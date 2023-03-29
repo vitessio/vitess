@@ -39,7 +39,7 @@
   {
     "comment": "ambiguous symbol reference",
     "query": "select user.col1, user_extra.col1 from user join user_extra having col1 = 2",
-    "v3-plan": "VT03021: ambiguous symbol reference: col1",
+    "v3-plan": "VT03021: ambiguous column reference: col1",
     "gen4-plan": "Column 'col1' in field list is ambiguous"
   },
   {
@@ -1612,7 +1612,7 @@
   {
     "comment": "Order by, verify outer symtab is searched according to its own context.",
     "query": "select u.id from user u having u.id in (select col2 from user where user.id = u.id order by u.col)",
-    "v3-plan": "VT03020: symbol u.col not found in subquery",
+    "v3-plan": "VT03020: column u.col not found in subquery",
     "gen4-plan": {
       "QueryType": "SELECT",
       "Original": "select u.id from user u having u.id in (select col2 from user where user.id = u.id order by u.col)",
@@ -1635,8 +1635,8 @@
   {
     "comment": "Order by, qualified '*' expression, name mismatched.",
     "query": "select user.* from user where id = 5 order by e.col",
-    "v3-plan": "VT03019: symbol e.col not found",
-    "gen4-plan": "symbol e.col not found"
+    "v3-plan": "VT03019: column e.col not found",
+    "gen4-plan": "column 'e.col' not found"
   },
   {
     "comment": "Order by, invalid column number",
@@ -2783,7 +2783,7 @@
   {
     "comment": "join order by with ambiguous column reference ; valid in MySQL",
     "query": "select name, name from user, music order by name",
-    "v3-plan": "VT03021: ambiguous symbol reference: `name`",
+    "v3-plan": "VT03021: ambiguous column reference: `name`",
     "gen4-plan": {
       "QueryType": "SELECT",
       "Original": "select name, name from user, music order by name",
@@ -2827,7 +2827,7 @@
   {
     "comment": "order by with ambiguous column reference ; valid in MySQL",
     "query": "select id, id from user order by id",
-    "v3-plan": "VT03021: ambiguous symbol reference: id",
+    "v3-plan": "VT03021: ambiguous column reference: id",
     "gen4-plan": {
       "QueryType": "SELECT",
       "Original": "select id, id from user order by id",
@@ -3030,7 +3030,7 @@
   {
     "comment": "Distinct with same column",
     "query": "select distinct a, a from user",
-    "v3-plan": "generating ORDER BY clause: VT03021: ambiguous symbol reference: a",
+    "v3-plan": "generating ORDER BY clause: VT03021: ambiguous column reference: a",
     "gen4-plan": {
       "QueryType": "SELECT",
       "Original": "select distinct a, a from user",

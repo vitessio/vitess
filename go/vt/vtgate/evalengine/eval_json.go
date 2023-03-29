@@ -96,6 +96,15 @@ func evalConvert_cj(e *evalBytes) (*evalJSON, error) {
 	if err != nil {
 		return nil, err
 	}
+	var p json.Parser
+	return p.ParseBytes(jsonText)
+}
+
+func evalConvertArg_cj(e *evalBytes) (*evalJSON, error) {
+	jsonText, err := charset.Convert(nil, charset.Charset_utf8mb4{}, e.bytes, e.col.Collation.Get().Charset())
+	if err != nil {
+		return nil, err
+	}
 	return json.NewString(jsonText), nil
 }
 
@@ -114,6 +123,26 @@ func evalToJSON(e eval) (*evalJSON, error) {
 			return evalConvert_bj(e), nil
 		}
 		return evalConvert_cj(e)
+	default:
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "Unsupported type conversion: %s AS JSON", e.SQLType())
+	}
+}
+
+func argToJSON(e eval) (*evalJSON, error) {
+	switch e := e.(type) {
+	case nil:
+		return json.ValueNull, nil
+	case *evalJSON:
+		return e, nil
+	case *evalFloat:
+		return evalConvert_fj(e), nil
+	case evalNumeric:
+		return evalConvert_nj(e), nil
+	case *evalBytes:
+		if sqltypes.IsBinary(e.SQLType()) {
+			return evalConvert_bj(e), nil
+		}
+		return evalConvertArg_cj(e)
 	default:
 		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "Unsupported type conversion: %s AS JSON", e.SQLType())
 	}

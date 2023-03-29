@@ -66,6 +66,26 @@ func (c *compiler) compileToJSON(doct ctype, offset int) (ctype, error) {
 	return ctype{Type: sqltypes.TypeJSON, Col: collationJSON}, nil
 }
 
+func (c *compiler) compileArgToJSON(doct ctype, offset int) (ctype, error) {
+	switch doct.Type {
+	case sqltypes.TypeJSON:
+		return doct, nil
+	case sqltypes.Float64:
+		c.asm.Convert_fj(offset)
+	case sqltypes.Int64, sqltypes.Uint64, sqltypes.Decimal:
+		c.asm.Convert_nj(offset, doct.Flag&flagIsBoolean != 0)
+	case sqltypes.VarChar:
+		c.asm.ConvertArg_cj(offset)
+	case sqltypes.VarBinary:
+		c.asm.Convert_bj(offset)
+	case sqltypes.Null:
+		c.asm.Convert_Nj(offset)
+	default:
+		return ctype{}, vterrors.Errorf(vtrpc.Code_UNIMPLEMENTED, "Unsupported type conversion: %s AS JSON", doct.Type)
+	}
+	return ctype{Type: sqltypes.TypeJSON, Col: collationJSON}, nil
+}
+
 func (c *compiler) compileFn_JSON_ARRAY(call *builtinJSONArray) (ctype, error) {
 	for _, arg := range call.Arguments {
 		tt, err := c.compileExpr(arg)
@@ -73,7 +93,7 @@ func (c *compiler) compileFn_JSON_ARRAY(call *builtinJSONArray) (ctype, error) {
 			return ctype{}, err
 		}
 
-		_, err = c.compileToJSON(tt, 1)
+		_, err = c.compileArgToJSON(tt, 1)
 		if err != nil {
 			return ctype{}, err
 		}
@@ -95,7 +115,7 @@ func (c *compiler) compileFn_JSON_OBJECT(call *builtinJSONObject) (ctype, error)
 		if err != nil {
 			return ctype{}, err
 		}
-		_, err = c.compileToJSON(val, 1)
+		_, err = c.compileArgToJSON(val, 1)
 		if err != nil {
 			return ctype{}, err
 		}

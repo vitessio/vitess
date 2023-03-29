@@ -76,12 +76,18 @@ func (call *builtinFromBase64) eval(env *ExpressionEnv) (eval, error) {
 	b := evalToBinary(arg)
 	decoded := make([]byte, mysqlBase64.DecodedLen(len(b.bytes)))
 	if n, err := mysqlBase64.Decode(decoded, b.bytes); err == nil {
+		if arg.SQLType() == sqltypes.Text || arg.SQLType() == sqltypes.TypeJSON {
+			return newEvalRaw(sqltypes.Blob, decoded[:n], collationBinary), nil
+		}
 		return newEvalBinary(decoded[:n]), nil
 	}
 	return nil, nil
 }
 
 func (call *builtinFromBase64) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
-	_, f := call.Arguments[0].typeof(env)
+	tt, f := call.Arguments[0].typeof(env)
+	if tt == sqltypes.Text || tt == sqltypes.TypeJSON {
+		return sqltypes.Blob, f | flagNullable
+	}
 	return sqltypes.VarBinary, f | flagNullable
 }

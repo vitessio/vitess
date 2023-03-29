@@ -25,6 +25,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtgate/engine"
+	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
 
 	"context"
 
@@ -395,10 +396,10 @@ func TestVDiffPlanSuccess(t *testing.T) {
 			selectPks:        []int{0},
 			sourcePrimitive: &engine.OrderedAggregate{
 				Aggregates: []*engine.AggregateParams{{
-					Opcode: engine.AggregateSum,
+					Opcode: opcode.AggregateSum,
 					Col:    2,
 				}, {
-					Opcode: engine.AggregateSum,
+					Opcode: opcode.AggregateSum,
 					Col:    3,
 				}},
 				GroupByKeys: []*engine.GroupByParams{{KeyCol: 0, WeightStringCol: -1}},

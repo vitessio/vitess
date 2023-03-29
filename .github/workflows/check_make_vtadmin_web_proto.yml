@@ -1,7 +1,9 @@
 name: check_make_vtadmin_web_proto
 on: [push, pull_request]
-jobs:
 
+permissions: read-all
+
+jobs:
   build:
     name: Check Make VTAdmin Web Proto
     runs-on: ubuntu-22.04

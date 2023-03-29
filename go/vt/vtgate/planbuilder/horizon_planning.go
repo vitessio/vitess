@@ -20,6 +20,7 @@ import (
 	"fmt"
 
 	"vitess.io/vitess/go/sqltypes"
+	popcode "vitess.io/vitess/go/vt/vtgate/engine/opcode"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 
@@ -44,7 +45,7 @@ func (hp *horizonPlanning) planHorizon(ctx *plancontext.PlanningContext, plan lo
 	}
 
 	if isRoute && rb.isSingleShard() {
-		err := planSingleShardRoutePlan(hp.sel, rb)
+		err := planSingleRoutePlan(hp.sel, rb)
 		if err != nil {
 			return nil, err
 		}
@@ -90,7 +91,7 @@ func (hp *horizonPlanning) planHorizon(ctx *plancontext.PlanningContext, plan lo
 		// if we already did sorting, we don't need to do it again
 		needsOrdering = needsOrdering && !hp.qp.CanPushDownSorting
 	case canShortcut:
-		err = planSingleShardRoutePlan(hp.sel, rb)
+		err = planSingleRoutePlan(hp.sel, rb)
 		if err != nil {
 			return nil, err
 		}
@@ -423,11 +424,11 @@ func generateAggregateParams(aggrs []operators.Aggr, aggrParamOffsets [][]offset
 			offset = incomingOffset
 		}
 
-		opcode := engine.AggregateSum
+		opcode := popcode.AggregateSum
 		switch aggr.OpCode {
-		case engine.AggregateMin, engine.AggregateMax, engine.AggregateRandom:
+		case popcode.AggregateMin, popcode.AggregateMax, popcode.AggregateRandom:
 			opcode = aggr.OpCode
-		case engine.AggregateCount, engine.AggregateCountStar, engine.AggregateCountDistinct, engine.AggregateSumDistinct:
+		case popcode.AggregateCount, popcode.AggregateCountStar, popcode.AggregateCountDistinct, popcode.AggregateSumDistinct:
 			if !pushed {
 				opcode = aggr.OpCode
 			}
@@ -1119,7 +1120,7 @@ func exprHasVindex(semTable *semantics.SemTable, expr sqlparser.Expr, hasToBeUni
 	return false
 }
 
-func planSingleShardRoutePlan(sel sqlparser.SelectStatement, rb *routeGen4) error {
+func planSingleRoutePlan(sel sqlparser.SelectStatement, rb *routeGen4) error {
 	err := stripDownQuery(sel, rb.Select)
 	if err != nil {
 		return err

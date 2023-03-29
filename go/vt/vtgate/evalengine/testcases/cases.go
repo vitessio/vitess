@@ -54,6 +54,8 @@ var Cases = []TestCase{
 	{Run: LikeComparison},
 	{Run: MultiComparisons},
 	{Run: IsStatement},
+	{Run: NotStatement},
+	{Run: LogicalStatement},
 	{Run: TupleComparisons},
 	{Run: Comparisons},
 	{Run: InStatement},
@@ -436,6 +438,12 @@ func BitwiseOperators(yield Query) {
 				yield(fmt.Sprintf("%s %s %s", lhs, op, rhs), nil)
 			}
 		}
+
+		for _, lhs := range inputConversions {
+			for _, rhs := range inputConversions {
+				yield(fmt.Sprintf("%s %s %s", lhs, op, rhs), nil)
+			}
+		}
 	}
 }
 
@@ -537,7 +545,7 @@ func Types(yield Query) {
 }
 
 func Arithmetic(yield Query) {
-	operators := []string{"+", "-", "*", "/"}
+	operators := []string{"+", "-", "*", "/", "DIV", "%", "MOD"}
 
 	for _, op := range operators {
 		for _, lhs := range inputConversions {
@@ -720,6 +728,26 @@ func IsStatement(yield Query) {
 	}
 }
 
+func NotStatement(yield Query) {
+	var ops = []string{"NOT", "!"}
+	for _, op := range ops {
+		for _, i := range inputConversions {
+			yield(fmt.Sprintf("%s %s", op, i), nil)
+		}
+	}
+}
+
+func LogicalStatement(yield Query) {
+	var ops = []string{"AND", "&&", "OR", "||", "XOR"}
+	for _, op := range ops {
+		for _, l := range inputConversions {
+			for _, r := range inputConversions {
+				yield(fmt.Sprintf("%s %s %s", l, op, r), nil)
+			}
+		}
+	}
+}
+
 func TupleComparisons(yield Query) {
 	var elems = []string{"NULL", "-1", "0", "1"}
 	var operators = []string{"=", "!=", "<=>", "<", "<=", ">", ">="}
@@ -872,5 +900,10 @@ func InStatement(yield Query) {
 		yield(fmt.Sprintf("%s IN (%s, %s)", inputs[2], inputs[1], inputs[0]), nil)
 		yield(fmt.Sprintf("%s IN (%s, %s)", inputs[1], inputs[0], inputs[2]), nil)
 		yield(fmt.Sprintf("%s IN (%s, %s, %s)", inputs[0], inputs[1], inputs[2], inputs[0]), nil)
+
+		yield(fmt.Sprintf("%s NOT IN (%s, %s)", inputs[0], inputs[1], inputs[2]), nil)
+		yield(fmt.Sprintf("%s NOT IN (%s, %s)", inputs[2], inputs[1], inputs[0]), nil)
+		yield(fmt.Sprintf("%s NOT IN (%s, %s)", inputs[1], inputs[0], inputs[2]), nil)
+		yield(fmt.Sprintf("%s NOT IN (%s, %s, %s)", inputs[0], inputs[1], inputs[2], inputs[0]), nil)
 	})
 }
