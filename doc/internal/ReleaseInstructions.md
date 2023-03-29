@@ -183,6 +183,15 @@ That includes:
   > - One Pull Request against `main` must be created, it will contain the new release notes that we are adding in the Release Pull Request.
   > - We open this Pull Request now to avoid waiting on the CI during release day.
   > - All future changes to the release notes during the code freeze will need to be ported to both PRs: the one on `main` and the Release Pull Request.
+- **Update the website documentation.**
+  > - We want to open a preparatory **draft** Pull Request to update the documentation.
+  > - There are several pages we want to update:
+  >   - [The releases page](https://vitess.io/docs/releases/), we must add the new release to the list with all its information and link. The links can be broken (404 error) while we are preparing for the release, this is fine.
+  >   - [The local install page](https://vitess.io/docs/get-started/local/), we must use the proper version increment for this guide and the proper SHA. The SHA will have to be modified once the Release Pull Request and the release is tagged is merged.
+  > - If we are doing a GA or RC release follow the instructions below:
+  >  - There are two scripts in the website repository in `./tools/{ga|rc}_release.sh`, use them to update the website documentation. The scripts automate:
+  >    - For an RC, we need to create a new version in the sidebar and mark the current version as RC.
+  >    - For a GA, we need to mark the version we are releasing as "Stable" and the next one as "Development".
 
 ### Release
 
@@ -202,10 +211,9 @@ On the release day, there are several things to do:
   > - Applies only to GA releases.
   > - This step is explained in the [Java Packages: Deploy & Release](#java-packages-deploy--release) section.
 - **Update the website documentation repository.**
-  > - Applies only to GA and RC releases.
-  > - There are two scripts in the website repository in `./tools/{ga|rc}_release.sh`, use them to update the website documentation. The scripts automate:
-  >   - For an RC, we need to create a new version in the sidebar and mark the current version as RC.
-  >   - For a GA, we need to mark the version we are releasing as "Stable" and the next one as "Development".
+  > - Review the Website Pull Request that was opened during the Pre-Release.
+  > - The git SHA used in [the local install page](https://vitess.io/docs/get-started/local/) should be updated with the new proper SHA for this release.
+  > - Merge the Pull Request.
 - **Publish the blog post on the Vitess website.**
   > - Applies only to GA releases.
   > - The corresponding Pull Request was created beforehand during the pre-release. Merge it.
