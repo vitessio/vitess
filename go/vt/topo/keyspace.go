@@ -56,7 +56,7 @@ func (ki *KeyspaceInfo) SetKeyspaceName(name string) {
 
 var invalidKeyspaceNameChars = "/"
 
-// ValidateKeyspaceNames checks if the provided name is a valid name for a
+// ValidateKeyspaceName checks if the provided name is a valid name for a
 // keyspace.
 //
 // As of v17, "all invalid characters" is just the forward slash ("/").
