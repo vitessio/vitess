@@ -24,6 +24,8 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/evalengine/internal/datetime"
 )
 
+var SystemTime = time.Now
+
 type (
 	builtinNow struct {
 		CallExpr
@@ -90,7 +92,7 @@ func (call *builtinNow) constant() bool {
 }
 
 func (call *builtinSysdate) eval(env *ExpressionEnv) (eval, error) {
-	now := time.Now()
+	now := SystemTime()
 	if tz := env.currentTimezone(); tz != nil {
 		now = now.In(tz)
 	}

@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"math"
 	"math/bits"
-	"time"
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/collations/charset"
@@ -2423,7 +2422,7 @@ func (asm *assembler) Fn_Sysdate(format *datetime.Strftime) {
 	asm.emit(func(env *ExpressionEnv) int {
 		val := env.vm.arena.newEvalBytesEmpty()
 		val.tt = int16(sqltypes.Datetime)
-		now := time.Now()
+		now := SystemTime()
 		if tz := env.currentTimezone(); tz != nil {
 			now = now.In(tz)
 		}

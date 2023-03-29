@@ -21,6 +21,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/olekukonko/tablewriter"
 
@@ -93,6 +94,10 @@ func (s *Tracker) String() string {
 }
 
 func TestCompilerReference(t *testing.T) {
+	now := time.Now()
+	evalengine.SystemTime = func() time.Time { return now }
+	defer func() { evalengine.SystemTime = time.Now }()
+
 	track := NewTracker()
 
 	for _, tc := range testcases.Cases {
