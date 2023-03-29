@@ -1243,7 +1243,6 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 			return err
 		}
 	case ComStmtFetch:
-		log.Info("RECEIVED FETCH")
 		c.startWriterBuffering()
 		endFetch := func() error {
 			if err = c.writeEndResult(false, 0, 0, handler.WarningCount(c)); err != nil {
@@ -1292,7 +1291,6 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 
 		// while we are still expecting rows
 		for c.cs.pending == nil || len(c.cs.pending.Rows) < int(numRows) {
-			log.Info("RECEIVING QUERY RESULT")
 			// receive rows from next to cs.pending
 			var newqr *sqltypes.Result
 			newqr, ok = <-c.cs.next
@@ -1308,12 +1306,10 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 
 			// channel is closed, meaning there are no more rows
 			if !ok {
-				log.Info("CHANNEL CLOSED")
 				break
 			}
 
 			// move rows into buffer
-			log.Info("SUCCESSFULLY RECEIVED QUERY RESULT")
 			if c.cs.pending == nil {
 				c.cs.pending = newqr
 			} else {
@@ -1331,15 +1327,12 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 
 		// reached end of result set
 		if c.cs.pending == nil {
-			log.Infof("REACHED END OF RESULT SET")
 			c.discardCursor()
 			if err = endFetch(); err != nil {
 				return err
 			}
 			return nil
 		}
-
-		log.Infof("WRITING ROWS")
 
 		// cap the number of rows
 		if int(numRows) > len(c.cs.pending.Rows) {
@@ -1354,7 +1347,6 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 		}
 		// no rows left, reset pending
 		if len(c.cs.pending.Rows) == 0 {
-			log.Infof("RESET PENDING")
 			c.cs.pending = nil
 		}
 		return nil
@@ -1395,7 +1387,6 @@ func (c *Conn) writeNumRows(numRows int) (err error) {
 
 // discardCursor stops the statement execute goroutine and clears the cursor state, if it exists
 func (c *Conn) discardCursor() {
-	log.Info("DISCARDING CURSOR")
 	// close cursor if open with unread results
 	if c.cs != nil && c.cs.pending != nil {
 		select {
@@ -1404,7 +1395,6 @@ func (c *Conn) discardCursor() {
 		case <- c.cs.done:
 		}
 	}
-	log.Info("CURSOR DISCARDED")
 	c.StatusFlags &= ^uint16(ServerCursorExists)
 	c.StatusFlags |= uint16(ServerCursorLastRowSent)
 	c.cs = nil
@@ -1572,24 +1562,18 @@ func (c *Conn) execPrepareStatement(stmtID uint32, cursorType byte, handler Hand
 
 			err = handler.ComStmtExecute(c, prepare, func(qr *sqltypes.Result) error {
 				// block until query results are sent or receive signal to quit
-				log.Infof("EXECUTING RESULTS")
 				var err error
 				select {
 				case c.cs.next <- qr:
-					log.Infof("SENDING QUERY RESULT")
 				case err = <-c.cs.quit:
-					log.Infof("RECEIVED QUIT SIGNAL")
 				}
-				log.Infof("SENDING DONE SIGNAL")
 				c.cs.done <- err
 				return nil
 			})
 		}()
 
 		// Immediately receive the very first query result to write the fields
-		log.Infof("RECEIVING QUERY RESULT (INITIAL)")
 		qr, ok := <- c.cs.next
-		log.Infof("RECEIVING DONE SIGNAL (INITIAL)")
 		err = <- c.cs.done
 		if err != nil {
 			return err
@@ -1603,7 +1587,6 @@ func (c *Conn) execPrepareStatement(stmtID uint32, cursorType byte, handler Hand
 		}
 
 		// Write fields
-		log.Infof("WRITING FIELDS")
 		fieldSent = true
 		if len(qr.Fields) == 0 {
 			sendFinished = true
