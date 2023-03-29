@@ -66,6 +66,20 @@ func (env *ExpressionEnv) currentUser() string {
 	return user
 }
 
+func (env *ExpressionEnv) currentDatabase() string {
+	if env.vc == nil {
+		return ""
+	}
+	return env.vc.GetKeyspace()
+}
+
+func (env *ExpressionEnv) currentTimezone() *time.Location {
+	if env.vc == nil {
+		return nil
+	}
+	return env.vc.TimeZone()
+}
+
 func (env *ExpressionEnv) Evaluate(expr Expr) (EvalResult, error) {
 	if p, ok := expr.(*CompiledExpr); ok {
 		return env.EvaluateVM(p)
@@ -98,10 +112,9 @@ func NewExpressionEnv(ctx context.Context, bindVars map[string]*querypb.BindVari
 	// This is to ensure that all expressions in the same ExpressionEnv evaluate NOW()
 	// and similar SQL functions to the same value.
 	env.now = time.Now()
-	if env.vc != nil {
-		if tz := env.vc.TimeZone(); tz != nil {
-			env.now = env.now.In(tz)
-		}
+
+	if tz := env.currentTimezone(); tz != nil {
+		env.now = env.now.In(tz)
 	}
 	return env
 }

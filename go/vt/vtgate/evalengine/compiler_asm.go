@@ -2424,10 +2424,8 @@ func (asm *assembler) Fn_Sysdate(format *datetime.Strftime) {
 		val := env.vm.arena.newEvalBytesEmpty()
 		val.tt = int16(sqltypes.Datetime)
 		now := time.Now()
-		if env.vc != nil {
-			if tz := env.vc.TimeZone(); tz != nil {
-				now = now.In(tz)
-			}
+		if tz := env.currentTimezone(); tz != nil {
+			now = now.In(tz)
 		}
 		val.bytes = format.Format(now)
 		env.vm.stack[env.vm.sp] = val
@@ -2460,10 +2458,11 @@ func (asm *assembler) Fn_User() {
 func (asm *assembler) Fn_Database() {
 	asm.adjustStack(1)
 	asm.emit(func(env *ExpressionEnv) int {
-		if env.vc == nil {
+		db := env.currentDatabase()
+		if db == "" {
 			env.vm.stack[env.vm.sp] = nil
 		} else {
-			env.vm.stack[env.vm.sp] = env.vm.arena.newEvalText([]byte(env.vc.GetKeyspace()), collationUtf8mb3)
+			env.vm.stack[env.vm.sp] = env.vm.arena.newEvalText([]byte(db), collationUtf8mb3)
 		}
 		env.vm.sp++
 		return 1

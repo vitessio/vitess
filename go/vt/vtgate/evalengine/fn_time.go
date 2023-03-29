@@ -83,8 +83,8 @@ func (call *builtinNow) typeof(_ *ExpressionEnv, _ []*querypb.Field) (sqltypes.T
 
 func (call *builtinSysdate) eval(env *ExpressionEnv) (eval, error) {
 	now := time.Now()
-	if env.tz != nil {
-		now = now.In(env.tz)
+	if tz := env.currentTimezone(); tz != nil {
+		now = now.In(tz)
 	}
 	return newEvalRaw(sqltypes.Datetime, formatDateTime[call.prec].Format(now), collationBinary), nil
 }

@@ -57,10 +57,11 @@ type builtinDatabase struct {
 var _ Expr = (*builtinDatabase)(nil)
 
 func (call *builtinDatabase) eval(env *ExpressionEnv) (eval, error) {
-	if env.vc == nil {
+	db := env.currentDatabase()
+	if db == "" {
 		return nil, nil
 	}
-	return newEvalText([]byte(env.vc.GetKeyspace()), collationUtf8mb3), nil
+	return newEvalText([]byte(db), collationUtf8mb3), nil
 }
 
 func (call *builtinDatabase) typeof(_ *ExpressionEnv, _ []*querypb.Field) (sqltypes.Type, typeFlag) {
