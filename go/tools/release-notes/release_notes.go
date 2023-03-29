@@ -512,7 +512,7 @@ func main() {
 	// Define the path to the release notes folder
 	majorVersion := versionMatch[1] + "." + versionMatch[2]
 	patchVersion := versionMatch[0]
-	releaseNotesPath = path.Join(releaseNotesPath, majorVersion, patchVersion)
+	releaseNotesPath = path.Join(releaseNotesPath, majorVersion, patchVersion[1:])
 
 	err := os.MkdirAll(releaseNotesPath, os.ModePerm)
 	if err != nil {
