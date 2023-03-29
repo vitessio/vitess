@@ -45,6 +45,7 @@ const (
 	onDemandHeartbeatDuration = 5 * time.Second
 	throttlerEnabledTimeout   = 60 * time.Second
 	useDefaultQuery           = ""
+	useDefaultThreshold       = 0
 )
 
 var (
@@ -271,13 +272,17 @@ func TestInitialThrottler(t *testing.T) {
 		waitForThrottleCheckStatus(t, primaryTablet, http.StatusOK)
 	})
 	t.Run("enabling throttler, again", func(t *testing.T) {
-		// Enable throttler again with the default query, leaving threshold unchanged (0 parameter value).
-		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, true, false, 0, useDefaultQuery, true)
+		// Enable throttler again with the default query and moving back to the default threshold
+		// as the 0 parameter value elides the --threshold flag to the client command, which in
+		// turn causes a zero value threshold to be sent in the RPC request which in turn causes
+		// the default threshold to be set. So this should in effect enable the throttler again
+		// with the default config.
+		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, true, false, useDefaultThreshold, useDefaultQuery, true)
 		assert.NoError(t, err)
 
-		// Wait for the throttler to be enabled everywhere again.
+		// Wait for the throttler to be enabled everywhere again with the default config.
 		for _, tablet := range clusterInstance.Keyspaces[0].Shards[0].Vttablets {
-			throttler.WaitForThrottlerStatusEnabled(t, tablet, true, &throttler.Config{Query: throttler.DefaultQuery, Threshold: unreasonablyLowThreshold.Seconds()}, throttlerEnabledTimeout)
+			throttler.WaitForThrottlerStatusEnabled(t, tablet, true, throttler.DefaultConfig, throttlerEnabledTimeout)
 		}
 	})
 	t.Run("validating pushback response from throttler, again", func(t *testing.T) {
@@ -451,10 +456,10 @@ func TestCustomQuery(t *testing.T) {
 		assert.Equalf(t, http.StatusOK, resp.StatusCode, "Unexpected response from throttler: %s", getResponseBody(resp))
 	})
 	t.Run("test threads running", func(t *testing.T) {
-		sleepDuration := 10 * time.Second
+		sleepDuration := 20 * time.Second
 		var wg sync.WaitGroup
 		for i := 0; i < int(customThreshold.Seconds()); i++ {
-			// generate different Sleep() calls, all at minimum sleepDuration
+			// Generate different Sleep() calls, all at minimum sleepDuration.
 			wg.Add(1)
 			go func(i int) {
 				defer wg.Done()
@@ -464,8 +469,8 @@ func TestCustomQuery(t *testing.T) {
 		t.Run("exceeds threshold", func(t *testing.T) {
 			throttler.WaitForQueryResult(t, primaryTablet,
 				"select if(variable_value > 5, 'true', 'false') as result from performance_schema.global_status where variable_name='threads_running'",
-				"true", sleepDuration/2)
-			throttler.WaitForValidData(t, primaryTablet, sleepDuration/2)
+				"true", sleepDuration/3)
+			throttler.WaitForValidData(t, primaryTablet, sleepDuration-(5*time.Second))
 			// Now we should be reporting ~ customThreshold*2 threads_running, and we should
 			// hit the threshold. For example:
 			// {"StatusCode":429,"Value":6,"Threshold":5,"Message":"Threshold exceeded"}
