@@ -95,18 +95,22 @@ const (
 
 	/* generic topo resources */
 
-	CellInfoResource    Resource = "CellInfo"
-	CellsAliasResource  Resource = "CellsAlias"
-	KeyspaceResource    Resource = "Keyspace"
-	ShardResource       Resource = "Shard"
-	TabletResource      Resource = "Tablet"
-	VTGateResource      Resource = "VTGate"
-	VtctldResource      Resource = "Vtctld"
-	SrvKeyspaceResource Resource = "SrvKeyspace"
+	CellInfoResource   Resource = "CellInfo"
+	CellsAliasResource Resource = "CellsAlias"
+	KeyspaceResource   Resource = "Keyspace"
+	ShardResource      Resource = "Shard"
+	TabletResource     Resource = "Tablet"
+	VTGateResource     Resource = "VTGate"
+	VtctldResource     Resource = "Vtctld"
+
 	/* vschema resources */
 
-	SrvVSchemaResource Resource = "SrvVSchema"
-	VSchemaResource    Resource = "VSchema"
+	VSchemaResource Resource = "VSchema"
+
+	/* serving graph resources */
+
+	SrvKeyspaceResource Resource = "SrvKeyspace"
+	SrvVSchemaResource  Resource = "SrvVSchema"
 
 	/* misc resources */
 

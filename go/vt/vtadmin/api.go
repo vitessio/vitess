@@ -370,7 +370,7 @@ func (api *API) Handler() http.Handler {
 	router.HandleFunc("/shards/{cluster_id}", httpAPI.Adapt(vtadminhttp.CreateShard)).Name("API.CreateShard").Methods("POST")
 	router.HandleFunc("/shards/{cluster_id}", httpAPI.Adapt(vtadminhttp.DeleteShards)).Name("API.DeleteShards").Methods("DELETE")
 	router.HandleFunc("/srvkeyspaces", httpAPI.Adapt(vtadminhttp.GetSrvKeyspaces)).Name("API.GetSrvKeyspaces").Methods("GET")
-	router.HandleFunc("/srvkeyspace/{cluster_id}/{name}", httpAPI.Adapt(vtadminhttp.GetSrvKeyspace)).Name("API.GetSrvKeyspace").Methods("Get")
+	router.HandleFunc("/srvkeyspace/{cluster_id}/{name}", httpAPI.Adapt(vtadminhttp.GetSrvKeyspace)).Name("API.GetSrvKeyspace").Methods("GET")
 	router.HandleFunc("/srvvschema/{cluster_id}/{cell}", httpAPI.Adapt(vtadminhttp.GetSrvVSchema)).Name("API.GetSrvVSchema")
 	router.HandleFunc("/srvvschemas", httpAPI.Adapt(vtadminhttp.GetSrvVSchemas)).Name("API.GetSrvVSchemas")
 	router.HandleFunc("/tablets", httpAPI.Adapt(vtadminhttp.GetTablets)).Name("API.GetTablets")
@@ -1081,7 +1081,7 @@ func (api *API) GetSrvKeyspaces(ctx context.Context, req *vtadminpb.GetSrvKeyspa
 	clusters, _ := api.getClustersForRequest(req.ClusterIds)
 
 	var (
-		sks map[string]*vtctldatapb.GetSrvKeyspacesResponse = make(map[string]*vtctldatapb.GetSrvKeyspacesResponse)
+		sks = make(map[string]*vtctldatapb.GetSrvKeyspacesResponse)
 		wg  sync.WaitGroup
 		er  concurrency.AllErrorRecorder
 		m   sync.Mutex
@@ -1100,51 +1100,15 @@ func (api *API) GetSrvKeyspaces(ctx context.Context, req *vtadminpb.GetSrvKeyspa
 			span, ctx := trace.NewSpan(ctx, "Cluster.GetSrvKeyspaces")
 			defer span.Finish()
 
-			getKeyspacesSpan, getKeyspacesCtx := trace.NewSpan(ctx, "Cluster.GetKeyspaces")
-			cluster.AnnotateSpan(c, getKeyspacesSpan)
+			sks, err := c.GetSrvKeyspaces(ctx, req.Cells)
 
-			keyspaces, err := c.Vtctld.GetKeyspaces(getKeyspacesCtx, &vtctldatapb.GetKeyspacesRequest{})
 			if err != nil {
-				er.RecordError(fmt.Errorf("GetKeyspaces(cluster = %s): %w", c.ID, err))
-				getKeyspacesSpan.Finish()
-				return
-			}
-
-			getKeyspacesSpan.Finish()
-
-			var (
-				clusterM            sync.Mutex
-				clusterWG           sync.WaitGroup
-				clusterRec          concurrency.AllErrorRecorder
-				clusterSrvKeyspaces map[string]*vtctldatapb.GetSrvKeyspacesResponse = make(map[string]*vtctldatapb.GetSrvKeyspacesResponse, len(keyspaces.Keyspaces))
-			)
-
-			for _, keyspace := range keyspaces.Keyspaces {
-				clusterWG.Add(1)
-
-				go func(keyspace *vtctldatapb.Keyspace) {
-					defer clusterWG.Done()
-					srv_keyspaces, err := c.Vtctld.GetSrvKeyspaces(ctx, &vtctldatapb.GetSrvKeyspacesRequest{Keyspace: keyspace.Name, Cells: req.Cells})
-					if err != nil {
-						clusterRec.RecordError(fmt.Errorf("GetSrvKeyspaces(keyspace = %s): %w", keyspace.Name, err))
-						return
-					}
-
-					clusterM.Lock()
-					clusterSrvKeyspaces[keyspace.Name] = srv_keyspaces
-					clusterM.Unlock()
-				}(keyspace)
-			}
-
-			clusterWG.Wait()
-
-			if clusterRec.HasErrors() {
-				er.RecordError(clusterRec.Error())
+				er.RecordError(err)
 				return
 			}
 
 			m.Lock()
-			for key, value := range clusterSrvKeyspaces {
+			for key, value := range sks {
 				sks[key] = value
 			}
 			m.Unlock()
