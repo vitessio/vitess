@@ -4311,6 +4311,18 @@ alter_table_statement_part:
   {
     $$ = &DDL{Action: AlterStr, IndexSpec: &IndexSpec{Action: string($1)}}
   }
+| default_keyword_opt CHARACTER SET equal_opt charset
+  {
+    $$ = &DDL{Action: AlterStr, AlterCollationSpec: &AlterCollationSpec{CharacterSet: $5, Collation: ""}}
+  }
+| default_keyword_opt CHARACTER SET equal_opt charset COLLATE equal_opt charset
+  {
+    $$ = &DDL{Action: AlterStr, AlterCollationSpec: &AlterCollationSpec{CharacterSet: $5, Collation: $8}}
+  }
+| default_keyword_opt COLLATE equal_opt charset
+  {
+    $$ = &DDL{Action: AlterStr, AlterCollationSpec: &AlterCollationSpec{CharacterSet: "", Collation: $4}}
+  }
 
 column_order_opt:
   {
