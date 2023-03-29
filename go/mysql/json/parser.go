@@ -27,10 +27,10 @@ import (
 
 	"golang.org/x/exp/slices"
 
-	"vitess.io/vitess/go/mysql/decimal"
-	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/mysql/datetime"
 
 	"vitess.io/vitess/go/hack"
+	"vitess.io/vitess/go/mysql/decimal"
 )
 
 // Parser parses JSON.
@@ -824,7 +824,7 @@ func (v *Value) Date() (time.Time, bool) {
 	if v.t != TypeDate {
 		return time.Time{}, false
 	}
-	t, err := sqlparser.ParseDate(v.s)
+	t, err := datetime.ParseDate(v.s)
 	if err != nil {
 		return time.Time{}, false
 	}
@@ -835,7 +835,7 @@ func (v *Value) DateTime() (time.Time, bool) {
 	if v.t != TypeDateTime {
 		return time.Time{}, false
 	}
-	t, err := sqlparser.ParseDateTime(v.s)
+	t, err := datetime.ParseDateTime(v.s)
 	if err != nil {
 		return time.Time{}, false
 	}
@@ -846,7 +846,7 @@ func (v *Value) Time() (time.Time, bool) {
 	if v.t != TypeTime {
 		return time.Time{}, false
 	}
-	t, err := sqlparser.ParseTime(v.s)
+	t, err := datetime.ParseTime(v.s)
 	if err != nil {
 		return time.Time{}, false
 	}

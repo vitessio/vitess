@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"math/big"
 
+	"vitess.io/vitess/go/mysql/datetime"
 	"vitess.io/vitess/go/sqltypes"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -159,11 +160,11 @@ func (nz *normalizer) walkUpSelect(cursor *Cursor) bool {
 func validateLiteral(node *Literal) (err error) {
 	switch node.Type {
 	case DateVal:
-		_, err = ParseDate(node.Val)
+		_, err = datetime.ParseDate(node.Val)
 	case TimeVal:
-		_, err = ParseTime(node.Val)
+		_, err = datetime.ParseTime(node.Val)
 	case TimestampVal:
-		_, err = ParseDateTime(node.Val)
+		_, err = datetime.ParseDateTime(node.Val)
 	}
 	return err
 }
