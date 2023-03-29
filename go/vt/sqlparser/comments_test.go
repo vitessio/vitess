@@ -526,16 +526,23 @@ func TestGetCriticalityFromStatement(t *testing.T) {
 			query:               "select /*vt+ CRITICALITY=some_text */ * from another_table",
 			expectedCriticality: "",
 		},
+		{
+			query:               "select /*vt+ CRITICALITY=0 */ * from another_table",
+			expectedCriticality: "0",
+		},
+		{
+			query:               "select /*vt+ CRITICALITY=100 */ * from another_table",
+			expectedCriticality: "100",
+		},
 	}
 
 	for _, testCase := range testCases {
-		t.Run(testCase.query, func(t *testing.T) {
+		theThestCase := testCase
+		t.Run(theThestCase.query, func(t *testing.T) {
 			t.Parallel()
-			stmt, err := Parse(testCase.query)
+			stmt, err := Parse(theThestCase.query)
 			assert.NoError(t, err)
-			assert.Equal(t, testCase.expectedCriticality, GetCriticalityFromStatement(stmt))
-
+			assert.Equal(t, theThestCase.expectedCriticality, GetCriticalityFromStatement(stmt))
 		})
-
 	}
 }
