@@ -24,6 +24,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"vitess.io/vitess/go/mysql/json"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
@@ -850,11 +851,20 @@ func CellValue(data []byte, pos int, typ byte, metadata uint16, field *querypb.F
 		if typ == TypeJSON {
 			var err error
 			jsonData := data[pos : pos+l]
-			s, err := getJSONValue(jsonData)
+
+			//s, err := getJSONValue(jsonData)
+			//if err != nil {
+			//	return sqltypes.NULL, 0, vterrors.Wrapf(err, "error stringifying JSON data %v", limitArray(jsonData, 100))
+			//}
+			//d := []byte(s)
+			_ = limitArray
+
+			// replace ajson-based parser with vitess json parser
+			jsonVal, err := json.ParseMySQL(jsonData)
 			if err != nil {
-				return sqltypes.NULL, 0, vterrors.Wrapf(err, "error stringifying JSON data %v", limitArray(jsonData, 100))
+				panic(err)
 			}
-			d := []byte(s)
+			d := jsonVal.MarshalTo(nil)
 			return sqltypes.MakeTrusted(sqltypes.Expression,
 				d), l + int(metadata), nil
 		}
