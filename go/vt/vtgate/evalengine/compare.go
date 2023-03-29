@@ -20,12 +20,12 @@ import (
 	"bytes"
 	"time"
 
+	"vitess.io/vitess/go/mysql/datetime"
+	"vitess.io/vitess/go/mysql/decimal"
+	"vitess.io/vitess/go/mysql/json"
 	"vitess.io/vitess/go/sqltypes"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/evalengine/internal/decimal"
-	"vitess.io/vitess/go/vt/vtgate/evalengine/internal/json"
 )
 
 func compareNumeric(left, right eval) (int, error) {
@@ -123,15 +123,15 @@ func compareNumeric(left, right eval) (int, error) {
 // that does not return an error.
 func matchExprWithAnyDateFormat(e eval) (t time.Time, err error) {
 	expr := e.(*evalBytes)
-	t, err = sqlparser.ParseDate(expr.string())
+	t, err = datetime.ParseDate(expr.string())
 	if err == nil {
 		return
 	}
-	t, err = sqlparser.ParseDateTime(expr.string())
+	t, err = datetime.ParseDateTime(expr.string())
 	if err == nil {
 		return
 	}
-	t, err = sqlparser.ParseTime(expr.string())
+	t, err = datetime.ParseTime(expr.string())
 	return
 }
 

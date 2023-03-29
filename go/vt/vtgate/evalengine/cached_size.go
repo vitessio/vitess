@@ -875,7 +875,7 @@ func (cached *evalDecimal) CachedSize(alloc bool) int64 {
 	if alloc {
 		size += int64(16)
 	}
-	// field dec vitess.io/vitess/go/vt/vtgate/evalengine/internal/decimal.Decimal
+	// field dec vitess.io/vitess/go/mysql/decimal.Decimal
 	size += cached.dec.CachedSize(false)
 	return size
 }
