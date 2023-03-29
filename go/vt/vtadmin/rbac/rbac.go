@@ -107,7 +107,7 @@ const (
 
 	VSchemaResource Resource = "VSchema"
 
-	/* serving graph resources */
+	/* serving graph resources  */
 
 	SrvKeyspaceResource Resource = "SrvKeyspace"
 	SrvVSchemaResource  Resource = "SrvVSchema"
