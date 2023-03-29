@@ -846,7 +846,7 @@ func (v *Value) Time() (time.Time, bool) {
 	if v.t != TypeTime {
 		return time.Time{}, false
 	}
-	t, err := datetime.ParseTime(v.s)
+	t, _, err := datetime.ParseTime(v.s)
 	if err != nil {
 		return time.Time{}, false
 	}

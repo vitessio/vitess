@@ -20,6 +20,8 @@ import (
 	"bytes"
 	"math"
 	"math/bits"
+	"strconv"
+	"strings"
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/collations/charset"
@@ -723,6 +725,30 @@ func (asm *assembler) CmpTupleNullsafe() {
 	}, "CMP NULLSAFE TUPLE(SP-2), TUPLE(SP-1)")
 }
 
+func (asm *assembler) CmpDateString() {
+	asm.adjustStack(-2)
+
+	asm.emit(func(env *ExpressionEnv) int {
+		l := env.vm.stack[env.vm.sp-2].(*evalBytes)
+		r := env.vm.stack[env.vm.sp-1].(*evalBytes)
+		env.vm.sp -= 2
+		env.vm.flags.cmp, env.vm.err = compareDateAndString(l, r)
+		return 1
+	}, "CMP DATE|STRING(SP-2), DATE|STRING(SP-1)")
+}
+
+func (asm *assembler) CmpDates() {
+	asm.adjustStack(-2)
+
+	asm.emit(func(env *ExpressionEnv) int {
+		l := env.vm.stack[env.vm.sp-2].(*evalBytes)
+		r := env.vm.stack[env.vm.sp-1].(*evalBytes)
+		env.vm.sp -= 2
+		env.vm.flags.cmp, env.vm.err = compareDates(l, r)
+		return 1
+	}, "CMP DATE(SP-2), DATE(SP-1)")
+}
+
 func (asm *assembler) Collate(col collations.ID) {
 	asm.emit(func(env *ExpressionEnv) int {
 		a := env.vm.stack[env.vm.sp-1].(*evalBytes)
@@ -859,6 +885,48 @@ func (asm *assembler) Convert_hex(offset int) {
 		}
 		return 1
 	}, "CONV VARBINARY(SP-%d), HEX", offset)
+}
+
+func (asm *assembler) Convert_date(offset int) {
+	asm.emit(func(env *ExpressionEnv) int {
+		v := env.vm.stack[env.vm.sp-offset].(*evalBytes)
+		t, err := datetime.ParseDate(v.string())
+		if err != nil {
+			env.vm.err = err
+			return 1
+		}
+		i, _ := strconv.ParseInt(t.Format("20060102"), 10, 64)
+		env.vm.stack[env.vm.sp-offset] = env.vm.arena.newEvalInt64(i)
+		return 1
+	}, "CONV DATE(SP-%d), INT64", offset)
+}
+
+func (asm *assembler) Convert_datetime(offset int) {
+	asm.emit(func(env *ExpressionEnv) int {
+		v := env.vm.stack[env.vm.sp-offset].(*evalBytes)
+		t, err := datetime.ParseDateTime(v.string())
+		if err != nil {
+			env.vm.err = err
+			return 1
+		}
+		i, _ := strconv.ParseInt(t.Format("20060102150405"), 10, 64)
+		env.vm.stack[env.vm.sp-offset] = env.vm.arena.newEvalInt64(i)
+		return 1
+	}, "CONV DATETIME(SP-%d), INT64", offset)
+}
+
+func (asm *assembler) Convert_time(offset int) {
+	asm.emit(func(env *ExpressionEnv) int {
+		v := env.vm.stack[env.vm.sp-offset].(*evalBytes)
+		_, n, err := datetime.ParseTime(v.string())
+		if err != nil {
+			env.vm.err = err
+			return 1
+		}
+		i, _ := strconv.ParseInt(strings.ReplaceAll(n, ":", ""), 10, 64)
+		env.vm.stack[env.vm.sp-offset] = env.vm.arena.newEvalInt64(i)
+		return 1
+	}, "CONV TIME(SP-%d), INT64", offset)
 }
 
 func (asm *assembler) Convert_iB(offset int) {

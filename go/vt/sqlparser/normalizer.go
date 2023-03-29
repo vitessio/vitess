@@ -162,7 +162,7 @@ func validateLiteral(node *Literal) (err error) {
 	case DateVal:
 		_, err = datetime.ParseDate(node.Val)
 	case TimeVal:
-		_, err = datetime.ParseTime(node.Val)
+		_, _, err = datetime.ParseTime(node.Val)
 	case TimestampVal:
 		_, err = datetime.ParseDateTime(node.Val)
 	}
