@@ -1004,7 +1004,7 @@ func (s *VtctldServer) EmergencyReparentShard(ctx context.Context, req *vtctldat
 		req.Shard,
 		reparentutil.EmergencyReparentOptions{
 			NewPrimaryAlias:           req.NewPrimary,
-			IgnoreReplicas:            sets.New[string](ignoreReplicaAliases...),
+			IgnoreReplicas:            sets.New(ignoreReplicaAliases...),
 			WaitReplicasTimeout:       waitReplicasTimeout,
 			PreventCrossCellPromotion: req.PreventCrossCellPromotion,
 		},
@@ -1665,8 +1665,8 @@ func (s *VtctldServer) GetSrvVSchemas(ctx context.Context, req *vtctldatapb.GetS
 
 	// Omit any cell names in the request that don't map to existing cells
 	if len(req.Cells) > 0 {
-		s1 := sets.New[string](allCells...)
-		s2 := sets.New[string](req.Cells...)
+		s1 := sets.New(allCells...)
+		s2 := sets.New(req.Cells...)
 
 		cells = sets.List(s1.Intersection(s2))
 	}
@@ -2397,7 +2397,7 @@ func (s *VtctldServer) RefreshState(ctx context.Context, req *vtctldatapb.Refres
 
 	tablet, err := s.ts.GetTablet(ctx, req.TabletAlias)
 	if err != nil {
-		err = fmt.Errorf("Failed to get tablet %s: %w", topoproto.TabletAliasString(req.TabletAlias), err)
+		err = fmt.Errorf("failed to get tablet %s: %w", topoproto.TabletAliasString(req.TabletAlias), err)
 		return nil, err
 	}
 
@@ -2430,7 +2430,7 @@ func (s *VtctldServer) RefreshStateByShard(ctx context.Context, req *vtctldatapb
 
 	si, err := s.ts.GetShard(ctx, req.Keyspace, req.Shard)
 	if err != nil {
-		err = fmt.Errorf("Failed to get shard %s/%s/: %w", req.Keyspace, req.Shard, err)
+		err = fmt.Errorf("failed to get shard %s/%s/: %w", req.Keyspace, req.Shard, err)
 		return nil, err
 	}
 
