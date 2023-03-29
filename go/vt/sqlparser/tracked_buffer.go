@@ -19,6 +19,7 @@ package sqlparser
 import (
 	"fmt"
 	"strings"
+	"vitess.io/vitess/go/mysql/json"
 )
 
 // NodeFormatter defines the signature of a custom node formatter
@@ -193,6 +194,14 @@ func (buf *TrackedBuffer) astPrintf(currentNode SQLNode, format string, values .
 			buf.WriteString(fmt.Sprintf("%d", values[fieldnum]))
 		case 'a':
 			buf.WriteArg("", values[fieldnum].(string))
+		case 'j':
+			jsonVal := values[fieldnum].(string)
+			val, err := json.ParseMySQL([]byte(jsonVal))
+			if err != nil {
+				panic(err)
+			}
+			newVal := val.MarshalSQLTo(nil)
+			buf.WriteArg("", string(newVal))
 		default:
 			panic("unexpected")
 		}

@@ -25,8 +25,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
 	"vitess.io/vitess/go/mysql"
+	format "vitess.io/vitess/go/mysql/format"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -414,7 +414,7 @@ func binparserInt(typ jsonDataType, data []byte, pos int) (*Value, error) {
 		s = strconv.FormatUint(val, 10)
 	case jsonDouble:
 		dbl = true
-		s = string(mysql.FormatFloat(sqltypes.Float64, math.Float64frombits(val)))
+		s = string(format.FormatFloat(sqltypes.Float64, math.Float64frombits(val)))
 	}
 	return &Value{
 		t: TypeNumber,
@@ -445,7 +445,7 @@ func binparserOpaque(_ jsonDataType, data []byte, pos int) (node *Value, err err
 	start := 3       // account for length of stored value
 	end := start + 8 // all currently supported opaque data types are 8 bytes in size
 	switch dataType {
-	case mysql.TypeDate:
+	case sqltypes.ComTypeDate:
 		raw := binary.LittleEndian.Uint64(data[start:end])
 		value := raw >> 24
 		yearMonth := (value >> 22) & 0x01ffff // 17 bits starting at 22nd
@@ -454,7 +454,7 @@ func binparserOpaque(_ jsonDataType, data []byte, pos int) (node *Value, err err
 		day := (value >> 17) & 0x1f // 5 bits starting at 17th
 		dateString := fmt.Sprintf("%04d-%02d-%02d", year, month, day)
 		node = &Value{t: TypeDate, s: dateString}
-	case mysql.TypeTime2, mysql.TypeTime:
+	case sqltypes.ComTypeTime2, sqltypes.ComTypeTime:
 		raw := binary.LittleEndian.Uint64(data[start:end])
 		value := raw >> 24
 		hour := (value >> 12) & 0x03ff // 10 bits starting at 12th
@@ -463,7 +463,7 @@ func binparserOpaque(_ jsonDataType, data []byte, pos int) (node *Value, err err
 		microSeconds := raw & 0xffffff // 24 lower bits
 		timeString := fmt.Sprintf("%02d:%02d:%02d.%06d", hour, minute, second, microSeconds)
 		node = &Value{t: TypeTime, s: timeString}
-	case mysql.TypeDateTime2, mysql.TypeDateTime, mysql.TypeTimestamp2, mysql.TypeTimestamp:
+	case sqltypes.ComTypeDateTime2, sqltypes.ComTypeDateTime, sqltypes.ComTypeTimestamp2, sqltypes.ComTypeTimestamp:
 		raw := binary.LittleEndian.Uint64(data[start:end])
 		value := raw >> 24
 		yearMonth := (value >> 22) & 0x01ffff // 17 bits starting at 22nd
@@ -476,19 +476,19 @@ func binparserOpaque(_ jsonDataType, data []byte, pos int) (node *Value, err err
 		microSeconds := raw & 0xffffff // 24 lower bits
 		timeString := fmt.Sprintf("%04d-%02d-%02d %02d:%02d:%02d.%06d", year, month, day, hour, minute, second, microSeconds)
 		node = &Value{t: TypeDateTime, s: timeString}
-	case mysql.TypeDecimal, mysql.TypeNewDecimal:
+	case sqltypes.ComTypeDecimal, sqltypes.ComTypeNewDecimal:
 		decimalData := data[start:end]
 		precision := decimalData[0]
 		scale := decimalData[1]
 		metadata := (uint16(precision) << 8) + uint16(scale)
-		val, _, err := mysql.CellValue(decimalData, 2, mysql.TypeNewDecimal, metadata, &querypb.Field{Type: querypb.Type_DECIMAL})
+		val, _, err := mysql.CellValue(decimalData, 2, sqltypes.ComTypeNewDecimal, metadata, &querypb.Field{Type: querypb.Type_DECIMAL})
 		if err != nil {
 			return nil, err
 		}
 		node = &Value{t: TypeNumber, s: val.ToString(), i: true}
-	case mysql.TypeVarchar, mysql.TypeVarString, mysql.TypeString, mysql.TypeBlob, mysql.TypeTinyBlob, mysql.TypeMediumBlob, mysql.TypeLongBlob:
+	case sqltypes.ComTypeVarchar, sqltypes.ComTypeVarString, sqltypes.ComTypeString, sqltypes.ComTypeBlob, sqltypes.ComTypeTinyBlob, sqltypes.ComTypeMediumBlob, sqltypes.ComTypeLongBlob:
 		node = &Value{t: TypeBlob, s: string(data[pos+1:])}
-	case mysql.TypeBit:
+	case sqltypes.ComTypeBit:
 		node = &Value{t: TypeBit, s: string(data[pos+1:])}
 	default:
 		node = &Value{t: TypeOpaque, s: string(data[pos+1:])}
