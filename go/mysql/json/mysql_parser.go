@@ -29,6 +29,8 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 // MarshalSQLTo appends marshaled v to dst and returns the result in
@@ -221,56 +223,13 @@ func ParseMySQL(data []byte) (*Value, error) {
 	if len(data) == 0 {
 		node = ValueNull
 	} else {
-		node, err = bp.parse(data)
+		node, err = binparserNode(jsonDataType(data[0]), data, 1)
 		if err != nil {
 			return nil, err
 		}
 	}
 	return node, nil
 }
-
-var bp *binParser
-
-func init() {
-	bp = &binParser{
-		plugins: make(map[jsonDataType]jsonPlugin),
-	}
-}
-
-//region plugin manager
-
-// binParser contains the plugins for all json types and methods for parsing the
-// binary json representation of a specific type from the binlog
-type binParser struct {
-	plugins map[jsonDataType]jsonPlugin
-}
-
-// parse decodes a value from the binlog
-func (jh *binParser) parse(data []byte) (node *Value, err error) {
-	// pos keeps track of the offset of the current node being parsed
-	pos := 0
-	typ := data[pos]
-	pos++
-	return jh.getNode(jsonDataType(typ), data, pos)
-}
-
-// each plugin registers itself in init()s
-func (jh *binParser) register(typ jsonDataType, Plugin jsonPlugin) {
-	jh.plugins[typ] = Plugin
-}
-
-// gets the node at this position
-func (jh *binParser) getNode(typ jsonDataType, data []byte, pos int) (node *Value, err error) {
-	Plugin := jh.plugins[typ]
-	if Plugin == nil {
-		return nil, fmt.Errorf("Plugin not found for type %d", typ)
-	}
-	return Plugin.getNode(typ, data, pos)
-}
-
-//endregion
-
-//region enums
 
 // jsonDataType has the values used in the mysql json binary representation to denote types.
 // We have string, literal(true/false/null), number, object or array types.
@@ -305,10 +264,6 @@ const (
 	jsonFalseLiteral = '\x02'
 )
 
-//endregion
-
-//region util funcs
-
 // in objects and arrays some values are inlined, other types have offsets into the raw data.
 // literals (true/false/null) and 16bit integers are always inlined.
 // for large documents 32bit integers are also inlined.
@@ -340,8 +295,7 @@ func readInt(data []byte, pos int, large bool) (int, int) {
 				int(data[pos+3])<<24,
 			pos + 4
 	}
-	return int(data[pos]) +
-		int(data[pos+1])<<8, pos + 2
+	return int(data[pos]) + int(data[pos+1])<<8, pos + 2
 }
 
 // readVariableLength implements the logic to decode the length
@@ -365,15 +319,43 @@ func readVariableLength(data []byte, pos int) (int, int) {
 	return length, pos
 }
 
+var binparserFn [16]func(dataType jsonDataType, data []byte, pos int) (*Value, error)
+
+func init() {
+	binparserFn[jsonSmallObject] = binparserObject
+	binparserFn[jsonLargeObject] = binparserObject
+	binparserFn[jsonSmallArray] = binparserArray
+	binparserFn[jsonLargeArray] = binparserArray
+	binparserFn[jsonLiteral] = binparserLiteral
+	binparserFn[jsonInt16] = binparserInt
+	binparserFn[jsonUint16] = binparserInt
+	binparserFn[jsonInt32] = binparserInt
+	binparserFn[jsonUint32] = binparserInt
+	binparserFn[jsonInt64] = binparserInt
+	binparserFn[jsonUint64] = binparserInt
+	binparserFn[jsonDouble] = binparserInt
+	binparserFn[jsonString] = binparserString
+	binparserFn[jsonOpaque] = binparserOpaque
+}
+
+func binparserNode(typ jsonDataType, data []byte, pos int) (node *Value, err error) {
+	if int(typ) < len(binparserFn) {
+		if p := binparserFn[typ]; p != nil {
+			return p(typ, data, pos)
+		}
+	}
+	return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid json type: %d", typ)
+}
+
 // getElem returns the json value found inside json objects and arrays at the provided position
-func getElem(data []byte, pos int, large bool) (*Value, int, error) {
+func binparserElement(data []byte, pos int, large bool) (*Value, int, error) {
 	var elem *Value
 	var err error
 	var offset int
 	typ := jsonDataType(data[pos])
 	pos++
 	if isInline(typ, large) {
-		elem, err = bp.getNode(typ, data, pos)
+		elem, err = binparserNode(typ, data, pos)
 		if err != nil {
 			return nil, 0, err
 		}
@@ -389,7 +371,7 @@ func getElem(data []byte, pos int, large bool) (*Value, int, error) {
 		}
 		newData := data[offset:]
 		//newPos ignored because this is an offset into the "extra" section of the buffer
-		elem, err = bp.getNode(typ, newData, 1)
+		elem, err = binparserNode(typ, newData, 1)
 		if err != nil {
 			return nil, 0, err
 		}
@@ -399,33 +381,19 @@ func getElem(data []byte, pos int, large bool) (*Value, int, error) {
 
 //endregion
 
-// json sub-type interface
-// one plugin for each sub-type, plugins are stateless and initialized on load via individual init() functions
-type jsonPlugin interface {
-	getNode(typ jsonDataType, data []byte, pos int) (node *Value, err error)
+var binaryIntSizes = map[jsonDataType]int{
+	jsonUint64: 8,
+	jsonInt64:  8,
+	jsonUint32: 4,
+	jsonInt32:  4,
+	jsonUint16: 2,
+	jsonInt16:  2,
+	jsonDouble: 8,
 }
 
-type jsonPluginInfo struct {
-	name  string
-	types []jsonDataType
-}
-
-//region int plugin
-
-func init() {
-	newIntPlugin()
-}
-
-type intPlugin struct {
-	info  *jsonPluginInfo
-	sizes map[jsonDataType]int
-}
-
-var _ jsonPlugin = (*intPlugin)(nil)
-
-func (ih intPlugin) getVal(typ jsonDataType, data []byte, pos int) *Value {
+func binparserInt(typ jsonDataType, data []byte, pos int) (*Value, error) {
 	var val uint64
-	size := ih.sizes[typ]
+	size := binaryIntSizes[typ]
 	for i := 0; i < size; i++ {
 		val = val + uint64(data[pos+i])<<(8*i)
 	}
@@ -452,52 +420,10 @@ func (ih intPlugin) getVal(typ jsonDataType, data []byte, pos int) *Value {
 		t: TypeNumber,
 		s: s,
 		i: !dbl,
-	}
+	}, nil
 }
 
-func (ih intPlugin) getNode(typ jsonDataType, data []byte, pos int) (node *Value, err error) {
-	val := ih.getVal(typ, data, pos)
-	return val, nil
-}
-
-func newIntPlugin() *intPlugin {
-	ih := &intPlugin{
-		info: &jsonPluginInfo{
-			name:  "Int",
-			types: []jsonDataType{jsonInt64, jsonInt32, jsonInt16, jsonUint16, jsonUint32, jsonUint64, jsonDouble},
-		},
-		sizes: make(map[jsonDataType]int),
-	}
-	ih.sizes = map[jsonDataType]int{
-		jsonUint64: 8,
-		jsonInt64:  8,
-		jsonUint32: 4,
-		jsonInt32:  4,
-		jsonUint16: 2,
-		jsonInt16:  2,
-		jsonDouble: 8,
-	}
-	for _, typ := range ih.info.types {
-		bp.register(typ, ih)
-	}
-	return ih
-}
-
-//endregion
-
-//region literal plugin
-
-func init() {
-	newLiteralPlugin()
-}
-
-type literalPlugin struct {
-	info *jsonPluginInfo
-}
-
-var _ jsonPlugin = (*literalPlugin)(nil)
-
-func (lh literalPlugin) getNode(typ jsonDataType, data []byte, pos int) (node *Value, err error) {
+func binparserLiteral(_ jsonDataType, data []byte, pos int) (node *Value, err error) {
 	val := jsonDataLiteral(data[pos])
 	switch val {
 	case jsonNullLiteral:
@@ -507,39 +433,14 @@ func (lh literalPlugin) getNode(typ jsonDataType, data []byte, pos int) (node *V
 	case jsonFalseLiteral:
 		node = ValueFalse
 	default:
-		return nil, fmt.Errorf("unknown literal value %v", val)
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unknown literal value %v", val)
 	}
 	return node, nil
 }
 
-func newLiteralPlugin() *literalPlugin {
-	lh := &literalPlugin{
-		info: &jsonPluginInfo{
-			name:  "Literal",
-			types: []jsonDataType{jsonLiteral},
-		},
-	}
-	bp.register(jsonLiteral, lh)
-	return lh
-}
-
-//endregion
-
-//region opaque plugin
-
-func init() {
-	newOpaquePlugin()
-}
-
-type opaquePlugin struct {
-	info *jsonPluginInfo
-}
-
-var _ jsonPlugin = (*opaquePlugin)(nil)
-
 // other types are stored as catch-all opaque types: documentation on these is scarce.
 // we currently know about (and support) date/time/datetime/decimal.
-func (oh opaquePlugin) getNode(typ jsonDataType, data []byte, pos int) (node *Value, err error) {
+func binparserOpaque(_ jsonDataType, data []byte, pos int) (node *Value, err error) {
 	dataType := data[pos]
 	start := 3       // account for length of stored value
 	end := start + 8 // all currently supported opaque data types are 8 bytes in size
@@ -595,65 +496,15 @@ func (oh opaquePlugin) getNode(typ jsonDataType, data []byte, pos int) (node *Va
 	return node, nil
 }
 
-func newOpaquePlugin() *opaquePlugin {
-	oh := &opaquePlugin{
-		info: &jsonPluginInfo{
-			name:  "Opaque",
-			types: []jsonDataType{jsonOpaque},
-		},
-	}
-	bp.register(jsonOpaque, oh)
-	return oh
-}
-
-//endregion
-
-//region string plugin
-
-func init() {
-	newStringPlugin()
-}
-
-type stringPlugin struct {
-	info *jsonPluginInfo
-}
-
-var _ jsonPlugin = (*stringPlugin)(nil)
-
-func (sh stringPlugin) getNode(typ jsonDataType, data []byte, pos int) (node *Value, err error) {
+func binparserString(_ jsonDataType, data []byte, pos int) (node *Value, err error) {
 	size, pos := readVariableLength(data, pos)
 	node = &Value{t: TypeString, s: string(data[pos : pos+size])}
 	return node, nil
 }
 
-func newStringPlugin() *stringPlugin {
-	sh := &stringPlugin{
-		info: &jsonPluginInfo{
-			name:  "String",
-			types: []jsonDataType{jsonString},
-		},
-	}
-	bp.register(jsonString, sh)
-	return sh
-}
-
-//endregion
-
-//region array plugin
-
-func init() {
-	newArrayPlugin()
-}
-
-type arrayPlugin struct {
-	info *jsonPluginInfo
-}
-
-var _ jsonPlugin = (*arrayPlugin)(nil)
-
 // arrays are stored thus:
 // | type_identifier(one of [2,3]) | elem count | obj size | list of offsets+lengths of values | actual values |
-func (ah arrayPlugin) getNode(typ jsonDataType, data []byte, pos int) (node *Value, err error) {
+func binparserArray(typ jsonDataType, data []byte, pos int) (node *Value, err error) {
 	var nodes []*Value
 	var elem *Value
 	var elementCount int
@@ -661,7 +512,7 @@ func (ah arrayPlugin) getNode(typ jsonDataType, data []byte, pos int) (node *Val
 	elementCount, pos = readInt(data, pos, large)
 	_, pos = readInt(data, pos, large)
 	for i := 0; i < elementCount; i++ {
-		elem, pos, err = getElem(data, pos, large)
+		elem, pos, err = binparserElement(data, pos, large)
 		if err != nil {
 			return nil, err
 		}
@@ -671,35 +522,9 @@ func (ah arrayPlugin) getNode(typ jsonDataType, data []byte, pos int) (node *Val
 	return node, nil
 }
 
-func newArrayPlugin() *arrayPlugin {
-	ah := &arrayPlugin{
-		info: &jsonPluginInfo{
-			name:  "Array",
-			types: []jsonDataType{jsonSmallArray, jsonLargeArray},
-		},
-	}
-	bp.register(jsonSmallArray, ah)
-	bp.register(jsonLargeArray, ah)
-	return ah
-}
-
-//endregion
-
-//region object plugin
-
-func init() {
-	newObjectPlugin()
-}
-
-type objectPlugin struct {
-	info *jsonPluginInfo
-}
-
-var _ jsonPlugin = (*objectPlugin)(nil)
-
 // objects are stored thus:
 // | type_identifier(0/1) | elem count | obj size | list of offsets+lengths of keys | list of offsets+lengths of values | actual keys | actual values |
-func (oh objectPlugin) getNode(typ jsonDataType, data []byte, pos int) (node *Value, err error) {
+func binparserObject(typ jsonDataType, data []byte, pos int) (node *Value, err error) {
 	// "large" decides number of bytes used to specify element count and total object size: 4 bytes for large, 2 for small
 	var large = typ == jsonLargeObject
 
@@ -728,7 +553,7 @@ func (oh objectPlugin) getNode(typ jsonDataType, data []byte, pos int) (node *Va
 
 	// get the value for each key
 	for i := 0; i < elementCount; i++ {
-		elem, pos, err = getElem(data, pos, large)
+		elem, pos, err = binparserElement(data, pos, large)
 		if err != nil {
 			return nil, err
 		}
@@ -738,17 +563,3 @@ func (oh objectPlugin) getNode(typ jsonDataType, data []byte, pos int) (node *Va
 	node = &Value{t: TypeObject, o: Object{kvs: object}}
 	return node, nil
 }
-
-func newObjectPlugin() *objectPlugin {
-	oh := &objectPlugin{
-		info: &jsonPluginInfo{
-			name:  "Object",
-			types: []jsonDataType{jsonSmallObject, jsonLargeObject},
-		},
-	}
-	bp.register(jsonSmallObject, oh)
-	bp.register(jsonLargeObject, oh)
-	return oh
-}
-
-//endregion
