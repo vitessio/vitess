@@ -19,7 +19,9 @@ package sqlparser
 import (
 	"fmt"
 	"strings"
-	"vitess.io/vitess/go/mysql/json"
+
+	"vitess.io/vitess/go/hack"
+	"vitess.io/vitess/go/mysql/binlog"
 )
 
 // NodeFormatter defines the signature of a custom node formatter
@@ -196,7 +198,7 @@ func (buf *TrackedBuffer) astPrintf(currentNode SQLNode, format string, values .
 			buf.WriteArg("", values[fieldnum].(string))
 		case 'j':
 			jsonVal := values[fieldnum].(string)
-			val, err := json.ParseMySQL([]byte(jsonVal))
+			val, err := binlog.ParseBinaryJSON(hack.StringBytes(jsonVal))
 			if err != nil {
 				panic(err)
 			}

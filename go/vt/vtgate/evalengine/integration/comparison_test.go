@@ -26,6 +26,7 @@ import (
 
 	"github.com/spf13/pflag"
 
+	"vitess.io/vitess/go/mysql/format"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 
@@ -74,7 +75,7 @@ func normalizeValue(v sqltypes.Value, coll collations.ID) sqltypes.Value {
 		if err != nil {
 			panic(err)
 		}
-		return sqltypes.MakeTrusted(typ, mysql.FormatFloat(typ, f))
+		return sqltypes.MakeTrusted(typ, format.FormatFloat(typ, f))
 	}
 	return v
 }
