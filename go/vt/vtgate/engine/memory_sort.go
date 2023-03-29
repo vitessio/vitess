@@ -68,7 +68,7 @@ func (ms *MemorySort) SetTruncateColumnCount(count int) {
 
 // TryExecute satisfies the Primitive interface.
 func (ms *MemorySort) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	count, err := ms.fetchCount(vcursor, bindVars)
+	count, err := ms.fetchCount(ctx, vcursor, bindVars)
 	if err != nil {
 		return nil, err
 	}
@@ -94,7 +94,7 @@ func (ms *MemorySort) TryExecute(ctx context.Context, vcursor VCursor, bindVars 
 
 // TryStreamExecute satisfies the Primitive interface.
 func (ms *MemorySort) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	count, err := ms.fetchCount(vcursor, bindVars)
+	count, err := ms.fetchCount(ctx, vcursor, bindVars)
 	if err != nil {
 		return err
 	}
@@ -159,11 +159,11 @@ func (ms *MemorySort) NeedsTransaction() bool {
 	return ms.Input.NeedsTransaction()
 }
 
-func (ms *MemorySort) fetchCount(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (int, error) {
+func (ms *MemorySort) fetchCount(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (int, error) {
 	if ms.UpperLimit == nil {
 		return math.MaxInt64, nil
 	}
-	env := evalengine.EnvWithBindVars(bindVars)
+	env := evalengine.NewExpressionEnv(ctx, bindVars, vcursor)
 	resolved, err := env.Evaluate(ms.UpperLimit)
 	if err != nil {
 		return 0, err

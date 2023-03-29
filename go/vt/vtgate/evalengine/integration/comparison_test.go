@@ -17,6 +17,7 @@ limitations under the License.
 package integration
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 	"strings"
@@ -24,6 +25,9 @@ import (
 	"time"
 
 	"github.com/spf13/pflag"
+
+	"vitess.io/vitess/go/vt/callerid"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/collations"
@@ -50,14 +54,6 @@ func registerFlags(fs *pflag.FlagSet) {
 	fs.BoolVar(&debugSimplify, "simplify", debugSimplify, "simplify expressions before evaluating them")
 	fs.BoolVar(&debugCheckTypes, "check-types", debugCheckTypes, "check the TypeOf operator for all queries")
 	fs.BoolVar(&debugCheckCollations, "check-collations", debugCheckCollations, "check the returned collations for all queries")
-}
-
-func init() {
-	// We require MySQL 8.0 collations for the comparisons in the tests
-	mySQLVersion := "8.0.0"
-	servenv.SetMySQLServerVersionForTest(mySQLVersion)
-	collationEnv = collations.NewEnvironment(mySQLVersion)
-	servenv.OnParse(registerFlags)
 }
 
 // normalizeValue returns a normalized form of this value that matches the output
@@ -189,13 +185,33 @@ func compareRemoteExprEnv(t *testing.T, env *evalengine.ExpressionEnv, conn *mys
 	}
 }
 
+type vcursor struct {
+}
+
+func (vc *vcursor) GetKeyspace() string {
+	return "vttest"
+}
+
+func (vc *vcursor) TimeZone() *time.Location {
+	return time.Local
+}
+
 func TestMySQL(t *testing.T) {
 	var conn = mysqlconn(t)
 	defer conn.Close()
 
+	// We require MySQL 8.0 collations for the comparisons in the tests
+
+	servenv.SetMySQLServerVersionForTest(conn.ServerVersion)
+	collationEnv = collations.NewEnvironment(conn.ServerVersion)
+	servenv.OnParse(registerFlags)
+
 	for _, tc := range testcases.Cases {
 		t.Run(tc.Name(), func(t *testing.T) {
-			env := evalengine.EmptyExpressionEnv()
+			ctx := callerid.NewContext(context.Background(), &vtrpc.CallerID{Principal: "testuser"}, &querypb.VTGateCallerID{
+				Username: "vt_dba",
+			})
+			env := evalengine.NewExpressionEnv(ctx, nil, &vcursor{})
 			tc.Run(func(query string, row []sqltypes.Value) {
 				env.Row = row
 				compareRemoteExprEnv(t, env, conn, query, tc.Schema)

@@ -567,8 +567,8 @@ func Translate(e sqlparser.Expr, cfg *Config) (Expr, error) {
 	}
 
 	if cfg.Optimization >= OptimizationLevelSimplify && cfg.Optimization != OptimizationLevelCompilerDebug {
-		var staticEnv ExpressionEnv
-		expr, err = simplifyExpr(&staticEnv, expr)
+		staticEnv := EmptyExpressionEnv()
+		expr, err = simplifyExpr(staticEnv, expr)
 	}
 
 	if cfg.Optimization >= OptimizationLevelCompile && ast.untyped == 0 {

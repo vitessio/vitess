@@ -2192,8 +2192,8 @@ func (cmp *Comparator) RefOfCurTimeFuncExpr(a, b *CurTimeFuncExpr) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return cmp.IdentifierCI(a.Name, b.Name) &&
-		cmp.Expr(a.Fsp, b.Fsp)
+	return a.Fsp == b.Fsp &&
+		cmp.IdentifierCI(a.Name, b.Name)
 }
 
 // RefOfDeallocateStmt does deep equals between the two objects.
