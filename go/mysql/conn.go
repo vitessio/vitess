@@ -1124,6 +1124,16 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 		// encapsulate it with a defer'd func()
 		c.startWriterBuffering()
 
+		// outstanding cursor, error
+		if c.cs != nil {
+			log.Error("Received ComStmtExecute with outstanding cursor")
+			if werr := c.writeErrorPacket(ERUnknownComError, SSUnknownComError, "error handling packet: %v", data); werr != nil {
+				log.Error("Error writing error packet to client: %v", werr)
+				return werr
+			}
+			return nil
+		}
+
 		queryStart := time.Now()
 		stmtID, cursorType, err := c.parseComStmtExecute(c.PrepareData, data)
 		c.recycleReadPacket()
@@ -1233,6 +1243,7 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 			return err
 		}
 	case ComStmtFetch:
+		log.Info("RECEIVED FETCH")
 		c.startWriterBuffering()
 		endFetch := func() error {
 			if err = c.writeEndResult(false, 0, 0, handler.WarningCount(c)); err != nil {
