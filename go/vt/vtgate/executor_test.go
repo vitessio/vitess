@@ -2559,6 +2559,69 @@ func TestExecutorStartTxnStmt(t *testing.T) {
 	}
 }
 
+func TestExecutorPrepareExecute(t *testing.T) {
+	executor, _, _, _ := createExecutorEnv()
+	executor.normalize = true
+	session := NewAutocommitSession(&vtgatepb.Session{})
+
+	// prepare statement.
+	_, err := executor.Execute(context.Background(),
+		"TestExecutorPrepareExecute",
+		session,
+		"prepare prep_user from 'select * from user where id = ?'",
+		nil)
+	require.NoError(t, err)
+	prepData := session.PrepareStatement["prep_user"]
+	require.NotNil(t, prepData)
+	require.Equal(t, "select * from `user` where id = :v1", prepData.PrepareStatement)
+	require.EqualValues(t, 1, prepData.ParamsCount)
+
+	// prepare statement using user defined variable
+	_, err = executor.Execute(context.Background(),
+		"TestExecutorPrepareExecute",
+		session,
+		"set @udv_query = 'select * from user where id in (?,?,?)'",
+		nil)
+	require.NoError(t, err)
+
+	_, err = executor.Execute(context.Background(),
+		"TestExecutorPrepareExecute",
+		session,
+		"prepare prep_user2 from @udv_query",
+		nil)
+	require.NoError(t, err)
+	prepData = session.PrepareStatement["prep_user2"]
+	require.NotNil(t, prepData)
+	require.Equal(t, "select * from `user` where id in ::__vals", prepData.PrepareStatement)
+	require.EqualValues(t, 3, prepData.ParamsCount)
+
+	// syntax error on prepared query
+	_, err = executor.Execute(context.Background(),
+		"TestExecutorPrepareExecute",
+		session,
+		"prepare prep_user2 from 'select'",
+		nil)
+	require.Error(t, err)
+	require.Nil(t, session.PrepareStatement["prep_user2"]) // prepared statement is cleared from the session.
+
+	// user defined variable does not exists on prepared query
+	_, err = executor.Execute(context.Background(),
+		"TestExecutorPrepareExecute",
+		session,
+		"prepare prep_user from @foo",
+		nil)
+	require.Error(t, err)
+	require.Nil(t, session.PrepareStatement["prep_user"]) // prepared statement is cleared from the session.
+
+	// empty prepared query
+	_, err = executor.Execute(context.Background(),
+		"TestExecutorPrepareExecute",
+		session,
+		"prepare prep_user from ''",
+		nil)
+	require.Error(t, err)
+}
+
 func exec(executor *Executor, session *SafeSession, sql string) (*sqltypes.Result, error) {
 	return executor.Execute(context.Background(), "TestExecute", session, sql, nil)
 }

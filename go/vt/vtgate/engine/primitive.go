@@ -197,6 +197,7 @@ type (
 		// InTransaction returns true if the session has already opened transaction or
 		// will start a transaction on the query execution.
 		InTransaction() bool
+		StorePrepareData(stmtName string, prepareData *vtgatepb.PrepareData)
 	}
 
 	// Match is used to check if a Primitive matches

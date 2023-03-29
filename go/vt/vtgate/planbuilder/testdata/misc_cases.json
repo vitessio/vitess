@@ -1,0 +1,184 @@
+[
+  {
+    "comment": "prepare statement with select",
+    "query": "prepare prep from 'select * from user where id = ?'",
+    "v3-plan": {
+      "QueryType": "PREPARE",
+      "Original": "prepare prep from 'select * from user where id = ?'",
+      "Instructions": {
+        "OperatorType": "PREPARE",
+        "ParameterCount": 1,
+        "PrepareStatement": "select * from `user` where id = :v1",
+        "StatementName": "prep",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select * from `user` where 1 != 1",
+            "Query": "select * from `user` where id = :v1",
+            "Table": "`user`",
+            "Values": [
+              ":v1"
+            ],
+            "Vindex": "user_index"
+          }
+        ]
+      }
+    },
+    "gen4-plan": {
+      "QueryType": "PREPARE",
+      "Original": "prepare prep from 'select * from user where id = ?'",
+      "Instructions": {
+        "OperatorType": "PREPARE",
+        "ParameterCount": 1,
+        "PrepareStatement": "select * from `user` where id = :v1",
+        "StatementName": "prep",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select * from `user` where 1 != 1",
+            "Query": "select * from `user` where id = :v1",
+            "Table": "`user`",
+            "Values": [
+              ":v1"
+            ],
+            "Vindex": "user_index"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "prepare statement with delete",
+    "query": "prepare prep from 'delete from user where id between ? and ?'",
+    "plan": {
+      "QueryType": "PREPARE",
+      "Original": "prepare prep from 'delete from user where id between ? and ?'",
+      "Instructions": {
+        "OperatorType": "PREPARE",
+        "ParameterCount": 2,
+        "PrepareStatement": "delete from `user` where id between :v1 and :v2",
+        "StatementName": "prep",
+        "Inputs": [
+          {
+            "OperatorType": "Delete",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "TargetTabletType": "PRIMARY",
+            "KsidLength": 1,
+            "KsidVindex": "user_index",
+            "MultiShardAutocommit": false,
+            "OwnedVindexQuery": "select Id, `Name`, Costly from `user` where id between :v1 and :v2 for update",
+            "Query": "delete from `user` where id between :v1 and :v2",
+            "Table": "user"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "prepare statement with drop",
+    "query": "prepare prep from 'drop table user'",
+    "plan": {
+      "QueryType": "PREPARE",
+      "Original": "prepare prep from 'drop table user'",
+      "Instructions": {
+        "OperatorType": "PREPARE",
+        "PrepareStatement": "drop table `user`",
+        "StatementName": "prep",
+        "Inputs": [
+          {
+            "OperatorType": "DDL",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "Query": "drop table `user`"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "prepare statement with user defined variable",
+    "query": "prepare prep from @prep_stmt",
+    "v3-plan": {
+      "QueryType": "PREPARE",
+      "Original": "prepare prep from @prep_stmt",
+      "Instructions": {
+        "OperatorType": "PREPARE",
+        "ParameterCount": 3,
+        "PrepareStatement": "select * from `user` where id in ::__vals",
+        "StatementName": "prep",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "IN",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select * from `user` where 1 != 1",
+            "Query": "select * from `user` where id in ::__vals",
+            "Table": "`user`",
+            "Values": [
+              "(:v1, :v2, :v3)"
+            ],
+            "Vindex": "user_index"
+          }
+        ]
+      }
+    },
+    "gen4-plan": {
+      "QueryType": "PREPARE",
+      "Original": "prepare prep from @prep_stmt",
+      "Instructions": {
+        "OperatorType": "PREPARE",
+        "ParameterCount": 3,
+        "PrepareStatement": "select * from `user` where id in ::__vals",
+        "StatementName": "prep",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "IN",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select * from `user` where 1 != 1",
+            "Query": "select * from `user` where id in ::__vals",
+            "Table": "`user`",
+            "Values": [
+              "(:v1, :v2, :v3)"
+            ],
+            "Vindex": "user_index"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  }
+]

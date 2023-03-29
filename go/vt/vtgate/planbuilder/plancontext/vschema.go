@@ -68,6 +68,10 @@ type VSchema interface {
 
 	// IsViewsEnabled returns true if Vitess manages the views.
 	IsViewsEnabled() bool
+
+	// GetUDV returns user defined value from the variable passed.
+	GetUDV(name string) *querypb.BindVariable
+	ClearPrepareData(lowered string)
 }
 
 // PlannerNameToVersion returns the numerical representation of the planner

@@ -31,6 +31,7 @@ import (
 	"github.com/nsf/jsondiff"
 	"github.com/stretchr/testify/require"
 
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sidecardb"
 
@@ -256,6 +257,7 @@ func TestPlan(t *testing.T) {
 	testFile(t, "info_schema80_cases.json", testOutputTempDir, vschemaWrapper, false)
 	testFile(t, "reference_cases.json", testOutputTempDir, vschemaWrapper, false)
 	testFile(t, "vexplain_cases.json", testOutputTempDir, vschemaWrapper, false)
+	testFile(t, "misc_cases.json", testOutputTempDir, vschemaWrapper, false)
 }
 
 func TestSystemTables57(t *testing.T) {
@@ -577,6 +579,16 @@ type vschemaWrapper struct {
 	sysVarEnabled bool
 	version       plancontext.PlannerVersion
 	enableViews   bool
+}
+
+func (vw *vschemaWrapper) ClearPrepareData(lowered string) {
+}
+
+func (vw *vschemaWrapper) GetUDV(name string) *querypb.BindVariable {
+	if strings.EqualFold(name, "prep_stmt") {
+		return sqltypes.StringBindVariable("select * from user where id in (?, ?, ?)")
+	}
+	return nil
 }
 
 func (vw *vschemaWrapper) IsShardRoutingEnabled() bool {

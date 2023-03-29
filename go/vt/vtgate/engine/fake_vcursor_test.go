@@ -51,6 +51,11 @@ var _ SessionActions = (*noopVCursor)(nil)
 type noopVCursor struct {
 }
 
+func (t *noopVCursor) StorePrepareData(stmtName string, prepareData *vtgatepb.PrepareData) {
+	//TODO implement me
+	panic("implement me")
+}
+
 func (t *noopVCursor) InTransaction() bool {
 	return false
 }

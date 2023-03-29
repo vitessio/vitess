@@ -1157,3 +1157,15 @@ func (vc *vcursorImpl) FindRoutedShard(keyspace, shard string) (keyspaceName str
 func (vc *vcursorImpl) IsViewsEnabled() bool {
 	return enableViews
 }
+
+func (vc *vcursorImpl) GetUDV(name string) *querypb.BindVariable {
+	return vc.safeSession.GetUDV(name)
+}
+
+func (vc *vcursorImpl) ClearPrepareData(name string) {
+	delete(vc.safeSession.PrepareStatement, name)
+}
+
+func (vc *vcursorImpl) StorePrepareData(stmtName string, prepareData *vtgatepb.PrepareData) {
+	vc.safeSession.StorePrepareData(stmtName, prepareData)
+}

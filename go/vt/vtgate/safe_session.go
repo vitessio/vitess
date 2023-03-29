@@ -903,6 +903,26 @@ func (session *SafeSession) EnableLogging() {
 	session.logging = &executeLogger{}
 }
 
+func (session *SafeSession) GetUDV(name string) *querypb.BindVariable {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+
+	if session.UserDefinedVariables == nil {
+		return nil
+	}
+	return session.UserDefinedVariables[name]
+}
+
+func (session *SafeSession) StorePrepareData(key string, value *vtgatepb.PrepareData) {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+
+	if session.PrepareStatement == nil {
+		session.PrepareStatement = map[string]*vtgatepb.PrepareData{}
+	}
+	session.PrepareStatement[key] = value
+}
+
 func (l *executeLogger) log(primitive engine.Primitive, target *querypb.Target, gateway srvtopo.Gateway, query string, begin bool, bv map[string]*querypb.BindVariable) {
 	if l == nil {
 		return

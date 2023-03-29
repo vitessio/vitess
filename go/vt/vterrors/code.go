@@ -46,6 +46,7 @@ var (
 	VT03021 = errorWithoutState("VT03021", vtrpcpb.Code_INVALID_ARGUMENT, "ambiguous column reference: %v", "The given column is ambiguous. You can use a table qualifier to make it unambiguous.")
 	VT03022 = errorWithoutState("VT03022", vtrpcpb.Code_INVALID_ARGUMENT, "column %v not found in %v", "The given column cannot be found.")
 	VT03023 = errorWithoutState("VT03023", vtrpcpb.Code_INVALID_ARGUMENT, "INSERT not supported when targeting a key range: %s", "When targeting a range of shards, Vitess does not know which shard to send the INSERT to.")
+	VT03024 = errorWithoutState("VT03024", vtrpcpb.Code_INVALID_ARGUMENT, "'%s' user defined variable does not exists", "The query cannot be prepared using the user defined variable as it does not exists for this session.")
 
 	VT05001 = errorWithState("VT05001", vtrpcpb.Code_NOT_FOUND, DbDropExists, "cannot drop database '%s'; database does not exists", "The given database does not exist; Vitess cannot drop it.")
 	VT05002 = errorWithState("VT05002", vtrpcpb.Code_NOT_FOUND, BadDb, "cannot alter database '%s'; unknown database", "The given database does not exist; Vitess cannot alter it.")

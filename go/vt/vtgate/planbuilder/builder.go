@@ -20,9 +20,9 @@ import (
 	"fmt"
 	"sort"
 
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 
-	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 
 	"vitess.io/vitess/go/vt/vterrors"
@@ -275,6 +275,8 @@ func createInstructionFor(query string, stmt sqlparser.Statement, reservedVars *
 		return buildStreamPlan(stmt, vschema)
 	case *sqlparser.VStream:
 		return buildVStreamPlan(stmt, vschema)
+	case *sqlparser.PrepareStmt:
+		return buildPrepareStmtPlan(query, stmt, vschema, enableOnlineDDL, enableDirectDDL)
 	case *sqlparser.CommentOnly:
 		// There is only a comment in the input.
 		// This is essentially a No-op
