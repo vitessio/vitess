@@ -93,7 +93,7 @@ func (spec_b) format(ctx *formatctx, b []byte) []byte {
 
 func (spec_cm) format(ctx *formatctx, b []byte) []byte {
 	ctx.initYear()
-	return appendInt(b, int(ctx.month), 0)
+	return appendInt(b, int(ctx.month), 2)
 }
 
 func (spec_d) format(ctx *formatctx, b []byte) []byte {

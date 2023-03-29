@@ -36,6 +36,10 @@ func (call *builtinUser) typeof(_ *ExpressionEnv, _ []*querypb.Field) (sqltypes.
 	return sqltypes.VarChar, 0
 }
 
+func (call *builtinUser) constant() bool {
+	return false
+}
+
 type builtinVersion struct {
 	CallExpr
 }
@@ -66,4 +70,8 @@ func (call *builtinDatabase) eval(env *ExpressionEnv) (eval, error) {
 
 func (call *builtinDatabase) typeof(_ *ExpressionEnv, _ []*querypb.Field) (sqltypes.Type, typeFlag) {
 	return sqltypes.VarChar, 0
+}
+
+func (call *builtinDatabase) constant() bool {
+	return false
 }

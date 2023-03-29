@@ -53,13 +53,17 @@ var (
 )
 
 func init() {
-	formatTime[0], _ = datetime.New("%H:%M:%S", 0)
-	formatDateTime[0], _ = datetime.New("%Y-%m-%d %H:%M:%S", 0)
-	formatDate, _ = datetime.New("%Y-%m-%d", 0)
+	const fmtTime = "%H:%i:%s"
+	const fmtDate = "%Y-%m-%d"
+	const fmtDateTime = fmtDate + " " + fmtTime
+
+	formatTime[0], _ = datetime.New(fmtTime, 0)
+	formatDateTime[0], _ = datetime.New(fmtDateTime, 0)
+	formatDate, _ = datetime.New(fmtDate, 0)
 
 	for i := 1; i <= 6; i++ {
-		formatTime[i], _ = datetime.New("%H:%M:%S.%f", uint8(i))
-		formatDateTime[i], _ = datetime.New("%Y-%m-%d %H:%M:%S.%f", uint8(i))
+		formatTime[i], _ = datetime.New(fmtTime+".%f", uint8(i))
+		formatDateTime[i], _ = datetime.New(fmtDateTime+".%f", uint8(i))
 	}
 }
 
@@ -81,6 +85,10 @@ func (call *builtinNow) typeof(_ *ExpressionEnv, _ []*querypb.Field) (sqltypes.T
 	return sqltypes.Datetime, 0
 }
 
+func (call *builtinNow) constant() bool {
+	return false
+}
+
 func (call *builtinSysdate) eval(env *ExpressionEnv) (eval, error) {
 	now := time.Now()
 	if tz := env.currentTimezone(); tz != nil {
@@ -93,6 +101,10 @@ func (call *builtinSysdate) typeof(_ *ExpressionEnv, _ []*querypb.Field) (sqltyp
 	return sqltypes.Datetime, 0
 }
 
+func (call *builtinSysdate) constant() bool {
+	return false
+}
+
 func (call *builtinCurdate) eval(env *ExpressionEnv) (eval, error) {
 	now := env.time(false)
 	return newEvalRaw(sqltypes.Date, formatDate.Format(now), collationBinary), nil
@@ -100,4 +112,8 @@ func (call *builtinCurdate) eval(env *ExpressionEnv) (eval, error) {
 
 func (call *builtinCurdate) typeof(_ *ExpressionEnv, _ []*querypb.Field) (sqltypes.Type, typeFlag) {
 	return sqltypes.Date, 0
+}
+
+func (call *builtinCurdate) constant() bool {
+	return false
 }
