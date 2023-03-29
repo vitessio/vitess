@@ -41,11 +41,11 @@ func buildPrepareStmtPlan(query string, pStmt *sqlparser.PrepareStmt, vschema pl
 	case *sqlparser.Variable:
 		udv = expr.Name.Lowered()
 		udvType = true
-	case sqlparser.Argument:
-		udv, _ = strings.CutPrefix(string(expr), sqlparser.UserDefinedVariableName)
+	case *sqlparser.Argument:
+		udv, _ = strings.CutPrefix(expr.Name, sqlparser.UserDefinedVariableName)
 		udvType = true
 	default:
-		return nil, vterrors.VT13002("prepare statement should not have :%T", pStmt.Statement)
+		return nil, vterrors.VT13002("prepare statement should not have : %T", pStmt.Statement)
 	}
 	if udvType {
 		bv := vschema.GetUDV(udv)
