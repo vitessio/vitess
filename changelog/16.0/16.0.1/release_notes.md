@@ -10,7 +10,7 @@ Below is a summary of this Go patch release. You can learn more [here](https://g
 
 
 ------------
-The entire changelog for this release can be found [here](https://github.com/vitessio/vitess/blob/main/changelog/16.0/v16.0.1/changelog.md).
+The entire changelog for this release can be found [here](https://github.com/vitessio/vitess/blob/main/changelog/16.0/16.0.1/changelog.md).
 
 The release includes 39 commits (excluding merges)
 
