@@ -1100,7 +1100,7 @@ func (api *API) GetSrvKeyspaces(ctx context.Context, req *vtadminpb.GetSrvKeyspa
 			span, ctx := trace.NewSpan(ctx, "Cluster.GetSrvKeyspaces")
 			defer span.Finish()
 
-			sks, err := c.GetSrvKeyspaces(ctx, req.Cells)
+			sk, err := c.GetSrvKeyspaces(ctx, req.Cells)
 
 			if err != nil {
 				er.RecordError(err)
@@ -1108,7 +1108,7 @@ func (api *API) GetSrvKeyspaces(ctx context.Context, req *vtadminpb.GetSrvKeyspa
 			}
 
 			m.Lock()
-			for key, value := range sks {
+			for key, value := range sk {
 				sks[key] = value
 			}
 			m.Unlock()
