@@ -37,3 +37,11 @@ func Any[T any](s []T, fn func(T) bool) bool {
 	}
 	return false
 }
+
+func Map[From, To any](in []From, f func(From) To) []To {
+	result := make([]To, len(in))
+	for i, col := range in {
+		result[i] = f(col)
+	}
+	return result
+}

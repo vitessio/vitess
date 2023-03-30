@@ -17,6 +17,7 @@ limitations under the License.
 package operators
 
 import (
+	"vitess.io/vitess/go/slices2"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -66,18 +67,28 @@ func (v *Vindex) Clone([]ops.Operator) ops.Operator {
 
 var _ ops.PhysicalOperator = (*Vindex)(nil)
 
-func (v *Vindex) AddColumn(_ *plancontext.PlanningContext, expr sqlparser.Expr) (int, error) {
-	return addColumn(v, expr)
+func (v *Vindex) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, reuseCol bool) (ops.Operator, int, error) {
+	offset, err := addColumn(ctx, v, expr.Expr, reuseCol)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	return v, offset, nil
 }
 
-func (v *Vindex) GetColumns() []*sqlparser.ColName {
+func colNameToExpr(c *sqlparser.ColName) sqlparser.Expr { return c }
+
+func (v *Vindex) GetColumns() ([]sqlparser.Expr, error) {
+	return slices2.Map(v.Columns, colNameToExpr), nil
+}
+
+func (v *Vindex) GetColNames() []*sqlparser.ColName {
 	return v.Columns
 }
 func (v *Vindex) AddCol(col *sqlparser.ColName) {
 	v.Columns = append(v.Columns, col)
 }
 
-// checkValid implements the Operator interface
 func (v *Vindex) CheckValid() error {
 	if len(v.Table.Predicates) == 0 {
 		return vterrors.VT12001(VindexUnsupported + " (where clause missing)")

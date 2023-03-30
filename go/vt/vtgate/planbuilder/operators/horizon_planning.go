@@ -19,35 +19,68 @@ package operators
 import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
+	"vitess.io/vitess/go/vt/vtgate/semantics"
 
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 )
 
 var errNotHorizonPlanned = vterrors.VT12001("query cannot be fully operator planned")
 
-func planHorizons(ctx *plancontext.PlanningContext, in ops.Operator) (ops.Operator, error) {
-	return rewrite.TopDown(in, func(in ops.Operator) (ops.Operator, rewrite.TreeIdentity, rewrite.VisitRule, error) {
+// planColumns is the process of figuring out all necessary columns.
+// They can be needed because the user wants to return the value of a column,
+// or because we need a column for filtering, grouping or ordering
+func planColumns(ctx *plancontext.PlanningContext, root ops.Operator) (ops.Operator, error) {
+	// We only need to do column planning to the point we hit a Route.
+	// Everything underneath the route is handled by the mysql planner
+	stopAtRoute := func(operator ops.Operator) rewrite.VisitRule {
+		_, isRoute := operator.(*Route)
+		return rewrite.VisitRule(!isRoute)
+	}
+	visitor := func(in ops.Operator, _ semantics.TableSet) (ops.Operator, rewrite.TreeIdentity, error) {
 		switch in := in.(type) {
 		case *Horizon:
-			op, visit, err := planHorizon(ctx, in)
+			op, err := planHorizon(ctx, in, in == root)
 			if err != nil {
-				return nil, rewrite.SameTree, rewrite.SkipChildren, err
+				return nil, false, err
 			}
-			return op, rewrite.NewTree, visit, nil
-		case *Route:
-			return in, rewrite.SameTree, rewrite.SkipChildren, nil
+			return op, rewrite.NewTree, nil
+		case *Derived:
+			op, err := planDerived(ctx, in, in == root)
+			if err != nil {
+				return nil, false, err
+			}
+			return op, rewrite.NewTree, err
+		case *Filter:
+			err := planFilter(ctx, in)
+			if err != nil {
+				return nil, false, err
+			}
+			return in, rewrite.SameTree, nil
 		default:
-			return in, rewrite.SameTree, rewrite.VisitChildren, nil
+			return in, rewrite.SameTree, nil
 		}
-	})
+	}
+
+	newOp, err := rewrite.BottomUp(root, TableID, visitor, stopAtRoute)
+	if err != nil {
+		if vterr, ok := err.(*vterrors.VitessError); ok && vterr.ID == "VT13001" {
+			// we encountered a bug. let's try to back out
+			return nil, errNotHorizonPlanned
+		}
+		return nil, err
+	}
+
+	return newOp, nil
 }
 
-func planHorizon(ctx *plancontext.PlanningContext, in *Horizon) (ops.Operator, rewrite.VisitRule, error) {
+func planHorizon(ctx *plancontext.PlanningContext, in *Horizon, isRoot bool) (ops.Operator, error) {
 	rb, isRoute := in.Source.(*Route)
-	if !isRoute {
-		return in, rewrite.VisitChildren, nil
+	if isRoot && !isRoute && ctx.SemTable.NotSingleRouteErr != nil {
+		// If we got here, we don't have a single shard plan
+		return nil, ctx.SemTable.NotSingleRouteErr
 	}
 	if isRoute && rb.IsSingleShard() && in.Select.GetLimit() == nil {
 		return planSingleRoute(rb, in)
@@ -55,24 +88,127 @@ func planHorizon(ctx *plancontext.PlanningContext, in *Horizon) (ops.Operator, r
 
 	sel, isSel := in.Select.(*sqlparser.Select)
 	if !isSel {
-		return nil, rewrite.VisitChildren, errNotHorizonPlanned
+		return nil, errNotHorizonPlanned
 	}
 
 	qp, err := CreateQPFromSelect(ctx, sel)
 	if err != nil {
-		return nil, rewrite.VisitChildren, err
+		return nil, err
 	}
 
 	needsOrdering := len(qp.OrderExprs) > 0
 	canShortcut := isRoute && sel.Having == nil && !needsOrdering
+	_, isDerived := in.Source.(*Derived)
 
-	if !qp.NeedsAggregation() && sel.Having == nil && canShortcut && !needsOrdering && !qp.NeedsDistinct() && in.Select.GetLimit() == nil {
+	switch {
+	case qp.NeedsAggregation() || sel.Having != nil || sel.Limit != nil || isDerived || needsOrdering || qp.NeedsDistinct():
+		return nil, errNotHorizonPlanned
+	case canShortcut:
 		return planSingleRoute(rb, in)
+	default:
+		return pushProjections(ctx, qp, in.Source, isRoot)
 	}
-	return nil, rewrite.VisitChildren, errNotHorizonPlanned
 }
 
-func planSingleRoute(rb *Route, horizon *Horizon) (ops.Operator, rewrite.VisitRule, error) {
+func planDerived(ctx *plancontext.PlanningContext, in *Derived, isRoot bool) (ops.Operator, error) {
+	rb, isRoute := in.Source.(*Route)
+
+	sel, isSel := in.Query.(*sqlparser.Select)
+	if !isSel {
+		return nil, errNotHorizonPlanned
+	}
+
+	qp, err := CreateQPFromSelect(ctx, sel)
+	if err != nil {
+		return nil, err
+	}
+
+	needsOrdering := len(qp.OrderExprs) > 0
+	canShortcut := isRoute && sel.Having == nil && !needsOrdering
+	_, isDerived := in.Source.(*Derived)
+
+	switch {
+	case qp.NeedsAggregation() || sel.Having != nil || sel.Limit != nil || isDerived || needsOrdering || qp.NeedsDistinct():
+		return nil, errNotHorizonPlanned
+	case canShortcut:
+		// shortcut here means we don't need to plan the derived table, we can just push it under the route
+		rb.Source, in.Source = in.Source, in
+		return rb, nil
+	default:
+		return pushProjections(ctx, qp, in.Source, isRoot)
+	}
+}
+
+func pushProjections(ctx *plancontext.PlanningContext, qp *QueryProjection, src ops.Operator, isRoot bool) (ops.Operator, error) {
+	// if we are at the root, we have to return the columns the user asked for. in all other levels, we reuse as much as possible
+	canReuseCols := !isRoot
+	proj := newSimpleProjection(src)
+	needProj := false
+	for idx, e := range qp.SelectExprs {
+		expr, err := e.GetAliasedExpr()
+		if err != nil {
+			return nil, err
+		}
+		if !expr.As.IsEmpty() {
+			// we are not handling column names correct yet, so let's fail here for now
+			return nil, errNotHorizonPlanned
+		}
+		var offset int
+		src, offset, err = src.AddColumn(ctx, expr, canReuseCols)
+		if err != nil {
+			return nil, err
+		}
+
+		if offset != idx {
+			needProj = true
+		}
+		proj.ASTColumns = append(proj.ASTColumns, expr)
+		proj.Columns = append(proj.Columns, offset)
+	}
+
+	if needProj {
+		return proj, nil
+	}
+
+	columns, err := src.GetColumns()
+	if err != nil {
+		return nil, err
+	}
+	if len(columns) == qp.GetColumnCount() {
+		return src, nil
+	}
+	return proj, nil
+}
+
+func planSingleRoute(rb *Route, horizon *Horizon) (ops.Operator, error) {
 	rb.Source, horizon.Source = horizon, rb.Source
-	return rb, rewrite.SkipChildren, nil
+	return rb, nil
+}
+
+func aeWrap(e sqlparser.Expr) *sqlparser.AliasedExpr {
+	return &sqlparser.AliasedExpr{Expr: e}
+}
+
+func planFilter(ctx *plancontext.PlanningContext, in *Filter) error {
+	resolveColumn := func(col *sqlparser.ColName) (int, error) {
+		newSrc, offset, err := in.Source.AddColumn(ctx, aeWrap(col), true)
+		if err != nil {
+			return 0, err
+		}
+		in.Source = newSrc
+		return offset, nil
+	}
+	cfg := &evalengine.Config{
+		ResolveType:   ctx.SemTable.TypeForExpr,
+		Collation:     ctx.SemTable.Collation,
+		ResolveColumn: resolveColumn,
+	}
+
+	eexpr, err := evalengine.Translate(sqlparser.AndExpressions(in.Predicates...), cfg)
+	if err != nil {
+		return err
+	}
+
+	in.FinalPredicate = eexpr
+	return nil
 }
