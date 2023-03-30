@@ -25,10 +25,9 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 
-	"vitess.io/vitess/go/vt/vtgate/engine"
-
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
+	popcode "vitess.io/vitess/go/vt/vtgate/engine/opcode"
 )
 
 type (
@@ -75,7 +74,7 @@ type (
 	Aggr struct {
 		Original *sqlparser.AliasedExpr
 		Func     sqlparser.AggrFunc
-		OpCode   engine.AggregateOpcode
+		OpCode   popcode.AggregateOpcode
 		Alias    string
 		// The index at which the user expects to see this aggregated function. Set to nil, if the user does not ask for it
 		Index    *int
@@ -224,7 +223,6 @@ func (ar *AggrRewriter) RewriteUp() func(*sqlparser.Cursor) bool {
 			Col:  &sqlparser.AliasedExpr{Expr: fExp},
 		}
 		ar.qp.HasAggr = true
-
 		cursor.Replace(sqlparser.NewOffset(len(ar.qp.SelectExprs), fExp))
 		ar.qp.SelectExprs = append(ar.qp.SelectExprs, col)
 		ar.qp.AddedColumn++
@@ -418,7 +416,84 @@ func (qp *QueryProjection) NeedsAggregation() bool {
 	return qp.HasAggr || len(qp.groupByExprs) > 0
 }
 
-func (qp QueryProjection) onlyAggr() bool {
+// NeedsProjecting returns true if we have projections that need to be evaluated at the vtgate level
+// and can't be pushed down to MySQL
+func (qp *QueryProjection) NeedsProjecting(
+	ctx *plancontext.PlanningContext,
+	pusher func(expr *sqlparser.AliasedExpr) (int, error),
+) (needsVtGateEval bool, expressions []sqlparser.Expr, colNames []string, err error) {
+	for _, se := range qp.SelectExprs {
+		var ae *sqlparser.AliasedExpr
+		ae, err = se.GetAliasedExpr()
+		if err != nil {
+			return false, nil, nil, err
+		}
+
+		expr := ae.Expr
+		colNames = append(colNames, ae.ColumnName())
+
+		if _, isCol := expr.(*sqlparser.ColName); isCol {
+			offset, err := pusher(ae)
+			if err != nil {
+				return false, nil, nil, err
+			}
+			expressions = append(expressions, sqlparser.NewOffset(offset, expr))
+			continue
+		}
+
+		stopOnError := func(sqlparser.SQLNode, sqlparser.SQLNode) bool {
+			return err == nil
+		}
+		rewriter := func(cursor *sqlparser.CopyOnWriteCursor) {
+			col, isCol := cursor.Node().(*sqlparser.ColName)
+			if !isCol {
+				return
+			}
+			var tableInfo semantics.TableInfo
+			tableInfo, err = ctx.SemTable.TableInfoForExpr(col)
+			if err != nil {
+				return
+			}
+			dt, isDT := tableInfo.(*semantics.DerivedTable)
+			if !isDT {
+				return
+			}
+
+			rewritten := semantics.RewriteDerivedTableExpression(col, dt)
+			if sqlparser.ContainsAggregation(rewritten) {
+				offset, tErr := pusher(&sqlparser.AliasedExpr{Expr: col})
+				if tErr != nil {
+					err = tErr
+					return
+				}
+				cursor.Replace(sqlparser.NewOffset(offset, col))
+			}
+		}
+		newExpr := sqlparser.CopyOnRewrite(expr, stopOnError, rewriter, nil)
+
+		if err != nil {
+			return
+		}
+
+		if newExpr != expr {
+			// if we changed the expression, it means that we have to evaluate the rest at the vtgate level
+			expressions = append(expressions, newExpr.(sqlparser.Expr))
+			needsVtGateEval = true
+			continue
+		}
+
+		// we did not need to push any parts of this expression down. Let's check if we can push all of it
+		offset, err := pusher(ae)
+		if err != nil {
+			return false, nil, nil, err
+		}
+		expressions = append(expressions, sqlparser.NewOffset(offset, expr))
+	}
+
+	return
+}
+
+func (qp *QueryProjection) onlyAggr() bool {
 	if !qp.HasAggr {
 		return false
 	}
@@ -473,7 +548,7 @@ orderBy:
 			if !qp.isExprInGroupByExprs(ctx, expr) {
 				out = append(out, Aggr{
 					Original: aliasedExpr,
-					OpCode:   engine.AggregateRandom,
+					OpCode:   popcode.AggregateRandom,
 					Alias:    aliasedExpr.ColumnName(),
 					Index:    &idxCopy,
 				})
@@ -485,14 +560,14 @@ orderBy:
 			return nil, vterrors.VT12001("in scatter query: complex aggregate expression")
 		}
 
-		opcode, found := engine.SupportedAggregates[strings.ToLower(fnc.AggrName())]
+		opcode, found := popcode.SupportedAggregates[strings.ToLower(fnc.AggrName())]
 		if !found {
 			return nil, vterrors.VT12001(fmt.Sprintf("in scatter query: aggregation function '%s'", fnc.AggrName()))
 		}
 
-		if opcode == engine.AggregateCount {
+		if opcode == popcode.AggregateCount {
 			if _, isStar := fnc.(*sqlparser.CountStar); isStar {
-				opcode = engine.AggregateCountStar
+				opcode = popcode.AggregateCountStar
 			}
 		}
 
@@ -500,10 +575,10 @@ orderBy:
 
 		if aggr.IsDistinct() {
 			switch opcode {
-			case engine.AggregateCount:
-				opcode = engine.AggregateCountDistinct
-			case engine.AggregateSum:
-				opcode = engine.AggregateSumDistinct
+			case popcode.AggregateCount:
+				opcode = popcode.AggregateCountDistinct
+			case popcode.AggregateSum:
+				opcode = popcode.AggregateSumDistinct
 			}
 		}
 
@@ -601,8 +676,8 @@ func checkForInvalidGroupingExpressions(expr sqlparser.Expr) error {
 			return false, vterrors.VT03005(sqlparser.String(expr))
 		}
 		_, isSubQ := node.(*sqlparser.Subquery)
-		arg, isArg := node.(sqlparser.Argument)
-		if isSubQ || (isArg && strings.HasPrefix(string(arg), "__sq")) {
+		arg, isArg := node.(*sqlparser.Argument)
+		if isSubQ || (isArg && strings.HasPrefix(arg.Name, "__sq")) {
 			return false, vterrors.VT12001("subqueries in GROUP BY")
 		}
 		return true, nil

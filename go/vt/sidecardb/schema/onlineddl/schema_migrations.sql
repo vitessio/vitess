@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-CREATE TABLE IF NOT EXISTS _vt.schema_migrations
+CREATE TABLE IF NOT EXISTS schema_migrations
 (
     `id`                              bigint unsigned  NOT NULL AUTO_INCREMENT,
     `migration_uuid`                  varchar(64)      NOT NULL,
@@ -58,7 +58,6 @@ CREATE TABLE IF NOT EXISTS _vt.schema_migrations
     `reverted_uuid`                   varchar(64)      NOT NULL DEFAULT '',
     `is_view`                         tinyint unsigned NOT NULL DEFAULT '0',
     `ready_to_complete`               tinyint unsigned NOT NULL DEFAULT '0',
-    `stowaway_table`                  tinytext         NOT NULL,
     `vitess_liveness_indicator`       bigint           NOT NULL DEFAULT '0',
     `user_throttle_ratio`             float            NOT NULL DEFAULT '0',
     `special_plan`                    text             NOT NULL,
@@ -70,6 +69,7 @@ CREATE TABLE IF NOT EXISTS _vt.schema_migrations
     `cutover_attempts`                int unsigned     NOT NULL DEFAULT '0',
     `is_immediate_operation`          tinyint unsigned NOT NULL DEFAULT '0',
     `reviewed_timestamp`              timestamp        NULL DEFAULT NULL,
+    `ready_to_complete_timestamp`     timestamp        NULL DEFAULT NULL,
     PRIMARY KEY (`id`),
     UNIQUE KEY `uuid_idx` (`migration_uuid`),
     KEY `keyspace_shard_idx` (`keyspace`(64), `shard`(64)),

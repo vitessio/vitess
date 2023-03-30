@@ -466,11 +466,11 @@ func (ins *Insert) getInsertSelectQueries(
 		bvs := sqltypes.CopyBindVariables(bindVars) // we don't want to create one huge bindvars for all values
 		var mids sqlparser.Values
 		for _, indexValue := range indexesPerRss[i] {
-			index, _ := strconv.ParseInt(string(indexValue.Value), 0, 64)
+			index, _ := strconv.Atoi(string(indexValue.Value))
 			if keyspaceIDs[index] != nil {
 				row := sqlparser.ValTuple{}
 				for colOffset, value := range rows[index] {
-					bvName := insertVarOffset(int(index), colOffset)
+					bvName := insertVarOffset(index, colOffset)
 					bvs[bvName] = sqltypes.ValueBindVariable(value)
 					row = append(row, sqlparser.NewArgument(bvName))
 				}
@@ -535,7 +535,7 @@ func (ins *Insert) processGenerateFromValues(
 
 	// Scan input values to compute the number of values to generate, and
 	// keep track of where they should be filled.
-	env := evalengine.EnvWithBindVars(bindVars, vcursor.ConnCollation())
+	env := evalengine.NewExpressionEnv(ctx, bindVars, vcursor)
 	resolved, err := env.Evaluate(ins.Generate.Values)
 	if err != nil {
 		return 0, err
@@ -667,7 +667,7 @@ func (ins *Insert) getInsertShardedRoute(
 	// require inputs in that format.
 	vindexRowsValues := make([][]sqltypes.Row, len(ins.VindexValues))
 	rowCount := 0
-	env := evalengine.EnvWithBindVars(bindVars, vcursor.ConnCollation())
+	env := evalengine.NewExpressionEnv(ctx, bindVars, vcursor)
 	colVindexes := ins.ColVindexes
 	if colVindexes == nil {
 		colVindexes = ins.Table.ColumnVindexes

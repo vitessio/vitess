@@ -17,17 +17,20 @@ limitations under the License.
 package evalengine
 
 import (
-	"encoding/binary"
 	"math"
 	"strconv"
 
+	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/decimal"
+	"vitess.io/vitess/go/mysql/json"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/vtgate/evalengine/internal/decimal"
+	"vitess.io/vitess/go/vt/vthash"
 )
 
 type (
 	evalNumeric interface {
 		eval
+		hashable
 		toFloat() (*evalFloat, bool)
 		toDecimal(m, d int32) *evalDecimal
 		toInt64() *evalInt64
@@ -85,7 +88,7 @@ func newEvalDecimalWithPrec(dec decimal.Decimal, prec int32) *evalDecimal {
 	return &evalDecimal{dec: dec, length: prec}
 }
 
-func newEvalBool(b bool) eval {
+func newEvalBool(b bool) *evalInt64 {
 	if b {
 		return evalBoolTrue
 	}
@@ -98,48 +101,80 @@ func evalToNumeric(e eval) evalNumeric {
 		return e
 	case *evalBytes:
 		if e.isHexLiteral {
-			raw := e.bytes
-			if len(raw) > 8 {
-				return &evalFloat{0} // overflow
+			hex, ok := e.toNumericHex()
+			if !ok {
+				// overflow
+				return newEvalFloat(0)
 			}
-
-			var number [8]byte
-			for i, b := range raw {
-				number[8-len(raw)+i] = b
-			}
-			return &evalUint64{u: binary.BigEndian.Uint64(number[:]), hexLiteral: true}
+			return hex
 		}
 		return &evalFloat{f: parseStringToFloat(e.string())}
+	case *evalJSON:
+		switch e.Type() {
+		case json.TypeBoolean:
+			if e == json.ValueTrue {
+				return &evalFloat{f: 1.0}
+			}
+			return &evalFloat{f: 0.0}
+		case json.TypeNumber:
+			switch e.NumberType() {
+			case json.NumberTypeInteger:
+				i, ok := e.Int64()
+				if ok {
+					return &evalInt64{i: i}
+				}
+				d, _ := e.Decimal()
+				return newEvalDecimalWithPrec(d, 0)
+			case json.NumberTypeDouble:
+				f, _ := e.Float64()
+				return &evalFloat{f: f}
+			default:
+				panic("unsupported")
+			}
+		case json.TypeString:
+			return &evalFloat{f: parseStringToFloat(e.Raw())}
+		default:
+			return &evalFloat{f: 0}
+		}
 	default:
 		panic("unsupported")
 	}
 }
 
-func (e *evalInt64) hash() (HashCode, error) {
-	return HashCode(e.i), nil
+func (e *evalInt64) Hash(h *vthash.Hasher) {
+	if e.i < 0 {
+		h.Write16(hashPrefixIntegralNegative)
+	} else {
+		h.Write16(hashPrefixIntegralPositive)
+	}
+	h.Write64(uint64(e.i))
 }
 
-func (e *evalInt64) sqlType() sqltypes.Type {
+func (e *evalInt64) SQLType() sqltypes.Type {
 	return sqltypes.Int64
 }
 
-func (e *evalInt64) toRawBytes() []byte {
+func (e *evalInt64) ToRawBytes() []byte {
 	return strconv.AppendInt(nil, e.i, 10)
 }
 
 func (e *evalInt64) negate() evalNumeric {
 	if e.i == math.MinInt64 {
-		return &evalDecimal{dec: decimal.NewFromInt(e.i).NegInPlace(), length: 0}
+		return newEvalDecimalWithPrec(decimal.NewFromInt(e.i).NegInPlace(), 0)
 	}
-	return &evalInt64{-e.i}
+	return newEvalInt64(-e.i)
 }
 
 func (e *evalInt64) toInt64() *evalInt64 {
 	return e
 }
 
+func (e *evalInt64) toFloat0() float64 {
+	return float64(e.i)
+}
+
 func (e *evalInt64) toFloat() (*evalFloat, bool) {
-	return newEvalFloat(float64(e.i)), true
+	return newEvalFloat(e.toFloat0()), true
 }
 
 func (e *evalInt64) toDecimal(m, d int32) *evalDecimal {
@@ -150,15 +185,16 @@ func (e *evalInt64) toUint64() *evalUint64 {
 	return newEvalUint64(uint64(e.i))
 }
 
-func (e *evalUint64) hash() (HashCode, error) {
-	return HashCode(e.u), nil
+func (e *evalUint64) Hash(h *vthash.Hasher) {
+	h.Write16(hashPrefixIntegralPositive)
+	h.Write64(e.u)
 }
 
-func (e *evalUint64) sqlType() sqltypes.Type {
+func (e *evalUint64) SQLType() sqltypes.Type {
 	return sqltypes.Uint64
 }
 
-func (e *evalUint64) toRawBytes() []byte {
+func (e *evalUint64) ToRawBytes() []byte {
 	return strconv.AppendUint(nil, e.u, 10)
 }
 
@@ -176,8 +212,12 @@ func (e *evalUint64) toInt64() *evalInt64 {
 	return newEvalInt64(int64(e.u))
 }
 
+func (e *evalUint64) toFloat0() float64 {
+	return float64(e.u)
+}
+
 func (e *evalUint64) toFloat() (*evalFloat, bool) {
-	return &evalFloat{float64(e.u)}, true
+	return newEvalFloat(e.toFloat0()), true
 }
 
 func (e *evalUint64) toDecimal(m, d int32) *evalDecimal {
@@ -188,20 +228,21 @@ func (e *evalUint64) toUint64() *evalUint64 {
 	return e
 }
 
-func (e *evalFloat) hash() (HashCode, error) {
-	return HashCode(math.Float64bits(e.f)), nil
+func (e *evalFloat) Hash(h *vthash.Hasher) {
+	h.Write16(hashPrefixFloat)
+	h.Write64(math.Float64bits(e.f))
 }
 
-func (e *evalFloat) sqlType() sqltypes.Type {
+func (e *evalFloat) SQLType() sqltypes.Type {
 	return sqltypes.Float64
 }
 
-func (e *evalFloat) toRawBytes() []byte {
-	return FormatFloat(sqltypes.Float64, e.f)
+func (e *evalFloat) ToRawBytes() []byte {
+	return mysql.FormatFloat(sqltypes.Float64, e.f)
 }
 
 func (e *evalFloat) negate() evalNumeric {
-	return &evalFloat{-e.f}
+	return newEvalFloat(-e.f)
 }
 
 func (e *evalFloat) toInt64() *evalInt64 {
@@ -213,7 +254,7 @@ func (e *evalFloat) toInt64() *evalInt64 {
 	if i < 0 && !math.Signbit(f) {
 		i = math.MaxInt64
 	}
-	return &evalInt64{i}
+	return newEvalInt64(i)
 }
 
 func (e *evalFloat) toFloat() (*evalFloat, bool) {
@@ -260,16 +301,16 @@ func (e *evalFloat) toUint64() *evalUint64 {
 	return newEvalUint64(i)
 }
 
-func (e *evalDecimal) hash() (HashCode, error) {
-	u, _ := e.dec.Uint64()
-	return HashCode(u), nil
+func (e *evalDecimal) Hash(h *vthash.Hasher) {
+	h.Write16(hashPrefixDecimal)
+	e.dec.Hash(h)
 }
 
-func (e *evalDecimal) sqlType() sqltypes.Type {
+func (e *evalDecimal) SQLType() sqltypes.Type {
 	return sqltypes.Decimal
 }
 
-func (e *evalDecimal) toRawBytes() []byte {
+func (e *evalDecimal) ToRawBytes() []byte {
 	return e.dec.FormatMySQL(e.length)
 }
 
@@ -282,12 +323,22 @@ func (e *evalDecimal) negate() evalNumeric {
 
 func (e *evalDecimal) toInt64() *evalInt64 {
 	dec := e.dec.Round(0)
-	i, _ := dec.Int64()
+	i, valid := dec.Int64()
+	if !valid {
+		if dec.Sign() < 0 {
+			return newEvalInt64(math.MinInt64)
+		}
+		return newEvalInt64(math.MaxInt64)
+	}
 	return newEvalInt64(i)
 }
 
+func (e *evalDecimal) toFloat0() (float64, bool) {
+	return e.dec.Float64()
+}
+
 func (e *evalDecimal) toFloat() (*evalFloat, bool) {
-	f, exact := e.dec.Float64()
+	f, exact := e.toFloat0()
 	return newEvalFloat(f), exact
 }
 
@@ -303,8 +354,11 @@ func (e *evalDecimal) toUint64() *evalUint64 {
 	if dec.Sign() < 0 {
 		i, _ := dec.Int64()
 		return newEvalUint64(uint64(i))
-	} else {
-		u, _ := dec.Uint64()
-		return newEvalUint64(u)
 	}
+
+	u, valid := dec.Uint64()
+	if !valid {
+		return newEvalUint64(math.MaxUint64)
+	}
+	return newEvalUint64(u)
 }

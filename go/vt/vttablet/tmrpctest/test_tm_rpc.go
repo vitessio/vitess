@@ -54,6 +54,11 @@ type fakeRPCTM struct {
 	mu sync.Mutex
 }
 
+func (fra *fakeRPCTM) UpdateVRWorkflow(ctx context.Context, req *tabletmanagerdatapb.UpdateVRWorkflowRequest) (*tabletmanagerdatapb.UpdateVRWorkflowResponse, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
 func (fra *fakeRPCTM) VDiff(ctx context.Context, req *tabletmanagerdatapb.VDiffRequest) (*tabletmanagerdatapb.VDiffResponse, error) {
 	//TODO implement me
 	panic("implement me")
@@ -899,14 +904,6 @@ func tmRPCTestGetReplicas(ctx context.Context, t *testing.T, client tmclient.Tab
 func tmRPCTestGetReplicasPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	_, err := client.GetReplicas(ctx, tablet)
 	expectHandleRPCPanic(t, "GetReplicas", false /*verbose*/, err)
-}
-
-func (fra *fakeRPCTM) VExec(ctx context.Context, query, workflow, keyspace string) (*querypb.QueryResult, error) {
-	if fra.panics {
-		panic(fmt.Errorf("test-triggered panic"))
-	}
-	compare(fra.t, "VExec query", query, "query")
-	return testExecuteFetchResult, nil
 }
 
 var testVRQuery = "query"

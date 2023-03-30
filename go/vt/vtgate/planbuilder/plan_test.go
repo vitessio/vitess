@@ -32,6 +32,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/sidecardb"
 
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 
@@ -47,6 +48,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -336,6 +338,15 @@ func TestOneWithTPCHVSchema(t *testing.T) {
 	testFile(t, "onecase.json", "", vschema, false)
 }
 
+func TestOneWith57Version(t *testing.T) {
+	// first we move everything to use 5.7 logic
+	servenv.SetMySQLServerVersionForTest("5.7")
+	defer servenv.SetMySQLServerVersionForTest("")
+	vschema := &vschemaWrapper{v: loadSchema(t, "vschemas/schema.json", true)}
+
+	testFile(t, "onecase.json", "", vschema, false)
+}
+
 func TestRubyOnRailsQueries(t *testing.T) {
 	vschemaWrapper := &vschemaWrapper{
 		v:             loadSchema(t, "vschemas/rails_schema.json", true),
@@ -437,6 +448,19 @@ func TestWithDefaultKeyspaceFromFile(t *testing.T) {
 		},
 		tabletType: topodatapb.TabletType_PRIMARY,
 	}
+	ts := memorytopo.NewServer("cell1")
+	ts.CreateKeyspace(context.Background(), "main", &topodatapb.Keyspace{})
+	ts.CreateKeyspace(context.Background(), "user", &topodatapb.Keyspace{})
+	// Create a cache to use for lookups of the sidecar database identifier
+	// in use by each keyspace.
+	_, created := sidecardb.NewIdentifierCache(func(ctx context.Context, keyspace string) (string, error) {
+		ki, err := ts.GetKeyspace(ctx, keyspace)
+		if err != nil {
+			return "", err
+		}
+		return ki.SidecarDbName, nil
+	})
+	require.True(t, created)
 
 	testOutputTempDir := makeTestOutput(t)
 	testFile(t, "alterVschema_cases.json", testOutputTempDir, vschema, false)
@@ -678,6 +702,22 @@ func (vw *vschemaWrapper) FindView(tab sqlparser.TableName) sqlparser.SelectStat
 }
 
 func (vw *vschemaWrapper) FindTableOrVindex(tab sqlparser.TableName) (*vindexes.Table, vindexes.Vindex, string, topodatapb.TabletType, key.Destination, error) {
+	if tab.Qualifier.IsEmpty() && tab.Name.String() == "dual" {
+		ksName := vw.getActualKeyspace()
+		var ks *vindexes.Keyspace
+		if ksName == "" {
+			ks = vw.getfirstKeyspace()
+			ksName = ks.Name
+		} else {
+			ks = vw.v.Keyspaces[ksName].Keyspace
+		}
+		tbl := &vindexes.Table{
+			Name:     sqlparser.NewIdentifierCS("dual"),
+			Keyspace: ks,
+			Type:     vindexes.TypeReference,
+		}
+		return tbl, nil, ksName, topodatapb.TabletType_PRIMARY, nil, nil
+	}
 	destKeyspace, destTabletType, destTarget, err := topoproto.ParseDestination(tab.Qualifier.String(), topodatapb.TabletType_PRIMARY)
 	if err != nil {
 		return nil, nil, destKeyspace, destTabletType, destTarget, err
@@ -692,6 +732,16 @@ func (vw *vschemaWrapper) FindTableOrVindex(tab sqlparser.TableName) (*vindexes.
 	return table, vindex, destKeyspace, destTabletType, destTarget, nil
 }
 
+func (vw *vschemaWrapper) getfirstKeyspace() (ks *vindexes.Keyspace) {
+	var f string
+	for name, schema := range vw.v.Keyspaces {
+		if f == "" || f > name {
+			f = name
+			ks = schema.Keyspace
+		}
+	}
+	return
+}
 func (vw *vschemaWrapper) getActualKeyspace() string {
 	if vw.keyspace == nil {
 		return ""

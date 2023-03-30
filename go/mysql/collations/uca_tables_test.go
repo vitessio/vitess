@@ -28,7 +28,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"gotest.tools/assert"
 
-	"vitess.io/vitess/go/mysql/collations/internal/charset"
+	"vitess.io/vitess/go/mysql/collations/charset"
 	"vitess.io/vitess/go/mysql/collations/internal/uca"
 )
 
@@ -131,7 +131,7 @@ func TestTailoringPatchApplication(t *testing.T) {
 
 		switch col := col.(type) {
 		case *Collation_uca_legacy:
-			if _, utf8 := col.charset.(charset.Charset_utf8mb4); !utf8 {
+			if _, utf8 := col.Charset().(charset.Charset_utf8mb4); !utf8 {
 				continue
 			}
 			weightTable, tableLayout = col.uca.Weights()

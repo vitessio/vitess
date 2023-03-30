@@ -16,16 +16,14 @@ limitations under the License.
 
 package evalengine
 
-import "vitess.io/vitess/go/vt/sqlparser"
-
 type (
 	callable interface {
+		Expr
 		callable() []Expr
 	}
 
 	CallExpr struct {
 		Arguments TupleExpr
-		Aliases   []sqlparser.IdentifierCI
 		Method    string
 	}
 )

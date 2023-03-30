@@ -74,10 +74,12 @@ import (
 	"vitess.io/vitess/go/cmd"
 	"vitess.io/vitess/go/exit"
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
+	"vitess.io/vitess/go/vt/mysqlctl/backupstats"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/servenv"
@@ -119,6 +121,11 @@ var (
 	detachedMode     bool
 	keepAliveTimeout = 0 * time.Second
 	disableRedoLog   = false
+	durationByPhase  = stats.NewGaugesWithSingleLabel(
+		"DurationByPhaseSeconds",
+		"How long it took vtbackup to perform each phase (in seconds).",
+		"phase",
+	)
 )
 
 func registerFlags(fs *pflag.FlagSet) {
@@ -258,16 +265,18 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 	}
 	initCtx, initCancel := context.WithTimeout(ctx, mysqlTimeout)
 	defer initCancel()
+	initMysqldAt := time.Now()
 	if err := mysqld.Init(initCtx, mycnf, initDBSQLFile); err != nil {
 		return fmt.Errorf("failed to initialize mysql data dir and start mysqld: %v", err)
 	}
+	durationByPhase.Set("InitMySQLd", int64(time.Since(initMysqldAt).Seconds()))
 	// Shut down mysqld when we're done.
 	defer func() {
 		// Be careful not to use the original context, because we don't want to
 		// skip shutdown just because we timed out waiting for other things.
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
-		if err := mysqld.Shutdown(ctx, mycnf, false); err != nil {
+		mysqlShutdownCtx, mysqlShutdownCancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer mysqlShutdownCancel()
+		if err := mysqld.Shutdown(mysqlShutdownCtx, mycnf, false); err != nil {
 			log.Errorf("failed to shutdown mysqld: %v", err)
 		}
 	}()
@@ -291,6 +300,7 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 		Keyspace:           initKeyspace,
 		Shard:              initShard,
 		TabletAlias:        topoproto.TabletAliasString(tabletAlias),
+		Stats:              backupstats.BackupStats(),
 	}
 	// In initial_backup mode, just take a backup of this empty database.
 	if initialBackup {
@@ -302,6 +312,19 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 		if err := mysqld.ResetReplication(ctx); err != nil {
 			return fmt.Errorf("can't reset replication: %v", err)
 		}
+		// We need to switch off super_read_only before we create the database.
+		resetFunc, err := mysqld.SetSuperReadOnly(false)
+		if err != nil {
+			return fmt.Errorf("failed to disable super_read_only during backup: %v", err)
+		}
+		if resetFunc != nil {
+			defer func() {
+				err := resetFunc()
+				if err != nil {
+					log.Error("Failed to set super_read_only back to its original value during backup")
+				}
+			}()
+		}
 		cmd := mysqlctl.GenerateInitialBinlogEntry()
 		if err := mysqld.ExecuteSuperQueryList(ctx, []string{cmd}); err != nil {
 			return err
@@ -312,12 +335,14 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 		if err := mysqlctl.Backup(ctx, backupParams); err != nil {
 			return fmt.Errorf("backup failed: %v", err)
 		}
+		durationByPhase.Set("InitialBackup", int64(time.Since(backupParams.BackupTime).Seconds()))
 		log.Info("Initial backup successful.")
 		return nil
 	}
 
 	backupDir := mysqlctl.GetBackupDir(initKeyspace, initShard)
 	log.Infof("Restoring latest backup from directory %v", backupDir)
+	restoreAt := time.Now()
 	params := mysqlctl.RestoreParams{
 		Cnf:                 mycnf,
 		Mysqld:              mysqld,
@@ -328,14 +353,15 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 		DbName:              dbName,
 		Keyspace:            initKeyspace,
 		Shard:               initShard,
+		Stats:               backupstats.RestoreStats(),
 	}
 	backupManifest, err := mysqlctl.Restore(ctx, params)
 	var restorePos mysql.Position
 	switch err {
 	case nil:
-		log.Infof("Successfully restored from backup at replication position %v", restorePos)
 		// if err is nil, we expect backupManifest to be non-nil
 		restorePos = backupManifest.Position
+		log.Infof("Successfully restored from backup at replication position %v", restorePos)
 	case mysqlctl.ErrNoBackup:
 		// There is no backup found, but we may be taking the initial backup of a shard
 		if !allowFirstBackup {
@@ -345,6 +371,7 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 	default:
 		return fmt.Errorf("can't restore from backup: %v", err)
 	}
+	durationByPhase.Set("RestoreLastBackup", int64(time.Since(restoreAt).Seconds()))
 
 	// Disable redo logging (if we can) before we start replication.
 	disabledRedoLog := false
@@ -364,6 +391,7 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 		return fmt.Errorf("error starting replication: %v", err)
 	}
 
+	log.Info("get the current primary replication position, and wait until we catch up")
 	// Get the current primary replication position, and wait until we catch up
 	// to that point. We do this instead of looking at ReplicationLag
 	// because that value can
@@ -377,8 +405,8 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 	var primaryPos mysql.Position
 	err = retryOnError(ctx, func() error {
 		// Add a per-operation timeout so we re-read topo if the primary is unreachable.
-		opCtx, cancel := context.WithTimeout(ctx, operationTimeout)
-		defer cancel()
+		opCtx, optCancel := context.WithTimeout(ctx, operationTimeout)
+		defer optCancel()
 		pos, err := getPrimaryPosition(opCtx, tmc, topoServer)
 		if err != nil {
 			return fmt.Errorf("can't get the primary replication position: %v", err)
@@ -387,8 +415,10 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 		return nil
 	})
 	if err != nil {
-		return err
+		return fmt.Errorf("can't get the primary replication position after all retries: %v", err)
 	}
+
+	log.Infof("takeBackup: primary position is: %s", primaryPos.String())
 
 	// Remember the time when we fetched the primary position, not when we caught
 	// up to it, so the timestamp on our backup is honest (assuming we make it
@@ -400,7 +430,7 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 	for {
 		select {
 		case <-ctx.Done():
-			return ctx.Err()
+			return fmt.Errorf("error in replication catch up: %v", ctx.Err())
 		case <-time.After(time.Second):
 		}
 
@@ -413,6 +443,7 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 			// We're caught up on replication to at least the point the primary
 			// was at when this vtbackup run started.
 			log.Infof("Replication caught up to %v after %v", status.Position, time.Since(waitStartTime))
+			durationByPhase.Set("CatchUpReplication", int64(time.Since(waitStartTime).Seconds()))
 			break
 		}
 		if !status.Healthy() {
@@ -446,6 +477,7 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 	}
 
 	if restartBeforeBackup {
+		restartAt := time.Now()
 		log.Info("Proceeding with clean MySQL shutdown and startup to flush all buffers.")
 		// Prep for full/clean shutdown (not typically the default)
 		if err := mysqld.ExecuteSuperQuery(ctx, "SET GLOBAL innodb_fast_shutdown=0"); err != nil {
@@ -459,12 +491,15 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 		if err := mysqld.Start(ctx, mycnf); err != nil {
 			return fmt.Errorf("Could not start MySQL after full shutdown: %v", err)
 		}
+		durationByPhase.Set("RestartBeforeBackup", int64(time.Since(restartAt).Seconds()))
 	}
 
 	// Now we can take a new backup.
+	backupAt := time.Now()
 	if err := mysqlctl.Backup(ctx, backupParams); err != nil {
 		return fmt.Errorf("error taking backup: %v", err)
 	}
+	durationByPhase.Set("TakeNewBackup", int64(time.Since(backupAt).Seconds()))
 
 	// Return a non-zero exit code if we didn't meet the replication position
 	// goal, even though we took a backup that pushes the high-water mark up.

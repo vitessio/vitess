@@ -26,7 +26,6 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 
-	"vitess.io/vitess/go/vt/vtgate/semantics"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
@@ -131,7 +130,7 @@ func getBestVindexOption(exprs []sqlparser.Expr, index *vindexes.ColumnVindex) *
 		default:
 			continue
 		}
-		expr, err := evalengine.Translate(comparison.Right, semantics.EmptySemTable())
+		expr, err := evalengine.Translate(comparison.Right, nil)
 		if err != nil {
 			continue
 		}

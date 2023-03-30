@@ -54,8 +54,8 @@ func (c *cow) copyOnRewriteSQLNode(n SQLNode, parent SQLNode) (out SQLNode, chan
 		return c.copyOnRewriteRefOfAlterVschema(n, parent)
 	case *AndExpr:
 		return c.copyOnRewriteRefOfAndExpr(n, parent)
-	case Argument:
-		return c.copyOnRewriteArgument(n, parent)
+	case *Argument:
+		return c.copyOnRewriteRefOfArgument(n, parent)
 	case *ArgumentLessWindowExpr:
 		return c.copyOnRewriteRefOfArgumentLessWindowExpr(n, parent)
 	case *AutoIncSpec:
@@ -180,6 +180,8 @@ func (c *cow) copyOnRewriteSQLNode(n SQLNode, parent SQLNode) (out SQLNode, chan
 		return c.copyOnRewriteRefOfFuncExpr(n, parent)
 	case *GTIDFuncExpr:
 		return c.copyOnRewriteRefOfGTIDFuncExpr(n, parent)
+	case *GeomFromTextExpr:
+		return c.copyOnRewriteRefOfGeomFromTextExpr(n, parent)
 	case GroupBy:
 		return c.copyOnRewriteGroupBy(n, parent)
 	case *GroupConcatExpr:
@@ -266,6 +268,8 @@ func (c *cow) copyOnRewriteSQLNode(n SQLNode, parent SQLNode) (out SQLNode, chan
 		return c.copyOnRewriteRefOfLagLeadExpr(n, parent)
 	case *Limit:
 		return c.copyOnRewriteRefOfLimit(n, parent)
+	case *LineStringExpr:
+		return c.copyOnRewriteRefOfLineStringExpr(n, parent)
 	case ListArg:
 		return c.copyOnRewriteListArg(n, parent)
 	case *Literal:
@@ -292,6 +296,12 @@ func (c *cow) copyOnRewriteSQLNode(n SQLNode, parent SQLNode) (out SQLNode, chan
 		return c.copyOnRewriteRefOfMin(n, parent)
 	case *ModifyColumn:
 		return c.copyOnRewriteRefOfModifyColumn(n, parent)
+	case *MultiLinestringExpr:
+		return c.copyOnRewriteRefOfMultiLinestringExpr(n, parent)
+	case *MultiPointExpr:
+		return c.copyOnRewriteRefOfMultiPointExpr(n, parent)
+	case *MultiPolygonExpr:
+		return c.copyOnRewriteRefOfMultiPolygonExpr(n, parent)
 	case *NTHValueExpr:
 		return c.copyOnRewriteRefOfNTHValueExpr(n, parent)
 	case *NamedWindow:
@@ -348,8 +358,14 @@ func (c *cow) copyOnRewriteSQLNode(n SQLNode, parent SQLNode) (out SQLNode, chan
 		return c.copyOnRewritePartitions(n, parent)
 	case *PerformanceSchemaFuncExpr:
 		return c.copyOnRewriteRefOfPerformanceSchemaFuncExpr(n, parent)
+	case *PointExpr:
+		return c.copyOnRewriteRefOfPointExpr(n, parent)
+	case *PolygonExpr:
+		return c.copyOnRewriteRefOfPolygonExpr(n, parent)
 	case *PrepareStmt:
 		return c.copyOnRewriteRefOfPrepareStmt(n, parent)
+	case *PurgeBinaryLogs:
+		return c.copyOnRewriteRefOfPurgeBinaryLogs(n, parent)
 	case ReferenceAction:
 		return c.copyOnRewriteReferenceAction(n, parent)
 	case *ReferenceDefinition:
@@ -891,6 +907,18 @@ func (c *cow) copyOnRewriteRefOfAndExpr(n *AndExpr, parent SQLNode) (out SQLNode
 			}
 			changed = true
 		}
+	}
+	if c.post != nil {
+		out, changed = c.postVisit(out, parent, changed)
+	}
+	return
+}
+func (c *cow) copyOnRewriteRefOfArgument(n *Argument, parent SQLNode) (out SQLNode, changed bool) {
+	if n == nil || c.cursor.stop {
+		return n, false
+	}
+	out = n
+	if c.pre == nil || c.pre(n, parent) {
 	}
 	if c.post != nil {
 		out, changed = c.postVisit(out, parent, changed)
@@ -1655,11 +1683,9 @@ func (c *cow) copyOnRewriteRefOfCurTimeFuncExpr(n *CurTimeFuncExpr, parent SQLNo
 	out = n
 	if c.pre == nil || c.pre(n, parent) {
 		_Name, changedName := c.copyOnRewriteIdentifierCI(n.Name, n)
-		_Fsp, changedFsp := c.copyOnRewriteExpr(n.Fsp, n)
-		if changedName || changedFsp {
+		if changedName {
 			res := *n
 			res.Name, _ = _Name.(IdentifierCI)
-			res.Fsp, _ = _Fsp.(Expr)
 			out = &res
 			if c.cloned != nil {
 				c.cloned(n, out)
@@ -2279,6 +2305,32 @@ func (c *cow) copyOnRewriteRefOfGTIDFuncExpr(n *GTIDFuncExpr, parent SQLNode) (o
 			res.Set2, _ = _Set2.(Expr)
 			res.Timeout, _ = _Timeout.(Expr)
 			res.Channel, _ = _Channel.(Expr)
+			out = &res
+			if c.cloned != nil {
+				c.cloned(n, out)
+			}
+			changed = true
+		}
+	}
+	if c.post != nil {
+		out, changed = c.postVisit(out, parent, changed)
+	}
+	return
+}
+func (c *cow) copyOnRewriteRefOfGeomFromTextExpr(n *GeomFromTextExpr, parent SQLNode) (out SQLNode, changed bool) {
+	if n == nil || c.cursor.stop {
+		return n, false
+	}
+	out = n
+	if c.pre == nil || c.pre(n, parent) {
+		_WktText, changedWktText := c.copyOnRewriteExpr(n.WktText, n)
+		_Srid, changedSrid := c.copyOnRewriteExpr(n.Srid, n)
+		_AxisOrderOpt, changedAxisOrderOpt := c.copyOnRewriteExpr(n.AxisOrderOpt, n)
+		if changedWktText || changedSrid || changedAxisOrderOpt {
+			res := *n
+			res.WktText, _ = _WktText.(Expr)
+			res.Srid, _ = _Srid.(Expr)
+			res.AxisOrderOpt, _ = _AxisOrderOpt.(Expr)
 			out = &res
 			if c.cloned != nil {
 				c.cloned(n, out)
@@ -3347,6 +3399,28 @@ func (c *cow) copyOnRewriteRefOfLimit(n *Limit, parent SQLNode) (out SQLNode, ch
 	}
 	return
 }
+func (c *cow) copyOnRewriteRefOfLineStringExpr(n *LineStringExpr, parent SQLNode) (out SQLNode, changed bool) {
+	if n == nil || c.cursor.stop {
+		return n, false
+	}
+	out = n
+	if c.pre == nil || c.pre(n, parent) {
+		_PointParams, changedPointParams := c.copyOnRewriteExprs(n.PointParams, n)
+		if changedPointParams {
+			res := *n
+			res.PointParams, _ = _PointParams.(Exprs)
+			out = &res
+			if c.cloned != nil {
+				c.cloned(n, out)
+			}
+			changed = true
+		}
+	}
+	if c.post != nil {
+		out, changed = c.postVisit(out, parent, changed)
+	}
+	return
+}
 func (c *cow) copyOnRewriteRefOfLiteral(n *Literal, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -3569,6 +3643,72 @@ func (c *cow) copyOnRewriteRefOfModifyColumn(n *ModifyColumn, parent SQLNode) (o
 	}
 	return
 }
+func (c *cow) copyOnRewriteRefOfMultiLinestringExpr(n *MultiLinestringExpr, parent SQLNode) (out SQLNode, changed bool) {
+	if n == nil || c.cursor.stop {
+		return n, false
+	}
+	out = n
+	if c.pre == nil || c.pre(n, parent) {
+		_LinestringParams, changedLinestringParams := c.copyOnRewriteExprs(n.LinestringParams, n)
+		if changedLinestringParams {
+			res := *n
+			res.LinestringParams, _ = _LinestringParams.(Exprs)
+			out = &res
+			if c.cloned != nil {
+				c.cloned(n, out)
+			}
+			changed = true
+		}
+	}
+	if c.post != nil {
+		out, changed = c.postVisit(out, parent, changed)
+	}
+	return
+}
+func (c *cow) copyOnRewriteRefOfMultiPointExpr(n *MultiPointExpr, parent SQLNode) (out SQLNode, changed bool) {
+	if n == nil || c.cursor.stop {
+		return n, false
+	}
+	out = n
+	if c.pre == nil || c.pre(n, parent) {
+		_PointParams, changedPointParams := c.copyOnRewriteExprs(n.PointParams, n)
+		if changedPointParams {
+			res := *n
+			res.PointParams, _ = _PointParams.(Exprs)
+			out = &res
+			if c.cloned != nil {
+				c.cloned(n, out)
+			}
+			changed = true
+		}
+	}
+	if c.post != nil {
+		out, changed = c.postVisit(out, parent, changed)
+	}
+	return
+}
+func (c *cow) copyOnRewriteRefOfMultiPolygonExpr(n *MultiPolygonExpr, parent SQLNode) (out SQLNode, changed bool) {
+	if n == nil || c.cursor.stop {
+		return n, false
+	}
+	out = n
+	if c.pre == nil || c.pre(n, parent) {
+		_PolygonParams, changedPolygonParams := c.copyOnRewriteExprs(n.PolygonParams, n)
+		if changedPolygonParams {
+			res := *n
+			res.PolygonParams, _ = _PolygonParams.(Exprs)
+			out = &res
+			if c.cloned != nil {
+				c.cloned(n, out)
+			}
+			changed = true
+		}
+	}
+	if c.post != nil {
+		out, changed = c.postVisit(out, parent, changed)
+	}
+	return
+}
 func (c *cow) copyOnRewriteRefOfNTHValueExpr(n *NTHValueExpr, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -3742,6 +3882,16 @@ func (c *cow) copyOnRewriteRefOfOffset(n *Offset, parent SQLNode) (out SQLNode, 
 	}
 	out = n
 	if c.pre == nil || c.pre(n, parent) {
+		_Original, changedOriginal := c.copyOnRewriteExpr(n.Original, n)
+		if changedOriginal {
+			res := *n
+			res.Original, _ = _Original.(Expr)
+			out = &res
+			if c.cloned != nil {
+				c.cloned(n, out)
+			}
+			changed = true
+		}
 	}
 	if c.post != nil {
 		out, changed = c.postVisit(out, parent, changed)
@@ -4173,6 +4323,52 @@ func (c *cow) copyOnRewriteRefOfPerformanceSchemaFuncExpr(n *PerformanceSchemaFu
 	}
 	return
 }
+func (c *cow) copyOnRewriteRefOfPointExpr(n *PointExpr, parent SQLNode) (out SQLNode, changed bool) {
+	if n == nil || c.cursor.stop {
+		return n, false
+	}
+	out = n
+	if c.pre == nil || c.pre(n, parent) {
+		_XCordinate, changedXCordinate := c.copyOnRewriteExpr(n.XCordinate, n)
+		_YCordinate, changedYCordinate := c.copyOnRewriteExpr(n.YCordinate, n)
+		if changedXCordinate || changedYCordinate {
+			res := *n
+			res.XCordinate, _ = _XCordinate.(Expr)
+			res.YCordinate, _ = _YCordinate.(Expr)
+			out = &res
+			if c.cloned != nil {
+				c.cloned(n, out)
+			}
+			changed = true
+		}
+	}
+	if c.post != nil {
+		out, changed = c.postVisit(out, parent, changed)
+	}
+	return
+}
+func (c *cow) copyOnRewriteRefOfPolygonExpr(n *PolygonExpr, parent SQLNode) (out SQLNode, changed bool) {
+	if n == nil || c.cursor.stop {
+		return n, false
+	}
+	out = n
+	if c.pre == nil || c.pre(n, parent) {
+		_LinestringParams, changedLinestringParams := c.copyOnRewriteExprs(n.LinestringParams, n)
+		if changedLinestringParams {
+			res := *n
+			res.LinestringParams, _ = _LinestringParams.(Exprs)
+			out = &res
+			if c.cloned != nil {
+				c.cloned(n, out)
+			}
+			changed = true
+		}
+	}
+	if c.post != nil {
+		out, changed = c.postVisit(out, parent, changed)
+	}
+	return
+}
 func (c *cow) copyOnRewriteRefOfPrepareStmt(n *PrepareStmt, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -4193,6 +4389,18 @@ func (c *cow) copyOnRewriteRefOfPrepareStmt(n *PrepareStmt, parent SQLNode) (out
 			}
 			changed = true
 		}
+	}
+	if c.post != nil {
+		out, changed = c.postVisit(out, parent, changed)
+	}
+	return
+}
+func (c *cow) copyOnRewriteRefOfPurgeBinaryLogs(n *PurgeBinaryLogs, parent SQLNode) (out SQLNode, changed bool) {
+	if n == nil || c.cursor.stop {
+		return n, false
+	}
+	out = n
+	if c.pre == nil || c.pre(n, parent) {
 	}
 	if c.post != nil {
 		out, changed = c.postVisit(out, parent, changed)
@@ -6175,6 +6383,8 @@ func (c *cow) copyOnRewriteCallable(n Callable, parent SQLNode) (out SQLNode, ch
 		return c.copyOnRewriteRefOfFuncExpr(n, parent)
 	case *GTIDFuncExpr:
 		return c.copyOnRewriteRefOfGTIDFuncExpr(n, parent)
+	case *GeomFromTextExpr:
+		return c.copyOnRewriteRefOfGeomFromTextExpr(n, parent)
 	case *GroupConcatExpr:
 		return c.copyOnRewriteRefOfGroupConcatExpr(n, parent)
 	case *InsertExpr:
@@ -6223,6 +6433,8 @@ func (c *cow) copyOnRewriteCallable(n Callable, parent SQLNode) (out SQLNode, ch
 		return c.copyOnRewriteRefOfJSONValueModifierExpr(n, parent)
 	case *LagLeadExpr:
 		return c.copyOnRewriteRefOfLagLeadExpr(n, parent)
+	case *LineStringExpr:
+		return c.copyOnRewriteRefOfLineStringExpr(n, parent)
 	case *LocateExpr:
 		return c.copyOnRewriteRefOfLocateExpr(n, parent)
 	case *MatchExpr:
@@ -6233,6 +6445,12 @@ func (c *cow) copyOnRewriteCallable(n Callable, parent SQLNode) (out SQLNode, ch
 		return c.copyOnRewriteRefOfMemberOfExpr(n, parent)
 	case *Min:
 		return c.copyOnRewriteRefOfMin(n, parent)
+	case *MultiLinestringExpr:
+		return c.copyOnRewriteRefOfMultiLinestringExpr(n, parent)
+	case *MultiPointExpr:
+		return c.copyOnRewriteRefOfMultiPointExpr(n, parent)
+	case *MultiPolygonExpr:
+		return c.copyOnRewriteRefOfMultiPolygonExpr(n, parent)
 	case *NTHValueExpr:
 		return c.copyOnRewriteRefOfNTHValueExpr(n, parent)
 	case *NamedWindow:
@@ -6241,6 +6459,10 @@ func (c *cow) copyOnRewriteCallable(n Callable, parent SQLNode) (out SQLNode, ch
 		return c.copyOnRewriteRefOfNtileExpr(n, parent)
 	case *PerformanceSchemaFuncExpr:
 		return c.copyOnRewriteRefOfPerformanceSchemaFuncExpr(n, parent)
+	case *PointExpr:
+		return c.copyOnRewriteRefOfPointExpr(n, parent)
+	case *PolygonExpr:
+		return c.copyOnRewriteRefOfPolygonExpr(n, parent)
 	case *RegexpInstrExpr:
 		return c.copyOnRewriteRefOfRegexpInstrExpr(n, parent)
 	case *RegexpLikeExpr:
@@ -6361,8 +6583,8 @@ func (c *cow) copyOnRewriteExpr(n Expr, parent SQLNode) (out SQLNode, changed bo
 	switch n := n.(type) {
 	case *AndExpr:
 		return c.copyOnRewriteRefOfAndExpr(n, parent)
-	case Argument:
-		return c.copyOnRewriteArgument(n, parent)
+	case *Argument:
+		return c.copyOnRewriteRefOfArgument(n, parent)
 	case *ArgumentLessWindowExpr:
 		return c.copyOnRewriteRefOfArgumentLessWindowExpr(n, parent)
 	case *Avg:
@@ -6417,6 +6639,8 @@ func (c *cow) copyOnRewriteExpr(n Expr, parent SQLNode) (out SQLNode, changed bo
 		return c.copyOnRewriteRefOfFuncExpr(n, parent)
 	case *GTIDFuncExpr:
 		return c.copyOnRewriteRefOfGTIDFuncExpr(n, parent)
+	case *GeomFromTextExpr:
+		return c.copyOnRewriteRefOfGeomFromTextExpr(n, parent)
 	case *GroupConcatExpr:
 		return c.copyOnRewriteRefOfGroupConcatExpr(n, parent)
 	case *InsertExpr:
@@ -6471,6 +6695,8 @@ func (c *cow) copyOnRewriteExpr(n Expr, parent SQLNode) (out SQLNode, changed bo
 		return c.copyOnRewriteRefOfJSONValueModifierExpr(n, parent)
 	case *LagLeadExpr:
 		return c.copyOnRewriteRefOfLagLeadExpr(n, parent)
+	case *LineStringExpr:
+		return c.copyOnRewriteRefOfLineStringExpr(n, parent)
 	case ListArg:
 		return c.copyOnRewriteListArg(n, parent)
 	case *Literal:
@@ -6487,6 +6713,12 @@ func (c *cow) copyOnRewriteExpr(n Expr, parent SQLNode) (out SQLNode, changed bo
 		return c.copyOnRewriteRefOfMemberOfExpr(n, parent)
 	case *Min:
 		return c.copyOnRewriteRefOfMin(n, parent)
+	case *MultiLinestringExpr:
+		return c.copyOnRewriteRefOfMultiLinestringExpr(n, parent)
+	case *MultiPointExpr:
+		return c.copyOnRewriteRefOfMultiPointExpr(n, parent)
+	case *MultiPolygonExpr:
+		return c.copyOnRewriteRefOfMultiPolygonExpr(n, parent)
 	case *NTHValueExpr:
 		return c.copyOnRewriteRefOfNTHValueExpr(n, parent)
 	case *NamedWindow:
@@ -6503,6 +6735,10 @@ func (c *cow) copyOnRewriteExpr(n Expr, parent SQLNode) (out SQLNode, changed bo
 		return c.copyOnRewriteRefOfOrExpr(n, parent)
 	case *PerformanceSchemaFuncExpr:
 		return c.copyOnRewriteRefOfPerformanceSchemaFuncExpr(n, parent)
+	case *PointExpr:
+		return c.copyOnRewriteRefOfPointExpr(n, parent)
+	case *PolygonExpr:
+		return c.copyOnRewriteRefOfPolygonExpr(n, parent)
 	case *RegexpInstrExpr:
 		return c.copyOnRewriteRefOfRegexpInstrExpr(n, parent)
 	case *RegexpLikeExpr:
@@ -6689,6 +6925,8 @@ func (c *cow) copyOnRewriteStatement(n Statement, parent SQLNode) (out SQLNode, 
 		return c.copyOnRewriteRefOfOtherRead(n, parent)
 	case *PrepareStmt:
 		return c.copyOnRewriteRefOfPrepareStmt(n, parent)
+	case *PurgeBinaryLogs:
+		return c.copyOnRewriteRefOfPurgeBinaryLogs(n, parent)
 	case *Release:
 		return c.copyOnRewriteRefOfRelease(n, parent)
 	case *RenameTable:
@@ -6753,20 +6991,6 @@ func (c *cow) copyOnRewriteTableExpr(n TableExpr, parent SQLNode) (out SQLNode, 
 	}
 }
 func (c *cow) copyOnRewriteAlgorithmValue(n AlgorithmValue, parent SQLNode) (out SQLNode, changed bool) {
-	if c.cursor.stop {
-		return n, false
-	}
-	if c.pre != nil {
-		c.pre(n, parent)
-	}
-	if c.post != nil {
-		out, changed = c.postVisit(n, parent, changed)
-	} else {
-		out = n
-	}
-	return
-}
-func (c *cow) copyOnRewriteArgument(n Argument, parent SQLNode) (out SQLNode, changed bool) {
 	if c.cursor.stop {
 		return n, false
 	}

@@ -29,15 +29,15 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/sync/semaphore"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/proto"
-	"k8s.io/apimachinery/pkg/util/sets"
 
 	"vitess.io/vitess/go/event"
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/protoutil"
+	"vitess.io/vitess/go/sets"
 	"vitess.io/vitess/go/sqlescape"
-	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/concurrency"
@@ -222,7 +222,6 @@ func (s *VtctldServer) ApplySchema(ctx context.Context, req *vtctldatapb.ApplySc
 	defer panicHandler(&err)
 
 	span.Annotate("keyspace", req.Keyspace)
-	span.Annotate("skip_preflight", req.SkipPreflight)
 	span.Annotate("ddl_strategy", req.DdlStrategy)
 
 	if len(req.Sql) == 0 {
@@ -267,9 +266,6 @@ func (s *VtctldServer) ApplySchema(ctx context.Context, req *vtctldatapb.ApplySc
 	executor := schemamanager.NewTabletExecutor(migrationContext, s.ts, s.tmc, logger, waitReplicasTimeout)
 	if req.AllowLongUnavailability {
 		executor.AllowBigSchemaChange()
-	}
-	if req.SkipPreflight {
-		executor.SkipPreflight()
 	}
 
 	if err = executor.SetDDLStrategy(req.DdlStrategy); err != nil {
@@ -638,7 +634,7 @@ func (s *VtctldServer) CreateKeyspace(ctx context.Context, req *vtctldatapb.Crea
 		}
 
 		span.Annotate("base_keyspace", req.BaseKeyspace)
-		span.Annotate("snapshot_time", req.SnapshotTime) // TODO: get a proper string repr
+		span.Annotate("snapshot_time", protoutil.TimeFromProto(req.SnapshotTime).String())
 	default:
 		return nil, fmt.Errorf("unknown keyspace type %v", req.Type)
 	}
@@ -649,6 +645,7 @@ func (s *VtctldServer) CreateKeyspace(ctx context.Context, req *vtctldatapb.Crea
 		BaseKeyspace:     req.BaseKeyspace,
 		SnapshotTime:     req.SnapshotTime,
 		DurabilityPolicy: req.DurabilityPolicy,
+		SidecarDbName:    req.SidecarDbName,
 	}
 
 	err = s.ts.CreateKeyspace(ctx, req.Name, ki)
@@ -1007,7 +1004,7 @@ func (s *VtctldServer) EmergencyReparentShard(ctx context.Context, req *vtctldat
 		req.Shard,
 		reparentutil.EmergencyReparentOptions{
 			NewPrimaryAlias:           req.NewPrimary,
-			IgnoreReplicas:            sets.New[string](ignoreReplicaAliases...),
+			IgnoreReplicas:            sets.New(ignoreReplicaAliases...),
 			WaitReplicasTimeout:       waitReplicasTimeout,
 			PreventCrossCellPromotion: req.PreventCrossCellPromotion,
 		},
@@ -1581,9 +1578,9 @@ func (s *VtctldServer) UpdateThrottlerConfig(ctx context.Context, req *vtctldata
 		return nil, fmt.Errorf("--check-as-check-self and --check-as-check-shard are mutually exclusive")
 	}
 
-	update := func(throttlerConfig *topodatapb.SrvKeyspace_ThrottlerConfig) *topodatapb.SrvKeyspace_ThrottlerConfig {
+	update := func(throttlerConfig *topodatapb.ThrottlerConfig) *topodatapb.ThrottlerConfig {
 		if throttlerConfig == nil {
-			throttlerConfig = &topodatapb.SrvKeyspace_ThrottlerConfig{}
+			throttlerConfig = &topodatapb.ThrottlerConfig{}
 		}
 		if req.CustomQuerySet {
 			// custom query provided
@@ -1616,11 +1613,21 @@ func (s *VtctldServer) UpdateThrottlerConfig(ctx context.Context, req *vtctldata
 	}
 	defer unlock(&err)
 
-	_, err = s.ts.UpdateSrvKeyspaceThrottlerConfig(ctx, req.Keyspace, []string{}, update)
+	ki, err := s.ts.GetKeyspace(ctx, req.Keyspace)
 	if err != nil {
 		return nil, err
 	}
-	return &vtctldatapb.UpdateThrottlerConfigResponse{}, nil
+
+	ki.ThrottlerConfig = update(ki.ThrottlerConfig)
+
+	err = s.ts.UpdateKeyspace(ctx, ki)
+	if err != nil {
+		return nil, err
+	}
+
+	_, err = s.ts.UpdateSrvKeyspaceThrottlerConfig(ctx, req.Keyspace, []string{}, update)
+
+	return &vtctldatapb.UpdateThrottlerConfigResponse{}, err
 }
 
 // GetSrvVSchema is part of the vtctlservicepb.VtctldServer interface.
@@ -1658,8 +1665,8 @@ func (s *VtctldServer) GetSrvVSchemas(ctx context.Context, req *vtctldatapb.GetS
 
 	// Omit any cell names in the request that don't map to existing cells
 	if len(req.Cells) > 0 {
-		s1 := sets.New[string](allCells...)
-		s2 := sets.New[string](req.Cells...)
+		s1 := sets.New(allCells...)
+		s2 := sets.New(req.Cells...)
 
 		cells = sets.List(s1.Intersection(s2))
 	}
@@ -2390,7 +2397,7 @@ func (s *VtctldServer) RefreshState(ctx context.Context, req *vtctldatapb.Refres
 
 	tablet, err := s.ts.GetTablet(ctx, req.TabletAlias)
 	if err != nil {
-		err = fmt.Errorf("Failed to get tablet %s: %w", topoproto.TabletAliasString(req.TabletAlias), err)
+		err = fmt.Errorf("failed to get tablet %s: %w", topoproto.TabletAliasString(req.TabletAlias), err)
 		return nil, err
 	}
 
@@ -2423,7 +2430,7 @@ func (s *VtctldServer) RefreshStateByShard(ctx context.Context, req *vtctldatapb
 
 	si, err := s.ts.GetShard(ctx, req.Keyspace, req.Shard)
 	if err != nil {
-		err = fmt.Errorf("Failed to get shard %s/%s/: %w", req.Keyspace, req.Shard, err)
+		err = fmt.Errorf("failed to get shard %s/%s/: %w", req.Keyspace, req.Shard, err)
 		return nil, err
 	}
 
@@ -2476,9 +2483,9 @@ func (s *VtctldServer) ReloadSchemaShard(ctx context.Context, req *vtctldatapb.R
 
 	logger, getEvents := eventStreamLogger()
 
-	var sema *sync2.Semaphore
+	var sema *semaphore.Weighted
 	if req.Concurrency > 0 {
-		sema = sync2.NewSemaphore(int(req.Concurrency), 0)
+		sema = semaphore.NewWeighted(int64(req.Concurrency))
 	}
 
 	s.reloadSchemaShard(ctx, req, sema, logger)
@@ -2488,7 +2495,7 @@ func (s *VtctldServer) ReloadSchemaShard(ctx context.Context, req *vtctldatapb.R
 	}, nil
 }
 
-func (s *VtctldServer) reloadSchemaShard(ctx context.Context, req *vtctldatapb.ReloadSchemaShardRequest, sema *sync2.Semaphore, logger logutil.Logger) {
+func (s *VtctldServer) reloadSchemaShard(ctx context.Context, req *vtctldatapb.ReloadSchemaShardRequest, sema *semaphore.Weighted, logger logutil.Logger) {
 	span, ctx := trace.NewSpan(ctx, "VtctldServer.ReloadSchemaShard")
 	defer span.Finish()
 
@@ -2526,12 +2533,12 @@ func (s *VtctldServer) ReloadSchemaKeyspace(ctx context.Context, req *vtctldatap
 
 	var (
 		wg                sync.WaitGroup
-		sema              *sync2.Semaphore
+		sema              *semaphore.Weighted
 		logger, getEvents = eventStreamLogger()
 	)
 
 	if req.Concurrency > 0 {
-		sema = sync2.NewSemaphore(int(req.Concurrency), 0)
+		sema = semaphore.NewWeighted(int64(req.Concurrency))
 	}
 
 	for _, shard := range shards {
@@ -4343,6 +4350,23 @@ func (s *VtctldServer) ValidateVSchema(ctx context.Context, req *vtctldatapb.Val
 		}(shard)
 	}
 	wg.Wait()
+	return resp, err
+}
+
+// WorkflowUpdate is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) WorkflowUpdate(ctx context.Context, req *vtctldatapb.WorkflowUpdateRequest) (resp *vtctldatapb.WorkflowUpdateResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.WorkflowUpdate")
+	defer span.Finish()
+
+	defer panicHandler(&err)
+
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("workflow", req.TabletRequest.Workflow)
+	span.Annotate("cells", req.TabletRequest.Cells)
+	span.Annotate("tablet_types", req.TabletRequest.TabletTypes)
+	span.Annotate("on_ddl", req.TabletRequest.OnDdl)
+
+	resp, err = s.ws.WorkflowUpdate(ctx, req)
 	return resp, err
 }
 

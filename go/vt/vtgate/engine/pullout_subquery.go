@@ -18,10 +18,10 @@ package engine
 
 import (
 	"context"
-	"fmt"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vterrors"
+	. "vitess.io/vitess/go/vt/vtgate/engine/opcode"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -188,33 +188,4 @@ func (ps *PulloutSubquery) description() PrimitiveDescription {
 		Variant:      ps.Opcode.String(),
 		Other:        other,
 	}
-}
-
-// PulloutOpcode is a number representing the opcode
-// for the PulloutSubquery primitive.
-type PulloutOpcode int
-
-// This is the list of PulloutOpcode values.
-const (
-	PulloutValue = PulloutOpcode(iota)
-	PulloutIn
-	PulloutNotIn
-	PulloutExists
-)
-
-var pulloutName = map[PulloutOpcode]string{
-	PulloutValue:  "PulloutValue",
-	PulloutIn:     "PulloutIn",
-	PulloutNotIn:  "PulloutNotIn",
-	PulloutExists: "PulloutExists",
-}
-
-func (code PulloutOpcode) String() string {
-	return pulloutName[code]
-}
-
-// MarshalJSON serializes the PulloutOpcode as a JSON string.
-// It's used for testing and diagnostics.
-func (code PulloutOpcode) MarshalJSON() ([]byte, error) {
-	return ([]byte)(fmt.Sprintf("\"%s\"", code.String())), nil
 }

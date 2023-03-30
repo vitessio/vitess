@@ -28,7 +28,7 @@ BUILD_CONSUL=${BUILD_CONSUL:-1}
 BUILD_CHROME=${BUILD_CHROME:-1}
 
 VITESS_RESOURCES_DOWNLOAD_BASE_URL="https://github.com/vitessio/vitess-resources/releases/download"
-VITESS_RESOURCES_RELEASE="v2.0"
+VITESS_RESOURCES_RELEASE="v4.0"
 VITESS_RESOURCES_DOWNLOAD_URL="${VITESS_RESOURCES_DOWNLOAD_BASE_URL}/${VITESS_RESOURCES_RELEASE}"
 #
 # 0. Initialization and helper methods.
@@ -127,16 +127,14 @@ install_zookeeper() {
   local version="$1"
   local dist="$2"
   zk="zookeeper-$version"
-  vtzk="vt-zookeeper-$version"
   # This is how we'd download directly from source:
   # wget "https://dlcdn.apache.org/zookeeper/$zk/apache-$zk.tar.gz"
   $VTROOT/tools/wget-retry "${VITESS_RESOURCES_DOWNLOAD_URL}/apache-${zk}.tar.gz"
   tar -xzf "$dist/apache-$zk.tar.gz"
-  mv $dist/apache-$zk $dist/$vtzk
-  mvn -f $dist/$vtzk/zookeeper-contrib/zookeeper-contrib-fatjar/pom.xml clean install -P fatjar -DskipTests
-  mkdir -p $dist/$vtzk/lib
-  cp "$dist/$vtzk/zookeeper-contrib/zookeeper-contrib-fatjar/target/$zk-fatjar.jar" "$dist/$vtzk/lib/$zk-fatjar.jar"
-  rm -rf "$zk.tar.gz"
+  mvn -f $dist/apache-$zk/zookeeper-contrib/zookeeper-contrib-fatjar/pom.xml clean install -P fatjar -DskipTests
+  mkdir -p $dist/lib
+  cp "$dist/apache-$zk/zookeeper-contrib/zookeeper-contrib-fatjar/target/$zk-fatjar.jar" "$dist/lib/$zk-fatjar.jar"
+  rm -rf "$dist/apache-$zk"
 }
 
 
@@ -270,7 +268,7 @@ install_all() {
   # zk
   zk_ver=${ZK_VERSION:-3.8.0}
   if [ "$BUILD_JAVA" == 1 ] ; then
-    install_dep "Zookeeper" "$zk_ver" "$VTROOT/dist" install_zookeeper
+    install_dep "Zookeeper" "$zk_ver" "$VTROOT/dist/vt-zookeeper-$zk_ver" install_zookeeper
   fi
 
   # etcd

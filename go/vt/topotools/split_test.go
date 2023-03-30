@@ -130,6 +130,10 @@ func TestValidateForReshard(t *testing.T) {
 		targets: []string{"-40", "40-"},
 		out:     "",
 	}, {
+		sources: []string{"0003-"},
+		targets: []string{"000300-000380", "000380-000400", "0004-"},
+		out:     "",
+	}, {
 		sources: []string{"-40", "40-80", "80-"},
 		targets: []string{"-40", "40-"},
 		out:     "same keyrange is present in source and target: -40",

@@ -7,13 +7,15 @@ concurrency:
   group: format('{0}-{1}', ${{ github.ref }}, 'Upgrade Downgrade Testing Query Serving (Queries)')
   cancel-in-progress: true
 
+permissions: read-all
+
 # This test ensures that our end-to-end tests work using Vitess components
 # (vtgate, vttablet, etc) built on different versions.
 
 jobs:
   get_previous_release:
     if: always()
-    name: Get latest release
+    name: Get Previous Release - Query Serving (Queries)
     runs-on: ubuntu-22.04
     outputs:
       previous_release: ${{ steps.output-previous-release-ref.outputs.previous_release_ref }}
@@ -33,7 +35,7 @@ jobs:
 
   upgrade_downgrade_test:
     if: always() && (needs.get_previous_release.result == 'success')
-    name: Run Upgrade Downgrade Test
+    name: Run Upgrade Downgrade Test - Query Serving (Queries)
     runs-on: ubuntu-22.04
     needs:
       - get_previous_release
@@ -85,7 +87,7 @@ jobs:
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       uses: actions/setup-go@v3
       with:
-        go-version: 1.19.4
+        go-version: 1.20.1
 
     - name: Set up python
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
@@ -181,7 +183,7 @@ jobs:
         mkdir -p /tmp/vtdataroot
 
         source build.env
-        eatmydata -- go run test.go -skip-build -keep-data -docker=false -print-log -follow -tag upgrade_downgrade_query_serving_queries
+        eatmydata -- go run test.go -skip-build -keep-data=false -docker=false -print-log -follow -tag upgrade_downgrade_query_serving_queries
 
     # Swap the binaries in the bin. Use vtgate version n-1 and keep vttablet at version n
     - name: Use last release's VTGate
@@ -201,7 +203,7 @@ jobs:
         mkdir -p /tmp/vtdataroot
 
         source build.env
-        eatmydata -- go run test.go -skip-build -keep-data -docker=false -print-log -follow -tag upgrade_downgrade_query_serving_queries
+        eatmydata -- go run test.go -skip-build -keep-data=false -docker=false -print-log -follow -tag upgrade_downgrade_query_serving_queries
 
     # Swap the binaries again. This time, vtgate will be at version n, and vttablet will be at version n-1
     - name: Use current version VTGate, and other version VTTablet
@@ -209,9 +211,11 @@ jobs:
       run: |
         source build.env
 
-        rm -f $PWD/bin/vtgate $PWD/bin/vttablet
+        rm -f $PWD/bin/vtgate $PWD/bin/vttablet $PWD/bin/mysqlctl $PWD/bin/mysqlctld
         cp /tmp/vitess-build-current/bin/vtgate $PWD/bin/vtgate
         cp /tmp/vitess-build-other/bin/vttablet $PWD/bin/vttablet
+        cp /tmp/vitess-build-other/bin/mysqlctl $PWD/bin/mysqlctl
+        cp /tmp/vitess-build-other/bin/mysqlctld $PWD/bin/mysqlctld
         vtgate --version
         vttablet --version
 
@@ -223,4 +227,4 @@ jobs:
         mkdir -p /tmp/vtdataroot
 
         source build.env
-        eatmydata -- go run test.go -skip-build -keep-data -docker=false -print-log -follow -tag upgrade_downgrade_query_serving_queries
+        eatmydata -- go run test.go -skip-build -keep-data=false -docker=false -print-log -follow -tag upgrade_downgrade_query_serving_queries

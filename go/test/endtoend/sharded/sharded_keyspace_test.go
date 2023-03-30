@@ -28,6 +28,7 @@ import (
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/sidecardb"
 )
 
 var (
@@ -83,7 +84,7 @@ func TestMain(m *testing.M) {
 		if err := clusterInstance.StartTopo(); err != nil {
 			return 1, err
 		}
-		if err := clusterInstance.VtctlProcess.CreateKeyspace(keyspaceName); err != nil {
+		if err := clusterInstance.VtctlProcess.CreateKeyspace(keyspaceName, sidecardb.DefaultName); err != nil {
 			return 1, err
 		}
 
@@ -215,7 +216,11 @@ func initCluster(shardNames []string, totalTabletsRequired int) {
 				tablet.Type = "primary"
 			}
 			// Start Mysqlctl process
-			tablet.MysqlctlProcess = *cluster.MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, clusterInstance.TmpDirectory)
+			mysqlctlProcess, err := cluster.MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, clusterInstance.TmpDirectory)
+			if err != nil {
+				return
+			}
+			tablet.MysqlctlProcess = *mysqlctlProcess
 			proc, err := tablet.MysqlctlProcess.StartProcess()
 			if err != nil {
 				return

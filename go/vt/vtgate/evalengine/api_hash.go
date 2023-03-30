@@ -18,24 +18,67 @@ package evalengine
 
 import (
 	"math"
+	"strconv"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/decimal"
 	"vitess.io/vitess/go/sqltypes"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vthash"
 )
 
 // HashCode is a type alias to the code easier to read
-type HashCode = uintptr
+type HashCode = uint64
 
-// NullsafeHashCodeInPlace behaves like NullsafeHashCode but the type coercion is performed
-// in-place for performance reasons. Eventually this method will replace the old implementation.
-func NullsafeHashCodeInPlace(v sqltypes.Value, collation collations.ID, typ sqltypes.Type) (HashCode, error) {
-	switch {
-	case typ == sqltypes.Null:
+// NullsafeHashcode returns an int64 hashcode that is guaranteed to be the same
+// for two values that are considered equal by `NullsafeCompare`.
+func NullsafeHashcode(v sqltypes.Value, collation collations.ID, coerceType sqltypes.Type) (HashCode, error) {
+	e, err := valueToEvalCast(v, coerceType)
+	if err != nil {
+		return 0, err
+	}
+	if e == nil {
 		return HashCode(math.MaxUint64), nil
+	}
 
-	case sqltypes.IsFloat(typ):
+	h := vthash.New()
+	switch e := e.(type) {
+	case *evalBytes:
+		if !collation.Valid() {
+			return 0, UnsupportedCollationHashError
+		}
+		e.col.Collation = collation
+		e.Hash(&h)
+	case hashable:
+		e.Hash(&h)
+	default:
+		return 0, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "cannot hash %s object", coerceType)
+	}
+	return h.Sum64(), nil
+}
+
+const (
+	hashPrefixNil              = 0x0000
+	hashPrefixFloat            = 0xAAAA
+	hashPrefixIntegralNegative = 0xBBB1
+	hashPrefixIntegralPositive = 0xBBB0
+	hashPrefixBytes            = 0xCCCC
+	hashPrefixDate             = 0xCCC0
+	hashPrefixDecimal          = 0xDDDD
+)
+
+var ErrHashCoercionIsNotExact = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "cannot coerce into target type without losing precision")
+
+// NullsafeHashcode128 returns a 128-bit hashcode that is guaranteed to be the same
+// for two values that are considered equal by `NullsafeCompare`.
+// This can be used to avoid having to do comparison checks after a hash,
+// since we consider the 128 bits of entropy enough to guarantee uniqueness.
+func NullsafeHashcode128(hash *vthash.Hasher, v sqltypes.Value, collation collations.ID, coerceTo sqltypes.Type) error {
+	switch {
+	case v.IsNull(), sqltypes.IsNull(coerceTo):
+		hash.Write16(hashPrefixNil)
+	case sqltypes.IsFloat(coerceTo):
 		var f float64
 		var err error
 
@@ -48,55 +91,133 @@ func NullsafeHashCodeInPlace(v sqltypes.Value, collation collations.ID, typ sqlt
 			var uval uint64
 			uval, err = v.ToUint64()
 			f = float64(uval)
-		case v.IsFloat() || v.Type() == sqltypes.Decimal:
+		case v.IsFloat() || v.IsDecimal():
 			f, err = v.ToFloat64()
-		case v.IsText() || v.IsBinary():
+		case v.IsQuoted():
 			f = parseStringToFloat(v.RawStr())
 		default:
-			return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "coercion should not try to coerce this value to a float: %v", v)
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected type %v", v.Type())
 		}
-		return HashCode(math.Float64bits(f)), err
+		if err != nil {
+			return err
+		}
+		hash.Write16(hashPrefixFloat)
+		hash.Write64(math.Float64bits(f))
 
-	case sqltypes.IsIntegral(typ):
+	case sqltypes.IsSigned(coerceTo):
+		var i int64
+		var err error
+
 		switch {
 		case v.IsSigned():
-			i, err := v.ToInt64()
-			return HashCode(uint64(i)), err
+			i, err = v.ToInt64()
 		case v.IsUnsigned():
-			u, err := v.ToUint64()
-			return HashCode(u), err
+			var uval uint64
+			uval, err = v.ToUint64()
+			i = int64(uval)
+		case v.IsFloat():
+			var fval float64
+			fval, err = v.ToFloat64()
+			if fval != math.Trunc(fval) {
+				return ErrHashCoercionIsNotExact
+			}
+			i = int64(fval)
+		case v.IsQuoted():
+			i, err = strconv.ParseInt(v.RawStr(), 10, 64)
+			if err != nil {
+				fval := parseStringToFloat(v.RawStr())
+				if fval != math.Trunc(fval) {
+					return ErrHashCoercionIsNotExact
+				}
+				i, err = int64(fval), nil
+			}
 		default:
-			return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "coercion should not try to coerce this value to an integral: %v", v)
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected type %v", v.Type())
 		}
+		if err != nil {
+			return err
+		}
+		if i < 0 {
+			hash.Write16(hashPrefixIntegralNegative)
+		} else {
+			hash.Write16(hashPrefixIntegralPositive)
+		}
+		hash.Write64(uint64(i))
 
-	case sqltypes.IsBinary(typ):
-		coll := collations.Local().LookupByID(collations.CollationBinaryID)
-		return coll.Hash(v.Raw(), 0), nil
+	case sqltypes.IsUnsigned(coerceTo):
+		var u uint64
+		var err error
 
-	case sqltypes.IsText(typ):
-		coll := collations.Local().LookupByID(collation)
+		switch {
+		case v.IsSigned():
+			var ival int64
+			ival, err = v.ToInt64()
+			u = uint64(ival)
+		case v.IsUnsigned():
+			u, err = v.ToUint64()
+		case v.IsFloat():
+			var fval float64
+			fval, err = v.ToFloat64()
+			if fval != math.Trunc(fval) || fval < 0 {
+				return ErrHashCoercionIsNotExact
+			}
+			u = uint64(fval)
+		case v.IsQuoted():
+			u, err = strconv.ParseUint(v.RawStr(), 10, 64)
+			if err != nil {
+				fval := parseStringToFloat(v.RawStr())
+				if fval != math.Trunc(fval) || fval < 0 {
+					return ErrHashCoercionIsNotExact
+				}
+				u, err = uint64(fval), nil
+			}
+		default:
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected type %v", v.Type())
+		}
+		if err != nil {
+			return err
+		}
+		hash.Write16(hashPrefixIntegralPositive)
+		hash.Write64(u)
+
+	case sqltypes.IsBinary(coerceTo):
+		hash.Write16(hashPrefixBytes)
+		collations.Binary.Hash(hash, v.Raw(), 0)
+
+	case sqltypes.IsText(coerceTo):
+		coll := collation.Get()
 		if coll == nil {
-			return 0, UnsupportedCollationHashError
+			panic("cannot hash unsupported collation")
 		}
-		return coll.Hash(v.Raw(), 0), nil
+		hash.Write16(hashPrefixBytes)
+		coll.Hash(hash, v.Raw(), 0)
+
+	case sqltypes.IsDecimal(coerceTo):
+		var dec decimal.Decimal
+		switch {
+		case v.IsIntegral() || v.IsDecimal():
+			var err error
+			dec, err = decimal.NewFromMySQL(v.Raw())
+			if err != nil {
+				return err
+			}
+		case v.IsFloat():
+			fval, err := v.ToFloat64()
+			if err != nil {
+				return err
+			}
+			dec = decimal.NewFromFloat(fval)
+		case v.IsText() || v.IsBinary():
+			fval := parseStringToFloat(v.RawStr())
+			dec = decimal.NewFromFloat(fval)
+		default:
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "coercion should not try to coerce this value to a decimal: %v", v)
+		}
+		hash.Write16(hashPrefixDecimal)
+		dec.Hash(hash)
 
 	default:
-		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unsupported hash type: %v", v)
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected type %v", v.Type())
 	}
-}
-
-// NullsafeHashcode returns an int64 hashcode that is guaranteed to be the same
-// for two values that are considered equal by `NullsafeCompare`.
-func NullsafeHashcode(v sqltypes.Value, collation collations.ID, coerceType sqltypes.Type) (HashCode, error) {
-	e, err := valueToEvalCast(v, coerceType)
-	if err != nil {
-		return 0, err
-	}
-	if e == nil {
-		return HashCode(math.MaxUint64), nil
-	}
-	if e, ok := e.(*evalBytes); ok {
-		e.col.Collation = collation
-	}
-	return e.hash()
+	return nil
 }

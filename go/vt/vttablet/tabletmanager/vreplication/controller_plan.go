@@ -19,6 +19,7 @@ package vreplication
 import (
 	"fmt"
 
+	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
@@ -76,7 +77,14 @@ func buildControllerPlan(query string) (*controllerPlan, error) {
 }
 
 func buildInsertPlan(ins *sqlparser.Insert) (*controllerPlan, error) {
-	switch sqlparser.String(ins.Table) {
+	// This should never happen.
+	if ins == nil {
+		return nil, fmt.Errorf("BUG: invalid nil INSERT statement found when building VReplication plan")
+	}
+	if ins.Table.Qualifier.String() != sidecardb.GetName() && ins.Table.Qualifier.String() != sidecardb.DefaultName {
+		return nil, fmt.Errorf("invalid database name: %s", ins.Table.Qualifier.String())
+	}
+	switch ins.Table.Name.String() {
 	case reshardingJournalTableName:
 		return &controllerPlan{
 			opcode: reshardingJournalQuery,
@@ -84,7 +92,7 @@ func buildInsertPlan(ins *sqlparser.Insert) (*controllerPlan, error) {
 	case vreplicationTableName:
 		// no-op
 	default:
-		return nil, fmt.Errorf("invalid table name: %v", sqlparser.String(ins.Table))
+		return nil, fmt.Errorf("invalid table name: %s", ins.Table.Name.String())
 	}
 	if ins.Action != sqlparser.InsertAct {
 		return nil, fmt.Errorf("unsupported construct: %v", sqlparser.String(ins))
@@ -129,7 +137,23 @@ func buildInsertPlan(ins *sqlparser.Insert) (*controllerPlan, error) {
 }
 
 func buildUpdatePlan(upd *sqlparser.Update) (*controllerPlan, error) {
-	switch sqlparser.String(upd.TableExprs) {
+	// This should never happen.
+	if upd == nil || len(upd.TableExprs) == 0 {
+		return nil, fmt.Errorf("BUG: invalid UPDATE statement found when building VReplication plan: %s",
+			sqlparser.String(upd))
+	}
+	tableExpr, ok := upd.TableExprs[0].(*sqlparser.AliasedTableExpr)
+	if !ok {
+		return nil, fmt.Errorf("invalid FROM construct: %v", sqlparser.String(upd.TableExprs[0]))
+	}
+	tableName, err := tableExpr.TableName()
+	if err != nil {
+		return nil, err
+	}
+	if tableName.Qualifier.String() != sidecardb.GetName() && tableName.Qualifier.String() != sidecardb.DefaultName {
+		return nil, fmt.Errorf("invalid database name: %s", tableName.Qualifier.String())
+	}
+	switch tableName.Name.String() {
 	case reshardingJournalTableName:
 		return &controllerPlan{
 			opcode: reshardingJournalQuery,
@@ -137,7 +161,7 @@ func buildUpdatePlan(upd *sqlparser.Update) (*controllerPlan, error) {
 	case vreplicationTableName:
 		// no-op
 	default:
-		return nil, fmt.Errorf("invalid table name: %v", sqlparser.String(upd.TableExprs))
+		return nil, fmt.Errorf("invalid table name: %s", tableName.Name.String())
 	}
 	if upd.OrderBy != nil || upd.Limit != nil {
 		return nil, fmt.Errorf("unsupported construct: %v", sqlparser.String(upd))
@@ -149,7 +173,7 @@ func buildUpdatePlan(upd *sqlparser.Update) (*controllerPlan, error) {
 	}
 
 	buf1 := sqlparser.NewTrackedBuffer(nil)
-	buf1.Myprintf("select id from %s%v", vreplicationTableName, upd.Where)
+	buf1.Myprintf("select id from %s.%s%v", sidecardb.GetIdentifier(), vreplicationTableName, upd.Where)
 	upd.Where = &sqlparser.Where{
 		Type: sqlparser.WhereClause,
 		Expr: &sqlparser.ComparisonExpr{
@@ -170,7 +194,23 @@ func buildUpdatePlan(upd *sqlparser.Update) (*controllerPlan, error) {
 }
 
 func buildDeletePlan(del *sqlparser.Delete) (*controllerPlan, error) {
-	switch sqlparser.String(del.TableExprs) {
+	// This should never happen.
+	if del == nil || len(del.TableExprs) == 0 {
+		return nil, fmt.Errorf("BUG: invalid DELETE statement found when building VReplication plan: %s",
+			sqlparser.String(del))
+	}
+	tableExpr, ok := del.TableExprs[0].(*sqlparser.AliasedTableExpr)
+	if !ok {
+		return nil, fmt.Errorf("invalid FROM construct: %v", sqlparser.String(del.TableExprs[0]))
+	}
+	tableName, err := tableExpr.TableName()
+	if err != nil {
+		return nil, err
+	}
+	if tableName.Qualifier.String() != sidecardb.GetName() && tableName.Qualifier.String() != sidecardb.DefaultName {
+		return nil, fmt.Errorf("invalid database name: %s", tableName.Qualifier.String())
+	}
+	switch tableName.Name.String() {
 	case reshardingJournalTableName:
 		return &controllerPlan{
 			opcode: reshardingJournalQuery,
@@ -178,7 +218,7 @@ func buildDeletePlan(del *sqlparser.Delete) (*controllerPlan, error) {
 	case vreplicationTableName:
 		// no-op
 	default:
-		return nil, fmt.Errorf("invalid table name: %v", sqlparser.String(del.TableExprs))
+		return nil, fmt.Errorf("invalid table name: %s", tableName.Name.String())
 	}
 	if del.Targets != nil {
 		return nil, fmt.Errorf("unsupported construct: %v", sqlparser.String(del))
@@ -191,7 +231,7 @@ func buildDeletePlan(del *sqlparser.Delete) (*controllerPlan, error) {
 	}
 
 	buf1 := sqlparser.NewTrackedBuffer(nil)
-	buf1.Myprintf("select id from %s%v", vreplicationTableName, del.Where)
+	buf1.Myprintf("select id from %s.%s%v", sidecardb.GetIdentifier(), vreplicationTableName, del.Where)
 	del.Where = &sqlparser.Where{
 		Type: sqlparser.WhereClause,
 		Expr: &sqlparser.ComparisonExpr{
@@ -213,10 +253,10 @@ func buildDeletePlan(del *sqlparser.Delete) (*controllerPlan, error) {
 		},
 	}
 	buf3 := sqlparser.NewTrackedBuffer(nil)
-	buf3.Myprintf("delete from %s%v", copyStateTableName, copyStateWhere)
+	buf3.Myprintf("delete from %s.%s%v", sidecardb.GetIdentifier(), copyStateTableName, copyStateWhere)
 
 	buf4 := sqlparser.NewTrackedBuffer(nil)
-	buf4.Myprintf("delete from %s%v", postCopyActionTableName, copyStateWhere)
+	buf4.Myprintf("delete from %s.%s%v", sidecardb.GetIdentifier(), postCopyActionTableName, copyStateWhere)
 
 	return &controllerPlan{
 		opcode:            deleteQuery,
@@ -228,12 +268,28 @@ func buildDeletePlan(del *sqlparser.Delete) (*controllerPlan, error) {
 }
 
 func buildSelectPlan(sel *sqlparser.Select) (*controllerPlan, error) {
-	switch sqlparser.ToString(sel.From) {
+	// This should never happen.
+	if sel == nil || len(sel.From) == 0 {
+		return nil, fmt.Errorf("BUG: invalid SELECT statement found when building VReplication plan: %s",
+			sqlparser.String(sel))
+	}
+	tableExpr, ok := sel.From[0].(*sqlparser.AliasedTableExpr)
+	if !ok {
+		return nil, fmt.Errorf("invalid FROM construct: %v", sqlparser.String(sel.From[0]))
+	}
+	tableName, err := tableExpr.TableName()
+	if err != nil {
+		return nil, err
+	}
+	if tableName.Qualifier.String() != sidecardb.GetName() && tableName.Qualifier.String() != sidecardb.DefaultName {
+		return nil, fmt.Errorf("invalid database name: %s", tableName.Qualifier.String())
+	}
+	switch tableName.Name.String() {
 	case vreplicationTableName, reshardingJournalTableName, copyStateTableName, vreplicationLogTableName:
 		return &controllerPlan{
 			opcode: selectQuery,
 		}, nil
 	default:
-		return nil, fmt.Errorf("invalid table name: %v", sqlparser.ToString(sel.From))
+		return nil, fmt.Errorf("invalid table name: %s", tableName.Name.String())
 	}
 }

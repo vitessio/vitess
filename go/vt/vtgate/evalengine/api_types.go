@@ -17,6 +17,7 @@ limitations under the License.
 package evalengine
 
 import (
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -143,11 +144,11 @@ func ToFloat64(v sqltypes.Value) (float64, error) {
 }
 
 func LiteralToValue(literal *sqlparser.Literal) (sqltypes.Value, error) {
-	lit, err := translateLiteral(literal, nil)
+	lit, err := translateLiteral(literal, collations.Default())
 	if err != nil {
 		return sqltypes.Value{}, err
 	}
-	return evalToSqlValue(lit.inner), nil
+	return evalToSQLValue(lit.inner), nil
 }
 
 // ToNative converts Value to a native go type.

@@ -18,6 +18,7 @@ package vtbackup
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path"
@@ -56,18 +57,29 @@ func TestTabletInitialBackup(t *testing.T) {
 	//    - list the backups, remove them
 	defer cluster.PanicHandler(t)
 
+	waitForReplicationToCatchup([]cluster.Vttablet{*replica1, *replica2})
+
 	vtBackup(t, true, false, false)
 	verifyBackupCount(t, shardKsName, 1)
 
 	// Initialize the tablets
 	initTablets(t, false, false)
 
-	// Restore the Tablets
+	vtTabletVersion, err := cluster.GetMajorVersion("vttablet")
+	require.NoError(t, err)
+	// For all version at or above v17.0.0, each replica will start in super_read_only mode. Let's verify that is working correctly.
+	if vtTabletVersion >= 17 {
+		err := primary.VttabletProcess.CreateDB("testDB")
+		require.ErrorContains(t, err, "The MySQL server is running with the --super-read-only option so it cannot execute this statement")
+		err = replica1.VttabletProcess.CreateDB("testDB")
+		require.ErrorContains(t, err, "The MySQL server is running with the --super-read-only option so it cannot execute this statement")
+	}
 
+	// Restore the Tablet
 	restore(t, primary, "replica", "NOT_SERVING")
 	// Vitess expects that the user has set the database into ReadWrite mode before calling
 	// TabletExternallyReparented
-	err := localCluster.VtctlclientProcess.ExecuteCommand(
+	err = localCluster.VtctlclientProcess.ExecuteCommand(
 		"SetReadWrite", primary.Alias)
 	require.Nil(t, err)
 	err = localCluster.VtctlclientProcess.ExecuteCommand(
@@ -254,19 +266,15 @@ func initTablets(t *testing.T, startTablet bool, initShardPrimary bool) {
 
 func restore(t *testing.T, tablet *cluster.Vttablet, tabletType string, waitForState string) {
 	// Erase mysql/tablet dir, then start tablet with restore enabled.
-
 	log.Infof("restoring tablet %s", time.Now())
 	resetTabletDirectory(t, *tablet, true)
-
-	err := tablet.VttabletProcess.CreateDB(keyspaceName)
-	require.Nil(t, err)
 
 	// Start tablets
 	tablet.VttabletProcess.ExtraArgs = []string{"--db-credentials-file", dbCredentialFile}
 	tablet.VttabletProcess.TabletType = tabletType
 	tablet.VttabletProcess.ServingStatus = waitForState
 	tablet.VttabletProcess.SupportsBackup = true
-	err = tablet.VttabletProcess.Setup()
+	err := tablet.VttabletProcess.Setup()
 	require.Nil(t, err)
 }
 
@@ -294,6 +302,12 @@ func resetTabletDirectory(t *testing.T, tablet cluster.Vttablet, initMysql bool)
 
 func tearDown(t *testing.T, initMysql bool) {
 	// reset replication
+	for _, db := range []string{"_vt", "vt_insert_test"} {
+		_, err := primary.VttabletProcess.QueryTablet(fmt.Sprintf("drop database if exists %s", db), keyspaceName, true)
+		require.Nil(t, err)
+	}
+	caughtUp := waitForReplicationToCatchup([]cluster.Vttablet{*replica1, *replica2})
+	require.True(t, caughtUp, "Timed out waiting for all replicas to catch up")
 	promoteCommands := "STOP SLAVE; RESET SLAVE ALL; RESET MASTER;"
 	disableSemiSyncCommands := "SET GLOBAL rpl_semi_sync_master_enabled = false; SET GLOBAL rpl_semi_sync_slave_enabled = false"
 	for _, tablet := range []cluster.Vttablet{*primary, *replica1, *replica2} {
@@ -301,10 +315,6 @@ func tearDown(t *testing.T, initMysql bool) {
 		require.Nil(t, err)
 		_, err = tablet.VttabletProcess.QueryTablet(disableSemiSyncCommands, keyspaceName, true)
 		require.Nil(t, err)
-		for _, db := range []string{"_vt", "vt_insert_test"} {
-			_, err = tablet.VttabletProcess.QueryTablet(fmt.Sprintf("drop database if exists %s", db), keyspaceName, true)
-			require.Nil(t, err)
-		}
 	}
 
 	// TODO: Ideally we should not be resetting the mysql.
@@ -364,6 +374,42 @@ func verifyDisableEnableRedoLogs(ctx context.Context, t *testing.T, mysqlSocket 
 			return
 		case <-ctx.Done():
 			require.Fail(t, "Failed to verify disable/enable redo log.")
+		}
+	}
+}
+
+// This helper function wait for all replicas to catch-up the replication.
+// It does this by querying the status detail url of each replica and find the lag.
+func waitForReplicationToCatchup(tablets []cluster.Vttablet) bool {
+	endTime := time.Now().Add(time.Second * 30)
+	timeout := time.After(time.Until(endTime))
+	// key-value structure returned by status url.
+	type kv struct {
+		Key   string
+		Class string
+		Value string
+	}
+	// defining a struct instance
+	var statuslst []kv
+	for {
+		select {
+		case <-timeout:
+			return false
+		default:
+			var replicaCount = 0
+			for _, tablet := range tablets {
+				status := tablet.VttabletProcess.GetStatusDetails()
+				json.Unmarshal([]byte(status), &statuslst)
+				for _, obj := range statuslst {
+					if obj.Key == "Replication Lag" && obj.Value == "0s" {
+						replicaCount++
+					}
+				}
+				if replicaCount == len(tablets) {
+					return true
+				}
+			}
+			time.Sleep(time.Second * 1)
 		}
 	}
 }

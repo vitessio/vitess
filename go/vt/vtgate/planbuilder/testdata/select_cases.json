@@ -796,7 +796,7 @@
   {
     "comment": "Cannot auto-resolve for cross-shard joins",
     "query": "select col from user join user_extra",
-    "v3-plan": "VT03019: symbol col not found",
+    "v3-plan": "VT03019: column col not found",
     "gen4-plan": "Column 'col' in field list is ambiguous"
   },
   {
@@ -1032,41 +1032,9 @@
     }
   },
   {
-    "comment": "select from dual on sharded keyspace",
-    "query": "select @@session.auto_increment_increment from user.dual",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select @@session.auto_increment_increment from user.dual",
-      "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "Reference",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select @@auto_increment_increment from dual where 1 != 1",
-        "Query": "select @@auto_increment_increment from dual",
-        "Table": "dual"
-      }
-    },
-    "gen4-plan": {
-      "QueryType": "SELECT",
-      "Original": "select @@session.auto_increment_increment from user.dual",
-      "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "Reference",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select @@auto_increment_increment from dual where 1 != 1",
-        "Query": "select @@auto_increment_increment from dual",
-        "Table": "dual"
-      },
-      "TablesUsed": [
-        "user.dual"
-      ]
-    }
+    "comment": "prefixing dual with a keyspace should not work",
+    "query": "select 1 from user.dual",
+    "plan": "table dual not found"
   },
   {
     "comment": "RHS route referenced",
@@ -2404,8 +2372,8 @@
   {
     "comment": "non-existent symbol in cross-shard derived table",
     "query": "select t.col from (select user.id from user join user_extra) as t",
-    "v3-plan": "VT03019: symbol t.col not found",
-    "gen4-plan": "symbol t.col not found"
+    "v3-plan": "VT03019: column t.col not found",
+    "gen4-plan": "column 't.col' not found"
   },
   {
     "comment": "union with the same target shard",
@@ -2823,7 +2791,7 @@
       "Original": "select 42 from dual where false",
       "Instructions": {
         "OperatorType": "Route",
-        "Variant": "Reference",
+        "Variant": "None",
         "Keyspace": {
           "Name": "main",
           "Sharded": false
@@ -3553,82 +3521,6 @@
     }
   },
   {
-    "comment": "Table named \"dual\" with a qualifier joined on user should not be merged",
-    "query": "select 42, user.id from main.dual, user",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select 42, user.id from main.dual, user",
-      "Instructions": {
-        "OperatorType": "Join",
-        "Variant": "Join",
-        "JoinColumnIndexes": "L:0,R:0",
-        "TableName": "dual_`user`",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "Reference",
-            "Keyspace": {
-              "Name": "main",
-              "Sharded": false
-            },
-            "FieldQuery": "select 42 from dual where 1 != 1",
-            "Query": "select 42 from dual",
-            "Table": "dual"
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select `user`.id from `user` where 1 != 1",
-            "Query": "select `user`.id from `user`",
-            "Table": "`user`"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
-      "QueryType": "SELECT",
-      "Original": "select 42, user.id from main.dual, user",
-      "Instructions": {
-        "OperatorType": "Join",
-        "Variant": "Join",
-        "JoinColumnIndexes": "L:0,R:0",
-        "TableName": "dual_`user`",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "Reference",
-            "Keyspace": {
-              "Name": "main",
-              "Sharded": false
-            },
-            "FieldQuery": "select 42 from dual where 1 != 1",
-            "Query": "select 42 from dual",
-            "Table": "dual"
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select `user`.id from `user` where 1 != 1",
-            "Query": "select `user`.id from `user`",
-            "Table": "`user`"
-          }
-        ]
-      },
-      "TablesUsed": [
-        "main.dual",
-        "user.user"
-      ]
-    }
-  },
-  {
     "comment": "select (select col from user limit 1) as a from user join user_extra order by a",
     "query": "select (select col from user limit 1) as a from user join user_extra order by a",
     "v3-plan": {
@@ -4182,7 +4074,7 @@
               "Sharded": true
             },
             "FieldQuery": "select 1 from user_extra as ue where 1 != 1",
-            "Query": "select 1 from user_extra as ue where ue.col = :u1_col and ue.col = :u2_col",
+            "Query": "select 1 from user_extra as ue where ue.col = :u1_col /* INT16 */ and ue.col = :u2_col /* INT16 */",
             "Table": "user_extra"
           }
         ]
@@ -4227,7 +4119,7 @@
               "Sharded": true
             },
             "FieldQuery": "select 1 from user_extra as ue where 1 != 1",
-            "Query": "select 1 from user_extra as ue where ue.col = :u_col and ue.col2 = :u_col",
+            "Query": "select 1 from user_extra as ue where ue.col = :u_col /* INT16 */ and ue.col2 = :u_col",
             "Table": "user_extra"
           }
         ]
@@ -4596,7 +4488,7 @@
           "Sharded": false
         },
         "FieldQuery": "select 1 from dual where 1 != 1",
-        "Query": "select 1 from dual where exists (select 1 from information_schema.`TABLES` where information_schema.`TABLES`.TABLE_NAME = :TABLES_TABLE_NAME and information_schema.`TABLES`.TABLE_SCHEMA = :__vtschemaname limit 1)",
+        "Query": "select 1 from dual where exists (select 1 from information_schema.`TABLES` where information_schema.`TABLES`.TABLE_NAME = :TABLES_TABLE_NAME /* VARCHAR */ and information_schema.`TABLES`.TABLE_SCHEMA = :__vtschemaname /* VARCHAR */ limit 1)",
         "SysTableTableName": "[TABLES_TABLE_NAME:VARCHAR(\"proc\")]",
         "SysTableTableSchema": "[VARCHAR(\"mysql\")]",
         "Table": "dual"
@@ -4613,7 +4505,7 @@
           "Sharded": false
         },
         "FieldQuery": "select 1 from dual where 1 != 1",
-        "Query": "select 1 from dual where exists (select 1 from information_schema.`TABLES` where `TABLES`.TABLE_NAME = :TABLES_TABLE_NAME and `TABLES`.TABLE_SCHEMA = :__vtschemaname limit 1)",
+        "Query": "select 1 from dual where exists (select 1 from information_schema.`TABLES` where `TABLES`.TABLE_NAME = :TABLES_TABLE_NAME /* VARCHAR */ and `TABLES`.TABLE_SCHEMA = :__vtschemaname /* VARCHAR */ limit 1)",
         "SysTableTableName": "[TABLES_TABLE_NAME:VARCHAR(\"proc\")]",
         "SysTableTableSchema": "[VARCHAR(\"mysql\")]",
         "Table": "dual"
@@ -4636,8 +4528,8 @@
           "Name": "main",
           "Sharded": false
         },
-        "FieldQuery": "select json_quote('null'), json_quote('\\\"null\\\"'), json_object(BIN(1), 2, 'abc', ASCII(4)), json_array(1, 'abc', null, true, CURTIME()) from dual where 1 != 1",
-        "Query": "select json_quote('null'), json_quote('\\\"null\\\"'), json_object(BIN(1), 2, 'abc', ASCII(4)), json_array(1, 'abc', null, true, CURTIME()) from dual",
+        "FieldQuery": "select json_quote('null'), json_quote('\\\"null\\\"'), json_object(BIN(1), 2, 'abc', ASCII(4)), json_array(1, 'abc', null, true, curtime()) from dual where 1 != 1",
+        "Query": "select json_quote('null'), json_quote('\\\"null\\\"'), json_object(BIN(1), 2, 'abc', ASCII(4)), json_array(1, 'abc', null, true, curtime()) from dual",
         "Table": "dual"
       }
     },
@@ -4651,8 +4543,8 @@
           "Name": "main",
           "Sharded": false
         },
-        "FieldQuery": "select json_quote('null'), json_quote('\\\"null\\\"'), json_object(BIN(1), 2, 'abc', ASCII(4)), json_array(1, 'abc', null, true, CURTIME()) from dual where 1 != 1",
-        "Query": "select json_quote('null'), json_quote('\\\"null\\\"'), json_object(BIN(1), 2, 'abc', ASCII(4)), json_array(1, 'abc', null, true, CURTIME()) from dual",
+        "FieldQuery": "select json_quote('null'), json_quote('\\\"null\\\"'), json_object(BIN(1), 2, 'abc', ASCII(4)), json_array(1, 'abc', null, true, curtime()) from dual where 1 != 1",
+        "Query": "select json_quote('null'), json_quote('\\\"null\\\"'), json_object(BIN(1), 2, 'abc', ASCII(4)), json_array(1, 'abc', null, true, curtime()) from dual",
         "Table": "dual"
       },
       "TablesUsed": [
@@ -8001,6 +7893,44 @@
       },
       "TablesUsed": [
         "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "query with a derived table and dual table in unsharded keyspace",
+    "query": "SELECT * FROM unsharded_a AS t1  JOIN (SELECT trim((SELECT MAX(name) FROM unsharded_a)) AS name) AS t2 WHERE t1.name >= t2.name ORDER BY t1.name ASC LIMIT 1;",
+    "v3-plan": {
+      "QueryType": "SELECT",
+      "Original": "SELECT * FROM unsharded_a AS t1  JOIN (SELECT trim((SELECT MAX(name) FROM unsharded_a)) AS name) AS t2 WHERE t1.name >= t2.name ORDER BY t1.name ASC LIMIT 1;",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select * from unsharded_a as t1 join (select trim((select max(`name`) from unsharded_a where 1 != 1)) as `name` from dual where 1 != 1) as t2 where 1 != 1",
+        "Query": "select * from unsharded_a as t1 join (select trim((select max(`name`) from unsharded_a)) as `name` from dual) as t2 where t1.`name` >= t2.`name` order by t1.`name` asc limit 1",
+        "Table": "unsharded_a, dual"
+      }
+    },
+    "gen4-plan": {
+      "QueryType": "SELECT",
+      "Original": "SELECT * FROM unsharded_a AS t1  JOIN (SELECT trim((SELECT MAX(name) FROM unsharded_a)) AS name) AS t2 WHERE t1.name >= t2.name ORDER BY t1.name ASC LIMIT 1;",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select * from unsharded_a as t1 join (select trim((select max(`name`) from unsharded_a where 1 != 1)) as `name` from dual where 1 != 1) as t2 where 1 != 1",
+        "Query": "select * from unsharded_a as t1 join (select trim((select max(`name`) from unsharded_a)) as `name` from dual) as t2 where t1.`name` >= t2.`name` order by t1.`name` asc limit 1",
+        "Table": "dual, unsharded_a"
+      },
+      "TablesUsed": [
+        "main.dual",
+        "main.unsharded_a"
       ]
     }
   }

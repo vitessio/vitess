@@ -20,11 +20,9 @@ import (
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
-	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -232,13 +230,12 @@ func (st *SemTable) AddExprs(tbl *sqlparser.AliasedTableExpr, cols sqlparser.Sel
 	}
 }
 
-// TypeFor returns the type of expressions in the query
-func (st *SemTable) TypeFor(e sqlparser.Expr) *querypb.Type {
-	typ, found := st.ExprTypes[e]
-	if found {
-		return &typ.Type
+// TypeForExpr returns the type of expressions in the query
+func (st *SemTable) TypeForExpr(e sqlparser.Expr) (sqltypes.Type, collations.ID, bool) {
+	if typ, found := st.ExprTypes[e]; found {
+		return typ.Type, typ.Collation, true
 	}
-	return nil
+	return -1, collations.Unknown, false
 }
 
 // CollationForExpr returns the collation name of expressions in the query
@@ -343,7 +340,7 @@ func (st *SemTable) FindSubqueryReference(subquery *sqlparser.Subquery) *sqlpars
 func (st *SemTable) GetSubqueryNeedingRewrite() []*sqlparser.ExtractedSubquery {
 	var res []*sqlparser.ExtractedSubquery
 	for _, extractedSubquery := range st.SubqueryRef {
-		if extractedSubquery.NeedsRewrite {
+		if extractedSubquery.Merged {
 			res = append(res, extractedSubquery)
 		}
 	}
@@ -359,8 +356,6 @@ func (st *SemTable) CopyExprInfo(src, dest sqlparser.Expr) {
 	}
 }
 
-var _ evalengine.TranslationLookup = (*SemTable)(nil)
-
 var columnNotSupportedErr = vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "column access not supported here")
 
 // ColumnLookup implements the TranslationLookup interface
@@ -375,11 +370,18 @@ func (st *SemTable) SingleUnshardedKeyspace() (*vindexes.Keyspace, []*vindexes.T
 	for _, table := range st.Tables {
 		vindexTable := table.GetVindexTable()
 
-		if vindexTable == nil || vindexTable.Type != "" {
+		if vindexTable == nil {
 			_, isDT := table.getExpr().Expr.(*sqlparser.DerivedTable)
 			if isDT {
 				// derived tables are ok, as long as all real tables are from the same unsharded keyspace
 				// we check the real tables inside the derived table as well for same unsharded keyspace.
+				continue
+			}
+			return nil, nil
+		}
+		if vindexTable.Type != "" {
+			// A reference table is not an issue when seeing if a query is going to an unsharded keyspace
+			if vindexTable.Type == vindexes.TypeReference {
 				continue
 			}
 			return nil, nil

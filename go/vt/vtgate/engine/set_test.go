@@ -23,10 +23,10 @@ import (
 	"testing"
 
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/srvtopo"
 
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -59,6 +59,7 @@ func TestSetSystemVariableAsString(t *testing.T) {
 			),
 			"foobar",
 		)},
+		shardSession: []*srvtopo.ResolvedShard{{Target: &querypb.Target{Keyspace: "ks", Shard: "-20"}}},
 	}
 	_, err := set.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
@@ -68,6 +69,7 @@ func TestSetSystemVariableAsString(t *testing.T) {
 		"ExecuteMultiShard ks.-20: select dummy_expr from dual where @@x != dummy_expr {} false false",
 		"SysVar set with (x,'foobar')",
 		"Needs Reserved Conn",
+		"ExecuteMultiShard ks.-20: set x = dummy_expr {} false false",
 	})
 }
 
@@ -105,7 +107,7 @@ func TestSetTable(t *testing.T) {
 		setOps: []SetOp{
 			&UserDefinedVariable{
 				Name: "x",
-				Expr: evalengine.NewColumn(0, collations.TypedCollation{}),
+				Expr: evalengine.NewColumn(0),
 			},
 		},
 		qr: []*sqltypes.Result{sqltypes.MakeTestResult(

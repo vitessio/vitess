@@ -19,7 +19,7 @@ package semantics
 import (
 	"strings"
 
-	"vitess.io/vitess/go/vt/vtgate/engine"
+	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
 
 	"vitess.io/vitess/go/vt/sqlparser"
 )
@@ -143,7 +143,7 @@ func (b *binder) bindCountStar(node *sqlparser.CountStar) {
 func (b *binder) rewriteJoinUsingColName(deps dependency, node *sqlparser.ColName, currentScope *scope) (dependency, error) {
 	constituents := deps.recursive.Constituents()
 	if len(constituents) < 1 {
-		return dependency{}, NewError(Buggy, "we should not have a *ColName that depends on nothing")
+		return dependency{}, &BuggyError{Msg: "we should not have a *ColName that depends on nothing"}
 	}
 	newTbl := constituents[0]
 	infoFor, err := b.tc.tableInfoFor(newTbl)
@@ -205,22 +205,22 @@ func (b *binder) setSubQueryDependencies(subq *sqlparser.Subquery, currScope *sc
 
 func (b *binder) createExtractedSubquery(cursor *sqlparser.Cursor, currScope *scope, subq *sqlparser.Subquery) (*sqlparser.ExtractedSubquery, error) {
 	if currScope.stmt == nil {
-		return nil, NewError(Buggy, "unable to bind subquery to select statement")
+		return nil, &BuggyError{Msg: "unable to bind subquery to select statement"}
 	}
 
 	sq := &sqlparser.ExtractedSubquery{
 		Subquery: subq,
 		Original: subq,
-		OpCode:   int(engine.PulloutValue),
+		OpCode:   int(opcode.PulloutValue),
 	}
 
 	switch par := cursor.Parent().(type) {
 	case *sqlparser.ComparisonExpr:
 		switch par.Operator {
 		case sqlparser.InOp:
-			sq.OpCode = int(engine.PulloutIn)
+			sq.OpCode = int(opcode.PulloutIn)
 		case sqlparser.NotInOp:
-			sq.OpCode = int(engine.PulloutNotIn)
+			sq.OpCode = int(opcode.PulloutNotIn)
 		}
 		subq, exp := GetSubqueryAndOtherSide(par)
 		sq.Original = &sqlparser.ComparisonExpr{
@@ -230,7 +230,7 @@ func (b *binder) createExtractedSubquery(cursor *sqlparser.Cursor, currScope *sc
 		}
 		sq.OtherSide = exp
 	case *sqlparser.ExistsExpr:
-		sq.OpCode = int(engine.PulloutExists)
+		sq.OpCode = int(opcode.PulloutExists)
 		sq.Original = par
 	}
 	return sq, nil
@@ -238,6 +238,8 @@ func (b *binder) createExtractedSubquery(cursor *sqlparser.Cursor, currScope *sc
 
 func (b *binder) resolveColumn(colName *sqlparser.ColName, current *scope, allowMulti bool) (dependency, error) {
 	var thisDeps dependencies
+	first := true
+	var tableName *sqlparser.TableName
 	for current != nil {
 		var err error
 		thisDeps, err = b.resolveColumnInScope(current, colName, allowMulti)
@@ -256,9 +258,22 @@ func (b *binder) resolveColumn(colName *sqlparser.ColName, current *scope, allow
 		} else if err != nil {
 			return dependency{}, err
 		}
+		if current.parent == nil && len(current.tables) == 1 && first && colName.Qualifier.IsEmpty() {
+			// if this is the top scope, and we still haven't been able to find a match, we know we are about to fail
+			// we can check this last scope and see if there is a single table. if there is just one table in the scope
+			// we assume that the column is meant to come from this table.
+			// we also check that this is the first scope we are looking in.
+			// If there are more scopes the column could come from, we can't assume anything
+			// This is just used for a clearer error message
+			name, err := current.tables[0].Name()
+			if err == nil {
+				tableName = &name
+			}
+		}
+		first = false
 		current = current.parent
 	}
-	return dependency{}, NewError(ColumnNotFound, colName)
+	return dependency{}, ShardedError{&ColumnNotFoundError{Column: colName, Table: tableName}}
 }
 
 func (b *binder) resolveColumnInScope(current *scope, expr *sqlparser.ColName, allowMulti bool) (dependencies, error) {
@@ -275,14 +290,14 @@ func (b *binder) resolveColumnInScope(current *scope, expr *sqlparser.ColName, a
 	}
 	if deps, isUncertain := deps.(*uncertain); isUncertain && deps.fail {
 		// if we have a failure from uncertain, we matched the column to multiple non-authoritative tables
-		return nil, ProjError{Inner: NewError(AmbiguousColumn, expr)}
+		return nil, ProjError{Inner: &AmbiguousColumnError{Column: sqlparser.String(expr)}}
 	}
 	return deps, nil
 }
 
 func makeAmbiguousError(colName *sqlparser.ColName, err error) error {
 	if err == ambigousErr {
-		err = NewError(AmbiguousColumn, colName)
+		err = &AmbiguousColumnError{Column: sqlparser.String(colName)}
 	}
 	return err
 }

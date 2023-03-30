@@ -22,8 +22,8 @@ import (
 	"fmt"
 
 	"github.com/gorilla/mux"
-	"k8s.io/apimachinery/pkg/util/sets"
 
+	"vitess.io/vitess/go/sets"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtadmin/errors"
 

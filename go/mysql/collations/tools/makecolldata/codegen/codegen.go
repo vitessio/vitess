@@ -21,10 +21,11 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"os/exec"
 	"path"
 	"reflect"
 	"sort"
+
+	"vitess.io/vitess/go/tools/codegen"
 )
 
 type Generator struct {
@@ -89,17 +90,12 @@ func (g *Generator) WriteToFile(out string) {
 	fmt.Fprintf(&file, ")\n\n")
 	g.Buffer.WriteTo(&file)
 
-	var stderr bytes.Buffer
-	gofmt := exec.Command("gofmt", "-s")
-	gofmt.Stdin = &file
-	gofmt.Stdout = &fmtfile
-	gofmt.Stderr = &stderr
-	if err := gofmt.Run(); err != nil {
-		g.Fail(fmt.Sprintf("failed to format generated code: %v\n%s", err, stderr.Bytes()))
+	if err := os.WriteFile(out, file.Bytes(), 0644); err != nil {
+		g.Fail(fmt.Sprintf("failed to generate %q: %v", out, err))
 	}
 
-	if err := os.WriteFile(out, fmtfile.Bytes(), 0644); err != nil {
-		g.Fail(fmt.Sprintf("failed to generate %q: %v", out, err))
+	if err := codegen.GoImports(out); err != nil {
+		g.Fail(err.Error())
 	}
 
 	log.Printf("written %q (%.02fkb)", out, float64(fmtfile.Len())/1024.0)

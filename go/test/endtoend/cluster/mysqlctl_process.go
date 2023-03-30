@@ -30,6 +30,7 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/tlstest"
 )
 
@@ -235,36 +236,65 @@ func (mysqlctl *MysqlctlProcess) Connect(ctx context.Context, username string) (
 
 // MysqlCtlProcessInstanceOptionalInit returns a Mysqlctl handle for mysqlctl process
 // configured with the given Config.
-func MysqlCtlProcessInstanceOptionalInit(tabletUID int, mySQLPort int, tmpDirectory string, initMySQL bool) *MysqlctlProcess {
+func MysqlCtlProcessInstanceOptionalInit(tabletUID int, mySQLPort int, tmpDirectory string, initMySQL bool) (*MysqlctlProcess, error) {
+	initFile, err := getInitDBFileUsed()
+	if err != nil {
+		return nil, err
+	}
 	mysqlctl := &MysqlctlProcess{
 		Name:         "mysqlctl",
 		Binary:       "mysqlctl",
 		LogDirectory: tmpDirectory,
-		InitDBFile:   path.Join(os.Getenv("VTROOT"), "/config/init_db.sql"),
+		InitDBFile:   initFile,
 	}
 	mysqlctl.MySQLPort = mySQLPort
 	mysqlctl.TabletUID = tabletUID
 	mysqlctl.InitMysql = initMySQL
 	mysqlctl.SecureTransport = false
-	return mysqlctl
+	return mysqlctl, nil
+}
+
+func getInitDBFileUsed() (string, error) {
+	versionStr, err := mysqlctl.GetVersionString()
+	if err != nil {
+		return "", err
+	}
+	flavor, _, err := mysqlctl.ParseVersionString(versionStr)
+	if err != nil {
+		return "", err
+	}
+	if flavor == mysqlctl.FlavorMySQL || flavor == mysqlctl.FlavorPercona {
+		return path.Join(os.Getenv("VTROOT"), "/config/init_db.sql"), nil
+	}
+	// Non-MySQL instances for example MariaDB, will use init_testserver_db.sql which does not contain super_read_only global variable.
+	// Even though MariaDB support is deprecated (https://github.com/vitessio/vitess/issues/9518) but we still support migration scenario.
+	return path.Join(os.Getenv("VTROOT"), "go/test/endtoend/vreplication/testdata/config/init_testserver_db.sql"), nil
 }
 
 // MysqlCtlProcessInstance returns a Mysqlctl handle for mysqlctl process
 // configured with the given Config.
-func MysqlCtlProcessInstance(tabletUID int, mySQLPort int, tmpDirectory string) *MysqlctlProcess {
+func MysqlCtlProcessInstance(tabletUID int, mySQLPort int, tmpDirectory string) (*MysqlctlProcess, error) {
 	return MysqlCtlProcessInstanceOptionalInit(tabletUID, mySQLPort, tmpDirectory, true)
 }
 
 // StartMySQL starts mysqlctl process
 func StartMySQL(ctx context.Context, tablet *Vttablet, username string, tmpDirectory string) error {
-	tablet.MysqlctlProcess = *MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, tmpDirectory)
+	mysqlctlProcess, err := MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, tmpDirectory)
+	if err != nil {
+		return err
+	}
+	tablet.MysqlctlProcess = *mysqlctlProcess
 	return tablet.MysqlctlProcess.Start()
 }
 
 // StartMySQLAndGetConnection create a connection to tablet mysql
 func StartMySQLAndGetConnection(ctx context.Context, tablet *Vttablet, username string, tmpDirectory string) (*mysql.Conn, error) {
-	tablet.MysqlctlProcess = *MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, tmpDirectory)
-	err := tablet.MysqlctlProcess.Start()
+	mysqlctlProcess, err := MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, tmpDirectory)
+	if err != nil {
+		return nil, err
+	}
+	tablet.MysqlctlProcess = *mysqlctlProcess
+	err = tablet.MysqlctlProcess.Start()
 	if err != nil {
 		return nil, err
 	}

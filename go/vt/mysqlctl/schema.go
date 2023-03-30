@@ -24,6 +24,7 @@ import (
 	"strings"
 	"sync"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -109,6 +110,15 @@ func (mysqld *Mysqld) GetSchema(ctx context.Context, dbName string, request *tab
 
 			fields, columns, schema, err := mysqld.collectSchema(ctx, dbName, td.Name, td.Type, request.TableSchemaOnly)
 			if err != nil {
+				// There's a possible race condition: it could happen that a table was dropped in between reading
+				// the list of tables (collectBasicTableData(), earlier) and the point above where we investigate
+				// the table.
+				// This is fine. We identify the situation and keep the table without any fields/columns/key information
+				sqlErr, isSQLErr := mysql.NewSQLErrorFromError(err).(*mysql.SQLError)
+				if isSQLErr && sqlErr != nil && sqlErr.Number() == mysql.ERNoSuchTable {
+					return
+				}
+
 				allErrors.RecordError(err)
 				cancel()
 				return
@@ -121,6 +131,8 @@ func (mysqld *Mysqld) GetSchema(ctx context.Context, dbName string, request *tab
 	}
 
 	// Get primary columns concurrently.
+	// The below runs a single query on `INFORMATION_SCHEMA` and does not interact with the actual tables.
+	// It is therefore safe to run even if some tables are dropped in the interim.
 	colMap := map[string][]string{}
 	if len(tableNames) > 0 {
 		wg.Add(1)
@@ -232,7 +244,7 @@ func (mysqld *Mysqld) normalizedSchema(ctx context.Context, dbName, tableName, t
 	backtickDBName := sqlescape.EscapeID(dbName)
 	qr, fetchErr := mysqld.FetchSuperQuery(ctx, fmt.Sprintf("SHOW CREATE TABLE %s.%s", backtickDBName, sqlescape.EscapeID(tableName)))
 	if fetchErr != nil {
-		return "", fetchErr
+		return "", vterrors.Wrapf(fetchErr, "in Mysqld.normalizedSchema()")
 	}
 	if len(qr.Rows) == 0 {
 		return "", fmt.Errorf("empty create table statement for %v", tableName)
@@ -322,7 +334,7 @@ func GetColumns(dbName, table string, exec func(string, int, bool) (*sqltypes.Re
 	query := fmt.Sprintf(GetFieldsQuery, selectColumns, tableSpec)
 	qr, err := exec(query, 0, true)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, vterrors.Wrapf(err, "in Mysqld.GetColumns()")
 	}
 
 	columns := make([]string, len(qr.Fields))

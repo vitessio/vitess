@@ -21,7 +21,8 @@ import (
 	"math"
 	"math/bits"
 
-	"vitess.io/vitess/go/mysql/collations/internal/charset"
+	"vitess.io/vitess/go/mysql/collations/charset"
+	"vitess.io/vitess/go/vt/vthash"
 )
 
 type Collation_unicode_general_ci struct {
@@ -30,8 +31,6 @@ type Collation_unicode_general_ci struct {
 	unicase *UnicaseInfo
 	charset charset.Charset
 }
-
-func (c *Collation_unicode_general_ci) Init() {}
 
 func (c *Collation_unicode_general_ci) ID() ID {
 	return c.id
@@ -124,11 +123,11 @@ func (c *Collation_unicode_general_ci) WeightString(dst, src []byte, numCodepoin
 	return dst
 }
 
-func (c *Collation_unicode_general_ci) Hash(src []byte, numCodepoints int) HashCode {
+func (c *Collation_unicode_general_ci) Hash(hasher *vthash.Hasher, src []byte, numCodepoints int) {
 	unicaseInfo := c.unicase
 	cs := c.charset
 
-	var hash = uintptr(c.id)
+	hasher.Write64(uint64(c.id))
 	var left = numCodepoints
 	if left == 0 {
 		left = math.MaxInt32
@@ -140,17 +139,16 @@ func (c *Collation_unicode_general_ci) Hash(src []byte, numCodepoints int) HashC
 			break
 		}
 		src = src[width:]
-		hash = memhash16(bits.ReverseBytes16(uint16(unicaseInfo.unicodeSort(r))), hash)
+		hasher.Write16(bits.ReverseBytes16(uint16(unicaseInfo.unicodeSort(r))))
 		left--
 	}
 
 	if numCodepoints > 0 {
 		for left > 0 {
-			hash = memhash16(bits.ReverseBytes16(0x0020), hash)
+			hasher.Write16(bits.ReverseBytes16(0x0020))
 			left--
 		}
 	}
-	return hash
 }
 
 func (c *Collation_unicode_general_ci) WeightStringLen(numBytes int) int {
@@ -170,8 +168,6 @@ type Collation_unicode_bin struct {
 	name    string
 	charset charset.Charset
 }
-
-func (c *Collation_unicode_bin) Init() {}
 
 func (c *Collation_unicode_bin) ID() ID {
 	return c.id
@@ -286,17 +282,18 @@ func (c *Collation_unicode_bin) weightStringUnicode(dst, src []byte, numCodepoin
 	return dst
 }
 
-func (c *Collation_unicode_bin) Hash(src []byte, numCodepoints int) HashCode {
+func (c *Collation_unicode_bin) Hash(hasher *vthash.Hasher, src []byte, numCodepoints int) {
 	if c.charset.SupportsSupplementaryChars() {
-		return c.hashUnicode(src, numCodepoints)
+		c.hashUnicode(hasher, src, numCodepoints)
+	} else {
+		c.hashBMP(hasher, src, numCodepoints)
 	}
-	return c.hashBMP(src, numCodepoints)
 }
 
-func (c *Collation_unicode_bin) hashUnicode(src []byte, numCodepoints int) uintptr {
+func (c *Collation_unicode_bin) hashUnicode(hasher *vthash.Hasher, src []byte, numCodepoints int) {
 	cs := c.charset
 
-	var hash = uintptr(c.id)
+	hasher.Write64(uint64(c.id))
 	var left = numCodepoints
 	if left == 0 {
 		left = math.MaxInt32
@@ -307,22 +304,21 @@ func (c *Collation_unicode_bin) hashUnicode(src []byte, numCodepoints int) uintp
 			break
 		}
 		src = src[width:]
-		hash = memhash32(bits.ReverseBytes32(uint32(r)), hash)
+		hasher.Write32(bits.ReverseBytes32(uint32(r)))
 		left--
 	}
 	if numCodepoints > 0 {
 		for left > 0 {
-			hash = memhash32(bits.ReverseBytes32(0x20), hash)
+			hasher.Write32(bits.ReverseBytes32(0x20))
 			left--
 		}
 	}
-	return hash
 }
 
-func (c *Collation_unicode_bin) hashBMP(src []byte, numCodepoints int) uintptr {
+func (c *Collation_unicode_bin) hashBMP(hasher *vthash.Hasher, src []byte, numCodepoints int) {
 	cs := c.charset
 
-	var hash = uintptr(c.id)
+	hasher.Write64(uint64(c.id))
 	var left = numCodepoints
 	if left == 0 {
 		left = math.MaxInt32
@@ -333,16 +329,15 @@ func (c *Collation_unicode_bin) hashBMP(src []byte, numCodepoints int) uintptr {
 			break
 		}
 		src = src[width:]
-		hash = memhash16(bits.ReverseBytes16(uint16(r)), hash)
+		hasher.Write16(bits.ReverseBytes16(uint16(r)))
 		left--
 	}
 	if numCodepoints > 0 {
 		for left > 0 {
-			hash = memhash16(bits.ReverseBytes16(0x20), hash)
+			hasher.Write16(bits.ReverseBytes16(0x20))
 			left--
 		}
 	}
-	return hash
 }
 
 func (c *Collation_unicode_bin) WeightStringLen(numBytes int) int {

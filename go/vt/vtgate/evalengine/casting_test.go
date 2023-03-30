@@ -41,7 +41,7 @@ func TestEvalResultToBooleanStrict(t *testing.T) {
 	}
 
 	for _, res := range trueValues {
-		name := evalToSqlValue(res).String()
+		name := evalToSQLValue(res).String()
 		t.Run(fmt.Sprintf("ToBooleanStrict() %s expected true (success)", name), func(t *testing.T) {
 			result, err := (&EvalResult{res}).ToBooleanStrict()
 			require.NoError(t, err, name)
@@ -49,7 +49,7 @@ func TestEvalResultToBooleanStrict(t *testing.T) {
 		})
 	}
 	for _, res := range falseValues {
-		name := evalToSqlValue(res).String()
+		name := evalToSQLValue(res).String()
 		t.Run(fmt.Sprintf("ToBooleanStrict() %s expected false (success)", name), func(t *testing.T) {
 			result, err := (&EvalResult{res}).ToBooleanStrict()
 			require.NoError(t, err, name)
@@ -57,7 +57,7 @@ func TestEvalResultToBooleanStrict(t *testing.T) {
 		})
 	}
 	for _, res := range invalid {
-		name := evalToSqlValue(res).String()
+		name := evalToSQLValue(res).String()
 		t.Run(fmt.Sprintf("ToBooleanStrict() %s  expected fail", name), func(t *testing.T) {
 			_, err := (&EvalResult{res}).ToBooleanStrict()
 			require.Error(t, err)

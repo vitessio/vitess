@@ -491,7 +491,7 @@ func checkIfDenyListExists(t *testing.T, vc *VitessCluster, ksShard string, tabl
 }
 
 func expectNumberOfStreams(t *testing.T, vtgateConn *mysql.Conn, name string, workflow string, database string, want int) {
-	query := fmt.Sprintf("select count(*) from _vt.vreplication where workflow='%s';", workflow)
+	query := sqlparser.BuildParsedQuery("select count(*) from %s.vreplication where workflow='%s'", sidecarDBIdentifier, workflow).Query
 	waitForQueryResult(t, vtgateConn, database, query, fmt.Sprintf(`[[INT64(%d)]]`, want))
 }
 
@@ -526,6 +526,7 @@ func getDebugVar(t *testing.T, port int, varPath []string) (string, error) {
 	var val []byte
 	var err error
 	url := fmt.Sprintf("http://localhost:%d/debug/vars", port)
+	log.Infof("url: %s, varPath: %s", url, strings.Join(varPath, ":"))
 	body := getHTTPBody(url)
 	val, _, _, err = jsonparser.Get([]byte(body), varPath...)
 	require.NoError(t, err)
@@ -607,14 +608,14 @@ func getShardRoutingRules(t *testing.T) string {
 
 func verifyCopyStateIsOptimized(t *testing.T, tablet *cluster.VttabletProcess) {
 	// Update information_schem with the latest data
-	_, err := tablet.QueryTablet("analyze table _vt.copy_state", "", false)
+	_, err := tablet.QueryTablet(sqlparser.BuildParsedQuery("analyze table %s.copy_state", sidecarDBIdentifier).Query, "", false)
 	require.NoError(t, err)
 
 	// Verify that there's no delete marked rows and we reset the auto-inc value.
 	// MySQL doesn't always immediately update information_schema so we wait.
 	tmr := time.NewTimer(defaultTimeout)
 	defer tmr.Stop()
-	query := "select data_free, auto_increment from information_schema.tables where table_schema='_vt' and table_name='copy_state'"
+	query := sqlparser.BuildParsedQuery("select data_free, auto_increment from information_schema.tables where table_schema='%s' and table_name='copy_state'", sidecarDBName).Query
 	var dataFree, autoIncrement int64
 	for {
 		res, err := tablet.QueryTablet(query, "", false)

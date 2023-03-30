@@ -19,7 +19,6 @@ package tabletmanager
 import (
 	"context"
 	"fmt"
-	"strconv"
 	"strings"
 	"time"
 
@@ -38,11 +37,11 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
-var setSuperReadOnly bool
 var disableReplicationManager bool
 
 func registerReplicationFlags(fs *pflag.FlagSet) {
-	fs.BoolVar(&setSuperReadOnly, "use_super_read_only", setSuperReadOnly, "Set super_read_only flag when performing planned failover.")
+	fs.Bool("use_super_read_only", true, "Set super_read_only flag when performing planned failover.")
+	fs.MarkDeprecated("use_super_read_only", "From v17 onwards MySQL server will always try to start with super_read_only=ON")
 	fs.BoolVar(&disableReplicationManager, "disable-replication-manager", disableReplicationManager, "Disable replication manager to prevent replication repairs.")
 	fs.MarkDeprecated("disable-replication-manager", "Replication manager is deleted")
 }
@@ -113,6 +112,12 @@ func (tm *TabletManager) FullStatus(ctx context.Context) (*replicationdatapb.Ful
 		return nil, err
 	}
 
+	// superReadOnly - "SELECT @@global.super_read_only"
+	superReadOnly, err := tm.MysqlDaemon.IsSuperReadOnly()
+	if err != nil {
+		return nil, err
+	}
+
 	// Binlog Information - "select @@global.binlog_format, @@global.log_bin, @@global.log_slave_updates, @@global.binlog_row_image"
 	binlogFormat, logBin, logReplicaUpdates, binlogRowImage, err := tm.MysqlDaemon.GetBinlogInformation(ctx)
 	if err != nil {
@@ -158,6 +163,7 @@ func (tm *TabletManager) FullStatus(ctx context.Context) (*replicationdatapb.Ful
 		SemiSyncPrimaryClients:      semiSyncClients,
 		SemiSyncPrimaryTimeout:      semiSyncTimeout,
 		SemiSyncWaitForReplicaCount: semiSyncNumReplicas,
+		SuperReadOnly:               superReadOnly,
 	}, nil
 }
 
@@ -298,14 +304,12 @@ func (tm *TabletManager) InitPrimary(ctx context.Context, semiSync bool) (string
 	}
 	defer tm.unlock()
 
-	if setSuperReadOnly {
-		// Setting super_read_only off so that we can run the DDL commands
-		if err := tm.MysqlDaemon.SetSuperReadOnly(false); err != nil {
-			if strings.Contains(err.Error(), strconv.Itoa(mysql.ERUnknownSystemVariable)) {
-				log.Warningf("server does not know about super_read_only, continuing anyway...")
-			} else {
-				return "", err
-			}
+	// Setting super_read_only `OFF` so that we can run the DDL commands
+	if _, err := tm.MysqlDaemon.SetSuperReadOnly(false); err != nil {
+		if sqlErr, ok := err.(*mysql.SQLError); ok && sqlErr.Number() == mysql.ERUnknownSystemVariable {
+			log.Warningf("server does not know about super_read_only, continuing anyway...")
+		} else {
+			return "", err
 		}
 	}
 
@@ -464,23 +468,17 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 	}
 
 	// Now that we know no writes are in-flight and no new writes can occur,
-	// set MySQL to read-only mode. If we are already read-only because of a
+	// set MySQL to super_read_only mode. If we are already super_read_only because of a
 	// previous demotion, or because we are not primary anyway, this should be
 	// idempotent.
-	if setSuperReadOnly {
-		// Setting super_read_only also sets read_only
-		if err := tm.MysqlDaemon.SetSuperReadOnly(true); err != nil {
-			if strings.Contains(err.Error(), strconv.Itoa(mysql.ERUnknownSystemVariable)) {
-				log.Warningf("server does not know about super_read_only, continuing anyway...")
-			} else {
-				return nil, err
-			}
-		}
-	} else {
-		if err := tm.MysqlDaemon.SetReadOnly(true); err != nil {
+	if _, err := tm.MysqlDaemon.SetSuperReadOnly(true); err != nil {
+		if sqlErr, ok := err.(*mysql.SQLError); ok && sqlErr.Number() == mysql.ERUnknownSystemVariable {
+			log.Warningf("server does not know about super_read_only, continuing anyway...")
+		} else {
 			return nil, err
 		}
 	}
+
 	defer func() {
 		if finalErr != nil && revertPartialFailure && !wasReadOnly {
 			// setting read_only OFF will also set super_read_only OFF if it was set

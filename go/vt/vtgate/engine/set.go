@@ -127,9 +127,8 @@ func (s *Set) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[stri
 	if len(input.Rows) != 1 {
 		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "should get a single row")
 	}
-	env := evalengine.EnvWithBindVars(bindVars, vcursor.ConnCollation())
+	env := evalengine.NewExpressionEnv(ctx, bindVars, vcursor)
 	env.Row = input.Rows[0]
-	env.Fields = input.Fields
 	for _, setOp := range s.Ops {
 		err := setOp.Execute(ctx, vcursor, env)
 		if err != nil {
@@ -313,7 +312,7 @@ func (svs *SysVarReservedConn) Execute(ctx context.Context, vcursor VCursor, env
 	queries := make([]*querypb.BoundQuery, len(rss))
 	for i := 0; i < len(rss); i++ {
 		queries[i] = &querypb.BoundQuery{
-			Sql:           fmt.Sprintf("set @@%s = %s", svs.Name, svs.Expr),
+			Sql:           fmt.Sprintf("set %s = %s", svs.Name, svs.Expr),
 			BindVariables: env.BindVars,
 		}
 	}

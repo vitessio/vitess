@@ -20,11 +20,10 @@ import (
 	"strings"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
-	"vitess.io/vitess/go/vt/vtgate/semantics"
-
+	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -51,7 +50,7 @@ func analyzeSelect(sel *sqlparser.Select, tables map[string]*schema.Table) (plan
 			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%s is not a sequence", sqlparser.ToString(sel.From))
 		}
 		plan.PlanID = PlanNextval
-		v, err := evalengine.Translate(nextVal.Expr, semantics.EmptySemTable())
+		v, err := evalengine.Translate(nextVal.Expr, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -226,9 +225,9 @@ func analyzeDDL(stmt sqlparser.DDLStatement, viewsEnabled bool) (*Plan, error) {
 func analyzeViewsDDL(stmt sqlparser.DDLStatement) (*Plan, error) {
 	switch viewDDL := stmt.(type) {
 	case *sqlparser.CreateView:
-		query := mysql.InsertIntoViewsTable
+		query := sqlparser.BuildParsedQuery(mysql.InsertIntoViewsTable, sidecardb.GetIdentifier()).Query
 		if viewDDL.IsReplace {
-			query = mysql.ReplaceIntoViewsTable
+			query = sqlparser.BuildParsedQuery(mysql.ReplaceIntoViewsTable, sidecardb.GetIdentifier()).Query
 		}
 		insert, err := sqlparser.Parse(query)
 		if err != nil {
@@ -236,13 +235,13 @@ func analyzeViewsDDL(stmt sqlparser.DDLStatement) (*Plan, error) {
 		}
 		return &Plan{PlanID: PlanViewDDL, FullQuery: GenerateFullQuery(insert), FullStmt: viewDDL}, nil
 	case *sqlparser.AlterView:
-		update, err := sqlparser.Parse(mysql.UpdateViewsTable)
+		update, err := sqlparser.Parse(sqlparser.BuildParsedQuery(mysql.UpdateViewsTable, sidecardb.GetIdentifier()).Query)
 		if err != nil {
 			return nil, err
 		}
 		return &Plan{PlanID: PlanViewDDL, FullQuery: GenerateFullQuery(update), FullStmt: viewDDL}, nil
 	case *sqlparser.DropView:
-		del, err := sqlparser.Parse(mysql.DeleteFromViewsTable)
+		del, err := sqlparser.Parse(sqlparser.BuildParsedQuery(mysql.DeleteFromViewsTable, sidecardb.GetIdentifier()).Query)
 		if err != nil {
 			return nil, err
 		}

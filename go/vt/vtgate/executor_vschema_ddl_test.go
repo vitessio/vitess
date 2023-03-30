@@ -318,9 +318,9 @@ func TestPlanExecutorAddDropVschemaTableDDL(t *testing.T) {
 	// No queries should have gone to any tablets
 	wantCount := []int64{0, 0, 0}
 	gotCount := []int64{
-		sbc1.ExecCount.Get(),
-		sbc2.ExecCount.Get(),
-		sbclookup.ExecCount.Get(),
+		sbc1.ExecCount.Load(),
+		sbc2.ExecCount.Load(),
+		sbclookup.ExecCount.Load(),
 	}
 	if !reflect.DeepEqual(gotCount, wantCount) {
 		t.Errorf("Exec %s: %v, want %v", stmt, gotCount, wantCount)
@@ -373,13 +373,13 @@ func TestExecutorAddSequenceDDL(t *testing.T) {
 	}
 	time.Sleep(10 * time.Millisecond)
 
-	stmt = "alter vschema on test_table add auto_increment id using test_seq"
+	stmt = "alter vschema on test_table add auto_increment id using `db-name`.`test_seq`"
 	if _, err = executor.Execute(context.Background(), "TestExecute", session, stmt, nil); err != nil {
 		t.Error(err)
 	}
 	time.Sleep(10 * time.Millisecond)
 
-	wantAutoInc := &vschemapb.AutoIncrement{Column: "id", Sequence: "test_seq"}
+	wantAutoInc := &vschemapb.AutoIncrement{Column: "id", Sequence: "`db-name`.test_seq"}
 	gotAutoInc := executor.vm.GetCurrentSrvVschema().Keyspaces[ksSharded].Tables["test_table"].AutoIncrement
 
 	if !reflect.DeepEqual(wantAutoInc, gotAutoInc) {
@@ -579,6 +579,18 @@ func TestExecutorAddDropVindexDDL(t *testing.T) {
 	}
 	utils.MustMatch(t, wantqr, qr)
 
+	// now make sure we can create another vindex that references a table with dashes (i.e. escaping is necessary)
+	stmt = "alter vschema on test2 add vindex test_lookup_fqn(c1,c2) using consistent_lookup_unique with owner=`test`, from=`c1,c2`, table=`test-keyspace`.`lookup-fqn`, to=`keyspace_id`"
+	_, err = executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
+	require.NoError(t, err)
+
+	_, vindex = waitForVindex(t, ks, "test_lookup_fqn", vschemaUpdates, executor)
+	require.Equal(t, "consistent_lookup_unique", vindex.Type)
+	require.Equal(t, "test", vindex.Owner)
+	require.Equal(t, "c1,c2", vindex.Params["from"])
+	require.Equal(t, "`test-keyspace`.`lookup-fqn`", vindex.Params["table"])
+	require.Equal(t, "keyspace_id", vindex.Params["to"])
+
 	stmt = "alter vschema on test2 add vindex nonexistent (c1,c2)"
 	_, err = executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
 	require.EqualError(t, err, "vindex nonexistent does not exist in keyspace TestExecutor")
@@ -614,9 +626,9 @@ func TestExecutorAddDropVindexDDL(t *testing.T) {
 	// no queries should have gone to any tablets
 	wantCount := []int64{0, 0, 0}
 	gotCount := []int64{
-		sbc1.ExecCount.Get(),
-		sbc2.ExecCount.Get(),
-		sbclookup.ExecCount.Get(),
+		sbc1.ExecCount.Load(),
+		sbc2.ExecCount.Load(),
+		sbclookup.ExecCount.Load(),
 	}
 	utils.MustMatch(t, wantCount, gotCount)
 }

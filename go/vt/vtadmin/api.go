@@ -31,8 +31,8 @@ import (
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
 	"github.com/patrickmn/go-cache"
-	"k8s.io/apimachinery/pkg/util/sets"
 
+	"vitess.io/vitess/go/sets"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/log"
@@ -73,6 +73,10 @@ type API struct {
 	authz *rbac.Authorizer
 
 	options Options
+
+	// vtexplain is now global again due to stat exporters in the tablet layer
+	// we're not super concerned because we will be deleting vtexplain Soon(TM).
+	vtexplainLock sync.Mutex
 }
 
 // Options wraps the configuration options for different components of the
@@ -1942,6 +1946,16 @@ func (api *API) VTExplain(ctx context.Context, req *vtadminpb.VTExplainRequest) 
 	if !api.authz.IsAuthorized(ctx, c.ID, rbac.VTExplainResource, rbac.GetAction) {
 		return nil, nil
 	}
+
+	lockWaitStart := time.Now()
+
+	api.vtexplainLock.Lock()
+	defer api.vtexplainLock.Unlock()
+
+	lockWaitTime := time.Since(lockWaitStart)
+	log.Infof("vtexplain lock wait time: %s", lockWaitTime)
+
+	span.Annotate("vtexplain_lock_wait_time", lockWaitTime.String())
 
 	tablet, err := c.FindTablet(ctx, func(t *vtadminpb.Tablet) bool {
 		return t.Tablet.Keyspace == req.Keyspace && topo.IsInServingGraph(t.Tablet.Type) && t.Tablet.Type != topodatapb.TabletType_PRIMARY && t.State == vtadminpb.Tablet_SERVING

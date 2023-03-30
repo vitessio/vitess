@@ -119,8 +119,16 @@ Create the `settings.xml` in the `$HOME/.m2/` directory as described in their [i
 
 ## Release Cutover 
 
-In this section we describe our current release process. We begin with a short [**overview**](#overview).
+In this section we describe our current release process. We begin with a list of [**pre-requisite for the release team**](#pre-requisites) and with a short [**overview**](#overview).
 The release process is divided into three parts: [**Pre-Release**](#pre-release), [**Release**](#release), [**Post-Release**](#post-release), which are detailed after the overview.
+
+### Pre-Requisites
+
+This section highlights the different pre-requisites the release team has to meet before releasing.
+
+- The tool `gh` must be installed locally and ready to be used.
+- You must have access to the Java release, more information in the [**Java Packages**](#java-packages) section.
+- You must be able to create branches and have admin right on the `vitessio/vitess` and `planetscale/vitess-operator` repositories.
 
 ### Overview
 
@@ -153,8 +161,9 @@ That includes:
   > - This includes write access to the Vitess repository and to the Maven repository. 
 - **Preparing and cleaning the release notes summary.**
   > - One or more Pull Requests have to be submitted in advance to create and update the release summary.
-  > - The summary files are located in: `./doc/releasenotes/*_*_*_summary.md`.
+  > - The summary files are located in: `./changelog/*.0/*.*.*/summary.md`.
   > - The summary file for a release candidate is the same as the one for the GA release.
+  > - Make sure to run `go run ./go/tools/releases/releases.go` to update the `changelog` directory with the latest release notes.
 - **Finishing the blog post, and coordinating with the different organizations for cross-posting. Usually CNCF and PlanetScale. This step applies only for GA releases.**
   > - The blog post must be finished and reviewed.
   > - A Pull Request on the website repository of Vitess has to be created so we can easily publish the blog during the release day.
@@ -162,6 +171,7 @@ That includes:
   > - As soon as we go into code freeze, if we are doing an RC, create the release branch.
   > - If we are doing a GA release, do not merge any new Pull Requests.
   > - The guide on how to do a code freeze is available in the [How To Code Freeze](#how-to-code-freeze) section.
+  > - It is not advised to merge a PR during code freeze, but if it is deemed necessary by the release lead, then follow the steps in [How To Merge During Code Freeze](#how-to-merge-during-code-freeze) section.
 - **Create the Vitess release.**
   > - A guide on how to create a Vitess release is available in the [How to prepare the release of Vitess](#how-to-prepare-the-release-of-vitess) section.
   > - This step will create a Release Pull Request, it must be reviewed and merged before the release day. The release commit will be used to tag the release.
@@ -169,13 +179,30 @@ That includes:
   > - While the Vitess Operator is located in a different repository, we also need to do a release for it.
   > - The Operator follows the same cycle: RC1 -> GA -> Patches.
   > - Documentation for the pre-release of the Vitess Operator is available [here](https://github.com/planetscale/vitess-operator/blob/main/docs/release-process.md#prepare-for-release).
+- **Update the release notes on `main`.**
+  > - One Pull Request against `main` must be created, it will contain the new release notes that we are adding in the Release Pull Request.
+  > - We open this Pull Request now to avoid waiting on the CI during release day.
+  > - All future changes to the release notes during the code freeze will need to be ported to both PRs: the one on `main` and the Release Pull Request.
+- **Update the website documentation.**
+  > - We want to open a preparatory **draft** Pull Request to update the documentation.
+  > - There are several pages we want to update:
+  >   - [The releases page](https://vitess.io/docs/releases/), we must add the new release to the list with all its information and link. The links can be broken (404 error) while we are preparing for the release, this is fine.
+  >   - [The local install page](https://vitess.io/docs/get-started/local/), we must use the proper version increment for this guide and the proper SHA. The SHA will have to be modified once the Release Pull Request and the release is tagged is merged.
+  > - If we are doing a GA or RC release follow the instructions below:
+  >  - There are two scripts in the website repository in `./tools/{ga|rc}_release.sh`, use them to update the website documentation. The scripts automate:
+  >    - For an RC, we need to create a new version in the sidebar and mark the current version as RC.
+  >    - For a GA, we need to mark the version we are releasing as "Stable" and the next one as "Development".
 
 ### Release
 
 On the release day, there are several things to do:
 
+- **Merge the Release Pull Request.**
+  > - During the code freeze, we created a Release Pull Request. It must be merged.
 - **Tag the Vitess release.**
   > - A guide on how to tag a version is available in the [How To Release Vitess](#how-to-release-vitess) section.
+- **Update the release notes on `main`.**
+  > - During the code freeze, we created a Pull Request against `main` to update the release notes. It must be merged.
 - **Create the corresponding Vitess operator release.**
   > - Applies only to versions greater or equal to `v14.0.0`.
   > - If we are doing an RC release, then we will need to create the Vitess Operator RC too. If we are doing a GA release, we're also doing a GA release in the Operator.
@@ -184,10 +211,9 @@ On the release day, there are several things to do:
   > - Applies only to GA releases.
   > - This step is explained in the [Java Packages: Deploy & Release](#java-packages-deploy--release) section.
 - **Update the website documentation repository.**
-  > - Applies only to GA and RC releases.
-  > - There are two scripts in the website repository in `./tools/{ga|rc}_release.sh`, use them to update the website documentation. The scripts automate:
-  >   - For an RC, we need to create a new version in the sidebar and mark the current version as RC.
-  >   - For a GA, we need to mark the version we are releasing as "Stable" and the next one as "Development".
+  > - Review the Website Pull Request that was opened during the Pre-Release.
+  > - The git SHA used in [the local install page](https://vitess.io/docs/get-started/local/) should be updated with the new proper SHA for this release.
+  > - Merge the Pull Request.
 - **Publish the blog post on the Vitess website.**
   > - Applies only to GA releases.
   > - The corresponding Pull Request was created beforehand during the pre-release. Merge it.
@@ -197,8 +223,6 @@ On the release day, there are several things to do:
   > - After a while, those elements will finish their execution and their status will be green.
   > - This step is even more important for GA releases as we often include a link to _arewefastyet_ in the blog post.
   > - The benchmarks need to complete before announcing the blog posts or before they get cross-posted.
-- **Update the release notes on `main`.**
-  > - One Pull Request against `main` must be created, it will contain the new release notes. 
 - **Go back to dev mode on the release branch.**
   > - The version constants across the codebase must be updated to `SNAPSHOT`. 
 - **Build k8s Docker images and publish them**
@@ -247,14 +271,14 @@ We need to verify that _arewefastyet_ has finished the benchmark too.
     2. Run the following command to generate the release notes:
         1. Release Candidate:
             ```shell
-            make VERSION="v15.0.0-rc1" FROM="v14.0.3" TO="HEAD" SUMMARY="./doc/releasenotes/15_0_0_summary.md" release-notes  
+            make VERSION="v15.0.0-rc1" FROM="v14.0.3" TO="HEAD" SUMMARY="./changelog/15.0/15.0.0/summary.md" release-notes  
             ```
         2. General Availability:
             ```shell
-            make VERSION="v15.0.0-rc1" FROM="v14.0.3" TO="HEAD" SUMMARY="./doc/releasenotes/15_0_0_summary.md" release-notes  
+            make VERSION="v15.0.0-rc1" FROM="v14.0.3" TO="HEAD" SUMMARY="./changelog/15.0/15.0.0/summary.md" release-notes  
             ```
        This command will generate the release notes by looking at all the commits between the tag `v14.0.3` and the reference `HEAD`.
-       It will also use the file located in `./doc/releasenotes/15_0_0_summary.md` to prefix the release notes with a text that the maintainers wrote before the release.
+       It will also use the file located in `./changelog/15.0/15.0.0/summary.md` to prefix the release notes with a text that the maintainers wrote before the release.
        Please verify the generated release notes to make sure it is well-formatted and all the bookmarks are generated properly.
 
 
@@ -295,7 +319,7 @@ This section is divided into two parts:
    git tag v15.0.0 && git tag v0.15.0 && git push origin v15.0.0 && git push origin v0.15.0
    ```
 
-4. Create a Pull Request against the `main` branch with the release notes found in `doc/releasenotes/15_0_0_*.md`.
+4. Create a Pull Request against the `main` branch with the release notes found in `./changelog/15.0/15.0.0/15_0_0_*.md`.
 
 5. Run the back to dev mode tool.
    ```shell
@@ -367,6 +391,26 @@ Finally, let's run the code freeze script:
 
 The script will prompt the command that will allow you to push the code freeze change. Once pushed, open a PR that will be merged on `release-15.0`.
 
+Remember, you should also disable the Launchable integration from the newly created release branch.
+
+### How To Merge During Code Freeze
+
+> **Warning:** It is not advised to merge a PR during code-freeze. If it is deemed absolutely necessary, then the following steps can be followed.
+ 
+The PR that needs to be merged will be failing on the `Code Freeze` CI. To merge this PR, we'll have to mark this CI action as not required.
+You will need administrator privileges on the vitess repository to be able to make this change.
+
+1. Go to the GitHub repository and click on `Settings`.
+2. Under the `Code and automation` section, select `Branches`.
+3. Find the branch that you want to merge the PR against and then select `Edit`.
+4. Scroll down to find the list of required checks.
+5. Within this list find `Code Freeze` and click on the cross next to it to remove it from this list.
+6. Save your changes on the bottom of the page.
+7. Refresh the page of the PR, and you should be able to merge it.
+8. After merging the PR, you need to do 2 more things - 
+   1. Add `Code Freeze` back as a required check.
+   2. Check if the release PR has any merge conflicts. If it does, fix them and push.
+
 ### Java Packages: Deploy & Release
 
 > **Warning:** This section's steps need to be executed only when releasing a new major version of Vitess,
@@ -379,7 +423,7 @@ The script will prompt the command that will allow you to push the code freeze c
     git checkout v12.0.0
     ```
 
-2. Run `gpg-agent` to avoid that Maven will constantly prompt you for the password of your private key.
+2. Run `gpg-agent` to avoid that Maven will constantly prompt you for the password of your private key. Note that this can print error messages that can be ignored on Mac.
 
     ```bash
     eval $(gpg-agent --daemon --no-grab --write-env-file $HOME/.gpg-agent-info)
@@ -398,7 +442,9 @@ The script will prompt the command that will allow you to push the code freeze c
     > **Warning:** After the deployment, the Java packages will be automatically released. Once released, you cannot delete them. The only option is to upload a newer version (e.g. increment the patch level).</p>
 
     ```bash
+    cd ./java/
     mvn clean deploy -P release -DskipTests
     cd ..
     ```
+
 5. It will take some time for artifacts to appear on [maven directory](https://mvnrepository.com/artifact/io.vitess/vitess-client)

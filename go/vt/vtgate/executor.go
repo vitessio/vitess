@@ -17,6 +17,7 @@ limitations under the License.
 package vtgate
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"crypto/sha256"
@@ -28,17 +29,16 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/cache"
-	"vitess.io/vitess/go/hack"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
-	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/key"
@@ -256,7 +256,7 @@ func (e *Executor) StreamExecute(
 	var err error
 
 	resultHandler := func(ctx context.Context, plan *engine.Plan, vc *vcursorImpl, bindVars map[string]*querypb.BindVariable, execStart time.Time) error {
-		var seenResults sync2.AtomicBool
+		var seenResults atomic.Bool
 		var resultMu sync.Mutex
 		result := &sqltypes.Result{}
 		if canReturnRows(plan.Type) {
@@ -271,7 +271,7 @@ func (e *Executor) StreamExecute(
 					if err := callback(qr.Metadata()); err != nil {
 						return err
 					}
-					seenResults.Set(true)
+					seenResults.Store(true)
 				}
 
 				for _, row := range qr.Rows {
@@ -283,7 +283,7 @@ func (e *Executor) StreamExecute(
 
 					if byteCount >= e.streamSize {
 						err := callback(result)
-						seenResults.Set(true)
+						seenResults.Store(true)
 						result = &sqltypes.Result{}
 						byteCount = 0
 						if err != nil {
@@ -313,7 +313,7 @@ func (e *Executor) StreamExecute(
 		}
 
 		// Send left-over rows if there is no error on execution.
-		if len(result.Rows) > 0 || !seenResults.Get() {
+		if len(result.Rows) > 0 || !seenResults.Load() {
 			if err := callback(result); err != nil {
 				return err
 			}
@@ -984,6 +984,7 @@ func (e *Executor) getPlan(ctx context.Context, vcursor *vcursorImpl, sql string
 	vcursor.SetIgnoreMaxMemoryRows(ignoreMaxMemoryRows)
 	consolidator := sqlparser.Consolidator(stmt)
 	vcursor.SetConsolidator(consolidator)
+	vcursor.SetWorkloadName(sqlparser.GetWorkloadNameFromStatement(stmt))
 
 	setVarComment, err := prepareSetVarComment(vcursor, stmt)
 	if err != nil {
@@ -1017,13 +1018,21 @@ func (e *Executor) getPlan(ctx context.Context, vcursor *vcursorImpl, sql string
 	return e.cacheAndBuildStatement(ctx, vcursor, query, statement, qo, logStats, stmt, reservedVars, bindVarNeeds)
 }
 
-func (e *Executor) cacheAndBuildStatement(ctx context.Context, vcursor *vcursorImpl, query string, statement sqlparser.Statement, qo iQueryOption, logStats *logstats.LogStats, stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, bindVarNeeds *sqlparser.BindVarNeeds) (*engine.Plan, sqlparser.Statement, error) {
+func (e *Executor) hashPlan(ctx context.Context, vcursor *vcursorImpl, query string) string {
 	planHash := sha256.New()
-	_, _ = planHash.Write([]byte(vcursor.planPrefixKey(ctx)))
-	_, _ = planHash.Write([]byte{':'})
-	_, _ = planHash.Write(hack.StringBytes(query))
-	planKey := hex.EncodeToString(planHash.Sum(nil))
 
+	{
+		// use a bufio.Writer to accumulate writes instead of writing directly to the hasher
+		buf := bufio.NewWriter(planHash)
+		vcursor.keyForPlan(ctx, query, buf)
+		buf.Flush()
+	}
+
+	return hex.EncodeToString(planHash.Sum(nil))
+}
+
+func (e *Executor) cacheAndBuildStatement(ctx context.Context, vcursor *vcursorImpl, query string, statement sqlparser.Statement, qo iQueryOption, logStats *logstats.LogStats, stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, bindVarNeeds *sqlparser.BindVarNeeds) (*engine.Plan, sqlparser.Statement, error) {
+	planKey := e.hashPlan(ctx, vcursor, query)
 	if sqlparser.CachePlan(statement) && qo.cachePlan() {
 		if plan, ok := e.plans.Get(planKey); ok {
 			logStats.CachedPlan = true
@@ -1078,15 +1087,6 @@ func prepareSetVarComment(vcursor *vcursorImpl, stmt sqlparser.Statement) (strin
 		res.WriteString(fmt.Sprintf("SET_VAR(%s = %s) ", k, v))
 	})
 	return strings.TrimSpace(res.String()), nil
-}
-
-func (e *Executor) debugGetPlan(planKey string) (*engine.Plan, bool) {
-	planHash := sha256.Sum256([]byte(planKey))
-	planHex := hex.EncodeToString(planHash[:])
-	if plan, ok := e.plans.Get(planHex); ok {
-		return plan.(*engine.Plan), true
-	}
-	return nil, false
 }
 
 type cacheItem struct {

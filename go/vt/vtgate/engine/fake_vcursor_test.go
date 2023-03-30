@@ -25,6 +25,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
@@ -99,6 +100,10 @@ func (t *noopVCursor) SetContextWithValue(key, value interface{}) func() {
 // ConnCollation implements VCursor
 func (t *noopVCursor) ConnCollation() collations.ID {
 	return collations.CollationUtf8mb4ID
+}
+
+func (t *noopVCursor) TimeZone() *time.Location {
+	return nil
 }
 
 func (t *noopVCursor) ExecutePrimitive(ctx context.Context, primitive Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
@@ -255,6 +260,10 @@ func (t *noopVCursor) SetWorkload(querypb.ExecuteOptions_Workload) {
 	panic("implement me")
 }
 
+func (t *noopVCursor) SetWorkloadName(string) {
+	panic("implement me")
+}
+
 func (t *noopVCursor) SetPlannerVersion(querypb.ExecuteOptions_PlannerVersion) {
 	panic("implement me")
 }
@@ -355,6 +364,8 @@ type loggingVCursor struct {
 
 	// map different shards to keyspaces in the test.
 	ksShardMap map[string][]string
+
+	shardSession []*srvtopo.ResolvedShard
 }
 
 type tableRoutes struct {
@@ -420,7 +431,7 @@ func (f *loggingVCursor) InReservedConn() bool {
 }
 
 func (f *loggingVCursor) ShardSession() []*srvtopo.ResolvedShard {
-	return nil
+	return f.shardSession
 }
 
 func (f *loggingVCursor) ExecuteVSchema(context.Context, string, *sqlparser.AlterVschema) error {
@@ -677,6 +688,10 @@ func (f *loggingVCursor) SetTransactionMode(vtgatepb.TransactionMode) {
 }
 
 func (f *loggingVCursor) SetWorkload(querypb.ExecuteOptions_Workload) {
+	panic("implement me")
+}
+
+func (f *loggingVCursor) SetWorkloadName(string) {
 	panic("implement me")
 }
 

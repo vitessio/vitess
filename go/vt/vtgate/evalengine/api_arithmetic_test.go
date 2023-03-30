@@ -26,6 +26,7 @@ import (
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/test/utils"
+	"vitess.io/vitess/go/vt/vthash"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -271,7 +272,7 @@ func TestArithmetics(t *testing.T) {
 		operator: "/",
 		f:        Divide,
 		cases: []tcase{{
-			//All Nulls
+			// All Nulls
 			v1:  NULL,
 			v2:  NULL,
 			out: NULL,
@@ -349,13 +350,13 @@ func TestArithmetics(t *testing.T) {
 			// testing for overflow of float64
 			v1:  NewFloat64(math.MaxFloat64),
 			v2:  NewFloat64(0.5),
-			err: dataOutOfRangeError(math.MaxFloat64, 0.5, "BIGINT", "/").Error(),
+			err: dataOutOfRangeError(math.MaxFloat64, 0.5, "DOUBLE", "/").Error(),
 		}},
 	}, {
 		operator: "*",
 		f:        Multiply,
 		cases: []tcase{{
-			//All Nulls
+			// All Nulls
 			v1:  NULL,
 			v2:  NULL,
 			out: NULL,
@@ -424,7 +425,7 @@ func TestArithmetics(t *testing.T) {
 			v2:  NewUint64(1),
 			out: NewUint64(math.MaxUint64),
 		}, {
-			//Checking whether maxInt value can be passed as uint value
+			// Checking whether maxInt value can be passed as uint value
 			v1:  NewUint64(math.MaxInt64),
 			v2:  NewInt64(3),
 			err: dataOutOfRangeError(math.MaxInt64, 3, "BIGINT UNSIGNED", "*").Error(),
@@ -984,10 +985,10 @@ func TestPrioritize(t *testing.T) {
 		out2: ival,
 	}}
 	for _, tcase := range tcases {
-		t.Run(fmt.Sprintf("%s - %s", evalToSqlValue(tcase.v1), evalToSqlValue(tcase.v2)), func(t *testing.T) {
+		t.Run(fmt.Sprintf("%s - %s", evalToSQLValue(tcase.v1), evalToSQLValue(tcase.v2)), func(t *testing.T) {
 			got1, got2 := makeNumericAndPrioritize(tcase.v1, tcase.v2)
-			utils.MustMatch(t, evalToSqlValue(tcase.out1), evalToSqlValue(got1), "makeNumericAndPrioritize")
-			utils.MustMatch(t, evalToSqlValue(tcase.out2), evalToSqlValue(got2), "makeNumericAndPrioritize")
+			utils.MustMatch(t, evalToSQLValue(tcase.out1), evalToSQLValue(got1), "makeNumericAndPrioritize")
+			utils.MustMatch(t, evalToSQLValue(tcase.out2), evalToSQLValue(got2), "makeNumericAndPrioritize")
 		})
 	}
 }
@@ -1089,18 +1090,21 @@ func TestCompareNumeric(t *testing.T) {
 
 	for aIdx, aVal := range values {
 		for bIdx, bVal := range values {
-			t.Run(fmt.Sprintf("[%d/%d] %s %s", aIdx, bIdx, evalToSqlValue(aVal), evalToSqlValue(bVal)), func(t *testing.T) {
+			t.Run(fmt.Sprintf("[%d/%d] %s %s", aIdx, bIdx, evalToSQLValue(aVal), evalToSQLValue(bVal)), func(t *testing.T) {
 				result, err := compareNumeric(aVal, bVal)
 				require.NoError(t, err)
 				assert.Equal(t, cmpResults[aIdx][bIdx], result)
 
 				// if two values are considered equal, they must also produce the same hashcode
 				if result == 0 {
-					if aVal.sqlType() == bVal.sqlType() {
+					if aVal.SQLType() == bVal.SQLType() {
+						hash1 := vthash.New()
+						hash2 := vthash.New()
+
 						// hash codes can only be compared if they are coerced to the same type first
-						aHash, _ := aVal.hash()
-						bHash, _ := bVal.hash()
-						assert.Equal(t, aHash, bHash, "hash code does not match")
+						aVal.(hashable).Hash(&hash1)
+						bVal.(hashable).Hash(&hash2)
+						assert.Equal(t, hash1.Sum128(), hash2.Sum128(), "hash code does not match")
 					}
 				}
 			})

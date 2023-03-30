@@ -54,8 +54,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfAlterVschema(in, f)
 	case *AndExpr:
 		return VisitRefOfAndExpr(in, f)
-	case Argument:
-		return VisitArgument(in, f)
+	case *Argument:
+		return VisitRefOfArgument(in, f)
 	case *ArgumentLessWindowExpr:
 		return VisitRefOfArgumentLessWindowExpr(in, f)
 	case *AutoIncSpec:
@@ -180,6 +180,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfFuncExpr(in, f)
 	case *GTIDFuncExpr:
 		return VisitRefOfGTIDFuncExpr(in, f)
+	case *GeomFromTextExpr:
+		return VisitRefOfGeomFromTextExpr(in, f)
 	case GroupBy:
 		return VisitGroupBy(in, f)
 	case *GroupConcatExpr:
@@ -266,6 +268,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfLagLeadExpr(in, f)
 	case *Limit:
 		return VisitRefOfLimit(in, f)
+	case *LineStringExpr:
+		return VisitRefOfLineStringExpr(in, f)
 	case ListArg:
 		return VisitListArg(in, f)
 	case *Literal:
@@ -292,6 +296,12 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfMin(in, f)
 	case *ModifyColumn:
 		return VisitRefOfModifyColumn(in, f)
+	case *MultiLinestringExpr:
+		return VisitRefOfMultiLinestringExpr(in, f)
+	case *MultiPointExpr:
+		return VisitRefOfMultiPointExpr(in, f)
+	case *MultiPolygonExpr:
+		return VisitRefOfMultiPolygonExpr(in, f)
 	case *NTHValueExpr:
 		return VisitRefOfNTHValueExpr(in, f)
 	case *NamedWindow:
@@ -348,8 +358,14 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitPartitions(in, f)
 	case *PerformanceSchemaFuncExpr:
 		return VisitRefOfPerformanceSchemaFuncExpr(in, f)
+	case *PointExpr:
+		return VisitRefOfPointExpr(in, f)
+	case *PolygonExpr:
+		return VisitRefOfPolygonExpr(in, f)
 	case *PrepareStmt:
 		return VisitRefOfPrepareStmt(in, f)
+	case *PurgeBinaryLogs:
+		return VisitRefOfPurgeBinaryLogs(in, f)
 	case ReferenceAction:
 		return VisitReferenceAction(in, f)
 	case *ReferenceDefinition:
@@ -751,6 +767,15 @@ func VisitRefOfAndExpr(in *AndExpr, f Visit) error {
 		return err
 	}
 	if err := VisitExpr(in.Right, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfArgument(in *Argument, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
 	return nil
@@ -1237,9 +1262,6 @@ func VisitRefOfCurTimeFuncExpr(in *CurTimeFuncExpr, f Visit) error {
 	if err := VisitIdentifierCI(in.Name, f); err != nil {
 		return err
 	}
-	if err := VisitExpr(in.Fsp, f); err != nil {
-		return err
-	}
 	return nil
 }
 func VisitRefOfDeallocateStmt(in *DeallocateStmt, f Visit) error {
@@ -1638,6 +1660,24 @@ func VisitRefOfGTIDFuncExpr(in *GTIDFuncExpr, f Visit) error {
 		return err
 	}
 	if err := VisitExpr(in.Channel, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfGeomFromTextExpr(in *GeomFromTextExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.WktText, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.Srid, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.AxisOrderOpt, f); err != nil {
 		return err
 	}
 	return nil
@@ -2295,6 +2335,18 @@ func VisitRefOfLimit(in *Limit, f Visit) error {
 	}
 	return nil
 }
+func VisitRefOfLineStringExpr(in *LineStringExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExprs(in.PointParams, f); err != nil {
+		return err
+	}
+	return nil
+}
 func VisitRefOfLiteral(in *Literal, f Visit) error {
 	if in == nil {
 		return nil
@@ -2435,6 +2487,42 @@ func VisitRefOfModifyColumn(in *ModifyColumn, f Visit) error {
 	}
 	return nil
 }
+func VisitRefOfMultiLinestringExpr(in *MultiLinestringExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExprs(in.LinestringParams, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfMultiPointExpr(in *MultiPointExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExprs(in.PointParams, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfMultiPolygonExpr(in *MultiPolygonExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExprs(in.PolygonParams, f); err != nil {
+		return err
+	}
+	return nil
+}
 func VisitRefOfNTHValueExpr(in *NTHValueExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -2547,6 +2635,9 @@ func VisitRefOfOffset(in *Offset, f Visit) error {
 		return nil
 	}
 	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.Original, f); err != nil {
 		return err
 	}
 	return nil
@@ -2819,6 +2910,33 @@ func VisitRefOfPerformanceSchemaFuncExpr(in *PerformanceSchemaFuncExpr, f Visit)
 	}
 	return nil
 }
+func VisitRefOfPointExpr(in *PointExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.XCordinate, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.YCordinate, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfPolygonExpr(in *PolygonExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExprs(in.LinestringParams, f); err != nil {
+		return err
+	}
+	return nil
+}
 func VisitRefOfPrepareStmt(in *PrepareStmt, f Visit) error {
 	if in == nil {
 		return nil
@@ -2833,6 +2951,15 @@ func VisitRefOfPrepareStmt(in *PrepareStmt, f Visit) error {
 		return err
 	}
 	if err := VisitRefOfParsedComments(in.Comments, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfPurgeBinaryLogs(in *PurgeBinaryLogs, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
 	return nil
@@ -4140,6 +4267,8 @@ func VisitCallable(in Callable, f Visit) error {
 		return VisitRefOfFuncExpr(in, f)
 	case *GTIDFuncExpr:
 		return VisitRefOfGTIDFuncExpr(in, f)
+	case *GeomFromTextExpr:
+		return VisitRefOfGeomFromTextExpr(in, f)
 	case *GroupConcatExpr:
 		return VisitRefOfGroupConcatExpr(in, f)
 	case *InsertExpr:
@@ -4188,6 +4317,8 @@ func VisitCallable(in Callable, f Visit) error {
 		return VisitRefOfJSONValueModifierExpr(in, f)
 	case *LagLeadExpr:
 		return VisitRefOfLagLeadExpr(in, f)
+	case *LineStringExpr:
+		return VisitRefOfLineStringExpr(in, f)
 	case *LocateExpr:
 		return VisitRefOfLocateExpr(in, f)
 	case *MatchExpr:
@@ -4198,6 +4329,12 @@ func VisitCallable(in Callable, f Visit) error {
 		return VisitRefOfMemberOfExpr(in, f)
 	case *Min:
 		return VisitRefOfMin(in, f)
+	case *MultiLinestringExpr:
+		return VisitRefOfMultiLinestringExpr(in, f)
+	case *MultiPointExpr:
+		return VisitRefOfMultiPointExpr(in, f)
+	case *MultiPolygonExpr:
+		return VisitRefOfMultiPolygonExpr(in, f)
 	case *NTHValueExpr:
 		return VisitRefOfNTHValueExpr(in, f)
 	case *NamedWindow:
@@ -4206,6 +4343,10 @@ func VisitCallable(in Callable, f Visit) error {
 		return VisitRefOfNtileExpr(in, f)
 	case *PerformanceSchemaFuncExpr:
 		return VisitRefOfPerformanceSchemaFuncExpr(in, f)
+	case *PointExpr:
+		return VisitRefOfPointExpr(in, f)
+	case *PolygonExpr:
+		return VisitRefOfPolygonExpr(in, f)
 	case *RegexpInstrExpr:
 		return VisitRefOfRegexpInstrExpr(in, f)
 	case *RegexpLikeExpr:
@@ -4326,8 +4467,8 @@ func VisitExpr(in Expr, f Visit) error {
 	switch in := in.(type) {
 	case *AndExpr:
 		return VisitRefOfAndExpr(in, f)
-	case Argument:
-		return VisitArgument(in, f)
+	case *Argument:
+		return VisitRefOfArgument(in, f)
 	case *ArgumentLessWindowExpr:
 		return VisitRefOfArgumentLessWindowExpr(in, f)
 	case *Avg:
@@ -4382,6 +4523,8 @@ func VisitExpr(in Expr, f Visit) error {
 		return VisitRefOfFuncExpr(in, f)
 	case *GTIDFuncExpr:
 		return VisitRefOfGTIDFuncExpr(in, f)
+	case *GeomFromTextExpr:
+		return VisitRefOfGeomFromTextExpr(in, f)
 	case *GroupConcatExpr:
 		return VisitRefOfGroupConcatExpr(in, f)
 	case *InsertExpr:
@@ -4436,6 +4579,8 @@ func VisitExpr(in Expr, f Visit) error {
 		return VisitRefOfJSONValueModifierExpr(in, f)
 	case *LagLeadExpr:
 		return VisitRefOfLagLeadExpr(in, f)
+	case *LineStringExpr:
+		return VisitRefOfLineStringExpr(in, f)
 	case ListArg:
 		return VisitListArg(in, f)
 	case *Literal:
@@ -4452,6 +4597,12 @@ func VisitExpr(in Expr, f Visit) error {
 		return VisitRefOfMemberOfExpr(in, f)
 	case *Min:
 		return VisitRefOfMin(in, f)
+	case *MultiLinestringExpr:
+		return VisitRefOfMultiLinestringExpr(in, f)
+	case *MultiPointExpr:
+		return VisitRefOfMultiPointExpr(in, f)
+	case *MultiPolygonExpr:
+		return VisitRefOfMultiPolygonExpr(in, f)
 	case *NTHValueExpr:
 		return VisitRefOfNTHValueExpr(in, f)
 	case *NamedWindow:
@@ -4468,6 +4619,10 @@ func VisitExpr(in Expr, f Visit) error {
 		return VisitRefOfOrExpr(in, f)
 	case *PerformanceSchemaFuncExpr:
 		return VisitRefOfPerformanceSchemaFuncExpr(in, f)
+	case *PointExpr:
+		return VisitRefOfPointExpr(in, f)
+	case *PolygonExpr:
+		return VisitRefOfPolygonExpr(in, f)
 	case *RegexpInstrExpr:
 		return VisitRefOfRegexpInstrExpr(in, f)
 	case *RegexpLikeExpr:
@@ -4654,6 +4809,8 @@ func VisitStatement(in Statement, f Visit) error {
 		return VisitRefOfOtherRead(in, f)
 	case *PrepareStmt:
 		return VisitRefOfPrepareStmt(in, f)
+	case *PurgeBinaryLogs:
+		return VisitRefOfPurgeBinaryLogs(in, f)
 	case *Release:
 		return VisitRefOfRelease(in, f)
 	case *RenameTable:
@@ -4718,10 +4875,6 @@ func VisitTableExpr(in TableExpr, f Visit) error {
 	}
 }
 func VisitAlgorithmValue(in AlgorithmValue, f Visit) error {
-	_, err := f(in)
-	return err
-}
-func VisitArgument(in Argument, f Visit) error {
 	_, err := f(in)
 	return err
 }

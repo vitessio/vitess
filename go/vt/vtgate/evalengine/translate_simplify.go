@@ -16,11 +16,6 @@ limitations under the License.
 
 package evalengine
 
-import (
-	"vitess.io/vitess/go/mysql/collations"
-	"vitess.io/vitess/go/sqltypes"
-)
-
 func (expr *Literal) constant() bool {
 	return true
 }
@@ -81,9 +76,9 @@ func (expr *LikeExpr) simplify(env *ExpressionEnv) error {
 	}
 
 	if lit, ok := expr.Right.(*Literal); ok {
-		if b, ok := lit.inner.(*evalBytes); ok && (b.isText() || b.isBinary()) {
+		if b, ok := lit.inner.(*evalBytes); ok && (b.isVarChar() || b.isBinary()) {
 			expr.MatchCollation = b.col.Collation
-			coll := collations.Local().LookupByID(expr.MatchCollation)
+			coll := expr.MatchCollation.Get()
 			expr.Match = coll.Wildcard(b.bytes, 0, 0, 0)
 		}
 	}
@@ -95,54 +90,10 @@ func (inexpr *InExpr) simplify(env *ExpressionEnv) error {
 		return err
 	}
 
-	tuple, ok := inexpr.Right.(TupleExpr)
-	if !ok {
-		return nil
+	if err := inexpr.Right.simplify(env); err != nil {
+		return err
 	}
 
-	var (
-		collation collations.ID
-		typ       sqltypes.Type
-		optimize  = true
-	)
-
-	for i, expr := range tuple {
-		if lit, ok := expr.(*Literal); ok {
-			thisColl := evalCollation(lit.inner).Collation
-			thisTyp := lit.inner.sqlType()
-			if i == 0 {
-				collation = thisColl
-				typ = thisTyp
-				continue
-			}
-			if collation == thisColl && typ == thisTyp {
-				continue
-			}
-		}
-		optimize = false
-		break
-	}
-
-	if optimize {
-		inexpr.Hashed = make(map[HashCode]int)
-		for i, expr := range tuple {
-			lit := expr.(*Literal)
-			hash, err := lit.inner.hash()
-			if err != nil {
-				inexpr.Hashed = nil
-				break
-			}
-			if collidx, collision := inexpr.Hashed[hash]; collision {
-				cmp, _, err := evalCompareAll(lit.inner, tuple[collidx].(*Literal).inner, true)
-				if cmp != 0 || err != nil {
-					inexpr.Hashed = nil
-					break
-				}
-				continue
-			}
-			inexpr.Hashed[hash] = i
-		}
-	}
 	return nil
 }
 

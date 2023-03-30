@@ -7,13 +7,15 @@ concurrency:
   group: format('{0}-{1}', ${{ github.ref }}, 'Upgrade Downgrade Testing Reparent Old VTTablet')
   cancel-in-progress: true
 
+permissions: read-all
+
 # This test ensures that our end-to-end tests work using Vitess components
 # (vtctl, vttablet, etc) built on different versions.
 
 jobs:
   get_previous_release:
     if: always()
-    name: Get latest release
+    name: Get Previous Release - Reparent Old VTTablet
     runs-on: ubuntu-22.04
     outputs:
       previous_release: ${{ steps.output-previous-release-ref.outputs.previous_release_ref }}
@@ -33,7 +35,7 @@ jobs:
 
   upgrade_downgrade_test:
     if: always() && (needs.get_previous_release.result == 'success')
-    name: Run Upgrade Downgrade Test
+    name: Run Upgrade Downgrade Test - Reparent Old VTTablet
     runs-on: ubuntu-22.04
     needs:
       - get_previous_release
@@ -85,7 +87,7 @@ jobs:
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       uses: actions/setup-go@v3
       with:
-        go-version: 1.19.4
+        go-version: 1.20.1
 
     - name: Set up python
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
@@ -179,8 +181,10 @@ jobs:
       run: |
         source build.env
 
-        rm -f $PWD/bin/vttablet
+        rm -f $PWD/bin/vttablet $PWD/bin/mysqlctl $PWD/bin/mysqlctld
         cp /tmp/vitess-build-other/bin/vttablet $PWD/bin/vttablet
+        cp /tmp/vitess-build-other/bin/mysqlctl $PWD/bin/mysqlctl
+        cp /tmp/vitess-build-other/bin/mysqlctld $PWD/bin/mysqlctld
         vtctl --version
         vttablet --version
 
@@ -192,4 +196,4 @@ jobs:
         mkdir -p /tmp/vtdataroot
 
         source build.env
-        eatmydata -- go run test.go -skip-build -keep-data -docker=false -print-log -follow -tag upgrade_downgrade_reparent
+        eatmydata -- go run test.go -skip-build -keep-data=false -docker=false -print-log -follow -tag upgrade_downgrade_reparent
