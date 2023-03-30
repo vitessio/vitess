@@ -401,6 +401,7 @@ func init() {
 		"vtgate",
 		"vtgateclienttest",
 		"vtgr",
+		"vtorc",
 		"vttablet",
 		"vttestserver",
 	} {
