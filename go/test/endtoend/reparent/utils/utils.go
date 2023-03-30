@@ -31,6 +31,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/vttablet/tabletconn"
+
 	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
@@ -703,5 +706,26 @@ func CheckReplicationStatus(ctx context.Context, t *testing.T, tablet *cluster.V
 		require.Equal(t, "Yes", res.Rows[0][11].ToString())
 	} else {
 		require.Equal(t, "No", res.Rows[0][11].ToString())
+	}
+}
+
+func WaitForTabletToBeServing(t *testing.T, clusterInstance *cluster.LocalProcessCluster, tablet *cluster.Vttablet, timeout time.Duration) {
+	vTablet, err := clusterInstance.VtctlclientGetTablet(tablet)
+	require.NoError(t, err)
+
+	tConn, err := tabletconn.GetDialer()(vTablet, false)
+	require.NoError(t, err)
+
+	newCtx, cancel := context.WithTimeout(context.Background(), timeout)
+	err = tConn.StreamHealth(newCtx, func(shr *querypb.StreamHealthResponse) error {
+		if shr.Serving {
+			cancel()
+		}
+		return nil
+	})
+
+	// the error should only be because we cancelled the context when the tablet became serving again.
+	if err != nil && !strings.Contains(err.Error(), "context canceled") {
+		t.Fatal(err.Error())
 	}
 }
