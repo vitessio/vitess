@@ -1445,6 +1445,143 @@ func (asm *assembler) Fn_RADIANS() {
 	}, "FN RADIANS FLOAT64(SP-1)")
 }
 
+func (asm *assembler) Fn_EXP() {
+	asm.emit(func(env *ExpressionEnv) int {
+		f := env.vm.stack[env.vm.sp-1].(*evalFloat)
+		f.f = math.Exp(f.f)
+		if !isFinite(f.f) {
+			env.vm.stack[env.vm.sp-1] = nil
+		}
+		return 1
+	}, "FN EXP FLOAT64(SP-1)")
+}
+
+func (asm *assembler) Fn_LN() {
+	asm.emit(func(env *ExpressionEnv) int {
+		f := env.vm.stack[env.vm.sp-1].(*evalFloat)
+		var ok bool
+		f.f, ok = math_log(f.f)
+		if !ok {
+			env.vm.stack[env.vm.sp-1] = nil
+		}
+		return 1
+	}, "FN LN FLOAT64(SP-1)")
+}
+
+func (asm *assembler) Fn_LOG() {
+	asm.adjustStack(-1)
+	asm.emit(func(env *ExpressionEnv) int {
+		var ok bool
+		f1 := env.vm.stack[env.vm.sp-2].(*evalFloat)
+		f2 := env.vm.stack[env.vm.sp-1].(*evalFloat)
+		f1.f, ok = math_logN(f1.f, f2.f)
+		if !ok {
+			env.vm.stack[env.vm.sp-2] = nil
+		}
+		env.vm.sp--
+		return 1
+	}, "FN LOG FLOAT64(SP-1)")
+}
+
+func (asm *assembler) Fn_LOG10() {
+	asm.emit(func(env *ExpressionEnv) int {
+		var ok bool
+		f := env.vm.stack[env.vm.sp-1].(*evalFloat)
+		f.f, ok = math_log10(f.f)
+		if !ok {
+			env.vm.stack[env.vm.sp-1] = nil
+		}
+		return 1
+	}, "FN LOG10 FLOAT64(SP-1)")
+}
+
+func (asm *assembler) Fn_LOG2() {
+	asm.emit(func(env *ExpressionEnv) int {
+		var ok bool
+		f := env.vm.stack[env.vm.sp-1].(*evalFloat)
+		f.f, ok = math_log2(f.f)
+		if !ok {
+			env.vm.stack[env.vm.sp-1] = nil
+		}
+		return 1
+	}, "FN LOG2 FLOAT64(SP-1)")
+}
+
+func (asm *assembler) Fn_POW() {
+	asm.adjustStack(-1)
+	asm.emit(func(env *ExpressionEnv) int {
+		f1 := env.vm.stack[env.vm.sp-2].(*evalFloat)
+		f2 := env.vm.stack[env.vm.sp-1].(*evalFloat)
+
+		f1.f = math.Pow(f1.f, f2.f)
+		if !isFinite(f1.f) {
+			env.vm.stack[env.vm.sp-2] = nil
+		}
+		env.vm.sp--
+		return 1
+	}, "FN POW FLOAT64(SP-1)")
+}
+
+func (asm *assembler) Fn_SIGN_i() {
+	asm.emit(func(env *ExpressionEnv) int {
+		i := env.vm.stack[env.vm.sp-1].(*evalInt64)
+		if i.i < 0 {
+			i.i = -1
+		} else if i.i > 0 {
+			i.i = 1
+		} else {
+			i.i = 0
+		}
+		return 1
+	}, "FN SIGN INT64(SP-1)")
+}
+
+func (asm *assembler) Fn_SIGN_u() {
+	asm.emit(func(env *ExpressionEnv) int {
+		u := env.vm.stack[env.vm.sp-1].(*evalUint64)
+		a := int64(0)
+		if u.u > 0 {
+			a = 1
+		}
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalInt64(a)
+		return 1
+	}, "FN SIGN UINT64(SP-1)")
+}
+
+func (asm *assembler) Fn_SIGN_f() {
+	asm.emit(func(env *ExpressionEnv) int {
+		f := env.vm.stack[env.vm.sp-1].(*evalFloat)
+		a := int64(0)
+		if f.f < 0 {
+			a = -1
+		} else if f.f > 0 {
+			a = 1
+		}
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalInt64(a)
+		return 1
+	}, "FN SIGN FLOAT64(SP-1)")
+}
+
+func (asm *assembler) Fn_SIGN_d() {
+	asm.emit(func(env *ExpressionEnv) int {
+		d := env.vm.stack[env.vm.sp-1].(*evalDecimal)
+		a := int64(d.dec.Sign())
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalInt64(a)
+		return 1
+	}, "FN SIGN FLOAT64(SP-1)")
+}
+
+func (asm *assembler) Fn_SQRT() {
+	asm.emit(func(env *ExpressionEnv) int {
+		f := env.vm.stack[env.vm.sp-1].(*evalFloat)
+		f.f = math.Sqrt(f.f)
+		if !isFinite(f.f) {
+			env.vm.stack[env.vm.sp-1] = nil
+		}
+		return 1
+	}, "FN SQRT FLOAT64(SP-1)")
+}
+
 func (asm *assembler) Fn_COLLATION(col collations.TypedCollation) {
 	asm.emit(func(env *ExpressionEnv) int {
 		v := evalCollation(env.vm.stack[env.vm.sp-1])
