@@ -23,7 +23,8 @@ import (
 )
 
 // Horizon is an operator that allows us to postpone planning things like SELECT/GROUP BY/ORDER BY/LIMIT until later.
-// It contains information about the planning we have to do after deciding how we will send the query to the tablets.	// If we are able to push down the Horizon under a route, we don't have to plan these things separately and can
+// It contains information about the planning we have to do after deciding how we will send the query to the tablets.
+// If we are able to push down the Horizon under a route, we don't have to plan these things separately and can
 // just copy over the AST constructs to the query being sent to a tablet.
 // If we are not able to push it down, this operator needs to be split up into smaller
 // Project/Aggregate/Sort/Limit operations, some which can be pushed down,

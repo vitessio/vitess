@@ -148,6 +148,7 @@ func (a *ApplyJoin) pushColLeft(ctx *plancontext.PlanningContext, e *sqlparser.A
 	a.LHS = newLHS
 	return offset, nil
 }
+
 func (a *ApplyJoin) pushColRight(ctx *plancontext.PlanningContext, e *sqlparser.AliasedExpr) (int, error) {
 	newRHS, offset, err := a.RHS.AddColumn(ctx, e, true)
 	if err != nil {
@@ -162,13 +163,8 @@ func (a *ApplyJoin) GetColumns() ([]sqlparser.Expr, error) {
 }
 
 func (a *ApplyJoin) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, reuseCol bool) (ops.Operator, int, error) {
-	// first check if we already are passing through this expression
-	if reuseCol {
-		for i, existing := range a.ColumnsAST {
-			if ctx.SemTable.EqualsExpr(existing, expr.Expr) {
-				return a, i, nil
-			}
-		}
+	if offset, found := canReuseColumn(ctx, reuseCol, a.ColumnsAST, expr.Expr); found {
+		return a, offset, nil
 	}
 
 	lhs := TableID(a.LHS)
