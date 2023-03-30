@@ -1376,6 +1376,8 @@ func Run(t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.T
 	tmRPCTestExecuteFetch(ctx, t, client, tablet)
 
 	// Replication related methods
+	tmRPCTestPrimaryPosition(ctx, t, client, tablet)
+
 	tmRPCTestReplicationStatus(ctx, t, client, tablet)
 	tmRPCTestFullStatus(ctx, t, client, tablet)
 	tmRPCTestMasterPosition(ctx, t, client, tablet)
