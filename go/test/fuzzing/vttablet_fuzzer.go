@@ -291,14 +291,14 @@ func (fs *fuzzStore) callExecuteFetchAsApp() error {
 	return nil
 }
 
-// callInitMaster implements a wrapper
-// for fuzzing InitMaster
-func (fs *fuzzStore) callInitMaster() error {
+// callInitPrimary implements a wrapper
+// for fuzzing InitPrimary
+func (fs *fuzzStore) callInitPrimary() error {
 	tablet, err := fs.getTablet()
 	if err != nil {
 		return err
 	}
-	_, _ = fs.client.InitMaster(context.Background(), tablet, false)
+	_, _ = fs.client.InitPrimary(context.Background(), tablet, false)
 	return nil
 }
 
@@ -397,7 +397,7 @@ func (fs *fuzzStore) callPrimaryStatus() error {
 	if err != nil {
 		return err
 	}
-	_, _ = fs.client.MasterStatus(context.Background(), tablet)
+	_, _ = fs.client.PrimaryStatus(context.Background(), tablet)
 	return nil
 }
 
@@ -646,7 +646,7 @@ func (fs *fuzzStore) executeInRandomOrder() {
 		var err error
 		switch execInt % maxTargets {
 		case 0:
-			err = fs.callInitMaster()
+			err = fs.callInitPrimary()
 		case 1:
 			err = fs.callResetReplication()
 		case 2:
