@@ -3812,7 +3812,10 @@ func (e *Executor) gcArtifacts(ctx context.Context) error {
 			log.Infof("Executor.gcArtifacts: will GC artifact %s for migration %s", artifactTable, uuid)
 			timestampInThePast := timeNow.Add(time.Duration(-i) * time.Second).UTC()
 			toTableName, err := e.gcArtifactTable(ctx, artifactTable, uuid, timestampInThePast)
-			if err != nil {
+			if err == nil {
+				// artifact was renamed away and is gone. There' no need to list it in `artifacts` column.
+				e.clearSingleArtifact(ctx, uuid, artifactTable)
+			} else {
 				return vterrors.Wrapf(err, "in gcArtifacts() for %s", artifactTable)
 			}
 			log.Infof("Executor.gcArtifacts: renamed away artifact %s to %s", artifactTable, toTableName)
