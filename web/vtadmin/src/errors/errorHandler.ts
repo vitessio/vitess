@@ -58,7 +58,7 @@ export const notify = (error: Error, metadata?: object) => {
 };
 
 /**
- * sanitizeEnv serializes import.meta.env into an object that's sent to
+ * sanitizeEnv serializes process.env into an object that's sent to
  * configured error handlers, for extra debugging context.
  * Implemented as an allow list, rather than as a block list, to avoid
  * leaking sensitive environment variables, like API keys.

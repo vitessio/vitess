@@ -26,9 +26,9 @@ import { CreateKeyspace } from './CreateKeyspace';
 import { vtadmin } from '../../../proto/vtadmin';
 import * as Snackbar from '../../Snackbar';
 
-const ORIGINAL_PROCESS_ENV = import.meta.env;
+const ORIGINAL_PROCESS_ENV = process.env;
 const TEST_PROCESS_ENV = {
-    ...import.meta.env,
+    ...process.env,
     VITE_VTADMIN_API_ADDRESS: '',
 };
 
@@ -41,15 +41,15 @@ describe('CreateKeyspace integration test', () => {
     const server = setupServer();
 
     beforeAll(() => {
-        import.meta.env = { ...TEST_PROCESS_ENV } as NodeJS.ProcessEnv;
+        process.env = { ...TEST_PROCESS_ENV } as NodeJS.ProcessEnv;
     });
 
     afterEach(() => {
-        import.meta.env = { ...TEST_PROCESS_ENV } as NodeJS.ProcessEnv;
+        process.env = { ...TEST_PROCESS_ENV } as NodeJS.ProcessEnv;
     });
 
     afterAll(() => {
-        import.meta.env = { ...ORIGINAL_PROCESS_ENV };
+        process.env = { ...ORIGINAL_PROCESS_ENV };
         server.close();
     });
 

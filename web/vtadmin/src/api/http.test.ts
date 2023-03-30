@@ -56,26 +56,26 @@ const mockServerJson = (endpoint: string, json: object) => {
     server.use(rest.get(endpoint, (req, res, ctx) => res(ctx.json(json))));
 };
 
-// Since vtadmin uses import.meta.env variables quite a bit, we need to
+// Since vtadmin uses process.env variables quite a bit, we need to
 // do a bit of a dance to clear them out between test runs.
-const ORIGINAL_PROCESS_ENV = import.meta.env;
+const ORIGINAL_PROCESS_ENV = process.env;
 const TEST_PROCESS_ENV = {
-    ...import.meta.env,
+    ...process.env,
     VITE_VTADMIN_API_ADDRESS: '',
 };
 
 beforeAll(() => {
     // TypeScript can get a little cranky with the automatic
     // string/boolean type conversions, hence this cast.
-    import.meta.env = { ...TEST_PROCESS_ENV } as NodeJS.ProcessEnv;
+    process.env = { ...TEST_PROCESS_ENV } as NodeJS.ProcessEnv;
 
     // Enable API mocking before tests.
     server.listen();
 });
 
 afterEach(() => {
-    // Reset the import.meta.env to clear out any changes made in the tests.
-    import.meta.env = { ...TEST_PROCESS_ENV } as NodeJS.ProcessEnv;
+    // Reset the process.env to clear out any changes made in the tests.
+    process.env = { ...TEST_PROCESS_ENV } as NodeJS.ProcessEnv;
 
     vi.restoreAllMocks();
 
@@ -84,7 +84,7 @@ afterEach(() => {
 });
 
 afterAll(() => {
-    import.meta.env = { ...ORIGINAL_PROCESS_ENV };
+    process.env = { ...ORIGINAL_PROCESS_ENV };
 
     // Disable API mocking after the tests are done.
     server.close();
@@ -173,7 +173,7 @@ describe('api/http', () => {
 
         describe('credentials', () => {
             it('uses the VITE_FETCH_CREDENTIALS env variable if specified', async () => {
-                import.meta.env.VITE_FETCH_CREDENTIALS = 'include';
+                process.env.VITE_FETCH_CREDENTIALS = 'include';
 
                 vi.spyOn(global, 'fetch');
 

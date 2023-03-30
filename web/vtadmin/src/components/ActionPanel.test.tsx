@@ -24,9 +24,9 @@ import { describe, it, expect, beforeAll, vi } from 'vitest';
 
 import ActionPanel, { ActionPanelProps } from './ActionPanel';
 
-const ORIGINAL_PROCESS_ENV = import.meta.env;
+const ORIGINAL_PROCESS_ENV = process.env;
 const TEST_PROCESS_ENV = {
-    ...import.meta.env,
+    ...process.env,
     VITE_VTADMIN_API_ADDRESS: '',
 };
 
@@ -52,17 +52,17 @@ describe('ActionPanel', () => {
     };
 
     beforeAll(() => {
-        import.meta.env = { ...TEST_PROCESS_ENV } as NodeJS.ProcessEnv;
+        process.env = { ...TEST_PROCESS_ENV } as NodeJS.ProcessEnv;
         server.listen();
     });
 
     afterEach(() => {
-        import.meta.env = { ...TEST_PROCESS_ENV } as NodeJS.ProcessEnv;
+        process.env = { ...TEST_PROCESS_ENV } as NodeJS.ProcessEnv;
         vi.clearAllMocks();
     });
 
     afterAll(() => {
-        import.meta.env = { ...ORIGINAL_PROCESS_ENV };
+        process.env = { ...ORIGINAL_PROCESS_ENV };
         server.close();
     });
 

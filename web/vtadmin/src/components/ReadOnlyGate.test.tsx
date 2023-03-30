@@ -18,12 +18,12 @@ import { render, screen } from '@testing-library/react';
 import { ReadOnlyGate } from './ReadOnlyGate';
 import { describe, it, expect, afterEach  } from 'vitest';
 
-// Preserve import.meta.env to restore its original values after each test runs.
-const ORIGINAL_PROCESS_ENV = { ...import.meta.env };
+// Preserve process.env to restore its original values after each test runs.
+const ORIGINAL_PROCESS_ENV = { ...process.env };
 
 describe('ReadOnlyGate', () => {
     afterEach(() => {
-        import.meta.env = ORIGINAL_PROCESS_ENV;
+        process.env = ORIGINAL_PROCESS_ENV;
     });
 
     it('hides children when in read-only mode', () => {

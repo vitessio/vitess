@@ -15,10 +15,10 @@
  */
 
 export const env: () => NodeJS.ProcessEnv = () => {
-    return { ...window.env, ...import.meta.env };
+    return { ...window.env, ...process.env };
 };
 
-// import.meta.env variables are always strings, hence this tiny helper function
+// process.env variables are always strings, hence this tiny helper function
 // to transmute it into a boolean. It is a function, rather than a constant,
-// to support dynamic updates to import.meta.env in tests.
+// to support dynamic updates to process.env in tests.
 export const isReadOnlyMode = (): boolean => env().VITE_READONLY_MODE === 'true';

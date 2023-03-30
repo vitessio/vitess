@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import { response, rest } from 'msw';
+import { rest } from 'msw';
 import { setupServer } from 'msw/node';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -24,9 +24,9 @@ import { vtadmin } from '../../../proto/vtadmin';
 import { describe, it, expect, vi } from 'vitest';
 import { Response } from 'cross-fetch'
 
-const ORIGINAL_PROCESS_ENV = import.meta.env;
+const ORIGINAL_PROCESS_ENV = process.env;
 const TEST_PROCESS_ENV = {
-    ...import.meta.env,
+    ...process.env,
     VITE_VTADMIN_API_ADDRESS: '',
 };
 
@@ -52,24 +52,27 @@ describe('Advanced keyspace actions', () => {
     });
 
     beforeAll(() => {
-        import.meta.env = { ...TEST_PROCESS_ENV } as NodeJS.ProcessEnv;
+        process.env = { ...TEST_PROCESS_ENV } as NodeJS.ProcessEnv;
         server.listen();
     });
 
     beforeEach(() => {
-        import.meta.env = { ...TEST_PROCESS_ENV } as NodeJS.ProcessEnv;
+        process.env = { ...TEST_PROCESS_ENV } as NodeJS.ProcessEnv;
         vi.clearAllMocks();
     });
 
     afterAll(() => {
-        import.meta.env = { ...ORIGINAL_PROCESS_ENV };
+        process.env = { ...ORIGINAL_PROCESS_ENV };
         server.close();
     });
 
     describe('Reload Schema', () => {
         it('reloads the schema', async () => {
             vi.spyOn(global, 'fetch');
-      
+
+            const response = new Response('', { status: 500 });
+            fetch.mockReturnValue(response)
+
             render(
                 <QueryClientProvider client={queryClient}>
                     <Advanced clusterID="some-cluster" name="some-keyspace" />
