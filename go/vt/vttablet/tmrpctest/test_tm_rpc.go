@@ -89,7 +89,7 @@ func NewFakeRPCTM(t testing.TB) tabletmanager.RPCTM {
 
 var protoMessage = reflect.TypeOf((*proto.Message)(nil)).Elem()
 
-func compare(t testing.TB, name string, got, want any) {
+func compare(t testing.TB, name string, got, want interface{}) {
 	t.Helper()
 	typ := reflect.TypeOf(got)
 	if reflect.TypeOf(got) != reflect.TypeOf(want) {
@@ -127,7 +127,7 @@ func compareBool(t testing.TB, name string, got bool) {
 	}
 }
 
-func compareError(t *testing.T, name string, err error, got, want any) {
+func compareError(t *testing.T, name string, err error, got, want interface{}) {
 	t.Helper()
 	if err != nil {
 		t.Errorf("%v failed: %v", name, err)
@@ -1178,6 +1178,11 @@ func tmRPCTestSetMasterPanic(ctx context.Context, t *testing.T, client tmclient.
 	expectHandleRPCPanic(t, "SetMaster", true /*verbose*/, err)
 }
 
+func tmRPCTestSetReplicationSourcePanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+	err := client.SetReplicationSource(ctx, tablet, testPrimaryAlias, testTimeCreatedNS, testWaitPosition, testForceStartReplica, false)
+	expectHandleRPCPanic(t, "SetReplicationSource", true /*verbose*/, err)
+}
+
 func (fra *fakeRPCTM) StopReplicationAndGetStatus(ctx context.Context, stopReplicationMode replicationdatapb.StopReplicationMode) (tabletmanager.StopReplicationAndGetStatusResponse, error) {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
@@ -1321,7 +1326,7 @@ func tmRPCTestRestoreFromBackupPanic(ctx context.Context, t *testing.T, client t
 //
 
 // HandleRPCPanic is part of the RPCTM interface
-func (fra *fakeRPCTM) HandleRPCPanic(ctx context.Context, name string, args, reply any, verbose bool, err *error) {
+func (fra *fakeRPCTM) HandleRPCPanic(ctx context.Context, name string, args, reply interface{}, verbose bool, err *error) {
 	if x := recover(); x != nil {
 		// Use the panic case to make sure 'name' and 'verbose' are right.
 		*err = fmt.Errorf("HandleRPCPanic caught panic during %v with verbose %v", name, verbose)
@@ -1436,6 +1441,7 @@ func Run(t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.T
 	tmRPCTestDemoteMasterPanic(ctx, t, client, tablet)
 	tmRPCTestUndoDemoteMasterPanic(ctx, t, client, tablet)
 	tmRPCTestSetMasterPanic(ctx, t, client, tablet)
+	tmRPCTestSetReplicationSourcePanic(ctx, t, client, tablet)
 	tmRPCTestStopReplicationAndGetStatusPanic(ctx, t, client, tablet)
 	tmRPCTestPromoteReplicaPanic(ctx, t, client, tablet)
 
