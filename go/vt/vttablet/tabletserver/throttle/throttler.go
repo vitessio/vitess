@@ -260,7 +260,7 @@ func (throttler *Throttler) GetMetricsQuery() string {
 }
 
 func (throttler *Throttler) GetMetricsThreshold() float64 {
-	return math.Float64frombits(throttler.MetricsThreshold.Load())
+	return throttler.MetricsThreshold.Get()
 }
 
 // initThrottler initializes config
