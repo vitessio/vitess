@@ -271,8 +271,8 @@ func TestInitialThrottler(t *testing.T) {
 		waitForThrottleCheckStatus(t, primaryTablet, http.StatusOK)
 	})
 	t.Run("enabling throttler, again", func(t *testing.T) {
-		// Enable throttler again with the default query which also moves us back to the default
-		// threshold.
+		// Enable the throttler again with the default query which also moves us back
+		// to the default threshold.
 		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, true, false, 0, useDefaultQuery, true)
 		assert.NoError(t, err)
 
