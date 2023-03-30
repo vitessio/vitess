@@ -23,6 +23,8 @@ import (
 	"strings"
 	"time"
 
+	querypb "vitess.io/vitess/go/vt/proto/query"
+
 	"vitess.io/vitess/go/sqltypes"
 )
 
@@ -58,7 +60,7 @@ func (v *Value) marshalSQLInternal(top bool, dst []byte) []byte {
 		}
 		dst = append(dst, ')')
 		return dst
-	case TypeString:
+	case TypeString, typeRawString:
 		if top {
 			dst = append(dst, "CAST(JSON_QUOTE("...)
 		}
@@ -192,4 +194,22 @@ func (v *Value) marshalSQLInternal(top bool, dst []byte) []byte {
 	default:
 		panic(fmt.Errorf("BUG: unexpected Value type: %d", v.t))
 	}
+}
+
+// MarshalSQLValue converts the byte representation of a json value
+// and returns it formatted by MarshalSQLTo
+func MarshalSQLValue(buf []byte) (*sqltypes.Value, error) {
+	var parser Parser
+	if len(buf) == 0 {
+		buf = sqltypes.NullBytes
+	}
+	jsonVal, err := parser.ParseBytes(buf)
+	if err != nil {
+		return nil, err
+	}
+	newVal := sqltypes.MakeTrusted(querypb.Type_JSON, jsonVal.MarshalSQLTo(nil))
+	if err != nil {
+		return nil, err
+	}
+	return &newVal, nil
 }
