@@ -31,7 +31,7 @@ Scripts for common and not-so-common tasks. These are always run from the `vites
 
 Under the hood, we use create-react-app's environment variable set-up which is very well documented: https://create-react-app.dev/docs/adding-custom-environment-variables. 
 
-All of our environment variables are enumerated and commented in [react-app-env.d.ts](./src/react-app-env.d.ts). This also gives us type hinting on `process.env`, for editors that support it. 
+All of our environment variables are enumerated and commented in [react-app-env.d.ts](./src/react-app-env.d.ts). This also gives us type hinting on `import.meta.env`, for editors that support it. 
 
 ## Linters and Formatters
 

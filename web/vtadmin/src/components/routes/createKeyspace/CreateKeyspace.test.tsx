@@ -20,15 +20,16 @@ import userEvent from '@testing-library/user-event';
 import { createMemoryHistory } from 'history';
 import { QueryClient, QueryClientProvider } from 'react-query';
 import { Router } from 'react-router-dom';
+import { describe, it, expect, beforeAll, vi } from 'vitest';
 
 import { CreateKeyspace } from './CreateKeyspace';
 import { vtadmin } from '../../../proto/vtadmin';
 import * as Snackbar from '../../Snackbar';
 
-const ORIGINAL_PROCESS_ENV = process.env;
+const ORIGINAL_PROCESS_ENV = import.meta.env;
 const TEST_PROCESS_ENV = {
-    ...process.env,
-    REACT_APP_VTADMIN_API_ADDRESS: '',
+    ...import.meta.env,
+    VITE_VTADMIN_API_ADDRESS: '',
 };
 
 // This integration test verifies the behaviour from the form UI
@@ -40,21 +41,21 @@ describe('CreateKeyspace integration test', () => {
     const server = setupServer();
 
     beforeAll(() => {
-        process.env = { ...TEST_PROCESS_ENV } as NodeJS.ProcessEnv;
+        import.meta.env = { ...TEST_PROCESS_ENV } as NodeJS.ProcessEnv;
     });
 
     afterEach(() => {
-        process.env = { ...TEST_PROCESS_ENV } as NodeJS.ProcessEnv;
+        import.meta.env = { ...TEST_PROCESS_ENV } as NodeJS.ProcessEnv;
     });
 
     afterAll(() => {
-        process.env = { ...ORIGINAL_PROCESS_ENV };
+        import.meta.env = { ...ORIGINAL_PROCESS_ENV };
         server.close();
     });
 
     it('successfully creates a keyspace', async () => {
-        jest.spyOn(global, 'fetch');
-        jest.spyOn(Snackbar, 'success');
+        vi.spyOn(global, 'fetch');
+        vi.spyOn(Snackbar, 'success');
 
         const cluster = { id: 'local', name: 'local' };
 
@@ -75,7 +76,7 @@ describe('CreateKeyspace integration test', () => {
         server.listen();
 
         const history = createMemoryHistory();
-        jest.spyOn(history, 'push');
+        vi.spyOn(history, 'push');
 
         const queryClient = new QueryClient({
             defaultOptions: { queries: { retry: false } },

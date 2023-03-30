@@ -8,6 +8,8 @@ export default defineConfig(() => {
     },
     plugins: [react()],
     test: {
+      globals: true,
+      setupFiles: './tests/setup.js',
       environment: 'jsdom',
     }
   };

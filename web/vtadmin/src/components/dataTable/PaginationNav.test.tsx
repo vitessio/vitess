@@ -14,10 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, within, cleanup } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { PaginationNav, Props } from './PaginationNav';
-import { describe, it, expect } from 'vitest';
+import { describe, test, expect } from 'vitest';
 
 const formatLink = (page: number) => ({
     pathname: '/test',
@@ -97,5 +97,6 @@ describe('PaginationNav', () => {
                 }
             }
         });
-    });
+        cleanup()
+      });
 });

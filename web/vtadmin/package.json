@@ -34,7 +34,7 @@
     "web-vitals": "^3.1.1"
   },
   "scripts": {
-    "local": "REACT_APP_VTADMIN_API_ADDRESS=\"http://localhost:14200\" REACT_APP_ENABLE_EXPERIMENTAL_TABLET_DEBUG_VARS=\"true\" PORT=14201 vite",
+    "local": "VITE_VTADMIN_API_ADDRESS=\"http://localhost:14200\" VITE_ENABLE_EXPERIMENTAL_TABLET_DEBUG_VARS=\"true\" PORT=14201 vite",
     "start": "vite",
     "build": "vite build",
     "test": "vitest",
@@ -81,6 +81,7 @@
     "@types/react-dom": "^18.0.11",
     "@vitejs/plugin-react": "^3.1.0",
     "autoprefixer": "^10.4.2",
+    "cross-fetch": "^3.1.5",
     "jsdom": "^21.1.1",
     "msw": "^0.36.8",
     "postcss": "^8.4.6",

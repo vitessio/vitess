@@ -14,19 +14,20 @@
  * limitations under the License.
  */
 
-import { rest } from 'msw';
+import { response, rest } from 'msw';
 import { setupServer } from 'msw/node';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from 'react-query';
 import { Advanced } from './Advanced';
 import { vtadmin } from '../../../proto/vtadmin';
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+import { Response } from 'cross-fetch'
 
-const ORIGINAL_PROCESS_ENV = process.env;
+const ORIGINAL_PROCESS_ENV = import.meta.env;
 const TEST_PROCESS_ENV = {
-    ...process.env,
-    REACT_APP_VTADMIN_API_ADDRESS: '',
+    ...import.meta.env,
+    VITE_VTADMIN_API_ADDRESS: '',
 };
 
 describe('Advanced keyspace actions', () => {
@@ -51,24 +52,24 @@ describe('Advanced keyspace actions', () => {
     });
 
     beforeAll(() => {
-        process.env = { ...TEST_PROCESS_ENV } as NodeJS.ProcessEnv;
+        import.meta.env = { ...TEST_PROCESS_ENV } as NodeJS.ProcessEnv;
         server.listen();
     });
 
     beforeEach(() => {
-        process.env = { ...TEST_PROCESS_ENV } as NodeJS.ProcessEnv;
-        jest.clearAllMocks();
+        import.meta.env = { ...TEST_PROCESS_ENV } as NodeJS.ProcessEnv;
+        vi.clearAllMocks();
     });
 
     afterAll(() => {
-        process.env = { ...ORIGINAL_PROCESS_ENV };
+        import.meta.env = { ...ORIGINAL_PROCESS_ENV };
         server.close();
     });
 
     describe('Reload Schema', () => {
         it('reloads the schema', async () => {
-            jest.spyOn(global, 'fetch');
-
+            vi.spyOn(global, 'fetch');
+      
             render(
                 <QueryClientProvider client={queryClient}>
                     <Advanced clusterID="some-cluster" name="some-keyspace" />
@@ -86,7 +87,7 @@ describe('Advanced keyspace actions', () => {
                 credentials: undefined,
             });
 
-            jest.clearAllMocks();
+            vi.clearAllMocks();
 
             const container = screen.getByTitle('Reload Schema');
             const button = within(container).getByRole('button');

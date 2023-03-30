@@ -25,9 +25,9 @@ import {
     MALFORMED_HTTP_RESPONSE_ERROR,
 } from '../errors/errorTypes';
 import * as errorHandler from '../errors/errorHandler';
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 
-jest.mock('../errors/errorHandler');
+vi.mock('../errors/errorHandler');
 
 // This test suite uses Mock Service Workers (https://github.com/mswjs/msw)
 // to mock HTTP responses from vtadmin-api.
@@ -56,35 +56,35 @@ const mockServerJson = (endpoint: string, json: object) => {
     server.use(rest.get(endpoint, (req, res, ctx) => res(ctx.json(json))));
 };
 
-// Since vtadmin uses process.env variables quite a bit, we need to
+// Since vtadmin uses import.meta.env variables quite a bit, we need to
 // do a bit of a dance to clear them out between test runs.
-const ORIGINAL_PROCESS_ENV = process.env;
+const ORIGINAL_PROCESS_ENV = import.meta.env;
 const TEST_PROCESS_ENV = {
-    ...process.env,
-    REACT_APP_VTADMIN_API_ADDRESS: '',
+    ...import.meta.env,
+    VITE_VTADMIN_API_ADDRESS: '',
 };
 
 beforeAll(() => {
     // TypeScript can get a little cranky with the automatic
     // string/boolean type conversions, hence this cast.
-    process.env = { ...TEST_PROCESS_ENV } as NodeJS.ProcessEnv;
+    import.meta.env = { ...TEST_PROCESS_ENV } as NodeJS.ProcessEnv;
 
     // Enable API mocking before tests.
     server.listen();
 });
 
 afterEach(() => {
-    // Reset the process.env to clear out any changes made in the tests.
-    process.env = { ...TEST_PROCESS_ENV } as NodeJS.ProcessEnv;
+    // Reset the import.meta.env to clear out any changes made in the tests.
+    import.meta.env = { ...TEST_PROCESS_ENV } as NodeJS.ProcessEnv;
 
-    jest.restoreAllMocks();
+    vi.restoreAllMocks();
 
     // Reset any runtime request handlers we may add during the tests.
     server.resetHandlers();
 });
 
 afterAll(() => {
-    process.env = { ...ORIGINAL_PROCESS_ENV };
+    import.meta.env = { ...ORIGINAL_PROCESS_ENV };
 
     // Disable API mocking after the tests are done.
     server.close();
@@ -172,10 +172,10 @@ describe('api/http', () => {
         });
 
         describe('credentials', () => {
-            it('uses the REACT_APP_FETCH_CREDENTIALS env variable if specified', async () => {
-                process.env.REACT_APP_FETCH_CREDENTIALS = 'include';
+            it('uses the VITE_FETCH_CREDENTIALS env variable if specified', async () => {
+                import.meta.env.VITE_FETCH_CREDENTIALS = 'include';
 
-                jest.spyOn(global, 'fetch');
+                vi.spyOn(global, 'fetch');
 
                 const endpoint = `/api/tablets`;
                 const response = { ok: true, result: null };
@@ -187,11 +187,11 @@ describe('api/http', () => {
                     credentials: 'include',
                 });
 
-                jest.restoreAllMocks();
+                vi.restoreAllMocks();
             });
 
             it('uses the fetch default `credentials` property by default', async () => {
-                jest.spyOn(global, 'fetch');
+                vi.spyOn(global, 'fetch');
 
                 const endpoint = `/api/tablets`;
                 const response = { ok: true, result: null };
@@ -203,13 +203,13 @@ describe('api/http', () => {
                     credentials: undefined,
                 });
 
-                jest.restoreAllMocks();
+                vi.restoreAllMocks();
             });
 
             it('throws an error if an invalid value used for `credentials`', async () => {
-                (process as any).env.REACT_APP_FETCH_CREDENTIALS = 'nope';
+                (process as any).env.VITE_FETCH_CREDENTIALS = 'nope';
 
-                jest.spyOn(global, 'fetch');
+                vi.spyOn(global, 'fetch');
 
                 const endpoint = `/api/tablets`;
                 const response = { ok: true, result: null };
@@ -230,12 +230,12 @@ describe('api/http', () => {
                     /* eslint-enable jest/no-conditional-expect */
                 }
 
-                jest.restoreAllMocks();
+                vi.restoreAllMocks();
             });
         });
 
         it('allows GET requests when in read only mode', async () => {
-            (process as any).env.REACT_APP_READONLY_MODE = 'true';
+            (process as any).env.VITE_READONLY_MODE = 'true';
 
             const endpoint = `/api/tablets`;
             const response = { ok: true, result: null };
@@ -249,9 +249,9 @@ describe('api/http', () => {
         });
 
         it('throws an error when executing a write request in read only mode', async () => {
-            (process as any).env.REACT_APP_READONLY_MODE = 'true';
+            (process as any).env.VITE_READONLY_MODE = 'true';
 
-            jest.spyOn(global, 'fetch');
+            vi.spyOn(global, 'fetch');
 
             // Endpoint doesn't really matter here since the point is that we don't hit it
             const endpoint = `/api/fake`;
@@ -273,10 +273,10 @@ describe('api/http', () => {
                     /* eslint-enable jest/no-conditional-expect */
                 }
 
-                jest.clearAllMocks();
+                vi.clearAllMocks();
             }
 
-            jest.restoreAllMocks();
+            vi.restoreAllMocks();
         });
     });
 

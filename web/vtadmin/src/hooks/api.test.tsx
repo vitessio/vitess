@@ -20,9 +20,9 @@ import { renderHook } from '@testing-library/react-hooks';
 import * as api from './api';
 import * as httpAPI from '../api/http';
 import { vtadmin as pb } from '../proto/vtadmin';
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 
-jest.mock('../api/http');
+vi.mock('../api/http');
 
 describe('useWorkflows', () => {
     const tests: {
