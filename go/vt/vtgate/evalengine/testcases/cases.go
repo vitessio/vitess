@@ -81,6 +81,8 @@ var Cases = []TestCase{
 	{Run: FnTan},
 	{Run: FnDegrees},
 	{Run: FnRadians},
+	{Run: FnNow},
+	{Run: FnInfo},
 }
 
 func JSONPathOperations(yield Query) {
@@ -769,9 +771,15 @@ func TupleComparisons(yield Query) {
 func Comparisons(yield Query) {
 	var operators = []string{"=", "!=", "<=>", "<", "<=", ">", ">="}
 	for _, op := range operators {
-		for i := 0; i < len(inputComparisonElement); i++ {
-			for j := 0; j < len(inputComparisonElement); j++ {
-				yield(fmt.Sprintf("%s %s %s", inputComparisonElement[i], op, inputComparisonElement[j]), nil)
+		for _, l := range inputComparisonElement {
+			for _, r := range inputComparisonElement {
+				yield(fmt.Sprintf("%s %s %s", l, op, r), nil)
+			}
+		}
+
+		for _, l := range inputConversions {
+			for _, r := range inputConversions {
+				yield(fmt.Sprintf("%s %s %s", l, op, r), nil)
 			}
 		}
 	}
@@ -906,4 +914,38 @@ func InStatement(yield Query) {
 		yield(fmt.Sprintf("%s NOT IN (%s, %s)", inputs[1], inputs[0], inputs[2]), nil)
 		yield(fmt.Sprintf("%s NOT IN (%s, %s, %s)", inputs[0], inputs[1], inputs[2], inputs[0]), nil)
 	})
+}
+
+func FnNow(yield Query) {
+	fns := []string{
+		"NOW()", "CURRENT_TIMESTAMP()", "CURRENT_TIMESTAMP",
+		"NOW(1)", "CURRENT_TIMESTAMP(1)",
+		"LOCALTIME()", "LOCALTIME", "LOCALTIMESTAMP()", "LOCALTIMESTAMP",
+		"LOCALTIME(1)", "LOCALTIMESTAMP(1)",
+		"UTC_TIMESTAMP()", "UTC_TIMESTAMP",
+		"UTC_TIMESTAMP(1)",
+		"CURDATE()", "CURRENT_DATE()", "CURRENT_DATE",
+		"UTC_TIME()", "UTC_TIME",
+		"UTC_TIME(1)",
+		"CURTIME()", "CURRENT_TIME()", "CURRENT_TIME",
+		"CURTIME(1)", "CURRENT_TIME(1)",
+		"SYSDATE()", "SYSDATE(1)",
+		"NOW(1)", "NOW(2)", "NOW(3)", "NOW(4)", "NOW(5)",
+		"SYSDATE(1)", "SYSDATE(2)", "SYSDATE(3)", "SYSDATE(4)", "SYSDATE(5)",
+	}
+	for _, fn := range fns {
+		yield(fn, nil)
+	}
+}
+
+func FnInfo(yield Query) {
+	fns := []string{
+		"USER()", "CURRENT_USER()", "CURRENT_USER",
+		"SESSION_USER()", "SYSTEM_USER()",
+		"DATABASE()", "SCHEMA()",
+		"VERSION()",
+	}
+	for _, fn := range fns {
+		yield(fn, nil)
+	}
 }

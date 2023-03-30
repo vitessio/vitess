@@ -23,8 +23,6 @@ import (
 	"strconv"
 	"strings"
 
-	"vitess.io/vitess/go/vt/vtgate/semantics"
-
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
@@ -531,7 +529,7 @@ func (plan *Plan) analyzeWhere(vschema *localVSchema, where *sqlparser.Where) er
 			if val.Type != sqlparser.IntVal && val.Type != sqlparser.StrVal {
 				return fmt.Errorf("unexpected: %v", sqlparser.String(expr))
 			}
-			pv, err := evalengine.Translate(val, semantics.EmptySemTable())
+			pv, err := evalengine.Translate(val, nil)
 			if err != nil {
 				return err
 			}

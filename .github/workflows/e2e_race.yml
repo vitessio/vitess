@@ -1,5 +1,6 @@
 name: e2e_race
 on: [push, pull_request]
+permissions: read-all
 jobs:
 
   build:

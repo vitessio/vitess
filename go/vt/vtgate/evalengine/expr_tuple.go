@@ -16,7 +16,10 @@ limitations under the License.
 
 package evalengine
 
-import "vitess.io/vitess/go/sqltypes"
+import (
+	"vitess.io/vitess/go/sqltypes"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+)
 
 type (
 	TupleExpr []Expr
@@ -37,6 +40,6 @@ func (t TupleExpr) eval(env *ExpressionEnv) (eval, error) {
 }
 
 // typeof implements the Expr interface
-func (t TupleExpr) typeof(*ExpressionEnv) (sqltypes.Type, typeFlag) {
+func (t TupleExpr) typeof(*ExpressionEnv, []*querypb.Field) (sqltypes.Type, typeFlag) {
 	return sqltypes.Tuple, flagNullable
 }

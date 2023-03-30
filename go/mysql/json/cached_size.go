@@ -27,7 +27,7 @@ func (cached *Object) CachedSize(alloc bool) int64 {
 	if alloc {
 		size += int64(24)
 	}
-	// field kvs []vitess.io/vitess/go/vt/vtgate/evalengine/internal/json.kv
+	// field kvs []vitess.io/vitess/go/mysql/json.kv
 	{
 		size += hack.RuntimeAllocSize(int64(cap(cached.kvs)) * int64(24))
 		for _, elem := range cached.kvs {
@@ -44,9 +44,9 @@ func (cached *Value) CachedSize(alloc bool) int64 {
 	if alloc {
 		size += int64(80)
 	}
-	// field o vitess.io/vitess/go/vt/vtgate/evalengine/internal/json.Object
+	// field o vitess.io/vitess/go/mysql/json.Object
 	size += cached.o.CachedSize(false)
-	// field a []*vitess.io/vitess/go/vt/vtgate/evalengine/internal/json.Value
+	// field a []*vitess.io/vitess/go/mysql/json.Value
 	{
 		size += hack.RuntimeAllocSize(int64(cap(cached.a)) * int64(8))
 		for _, elem := range cached.a {
@@ -67,7 +67,7 @@ func (cached *kv) CachedSize(alloc bool) int64 {
 	}
 	// field k string
 	size += hack.RuntimeAllocSize(int64(len(cached.k)))
-	// field v *vitess.io/vitess/go/vt/vtgate/evalengine/internal/json.Value
+	// field v *vitess.io/vitess/go/mysql/json.Value
 	size += cached.v.CachedSize(true)
 	return size
 }

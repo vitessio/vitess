@@ -18,8 +18,8 @@ package evalengine
 
 import (
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/decimal"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/vtgate/evalengine/internal/decimal"
 )
 
 // Arena is an arena memory allocator for eval types.

@@ -19,12 +19,15 @@ package evalengine
 import (
 	"encoding/base64"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 type (
 	builtinToBase64 struct {
 		CallExpr
+		collate collations.ID
 	}
 
 	builtinFromBase64 struct {
@@ -35,7 +38,35 @@ type (
 var _ Expr = (*builtinToBase64)(nil)
 var _ Expr = (*builtinFromBase64)(nil)
 
-var mysqlBase64 = base64.StdEncoding
+// MySQL wraps every 76 characters with a newline. That maps
+// to a 57 byte input. So we encode here in blocks of 57 bytes
+// with then each a newline.
+var mysqlBase64OutLineLength = 76
+var mysqlBase64InLineLength = (mysqlBase64OutLineLength / 4) * 3
+
+func mysqlBase64Encode(in []byte) []byte {
+	newlines := len(in) / mysqlBase64InLineLength
+	encoded := make([]byte, base64.StdEncoding.EncodedLen(len(in))+newlines)
+	out := encoded
+	for len(in) > mysqlBase64InLineLength {
+		base64.StdEncoding.Encode(out, in[:mysqlBase64InLineLength])
+		in = in[mysqlBase64InLineLength:]
+		out[mysqlBase64OutLineLength] = '\n'
+		out = out[mysqlBase64OutLineLength+1:]
+	}
+	base64.StdEncoding.Encode(out, in)
+	return encoded
+}
+
+func mysqlBase64Decode(in []byte) ([]byte, error) {
+	decoded := make([]byte, base64.StdEncoding.DecodedLen(len(in)))
+
+	n, err := base64.StdEncoding.Decode(decoded, in)
+	if err != nil {
+		return nil, err
+	}
+	return decoded[:n], nil
+}
 
 func (call *builtinToBase64) eval(env *ExpressionEnv) (eval, error) {
 	arg, err := call.arg1(env)
@@ -47,17 +78,16 @@ func (call *builtinToBase64) eval(env *ExpressionEnv) (eval, error) {
 	}
 
 	b := evalToBinary(arg)
-	encoded := make([]byte, mysqlBase64.EncodedLen(len(b.bytes)))
-	mysqlBase64.Encode(encoded, b.bytes)
+	encoded := mysqlBase64Encode(b.bytes)
 
 	if arg.SQLType() == sqltypes.Blob || arg.SQLType() == sqltypes.TypeJSON {
-		return newEvalRaw(sqltypes.Text, encoded, env.collation()), nil
+		return newEvalRaw(sqltypes.Text, encoded, defaultCoercionCollation(call.collate)), nil
 	}
-	return newEvalText(encoded, env.collation()), nil
+	return newEvalText(encoded, defaultCoercionCollation(call.collate)), nil
 }
 
-func (call *builtinToBase64) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
-	tt, f := call.Arguments[0].typeof(env)
+func (call *builtinToBase64) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	tt, f := call.Arguments[0].typeof(env, fields)
 	if tt == sqltypes.Blob || tt == sqltypes.TypeJSON {
 		return sqltypes.Text, f
 	}
@@ -74,18 +104,18 @@ func (call *builtinFromBase64) eval(env *ExpressionEnv) (eval, error) {
 	}
 
 	b := evalToBinary(arg)
-	decoded := make([]byte, mysqlBase64.DecodedLen(len(b.bytes)))
-	if n, err := mysqlBase64.Decode(decoded, b.bytes); err == nil {
-		if arg.SQLType() == sqltypes.Text || arg.SQLType() == sqltypes.TypeJSON {
-			return newEvalRaw(sqltypes.Blob, decoded[:n], collationBinary), nil
-		}
-		return newEvalBinary(decoded[:n]), nil
+	decoded, err := mysqlBase64Decode(b.bytes)
+	if err != nil {
+		return nil, nil
 	}
-	return nil, nil
+	if arg.SQLType() == sqltypes.Text || arg.SQLType() == sqltypes.TypeJSON {
+		return newEvalRaw(sqltypes.Blob, decoded, collationBinary), nil
+	}
+	return newEvalBinary(decoded), nil
 }
 
-func (call *builtinFromBase64) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
-	tt, f := call.Arguments[0].typeof(env)
+func (call *builtinFromBase64) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	tt, f := call.Arguments[0].typeof(env, fields)
 	if tt == sqltypes.Text || tt == sqltypes.TypeJSON {
 		return sqltypes.Blob, f | flagNullable
 	}

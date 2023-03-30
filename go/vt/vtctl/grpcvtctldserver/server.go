@@ -634,7 +634,7 @@ func (s *VtctldServer) CreateKeyspace(ctx context.Context, req *vtctldatapb.Crea
 		}
 
 		span.Annotate("base_keyspace", req.BaseKeyspace)
-		span.Annotate("snapshot_time", req.SnapshotTime) // TODO: get a proper string repr
+		span.Annotate("snapshot_time", protoutil.TimeFromProto(req.SnapshotTime).String())
 	default:
 		return nil, fmt.Errorf("unknown keyspace type %v", req.Type)
 	}
@@ -1004,7 +1004,7 @@ func (s *VtctldServer) EmergencyReparentShard(ctx context.Context, req *vtctldat
 		req.Shard,
 		reparentutil.EmergencyReparentOptions{
 			NewPrimaryAlias:           req.NewPrimary,
-			IgnoreReplicas:            sets.New[string](ignoreReplicaAliases...),
+			IgnoreReplicas:            sets.New(ignoreReplicaAliases...),
 			WaitReplicasTimeout:       waitReplicasTimeout,
 			PreventCrossCellPromotion: req.PreventCrossCellPromotion,
 		},
@@ -1665,8 +1665,8 @@ func (s *VtctldServer) GetSrvVSchemas(ctx context.Context, req *vtctldatapb.GetS
 
 	// Omit any cell names in the request that don't map to existing cells
 	if len(req.Cells) > 0 {
-		s1 := sets.New[string](allCells...)
-		s2 := sets.New[string](req.Cells...)
+		s1 := sets.New(allCells...)
+		s2 := sets.New(req.Cells...)
 
 		cells = sets.List(s1.Intersection(s2))
 	}
@@ -2397,7 +2397,7 @@ func (s *VtctldServer) RefreshState(ctx context.Context, req *vtctldatapb.Refres
 
 	tablet, err := s.ts.GetTablet(ctx, req.TabletAlias)
 	if err != nil {
-		err = fmt.Errorf("Failed to get tablet %s: %w", topoproto.TabletAliasString(req.TabletAlias), err)
+		err = fmt.Errorf("failed to get tablet %s: %w", topoproto.TabletAliasString(req.TabletAlias), err)
 		return nil, err
 	}
 
@@ -2430,7 +2430,7 @@ func (s *VtctldServer) RefreshStateByShard(ctx context.Context, req *vtctldatapb
 
 	si, err := s.ts.GetShard(ctx, req.Keyspace, req.Shard)
 	if err != nil {
-		err = fmt.Errorf("Failed to get shard %s/%s/: %w", req.Keyspace, req.Shard, err)
+		err = fmt.Errorf("failed to get shard %s/%s/: %w", req.Keyspace, req.Shard, err)
 		return nil, err
 	}
 
@@ -4350,6 +4350,23 @@ func (s *VtctldServer) ValidateVSchema(ctx context.Context, req *vtctldatapb.Val
 		}(shard)
 	}
 	wg.Wait()
+	return resp, err
+}
+
+// WorkflowUpdate is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) WorkflowUpdate(ctx context.Context, req *vtctldatapb.WorkflowUpdateRequest) (resp *vtctldatapb.WorkflowUpdateResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.WorkflowUpdate")
+	defer span.Finish()
+
+	defer panicHandler(&err)
+
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("workflow", req.TabletRequest.Workflow)
+	span.Annotate("cells", req.TabletRequest.Cells)
+	span.Annotate("tablet_types", req.TabletRequest.TabletTypes)
+	span.Annotate("on_ddl", req.TabletRequest.OnDdl)
+
+	resp, err = s.ws.WorkflowUpdate(ctx, req)
 	return resp, err
 }
 

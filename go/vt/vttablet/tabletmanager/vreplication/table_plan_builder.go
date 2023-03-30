@@ -201,7 +201,7 @@ func buildTablePlan(tableName string, rule *binlogdatapb.Rule, colInfos []*Colum
 		buf := sqlparser.NewTrackedBuffer(nil)
 		buf.Myprintf("select * from %v", sqlparser.NewIdentifierCS(tableName))
 		query = buf.String()
-	case key.IsKeyRange(filter):
+	case key.IsValidKeyRange(filter):
 		buf := sqlparser.NewTrackedBuffer(nil)
 		buf.Myprintf("select * from %v where in_keyrange(%v)", sqlparser.NewIdentifierCS(tableName), sqlparser.NewStrLiteral(filter))
 		query = buf.String()

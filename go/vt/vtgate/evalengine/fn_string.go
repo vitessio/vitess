@@ -22,6 +22,7 @@ import (
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/collations/charset"
 	"vitess.io/vitess/go/sqltypes"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 )
@@ -29,7 +30,8 @@ import (
 type (
 	builtinChangeCase struct {
 		CallExpr
-		upcase bool
+		upcase  bool
+		collate collations.ID
 	}
 
 	builtinCharLength struct {
@@ -79,7 +81,7 @@ func (call *builtinChangeCase) eval(env *ExpressionEnv) (eval, error) {
 		return nil, nil
 
 	case evalNumeric:
-		return evalToVarchar(e, env.DefaultCollation, false)
+		return evalToVarchar(e, call.collate, false)
 
 	case *evalBytes:
 		coll := e.col.Collation.Get()
@@ -100,8 +102,8 @@ func (call *builtinChangeCase) eval(env *ExpressionEnv) (eval, error) {
 	}
 }
 
-func (call *builtinChangeCase) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
-	_, f := call.Arguments[0].typeof(env)
+func (call *builtinChangeCase) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	_, f := call.Arguments[0].typeof(env, fields)
 	return sqltypes.VarChar, f
 }
 
@@ -125,8 +127,8 @@ func (call *builtinCharLength) eval(env *ExpressionEnv) (eval, error) {
 	}
 }
 
-func (call *builtinCharLength) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
-	_, f := call.Arguments[0].typeof(env)
+func (call *builtinCharLength) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	_, f := call.Arguments[0].typeof(env, fields)
 	return sqltypes.Int64, f
 }
 
@@ -141,8 +143,8 @@ func (call *builtinLength) eval(env *ExpressionEnv) (eval, error) {
 	return newEvalInt64(int64(len(arg.ToRawBytes()))), nil
 }
 
-func (call *builtinLength) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
-	_, f := call.Arguments[0].typeof(env)
+func (call *builtinLength) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	_, f := call.Arguments[0].typeof(env, fields)
 	return sqltypes.Int64, f
 }
 
@@ -157,8 +159,8 @@ func (call *builtinBitLength) eval(env *ExpressionEnv) (eval, error) {
 	return newEvalInt64(int64(len(arg.ToRawBytes())) * 8), nil
 }
 
-func (call *builtinBitLength) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
-	_, f := call.Arguments[0].typeof(env)
+func (call *builtinBitLength) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	_, f := call.Arguments[0].typeof(env, fields)
 	return sqltypes.Int64, f
 }
 
@@ -181,8 +183,8 @@ func (call *builtinASCII) eval(env *ExpressionEnv) (eval, error) {
 	return newEvalInt64(int64(b.bytes[0])), nil
 }
 
-func (call *builtinASCII) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
-	_, f := call.Arguments[0].typeof(env)
+func (call *builtinASCII) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	_, f := call.Arguments[0].typeof(env, fields)
 	return sqltypes.Int64, f
 }
 
@@ -202,6 +204,7 @@ const maxRepeatLength = 1073741824
 
 type builtinRepeat struct {
 	CallExpr
+	collate collations.ID
 }
 
 func (call *builtinRepeat) eval(env *ExpressionEnv) (eval, error) {
@@ -215,7 +218,7 @@ func (call *builtinRepeat) eval(env *ExpressionEnv) (eval, error) {
 
 	text, ok := arg1.(*evalBytes)
 	if !ok {
-		text, err = evalToVarchar(arg1, env.DefaultCollation, true)
+		text, err = evalToVarchar(arg1, call.collate, true)
 		if err != nil {
 			return nil, err
 		}
@@ -243,10 +246,10 @@ func checkMaxLength(len, repeat int64) bool {
 	return len*repeat <= maxRepeatLength
 }
 
-func (call *builtinRepeat) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
-	_, f1 := call.Arguments[0].typeof(env)
+func (call *builtinRepeat) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	_, f1 := call.Arguments[0].typeof(env, fields)
 	// typecheck the right-hand argument but ignore its flags
-	call.Arguments[1].typeof(env)
+	call.Arguments[1].typeof(env, fields)
 	return sqltypes.VarChar, f1
 }
 
@@ -260,14 +263,10 @@ func (c *builtinCollation) eval(env *ExpressionEnv) (eval, error) {
 
 	// the collation of a `COLLATION` expr is hardcoded to `utf8_general_ci`,
 	// not to the default collation of our connection. this is probably a bug in MySQL, but we match it
-	return newEvalText([]byte(col.Name()), collations.TypedCollation{
-		Collation:    collations.CollationUtf8ID,
-		Coercibility: collations.CoerceImplicit,
-		Repertoire:   collations.RepertoireASCII,
-	}), nil
+	return newEvalText([]byte(col.Name()), collationUtf8mb3), nil
 }
 
-func (*builtinCollation) typeof(_ *ExpressionEnv) (sqltypes.Type, typeFlag) {
+func (*builtinCollation) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
 	return sqltypes.VarChar, 0
 }
 
@@ -275,8 +274,8 @@ func (c *builtinWeightString) callable() []Expr {
 	return []Expr{c.String}
 }
 
-func (c *builtinWeightString) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
-	_, f := c.String.typeof(env)
+func (c *builtinWeightString) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	_, f := c.String.typeof(env, fields)
 	return sqltypes.VarBinary, f
 }
 

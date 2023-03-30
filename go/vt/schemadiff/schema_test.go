@@ -24,6 +24,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/errors"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
@@ -112,9 +114,12 @@ func TestNewSchemaFromQueriesUnresolved(t *testing.T) {
 	queries := append(createQueries,
 		"create view v7 as select * from v8, t2",
 	)
-	_, err := NewSchemaFromQueries(queries)
+	schema, err := NewSchemaFromQueries(queries)
 	assert.Error(t, err)
 	assert.EqualError(t, err, (&ViewDependencyUnresolvedError{View: "v7"}).Error())
+	v := schema.sorted[len(schema.sorted)-1]
+	assert.IsType(t, &CreateViewEntity{}, v)
+	assert.Equal(t, "CREATE VIEW `v7` AS SELECT * FROM `v8`, `t2`", v.Create().CanonicalStatementString())
 }
 
 func TestNewSchemaFromQueriesUnresolvedAlias(t *testing.T) {
@@ -152,7 +157,8 @@ func TestNewSchemaFromQueriesLoop(t *testing.T) {
 		"create view v8 as select * from t1, v7",
 	)
 	_, err := NewSchemaFromQueries(queries)
-	assert.Error(t, err)
+	require.Error(t, err)
+	err = errors.UnwrapFirst(err)
 	assert.EqualError(t, err, (&ViewDependencyUnresolvedError{View: "v7"}).Error())
 }
 
@@ -700,6 +706,8 @@ func TestViewReferences(t *testing.T) {
 				require.NoError(t, err)
 				require.NotNil(t, schema)
 			} else {
+				require.Error(t, err)
+				err = errors.UnwrapFirst(err)
 				require.Equal(t, ts.expectErr, err, "received error: %v", err)
 			}
 		})

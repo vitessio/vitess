@@ -59,6 +59,13 @@ func (c *compiler) compileComparison(expr *ComparisonExpr) (ctype, error) {
 		return ctype{}, err
 	}
 
+	var skip1 *jump
+	switch expr.Op.(type) {
+	case compareNullSafeEQ:
+	default:
+		skip1 = c.compileNullCheck1(lt)
+	}
+
 	rt, err := c.compileExpr(expr.Right)
 	if err != nil {
 		return ctype{}, err
@@ -72,14 +79,14 @@ func (c *compiler) compileComparison(expr *ComparisonExpr) (ctype, error) {
 	}
 
 	swapped := false
-	var skip *jump
+	var skip2 *jump
 
 	switch expr.Op.(type) {
 	case compareNullSafeEQ:
-		skip = c.asm.jumpFrom()
-		c.asm.Cmp_nullsafe(skip)
+		skip2 = c.asm.jumpFrom()
+		c.asm.Cmp_nullsafe(skip2)
 	default:
-		skip = c.compileNullCheck2(lt, rt)
+		skip2 = c.compileNullCheck1r(rt)
 	}
 
 	switch {
@@ -93,6 +100,11 @@ func (c *compiler) compileComparison(expr *ComparisonExpr) (ctype, error) {
 
 	case compareAsDates(lt.Type, rt.Type) || compareAsDateAndString(lt.Type, rt.Type) || compareAsDateAndNumeric(lt.Type, rt.Type):
 		return ctype{}, c.unsupported(expr)
+
+	case compareAsJSON(lt.Type, rt.Type):
+		if err := c.compareAsJSON(lt, rt); err != nil {
+			return ctype{}, err
+		}
 
 	default:
 		lt = c.compileToFloat(lt, 2)
@@ -132,7 +144,7 @@ func (c *compiler) compileComparison(expr *ComparisonExpr) (ctype, error) {
 			c.asm.Cmp_ge()
 		}
 	case compareNullSafeEQ:
-		c.asm.jumpDestination(skip)
+		c.asm.jumpDestination(skip2)
 		c.asm.Cmp_eq()
 		return cmptype, nil
 
@@ -140,7 +152,7 @@ func (c *compiler) compileComparison(expr *ComparisonExpr) (ctype, error) {
 		panic("unexpected comparison operator")
 	}
 
-	c.asm.jumpDestination(skip)
+	c.asm.jumpDestination(skip1, skip2)
 	return cmptype, nil
 }
 
@@ -238,6 +250,21 @@ func (c *compiler) compareAsStrings(lt ctype, rt ctype) error {
 	return nil
 }
 
+func (c *compiler) compareAsJSON(lt ctype, rt ctype) error {
+	_, err := c.compileArgToJSON(lt, 2)
+	if err != nil {
+		return err
+	}
+
+	_, err = c.compileArgToJSON(rt, 1)
+	if err != nil {
+		return err
+	}
+	c.asm.CmpJSON()
+
+	return nil
+}
+
 func (c *compiler) compileCheckTrue(when ctype, offset int) error {
 	switch when.Type {
 	case sqltypes.Int64:
@@ -272,18 +299,18 @@ func (c *compiler) compileLike(expr *LikeExpr) (ctype, error) {
 	skip := c.compileNullCheck2(lt, rt)
 
 	if !lt.isTextual() {
-		c.asm.Convert_xc(2, sqltypes.VarChar, c.defaultCollation, 0, false)
+		c.asm.Convert_xc(2, sqltypes.VarChar, c.cfg.Collation, 0, false)
 		lt.Col = collations.TypedCollation{
-			Collation:    c.defaultCollation,
+			Collation:    c.cfg.Collation,
 			Coercibility: collations.CoerceCoercible,
 			Repertoire:   collations.RepertoireASCII,
 		}
 	}
 
 	if !rt.isTextual() {
-		c.asm.Convert_xc(1, sqltypes.VarChar, c.defaultCollation, 0, false)
+		c.asm.Convert_xc(1, sqltypes.VarChar, c.cfg.Collation, 0, false)
 		rt.Col = collations.TypedCollation{
-			Collation:    c.defaultCollation,
+			Collation:    c.cfg.Collation,
 			Coercibility: collations.CoerceCoercible,
 			Repertoire:   collations.RepertoireASCII,
 		}

@@ -18,14 +18,19 @@ limitations under the License.
 package json
 
 import (
+	"encoding/base64"
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 	"unicode/utf16"
 
 	"golang.org/x/exp/slices"
 
+	"vitess.io/vitess/go/mysql/datetime"
+
 	"vitess.io/vitess/go/hack"
+	"vitess.io/vitess/go/mysql/decimal"
 )
 
 // Parser parses JSON.
@@ -493,6 +498,14 @@ func (o *Object) reset() {
 	o.kvs = o.kvs[:0]
 }
 
+func (o *Object) Keys() []string {
+	keys := make([]string, 0, len(o.kvs))
+	for _, kv := range o.kvs {
+		keys = append(keys, kv.k)
+	}
+	return keys
+}
+
 // MarshalTo appends marshaled o to dst and returns the result.
 func (o *Object) MarshalTo(dst []byte) []byte {
 	dst = append(dst, '{')
@@ -605,6 +618,11 @@ type Value struct {
 	a []*Value
 	s string
 	t Type
+	// Flag to indicate if we have an arbitrary sized integer type
+	// or a floating point value if we have a number type. MySQL
+	// makes this distinction as well and keeps track of this type
+	// through JSON operations.
+	i bool
 }
 
 // MarshalTo appends marshaled v to dst and returns the result.
@@ -629,11 +647,58 @@ func (v *Value) MarshalTo(dst []byte) []byte {
 		return dst
 	case TypeString:
 		return escapeString(dst, v.s)
+	case TypeDate:
+		t, _ := v.Date()
+		return escapeString(dst, t.Format("2006-01-02"))
+	case TypeDateTime:
+		t, _ := v.DateTime()
+		return escapeString(dst, t.Format("2006-01-02 15:04:05.000000"))
+	case TypeTime:
+		now := time.Now()
+		year, month, day := now.Date()
+
+		t, _ := v.Time()
+		diff := t.Sub(time.Date(year, month, day, 0, 0, 0, 0, time.UTC))
+		var neg bool
+		if diff < 0 {
+			diff = -diff
+			neg = true
+		}
+
+		b := strings.Builder{}
+		if neg {
+			b.WriteByte('-')
+		}
+
+		hours := (diff / time.Hour)
+		diff -= hours * time.Hour
+		// For some reason MySQL wraps this around and loses data
+		// if it's more than 32 hours.
+		fmt.Fprintf(&b, "%02d", hours%32)
+		minutes := (diff / time.Minute)
+		fmt.Fprintf(&b, ":%02d", minutes)
+		diff -= minutes * time.Minute
+		seconds := (diff / time.Second)
+		fmt.Fprintf(&b, ":%02d", seconds)
+		diff -= seconds * time.Second
+		fmt.Fprintf(&b, ".%06d", diff)
+		return escapeString(dst, b.String())
+	case TypeBlob, TypeBit:
+		const prefix = "base64:type15:"
+
+		size := 2 + len(prefix) + base64.StdEncoding.EncodedLen(len(v.s))
+		dst := make([]byte, size)
+		dst[0] = '"'
+		copy(dst[1:], prefix)
+		base64.StdEncoding.Encode(dst[len(prefix)+1:], []byte(v.s))
+		dst[size-1] = '"'
+		return dst
 	case TypeNumber:
 		return append(dst, v.s...)
-	case TypeTrue:
-		return append(dst, "true"...)
-	case TypeFalse:
+	case TypeBoolean:
+		if v == ValueTrue {
+			return append(dst, "true"...)
+		}
 		return append(dst, "false"...)
 	case TypeNull:
 		return append(dst, "null"...)
@@ -657,31 +722,55 @@ func (v *Value) String() string {
 }
 
 // Type represents JSON type.
-type Type int
+type Type int32
 
+// See https://dev.mysql.com/doc/refman/8.0/en/json.html#json-comparison for the ordering here
 const (
 	// TypeNull is JSON null.
-	TypeNull Type = 0
-
-	// TypeObject is JSON object type.
-	TypeObject Type = 1
-
-	// TypeArray is JSON array type.
-	TypeArray Type = 2
-
-	// TypeString is JSON string type.
-	TypeString Type = 3
+	TypeNull Type = iota
 
 	// TypeNumber is JSON number type.
-	TypeNumber Type = 4
+	TypeNumber
 
-	// TypeTrue is JSON true.
-	TypeTrue Type = 5
+	// TypeString is JSON string type.
+	TypeString
 
-	// TypeFalse is JSON false.
-	TypeFalse Type = 6
+	// TypeObject is JSON object type.
+	TypeObject
 
-	typeRawString Type = 7
+	// TypeArray is JSON array type.
+	TypeArray
+
+	// TypeTrue is JSON boolean.
+	TypeBoolean
+
+	// TypeDate is JSON date.
+	TypeDate
+
+	// TypeTime is JSON time.
+	TypeTime
+
+	// TypeDateTime is JSON time.
+	TypeDateTime
+
+	// TypeOpaque is JSON opaque type.
+	TypeOpaque
+
+	// TypeBit is JSON bit string.
+	TypeBit
+
+	// TypeBlob is JSON blob.
+	TypeBlob
+
+	typeRawString
+)
+
+type NumberType int32
+
+const (
+	NumberTypeUnknown NumberType = iota
+	NumberTypeInteger
+	NumberTypeDouble
 )
 
 // String returns string representation of t.
@@ -695,10 +784,20 @@ func (t Type) String() string {
 		return "string"
 	case TypeNumber:
 		return "number"
-	case TypeTrue:
-		return "true"
-	case TypeFalse:
-		return "false"
+	case TypeBoolean:
+		return "boolean"
+	case TypeBlob:
+		return "blob"
+	case TypeBit:
+		return "bit"
+	case TypeDate:
+		return "date"
+	case TypeTime:
+		return "time"
+	case TypeDateTime:
+		return "datetime"
+	case TypeOpaque:
+		return "opaque"
 	case TypeNull:
 		return "null"
 
@@ -719,6 +818,39 @@ func (v *Value) Type() Type {
 		v.t = TypeString
 	}
 	return v.t
+}
+
+func (v *Value) Date() (time.Time, bool) {
+	if v.t != TypeDate {
+		return time.Time{}, false
+	}
+	t, err := datetime.ParseDate(v.s)
+	if err != nil {
+		return time.Time{}, false
+	}
+	return t, true
+}
+
+func (v *Value) DateTime() (time.Time, bool) {
+	if v.t != TypeDateTime {
+		return time.Time{}, false
+	}
+	t, err := datetime.ParseDateTime(v.s)
+	if err != nil {
+		return time.Time{}, false
+	}
+	return t, true
+}
+
+func (v *Value) Time() (time.Time, bool) {
+	if v.t != TypeTime {
+		return time.Time{}, false
+	}
+	t, err := datetime.ParseTime(v.s)
+	if err != nil {
+		return time.Time{}, false
+	}
+	return t, true
 }
 
 // Object returns the underlying JSON object for the v.
@@ -749,21 +881,61 @@ func (v *Value) Raw() string {
 	return v.s
 }
 
+func (v *Value) NumberType() NumberType {
+	if v.t != TypeNumber {
+		return NumberTypeUnknown
+	}
+	if v.i {
+		return NumberTypeInteger
+	}
+	return NumberTypeDouble
+}
+
+func (v *Value) Int64() (int64, bool) {
+	str := strings.TrimSpace(v.s)
+	i, err := strconv.ParseInt(str, 10, 64)
+	if err != nil {
+		return 0, false
+	}
+	return i, true
+}
+
+func (v *Value) Float64() (float64, bool) {
+	str := strings.TrimSpace(v.s)
+	// We only care to parse as many of the initial float characters of the
+	// string as possible. This functionality is implemented in the `strconv` package
+	// of the standard library, but not exposed, so we hook into it.
+	val, _, err := hack.ParseFloatPrefix(str, 64)
+	if err != nil {
+		return 0.0, false
+	}
+	return val, true
+}
+
+func (v *Value) Decimal() (decimal.Decimal, bool) {
+	str := strings.TrimSpace(v.s)
+	dec, err := decimal.NewFromString(str)
+	if err != nil {
+		return decimal.Zero, false
+	}
+	return dec, true
+}
+
 // Bool returns the underlying JSON bool for the v.
 //
 // Use GetBool if you don't need error handling.
 func (v *Value) Bool() (bool, bool) {
-	if v.t == TypeTrue {
+	if v == ValueTrue {
 		return true, true
 	}
-	if v.t == TypeFalse {
+	if v == ValueFalse {
 		return false, true
 	}
 	return false, false
 }
 
 var (
-	ValueTrue  = &Value{t: TypeTrue}
-	ValueFalse = &Value{t: TypeFalse}
+	ValueTrue  = &Value{t: TypeBoolean}
+	ValueFalse = &Value{t: TypeBoolean}
 	ValueNull  = &Value{t: TypeNull}
 )

@@ -4255,7 +4255,7 @@
   {
     "comment": "select (select 1 from user u having count(ue.col) > 10) from user_extra ue",
     "query": "select (select 1 from user u having count(ue.col) > 10) from user_extra ue",
-    "v3-plan": "VT03020: symbol ue.col not found in subquery",
+    "v3-plan": "VT03020: column ue.col not found in subquery",
     "gen4-plan": {
       "QueryType": "SELECT",
       "Original": "select (select 1 from user u having count(ue.col) > 10) from user_extra ue",
@@ -4386,7 +4386,7 @@
   {
     "comment": "scatter aggregate symtab lookup error",
     "query": "select id, b as id, count(*) from user order by id",
-    "v3-plan": "VT03021: ambiguous symbol reference: id",
+    "v3-plan": "VT03021: ambiguous column reference: id",
     "gen4-plan": {
       "QueryType": "SELECT",
       "Original": "select id, b as id, count(*) from user order by id",
@@ -5002,6 +5002,43 @@
       },
       "TablesUsed": [
         "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "when pushing predicates into derived tables, make sure to put them in HAVING when they contain aggregations",
+    "query": "select t1.portalId, t1.flowId from (select portalId, flowId, count(*) as count from user_extra where localDate > :v1 group by user_id, flowId order by null) as t1 where count >= :v2",
+    "v3-plan": {
+      "QueryType": "SELECT",
+      "Original": "select t1.portalId, t1.flowId from (select portalId, flowId, count(*) as count from user_extra where localDate > :v1 group by user_id, flowId order by null) as t1 where count >= :v2",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select t1.portalId, t1.flowId from (select portalId, flowId, count(*) as `count` from user_extra where 1 != 1 group by user_id, flowId) as t1 where 1 != 1",
+        "Query": "select t1.portalId, t1.flowId from (select portalId, flowId, count(*) as `count` from user_extra where localDate > :v1 group by user_id, flowId order by null) as t1 where `count` >= :v2",
+        "Table": "user_extra"
+      }
+    },
+    "gen4-plan": {
+      "QueryType": "SELECT",
+      "Original": "select t1.portalId, t1.flowId from (select portalId, flowId, count(*) as count from user_extra where localDate > :v1 group by user_id, flowId order by null) as t1 where count >= :v2",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select t1.portalId, t1.flowId from (select portalId, flowId, count(*) as `count` from user_extra where 1 != 1 group by user_id, flowId) as t1 where 1 != 1",
+        "Query": "select t1.portalId, t1.flowId from (select portalId, flowId, count(*) as `count` from user_extra where localDate > :v1 group by user_id, flowId having count(*) >= :v2 order by null) as t1",
+        "Table": "user_extra"
+      },
+      "TablesUsed": [
+        "user.user_extra"
       ]
     }
   }

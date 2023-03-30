@@ -17,6 +17,7 @@ limitations under the License.
 package evalengine
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -49,11 +50,19 @@ var errKnownBadQuery = errors.New("this query is known to give bad results in My
 func convert(t *testing.T, query string, simplify bool) (Expr, error) {
 	stmt, err := sqlparser.Parse(query)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("failed to parse '%s': %v", query, err)
+	}
+
+	cfg := &Config{
+		Collation:    collations.CollationUtf8mb4ID,
+		Optimization: OptimizationLevelNone,
+	}
+	if simplify {
+		cfg.Optimization = OptimizationLevelSimplify
 	}
 
 	astExpr := stmt.(*sqlparser.Select).SelectExprs[0].(*sqlparser.AliasedExpr).Expr
-	converted, err := TranslateEx(astExpr, &LookupIntegrationTest{collations.CollationUtf8mb4ID}, simplify)
+	converted, err := Translate(astExpr, cfg)
 	if err == nil {
 		if knownBadQuery(converted) {
 			return nil, errKnownBadQuery
@@ -68,7 +77,7 @@ func testSingle(t *testing.T, query string) (EvalResult, error) {
 	if err != nil {
 		return EvalResult{}, err
 	}
-	return EnvWithBindVars(nil, collations.CollationUtf8mb4ID).Evaluate(converted)
+	return NewExpressionEnv(context.Background(), nil, nil).Evaluate(converted)
 }
 
 func TestMySQLGolden(t *testing.T) {

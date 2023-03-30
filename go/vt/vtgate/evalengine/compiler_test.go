@@ -21,6 +21,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/olekukonko/tablewriter"
 
@@ -35,8 +36,9 @@ import (
 )
 
 func makeFields(values []sqltypes.Value) (fields []*querypb.Field) {
-	for _, v := range values {
+	for i, v := range values {
 		field := &querypb.Field{
+			Name: fmt.Sprintf("column%d", i),
 			Type: v.Type(),
 		}
 		if sqltypes.IsText(field.Type) {
@@ -92,61 +94,70 @@ func (s *Tracker) String() string {
 }
 
 func TestCompilerReference(t *testing.T) {
+	now := time.Now()
+	evalengine.SystemTime = func() time.Time { return now }
+	defer func() { evalengine.SystemTime = time.Now }()
+
 	track := NewTracker()
 
 	for _, tc := range testcases.Cases {
 		t.Run(tc.Name(), func(t *testing.T) {
 			var supported, total int
 			env := evalengine.EmptyExpressionEnv()
-			env.Fields = tc.Schema
 
 			tc.Run(func(query string, row []sqltypes.Value) {
-				stmt, err := sqlparser.Parse("SELECT " + query)
+				env.Row = row
+
+				stmt, err := sqlparser.ParseExpr(query)
 				if err != nil {
 					// no need to test un-parseable queries
 					return
 				}
 
-				queryAST := stmt.(*sqlparser.Select).SelectExprs[0].(*sqlparser.AliasedExpr).Expr
-				converted, err := evalengine.TranslateEx(queryAST, &evalengine.LookupIntegrationTest{collations.CollationUtf8mb4ID}, false)
+				fields := evalengine.FieldResolver(tc.Schema)
+				cfg := &evalengine.Config{
+					ResolveColumn: fields.Column,
+					ResolveType:   fields.Type,
+					Collation:     collations.CollationUtf8mb4ID,
+					Optimization:  evalengine.OptimizationLevelCompilerDebug,
+				}
+
+				converted, err := evalengine.Translate(stmt, cfg)
 				if err != nil {
 					return
 				}
 
+				expected, evalErr := env.Evaluate(evalengine.Deoptimize(converted))
 				total++
-				env.Row = row
-				expected, evalErr := env.Evaluate(converted)
-				program, compileErr := evalengine.Compile(converted, env.Fields)
 
-				if compileErr != nil {
+				if cfg.CompilerErr != nil {
 					switch {
-					case vterrors.Code(compileErr) == vtrpcpb.Code_UNIMPLEMENTED:
+					case vterrors.Code(cfg.CompilerErr) == vtrpcpb.Code_UNIMPLEMENTED:
 						t.Logf("unsupported: %s", query)
 					case evalErr == nil:
-						t.Errorf("failed compilation:\nSQL:  %s\nError: %s", query, compileErr)
-					case evalErr.Error() != compileErr.Error():
-						t.Errorf("error mismatch:\nSQL:  %s\nError eval: %s\nError comp: %s", query, evalErr, compileErr)
+						t.Errorf("failed compilation:\nSQL:  %s\nError: %s", query, cfg.CompilerErr)
+					case evalErr.Error() != cfg.CompilerErr.Error():
+						t.Errorf("error mismatch:\nSQL:  %s\nError eval: %s\nError comp: %s", query, evalErr, cfg.CompilerErr)
 					default:
 						supported++
 					}
 					return
 				}
 
-				var vm evalengine.VirtualMachine
 				res, vmErr := func() (res evalengine.EvalResult, err error) {
 					defer func() {
 						if r := recover(); r != nil {
 							err = fmt.Errorf("PANIC: %v", r)
 						}
 					}()
-					res, err = vm.Run(program, env.Row)
+					res, err = env.EvaluateVM(converted.(*evalengine.CompiledExpr))
 					return
 				}()
 
 				if vmErr != nil {
 					switch {
 					case evalErr == nil:
-						t.Errorf("failed evaluation from compiler:\nSQL:  %s\nError: %s", query, err)
+						t.Errorf("failed evaluation from compiler:\nSQL:  %s\nError: %s", query, vmErr)
 					case evalErr.Error() != vmErr.Error():
 						t.Errorf("error mismatch:\nSQL:  %s\nError eval: %s\nError comp: %s", query, evalErr, vmErr)
 					default:
@@ -280,14 +291,27 @@ func TestCompilerSingle(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			converted, err := evalengine.TranslateEx(expr, &evalengine.LookupIntegrationTest{collations.CollationUtf8mb4ID}, false)
+			fields := evalengine.FieldResolver(makeFields(tc.values))
+			cfg := &evalengine.Config{
+				ResolveColumn: fields.Column,
+				ResolveType:   fields.Type,
+				Collation:     collations.CollationUtf8mb4ID,
+				Optimization:  evalengine.OptimizationLevelCompilerDebug,
+			}
+
+			converted, err := evalengine.Translate(expr, cfg)
 			if err != nil {
 				t.Fatal(err)
 			}
 
+			if cfg.CompilerErr != nil {
+				t.Fatalf("bad compilation: %v", cfg.CompilerErr)
+			}
+
 			env := evalengine.EmptyExpressionEnv()
 			env.Row = tc.values
-			expected, err := env.Evaluate(converted)
+
+			expected, err := env.Evaluate(evalengine.Deoptimize(converted))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -295,15 +319,9 @@ func TestCompilerSingle(t *testing.T) {
 				t.Fatalf("bad evaluation from eval engine: got %s, want %s", expected.String(), tc.result)
 			}
 
-			compiled, err := evalengine.Compile(converted, makeFields(tc.values), evalengine.WithAssemblerLog(&debugCompiler{t}))
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			var vm evalengine.VirtualMachine
 			// re-run the same evaluation multiple times to ensure results are always consistent
 			for i := 0; i < 8; i++ {
-				res, err := vm.Run(compiled, tc.values)
+				res, err := env.EvaluateVM(converted.(*evalengine.CompiledExpr))
 				if err != nil {
 					t.Fatal(err)
 				}

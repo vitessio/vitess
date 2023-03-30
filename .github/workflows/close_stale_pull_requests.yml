@@ -5,12 +5,14 @@ on:
 
   workflow_dispatch: {}
 
-permissions:
-  pull-requests: write
+permissions: read-all
 
 jobs:
   close_stale_pull_requests:
     runs-on: ubuntu-22.04
+    permissions:
+      pull-requests: write
+
     steps:
       - uses: actions/stale@v5
         with:

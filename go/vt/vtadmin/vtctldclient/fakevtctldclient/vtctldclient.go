@@ -139,6 +139,10 @@ type VtctldClient struct {
 		Response *vtctldatapb.ValidateVersionKeyspaceResponse
 		Error    error
 	}
+	WorkflowUpdateResults map[string]struct {
+		Response *vtctldatapb.WorkflowUpdateResponse
+		Error    error
+	}
 }
 
 // Compile-time type assertion to make sure we haven't overriden a method
@@ -670,4 +674,17 @@ func (fake *VtctldClient) ValidateVersionKeyspace(ctx context.Context, req *vtct
 	}
 
 	return nil, fmt.Errorf("%w: no result set for %s", assert.AnError, key)
+}
+
+// WorkflowUpdate is part of the vtctldclient.VtctldClient interface.
+func (fake *VtctldClient) WorkflowUpdate(ctx context.Context, req *vtctldatapb.WorkflowUpdateRequest, opts ...grpc.CallOption) (*vtctldatapb.WorkflowUpdateResponse, error) {
+	if fake.WorkflowUpdateResults == nil {
+		return nil, fmt.Errorf("%w: WorkflowUpdateResults not set on fake vtctldclient", assert.AnError)
+	}
+
+	if result, ok := fake.WorkflowUpdateResults[req.Keyspace]; ok {
+		return result.Response, result.Error
+	}
+
+	return nil, fmt.Errorf("%w: no result set for keyspace %s", assert.AnError, req.Keyspace)
 }

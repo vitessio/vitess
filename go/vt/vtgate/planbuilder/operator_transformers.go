@@ -64,13 +64,11 @@ func transformToLogicalPlan(ctx *plancontext.PlanningContext, op ops.Operator, i
 		if err != nil {
 			return nil, err
 		}
-		scl := &simpleConverterLookup{
-			canPushProjection: true,
-			ctx:               ctx,
-			plan:              plan,
-		}
 		ast := ctx.SemTable.AndExpressions(op.Predicates...)
-		predicate, err := evalengine.Translate(ast, scl)
+		predicate, err := evalengine.Translate(ast, &evalengine.Config{
+			ResolveColumn: resolveFromPlan(ctx, plan, true),
+			Collation:     ctx.SemTable.Collation,
+		})
 		if err != nil {
 			return nil, err
 		}
@@ -114,7 +112,7 @@ func transformHorizon(ctx *plancontext.PlanningContext, op *operators.Horizon, i
 		}
 		var plan logicalPlan
 		if isRoute && rb.isSingleShard() {
-			err = planSingleShardRoutePlan(node, rb)
+			err = planSingleRoutePlan(node, rb)
 			plan = rb
 		} else {
 			plan, err = planOrderByOnUnion(ctx, source, node)
@@ -756,12 +754,12 @@ func gen4ValEqual(ctx *plancontext.PlanningContext, a, b sqlparser.Expr) bool {
 
 			return ctx.SemTable.DirectDeps(a) == ctx.SemTable.DirectDeps(b)
 		}
-	case sqlparser.Argument:
-		b, ok := b.(sqlparser.Argument)
+	case *sqlparser.Argument:
+		b, ok := b.(*sqlparser.Argument)
 		if !ok {
 			return false
 		}
-		return a == b
+		return a.Name == b.Name
 	case *sqlparser.Literal:
 		b, ok := b.(*sqlparser.Literal)
 		if !ok {

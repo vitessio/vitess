@@ -18,6 +18,7 @@ package engine
 
 import (
 	"context"
+	"time"
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
@@ -86,6 +87,7 @@ type (
 		Session() SessionActions
 
 		ConnCollation() collations.ID
+		TimeZone() *time.Location
 
 		ExecuteLock(ctx context.Context, rs *srvtopo.ResolvedShard, query *querypb.BoundQuery, lockFuncType sqlparser.LockingFuncType) (*sqltypes.Result, error)
 

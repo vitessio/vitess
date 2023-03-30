@@ -54,8 +54,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfAlterVschema(in, f)
 	case *AndExpr:
 		return VisitRefOfAndExpr(in, f)
-	case Argument:
-		return VisitArgument(in, f)
+	case *Argument:
+		return VisitRefOfArgument(in, f)
 	case *ArgumentLessWindowExpr:
 		return VisitRefOfArgumentLessWindowExpr(in, f)
 	case *AutoIncSpec:
@@ -180,6 +180,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfFuncExpr(in, f)
 	case *GTIDFuncExpr:
 		return VisitRefOfGTIDFuncExpr(in, f)
+	case *GeomFromTextExpr:
+		return VisitRefOfGeomFromTextExpr(in, f)
 	case GroupBy:
 		return VisitGroupBy(in, f)
 	case *GroupConcatExpr:
@@ -769,6 +771,15 @@ func VisitRefOfAndExpr(in *AndExpr, f Visit) error {
 	}
 	return nil
 }
+func VisitRefOfArgument(in *Argument, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	return nil
+}
 func VisitRefOfArgumentLessWindowExpr(in *ArgumentLessWindowExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -1251,9 +1262,6 @@ func VisitRefOfCurTimeFuncExpr(in *CurTimeFuncExpr, f Visit) error {
 	if err := VisitIdentifierCI(in.Name, f); err != nil {
 		return err
 	}
-	if err := VisitExpr(in.Fsp, f); err != nil {
-		return err
-	}
 	return nil
 }
 func VisitRefOfDeallocateStmt(in *DeallocateStmt, f Visit) error {
@@ -1652,6 +1660,24 @@ func VisitRefOfGTIDFuncExpr(in *GTIDFuncExpr, f Visit) error {
 		return err
 	}
 	if err := VisitExpr(in.Channel, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfGeomFromTextExpr(in *GeomFromTextExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.WktText, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.Srid, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.AxisOrderOpt, f); err != nil {
 		return err
 	}
 	return nil
@@ -2609,6 +2635,9 @@ func VisitRefOfOffset(in *Offset, f Visit) error {
 		return nil
 	}
 	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.Original, f); err != nil {
 		return err
 	}
 	return nil
@@ -4238,6 +4267,8 @@ func VisitCallable(in Callable, f Visit) error {
 		return VisitRefOfFuncExpr(in, f)
 	case *GTIDFuncExpr:
 		return VisitRefOfGTIDFuncExpr(in, f)
+	case *GeomFromTextExpr:
+		return VisitRefOfGeomFromTextExpr(in, f)
 	case *GroupConcatExpr:
 		return VisitRefOfGroupConcatExpr(in, f)
 	case *InsertExpr:
@@ -4436,8 +4467,8 @@ func VisitExpr(in Expr, f Visit) error {
 	switch in := in.(type) {
 	case *AndExpr:
 		return VisitRefOfAndExpr(in, f)
-	case Argument:
-		return VisitArgument(in, f)
+	case *Argument:
+		return VisitRefOfArgument(in, f)
 	case *ArgumentLessWindowExpr:
 		return VisitRefOfArgumentLessWindowExpr(in, f)
 	case *Avg:
@@ -4492,6 +4523,8 @@ func VisitExpr(in Expr, f Visit) error {
 		return VisitRefOfFuncExpr(in, f)
 	case *GTIDFuncExpr:
 		return VisitRefOfGTIDFuncExpr(in, f)
+	case *GeomFromTextExpr:
+		return VisitRefOfGeomFromTextExpr(in, f)
 	case *GroupConcatExpr:
 		return VisitRefOfGroupConcatExpr(in, f)
 	case *InsertExpr:
@@ -4842,10 +4875,6 @@ func VisitTableExpr(in TableExpr, f Visit) error {
 	}
 }
 func VisitAlgorithmValue(in AlgorithmValue, f Visit) error {
-	_, err := f(in)
-	return err
-}
-func VisitArgument(in Argument, f Visit) error {
 	_, err := f(in)
 	return err
 }

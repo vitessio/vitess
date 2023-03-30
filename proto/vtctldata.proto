@@ -792,6 +792,7 @@ message GetVSchemaResponse {
 message GetWorkflowsRequest {
   string keyspace = 1;
   bool active_only = 2;
+  bool name_only = 3;
 }
 
 message GetWorkflowsResponse {
@@ -1300,4 +1301,23 @@ message ValidateVSchemaRequest {
 message ValidateVSchemaResponse {
   repeated string results = 1;
   map<string, ValidateShardResponse> results_by_shard = 2;
+}
+
+message WorkflowUpdateRequest {
+  string keyspace = 1;
+  // TabletRequest gets passed on to each primary tablet involved
+  // in the workflow via the UpdateVRWorkflow tabletmanager RPC.
+  tabletmanagerdata.UpdateVRWorkflowRequest tablet_request = 2;
+}
+
+message WorkflowUpdateResponse {
+  message TabletInfo {
+    string tablet = 1;
+    // Changed is true if any of the provided values were different
+    // than what was already stored. The value is based on the query
+    // result's RowsAffected being 0 or not.
+    bool changed = 2;
+  }
+  string summary = 1;
+  repeated TabletInfo details = 2;
 }

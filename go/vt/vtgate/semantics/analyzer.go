@@ -80,6 +80,23 @@ func Analyze(statement sqlparser.Statement, currentDb string, si SchemaInformati
 	return semTable, nil
 }
 
+// AnalyzeStrict analyzes the parsed query, and fails the analysis for any possible errors
+func AnalyzeStrict(statement sqlparser.Statement, currentDb string, si SchemaInformation) (*SemTable, error) {
+	st, err := Analyze(statement, currentDb, si)
+	if err != nil {
+		return nil, err
+	}
+
+	if st.NotUnshardedErr != nil {
+		return nil, st.NotUnshardedErr
+	}
+	if st.NotSingleRouteErr != nil {
+		return nil, st.NotSingleRouteErr
+	}
+
+	return st, nil
+}
+
 func (a *analyzer) newSemTable(statement sqlparser.Statement, coll collations.ID) *SemTable {
 	var comments *sqlparser.ParsedComments
 	commentedStmt, isCommented := statement.(sqlparser.Commented)
@@ -109,7 +126,7 @@ func (a *analyzer) setError(err error) {
 	switch err := err.(type) {
 	case ProjError:
 		a.projErr = err.Inner
-	case UnshardedError:
+	case ShardedError:
 		a.unshardedErr = err.Inner
 	default:
 		if a.inProjection > 0 && vterrors.ErrState(err) == vterrors.NonUniqError {
@@ -193,15 +210,14 @@ func checkUnionColumns(union *sqlparser.Union) error {
 		// we'll fail it at run time instead
 		return nil
 	}
-	count := len(firstProj)
 
 	secondProj := sqlparser.GetFirstSelect(union.Right).SelectExprs
 	if containsStar(secondProj) {
 		return nil
 	}
 
-	if len(secondProj) != count {
-		return NewError(UnionColumnsDoNotMatch)
+	if len(secondProj) != len(firstProj) {
+		return &UnionColumnsDoNotMatchError{FirstProj: len(firstProj), SecondProj: len(secondProj)}
 	}
 
 	return nil
@@ -260,23 +276,23 @@ func (a *analyzer) checkForInvalidConstructs(cursor *sqlparser.Cursor) error {
 	switch node := cursor.Node().(type) {
 	case *sqlparser.Update:
 		if len(node.TableExprs) != 1 {
-			return UnshardedError{Inner: NewError(UnsupportedMultiTablesInUpdate)}
+			return ShardedError{Inner: &UnsupportedMultiTablesInUpdateError{ExprCount: len(node.TableExprs)}}
 		}
 		alias, isAlias := node.TableExprs[0].(*sqlparser.AliasedTableExpr)
 		if !isAlias {
-			return UnshardedError{Inner: NewError(UnsupportedMultiTablesInUpdate)}
+			return ShardedError{Inner: &UnsupportedMultiTablesInUpdateError{NotAlias: true}}
 		}
 		_, isDerived := alias.Expr.(*sqlparser.DerivedTable)
 		if isDerived {
-			return NewError(TableNotUpdatable, alias.As.String())
+			return &TableNotUpdatableError{Table: alias.As.String()}
 		}
 	case *sqlparser.Select:
 		parent := cursor.Parent()
 		if _, isUnion := parent.(*sqlparser.Union); isUnion && node.SQLCalcFoundRows {
-			return NewError(UnionWithSQLCalcFoundRows)
+			return &UnionWithSQLCalcFoundRowsError{}
 		}
 		if _, isRoot := parent.(*sqlparser.RootNode); !isRoot && node.SQLCalcFoundRows {
-			return NewError(SQLCalcFoundRowsUsage)
+			return &SQLCalcFoundRowsUsageError{}
 		}
 		errMsg := "INTO"
 		nextVal := false
@@ -290,35 +306,41 @@ func (a *analyzer) checkForInvalidConstructs(cursor *sqlparser.Cursor) error {
 			return nil
 		}
 		if a.scoper.currentScope().parent != nil {
-			return NewError(CantUseOptionHere, errMsg)
+			return &CantUseOptionHereError{Msg: errMsg}
 		}
 	case *sqlparser.Nextval:
 		currScope := a.scoper.currentScope()
 		if currScope.parent != nil {
-			return NewError(CantUseOptionHere, "Incorrect usage/placement of 'INTO'")
+			// This is defensively checking that we are not inside a subquery or derived table
+			// Will probably already have been checked on the SELECT level
+			return &CantUseOptionHereError{Msg: "INTO"}
 		}
 		if len(currScope.tables) != 1 {
-			return NewError(NextWithMultipleTables)
+			// This is defensively checking that we don't have too many tables.
+			// Hard to check this with unit tests, since the parser does not accept these queries
+			return &NextWithMultipleTablesError{CountTables: len(currScope.tables)}
 		}
 		vindexTbl := currScope.tables[0].GetVindexTable()
 		if vindexTbl == nil {
-			return NewError(MissingInVSchema)
+			return &MissingInVSchemaError{
+				Table: currScope.tables[0],
+			}
 		}
 		if vindexTbl.Type != vindexes.TypeSequence {
-			return NewError(NotSequenceTable)
+			return &NotSequenceTableError{Table: vindexTbl.Name.String()}
 		}
 	case *sqlparser.JoinTableExpr:
 		if node.Join == sqlparser.NaturalJoinType || node.Join == sqlparser.NaturalRightJoinType || node.Join == sqlparser.NaturalLeftJoinType {
-			return NewError(UnsupportedNaturalJoin, node.Join.ToString())
+			return &UnsupportedNaturalJoinError{JoinExpr: node}
 		}
 	case *sqlparser.LockingFunc:
-		return NewError(LockOnlyWithDual, node)
+		return &LockOnlyWithDualError{Node: node}
 	case *sqlparser.Union:
 		err := sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 			switch node := node.(type) {
 			case *sqlparser.ColName:
 				if !node.Qualifier.IsEmpty() {
-					return false, NewError(QualifiedOrderInUnion, node.Qualifier.Name)
+					return false, &QualifiedOrderInUnionError{Table: node.Qualifier.Name.String()}
 				}
 			case *sqlparser.Subquery:
 				return false, nil
@@ -333,7 +355,7 @@ func (a *analyzer) checkForInvalidConstructs(cursor *sqlparser.Cursor) error {
 			return err
 		}
 	case *sqlparser.JSONTableExpr:
-		return NewError(JSONTables)
+		return &JSONTablesError{}
 	}
 
 	return nil
@@ -357,12 +379,12 @@ func (p ProjError) Error() string {
 	return p.Inner.Error()
 }
 
-// UnshardedError is used to mark an error as something that should only be returned
+// ShardedError is used to mark an error as something that should only be returned
 // if the query is not unsharded
-type UnshardedError struct {
+type ShardedError struct {
 	Inner error
 }
 
-func (p UnshardedError) Error() string {
+func (p ShardedError) Error() string {
 	return p.Inner.Error()
 }

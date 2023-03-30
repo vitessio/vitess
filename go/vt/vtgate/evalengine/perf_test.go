@@ -27,37 +27,43 @@ func BenchmarkCompilerExpressions(b *testing.B) {
 		if err != nil {
 			b.Fatal(err)
 		}
-		converted, err := evalengine.TranslateEx(expr, &evalengine.LookupIntegrationTest{collations.CollationUtf8mb4ID}, true)
-		if err != nil {
-			b.Fatal(err)
+
+		fields := evalengine.FieldResolver(makeFields(tc.values))
+		cfg := &evalengine.Config{
+			ResolveColumn: fields.Column,
+			ResolveType:   fields.Type,
+			Collation:     collations.CollationUtf8mb4ID,
+			Optimization:  evalengine.OptimizationLevelCompile,
 		}
 
-		compiled, err := evalengine.Compile(converted, makeFields(tc.values))
+		translated, err := evalengine.Translate(expr, cfg)
 		if err != nil {
 			b.Fatal(err)
 		}
 
 		b.Run(tc.name+"/eval=ast", func(b *testing.B) {
+			decompiled := evalengine.Deoptimize(translated)
+
 			b.ResetTimer()
 			b.ReportAllocs()
 
 			var env evalengine.ExpressionEnv
 			env.Row = tc.values
 			for n := 0; n < b.N; n++ {
-				_, _ = env.Evaluate(converted)
+				_, _ = env.Evaluate(decompiled)
 			}
 		})
 
 		b.Run(tc.name+"/eval=vm", func(b *testing.B) {
-			compiled := compiled
-			values := tc.values
+			compiled := translated.(*evalengine.CompiledExpr)
 
 			b.ResetTimer()
 			b.ReportAllocs()
 
-			var vm evalengine.VirtualMachine
+			var env evalengine.ExpressionEnv
+			env.Row = tc.values
 			for n := 0; n < b.N; n++ {
-				_, _ = vm.Run(compiled, values)
+				_, _ = env.EvaluateVM(compiled)
 			}
 		})
 	}

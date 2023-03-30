@@ -18,6 +18,7 @@ package evalengine
 
 import (
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/datetime"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -48,11 +49,11 @@ func (c *compiler) compileFn(call callable) (ctype, error) {
 	case *builtinChangeCase:
 		return c.compileFn_CCASE(call)
 	case *builtinCharLength:
-		return c.compileFn_xLENGTH(call, c.asm.Fn_CHAR_LENGTH)
+		return c.compileFn_length(call, c.asm.Fn_CHAR_LENGTH)
 	case *builtinLength:
-		return c.compileFn_xLENGTH(call, c.asm.Fn_LENGTH)
+		return c.compileFn_length(call, c.asm.Fn_LENGTH)
 	case *builtinBitLength:
-		return c.compileFn_xLENGTH(call, c.asm.Fn_BIT_LENGTH)
+		return c.compileFn_length(call, c.asm.Fn_BIT_LENGTH)
 	case *builtinASCII:
 		return c.compileFn_ASCII(call)
 	case *builtinHex:
@@ -62,9 +63,9 @@ func (c *compiler) compileFn(call callable) (ctype, error) {
 	case *builtinCollation:
 		return c.compileFn_COLLATION(call)
 	case *builtinCeil:
-		return c.compileFn_CEIL(call)
+		return c.compileFn_rounding(call, c.asm.Fn_CEIL_f, c.asm.Fn_CEIL_d)
 	case *builtinFloor:
-		return c.compileFn_FLOOR(call)
+		return c.compileFn_rounding(call, c.asm.Fn_FLOOR_f, c.asm.Fn_FLOOR_d)
 	case *builtinAbs:
 		return c.compileFn_ABS(call)
 	case *builtinPi:
@@ -91,6 +92,18 @@ func (c *compiler) compileFn(call callable) (ctype, error) {
 		return c.compileFn_math1(call, c.asm.Fn_RADIANS, 0)
 	case *builtinWeightString:
 		return c.compileFn_WEIGHT_STRING(call)
+	case *builtinNow:
+		return c.compileFn_Now(call)
+	case *builtinCurdate:
+		return c.compileFn_Curdate(call)
+	case *builtinSysdate:
+		return c.compileFn_Sysdate(call)
+	case *builtinUser:
+		return c.compileFn_User(call)
+	case *builtinDatabase:
+		return c.compileFn_Database(call)
+	case *builtinVersion:
+		return c.compileFn_Version(call)
 	default:
 		return ctype{}, c.unsupported(call)
 	}
@@ -98,13 +111,13 @@ func (c *compiler) compileFn(call callable) (ctype, error) {
 
 func (c *compiler) compileFn_MULTICMP(call *builtinMultiComparison) (ctype, error) {
 	var (
-		integersI int
-		integersU int
-		floats    int
-		decimals  int
-		text      int
-		binary    int
-		args      []ctype
+		signed   int
+		unsigned int
+		floats   int
+		decimals int
+		text     int
+		binary   int
+		args     []ctype
 	)
 
 	/*
@@ -126,9 +139,9 @@ func (c *compiler) compileFn_MULTICMP(call *builtinMultiComparison) (ctype, erro
 
 		switch tt.Type {
 		case sqltypes.Int64:
-			integersI++
+			signed++
 		case sqltypes.Uint64:
-			integersU++
+			unsigned++
 		case sqltypes.Float64:
 			floats++
 		case sqltypes.Decimal:
@@ -142,12 +155,12 @@ func (c *compiler) compileFn_MULTICMP(call *builtinMultiComparison) (ctype, erro
 		}
 	}
 
-	if integersI+integersU == len(args) {
-		if integersI == len(args) {
+	if signed+unsigned == len(args) {
+		if signed == len(args) {
 			c.asm.Fn_MULTICMP_i(len(args), call.cmp < 0)
 			return ctype{Type: sqltypes.Int64, Col: collationNumeric}, nil
 		}
-		if integersU == len(args) {
+		if unsigned == len(args) {
 			c.asm.Fn_MULTICMP_u(len(args), call.cmp < 0)
 			return ctype{Type: sqltypes.Uint64, Col: collationNumeric}, nil
 		}
@@ -213,7 +226,7 @@ func (c *compiler) compileFn_REPEAT(expr *builtinRepeat) (ctype, error) {
 	switch {
 	case str.isTextual():
 	default:
-		c.asm.Convert_xc(2, sqltypes.VarChar, c.defaultCollation, 0, false)
+		c.asm.Convert_xc(2, sqltypes.VarChar, c.cfg.Collation, 0, false)
 	}
 	_ = c.compileToInt64(repeat, 1)
 
@@ -238,11 +251,11 @@ func (c *compiler) compileFn_TO_BASE64(call *builtinToBase64) (ctype, error) {
 	switch {
 	case str.isTextual():
 	default:
-		c.asm.Convert_xc(1, t, c.defaultCollation, 0, false)
+		c.asm.Convert_xb(1, t, 0, false)
 	}
 
 	col := collations.TypedCollation{
-		Collation:    c.defaultCollation,
+		Collation:    c.cfg.Collation,
 		Coercibility: collations.CoerceCoercible,
 		Repertoire:   collations.RepertoireASCII,
 	}
@@ -269,7 +282,7 @@ func (c *compiler) compileFn_FROM_BASE64(call *builtinFromBase64) (ctype, error)
 	switch {
 	case str.isTextual():
 	default:
-		c.asm.Convert_xc(1, t, c.defaultCollation, 0, false)
+		c.asm.Convert_xb(1, t, 0, false)
 	}
 
 	c.asm.Fn_FROM_BASE64(t)
@@ -289,7 +302,7 @@ func (c *compiler) compileFn_CCASE(call *builtinChangeCase) (ctype, error) {
 	switch {
 	case str.isTextual():
 	default:
-		c.asm.Convert_xc(1, sqltypes.VarChar, c.defaultCollation, 0, false)
+		c.asm.Convert_xc(1, sqltypes.VarChar, c.cfg.Collation, 0, false)
 	}
 
 	c.asm.Fn_LUCASE(call.upcase)
@@ -298,7 +311,7 @@ func (c *compiler) compileFn_CCASE(call *builtinChangeCase) (ctype, error) {
 	return ctype{Type: sqltypes.VarChar, Col: str.Col}, nil
 }
 
-func (c *compiler) compileFn_xLENGTH(call callable, asm_ins func()) (ctype, error) {
+func (c *compiler) compileFn_length(call callable, asm_ins func()) (ctype, error) {
 	str, err := c.compileExpr(call.callable()[0])
 	if err != nil {
 		return ctype{}, err
@@ -309,7 +322,7 @@ func (c *compiler) compileFn_xLENGTH(call callable, asm_ins func()) (ctype, erro
 	switch {
 	case str.isTextual():
 	default:
-		c.asm.Convert_xc(1, sqltypes.VarChar, c.defaultCollation, 0, false)
+		c.asm.Convert_xc(1, sqltypes.VarChar, c.cfg.Collation, 0, false)
 	}
 
 	asm_ins()
@@ -329,7 +342,7 @@ func (c *compiler) compileFn_ASCII(call *builtinASCII) (ctype, error) {
 	switch {
 	case str.isTextual():
 	default:
-		c.asm.Convert_xc(1, sqltypes.VarChar, c.defaultCollation, 0, false)
+		c.asm.Convert_xc(1, sqltypes.VarChar, c.cfg.Collation, 0, false)
 	}
 
 	c.asm.Fn_ASCII()
@@ -347,7 +360,7 @@ func (c *compiler) compileFn_HEX(call *builtinHex) (ctype, error) {
 	skip := c.compileNullCheck1(str)
 
 	col := collations.TypedCollation{
-		Collation:    c.defaultCollation,
+		Collation:    c.cfg.Collation,
 		Coercibility: collations.CoerceCoercible,
 		Repertoire:   collations.RepertoireASCII,
 	}
@@ -363,7 +376,7 @@ func (c *compiler) compileFn_HEX(call *builtinHex) (ctype, error) {
 	case str.isTextual():
 		c.asm.Fn_HEX_c(t, col)
 	default:
-		c.asm.Convert_xc(1, t, c.defaultCollation, 0, false)
+		c.asm.Convert_xc(1, t, c.cfg.Collation, 0, false)
 		c.asm.Fn_HEX_c(t, col)
 	}
 
@@ -380,70 +393,38 @@ func (c *compiler) compileFn_COLLATION(expr *builtinCollation) (ctype, error) {
 
 	skip := c.asm.jumpFrom()
 
-	col := collations.TypedCollation{
-		Collation:    collations.CollationUtf8ID,
-		Coercibility: collations.CoerceCoercible,
-		Repertoire:   collations.RepertoireASCII,
-	}
-
-	c.asm.Fn_COLLATION(col)
+	c.asm.Fn_COLLATION(collationUtf8mb3)
 	c.asm.jumpDestination(skip)
 
-	return ctype{Type: sqltypes.VarChar, Col: col}, nil
+	return ctype{Type: sqltypes.VarChar, Col: collationUtf8mb3}, nil
 }
 
-func (c *compiler) compileFn_CEIL(expr *builtinCeil) (ctype, error) {
-	arg, err := c.compileExpr(expr.Arguments[0])
+func (c *compiler) compileFn_rounding(expr callable, asm_ins_f, asm_ins_d func()) (ctype, error) {
+	arg, err := c.compileExpr(expr.callable()[0])
 	if err != nil {
 		return ctype{}, err
+	}
+
+	if arg.Type == sqltypes.Int64 || arg.Type == sqltypes.Uint64 {
+		// No-op for integers.
+		return arg, nil
 	}
 
 	skip := c.compileNullCheck1(arg)
 
 	convt := ctype{Type: arg.Type, Col: collationNumeric, Flag: arg.Flag}
-	switch {
-	case sqltypes.IsIntegral(arg.Type):
-		// No-op for integers.
-	case sqltypes.IsFloat(arg.Type):
-		c.asm.Fn_CEIL_f()
-	case sqltypes.IsDecimal(arg.Type):
+	switch arg.Type {
+	case sqltypes.Float64:
+		asm_ins_f()
+	case sqltypes.Decimal:
 		// We assume here the most common case here is that
 		// the decimal fits into an integer.
 		convt.Type = sqltypes.Int64
-		c.asm.Fn_CEIL_d()
+		asm_ins_d()
 	default:
 		convt.Type = sqltypes.Float64
 		c.asm.Convert_xf(1)
-		c.asm.Fn_CEIL_f()
-	}
-
-	c.asm.jumpDestination(skip)
-	return convt, nil
-}
-
-func (c *compiler) compileFn_FLOOR(expr *builtinFloor) (ctype, error) {
-	arg, err := c.compileExpr(expr.Arguments[0])
-	if err != nil {
-		return ctype{}, err
-	}
-
-	skip := c.compileNullCheck1(arg)
-
-	convt := ctype{Type: arg.Type, Col: collationNumeric, Flag: arg.Flag}
-	switch {
-	case sqltypes.IsIntegral(arg.Type):
-		// No-op for integers.
-	case sqltypes.IsFloat(arg.Type):
-		c.asm.Fn_FLOOR_f()
-	case sqltypes.IsDecimal(arg.Type):
-		// We assume here the most common case here is that
-		// the decimal fits into an integer.
-		convt.Type = sqltypes.Int64
-		c.asm.Fn_FLOOR_d()
-	default:
-		convt.Type = sqltypes.Float64
-		c.asm.Convert_xf(1)
-		c.asm.Fn_FLOOR_f()
+		asm_ins_f()
 	}
 
 	c.asm.jumpDestination(skip)
@@ -456,17 +437,20 @@ func (c *compiler) compileFn_ABS(expr *builtinAbs) (ctype, error) {
 		return ctype{}, err
 	}
 
+	if arg.Type == sqltypes.Uint64 {
+		// No-op if it's unsigned since that's already positive.
+		return arg, nil
+	}
+
 	skip := c.compileNullCheck1(arg)
 
 	convt := ctype{Type: arg.Type, Col: collationNumeric, Flag: arg.Flag}
-	switch {
-	case sqltypes.IsUnsigned(arg.Type):
-		// No-op if it's unsigned since that's already positive.
-	case sqltypes.IsSigned(arg.Type):
+	switch arg.Type {
+	case sqltypes.Int64:
 		c.asm.Fn_ABS_i()
-	case sqltypes.IsFloat(arg.Type):
+	case sqltypes.Float64:
 		c.asm.Fn_ABS_f()
-	case sqltypes.IsDecimal(arg.Type):
+	case sqltypes.Decimal:
 		// We assume here the most common case here is that
 		// the decimal fits into an integer.
 		c.asm.Fn_ABS_d()
@@ -542,4 +526,44 @@ func (c *compiler) compileFn_WEIGHT_STRING(call *builtinWeightString) (ctype, er
 		c.asm.SetNull(1)
 		return ctype{Type: sqltypes.VarBinary, Flag: flagNullable | flagNull, Col: collationBinary}, nil
 	}
+}
+
+func (c *compiler) compileFn_Now(call *builtinNow) (ctype, error) {
+	var format *datetime.Strftime
+	var t sqltypes.Type
+
+	if call.onlyTime {
+		format = formatTime[call.prec]
+		t = sqltypes.Time
+	} else {
+		format = formatDateTime[call.prec]
+		t = sqltypes.Datetime
+	}
+	c.asm.Fn_Now(t, format, call.utc)
+	return ctype{Type: t, Col: collationBinary}, nil
+}
+
+func (c *compiler) compileFn_Curdate(*builtinCurdate) (ctype, error) {
+	c.asm.Fn_Curdate()
+	return ctype{Type: sqltypes.Date, Col: collationBinary}, nil
+}
+
+func (c *compiler) compileFn_Sysdate(call *builtinSysdate) (ctype, error) {
+	c.asm.Fn_Sysdate(formatDateTime[call.prec])
+	return ctype{Type: sqltypes.Datetime, Col: collationBinary}, nil
+}
+
+func (c *compiler) compileFn_User(_ *builtinUser) (ctype, error) {
+	c.asm.Fn_User()
+	return ctype{Type: sqltypes.VarChar, Col: collationUtf8mb3}, nil
+}
+
+func (c *compiler) compileFn_Database(_ *builtinDatabase) (ctype, error) {
+	c.asm.Fn_Database()
+	return ctype{Type: sqltypes.Datetime, Col: collationUtf8mb3}, nil
+}
+
+func (c *compiler) compileFn_Version(_ *builtinVersion) (ctype, error) {
+	c.asm.Fn_Version()
+	return ctype{Type: sqltypes.Datetime, Col: collationUtf8mb3}, nil
 }

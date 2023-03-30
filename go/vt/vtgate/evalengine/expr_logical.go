@@ -19,6 +19,7 @@ package evalengine
 import (
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
@@ -205,8 +206,8 @@ func (n *NotExpr) eval(env *ExpressionEnv) (eval, error) {
 	return evalIsTruthy(e).not().eval(), nil
 }
 
-func (n *NotExpr) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
-	_, flags := n.Inner.typeof(env)
+func (n *NotExpr) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	_, flags := n.Inner.typeof(env, fields)
 	return sqltypes.Int64, flags | flagIsBoolean
 }
 
@@ -215,9 +216,9 @@ func (l *LogicalExpr) eval(env *ExpressionEnv) (eval, error) {
 	return res.eval(), err
 }
 
-func (l *LogicalExpr) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
-	_, f1 := l.Left.typeof(env)
-	_, f2 := l.Right.typeof(env)
+func (l *LogicalExpr) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	_, f1 := l.Left.typeof(env, fields)
+	_, f2 := l.Right.typeof(env, fields)
 	return sqltypes.Int64, f1 | f2 | flagIsBoolean
 }
 
@@ -229,7 +230,7 @@ func (i *IsExpr) eval(env *ExpressionEnv) (eval, error) {
 	return newEvalBool(i.Check(e)), nil
 }
 
-func (i *IsExpr) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
+func (i *IsExpr) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
 	return sqltypes.Int64, 0
 }
 
@@ -280,21 +281,21 @@ func (c *CaseExpr) eval(env *ExpressionEnv) (eval, error) {
 	if !matched {
 		return nil, nil
 	}
-	t, _ := c.typeof(env)
+	t, _ := c.typeof(env, nil)
 	return evalCoerce(result, t, ca.result().Collation)
 }
 
-func (c *CaseExpr) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
+func (c *CaseExpr) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
 	var ta typeAggregation
 	var resultFlag typeFlag
 
 	for _, whenthen := range c.cases {
-		t, f := whenthen.then.typeof(env)
+		t, f := whenthen.then.typeof(env, fields)
 		ta.add(t, f)
 		resultFlag = resultFlag | f
 	}
 	if c.Else != nil {
-		t, f := c.Else.typeof(env)
+		t, f := c.Else.typeof(env, fields)
 		ta.add(t, f)
 		resultFlag = f
 	}

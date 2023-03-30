@@ -293,4 +293,7 @@ service Vtctld {
   rpc ValidateVersionShard(vtctldata.ValidateVersionShardRequest) returns (vtctldata.ValidateVersionShardResponse) {};
   // ValidateVSchema compares the schema of each primary tablet in "keyspace/shards..." to the vschema and errs if there are differences.
   rpc ValidateVSchema(vtctldata.ValidateVSchemaRequest) returns (vtctldata.ValidateVSchemaResponse) {};
+  // WorkflowUpdate updates the configuration of a vreplication workflow
+  // using the provided updated parameters.
+  rpc WorkflowUpdate(vtctldata.WorkflowUpdateRequest) returns (vtctldata.WorkflowUpdateResponse) {};
 }
