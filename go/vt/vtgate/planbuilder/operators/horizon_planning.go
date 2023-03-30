@@ -86,7 +86,19 @@ func planHorizon(ctx *plancontext.PlanningContext, in *Horizon, isRoot bool) (op
 		return planSingleRoute(rb, in)
 	}
 
-	sel, isSel := in.Select.(*sqlparser.Select)
+	return planSelectExpressions(ctx, in.Select, in.Source, isRoot, func(rb *Route) (ops.Operator, error) {
+		return planSingleRoute(rb, in)
+	})
+}
+
+func planSelectExpressions(
+	ctx *plancontext.PlanningContext,
+	selStmt sqlparser.SelectStatement,
+	src ops.Operator,
+	isRoot bool,
+	shortcut func(*Route) (ops.Operator, error),
+) (ops.Operator, error) {
+	sel, isSel := selStmt.(*sqlparser.Select)
 	if !isSel {
 		return nil, errNotHorizonPlanned
 	}
@@ -96,47 +108,27 @@ func planHorizon(ctx *plancontext.PlanningContext, in *Horizon, isRoot bool) (op
 		return nil, err
 	}
 
+	rb, isRoute := src.(*Route)
+
 	needsOrdering := len(qp.OrderExprs) > 0
 	canShortcut := isRoute && sel.Having == nil && !needsOrdering
-	_, isDerived := in.Source.(*Derived)
+	_, isDerived := src.(*Derived)
 
 	switch {
 	case qp.NeedsAggregation() || sel.Having != nil || sel.Limit != nil || isDerived || needsOrdering || qp.NeedsDistinct():
 		return nil, errNotHorizonPlanned
 	case canShortcut:
-		return planSingleRoute(rb, in)
+		return shortcut(rb)
 	default:
-		return pushProjections(ctx, qp, in.Source, isRoot)
+		return pushProjections(ctx, qp, src, isRoot)
 	}
 }
 
 func planDerived(ctx *plancontext.PlanningContext, in *Derived, isRoot bool) (ops.Operator, error) {
-	rb, isRoute := in.Source.(*Route)
-
-	sel, isSel := in.Query.(*sqlparser.Select)
-	if !isSel {
-		return nil, errNotHorizonPlanned
-	}
-
-	qp, err := CreateQPFromSelect(ctx, sel)
-	if err != nil {
-		return nil, err
-	}
-
-	needsOrdering := len(qp.OrderExprs) > 0
-	canShortcut := isRoute && sel.Having == nil && !needsOrdering
-	_, isDerived := in.Source.(*Derived)
-
-	switch {
-	case qp.NeedsAggregation() || sel.Having != nil || sel.Limit != nil || isDerived || needsOrdering || qp.NeedsDistinct():
-		return nil, errNotHorizonPlanned
-	case canShortcut:
-		// shortcut here means we don't need to plan the derived table, we can just push it under the route
+	return planSelectExpressions(ctx, in.Query, in.Source, isRoot, func(rb *Route) (ops.Operator, error) {
 		rb.Source, in.Source = in.Source, in
 		return rb, nil
-	default:
-		return pushProjections(ctx, qp, in.Source, isRoot)
-	}
+	})
 }
 
 func pushProjections(ctx *plancontext.PlanningContext, qp *QueryProjection, src ops.Operator, isRoot bool) (ops.Operator, error) {
