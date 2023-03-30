@@ -60,7 +60,7 @@ var invalidKeyspaceNameChars = "/"
 // ValidateKeyspaceName checks if the provided name is a valid name for a
 // keyspace.
 //
-// As of v17, "all invalid characters" is just the forward slash ("/").
+// As of v16.0.1, "all invalid characters" is just the forward slash ("/").
 func ValidateKeyspaceName(name string) error {
 	if strings.ContainsAny(name, invalidKeyspaceNameChars) {
 		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "keyspace name %s contains invalid characters; may not contain any of the following: %+v", name, strings.Split(invalidKeyspaceNameChars, ""))
