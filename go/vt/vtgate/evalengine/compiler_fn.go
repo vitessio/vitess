@@ -90,6 +90,22 @@ func (c *compiler) compileFn(call callable) (ctype, error) {
 		return c.compileFn_math1(call, c.asm.Fn_DEGREES, 0)
 	case *builtinRadians:
 		return c.compileFn_math1(call, c.asm.Fn_RADIANS, 0)
+	case *builtinExp:
+		return c.compileFn_math1(call, c.asm.Fn_EXP, flagNullable)
+	case *builtinLn:
+		return c.compileFn_math1(call, c.asm.Fn_LN, flagNullable)
+	case *builtinLog:
+		return c.compileFn_math1(call, c.asm.Fn_LOG, flagNullable)
+	case *builtinLog10:
+		return c.compileFn_math1(call, c.asm.Fn_LOG10, flagNullable)
+	case *builtinLog2:
+		return c.compileFn_math1(call, c.asm.Fn_LOG2, flagNullable)
+	case *builtinPow:
+		return c.compileFn_POW(call)
+	case *builtinSign:
+		return c.compileFn_SIGN(call)
+	case *builtinSqrt:
+		return c.compileFn_math1(call, c.asm.Fn_SQRT, flagNullable)
 	case *builtinWeightString:
 		return c.compileFn_WEIGHT_STRING(call)
 	case *builtinNow:
@@ -499,6 +515,53 @@ func (c *compiler) compileFn_ATAN2(expr *builtinAtan2) (ctype, error) {
 	c.asm.Fn_ATAN2()
 	c.asm.jumpDestination(skip)
 	return ctype{Type: sqltypes.Float64, Col: collationNumeric, Flag: arg1.Flag | arg2.Flag}, nil
+}
+
+func (c *compiler) compileFn_POW(expr *builtinPow) (ctype, error) {
+	arg1, err := c.compileExpr(expr.Arguments[0])
+	if err != nil {
+		return ctype{}, err
+	}
+
+	arg2, err := c.compileExpr(expr.Arguments[1])
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip := c.compileNullCheck2(arg1, arg2)
+	c.compileToFloat(arg1, 2)
+	c.compileToFloat(arg2, 1)
+	c.asm.Fn_POW()
+	c.asm.jumpDestination(skip)
+	return ctype{Type: sqltypes.Float64, Col: collationNumeric, Flag: arg1.Flag | arg2.Flag | flagNullable}, nil
+}
+
+func (c *compiler) compileFn_SIGN(expr callable) (ctype, error) {
+	arg, err := c.compileExpr(expr.callable()[0])
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip := c.compileNullCheck1(arg)
+
+	switch arg.Type {
+	case sqltypes.Int64:
+		c.asm.Fn_SIGN_i()
+	case sqltypes.Uint64:
+		c.asm.Fn_SIGN_u()
+	case sqltypes.Float64:
+		c.asm.Fn_SIGN_f()
+	case sqltypes.Decimal:
+		// We assume here the most common case here is that
+		// the decimal fits into an integer.
+		c.asm.Fn_SIGN_d()
+	default:
+		c.asm.Convert_xf(1)
+		c.asm.Fn_SIGN_f()
+	}
+
+	c.asm.jumpDestination(skip)
+	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: arg.Flag}, nil
 }
 
 func (c *compiler) compileFn_WEIGHT_STRING(call *builtinWeightString) (ctype, error) {

@@ -171,6 +171,61 @@ func (ast *astCompiler) translateFuncExpr(fn *sqlparser.FuncExpr) (Expr, error) 
 			return nil, argError(method)
 		}
 		return &builtinRadians{CallExpr: call}, nil
+	case "exp":
+		if len(args) != 1 {
+			return nil, argError(method)
+		}
+		return &builtinExp{CallExpr: call}, nil
+	case "ln":
+		if len(args) != 1 {
+			return nil, argError(method)
+		}
+		return &builtinLn{CallExpr: call}, nil
+	case "log":
+		switch len(args) {
+		case 1:
+			return &builtinLn{CallExpr: call}, nil
+		case 2:
+			return &builtinLog{CallExpr: call}, nil
+		default:
+			return nil, argError(method)
+		}
+	case "log10":
+		if len(args) != 1 {
+			return nil, argError(method)
+		}
+		return &builtinLog10{CallExpr: call}, nil
+	case "mod":
+		if len(args) != 2 {
+			return nil, argError(method)
+		}
+		return &ArithmeticExpr{
+			BinaryExpr: BinaryExpr{
+				Left:  args[0],
+				Right: args[1],
+			},
+			Op: &opArithMod{},
+		}, nil
+	case "log2":
+		if len(args) != 1 {
+			return nil, argError(method)
+		}
+		return &builtinLog2{CallExpr: call}, nil
+	case "pow", "power":
+		if len(args) != 2 {
+			return nil, argError(method)
+		}
+		return &builtinPow{CallExpr: call}, nil
+	case "sign":
+		if len(args) != 1 {
+			return nil, argError(method)
+		}
+		return &builtinSign{CallExpr: call}, nil
+	case "sqrt":
+		if len(args) != 1 {
+			return nil, argError(method)
+		}
+		return &builtinSqrt{CallExpr: call}, nil
 	case "lower", "lcase":
 		if len(args) != 1 {
 			return nil, argError(method)
