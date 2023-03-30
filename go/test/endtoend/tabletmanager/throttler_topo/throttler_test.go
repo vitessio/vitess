@@ -45,7 +45,6 @@ const (
 	onDemandHeartbeatDuration = 5 * time.Second
 	throttlerEnabledTimeout   = 60 * time.Second
 	useDefaultQuery           = ""
-	useDefaultThreshold       = 0
 )
 
 var (
@@ -273,11 +272,8 @@ func TestInitialThrottler(t *testing.T) {
 	})
 	t.Run("enabling throttler, again", func(t *testing.T) {
 		// Enable throttler again with the default query which also moves us back to the default
-		// threshold as the 0 parameter value elides the --threshold flag to the client command,
-		// which in turn causes a zero value threshold to be sent in the RPC request which in turn
-		// causes the default threshold to be set when reverting to the default query (lag throttler).
-		// So this should in effect enable the throttler again with the default config.
-		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, true, false, useDefaultThreshold, useDefaultQuery, true)
+		// threshold.
+		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, true, false, 0, useDefaultQuery, true)
 		assert.NoError(t, err)
 
 		// Wait for the throttler to be enabled everywhere again with the default config.
