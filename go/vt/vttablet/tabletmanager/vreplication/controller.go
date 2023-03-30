@@ -57,6 +57,7 @@ type controller struct {
 
 	id           int32
 	workflow     string
+	workflowType string
 	source       *binlogdatapb.BinlogSource
 	stopPos      string
 	tabletPicker *discovery.TabletPicker
@@ -95,6 +96,16 @@ func newController(ctx context.Context, params map[string]string, dbClientFactor
 	}
 	ct.id = int32(id)
 	ct.workflow = params["workflow"]
+	ct.workflowType = "Unknown"
+	if typeS, ok := params["workflow_type"]; ok {
+		typeI, err := strconv.ParseInt(typeS, 10, 32)
+		if err != nil {
+			return nil, err
+		}
+		if name, ok := binlogdatapb.VReplicationWorkflowType_name[int32(typeI)]; ok {
+			ct.workflowType = name
+		}
+	}
 	ct.lastWorkflowError = vterrors.NewLastError(fmt.Sprintf("VReplication controller %d for workflow %q", ct.id, ct.workflow), maxTimeToRetryError)
 
 	state := params["state"]
