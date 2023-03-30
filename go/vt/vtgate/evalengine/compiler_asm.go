@@ -1459,8 +1459,9 @@ func (asm *assembler) Fn_EXP() {
 func (asm *assembler) Fn_LN() {
 	asm.emit(func(env *ExpressionEnv) int {
 		f := env.vm.stack[env.vm.sp-1].(*evalFloat)
-		f.f = math.Log(f.f)
-		if !isFinite(f.f) {
+		var ok bool
+		f.f, ok = math_log(f.f)
+		if !ok {
 			env.vm.stack[env.vm.sp-1] = nil
 		}
 		return 1
@@ -1470,11 +1471,11 @@ func (asm *assembler) Fn_LN() {
 func (asm *assembler) Fn_LOG() {
 	asm.adjustStack(-1)
 	asm.emit(func(env *ExpressionEnv) int {
+		var ok bool
 		f1 := env.vm.stack[env.vm.sp-2].(*evalFloat)
 		f2 := env.vm.stack[env.vm.sp-1].(*evalFloat)
-
-		f1.f = log(f1.f, f2.f)
-		if !isFinite(f1.f) {
+		f1.f, ok = math_logN(f1.f, f2.f)
+		if !ok {
 			env.vm.stack[env.vm.sp-2] = nil
 		}
 		env.vm.sp--
@@ -1484,9 +1485,10 @@ func (asm *assembler) Fn_LOG() {
 
 func (asm *assembler) Fn_LOG10() {
 	asm.emit(func(env *ExpressionEnv) int {
+		var ok bool
 		f := env.vm.stack[env.vm.sp-1].(*evalFloat)
-		f.f = math.Log10(f.f)
-		if !isFinite(f.f) {
+		f.f, ok = math_log10(f.f)
+		if !ok {
 			env.vm.stack[env.vm.sp-1] = nil
 		}
 		return 1
@@ -1495,9 +1497,10 @@ func (asm *assembler) Fn_LOG10() {
 
 func (asm *assembler) Fn_LOG2() {
 	asm.emit(func(env *ExpressionEnv) int {
+		var ok bool
 		f := env.vm.stack[env.vm.sp-1].(*evalFloat)
-		f.f = math.Log2(f.f)
-		if !isFinite(f.f) {
+		f.f, ok = math_log2(f.f)
+		if !ok {
 			env.vm.stack[env.vm.sp-1] = nil
 		}
 		return 1
