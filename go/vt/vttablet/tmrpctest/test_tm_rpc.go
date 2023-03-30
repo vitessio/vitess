@@ -972,6 +972,16 @@ func (fra *fakeRPCTM) InitPrimary(ctx context.Context, semiSync bool) (string, e
 	return testReplicationPosition, nil
 }
 
+func tmRPCTestInitPrimary(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+	rp, err := client.InitPrimary(ctx, tablet, false)
+	compareError(t, "InitPrimary", err, rp, testReplicationPosition)
+}
+
+func tmRPCTestInitPrimaryPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+	_, err := client.InitPrimary(ctx, tablet, false)
+	expectHandleRPCPanic(t, "InitPrimary", true /*verbose*/, err)
+}
+
 // Deprecated
 func (fra *fakeRPCTM) InitMaster(ctx context.Context, semiSync bool) (string, error) {
 	if fra.panics {
@@ -1383,6 +1393,7 @@ func Run(t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.T
 	// Reparenting related functions
 	tmRPCTestResetReplication(ctx, t, client, tablet)
 	tmRPCTestInitMaster(ctx, t, client, tablet)
+	tmRPCTestInitPrimary(ctx, t, client, tablet)
 	tmRPCTestPopulateReparentJournal(ctx, t, client, tablet)
 	tmRPCTestDemoteMaster(ctx, t, client, tablet)
 	tmRPCTestUndoDemoteMaster(ctx, t, client, tablet)
@@ -1437,6 +1448,7 @@ func Run(t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.T
 	// Reparenting related functions
 	tmRPCTestResetReplicationPanic(ctx, t, client, tablet)
 	tmRPCTestInitMasterPanic(ctx, t, client, tablet)
+	tmRPCTestInitPrimaryPanic(ctx, t, client, tablet)
 	tmRPCTestPopulateReparentJournalPanic(ctx, t, client, tablet)
 	tmRPCTestDemoteMasterPanic(ctx, t, client, tablet)
 	tmRPCTestUndoDemoteMasterPanic(ctx, t, client, tablet)
