@@ -784,6 +784,16 @@ func tmRPCTestMasterPositionPanic(ctx context.Context, t *testing.T, client tmcl
 	expectHandleRPCPanic(t, "PrimaryPosition", false /*verbose*/, err)
 }
 
+func tmRPCTestPrimaryPosition(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+	rs, err := client.PrimaryPosition(ctx, tablet)
+	compareError(t, "PrimaryPosition", err, rs, testReplicationPosition)
+}
+
+func tmRPCTestPrimaryPositionPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+	_, err := client.PrimaryPosition(ctx, tablet)
+	expectHandleRPCPanic(t, "PrimaryPosition", false /*verbose*/, err)
+}
+
 var testStopReplicationCalled = false
 
 func (fra *fakeRPCTM) StopReplication(ctx context.Context) error {
@@ -1351,12 +1361,10 @@ func Run(t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.T
 	tmRPCTestExecuteFetch(ctx, t, client, tablet)
 
 	// Replication related methods
-	tmRPCTestMasterPosition(ctx, t, client, tablet)
-
 	tmRPCTestReplicationStatus(ctx, t, client, tablet)
 	tmRPCTestFullStatus(ctx, t, client, tablet)
-	tmRPCTestPrimaryPosition(ctx, t, client, tablet)
 	tmRPCTestMasterPosition(ctx, t, client, tablet)
+	tmRPCTestPrimaryPosition(ctx, t, client, tablet)
 	tmRPCTestStopReplication(ctx, t, client, tablet)
 	tmRPCTestStopReplicationMinimum(ctx, t, client, tablet)
 	tmRPCTestStartReplication(ctx, t, client, tablet)
@@ -1410,6 +1418,7 @@ func Run(t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.T
 
 	// Replication related methods
 	tmRPCTestMasterPositionPanic(ctx, t, client, tablet)
+	tmRPCTestPrimaryPositionPanic(ctx, t, client, tablet)
 	tmRPCTestReplicationStatusPanic(ctx, t, client, tablet)
 	tmRPCTestFullStatusPanic(ctx, t, client, tablet)
 	tmRPCTestStopReplicationPanic(ctx, t, client, tablet)
