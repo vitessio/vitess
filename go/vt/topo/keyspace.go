@@ -18,6 +18,7 @@ package topo
 
 import (
 	"path"
+	"strings"
 
 	"google.golang.org/protobuf/proto"
 
@@ -52,6 +53,20 @@ func (ki *KeyspaceInfo) KeyspaceName() string {
 // SetKeyspaceName sets the keyspace name
 func (ki *KeyspaceInfo) SetKeyspaceName(name string) {
 	ki.keyspace = name
+}
+
+var invalidKeyspaceNameChars = "/"
+
+// ValidateKeyspaceName checks if the provided name is a valid name for a
+// keyspace.
+//
+// As of v16.0.1, "all invalid characters" is just the forward slash ("/").
+func ValidateKeyspaceName(name string) error {
+	if strings.ContainsAny(name, invalidKeyspaceNameChars) {
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "keyspace name %s contains invalid characters; may not contain any of the following: %+v", name, strings.Split(invalidKeyspaceNameChars, ""))
+	}
+
+	return nil
 }
 
 // GetServedFrom returns a Keyspace_ServedFrom record if it exists.
@@ -161,6 +176,10 @@ func (ki *KeyspaceInfo) ComputeCellServedFrom(cell string) []*topodatapb.SrvKeys
 // CreateKeyspace wraps the underlying Conn.Create
 // and dispatches the event.
 func (ts *Server) CreateKeyspace(ctx context.Context, keyspace string, value *topodatapb.Keyspace) error {
+	if err := ValidateKeyspaceName(keyspace); err != nil {
+		return vterrors.Wrapf(err, "CreateKeyspace: %s", err)
+	}
+
 	data, err := proto.Marshal(value)
 	if err != nil {
 		return err
@@ -181,6 +200,10 @@ func (ts *Server) CreateKeyspace(ctx context.Context, keyspace string, value *to
 
 // GetKeyspace reads the given keyspace and returns it
 func (ts *Server) GetKeyspace(ctx context.Context, keyspace string) (*KeyspaceInfo, error) {
+	if err := ValidateKeyspaceName(keyspace); err != nil {
+		return nil, vterrors.Wrapf(err, "GetKeyspace: %s", err)
+	}
+
 	keyspacePath := path.Join(KeyspacesPath, keyspace, KeyspaceFile)
 	data, version, err := ts.globalCell.Get(ctx, keyspacePath)
 	if err != nil {
