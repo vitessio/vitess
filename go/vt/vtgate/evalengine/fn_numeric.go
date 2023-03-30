@@ -172,6 +172,13 @@ func (call *builtinPi) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqlt
 	return sqltypes.Float64, 0
 }
 
+func isFinite(f float64) bool {
+	const mask = 0x7FF
+	const shift = 64 - 11 - 1
+	x := math.Float64bits(f)
+	return uint32(x>>shift)&mask != mask
+}
+
 type builtinAcos struct {
 	CallExpr
 }
@@ -417,4 +424,281 @@ func (call *builtinRadians) eval(env *ExpressionEnv) (eval, error) {
 func (call *builtinRadians) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
 	_, f := call.Arguments[0].typeof(env, fields)
 	return sqltypes.Float64, f
+}
+
+type builtinExp struct {
+	CallExpr
+}
+
+var _ Expr = (*builtinExp)(nil)
+
+func (call *builtinExp) eval(env *ExpressionEnv) (eval, error) {
+	arg, err := call.arg1(env)
+	if err != nil {
+		return nil, err
+	}
+	if arg == nil {
+		return nil, nil
+	}
+
+	f, _ := evalToNumeric(arg).toFloat()
+	a := math.Exp(f.f)
+	if !isFinite(a) {
+		return nil, nil
+	}
+	return newEvalFloat(a), nil
+}
+
+func (call *builtinExp) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	_, f := call.Arguments[0].typeof(env, fields)
+	return sqltypes.Float64, f | flagNullable
+}
+
+type builtinLn struct {
+	CallExpr
+}
+
+var _ Expr = (*builtinLn)(nil)
+
+func (call *builtinLn) eval(env *ExpressionEnv) (eval, error) {
+	arg, err := call.arg1(env)
+	if err != nil {
+		return nil, err
+	}
+	if arg == nil {
+		return nil, nil
+	}
+
+	f, _ := evalToNumeric(arg).toFloat()
+	a := math.Log(f.f)
+	if !isFinite(a) {
+		return nil, nil
+	}
+
+	return newEvalFloat(a), nil
+}
+
+func (call *builtinLn) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	_, f := call.Arguments[0].typeof(env, fields)
+	return sqltypes.Float64, f | flagNullable
+}
+
+type builtinLog struct {
+	CallExpr
+}
+
+var _ Expr = (*builtinLog)(nil)
+
+func log(f1, f2 float64) float64 {
+	a1 := math.Log(f1)
+	if !isFinite(a1) {
+		return a1
+	}
+
+	a2 := math.Log(f2)
+	if !isFinite(a2) {
+		return a2
+	}
+
+	return a2 / a1
+}
+
+func (call *builtinLog) eval(env *ExpressionEnv) (eval, error) {
+	arg1, arg2, err := call.arg2(env)
+	if err != nil {
+		return nil, err
+	}
+	if arg1 == nil || arg2 == nil {
+		return nil, nil
+	}
+
+	f1, _ := evalToNumeric(arg1).toFloat()
+	f2, _ := evalToNumeric(arg2).toFloat()
+
+	a := log(f1.f, f2.f)
+	if !isFinite(a) {
+		return nil, nil
+	}
+
+	return newEvalFloat(a), nil
+}
+
+func (call *builtinLog) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	_, f := call.Arguments[0].typeof(env, fields)
+	return sqltypes.Float64, f | flagNullable
+}
+
+type builtinLog10 struct {
+	CallExpr
+}
+
+var _ Expr = (*builtinLog10)(nil)
+
+func (call *builtinLog10) eval(env *ExpressionEnv) (eval, error) {
+	arg, err := call.arg1(env)
+	if err != nil {
+		return nil, err
+	}
+	if arg == nil {
+		return nil, nil
+	}
+
+	f, _ := evalToNumeric(arg).toFloat()
+	a := math.Log10(f.f)
+	if !isFinite(a) {
+		return nil, nil
+	}
+
+	return newEvalFloat(a), nil
+}
+
+func (call *builtinLog10) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	_, f := call.Arguments[0].typeof(env, fields)
+	return sqltypes.Float64, f | flagNullable
+}
+
+type builtinLog2 struct {
+	CallExpr
+}
+
+var _ Expr = (*builtinLog2)(nil)
+
+func (call *builtinLog2) eval(env *ExpressionEnv) (eval, error) {
+	arg, err := call.arg1(env)
+	if err != nil {
+		return nil, err
+	}
+	if arg == nil {
+		return nil, nil
+	}
+
+	f, _ := evalToNumeric(arg).toFloat()
+	a := math.Log2(f.f)
+	if !isFinite(a) {
+		return nil, nil
+	}
+
+	return newEvalFloat(a), nil
+}
+
+func (call *builtinLog2) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	_, f := call.Arguments[0].typeof(env, fields)
+	return sqltypes.Float64, f | flagNullable
+}
+
+type builtinPow struct {
+	CallExpr
+}
+
+var _ Expr = (*builtinPow)(nil)
+
+func (call *builtinPow) eval(env *ExpressionEnv) (eval, error) {
+	arg1, arg2, err := call.arg2(env)
+	if err != nil {
+		return nil, err
+	}
+	if arg1 == nil || arg2 == nil {
+		return nil, nil
+	}
+
+	f1, _ := evalToNumeric(arg1).toFloat()
+	f2, _ := evalToNumeric(arg2).toFloat()
+
+	a := math.Pow(f1.f, f2.f)
+	if !isFinite(a) {
+		return nil, nil
+	}
+
+	return newEvalFloat(a), nil
+}
+
+func (call *builtinPow) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	_, f := call.Arguments[0].typeof(env, fields)
+	return sqltypes.Float64, f | flagNullable
+}
+
+type builtinSign struct {
+	CallExpr
+}
+
+var _ Expr = (*builtinSign)(nil)
+
+func (call *builtinSign) eval(env *ExpressionEnv) (eval, error) {
+	arg, err := call.arg1(env)
+	if err != nil {
+		return nil, err
+	}
+	if arg == nil {
+		return nil, nil
+	}
+
+	switch arg := arg.(type) {
+	case *evalInt64:
+		if arg.i < 0 {
+			return newEvalInt64(-1), nil
+		} else if arg.i > 0 {
+			return newEvalInt64(1), nil
+		} else {
+			return newEvalInt64(0), nil
+		}
+	case *evalUint64:
+		if arg.u > 0 {
+			return newEvalInt64(1), nil
+		} else {
+			return newEvalInt64(0), nil
+		}
+	case *evalDecimal:
+		return newEvalInt64(int64(arg.dec.Sign())), nil
+	case *evalFloat:
+		if arg.f < 0 {
+			return newEvalInt64(-1), nil
+		} else if arg.f > 0 {
+			return newEvalInt64(1), nil
+		} else {
+			return newEvalInt64(0), nil
+		}
+	default:
+		f, _ := evalToNumeric(arg).toFloat()
+		if f.f < 0 {
+			return newEvalInt64(-1), nil
+		} else if f.f > 0 {
+			return newEvalInt64(1), nil
+		} else {
+			return newEvalInt64(0), nil
+		}
+	}
+}
+
+func (call *builtinSign) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	_, t := call.Arguments[0].typeof(env, fields)
+	return sqltypes.Int64, t
+}
+
+type builtinSqrt struct {
+	CallExpr
+}
+
+var _ Expr = (*builtinSqrt)(nil)
+
+func (call *builtinSqrt) eval(env *ExpressionEnv) (eval, error) {
+	arg, err := call.arg1(env)
+	if err != nil {
+		return nil, err
+	}
+	if arg == nil {
+		return nil, nil
+	}
+
+	f, _ := evalToNumeric(arg).toFloat()
+	a := math.Sqrt(f.f)
+	if !isFinite(a) {
+		return nil, nil
+	}
+
+	return newEvalFloat(a), nil
+}
+
+func (call *builtinSqrt) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	_, t := call.Arguments[0].typeof(env, fields)
+	return sqltypes.Float64, t | flagNullable
 }

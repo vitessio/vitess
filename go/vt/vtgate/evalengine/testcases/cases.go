@@ -83,6 +83,15 @@ var Cases = []TestCase{
 	{Run: FnRadians},
 	{Run: FnNow},
 	{Run: FnInfo},
+	{Run: FnExp},
+	{Run: FnLn},
+	{Run: FnLog},
+	{Run: FnLog10},
+	{Run: FnMod},
+	{Run: FnLog2},
+	{Run: FnPow},
+	{Run: FnSign},
+	{Run: FnSqrt},
 }
 
 func JSONPathOperations(yield Query) {
@@ -351,6 +360,138 @@ func FnRadians(yield Query) {
 
 	for _, num := range inputBitwise {
 		yield(fmt.Sprintf("RADIANS(%s)", num), nil)
+	}
+}
+
+func FnExp(yield Query) {
+	for _, num := range radianInputs {
+		yield(fmt.Sprintf("EXP(%s)", num), nil)
+	}
+
+	for _, num := range inputBitwise {
+		yield(fmt.Sprintf("EXP(%s)", num), nil)
+	}
+}
+
+func FnLn(yield Query) {
+	for _, num := range radianInputs {
+		yield(fmt.Sprintf("LN(%s)", num), nil)
+	}
+
+	for _, num := range inputBitwise {
+		yield(fmt.Sprintf("LN(%s)", num), nil)
+	}
+}
+
+func FnLog(yield Query) {
+	for _, num := range radianInputs {
+		yield(fmt.Sprintf("LOG(%s)", num), nil)
+	}
+
+	for _, num := range inputBitwise {
+		yield(fmt.Sprintf("LOG(%s)", num), nil)
+	}
+
+	for _, num1 := range radianInputs {
+		for _, num2 := range radianInputs {
+			yield(fmt.Sprintf("LOG(%s, %s)", num1, num2), nil)
+		}
+		for _, num2 := range inputBitwise {
+			yield(fmt.Sprintf("LOG(%s, %s)", num1, num2), nil)
+		}
+	}
+
+	for _, num1 := range inputBitwise {
+		for _, num2 := range radianInputs {
+			yield(fmt.Sprintf("LOG(%s, %s)", num1, num2), nil)
+		}
+		for _, num2 := range inputBitwise {
+			yield(fmt.Sprintf("LOG(%s, %s)", num1, num2), nil)
+		}
+	}
+}
+
+func FnLog10(yield Query) {
+	for _, num := range radianInputs {
+		yield(fmt.Sprintf("LOG10(%s)", num), nil)
+	}
+
+	for _, num := range inputBitwise {
+		yield(fmt.Sprintf("LOG10(%s)", num), nil)
+	}
+}
+
+func FnMod(yield Query) {
+	for _, num1 := range radianInputs {
+		for _, num2 := range radianInputs {
+			yield(fmt.Sprintf("MOD(%s, %s)", num1, num2), nil)
+		}
+		for _, num2 := range inputBitwise {
+			yield(fmt.Sprintf("MOD(%s, %s)", num1, num2), nil)
+		}
+	}
+
+	for _, num1 := range inputBitwise {
+		for _, num2 := range radianInputs {
+			yield(fmt.Sprintf("MOD(%s, %s)", num1, num2), nil)
+		}
+		for _, num2 := range inputBitwise {
+			yield(fmt.Sprintf("MOD(%s, %s)", num1, num2), nil)
+		}
+	}
+}
+
+func FnLog2(yield Query) {
+	for _, num := range radianInputs {
+		yield(fmt.Sprintf("LOG2(%s)", num), nil)
+	}
+
+	for _, num := range inputBitwise {
+		yield(fmt.Sprintf("LOG2(%s)", num), nil)
+	}
+}
+
+func FnPow(yield Query) {
+	for _, num1 := range radianInputs {
+		for _, num2 := range radianInputs {
+			yield(fmt.Sprintf("POW(%s, %s)", num1, num2), nil)
+			yield(fmt.Sprintf("POWER(%s, %s)", num1, num2), nil)
+		}
+		for _, num2 := range inputBitwise {
+			yield(fmt.Sprintf("POW(%s, %s)", num1, num2), nil)
+			yield(fmt.Sprintf("POWER(%s, %s)", num1, num2), nil)
+		}
+	}
+
+	for _, num1 := range inputBitwise {
+		for _, num2 := range radianInputs {
+			yield(fmt.Sprintf("POW(%s, %s)", num1, num2), nil)
+			yield(fmt.Sprintf("POWER(%s, %s)", num1, num2), nil)
+		}
+		for _, num2 := range inputBitwise {
+			yield(fmt.Sprintf("POW(%s, %s)", num1, num2), nil)
+			yield(fmt.Sprintf("POWER(%s, %s)", num1, num2), nil)
+		}
+	}
+}
+
+func FnSign(yield Query) {
+	for _, num := range radianInputs {
+		yield(fmt.Sprintf("SIGN(%s)", num), nil)
+	}
+
+	for _, num := range inputBitwise {
+		yield(fmt.Sprintf("SIGN(%s)", num), nil)
+	}
+}
+
+func FnSqrt(yield Query) {
+	for _, num := range radianInputs {
+		yield(fmt.Sprintf("SQRT(%s)", num), nil)
+	}
+
+	for _, num := range inputBitwise {
+		yield(fmt.Sprintf("SQRT(%s)", num), nil)
 	}
 }
 
