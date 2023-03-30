@@ -8,7 +8,8 @@
  * Purge logs without panicking [#12187](https://github.com/vitessio/vitess/pull/12187)
  * Fix `vtctldclient`'s Root command to return an error on unknown command [#12481](https://github.com/vitessio/vitess/pull/12481) 
 #### Cluster management
- * Fix initialization code to also stop replication to prevent crash [#12534](https://github.com/vitessio/vitess/pull/12534) 
+ * Fix initialization code to also stop replication to prevent crash [#12534](https://github.com/vitessio/vitess/pull/12534)
+ * [Backport] Update topo {Get,Create}Keyspace to prevent invalid keyspace names [#12732](https://github.com/vitessio/vitess/pull/12732)
 #### General
  * Fixing backup tests flakiness [#12655](https://github.com/vitessio/vitess/pull/12655)
  * [release-16.0] Port two flaky test fixes #12603 and #12546 [#12745](https://github.com/vitessio/vitess/pull/12745) 
