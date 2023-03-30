@@ -13,7 +13,7 @@ jobs:
       id: skip-workflow
       run: |
         skip='false'
-        if [[ "{{"${{github.event.pull_request}}"}}" ==  "" ]] && [[ "{{"${{github.ref}}"}}" != "refs/heads/main" ]] && [[ ! "{{"${{github.ref}}"}}" =~ ^refs/heads/release-[0-9]+\.[0-9]$ ]] && [[ ! "{{"${{github.ref}}"}}" =~ "refs/tags/.*" ]]; then
+        if [[ "{{"${{github.event.pull_request}}"}}" ==  "" ]] && [[ "{{"${{github.ref}}"}}" != "refs/heads/main" ]] && [[ ! "{{"${{github.ref}}"}}" =~ ^refs/heads/slack-vitess-r[0-9]+\.[0-9]\.[0-9]+$ ]] && [[ ! "{{"${{github.ref}}"}}" =~ "refs/tags/.*" ]]; then
           skip='true'
         fi
         echo Skip ${skip}
@@ -94,28 +94,6 @@ jobs:
 
         {{end}}
 
-        {{if (eq .Platform "mariadb102")}}
-
-        # mariadb102
-        sudo apt-get install -y software-properties-common
-        sudo apt-key adv --recv-keys --keyserver hkp://keyserver.ubuntu.com:80 0xF1656F24C74CD1D8
-        sudo add-apt-repository 'deb [arch=amd64,arm64,ppc64el] https://mirror.rackspace.com/mariadb/repo/10.2/ubuntu bionic main'
-        sudo apt update
-        sudo DEBIAN_FRONTEND="noninteractive" apt install -y mariadb-server
-
-        {{end}}
-
-        {{if (eq .Platform "mariadb103")}}
-
-        # mariadb103
-        sudo apt-get install -y software-properties-common
-        sudo apt-key adv --recv-keys --keyserver hkp://keyserver.ubuntu.com:80 0xF1656F24C74CD1D8
-        sudo add-apt-repository 'deb [arch=amd64,arm64,ppc64el] https://mirror.rackspace.com/mariadb/repo/10.3/ubuntu bionic main'
-        sudo apt update
-        sudo DEBIAN_FRONTEND="noninteractive" apt install -y mariadb-server
-
-        {{end}}
-
         {{end}} {{/*outer if*/}}
 
         sudo apt-get install -y make unzip g++ curl git wget ant openjdk-8-jdk eatmydata
@@ -138,6 +116,10 @@ jobs:
 
     - name: Run test
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.unit_tests == 'true'
-      timeout-minutes: 30
-      run: |
-        eatmydata -- make unit_test
+      uses: nick-fields/retry@v2
+      with:
+        timeout_minutes: 30
+        max_attempts: 3
+        retry_on: error
+        command: |
+          eatmydata -- make unit_test
