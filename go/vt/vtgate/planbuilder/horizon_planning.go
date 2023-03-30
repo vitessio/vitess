@@ -602,25 +602,11 @@ func hasUniqueVindex(semTable *semantics.SemTable, groupByExprs []operators.Grou
 func (hp *horizonPlanning) planOrderBy(ctx *plancontext.PlanningContext, orderExprs []operators.OrderBy, plan logicalPlan) (logicalPlan, error) {
 	switch plan := plan.(type) {
 	case *routeGen4:
-		newPlan, err := planOrderByForRoute(ctx, orderExprs, plan, hp.qp.HasStar)
-		if err != nil {
-			return nil, err
-		}
-		return newPlan, nil
+		return planOrderByForRoute(ctx, orderExprs, plan, hp.qp.HasStar)
 	case *joinGen4:
-		newPlan, err := hp.planOrderByForJoin(ctx, orderExprs, plan)
-		if err != nil {
-			return nil, err
-		}
-
-		return newPlan, nil
+		return hp.planOrderByForJoin(ctx, orderExprs, plan)
 	case *hashJoin:
-		newPlan, err := hp.planOrderByForHashJoin(ctx, orderExprs, plan)
-		if err != nil {
-			return nil, err
-		}
-
-		return newPlan, nil
+		return hp.planOrderByForHashJoin(ctx, orderExprs, plan)
 	case *orderedAggregate:
 		// remove ORDER BY NULL from the list of order by expressions since we will be doing the ordering on vtgate level so NULL is not useful
 		var orderExprsWithoutNils []operators.OrderBy
