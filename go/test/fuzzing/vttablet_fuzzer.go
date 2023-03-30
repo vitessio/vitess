@@ -291,14 +291,14 @@ func (fs *fuzzStore) callExecuteFetchAsApp() error {
 	return nil
 }
 
-// callInitPrimary implements a wrapper
-// for fuzzing InitPrimary
-func (fs *fuzzStore) callInitPrimary() error {
+// callInitMaster implements a wrapper
+// for fuzzing InitMaster
+func (fs *fuzzStore) callInitMaster() error {
 	tablet, err := fs.getTablet()
 	if err != nil {
 		return err
 	}
-	_, _ = fs.client.InitPrimary(context.Background(), tablet, false)
+	_, _ = fs.client.InitMaster(context.Background(), tablet, false)
 	return nil
 }
 
@@ -357,6 +357,17 @@ func (fs *fuzzStore) callPrimaryPosition() error {
 	return nil
 }
 
+// callDemoteMaster implements a wrapper
+// for fuzzing DemoteMaster
+func (fs *fuzzStore) callDemoteMaster() error {
+	tablet, err := fs.getTablet()
+	if err != nil {
+		return err
+	}
+	_, _ = fs.client.DemoteMaster(context.Background(), tablet)
+	return nil
+}
+
 // callReplicationStatus implements a wrapper
 // for fuzzing ReplicationStatus
 func (fs *fuzzStore) callReplicationStatus() error {
@@ -386,7 +397,7 @@ func (fs *fuzzStore) callPrimaryStatus() error {
 	if err != nil {
 		return err
 	}
-	_, _ = fs.client.PrimaryStatus(context.Background(), tablet)
+	_, _ = fs.client.MasterStatus(context.Background(), tablet)
 	return nil
 }
 
@@ -398,6 +409,17 @@ func (fs *fuzzStore) callDemotePrimary() error {
 		return err
 	}
 	_, _ = fs.client.DemotePrimary(context.Background(), tablet)
+	return nil
+}
+
+// callUndoDemoteMaster implements a wrapper
+// for fuzzing UndoDemoteMaster
+func (fs *fuzzStore) callUndoDemoteMaster() error {
+	tablet, err := fs.getTablet()
+	if err != nil {
+		return err
+	}
+	_ = fs.client.UndoDemoteMaster(context.Background(), tablet)
 	return nil
 }
 
@@ -624,7 +646,7 @@ func (fs *fuzzStore) executeInRandomOrder() {
 		var err error
 		switch execInt % maxTargets {
 		case 0:
-			err = fs.callInitPrimary()
+			err = fs.callInitMaster()
 		case 1:
 			err = fs.callResetReplication()
 		case 2:
@@ -635,12 +657,16 @@ func (fs *fuzzStore) executeInRandomOrder() {
 			err = fs.callStopReplication()
 		case 5:
 			err = fs.callPrimaryPosition()
+		case 6:
+			err = fs.callDemoteMaster()
 		case 7:
 			err = fs.callReplicationStatus()
 		case 8:
 			err = fs.callPrimaryStatus()
 		case 9:
 			err = fs.callDemotePrimary()
+		case 10:
+			err = fs.callUndoDemoteMaster()
 		case 11:
 			err = fs.callUndoDemotePrimary()
 		case 12:

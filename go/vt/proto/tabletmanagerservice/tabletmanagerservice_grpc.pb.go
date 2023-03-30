@@ -50,8 +50,12 @@ type TabletManagerClient interface {
 	ExecuteFetchAsApp(ctx context.Context, in *tabletmanagerdata.ExecuteFetchAsAppRequest, opts ...grpc.CallOption) (*tabletmanagerdata.ExecuteFetchAsAppResponse, error)
 	// ReplicationStatus returns the current replication status.
 	ReplicationStatus(ctx context.Context, in *tabletmanagerdata.ReplicationStatusRequest, opts ...grpc.CallOption) (*tabletmanagerdata.ReplicationStatusResponse, error)
+	// Deprecated, use PrimaryStatus instead
+	MasterStatus(ctx context.Context, in *tabletmanagerdata.PrimaryStatusRequest, opts ...grpc.CallOption) (*tabletmanagerdata.PrimaryStatusResponse, error)
 	// PrimaryStatus returns the current primary status.
 	PrimaryStatus(ctx context.Context, in *tabletmanagerdata.PrimaryStatusRequest, opts ...grpc.CallOption) (*tabletmanagerdata.PrimaryStatusResponse, error)
+	// Deprecated, use PrimaryPosition instead
+	MasterPosition(ctx context.Context, in *tabletmanagerdata.PrimaryPositionRequest, opts ...grpc.CallOption) (*tabletmanagerdata.PrimaryPositionResponse, error)
 	// PrimaryPosition returns the current primary position
 	PrimaryPosition(ctx context.Context, in *tabletmanagerdata.PrimaryPositionRequest, opts ...grpc.CallOption) (*tabletmanagerdata.PrimaryPositionResponse, error)
 	// WaitForPosition waits for the position to be reached
@@ -75,6 +79,8 @@ type TabletManagerClient interface {
 	VDiff(ctx context.Context, in *tabletmanagerdata.VDiffRequest, opts ...grpc.CallOption) (*tabletmanagerdata.VDiffResponse, error)
 	// ResetReplication makes the target not replicating
 	ResetReplication(ctx context.Context, in *tabletmanagerdata.ResetReplicationRequest, opts ...grpc.CallOption) (*tabletmanagerdata.ResetReplicationResponse, error)
+	// Deprecated, use InitPrimary instead
+	InitMaster(ctx context.Context, in *tabletmanagerdata.InitPrimaryRequest, opts ...grpc.CallOption) (*tabletmanagerdata.InitPrimaryResponse, error)
 	// InitPrimary initializes the tablet as a primary
 	InitPrimary(ctx context.Context, in *tabletmanagerdata.InitPrimaryRequest, opts ...grpc.CallOption) (*tabletmanagerdata.InitPrimaryResponse, error)
 	// PopulateReparentJournal tells the tablet to add an entry to its
@@ -82,8 +88,12 @@ type TabletManagerClient interface {
 	PopulateReparentJournal(ctx context.Context, in *tabletmanagerdata.PopulateReparentJournalRequest, opts ...grpc.CallOption) (*tabletmanagerdata.PopulateReparentJournalResponse, error)
 	// InitReplica tells the tablet to reparent to the primary unconditionally
 	InitReplica(ctx context.Context, in *tabletmanagerdata.InitReplicaRequest, opts ...grpc.CallOption) (*tabletmanagerdata.InitReplicaResponse, error)
+	// Deprecated, see DemotePrimary instead
+	DemoteMaster(ctx context.Context, in *tabletmanagerdata.DemotePrimaryRequest, opts ...grpc.CallOption) (*tabletmanagerdata.DemotePrimaryResponse, error)
 	// DemotePrimary tells the soon-to-be-former primary it's gonna change
 	DemotePrimary(ctx context.Context, in *tabletmanagerdata.DemotePrimaryRequest, opts ...grpc.CallOption) (*tabletmanagerdata.DemotePrimaryResponse, error)
+	// Deprecated, use UndoDemotePrimary instead
+	UndoDemoteMaster(ctx context.Context, in *tabletmanagerdata.UndoDemotePrimaryRequest, opts ...grpc.CallOption) (*tabletmanagerdata.UndoDemotePrimaryResponse, error)
 	// UndoDemotePrimary reverts all changes made by DemotePrimary
 	UndoDemotePrimary(ctx context.Context, in *tabletmanagerdata.UndoDemotePrimaryRequest, opts ...grpc.CallOption) (*tabletmanagerdata.UndoDemotePrimaryResponse, error)
 	// ReplicaWasPromoted tells the remote tablet it is now the primary
@@ -92,6 +102,8 @@ type TabletManagerClient interface {
 	ResetReplicationParameters(ctx context.Context, in *tabletmanagerdata.ResetReplicationParametersRequest, opts ...grpc.CallOption) (*tabletmanagerdata.ResetReplicationParametersResponse, error)
 	// FullStatus collects and returns the full status of MySQL including the replication information, semi-sync information, GTID information among others
 	FullStatus(ctx context.Context, in *tabletmanagerdata.FullStatusRequest, opts ...grpc.CallOption) (*tabletmanagerdata.FullStatusResponse, error)
+	// Deprecated, use SetReplicationSource instead
+	SetMaster(ctx context.Context, in *tabletmanagerdata.SetReplicationSourceRequest, opts ...grpc.CallOption) (*tabletmanagerdata.SetReplicationSourceResponse, error)
 	// SetReplicationSource tells the replica to reparent
 	SetReplicationSource(ctx context.Context, in *tabletmanagerdata.SetReplicationSourceRequest, opts ...grpc.CallOption) (*tabletmanagerdata.SetReplicationSourceResponse, error)
 	// ReplicaWasRestarted tells the remote tablet its primary has changed
@@ -296,9 +308,27 @@ func (c *tabletManagerClient) ReplicationStatus(ctx context.Context, in *tabletm
 	return out, nil
 }
 
+func (c *tabletManagerClient) MasterStatus(ctx context.Context, in *tabletmanagerdata.PrimaryStatusRequest, opts ...grpc.CallOption) (*tabletmanagerdata.PrimaryStatusResponse, error) {
+	out := new(tabletmanagerdata.PrimaryStatusResponse)
+	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/MasterStatus", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *tabletManagerClient) PrimaryStatus(ctx context.Context, in *tabletmanagerdata.PrimaryStatusRequest, opts ...grpc.CallOption) (*tabletmanagerdata.PrimaryStatusResponse, error) {
 	out := new(tabletmanagerdata.PrimaryStatusResponse)
 	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/PrimaryStatus", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tabletManagerClient) MasterPosition(ctx context.Context, in *tabletmanagerdata.PrimaryPositionRequest, opts ...grpc.CallOption) (*tabletmanagerdata.PrimaryPositionResponse, error) {
+	out := new(tabletmanagerdata.PrimaryPositionResponse)
+	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/MasterPosition", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -404,6 +434,15 @@ func (c *tabletManagerClient) ResetReplication(ctx context.Context, in *tabletma
 	return out, nil
 }
 
+func (c *tabletManagerClient) InitMaster(ctx context.Context, in *tabletmanagerdata.InitPrimaryRequest, opts ...grpc.CallOption) (*tabletmanagerdata.InitPrimaryResponse, error) {
+	out := new(tabletmanagerdata.InitPrimaryResponse)
+	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/InitMaster", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *tabletManagerClient) InitPrimary(ctx context.Context, in *tabletmanagerdata.InitPrimaryRequest, opts ...grpc.CallOption) (*tabletmanagerdata.InitPrimaryResponse, error) {
 	out := new(tabletmanagerdata.InitPrimaryResponse)
 	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/InitPrimary", in, out, opts...)
@@ -431,9 +470,27 @@ func (c *tabletManagerClient) InitReplica(ctx context.Context, in *tabletmanager
 	return out, nil
 }
 
+func (c *tabletManagerClient) DemoteMaster(ctx context.Context, in *tabletmanagerdata.DemotePrimaryRequest, opts ...grpc.CallOption) (*tabletmanagerdata.DemotePrimaryResponse, error) {
+	out := new(tabletmanagerdata.DemotePrimaryResponse)
+	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/DemoteMaster", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *tabletManagerClient) DemotePrimary(ctx context.Context, in *tabletmanagerdata.DemotePrimaryRequest, opts ...grpc.CallOption) (*tabletmanagerdata.DemotePrimaryResponse, error) {
 	out := new(tabletmanagerdata.DemotePrimaryResponse)
 	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/DemotePrimary", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tabletManagerClient) UndoDemoteMaster(ctx context.Context, in *tabletmanagerdata.UndoDemotePrimaryRequest, opts ...grpc.CallOption) (*tabletmanagerdata.UndoDemotePrimaryResponse, error) {
+	out := new(tabletmanagerdata.UndoDemotePrimaryResponse)
+	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/UndoDemoteMaster", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -470,6 +527,15 @@ func (c *tabletManagerClient) ResetReplicationParameters(ctx context.Context, in
 func (c *tabletManagerClient) FullStatus(ctx context.Context, in *tabletmanagerdata.FullStatusRequest, opts ...grpc.CallOption) (*tabletmanagerdata.FullStatusResponse, error) {
 	out := new(tabletmanagerdata.FullStatusResponse)
 	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/FullStatus", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tabletManagerClient) SetMaster(ctx context.Context, in *tabletmanagerdata.SetReplicationSourceRequest, opts ...grpc.CallOption) (*tabletmanagerdata.SetReplicationSourceResponse, error) {
+	out := new(tabletmanagerdata.SetReplicationSourceResponse)
+	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/SetMaster", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -616,8 +682,12 @@ type TabletManagerServer interface {
 	ExecuteFetchAsApp(context.Context, *tabletmanagerdata.ExecuteFetchAsAppRequest) (*tabletmanagerdata.ExecuteFetchAsAppResponse, error)
 	// ReplicationStatus returns the current replication status.
 	ReplicationStatus(context.Context, *tabletmanagerdata.ReplicationStatusRequest) (*tabletmanagerdata.ReplicationStatusResponse, error)
+	// Deprecated, use PrimaryStatus instead
+	MasterStatus(context.Context, *tabletmanagerdata.PrimaryStatusRequest) (*tabletmanagerdata.PrimaryStatusResponse, error)
 	// PrimaryStatus returns the current primary status.
 	PrimaryStatus(context.Context, *tabletmanagerdata.PrimaryStatusRequest) (*tabletmanagerdata.PrimaryStatusResponse, error)
+	// Deprecated, use PrimaryPosition instead
+	MasterPosition(context.Context, *tabletmanagerdata.PrimaryPositionRequest) (*tabletmanagerdata.PrimaryPositionResponse, error)
 	// PrimaryPosition returns the current primary position
 	PrimaryPosition(context.Context, *tabletmanagerdata.PrimaryPositionRequest) (*tabletmanagerdata.PrimaryPositionResponse, error)
 	// WaitForPosition waits for the position to be reached
@@ -641,6 +711,8 @@ type TabletManagerServer interface {
 	VDiff(context.Context, *tabletmanagerdata.VDiffRequest) (*tabletmanagerdata.VDiffResponse, error)
 	// ResetReplication makes the target not replicating
 	ResetReplication(context.Context, *tabletmanagerdata.ResetReplicationRequest) (*tabletmanagerdata.ResetReplicationResponse, error)
+	// Deprecated, use InitPrimary instead
+	InitMaster(context.Context, *tabletmanagerdata.InitPrimaryRequest) (*tabletmanagerdata.InitPrimaryResponse, error)
 	// InitPrimary initializes the tablet as a primary
 	InitPrimary(context.Context, *tabletmanagerdata.InitPrimaryRequest) (*tabletmanagerdata.InitPrimaryResponse, error)
 	// PopulateReparentJournal tells the tablet to add an entry to its
@@ -648,8 +720,12 @@ type TabletManagerServer interface {
 	PopulateReparentJournal(context.Context, *tabletmanagerdata.PopulateReparentJournalRequest) (*tabletmanagerdata.PopulateReparentJournalResponse, error)
 	// InitReplica tells the tablet to reparent to the primary unconditionally
 	InitReplica(context.Context, *tabletmanagerdata.InitReplicaRequest) (*tabletmanagerdata.InitReplicaResponse, error)
+	// Deprecated, see DemotePrimary instead
+	DemoteMaster(context.Context, *tabletmanagerdata.DemotePrimaryRequest) (*tabletmanagerdata.DemotePrimaryResponse, error)
 	// DemotePrimary tells the soon-to-be-former primary it's gonna change
 	DemotePrimary(context.Context, *tabletmanagerdata.DemotePrimaryRequest) (*tabletmanagerdata.DemotePrimaryResponse, error)
+	// Deprecated, use UndoDemotePrimary instead
+	UndoDemoteMaster(context.Context, *tabletmanagerdata.UndoDemotePrimaryRequest) (*tabletmanagerdata.UndoDemotePrimaryResponse, error)
 	// UndoDemotePrimary reverts all changes made by DemotePrimary
 	UndoDemotePrimary(context.Context, *tabletmanagerdata.UndoDemotePrimaryRequest) (*tabletmanagerdata.UndoDemotePrimaryResponse, error)
 	// ReplicaWasPromoted tells the remote tablet it is now the primary
@@ -658,6 +734,8 @@ type TabletManagerServer interface {
 	ResetReplicationParameters(context.Context, *tabletmanagerdata.ResetReplicationParametersRequest) (*tabletmanagerdata.ResetReplicationParametersResponse, error)
 	// FullStatus collects and returns the full status of MySQL including the replication information, semi-sync information, GTID information among others
 	FullStatus(context.Context, *tabletmanagerdata.FullStatusRequest) (*tabletmanagerdata.FullStatusResponse, error)
+	// Deprecated, use SetReplicationSource instead
+	SetMaster(context.Context, *tabletmanagerdata.SetReplicationSourceRequest) (*tabletmanagerdata.SetReplicationSourceResponse, error)
 	// SetReplicationSource tells the replica to reparent
 	SetReplicationSource(context.Context, *tabletmanagerdata.SetReplicationSourceRequest) (*tabletmanagerdata.SetReplicationSourceResponse, error)
 	// ReplicaWasRestarted tells the remote tablet its primary has changed
@@ -739,8 +817,14 @@ func (UnimplementedTabletManagerServer) ExecuteFetchAsApp(context.Context, *tabl
 func (UnimplementedTabletManagerServer) ReplicationStatus(context.Context, *tabletmanagerdata.ReplicationStatusRequest) (*tabletmanagerdata.ReplicationStatusResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ReplicationStatus not implemented")
 }
+func (UnimplementedTabletManagerServer) MasterStatus(context.Context, *tabletmanagerdata.PrimaryStatusRequest) (*tabletmanagerdata.PrimaryStatusResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method MasterStatus not implemented")
+}
 func (UnimplementedTabletManagerServer) PrimaryStatus(context.Context, *tabletmanagerdata.PrimaryStatusRequest) (*tabletmanagerdata.PrimaryStatusResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method PrimaryStatus not implemented")
+}
+func (UnimplementedTabletManagerServer) MasterPosition(context.Context, *tabletmanagerdata.PrimaryPositionRequest) (*tabletmanagerdata.PrimaryPositionResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method MasterPosition not implemented")
 }
 func (UnimplementedTabletManagerServer) PrimaryPosition(context.Context, *tabletmanagerdata.PrimaryPositionRequest) (*tabletmanagerdata.PrimaryPositionResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method PrimaryPosition not implemented")
@@ -775,6 +859,9 @@ func (UnimplementedTabletManagerServer) VDiff(context.Context, *tabletmanagerdat
 func (UnimplementedTabletManagerServer) ResetReplication(context.Context, *tabletmanagerdata.ResetReplicationRequest) (*tabletmanagerdata.ResetReplicationResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ResetReplication not implemented")
 }
+func (UnimplementedTabletManagerServer) InitMaster(context.Context, *tabletmanagerdata.InitPrimaryRequest) (*tabletmanagerdata.InitPrimaryResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method InitMaster not implemented")
+}
 func (UnimplementedTabletManagerServer) InitPrimary(context.Context, *tabletmanagerdata.InitPrimaryRequest) (*tabletmanagerdata.InitPrimaryResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method InitPrimary not implemented")
 }
@@ -784,8 +871,14 @@ func (UnimplementedTabletManagerServer) PopulateReparentJournal(context.Context,
 func (UnimplementedTabletManagerServer) InitReplica(context.Context, *tabletmanagerdata.InitReplicaRequest) (*tabletmanagerdata.InitReplicaResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method InitReplica not implemented")
 }
+func (UnimplementedTabletManagerServer) DemoteMaster(context.Context, *tabletmanagerdata.DemotePrimaryRequest) (*tabletmanagerdata.DemotePrimaryResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method DemoteMaster not implemented")
+}
 func (UnimplementedTabletManagerServer) DemotePrimary(context.Context, *tabletmanagerdata.DemotePrimaryRequest) (*tabletmanagerdata.DemotePrimaryResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method DemotePrimary not implemented")
+}
+func (UnimplementedTabletManagerServer) UndoDemoteMaster(context.Context, *tabletmanagerdata.UndoDemotePrimaryRequest) (*tabletmanagerdata.UndoDemotePrimaryResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method UndoDemoteMaster not implemented")
 }
 func (UnimplementedTabletManagerServer) UndoDemotePrimary(context.Context, *tabletmanagerdata.UndoDemotePrimaryRequest) (*tabletmanagerdata.UndoDemotePrimaryResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method UndoDemotePrimary not implemented")
@@ -798,6 +891,9 @@ func (UnimplementedTabletManagerServer) ResetReplicationParameters(context.Conte
 }
 func (UnimplementedTabletManagerServer) FullStatus(context.Context, *tabletmanagerdata.FullStatusRequest) (*tabletmanagerdata.FullStatusResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method FullStatus not implemented")
+}
+func (UnimplementedTabletManagerServer) SetMaster(context.Context, *tabletmanagerdata.SetReplicationSourceRequest) (*tabletmanagerdata.SetReplicationSourceResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SetMaster not implemented")
 }
 func (UnimplementedTabletManagerServer) SetReplicationSource(context.Context, *tabletmanagerdata.SetReplicationSourceRequest) (*tabletmanagerdata.SetReplicationSourceResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SetReplicationSource not implemented")
@@ -1193,6 +1289,24 @@ func _TabletManager_ReplicationStatus_Handler(srv interface{}, ctx context.Conte
 	return interceptor(ctx, in, info, handler)
 }
 
+func _TabletManager_MasterStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(tabletmanagerdata.PrimaryStatusRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TabletManagerServer).MasterStatus(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/tabletmanagerservice.TabletManager/MasterStatus",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TabletManagerServer).MasterStatus(ctx, req.(*tabletmanagerdata.PrimaryStatusRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _TabletManager_PrimaryStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(tabletmanagerdata.PrimaryStatusRequest)
 	if err := dec(in); err != nil {
@@ -1207,6 +1321,24 @@ func _TabletManager_PrimaryStatus_Handler(srv interface{}, ctx context.Context, 
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(TabletManagerServer).PrimaryStatus(ctx, req.(*tabletmanagerdata.PrimaryStatusRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TabletManager_MasterPosition_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(tabletmanagerdata.PrimaryPositionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TabletManagerServer).MasterPosition(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/tabletmanagerservice.TabletManager/MasterPosition",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TabletManagerServer).MasterPosition(ctx, req.(*tabletmanagerdata.PrimaryPositionRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1409,6 +1541,24 @@ func _TabletManager_ResetReplication_Handler(srv interface{}, ctx context.Contex
 	return interceptor(ctx, in, info, handler)
 }
 
+func _TabletManager_InitMaster_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(tabletmanagerdata.InitPrimaryRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TabletManagerServer).InitMaster(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/tabletmanagerservice.TabletManager/InitMaster",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TabletManagerServer).InitMaster(ctx, req.(*tabletmanagerdata.InitPrimaryRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _TabletManager_InitPrimary_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(tabletmanagerdata.InitPrimaryRequest)
 	if err := dec(in); err != nil {
@@ -1463,6 +1613,24 @@ func _TabletManager_InitReplica_Handler(srv interface{}, ctx context.Context, de
 	return interceptor(ctx, in, info, handler)
 }
 
+func _TabletManager_DemoteMaster_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(tabletmanagerdata.DemotePrimaryRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TabletManagerServer).DemoteMaster(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/tabletmanagerservice.TabletManager/DemoteMaster",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TabletManagerServer).DemoteMaster(ctx, req.(*tabletmanagerdata.DemotePrimaryRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _TabletManager_DemotePrimary_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(tabletmanagerdata.DemotePrimaryRequest)
 	if err := dec(in); err != nil {
@@ -1477,6 +1645,24 @@ func _TabletManager_DemotePrimary_Handler(srv interface{}, ctx context.Context, 
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(TabletManagerServer).DemotePrimary(ctx, req.(*tabletmanagerdata.DemotePrimaryRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TabletManager_UndoDemoteMaster_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(tabletmanagerdata.UndoDemotePrimaryRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TabletManagerServer).UndoDemoteMaster(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/tabletmanagerservice.TabletManager/UndoDemoteMaster",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TabletManagerServer).UndoDemoteMaster(ctx, req.(*tabletmanagerdata.UndoDemotePrimaryRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1549,6 +1735,24 @@ func _TabletManager_FullStatus_Handler(srv interface{}, ctx context.Context, dec
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(TabletManagerServer).FullStatus(ctx, req.(*tabletmanagerdata.FullStatusRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TabletManager_SetMaster_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(tabletmanagerdata.SetReplicationSourceRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TabletManagerServer).SetMaster(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/tabletmanagerservice.TabletManager/SetMaster",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TabletManagerServer).SetMaster(ctx, req.(*tabletmanagerdata.SetReplicationSourceRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1773,8 +1977,16 @@ var TabletManager_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _TabletManager_ReplicationStatus_Handler,
 		},
 		{
+			MethodName: "MasterStatus",
+			Handler:    _TabletManager_MasterStatus_Handler,
+		},
+		{
 			MethodName: "PrimaryStatus",
 			Handler:    _TabletManager_PrimaryStatus_Handler,
+		},
+		{
+			MethodName: "MasterPosition",
+			Handler:    _TabletManager_MasterPosition_Handler,
 		},
 		{
 			MethodName: "PrimaryPosition",
@@ -1821,6 +2033,10 @@ var TabletManager_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _TabletManager_ResetReplication_Handler,
 		},
 		{
+			MethodName: "InitMaster",
+			Handler:    _TabletManager_InitMaster_Handler,
+		},
+		{
 			MethodName: "InitPrimary",
 			Handler:    _TabletManager_InitPrimary_Handler,
 		},
@@ -1833,8 +2049,16 @@ var TabletManager_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _TabletManager_InitReplica_Handler,
 		},
 		{
+			MethodName: "DemoteMaster",
+			Handler:    _TabletManager_DemoteMaster_Handler,
+		},
+		{
 			MethodName: "DemotePrimary",
 			Handler:    _TabletManager_DemotePrimary_Handler,
+		},
+		{
+			MethodName: "UndoDemoteMaster",
+			Handler:    _TabletManager_UndoDemoteMaster_Handler,
 		},
 		{
 			MethodName: "UndoDemotePrimary",
@@ -1851,6 +2075,10 @@ var TabletManager_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "FullStatus",
 			Handler:    _TabletManager_FullStatus_Handler,
+		},
+		{
+			MethodName: "SetMaster",
+			Handler:    _TabletManager_SetMaster_Handler,
 		},
 		{
 			MethodName: "SetReplicationSource",
