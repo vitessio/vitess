@@ -71,6 +71,7 @@ func StatusURLPath() string {
 var (
 	binaryName       = filepath.Base(os.Args[0])
 	hostname         string
+	serverStart      = time.Now()
 	blockProfileRate = 0
 
 	globalStatus = newStatusPage("")
@@ -216,7 +217,7 @@ func (sp *statusPage) statusHandler(w http.ResponseWriter, r *http.Request) {
 		Sections:   sp.sections,
 		BinaryName: binaryName,
 		Hostname:   hostname,
-		StartTime:  GetInitStartTime().Format(time.RFC1123),
+		StartTime:  serverStart.Format(time.RFC1123),
 	}
 
 	if err := sp.tmpl.ExecuteTemplate(w, "status", data); err != nil {
