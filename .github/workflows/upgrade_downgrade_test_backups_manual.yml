@@ -215,11 +215,15 @@ jobs:
         echo "insert into product(sku, description, price) values('SKU-1009', 'description', 89);" | mysql
         echo "insert into corder(customer_id, sku, price) values(1, 'SKU-1009', 100);" | mysql
 
+    # Enable tmate debugging of manually-triggered workflows if the input option was provided
+    - name: Setup tmate session
+      uses: mxschmitt/action-tmate@v3
     # Stop all the tablets and remove their data
     - name: Stop tablets
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       timeout-minutes: 10
       run: |
+        # Enable tmate debugging of manually-triggered workflows if the input option was provided
         source build.env ; cd examples/backups
         ./stop_tablets.sh
 
