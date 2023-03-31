@@ -152,7 +152,7 @@ func (s StringMapFuncWithMultiLabels) KeyLabels() []string {
 	return s.keyLabels
 }
 
-// ValueLabel returns the value label labels.
+// ValueLabel returns the value label.
 func (s StringMapFuncWithMultiLabels) ValueLabel() string {
 	return s.valueLabel
 }
