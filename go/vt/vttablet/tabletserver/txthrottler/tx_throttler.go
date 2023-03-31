@@ -22,6 +22,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 
 	"google.golang.org/protobuf/proto"
