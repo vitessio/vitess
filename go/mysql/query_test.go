@@ -718,7 +718,7 @@ func checkExecute(t *testing.T, sConn, cConn *Conn, test testExec) {
 	// use go routine to emulate client calls
 	var qr *sqltypes.Result
 	var err error
-	handler := testHandler{}
+
 
 	wg := sync.WaitGroup{}
 	wg.Add(1)
@@ -739,6 +739,7 @@ func checkExecute(t *testing.T, sConn, cConn *Conn, test testExec) {
 	}()
 
 	// handle a single client command
+	handler := testHandler{}
 	if err = sConn.handleNextCommand(&handler); err != nil {
 		t.Fatalf("handleNextComamnd failed with error: %v", err)
 	}
@@ -785,6 +786,7 @@ func checkExecute(t *testing.T, sConn, cConn *Conn, test testExec) {
 	}()
 
 	// handle a single client command
+	handler = testHandler{}
 	if err = sConn.handleNextCommand(&handler); err != nil {
 		t.Fatalf("handleNextComamnd failed with error: %v", err)
 	}
