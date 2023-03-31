@@ -17,6 +17,7 @@ limitations under the License.
 package evalengine
 
 import (
+	"fmt"
 	"math"
 	"strconv"
 	"strings"
@@ -25,6 +26,7 @@ import (
 	"vitess.io/vitess/go/mysql/datetime"
 	"vitess.io/vitess/go/mysql/decimal"
 	"vitess.io/vitess/go/mysql/json"
+	"vitess.io/vitess/go/mysql/json/fastparse"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vthash"
 )
@@ -163,6 +165,77 @@ func evalToNumeric(e eval) evalNumeric {
 		}
 	default:
 		panic("unsupported")
+	}
+}
+
+func evalToInt64(e eval) *evalInt64 {
+	switch e := e.(type) {
+	case *evalInt64:
+		return e
+	case *evalUint64:
+		return newEvalInt64(int64(e.u))
+	case *evalFloat:
+		return newEvalInt64(int64(math.Round(e.f)))
+	case *evalDecimal:
+		i, ok := e.dec.Round(0).Int64()
+		if !ok {
+			if e.dec.Sign() < 0 {
+				return newEvalInt64(math.MinInt64)
+			}
+			return newEvalInt64(math.MaxInt64)
+		}
+		return newEvalInt64(i)
+	case *evalBytes:
+		if e.isHexLiteral {
+			hex, ok := e.toNumericHex()
+			if !ok {
+				// overflow
+				return newEvalInt64(0)
+			}
+			return hex.toInt64()
+		}
+		i, _ := fastparse.ParseInt64(e.string())
+		return newEvalInt64(i)
+	case *evalJSON:
+		switch e.Type() {
+		case json.TypeBoolean:
+			if e == json.ValueTrue {
+				return newEvalInt64(1)
+			}
+			return newEvalInt64(0)
+		case json.TypeNumber:
+			switch e.NumberType() {
+			case json.NumberTypeInteger:
+				i, ok := e.Int64()
+				if ok {
+					return newEvalInt64(i)
+				}
+				d, ok := e.Decimal()
+				if !ok {
+					return newEvalInt64(0)
+				}
+				i, ok = d.Round(0).Int64()
+				if !ok {
+					if d.Sign() < 0 {
+						return newEvalInt64(math.MinInt64)
+					}
+					return newEvalInt64(math.MaxInt64)
+				}
+				return newEvalInt64(i)
+			case json.NumberTypeDouble:
+				f, _ := e.Float64()
+				return newEvalInt64(int64(math.Round(f)))
+			default:
+				panic("unsupported")
+			}
+		case json.TypeString:
+			i, _ := fastparse.ParseInt64(e.Raw())
+			return newEvalInt64(i)
+		default:
+			return newEvalInt64(0)
+		}
+	default:
+		panic(fmt.Sprintf("unsupported type: %T", e))
 	}
 }
 
