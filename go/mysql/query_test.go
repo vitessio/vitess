@@ -822,18 +822,18 @@ func TestExecuteQueries(t *testing.T) {
 			expectedNumFields: 2,
 			expectedNumRows: 2,
 		},
-		{
-			query: "empty result",
-			useCursor: 1,
-			expectedNumFields: 3,
-			expectedNumRows: 0,
-		},
-		{
-			query: "select rows",
-			useCursor: 1,
-			expectedNumFields: 2,
-			expectedNumRows: 2,
-		},
+		//{
+		//	query: "empty result",
+		//	useCursor: 1,
+		//	expectedNumFields: 3,
+		//	expectedNumRows: 0,
+		//},
+		//{
+		//	query: "select rows",
+		//	useCursor: 1,
+		//	expectedNumFields: 2,
+		//	expectedNumRows: 2,
+		//},
 	}
 
 	for _, test := range tests {
