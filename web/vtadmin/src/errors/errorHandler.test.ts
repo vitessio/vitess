@@ -62,8 +62,8 @@ describe('errorHandler', () => {
                     fetchResponse: {
                         ok: false,
                         status: 500,
-                        statusText: '',
-                        type: 'default',
+                        statusText: 'Internal Server Error',
+                        type: undefined,
                         url: '',
                     },
                     name: 'HttpResponseNotOkError',
