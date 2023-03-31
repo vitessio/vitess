@@ -521,6 +521,19 @@ func (be *BuiltinBackupEngine) backupFiles(
 				return
 			}
 			defer sema.Release(1)
+			// check for context cancellation explicitly because, the way semaphore code is
+			// written theoretically we might end up not throwing error even after cancellation.
+			// see (https://cs.opensource.google/go/x/sync/+/refs/tags/v0.1.0:semaphore/semaphore.go;l=66)
+			// which suggest if ctx is already done, Acquire may still succeed without blocking.
+			// This brings unpredictability in my test cases, so in order to avoid that I am adding this
+			// cancellation check.
+			select {
+			case <-ctx.Done():
+				log.Errorf("Context cancelled during %q backup", fe.Name)
+				bh.RecordError(vterrors.Errorf(vtrpc.Code_CANCELED, "context canceled"))
+				return
+			default:
+			}
 
 			if bh.HasErrors() {
 				return
@@ -896,6 +909,19 @@ func (be *BuiltinBackupEngine) restoreFiles(ctx context.Context, params RestoreP
 				return
 			}
 			defer sema.Release(1)
+			// check for context cancellation explicitly because, the way semaphore code is
+			// written theoretically we might end up not throwing error even after cancellation.
+			// See https://cs.opensource.google/go/x/sync/+/refs/tags/v0.1.0:semaphore/semaphore.go;l=66
+			// which suggest if ctx is already done, Acquire may still succeed without blocking.
+			// This brings unpredictability in my test cases, so in order to avoid that I am adding this
+			// cancellation check.
+			select {
+			case <-ctx.Done():
+				log.Errorf("Context cancelled during %q backup", fe.Name)
+				bh.RecordError(vterrors.Errorf(vtrpc.Code_CANCELED, "context canceled"))
+				return
+			default:
+			}
 
 			if rec.HasErrors() {
 				return

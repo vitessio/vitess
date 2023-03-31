@@ -256,7 +256,7 @@ func TestExecuteBackupWithCancelledContext(t *testing.T) {
 
 	require.Error(t, err)
 	// out of four, two files will fail.
-	require.ErrorContains(t, err, "context canceled;context canceled")
+	require.ErrorContains(t, err, "context canceled;context canceled;context canceled;context canceled")
 	assert.False(t, ok)
 }
 
