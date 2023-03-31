@@ -22,6 +22,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"vitess.io/vitess/go/vt/sqlparser"
 
 	"google.golang.org/protobuf/proto"
 
@@ -89,10 +90,6 @@ type TxThrottler struct {
 // TxThrottlerName is the name the wrapped go/vt/throttler object will be registered with
 // go/vt/throttler.GlobalManager.
 const TxThrottlerName = "TransactionThrottler"
-
-// MaxTxThrottlerCriticalityValue specifies the maximum value allowed for criticality. Valid criticality values are
-// between zero and MaxTxThrottlerCriticalityValue.
-const MaxTxThrottlerCriticalityValue = 100
 
 // NewTxThrottler tries to construct a TxThrottler from the
 // relevant fields in the tabletenv.Config object. It returns a disabled TxThrottler if
@@ -284,7 +281,7 @@ func (t *TxThrottler) Throttle(criticality int) (result bool) {
 
 	// Throttle according to both what the throttle state says, and the criticality. Workloads with higher criticality
 	// are less likely to be throttled.
-	result = t.state.throttle() && rand.Intn(MaxTxThrottlerCriticalityValue) > criticality
+	result = t.state.throttle() && rand.Intn(sqlparser.MaxCriticalityValue) > criticality
 	t.requestsTotal.Add(1)
 	if result {
 		t.requestsThrottled.Add(1)
