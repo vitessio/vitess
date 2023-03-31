@@ -177,7 +177,7 @@ func (e *evalBytes) parseDate() (t time.Time, err error) {
 	case sqltypes.Timestamp, sqltypes.Datetime:
 		t, err = datetime.ParseDateTime(e.string())
 	case sqltypes.Time:
-		t, err = datetime.ParseTime(e.string())
+		t, _, err = datetime.ParseTime(e.string())
 	default:
 		err = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "type %v is not date-like", e.SQLType())
 	}

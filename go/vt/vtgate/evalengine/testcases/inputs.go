@@ -97,6 +97,8 @@ var inputConversions = []string{
 	"18446744073709540000e0",
 	"-18446744073709540000e0",
 	"JSON_OBJECT()", "JSON_ARRAY()",
+	"time '10:04:58'", "time '101:34:58'", "time '5 10:34:58'", "date '2000-01-01'", "timestamp '2000-01-01 12:34:58'",
+	"'10:04:58'", "'101:34:58'", "'5 10:34:58'", "'2000-01-01'", "'2000-01-01 12:34:58'",
 	"cast(0 as json)", "cast(1 as json)",
 	"cast(true as json)", "cast(false as json)",
 	"cast('{}' as json)", "cast('[]' as json)",
@@ -159,7 +161,7 @@ var inputConversionTypes = []string{
 	"BINARY", "BINARY(1)", "BINARY(0)", "BINARY(16)", "BINARY(-1)",
 	"CHAR", "CHAR(1)", "CHAR(0)", "CHAR(16)", "CHAR(-1)",
 	"NCHAR", "NCHAR(1)", "NCHAR(0)", "NCHAR(16)", "NCHAR(-1)",
-	"DECIMAL", "DECIMAL(0, 4)", "DECIMAL(12, 0)", "DECIMAL(12, 4)",
+	"DECIMAL", "DECIMAL(0, 4)", "DECIMAL(12, 0)", "DECIMAL(12, 4)", "DECIMAL(60)",
 	"DOUBLE", "REAL",
 	"SIGNED", "UNSIGNED", "SIGNED INTEGER", "UNSIGNED INTEGER", "JSON",
 }
