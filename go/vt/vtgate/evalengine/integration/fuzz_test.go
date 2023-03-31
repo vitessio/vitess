@@ -95,6 +95,7 @@ var (
 		regexp.MustCompile(`Cannot convert string '(.*?)' from \w+ to \w+`),
 		regexp.MustCompile(`Invalid JSON text in argument (\d+) to function (\w+): (.*?)`),
 		regexp.MustCompile(`Illegal mix of collations`),
+		regexp.MustCompile(`Incorrect (DATE|DATETIME) value`),
 	}
 )
 

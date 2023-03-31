@@ -346,7 +346,7 @@ func valueToEval(value sqltypes.Value, collation collations.TypedCollation) (eva
 		}
 	case sqltypes.IsBinary(tt):
 		return newEvalBinary(value.Raw()), nil
-	case sqltypes.IsDate(tt):
+	case sqltypes.IsDateOrTime(tt):
 		return newEvalRaw(value.Type(), value.Raw(), collationNumeric), nil
 	case sqltypes.IsNull(tt):
 		return nil, nil

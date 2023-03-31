@@ -19,8 +19,10 @@ package evalengine
 import (
 	"math"
 	"strconv"
+	"strings"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/datetime"
 	"vitess.io/vitess/go/mysql/decimal"
 	"vitess.io/vitess/go/mysql/json"
 	"vitess.io/vitess/go/sqltypes"
@@ -107,6 +109,29 @@ func evalToNumeric(e eval) evalNumeric {
 				return newEvalFloat(0)
 			}
 			return hex
+		}
+		switch e.SQLType() {
+		case sqltypes.Date:
+			dt, err := datetime.ParseDate(e.string())
+			if err != nil {
+				return newEvalInt64(0)
+			}
+			i, _ := strconv.ParseInt(dt.Format("20060102"), 10, 64)
+			return newEvalInt64(i)
+		case sqltypes.Timestamp, sqltypes.Datetime:
+			dt, err := datetime.ParseDateTime(e.string())
+			if err != nil {
+				return newEvalInt64(0)
+			}
+			i, _ := strconv.ParseInt(dt.Format("20060102150405"), 10, 64)
+			return newEvalInt64(i)
+		case sqltypes.Time:
+			_, n, err := datetime.ParseTime(e.string())
+			if err != nil {
+				return newEvalInt64(0)
+			}
+			i, _ := strconv.ParseInt(strings.ReplaceAll(n, ":", ""), 10, 64)
+			return newEvalInt64(i)
 		}
 		return &evalFloat{f: parseStringToFloat(e.string())}
 	case *evalJSON:
