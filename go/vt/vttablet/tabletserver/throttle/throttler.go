@@ -81,7 +81,7 @@ func registerThrottlerFlags(fs *pflag.FlagSet) {
 
 	fs.DurationVar(&throttleThreshold, "throttle_threshold", throttleThreshold, "Replication lag threshold for default lag throttling")
 	fs.StringVar(&throttleMetricQuery, "throttle_metrics_query", throttleMetricQuery, "Override default heartbeat/lag metric. Use either `SELECT` (must return single row, single value) or `SHOW GLOBAL ... LIKE ...` queries. Set -throttle_metrics_threshold respectively.")
-	fs.Float64Var(&throttleMetricThreshold, "throttle_metrics_threshold", throttleMetricThreshold, "Override default throttle threshold, respective to -throttle_metrics_query")
+	fs.Float64Var(&throttleMetricThreshold, "throttle_metrics_threshold", throttleMetricThreshold, "Override default throttle threshold, respective to --throttle_metrics_query")
 	fs.BoolVar(&throttlerCheckAsCheckSelf, "throttle_check_as_check_self", throttlerCheckAsCheckSelf, "Should throttler/check return a throttler/check-self result (changes throttler behavior for writes)")
 	fs.BoolVar(&throttlerConfigViaTopo, "throttler-config-via-topo", throttlerConfigViaTopo, "When 'true', read config from topo service and ignore throttle_threshold, throttle_metrics_threshold, throttle_metrics_query, throttle_check_as_check_self")
 }
@@ -163,6 +163,9 @@ type ThrottlerStatus struct {
 	IsOpen    bool
 	IsEnabled bool
 	IsDormant bool
+
+	Query     string
+	Threshold float64
 
 	AggregatedMetrics map[string]base.MetricResult
 	MetricsHealth     base.MetricHealthMap
@@ -256,6 +259,10 @@ func (throttler *Throttler) GetMetricsQuery() string {
 	return throttler.metricsQuery.Load().(string)
 }
 
+func (throttler *Throttler) GetMetricsThreshold() float64 {
+	return throttler.MetricsThreshold.Get()
+}
+
 // initThrottler initializes config
 func (throttler *Throttler) initConfig() {
 	log.Infof("Throttler: initializing config")
@@ -310,8 +317,9 @@ func (throttler *Throttler) WatchSrvKeyspaceCallback(srvks *topodatapb.SrvKeyspa
 	}
 	throttlerConfig := throttler.normalizeThrottlerConfig(srvks.ThrottlerConfig)
 
-	if throttler.isEnabled > 0 {
-		// throttler is running and we should apply the config change through Operate() or else we get into race conditions
+	if throttler.IsEnabled() {
+		// Throttler is running and we should apply the config change through Operate()
+		// or else we get into race conditions.
 		go func() {
 			throttler.throttlerConfigChan <- throttlerConfig
 		}()
@@ -1030,6 +1038,9 @@ func (throttler *Throttler) Status() *ThrottlerStatus {
 		IsOpen:    (atomic.LoadInt64(&throttler.isOpen) > 0),
 		IsEnabled: (atomic.LoadInt64(&throttler.isEnabled) > 0),
 		IsDormant: throttler.isDormant(),
+
+		Query:     throttler.GetMetricsQuery(),
+		Threshold: throttler.GetMetricsThreshold(),
 
 		AggregatedMetrics: throttler.aggregatedMetricsSnapshot(),
 		MetricsHealth:     throttler.metricsHealthSnapshot(),
