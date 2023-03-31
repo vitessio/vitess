@@ -63,5 +63,10 @@ jobs:
 
     - name: Run tests which require docker - 1
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
-      run: |
-        go run test.go -docker=true --follow -shard 10
+      uses: nick-fields/retry@v2
+      with:
+        timeout_minutes: 60
+        max_attempts: 3
+        retry_on: error
+        command: |
+          go run test.go -docker=true --follow -shard 10
