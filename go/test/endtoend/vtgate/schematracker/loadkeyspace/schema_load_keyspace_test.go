@@ -20,6 +20,7 @@ import (
 	"os"
 	"path"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -76,12 +77,26 @@ func TestLoadKeyspaceWithNoTablet(t *testing.T) {
 	for _, vttablet := range clusterInstance.Keyspaces[0].Shards[0].Vttablets {
 		err = vttablet.VttabletProcess.TearDown()
 		require.NoError(t, err)
+		timeout := time.After(1 * time.Minute)
+		down := false
+		for !down {
+			select {
+			case <-timeout:
+				t.Error("Teardown of VTTablet timed-out")
+			case <-time.After(1 * time.Second):
+				down = vttablet.VttabletProcess.GetStatus() == ""
+			}
+		}
 	}
 
 	// Start vtgate with the schema_change_signal flag
 	clusterInstance.VtGateExtraArgs = []string{"--schema_change_signal"}
 	err = clusterInstance.StartVtgate()
 	require.NoError(t, err)
+
+	// After starting VTGate we need to leave enough time for resolveAndLoadKeyspace to reach
+	// the schema tracking timeout (5 seconds).
+	time.Sleep(10 * time.Second)
 
 	// check warning logs
 	logDir := clusterInstance.VtgateProcess.LogDir
