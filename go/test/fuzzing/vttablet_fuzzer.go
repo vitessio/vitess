@@ -357,6 +357,17 @@ func (fs *fuzzStore) callPrimaryPosition() error {
 	return nil
 }
 
+// callDemoteMaster implements a wrapper
+// for fuzzing DemoteMaster
+func (fs *fuzzStore) callDemoteMaster() error {
+	tablet, err := fs.getTablet()
+	if err != nil {
+		return err
+	}
+	_, _ = fs.client.DemoteMaster(context.Background(), tablet)
+	return nil
+}
+
 // callReplicationStatus implements a wrapper
 // for fuzzing ReplicationStatus
 func (fs *fuzzStore) callReplicationStatus() error {
@@ -398,6 +409,17 @@ func (fs *fuzzStore) callDemotePrimary() error {
 		return err
 	}
 	_, _ = fs.client.DemotePrimary(context.Background(), tablet)
+	return nil
+}
+
+// callUndoDemoteMaster implements a wrapper
+// for fuzzing UndoDemoteMaster
+func (fs *fuzzStore) callUndoDemoteMaster() error {
+	tablet, err := fs.getTablet()
+	if err != nil {
+		return err
+	}
+	_ = fs.client.UndoDemoteMaster(context.Background(), tablet)
 	return nil
 }
 
@@ -635,12 +657,16 @@ func (fs *fuzzStore) executeInRandomOrder() {
 			err = fs.callStopReplication()
 		case 5:
 			err = fs.callPrimaryPosition()
+		case 6:
+			err = fs.callDemoteMaster()
 		case 7:
 			err = fs.callReplicationStatus()
 		case 8:
 			err = fs.callPrimaryStatus()
 		case 9:
 			err = fs.callDemotePrimary()
+		case 10:
+			err = fs.callUndoDemoteMaster()
 		case 11:
 			err = fs.callUndoDemotePrimary()
 		case 12:

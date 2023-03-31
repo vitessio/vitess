@@ -730,7 +730,10 @@ func CheckDBstatus(ctx context.Context, t *testing.T, tablet *cluster.Vttablet, 
 // unable to setReplicationSource. Since some tests are used in upgrade-downgrade testing, we need this function to
 // work with different versions of vtctl.
 func SetReplicationSourceFailed(tablet *cluster.Vttablet, prsOut string) bool {
-	return strings.Contains(prsOut, fmt.Sprintf("tablet %s failed to SetReplicationSource", tablet.Alias))
+	if strings.Contains(prsOut, fmt.Sprintf("tablet %s failed to SetReplicationSource", tablet.Alias)) {
+		return true
+	}
+	return strings.Contains(prsOut, fmt.Sprintf("tablet %s failed to SetMaster", tablet.Alias))
 }
 
 // CheckReplicationStatus checks that the replication for sql and io threads is setup as expected
