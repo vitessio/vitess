@@ -68,10 +68,9 @@ describe('Advanced keyspace actions', () => {
 
     describe('Reload Schema', () => {
         it('reloads the schema', async () => {
-            vi.spyOn(global, 'fetch');
+            const response: Promise<Response> = new Promise((resolve) => resolve(new Response('{"ok": "true", "result": {}}', { status: 200 })));
+            vi.spyOn(global, 'fetch').mockReturnValue(response);
 
-            const response = new Response('', { status: 500 });
-            fetch.mockReturnValue(response)
 
             render(
                 <QueryClientProvider client={queryClient}>
