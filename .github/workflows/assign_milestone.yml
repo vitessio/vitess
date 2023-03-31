@@ -1,7 +1,7 @@
 name: Assign Milestone
 
 on:
-  pull_request:
+  pull_request_target:
     types: [opened]
 
 permissions: read-all
@@ -27,4 +27,4 @@ jobs:
 
       - name: Assign Milestone
         run: |
-          gh pr edit ${{ github.event.number }} --milestone "v$(go run ./go/tools/version/version.go)"
+          gh pr edit ${{ github.event.number }} --milestone "v$(sed -n 's/.*versionName.*\"\([[:digit:]\.]*\).*\"/\1/p' ./go/vt/servenv/version.go)"
