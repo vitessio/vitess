@@ -824,33 +824,22 @@ func (v *Value) Date() (time.Time, bool) {
 	if v.t != TypeDate {
 		return time.Time{}, false
 	}
-	t, err := datetime.ParseDate(v.s)
-	if err != nil {
-		return time.Time{}, false
-	}
-	return t, true
+	return datetime.ParseDate(v.s)
 }
 
 func (v *Value) DateTime() (time.Time, bool) {
 	if v.t != TypeDateTime {
 		return time.Time{}, false
 	}
-	t, err := datetime.ParseDateTime(v.s)
-	if err != nil {
-		return time.Time{}, false
-	}
-	return t, true
+	return datetime.ParseDateTime(v.s)
 }
 
 func (v *Value) Time() (time.Time, bool) {
 	if v.t != TypeTime {
 		return time.Time{}, false
 	}
-	t, _, err := datetime.ParseTime(v.s)
-	if err != nil {
-		return time.Time{}, false
-	}
-	return t, true
+	t, _, ok := datetime.ParseTime(v.s, nil)
+	return t, ok
 }
 
 // Object returns the underlying JSON object for the v.

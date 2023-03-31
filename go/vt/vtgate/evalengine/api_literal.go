@@ -23,11 +23,14 @@ import (
 	"strconv"
 	"unicode/utf8"
 
+	"vitess.io/vitess/go/hack"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/datetime"
 	"vitess.io/vitess/go/mysql/decimal"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 // NullExpr is just what you are lead to believe
@@ -103,9 +106,9 @@ func NewLiteralString(val []byte, collation collations.TypedCollation) *Literal 
 
 // NewLiteralDateFromBytes returns a literal expression.
 func NewLiteralDateFromBytes(val []byte) (*Literal, error) {
-	_, err := datetime.ParseDate(string(val))
-	if err != nil {
-		return nil, err
+	_, ok := datetime.ParseDate(string(val))
+	if !ok {
+		return nil, errIncorrectDate("DATE", val)
 	}
 	return &Literal{newEvalRaw(querypb.Type_DATE, val, collationNumeric)}, nil
 }
@@ -113,22 +116,55 @@ func NewLiteralDateFromBytes(val []byte) (*Literal, error) {
 // NewLiteralTimeFromBytes returns a literal expression.
 // it validates the time by parsing it and checking the error.
 func NewLiteralTimeFromBytes(val []byte) (*Literal, error) {
-	_, normalized, err := datetime.ParseTime(string(val))
-	if err != nil {
-		return nil, err
+	_, normalized, ok := datetime.ParseTime(hack.String(val), datetime.Time_hh_mm_ss)
+	if !ok {
+		return nil, errIncorrectDate("TIME", val)
 	}
 	// Convert days to only hours syntax as this is how MySQL normalizes as well.
-	return &Literal{newEvalRaw(querypb.Type_TIME, []byte(normalized), collationNumeric)}, nil
+	return &Literal{newEvalRaw(querypb.Type_TIME, normalized, collationNumeric)}, nil
 }
 
 // NewLiteralDatetimeFromBytes returns a literal expression.
 // it validates the datetime by parsing it and checking the error.
 func NewLiteralDatetimeFromBytes(val []byte) (*Literal, error) {
-	_, err := datetime.ParseDateTime(string(val))
-	if err != nil {
-		return nil, err
+	_, ok := datetime.ParseDateTime(hack.String(val))
+	if !ok {
+		return nil, errIncorrectDate("DATETIME", val)
 	}
 	return &Literal{newEvalRaw(querypb.Type_DATETIME, val, collationNumeric)}, nil
+}
+
+func sanitizeErrorValue(s []byte) []byte {
+	b := make([]byte, 0, len(s)+1)
+	invalid := false // previous byte was from an invalid UTF-8 sequence
+	for i := 0; i < len(s); {
+		c := s[i]
+		if c < utf8.RuneSelf {
+			i++
+			invalid = false
+			if c != 0 {
+				b = append(b, c)
+			}
+			continue
+		}
+		_, wid := utf8.DecodeRune(s[i:])
+		if wid == 1 {
+			i++
+			if !invalid {
+				invalid = true
+				b = append(b, '?')
+			}
+			continue
+		}
+		invalid = false
+		b = append(b, s[i:i+wid]...)
+		i += wid
+	}
+	return b
+}
+
+func errIncorrectDate(date string, in []byte) error {
+	return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongValue, "Incorrect %s value: '%s'", date, sanitizeErrorValue(in))
 }
 
 func parseHexLiteral(val []byte) ([]byte, error) {

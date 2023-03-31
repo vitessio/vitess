@@ -29,8 +29,8 @@ import (
 	"math"
 	"math/bits"
 	"strconv"
-	"strings"
 
+	"vitess.io/vitess/go/hack"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/collations/charset"
 	"vitess.io/vitess/go/mysql/datetime"
@@ -899,9 +899,9 @@ func (asm *assembler) Convert_hex(offset int) {
 func (asm *assembler) Convert_date(offset int) {
 	asm.emit(func(env *ExpressionEnv) int {
 		v := env.vm.stack[env.vm.sp-offset].(*evalBytes)
-		t, err := datetime.ParseDate(v.string())
-		if err != nil {
-			env.vm.err = err
+		t, ok := datetime.ParseDate(v.string())
+		if !ok {
+			env.vm.err = errIncorrectDate("DATE", v.bytes)
 			return 1
 		}
 		i, _ := strconv.ParseInt(t.Format("20060102"), 10, 64)
@@ -913,9 +913,9 @@ func (asm *assembler) Convert_date(offset int) {
 func (asm *assembler) Convert_datetime(offset int) {
 	asm.emit(func(env *ExpressionEnv) int {
 		v := env.vm.stack[env.vm.sp-offset].(*evalBytes)
-		t, err := datetime.ParseDateTime(v.string())
-		if err != nil {
-			env.vm.err = err
+		t, ok := datetime.ParseDateTime(v.string())
+		if !ok {
+			env.vm.err = errIncorrectDate("DATETIME", v.bytes)
 			return 1
 		}
 		i, _ := strconv.ParseInt(t.Format("20060102150405"), 10, 64)
@@ -927,12 +927,12 @@ func (asm *assembler) Convert_datetime(offset int) {
 func (asm *assembler) Convert_time(offset int) {
 	asm.emit(func(env *ExpressionEnv) int {
 		v := env.vm.stack[env.vm.sp-offset].(*evalBytes)
-		_, n, err := datetime.ParseTime(v.string())
-		if err != nil {
-			env.vm.err = err
+		_, n, ok := datetime.ParseTime(v.string(), datetime.Time_hhmmss)
+		if !ok {
+			env.vm.err = errIncorrectDate("TIME", v.bytes)
 			return 1
 		}
-		i, _ := strconv.ParseInt(strings.ReplaceAll(n, ":", ""), 10, 64)
+		i, _ := strconv.ParseInt(hack.String(n), 10, 64)
 		env.vm.stack[env.vm.sp-offset] = env.vm.arena.newEvalInt64(i)
 		return 1
 	}, "CONV TIME(SP-%d), INT64", offset)

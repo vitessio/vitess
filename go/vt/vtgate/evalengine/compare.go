@@ -128,21 +128,22 @@ func validMessage(in string) string {
 // that does not return an error.
 func matchExprWithAnyDateFormat(e eval, errType sqltypes.Type) (t time.Time, err error) {
 	expr := e.(*evalBytes)
-	t, err = datetime.ParseDate(expr.string())
-	if err == nil {
+	var ok bool
+	t, ok = datetime.ParseDate(expr.string())
+	if ok {
 		return
 	}
-	t, err = datetime.ParseDateTime(expr.string())
-	if err == nil {
+	t, ok = datetime.ParseDateTime(expr.string())
+	if ok {
 		return
 	}
 	switch errType {
 	case sqltypes.Date:
-		return t, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongValue, "Incorrect DATE value: '%s'", validMessage(expr.string()))
+		return t, errIncorrectDate("DATE", expr.bytes)
 	case sqltypes.Datetime:
-		return t, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongValue, "Incorrect DATETIME value: '%s'", validMessage(expr.string()))
+		return t, errIncorrectDate("DATETIME", expr.bytes)
 	case sqltypes.Timestamp:
-		return t, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongValue, "Incorrect TIMESTAMP value: '%s'", validMessage(expr.string()))
+		return t, errIncorrectDate("TIMESTAMP", expr.bytes)
 	}
 	return
 }

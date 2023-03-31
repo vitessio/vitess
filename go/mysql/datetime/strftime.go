@@ -25,13 +25,9 @@ import (
 
 func compile(ds map[byte]Spec, p string, exec func(Spec)) error {
 	for l := len(p); l > 0; l = len(p) {
-		// This is a really tight loop, so we don't even calls to
-		// Verbatim() to cuase extra stuff
-		var verbatim verbatimw
-
 		i := strings.IndexByte(p, '%')
 		if i < 0 {
-			exec(&verbatimw{s: p})
+			exec(&verbatim{s: p})
 			break
 		}
 		if i == l-1 {
@@ -42,15 +38,14 @@ func compile(ds map[byte]Spec, p string, exec func(Spec)) error {
 		// we already know that i < l - 1
 		// everything up to the i is verbatim
 		if i > 0 {
-			verbatim.s = p[:i]
-			exec(&verbatimw{s: p[:i]})
+			exec(&verbatim{s: p[:i]})
 			p = p[i:]
 		}
 
 		if spec, ok := ds[p[1]]; ok {
 			exec(spec)
 		} else {
-			exec(&verbatimw{s: p[1:2]})
+			exec(&verbatim{s: p[1:2]})
 		}
 		p = p[2:]
 	}
@@ -66,9 +61,9 @@ func compile(ds map[byte]Spec, p string, exec func(Spec)) error {
 // and reusing it.
 func Format(p string, t time.Time, prec uint8) ([]byte, error) {
 	var dst []byte
-	var ctx = newformatctx(t, prec)
+	var tp = newtimeparts(prec)
 	err := compile(DefaultMySQLStrftime, p, func(a Spec) {
-		dst = a.format(&ctx, dst)
+		dst = a.format(&tp, t, dst)
 	})
 	return dst, err
 }
@@ -99,21 +94,207 @@ func (f *Strftime) Pattern() string {
 }
 
 func (f *Strftime) Format(t time.Time) []byte {
-	return f.format(make([]byte, 0, len(f.pattern)+10), t)
+	var tp timeparts
+	tp.year = -1
+	tp.hour = -1
+	tp.prec = f.prec
+	return f.format(&tp, make([]byte, 0, len(f.pattern)+10), t)
 }
 
 func (f *Strftime) AppendFormat(dst []byte, t time.Time) []byte {
-	return f.format(dst, t)
+	var tp timeparts
+	tp.year = -1
+	tp.hour = -1
+	tp.prec = f.prec
+	return f.format(&tp, dst, t)
 }
 
-func (f *Strftime) format(b []byte, t time.Time) []byte {
-	ctx := newformatctx(t, f.prec)
+func (f *Strftime) format(tp *timeparts, b []byte, t time.Time) []byte {
 	for _, w := range f.compiled {
-		b = w.format(&ctx, b)
+		b = w.format(tp, t, b)
 	}
 	return b
 }
 
 func (f *Strftime) FormatString(tm time.Time) string {
 	return string(f.Format(tm))
+}
+
+func (f *Strftime) parse(s string) (time.Time, string, bool) {
+	var tp timeparts
+	tp.month = -1
+	tp.day = -1
+	tp.yday = -1
+
+	var ok bool
+	for _, w := range f.compiled {
+		s, ok = w.parse(&tp, s)
+		if !ok {
+			return time.Time{}, "", false
+		}
+	}
+	t, ok := tp.toTime(time.Local)
+	return t, s, ok
+}
+
+func (f *Strftime) Parse(s string) (time.Time, bool) {
+	t, s, ok := f.parse(s)
+	return t, ok && len(s) == 0
+}
+
+func (f *Strftime) ParseBestEffort(s string) (time.Time, bool) {
+	t, _, ok := f.parse(s)
+	return t, ok
+}
+
+var Date_YYYY_MM_DD = &Strftime{
+	pattern: "YYYY-MM-DD",
+	compiled: []Spec{
+		spec_Y{},
+		spec_sep('-'),
+		spec_cm{true},
+		spec_sep('-'),
+		spec_e{},
+	},
+}
+
+var Date_YY_MM_DD = &Strftime{
+	pattern: "YY-MM-DD",
+	compiled: []Spec{
+		spec_y{},
+		spec_sep('-'),
+		spec_cm{true},
+		spec_sep('-'),
+		spec_e{},
+	},
+}
+
+var Date_YYYYMMDD = &Strftime{
+	pattern: "YYYYMMDD",
+	compiled: []Spec{
+		spec_Y{},
+		spec_cm{false},
+		spec_e{},
+	},
+}
+
+var Date_YYMMDD = &Strftime{
+	pattern: "YYMMDD",
+	compiled: []Spec{
+		spec_y{},
+		spec_cm{false},
+		spec_e{},
+	},
+}
+
+var DateTime_YYYY_MM_DD_hh_mm_ss = &Strftime{
+	pattern: "YYYY-MM-DD hh:mm:ss",
+	compiled: []Spec{
+		spec_Y{},
+		spec_sep('-'),
+		spec_cm{true},
+		spec_sep('-'),
+		spec_e{},
+		spec_tsep{},
+		spec_Hk{true},
+		spec_sep(':'),
+		spec_i{true},
+		spec_sep(':'),
+		spec_Ss{true, false},
+	},
+}
+
+var DateTime_YY_MM_DD_hh_mm_ss = &Strftime{
+	pattern: "YY-MM-DD hh:mm:ss",
+	compiled: []Spec{
+		spec_y{},
+		spec_sep('-'),
+		spec_cm{true},
+		spec_sep('-'),
+		spec_e{},
+		spec_tsep{},
+		spec_Hk{true},
+		spec_sep(':'),
+		spec_i{true},
+		spec_sep(':'),
+		spec_Ss{true, false},
+	},
+}
+
+var DateTime_YYYYMMDDhhmmss = &Strftime{
+	pattern: "YYYYMMDDhhmmss",
+	compiled: []Spec{
+		spec_Y{},
+		spec_cm{false},
+		spec_e{},
+		spec_Hk{false},
+		spec_i{false},
+		spec_Ss{false, false},
+	},
+}
+
+var DateTime_YYMMDDhhmmss = &Strftime{
+	pattern: "YYMMDDhhmmss",
+	compiled: []Spec{
+		spec_y{},
+		spec_cm{false},
+		spec_e{},
+		spec_Hk{false},
+		spec_i{false},
+		spec_Ss{false, false},
+	},
+}
+
+var Time_hh_mm_ss = &Strftime{
+	pattern: "hh:mm:ss",
+	compiled: []Spec{
+		spec_Hk{true},
+		spec_sep(':'),
+		spec_i{true},
+		spec_sep(':'),
+		spec_Ss{true, true},
+	},
+}
+
+var Time_hhmmss = &Strftime{
+	pattern: "hhmmss",
+	compiled: []Spec{
+		spec_Hk{false},
+		spec_i{false},
+		spec_Ss{false, true},
+	},
+}
+
+func ParseDate(s string) (time.Time, bool) {
+	if len(s) >= 8 {
+		if t, ok := Date_YYYY_MM_DD.Parse(s); ok {
+			return t, true
+		}
+	}
+	if len(s) >= 6 {
+		if t, ok := Date_YY_MM_DD.Parse(s); ok {
+			return t, true
+		}
+		if t, ok := Date_YYYYMMDD.Parse(s); ok {
+			return t, true
+		}
+		return Date_YYMMDD.Parse(s)
+	}
+	return time.Time{}, false
+}
+
+func ParseDateTime(s string) (time.Time, bool) {
+	if t, ok := DateTime_YYYY_MM_DD_hh_mm_ss.Parse(s); ok {
+		return t, true
+	}
+	if t, ok := DateTime_YY_MM_DD_hh_mm_ss.Parse(s); ok {
+		return t, true
+	}
+	if t, ok := DateTime_YYYYMMDDhhmmss.Parse(s); ok {
+		return t, true
+	}
+	if t, ok := DateTime_YYMMDDhhmmss.Parse(s); ok {
+		return t, true
+	}
+	return time.Time{}, false
 }

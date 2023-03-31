@@ -22,6 +22,8 @@ import (
 
 	"vitess.io/vitess/go/mysql/datetime"
 	"vitess.io/vitess/go/sqltypes"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
@@ -157,16 +159,20 @@ func (nz *normalizer) walkUpSelect(cursor *Cursor) bool {
 	return nz.err == nil // only continue if we haven't found any errors
 }
 
-func validateLiteral(node *Literal) (err error) {
+func validateLiteral(node *Literal) error {
+	var ok bool
 	switch node.Type {
 	case DateVal:
-		_, err = datetime.ParseDate(node.Val)
+		_, ok = datetime.ParseDate(node.Val)
 	case TimeVal:
-		_, _, err = datetime.ParseTime(node.Val)
+		_, _, ok = datetime.ParseTime(node.Val, nil)
 	case TimestampVal:
-		_, err = datetime.ParseDateTime(node.Val)
+		_, ok = datetime.ParseDateTime(node.Val)
 	}
-	return err
+	if !ok {
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid literal: %s", node.Val)
+	}
+	return nil
 }
 
 func (nz *normalizer) convertLiteralDedup(node *Literal, cursor *Cursor) {

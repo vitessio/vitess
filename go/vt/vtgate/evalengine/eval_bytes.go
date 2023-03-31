@@ -171,13 +171,23 @@ func (e *evalBytes) truncateInPlace(size int) {
 }
 
 func (e *evalBytes) parseDate() (t time.Time, err error) {
+	var ok bool
 	switch e.SQLType() {
 	case sqltypes.Date:
-		t, err = datetime.ParseDate(e.string())
+		t, ok = datetime.ParseDate(e.string())
+		if !ok {
+			err = errIncorrectDate("DATE", e.bytes)
+		}
 	case sqltypes.Timestamp, sqltypes.Datetime:
-		t, err = datetime.ParseDateTime(e.string())
+		t, ok = datetime.ParseDateTime(e.string())
+		if !ok {
+			err = errIncorrectDate("DATETIME", e.bytes)
+		}
 	case sqltypes.Time:
-		t, _, err = datetime.ParseTime(e.string())
+		t, _, ok = datetime.ParseTime(e.string(), nil)
+		if !ok {
+			err = errIncorrectDate("TIME", e.bytes)
+		}
 	default:
 		err = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "type %v is not date-like", e.SQLType())
 	}

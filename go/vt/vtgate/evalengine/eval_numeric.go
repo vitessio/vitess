@@ -20,8 +20,8 @@ import (
 	"fmt"
 	"math"
 	"strconv"
-	"strings"
 
+	"vitess.io/vitess/go/hack"
 	"vitess.io/vitess/go/mysql/datetime"
 	"vitess.io/vitess/go/mysql/decimal"
 	"vitess.io/vitess/go/mysql/format"
@@ -114,25 +114,25 @@ func evalToNumeric(e eval) evalNumeric {
 		}
 		switch e.SQLType() {
 		case sqltypes.Date:
-			dt, err := datetime.ParseDate(e.string())
-			if err != nil {
+			dt, ok := datetime.ParseDate(e.string())
+			if !ok {
 				return newEvalInt64(0)
 			}
 			i, _ := strconv.ParseInt(dt.Format("20060102"), 10, 64)
 			return newEvalInt64(i)
 		case sqltypes.Timestamp, sqltypes.Datetime:
-			dt, err := datetime.ParseDateTime(e.string())
-			if err != nil {
+			dt, ok := datetime.ParseDateTime(e.string())
+			if !ok {
 				return newEvalInt64(0)
 			}
 			i, _ := strconv.ParseInt(dt.Format("20060102150405"), 10, 64)
 			return newEvalInt64(i)
 		case sqltypes.Time:
-			_, n, err := datetime.ParseTime(e.string())
-			if err != nil {
+			_, n, ok := datetime.ParseTime(e.string(), datetime.Time_hhmmss)
+			if !ok {
 				return newEvalInt64(0)
 			}
-			i, _ := strconv.ParseInt(strings.ReplaceAll(n, ":", ""), 10, 64)
+			i, _ := strconv.ParseInt(hack.String(n), 10, 64)
 			return newEvalInt64(i)
 		}
 		return &evalFloat{f: parseStringToFloat(e.string())}

@@ -34,32 +34,37 @@ func TestParseDate(t *testing.T) {
 		input  string
 		output date
 		err    bool
-	}{{
-		input:  "2022-10-12",
-		output: date{2022, time.October, 12},
-	}, {
-		input:  "22-10-12",
-		output: date{2022, time.October, 12},
-	}, {
-		input:  "20221012",
-		output: date{2022, time.October, 12},
-	}, {
-		input:  "221012",
-		output: date{2022, time.October, 12},
-	}, {
-		input: "2022",
-		err:   true,
-	}}
+	}{
+		{input: "2022-10-12", output: date{2022, time.October, 12}},
+		{input: "22-10-12", output: date{2022, time.October, 12}},
+		{input: "20221012", output: date{2022, time.October, 12}},
+		{input: "221012", output: date{2022, time.October, 12}},
+		{input: "2012-12-31", output: date{2012, time.December, 31}},
+		{input: "2012-1-1", output: date{2012, time.January, 1}},
+		{input: "2012-12-1", output: date{2012, time.December, 1}},
+		{input: "2012-1-11", output: date{2012, time.January, 11}},
+		{input: "12-12-31", output: date{2012, time.December, 31}},
+		{input: "12-1-1", output: date{2012, time.January, 1}},
+		{input: "12-12-1", output: date{2012, time.December, 1}},
+		{input: "12-1-11", output: date{2012, time.January, 11}},
+		{input: "2012/12/31", output: date{2012, time.December, 31}},
+		{input: "2012^12^31", output: date{2012, time.December, 31}},
+		{input: "2012@12@31", output: date{2012, time.December, 31}},
+		{input: "20070523", output: date{2007, time.May, 23}},
+		{input: "070523", output: date{2007, time.May, 23}},
+		{input: "071332", err: true},
+		{input: "2022", err: true},
+	}
 
 	for _, test := range tests {
 		t.Run(test.input, func(t *testing.T) {
-			got, err := ParseDate(test.input)
+			got, ok := ParseDate(test.input)
 			if test.err {
-				assert.Error(t, err)
+				assert.Falsef(t, ok, "expected '%s' to fail to parse", test.input)
 				return
 			}
 
-			require.NoError(t, err)
+			require.True(t, ok)
 			assert.Equal(t, test.output.year, got.Year())
 			assert.Equal(t, test.output.month, got.Month())
 			assert.Equal(t, test.output.day, got.Day())
@@ -152,13 +157,13 @@ func TestParseTime(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.input, func(t *testing.T) {
-			got, norm, err := ParseTime(test.input)
+			got, norm, ok := ParseTime(test.input, Time_hh_mm_ss)
 			if test.err {
-				assert.Errorf(t, err, "got: %s", got)
+				assert.Falsef(t, ok, "did not fail to parse %s", test.input)
 				return
 			}
 
-			require.NoError(t, err)
+			require.True(t, ok)
 			now := time.Now()
 			startOfToday := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
 			expected := startOfToday.Add(time.Duration(test.output.hour)*time.Hour +
@@ -167,7 +172,7 @@ func TestParseTime(t *testing.T) {
 				time.Duration(test.output.nanosecond)*time.Nanosecond)
 
 			assert.Equal(t, expected, got)
-			assert.Equal(t, test.norm, norm)
+			assert.Equal(t, test.norm, string(norm))
 		})
 	}
 }
@@ -186,26 +191,44 @@ func TestParseDateTime(t *testing.T) {
 		input  string
 		output datetime
 		err    bool
-	}{{
-		input:  "2022-10-12 11:12:13",
-		output: datetime{2022, time.October, 12, 11, 12, 13, 0},
-	}, {
-		input:  "2022-10-12 11:12:13.123456",
-		output: datetime{2022, time.October, 12, 11, 12, 13, 123456000},
-	}, {
-		input:  "20221012111213.123456",
-		output: datetime{2022, time.October, 12, 11, 12, 13, 123456000},
-	}}
+	}{
+		{input: "2022-10-12 11:12:13", output: datetime{2022, time.October, 12, 11, 12, 13, 0}},
+		{input: "2022-10-12 11:12:13.123456", output: datetime{2022, time.October, 12, 11, 12, 13, 123456000}},
+		{input: "20221012111213.123456", output: datetime{2022, time.October, 12, 11, 12, 13, 123456000}},
+		{input: "2012-12-31 11:30:45", output: datetime{2012, time.December, 31, 11, 30, 45, 0}},
+		{input: "2012^12^31 11+30+45", output: datetime{2012, time.December, 31, 11, 30, 45, 0}},
+		{input: "2012/12/31 11*30*45", output: datetime{2012, time.December, 31, 11, 30, 45, 0}},
+		{input: "2012@12@31 11^30^45", output: datetime{2012, time.December, 31, 11, 30, 45, 0}},
+		{input: "2012-12-31T11:30:45", output: datetime{2012, time.December, 31, 11, 30, 45, 0}},
+		{input: "20070523091528", output: datetime{2007, time.May, 23, 9, 15, 28, 0}},
+		{input: "070523091528", output: datetime{2007, time.May, 23, 9, 15, 28, 0}},
+
+		{input: "2042-07-07 07:07:07", output: datetime{2042, time.July, 7, 7, 7, 7, 0}},
+		{input: "2042-7-07 07:07:07", output: datetime{2042, time.July, 7, 7, 7, 7, 0}},
+		{input: "2042-07-7 07:07:07", output: datetime{2042, time.July, 7, 7, 7, 7, 0}},
+		{input: "2042-07-07 7:07:07", output: datetime{2042, time.July, 7, 7, 7, 7, 0}},
+		{input: "2042-07-07 07:7:07", output: datetime{2042, time.July, 7, 7, 7, 7, 0}},
+		{input: "2042-07-07 07:07:7", output: datetime{2042, time.July, 7, 7, 7, 7, 0}},
+		{input: "2042-7-7 7:7:7", output: datetime{2042, time.July, 7, 7, 7, 7, 0}},
+
+		{input: "42-07-07 07:07:07", output: datetime{2042, time.July, 7, 7, 7, 7, 0}},
+		{input: "42-7-07 07:07:07", output: datetime{2042, time.July, 7, 7, 7, 7, 0}},
+		{input: "42-07-7 07:07:07", output: datetime{2042, time.July, 7, 7, 7, 7, 0}},
+		{input: "42-07-07 7:07:07", output: datetime{2042, time.July, 7, 7, 7, 7, 0}},
+		{input: "42-07-07 07:7:07", output: datetime{2042, time.July, 7, 7, 7, 7, 0}},
+		{input: "42-07-07 07:07:7", output: datetime{2042, time.July, 7, 7, 7, 7, 0}},
+		{input: "42-7-7 7:7:7", output: datetime{2042, time.July, 7, 7, 7, 7, 0}},
+	}
 
 	for _, test := range tests {
 		t.Run(test.input, func(t *testing.T) {
-			got, err := ParseDateTime(test.input)
+			got, ok := ParseDateTime(test.input)
 			if test.err {
-				assert.Error(t, err)
+				assert.Falsef(t, ok, "did not fail to parse %s", test.input)
 				return
 			}
 
-			require.NoError(t, err)
+			require.True(t, ok)
 			assert.Equal(t, test.output.year, got.Year())
 			assert.Equal(t, test.output.month, got.Month())
 			assert.Equal(t, test.output.day, got.Day())
