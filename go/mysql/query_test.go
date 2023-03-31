@@ -18,6 +18,7 @@ package mysql
 
 import (
 	"fmt"
+	"io"
 	"reflect"
 	"sync"
 	"testing"
@@ -689,4 +690,127 @@ func RowString(row []sqltypes.Value) string {
 		result += fmt.Sprintf(" %v", val)
 	}
 	return result
+}
+
+func checkPrepare(t *testing.T, query string, sConn, cConn *Conn, result *sqltypes.Result) {
+	// TODO: deal with CapabilityClientDeprecateEOF
+}
+
+func WriteMockDataToConn(c *Conn, mockData []byte) error {
+	c.sequence = 0
+	data := c.startEphemeralPacket(len(mockData))
+	copy(data, mockData)
+	return c.writeEphemeralPacket()
+}
+
+func checkExecute(t *testing.T, query string, useCursor byte, sConn, cConn *Conn, result *sqltypes.Result) {
+	t.Logf(query)
+	// Pretend a successful COM_PREPARE was sent to server
+	prepare := &PrepareData{
+		StatementID: 0,
+		PrepareStmt: query,
+	}
+	sConn.PrepareData = make(map[uint32]*PrepareData)
+	sConn.PrepareData[prepare.StatementID] = prepare
+
+	// use go routine to emulate client calls
+	var qr *sqltypes.Result
+	var err error
+
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+
+		// Write a COM_STMT_EXECUTE packet
+		t.Logf("CLIENT SENDING EXECUTE")
+		mockData := []byte{ComStmtExecute, byte(prepare.StatementID), 0, 0, 0, useCursor, 1, 0, 0, 0, 0, 1, 1, 128, 1} // TODO: does the rest of the data matter?
+		if err = WriteMockDataToConn(cConn, mockData); err != nil {
+			t.Fatalf("WriteMockExecuteToConn failed with error: %v", err)
+		}
+
+		// Read Query Results
+		t.Logf("READING QUERY RESULTS")
+		qr, _, _, err = cConn.ReadQueryResult(100, true)
+		if err != nil {
+			t.Fatalf("ReadQueryResult failed with error: %v", err)
+		}
+
+		t.Logf("num fields: %v \nnum rows: %v \nrows affected: %v", len(qr.Fields), len(qr.Rows), qr.RowsAffected)
+	}()
+
+	// handle a single client command
+	handler := testHandler{}
+	if err = sConn.handleNextCommand(&handler); err != nil {
+		t.Fatalf("handleNextComamnd failed with error: %v", err)
+	}
+
+	// wait until client receives the query result back
+	wg.Wait()
+	t.Logf("FIRST COMMAND FINISHED")
+
+	// if not using cursor, we should have results without fetching
+	if useCursor == 0 {
+		if (sConn.StatusFlags & ServerCursorExists) != 0 {
+			t.Fatalf("Server StatusFlag should indicate that Cursor does not exist")
+		}
+
+		if query == "empty result" {
+			return
+		}
+
+		return
+	}
+
+	if (sConn.StatusFlags & ServerCursorExists) == 0 {
+		t.Errorf("Server StatusFlag should indicate that Cursor exists")
+	}
+
+	// if using cursor, we should have client fetch results
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+
+		// Write a COM_STMT_FETCH packet
+		t.Logf("CLIENT SENDING FETCH")
+		mockData := []byte{ComStmtFetch, byte(prepare.StatementID), 0, 0, 0, useCursor, 1, 0, 0, 0, 0, 1, 1, 128, 1}
+		if err = WriteMockDataToConn(cConn, mockData); err != nil {
+			t.Fatalf("WriteMockExecuteToConn failed with error: %v", err)
+		}
+
+		// Read Query Results
+
+		// TODO: need to change expected response for fetch statements
+		t.Logf("CLIENT READING RESULTS")
+		qr, _, _, err = cConn.FetchQueryResult(100, qr.Fields)
+		if err != nil && err != io.EOF {
+			t.Fatalf("FetchQueryResult failed with error: %v", err)
+		}
+
+		t.Logf("num fields: %v \nnum rows: %v \nrows affected: %v", len(qr.Fields), len(qr.Rows), qr.RowsAffected)
+	}()
+
+	// handle a single client command
+	if err = sConn.handleNextCommand(&handler); err != nil {
+		t.Fatalf("handleNextComamnd failed with error: %v", err)
+	}
+
+	// wait until client fetches the rows
+	wg.Wait()
+}
+
+func TestExecuteQueries(t *testing.T) {
+	listener, sConn, cConn := createSocketPair(t)
+	defer func() {
+		listener.Close()
+		sConn.Close()
+		cConn.Close()
+	}()
+
+	sConn.Capabilities = CapabilityClientDeprecateEOF
+	cConn.Capabilities = CapabilityClientDeprecateEOF
+	checkExecute(t, "empty result", 0, sConn, cConn, &sqltypes.Result{})
+	checkExecute(t, "select rows", 0, sConn, cConn, &sqltypes.Result{})
+	checkExecute(t, "empty result", 1, sConn, cConn, &sqltypes.Result{})
+	checkExecute(t, "select rows", 1, sConn, cConn, &sqltypes.Result{})
 }
