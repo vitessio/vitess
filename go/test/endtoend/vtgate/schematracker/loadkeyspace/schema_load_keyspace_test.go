@@ -82,7 +82,7 @@ func TestLoadKeyspaceWithNoTablet(t *testing.T) {
 		for !down {
 			select {
 			case <-timeout:
-				t.Error("Teardown of VTTablet timed-out")
+				t.Error("timeout - teardown of VTTablet")
 			case <-time.After(1 * time.Second):
 				down = vttablet.VttabletProcess.GetStatus() == ""
 			}

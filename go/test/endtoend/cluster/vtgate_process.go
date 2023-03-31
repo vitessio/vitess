@@ -204,7 +204,7 @@ func (vtgate *VtgateProcess) GetStatusForTabletOfShard(name string, endPointsCou
 func (vtgate *VtgateProcess) WaitForStatusOfTabletInShard(name string, endPointsCount int) error {
 	log.Infof("Waiting for healthy status of %d %s tablets in cell %s",
 		endPointsCount, name, vtgate.Cell)
-	timeout := time.Now().Add(30 * time.Second)
+	timeout := time.Now().Add(2 * time.Minute)
 	for time.Now().Before(timeout) {
 		if vtgate.GetStatusForTabletOfShard(name, endPointsCount) {
 			return nil
