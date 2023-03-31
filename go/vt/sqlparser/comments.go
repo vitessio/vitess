@@ -21,6 +21,9 @@ import (
 	"strings"
 	"unicode"
 
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
+
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
@@ -58,6 +61,8 @@ const (
 	// between zero and MaxCriticalityValue.
 	MaxCriticalityValue = 100
 )
+
+var ErrInvalidCriticality = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Invalid criticality value specified in query")
 
 func isNonSpace(r rune) bool {
 	return !unicode.IsSpace(r)
@@ -384,26 +389,26 @@ func AllowScatterDirective(stmt Statement) bool {
 }
 
 // GetCriticalityFromStatement gets the criticality from the provided Statement, using DirectiveCriticality
-func GetCriticalityFromStatement(statement Statement) string {
+func GetCriticalityFromStatement(statement Statement) (string, error) {
 	commentedStatement, ok := statement.(Commented)
 	// This would mean that the statement lacks comments, so we can't obtain the workload from it. Hence default to
 	// empty criticality
 	if !ok {
-		return ""
+		return "", nil
 	}
 
 	directives := commentedStatement.GetParsedComments().Directives()
 	criticality, ok := directives.GetString(DirectiveCriticality, "")
 	if !ok || criticality == "" {
-		return ""
+		return "", nil
 	}
 
 	intCriticality, err := strconv.Atoi(criticality)
 	if err != nil || intCriticality < 0 || intCriticality > MaxCriticalityValue {
-		return ""
+		return "", ErrInvalidCriticality
 	}
 
-	return criticality
+	return criticality, nil
 }
 
 // Consolidator returns the consolidator option.
