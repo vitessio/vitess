@@ -491,22 +491,6 @@ func (c *Conn) ReadQueryResult(maxrows int, wantfields bool) (result *sqltypes.R
 // FetchQueryResult gets the reset set from the last executed query.
 func (c *Conn) FetchQueryResult(maxrows int, fields []*querypb.Field) (result *sqltypes.Result, more bool, warnings uint16, err error) {
 	result = &sqltypes.Result{}
-	if c.Capabilities&CapabilityClientDeprecateEOF == 0 {
-		// EOF is only present here if it's not deprecated.
-		data, err := c.readEphemeralPacket()
-		if err != nil {
-			return nil, false, 0, NewSQLError(CRServerLost, SSUnknownSQLState, "%v", err)
-		}
-		if isEOFPacket(data) {
-			c.recycleReadPacket()
-		} else if isErrorPacket(data) {
-			defer c.recycleReadPacket()
-			return nil, false, 0, ParseErrorPacket(data)
-		} else {
-			defer c.recycleReadPacket()
-			return nil, false, 0, vterrors.Errorf(vtrpc.Code_INTERNAL, "unexpected packet after fields: %v", data)
-		}
-	}
 
 	// read each row until EOF or OK packet.
 	for {

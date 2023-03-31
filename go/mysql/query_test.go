@@ -807,6 +807,11 @@ func TestExecuteQueries(t *testing.T) {
 		cConn.Close()
 	}()
 
+	checkExecute(t, "empty result", 0, sConn, cConn, &sqltypes.Result{})
+	checkExecute(t, "select rows", 0, sConn, cConn, &sqltypes.Result{})
+	checkExecute(t, "empty result", 1, sConn, cConn, &sqltypes.Result{})
+	checkExecute(t, "select rows", 1, sConn, cConn, &sqltypes.Result{})
+
 	sConn.Capabilities = CapabilityClientDeprecateEOF
 	cConn.Capabilities = CapabilityClientDeprecateEOF
 	checkExecute(t, "empty result", 0, sConn, cConn, &sqltypes.Result{})

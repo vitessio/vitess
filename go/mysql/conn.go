@@ -1169,6 +1169,7 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 		}
 
 		timings.Record(queryTimingKey, queryStart)
+		log.Error("SERVER EXECUTE FLUSHING")
 		if err := c.flush(); err != nil {
 			log.Errorf("Conn %v: Flush() failed: %v", c.ID(), err)
 			return err
@@ -1599,6 +1600,12 @@ func (c *Conn) execPrepareStatement(stmtID uint32, cursorType byte, handler Hand
 			err = c.writeOKPacket(qr.RowsAffected, qr.InsertID, c.StatusFlags, 0)
 		} else {
 			err = c.writeFields(qr)
+			if c.Capabilities&CapabilityClientDeprecateEOF == 0 {
+				// With CapabilityClientDeprecateEOF, we do not send this EOF.
+				if err = c.writeEOFPacket(c.StatusFlags, 0); err != nil {
+					return err
+				}
+			}
 		}
 
 		// Cache query results to be written upon ComStmtFetch
