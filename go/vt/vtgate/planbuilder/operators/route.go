@@ -517,8 +517,17 @@ func (r *Route) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Ex
 	return r, err
 }
 
-func (r *Route) AddColumn(ctx *plancontext.PlanningContext, e sqlparser.Expr) (int, error) {
-	return r.Source.AddColumn(ctx, e)
+func (r *Route) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, reuseCol bool) (ops.Operator, int, error) {
+	newSrc, offset, err := r.Source.AddColumn(ctx, expr, reuseCol)
+	if err != nil {
+		return nil, 0, err
+	}
+	r.Source = newSrc
+	return r, offset, nil
+}
+
+func (r *Route) GetColumns() ([]sqlparser.Expr, error) {
+	return r.Source.GetColumns()
 }
 
 // TablesUsed returns tables used by MergedWith routes, which are not included

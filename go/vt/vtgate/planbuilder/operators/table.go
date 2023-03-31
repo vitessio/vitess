@@ -17,6 +17,7 @@ limitations under the License.
 package operators
 
 import (
+	"vitess.io/vitess/go/slices2"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
@@ -34,7 +35,7 @@ type (
 		noInputs
 	}
 	ColNameColumns interface {
-		GetColumns() []*sqlparser.ColName
+		GetColNames() []*sqlparser.ColName
 		AddCol(*sqlparser.ColName)
 	}
 )
@@ -67,11 +68,20 @@ func (to *Table) AddPredicate(_ *plancontext.PlanningContext, expr sqlparser.Exp
 	return newFilter(to, expr), nil
 }
 
-func (to *Table) AddColumn(_ *plancontext.PlanningContext, e sqlparser.Expr) (int, error) {
-	return addColumn(to, e)
+func (to *Table) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, reuseCol bool) (ops.Operator, int, error) {
+	offset, err := addColumn(ctx, to, expr.Expr, reuseCol)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	return to, offset, nil
 }
 
-func (to *Table) GetColumns() []*sqlparser.ColName {
+func (to *Table) GetColumns() ([]sqlparser.Expr, error) {
+	return slices2.Map(to.Columns, colNameToExpr), nil
+}
+
+func (to *Table) GetColNames() []*sqlparser.ColName {
 	return to.Columns
 }
 func (to *Table) AddCol(col *sqlparser.ColName) {
@@ -85,16 +95,15 @@ func (to *Table) TablesUsed() []string {
 	return SingleQualifiedIdentifier(to.VTable.Keyspace, to.VTable.Name)
 }
 
-func addColumn(op ColNameColumns, e sqlparser.Expr) (int, error) {
+func addColumn(ctx *plancontext.PlanningContext, op ColNameColumns, e sqlparser.Expr, reuseCol bool) (int, error) {
 	col, ok := e.(*sqlparser.ColName)
 	if !ok {
 		return 0, vterrors.VT13001("cannot push this expression to a table/vindex")
 	}
-	cols := op.GetColumns()
-	for idx, column := range cols {
-		if col.Name.Equal(column.Name) {
-			return idx, nil
-		}
+	sqlparser.RemoveKeyspaceFromColName(col)
+	cols := op.GetColNames()
+	if offset, found := canReuseColumn(ctx, reuseCol, cols, e); found {
+		return offset, nil
 	}
 	offset := len(cols)
 	op.AddCol(col)

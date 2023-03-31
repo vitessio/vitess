@@ -11,6 +11,7 @@
   - **[New stats](#new-stats)**
     - [Detailed backup and restore stats](#detailed-backup-and-restore-stats)
     - [VTtablet Error count with code ](#vttablet-error-count-with-code)
+    - [VReplication stream status for Prometheus](#vreplication-stream-status-for-prometheus)
   - **[Deprecations and Deletions](#deprecations-and-deletions)**
     - [Deprecated Stats](#deprecated-stats)
   - **[VTTablet](#vttablet)**
@@ -201,6 +202,24 @@ Some notes to help understand these metrics:
 
 We are introducing new error counter `QueryErrorCountsWithCode` for VTTablet. It is similar to existing [QueryErrorCounts](https://github.com/vitessio/vitess/blob/main/go/vt/vttablet/tabletserver/query_engine.go#L174) except it contains errorCode as additional dimension.
 We will deprecate `QueryErrorCounts` in v18.
+
+#### <a id="vreplication-stream-status-for-prometheus"/> VReplication stream status for Prometheus
+
+VReplication publishes the `VReplicationStreamState` status which reports the state of VReplication streams. For example, here's what it looks like in the local cluster example after the MoveTables step:
+
+```
+"VReplicationStreamState": {
+  "commerce2customer.1": "Running"
+}
+```
+
+Prior to v17, this data was not available via the Prometheus backend. In v17, workflow states are also published as a Prometheus gauge with a `state` label and a value of `1.0`. For example:
+
+```
+# HELP vttablet_v_replication_stream_state State of vreplication workflow
+# TYPE vttablet_v_replication_stream_state gauge
+vttablet_v_replication_stream_state{counts="1",state="Running",workflow="commerce2customer"} 1
+```
 
 ## <a id="deprecations-and-deletions"/> Deprecations and Deletions
 
