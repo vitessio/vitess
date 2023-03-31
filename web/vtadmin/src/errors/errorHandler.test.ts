@@ -20,34 +20,8 @@ import * as errorHandlers from './errorHandlers';
 import { describe, it, expect, beforeAll, afterEach, afterAll, vi } from 'vitest';
 import { Response } from 'cross-fetch'
 
-// Since vtadmin uses import.meta.env variables quite a bit, we need to
-// do a bit of a dance to clear them out between test runs.
-const ORIGINAL_PROCESS_ENV = import.meta.env;
-const TEST_PROCESS_ENV = {
-    ...import.meta.env,
-    VITE_VTADMIN_API_ADDRESS: '',
-};
-
-beforeAll(() => {
-    // TypeScript can get a little cranky with the automatic
-    // string/boolean type conversions, hence this cast.
-    import.meta.env = { ...TEST_PROCESS_ENV } as NodeJS.ProcessEnv;
-});
-
-afterEach(() => {
-    // Reset the import.meta.env to clear out any changes made in the tests.
-    import.meta.env = { ...TEST_PROCESS_ENV } as NodeJS.ProcessEnv;
-
-    vi.restoreAllMocks();
-});
-
-afterAll(() => {
-    import.meta.env = { ...ORIGINAL_PROCESS_ENV };
-});
-
 describe('errorHandler', () => {
     let mockErrorHandler: ErrorHandler;
-    let mockEnv: NodeJS.ProcessEnv;
 
     beforeEach(() => {
         mockErrorHandler = {
@@ -57,11 +31,6 @@ describe('errorHandler', () => {
         };
 
         vi.spyOn(errorHandlers, 'getHandlers').mockReturnValue([mockErrorHandler]);
-
-        mockEnv = {
-            VITE_VTADMIN_API_ADDRESS: 'http://example.com',
-        } as NodeJS.ProcessEnv;
-        import.meta.env = mockEnv;
     });
 
     describe('initialize', () => {
@@ -77,7 +46,7 @@ describe('errorHandler', () => {
             errorHandler.notify(err);
 
             expect(mockErrorHandler.notify).toHaveBeenCalledTimes(1);
-            expect(mockErrorHandler.notify).toHaveBeenCalledWith(err, mockEnv, {
+            expect(mockErrorHandler.notify).toHaveBeenCalledWith(err, { VITE_VTADMIN_API_ADDRESS: "http://test-api.com"}, {
                 errorMetadata: {},
             });
         });
@@ -88,7 +57,7 @@ describe('errorHandler', () => {
             errorHandler.notify(err, { goodbye: 'moon' });
 
             expect(mockErrorHandler.notify).toHaveBeenCalledTimes(1);
-            expect(mockErrorHandler.notify).toHaveBeenCalledWith(err, mockEnv, {
+            expect(mockErrorHandler.notify).toHaveBeenCalledWith(err, { VITE_VTADMIN_API_ADDRESS: "http://test-api.com"}, {
                 errorMetadata: {
                     fetchResponse: {
                         ok: false,

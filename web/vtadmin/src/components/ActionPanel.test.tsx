@@ -24,19 +24,7 @@ import { describe, it, expect, beforeAll, vi } from 'vitest';
 
 import ActionPanel, { ActionPanelProps } from './ActionPanel';
 
-const ORIGINAL_PROCESS_ENV = import.meta.env;
-const TEST_PROCESS_ENV = {
-    ...import.meta.env,
-    VITE_VTADMIN_API_ADDRESS: '',
-};
-
 describe('ActionPanel', () => {
-    const server = setupServer(
-        rest.post('/api/test', (req, res, ctx) => {
-            return res(ctx.json({ ok: true }));
-        })
-    );
-
     const queryClient = new QueryClient({
         defaultOptions: { queries: { retry: false } },
     });
@@ -46,32 +34,23 @@ describe('ActionPanel', () => {
      * that is _within_ the context of a QueryClientProvider. This Wrapper component
      * provides such a function and should be `render`ed in the context QueryClientProvider.
      */
-    const Wrapper: React.FC<Omit<ActionPanelProps, 'mutation'>> = (props) => {
-        const mutation = useMutation(() => fetch('/api/test', { method: 'post' }));
+    const Wrapper: React.FC<ActionPanelProps & { url: string }> = (props) => {
+        const mutation = useMutation(() => fetch(new URL(props["url"]), { method: 'post' }), { onError: (error) => {console.log("ERROR: ", error)}});
         return <ActionPanel {...props} mutation={mutation as any} />;
     };
-
-    beforeAll(() => {
-        import.meta.env = { ...TEST_PROCESS_ENV } as NodeJS.ProcessEnv;
-        server.listen();
-    });
-
-    afterEach(() => {
-        import.meta.env = { ...TEST_PROCESS_ENV } as NodeJS.ProcessEnv;
-        vi.clearAllMocks();
-    });
-
-    afterAll(() => {
-        import.meta.env = { ...ORIGINAL_PROCESS_ENV };
-        server.close();
-    });
 
     it('initiates the mutation', async () => {
         vi.spyOn(global, 'fetch');
 
+        const url = `${import.meta.env.VITE_VTADMIN_API_ADDRESS}/api/test`
+        global.server.use(rest.post(url, (req, res, ctx) => {
+            return res(ctx.json({ ok: true }));
+        }))
+
         render(
             <QueryClientProvider client={queryClient}>
                 <Wrapper
+                    url={url}
                     confirmationValue="zone1-101"
                     description="Do an action."
                     documentationLink="https://test.com"
@@ -97,7 +76,7 @@ describe('ActionPanel', () => {
         expect(button).toHaveTextContent('Doing Action...');
 
         expect(global.fetch).toHaveBeenCalledTimes(1);
-        expect(global.fetch).toHaveBeenCalledWith('/api/test', { method: 'post' });
+        expect(global.fetch).toHaveBeenCalledWith(new URL(url), { method: 'post' });
 
         // Wait for API request to complete
         await waitFor(() => expect(button).toHaveTextContent('Do Action'));

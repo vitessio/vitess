@@ -47,6 +47,7 @@ export const vtfetch = async (endpoint: string, options: RequestInit = {}): Prom
         let response = null;
         try {
             response = await global.fetch(url, opts);
+            console.log("RESPONSE ", response)
         } catch (error) {
           console.log("URL: ", url)
           console.log("ERROR: ", error)
