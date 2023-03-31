@@ -491,6 +491,7 @@ func (c *Conn) ReadPacket() ([]byte, error) {
 	if err != nil {
 		return nil, NewSQLError(CRServerLost, SSUnknownSQLState, "%v", err)
 	}
+	log.Errorf("ReadPacket: %v", result)
 	return result, err
 }
 
@@ -503,6 +504,7 @@ func (c *Conn) ReadPacket() ([]byte, error) {
 func (c *Conn) writePacket(data []byte) error {
 	index := 0
 	length := len(data)
+	log.Errorf("writePacket: %v", data)
 
 	w := c.getWriter()
 
@@ -1119,13 +1121,14 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 			return err
 		}
 	case ComStmtExecute:
+		log.Errorf("RECEIVED EXECUTE")
 		// flush is called at the end of this block.
 		// To simplify error handling, we do not
 		// encapsulate it with a defer'd func()
 		c.startWriterBuffering()
 
 		// outstanding cursor, error
-		if c.cs != nil {
+		if c.cs != nil && c.cs.pending != nil {
 			log.Error("Received ComStmtExecute with outstanding cursor")
 			if werr := c.writeErrorPacket(ERUnknownComError, SSUnknownComError, "error handling packet: %v", data); werr != nil {
 				log.Error("Error writing error packet to client: %v", werr)
@@ -1243,6 +1246,7 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 			return err
 		}
 	case ComStmtFetch:
+		log.Errorf("RECEIVED FETCH")
 		c.startWriterBuffering()
 		endFetch := func() error {
 			if err = c.writeEndResult(false, 0, 0, handler.WarningCount(c)); err != nil {
@@ -1376,6 +1380,7 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 
 // writeNumRows writes the specified number of rows to the handler, the end result, and flushes
 func (c *Conn) writeNumRows(numRows int) (err error) {
+	log.Errorf("WRITING %d ROWS", numRows)
 	origRows := c.cs.pending.Rows
 	c.cs.pending.Rows = c.cs.pending.Rows[:numRows]
 	if err = c.writeBinaryRows(c.cs.pending); err != nil {

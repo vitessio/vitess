@@ -219,7 +219,36 @@ func (th *testHandler) ComPrepare(c *Conn, query string) ([]*querypb.Field, erro
 }
 
 func (th *testHandler) ComStmtExecute(c *Conn, prepare *PrepareData, callback func(*sqltypes.Result) error) error {
-	return nil
+	// TODO: depending on what query is, throw an error or pretend to do something else
+	switch prepare.PrepareStmt {
+	case "empty result":
+		// create a query result with fields and no rows
+		res := &sqltypes.Result{
+			Fields: []*querypb.Field{
+				{
+					Name: "id",
+					Type: querypb.Type_INT32,
+				},
+				{
+					Name: "name",
+					Type: querypb.Type_VARCHAR,
+				},
+				{
+					Name: "name2",
+					Type: querypb.Type_VARCHAR,
+				},
+			},
+			Rows: [][]sqltypes.Value{},
+			RowsAffected: 0,
+		}
+		return callback(res)
+	case "select rows":
+		return callback(selectRowsResult)
+	case "batch":
+		panic("how to test batch limit")
+	default:
+		return fmt.Errorf("unrecorgnized test command")
+	}
 }
 
 func (th *testHandler) ComResetConnection(c *Conn) {

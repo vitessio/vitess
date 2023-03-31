@@ -220,7 +220,7 @@ const (
 	// ComStmtReset is COM_STMT_RESET
 	ComStmtReset = 0x1a
 
-	//ComStmtFetch is COM_STMT_FETCH
+	// ComStmtFetch is COM_STMT_FETCH
 	ComStmtFetch = 0x1c
 
 	// ComSetOption is COM_SET_OPTION
