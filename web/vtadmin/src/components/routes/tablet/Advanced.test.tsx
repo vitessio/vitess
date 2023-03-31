@@ -64,25 +64,25 @@ const renderHelper = (children: React.ReactNode) => {
     );
 };
 
-const ORIGINAL_PROCESS_ENV = process.env;
+const ORIGINAL_PROCESS_ENV = import.meta.env;
 const TEST_PROCESS_ENV = {
-    ...process.env,
+    ...import.meta.env,
     VITE_VTADMIN_API_ADDRESS: '',
 };
 
 describe('Advanced', () => {
     beforeAll(() => {
-        process.env = { ...TEST_PROCESS_ENV } as NodeJS.ProcessEnv;
+        import.meta.env = { ...TEST_PROCESS_ENV } as NodeJS.ProcessEnv;
         vi.spyOn(global, 'fetch');
     });
 
     beforeEach(() => {
-        process.env = { ...TEST_PROCESS_ENV } as NodeJS.ProcessEnv;
+        import.meta.env = { ...TEST_PROCESS_ENV } as NodeJS.ProcessEnv;
         vi.clearAllMocks();
     });
 
     afterAll(() => {
-        process.env = { ...ORIGINAL_PROCESS_ENV };
+        import.meta.env = { ...ORIGINAL_PROCESS_ENV };
     });
 
     describe('Advanced tablet actions', () => {

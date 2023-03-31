@@ -24,9 +24,9 @@ import { vtadmin } from '../../../proto/vtadmin';
 import { describe, it, expect, vi } from 'vitest';
 import { Response } from 'cross-fetch'
 
-const ORIGINAL_PROCESS_ENV = process.env;
+const ORIGINAL_PROCESS_ENV = import.meta.env;
 const TEST_PROCESS_ENV = {
-    ...process.env,
+    ...import.meta.env,
     VITE_VTADMIN_API_ADDRESS: '',
 };
 
@@ -52,17 +52,17 @@ describe('Advanced keyspace actions', () => {
     });
 
     beforeAll(() => {
-        process.env = { ...TEST_PROCESS_ENV } as NodeJS.ProcessEnv;
+        import.meta.env = { ...TEST_PROCESS_ENV } as NodeJS.ProcessEnv;
         server.listen();
     });
 
     beforeEach(() => {
-        process.env = { ...TEST_PROCESS_ENV } as NodeJS.ProcessEnv;
+        import.meta.env = { ...TEST_PROCESS_ENV } as NodeJS.ProcessEnv;
         vi.clearAllMocks();
     });
 
     afterAll(() => {
-        process.env = { ...ORIGINAL_PROCESS_ENV };
+        import.meta.env = { ...ORIGINAL_PROCESS_ENV };
         server.close();
     });
 

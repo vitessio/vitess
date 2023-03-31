@@ -29,70 +29,17 @@ import { describe, it, expect, vi } from 'vitest';
 
 vi.mock('../errors/errorHandler');
 
-// This test suite uses Mock Service Workers (https://github.com/mswjs/msw)
-// to mock HTTP responses from vtadmin-api.
-//
-// MSW lets us intercept requests at the network level. This decouples the tests from
-// whatever particular HTTP fetcher interface we are using, and obviates the need
-// to mock `fetch` directly (by using a library like jest-fetch-mock, for example).
-//
-// MSW gives us full control over the response, including edge cases like errors,
-// malformed payloads, and timeouts.
-//
-// The big downside to mocking or "faking" APIs like vtadmin is that
-// we end up re-implementing some (or all) of vtadmin-api in our test environment.
-// It is, unfortunately, impossible to completely avoid this kind of duplication
-// unless we solely use e2e tests (which have their own trade-offs).
-//
-// That said, our use of protobufjs to validate and strongly type HTTP responses
-// means our fake is more robust than it would be otherwise. Since we are using
-// the exact same protos in our fake as in our real vtadmin-api server, we're guaranteed
-// to have type parity.
-const server = setupServer();
-
 // mockServerJson configures an HttpOkResponse containing the given `json`
 // for all requests made against the given `endpoint`.
-const mockServerJson = (endpoint: string, json: object) => {
-    server.use(rest.get(endpoint, (req, res, ctx) => res(ctx.json(json))));
+const mockServerJson = (endpoint: string, json: object, status: number = 200) => {
+    const apiAddr = import.meta.env.VITE_VTADMIN_API_ADDRESS
+    global.server.use(rest.get(`${apiAddr}${endpoint}`, (req, res, ctx) => res(ctx.status(status), ctx.json(json))));
 };
-
-// Since vtadmin uses process.env variables quite a bit, we need to
-// do a bit of a dance to clear them out between test runs.
-const ORIGINAL_PROCESS_ENV = process.env;
-const TEST_PROCESS_ENV = {
-    ...process.env,
-    VITE_VTADMIN_API_ADDRESS: '',
-};
-
-beforeAll(() => {
-    // TypeScript can get a little cranky with the automatic
-    // string/boolean type conversions, hence this cast.
-    process.env = { ...TEST_PROCESS_ENV } as NodeJS.ProcessEnv;
-
-    // Enable API mocking before tests.
-    server.listen();
-});
-
-afterEach(() => {
-    // Reset the process.env to clear out any changes made in the tests.
-    process.env = { ...TEST_PROCESS_ENV } as NodeJS.ProcessEnv;
-
-    vi.restoreAllMocks();
-
-    // Reset any runtime request handlers we may add during the tests.
-    server.resetHandlers();
-});
-
-afterAll(() => {
-    process.env = { ...ORIGINAL_PROCESS_ENV };
-
-    // Disable API mocking after the tests are done.
-    server.close();
-});
 
 describe('api/http', () => {
     describe('vtfetch', () => {
         it('parses and returns JSON, given an HttpOkResponse response', async () => {
+            
             const endpoint = `/api/tablets`;
             const response = { ok: true, result: null };
             mockServerJson(endpoint, response);
@@ -112,7 +59,7 @@ describe('api/http', () => {
             };
 
             // See https://mswjs.io/docs/recipes/mocking-error-responses
-            server.use(rest.get(endpoint, (req, res, ctx) => res(ctx.status(500), ctx.json(response))));
+            mockServerJson(endpoint, response, 500)
 
             expect.assertions(5);
 
@@ -132,9 +79,10 @@ describe('api/http', () => {
         });
 
         it('throws an error on malformed JSON', async () => {
+            errorHandler.notify.mockReset()
             const endpoint = `/api/tablets`;
-            server.use(
-                rest.get(endpoint, (req, res, ctx) =>
+            global.server.use(
+                rest.get(`${import.meta.env.VITE_VTADMIN_API_ADDRESS}${endpoint}`, (req, res, ctx) =>
                     res(ctx.status(504), ctx.body('<html><head><title>504 Gateway Time-out</title></head></html>'))
                 )
             );
@@ -147,7 +95,7 @@ describe('api/http', () => {
                 let e: MalformedHttpResponseError = error as MalformedHttpResponseError;
                 /* eslint-disable jest/no-conditional-expect */
                 expect(e.name).toEqual(MALFORMED_HTTP_RESPONSE_ERROR);
-                expect(e.message).toEqual('[status 504] /api/tablets: Unexpected token < in JSON at position 0');
+                expect(e.message).toEqual('[status 504] /api/tablets: invalid json response body at http://test-api.com/api/tablets reason: Unexpected token < in JSON at position 0');
 
                 expect(errorHandler.notify).toHaveBeenCalledTimes(1);
                 expect(errorHandler.notify).toHaveBeenCalledWith(e);
@@ -173,7 +121,7 @@ describe('api/http', () => {
 
         describe('credentials', () => {
             it('uses the VITE_FETCH_CREDENTIALS env variable if specified', async () => {
-                process.env.VITE_FETCH_CREDENTIALS = 'include';
+                import.meta.env.VITE_FETCH_CREDENTIALS = 'include';
 
                 vi.spyOn(global, 'fetch');
 
@@ -183,7 +131,7 @@ describe('api/http', () => {
 
                 await api.vtfetch(endpoint);
                 expect(global.fetch).toHaveBeenCalledTimes(1);
-                expect(global.fetch).toHaveBeenCalledWith(endpoint, {
+                expect(global.fetch).toHaveBeenCalledWith(`${import.meta.env.VITE_VTADMIN_API_ADDRESS}${endpoint}`, {
                     credentials: 'include',
                 });
 
@@ -199,7 +147,7 @@ describe('api/http', () => {
 
                 await api.vtfetch(endpoint);
                 expect(global.fetch).toHaveBeenCalledTimes(1);
-                expect(global.fetch).toHaveBeenCalledWith(endpoint, {
+                expect(global.fetch).toHaveBeenCalledWith(`${import.meta.env.VITE_VTADMIN_API_ADDRESS}${endpoint}`, {
                     credentials: undefined,
                 });
 

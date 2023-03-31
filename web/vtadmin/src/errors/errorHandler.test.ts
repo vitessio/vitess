@@ -20,29 +20,29 @@ import * as errorHandlers from './errorHandlers';
 import { describe, it, expect, beforeAll, afterEach, afterAll, vi } from 'vitest';
 import { Response } from 'cross-fetch'
 
-// Since vtadmin uses process.env variables quite a bit, we need to
+// Since vtadmin uses import.meta.env variables quite a bit, we need to
 // do a bit of a dance to clear them out between test runs.
-const ORIGINAL_PROCESS_ENV = process.env;
+const ORIGINAL_PROCESS_ENV = import.meta.env;
 const TEST_PROCESS_ENV = {
-    ...process.env,
+    ...import.meta.env,
     VITE_VTADMIN_API_ADDRESS: '',
 };
 
 beforeAll(() => {
     // TypeScript can get a little cranky with the automatic
     // string/boolean type conversions, hence this cast.
-    process.env = { ...TEST_PROCESS_ENV } as NodeJS.ProcessEnv;
+    import.meta.env = { ...TEST_PROCESS_ENV } as NodeJS.ProcessEnv;
 });
 
 afterEach(() => {
-    // Reset the process.env to clear out any changes made in the tests.
-    process.env = { ...TEST_PROCESS_ENV } as NodeJS.ProcessEnv;
+    // Reset the import.meta.env to clear out any changes made in the tests.
+    import.meta.env = { ...TEST_PROCESS_ENV } as NodeJS.ProcessEnv;
 
     vi.restoreAllMocks();
 });
 
 afterAll(() => {
-    process.env = { ...ORIGINAL_PROCESS_ENV };
+    import.meta.env = { ...ORIGINAL_PROCESS_ENV };
 });
 
 describe('errorHandler', () => {
@@ -61,7 +61,7 @@ describe('errorHandler', () => {
         mockEnv = {
             VITE_VTADMIN_API_ADDRESS: 'http://example.com',
         } as NodeJS.ProcessEnv;
-        process.env = mockEnv;
+        import.meta.env = mockEnv;
     });
 
     describe('initialize', () => {
@@ -105,7 +105,7 @@ describe('errorHandler', () => {
         });
 
         it('only includes santizied environment variables', () => {
-            process.env = {
+            import.meta.env = {
                 VITE_VTADMIN_API_ADDRESS: 'http://not-secret.example.com',
                 VITE_BUGSNAG_API_KEY: 'secret',
             } as NodeJS.ProcessEnv;
