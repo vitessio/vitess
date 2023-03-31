@@ -99,13 +99,6 @@ jobs:
       run: |
         sudo sysctl -w net.ipv4.ip_local_port_range="22768 65535"
 
-    # TEMPORARY WHILE GITHUB FIXES THIS https://github.com/actions/virtual-environments/issues/3185
-    - name: Add the current IP address, long hostname and short hostname record to /etc/hosts file
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
-      run: |
-        echo -e "$(ip addr show eth0 | grep "inet\b" | awk '{print $2}' | cut -d/ -f1)\t$(hostname -f) $(hostname -s)" | sudo tee -a /etc/hosts
-    # DON'T FORGET TO REMOVE CODE ABOVE WHEN ISSUE IS ADRESSED!
-
     - name: Get base dependencies
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       run: |
