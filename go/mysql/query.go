@@ -581,7 +581,6 @@ func (c *Conn) readComQueryResponse() (affectedRows uint64, lastInsertID uint64,
 		return 0, 0, 0, false, 0, vterrors.Errorf(vtrpc.Code_UNIMPLEMENTED, "not implemented")
 	}
 	n, pos, ok := readLenEncInt(data, 0)
-	log.Errorf("readLenEncInt: %v", n)
 	if !ok {
 		return 0, 0, 0, false, 0, NewSQLError(CRMalformedPacket, SSUnknownSQLState, "cannot get column number")
 	}
