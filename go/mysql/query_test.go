@@ -725,7 +725,7 @@ func checkExecute(t *testing.T, sConn, cConn *Conn, test testExec) {
 		defer wg.Done()
 
 		// Write a COM_STMT_EXECUTE packet
-		mockData := []byte{ComStmtExecute, byte(prepare.StatementID), 0, 0, 0, test.useCursor, 1, 0, 0, 0, 0, 1, 1, 128, 1} // TODO: does the rest of the data matter?
+		mockData := []byte{ComStmtExecute, byte(prepare.StatementID), 0, 0, 0, test.useCursor, 1, 0, 0, 0, 0, 1, 1, 128, 1}
 		if err = WriteMockDataToConn(cConn, mockData); err != nil {
 			t.Fatalf("WriteMockExecuteToConn failed with error: %v", err)
 		}
@@ -766,6 +766,7 @@ func checkExecute(t *testing.T, sConn, cConn *Conn, test testExec) {
 		t.Fatalf("Server StatusFlag should indicate that Cursor exists")
 	}
 
+	var newqr *sqltypes.Result
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -777,7 +778,7 @@ func checkExecute(t *testing.T, sConn, cConn *Conn, test testExec) {
 		}
 
 		// Read Query Results
-		qr, _, _, err = cConn.FetchQueryResult(100, qr.Fields)
+		newqr, _, _, err = cConn.FetchQueryResult(100, qr.Fields)
 		if err != nil && err != io.EOF {
 			t.Fatalf("FetchQueryResult failed with error: %v", err)
 		}
@@ -795,8 +796,8 @@ func checkExecute(t *testing.T, sConn, cConn *Conn, test testExec) {
 		t.Fatalf("Server StatusFlag should indicate that Cursor exists")
 	}
 
-	if test.expectedNumRows != len(qr.Rows) {
-		t.Fatalf("Expected %d rows, Received %d", test.expectedNumRows, len(qr.Rows))
+	if test.expectedNumRows != len(newqr.Rows) {
+		t.Fatalf("Expected %d rows, Received %d", test.expectedNumRows, len(newqr.Rows))
 	}
 }
 

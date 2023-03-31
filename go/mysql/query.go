@@ -388,11 +388,6 @@ func (c *Conn) ReadQueryResult(maxrows int, wantfields bool) (result *sqltypes.R
 		}, more, warnings, nil
 	}
 
-	result = &sqltypes.Result{
-		RowsAffected: affectedRows,
-		InsertID:     lastInsertID,
-	}
-
 	fields := make([]querypb.Field, numCols)
 	result = &sqltypes.Result{
 		Fields: make([]*querypb.Field, numCols),
@@ -578,7 +573,7 @@ func (c *Conn) readComQueryResponse() (affectedRows uint64, lastInsertID uint64,
 	if !ok {
 		return 0, 0, 0, false, 0, NewSQLError(CRMalformedPacket, SSUnknownSQLState, "cannot get column number")
 	}
-	if pos != len(data) { // todo: wtf?? why do you expect this to be true??????????
+	if pos != len(data) {
 		return 0, 0, 0, false, 0, NewSQLError(CRMalformedPacket, SSUnknownSQLState, "extra data in COM_QUERY response")
 	}
 	return 0, 0, int(n), false, 0, nil
