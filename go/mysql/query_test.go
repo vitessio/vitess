@@ -726,7 +726,7 @@ func checkExecute(t *testing.T, sConn, cConn *Conn, test testExec) {
 		defer wg.Done()
 
 		// Write a COM_STMT_EXECUTE packet
-		mockData := []byte{ComStmtExecute, byte(prepare.StatementID), 0, 0, 0, test.useCursor, 1, 0, 0, 0, 0, 1, 1, 128, 1}
+		mockData := []byte{ComStmtExecute, 0, 0, 0, 0, test.useCursor, 1, 0, 0, 0, 0, 1, 1, 128, 1}
 		if err = WriteMockDataToConn(cConn, mockData); err != nil {
 			t.Fatalf("WriteMockExecuteToConn failed with error: %v", err)
 		}
