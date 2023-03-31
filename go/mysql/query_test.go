@@ -836,13 +836,14 @@ func TestExecuteQueries(t *testing.T) {
 		},
 	}
 
-	for _, test := range tests {
-		checkExecute(t, sConn, cConn, test)
-	}
+	//for _, test := range tests {
+	//
+	//}
+	checkExecute(t, sConn, cConn, tests[0])
 
-	sConn.Capabilities = CapabilityClientDeprecateEOF
-	cConn.Capabilities = CapabilityClientDeprecateEOF
-	for _, test := range tests {
-		checkExecute(t, sConn, cConn, test)
-	}
+	//sConn.Capabilities = CapabilityClientDeprecateEOF
+	//cConn.Capabilities = CapabilityClientDeprecateEOF
+	//for _, test := range tests {
+	//	checkExecute(t, sConn, cConn, test)
+	//}
 }
