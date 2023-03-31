@@ -85,6 +85,8 @@ func parseHoursMinutesSeconds(in string) (hours, minutes, seconds, nanoseconds i
 		if err != nil {
 			return 0, 0, 0, 0, err
 		}
+	default:
+		return 0, 0, 0, 0, fmt.Errorf("invalid time format: %s", in)
 	}
 
 	if hours < 0 || minutes < 0 || seconds < 0 || nanoseconds < 0 {
