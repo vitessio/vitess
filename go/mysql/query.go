@@ -18,7 +18,6 @@ package mysql
 
 import (
 	"fmt"
-	"github.com/dolthub/vitess/go/vt/log"
 	"math"
 	"strconv"
 	"strings"
@@ -116,7 +115,6 @@ func (c *Conn) readColumnDefinition(field *querypb.Field, index int) error {
 	if err != nil {
 		return NewSQLError(CRServerLost, SSUnknownSQLState, "%v", err)
 	}
-	log.Errorf("readColumnDefinition: %v", colDef)
 	defer c.recycleReadPacket()
 
 	// Catalog is ignored, always set to "def"
@@ -215,7 +213,6 @@ func (c *Conn) readColumnDefinitionType(field *querypb.Field, index int) error {
 	if err != nil {
 		return NewSQLError(CRServerLost, SSUnknownSQLState, "%v", err)
 	}
-	log.Errorf("readColumnDefinitionType: %v", colDef)
 	defer c.recycleReadPacket()
 
 	// catalog, schema, table, orgTable, name and orgName are
@@ -444,7 +441,6 @@ func (c *Conn) ReadQueryResult(maxrows int, wantfields bool) (result *sqltypes.R
 		}
 
 		if isEOFPacket(data) {
-			log.Errorf("CLIENT READ EOF PACKET")
 			// Strip the partial Fields before returning.
 			if !wantfields {
 				result.Fields = nil
@@ -500,7 +496,6 @@ func (c *Conn) FetchQueryResult(maxrows int, fields []*querypb.Field) (result *s
 		}
 
 		if isEOFPacket(data) {
-			log.Errorf("CLIENT READ EOF PACKET")
 			result.RowsAffected = uint64(len(result.Rows))
 
 			// The deprecated EOF packets change means that this is either an
@@ -563,7 +558,6 @@ func (c *Conn) readComQueryResponse() (affectedRows uint64, lastInsertID uint64,
 	if err != nil {
 		return 0, 0, 0, false, 0, NewSQLError(CRServerLost, SSUnknownSQLState, "%v", err)
 	}
-	log.Errorf("readComQueryResponse data: %v", data)
 	defer c.recycleReadPacket()
 	if len(data) == 0 {
 		return 0, 0, 0, false, 0, NewSQLError(CRMalformedPacket, SSUnknownSQLState, "invalid empty COM_QUERY response packet")
@@ -976,7 +970,6 @@ func (c *Conn) parseComInitDB(data []byte) string {
 }
 
 func (c *Conn) sendColumnCount(count uint64) error {
-	log.Errorf("SENDING COLUMN COUNT: %d", count)
 	length := lenEncIntSize(count)
 	data := c.startEphemeralPacket(length)
 	writeLenEncInt(data, 0, count)
@@ -1037,8 +1030,6 @@ func (c *Conn) writeColumnDefinition(field *querypb.Field, withDefaults bool) er
 		return vterrors.Errorf(vtrpc.Code_INTERNAL, "packing of column definition used %v bytes instead of %v", pos, len(data))
 	}
 
-	log.Errorf("SENDING COLUMN DEFINITION")
-
 	return c.writeEphemeralPacket()
 }
 
@@ -1075,7 +1066,6 @@ func (c *Conn) writeRow(row []sqltypes.Value) error {
 // writeFields writes the fields of a Result. It should be called only
 // if there are valid columns in the result.
 func (c *Conn) writeFields(result *sqltypes.Result) error {
-	log.Errorf("SENDING FIELDS")
 	// Send the number of fields first.
 	if err := c.sendColumnCount(uint64(len(result.Fields))); err != nil {
 		return err
@@ -1105,7 +1095,6 @@ func (c *Conn) writeRows(result *sqltypes.Result) error {
 func (c *Conn) writeEndResult(more bool, affectedRows, lastInsertID uint64, warnings uint16) error {
 	// Send either an EOF, or an OK packet.
 	// See doc.go.
-	log.Errorf("SENDING END RESULT")
 	flags := c.StatusFlags
 	if more {
 		flags |= ServerMoreResultsExists
@@ -1203,8 +1192,6 @@ func (c *Conn) writeBinaryRow(fields []*querypb.Field, row []sqltypes.Value) err
 	}
 
 	length += nullBitMapLen + 1
-
-	log.Errorf("SENDING BINARY ROW")
 
 	data := c.startEphemeralPacket(length)
 	pos := 0
