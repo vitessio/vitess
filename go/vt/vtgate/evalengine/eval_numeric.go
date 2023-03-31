@@ -194,6 +194,29 @@ func evalToInt64(e eval) *evalInt64 {
 			}
 			return hex.toInt64()
 		}
+		switch e.SQLType() {
+		case sqltypes.Date:
+			dt, err := datetime.ParseDate(e.string())
+			if err != nil {
+				return newEvalInt64(0)
+			}
+			i, _ := strconv.ParseInt(dt.Format("20060102"), 10, 64)
+			return newEvalInt64(i)
+		case sqltypes.Timestamp, sqltypes.Datetime:
+			dt, err := datetime.ParseDateTime(e.string())
+			if err != nil {
+				return newEvalInt64(0)
+			}
+			i, _ := strconv.ParseInt(dt.Format("20060102150405"), 10, 64)
+			return newEvalInt64(i)
+		case sqltypes.Time:
+			_, n, err := datetime.ParseTime(e.string())
+			if err != nil {
+				return newEvalInt64(0)
+			}
+			i, _ := strconv.ParseInt(strings.ReplaceAll(n, ":", ""), 10, 64)
+			return newEvalInt64(i)
+		}
 		i, _ := fastparse.ParseInt64(e.string())
 		return newEvalInt64(i)
 	case *evalJSON:
