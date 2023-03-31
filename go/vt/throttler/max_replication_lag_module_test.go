@@ -19,9 +19,10 @@ package throttler
 import (
 	"errors"
 	"fmt"
-	"github.com/stretchr/testify/assert"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 
 	"vitess.io/vitess/go/vt/log"
 
