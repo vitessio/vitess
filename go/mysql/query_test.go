@@ -739,8 +739,7 @@ func checkExecute(t *testing.T, sConn, cConn *Conn, test testExec) {
 	}()
 
 	// handle a single client command
-	handler := testHandler{}
-	if err = sConn.handleNextCommand(&handler); err != nil {
+	if err = sConn.handleNextCommand(&testHandler{}); err != nil {
 		t.Fatalf("handleNextComamnd failed with error: %v", err)
 	}
 
@@ -786,8 +785,7 @@ func checkExecute(t *testing.T, sConn, cConn *Conn, test testExec) {
 	}()
 
 	// handle a single client command
-	handler = testHandler{}
-	if err = sConn.handleNextCommand(&handler); err != nil {
+	if err = sConn.handleNextCommand(&testHandler{}); err != nil {
 		t.Fatalf("handleNextComamnd failed with error: %v", err)
 	}
 
