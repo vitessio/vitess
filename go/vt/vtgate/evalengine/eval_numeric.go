@@ -17,6 +17,7 @@ limitations under the License.
 package evalengine
 
 import (
+	"fmt"
 	"math"
 	"strconv"
 	"strings"
@@ -25,6 +26,7 @@ import (
 	"vitess.io/vitess/go/mysql/datetime"
 	"vitess.io/vitess/go/mysql/decimal"
 	"vitess.io/vitess/go/mysql/json"
+	"vitess.io/vitess/go/mysql/json/fastparse"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vthash"
 )
@@ -166,6 +168,86 @@ func evalToNumeric(e eval) evalNumeric {
 	}
 }
 
+func evalToInt64(e eval) *evalInt64 {
+	switch e := e.(type) {
+	case *evalInt64:
+		return e
+	case *evalUint64:
+		return e.toInt64()
+	case *evalFloat:
+		return e.toInt64()
+	case *evalDecimal:
+		return e.toInt64()
+	case *evalBytes:
+		if e.isHexLiteral {
+			hex, ok := e.toNumericHex()
+			if !ok {
+				// overflow
+				return newEvalInt64(0)
+			}
+			return hex.toInt64()
+		}
+		switch e.SQLType() {
+		case sqltypes.Date:
+			dt, err := datetime.ParseDate(e.string())
+			if err != nil {
+				return newEvalInt64(0)
+			}
+			i, _ := strconv.ParseInt(dt.Format("20060102"), 10, 64)
+			return newEvalInt64(i)
+		case sqltypes.Timestamp, sqltypes.Datetime:
+			dt, err := datetime.ParseDateTime(e.string())
+			if err != nil {
+				return newEvalInt64(0)
+			}
+			i, _ := strconv.ParseInt(dt.Format("20060102150405"), 10, 64)
+			return newEvalInt64(i)
+		case sqltypes.Time:
+			_, n, err := datetime.ParseTime(e.string())
+			if err != nil {
+				return newEvalInt64(0)
+			}
+			i, _ := strconv.ParseInt(strings.ReplaceAll(n, ":", ""), 10, 64)
+			return newEvalInt64(i)
+		}
+		i, _ := fastparse.ParseInt64(e.string())
+		return newEvalInt64(i)
+	case *evalJSON:
+		switch e.Type() {
+		case json.TypeBoolean:
+			if e == json.ValueTrue {
+				return newEvalInt64(1)
+			}
+			return newEvalInt64(0)
+		case json.TypeNumber:
+			switch e.NumberType() {
+			case json.NumberTypeInteger:
+				i, ok := e.Int64()
+				if ok {
+					return newEvalInt64(i)
+				}
+				d, ok := e.Decimal()
+				if !ok {
+					return newEvalInt64(0)
+				}
+				return newEvalInt64(decimalToInt64(d))
+			case json.NumberTypeDouble:
+				f, _ := e.Float64()
+				return newEvalInt64(floatToInt64(f))
+			default:
+				panic("unsupported")
+			}
+		case json.TypeString:
+			i, _ := fastparse.ParseInt64(e.Raw())
+			return newEvalInt64(i)
+		default:
+			return newEvalInt64(0)
+		}
+	default:
+		panic(fmt.Sprintf("unsupported type: %T", e))
+	}
+}
+
 func (e *evalInt64) Hash(h *vthash.Hasher) {
 	if e.i < 0 {
 		h.Write16(hashPrefixIntegralNegative)
@@ -270,16 +352,19 @@ func (e *evalFloat) negate() evalNumeric {
 	return newEvalFloat(-e.f)
 }
 
-func (e *evalFloat) toInt64() *evalInt64 {
+func floatToInt64(f float64) int64 {
 	// the int64(f) conversion is always well-defined, but for float values larger than
 	// MaxInt64, it returns a negative value. Check for underflow: if the sign of
 	// our integral is negative but our float is not, clamp to MaxInt64 like MySQL does.
-	f := math.Round(e.f)
-	i := int64(f)
+	i := int64(math.Round(f))
 	if i < 0 && !math.Signbit(f) {
 		i = math.MaxInt64
 	}
-	return newEvalInt64(i)
+	return i
+}
+
+func (e *evalFloat) toInt64() *evalInt64 {
+	return newEvalInt64(floatToInt64(e.f))
 }
 
 func (e *evalFloat) toFloat() (*evalFloat, bool) {
@@ -346,16 +431,20 @@ func (e *evalDecimal) negate() evalNumeric {
 	return newEvalDecimalWithPrec(e.dec.Neg(), e.length)
 }
 
-func (e *evalDecimal) toInt64() *evalInt64 {
-	dec := e.dec.Round(0)
+func decimalToInt64(dec decimal.Decimal) int64 {
+	dec = dec.Round(0)
 	i, valid := dec.Int64()
 	if !valid {
 		if dec.Sign() < 0 {
-			return newEvalInt64(math.MinInt64)
+			return math.MinInt64
 		}
-		return newEvalInt64(math.MaxInt64)
+		return math.MaxInt64
 	}
-	return newEvalInt64(i)
+	return i
+}
+
+func (e *evalDecimal) toInt64() *evalInt64 {
+	return newEvalInt64(decimalToInt64(e.dec))
 }
 
 func (e *evalDecimal) toFloat0() (float64, bool) {

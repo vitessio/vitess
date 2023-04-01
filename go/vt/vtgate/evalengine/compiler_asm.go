@@ -854,8 +854,8 @@ func (asm *assembler) Convert_dB(offset int) {
 // uint64 to ensure we match the behavior of MySQL.
 func (asm *assembler) Convert_dbit(offset int) {
 	asm.emit(func(env *ExpressionEnv) int {
-		arg := evalToNumeric(env.vm.stack[env.vm.sp-offset])
-		env.vm.stack[env.vm.sp-offset] = env.vm.arena.newEvalUint64(uint64(arg.toInt64().i))
+		arg := evalToInt64(env.vm.stack[env.vm.sp-offset])
+		env.vm.stack[env.vm.sp-offset] = env.vm.arena.newEvalUint64(uint64(arg.i))
 		return 1
 	}, "CONV DECIMAL_BITWISE(SP-%d), UINT64", offset)
 }
@@ -959,6 +959,16 @@ func (asm *assembler) Convert_iu(offset int) {
 		env.vm.stack[env.vm.sp-offset] = env.vm.arena.newEvalUint64(uint64(arg.i))
 		return 1
 	}, "CONV INT64(SP-%d), UINT64", offset)
+}
+
+func (asm *assembler) Clamp_u(offset int, val uint64) {
+	asm.emit(func(env *ExpressionEnv) int {
+		arg := env.vm.stack[env.vm.sp-offset].(*evalUint64)
+		if arg.u > val {
+			arg.u = val
+		}
+		return 1
+	}, "CLAMP UINT64(SP-%d), UINT64", offset)
 }
 
 func (asm *assembler) Convert_nj(offset int, isBool bool) {
@@ -1069,7 +1079,7 @@ func (asm *assembler) Convert_xd(offset int, m, d int32) {
 	asm.emit(func(env *ExpressionEnv) int {
 		env.vm.stack[env.vm.sp-offset] = evalToNumeric(env.vm.stack[env.vm.sp-offset]).toDecimal(m, d)
 		return 1
-	}, "CONV (SP-%d), FLOAT64", offset)
+	}, "CONV (SP-%d), DECIMAL", offset)
 }
 
 func (asm *assembler) Convert_xf(offset int) {
@@ -1078,18 +1088,19 @@ func (asm *assembler) Convert_xf(offset int) {
 		return 1
 	}, "CONV (SP-%d), FLOAT64", offset)
 }
+
 func (asm *assembler) Convert_xi(offset int) {
 	asm.emit(func(env *ExpressionEnv) int {
-		arg := evalToNumeric(env.vm.stack[env.vm.sp-offset])
-		env.vm.stack[env.vm.sp-offset] = arg.toInt64()
+		arg := evalToInt64(env.vm.stack[env.vm.sp-offset])
+		env.vm.stack[env.vm.sp-offset] = arg
 		return 1
 	}, "CONV (SP-%d), INT64", offset)
 }
 
 func (asm *assembler) Convert_xu(offset int) {
 	asm.emit(func(env *ExpressionEnv) int {
-		arg := evalToNumeric(env.vm.stack[env.vm.sp-offset])
-		env.vm.stack[env.vm.sp-offset] = arg.toUint64()
+		arg := evalToInt64(env.vm.stack[env.vm.sp-offset])
+		env.vm.stack[env.vm.sp-offset] = env.vm.arena.newEvalUint64(uint64(arg.i))
 		return 1
 	}, "CONV (SP-%d), UINT64", offset)
 }
@@ -1648,6 +1659,197 @@ func (asm *assembler) Fn_SQRT() {
 		}
 		return 1
 	}, "FN SQRT FLOAT64(SP-1)")
+}
+
+func (asm *assembler) Fn_ROUND1_f() {
+	asm.emit(func(env *ExpressionEnv) int {
+		f := env.vm.stack[env.vm.sp-1].(*evalFloat)
+		f.f = math.Round(f.f)
+		return 1
+	}, "FN ROUND FLOAT64(SP-1)")
+}
+
+func (asm *assembler) Fn_ROUND1_d() {
+	asm.emit(func(env *ExpressionEnv) int {
+		d := env.vm.stack[env.vm.sp-1].(*evalDecimal)
+		d.dec = d.dec.Round(0)
+		d.length = 0
+		return 1
+	}, "FN ROUND DECIMAL(SP-1)")
+}
+
+func (asm *assembler) Fn_ROUND2_i() {
+	asm.adjustStack(-1)
+	asm.emit(func(env *ExpressionEnv) int {
+		i := env.vm.stack[env.vm.sp-2].(*evalInt64)
+		r := env.vm.stack[env.vm.sp-1].(*evalInt64)
+
+		i.i = roundSigned(i.i, r.i)
+		env.vm.sp--
+		return 1
+	}, "FN ROUND INT64(SP-2) INT64(SP-1)")
+}
+
+func (asm *assembler) Fn_ROUND2_u() {
+	asm.adjustStack(-1)
+	asm.emit(func(env *ExpressionEnv) int {
+		u := env.vm.stack[env.vm.sp-2].(*evalUint64)
+		r := env.vm.stack[env.vm.sp-1].(*evalInt64)
+
+		u.u = roundUnsigned(u.u, r.i)
+		env.vm.sp--
+		return 1
+	}, "FN ROUND INT64(SP-2) INT64(SP-1)")
+}
+
+func (asm *assembler) Fn_ROUND2_f() {
+	asm.adjustStack(-1)
+	asm.emit(func(env *ExpressionEnv) int {
+		f := env.vm.stack[env.vm.sp-2].(*evalFloat)
+		r := env.vm.stack[env.vm.sp-1].(*evalInt64)
+		if r.i == 0 {
+			f.f = math.Round(f.f)
+			env.vm.sp--
+			return 1
+		}
+
+		r.i = clampRounding(r.i)
+		factor := math.Pow(10, float64(r.i))
+		if factor == 0.0 {
+			f.f = 0.0
+			env.vm.sp--
+			return 1
+		}
+		f.f = math.Round(f.f*factor) / factor
+		env.vm.sp--
+		return 1
+	}, "FN ROUND FLOAT64(SP-2) INT64(SP-1)")
+}
+
+func (asm *assembler) Fn_ROUND2_d() {
+	asm.adjustStack(-1)
+	asm.emit(func(env *ExpressionEnv) int {
+		d := env.vm.stack[env.vm.sp-2].(*evalDecimal)
+		r := env.vm.stack[env.vm.sp-1].(*evalInt64)
+
+		if d.dec.IsZero() {
+			env.vm.sp--
+			return 1
+		}
+
+		if r.i == 0 {
+			d.dec = d.dec.Round(0)
+			d.length = 0
+			env.vm.sp--
+			return 1
+		}
+
+		r.i = clampRounding(r.i)
+		digit := int32(r.i)
+		if digit < 0 {
+			digit = 0
+		}
+		if digit > d.length {
+			digit = d.length
+		}
+		rounded := d.dec.Round(int32(r.i))
+		if rounded.IsZero() {
+			d.dec = decimal.Zero
+			d.length = 0
+			env.vm.sp--
+			return 1
+		}
+		env.vm.stack[env.vm.sp-2] = env.vm.arena.newEvalDecimalWithPrec(rounded, digit)
+		env.vm.sp--
+		return 1
+	}, "FN ROUND DECIMAL(SP-2) INT64(SP-1)")
+}
+
+func (asm *assembler) Fn_TRUNCATE_i() {
+	asm.adjustStack(-1)
+	asm.emit(func(env *ExpressionEnv) int {
+		i := env.vm.stack[env.vm.sp-2].(*evalInt64)
+		r := env.vm.stack[env.vm.sp-1].(*evalInt64)
+
+		i.i = truncateSigned(i.i, r.i)
+		env.vm.sp--
+		return 1
+	}, "FN TRUNCATE INT64(SP-2) INT64(SP-1)")
+}
+
+func (asm *assembler) Fn_TRUNCATE_u() {
+	asm.adjustStack(-1)
+	asm.emit(func(env *ExpressionEnv) int {
+		u := env.vm.stack[env.vm.sp-2].(*evalUint64)
+		r := env.vm.stack[env.vm.sp-1].(*evalInt64)
+
+		u.u = truncateUnsigned(u.u, r.i)
+		env.vm.sp--
+		return 1
+	}, "FN TRUNCATE INT64(SP-2) INT64(SP-1)")
+}
+
+func (asm *assembler) Fn_TRUNCATE_f() {
+	asm.adjustStack(-1)
+	asm.emit(func(env *ExpressionEnv) int {
+		f := env.vm.stack[env.vm.sp-2].(*evalFloat)
+		r := env.vm.stack[env.vm.sp-1].(*evalInt64)
+		if r.i == 0 {
+			f.f = math.Trunc(f.f)
+			env.vm.sp--
+			return 1
+		}
+
+		r.i = clampRounding(r.i)
+		factor := math.Pow(10, float64(r.i))
+		if factor == 0.0 {
+			f.f = 0.0
+			env.vm.sp--
+			return 1
+		}
+		f.f = math.Trunc(f.f*factor) / factor
+		env.vm.sp--
+		return 1
+	}, "FN TRUNCATE FLOAT64(SP-2) INT64(SP-1)")
+}
+
+func (asm *assembler) Fn_TRUNCATE_d() {
+	asm.adjustStack(-1)
+	asm.emit(func(env *ExpressionEnv) int {
+		d := env.vm.stack[env.vm.sp-2].(*evalDecimal)
+		r := env.vm.stack[env.vm.sp-1].(*evalInt64)
+
+		if d.dec.IsZero() {
+			env.vm.sp--
+			return 1
+		}
+
+		if r.i == 0 {
+			d.dec = d.dec.Truncate(0)
+			d.length = 0
+			env.vm.sp--
+			return 1
+		}
+
+		r.i = clampRounding(r.i)
+		digit := int32(r.i)
+		if digit < 0 {
+			digit = 0
+		}
+		if digit > d.length {
+			digit = d.length
+		}
+		rounded := d.dec.Truncate(int32(r.i))
+		if rounded.IsZero() {
+			d.dec = decimal.Zero
+			d.length = 0
+			env.vm.sp--
+			return 1
+		}
+		env.vm.stack[env.vm.sp-2] = env.vm.arena.newEvalDecimalWithPrec(rounded, digit)
+		env.vm.sp--
+		return 1
+	}, "FN TRUNCATE DECIMAL(SP-2) INT64(SP-1)")
 }
 
 func (asm *assembler) Fn_COLLATION(col collations.TypedCollation) {

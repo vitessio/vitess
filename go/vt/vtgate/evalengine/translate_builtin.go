@@ -226,6 +226,18 @@ func (ast *astCompiler) translateFuncExpr(fn *sqlparser.FuncExpr) (Expr, error) 
 			return nil, argError(method)
 		}
 		return &builtinSqrt{CallExpr: call}, nil
+	case "round":
+		switch len(args) {
+		case 1, 2:
+			return &builtinRound{CallExpr: call}, nil
+		default:
+			return nil, argError(method)
+		}
+	case "truncate":
+		if len(args) != 2 {
+			return nil, argError(method)
+		}
+		return &builtinTruncate{CallExpr: call}, nil
 	case "lower", "lcase":
 		if len(args) != 1 {
 			return nil, argError(method)

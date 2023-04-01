@@ -38,23 +38,22 @@ func ParseUint64(s string) (uint64, error) {
 	j := i
 	for i < uint(len(s)) {
 		if s[i] >= '0' && s[i] <= '9' {
-			d = d*10 + uint64(s[i]-'0')
-			i++
-			if i > 18 {
-				// The integer part may be out of range for uint64.
-				// Fall back to slow parsing.
-				return strconv.ParseUint(s, 10, 64)
+			v := d*10 + uint64(s[i]-'0')
+			if v < d {
+				return math.MaxUint64, fmt.Errorf("cannot parse uint64 from %q", s)
 			}
+			d = v
+			i++
 			continue
 		}
 		break
 	}
 	if i <= j {
-		return 0, fmt.Errorf("cannot parse uint64 from %q", s)
+		return d, fmt.Errorf("cannot parse uint64 from %q", s)
 	}
 	if i < uint(len(s)) {
 		// Unparsed tail left.
-		return 0, fmt.Errorf("unparsed tail left after parsing uint64 from %q: %q", s, s[i:])
+		return d, fmt.Errorf("unparsed tail left after parsing uint64 from %q: %q", s, s[i:])
 	}
 	return d, nil
 }
@@ -77,32 +76,50 @@ func ParseInt64(s string) (int64, error) {
 		}
 	}
 
-	d := int64(0)
+	d := uint64(0)
 	j := i
 	for i < uint(len(s)) {
 		if s[i] >= '0' && s[i] <= '9' {
-			d = d*10 + int64(s[i]-'0')
-			i++
-			if i > 18 {
-				// The integer part may be out of range for int64.
-				// Fall back to slow parsing.
-				return strconv.ParseInt(s, 10, 64)
+			v := d*10 + uint64(s[i]-'0')
+			if v < d {
+				if minus {
+					return math.MinInt64, fmt.Errorf("cannot parse int64 from %q", s)
+				}
+				return math.MaxInt64, fmt.Errorf("cannot parse int64 from %q", s)
 			}
+			d = v
+			i++
 			continue
 		}
 		break
 	}
+
+	v := int64(d)
+	if d > math.MaxInt64 && !minus {
+		return math.MaxInt64, fmt.Errorf("cannot parse int64 from %q", s)
+	} else if d > math.MaxInt64+1 && minus {
+		return math.MinInt64, fmt.Errorf("cannot parse int64 from %q", s)
+	}
+
+	if minus {
+		v = -v
+		if d == math.MaxInt64+1 {
+			v = math.MinInt64
+		}
+	}
+
 	if i <= j {
-		return 0, fmt.Errorf("cannot parse int64 from %q", s)
+		return v, fmt.Errorf("cannot parse int64 from %q", s)
 	}
 	if i < uint(len(s)) {
 		// Unparsed tail left.
-		return 0, fmt.Errorf("unparsed tail left after parsing int64 form %q: %q", s, s[i:])
+		return v, fmt.Errorf("unparsed tail left after parsing int64 from %q: %q", s, s[i:])
 	}
-	if minus {
-		d = -d
+	if d == math.MaxInt64+1 && minus {
+		v = math.MinInt64
 	}
-	return d, nil
+
+	return v, nil
 }
 
 // Exact powers of 10.

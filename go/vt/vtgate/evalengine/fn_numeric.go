@@ -19,6 +19,7 @@ package evalengine
 import (
 	"math"
 
+	"vitess.io/vitess/go/mysql/decimal"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -761,4 +762,331 @@ func math_log2(f float64) (float64, bool) {
 		return a*(1/math.Ln2) + float64(exp), true
 	}
 	return 0, false
+}
+
+type builtinRound struct {
+	CallExpr
+}
+
+var _ Expr = (*builtinRound)(nil)
+
+func clampRounding(round int64) int64 {
+	// Use some reasonable lower limit to avoid too slow
+	// iteration for very large numbers. We need to be able
+	// to at least truncate math.MaxFloat64 to 0 for the largest
+	// possible values.
+	if round < -1024 {
+		round = -1024
+	} else if round > 30 {
+		round = 30
+	}
+	return round
+}
+
+func roundSigned(v int64, round int64) int64 {
+	if round >= 0 {
+		return v
+	}
+	round = clampRounding(round)
+
+	if v == 0 {
+		return 0
+	}
+	for i := round; i < -1 && v != 0; i++ {
+		v /= 10
+	}
+
+	if v == 0 {
+		return 0
+	}
+	if v%10 <= -5 {
+		v -= 10
+	} else if v%10 >= 5 {
+		v += 10
+	}
+
+	v /= 10
+	for i := round; i < 0; i++ {
+		v *= 10
+	}
+	return v
+}
+
+func roundUnsigned(v uint64, round int64) uint64 {
+	if round >= 0 {
+		return v
+	}
+	round = clampRounding(round)
+
+	if v == 0 {
+		return 0
+	}
+	for i := round; i < -1 && v != 0; i++ {
+		v /= 10
+	}
+
+	if v == 0 {
+		return 0
+	}
+
+	if v%10 >= 5 {
+		v += 10
+	}
+
+	v /= 10
+	for i := round; i < 0; i++ {
+		v *= 10
+	}
+	return v
+}
+
+func (call *builtinRound) eval(env *ExpressionEnv) (eval, error) {
+	arg, err := call.arg1(env)
+	if err != nil {
+		return nil, err
+	}
+	if arg == nil {
+		return nil, nil
+	}
+
+	round := int64(0)
+	if len(call.Arguments) > 1 {
+		d, err := call.Arguments[1].eval(env)
+		if err != nil {
+			return nil, err
+		}
+		if d == nil {
+			return nil, nil
+		}
+
+		switch d := d.(type) {
+		case *evalUint64:
+			round = int64(d.u)
+			if d.u > math.MaxInt64 {
+				round = math.MaxInt64
+			}
+		default:
+			round = evalToInt64(d).i
+		}
+	}
+
+	switch arg := arg.(type) {
+	case *evalInt64:
+		return newEvalInt64(roundSigned(arg.i, round)), nil
+	case *evalUint64:
+		return newEvalUint64(roundUnsigned(arg.u, round)), nil
+	case *evalDecimal:
+		if arg.dec.IsZero() {
+			return arg, nil
+		}
+
+		if round == 0 {
+			return newEvalDecimalWithPrec(arg.dec.Round(0), 0), nil
+		}
+
+		round = clampRounding(round)
+		digit := int32(round)
+		if digit < 0 {
+			digit = 0
+		}
+		if digit > arg.length {
+			digit = arg.length
+		}
+		rounded := arg.dec.Round(int32(round))
+		if rounded.IsZero() {
+			return newEvalDecimalWithPrec(decimal.Zero, 0), nil
+		}
+		return newEvalDecimalWithPrec(rounded, digit), nil
+	case *evalFloat:
+		if arg.f == 0.0 {
+			return arg, nil
+		}
+		if round == 0 {
+			return newEvalFloat(math.Round(arg.f)), nil
+		}
+
+		round = clampRounding(round)
+		f := math.Pow(10, float64(round))
+		if f == 0 {
+			return newEvalFloat(0), nil
+		}
+		return newEvalFloat(math.Round(arg.f*f) / f), nil
+	default:
+		v, _ := evalToNumeric(arg).toFloat()
+		if v.f == 0.0 {
+			return v, nil
+		}
+
+		if round == 0 {
+			return newEvalFloat(math.Round(v.f)), nil
+		}
+
+		round = clampRounding(round)
+		f := math.Pow(10, float64(round))
+		if f == 0 {
+			return newEvalFloat(0), nil
+		}
+		return newEvalFloat(math.Round(v.f*f) / f), nil
+	}
+}
+
+func (call *builtinRound) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	t, f := call.Arguments[0].typeof(env, fields)
+	if sqltypes.IsSigned(t) {
+		return sqltypes.Int64, f
+	} else if sqltypes.IsUnsigned(t) {
+		return sqltypes.Uint64, f
+	} else if sqltypes.Decimal == t {
+		return sqltypes.Decimal, f
+	} else {
+		return sqltypes.Float64, f
+	}
+}
+
+type builtinTruncate struct {
+	CallExpr
+}
+
+var _ Expr = (*builtinRound)(nil)
+
+func truncateSigned(v int64, round int64) int64 {
+	if round >= 0 {
+		return v
+	}
+	if v == 0 {
+		return 0
+	}
+	round = clampRounding(round)
+	for i := round; i < 0 && v != 0; i++ {
+		v /= 10
+	}
+
+	if v == 0 {
+		return 0
+	}
+
+	for i := round; i < 0; i++ {
+		v *= 10
+	}
+	return v
+}
+
+func truncateUnsigned(v uint64, round int64) uint64 {
+	if round >= 0 {
+		return v
+	}
+	if v == 0 {
+		return 0
+	}
+	round = clampRounding(round)
+	for i := round; i < 0 && v != 0; i++ {
+		v /= 10
+	}
+
+	if v == 0 {
+		return 0
+	}
+
+	for i := round; i < 0; i++ {
+		v *= 10
+	}
+	return v
+}
+
+func (call *builtinTruncate) eval(env *ExpressionEnv) (eval, error) {
+	arg, err := call.arg1(env)
+	if err != nil {
+		return nil, err
+	}
+	if arg == nil {
+		return nil, nil
+	}
+
+	round := int64(0)
+	if len(call.Arguments) > 1 {
+		d, err := call.Arguments[1].eval(env)
+		if err != nil {
+			return nil, err
+		}
+		if d == nil {
+			return nil, nil
+		}
+
+		switch d := d.(type) {
+		case *evalUint64:
+			round = int64(d.u)
+			if d.u > math.MaxInt64 {
+				round = math.MaxInt64
+			}
+		default:
+			round = evalToInt64(d).i
+		}
+	}
+
+	switch arg := arg.(type) {
+	case *evalInt64:
+		return newEvalInt64(truncateSigned(arg.i, round)), nil
+	case *evalUint64:
+		return newEvalUint64(truncateUnsigned(arg.u, round)), nil
+	case *evalDecimal:
+		if arg.dec.IsZero() {
+			return arg, nil
+		}
+		round = clampRounding(round)
+		digit := int32(round)
+		if digit < 0 {
+			digit = 0
+		}
+		if digit > arg.length {
+			digit = arg.length
+		}
+
+		truncated := arg.dec.Truncate(int32(round))
+		if truncated.IsZero() {
+			return newEvalDecimalWithPrec(decimal.Zero, 0), nil
+		}
+		return newEvalDecimalWithPrec(truncated, digit), nil
+	case *evalFloat:
+		if arg.f == 0.0 {
+			return arg, nil
+		}
+		if round == 0 {
+			return newEvalFloat(math.Trunc(arg.f)), nil
+		}
+
+		round = clampRounding(round)
+		f := math.Pow(10, float64(round))
+		if f == 0 {
+			return newEvalFloat(0), nil
+		}
+		return newEvalFloat(math.Trunc(arg.f*f) / f), nil
+	default:
+		v, _ := evalToNumeric(arg).toFloat()
+		if v.f == 0.0 {
+			return v, nil
+		}
+		if round == 0 {
+			return newEvalFloat(math.Trunc(v.f)), nil
+		}
+
+		round = clampRounding(round)
+		f := math.Pow(10, float64(round))
+		if f == 0 {
+			return newEvalFloat(0), nil
+		}
+		return newEvalFloat(math.Trunc(v.f*f) / f), nil
+	}
+}
+
+func (call *builtinTruncate) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	t, f := call.Arguments[0].typeof(env, fields)
+	if sqltypes.IsSigned(t) {
+		return sqltypes.Int64, f
+	} else if sqltypes.IsUnsigned(t) {
+		return sqltypes.Uint64, f
+	} else if sqltypes.Decimal == t {
+		return sqltypes.Decimal, f
+	} else {
+		return sqltypes.Float64, f
+	}
 }
