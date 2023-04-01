@@ -18,6 +18,7 @@ package evalengine
 
 import (
 	"bytes"
+	"hash/crc32"
 	"math"
 	"math/bits"
 	"strconv"
@@ -1850,6 +1851,14 @@ func (asm *assembler) Fn_TRUNCATE_d() {
 		env.vm.sp--
 		return 1
 	}, "FN TRUNCATE DECIMAL(SP-2) INT64(SP-1)")
+}
+
+func (asm *assembler) Fn_CRC32() {
+	asm.emit(func(env *ExpressionEnv) int {
+		b := env.vm.stack[env.vm.sp-1].(*evalBytes)
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalUint64(uint64(crc32.ChecksumIEEE(b.bytes)))
+		return 1
+	}, "FN CRC32 BINARY(SP-1)")
 }
 
 func (asm *assembler) Fn_COLLATION(col collations.TypedCollation) {

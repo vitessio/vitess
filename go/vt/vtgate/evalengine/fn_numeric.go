@@ -17,6 +17,7 @@ limitations under the License.
 package evalengine
 
 import (
+	"hash/crc32"
 	"math"
 
 	"vitess.io/vitess/go/mysql/decimal"
@@ -1089,4 +1090,29 @@ func (call *builtinTruncate) typeof(env *ExpressionEnv, fields []*querypb.Field)
 	} else {
 		return sqltypes.Float64, f
 	}
+}
+
+type builtinCrc32 struct {
+	CallExpr
+}
+
+var _ Expr = (*builtinCrc32)(nil)
+
+func (call *builtinCrc32) eval(env *ExpressionEnv) (eval, error) {
+	arg, err := call.arg1(env)
+	if err != nil {
+		return nil, err
+	}
+	if arg == nil {
+		return nil, nil
+	}
+
+	b := evalToBinary(arg)
+	hash := crc32.ChecksumIEEE(b.bytes)
+	return newEvalUint64(uint64(hash)), nil
+}
+
+func (call *builtinCrc32) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	_, f := call.Arguments[0].typeof(env, fields)
+	return sqltypes.Uint64, f
 }

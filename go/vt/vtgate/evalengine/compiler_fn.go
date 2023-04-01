@@ -112,6 +112,8 @@ func (c *compiler) compileFn(call callable) (ctype, error) {
 		return c.compileFn_ROUND(call)
 	case *builtinTruncate:
 		return c.compileFn_TRUNCATE(call)
+	case *builtinCrc32:
+		return c.compileFn_CRC32(call)
 	case *builtinWeightString:
 		return c.compileFn_WEIGHT_STRING(call)
 	case *builtinNow:
@@ -680,6 +682,25 @@ func (c *compiler) compileFn_TRUNCATE(expr callable) (ctype, error) {
 	}
 
 	c.asm.jumpDestination(skip1, skip2)
+	return arg, nil
+}
+
+func (c *compiler) compileFn_CRC32(expr callable) (ctype, error) {
+	arg, err := c.compileExpr(expr.callable()[0])
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip := c.compileNullCheck1(arg)
+
+	switch {
+	case arg.isTextual():
+	default:
+		c.asm.Convert_xb(1, sqltypes.Binary, 0, false)
+	}
+
+	c.asm.Fn_CRC32()
+	c.asm.jumpDestination(skip)
 	return arg, nil
 }
 

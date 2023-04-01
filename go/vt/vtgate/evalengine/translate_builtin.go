@@ -238,6 +238,11 @@ func (ast *astCompiler) translateFuncExpr(fn *sqlparser.FuncExpr) (Expr, error) 
 			return nil, argError(method)
 		}
 		return &builtinTruncate{CallExpr: call}, nil
+	case "crc32":
+		if len(args) != 1 {
+			return nil, argError(method)
+		}
+		return &builtinCrc32{CallExpr: call}, nil
 	case "lower", "lcase":
 		if len(args) != 1 {
 			return nil, argError(method)
