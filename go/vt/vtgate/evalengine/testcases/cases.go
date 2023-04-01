@@ -92,6 +92,8 @@ var Cases = []TestCase{
 	{Run: FnPow},
 	{Run: FnSign},
 	{Run: FnSqrt},
+	{Run: FnRound},
+	{Run: FnTruncate},
 }
 
 func JSONPathOperations(yield Query) {
@@ -492,6 +494,54 @@ func FnSqrt(yield Query) {
 
 	for _, num := range inputBitwise {
 		yield(fmt.Sprintf("SQRT(%s)", num), nil)
+	}
+}
+
+func FnRound(yield Query) {
+	for _, num := range radianInputs {
+		yield(fmt.Sprintf("ROUND(%s)", num), nil)
+	}
+
+	for _, num := range inputBitwise {
+		yield(fmt.Sprintf("ROUND(%s)", num), nil)
+	}
+
+	for _, num1 := range radianInputs {
+		for _, num2 := range radianInputs {
+			yield(fmt.Sprintf("ROUND(%s, %s)", num1, num2), nil)
+		}
+		for _, num2 := range inputBitwise {
+			yield(fmt.Sprintf("ROUND(%s, %s)", num1, num2), nil)
+		}
+	}
+
+	for _, num1 := range inputBitwise {
+		for _, num2 := range radianInputs {
+			yield(fmt.Sprintf("ROUND(%s, %s)", num1, num2), nil)
+		}
+		for _, num2 := range inputBitwise {
+			yield(fmt.Sprintf("ROUND(%s, %s)", num1, num2), nil)
+		}
+	}
+}
+
+func FnTruncate(yield Query) {
+	for _, num1 := range radianInputs {
+		for _, num2 := range radianInputs {
+			yield(fmt.Sprintf("TRUNCATE(%s, %s)", num1, num2), nil)
+		}
+		for _, num2 := range inputBitwise {
+			yield(fmt.Sprintf("TRUNCATE(%s, %s)", num1, num2), nil)
+		}
+	}
+
+	for _, num1 := range inputBitwise {
+		for _, num2 := range radianInputs {
+			yield(fmt.Sprintf("TRUNCATE(%s, %s)", num1, num2), nil)
+		}
+		for _, num2 := range inputBitwise {
+			yield(fmt.Sprintf("TRUNCATE(%s, %s)", num1, num2), nil)
+		}
 	}
 }
 
@@ -1015,7 +1065,7 @@ func FnAscii(yield Query) {
 }
 
 func FnRepeat(yield Query) {
-	counts := []string{"-1", "1.2", "3", "1073741825"}
+	counts := []string{"-1", "1.9", "3", "1073741825", "'1.9'"}
 	for _, str := range inputStrings {
 		for _, cnt := range counts {
 			yield(fmt.Sprintf("repeat(%s, %s)", str, cnt), nil)

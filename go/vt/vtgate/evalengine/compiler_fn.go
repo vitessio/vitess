@@ -17,6 +17,8 @@ limitations under the License.
 package evalengine
 
 import (
+	"math"
+
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/datetime"
 	"vitess.io/vitess/go/sqltypes"
@@ -106,6 +108,10 @@ func (c *compiler) compileFn(call callable) (ctype, error) {
 		return c.compileFn_SIGN(call)
 	case *builtinSqrt:
 		return c.compileFn_math1(call, c.asm.Fn_SQRT, flagNullable)
+	case *builtinRound:
+		return c.compileFn_ROUND(call)
+	case *builtinTruncate:
+		return c.compileFn_TRUNCATE(call)
 	case *builtinWeightString:
 		return c.compileFn_WEIGHT_STRING(call)
 	case *builtinNow:
@@ -562,6 +568,119 @@ func (c *compiler) compileFn_SIGN(expr callable) (ctype, error) {
 
 	c.asm.jumpDestination(skip)
 	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: arg.Flag}, nil
+}
+
+func (c *compiler) compileFn_ROUND(expr callable) (ctype, error) {
+	args := expr.callable()
+
+	arg, err := c.compileExpr(args[0])
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip1 := c.compileNullCheck1(arg)
+	var skip2 *jump
+
+	if len(args) == 1 {
+		switch arg.Type {
+		case sqltypes.Int64:
+			// No-op, already rounded
+		case sqltypes.Uint64:
+			// No-op, already rounded
+		case sqltypes.Float64:
+			c.asm.Fn_ROUND1_f()
+		case sqltypes.Decimal:
+			// We assume here the most common case here is that
+			// the decimal fits into an integer.
+			c.asm.Fn_ROUND1_d()
+		default:
+			c.asm.Convert_xf(1)
+			c.asm.Fn_ROUND1_f()
+		}
+	} else {
+		round, err := c.compileExpr(args[1])
+		if err != nil {
+			return ctype{}, err
+		}
+
+		skip2 = c.compileNullCheck1r(round)
+
+		switch round.Type {
+		case sqltypes.Int64:
+			// No-op, already correct type
+		case sqltypes.Uint64:
+			c.asm.Clamp_u(1, math.MaxInt64)
+			c.asm.Convert_ui(1)
+		default:
+			c.asm.Convert_xi(1)
+		}
+
+		switch arg.Type {
+		case sqltypes.Int64:
+			c.asm.Fn_ROUND2_i()
+		case sqltypes.Uint64:
+			c.asm.Fn_ROUND2_u()
+		case sqltypes.Float64:
+			c.asm.Fn_ROUND2_f()
+		case sqltypes.Decimal:
+			// We assume here the most common case here is that
+			// the decimal fits into an integer.
+			c.asm.Fn_ROUND2_d()
+		default:
+			c.asm.Convert_xf(2)
+			c.asm.Fn_ROUND2_f()
+		}
+	}
+
+	c.asm.jumpDestination(skip1, skip2)
+	return arg, nil
+}
+
+func (c *compiler) compileFn_TRUNCATE(expr callable) (ctype, error) {
+	args := expr.callable()
+
+	arg, err := c.compileExpr(args[0])
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip1 := c.compileNullCheck1(arg)
+
+	round, err := c.compileExpr(args[1])
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip2 := c.compileNullCheck1r(round)
+
+	switch round.Type {
+	case sqltypes.Int64:
+		// No-op, already correct type
+	case sqltypes.Uint64:
+		c.asm.Clamp_u(1, math.MaxInt64)
+		c.asm.Convert_ui(1)
+	default:
+		c.asm.Convert_xi(1)
+	}
+
+	switch arg.Type {
+	case sqltypes.Int64:
+		c.asm.Fn_TRUNCATE_i()
+	case sqltypes.Uint64:
+		c.asm.Fn_TRUNCATE_u()
+	case sqltypes.Float64:
+		c.asm.Fn_TRUNCATE_f()
+	case sqltypes.Decimal:
+		// We assume here the most common case here is that
+		// the decimal fits into an integer.
+		c.asm.Fn_TRUNCATE_d()
+	default:
+		c.asm.Convert_xf(2)
+		c.asm.Fn_TRUNCATE_f()
+	}
+
+	c.asm.jumpDestination(skip1, skip2)
+	return arg, nil
 }
 
 func (c *compiler) compileFn_WEIGHT_STRING(call *builtinWeightString) (ctype, error) {

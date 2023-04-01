@@ -45,7 +45,7 @@ func (call *builtinBitCount) eval(env *ExpressionEnv) (eval, error) {
 			count += bits.OnesCount8(b)
 		}
 	} else {
-		u := evalToNumeric(arg).toInt64()
+		u := evalToInt64(arg)
 		count = bits.OnesCount64(uint64(u.i))
 	}
 	return newEvalInt64(int64(count)), nil
