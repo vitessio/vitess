@@ -282,6 +282,18 @@ func TestCompilerSingle(t *testing.T) {
 			expression: `NULL AND 1`,
 			result:     `NULL`,
 		},
+		{
+			expression: `CONV(-1.5e0, 1.5e0, 1.5e0)`,
+			result:     `VARCHAR("1111111111111111111111111111111111111111111111111111111111111111")`,
+		},
+		{
+			expression: `CONV(9223372036854775810.4, 13, 7)`,
+			result:     `VARCHAR("45012021522523134134601")`,
+		},
+		{
+			expression: `CONV(-9223372036854775809, 13e0, 13e0)`,
+			result:     `VARCHAR("0")`,
+		},
 	}
 
 	for _, tc := range testCases {

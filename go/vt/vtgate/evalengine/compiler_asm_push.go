@@ -29,7 +29,7 @@ import (
 
 func push_i(env *ExpressionEnv, raw []byte) int {
 	var ival int64
-	ival, env.vm.err = fastparse.ParseInt64(hack.String(raw))
+	ival, env.vm.err = fastparse.ParseInt64(hack.String(raw), 10)
 	env.vm.stack[env.vm.sp] = env.vm.arena.newEvalInt64(ival)
 	env.vm.sp++
 	return 1
@@ -254,7 +254,7 @@ func (asm *assembler) PushBVar_text(key string, col collations.TypedCollation) {
 
 func push_u(env *ExpressionEnv, raw []byte) int {
 	var uval uint64
-	uval, env.vm.err = fastparse.ParseUint64(hack.String(raw))
+	uval, env.vm.err = fastparse.ParseUint64(hack.String(raw), 10)
 	env.vm.stack[env.vm.sp] = env.vm.arena.newEvalUint64(uval)
 	env.vm.sp++
 	return 1

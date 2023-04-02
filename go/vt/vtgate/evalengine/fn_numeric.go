@@ -17,10 +17,15 @@ limitations under the License.
 package evalengine
 
 import (
+	"errors"
 	"hash/crc32"
 	"math"
+	"strconv"
+	"strings"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/decimal"
+	"vitess.io/vitess/go/mysql/json/fastparse"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -1115,4 +1120,70 @@ func (call *builtinCrc32) eval(env *ExpressionEnv) (eval, error) {
 func (call *builtinCrc32) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
 	_, f := call.Arguments[0].typeof(env, fields)
 	return sqltypes.Uint64, f
+}
+
+type builtinConv struct {
+	CallExpr
+	collate collations.ID
+}
+
+var _ Expr = (*builtinConv)(nil)
+
+func (call *builtinConv) eval(env *ExpressionEnv) (eval, error) {
+	n, err := call.Arguments[0].eval(env)
+	if err != nil {
+		return nil, err
+	}
+	from, err := call.Arguments[1].eval(env)
+	if err != nil {
+		return nil, err
+	}
+	to, err := call.Arguments[2].eval(env)
+	if err != nil {
+		return nil, err
+	}
+
+	if n == nil || from == nil || to == nil {
+		return nil, nil
+	}
+
+	fromBase := evalToInt64(from).i
+	toBase := evalToInt64(to).i
+
+	if fromBase < -36 || (fromBase > -2 && fromBase < 2) || fromBase > 36 {
+		return nil, nil
+	}
+	if fromBase < 0 {
+		fromBase = -fromBase
+	}
+
+	if toBase < -36 || (toBase > -2 && toBase < 2) || toBase > 36 {
+		return nil, nil
+	}
+
+	var u uint64
+	if b, ok := n.(*evalBytes); ok && b.isHexOrBitLiteral() {
+		nh, _ := b.toNumericHex()
+		u = nh.u
+	} else {
+		nStr := evalToBinary(n)
+		i, err := fastparse.ParseInt64(nStr.string(), int(fromBase))
+		u = uint64(i)
+		if errors.Is(err, fastparse.ErrOverflow) {
+			u, _ = fastparse.ParseUint64(nStr.string(), int(fromBase))
+		}
+	}
+
+	var out string
+	if toBase < 0 {
+		out = strconv.FormatInt(int64(u), -int(toBase))
+	} else {
+		out = strconv.FormatUint(u, int(toBase))
+	}
+	return newEvalText([]byte(strings.ToUpper(out)), defaultCoercionCollation(call.collate)), nil
+}
+
+func (call *builtinConv) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	_, f := call.Arguments[0].typeof(env, fields)
+	return sqltypes.VarChar, f | flagNullable
 }

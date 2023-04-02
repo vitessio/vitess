@@ -18,6 +18,7 @@ package evalengine
 
 import (
 	"bytes"
+	"errors"
 	"hash/crc32"
 	"math"
 	"math/bits"
@@ -29,6 +30,7 @@ import (
 	"vitess.io/vitess/go/mysql/datetime"
 	"vitess.io/vitess/go/mysql/decimal"
 	"vitess.io/vitess/go/mysql/json"
+	"vitess.io/vitess/go/mysql/json/fastparse"
 	"vitess.io/vitess/go/slices2"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -1861,6 +1863,80 @@ func (asm *assembler) Fn_CRC32() {
 	}, "FN CRC32 BINARY(SP-1)")
 }
 
+func (asm *assembler) Fn_CONV_hu(offset int, baseOffset int) {
+	asm.emit(func(env *ExpressionEnv) int {
+		base := env.vm.stack[env.vm.sp-baseOffset].(*evalInt64)
+
+		// Even though the base is not used at all with a hex string literal,
+		// we still need to check the base range to make sure it is valid.
+		if base.i < -36 || (base.i > -2 && base.i < 2) || base.i > 36 {
+			env.vm.stack[env.vm.sp-offset] = nil
+			return 1
+		}
+
+		env.vm.stack[env.vm.sp-offset], _ = env.vm.stack[env.vm.sp-offset].(*evalBytes).toNumericHex()
+		return 1
+	}, "FN CONV VARBINARY(SP-%d), HEX", offset)
+}
+
+func (asm *assembler) Fn_CONV_bu(offset int, baseOffset int) {
+	asm.emit(func(env *ExpressionEnv) int {
+		arg := env.vm.stack[env.vm.sp-offset].(*evalBytes)
+		base := env.vm.stack[env.vm.sp-baseOffset].(*evalInt64)
+
+		if base.i < -36 || (base.i > -2 && base.i < 2) || base.i > 36 {
+			env.vm.stack[env.vm.sp-offset] = nil
+			return 1
+		}
+		if base.i < 0 {
+			base.i = -base.i
+		}
+
+		var u uint64
+		i, err := fastparse.ParseInt64(arg.string(), int(base.i))
+		u = uint64(i)
+		if errors.Is(err, fastparse.ErrOverflow) {
+			u, _ = fastparse.ParseUint64(arg.string(), int(base.i))
+		}
+		env.vm.stack[env.vm.sp-offset] = env.vm.arena.newEvalUint64(u)
+		return 1
+	}, "FN CONV VARBINARY(SP-%d), INT64(SP-%d)", offset, baseOffset)
+}
+
+func (asm *assembler) Fn_CONV_uc(t sqltypes.Type, col collations.TypedCollation) {
+	asm.adjustStack(-2)
+	asm.emit(func(env *ExpressionEnv) int {
+		if env.vm.stack[env.vm.sp-3] == nil {
+			env.vm.sp -= 2
+			return 1
+		}
+		u := env.vm.stack[env.vm.sp-3].(*evalUint64).u
+		base := env.vm.stack[env.vm.sp-1].(*evalInt64)
+
+		if base.i < -36 || (base.i > -2 && base.i < 2) || base.i > 36 {
+			env.vm.stack[env.vm.sp-3] = nil
+			env.vm.sp -= 2
+			return 1
+		}
+
+		var out string
+		if base.i < 0 {
+			out = strconv.FormatInt(int64(u), -int(base.i))
+		} else {
+			out = strconv.FormatUint(u, int(base.i))
+		}
+
+		res := env.vm.arena.newEvalBytesEmpty()
+		res.tt = int16(t)
+		res.bytes = []byte(strings.ToUpper(out))
+		res.col = col
+
+		env.vm.stack[env.vm.sp-3] = res
+		env.vm.sp -= 2
+		return 1
+	}, "FN CONV VARCHAR(SP-3) INT64(SP-2) INT64(SP-1)")
+}
+
 func (asm *assembler) Fn_COLLATION(col collations.TypedCollation) {
 	asm.emit(func(env *ExpressionEnv) int {
 		v := evalCollation(env.vm.stack[env.vm.sp-1])
@@ -2677,6 +2753,17 @@ func (asm *assembler) NullCheck2(j *jump) {
 		}
 		return 1
 	}, "NULLCHECK SP-1, SP-2")
+}
+
+func (asm *assembler) NullCheck3(j *jump) {
+	asm.emit(func(env *ExpressionEnv) int {
+		if env.vm.stack[env.vm.sp-3] == nil || env.vm.stack[env.vm.sp-2] == nil || env.vm.stack[env.vm.sp-1] == nil {
+			env.vm.stack[env.vm.sp-3] = nil
+			env.vm.sp -= 2
+			return j.offset()
+		}
+		return 1
+	}, "NULLCHECK SP-1, SP-2, SP-3")
 }
 
 func (asm *assembler) Cmp_nullsafe(j *jump) {

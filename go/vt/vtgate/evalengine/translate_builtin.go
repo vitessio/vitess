@@ -243,6 +243,11 @@ func (ast *astCompiler) translateFuncExpr(fn *sqlparser.FuncExpr) (Expr, error) 
 			return nil, argError(method)
 		}
 		return &builtinCrc32{CallExpr: call}, nil
+	case "conv":
+		if len(args) != 3 {
+			return nil, argError(method)
+		}
+		return &builtinConv{CallExpr: call, collate: ast.cfg.Collation}, nil
 	case "lower", "lcase":
 		if len(args) != 1 {
 			return nil, argError(method)
