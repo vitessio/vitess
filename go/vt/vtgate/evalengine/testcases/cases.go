@@ -1168,6 +1168,7 @@ func FnNow(yield Query) {
 		"UTC_TIMESTAMP(1)",
 		"CURDATE()", "CURRENT_DATE()", "CURRENT_DATE",
 		"UTC_TIME()", "UTC_TIME",
+		"UTC_DATE()", "UTC_DATE",
 		"UTC_TIME(1)",
 		"CURTIME()", "CURRENT_TIME()", "CURRENT_TIME",
 		"CURTIME(1)", "CURRENT_TIME(1)",

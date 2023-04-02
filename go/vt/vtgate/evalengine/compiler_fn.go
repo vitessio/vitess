@@ -122,6 +122,8 @@ func (c *compiler) compileFn(call callable) (ctype, error) {
 		return c.compileFn_Now(call)
 	case *builtinCurdate:
 		return c.compileFn_Curdate(call)
+	case *builtinUtcDate:
+		return c.compileFn_UtcDate(call)
 	case *builtinSysdate:
 		return c.compileFn_Sysdate(call)
 	case *builtinUser:
@@ -800,6 +802,11 @@ func (c *compiler) compileFn_Now(call *builtinNow) (ctype, error) {
 
 func (c *compiler) compileFn_Curdate(*builtinCurdate) (ctype, error) {
 	c.asm.Fn_Curdate()
+	return ctype{Type: sqltypes.Date, Col: collationBinary}, nil
+}
+
+func (c *compiler) compileFn_UtcDate(*builtinUtcDate) (ctype, error) {
+	c.asm.Fn_UtcDate()
 	return ctype{Type: sqltypes.Date, Col: collationBinary}, nil
 }
 

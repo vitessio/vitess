@@ -42,11 +42,16 @@ type (
 	builtinCurdate struct {
 		CallExpr
 	}
+
+	builtinUtcDate struct {
+		CallExpr
+	}
 )
 
 var _ Expr = (*builtinNow)(nil)
 var _ Expr = (*builtinSysdate)(nil)
 var _ Expr = (*builtinCurdate)(nil)
+var _ Expr = (*builtinUtcDate)(nil)
 
 var (
 	formatTime     [7]*datetime.Strftime
@@ -117,5 +122,18 @@ func (call *builtinCurdate) typeof(_ *ExpressionEnv, _ []*querypb.Field) (sqltyp
 }
 
 func (call *builtinCurdate) constant() bool {
+	return false
+}
+
+func (call *builtinUtcDate) eval(env *ExpressionEnv) (eval, error) {
+	now := env.time(true)
+	return newEvalRaw(sqltypes.Date, formatDate.Format(now), collationBinary), nil
+}
+
+func (call *builtinUtcDate) typeof(_ *ExpressionEnv, _ []*querypb.Field) (sqltypes.Type, typeFlag) {
+	return sqltypes.Date, 0
+}
+
+func (call *builtinUtcDate) constant() bool {
 	return false
 }

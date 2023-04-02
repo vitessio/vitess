@@ -2948,6 +2948,18 @@ func (asm *assembler) Fn_Curdate() {
 	}, "FN CURDATE")
 }
 
+func (asm *assembler) Fn_UtcDate() {
+	asm.adjustStack(1)
+	asm.emit(func(env *ExpressionEnv) int {
+		val := env.vm.arena.newEvalBytesEmpty()
+		val.tt = int16(sqltypes.Date)
+		val.bytes = formatDate.Format(env.time(true))
+		env.vm.stack[env.vm.sp] = val
+		env.vm.sp++
+		return 1
+	}, "FN UTC_DATE")
+}
+
 func (asm *assembler) Fn_User() {
 	asm.adjustStack(1)
 	asm.emit(func(env *ExpressionEnv) int {
