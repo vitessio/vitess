@@ -64,9 +64,6 @@ func startEndString(s string) string {
 //
 // Use Scanner if a stream of JSON values must be parsed.
 func (p *Parser) Parse(s string) (*Value, error) {
-	if s == "NULL" { //FIXME, Parse doesn't parse uppercase NULL atm
-		s = "null"
-	}
 	s = skipWS(s)
 	p.b = append(p.b[:0], s...)
 	p.c.reset()
