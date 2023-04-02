@@ -340,7 +340,7 @@ func (qr *Rule) MarshalJSON() ([]byte, error) {
 		safeEncode(b, `,"Action":`, qr.act)
 	}
 	if qr.timeout != 0 {
-		safeEncode(b, `,"Timeut":`, qr.timeout)
+		safeEncode(b, `,"Timeout":`, qr.timeout)
 	}
 	_, _ = b.WriteString("}")
 	return b.Bytes(), nil
