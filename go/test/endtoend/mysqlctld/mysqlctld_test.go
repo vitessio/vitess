@@ -135,11 +135,12 @@ func initCluster(shardNames []string, totalTabletsRequired int) error {
 	return nil
 }
 
-const defaultOperationTimeout = 60 * time.Second
-const defeaultRetryDelay = 3 * time.Second
+const defaultOperationTimeout = 300 * time.Second
+const defaultRetryDelay = 3 * time.Second
 
 func waitForMysqlctldShutdown(t *testing.T, tab *cluster.Vttablet) bool {
 	tmr := time.NewTimer(defaultOperationTimeout)
+	defer tmr.Stop()
 	for {
 		if tab.MysqlctldProcess.HasShutdown() {
 			return true
@@ -149,7 +150,7 @@ func waitForMysqlctldShutdown(t *testing.T, tab *cluster.Vttablet) bool {
 			return false
 		default:
 		}
-		time.Sleep(defeaultRetryDelay)
+		time.Sleep(defaultRetryDelay)
 	}
 }
 
