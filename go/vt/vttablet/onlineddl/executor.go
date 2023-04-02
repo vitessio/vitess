@@ -99,7 +99,6 @@ func registerOnlineDDLFlags(fs *pflag.FlagSet) {
 	fs.DurationVar(&migrationCheckInterval, "migration_check_interval", migrationCheckInterval, "Interval between migration checks")
 	fs.DurationVar(&retainOnlineDDLTables, "retain_online_ddl_tables", retainOnlineDDLTables, "How long should vttablet keep an old migrated table before purging it")
 	fs.IntVar(&maxConcurrentOnlineDDLs, "max_concurrent_online_ddl", maxConcurrentOnlineDDLs, "Maximum number of online DDL changes that may run concurrently")
-	fs.DurationVar(&cutOverThreshold, "online-ddl-cut-over-threshold", cutOverThreshold, "max time to wait on migration cut-over before cancelling")
 }
 
 var migrationNextCheckIntervals = []time.Duration{1 * time.Second, 5 * time.Second, 10 * time.Second, 20 * time.Second}
@@ -229,6 +228,15 @@ func PTOSCFileName() (fileName string, isOverride bool) {
 // newGCTableRetainTime returns the time until which a new GC table is to be retained
 func newGCTableRetainTime() time.Time {
 	return time.Now().UTC().Add(retainOnlineDDLTables)
+}
+
+// getMigrationCutOverThreshold returns the cut-over threshold for the given migration. The migration's
+// DDL Strategy may excplicitly set the threshold; otherwise, we return the default cut-over threshold.
+func getMigrationCutOverThreshold(onlineDDL *schema.OnlineDDL) time.Duration {
+	if threshold, _ := onlineDDL.StrategySetting().CutOverThreshold(); threshold != 0 {
+		return threshold
+	}
+	return cutOverThreshold
 }
 
 // NewExecutor creates a new gh-ost executor.
@@ -777,8 +785,10 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 
 	var sentryTableName string
 
+	migrationCutOverThreshold := getMigrationCutOverThreshold(onlineDDL)
+
 	waitForPos := func(s *VReplStream, pos mysql.Position) error {
-		ctx, cancel := context.WithTimeout(ctx, cutOverThreshold)
+		ctx, cancel := context.WithTimeout(ctx, migrationCutOverThreshold)
 		defer cancel()
 		// Wait for target to reach the up-to-date pos
 		if err := tmClient.VReplicationWaitForPos(ctx, tablet.Tablet, s.id, mysql.EncodePosition(pos)); err != nil {
@@ -861,7 +871,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 		// This function waits until it finds the RENAME TABLE... query running in MySQL's PROCESSLIST, or until timeout
 		// The function assumes that one of the renamed tables is locked, thus causing the RENAME to block. If nothing
 		// is locked, then the RENAME will be near-instantaneious and it's unlikely that the function will find it.
-		renameWaitCtx, cancel := context.WithTimeout(ctx, cutOverThreshold)
+		renameWaitCtx, cancel := context.WithTimeout(ctx, migrationCutOverThreshold)
 		defer cancel()
 
 		for {
@@ -888,7 +898,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 	// Preparation is complete. We proceed to cut-over.
 	toggleBuffering := func(bufferQueries bool) error {
 		log.Infof("toggling buffering: %t in migration %v", bufferQueries, onlineDDL.UUID)
-		timeout := cutOverThreshold + qrBufferExtraTimeout
+		timeout := migrationCutOverThreshold + qrBufferExtraTimeout
 
 		e.toggleBufferTableFunc(bufferingCtx, onlineDDL.Table, timeout, bufferQueries)
 		if !bufferQueries {
@@ -941,7 +951,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 		// real production
 
 		e.updateMigrationStage(ctx, onlineDDL.UUID, "locking tables")
-		lockCtx, cancel := context.WithTimeout(ctx, cutOverThreshold)
+		lockCtx, cancel := context.WithTimeout(ctx, migrationCutOverThreshold)
 		defer cancel()
 		lockTableQuery := sqlparser.BuildParsedQuery(sqlLockTwoTablesWrite, sentryTableName, onlineDDL.Table)
 		if _, err := lockConn.Exec(lockCtx, lockTableQuery.Query, 1, false); err != nil {
@@ -1013,14 +1023,14 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 
 			{
 				dropTableQuery := sqlparser.BuildParsedQuery(sqlDropTable, sentryTableName)
-				lockCtx, cancel := context.WithTimeout(ctx, cutOverThreshold)
+				lockCtx, cancel := context.WithTimeout(ctx, migrationCutOverThreshold)
 				defer cancel()
 				if _, err := lockConn.Exec(lockCtx, dropTableQuery.Query, 1, false); err != nil {
 					return err
 				}
 			}
 			{
-				lockCtx, cancel := context.WithTimeout(ctx, cutOverThreshold)
+				lockCtx, cancel := context.WithTimeout(ctx, migrationCutOverThreshold)
 				defer cancel()
 				e.updateMigrationStage(ctx, onlineDDL.UUID, "unlocking tables")
 				if _, err := lockConn.Exec(lockCtx, sqlUnlockTables, 1, false); err != nil {
@@ -1028,7 +1038,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 				}
 			}
 			{
-				lockCtx, cancel := context.WithTimeout(ctx, cutOverThreshold)
+				lockCtx, cancel := context.WithTimeout(ctx, migrationCutOverThreshold)
 				defer cancel()
 				e.updateMigrationStage(lockCtx, onlineDDL.UUID, "waiting for RENAME to complete")
 				if err := <-renameCompleteChan; err != nil {
@@ -3363,7 +3373,7 @@ func (e *Executor) readVReplStream(ctx context.Context, uuid string, okIfMissing
 
 // isVReplMigrationReadyToCutOver sees if the vreplication migration has completed the row copy
 // and is up to date with the binlogs.
-func (e *Executor) isVReplMigrationReadyToCutOver(ctx context.Context, s *VReplStream) (isReady bool, err error) {
+func (e *Executor) isVReplMigrationReadyToCutOver(ctx context.Context, onlineDDL *schema.OnlineDDL, s *VReplStream) (isReady bool, err error) {
 	// Check all the cases where migration is still running:
 	{
 		// when ready to cut-over, pos must have some value
@@ -3378,15 +3388,17 @@ func (e *Executor) isVReplMigrationReadyToCutOver(ctx context.Context, s *VReplS
 		durationDiff := func(t1, t2 time.Time) time.Duration {
 			return t1.Sub(t2).Abs()
 		}
+		migrationCutOverThreshold := getMigrationCutOverThreshold(onlineDDL)
+
 		timeNow := time.Now()
 		timeUpdated := time.Unix(s.timeUpdated, 0)
-		if durationDiff(timeNow, timeUpdated) > cutOverThreshold {
+		if durationDiff(timeNow, timeUpdated) > migrationCutOverThreshold {
 			return false, nil
 		}
 		// Let's look at transaction timestamp. This gets written by any ongoing
 		// writes on the server (whether on this table or any other table)
 		transactionTimestamp := time.Unix(s.transactionTimestamp, 0)
-		if durationDiff(timeNow, transactionTimestamp) > cutOverThreshold {
+		if durationDiff(timeNow, transactionTimestamp) > migrationCutOverThreshold {
 			return false, nil
 		}
 	}
@@ -3530,7 +3542,7 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 					_ = e.updateMigrationETASecondsByProgress(ctx, uuid)
 					_ = e.updateMigrationLastThrottled(ctx, uuid, s.timeThrottled, s.componentThrottled)
 
-					isReady, err := e.isVReplMigrationReadyToCutOver(ctx, s)
+					isReady, err := e.isVReplMigrationReadyToCutOver(ctx, onlineDDL, s)
 					if err != nil {
 						_ = e.updateMigrationMessage(ctx, uuid, err.Error())
 						return countRunnning, cancellable, err
