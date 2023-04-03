@@ -235,6 +235,18 @@ func (c *compiler) compileToNumeric(ct ctype, offset int) ctype {
 		c.asm.Convert_hex(offset)
 		return ctype{sqltypes.Uint64, ct.Flag, collationNumeric}
 	}
+
+	if sqltypes.IsDateOrTime(ct.Type) {
+		switch ct.Type {
+		case sqltypes.Date:
+			c.asm.Convert_date(offset)
+		case sqltypes.Time:
+			c.asm.Convert_time(offset)
+		case sqltypes.Timestamp, sqltypes.Datetime:
+			c.asm.Convert_datetime(offset)
+		}
+		return ctype{sqltypes.Int64, ct.Flag, collationNumeric}
+	}
 	c.asm.Convert_xf(offset)
 	return ctype{sqltypes.Float64, ct.Flag, collationNumeric}
 }
@@ -334,6 +346,15 @@ func (c *compiler) compileNullCheck2(lt, rt ctype) *jump {
 	if lt.nullable() || rt.nullable() {
 		j := c.asm.jumpFrom()
 		c.asm.NullCheck2(j)
+		return j
+	}
+	return nil
+}
+
+func (c *compiler) compileNullCheck3(arg1, arg2, arg3 ctype) *jump {
+	if arg1.nullable() || arg2.nullable() || arg3.nullable() {
+		j := c.asm.jumpFrom()
+		c.asm.NullCheck3(j)
 		return j
 	}
 	return nil

@@ -44,7 +44,7 @@ func optimizeSubQuery(ctx *plancontext.PlanningContext, op *SubQuery, ts semanti
 		}
 		merged, err := tryMergeSubQueryOp(ctx, outer, innerOp, newInner, preds, newSubQueryMerge(ctx, newInner), ts)
 		if err != nil {
-			return nil, rewrite.SameTree, err
+			return nil, false, err
 		}
 
 		if merged != nil {
@@ -65,13 +65,13 @@ func optimizeSubQuery(ctx *plancontext.PlanningContext, op *SubQuery, ts semanti
 		if inner.ExtractedSubquery.OpCode == int(popcode.PulloutExists) {
 			correlatedTree, err := createCorrelatedSubqueryOp(ctx, innerOp, outer, preds, inner.ExtractedSubquery)
 			if err != nil {
-				return nil, rewrite.SameTree, err
+				return nil, false, err
 			}
 			outer = correlatedTree
 			continue
 		}
 
-		return nil, rewrite.SameTree, vterrors.VT12001("cross-shard correlated subquery")
+		return nil, false, vterrors.VT12001("cross-shard correlated subquery")
 	}
 
 	for _, tree := range unmerged {
@@ -361,11 +361,12 @@ func rewriteColumnsInSubqueryOpForJoin(
 			return true
 		}
 		// if it does not exist, then push this as an output column there and add it to the joinVars
-		offset, err := resultInnerOp.AddColumn(ctx, node)
+		newInnerOp, offset, err := resultInnerOp.AddColumn(ctx, aeWrap(node), true)
 		if err != nil {
 			rewriteError = err
 			return false
 		}
+		resultInnerOp = newInnerOp
 		outerTree.Vars[bindVar] = offset
 		return true
 	})
@@ -426,11 +427,12 @@ func createCorrelatedSubqueryOp(
 			bindVars[node] = bindVar
 
 			// if it does not exist, then push this as an output column in the outerOp and add it to the joinVars
-			offset, err := resultOuterOp.AddColumn(ctx, node)
+			newOuterOp, offset, err := resultOuterOp.AddColumn(ctx, aeWrap(node), true)
 			if err != nil {
 				rewriteError = err
 				return true
 			}
+			resultOuterOp = newOuterOp
 			lhsCols = append(lhsCols, node)
 			vars[bindVar] = offset
 			return true

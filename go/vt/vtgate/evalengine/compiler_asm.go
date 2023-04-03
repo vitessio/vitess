@@ -18,14 +18,19 @@ package evalengine
 
 import (
 	"bytes"
+	"errors"
+	"hash/crc32"
 	"math"
 	"math/bits"
+	"strconv"
+	"strings"
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/collations/charset"
 	"vitess.io/vitess/go/mysql/datetime"
 	"vitess.io/vitess/go/mysql/decimal"
 	"vitess.io/vitess/go/mysql/json"
+	"vitess.io/vitess/go/mysql/json/fastparse"
 	"vitess.io/vitess/go/slices2"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -723,6 +728,30 @@ func (asm *assembler) CmpTupleNullsafe() {
 	}, "CMP NULLSAFE TUPLE(SP-2), TUPLE(SP-1)")
 }
 
+func (asm *assembler) CmpDateString() {
+	asm.adjustStack(-2)
+
+	asm.emit(func(env *ExpressionEnv) int {
+		l := env.vm.stack[env.vm.sp-2].(*evalBytes)
+		r := env.vm.stack[env.vm.sp-1].(*evalBytes)
+		env.vm.sp -= 2
+		env.vm.flags.cmp, env.vm.err = compareDateAndString(l, r)
+		return 1
+	}, "CMP DATE|STRING(SP-2), DATE|STRING(SP-1)")
+}
+
+func (asm *assembler) CmpDates() {
+	asm.adjustStack(-2)
+
+	asm.emit(func(env *ExpressionEnv) int {
+		l := env.vm.stack[env.vm.sp-2].(*evalBytes)
+		r := env.vm.stack[env.vm.sp-1].(*evalBytes)
+		env.vm.sp -= 2
+		env.vm.flags.cmp, env.vm.err = compareDates(l, r)
+		return 1
+	}, "CMP DATE(SP-2), DATE(SP-1)")
+}
+
 func (asm *assembler) Collate(col collations.ID) {
 	asm.emit(func(env *ExpressionEnv) int {
 		a := env.vm.stack[env.vm.sp-1].(*evalBytes)
@@ -828,8 +857,8 @@ func (asm *assembler) Convert_dB(offset int) {
 // uint64 to ensure we match the behavior of MySQL.
 func (asm *assembler) Convert_dbit(offset int) {
 	asm.emit(func(env *ExpressionEnv) int {
-		arg := evalToNumeric(env.vm.stack[env.vm.sp-offset])
-		env.vm.stack[env.vm.sp-offset] = env.vm.arena.newEvalUint64(uint64(arg.toInt64().i))
+		arg := evalToInt64(env.vm.stack[env.vm.sp-offset])
+		env.vm.stack[env.vm.sp-offset] = env.vm.arena.newEvalUint64(uint64(arg.i))
 		return 1
 	}, "CONV DECIMAL_BITWISE(SP-%d), UINT64", offset)
 }
@@ -859,6 +888,48 @@ func (asm *assembler) Convert_hex(offset int) {
 		}
 		return 1
 	}, "CONV VARBINARY(SP-%d), HEX", offset)
+}
+
+func (asm *assembler) Convert_date(offset int) {
+	asm.emit(func(env *ExpressionEnv) int {
+		v := env.vm.stack[env.vm.sp-offset].(*evalBytes)
+		t, err := datetime.ParseDate(v.string())
+		if err != nil {
+			env.vm.err = err
+			return 1
+		}
+		i, _ := strconv.ParseInt(t.Format("20060102"), 10, 64)
+		env.vm.stack[env.vm.sp-offset] = env.vm.arena.newEvalInt64(i)
+		return 1
+	}, "CONV DATE(SP-%d), INT64", offset)
+}
+
+func (asm *assembler) Convert_datetime(offset int) {
+	asm.emit(func(env *ExpressionEnv) int {
+		v := env.vm.stack[env.vm.sp-offset].(*evalBytes)
+		t, err := datetime.ParseDateTime(v.string())
+		if err != nil {
+			env.vm.err = err
+			return 1
+		}
+		i, _ := strconv.ParseInt(t.Format("20060102150405"), 10, 64)
+		env.vm.stack[env.vm.sp-offset] = env.vm.arena.newEvalInt64(i)
+		return 1
+	}, "CONV DATETIME(SP-%d), INT64", offset)
+}
+
+func (asm *assembler) Convert_time(offset int) {
+	asm.emit(func(env *ExpressionEnv) int {
+		v := env.vm.stack[env.vm.sp-offset].(*evalBytes)
+		_, n, err := datetime.ParseTime(v.string())
+		if err != nil {
+			env.vm.err = err
+			return 1
+		}
+		i, _ := strconv.ParseInt(strings.ReplaceAll(n, ":", ""), 10, 64)
+		env.vm.stack[env.vm.sp-offset] = env.vm.arena.newEvalInt64(i)
+		return 1
+	}, "CONV TIME(SP-%d), INT64", offset)
 }
 
 func (asm *assembler) Convert_iB(offset int) {
@@ -891,6 +962,16 @@ func (asm *assembler) Convert_iu(offset int) {
 		env.vm.stack[env.vm.sp-offset] = env.vm.arena.newEvalUint64(uint64(arg.i))
 		return 1
 	}, "CONV INT64(SP-%d), UINT64", offset)
+}
+
+func (asm *assembler) Clamp_u(offset int, val uint64) {
+	asm.emit(func(env *ExpressionEnv) int {
+		arg := env.vm.stack[env.vm.sp-offset].(*evalUint64)
+		if arg.u > val {
+			arg.u = val
+		}
+		return 1
+	}, "CLAMP UINT64(SP-%d), UINT64", offset)
 }
 
 func (asm *assembler) Convert_nj(offset int, isBool bool) {
@@ -1001,7 +1082,7 @@ func (asm *assembler) Convert_xd(offset int, m, d int32) {
 	asm.emit(func(env *ExpressionEnv) int {
 		env.vm.stack[env.vm.sp-offset] = evalToNumeric(env.vm.stack[env.vm.sp-offset]).toDecimal(m, d)
 		return 1
-	}, "CONV (SP-%d), FLOAT64", offset)
+	}, "CONV (SP-%d), DECIMAL", offset)
 }
 
 func (asm *assembler) Convert_xf(offset int) {
@@ -1010,18 +1091,19 @@ func (asm *assembler) Convert_xf(offset int) {
 		return 1
 	}, "CONV (SP-%d), FLOAT64", offset)
 }
+
 func (asm *assembler) Convert_xi(offset int) {
 	asm.emit(func(env *ExpressionEnv) int {
-		arg := evalToNumeric(env.vm.stack[env.vm.sp-offset])
-		env.vm.stack[env.vm.sp-offset] = arg.toInt64()
+		arg := evalToInt64(env.vm.stack[env.vm.sp-offset])
+		env.vm.stack[env.vm.sp-offset] = arg
 		return 1
 	}, "CONV (SP-%d), INT64", offset)
 }
 
 func (asm *assembler) Convert_xu(offset int) {
 	asm.emit(func(env *ExpressionEnv) int {
-		arg := evalToNumeric(env.vm.stack[env.vm.sp-offset])
-		env.vm.stack[env.vm.sp-offset] = arg.toUint64()
+		arg := evalToInt64(env.vm.stack[env.vm.sp-offset])
+		env.vm.stack[env.vm.sp-offset] = env.vm.arena.newEvalUint64(uint64(arg.i))
 		return 1
 	}, "CONV (SP-%d), UINT64", offset)
 }
@@ -1443,6 +1525,416 @@ func (asm *assembler) Fn_RADIANS() {
 		f.f = f.f * (math.Pi / 180)
 		return 1
 	}, "FN RADIANS FLOAT64(SP-1)")
+}
+
+func (asm *assembler) Fn_EXP() {
+	asm.emit(func(env *ExpressionEnv) int {
+		f := env.vm.stack[env.vm.sp-1].(*evalFloat)
+		f.f = math.Exp(f.f)
+		if !isFinite(f.f) {
+			env.vm.stack[env.vm.sp-1] = nil
+		}
+		return 1
+	}, "FN EXP FLOAT64(SP-1)")
+}
+
+func (asm *assembler) Fn_LN() {
+	asm.emit(func(env *ExpressionEnv) int {
+		f := env.vm.stack[env.vm.sp-1].(*evalFloat)
+		var ok bool
+		f.f, ok = math_log(f.f)
+		if !ok {
+			env.vm.stack[env.vm.sp-1] = nil
+		}
+		return 1
+	}, "FN LN FLOAT64(SP-1)")
+}
+
+func (asm *assembler) Fn_LOG() {
+	asm.adjustStack(-1)
+	asm.emit(func(env *ExpressionEnv) int {
+		var ok bool
+		f1 := env.vm.stack[env.vm.sp-2].(*evalFloat)
+		f2 := env.vm.stack[env.vm.sp-1].(*evalFloat)
+		f1.f, ok = math_logN(f1.f, f2.f)
+		if !ok {
+			env.vm.stack[env.vm.sp-2] = nil
+		}
+		env.vm.sp--
+		return 1
+	}, "FN LOG FLOAT64(SP-1)")
+}
+
+func (asm *assembler) Fn_LOG10() {
+	asm.emit(func(env *ExpressionEnv) int {
+		var ok bool
+		f := env.vm.stack[env.vm.sp-1].(*evalFloat)
+		f.f, ok = math_log10(f.f)
+		if !ok {
+			env.vm.stack[env.vm.sp-1] = nil
+		}
+		return 1
+	}, "FN LOG10 FLOAT64(SP-1)")
+}
+
+func (asm *assembler) Fn_LOG2() {
+	asm.emit(func(env *ExpressionEnv) int {
+		var ok bool
+		f := env.vm.stack[env.vm.sp-1].(*evalFloat)
+		f.f, ok = math_log2(f.f)
+		if !ok {
+			env.vm.stack[env.vm.sp-1] = nil
+		}
+		return 1
+	}, "FN LOG2 FLOAT64(SP-1)")
+}
+
+func (asm *assembler) Fn_POW() {
+	asm.adjustStack(-1)
+	asm.emit(func(env *ExpressionEnv) int {
+		f1 := env.vm.stack[env.vm.sp-2].(*evalFloat)
+		f2 := env.vm.stack[env.vm.sp-1].(*evalFloat)
+
+		f1.f = math.Pow(f1.f, f2.f)
+		if !isFinite(f1.f) {
+			env.vm.stack[env.vm.sp-2] = nil
+		}
+		env.vm.sp--
+		return 1
+	}, "FN POW FLOAT64(SP-1)")
+}
+
+func (asm *assembler) Fn_SIGN_i() {
+	asm.emit(func(env *ExpressionEnv) int {
+		i := env.vm.stack[env.vm.sp-1].(*evalInt64)
+		if i.i < 0 {
+			i.i = -1
+		} else if i.i > 0 {
+			i.i = 1
+		} else {
+			i.i = 0
+		}
+		return 1
+	}, "FN SIGN INT64(SP-1)")
+}
+
+func (asm *assembler) Fn_SIGN_u() {
+	asm.emit(func(env *ExpressionEnv) int {
+		u := env.vm.stack[env.vm.sp-1].(*evalUint64)
+		a := int64(0)
+		if u.u > 0 {
+			a = 1
+		}
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalInt64(a)
+		return 1
+	}, "FN SIGN UINT64(SP-1)")
+}
+
+func (asm *assembler) Fn_SIGN_f() {
+	asm.emit(func(env *ExpressionEnv) int {
+		f := env.vm.stack[env.vm.sp-1].(*evalFloat)
+		a := int64(0)
+		if f.f < 0 {
+			a = -1
+		} else if f.f > 0 {
+			a = 1
+		}
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalInt64(a)
+		return 1
+	}, "FN SIGN FLOAT64(SP-1)")
+}
+
+func (asm *assembler) Fn_SIGN_d() {
+	asm.emit(func(env *ExpressionEnv) int {
+		d := env.vm.stack[env.vm.sp-1].(*evalDecimal)
+		a := int64(d.dec.Sign())
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalInt64(a)
+		return 1
+	}, "FN SIGN FLOAT64(SP-1)")
+}
+
+func (asm *assembler) Fn_SQRT() {
+	asm.emit(func(env *ExpressionEnv) int {
+		f := env.vm.stack[env.vm.sp-1].(*evalFloat)
+		f.f = math.Sqrt(f.f)
+		if !isFinite(f.f) {
+			env.vm.stack[env.vm.sp-1] = nil
+		}
+		return 1
+	}, "FN SQRT FLOAT64(SP-1)")
+}
+
+func (asm *assembler) Fn_ROUND1_f() {
+	asm.emit(func(env *ExpressionEnv) int {
+		f := env.vm.stack[env.vm.sp-1].(*evalFloat)
+		f.f = math.Round(f.f)
+		return 1
+	}, "FN ROUND FLOAT64(SP-1)")
+}
+
+func (asm *assembler) Fn_ROUND1_d() {
+	asm.emit(func(env *ExpressionEnv) int {
+		d := env.vm.stack[env.vm.sp-1].(*evalDecimal)
+		d.dec = d.dec.Round(0)
+		d.length = 0
+		return 1
+	}, "FN ROUND DECIMAL(SP-1)")
+}
+
+func (asm *assembler) Fn_ROUND2_i() {
+	asm.adjustStack(-1)
+	asm.emit(func(env *ExpressionEnv) int {
+		i := env.vm.stack[env.vm.sp-2].(*evalInt64)
+		r := env.vm.stack[env.vm.sp-1].(*evalInt64)
+
+		i.i = roundSigned(i.i, r.i)
+		env.vm.sp--
+		return 1
+	}, "FN ROUND INT64(SP-2) INT64(SP-1)")
+}
+
+func (asm *assembler) Fn_ROUND2_u() {
+	asm.adjustStack(-1)
+	asm.emit(func(env *ExpressionEnv) int {
+		u := env.vm.stack[env.vm.sp-2].(*evalUint64)
+		r := env.vm.stack[env.vm.sp-1].(*evalInt64)
+
+		u.u = roundUnsigned(u.u, r.i)
+		env.vm.sp--
+		return 1
+	}, "FN ROUND INT64(SP-2) INT64(SP-1)")
+}
+
+func (asm *assembler) Fn_ROUND2_f() {
+	asm.adjustStack(-1)
+	asm.emit(func(env *ExpressionEnv) int {
+		f := env.vm.stack[env.vm.sp-2].(*evalFloat)
+		r := env.vm.stack[env.vm.sp-1].(*evalInt64)
+		if r.i == 0 {
+			f.f = math.Round(f.f)
+			env.vm.sp--
+			return 1
+		}
+
+		r.i = clampRounding(r.i)
+		factor := math.Pow(10, float64(r.i))
+		if factor == 0.0 {
+			f.f = 0.0
+			env.vm.sp--
+			return 1
+		}
+		f.f = math.Round(f.f*factor) / factor
+		env.vm.sp--
+		return 1
+	}, "FN ROUND FLOAT64(SP-2) INT64(SP-1)")
+}
+
+func (asm *assembler) Fn_ROUND2_d() {
+	asm.adjustStack(-1)
+	asm.emit(func(env *ExpressionEnv) int {
+		d := env.vm.stack[env.vm.sp-2].(*evalDecimal)
+		r := env.vm.stack[env.vm.sp-1].(*evalInt64)
+
+		if d.dec.IsZero() {
+			env.vm.sp--
+			return 1
+		}
+
+		if r.i == 0 {
+			d.dec = d.dec.Round(0)
+			d.length = 0
+			env.vm.sp--
+			return 1
+		}
+
+		r.i = clampRounding(r.i)
+		digit := int32(r.i)
+		if digit < 0 {
+			digit = 0
+		}
+		if digit > d.length {
+			digit = d.length
+		}
+		rounded := d.dec.Round(int32(r.i))
+		if rounded.IsZero() {
+			d.dec = decimal.Zero
+			d.length = 0
+			env.vm.sp--
+			return 1
+		}
+		env.vm.stack[env.vm.sp-2] = env.vm.arena.newEvalDecimalWithPrec(rounded, digit)
+		env.vm.sp--
+		return 1
+	}, "FN ROUND DECIMAL(SP-2) INT64(SP-1)")
+}
+
+func (asm *assembler) Fn_TRUNCATE_i() {
+	asm.adjustStack(-1)
+	asm.emit(func(env *ExpressionEnv) int {
+		i := env.vm.stack[env.vm.sp-2].(*evalInt64)
+		r := env.vm.stack[env.vm.sp-1].(*evalInt64)
+
+		i.i = truncateSigned(i.i, r.i)
+		env.vm.sp--
+		return 1
+	}, "FN TRUNCATE INT64(SP-2) INT64(SP-1)")
+}
+
+func (asm *assembler) Fn_TRUNCATE_u() {
+	asm.adjustStack(-1)
+	asm.emit(func(env *ExpressionEnv) int {
+		u := env.vm.stack[env.vm.sp-2].(*evalUint64)
+		r := env.vm.stack[env.vm.sp-1].(*evalInt64)
+
+		u.u = truncateUnsigned(u.u, r.i)
+		env.vm.sp--
+		return 1
+	}, "FN TRUNCATE INT64(SP-2) INT64(SP-1)")
+}
+
+func (asm *assembler) Fn_TRUNCATE_f() {
+	asm.adjustStack(-1)
+	asm.emit(func(env *ExpressionEnv) int {
+		f := env.vm.stack[env.vm.sp-2].(*evalFloat)
+		r := env.vm.stack[env.vm.sp-1].(*evalInt64)
+		if r.i == 0 {
+			f.f = math.Trunc(f.f)
+			env.vm.sp--
+			return 1
+		}
+
+		r.i = clampRounding(r.i)
+		factor := math.Pow(10, float64(r.i))
+		if factor == 0.0 {
+			f.f = 0.0
+			env.vm.sp--
+			return 1
+		}
+		f.f = math.Trunc(f.f*factor) / factor
+		env.vm.sp--
+		return 1
+	}, "FN TRUNCATE FLOAT64(SP-2) INT64(SP-1)")
+}
+
+func (asm *assembler) Fn_TRUNCATE_d() {
+	asm.adjustStack(-1)
+	asm.emit(func(env *ExpressionEnv) int {
+		d := env.vm.stack[env.vm.sp-2].(*evalDecimal)
+		r := env.vm.stack[env.vm.sp-1].(*evalInt64)
+
+		if d.dec.IsZero() {
+			env.vm.sp--
+			return 1
+		}
+
+		if r.i == 0 {
+			d.dec = d.dec.Truncate(0)
+			d.length = 0
+			env.vm.sp--
+			return 1
+		}
+
+		r.i = clampRounding(r.i)
+		digit := int32(r.i)
+		if digit < 0 {
+			digit = 0
+		}
+		if digit > d.length {
+			digit = d.length
+		}
+		rounded := d.dec.Truncate(int32(r.i))
+		if rounded.IsZero() {
+			d.dec = decimal.Zero
+			d.length = 0
+			env.vm.sp--
+			return 1
+		}
+		env.vm.stack[env.vm.sp-2] = env.vm.arena.newEvalDecimalWithPrec(rounded, digit)
+		env.vm.sp--
+		return 1
+	}, "FN TRUNCATE DECIMAL(SP-2) INT64(SP-1)")
+}
+
+func (asm *assembler) Fn_CRC32() {
+	asm.emit(func(env *ExpressionEnv) int {
+		b := env.vm.stack[env.vm.sp-1].(*evalBytes)
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalUint64(uint64(crc32.ChecksumIEEE(b.bytes)))
+		return 1
+	}, "FN CRC32 BINARY(SP-1)")
+}
+
+func (asm *assembler) Fn_CONV_hu(offset int, baseOffset int) {
+	asm.emit(func(env *ExpressionEnv) int {
+		base := env.vm.stack[env.vm.sp-baseOffset].(*evalInt64)
+
+		// Even though the base is not used at all with a hex string literal,
+		// we still need to check the base range to make sure it is valid.
+		if base.i < -36 || (base.i > -2 && base.i < 2) || base.i > 36 {
+			env.vm.stack[env.vm.sp-offset] = nil
+			return 1
+		}
+
+		env.vm.stack[env.vm.sp-offset], _ = env.vm.stack[env.vm.sp-offset].(*evalBytes).toNumericHex()
+		return 1
+	}, "FN CONV VARBINARY(SP-%d), HEX", offset)
+}
+
+func (asm *assembler) Fn_CONV_bu(offset int, baseOffset int) {
+	asm.emit(func(env *ExpressionEnv) int {
+		arg := env.vm.stack[env.vm.sp-offset].(*evalBytes)
+		base := env.vm.stack[env.vm.sp-baseOffset].(*evalInt64)
+
+		if base.i < -36 || (base.i > -2 && base.i < 2) || base.i > 36 {
+			env.vm.stack[env.vm.sp-offset] = nil
+			return 1
+		}
+		if base.i < 0 {
+			base.i = -base.i
+		}
+
+		var u uint64
+		i, err := fastparse.ParseInt64(arg.string(), int(base.i))
+		u = uint64(i)
+		if errors.Is(err, fastparse.ErrOverflow) {
+			u, _ = fastparse.ParseUint64(arg.string(), int(base.i))
+		}
+		env.vm.stack[env.vm.sp-offset] = env.vm.arena.newEvalUint64(u)
+		return 1
+	}, "FN CONV VARBINARY(SP-%d), INT64(SP-%d)", offset, baseOffset)
+}
+
+func (asm *assembler) Fn_CONV_uc(t sqltypes.Type, col collations.TypedCollation) {
+	asm.adjustStack(-2)
+	asm.emit(func(env *ExpressionEnv) int {
+		if env.vm.stack[env.vm.sp-3] == nil {
+			env.vm.sp -= 2
+			return 1
+		}
+		u := env.vm.stack[env.vm.sp-3].(*evalUint64).u
+		base := env.vm.stack[env.vm.sp-1].(*evalInt64)
+
+		if base.i < -36 || (base.i > -2 && base.i < 2) || base.i > 36 {
+			env.vm.stack[env.vm.sp-3] = nil
+			env.vm.sp -= 2
+			return 1
+		}
+
+		var out []byte
+		if base.i < 0 {
+			out = strconv.AppendInt(out, int64(u), -int(base.i))
+		} else {
+			out = strconv.AppendUint(out, u, int(base.i))
+		}
+
+		res := env.vm.arena.newEvalBytesEmpty()
+		res.tt = int16(t)
+		res.bytes = upcaseASCII(out)
+		res.col = col
+
+		env.vm.stack[env.vm.sp-3] = res
+		env.vm.sp -= 2
+		return 1
+	}, "FN CONV VARCHAR(SP-3) INT64(SP-2) INT64(SP-1)")
 }
 
 func (asm *assembler) Fn_COLLATION(col collations.TypedCollation) {
@@ -2263,6 +2755,17 @@ func (asm *assembler) NullCheck2(j *jump) {
 	}, "NULLCHECK SP-1, SP-2")
 }
 
+func (asm *assembler) NullCheck3(j *jump) {
+	asm.emit(func(env *ExpressionEnv) int {
+		if env.vm.stack[env.vm.sp-3] == nil || env.vm.stack[env.vm.sp-2] == nil || env.vm.stack[env.vm.sp-1] == nil {
+			env.vm.stack[env.vm.sp-3] = nil
+			env.vm.sp -= 2
+			return j.offset()
+		}
+		return 1
+	}, "NULLCHECK SP-1, SP-2, SP-3")
+}
+
 func (asm *assembler) Cmp_nullsafe(j *jump) {
 	asm.emit(func(env *ExpressionEnv) int {
 		l := env.vm.stack[env.vm.sp-2]
@@ -2443,6 +2946,18 @@ func (asm *assembler) Fn_Curdate() {
 		env.vm.sp++
 		return 1
 	}, "FN CURDATE")
+}
+
+func (asm *assembler) Fn_UtcDate() {
+	asm.adjustStack(1)
+	asm.emit(func(env *ExpressionEnv) int {
+		val := env.vm.arena.newEvalBytesEmpty()
+		val.tt = int16(sqltypes.Date)
+		val.bytes = formatDate.Format(env.time(true))
+		env.vm.stack[env.vm.sp] = val
+		env.vm.sp++
+		return 1
+	}, "FN UTC_DATE")
 }
 
 func (asm *assembler) Fn_User() {

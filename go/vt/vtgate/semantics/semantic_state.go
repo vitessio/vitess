@@ -129,6 +129,16 @@ func (st *SemTable) CopyDependencies(from, to sqlparser.Expr) {
 	st.Direct[to] = st.DirectDeps(from)
 }
 
+// CopyDependencies copies the dependencies from one expression into the other
+func (st *SemTable) Cloned(from, to sqlparser.SQLNode) {
+	f, fromOK := from.(sqlparser.Expr)
+	t, toOK := to.(sqlparser.Expr)
+	if !(fromOK && toOK) {
+		return
+	}
+	st.CopyDependencies(f, t)
+}
+
 // EmptySemTable creates a new empty SemTable
 func EmptySemTable() *SemTable {
 	return &SemTable{

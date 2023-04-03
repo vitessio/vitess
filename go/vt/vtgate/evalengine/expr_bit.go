@@ -76,7 +76,7 @@ func (b *BitwiseNotExpr) eval(env *ExpressionEnv) (eval, error) {
 		return newEvalBinary(out), nil
 	}
 
-	eu := evalToNumeric(e).toInt64()
+	eu := evalToInt64(e)
 	return newEvalUint64(^uint64(eu.i)), nil
 }
 
@@ -207,8 +207,8 @@ func (bit *BitwiseExpr) eval(env *ExpressionEnv) (eval, error) {
 			}
 		}
 
-		lu := evalToNumeric(l).toInt64()
-		ru := evalToNumeric(r).toInt64()
+		lu := evalToInt64(l)
+		ru := evalToInt64(r)
 		return newEvalUint64(op.numeric(uint64(lu.i), uint64(ru.i))), nil
 
 	case opBitShift:
@@ -219,11 +219,11 @@ func (bit *BitwiseExpr) eval(env *ExpressionEnv) (eval, error) {
 			unsigned 64-bit integer as necessary.
 		*/
 		if l, ok := l.(*evalBytes); ok && l.isBinary() && !l.isHexOrBitLiteral() {
-			ru := evalToNumeric(r).toInt64()
+			ru := evalToInt64(r)
 			return newEvalBinary(op.binary(l.bytes, uint64(ru.i))), nil
 		}
-		lu := evalToNumeric(l).toInt64()
-		ru := evalToNumeric(r).toInt64()
+		lu := evalToInt64(l)
+		ru := evalToInt64(r)
 		return newEvalUint64(op.numeric(uint64(lu.i), uint64(ru.i))), nil
 
 	default:

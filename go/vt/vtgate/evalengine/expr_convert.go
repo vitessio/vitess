@@ -114,9 +114,9 @@ func (c *ConvertExpr) eval(env *ExpressionEnv) (eval, error) {
 		}
 		return nil, c.returnUnsupportedError()
 	case "SIGNED", "SIGNED INTEGER":
-		return evalToNumeric(e).toInt64(), nil
+		return evalToInt64(e), nil
 	case "UNSIGNED", "UNSIGNED INTEGER":
-		return evalToNumeric(e).toUint64(), nil
+		return evalToInt64(e).toUint64(), nil
 	case "JSON":
 		return evalToJSON(e)
 	case "DATE", "DATETIME", "YEAR", "TIME":
