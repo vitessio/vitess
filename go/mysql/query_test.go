@@ -707,6 +707,12 @@ type testExec struct {
 }
 
 func clientExecute(t *testing.T, cConn *Conn, useCursor byte, maxRows int) *sqltypes.Result {
+	if useCursor != 0 {
+		cConn.StatusFlags |= uint16(ServerCursorExists)
+	} else {
+		cConn.StatusFlags &= ^uint16(ServerCursorExists)
+	}
+
 	// Write a COM_STMT_EXECUTE packet
 	mockPacket := []byte{ComStmtExecute, 0, 0, 0, 0, useCursor, 1, 0, 0, 0, 0, 1, 1, 128, 1}
 

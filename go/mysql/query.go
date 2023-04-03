@@ -51,38 +51,6 @@ func (c *Conn) WriteComQuery(query string) error {
 	return nil
 }
 
-// WriteComPrepare writes a query for the server to execute.
-// Client -> Server.
-// Returns SQLError(CRServerGone) if it can't.
-func (c *Conn) WriteComPrepare(query string) error {
-	// This is a new command, need to reset the sequence.
-	c.sequence = 0
-
-	data := c.startEphemeralPacket(len(query) + 1)
-	data[0] = ComPrepare
-	copy(data[1:], query)
-	if err := c.writeEphemeralPacket(); err != nil {
-		return NewSQLError(CRServerGone, SSUnknownSQLState, err.Error())
-	}
-	return nil
-}
-
-// WriteComExecute writes a query for the server to execute.
-// Client -> Server.
-// Returns SQLError(CRServerGone) if it can't.
-func (c *Conn) WriteComExecute(query string) error {
-	// This is a new command, need to reset the sequence.
-	c.sequence = 0
-
-	data := c.startEphemeralPacket(len(query) + 1)
-	data[0] = ComStmtExecute
-	copy(data[1:], query)
-	if err := c.writeEphemeralPacket(); err != nil {
-		return NewSQLError(CRServerGone, SSUnknownSQLState, err.Error())
-	}
-	return nil
-}
-
 // writeComInitDB changes the default database to use.
 // Client -> Server.
 // Returns SQLError(CRServerGone) if it can't.
@@ -418,7 +386,10 @@ func (c *Conn) ReadQueryResult(maxrows int, wantfields bool) (result *sqltypes.R
 			// This is what we expect.
 			// Warnings and status flags are ignored.
 			c.recycleReadPacket()
-			// goto: read row loop
+			// goto: read row loop, unless using cursors
+			if c.StatusFlags & ServerCursorExists != 0 {
+				return result, false, 0, nil
+			}
 		} else if isErrorPacket(data) {
 			defer c.recycleReadPacket()
 			return nil, false, 0, ParseErrorPacket(data)

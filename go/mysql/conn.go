@@ -1597,11 +1597,6 @@ func (c *Conn) execPrepareStatement(stmtID uint32, cursorType byte, handler Hand
 			err = c.writeOKPacket(qr.RowsAffected, qr.InsertID, c.StatusFlags, 0)
 		} else {
 			err = c.writeFields(qr)
-			if c.Capabilities&CapabilityClientDeprecateEOF == 0 {
-				if err = c.writeEOFPacket(c.StatusFlags, 0); err != nil {
-					return err
-				}
-			}
 		}
 
 		// Cache query results to be written upon ComStmtFetch
