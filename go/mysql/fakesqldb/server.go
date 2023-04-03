@@ -616,11 +616,15 @@ func (db *DB) GetQueryCalledNum(query string) int {
 
 // QueryLog returns the query log in a semicomma separated string
 func (db *DB) QueryLog() string {
+	db.mu.Lock()
+	defer db.mu.Unlock()
 	return strings.Join(db.querylog, ";")
 }
 
 // ResetQueryLog resets the query log
 func (db *DB) ResetQueryLog() {
+	db.mu.Lock()
+	defer db.mu.Unlock()
 	db.querylog = nil
 }
 
