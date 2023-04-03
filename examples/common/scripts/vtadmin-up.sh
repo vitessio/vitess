@@ -76,8 +76,8 @@ nvm use "$NODE_VERSION" || fail "Could not use nvm $NODE_VERSION."
 # other Vitess components.)
 npm --prefix "$web_dir" --silent install
 
-REACT_APP_VTADMIN_API_ADDRESS="http://localhost:${vtadmin_api_port}" \
-  REACT_APP_ENABLE_EXPERIMENTAL_TABLET_DEBUG_VARS="true" \
+VITE_VTADMIN_API_ADDRESS="http://localhost:${vtadmin_api_port}" \
+  VITE_ENABLE_EXPERIMENTAL_TABLET_DEBUG_VARS="true" \
   npm run --prefix "$web_dir" build
 
 "${web_dir}/node_modules/.bin/serve" --no-clipboard -l $vtadmin_web_port -s "${web_dir}/build" \

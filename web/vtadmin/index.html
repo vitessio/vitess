@@ -9,7 +9,9 @@
     <link rel="manifest" href="/manifest.json" />
     <script src="/config/config.js"></script>
     <script type="module" src="/src/index.tsx"></script>
-    
+    <!-- shim for global since vite doesn't include shims -->
+    <script>window.global = window;</script>
+
     <!-- See also the useDocumentTitle hook, which sets document.title dynamically. -->
     <title>VTAdmin</title>
   </head>
