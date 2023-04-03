@@ -115,6 +115,10 @@ func (d *Derived) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.
 		d.Source, err = d.Source.AddPredicate(ctx, expr)
 		return d, err
 	}
+	if sqlparser.ContainsAggregation(expr) {
+		// if we have an aggregation, we don't want to push it inside
+		return &Filter{Source: d, Predicates: []sqlparser.Expr{expr}}, nil
+	}
 	tableInfo, err := ctx.SemTable.TableInfoForExpr(expr)
 	if err != nil {
 		if err == semantics.ErrNotSingleTable {
