@@ -51,13 +51,6 @@ func (c *Conn) WriteComQuery(query string) error {
 	return nil
 }
 
-func (c *Conn) WritePacket(packetData []byte) error {
-	c.sequence = 0
-	data := c.startEphemeralPacket(len(packetData))
-	copy(data, packetData)
-	return c.writeEphemeralPacket()
-}
-
 // WriteComPrepare writes a query for the server to execute.
 // Client -> Server.
 // Returns SQLError(CRServerGone) if it can't.

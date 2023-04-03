@@ -1296,12 +1296,16 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 			newqr, ok = <-c.cs.next
 
 			// check if there was an error
-			if err = <- c.cs.done; err != nil {
-				if werr := c.writeErrorPacketFromError(err); werr != nil {
-					log.Errorf("Error writing query error to %s: %v", c, werr)
-					return werr
+			select {
+			case err = <- c.cs.done:
+				if err != nil {
+					if werr := c.writeErrorPacketFromError(err); werr != nil {
+						log.Errorf("Error writing query error to %s: %v", c, werr)
+						return werr
+					}
+					return nil
 				}
-				return nil
+			default:
 			}
 
 			// channel is closed, meaning there are no more rows

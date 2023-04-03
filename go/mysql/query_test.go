@@ -691,10 +691,10 @@ func RowString(row []sqltypes.Value) string {
 	return result
 }
 
-func WriteMockDataToConn(c *Conn, mockData []byte) error {
+func writeRawPacketToConn(c *Conn, packet []byte) error {
 	c.sequence = 0
-	data := c.startEphemeralPacket(len(mockData))
-	copy(data, mockData)
+	data := c.startEphemeralPacket(len(packet))
+	copy(data, packet)
 	return c.writeEphemeralPacket()
 }
 
@@ -706,11 +706,11 @@ type testExec struct {
 	maxRows int
 }
 
-func clientExecute(t *testing.T, cConn *Conn, useCursor byte, maxRows int) (*sqltypes.Result, error) {
+func clientExecute(t *testing.T, cConn *Conn, useCursor byte, maxRows int) *sqltypes.Result {
 	// Write a COM_STMT_EXECUTE packet
 	mockPacket := []byte{ComStmtExecute, 0, 0, 0, 0, useCursor, 1, 0, 0, 0, 0, 1, 1, 128, 1}
 
-	if err := cConn.WritePacket(mockPacket); err != nil {
+	if err := writeRawPacketToConn(cConn, mockPacket); err != nil {
 		t.Fatalf("WriteMockExecuteToConn failed with error: %v", err)
 	}
 
@@ -719,7 +719,23 @@ func clientExecute(t *testing.T, cConn *Conn, useCursor byte, maxRows int) (*sql
 		t.Fatalf("ReadQueryResult failed with error: %v", err)
 	}
 
-	return qr, err
+	return qr
+}
+
+func clientFetch(t *testing.T, cConn *Conn, useCursor byte, maxRows int, fields []*querypb.Field) *sqltypes.Result {
+	// Write a COM_STMT_FETCH packet
+	mockPacket := []byte{ComStmtFetch, 0, 0, 0, 0, useCursor, 1, 0, 0, 0, 0, 1, 1, 128, 1}
+
+	if err := writeRawPacketToConn(cConn, mockPacket); err != nil {
+		t.Fatalf("WriteMockDataToConn failed with error: %v", err)
+	}
+
+	qr, _, _, err := cConn.FetchQueryResult(maxRows, fields)
+	if err != nil && err != io.EOF {
+		t.Fatalf("FetchQueryResult failed with error: %v", err)
+	}
+
+	return qr
 }
 
 func checkExecute(t *testing.T, sConn, cConn *Conn, test testExec) {
@@ -737,25 +753,7 @@ func checkExecute(t *testing.T, sConn, cConn *Conn, test testExec) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-
-		// Write a COM_STMT_EXECUTE packet
-		mockPacket := []byte{ComStmtExecute, 0, 0, 0, 0, test.useCursor, 1, 0, 0, 0, 0, 1, 1, 128, 1}
-
-		var err error
-		//if err = cConn.WritePacket(mockPacket); err != nil {
-		//	t.Fatalf("WriteMockExecuteToConn failed with error: %v", err)
-		//}
-		if err = WriteMockDataToConn(cConn, mockPacket); err != nil {
-			t.Fatalf("WriteMockDataToConn failed with error: %v", err)
-		}
-
-		// Read Query Results
-		qr, _, _, err = cConn.ReadQueryResult(100, true)
-		if err != nil {
-			t.Fatalf("ReadQueryResult failed with error: %v", err)
-		}
-
-		//qr, err = clientExecute(t, cConn, test.useCursor, test.maxRows)
+		qr = clientExecute(t, cConn, test.useCursor, test.maxRows)
 	}()
 
 	// handle a single client command
@@ -766,8 +764,9 @@ func checkExecute(t *testing.T, sConn, cConn *Conn, test testExec) {
 	// wait until client receives the query result back
 	wg.Wait()
 
-	if test.expectedNumFields != len(qr.Fields) {
-		t.Fatalf("Expected %d fields, Received %d", test.expectedNumFields, len(qr.Fields))
+	var fields = qr.Fields
+	if test.expectedNumFields != len(fields) {
+		t.Fatalf("Expected %d fields, Received %d", test.expectedNumFields, len(fields))
 	}
 
 	// if not using cursor, we should have results without fetching
@@ -789,23 +788,7 @@ func checkExecute(t *testing.T, sConn, cConn *Conn, test testExec) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-
-		// Write a COM_STMT_FETCH packet
-		mockPacket := []byte{ComStmtFetch, byte(prepare.StatementID), 0, 0, 0, test.useCursor, 1, 0, 0, 0, 0, 1, 1, 128, 1}
-
-		var err error
-		//if err = cConn.WritePacket(mockPacket); err != nil {
-		//	t.Fatalf("WriteMockExecuteToConn failed with error: %v", err)
-		//}
-		if err = WriteMockDataToConn(cConn, mockPacket); err != nil {
-			t.Fatalf("WriteMockDataToConn failed with error: %v", err)
-		}
-
-		// Read Query Results
-		qr, _, _, err = cConn.FetchQueryResult(100, qr.Fields)
-		if err != nil && err != io.EOF {
-			t.Fatalf("FetchQueryResult failed with error: %v", err)
-		}
+		qr = clientFetch(t, cConn, test.useCursor, test.maxRows, fields)
 	}()
 
 	// handle a single client command
@@ -823,6 +806,28 @@ func checkExecute(t *testing.T, sConn, cConn *Conn, test testExec) {
 	if test.expectedNumRows != len(qr.Rows) {
 		t.Fatalf("Expected %d rows, Received %d", test.expectedNumRows, len(qr.Rows))
 	}
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		qr = clientFetch(t, cConn, test.useCursor, test.maxRows, fields)
+	}()
+
+	// handle a single client command
+	if err := sConn.handleNextCommand(&testHandler{}); err != nil {
+		t.Fatalf("handleNextComamnd failed with error: %v", err)
+	}
+
+	// wait until client fetches the rows
+	wg.Wait()
+
+	if (sConn.StatusFlags & ServerCursorExists) != 0 {
+		t.Fatalf("Server StatusFlag should indicate that Cursor does not exist")
+	}
+
+	if len(qr.Rows) != 0 {
+		t.Fatalf("Expected %d rows, Received %d", 0, len(qr.Rows))
+	}
 }
 
 func TestExecuteQueries(t *testing.T) {
@@ -839,24 +844,42 @@ func TestExecuteQueries(t *testing.T) {
 			useCursor: 0,
 			expectedNumFields: 3,
 			expectedNumRows: 0,
+			maxRows: 100,
 		},
 		{
 			query: "select rows",
 			useCursor: 0,
 			expectedNumFields: 2,
 			expectedNumRows: 2,
+			maxRows: 100,
+		},
+		{
+			query: "large batch",
+			useCursor: 0,
+			expectedNumFields: 2,
+			expectedNumRows: 256,
+			maxRows: 1000,
 		},
 		{
 			query: "empty result",
 			useCursor: 1,
 			expectedNumFields: 3,
 			expectedNumRows: 0,
+			maxRows: 100,
 		},
 		{
 			query: "select rows",
 			useCursor: 1,
 			expectedNumFields: 2,
 			expectedNumRows: 2,
+			maxRows: 100,
+		},
+		{
+			query: "large batch",
+			useCursor: 1,
+			expectedNumFields: 2,
+			expectedNumRows: 256,
+			maxRows: 1000,
 		},
 	}
 
@@ -869,8 +892,4 @@ func TestExecuteQueries(t *testing.T) {
 	for _, test := range tests {
 		checkExecute(t, sConn, cConn, test)
 	}
-}
-
-func TestFetchQueries(t *testing.T) {
-
 }
