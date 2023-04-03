@@ -269,7 +269,15 @@ create table json_tbl (id int, j1 json, j2 json, primary key(id));
         }
       ]
     },
-	"cproduct": {
+	"json_tbl": {
+      "column_vindexes": [
+        {
+          "column": "id",
+          "name": "reverse_bits"
+        }
+      ]
+    },
+    "cproduct": {
 		"type": "reference"
 	},
 	"vproduct": {
