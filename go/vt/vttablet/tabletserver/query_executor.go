@@ -203,6 +203,8 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 		return qre.execAlterMigration()
 	case p.PlanRevertMigration:
 		return qre.execRevertMigration()
+	case p.PlanShowMigrations:
+		return qre.execShowMigrations()
 	case p.PlanShowMigrationLogs:
 		return qre.execShowMigrationLogs()
 	case p.PlanShowThrottledApps:
@@ -1056,6 +1058,13 @@ func (qre *QueryExecutor) execRevertMigration() (*sqltypes.Result, error) {
 		return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "Expecting REVERT VITESS_MIGRATION plan")
 	}
 	return qre.tsv.onlineDDLExecutor.SubmitMigration(qre.ctx, qre.plan.FullStmt)
+}
+
+func (qre *QueryExecutor) execShowMigrations() (*sqltypes.Result, error) {
+	if showStmt, ok := qre.plan.FullStmt.(*sqlparser.Show); ok {
+		return qre.tsv.onlineDDLExecutor.ShowMigrations(qre.ctx, showStmt)
+	}
+	return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "Expecting SHOW VITESS_MIGRATIONS plan")
 }
 
 func (qre *QueryExecutor) execShowMigrationLogs() (*sqltypes.Result, error) {

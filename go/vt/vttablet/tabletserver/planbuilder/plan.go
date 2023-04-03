@@ -76,6 +76,7 @@ const (
 	PlanCallProc
 	PlanAlterMigration
 	PlanRevertMigration
+	PlanShowMigrations
 	PlanShowMigrationLogs
 	PlanShowThrottledApps
 	PlanShowThrottlerStatus
@@ -112,6 +113,7 @@ var planName = []string{
 	"CallProcedure",
 	"AlterMigration",
 	"RevertMigration",
+	"ShowMigrations",
 	"ShowMigrationLogs",
 	"ShowThrottledApps",
 	"ShowThrottlerStatus",

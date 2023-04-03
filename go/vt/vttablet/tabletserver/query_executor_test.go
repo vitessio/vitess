@@ -490,7 +490,7 @@ func TestDisableOnlineDDL(t *testing.T) {
 
 	qre = newTestQueryExecutor(ctx, tsv, query, 0)
 	_, err = qre.Execute()
-	require.EqualError(t, err, "online ddl is disabled")
+	require.EqualError(t, err, "online DDL is disabled")
 }
 
 func TestQueryExecutorLimitFailure(t *testing.T) {

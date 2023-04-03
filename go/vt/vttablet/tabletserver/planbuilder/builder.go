@@ -133,7 +133,10 @@ func analyzeInsert(ins *sqlparser.Insert, tables map[string]*schema.Table) (plan
 func analyzeShow(show *sqlparser.Show, dbName string) (plan *Plan, err error) {
 	switch showInternal := show.Internal.(type) {
 	case *sqlparser.ShowBasic:
-		if showInternal.Command == sqlparser.Table {
+		switch showInternal.Command {
+		case sqlparser.VitessMigrations:
+			return &Plan{PlanID: PlanShowMigrations, FullStmt: show}, nil
+		case sqlparser.Table:
 			// rewrite WHERE clause if it exists
 			// `where Tables_in_Keyspace` => `where Tables_in_DbName`
 			if showInternal.Filter != nil {
