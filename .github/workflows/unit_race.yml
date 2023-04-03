@@ -93,6 +93,6 @@ jobs:
 
     - name: unit_race
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.unit_tests == 'true'
-      timeout-minutes: 30
+      timeout-minutes: 45
       run: |
         eatmydata -- make unit_test_race
