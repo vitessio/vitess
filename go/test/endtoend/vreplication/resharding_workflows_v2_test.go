@@ -22,6 +22,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	time2 "time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -599,8 +600,8 @@ func setupCluster(t *testing.T) *VitessCluster {
 	require.NotNil(t, vtgate)
 	err := cluster.WaitForHealthyShard(vc.VtctldClient, "product", "0")
 	require.NoError(t, err)
-	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", "product", "0"), 2)
-	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.rdonly", "product", "0"), 1)
+	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", "product", "0"), 2, 30*time2.Second)
+	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.rdonly", "product", "0"), 1, 30*time2.Second)
 
 	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 	verifyClusterHealth(t, vc)
@@ -622,16 +623,16 @@ func setupCustomerKeyspace(t *testing.T) {
 	require.NoError(t, err)
 	err = cluster.WaitForHealthyShard(vc.VtctldClient, "customer", "80-")
 	require.NoError(t, err)
-	if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", "customer", "-80"), 2); err != nil {
+	if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", "customer", "-80"), 2, 30*time2.Second); err != nil {
 		t.Fatal(err)
 	}
-	if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", "customer", "80-"), 2); err != nil {
+	if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", "customer", "80-"), 2, 30*time2.Second); err != nil {
 		t.Fatal(err)
 	}
-	if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.rdonly", "customer", "-80"), 1); err != nil {
+	if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.rdonly", "customer", "-80"), 1, 30*time2.Second); err != nil {
 		t.Fatal(err)
 	}
-	if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.rdonly", "customer", "80-"), 1); err != nil {
+	if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.rdonly", "customer", "80-"), 1, 30*time2.Second); err != nil {
 		t.Fatal(err)
 	}
 	custKs := vc.Cells[defaultCell.Name].Keyspaces["customer"]
@@ -652,12 +653,12 @@ func setupCustomer2Keyspace(t *testing.T) {
 		err := cluster.WaitForHealthyShard(vc.VtctldClient, c2keyspace, c2shard)
 		require.NoError(t, err)
 		if defaultReplicas > 0 {
-			if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", c2keyspace, c2shard), defaultReplicas); err != nil {
+			if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", c2keyspace, c2shard), defaultReplicas, 30*time2.Second); err != nil {
 				t.Fatal(err)
 			}
 		}
 		if defaultRdonly > 0 {
-			if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.rdonly", c2keyspace, c2shard), defaultRdonly); err != nil {
+			if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.rdonly", c2keyspace, c2shard), defaultRdonly, 30*time2.Second); err != nil {
 				t.Fatal(err)
 			}
 		}
@@ -785,10 +786,10 @@ func createAdditionalCustomerShards(t *testing.T, shards string) {
 	for _, shardName := range arrTargetShardNames {
 		err := cluster.WaitForHealthyShard(vc.VtctldClient, ksName, shardName)
 		require.NoError(t, err)
-		if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", ksName, shardName), 2); err != nil {
+		if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", ksName, shardName), 2, 30*time2.Second); err != nil {
 			require.NoError(t, err)
 		}
-		if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.rdonly", ksName, shardName), 1); err != nil {
+		if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.rdonly", ksName, shardName), 1, 30*time2.Second); err != nil {
 			require.NoError(t, err)
 		}
 	}

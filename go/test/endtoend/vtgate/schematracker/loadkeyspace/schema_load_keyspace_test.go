@@ -19,6 +19,7 @@ package loadkeyspace
 import (
 	"os"
 	"path"
+	"strings"
 	"testing"
 	"time"
 
@@ -96,13 +97,18 @@ func TestLoadKeyspaceWithNoTablet(t *testing.T) {
 
 	// After starting VTGate we need to leave enough time for resolveAndLoadKeyspace to reach
 	// the schema tracking timeout (5 seconds).
-	time.Sleep(10 * time.Second)
-
-	// check warning logs
-	logDir := clusterInstance.VtgateProcess.LogDir
-	all, err := os.ReadFile(path.Join(logDir, "vtgate-stderr.txt"))
-	require.NoError(t, err)
-	require.Contains(t, string(all), "Unable to get initial schema reload")
+	timeout := time.After(1 * time.Minute)
+	ok := false
+	for !ok {
+		select {
+		case <-timeout:
+			t.Error("timeout - could not find 'Unable to get initial schema reload' in 'vtgate-stderr.txt'")
+		case <-time.After(1 * time.Second):
+			logDir := clusterInstance.VtgateProcess.LogDir
+			all, _ := os.ReadFile(path.Join(logDir, "vtgate-stderr.txt"))
+			ok = strings.Contains(string(all), "Unable to get initial schema reload")
+		}
+	}
 }
 
 func TestNoInitialKeyspace(t *testing.T) {

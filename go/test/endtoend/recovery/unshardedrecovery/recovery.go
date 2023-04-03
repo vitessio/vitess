@@ -24,6 +24,7 @@ import (
 	"os/exec"
 	"path"
 	"testing"
+	time2 "time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -285,13 +286,13 @@ func TestRecoveryImpl(t *testing.T) {
 	localCluster.VtgateGrpcPort = vtgateInstance.GrpcPort
 	assert.NoError(t, err)
 	defer vtgateInstance.TearDown()
-	err = vtgateInstance.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", keyspaceName, shardName), 1)
+	err = vtgateInstance.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", keyspaceName, shardName), 1, 30*time2.Second)
 	assert.NoError(t, err)
-	err = vtgateInstance.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", keyspaceName, shardName), 1)
+	err = vtgateInstance.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", keyspaceName, shardName), 1, 30*time2.Second)
 	assert.NoError(t, err)
-	err = vtgateInstance.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", recoveryKS1, shardName), 1)
+	err = vtgateInstance.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", recoveryKS1, shardName), 1, 30*time2.Second)
 	assert.NoError(t, err)
-	err = vtgateInstance.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", recoveryKS2, shardName), 1)
+	err = vtgateInstance.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", recoveryKS2, shardName), 1, 30*time2.Second)
 	assert.NoError(t, err)
 
 	// Build vtgate grpc connection
