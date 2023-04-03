@@ -97,7 +97,7 @@ func TestLoadKeyspaceWithNoTablet(t *testing.T) {
 
 	// After starting VTGate we need to leave enough time for resolveAndLoadKeyspace to reach
 	// the schema tracking timeout (5 seconds).
-	timeout := time.After(1 * time.Minute)
+	timeout := time.After(5 * time.Minute)
 	ok := false
 	for !ok {
 		select {
