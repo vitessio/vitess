@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -134,10 +135,30 @@ func initCluster(shardNames []string, totalTabletsRequired int) error {
 	return nil
 }
 
+const defaultOperationTimeout = 300 * time.Second
+const defaultRetryDelay = 3 * time.Second
+
+func waitForMysqlctldShutdown(t *testing.T, tab *cluster.Vttablet) bool {
+	tmr := time.NewTimer(defaultOperationTimeout)
+	defer tmr.Stop()
+	for {
+		if tab.MysqlctldProcess.HasShutdown() {
+			return true
+		}
+		select {
+		case <-tmr.C:
+			return false
+		default:
+		}
+		time.Sleep(defaultRetryDelay)
+	}
+}
+
 func TestRestart(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	err := primaryTablet.MysqlctldProcess.Stop()
 	require.Nil(t, err)
+	require.Truef(t, waitForMysqlctldShutdown(t, primaryTablet), "Mysqlctld has not stopped after %s", defaultOperationTimeout)
 	primaryTablet.MysqlctldProcess.CleanupFiles(primaryTablet.TabletUID)
 	err = primaryTablet.MysqlctldProcess.Start()
 	require.Nil(t, err)
