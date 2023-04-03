@@ -350,3 +350,12 @@ func (c *compiler) compileNullCheck2(lt, rt ctype) *jump {
 	}
 	return nil
 }
+
+func (c *compiler) compileNullCheck3(arg1, arg2, arg3 ctype) *jump {
+	if arg1.nullable() || arg2.nullable() || arg3.nullable() {
+		j := c.asm.jumpFrom()
+		c.asm.NullCheck3(j)
+		return j
+	}
+	return nil
+}

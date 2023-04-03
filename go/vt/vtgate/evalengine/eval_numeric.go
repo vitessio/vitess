@@ -210,7 +210,7 @@ func evalToInt64(e eval) *evalInt64 {
 			i, _ := strconv.ParseInt(strings.ReplaceAll(n, ":", ""), 10, 64)
 			return newEvalInt64(i)
 		}
-		i, _ := fastparse.ParseInt64(e.string())
+		i, _ := fastparse.ParseInt64(e.string(), 10)
 		return newEvalInt64(i)
 	case *evalJSON:
 		switch e.Type() {
@@ -238,7 +238,7 @@ func evalToInt64(e eval) *evalInt64 {
 				panic("unsupported")
 			}
 		case json.TypeString:
-			i, _ := fastparse.ParseInt64(e.Raw())
+			i, _ := fastparse.ParseInt64(e.Raw(), 10)
 			return newEvalInt64(i)
 		default:
 			return newEvalInt64(0)
