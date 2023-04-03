@@ -238,6 +238,16 @@ func (ast *astCompiler) translateFuncExpr(fn *sqlparser.FuncExpr) (Expr, error) 
 			return nil, argError(method)
 		}
 		return &builtinTruncate{CallExpr: call}, nil
+	case "crc32":
+		if len(args) != 1 {
+			return nil, argError(method)
+		}
+		return &builtinCrc32{CallExpr: call}, nil
+	case "conv":
+		if len(args) != 3 {
+			return nil, argError(method)
+		}
+		return &builtinConv{CallExpr: call, collate: ast.cfg.Collation}, nil
 	case "lower", "lcase":
 		if len(args) != 1 {
 			return nil, argError(method)
@@ -300,6 +310,11 @@ func (ast *astCompiler) translateFuncExpr(fn *sqlparser.FuncExpr) (Expr, error) 
 			return nil, argError(method)
 		}
 		return &builtinCurdate{CallExpr: call}, nil
+	case "utc_date":
+		if len(args) != 0 {
+			return nil, argError(method)
+		}
+		return &builtinUtcDate{CallExpr: call}, nil
 	case "user", "current_user", "session_user", "system_user":
 		if len(args) != 0 {
 			return nil, argError(method)

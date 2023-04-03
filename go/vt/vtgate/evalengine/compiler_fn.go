@@ -112,12 +112,18 @@ func (c *compiler) compileFn(call callable) (ctype, error) {
 		return c.compileFn_ROUND(call)
 	case *builtinTruncate:
 		return c.compileFn_TRUNCATE(call)
+	case *builtinCrc32:
+		return c.compileFn_CRC32(call)
+	case *builtinConv:
+		return c.compileFn_CONV(call)
 	case *builtinWeightString:
 		return c.compileFn_WEIGHT_STRING(call)
 	case *builtinNow:
 		return c.compileFn_Now(call)
 	case *builtinCurdate:
 		return c.compileFn_Curdate(call)
+	case *builtinUtcDate:
+		return c.compileFn_UtcDate(call)
 	case *builtinSysdate:
 		return c.compileFn_Sysdate(call)
 	case *builtinUser:
@@ -683,6 +689,75 @@ func (c *compiler) compileFn_TRUNCATE(expr callable) (ctype, error) {
 	return arg, nil
 }
 
+func (c *compiler) compileFn_CRC32(expr callable) (ctype, error) {
+	arg, err := c.compileExpr(expr.callable()[0])
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip := c.compileNullCheck1(arg)
+
+	switch {
+	case arg.isTextual():
+	default:
+		c.asm.Convert_xb(1, sqltypes.Binary, 0, false)
+	}
+
+	c.asm.Fn_CRC32()
+	c.asm.jumpDestination(skip)
+	return arg, nil
+}
+
+func (c *compiler) compileFn_CONV(expr callable) (ctype, error) {
+	n, err := c.compileExpr(expr.callable()[0])
+	if err != nil {
+		return ctype{}, err
+	}
+
+	from, err := c.compileExpr(expr.callable()[1])
+	if err != nil {
+		return ctype{}, err
+	}
+
+	to, err := c.compileExpr(expr.callable()[2])
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip := c.compileNullCheck3(n, from, to)
+
+	_ = c.compileToInt64(from, 2)
+	_ = c.compileToInt64(to, 1)
+
+	t := sqltypes.VarChar
+	if n.Type == sqltypes.Blob || n.Type == sqltypes.TypeJSON {
+		t = sqltypes.Text
+	}
+
+	switch {
+	case n.isTextual():
+	default:
+		c.asm.Convert_xb(3, t, 0, false)
+	}
+
+	if n.isHexOrBitLiteral() {
+		c.asm.Fn_CONV_hu(3, 2)
+	} else {
+		c.asm.Fn_CONV_bu(3, 2)
+	}
+
+	col := collations.TypedCollation{
+		Collation:    c.cfg.Collation,
+		Coercibility: collations.CoerceCoercible,
+		Repertoire:   collations.RepertoireASCII,
+	}
+
+	c.asm.Fn_CONV_uc(t, col)
+	c.asm.jumpDestination(skip)
+
+	return ctype{Type: t, Col: col, Flag: flagNullable}, nil
+}
+
 func (c *compiler) compileFn_WEIGHT_STRING(call *builtinWeightString) (ctype, error) {
 	str, err := c.compileExpr(call.String)
 	if err != nil {
@@ -727,6 +802,11 @@ func (c *compiler) compileFn_Now(call *builtinNow) (ctype, error) {
 
 func (c *compiler) compileFn_Curdate(*builtinCurdate) (ctype, error) {
 	c.asm.Fn_Curdate()
+	return ctype{Type: sqltypes.Date, Col: collationBinary}, nil
+}
+
+func (c *compiler) compileFn_UtcDate(*builtinUtcDate) (ctype, error) {
+	c.asm.Fn_UtcDate()
 	return ctype{Type: sqltypes.Date, Col: collationBinary}, nil
 }
 

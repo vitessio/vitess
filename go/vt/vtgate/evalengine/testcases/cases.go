@@ -94,6 +94,8 @@ var Cases = []TestCase{
 	{Run: FnSqrt},
 	{Run: FnRound},
 	{Run: FnTruncate},
+	{Run: FnCrc32},
+	{Run: FnConv},
 }
 
 func JSONPathOperations(yield Query) {
@@ -541,6 +543,55 @@ func FnTruncate(yield Query) {
 		}
 		for _, num2 := range inputBitwise {
 			yield(fmt.Sprintf("TRUNCATE(%s, %s)", num1, num2), nil)
+		}
+	}
+}
+
+func FnCrc32(yield Query) {
+	for _, num := range radianInputs {
+		yield(fmt.Sprintf("CRC32(%s)", num), nil)
+	}
+
+	for _, num := range inputBitwise {
+		yield(fmt.Sprintf("CRC32(%s)", num), nil)
+	}
+
+	for _, num := range inputConversions {
+		yield(fmt.Sprintf("CRC32(%s)", num), nil)
+	}
+}
+
+func FnConv(yield Query) {
+	for _, num1 := range radianInputs {
+		for _, num2 := range radianInputs {
+			for _, num3 := range radianInputs {
+				yield(fmt.Sprintf("CONV(%s, %s, %s)", num1, num2, num3), nil)
+			}
+			for _, num3 := range inputBitwise {
+				yield(fmt.Sprintf("CONV(%s, %s, %s)", num1, num2, num3), nil)
+			}
+		}
+	}
+
+	for _, num1 := range radianInputs {
+		for _, num2 := range inputBitwise {
+			for _, num3 := range radianInputs {
+				yield(fmt.Sprintf("CONV(%s, %s, %s)", num1, num2, num3), nil)
+			}
+			for _, num3 := range inputBitwise {
+				yield(fmt.Sprintf("CONV(%s, %s, %s)", num1, num2, num3), nil)
+			}
+		}
+	}
+
+	for _, num1 := range inputBitwise {
+		for _, num2 := range inputBitwise {
+			for _, num3 := range radianInputs {
+				yield(fmt.Sprintf("CONV(%s, %s, %s)", num1, num2, num3), nil)
+			}
+			for _, num3 := range inputBitwise {
+				yield(fmt.Sprintf("CONV(%s, %s, %s)", num1, num2, num3), nil)
+			}
 		}
 	}
 }
@@ -1117,6 +1168,7 @@ func FnNow(yield Query) {
 		"UTC_TIMESTAMP(1)",
 		"CURDATE()", "CURRENT_DATE()", "CURRENT_DATE",
 		"UTC_TIME()", "UTC_TIME",
+		"UTC_DATE()", "UTC_DATE",
 		"UTC_TIME(1)",
 		"CURTIME()", "CURRENT_TIME()", "CURRENT_TIME",
 		"CURTIME(1)", "CURRENT_TIME(1)",
