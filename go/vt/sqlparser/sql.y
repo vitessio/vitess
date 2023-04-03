@@ -193,6 +193,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
   eventScheduleTimeSpec *EventScheduleTimeSpec
   eventStatus EventStatus
   intervalExprs []IntervalExpr
+  separator Separator
 }
 
 %token LEX_ERROR
@@ -421,7 +422,8 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <bytes> work_opt no_opt chain_opt release_opt
 %type <bytes2> comment_opt comment_list
 %type <str> union_op insert_or_replace
-%type <str> distinct_opt straight_join_opt cache_opt match_option separator_opt format_opt
+%type <str> distinct_opt straight_join_opt cache_opt match_option format_opt
+%type <separator> separator_opt
 %type <expr> like_escape_opt
 %type <selectExprs> select_expression_list argument_expression_list argument_expression_list_opt
 %type <selectExpr> select_expression argument_expression
@@ -6899,11 +6901,11 @@ expression_opt:
 
 separator_opt:
   {
-    $$ = string("")
+    $$ = Separator{SeparatorString: "", DefaultSeparator: true}
   }
 | SEPARATOR STRING
   {
-    $$ = string($2)
+    $$ = Separator{SeparatorString: string($2), DefaultSeparator: false}
   }
 
 when_expression_list:

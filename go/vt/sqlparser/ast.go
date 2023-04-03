@@ -5393,14 +5393,19 @@ type GroupConcatExpr struct {
 	Distinct  string
 	Exprs     SelectExprs
 	OrderBy   OrderBy
-	Separator string
+	Separator Separator
+}
+
+type Separator struct {
+	SeparatorString  string
+	DefaultSeparator bool
 }
 
 // Format formats the node
 func (node *GroupConcatExpr) Format(buf *TrackedBuffer) {
-	sep := node.Separator
-	if sep != "" {
-		sep = " separator " + "'" + sep + "'"
+	sep := ""
+	if !node.Separator.DefaultSeparator {
+		sep = " separator " + "'" + node.Separator.SeparatorString + "'"
 	}
 
 	buf.Myprintf("group_concat(%s%v%v%s)", node.Distinct, node.Exprs, node.OrderBy, sep)
