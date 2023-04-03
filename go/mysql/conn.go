@@ -1551,9 +1551,9 @@ func (c *Conn) execPrepareStatement(stmtID uint32, cursorType byte, handler Hand
 		}
 
 		go func() {
+			var err error
 			defer func(){
 				// pass along error, even if there's a panic
-				var err error
 				if r := recover(); r != nil {
 					err = fmt.Errorf("panic while running query for server-side cursor: %v", r)
 				}
