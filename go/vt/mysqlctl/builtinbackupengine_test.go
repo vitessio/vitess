@@ -225,7 +225,7 @@ func TestExecuteBackupWithCancelledContext(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	// Set up tm client
+	// Set up tm client.
 	// Note that using faketmclient.NewFakeTabletManagerClient will cause infinite recursion :shrug:
 	tmclient.RegisterTabletManagerClientFactory("grpc2",
 		func() tmclient.TabletManagerClient { return &faketmclient.FakeTabletManagerClient{} },
@@ -234,7 +234,7 @@ func TestExecuteBackupWithCancelledContext(t *testing.T) {
 	be := &mysqlctl.BuiltinBackupEngine{}
 	bh := filebackupstorage.NewBackupHandle(nil, "", "", false)
 	// Spin up a fake daemon to be used in backups. It needs to be allowed to receive:
-	//  "STOP SLAVE", "START SLAVE", in that order.
+	// "STOP SLAVE", "START SLAVE", in that order.
 	mysqld := mysqlctl.NewFakeMysqlDaemon(fakesqldb.New(t))
 	mysqld.ExpectedExecuteSuperQueryList = []string{"STOP SLAVE", "START SLAVE"}
 
@@ -255,7 +255,7 @@ func TestExecuteBackupWithCancelledContext(t *testing.T) {
 	}, bh)
 
 	require.Error(t, err)
-	// out of four, two files will fail.
+	// all four files will fail
 	require.ErrorContains(t, err, "context canceled;context canceled;context canceled;context canceled")
 	assert.False(t, ok)
 }
