@@ -645,10 +645,12 @@ func (ts *Server) GetTabletMapForShardByCell(ctx context.Context, keyspace, shar
 
 	// get the tablets for the cells we were able to reach, forward
 	// ErrPartialResult from FindAllTabletAliasesInShard
+	log.Infof("GetTabletMap ---> start")
 	result, gerr := ts.GetTabletMap(ctx, aliases)
 	if gerr == nil && err != nil {
 		gerr = err
 	}
+	log.Infof("GetTabletMap ---> end")
 	return result, gerr
 }
 

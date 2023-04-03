@@ -24,6 +24,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/patrickmn/go-cache"
 	"github.com/rcrowley/go-metrics"
 	"github.com/sjmudd/stopwatch"
@@ -203,7 +204,10 @@ func DiscoverInstance(instanceKey inst.InstanceKey, forceDiscovery bool) {
 		}
 	}()
 
+	id1 := uuid.New()
+	log.Infof("%v ResolveHostname start - %v", id1, instanceKey.Port)
 	_, _ = instanceKey.ResolveHostname()
+	log.Infof("%v ResolveHostname end - %v", id1, instanceKey.Port)
 	if !instanceKey.IsValid() {
 		return
 	}
@@ -217,7 +221,10 @@ func DiscoverInstance(instanceKey inst.InstanceKey, forceDiscovery bool) {
 	}
 
 	latency.Start("backend")
+	id2 := uuid.New()
+	log.Infof("%v ReadInstance start - %v", id2, instanceKey.Port)
 	instance, found, _ := inst.ReadInstance(&instanceKey)
+	log.Infof("%v ReadInstance end - %v", id2, instanceKey.Port)
 	latency.Stop("backend")
 	if !forceDiscovery && found && instance.IsUpToDate && instance.IsLastCheckValid {
 		// we've already discovered this one. Skip!
@@ -227,7 +234,10 @@ func DiscoverInstance(instanceKey inst.InstanceKey, forceDiscovery bool) {
 	discoveriesCounter.Inc(1)
 
 	// First we've ever heard of this instance. Continue investigation:
+	id3 := uuid.New()
+	log.Infof("%v ReadTopologyInstanceBufferable start - %v", id3, instanceKey.Port)
 	instance, err := inst.ReadTopologyInstanceBufferable(&instanceKey, latency)
+	log.Infof("%v ReadTopologyInstanceBufferable end - %v", id3, instanceKey.Port)
 	// panic can occur (IO stuff). Therefore it may happen
 	// that instance is nil. Check it, but first get the timing metrics.
 	totalLatency := latency.Elapsed("total")

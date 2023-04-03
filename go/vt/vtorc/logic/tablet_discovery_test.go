@@ -275,7 +275,7 @@ func verifyRefreshTabletsInKeyspaceShard(t *testing.T, forceRefresh bool, instan
 	// call refreshTabletsInKeyspaceShard while counting all the instances that are refreshed
 	refreshTabletsInKeyspaceShard(context.Background(), keyspace, shard, func(instanceKey *inst.InstanceKey) {
 		instancesRefreshed.Add(1)
-	}, forceRefresh)
+	}, forceRefresh, false)
 	// Verify that all the tablets are present in the database
 	for _, tablet := range tablets {
 		verifyTabletInfo(t, tablet, "")
