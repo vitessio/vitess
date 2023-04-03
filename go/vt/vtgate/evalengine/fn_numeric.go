@@ -21,7 +21,6 @@ import (
 	"hash/crc32"
 	"math"
 	"strconv"
-	"strings"
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/decimal"
@@ -1129,6 +1128,15 @@ type builtinConv struct {
 
 var _ Expr = (*builtinConv)(nil)
 
+func upcaseASCII(b []byte) []byte {
+	for i, c := range b {
+		if c >= 'a' && c <= 'z' {
+			b[i] = c - 32
+		}
+	}
+	return b
+}
+
 func (call *builtinConv) eval(env *ExpressionEnv) (eval, error) {
 	n, err := call.Arguments[0].eval(env)
 	if err != nil {
@@ -1174,13 +1182,13 @@ func (call *builtinConv) eval(env *ExpressionEnv) (eval, error) {
 		}
 	}
 
-	var out string
+	var out []byte
 	if toBase < 0 {
-		out = strconv.FormatInt(int64(u), -int(toBase))
+		out = strconv.AppendInt(out, int64(u), -int(toBase))
 	} else {
-		out = strconv.FormatUint(u, int(toBase))
+		out = strconv.AppendUint(out, u, int(toBase))
 	}
-	return newEvalText([]byte(strings.ToUpper(out)), defaultCoercionCollation(call.collate)), nil
+	return newEvalText(upcaseASCII(out), defaultCoercionCollation(call.collate)), nil
 }
 
 func (call *builtinConv) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {

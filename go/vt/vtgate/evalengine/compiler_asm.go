@@ -1919,16 +1919,16 @@ func (asm *assembler) Fn_CONV_uc(t sqltypes.Type, col collations.TypedCollation)
 			return 1
 		}
 
-		var out string
+		var out []byte
 		if base.i < 0 {
-			out = strconv.FormatInt(int64(u), -int(base.i))
+			out = strconv.AppendInt(out, int64(u), -int(base.i))
 		} else {
-			out = strconv.FormatUint(u, int(base.i))
+			out = strconv.AppendUint(out, u, int(base.i))
 		}
 
 		res := env.vm.arena.newEvalBytesEmpty()
 		res.tt = int16(t)
-		res.bytes = []byte(strings.ToUpper(out))
+		res.bytes = upcaseASCII(out)
 		res.col = col
 
 		env.vm.stack[env.vm.sp-3] = res
