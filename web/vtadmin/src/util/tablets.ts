@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 import { invertBy, padStart } from 'lodash-es';
-import { topodata, vtadmin as pb } from '../proto/vtadmin';
+import type { topodata, vtadmin as pb } from '../proto/vtadmin';
 
 /**
  * TABLET_TYPES maps numeric tablet types back to human readable strings.

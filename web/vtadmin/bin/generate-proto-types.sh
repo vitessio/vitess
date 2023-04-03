@@ -35,7 +35,8 @@ $pbjs_bin \
 	--keep-case \
 	-p "$vitess_proto_root" \
 	-t static-module \
-	-w commonjs \
+  --es6 \
+	-w es6 \
 	-o "$output_dir/$output_filename.js" \
 	"$proto_targets"
 
