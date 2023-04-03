@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import type { vtadmin as pb, vtadmin, vtctldata } from '../proto/vtadmin';
+import { vtadmin as pb, vtadmin, vtctldata } from '../proto/vtadmin';
 import * as errorHandler from '../errors/errorHandler';
 import { HttpFetchError, HttpResponseNotOkError, MalformedHttpResponseError } from '../errors/errorTypes';
 import { HttpOkResponse } from './responseTypes';
