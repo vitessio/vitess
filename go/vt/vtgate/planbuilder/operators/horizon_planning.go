@@ -78,10 +78,6 @@ func planColumns(ctx *plancontext.PlanningContext, root ops.Operator) (ops.Opera
 
 func planHorizon(ctx *plancontext.PlanningContext, in *Horizon, isRoot bool) (ops.Operator, error) {
 	rb, isRoute := in.Source.(*Route)
-	if isRoot && !isRoute && ctx.SemTable.NotSingleRouteErr != nil {
-		// If we got here, we don't have a single shard plan
-		return nil, ctx.SemTable.NotSingleRouteErr
-	}
 	if isRoute && rb.IsSingleShard() && in.Select.GetLimit() == nil {
 		return planSingleRoute(rb, in)
 	}
