@@ -703,6 +703,23 @@ type testExec struct {
 	useCursor byte
 	expectedNumFields int
 	expectedNumRows int
+	maxRows int
+}
+
+func clientExecute(t *testing.T, cConn *Conn, useCursor byte, maxRows int) (*sqltypes.Result, error) {
+	// Write a COM_STMT_EXECUTE packet
+	mockPacket := []byte{ComStmtExecute, 0, 0, 0, 0, useCursor, 1, 0, 0, 0, 0, 1, 1, 128, 1}
+
+	if err := cConn.WritePacket(mockPacket); err != nil {
+		t.Fatalf("WriteMockExecuteToConn failed with error: %v", err)
+	}
+
+	qr, _, _, err := cConn.ReadQueryResult(maxRows, true)
+	if err != nil {
+		t.Fatalf("ReadQueryResult failed with error: %v", err)
+	}
+
+	return qr, err
 }
 
 func checkExecute(t *testing.T, sConn, cConn *Conn, test testExec) {
@@ -725,8 +742,11 @@ func checkExecute(t *testing.T, sConn, cConn *Conn, test testExec) {
 		mockPacket := []byte{ComStmtExecute, 0, 0, 0, 0, test.useCursor, 1, 0, 0, 0, 0, 1, 1, 128, 1}
 
 		var err error
-		if err = cConn.WritePacket(mockPacket); err != nil {
-			t.Fatalf("WriteMockExecuteToConn failed with error: %v", err)
+		//if err = cConn.WritePacket(mockPacket); err != nil {
+		//	t.Fatalf("WriteMockExecuteToConn failed with error: %v", err)
+		//}
+		if err = WriteMockDataToConn(cConn, mockPacket); err != nil {
+			t.Fatalf("WriteMockDataToConn failed with error: %v", err)
 		}
 
 		// Read Query Results
@@ -734,6 +754,8 @@ func checkExecute(t *testing.T, sConn, cConn *Conn, test testExec) {
 		if err != nil {
 			t.Fatalf("ReadQueryResult failed with error: %v", err)
 		}
+
+		//qr, err = clientExecute(t, cConn, test.useCursor, test.maxRows)
 	}()
 
 	// handle a single client command
@@ -764,7 +786,6 @@ func checkExecute(t *testing.T, sConn, cConn *Conn, test testExec) {
 		t.Fatalf("Server StatusFlag should indicate that Cursor exists")
 	}
 
-	//var qr *sqltypes.Result
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -773,8 +794,11 @@ func checkExecute(t *testing.T, sConn, cConn *Conn, test testExec) {
 		mockPacket := []byte{ComStmtFetch, byte(prepare.StatementID), 0, 0, 0, test.useCursor, 1, 0, 0, 0, 0, 1, 1, 128, 1}
 
 		var err error
-		if err = cConn.WritePacket(mockPacket); err != nil {
-			t.Fatalf("WriteMockExecuteToConn failed with error: %v", err)
+		//if err = cConn.WritePacket(mockPacket); err != nil {
+		//	t.Fatalf("WriteMockExecuteToConn failed with error: %v", err)
+		//}
+		if err = WriteMockDataToConn(cConn, mockPacket); err != nil {
+			t.Fatalf("WriteMockDataToConn failed with error: %v", err)
 		}
 
 		// Read Query Results
@@ -845,4 +869,8 @@ func TestExecuteQueries(t *testing.T) {
 	for _, test := range tests {
 		checkExecute(t, sConn, cConn, test)
 	}
+}
+
+func TestFetchQueries(t *testing.T) {
+
 }
