@@ -1529,13 +1529,13 @@ func (c *Conn) execPrepareStatement(stmtID uint32, cursorType byte, handler Hand
 					// We should not send any more packets after this.
 					return c.writeOKPacket(qr.RowsAffected, qr.InsertID, c.StatusFlags, 0)
 				}
-				if err = c.writeFields(qr); err != nil {
+				if err := c.writeFields(qr); err != nil {
 					return err
 				}
 				// Now send an EOF packet.
 				if c.Capabilities&CapabilityClientDeprecateEOF == 0 {
 					// With CapabilityClientDeprecateEOF, we do not send this EOF.
-					if err = c.writeEOFPacket(c.StatusFlags, 0); err != nil {
+					if err := c.writeEOFPacket(c.StatusFlags, 0); err != nil {
 						return err
 					}
 				}
@@ -1553,13 +1553,13 @@ func (c *Conn) execPrepareStatement(stmtID uint32, cursorType byte, handler Hand
 		go func() {
 			defer func(){
 				// pass along error, even if there's a panic
+				var err error
 				if r := recover(); r != nil {
 					err = fmt.Errorf("panic while running query for server-side cursor: %v", r)
 				}
 				close(c.cs.next)
 				c.cs.done <- err
 			}()
-
 			err = handler.ComStmtExecute(c, prepare, func(qr *sqltypes.Result) error {
 				// block until query results are sent or receive signal to quit
 				var err error
@@ -1574,7 +1574,7 @@ func (c *Conn) execPrepareStatement(stmtID uint32, cursorType byte, handler Hand
 
 		// Immediately receive the very first query result to write the fields
 		qr, ok := <- c.cs.next
-		err = <- c.cs.done
+		err := <- c.cs.done
 		if err != nil {
 			return err
 		}
