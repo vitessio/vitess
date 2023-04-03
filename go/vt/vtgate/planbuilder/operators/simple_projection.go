@@ -56,6 +56,11 @@ func (s *SimpleProjection) Inputs() []ops.Operator {
 	return []ops.Operator{s.Source}
 }
 
+// SetInputs implements the Operator interface
+func (s *SimpleProjection) SetInputs(ops []ops.Operator) {
+	s.Source = ops[0]
+}
+
 func (s *SimpleProjection) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (ops.Operator, error) {
 	// TODO implement me
 	return nil, errNotHorizonPlanned

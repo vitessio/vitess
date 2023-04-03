@@ -87,6 +87,13 @@ func (noInputs) Inputs() []ops.Operator {
 	return nil
 }
 
+// SetInputs implements the Operator interface
+func (noInputs) SetInputs(ops []ops.Operator) {
+	if len(ops) > 0 {
+		panic("the noInputs operator does not have inputs")
+	}
+}
+
 // AddColumn implements the Operator interface
 func (noColumns) AddColumn(*plancontext.PlanningContext, *sqlparser.AliasedExpr, bool) (ops.Operator, int, error) {
 	return nil, 0, vterrors.VT13001("the noColumns operator cannot accept columns")

@@ -60,6 +60,11 @@ func (f *Filter) Inputs() []ops.Operator {
 	return []ops.Operator{f.Source}
 }
 
+// SetInputs implements the Operator interface
+func (f *Filter) SetInputs(ops []ops.Operator) {
+	f.Source = ops[0]
+}
+
 // UnsolvedPredicates implements the unresolved interface
 func (f *Filter) UnsolvedPredicates(st *semantics.SemTable) []sqlparser.Expr {
 	var result []sqlparser.Expr

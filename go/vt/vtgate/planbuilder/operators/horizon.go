@@ -60,3 +60,8 @@ func (h *Horizon) Clone(inputs []ops.Operator) ops.Operator {
 func (h *Horizon) Inputs() []ops.Operator {
 	return []ops.Operator{h.Source}
 }
+
+// SetInputs implements the Operator interface
+func (h *Horizon) SetInputs(ops []ops.Operator) {
+	h.Source = ops[0]
+}

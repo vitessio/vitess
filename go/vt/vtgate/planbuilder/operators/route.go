@@ -189,6 +189,11 @@ func (r *Route) Inputs() []ops.Operator {
 	return []ops.Operator{r.Source}
 }
 
+// SetInputs implements the Operator interface
+func (r *Route) SetInputs(ops []ops.Operator) {
+	r.Source = ops[0]
+}
+
 func createOption(
 	colVindex *vindexes.ColumnVindex,
 	vfunc func(*vindexes.ColumnVindex) vindexes.Vindex,

@@ -52,6 +52,11 @@ func (j *Join) Inputs() []ops.Operator {
 	return []ops.Operator{j.LHS, j.RHS}
 }
 
+// SetInputs implements the Operator interface
+func (j *Join) SetInputs(ops []ops.Operator) {
+	j.LHS, j.RHS = ops[0], ops[1]
+}
+
 func (j *Join) Compact(ctx *plancontext.PlanningContext) (ops.Operator, rewrite.TreeIdentity, error) {
 	if j.LeftJoin {
 		// we can't merge outer joins into a single QG

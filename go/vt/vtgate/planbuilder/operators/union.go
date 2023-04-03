@@ -51,6 +51,11 @@ func (u *Union) Inputs() []ops.Operator {
 	return u.Sources
 }
 
+// SetInputs implements the Operator interface
+func (u *Union) SetInputs(ops []ops.Operator) {
+	u.Sources = ops
+}
+
 // AddPredicate adds a predicate a UNION by pushing the predicate to all sources of the UNION.
 /* this is done by offset and expression rewriting. Say we have a query like so:
 select * (

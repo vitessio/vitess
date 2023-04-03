@@ -110,6 +110,11 @@ func (d *Derived) Inputs() []ops.Operator {
 	return []ops.Operator{d.Source}
 }
 
+// SetInputs implements the Operator interface
+func (d *Derived) SetInputs(ops []ops.Operator) {
+	d.Source = ops[0]
+}
+
 func (d *Derived) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (ops.Operator, error) {
 	if _, isUNion := d.Source.(*Union); isUNion {
 		// If we have a derived table on top of a UNION, we can let the UNION do the expression rewriting

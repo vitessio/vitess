@@ -90,6 +90,11 @@ func (a *ApplyJoin) Inputs() []ops.Operator {
 	return []ops.Operator{a.LHS, a.RHS}
 }
 
+// SetInputs implements the Operator interface
+func (a *ApplyJoin) SetInputs(inputs []ops.Operator) {
+	a.LHS, a.RHS = inputs[0], inputs[1]
+}
+
 var _ JoinOp = (*ApplyJoin)(nil)
 
 func (a *ApplyJoin) GetLHS() ops.Operator {
