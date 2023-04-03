@@ -21,84 +21,8 @@ import (
 	"time"
 )
 
-func parsetimeDays(tp *timeparts, in string) (out string, ok bool) {
-	var x int
-	if x, in, ok = getnum(in, false); ok {
-		switch {
-		case len(in) == 0:
-			tp.sec = x
-			if tp.sec > 59 {
-				return "", false
-			}
-			return "", true
-		case in[0] == ':':
-			tp.day = tp.day + x/24
-			tp.hour = x % 24
-			return parsetimeMinutes(tp, in[1:])
-		case isDigit(in, 0):
-			return parsetimeNoDelimiters(tp, in, x)
-		case isSpace(in[0]):
-			tp.day = x
-			for len(in) > 0 && isSpace(in[0]) {
-				in = in[1:]
-			}
-			if tp.day > 34 {
-				return "", false
-			}
-			return parsetimeHours(tp, in)
-		}
-	}
-	return "", false
-}
-
-func parsetimeNoDelimiters(tp *timeparts, in string, x int) (string, bool) {
-	var ok bool
-	var decimal string
-
-	if dot := strings.IndexByte(in, '.'); dot >= 0 {
-		decimal = in[dot:]
-		in = in[:dot]
-	}
-
-	switch len(in) {
-	case 4:
-		tp.day = tp.day + x/24
-		tp.hour = x % 24
-		tp.min, in, ok = getnum(in, true)
-		if !ok || tp.min > 59 {
-			return "", false
-		}
-		tp.sec, in, ok = getnum(in, true)
-		if !ok || tp.sec > 59 {
-			return "", false
-		}
-	case 2:
-		tp.min = x
-		if tp.min > 59 {
-			return "", false
-		}
-		tp.sec, in, ok = getnum(in, true)
-		if !ok || tp.sec > 59 {
-			return "", false
-		}
-	default:
-		return "", false
-	}
-	if decimal != "" {
-		if len(decimal) > 2 && isDigit(decimal, 1) {
-			n := 2
-			for ; n < len(decimal) && isDigit(decimal, n); n++ {
-			}
-			tp.nsec, ok = parseNanoseconds(decimal, n)
-			return "", ok && len(decimal) == n
-		}
-		return "", false
-	}
-	return "", true
-}
-
 func parsetimeHours(tp *timeparts, in string) (out string, ok bool) {
-	if tp.hour, in, ok = getnum(in, false); ok {
+	if tp.hour, in, ok = getnumn(in); ok {
 		tp.day = tp.day + tp.hour/24
 		tp.hour = tp.hour % 24
 
@@ -144,6 +68,73 @@ func parsetimeSeconds(tp *timeparts, in string) (out string, ok bool) {
 	return "", false
 }
 
+func parsetimeAny(tp *timeparts, in string) (out string, ok bool) {
+	for i := 0; i < len(in); i++ {
+		switch r := in[i]; {
+		case (r >= '0' && r <= '9') || r == '.':
+			continue
+		case isSpace(r):
+			tp.day, in, ok = getnum(in, false)
+			if !ok || tp.day > 34 {
+				return "", false
+			}
+			for len(in) > 0 && isSpace(in[0]) {
+				in = in[1:]
+			}
+			return parsetimeHours(tp, in)
+		case r == ':':
+			return parsetimeHours(tp, in)
+		default:
+			return "", false
+		}
+	}
+	return parsetimeNoDelimiters(tp, in)
+}
+
+func parsetimeNoDelimiters(tp *timeparts, in string) (out string, ok bool) {
+	integral := strings.IndexByte(in, '.')
+	if integral < 0 {
+		integral = len(in)
+	}
+
+	switch integral {
+	case 6:
+		tp.hour, in, ok = getnum(in, true)
+		if !ok {
+			return
+		}
+		tp.day = tp.day + tp.hour/24
+		tp.hour = tp.hour % 24
+		fallthrough
+
+	case 4:
+		tp.min, in, ok = getnum(in, true)
+		if !ok || tp.min > 59 {
+			return "", false
+		}
+		fallthrough
+
+	case 2:
+		tp.sec, in, ok = getnum(in, true)
+		if !ok || tp.sec > 59 {
+			return "", false
+		}
+
+	default:
+		return "", false
+	}
+
+	if len(in) > 2 && in[0] == '.' && isDigit(in, 1) {
+		n := 2
+		for ; n < len(in) && isDigit(in, n); n++ {
+		}
+		tp.nsec, ok = parseNanoseconds(in, n)
+		in = in[n:]
+	}
+
+	return in, ok
+}
+
 func ParseTime(in string, normalize *Strftime) (t time.Time, normalized []byte, ok bool) {
 	if len(in) == 0 {
 		return time.Time{}, nil, false
@@ -155,8 +146,8 @@ func ParseTime(in string, normalize *Strftime) (t time.Time, normalized []byte, 
 	}
 
 	var tp timeparts
-	_, ok = parsetimeDays(&tp, in)
-	if !ok {
+	in, ok = parsetimeAny(&tp, in)
+	if !ok || len(in) > 0 {
 		return time.Time{}, nil, false
 	}
 
@@ -191,4 +182,38 @@ func ParseTime(in string, normalize *Strftime) (t time.Time, normalized []byte, 
 		}, normalized, t)
 	}
 	return t, normalized, true
+}
+
+func ParseDate(s string) (time.Time, bool) {
+	if len(s) >= 8 {
+		if t, ok := Date_YYYY_M_D.Parse(s); ok {
+			return t, true
+		}
+	}
+	if len(s) >= 6 {
+		if t, ok := Date_YY_M_D.Parse(s); ok {
+			return t, true
+		}
+		if t, ok := Date_YYYYMMDD.Parse(s); ok {
+			return t, true
+		}
+		return Date_YYMMDD.Parse(s)
+	}
+	return time.Time{}, false
+}
+
+func ParseDateTime(s string) (time.Time, bool) {
+	if t, ok := DateTime_YYYY_M_D_h_m_s.Parse(s); ok {
+		return t, true
+	}
+	if t, ok := DateTime_YY_M_D_h_m_s.Parse(s); ok {
+		return t, true
+	}
+	if t, ok := DateTime_YYYYMMDDhhmmss.Parse(s); ok {
+		return t, true
+	}
+	if t, ok := DateTime_YYMMDDhhmmss.Parse(s); ok {
+		return t, true
+	}
+	return time.Time{}, false
 }

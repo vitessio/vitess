@@ -2912,19 +2912,19 @@ func cmpnum[N interface{ int64 | uint64 | float64 }](a, b N) int {
 	}
 }
 
-func (asm *assembler) Fn_Now(t querypb.Type, format *datetime.Strftime, utc bool) {
+func (asm *assembler) Fn_Now(t querypb.Type, format *datetime.Strftime, prec uint8, utc bool) {
 	asm.adjustStack(1)
 	asm.emit(func(env *ExpressionEnv) int {
 		val := env.vm.arena.newEvalBytesEmpty()
 		val.tt = int16(t)
-		val.bytes = format.Format(env.time(utc))
+		val.bytes = format.Format(env.time(utc), prec)
 		env.vm.stack[env.vm.sp] = val
 		env.vm.sp++
 		return 1
 	}, "FN NOW")
 }
 
-func (asm *assembler) Fn_Sysdate(format *datetime.Strftime) {
+func (asm *assembler) Fn_Sysdate(format *datetime.Strftime, prec uint8) {
 	asm.adjustStack(1)
 	asm.emit(func(env *ExpressionEnv) int {
 		val := env.vm.arena.newEvalBytesEmpty()
@@ -2933,7 +2933,7 @@ func (asm *assembler) Fn_Sysdate(format *datetime.Strftime) {
 		if tz := env.currentTimezone(); tz != nil {
 			now = now.In(tz)
 		}
-		val.bytes = format.Format(now)
+		val.bytes = format.Format(now, prec)
 		env.vm.stack[env.vm.sp] = val
 		env.vm.sp++
 		return 1
@@ -2945,7 +2945,7 @@ func (asm *assembler) Fn_Curdate() {
 	asm.emit(func(env *ExpressionEnv) int {
 		val := env.vm.arena.newEvalBytesEmpty()
 		val.tt = int16(sqltypes.Date)
-		val.bytes = formatDate.Format(env.time(false))
+		val.bytes = datetime.Date_YYYY_MM_DD.Format(env.time(false), 0)
 		env.vm.stack[env.vm.sp] = val
 		env.vm.sp++
 		return 1

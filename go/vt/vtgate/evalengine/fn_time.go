@@ -53,34 +53,13 @@ var _ Expr = (*builtinSysdate)(nil)
 var _ Expr = (*builtinCurdate)(nil)
 var _ Expr = (*builtinUtcDate)(nil)
 
-var (
-	formatTime     [7]*datetime.Strftime
-	formatDateTime [7]*datetime.Strftime
-	formatDate     *datetime.Strftime
-)
-
-func init() {
-	const fmtTime = "%H:%i:%s"
-	const fmtDate = "%Y-%m-%d"
-	const fmtDateTime = fmtDate + " " + fmtTime
-
-	formatTime[0], _ = datetime.New(fmtTime, 0)
-	formatDateTime[0], _ = datetime.New(fmtDateTime, 0)
-	formatDate, _ = datetime.New(fmtDate, 0)
-
-	for i := 1; i <= 6; i++ {
-		formatTime[i], _ = datetime.New(fmtTime+".%f", uint8(i))
-		formatDateTime[i], _ = datetime.New(fmtDateTime+".%f", uint8(i))
-	}
-}
-
 func (call *builtinNow) eval(env *ExpressionEnv) (eval, error) {
 	now := env.time(call.utc)
 	if call.onlyTime {
-		buf := formatTime[call.prec].Format(now)
+		buf := datetime.Time_hh_mm_ss.Format(now, call.prec)
 		return newEvalRaw(sqltypes.Time, buf, collationBinary), nil
 	} else {
-		buf := formatDateTime[call.prec].Format(now)
+		buf := datetime.DateTime_YYYY_MM_DD_hh_mm_ss.Format(now, call.prec)
 		return newEvalRaw(sqltypes.Datetime, buf, collationBinary), nil
 	}
 }
@@ -101,7 +80,7 @@ func (call *builtinSysdate) eval(env *ExpressionEnv) (eval, error) {
 	if tz := env.currentTimezone(); tz != nil {
 		now = now.In(tz)
 	}
-	return newEvalRaw(sqltypes.Datetime, formatDateTime[call.prec].Format(now), collationBinary), nil
+	return newEvalRaw(sqltypes.Datetime, datetime.DateTime_YYYY_MM_DD_hh_mm_ss.Format(now, call.prec), collationBinary), nil
 }
 
 func (call *builtinSysdate) typeof(_ *ExpressionEnv, _ []*querypb.Field) (sqltypes.Type, typeFlag) {
@@ -114,7 +93,7 @@ func (call *builtinSysdate) constant() bool {
 
 func (call *builtinCurdate) eval(env *ExpressionEnv) (eval, error) {
 	now := env.time(false)
-	return newEvalRaw(sqltypes.Date, formatDate.Format(now), collationBinary), nil
+	return newEvalRaw(sqltypes.Date, datetime.Date_YYYY_MM_DD.Format(now, 0), collationBinary), nil
 }
 
 func (call *builtinCurdate) typeof(_ *ExpressionEnv, _ []*querypb.Field) (sqltypes.Type, typeFlag) {

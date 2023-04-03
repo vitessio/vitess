@@ -159,6 +159,19 @@ func getnum(s string, fixed bool) (int, string, bool) {
 	return int(s[0]-'0')*10 + int(s[1]-'0'), s[2:], true
 }
 
+func getnumn(s string) (int, string, bool) {
+	if !isDigit(s, 0) {
+		return 0, s, false
+	}
+
+	var n int
+	for len(s) > 0 && '0' <= s[0] && s[0] <= '9' {
+		n = n*10 + int(s[0]-'0')
+		s = s[1:]
+	}
+	return n, s, true
+}
+
 // daysBefore[m] counts the number of days in a non-leap year
 // before month m begins. There is an entry for m=12, counting
 // the number of days before January of next year (365).

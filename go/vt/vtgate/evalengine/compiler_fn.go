@@ -798,13 +798,13 @@ func (c *compiler) compileFn_Now(call *builtinNow) (ctype, error) {
 	var t sqltypes.Type
 
 	if call.onlyTime {
-		format = formatTime[call.prec]
+		format = datetime.Time_hh_mm_ss
 		t = sqltypes.Time
 	} else {
-		format = formatDateTime[call.prec]
+		format = datetime.DateTime_YYYY_MM_DD_hh_mm_ss
 		t = sqltypes.Datetime
 	}
-	c.asm.Fn_Now(t, format, call.utc)
+	c.asm.Fn_Now(t, format, call.prec, call.utc)
 	return ctype{Type: t, Col: collationBinary}, nil
 }
 
@@ -819,7 +819,7 @@ func (c *compiler) compileFn_UtcDate(*builtinUtcDate) (ctype, error) {
 }
 
 func (c *compiler) compileFn_Sysdate(call *builtinSysdate) (ctype, error) {
-	c.asm.Fn_Sysdate(formatDateTime[call.prec])
+	c.asm.Fn_Sysdate(datetime.DateTime_YYYY_MM_DD_hh_mm_ss, call.prec)
 	return ctype{Type: sqltypes.Datetime, Col: collationBinary}, nil
 }
 
