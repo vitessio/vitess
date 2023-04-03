@@ -5396,6 +5396,8 @@ type GroupConcatExpr struct {
 	Separator Separator
 }
 
+// Separator stores the separator string and a flag to indicate whether the default separator value should be used.
+// The separator is represented this way so that an empty string can be used as a separator without issues.
 type Separator struct {
 	SeparatorString  string
 	DefaultSeparator bool
