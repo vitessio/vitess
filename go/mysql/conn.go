@@ -1629,9 +1629,9 @@ func (c *Conn) execPrepareStatement(stmtID uint32, cursorType byte, handler Hand
 	// In this case the affectedRows and lastInsertID are always 0 since it
 	// was a read operation.
 	if !sendFinished {
-		if err = c.writeEndResult(false, 0, 0, handler.WarningCount(c)); err != nil {
-			log.Errorf("Error writing result to %s: %v", c, err)
-			return err
+		if werr := c.writeEndResult(false, 0, 0, handler.WarningCount(c)); werr != nil {
+			log.Errorf("Error writing result to %s: %v", c, werr)
+			return werr
 		}
 	}
 
