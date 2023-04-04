@@ -451,7 +451,7 @@ func (s *Schema) Diff(other *Schema, hints *DiffHints) (diffs []EntityDiff, err 
 	for _, e := range s.Entities() {
 		if _, ok := other.named[e.Name()]; !ok {
 			// other schema does not have the entity
-			// Entities are sorted in foreign key CREATE TABLE valid order (create parents first ,then children).
+			// Entities are sorted in foreign key CREATE TABLE valid order (create parents first, then children).
 			// When issuing DROPs, we want to reverse that order. We want to first frop children, then parents.
 			// Instead of analyzing all relationships again, we just reverse the entire order of DROPs, foreign key
 			// related or not.
