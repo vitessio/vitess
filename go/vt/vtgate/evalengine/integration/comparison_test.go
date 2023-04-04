@@ -178,8 +178,8 @@ func compareRemoteExprEnv(t *testing.T, env *evalengine.ExpressionEnv, conn *mys
 		}
 	}
 
-	if diff := compareResult(localErr, remoteErr, localVal, remoteVal, localCollation, remoteCollation, decimals); diff != "" {
-		t.Errorf("%s\nquery: %s (SIMPLIFY=%v)\nrow: %v", diff, localQuery, debugSimplify, env.Row)
+	if err := compareResult(localErr, remoteErr, localVal, remoteVal, localCollation, remoteCollation, decimals); err != nil {
+		t.Errorf("%s\nquery: %s (SIMPLIFY=%v)\nrow: %v", err, localQuery, debugSimplify, env.Row)
 	} else if debugPrintAll {
 		t.Logf("local=%s mysql=%s\nquery: %s\nrow: %v", localVal.String(), remoteVal.String(), localQuery, env.Row)
 	}
