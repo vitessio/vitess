@@ -180,6 +180,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfFuncExpr(in, f)
 	case *GTIDFuncExpr:
 		return VisitRefOfGTIDFuncExpr(in, f)
+	case *GeomFormatExpr:
+		return VisitRefOfGeomFormatExpr(in, f)
 	case *GeomFromTextExpr:
 		return VisitRefOfGeomFromTextExpr(in, f)
 	case *GeomFromWKBExpr:
@@ -1662,6 +1664,21 @@ func VisitRefOfGTIDFuncExpr(in *GTIDFuncExpr, f Visit) error {
 		return err
 	}
 	if err := VisitExpr(in.Channel, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfGeomFormatExpr(in *GeomFormatExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.Geom, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.AxisOrderOpt, f); err != nil {
 		return err
 	}
 	return nil
@@ -4287,6 +4304,8 @@ func VisitCallable(in Callable, f Visit) error {
 		return VisitRefOfFuncExpr(in, f)
 	case *GTIDFuncExpr:
 		return VisitRefOfGTIDFuncExpr(in, f)
+	case *GeomFormatExpr:
+		return VisitRefOfGeomFormatExpr(in, f)
 	case *GeomFromTextExpr:
 		return VisitRefOfGeomFromTextExpr(in, f)
 	case *GeomFromWKBExpr:
@@ -4545,6 +4564,8 @@ func VisitExpr(in Expr, f Visit) error {
 		return VisitRefOfFuncExpr(in, f)
 	case *GTIDFuncExpr:
 		return VisitRefOfGTIDFuncExpr(in, f)
+	case *GeomFormatExpr:
+		return VisitRefOfGeomFormatExpr(in, f)
 	case *GeomFromTextExpr:
 		return VisitRefOfGeomFromTextExpr(in, f)
 	case *GeomFromWKBExpr:

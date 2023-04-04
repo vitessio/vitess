@@ -1443,6 +1443,24 @@ func (cached *GTIDFuncExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+func (cached *GeomFormatExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field Geom vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Geom.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field AxisOrderOpt vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.AxisOrderOpt.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	return size
+}
 func (cached *GeomFromTextExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
