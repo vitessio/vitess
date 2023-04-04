@@ -66,7 +66,7 @@ func (r *EquivalenceRelation) Add(element string) {
 	}
 	r.elementClassMap[element] = r.classCounter
 	r.classElementsMap[r.classCounter] = []string{element}
-	r.classCounter++
+	r.classCounter++ // Set the grounds for next element
 }
 
 // AddAll adds multiple elements to the set. Each element is associated with its own unique class
@@ -130,7 +130,8 @@ func (r *EquivalenceRelation) Related(element1, element2 string) (bool, error) {
 
 // OrderedClasses returns the list of classes, increasing
 func (r *EquivalenceRelation) OrderedClasses() []int {
-	classes := []int{}
+	// The classes are the map's keys.
+	classes := make([]int, 0, len(r.classElementsMap))
 	for class := range r.classElementsMap {
 		classes = append(classes, class)
 	}
