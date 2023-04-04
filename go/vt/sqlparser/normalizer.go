@@ -160,17 +160,19 @@ func (nz *normalizer) walkUpSelect(cursor *Cursor) bool {
 }
 
 func validateLiteral(node *Literal) error {
-	var ok bool
 	switch node.Type {
 	case DateVal:
-		_, ok = datetime.ParseDate(node.Val)
+		if _, ok := datetime.ParseDate(node.Val); !ok {
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid DATE literal: %s", node.Val)
+		}
 	case TimeVal:
-		_, ok = datetime.ParseTime(node.Val)
+		if _, ok := datetime.ParseTime(node.Val); !ok {
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid TIME literal: %s", node.Val)
+		}
 	case TimestampVal:
-		_, ok = datetime.ParseDateTime(node.Val)
-	}
-	if !ok {
-		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid literal: %s", node.Val)
+		if _, ok := datetime.ParseDateTime(node.Val); !ok {
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid TIMESTAMP literal: %s", node.Val)
+		}
 	}
 	return nil
 }
