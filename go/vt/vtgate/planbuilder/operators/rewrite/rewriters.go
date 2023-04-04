@@ -17,6 +17,9 @@ limitations under the License.
 package rewrite
 
 import (
+	"golang.org/x/exp/slices"
+
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
@@ -87,6 +90,32 @@ func BottomUpAll(
 	return BottomUp(root, resolveID, visit, func(ops.Operator) VisitRule {
 		return VisitChildren
 	})
+}
+
+// Swap takes a tree like a->b->c and swaps `a` and `b`, so we end up with b->a->c
+func Swap(a, b ops.Operator) (ops.Operator, error) {
+	c := b.Inputs()
+	if len(c) != 1 {
+		return nil, vterrors.VT13001("Swap can only be used on single input operators")
+	}
+
+	aInputs := slices.Clone(a.Inputs())
+	var tmp ops.Operator
+	for i, in := range aInputs {
+		if in == b {
+			tmp = aInputs[i]
+			aInputs[i] = c[0]
+			break
+		}
+	}
+	if tmp == nil {
+		return nil, vterrors.VT13001("Swap can only be used when the second argument is an input to the first")
+	}
+
+	b.SetInputs([]ops.Operator{a})
+	a.SetInputs(aInputs)
+
+	return b, nil
 }
 
 func bottomUp(

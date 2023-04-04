@@ -223,3 +223,12 @@ func addToIntSlice(columnOffset []int, valToAdd int) ([]int, int) {
 	columnOffset = append(columnOffset, valToAdd)
 	return columnOffset, len(columnOffset) - 1
 }
+
+// TODO: REMOVE
+func (d *Derived) selectStatement() sqlparser.SelectStatement {
+	return d.Query
+}
+
+func (d *Derived) src() ops.Operator {
+	return d.Source
+}

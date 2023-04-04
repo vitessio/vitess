@@ -79,22 +79,21 @@ func planColumns(ctx *plancontext.PlanningContext, root ops.Operator) (ops.Opera
 func planHorizon(ctx *plancontext.PlanningContext, in *Horizon, isRoot bool) (ops.Operator, error) {
 	rb, isRoute := in.Source.(*Route)
 	if isRoute && rb.IsSingleShard() && in.Select.GetLimit() == nil {
-		return planSingleRoute(rb, in)
+		return rewrite.Swap(in, rb)
 	}
 
-	return planSelectExpressions(ctx, in.Select, in.Source, isRoot, func(rb *Route) (ops.Operator, error) {
-		return planSingleRoute(rb, in)
-	})
+	return planSelectExpressions(ctx, in, isRoot)
 }
 
-func planSelectExpressions(
-	ctx *plancontext.PlanningContext,
-	selStmt sqlparser.SelectStatement,
-	src ops.Operator,
-	isRoot bool,
-	shortcut func(*Route) (ops.Operator, error),
-) (ops.Operator, error) {
-	sel, isSel := selStmt.(*sqlparser.Select)
+// horizonLike should be removed. we should use Horizon for both these cases
+type horizonLike interface {
+	ops.Operator
+	selectStatement() sqlparser.SelectStatement
+	src() ops.Operator
+}
+
+func planSelectExpressions(ctx *plancontext.PlanningContext, in horizonLike, isRoot bool) (ops.Operator, error) {
+	sel, isSel := in.selectStatement().(*sqlparser.Select)
 	if !isSel {
 		return nil, errNotHorizonPlanned
 	}
@@ -104,27 +103,25 @@ func planSelectExpressions(
 		return nil, err
 	}
 
+	src := in.src()
 	rb, isRoute := src.(*Route)
 
 	needsOrdering := len(qp.OrderExprs) > 0
-	canShortcut := isRoute && sel.Having == nil && !needsOrdering
+	canPushDown := isRoute && sel.Having == nil && !needsOrdering
 	_, isDerived := src.(*Derived)
 
 	switch {
 	case qp.NeedsAggregation() || sel.Having != nil || sel.Limit != nil || isDerived || needsOrdering || qp.NeedsDistinct():
 		return nil, errNotHorizonPlanned
-	case canShortcut:
-		return shortcut(rb)
+	case canPushDown:
+		return rewrite.Swap(in, rb)
 	default:
 		return pushProjections(ctx, qp, src, isRoot)
 	}
 }
 
 func planDerived(ctx *plancontext.PlanningContext, in *Derived, isRoot bool) (ops.Operator, error) {
-	return planSelectExpressions(ctx, in.Query, in.Source, isRoot, func(rb *Route) (ops.Operator, error) {
-		rb.Source, in.Source = in.Source, in
-		return rb, nil
-	})
+	return planSelectExpressions(ctx, in, isRoot)
 }
 
 func pushProjections(ctx *plancontext.PlanningContext, qp *QueryProjection, src ops.Operator, isRoot bool) (ops.Operator, error) {
@@ -166,11 +163,6 @@ func pushProjections(ctx *plancontext.PlanningContext, qp *QueryProjection, src 
 		return src, nil
 	}
 	return proj, nil
-}
-
-func planSingleRoute(rb *Route, horizon *Horizon) (ops.Operator, error) {
-	rb.Source, horizon.Source = horizon, rb.Source
-	return rb, nil
 }
 
 func aeWrap(e sqlparser.Expr) *sqlparser.AliasedExpr {
