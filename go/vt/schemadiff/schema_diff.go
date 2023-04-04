@@ -39,6 +39,7 @@ type DiffDep struct {
 	depType DiffDepType
 }
 
+// NewDiffDep returns a new diff dependency pairing.
 func NewDiffDep(diff EntityDiff, depDiff EntityDiff, depType DiffDepType) *DiffDep {
 	return &DiffDep{
 		diff:    diff,
@@ -60,6 +61,9 @@ Modified to have an early break
 // permutateDiffs calls `callback` with each permutation of a. If the function returns `true`, that means
 // the callback has returned `true` for an early break, thus possibly not all permutations have been evaluated.
 func permutateDiffs(a []EntityDiff, callback func([]EntityDiff) (earlyBreak bool)) (earlyBreak bool) {
+	if len(a) == 0 {
+		return false
+	}
 	return permDiff(a, callback, 0)
 }
 
@@ -87,6 +91,7 @@ func permDiff(a []EntityDiff, callback func([]EntityDiff) (earlyBreak bool), i i
 // - The source schema (on which the diff would operate)
 // - A list of SQL diffs (e.g. CREATE VIEW, ALTER TABLE, ...)
 // - A map of dependencies between the diffs
+// Operations on SchemaDiff are not concurrency-safe.
 type SchemaDiff struct {
 	schema *Schema
 	diffs  []EntityDiff
@@ -181,7 +186,7 @@ func (d *SchemaDiff) HasDeps() bool {
 	return len(d.deps) > 0
 }
 
-// AllSequentialExecutionDeps returns all diffs that are of "subsequential execution" type.
+// AllSequentialExecutionDeps returns all diffs that are of "sequential execution" type.
 func (d *SchemaDiff) AllSequentialExecutionDeps() (deps []*DiffDep) {
 	for _, dep := range d.deps {
 		if dep.depType >= DiffDepSequentialExecution {
