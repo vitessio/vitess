@@ -188,6 +188,11 @@ func yySpecialCommentMode(yylex interface{}) bool {
   window Window
   over *Over
   windowDef *WindowDef
+  eventName EventName
+  eventScheduleSpec *EventScheduleSpec
+  eventScheduleTimeSpec *EventScheduleTimeSpec
+  eventStatus EventStatus
+  intervalExprs []IntervalExpr
 }
 
 %token LEX_ERROR
@@ -253,6 +258,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %token <bytes> SEQUENCE ENABLE DISABLE
 %token <bytes> EACH ROW BEFORE FOLLOWS PRECEDES DEFINER INVOKER
 %token <bytes> INOUT OUT DETERMINISTIC CONTAINS READS MODIFIES SQL SECURITY TEMPORARY ALGORITHM MERGE TEMPTABLE UNDEFINED
+%token <bytes> EVENT SCHEDULE EVERY STARTS ENDS COMPLETION PRESERVE
 
 // SIGNAL Tokens
 %token <bytes> CLASS_ORIGIN SUBCLASS_ORIGIN MESSAGE_TEXT MYSQL_ERRNO CONSTRAINT_CATALOG CONSTRAINT_SCHEMA
@@ -267,7 +273,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %token <bytes> SSL X509 CIPHER ISSUER SUBJECT ACCOUNT EXPIRE NEVER OPTION OPTIONAL EXCEPT ADMIN PRIVILEGES
 %token <bytes> MAX_QUERIES_PER_HOUR MAX_UPDATES_PER_HOUR MAX_CONNECTIONS_PER_HOUR MAX_USER_CONNECTIONS FLUSH
 %token <bytes> FAILED_LOGIN_ATTEMPTS PASSWORD_LOCK_TIME UNBOUNDED REQUIRE PROXY ROUTINE TABLESPACE CLIENT SLAVE
-%token <bytes> EVENT EXECUTE FILE RELOAD REPLICATION SHUTDOWN SUPER USAGE LOGS ENGINE ERROR GENERAL HOSTS
+%token <bytes> EXECUTE FILE RELOAD REPLICATION SHUTDOWN SUPER USAGE LOGS ENGINE ERROR GENERAL HOSTS
 %token <bytes> OPTIMIZER_COSTS RELAY SLOW USER_RESOURCES NO_WRITE_TO_BINLOG CHANNEL
 
 // Dynamic Privilege Tokens
@@ -375,7 +381,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 
 // MySQL unreserved keywords that are currently unused
 %token <bytes> ACTIVE AGGREGATE ANY ARRAY ASCII AT AUTOEXTEND_SIZE
-%token <bytes> ENDS EVENTS
+%token <bytes> EVENTS
 
 // Generated Columns
 %token <bytes> GENERATED ALWAYS STORED VIRTUAL
@@ -432,6 +438,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <tableName> table_name load_into_table_name into_table_name delete_table_name
 %type <aliasedTableName> aliased_table_name aliased_table_options
 %type <procedureName> procedure_name
+%type <eventName> event_name
 %type <indexHints> index_hint_list
 %type <expr> where_expression_opt
 %type <expr> condition
@@ -439,8 +446,8 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <boolean> all_opt enforced_opt
 %type <str> compare
 %type <ins> insert_data
-%type <expr> value value_expression num_val as_of_opt integral_or_value_arg integral_or_interval_expr
-%type <bytes> time_unit
+%type <expr> value value_expression num_val as_of_opt integral_or_value_arg integral_or_interval_expr timestamp_value
+%type <bytes> time_unit non_microsecond_time_unit
 %type <expr> function_call_keyword function_call_nonkeyword function_call_generic function_call_conflict
 %type <expr> func_datetime_precision function_call_window function_call_aggregate_with_window
 %type <str> is_suffix
@@ -505,10 +512,10 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <convertType> convert_type
 %type <columnType> column_type  column_type_options json_table_column_options on_empty
 %type <columnType> int_type decimal_type numeric_type time_type char_type spatial_type
-%type <sqlVal> char_length_opt length_opt column_comment ignore_number_opt
+%type <sqlVal> char_length_opt length_opt column_comment ignore_number_opt comment_keyword_opt
 %type <optVal> column_default on_update
 %type <str> charset_opt character_set collate_opt collate
-%type <boolean> default_keyword_opt
+%type <boolean> default_keyword_opt event_on_completion_preserve_opt
 %type <charsetCollate> charset_default_opt collate_default_opt encryption_default_opt
 %type <charsetCollates> creation_option creation_option_opt
 %type <boolVal> stored_opt
@@ -561,6 +568,10 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <accountWithAuth> account_with_auth
 %type <accountsWithAuth> account_with_auth_list
 %type <authentication> authentication authentication_initial
+%type <eventScheduleSpec> event_schedule
+%type <eventScheduleTimeSpec> event_starts_opt event_ends_opt
+%type <eventStatus> event_status_opt
+%type <intervalExprs> event_schedule_intervals_opt
 %type <tlsOptionItem> tls_option_item
 %type <tlsOptionItems> tls_options tls_option_item_list
 %type <accountLimitItem> account_limit_item
@@ -1078,6 +1089,14 @@ create_statement:
       notExists = true
     }
     $$ = &CreateRole{IfNotExists: notExists, Roles: $4}
+  }
+| CREATE definer_opt EVENT not_exists_opt event_name ON SCHEDULE event_schedule event_on_completion_preserve_opt event_status_opt comment_keyword_opt DO lexer_position statement_list_statement lexer_position
+  {
+    var notExists bool
+    if $4 != 0 {
+      notExists = true
+    }
+    $$ = &DDL{Action: CreateStr, EventSpec: &EventSpec{EventName: $5, Definer: $2, IfNotExists: notExists, OnSchedule: $8, OnCompletionPreserve: $9, Status: $10, Comment: $11, Body: $14}, SubStatementPositionStart: $13, SubStatementPositionEnd: $15 - 1}
   }
 
 default_role_opt:
@@ -1945,6 +1964,102 @@ account_with_auth_list:
 | account_with_auth_list ',' account_with_auth
   {
     $$ = append($1, $3)
+  }
+
+event_name:
+  sql_id
+  {
+    $$ = EventName{Name: $1}
+  }
+| table_id '.' sql_id
+  {
+    $$ = EventName{Qualifier: $1, Name: $3}
+  }
+
+event_schedule:
+  AT timestamp_value event_schedule_intervals_opt
+  {
+    $$ = &EventScheduleSpec{At: &EventScheduleTimeSpec{EventTimestamp: $2, EventIntervals: $3}}
+  }
+| EVERY value non_microsecond_time_unit event_starts_opt event_ends_opt
+  {
+    $$ = &EventScheduleSpec{EveryInterval: IntervalExpr{Expr: $2, Unit: string($3)}, Starts: $4, Ends: $5}
+  }
+
+event_schedule_intervals_opt:
+  {
+    $$ = []IntervalExpr{}
+  }
+| event_schedule_intervals_opt '+' INTERVAL value non_microsecond_time_unit
+  {
+    $$ = append($1, IntervalExpr{Expr: $4, Unit: string($5)})
+  }
+
+event_starts_opt:
+  {
+    $$ = nil
+  }
+| STARTS timestamp_value event_schedule_intervals_opt
+  {
+    $$ = &EventScheduleTimeSpec{EventTimestamp: $2, EventIntervals: $3}
+  }
+
+event_ends_opt:
+  {
+    $$ = nil
+  }
+| ENDS timestamp_value event_schedule_intervals_opt
+  {
+    $$ = &EventScheduleTimeSpec{EventTimestamp: $2, EventIntervals: $3}
+  }
+
+event_on_completion_preserve_opt:
+  {
+    $$ = true
+  }
+| ON COMPLETION PRESERVE
+  {
+    $$ = true
+  }
+| ON COMPLETION NOT PRESERVE
+  {
+    $$ = false
+  }
+
+event_status_opt:
+  {
+    $$ = EventStatus_Enable
+  }
+| ENABLE
+  {
+    $$ = EventStatus_Enable
+  }
+| DISABLE
+  {
+    $$ = EventStatus_Disable
+  }
+| DISABLE ON SLAVE
+  {
+    $$ = EventStatus_DisableOnSlave
+  }
+
+comment_keyword_opt:
+  {
+    $$ = nil
+  }
+| COMMENT_KEYWORD STRING
+  {
+    $$ = NewStrVal($2)
+  }
+
+timestamp_value:
+  value
+  {
+    $$ = $1
+  }
+| function_call_nonkeyword
+  {
+    $$ = $1
   }
 
 trigger_time:
@@ -4469,6 +4584,14 @@ drop_statement:
     }
     $$ = &DropRole{IfExists: exists, Roles: $4}
   }
+| DROP EVENT exists_opt event_name
+  {
+    var exists bool
+    if $3 != 0 {
+      exists = true
+    }
+    $$ = &DDL{Action: DropStr, EventSpec: &EventSpec{EventName: $4}, IfExists: exists}
+  }
 
 drop_statement_action:
   {
@@ -5251,26 +5374,29 @@ window_definition:
   }
 
 time_unit:
-  MICROSECOND
-| SECOND
-| MINUTE
-| HOUR
-| DAY
-| WEEK
-| MONTH
-| QUARTER
-| YEAR
+  non_microsecond_time_unit
+| MICROSECOND
 | SECOND_MICROSECOND
 | MINUTE_MICROSECOND
-| MINUTE_SECOND
 | HOUR_MICROSECOND
-| HOUR_SECOND
-| HOUR_MINUTE
 | DAY_MICROSECOND
-| DAY_SECOND
-| DAY_MINUTE
-| DAY_HOUR
+
+non_microsecond_time_unit:
+  YEAR
+| QUARTER
+| MONTH
+| DAY
+| HOUR
+| MINUTE
+| WEEK
+| SECOND
 | YEAR_MONTH
+| DAY_HOUR
+| DAY_MINUTE
+| DAY_SECOND
+| HOUR_MINUTE
+| HOUR_SECOND
+| MINUTE_SECOND
 
 // TODO : support prepared statements
 integral_or_interval_expr:
@@ -8128,6 +8254,7 @@ non_reserved_keyword:
 | ALGORITHM
 | ALWAYS
 | ARRAY
+| AT
 | AUTHENTICATION
 | AUTO_INCREMENT
 | AVG_ROW_LENGTH
@@ -8156,6 +8283,7 @@ non_reserved_keyword:
 | COMPRESSION
 | COMMITTED
 | CONNECTION
+| COMPLETION
 | COMPONENT
 | CONSTRAINT_CATALOG
 | CONSTRAINT_NAME
@@ -8182,6 +8310,7 @@ non_reserved_keyword:
 | ENABLE
 | ENCRYPTION
 | END
+| ENDS
 | ENFORCED
 | ENGINE
 | ENGINES
@@ -8189,6 +8318,7 @@ non_reserved_keyword:
 | ENUM
 | ERROR
 | ERRORS
+| EVERY
 | EXCLUDE
 | EXPANSION
 | EXPIRE
@@ -8285,6 +8415,7 @@ non_reserved_keyword:
 | PRECEDES
 | PRECEDING
 | PREPARE
+| PRESERVE
 | PRIVILEGE_CHECKS_USER
 | PRIVILEGES
 | PROCESSLIST
@@ -8314,6 +8445,7 @@ non_reserved_keyword:
 | ROUTINE
 | ROW_FORMAT
 | SAVEPOINT
+| SCHEDULE
 | SCHEMA_NAME
 | SECOND
 | SECONDARY
@@ -8339,6 +8471,7 @@ non_reserved_keyword:
 | SOURCE_USER
 | SRID
 | START
+| STARTS
 | STATUS
 | STATS_AUTO_RECALC
 | STATS_PERSISTENT

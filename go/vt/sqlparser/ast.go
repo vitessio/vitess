@@ -1780,6 +1780,56 @@ type ProcedureParam struct {
 	Type      ColumnType
 }
 
+type EventSpec struct {
+	EventName            EventName
+	Definer              string
+	IfNotExists          bool
+	OnSchedule           *EventScheduleSpec
+	OnCompletionPreserve bool
+	Status               EventStatus
+	Comment              *SQLVal
+	Body                 Statement
+}
+
+type EventStatus string
+
+const (
+	EventStatus_Enable         EventStatus = "enable"
+	EventStatus_Disable        EventStatus = "disable"
+	EventStatus_DisableOnSlave EventStatus = "disable on slave"
+)
+
+type EventScheduleSpec struct {
+	At            *EventScheduleTimeSpec
+	EveryInterval IntervalExpr
+	Starts        *EventScheduleTimeSpec
+	Ends          *EventScheduleTimeSpec
+}
+
+type EventScheduleTimeSpec struct {
+	EventTimestamp Expr
+	EventIntervals []IntervalExpr
+}
+
+// Format returns a canonical string representation of the type and all relevant options
+func (est *EventScheduleTimeSpec) Format(buf *TrackedBuffer) {
+	sb := strings.Builder{}
+
+	sb.WriteString(fmt.Sprintf("%s ", String(est.EventTimestamp)))
+	for _, interval := range est.EventIntervals {
+		sb.WriteString(fmt.Sprintf("+ interval %v %s ", interval.Expr, interval.Unit))
+	}
+
+	buf.Myprintf("%s", sb.String())
+}
+
+// String returns a canonical string representation of the type and all relevant options
+func (est *EventScheduleTimeSpec) String() string {
+	buf := NewTrackedBuffer(nil)
+	est.Format(buf)
+	return buf.String()
+}
+
 type CharacteristicValue string
 
 const (
@@ -1907,6 +1957,9 @@ type DDL struct {
 	// AlterCollationSpec is set for CHARACTER SET / COLLATE operations on ALTER statements
 	AlterCollationSpec *AlterCollationSpec
 
+	// EventSpec is set for CREATE EVENT operations
+	EventSpec *EventSpec
+
 	// Temporary is set for CREATE TEMPORARY TABLE operations.
 	Temporary bool
 
@@ -2004,6 +2057,39 @@ func (node *DDL) Format(buf *TrackedBuffer) {
 				sb.WriteString(" " + characteristic.String())
 			}
 			buf.Myprintf("%s %v", sb.String(), proc.Body)
+		} else if node.EventSpec != nil {
+			event := node.EventSpec
+			sb := strings.Builder{}
+			sb.WriteString("create ")
+			if event.Definer != "" {
+				sb.WriteString(fmt.Sprintf("definer = %s ", event.Definer))
+			}
+			notExists := ""
+			if node.IfNotExists {
+				notExists = " if not exists"
+			}
+			sb.WriteString(fmt.Sprintf("event%s %s ", notExists, event.EventName))
+
+			if event.OnSchedule.At != nil {
+				sb.WriteString(fmt.Sprintf("on schedule at %s", event.OnSchedule.At.String()))
+			} else {
+				sb.WriteString(fmt.Sprintf("on schedule every %s %s ", String(event.OnSchedule.EveryInterval.Expr), event.OnSchedule.EveryInterval.Unit))
+				if event.OnSchedule.Starts != nil {
+					sb.WriteString(fmt.Sprintf("starts %s", event.OnSchedule.Starts.String()))
+				}
+				if event.OnSchedule.Ends != nil {
+					sb.WriteString(fmt.Sprintf("ends %s", event.OnSchedule.Ends.String()))
+				}
+			}
+
+			if !event.OnCompletionPreserve {
+				sb.WriteString("on completion not preserve ")
+			}
+			if event.Comment != nil {
+				sb.WriteString(fmt.Sprintf("comment %s ", event.Comment))
+			}
+
+			buf.Myprintf("%sdo %v", sb.String(), event.Body)
 		} else {
 			notExists := ""
 			if node.IfNotExists {
@@ -2037,17 +2123,23 @@ func (node *DDL) Format(buf *TrackedBuffer) {
 		if len(node.FromViews) > 0 {
 			buf.Myprintf("%s view%s %v", node.Action, exists, node.FromViews)
 		} else if node.TriggerSpec != nil {
-			exists := ""
+			exists = ""
 			if node.IfExists {
 				exists = " if exists"
 			}
 			buf.Myprintf(fmt.Sprintf("%s trigger%s %v", node.Action, exists, node.TriggerSpec.TrigName))
 		} else if node.ProcedureSpec != nil {
-			exists := ""
+			exists = ""
 			if node.IfExists {
 				exists = " if exists"
 			}
 			buf.Myprintf(fmt.Sprintf("%s procedure%s %v", node.Action, exists, node.ProcedureSpec.ProcName))
+		} else if node.EventSpec != nil {
+			exists = ""
+			if node.IfExists {
+				exists = " if exists"
+			}
+			buf.Myprintf(fmt.Sprintf("%s event%s %v", node.Action, exists, node.EventSpec.EventName))
 		} else {
 			buf.Myprintf("%s table%s %v", node.Action, exists, node.FromTables)
 		}
@@ -3970,6 +4062,51 @@ func (node ProcedureName) IsEmpty() bool {
 	return node.Name.IsEmpty()
 }
 
+// EventName represents an event name.
+// Qualifier, if specified, represents a database name.
+// EventName is a value struct whose fields are case-sensitive,
+// so TableIdent struct is used for fields
+type EventName struct {
+	Name      ColIdent
+	Qualifier TableIdent
+}
+
+// Format formats the node.
+func (node EventName) Format(buf *TrackedBuffer) {
+	if node.IsEmpty() {
+		return
+	}
+	if !node.Qualifier.IsEmpty() {
+		buf.Myprintf("%v.", node.Qualifier)
+	}
+	buf.Myprintf("%v", node.Name)
+}
+
+// Format formats the node.
+func (node EventName) String() string {
+	if node.IsEmpty() {
+		return ""
+	}
+	if !node.Qualifier.IsEmpty() {
+		return fmt.Sprintf("%s.%s", node.Qualifier.String(), node.Name)
+	}
+	return node.Name.String()
+}
+
+func (node EventName) walkSubtree(visit Visit) error {
+	return Walk(
+		visit,
+		node.Name,
+		node.Qualifier,
+	)
+}
+
+// IsEmpty returns true if EventName is nil or empty.
+func (node EventName) IsEmpty() bool {
+	// If Name is empty, Qualifier is also empty.
+	return node.Name.IsEmpty()
+}
+
 // TableName represents a table  name.
 // Qualifier, if specified, represents a database or keyspace.
 // TableName is a value struct whose fields are case sensitive.
@@ -4280,7 +4417,7 @@ func (*IntervalExpr) iExpr()      {}
 func (*CollateExpr) iExpr()       {}
 func (*FuncExpr) iExpr()          {}
 func (*TimestampFuncExpr) iExpr() {}
-func (*ExtractFuncExpr) iExpr() {}
+func (*ExtractFuncExpr) iExpr()   {}
 func (*CurTimeFuncExpr) iExpr()   {}
 func (*CaseExpr) iExpr()          {}
 func (*ValuesFuncExpr) iExpr()    {}
@@ -5058,8 +5195,8 @@ func (node *IntervalExpr) replace(from, to Expr) bool {
 
 // ExtractFuncExpr represents the function and arguments for EXTRACT(<time_unit> from <expr>) functions.
 type ExtractFuncExpr struct {
-	Name  string
-	Unit  string
+	Name string
+	Unit string
 	Expr Expr
 }
 

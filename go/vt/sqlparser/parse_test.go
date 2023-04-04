@@ -2577,7 +2577,7 @@ var (
 		}, {
 			input:  "GRANT PROXY ON UserName TO Role1, Role2 WITH GRANT OPTION",
 			output: "grant proxy on `UserName`@`%` to `Role1`@`%`, `Role2`@`%` with grant option",
-		},  {
+		}, {
 			input:  "GRANT REPLICATION_SLAVE_ADMIN, GROUP_REPLICATION_ADMIN, BINLOG_ADMIN ON *.* TO 'u1'@'localhost'",
 			output: "grant replication_slave_admin, group_replication_admin, binlog_admin on *.* to `u1`@`localhost`",
 		}, {
@@ -2858,6 +2858,34 @@ var (
 		},
 		{
 			input: "select EXTRACT(DAY from '2020-10-1')",
+		},
+		{
+			input:  "DROP EVENT event1",
+			output: "drop event event1",
+		},
+		{
+			input:  "DROP EVENT IF EXISTS event1",
+			output: "drop event if exists event1",
+		},
+		{
+			input:  "CREATE EVENT event1 ON SCHEDULE AT '2006-02-10 23:59:00' DO INSERT INTO test.totals VALUES (NOW())",
+			output: "create event event1 on schedule at '2006-02-10 23:59:00' do insert into test.totals values (NOW())",
+		},
+		{
+			input:  "CREATE DEFINER = `root`@`localhost` EVENT event1 ON SCHEDULE AT CURRENT_TIMESTAMP + INTERVAL 3 WEEK + INTERVAL 2 DAY DO INSERT INTO mytable VALUES (NOW())",
+			output: "create definer = `root`@`localhost` event event1 on schedule at CURRENT_TIMESTAMP() + interval 3 WEEK + interval 2 DAY do insert into mytable values (NOW())",
+		},
+		{
+			input:  "CREATE EVENT event1 ON SCHEDULE EVERY 1 MINUTE ENDS CURRENT_TIMESTAMP + INTERVAL 3 HOUR ON COMPLETION PRESERVE COMMENT 'new event' DO INSERT INTO mytable VALUES (1)",
+			output: "create event event1 on schedule every 1 MINUTE ends CURRENT_TIMESTAMP() + interval 3 HOUR comment 'new event' do insert into mytable values (1)",
+		},
+		{
+			input:  "CREATE EVENT event1 ON SCHEDULE EVERY 1 MINUTE STARTS CURRENT_TIMESTAMP + INTERVAL 2 HOUR ENDS CURRENT_TIMESTAMP + INTERVAL 3 HOUR ON COMPLETION NOT PRESERVE  DO INSERT INTO mytable VALUES (1)",
+			output: "create event event1 on schedule every 1 MINUTE starts CURRENT_TIMESTAMP() + interval 2 HOUR ends CURRENT_TIMESTAMP() + interval 3 HOUR on completion not preserve do insert into mytable values (1)",
+		},
+		{
+			input:  "CREATE EVENT e_call_myproc ON SCHEDULE AT CURRENT_TIMESTAMP + INTERVAL 1 DAY DO CALL myproc(5, 27)",
+			output: "create event e_call_myproc on schedule at CURRENT_TIMESTAMP() + interval 1 DAY do call myproc(5, 27)",
 		},
 	}
 	// Any tests that contain multiple statements within the body (such as BEGIN/END blocks) should go here.
@@ -3489,7 +3517,7 @@ BEGIN
     VALUES ("delete", OLD.id,OLD.created_at,OLD.updated_at,OLD.created_by,OLD.updated_by,OLD.company_id,OLD.label_id,OLD.task_id,OLD.delete);
     END */
 `,
-   output: "create definer = `root`@`localhost` trigger forecast_db.before_ai_suggested_task_label_delete " +
+		output: "create definer = `root`@`localhost` trigger forecast_db.before_ai_suggested_task_label_delete " +
 			"before delete on forecast_db.ai_suggested_task_label for each row begin\n" +
 			"if OLD.`delete` != (1) then " +
 			"set @message_text = CONCAT('CANNOT DELETE ai_suggested_task_label IF DELETE FLAG IS NOT SET FOR: ', CAST(OLD.id, CHAR)); " +
@@ -3509,7 +3537,7 @@ func TestValidIgnoreWhitespace(t *testing.T) {
 			}
 			tree, err := Parse(tcase.input)
 			require.NoError(t, err)
-			
+
 			out := String(tree)
 			normalize := regexp.MustCompile("\\s+")
 			normalizedOut := normalize.ReplaceAllLiteralString(out, " ")
