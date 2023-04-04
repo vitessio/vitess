@@ -255,7 +255,7 @@ func (c *Conn) parseRow(data []byte, fields []*querypb.Field) ([]sqltypes.Value,
 	result := make([]sqltypes.Value, colNumber)
 	pos := 0
 	for i := 0; i < colNumber; i++ {
-		if data[pos] == 0xfb {
+		if data[pos] == NullValue {
 			pos++
 			continue
 		}
@@ -343,12 +343,12 @@ func (c *Conn) ExecuteFetchWithWarningCount(query string, maxrows int, wantfield
 // ReadQueryResult gets the result from the last written query.
 func (c *Conn) ReadQueryResult(maxrows int, wantfields bool) (result *sqltypes.Result, more bool, warnings uint16, err error) {
 	// Get the result.
-	affectedRows, lastInsertID, colNumber, more, warnings, err := c.readComQueryResponse()
+	affectedRows, lastInsertID, numCols, more, warnings, err := c.readComQueryResponse()
 	if err != nil {
 		return nil, false, 0, err
 	}
 
-	if colNumber == 0 {
+	if numCols == 0 {
 		// OK packet, means no results. Just use the numbers.
 		return &sqltypes.Result{
 			RowsAffected: affectedRows,
@@ -356,16 +356,15 @@ func (c *Conn) ReadQueryResult(maxrows int, wantfields bool) (result *sqltypes.R
 		}, more, warnings, nil
 	}
 
-	fields := make([]querypb.Field, colNumber)
+	fields := make([]querypb.Field, numCols)
 	result = &sqltypes.Result{
-		Fields: make([]*querypb.Field, colNumber),
+		Fields: make([]*querypb.Field, numCols),
 	}
 
 	// Read column headers. One packet per column.
 	// Build the fields.
-	for i := 0; i < colNumber; i++ {
+	for i := 0; i < numCols; i++ {
 		result.Fields[i] = &fields[i]
-
 		if wantfields {
 			if err := c.readColumnDefinition(result.Fields[i], i); err != nil {
 				return nil, false, 0, err
@@ -384,12 +383,13 @@ func (c *Conn) ReadQueryResult(maxrows int, wantfields bool) (result *sqltypes.R
 			return nil, false, 0, NewSQLError(CRServerLost, SSUnknownSQLState, "%v", err)
 		}
 		if isEOFPacket(data) {
-
 			// This is what we expect.
 			// Warnings and status flags are ignored.
 			c.recycleReadPacket()
-			// goto: read row loop
-
+			// goto: read row loop, unless using cursors
+			if c.StatusFlags & ServerCursorExists != 0 {
+				return result, false, 0, nil
+			}
 		} else if isErrorPacket(data) {
 			defer c.recycleReadPacket()
 			return nil, false, 0, ParseErrorPacket(data)
@@ -429,9 +429,7 @@ func (c *Conn) ReadQueryResult(maxrows int, wantfields bool) (result *sqltypes.R
 				more = (statusFlags & ServerMoreResultsExists) != 0
 			}
 			return result, more, warnings, nil
-
 		} else if isErrorPacket(data) {
-			// Error packet.
 			return nil, false, 0, ParseErrorPacket(data)
 		}
 
@@ -445,6 +443,57 @@ func (c *Conn) ReadQueryResult(maxrows int, wantfields bool) (result *sqltypes.R
 
 		// Regular row.
 		row, err := c.parseRow(data, result.Fields)
+		if err != nil {
+			return nil, false, 0, err
+		}
+		result.Rows = append(result.Rows, row)
+	}
+}
+
+// FetchQueryResult gets the reset set from the last executed query.
+func (c *Conn) FetchQueryResult(maxrows int, fields []*querypb.Field) (result *sqltypes.Result, more bool, warnings uint16, err error) {
+	result = &sqltypes.Result{}
+
+	// read each row until EOF or OK packet.
+	for {
+		data, err := c.ReadPacket()
+		if err != nil {
+			return nil, false, 0, err
+		}
+
+		if isEOFPacket(data) {
+			result.RowsAffected = uint64(len(result.Rows))
+
+			// The deprecated EOF packets change means that this is either an
+			// EOF packet or an OK packet with the EOF type code.
+			if c.Capabilities&CapabilityClientDeprecateEOF == 0 {
+				warnings, more, err = parseEOFPacket(data)
+				if err != nil {
+					return nil, false, 0, err
+				}
+			} else {
+				var statusFlags uint16
+				_, _, statusFlags, warnings, err = parseOKPacket(data)
+				if err != nil {
+					return nil, false, 0, err
+				}
+				more = (statusFlags & ServerMoreResultsExists) != 0
+			}
+			return result, more, warnings, nil
+		} else if isErrorPacket(data) {
+			return nil, false, 0, ParseErrorPacket(data)
+		}
+
+		// Check we're not over the limit before we add more.
+		if len(result.Rows) == maxrows {
+			if err := c.drainResults(); err != nil {
+				return nil, false, 0, err
+			}
+			return nil, false, 0, NewSQLError(ERVitessMaxRowsExceeded, SSUnknownSQLState, "Row count exceeded %d", maxrows)
+		}
+
+		// Regular row.
+		row, err := c.parseRow(data, fields)
 		if err != nil {
 			return nil, false, 0, err
 		}
@@ -991,14 +1040,6 @@ func (c *Conn) writeFields(result *sqltypes.Result) error {
 	// Now send each Field.
 	for _, field := range result.Fields {
 		if err := c.writeColumnDefinition(field, false); err != nil {
-			return err
-		}
-	}
-
-	// Now send an EOF packet.
-	if c.Capabilities&CapabilityClientDeprecateEOF == 0 {
-		// With CapabilityClientDeprecateEOF, we do not send this EOF.
-		if err := c.writeEOFPacket(c.StatusFlags, 0); err != nil {
 			return err
 		}
 	}

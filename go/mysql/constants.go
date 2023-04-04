@@ -144,7 +144,8 @@ const (
 
 // Status flags. They are returned by the server in a few cases.
 // Originally found in include/mysql/mysql_com.h
-// See http://dev.mysql.com/doc/internals/en/status-flags.html
+// See https://dev.mysql.com/doc/dev/mysql-server/latest/mysql__com_8h.html#a1d854e841086925be1883e4d7b4e8cad
+// See https://mariadb.com/kb/en/ok_packet/ if you actually want useful information
 const (
 	// ServerInTransaction is SERVER_STATUS_IN_TRANS (a transaction is active)
 	ServerInTransaction = 0x0001
@@ -154,6 +155,21 @@ const (
 
 	// ServerMoreResultsExists is SERVER_MORE_RESULTS_EXISTS
 	ServerMoreResultsExists = 0x0008
+
+	// ServerCursorExists is SERVER_STATUS_CURSOR_EXISTS
+	ServerCursorExists = 0x0040
+
+	// ServerCursorLastRowSent is SERVER_STATUS_LAST_ROW_SENT
+	ServerCursorLastRowSent = 0x0080
+)
+
+// Cursor Types. They are received on COM_STMT_EXECUTE()
+// See https://mariadb.com/kb/en/com_stmt_execute/
+const (
+	NoCursor = iota
+	ReadOnly
+	CursorForUpdate
+	ScrollableCursor
 )
 
 // State Change Information
@@ -204,7 +220,7 @@ const (
 	// ComStmtReset is COM_STMT_RESET
 	ComStmtReset = 0x1a
 
-	//ComStmtFetch is COM_STMT_FETCH
+	// ComStmtFetch is COM_STMT_FETCH
 	ComStmtFetch = 0x1c
 
 	// ComSetOption is COM_SET_OPTION

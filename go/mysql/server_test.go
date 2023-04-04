@@ -219,7 +219,79 @@ func (th *testHandler) ComPrepare(c *Conn, query string) ([]*querypb.Field, erro
 }
 
 func (th *testHandler) ComStmtExecute(c *Conn, prepare *PrepareData, callback func(*sqltypes.Result) error) error {
-	return nil
+	switch prepare.PrepareStmt {
+	case "empty result":
+		res := &sqltypes.Result{
+			Fields: []*querypb.Field{
+				{
+					Name: "id",
+					Type: querypb.Type_INT32,
+				},
+				{
+					Name: "name",
+					Type: querypb.Type_VARCHAR,
+				},
+				{
+					Name: "name2",
+					Type: querypb.Type_VARCHAR,
+				},
+			},
+			Rows: [][]sqltypes.Value{},
+			RowsAffected: 0,
+		}
+		return callback(res)
+	case "select rows":
+		res := &sqltypes.Result{
+			Fields: []*querypb.Field{
+				{
+					Name: "id",
+					Type: querypb.Type_INT32,
+				},
+				{
+					Name: "name",
+					Type: querypb.Type_VARCHAR,
+				},
+			},
+			Rows: [][]sqltypes.Value{
+				{
+					sqltypes.MakeTrusted(querypb.Type_INT32, []byte("10")),
+					sqltypes.MakeTrusted(querypb.Type_VARCHAR, []byte("nice name")),
+				},
+				{
+					sqltypes.MakeTrusted(querypb.Type_INT32, []byte("20")),
+					sqltypes.MakeTrusted(querypb.Type_VARCHAR, []byte("nicer name")),
+				},
+			},
+			RowsAffected: 2,
+		}
+		return callback(res)
+	case "large batch":
+		n := 2 * batchSize
+		rows := make([][]sqltypes.Value, n)
+		for i := 0; i < n; i++ {
+			rows[i] = []sqltypes.Value{
+				sqltypes.MakeTrusted(querypb.Type_INT32, []byte("10")),
+				sqltypes.MakeTrusted(querypb.Type_VARCHAR, []byte("nice name")),
+			}
+		}
+		res := &sqltypes.Result{
+			Fields: []*querypb.Field{
+				{
+					Name: "id",
+					Type: querypb.Type_INT32,
+				},
+				{
+					Name: "name",
+					Type: querypb.Type_VARCHAR,
+				},
+			},
+			Rows: rows,
+			RowsAffected: uint64(n),
+		}
+		return callback(res)
+	default:
+		return fmt.Errorf("unrecorgnized test command")
+	}
 }
 
 func (th *testHandler) ComResetConnection(c *Conn) {
