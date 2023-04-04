@@ -784,8 +784,8 @@ func (s *Schema) SchemaDiff(other *Schema, hints *DiffHints) (*SchemaDiff, error
 		for _, dependentName := range dependentNames {
 			dependentDiffs = schemaDiff.diffsByEntityName(dependentName)
 			for _, dependentDiff := range dependentDiffs {
-				// so, 'diff' is an entity that has changed. But now we also see that one of the
-				// entities our entity depends on, has also changed.
+				// 'diff' refers to an entity (call it "e") that has changed. But here we find that one of the
+				// entities that "e" depends on, has also changed.
 				relationsMade = true
 				schemaDiff.addDep(diff, dependentDiff, DiffDepOrderUnknown)
 			}
