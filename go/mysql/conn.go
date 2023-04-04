@@ -1555,34 +1555,30 @@ func (c *Conn) execPrepareStatement(stmtID uint32, cursorType byte, handler Hand
 		}
 
 		go func() {
-			var err error
+			var gerr error
 			defer func(){
 				// pass along error, even if there's a panic
 				if r := recover(); r != nil {
-					err = fmt.Errorf("panic while running query for server-side cursor: %v", r)
+					gerr = fmt.Errorf("panic while running query for server-side cursor: %v", r)
 				}
 				close(c.cs.next)
-				c.cs.done <- err
+				c.cs.done <- gerr
 			}()
-			err = handler.ComStmtExecute(c, prepare, func(qr *sqltypes.Result) error {
+			gerr = handler.ComStmtExecute(c, prepare, func(qr *sqltypes.Result) error {
 				// block until query results are sent or receive signal to quit
-				var err error
+				var qerr error
 				select {
 				case c.cs.next <- qr:
-				case err = <-c.cs.quit:
+				case qerr = <-c.cs.quit:
 				}
-				c.cs.done <- err
-				return nil
+				return qerr
 			})
 		}()
 
 		// Immediately receive the very first query result to write the fields
 		qr, ok := <- c.cs.next
-		err := <- c.cs.done
-		if err != nil {
-			return err
-		}
 		if !ok {
+			c.discardCursor()
 			if werr := c.writeErrorPacket(ERUnknownError, SSUnknownSQLState, "unknown error: %v", "missing result set"); werr != nil {
 				log.Errorf("Error writing query error to %s: %v", c, werr)
 				return werr
