@@ -16,7 +16,7 @@
 
 import { render, screen } from '@testing-library/react';
 import { ReadOnlyGate } from './ReadOnlyGate';
-import { describe, it, expect, afterEach  } from 'vitest';
+import { describe, it, expect, afterEach } from 'vitest';
 
 // Preserve import.meta.env to restore its original values after each test runs.
 const ORIGINAL_PROCESS_ENV = { ...import.meta.env };

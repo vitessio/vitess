@@ -18,7 +18,7 @@ import { ErrorHandler, HttpResponseNotOkError } from './errorTypes';
 import * as errorHandler from './errorHandler';
 import * as errorHandlers from './errorHandlers';
 import { describe, it, expect, beforeAll, afterEach, afterAll, vi } from 'vitest';
-import { Response } from 'cross-fetch'
+import { Response } from 'cross-fetch';
 
 describe('errorHandler', () => {
     let mockErrorHandler: ErrorHandler;
@@ -46,9 +46,13 @@ describe('errorHandler', () => {
             errorHandler.notify(err);
 
             expect(mockErrorHandler.notify).toHaveBeenCalledTimes(1);
-            expect(mockErrorHandler.notify).toHaveBeenCalledWith(err, { VITE_VTADMIN_API_ADDRESS: "http://test-api.com"}, {
-                errorMetadata: {},
-            });
+            expect(mockErrorHandler.notify).toHaveBeenCalledWith(
+                err,
+                { VITE_VTADMIN_API_ADDRESS: 'http://test-api.com' },
+                {
+                    errorMetadata: {},
+                }
+            );
         });
 
         it("appends metadata from the Error's instance properties", () => {
@@ -57,20 +61,24 @@ describe('errorHandler', () => {
             errorHandler.notify(err, { goodbye: 'moon' });
 
             expect(mockErrorHandler.notify).toHaveBeenCalledTimes(1);
-            expect(mockErrorHandler.notify).toHaveBeenCalledWith(err, { VITE_VTADMIN_API_ADDRESS: "http://test-api.com"}, {
-                errorMetadata: {
-                    fetchResponse: {
-                        ok: false,
-                        status: 500,
-                        statusText: 'Internal Server Error',
-                        type: undefined,
-                        url: '',
+            expect(mockErrorHandler.notify).toHaveBeenCalledWith(
+                err,
+                { VITE_VTADMIN_API_ADDRESS: 'http://test-api.com' },
+                {
+                    errorMetadata: {
+                        fetchResponse: {
+                            ok: false,
+                            status: 500,
+                            statusText: 'Internal Server Error',
+                            type: undefined,
+                            url: '',
+                        },
+                        name: 'HttpResponseNotOkError',
+                        response: { ok: false },
                     },
-                    name: 'HttpResponseNotOkError',
-                    response: { ok: false },
-                },
-                goodbye: 'moon',
-            });
+                    goodbye: 'moon',
+                }
+            );
         });
 
         it('only includes santizied environment variables', () => {

@@ -21,7 +21,6 @@ import { setupServer } from 'msw/node';
 import { QueryClient, QueryClientProvider, useMutation } from 'react-query';
 import { describe, it, expect, beforeAll, vi } from 'vitest';
 
-
 import ActionPanel, { ActionPanelProps } from './ActionPanel';
 
 describe('ActionPanel', () => {
@@ -35,17 +34,23 @@ describe('ActionPanel', () => {
      * provides such a function and should be `render`ed in the context QueryClientProvider.
      */
     const Wrapper: React.FC<ActionPanelProps & { url: string }> = (props) => {
-        const mutation = useMutation(() => fetch(new URL(props["url"]), { method: 'post' }), { onError: (error) => {console.log("ERROR: ", error)}});
+        const mutation = useMutation(() => fetch(new URL(props['url']), { method: 'post' }), {
+            onError: (error) => {
+                console.log('ERROR: ', error);
+            },
+        });
         return <ActionPanel {...props} mutation={mutation as any} />;
     };
 
     it('initiates the mutation', async () => {
         vi.spyOn(global, 'fetch');
 
-        const url = `${import.meta.env.VITE_VTADMIN_API_ADDRESS}/api/test`
-        global.server.use(rest.post(url, (req, res, ctx) => {
-            return res(ctx.json({ ok: true }));
-        }))
+        const url = `${import.meta.env.VITE_VTADMIN_API_ADDRESS}/api/test`;
+        global.server.use(
+            rest.post(url, (req, res, ctx) => {
+                return res(ctx.json({ ok: true }));
+            })
+        );
 
         render(
             <QueryClientProvider client={queryClient}>

@@ -32,14 +32,13 @@ vi.mock('../errors/errorHandler');
 // mockServerJson configures an HttpOkResponse containing the given `json`
 // for all requests made against the given `endpoint`.
 const mockServerJson = (endpoint: string, json: object, status: number = 200) => {
-    const apiAddr = import.meta.env.VITE_VTADMIN_API_ADDRESS
+    const apiAddr = import.meta.env.VITE_VTADMIN_API_ADDRESS;
     global.server.use(rest.get(`${apiAddr}${endpoint}`, (req, res, ctx) => res(ctx.status(status), ctx.json(json))));
 };
 
 describe('api/http', () => {
     describe('vtfetch', () => {
         it('parses and returns JSON, given an HttpOkResponse response', async () => {
-            
             const endpoint = `/api/tablets`;
             const response = { ok: true, result: null };
             mockServerJson(endpoint, response);
@@ -59,7 +58,7 @@ describe('api/http', () => {
             };
 
             // See https://mswjs.io/docs/recipes/mocking-error-responses
-            mockServerJson(endpoint, response, 500)
+            mockServerJson(endpoint, response, 500);
 
             expect.assertions(5);
 
@@ -79,7 +78,7 @@ describe('api/http', () => {
         });
 
         it('throws an error on malformed JSON', async () => {
-            errorHandler.notify.mockReset()
+            errorHandler.notify.mockReset();
             const endpoint = `/api/tablets`;
             global.server.use(
                 rest.get(`${import.meta.env.VITE_VTADMIN_API_ADDRESS}${endpoint}`, (req, res, ctx) =>
@@ -95,7 +94,9 @@ describe('api/http', () => {
                 let e: MalformedHttpResponseError = error as MalformedHttpResponseError;
                 /* eslint-disable jest/no-conditional-expect */
                 expect(e.name).toEqual(MALFORMED_HTTP_RESPONSE_ERROR);
-                expect(e.message).toEqual('[status 504] /api/tablets: invalid json response body at http://test-api.com/api/tablets reason: Unexpected token < in JSON at position 0');
+                expect(e.message).toEqual(
+                    '[status 504] /api/tablets: invalid json response body at http://test-api.com/api/tablets reason: Unexpected token < in JSON at position 0'
+                );
 
                 expect(errorHandler.notify).toHaveBeenCalledTimes(1);
                 expect(errorHandler.notify).toHaveBeenCalledWith(e);

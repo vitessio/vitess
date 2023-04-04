@@ -22,7 +22,7 @@ import { QueryClient, QueryClientProvider } from 'react-query';
 import { Advanced } from './Advanced';
 import { vtadmin } from '../../../proto/vtadmin';
 import { describe, it, expect, vi } from 'vitest';
-import { Response } from 'cross-fetch'
+import { Response } from 'cross-fetch';
 
 const ORIGINAL_PROCESS_ENV = import.meta.env;
 const TEST_PROCESS_ENV = {
@@ -68,9 +68,10 @@ describe('Advanced keyspace actions', () => {
 
     describe('Reload Schema', () => {
         it('reloads the schema', async () => {
-            const response: Promise<Response> = new Promise((resolve) => resolve(new Response('{"ok": "true", "result": {}}', { status: 200 })));
+            const response: Promise<Response> = new Promise((resolve) =>
+                resolve(new Response('{"ok": "true", "result": {}}', { status: 200 }))
+            );
             vi.spyOn(global, 'fetch').mockReturnValue(response);
-
 
             render(
                 <QueryClientProvider client={queryClient}>

@@ -91,12 +91,12 @@ describe('PaginationNav', () => {
                 expect(link).toHaveTextContent(`${e}`);
 
                 if (e === props.currentPage) {
-                    expect(link?.className).toContain('activeLink')
+                    expect(link?.className).toContain('activeLink');
                 } else {
-                    expect(link?.className).not.toContain('activeLink')
+                    expect(link?.className).not.toContain('activeLink');
                 }
             }
         });
-        cleanup()
-      });
+        cleanup();
+    });
 });

@@ -43,7 +43,7 @@ describe('CreateKeyspace integration test', () => {
         vi.spyOn(Snackbar, 'success');
 
         const cluster = { id: 'local', name: 'local' };
-        const apiAddr = import.meta.env.VITE_VTADMIN_API_ADDRESS
+        const apiAddr = import.meta.env.VITE_VTADMIN_API_ADDRESS;
         server.use(
             rest.get(`${apiAddr}/api/clusters`, (req, res, ctx) => {
                 return res(ctx.json({ result: { clusters: [cluster] }, ok: true }));

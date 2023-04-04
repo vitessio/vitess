@@ -118,7 +118,7 @@ describe('useWorkflow', () => {
     // This test corresponds to a common UI flow from a component that fetches all the workflows
     // to a component that fetches a single workflow.
     it('uses cached data as initialData', async () => {
-        httpAPI.fetchWorkflow.mockReset()
+        httpAPI.fetchWorkflow.mockReset();
         const queryClient = new QueryClient();
         const wrapper: React.FunctionComponent = ({ children }) => (
             <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
