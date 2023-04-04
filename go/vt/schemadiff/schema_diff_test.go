@@ -25,77 +25,133 @@ import (
 )
 
 func TestPermutations(t *testing.T) {
-	var (
-		fromQueries = []string{
-			"create table t1 (id int primary key, info int not null);",
-			"create table t2 (id int primary key, ts timestamp);",
-			"create view v1 as select id from t1",
-		}
-		toQueries = []string{
-			"create table t1 (id int primary key, info int not null, i int);",
-			"create table t2 (id int primary key);",
-			"create view v1 as select id, info from t1",
-			"create view v2 as select id from t2",
-		}
-	)
+	tt := []struct {
+		name               string
+		fromQueries        []string
+		toQueries          []string
+		expectDiffs        int
+		expectPermutations int
+	}{
+		{
+			name: "no diff",
+			fromQueries: []string{
+				"create table t1 (id int primary key, info int not null);",
+			},
+			toQueries: []string{
+				"create table t1 (id int primary key, info int not null);",
+			},
+			expectDiffs:        0,
+			expectPermutations: 0,
+		},
+		{
+			name: "single diff",
+			fromQueries: []string{
+				"create table t1 (id int primary key, info int not null);",
+			},
+			toQueries: []string{
+				"create table t1 (id int primary key, info int not null, i int);",
+			},
+			expectDiffs:        1,
+			expectPermutations: 1,
+		},
+		{
+			name: "two diffs",
+			fromQueries: []string{
+				"create table t1 (id int primary key, info int not null);",
+				"create view v1 as select id from t1",
+			},
+			toQueries: []string{
+				"create table t1 (id int primary key, info int not null, i int);",
+				"create view v1 as select id, info from t1",
+			},
+			expectDiffs:        2,
+			expectPermutations: 2,
+		},
+		{
+			name: "multiple diffs",
+			fromQueries: []string{
+				"create table t1 (id int primary key, info int not null);",
+				"create table t2 (id int primary key, ts timestamp);",
+				"create view v1 as select id from t1",
+			},
+			toQueries: []string{
+				"create table t1 (id int primary key, info int not null, i int);",
+				"create table t2 (id int primary key);",
+				"create view v1 as select id, info from t1",
+				"create view v2 as select id from t2",
+			},
+			expectDiffs:        4,
+			expectPermutations: 24,
+		},
+	}
 	hints := &DiffHints{RangeRotationStrategy: RangeRotationDistinctStatements}
+	for _, tc := range tt {
+		t.Run(tc.name, func(t *testing.T) {
 
-	fromSchema, err := NewSchemaFromQueries(fromQueries)
-	require.NoError(t, err)
-	require.NotNil(t, fromSchema)
+			fromSchema, err := NewSchemaFromQueries(tc.fromQueries)
+			require.NoError(t, err)
+			require.NotNil(t, fromSchema)
 
-	toSchema, err := NewSchemaFromQueries(toQueries)
-	require.NoError(t, err)
-	require.NotNil(t, toSchema)
+			toSchema, err := NewSchemaFromQueries(tc.toQueries)
+			require.NoError(t, err)
+			require.NotNil(t, toSchema)
 
-	schemaDiff, err := fromSchema.SchemaDiff(toSchema, hints)
-	require.NoError(t, err)
+			schemaDiff, err := fromSchema.SchemaDiff(toSchema, hints)
+			require.NoError(t, err)
 
-	allDiffs := schemaDiff.allDiffs()[:]
-	require.Equal(t, 4, len(allDiffs))
+			allDiffs := schemaDiff.allDiffs()[:]
+			require.Equal(t, tc.expectDiffs, len(allDiffs))
 
-	toSingleString := func(diffs []EntityDiff) string {
-		res := ""
-		for _, diff := range diffs {
-			res = res + diff.CanonicalStatementString() + ";"
-		}
-		return res
-	}
-	{
-		iteration := 0
-		allPerms := map[string]bool{}
-		allDiffs := schemaDiff.allDiffs()[:]
-		originalSingleString := toSingleString(allDiffs)
-		earlyBreak := permutateDiffs(allDiffs, func(pdiffs []EntityDiff) (earlyBreak bool) {
-			// cover all permutations
-			allPerms[toSingleString(pdiffs)] = true
-			if iteration == 0 {
-				// First permutation should be the same as original
-				require.Equal(t, originalSingleString, toSingleString(pdiffs))
-			} else {
-				// rest of permutations must be different than original (later we also verify they are all unique)
-				require.NotEqualf(t, originalSingleString, toSingleString(pdiffs), "in iteration %d", iteration)
+			toSingleString := func(diffs []EntityDiff) string {
+				res := ""
+				for _, diff := range diffs {
+					res = res + diff.CanonicalStatementString() + ";"
+				}
+				return res
 			}
-			iteration++
-			return false
+			t.Run("no early break", func(t *testing.T) {
+				iteration := 0
+				allPerms := map[string]bool{}
+				allDiffs := schemaDiff.allDiffs()
+				originalSingleString := toSingleString(allDiffs)
+				earlyBreak := permutateDiffs(allDiffs, func(pdiffs []EntityDiff) (earlyBreak bool) {
+					// cover all permutations
+					allPerms[toSingleString(pdiffs)] = true
+					if iteration == 0 {
+						// First permutation should be the same as original
+						require.Equal(t, originalSingleString, toSingleString(pdiffs))
+					} else {
+						// rest of permutations must be different than original (later we also verify they are all unique)
+						require.NotEqualf(t, originalSingleString, toSingleString(pdiffs), "in iteration %d", iteration)
+					}
+					iteration++
+					return false
+				})
+				assert.False(t, earlyBreak)
+				assert.Equal(t, tc.expectPermutations, len(allPerms))
+			})
+			t.Run("early break", func(t *testing.T) {
+				allPerms := map[string]bool{}
+				allDiffs := schemaDiff.allDiffs()[:]
+				originalSingleString := toSingleString(allDiffs)
+				earlyBreak := permutateDiffs(allDiffs, func(pdiffs []EntityDiff) (earlyBreak bool) {
+					// Single visit
+					allPerms[toSingleString(pdiffs)] = true
+					// First permutation should be the same as original
+					require.Equal(t, originalSingleString, toSingleString(pdiffs))
+					// early break; this callback function should not be invoked again
+					return true
+				})
+				if len(allDiffs) > 0 {
+					assert.True(t, earlyBreak)
+					assert.Equal(t, 1, len(allPerms))
+				} else {
+					// no diffs means no permutations, and no call to the callback function
+					assert.False(t, earlyBreak)
+					assert.Equal(t, 0, len(allPerms))
+				}
+			})
 		})
-		assert.False(t, earlyBreak)
-		assert.Equal(t, 24, len(allPerms))
-	}
-	{
-		allPerms := map[string]bool{}
-		allDiffs := schemaDiff.allDiffs()[:]
-		originalSingleString := toSingleString(allDiffs)
-		earlyBreak := permutateDiffs(allDiffs, func(pdiffs []EntityDiff) (earlyBreak bool) {
-			// Single visit
-			allPerms[toSingleString(pdiffs)] = true
-			// First permutation should be the same as original
-			require.Equal(t, originalSingleString, toSingleString(pdiffs))
-			// early break; this callback function should not be invoked again
-			return true
-		})
-		assert.True(t, earlyBreak)
-		assert.Equal(t, 1, len(allPerms))
 	}
 }
 
@@ -156,6 +212,8 @@ func TestSchemaDiff(t *testing.T) {
 			entityOrder: []string{"t2"},
 		},
 		{
+			// MySQL limitation: you cannot add two FULLTEXT keys in a single statement. `schemadiff` complies
+			// with that limitation and turns such a request into two distinct statements.
 			name: "add two fulltext keys",
 			toQueries: []string{
 				"create table t1 (id int primary key, info int not null);",
@@ -648,7 +706,7 @@ func TestSchemaDiff(t *testing.T) {
 			}
 			for _, diff := range orderedDiffs {
 				s := diff.CanonicalStatementString()
-				// Internal sanity, while we're here: see that the equivalence relation has entries for all diffs.
+				// Internal integrity, while we're here: see that the equivalence relation has entries for all diffs.
 				_, err := schemaDiff.r.ElementClass(s)
 				require.NoError(t, err)
 			}
