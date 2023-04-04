@@ -1295,21 +1295,15 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 			var newqr *sqltypes.Result
 			newqr, ok = <-c.cs.next
 
-			// check if there was an error
-			select {
-			case err = <- c.cs.done:
-				if err != nil {
+			// channel is closed, meaning there are no more rows
+			if !ok {
+				// check if there was an error
+				if err, ok = <- c.cs.done; ok && err != nil {
 					if werr := c.writeErrorPacketFromError(err); werr != nil {
 						log.Errorf("Error writing query error to %s: %v", c, werr)
 						return werr
 					}
-					return nil
 				}
-			default:
-			}
-
-			// channel is closed, meaning there are no more rows
-			if !ok {
 				break
 			}
 
@@ -1563,6 +1557,7 @@ func (c *Conn) execPrepareStatement(stmtID uint32, cursorType byte, handler Hand
 				}
 				close(c.cs.next)
 				c.cs.done <- gerr
+				close(c.cs.done)
 			}()
 			gerr = handler.ComStmtExecute(c, prepare, func(qr *sqltypes.Result) error {
 				// block until query results are sent or receive signal to quit
