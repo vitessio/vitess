@@ -191,6 +191,7 @@ type Conn struct {
 type cursorState struct {
 	stmtID  uint32
 	pending *sqltypes.Result
+	finished bool
 
 	next  chan *sqltypes.Result
 	done  chan error
@@ -1048,7 +1049,16 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 		query := c.parseComPrepare(data)
 		c.recycleReadPacket()
 
-		// Popoulate PrepareData
+		if c.cs != nil {
+			log.Error("Received ComStmtPrepare with outstanding cursor")
+			if werr := c.writeErrorPacket(ERUnknownComError, SSUnknownComError, "error handling packet: %v", data); werr != nil {
+				log.Error("Error writing error packet to client: %v", werr)
+				return werr
+			}
+			return nil
+		}
+
+		// Populate PrepareData
 		c.StatementID++
 		prepare := &PrepareData{
 			StatementID: c.StatementID,
@@ -1298,12 +1308,15 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 			// channel is closed, meaning there are no more rows
 			if !ok {
 				// check if there was an error
-				if err, ok = <- c.cs.done; ok {
-					close(c.cs.done)
-					if err != nil {
-						if werr := c.writeErrorPacketFromError(err); werr != nil {
-							log.Errorf("Error writing query error to %s: %v", c, werr)
-							return werr
+				if !c.cs.finished {
+					if err, ok = <- c.cs.done; ok {
+						c.cs.finished = true
+						if err != nil {
+							c.discardCursor()
+							if werr := c.writeErrorPacketFromError(err); werr != nil {
+								log.Errorf("Error writing query error to %s: %v", c, werr)
+								return werr
+							}
 						}
 					}
 				}
