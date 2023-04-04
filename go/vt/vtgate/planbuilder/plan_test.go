@@ -581,6 +581,18 @@ type vschemaWrapper struct {
 	enableViews   bool
 }
 
+func (vw *vschemaWrapper) PlanPrepareStatement(ctx context.Context, query string) (*engine.Plan, sqlparser.Statement, error) {
+	plan, err := TestBuilder(query, vw, vw.currentDb())
+	if err != nil {
+		return nil, nil, err
+	}
+	stmt, _, err := sqlparser.Parse2(query)
+	if err != nil {
+		return nil, nil, err
+	}
+	return plan, stmt, nil
+}
+
 func (vw *vschemaWrapper) ClearPrepareData(lowered string) {
 }
 

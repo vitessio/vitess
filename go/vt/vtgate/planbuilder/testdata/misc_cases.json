@@ -129,7 +129,7 @@
       "Instructions": {
         "OperatorType": "PREPARE",
         "ParameterCount": 3,
-        "PrepareStatement": "select * from `user` where id in ::__vals",
+        "PrepareStatement": "select * from `user` where id in (:v1, :v2, :v3)",
         "StatementName": "prep",
         "Inputs": [
           {
@@ -156,7 +156,7 @@
       "Instructions": {
         "OperatorType": "PREPARE",
         "ParameterCount": 3,
-        "PrepareStatement": "select * from `user` where id in ::__vals",
+        "PrepareStatement": "select * from `user` where id in (:v1, :v2, :v3)",
         "StatementName": "prep",
         "Inputs": [
           {

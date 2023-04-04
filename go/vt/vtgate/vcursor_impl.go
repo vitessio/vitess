@@ -81,6 +81,7 @@ type iExecute interface {
 	// TODO: remove when resolver is gone
 	ParseDestinationTarget(targetString string) (string, topodatapb.TabletType, key.Destination, error)
 	VSchema() *vindexes.VSchema
+	planPrepareStmt(ctx context.Context, vcursor *vcursorImpl, query string) (*engine.Plan, sqlparser.Statement, error)
 }
 
 // VSchemaOperator is an interface to Vschema Operations
@@ -1100,6 +1101,10 @@ func (vc *vcursorImpl) ShowExec(ctx context.Context, command sqlparser.ShowComma
 	default:
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "bug: unexpected show command: %v", command)
 	}
+}
+
+func (vc *vcursorImpl) PlanPrepareStatement(ctx context.Context, query string) (*engine.Plan, sqlparser.Statement, error) {
+	return vc.executor.planPrepareStmt(ctx, vc, query)
 }
 
 func (vc *vcursorImpl) GetVSchema() *vindexes.VSchema {

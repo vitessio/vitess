@@ -22,7 +22,6 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
-	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
@@ -30,7 +29,7 @@ var _ Primitive = (*PrepareStmt)(nil)
 
 type PrepareStmt struct {
 	Name       string
-	Stmt       sqlparser.Statement
+	Query      string
 	ParamCount int
 	Input      Primitive
 
@@ -55,7 +54,7 @@ func (p *PrepareStmt) GetFields(ctx context.Context, vcursor VCursor, bindVars m
 
 func (p *PrepareStmt) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	vcursor.Session().StorePrepareData(p.Name, &vtgatepb.PrepareData{
-		PrepareStatement: sqlparser.String(p.Stmt),
+		PrepareStatement: p.Query,
 		ParamsCount:      int32(p.ParamCount),
 	})
 	return &sqltypes.Result{}, nil
@@ -73,7 +72,7 @@ func (p *PrepareStmt) Inputs() []Primitive {
 func (p *PrepareStmt) description() PrimitiveDescription {
 	other := map[string]any{
 		"StatementName":    p.Name,
-		"PrepareStatement": sqlparser.String(p.Stmt),
+		"PrepareStatement": p.Query,
 		"ParameterCount":   p.ParamCount,
 	}
 

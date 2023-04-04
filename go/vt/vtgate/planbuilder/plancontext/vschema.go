@@ -1,10 +1,12 @@
 package plancontext
 
 import (
+	"context"
 	"strings"
 
 	"vitess.io/vitess/go/vt/log"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
+	"vitess.io/vitess/go/vt/vtgate/engine"
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/key"
@@ -72,6 +74,7 @@ type VSchema interface {
 	// GetUDV returns user defined value from the variable passed.
 	GetUDV(name string) *querypb.BindVariable
 	ClearPrepareData(lowered string)
+	PlanPrepareStatement(ctx context.Context, query string) (*engine.Plan, sqlparser.Statement, error)
 }
 
 // PlannerNameToVersion returns the numerical representation of the planner

@@ -17,6 +17,7 @@ limitations under the License.
 package planbuilder
 
 import (
+	"context"
 	"regexp"
 	"strings"
 
@@ -29,7 +30,7 @@ import (
 
 var regexParams = regexp.MustCompile(`^v\d+`)
 
-func buildPrepareStmtPlan(query string, pStmt *sqlparser.PrepareStmt, vschema plancontext.VSchema, enableOnlineDDL, enableDirectDDL bool) (*planResult, error) {
+func buildPrepareStmtPlan(ctx context.Context, vschema plancontext.VSchema, pStmt *sqlparser.PrepareStmt) (*planResult, error) {
 	stmtName := pStmt.Name.Lowered()
 	vschema.ClearPrepareData(stmtName)
 
@@ -59,30 +60,29 @@ func buildPrepareStmtPlan(query string, pStmt *sqlparser.PrepareStmt, vschema pl
 		pQuery = val.ToString()
 	}
 
-	stmt, bindVars, err := sqlparser.Parse2(pQuery)
-	if err != nil {
-		return nil, err
-	}
-	reservedVars := sqlparser.NewReservedVars("vtg", bindVars)
-	prim, err := createInstructionFor(query, stmt, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
+	plan, stmt, err := vschema.PlanPrepareStatement(ctx, pQuery)
 	if err != nil {
 		return nil, err
 	}
 
 	var paramsCount int
-	for key := range bindVars {
-		if regexParams.MatchString(key) {
-			paramsCount++
+	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
+		switch node := node.(type) {
+		case *sqlparser.Argument:
+			if regexParams.MatchString(node.Name) {
+				paramsCount++
+			}
 		}
-	}
+		return true, nil
+	}, stmt)
 
 	return &planResult{
 		primitive: &engine.PrepareStmt{
 			Name:       stmtName,
-			Stmt:       stmt,
+			Query:      sqlparser.String(stmt),
 			ParamCount: paramsCount,
-			Input:      prim.primitive,
+			Input:      plan.Instructions,
 		},
-		tables: prim.tables,
+		tables: plan.TablesUsed,
 	}, nil
 }

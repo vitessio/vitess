@@ -650,10 +650,8 @@ func (cached *PrepareStmt) CachedSize(alloc bool) int64 {
 	}
 	// field Name string
 	size += hack.RuntimeAllocSize(int64(len(cached.Name)))
-	// field Stmt vitess.io/vitess/go/vt/sqlparser.Statement
-	if cc, ok := cached.Stmt.(cachedObject); ok {
-		size += cc.CachedSize(true)
-	}
+	// field Query string
+	size += hack.RuntimeAllocSize(int64(len(cached.Query)))
 	// field Input vitess.io/vitess/go/vt/vtgate/engine.Primitive
 	if cc, ok := cached.Input.(cachedObject); ok {
 		size += cc.CachedSize(true)

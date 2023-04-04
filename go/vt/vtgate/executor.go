@@ -1048,7 +1048,7 @@ func (e *Executor) cacheAndBuildStatement(
 		}
 	}
 
-	plan, err := planbuilder.BuildFromStmt(query, stmt, reservedVars, vcursor, bindVarNeeds, enableOnlineDDL, enableDirectDDL)
+	plan, err := planbuilder.BuildFromStmt(ctx, query, stmt, reservedVars, vcursor, bindVarNeeds, enableOnlineDDL, enableDirectDDL)
 	if err != nil {
 		return nil, err
 	}
@@ -1430,4 +1430,19 @@ func getTabletThrottlerStatus(tabletHostPort string) (string, error) {
 // ReleaseLock implements the IExecutor interface
 func (e *Executor) ReleaseLock(ctx context.Context, session *SafeSession) error {
 	return e.txConn.ReleaseLock(ctx, session)
+}
+
+func (e *Executor) planPrepareStmt(ctx context.Context, vcursor *vcursorImpl, query string) (*engine.Plan, sqlparser.Statement, error) {
+	stmt, reservedVars, err := parseAndValidateQuery(query)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// creating this log stats to not interfere with the original log stats.
+	lStats := logstats.NewLogStats(ctx, "prepare", query, vcursor.safeSession.SessionUUID, nil)
+	plan, err := e.getPlan(ctx, vcursor, query, stmt, vcursor.marginComments, map[string]*querypb.BindVariable{}, reservedVars /* normalize */, false, lStats)
+	if err != nil {
+		return nil, nil, err
+	}
+	return plan, stmt, nil
 }
