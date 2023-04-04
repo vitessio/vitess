@@ -914,7 +914,7 @@ func (be *BuiltinBackupEngine) restoreFiles(ctx context.Context, params RestoreP
 			select {
 			case <-ctx.Done():
 				log.Errorf("Context cancelled during %q backup", fe.Name)
-				bh.RecordError(vterrors.Errorf(vtrpc.Code_CANCELED, "context canceled"))
+				rec.RecordError(vterrors.Errorf(vtrpc.Code_CANCELED, "context canceled"))
 				return
 			default:
 			}
