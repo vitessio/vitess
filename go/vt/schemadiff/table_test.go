@@ -391,6 +391,8 @@ func TestCreateTableDiff(t *testing.T) {
 			to:   "create table t2 (`id` int, i int, primary key (id))",
 		},
 		{
+			// Note our DiffHints uses the default `ColumnRenameAssumeDifferent` value for `ColumnRenameStrategy`,
+			// therefore the diff is expected to drop and recreate the PK column.
 			name:  "change primary key column",
 			from:  "create table t1 (id int primary key, info int not null);",
 			to:    "create table t1 (the_id int primary key, info int not null);",
