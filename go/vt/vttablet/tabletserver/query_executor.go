@@ -562,7 +562,7 @@ func (qre *QueryExecutor) checkPermissions() error {
 				// good! We have buffered the query, and buffering is completed
 			case <-bufferingTimeoutCtx.Done():
 				// Sorry, timeout while waiting for buffering to complete
-				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "buffer timeout after %v in rule: %s", timeout.String(), desc)
+				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "buffer timeout after %v in rule: %s", timeout, desc)
 			}
 		}
 	default:
