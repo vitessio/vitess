@@ -749,8 +749,8 @@ func (asm *assembler) CmpDates() {
 	asm.adjustStack(-2)
 
 	asm.emit(func(env *ExpressionEnv) int {
-		l := env.vm.stack[env.vm.sp-2].(*evalBytes)
-		r := env.vm.stack[env.vm.sp-1].(*evalBytes)
+		l := env.vm.stack[env.vm.sp-2].(*evalTime)
+		r := env.vm.stack[env.vm.sp-1].(*evalTime)
 		env.vm.sp -= 2
 		env.vm.flags.cmp, env.vm.err = compareDates(l, r)
 		return 1
@@ -772,6 +772,14 @@ func (asm *assembler) Convert_bB(offset int) {
 		env.vm.stack[env.vm.sp-offset] = env.vm.arena.newEvalBool(arg != nil && parseStringToFloat(arg.(*evalBytes).string()) != 0.0)
 		return 1
 	}, "CONV VARBINARY(SP-%d), BOOL", offset)
+}
+
+func (asm *assembler) Convert_TB(offset int) {
+	asm.emit(func(env *ExpressionEnv) int {
+		arg := env.vm.stack[env.vm.sp-offset]
+		env.vm.stack[env.vm.sp-offset] = env.vm.arena.newEvalBool(arg != nil && !arg.(*evalTime).time.Time.IsZero())
+		return 1
+	}, "CONV SQLTYPES(SP-%d), BOOL", offset)
 }
 
 func (asm *assembler) Convert_jB(offset int) {
@@ -824,28 +832,12 @@ func (asm *assembler) Convert_cj(offset int) {
 	}, "CONV VARCHAR(SP-%d), JSON", offset)
 }
 
-func (asm *assembler) Convert_dj(offset int) {
+func (asm *assembler) Convert_Tj(offset int) {
 	asm.emit(func(env *ExpressionEnv) int {
-		arg := env.vm.stack[env.vm.sp-offset].(*evalBytes)
-		env.vm.stack[env.vm.sp-offset] = evalConvert_dj(arg)
+		arg := env.vm.stack[env.vm.sp-offset].(*evalTime)
+		env.vm.stack[env.vm.sp-offset] = arg.toJSON()
 		return 1
-	}, "CONV DATE(SP-%d), JSON", offset)
-}
-
-func (asm *assembler) Convert_dtj(offset int) {
-	asm.emit(func(env *ExpressionEnv) int {
-		arg := env.vm.stack[env.vm.sp-offset].(*evalBytes)
-		env.vm.stack[env.vm.sp-offset] = evalConvert_dtj(arg)
-		return 1
-	}, "CONV DATETIME(SP-%d), JSON", offset)
-}
-
-func (asm *assembler) Convert_tj(offset int) {
-	asm.emit(func(env *ExpressionEnv) int {
-		arg := env.vm.stack[env.vm.sp-offset].(*evalBytes)
-		env.vm.stack[env.vm.sp-offset] = evalConvert_tj(arg)
-		return 1
-	}, "CONV TIME(SP-%d), JSON", offset)
+	}, "CONV SQLTIME(SP-%d), JSON", offset)
 }
 
 func (asm *assembler) Convert_dB(offset int) {
@@ -895,43 +887,12 @@ func (asm *assembler) Convert_hex(offset int) {
 	}, "CONV VARBINARY(SP-%d), HEX", offset)
 }
 
-func (asm *assembler) Convert_date(offset int) {
+func (asm *assembler) Convert_Ti(offset int) {
 	asm.emit(func(env *ExpressionEnv) int {
-		v := env.vm.stack[env.vm.sp-offset].(*evalBytes)
-		t, ok := datetime.ParseDate(v.string())
-		if !ok {
-			env.vm.err = errIncorrectDate("DATE", v.bytes)
-			return 1
-		}
-		env.vm.stack[env.vm.sp-offset] = env.vm.arena.newEvalInt64(datetime.Date_YYYYMMDD.FormatNumeric(t))
+		v := env.vm.stack[env.vm.sp-offset].(*evalTime)
+		env.vm.stack[env.vm.sp-offset] = env.vm.arena.newEvalInt64(v.toInt64())
 		return 1
-	}, "CONV DATE(SP-%d), INT64", offset)
-}
-
-func (asm *assembler) Convert_datetime(offset int) {
-	asm.emit(func(env *ExpressionEnv) int {
-		v := env.vm.stack[env.vm.sp-offset].(*evalBytes)
-		t, ok := datetime.ParseDateTime(v.string())
-		if !ok {
-			env.vm.err = errIncorrectDate("DATETIME", v.bytes)
-			return 1
-		}
-		env.vm.stack[env.vm.sp-offset] = env.vm.arena.newEvalInt64(datetime.DateTime_YYYYMMDDhhmmss.FormatNumeric(t))
-		return 1
-	}, "CONV DATETIME(SP-%d), INT64", offset)
-}
-
-func (asm *assembler) Convert_time(offset int) {
-	asm.emit(func(env *ExpressionEnv) int {
-		v := env.vm.stack[env.vm.sp-offset].(*evalBytes)
-		t, ok := datetime.ParseTime(v.string())
-		if !ok {
-			env.vm.err = errIncorrectDate("TIME", v.bytes)
-			return 1
-		}
-		env.vm.stack[env.vm.sp-offset] = env.vm.arena.newEvalInt64(t.FormatInt64())
-		return 1
-	}, "CONV TIME(SP-%d), INT64", offset)
+	}, "CONV SQLTIME(SP-%d), INT64", offset)
 }
 
 func (asm *assembler) Convert_iB(offset int) {

@@ -108,8 +108,10 @@ func mergeCollations(left, right eval) (eval, eval, collations.ID, error) {
 		return left, right, lc.Collation, nil
 	}
 
-	lt := typeIsTextual(left.SQLType())
-	rt := typeIsTextual(right.SQLType())
+	t1 := left.SQLType()
+	t2 := right.SQLType()
+	lt := sqltypes.IsText(t1) || sqltypes.IsBinary(t1)
+	rt := sqltypes.IsText(t2) || sqltypes.IsBinary(t2)
 	if !lt || !rt {
 		if lt {
 			return left, right, lc.Collation, nil

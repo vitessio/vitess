@@ -28,7 +28,6 @@ import (
 	"vitess.io/vitess/go/mysql/datetime"
 	"vitess.io/vitess/go/mysql/decimal"
 	"vitess.io/vitess/go/sqltypes"
-	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 )
@@ -106,11 +105,11 @@ func NewLiteralString(val []byte, collation collations.TypedCollation) *Literal 
 
 // NewLiteralDateFromBytes returns a literal expression.
 func NewLiteralDateFromBytes(val []byte) (*Literal, error) {
-	_, ok := datetime.ParseDate(string(val))
+	t, ok := datetime.ParseDate(string(val))
 	if !ok {
 		return nil, errIncorrectDate("DATE", val)
 	}
-	return &Literal{newEvalRaw(querypb.Type_DATE, val, collationNumeric)}, nil
+	return &Literal{newEvalDateTime(sqltypes.Date, t)}, nil
 }
 
 // NewLiteralTimeFromBytes returns a literal expression.
@@ -120,18 +119,17 @@ func NewLiteralTimeFromBytes(val []byte) (*Literal, error) {
 	if !ok {
 		return nil, errIncorrectDate("TIME", val)
 	}
-	// Convert days to only hours syntax as this is how MySQL normalizes as well.
-	return &Literal{newEvalRaw(querypb.Type_TIME, t.AppendFormat(nil, 9), collationNumeric)}, nil
+	return &Literal{newEvalTime(t)}, nil
 }
 
 // NewLiteralDatetimeFromBytes returns a literal expression.
 // it validates the datetime by parsing it and checking the error.
 func NewLiteralDatetimeFromBytes(val []byte) (*Literal, error) {
-	_, ok := datetime.ParseDateTime(hack.String(val))
+	t, ok := datetime.ParseDateTime(hack.String(val))
 	if !ok {
 		return nil, errIncorrectDate("DATETIME", val)
 	}
-	return &Literal{newEvalRaw(querypb.Type_DATETIME, val, collationNumeric)}, nil
+	return &Literal{newEvalDateTime(sqltypes.Datetime, t)}, nil
 }
 
 func sanitizeErrorValue(s []byte) []byte {

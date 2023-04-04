@@ -105,18 +105,6 @@ func evalConvertArg_cj(e *evalBytes) (*evalJSON, error) {
 	return json.NewString(string(jsonText)), nil
 }
 
-func evalConvert_dj(e *evalBytes) *evalJSON {
-	return json.NewDate(e.string())
-}
-
-func evalConvert_dtj(e *evalBytes) *evalJSON {
-	return json.NewDateTime(e.string())
-}
-
-func evalConvert_tj(e *evalBytes) *evalJSON {
-	return json.NewTime(e.string())
-}
-
 func evalToJSON(e eval) (*evalJSON, error) {
 	switch e := e.(type) {
 	case nil:
@@ -128,17 +116,12 @@ func evalToJSON(e eval) (*evalJSON, error) {
 	case evalNumeric:
 		return evalConvert_nj(e), nil
 	case *evalBytes:
-		switch {
-		case e.SQLType() == sqltypes.Date:
-			return evalConvert_dj(e), nil
-		case e.SQLType() == sqltypes.Datetime, e.SQLType() == sqltypes.Timestamp:
-			return evalConvert_dtj(e), nil
-		case e.SQLType() == sqltypes.Time:
-			return evalConvert_tj(e), nil
-		case sqltypes.IsBinary(e.SQLType()):
+		if sqltypes.IsBinary(e.SQLType()) {
 			return evalConvert_bj(e), nil
 		}
 		return evalConvert_cj(e)
+	case *evalTime:
+		return e.toJSON(), nil
 	default:
 		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "Unsupported type conversion: %s AS JSON", e.SQLType())
 	}
@@ -155,17 +138,12 @@ func argToJSON(e eval) (*evalJSON, error) {
 	case evalNumeric:
 		return evalConvert_nj(e), nil
 	case *evalBytes:
-		switch {
-		case e.SQLType() == sqltypes.Date:
-			return evalConvert_dj(e), nil
-		case e.SQLType() == sqltypes.Datetime, e.SQLType() == sqltypes.Timestamp:
-			return evalConvert_dtj(e), nil
-		case e.SQLType() == sqltypes.Time:
-			return evalConvert_tj(e), nil
-		case sqltypes.IsBinary(e.SQLType()):
+		if sqltypes.IsBinary(e.SQLType()) {
 			return evalConvert_bj(e), nil
 		}
 		return evalConvertArg_cj(e)
+	case *evalTime:
+		return e.toJSON(), nil
 	default:
 		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "Unsupported type conversion: %s AS JSON", e.SQLType())
 	}

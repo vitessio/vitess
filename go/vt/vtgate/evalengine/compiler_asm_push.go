@@ -317,6 +317,12 @@ func (asm *assembler) PushLiteral(lit eval) error {
 			env.vm.sp++
 			return 1
 		}, "PUSH VARCHAR(%q)", lit.ToRawBytes())
+	case *evalTime:
+		asm.emit(func(env *ExpressionEnv) int {
+			env.vm.stack[env.vm.sp] = env.vm.arena.newEvalTime(lit.t, lit.time)
+			env.vm.sp++
+			return 1
+		}, "PUSH SQLTIME(%q)", lit.ToRawBytes())
 	default:
 		return vterrors.Errorf(vtrpc.Code_UNIMPLEMENTED, "unsupported literal kind '%T'", lit)
 	}

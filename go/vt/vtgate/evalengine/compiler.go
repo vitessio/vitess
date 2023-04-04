@@ -237,14 +237,7 @@ func (c *compiler) compileToNumeric(ct ctype, offset int) ctype {
 	}
 
 	if sqltypes.IsDateOrTime(ct.Type) {
-		switch ct.Type {
-		case sqltypes.Date:
-			c.asm.Convert_date(offset)
-		case sqltypes.Time:
-			c.asm.Convert_time(offset)
-		case sqltypes.Timestamp, sqltypes.Datetime:
-			c.asm.Convert_datetime(offset)
-		}
+		c.asm.Convert_Ti(offset)
 		return ctype{sqltypes.Int64, ct.Flag, collationNumeric}
 	}
 	c.asm.Convert_xf(offset)

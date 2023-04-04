@@ -107,13 +107,6 @@ func evalToVarchar(e eval, col collations.ID, convert bool) (*evalBytes, error) 
 
 func (e *evalBytes) Hash(h *vthash.Hasher) {
 	switch tt := e.SQLType(); {
-	case sqltypes.IsDate(tt):
-		t, err := e.parseDate()
-		if err != nil {
-			panic("parseDate() in evalBytes should never fail")
-		}
-		h.Write16(hashPrefixDate)
-		h.Write64(uint64(t.UnixNano()))
 	case tt == sqltypes.VarBinary:
 		h.Write16(hashPrefixBytes)
 		_, _ = h.Write(e.bytes)
@@ -170,29 +163,27 @@ func (e *evalBytes) truncateInPlace(size int) {
 	}
 }
 
-func (e *evalBytes) parseDate() (time.Time, error) {
-	switch e.SQLType() {
-	case sqltypes.Date:
-		t, ok := datetime.ParseDate(e.string())
-		if !ok {
-			return time.Time{}, errIncorrectDate("DATE", e.bytes)
-		}
-		return t, nil
-	case sqltypes.Timestamp, sqltypes.Datetime:
-		t, ok := datetime.ParseDateTime(e.string())
-		if !ok {
-			return time.Time{}, errIncorrectDate("DATETIME", e.bytes)
-		}
-		return t, nil
-	case sqltypes.Time:
-		t, ok := datetime.ParseTime(e.string())
-		if !ok {
-			return time.Time{}, errIncorrectDate("TIME", e.bytes)
-		}
-		return t.Time, nil
-	default:
-		return time.Time{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "type %v is not date-like", e.SQLType())
+func (e *evalBytes) toDatetime() (*evalTime, error) {
+	if t, ok := datetime.ParseDateTime(e.string()); ok {
+		return newEvalDateTime(sqltypes.Datetime, t), nil
 	}
+	if t, ok := datetime.ParseDate(e.string()); ok {
+		return newEvalDateTime(sqltypes.Date, t), nil
+	}
+	if t, ok := datetime.ParseTime(e.string()); ok {
+		return newEvalTime(t), nil
+	}
+	return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "type %v is not date-like", e.SQLType())
+}
+
+func (e *evalBytes) toDateBestEffort() time.Time {
+	if t, ok := datetime.ParseDateTime(e.string()); ok {
+		return t
+	}
+	if t, ok := datetime.ParseDate(e.string()); ok {
+		return t
+	}
+	return time.Time{}
 }
 
 func (e *evalBytes) toNumericHex() (*evalUint64, bool) {

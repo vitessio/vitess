@@ -19,6 +19,7 @@ package evalengine
 import (
 	"time"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/datetime"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -46,12 +47,18 @@ type (
 	builtinUtcDate struct {
 		CallExpr
 	}
+
+	builtinDateFormat struct {
+		CallExpr
+		collate collations.ID
+	}
 )
 
 var _ Expr = (*builtinNow)(nil)
 var _ Expr = (*builtinSysdate)(nil)
 var _ Expr = (*builtinCurdate)(nil)
 var _ Expr = (*builtinUtcDate)(nil)
+var _ Expr = (*builtinDateFormat)(nil)
 
 func (call *builtinNow) eval(env *ExpressionEnv) (eval, error) {
 	now := env.time(call.utc)
@@ -115,4 +122,34 @@ func (call *builtinUtcDate) typeof(_ *ExpressionEnv, _ []*querypb.Field) (sqltyp
 
 func (call *builtinUtcDate) constant() bool {
 	return false
+}
+
+func (b *builtinDateFormat) eval(env *ExpressionEnv) (eval, error) {
+	date, format, err := b.arg2(env)
+	if err != nil {
+		return nil, err
+	}
+	if date == nil || format == nil {
+		return nil, nil
+	}
+	panic("TODO")
+
+	/*
+		t, err := evalToTime(date)
+		if err != nil {
+			return nil, err
+		}
+		f := evalToBinary(date)
+
+		d, err := datetime.Format(f.string(), t, 6)
+		if err != nil {
+			return nil, err
+		}
+		return newEvalText(d, defaultCoercionCollation(b.collate)), nil
+	*/
+}
+
+func (b *builtinDateFormat) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	//TODO implement me
+	panic("implement me")
 }

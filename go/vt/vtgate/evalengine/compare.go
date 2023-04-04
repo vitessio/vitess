@@ -18,13 +18,10 @@ package evalengine
 
 import (
 	"bytes"
-	"strings"
 	"time"
 
-	"vitess.io/vitess/go/mysql/datetime"
 	"vitess.io/vitess/go/mysql/decimal"
 	"vitess.io/vitess/go/mysql/json"
-	"vitess.io/vitess/go/sqltypes"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 )
@@ -120,76 +117,23 @@ func compareNumeric(left, right eval) (int, error) {
 	return 1, nil
 }
 
-func validMessage(in string) string {
-	return strings.ToValidUTF8(strings.ReplaceAll(in, "\x00", ""), "?")
-}
-
-// matchExprWithAnyDateFormat formats the given expr (usually a string) to a date using the first format
-// that does not return an error.
-func matchExprWithAnyDateFormat(e eval, errType sqltypes.Type) (t time.Time, err error) {
-	expr := e.(*evalBytes)
-	var ok bool
-	t, ok = datetime.ParseDate(expr.string())
-	if ok {
-		return
-	}
-	t, ok = datetime.ParseDateTime(expr.string())
-	if ok {
-		return
-	}
-	switch errType {
-	case sqltypes.Date:
-		return t, errIncorrectDate("DATE", expr.bytes)
-	case sqltypes.Datetime:
-		return t, errIncorrectDate("DATETIME", expr.bytes)
-	case sqltypes.Timestamp:
-		return t, errIncorrectDate("TIMESTAMP", expr.bytes)
-	}
-	return
-}
-
 // Date comparison based on:
 //   - https://dev.mysql.com/doc/refman/8.0/en/type-conversion.html
 //   - https://dev.mysql.com/doc/refman/8.0/en/date-and-time-type-conversion.html
-func compareDates(l, r eval) (int, error) {
-	lTime, err := l.(*evalBytes).parseDate()
-	if err != nil {
-		return 0, err
-	}
-	rTime, err := r.(*evalBytes).parseDate()
-	if err != nil {
-		return 0, err
-	}
-	return compareGoTimes(lTime, rTime)
+func compareDates(l, r *evalTime) (int, error) {
+	return compareGoTimes(l.time.Time, r.time.Time)
 }
 
 func compareDateAndString(l, r eval) (int, error) {
-	lb := l.(*evalBytes)
-	rb := r.(*evalBytes)
-
-	var lTime, rTime time.Time
-	var err error
-	switch {
-	case sqltypes.IsDate(lb.SQLType()):
-		lTime, err = lb.parseDate()
-		if err != nil {
-			return 0, err
-		}
-		rTime, err = matchExprWithAnyDateFormat(r, lb.SQLType())
-		if err != nil {
-			return 0, err
-		}
-	case sqltypes.IsDate(rb.SQLType()):
-		lTime, err = matchExprWithAnyDateFormat(l, rb.SQLType())
-		if err != nil {
-			return 0, err
-		}
-		rTime, err = rb.parseDate()
-		if err != nil {
-			return 0, err
-		}
+	var t1, t2 time.Time
+	if tt, ok := l.(*evalTime); ok {
+		t1 = tt.time.Time
+		t2 = r.(*evalBytes).toDateBestEffort()
+	} else if tt, ok := r.(*evalTime); ok {
+		t1 = l.(*evalBytes).toDateBestEffort()
+		t2 = tt.time.Time
 	}
-	return compareGoTimes(lTime, rTime)
+	return compareGoTimes(t1, t2)
 }
 
 func compareGoTimes(lTime, rTime time.Time) (int, error) {
@@ -213,7 +157,7 @@ func compareStrings(l, r eval) (int, error) {
 	if collation == nil {
 		panic("unknown collation after coercion")
 	}
-	return collation.Collate(l.(*evalBytes).bytes, r.(*evalBytes).bytes, false), nil
+	return collation.Collate(l.ToRawBytes(), r.ToRawBytes(), false), nil
 }
 
 func compareJSON(l, r eval) (int, error) {

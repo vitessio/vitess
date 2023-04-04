@@ -21,7 +21,6 @@ import (
 	"math"
 	"strconv"
 
-	"vitess.io/vitess/go/mysql/datetime"
 	"vitess.io/vitess/go/mysql/decimal"
 	"vitess.io/vitess/go/mysql/format"
 	"vitess.io/vitess/go/mysql/json"
@@ -111,26 +110,6 @@ func evalToNumeric(e eval) evalNumeric {
 			}
 			return hex
 		}
-		switch e.SQLType() {
-		case sqltypes.Date:
-			var t int64
-			if dt, ok := datetime.ParseDate(e.string()); ok {
-				t = datetime.Date_YYYYMMDD.FormatNumeric(dt)
-			}
-			return newEvalInt64(t)
-		case sqltypes.Timestamp, sqltypes.Datetime:
-			var t int64
-			if dt, ok := datetime.ParseDateTime(e.string()); ok {
-				t = datetime.DateTime_YYYYMMDDhhmmss.FormatNumeric(dt)
-			}
-			return newEvalInt64(t)
-		case sqltypes.Time:
-			var t int64
-			if dt, ok := datetime.ParseTime(e.string()); ok {
-				t = dt.FormatInt64()
-			}
-			return newEvalInt64(t)
-		}
 		return &evalFloat{f: parseStringToFloat(e.string())}
 	case *evalJSON:
 		switch e.Type() {
@@ -159,6 +138,8 @@ func evalToNumeric(e eval) evalNumeric {
 		default:
 			return &evalFloat{f: 0}
 		}
+	case *evalTime:
+		return newEvalInt64(e.toInt64())
 	default:
 		panic("unsupported")
 	}
@@ -182,26 +163,6 @@ func evalToInt64(e eval) *evalInt64 {
 				return newEvalInt64(0)
 			}
 			return hex.toInt64()
-		}
-		switch e.SQLType() {
-		case sqltypes.Date:
-			var t int64
-			if dt, ok := datetime.ParseDate(e.string()); ok {
-				t = datetime.Date_YYYYMMDD.FormatNumeric(dt)
-			}
-			return newEvalInt64(t)
-		case sqltypes.Timestamp, sqltypes.Datetime:
-			var t int64
-			if dt, ok := datetime.ParseDateTime(e.string()); ok {
-				t = datetime.DateTime_YYYYMMDDhhmmss.FormatNumeric(dt)
-			}
-			return newEvalInt64(t)
-		case sqltypes.Time:
-			var t int64
-			if dt, ok := datetime.ParseTime(e.string()); ok {
-				t = dt.FormatInt64()
-			}
-			return newEvalInt64(t)
 		}
 		i, _ := fastparse.ParseInt64(e.string(), 10)
 		return newEvalInt64(i)
@@ -236,6 +197,8 @@ func evalToInt64(e eval) *evalInt64 {
 		default:
 			return newEvalInt64(0)
 		}
+	case *evalTime:
+		return newEvalInt64(e.toInt64())
 	default:
 		panic(fmt.Sprintf("unsupported type: %T", e))
 	}

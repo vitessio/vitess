@@ -213,7 +213,7 @@ func evalCompare(left, right eval) (comp int, err error) {
 
 	switch {
 	case compareAsDates(lt, rt):
-		return compareDates(left, right)
+		return compareDates(left.(*evalTime), right.(*evalTime))
 	case compareAsStrings(lt, rt):
 		return compareStrings(left, right)
 	case compareAsSameNumericType(lt, rt) || compareAsDecimal(lt, rt):
