@@ -52,7 +52,7 @@ func (d *DiffDep) hashKey() string {
 }
 
 /*
-The blow is adapted from https://yourbasic.org/golang/generate-permutation-slice-string/
+The below is adapted from https://yourbasic.org/golang/generate-permutation-slice-string/
 Licensed under https://creativecommons.org/licenses/by/3.0/
 Modified to have an early break
 */
