@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 import { rest } from 'msw';
-import { setupServer } from 'msw/node';
 
 import * as api from './http';
 import {

@@ -17,7 +17,7 @@
 import { ErrorHandler, HttpResponseNotOkError } from './errorTypes';
 import * as errorHandler from './errorHandler';
 import * as errorHandlers from './errorHandlers';
-import { describe, it, expect, beforeAll, afterEach, afterAll, vi } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { Response } from 'cross-fetch';
 
 describe('errorHandler', () => {
