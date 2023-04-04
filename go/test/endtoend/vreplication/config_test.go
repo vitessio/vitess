@@ -50,6 +50,7 @@ create table _vt_PURGE_4f9194b43b2011eb8a0104ed332e05c2_20221210194431(id int, v
 create table db_order_test (c_uuid varchar(64) not null default '', created_at datetime not null, dstuff varchar(128), dtstuff text, dbstuff blob, cstuff char(32), primary key (c_uuid,created_at), key (dstuff)) CHARSET=utf8mb4;
 create table datze (id int, dt1 datetime not null default current_timestamp, dt2 datetime not null, ts1 timestamp default current_timestamp, primary key (id), key (dt1));
 create table json_tbl (id int, j1 json, j2 json, primary key(id));
+create table geom_tbl (id int, g geometry, p point, ls linestring, pg polygon, mp multipoint, mls multilinestring, mpg multipolygon, gc geometrycollection, primary key(id));
 `
 	// These should always be ignored in vreplication
 	internalSchema = `
@@ -148,6 +149,14 @@ create table json_tbl (id int, j1 json, j2 json, primary key(id));
           "name": "xxhash"
         }
       ]
+    },
+    "geom_tbl": {
+      "column_vindexes": [
+         {
+           "column": "id",
+           "name": "reverse_bits"
+         }
+       ]
     },
     "json_tbl": {
       "column_vindexes": [
@@ -269,7 +278,15 @@ create table json_tbl (id int, j1 json, j2 json, primary key(id));
         }
       ]
     },
-	"json_tbl": {
+    "geom_tbl": {
+      "column_vindexes": [
+         {
+           "column": "id",
+           "name": "reverse_bits"
+         }
+       ]
+    },
+    "json_tbl": {
       "column_vindexes": [
         {
           "column": "id",

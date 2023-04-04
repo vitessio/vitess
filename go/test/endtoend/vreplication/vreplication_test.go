@@ -658,9 +658,10 @@ func testVStreamFrom(t *testing.T, table string, expectedRowCount int) {
 	}
 }
 
+const NumJSONRows = 100
+
 func insertJSONValues(t *testing.T) {
 	// insert null value combinations
-	const NumJSONRows = 100
 	execVtgateQuery(t, vtgateConn, "product:0", "insert into json_tbl(id) values(1)")
 	execVtgateQuery(t, vtgateConn, "product:0", "insert into json_tbl(id, j1) values(2, \"{}\")")
 	execVtgateQuery(t, vtgateConn, "product:0", "insert into json_tbl(id, j2) values(3, \"{}\")")
@@ -673,7 +674,6 @@ func insertJSONValues(t *testing.T) {
 		j1 := rand.Intn(numJsonValues)
 		j2 := rand.Intn(numJsonValues)
 		query := fmt.Sprintf(q, id, jsonValues[j1], jsonValues[j2])
-		log.Infof("query is %s", query)
 		execVtgateQuery(t, vtgateConn, "product:0", query)
 	}
 }
@@ -745,7 +745,7 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 		defaultCell := cells[0]
 		custKs := vc.Cells[defaultCell.Name].Keyspaces["customer"]
 
-		tables := "customer,Lead,Lead-1,db_order_test,json_tbl"
+		tables := "customer,Lead,Lead-1,db_order_test,geom_tbl,json_tbl"
 		moveTablesAction(t, "Create", sourceCellOrAlias, workflow, sourceKs, targetKs, tables)
 
 		customerTab1 := custKs.Shards["-80"].Tablets["zone1-200"].Vttablet
