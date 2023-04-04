@@ -72,12 +72,12 @@ const TEST_PROCESS_ENV = {
 
 describe('Advanced', () => {
     beforeAll(() => {
-        import.meta.env = { ...TEST_PROCESS_ENV } as NodeJS.ProcessEnv;
+        import.meta.env = { ...TEST_PROCESS_ENV } as Vite.ImportMetaEnv;
         vi.spyOn(global, 'fetch');
     });
 
     beforeEach(() => {
-        import.meta.env = { ...TEST_PROCESS_ENV } as NodeJS.ProcessEnv;
+        import.meta.env = { ...TEST_PROCESS_ENV } as Vite.ImportMetaEnv;
         vi.clearAllMocks();
     });
 

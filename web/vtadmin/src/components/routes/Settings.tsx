@@ -29,7 +29,7 @@ export const Settings = () => {
                 <h2 className="mt-12 mb-8">Environment variables</h2>
                 <pre>{JSON.stringify(env(), null, 2)}</pre>
 
-                {import.meta.env.NODE_ENV !== 'production' && (
+                {!import.meta.env.PROD && (
                     <>
                         <h2 className="mt-12 mb-8">Style Guide</h2>
 

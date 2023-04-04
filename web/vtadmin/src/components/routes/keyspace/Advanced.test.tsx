@@ -52,12 +52,12 @@ describe('Advanced keyspace actions', () => {
     });
 
     beforeAll(() => {
-        import.meta.env = { ...TEST_PROCESS_ENV } as NodeJS.ProcessEnv;
+        import.meta.env = { ...TEST_PROCESS_ENV } as Vite.ImportMetaEnv;
         server.listen();
     });
 
     beforeEach(() => {
-        import.meta.env = { ...TEST_PROCESS_ENV } as NodeJS.ProcessEnv;
+        import.meta.env = { ...TEST_PROCESS_ENV } as Vite.ImportMetaEnv;
         vi.clearAllMocks();
     });
 

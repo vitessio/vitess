@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-export const env: () => NodeJS.ProcessEnv = () => {
+export const env: () => Vite.ImportMetaEnv = () => {
     return { ...window.env, ...import.meta.env };
 };
 

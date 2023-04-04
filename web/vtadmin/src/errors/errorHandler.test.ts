@@ -85,7 +85,7 @@ describe('errorHandler', () => {
             import.meta.env = {
                 VITE_VTADMIN_API_ADDRESS: 'http://not-secret.example.com',
                 VITE_BUGSNAG_API_KEY: 'secret',
-            } as NodeJS.ProcessEnv;
+            } as Vite.ImportMetaEnv;
 
             const err = new Error('testing');
             errorHandler.notify(err);
