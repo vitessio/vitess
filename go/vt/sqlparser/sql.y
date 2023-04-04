@@ -366,6 +366,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %token <str> GET_LOCK RELEASE_LOCK RELEASE_ALL_LOCKS IS_FREE_LOCK IS_USED_LOCK
 %token <str> LOCATE POSITION
 %token <str> ST_GeometryCollectionFromText ST_GeometryFromText ST_LineStringFromText ST_MultiLineStringFromText ST_MultiPointFromText ST_MultiPolygonFromText ST_PointFromText ST_PolygonFromText
+%token <str> ST_GeometryCollectionFromWKB ST_GeometryFromWKB ST_LineStringFromWKB ST_MultiLineStringFromWKB ST_MultiPointFromWKB ST_MultiPolygonFromWKB ST_PointFromWKB ST_PolygonFromWKB
 
 // Match
 %token <str> MATCH AGAINST BOOLEAN LANGUAGE WITH QUERY EXPANSION WITHOUT VALIDATION
@@ -6187,6 +6188,102 @@ UTC_DATE func_paren_opt
   {
     $$ = &GeomFromTextExpr{ Type: PolygonFromText, WktText: $3, Srid: $5, AxisOrderOpt: $7 }
   }
+| ST_GeometryFromWKB openb expression closeb
+  {
+    $$ = &GeomFromWKBExpr{ Type: GeometryFromWKB, WkbBlob: $3 }
+  }
+| ST_GeometryFromWKB openb expression ',' expression closeb
+  {
+    $$ = &GeomFromWKBExpr{ Type: GeometryFromWKB, WkbBlob: $3, Srid: $5 }
+  }
+| ST_GeometryFromWKB openb expression ',' expression ',' expression closeb
+  {
+    $$ = &GeomFromWKBExpr{ Type: GeometryFromWKB, WkbBlob: $3, Srid: $5, AxisOrderOpt: $7 }
+  }
+|  ST_GeometryCollectionFromWKB openb expression closeb
+  {
+    $$ = &GeomFromWKBExpr{ Type: GeometryCollectionFromWKB, WkbBlob: $3 }
+  }
+| ST_GeometryCollectionFromWKB openb expression ',' expression closeb
+  {
+    $$ = &GeomFromWKBExpr{ Type: GeometryCollectionFromWKB, WkbBlob: $3, Srid: $5 }
+  }
+| ST_GeometryCollectionFromWKB openb expression ',' expression ',' expression closeb
+  {
+    $$ = &GeomFromWKBExpr{ Type: GeometryCollectionFromWKB, WkbBlob: $3, Srid: $5, AxisOrderOpt: $7 }
+  }
+| ST_LineStringFromWKB openb expression closeb
+  {
+    $$ = &GeomFromWKBExpr{ Type: LineStringFromWKB, WkbBlob: $3 }
+  }
+| ST_LineStringFromWKB openb expression ',' expression closeb
+  {
+    $$ = &GeomFromWKBExpr{ Type: LineStringFromWKB, WkbBlob: $3, Srid: $5 }
+  }
+| ST_LineStringFromWKB openb expression ',' expression ',' expression closeb
+  {
+    $$ = &GeomFromWKBExpr{ Type: LineStringFromWKB, WkbBlob: $3, Srid: $5, AxisOrderOpt: $7 }
+  }
+| ST_MultiLineStringFromWKB openb expression closeb
+  {
+    $$ = &GeomFromWKBExpr{ Type: MultiLinestringFromWKB, WkbBlob: $3 }
+  }
+| ST_MultiLineStringFromWKB openb expression ',' expression closeb
+  {
+    $$ = &GeomFromWKBExpr{ Type: MultiLinestringFromWKB, WkbBlob: $3, Srid: $5 }
+  }
+| ST_MultiLineStringFromWKB openb expression ',' expression ',' expression closeb
+  {
+    $$ = &GeomFromWKBExpr{ Type: MultiLinestringFromWKB, WkbBlob: $3, Srid: $5, AxisOrderOpt: $7 }
+  }
+| ST_MultiPointFromWKB openb expression closeb
+  {
+    $$ = &GeomFromWKBExpr{ Type: MultiPointFromWKB, WkbBlob: $3 }
+  }
+| ST_MultiPointFromWKB openb expression ',' expression closeb
+  {
+    $$ = &GeomFromWKBExpr{ Type: MultiPointFromWKB, WkbBlob: $3, Srid: $5 }
+  }
+| ST_MultiPointFromWKB openb expression ',' expression ',' expression closeb
+  {
+    $$ = &GeomFromWKBExpr{ Type: MultiPointFromWKB, WkbBlob: $3, Srid: $5, AxisOrderOpt: $7 }
+  }
+| ST_MultiPolygonFromWKB openb expression closeb
+  {
+    $$ = &GeomFromWKBExpr{ Type: MultiPolygonFromWKB, WkbBlob: $3 }
+  }
+| ST_MultiPolygonFromWKB openb expression ',' expression closeb
+  {
+    $$ = &GeomFromWKBExpr{ Type: MultiPolygonFromWKB, WkbBlob: $3, Srid: $5 }
+  }
+| ST_MultiPolygonFromWKB openb expression ',' expression ',' expression closeb
+  {
+    $$ = &GeomFromWKBExpr{ Type: MultiPolygonFromWKB, WkbBlob: $3, Srid: $5, AxisOrderOpt: $7 }
+  }
+| ST_PointFromWKB openb expression closeb
+  {
+    $$ = &GeomFromWKBExpr{ Type: PointFromWKB, WkbBlob: $3 }
+  }
+| ST_PointFromWKB openb expression ',' expression closeb
+  {
+    $$ = &GeomFromWKBExpr{ Type: PointFromWKB, WkbBlob: $3, Srid: $5 }
+  }
+| ST_PointFromWKB openb expression ',' expression ',' expression closeb
+  {
+    $$ = &GeomFromWKBExpr{ Type: PointFromWKB, WkbBlob: $3, Srid: $5, AxisOrderOpt: $7 }
+  }
+| ST_PolygonFromWKB openb expression closeb
+  {
+    $$ = &GeomFromWKBExpr{ Type: PolygonFromWKB, WkbBlob: $3 }
+  }
+| ST_PolygonFromWKB openb expression ',' expression closeb
+  {
+    $$ = &GeomFromWKBExpr{ Type: PolygonFromWKB, WkbBlob: $3, Srid: $5 }
+  }
+| ST_PolygonFromWKB openb expression ',' expression ',' expression closeb
+  {
+    $$ = &GeomFromWKBExpr{ Type: PolygonFromWKB, WkbBlob: $3, Srid: $5, AxisOrderOpt: $7 }
+  }
 | JSON_OBJECT openb json_object_param_opt closeb
   {
     $$ = &JSONObjectExpr{ Params:$3 }
@@ -8009,6 +8106,14 @@ non_reserved_keyword:
 | ST_MultiPointFromText %prec FUNCTION_CALL_NON_KEYWORD
 | ST_MultiPolygonFromText %prec FUNCTION_CALL_NON_KEYWORD
 | ST_PointFromText %prec FUNCTION_CALL_NON_KEYWORD
+| ST_GeometryFromWKB %prec FUNCTION_CALL_NON_KEYWORD
+| ST_GeometryCollectionFromWKB %prec FUNCTION_CALL_NON_KEYWORD
+| ST_LineStringFromWKB %prec FUNCTION_CALL_NON_KEYWORD
+| ST_MultiLineStringFromWKB %prec FUNCTION_CALL_NON_KEYWORD
+| ST_MultiPointFromWKB %prec FUNCTION_CALL_NON_KEYWORD
+| ST_MultiPolygonFromWKB %prec FUNCTION_CALL_NON_KEYWORD
+| ST_PointFromWKB %prec FUNCTION_CALL_NON_KEYWORD
+| ST_PolygonFromWKB %prec FUNCTION_CALL_NON_KEYWORD
 | ST_PolygonFromText %prec FUNCTION_CALL_NON_KEYWORD
 | SUBPARTITION
 | SUBPARTITIONS

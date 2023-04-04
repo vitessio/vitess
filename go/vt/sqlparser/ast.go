@@ -2757,6 +2757,16 @@ type (
 		AxisOrderOpt Expr
 	}
 
+	// GeomFromWkbType is an enum to get the types of wkt functions with possible values: GeometryFromWKB GeometryCollectionFromWKB PointFromWKB LineStringFromWKB PolygonFromWKB MultiPointFromWKB MultiPolygonFromWKB MultiLinestringFromWKB
+	GeomFromWkbType int8
+
+	GeomFromWKBExpr struct {
+		Type         GeomFromWkbType
+		WkbBlob      Expr
+		Srid         Expr
+		AxisOrderOpt Expr
+	}
+
 	AggrFunc interface {
 		Expr
 		AggrName() string
@@ -3090,6 +3100,7 @@ func (*MultiPolygonExpr) iExpr()                   {}
 func (*MultiPointExpr) iExpr()                     {}
 func (*MultiLinestringExpr) iExpr()                {}
 func (*GeomFromTextExpr) iExpr()                   {}
+func (*GeomFromWKBExpr) iExpr()                    {}
 
 // iCallable marks all expressions that represent function calls
 func (*FuncExpr) iCallable()                           {}
@@ -3150,6 +3161,7 @@ func (*MultiPolygonExpr) iCallable()                   {}
 func (*MultiPointExpr) iCallable()                     {}
 func (*MultiLinestringExpr) iCallable()                {}
 func (*GeomFromTextExpr) iCallable()                   {}
+func (*GeomFromWKBExpr) iCallable()                    {}
 
 func (*Sum) iCallable()       {}
 func (*Min) iCallable()       {}

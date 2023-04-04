@@ -182,6 +182,8 @@ func (c *cow) copyOnRewriteSQLNode(n SQLNode, parent SQLNode) (out SQLNode, chan
 		return c.copyOnRewriteRefOfGTIDFuncExpr(n, parent)
 	case *GeomFromTextExpr:
 		return c.copyOnRewriteRefOfGeomFromTextExpr(n, parent)
+	case *GeomFromWKBExpr:
+		return c.copyOnRewriteRefOfGeomFromWKBExpr(n, parent)
 	case GroupBy:
 		return c.copyOnRewriteGroupBy(n, parent)
 	case *GroupConcatExpr:
@@ -2329,6 +2331,32 @@ func (c *cow) copyOnRewriteRefOfGeomFromTextExpr(n *GeomFromTextExpr, parent SQL
 		if changedWktText || changedSrid || changedAxisOrderOpt {
 			res := *n
 			res.WktText, _ = _WktText.(Expr)
+			res.Srid, _ = _Srid.(Expr)
+			res.AxisOrderOpt, _ = _AxisOrderOpt.(Expr)
+			out = &res
+			if c.cloned != nil {
+				c.cloned(n, out)
+			}
+			changed = true
+		}
+	}
+	if c.post != nil {
+		out, changed = c.postVisit(out, parent, changed)
+	}
+	return
+}
+func (c *cow) copyOnRewriteRefOfGeomFromWKBExpr(n *GeomFromWKBExpr, parent SQLNode) (out SQLNode, changed bool) {
+	if n == nil || c.cursor.stop {
+		return n, false
+	}
+	out = n
+	if c.pre == nil || c.pre(n, parent) {
+		_WkbBlob, changedWkbBlob := c.copyOnRewriteExpr(n.WkbBlob, n)
+		_Srid, changedSrid := c.copyOnRewriteExpr(n.Srid, n)
+		_AxisOrderOpt, changedAxisOrderOpt := c.copyOnRewriteExpr(n.AxisOrderOpt, n)
+		if changedWkbBlob || changedSrid || changedAxisOrderOpt {
+			res := *n
+			res.WkbBlob, _ = _WkbBlob.(Expr)
 			res.Srid, _ = _Srid.(Expr)
 			res.AxisOrderOpt, _ = _AxisOrderOpt.(Expr)
 			out = &res
@@ -6385,6 +6413,8 @@ func (c *cow) copyOnRewriteCallable(n Callable, parent SQLNode) (out SQLNode, ch
 		return c.copyOnRewriteRefOfGTIDFuncExpr(n, parent)
 	case *GeomFromTextExpr:
 		return c.copyOnRewriteRefOfGeomFromTextExpr(n, parent)
+	case *GeomFromWKBExpr:
+		return c.copyOnRewriteRefOfGeomFromWKBExpr(n, parent)
 	case *GroupConcatExpr:
 		return c.copyOnRewriteRefOfGroupConcatExpr(n, parent)
 	case *InsertExpr:
@@ -6641,6 +6671,8 @@ func (c *cow) copyOnRewriteExpr(n Expr, parent SQLNode) (out SQLNode, changed bo
 		return c.copyOnRewriteRefOfGTIDFuncExpr(n, parent)
 	case *GeomFromTextExpr:
 		return c.copyOnRewriteRefOfGeomFromTextExpr(n, parent)
+	case *GeomFromWKBExpr:
+		return c.copyOnRewriteRefOfGeomFromWKBExpr(n, parent)
 	case *GroupConcatExpr:
 		return c.copyOnRewriteRefOfGroupConcatExpr(n, parent)
 	case *InsertExpr:

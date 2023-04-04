@@ -432,6 +432,16 @@ const (
 	MultiLinestringFromTextStr    = "st_multilinestringfromtext"
 	PolygonFromTextStr            = "st_polygonfromtext"
 	MultiPolygonFromTextStr       = "st_multipolygonfromtext"
+
+	//GeomeFromWktType strings
+	GeometryFromWKBStr           = "st_geometryfromwkb"
+	GeometryCollectionFromWKBStr = "st_geometrycollectionfromwkb"
+	PointFromWKBStr              = "st_pointfromwkb"
+	MultiPointFromWKBStr         = "st_multipointfromwkb"
+	LineStringFromWKBStr         = "st_linestringfromwkb"
+	MultiLinestringFromWKBStr    = "st_multilinestringfromwkb"
+	PolygonFromWKBStr            = "st_polygonfromwkb"
+	MultiPolygonFromWKBStr       = "st_multipolygonfromwkb"
 )
 
 // Constants for Enum Type - Insert.Action
@@ -908,4 +918,16 @@ const (
 	MultiPointFromText
 	MultiPolygonFromText
 	MultiLinestringFromText
+)
+
+// Enum Types of WKT functions
+const (
+	GeometryFromWKB GeomFromWkbType = iota
+	GeometryCollectionFromWKB
+	PointFromWKB
+	LineStringFromWKB
+	PolygonFromWKB
+	MultiPointFromWKB
+	MultiPolygonFromWKB
+	MultiLinestringFromWKB
 )
