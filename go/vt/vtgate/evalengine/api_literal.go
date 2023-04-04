@@ -116,12 +116,12 @@ func NewLiteralDateFromBytes(val []byte) (*Literal, error) {
 // NewLiteralTimeFromBytes returns a literal expression.
 // it validates the time by parsing it and checking the error.
 func NewLiteralTimeFromBytes(val []byte) (*Literal, error) {
-	_, normalized, ok := datetime.ParseTime(hack.String(val), datetime.Time_hh_mm_ss)
+	t, ok := datetime.ParseTime(hack.String(val))
 	if !ok {
 		return nil, errIncorrectDate("TIME", val)
 	}
 	// Convert days to only hours syntax as this is how MySQL normalizes as well.
-	return &Literal{newEvalRaw(querypb.Type_TIME, normalized, collationNumeric)}, nil
+	return &Literal{newEvalRaw(querypb.Type_TIME, t.AppendFormat(nil, 9), collationNumeric)}, nil
 }
 
 // NewLiteralDatetimeFromBytes returns a literal expression.

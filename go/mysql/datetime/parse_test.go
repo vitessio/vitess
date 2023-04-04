@@ -108,7 +108,7 @@ func TestParseTime(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.input, func(t *testing.T) {
-			got, norm, ok := ParseTime(test.input, Time_hh_mm_ss)
+			got, ok := ParseTime(test.input)
 			if test.err {
 				assert.Falsef(t, ok, "did not fail to parse %s", test.input)
 				return
@@ -122,8 +122,8 @@ func TestParseTime(t *testing.T) {
 				time.Duration(test.output.second)*time.Second +
 				time.Duration(test.output.nanosecond)*time.Nanosecond)
 
-			assert.Equal(t, expected, got)
-			assert.Equal(t, test.norm, string(norm))
+			assert.Equal(t, expected, got.Time)
+			assert.Equal(t, test.norm, string(got.AppendFormat(nil, 9)))
 		})
 	}
 }

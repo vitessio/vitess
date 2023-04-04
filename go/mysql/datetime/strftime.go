@@ -122,6 +122,19 @@ func (f *Strftime) FormatString(tm time.Time, prec uint8) string {
 	return string(f.Format(tm, prec))
 }
 
+func (f *Strftime) FormatNumeric(tm time.Time) (n int64) {
+	var tp timeparts
+	tp.year = -1
+	tp.hour = -1
+	tp.prec = 0
+	for _, w := range f.compiled {
+		w := w.(numeric)
+		x, width := w.numeric(&tp, tm)
+		n = n*int64(width) + int64(x)
+	}
+	return n
+}
+
 func (f *Strftime) parse(s string) (time.Time, string, bool) {
 	var tp timeparts
 	tp.month = -1

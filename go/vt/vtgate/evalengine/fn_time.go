@@ -106,7 +106,7 @@ func (call *builtinCurdate) constant() bool {
 
 func (call *builtinUtcDate) eval(env *ExpressionEnv) (eval, error) {
 	now := env.time(true)
-	return newEvalRaw(sqltypes.Date, formatDate.Format(now), collationBinary), nil
+	return newEvalRaw(sqltypes.Date, datetime.Date_YYYY_MM_DD.Format(now, 0), collationBinary), nil
 }
 
 func (call *builtinUtcDate) typeof(_ *ExpressionEnv, _ []*querypb.Field) (sqltypes.Type, typeFlag) {

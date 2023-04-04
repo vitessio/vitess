@@ -30,7 +30,6 @@ import (
 	"math/bits"
 	"strconv"
 
-	"vitess.io/vitess/go/hack"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/collations/charset"
 	"vitess.io/vitess/go/mysql/datetime"
@@ -904,8 +903,7 @@ func (asm *assembler) Convert_date(offset int) {
 			env.vm.err = errIncorrectDate("DATE", v.bytes)
 			return 1
 		}
-		i, _ := strconv.ParseInt(t.Format("20060102"), 10, 64)
-		env.vm.stack[env.vm.sp-offset] = env.vm.arena.newEvalInt64(i)
+		env.vm.stack[env.vm.sp-offset] = env.vm.arena.newEvalInt64(datetime.Date_YYYYMMDD.FormatNumeric(t))
 		return 1
 	}, "CONV DATE(SP-%d), INT64", offset)
 }
@@ -918,8 +916,7 @@ func (asm *assembler) Convert_datetime(offset int) {
 			env.vm.err = errIncorrectDate("DATETIME", v.bytes)
 			return 1
 		}
-		i, _ := strconv.ParseInt(t.Format("20060102150405"), 10, 64)
-		env.vm.stack[env.vm.sp-offset] = env.vm.arena.newEvalInt64(i)
+		env.vm.stack[env.vm.sp-offset] = env.vm.arena.newEvalInt64(datetime.DateTime_YYYYMMDDhhmmss.FormatNumeric(t))
 		return 1
 	}, "CONV DATETIME(SP-%d), INT64", offset)
 }
@@ -927,13 +924,12 @@ func (asm *assembler) Convert_datetime(offset int) {
 func (asm *assembler) Convert_time(offset int) {
 	asm.emit(func(env *ExpressionEnv) int {
 		v := env.vm.stack[env.vm.sp-offset].(*evalBytes)
-		_, n, ok := datetime.ParseTime(v.string(), datetime.Time_hhmmss)
+		t, ok := datetime.ParseTime(v.string())
 		if !ok {
 			env.vm.err = errIncorrectDate("TIME", v.bytes)
 			return 1
 		}
-		i, _ := strconv.ParseInt(hack.String(n), 10, 64)
-		env.vm.stack[env.vm.sp-offset] = env.vm.arena.newEvalInt64(i)
+		env.vm.stack[env.vm.sp-offset] = env.vm.arena.newEvalInt64(t.FormatInt64())
 		return 1
 	}, "CONV TIME(SP-%d), INT64", offset)
 }
@@ -2957,7 +2953,7 @@ func (asm *assembler) Fn_UtcDate() {
 	asm.emit(func(env *ExpressionEnv) int {
 		val := env.vm.arena.newEvalBytesEmpty()
 		val.tt = int16(sqltypes.Date)
-		val.bytes = formatDate.Format(env.time(true))
+		val.bytes = datetime.Date_YYYY_MM_DD.Format(env.time(true), 0)
 		env.vm.stack[env.vm.sp] = val
 		env.vm.sp++
 		return 1

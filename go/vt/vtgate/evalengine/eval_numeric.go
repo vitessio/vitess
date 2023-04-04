@@ -21,7 +21,6 @@ import (
 	"math"
 	"strconv"
 
-	"vitess.io/vitess/go/hack"
 	"vitess.io/vitess/go/mysql/datetime"
 	"vitess.io/vitess/go/mysql/decimal"
 	"vitess.io/vitess/go/mysql/format"
@@ -114,26 +113,23 @@ func evalToNumeric(e eval) evalNumeric {
 		}
 		switch e.SQLType() {
 		case sqltypes.Date:
-			dt, ok := datetime.ParseDate(e.string())
-			if !ok {
-				return newEvalInt64(0)
+			var t int64
+			if dt, ok := datetime.ParseDate(e.string()); ok {
+				t = datetime.Date_YYYYMMDD.FormatNumeric(dt)
 			}
-			i, _ := strconv.ParseInt(dt.Format("20060102"), 10, 64)
-			return newEvalInt64(i)
+			return newEvalInt64(t)
 		case sqltypes.Timestamp, sqltypes.Datetime:
-			dt, ok := datetime.ParseDateTime(e.string())
-			if !ok {
-				return newEvalInt64(0)
+			var t int64
+			if dt, ok := datetime.ParseDateTime(e.string()); ok {
+				t = datetime.DateTime_YYYYMMDDhhmmss.FormatNumeric(dt)
 			}
-			i, _ := strconv.ParseInt(dt.Format("20060102150405"), 10, 64)
-			return newEvalInt64(i)
+			return newEvalInt64(t)
 		case sqltypes.Time:
-			_, n, ok := datetime.ParseTime(e.string(), datetime.Time_hhmmss)
-			if !ok {
-				return newEvalInt64(0)
+			var t int64
+			if dt, ok := datetime.ParseTime(e.string()); ok {
+				t = dt.FormatInt64()
 			}
-			i, _ := strconv.ParseInt(hack.String(n), 10, 64)
-			return newEvalInt64(i)
+			return newEvalInt64(t)
 		}
 		return &evalFloat{f: parseStringToFloat(e.string())}
 	case *evalJSON:
@@ -189,26 +185,23 @@ func evalToInt64(e eval) *evalInt64 {
 		}
 		switch e.SQLType() {
 		case sqltypes.Date:
-			dt, err := datetime.ParseDate(e.string())
-			if err != nil {
-				return newEvalInt64(0)
+			var t int64
+			if dt, ok := datetime.ParseDate(e.string()); ok {
+				t = datetime.Date_YYYYMMDD.FormatNumeric(dt)
 			}
-			i, _ := strconv.ParseInt(dt.Format("20060102"), 10, 64)
-			return newEvalInt64(i)
+			return newEvalInt64(t)
 		case sqltypes.Timestamp, sqltypes.Datetime:
-			dt, err := datetime.ParseDateTime(e.string())
-			if err != nil {
-				return newEvalInt64(0)
+			var t int64
+			if dt, ok := datetime.ParseDateTime(e.string()); ok {
+				t = datetime.DateTime_YYYYMMDDhhmmss.FormatNumeric(dt)
 			}
-			i, _ := strconv.ParseInt(dt.Format("20060102150405"), 10, 64)
-			return newEvalInt64(i)
+			return newEvalInt64(t)
 		case sqltypes.Time:
-			_, n, err := datetime.ParseTime(e.string())
-			if err != nil {
-				return newEvalInt64(0)
+			var t int64
+			if dt, ok := datetime.ParseTime(e.string()); ok {
+				t = dt.FormatInt64()
 			}
-			i, _ := strconv.ParseInt(strings.ReplaceAll(n, ":", ""), 10, 64)
-			return newEvalInt64(i)
+			return newEvalInt64(t)
 		}
 		i, _ := fastparse.ParseInt64(e.string(), 10)
 		return newEvalInt64(i)

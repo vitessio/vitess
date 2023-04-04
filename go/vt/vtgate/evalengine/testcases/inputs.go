@@ -98,6 +98,7 @@ var inputConversions = []string{
 	"-18446744073709540000e0",
 	"JSON_OBJECT()", "JSON_ARRAY()",
 	"time '10:04:58'", "time '101:34:58'", "time '5 10:34:58'", "date '2000-01-01'", "timestamp '2000-01-01 12:34:58'",
+	"time '-101:34:58'", "time '-5 10:34:58'",
 	"'10:04:58'", "'101:34:58'", "'5 10:34:58'", "'2000-01-01'", "'2000-01-01 12:34:58'",
 	"cast(0 as json)", "cast(1 as json)",
 	"cast(true as json)", "cast(false as json)",

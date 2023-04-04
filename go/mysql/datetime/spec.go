@@ -34,6 +34,10 @@ type parser interface {
 	parse(*timeparts, string) (string, bool)
 }
 
+type numeric interface {
+	numeric(*timeparts, time.Time) (int, int)
+}
+
 var shortDayNames = []string{
 	"Sun",
 	"Mon",
@@ -102,6 +106,11 @@ func (s fmtMonth) parse(tp *timeparts, b string) (out string, ok bool) {
 	return
 }
 
+func (s fmtMonth) numeric(tp *timeparts, t time.Time) (int, int) {
+	tp.initYear(t)
+	return tp.month, 100
+}
+
 type fmtMonthDaySuffix struct{}
 
 func (fmtMonthDaySuffix) format(_ *timeparts, _ time.Time, _ []byte) []byte {
@@ -130,17 +139,26 @@ func (s fmtDay) parse(tp *timeparts, b string) (out string, ok bool) {
 	return
 }
 
+func (fmtDay) numeric(tp *timeparts, t time.Time) (int, int) {
+	tp.initYear(t)
+	return tp.day, 100
+}
+
 type fmtNanoseconds struct{}
 
-func (fmtNanoseconds) format(tp *timeparts, t time.Time, b []byte) []byte {
-	tp.initHour(t)
-	f := tp.nsec / 1000
-	l := len(b) + int(tp.prec)
+func appendNsec(b []byte, nsec int, prec int) []byte {
+	f := nsec / 1000
+	l := len(b) + prec
 	b = appendInt(b, f, 6)
 	for len(b) < l {
 		b = append(b, '0')
 	}
 	return b[:l]
+}
+
+func (fmtNanoseconds) format(tp *timeparts, t time.Time, b []byte) []byte {
+	tp.initHour(t)
+	return appendNsec(b, tp.nsec, int(tp.prec))
 }
 
 func (f fmtNanoseconds) parse(t *timeparts, bytes string) (string, bool) {
@@ -168,16 +186,17 @@ func (s fmtHour24) parse(tp *timeparts, b string) (out string, ok bool) {
 	return
 }
 
+func (fmtHour24) numeric(tp *timeparts, t time.Time) (int, int) {
+	tp.initHour(t)
+	return tp.hour, 100
+}
+
 type fmtHour12 struct {
 	zero bool
 }
 
 func (f fmtHour12) format(tp *timeparts, t time.Time, b []byte) []byte {
-	tp.initHour(t)
-	hr := tp.hour % 12
-	if hr == 0 {
-		hr = 12
-	}
+	hr, _ := f.numeric(tp, t)
 	if f.zero {
 		return appendInt(b, hr, 2)
 	}
@@ -190,6 +209,15 @@ func (f fmtHour12) parse(tp *timeparts, b string) (out string, ok bool) {
 		ok = false
 	}
 	return
+}
+
+func (f fmtHour12) numeric(tp *timeparts, t time.Time) (int, int) {
+	tp.initHour(t)
+	hr := tp.hour % 12
+	if hr == 0 {
+		hr = 12
+	}
+	return hr, 100
 }
 
 type fmtMin struct {
@@ -210,6 +238,11 @@ func (s fmtMin) parse(tp *timeparts, b string) (out string, ok bool) {
 		ok = false
 	}
 	return
+}
+
+func (s fmtMin) numeric(tp *timeparts, t time.Time) (int, int) {
+	tp.initHour(t)
+	return tp.min, 100
 }
 
 type fmtZeroYearDay struct{}
@@ -280,7 +313,7 @@ func (s fmtSecond) format(tp *timeparts, t time.Time, b []byte) []byte {
 	}
 	if s.nsec && tp.prec > 0 && tp.nsec != 0 {
 		b = append(b, '.')
-		b = fmtNanoseconds{}.format(tp, t, b)
+		b = appendNsec(b, tp.nsec, int(tp.prec))
 	}
 	return b
 }
@@ -298,6 +331,11 @@ func (s fmtSecond) parse(tp *timeparts, b string) (out string, ok bool) {
 		out = out[n:]
 	}
 	return
+}
+
+func (s fmtSecond) numeric(tp *timeparts, t time.Time) (int, int) {
+	tp.initHour(t)
+	return tp.sec, 100
 }
 
 type fmtFullTime24 struct{}
@@ -416,15 +454,16 @@ func (y fmtYearLong) parse(tp *timeparts, b string) (out string, ok bool) {
 	return
 }
 
+func (y fmtYearLong) numeric(tp *timeparts, t time.Time) (int, int) {
+	tp.initYear(t)
+	return tp.year, 10000
+}
+
 type fmtYearShort struct{}
 
-func (fmtYearShort) format(tp *timeparts, t time.Time, b []byte) []byte {
-	tp.initYear(t)
-	y := tp.year
-	if y < 0 {
-		y = -y
-	}
-	return appendInt(b, y%100, 2)
+func (f fmtYearShort) format(tp *timeparts, t time.Time, b []byte) []byte {
+	y, _ := f.numeric(tp, t)
+	return appendInt(b, y, 2)
 }
 
 func (fmtYearShort) parse(tp *timeparts, b string) (out string, ok bool) {
@@ -439,6 +478,15 @@ func (fmtYearShort) parse(tp *timeparts, b string) (out string, ok bool) {
 		}
 	}
 	return
+}
+
+func (fmtYearShort) numeric(tp *timeparts, t time.Time) (int, int) {
+	tp.initYear(t)
+	y := tp.year
+	if y < 0 {
+		y = -y
+	}
+	return y % 100, 2
 }
 
 type fmtVerbatim struct {

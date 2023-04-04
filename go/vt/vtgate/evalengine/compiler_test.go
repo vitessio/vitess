@@ -289,6 +289,14 @@ func TestCompilerSingle(t *testing.T) {
 			expression: `CONV(-9223372036854775809, 13e0, 13e0)`,
 			result:     `VARCHAR("0")`,
 		},
+		{
+			expression: `0 + time '10:04:58'`,
+			result:     `INT64(100458)`,
+		},
+		{
+			expression: `0 + time '101:34:58'`,
+			result:     `INT64(1013458)`,
+		},
 	}
 
 	for _, tc := range testCases {
@@ -334,7 +342,7 @@ func TestCompilerSingle(t *testing.T) {
 				}
 
 				if res.String() != tc.result {
-					t.Fatalf("bad evaluation from compiler: got %s, want %s (iteration %d)", res, tc.result, i)
+					t.Errorf("bad evaluation from compiler: got %s, want %s (iteration %d)", res, tc.result, i)
 				}
 			}
 		})

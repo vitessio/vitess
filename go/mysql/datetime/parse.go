@@ -135,9 +135,44 @@ func parsetimeNoDelimiters(tp *timeparts, in string) (out string, ok bool) {
 	return in, ok
 }
 
-func ParseTime(in string, normalize *Strftime) (t time.Time, normalized []byte, ok bool) {
+type SQLTime struct {
+	Time  time.Time
+	Parts struct {
+		Hours int
+		Mins  int
+		Secs  int
+		Nsec  int
+	}
+}
+
+func (t *SQLTime) AppendFormat(b []byte, prec uint8) []byte {
+	h := t.Parts.Hours
+	if h < 0 {
+		h = -h
+		b = append(b, '-')
+	}
+	b = appendInt(b, h, 2)
+	b = append(b, ':')
+	b = appendInt(b, t.Parts.Mins, 2)
+	b = append(b, ':')
+	b = appendInt(b, t.Parts.Secs, 2)
+	if prec > 0 && t.Parts.Nsec != 0 {
+		b = append(b, '.')
+		b = appendNsec(b, t.Parts.Nsec, int(prec))
+	}
+	return b
+}
+
+func (t *SQLTime) FormatInt64() (n int64) {
+	if t.Parts.Hours < 0 {
+		return -(int64(-t.Parts.Hours)*10000 + int64(t.Parts.Mins)*100 + int64(t.Parts.Secs))
+	}
+	return int64(t.Parts.Hours)*10000 + int64(t.Parts.Mins)*100 + int64(t.Parts.Secs)
+}
+
+func ParseTime(in string) (t SQLTime, ok bool) {
 	if len(in) == 0 {
-		return time.Time{}, nil, false
+		return SQLTime{}, false
 	}
 	var neg bool
 	if in[0] == '-' {
@@ -148,10 +183,15 @@ func ParseTime(in string, normalize *Strftime) (t time.Time, normalized []byte, 
 	var tp timeparts
 	in, ok = parsetimeAny(&tp, in)
 	if !ok || len(in) > 0 {
-		return time.Time{}, nil, false
+		return SQLTime{}, false
 	}
 
 	year, month, day := time.Now().Date()
+
+	t.Parts.Hours = 24*tp.day + tp.hour
+	t.Parts.Mins = tp.min
+	t.Parts.Secs = tp.sec
+	t.Parts.Nsec = tp.nsec
 
 	if neg {
 		duration := time.Duration(tp.day)*24*time.Hour +
@@ -162,26 +202,14 @@ func ParseTime(in string, normalize *Strftime) (t time.Time, normalized []byte, 
 
 		// If we have a negative time, we start with the start of today
 		// and substract the total duration of the parsed time.
-		t = time.Date(year, month, day, 0, 0, 0, 0, time.UTC)
-		t = t.Add(-duration)
+		t.Time = time.Date(year, month, day, 0, 0, 0, 0, time.UTC)
+		t.Time = t.Time.Add(-duration)
+		t.Parts.Hours = -t.Parts.Hours
 	} else {
-		t = time.Date(0, 1, 1, tp.hour, tp.min, tp.sec, tp.nsec, time.UTC)
-		t = t.AddDate(year, int(month-1), day-1+tp.day)
+		t.Time = time.Date(0, 1, 1, tp.hour, tp.min, tp.sec, tp.nsec, time.UTC)
+		t.Time = t.Time.AddDate(year, int(month-1), day-1+tp.day)
 	}
-
-	if normalize != nil {
-		if neg {
-			normalized = append(normalized, '-')
-		}
-		normalized = normalize.format(&timeparts{
-			hour: 24*tp.day + tp.hour,
-			min:  tp.min,
-			sec:  tp.sec,
-			nsec: tp.nsec,
-			prec: 9,
-		}, normalized, t)
-	}
-	return t, normalized, true
+	return t, true
 }
 
 func ParseDate(s string) (time.Time, bool) {

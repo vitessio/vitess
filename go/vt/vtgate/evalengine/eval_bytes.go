@@ -170,28 +170,29 @@ func (e *evalBytes) truncateInPlace(size int) {
 	}
 }
 
-func (e *evalBytes) parseDate() (t time.Time, err error) {
-	var ok bool
+func (e *evalBytes) parseDate() (time.Time, error) {
 	switch e.SQLType() {
 	case sqltypes.Date:
-		t, ok = datetime.ParseDate(e.string())
+		t, ok := datetime.ParseDate(e.string())
 		if !ok {
-			err = errIncorrectDate("DATE", e.bytes)
+			return time.Time{}, errIncorrectDate("DATE", e.bytes)
 		}
+		return t, nil
 	case sqltypes.Timestamp, sqltypes.Datetime:
-		t, ok = datetime.ParseDateTime(e.string())
+		t, ok := datetime.ParseDateTime(e.string())
 		if !ok {
-			err = errIncorrectDate("DATETIME", e.bytes)
+			return time.Time{}, errIncorrectDate("DATETIME", e.bytes)
 		}
+		return t, nil
 	case sqltypes.Time:
-		t, _, ok = datetime.ParseTime(e.string(), nil)
+		t, ok := datetime.ParseTime(e.string())
 		if !ok {
-			err = errIncorrectDate("TIME", e.bytes)
+			return time.Time{}, errIncorrectDate("TIME", e.bytes)
 		}
+		return t.Time, nil
 	default:
-		err = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "type %v is not date-like", e.SQLType())
+		return time.Time{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "type %v is not date-like", e.SQLType())
 	}
-	return
 }
 
 func (e *evalBytes) toNumericHex() (*evalUint64, bool) {
