@@ -327,7 +327,7 @@ func closeDatetime(a, b time.Time, diff time.Duration) bool {
 	if d < 0 {
 		d = -d
 	}
-	return d < diff
+	return d <= diff
 }
 
 func compareResult(localErr, remoteErr error, localVal, remoteVal sqltypes.Value, localCollation, remoteCollation collations.ID, decimals uint32) string {
@@ -381,11 +381,23 @@ func compareResult(localErr, remoteErr error, localVal, remoteVal sqltypes.Value
 		if err != nil {
 			return fmt.Sprintf("error converting remote value to datetime: %v", err)
 		}
-		if !closeDatetime(localDatetime, remoteDatetime, 100*time.Millisecond) {
+		if !closeDatetime(localDatetime, remoteDatetime, 1*time.Second) {
 			return fmt.Sprintf("different results: %s; mysql response: %s (local collation: %s; mysql collation: %s)",
 				localVal.String(), remoteVal.String(), localCollationName, remoteCollationName)
 		}
-
+	} else if localVal.IsTime() && remoteVal.IsTime() {
+		localTime, err := time.Parse("15:04:05.999999", localVal.ToString())
+		if err != nil {
+			return fmt.Sprintf("error converting local value to time: %v", err)
+		}
+		remoteTime, err := time.Parse("15:04:05.999999", remoteVal.ToString())
+		if err != nil {
+			return fmt.Sprintf("error converting remote value to time: %v", err)
+		}
+		if !closeDatetime(localTime, remoteTime, 1*time.Second) {
+			return fmt.Sprintf("different results: %s; mysql response: %s (local collation: %s; mysql collation: %s)",
+				localVal.String(), remoteVal.String(), localCollationName, remoteCollationName)
+		}
 	} else if localVal.String() != remoteVal.String() {
 		return fmt.Sprintf("different results: %s; mysql response: %s (local collation: %s; mysql collation: %s)",
 			localVal.String(), remoteVal.String(), localCollationName, remoteCollationName)

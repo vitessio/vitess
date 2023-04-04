@@ -480,6 +480,11 @@ func (v Value) IsDateTime() bool {
 	return v.typ == querypb.Type_DATETIME
 }
 
+// IsTime returns true if Value is time.
+func (v Value) IsTime() bool {
+	return v.typ == querypb.Type_TIME
+}
+
 // IsDecimal returns true if Value is a decimal.
 func (v Value) IsDecimal() bool {
 	return IsDecimal(v.typ)
