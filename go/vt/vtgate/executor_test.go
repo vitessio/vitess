@@ -398,7 +398,7 @@ func TestExecutorAutocommit(t *testing.T) {
 	wantSession = &vtgatepb.Session{Autocommit: true, TargetString: "@primary", FoundRows: 0, RowCount: 1}
 	utils.MustMatch(t, wantSession, session.Session, "session does not match for autocommit=1")
 
-	logStats = testQueryLog(t, logChan, "TestExecute", "UPDATE", "update main1 set id=1", 1)
+	logStats = testQueryLog(t, logChan, "TestExecute", "UPDATE", "update main1 set id = 1", 1)
 	assert.NotZero(t, logStats.CommitTime, "logstats: expected non-zero CommitTime")
 	assert.NotEqual(t, uint64(0), logStats.RowsAffected, "logstats: expected non-zero RowsAffected")
 
@@ -419,7 +419,7 @@ func TestExecutorAutocommit(t *testing.T) {
 		t.Errorf("Commit count: %d, want %d", got, want)
 	}
 
-	logStats = testQueryLog(t, logChan, "TestExecute", "UPDATE", "update main1 set id=1", 1)
+	logStats = testQueryLog(t, logChan, "TestExecute", "UPDATE", "update main1 set id = 1", 1)
 	if logStats.CommitTime != 0 {
 		t.Errorf("logstats: expected zero CommitTime")
 	}
@@ -1682,9 +1682,14 @@ func assertCacheContains(t *testing.T, e *Executor, vc *vcursorImpl, sql string)
 
 func getPlanCached(t *testing.T, e *Executor, vcursor *vcursorImpl, sql string, comments sqlparser.MarginComments, bindVars map[string]*querypb.BindVariable, skipQueryPlanCache bool) (*engine.Plan, *logstats.LogStats) {
 	logStats := logstats.NewLogStats(ctx, "Test", "", "", nil)
-	plan, _, err := e.getPlan(context.Background(), vcursor, sql, comments, bindVars, &SafeSession{
-		Session: &vtgatepb.Session{Options: &querypb.ExecuteOptions{SkipQueryPlanCache: skipQueryPlanCache}},
-	}, logStats)
+	vcursor.safeSession = &SafeSession{
+		Session: &vtgatepb.Session{
+			Options: &querypb.ExecuteOptions{SkipQueryPlanCache: skipQueryPlanCache}},
+	}
+
+	stmt, reservedVars, err := parseAndValidateQuery(sql)
+	require.NoError(t, err)
+	plan, err := e.getPlan(context.Background(), vcursor, sql, stmt, comments, bindVars, reservedVars /* normalize */, e.normalize, logStats)
 	require.NoError(t, err)
 
 	// Wait for cache to settle
@@ -1809,11 +1814,6 @@ func TestGetPlanNormalized(t *testing.T) {
 
 	plan4, _ := getPlanCached(t, r, unshardedvc, query1, makeComments(" /* comment 6 */"), map[string]*querypb.BindVariable{}, false)
 	assert.Equal(t, plan1, plan4)
-	assertCacheContains(t, r, emptyvc, normalized)
-	assertCacheContains(t, r, unshardedvc, normalized)
-
-	_, _, err := r.getPlan(context.Background(), emptyvc, "syntax", makeComments(""), map[string]*querypb.BindVariable{}, nil, nil)
-	assert.EqualError(t, err, "syntax error at position 7 near 'syntax'")
 	assertCacheContains(t, r, emptyvc, normalized)
 	assertCacheContains(t, r, unshardedvc, normalized)
 }
@@ -2268,11 +2268,11 @@ func TestExecutorSavepointInTx(t *testing.T) {
 	testQueryLog(t, logChan, "TestExecute", "SAVEPOINT", "savepoint a", 0)
 	testQueryLog(t, logChan, "TestExecute", "SAVEPOINT_ROLLBACK", "rollback to a", 0)
 	testQueryLog(t, logChan, "TestExecute", "RELEASE", "release savepoint a", 0)
-	testQueryLog(t, logChan, "TestExecute", "SELECT", "select id from user where id = 1", 1)
+	testQueryLog(t, logChan, "TestExecute", "SELECT", "select id from `user` where id = 1", 1)
 	testQueryLog(t, logChan, "TestExecute", "SAVEPOINT", "savepoint b", 1)
 	testQueryLog(t, logChan, "TestExecute", "SAVEPOINT_ROLLBACK", "rollback to b", 1)
 	testQueryLog(t, logChan, "TestExecute", "RELEASE", "release savepoint b", 1)
-	testQueryLog(t, logChan, "TestExecute", "SELECT", "select id from user where id = 3", 1)
+	testQueryLog(t, logChan, "TestExecute", "SELECT", "select id from `user` where id = 3", 1)
 	testQueryLog(t, logChan, "TestExecute", "ROLLBACK", "rollback", 2)
 }
 
@@ -2335,10 +2335,10 @@ func TestExecutorSavepointInTxWithReservedConn(t *testing.T) {
 	testQueryLog(t, logChan, "TestExecute", "SET", "set @@sql_mode = ''", 1)
 	testQueryLog(t, logChan, "TestExecute", "BEGIN", "begin", 0)
 	testQueryLog(t, logChan, "TestExecute", "SAVEPOINT", "savepoint a", 0)
-	testQueryLog(t, logChan, "TestExecute", "SELECT", "select id from user where id = 1", 1)
+	testQueryLog(t, logChan, "TestExecute", "SELECT", "select id from `user` where id = 1", 1)
 	testQueryLog(t, logChan, "TestExecute", "SAVEPOINT", "savepoint b", 1)
 	testQueryLog(t, logChan, "TestExecute", "RELEASE", "release savepoint a", 1)
-	testQueryLog(t, logChan, "TestExecute", "SELECT", "select id from user where id = 3", 1)
+	testQueryLog(t, logChan, "TestExecute", "SELECT", "select id from `user` where id = 3", 1)
 	testQueryLog(t, logChan, "TestExecute", "COMMIT", "commit", 2)
 }
 
@@ -2378,11 +2378,11 @@ func TestExecutorSavepointWithoutTx(t *testing.T) {
 	testQueryLog(t, logChan, "TestExecute", "SAVEPOINT", "savepoint a", 0)
 	testQueryLog(t, logChan, "TestExecute", "SAVEPOINT_ROLLBACK", "rollback to a", 0)
 	testQueryLog(t, logChan, "TestExecute", "RELEASE", "release savepoint a", 0)
-	testQueryLog(t, logChan, "TestExecute", "SELECT", "select id from user where id = 1", 1)
+	testQueryLog(t, logChan, "TestExecute", "SELECT", "select id from `user` where id = 1", 1)
 	testQueryLog(t, logChan, "TestExecute", "SAVEPOINT", "savepoint b", 0)
 	testQueryLog(t, logChan, "TestExecute", "SAVEPOINT_ROLLBACK", "rollback to b", 0)
 	testQueryLog(t, logChan, "TestExecute", "RELEASE", "release savepoint b", 0)
-	testQueryLog(t, logChan, "TestExecute", "SELECT", "select id from user where id = 3", 1)
+	testQueryLog(t, logChan, "TestExecute", "SELECT", "select id from `user` where id = 3", 1)
 }
 
 func TestExecutorCallProc(t *testing.T) {

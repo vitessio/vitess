@@ -23,7 +23,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -964,58 +963,58 @@ type iQueryOption interface {
 
 // getPlan computes the plan for the given query. If one is in
 // the cache, it reuses it.
-func (e *Executor) getPlan(ctx context.Context, vcursor *vcursorImpl, sql string, comments sqlparser.MarginComments, bindVars map[string]*querypb.BindVariable, qo iQueryOption, logStats *logstats.LogStats) (*engine.Plan, sqlparser.Statement, error) {
+func (e *Executor) getPlan(
+	ctx context.Context,
+	vcursor *vcursorImpl,
+	query string,
+	stmt sqlparser.Statement,
+	comments sqlparser.MarginComments,
+	bindVars map[string]*querypb.BindVariable,
+	reservedVars *sqlparser.ReservedVars,
+	allowParameterization bool,
+	logStats *logstats.LogStats,
+) (*engine.Plan, error) {
 	if e.VSchema() == nil {
-		return nil, nil, errors.New("vschema not initialized")
+		return nil, vterrors.VT13001("vschema not initialized")
 	}
 
-	stmt, reserved, err := sqlparser.Parse2(sql)
-	if err != nil {
-		return nil, nil, err
-	}
-	query := sql
-	statement := stmt
-	reservedVars := sqlparser.NewReservedVars("vtg", reserved)
-	bindVarNeeds := &sqlparser.BindVarNeeds{}
-	if !sqlparser.IgnoreMaxPayloadSizeDirective(statement) && !isValidPayloadSize(query) {
-		return nil, nil, vterrors.NewErrorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.NetPacketTooLarge, "query payload size above threshold")
-	}
-	ignoreMaxMemoryRows := sqlparser.IgnoreMaxMaxMemoryRowsDirective(stmt)
-	vcursor.SetIgnoreMaxMemoryRows(ignoreMaxMemoryRows)
-	consolidator := sqlparser.Consolidator(stmt)
-	vcursor.SetConsolidator(consolidator)
+	vcursor.SetIgnoreMaxMemoryRows(sqlparser.IgnoreMaxMaxMemoryRowsDirective(stmt))
+	vcursor.SetConsolidator(sqlparser.Consolidator(stmt))
 	vcursor.SetWorkloadName(sqlparser.GetWorkloadNameFromStatement(stmt))
 
 	setVarComment, err := prepareSetVarComment(vcursor, stmt)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	// Normalize if possible and retry.
-	if e.canNormalizeStatement(stmt, qo, setVarComment) {
-		parameterize := e.normalize // the public flag is called normalize
-		result, err := sqlparser.PrepareAST(
-			stmt,
-			reservedVars,
-			bindVars,
-			parameterize,
-			vcursor.keyspace,
-			qo.getSelectLimit(),
-			setVarComment,
-			vcursor.safeSession.SystemVariables,
-			vcursor,
-		)
-		if err != nil {
-			return nil, nil, err
-		}
-		statement = result.AST
-		bindVarNeeds = result.BindVarNeeds
-		query = sqlparser.String(statement)
+
+	// Normalize if possible
+	shouldNormalize := e.canNormalizeStatement(stmt, vcursor.safeSession, setVarComment)
+	parameterize := allowParameterization && shouldNormalize
+
+	rewriteASTResult, err := sqlparser.PrepareAST(
+		stmt,
+		reservedVars,
+		bindVars,
+		parameterize,
+		vcursor.keyspace,
+		vcursor.safeSession.getSelectLimit(),
+		setVarComment,
+		vcursor.safeSession.SystemVariables,
+		vcursor,
+	)
+	if err != nil {
+		return nil, err
+	}
+	stmt = rewriteASTResult.AST
+	bindVarNeeds := rewriteASTResult.BindVarNeeds
+	if shouldNormalize {
+		query = sqlparser.String(stmt)
 	}
 
 	logStats.SQL = comments.Leading + query + comments.Trailing
 	logStats.BindVariables = sqltypes.CopyBindVariables(bindVars)
 
-	return e.cacheAndBuildStatement(ctx, vcursor, query, statement, qo, logStats, stmt, reservedVars, bindVarNeeds)
+	return e.cacheAndBuildStatement(ctx, vcursor, query, stmt, reservedVars, bindVarNeeds, logStats)
 }
 
 func (e *Executor) hashPlan(ctx context.Context, vcursor *vcursorImpl, query string) string {
@@ -1031,18 +1030,27 @@ func (e *Executor) hashPlan(ctx context.Context, vcursor *vcursorImpl, query str
 	return hex.EncodeToString(planHash.Sum(nil))
 }
 
-func (e *Executor) cacheAndBuildStatement(ctx context.Context, vcursor *vcursorImpl, query string, statement sqlparser.Statement, qo iQueryOption, logStats *logstats.LogStats, stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, bindVarNeeds *sqlparser.BindVarNeeds) (*engine.Plan, sqlparser.Statement, error) {
+func (e *Executor) cacheAndBuildStatement(
+	ctx context.Context,
+	vcursor *vcursorImpl,
+	query string,
+	stmt sqlparser.Statement,
+	reservedVars *sqlparser.ReservedVars,
+	bindVarNeeds *sqlparser.BindVarNeeds,
+	logStats *logstats.LogStats,
+) (*engine.Plan, error) {
 	planKey := e.hashPlan(ctx, vcursor, query)
-	if sqlparser.CachePlan(statement) && qo.cachePlan() {
+	planCachable := sqlparser.CachePlan(stmt) && vcursor.safeSession.cachePlan()
+	if planCachable {
 		if plan, ok := e.plans.Get(planKey); ok {
 			logStats.CachedPlan = true
-			return plan.(*engine.Plan), stmt, nil
+			return plan.(*engine.Plan), nil
 		}
 	}
 
-	plan, err := planbuilder.BuildFromStmt(query, statement, reservedVars, vcursor, bindVarNeeds, enableOnlineDDL, enableDirectDDL)
+	plan, err := planbuilder.BuildFromStmt(query, stmt, reservedVars, vcursor, bindVarNeeds, enableOnlineDDL, enableDirectDDL)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	plan.Warnings = vcursor.warnings
@@ -1050,15 +1058,14 @@ func (e *Executor) cacheAndBuildStatement(ctx context.Context, vcursor *vcursorI
 
 	err = e.checkThatPlanIsValid(stmt, plan)
 	// Only cache the plan if it is valid (i.e. does not scatter)
-	if err == nil && qo.cachePlan() && sqlparser.CachePlan(statement) {
+	if err == nil && planCachable {
 		e.plans.Set(planKey, plan)
 	}
-	return plan, stmt, err
+	return plan, err
 }
 
 func (e *Executor) canNormalizeStatement(stmt sqlparser.Statement, qo iQueryOption, setVarComment string) bool {
-	return (e.normalize && sqlparser.CanNormalize(stmt)) ||
-		sqlparser.MustRewriteAST(stmt, qo.getSelectLimit() > 0) || setVarComment != ""
+	return sqlparser.CanNormalize(stmt) || setVarComment != ""
 }
 
 func prepareSetVarComment(vcursor *vcursorImpl, stmt sqlparser.Statement) (string, error) {
@@ -1255,7 +1262,13 @@ func (e *Executor) handlePrepare(ctx context.Context, safeSession *SafeSession, 
 	// V3 mode.
 	query, comments := sqlparser.SplitMarginComments(sql)
 	vcursor, _ := newVCursorImpl(safeSession, comments, e, logStats, e.vm, e.VSchema(), e.resolver.resolver, e.serv, e.warnShardedOnly, e.pv)
-	plan, _, err := e.getPlan(ctx, vcursor, query, comments, bindVars, safeSession, logStats)
+
+	stmt, reservedVars, err := parseAndValidateQuery(query)
+	if err != nil {
+		return nil, err
+	}
+
+	plan, err := e.getPlan(ctx, vcursor, sql, stmt, comments, bindVars, reservedVars /* parameterize */, false, logStats)
 	execStart := time.Now()
 	logStats.PlanTime = execStart.Sub(logStats.StartTime)
 
@@ -1283,6 +1296,17 @@ func (e *Executor) handlePrepare(ctx context.Context, safeSession *SafeSession, 
 	plan.AddStats(1, time.Since(logStats.StartTime), logStats.ShardQueries, qr.RowsAffected, uint64(len(qr.Rows)), errCount)
 
 	return qr.Fields, err
+}
+
+func parseAndValidateQuery(query string) (sqlparser.Statement, *sqlparser.ReservedVars, error) {
+	stmt, reserved, err := sqlparser.Parse2(query)
+	if err != nil {
+		return nil, nil, err
+	}
+	if !sqlparser.IgnoreMaxPayloadSizeDirective(stmt) && !isValidPayloadSize(query) {
+		return nil, nil, vterrors.NewErrorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.NetPacketTooLarge, "query payload size above threshold")
+	}
+	return stmt, sqlparser.NewReservedVars("vtg", reserved), nil
 }
 
 // ExecuteMultiShard implements the IExecutor interface
