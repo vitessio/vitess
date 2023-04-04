@@ -84,7 +84,7 @@ var (
 	ptOSCOverridePath       string
 	migrationCheckInterval  = 1 * time.Minute
 	retainOnlineDDLTables   = 24 * time.Hour
-	cutOverThreshold        = 10 * time.Second
+	defaultCutOverThreshold = 10 * time.Second
 	maxConcurrentOnlineDDLs = 256
 )
 
@@ -236,7 +236,7 @@ func getMigrationCutOverThreshold(onlineDDL *schema.OnlineDDL) time.Duration {
 	if threshold, _ := onlineDDL.StrategySetting().CutOverThreshold(); threshold != 0 {
 		return threshold
 	}
-	return cutOverThreshold
+	return defaultCutOverThreshold
 }
 
 // NewExecutor creates a new gh-ost executor.
