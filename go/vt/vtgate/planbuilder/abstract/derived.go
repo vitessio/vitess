@@ -17,7 +17,10 @@ limitations under the License.
 package abstract
 
 import (
+	"io"
+
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
@@ -54,9 +57,29 @@ func (d *Derived) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTabl
 	if err != nil {
 		return nil, err
 	}
+	if !canBePushedDownIntoDerived(newExpr) {
+		// if we have an aggregation, we don't want to push it inside
+		return &Filter{Source: d, Predicates: []sqlparser.Expr{expr}}, nil
+	}
 	newSrc, err := d.Inner.PushPredicate(newExpr, semTable)
 	d.Inner = newSrc
 	return d, err
+}
+
+func canBePushedDownIntoDerived(expr sqlparser.Expr) (canBePushed bool) {
+	canBePushed = true
+	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+		switch n := node.(type) {
+		case *sqlparser.FuncExpr:
+			if n.Name.EqualString("min") || n.Name.EqualString("max") {
+				break
+			}
+			canBePushed = false
+			return false, io.EOF
+		}
+		return true, nil
+	}, expr)
+	return
 }
 
 // UnsolvedPredicates implements the Operator interface

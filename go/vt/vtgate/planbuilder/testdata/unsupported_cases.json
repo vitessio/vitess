@@ -471,5 +471,11 @@
     "comment": "mix lock with other expr",
     "query": "select get_lock('xyz', 10), 1 from dual",
     "plan": "unsupported: lock function and other expression in same select query"
+  },
+  {
+    "comment": "aggregation, where and derived tables - we can't push aggregations that might need a second layer of aggregation",
+    "query": "SELECT foo FROM (SELECT foo, count(baz) as bazo FROM (SELECT foo, baz FROM user) f GROUP BY foo) tt WHERE bazo BETWEEN 100 AND 200",
+    "v3-plan": "unsupported: filtering on results of cross-shard subquery",
+    "gen4-plan": "expr cannot be translated, not supported: bazo between 100 and 200"
   }
 ]
