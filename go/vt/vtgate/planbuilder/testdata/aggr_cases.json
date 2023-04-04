@@ -5340,8 +5340,45 @@
           "Sharded": true
         },
         "FieldQuery": "select t1.portalId, t1.flowId from (select portalId, flowId, count(*) as count from user_extra where 1 != 1 group by user_id, flowId) as t1 where 1 != 1",
-        "Query": "select t1.portalId, t1.flowId from (select portalId, flowId, count(*) as count from user_extra where localDate > :v1 group by user_id, flowId having count(*) >= :v2 order by null) as t1",
+        "Query": "select t1.portalId, t1.flowId from (select portalId, flowId, count(*) as count from user_extra where localDate > :v1 group by user_id, flowId order by null) as t1 where count >= :v2",
         "Table": "user_extra"
+      }
+    }
+  },
+  {
+    "comment": "aggregation, where and derived tables - we can push extremums",
+    "query": "SELECT foo FROM (SELECT foo, max(baz) as bazo FROM (SELECT foo, baz FROM user) f GROUP BY foo) tt WHERE bazo BETWEEN 100 AND 200",
+    "v3-plan": "unsupported: filtering on results of cross-shard subquery",
+    "gen4-plan": {
+      "QueryType": "SELECT",
+      "Original": "SELECT foo FROM (SELECT foo, max(baz) as bazo FROM (SELECT foo, baz FROM user) f GROUP BY foo) tt WHERE bazo BETWEEN 100 AND 200",
+      "Instructions": {
+        "OperatorType": "SimpleProjection",
+        "Columns": [
+          0
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Aggregate",
+            "Variant": "Ordered",
+            "Aggregates": "max(1) AS bazo",
+            "GroupBy": "(0|2)",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select foo, max(baz) as bazo, weight_string(foo) from (select foo, baz from `user` where 1 != 1) as f where 1 != 1 group by foo, weight_string(foo)",
+                "OrderBy": "(0|2) ASC",
+                "Query": "select foo, max(baz) as bazo, weight_string(foo) from (select foo, baz from `user` having max(baz) between 100 and 200) as f group by foo, weight_string(foo) order by foo asc",
+                "Table": "`user`"
+              }
+            ]
+          }
+        ]
       }
     }
   }
