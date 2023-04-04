@@ -1307,7 +1307,17 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 						}
 					}
 				}
-				// write out any remaining rows
+
+				// no remaining rows, reached end of result set
+				if c.cs.pending == nil {
+					c.discardCursor()
+					if err = endFetch(); err != nil {
+						return err
+					}
+					return nil
+				}
+
+				// send remaining rows
 				break
 			}
 
@@ -1325,15 +1335,6 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 				}
 				numRows -= batchSize
 			}
-		}
-
-		// reached end of result set
-		if c.cs.pending == nil {
-			c.discardCursor()
-			if err = endFetch(); err != nil {
-				return err
-			}
-			return nil
 		}
 
 		// cap the number of rows
