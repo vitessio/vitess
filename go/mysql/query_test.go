@@ -845,27 +845,27 @@ func TestExecuteQueries(t *testing.T) {
 	}()
 
 	tests := []testExec{
-		//{
-		//	query: "empty result",
-		//	useCursor: 0,
-		//	expectedNumFields: 3,
-		//	expectedNumRows: 0,
-		//	maxRows: 100,
-		//},
-		//{
-		//	query: "select rows",
-		//	useCursor: 0,
-		//	expectedNumFields: 2,
-		//	expectedNumRows: 2,
-		//	maxRows: 100,
-		//},
-		//{
-		//	query: "large batch",
-		//	useCursor: 0,
-		//	expectedNumFields: 2,
-		//	expectedNumRows: 256,
-		//	maxRows: 1000,
-		//},
+		{
+			query: "empty result",
+			useCursor: 0,
+			expectedNumFields: 3,
+			expectedNumRows: 0,
+			maxRows: 100,
+		},
+		{
+			query: "select rows",
+			useCursor: 0,
+			expectedNumFields: 2,
+			expectedNumRows: 2,
+			maxRows: 100,
+		},
+		{
+			query: "large batch",
+			useCursor: 0,
+			expectedNumFields: 2,
+			expectedNumRows: 256,
+			maxRows: 1000,
+		},
 		{
 			query: "empty result",
 			useCursor: 1,
