@@ -17,7 +17,7 @@
 #       ensure images contain the right binaries.
 
 # Use a temporary layer for the build stage.
-ARG bootstrap_version=16
+ARG bootstrap_version=17
 ARG image="vitess/bootstrap:${bootstrap_version}-mysql57"
 
 FROM "${image}" AS builder
