@@ -190,13 +190,13 @@ func (tp *tablePlan) findPKs(dbClient binlogplayer.DBClient, targetSelect *sqlpa
 			}
 			if strings.EqualFold(pk, colname) {
 				tp.compareCols[i].isPK = true
-				// We need to set the correct collation to ensure proper ordering
-				// of the results when we later do the merge sort.
-				collationStr, err := getColumnCollation(dbClient, tp.table.Name, colname)
+				// We need to set the correct collation, if the column has one, to ensure
+				// proper ordering of the results when we later do the merge sort.
+				collationName, err := getColumnCollation(dbClient, tp.table.Name, colname)
 				if err != nil {
 					return err
 				}
-				tp.compareCols[i].collation = collations.Local().LookupByName(collationStr)
+				tp.compareCols[i].collation = collations.Local().LookupByName(collationName)
 				tp.comparePKs = append(tp.comparePKs, tp.compareCols[i])
 				tp.selectPks = append(tp.selectPks, i)
 				// We'll be comparing pks separately. So, remove them from compareCols.

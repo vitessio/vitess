@@ -31,6 +31,9 @@ package vreplication
 //
 // The internal table _vt_PURGE_4f9194b43b2011eb8a0104ed332e05c2_20221210194431 should be ignored by vreplication
 // The db_order_test table is used to ensure vreplication and vdiff work well with complex non-integer PKs, even across DB versions.
+// The db_order_test table needs to use a collation that exists in all versions for cross version tests as we use the collation for the PK based merge sort in VDiff.
+// The db_order_test is using a non-default collation for any version with utf8mb4 as 5.7 does NOT show the default collation in the SHOW CREATE TABLE output which means
+// in the cross version tests the source and target will be using a different collation.
 var (
 	// All standard user tables should have a primary key and at least one secondary key.
 	initialProductSchema = `
@@ -47,7 +50,7 @@ create table customer_seq2(id int, next_id bigint, cache bigint, primary key(id)
 create table ` + "`Lead`(`Lead-id`" + ` binary(16), name varbinary(16), date1 datetime not null default '0000-00-00 00:00:00', date2 datetime not null default '2021-00-01 00:00:00', primary key (` + "`Lead-id`" + `), key (date1));
 create table ` + "`Lead-1`(`Lead`" + ` binary(16), name varbinary(16), date1 datetime not null default '0000-00-00 00:00:00', date2 datetime not null default '2021-00-01 00:00:00', primary key (` + "`Lead`" + `), key (date2));
 create table _vt_PURGE_4f9194b43b2011eb8a0104ed332e05c2_20221210194431(id int, val varbinary(128), primary key(id), key(val));
-create table db_order_test (c_uuid varchar(64) not null default '', created_at datetime not null, dstuff varchar(128), dtstuff text, dbstuff blob, cstuff char(32), primary key (c_uuid,created_at), key (dstuff)) CHARSET=utf8mb4;
+create table db_order_test (c_uuid varchar(64) not null default '', created_at datetime not null, dstuff varchar(128), dtstuff text, dbstuff blob, cstuff char(32), primary key (c_uuid,created_at), key (dstuff)) CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 create table datze (id int, dt1 datetime not null default current_timestamp, dt2 datetime not null, ts1 timestamp default current_timestamp, primary key (id), key (dt1));
 `
 
