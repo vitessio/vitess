@@ -5,7 +5,11 @@
 - **[Major Changes](#major-changes)**
   - **[Breaking Changes](#breaking-changes)**
     - [Dedicated stats for VTGate Prepare operations](#dedicated-vtgate-prepare-stats)
+<<<<<<< HEAD
     - [VTAdmin web migrated from create-react-app to vite](#migrated-vtadmin)
+=======
+    - [Keyspace name validation in TopoServer](#keyspace-name-validation)
+>>>>>>> bf0af2b7994ce21585052ee4fa76b17039d2b89a
   - **[New command line flags and behavior](#new-flag)**
     - [Builtin backup: read buffering flags](#builtin-backup-read-buffering-flags)
   - **[New stats](#new-stats)**
@@ -57,6 +61,12 @@ Previously, VTAdmin web used the Create React App framework to test, build, and 
 - [Vitest](https://vitest.dev/) is used in place of Jest for testing
 - Our protobufjs generator now produces an es6 module instead of commonjs to better work with Vite's defaults
 - `public/index.html` has been moved to root directory in web/vtadmin
+
+#### <a id="keyspace-name-validation"> Keyspace name validation in TopoServer
+
+Prior to v17, it was possible to create a keyspace with invalid characters, which would then be inaccessible to various cluster management operations.
+
+Keyspace names may no longer contain the forward slash ("/") character, and TopoServer's `GetKeyspace` and `CreateKeyspace` methods return an error if given such a name.
 
 ### <a id="new-flag"/> New command line flags and behavior
 

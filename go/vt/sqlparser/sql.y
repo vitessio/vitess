@@ -47,7 +47,7 @@ func skipToEnd(yylex yyLexer) {
   yylex.(*Tokenizer).SkipToEnd = true
 }
 
-func bindVariable(yylex yyLexer, bvar string) {
+func markBindVariable(yylex yyLexer, bvar string) {
   yylex.(*Tokenizer).BindVars[bvar] = struct{}{}
 }
 
@@ -346,9 +346,9 @@ func bindVariable(yylex yyLexer, bvar string) {
 %token <str> NAMES GLOBAL SESSION ISOLATION LEVEL READ WRITE ONLY REPEATABLE COMMITTED UNCOMMITTED SERIALIZABLE
 
 // Functions
-%token <str> CURRENT_TIMESTAMP DATABASE CURRENT_DATE NOW
-%token <str> CURRENT_TIME LOCALTIME LOCALTIMESTAMP CURRENT_USER
-%token <str> UTC_DATE UTC_TIME UTC_TIMESTAMP
+%token <str> CURRENT_TIMESTAMP DATABASE CURRENT_DATE CURDATE NOW
+%token <str> CURTIME CURRENT_TIME LOCALTIME LOCALTIMESTAMP CURRENT_USER
+%token <str> UTC_DATE UTC_TIME UTC_TIMESTAMP SYSDATE
 %token <str> DAY DAY_HOUR DAY_MICROSECOND DAY_MINUTE DAY_SECOND HOUR HOUR_MICROSECOND HOUR_MINUTE HOUR_SECOND MICROSECOND MINUTE MINUTE_MICROSECOND MINUTE_SECOND MONTH QUARTER SECOND SECOND_MICROSECOND YEAR_MONTH WEEK
 %token <str> REPLACE
 %token <str> CONVERT CAST
@@ -546,7 +546,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <columnType> column_type
 %type <columnType> int_type decimal_type numeric_type time_type char_type spatial_type
 %type <literal> length_opt partition_comment partition_data_directory partition_index_directory
-%type <expr> func_datetime_precision
+%type <integer> func_datetime_precision
 %type <columnCharset> charset_opt
 %type <str> collate_opt
 %type <boolean> binary_opt
@@ -1645,6 +1645,10 @@ CURRENT_TIMESTAMP func_datetime_precision
   {
     $$ = &CurTimeFuncExpr{Name:NewIdentifierCI("now"), Fsp: $2}
   }
+| SYSDATE func_datetime_precision
+  {
+    $$ = &CurTimeFuncExpr{Name:NewIdentifierCI("sysdate"), Fsp: $2}
+  }
 
 signed_literal_or_null:
 signed_literal
@@ -1698,8 +1702,7 @@ text_literal
   }
 | VALUE_ARG
   {
-    $$ = NewArgument($1[1:])
-    bindVariable(yylex, $1[1:])
+    $$ = parseBindVariable(yylex, $1[1:])
   }
 | underscore_charsets BIT_LITERAL %prec UNARY
   {
@@ -1723,8 +1726,8 @@ text_literal
   }
 | underscore_charsets VALUE_ARG %prec UNARY
   {
-    bindVariable(yylex, $2[1:])
-    $$ = &IntroducerExpr{CharacterSet: $1, Expr: NewArgument($2[1:])}
+    arg := parseBindVariable(yylex, $2[1:])
+    $$ = &IntroducerExpr{CharacterSet: $1, Expr: arg}
   }
 | DATE STRING
   {
@@ -1948,8 +1951,7 @@ text_literal_or_arg:
   }
 | VALUE_ARG
   {
-    $$ = NewArgument($1[1:])
-    bindVariable(yylex, $1[1:])
+    $$ = parseBindVariable(yylex, $1[1:])
   }
 
 keys:
@@ -2864,7 +2866,11 @@ insert_method_options:
 | LAST
 
 table_opt_value:
-  reserved_sql_id
+  table_id '.' reserved_table_id
+  {
+    $$ = String(TableName{Qualifier: $1, Name: $3})
+  }
+| reserved_sql_id
   {
     $$ = $1.String()
   }
@@ -5800,7 +5806,7 @@ col_tuple:
 | LIST_ARG
   {
     $$ = ListArg($1[2:])
-    bindVariable(yylex, $1[2:])
+    markBindVariable(yylex, $1[2:])
   }
 
 subquery:
@@ -5899,9 +5905,18 @@ UTC_DATE func_paren_opt
   {
     $$ = &FuncExpr{Name:NewIdentifierCI("current_date")}
   }
+| CURDATE func_paren_opt
+  {
+    $$ = &FuncExpr{Name:NewIdentifierCI("curdate")}
+  }
 | UTC_TIME func_datetime_precision
   {
     $$ = &CurTimeFuncExpr{Name:NewIdentifierCI("utc_time"), Fsp: $2}
+  }
+  // curtime
+| CURTIME func_datetime_precision
+  {
+    $$ = &CurTimeFuncExpr{Name:NewIdentifierCI("curtime"), Fsp: $2}
   }
   // curtime
 | CURRENT_TIME func_datetime_precision
@@ -6356,8 +6371,7 @@ null_int_variable_arg:
   }
 | VALUE_ARG
   {
-    $$ = NewArgument($1[1:])
-    bindVariable(yylex, $1[1:])
+    $$ = parseBindVariable(yylex, $1[1:])
   }
 
 default_with_comma_opt:
@@ -6594,20 +6608,15 @@ func_paren_opt:
 func_datetime_precision:
   /* empty */
   {
-  	$$ = nil
+  	$$ = 0
   }
 | openb closeb
   {
-    $$ = nil
+    $$ = 0
   }
 | openb INTEGRAL closeb
   {
-  	$$ = NewIntLiteral($2)
-  }
-| openb VALUE_ARG closeb
-  {
-    $$ = NewArgument($2[1:])
-    bindVariable(yylex, $2[1:])
+      $$ = convertStringToInt($2)
   }
 
 /*
@@ -6847,8 +6856,7 @@ num_val:
   }
 | VALUE_ARG VALUES
   {
-    $$ = NewArgument($1[1:])
-    bindVariable(yylex, $1[1:])
+    $$ = parseBindVariable(yylex, $1[1:])
   }
 
 group_by_opt:
@@ -7544,6 +7552,7 @@ reserved_keyword:
 | CURRENT_DATE
 | CURRENT_TIME
 | CURRENT_TIMESTAMP
+| CURTIME
 | CURRENT_USER
 | SUBSTR
 | SUBSTRING
@@ -7645,6 +7654,7 @@ reserved_keyword:
 | SPATIAL
 | STORED
 | STRAIGHT_JOIN
+| SYSDATE
 | SYSTEM
 | TABLE
 | THEN

@@ -368,7 +368,7 @@ func IsColName(node Expr) bool {
 // NULL is not considered to be a value.
 func IsValue(node Expr) bool {
 	switch v := node.(type) {
-	case Argument:
+	case *Argument:
 		return true
 	case *Literal:
 		switch v.Type {

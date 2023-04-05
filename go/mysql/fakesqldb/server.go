@@ -450,7 +450,7 @@ func (db *DB) comQueryOrdered(query string) (*sqltypes.Result, error) {
 		if db.neverFail.Load() {
 			return &sqltypes.Result{}, nil
 		}
-		db.t.Errorf("%v: got unexpected out of bound fetch: %v >= %v", db.name, index, len(db.expectedExecuteFetch))
+		db.t.Errorf("%v: got unexpected out of bound fetch: %v >= %v (%s)", db.name, index, len(db.expectedExecuteFetch), query)
 		return nil, errors.New("unexpected out of bound fetch")
 	}
 

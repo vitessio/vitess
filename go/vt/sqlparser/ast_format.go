@@ -1311,8 +1311,14 @@ func (node *Literal) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node.
-func (node Argument) Format(buf *TrackedBuffer) {
-	buf.WriteArg(":", string(node))
+func (node *Argument) Format(buf *TrackedBuffer) {
+	buf.WriteArg(":", node.Name)
+	if node.Type >= 0 {
+		// For bind variables that are statically typed, emit their type as an adjacent comment.
+		// This comment will be ignored by older versions of Vitess (and by MySQL) but will provide
+		// type safety when using the query as a cache key.
+		buf.astPrintf(node, " /* %s */", node.Type.String())
+	}
 }
 
 // Format formats the node.
@@ -1480,8 +1486,8 @@ func (node *WeightStringFuncExpr) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *CurTimeFuncExpr) Format(buf *TrackedBuffer) {
-	if node.Fsp != nil {
-		buf.astPrintf(node, "%#s(%v)", node.Name.String(), node.Fsp)
+	if node.Fsp > 0 {
+		buf.astPrintf(node, "%#s(%d)", node.Name.String(), node.Fsp)
 	} else {
 		buf.astPrintf(node, "%#s()", node.Name.String())
 	}

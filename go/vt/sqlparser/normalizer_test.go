@@ -44,7 +44,7 @@ func TestNormalize(t *testing.T) {
 	}{{
 		// str val
 		in:      "select * from t where foobar = 'aa'",
-		outstmt: "select * from t where foobar = :foobar",
+		outstmt: "select * from t where foobar = :foobar /* VARCHAR */",
 		outbv: map[string]*querypb.BindVariable{
 			"foobar": sqltypes.StringBindVariable("aa"),
 		},
@@ -61,28 +61,28 @@ func TestNormalize(t *testing.T) {
 	}, {
 		// str val in select
 		in:      "select 'aa' from t",
-		outstmt: "select :bv1 from t",
+		outstmt: "select :bv1 /* VARCHAR */ from t",
 		outbv: map[string]*querypb.BindVariable{
 			"bv1": sqltypes.StringBindVariable("aa"),
 		},
 	}, {
 		// int val
 		in:      "select * from t where foobar = 1",
-		outstmt: "select * from t where foobar = :foobar",
+		outstmt: "select * from t where foobar = :foobar /* INT64 */",
 		outbv: map[string]*querypb.BindVariable{
 			"foobar": sqltypes.Int64BindVariable(1),
 		},
 	}, {
 		// float val
 		in:      "select * from t where foobar = 1.2",
-		outstmt: "select * from t where foobar = :foobar",
+		outstmt: "select * from t where foobar = :foobar /* DECIMAL */",
 		outbv: map[string]*querypb.BindVariable{
 			"foobar": sqltypes.DecimalBindVariable(1.2),
 		},
 	}, {
 		// multiple vals
 		in:      "select * from t where foo = 1.2 and bar = 2",
-		outstmt: "select * from t where foo = :foo and bar = :bar",
+		outstmt: "select * from t where foo = :foo /* DECIMAL */ and bar = :bar /* INT64 */",
 		outbv: map[string]*querypb.BindVariable{
 			"foo": sqltypes.DecimalBindVariable(1.2),
 			"bar": sqltypes.Int64BindVariable(2),
@@ -90,21 +90,21 @@ func TestNormalize(t *testing.T) {
 	}, {
 		// bv collision
 		in:      "select * from t where foo = :bar and bar = 12",
-		outstmt: "select * from t where foo = :bar and bar = :bar1",
+		outstmt: "select * from t where foo = :bar and bar = :bar1 /* INT64 */",
 		outbv: map[string]*querypb.BindVariable{
 			"bar1": sqltypes.Int64BindVariable(12),
 		},
 	}, {
 		// val reuse
 		in:      "select * from t where foo = 1 and bar = 1",
-		outstmt: "select * from t where foo = :foo and bar = :foo",
+		outstmt: "select * from t where foo = :foo /* INT64 */ and bar = :foo /* INT64 */",
 		outbv: map[string]*querypb.BindVariable{
 			"foo": sqltypes.Int64BindVariable(1),
 		},
 	}, {
 		// ints and strings are different
 		in:      "select * from t where foo = 1 and bar = '1'",
-		outstmt: "select * from t where foo = :foo and bar = :bar",
+		outstmt: "select * from t where foo = :foo /* INT64 */ and bar = :bar /* VARCHAR */",
 		outbv: map[string]*querypb.BindVariable{
 			"foo": sqltypes.Int64BindVariable(1),
 			"bar": sqltypes.StringBindVariable("1"),
@@ -112,7 +112,7 @@ func TestNormalize(t *testing.T) {
 	}, {
 		// val should not be reused for non-select statements
 		in:      "insert into a values(1, 1)",
-		outstmt: "insert into a values (:bv1, :bv2)",
+		outstmt: "insert into a values (:bv1 /* INT64 */, :bv2 /* INT64 */)",
 		outbv: map[string]*querypb.BindVariable{
 			"bv1": sqltypes.Int64BindVariable(1),
 			"bv2": sqltypes.Int64BindVariable(1),
@@ -120,14 +120,14 @@ func TestNormalize(t *testing.T) {
 	}, {
 		// val should be reused only in subqueries of DMLs
 		in:      "update a set v1=(select 5 from t), v2=5, v3=(select 5 from t), v4=5",
-		outstmt: "update a set v1 = (select :bv1 from t), v2 = :bv1, v3 = (select :bv1 from t), v4 = :bv1",
+		outstmt: "update a set v1 = (select :bv1 /* INT64 */ from t), v2 = :bv1 /* INT64 */, v3 = (select :bv1 /* INT64 */ from t), v4 = :bv1 /* INT64 */",
 		outbv: map[string]*querypb.BindVariable{
 			"bv1": sqltypes.Int64BindVariable(5),
 		},
 	}, {
 		// list vars should work for DMLs also
 		in:      "update a set v1=5 where v2 in (1, 4, 5)",
-		outstmt: "update a set v1 = :v1 where v2 in ::bv1",
+		outstmt: "update a set v1 = :v1 /* INT64 */ where v2 in ::bv1",
 		outbv: map[string]*querypb.BindVariable{
 			"v1":  sqltypes.Int64BindVariable(5),
 			"bv1": sqltypes.TestBindVariable([]any{1, 4, 5}),
@@ -135,49 +135,49 @@ func TestNormalize(t *testing.T) {
 	}, {
 		// Hex number values should work for selects
 		in:      "select * from t where foo = 0x1234",
-		outstmt: "select * from t where foo = :foo",
+		outstmt: "select * from t where foo = :foo /* HEXNUM */",
 		outbv: map[string]*querypb.BindVariable{
 			"foo": sqltypes.HexNumBindVariable([]byte("0x1234")),
 		},
 	}, {
 		// Hex encoded string values should work for selects
 		in:      "select * from t where foo = x'7b7d'",
-		outstmt: "select * from t where foo = :foo",
+		outstmt: "select * from t where foo = :foo /* HEXVAL */",
 		outbv: map[string]*querypb.BindVariable{
 			"foo": sqltypes.HexValBindVariable([]byte("x'7b7d'")),
 		},
 	}, {
 		// Ensure that hex notation bind vars work with collation based conversions
 		in:      "select convert(x'7b7d' using utf8mb4) from dual",
-		outstmt: "select convert(:bv1 using utf8mb4) from dual",
+		outstmt: "select convert(:bv1 /* HEXVAL */ using utf8mb4) from dual",
 		outbv: map[string]*querypb.BindVariable{
 			"bv1": sqltypes.HexValBindVariable([]byte("x'7b7d'")),
 		},
 	}, {
 		// Hex number values should work for DMLs
 		in:      "update a set foo = 0x12",
-		outstmt: "update a set foo = :foo",
+		outstmt: "update a set foo = :foo /* HEXNUM */",
 		outbv: map[string]*querypb.BindVariable{
 			"foo": sqltypes.HexNumBindVariable([]byte("0x12")),
 		},
 	}, {
 		// Bin values work fine
 		in:      "select * from t where foo = b'11'",
-		outstmt: "select * from t where foo = :foo",
+		outstmt: "select * from t where foo = :foo /* HEXNUM */",
 		outbv: map[string]*querypb.BindVariable{
 			"foo": sqltypes.HexNumBindVariable([]byte("0x3")),
 		},
 	}, {
 		// Large bin values work fine
 		in:      "select * from t where foo = b'11101010100101010010101010101010101010101000100100100100100101001101010101010101000001'",
-		outstmt: "select * from t where foo = :foo",
+		outstmt: "select * from t where foo = :foo /* HEXNUM */",
 		outbv: map[string]*querypb.BindVariable{
 			"foo": sqltypes.HexNumBindVariable([]byte("0x3aa54aaaaaa24925355541")),
 		},
 	}, {
 		// Bin value does not convert for DMLs
 		in:      "update a set v1 = b'11'",
-		outstmt: "update a set v1 = :v1",
+		outstmt: "update a set v1 = :v1 /* HEXNUM */",
 		outbv: map[string]*querypb.BindVariable{
 			"v1": sqltypes.HexNumBindVariable([]byte("0x3")),
 		},
@@ -194,7 +194,7 @@ func TestNormalize(t *testing.T) {
 	}, {
 		// ORDER BY with literal inside complex expression
 		in:      "select a, b from t order by field(a,1,2,3) asc",
-		outstmt: "select a, b from t order by field(a, :bv1, :bv2, :bv3) asc",
+		outstmt: "select a, b from t order by field(a, :bv1 /* INT64 */, :bv2 /* INT64 */, :bv3 /* INT64 */) asc",
 		outbv: map[string]*querypb.BindVariable{
 			"bv1": sqltypes.Int64BindVariable(1),
 			"bv2": sqltypes.Int64BindVariable(2),
@@ -208,14 +208,14 @@ func TestNormalize(t *testing.T) {
 	}, {
 		// Values up to len 256 will reuse.
 		in:      fmt.Sprintf("select * from t where foo = '%256s' and bar = '%256s'", "a", "a"),
-		outstmt: "select * from t where foo = :foo and bar = :foo",
+		outstmt: "select * from t where foo = :foo /* VARCHAR */ and bar = :foo /* VARCHAR */",
 		outbv: map[string]*querypb.BindVariable{
 			"foo": sqltypes.StringBindVariable(fmt.Sprintf("%256s", "a")),
 		},
 	}, {
 		// Values greater than len 256 will not reuse.
 		in:      fmt.Sprintf("select * from t where foo = '%257s' and bar = '%257s'", "b", "b"),
-		outstmt: "select * from t where foo = :foo and bar = :bar",
+		outstmt: "select * from t where foo = :foo /* VARCHAR */ and bar = :bar /* VARCHAR */",
 		outbv: map[string]*querypb.BindVariable{
 			"foo": sqltypes.StringBindVariable(fmt.Sprintf("%257s", "b")),
 			"bar": sqltypes.StringBindVariable(fmt.Sprintf("%257s", "b")),
@@ -238,7 +238,7 @@ func TestNormalize(t *testing.T) {
 	}, {
 		// IN clause with non-val values
 		in:      "select * from t where v1 in (1, a)",
-		outstmt: "select * from t where v1 in (:bv1, a)",
+		outstmt: "select * from t where v1 in (:bv1 /* INT64 */, a)",
 		outbv: map[string]*querypb.BindVariable{
 			"bv1": sqltypes.Int64BindVariable(1),
 		},
@@ -266,14 +266,14 @@ func TestNormalize(t *testing.T) {
 	}, {
 		// Do not normalize cast/convert types
 		in:      `select CAST("test" AS CHAR(60))`,
-		outstmt: `select cast(:bv1 as CHAR(60)) from dual`,
+		outstmt: `select cast(:bv1 /* VARCHAR */ as CHAR(60)) from dual`,
 		outbv: map[string]*querypb.BindVariable{
 			"bv1": sqltypes.StringBindVariable("test"),
 		},
 	}, {
 		// insert syntax
 		in:      "insert into a (v1, v2, v3) values (1, '2', 3)",
-		outstmt: "insert into a(v1, v2, v3) values (:bv1, :bv2, :bv3)",
+		outstmt: "insert into a(v1, v2, v3) values (:bv1 /* INT64 */, :bv2 /* VARCHAR */, :bv3 /* INT64 */)",
 		outbv: map[string]*querypb.BindVariable{
 			"bv1": sqltypes.Int64BindVariable(1),
 			"bv2": sqltypes.StringBindVariable("2"),
@@ -282,7 +282,7 @@ func TestNormalize(t *testing.T) {
 	}, {
 		// BitVal should also be normalized
 		in:      `select b'1', 0b01, b'1010', 0b1111111`,
-		outstmt: `select :bv1, :bv2, :bv3, :bv4 from dual`,
+		outstmt: `select :bv1 /* HEXNUM */, :bv2 /* HEXNUM */, :bv3 /* HEXNUM */, :bv4 /* HEXNUM */ from dual`,
 		outbv: map[string]*querypb.BindVariable{
 			"bv1": sqltypes.HexNumBindVariable([]byte("0x1")),
 			"bv2": sqltypes.HexNumBindVariable([]byte("0x1")),
@@ -292,28 +292,28 @@ func TestNormalize(t *testing.T) {
 	}, {
 		// DateVal should also be normalized
 		in:      `select date'2022-08-06'`,
-		outstmt: `select :bv1 from dual`,
+		outstmt: `select :bv1 /* DATE */ from dual`,
 		outbv: map[string]*querypb.BindVariable{
 			"bv1": sqltypes.ValueBindVariable(sqltypes.MakeTrusted(sqltypes.Date, []byte("2022-08-06"))),
 		},
 	}, {
 		// TimeVal should also be normalized
 		in:      `select time'17:05:12'`,
-		outstmt: `select :bv1 from dual`,
+		outstmt: `select :bv1 /* TIME */ from dual`,
 		outbv: map[string]*querypb.BindVariable{
 			"bv1": sqltypes.ValueBindVariable(sqltypes.MakeTrusted(sqltypes.Time, []byte("17:05:12"))),
 		},
 	}, {
 		// TimestampVal should also be normalized
 		in:      `select timestamp'2022-08-06 17:05:12'`,
-		outstmt: `select :bv1 from dual`,
+		outstmt: `select :bv1 /* DATETIME */ from dual`,
 		outbv: map[string]*querypb.BindVariable{
 			"bv1": sqltypes.ValueBindVariable(sqltypes.MakeTrusted(sqltypes.Datetime, []byte("2022-08-06 17:05:12"))),
 		},
 	}, {
 		// TimestampVal should also be normalized
 		in:      `explain select comms_by_companies.* from comms_by_companies where comms_by_companies.id = 'rjve634shXzaavKHbAH16ql6OrxJ' limit 1,1`,
-		outstmt: `explain select comms_by_companies.* from comms_by_companies where comms_by_companies.id = :comms_by_companies_id limit :bv1, :bv2`,
+		outstmt: `explain select comms_by_companies.* from comms_by_companies where comms_by_companies.id = :comms_by_companies_id /* VARCHAR */ limit :bv1 /* INT64 */, :bv2 /* INT64 */`,
 		outbv: map[string]*querypb.BindVariable{
 			"bv1":                   sqltypes.Int64BindVariable(1),
 			"bv2":                   sqltypes.Int64BindVariable(1),
@@ -322,14 +322,14 @@ func TestNormalize(t *testing.T) {
 	}, {
 		// Int leading with zero should also be normalized
 		in:      `select * from t where zipcode = 01001900`,
-		outstmt: `select * from t where zipcode = :zipcode`,
+		outstmt: `select * from t where zipcode = :zipcode /* INT64 */`,
 		outbv: map[string]*querypb.BindVariable{
 			"zipcode": sqltypes.ValueBindVariable(sqltypes.MakeTrusted(sqltypes.Int64, []byte("01001900"))),
 		},
 	}, {
 		// literals in limit and offset should not reuse bindvars
 		in:      `select * from t where id = 10 limit 10 offset 10`,
-		outstmt: `select * from t where id = :id limit :bv1, :bv2`,
+		outstmt: `select * from t where id = :id /* INT64 */ limit :bv1 /* INT64 */, :bv2 /* INT64 */`,
 		outbv: map[string]*querypb.BindVariable{
 			"bv1": sqltypes.Int64BindVariable(10),
 			"bv2": sqltypes.Int64BindVariable(10),

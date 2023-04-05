@@ -17,6 +17,7 @@ limitations under the License.
 package integration
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 	"strings"
@@ -25,9 +26,13 @@ import (
 
 	"github.com/spf13/pflag"
 
+	"vitess.io/vitess/go/vt/callerid"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/evalengine/testcases"
@@ -51,14 +56,6 @@ func registerFlags(fs *pflag.FlagSet) {
 	fs.BoolVar(&debugCheckCollations, "check-collations", debugCheckCollations, "check the returned collations for all queries")
 }
 
-func init() {
-	// We require MySQL 8.0 collations for the comparisons in the tests
-	mySQLVersion := "8.0.0"
-	servenv.SetMySQLServerVersionForTest(mySQLVersion)
-	collationEnv = collations.NewEnvironment(mySQLVersion)
-	servenv.OnParse(registerFlags)
-}
-
 // normalizeValue returns a normalized form of this value that matches the output
 // of the evaluation engine. This is used to mask quirks in the way MySQL sends SQL
 // values over the wire, to allow comparing our implementation against MySQL's in
@@ -77,12 +74,12 @@ func normalizeValue(v sqltypes.Value, coll collations.ID) sqltypes.Value {
 		if err != nil {
 			panic(err)
 		}
-		return sqltypes.MakeTrusted(typ, evalengine.FormatFloat(typ, f))
+		return sqltypes.MakeTrusted(typ, mysql.FormatFloat(typ, f))
 	}
 	return v
 }
 
-func compareRemoteExprEnv(t *testing.T, env *evalengine.ExpressionEnv, conn *mysql.Conn, expr string) {
+func compareRemoteExprEnv(t *testing.T, env *evalengine.ExpressionEnv, conn *mysql.Conn, expr string, fields []*querypb.Field) {
 	t.Helper()
 
 	localQuery := "SELECT " + expr
@@ -90,14 +87,14 @@ func compareRemoteExprEnv(t *testing.T, env *evalengine.ExpressionEnv, conn *mys
 	if debugCheckCollations {
 		remoteQuery = fmt.Sprintf("SELECT %s, COLLATION(%s)", expr, expr)
 	}
-	if len(env.Fields) > 0 {
+	if len(fields) > 0 {
 		if _, err := conn.ExecuteFetch(`DROP TEMPORARY TABLE IF EXISTS vteval_test`, -1, false); err != nil {
 			t.Fatalf("failed to drop temporary table: %v", err)
 		}
 
 		var schema strings.Builder
 		schema.WriteString(`CREATE TEMPORARY TABLE vteval_test(autopk int primary key auto_increment, `)
-		for i, field := range env.Fields {
+		for i, field := range fields {
 			if i > 0 {
 				schema.WriteString(", ")
 			}
@@ -112,7 +109,7 @@ func compareRemoteExprEnv(t *testing.T, env *evalengine.ExpressionEnv, conn *mys
 		if len(env.Row) > 0 {
 			var rowsql strings.Builder
 			rowsql.WriteString(`INSERT INTO vteval_test(`)
-			for i, field := range env.Fields {
+			for i, field := range fields {
 				if i > 0 {
 					rowsql.WriteString(", ")
 				}
@@ -136,7 +133,7 @@ func compareRemoteExprEnv(t *testing.T, env *evalengine.ExpressionEnv, conn *mys
 		remoteQuery = remoteQuery + " FROM vteval_test"
 	}
 
-	local, localType, localErr := evaluateLocalEvalengine(env, localQuery)
+	local, localType, localErr := evaluateLocalEvalengine(env, localQuery, fields)
 	remote, remoteErr := conn.ExecuteFetch(remoteQuery, 1, true)
 
 	var localVal, remoteVal sqltypes.Value
@@ -188,17 +185,36 @@ func compareRemoteExprEnv(t *testing.T, env *evalengine.ExpressionEnv, conn *mys
 	}
 }
 
+type vcursor struct {
+}
+
+func (vc *vcursor) GetKeyspace() string {
+	return "vttest"
+}
+
+func (vc *vcursor) TimeZone() *time.Location {
+	return time.Local
+}
+
 func TestMySQL(t *testing.T) {
 	var conn = mysqlconn(t)
 	defer conn.Close()
 
+	// We require MySQL 8.0 collations for the comparisons in the tests
+
+	servenv.SetMySQLServerVersionForTest(conn.ServerVersion)
+	collationEnv = collations.NewEnvironment(conn.ServerVersion)
+	servenv.OnParse(registerFlags)
+
 	for _, tc := range testcases.Cases {
 		t.Run(tc.Name(), func(t *testing.T) {
-			env := evalengine.EmptyExpressionEnv()
-			env.Fields = tc.Schema
+			ctx := callerid.NewContext(context.Background(), &vtrpc.CallerID{Principal: "testuser"}, &querypb.VTGateCallerID{
+				Username: "vt_dba",
+			})
+			env := evalengine.NewExpressionEnv(ctx, nil, &vcursor{})
 			tc.Run(func(query string, row []sqltypes.Value) {
 				env.Row = row
-				compareRemoteExprEnv(t, env, conn, query)
+				compareRemoteExprEnv(t, env, conn, query, tc.Schema)
 			})
 		})
 	}

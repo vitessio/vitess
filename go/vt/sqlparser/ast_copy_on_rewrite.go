@@ -54,8 +54,8 @@ func (c *cow) copyOnRewriteSQLNode(n SQLNode, parent SQLNode) (out SQLNode, chan
 		return c.copyOnRewriteRefOfAlterVschema(n, parent)
 	case *AndExpr:
 		return c.copyOnRewriteRefOfAndExpr(n, parent)
-	case Argument:
-		return c.copyOnRewriteArgument(n, parent)
+	case *Argument:
+		return c.copyOnRewriteRefOfArgument(n, parent)
 	case *ArgumentLessWindowExpr:
 		return c.copyOnRewriteRefOfArgumentLessWindowExpr(n, parent)
 	case *AutoIncSpec:
@@ -913,6 +913,18 @@ func (c *cow) copyOnRewriteRefOfAndExpr(n *AndExpr, parent SQLNode) (out SQLNode
 	}
 	return
 }
+func (c *cow) copyOnRewriteRefOfArgument(n *Argument, parent SQLNode) (out SQLNode, changed bool) {
+	if n == nil || c.cursor.stop {
+		return n, false
+	}
+	out = n
+	if c.pre == nil || c.pre(n, parent) {
+	}
+	if c.post != nil {
+		out, changed = c.postVisit(out, parent, changed)
+	}
+	return
+}
 func (c *cow) copyOnRewriteRefOfArgumentLessWindowExpr(n *ArgumentLessWindowExpr, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -1671,11 +1683,9 @@ func (c *cow) copyOnRewriteRefOfCurTimeFuncExpr(n *CurTimeFuncExpr, parent SQLNo
 	out = n
 	if c.pre == nil || c.pre(n, parent) {
 		_Name, changedName := c.copyOnRewriteIdentifierCI(n.Name, n)
-		_Fsp, changedFsp := c.copyOnRewriteExpr(n.Fsp, n)
-		if changedName || changedFsp {
+		if changedName {
 			res := *n
 			res.Name, _ = _Name.(IdentifierCI)
-			res.Fsp, _ = _Fsp.(Expr)
 			out = &res
 			if c.cloned != nil {
 				c.cloned(n, out)
@@ -3872,6 +3882,16 @@ func (c *cow) copyOnRewriteRefOfOffset(n *Offset, parent SQLNode) (out SQLNode, 
 	}
 	out = n
 	if c.pre == nil || c.pre(n, parent) {
+		_Original, changedOriginal := c.copyOnRewriteExpr(n.Original, n)
+		if changedOriginal {
+			res := *n
+			res.Original, _ = _Original.(Expr)
+			out = &res
+			if c.cloned != nil {
+				c.cloned(n, out)
+			}
+			changed = true
+		}
 	}
 	if c.post != nil {
 		out, changed = c.postVisit(out, parent, changed)
@@ -6563,8 +6583,8 @@ func (c *cow) copyOnRewriteExpr(n Expr, parent SQLNode) (out SQLNode, changed bo
 	switch n := n.(type) {
 	case *AndExpr:
 		return c.copyOnRewriteRefOfAndExpr(n, parent)
-	case Argument:
-		return c.copyOnRewriteArgument(n, parent)
+	case *Argument:
+		return c.copyOnRewriteRefOfArgument(n, parent)
 	case *ArgumentLessWindowExpr:
 		return c.copyOnRewriteRefOfArgumentLessWindowExpr(n, parent)
 	case *Avg:
@@ -6971,20 +6991,6 @@ func (c *cow) copyOnRewriteTableExpr(n TableExpr, parent SQLNode) (out SQLNode, 
 	}
 }
 func (c *cow) copyOnRewriteAlgorithmValue(n AlgorithmValue, parent SQLNode) (out SQLNode, changed bool) {
-	if c.cursor.stop {
-		return n, false
-	}
-	if c.pre != nil {
-		c.pre(n, parent)
-	}
-	if c.post != nil {
-		out, changed = c.postVisit(n, parent, changed)
-	} else {
-		out = n
-	}
-	return
-}
-func (c *cow) copyOnRewriteArgument(n Argument, parent SQLNode) (out SQLNode, changed bool) {
 	if c.cursor.stop {
 		return n, false
 	}

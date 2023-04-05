@@ -138,7 +138,7 @@ const (
 			migration_uuid=%a
 	`
 	sqlClearSingleArtifact = `UPDATE _vt.schema_migrations
-			SET artifacts=replace(artifacts, concat(%a, ','), ''), cleanup_timestamp=NULL
+			SET artifacts=replace(artifacts, concat(%a, ','), '')
 		WHERE
 			migration_uuid=%a
 	`

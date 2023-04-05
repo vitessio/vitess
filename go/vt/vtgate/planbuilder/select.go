@@ -364,7 +364,7 @@ func handleDualSelects(sel *sqlparser.Select, vschema plancontext.VSchema) (engi
 		if len(lockFunctions) > 0 {
 			return nil, vterrors.VT12001(fmt.Sprintf("LOCK function and other expression: [%s] in same select query", sqlparser.String(expr)))
 		}
-		exprs[i], err = evalengine.Translate(expr.Expr, evalengine.LookupDefaultCollation(vschema.ConnCollation()))
+		exprs[i], err = evalengine.Translate(expr.Expr, &evalengine.Config{Collation: vschema.ConnCollation()})
 		if err != nil {
 			return nil, nil
 		}

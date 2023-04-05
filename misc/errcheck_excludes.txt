@@ -27,6 +27,7 @@ os.Rename
 
 (*github.com/spf13/cobra.Command).Help
 (*github.com/spf13/cobra.Command).MarkFlagRequired
+(*github.com/spf13/cobra.Command).MarkPersistentFlagRequired
 (*github.com/spf13/cobra.Command).MarkPersistentFlagFilename
 
 (*github.com/spf13/pflag.FlagSet).MarkDeprecated

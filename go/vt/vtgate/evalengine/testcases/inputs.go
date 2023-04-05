@@ -20,8 +20,8 @@ import (
 	"math"
 	"strconv"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
 
 var inputJSONObjects = []string{
@@ -71,10 +71,10 @@ var radianInputs = []string{
 	"-1.5e0",
 	"9223372036854775810.4",
 	"-9223372036854775810.4",
-	string(evalengine.FormatFloat(sqltypes.Float64, math.Pi)),
-	string(evalengine.FormatFloat(sqltypes.Float64, math.MaxFloat64)),
-	string(evalengine.FormatFloat(sqltypes.Float64, math.SmallestNonzeroFloat32)),
-	string(evalengine.FormatFloat(sqltypes.Float64, math.SmallestNonzeroFloat64)),
+	string(mysql.FormatFloat(sqltypes.Float64, math.Pi)),
+	string(mysql.FormatFloat(sqltypes.Float64, math.MaxFloat64)),
+	string(mysql.FormatFloat(sqltypes.Float64, math.SmallestNonzeroFloat32)),
+	string(mysql.FormatFloat(sqltypes.Float64, math.SmallestNonzeroFloat64)),
 }
 
 var inputComparisonElement = []string{
@@ -101,8 +101,25 @@ var inputConversions = []string{
 	"cast(true as json)", "cast(false as json)",
 	"cast('{}' as json)", "cast('[]' as json)",
 	"cast('null' as json)", "cast('true' as json)", "cast('false' as json)",
-	"cast('1' as json)", "cast('1.1' as json)", "cast('-1.1' as json)",
-	"cast('\"foo\"' as json)", "cast('invalid' as json)",
+	// JSON numbers
+	"cast('1' as json)", "cast('2' as json)", "cast('1.1' as json)", "cast('-1.1' as json)",
+	// JSON strings
+	"cast('\"foo\"' as json)", "cast('\"bar\"' as json)", "cast('invalid' as json)",
+	// JSON binary values
+	"cast(_binary' \"foo\"' as json)", "cast(_binary '\"bar\"' as json)",
+	"cast(0xFF666F6F626172FF as json)", "cast(0x666F6F626172FF as json)",
+	"cast(0b01 as json)", "cast(0b001 as json)",
+	// JSON arrays
+	"cast('[\"a\"]' as json)", "cast('[\"ab\"]' as json)",
+	"cast('[\"ab\", \"cd\", \"ef\"]' as json)", "cast('[\"ab\", \"ef\"]' as json)",
+	// JSON objects
+	"cast('{\"a\": 1, \"b\": 2}' as json)", "cast('{\"b\": 2, \"a\": 1}' as json)",
+	"cast('{\"c\": 1, \"b\": 2}' as json)", "cast('{\"b\": 2, \"c\": 1}' as json)",
+	"cast(' \"b\": 2}' as json)", "cast('\"a\": 1' as json)",
+	// JSON date, datetime & time
+	"cast(date '2000-01-01' as json)", "cast(date '2000-01-02' as json)",
+	"cast(timestamp '2000-01-01 12:34:58' as json)",
+	"cast(time '12:34:56' as json)", "cast(time '12:34:58' as json)", "cast(time '5 12:34:58' as json)",
 }
 
 const inputPi = "314159265358979323846264338327950288419716939937510582097494459"

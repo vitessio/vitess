@@ -34,6 +34,7 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/callinfo"
 	"vitess.io/vitess/go/vt/callinfo/fakecallinfo"
@@ -1261,165 +1262,137 @@ func TestReplaceSchemaName(t *testing.T) {
 	}
 }
 
-// TODO(maxeng) This is currently flaky. Skipping for now to avoid slowing down developers.
-//
-// Plans to rework this test.
-//   - Use mock consolidator and mock db instead of real consolidator and fakedb.
-//   - Run a single query per test case. Simulate concurrent queries through mock
-//     consolidator.
 func TestQueryExecutorShouldConsolidate(t *testing.T) {
-	t.Skip()
+	testCases := []struct {
+		// whether or not the consolidator is enabled by default on the tablet
+		consolidatorEnabledByDefault bool
+		// query-specific consolidator override, unspecified by default
+		consolidatorExecuteOption querypb.ExecuteOptions_Consolidator
+		// whether or not the consolidator is waiting on the results of an
+		// identical running query
+		consolidatorHasIdenticalQuery bool
+		// whether or not the query should be consolidated
+		expectConsolidate bool
+		// whether or not the query should be exec'd (= sent to db)
+		expectExec bool
+		// query to run
+		input string
+	}{
+		{
+			consolidatorEnabledByDefault:  true,
+			consolidatorExecuteOption:     querypb.ExecuteOptions_CONSOLIDATOR_UNSPECIFIED,
+			consolidatorHasIdenticalQuery: false,
+			expectConsolidate:             true,
+			expectExec:                    true,
+			input:                         "select * from t limit 10001",
+		},
+		{
+			consolidatorEnabledByDefault:  true,
+			consolidatorExecuteOption:     querypb.ExecuteOptions_CONSOLIDATOR_UNSPECIFIED,
+			consolidatorHasIdenticalQuery: true,
+			expectConsolidate:             true,
+			expectExec:                    false,
+			input:                         "select * from t limit 10001",
+		},
+		{
+			consolidatorEnabledByDefault:  true,
+			consolidatorExecuteOption:     querypb.ExecuteOptions_CONSOLIDATOR_DISABLED,
+			consolidatorHasIdenticalQuery: true,
+			expectConsolidate:             false,
+			expectExec:                    true,
+			input:                         "select * from t limit 10001",
+		},
+		{
+			consolidatorEnabledByDefault:  false,
+			consolidatorExecuteOption:     querypb.ExecuteOptions_CONSOLIDATOR_DISABLED,
+			consolidatorHasIdenticalQuery: true,
+			expectConsolidate:             false,
+			expectExec:                    true,
+			input:                         "select * from t limit 10001",
+		},
+		{
+			consolidatorEnabledByDefault:  false,
+			consolidatorExecuteOption:     querypb.ExecuteOptions_CONSOLIDATOR_ENABLED,
+			consolidatorHasIdenticalQuery: false,
+			expectConsolidate:             true,
+			expectExec:                    true,
+			input:                         "select * from t limit 10001",
+		},
+		{
+			consolidatorEnabledByDefault:  false,
+			consolidatorExecuteOption:     querypb.ExecuteOptions_CONSOLIDATOR_ENABLED,
+			consolidatorHasIdenticalQuery: true,
+			expectConsolidate:             true,
+			expectExec:                    false,
+			input:                         "select * from t limit 10001",
+		},
+	}
+	for _, tcase := range testCases {
+		name := fmt.Sprintf("table-consolidator:%t;query-consolidator:%v;identical-query:%t",
+			tcase.consolidatorEnabledByDefault, tcase.consolidatorExecuteOption, tcase.consolidatorHasIdenticalQuery)
+		t.Run(name, func(t *testing.T) {
+			// Set up fake db, tablet server (with fake consolidator), and executor.
 
-	testcases := []struct {
-		consolidates  []bool
-		executorFlags executorFlags
-		name          string
-		// Whether or not query consolidator is requested.
-		options []querypb.ExecuteOptions_Consolidator
-		// Whether or not query is consolidated.
-		queries []string
-	}{{
-		consolidates: []bool{
-			false,
-			false,
-			false,
-			true,
-		},
-		executorFlags: noFlags,
-		name:          "vttablet-consolidator-disabled",
-		options: []querypb.ExecuteOptions_Consolidator{
-			querypb.ExecuteOptions_CONSOLIDATOR_UNSPECIFIED,
-			querypb.ExecuteOptions_CONSOLIDATOR_ENABLED,
-			querypb.ExecuteOptions_CONSOLIDATOR_UNSPECIFIED,
-			querypb.ExecuteOptions_CONSOLIDATOR_ENABLED,
-		},
-		queries: []string{
-			"select * from t limit 10001",
-			// The previous query isn't passed to the query consolidator,
-			// so the next query can't consolidate into it.
-			"select * from t limit 10001",
-			"select * from t limit 10001",
-			// This query should consolidate into the previous query
-			// that was passed to the consolidator.
-			"select * from t limit 10001",
-		},
-	}, {
-		consolidates: []bool{
-			false,
-			true,
-			false,
-			true,
-			false,
-		},
-		executorFlags: enableConsolidator,
-		name:          "consolidator=enabled",
-		options: []querypb.ExecuteOptions_Consolidator{
-			querypb.ExecuteOptions_CONSOLIDATOR_UNSPECIFIED,
-			querypb.ExecuteOptions_CONSOLIDATOR_UNSPECIFIED,
-			querypb.ExecuteOptions_CONSOLIDATOR_DISABLED,
-			querypb.ExecuteOptions_CONSOLIDATOR_UNSPECIFIED,
-			querypb.ExecuteOptions_CONSOLIDATOR_DISABLED,
-		},
-		queries: []string{
-			"select * from t limit 10001",
-			"select * from t limit 10001",
-			// This query shouldn't be passed to the consolidator.
-			"select * from t limit 10001",
-			"select * from t limit 10001",
-			// This query shouldn't be passed to the consolidator.
-			"select * from t limit 10001",
-		},
-	}}
-	for _, tcase := range testcases {
-		t.Run(tcase.name, func(t *testing.T) {
 			db := setUpQueryExecutorTest(t)
+			defer db.Close()
 
 			ctx := context.Background()
-			tsv := newTestTabletServer(ctx, tcase.executorFlags, db)
+			flags := noFlags
+			if tcase.consolidatorEnabledByDefault {
+				flags = enableConsolidator
+			}
 
-			defer db.Close()
+			tsv := newTestTabletServer(ctx, flags, db)
 			defer tsv.StopService()
 
-			doneCh := make(chan bool, len(tcase.queries))
-			readyCh := make(chan bool, len(tcase.queries))
-			var qres []*QueryExecutor
-			var waitChs []chan bool
+			fakeConsolidator := sync2.NewFakeConsolidator()
+			tsv.qe.consolidator = fakeConsolidator
 
-			for i, input := range tcase.queries {
-				qre := newTestQueryExecutor(ctx, tsv, input, 0)
-				qre.options = &querypb.ExecuteOptions{
-					Consolidator: tcase.options[i],
+			qre := newTestQueryExecutor(context.Background(), tsv, tcase.input, 0)
+			qre.options = &querypb.ExecuteOptions{Consolidator: tcase.consolidatorExecuteOption}
+
+			result := &sqltypes.Result{
+				Fields: getTestTableFields(),
+			}
+
+			// Set up consolidator pre-conditions.
+
+			fakePendingResult := &sync2.FakePendingResult{}
+			fakePendingResult.SetResult(result)
+			fakeConsolidator.CreateReturn = &sync2.FakeConsolidatorCreateReturn{
+				Created:       !tcase.consolidatorHasIdenticalQuery,
+				PendingResult: fakePendingResult,
+			}
+
+			// Set up database query/response.
+
+			db.AddQuery(tcase.input, result)
+
+			// Execute query.
+
+			_, err := qre.Execute()
+			require.Nil(t, err)
+
+			// Verify expectations.
+
+			if tcase.expectConsolidate {
+				require.Len(t, fakeConsolidator.CreateCalls, 1)
+				require.Len(t, fakeConsolidator.CreateReturns, 1)
+				if tcase.consolidatorHasIdenticalQuery {
+					require.Equal(t, 0, fakePendingResult.BroadcastCalls)
+					require.Equal(t, 1, fakePendingResult.WaitCalls)
+				} else {
+					require.Equal(t, 1, fakePendingResult.BroadcastCalls)
+					require.Equal(t, 0, fakePendingResult.WaitCalls)
 				}
-				qres = append(qres, qre)
-
-				// If this query is consolidated, don't add a fakesqldb expectation.
-				if tcase.consolidates[i] {
-					continue
-				}
-
-				// Set up a query expectation.
-				waitCh := make(chan bool)
-				waitChs = append(waitChs, waitCh)
-				db.AddExpectedExecuteFetchAtIndex(i, fakesqldb.ExpectedExecuteFetch{
-					AfterFunc: func() {
-						// Signal that we're ready to proceed.
-						readyCh <- true
-						// Wait until we're signaled to proceed.
-						<-waitCh
-					},
-					Query: input,
-					QueryResult: &sqltypes.Result{
-						Fields: getTestTableFields(),
-					},
-				})
+			} else {
+				require.Len(t, fakeConsolidator.CreateCalls, 0)
 			}
 
-			db.OrderMatters()
-			db.SetNeverFail(true)
-
-			for i, input := range tcase.queries {
-				qre := qres[i]
-				go func(i int, input string, qre *QueryExecutor) {
-					// Execute the query.
-					_, err := qre.Execute()
-
-					require.NoError(t, err, fmt.Sprintf(
-						"input[%d]=%q,querySources=%v", i, input, qre.logStats.QuerySources,
-					))
-
-					// Signal that the query is done.
-					doneCh <- true
-				}(i, input, qre)
-
-				// If this query is consolidated, don't wait for fakesqldb to
-				// tell us query is ready is ready.
-				if tcase.consolidates[i] {
-					continue
-				}
-
-				// Wait until query is queued up before starting next one.
-				<-readyCh
-			}
-
-			// Signal ready queries to return.
-			for i := 0; i < len(waitChs); i++ {
-				close(waitChs[i])
-			}
-
-			// Wait for queries to finish.
-			for i := 0; i < len(qres); i++ {
-				<-doneCh
-			}
-
-			for i := 0; i < len(tcase.consolidates); i++ {
-				input := tcase.queries[i]
-				qre := qres[i]
-				want := tcase.consolidates[i]
-				got := qre.logStats.QuerySources&tabletenv.QuerySourceConsolidator != 0
-
-				require.Equal(t, want, got, fmt.Sprintf(
-					"input[%d]=%q,querySources=%v", i, input, qre.logStats.QuerySources,
-				))
+			if tcase.expectExec {
+				require.Equal(t, 1, db.GetQueryCalledNum(tcase.input))
+			} else {
+				require.Equal(t, 0, db.GetQueryCalledNum(tcase.input))
 			}
 
 			db.VerifyAllExecutedOrFail()

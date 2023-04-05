@@ -19,6 +19,7 @@ package evalengine
 import (
 	"fmt"
 
+	"vitess.io/vitess/go/sqltypes"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 )
@@ -30,7 +31,7 @@ func errCardinality(expected int) error {
 func (ast *astCompiler) cardinality(expr Expr) int {
 	switch expr := expr.(type) {
 	case *BindVariable:
-		if expr.tuple {
+		if expr.Type == sqltypes.Tuple {
 			return -1
 		}
 		return 1
@@ -164,7 +165,7 @@ func (ast *astCompiler) cardExpr(expr Expr) error {
 				}
 			}
 		case *BindVariable:
-			if !r.tuple {
+			if r.Type != sqltypes.Tuple {
 				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "rhs of an In operation should be a tuple")
 			}
 			if left != 1 {

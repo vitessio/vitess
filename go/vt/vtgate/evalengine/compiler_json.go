@@ -19,11 +19,11 @@ package evalengine
 import (
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/collations/charset"
+	"vitess.io/vitess/go/mysql/json"
 	"vitess.io/vitess/go/slices2"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/evalengine/internal/json"
 )
 
 func isEncodingJSONSafe(col collations.ID) bool {
@@ -60,6 +60,12 @@ func (c *compiler) compileToJSON(doct ctype, offset int) (ctype, error) {
 		c.asm.Convert_bj(offset)
 	case sqltypes.Null:
 		c.asm.Convert_Nj(offset)
+	case sqltypes.Date:
+		c.asm.Convert_dj(offset)
+	case sqltypes.Datetime, sqltypes.Timestamp:
+		c.asm.Convert_dtj(offset)
+	case sqltypes.Time:
+		c.asm.Convert_tj(offset)
 	default:
 		return ctype{}, vterrors.Errorf(vtrpc.Code_UNIMPLEMENTED, "Unsupported type conversion: %s AS JSON", doct.Type)
 	}
@@ -80,6 +86,14 @@ func (c *compiler) compileArgToJSON(doct ctype, offset int) (ctype, error) {
 		c.asm.Convert_bj(offset)
 	case sqltypes.Null:
 		c.asm.Convert_Nj(offset)
+	case sqltypes.Date:
+		c.asm.Convert_dj(offset)
+	case sqltypes.Datetime:
+		c.asm.Convert_dtj(offset)
+	case sqltypes.Timestamp:
+		c.asm.Convert_dtj(offset)
+	case sqltypes.Time:
+		c.asm.Convert_tj(offset)
 	default:
 		return ctype{}, vterrors.Errorf(vtrpc.Code_UNIMPLEMENTED, "Unsupported type conversion: %s AS JSON", doct.Type)
 	}
@@ -134,7 +148,7 @@ func (c *compiler) compileToJSONKey(key ctype) error {
 	if key.Type == sqltypes.VarBinary {
 		return nil
 	}
-	c.asm.Convert_xc(1, sqltypes.VarChar, c.defaultCollation, 0, false)
+	c.asm.Convert_xc(1, sqltypes.VarChar, c.cfg.Collation, 0, false)
 	return nil
 }
 

@@ -20,12 +20,13 @@ import (
 	"fmt"
 	"strconv"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/decimal"
+	"vitess.io/vitess/go/mysql/json"
 	"vitess.io/vitess/go/sqltypes"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/evalengine/internal/decimal"
-	"vitess.io/vitess/go/vt/vtgate/evalengine/internal/json"
 	"vitess.io/vitess/go/vt/vthash"
 )
 
@@ -106,7 +107,7 @@ func evalToSQLValueWithType(e eval, resultType sqltypes.Type) sqltypes.Value {
 		case *evalUint64:
 			return sqltypes.MakeTrusted(resultType, strconv.AppendUint(nil, e.u, 10))
 		case *evalFloat:
-			return sqltypes.MakeTrusted(resultType, FormatFloat(resultType, e.f))
+			return sqltypes.MakeTrusted(resultType, mysql.FormatFloat(resultType, e.f))
 		case *evalDecimal:
 			return sqltypes.MakeTrusted(resultType, e.dec.FormatMySQL(e.length))
 		}
@@ -142,7 +143,20 @@ func evalIsTruthy(e eval) boolean {
 	case *evalJSON:
 		switch e.Type() {
 		case json.TypeNumber:
-			return makeboolean(parseStringToFloat(e.Raw()) != 0.0)
+			switch e.NumberType() {
+			case json.NumberTypeInteger:
+				if i, ok := e.Int64(); ok {
+					return makeboolean(i != 0)
+				}
+
+				d, _ := e.Decimal()
+				return makeboolean(!d.IsZero())
+			case json.NumberTypeDouble:
+				d, _ := e.Float64()
+				return makeboolean(d != 0.0)
+			default:
+				return makeboolean(parseStringToFloat(e.Raw()) != 0.0)
+			}
 		default:
 			return makeboolean(true)
 		}

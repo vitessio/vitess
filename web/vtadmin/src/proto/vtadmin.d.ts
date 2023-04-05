@@ -25919,6 +25919,3874 @@ export namespace tabletmanagerdata {
          */
         public static getTypeUrl(typeUrlPrefix?: string): string;
     }
+
+    /** Properties of an UpdateVRWorkflowRequest. */
+    interface IUpdateVRWorkflowRequest {
+
+        /** UpdateVRWorkflowRequest workflow */
+        workflow?: (string|null);
+
+        /** UpdateVRWorkflowRequest cells */
+        cells?: (string[]|null);
+
+        /** UpdateVRWorkflowRequest tablet_types */
+        tablet_types?: (string[]|null);
+
+        /** UpdateVRWorkflowRequest on_ddl */
+        on_ddl?: (binlogdata.OnDDLAction|null);
+    }
+
+    /** Represents an UpdateVRWorkflowRequest. */
+    class UpdateVRWorkflowRequest implements IUpdateVRWorkflowRequest {
+
+        /**
+         * Constructs a new UpdateVRWorkflowRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: tabletmanagerdata.IUpdateVRWorkflowRequest);
+
+        /** UpdateVRWorkflowRequest workflow. */
+        public workflow: string;
+
+        /** UpdateVRWorkflowRequest cells. */
+        public cells: string[];
+
+        /** UpdateVRWorkflowRequest tablet_types. */
+        public tablet_types: string[];
+
+        /** UpdateVRWorkflowRequest on_ddl. */
+        public on_ddl: binlogdata.OnDDLAction;
+
+        /**
+         * Creates a new UpdateVRWorkflowRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns UpdateVRWorkflowRequest instance
+         */
+        public static create(properties?: tabletmanagerdata.IUpdateVRWorkflowRequest): tabletmanagerdata.UpdateVRWorkflowRequest;
+
+        /**
+         * Encodes the specified UpdateVRWorkflowRequest message. Does not implicitly {@link tabletmanagerdata.UpdateVRWorkflowRequest.verify|verify} messages.
+         * @param message UpdateVRWorkflowRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: tabletmanagerdata.IUpdateVRWorkflowRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified UpdateVRWorkflowRequest message, length delimited. Does not implicitly {@link tabletmanagerdata.UpdateVRWorkflowRequest.verify|verify} messages.
+         * @param message UpdateVRWorkflowRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: tabletmanagerdata.IUpdateVRWorkflowRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes an UpdateVRWorkflowRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns UpdateVRWorkflowRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): tabletmanagerdata.UpdateVRWorkflowRequest;
+
+        /**
+         * Decodes an UpdateVRWorkflowRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns UpdateVRWorkflowRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): tabletmanagerdata.UpdateVRWorkflowRequest;
+
+        /**
+         * Verifies an UpdateVRWorkflowRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates an UpdateVRWorkflowRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns UpdateVRWorkflowRequest
+         */
+        public static fromObject(object: { [k: string]: any }): tabletmanagerdata.UpdateVRWorkflowRequest;
+
+        /**
+         * Creates a plain object from an UpdateVRWorkflowRequest message. Also converts values to other types if specified.
+         * @param message UpdateVRWorkflowRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: tabletmanagerdata.UpdateVRWorkflowRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this UpdateVRWorkflowRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for UpdateVRWorkflowRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of an UpdateVRWorkflowResponse. */
+    interface IUpdateVRWorkflowResponse {
+
+        /** UpdateVRWorkflowResponse result */
+        result?: (query.IQueryResult|null);
+    }
+
+    /** Represents an UpdateVRWorkflowResponse. */
+    class UpdateVRWorkflowResponse implements IUpdateVRWorkflowResponse {
+
+        /**
+         * Constructs a new UpdateVRWorkflowResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: tabletmanagerdata.IUpdateVRWorkflowResponse);
+
+        /** UpdateVRWorkflowResponse result. */
+        public result?: (query.IQueryResult|null);
+
+        /**
+         * Creates a new UpdateVRWorkflowResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns UpdateVRWorkflowResponse instance
+         */
+        public static create(properties?: tabletmanagerdata.IUpdateVRWorkflowResponse): tabletmanagerdata.UpdateVRWorkflowResponse;
+
+        /**
+         * Encodes the specified UpdateVRWorkflowResponse message. Does not implicitly {@link tabletmanagerdata.UpdateVRWorkflowResponse.verify|verify} messages.
+         * @param message UpdateVRWorkflowResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: tabletmanagerdata.IUpdateVRWorkflowResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified UpdateVRWorkflowResponse message, length delimited. Does not implicitly {@link tabletmanagerdata.UpdateVRWorkflowResponse.verify|verify} messages.
+         * @param message UpdateVRWorkflowResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: tabletmanagerdata.IUpdateVRWorkflowResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes an UpdateVRWorkflowResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns UpdateVRWorkflowResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): tabletmanagerdata.UpdateVRWorkflowResponse;
+
+        /**
+         * Decodes an UpdateVRWorkflowResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns UpdateVRWorkflowResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): tabletmanagerdata.UpdateVRWorkflowResponse;
+
+        /**
+         * Verifies an UpdateVRWorkflowResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates an UpdateVRWorkflowResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns UpdateVRWorkflowResponse
+         */
+        public static fromObject(object: { [k: string]: any }): tabletmanagerdata.UpdateVRWorkflowResponse;
+
+        /**
+         * Creates a plain object from an UpdateVRWorkflowResponse message. Also converts values to other types if specified.
+         * @param message UpdateVRWorkflowResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: tabletmanagerdata.UpdateVRWorkflowResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this UpdateVRWorkflowResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for UpdateVRWorkflowResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+}
+
+/** Namespace binlogdata. */
+export namespace binlogdata {
+
+    /** Properties of a Charset. */
+    interface ICharset {
+
+        /** Charset client */
+        client?: (number|null);
+
+        /** Charset conn */
+        conn?: (number|null);
+
+        /** Charset server */
+        server?: (number|null);
+    }
+
+    /** Represents a Charset. */
+    class Charset implements ICharset {
+
+        /**
+         * Constructs a new Charset.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: binlogdata.ICharset);
+
+        /** Charset client. */
+        public client: number;
+
+        /** Charset conn. */
+        public conn: number;
+
+        /** Charset server. */
+        public server: number;
+
+        /**
+         * Creates a new Charset instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns Charset instance
+         */
+        public static create(properties?: binlogdata.ICharset): binlogdata.Charset;
+
+        /**
+         * Encodes the specified Charset message. Does not implicitly {@link binlogdata.Charset.verify|verify} messages.
+         * @param message Charset message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: binlogdata.ICharset, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified Charset message, length delimited. Does not implicitly {@link binlogdata.Charset.verify|verify} messages.
+         * @param message Charset message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: binlogdata.ICharset, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a Charset message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns Charset
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.Charset;
+
+        /**
+         * Decodes a Charset message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns Charset
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.Charset;
+
+        /**
+         * Verifies a Charset message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a Charset message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns Charset
+         */
+        public static fromObject(object: { [k: string]: any }): binlogdata.Charset;
+
+        /**
+         * Creates a plain object from a Charset message. Also converts values to other types if specified.
+         * @param message Charset
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: binlogdata.Charset, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this Charset to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for Charset
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a BinlogTransaction. */
+    interface IBinlogTransaction {
+
+        /** BinlogTransaction statements */
+        statements?: (binlogdata.BinlogTransaction.IStatement[]|null);
+
+        /** BinlogTransaction event_token */
+        event_token?: (query.IEventToken|null);
+    }
+
+    /** Represents a BinlogTransaction. */
+    class BinlogTransaction implements IBinlogTransaction {
+
+        /**
+         * Constructs a new BinlogTransaction.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: binlogdata.IBinlogTransaction);
+
+        /** BinlogTransaction statements. */
+        public statements: binlogdata.BinlogTransaction.IStatement[];
+
+        /** BinlogTransaction event_token. */
+        public event_token?: (query.IEventToken|null);
+
+        /**
+         * Creates a new BinlogTransaction instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns BinlogTransaction instance
+         */
+        public static create(properties?: binlogdata.IBinlogTransaction): binlogdata.BinlogTransaction;
+
+        /**
+         * Encodes the specified BinlogTransaction message. Does not implicitly {@link binlogdata.BinlogTransaction.verify|verify} messages.
+         * @param message BinlogTransaction message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: binlogdata.IBinlogTransaction, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified BinlogTransaction message, length delimited. Does not implicitly {@link binlogdata.BinlogTransaction.verify|verify} messages.
+         * @param message BinlogTransaction message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: binlogdata.IBinlogTransaction, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a BinlogTransaction message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns BinlogTransaction
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.BinlogTransaction;
+
+        /**
+         * Decodes a BinlogTransaction message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns BinlogTransaction
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.BinlogTransaction;
+
+        /**
+         * Verifies a BinlogTransaction message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a BinlogTransaction message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns BinlogTransaction
+         */
+        public static fromObject(object: { [k: string]: any }): binlogdata.BinlogTransaction;
+
+        /**
+         * Creates a plain object from a BinlogTransaction message. Also converts values to other types if specified.
+         * @param message BinlogTransaction
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: binlogdata.BinlogTransaction, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this BinlogTransaction to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for BinlogTransaction
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    namespace BinlogTransaction {
+
+        /** Properties of a Statement. */
+        interface IStatement {
+
+            /** Statement category */
+            category?: (binlogdata.BinlogTransaction.Statement.Category|null);
+
+            /** Statement charset */
+            charset?: (binlogdata.ICharset|null);
+
+            /** Statement sql */
+            sql?: (Uint8Array|null);
+        }
+
+        /** Represents a Statement. */
+        class Statement implements IStatement {
+
+            /**
+             * Constructs a new Statement.
+             * @param [properties] Properties to set
+             */
+            constructor(properties?: binlogdata.BinlogTransaction.IStatement);
+
+            /** Statement category. */
+            public category: binlogdata.BinlogTransaction.Statement.Category;
+
+            /** Statement charset. */
+            public charset?: (binlogdata.ICharset|null);
+
+            /** Statement sql. */
+            public sql: Uint8Array;
+
+            /**
+             * Creates a new Statement instance using the specified properties.
+             * @param [properties] Properties to set
+             * @returns Statement instance
+             */
+            public static create(properties?: binlogdata.BinlogTransaction.IStatement): binlogdata.BinlogTransaction.Statement;
+
+            /**
+             * Encodes the specified Statement message. Does not implicitly {@link binlogdata.BinlogTransaction.Statement.verify|verify} messages.
+             * @param message Statement message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encode(message: binlogdata.BinlogTransaction.IStatement, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Encodes the specified Statement message, length delimited. Does not implicitly {@link binlogdata.BinlogTransaction.Statement.verify|verify} messages.
+             * @param message Statement message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encodeDelimited(message: binlogdata.BinlogTransaction.IStatement, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Decodes a Statement message from the specified reader or buffer.
+             * @param reader Reader or buffer to decode from
+             * @param [length] Message length if known beforehand
+             * @returns Statement
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.BinlogTransaction.Statement;
+
+            /**
+             * Decodes a Statement message from the specified reader or buffer, length delimited.
+             * @param reader Reader or buffer to decode from
+             * @returns Statement
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.BinlogTransaction.Statement;
+
+            /**
+             * Verifies a Statement message.
+             * @param message Plain object to verify
+             * @returns `null` if valid, otherwise the reason why it is not
+             */
+            public static verify(message: { [k: string]: any }): (string|null);
+
+            /**
+             * Creates a Statement message from a plain object. Also converts values to their respective internal types.
+             * @param object Plain object
+             * @returns Statement
+             */
+            public static fromObject(object: { [k: string]: any }): binlogdata.BinlogTransaction.Statement;
+
+            /**
+             * Creates a plain object from a Statement message. Also converts values to other types if specified.
+             * @param message Statement
+             * @param [options] Conversion options
+             * @returns Plain object
+             */
+            public static toObject(message: binlogdata.BinlogTransaction.Statement, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+            /**
+             * Converts this Statement to JSON.
+             * @returns JSON object
+             */
+            public toJSON(): { [k: string]: any };
+
+            /**
+             * Gets the default type url for Statement
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
+        }
+
+        namespace Statement {
+
+            /** Category enum. */
+            enum Category {
+                BL_UNRECOGNIZED = 0,
+                BL_BEGIN = 1,
+                BL_COMMIT = 2,
+                BL_ROLLBACK = 3,
+                BL_DML_DEPRECATED = 4,
+                BL_DDL = 5,
+                BL_SET = 6,
+                BL_INSERT = 7,
+                BL_UPDATE = 8,
+                BL_DELETE = 9
+            }
+        }
+    }
+
+    /** Properties of a StreamKeyRangeRequest. */
+    interface IStreamKeyRangeRequest {
+
+        /** StreamKeyRangeRequest position */
+        position?: (string|null);
+
+        /** StreamKeyRangeRequest key_range */
+        key_range?: (topodata.IKeyRange|null);
+
+        /** StreamKeyRangeRequest charset */
+        charset?: (binlogdata.ICharset|null);
+    }
+
+    /** Represents a StreamKeyRangeRequest. */
+    class StreamKeyRangeRequest implements IStreamKeyRangeRequest {
+
+        /**
+         * Constructs a new StreamKeyRangeRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: binlogdata.IStreamKeyRangeRequest);
+
+        /** StreamKeyRangeRequest position. */
+        public position: string;
+
+        /** StreamKeyRangeRequest key_range. */
+        public key_range?: (topodata.IKeyRange|null);
+
+        /** StreamKeyRangeRequest charset. */
+        public charset?: (binlogdata.ICharset|null);
+
+        /**
+         * Creates a new StreamKeyRangeRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns StreamKeyRangeRequest instance
+         */
+        public static create(properties?: binlogdata.IStreamKeyRangeRequest): binlogdata.StreamKeyRangeRequest;
+
+        /**
+         * Encodes the specified StreamKeyRangeRequest message. Does not implicitly {@link binlogdata.StreamKeyRangeRequest.verify|verify} messages.
+         * @param message StreamKeyRangeRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: binlogdata.IStreamKeyRangeRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified StreamKeyRangeRequest message, length delimited. Does not implicitly {@link binlogdata.StreamKeyRangeRequest.verify|verify} messages.
+         * @param message StreamKeyRangeRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: binlogdata.IStreamKeyRangeRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a StreamKeyRangeRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns StreamKeyRangeRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.StreamKeyRangeRequest;
+
+        /**
+         * Decodes a StreamKeyRangeRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns StreamKeyRangeRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.StreamKeyRangeRequest;
+
+        /**
+         * Verifies a StreamKeyRangeRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a StreamKeyRangeRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns StreamKeyRangeRequest
+         */
+        public static fromObject(object: { [k: string]: any }): binlogdata.StreamKeyRangeRequest;
+
+        /**
+         * Creates a plain object from a StreamKeyRangeRequest message. Also converts values to other types if specified.
+         * @param message StreamKeyRangeRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: binlogdata.StreamKeyRangeRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this StreamKeyRangeRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for StreamKeyRangeRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a StreamKeyRangeResponse. */
+    interface IStreamKeyRangeResponse {
+
+        /** StreamKeyRangeResponse binlog_transaction */
+        binlog_transaction?: (binlogdata.IBinlogTransaction|null);
+    }
+
+    /** Represents a StreamKeyRangeResponse. */
+    class StreamKeyRangeResponse implements IStreamKeyRangeResponse {
+
+        /**
+         * Constructs a new StreamKeyRangeResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: binlogdata.IStreamKeyRangeResponse);
+
+        /** StreamKeyRangeResponse binlog_transaction. */
+        public binlog_transaction?: (binlogdata.IBinlogTransaction|null);
+
+        /**
+         * Creates a new StreamKeyRangeResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns StreamKeyRangeResponse instance
+         */
+        public static create(properties?: binlogdata.IStreamKeyRangeResponse): binlogdata.StreamKeyRangeResponse;
+
+        /**
+         * Encodes the specified StreamKeyRangeResponse message. Does not implicitly {@link binlogdata.StreamKeyRangeResponse.verify|verify} messages.
+         * @param message StreamKeyRangeResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: binlogdata.IStreamKeyRangeResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified StreamKeyRangeResponse message, length delimited. Does not implicitly {@link binlogdata.StreamKeyRangeResponse.verify|verify} messages.
+         * @param message StreamKeyRangeResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: binlogdata.IStreamKeyRangeResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a StreamKeyRangeResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns StreamKeyRangeResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.StreamKeyRangeResponse;
+
+        /**
+         * Decodes a StreamKeyRangeResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns StreamKeyRangeResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.StreamKeyRangeResponse;
+
+        /**
+         * Verifies a StreamKeyRangeResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a StreamKeyRangeResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns StreamKeyRangeResponse
+         */
+        public static fromObject(object: { [k: string]: any }): binlogdata.StreamKeyRangeResponse;
+
+        /**
+         * Creates a plain object from a StreamKeyRangeResponse message. Also converts values to other types if specified.
+         * @param message StreamKeyRangeResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: binlogdata.StreamKeyRangeResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this StreamKeyRangeResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for StreamKeyRangeResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a StreamTablesRequest. */
+    interface IStreamTablesRequest {
+
+        /** StreamTablesRequest position */
+        position?: (string|null);
+
+        /** StreamTablesRequest tables */
+        tables?: (string[]|null);
+
+        /** StreamTablesRequest charset */
+        charset?: (binlogdata.ICharset|null);
+    }
+
+    /** Represents a StreamTablesRequest. */
+    class StreamTablesRequest implements IStreamTablesRequest {
+
+        /**
+         * Constructs a new StreamTablesRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: binlogdata.IStreamTablesRequest);
+
+        /** StreamTablesRequest position. */
+        public position: string;
+
+        /** StreamTablesRequest tables. */
+        public tables: string[];
+
+        /** StreamTablesRequest charset. */
+        public charset?: (binlogdata.ICharset|null);
+
+        /**
+         * Creates a new StreamTablesRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns StreamTablesRequest instance
+         */
+        public static create(properties?: binlogdata.IStreamTablesRequest): binlogdata.StreamTablesRequest;
+
+        /**
+         * Encodes the specified StreamTablesRequest message. Does not implicitly {@link binlogdata.StreamTablesRequest.verify|verify} messages.
+         * @param message StreamTablesRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: binlogdata.IStreamTablesRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified StreamTablesRequest message, length delimited. Does not implicitly {@link binlogdata.StreamTablesRequest.verify|verify} messages.
+         * @param message StreamTablesRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: binlogdata.IStreamTablesRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a StreamTablesRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns StreamTablesRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.StreamTablesRequest;
+
+        /**
+         * Decodes a StreamTablesRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns StreamTablesRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.StreamTablesRequest;
+
+        /**
+         * Verifies a StreamTablesRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a StreamTablesRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns StreamTablesRequest
+         */
+        public static fromObject(object: { [k: string]: any }): binlogdata.StreamTablesRequest;
+
+        /**
+         * Creates a plain object from a StreamTablesRequest message. Also converts values to other types if specified.
+         * @param message StreamTablesRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: binlogdata.StreamTablesRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this StreamTablesRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for StreamTablesRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a StreamTablesResponse. */
+    interface IStreamTablesResponse {
+
+        /** StreamTablesResponse binlog_transaction */
+        binlog_transaction?: (binlogdata.IBinlogTransaction|null);
+    }
+
+    /** Represents a StreamTablesResponse. */
+    class StreamTablesResponse implements IStreamTablesResponse {
+
+        /**
+         * Constructs a new StreamTablesResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: binlogdata.IStreamTablesResponse);
+
+        /** StreamTablesResponse binlog_transaction. */
+        public binlog_transaction?: (binlogdata.IBinlogTransaction|null);
+
+        /**
+         * Creates a new StreamTablesResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns StreamTablesResponse instance
+         */
+        public static create(properties?: binlogdata.IStreamTablesResponse): binlogdata.StreamTablesResponse;
+
+        /**
+         * Encodes the specified StreamTablesResponse message. Does not implicitly {@link binlogdata.StreamTablesResponse.verify|verify} messages.
+         * @param message StreamTablesResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: binlogdata.IStreamTablesResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified StreamTablesResponse message, length delimited. Does not implicitly {@link binlogdata.StreamTablesResponse.verify|verify} messages.
+         * @param message StreamTablesResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: binlogdata.IStreamTablesResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a StreamTablesResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns StreamTablesResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.StreamTablesResponse;
+
+        /**
+         * Decodes a StreamTablesResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns StreamTablesResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.StreamTablesResponse;
+
+        /**
+         * Verifies a StreamTablesResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a StreamTablesResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns StreamTablesResponse
+         */
+        public static fromObject(object: { [k: string]: any }): binlogdata.StreamTablesResponse;
+
+        /**
+         * Creates a plain object from a StreamTablesResponse message. Also converts values to other types if specified.
+         * @param message StreamTablesResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: binlogdata.StreamTablesResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this StreamTablesResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for StreamTablesResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a CharsetConversion. */
+    interface ICharsetConversion {
+
+        /** CharsetConversion from_charset */
+        from_charset?: (string|null);
+
+        /** CharsetConversion to_charset */
+        to_charset?: (string|null);
+    }
+
+    /** Represents a CharsetConversion. */
+    class CharsetConversion implements ICharsetConversion {
+
+        /**
+         * Constructs a new CharsetConversion.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: binlogdata.ICharsetConversion);
+
+        /** CharsetConversion from_charset. */
+        public from_charset: string;
+
+        /** CharsetConversion to_charset. */
+        public to_charset: string;
+
+        /**
+         * Creates a new CharsetConversion instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns CharsetConversion instance
+         */
+        public static create(properties?: binlogdata.ICharsetConversion): binlogdata.CharsetConversion;
+
+        /**
+         * Encodes the specified CharsetConversion message. Does not implicitly {@link binlogdata.CharsetConversion.verify|verify} messages.
+         * @param message CharsetConversion message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: binlogdata.ICharsetConversion, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified CharsetConversion message, length delimited. Does not implicitly {@link binlogdata.CharsetConversion.verify|verify} messages.
+         * @param message CharsetConversion message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: binlogdata.ICharsetConversion, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a CharsetConversion message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns CharsetConversion
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.CharsetConversion;
+
+        /**
+         * Decodes a CharsetConversion message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns CharsetConversion
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.CharsetConversion;
+
+        /**
+         * Verifies a CharsetConversion message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a CharsetConversion message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns CharsetConversion
+         */
+        public static fromObject(object: { [k: string]: any }): binlogdata.CharsetConversion;
+
+        /**
+         * Creates a plain object from a CharsetConversion message. Also converts values to other types if specified.
+         * @param message CharsetConversion
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: binlogdata.CharsetConversion, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this CharsetConversion to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for CharsetConversion
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a Rule. */
+    interface IRule {
+
+        /** Rule match */
+        match?: (string|null);
+
+        /** Rule filter */
+        filter?: (string|null);
+
+        /** Rule convert_enum_to_text */
+        convert_enum_to_text?: ({ [k: string]: string }|null);
+
+        /** Rule convert_charset */
+        convert_charset?: ({ [k: string]: binlogdata.ICharsetConversion }|null);
+
+        /** Rule source_unique_key_columns */
+        source_unique_key_columns?: (string|null);
+
+        /** Rule target_unique_key_columns */
+        target_unique_key_columns?: (string|null);
+
+        /** Rule source_unique_key_target_columns */
+        source_unique_key_target_columns?: (string|null);
+
+        /** Rule convert_int_to_enum */
+        convert_int_to_enum?: ({ [k: string]: boolean }|null);
+    }
+
+    /** Represents a Rule. */
+    class Rule implements IRule {
+
+        /**
+         * Constructs a new Rule.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: binlogdata.IRule);
+
+        /** Rule match. */
+        public match: string;
+
+        /** Rule filter. */
+        public filter: string;
+
+        /** Rule convert_enum_to_text. */
+        public convert_enum_to_text: { [k: string]: string };
+
+        /** Rule convert_charset. */
+        public convert_charset: { [k: string]: binlogdata.ICharsetConversion };
+
+        /** Rule source_unique_key_columns. */
+        public source_unique_key_columns: string;
+
+        /** Rule target_unique_key_columns. */
+        public target_unique_key_columns: string;
+
+        /** Rule source_unique_key_target_columns. */
+        public source_unique_key_target_columns: string;
+
+        /** Rule convert_int_to_enum. */
+        public convert_int_to_enum: { [k: string]: boolean };
+
+        /**
+         * Creates a new Rule instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns Rule instance
+         */
+        public static create(properties?: binlogdata.IRule): binlogdata.Rule;
+
+        /**
+         * Encodes the specified Rule message. Does not implicitly {@link binlogdata.Rule.verify|verify} messages.
+         * @param message Rule message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: binlogdata.IRule, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified Rule message, length delimited. Does not implicitly {@link binlogdata.Rule.verify|verify} messages.
+         * @param message Rule message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: binlogdata.IRule, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a Rule message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns Rule
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.Rule;
+
+        /**
+         * Decodes a Rule message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns Rule
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.Rule;
+
+        /**
+         * Verifies a Rule message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a Rule message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns Rule
+         */
+        public static fromObject(object: { [k: string]: any }): binlogdata.Rule;
+
+        /**
+         * Creates a plain object from a Rule message. Also converts values to other types if specified.
+         * @param message Rule
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: binlogdata.Rule, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this Rule to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for Rule
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a Filter. */
+    interface IFilter {
+
+        /** Filter rules */
+        rules?: (binlogdata.IRule[]|null);
+
+        /** Filter field_event_mode */
+        field_event_mode?: (binlogdata.Filter.FieldEventMode|null);
+
+        /** Filter workflow_type */
+        workflow_type?: (number|Long|null);
+
+        /** Filter workflow_name */
+        workflow_name?: (string|null);
+    }
+
+    /** Represents a Filter. */
+    class Filter implements IFilter {
+
+        /**
+         * Constructs a new Filter.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: binlogdata.IFilter);
+
+        /** Filter rules. */
+        public rules: binlogdata.IRule[];
+
+        /** Filter field_event_mode. */
+        public field_event_mode: binlogdata.Filter.FieldEventMode;
+
+        /** Filter workflow_type. */
+        public workflow_type: (number|Long);
+
+        /** Filter workflow_name. */
+        public workflow_name: string;
+
+        /**
+         * Creates a new Filter instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns Filter instance
+         */
+        public static create(properties?: binlogdata.IFilter): binlogdata.Filter;
+
+        /**
+         * Encodes the specified Filter message. Does not implicitly {@link binlogdata.Filter.verify|verify} messages.
+         * @param message Filter message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: binlogdata.IFilter, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified Filter message, length delimited. Does not implicitly {@link binlogdata.Filter.verify|verify} messages.
+         * @param message Filter message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: binlogdata.IFilter, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a Filter message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns Filter
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.Filter;
+
+        /**
+         * Decodes a Filter message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns Filter
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.Filter;
+
+        /**
+         * Verifies a Filter message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a Filter message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns Filter
+         */
+        public static fromObject(object: { [k: string]: any }): binlogdata.Filter;
+
+        /**
+         * Creates a plain object from a Filter message. Also converts values to other types if specified.
+         * @param message Filter
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: binlogdata.Filter, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this Filter to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for Filter
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    namespace Filter {
+
+        /** FieldEventMode enum. */
+        enum FieldEventMode {
+            ERR_ON_MISMATCH = 0,
+            BEST_EFFORT = 1
+        }
+    }
+
+    /** OnDDLAction enum. */
+    enum OnDDLAction {
+        IGNORE = 0,
+        STOP = 1,
+        EXEC = 2,
+        EXEC_IGNORE = 3
+    }
+
+    /** VReplicationWorkflowType enum. */
+    enum VReplicationWorkflowType {
+        Materialize = 0,
+        MoveTables = 1,
+        CreateLookupIndex = 2,
+        Migrate = 3,
+        Reshard = 4,
+        OnlineDDL = 5
+    }
+
+    /** VReplicationWorkflowSubType enum. */
+    enum VReplicationWorkflowSubType {
+        None = 0,
+        Partial = 1
+    }
+
+    /** Properties of a BinlogSource. */
+    interface IBinlogSource {
+
+        /** BinlogSource keyspace */
+        keyspace?: (string|null);
+
+        /** BinlogSource shard */
+        shard?: (string|null);
+
+        /** BinlogSource tablet_type */
+        tablet_type?: (topodata.TabletType|null);
+
+        /** BinlogSource key_range */
+        key_range?: (topodata.IKeyRange|null);
+
+        /** BinlogSource tables */
+        tables?: (string[]|null);
+
+        /** BinlogSource filter */
+        filter?: (binlogdata.IFilter|null);
+
+        /** BinlogSource on_ddl */
+        on_ddl?: (binlogdata.OnDDLAction|null);
+
+        /** BinlogSource external_mysql */
+        external_mysql?: (string|null);
+
+        /** BinlogSource stop_after_copy */
+        stop_after_copy?: (boolean|null);
+
+        /** BinlogSource external_cluster */
+        external_cluster?: (string|null);
+
+        /** BinlogSource source_time_zone */
+        source_time_zone?: (string|null);
+
+        /** BinlogSource target_time_zone */
+        target_time_zone?: (string|null);
+    }
+
+    /** Represents a BinlogSource. */
+    class BinlogSource implements IBinlogSource {
+
+        /**
+         * Constructs a new BinlogSource.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: binlogdata.IBinlogSource);
+
+        /** BinlogSource keyspace. */
+        public keyspace: string;
+
+        /** BinlogSource shard. */
+        public shard: string;
+
+        /** BinlogSource tablet_type. */
+        public tablet_type: topodata.TabletType;
+
+        /** BinlogSource key_range. */
+        public key_range?: (topodata.IKeyRange|null);
+
+        /** BinlogSource tables. */
+        public tables: string[];
+
+        /** BinlogSource filter. */
+        public filter?: (binlogdata.IFilter|null);
+
+        /** BinlogSource on_ddl. */
+        public on_ddl: binlogdata.OnDDLAction;
+
+        /** BinlogSource external_mysql. */
+        public external_mysql: string;
+
+        /** BinlogSource stop_after_copy. */
+        public stop_after_copy: boolean;
+
+        /** BinlogSource external_cluster. */
+        public external_cluster: string;
+
+        /** BinlogSource source_time_zone. */
+        public source_time_zone: string;
+
+        /** BinlogSource target_time_zone. */
+        public target_time_zone: string;
+
+        /**
+         * Creates a new BinlogSource instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns BinlogSource instance
+         */
+        public static create(properties?: binlogdata.IBinlogSource): binlogdata.BinlogSource;
+
+        /**
+         * Encodes the specified BinlogSource message. Does not implicitly {@link binlogdata.BinlogSource.verify|verify} messages.
+         * @param message BinlogSource message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: binlogdata.IBinlogSource, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified BinlogSource message, length delimited. Does not implicitly {@link binlogdata.BinlogSource.verify|verify} messages.
+         * @param message BinlogSource message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: binlogdata.IBinlogSource, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a BinlogSource message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns BinlogSource
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.BinlogSource;
+
+        /**
+         * Decodes a BinlogSource message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns BinlogSource
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.BinlogSource;
+
+        /**
+         * Verifies a BinlogSource message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a BinlogSource message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns BinlogSource
+         */
+        public static fromObject(object: { [k: string]: any }): binlogdata.BinlogSource;
+
+        /**
+         * Creates a plain object from a BinlogSource message. Also converts values to other types if specified.
+         * @param message BinlogSource
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: binlogdata.BinlogSource, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this BinlogSource to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for BinlogSource
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** VEventType enum. */
+    enum VEventType {
+        UNKNOWN = 0,
+        GTID = 1,
+        BEGIN = 2,
+        COMMIT = 3,
+        ROLLBACK = 4,
+        DDL = 5,
+        INSERT = 6,
+        REPLACE = 7,
+        UPDATE = 8,
+        DELETE = 9,
+        SET = 10,
+        OTHER = 11,
+        ROW = 12,
+        FIELD = 13,
+        HEARTBEAT = 14,
+        VGTID = 15,
+        JOURNAL = 16,
+        VERSION = 17,
+        LASTPK = 18,
+        SAVEPOINT = 19,
+        COPY_COMPLETED = 20
+    }
+
+    /** Properties of a RowChange. */
+    interface IRowChange {
+
+        /** RowChange before */
+        before?: (query.IRow|null);
+
+        /** RowChange after */
+        after?: (query.IRow|null);
+    }
+
+    /** Represents a RowChange. */
+    class RowChange implements IRowChange {
+
+        /**
+         * Constructs a new RowChange.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: binlogdata.IRowChange);
+
+        /** RowChange before. */
+        public before?: (query.IRow|null);
+
+        /** RowChange after. */
+        public after?: (query.IRow|null);
+
+        /**
+         * Creates a new RowChange instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns RowChange instance
+         */
+        public static create(properties?: binlogdata.IRowChange): binlogdata.RowChange;
+
+        /**
+         * Encodes the specified RowChange message. Does not implicitly {@link binlogdata.RowChange.verify|verify} messages.
+         * @param message RowChange message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: binlogdata.IRowChange, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified RowChange message, length delimited. Does not implicitly {@link binlogdata.RowChange.verify|verify} messages.
+         * @param message RowChange message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: binlogdata.IRowChange, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a RowChange message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns RowChange
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.RowChange;
+
+        /**
+         * Decodes a RowChange message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns RowChange
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.RowChange;
+
+        /**
+         * Verifies a RowChange message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a RowChange message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns RowChange
+         */
+        public static fromObject(object: { [k: string]: any }): binlogdata.RowChange;
+
+        /**
+         * Creates a plain object from a RowChange message. Also converts values to other types if specified.
+         * @param message RowChange
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: binlogdata.RowChange, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this RowChange to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for RowChange
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a RowEvent. */
+    interface IRowEvent {
+
+        /** RowEvent table_name */
+        table_name?: (string|null);
+
+        /** RowEvent row_changes */
+        row_changes?: (binlogdata.IRowChange[]|null);
+
+        /** RowEvent keyspace */
+        keyspace?: (string|null);
+
+        /** RowEvent shard */
+        shard?: (string|null);
+    }
+
+    /** Represents a RowEvent. */
+    class RowEvent implements IRowEvent {
+
+        /**
+         * Constructs a new RowEvent.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: binlogdata.IRowEvent);
+
+        /** RowEvent table_name. */
+        public table_name: string;
+
+        /** RowEvent row_changes. */
+        public row_changes: binlogdata.IRowChange[];
+
+        /** RowEvent keyspace. */
+        public keyspace: string;
+
+        /** RowEvent shard. */
+        public shard: string;
+
+        /**
+         * Creates a new RowEvent instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns RowEvent instance
+         */
+        public static create(properties?: binlogdata.IRowEvent): binlogdata.RowEvent;
+
+        /**
+         * Encodes the specified RowEvent message. Does not implicitly {@link binlogdata.RowEvent.verify|verify} messages.
+         * @param message RowEvent message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: binlogdata.IRowEvent, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified RowEvent message, length delimited. Does not implicitly {@link binlogdata.RowEvent.verify|verify} messages.
+         * @param message RowEvent message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: binlogdata.IRowEvent, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a RowEvent message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns RowEvent
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.RowEvent;
+
+        /**
+         * Decodes a RowEvent message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns RowEvent
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.RowEvent;
+
+        /**
+         * Verifies a RowEvent message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a RowEvent message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns RowEvent
+         */
+        public static fromObject(object: { [k: string]: any }): binlogdata.RowEvent;
+
+        /**
+         * Creates a plain object from a RowEvent message. Also converts values to other types if specified.
+         * @param message RowEvent
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: binlogdata.RowEvent, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this RowEvent to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for RowEvent
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a FieldEvent. */
+    interface IFieldEvent {
+
+        /** FieldEvent table_name */
+        table_name?: (string|null);
+
+        /** FieldEvent fields */
+        fields?: (query.IField[]|null);
+
+        /** FieldEvent keyspace */
+        keyspace?: (string|null);
+
+        /** FieldEvent shard */
+        shard?: (string|null);
+    }
+
+    /** Represents a FieldEvent. */
+    class FieldEvent implements IFieldEvent {
+
+        /**
+         * Constructs a new FieldEvent.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: binlogdata.IFieldEvent);
+
+        /** FieldEvent table_name. */
+        public table_name: string;
+
+        /** FieldEvent fields. */
+        public fields: query.IField[];
+
+        /** FieldEvent keyspace. */
+        public keyspace: string;
+
+        /** FieldEvent shard. */
+        public shard: string;
+
+        /**
+         * Creates a new FieldEvent instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns FieldEvent instance
+         */
+        public static create(properties?: binlogdata.IFieldEvent): binlogdata.FieldEvent;
+
+        /**
+         * Encodes the specified FieldEvent message. Does not implicitly {@link binlogdata.FieldEvent.verify|verify} messages.
+         * @param message FieldEvent message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: binlogdata.IFieldEvent, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified FieldEvent message, length delimited. Does not implicitly {@link binlogdata.FieldEvent.verify|verify} messages.
+         * @param message FieldEvent message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: binlogdata.IFieldEvent, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a FieldEvent message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns FieldEvent
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.FieldEvent;
+
+        /**
+         * Decodes a FieldEvent message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns FieldEvent
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.FieldEvent;
+
+        /**
+         * Verifies a FieldEvent message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a FieldEvent message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns FieldEvent
+         */
+        public static fromObject(object: { [k: string]: any }): binlogdata.FieldEvent;
+
+        /**
+         * Creates a plain object from a FieldEvent message. Also converts values to other types if specified.
+         * @param message FieldEvent
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: binlogdata.FieldEvent, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this FieldEvent to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for FieldEvent
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a ShardGtid. */
+    interface IShardGtid {
+
+        /** ShardGtid keyspace */
+        keyspace?: (string|null);
+
+        /** ShardGtid shard */
+        shard?: (string|null);
+
+        /** ShardGtid gtid */
+        gtid?: (string|null);
+
+        /** ShardGtid table_p_ks */
+        table_p_ks?: (binlogdata.ITableLastPK[]|null);
+    }
+
+    /** Represents a ShardGtid. */
+    class ShardGtid implements IShardGtid {
+
+        /**
+         * Constructs a new ShardGtid.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: binlogdata.IShardGtid);
+
+        /** ShardGtid keyspace. */
+        public keyspace: string;
+
+        /** ShardGtid shard. */
+        public shard: string;
+
+        /** ShardGtid gtid. */
+        public gtid: string;
+
+        /** ShardGtid table_p_ks. */
+        public table_p_ks: binlogdata.ITableLastPK[];
+
+        /**
+         * Creates a new ShardGtid instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ShardGtid instance
+         */
+        public static create(properties?: binlogdata.IShardGtid): binlogdata.ShardGtid;
+
+        /**
+         * Encodes the specified ShardGtid message. Does not implicitly {@link binlogdata.ShardGtid.verify|verify} messages.
+         * @param message ShardGtid message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: binlogdata.IShardGtid, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ShardGtid message, length delimited. Does not implicitly {@link binlogdata.ShardGtid.verify|verify} messages.
+         * @param message ShardGtid message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: binlogdata.IShardGtid, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ShardGtid message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ShardGtid
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.ShardGtid;
+
+        /**
+         * Decodes a ShardGtid message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ShardGtid
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.ShardGtid;
+
+        /**
+         * Verifies a ShardGtid message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ShardGtid message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ShardGtid
+         */
+        public static fromObject(object: { [k: string]: any }): binlogdata.ShardGtid;
+
+        /**
+         * Creates a plain object from a ShardGtid message. Also converts values to other types if specified.
+         * @param message ShardGtid
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: binlogdata.ShardGtid, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ShardGtid to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ShardGtid
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a VGtid. */
+    interface IVGtid {
+
+        /** VGtid shard_gtids */
+        shard_gtids?: (binlogdata.IShardGtid[]|null);
+    }
+
+    /** Represents a VGtid. */
+    class VGtid implements IVGtid {
+
+        /**
+         * Constructs a new VGtid.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: binlogdata.IVGtid);
+
+        /** VGtid shard_gtids. */
+        public shard_gtids: binlogdata.IShardGtid[];
+
+        /**
+         * Creates a new VGtid instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns VGtid instance
+         */
+        public static create(properties?: binlogdata.IVGtid): binlogdata.VGtid;
+
+        /**
+         * Encodes the specified VGtid message. Does not implicitly {@link binlogdata.VGtid.verify|verify} messages.
+         * @param message VGtid message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: binlogdata.IVGtid, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified VGtid message, length delimited. Does not implicitly {@link binlogdata.VGtid.verify|verify} messages.
+         * @param message VGtid message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: binlogdata.IVGtid, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a VGtid message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns VGtid
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.VGtid;
+
+        /**
+         * Decodes a VGtid message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns VGtid
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.VGtid;
+
+        /**
+         * Verifies a VGtid message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a VGtid message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns VGtid
+         */
+        public static fromObject(object: { [k: string]: any }): binlogdata.VGtid;
+
+        /**
+         * Creates a plain object from a VGtid message. Also converts values to other types if specified.
+         * @param message VGtid
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: binlogdata.VGtid, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this VGtid to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for VGtid
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a KeyspaceShard. */
+    interface IKeyspaceShard {
+
+        /** KeyspaceShard keyspace */
+        keyspace?: (string|null);
+
+        /** KeyspaceShard shard */
+        shard?: (string|null);
+    }
+
+    /** Represents a KeyspaceShard. */
+    class KeyspaceShard implements IKeyspaceShard {
+
+        /**
+         * Constructs a new KeyspaceShard.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: binlogdata.IKeyspaceShard);
+
+        /** KeyspaceShard keyspace. */
+        public keyspace: string;
+
+        /** KeyspaceShard shard. */
+        public shard: string;
+
+        /**
+         * Creates a new KeyspaceShard instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns KeyspaceShard instance
+         */
+        public static create(properties?: binlogdata.IKeyspaceShard): binlogdata.KeyspaceShard;
+
+        /**
+         * Encodes the specified KeyspaceShard message. Does not implicitly {@link binlogdata.KeyspaceShard.verify|verify} messages.
+         * @param message KeyspaceShard message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: binlogdata.IKeyspaceShard, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified KeyspaceShard message, length delimited. Does not implicitly {@link binlogdata.KeyspaceShard.verify|verify} messages.
+         * @param message KeyspaceShard message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: binlogdata.IKeyspaceShard, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a KeyspaceShard message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns KeyspaceShard
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.KeyspaceShard;
+
+        /**
+         * Decodes a KeyspaceShard message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns KeyspaceShard
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.KeyspaceShard;
+
+        /**
+         * Verifies a KeyspaceShard message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a KeyspaceShard message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns KeyspaceShard
+         */
+        public static fromObject(object: { [k: string]: any }): binlogdata.KeyspaceShard;
+
+        /**
+         * Creates a plain object from a KeyspaceShard message. Also converts values to other types if specified.
+         * @param message KeyspaceShard
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: binlogdata.KeyspaceShard, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this KeyspaceShard to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for KeyspaceShard
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** MigrationType enum. */
+    enum MigrationType {
+        TABLES = 0,
+        SHARDS = 1
+    }
+
+    /** Properties of a Journal. */
+    interface IJournal {
+
+        /** Journal id */
+        id?: (number|Long|null);
+
+        /** Journal migration_type */
+        migration_type?: (binlogdata.MigrationType|null);
+
+        /** Journal tables */
+        tables?: (string[]|null);
+
+        /** Journal local_position */
+        local_position?: (string|null);
+
+        /** Journal shard_gtids */
+        shard_gtids?: (binlogdata.IShardGtid[]|null);
+
+        /** Journal participants */
+        participants?: (binlogdata.IKeyspaceShard[]|null);
+
+        /** Journal source_workflows */
+        source_workflows?: (string[]|null);
+    }
+
+    /** Represents a Journal. */
+    class Journal implements IJournal {
+
+        /**
+         * Constructs a new Journal.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: binlogdata.IJournal);
+
+        /** Journal id. */
+        public id: (number|Long);
+
+        /** Journal migration_type. */
+        public migration_type: binlogdata.MigrationType;
+
+        /** Journal tables. */
+        public tables: string[];
+
+        /** Journal local_position. */
+        public local_position: string;
+
+        /** Journal shard_gtids. */
+        public shard_gtids: binlogdata.IShardGtid[];
+
+        /** Journal participants. */
+        public participants: binlogdata.IKeyspaceShard[];
+
+        /** Journal source_workflows. */
+        public source_workflows: string[];
+
+        /**
+         * Creates a new Journal instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns Journal instance
+         */
+        public static create(properties?: binlogdata.IJournal): binlogdata.Journal;
+
+        /**
+         * Encodes the specified Journal message. Does not implicitly {@link binlogdata.Journal.verify|verify} messages.
+         * @param message Journal message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: binlogdata.IJournal, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified Journal message, length delimited. Does not implicitly {@link binlogdata.Journal.verify|verify} messages.
+         * @param message Journal message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: binlogdata.IJournal, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a Journal message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns Journal
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.Journal;
+
+        /**
+         * Decodes a Journal message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns Journal
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.Journal;
+
+        /**
+         * Verifies a Journal message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a Journal message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns Journal
+         */
+        public static fromObject(object: { [k: string]: any }): binlogdata.Journal;
+
+        /**
+         * Creates a plain object from a Journal message. Also converts values to other types if specified.
+         * @param message Journal
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: binlogdata.Journal, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this Journal to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for Journal
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a VEvent. */
+    interface IVEvent {
+
+        /** VEvent type */
+        type?: (binlogdata.VEventType|null);
+
+        /** VEvent timestamp */
+        timestamp?: (number|Long|null);
+
+        /** VEvent gtid */
+        gtid?: (string|null);
+
+        /** VEvent statement */
+        statement?: (string|null);
+
+        /** VEvent row_event */
+        row_event?: (binlogdata.IRowEvent|null);
+
+        /** VEvent field_event */
+        field_event?: (binlogdata.IFieldEvent|null);
+
+        /** VEvent vgtid */
+        vgtid?: (binlogdata.IVGtid|null);
+
+        /** VEvent journal */
+        journal?: (binlogdata.IJournal|null);
+
+        /** VEvent dml */
+        dml?: (string|null);
+
+        /** VEvent current_time */
+        current_time?: (number|Long|null);
+
+        /** VEvent last_p_k_event */
+        last_p_k_event?: (binlogdata.ILastPKEvent|null);
+
+        /** VEvent keyspace */
+        keyspace?: (string|null);
+
+        /** VEvent shard */
+        shard?: (string|null);
+
+        /** VEvent throttled */
+        throttled?: (boolean|null);
+    }
+
+    /** Represents a VEvent. */
+    class VEvent implements IVEvent {
+
+        /**
+         * Constructs a new VEvent.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: binlogdata.IVEvent);
+
+        /** VEvent type. */
+        public type: binlogdata.VEventType;
+
+        /** VEvent timestamp. */
+        public timestamp: (number|Long);
+
+        /** VEvent gtid. */
+        public gtid: string;
+
+        /** VEvent statement. */
+        public statement: string;
+
+        /** VEvent row_event. */
+        public row_event?: (binlogdata.IRowEvent|null);
+
+        /** VEvent field_event. */
+        public field_event?: (binlogdata.IFieldEvent|null);
+
+        /** VEvent vgtid. */
+        public vgtid?: (binlogdata.IVGtid|null);
+
+        /** VEvent journal. */
+        public journal?: (binlogdata.IJournal|null);
+
+        /** VEvent dml. */
+        public dml: string;
+
+        /** VEvent current_time. */
+        public current_time: (number|Long);
+
+        /** VEvent last_p_k_event. */
+        public last_p_k_event?: (binlogdata.ILastPKEvent|null);
+
+        /** VEvent keyspace. */
+        public keyspace: string;
+
+        /** VEvent shard. */
+        public shard: string;
+
+        /** VEvent throttled. */
+        public throttled: boolean;
+
+        /**
+         * Creates a new VEvent instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns VEvent instance
+         */
+        public static create(properties?: binlogdata.IVEvent): binlogdata.VEvent;
+
+        /**
+         * Encodes the specified VEvent message. Does not implicitly {@link binlogdata.VEvent.verify|verify} messages.
+         * @param message VEvent message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: binlogdata.IVEvent, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified VEvent message, length delimited. Does not implicitly {@link binlogdata.VEvent.verify|verify} messages.
+         * @param message VEvent message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: binlogdata.IVEvent, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a VEvent message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns VEvent
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.VEvent;
+
+        /**
+         * Decodes a VEvent message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns VEvent
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.VEvent;
+
+        /**
+         * Verifies a VEvent message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a VEvent message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns VEvent
+         */
+        public static fromObject(object: { [k: string]: any }): binlogdata.VEvent;
+
+        /**
+         * Creates a plain object from a VEvent message. Also converts values to other types if specified.
+         * @param message VEvent
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: binlogdata.VEvent, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this VEvent to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for VEvent
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a MinimalTable. */
+    interface IMinimalTable {
+
+        /** MinimalTable name */
+        name?: (string|null);
+
+        /** MinimalTable fields */
+        fields?: (query.IField[]|null);
+
+        /** MinimalTable p_k_columns */
+        p_k_columns?: ((number|Long)[]|null);
+    }
+
+    /** Represents a MinimalTable. */
+    class MinimalTable implements IMinimalTable {
+
+        /**
+         * Constructs a new MinimalTable.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: binlogdata.IMinimalTable);
+
+        /** MinimalTable name. */
+        public name: string;
+
+        /** MinimalTable fields. */
+        public fields: query.IField[];
+
+        /** MinimalTable p_k_columns. */
+        public p_k_columns: (number|Long)[];
+
+        /**
+         * Creates a new MinimalTable instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns MinimalTable instance
+         */
+        public static create(properties?: binlogdata.IMinimalTable): binlogdata.MinimalTable;
+
+        /**
+         * Encodes the specified MinimalTable message. Does not implicitly {@link binlogdata.MinimalTable.verify|verify} messages.
+         * @param message MinimalTable message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: binlogdata.IMinimalTable, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified MinimalTable message, length delimited. Does not implicitly {@link binlogdata.MinimalTable.verify|verify} messages.
+         * @param message MinimalTable message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: binlogdata.IMinimalTable, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a MinimalTable message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns MinimalTable
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.MinimalTable;
+
+        /**
+         * Decodes a MinimalTable message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns MinimalTable
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.MinimalTable;
+
+        /**
+         * Verifies a MinimalTable message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a MinimalTable message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns MinimalTable
+         */
+        public static fromObject(object: { [k: string]: any }): binlogdata.MinimalTable;
+
+        /**
+         * Creates a plain object from a MinimalTable message. Also converts values to other types if specified.
+         * @param message MinimalTable
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: binlogdata.MinimalTable, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this MinimalTable to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for MinimalTable
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a MinimalSchema. */
+    interface IMinimalSchema {
+
+        /** MinimalSchema tables */
+        tables?: (binlogdata.IMinimalTable[]|null);
+    }
+
+    /** Represents a MinimalSchema. */
+    class MinimalSchema implements IMinimalSchema {
+
+        /**
+         * Constructs a new MinimalSchema.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: binlogdata.IMinimalSchema);
+
+        /** MinimalSchema tables. */
+        public tables: binlogdata.IMinimalTable[];
+
+        /**
+         * Creates a new MinimalSchema instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns MinimalSchema instance
+         */
+        public static create(properties?: binlogdata.IMinimalSchema): binlogdata.MinimalSchema;
+
+        /**
+         * Encodes the specified MinimalSchema message. Does not implicitly {@link binlogdata.MinimalSchema.verify|verify} messages.
+         * @param message MinimalSchema message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: binlogdata.IMinimalSchema, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified MinimalSchema message, length delimited. Does not implicitly {@link binlogdata.MinimalSchema.verify|verify} messages.
+         * @param message MinimalSchema message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: binlogdata.IMinimalSchema, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a MinimalSchema message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns MinimalSchema
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.MinimalSchema;
+
+        /**
+         * Decodes a MinimalSchema message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns MinimalSchema
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.MinimalSchema;
+
+        /**
+         * Verifies a MinimalSchema message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a MinimalSchema message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns MinimalSchema
+         */
+        public static fromObject(object: { [k: string]: any }): binlogdata.MinimalSchema;
+
+        /**
+         * Creates a plain object from a MinimalSchema message. Also converts values to other types if specified.
+         * @param message MinimalSchema
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: binlogdata.MinimalSchema, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this MinimalSchema to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for MinimalSchema
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a VStreamRequest. */
+    interface IVStreamRequest {
+
+        /** VStreamRequest effective_caller_id */
+        effective_caller_id?: (vtrpc.ICallerID|null);
+
+        /** VStreamRequest immediate_caller_id */
+        immediate_caller_id?: (query.IVTGateCallerID|null);
+
+        /** VStreamRequest target */
+        target?: (query.ITarget|null);
+
+        /** VStreamRequest position */
+        position?: (string|null);
+
+        /** VStreamRequest filter */
+        filter?: (binlogdata.IFilter|null);
+
+        /** VStreamRequest table_last_p_ks */
+        table_last_p_ks?: (binlogdata.ITableLastPK[]|null);
+    }
+
+    /** Represents a VStreamRequest. */
+    class VStreamRequest implements IVStreamRequest {
+
+        /**
+         * Constructs a new VStreamRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: binlogdata.IVStreamRequest);
+
+        /** VStreamRequest effective_caller_id. */
+        public effective_caller_id?: (vtrpc.ICallerID|null);
+
+        /** VStreamRequest immediate_caller_id. */
+        public immediate_caller_id?: (query.IVTGateCallerID|null);
+
+        /** VStreamRequest target. */
+        public target?: (query.ITarget|null);
+
+        /** VStreamRequest position. */
+        public position: string;
+
+        /** VStreamRequest filter. */
+        public filter?: (binlogdata.IFilter|null);
+
+        /** VStreamRequest table_last_p_ks. */
+        public table_last_p_ks: binlogdata.ITableLastPK[];
+
+        /**
+         * Creates a new VStreamRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns VStreamRequest instance
+         */
+        public static create(properties?: binlogdata.IVStreamRequest): binlogdata.VStreamRequest;
+
+        /**
+         * Encodes the specified VStreamRequest message. Does not implicitly {@link binlogdata.VStreamRequest.verify|verify} messages.
+         * @param message VStreamRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: binlogdata.IVStreamRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified VStreamRequest message, length delimited. Does not implicitly {@link binlogdata.VStreamRequest.verify|verify} messages.
+         * @param message VStreamRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: binlogdata.IVStreamRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a VStreamRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns VStreamRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.VStreamRequest;
+
+        /**
+         * Decodes a VStreamRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns VStreamRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.VStreamRequest;
+
+        /**
+         * Verifies a VStreamRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a VStreamRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns VStreamRequest
+         */
+        public static fromObject(object: { [k: string]: any }): binlogdata.VStreamRequest;
+
+        /**
+         * Creates a plain object from a VStreamRequest message. Also converts values to other types if specified.
+         * @param message VStreamRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: binlogdata.VStreamRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this VStreamRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for VStreamRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a VStreamResponse. */
+    interface IVStreamResponse {
+
+        /** VStreamResponse events */
+        events?: (binlogdata.IVEvent[]|null);
+    }
+
+    /** Represents a VStreamResponse. */
+    class VStreamResponse implements IVStreamResponse {
+
+        /**
+         * Constructs a new VStreamResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: binlogdata.IVStreamResponse);
+
+        /** VStreamResponse events. */
+        public events: binlogdata.IVEvent[];
+
+        /**
+         * Creates a new VStreamResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns VStreamResponse instance
+         */
+        public static create(properties?: binlogdata.IVStreamResponse): binlogdata.VStreamResponse;
+
+        /**
+         * Encodes the specified VStreamResponse message. Does not implicitly {@link binlogdata.VStreamResponse.verify|verify} messages.
+         * @param message VStreamResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: binlogdata.IVStreamResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified VStreamResponse message, length delimited. Does not implicitly {@link binlogdata.VStreamResponse.verify|verify} messages.
+         * @param message VStreamResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: binlogdata.IVStreamResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a VStreamResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns VStreamResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.VStreamResponse;
+
+        /**
+         * Decodes a VStreamResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns VStreamResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.VStreamResponse;
+
+        /**
+         * Verifies a VStreamResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a VStreamResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns VStreamResponse
+         */
+        public static fromObject(object: { [k: string]: any }): binlogdata.VStreamResponse;
+
+        /**
+         * Creates a plain object from a VStreamResponse message. Also converts values to other types if specified.
+         * @param message VStreamResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: binlogdata.VStreamResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this VStreamResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for VStreamResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a VStreamRowsRequest. */
+    interface IVStreamRowsRequest {
+
+        /** VStreamRowsRequest effective_caller_id */
+        effective_caller_id?: (vtrpc.ICallerID|null);
+
+        /** VStreamRowsRequest immediate_caller_id */
+        immediate_caller_id?: (query.IVTGateCallerID|null);
+
+        /** VStreamRowsRequest target */
+        target?: (query.ITarget|null);
+
+        /** VStreamRowsRequest query */
+        query?: (string|null);
+
+        /** VStreamRowsRequest lastpk */
+        lastpk?: (query.IQueryResult|null);
+    }
+
+    /** Represents a VStreamRowsRequest. */
+    class VStreamRowsRequest implements IVStreamRowsRequest {
+
+        /**
+         * Constructs a new VStreamRowsRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: binlogdata.IVStreamRowsRequest);
+
+        /** VStreamRowsRequest effective_caller_id. */
+        public effective_caller_id?: (vtrpc.ICallerID|null);
+
+        /** VStreamRowsRequest immediate_caller_id. */
+        public immediate_caller_id?: (query.IVTGateCallerID|null);
+
+        /** VStreamRowsRequest target. */
+        public target?: (query.ITarget|null);
+
+        /** VStreamRowsRequest query. */
+        public query: string;
+
+        /** VStreamRowsRequest lastpk. */
+        public lastpk?: (query.IQueryResult|null);
+
+        /**
+         * Creates a new VStreamRowsRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns VStreamRowsRequest instance
+         */
+        public static create(properties?: binlogdata.IVStreamRowsRequest): binlogdata.VStreamRowsRequest;
+
+        /**
+         * Encodes the specified VStreamRowsRequest message. Does not implicitly {@link binlogdata.VStreamRowsRequest.verify|verify} messages.
+         * @param message VStreamRowsRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: binlogdata.IVStreamRowsRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified VStreamRowsRequest message, length delimited. Does not implicitly {@link binlogdata.VStreamRowsRequest.verify|verify} messages.
+         * @param message VStreamRowsRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: binlogdata.IVStreamRowsRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a VStreamRowsRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns VStreamRowsRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.VStreamRowsRequest;
+
+        /**
+         * Decodes a VStreamRowsRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns VStreamRowsRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.VStreamRowsRequest;
+
+        /**
+         * Verifies a VStreamRowsRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a VStreamRowsRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns VStreamRowsRequest
+         */
+        public static fromObject(object: { [k: string]: any }): binlogdata.VStreamRowsRequest;
+
+        /**
+         * Creates a plain object from a VStreamRowsRequest message. Also converts values to other types if specified.
+         * @param message VStreamRowsRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: binlogdata.VStreamRowsRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this VStreamRowsRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for VStreamRowsRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a VStreamRowsResponse. */
+    interface IVStreamRowsResponse {
+
+        /** VStreamRowsResponse fields */
+        fields?: (query.IField[]|null);
+
+        /** VStreamRowsResponse pkfields */
+        pkfields?: (query.IField[]|null);
+
+        /** VStreamRowsResponse gtid */
+        gtid?: (string|null);
+
+        /** VStreamRowsResponse rows */
+        rows?: (query.IRow[]|null);
+
+        /** VStreamRowsResponse lastpk */
+        lastpk?: (query.IRow|null);
+
+        /** VStreamRowsResponse throttled */
+        throttled?: (boolean|null);
+
+        /** VStreamRowsResponse heartbeat */
+        heartbeat?: (boolean|null);
+    }
+
+    /** Represents a VStreamRowsResponse. */
+    class VStreamRowsResponse implements IVStreamRowsResponse {
+
+        /**
+         * Constructs a new VStreamRowsResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: binlogdata.IVStreamRowsResponse);
+
+        /** VStreamRowsResponse fields. */
+        public fields: query.IField[];
+
+        /** VStreamRowsResponse pkfields. */
+        public pkfields: query.IField[];
+
+        /** VStreamRowsResponse gtid. */
+        public gtid: string;
+
+        /** VStreamRowsResponse rows. */
+        public rows: query.IRow[];
+
+        /** VStreamRowsResponse lastpk. */
+        public lastpk?: (query.IRow|null);
+
+        /** VStreamRowsResponse throttled. */
+        public throttled: boolean;
+
+        /** VStreamRowsResponse heartbeat. */
+        public heartbeat: boolean;
+
+        /**
+         * Creates a new VStreamRowsResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns VStreamRowsResponse instance
+         */
+        public static create(properties?: binlogdata.IVStreamRowsResponse): binlogdata.VStreamRowsResponse;
+
+        /**
+         * Encodes the specified VStreamRowsResponse message. Does not implicitly {@link binlogdata.VStreamRowsResponse.verify|verify} messages.
+         * @param message VStreamRowsResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: binlogdata.IVStreamRowsResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified VStreamRowsResponse message, length delimited. Does not implicitly {@link binlogdata.VStreamRowsResponse.verify|verify} messages.
+         * @param message VStreamRowsResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: binlogdata.IVStreamRowsResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a VStreamRowsResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns VStreamRowsResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.VStreamRowsResponse;
+
+        /**
+         * Decodes a VStreamRowsResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns VStreamRowsResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.VStreamRowsResponse;
+
+        /**
+         * Verifies a VStreamRowsResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a VStreamRowsResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns VStreamRowsResponse
+         */
+        public static fromObject(object: { [k: string]: any }): binlogdata.VStreamRowsResponse;
+
+        /**
+         * Creates a plain object from a VStreamRowsResponse message. Also converts values to other types if specified.
+         * @param message VStreamRowsResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: binlogdata.VStreamRowsResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this VStreamRowsResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for VStreamRowsResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a LastPKEvent. */
+    interface ILastPKEvent {
+
+        /** LastPKEvent table_last_p_k */
+        table_last_p_k?: (binlogdata.ITableLastPK|null);
+
+        /** LastPKEvent completed */
+        completed?: (boolean|null);
+    }
+
+    /** Represents a LastPKEvent. */
+    class LastPKEvent implements ILastPKEvent {
+
+        /**
+         * Constructs a new LastPKEvent.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: binlogdata.ILastPKEvent);
+
+        /** LastPKEvent table_last_p_k. */
+        public table_last_p_k?: (binlogdata.ITableLastPK|null);
+
+        /** LastPKEvent completed. */
+        public completed: boolean;
+
+        /**
+         * Creates a new LastPKEvent instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns LastPKEvent instance
+         */
+        public static create(properties?: binlogdata.ILastPKEvent): binlogdata.LastPKEvent;
+
+        /**
+         * Encodes the specified LastPKEvent message. Does not implicitly {@link binlogdata.LastPKEvent.verify|verify} messages.
+         * @param message LastPKEvent message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: binlogdata.ILastPKEvent, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified LastPKEvent message, length delimited. Does not implicitly {@link binlogdata.LastPKEvent.verify|verify} messages.
+         * @param message LastPKEvent message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: binlogdata.ILastPKEvent, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a LastPKEvent message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns LastPKEvent
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.LastPKEvent;
+
+        /**
+         * Decodes a LastPKEvent message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns LastPKEvent
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.LastPKEvent;
+
+        /**
+         * Verifies a LastPKEvent message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a LastPKEvent message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns LastPKEvent
+         */
+        public static fromObject(object: { [k: string]: any }): binlogdata.LastPKEvent;
+
+        /**
+         * Creates a plain object from a LastPKEvent message. Also converts values to other types if specified.
+         * @param message LastPKEvent
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: binlogdata.LastPKEvent, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this LastPKEvent to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for LastPKEvent
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a TableLastPK. */
+    interface ITableLastPK {
+
+        /** TableLastPK table_name */
+        table_name?: (string|null);
+
+        /** TableLastPK lastpk */
+        lastpk?: (query.IQueryResult|null);
+    }
+
+    /** Represents a TableLastPK. */
+    class TableLastPK implements ITableLastPK {
+
+        /**
+         * Constructs a new TableLastPK.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: binlogdata.ITableLastPK);
+
+        /** TableLastPK table_name. */
+        public table_name: string;
+
+        /** TableLastPK lastpk. */
+        public lastpk?: (query.IQueryResult|null);
+
+        /**
+         * Creates a new TableLastPK instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns TableLastPK instance
+         */
+        public static create(properties?: binlogdata.ITableLastPK): binlogdata.TableLastPK;
+
+        /**
+         * Encodes the specified TableLastPK message. Does not implicitly {@link binlogdata.TableLastPK.verify|verify} messages.
+         * @param message TableLastPK message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: binlogdata.ITableLastPK, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified TableLastPK message, length delimited. Does not implicitly {@link binlogdata.TableLastPK.verify|verify} messages.
+         * @param message TableLastPK message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: binlogdata.ITableLastPK, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a TableLastPK message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns TableLastPK
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.TableLastPK;
+
+        /**
+         * Decodes a TableLastPK message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns TableLastPK
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.TableLastPK;
+
+        /**
+         * Verifies a TableLastPK message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a TableLastPK message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns TableLastPK
+         */
+        public static fromObject(object: { [k: string]: any }): binlogdata.TableLastPK;
+
+        /**
+         * Creates a plain object from a TableLastPK message. Also converts values to other types if specified.
+         * @param message TableLastPK
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: binlogdata.TableLastPK, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this TableLastPK to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for TableLastPK
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a VStreamResultsRequest. */
+    interface IVStreamResultsRequest {
+
+        /** VStreamResultsRequest effective_caller_id */
+        effective_caller_id?: (vtrpc.ICallerID|null);
+
+        /** VStreamResultsRequest immediate_caller_id */
+        immediate_caller_id?: (query.IVTGateCallerID|null);
+
+        /** VStreamResultsRequest target */
+        target?: (query.ITarget|null);
+
+        /** VStreamResultsRequest query */
+        query?: (string|null);
+    }
+
+    /** Represents a VStreamResultsRequest. */
+    class VStreamResultsRequest implements IVStreamResultsRequest {
+
+        /**
+         * Constructs a new VStreamResultsRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: binlogdata.IVStreamResultsRequest);
+
+        /** VStreamResultsRequest effective_caller_id. */
+        public effective_caller_id?: (vtrpc.ICallerID|null);
+
+        /** VStreamResultsRequest immediate_caller_id. */
+        public immediate_caller_id?: (query.IVTGateCallerID|null);
+
+        /** VStreamResultsRequest target. */
+        public target?: (query.ITarget|null);
+
+        /** VStreamResultsRequest query. */
+        public query: string;
+
+        /**
+         * Creates a new VStreamResultsRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns VStreamResultsRequest instance
+         */
+        public static create(properties?: binlogdata.IVStreamResultsRequest): binlogdata.VStreamResultsRequest;
+
+        /**
+         * Encodes the specified VStreamResultsRequest message. Does not implicitly {@link binlogdata.VStreamResultsRequest.verify|verify} messages.
+         * @param message VStreamResultsRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: binlogdata.IVStreamResultsRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified VStreamResultsRequest message, length delimited. Does not implicitly {@link binlogdata.VStreamResultsRequest.verify|verify} messages.
+         * @param message VStreamResultsRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: binlogdata.IVStreamResultsRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a VStreamResultsRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns VStreamResultsRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.VStreamResultsRequest;
+
+        /**
+         * Decodes a VStreamResultsRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns VStreamResultsRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.VStreamResultsRequest;
+
+        /**
+         * Verifies a VStreamResultsRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a VStreamResultsRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns VStreamResultsRequest
+         */
+        public static fromObject(object: { [k: string]: any }): binlogdata.VStreamResultsRequest;
+
+        /**
+         * Creates a plain object from a VStreamResultsRequest message. Also converts values to other types if specified.
+         * @param message VStreamResultsRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: binlogdata.VStreamResultsRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this VStreamResultsRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for VStreamResultsRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a VStreamResultsResponse. */
+    interface IVStreamResultsResponse {
+
+        /** VStreamResultsResponse fields */
+        fields?: (query.IField[]|null);
+
+        /** VStreamResultsResponse gtid */
+        gtid?: (string|null);
+
+        /** VStreamResultsResponse rows */
+        rows?: (query.IRow[]|null);
+    }
+
+    /** Represents a VStreamResultsResponse. */
+    class VStreamResultsResponse implements IVStreamResultsResponse {
+
+        /**
+         * Constructs a new VStreamResultsResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: binlogdata.IVStreamResultsResponse);
+
+        /** VStreamResultsResponse fields. */
+        public fields: query.IField[];
+
+        /** VStreamResultsResponse gtid. */
+        public gtid: string;
+
+        /** VStreamResultsResponse rows. */
+        public rows: query.IRow[];
+
+        /**
+         * Creates a new VStreamResultsResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns VStreamResultsResponse instance
+         */
+        public static create(properties?: binlogdata.IVStreamResultsResponse): binlogdata.VStreamResultsResponse;
+
+        /**
+         * Encodes the specified VStreamResultsResponse message. Does not implicitly {@link binlogdata.VStreamResultsResponse.verify|verify} messages.
+         * @param message VStreamResultsResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: binlogdata.IVStreamResultsResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified VStreamResultsResponse message, length delimited. Does not implicitly {@link binlogdata.VStreamResultsResponse.verify|verify} messages.
+         * @param message VStreamResultsResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: binlogdata.IVStreamResultsResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a VStreamResultsResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns VStreamResultsResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.VStreamResultsResponse;
+
+        /**
+         * Decodes a VStreamResultsResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns VStreamResultsResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.VStreamResultsResponse;
+
+        /**
+         * Verifies a VStreamResultsResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a VStreamResultsResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns VStreamResultsResponse
+         */
+        public static fromObject(object: { [k: string]: any }): binlogdata.VStreamResultsResponse;
+
+        /**
+         * Creates a plain object from a VStreamResultsResponse message. Also converts values to other types if specified.
+         * @param message VStreamResultsResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: binlogdata.VStreamResultsResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this VStreamResultsResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for VStreamResultsResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+}
+
+/** Namespace vtrpc. */
+export namespace vtrpc {
+
+    /** Properties of a CallerID. */
+    interface ICallerID {
+
+        /** CallerID principal */
+        principal?: (string|null);
+
+        /** CallerID component */
+        component?: (string|null);
+
+        /** CallerID subcomponent */
+        subcomponent?: (string|null);
+
+        /** CallerID groups */
+        groups?: (string[]|null);
+    }
+
+    /** Represents a CallerID. */
+    class CallerID implements ICallerID {
+
+        /**
+         * Constructs a new CallerID.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtrpc.ICallerID);
+
+        /** CallerID principal. */
+        public principal: string;
+
+        /** CallerID component. */
+        public component: string;
+
+        /** CallerID subcomponent. */
+        public subcomponent: string;
+
+        /** CallerID groups. */
+        public groups: string[];
+
+        /**
+         * Creates a new CallerID instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns CallerID instance
+         */
+        public static create(properties?: vtrpc.ICallerID): vtrpc.CallerID;
+
+        /**
+         * Encodes the specified CallerID message. Does not implicitly {@link vtrpc.CallerID.verify|verify} messages.
+         * @param message CallerID message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtrpc.ICallerID, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified CallerID message, length delimited. Does not implicitly {@link vtrpc.CallerID.verify|verify} messages.
+         * @param message CallerID message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtrpc.ICallerID, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a CallerID message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns CallerID
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtrpc.CallerID;
+
+        /**
+         * Decodes a CallerID message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns CallerID
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtrpc.CallerID;
+
+        /**
+         * Verifies a CallerID message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a CallerID message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns CallerID
+         */
+        public static fromObject(object: { [k: string]: any }): vtrpc.CallerID;
+
+        /**
+         * Creates a plain object from a CallerID message. Also converts values to other types if specified.
+         * @param message CallerID
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtrpc.CallerID, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this CallerID to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for CallerID
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Code enum. */
+    enum Code {
+        OK = 0,
+        CANCELED = 1,
+        UNKNOWN = 2,
+        INVALID_ARGUMENT = 3,
+        DEADLINE_EXCEEDED = 4,
+        NOT_FOUND = 5,
+        ALREADY_EXISTS = 6,
+        PERMISSION_DENIED = 7,
+        RESOURCE_EXHAUSTED = 8,
+        FAILED_PRECONDITION = 9,
+        ABORTED = 10,
+        OUT_OF_RANGE = 11,
+        UNIMPLEMENTED = 12,
+        INTERNAL = 13,
+        UNAVAILABLE = 14,
+        DATA_LOSS = 15,
+        UNAUTHENTICATED = 16,
+        CLUSTER_EVENT = 17,
+        READ_ONLY = 18
+    }
+
+    /** Properties of a RPCError. */
+    interface IRPCError {
+
+        /** RPCError message */
+        message?: (string|null);
+
+        /** RPCError code */
+        code?: (vtrpc.Code|null);
+    }
+
+    /** Represents a RPCError. */
+    class RPCError implements IRPCError {
+
+        /**
+         * Constructs a new RPCError.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtrpc.IRPCError);
+
+        /** RPCError message. */
+        public message: string;
+
+        /** RPCError code. */
+        public code: vtrpc.Code;
+
+        /**
+         * Creates a new RPCError instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns RPCError instance
+         */
+        public static create(properties?: vtrpc.IRPCError): vtrpc.RPCError;
+
+        /**
+         * Encodes the specified RPCError message. Does not implicitly {@link vtrpc.RPCError.verify|verify} messages.
+         * @param message RPCError message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtrpc.IRPCError, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified RPCError message, length delimited. Does not implicitly {@link vtrpc.RPCError.verify|verify} messages.
+         * @param message RPCError message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtrpc.IRPCError, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a RPCError message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns RPCError
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtrpc.RPCError;
+
+        /**
+         * Decodes a RPCError message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns RPCError
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtrpc.RPCError;
+
+        /**
+         * Verifies a RPCError message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a RPCError message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns RPCError
+         */
+        public static fromObject(object: { [k: string]: any }): vtrpc.RPCError;
+
+        /**
+         * Creates a plain object from a RPCError message. Also converts values to other types if specified.
+         * @param message RPCError
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtrpc.RPCError, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this RPCError to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for RPCError
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
 }
 
 /** Namespace query. */
@@ -33436,251 +37304,6 @@ export namespace query {
 
         /**
          * Gets the default type url for GetSchemaResponse
-         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
-         * @returns The default type url
-         */
-        public static getTypeUrl(typeUrlPrefix?: string): string;
-    }
-}
-
-/** Namespace vtrpc. */
-export namespace vtrpc {
-
-    /** Properties of a CallerID. */
-    interface ICallerID {
-
-        /** CallerID principal */
-        principal?: (string|null);
-
-        /** CallerID component */
-        component?: (string|null);
-
-        /** CallerID subcomponent */
-        subcomponent?: (string|null);
-
-        /** CallerID groups */
-        groups?: (string[]|null);
-    }
-
-    /** Represents a CallerID. */
-    class CallerID implements ICallerID {
-
-        /**
-         * Constructs a new CallerID.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: vtrpc.ICallerID);
-
-        /** CallerID principal. */
-        public principal: string;
-
-        /** CallerID component. */
-        public component: string;
-
-        /** CallerID subcomponent. */
-        public subcomponent: string;
-
-        /** CallerID groups. */
-        public groups: string[];
-
-        /**
-         * Creates a new CallerID instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns CallerID instance
-         */
-        public static create(properties?: vtrpc.ICallerID): vtrpc.CallerID;
-
-        /**
-         * Encodes the specified CallerID message. Does not implicitly {@link vtrpc.CallerID.verify|verify} messages.
-         * @param message CallerID message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: vtrpc.ICallerID, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified CallerID message, length delimited. Does not implicitly {@link vtrpc.CallerID.verify|verify} messages.
-         * @param message CallerID message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: vtrpc.ICallerID, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a CallerID message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns CallerID
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtrpc.CallerID;
-
-        /**
-         * Decodes a CallerID message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns CallerID
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtrpc.CallerID;
-
-        /**
-         * Verifies a CallerID message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a CallerID message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns CallerID
-         */
-        public static fromObject(object: { [k: string]: any }): vtrpc.CallerID;
-
-        /**
-         * Creates a plain object from a CallerID message. Also converts values to other types if specified.
-         * @param message CallerID
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: vtrpc.CallerID, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this CallerID to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-
-        /**
-         * Gets the default type url for CallerID
-         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
-         * @returns The default type url
-         */
-        public static getTypeUrl(typeUrlPrefix?: string): string;
-    }
-
-    /** Code enum. */
-    enum Code {
-        OK = 0,
-        CANCELED = 1,
-        UNKNOWN = 2,
-        INVALID_ARGUMENT = 3,
-        DEADLINE_EXCEEDED = 4,
-        NOT_FOUND = 5,
-        ALREADY_EXISTS = 6,
-        PERMISSION_DENIED = 7,
-        RESOURCE_EXHAUSTED = 8,
-        FAILED_PRECONDITION = 9,
-        ABORTED = 10,
-        OUT_OF_RANGE = 11,
-        UNIMPLEMENTED = 12,
-        INTERNAL = 13,
-        UNAVAILABLE = 14,
-        DATA_LOSS = 15,
-        UNAUTHENTICATED = 16,
-        CLUSTER_EVENT = 17,
-        READ_ONLY = 18
-    }
-
-    /** Properties of a RPCError. */
-    interface IRPCError {
-
-        /** RPCError message */
-        message?: (string|null);
-
-        /** RPCError code */
-        code?: (vtrpc.Code|null);
-    }
-
-    /** Represents a RPCError. */
-    class RPCError implements IRPCError {
-
-        /**
-         * Constructs a new RPCError.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: vtrpc.IRPCError);
-
-        /** RPCError message. */
-        public message: string;
-
-        /** RPCError code. */
-        public code: vtrpc.Code;
-
-        /**
-         * Creates a new RPCError instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns RPCError instance
-         */
-        public static create(properties?: vtrpc.IRPCError): vtrpc.RPCError;
-
-        /**
-         * Encodes the specified RPCError message. Does not implicitly {@link vtrpc.RPCError.verify|verify} messages.
-         * @param message RPCError message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: vtrpc.IRPCError, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified RPCError message, length delimited. Does not implicitly {@link vtrpc.RPCError.verify|verify} messages.
-         * @param message RPCError message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: vtrpc.IRPCError, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a RPCError message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns RPCError
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtrpc.RPCError;
-
-        /**
-         * Decodes a RPCError message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns RPCError
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtrpc.RPCError;
-
-        /**
-         * Verifies a RPCError message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a RPCError message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns RPCError
-         */
-        public static fromObject(object: { [k: string]: any }): vtrpc.RPCError;
-
-        /**
-         * Creates a plain object from a RPCError message. Also converts values to other types if specified.
-         * @param message RPCError
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: vtrpc.RPCError, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this RPCError to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-
-        /**
-         * Gets the default type url for RPCError
          * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
          * @returns The default type url
          */
@@ -46133,6 +49756,9 @@ export namespace vtctldata {
 
         /** GetWorkflowsRequest active_only */
         active_only?: (boolean|null);
+
+        /** GetWorkflowsRequest name_only */
+        name_only?: (boolean|null);
     }
 
     /** Represents a GetWorkflowsRequest. */
@@ -46149,6 +49775,9 @@ export namespace vtctldata {
 
         /** GetWorkflowsRequest active_only. */
         public active_only: boolean;
+
+        /** GetWorkflowsRequest name_only. */
+        public name_only: boolean;
 
         /**
          * Creates a new GetWorkflowsRequest instance using the specified properties.
@@ -54758,3415 +58387,316 @@ export namespace vtctldata {
          */
         public static getTypeUrl(typeUrlPrefix?: string): string;
     }
-}
 
-/** Namespace binlogdata. */
-export namespace binlogdata {
+    /** Properties of a WorkflowUpdateRequest. */
+    interface IWorkflowUpdateRequest {
 
-    /** Properties of a Charset. */
-    interface ICharset {
+        /** WorkflowUpdateRequest keyspace */
+        keyspace?: (string|null);
 
-        /** Charset client */
-        client?: (number|null);
-
-        /** Charset conn */
-        conn?: (number|null);
-
-        /** Charset server */
-        server?: (number|null);
+        /** WorkflowUpdateRequest tablet_request */
+        tablet_request?: (tabletmanagerdata.IUpdateVRWorkflowRequest|null);
     }
 
-    /** Represents a Charset. */
-    class Charset implements ICharset {
+    /** Represents a WorkflowUpdateRequest. */
+    class WorkflowUpdateRequest implements IWorkflowUpdateRequest {
 
         /**
-         * Constructs a new Charset.
+         * Constructs a new WorkflowUpdateRequest.
          * @param [properties] Properties to set
          */
-        constructor(properties?: binlogdata.ICharset);
+        constructor(properties?: vtctldata.IWorkflowUpdateRequest);
 
-        /** Charset client. */
-        public client: number;
+        /** WorkflowUpdateRequest keyspace. */
+        public keyspace: string;
 
-        /** Charset conn. */
-        public conn: number;
-
-        /** Charset server. */
-        public server: number;
+        /** WorkflowUpdateRequest tablet_request. */
+        public tablet_request?: (tabletmanagerdata.IUpdateVRWorkflowRequest|null);
 
         /**
-         * Creates a new Charset instance using the specified properties.
+         * Creates a new WorkflowUpdateRequest instance using the specified properties.
          * @param [properties] Properties to set
-         * @returns Charset instance
+         * @returns WorkflowUpdateRequest instance
          */
-        public static create(properties?: binlogdata.ICharset): binlogdata.Charset;
+        public static create(properties?: vtctldata.IWorkflowUpdateRequest): vtctldata.WorkflowUpdateRequest;
 
         /**
-         * Encodes the specified Charset message. Does not implicitly {@link binlogdata.Charset.verify|verify} messages.
-         * @param message Charset message or plain object to encode
+         * Encodes the specified WorkflowUpdateRequest message. Does not implicitly {@link vtctldata.WorkflowUpdateRequest.verify|verify} messages.
+         * @param message WorkflowUpdateRequest message or plain object to encode
          * @param [writer] Writer to encode to
          * @returns Writer
          */
-        public static encode(message: binlogdata.ICharset, writer?: $protobuf.Writer): $protobuf.Writer;
+        public static encode(message: vtctldata.IWorkflowUpdateRequest, writer?: $protobuf.Writer): $protobuf.Writer;
 
         /**
-         * Encodes the specified Charset message, length delimited. Does not implicitly {@link binlogdata.Charset.verify|verify} messages.
-         * @param message Charset message or plain object to encode
+         * Encodes the specified WorkflowUpdateRequest message, length delimited. Does not implicitly {@link vtctldata.WorkflowUpdateRequest.verify|verify} messages.
+         * @param message WorkflowUpdateRequest message or plain object to encode
          * @param [writer] Writer to encode to
          * @returns Writer
          */
-        public static encodeDelimited(message: binlogdata.ICharset, writer?: $protobuf.Writer): $protobuf.Writer;
+        public static encodeDelimited(message: vtctldata.IWorkflowUpdateRequest, writer?: $protobuf.Writer): $protobuf.Writer;
 
         /**
-         * Decodes a Charset message from the specified reader or buffer.
+         * Decodes a WorkflowUpdateRequest message from the specified reader or buffer.
          * @param reader Reader or buffer to decode from
          * @param [length] Message length if known beforehand
-         * @returns Charset
+         * @returns WorkflowUpdateRequest
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.Charset;
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.WorkflowUpdateRequest;
 
         /**
-         * Decodes a Charset message from the specified reader or buffer, length delimited.
+         * Decodes a WorkflowUpdateRequest message from the specified reader or buffer, length delimited.
          * @param reader Reader or buffer to decode from
-         * @returns Charset
+         * @returns WorkflowUpdateRequest
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.Charset;
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.WorkflowUpdateRequest;
 
         /**
-         * Verifies a Charset message.
+         * Verifies a WorkflowUpdateRequest message.
          * @param message Plain object to verify
          * @returns `null` if valid, otherwise the reason why it is not
          */
         public static verify(message: { [k: string]: any }): (string|null);
 
         /**
-         * Creates a Charset message from a plain object. Also converts values to their respective internal types.
+         * Creates a WorkflowUpdateRequest message from a plain object. Also converts values to their respective internal types.
          * @param object Plain object
-         * @returns Charset
+         * @returns WorkflowUpdateRequest
          */
-        public static fromObject(object: { [k: string]: any }): binlogdata.Charset;
+        public static fromObject(object: { [k: string]: any }): vtctldata.WorkflowUpdateRequest;
 
         /**
-         * Creates a plain object from a Charset message. Also converts values to other types if specified.
-         * @param message Charset
+         * Creates a plain object from a WorkflowUpdateRequest message. Also converts values to other types if specified.
+         * @param message WorkflowUpdateRequest
          * @param [options] Conversion options
          * @returns Plain object
          */
-        public static toObject(message: binlogdata.Charset, options?: $protobuf.IConversionOptions): { [k: string]: any };
+        public static toObject(message: vtctldata.WorkflowUpdateRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
 
         /**
-         * Converts this Charset to JSON.
+         * Converts this WorkflowUpdateRequest to JSON.
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
 
         /**
-         * Gets the default type url for Charset
+         * Gets the default type url for WorkflowUpdateRequest
          * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
          * @returns The default type url
          */
         public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
-    /** Properties of a BinlogTransaction. */
-    interface IBinlogTransaction {
+    /** Properties of a WorkflowUpdateResponse. */
+    interface IWorkflowUpdateResponse {
 
-        /** BinlogTransaction statements */
-        statements?: (binlogdata.BinlogTransaction.IStatement[]|null);
+        /** WorkflowUpdateResponse summary */
+        summary?: (string|null);
 
-        /** BinlogTransaction event_token */
-        event_token?: (query.IEventToken|null);
+        /** WorkflowUpdateResponse details */
+        details?: (vtctldata.WorkflowUpdateResponse.ITabletInfo[]|null);
     }
 
-    /** Represents a BinlogTransaction. */
-    class BinlogTransaction implements IBinlogTransaction {
+    /** Represents a WorkflowUpdateResponse. */
+    class WorkflowUpdateResponse implements IWorkflowUpdateResponse {
 
         /**
-         * Constructs a new BinlogTransaction.
+         * Constructs a new WorkflowUpdateResponse.
          * @param [properties] Properties to set
          */
-        constructor(properties?: binlogdata.IBinlogTransaction);
+        constructor(properties?: vtctldata.IWorkflowUpdateResponse);
 
-        /** BinlogTransaction statements. */
-        public statements: binlogdata.BinlogTransaction.IStatement[];
+        /** WorkflowUpdateResponse summary. */
+        public summary: string;
 
-        /** BinlogTransaction event_token. */
-        public event_token?: (query.IEventToken|null);
+        /** WorkflowUpdateResponse details. */
+        public details: vtctldata.WorkflowUpdateResponse.ITabletInfo[];
 
         /**
-         * Creates a new BinlogTransaction instance using the specified properties.
+         * Creates a new WorkflowUpdateResponse instance using the specified properties.
          * @param [properties] Properties to set
-         * @returns BinlogTransaction instance
+         * @returns WorkflowUpdateResponse instance
          */
-        public static create(properties?: binlogdata.IBinlogTransaction): binlogdata.BinlogTransaction;
+        public static create(properties?: vtctldata.IWorkflowUpdateResponse): vtctldata.WorkflowUpdateResponse;
 
         /**
-         * Encodes the specified BinlogTransaction message. Does not implicitly {@link binlogdata.BinlogTransaction.verify|verify} messages.
-         * @param message BinlogTransaction message or plain object to encode
+         * Encodes the specified WorkflowUpdateResponse message. Does not implicitly {@link vtctldata.WorkflowUpdateResponse.verify|verify} messages.
+         * @param message WorkflowUpdateResponse message or plain object to encode
          * @param [writer] Writer to encode to
          * @returns Writer
          */
-        public static encode(message: binlogdata.IBinlogTransaction, writer?: $protobuf.Writer): $protobuf.Writer;
+        public static encode(message: vtctldata.IWorkflowUpdateResponse, writer?: $protobuf.Writer): $protobuf.Writer;
 
         /**
-         * Encodes the specified BinlogTransaction message, length delimited. Does not implicitly {@link binlogdata.BinlogTransaction.verify|verify} messages.
-         * @param message BinlogTransaction message or plain object to encode
+         * Encodes the specified WorkflowUpdateResponse message, length delimited. Does not implicitly {@link vtctldata.WorkflowUpdateResponse.verify|verify} messages.
+         * @param message WorkflowUpdateResponse message or plain object to encode
          * @param [writer] Writer to encode to
          * @returns Writer
          */
-        public static encodeDelimited(message: binlogdata.IBinlogTransaction, writer?: $protobuf.Writer): $protobuf.Writer;
+        public static encodeDelimited(message: vtctldata.IWorkflowUpdateResponse, writer?: $protobuf.Writer): $protobuf.Writer;
 
         /**
-         * Decodes a BinlogTransaction message from the specified reader or buffer.
+         * Decodes a WorkflowUpdateResponse message from the specified reader or buffer.
          * @param reader Reader or buffer to decode from
          * @param [length] Message length if known beforehand
-         * @returns BinlogTransaction
+         * @returns WorkflowUpdateResponse
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.BinlogTransaction;
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.WorkflowUpdateResponse;
 
         /**
-         * Decodes a BinlogTransaction message from the specified reader or buffer, length delimited.
+         * Decodes a WorkflowUpdateResponse message from the specified reader or buffer, length delimited.
          * @param reader Reader or buffer to decode from
-         * @returns BinlogTransaction
+         * @returns WorkflowUpdateResponse
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.BinlogTransaction;
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.WorkflowUpdateResponse;
 
         /**
-         * Verifies a BinlogTransaction message.
+         * Verifies a WorkflowUpdateResponse message.
          * @param message Plain object to verify
          * @returns `null` if valid, otherwise the reason why it is not
          */
         public static verify(message: { [k: string]: any }): (string|null);
 
         /**
-         * Creates a BinlogTransaction message from a plain object. Also converts values to their respective internal types.
+         * Creates a WorkflowUpdateResponse message from a plain object. Also converts values to their respective internal types.
          * @param object Plain object
-         * @returns BinlogTransaction
+         * @returns WorkflowUpdateResponse
          */
-        public static fromObject(object: { [k: string]: any }): binlogdata.BinlogTransaction;
+        public static fromObject(object: { [k: string]: any }): vtctldata.WorkflowUpdateResponse;
 
         /**
-         * Creates a plain object from a BinlogTransaction message. Also converts values to other types if specified.
-         * @param message BinlogTransaction
+         * Creates a plain object from a WorkflowUpdateResponse message. Also converts values to other types if specified.
+         * @param message WorkflowUpdateResponse
          * @param [options] Conversion options
          * @returns Plain object
          */
-        public static toObject(message: binlogdata.BinlogTransaction, options?: $protobuf.IConversionOptions): { [k: string]: any };
+        public static toObject(message: vtctldata.WorkflowUpdateResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
 
         /**
-         * Converts this BinlogTransaction to JSON.
+         * Converts this WorkflowUpdateResponse to JSON.
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
 
         /**
-         * Gets the default type url for BinlogTransaction
+         * Gets the default type url for WorkflowUpdateResponse
          * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
          * @returns The default type url
          */
         public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
-    namespace BinlogTransaction {
+    namespace WorkflowUpdateResponse {
 
-        /** Properties of a Statement. */
-        interface IStatement {
+        /** Properties of a TabletInfo. */
+        interface ITabletInfo {
 
-            /** Statement category */
-            category?: (binlogdata.BinlogTransaction.Statement.Category|null);
+            /** TabletInfo tablet */
+            tablet?: (string|null);
 
-            /** Statement charset */
-            charset?: (binlogdata.ICharset|null);
-
-            /** Statement sql */
-            sql?: (Uint8Array|null);
+            /** TabletInfo changed */
+            changed?: (boolean|null);
         }
 
-        /** Represents a Statement. */
-        class Statement implements IStatement {
+        /** Represents a TabletInfo. */
+        class TabletInfo implements ITabletInfo {
 
             /**
-             * Constructs a new Statement.
+             * Constructs a new TabletInfo.
              * @param [properties] Properties to set
              */
-            constructor(properties?: binlogdata.BinlogTransaction.IStatement);
+            constructor(properties?: vtctldata.WorkflowUpdateResponse.ITabletInfo);
 
-            /** Statement category. */
-            public category: binlogdata.BinlogTransaction.Statement.Category;
+            /** TabletInfo tablet. */
+            public tablet: string;
 
-            /** Statement charset. */
-            public charset?: (binlogdata.ICharset|null);
-
-            /** Statement sql. */
-            public sql: Uint8Array;
+            /** TabletInfo changed. */
+            public changed: boolean;
 
             /**
-             * Creates a new Statement instance using the specified properties.
+             * Creates a new TabletInfo instance using the specified properties.
              * @param [properties] Properties to set
-             * @returns Statement instance
+             * @returns TabletInfo instance
              */
-            public static create(properties?: binlogdata.BinlogTransaction.IStatement): binlogdata.BinlogTransaction.Statement;
+            public static create(properties?: vtctldata.WorkflowUpdateResponse.ITabletInfo): vtctldata.WorkflowUpdateResponse.TabletInfo;
 
             /**
-             * Encodes the specified Statement message. Does not implicitly {@link binlogdata.BinlogTransaction.Statement.verify|verify} messages.
-             * @param message Statement message or plain object to encode
+             * Encodes the specified TabletInfo message. Does not implicitly {@link vtctldata.WorkflowUpdateResponse.TabletInfo.verify|verify} messages.
+             * @param message TabletInfo message or plain object to encode
              * @param [writer] Writer to encode to
              * @returns Writer
              */
-            public static encode(message: binlogdata.BinlogTransaction.IStatement, writer?: $protobuf.Writer): $protobuf.Writer;
+            public static encode(message: vtctldata.WorkflowUpdateResponse.ITabletInfo, writer?: $protobuf.Writer): $protobuf.Writer;
 
             /**
-             * Encodes the specified Statement message, length delimited. Does not implicitly {@link binlogdata.BinlogTransaction.Statement.verify|verify} messages.
-             * @param message Statement message or plain object to encode
+             * Encodes the specified TabletInfo message, length delimited. Does not implicitly {@link vtctldata.WorkflowUpdateResponse.TabletInfo.verify|verify} messages.
+             * @param message TabletInfo message or plain object to encode
              * @param [writer] Writer to encode to
              * @returns Writer
              */
-            public static encodeDelimited(message: binlogdata.BinlogTransaction.IStatement, writer?: $protobuf.Writer): $protobuf.Writer;
+            public static encodeDelimited(message: vtctldata.WorkflowUpdateResponse.ITabletInfo, writer?: $protobuf.Writer): $protobuf.Writer;
 
             /**
-             * Decodes a Statement message from the specified reader or buffer.
+             * Decodes a TabletInfo message from the specified reader or buffer.
              * @param reader Reader or buffer to decode from
              * @param [length] Message length if known beforehand
-             * @returns Statement
+             * @returns TabletInfo
              * @throws {Error} If the payload is not a reader or valid buffer
              * @throws {$protobuf.util.ProtocolError} If required fields are missing
              */
-            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.BinlogTransaction.Statement;
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.WorkflowUpdateResponse.TabletInfo;
 
             /**
-             * Decodes a Statement message from the specified reader or buffer, length delimited.
+             * Decodes a TabletInfo message from the specified reader or buffer, length delimited.
              * @param reader Reader or buffer to decode from
-             * @returns Statement
+             * @returns TabletInfo
              * @throws {Error} If the payload is not a reader or valid buffer
              * @throws {$protobuf.util.ProtocolError} If required fields are missing
              */
-            public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.BinlogTransaction.Statement;
+            public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.WorkflowUpdateResponse.TabletInfo;
 
             /**
-             * Verifies a Statement message.
+             * Verifies a TabletInfo message.
              * @param message Plain object to verify
              * @returns `null` if valid, otherwise the reason why it is not
              */
             public static verify(message: { [k: string]: any }): (string|null);
 
             /**
-             * Creates a Statement message from a plain object. Also converts values to their respective internal types.
+             * Creates a TabletInfo message from a plain object. Also converts values to their respective internal types.
              * @param object Plain object
-             * @returns Statement
+             * @returns TabletInfo
              */
-            public static fromObject(object: { [k: string]: any }): binlogdata.BinlogTransaction.Statement;
+            public static fromObject(object: { [k: string]: any }): vtctldata.WorkflowUpdateResponse.TabletInfo;
 
             /**
-             * Creates a plain object from a Statement message. Also converts values to other types if specified.
-             * @param message Statement
+             * Creates a plain object from a TabletInfo message. Also converts values to other types if specified.
+             * @param message TabletInfo
              * @param [options] Conversion options
              * @returns Plain object
              */
-            public static toObject(message: binlogdata.BinlogTransaction.Statement, options?: $protobuf.IConversionOptions): { [k: string]: any };
+            public static toObject(message: vtctldata.WorkflowUpdateResponse.TabletInfo, options?: $protobuf.IConversionOptions): { [k: string]: any };
 
             /**
-             * Converts this Statement to JSON.
+             * Converts this TabletInfo to JSON.
              * @returns JSON object
              */
             public toJSON(): { [k: string]: any };
 
             /**
-             * Gets the default type url for Statement
+             * Gets the default type url for TabletInfo
              * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
              * @returns The default type url
              */
             public static getTypeUrl(typeUrlPrefix?: string): string;
         }
-
-        namespace Statement {
-
-            /** Category enum. */
-            enum Category {
-                BL_UNRECOGNIZED = 0,
-                BL_BEGIN = 1,
-                BL_COMMIT = 2,
-                BL_ROLLBACK = 3,
-                BL_DML_DEPRECATED = 4,
-                BL_DDL = 5,
-                BL_SET = 6,
-                BL_INSERT = 7,
-                BL_UPDATE = 8,
-                BL_DELETE = 9
-            }
-        }
-    }
-
-    /** Properties of a StreamKeyRangeRequest. */
-    interface IStreamKeyRangeRequest {
-
-        /** StreamKeyRangeRequest position */
-        position?: (string|null);
-
-        /** StreamKeyRangeRequest key_range */
-        key_range?: (topodata.IKeyRange|null);
-
-        /** StreamKeyRangeRequest charset */
-        charset?: (binlogdata.ICharset|null);
-    }
-
-    /** Represents a StreamKeyRangeRequest. */
-    class StreamKeyRangeRequest implements IStreamKeyRangeRequest {
-
-        /**
-         * Constructs a new StreamKeyRangeRequest.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: binlogdata.IStreamKeyRangeRequest);
-
-        /** StreamKeyRangeRequest position. */
-        public position: string;
-
-        /** StreamKeyRangeRequest key_range. */
-        public key_range?: (topodata.IKeyRange|null);
-
-        /** StreamKeyRangeRequest charset. */
-        public charset?: (binlogdata.ICharset|null);
-
-        /**
-         * Creates a new StreamKeyRangeRequest instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns StreamKeyRangeRequest instance
-         */
-        public static create(properties?: binlogdata.IStreamKeyRangeRequest): binlogdata.StreamKeyRangeRequest;
-
-        /**
-         * Encodes the specified StreamKeyRangeRequest message. Does not implicitly {@link binlogdata.StreamKeyRangeRequest.verify|verify} messages.
-         * @param message StreamKeyRangeRequest message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: binlogdata.IStreamKeyRangeRequest, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified StreamKeyRangeRequest message, length delimited. Does not implicitly {@link binlogdata.StreamKeyRangeRequest.verify|verify} messages.
-         * @param message StreamKeyRangeRequest message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: binlogdata.IStreamKeyRangeRequest, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a StreamKeyRangeRequest message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns StreamKeyRangeRequest
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.StreamKeyRangeRequest;
-
-        /**
-         * Decodes a StreamKeyRangeRequest message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns StreamKeyRangeRequest
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.StreamKeyRangeRequest;
-
-        /**
-         * Verifies a StreamKeyRangeRequest message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a StreamKeyRangeRequest message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns StreamKeyRangeRequest
-         */
-        public static fromObject(object: { [k: string]: any }): binlogdata.StreamKeyRangeRequest;
-
-        /**
-         * Creates a plain object from a StreamKeyRangeRequest message. Also converts values to other types if specified.
-         * @param message StreamKeyRangeRequest
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: binlogdata.StreamKeyRangeRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this StreamKeyRangeRequest to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-
-        /**
-         * Gets the default type url for StreamKeyRangeRequest
-         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
-         * @returns The default type url
-         */
-        public static getTypeUrl(typeUrlPrefix?: string): string;
-    }
-
-    /** Properties of a StreamKeyRangeResponse. */
-    interface IStreamKeyRangeResponse {
-
-        /** StreamKeyRangeResponse binlog_transaction */
-        binlog_transaction?: (binlogdata.IBinlogTransaction|null);
-    }
-
-    /** Represents a StreamKeyRangeResponse. */
-    class StreamKeyRangeResponse implements IStreamKeyRangeResponse {
-
-        /**
-         * Constructs a new StreamKeyRangeResponse.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: binlogdata.IStreamKeyRangeResponse);
-
-        /** StreamKeyRangeResponse binlog_transaction. */
-        public binlog_transaction?: (binlogdata.IBinlogTransaction|null);
-
-        /**
-         * Creates a new StreamKeyRangeResponse instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns StreamKeyRangeResponse instance
-         */
-        public static create(properties?: binlogdata.IStreamKeyRangeResponse): binlogdata.StreamKeyRangeResponse;
-
-        /**
-         * Encodes the specified StreamKeyRangeResponse message. Does not implicitly {@link binlogdata.StreamKeyRangeResponse.verify|verify} messages.
-         * @param message StreamKeyRangeResponse message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: binlogdata.IStreamKeyRangeResponse, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified StreamKeyRangeResponse message, length delimited. Does not implicitly {@link binlogdata.StreamKeyRangeResponse.verify|verify} messages.
-         * @param message StreamKeyRangeResponse message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: binlogdata.IStreamKeyRangeResponse, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a StreamKeyRangeResponse message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns StreamKeyRangeResponse
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.StreamKeyRangeResponse;
-
-        /**
-         * Decodes a StreamKeyRangeResponse message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns StreamKeyRangeResponse
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.StreamKeyRangeResponse;
-
-        /**
-         * Verifies a StreamKeyRangeResponse message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a StreamKeyRangeResponse message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns StreamKeyRangeResponse
-         */
-        public static fromObject(object: { [k: string]: any }): binlogdata.StreamKeyRangeResponse;
-
-        /**
-         * Creates a plain object from a StreamKeyRangeResponse message. Also converts values to other types if specified.
-         * @param message StreamKeyRangeResponse
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: binlogdata.StreamKeyRangeResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this StreamKeyRangeResponse to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-
-        /**
-         * Gets the default type url for StreamKeyRangeResponse
-         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
-         * @returns The default type url
-         */
-        public static getTypeUrl(typeUrlPrefix?: string): string;
-    }
-
-    /** Properties of a StreamTablesRequest. */
-    interface IStreamTablesRequest {
-
-        /** StreamTablesRequest position */
-        position?: (string|null);
-
-        /** StreamTablesRequest tables */
-        tables?: (string[]|null);
-
-        /** StreamTablesRequest charset */
-        charset?: (binlogdata.ICharset|null);
-    }
-
-    /** Represents a StreamTablesRequest. */
-    class StreamTablesRequest implements IStreamTablesRequest {
-
-        /**
-         * Constructs a new StreamTablesRequest.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: binlogdata.IStreamTablesRequest);
-
-        /** StreamTablesRequest position. */
-        public position: string;
-
-        /** StreamTablesRequest tables. */
-        public tables: string[];
-
-        /** StreamTablesRequest charset. */
-        public charset?: (binlogdata.ICharset|null);
-
-        /**
-         * Creates a new StreamTablesRequest instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns StreamTablesRequest instance
-         */
-        public static create(properties?: binlogdata.IStreamTablesRequest): binlogdata.StreamTablesRequest;
-
-        /**
-         * Encodes the specified StreamTablesRequest message. Does not implicitly {@link binlogdata.StreamTablesRequest.verify|verify} messages.
-         * @param message StreamTablesRequest message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: binlogdata.IStreamTablesRequest, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified StreamTablesRequest message, length delimited. Does not implicitly {@link binlogdata.StreamTablesRequest.verify|verify} messages.
-         * @param message StreamTablesRequest message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: binlogdata.IStreamTablesRequest, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a StreamTablesRequest message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns StreamTablesRequest
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.StreamTablesRequest;
-
-        /**
-         * Decodes a StreamTablesRequest message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns StreamTablesRequest
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.StreamTablesRequest;
-
-        /**
-         * Verifies a StreamTablesRequest message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a StreamTablesRequest message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns StreamTablesRequest
-         */
-        public static fromObject(object: { [k: string]: any }): binlogdata.StreamTablesRequest;
-
-        /**
-         * Creates a plain object from a StreamTablesRequest message. Also converts values to other types if specified.
-         * @param message StreamTablesRequest
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: binlogdata.StreamTablesRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this StreamTablesRequest to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-
-        /**
-         * Gets the default type url for StreamTablesRequest
-         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
-         * @returns The default type url
-         */
-        public static getTypeUrl(typeUrlPrefix?: string): string;
-    }
-
-    /** Properties of a StreamTablesResponse. */
-    interface IStreamTablesResponse {
-
-        /** StreamTablesResponse binlog_transaction */
-        binlog_transaction?: (binlogdata.IBinlogTransaction|null);
-    }
-
-    /** Represents a StreamTablesResponse. */
-    class StreamTablesResponse implements IStreamTablesResponse {
-
-        /**
-         * Constructs a new StreamTablesResponse.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: binlogdata.IStreamTablesResponse);
-
-        /** StreamTablesResponse binlog_transaction. */
-        public binlog_transaction?: (binlogdata.IBinlogTransaction|null);
-
-        /**
-         * Creates a new StreamTablesResponse instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns StreamTablesResponse instance
-         */
-        public static create(properties?: binlogdata.IStreamTablesResponse): binlogdata.StreamTablesResponse;
-
-        /**
-         * Encodes the specified StreamTablesResponse message. Does not implicitly {@link binlogdata.StreamTablesResponse.verify|verify} messages.
-         * @param message StreamTablesResponse message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: binlogdata.IStreamTablesResponse, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified StreamTablesResponse message, length delimited. Does not implicitly {@link binlogdata.StreamTablesResponse.verify|verify} messages.
-         * @param message StreamTablesResponse message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: binlogdata.IStreamTablesResponse, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a StreamTablesResponse message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns StreamTablesResponse
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.StreamTablesResponse;
-
-        /**
-         * Decodes a StreamTablesResponse message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns StreamTablesResponse
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.StreamTablesResponse;
-
-        /**
-         * Verifies a StreamTablesResponse message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a StreamTablesResponse message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns StreamTablesResponse
-         */
-        public static fromObject(object: { [k: string]: any }): binlogdata.StreamTablesResponse;
-
-        /**
-         * Creates a plain object from a StreamTablesResponse message. Also converts values to other types if specified.
-         * @param message StreamTablesResponse
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: binlogdata.StreamTablesResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this StreamTablesResponse to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-
-        /**
-         * Gets the default type url for StreamTablesResponse
-         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
-         * @returns The default type url
-         */
-        public static getTypeUrl(typeUrlPrefix?: string): string;
-    }
-
-    /** Properties of a CharsetConversion. */
-    interface ICharsetConversion {
-
-        /** CharsetConversion from_charset */
-        from_charset?: (string|null);
-
-        /** CharsetConversion to_charset */
-        to_charset?: (string|null);
-    }
-
-    /** Represents a CharsetConversion. */
-    class CharsetConversion implements ICharsetConversion {
-
-        /**
-         * Constructs a new CharsetConversion.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: binlogdata.ICharsetConversion);
-
-        /** CharsetConversion from_charset. */
-        public from_charset: string;
-
-        /** CharsetConversion to_charset. */
-        public to_charset: string;
-
-        /**
-         * Creates a new CharsetConversion instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns CharsetConversion instance
-         */
-        public static create(properties?: binlogdata.ICharsetConversion): binlogdata.CharsetConversion;
-
-        /**
-         * Encodes the specified CharsetConversion message. Does not implicitly {@link binlogdata.CharsetConversion.verify|verify} messages.
-         * @param message CharsetConversion message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: binlogdata.ICharsetConversion, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified CharsetConversion message, length delimited. Does not implicitly {@link binlogdata.CharsetConversion.verify|verify} messages.
-         * @param message CharsetConversion message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: binlogdata.ICharsetConversion, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a CharsetConversion message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns CharsetConversion
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.CharsetConversion;
-
-        /**
-         * Decodes a CharsetConversion message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns CharsetConversion
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.CharsetConversion;
-
-        /**
-         * Verifies a CharsetConversion message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a CharsetConversion message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns CharsetConversion
-         */
-        public static fromObject(object: { [k: string]: any }): binlogdata.CharsetConversion;
-
-        /**
-         * Creates a plain object from a CharsetConversion message. Also converts values to other types if specified.
-         * @param message CharsetConversion
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: binlogdata.CharsetConversion, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this CharsetConversion to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-
-        /**
-         * Gets the default type url for CharsetConversion
-         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
-         * @returns The default type url
-         */
-        public static getTypeUrl(typeUrlPrefix?: string): string;
-    }
-
-    /** Properties of a Rule. */
-    interface IRule {
-
-        /** Rule match */
-        match?: (string|null);
-
-        /** Rule filter */
-        filter?: (string|null);
-
-        /** Rule convert_enum_to_text */
-        convert_enum_to_text?: ({ [k: string]: string }|null);
-
-        /** Rule convert_charset */
-        convert_charset?: ({ [k: string]: binlogdata.ICharsetConversion }|null);
-
-        /** Rule source_unique_key_columns */
-        source_unique_key_columns?: (string|null);
-
-        /** Rule target_unique_key_columns */
-        target_unique_key_columns?: (string|null);
-
-        /** Rule source_unique_key_target_columns */
-        source_unique_key_target_columns?: (string|null);
-
-        /** Rule convert_int_to_enum */
-        convert_int_to_enum?: ({ [k: string]: boolean }|null);
-    }
-
-    /** Represents a Rule. */
-    class Rule implements IRule {
-
-        /**
-         * Constructs a new Rule.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: binlogdata.IRule);
-
-        /** Rule match. */
-        public match: string;
-
-        /** Rule filter. */
-        public filter: string;
-
-        /** Rule convert_enum_to_text. */
-        public convert_enum_to_text: { [k: string]: string };
-
-        /** Rule convert_charset. */
-        public convert_charset: { [k: string]: binlogdata.ICharsetConversion };
-
-        /** Rule source_unique_key_columns. */
-        public source_unique_key_columns: string;
-
-        /** Rule target_unique_key_columns. */
-        public target_unique_key_columns: string;
-
-        /** Rule source_unique_key_target_columns. */
-        public source_unique_key_target_columns: string;
-
-        /** Rule convert_int_to_enum. */
-        public convert_int_to_enum: { [k: string]: boolean };
-
-        /**
-         * Creates a new Rule instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns Rule instance
-         */
-        public static create(properties?: binlogdata.IRule): binlogdata.Rule;
-
-        /**
-         * Encodes the specified Rule message. Does not implicitly {@link binlogdata.Rule.verify|verify} messages.
-         * @param message Rule message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: binlogdata.IRule, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified Rule message, length delimited. Does not implicitly {@link binlogdata.Rule.verify|verify} messages.
-         * @param message Rule message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: binlogdata.IRule, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a Rule message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns Rule
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.Rule;
-
-        /**
-         * Decodes a Rule message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns Rule
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.Rule;
-
-        /**
-         * Verifies a Rule message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a Rule message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns Rule
-         */
-        public static fromObject(object: { [k: string]: any }): binlogdata.Rule;
-
-        /**
-         * Creates a plain object from a Rule message. Also converts values to other types if specified.
-         * @param message Rule
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: binlogdata.Rule, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this Rule to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-
-        /**
-         * Gets the default type url for Rule
-         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
-         * @returns The default type url
-         */
-        public static getTypeUrl(typeUrlPrefix?: string): string;
-    }
-
-    /** Properties of a Filter. */
-    interface IFilter {
-
-        /** Filter rules */
-        rules?: (binlogdata.IRule[]|null);
-
-        /** Filter field_event_mode */
-        field_event_mode?: (binlogdata.Filter.FieldEventMode|null);
-
-        /** Filter workflow_type */
-        workflow_type?: (number|Long|null);
-
-        /** Filter workflow_name */
-        workflow_name?: (string|null);
-    }
-
-    /** Represents a Filter. */
-    class Filter implements IFilter {
-
-        /**
-         * Constructs a new Filter.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: binlogdata.IFilter);
-
-        /** Filter rules. */
-        public rules: binlogdata.IRule[];
-
-        /** Filter field_event_mode. */
-        public field_event_mode: binlogdata.Filter.FieldEventMode;
-
-        /** Filter workflow_type. */
-        public workflow_type: (number|Long);
-
-        /** Filter workflow_name. */
-        public workflow_name: string;
-
-        /**
-         * Creates a new Filter instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns Filter instance
-         */
-        public static create(properties?: binlogdata.IFilter): binlogdata.Filter;
-
-        /**
-         * Encodes the specified Filter message. Does not implicitly {@link binlogdata.Filter.verify|verify} messages.
-         * @param message Filter message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: binlogdata.IFilter, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified Filter message, length delimited. Does not implicitly {@link binlogdata.Filter.verify|verify} messages.
-         * @param message Filter message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: binlogdata.IFilter, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a Filter message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns Filter
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.Filter;
-
-        /**
-         * Decodes a Filter message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns Filter
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.Filter;
-
-        /**
-         * Verifies a Filter message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a Filter message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns Filter
-         */
-        public static fromObject(object: { [k: string]: any }): binlogdata.Filter;
-
-        /**
-         * Creates a plain object from a Filter message. Also converts values to other types if specified.
-         * @param message Filter
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: binlogdata.Filter, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this Filter to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-
-        /**
-         * Gets the default type url for Filter
-         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
-         * @returns The default type url
-         */
-        public static getTypeUrl(typeUrlPrefix?: string): string;
-    }
-
-    namespace Filter {
-
-        /** FieldEventMode enum. */
-        enum FieldEventMode {
-            ERR_ON_MISMATCH = 0,
-            BEST_EFFORT = 1
-        }
-    }
-
-    /** OnDDLAction enum. */
-    enum OnDDLAction {
-        IGNORE = 0,
-        STOP = 1,
-        EXEC = 2,
-        EXEC_IGNORE = 3
-    }
-
-    /** VReplicationWorkflowType enum. */
-    enum VReplicationWorkflowType {
-        Materialize = 0,
-        MoveTables = 1,
-        CreateLookupIndex = 2,
-        Migrate = 3,
-        Reshard = 4,
-        OnlineDDL = 5
-    }
-
-    /** VReplicationWorkflowSubType enum. */
-    enum VReplicationWorkflowSubType {
-        None = 0,
-        Partial = 1
-    }
-
-    /** Properties of a BinlogSource. */
-    interface IBinlogSource {
-
-        /** BinlogSource keyspace */
-        keyspace?: (string|null);
-
-        /** BinlogSource shard */
-        shard?: (string|null);
-
-        /** BinlogSource tablet_type */
-        tablet_type?: (topodata.TabletType|null);
-
-        /** BinlogSource key_range */
-        key_range?: (topodata.IKeyRange|null);
-
-        /** BinlogSource tables */
-        tables?: (string[]|null);
-
-        /** BinlogSource filter */
-        filter?: (binlogdata.IFilter|null);
-
-        /** BinlogSource on_ddl */
-        on_ddl?: (binlogdata.OnDDLAction|null);
-
-        /** BinlogSource external_mysql */
-        external_mysql?: (string|null);
-
-        /** BinlogSource stop_after_copy */
-        stop_after_copy?: (boolean|null);
-
-        /** BinlogSource external_cluster */
-        external_cluster?: (string|null);
-
-        /** BinlogSource source_time_zone */
-        source_time_zone?: (string|null);
-
-        /** BinlogSource target_time_zone */
-        target_time_zone?: (string|null);
-    }
-
-    /** Represents a BinlogSource. */
-    class BinlogSource implements IBinlogSource {
-
-        /**
-         * Constructs a new BinlogSource.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: binlogdata.IBinlogSource);
-
-        /** BinlogSource keyspace. */
-        public keyspace: string;
-
-        /** BinlogSource shard. */
-        public shard: string;
-
-        /** BinlogSource tablet_type. */
-        public tablet_type: topodata.TabletType;
-
-        /** BinlogSource key_range. */
-        public key_range?: (topodata.IKeyRange|null);
-
-        /** BinlogSource tables. */
-        public tables: string[];
-
-        /** BinlogSource filter. */
-        public filter?: (binlogdata.IFilter|null);
-
-        /** BinlogSource on_ddl. */
-        public on_ddl: binlogdata.OnDDLAction;
-
-        /** BinlogSource external_mysql. */
-        public external_mysql: string;
-
-        /** BinlogSource stop_after_copy. */
-        public stop_after_copy: boolean;
-
-        /** BinlogSource external_cluster. */
-        public external_cluster: string;
-
-        /** BinlogSource source_time_zone. */
-        public source_time_zone: string;
-
-        /** BinlogSource target_time_zone. */
-        public target_time_zone: string;
-
-        /**
-         * Creates a new BinlogSource instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns BinlogSource instance
-         */
-        public static create(properties?: binlogdata.IBinlogSource): binlogdata.BinlogSource;
-
-        /**
-         * Encodes the specified BinlogSource message. Does not implicitly {@link binlogdata.BinlogSource.verify|verify} messages.
-         * @param message BinlogSource message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: binlogdata.IBinlogSource, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified BinlogSource message, length delimited. Does not implicitly {@link binlogdata.BinlogSource.verify|verify} messages.
-         * @param message BinlogSource message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: binlogdata.IBinlogSource, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a BinlogSource message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns BinlogSource
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.BinlogSource;
-
-        /**
-         * Decodes a BinlogSource message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns BinlogSource
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.BinlogSource;
-
-        /**
-         * Verifies a BinlogSource message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a BinlogSource message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns BinlogSource
-         */
-        public static fromObject(object: { [k: string]: any }): binlogdata.BinlogSource;
-
-        /**
-         * Creates a plain object from a BinlogSource message. Also converts values to other types if specified.
-         * @param message BinlogSource
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: binlogdata.BinlogSource, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this BinlogSource to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-
-        /**
-         * Gets the default type url for BinlogSource
-         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
-         * @returns The default type url
-         */
-        public static getTypeUrl(typeUrlPrefix?: string): string;
-    }
-
-    /** VEventType enum. */
-    enum VEventType {
-        UNKNOWN = 0,
-        GTID = 1,
-        BEGIN = 2,
-        COMMIT = 3,
-        ROLLBACK = 4,
-        DDL = 5,
-        INSERT = 6,
-        REPLACE = 7,
-        UPDATE = 8,
-        DELETE = 9,
-        SET = 10,
-        OTHER = 11,
-        ROW = 12,
-        FIELD = 13,
-        HEARTBEAT = 14,
-        VGTID = 15,
-        JOURNAL = 16,
-        VERSION = 17,
-        LASTPK = 18,
-        SAVEPOINT = 19,
-        COPY_COMPLETED = 20
-    }
-
-    /** Properties of a RowChange. */
-    interface IRowChange {
-
-        /** RowChange before */
-        before?: (query.IRow|null);
-
-        /** RowChange after */
-        after?: (query.IRow|null);
-    }
-
-    /** Represents a RowChange. */
-    class RowChange implements IRowChange {
-
-        /**
-         * Constructs a new RowChange.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: binlogdata.IRowChange);
-
-        /** RowChange before. */
-        public before?: (query.IRow|null);
-
-        /** RowChange after. */
-        public after?: (query.IRow|null);
-
-        /**
-         * Creates a new RowChange instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns RowChange instance
-         */
-        public static create(properties?: binlogdata.IRowChange): binlogdata.RowChange;
-
-        /**
-         * Encodes the specified RowChange message. Does not implicitly {@link binlogdata.RowChange.verify|verify} messages.
-         * @param message RowChange message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: binlogdata.IRowChange, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified RowChange message, length delimited. Does not implicitly {@link binlogdata.RowChange.verify|verify} messages.
-         * @param message RowChange message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: binlogdata.IRowChange, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a RowChange message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns RowChange
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.RowChange;
-
-        /**
-         * Decodes a RowChange message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns RowChange
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.RowChange;
-
-        /**
-         * Verifies a RowChange message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a RowChange message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns RowChange
-         */
-        public static fromObject(object: { [k: string]: any }): binlogdata.RowChange;
-
-        /**
-         * Creates a plain object from a RowChange message. Also converts values to other types if specified.
-         * @param message RowChange
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: binlogdata.RowChange, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this RowChange to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-
-        /**
-         * Gets the default type url for RowChange
-         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
-         * @returns The default type url
-         */
-        public static getTypeUrl(typeUrlPrefix?: string): string;
-    }
-
-    /** Properties of a RowEvent. */
-    interface IRowEvent {
-
-        /** RowEvent table_name */
-        table_name?: (string|null);
-
-        /** RowEvent row_changes */
-        row_changes?: (binlogdata.IRowChange[]|null);
-
-        /** RowEvent keyspace */
-        keyspace?: (string|null);
-
-        /** RowEvent shard */
-        shard?: (string|null);
-    }
-
-    /** Represents a RowEvent. */
-    class RowEvent implements IRowEvent {
-
-        /**
-         * Constructs a new RowEvent.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: binlogdata.IRowEvent);
-
-        /** RowEvent table_name. */
-        public table_name: string;
-
-        /** RowEvent row_changes. */
-        public row_changes: binlogdata.IRowChange[];
-
-        /** RowEvent keyspace. */
-        public keyspace: string;
-
-        /** RowEvent shard. */
-        public shard: string;
-
-        /**
-         * Creates a new RowEvent instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns RowEvent instance
-         */
-        public static create(properties?: binlogdata.IRowEvent): binlogdata.RowEvent;
-
-        /**
-         * Encodes the specified RowEvent message. Does not implicitly {@link binlogdata.RowEvent.verify|verify} messages.
-         * @param message RowEvent message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: binlogdata.IRowEvent, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified RowEvent message, length delimited. Does not implicitly {@link binlogdata.RowEvent.verify|verify} messages.
-         * @param message RowEvent message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: binlogdata.IRowEvent, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a RowEvent message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns RowEvent
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.RowEvent;
-
-        /**
-         * Decodes a RowEvent message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns RowEvent
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.RowEvent;
-
-        /**
-         * Verifies a RowEvent message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a RowEvent message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns RowEvent
-         */
-        public static fromObject(object: { [k: string]: any }): binlogdata.RowEvent;
-
-        /**
-         * Creates a plain object from a RowEvent message. Also converts values to other types if specified.
-         * @param message RowEvent
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: binlogdata.RowEvent, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this RowEvent to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-
-        /**
-         * Gets the default type url for RowEvent
-         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
-         * @returns The default type url
-         */
-        public static getTypeUrl(typeUrlPrefix?: string): string;
-    }
-
-    /** Properties of a FieldEvent. */
-    interface IFieldEvent {
-
-        /** FieldEvent table_name */
-        table_name?: (string|null);
-
-        /** FieldEvent fields */
-        fields?: (query.IField[]|null);
-
-        /** FieldEvent keyspace */
-        keyspace?: (string|null);
-
-        /** FieldEvent shard */
-        shard?: (string|null);
-    }
-
-    /** Represents a FieldEvent. */
-    class FieldEvent implements IFieldEvent {
-
-        /**
-         * Constructs a new FieldEvent.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: binlogdata.IFieldEvent);
-
-        /** FieldEvent table_name. */
-        public table_name: string;
-
-        /** FieldEvent fields. */
-        public fields: query.IField[];
-
-        /** FieldEvent keyspace. */
-        public keyspace: string;
-
-        /** FieldEvent shard. */
-        public shard: string;
-
-        /**
-         * Creates a new FieldEvent instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns FieldEvent instance
-         */
-        public static create(properties?: binlogdata.IFieldEvent): binlogdata.FieldEvent;
-
-        /**
-         * Encodes the specified FieldEvent message. Does not implicitly {@link binlogdata.FieldEvent.verify|verify} messages.
-         * @param message FieldEvent message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: binlogdata.IFieldEvent, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified FieldEvent message, length delimited. Does not implicitly {@link binlogdata.FieldEvent.verify|verify} messages.
-         * @param message FieldEvent message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: binlogdata.IFieldEvent, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a FieldEvent message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns FieldEvent
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.FieldEvent;
-
-        /**
-         * Decodes a FieldEvent message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns FieldEvent
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.FieldEvent;
-
-        /**
-         * Verifies a FieldEvent message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a FieldEvent message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns FieldEvent
-         */
-        public static fromObject(object: { [k: string]: any }): binlogdata.FieldEvent;
-
-        /**
-         * Creates a plain object from a FieldEvent message. Also converts values to other types if specified.
-         * @param message FieldEvent
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: binlogdata.FieldEvent, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this FieldEvent to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-
-        /**
-         * Gets the default type url for FieldEvent
-         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
-         * @returns The default type url
-         */
-        public static getTypeUrl(typeUrlPrefix?: string): string;
-    }
-
-    /** Properties of a ShardGtid. */
-    interface IShardGtid {
-
-        /** ShardGtid keyspace */
-        keyspace?: (string|null);
-
-        /** ShardGtid shard */
-        shard?: (string|null);
-
-        /** ShardGtid gtid */
-        gtid?: (string|null);
-
-        /** ShardGtid table_p_ks */
-        table_p_ks?: (binlogdata.ITableLastPK[]|null);
-    }
-
-    /** Represents a ShardGtid. */
-    class ShardGtid implements IShardGtid {
-
-        /**
-         * Constructs a new ShardGtid.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: binlogdata.IShardGtid);
-
-        /** ShardGtid keyspace. */
-        public keyspace: string;
-
-        /** ShardGtid shard. */
-        public shard: string;
-
-        /** ShardGtid gtid. */
-        public gtid: string;
-
-        /** ShardGtid table_p_ks. */
-        public table_p_ks: binlogdata.ITableLastPK[];
-
-        /**
-         * Creates a new ShardGtid instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns ShardGtid instance
-         */
-        public static create(properties?: binlogdata.IShardGtid): binlogdata.ShardGtid;
-
-        /**
-         * Encodes the specified ShardGtid message. Does not implicitly {@link binlogdata.ShardGtid.verify|verify} messages.
-         * @param message ShardGtid message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: binlogdata.IShardGtid, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified ShardGtid message, length delimited. Does not implicitly {@link binlogdata.ShardGtid.verify|verify} messages.
-         * @param message ShardGtid message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: binlogdata.IShardGtid, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a ShardGtid message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns ShardGtid
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.ShardGtid;
-
-        /**
-         * Decodes a ShardGtid message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns ShardGtid
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.ShardGtid;
-
-        /**
-         * Verifies a ShardGtid message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a ShardGtid message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns ShardGtid
-         */
-        public static fromObject(object: { [k: string]: any }): binlogdata.ShardGtid;
-
-        /**
-         * Creates a plain object from a ShardGtid message. Also converts values to other types if specified.
-         * @param message ShardGtid
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: binlogdata.ShardGtid, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this ShardGtid to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-
-        /**
-         * Gets the default type url for ShardGtid
-         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
-         * @returns The default type url
-         */
-        public static getTypeUrl(typeUrlPrefix?: string): string;
-    }
-
-    /** Properties of a VGtid. */
-    interface IVGtid {
-
-        /** VGtid shard_gtids */
-        shard_gtids?: (binlogdata.IShardGtid[]|null);
-    }
-
-    /** Represents a VGtid. */
-    class VGtid implements IVGtid {
-
-        /**
-         * Constructs a new VGtid.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: binlogdata.IVGtid);
-
-        /** VGtid shard_gtids. */
-        public shard_gtids: binlogdata.IShardGtid[];
-
-        /**
-         * Creates a new VGtid instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns VGtid instance
-         */
-        public static create(properties?: binlogdata.IVGtid): binlogdata.VGtid;
-
-        /**
-         * Encodes the specified VGtid message. Does not implicitly {@link binlogdata.VGtid.verify|verify} messages.
-         * @param message VGtid message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: binlogdata.IVGtid, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified VGtid message, length delimited. Does not implicitly {@link binlogdata.VGtid.verify|verify} messages.
-         * @param message VGtid message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: binlogdata.IVGtid, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a VGtid message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns VGtid
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.VGtid;
-
-        /**
-         * Decodes a VGtid message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns VGtid
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.VGtid;
-
-        /**
-         * Verifies a VGtid message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a VGtid message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns VGtid
-         */
-        public static fromObject(object: { [k: string]: any }): binlogdata.VGtid;
-
-        /**
-         * Creates a plain object from a VGtid message. Also converts values to other types if specified.
-         * @param message VGtid
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: binlogdata.VGtid, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this VGtid to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-
-        /**
-         * Gets the default type url for VGtid
-         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
-         * @returns The default type url
-         */
-        public static getTypeUrl(typeUrlPrefix?: string): string;
-    }
-
-    /** Properties of a KeyspaceShard. */
-    interface IKeyspaceShard {
-
-        /** KeyspaceShard keyspace */
-        keyspace?: (string|null);
-
-        /** KeyspaceShard shard */
-        shard?: (string|null);
-    }
-
-    /** Represents a KeyspaceShard. */
-    class KeyspaceShard implements IKeyspaceShard {
-
-        /**
-         * Constructs a new KeyspaceShard.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: binlogdata.IKeyspaceShard);
-
-        /** KeyspaceShard keyspace. */
-        public keyspace: string;
-
-        /** KeyspaceShard shard. */
-        public shard: string;
-
-        /**
-         * Creates a new KeyspaceShard instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns KeyspaceShard instance
-         */
-        public static create(properties?: binlogdata.IKeyspaceShard): binlogdata.KeyspaceShard;
-
-        /**
-         * Encodes the specified KeyspaceShard message. Does not implicitly {@link binlogdata.KeyspaceShard.verify|verify} messages.
-         * @param message KeyspaceShard message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: binlogdata.IKeyspaceShard, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified KeyspaceShard message, length delimited. Does not implicitly {@link binlogdata.KeyspaceShard.verify|verify} messages.
-         * @param message KeyspaceShard message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: binlogdata.IKeyspaceShard, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a KeyspaceShard message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns KeyspaceShard
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.KeyspaceShard;
-
-        /**
-         * Decodes a KeyspaceShard message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns KeyspaceShard
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.KeyspaceShard;
-
-        /**
-         * Verifies a KeyspaceShard message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a KeyspaceShard message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns KeyspaceShard
-         */
-        public static fromObject(object: { [k: string]: any }): binlogdata.KeyspaceShard;
-
-        /**
-         * Creates a plain object from a KeyspaceShard message. Also converts values to other types if specified.
-         * @param message KeyspaceShard
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: binlogdata.KeyspaceShard, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this KeyspaceShard to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-
-        /**
-         * Gets the default type url for KeyspaceShard
-         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
-         * @returns The default type url
-         */
-        public static getTypeUrl(typeUrlPrefix?: string): string;
-    }
-
-    /** MigrationType enum. */
-    enum MigrationType {
-        TABLES = 0,
-        SHARDS = 1
-    }
-
-    /** Properties of a Journal. */
-    interface IJournal {
-
-        /** Journal id */
-        id?: (number|Long|null);
-
-        /** Journal migration_type */
-        migration_type?: (binlogdata.MigrationType|null);
-
-        /** Journal tables */
-        tables?: (string[]|null);
-
-        /** Journal local_position */
-        local_position?: (string|null);
-
-        /** Journal shard_gtids */
-        shard_gtids?: (binlogdata.IShardGtid[]|null);
-
-        /** Journal participants */
-        participants?: (binlogdata.IKeyspaceShard[]|null);
-
-        /** Journal source_workflows */
-        source_workflows?: (string[]|null);
-    }
-
-    /** Represents a Journal. */
-    class Journal implements IJournal {
-
-        /**
-         * Constructs a new Journal.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: binlogdata.IJournal);
-
-        /** Journal id. */
-        public id: (number|Long);
-
-        /** Journal migration_type. */
-        public migration_type: binlogdata.MigrationType;
-
-        /** Journal tables. */
-        public tables: string[];
-
-        /** Journal local_position. */
-        public local_position: string;
-
-        /** Journal shard_gtids. */
-        public shard_gtids: binlogdata.IShardGtid[];
-
-        /** Journal participants. */
-        public participants: binlogdata.IKeyspaceShard[];
-
-        /** Journal source_workflows. */
-        public source_workflows: string[];
-
-        /**
-         * Creates a new Journal instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns Journal instance
-         */
-        public static create(properties?: binlogdata.IJournal): binlogdata.Journal;
-
-        /**
-         * Encodes the specified Journal message. Does not implicitly {@link binlogdata.Journal.verify|verify} messages.
-         * @param message Journal message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: binlogdata.IJournal, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified Journal message, length delimited. Does not implicitly {@link binlogdata.Journal.verify|verify} messages.
-         * @param message Journal message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: binlogdata.IJournal, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a Journal message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns Journal
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.Journal;
-
-        /**
-         * Decodes a Journal message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns Journal
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.Journal;
-
-        /**
-         * Verifies a Journal message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a Journal message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns Journal
-         */
-        public static fromObject(object: { [k: string]: any }): binlogdata.Journal;
-
-        /**
-         * Creates a plain object from a Journal message. Also converts values to other types if specified.
-         * @param message Journal
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: binlogdata.Journal, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this Journal to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-
-        /**
-         * Gets the default type url for Journal
-         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
-         * @returns The default type url
-         */
-        public static getTypeUrl(typeUrlPrefix?: string): string;
-    }
-
-    /** Properties of a VEvent. */
-    interface IVEvent {
-
-        /** VEvent type */
-        type?: (binlogdata.VEventType|null);
-
-        /** VEvent timestamp */
-        timestamp?: (number|Long|null);
-
-        /** VEvent gtid */
-        gtid?: (string|null);
-
-        /** VEvent statement */
-        statement?: (string|null);
-
-        /** VEvent row_event */
-        row_event?: (binlogdata.IRowEvent|null);
-
-        /** VEvent field_event */
-        field_event?: (binlogdata.IFieldEvent|null);
-
-        /** VEvent vgtid */
-        vgtid?: (binlogdata.IVGtid|null);
-
-        /** VEvent journal */
-        journal?: (binlogdata.IJournal|null);
-
-        /** VEvent dml */
-        dml?: (string|null);
-
-        /** VEvent current_time */
-        current_time?: (number|Long|null);
-
-        /** VEvent last_p_k_event */
-        last_p_k_event?: (binlogdata.ILastPKEvent|null);
-
-        /** VEvent keyspace */
-        keyspace?: (string|null);
-
-        /** VEvent shard */
-        shard?: (string|null);
-
-        /** VEvent throttled */
-        throttled?: (boolean|null);
-    }
-
-    /** Represents a VEvent. */
-    class VEvent implements IVEvent {
-
-        /**
-         * Constructs a new VEvent.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: binlogdata.IVEvent);
-
-        /** VEvent type. */
-        public type: binlogdata.VEventType;
-
-        /** VEvent timestamp. */
-        public timestamp: (number|Long);
-
-        /** VEvent gtid. */
-        public gtid: string;
-
-        /** VEvent statement. */
-        public statement: string;
-
-        /** VEvent row_event. */
-        public row_event?: (binlogdata.IRowEvent|null);
-
-        /** VEvent field_event. */
-        public field_event?: (binlogdata.IFieldEvent|null);
-
-        /** VEvent vgtid. */
-        public vgtid?: (binlogdata.IVGtid|null);
-
-        /** VEvent journal. */
-        public journal?: (binlogdata.IJournal|null);
-
-        /** VEvent dml. */
-        public dml: string;
-
-        /** VEvent current_time. */
-        public current_time: (number|Long);
-
-        /** VEvent last_p_k_event. */
-        public last_p_k_event?: (binlogdata.ILastPKEvent|null);
-
-        /** VEvent keyspace. */
-        public keyspace: string;
-
-        /** VEvent shard. */
-        public shard: string;
-
-        /** VEvent throttled. */
-        public throttled: boolean;
-
-        /**
-         * Creates a new VEvent instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns VEvent instance
-         */
-        public static create(properties?: binlogdata.IVEvent): binlogdata.VEvent;
-
-        /**
-         * Encodes the specified VEvent message. Does not implicitly {@link binlogdata.VEvent.verify|verify} messages.
-         * @param message VEvent message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: binlogdata.IVEvent, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified VEvent message, length delimited. Does not implicitly {@link binlogdata.VEvent.verify|verify} messages.
-         * @param message VEvent message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: binlogdata.IVEvent, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a VEvent message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns VEvent
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.VEvent;
-
-        /**
-         * Decodes a VEvent message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns VEvent
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.VEvent;
-
-        /**
-         * Verifies a VEvent message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a VEvent message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns VEvent
-         */
-        public static fromObject(object: { [k: string]: any }): binlogdata.VEvent;
-
-        /**
-         * Creates a plain object from a VEvent message. Also converts values to other types if specified.
-         * @param message VEvent
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: binlogdata.VEvent, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this VEvent to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-
-        /**
-         * Gets the default type url for VEvent
-         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
-         * @returns The default type url
-         */
-        public static getTypeUrl(typeUrlPrefix?: string): string;
-    }
-
-    /** Properties of a MinimalTable. */
-    interface IMinimalTable {
-
-        /** MinimalTable name */
-        name?: (string|null);
-
-        /** MinimalTable fields */
-        fields?: (query.IField[]|null);
-
-        /** MinimalTable p_k_columns */
-        p_k_columns?: ((number|Long)[]|null);
-    }
-
-    /** Represents a MinimalTable. */
-    class MinimalTable implements IMinimalTable {
-
-        /**
-         * Constructs a new MinimalTable.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: binlogdata.IMinimalTable);
-
-        /** MinimalTable name. */
-        public name: string;
-
-        /** MinimalTable fields. */
-        public fields: query.IField[];
-
-        /** MinimalTable p_k_columns. */
-        public p_k_columns: (number|Long)[];
-
-        /**
-         * Creates a new MinimalTable instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns MinimalTable instance
-         */
-        public static create(properties?: binlogdata.IMinimalTable): binlogdata.MinimalTable;
-
-        /**
-         * Encodes the specified MinimalTable message. Does not implicitly {@link binlogdata.MinimalTable.verify|verify} messages.
-         * @param message MinimalTable message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: binlogdata.IMinimalTable, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified MinimalTable message, length delimited. Does not implicitly {@link binlogdata.MinimalTable.verify|verify} messages.
-         * @param message MinimalTable message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: binlogdata.IMinimalTable, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a MinimalTable message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns MinimalTable
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.MinimalTable;
-
-        /**
-         * Decodes a MinimalTable message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns MinimalTable
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.MinimalTable;
-
-        /**
-         * Verifies a MinimalTable message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a MinimalTable message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns MinimalTable
-         */
-        public static fromObject(object: { [k: string]: any }): binlogdata.MinimalTable;
-
-        /**
-         * Creates a plain object from a MinimalTable message. Also converts values to other types if specified.
-         * @param message MinimalTable
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: binlogdata.MinimalTable, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this MinimalTable to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-
-        /**
-         * Gets the default type url for MinimalTable
-         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
-         * @returns The default type url
-         */
-        public static getTypeUrl(typeUrlPrefix?: string): string;
-    }
-
-    /** Properties of a MinimalSchema. */
-    interface IMinimalSchema {
-
-        /** MinimalSchema tables */
-        tables?: (binlogdata.IMinimalTable[]|null);
-    }
-
-    /** Represents a MinimalSchema. */
-    class MinimalSchema implements IMinimalSchema {
-
-        /**
-         * Constructs a new MinimalSchema.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: binlogdata.IMinimalSchema);
-
-        /** MinimalSchema tables. */
-        public tables: binlogdata.IMinimalTable[];
-
-        /**
-         * Creates a new MinimalSchema instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns MinimalSchema instance
-         */
-        public static create(properties?: binlogdata.IMinimalSchema): binlogdata.MinimalSchema;
-
-        /**
-         * Encodes the specified MinimalSchema message. Does not implicitly {@link binlogdata.MinimalSchema.verify|verify} messages.
-         * @param message MinimalSchema message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: binlogdata.IMinimalSchema, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified MinimalSchema message, length delimited. Does not implicitly {@link binlogdata.MinimalSchema.verify|verify} messages.
-         * @param message MinimalSchema message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: binlogdata.IMinimalSchema, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a MinimalSchema message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns MinimalSchema
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.MinimalSchema;
-
-        /**
-         * Decodes a MinimalSchema message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns MinimalSchema
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.MinimalSchema;
-
-        /**
-         * Verifies a MinimalSchema message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a MinimalSchema message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns MinimalSchema
-         */
-        public static fromObject(object: { [k: string]: any }): binlogdata.MinimalSchema;
-
-        /**
-         * Creates a plain object from a MinimalSchema message. Also converts values to other types if specified.
-         * @param message MinimalSchema
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: binlogdata.MinimalSchema, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this MinimalSchema to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-
-        /**
-         * Gets the default type url for MinimalSchema
-         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
-         * @returns The default type url
-         */
-        public static getTypeUrl(typeUrlPrefix?: string): string;
-    }
-
-    /** Properties of a VStreamRequest. */
-    interface IVStreamRequest {
-
-        /** VStreamRequest effective_caller_id */
-        effective_caller_id?: (vtrpc.ICallerID|null);
-
-        /** VStreamRequest immediate_caller_id */
-        immediate_caller_id?: (query.IVTGateCallerID|null);
-
-        /** VStreamRequest target */
-        target?: (query.ITarget|null);
-
-        /** VStreamRequest position */
-        position?: (string|null);
-
-        /** VStreamRequest filter */
-        filter?: (binlogdata.IFilter|null);
-
-        /** VStreamRequest table_last_p_ks */
-        table_last_p_ks?: (binlogdata.ITableLastPK[]|null);
-    }
-
-    /** Represents a VStreamRequest. */
-    class VStreamRequest implements IVStreamRequest {
-
-        /**
-         * Constructs a new VStreamRequest.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: binlogdata.IVStreamRequest);
-
-        /** VStreamRequest effective_caller_id. */
-        public effective_caller_id?: (vtrpc.ICallerID|null);
-
-        /** VStreamRequest immediate_caller_id. */
-        public immediate_caller_id?: (query.IVTGateCallerID|null);
-
-        /** VStreamRequest target. */
-        public target?: (query.ITarget|null);
-
-        /** VStreamRequest position. */
-        public position: string;
-
-        /** VStreamRequest filter. */
-        public filter?: (binlogdata.IFilter|null);
-
-        /** VStreamRequest table_last_p_ks. */
-        public table_last_p_ks: binlogdata.ITableLastPK[];
-
-        /**
-         * Creates a new VStreamRequest instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns VStreamRequest instance
-         */
-        public static create(properties?: binlogdata.IVStreamRequest): binlogdata.VStreamRequest;
-
-        /**
-         * Encodes the specified VStreamRequest message. Does not implicitly {@link binlogdata.VStreamRequest.verify|verify} messages.
-         * @param message VStreamRequest message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: binlogdata.IVStreamRequest, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified VStreamRequest message, length delimited. Does not implicitly {@link binlogdata.VStreamRequest.verify|verify} messages.
-         * @param message VStreamRequest message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: binlogdata.IVStreamRequest, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a VStreamRequest message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns VStreamRequest
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.VStreamRequest;
-
-        /**
-         * Decodes a VStreamRequest message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns VStreamRequest
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.VStreamRequest;
-
-        /**
-         * Verifies a VStreamRequest message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a VStreamRequest message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns VStreamRequest
-         */
-        public static fromObject(object: { [k: string]: any }): binlogdata.VStreamRequest;
-
-        /**
-         * Creates a plain object from a VStreamRequest message. Also converts values to other types if specified.
-         * @param message VStreamRequest
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: binlogdata.VStreamRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this VStreamRequest to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-
-        /**
-         * Gets the default type url for VStreamRequest
-         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
-         * @returns The default type url
-         */
-        public static getTypeUrl(typeUrlPrefix?: string): string;
-    }
-
-    /** Properties of a VStreamResponse. */
-    interface IVStreamResponse {
-
-        /** VStreamResponse events */
-        events?: (binlogdata.IVEvent[]|null);
-    }
-
-    /** Represents a VStreamResponse. */
-    class VStreamResponse implements IVStreamResponse {
-
-        /**
-         * Constructs a new VStreamResponse.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: binlogdata.IVStreamResponse);
-
-        /** VStreamResponse events. */
-        public events: binlogdata.IVEvent[];
-
-        /**
-         * Creates a new VStreamResponse instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns VStreamResponse instance
-         */
-        public static create(properties?: binlogdata.IVStreamResponse): binlogdata.VStreamResponse;
-
-        /**
-         * Encodes the specified VStreamResponse message. Does not implicitly {@link binlogdata.VStreamResponse.verify|verify} messages.
-         * @param message VStreamResponse message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: binlogdata.IVStreamResponse, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified VStreamResponse message, length delimited. Does not implicitly {@link binlogdata.VStreamResponse.verify|verify} messages.
-         * @param message VStreamResponse message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: binlogdata.IVStreamResponse, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a VStreamResponse message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns VStreamResponse
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.VStreamResponse;
-
-        /**
-         * Decodes a VStreamResponse message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns VStreamResponse
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.VStreamResponse;
-
-        /**
-         * Verifies a VStreamResponse message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a VStreamResponse message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns VStreamResponse
-         */
-        public static fromObject(object: { [k: string]: any }): binlogdata.VStreamResponse;
-
-        /**
-         * Creates a plain object from a VStreamResponse message. Also converts values to other types if specified.
-         * @param message VStreamResponse
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: binlogdata.VStreamResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this VStreamResponse to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-
-        /**
-         * Gets the default type url for VStreamResponse
-         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
-         * @returns The default type url
-         */
-        public static getTypeUrl(typeUrlPrefix?: string): string;
-    }
-
-    /** Properties of a VStreamRowsRequest. */
-    interface IVStreamRowsRequest {
-
-        /** VStreamRowsRequest effective_caller_id */
-        effective_caller_id?: (vtrpc.ICallerID|null);
-
-        /** VStreamRowsRequest immediate_caller_id */
-        immediate_caller_id?: (query.IVTGateCallerID|null);
-
-        /** VStreamRowsRequest target */
-        target?: (query.ITarget|null);
-
-        /** VStreamRowsRequest query */
-        query?: (string|null);
-
-        /** VStreamRowsRequest lastpk */
-        lastpk?: (query.IQueryResult|null);
-    }
-
-    /** Represents a VStreamRowsRequest. */
-    class VStreamRowsRequest implements IVStreamRowsRequest {
-
-        /**
-         * Constructs a new VStreamRowsRequest.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: binlogdata.IVStreamRowsRequest);
-
-        /** VStreamRowsRequest effective_caller_id. */
-        public effective_caller_id?: (vtrpc.ICallerID|null);
-
-        /** VStreamRowsRequest immediate_caller_id. */
-        public immediate_caller_id?: (query.IVTGateCallerID|null);
-
-        /** VStreamRowsRequest target. */
-        public target?: (query.ITarget|null);
-
-        /** VStreamRowsRequest query. */
-        public query: string;
-
-        /** VStreamRowsRequest lastpk. */
-        public lastpk?: (query.IQueryResult|null);
-
-        /**
-         * Creates a new VStreamRowsRequest instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns VStreamRowsRequest instance
-         */
-        public static create(properties?: binlogdata.IVStreamRowsRequest): binlogdata.VStreamRowsRequest;
-
-        /**
-         * Encodes the specified VStreamRowsRequest message. Does not implicitly {@link binlogdata.VStreamRowsRequest.verify|verify} messages.
-         * @param message VStreamRowsRequest message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: binlogdata.IVStreamRowsRequest, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified VStreamRowsRequest message, length delimited. Does not implicitly {@link binlogdata.VStreamRowsRequest.verify|verify} messages.
-         * @param message VStreamRowsRequest message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: binlogdata.IVStreamRowsRequest, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a VStreamRowsRequest message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns VStreamRowsRequest
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.VStreamRowsRequest;
-
-        /**
-         * Decodes a VStreamRowsRequest message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns VStreamRowsRequest
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.VStreamRowsRequest;
-
-        /**
-         * Verifies a VStreamRowsRequest message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a VStreamRowsRequest message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns VStreamRowsRequest
-         */
-        public static fromObject(object: { [k: string]: any }): binlogdata.VStreamRowsRequest;
-
-        /**
-         * Creates a plain object from a VStreamRowsRequest message. Also converts values to other types if specified.
-         * @param message VStreamRowsRequest
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: binlogdata.VStreamRowsRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this VStreamRowsRequest to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-
-        /**
-         * Gets the default type url for VStreamRowsRequest
-         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
-         * @returns The default type url
-         */
-        public static getTypeUrl(typeUrlPrefix?: string): string;
-    }
-
-    /** Properties of a VStreamRowsResponse. */
-    interface IVStreamRowsResponse {
-
-        /** VStreamRowsResponse fields */
-        fields?: (query.IField[]|null);
-
-        /** VStreamRowsResponse pkfields */
-        pkfields?: (query.IField[]|null);
-
-        /** VStreamRowsResponse gtid */
-        gtid?: (string|null);
-
-        /** VStreamRowsResponse rows */
-        rows?: (query.IRow[]|null);
-
-        /** VStreamRowsResponse lastpk */
-        lastpk?: (query.IRow|null);
-
-        /** VStreamRowsResponse throttled */
-        throttled?: (boolean|null);
-
-        /** VStreamRowsResponse heartbeat */
-        heartbeat?: (boolean|null);
-    }
-
-    /** Represents a VStreamRowsResponse. */
-    class VStreamRowsResponse implements IVStreamRowsResponse {
-
-        /**
-         * Constructs a new VStreamRowsResponse.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: binlogdata.IVStreamRowsResponse);
-
-        /** VStreamRowsResponse fields. */
-        public fields: query.IField[];
-
-        /** VStreamRowsResponse pkfields. */
-        public pkfields: query.IField[];
-
-        /** VStreamRowsResponse gtid. */
-        public gtid: string;
-
-        /** VStreamRowsResponse rows. */
-        public rows: query.IRow[];
-
-        /** VStreamRowsResponse lastpk. */
-        public lastpk?: (query.IRow|null);
-
-        /** VStreamRowsResponse throttled. */
-        public throttled: boolean;
-
-        /** VStreamRowsResponse heartbeat. */
-        public heartbeat: boolean;
-
-        /**
-         * Creates a new VStreamRowsResponse instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns VStreamRowsResponse instance
-         */
-        public static create(properties?: binlogdata.IVStreamRowsResponse): binlogdata.VStreamRowsResponse;
-
-        /**
-         * Encodes the specified VStreamRowsResponse message. Does not implicitly {@link binlogdata.VStreamRowsResponse.verify|verify} messages.
-         * @param message VStreamRowsResponse message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: binlogdata.IVStreamRowsResponse, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified VStreamRowsResponse message, length delimited. Does not implicitly {@link binlogdata.VStreamRowsResponse.verify|verify} messages.
-         * @param message VStreamRowsResponse message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: binlogdata.IVStreamRowsResponse, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a VStreamRowsResponse message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns VStreamRowsResponse
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.VStreamRowsResponse;
-
-        /**
-         * Decodes a VStreamRowsResponse message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns VStreamRowsResponse
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.VStreamRowsResponse;
-
-        /**
-         * Verifies a VStreamRowsResponse message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a VStreamRowsResponse message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns VStreamRowsResponse
-         */
-        public static fromObject(object: { [k: string]: any }): binlogdata.VStreamRowsResponse;
-
-        /**
-         * Creates a plain object from a VStreamRowsResponse message. Also converts values to other types if specified.
-         * @param message VStreamRowsResponse
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: binlogdata.VStreamRowsResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this VStreamRowsResponse to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-
-        /**
-         * Gets the default type url for VStreamRowsResponse
-         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
-         * @returns The default type url
-         */
-        public static getTypeUrl(typeUrlPrefix?: string): string;
-    }
-
-    /** Properties of a LastPKEvent. */
-    interface ILastPKEvent {
-
-        /** LastPKEvent table_last_p_k */
-        table_last_p_k?: (binlogdata.ITableLastPK|null);
-
-        /** LastPKEvent completed */
-        completed?: (boolean|null);
-    }
-
-    /** Represents a LastPKEvent. */
-    class LastPKEvent implements ILastPKEvent {
-
-        /**
-         * Constructs a new LastPKEvent.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: binlogdata.ILastPKEvent);
-
-        /** LastPKEvent table_last_p_k. */
-        public table_last_p_k?: (binlogdata.ITableLastPK|null);
-
-        /** LastPKEvent completed. */
-        public completed: boolean;
-
-        /**
-         * Creates a new LastPKEvent instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns LastPKEvent instance
-         */
-        public static create(properties?: binlogdata.ILastPKEvent): binlogdata.LastPKEvent;
-
-        /**
-         * Encodes the specified LastPKEvent message. Does not implicitly {@link binlogdata.LastPKEvent.verify|verify} messages.
-         * @param message LastPKEvent message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: binlogdata.ILastPKEvent, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified LastPKEvent message, length delimited. Does not implicitly {@link binlogdata.LastPKEvent.verify|verify} messages.
-         * @param message LastPKEvent message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: binlogdata.ILastPKEvent, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a LastPKEvent message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns LastPKEvent
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.LastPKEvent;
-
-        /**
-         * Decodes a LastPKEvent message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns LastPKEvent
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.LastPKEvent;
-
-        /**
-         * Verifies a LastPKEvent message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a LastPKEvent message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns LastPKEvent
-         */
-        public static fromObject(object: { [k: string]: any }): binlogdata.LastPKEvent;
-
-        /**
-         * Creates a plain object from a LastPKEvent message. Also converts values to other types if specified.
-         * @param message LastPKEvent
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: binlogdata.LastPKEvent, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this LastPKEvent to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-
-        /**
-         * Gets the default type url for LastPKEvent
-         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
-         * @returns The default type url
-         */
-        public static getTypeUrl(typeUrlPrefix?: string): string;
-    }
-
-    /** Properties of a TableLastPK. */
-    interface ITableLastPK {
-
-        /** TableLastPK table_name */
-        table_name?: (string|null);
-
-        /** TableLastPK lastpk */
-        lastpk?: (query.IQueryResult|null);
-    }
-
-    /** Represents a TableLastPK. */
-    class TableLastPK implements ITableLastPK {
-
-        /**
-         * Constructs a new TableLastPK.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: binlogdata.ITableLastPK);
-
-        /** TableLastPK table_name. */
-        public table_name: string;
-
-        /** TableLastPK lastpk. */
-        public lastpk?: (query.IQueryResult|null);
-
-        /**
-         * Creates a new TableLastPK instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns TableLastPK instance
-         */
-        public static create(properties?: binlogdata.ITableLastPK): binlogdata.TableLastPK;
-
-        /**
-         * Encodes the specified TableLastPK message. Does not implicitly {@link binlogdata.TableLastPK.verify|verify} messages.
-         * @param message TableLastPK message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: binlogdata.ITableLastPK, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified TableLastPK message, length delimited. Does not implicitly {@link binlogdata.TableLastPK.verify|verify} messages.
-         * @param message TableLastPK message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: binlogdata.ITableLastPK, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a TableLastPK message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns TableLastPK
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.TableLastPK;
-
-        /**
-         * Decodes a TableLastPK message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns TableLastPK
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.TableLastPK;
-
-        /**
-         * Verifies a TableLastPK message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a TableLastPK message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns TableLastPK
-         */
-        public static fromObject(object: { [k: string]: any }): binlogdata.TableLastPK;
-
-        /**
-         * Creates a plain object from a TableLastPK message. Also converts values to other types if specified.
-         * @param message TableLastPK
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: binlogdata.TableLastPK, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this TableLastPK to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-
-        /**
-         * Gets the default type url for TableLastPK
-         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
-         * @returns The default type url
-         */
-        public static getTypeUrl(typeUrlPrefix?: string): string;
-    }
-
-    /** Properties of a VStreamResultsRequest. */
-    interface IVStreamResultsRequest {
-
-        /** VStreamResultsRequest effective_caller_id */
-        effective_caller_id?: (vtrpc.ICallerID|null);
-
-        /** VStreamResultsRequest immediate_caller_id */
-        immediate_caller_id?: (query.IVTGateCallerID|null);
-
-        /** VStreamResultsRequest target */
-        target?: (query.ITarget|null);
-
-        /** VStreamResultsRequest query */
-        query?: (string|null);
-    }
-
-    /** Represents a VStreamResultsRequest. */
-    class VStreamResultsRequest implements IVStreamResultsRequest {
-
-        /**
-         * Constructs a new VStreamResultsRequest.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: binlogdata.IVStreamResultsRequest);
-
-        /** VStreamResultsRequest effective_caller_id. */
-        public effective_caller_id?: (vtrpc.ICallerID|null);
-
-        /** VStreamResultsRequest immediate_caller_id. */
-        public immediate_caller_id?: (query.IVTGateCallerID|null);
-
-        /** VStreamResultsRequest target. */
-        public target?: (query.ITarget|null);
-
-        /** VStreamResultsRequest query. */
-        public query: string;
-
-        /**
-         * Creates a new VStreamResultsRequest instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns VStreamResultsRequest instance
-         */
-        public static create(properties?: binlogdata.IVStreamResultsRequest): binlogdata.VStreamResultsRequest;
-
-        /**
-         * Encodes the specified VStreamResultsRequest message. Does not implicitly {@link binlogdata.VStreamResultsRequest.verify|verify} messages.
-         * @param message VStreamResultsRequest message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: binlogdata.IVStreamResultsRequest, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified VStreamResultsRequest message, length delimited. Does not implicitly {@link binlogdata.VStreamResultsRequest.verify|verify} messages.
-         * @param message VStreamResultsRequest message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: binlogdata.IVStreamResultsRequest, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a VStreamResultsRequest message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns VStreamResultsRequest
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.VStreamResultsRequest;
-
-        /**
-         * Decodes a VStreamResultsRequest message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns VStreamResultsRequest
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.VStreamResultsRequest;
-
-        /**
-         * Verifies a VStreamResultsRequest message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a VStreamResultsRequest message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns VStreamResultsRequest
-         */
-        public static fromObject(object: { [k: string]: any }): binlogdata.VStreamResultsRequest;
-
-        /**
-         * Creates a plain object from a VStreamResultsRequest message. Also converts values to other types if specified.
-         * @param message VStreamResultsRequest
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: binlogdata.VStreamResultsRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this VStreamResultsRequest to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-
-        /**
-         * Gets the default type url for VStreamResultsRequest
-         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
-         * @returns The default type url
-         */
-        public static getTypeUrl(typeUrlPrefix?: string): string;
-    }
-
-    /** Properties of a VStreamResultsResponse. */
-    interface IVStreamResultsResponse {
-
-        /** VStreamResultsResponse fields */
-        fields?: (query.IField[]|null);
-
-        /** VStreamResultsResponse gtid */
-        gtid?: (string|null);
-
-        /** VStreamResultsResponse rows */
-        rows?: (query.IRow[]|null);
-    }
-
-    /** Represents a VStreamResultsResponse. */
-    class VStreamResultsResponse implements IVStreamResultsResponse {
-
-        /**
-         * Constructs a new VStreamResultsResponse.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: binlogdata.IVStreamResultsResponse);
-
-        /** VStreamResultsResponse fields. */
-        public fields: query.IField[];
-
-        /** VStreamResultsResponse gtid. */
-        public gtid: string;
-
-        /** VStreamResultsResponse rows. */
-        public rows: query.IRow[];
-
-        /**
-         * Creates a new VStreamResultsResponse instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns VStreamResultsResponse instance
-         */
-        public static create(properties?: binlogdata.IVStreamResultsResponse): binlogdata.VStreamResultsResponse;
-
-        /**
-         * Encodes the specified VStreamResultsResponse message. Does not implicitly {@link binlogdata.VStreamResultsResponse.verify|verify} messages.
-         * @param message VStreamResultsResponse message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: binlogdata.IVStreamResultsResponse, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified VStreamResultsResponse message, length delimited. Does not implicitly {@link binlogdata.VStreamResultsResponse.verify|verify} messages.
-         * @param message VStreamResultsResponse message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: binlogdata.IVStreamResultsResponse, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a VStreamResultsResponse message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns VStreamResultsResponse
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.VStreamResultsResponse;
-
-        /**
-         * Decodes a VStreamResultsResponse message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns VStreamResultsResponse
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.VStreamResultsResponse;
-
-        /**
-         * Verifies a VStreamResultsResponse message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a VStreamResultsResponse message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns VStreamResultsResponse
-         */
-        public static fromObject(object: { [k: string]: any }): binlogdata.VStreamResultsResponse;
-
-        /**
-         * Creates a plain object from a VStreamResultsResponse message. Also converts values to other types if specified.
-         * @param message VStreamResultsResponse
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: binlogdata.VStreamResultsResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this VStreamResultsResponse to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-
-        /**
-         * Gets the default type url for VStreamResultsResponse
-         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
-         * @returns The default type url
-         */
-        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 }

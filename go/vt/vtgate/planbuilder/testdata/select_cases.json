@@ -4074,7 +4074,7 @@
               "Sharded": true
             },
             "FieldQuery": "select 1 from user_extra as ue where 1 != 1",
-            "Query": "select 1 from user_extra as ue where ue.col = :u1_col and ue.col = :u2_col",
+            "Query": "select 1 from user_extra as ue where ue.col = :u1_col /* INT16 */ and ue.col = :u2_col /* INT16 */",
             "Table": "user_extra"
           }
         ]
@@ -4119,7 +4119,7 @@
               "Sharded": true
             },
             "FieldQuery": "select 1 from user_extra as ue where 1 != 1",
-            "Query": "select 1 from user_extra as ue where ue.col = :u_col and ue.col2 = :u_col",
+            "Query": "select 1 from user_extra as ue where ue.col = :u_col /* INT16 */ and ue.col2 = :u_col",
             "Table": "user_extra"
           }
         ]
@@ -4488,7 +4488,7 @@
           "Sharded": false
         },
         "FieldQuery": "select 1 from dual where 1 != 1",
-        "Query": "select 1 from dual where exists (select 1 from information_schema.`TABLES` where information_schema.`TABLES`.TABLE_NAME = :TABLES_TABLE_NAME and information_schema.`TABLES`.TABLE_SCHEMA = :__vtschemaname limit 1)",
+        "Query": "select 1 from dual where exists (select 1 from information_schema.`TABLES` where information_schema.`TABLES`.TABLE_NAME = :TABLES_TABLE_NAME /* VARCHAR */ and information_schema.`TABLES`.TABLE_SCHEMA = :__vtschemaname /* VARCHAR */ limit 1)",
         "SysTableTableName": "[TABLES_TABLE_NAME:VARCHAR(\"proc\")]",
         "SysTableTableSchema": "[VARCHAR(\"mysql\")]",
         "Table": "dual"
@@ -4505,7 +4505,7 @@
           "Sharded": false
         },
         "FieldQuery": "select 1 from dual where 1 != 1",
-        "Query": "select 1 from dual where exists (select 1 from information_schema.`TABLES` where `TABLES`.TABLE_NAME = :TABLES_TABLE_NAME and `TABLES`.TABLE_SCHEMA = :__vtschemaname limit 1)",
+        "Query": "select 1 from dual where exists (select 1 from information_schema.`TABLES` where `TABLES`.TABLE_NAME = :TABLES_TABLE_NAME /* VARCHAR */ and `TABLES`.TABLE_SCHEMA = :__vtschemaname /* VARCHAR */ limit 1)",
         "SysTableTableName": "[TABLES_TABLE_NAME:VARCHAR(\"proc\")]",
         "SysTableTableSchema": "[VARCHAR(\"mysql\")]",
         "Table": "dual"
@@ -4528,8 +4528,8 @@
           "Name": "main",
           "Sharded": false
         },
-        "FieldQuery": "select json_quote('null'), json_quote('\\\"null\\\"'), json_object(BIN(1), 2, 'abc', ASCII(4)), json_array(1, 'abc', null, true, CURTIME()) from dual where 1 != 1",
-        "Query": "select json_quote('null'), json_quote('\\\"null\\\"'), json_object(BIN(1), 2, 'abc', ASCII(4)), json_array(1, 'abc', null, true, CURTIME()) from dual",
+        "FieldQuery": "select json_quote('null'), json_quote('\\\"null\\\"'), json_object(BIN(1), 2, 'abc', ASCII(4)), json_array(1, 'abc', null, true, curtime()) from dual where 1 != 1",
+        "Query": "select json_quote('null'), json_quote('\\\"null\\\"'), json_object(BIN(1), 2, 'abc', ASCII(4)), json_array(1, 'abc', null, true, curtime()) from dual",
         "Table": "dual"
       }
     },
@@ -4543,8 +4543,8 @@
           "Name": "main",
           "Sharded": false
         },
-        "FieldQuery": "select json_quote('null'), json_quote('\\\"null\\\"'), json_object(BIN(1), 2, 'abc', ASCII(4)), json_array(1, 'abc', null, true, CURTIME()) from dual where 1 != 1",
-        "Query": "select json_quote('null'), json_quote('\\\"null\\\"'), json_object(BIN(1), 2, 'abc', ASCII(4)), json_array(1, 'abc', null, true, CURTIME()) from dual",
+        "FieldQuery": "select json_quote('null'), json_quote('\\\"null\\\"'), json_object(BIN(1), 2, 'abc', ASCII(4)), json_array(1, 'abc', null, true, curtime()) from dual where 1 != 1",
+        "Query": "select json_quote('null'), json_quote('\\\"null\\\"'), json_object(BIN(1), 2, 'abc', ASCII(4)), json_array(1, 'abc', null, true, curtime()) from dual",
         "Table": "dual"
       },
       "TablesUsed": [

@@ -25,7 +25,6 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 
-	"vitess.io/vitess/go/vt/vtgate/semantics"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
@@ -153,7 +152,7 @@ func initialQuery(ksidCols []sqlparser.IdentifierCI, table *vindexes.Table) (*sq
 // it's holding. At the moment it only supports: StrVal, HexVal, IntVal, ValArg.
 // If a complex expression is provided (e.g set name = name + 1), the update will be rejected.
 func extractValueFromUpdate(upd *sqlparser.UpdateExpr) (evalengine.Expr, error) {
-	pv, err := evalengine.Translate(upd.Expr, semantics.EmptySemTable())
+	pv, err := evalengine.Translate(upd.Expr, nil)
 	if err != nil || sqlparser.IsSimpleTuple(upd.Expr) {
 		err := vterrors.VT12001(fmt.Sprintf("only values are supported: invalid update on column: `%s` with expr: [%s]", upd.Name.Name.String(), sqlparser.String(upd.Expr)))
 		return nil, err

@@ -96,7 +96,7 @@ func (ast *astCompiler) translateFuncExpr(fn *sqlparser.FuncExpr) (Expr, error) 
 		if len(args) != 1 {
 			return nil, argError(method)
 		}
-		return &builtinHex{CallExpr: call}, nil
+		return &builtinHex{CallExpr: call, collate: ast.cfg.Collation}, nil
 	case "ceil", "ceiling":
 		if len(args) != 1 {
 			return nil, argError(method)
@@ -171,16 +171,71 @@ func (ast *astCompiler) translateFuncExpr(fn *sqlparser.FuncExpr) (Expr, error) 
 			return nil, argError(method)
 		}
 		return &builtinRadians{CallExpr: call}, nil
+	case "exp":
+		if len(args) != 1 {
+			return nil, argError(method)
+		}
+		return &builtinExp{CallExpr: call}, nil
+	case "ln":
+		if len(args) != 1 {
+			return nil, argError(method)
+		}
+		return &builtinLn{CallExpr: call}, nil
+	case "log":
+		switch len(args) {
+		case 1:
+			return &builtinLn{CallExpr: call}, nil
+		case 2:
+			return &builtinLog{CallExpr: call}, nil
+		default:
+			return nil, argError(method)
+		}
+	case "log10":
+		if len(args) != 1 {
+			return nil, argError(method)
+		}
+		return &builtinLog10{CallExpr: call}, nil
+	case "mod":
+		if len(args) != 2 {
+			return nil, argError(method)
+		}
+		return &ArithmeticExpr{
+			BinaryExpr: BinaryExpr{
+				Left:  args[0],
+				Right: args[1],
+			},
+			Op: &opArithMod{},
+		}, nil
+	case "log2":
+		if len(args) != 1 {
+			return nil, argError(method)
+		}
+		return &builtinLog2{CallExpr: call}, nil
+	case "pow", "power":
+		if len(args) != 2 {
+			return nil, argError(method)
+		}
+		return &builtinPow{CallExpr: call}, nil
+	case "sign":
+		if len(args) != 1 {
+			return nil, argError(method)
+		}
+		return &builtinSign{CallExpr: call}, nil
+	case "sqrt":
+		if len(args) != 1 {
+			return nil, argError(method)
+		}
+		return &builtinSqrt{CallExpr: call}, nil
 	case "lower", "lcase":
 		if len(args) != 1 {
 			return nil, argError(method)
 		}
-		return &builtinChangeCase{CallExpr: call, upcase: false}, nil
+		return &builtinChangeCase{CallExpr: call, upcase: false, collate: ast.cfg.Collation}, nil
 	case "upper", "ucase":
 		if len(args) != 1 {
 			return nil, argError(method)
 		}
-		return &builtinChangeCase{CallExpr: call, upcase: true}, nil
+		return &builtinChangeCase{CallExpr: call, upcase: true, collate: ast.cfg.Collation}, nil
 	case "char_length", "character_length":
 		if len(args) != 1 {
 			return nil, argError(method)
@@ -205,7 +260,7 @@ func (ast *astCompiler) translateFuncExpr(fn *sqlparser.FuncExpr) (Expr, error) 
 		if len(args) != 2 {
 			return nil, argError(method)
 		}
-		return &builtinRepeat{CallExpr: call}, nil
+		return &builtinRepeat{CallExpr: call, collate: ast.cfg.Collation}, nil
 	case "from_base64":
 		if len(args) != 1 {
 			return nil, argError(method)
@@ -215,7 +270,7 @@ func (ast *astCompiler) translateFuncExpr(fn *sqlparser.FuncExpr) (Expr, error) 
 		if len(args) != 1 {
 			return nil, argError(method)
 		}
-		return &builtinToBase64{CallExpr: call}, nil
+		return &builtinToBase64{CallExpr: call, collate: ast.cfg.Collation}, nil
 	case "json_depth":
 		if len(args) != 1 {
 			return nil, argError(method)
@@ -228,6 +283,26 @@ func (ast *astCompiler) translateFuncExpr(fn *sqlparser.FuncExpr) (Expr, error) 
 		default:
 			return nil, argError(method)
 		}
+	case "curdate", "current_date":
+		if len(args) != 0 {
+			return nil, argError(method)
+		}
+		return &builtinCurdate{CallExpr: call}, nil
+	case "user", "current_user", "session_user", "system_user":
+		if len(args) != 0 {
+			return nil, argError(method)
+		}
+		return &builtinUser{CallExpr: call}, nil
+	case "database", "schema":
+		if len(args) != 0 {
+			return nil, argError(method)
+		}
+		return &builtinDatabase{CallExpr: call}, nil
+	case "version":
+		if len(args) != 0 {
+			return nil, argError(method)
+		}
+		return &builtinVersion{CallExpr: call}, nil
 	default:
 		return nil, translateExprNotSupported(fn)
 	}
@@ -347,6 +422,34 @@ func (ast *astCompiler) translateCallable(call sqlparser.Callable) (Expr, error)
 			Arguments: args,
 			Method:    "JSON_KEYS",
 		}}, nil
+
+	case *sqlparser.CurTimeFuncExpr:
+		if call.Fsp > 6 {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Too-big precision 12 specified for '%s'. Maximum is 6.", call.Name.String())
+		}
+
+		var cexpr = CallExpr{Arguments: nil, Method: call.Name.String()}
+		var utc, onlyTime bool
+		switch call.Name.Lowered() {
+		case "current_time", "curtime":
+			onlyTime = true
+		case "utc_time":
+			onlyTime = true
+			utc = true
+		case "utc_timestamp":
+			utc = true
+		case "sysdate":
+			return &builtinSysdate{
+				CallExpr: cexpr,
+				prec:     uint8(call.Fsp),
+			}, nil
+		}
+		return &builtinNow{
+			CallExpr: cexpr,
+			utc:      utc,
+			onlyTime: onlyTime,
+			prec:     uint8(call.Fsp),
+		}, nil
 
 	default:
 		return nil, translateExprNotSupported(call)

@@ -44,10 +44,7 @@ func TestQueryzHandler(t *testing.T) {
 	_, err := executorExec(executor, sql, nil)
 	require.NoError(t, err)
 	executor.plans.Wait()
-	plan1, ok := executor.debugGetPlan("@primary:" + sql)
-	if !ok {
-		t.Fatalf("couldn't get plan from cache")
-	}
+	plan1 := assertCacheContains(t, executor, nil, sql)
 	plan1.ExecTime = uint64(1 * time.Millisecond)
 
 	// scatter
@@ -55,10 +52,7 @@ func TestQueryzHandler(t *testing.T) {
 	_, err = executorExec(executor, sql, nil)
 	require.NoError(t, err)
 	executor.plans.Wait()
-	plan2, ok := executor.debugGetPlan("@primary:" + sql)
-	if !ok {
-		t.Fatalf("couldn't get plan from cache")
-	}
+	plan2 := assertCacheContains(t, executor, nil, sql)
 	plan2.ExecTime = uint64(1 * time.Second)
 
 	sql = "insert into user (id, name) values (:id, :name)"
@@ -68,14 +62,10 @@ func TestQueryzHandler(t *testing.T) {
 	})
 	require.NoError(t, err)
 	executor.plans.Wait()
-	plan3, ok := executor.debugGetPlan("@primary:" + sql)
-	if !ok {
-		t.Fatalf("couldn't get plan from cache")
-	}
+	plan3 := assertCacheContains(t, executor, nil, sql)
 
 	// vindex insert from above execution
-	plan4, ok := executor.debugGetPlan("@primary:" + "insert into name_user_map(name, user_id) values(:name_0, :user_id_0)")
-	require.True(t, ok, "couldn't get plan from cache")
+	plan4 := assertCacheContains(t, executor, nil, "insert into name_user_map(name, user_id) values(:name_0, :user_id_0)")
 
 	// same query again should add query counts to existing plans
 	sql = "insert into user (id, name) values (:id, :name)"

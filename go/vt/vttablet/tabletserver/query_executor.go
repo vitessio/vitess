@@ -27,7 +27,6 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/pools"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/trace"
@@ -711,7 +710,7 @@ func (*QueryExecutor) BeginAgain(ctx context.Context, dc *StatefulConnection) er
 }
 
 func (qre *QueryExecutor) execNextval() (*sqltypes.Result, error) {
-	env := evalengine.EnvWithBindVars(qre.bindVars, collations.Unknown)
+	env := evalengine.NewExpressionEnv(qre.ctx, qre.bindVars, nil)
 	result, err := env.Evaluate(qre.plan.NextCount)
 	if err != nil {
 		return nil, err
@@ -800,10 +799,12 @@ func (qre *QueryExecutor) execSelect() (*sqltypes.Result, error) {
 			conn, err := qre.getConn()
 
 			if err != nil {
-				q.Err = err
+				q.SetErr(err)
 			} else {
 				defer conn.Recycle()
-				q.Result, q.Err = qre.execDBConn(conn, sql, true)
+				res, err := qre.execDBConn(conn, sql, true)
+				q.SetResult(res)
+				q.SetErr(err)
 			}
 		} else {
 			qre.logStats.QuerySources |= tabletenv.QuerySourceConsolidator
@@ -811,10 +812,10 @@ func (qre *QueryExecutor) execSelect() (*sqltypes.Result, error) {
 			q.Wait()
 			qre.tsv.stats.WaitTimings.Record("Consolidations", startTime)
 		}
-		if q.Err != nil {
-			return nil, q.Err
+		if q.Err() != nil {
+			return nil, q.Err()
 		}
-		return q.Result.(*sqltypes.Result), nil
+		return q.Result(), nil
 	}
 	conn, err := qre.getConn()
 	if err != nil {

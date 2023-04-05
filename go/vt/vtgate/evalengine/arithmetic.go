@@ -22,11 +22,12 @@ import (
 
 	"golang.org/x/exp/constraints"
 
+	"vitess.io/vitess/go/mysql/decimal"
+
 	"vitess.io/vitess/go/hack"
 	"vitess.io/vitess/go/sqltypes"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/evalengine/internal/decimal"
 )
 
 func dataOutOfRangeError[N1, N2 constraints.Integer | constraints.Float](v1 N1, v2 N2, typ, sign string) error {

@@ -477,8 +477,7 @@ func (v Value) IsBinary() bool {
 
 // IsDateTime returns true if Value is datetime.
 func (v Value) IsDateTime() bool {
-	dt := int(querypb.Type_DATETIME)
-	return int(v.typ)&dt == dt
+	return v.typ == querypb.Type_DATETIME
 }
 
 // IsDecimal returns true if Value is a decimal.

@@ -59,34 +59,58 @@ func transformToLogicalPlan(ctx *plancontext.PlanningContext, op ops.Operator, i
 		return transformCorrelatedSubQueryPlan(ctx, op)
 	case *operators.Derived:
 		return transformDerivedPlan(ctx, op)
+	case *operators.SimpleProjection:
+		return transformSimpleProjection(ctx, op)
 	case *operators.Filter:
-		plan, err := transformToLogicalPlan(ctx, op.Source, false)
-		if err != nil {
-			return nil, err
-		}
-		scl := &simpleConverterLookup{
-			canPushProjection: true,
-			ctx:               ctx,
-			plan:              plan,
-		}
-		ast := ctx.SemTable.AndExpressions(op.Predicates...)
-		predicate, err := evalengine.Translate(ast, scl)
-		if err != nil {
-			return nil, err
-		}
-
-		return &filter{
-			logicalPlanCommon: newBuilderCommon(plan),
-			efilter: &engine.Filter{
-				Predicate:    predicate,
-				ASTPredicate: ast,
-			},
-		}, nil
+		return transformFilter(ctx, op)
 	case *operators.Horizon:
 		return transformHorizon(ctx, op, isRoot)
 	}
 
 	return nil, vterrors.VT13001(fmt.Sprintf("unknown type encountered: %T (transformToLogicalPlan)", op))
+}
+
+func transformFilter(ctx *plancontext.PlanningContext, op *operators.Filter) (logicalPlan, error) {
+	plan, err := transformToLogicalPlan(ctx, op.Source, false)
+	if err != nil {
+		return nil, err
+	}
+
+	predicate := op.FinalPredicate
+	ast := ctx.SemTable.AndExpressions(op.Predicates...)
+
+	// this might already have been done on the operators
+	if predicate == nil {
+		predicate, err = evalengine.Translate(ast, &evalengine.Config{
+			ResolveColumn: resolveFromPlan(ctx, plan, true),
+			Collation:     ctx.SemTable.Collation,
+		})
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return &filter{
+		logicalPlanCommon: newBuilderCommon(plan),
+		efilter: &engine.Filter{
+			Predicate:    predicate,
+			ASTPredicate: ast,
+		},
+	}, nil
+}
+
+func transformSimpleProjection(ctx *plancontext.PlanningContext, op *operators.SimpleProjection) (logicalPlan, error) {
+	src, err := transformToLogicalPlan(ctx, op.Source, false)
+	if err != nil {
+		return nil, err
+	}
+
+	return &simpleProjection{
+		logicalPlanCommon: newBuilderCommon(src),
+		eSimpleProj: &engine.SimpleProjection{
+			Cols: op.Columns,
+		},
+	}, nil
 }
 
 func transformHorizon(ctx *plancontext.PlanningContext, op *operators.Horizon, isRoot bool) (logicalPlan, error) {
@@ -756,12 +780,12 @@ func gen4ValEqual(ctx *plancontext.PlanningContext, a, b sqlparser.Expr) bool {
 
 			return ctx.SemTable.DirectDeps(a) == ctx.SemTable.DirectDeps(b)
 		}
-	case sqlparser.Argument:
-		b, ok := b.(sqlparser.Argument)
+	case *sqlparser.Argument:
+		b, ok := b.(*sqlparser.Argument)
 		if !ok {
 			return false
 		}
-		return a == b
+		return a.Name == b.Name
 	case *sqlparser.Literal:
 		b, ok := b.(*sqlparser.Literal)
 		if !ok {

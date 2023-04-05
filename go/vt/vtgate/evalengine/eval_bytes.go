@@ -23,9 +23,9 @@ import (
 	"vitess.io/vitess/go/hack"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/collations/charset"
+	"vitess.io/vitess/go/mysql/datetime"
 	"vitess.io/vitess/go/sqltypes"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vthash"
 )
@@ -47,6 +47,13 @@ func newEvalRaw(typ sqltypes.Type, raw []byte, col collations.TypedCollation) *e
 
 func newEvalBytesHex(raw []byte) eval {
 	return &evalBytes{tt: int16(sqltypes.VarBinary), isHexLiteral: true, col: collationBinary, bytes: raw}
+}
+
+// newEvalBytesBit creates a new evalBytes for a bit literal.
+// Turns out that a bit literal is not actually typed with
+// sqltypes.Bit, but with sqltypes.VarBinary.
+func newEvalBytesBit(raw []byte) eval {
+	return &evalBytes{tt: int16(sqltypes.VarBinary), isBitLiteral: true, col: collationBinary, bytes: raw}
 }
 
 func newEvalBinary(raw []byte) *evalBytes {
@@ -166,11 +173,11 @@ func (e *evalBytes) truncateInPlace(size int) {
 func (e *evalBytes) parseDate() (t time.Time, err error) {
 	switch e.SQLType() {
 	case sqltypes.Date:
-		t, err = sqlparser.ParseDate(e.string())
+		t, err = datetime.ParseDate(e.string())
 	case sqltypes.Timestamp, sqltypes.Datetime:
-		t, err = sqlparser.ParseDateTime(e.string())
+		t, err = datetime.ParseDateTime(e.string())
 	case sqltypes.Time:
-		t, err = sqlparser.ParseTime(e.string())
+		t, err = datetime.ParseTime(e.string())
 	default:
 		err = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "type %v is not date-like", e.SQLType())
 	}
