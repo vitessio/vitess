@@ -51,10 +51,11 @@ Here is a (condensed) example of stats output:
 ```
 
 #### <a id="migrate-vtadmin"/>VTAdmin web migrated to vite
-Previously, VTAdmin web used the create-react-app framework to test, build, and serve the application. In v17, create-react-app has been removed, and [vite](https://vitejs.dev/) is used in its place. Some of the main changes include:
-- vite uses `VITE_*` environment variables instead of `REACT_APP_*` environment variables
-- [vitest](https://vitest.dev/) is used in place of jest
-- Protobufjs generator now produces an es6 module instead of commonjs to better work with vite's defaults
+Previously, VTAdmin web used the Create React App framework to test, build, and serve the application. In v17, Create React App has been removed, and [Vite](https://vitejs.dev/) is used in its place. Some of the main changes include:
+- Vite uses `VITE_*` environment variables instead of `REACT_APP_*` environment variables
+- Vite uses `import.meta.env` in place of `process.env`
+- [Vitest](https://vitest.dev/) is used in place of Jest for testing
+- Our protobufjs generator now produces an es6 module instead of commonjs to better work with Vite's defaults
 - `public/index.html` has been moved to root directory in web/vtadmin
 
 ### <a id="new-flag"/> New command line flags and behavior
