@@ -122,7 +122,7 @@ func IsShardUsingRangeBasedSharding(shard string) bool {
 // the KeyRange.
 func ValidateShardName(shard string) (string, *topodatapb.KeyRange, error) {
 	if strings.Contains(shard, "/") {
-		return "", nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "invalid shardId, may not contain '-': %v", shard)
+		return "", nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "invalid shardId, may not contain '/': %v", shard)
 	}
 
 	if !IsShardUsingRangeBasedSharding(shard) {
