@@ -472,5 +472,11 @@
     "query": "select * from (select * from `information_schema`.`key_column_usage` `kcu` where `kcu`.`table_schema` = 'user' and `kcu`.`table_name` = 'user_extra' union select * from `information_schema`.`key_column_usage` `kcu` where `kcu`.`table_schema` = 'user' and `kcu`.`table_name` = 'music') `kcu` where `constraint_name` = 'primary'",
     "v3-plan": "symbol constraint_name not found in table or subquery",
     "gen4-plan": "unsupported: pushing projection 'constraint_name' on *sqlparser.Union"
+  },
+  {
+    "comment": "aggregation, where and derived tables - we can't push aggregations that might need a second layer of aggregation",
+    "query": "SELECT foo FROM (SELECT foo, count(baz) as bazo FROM (SELECT foo, baz FROM user) f GROUP BY foo) tt WHERE bazo BETWEEN 100 AND 200",
+    "v3-plan": "unsupported: filtering on results of cross-shard subquery",
+    "gen4-plan": "expr cannot be translated, not supported: bazo between 100 and 200"
   }
 ]
