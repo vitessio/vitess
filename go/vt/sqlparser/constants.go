@@ -442,6 +442,10 @@ const (
 	MultiLinestringFromWKBStr    = "st_multilinestringfromwkb"
 	PolygonFromWKBStr            = "st_polygonfromwkb"
 	MultiPolygonFromWKBStr       = "st_multipolygonfromwkb"
+
+	//GeomFormatExpr strings
+	TextFormatStr   = "st_astext"
+	BinaryFormatStr = "st_asbinary"
 )
 
 // Constants for Enum Type - Insert.Action
@@ -930,4 +934,10 @@ const (
 	MultiPointFromWKB
 	MultiPolygonFromWKB
 	MultiLinestringFromWKB
+)
+
+// Enum Types of spatial format functions
+const (
+	TextFormat GeomFormatType = iota
+	BinaryFormat
 )

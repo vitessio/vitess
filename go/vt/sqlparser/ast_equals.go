@@ -500,6 +500,12 @@ func (cmp *Comparator) SQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return cmp.RefOfGTIDFuncExpr(a, b)
+	case *GeomFormatExpr:
+		b, ok := inB.(*GeomFormatExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfGeomFormatExpr(a, b)
 	case *GeomFromTextExpr:
 		b, ok := inB.(*GeomFromTextExpr)
 		if !ok {
@@ -2551,6 +2557,19 @@ func (cmp *Comparator) RefOfGTIDFuncExpr(a, b *GTIDFuncExpr) bool {
 		cmp.Expr(a.Set2, b.Set2) &&
 		cmp.Expr(a.Timeout, b.Timeout) &&
 		cmp.Expr(a.Channel, b.Channel)
+}
+
+// RefOfGeomFormatExpr does deep equals between the two objects.
+func (cmp *Comparator) RefOfGeomFormatExpr(a, b *GeomFormatExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.FormatType == b.FormatType &&
+		cmp.Expr(a.Geom, b.Geom) &&
+		cmp.Expr(a.AxisOrderOpt, b.AxisOrderOpt)
 }
 
 // RefOfGeomFromTextExpr does deep equals between the two objects.
@@ -5032,6 +5051,12 @@ func (cmp *Comparator) Callable(inA, inB Callable) bool {
 			return false
 		}
 		return cmp.RefOfGTIDFuncExpr(a, b)
+	case *GeomFormatExpr:
+		b, ok := inB.(*GeomFormatExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfGeomFormatExpr(a, b)
 	case *GeomFromTextExpr:
 		b, ok := inB.(*GeomFromTextExpr)
 		if !ok {
@@ -5716,6 +5741,12 @@ func (cmp *Comparator) Expr(inA, inB Expr) bool {
 			return false
 		}
 		return cmp.RefOfGTIDFuncExpr(a, b)
+	case *GeomFormatExpr:
+		b, ok := inB.(*GeomFormatExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfGeomFormatExpr(a, b)
 	case *GeomFromTextExpr:
 		b, ok := inB.(*GeomFromTextExpr)
 		if !ok {

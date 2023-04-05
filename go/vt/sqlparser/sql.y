@@ -367,6 +367,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %token <str> LOCATE POSITION
 %token <str> ST_GeometryCollectionFromText ST_GeometryFromText ST_LineStringFromText ST_MultiLineStringFromText ST_MultiPointFromText ST_MultiPolygonFromText ST_PointFromText ST_PolygonFromText
 %token <str> ST_GeometryCollectionFromWKB ST_GeometryFromWKB ST_LineStringFromWKB ST_MultiLineStringFromWKB ST_MultiPointFromWKB ST_MultiPolygonFromWKB ST_PointFromWKB ST_PolygonFromWKB
+%token <str> ST_AsBinary ST_AsText
 
 // Match
 %token <str> MATCH AGAINST BOOLEAN LANGUAGE WITH QUERY EXPANSION WITHOUT VALIDATION
@@ -6092,6 +6093,22 @@ UTC_DATE func_paren_opt
   {
     $$ = &JSONArrayExpr{ Params:$3 }
   }
+| ST_AsBinary openb expression closeb
+  {
+    $$ = &GeomFormatExpr{ FormatType: BinaryFormat, Geom: $3}
+  }
+| ST_AsBinary openb expression ',' expression closeb
+  {
+    $$ = &GeomFormatExpr{ FormatType: BinaryFormat, Geom: $3, AxisOrderOpt: $5 }
+  }
+| ST_AsText openb expression closeb
+  {
+    $$ = &GeomFormatExpr{ FormatType: TextFormat, Geom: $3}
+  }
+| ST_AsText openb expression ',' expression closeb
+  {
+    $$ = &GeomFormatExpr{ FormatType: TextFormat, Geom: $3, AxisOrderOpt: $5 }
+  }
 | ST_GeometryFromText openb expression closeb
   {
     $$ = &GeomFromTextExpr{ Type: GeometryFromText, WktText: $3 }
@@ -8099,6 +8116,8 @@ non_reserved_keyword:
 | STDDEV_POP %prec FUNCTION_CALL_NON_KEYWORD
 | STDDEV_SAMP %prec FUNCTION_CALL_NON_KEYWORD
 | STREAM
+| ST_AsBinary %prec FUNCTION_CALL_NON_KEYWORD
+| ST_AsText %prec FUNCTION_CALL_NON_KEYWORD
 | ST_GeometryCollectionFromText %prec FUNCTION_CALL_NON_KEYWORD
 | ST_GeometryFromText %prec FUNCTION_CALL_NON_KEYWORD
 | ST_LineStringFromText %prec FUNCTION_CALL_NON_KEYWORD
