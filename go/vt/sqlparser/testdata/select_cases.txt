@@ -860,7 +860,7 @@ INPUT
 select ST_astext(ST_intersection(ST_GeomFromText('polygon((0 0, 1 0, 0 1, 0 0))'), ST_GeomFromText('polygon((0 0, 1 1, 0 2, 0 0))')));
 END
 OUTPUT
-select ST_astext(ST_intersection(st_geometryfromtext('polygon((0 0, 1 0, 0 1, 0 0))'), st_geometryfromtext('polygon((0 0, 1 1, 0 2, 0 0))'))) from dual
+select st_astext(ST_intersection(st_geometryfromtext('polygon((0 0, 1 0, 0 1, 0 0))'), st_geometryfromtext('polygon((0 0, 1 1, 0 2, 0 0))'))) from dual
 END
 INPUT
 select * from t1 left join t2 on m_id = id where match(d, e, f) against ('+aword +bword' in boolean mode);
@@ -938,7 +938,7 @@ INPUT
 select ST_astext(fn3());
 END
 OUTPUT
-select ST_astext(fn3()) from dual
+select st_astext(fn3()) from dual
 END
 INPUT
 select 1 | -1, 1 ^ -1, 1 & -1;
@@ -1178,7 +1178,7 @@ INPUT
 select ST_astext(st_difference(st_intersection(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')), st_intersection(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)'))));
 END
 OUTPUT
-select ST_astext(st_difference(st_intersection(st_geometryfromtext('point(1 1)'), st_geometryfromtext('multipoint(2 2, 3 3)')), st_intersection(st_geometryfromtext('point(0 0)'), st_geometryfromtext('point(1 1)')))) from dual
+select st_astext(st_difference(st_intersection(st_geometryfromtext('point(1 1)'), st_geometryfromtext('multipoint(2 2, 3 3)')), st_intersection(st_geometryfromtext('point(0 0)'), st_geometryfromtext('point(1 1)')))) from dual
 END
 INPUT
 select a as like_l from t1 where a like 'l%';
@@ -1244,7 +1244,7 @@ INPUT
 select ST_astext(st_intersection(st_intersection(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')), st_intersection(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)'))));
 END
 OUTPUT
-select ST_astext(st_intersection(st_intersection(st_geometryfromtext('point(1 1)'), st_geometryfromtext('multipoint(2 2, 3 3)')), st_intersection(st_geometryfromtext('point(0 0)'), st_geometryfromtext('point(1 1)')))) from dual
+select st_astext(st_intersection(st_intersection(st_geometryfromtext('point(1 1)'), st_geometryfromtext('multipoint(2 2, 3 3)')), st_intersection(st_geometryfromtext('point(0 0)'), st_geometryfromtext('point(1 1)')))) from dual
 END
 INPUT
 select distinct t1.a from t1,t2 order by t2.a;
@@ -1352,7 +1352,7 @@ INPUT
 select (ST_aswkb(cast(st_union(multipoint( point(8,6), point(1,-17679), point(-9,-9)), linestring(point(91,12), point(-77,49), point(53,-81)))as char(18)))) in ('1','2');
 END
 OUTPUT
-select ST_aswkb(cast(st_union(multipoint(point(8, 6), point(1, -17679), point(-9, -9)), linestring(point(91, 12), point(-77, 49), point(53, -81))) as char(18))) in ('1', '2') from dual
+select st_asbinary(cast(st_union(multipoint(point(8, 6), point(1, -17679), point(-9, -9)), linestring(point(91, 12), point(-77, 49), point(53, -81))) as char(18))) in ('1', '2') from dual
 END
 INPUT
 select 12%0 as 'NULL';
@@ -1448,7 +1448,7 @@ INPUT
 select ST_astext(ST_MPointFromWKB(ST_AsWKB(MultiPoint(Point('0', '-0'),Point('-0', '0'), Point('0', '0'))))) as result;
 END
 OUTPUT
-select ST_astext(st_multipointfromwkb(ST_AsWKB(multipoint(point('0', '-0'), point('-0', '0'), point('0', '0'))))) as result from dual
+select st_astext(st_multipointfromwkb(st_asbinary(multipoint(point('0', '-0'), point('-0', '0'), point('0', '0'))))) as result from dual
 END
 INPUT
 select table_name, index_type from information_schema.statistics where table_schema = 'test' and table_name = 'tm' order by table_name;
@@ -1490,7 +1490,7 @@ INPUT
 select ST_asbinary(g) from t1;
 END
 OUTPUT
-select ST_asbinary(g) from t1
+select st_asbinary(g) from t1
 END
 INPUT
 select * from t1 join t2 using(`t1_id`) where match (t1.name, t2.name) against('xxfoo' in boolean mode);
@@ -1532,7 +1532,7 @@ INPUT
 select ST_AsText(Polygon(LineString(Point(0, 0), Point(1, 0), Point(1,1), Point(0, 1), Point(0, 0))));
 END
 OUTPUT
-select ST_AsText(polygon(linestring(point(0, 0), point(1, 0), point(1, 1), point(0, 1), point(0, 0)))) from dual
+select st_astext(polygon(linestring(point(0, 0), point(1, 0), point(1, 1), point(0, 1), point(0, 0)))) from dual
 END
 INPUT
 select get_lock('ee_16407_5', 60);
@@ -2270,7 +2270,7 @@ INPUT
 select object_id, ST_geometrytype(geo), ST_ISSIMPLE(GEO), ST_ASTEXT(ST_centroid(geo)) from t1 where object_id=85984;
 END
 OUTPUT
-select object_id, ST_geometrytype(geo), ST_ISSIMPLE(GEO), ST_ASTEXT(ST_centroid(geo)) from t1 where object_id = 85984
+select object_id, ST_geometrytype(geo), ST_ISSIMPLE(GEO), st_astext(ST_centroid(geo)) from t1 where object_id = 85984
 END
 INPUT
 select @@global.optimizer_switch;
@@ -2378,7 +2378,7 @@ INPUT
 select ST_astext(geom), ST_area(geom),ST_area(ST_buffer(geom,2)) from t1;
 END
 OUTPUT
-select ST_astext(geom), ST_area(geom), ST_area(ST_buffer(geom, 2)) from t1
+select st_astext(geom), ST_area(geom), ST_area(ST_buffer(geom, 2)) from t1
 END
 INPUT
 select * from t1,t2 right join t3 on (t2.i=t3.i) order by t1.i,t2.i,t3.i;
@@ -2402,7 +2402,7 @@ INPUT
 select ST_astext(st_symdifference(ST_GeomFromText('polygon((0 0, 1 0, 0 1, 0 0))'), ST_GeomFromText('polygon((0 0, 0 1, 1 1, 1 0, 0 0))'))) as result;
 END
 OUTPUT
-select ST_astext(st_symdifference(st_geometryfromtext('polygon((0 0, 1 0, 0 1, 0 0))'), st_geometryfromtext('polygon((0 0, 0 1, 1 1, 1 0, 0 0))'))) as result from dual
+select st_astext(st_symdifference(st_geometryfromtext('polygon((0 0, 1 0, 0 1, 0 0))'), st_geometryfromtext('polygon((0 0, 0 1, 1 1, 1 0, 0 0))'))) as result from dual
 END
 INPUT
 select TRIGGER_NAME from information_schema.triggers where trigger_schema='test';
@@ -2570,7 +2570,7 @@ INPUT
 select ST_astext(st_difference(ST_GeomFromText('multipoint(2 2, 3 3)'), ST_GeomFromText('multipoint(0 0, 4 4)')));
 END
 OUTPUT
-select ST_astext(st_difference(st_geometryfromtext('multipoint(2 2, 3 3)'), st_geometryfromtext('multipoint(0 0, 4 4)'))) from dual
+select st_astext(st_difference(st_geometryfromtext('multipoint(2 2, 3 3)'), st_geometryfromtext('multipoint(0 0, 4 4)'))) from dual
 END
 INPUT
 select a1,a2,b, max(c) from t1 where (c > 'b1') or (c <= 'g1') group by a1,a2,b;
@@ -2840,7 +2840,7 @@ INPUT
 select ST_astext(ST_centroid(ST_PolyFromWKB(ST_AsWKB(Polygon(LineString(Point(0, 0), Point(30, 0), Point(30, 30), Point(1, 0), Point(0, 0)))))));
 END
 OUTPUT
-select ST_astext(ST_centroid(st_polygonfromwkb(ST_AsWKB(polygon(linestring(point(0, 0), point(30, 0), point(30, 30), point(1, 0), point(0, 0))))))) from dual
+select st_astext(ST_centroid(st_polygonfromwkb(st_asbinary(polygon(linestring(point(0, 0), point(30, 0), point(30, 30), point(1, 0), point(0, 0))))))) from dual
 END
 INPUT
 select null sounds like 'null';
@@ -2882,7 +2882,7 @@ INPUT
 select ST_astext(st_symdifference(st_intersection(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')), st_intersection(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)'))));
 END
 OUTPUT
-select ST_astext(st_symdifference(st_intersection(st_geometryfromtext('point(1 1)'), st_geometryfromtext('multipoint(2 2, 3 3)')), st_intersection(st_geometryfromtext('point(0 0)'), st_geometryfromtext('point(1 1)')))) from dual
+select st_astext(st_symdifference(st_intersection(st_geometryfromtext('point(1 1)'), st_geometryfromtext('multipoint(2 2, 3 3)')), st_intersection(st_geometryfromtext('point(0 0)'), st_geometryfromtext('point(1 1)')))) from dual
 END
 INPUT
 select @@session.transaction_isolation;
@@ -3662,7 +3662,7 @@ INPUT
 select ST_astext(st_intersection(st_intersection(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')), st_difference(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)'))));
 END
 OUTPUT
-select ST_astext(st_intersection(st_intersection(st_geometryfromtext('point(1 1)'), st_geometryfromtext('multipoint(2 2, 3 3)')), st_difference(st_geometryfromtext('point(0 0)'), st_geometryfromtext('point(1 1)')))) from dual
+select st_astext(st_intersection(st_intersection(st_geometryfromtext('point(1 1)'), st_geometryfromtext('multipoint(2 2, 3 3)')), st_difference(st_geometryfromtext('point(0 0)'), st_geometryfromtext('point(1 1)')))) from dual
 END
 INPUT
 select 'a' union select concat('a', -0.0);
@@ -3950,7 +3950,7 @@ INPUT
 select ST_astext(st_symdifference(ST_GeomFromText('multipoint(2 2, 3 3)'), st_intersection(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)'))));
 END
 OUTPUT
-select ST_astext(st_symdifference(st_geometryfromtext('multipoint(2 2, 3 3)'), st_intersection(st_geometryfromtext('point(0 0)'), st_geometryfromtext('point(1 1)')))) from dual
+select st_astext(st_symdifference(st_geometryfromtext('multipoint(2 2, 3 3)'), st_intersection(st_geometryfromtext('point(0 0)'), st_geometryfromtext('point(1 1)')))) from dual
 END
 INPUT
 select 2;
@@ -3986,7 +3986,7 @@ INPUT
 select ST_astext(Polygon(LineString(Point(0, 0), Point(30, 0), Point(30, 30), Point(1, 0), Point(0, 0))));
 END
 OUTPUT
-select ST_astext(polygon(linestring(point(0, 0), point(30, 0), point(30, 30), point(1, 0), point(0, 0)))) from dual
+select st_astext(polygon(linestring(point(0, 0), point(30, 0), point(30, 30), point(1, 0), point(0, 0)))) from dual
 END
 INPUT
 select host,user from mysql.user where User='myuser';
@@ -4166,7 +4166,7 @@ INPUT
 select ST_astext(ST_buffer(ST_geometryfromtext('point(1 1)'), 1));
 END
 OUTPUT
-select ST_astext(ST_buffer(st_geometryfromtext('point(1 1)'), 1)) from dual
+select st_astext(ST_buffer(st_geometryfromtext('point(1 1)'), 1)) from dual
 END
 INPUT
 select concat(a,if(b<10,_ucs2 0x00C0,_ucs2 0x0062)) from t1;
@@ -4316,7 +4316,7 @@ INPUT
 select ST_astext(st_intersection(ST_GeomFromText('multipoint(2 2, 3 3)'), st_intersection(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)'))));
 END
 OUTPUT
-select ST_astext(st_intersection(st_geometryfromtext('multipoint(2 2, 3 3)'), st_intersection(st_geometryfromtext('point(0 0)'), st_geometryfromtext('point(1 1)')))) from dual
+select st_astext(st_intersection(st_geometryfromtext('multipoint(2 2, 3 3)'), st_intersection(st_geometryfromtext('point(0 0)'), st_geometryfromtext('point(1 1)')))) from dual
 END
 INPUT
 select st_astext(st_intersection( st_geomfromtext('polygon((0 0, 1 0, 1 1, 0 1, 0 0))'), st_geomfromtext('polygon((2 0, 3 0, 3 1, 2 1, 2 0))'))) select st_astext(st_intersection( st_geomfromtext('polygon((0 0, 2 0, 2 1, 0 1, 0 0))'), st_geomfromtext('polygon((1 0, 3 0, 3 1, 1 1, 1 0))'))) select st_astext(st_intersection( st_geomfromtext('polygon((0 0, 1 0, 1 1, 0 1, 0 0))'), st_geomfromtext('polygon((1 0, 2 0, 2 1, 1 1, 1 0))'))) select st_astext(st_intersection( st_geomfromtext('polygon((0 0, 10 0, 10 3, 0 3, 0 0))'), st_geomfromtext('polygon((0 5, 1 3, 2 5, 0 5))'))) select st_astext(st_intersection( st_geomfromtext('polygon((0 0, 10 0, 10 3, 0 3, 0 0))'), st_geomfromtext('polygon((0 5, 1 3, 2 5, 3 3, 4 3, 4 5, 0 5))'))) select st_astext(st_intersection( st_geomfromtext('polygon((0 0, 10 0, 10 3, 0 3, 0 0))'), st_geomfromtext('polygon((0 5, 1 3, 2 5, 3 2, 6 2, 6 5, 0 5))'))) select st_astext(st_intersection( st_geomfromtext('polygon((0 0, 10 0, 10 3, 0 3, 0 0))'), st_geomfromtext('polygon((0 5, 1 3, 4 3, 4 2, 6 2, 6 5, 0 5))'))) select st_astext(st_intersection( st_geomfromtext('polygon((0 0, 10 0, 10 3, 0 3, 0 0))'), st_geomfromtext('polygon((0 5, 1 3, 4 3, 4 0, 6 0, 6 3, 5 3, 5 5, 0 5))'))) select st_astext(st_intersection( st_geomfromtext('polygon((0 0, 10 0, 10 3, 0 3, 0 0))'), st_geomfromtext('polygon((0 5, 1 3, 2 5, 3 3, 4 3, 4 2, 6 2, 6 5, 0 5))'))) select st_astext(st_intersection( st_geomfromtext('polygon((0 0, 10 0, 10 3, 0 3, 0 0))'), st_geomfromtext('polygon((0 5, 1 3, 2 5, 3 3, 4 3, 4 0, 10 0, 10 3, 6 3, 6 5, 0 5))'))) SELECT ST_AsText(ST_GeomFromText("POINT(10 11) POINT(11 12)")) as result;
@@ -4550,7 +4550,7 @@ INPUT
 select ST_astext(ST_Intersection(ST_GeomFromText('POLYGON((0 0, 50 45, 40 50, 0 0))'), ST_GeomFromText('LINESTRING(-10 -10, 200 200)')));
 END
 OUTPUT
-select ST_astext(ST_Intersection(st_geometryfromtext('POLYGON((0 0, 50 45, 40 50, 0 0))'), st_geometryfromtext('LINESTRING(-10 -10, 200 200)'))) from dual
+select st_astext(ST_Intersection(st_geometryfromtext('POLYGON((0 0, 50 45, 40 50, 0 0))'), st_geometryfromtext('LINESTRING(-10 -10, 200 200)'))) from dual
 END
 INPUT
 select TABLE_SCHEMA,TABLE_NAME FROM information_schema.TABLES where TABLE_SCHEMA ='mysqltest_LC2';
@@ -4700,7 +4700,7 @@ INPUT
 select ST_AsText(a) from t2;
 END
 OUTPUT
-select ST_AsText(a) from t2
+select st_astext(a) from t2
 END
 INPUT
 select count(distinct f) from t1;
@@ -5834,7 +5834,7 @@ INPUT
 select ST_astext(st_union(st_intersection(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')), st_intersection(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)'))));
 END
 OUTPUT
-select ST_astext(st_union(st_intersection(st_geometryfromtext('point(1 1)'), st_geometryfromtext('multipoint(2 2, 3 3)')), st_intersection(st_geometryfromtext('point(0 0)'), st_geometryfromtext('point(1 1)')))) from dual
+select st_astext(st_union(st_intersection(st_geometryfromtext('point(1 1)'), st_geometryfromtext('multipoint(2 2, 3 3)')), st_intersection(st_geometryfromtext('point(0 0)'), st_geometryfromtext('point(1 1)')))) from dual
 END
 INPUT
 select column_type from information_schema.columns where table_schema="information_schema" and table_name="COLUMNS" and (column_name="character_set_name" or column_name="collation_name");
@@ -6104,7 +6104,7 @@ INPUT
 select ST_astext(g) from t1 where ST_Contains(ST_GeomFromText('POLYGON((5 1, 7 1, 7 7, 5 7, 3 3, 5 3, 5 1))'), g);
 END
 OUTPUT
-select ST_astext(g) from t1 where ST_Contains(st_geometryfromtext('POLYGON((5 1, 7 1, 7 7, 5 7, 3 3, 5 3, 5 1))'), g)
+select st_astext(g) from t1 where ST_Contains(st_geometryfromtext('POLYGON((5 1, 7 1, 7 7, 5 7, 3 3, 5 3, 5 1))'), g)
 END
 INPUT
 select timestamp("2001-12-01", "25:01:01");
@@ -6164,7 +6164,7 @@ INPUT
 select ST_astext(ST_Intersection(ST_geometryfromtext('point(1 1)'), ST_geometryfromtext('polygon((0 0, 2 0, 1 2, 0 0))')));
 END
 OUTPUT
-select ST_astext(ST_Intersection(st_geometryfromtext('point(1 1)'), st_geometryfromtext('polygon((0 0, 2 0, 1 2, 0 0))'))) from dual
+select st_astext(ST_Intersection(st_geometryfromtext('point(1 1)'), st_geometryfromtext('polygon((0 0, 2 0, 1 2, 0 0))'))) from dual
 END
 INPUT
 select (select d from t2 where d > a) as 'x', t1.* from t1;
@@ -6308,7 +6308,7 @@ INPUT
 select ST_astext(ST_convexhull(ST_PolyFromWKB(ST_AsWKB(Polygon(LineString(Point(0, 0), Point(30, 0), Point(30, 30), Point(1, 0), Point(0, 0)))))));
 END
 OUTPUT
-select ST_astext(ST_convexhull(st_polygonfromwkb(ST_AsWKB(polygon(linestring(point(0, 0), point(30, 0), point(30, 30), point(1, 0), point(0, 0))))))) from dual
+select st_astext(ST_convexhull(st_polygonfromwkb(st_asbinary(polygon(linestring(point(0, 0), point(30, 0), point(30, 30), point(1, 0), point(0, 0))))))) from dual
 END
 INPUT
 select * from t1 where i between 2 and 4 and v in ('def','3r4f','abc');
@@ -7430,7 +7430,7 @@ INPUT
 select ST_AsText(f2),ST_AsText(f3) from t1;
 END
 OUTPUT
-select ST_AsText(f2), ST_AsText(f3) from t1
+select st_astext(f2), st_astext(f3) from t1
 END
 INPUT
 select collation(group_concat(a,b)) from t1;
@@ -7874,7 +7874,7 @@ INPUT
 select ST_astext(ST_Intersection(ST_GeomFromText('POLYGON((0 0, 50 45, 40 50, 0 0))'), ST_GeomFromText('LINESTRING(-10 -10, 200 200, 199 201, -11 -9)')));
 END
 OUTPUT
-select ST_astext(ST_Intersection(st_geometryfromtext('POLYGON((0 0, 50 45, 40 50, 0 0))'), st_geometryfromtext('LINESTRING(-10 -10, 200 200, 199 201, -11 -9)'))) from dual
+select st_astext(ST_Intersection(st_geometryfromtext('POLYGON((0 0, 50 45, 40 50, 0 0))'), st_geometryfromtext('LINESTRING(-10 -10, 200 200, 199 201, -11 -9)'))) from dual
 END
 INPUT
 select cast('18446744073709551616' as signed);
@@ -8168,7 +8168,7 @@ INPUT
 select ST_Astext(ST_Envelope(ST_MPointFromWKB(ST_AsWKB(MultiPoint(Point('0', '0'),Point('-0', '0'), Point('0', '-0')))))) as result;
 END
 OUTPUT
-select ST_Astext(ST_Envelope(st_multipointfromwkb(ST_AsWKB(multipoint(point('0', '0'), point('-0', '0'), point('0', '-0')))))) as result from dual
+select st_astext(ST_Envelope(st_multipointfromwkb(st_asbinary(multipoint(point('0', '0'), point('-0', '0'), point('0', '-0')))))) as result from dual
 END
 INPUT
 select constraint_name from information_schema.table_constraints where table_schema='test' order by constraint_name;
@@ -8372,7 +8372,7 @@ INPUT
 select ST_astext(ST_Union(ST_geometryfromtext('point(1 1)'), ST_geometryfromtext('polygon((0 0, 2 0, 1 2, 0 0))')));
 END
 OUTPUT
-select ST_astext(ST_Union(st_geometryfromtext('point(1 1)'), st_geometryfromtext('polygon((0 0, 2 0, 1 2, 0 0))'))) from dual
+select st_astext(ST_Union(st_geometryfromtext('point(1 1)'), st_geometryfromtext('polygon((0 0, 2 0, 1 2, 0 0))'))) from dual
 END
 INPUT
 select hex(convert(_big5 0xC84041 using ucs2));
@@ -9320,7 +9320,7 @@ INPUT
 select ST_AsText(a) from (select f2 as a from t1 union select f3 from t1) t;
 END
 OUTPUT
-select ST_AsText(a) from (select f2 as a from t1 union select f3 from t1) as t
+select st_astext(a) from (select f2 as a from t1 union select f3 from t1) as t
 END
 INPUT
 select host,db,user,table_name from mysql.tables_priv where user = 'mysqltest_1' order by host,db,user,table_name;
@@ -9422,7 +9422,7 @@ INPUT
 select ST_AsText(ST_GeometryFromWKB(ST_AsWKB(GeometryCollection(POINT(0, 0), MULTIPOINT(point(0, 0), point(1, 1)), LINESTRING(point(0, 0),point(10, 10)), MULTILINESTRING(LINESTRING(point(1, 2), point(1, 3))), POLYGON(LineString(Point(10, 20), Point(1, 1), Point(2, 2), Point(1, 1), Point(10, 20))), MULTIPOLYGON(Polygon(LineString(Point(0, 0), Point(1, 0), Point(1, 1), Point(0, 0)))))))) as Result;
 END
 OUTPUT
-select ST_AsText(st_geometryfromwkb(ST_AsWKB(GeometryCollection(point(0, 0), multipoint(point(0, 0), point(1, 1)), linestring(point(0, 0), point(10, 10)), multilinestring(linestring(point(1, 2), point(1, 3))), polygon(linestring(point(10, 20), point(1, 1), point(2, 2), point(1, 1), point(10, 20))), multipolygon(polygon(linestring(point(0, 0), point(1, 0), point(1, 1), point(0, 0)))))))) as Result from dual
+select st_astext(st_geometryfromwkb(st_asbinary(GeometryCollection(point(0, 0), multipoint(point(0, 0), point(1, 1)), linestring(point(0, 0), point(10, 10)), multilinestring(linestring(point(1, 2), point(1, 3))), polygon(linestring(point(10, 20), point(1, 1), point(2, 2), point(1, 1), point(10, 20))), multipolygon(polygon(linestring(point(0, 0), point(1, 0), point(1, 1), point(0, 0)))))))) as Result from dual
 END
 INPUT
 select s1*0 as s1 from t1 group by s1 having s1 <> 0;
@@ -9560,7 +9560,7 @@ INPUT
 select ST_astext(st_symdifference(ST_GeomFromText('multipoint(2 2, 3 3)'), ST_GeomFromText('multipoint(0 0, 4 4)')));
 END
 OUTPUT
-select ST_astext(st_symdifference(st_geometryfromtext('multipoint(2 2, 3 3)'), st_geometryfromtext('multipoint(0 0, 4 4)'))) from dual
+select st_astext(st_symdifference(st_geometryfromtext('multipoint(2 2, 3 3)'), st_geometryfromtext('multipoint(0 0, 4 4)'))) from dual
 END
 INPUT
 select count(b), sum(b), avg(b), std(b), min(b), max(b), bit_and(b), bit_or(b) from t1;
@@ -9704,7 +9704,7 @@ INPUT
 select ST_astext(st_difference(st_intersection(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')), st_difference(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)'))));
 END
 OUTPUT
-select ST_astext(st_difference(st_intersection(st_geometryfromtext('point(1 1)'), st_geometryfromtext('multipoint(2 2, 3 3)')), st_difference(st_geometryfromtext('point(0 0)'), st_geometryfromtext('point(1 1)')))) from dual
+select st_astext(st_difference(st_intersection(st_geometryfromtext('point(1 1)'), st_geometryfromtext('multipoint(2 2, 3 3)')), st_difference(st_geometryfromtext('point(0 0)'), st_geometryfromtext('point(1 1)')))) from dual
 END
 INPUT
 select * from information_schema.user_privileges where grantee like "'mysqltest_8'%";
@@ -10340,7 +10340,7 @@ INPUT
 select ST_astext(ST_geomfromwkb(ST_AsWKB(st_intersection(linestring(point(-59,82),point(32,29)), point(2,-5))))) as result;
 END
 OUTPUT
-select ST_astext(st_geometryfromwkb(ST_AsWKB(st_intersection(linestring(point(-59, 82), point(32, 29)), point(2, -5))))) as result from dual
+select st_astext(st_geometryfromwkb(st_asbinary(st_intersection(linestring(point(-59, 82), point(32, 29)), point(2, -5))))) as result from dual
 END
 INPUT
 select event_name from performance_schema.events_stages_history_long where thread_id = @con1_thread_id and event_name like '%Opening %tables' or event_name like '%Locking system tables' or event_name like '%System lock';
@@ -10430,7 +10430,7 @@ INPUT
 select ST_astext(ST_Intersection(ST_GeomFromText('POLYGON((0 0, 50 45, 40 50, 0 0))'), ST_GeomFromText('POINT(20 20)')));
 END
 OUTPUT
-select ST_astext(ST_Intersection(st_geometryfromtext('POLYGON((0 0, 50 45, 40 50, 0 0))'), st_geometryfromtext('POINT(20 20)'))) from dual
+select st_astext(ST_Intersection(st_geometryfromtext('POLYGON((0 0, 50 45, 40 50, 0 0))'), st_geometryfromtext('POINT(20 20)'))) from dual
 END
 INPUT
 select group_concat(bar order by concat(bar,bar)) from t1;
@@ -11342,7 +11342,7 @@ INPUT
 select ST_astext(ST_Intersection(ST_GeomFromText('POLYGON((0 0, 50 45, 40 50, 0 0))'), ST_GeomFromText('POLYGON((50 5, 55 10, 0 45, 50 5))')));
 END
 OUTPUT
-select ST_astext(ST_Intersection(st_geometryfromtext('POLYGON((0 0, 50 45, 40 50, 0 0))'), st_geometryfromtext('POLYGON((50 5, 55 10, 0 45, 50 5))'))) from dual
+select st_astext(ST_Intersection(st_geometryfromtext('POLYGON((0 0, 50 45, 40 50, 0 0))'), st_geometryfromtext('POLYGON((50 5, 55 10, 0 45, 50 5))'))) from dual
 END
 INPUT
 select strcmp(concat(utc_date(),' ',utc_time()),utc_timestamp())=0;
@@ -11570,7 +11570,7 @@ INPUT
 select ST_astext(g) from t1 where ST_Contains(ST_GeomFromText('POLYGON((5 1, 7 1, 7 7, 5 7, 3 3, 5 3, 5 1), (5.01 3.01, 6 5, 9 5, 8 3, 5.01 3.01))'), g);
 END
 OUTPUT
-select ST_astext(g) from t1 where ST_Contains(st_geometryfromtext('POLYGON((5 1, 7 1, 7 7, 5 7, 3 3, 5 3, 5 1), (5.01 3.01, 6 5, 9 5, 8 3, 5.01 3.01))'), g)
+select st_astext(g) from t1 where ST_Contains(st_geometryfromtext('POLYGON((5 1, 7 1, 7 7, 5 7, 3 3, 5 3, 5 1), (5.01 3.01, 6 5, 9 5, 8 3, 5.01 3.01))'), g)
 END
 INPUT
 select week(19981231,0) as '0', week(19981231,1) as '1', week(19981231,2) as '2', week(19981231,3) as '3', week(19981231,4) as '4', week(19981231,5) as '5', week(19981231,6) as '6', week(19981231,7) as '7';
@@ -12050,7 +12050,7 @@ INPUT
 select ST_astext(ST_MPointFromWKB(ST_AsWKB(MultiPoint(Point('0', '0'),Point('-0', '0'), Point('0', '-0'))))) as result;
 END
 OUTPUT
-select ST_astext(st_multipointfromwkb(ST_AsWKB(multipoint(point('0', '0'), point('-0', '0'), point('0', '-0'))))) as result from dual
+select st_astext(st_multipointfromwkb(st_asbinary(multipoint(point('0', '0'), point('-0', '0'), point('0', '-0'))))) as result from dual
 END
 INPUT
 select IF(0,"ERROR","this"),IF(1,"is","ERROR"),IF(NULL,"ERROR","a"),IF(1,2,3)|0,IF(1,2.0,3.0)+0;
@@ -12074,7 +12074,7 @@ INPUT
 select ST_AsText(a) from t1 where MBRContains(ST_GeomFromText('Polygon((0 0, 0 2, 2 2, 2 0, 0 0))'), a) or MBRContains(ST_GeomFromText('Polygon((2 2, 2 5, 5 5, 5 2, 2 2))'), a);
 END
 OUTPUT
-select ST_AsText(a) from t1 where MBRContains(st_geometryfromtext('Polygon((0 0, 0 2, 2 2, 2 0, 0 0))'), a) or MBRContains(st_geometryfromtext('Polygon((2 2, 2 5, 5 5, 5 2, 2 2))'), a)
+select st_astext(a) from t1 where MBRContains(st_geometryfromtext('Polygon((0 0, 0 2, 2 2, 2 0, 0 0))'), a) or MBRContains(st_geometryfromtext('Polygon((2 2, 2 5, 5 5, 5 2, 2 2))'), a)
 END
 INPUT
 select date_add("1997-12-31 23:59:59",INTERVAL "10000:1" DAY_HOUR);
@@ -12506,7 +12506,7 @@ INPUT
 select ST_astext(st_symdifference(st_intersection(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')), st_difference(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)'))));
 END
 OUTPUT
-select ST_astext(st_symdifference(st_intersection(st_geometryfromtext('point(1 1)'), st_geometryfromtext('multipoint(2 2, 3 3)')), st_difference(st_geometryfromtext('point(0 0)'), st_geometryfromtext('point(1 1)')))) from dual
+select st_astext(st_symdifference(st_intersection(st_geometryfromtext('point(1 1)'), st_geometryfromtext('multipoint(2 2, 3 3)')), st_difference(st_geometryfromtext('point(0 0)'), st_geometryfromtext('point(1 1)')))) from dual
 END
 INPUT
 select user() like _latin1"%@%";
@@ -13640,7 +13640,7 @@ INPUT
 select ST_ASTEXT(ST_UNION(ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(MULTILINESTRING((0 -14,13 -8),(-5 -3,8 7),(-6 18,17 -11,-12 19,19 5),(16 11,9 -5),(17 -5,5 10),(-4 17,6 4),(-12 15,17 13,-18 11,15 10),(7 0,2 -16,-18 13,-6 4),(-17 -6,-6 -7,1 4,-18 0)),MULTIPOINT(0 14,-9 -11),MULTILINESTRING((-11 -2,17 -14),(18 -12,18 -8),(-13 -16,9 16,9 -10,-7 20),(-14 -5,10 -9,4 1,17 -8),(-9 -4,-2 -12,9 -13,-5 4),(15 17,13 20)),MULTIPOINT(16 1,-9 -17,-16 6,-17 3),POINT(-18 13))'), ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(POINT(7 0),MULTILINESTRING((-13 -18,-16 0),(17 11,-1 11,-18 -19,-4 -18),(-8 -8,-15 -13,3 -18,6 8)),LINESTRING(5 16,0 -9,-6 4,-15 17),MULTIPOINT(-9 -5,5 15,12 -11,12 11))'))) as result;
 END
 OUTPUT
-select ST_ASTEXT(ST_UNION(st_geometryfromtext('GEOMETRYCOLLECTION(MULTILINESTRING((0 -14,13 -8),(-5 -3,8 7),(-6 18,17 -11,-12 19,19 5),(16 11,9 -5),(17 -5,5 10),(-4 17,6 4),(-12 15,17 13,-18 11,15 10),(7 0,2 -16,-18 13,-6 4),(-17 -6,-6 -7,1 4,-18 0)),MULTIPOINT(0 14,-9 -11),MULTILINESTRING((-11 -2,17 -14),(18 -12,18 -8),(-13 -16,9 16,9 -10,-7 20),(-14 -5,10 -9,4 1,17 -8),(-9 -4,-2 -12,9 -13,-5 4),(15 17,13 20)),MULTIPOINT(16 1,-9 -17,-16 6,-17 3),POINT(-18 13))'), st_geometryfromtext('GEOMETRYCOLLECTION(POINT(7 0),MULTILINESTRING((-13 -18,-16 0),(17 11,-1 11,-18 -19,-4 -18),(-8 -8,-15 -13,3 -18,6 8)),LINESTRING(5 16,0 -9,-6 4,-15 17),MULTIPOINT(-9 -5,5 15,12 -11,12 11))'))) as result from dual
+select st_astext(ST_UNION(st_geometryfromtext('GEOMETRYCOLLECTION(MULTILINESTRING((0 -14,13 -8),(-5 -3,8 7),(-6 18,17 -11,-12 19,19 5),(16 11,9 -5),(17 -5,5 10),(-4 17,6 4),(-12 15,17 13,-18 11,15 10),(7 0,2 -16,-18 13,-6 4),(-17 -6,-6 -7,1 4,-18 0)),MULTIPOINT(0 14,-9 -11),MULTILINESTRING((-11 -2,17 -14),(18 -12,18 -8),(-13 -16,9 16,9 -10,-7 20),(-14 -5,10 -9,4 1,17 -8),(-9 -4,-2 -12,9 -13,-5 4),(15 17,13 20)),MULTIPOINT(16 1,-9 -17,-16 6,-17 3),POINT(-18 13))'), st_geometryfromtext('GEOMETRYCOLLECTION(POINT(7 0),MULTILINESTRING((-13 -18,-16 0),(17 11,-1 11,-18 -19,-4 -18),(-8 -8,-15 -13,3 -18,6 8)),LINESTRING(5 16,0 -9,-6 4,-15 17),MULTIPOINT(-9 -5,5 15,12 -11,12 11))'))) as result from dual
 END
 INPUT
 select 1 from t1 group by b;
@@ -14570,7 +14570,7 @@ INPUT
 select ST_AsText(ST_PolygonFromText('POLYGON((10 10,20 10,20 20,10 20, 10 10))'));
 END
 OUTPUT
-select ST_AsText(st_polygonfromtext('POLYGON((10 10,20 10,20 20,10 20, 10 10))')) from dual
+select st_astext(st_polygonfromtext('POLYGON((10 10,20 10,20 20,10 20, 10 10))')) from dual
 END
 INPUT
 select 10.0+'10';
@@ -15356,7 +15356,7 @@ INPUT
 select ST_astext(ST_Intersection(ST_GeomFromText('LINESTRING(0 0, 50 45, 40 50, 0 0)'), ST_GeomFromText('LINESTRING(50 5, 55 10, 0 45, 50 5)')));
 END
 OUTPUT
-select ST_astext(ST_Intersection(st_geometryfromtext('LINESTRING(0 0, 50 45, 40 50, 0 0)'), st_geometryfromtext('LINESTRING(50 5, 55 10, 0 45, 50 5)'))) from dual
+select st_astext(ST_Intersection(st_geometryfromtext('LINESTRING(0 0, 50 45, 40 50, 0 0)'), st_geometryfromtext('LINESTRING(50 5, 55 10, 0 45, 50 5)'))) from dual
 END
 INPUT
 select load_file("/proc/self/fd/0");
@@ -15440,7 +15440,7 @@ INPUT
 select ST_astext(st_difference(ST_GeomFromText('multipoint(2 2, 3 3)'), ST_GeomFromText('multipoint(2 2, 3 3)')));
 END
 OUTPUT
-select ST_astext(st_difference(st_geometryfromtext('multipoint(2 2, 3 3)'), st_geometryfromtext('multipoint(2 2, 3 3)'))) from dual
+select st_astext(st_difference(st_geometryfromtext('multipoint(2 2, 3 3)'), st_geometryfromtext('multipoint(2 2, 3 3)'))) from dual
 END
 INPUT
 select bit_length(';
@@ -15554,7 +15554,7 @@ INPUT
 select ST_astext(ST_symdifference(ST_GeomFromText('polygon((0 0, 1 0, 0 1, 0 0))'), ST_GeomFromText('polygon((0 0, 1 0, 0 0,0 1, 0 0))'))) as result;
 END
 OUTPUT
-select ST_astext(ST_symdifference(st_geometryfromtext('polygon((0 0, 1 0, 0 1, 0 0))'), st_geometryfromtext('polygon((0 0, 1 0, 0 0,0 1, 0 0))'))) as result from dual
+select st_astext(ST_symdifference(st_geometryfromtext('polygon((0 0, 1 0, 0 1, 0 0))'), st_geometryfromtext('polygon((0 0, 1 0, 0 0,0 1, 0 0))'))) as result from dual
 END
 INPUT
 select extract(HOUR_SECOND FROM "10:11:12");
@@ -16058,7 +16058,7 @@ INPUT
 select ST_astext(st_union( st_intersection( multipoint(point(-1,-1)), point(1,-1) ), st_difference( multipoint(point(-1,1)), point(-1,-1) )));
 END
 OUTPUT
-select ST_astext(st_union(st_intersection(multipoint(point(-1, -1)), point(1, -1)), st_difference(multipoint(point(-1, 1)), point(-1, -1)))) from dual
+select st_astext(st_union(st_intersection(multipoint(point(-1, -1)), point(1, -1)), st_difference(multipoint(point(-1, 1)), point(-1, -1)))) from dual
 END
 INPUT
 select * from t1, lateral (with qn as (select t1.a) select (select max(a) from qn)) as dt;
@@ -16604,7 +16604,7 @@ INPUT
 select ST_astext(st_union(ST_GeomFromText('multipoint(2 2, 3 3)'), st_intersection(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)'))));
 END
 OUTPUT
-select ST_astext(st_union(st_geometryfromtext('multipoint(2 2, 3 3)'), st_intersection(st_geometryfromtext('point(0 0)'), st_geometryfromtext('point(1 1)')))) from dual
+select st_astext(st_union(st_geometryfromtext('multipoint(2 2, 3 3)'), st_intersection(st_geometryfromtext('point(0 0)'), st_geometryfromtext('point(1 1)')))) from dual
 END
 INPUT
 select * from t3_trans;
@@ -17954,7 +17954,7 @@ INPUT
 select ST_ASTEXT(ST_UNION(ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(MULTILINESTRING((0 -14,13 -8),(-5 -3,8 7),(-6 18,17 -11,-12 19,19 5),(16 11,9 -5),(17 -5,5 10),(-4 17,6 4),(-12 15,17 13,-18 11,15 10),(7 0,2 -16,-18 13,-6 4),(-17 -6,-6 -7,1 4,-18 0)),GEOMETRYCOLLECTION(MULTIPOINT(0 14,-9 -11),MULTILINESTRING((-11 -2,17 -14),(18 -12,18 -8),(-13 -16,9 16,9 -10,-7 20),(-14 -5,10 -9,4 1,17 -8),(-9 -4,-2 -12,9 -13,-5 4),(15 17,13 20))),MULTIPOINT(16 1,-9 -17,-16 6,-17 3),POINT(-18 13))'), ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(POINT(7 0),MULTILINESTRING((-13 -18,-16 0),(17 11,-1 11,-18 -19,-4 -18),(-8 -8,-15 -13,3 -18,6 8)),LINESTRING(5 16,0 -9,-6 4,-15 17),MULTIPOINT(-9 -5,5 15,12 -11,12 11))'))) as result;
 END
 OUTPUT
-select ST_ASTEXT(ST_UNION(st_geometryfromtext('GEOMETRYCOLLECTION(MULTILINESTRING((0 -14,13 -8),(-5 -3,8 7),(-6 18,17 -11,-12 19,19 5),(16 11,9 -5),(17 -5,5 10),(-4 17,6 4),(-12 15,17 13,-18 11,15 10),(7 0,2 -16,-18 13,-6 4),(-17 -6,-6 -7,1 4,-18 0)),GEOMETRYCOLLECTION(MULTIPOINT(0 14,-9 -11),MULTILINESTRING((-11 -2,17 -14),(18 -12,18 -8),(-13 -16,9 16,9 -10,-7 20),(-14 -5,10 -9,4 1,17 -8),(-9 -4,-2 -12,9 -13,-5 4),(15 17,13 20))),MULTIPOINT(16 1,-9 -17,-16 6,-17 3),POINT(-18 13))'), st_geometryfromtext('GEOMETRYCOLLECTION(POINT(7 0),MULTILINESTRING((-13 -18,-16 0),(17 11,-1 11,-18 -19,-4 -18),(-8 -8,-15 -13,3 -18,6 8)),LINESTRING(5 16,0 -9,-6 4,-15 17),MULTIPOINT(-9 -5,5 15,12 -11,12 11))'))) as result from dual
+select st_astext(ST_UNION(st_geometryfromtext('GEOMETRYCOLLECTION(MULTILINESTRING((0 -14,13 -8),(-5 -3,8 7),(-6 18,17 -11,-12 19,19 5),(16 11,9 -5),(17 -5,5 10),(-4 17,6 4),(-12 15,17 13,-18 11,15 10),(7 0,2 -16,-18 13,-6 4),(-17 -6,-6 -7,1 4,-18 0)),GEOMETRYCOLLECTION(MULTIPOINT(0 14,-9 -11),MULTILINESTRING((-11 -2,17 -14),(18 -12,18 -8),(-13 -16,9 16,9 -10,-7 20),(-14 -5,10 -9,4 1,17 -8),(-9 -4,-2 -12,9 -13,-5 4),(15 17,13 20))),MULTIPOINT(16 1,-9 -17,-16 6,-17 3),POINT(-18 13))'), st_geometryfromtext('GEOMETRYCOLLECTION(POINT(7 0),MULTILINESTRING((-13 -18,-16 0),(17 11,-1 11,-18 -19,-4 -18),(-8 -8,-15 -13,3 -18,6 8)),LINESTRING(5 16,0 -9,-6 4,-15 17),MULTIPOINT(-9 -5,5 15,12 -11,12 11))'))) as result from dual
 END
 INPUT
 select count(distinct vs) from t1;
@@ -18698,7 +18698,7 @@ INPUT
 select (ST_asWKT(ST_geomfromwkb((0x000000000140240000000000004024000000000000))));
 END
 OUTPUT
-select ST_asWKT(st_geometryfromwkb(0x000000000140240000000000004024000000000000)) from dual
+select st_astext(st_geometryfromwkb(0x000000000140240000000000004024000000000000)) from dual
 END
 INPUT
 select collation(export_set(255,_latin2'y',_latin2'n',_latin2' ')), coercibility(export_set(255,_latin2'y',_latin2'n',_latin2' '));
@@ -18722,7 +18722,7 @@ INPUT
 select ST_astext(g) from t1 where ST_Intersects(ST_GeomFromText('POLYGON((5 1, 7 1, 7 7, 5 7, 3 3, 5 3, 5 1))'), g);
 END
 OUTPUT
-select ST_astext(g) from t1 where ST_Intersects(st_geometryfromtext('POLYGON((5 1, 7 1, 7 7, 5 7, 3 3, 5 3, 5 1))'), g)
+select st_astext(g) from t1 where ST_Intersects(st_geometryfromtext('POLYGON((5 1, 7 1, 7 7, 5 7, 3 3, 5 3, 5 1))'), g)
 END
 INPUT
 select t1.f1,t.* from t1, t1 t group by 1;
@@ -19220,7 +19220,7 @@ INPUT
 select ST_astext(st_symdifference(ST_GeomFromText('multipoint(2 2, 3 3)'), ST_GeomFromText('multipoint(2 2, 3 3)')));
 END
 OUTPUT
-select ST_astext(st_symdifference(st_geometryfromtext('multipoint(2 2, 3 3)'), st_geometryfromtext('multipoint(2 2, 3 3)'))) from dual
+select st_astext(st_symdifference(st_geometryfromtext('multipoint(2 2, 3 3)'), st_geometryfromtext('multipoint(2 2, 3 3)'))) from dual
 END
 INPUT
 select t2.fld3 FROM t2 where fld3 >= 'honeysuckle' and fld3 <= 'honoring' order by fld3;
@@ -19598,7 +19598,7 @@ INPUT
 select ST_astext(ST_symdifference(ST_GeomFromText('polygon((0 0, 1 0, 0 1, 0 0))'), ST_GeomFromText('polygon((0 0, 1 1, 0 2, 0 0))')));
 END
 OUTPUT
-select ST_astext(ST_symdifference(st_geometryfromtext('polygon((0 0, 1 0, 0 1, 0 0))'), st_geometryfromtext('polygon((0 0, 1 1, 0 2, 0 0))'))) from dual
+select st_astext(ST_symdifference(st_geometryfromtext('polygon((0 0, 1 0, 0 1, 0 0))'), st_geometryfromtext('polygon((0 0, 1 1, 0 2, 0 0))'))) from dual
 END
 INPUT
 select ifnull(group_concat(concat(t1.id, ':', t1.name)), 'shortname') as 'without distinct: how it should be' from t1;
@@ -19670,7 +19670,7 @@ INPUT
 select ST_AsText(ST_GeometryFromWKB(ST_AsWKB(GeometryCollection(POINT(0, 0), MULTIPOINT(point(0, 0), point(1, 1)), LINESTRING(point(0, 0),point(10, 10)), MULTILINESTRING(LINESTRING(point(1, 2), point(1, 3))), POLYGON(LineString(Point(10, 20), Point(1, 1), Point(2, 2), Point(10, 20))), MULTIPOLYGON(Polygon(LineString(Point(0, 0), Point(1, 0), Point(1, 1), Point(0, 0)))))))) as Result;
 END
 OUTPUT
-select ST_AsText(st_geometryfromwkb(ST_AsWKB(GeometryCollection(point(0, 0), multipoint(point(0, 0), point(1, 1)), linestring(point(0, 0), point(10, 10)), multilinestring(linestring(point(1, 2), point(1, 3))), polygon(linestring(point(10, 20), point(1, 1), point(2, 2), point(10, 20))), multipolygon(polygon(linestring(point(0, 0), point(1, 0), point(1, 1), point(0, 0)))))))) as Result from dual
+select st_astext(st_geometryfromwkb(st_asbinary(GeometryCollection(point(0, 0), multipoint(point(0, 0), point(1, 1)), linestring(point(0, 0), point(10, 10)), multilinestring(linestring(point(1, 2), point(1, 3))), polygon(linestring(point(10, 20), point(1, 1), point(2, 2), point(10, 20))), multipolygon(polygon(linestring(point(0, 0), point(1, 0), point(1, 1), point(0, 0)))))))) as Result from dual
 END
 INPUT
 select bar from t1 having group_concat(bar)='';
@@ -20078,7 +20078,7 @@ INPUT
 select ST_astext(ST_Intersection(ST_GeomFromText('LINESTRING(0 0, 50 45, 40 50)'), ST_GeomFromText('LINESTRING(50 5, 55 10, 0 45)')));
 END
 OUTPUT
-select ST_astext(ST_Intersection(st_geometryfromtext('LINESTRING(0 0, 50 45, 40 50)'), st_geometryfromtext('LINESTRING(50 5, 55 10, 0 45)'))) from dual
+select st_astext(ST_Intersection(st_geometryfromtext('LINESTRING(0 0, 50 45, 40 50)'), st_geometryfromtext('LINESTRING(50 5, 55 10, 0 45)'))) from dual
 END
 INPUT
 select distinct ifnull(group_concat(concat(t1.id, ':', t1.name)), 'shortname') as 'with distinct: cutoff at length of shortname' from t1;
@@ -20378,7 +20378,7 @@ INPUT
 select ST_Astext(ST_Envelope(ST_MPointFromWKB(ST_AsWKB(MultiPoint(Point('0', '-0'),Point('-0', '0'), Point('0', '0')))))) as result;
 END
 OUTPUT
-select ST_Astext(ST_Envelope(st_multipointfromwkb(ST_AsWKB(multipoint(point('0', '-0'), point('-0', '0'), point('0', '0')))))) as result from dual
+select st_astext(ST_Envelope(st_multipointfromwkb(st_asbinary(multipoint(point('0', '-0'), point('-0', '0'), point('0', '0')))))) as result from dual
 END
 INPUT
 select date_add("9999-12-31 23:59:59",INTERVAL 1 SECOND);
@@ -20522,7 +20522,7 @@ INPUT
 select ST_astext(g) from t1 where ST_Within(g, ST_GeomFromText('POLYGON((5 1, 7 1, 7 7, 5 7, 3 3, 5 3, 5 1))'));
 END
 OUTPUT
-select ST_astext(g) from t1 where ST_Within(g, st_geometryfromtext('POLYGON((5 1, 7 1, 7 7, 5 7, 3 3, 5 3, 5 1))'))
+select st_astext(g) from t1 where ST_Within(g, st_geometryfromtext('POLYGON((5 1, 7 1, 7 7, 5 7, 3 3, 5 3, 5 1))'))
 END
 INPUT
 select table_name, is_updatable from information_schema.views where table_schema != 'sys' order by table_name;
@@ -21212,7 +21212,7 @@ INPUT
 select ST_astext(st_difference(ST_GeomFromText('polygon((0 0, 1 0, 0 1, 0 0))'), ST_GeomFromText('polygon((0 0, 0 1, 1 1, 1 0, 0 0))'))) as result;
 END
 OUTPUT
-select ST_astext(st_difference(st_geometryfromtext('polygon((0 0, 1 0, 0 1, 0 0))'), st_geometryfromtext('polygon((0 0, 0 1, 1 1, 1 0, 0 0))'))) as result from dual
+select st_astext(st_difference(st_geometryfromtext('polygon((0 0, 1 0, 0 1, 0 0))'), st_geometryfromtext('polygon((0 0, 0 1, 1 1, 1 0, 0 0))'))) as result from dual
 END
 INPUT
 select distinct a1,a2,b from t2 where (a2 >= 'b') and (b = 'a') group by a1,a2,b;
@@ -21650,7 +21650,7 @@ INPUT
 select (ST_asWKT(ST_geomfromwkb((0x010100000000000000000024400000000000002440))));
 END
 OUTPUT
-select ST_asWKT(st_geometryfromwkb(0x010100000000000000000024400000000000002440)) from dual
+select st_astext(st_geometryfromwkb(0x010100000000000000000024400000000000002440)) from dual
 END
 INPUT
 select right('hello', 18446744073709551617);
@@ -21992,7 +21992,7 @@ INPUT
 select ST_astext(ST_UNION(ST_GeomFromText('POLYGON((0 0, 50 45, 40 50, 0 0))'), ST_GeomFromText('LINESTRING(-10 -10, 200 200, 199 201, -11 -9)')));
 END
 OUTPUT
-select ST_astext(ST_UNION(st_geometryfromtext('POLYGON((0 0, 50 45, 40 50, 0 0))'), st_geometryfromtext('LINESTRING(-10 -10, 200 200, 199 201, -11 -9)'))) from dual
+select st_astext(ST_UNION(st_geometryfromtext('POLYGON((0 0, 50 45, 40 50, 0 0))'), st_geometryfromtext('LINESTRING(-10 -10, 200 200, 199 201, -11 -9)'))) from dual
 END
 INPUT
 select substring_index('.tcx.se','.',-2),substring_index('.tcx.se','.tcx',-1);
@@ -22172,7 +22172,7 @@ INPUT
 select ST_astext(ST_PolyFromWKB(ST_AsWKB(Polygon(LineString(Point(0, 0), Point(30, 0), Point(30, 30), Point(1, 0), Point(0, 0))))));
 END
 OUTPUT
-select ST_astext(st_polygonfromwkb(ST_AsWKB(polygon(linestring(point(0, 0), point(30, 0), point(30, 30), point(1, 0), point(0, 0)))))) from dual
+select st_astext(st_polygonfromwkb(st_asbinary(polygon(linestring(point(0, 0), point(30, 0), point(30, 30), point(1, 0), point(0, 0)))))) from dual
 END
 INPUT
 select count(*) from `load`;
@@ -22322,7 +22322,7 @@ INPUT
 select ST_astext(st_difference(ST_GeomFromText('multipoint(2 2, 3 3)'), st_intersection(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)'))));
 END
 OUTPUT
-select ST_astext(st_difference(st_geometryfromtext('multipoint(2 2, 3 3)'), st_intersection(st_geometryfromtext('point(0 0)'), st_geometryfromtext('point(1 1)')))) from dual
+select st_astext(st_difference(st_geometryfromtext('multipoint(2 2, 3 3)'), st_intersection(st_geometryfromtext('point(0 0)'), st_geometryfromtext('point(1 1)')))) from dual
 END
 INPUT
 select * from v1b;
@@ -22646,7 +22646,7 @@ INPUT
 select ST_geometryfromtext(b) IS NULL, ST_geometryfromwkb(b) IS NULL, ST_astext(b) IS NULL, ST_aswkb(b) IS NULL, ST_geometrytype(b) IS NULL, ST_centroid(b) IS NULL, ST_envelope(b) IS NULL, ST_startpoint(b) IS NULL, ST_endpoint(b) IS NULL, ST_exteriorring(b) IS NULL, ST_pointn(b, 1) IS NULL, ST_geometryn(b, 1) IS NULL, ST_interiorringn(b, 1) IS NULL, multipoint(b) IS NULL, ST_isempty(b) IS NULL, ST_issimple(b) IS NULL, ST_isclosed(b) IS NULL, ST_dimension(b) IS NULL, ST_numgeometries(b) IS NULL, ST_numinteriorrings(b) IS NULL, ST_numpoints(b) IS NULL, ST_area(b) IS NULL, ST_length(b) IS NULL, ST_srid(b) IS NULL, ST_x(b) IS NULL, ST_y(b) IS NULL from t1;
 END
 OUTPUT
-select st_geometryfromtext(b) is null, st_geometryfromwkb(b) is null, ST_astext(b) is null, ST_aswkb(b) is null, ST_geometrytype(b) is null, ST_centroid(b) is null, ST_envelope(b) is null, ST_startpoint(b) is null, ST_endpoint(b) is null, ST_exteriorring(b) is null, ST_pointn(b, 1) is null, ST_geometryn(b, 1) is null, ST_interiorringn(b, 1) is null, multipoint(b) is null, ST_isempty(b) is null, ST_issimple(b) is null, ST_isclosed(b) is null, ST_dimension(b) is null, ST_numgeometries(b) is null, ST_numinteriorrings(b) is null, ST_numpoints(b) is null, ST_area(b) is null, ST_length(b) is null, ST_srid(b) is null, ST_x(b) is null, ST_y(b) is null from t1
+select st_geometryfromtext(b) is null, st_geometryfromwkb(b) is null, st_astext(b) is null, st_asbinary(b) is null, ST_geometrytype(b) is null, ST_centroid(b) is null, ST_envelope(b) is null, ST_startpoint(b) is null, ST_endpoint(b) is null, ST_exteriorring(b) is null, ST_pointn(b, 1) is null, ST_geometryn(b, 1) is null, ST_interiorringn(b, 1) is null, multipoint(b) is null, ST_isempty(b) is null, ST_issimple(b) is null, ST_isclosed(b) is null, ST_dimension(b) is null, ST_numgeometries(b) is null, ST_numinteriorrings(b) is null, ST_numpoints(b) is null, ST_area(b) is null, ST_length(b) is null, ST_srid(b) is null, ST_x(b) is null, ST_y(b) is null from t1
 END
 INPUT
 select inet6_ntoa(null),inet6_aton(null);
@@ -22760,7 +22760,7 @@ INPUT
 select ST_ASTEXT(ST_UNION(ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(MULTILINESTRING((0 -14,13 -8),(-5 -3,8 7),(-6 18,17 -11,-12 19,19 5),(16 11,9 -5),(17 -5,5 10),(-4 17,6 4),(-12 15,17 13,-18 11,15 10),(7 0,2 -16,-18 13,-6 4),(-17 -6,-6 -7,1 4,-18 0)),MULTILINESTRING((-11 -2,17 -14),(18 -12,18 -8),(-13 -16,9 16,9 -10,-7 20),(-14 -5,10 -9,4 1,17 -8),(-9 -4,-2 -12,9 -13,-5 4),(15 17,13 20)))'), ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(MULTILINESTRING((-13 -18,-16 0),(17 11,-1 11,-18 -19,-4 -18),(-8 -8,-15 -13,3 -18,6 8)),LINESTRING(5 16,0 -9,-6 4,-15 17))'))) as result;
 END
 OUTPUT
-select ST_ASTEXT(ST_UNION(st_geometryfromtext('GEOMETRYCOLLECTION(MULTILINESTRING((0 -14,13 -8),(-5 -3,8 7),(-6 18,17 -11,-12 19,19 5),(16 11,9 -5),(17 -5,5 10),(-4 17,6 4),(-12 15,17 13,-18 11,15 10),(7 0,2 -16,-18 13,-6 4),(-17 -6,-6 -7,1 4,-18 0)),MULTILINESTRING((-11 -2,17 -14),(18 -12,18 -8),(-13 -16,9 16,9 -10,-7 20),(-14 -5,10 -9,4 1,17 -8),(-9 -4,-2 -12,9 -13,-5 4),(15 17,13 20)))'), st_geometryfromtext('GEOMETRYCOLLECTION(MULTILINESTRING((-13 -18,-16 0),(17 11,-1 11,-18 -19,-4 -18),(-8 -8,-15 -13,3 -18,6 8)),LINESTRING(5 16,0 -9,-6 4,-15 17))'))) as result from dual
+select st_astext(ST_UNION(st_geometryfromtext('GEOMETRYCOLLECTION(MULTILINESTRING((0 -14,13 -8),(-5 -3,8 7),(-6 18,17 -11,-12 19,19 5),(16 11,9 -5),(17 -5,5 10),(-4 17,6 4),(-12 15,17 13,-18 11,15 10),(7 0,2 -16,-18 13,-6 4),(-17 -6,-6 -7,1 4,-18 0)),MULTILINESTRING((-11 -2,17 -14),(18 -12,18 -8),(-13 -16,9 16,9 -10,-7 20),(-14 -5,10 -9,4 1,17 -8),(-9 -4,-2 -12,9 -13,-5 4),(15 17,13 20)))'), st_geometryfromtext('GEOMETRYCOLLECTION(MULTILINESTRING((-13 -18,-16 0),(17 11,-1 11,-18 -19,-4 -18),(-8 -8,-15 -13,3 -18,6 8)),LINESTRING(5 16,0 -9,-6 4,-15 17))'))) as result from dual
 END
 INPUT
 select group_concat(c1 order by binary c1 separator '') from t1 group by c1 collate utf32_esperanto_ci;
@@ -22778,7 +22778,7 @@ INPUT
 select object_id, ST_geometrytype(geo), ST_ISSIMPLE(GEO), ST_ASTEXT(ST_centroid(geo)) from t1 where object_id=85998;
 END
 OUTPUT
-select object_id, ST_geometrytype(geo), ST_ISSIMPLE(GEO), ST_ASTEXT(ST_centroid(geo)) from t1 where object_id = 85998
+select object_id, ST_geometrytype(geo), ST_ISSIMPLE(GEO), st_astext(ST_centroid(geo)) from t1 where object_id = 85998
 END
 INPUT
 select hex(cast(9007199254740994 as decimal(30,0)));
@@ -22910,7 +22910,7 @@ INPUT
 select ST_AsText(a) from t1 where MBRContains(ST_GeomFromText('Polygon((0 0, 0 2, 2 2, 2 0, 0 0))'), a) and MBRContains(ST_GeomFromText('Polygon((0 0, 0 7, 7 7, 7 0, 0 0))'), a);
 END
 OUTPUT
-select ST_AsText(a) from t1 where MBRContains(st_geometryfromtext('Polygon((0 0, 0 2, 2 2, 2 0, 0 0))'), a) and MBRContains(st_geometryfromtext('Polygon((0 0, 0 7, 7 7, 7 0, 0 0))'), a)
+select st_astext(a) from t1 where MBRContains(st_geometryfromtext('Polygon((0 0, 0 2, 2 2, 2 0, 0 0))'), a) and MBRContains(st_geometryfromtext('Polygon((0 0, 0 7, 7 7, 7 0, 0 0))'), a)
 END
 INPUT
 select group_concat(c1 order by binary c1 separator '') from t1 group by c1 collate utf16_spanish_ci;
@@ -23120,5 +23120,5 @@ INPUT
 select ST_astext(ST_envelope(ST_PolyFromWKB(ST_AsWKB(Polygon(LineString(Point(0, 0), Point(30, 0), Point(30, 30), Point(1, 0), Point(0, 0)))))));
 END
 OUTPUT
-select ST_astext(ST_envelope(st_polygonfromwkb(ST_AsWKB(polygon(linestring(point(0, 0), point(30, 0), point(30, 30), point(1, 0), point(0, 0))))))) from dual
+select st_astext(ST_envelope(st_polygonfromwkb(st_asbinary(polygon(linestring(point(0, 0), point(30, 0), point(30, 30), point(1, 0), point(0, 0))))))) from dual
 END

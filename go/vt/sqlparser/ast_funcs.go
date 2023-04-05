@@ -2258,6 +2258,18 @@ func AndExpressions(exprs ...Expr) Expr {
 var Equals = &Comparator{}
 
 // ToString returns the type as a string
+func (ty GeomFormatType) ToString() string {
+	switch ty {
+	case BinaryFormat:
+		return BinaryFormatStr
+	case TextFormat:
+		return TextFormatStr
+	default:
+		return "Unknown GeomFormatType"
+	}
+}
+
+// ToString returns the type as a string
 func (ty GeomFromWktType) ToString() string {
 	switch ty {
 	case GeometryFromText:
