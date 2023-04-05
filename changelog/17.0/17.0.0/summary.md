@@ -5,11 +5,8 @@
 - **[Major Changes](#major-changes)**
   - **[Breaking Changes](#breaking-changes)**
     - [Dedicated stats for VTGate Prepare operations](#dedicated-vtgate-prepare-stats)
-<<<<<<< HEAD
     - [VTAdmin web migrated from create-react-app to vite](#migrated-vtadmin)
-=======
     - [Keyspace name validation in TopoServer](#keyspace-name-validation)
->>>>>>> bf0af2b7994ce21585052ee4fa76b17039d2b89a
   - **[New command line flags and behavior](#new-flag)**
     - [Builtin backup: read buffering flags](#builtin-backup-read-buffering-flags)
   - **[New stats](#new-stats)**
@@ -54,7 +51,7 @@ Here is a (condensed) example of stats output:
 }
 ```
 
-#### <a id="migrate-vtadmin"/>VTAdmin web migrated to vite
+#### <a id="migrated-vtadmin"/>VTAdmin web migrated to vite
 Previously, VTAdmin web used the Create React App framework to test, build, and serve the application. In v17, Create React App has been removed, and [Vite](https://vitejs.dev/) is used in its place. Some of the main changes include:
 - Vite uses `VITE_*` environment variables instead of `REACT_APP_*` environment variables
 - Vite uses `import.meta.env` in place of `process.env`
