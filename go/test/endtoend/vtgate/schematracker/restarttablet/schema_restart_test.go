@@ -158,18 +158,11 @@ func TestVSchemaTrackerKeyspaceReInit(t *testing.T) {
 		err = clusterInstance.WaitForTabletsToHealthyInVtgate()
 		require.NoError(t, err)
 
-		timeout := time.After(1 * time.Minute)
-		ok := false
-		for !ok {
-			select {
-			case <-timeout:
-				t.Error("timeout - could not find the updated vschema in VTGate")
-			case <-time.After(1 * time.Second):
-				var newResults any
-				readVSchema(t, &clusterInstance.VtgateProcess, &newResults)
-				ok = assert.ObjectsAreEqual(originalResults, newResults)
-			}
-		}
+		utils.TimeoutAction(t, 1*time.Minute, "timeout - could not find the updated vschema in VTGate", func() bool {
+			var newResults any
+			readVSchema(t, &clusterInstance.VtgateProcess, &newResults)
+			return assert.ObjectsAreEqual(originalResults, newResults)
+		})
 	}
 }
 
