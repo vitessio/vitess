@@ -625,40 +625,23 @@ type Value struct {
 	i bool
 }
 
-// MarshalTo appends marshaled v to dst and returns the result.
-func (v *Value) MarshalTo(dst []byte) []byte {
-	switch v.t {
-	case typeRawString:
-		dst = append(dst, '"')
-		dst = append(dst, v.s...)
-		dst = append(dst, '"')
-		return dst
-	case TypeObject:
-		return v.o.MarshalTo(dst)
-	case TypeArray:
-		dst = append(dst, '[')
-		for i, vv := range v.a {
-			dst = vv.MarshalTo(dst)
-			if i != len(v.a)-1 {
-				dst = append(dst, ',', ' ')
-			}
-		}
-		dst = append(dst, ']')
-		return dst
-	case TypeString:
-		return escapeString(dst, v.s)
-	case TypeDate:
-		t, _ := v.Date()
-		return escapeString(dst, t.Format("2006-01-02"))
-	case TypeDateTime:
-		t, _ := v.DateTime()
-		return escapeString(dst, t.Format("2006-01-02 15:04:05.000000"))
-	case TypeTime:
-		now := time.Now()
-		year, month, day := now.Date()
+func (v *Value) MarshalDate() string {
+	if d, ok := v.Date(); ok {
+		return d.ToStdTime(time.Local).Format("2006-01-02")
+	}
+	return ""
+}
 
-		t, _ := v.Time()
-		diff := t.Sub(time.Date(year, month, day, 0, 0, 0, 0, time.UTC))
+func (v *Value) MarshalDateTime() string {
+	if dt, ok := v.DateTime(); ok {
+		return dt.ToStdTime(time.Local).Format("2006-01-02 15:04:05.000000")
+	}
+	return ""
+}
+
+func (v *Value) MarshalTime() string {
+	if t, ok := v.Time(); ok {
+		diff := t.ToDuration()
 		var neg bool
 		if diff < 0 {
 			diff = -diff
@@ -682,7 +665,39 @@ func (v *Value) MarshalTo(dst []byte) []byte {
 		fmt.Fprintf(&b, ":%02d", seconds)
 		diff -= seconds * time.Second
 		fmt.Fprintf(&b, ".%06d", diff)
-		return escapeString(dst, b.String())
+		return b.String()
+	}
+	return ""
+}
+
+// MarshalTo appends marshaled v to dst and returns the result.
+func (v *Value) MarshalTo(dst []byte) []byte {
+	switch v.t {
+	case typeRawString:
+		dst = append(dst, '"')
+		dst = append(dst, v.s...)
+		dst = append(dst, '"')
+		return dst
+	case TypeObject:
+		return v.o.MarshalTo(dst)
+	case TypeArray:
+		dst = append(dst, '[')
+		for i, vv := range v.a {
+			dst = vv.MarshalTo(dst)
+			if i != len(v.a)-1 {
+				dst = append(dst, ',', ' ')
+			}
+		}
+		dst = append(dst, ']')
+		return dst
+	case TypeString:
+		return escapeString(dst, v.s)
+	case TypeDate:
+		return escapeString(dst, v.MarshalDate())
+	case TypeDateTime:
+		return escapeString(dst, v.MarshalDateTime())
+	case TypeTime:
+		return escapeString(dst, v.MarshalTime())
 	case TypeBlob, TypeBit:
 		const prefix = "base64:type15:"
 

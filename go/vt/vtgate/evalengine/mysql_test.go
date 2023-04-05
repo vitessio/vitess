@@ -136,6 +136,6 @@ func TestMySQLGolden(t *testing.T) {
 
 func TestDebug1(t *testing.T) {
 	// Debug
-	eval, err := testSingle(t, `SELECT time '10:04:58' < '101:34:58'`)
+	eval, err := testSingle(t, `SELECT CAST(CAST(time '10:04:58' AS JSON) AS BINARY)`)
 	t.Logf("eval=%s err=%v coll=%s", eval.String(), err, eval.Collation().Get().Name())
 }

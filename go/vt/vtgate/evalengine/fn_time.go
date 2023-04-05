@@ -87,7 +87,7 @@ func (call *builtinSysdate) eval(env *ExpressionEnv) (eval, error) {
 	if tz := env.currentTimezone(); tz != nil {
 		now = now.In(tz)
 	}
-	return newEvalRaw(sqltypes.Datetime, datetime.DateTime_YYYY_MM_DD_hh_mm_ss.Format(now, call.prec), collationBinary), nil
+	return newEvalRaw(sqltypes.Datetime, datetime.FromStdTime(now).Format(call.prec), collationBinary), nil
 }
 
 func (call *builtinSysdate) typeof(_ *ExpressionEnv, _ []*querypb.Field) (sqltypes.Type, typeFlag) {

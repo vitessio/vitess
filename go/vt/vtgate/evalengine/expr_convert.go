@@ -120,23 +120,11 @@ func (c *ConvertExpr) eval(env *ExpressionEnv) (eval, error) {
 	case "JSON":
 		return evalToJSON(e)
 	case "DATETIME":
-		tmp, err := evalToTemporal(e)
-		if err != nil {
-			return nil, nil
-		}
-		return tmp.toDateTime(), nil
+		fallthrough
 	case "DATE":
-		tmp, err := evalToTemporal(e)
-		if err != nil {
-			return nil, nil
-		}
-		return tmp.toDate(), nil
+		fallthrough
 	case "TIME":
-		tmp, err := evalToTemporal(e)
-		if err != nil {
-			return nil, nil
-		}
-		return tmp.toTime(), nil
+		fallthrough
 	case "YEAR":
 		return nil, c.returnUnsupportedError()
 	default:

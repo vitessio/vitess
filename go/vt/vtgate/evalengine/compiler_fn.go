@@ -819,7 +819,7 @@ func (c *compiler) compileFn_UtcDate(*builtinUtcDate) (ctype, error) {
 }
 
 func (c *compiler) compileFn_Sysdate(call *builtinSysdate) (ctype, error) {
-	c.asm.Fn_Sysdate(datetime.DateTime_YYYY_MM_DD_hh_mm_ss, call.prec)
+	c.asm.Fn_Sysdate(call.prec)
 	return ctype{Type: sqltypes.Datetime, Col: collationBinary}, nil
 }
 

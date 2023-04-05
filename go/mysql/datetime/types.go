@@ -26,7 +26,9 @@ type DateTime struct {
 	Time Time
 }
 
-func (t *Time) AppendFormat(b []byte, prec uint8) []byte {
+const DefaultPrecision = 6
+
+func (t Time) AppendFormat(b []byte, prec uint8) []byte {
 	if t.Neg() {
 		b = append(b, '-')
 	}
@@ -43,7 +45,11 @@ func (t *Time) AppendFormat(b []byte, prec uint8) []byte {
 	return b
 }
 
-func (t *Time) FormatInt64() (n int64) {
+func (t Time) Format(prec uint8) []byte {
+	return t.AppendFormat(make([]byte, 0, 16), prec)
+}
+
+func (t Time) FormatInt64() (n int64) {
 	v := int64(t.Hour())*10000 + int64(t.Minute())*100 + int64(t.Second())
 	if t.Neg() {
 		return -v
@@ -51,146 +57,230 @@ func (t *Time) FormatInt64() (n int64) {
 	return v
 }
 
-func (t *Time) ToStdTime(loc *time.Location) (out time.Time) {
+func (t Time) ToDateTime() (out DateTime) {
 	year, month, day := time.Now().Date()
-	hour, min, sec, nsec := t.Hour(), t.Minute(), t.Second(), t.Nanosecond()
-	if t.Neg() {
-		duration := time.Duration(hour)*time.Hour +
-			time.Duration(min)*time.Minute +
-			time.Duration(sec)*time.Second +
-			time.Duration(nsec)*time.Nanosecond
-
-		// If we have a negative time, we start with the start of today
-		// and substract the total duration of the parsed time.
-		out = time.Date(year, month, day, 0, 0, 0, 0, loc)
-		out = out.Add(-duration)
-	} else {
-		out = time.Date(0, 1, 1, hour, min, sec, nsec, loc)
-		out = out.AddDate(year, int(month-1), day-1)
-	}
-	return
-}
-
-func (t *Time) ToDateTime() (out DateTime) {
-	year, month, day := time.Now().Date()
-	dt := DateTime{
+	return DateTime{
 		Date: Date{
 			year:  uint16(year),
 			month: uint8(month),
 			day:   uint8(day),
 		},
-		Time: *t,
+		Time: t,
 	}
-	return dt
 }
 
-func (t *Time) IsZero() bool {
+func (t Time) IsZero() bool {
 	return t.Hour() == 0 && t.Minute() == 0 && t.Second() == 0 && t.Nanosecond() == 0
 }
 
-func (t *Time) Hour() int {
+func (t Time) Hour() int {
 	return int(t.hour & ^negMask)
 }
 
-func (t *Time) Minute() int {
+func (t Time) Minute() int {
 	return int(t.minute)
 }
 
-func (t *Time) Second() int {
+func (t Time) Second() int {
 	return int(t.second)
 }
 
-func (t *Time) Nanosecond() int {
+func (t Time) Nanosecond() int {
 	return int(t.nanosecond)
 }
 
-func (t *Time) Neg() bool {
+func (t Time) Neg() bool {
 	return t.hour&negMask != 0
 }
 
-func (t *Time) Hash(h *vthash.Hasher) {
+func (t Time) Hash(h *vthash.Hasher) {
 	h.Write16(t.hour)
 	h.Write8(t.minute)
 	h.Write8(t.second)
 	h.Write32(t.nanosecond)
 }
 
-func (d *Date) IsZero() bool {
+func (t Time) Compare(t2 Time) int {
+	if t.Neg() != t2.Neg() {
+		if t.Neg() {
+			return -1
+		}
+		return 1
+	}
+	h1, h2 := t.Hour(), t2.Hour()
+	if h1 < h2 {
+		return -1
+	}
+	if h1 > h2 {
+		return 1
+	}
+	m1, m2 := t.Minute(), t2.Minute()
+	if m1 < m2 {
+		return -1
+	}
+	if m1 > m2 {
+		return 1
+	}
+	s1, s2 := t.Second(), t2.Second()
+	if s1 < s2 {
+		return -1
+	}
+	if s1 > s2 {
+		return 1
+	}
+	return 0
+}
+
+func (d Date) IsZero() bool {
 	return d.Year() == 0 && d.Month() == 0 && d.Day() == 0
 }
 
-func (d *Date) Year() int {
+func (d Date) Year() int {
 	return int(d.year)
 }
 
-func (d *Date) Month() int {
+func (d Date) Month() int {
 	return int(d.month)
 }
 
-func (d *Date) Day() int {
+func (d Date) Day() int {
 	return int(d.day)
 }
 
-func (d *Date) Hash(h *vthash.Hasher) {
+func (d Date) Hash(h *vthash.Hasher) {
 	h.Write16(d.year)
 	h.Write8(d.month)
 	h.Write8(d.day)
 }
 
-func (dt *Date) Weekday() time.Weekday {
+func (dt Date) Weekday() time.Weekday {
 	// TODO: Implement this
 	return 0
 }
 
-func (dt *Date) Yearday() int {
+func (dt Date) Yearday() int {
 	// TODO: Implement this
 	return 0
 }
 
-func (d *Date) ISOWeek() (int, int) {
+func (d Date) ISOWeek() (int, int) {
 	return 0, 0
 }
 
-func (dt *DateTime) IsZero() bool {
+func (dt DateTime) IsZero() bool {
 	return dt.Date.IsZero() && dt.Time.IsZero()
 }
 
-func (dt *DateTime) Hash(h *vthash.Hasher) {
+func (dt DateTime) Hash(h *vthash.Hasher) {
 	dt.Date.Hash(h)
 	dt.Time.Hash(h)
 }
 
-func (dt *DateTime) ToStdTime(loc *time.Location) (out time.Time) {
-	if dt.IsZero() {
+func (t Time) ToDuration() time.Duration {
+	duration := time.Duration(t.Hour())*time.Hour +
+		time.Duration(t.Minute())*time.Minute +
+		time.Duration(t.Second())*time.Second +
+		time.Duration(t.Nanosecond())*time.Nanosecond
+	if t.Neg() {
+		return -duration
+	}
+	return duration
+}
+
+func (t Time) toStdTime(year int, month time.Month, day int, loc *time.Location) (out time.Time) {
+	return time.Date(year, month, day, 0, 0, 0, 0, loc).Add(t.ToDuration())
+}
+
+func (t Time) ToStdTime(loc *time.Location) (out time.Time) {
+	year, month, day := time.Now().Date()
+	return t.toStdTime(year, month, day, loc)
+}
+
+func (d Date) ToStdTime(loc *time.Location) (out time.Time) {
+	return time.Date(d.Year(), time.Month(d.Month()), d.Day(), 0, 0, 0, 0, loc)
+}
+
+func (dt DateTime) ToStdTime(loc *time.Location) time.Time {
+	zerodate := dt.Date.IsZero()
+	zerotime := dt.Time.IsZero()
+
+	switch {
+	case zerodate && zerotime:
 		return time.Time{}
+	case zerodate:
+		return dt.Time.ToStdTime(loc)
+	case zerotime:
+		return dt.Date.ToStdTime(loc)
+	default:
+		year, month, day := dt.Date.Year(), time.Month(dt.Date.Month()), dt.Date.Day()
+		return dt.Time.toStdTime(year, month, day, loc)
 	}
+}
 
-	var year, day int
-	var month time.Month
-	if dt.Date.IsZero() {
-		year, month, day = time.Now().Date()
-	} else {
-		year, month, day = dt.Date.Year(), time.Month(dt.Date.Month()), dt.Date.Day()
+func (dt DateTime) Format(prec uint8) []byte {
+	return DateTime_YYYY_MM_DD_hh_mm_ss.Format(dt, prec)
+}
+
+func (d Date) Format() []byte {
+	return Date_YYYY_MM_DD.Format(DateTime{Date: d}, 0)
+}
+
+func (d Date) FormatInt64() int64 {
+	return int64(d.Year())*10000 + int64(d.Month())*100 + int64(d.Day())
+}
+
+func (d Date) Compare(d2 Date) int {
+	y1, y2 := d.Year(), d2.Year()
+	if y1 < y2 {
+		return -1
 	}
-
-	if dt.Time.IsZero() {
-		return time.Date(year, month, day, 0, 0, 0, 0, loc)
+	if y1 > y2 {
+		return 1
 	}
-
-	hour, min, sec, nsec := dt.Time.Hour(), dt.Time.Minute(), dt.Time.Second(), dt.Time.Nanosecond()
-	if dt.Time.Neg() {
-		duration := time.Duration(hour)*time.Hour +
-			time.Duration(min)*time.Minute +
-			time.Duration(sec)*time.Second +
-			time.Duration(nsec)*time.Nanosecond
-
-		// If we have a negative time, we start with the start of today
-		// and substract the total duration of the parsed time.
-		out = time.Date(year, month, day, 0, 0, 0, 0, loc)
-		out = out.Add(-duration)
-	} else {
-		out = time.Date(0, 1, 1, hour, min, sec, nsec, loc)
-		out = out.AddDate(year, int(month-1), day-1)
+	m1, m2 := d.Month(), d2.Month()
+	if m1 < m2 {
+		return -1
 	}
-	return
+	if m1 > m2 {
+		return 1
+	}
+	day1, day2 := d.Day(), d2.Day()
+	if day1 < day2 {
+		return -1
+	}
+	if day1 > day2 {
+		return 1
+	}
+	return 0
+}
+
+func (dt DateTime) FormatInt64() int64 {
+	return dt.Date.FormatInt64()*1000000 + dt.Time.FormatInt64()
+}
+
+func (dt DateTime) Compare(dt2 DateTime) int {
+	if cmp := dt.Date.Compare(dt2.Date); cmp != 0 {
+		return cmp
+	}
+	return dt.Time.Compare(dt2.Time)
+}
+
+func FromStdTime(t time.Time) DateTime {
+	year, month, day := t.Date()
+	hour, min, sec := t.Clock()
+	nsec := t.Nanosecond()
+
+	return DateTime{
+		Date: Date{
+			year:  uint16(year),
+			month: uint8(month),
+			day:   uint8(day),
+		},
+		Time: Time{
+			hour:       uint16(hour),
+			minute:     uint8(min),
+			second:     uint8(sec),
+			nanosecond: uint32(nsec),
+		},
+	}
 }

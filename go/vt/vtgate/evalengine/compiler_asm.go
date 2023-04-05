@@ -2881,7 +2881,7 @@ func (asm *assembler) Fn_Now(t querypb.Type, format *datetime.Strftime, prec uin
 	}, "FN NOW")
 }
 
-func (asm *assembler) Fn_Sysdate(format *datetime.Strftime, prec uint8) {
+func (asm *assembler) Fn_Sysdate(prec uint8) {
 	asm.adjustStack(1)
 	asm.emit(func(env *ExpressionEnv) int {
 		val := env.vm.arena.newEvalBytesEmpty()
@@ -2890,7 +2890,7 @@ func (asm *assembler) Fn_Sysdate(format *datetime.Strftime, prec uint8) {
 		if tz := env.currentTimezone(); tz != nil {
 			now = now.In(tz)
 		}
-		val.bytes = format.Format(now, prec)
+		val.bytes = datetime.FromStdTime(now).Format(prec)
 		env.vm.stack[env.vm.sp] = val
 		env.vm.sp++
 		return 1

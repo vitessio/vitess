@@ -26,11 +26,11 @@ func (e *evalTemporal) Hash(h *vthash.Hasher) {
 func (e *evalTemporal) ToRawBytes() []byte {
 	switch e.t {
 	case sqltypes.Date:
-		return datetime.Date_YYYY_MM_DD.Format(e.dt, 0)
+		return e.dt.Date.Format()
 	case sqltypes.Datetime:
-		return datetime.DateTime_YYYY_MM_DD_hh_mm_ss.Format(e.dt, 6)
+		return e.dt.Format(datetime.DefaultPrecision)
 	case sqltypes.Time:
-		return e.dt.Time.AppendFormat(nil, 6)
+		return e.dt.Time.Format(datetime.DefaultPrecision)
 	default:
 		panic("unreachable")
 	}
@@ -43,9 +43,9 @@ func (e *evalTemporal) SQLType() sqltypes.Type {
 func (e *evalTemporal) toInt64() int64 {
 	switch e.SQLType() {
 	case sqltypes.Date:
-		return datetime.Date_YYYYMMDD.FormatNumeric(e.dt)
+		return e.dt.Date.FormatInt64()
 	case sqltypes.Datetime:
-		return datetime.DateTime_YYYYMMDDhhmmss.FormatNumeric(e.dt)
+		return e.dt.FormatInt64()
 	case sqltypes.Time:
 		return e.dt.Time.FormatInt64()
 	default:
@@ -56,11 +56,11 @@ func (e *evalTemporal) toInt64() int64 {
 func (e *evalTemporal) toJSON() *evalJSON {
 	switch e.SQLType() {
 	case sqltypes.Date:
-		return json.NewDate(e.ToRawBytes())
+		return json.NewDate(hack.String(e.ToRawBytes()))
 	case sqltypes.Datetime:
-		return json.NewDateTime(e.ToRawBytes())
+		return json.NewDateTime(hack.String(e.ToRawBytes()))
 	case sqltypes.Time:
-		return json.NewTime(e.ToRawBytes())
+		return json.NewTime(hack.String(e.ToRawBytes()))
 	default:
 		panic("unreachable")
 	}

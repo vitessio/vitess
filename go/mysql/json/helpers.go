@@ -54,15 +54,15 @@ func NewNumber(num string, i bool) *Value {
 }
 
 func NewString(raw string) *Value {
-	return &Value{s: string(raw), t: TypeString}
+	return &Value{s: raw, t: TypeString}
 }
 
 func NewBlob(raw string) *Value {
-	return &Value{s: string(raw), t: TypeBlob}
+	return &Value{s: raw, t: TypeBlob}
 }
 
 func NewBit(raw string) *Value {
-	return &Value{s: string(raw), t: TypeBit}
+	return &Value{s: raw, t: TypeBit}
 }
 
 func NewDate(raw string) *Value {

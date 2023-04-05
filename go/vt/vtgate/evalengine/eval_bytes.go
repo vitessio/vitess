@@ -18,7 +18,6 @@ package evalengine
 
 import (
 	"encoding/binary"
-	"time"
 
 	"vitess.io/vitess/go/hack"
 	"vitess.io/vitess/go/mysql/collations"
@@ -173,14 +172,14 @@ func (e *evalBytes) toTemporal() (*evalTemporal, error) {
 	return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "type %v is not date-like", e.SQLType())
 }
 
-func (e *evalBytes) toDateBestEffort() time.Time {
+func (e *evalBytes) toDateBestEffort() datetime.DateTime {
 	if t, ok := datetime.ParseDateTime(e.string()); ok {
 		return t
 	}
 	if t, ok := datetime.ParseDate(e.string()); ok {
-		return t
+		return datetime.DateTime{Date: t}
 	}
-	return time.Time{}
+	return datetime.DateTime{}
 }
 
 func (e *evalBytes) toNumericHex() (*evalUint64, bool) {
