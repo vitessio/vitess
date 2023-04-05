@@ -20,7 +20,12 @@ import (
 	"fmt"
 	"strings"
 
+	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -28,6 +33,8 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
 )
+
+const sqlSelectColumnCollation = "select collation_name from information_schema.columns where table_name=%a and column_name=%a"
 
 type tablePlan struct {
 	// sourceQuery and targetQuery are select queries.
@@ -51,7 +58,7 @@ type tablePlan struct {
 	aggregates []*engine.AggregateParams
 }
 
-func (td *tableDiffer) buildTablePlan() (*tablePlan, error) {
+func (td *tableDiffer) buildTablePlan(dbClient binlogplayer.DBClient) (*tablePlan, error) {
 	tp := &tablePlan{table: td.table}
 	statement, err := sqlparser.Parse(td.sourceQuery)
 	if err != nil {
@@ -142,7 +149,7 @@ func (td *tableDiffer) buildTablePlan() (*tablePlan, error) {
 		},
 	}
 
-	err = tp.findPKs(targetSelect)
+	err = tp.findPKs(dbClient, targetSelect)
 	if err != nil {
 		return nil, err
 	}
@@ -166,7 +173,7 @@ func (td *tableDiffer) buildTablePlan() (*tablePlan, error) {
 }
 
 // findPKs identifies PKs and removes them from the columns to do data comparison.
-func (tp *tablePlan) findPKs(targetSelect *sqlparser.Select) error {
+func (tp *tablePlan) findPKs(dbClient binlogplayer.DBClient, targetSelect *sqlparser.Select) error {
 	var orderby sqlparser.OrderBy
 	for _, pk := range tp.table.PrimaryKeyColumns {
 		found := false
@@ -183,6 +190,13 @@ func (tp *tablePlan) findPKs(targetSelect *sqlparser.Select) error {
 			}
 			if strings.EqualFold(pk, colname) {
 				tp.compareCols[i].isPK = true
+				// We need to set the correct collation to ensure proper ordering
+				// of the results when we later do the merge sort.
+				collationStr, err := getColumnCollation(dbClient, tp.table.Name, colname)
+				if err != nil {
+					return err
+				}
+				tp.compareCols[i].collation = collations.Local().LookupByName(collationStr)
 				tp.comparePKs = append(tp.comparePKs, tp.compareCols[i])
 				tp.selectPks = append(tp.selectPks, i)
 				// We'll be comparing pks separately. So, remove them from compareCols.
@@ -202,4 +216,20 @@ func (tp *tablePlan) findPKs(targetSelect *sqlparser.Select) error {
 	}
 	tp.orderBy = orderby
 	return nil
+}
+
+func getColumnCollation(dbClient binlogplayer.DBClient, table, column string) (string, error) {
+	query, err := sqlparser.ParseAndBind(sqlSelectColumnCollation,
+		sqltypes.StringBindVariable(table), sqltypes.StringBindVariable(column))
+	if err != nil {
+		return "", err
+	}
+	qr, err := dbClient.ExecuteFetch(query, 1)
+	if err != nil {
+		return "", err
+	}
+	if qr == nil || len(qr.Rows) != 1 {
+		return "", vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unexpected result for query %s: %+v", query, qr)
+	}
+	return qr.Rows[0][0].ToString(), nil
 }
