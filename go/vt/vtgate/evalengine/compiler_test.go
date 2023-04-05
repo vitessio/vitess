@@ -145,11 +145,6 @@ func TestCompilerReference(t *testing.T) {
 				}
 
 				res, vmErr := func() (res evalengine.EvalResult, err error) {
-					defer func() {
-						if r := recover(); r != nil {
-							err = fmt.Errorf("PANIC: %v", r)
-						}
-					}()
 					res, err = env.EvaluateVM(converted.(*evalengine.CompiledExpr))
 					return
 				}()
