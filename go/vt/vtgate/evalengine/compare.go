@@ -149,7 +149,7 @@ func compareGoTimes(lTime, rTime time.Time) (int, error) {
 // More on string collations coercibility on MySQL documentation:
 //   - https://dev.mysql.com/doc/refman/8.0/en/charset-collation-coercibility.html
 func compareStrings(l, r eval) (int, error) {
-	l, r, col, err := mergeCollations(l, r)
+	l, r, col, err := mergeAndCoerceCollations(l, r)
 	if err != nil {
 		return 0, err
 	}

@@ -6,6 +6,8 @@ import (
 	"vitess.io/vitess/go/mysql/datetime"
 	"vitess.io/vitess/go/mysql/json"
 	"vitess.io/vitess/go/sqltypes"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vthash"
 )
 
@@ -73,6 +75,20 @@ func newEvalDateTime(t sqltypes.Type, time time.Time) *evalTime {
 
 func newEvalTime(time datetime.SQLTime) *evalTime {
 	return &evalTime{t: sqltypes.Time, time: time}
+}
+
+func evalToDate(e eval) (*evalTime, error) {
+	switch e := e.(type) {
+	case *evalTime:
+		return e, nil
+	case *evalBytes:
+		return e.toDatetime()
+	case *evalInt64:
+		// TODO
+		return nil, nil
+	default:
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "type %v is not date-like", e.SQLType())
+	}
 }
 
 var _ eval = (*evalTime)(nil)

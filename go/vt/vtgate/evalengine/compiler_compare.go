@@ -221,24 +221,10 @@ func (c *compiler) compareNumericTypes(lt ctype, rt ctype) (swapped bool) {
 }
 
 func (c *compiler) compareAsStrings(lt ctype, rt ctype) error {
-	var merged collations.TypedCollation
-	var coerceLeft collations.Coercion
-	var coerceRight collations.Coercion
-	var env = collations.Local()
-	var err error
-
-	if lt.Col.Collation != rt.Col.Collation {
-		merged, coerceLeft, coerceRight, err = env.MergeCollations(lt.Col, rt.Col, collations.CoercionOptions{
-			ConvertToSuperset:   true,
-			ConvertWithCoercion: true,
-		})
-	} else {
-		merged = lt.Col
-	}
+	merged, coerceLeft, coerceRight, err := mergeCollations(lt.Col, rt.Col, lt.Type, rt.Type)
 	if err != nil {
 		return err
 	}
-
 	if coerceLeft == nil && coerceRight == nil {
 		c.asm.CmpString_collate(merged.Collation.Get())
 	} else {

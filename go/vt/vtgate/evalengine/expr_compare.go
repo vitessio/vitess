@@ -366,7 +366,7 @@ func (l *LikeExpr) eval(env *ExpressionEnv) (eval, error) {
 	}
 
 	var col collations.ID
-	left, right, col, err = mergeCollations(left, right)
+	left, right, col, err = mergeAndCoerceCollations(left, right)
 	if err != nil {
 		return nil, err
 	}

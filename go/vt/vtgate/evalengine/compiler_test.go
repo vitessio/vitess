@@ -297,6 +297,10 @@ func TestCompilerSingle(t *testing.T) {
 			expression: `0 + time '101:34:58'`,
 			result:     `INT64(1013458)`,
 		},
+		{
+			expression: `time '10:04:58' < '101:34:58'`,
+			result:     `INT64(1)`,
+		},
 	}
 
 	for _, tc := range testCases {

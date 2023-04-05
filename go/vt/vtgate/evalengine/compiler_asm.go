@@ -688,10 +688,10 @@ func (asm *assembler) CmpString_collate(collation collations.Collation) {
 	asm.adjustStack(-2)
 
 	asm.emit(func(env *ExpressionEnv) int {
-		l := env.vm.stack[env.vm.sp-2].(*evalBytes)
-		r := env.vm.stack[env.vm.sp-1].(*evalBytes)
+		l := env.vm.stack[env.vm.sp-2]
+		r := env.vm.stack[env.vm.sp-1]
 		env.vm.sp -= 2
-		env.vm.flags.cmp = collation.Collate(l.bytes, r.bytes, false)
+		env.vm.flags.cmp = collation.Collate(l.ToRawBytes(), r.ToRawBytes(), false)
 		return 1
 	}, "CMP VARCHAR(SP-2), VARCHAR(SP-1) COLLATE '%s'", collation.Name())
 }
@@ -737,8 +737,8 @@ func (asm *assembler) CmpDateString() {
 	asm.adjustStack(-2)
 
 	asm.emit(func(env *ExpressionEnv) int {
-		l := env.vm.stack[env.vm.sp-2].(*evalBytes)
-		r := env.vm.stack[env.vm.sp-1].(*evalBytes)
+		l := env.vm.stack[env.vm.sp-2]
+		r := env.vm.stack[env.vm.sp-1]
 		env.vm.sp -= 2
 		env.vm.flags.cmp, env.vm.err = compareDateAndString(l, r)
 		return 1
