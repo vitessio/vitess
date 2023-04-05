@@ -91,9 +91,6 @@ func newFakeDBClient(name string) *fakeDBClient {
 func (dc *fakeDBClient) addQuery(query string, result *sqltypes.Result, err error) {
 	dc.mu.Lock()
 	defer dc.mu.Unlock()
-	if testMode == "debug" {
-		log.Infof("%s::addQuery %s\n\n", dc.id(), query)
-	}
 	dbr := &dbResult{result: result, err: err}
 	if dbrs, ok := dc.queries[query]; ok {
 		dbrs.results = append(dbrs.results, dbr)
@@ -105,9 +102,6 @@ func (dc *fakeDBClient) addQuery(query string, result *sqltypes.Result, err erro
 func (dc *fakeDBClient) addQueryRE(query string, result *sqltypes.Result, err error) {
 	dc.mu.Lock()
 	defer dc.mu.Unlock()
-	if testMode == "debug" {
-		log.Infof("%s::addQueryRE %s\n\n", dc.id(), query)
-	}
 	dbr := &dbResult{result: result, err: err}
 	if dbrs, ok := dc.queriesRE[query]; ok {
 		dbrs.results = append(dbrs.results, dbr)
@@ -126,9 +120,6 @@ func (dc *fakeDBClient) getInvariant(query string) *sqltypes.Result {
 func (dc *fakeDBClient) addInvariant(query string, result *sqltypes.Result) {
 	dc.mu.Lock()
 	defer dc.mu.Unlock()
-	if testMode == "debug" {
-		log.Infof("%s::addInvariant %s\n\n", dc.id(), query)
-	}
 	dc.invariants[query] = result
 }
 
@@ -170,9 +161,6 @@ func (dc *fakeDBClient) ExecuteFetch(query string, maxrows int) (*sqltypes.Resul
 	dc.mu.Lock()
 	defer dc.mu.Unlock()
 	qr, err := dc.executeFetch(query, maxrows)
-	if testMode == "debug" {
-		log.Infof("%s::ExecuteFetch for >>>%s<<< returns >>>%v<<< error >>>%+v<<< ", dc.id(), query, qr, err)
-	}
 	return qr, err
 }
 

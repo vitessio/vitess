@@ -23,6 +23,8 @@ import (
 	"sync"
 	"testing"
 
+	"vitess.io/vitess/go/mysql/fakesqldb"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/logutil"
@@ -340,4 +342,19 @@ func (tmc *testVDiffTMClient) PrimaryPosition(ctx context.Context, tablet *topod
 		return "", fmt.Errorf("no primary position for %d", tablet.Alias.Uid)
 	}
 	return pos, nil
+}
+
+func expectVDiffQueries(db *fakesqldb.DB) {
+	res := &sqltypes.Result{}
+	queries := []string{
+		"USE `vt_ks`",
+		"USE `vt_ks1`",
+		"USE `vt_ks2`",
+		"optimize table _vt.copy_state",
+		"alter table _vt.copy_state auto_increment = 1",
+	}
+	for _, query := range queries {
+		db.AddQuery(query, res)
+	}
+	db.AddQueryPattern("delete from vd, vdt, vdl.*", res)
 }
