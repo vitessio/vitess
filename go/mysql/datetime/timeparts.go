@@ -34,14 +34,14 @@ type timeparts struct {
 	prec uint8
 }
 
-func (tp *timeparts) toTime(loc *time.Location) (time.Time, bool) {
+func (tp *timeparts) toDateTime() (DateTime, bool) {
 	if tp.pmset && tp.hour < 12 {
 		tp.hour += 12
 	} else if tp.amset && tp.hour == 12 {
 		tp.hour = 0
 	}
 	if tp.yday > 0 {
-		return time.Time{}, false
+		return DateTime{}, false
 	} else {
 		if tp.month < 0 {
 			tp.month = int(time.January)
@@ -51,9 +51,21 @@ func (tp *timeparts) toTime(loc *time.Location) (time.Time, bool) {
 		}
 	}
 	if tp.day < 1 || tp.day > daysIn(time.Month(tp.month), tp.year) {
-		return time.Time{}, false
+		return DateTime{}, false
 	}
-	return time.Date(tp.year, time.Month(tp.month), tp.day, tp.hour, tp.min, tp.sec, tp.nsec, loc), true
+	return DateTime{
+		Date: Date{
+			year:  uint16(tp.year),
+			month: uint8(tp.month),
+			day:   uint8(tp.day),
+		},
+		Time: Time{
+			hour:       uint16(tp.hour),
+			minute:     uint8(tp.min),
+			second:     uint8(tp.sec),
+			nanosecond: uint32(tp.nsec),
+		},
+	}, true
 }
 
 func (tp *timeparts) initYear(t time.Time) {

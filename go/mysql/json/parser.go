@@ -820,26 +820,25 @@ func (v *Value) Type() Type {
 	return v.t
 }
 
-func (v *Value) Date() (time.Time, bool) {
+func (v *Value) Date() (datetime.Date, bool) {
 	if v.t != TypeDate {
-		return time.Time{}, false
+		return datetime.Date{}, false
 	}
 	return datetime.ParseDate(v.s)
 }
 
-func (v *Value) DateTime() (time.Time, bool) {
+func (v *Value) DateTime() (datetime.DateTime, bool) {
 	if v.t != TypeDateTime {
-		return time.Time{}, false
+		return datetime.DateTime{}, false
 	}
 	return datetime.ParseDateTime(v.s)
 }
 
-func (v *Value) Time() (time.Time, bool) {
+func (v *Value) Time() (datetime.Time, bool) {
 	if v.t != TypeTime {
-		return time.Time{}, false
+		return datetime.Time{}, false
 	}
-	t, ok := datetime.ParseTime(v.s)
-	return t.ToStdTime(), ok
+	return datetime.ParseTime(v.s)
 }
 
 // Object returns the underlying JSON object for the v.

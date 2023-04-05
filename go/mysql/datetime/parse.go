@@ -18,7 +18,6 @@ package datetime
 
 import (
 	"strings"
-	"time"
 )
 
 func parsetimeHours(tp *timeparts, in string) (out string, ok bool) {
@@ -98,34 +97,35 @@ func parsetimeNoDelimiters(tp *timeparts, in string) (out string, ok bool) {
 	}
 
 	switch integral {
-	case 6:
-		tp.hour, in, ok = getnum(in, true)
+	case 5, 6:
+		tp.hour, in, ok = getnuml(in, integral-4)
 		if !ok {
 			return
 		}
 		tp.day = tp.day + tp.hour/24
 		tp.hour = tp.hour % 24
+		integral = 4
 		fallthrough
 
-	case 4:
-		tp.min, in, ok = getnum(in, true)
+	case 3, 4:
+		tp.min, in, ok = getnuml(in, integral-2)
 		if !ok || tp.min > 59 {
 			return "", false
 		}
+		integral = 2
 		fallthrough
 
-	case 2:
-		tp.sec, in, ok = getnum(in, true)
+	case 1, 2:
+		tp.sec, in, ok = getnuml(in, integral)
 		if !ok || tp.sec > 59 {
 			return "", false
 		}
-
 	default:
 		return "", false
 	}
 
-	if len(in) > 2 && in[0] == '.' && isDigit(in, 1) {
-		n := 2
+	if len(in) > 1 && in[0] == '.' && isDigit(in, 1) {
+		n := 1
 		for ; n < len(in) && isDigit(in, n); n++ {
 		}
 		tp.nsec, ok = parseNanoseconds(in, n)
@@ -133,62 +133,6 @@ func parsetimeNoDelimiters(tp *timeparts, in string) (out string, ok bool) {
 	}
 
 	return in, ok
-}
-
-type Time struct {
-	Hours int16
-	Mins  int8
-	Secs  int8
-	Nsec  int32
-}
-
-func (t *Time) AppendFormat(b []byte, prec uint8) []byte {
-	h := t.Hours
-	if h < 0 {
-		h = -h
-		b = append(b, '-')
-	}
-	b = appendInt(b, int(h), 2)
-	b = append(b, ':')
-	b = appendInt(b, int(t.Mins), 2)
-	b = append(b, ':')
-	b = appendInt(b, int(t.Secs), 2)
-	if prec > 0 && t.Nsec != 0 {
-		b = append(b, '.')
-		b = appendNsec(b, int(t.Nsec), int(prec))
-	}
-	return b
-}
-
-func (t *Time) FormatInt64() (n int64) {
-	if t.Hours < 0 {
-		return -(int64(-t.Hours)*10000 + int64(t.Mins)*100 + int64(t.Secs))
-	}
-	return int64(t.Hours)*10000 + int64(t.Mins)*100 + int64(t.Secs)
-}
-
-func (t *Time) ToStdTime() (out time.Time) {
-	year, month, day := time.Now().Date()
-	hour, min, sec, nsec := t.Hours, t.Mins, t.Secs, t.Nsec
-	if hour < 0 {
-		duration := time.Duration(-hour)*time.Hour +
-			time.Duration(min)*time.Minute +
-			time.Duration(sec)*time.Second +
-			time.Duration(nsec)*time.Nanosecond
-
-		// If we have a negative time, we start with the start of today
-		// and substract the total duration of the parsed time.
-		out = time.Date(year, month, day, 0, 0, 0, 0, time.UTC)
-		out = out.Add(-duration)
-	} else {
-		out = time.Date(0, 1, 1, int(hour), int(min), int(sec), int(nsec), time.UTC)
-		out = out.AddDate(year, int(month-1), day-1)
-	}
-	return
-}
-
-func (t *Time) IsZero() bool {
-	return t.Hours == 0 && t.Mins == 0 && t.Secs == 0 && t.Nsec == 0
 }
 
 func ParseTime(in string) (t Time, ok bool) {
@@ -207,49 +151,54 @@ func ParseTime(in string) (t Time, ok bool) {
 		return Time{}, false
 	}
 
-	hours := int16(24*tp.day + tp.hour)
+	hours := uint16(24*tp.day + tp.hour)
 	if neg {
-		hours = -hours
+		hours |= negMask
 	}
 
 	return Time{
-		Hours: hours,
-		Mins:  int8(tp.min),
-		Secs:  int8(tp.sec),
-		Nsec:  int32(tp.nsec),
+		hour:       hours,
+		minute:     uint8(tp.min),
+		second:     uint8(tp.sec),
+		nanosecond: uint32(tp.nsec),
 	}, true
 }
 
-func ParseDate(s string) (time.Time, bool) {
+func ParseDate(s string) (Date, bool) {
+	if _, ok := isNumber(s); ok {
+		if len(s) >= 8 {
+			dt, ok := Date_YYYYMMDD.Parse(s)
+			return dt.Date, ok
+		}
+		dt, ok := Date_YYMMDD.Parse(s)
+		return dt.Date, ok
+	}
+
 	if len(s) >= 8 {
 		if t, ok := Date_YYYY_M_D.Parse(s); ok {
-			return t, true
+			return t.Date, true
 		}
 	}
 	if len(s) >= 6 {
 		if t, ok := Date_YY_M_D.Parse(s); ok {
-			return t, true
+			return t.Date, true
 		}
-		if t, ok := Date_YYYYMMDD.Parse(s); ok {
-			return t, true
-		}
-		return Date_YYMMDD.Parse(s)
 	}
-	return time.Time{}, false
+	return Date{}, false
 }
 
-func ParseDateTime(s string) (time.Time, bool) {
+func ParseDateTime(s string) (DateTime, bool) {
+	if l, ok := isNumber(s); ok {
+		if l >= 14 {
+			return DateTime_YYYYMMDDhhmmss.Parse(s)
+		}
+		return DateTime_YYMMDDhhmmss.Parse(s)
+	}
 	if t, ok := DateTime_YYYY_M_D_h_m_s.Parse(s); ok {
 		return t, true
 	}
 	if t, ok := DateTime_YY_M_D_h_m_s.Parse(s); ok {
 		return t, true
 	}
-	if t, ok := DateTime_YYYYMMDDhhmmss.Parse(s); ok {
-		return t, true
-	}
-	if t, ok := DateTime_YYMMDDhhmmss.Parse(s); ok {
-		return t, true
-	}
-	return time.Time{}, false
+	return DateTime{}, false
 }

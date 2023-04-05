@@ -27,7 +27,7 @@ type Spec interface {
 }
 
 type formatter interface {
-	format(*timeparts, time.Time, []byte) []byte
+	format(dst []byte, t DateTime, prec uint8) []byte
 }
 
 type parser interface {
@@ -35,7 +35,7 @@ type parser interface {
 }
 
 type numeric interface {
-	numeric(*timeparts, time.Time) (int, int)
+	numeric(t DateTime) (int, int)
 }
 
 var shortDayNames = []string{
@@ -65,8 +65,8 @@ var shortMonthNames = []string{
 
 type fmtWeekdayNameShort struct{}
 
-func (fmtWeekdayNameShort) format(_ *timeparts, t time.Time, b []byte) []byte {
-	return append(b, t.Weekday().String()[3:]...)
+func (fmtWeekdayNameShort) format(dst []byte, t DateTime, prec uint8) []byte {
+	return append(dst, t.Date.Weekday().String()[3:]...)
 }
 
 func (fmtWeekdayNameShort) parse(_ *timeparts, b string) (out string, ok bool) {
@@ -76,9 +76,8 @@ func (fmtWeekdayNameShort) parse(_ *timeparts, b string) (out string, ok bool) {
 
 type fmtMonthNameShort struct{}
 
-func (fmtMonthNameShort) format(tp *timeparts, t time.Time, b []byte) []byte {
-	tp.initYear(t)
-	return append(b, time.Month(tp.month).String()[3:]...)
+func (fmtMonthNameShort) format(dst []byte, t DateTime, prec uint8) []byte {
+	return append(dst, time.Month(t.Date.Month()).String()[3:]...)
 }
 
 func (fmtMonthNameShort) parse(tp *timeparts, b string) (out string, ok bool) {
@@ -90,12 +89,11 @@ type fmtMonth struct {
 	zero bool
 }
 
-func (s fmtMonth) format(tp *timeparts, t time.Time, b []byte) []byte {
-	tp.initYear(t)
+func (s fmtMonth) format(dst []byte, t DateTime, prec uint8) []byte {
 	if s.zero {
-		return appendInt(b, tp.month, 2)
+		return appendInt(dst, t.Date.Month(), 2)
 	}
-	return appendInt(b, tp.month, 0)
+	return appendInt(dst, t.Date.Month(), 0)
 }
 
 func (s fmtMonth) parse(tp *timeparts, b string) (out string, ok bool) {
@@ -106,14 +104,13 @@ func (s fmtMonth) parse(tp *timeparts, b string) (out string, ok bool) {
 	return
 }
 
-func (s fmtMonth) numeric(tp *timeparts, t time.Time) (int, int) {
-	tp.initYear(t)
-	return tp.month, 100
+func (s fmtMonth) numeric(t DateTime) (int, int) {
+	return t.Date.Month(), 100
 }
 
 type fmtMonthDaySuffix struct{}
 
-func (fmtMonthDaySuffix) format(_ *timeparts, _ time.Time, _ []byte) []byte {
+func (fmtMonthDaySuffix) format(dst []byte, t DateTime, prec uint8) []byte {
 	panic("TODO")
 }
 
@@ -126,12 +123,11 @@ type fmtDay struct {
 	zero bool
 }
 
-func (s fmtDay) format(tp *timeparts, t time.Time, b []byte) []byte {
-	tp.initYear(t)
+func (s fmtDay) format(dst []byte, t DateTime, prec uint8) []byte {
 	if s.zero {
-		return appendInt(b, tp.day, 2)
+		return appendInt(dst, t.Date.Day(), 2)
 	}
-	return appendInt(b, tp.day, 0)
+	return appendInt(dst, t.Date.Day(), 0)
 }
 
 func (s fmtDay) parse(tp *timeparts, b string) (out string, ok bool) {
@@ -139,9 +135,8 @@ func (s fmtDay) parse(tp *timeparts, b string) (out string, ok bool) {
 	return
 }
 
-func (fmtDay) numeric(tp *timeparts, t time.Time) (int, int) {
-	tp.initYear(t)
-	return tp.day, 100
+func (fmtDay) numeric(t DateTime) (int, int) {
+	return t.Date.Day(), 100
 }
 
 type fmtNanoseconds struct{}
@@ -156,9 +151,8 @@ func appendNsec(b []byte, nsec int, prec int) []byte {
 	return b[:l]
 }
 
-func (fmtNanoseconds) format(tp *timeparts, t time.Time, b []byte) []byte {
-	tp.initHour(t)
-	return appendNsec(b, tp.nsec, int(tp.prec))
+func (fmtNanoseconds) format(dst []byte, t DateTime, prec uint8) []byte {
+	return appendNsec(dst, t.Time.Nanosecond(), int(prec))
 }
 
 func (f fmtNanoseconds) parse(t *timeparts, bytes string) (string, bool) {
@@ -170,12 +164,11 @@ type fmtHour24 struct {
 	zero bool
 }
 
-func (s fmtHour24) format(tp *timeparts, t time.Time, b []byte) []byte {
-	tp.initHour(t)
+func (s fmtHour24) format(dst []byte, t DateTime, prec uint8) []byte {
 	if s.zero {
-		return appendInt(b, tp.hour, 2)
+		return appendInt(dst, t.Time.Hour(), 2)
 	}
-	return appendInt(b, tp.hour, 0)
+	return appendInt(dst, t.Time.Hour(), 0)
 }
 
 func (s fmtHour24) parse(tp *timeparts, b string) (out string, ok bool) {
@@ -186,21 +179,20 @@ func (s fmtHour24) parse(tp *timeparts, b string) (out string, ok bool) {
 	return
 }
 
-func (fmtHour24) numeric(tp *timeparts, t time.Time) (int, int) {
-	tp.initHour(t)
-	return tp.hour, 100
+func (fmtHour24) numeric(t DateTime) (int, int) {
+	return t.Time.Hour(), 100
 }
 
 type fmtHour12 struct {
 	zero bool
 }
 
-func (f fmtHour12) format(tp *timeparts, t time.Time, b []byte) []byte {
-	hr, _ := f.numeric(tp, t)
+func (f fmtHour12) format(dst []byte, t DateTime, prec uint8) []byte {
+	hr, _ := f.numeric(t)
 	if f.zero {
-		return appendInt(b, hr, 2)
+		return appendInt(dst, hr, 2)
 	}
-	return appendInt(b, hr, 0)
+	return appendInt(dst, hr, 0)
 }
 
 func (f fmtHour12) parse(tp *timeparts, b string) (out string, ok bool) {
@@ -211,9 +203,8 @@ func (f fmtHour12) parse(tp *timeparts, b string) (out string, ok bool) {
 	return
 }
 
-func (f fmtHour12) numeric(tp *timeparts, t time.Time) (int, int) {
-	tp.initHour(t)
-	hr := tp.hour % 12
+func (f fmtHour12) numeric(t DateTime) (int, int) {
+	hr := t.Time.Hour() % 12
 	if hr == 0 {
 		hr = 12
 	}
@@ -224,12 +215,11 @@ type fmtMin struct {
 	zero bool
 }
 
-func (s fmtMin) format(tp *timeparts, t time.Time, b []byte) []byte {
-	tp.initHour(t)
+func (s fmtMin) format(dst []byte, t DateTime, prec uint8) []byte {
 	if s.zero {
-		return appendInt(b, tp.min, 2)
+		return appendInt(dst, t.Time.Minute(), 2)
 	}
-	return appendInt(b, tp.min, 0)
+	return appendInt(dst, t.Time.Minute(), 0)
 }
 
 func (s fmtMin) parse(tp *timeparts, b string) (out string, ok bool) {
@@ -240,15 +230,14 @@ func (s fmtMin) parse(tp *timeparts, b string) (out string, ok bool) {
 	return
 }
 
-func (s fmtMin) numeric(tp *timeparts, t time.Time) (int, int) {
-	tp.initHour(t)
-	return tp.min, 100
+func (s fmtMin) numeric(t DateTime) (int, int) {
+	return t.Time.Minute(), 100
 }
 
 type fmtZeroYearDay struct{}
 
-func (fmtZeroYearDay) format(_ *timeparts, t time.Time, b []byte) []byte {
-	return appendInt(b, t.YearDay(), 3)
+func (fmtZeroYearDay) format(dst []byte, t DateTime, prec uint8) []byte {
+	return appendInt(dst, t.Date.Yearday(), 3)
 }
 func (j fmtZeroYearDay) parse(t *timeparts, bytes string) (string, bool) {
 	//TODO implement me
@@ -257,9 +246,8 @@ func (j fmtZeroYearDay) parse(t *timeparts, bytes string) (string, bool) {
 
 type fmtMonthName struct{}
 
-func (fmtMonthName) format(tp *timeparts, t time.Time, b []byte) []byte {
-	tp.initYear(t)
-	return append(b, time.Month(tp.month).String()...)
+func (fmtMonthName) format(dst []byte, t DateTime, prec uint8) []byte {
+	return append(dst, time.Month(t.Date.Month()).String()...)
 }
 
 func (m fmtMonthName) parse(t *timeparts, bytes string) (string, bool) {
@@ -269,12 +257,11 @@ func (m fmtMonthName) parse(t *timeparts, bytes string) (string, bool) {
 
 type fmtAMorPM struct{}
 
-func (fmtAMorPM) format(tp *timeparts, t time.Time, b []byte) []byte {
-	tp.initHour(t)
-	if tp.hour < 12 {
-		return append(b, "AM"...)
+func (fmtAMorPM) format(dst []byte, t DateTime, prec uint8) []byte {
+	if t.Time.Hour() < 12 {
+		return append(dst, "AM"...)
 	}
-	return append(b, "PM"...)
+	return append(dst, "PM"...)
 }
 
 func (p fmtAMorPM) parse(t *timeparts, bytes string) (string, bool) {
@@ -284,14 +271,14 @@ func (p fmtAMorPM) parse(t *timeparts, bytes string) (string, bool) {
 
 type fmtFullTime12 struct{}
 
-func (fmtFullTime12) format(tp *timeparts, t time.Time, b []byte) []byte {
-	b = (fmtHour12{true}).format(tp, t, b)
-	b = append(b, ':')
-	b = (fmtMin{true}).format(tp, t, b)
-	b = append(b, ':')
-	b = (fmtSecond{true, false}).format(tp, t, b)
-	b = (fmtAMorPM{}).format(tp, t, b)
-	return b
+func (fmtFullTime12) format(dst []byte, t DateTime, prec uint8) []byte {
+	dst = (fmtHour12{true}).format(dst, t, prec)
+	dst = append(dst, ':')
+	dst = (fmtMin{true}).format(dst, t, prec)
+	dst = append(dst, ':')
+	dst = (fmtSecond{true, false}).format(dst, t, prec)
+	dst = (fmtAMorPM{}).format(dst, t, prec)
+	return dst
 }
 
 func (r fmtFullTime12) parse(t *timeparts, bytes string) (string, bool) {
@@ -304,18 +291,17 @@ type fmtSecond struct {
 	nsec bool
 }
 
-func (s fmtSecond) format(tp *timeparts, t time.Time, b []byte) []byte {
-	tp.initHour(t)
+func (s fmtSecond) format(dst []byte, t DateTime, prec uint8) []byte {
 	if s.zero {
-		b = appendInt(b, tp.sec, 2)
+		dst = appendInt(dst, t.Time.Second(), 2)
 	} else {
-		b = appendInt(b, tp.sec, 0)
+		dst = appendInt(dst, t.Time.Second(), 0)
 	}
-	if s.nsec && tp.prec > 0 && tp.nsec != 0 {
-		b = append(b, '.')
-		b = appendNsec(b, tp.nsec, int(tp.prec))
+	if s.nsec && prec > 0 && t.Time.Nanosecond() != 0 {
+		dst = append(dst, '.')
+		dst = appendNsec(dst, t.Time.Nanosecond(), int(prec))
 	}
-	return b
+	return dst
 }
 
 func (s fmtSecond) parse(tp *timeparts, b string) (out string, ok bool) {
@@ -333,20 +319,19 @@ func (s fmtSecond) parse(tp *timeparts, b string) (out string, ok bool) {
 	return
 }
 
-func (s fmtSecond) numeric(tp *timeparts, t time.Time) (int, int) {
-	tp.initHour(t)
-	return tp.sec, 100
+func (s fmtSecond) numeric(t DateTime) (int, int) {
+	return t.Time.Second(), 100
 }
 
 type fmtFullTime24 struct{}
 
-func (fmtFullTime24) format(tp *timeparts, t time.Time, b []byte) []byte {
-	b = (fmtHour24{true}).format(tp, t, b)
-	b = append(b, ':')
-	b = (fmtMin{true}).format(tp, t, b)
-	b = append(b, ':')
-	b = (fmtSecond{true, false}).format(tp, t, b)
-	return b
+func (fmtFullTime24) format(dst []byte, t DateTime, prec uint8) []byte {
+	dst = (fmtHour24{true}).format(dst, t, prec)
+	dst = append(dst, ':')
+	dst = (fmtMin{true}).format(dst, t, prec)
+	dst = append(dst, ':')
+	dst = (fmtSecond{true, false}).format(dst, t, prec)
+	return dst
 }
 
 func (t2 fmtFullTime24) parse(t *timeparts, bytes string) (string, bool) {
@@ -356,7 +341,7 @@ func (t2 fmtFullTime24) parse(t *timeparts, bytes string) (string, bool) {
 
 type fmtWeek0 struct{}
 
-func (fmtWeek0) format(ctx *timeparts, t time.Time, b []byte) []byte {
+func (fmtWeek0) format(dst []byte, t DateTime, prec uint8) []byte {
 	panic("TODO")
 }
 
@@ -367,7 +352,7 @@ func (u fmtWeek0) parse(t *timeparts, bytes string) (string, bool) {
 
 type fmtWeek1 struct{}
 
-func (fmtWeek1) format(ctx *timeparts, t time.Time, b []byte) []byte {
+func (fmtWeek1) format(dst []byte, t DateTime, prec uint8) []byte {
 	panic("TODO")
 }
 
@@ -378,7 +363,7 @@ func (u fmtWeek1) parse(t *timeparts, bytes string) (string, bool) {
 
 type fmtWeek2 struct{}
 
-func (fmtWeek2) format(ctx *timeparts, t time.Time, b []byte) []byte {
+func (fmtWeek2) format(dst []byte, t DateTime, prec uint8) []byte {
 	panic("TODO")
 }
 
@@ -389,10 +374,11 @@ func (v fmtWeek2) parse(t *timeparts, bytes string) (string, bool) {
 
 type fmtWeek3 struct{}
 
-func (fmtWeek3) format(_ *timeparts, t time.Time, b []byte) []byte {
-	_, week := t.ISOWeek()
-	return appendInt(b, week, 2)
+func (fmtWeek3) format(dst []byte, t DateTime, prec uint8) []byte {
+	//TODO implement me
+	panic("implement me")
 }
+
 func (v fmtWeek3) parse(t *timeparts, bytes string) (string, bool) {
 	//TODO implement me
 	panic("implement me")
@@ -400,8 +386,8 @@ func (v fmtWeek3) parse(t *timeparts, bytes string) (string, bool) {
 
 type fmtWeekdayName struct{}
 
-func (fmtWeekdayName) format(_ *timeparts, t time.Time, b []byte) []byte {
-	return append(b, t.Weekday().String()...)
+func (fmtWeekdayName) format(dst []byte, t DateTime, prec uint8) []byte {
+	return append(dst, t.Date.Weekday().String()...)
 }
 func (w fmtWeekdayName) parse(t *timeparts, bytes string) (string, bool) {
 	//TODO implement me
@@ -410,8 +396,8 @@ func (w fmtWeekdayName) parse(t *timeparts, bytes string) (string, bool) {
 
 type fmtWeekday struct{}
 
-func (fmtWeekday) format(_ *timeparts, t time.Time, b []byte) []byte {
-	return appendInt(b, int(t.Weekday()), 0)
+func (fmtWeekday) format(dst []byte, t DateTime, prec uint8) []byte {
+	return appendInt(dst, int(t.Date.Weekday()), 0)
 }
 func (w fmtWeekday) parse(t *timeparts, bytes string) (string, bool) {
 	//TODO implement me
@@ -420,7 +406,7 @@ func (w fmtWeekday) parse(t *timeparts, bytes string) (string, bool) {
 
 type fmtYearForWeek2 struct{}
 
-func (fmtYearForWeek2) format(ctx *timeparts, t time.Time, b []byte) []byte {
+func (fmtYearForWeek2) format(dst []byte, t DateTime, prec uint8) []byte {
 	panic("TODO")
 }
 func (x fmtYearForWeek2) parse(t *timeparts, bytes string) (string, bool) {
@@ -430,9 +416,9 @@ func (x fmtYearForWeek2) parse(t *timeparts, bytes string) (string, bool) {
 
 type fmtYearForWeek3 struct{}
 
-func (fmtYearForWeek3) format(_ *timeparts, t time.Time, b []byte) []byte {
-	year, _ := t.ISOWeek()
-	return appendInt(b, year, 4)
+func (fmtYearForWeek3) format(dst []byte, t DateTime, prec uint8) []byte {
+	//TODO implement me
+	panic("implement me")
 }
 func (x fmtYearForWeek3) parse(t *timeparts, bytes string) (string, bool) {
 	//TODO implement me
@@ -441,9 +427,8 @@ func (x fmtYearForWeek3) parse(t *timeparts, bytes string) (string, bool) {
 
 type fmtYearLong struct{}
 
-func (fmtYearLong) format(tp *timeparts, t time.Time, b []byte) []byte {
-	tp.initYear(t)
-	return appendInt(b, tp.year, 4)
+func (fmtYearLong) format(dst []byte, t DateTime, prec uint8) []byte {
+	return appendInt(dst, t.Date.Year(), 4)
 }
 
 func (y fmtYearLong) parse(tp *timeparts, b string) (out string, ok bool) {
@@ -454,16 +439,15 @@ func (y fmtYearLong) parse(tp *timeparts, b string) (out string, ok bool) {
 	return
 }
 
-func (y fmtYearLong) numeric(tp *timeparts, t time.Time) (int, int) {
-	tp.initYear(t)
-	return tp.year, 10000
+func (y fmtYearLong) numeric(t DateTime) (int, int) {
+	return t.Date.Year(), 10000
 }
 
 type fmtYearShort struct{}
 
-func (f fmtYearShort) format(tp *timeparts, t time.Time, b []byte) []byte {
-	y, _ := f.numeric(tp, t)
-	return appendInt(b, y, 2)
+func (f fmtYearShort) format(dst []byte, t DateTime, prec uint8) []byte {
+	y, _ := f.numeric(t)
+	return appendInt(dst, y, 2)
 }
 
 func (fmtYearShort) parse(tp *timeparts, b string) (out string, ok bool) {
@@ -480,9 +464,8 @@ func (fmtYearShort) parse(tp *timeparts, b string) (out string, ok bool) {
 	return
 }
 
-func (fmtYearShort) numeric(tp *timeparts, t time.Time) (int, int) {
-	tp.initYear(t)
-	y := tp.year
+func (fmtYearShort) numeric(t DateTime) (int, int) {
+	y := t.Date.Year()
 	if y < 0 {
 		y = -y
 	}
@@ -498,14 +481,14 @@ func (v *fmtVerbatim) parse(t *timeparts, bytes string) (string, bool) {
 	panic("implement me")
 }
 
-func (v *fmtVerbatim) format(_ *timeparts, _ time.Time, b []byte) []byte {
-	return append(b, v.s...)
+func (v *fmtVerbatim) format(dst []byte, t DateTime, prec uint8) []byte {
+	return append(dst, v.s...)
 }
 
 type fmtSeparator byte
 
-func (s fmtSeparator) format(_ *timeparts, _ time.Time, b []byte) []byte {
-	return append(b, byte(s))
+func (s fmtSeparator) format(dst []byte, t DateTime, prec uint8) []byte {
+	return append(dst, byte(s))
 }
 
 func (s fmtSeparator) parse(_ *timeparts, b string) (string, bool) {
@@ -526,8 +509,8 @@ func isSeparator(b byte) bool {
 
 type fmtTimeSeparator struct{}
 
-func (s fmtTimeSeparator) format(_ *timeparts, _ time.Time, b []byte) []byte {
-	return append(b, byte(' '))
+func (s fmtTimeSeparator) format(dst []byte, t DateTime, prec uint8) []byte {
+	return append(dst, byte(' '))
 }
 
 func (s fmtTimeSeparator) parse(_ *timeparts, b string) (string, bool) {

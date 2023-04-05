@@ -301,6 +301,10 @@ func TestCompilerSingle(t *testing.T) {
 			expression: `time '10:04:58' < '101:34:58'`,
 			result:     `INT64(1)`,
 		},
+		{
+			expression: `CAST('20000101103458.123456' AS DATE)`,
+			result:     `DATE("2000-01-01")`,
+		},
 	}
 
 	for _, tc := range testCases {

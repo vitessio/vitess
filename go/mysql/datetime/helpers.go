@@ -16,7 +16,9 @@ limitations under the License.
 
 package datetime
 
-import "time"
+import (
+	"time"
+)
 
 // appendInt appends the decimal form of x to b and returns the result.
 // If the decimal form (excluding sign) is shorter than width, the result is padded with leading 0's.
@@ -143,6 +145,30 @@ func isDigit[bytes []byte | string](s bytes, i int) bool {
 	return '0' <= c && c <= '9'
 }
 
+// isNumber reports whether s is an integer or decimal number.
+// Returns the length of the integral part of the number if it's
+// a valid number.
+func isNumber[bytes []byte | string](s bytes) (int, bool) {
+	var dot bool
+	pos := -1
+	for i := 0; i < len(s); i++ {
+		if !isDigit(s, i) {
+			if dot {
+				return 0, false
+			}
+			if s[i] == '.' {
+				dot = true
+				continue
+			}
+			return 0, false
+		}
+		if !dot {
+			pos = i + 1
+		}
+	}
+	return pos, true
+}
+
 // getnum parses s[0:1] or s[0:2] (fixed forces s[0:2])
 // as a decimal integer and returns the integer and the
 // remainder of the string.
@@ -157,6 +183,17 @@ func getnum(s string, fixed bool) (int, string, bool) {
 		return int(s[0] - '0'), s[1:], true
 	}
 	return int(s[0]-'0')*10 + int(s[1]-'0'), s[2:], true
+}
+
+func getnuml(s string, l int) (int, string, bool) {
+	var res int
+	for i := 0; i < l; i++ {
+		if !isDigit(s, i) {
+			return 0, s, false
+		}
+		res = res*10 + int(s[i]-'0')
+	}
+	return res, s[l:], true
 }
 
 func getnumn(s string) (int, string, bool) {

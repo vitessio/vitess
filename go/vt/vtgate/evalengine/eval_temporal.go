@@ -14,34 +14,23 @@ import (
 )
 
 type evalTemporal struct {
-	t sqltypes.Type
-
-	// std is the standard time.Time representation for this temporal value.
-	// only set for t == DATE or t == DATETIME
-	std time.Time
-
-	// sql is the mysql datetime.Time representation for this temporal value.
-	// only set for t == TIME
-	sql datetime.Time
+	t  sqltypes.Type
+	dt datetime.DateTime
 }
 
 func (e *evalTemporal) Hash(h *vthash.Hasher) {
 	h.Write16(hashPrefixDate)
-	if e.t == sqltypes.Time {
-		h.Write64(uint64(e.sql.ToStdTime().UnixNano()))
-	} else {
-		h.Write64(uint64(e.std.UnixNano()))
-	}
+	e.dt.Hash(h)
 }
 
 func (e *evalTemporal) ToRawBytes() []byte {
 	switch e.t {
 	case sqltypes.Date:
-		return datetime.Date_YYYY_MM_DD.Format(e.std, 6)
+		return datetime.Date_YYYY_MM_DD.Format(e.dt, 0)
 	case sqltypes.Datetime:
-		return datetime.DateTime_YYYY_MM_DD_hh_mm_ss.Format(e.std, 6)
+		return datetime.DateTime_YYYY_MM_DD_hh_mm_ss.Format(e.dt, 6)
 	case sqltypes.Time:
-		return e.sql.AppendFormat(nil, 9)
+		return e.dt.Time.AppendFormat(nil, 6)
 	default:
 		panic("unreachable")
 	}
@@ -54,11 +43,11 @@ func (e *evalTemporal) SQLType() sqltypes.Type {
 func (e *evalTemporal) toInt64() int64 {
 	switch e.SQLType() {
 	case sqltypes.Date:
-		return datetime.Date_YYYYMMDD.FormatNumeric(e.std)
+		return datetime.Date_YYYYMMDD.FormatNumeric(e.dt)
 	case sqltypes.Datetime:
-		return datetime.DateTime_YYYYMMDDhhmmss.FormatNumeric(e.std)
+		return datetime.DateTime_YYYYMMDDhhmmss.FormatNumeric(e.dt)
 	case sqltypes.Time:
-		return e.sql.FormatInt64()
+		return e.dt.Time.FormatInt64()
 	default:
 		panic("unreachable")
 	}
@@ -82,9 +71,9 @@ func (e *evalTemporal) toDateTime() *evalTemporal {
 	case sqltypes.Datetime:
 		return e
 	case sqltypes.Date:
-		return &evalTemporal{t: sqltypes.Datetime, std: e.std}
+		return &evalTemporal{t: sqltypes.Datetime, dt: e.dt}
 	case sqltypes.Time:
-		return &evalTemporal{t: sqltypes.Datetime, std: e.sql.ToStdTime()}
+		return &evalTemporal{t: sqltypes.Time, dt: e.dt.Time.ToDateTime()}
 	default:
 		panic("unreachable")
 	}
@@ -93,8 +82,8 @@ func (e *evalTemporal) toDateTime() *evalTemporal {
 func (e *evalTemporal) toTime() *evalTemporal {
 	switch e.SQLType() {
 	case sqltypes.Datetime:
-		hour, min, sec := e.std.Clock()
-		return &evalTemporal{t: sqltypes.Time, sql: datetime.Time{Hours: int16(hour), Mins: int8(min), Secs: int8(sec), Nsec: int32(e.std.Nanosecond())}}
+		dt := datetime.DateTime{Time: e.dt.Time}
+		return &evalTemporal{t: sqltypes.Time, dt: dt}
 	case sqltypes.Date:
 		// Zero-time
 		return &evalTemporal{t: sqltypes.Time}
@@ -108,45 +97,37 @@ func (e *evalTemporal) toTime() *evalTemporal {
 func (e *evalTemporal) toDate() *evalTemporal {
 	switch e.SQLType() {
 	case sqltypes.Datetime:
-		// TODO: zero out hours/mins/secs?
-		return &evalTemporal{t: sqltypes.Date, std: e.std}
+		dt := datetime.DateTime{Date: e.dt.Date}
+		return &evalTemporal{t: sqltypes.Date, dt: dt}
 	case sqltypes.Date:
 		return e
 	case sqltypes.Time:
-		return &evalTemporal{t: sqltypes.Date}
+		dt := e.dt.Time.ToDateTime()
+		dt.Time = datetime.Time{}
+		return &evalTemporal{t: sqltypes.Date, dt: dt}
 	default:
 		panic("unreachable")
 	}
 }
 
 func (e *evalTemporal) isZero() bool {
-	switch e.SQLType() {
-	case sqltypes.Datetime, sqltypes.Date:
-		return e.std.IsZero()
-	case sqltypes.Time:
-		return e.sql.IsZero()
-	default:
-		panic("unreachable")
-	}
+	return e.dt.IsZero()
 }
 
-func (e *evalTemporal) toStdTime() time.Time {
-	if e.SQLType() == sqltypes.Time {
-		return e.sql.ToStdTime()
-	}
-	return e.std
+func (e *evalTemporal) toStdTime(loc *time.Location) time.Time {
+	return e.dt.ToStdTime(loc)
 }
 
-func newEvalDateTime(time time.Time) *evalTemporal {
-	return &evalTemporal{t: sqltypes.Datetime, std: time}
+func newEvalDateTime(dt datetime.DateTime) *evalTemporal {
+	return &evalTemporal{t: sqltypes.Datetime, dt: dt}
 }
 
-func newEvalDate(time time.Time) *evalTemporal {
-	return &evalTemporal{t: sqltypes.Date, std: time}
+func newEvalDate(d datetime.Date) *evalTemporal {
+	return &evalTemporal{t: sqltypes.Date, dt: datetime.DateTime{Date: d}}
 }
 
 func newEvalTime(time datetime.Time) *evalTemporal {
-	return &evalTemporal{t: sqltypes.Time, sql: time}
+	return &evalTemporal{t: sqltypes.Time, dt: datetime.DateTime{Time: time}}
 }
 
 func sanitizeErrorValue(s []byte) []byte {

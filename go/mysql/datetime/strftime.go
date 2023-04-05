@@ -20,7 +20,6 @@ package datetime
 import (
 	"fmt"
 	"strings"
-	"time"
 )
 
 func compile(ds map[byte]Spec, p string, exec func(Spec)) error {
@@ -59,14 +58,10 @@ func compile(ds map[byte]Spec, p string, exec func(Spec)) error {
 // If you know beforehand that you will be reusing the pattern
 // within your application, consider creating a `Strftime` object
 // and reusing it.
-func Format(p string, t time.Time, prec uint8) ([]byte, error) {
+func Format(p string, t DateTime, prec uint8) ([]byte, error) {
 	var dst []byte
-	var tp timeparts
-	tp.year = -1
-	tp.hour = -1
-	tp.prec = prec
 	err := compile(DefaultMySQLStrftime, p, func(a Spec) {
-		dst = a.format(&tp, t, dst)
+		dst = a.format(dst, t, prec)
 	})
 	return dst, err
 }
@@ -95,47 +90,35 @@ func (f *Strftime) Pattern() string {
 	return f.pattern
 }
 
-func (f *Strftime) Format(t time.Time, prec uint8) []byte {
-	var tp timeparts
-	tp.year = -1
-	tp.hour = -1
-	tp.prec = prec
-	return f.format(&tp, make([]byte, 0, len(f.pattern)+10), t)
+func (f *Strftime) Format(dt DateTime, prec uint8) []byte {
+	return f.format(make([]byte, 0, len(f.pattern)+10), dt, prec)
 }
 
-func (f *Strftime) AppendFormat(dst []byte, t time.Time, prec uint8) []byte {
-	var tp timeparts
-	tp.year = -1
-	tp.hour = -1
-	tp.prec = prec
-	return f.format(&tp, dst, t)
+func (f *Strftime) AppendFormat(dst []byte, t DateTime, prec uint8) []byte {
+	return f.format(dst, t, prec)
 }
 
-func (f *Strftime) format(tp *timeparts, b []byte, t time.Time) []byte {
+func (f *Strftime) format(dst []byte, t DateTime, prec uint8) []byte {
 	for _, w := range f.compiled {
-		b = w.format(tp, t, b)
+		dst = w.format(dst, t, prec)
 	}
-	return b
+	return dst
 }
 
-func (f *Strftime) FormatString(tm time.Time, prec uint8) string {
-	return string(f.Format(tm, prec))
+func (f *Strftime) FormatString(t DateTime, prec uint8) string {
+	return string(f.Format(t, prec))
 }
 
-func (f *Strftime) FormatNumeric(tm time.Time) (n int64) {
-	var tp timeparts
-	tp.year = -1
-	tp.hour = -1
-	tp.prec = 0
+func (f *Strftime) FormatNumeric(t DateTime) (n int64) {
 	for _, w := range f.compiled {
 		w := w.(numeric)
-		x, width := w.numeric(&tp, tm)
+		x, width := w.numeric(t)
 		n = n*int64(width) + int64(x)
 	}
 	return n
 }
 
-func (f *Strftime) parse(s string) (time.Time, string, bool) {
+func (f *Strftime) parse(s string) (DateTime, string, bool) {
 	var tp timeparts
 	tp.month = -1
 	tp.day = -1
@@ -145,19 +128,19 @@ func (f *Strftime) parse(s string) (time.Time, string, bool) {
 	for _, w := range f.compiled {
 		s, ok = w.parse(&tp, s)
 		if !ok {
-			return time.Time{}, "", false
+			return DateTime{}, "", false
 		}
 	}
-	t, ok := tp.toTime(time.Local)
+	t, ok := tp.toDateTime()
 	return t, s, ok
 }
 
-func (f *Strftime) Parse(s string) (time.Time, bool) {
+func (f *Strftime) Parse(s string) (DateTime, bool) {
 	t, s, ok := f.parse(s)
 	return t, ok && len(s) == 0
 }
 
-func (f *Strftime) ParseBestEffort(s string) (time.Time, bool) {
+func (f *Strftime) ParseBestEffort(s string) (DateTime, bool) {
 	t, _, ok := f.parse(s)
 	return t, ok
 }

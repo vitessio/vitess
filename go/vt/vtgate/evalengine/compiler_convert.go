@@ -92,6 +92,24 @@ func (c *compiler) compileConvert(conv *ConvertExpr) (ctype, error) {
 			return ctype{}, err
 		}
 
+	case "DATE":
+		convt, err = c.compileToDate(sqltypes.Date, arg, 1)
+		if err != nil {
+			return ctype{}, err
+		}
+
+	case "DATETIME":
+		convt, err = c.compileToDate(sqltypes.Datetime, arg, 1)
+		if err != nil {
+			return ctype{}, err
+		}
+
+	case "TIME":
+		convt, err = c.compileToDate(sqltypes.Time, arg, 1)
+		if err != nil {
+			return ctype{}, err
+		}
+
 	default:
 		return ctype{}, c.unsupported(conv)
 	}

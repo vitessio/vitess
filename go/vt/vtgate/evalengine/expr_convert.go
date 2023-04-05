@@ -164,8 +164,14 @@ func (c *ConvertExpr) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqlty
 		return sqltypes.Uint64, f
 	case "JSON":
 		return sqltypes.TypeJSON, f
-	case "DATE", "DATETIME", "YEAR", "TIME":
-		return sqltypes.Null, f
+	case "DATE":
+		return sqltypes.Date, f
+	case "DATETIME":
+		return sqltypes.Datetime, f
+	case "TIME":
+		return sqltypes.Time, f
+	case "YEAR":
+		return sqltypes.Year, f
 	default:
 		panic("BUG: sqlparser emitted unknown type")
 	}
