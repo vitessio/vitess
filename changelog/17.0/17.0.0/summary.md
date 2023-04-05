@@ -63,7 +63,7 @@ Keyspace names may no longer contain the forward slash ("/") character, and Topo
 
 Prior to v17, it was possible to create a shard name with invalid characters, which would then be inaccessible to various cluster management operations.
 
-Shard names may no longer contain the forward slash ("/") character, and TopoServer's `CreateShard` and method returns an error if given such a name.
+Shard names may no longer contain the forward slash ("/") character, and TopoServer's `CreateShard` method returns an error if given such a name.
 
 ### <a id="new-flag"/> New command line flags and behavior
 
