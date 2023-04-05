@@ -39,6 +39,8 @@ const (
 	DirectiveIgnoreMaxMemoryRows = "IGNORE_MAX_MEMORY_ROWS"
 	// DirectiveAllowScatter lets scatter plans pass through even when they are turned off by `no-scatter`.
 	DirectiveAllowScatter = "ALLOW_SCATTER"
+	// DirectiveWorkloadName specifies the name of the client application workload issuing the query.
+	DirectiveWorkloadName = "WORKLOAD_NAME"
 )
 
 func isNonSpace(r rune) bool {
@@ -404,4 +406,28 @@ func AllowScatterDirective(stmt Statement) bool {
 		return false
 	}
 	return directives.IsSet(DirectiveAllowScatter)
+}
+
+// GetWorkloadNameFromStatement gets the workload name from the provided Statement, using workloadLabel as the name of
+// the query directive that specifies it.
+func GetWorkloadNameFromStatement(statement Statement) string {
+	var directives CommentDirectives
+	switch stmt := statement.(type) {
+	case *Select:
+		directives = ExtractCommentDirectives(stmt.Comments)
+	case *Insert:
+		directives = ExtractCommentDirectives(stmt.Comments)
+	case *Update:
+		directives = ExtractCommentDirectives(stmt.Comments)
+	case *Delete:
+		directives = ExtractCommentDirectives(stmt.Comments)
+	default:
+		return ""
+	}
+
+	if directives.IsSet(DirectiveWorkloadName) {
+		return directives.GetString(DirectiveWorkloadName, "")
+	}
+
+	return ""
 }

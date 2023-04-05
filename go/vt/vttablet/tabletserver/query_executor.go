@@ -59,6 +59,7 @@ type QueryExecutor struct {
 	logStats       *tabletenv.LogStats
 	tsv            *TabletServer
 	tabletType     topodatapb.TabletType
+	workload       string
 }
 
 const streamRowsSize = 256
@@ -112,11 +113,11 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 		}
 
 		if reply == nil {
-			qre.tsv.qe.AddStats(planName, tableName, 1, duration, mysqlTime, 0, 1)
+			qre.tsv.qe.AddStats(planName, tableName, qre.options.GetWorkloadName(), 1, duration, mysqlTime, 0, 1)
 			qre.plan.AddStats(1, duration, mysqlTime, 0, 0, 1)
 			return
 		}
-		qre.tsv.qe.AddStats(planName, tableName, 1, duration, mysqlTime, int64(reply.RowsAffected), 0)
+		qre.tsv.qe.AddStats(planName, tableName, qre.options.GetWorkloadName(), 1, duration, mysqlTime, int64(reply.RowsAffected), 0)
 		qre.plan.AddStats(1, duration, mysqlTime, reply.RowsAffected, uint64(len(reply.Rows)), 0)
 		qre.logStats.RowsAffected = int(reply.RowsAffected)
 		qre.logStats.Rows = reply.Rows

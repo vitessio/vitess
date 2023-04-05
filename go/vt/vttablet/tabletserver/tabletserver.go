@@ -1239,6 +1239,7 @@ func (tsv *TabletServer) execRequest(
 	span, ctx := trace.NewSpan(ctx, "TabletServer."+requestName)
 	if options != nil {
 		span.Annotate("isolation-level", options.TransactionIsolation)
+		span.Annotate("workload_name", options.WorkloadName)
 	}
 	trace.AnnotateSQL(span, sql)
 	if target != nil {
