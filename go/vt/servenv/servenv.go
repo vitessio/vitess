@@ -118,7 +118,7 @@ func Init() {
 
 	// Uptime metric
 	_ = stats.NewGaugeFunc("Uptime", "Uptime in nanoseconds", func() int64 {
-		return int64(time.Since(initStartTime).Nanoseconds())
+		return int64(time.Since(serverStart).Nanoseconds())
 	})
 
 	// Ignore SIGPIPE if specified
