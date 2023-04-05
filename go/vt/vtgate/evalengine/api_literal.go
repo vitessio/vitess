@@ -23,9 +23,7 @@ import (
 	"strconv"
 	"unicode/utf8"
 
-	"vitess.io/vitess/go/hack"
 	"vitess.io/vitess/go/mysql/collations"
-	"vitess.io/vitess/go/mysql/datetime"
 	"vitess.io/vitess/go/mysql/decimal"
 	"vitess.io/vitess/go/sqltypes"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -105,31 +103,31 @@ func NewLiteralString(val []byte, collation collations.TypedCollation) *Literal 
 
 // NewLiteralDateFromBytes returns a literal expression.
 func NewLiteralDateFromBytes(val []byte) (*Literal, error) {
-	t, ok := datetime.ParseDate(string(val))
-	if !ok {
-		return nil, errIncorrectDate("DATE", val)
+	t, err := parseDate(val)
+	if err != nil {
+		return nil, err
 	}
-	return &Literal{newEvalDateTime(sqltypes.Date, t)}, nil
+	return &Literal{t}, nil
 }
 
 // NewLiteralTimeFromBytes returns a literal expression.
 // it validates the time by parsing it and checking the error.
 func NewLiteralTimeFromBytes(val []byte) (*Literal, error) {
-	t, ok := datetime.ParseTime(hack.String(val))
-	if !ok {
-		return nil, errIncorrectDate("TIME", val)
+	t, err := parseTime(val)
+	if err != nil {
+		return nil, err
 	}
-	return &Literal{newEvalTime(t)}, nil
+	return &Literal{t}, nil
 }
 
 // NewLiteralDatetimeFromBytes returns a literal expression.
 // it validates the datetime by parsing it and checking the error.
 func NewLiteralDatetimeFromBytes(val []byte) (*Literal, error) {
-	t, ok := datetime.ParseDateTime(hack.String(val))
-	if !ok {
-		return nil, errIncorrectDate("DATETIME", val)
+	t, err := parseDateTime(val)
+	if err != nil {
+		return nil, err
 	}
-	return &Literal{newEvalDateTime(sqltypes.Datetime, t)}, nil
+	return &Literal{t}, nil
 }
 
 func sanitizeErrorValue(s []byte) []byte {
@@ -161,7 +159,7 @@ func sanitizeErrorValue(s []byte) []byte {
 	return b
 }
 
-func errIncorrectDate(date string, in []byte) error {
+func errIncorrectTime(date string, in []byte) error {
 	return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongValue, "Incorrect %s value: '%s'", date, sanitizeErrorValue(in))
 }
 

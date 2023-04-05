@@ -348,8 +348,12 @@ func valueToEval(value sqltypes.Value, collation collations.TypedCollation) (eva
 		}
 	case sqltypes.IsBinary(tt):
 		return newEvalBinary(value.Raw()), nil
-	case sqltypes.IsDateOrTime(tt):
-		return newEvalRaw(value.Type(), value.Raw(), collationNumeric), nil
+	case tt == sqltypes.Date:
+		return parseDate(value.Raw())
+	case tt == sqltypes.Datetime || tt == sqltypes.Timestamp:
+		return parseDateTime(value.Raw())
+	case tt == sqltypes.Time:
+		return parseTime(value.Raw())
 	case sqltypes.IsNull(tt):
 		return nil, nil
 	case tt == sqltypes.TypeJSON:

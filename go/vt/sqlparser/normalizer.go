@@ -163,15 +163,15 @@ func validateLiteral(node *Literal) error {
 	switch node.Type {
 	case DateVal:
 		if _, ok := datetime.ParseDate(node.Val); !ok {
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid DATE literal: %s", node.Val)
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Incorrect DATE value: '%s'", node.Val)
 		}
 	case TimeVal:
 		if _, ok := datetime.ParseTime(node.Val); !ok {
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid TIME literal: %s", node.Val)
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Incorrect TIME value: '%s'", node.Val)
 		}
 	case TimestampVal:
 		if _, ok := datetime.ParseDateTime(node.Val); !ok {
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid TIMESTAMP literal: %s", node.Val)
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Incorrect DATETIME value: '%s'", node.Val)
 		}
 	}
 	return nil

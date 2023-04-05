@@ -165,10 +165,10 @@ func (e *evalBytes) truncateInPlace(size int) {
 
 func (e *evalBytes) toDatetime() (*evalTime, error) {
 	if t, ok := datetime.ParseDateTime(e.string()); ok {
-		return newEvalDateTime(sqltypes.Datetime, t), nil
+		return newEvalDateTime(t), nil
 	}
 	if t, ok := datetime.ParseDate(e.string()); ok {
-		return newEvalDateTime(sqltypes.Date, t), nil
+		return newEvalDate(t), nil
 	}
 	if t, ok := datetime.ParseTime(e.string()); ok {
 		return newEvalTime(t), nil

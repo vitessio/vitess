@@ -3,6 +3,7 @@ package evalengine
 import (
 	"time"
 
+	"vitess.io/vitess/go/hack"
 	"vitess.io/vitess/go/mysql/datetime"
 	"vitess.io/vitess/go/mysql/json"
 	"vitess.io/vitess/go/sqltypes"
@@ -64,17 +65,40 @@ func (e *evalTime) toJSON() *evalJSON {
 	}
 }
 
-func newEvalDateTime(t sqltypes.Type, time time.Time) *evalTime {
-	switch t {
-	case sqltypes.Date, sqltypes.Datetime, sqltypes.Timestamp:
-		return &evalTime{t: t, time: datetime.SQLTime{Time: time}}
-	default:
-		panic("bad type for newEvalTime")
-	}
+func newEvalDateTime(time time.Time) *evalTime {
+	return &evalTime{t: sqltypes.Datetime, time: datetime.SQLTime{Time: time}}
+}
+
+func newEvalDate(time time.Time) *evalTime {
+	return &evalTime{t: sqltypes.Date, time: datetime.SQLTime{Time: time}}
 }
 
 func newEvalTime(time datetime.SQLTime) *evalTime {
 	return &evalTime{t: sqltypes.Time, time: time}
+}
+
+func parseDate(s []byte) (*evalTime, error) {
+	t, ok := datetime.ParseDate(hack.String(s))
+	if !ok {
+		return nil, errIncorrectTime("DATE", s)
+	}
+	return newEvalDate(t), nil
+}
+
+func parseDateTime(s []byte) (*evalTime, error) {
+	t, ok := datetime.ParseDateTime(hack.String(s))
+	if !ok {
+		return nil, errIncorrectTime("DATETIME", s)
+	}
+	return newEvalDateTime(t), nil
+}
+
+func parseTime(s []byte) (*evalTime, error) {
+	t, ok := datetime.ParseTime(hack.String(s))
+	if !ok {
+		return nil, errIncorrectTime("TIME", s)
+	}
+	return newEvalTime(t), nil
 }
 
 func evalToDate(e eval) (*evalTime, error) {
