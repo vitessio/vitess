@@ -160,8 +160,8 @@ func evalIsTruthy(e eval) boolean {
 		default:
 			return makeboolean(true)
 		}
-	case *evalTime:
-		return makeboolean(!e.time.Time.IsZero())
+	case *evalTemporal:
+		return makeboolean(!e.isZero())
 	default:
 		panic("unhandled case: evalIsTruthy")
 	}

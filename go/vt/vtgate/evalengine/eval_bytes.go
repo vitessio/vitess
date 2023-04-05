@@ -163,15 +163,12 @@ func (e *evalBytes) truncateInPlace(size int) {
 	}
 }
 
-func (e *evalBytes) toDatetime() (*evalTime, error) {
+func (e *evalBytes) toTemporal() (*evalTemporal, error) {
 	if t, ok := datetime.ParseDateTime(e.string()); ok {
 		return newEvalDateTime(t), nil
 	}
 	if t, ok := datetime.ParseDate(e.string()); ok {
 		return newEvalDate(t), nil
-	}
-	if t, ok := datetime.ParseTime(e.string()); ok {
-		return newEvalTime(t), nil
 	}
 	return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "type %v is not date-like", e.SQLType())
 }

@@ -839,7 +839,7 @@ func (v *Value) Time() (time.Time, bool) {
 		return time.Time{}, false
 	}
 	t, ok := datetime.ParseTime(v.s)
-	return t.Time, ok
+	return t.ToStdTime(), ok
 }
 
 // Object returns the underlying JSON object for the v.

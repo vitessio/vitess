@@ -26,8 +26,6 @@ import (
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/decimal"
 	"vitess.io/vitess/go/sqltypes"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vterrors"
 )
 
 // NullExpr is just what you are lead to believe
@@ -128,39 +126,6 @@ func NewLiteralDatetimeFromBytes(val []byte) (*Literal, error) {
 		return nil, err
 	}
 	return &Literal{t}, nil
-}
-
-func sanitizeErrorValue(s []byte) []byte {
-	b := make([]byte, 0, len(s)+1)
-	invalid := false // previous byte was from an invalid UTF-8 sequence
-	for i := 0; i < len(s); {
-		c := s[i]
-		if c < utf8.RuneSelf {
-			i++
-			invalid = false
-			if c != 0 {
-				b = append(b, c)
-			}
-			continue
-		}
-		_, wid := utf8.DecodeRune(s[i:])
-		if wid == 1 {
-			i++
-			if !invalid {
-				invalid = true
-				b = append(b, '?')
-			}
-			continue
-		}
-		invalid = false
-		b = append(b, s[i:i+wid]...)
-		i += wid
-	}
-	return b
-}
-
-func errIncorrectTime(date string, in []byte) error {
-	return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongValue, "Incorrect %s value: '%s'", date, sanitizeErrorValue(in))
 }
 
 func parseHexLiteral(val []byte) ([]byte, error) {

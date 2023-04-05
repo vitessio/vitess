@@ -120,18 +120,18 @@ func compareNumeric(left, right eval) (int, error) {
 // Date comparison based on:
 //   - https://dev.mysql.com/doc/refman/8.0/en/type-conversion.html
 //   - https://dev.mysql.com/doc/refman/8.0/en/date-and-time-type-conversion.html
-func compareDates(l, r *evalTime) (int, error) {
-	return compareGoTimes(l.time.Time, r.time.Time)
+func compareDates(l, r *evalTemporal) (int, error) {
+	return compareGoTimes(l.toStdTime(), r.toStdTime())
 }
 
 func compareDateAndString(l, r eval) (int, error) {
 	var t1, t2 time.Time
-	if tt, ok := l.(*evalTime); ok {
-		t1 = tt.time.Time
+	if tt, ok := l.(*evalTemporal); ok {
+		t1 = tt.toStdTime()
 		t2 = r.(*evalBytes).toDateBestEffort()
-	} else if tt, ok := r.(*evalTime); ok {
+	} else if tt, ok := r.(*evalTemporal); ok {
 		t1 = l.(*evalBytes).toDateBestEffort()
-		t2 = tt.time.Time
+		t2 = tt.toStdTime()
 	}
 	return compareGoTimes(t1, t2)
 }

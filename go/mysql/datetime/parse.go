@@ -135,44 +135,65 @@ func parsetimeNoDelimiters(tp *timeparts, in string) (out string, ok bool) {
 	return in, ok
 }
 
-type SQLTime struct {
-	Time  time.Time
-	Parts struct {
-		Hours int
-		Mins  int
-		Secs  int
-		Nsec  int
-	}
+type Time struct {
+	Hours int16
+	Mins  int8
+	Secs  int8
+	Nsec  int32
 }
 
-func (t *SQLTime) AppendFormat(b []byte, prec uint8) []byte {
-	h := t.Parts.Hours
+func (t *Time) AppendFormat(b []byte, prec uint8) []byte {
+	h := t.Hours
 	if h < 0 {
 		h = -h
 		b = append(b, '-')
 	}
-	b = appendInt(b, h, 2)
+	b = appendInt(b, int(h), 2)
 	b = append(b, ':')
-	b = appendInt(b, t.Parts.Mins, 2)
+	b = appendInt(b, int(t.Mins), 2)
 	b = append(b, ':')
-	b = appendInt(b, t.Parts.Secs, 2)
-	if prec > 0 && t.Parts.Nsec != 0 {
+	b = appendInt(b, int(t.Secs), 2)
+	if prec > 0 && t.Nsec != 0 {
 		b = append(b, '.')
-		b = appendNsec(b, t.Parts.Nsec, int(prec))
+		b = appendNsec(b, int(t.Nsec), int(prec))
 	}
 	return b
 }
 
-func (t *SQLTime) FormatInt64() (n int64) {
-	if t.Parts.Hours < 0 {
-		return -(int64(-t.Parts.Hours)*10000 + int64(t.Parts.Mins)*100 + int64(t.Parts.Secs))
+func (t *Time) FormatInt64() (n int64) {
+	if t.Hours < 0 {
+		return -(int64(-t.Hours)*10000 + int64(t.Mins)*100 + int64(t.Secs))
 	}
-	return int64(t.Parts.Hours)*10000 + int64(t.Parts.Mins)*100 + int64(t.Parts.Secs)
+	return int64(t.Hours)*10000 + int64(t.Mins)*100 + int64(t.Secs)
 }
 
-func ParseTime(in string) (t SQLTime, ok bool) {
+func (t *Time) ToStdTime() (out time.Time) {
+	year, month, day := time.Now().Date()
+	hour, min, sec, nsec := t.Hours, t.Mins, t.Secs, t.Nsec
+	if hour < 0 {
+		duration := time.Duration(-hour)*time.Hour +
+			time.Duration(min)*time.Minute +
+			time.Duration(sec)*time.Second +
+			time.Duration(nsec)*time.Nanosecond
+
+		// If we have a negative time, we start with the start of today
+		// and substract the total duration of the parsed time.
+		out = time.Date(year, month, day, 0, 0, 0, 0, time.UTC)
+		out = out.Add(-duration)
+	} else {
+		out = time.Date(0, 1, 1, int(hour), int(min), int(sec), int(nsec), time.UTC)
+		out = out.AddDate(year, int(month-1), day-1)
+	}
+	return
+}
+
+func (t *Time) IsZero() bool {
+	return t.Hours == 0 && t.Mins == 0 && t.Secs == 0 && t.Nsec == 0
+}
+
+func ParseTime(in string) (t Time, ok bool) {
 	if len(in) == 0 {
-		return SQLTime{}, false
+		return Time{}, false
 	}
 	var neg bool
 	if in[0] == '-' {
@@ -183,33 +204,20 @@ func ParseTime(in string) (t SQLTime, ok bool) {
 	var tp timeparts
 	in, ok = parsetimeAny(&tp, in)
 	if !ok || len(in) > 0 {
-		return SQLTime{}, false
+		return Time{}, false
 	}
 
-	year, month, day := time.Now().Date()
-
-	t.Parts.Hours = 24*tp.day + tp.hour
-	t.Parts.Mins = tp.min
-	t.Parts.Secs = tp.sec
-	t.Parts.Nsec = tp.nsec
-
+	hours := int16(24*tp.day + tp.hour)
 	if neg {
-		duration := time.Duration(tp.day)*24*time.Hour +
-			time.Duration(tp.hour)*time.Hour +
-			time.Duration(tp.min)*time.Minute +
-			time.Duration(tp.sec)*time.Second +
-			time.Duration(tp.nsec)*time.Nanosecond
-
-		// If we have a negative time, we start with the start of today
-		// and substract the total duration of the parsed time.
-		t.Time = time.Date(year, month, day, 0, 0, 0, 0, time.UTC)
-		t.Time = t.Time.Add(-duration)
-		t.Parts.Hours = -t.Parts.Hours
-	} else {
-		t.Time = time.Date(0, 1, 1, tp.hour, tp.min, tp.sec, tp.nsec, time.UTC)
-		t.Time = t.Time.AddDate(year, int(month-1), day-1+tp.day)
+		hours = -hours
 	}
-	return t, true
+
+	return Time{
+		Hours: hours,
+		Mins:  int8(tp.min),
+		Secs:  int8(tp.sec),
+		Nsec:  int32(tp.nsec),
+	}, true
 }
 
 func ParseDate(s string) (time.Time, bool) {

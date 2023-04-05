@@ -138,7 +138,7 @@ func evalToNumeric(e eval) evalNumeric {
 		default:
 			return &evalFloat{f: 0}
 		}
-	case *evalTime:
+	case *evalTemporal:
 		return newEvalInt64(e.toInt64())
 	default:
 		panic("unsupported")
@@ -197,7 +197,7 @@ func evalToInt64(e eval) *evalInt64 {
 		default:
 			return newEvalInt64(0)
 		}
-	case *evalTime:
+	case *evalTemporal:
 		return newEvalInt64(e.toInt64())
 	default:
 		panic(fmt.Sprintf("unsupported type: %T", e))

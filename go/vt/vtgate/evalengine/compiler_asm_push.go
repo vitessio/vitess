@@ -22,6 +22,7 @@ import (
 	"vitess.io/vitess/go/mysql/decimal"
 	"vitess.io/vitess/go/mysql/json"
 	"vitess.io/vitess/go/mysql/json/fastparse"
+	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -317,12 +318,27 @@ func (asm *assembler) PushLiteral(lit eval) error {
 			env.vm.sp++
 			return 1
 		}, "PUSH VARCHAR(%q)", lit.ToRawBytes())
-	case *evalTime:
-		asm.emit(func(env *ExpressionEnv) int {
-			env.vm.stack[env.vm.sp] = env.vm.arena.newEvalTime(lit.t, lit.time)
-			env.vm.sp++
-			return 1
-		}, "PUSH SQLTIME(%q)", lit.ToRawBytes())
+	case *evalTemporal:
+		switch lit.SQLType() {
+		case sqltypes.Time:
+			asm.emit(func(env *ExpressionEnv) int {
+				env.vm.stack[env.vm.sp] = env.vm.arena.newEvalTime(lit.sql)
+				env.vm.sp++
+				return 1
+			}, "PUSH TIME(%q)", lit.ToRawBytes())
+		case sqltypes.Datetime:
+			asm.emit(func(env *ExpressionEnv) int {
+				env.vm.stack[env.vm.sp] = env.vm.arena.newEvalDateTime(lit.std)
+				env.vm.sp++
+				return 1
+			}, "PUSH DATETIME(%q)", lit.ToRawBytes())
+		case sqltypes.Date:
+			asm.emit(func(env *ExpressionEnv) int {
+				env.vm.stack[env.vm.sp] = env.vm.arena.newEvalDate(lit.std)
+				env.vm.sp++
+				return 1
+			}, "PUSH DATE(%q)", lit.ToRawBytes())
+		}
 	default:
 		return vterrors.Errorf(vtrpc.Code_UNIMPLEMENTED, "unsupported literal kind '%T'", lit)
 	}

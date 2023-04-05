@@ -120,7 +120,7 @@ func evalToJSON(e eval) (*evalJSON, error) {
 			return evalConvert_bj(e), nil
 		}
 		return evalConvert_cj(e)
-	case *evalTime:
+	case *evalTemporal:
 		return e.toJSON(), nil
 	default:
 		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "Unsupported type conversion: %s AS JSON", e.SQLType())
@@ -142,7 +142,7 @@ func argToJSON(e eval) (*evalJSON, error) {
 			return evalConvert_bj(e), nil
 		}
 		return evalConvertArg_cj(e)
-	case *evalTime:
+	case *evalTemporal:
 		return e.toJSON(), nil
 	default:
 		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "Unsupported type conversion: %s AS JSON", e.SQLType())

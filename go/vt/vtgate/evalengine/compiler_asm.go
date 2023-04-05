@@ -749,8 +749,8 @@ func (asm *assembler) CmpDates() {
 	asm.adjustStack(-2)
 
 	asm.emit(func(env *ExpressionEnv) int {
-		l := env.vm.stack[env.vm.sp-2].(*evalTime)
-		r := env.vm.stack[env.vm.sp-1].(*evalTime)
+		l := env.vm.stack[env.vm.sp-2].(*evalTemporal)
+		r := env.vm.stack[env.vm.sp-1].(*evalTemporal)
 		env.vm.sp -= 2
 		env.vm.flags.cmp, env.vm.err = compareDates(l, r)
 		return 1
@@ -777,7 +777,7 @@ func (asm *assembler) Convert_bB(offset int) {
 func (asm *assembler) Convert_TB(offset int) {
 	asm.emit(func(env *ExpressionEnv) int {
 		arg := env.vm.stack[env.vm.sp-offset]
-		env.vm.stack[env.vm.sp-offset] = env.vm.arena.newEvalBool(arg != nil && !arg.(*evalTime).time.Time.IsZero())
+		env.vm.stack[env.vm.sp-offset] = env.vm.arena.newEvalBool(arg != nil && !arg.(*evalTemporal).isZero())
 		return 1
 	}, "CONV SQLTYPES(SP-%d), BOOL", offset)
 }
@@ -834,7 +834,7 @@ func (asm *assembler) Convert_cj(offset int) {
 
 func (asm *assembler) Convert_Tj(offset int) {
 	asm.emit(func(env *ExpressionEnv) int {
-		arg := env.vm.stack[env.vm.sp-offset].(*evalTime)
+		arg := env.vm.stack[env.vm.sp-offset].(*evalTemporal)
 		env.vm.stack[env.vm.sp-offset] = arg.toJSON()
 		return 1
 	}, "CONV SQLTIME(SP-%d), JSON", offset)
@@ -889,7 +889,7 @@ func (asm *assembler) Convert_hex(offset int) {
 
 func (asm *assembler) Convert_Ti(offset int) {
 	asm.emit(func(env *ExpressionEnv) int {
-		v := env.vm.stack[env.vm.sp-offset].(*evalTime)
+		v := env.vm.stack[env.vm.sp-offset].(*evalTemporal)
 		env.vm.stack[env.vm.sp-offset] = env.vm.arena.newEvalInt64(v.toInt64())
 		return 1
 	}, "CONV SQLTIME(SP-%d), INT64", offset)

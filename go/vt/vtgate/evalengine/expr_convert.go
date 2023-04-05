@@ -119,7 +119,25 @@ func (c *ConvertExpr) eval(env *ExpressionEnv) (eval, error) {
 		return evalToInt64(e).toUint64(), nil
 	case "JSON":
 		return evalToJSON(e)
-	case "DATE", "DATETIME", "YEAR", "TIME":
+	case "DATETIME":
+		tmp, err := evalToTemporal(e)
+		if err != nil {
+			return nil, nil
+		}
+		return tmp.toDateTime(), nil
+	case "DATE":
+		tmp, err := evalToTemporal(e)
+		if err != nil {
+			return nil, nil
+		}
+		return tmp.toDate(), nil
+	case "TIME":
+		tmp, err := evalToTemporal(e)
+		if err != nil {
+			return nil, nil
+		}
+		return tmp.toTime(), nil
+	case "YEAR":
 		return nil, c.returnUnsupportedError()
 	default:
 		panic("BUG: sqlparser emitted unknown type")

@@ -17,6 +17,8 @@ limitations under the License.
 package evalengine
 
 import (
+	"time"
+
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/datetime"
 	"vitess.io/vitess/go/mysql/decimal"
@@ -127,7 +129,17 @@ func (a *Arena) newEvalText(raw []byte, tc collations.TypedCollation) *evalBytes
 	return b
 }
 
-func (a *Arena) newEvalTime(t sqltypes.Type, time datetime.SQLTime) *evalTime {
-	// TODO: reuse evalTime
-	return &evalTime{t: t, time: time}
+func (a *Arena) newEvalTime(time datetime.Time) *evalTemporal {
+	// TODO: reuse evalTemporal
+	return &evalTemporal{t: sqltypes.Time, sql: time}
+}
+
+func (a *Arena) newEvalDateTime(time time.Time) *evalTemporal {
+	// TODO: reuse evalTemporal
+	return &evalTemporal{t: sqltypes.Datetime, std: time}
+}
+
+func (a *Arena) newEvalDate(time time.Time) *evalTemporal {
+	// TODO: reuse evalTemporal
+	return &evalTemporal{t: sqltypes.Date, std: time}
 }
