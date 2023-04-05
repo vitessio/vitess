@@ -83,6 +83,9 @@ const (
 	// server not available
 	ServerNotAvailable
 
+	// unknown timezone
+	UnknownTimeZone
+
 	// No state should be added below NumOfStates
 	NumOfStates
 )
