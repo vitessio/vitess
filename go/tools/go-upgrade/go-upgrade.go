@@ -45,7 +45,7 @@ type (
 	}
 
 	bootstrapVersion struct {
-		major, minor int
+		major, minor int // when minor == -1, it means there are no minor version
 	}
 )
 
@@ -279,9 +279,13 @@ func currentBootstrapVersion() (bootstrapVersion, error) {
 	if err != nil {
 		return bootstrapVersion{}, err
 	}
-	minor, err := strconv.Atoi(vs[1])
-	if err != nil {
-		return bootstrapVersion{}, err
+
+	minor := -1
+	if len(vs) > 1 {
+		minor, err = strconv.Atoi(vs[1])
+		if err != nil {
+			return bootstrapVersion{}, err
+		}
 	}
 
 	return bootstrapVersion{
@@ -524,5 +528,8 @@ func replaceInFile(oldexps []*regexp.Regexp, new []string, fileToChange string) 
 }
 
 func (b bootstrapVersion) toString() string {
+	if b.minor == -1 {
+		return fmt.Sprintf("%d", b.major)
+	}
 	return fmt.Sprintf("%d.%d", b.major, b.minor)
 }
