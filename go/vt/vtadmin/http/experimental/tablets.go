@@ -42,7 +42,7 @@ func TabletDebugVarsPassthrough(ctx context.Context, r vtadminhttp.Request, api 
 
 	tablet, err := api.Server().GetTablet(ctx, &vtadminpb.GetTabletRequest{
 		Alias:      alias,
-		ClusterIds: r.URL.Query()["cluster"],
+		ClusterIds: r.URL.Query()["cluster_id"],
 	})
 
 	if err != nil {
