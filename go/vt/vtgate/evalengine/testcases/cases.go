@@ -96,6 +96,10 @@ var Cases = []TestCase{
 	{Run: FnTruncate},
 	{Run: FnCrc32},
 	{Run: FnConv},
+	{Run: FnMD5},
+	{Run: FnSHA1},
+	{Run: FnSHA2},
+	{Run: FnRandomBytes},
 }
 
 func JSONPathOperations(yield Query) {
@@ -593,6 +597,66 @@ func FnConv(yield Query) {
 				yield(fmt.Sprintf("CONV(%s, %s, %s)", num1, num2, num3), nil)
 			}
 		}
+	}
+}
+
+func FnMD5(yield Query) {
+	for _, num := range radianInputs {
+		yield(fmt.Sprintf("MD5(%s)", num), nil)
+	}
+
+	for _, num := range inputBitwise {
+		yield(fmt.Sprintf("MD5(%s)", num), nil)
+	}
+
+	for _, num := range inputConversions {
+		yield(fmt.Sprintf("MD5(%s)", num), nil)
+	}
+}
+
+func FnSHA1(yield Query) {
+	for _, num := range radianInputs {
+		yield(fmt.Sprintf("SHA1(%s)", num), nil)
+		yield(fmt.Sprintf("SHA(%s)", num), nil)
+	}
+
+	for _, num := range inputBitwise {
+		yield(fmt.Sprintf("SHA1(%s)", num), nil)
+		yield(fmt.Sprintf("SHA(%s)", num), nil)
+	}
+
+	for _, num := range inputConversions {
+		yield(fmt.Sprintf("SHA1(%s)", num), nil)
+		yield(fmt.Sprintf("SHA(%s)", num), nil)
+	}
+}
+
+func FnSHA2(yield Query) {
+	bitLengths := []string{"0", "224", "256", "384", "512", "1", "0.1", "256.1e0", "1-1", "128+128"}
+	for _, bits := range bitLengths {
+		for _, num := range radianInputs {
+			yield(fmt.Sprintf("SHA2(%s, %s)", num, bits), nil)
+		}
+
+		for _, num := range inputBitwise {
+			yield(fmt.Sprintf("SHA2(%s, %s)", num, bits), nil)
+		}
+
+		for _, num := range inputConversions {
+			yield(fmt.Sprintf("SHA2(%s, %s)", num, bits), nil)
+		}
+	}
+}
+
+func FnRandomBytes(yield Query) {
+	for _, num := range radianInputs {
+		yield(fmt.Sprintf("LENGTH(RANDOM_BYTES(%s))", num), nil)
+		yield(fmt.Sprintf("COLLATION(RANDOM_BYTES(%s))", num), nil)
+	}
+
+	for _, num := range inputBitwise {
+		yield(fmt.Sprintf("LENGTH(RANDOM_BYTES(%s))", num), nil)
+		yield(fmt.Sprintf("COLLATION(RANDOM_BYTES(%s))", num), nil)
 	}
 }
 

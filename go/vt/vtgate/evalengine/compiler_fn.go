@@ -132,6 +132,14 @@ func (c *compiler) compileFn(call callable) (ctype, error) {
 		return c.compileFn_Database(call)
 	case *builtinVersion:
 		return c.compileFn_Version(call)
+	case *builtinMD5:
+		return c.compileFn_MD5(call)
+	case *builtinSHA1:
+		return c.compileFn_SHA1(call)
+	case *builtinSHA2:
+		return c.compileFn_SHA2(call)
+	case *builtinRandomBytes:
+		return c.compileFn_RandomBytes(call)
 	default:
 		return ctype{}, c.unsupported(call)
 	}
@@ -828,4 +836,114 @@ func (c *compiler) compileFn_Database(_ *builtinDatabase) (ctype, error) {
 func (c *compiler) compileFn_Version(_ *builtinVersion) (ctype, error) {
 	c.asm.Fn_Version()
 	return ctype{Type: sqltypes.Datetime, Col: collationUtf8mb3}, nil
+}
+
+func (c *compiler) compileFn_MD5(call *builtinMD5) (ctype, error) {
+	str, err := c.compileExpr(call.Arguments[0])
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip := c.compileNullCheck1(str)
+
+	col := collations.TypedCollation{
+		Collation:    c.cfg.Collation,
+		Coercibility: collations.CoerceCoercible,
+		Repertoire:   collations.RepertoireASCII,
+	}
+
+	switch {
+	case str.isTextual():
+	default:
+		c.asm.Convert_xb(1, sqltypes.Binary, 0, false)
+	}
+	c.asm.Fn_MD5(col)
+	c.asm.jumpDestination(skip)
+	return ctype{Type: sqltypes.VarChar, Col: col, Flag: str.Flag}, nil
+}
+
+func (c *compiler) compileFn_SHA1(call *builtinSHA1) (ctype, error) {
+	str, err := c.compileExpr(call.Arguments[0])
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip := c.compileNullCheck1(str)
+
+	col := collations.TypedCollation{
+		Collation:    c.cfg.Collation,
+		Coercibility: collations.CoerceCoercible,
+		Repertoire:   collations.RepertoireASCII,
+	}
+
+	switch {
+	case str.isTextual():
+	default:
+		c.asm.Convert_xb(1, sqltypes.Binary, 0, false)
+	}
+	c.asm.Fn_SHA1(col)
+	c.asm.jumpDestination(skip)
+	return ctype{Type: sqltypes.VarChar, Col: col, Flag: str.Flag}, nil
+}
+
+func (c *compiler) compileFn_SHA2(call *builtinSHA2) (ctype, error) {
+	str, err := c.compileExpr(call.Arguments[0])
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip1 := c.compileNullCheck1(str)
+
+	bits, err := c.compileExpr(call.Arguments[1])
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip2 := c.compileNullCheck1r(bits)
+
+	col := collations.TypedCollation{
+		Collation:    c.cfg.Collation,
+		Coercibility: collations.CoerceCoercible,
+		Repertoire:   collations.RepertoireASCII,
+	}
+
+	switch {
+	case str.isTextual():
+	default:
+		c.asm.Convert_xb(2, sqltypes.Binary, 0, false)
+	}
+
+	switch bits.Type {
+	case sqltypes.Int64:
+		// No-op, already correct type
+	case sqltypes.Uint64:
+		c.asm.Convert_ui(1)
+	default:
+		c.asm.Convert_xi(1)
+	}
+	c.asm.Fn_SHA2(col)
+	c.asm.jumpDestination(skip1, skip2)
+	return ctype{Type: sqltypes.VarChar, Col: col, Flag: str.Flag | flagNullable}, nil
+}
+
+func (c *compiler) compileFn_RandomBytes(call *builtinRandomBytes) (ctype, error) {
+	arg, err := c.compileExpr(call.Arguments[0])
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip := c.compileNullCheck1(arg)
+
+	switch arg.Type {
+	case sqltypes.Int64:
+		// No-op, already correct type
+	case sqltypes.Uint64:
+		c.asm.Convert_ui(1)
+	default:
+		c.asm.Convert_xi(1)
+	}
+
+	c.asm.Fn_RandomBytes()
+	c.asm.jumpDestination(skip)
+	return ctype{Type: sqltypes.VarBinary, Col: collationBinary, Flag: arg.Flag | flagNullable}, nil
 }
