@@ -2265,7 +2265,7 @@ func (ty GeomFormatType) ToString() string {
 	case TextFormat:
 		return TextFormatStr
 	default:
-		return "Unknown GeomFromWktType"
+		return "Unknown GeomFormatType"
 	}
 }
 
