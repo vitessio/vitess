@@ -454,6 +454,7 @@ func (kew *KeyspaceEventWatcher) TargetIsBeingResharded(target *query.Target) bo
 // The shard state keeps track of the current primary and the last externally reparented time, which we can use
 // to determine that there was a serving primary which now became non serving. This is only possible in a DemotePrimary
 // RPC which are only called from ERS and PRS. So buffering will stop when these operations succeed.
+// We return the tablet alias of the primary if it is serving.
 func (kew *KeyspaceEventWatcher) PrimaryIsNotServing(target *query.Target) (*topodatapb.TabletAlias, bool) {
 	if target.TabletType != topodatapb.TabletType_PRIMARY {
 		return nil, false
