@@ -121,7 +121,7 @@ func TestVDiff2(t *testing.T) {
 	vtgate = defaultCell.Vtgates[0]
 	require.NotNil(t, vtgate)
 	for _, shard := range sourceShards {
-		require.NoError(t, vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", sourceKs, shard), 1))
+		require.NoError(t, vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", sourceKs, shard), 1, 30*time.Second))
 	}
 
 	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
@@ -139,7 +139,7 @@ func TestVDiff2(t *testing.T) {
 	_, err := vc.AddKeyspace(t, cells, targetKs, strings.Join(targetShards, ","), customerVSchema, customerSchema, 0, 0, 200, targetKsOpts)
 	require.NoError(t, err)
 	for _, shard := range targetShards {
-		require.NoError(t, vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", targetKs, shard), 1))
+		require.NoError(t, vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", targetKs, shard), 1, 30*time.Second))
 	}
 
 	for _, tc := range testCases {
@@ -155,7 +155,7 @@ func testWorkflow(t *testing.T, vc *VitessCluster, tc *testCase, cells []*Cell) 
 		tks := vc.Cells[cells[0].Name].Keyspaces[tc.targetKs]
 		require.NoError(t, vc.AddShards(t, cells, tks, tc.targetShards, 0, 0, tc.tabletBaseID, targetKsOpts))
 		for _, shard := range arrTargetShards {
-			require.NoError(t, vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", tc.targetKs, shard), 1))
+			require.NoError(t, vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", tc.targetKs, shard), 1, 30*time.Second))
 		}
 	}
 	ksWorkflow := fmt.Sprintf("%s.%s", tc.targetKs, tc.workflow)

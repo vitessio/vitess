@@ -139,8 +139,8 @@ func TestVreplicationCopyThrottling(t *testing.T) {
 	}
 	vtgate = defaultCell.Vtgates[0]
 	require.NotNil(t, vtgate)
-	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", sourceKs, shard), 1)
-	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", targetKs, shard), 1)
+	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", sourceKs, shard), 1, 30*time.Second)
+	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", targetKs, shard), 1, 30*time.Second)
 
 	// Confirm that the initial copy table phase does not proceed until the source tablet(s)
 	// have an InnoDB History List length that is less than specified in the tablet's config.
@@ -183,7 +183,7 @@ func testBasicVreplicationWorkflow(t *testing.T) {
 	vc.AddKeyspace(t, []*Cell{defaultCell}, "product", "0", initialProductVSchema, initialProductSchema, defaultReplicas, defaultRdonly, 100, sourceKsOpts)
 	vtgate = defaultCell.Vtgates[0]
 	require.NotNil(t, vtgate)
-	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", "product", "0"), 1)
+	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", "product", "0"), 1, 30*time.Second)
 
 	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 	defer vtgateConn.Close()
@@ -240,8 +240,8 @@ func TestMultiCellVreplicationWorkflow(t *testing.T) {
 
 	vtgate = cell1.Vtgates[0]
 	require.NotNil(t, vtgate)
-	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", "product", "0"), 1)
-	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", "product", "0"), 2)
+	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", "product", "0"), 1, 30*time.Second)
+	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", "product", "0"), 2, 30*time.Second)
 
 	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 	defer vtgateConn.Close()
@@ -276,8 +276,8 @@ func TestVStreamFlushBinlog(t *testing.T) {
 	}
 	vtgate = defaultCell.Vtgates[0]
 	require.NotNil(t, vtgate)
-	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", sourceKs, shard), 1)
-	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", targetKs, shard), 1)
+	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", sourceKs, shard), 1, 30*time.Second)
+	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", targetKs, shard), 1, 30*time.Second)
 	verifyClusterHealth(t, vc)
 
 	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
@@ -435,8 +435,8 @@ func TestCellAliasVreplicationWorkflow(t *testing.T) {
 
 	vtgate = cell1.Vtgates[0]
 	require.NotNil(t, vtgate)
-	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", "product", "0"), 1)
-	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", "product", "0"), 2)
+	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", "product", "0"), 1, 30*time.Second)
+	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", "product", "0"), 2, 30*time.Second)
 
 	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 	defer vtgateConn.Close()
@@ -569,10 +569,10 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 		if _, err := vc.AddKeyspace(t, cells, "customer", "-80,80-", customerVSchema, customerSchema, defaultReplicas, defaultRdonly, 200, targetKsOpts); err != nil {
 			t.Fatal(err)
 		}
-		if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", "customer", "-80"), 1); err != nil {
+		if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", "customer", "-80"), 1, 30*time.Second); err != nil {
 			t.Fatal(err)
 		}
-		if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", "customer", "80-"), 1); err != nil {
+		if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", "customer", "80-"), 1, 30*time.Second); err != nil {
 			t.Fatal(err)
 		}
 
@@ -839,7 +839,7 @@ func reshard(t *testing.T, ksName string, tableName string, workflow string, sou
 		arrTargetShardNames := strings.Split(targetShards, ",")
 
 		for _, shardName := range arrTargetShardNames {
-			if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", ksName, shardName), 1); err != nil {
+			if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", ksName, shardName), 1, 30*time.Second); err != nil {
 				t.Fatal(err)
 			}
 		}
@@ -925,10 +925,10 @@ func shardMerchant(t *testing.T) {
 		if _, err := vc.AddKeyspace(t, []*Cell{defaultCell}, merchantKeyspace, "-80,80-", merchantVSchema, "", defaultReplicas, defaultRdonly, 400, targetKsOpts); err != nil {
 			t.Fatal(err)
 		}
-		if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", merchantKeyspace, "-80"), 1); err != nil {
+		if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", merchantKeyspace, "-80"), 1, 30*time.Second); err != nil {
 			t.Fatal(err)
 		}
-		if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", merchantKeyspace, "80-"), 1); err != nil {
+		if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", merchantKeyspace, "80-"), 1, 30*time.Second); err != nil {
 			t.Fatal(err)
 		}
 		moveTables(t, cell, workflow, sourceKs, targetKs, tables)

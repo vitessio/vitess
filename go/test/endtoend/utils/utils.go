@@ -222,3 +222,19 @@ func convertToMap(input interface{}) map[string]interface{} {
 	output := input.(map[string]interface{})
 	return output
 }
+
+// TimeoutAction performs the action within the given timeout limit.
+// If the timeout is reached, the test is failed with errMsg.
+// If action returns false, the timeout loop continues, if it returns true, the function succeeds.
+func TimeoutAction(t *testing.T, timeout time.Duration, errMsg string, action func() bool) {
+	deadline := time.After(timeout)
+	ok := false
+	for !ok {
+		select {
+		case <-deadline:
+			t.Error(errMsg)
+		case <-time.After(1 * time.Second):
+			ok = action()
+		}
+	}
+}

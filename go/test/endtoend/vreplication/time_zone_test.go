@@ -51,7 +51,7 @@ func TestMoveTablesTZ(t *testing.T) {
 
 	vtgate = cell1.Vtgates[0]
 	require.NotNil(t, vtgate)
-	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", "product", "0"), 1)
+	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", "product", "0"), 1, 30*time.Second)
 
 	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 	defer vtgateConn.Close()
@@ -87,7 +87,7 @@ func TestMoveTablesTZ(t *testing.T) {
 	if _, err := vc.AddKeyspace(t, cells, targetKs, "0", customerVSchema, customerSchema, defaultReplicas, defaultRdonly, 200, targetKsOpts); err != nil {
 		t.Fatal(err)
 	}
-	if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", "customer", "0"), 1); err != nil {
+	if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", "customer", "0"), 1, 30*time.Second); err != nil {
 		t.Fatal(err)
 	}
 

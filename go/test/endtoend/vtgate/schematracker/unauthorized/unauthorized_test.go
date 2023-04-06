@@ -102,9 +102,11 @@ func TestSchemaTrackingError(t *testing.T) {
 		case <-timeout:
 			t.Error("timeout waiting for schema tracking error")
 		case <-time.After(1 * time.Second):
-			// check info logs
+			// check info logs, continue if the file could not be read correctly.
 			all, err := os.ReadFile(path.Join(logDir, "vtgate.WARNING"))
-			require.NoError(t, err)
+			if err != nil {
+				continue
+			}
 			if strings.Contains(string(all), "Table ACL might be enabled, --schema_change_signal_user needs to be passed to VTGate for schema tracking to work. Check 'schema tracking' docs on vitess.io") {
 				present = true
 			}

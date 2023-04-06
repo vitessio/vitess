@@ -63,7 +63,7 @@ create table customer(cid int, name varbinary(128), meta json default null, typ 
 	vtgate = defaultCell.Vtgates[0]
 	require.NotNil(t, vtgate)
 
-	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", "product", "0"), 1)
+	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", "product", "0"), 1, 30*time.Second)
 
 	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 	defer vtgateConn.Close()
