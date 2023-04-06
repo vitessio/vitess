@@ -425,9 +425,5 @@ func GetWorkloadNameFromStatement(statement Statement) string {
 		return ""
 	}
 
-	if directives.IsSet(DirectiveWorkloadName) {
-		return directives.GetString(DirectiveWorkloadName, "")
-	}
-
-	return ""
+	return directives.GetString(DirectiveWorkloadName, "")
 }
