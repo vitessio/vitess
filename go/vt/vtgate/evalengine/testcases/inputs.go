@@ -20,7 +20,7 @@ import (
 	"math"
 	"strconv"
 
-	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/format"
 	"vitess.io/vitess/go/sqltypes"
 )
 
@@ -71,10 +71,10 @@ var radianInputs = []string{
 	"-1.5e0",
 	"9223372036854775810.4",
 	"-9223372036854775810.4",
-	string(mysql.FormatFloat(sqltypes.Float64, math.Pi)),
-	string(mysql.FormatFloat(sqltypes.Float64, math.MaxFloat64)),
-	string(mysql.FormatFloat(sqltypes.Float64, math.SmallestNonzeroFloat32)),
-	string(mysql.FormatFloat(sqltypes.Float64, math.SmallestNonzeroFloat64)),
+	string(format.FormatFloat(sqltypes.Float64, math.Pi)),
+	string(format.FormatFloat(sqltypes.Float64, math.MaxFloat64)),
+	string(format.FormatFloat(sqltypes.Float64, math.SmallestNonzeroFloat32)),
+	string(format.FormatFloat(sqltypes.Float64, math.SmallestNonzeroFloat64)),
 }
 
 var inputComparisonElement = []string{

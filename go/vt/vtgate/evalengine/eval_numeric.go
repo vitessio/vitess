@@ -22,9 +22,9 @@ import (
 	"strconv"
 	"strings"
 
-	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/datetime"
 	"vitess.io/vitess/go/mysql/decimal"
+	"vitess.io/vitess/go/mysql/format"
 	"vitess.io/vitess/go/mysql/json"
 	"vitess.io/vitess/go/mysql/json/fastparse"
 	"vitess.io/vitess/go/sqltypes"
@@ -345,7 +345,7 @@ func (e *evalFloat) SQLType() sqltypes.Type {
 }
 
 func (e *evalFloat) ToRawBytes() []byte {
-	return mysql.FormatFloat(sqltypes.Float64, e.f)
+	return format.FormatFloat(sqltypes.Float64, e.f)
 }
 
 func (e *evalFloat) negate() evalNumeric {

@@ -23,6 +23,8 @@ import (
 	"golang.org/x/text/encoding"
 	"golang.org/x/text/encoding/charmap"
 	"golang.org/x/text/encoding/simplifiedchinese"
+
+	"vitess.io/vitess/go/mysql/binlog"
 )
 
 const (
@@ -661,9 +663,9 @@ var CharacterSetEncoding = map[string]encoding.Encoding{
 // IsNum returns true if a MySQL type is a numeric value.
 // It is the same as IS_NUM defined in mysql.h.
 func IsNum(typ uint8) bool {
-	return (typ <= TypeInt24 && typ != TypeTimestamp) ||
-		typ == TypeYear ||
-		typ == TypeNewDecimal
+	return (typ <= binlog.TypeInt24 && typ != binlog.TypeTimestamp) ||
+		typ == binlog.TypeYear ||
+		typ == binlog.TypeNewDecimal
 }
 
 // IsConnErr returns true if the error is a connection error.

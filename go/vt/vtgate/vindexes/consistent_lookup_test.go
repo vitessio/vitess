@@ -426,7 +426,6 @@ func TestConsistentLookupUpdateBecauseUncomparableTypes(t *testing.T) {
 		{querypb.Type_TEXT, "some string"},
 		{querypb.Type_VARCHAR, "some string"},
 		{querypb.Type_CHAR, "some string"},
-		{querypb.Type_GEOMETRY, "some string"},
 	}
 
 	for _, val := range tests {

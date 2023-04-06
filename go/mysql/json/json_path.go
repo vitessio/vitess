@@ -152,7 +152,7 @@ func (m *matcher) any(p *Path, v *Value) {
 	m.value(p, v)
 
 	if obj, ok := v.Object(); ok {
-		obj.Visit(func(_ []byte, v *Value) {
+		obj.Visit(func(_ string, v *Value) {
 			m.any(p, v)
 		})
 	}
@@ -182,7 +182,7 @@ func (m *matcher) value(p *Path, v *Value) {
 		}
 	case jpMemberAny:
 		if obj, ok := v.Object(); ok {
-			obj.Visit(func(_ []byte, v *Value) {
+			obj.Visit(func(_ string, v *Value) {
 				m.value(p.next, v)
 			})
 		}

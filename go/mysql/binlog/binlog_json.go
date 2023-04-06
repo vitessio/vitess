@@ -14,192 +14,21 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package json
+package binlog
 
 import (
 	"encoding/binary"
-	"encoding/hex"
 	"fmt"
 	"math"
-	"math/big"
 	"strconv"
-	"strings"
-	"time"
 
-	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/format"
+	"vitess.io/vitess/go/mysql/json"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 )
-
-// MarshalSQLTo appends marshaled v to dst and returns the result in
-// the form like `JSON_OBJECT` or `JSON_ARRAY` to ensure we don't
-// lose any type information.
-func (v *Value) MarshalSQLTo(dst []byte) []byte {
-	return v.marshalSQLInternal(true, dst)
-}
-
-func (v *Value) marshalSQLInternal(top bool, dst []byte) []byte {
-	switch v.t {
-	case TypeObject:
-		dst = append(dst, "JSON_OBJECT("...)
-		for i, vv := range v.o.kvs {
-			if i != 0 {
-				dst = append(dst, ", "...)
-			}
-			dst = append(dst, "_utf8mb4'"...)
-			dst = append(dst, vv.k...)
-			dst = append(dst, "', "...)
-			dst = vv.v.marshalSQLInternal(false, dst)
-		}
-		dst = append(dst, ')')
-		return dst
-	case TypeArray:
-		dst = append(dst, "JSON_ARRAY("...)
-		for i, vv := range v.a {
-			if i != 0 {
-				dst = append(dst, ", "...)
-			}
-			dst = vv.marshalSQLInternal(false, dst)
-		}
-		dst = append(dst, ')')
-		return dst
-	case TypeString:
-		if top {
-			dst = append(dst, "CAST(JSON_QUOTE("...)
-		}
-		dst = append(dst, "_utf8mb4"...)
-		dst = append(dst, sqltypes.EncodeStringSQL(v.s)...)
-		if top {
-			dst = append(dst, ") as JSON)"...)
-		}
-		return dst
-	case TypeDate:
-		t, _ := v.Date()
-
-		if top {
-			dst = append(dst, "CAST("...)
-		}
-		dst = append(dst, "date '"...)
-		dst = append(dst, t.Format("2006-01-02")...)
-		dst = append(dst, "'"...)
-		if top {
-			dst = append(dst, " as JSON)"...)
-		}
-		return dst
-	case TypeDateTime:
-		t, _ := v.DateTime()
-
-		if top {
-			dst = append(dst, "CAST("...)
-		}
-		dst = append(dst, "timestamp '"...)
-		dst = append(dst, t.Format("2006-01-02 15:04:05.000000")...)
-		dst = append(dst, "'"...)
-		if top {
-			dst = append(dst, " as JSON)"...)
-		}
-		return dst
-	case TypeTime:
-		now := time.Now()
-		year, month, day := now.Date()
-
-		t, _ := v.Time()
-		diff := t.Sub(time.Date(year, month, day, 0, 0, 0, 0, time.UTC))
-		var neg bool
-		if diff < 0 {
-			diff = -diff
-			neg = true
-		}
-
-		b := strings.Builder{}
-		if neg {
-			b.WriteByte('-')
-		}
-
-		hours := (diff / time.Hour)
-		diff -= hours * time.Hour
-		// For some reason MySQL wraps this around and loses data
-		// if it's more than 32 hours.
-		fmt.Fprintf(&b, "%02d", hours%32)
-		minutes := (diff / time.Minute)
-		fmt.Fprintf(&b, ":%02d", minutes)
-		diff -= minutes * time.Minute
-		seconds := (diff / time.Second)
-		fmt.Fprintf(&b, ":%02d", seconds)
-		diff -= seconds * time.Second
-		fmt.Fprintf(&b, ".%06d", diff/time.Microsecond)
-
-		if top {
-			dst = append(dst, "CAST("...)
-		}
-		dst = append(dst, "time '"...)
-		dst = append(dst, b.String()...)
-		dst = append(dst, "'"...)
-		if top {
-			dst = append(dst, " as JSON)"...)
-		}
-		return dst
-	case TypeBlob:
-		if top {
-			dst = append(dst, "CAST("...)
-		}
-		dst = append(dst, "x'"...)
-		dst = append(dst, hex.EncodeToString([]byte(v.s))...)
-		dst = append(dst, "'"...)
-		if top {
-			dst = append(dst, " as JSON)"...)
-		}
-		return dst
-	case TypeBit:
-		if top {
-			dst = append(dst, "CAST("...)
-		}
-		var i big.Int
-		i.SetBytes([]byte(v.s))
-		dst = append(dst, "b'"...)
-		dst = append(dst, i.Text(2)...)
-		dst = append(dst, "'"...)
-		if top {
-			dst = append(dst, " as JSON)"...)
-		}
-		return dst
-	case TypeNumber:
-		if top {
-			dst = append(dst, "CAST("...)
-		}
-		dst = append(dst, v.s...)
-		if top {
-			dst = append(dst, " as JSON)"...)
-		}
-		return dst
-	case TypeBoolean:
-		if top {
-			dst = append(dst, "CAST("...)
-		}
-		if v == ValueTrue {
-			dst = append(dst, "true"...)
-		} else {
-			dst = append(dst, "false"...)
-		}
-		if top {
-			dst = append(dst, " as JSON)"...)
-		}
-		return dst
-	case TypeNull:
-		if top {
-			dst = append(dst, "CAST("...)
-		}
-		dst = append(dst, "null"...)
-		if top {
-			dst = append(dst, " as JSON)"...)
-		}
-		return dst
-	default:
-		panic(fmt.Errorf("BUG: unexpected Value type: %d", v.t))
-	}
-}
 
 /*
 References:
@@ -215,13 +44,13 @@ https://github.com/shyiko/mysql-binlog-connector-java/pull/119/files
 https://github.com/noplay/python-mysql-replication/blob/175df28cc8b536a68522ff9b09dc5440adad6094/pymysqlreplication/packet.py
 */
 
-// ParseMySQL provides the parsing function from the mysql binary json
+// ParseBinaryJSON provides the parsing function from the mysql binary json
 // representation to a JSON value instance.
-func ParseMySQL(data []byte) (*Value, error) {
+func ParseBinaryJSON(data []byte) (*json.Value, error) {
 	var err error
-	var node *Value
+	var node *json.Value
 	if len(data) == 0 {
-		node = ValueNull
+		node = json.ValueNull
 	} else {
 		node, err = binparserNode(jsonDataType(data[0]), data, 1)
 		if err != nil {
@@ -295,11 +124,12 @@ func readInt(data []byte, pos int, large bool) (int, int) {
 				int(data[pos+3])<<24,
 			pos + 4
 	}
-	return int(data[pos]) + int(data[pos+1])<<8, pos + 2
+	return int(data[pos]) +
+		int(data[pos+1])<<8, pos + 2
 }
 
 // readVariableLength implements the logic to decode the length
-// of an arbitrarily long string as implemented by the mysql server.
+// of an arbitrarily long string.
 // readVariableLength also returns the new position (by advancing the position by the number of bytes read).
 func readVariableLength(data []byte, pos int) (int, int) {
 	var bb byte
@@ -319,7 +149,7 @@ func readVariableLength(data []byte, pos int) (int, int) {
 	return length, pos
 }
 
-var binparserFn [16]func(dataType jsonDataType, data []byte, pos int) (*Value, error)
+var binparserFn [16]func(dataType jsonDataType, data []byte, pos int) (*json.Value, error)
 
 func init() {
 	binparserFn[jsonSmallObject] = binparserObject
@@ -338,7 +168,7 @@ func init() {
 	binparserFn[jsonOpaque] = binparserOpaque
 }
 
-func binparserNode(typ jsonDataType, data []byte, pos int) (node *Value, err error) {
+func binparserNode(typ jsonDataType, data []byte, pos int) (node *json.Value, err error) {
 	if int(typ) < len(binparserFn) {
 		if p := binparserFn[typ]; p != nil {
 			return p(typ, data, pos)
@@ -348,8 +178,8 @@ func binparserNode(typ jsonDataType, data []byte, pos int) (node *Value, err err
 }
 
 // getElem returns the json value found inside json objects and arrays at the provided position
-func binparserElement(data []byte, pos int, large bool) (*Value, int, error) {
-	var elem *Value
+func binparserElement(data []byte, pos int, large bool) (*json.Value, int, error) {
+	var elem *json.Value
 	var err error
 	var offset int
 	typ := jsonDataType(data[pos])
@@ -391,7 +221,7 @@ var binaryIntSizes = map[jsonDataType]int{
 	jsonDouble: 8,
 }
 
-func binparserInt(typ jsonDataType, data []byte, pos int) (*Value, error) {
+func binparserInt(typ jsonDataType, data []byte, pos int) (*json.Value, error) {
 	var val uint64
 	size := binaryIntSizes[typ]
 	for i := 0; i < size; i++ {
@@ -414,24 +244,20 @@ func binparserInt(typ jsonDataType, data []byte, pos int) (*Value, error) {
 		s = strconv.FormatUint(val, 10)
 	case jsonDouble:
 		dbl = true
-		s = string(mysql.FormatFloat(sqltypes.Float64, math.Float64frombits(val)))
+		s = string(format.FormatFloat(sqltypes.Float64, math.Float64frombits(val)))
 	}
-	return &Value{
-		t: TypeNumber,
-		s: s,
-		i: !dbl,
-	}, nil
+	return json.NewNumber(s, !dbl), nil
 }
 
-func binparserLiteral(_ jsonDataType, data []byte, pos int) (node *Value, err error) {
+func binparserLiteral(_ jsonDataType, data []byte, pos int) (node *json.Value, err error) {
 	val := jsonDataLiteral(data[pos])
 	switch val {
 	case jsonNullLiteral:
-		node = ValueNull
+		node = json.ValueNull
 	case jsonTrueLiteral:
-		node = ValueTrue
+		node = json.ValueTrue
 	case jsonFalseLiteral:
-		node = ValueFalse
+		node = json.ValueFalse
 	default:
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unknown literal value %v", val)
 	}
@@ -440,12 +266,12 @@ func binparserLiteral(_ jsonDataType, data []byte, pos int) (node *Value, err er
 
 // other types are stored as catch-all opaque types: documentation on these is scarce.
 // we currently know about (and support) date/time/datetime/decimal.
-func binparserOpaque(_ jsonDataType, data []byte, pos int) (node *Value, err error) {
+func binparserOpaque(_ jsonDataType, data []byte, pos int) (node *json.Value, err error) {
 	dataType := data[pos]
 	start := 3       // account for length of stored value
 	end := start + 8 // all currently supported opaque data types are 8 bytes in size
 	switch dataType {
-	case mysql.TypeDate:
+	case TypeDate:
 		raw := binary.LittleEndian.Uint64(data[start:end])
 		value := raw >> 24
 		yearMonth := (value >> 22) & 0x01ffff // 17 bits starting at 22nd
@@ -453,8 +279,8 @@ func binparserOpaque(_ jsonDataType, data []byte, pos int) (node *Value, err err
 		month := yearMonth % 13
 		day := (value >> 17) & 0x1f // 5 bits starting at 17th
 		dateString := fmt.Sprintf("%04d-%02d-%02d", year, month, day)
-		node = &Value{t: TypeDate, s: dateString}
-	case mysql.TypeTime2, mysql.TypeTime:
+		node = json.NewDate(dateString)
+	case TypeTime2, TypeTime:
 		raw := binary.LittleEndian.Uint64(data[start:end])
 		value := raw >> 24
 		hour := (value >> 12) & 0x03ff // 10 bits starting at 12th
@@ -462,8 +288,8 @@ func binparserOpaque(_ jsonDataType, data []byte, pos int) (node *Value, err err
 		second := value & 0x3f         // 6 bits starting at 0th
 		microSeconds := raw & 0xffffff // 24 lower bits
 		timeString := fmt.Sprintf("%02d:%02d:%02d.%06d", hour, minute, second, microSeconds)
-		node = &Value{t: TypeTime, s: timeString}
-	case mysql.TypeDateTime2, mysql.TypeDateTime, mysql.TypeTimestamp2, mysql.TypeTimestamp:
+		node = json.NewTime(timeString)
+	case TypeDateTime2, TypeDateTime, TypeTimestamp2, TypeTimestamp:
 		raw := binary.LittleEndian.Uint64(data[start:end])
 		value := raw >> 24
 		yearMonth := (value >> 22) & 0x01ffff // 17 bits starting at 22nd
@@ -475,38 +301,37 @@ func binparserOpaque(_ jsonDataType, data []byte, pos int) (node *Value, err err
 		second := value & 0x3f         // 6 bits starting at 0th
 		microSeconds := raw & 0xffffff // 24 lower bits
 		timeString := fmt.Sprintf("%04d-%02d-%02d %02d:%02d:%02d.%06d", year, month, day, hour, minute, second, microSeconds)
-		node = &Value{t: TypeDateTime, s: timeString}
-	case mysql.TypeDecimal, mysql.TypeNewDecimal:
+		node = json.NewDateTime(timeString)
+	case TypeDecimal, TypeNewDecimal:
 		decimalData := data[start:end]
 		precision := decimalData[0]
 		scale := decimalData[1]
 		metadata := (uint16(precision) << 8) + uint16(scale)
-		val, _, err := mysql.CellValue(decimalData, 2, mysql.TypeNewDecimal, metadata, &querypb.Field{Type: querypb.Type_DECIMAL})
+		val, _, err := CellValue(decimalData, 2, TypeNewDecimal, metadata, &querypb.Field{Type: querypb.Type_DECIMAL})
 		if err != nil {
 			return nil, err
 		}
-		node = &Value{t: TypeNumber, s: val.ToString(), i: true}
-	case mysql.TypeVarchar, mysql.TypeVarString, mysql.TypeString, mysql.TypeBlob, mysql.TypeTinyBlob, mysql.TypeMediumBlob, mysql.TypeLongBlob:
-		node = &Value{t: TypeBlob, s: string(data[pos+1:])}
-	case mysql.TypeBit:
-		node = &Value{t: TypeBit, s: string(data[pos+1:])}
+		node = json.NewNumber(val.ToString(), true)
+	case TypeVarchar, TypeVarString, TypeString, TypeBlob, TypeTinyBlob, TypeMediumBlob, TypeLongBlob:
+		node = json.NewBlob(string(data[pos+1:]))
+	case TypeBit:
+		node = json.NewBit(string(data[pos+1:]))
 	default:
-		node = &Value{t: TypeOpaque, s: string(data[pos+1:])}
+		node = json.NewOpaqueValue(string(data[pos+1:]))
 	}
 	return node, nil
 }
 
-func binparserString(_ jsonDataType, data []byte, pos int) (node *Value, err error) {
+func binparserString(_ jsonDataType, data []byte, pos int) (node *json.Value, err error) {
 	size, pos := readVariableLength(data, pos)
-	node = &Value{t: TypeString, s: string(data[pos : pos+size])}
-	return node, nil
+	return json.NewString(string(data[pos : pos+size])), nil
 }
 
 // arrays are stored thus:
 // | type_identifier(one of [2,3]) | elem count | obj size | list of offsets+lengths of values | actual values |
-func binparserArray(typ jsonDataType, data []byte, pos int) (node *Value, err error) {
-	var nodes []*Value
-	var elem *Value
+func binparserArray(typ jsonDataType, data []byte, pos int) (node *json.Value, err error) {
+	var nodes []*json.Value
+	var elem *json.Value
 	var elementCount int
 	large := typ == jsonLargeArray
 	elementCount, pos = readInt(data, pos, large)
@@ -518,16 +343,15 @@ func binparserArray(typ jsonDataType, data []byte, pos int) (node *Value, err er
 		}
 		nodes = append(nodes, elem)
 	}
-	node = &Value{t: TypeArray, a: nodes}
+	node = json.NewArray(nodes)
 	return node, nil
 }
 
 // objects are stored thus:
 // | type_identifier(0/1) | elem count | obj size | list of offsets+lengths of keys | list of offsets+lengths of values | actual keys | actual values |
-func binparserObject(typ jsonDataType, data []byte, pos int) (node *Value, err error) {
+func binparserObject(typ jsonDataType, data []byte, pos int) (node *json.Value, err error) {
 	// "large" decides number of bytes used to specify element count and total object size: 4 bytes for large, 2 for small
 	var large = typ == jsonLargeObject
-
 	var elementCount int // total number of elements (== keys) in this object map. (element can be another object: recursively handled)
 
 	elementCount, pos = readInt(data, pos, large)
@@ -548,8 +372,8 @@ func binparserObject(typ jsonDataType, data []byte, pos int) (node *Value, err e
 		keys[i] = string(data[keyOffsetStart : keyOffsetStart+keyLength])
 	}
 
-	var object []kv
-	var elem *Value
+	var object json.Object
+	var elem *json.Value
 
 	// get the value for each key
 	for i := 0; i < elementCount; i++ {
@@ -557,9 +381,8 @@ func binparserObject(typ jsonDataType, data []byte, pos int) (node *Value, err e
 		if err != nil {
 			return nil, err
 		}
-		object = append(object, kv{k: keys[i], v: elem})
+		object.Add(keys[i], elem)
 	}
 
-	node = &Value{t: TypeObject, o: Object{kvs: object}}
-	return node, nil
+	return json.NewObject(object), nil
 }
