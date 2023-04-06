@@ -28,6 +28,7 @@ import (
 	"os"
 	"os/exec"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -339,12 +340,9 @@ func TestAddAliasWhileVtgateUp(t *testing.T) {
 
 func waitTillAllTabletsAreHealthyInVtgate(t *testing.T, vtgateInstance cluster.VtgateProcess, shards ...string) {
 	for _, shard := range shards {
-		err := vtgateInstance.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", keyspaceName, shard), 1)
-		require.Nil(t, err)
-		err = vtgateInstance.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", keyspaceName, shard), 1)
-		require.Nil(t, err)
-		err = vtgateInstance.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.rdonly", keyspaceName, shard), 1)
-		require.Nil(t, err)
+		require.NoError(t, vtgateInstance.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", keyspaceName, shard), 1, 30*time.Second))
+		require.NoError(t, vtgateInstance.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", keyspaceName, shard), 1, 30*time.Second))
+		require.NoError(t, vtgateInstance.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.rdonly", keyspaceName, shard), 1, 30*time.Second))
 	}
 }
 
