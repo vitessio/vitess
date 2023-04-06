@@ -502,6 +502,11 @@ func (s *VtctldServer) backupTablet(ctx context.Context, tablet *topodatapb.Tabl
 				return err
 			}
 
+			// Check again that we haven't become primary during the backup
+			if tabletInfo.Type == topodatapb.TabletType_PRIMARY {
+				return nil
+			}
+
 			return reparentutil.SetReplicationSource(ctx, s.ts, s.tmc, tabletInfo.Tablet)
 		default:
 			return err
