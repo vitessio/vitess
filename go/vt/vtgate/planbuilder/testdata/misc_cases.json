@@ -378,5 +378,60 @@
     "comment": "execute wrong number of parameters",
     "query": "execute prep_one_param using @foo, @bar",
     "plan": "VT03025: Incorrect arguments to EXECUTE"
+  },
+  {
+    "comment": "prepare a dual query",
+    "query": "prepare prep_dual from 'select 1+?, 10/?'",
+    "v3-plan": {
+      "QueryType": "PREPARE",
+      "Original": "prepare prep_dual from 'select 1+?, 10/?'",
+      "Instructions": {
+        "OperatorType": "PREPARE",
+        "ParameterCount": 2,
+        "PrepareStatement": "select 1 + :v1, 10 / :v2 from dual",
+        "StatementName": "prep_dual",
+        "Inputs": [
+          {
+            "OperatorType": "Projection",
+            "Expressions": [
+              "INT64(1) + :v1 as 1 + :v1",
+              "INT64(10) / :v2 as 10 / :v2"
+            ],
+            "Inputs": [
+              {
+                "OperatorType": "SingleRow"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "gen4-plan": {
+      "QueryType": "PREPARE",
+      "Original": "prepare prep_dual from 'select 1+?, 10/?'",
+      "Instructions": {
+        "OperatorType": "PREPARE",
+        "ParameterCount": 2,
+        "PrepareStatement": "select 1 + :v1, 10 / :v2 from dual",
+        "StatementName": "prep_dual",
+        "Inputs": [
+          {
+            "OperatorType": "Projection",
+            "Expressions": [
+              "INT64(1) + :v1 as 1 + :v1",
+              "INT64(10) / :v2 as 10 / :v2"
+            ],
+            "Inputs": [
+              {
+                "OperatorType": "SingleRow"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.dual"
+      ]
+    }
   }
 ]

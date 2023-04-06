@@ -270,4 +270,12 @@ func TestPrepareStatements(t *testing.T) {
 	mcmp.Exec(`prepare prep_in_pk from 'select id1, id2 from t1 where id1 in (?, ?)'`)
 	mcmp.AssertMatches(`execute prep_in_pk using @id1, @id1`, `[[INT64(1) INT64(0)]]`)
 	mcmp.AssertMatchesNoOrder(`execute prep_in_pk using @id1, @id2`, `[[INT64(0) INT64(0)] [INT64(1) INT64(0)]]`)
+
+	mcmp.Exec(`prepare prep_art from 'select 1+?, 10/?'`)
+	mcmp.Exec(`set @x1 = 1, @x2 = 2.0, @x3 = "v", @x4 = 9999999999999999999999999999"`)
+	mcmp.AssertMatches(`execute prep_art using @x1, @x1`, `[[INT64(1) INT64(0)]]`)
+	mcmp.AssertMatches(`execute prep_art using @x2, @x2`, `[[INT64(1) INT64(0)]]`)
+	mcmp.AssertMatches(`execute prep_art using @x3, @x3`, `[[INT64(1) INT64(0)]]`)
+	mcmp.AssertMatches(`execute prep_art using @x4, @x4`, `[[INT64(1) INT64(0)]]`)
+
 }
