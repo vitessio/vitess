@@ -139,11 +139,6 @@ func (mysqlctld *MysqlctldProcess) Stop() error {
 
 // CleanupFiles clean the mysql files to make sure we can start the same process again
 func (mysqlctld *MysqlctldProcess) CleanupFiles(tabletUID int) {
-	os.RemoveAll(path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d/data", tabletUID)))
-	os.RemoveAll(path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d/relay-logs", tabletUID)))
-	os.RemoveAll(path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d/tmp", tabletUID)))
-	os.RemoveAll(path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d/bin-logs", tabletUID)))
-	os.RemoveAll(path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d/innodb", tabletUID)))
 	os.RemoveAll(path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d", tabletUID)))
 }
 
@@ -179,11 +174,11 @@ func (mysqlctld *MysqlctldProcess) hasShutdown() bool {
 	return mysqlctld.process == nil
 }
 
-func (mysqlctld *MysqlctldProcess) WaitForMysqlctldShutdown(tablet *Vttablet) bool {
+func (mysqlctld *MysqlctldProcess) WaitForMysqlCtldShutdown() bool {
 	tmr := time.NewTimer(defaultOperationTimeout)
 	defer tmr.Stop()
 	for {
-		if tablet.MysqlctldProcess.hasShutdown() {
+		if mysqlctld.hasShutdown() {
 			return true
 		}
 		select {

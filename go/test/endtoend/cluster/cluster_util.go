@@ -54,7 +54,7 @@ func (tablet *Vttablet) Restart() error {
 
 	if tablet.MysqlctlProcess.TabletUID > 0 {
 		tablet.MysqlctlProcess.Stop()
-		tablet.MysqlctldProcess.WaitForMysqlctldShutdown(tablet)
+		tablet.MysqlctldProcess.WaitForMysqlCtldShutdown()
 		tablet.VttabletProcess.TearDown()
 		tablet.MysqlctldProcess.CleanupFiles(tablet.TabletUID)
 
@@ -62,7 +62,7 @@ func (tablet *Vttablet) Restart() error {
 	}
 
 	tablet.MysqlctldProcess.Stop()
-	tablet.MysqlctldProcess.WaitForMysqlctldShutdown(tablet)
+	tablet.MysqlctldProcess.WaitForMysqlCtldShutdown()
 	tablet.VttabletProcess.TearDown()
 	tablet.MysqlctldProcess.CleanupFiles(tablet.TabletUID)
 
