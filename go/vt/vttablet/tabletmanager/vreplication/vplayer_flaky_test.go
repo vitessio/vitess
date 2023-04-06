@@ -1376,14 +1376,13 @@ func TestPlayerTypes(t *testing.T) {
 	flavor := strings.ToLower(env.Flavor)
 	// Disable tests on percona and mariadb platforms in CI since they
 	// either don't support JSON or JSON support is not enabled by default
-	if strings.Contains(flavor, "mysql57") || strings.Contains(flavor, "mysql80") {
+	if strings.Contains(flavor, "mysql56") || strings.Contains(flavor, "mysql57") || strings.Contains(flavor, "mysql80") {
 		log.Infof("Running JSON column type tests on flavor %s", flavor)
 		enableJSONColumnTesting = true
 	} else {
 		log.Warningf("Not running JSON column type tests on flavor %s", flavor)
 	}
 	defer deleteTablet(addTablet(100))
-
 	execStatements(t, []string{
 		"create table vitess_ints(tiny tinyint, tinyu tinyint unsigned, small smallint, smallu smallint unsigned, medium mediumint, mediumu mediumint unsigned, normal int, normalu int unsigned, big bigint, bigu bigint unsigned, y year, primary key(tiny))",
 		fmt.Sprintf("create table %s.vitess_ints(tiny tinyint, tinyu tinyint unsigned, small smallint, smallu smallint unsigned, medium mediumint, mediumu mediumint unsigned, normal int, normalu int unsigned, big bigint, bigu bigint unsigned, y year, primary key(tiny))", vrepldb),
@@ -1420,6 +1419,7 @@ func TestPlayerTypes(t *testing.T) {
 		"drop table vitess_decimal",
 		fmt.Sprintf("drop table %s.vitess_decimal", vrepldb),
 	})
+
 	if enableJSONColumnTesting {
 		execStatements(t, []string{
 			"create table vitess_json(id int auto_increment, val1 json, val2 json, val3 json, val4 json, val5 json, primary key(id))",
@@ -1510,23 +1510,22 @@ func TestPlayerTypes(t *testing.T) {
 			{"a\000\000\000", "bbb"},
 		},
 	}}
+
 	if enableJSONColumnTesting {
 		testcases = append(testcases, testcase{
-			input: "insert into vitess_json(val1,val2,val3,val4,val5) values (null,'{}','123','{\"a\":[42,100]}', '{\"foo\":\"bar\"}')",
-			output: "insert into vitess_json(id,val1,val2,val3,val4,val5) values (1," +
-				"convert(null using utf8mb4)," + "convert('{}' using utf8mb4)," + "convert('123' using utf8mb4)," +
-				"convert('{\\\"a\\\":[42,100]}' using utf8mb4)," + "convert('{\\\"foo\\\":\\\"bar\\\"}' using utf8mb4))",
-			table: "vitess_json",
+			input:  "insert into vitess_json(val1,val2,val3,val4,val5) values (null,'{}','123','{\"a\":[42,100]}','{\"foo\": \"bar\"}')",
+			output: "insert into vitess_json(id,val1,val2,val3,val4,val5) values (1,CAST(null as JSON),JSON_OBJECT(),CAST(123 as JSON),JSON_OBJECT(_utf8mb4'a', JSON_ARRAY(42, 100)),JSON_OBJECT(_utf8mb4'foo', _utf8mb4'bar'))",
+			table:  "vitess_json",
 			data: [][]string{
 				{"1", "", "{}", "123", `{"a": [42, 100]}`, `{"foo": "bar"}`},
 			},
 		})
 		testcases = append(testcases, testcase{
-			input:  "update vitess_json set val4 = '{\"a\": [98, 123]}', val5 = convert(x'7b7d' using utf8mb4)",
-			output: "update vitess_json set val1=convert(null using utf8mb4), val2=convert('{}' using utf8mb4), val3=convert('123' using utf8mb4), val4=convert('{\\\"a\\\":[98,123]}' using utf8mb4), val5=convert('{}' using utf8mb4) where id=1",
+			input:  "update vitess_json set val1 = '{\"bar\": \"foo\"}', val4 = '{\"a\": [98, 123]}', val5 = convert(x'7b7d' using utf8mb4)",
+			output: "update vitess_json set val1=JSON_OBJECT(_utf8mb4'bar', _utf8mb4'foo'), val2=JSON_OBJECT(), val3=CAST(123 as JSON), val4=JSON_OBJECT(_utf8mb4'a', JSON_ARRAY(98, 123)), val5=JSON_OBJECT() where id=1",
 			table:  "vitess_json",
 			data: [][]string{
-				{"1", "", "{}", "123", `{"a": [98, 123]}`, `{}`},
+				{"1", `{"bar": "foo"}`, "{}", "123", `{"a": [98, 123]}`, `{}`},
 			},
 		})
 	}

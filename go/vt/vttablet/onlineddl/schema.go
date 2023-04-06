@@ -359,6 +359,10 @@ const (
 			AND cleanup_timestamp IS NULL
 			AND completed_timestamp IS NULL
 	`
+	sqlShowMigrationsWhere = `SELECT *
+		FROM _vt.schema_migrations
+		%s
+	`
 	sqlSelectMigration = `SELECT
 			id,
 			migration_uuid,

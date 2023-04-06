@@ -18,6 +18,7 @@ package datetime
 
 import (
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -28,8 +29,11 @@ import (
 
 var dateFormats = []string{"2006-01-02", "06-01-02", "20060102", "060102"}
 var datetimeFormats = []string{"2006-01-02 15:04:05.9", "06-01-02 15:04:05.9", "20060102150405.9", "060102150405.9"}
-var timeWithDayFormats = []string{"15:04:05.9", "15:04", "15"}
-var timeWithoutDayFormats = []string{"15:04:05.9", "15:04", "150405.9", "0405", "05"}
+var timeWithoutDayFormats = []string{"150405.9", "0405", "05"}
+
+func validMessage(in string) string {
+	return strings.ToValidUTF8(strings.ReplaceAll(in, "\x00", ""), "?")
+}
 
 func ParseDate(in string) (t time.Time, err error) {
 	for _, f := range dateFormats {
@@ -38,15 +42,65 @@ func ParseDate(in string) (t time.Time, err error) {
 			return t, nil
 		}
 	}
-	return t, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongValue, "incorrect DATE value: '%s'", in)
+	return t, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongValue, "Incorrect DATE value: '%s'", validMessage(in))
 }
 
-func ParseTime(in string) (t time.Time, err error) {
+func parseHoursMinutesSeconds(in string) (hours, minutes, seconds, nanoseconds int, err error) {
+	parts := strings.Split(in, ":")
+	switch len(parts) {
+	case 3:
+		sub := strings.Split(parts[2], ".")
+		if len(sub) > 2 {
+			return 0, 0, 0, 0, fmt.Errorf("invalid time format: %s", in)
+		}
+		seconds, err = strconv.Atoi(sub[0])
+		if err != nil {
+			return 0, 0, 0, 0, err
+		}
+		if seconds > 59 {
+			return 0, 0, 0, 0, fmt.Errorf("invalid time format: %s", in)
+		}
+		if len(sub) == 2 {
+			nanoseconds, err = strconv.Atoi(sub[1])
+			if err != nil {
+				return 0, 0, 0, 0, err
+			}
+			nanoseconds = int(math.Round(float64(nanoseconds)*math.Pow10(9-len(sub[1]))/1000) * 1000)
+		}
+		fallthrough
+	case 2:
+		if len(parts[1]) > 2 {
+			return 0, 0, 0, 0, fmt.Errorf("invalid time format: %s", in)
+		}
+		minutes, err = strconv.Atoi(parts[1])
+		if err != nil {
+			return 0, 0, 0, 0, err
+		}
+		if minutes > 59 {
+			return 0, 0, 0, 0, fmt.Errorf("invalid time format: %s", in)
+		}
+		fallthrough
+	case 1:
+		hours, err = strconv.Atoi(parts[0])
+		if err != nil {
+			return 0, 0, 0, 0, err
+		}
+	default:
+		return 0, 0, 0, 0, fmt.Errorf("invalid time format: %s", in)
+	}
+
+	if hours < 0 || minutes < 0 || seconds < 0 || nanoseconds < 0 {
+		return 0, 0, 0, 0, fmt.Errorf("invalid time format: %s", in)
+	}
+	return
+}
+
+func ParseTime(in string) (t time.Time, out string, err error) {
 	// ParseTime is right now only excepting on specific
 	// time format and doesn't accept all formats MySQL accepts.
 	// Can be improved in the future as needed.
 	if in == "" {
-		return t, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongValue, "incorrect TIME value: '%s'", in)
+		return t, "", vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongValue, "Incorrect TIME value: '%s'", validMessage(in))
 	}
 	start := 0
 	neg := in[start] == '-'
@@ -56,29 +110,29 @@ func ParseTime(in string) (t time.Time, err error) {
 
 	parts := strings.Split(in[start:], " ")
 	if len(parts) > 2 {
-		return t, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongValue, "incorrect TIME value: '%s'", in)
+		return t, "", vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongValue, "Incorrect TIME value: '%s'", validMessage(in))
 	}
-	days := 0
+	var days, hours, minutes, seconds, nanoseconds int
 	hourMinuteSeconds := parts[0]
 	if len(parts) == 2 {
 		days, err = strconv.Atoi(parts[0])
 		if err != nil {
-			fmt.Printf("atoi failed: %+v\n", err)
-			return t, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongValue, "incorrect TIME value: '%s'", in)
+			return t, "", vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongValue, "Incorrect TIME value: '%s'", validMessage(in))
 		}
 		if days < 0 {
 			// Double negative which is not allowed
-			return t, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongValue, "incorrect TIME value: '%s'", in)
+			return t, "", vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongValue, "Incorrect TIME value: '%s'", validMessage(in))
 		}
 		if days > 34 {
-			return t, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongValue, "incorrect TIME value: '%s'", in)
+			return t, "", vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongValue, "Incorrect TIME value: '%s'", validMessage(in))
 		}
-		for _, f := range timeWithDayFormats {
-			t, err = time.Parse(f, parts[1])
-			if err == nil {
-				break
-			}
+		hours, minutes, seconds, nanoseconds, err = parseHoursMinutesSeconds(parts[1])
+		if err != nil {
+			return t, "", vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongValue, "Incorrect TIME value: '%s'", validMessage(in))
 		}
+		days = days + hours/24
+		hours = hours % 24
+		t = time.Date(0, 1, 1, hours, minutes, seconds, nanoseconds, time.UTC)
 	} else {
 		for _, f := range timeWithoutDayFormats {
 			t, err = time.Parse(f, hourMinuteSeconds)
@@ -86,16 +140,29 @@ func ParseTime(in string) (t time.Time, err error) {
 				break
 			}
 		}
+		if err != nil {
+			hours, minutes, seconds, nanoseconds, err = parseHoursMinutesSeconds(parts[0])
+			if err != nil {
+				return t, "", vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongValue, "Incorrect TIME value: '%s'", validMessage(in))
+			}
+			days = hours / 24
+			hours = hours % 24
+			t = time.Date(0, 1, 1, hours, minutes, seconds, nanoseconds, time.UTC)
+			err = nil
+		}
 	}
 
 	if err != nil {
-		return t, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongValue, "incorrect TIME value: '%s'", in)
+		return t, "", vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongValue, "Incorrect TIME value: '%s'", validMessage(in))
 	}
 
 	// setting the date to today's date, because t is "0000-01-01 xx:xx:xx"
 	now := time.Now()
 	year, month, day := now.Date()
+	b := strings.Builder{}
+
 	if neg {
+		b.WriteString("-")
 		// If we have a negative time, we start with the start of today
 		// and substract the total duration of the parsed time.
 		today := time.Date(year, month, day, 0, 0, 0, 0, t.Location())
@@ -104,13 +171,28 @@ func ParseTime(in string) (t time.Time, err error) {
 			time.Duration(t.Minute())*time.Minute +
 			time.Duration(t.Second())*time.Second +
 			time.Duration(t.Nanosecond())*time.Nanosecond
+		fmt.Fprintf(&b, "%02d", days*24+t.Hour())
+		fmt.Fprintf(&b, ":%02d", t.Minute())
+		fmt.Fprintf(&b, ":%02d", t.Second())
+		if t.Nanosecond() > 0 {
+			fmt.Fprintf(&b, ".%09d", t.Nanosecond())
+		}
+
 		t = today.Add(-duration)
 	} else {
+		fmt.Fprintf(&b, "%02d", days*24+t.Hour())
+		fmt.Fprintf(&b, ":%02d", t.Minute())
+		fmt.Fprintf(&b, ":%02d", t.Second())
+		if t.Nanosecond() > 0 {
+			fmt.Fprintf(&b, ".%09d", t.Nanosecond())
+		}
+
 		// In case of a positive time, we can take a quicker
 		// shortcut and add the date of today.
 		t = t.AddDate(year, int(month-1), day-1+days)
 	}
-	return t, nil
+
+	return t, b.String(), nil
 }
 
 func ParseDateTime(in string) (t time.Time, err error) {
@@ -120,5 +202,5 @@ func ParseDateTime(in string) (t time.Time, err error) {
 			return t, nil
 		}
 	}
-	return t, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongValue, "incorrect DATETIME value: '%s'", in)
+	return t, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongValue, "Incorrect DATETIME value: '%s'", validMessage(in))
 }

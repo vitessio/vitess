@@ -27,6 +27,7 @@ import (
 	"vitess.io/vitess/go/bytes2"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/collations"
+	vjson "vitess.io/vitess/go/mysql/json"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -369,7 +370,18 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 		after = true
 		vals := sqltypes.MakeRowTrusted(tp.Fields, rowChange.After)
 		for i, field := range tp.Fields {
-			bindVar, err := tp.bindFieldVal(field, &vals[i])
+			var bindVar *querypb.BindVariable
+			var newVal *sqltypes.Value
+			var err error
+			if field.Type == querypb.Type_JSON {
+				newVal, err = vjson.MarshalSQLValue(vals[i].Raw())
+				if err != nil {
+					return nil, err
+				}
+				bindVar, err = tp.bindFieldVal(field, newVal)
+			} else {
+				bindVar, err = tp.bindFieldVal(field, &vals[i])
+			}
 			if err != nil {
 				return nil, err
 			}

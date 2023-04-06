@@ -26,6 +26,7 @@ import (
 
 	"github.com/spf13/pflag"
 
+	"vitess.io/vitess/go/mysql/format"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 
@@ -74,7 +75,7 @@ func normalizeValue(v sqltypes.Value, coll collations.ID) sqltypes.Value {
 		if err != nil {
 			panic(err)
 		}
-		return sqltypes.MakeTrusted(typ, mysql.FormatFloat(typ, f))
+		return sqltypes.MakeTrusted(typ, format.FormatFloat(typ, f))
 	}
 	return v
 }
@@ -178,8 +179,8 @@ func compareRemoteExprEnv(t *testing.T, env *evalengine.ExpressionEnv, conn *mys
 		}
 	}
 
-	if diff := compareResult(localErr, remoteErr, localVal, remoteVal, localCollation, remoteCollation, decimals); diff != "" {
-		t.Errorf("%s\nquery: %s (SIMPLIFY=%v)\nrow: %v", diff, localQuery, debugSimplify, env.Row)
+	if err := compareResult(localErr, remoteErr, localVal, remoteVal, localCollation, remoteCollation, decimals); err != nil {
+		t.Errorf("%s\nquery: %s (SIMPLIFY=%v)\nrow: %v", err, localQuery, debugSimplify, env.Row)
 	} else if debugPrintAll {
 		t.Logf("local=%s mysql=%s\nquery: %s\nrow: %v", localVal.String(), remoteVal.String(), localQuery, env.Row)
 	}

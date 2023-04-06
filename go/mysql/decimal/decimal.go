@@ -453,7 +453,7 @@ func (d Decimal) divRound(d2 Decimal, precision int32) Decimal {
 
 // mod returns d % d2.
 func (d Decimal) mod(d2 Decimal) Decimal {
-	quo := d.divRound(d2, -d.exp+1).truncate(0)
+	quo := d.divRound(d2, -d.exp+1).Truncate(0)
 	return d.sub(d2.mul(quo))
 }
 
@@ -488,9 +488,9 @@ func (d Decimal) Floor() Decimal {
 	return Decimal{value: z, exp: 0}
 }
 
-func (d Decimal) truncate(precision int32) Decimal {
+func (d Decimal) Truncate(precision int32) Decimal {
 	d.ensureInitialized()
-	if precision >= 0 && -precision > d.exp {
+	if -precision > d.exp {
 		return d.rescale(-precision)
 	}
 	return d
@@ -651,7 +651,7 @@ func (d Decimal) Round(places int32) Decimal {
 	if d.exp == -places {
 		return d
 	}
-	// truncate to places + 1
+	// Truncate to places + 1
 	ret := d.rescale(-places - 1)
 
 	// add sign(d) * 0.5

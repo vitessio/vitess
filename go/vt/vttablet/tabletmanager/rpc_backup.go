@@ -36,7 +36,7 @@ const (
 	backupModeOffline = "offline"
 )
 
-// Backup takes a db backup and sends it to the BackupStorage
+// Backup takes a db backup and sends it to the BackupStorage.
 func (tm *TabletManager) Backup(ctx context.Context, logger logutil.Logger, req *tabletmanagerdatapb.BackupRequest) error {
 	if tm.Cnf == nil {
 		return fmt.Errorf("cannot perform backup without my.cnf, please restart vttablet with a my.cnf file specified")
@@ -54,7 +54,7 @@ func (tm *TabletManager) Backup(ctx context.Context, logger logutil.Logger, req 
 	if err != nil {
 		return vterrors.Wrap(err, "failed to find backup engine")
 	}
-	// get Tablet info from topo so that it is up to date
+	// Get Tablet info from topo so that it is up to date
 	tablet, err := tm.TopoServer.GetTablet(ctx, tm.tabletAlias)
 	if err != nil {
 		return err
@@ -63,7 +63,7 @@ func (tm *TabletManager) Backup(ctx context.Context, logger logutil.Logger, req 
 		return fmt.Errorf("type PRIMARY cannot take backup. if you really need to do this, rerun the backup command with --allow_primary")
 	}
 
-	// prevent concurrent backups, and record stats
+	// Prevent concurrent backups, and record stats
 	backupMode := backupModeOnline
 	if engine.ShouldDrainForBackup() {
 		backupMode = backupModeOffline
@@ -72,6 +72,9 @@ func (tm *TabletManager) Backup(ctx context.Context, logger logutil.Logger, req 
 		return err
 	}
 	defer tm.endBackup(backupMode)
+
+	// Create the logger: tee to console and source.
+	l := logutil.NewTeeLogger(logutil.NewConsoleLogger(), logger)
 
 	var originalType topodatapb.TabletType
 	if engine.ShouldDrainForBackup() {
@@ -85,15 +88,23 @@ func (tm *TabletManager) Backup(ctx context.Context, logger logutil.Logger, req 
 			return err
 		}
 		originalType = tablet.Type
-		// update our type to BACKUP
+		// Update our type to `BACKUP`.
 		if err := tm.changeTypeLocked(ctx, topodatapb.TabletType_BACKUP, DBActionNone, SemiSyncActionUnset); err != nil {
 			return err
 		}
-	}
-	// create the loggers: tee to console and source
-	l := logutil.NewTeeLogger(logutil.NewConsoleLogger(), logger)
 
-	// now we can run the backup
+		// Adding defer to original value in case of any failures.
+		defer func() {
+			bgCtx := context.Background()
+			// Change our type back to the original value.
+			// Original type could be primary so pass in a real value for PrimaryTermStartTime
+			if err := tm.changeTypeLocked(bgCtx, originalType, DBActionNone, SemiSyncActionNone); err != nil {
+				l.Errorf("Failed to change tablet type from %v to %v, error: %v", topodatapb.TabletType_BACKUP, originalType, err)
+			}
+		}()
+	}
+
+	// Now we can run the backup.
 	backupParams := mysqlctl.BackupParams{
 		Cnf:                tm.Cnf,
 		Mysqld:             tm.MysqlDaemon,
@@ -110,24 +121,6 @@ func (tm *TabletManager) Backup(ctx context.Context, logger logutil.Logger, req 
 	}
 
 	returnErr := mysqlctl.Backup(ctx, backupParams)
-
-	if engine.ShouldDrainForBackup() {
-		bgCtx := context.Background()
-		// Starting from here we won't be able to recover if we get stopped by a cancelled
-		// context. It is also possible that the context already timed out during the
-		// above call to Backup. Thus we use the background context to get through to the finish.
-
-		// Change our type back to the original value.
-		// Original type could be primary so pass in a real value for PrimaryTermStartTime
-		if err := tm.changeTypeLocked(bgCtx, originalType, DBActionNone, SemiSyncActionNone); err != nil {
-			// failure in changing the topology type is probably worse,
-			// so returning that (we logged the snapshot error anyway)
-			if returnErr != nil {
-				l.Errorf("mysql backup command returned error: %v", returnErr)
-			}
-			returnErr = err
-		}
-	}
 
 	return returnErr
 }
@@ -148,13 +141,13 @@ func (tm *TabletManager) RestoreFromBackup(ctx context.Context, logger logutil.L
 		return fmt.Errorf("type PRIMARY cannot restore from backup, if you really need to do this, restart vttablet in replica mode")
 	}
 
-	// create the loggers: tee to console and source
+	// Create the logger: tee to console and source.
 	l := logutil.NewTeeLogger(logutil.NewConsoleLogger(), logger)
 
-	// now we can run restore
+	// Now we can run restore.
 	err = tm.restoreDataLocked(ctx, l, 0 /* waitForBackupInterval */, true /* deleteBeforeRestore */, request)
 
-	// re-run health check to be sure to capture any replication delay
+	// Re-run health check to be sure to capture any replication delay.
 	tm.QueryServiceControl.BroadcastHealth()
 
 	return err
@@ -166,10 +159,10 @@ func (tm *TabletManager) beginBackup(backupMode string) error {
 	if tm._isBackupRunning {
 		return fmt.Errorf("a backup is already running on tablet: %v", tm.tabletAlias)
 	}
-	// when mode is online we don't take the action lock, so we continue to serve,
-	// but let's set _isBackupRunning to true
-	// so that we only allow one online backup at a time
-	// offline backups also run only one at a time because we take the action lock
+	// When mode is online we don't take the action lock, so we continue to serve,
+	// but let's set _isBackupRunning to true.
+	// So that we only allow one online backup at a time.
+	// Offline backups also run only one at a time because we take the action lock
 	// so this is not really needed in that case, however we are using it to record the state
 	tm._isBackupRunning = true
 	statsBackupIsRunning.Set([]string{backupMode}, 1)
@@ -177,8 +170,8 @@ func (tm *TabletManager) beginBackup(backupMode string) error {
 }
 
 func (tm *TabletManager) endBackup(backupMode string) {
-	// now we set _isBackupRunning back to false
-	// have to take the mutex lock before writing to _ fields
+	// Now we set _isBackupRunning back to false.
+	// Have to take the mutex lock before writing to _ fields.
 	tm.mutex.Lock()
 	defer tm.mutex.Unlock()
 	tm._isBackupRunning = false

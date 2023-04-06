@@ -41,66 +41,44 @@ func (v *Value) SQLType() sqltypes.Type {
 }
 
 func NewArray(vals []*Value) *Value {
-	return &Value{
-		a: vals,
-		t: TypeArray,
-	}
+	return &Value{a: vals, t: TypeArray}
 }
 
-func NewObject() *Value {
-	return &Value{
-		o: Object{},
-		t: TypeObject,
-	}
+func NewObject(obj Object) *Value {
+	obj.sort()
+	return &Value{o: obj, t: TypeObject}
 }
 
-func NewNumber(num []byte) *Value {
-	return &Value{
-		s: string(num),
-		t: TypeNumber,
-	}
+func NewNumber(num string, i bool) *Value {
+	return &Value{s: string(num), t: TypeNumber, i: i}
 }
 
-func NewString(raw []byte) *Value {
-	return &Value{
-		s: string(raw),
-		t: TypeString,
-	}
+func NewString(raw string) *Value {
+	return &Value{s: string(raw), t: TypeString}
 }
 
-func NewBlob(raw []byte) *Value {
-	return &Value{
-		s: string(raw),
-		t: TypeBlob,
-	}
+func NewBlob(raw string) *Value {
+	return &Value{s: string(raw), t: TypeBlob}
 }
 
-func NewBit(raw []byte) *Value {
-	return &Value{
-		s: string(raw),
-		t: TypeBit,
-	}
+func NewBit(raw string) *Value {
+	return &Value{s: string(raw), t: TypeBit}
 }
 
-func NewDate(raw []byte) *Value {
-	return &Value{
-		s: string(raw),
-		t: TypeDate,
-	}
+func NewDate(raw string) *Value {
+	return &Value{s: raw, t: TypeDate}
 }
 
-func NewDateTime(raw []byte) *Value {
-	return &Value{
-		s: string(raw),
-		t: TypeDateTime,
-	}
+func NewDateTime(raw string) *Value {
+	return &Value{s: raw, t: TypeDateTime}
 }
 
-func NewTime(raw []byte) *Value {
-	return &Value{
-		s: string(raw),
-		t: TypeTime,
-	}
+func NewTime(raw string) *Value {
+	return &Value{s: raw, t: TypeTime}
+}
+
+func NewOpaqueValue(raw string) *Value {
+	return &Value{s: raw, t: TypeOpaque}
 }
 
 func (v *Value) Depth() int {

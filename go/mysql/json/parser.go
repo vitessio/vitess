@@ -598,12 +598,12 @@ func (o *Object) Get(key string) *Value {
 // of the parsed JSON.
 //
 // f cannot hold key and/or v after returning.
-func (o *Object) Visit(f func(key []byte, v *Value)) {
+func (o *Object) Visit(f func(key string, v *Value)) {
 	if o == nil {
 		return
 	}
 	for _, kv := range o.kvs {
-		f(hack.StringBytes(kv.k), kv.v)
+		f(kv.k, kv.v)
 	}
 }
 
@@ -846,7 +846,7 @@ func (v *Value) Time() (time.Time, bool) {
 	if v.t != TypeTime {
 		return time.Time{}, false
 	}
-	t, err := datetime.ParseTime(v.s)
+	t, _, err := datetime.ParseTime(v.s)
 	if err != nil {
 		return time.Time{}, false
 	}
