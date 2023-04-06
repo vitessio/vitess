@@ -33,6 +33,8 @@ package vreplication
 // The db_order_test table is used to ensure vreplication and vdiff work well with complex non-integer PKs, even across DB versions.
 // The db_order_test table needs to use a collation that exists in all versions for cross version tests as we use the collation for the PK based merge sort in VDiff.
 // The db_order_test is using a non-default collation for any version with utf8mb4 as 5.7 does NOT show the default collation in the SHOW CREATE TABLE output which means
+// The vdiff_order table is used to test MySQL->VDiff merge sort ordering and ensure it aligns across Reshards. It must not use the default collation as it has to work across
+// versions and the 8.0 default does not exist in 5.7.
 // in the cross version tests the source and target will be using a different collation.
 var (
 	// All standard user tables should have a primary key and at least one secondary key.
@@ -51,6 +53,7 @@ create table ` + "`Lead`(`Lead-id`" + ` binary(16), name varbinary(16), date1 da
 create table ` + "`Lead-1`(`Lead`" + ` binary(16), name varbinary(16), date1 datetime not null default '0000-00-00 00:00:00', date2 datetime not null default '2021-00-01 00:00:00', primary key (` + "`Lead`" + `), key (date2));
 create table _vt_PURGE_4f9194b43b2011eb8a0104ed332e05c2_20221210194431(id int, val varbinary(128), primary key(id), key(val));
 create table db_order_test (c_uuid varchar(64) not null default '', created_at datetime not null, dstuff varchar(128), dtstuff text, dbstuff blob, cstuff char(32), primary key (c_uuid,created_at), key (dstuff)) CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+create table vdiff_order (order_id varchar(50) not null collate utf8mb4_unicode_ci not null, primary key (order_id), key (order_id)) charset=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 create table datze (id int, dt1 datetime not null default current_timestamp, dt2 datetime not null, ts1 timestamp default current_timestamp, primary key (id), key (dt1));
 `
 
@@ -84,6 +87,7 @@ create table datze (id int, dt1 datetime not null default current_timestamp, dt2
 	"Lead": {},
 	"Lead-1": {},
 	"db_order_test": {},
+	"vdiff_order": {},
 	"datze": {}
   }
 }
@@ -98,6 +102,9 @@ create table datze (id int, dt1 datetime not null default current_timestamp, dt2
     },
     "xxhash": {
       "type": "xxhash"
+    },
+    "unicode_loose_md5": {
+      "type": "unicode_loose_md5"
     },
     "bmd5": {
       "type": "binary_md5"
@@ -149,6 +156,14 @@ create table datze (id int, dt1 datetime not null default current_timestamp, dt2
         {
           "columns": ["c_uuid", "created_at"],
           "name": "xxhash"
+        }
+      ]
+    },
+    "vdiff_order": {
+      "column_vindexes": [
+        {
+          "column": "order_id",
+          "name": "unicode_loose_md5"
         }
       ]
     },
@@ -227,6 +242,9 @@ create table datze (id int, dt1 datetime not null default current_timestamp, dt2
     "reverse_bits": {
       "type": "reverse_bits"
     },
+    "unicode_loose_md5": {
+      "type": "unicode_loose_md5"
+    },
     "xxhash": {
       "type": "xxhash"
     }
@@ -261,6 +279,14 @@ create table datze (id int, dt1 datetime not null default current_timestamp, dt2
         {
           "columns": ["c_uuid", "created_at"],
           "name": "xxhash"
+        }
+      ]
+    },
+    "vdiff_order": {
+      "column_vindexes": [
+        {
+          "column": "order_id"],
+          "name": "unicode_loose_md5"
         }
       ]
     },
