@@ -68,8 +68,8 @@ func (to *Table) AddPredicate(_ *plancontext.PlanningContext, expr sqlparser.Exp
 	return newFilter(to, expr), nil
 }
 
-func (to *Table) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, reuseCol bool) (ops.Operator, int, error) {
-	offset, err := addColumn(ctx, to, expr.Expr, reuseCol)
+func (to *Table) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr) (ops.Operator, int, error) {
+	offset, err := addColumn(ctx, to, expr.Expr)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -95,14 +95,14 @@ func (to *Table) TablesUsed() []string {
 	return SingleQualifiedIdentifier(to.VTable.Keyspace, to.VTable.Name)
 }
 
-func addColumn(ctx *plancontext.PlanningContext, op ColNameColumns, e sqlparser.Expr, reuseCol bool) (int, error) {
+func addColumn(ctx *plancontext.PlanningContext, op ColNameColumns, e sqlparser.Expr) (int, error) {
 	col, ok := e.(*sqlparser.ColName)
 	if !ok {
 		return 0, vterrors.VT13001("cannot push this expression to a table/vindex")
 	}
 	sqlparser.RemoveKeyspaceFromColName(col)
 	cols := op.GetColNames()
-	if offset, found := canReuseColumn(ctx, reuseCol, cols, e); found {
+	if offset, found := canReuseColumn(ctx, cols, e); found {
 		return offset, nil
 	}
 	offset := len(cols)

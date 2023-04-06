@@ -87,8 +87,8 @@ func (f *Filter) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.E
 	return f, nil
 }
 
-func (f *Filter) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, reuseCol bool) (ops.Operator, int, error) {
-	newSrc, offset, err := f.Source.AddColumn(ctx, expr, reuseCol)
+func (f *Filter) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr) (ops.Operator, int, error) {
+	newSrc, offset, err := f.Source.AddColumn(ctx, expr)
 	if err != nil {
 		return nil, 0, err
 	}

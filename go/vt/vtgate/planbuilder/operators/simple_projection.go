@@ -66,7 +66,7 @@ func (s *SimpleProjection) AddPredicate(ctx *plancontext.PlanningContext, expr s
 	return nil, errNotHorizonPlanned
 }
 
-func (s *SimpleProjection) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, reuseCol bool) (ops.Operator, int, error) {
+func (s *SimpleProjection) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr) (ops.Operator, int, error) {
 	// TODO implement me
 	return nil, 0, errNotHorizonPlanned
 }

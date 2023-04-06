@@ -522,8 +522,8 @@ func (r *Route) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Ex
 	return r, err
 }
 
-func (r *Route) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, reuseCol bool) (ops.Operator, int, error) {
-	newSrc, offset, err := r.Source.AddColumn(ctx, expr, reuseCol)
+func (r *Route) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr) (ops.Operator, int, error) {
+	newSrc, offset, err := r.Source.AddColumn(ctx, expr)
 	if err != nil {
 		return nil, 0, err
 	}

@@ -171,7 +171,7 @@ func pushProjections(ctx *plancontext.PlanningContext, qp *QueryProjection, src 
 			return nil, errNotHorizonPlanned
 		}
 		var offset int
-		src, offset, err = src.AddColumn(ctx, expr, true)
+		src, offset, err = src.AddColumn(ctx, expr)
 		if err != nil {
 			return nil, err
 		}
@@ -194,7 +194,7 @@ func aeWrap(e sqlparser.Expr) *sqlparser.AliasedExpr {
 
 func planFilter(ctx *plancontext.PlanningContext, in *Filter) error {
 	resolveColumn := func(col *sqlparser.ColName) (int, error) {
-		newSrc, offset, err := in.Source.AddColumn(ctx, aeWrap(col), true)
+		newSrc, offset, err := in.Source.AddColumn(ctx, aeWrap(col))
 		if err != nil {
 			return 0, err
 		}
