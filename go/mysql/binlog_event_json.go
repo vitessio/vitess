@@ -21,11 +21,11 @@ import (
 	"fmt"
 	"math"
 
+	"vitess.io/vitess/go/mysql/binlog"
 	"vitess.io/vitess/go/vt/log"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 
 	"github.com/spyzhov/ajson"
-
-	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 /*
@@ -432,7 +432,7 @@ func (oh opaquePlugin) getNode(typ jsonDataType, data []byte, pos int) (node *aj
 	start := 3       // account for length of stored value
 	end := start + 8 // all currently supported opaque data types are 8 bytes in size
 	switch dataType {
-	case TypeDate:
+	case binlog.TypeDate:
 		raw := binary.LittleEndian.Uint64(data[start:end])
 		value := raw >> 24
 		yearMonth := (value >> 22) & 0x01ffff // 17 bits starting at 22nd
@@ -441,7 +441,7 @@ func (oh opaquePlugin) getNode(typ jsonDataType, data []byte, pos int) (node *aj
 		day := (value >> 17) & 0x1f // 5 bits starting at 17th
 		dateString := fmt.Sprintf("%04d-%02d-%02d", year, month, day)
 		node = ajson.StringNode("", dateString)
-	case TypeTime:
+	case binlog.TypeTime:
 		raw := binary.LittleEndian.Uint64(data[start:end])
 		value := raw >> 24
 		hour := (value >> 12) & 0x03ff // 10 bits starting at 12th
@@ -450,7 +450,7 @@ func (oh opaquePlugin) getNode(typ jsonDataType, data []byte, pos int) (node *aj
 		microSeconds := raw & 0xffffff // 24 lower bits
 		timeString := fmt.Sprintf("%02d:%02d:%02d.%06d", hour, minute, second, microSeconds)
 		node = ajson.StringNode("", timeString)
-	case TypeDateTime:
+	case binlog.TypeDateTime:
 		raw := binary.LittleEndian.Uint64(data[start:end])
 		value := raw >> 24
 		yearMonth := (value >> 22) & 0x01ffff // 17 bits starting at 22nd
@@ -463,12 +463,12 @@ func (oh opaquePlugin) getNode(typ jsonDataType, data []byte, pos int) (node *aj
 		microSeconds := raw & 0xffffff // 24 lower bits
 		timeString := fmt.Sprintf("%04d-%02d-%02d %02d:%02d:%02d.%06d", year, month, day, hour, minute, second, microSeconds)
 		node = ajson.StringNode("", timeString)
-	case TypeNewDecimal:
+	case binlog.TypeNewDecimal:
 		decimalData := data[start:end]
 		precision := decimalData[0]
 		scale := decimalData[1]
 		metadata := (uint16(precision) << 8) + uint16(scale)
-		val, _, err := CellValue(decimalData, 2, TypeNewDecimal, metadata, &querypb.Field{Type: querypb.Type_DECIMAL})
+		val, _, err := binlog.CellValue(decimalData, 2, binlog.TypeNewDecimal, metadata, &querypb.Field{Type: querypb.Type_DECIMAL})
 		if err != nil {
 			return nil, err
 		}

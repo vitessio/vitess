@@ -990,10 +990,10 @@ func (asm *assembler) Convert_nj(offset int, isBool bool) {
 			case 1:
 				env.vm.stack[env.vm.sp-offset] = json.ValueTrue
 			default:
-				env.vm.stack[env.vm.sp-offset] = json.NewNumber(intArg.ToRawBytes())
+				env.vm.stack[env.vm.sp-offset] = json.NewNumber(string(intArg.ToRawBytes()), false)
 			}
 		} else {
-			env.vm.stack[env.vm.sp-offset] = json.NewNumber(arg.ToRawBytes())
+			env.vm.stack[env.vm.sp-offset] = json.NewNumber(string(arg.ToRawBytes()), false)
 		}
 		return 1
 	}, "CONV numeric(SP-%d), JSON")
@@ -2075,7 +2075,7 @@ func (asm *assembler) Fn_JSON_KEYS(jp *json.Path) {
 			j := doc.(*evalJSON)
 			if obj, ok := j.Object(); ok {
 				var keys []*json.Value
-				obj.Visit(func(key []byte, _ *json.Value) {
+				obj.Visit(func(key string, _ *json.Value) {
 					keys = append(keys, json.NewString(key))
 				})
 				env.vm.stack[env.vm.sp-1] = json.NewArray(keys)
@@ -2096,7 +2096,7 @@ func (asm *assembler) Fn_JSON_KEYS(jp *json.Path) {
 			})
 			if obj != nil {
 				var keys []*json.Value
-				obj.Visit(func(key []byte, _ *json.Value) {
+				obj.Visit(func(key string, _ *json.Value) {
 					keys = append(keys, json.NewString(key))
 				})
 				env.vm.stack[env.vm.sp-1] = json.NewArray(keys)
@@ -2111,9 +2111,7 @@ func (asm *assembler) Fn_JSON_KEYS(jp *json.Path) {
 func (asm *assembler) Fn_JSON_OBJECT(args int) {
 	asm.adjustStack(-(args - 1))
 	asm.emit(func(env *ExpressionEnv) int {
-		j := json.NewObject()
-		obj, _ := j.Object()
-
+		var obj json.Object
 		for sp := env.vm.sp - args; sp < env.vm.sp; sp += 2 {
 			key := env.vm.stack[sp]
 			val := env.vm.stack[sp+1]
@@ -2125,7 +2123,7 @@ func (asm *assembler) Fn_JSON_OBJECT(args int) {
 
 			obj.Set(key.(*evalBytes).string(), val.(*evalJSON), json.Set)
 		}
-		env.vm.stack[env.vm.sp-args] = j
+		env.vm.stack[env.vm.sp-args] = json.NewObject(obj)
 		env.vm.sp -= args - 1
 		return 1
 	}, "FN JSON_ARRAY (SP-%d)...(SP-1)", args)

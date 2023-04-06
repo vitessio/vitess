@@ -676,7 +676,7 @@ func (tpb *tablePlanBuilder) generateValuesPart(buf *sqlparser.TrackedBuffer, bv
 		case opExpr:
 			switch cexpr.colType {
 			case querypb.Type_JSON:
-				buf.Myprintf("convert(%v using utf8mb4)", cexpr.expr)
+				buf.Myprintf("%v", cexpr.expr)
 			case querypb.Type_DATETIME:
 				sourceTZ := tpb.source.SourceTimeZone
 				targetTZ := tpb.source.TargetTimeZone
@@ -780,7 +780,7 @@ func (tpb *tablePlanBuilder) generateUpdateStatement() *sqlparser.ParsedQuery {
 			bvf.mode = bvAfter
 			switch cexpr.colType {
 			case querypb.Type_JSON:
-				buf.Myprintf("convert(%v using utf8mb4)", cexpr.expr)
+				buf.Myprintf("%v", cexpr.expr)
 			case querypb.Type_DATETIME:
 				sourceTZ := tpb.source.SourceTimeZone
 				targetTZ := tpb.source.TargetTimeZone

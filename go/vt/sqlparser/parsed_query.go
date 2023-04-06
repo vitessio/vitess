@@ -21,10 +21,10 @@ import (
 	"fmt"
 	"strings"
 
+	"vitess.io/vitess/go/bytes2"
+	vjson "vitess.io/vitess/go/mysql/json"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
-
-	"vitess.io/vitess/go/bytes2"
 
 	"vitess.io/vitess/go/sqltypes"
 
@@ -124,21 +124,30 @@ func (pq *ParsedQuery) AppendFromRow(buf *bytes2.Buffer, fields []*querypb.Field
 	for i, loc := range pq.bindLocations {
 		col := rowInfo[i]
 		buf.WriteString(pq.Query[offsetQuery:loc.offset])
-
 		typ := col.typ
-		if typ == querypb.Type_TUPLE {
+
+		switch typ {
+		case querypb.Type_TUPLE:
 			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected Type_TUPLE for value %d", i)
+		case querypb.Type_JSON:
+			buf2 := sqltypes.NullBytes
+			if col.length >= 0 {
+				buf2 = row.Values[col.offset : col.offset+col.length]
+			}
+			vv, err := vjson.MarshalSQLValue(buf2)
+			if err != nil {
+				return err
+			}
+			buf.WriteString(vv.RawStr())
+		default:
+			if col.length < 0 {
+				// -1 means a null variable; serialize it directly
+				buf.WriteString(sqltypes.NullStr)
+			} else {
+				vv := sqltypes.MakeTrusted(typ, row.Values[col.offset:col.offset+col.length])
+				vv.EncodeSQLBytes2(buf)
+			}
 		}
-
-		length := col.length
-		if length < 0 {
-			// -1 means a null variable; serialize it directly
-			buf.WriteString("null")
-		} else {
-			vv := sqltypes.MakeTrusted(typ, row.Values[col.offset:col.offset+col.length])
-			vv.EncodeSQLBytes2(buf)
-		}
-
 		offsetQuery = loc.offset + loc.length
 	}
 	buf.WriteString(pq.Query[offsetQuery:])
@@ -153,22 +162,23 @@ func (pq *ParsedQuery) MarshalJSON() ([]byte, error) {
 
 // EncodeValue encodes one bind variable value into the query.
 func EncodeValue(buf *strings.Builder, value *querypb.BindVariable) {
-	if value.Type != querypb.Type_TUPLE {
-		// Since we already check for TUPLE, we don't expect an error.
+	switch value.Type {
+	case querypb.Type_TUPLE:
+		buf.WriteByte('(')
+		for i, bv := range value.Values {
+			if i != 0 {
+				buf.WriteString(", ")
+			}
+			sqltypes.ProtoToValue(bv).EncodeSQLStringBuilder(buf)
+		}
+		buf.WriteByte(')')
+	case querypb.Type_JSON:
+		v, _ := sqltypes.BindVariableToValue(value)
+		buf.Write(v.Raw())
+	default:
 		v, _ := sqltypes.BindVariableToValue(value)
 		v.EncodeSQLStringBuilder(buf)
-		return
 	}
-
-	// It's a TUPLE.
-	buf.WriteByte('(')
-	for i, bv := range value.Values {
-		if i != 0 {
-			buf.WriteString(", ")
-		}
-		sqltypes.ProtoToValue(bv).EncodeSQLStringBuilder(buf)
-	}
-	buf.WriteByte(')')
 }
 
 // FetchBindVar resolves the bind variable by fetching it from bindVariables.
