@@ -272,10 +272,18 @@ func TestPrepareStatements(t *testing.T) {
 	mcmp.AssertMatchesNoOrder(`execute prep_in_pk using @id1, @id2`, `[[INT64(0) INT64(0)] [INT64(1) INT64(0)]]`)
 
 	mcmp.Exec(`prepare prep_art from 'select 1+?, 10/?'`)
-	mcmp.Exec(`set @x1 = 1, @x2 = 2.0, @x3 = "v", @x4 = 9999999999999999999999999999"`)
-	mcmp.AssertMatches(`execute prep_art using @x1, @x1`, `[[INT64(1) INT64(0)]]`)
-	mcmp.AssertMatches(`execute prep_art using @x2, @x2`, `[[INT64(1) INT64(0)]]`)
-	mcmp.AssertMatches(`execute prep_art using @x3, @x3`, `[[INT64(1) INT64(0)]]`)
-	mcmp.AssertMatches(`execute prep_art using @x4, @x4`, `[[INT64(1) INT64(0)]]`)
+	mcmp.Exec(`set @x1 = 1, @x2 = 2.0, @x3 = "v", @x4 = 9999999999999999999999999999`)
 
+	// We are not matching types and precision with mysql at the moment, so not comparing with `mcmp`
+	// This is because of the difference in how MySQL executes a raw query with literal values and
+	// the PREPARE/EXEC way that is missing type info at the PREPARE stage
+	utils.AssertMatches(t, mcmp.VtConn, `execute prep_art using @x1, @x1`, `[[INT64(2) DECIMAL(10.0000)]]`)
+	utils.AssertMatches(t, mcmp.VtConn, `execute prep_art using @x2, @x2`, `[[DECIMAL(3.0) DECIMAL(5.0000)]]`)
+	utils.AssertMatches(t, mcmp.VtConn, `execute prep_art using @x3, @x3`, `[[FLOAT64(1) NULL]]`)
+	utils.AssertMatches(t, mcmp.VtConn, `execute prep_art using @x4, @x4`, `[[DECIMAL(10000000000000000000000000000) DECIMAL(0.0000)]]`)
+
+	mcmp.Exec(`select 1+1, 10/1 from t1 limit 1`)
+	mcmp.Exec(`select 1+2.0, 10/2.0 from t1 limit 1`)
+	mcmp.Exec(`select 1+'v', 10/'v' from t1 limit 1`)
+	mcmp.Exec(`select 1+9999999999999999999999999999, 10/9999999999999999999999999999 from t1 limit 1`)
 }
