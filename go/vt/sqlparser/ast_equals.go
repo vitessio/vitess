@@ -2216,8 +2216,7 @@ func (cmp *Comparator) RefOfDeallocateStmt(a, b *DeallocateStmt) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return a.Type == b.Type &&
-		cmp.RefOfParsedComments(a.Comments, b.Comments) &&
+	return cmp.RefOfParsedComments(a.Comments, b.Comments) &&
 		cmp.IdentifierCI(a.Name, b.Name)
 }
 

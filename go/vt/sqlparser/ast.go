@@ -670,13 +670,9 @@ type (
 	// DeallocateStmt represents a Deallocate Statement
 	// More info available on https://dev.mysql.com/doc/refman/8.0/en/deallocate-prepare.html
 	DeallocateStmt struct {
-		Type     DeallocateStmtType
 		Comments *ParsedComments
 		Name     IdentifierCI
 	}
-
-	// DeallocateStmtType is an enum to get types of deallocate
-	DeallocateStmtType int8
 
 	// IntervalTypes is an enum to get types of intervals
 	IntervalTypes int8
