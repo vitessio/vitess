@@ -77,6 +77,7 @@ type VSchema interface {
 	ClearPrepareData(stmtName string)
 	PlanPrepareStatement(ctx context.Context, query string) (*engine.Plan, sqlparser.Statement, error)
 	GetPrepareData(stmtName string) *vtgatepb.PrepareData
+	StorePrepareData(name string, v *vtgatepb.PrepareData)
 }
 
 // PlannerNameToVersion returns the numerical representation of the planner

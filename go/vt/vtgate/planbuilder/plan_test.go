@@ -617,6 +617,8 @@ func (vw *vschemaWrapper) PlanPrepareStatement(ctx context.Context, query string
 func (vw *vschemaWrapper) ClearPrepareData(lowered string) {
 }
 
+func (vw *vschemaWrapper) StorePrepareData(string, *vtgatepb.PrepareData) {}
+
 func (vw *vschemaWrapper) GetUDV(name string) *querypb.BindVariable {
 	if strings.EqualFold(name, "prep_stmt") {
 		return sqltypes.StringBindVariable("select * from user where id in (?, ?, ?)")

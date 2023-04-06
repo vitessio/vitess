@@ -52,12 +52,7 @@ type noopVCursor struct {
 }
 
 func (t *noopVCursor) GetUDV(key string) *querypb.BindVariable {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (t *noopVCursor) StorePrepareData(stmtName string, prepareData *vtgatepb.PrepareData) {
-	//TODO implement me
+	// TODO implement me
 	panic("implement me")
 }
 
@@ -66,7 +61,7 @@ func (t *noopVCursor) InTransaction() bool {
 }
 
 func (t *noopVCursor) SetCommitOrder(co vtgatepb.CommitOrder) {
-	//TODO implement me
+	// TODO implement me
 	panic("implement me")
 }
 
@@ -379,7 +374,7 @@ type loggingVCursor struct {
 }
 
 func (f *loggingVCursor) GetUDV(key string) *querypb.BindVariable {
-	//TODO implement me
+	// TODO implement me
 	panic("implement me")
 }
 

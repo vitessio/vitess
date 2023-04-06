@@ -6,54 +6,14 @@
       "QueryType": "PREPARE",
       "Original": "prepare prep from 'select * from user where id = ?'",
       "Instructions": {
-        "OperatorType": "PREPARE",
-        "ParameterCount": 1,
-        "PrepareStatement": "select * from `user` where id = :v1",
-        "StatementName": "prep",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "EqualUnique",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select * from `user` where 1 != 1",
-            "Query": "select * from `user` where id = :v1",
-            "Table": "`user`",
-            "Values": [
-              ":v1"
-            ],
-            "Vindex": "user_index"
-          }
-        ]
+        "OperatorType": "Rows"
       }
     },
     "gen4-plan": {
       "QueryType": "PREPARE",
       "Original": "prepare prep from 'select * from user where id = ?'",
       "Instructions": {
-        "OperatorType": "PREPARE",
-        "ParameterCount": 1,
-        "PrepareStatement": "select * from `user` where id = :v1",
-        "StatementName": "prep",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "EqualUnique",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select * from `user` where 1 != 1",
-            "Query": "select * from `user` where id = :v1",
-            "Table": "`user`",
-            "Values": [
-              ":v1"
-            ],
-            "Vindex": "user_index"
-          }
-        ]
+        "OperatorType": "Rows"
       },
       "TablesUsed": [
         "user.user"
@@ -67,27 +27,7 @@
       "QueryType": "PREPARE",
       "Original": "prepare prep from 'delete from user where id between ? and ?'",
       "Instructions": {
-        "OperatorType": "PREPARE",
-        "ParameterCount": 2,
-        "PrepareStatement": "delete from `user` where id between :v1 and :v2",
-        "StatementName": "prep",
-        "Inputs": [
-          {
-            "OperatorType": "Delete",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "TargetTabletType": "PRIMARY",
-            "KsidLength": 1,
-            "KsidVindex": "user_index",
-            "MultiShardAutocommit": false,
-            "OwnedVindexQuery": "select Id, `Name`, Costly from `user` where id between :v1 and :v2 for update",
-            "Query": "delete from `user` where id between :v1 and :v2",
-            "Table": "user"
-          }
-        ]
+        "OperatorType": "Rows"
       },
       "TablesUsed": [
         "user.user"
@@ -101,19 +41,7 @@
       "QueryType": "PREPARE",
       "Original": "prepare prep from 'drop table user'",
       "Instructions": {
-        "OperatorType": "PREPARE",
-        "PrepareStatement": "drop table `user`",
-        "StatementName": "prep",
-        "Inputs": [
-          {
-            "OperatorType": "DDL",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "Query": "drop table `user`"
-          }
-        ]
+        "OperatorType": "Rows"
       },
       "TablesUsed": [
         "user.user"
@@ -127,54 +55,14 @@
       "QueryType": "PREPARE",
       "Original": "prepare prep from @prep_stmt",
       "Instructions": {
-        "OperatorType": "PREPARE",
-        "ParameterCount": 3,
-        "PrepareStatement": "select * from `user` where id in (:v1, :v2, :v3)",
-        "StatementName": "prep",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "IN",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select * from `user` where 1 != 1",
-            "Query": "select * from `user` where id in ::__vals",
-            "Table": "`user`",
-            "Values": [
-              "(:v1, :v2, :v3)"
-            ],
-            "Vindex": "user_index"
-          }
-        ]
+        "OperatorType": "Rows"
       }
     },
     "gen4-plan": {
       "QueryType": "PREPARE",
       "Original": "prepare prep from @prep_stmt",
       "Instructions": {
-        "OperatorType": "PREPARE",
-        "ParameterCount": 3,
-        "PrepareStatement": "select * from `user` where id in (:v1, :v2, :v3)",
-        "StatementName": "prep",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "IN",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select * from `user` where 1 != 1",
-            "Query": "select * from `user` where id in ::__vals",
-            "Table": "`user`",
-            "Values": [
-              "(:v1, :v2, :v3)"
-            ],
-            "Vindex": "user_index"
-          }
-        ]
+        "OperatorType": "Rows"
       },
       "TablesUsed": [
         "user.user"
@@ -386,48 +274,14 @@
       "QueryType": "PREPARE",
       "Original": "prepare prep_dual from 'select 1+?, 10/?'",
       "Instructions": {
-        "OperatorType": "PREPARE",
-        "ParameterCount": 2,
-        "PrepareStatement": "select 1 + :v1, 10 / :v2 from dual",
-        "StatementName": "prep_dual",
-        "Inputs": [
-          {
-            "OperatorType": "Projection",
-            "Expressions": [
-              "INT64(1) + :v1 as 1 + :v1",
-              "INT64(10) / :v2 as 10 / :v2"
-            ],
-            "Inputs": [
-              {
-                "OperatorType": "SingleRow"
-              }
-            ]
-          }
-        ]
+        "OperatorType": "Rows"
       }
     },
     "gen4-plan": {
       "QueryType": "PREPARE",
       "Original": "prepare prep_dual from 'select 1+?, 10/?'",
       "Instructions": {
-        "OperatorType": "PREPARE",
-        "ParameterCount": 2,
-        "PrepareStatement": "select 1 + :v1, 10 / :v2 from dual",
-        "StatementName": "prep_dual",
-        "Inputs": [
-          {
-            "OperatorType": "Projection",
-            "Expressions": [
-              "INT64(1) + :v1 as 1 + :v1",
-              "INT64(10) / :v2 as 10 / :v2"
-            ],
-            "Inputs": [
-              {
-                "OperatorType": "SingleRow"
-              }
-            ]
-          }
-        ]
+        "OperatorType": "Rows"
       },
       "TablesUsed": [
         "main.dual"

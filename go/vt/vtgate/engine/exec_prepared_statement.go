@@ -22,65 +22,9 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 )
-
-var _ Primitive = (*PrepareStmt)(nil)
-
-type PrepareStmt struct {
-	Name       string
-	Query      string
-	ParamCount int
-	Input      Primitive
-
-	noTxNeeded
-}
-
-func (p *PrepareStmt) RouteType() string {
-	return "PREPARE"
-}
-
-func (p *PrepareStmt) GetKeyspaceName() string {
-	return p.Input.GetKeyspaceName()
-}
-
-func (p *PrepareStmt) GetTableName() string {
-	return p.Input.GetTableName()
-}
-
-func (p *PrepareStmt) GetFields(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	return nil, vterrors.VT12001("prepare command on prepare statement")
-}
-
-func (p *PrepareStmt) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	vcursor.Session().StorePrepareData(p.Name, &vtgatepb.PrepareData{
-		PrepareStatement: p.Query,
-		ParamsCount:      int32(p.ParamCount),
-	})
-	return &sqltypes.Result{}, nil
-}
-
-func (p *PrepareStmt) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	res, _ := p.TryExecute(ctx, vcursor, bindVars, wantfields)
-	return callback(res)
-}
-
-func (p *PrepareStmt) Inputs() []Primitive {
-	return []Primitive{p.Input}
-}
-
-func (p *PrepareStmt) description() PrimitiveDescription {
-	return PrimitiveDescription{
-		OperatorType: p.RouteType(),
-		Other: map[string]any{
-			"StatementName":    p.Name,
-			"PrepareStatement": p.Query,
-			"ParameterCount":   p.ParamCount,
-		},
-	}
-}
 
 var _ Primitive = (*ExecStmt)(nil)
 

@@ -22,6 +22,7 @@ import (
 	"strings"
 
 	"vitess.io/vitess/go/sqltypes"
+	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -57,7 +58,19 @@ func buildPrepareStmtPlan(ctx context.Context, vschema plancontext.VSchema, pStm
 		return nil, err
 	}
 
-	var paramsCount int
+	count := countArguments(stmt)
+	vschema.StorePrepareData(stmtName, &vtgatepb.PrepareData{
+		PrepareStatement: sqlparser.String(stmt),
+		ParamsCount:      count,
+	})
+
+	return &planResult{
+		primitive: engine.NewRowsPrimitive(nil, nil),
+		tables:    plan.TablesUsed,
+	}, nil
+}
+
+func countArguments(stmt sqlparser.Statement) (paramsCount int32) {
 	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
 		switch node := node.(type) {
 		case *sqlparser.Argument:
@@ -67,16 +80,7 @@ func buildPrepareStmtPlan(ctx context.Context, vschema plancontext.VSchema, pStm
 		}
 		return true, nil
 	}, stmt)
-
-	return &planResult{
-		primitive: &engine.PrepareStmt{
-			Name:       stmtName,
-			Query:      sqlparser.String(stmt),
-			ParamCount: paramsCount,
-			Input:      plan.Instructions,
-		},
-		tables: plan.TablesUsed,
-	}, nil
+	return
 }
 
 func fetchUDVValue(vschema plancontext.VSchema, udv string) (string, error) {
