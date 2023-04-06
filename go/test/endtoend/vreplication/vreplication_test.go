@@ -380,7 +380,7 @@ func TestMultiCellVreplicationWorkflow(t *testing.T) {
 	require.NotNil(t, vtgate)
 	err := cluster.WaitForHealthyShard(vc.VtctldClient, keyspace, shard)
 	require.NoError(t, err)
-	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", keyspace, shard), 2)
+	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", keyspace, shard), 2, 30*time.Second)
 
 	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 	defer vtgateConn.Close()
@@ -581,7 +581,7 @@ func TestCellAliasVreplicationWorkflow(t *testing.T) {
 	require.NotNil(t, vtgate)
 	err = cluster.WaitForHealthyShard(vc.VtctldClient, keyspace, shard)
 	require.NoError(t, err)
-	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", keyspace, shard), 2)
+	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", keyspace, shard), 2, 30*time.Second)
 
 	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 	defer vtgateConn.Close()
