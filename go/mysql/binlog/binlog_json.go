@@ -24,7 +24,6 @@ import (
 
 	"vitess.io/vitess/go/mysql/format"
 	"vitess.io/vitess/go/mysql/json"
-	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -244,7 +243,7 @@ func binparserInt(typ jsonDataType, data []byte, pos int) (*json.Value, error) {
 		s = strconv.FormatUint(val, 10)
 	case jsonDouble:
 		dbl = true
-		s = string(format.FormatFloat(sqltypes.Float64, math.Float64frombits(val)))
+		s = string(format.FormatFloat(math.Float64frombits(val)))
 	}
 	return json.NewNumber(s, !dbl), nil
 }

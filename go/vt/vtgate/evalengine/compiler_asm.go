@@ -947,10 +947,10 @@ func (asm *assembler) Convert_nj(offset int, isBool bool) {
 			case 1:
 				env.vm.stack[env.vm.sp-offset] = json.ValueTrue
 			default:
-				env.vm.stack[env.vm.sp-offset] = json.NewNumber(string(intArg.ToRawBytes()), false)
+				env.vm.stack[env.vm.sp-offset] = json.NewNumber(string(intArg.ToRawBytes()), true)
 			}
 		} else {
-			env.vm.stack[env.vm.sp-offset] = json.NewNumber(string(arg.ToRawBytes()), false)
+			env.vm.stack[env.vm.sp-offset] = json.NewNumber(string(arg.ToRawBytes()), arg.SQLType() != sqltypes.Decimal)
 		}
 		return 1
 	}, "CONV numeric(SP-%d), JSON")
@@ -1043,14 +1043,14 @@ func (asm *assembler) Convert_xc(offset int, t sqltypes.Type, collation collatio
 
 func (asm *assembler) Convert_xd(offset int, m, d int32) {
 	asm.emit(func(env *ExpressionEnv) int {
-		env.vm.stack[env.vm.sp-offset] = evalToNumeric(env.vm.stack[env.vm.sp-offset]).toDecimal(m, d)
+		env.vm.stack[env.vm.sp-offset] = evalToDecimal(env.vm.stack[env.vm.sp-offset], m, d)
 		return 1
 	}, "CONV (SP-%d), DECIMAL", offset)
 }
 
 func (asm *assembler) Convert_xf(offset int) {
 	asm.emit(func(env *ExpressionEnv) int {
-		env.vm.stack[env.vm.sp-offset], _ = evalToNumeric(env.vm.stack[env.vm.sp-offset]).toFloat()
+		env.vm.stack[env.vm.sp-offset], _ = evalToFloat(env.vm.stack[env.vm.sp-offset])
 		return 1
 	}, "CONV (SP-%d), FLOAT64", offset)
 }

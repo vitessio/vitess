@@ -25,10 +25,10 @@ import (
 
 func TestParseRawNumber(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
-		f := func(s, expectedRN, expectedTail string) {
+		f := func(s, expectedRN, expectedTail string, expectedFloat bool) {
 			t.Helper()
 
-			rn, tail, err := parseRawNumber(s)
+			rn, tail, float, err := parseRawNumber(s)
 			if err != nil {
 				t.Fatalf("unexpected error: %s", err)
 			}
@@ -38,34 +38,37 @@ func TestParseRawNumber(t *testing.T) {
 			if tail != expectedTail {
 				t.Fatalf("unexpected tail; got %q; want %q", tail, expectedTail)
 			}
+			if float != expectedFloat {
+				t.Fatalf("unexpected float; got %v; want %v", float, expectedFloat)
+			}
 		}
 
-		f("0", "0", "")
-		f("0tail", "0", "tail")
-		f("123", "123", "")
-		f("123tail", "123", "tail")
-		f("-123tail", "-123", "tail")
-		f("-12.345tail", "-12.345", "tail")
-		f("-12.345e67tail", "-12.345e67", "tail")
-		f("-12.345E+67 tail", "-12.345E+67", " tail")
-		f("-12.345E-67,tail", "-12.345E-67", ",tail")
-		f("-1234567.8e+90tail", "-1234567.8e+90", "tail")
-		f("12.tail", "12.", "tail")
-		f(".2tail", ".2", "tail")
-		f("-.2tail", "-.2", "tail")
-		f("NaN", "NaN", "")
-		f("nantail", "nan", "tail")
-		f("inf", "inf", "")
-		f("Inftail", "Inf", "tail")
-		f("-INF", "-INF", "")
-		f("-Inftail", "-Inf", "tail")
+		f("0", "0", "", false)
+		f("0tail", "0", "tail", false)
+		f("123", "123", "", false)
+		f("123tail", "123", "tail", false)
+		f("-123tail", "-123", "tail", false)
+		f("-12.345tail", "-12.345", "tail", true)
+		f("-12.345e67tail", "-12.345e67", "tail", true)
+		f("-12.345E+67 tail", "-12.345E+67", " tail", true)
+		f("-12.345E-67,tail", "-12.345E-67", ",tail", true)
+		f("-1234567.8e+90tail", "-1234567.8e+90", "tail", true)
+		f("12.tail", "12.", "tail", true)
+		f(".2tail", ".2", "tail", true)
+		f("-.2tail", "-.2", "tail", true)
+		f("NaN", "NaN", "", true)
+		f("nantail", "nan", "tail", true)
+		f("inf", "inf", "", true)
+		f("Inftail", "Inf", "tail", true)
+		f("-INF", "-INF", "", true)
+		f("-Inftail", "-Inf", "tail", true)
 	})
 
 	t.Run("error", func(t *testing.T) {
 		f := func(s, expectedTail string) {
 			t.Helper()
 
-			_, tail, err := parseRawNumber(s)
+			_, tail, _, err := parseRawNumber(s)
 			if err == nil {
 				t.Fatalf("expecting non-nil error")
 			}

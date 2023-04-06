@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 
+	"vitess.io/vitess/go/hack"
 	"vitess.io/vitess/go/mysql/collations/charset"
 	"vitess.io/vitess/go/mysql/json"
 	"vitess.io/vitess/go/sqltypes"
@@ -75,7 +76,7 @@ func evalConvert_fj(e *evalFloat) *evalJSON {
 	if bytes.IndexByte(f, '.') < 0 {
 		f = append(f, '.', '0')
 	}
-	return json.NewNumber(string(f), false)
+	return json.NewNumber(hack.String(f), false)
 }
 
 func evalConvert_nj(e evalNumeric) *evalJSON {
@@ -85,7 +86,7 @@ func evalConvert_nj(e evalNumeric) *evalJSON {
 	if e == evalBoolFalse {
 		return json.ValueFalse
 	}
-	return json.NewNumber(string(e.ToRawBytes()), false)
+	return json.NewNumber(hack.String(e.ToRawBytes()), e.SQLType() != sqltypes.Decimal)
 }
 
 func evalConvert_cj(e *evalBytes) (*evalJSON, error) {

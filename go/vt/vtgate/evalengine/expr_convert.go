@@ -101,9 +101,9 @@ func (c *ConvertExpr) eval(env *ExpressionEnv) (eval, error) {
 		return t, nil
 	case "DECIMAL":
 		m, d := c.decimalPrecision()
-		return evalToNumeric(e).toDecimal(m, d), nil
+		return evalToDecimal(e, m, d), nil
 	case "DOUBLE", "REAL":
-		f, _ := evalToNumeric(e).toFloat()
+		f, _ := evalToFloat(e)
 		return f, nil
 	case "FLOAT":
 		if c.HasLength {

@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"strconv"
 
+	"vitess.io/vitess/go/hack"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/decimal"
 	"vitess.io/vitess/go/mysql/format"
@@ -100,14 +101,25 @@ func evalToSQLValueWithType(e eval, resultType sqltypes.Type) sqltypes.Value {
 		case *evalFloat:
 			return sqltypes.MakeTrusted(resultType, strconv.AppendUint(nil, uint64(e.f), 10))
 		}
-	case sqltypes.IsFloat(resultType) || resultType == sqltypes.Decimal:
+	case sqltypes.IsFloat(resultType):
 		switch e := e.(type) {
 		case *evalInt64:
 			return sqltypes.MakeTrusted(resultType, strconv.AppendInt(nil, e.i, 10))
 		case *evalUint64:
 			return sqltypes.MakeTrusted(resultType, strconv.AppendUint(nil, e.u, 10))
 		case *evalFloat:
-			return sqltypes.MakeTrusted(resultType, format.FormatFloat(resultType, e.f))
+			return sqltypes.MakeTrusted(resultType, format.FormatFloat(e.f))
+		case *evalDecimal:
+			return sqltypes.MakeTrusted(resultType, e.dec.FormatMySQL(e.length))
+		}
+	case sqltypes.IsDecimal(resultType):
+		switch e := e.(type) {
+		case *evalInt64:
+			return sqltypes.MakeTrusted(resultType, strconv.AppendInt(nil, e.i, 10))
+		case *evalUint64:
+			return sqltypes.MakeTrusted(resultType, strconv.AppendUint(nil, e.u, 10))
+		case *evalFloat:
+			return sqltypes.MakeTrusted(resultType, hack.StringBytes(strconv.FormatFloat(e.f, 'f', -1, 64)))
 		case *evalDecimal:
 			return sqltypes.MakeTrusted(resultType, e.dec.FormatMySQL(e.length))
 		}
@@ -190,9 +202,9 @@ func evalCoerce(e eval, typ sqltypes.Type, col collations.ID) (eval, error) {
 	case sqltypes.Char, sqltypes.VarChar:
 		panic("unreacheable")
 	case sqltypes.Decimal:
-		return evalToNumeric(e).toDecimal(0, 0), nil
+		return evalToDecimal(e, 0, 0), nil
 	case sqltypes.Float32, sqltypes.Float64:
-		f, _ := evalToNumeric(e).toFloat()
+		f, _ := evalToFloat(e)
 		return f, nil
 	case sqltypes.Int8, sqltypes.Int16, sqltypes.Int32, sqltypes.Int64:
 		return evalToInt64(e), nil

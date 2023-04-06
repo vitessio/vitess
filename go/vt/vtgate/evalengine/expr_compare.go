@@ -240,8 +240,8 @@ func evalCompare(left, right eval) (comp int, err error) {
 		// 		comparison of floating-point numbers."
 		//
 		//		https://dev.mysql.com/doc/refman/8.0/en/type-conversion.html
-		lf, _ := evalToNumeric(left).toFloat()
-		rf, _ := evalToNumeric(right).toFloat()
+		lf, _ := evalToFloat(left)
+		rf, _ := evalToFloat(right)
 		return compareNumeric(lf, rf)
 	}
 }

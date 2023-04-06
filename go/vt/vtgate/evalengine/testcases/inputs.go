@@ -21,7 +21,6 @@ import (
 	"strconv"
 
 	"vitess.io/vitess/go/mysql/format"
-	"vitess.io/vitess/go/sqltypes"
 )
 
 var inputJSONObjects = []string{
@@ -71,10 +70,10 @@ var radianInputs = []string{
 	"-1.5e0",
 	"9223372036854775810.4",
 	"-9223372036854775810.4",
-	string(format.FormatFloat(sqltypes.Float64, math.Pi)),
-	string(format.FormatFloat(sqltypes.Float64, math.MaxFloat64)),
-	string(format.FormatFloat(sqltypes.Float64, math.SmallestNonzeroFloat32)),
-	string(format.FormatFloat(sqltypes.Float64, math.SmallestNonzeroFloat64)),
+	string(format.FormatFloat(math.Pi)),
+	string(format.FormatFloat(math.MaxFloat64)),
+	string(format.FormatFloat(math.SmallestNonzeroFloat32)),
+	string(format.FormatFloat(math.SmallestNonzeroFloat64)),
 }
 
 var inputComparisonElement = []string{
@@ -94,6 +93,7 @@ var inputConversions = []string{
 	`0x0`, `0x1`, `0xff`, `X'00'`, `X'01'`, `X'ff'`,
 	"NULL", "true", "false",
 	"0xFF666F6F626172FF", "0x666F6F626172FF", "0xFF666F6F626172",
+	"9223372036854775807", "-9223372036854775808", "18446744073709551615",
 	"18446744073709540000e0",
 	"-18446744073709540000e0",
 	"JSON_OBJECT()", "JSON_ARRAY()",
@@ -107,7 +107,10 @@ var inputConversions = []string{
 	"cast('{}' as json)", "cast('[]' as json)",
 	"cast('null' as json)", "cast('true' as json)", "cast('false' as json)",
 	// JSON numbers
+	"cast(1 as json)", "cast(2 as json)", "cast(1.1 as json)", "cast(-1.1 as json)",
+	"cast(9223372036854775807 as json)", "cast(18446744073709551615 as json)",
 	"cast('1' as json)", "cast('2' as json)", "cast('1.1' as json)", "cast('-1.1' as json)",
+	"cast('9223372036854775807' as json)", "cast('18446744073709551615' as json)",
 	// JSON strings
 	"cast('\"foo\"' as json)", "cast('\"bar\"' as json)", "cast('invalid' as json)",
 	// JSON binary values

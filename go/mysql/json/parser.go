@@ -28,6 +28,8 @@ import (
 	"golang.org/x/exp/slices"
 
 	"vitess.io/vitess/go/mysql/datetime"
+	"vitess.io/vitess/go/mysql/format"
+	"vitess.io/vitess/go/mysql/json/fastparse"
 
 	"vitess.io/vitess/go/hack"
 	"vitess.io/vitess/go/mysql/decimal"
@@ -193,13 +195,39 @@ func parseValue(s string, c *cache, depth int) (*Value, string, error) {
 		return ValueNull, s[len("null"):], nil
 	}
 
-	ns, tail, err := parseRawNumber(s)
+	ns, tail, float, err := parseRawNumber(s)
 	if err != nil {
 		return nil, tail, fmt.Errorf("cannot parse number: %s", err)
 	}
+
+	if !float {
+		_, err := fastparse.ParseInt64(ns, 10)
+		if err == nil {
+			v := c.getValue()
+			v.t = TypeNumber
+			v.s = ns
+			v.i = true
+			return v, tail, nil
+		}
+		_, err = fastparse.ParseUint64(ns, 10)
+		if err == nil {
+			v := c.getValue()
+			v.t = TypeNumber
+			v.s = ns
+			v.i = true
+			return v, tail, nil
+		}
+	}
+
+	f, err := fastparse.ParseFloat64(ns)
+	if err != nil {
+		return nil, tail, fmt.Errorf("cannot parse number: %s", err)
+	}
+
 	v := c.getValue()
 	v.t = TypeNumber
-	v.s = ns
+	v.s = hack.String(format.FormatFloat(f))
+	v.i = false
 	return v, tail, nil
 }
 
@@ -461,29 +489,33 @@ func parseRawString(s string) (string, string, error) {
 	}
 }
 
-func parseRawNumber(s string) (string, string, error) {
+func parseRawNumber(s string) (string, string, bool, error) {
 	// The caller must ensure len(s) > 0
 
+	var float bool
 	// Find the end of the number.
 	for i := 0; i < len(s); i++ {
 		ch := s[i]
 		if (ch >= '0' && ch <= '9') || ch == '.' || ch == '-' || ch == 'e' || ch == 'E' || ch == '+' {
+			if ch == '.' || ch == 'e' || ch == 'E' {
+				float = true
+			}
 			continue
 		}
 		if i == 0 || i == 1 && (s[0] == '-' || s[0] == '+') {
 			if len(s[i:]) >= 3 {
 				xs := s[i : i+3]
 				if strings.EqualFold(xs, "inf") || strings.EqualFold(xs, "nan") {
-					return s[:i+3], s[i+3:], nil
+					return s[:i+3], s[i+3:], true, nil
 				}
 			}
-			return "", s, fmt.Errorf("unexpected char: %q", s[:1])
+			return "", s, false, fmt.Errorf("unexpected char: %q", s[:1])
 		}
 		ns := s[:i]
 		s = s[i:]
-		return ns, s, nil
+		return ns, s, float, nil
 	}
-	return s, "", nil
+	return s, "", float, nil
 }
 
 // Object represents JSON object.
@@ -896,11 +928,20 @@ func (v *Value) NumberType() NumberType {
 
 func (v *Value) Int64() (int64, bool) {
 	str := strings.TrimSpace(v.s)
-	i, err := strconv.ParseInt(str, 10, 64)
+	i, err := fastparse.ParseInt64(str, 10)
 	if err != nil {
-		return 0, false
+		return i, false
 	}
 	return i, true
+}
+
+func (v *Value) Uint64() (uint64, bool) {
+	str := strings.TrimSpace(v.s)
+	u, err := fastparse.ParseUint64(str, 10)
+	if err != nil {
+		return u, false
+	}
+	return u, true
 }
 
 func (v *Value) Float64() (float64, bool) {
@@ -910,7 +951,7 @@ func (v *Value) Float64() (float64, bool) {
 	// of the standard library, but not exposed, so we hook into it.
 	val, _, err := hack.ParseFloatPrefix(str, 64)
 	if err != nil {
-		return 0.0, false
+		return val, false
 	}
 	return val, true
 }
