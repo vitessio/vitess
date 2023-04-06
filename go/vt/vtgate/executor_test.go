@@ -2592,7 +2592,7 @@ func TestExecutorPrepareExecute(t *testing.T) {
 	require.NoError(t, err)
 	prepData = session.PrepareStatement["prep_user2"]
 	require.NotNil(t, prepData)
-	require.Equal(t, "select * from `user` where id in ::__vals", prepData.PrepareStatement)
+	require.Equal(t, "select * from `user` where id in (:v1, :v2, :v3)", prepData.PrepareStatement)
 	require.EqualValues(t, 3, prepData.ParamsCount)
 
 	// syntax error on prepared query

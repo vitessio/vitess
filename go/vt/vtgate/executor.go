@@ -1440,7 +1440,17 @@ func (e *Executor) planPrepareStmt(ctx context.Context, vcursor *vcursorImpl, qu
 
 	// creating this log stats to not interfere with the original log stats.
 	lStats := logstats.NewLogStats(ctx, "prepare", query, vcursor.safeSession.SessionUUID, nil)
-	plan, err := e.getPlan(ctx, vcursor, query, stmt, vcursor.marginComments, map[string]*querypb.BindVariable{}, reservedVars /* normalize */, false, lStats)
+	plan, err := e.getPlan(
+		ctx,
+		vcursor,
+		query,
+		sqlparser.CloneStatement(stmt),
+		vcursor.marginComments,
+		map[string]*querypb.BindVariable{},
+		reservedVars, /* normalize */
+		false,
+		lStats,
+	)
 	if err != nil {
 		return nil, nil, err
 	}

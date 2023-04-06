@@ -271,6 +271,15 @@ func TestPrepareStatements(t *testing.T) {
 	mcmp.AssertMatches(`execute prep_in_pk using @id1, @id1`, `[[INT64(1) INT64(0)]]`)
 	mcmp.AssertMatchesNoOrder(`execute prep_in_pk using @id1, @id2`, `[[INT64(0) INT64(0)] [INT64(1) INT64(0)]]`)
 
+	// Fail by providing wrong number of arguments
+	_, err := mcmp.ExecAllowAndCompareError(`execute prep_in_pk using @id1, @id1, @id`)
+	incorrectCount := "VT03025: Incorrect arguments to EXECUTE"
+	assert.ErrorContains(t, err, incorrectCount)
+	_, err = mcmp.ExecAllowAndCompareError(`execute prep_in_pk using @id1`)
+	assert.ErrorContains(t, err, incorrectCount)
+	_, err = mcmp.ExecAllowAndCompareError(`execute prep_in_pk`)
+	assert.ErrorContains(t, err, incorrectCount)
+
 	mcmp.Exec(`prepare prep_art from 'select 1+?, 10/?'`)
 	mcmp.Exec(`set @x1 = 1, @x2 = 2.0, @x3 = "v", @x4 = 9999999999999999999999999999`)
 

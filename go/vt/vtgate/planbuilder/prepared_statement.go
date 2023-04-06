@@ -28,6 +28,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
+// regexParams checks that argument names are in the form v1, v2, v3...
 var regexParams = regexp.MustCompile(`^v\d+`)
 
 func buildPrepareStmtPlan(ctx context.Context, vschema plancontext.VSchema, pStmt *sqlparser.PrepareStmt) (*planResult, error) {
