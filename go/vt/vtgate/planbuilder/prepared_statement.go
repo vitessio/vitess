@@ -34,30 +34,21 @@ func buildPrepareStmtPlan(ctx context.Context, vschema plancontext.VSchema, pStm
 	stmtName := pStmt.Name.Lowered()
 	vschema.ClearPrepareData(stmtName)
 
-	var pQuery, udv string
-	var udvType bool
+	var pQuery string
+	var err error
 	switch expr := pStmt.Statement.(type) {
 	case *sqlparser.Literal:
 		pQuery = expr.Val
 	case *sqlparser.Variable:
-		udv = expr.Name.Lowered()
-		udvType = true
+		pQuery, err = fetchUDVValue(vschema, expr.Name.Lowered())
 	case *sqlparser.Argument:
-		udv, _ = strings.CutPrefix(expr.Name, sqlparser.UserDefinedVariableName)
-		udvType = true
+		udv, _ := strings.CutPrefix(expr.Name, sqlparser.UserDefinedVariableName)
+		pQuery, err = fetchUDVValue(vschema, udv)
 	default:
 		return nil, vterrors.VT13002("prepare statement should not have : %T", pStmt.Statement)
 	}
-	if udvType {
-		bv := vschema.GetUDV(udv)
-		if bv == nil {
-			return nil, vterrors.VT03024(udv)
-		}
-		val, err := sqltypes.BindVariableToValue(bv)
-		if err != nil {
-			return nil, err
-		}
-		pQuery = val.ToString()
+	if err != nil {
+		return nil, err
 	}
 
 	plan, stmt, err := vschema.PlanPrepareStatement(ctx, pQuery)
@@ -85,6 +76,18 @@ func buildPrepareStmtPlan(ctx context.Context, vschema plancontext.VSchema, pStm
 		},
 		tables: plan.TablesUsed,
 	}, nil
+}
+
+func fetchUDVValue(vschema plancontext.VSchema, udv string) (string, error) {
+	bv := vschema.GetUDV(udv)
+	if bv == nil {
+		return "", vterrors.VT03024(udv)
+	}
+	val, err := sqltypes.BindVariableToValue(bv)
+	if err != nil {
+		return "", err
+	}
+	return val.ToString(), nil
 }
 
 func buildExecuteStmtPlan(ctx context.Context, vschema plancontext.VSchema, eStmt *sqlparser.ExecuteStmt) (*planResult, error) {
