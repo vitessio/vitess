@@ -181,21 +181,38 @@ type Conn struct {
 	// PrepareData is the map to use a prepared statement.
 	PrepareData map[uint32]*PrepareData
 
-	// CursorState serves as a buffer for the current result set from the last COM_STMT_EXECUTE
-	// Rows are read from here upon receiving COM_STMT_FETCH
-	// This is basically a server-side cursor implementation
-	// TODO: we will allow only exactly 1 cursor open for now, MySQL seems to allow any number of independent cursors
+	// cursorState represents a query which is running as a result of a
+	// COM_STMT_EXECUTE.  Rows will be fetched with COM_STMT_FETCH, and
+	// possibly the query will need to be terminated as a result of what
+	// happens in the protocol, etc.
+	// TODO: We currently only support one outstanding cursor.
 	cs *cursorState
 }
 
 type cursorState struct {
-	stmtID  uint32
-	pending *sqltypes.Result
-	finished bool
+	stmtID uint32
 
-	next  chan *sqltypes.Result
-	done  chan error
-	quit  chan error
+	// The goroutine which generates the results delivers |Result|s with a
+	// batch of rows one at a time on the |next| channel.  As long as the
+	// query has not delivered EOF, we will have pending rows, because we
+	// prefetch them as soon as they are exhausted. That is, if we have 10
+	// pending rows and a client fetches only 10 rows, we will block on
+	// fetching more rows before ew return the currently cached 10 rows.
+	// This allows us to detect EOF and correctly return CursorExhausted.
+	pending *sqltypes.Result
+
+	// The channel on which the running query is sending batched results.
+	next chan *sqltypes.Result
+
+	// The channel on which the running query will return its final error
+	// status, either `nil` or an error.
+	done chan error
+
+	// A control channel on which the running query is listening. If the
+	// server needs to cancel the inflight query based on what is happening
+	// in the wire protocol handling, it will send on this channel and then
+	// block on `done` being sent to.
+	quit chan error
 }
 
 // PrepareData is a buffer used for store prepare statement metadata
@@ -1129,13 +1146,8 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 			return err
 		}
 	case ComStmtExecute:
-		// flush is called at the end of this block.
-		// To simplify error handling, we do not
-		// encapsulate it with a defer'd func()
-		c.startWriterBuffering()
-
 		// outstanding cursor, error
-		if c.cs != nil && c.cs.pending != nil {
+		if c.cs != nil {
 			log.Error("Received ComStmtExecute with outstanding cursor")
 			if werr := c.writeErrorPacket(ERUnknownComError, SSUnknownComError, "error handling packet: %v", data); werr != nil {
 				log.Error("Error writing error packet to client: %v", werr)
@@ -1144,18 +1156,13 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 			return nil
 		}
 
-		queryStart := time.Now()
+		// flush is called at the end of this block.
+		// To simplify error handling, we do not
+		// encapsulate it with a defer'd func()
+		c.startWriterBuffering()
+
 		stmtID, cursorType, err := c.parseComStmtExecute(c.PrepareData, data)
 		c.recycleReadPacket()
-
-		if stmtID != uint32(0) {
-			defer func() {
-				// Allocate a new bindvar map every time since VTGate.Execute() mutates it.
-				prepare := c.PrepareData[stmtID]
-				prepare.BindVars = make(map[string]*querypb.BindVariable, prepare.ParamsCount)
-			}()
-		}
-
 		if err != nil {
 			if werr := c.writeErrorPacketFromError(err); werr != nil {
 				// If we can't even write the error, we're done.
@@ -1165,11 +1172,14 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 			return c.flush()
 		}
 
-		if cursorType == NoCursor {
-			c.StatusFlags &= ^uint16(ServerCursorExists)
-		} else {
-			c.StatusFlags |= uint16(ServerCursorExists)
+		if stmtID != uint32(0) {
+			defer func() {
+				// Allocate a new bindvar map every time since VTGate.Execute() mutates it.
+				prepare := c.PrepareData[stmtID]
+				prepare.BindVars = make(map[string]*querypb.BindVariable, prepare.ParamsCount)
+			}()
 		}
+		queryStart := time.Now()
 
 		if err = c.execPrepareStatement(stmtID, cursorType, handler); err != nil {
 			return err
@@ -1254,18 +1264,6 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 		}
 	case ComStmtFetch:
 		c.startWriterBuffering()
-		endFetch := func() error {
-			if err = c.writeEndResult(false, 0, 0, handler.WarningCount(c)); err != nil {
-				log.Errorf("Error writing result to %s: %v", c, err)
-				return err
-			}
-			if err = c.flush(); err != nil {
-				log.Errorf("Conn %v: Flush() failed: %v", c.ID(), err)
-				return err
-			}
-			return nil
-		}
-
 		stmtID, numRows, ok := c.parseComStmtFetch(data)
 		c.recycleReadPacket()
 		if !ok {
@@ -1274,98 +1272,68 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 				log.Error("Error writing error packet to client: %v", werr)
 				return werr
 			}
+			return c.flush()
 		}
-
-		// cursor is closed
-		if c.cs == nil {
-			c.StatusFlags &= ^uint16(ServerCursorExists)
-			c.StatusFlags |= uint16(ServerCursorLastRowSent)
-			if err = endFetch(); err != nil {
-				return err
-			}
-			return nil
-		}
-
-		// cursor is open
-		c.StatusFlags |= uint16(ServerCursorExists)
-		c.StatusFlags &= ^uint16(ServerCursorLastRowSent)
 
 		// fetching from wrong statement
-		if stmtID != c.cs.stmtID {
+		if c.cs == nil || stmtID != c.cs.stmtID {
 			log.Errorf("Requested stmtID does not match stmtID of open cursor. Client %v, returning error: %v", c.ConnectionID, data)
 			if werr := c.writeErrorPacket(ERUnknownComError, SSUnknownComError, "error handling packet: %v", data); werr != nil {
 				log.Error("Error writing error packet to client: %v", err)
 				return werr
 			}
+			return c.flush()
 		}
 
-		// while we are still expecting rows
-		for c.cs.pending == nil || len(c.cs.pending.Rows) < int(numRows) {
-			// receive rows from next to cs.pending
-			var newqr *sqltypes.Result
-			newqr, ok = <-c.cs.next
 
-			// channel is closed, meaning there are no more rows
-			if !ok {
-				// check if there was an error
-				if !c.cs.finished {
-					if err, ok = <- c.cs.done; ok {
-						c.cs.finished = true
-						if err != nil {
-							c.discardCursor()
-							if werr := c.writeErrorPacketFromError(err); werr != nil {
-								log.Errorf("Error writing query error to %s: %v", c, werr)
-								return werr
-							}
-						}
-					}
-				}
+		// There is always a pending result set, because we prefetch it to detect EOF.
+		// When we detect EOF, we set c.cs = nil.
 
-				// no remaining rows, reached end of result set
-				if c.cs.pending == nil {
-					c.discardCursor()
-					if err = endFetch(); err != nil {
+		for c.cs != nil && numRows != 0 {
+			toSend := uint32(len(c.cs.pending.Rows))
+			if toSend > numRows {
+				toSend = numRows
+			}
+			nextRows := c.cs.pending.Rows[toSend:]
+			c.cs.pending.Rows = c.cs.pending.Rows[:toSend]
+
+			if err = c.writeBinaryRows(c.cs.pending); err != nil {
+				log.Errorf("Error writing result to %s: %v", c, err)
+				return err
+			}
+			c.cs.pending.Rows = nextRows
+			numRows -= toSend
+			if len(c.cs.pending.Rows) == 0 {
+				var ok bool
+				c.cs.pending, ok = <-c.cs.next
+				if !ok {
+					// Query has terminated. Check for an error.
+					err := <-c.cs.done
+					c.cs = nil
+					if err != nil {
+						// We can't send an error in the middle of a stream.
+						// All we can do is abort the send, which will cause a 2013.
+						log.Errorf("Error in the middle of a stream to %s: %v", c, err)
 						return err
 					}
-					return nil
 				}
-
-				// send remaining rows
-				break
-			}
-
-			// move rows into buffer
-			if c.cs.pending == nil {
-				c.cs.pending = newqr
-			} else {
-				c.cs.pending.Rows = append(c.cs.pending.Rows, newqr.Rows...)
-			}
-
-			// write out some rows to prevent packets from getting too large
-			for len(c.cs.pending.Rows) > batchSize && len(c.cs.pending.Rows) < int(numRows) {
-				if err = c.writeNumRows(batchSize); err != nil {
-					return err
-				}
-				numRows -= batchSize
 			}
 		}
 
-		// cap the number of rows
-		if int(numRows) > len(c.cs.pending.Rows) {
-			numRows = uint32(len(c.cs.pending.Rows))
+		if c.cs == nil {
+			c.StatusFlags |= uint16(ServerCursorLastRowSent)
 		}
-		// write the first numRows
-		if err = c.writeNumRows(int(numRows)); err != nil {
+		if err := c.writeEndResult(false, 0, 0, handler.WarningCount(c)); err != nil {
+			log.Errorf("Error writing result to %s: %v", c, err)
 			return err
 		}
-		if err = endFetch(); err != nil {
+		if c.cs == nil {
+			c.StatusFlags &= ^uint16(ServerCursorLastRowSent)
+		}
+		if err := c.flush(); err != nil {
+			log.Errorf("Conn %v: Flush() failed: %v", c.ID(), err)
 			return err
 		}
-		// no rows left, reset pending
-		if len(c.cs.pending.Rows) == 0 {
-			c.cs.pending = nil
-		}
-		return nil
 	case ComResetConnection:
 		// Clean up and reset the connection
 		c.recycleReadPacket()
@@ -1405,15 +1373,13 @@ func (c *Conn) writeNumRows(numRows int) (err error) {
 // discardCursor stops the statement execute goroutine and clears the cursor state, if it exists
 func (c *Conn) discardCursor() {
 	// close cursor if open with unread results
-	if c.cs != nil && c.cs.pending != nil {
+	if c.cs != nil {
 		select {
 		case c.cs.quit <- errors.New("cancel cursor query"):
-			<- c.cs.done
-		case <- c.cs.done:
+			<-c.cs.done
+		case <-c.cs.done:
 		}
 	}
-	c.StatusFlags &= ^uint16(ServerCursorExists)
-	c.StatusFlags |= uint16(ServerCursorLastRowSent)
 	c.cs = nil
 }
 
@@ -1469,12 +1435,6 @@ func (c *Conn) execQuery(query string, handler Handler, multiStatements bool) (s
 			if err := c.writeFields(qr); err != nil {
 				return err
 			}
-			// Now send an EOF packet.
-			if c.Capabilities&CapabilityClientDeprecateEOF == 0 {
-				if err := c.writeEOFPacket(c.StatusFlags, 0); err != nil {
-					return err
-				}
-			}
 		}
 
 		return c.writeRows(qr)
@@ -1527,12 +1487,12 @@ func (c *Conn) execQuery(query string, handler Handler, multiStatements bool) (s
 // If the client requests that a cursor be opened, we should only write the fields, and wait for subsequent fetch
 // requests to write the rows from the result set.
 func (c *Conn) execPrepareStatement(stmtID uint32, cursorType byte, handler Handler) error {
-	fieldSent := false
-	sendFinished := false // sendFinished is set if the response should just be an OK packet.
 	prepare := c.PrepareData[stmtID]
-	var err error
 	if cursorType == NoCursor {
-		err = handler.ComStmtExecute(c, prepare, func(qr *sqltypes.Result) error {
+		fieldSent := false
+		sendFinished := false // sendFinished is set if the response should just be an OK packet.
+
+		err := handler.ComStmtExecute(c, prepare, func(qr *sqltypes.Result) error {
 			if sendFinished {
 				// Failsafe: Unreachable if server is well-behaved.
 				return io.EOF
@@ -1548,49 +1508,71 @@ func (c *Conn) execPrepareStatement(stmtID uint32, cursorType byte, handler Hand
 				if err := c.writeFields(qr); err != nil {
 					return err
 				}
-				// Now send an EOF packet.
-				if c.Capabilities&CapabilityClientDeprecateEOF == 0 {
-					// With CapabilityClientDeprecateEOF, we do not send this EOF.
-					if err := c.writeEOFPacket(c.StatusFlags, 0); err != nil {
-						return err
-					}
-				}
 			}
 			return c.writeBinaryRows(qr)
 		})
-	} else {
-		c.cs = &cursorState{
-			stmtID: stmtID,
-			next: make(chan *sqltypes.Result),
-			done: make(chan error),
-			quit: make(chan error),
+
+		// If no field was sent, we expect an error.
+		if !fieldSent {
+			// This is just a failsafe. Should never happen.
+			if err == nil || err == io.EOF {
+				err = NewSQLErrorFromError(errors.New("unexpected: query ended with no results and no error"))
+			}
+			if werr := c.writeErrorPacketFromError(err); werr != nil {
+				// If we can't even write the error, we're done.
+				log.Errorf("Error writing query error to %s: %v", c, werr)
+				return werr
+			}
+		} else {
+			// We can't send an error in the middle of a stream.
+			// All we can do is abort the send, which will cause a 2013.
+			if err != nil {
+				log.Errorf("Error in the middle of a stream to %s: %v", c, err)
+				return err
+			}
+
+			// Send the end packet only if sendFinished is false (results were streamed).
+			// In this case the affectedRows and lastInsertID are always 0 since it
+			// was a read operation.
+			if !sendFinished {
+				if werr := c.writeEndResult(false, 0, 0, handler.WarningCount(c)); werr != nil {
+					log.Errorf("Error writing result to %s: %v", c, werr)
+					return werr
+				}
+			}
 		}
 
+		return nil
+	} else {
+		next := make(chan *sqltypes.Result)
+		done, quit := make(chan error), make(chan error)
+
 		go func() {
-			var gerr error
-			defer func(){
+			var err error
+			defer func() {
 				// pass along error, even if there's a panic
 				if r := recover(); r != nil {
-					gerr = fmt.Errorf("panic while running query for server-side cursor: %v", r)
+					err = fmt.Errorf("panic while running query for server-side cursor: %v", r)
 				}
-				close(c.cs.next)
-				c.cs.done <- gerr
+				close(next)
+				done <- err
+				close(done)
 			}()
-			gerr = handler.ComStmtExecute(c, prepare, func(qr *sqltypes.Result) error {
+			err = handler.ComStmtExecute(c, prepare, func(qr *sqltypes.Result) error {
 				// block until query results are sent or receive signal to quit
 				var qerr error
 				select {
-				case c.cs.next <- qr:
-				case qerr = <- c.cs.quit:
+				case next <- qr:
+				case qerr = <-quit:
 				}
 				return qerr
 			})
 		}()
 
 		// Immediately receive the very first query result to write the fields
-		qr, ok := <- c.cs.next
+		qr, ok := <-next
 		if !ok {
-			c.discardCursor()
+			<-done
 			if werr := c.writeErrorPacket(ERUnknownError, SSUnknownSQLState, "unknown error: %v", "missing result set"); werr != nil {
 				log.Errorf("Error writing query error to %s: %v", c, werr)
 				return werr
@@ -1598,51 +1580,37 @@ func (c *Conn) execPrepareStatement(stmtID uint32, cursorType byte, handler Hand
 			return nil
 		}
 
-		// Write fields
-		fieldSent = true
 		if len(qr.Fields) == 0 {
-			sendFinished = true
-			err = c.writeOKPacket(qr.RowsAffected, qr.InsertID, c.StatusFlags, 0)
+			// DML or something without a result set. We do not open a cursor here.
+			<-done
+			return c.writeOKPacket(qr.RowsAffected, qr.InsertID, c.StatusFlags, 0)
 		} else {
-			err = c.writeFields(qr)
-		}
-
-		// Cache query results to be written upon ComStmtFetch
-		c.cs.pending = qr
-	}
-
-	// If no field was sent, we expect an error.
-	if !fieldSent {
-		// This is just a failsafe. Should never happen.
-		if err == nil || err == io.EOF {
-			err = NewSQLErrorFromError(errors.New("unexpected: query ended with no results and no error"))
-		}
-		if werr := c.writeErrorPacketFromError(err); werr != nil {
-			// If we can't even write the error, we're done.
-			log.Errorf("Error writing query error to %s: %v", c, werr)
-			return werr
-		}
-		return nil
-	}
-
-	// We can't send an error in the middle of a stream.
-	// All we can do is abort the send, which will cause a 2013.
-	if err != nil {
-		log.Errorf("Error in the middle of a stream to %s: %v", c, err)
-		return err
-	}
-
-	// Send the end packet only if sendFinished is false (results were streamed).
-	// In this case the affectedRows and lastInsertID are always 0 since it
-	// was a read operation.
-	if !sendFinished {
-		if werr := c.writeEndResult(false, 0, 0, handler.WarningCount(c)); werr != nil {
-			log.Errorf("Error writing result to %s: %v", c, werr)
-			return werr
+			// Open the cursor and write the fields.
+			c.StatusFlags |= uint16(ServerCursorExists)
+			if err := c.writeFieldsWithoutEOF(qr); err != nil {
+				log.Errorf("Error writing fields to %s: %v", c, err)
+				return err
+			}
+			// TODO: Look into whether accessing WarningCount
+			// here after passing `c` to ComStmtExecute in the
+			// goroutine above races.
+			if werr := c.writeEndResult(false, 0, 0, handler.WarningCount(c)); werr != nil {
+				log.Errorf("Error writing result to %s: %v", c, werr)
+				return werr
+			}
+			// After writing the EOF_Packet/OK_Packet above, we
+			// have told the client the cursor is open.
+			c.StatusFlags &= ^uint16(ServerCursorExists)
+			c.cs = &cursorState{
+				stmtID:  stmtID,
+				next:    next,
+				done:    done,
+				quit:    quit,
+				pending: qr,
+			}
+			return nil
 		}
 	}
-
-	return nil
 }
 
 //
@@ -1674,19 +1642,19 @@ func isEOFPacket(data []byte) bool {
 //
 // Note: This is only valid on actual EOF packets and not on OK packets with the EOF
 // type code set, i.e. should not be used if ClientDeprecateEOF is set.
-func parseEOFPacket(data []byte) (warnings uint16, more bool, err error) {
+func parseEOFPacket(data []byte) (warnings uint16, status serverStatus, err error) {
 	// The warning count is in position 2 & 3
 	warnings, _, _ = readUint16(data, 1)
 
 	// The status flag is in position 4 & 5
 	statusFlags, _, ok := readUint16(data, 3)
 	if !ok {
-		return 0, false, vterrors.Errorf(vtrpc.Code_INTERNAL, "invalid EOF packet statusFlags: %v", data)
+		return 0, 0, vterrors.Errorf(vtrpc.Code_INTERNAL, "invalid EOF packet statusFlags: %v", data)
 	}
-	return warnings, (statusFlags & ServerMoreResultsExists) != 0, nil
+	return warnings, serverStatus(statusFlags), nil
 }
 
-func parseOKPacket(data []byte) (uint64, uint64, uint16, uint16, error) {
+func parseOKPacket(data []byte) (uint64, uint64, serverStatus, uint16, error) {
 	// We already read the type.
 	pos := 1
 
@@ -1714,7 +1682,7 @@ func parseOKPacket(data []byte) (uint64, uint64, uint16, uint16, error) {
 		return 0, 0, 0, 0, vterrors.Errorf(vtrpc.Code_INTERNAL, "invalid OK packet warnings: %v", data)
 	}
 
-	return affectedRows, lastInsertID, statusFlags, warnings, nil
+	return affectedRows, lastInsertID, serverStatus(statusFlags), warnings, nil
 }
 
 // isErrorPacket determines whether or not the packet is an error packet. Mostly here for
