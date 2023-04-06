@@ -6033,6 +6033,13 @@ export namespace vtadmin {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetSrvKeyspaceRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a GetSrvKeyspacesRequest. */
@@ -6129,6 +6136,13 @@ export namespace vtadmin {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetSrvKeyspacesRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a GetSrvKeyspacesResponse. */
@@ -6219,6 +6233,13 @@ export namespace vtadmin {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetSrvKeyspacesResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a GetSrvVSchemaRequest. */
