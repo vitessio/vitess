@@ -24,6 +24,7 @@ import (
 	"os/exec"
 	"path"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -240,12 +241,12 @@ func TestRecoveryImpl(t *testing.T) {
 	_, err = primary.VttabletProcess.QueryTablet("update vt_insert_test set msg = 'msgx1' where id = 1", keyspaceName, true)
 	assert.NoError(t, err)
 
-	//verify that primary has new value
+	// verify that primary has new value
 	qr, err := primary.VttabletProcess.QueryTablet("select msg from vt_insert_test where id = 1", keyspaceName, true)
 	assert.NoError(t, err)
 	assert.Equal(t, "msgx1", qr.Rows[0][0].ToString())
 
-	//verify that restored replica has old value
+	// verify that restored replica has old value
 	qr, err = replica2.VttabletProcess.QueryTablet("select msg from vt_insert_test where id = 1", keyspaceName, true)
 	assert.NoError(t, err)
 	assert.Equal(t, "test1", qr.Rows[0][0].ToString())
@@ -269,12 +270,12 @@ func TestRecoveryImpl(t *testing.T) {
 	_, err = primary.VttabletProcess.QueryTablet("update vt_insert_test set msg = 'msgx2' where id = 1", keyspaceName, true)
 	assert.NoError(t, err)
 
-	//verify that primary has new value
+	// verify that primary has new value
 	qr, err = primary.VttabletProcess.QueryTablet("select msg from vt_insert_test where id = 1", keyspaceName, true)
 	assert.NoError(t, err)
 	assert.Equal(t, "msgx2", qr.Rows[0][0].ToString())
 
-	//verify that restored replica has old value
+	// verify that restored replica has old value
 	qr, err = replica3.VttabletProcess.QueryTablet("select msg from vt_insert_test where id = 1", keyspaceName, true)
 	assert.NoError(t, err)
 	assert.Equal(t, "msgx1", qr.Rows[0][0].ToString())
@@ -285,14 +286,10 @@ func TestRecoveryImpl(t *testing.T) {
 	localCluster.VtgateGrpcPort = vtgateInstance.GrpcPort
 	assert.NoError(t, err)
 	defer vtgateInstance.TearDown()
-	err = vtgateInstance.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", keyspaceName, shardName), 1)
-	assert.NoError(t, err)
-	err = vtgateInstance.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", keyspaceName, shardName), 1)
-	assert.NoError(t, err)
-	err = vtgateInstance.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", recoveryKS1, shardName), 1)
-	assert.NoError(t, err)
-	err = vtgateInstance.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", recoveryKS2, shardName), 1)
-	assert.NoError(t, err)
+	assert.NoError(t, vtgateInstance.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", keyspaceName, shardName), 1, 30*time.Second))
+	assert.NoError(t, vtgateInstance.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", keyspaceName, shardName), 1, 30*time.Second))
+	assert.NoError(t, vtgateInstance.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", recoveryKS1, shardName), 1, 30*time.Second))
+	assert.NoError(t, vtgateInstance.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", recoveryKS2, shardName), 1, 30*time.Second))
 
 	// Build vtgate grpc connection
 	grpcAddress := fmt.Sprintf("%s:%d", localCluster.Hostname, localCluster.VtgateGrpcPort)
@@ -301,7 +298,7 @@ func TestRecoveryImpl(t *testing.T) {
 	defer vtgateConn.Close()
 	session := vtgateConn.Session("@replica", nil)
 
-	//check that vtgate doesn't route queries to new tablet
+	// check that vtgate doesn't route queries to new tablet
 	recovery.VerifyQueriesUsingVtgate(t, session, "select count(*) from vt_insert_test", "INT64(3)")
 	recovery.VerifyQueriesUsingVtgate(t, session, "select msg from vt_insert_test where id = 1", `VARCHAR("msgx2")`)
 	recovery.VerifyQueriesUsingVtgate(t, session, fmt.Sprintf("select count(*) from %s.vt_insert_test", recoveryKS1), "INT64(1)")
