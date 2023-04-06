@@ -269,10 +269,6 @@ func currentBootstrapVersion() (bootstrapVersion, error) {
 	if len(versionStr) != 2 {
 		return bootstrapVersion{}, fmt.Errorf("malformatted error, got: %v", versionStr)
 	}
-	_, err = strconv.ParseFloat(versionStr[1], 64)
-	if err != nil {
-		return bootstrapVersion{}, err
-	}
 
 	vs := strings.Split(versionStr[1], ".")
 	major, err := strconv.Atoi(vs[0])
