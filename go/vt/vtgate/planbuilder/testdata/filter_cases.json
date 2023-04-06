@@ -5173,7 +5173,7 @@
       "Instructions": {
         "OperatorType": "SimpleProjection",
         "Columns": [
-          1
+          0
         ],
         "Inputs": [
           {
@@ -5183,7 +5183,7 @@
               {
                 "OperatorType": "Join",
                 "Variant": "LeftJoin",
-                "JoinColumnIndexes": "R:0,L:1",
+                "JoinColumnIndexes": "L:1,R:0",
                 "JoinVars": {
                   "user_col": 0
                 },

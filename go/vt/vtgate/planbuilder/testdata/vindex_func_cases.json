@@ -143,19 +143,28 @@
       "QueryType": "SELECT",
       "Original": "select id, keyspace_id, id from user_index where id = :id",
       "Instructions": {
-        "OperatorType": "VindexFunc",
-        "Variant": "VindexMap",
+        "OperatorType": "SimpleProjection",
         "Columns": [
           0,
           1,
           0
         ],
-        "Fields": {
-          "id": "VARBINARY",
-          "keyspace_id": "VARBINARY"
-        },
-        "Value": ":id",
-        "Vindex": "user_index"
+        "Inputs": [
+          {
+            "OperatorType": "VindexFunc",
+            "Variant": "VindexMap",
+            "Columns": [
+              0,
+              1
+            ],
+            "Fields": {
+              "id": "VARBINARY",
+              "keyspace_id": "VARBINARY"
+            },
+            "Value": ":id",
+            "Vindex": "user_index"
+          }
+        ]
       },
       "TablesUsed": [
         "user_index"
@@ -193,19 +202,28 @@
       "QueryType": "SELECT",
       "Original": "select id, keyspace_id, id from second_user.hash_dup where id = :id",
       "Instructions": {
-        "OperatorType": "VindexFunc",
-        "Variant": "VindexMap",
+        "OperatorType": "SimpleProjection",
         "Columns": [
           0,
           1,
           0
         ],
-        "Fields": {
-          "id": "VARBINARY",
-          "keyspace_id": "VARBINARY"
-        },
-        "Value": ":id",
-        "Vindex": "hash_dup"
+        "Inputs": [
+          {
+            "OperatorType": "VindexFunc",
+            "Variant": "VindexMap",
+            "Columns": [
+              0,
+              1
+            ],
+            "Fields": {
+              "id": "VARBINARY",
+              "keyspace_id": "VARBINARY"
+            },
+            "Value": ":id",
+            "Vindex": "hash_dup"
+          }
+        ]
       },
       "TablesUsed": [
         "hash_dup"

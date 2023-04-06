@@ -35,7 +35,7 @@ func Compact(ctx *plancontext.PlanningContext, op ops.Operator) (ops.Operator, e
 		Compact(ctx *plancontext.PlanningContext) (ops.Operator, rewrite.TreeIdentity, error)
 	}
 
-	newOp, err := rewrite.BottomUpAll(op, TableID, func(op ops.Operator, _ semantics.TableSet) (ops.Operator, rewrite.TreeIdentity, error) {
+	newOp, err := rewrite.BottomUpAll(op, TableID, func(op ops.Operator, _ semantics.TableSet, _ bool) (ops.Operator, rewrite.TreeIdentity, error) {
 		newOp, ok := op.(compactable)
 		if !ok {
 			return op, rewrite.SameTree, nil

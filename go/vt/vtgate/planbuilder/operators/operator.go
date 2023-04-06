@@ -68,7 +68,13 @@ func PlanQuery(ctx *plancontext.PlanningContext, selStmt sqlparser.Statement) (o
 
 	backup := Clone(op)
 
-	op, err = planColumns(ctx, op)
+	op, err = pushOrExpandHorizon(ctx, op)
+	if err == nil {
+		err = planOffsets(ctx, op)
+		if err == nil {
+			op = stripSimpleProjection(op)
+		}
+	}
 	if err == errNotHorizonPlanned {
 		op = backup
 	} else if err != nil {
@@ -86,6 +92,30 @@ func PlanQuery(ctx *plancontext.PlanningContext, selStmt sqlparser.Statement) (o
 	}
 
 	return op, err
+}
+
+func stripSimpleProjection(op ops.Operator) ops.Operator {
+	sp, ok := op.(*SimpleProjection)
+	if !ok {
+		return op
+	}
+
+	srcColumns, err := sp.Source.GetColumns()
+	if err != nil {
+		return nil
+	}
+
+	if len(srcColumns) != len(sp.Columns) {
+		return op
+	} else {
+		for i, column := range sp.Columns {
+			if column != i {
+				return op
+			}
+		}
+	}
+
+	return sp.Source
 }
 
 // Inputs implements the Operator interface

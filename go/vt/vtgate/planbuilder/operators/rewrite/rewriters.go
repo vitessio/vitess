@@ -29,6 +29,7 @@ type (
 	VisitF func(
 		op ops.Operator, // op is the operator being visited
 		lhsTables semantics.TableSet, // lhsTables contains the TableSet for all table on the LHS of our parent
+		isRoot bool, // isRoot will be true for the root of the operator tree
 	) (ops.Operator, TreeIdentity, error)
 
 	// ShouldVisit is used when we want to control which nodes and ancestors to visit and which to skip
@@ -72,7 +73,7 @@ func BottomUp(
 	visit VisitF,
 	shouldVisit ShouldVisit,
 ) (ops.Operator, error) {
-	op, _, err := bottomUp(root, semantics.EmptyTableSet(), resolveID, visit, shouldVisit)
+	op, _, err := bottomUp(root, semantics.EmptyTableSet(), resolveID, visit, shouldVisit, true)
 	if err != nil {
 		return nil, err
 	}
@@ -124,6 +125,7 @@ func bottomUp(
 	resolveID func(ops.Operator) semantics.TableSet,
 	rewriter VisitF,
 	shouldVisit ShouldVisit,
+	isRoot bool,
 ) (ops.Operator, TreeIdentity, error) {
 	if !shouldVisit(root) {
 		return root, SameTree, nil
@@ -147,7 +149,7 @@ func bottomUp(
 		if _, isUnion := root.(noLHSTableSet); !isUnion && i > 0 {
 			childID = childID.Merge(resolveID(oldInputs[0]))
 		}
-		in, changed, err := bottomUp(operator, childID, resolveID, rewriter, shouldVisit)
+		in, changed, err := bottomUp(operator, childID, resolveID, rewriter, shouldVisit, false)
 		if err != nil {
 			return nil, SameTree, err
 		}
@@ -161,7 +163,7 @@ func bottomUp(
 		root = root.Clone(newInputs)
 	}
 
-	newOp, treeIdentity, err := rewriter(root, rootID)
+	newOp, treeIdentity, err := rewriter(root, rootID, isRoot)
 	if err != nil {
 		return nil, SameTree, err
 	}

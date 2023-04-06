@@ -29,36 +29,30 @@ import (
 
 var errNotHorizonPlanned = vterrors.VT12001("query cannot be fully operator planned")
 
-// planColumns is the process of figuring out all necessary columns.
+// pushOrExpandHorizon is the process of figuring out all necessary columns.
 // They can be needed because the user wants to return the value of a column,
 // or because we need a column for filtering, grouping or ordering
-func planColumns(ctx *plancontext.PlanningContext, root ops.Operator) (ops.Operator, error) {
+func pushOrExpandHorizon(ctx *plancontext.PlanningContext, root ops.Operator) (ops.Operator, error) {
 	// We only need to do column planning to the point we hit a Route.
 	// Everything underneath the route is handled by the mysql planner
 	stopAtRoute := func(operator ops.Operator) rewrite.VisitRule {
 		_, isRoute := operator.(*Route)
 		return rewrite.VisitRule(!isRoute)
 	}
-	visitor := func(in ops.Operator, _ semantics.TableSet) (ops.Operator, rewrite.TreeIdentity, error) {
+	visitor := func(in ops.Operator, _ semantics.TableSet, isRoot bool) (ops.Operator, rewrite.TreeIdentity, error) {
 		switch in := in.(type) {
 		case *Horizon:
-			op, err := planHorizon(ctx, in, in == root)
+			op, err := planHorizon(ctx, in, isRoot)
 			if err != nil {
 				return nil, false, err
 			}
 			return op, rewrite.NewTree, nil
 		case *Derived:
-			op, err := planDerived(ctx, in, in == root)
+			op, err := planDerived(ctx, in, isRoot)
 			if err != nil {
 				return nil, false, err
 			}
 			return op, rewrite.NewTree, err
-		case *Filter:
-			err := planFilter(ctx, in)
-			if err != nil {
-				return nil, false, err
-			}
-			return in, rewrite.SameTree, nil
 		default:
 			return in, rewrite.SameTree, nil
 		}
@@ -74,6 +68,43 @@ func planColumns(ctx *plancontext.PlanningContext, root ops.Operator) (ops.Opera
 	}
 
 	return newOp, nil
+}
+
+func planOffsets(ctx *plancontext.PlanningContext, root ops.Operator) error {
+	// We only need to do column planning to the point we hit a Route.
+	// Everything underneath the route is handled by the mysql planner
+	stopAtRoute := func(operator ops.Operator) rewrite.VisitRule {
+		_, isRoute := operator.(*Route)
+		return rewrite.VisitRule(!isRoute)
+	}
+	visitor := func(in ops.Operator, _ semantics.TableSet, _ bool) (ops.Operator, rewrite.TreeIdentity, error) {
+		switch in := in.(type) {
+		case *Horizon:
+			return nil, false, vterrors.VT13001("should not see Horizons here")
+		case *Derived:
+			return nil, false, vterrors.VT13001("should not see Derived here")
+		case *Filter:
+			err := planFilter(ctx, in)
+			if err != nil {
+				return nil, false, err
+			}
+			return in, rewrite.SameTree, nil
+		default:
+			return in, rewrite.SameTree, nil
+		}
+	}
+
+	_, err := rewrite.BottomUp(root, TableID, visitor, stopAtRoute)
+	if err != nil {
+		if vterr, ok := err.(*vterrors.VitessError); ok && vterr.ID == "VT13001" {
+			// we encountered a bug. let's try to back out
+			return errNotHorizonPlanned
+		}
+		return err
+	}
+
+	return nil
+
 }
 
 func planHorizon(ctx *plancontext.PlanningContext, in *Horizon, isRoot bool) (ops.Operator, error) {
@@ -126,10 +157,11 @@ func planDerived(ctx *plancontext.PlanningContext, in *Derived, isRoot bool) (op
 
 func pushProjections(ctx *plancontext.PlanningContext, qp *QueryProjection, src ops.Operator, isRoot bool) (ops.Operator, error) {
 	// if we are at the root, we have to return the columns the user asked for. in all other levels, we reuse as much as possible
-	canReuseCols := !isRoot
-	proj := newSimpleProjection(src)
-	needProj := false
-	for idx, e := range qp.SelectExprs {
+	var proj *SimpleProjection
+	if isRoot {
+		proj = newSimpleProjection(src)
+	}
+	for _, e := range qp.SelectExprs {
 		expr, err := e.GetAliasedExpr()
 		if err != nil {
 			return nil, err
@@ -139,29 +171,20 @@ func pushProjections(ctx *plancontext.PlanningContext, qp *QueryProjection, src 
 			return nil, errNotHorizonPlanned
 		}
 		var offset int
-		src, offset, err = src.AddColumn(ctx, expr, canReuseCols)
+		src, offset, err = src.AddColumn(ctx, expr, true)
 		if err != nil {
 			return nil, err
 		}
-
-		if offset != idx {
-			needProj = true
+		if isRoot {
+			proj.ASTColumns = append(proj.ASTColumns, expr)
+			proj.Columns = append(proj.Columns, offset)
 		}
-		proj.ASTColumns = append(proj.ASTColumns, expr)
-		proj.Columns = append(proj.Columns, offset)
 	}
 
-	if needProj {
-		return proj, nil
-	}
-
-	columns, err := src.GetColumns()
-	if err != nil {
-		return nil, err
-	}
-	if len(columns) == qp.GetColumnCount() {
+	if !isRoot {
 		return src, nil
 	}
+
 	return proj, nil
 }
 
