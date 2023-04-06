@@ -1432,6 +1432,7 @@ func (e *Executor) ReleaseLock(ctx context.Context, session *SafeSession) error 
 	return e.txConn.ReleaseLock(ctx, session)
 }
 
+// planPrepareStmt implements the IExecutor interface
 func (e *Executor) planPrepareStmt(ctx context.Context, vcursor *vcursorImpl, query string) (*engine.Plan, sqlparser.Statement, error) {
 	stmt, reservedVars, err := parseAndValidateQuery(query)
 	if err != nil {

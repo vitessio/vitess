@@ -903,6 +903,7 @@ func (session *SafeSession) EnableLogging() {
 	session.logging = &executeLogger{}
 }
 
+// GetUDV returns the bind variable value for the user defined variable.
 func (session *SafeSession) GetUDV(name string) *querypb.BindVariable {
 	session.mu.Lock()
 	defer session.mu.Unlock()
@@ -913,6 +914,7 @@ func (session *SafeSession) GetUDV(name string) *querypb.BindVariable {
 	return session.UserDefinedVariables[name]
 }
 
+// StorePrepareData stores the prepared data information for the given key.
 func (session *SafeSession) StorePrepareData(key string, value *vtgatepb.PrepareData) {
 	session.mu.Lock()
 	defer session.mu.Unlock()
@@ -923,6 +925,7 @@ func (session *SafeSession) StorePrepareData(key string, value *vtgatepb.Prepare
 	session.PrepareStatement[key] = value
 }
 
+// GetPrepareData returns the prepared data information for the given key.
 func (session *SafeSession) GetPrepareData(name string) *vtgatepb.PrepareData {
 	session.mu.Lock()
 	defer session.mu.Unlock()

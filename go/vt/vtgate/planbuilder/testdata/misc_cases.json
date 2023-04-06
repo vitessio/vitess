@@ -287,5 +287,21 @@
         "main.dual"
       ]
     }
+  },
+  {
+    "comment": "drop prepare",
+    "query": "drop prepare prep_no_param",
+    "plan": {
+      "QueryType": "DEALLOCATE PREPARE",
+      "Original": "drop prepare prep_no_param",
+      "Instructions": {
+        "OperatorType": "Rows"
+      }
+    }
+  },
+  {
+    "comment": "drop prepare that does not exists",
+    "query": "drop prepare prep_not_exist",
+    "plan": "VT09011: Unknown prepared statement handler (prep_not_exist) given to DEALLOCATE PREPARE"
   }
 ]

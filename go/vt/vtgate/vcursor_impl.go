@@ -114,10 +114,6 @@ type vcursorImpl struct {
 	pv       plancontext.PlannerVersion
 }
 
-func (vc *vcursorImpl) GetPrepareData(stmtName string) *vtgatepb.PrepareData {
-	return vc.safeSession.GetPrepareData(stmtName)
-}
-
 // newVcursorImpl creates a vcursorImpl. Before creating this object, you have to separate out any marginComments that came with
 // the query and supply it here. Trailing comments are typically sent by the application for various reasons,
 // including as identifying markers. So, they have to be added back to all queries that are executed
@@ -1107,10 +1103,6 @@ func (vc *vcursorImpl) ShowExec(ctx context.Context, command sqlparser.ShowComma
 	}
 }
 
-func (vc *vcursorImpl) PlanPrepareStatement(ctx context.Context, query string) (*engine.Plan, sqlparser.Statement, error) {
-	return vc.executor.planPrepareStmt(ctx, vc, query)
-}
-
 func (vc *vcursorImpl) GetVSchema() *vindexes.VSchema {
 	return vc.vschema
 }
@@ -1171,10 +1163,18 @@ func (vc *vcursorImpl) GetUDV(name string) *querypb.BindVariable {
 	return vc.safeSession.GetUDV(name)
 }
 
+func (vc *vcursorImpl) PlanPrepareStatement(ctx context.Context, query string) (*engine.Plan, sqlparser.Statement, error) {
+	return vc.executor.planPrepareStmt(ctx, vc, query)
+}
+
 func (vc *vcursorImpl) ClearPrepareData(name string) {
 	delete(vc.safeSession.PrepareStatement, name)
 }
 
 func (vc *vcursorImpl) StorePrepareData(stmtName string, prepareData *vtgatepb.PrepareData) {
 	vc.safeSession.StorePrepareData(stmtName, prepareData)
+}
+
+func (vc *vcursorImpl) GetPrepareData(stmtName string) *vtgatepb.PrepareData {
+	return vc.safeSession.GetPrepareData(stmtName)
 }

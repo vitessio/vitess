@@ -63,6 +63,7 @@ type VSchema interface {
 
 	// GetSrvVschema returns the latest cached vschema.SrvVSchema
 	GetSrvVschema() *vschemapb.SrvVSchema
+
 	// FindRoutedShard looks up shard routing rules for a shard
 	FindRoutedShard(keyspace, shard string) (string, error)
 
@@ -74,9 +75,17 @@ type VSchema interface {
 
 	// GetUDV returns user defined value from the variable passed.
 	GetUDV(name string) *querypb.BindVariable
-	ClearPrepareData(stmtName string)
+
+	// PlanPrepareStatement plans the prepared statement.
 	PlanPrepareStatement(ctx context.Context, query string) (*engine.Plan, sqlparser.Statement, error)
+
+	// ClearPrepareData clears the prepared data from the session.
+	ClearPrepareData(stmtName string)
+
+	// GetPrepareData returns the prepared data for the statement from the session.
 	GetPrepareData(stmtName string) *vtgatepb.PrepareData
+
+	// StorePrepareData stores the prepared data in the session.
 	StorePrepareData(name string, v *vtgatepb.PrepareData)
 }
 

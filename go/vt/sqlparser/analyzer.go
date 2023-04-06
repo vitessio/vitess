@@ -61,6 +61,7 @@ const (
 	StmtCommentOnly
 	StmtPrepare
 	StmtExecute
+	StmtDeallocate
 )
 
 // ASTToStatementType returns a StatementType from an AST stmt
@@ -120,6 +121,8 @@ func ASTToStatementType(stmt Statement) StatementType {
 		return StmtPrepare
 	case *ExecuteStmt:
 		return StmtExecute
+	case *DeallocateStmt:
+		return StmtDeallocate
 	default:
 		return StmtUnknown
 	}
@@ -309,6 +312,8 @@ func (s StatementType) String() string {
 		return "PREPARE"
 	case StmtExecute:
 		return "EXECUTE"
+	case StmtDeallocate:
+		return "DEALLOCATE PREPARE"
 	default:
 		return "UNKNOWN"
 	}
