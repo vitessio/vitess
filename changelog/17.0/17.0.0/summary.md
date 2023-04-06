@@ -6,6 +6,7 @@
   - **[Breaking Changes](#breaking-changes)**
     - [Dedicated stats for VTGate Prepare operations](#dedicated-vtgate-prepare-stats)
     - [Keyspace name validation in TopoServer](#keyspace-name-validation)
+    - [Shard name validation in TopoServer](#shard-name-validation)
   - **[New command line flags and behavior](#new-flag)**
     - [Builtin backup: read buffering flags](#builtin-backup-read-buffering-flags)
   - **[New stats](#new-stats)**
@@ -57,6 +58,12 @@ Here is a (condensed) example of stats output:
 Prior to v17, it was possible to create a keyspace with invalid characters, which would then be inaccessible to various cluster management operations.
 
 Keyspace names may no longer contain the forward slash ("/") character, and TopoServer's `GetKeyspace` and `CreateKeyspace` methods return an error if given such a name.
+
+#### <a id="shard-name-validation"> Shard name validation in TopoServer
+
+Prior to v17, it was possible to create a shard name with invalid characters, which would then be inaccessible to various cluster management operations.
+
+Shard names may no longer contain the forward slash ("/") character, and TopoServer's `CreateShard` method returns an error if given such a name.
 
 ### <a id="new-flag"/> New command line flags and behavior
 
