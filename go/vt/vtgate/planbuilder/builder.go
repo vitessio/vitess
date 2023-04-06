@@ -278,6 +278,8 @@ func createInstructionFor(ctx context.Context, query string, stmt sqlparser.Stat
 		return buildVStreamPlan(stmt, vschema)
 	case *sqlparser.PrepareStmt:
 		return buildPrepareStmtPlan(ctx, vschema, stmt)
+	case *sqlparser.ExecuteStmt:
+		return buildExecuteStmtPlan(ctx, vschema, stmt)
 	case *sqlparser.CommentOnly:
 		// There is only a comment in the input.
 		// This is essentially a No-op

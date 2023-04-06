@@ -6,6 +6,7 @@ import (
 
 	"vitess.io/vitess/go/vt/log"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
+	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 
 	"vitess.io/vitess/go/mysql/collations"
@@ -73,8 +74,9 @@ type VSchema interface {
 
 	// GetUDV returns user defined value from the variable passed.
 	GetUDV(name string) *querypb.BindVariable
-	ClearPrepareData(lowered string)
+	ClearPrepareData(stmtName string)
 	PlanPrepareStatement(ctx context.Context, query string) (*engine.Plan, sqlparser.Statement, error)
+	GetPrepareData(stmtName string) *vtgatepb.PrepareData
 }
 
 // PlannerNameToVersion returns the numerical representation of the planner

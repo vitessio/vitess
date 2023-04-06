@@ -51,6 +51,11 @@ var _ SessionActions = (*noopVCursor)(nil)
 type noopVCursor struct {
 }
 
+func (t *noopVCursor) GetUDV(key string) *querypb.BindVariable {
+	//TODO implement me
+	panic("implement me")
+}
+
 func (t *noopVCursor) StorePrepareData(stmtName string, prepareData *vtgatepb.PrepareData) {
 	//TODO implement me
 	panic("implement me")
@@ -371,6 +376,11 @@ type loggingVCursor struct {
 	ksShardMap map[string][]string
 
 	shardSession []*srvtopo.ResolvedShard
+}
+
+func (f *loggingVCursor) GetUDV(key string) *querypb.BindVariable {
+	//TODO implement me
+	panic("implement me")
 }
 
 type tableRoutes struct {

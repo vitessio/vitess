@@ -86,3 +86,28 @@ func buildPrepareStmtPlan(ctx context.Context, vschema plancontext.VSchema, pStm
 		tables: plan.TablesUsed,
 	}, nil
 }
+
+func buildExecuteStmtPlan(ctx context.Context, vschema plancontext.VSchema, eStmt *sqlparser.ExecuteStmt) (*planResult, error) {
+	stmtName := eStmt.Name.Lowered()
+	prepareData := vschema.GetPrepareData(stmtName)
+	if prepareData == nil {
+		return nil, vterrors.VT09011(stmtName, "EXECUTE")
+	}
+	if int(prepareData.ParamsCount) != len(eStmt.Arguments) {
+		return nil, vterrors.VT03025("EXECUTE")
+	}
+
+	plan, _, err := vschema.PlanPrepareStatement(ctx, prepareData.PrepareStatement)
+	if err != nil {
+		return nil, err
+	}
+
+	return &planResult{
+		primitive: &engine.ExecStmt{
+			Params: eStmt.Arguments,
+			Input:  plan.Instructions,
+		},
+		tables: plan.TablesUsed,
+	}, nil
+
+}

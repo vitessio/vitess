@@ -18,10 +18,12 @@ package engine
 
 import (
 	"context"
+	"strconv"
 
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
@@ -70,14 +72,78 @@ func (p *PrepareStmt) Inputs() []Primitive {
 }
 
 func (p *PrepareStmt) description() PrimitiveDescription {
-	other := map[string]any{
-		"StatementName":    p.Name,
-		"PrepareStatement": p.Query,
-		"ParameterCount":   p.ParamCount,
-	}
-
 	return PrimitiveDescription{
 		OperatorType: p.RouteType(),
-		Other:        other,
+		Other: map[string]any{
+			"StatementName":    p.Name,
+			"PrepareStatement": p.Query,
+			"ParameterCount":   p.ParamCount,
+		},
 	}
+}
+
+var _ Primitive = (*ExecStmt)(nil)
+
+type ExecStmt struct {
+	Params []*sqlparser.Variable
+	Input  Primitive
+
+	noTxNeeded
+}
+
+func (e *ExecStmt) RouteType() string {
+	return "EXECUTE"
+}
+
+func (e *ExecStmt) GetKeyspaceName() string {
+	return e.Input.GetKeyspaceName()
+}
+
+func (e *ExecStmt) GetTableName() string {
+	return e.Input.GetTableName()
+}
+
+func (e *ExecStmt) GetFields(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+	return nil, vterrors.VT12001("prepare command on execute statement")
+}
+
+func (e *ExecStmt) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+	bindVars = e.prepareBindVars(vcursor, bindVars)
+	return vcursor.ExecutePrimitive(ctx, e.Input, bindVars, wantfields)
+}
+
+func (e *ExecStmt) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+	bindVars = e.prepareBindVars(vcursor, bindVars)
+	return vcursor.StreamExecutePrimitive(ctx, e.Input, bindVars, wantfields, callback)
+}
+
+func (e *ExecStmt) Inputs() []Primitive {
+	return []Primitive{e.Input}
+}
+
+func (e *ExecStmt) description() PrimitiveDescription {
+	var params []string
+	for _, p := range e.Params {
+		params = append(params, p.Name.Lowered())
+	}
+	return PrimitiveDescription{
+		OperatorType: e.RouteType(),
+		Other: map[string]any{
+			"Parameters": params,
+		},
+	}
+}
+
+func (e *ExecStmt) prepareBindVars(vcursor VCursor, bindVars map[string]*querypb.BindVariable) map[string]*querypb.BindVariable {
+	count := 1
+	for _, p := range e.Params {
+		bvName := "v" + strconv.Itoa(count)
+		bv := vcursor.Session().GetUDV(p.Name.Lowered())
+		if bv == nil {
+			bv = sqltypes.NullBindVariable
+		}
+		bindVars[bvName] = bv
+		count++
+	}
+	return bindVars
 }

@@ -114,6 +114,10 @@ type vcursorImpl struct {
 	pv       plancontext.PlannerVersion
 }
 
+func (vc *vcursorImpl) GetPrepareData(stmtName string) *vtgatepb.PrepareData {
+	return vc.safeSession.GetPrepareData(stmtName)
+}
+
 // newVcursorImpl creates a vcursorImpl. Before creating this object, you have to separate out any marginComments that came with
 // the query and supply it here. Trailing comments are typically sent by the application for various reasons,
 // including as identifying markers. So, they have to be added back to all queries that are executed

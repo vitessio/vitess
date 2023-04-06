@@ -581,6 +581,27 @@ type vschemaWrapper struct {
 	enableViews   bool
 }
 
+func (vw *vschemaWrapper) GetPrepareData(stmtName string) *vtgatepb.PrepareData {
+	switch stmtName {
+	case "prep_one_param":
+		return &vtgatepb.PrepareData{
+			PrepareStatement: "select 1 from user where id = :v1",
+			ParamsCount:      1,
+		}
+	case "prep_in_param":
+		return &vtgatepb.PrepareData{
+			PrepareStatement: "select 1 from user where id in (:v1, :v2)",
+			ParamsCount:      2,
+		}
+	case "prep_no_param":
+		return &vtgatepb.PrepareData{
+			PrepareStatement: "select 1 from user",
+			ParamsCount:      0,
+		}
+	}
+	return nil
+}
+
 func (vw *vschemaWrapper) PlanPrepareStatement(ctx context.Context, query string) (*engine.Plan, sqlparser.Statement, error) {
 	plan, err := TestBuilder(query, vw, vw.currentDb())
 	if err != nil {

@@ -60,6 +60,7 @@ const (
 	StmtShowMigrationLogs
 	StmtCommentOnly
 	StmtPrepare
+	StmtExecute
 )
 
 // ASTToStatementType returns a StatementType from an AST stmt
@@ -117,6 +118,8 @@ func ASTToStatementType(stmt Statement) StatementType {
 		return StmtCommentOnly
 	case *PrepareStmt:
 		return StmtPrepare
+	case *ExecuteStmt:
+		return StmtExecute
 	default:
 		return StmtUnknown
 	}
@@ -304,6 +307,8 @@ func (s StatementType) String() string {
 		return "COMMENT_ONLY"
 	case StmtPrepare:
 		return "PREPARE"
+	case StmtExecute:
+		return "EXECUTE"
 	default:
 		return "UNKNOWN"
 	}
