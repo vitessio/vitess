@@ -107,6 +107,11 @@ func (t Time) Compare(t2 Time) int {
 		}
 		return 1
 	}
+	// Need to swap if both are negative.
+	if t.Neg() {
+		t, t2 = t2, t
+	}
+
 	h1, h2 := t.Hour(), t2.Hour()
 	if h1 < h2 {
 		return -1
