@@ -38,10 +38,16 @@ const (
 	goDevAPI = "https://go.dev/dl/?mode=json"
 )
 
-type latestGolangRelease struct {
-	Version string `json:"version"`
-	Stable  bool   `json:"stable"`
-}
+type (
+	latestGolangRelease struct {
+		Version string `json:"version"`
+		Stable  bool   `json:"stable"`
+	}
+
+	bootstrapVersion struct {
+		major, minor int // when minor == -1, it means there are no minor version
+	}
+)
 
 var (
 	workflowUpdate    = true
@@ -151,7 +157,7 @@ func runGetBootstrapCmd(_ *cobra.Command, _ []string) {
 	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Println(currentVersion)
+	fmt.Println(currentVersion.toString())
 }
 
 func runUpgradeWorkflowsCmd(_ *cobra.Command, _ []string) {
@@ -180,7 +186,7 @@ func updateWorkflowFilesOnly(goTo string) error {
 
 	for _, fileToChange := range filesToChange {
 		err = replaceInFile(
-			[]*regexp.Regexp{regexp.MustCompile(`(?i).*go-version:[[:space:]]*([0-9.]+).*`)},
+			[]*regexp.Regexp{regexp.MustCompile(`go-version:[[:space:]]*([0-9.]+).*`)},
 			[]string{"go-version: " + newV.String()},
 			fileToChange,
 		)
@@ -218,11 +224,11 @@ func upgradePath(allowMajorUpgrade, workflowUpdate, isMainBranch bool) error {
 	}
 	nextBootstrapVersionF := currentBootstrapVersionF
 	if isMainBranch {
-		nextBootstrapVersionF += 1
+		nextBootstrapVersionF.major += 1
 	} else {
-		nextBootstrapVersionF += 0.1
+		nextBootstrapVersionF.minor += 1
 	}
-	err = updateBootstrapVersionInCodebase(currentBootstrapVersionF, nextBootstrapVersionF, upgradeTo)
+	err = updateBootstrapVersionInCodebase(currentBootstrapVersionF.toString(), nextBootstrapVersionF.toString(), upgradeTo)
 	if err != nil {
 		return err
 	}
@@ -251,23 +257,41 @@ func currentGolangVersion() (*version.Version, error) {
 	return version.NewVersion(versionStr[1])
 }
 
-func currentBootstrapVersion() (float64, error) {
+func currentBootstrapVersion() (bootstrapVersion, error) {
 	contentRaw, err := os.ReadFile("Makefile")
 	if err != nil {
-		return 0, err
+		return bootstrapVersion{}, err
 	}
 	content := string(contentRaw)
 
 	versre := regexp.MustCompile("(?i).*BOOTSTRAP_VERSION[[:space:]]*=[[:space:]]*([0-9.]+).*")
 	versionStr := versre.FindStringSubmatch(content)
 	if len(versionStr) != 2 {
-		return 0, fmt.Errorf("malformatted error, got: %v", versionStr)
+		return bootstrapVersion{}, fmt.Errorf("malformatted error, got: %v", versionStr)
 	}
-	f, err := strconv.ParseFloat(versionStr[1], 64)
+	_, err = strconv.ParseFloat(versionStr[1], 64)
 	if err != nil {
-		return 0, err
+		return bootstrapVersion{}, err
 	}
-	return f, nil
+
+	vs := strings.Split(versionStr[1], ".")
+	major, err := strconv.Atoi(vs[0])
+	if err != nil {
+		return bootstrapVersion{}, err
+	}
+
+	minor := -1
+	if len(vs) > 1 {
+		minor, err = strconv.Atoi(vs[1])
+		if err != nil {
+			return bootstrapVersion{}, err
+		}
+	}
+
+	return bootstrapVersion{
+		major: major,
+		minor: minor,
+	}, nil
 }
 
 // getLatestStableGolangReleases fetches the latest stable releases of Golang from
@@ -371,7 +395,7 @@ func replaceGoVersionInCodebase(old, new *version.Version, workflowUpdate bool) 
 	return nil
 }
 
-func updateBootstrapVersionInCodebase(old, new float64, newGoVersion *version.Version) error {
+func updateBootstrapVersionInCodebase(old, new string, newGoVersion *version.Version) error {
 	if old == new {
 		return nil
 	}
@@ -390,12 +414,12 @@ func updateBootstrapVersionInCodebase(old, new float64, newGoVersion *version.Ve
 	for _, file := range files {
 		err = replaceInFile(
 			[]*regexp.Regexp{
-				regexp.MustCompile(`(?i)ARG[[:space:]]*bootstrap_version[[:space:]]*=[[:space:]]*[0-9.]+`), // Dockerfile
-				regexp.MustCompile(`(?i)BOOTSTRAP_VERSION[[:space:]]*=[[:space:]]*[0-9.]+`),                // Makefile
+				regexp.MustCompile(`ARG[[:space:]]*bootstrap_version[[:space:]]*=[[:space:]]*[0-9.]+`), // Dockerfile
+				regexp.MustCompile(`BOOTSTRAP_VERSION[[:space:]]*=[[:space:]]*[0-9.]+`),                // Makefile
 			},
 			[]string{
-				fmt.Sprintf("ARG bootstrap_version=%-1g", new), // Dockerfile
-				fmt.Sprintf("BOOTSTRAP_VERSION=%-1g", new),     // Makefile
+				fmt.Sprintf("ARG bootstrap_version=%s", new), // Dockerfile
+				fmt.Sprintf("BOOTSTRAP_VERSION=%s", new),     // Makefile
 			},
 			file,
 		)
@@ -405,8 +429,8 @@ func updateBootstrapVersionInCodebase(old, new float64, newGoVersion *version.Ve
 	}
 
 	err = replaceInFile(
-		[]*regexp.Regexp{regexp.MustCompile(`(?i)\"bootstrap-version\",[[:space:]]*\"([0-9.]+)\"`)},
-		[]string{fmt.Sprintf("\"bootstrap-version\", \"%-1g\"", new)},
+		[]*regexp.Regexp{regexp.MustCompile(`\"bootstrap-version\",[[:space:]]*\"([0-9.]+)\"`)},
+		[]string{fmt.Sprintf("\"bootstrap-version\", \"%s\"", new)},
 		"./test.go",
 	)
 	if err != nil {
@@ -421,7 +445,7 @@ func updateBootstrapVersionInCodebase(old, new float64, newGoVersion *version.Ve
 	return nil
 }
 
-func updateBootstrapChangelog(new float64, goVersion *version.Version) error {
+func updateBootstrapChangelog(new string, goVersion *version.Version) error {
 	file, err := os.OpenFile("./docker/bootstrap/CHANGELOG.md", os.O_RDWR, 0600)
 	if err != nil {
 		return err
@@ -434,7 +458,7 @@ func updateBootstrapChangelog(new float64, goVersion *version.Version) error {
 	}
 	newContent := fmt.Sprintf(`
 
-## [%-1g] - %s
+## [%s] - %s
 ### Changes
 - Update build to golang %s`, new, time.Now().Format(time.DateOnly), goVersion.String())
 
@@ -501,4 +525,11 @@ func replaceInFile(oldexps []*regexp.Regexp, new []string, fileToChange string) 
 		return err
 	}
 	return nil
+}
+
+func (b bootstrapVersion) toString() string {
+	if b.minor == -1 {
+		return fmt.Sprintf("%d", b.major)
+	}
+	return fmt.Sprintf("%d.%d", b.major, b.minor)
 }

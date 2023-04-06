@@ -91,9 +91,9 @@ func (tc testCase) run(t *testing.T) {
 	if tc.err == "" {
 		require.NoError(t, err)
 		if tc.out != nil && *tc.out {
-			require.EqualValues(t, uint64(1), evalToNumeric(got.v).toUint64().u)
+			require.EqualValues(t, uint64(1), evalToInt64(got.v).toUint64().u)
 		} else if tc.out != nil && !*tc.out {
-			require.EqualValues(t, uint64(0), evalToNumeric(got.v).toUint64().u)
+			require.EqualValues(t, uint64(0), evalToInt64(got.v).toUint64().u)
 		} else {
 			require.EqualValues(t, nil, got.v)
 		}
@@ -871,43 +871,43 @@ func TestCompareDates(t *testing.T) {
 		},
 		{
 			name: "string equal datetime",
-			v1:   NewColumn(0), v2: NewColumn(1),
+			v1:   NewColumnWithCollation(0, defaultCollation()), v2: NewColumn(1),
 			out: &T, op: sqlparser.EqualOp,
 			row: []sqltypes.Value{sqltypes.NewVarChar("2021-10-22"), sqltypes.NewDatetime("2021-10-22 00:00:00")},
 		},
 		{
 			name: "string equal timestamp",
-			v1:   NewColumn(0), v2: NewColumn(1),
+			v1:   NewColumnWithCollation(0, defaultCollation()), v2: NewColumn(1),
 			out: &T, op: sqlparser.EqualOp,
 			row: []sqltypes.Value{sqltypes.NewVarChar("2021-10-22 00:00:00"), sqltypes.NewTimestamp("2021-10-22 00:00:00")},
 		},
 		{
 			name: "string not equal timestamp",
-			v1:   NewColumn(0), v2: NewColumn(1),
+			v1:   NewColumnWithCollation(0, defaultCollation()), v2: NewColumn(1),
 			out: &T, op: sqlparser.NotEqualOp,
 			row: []sqltypes.Value{sqltypes.NewVarChar("2021-10-22 06:00:30"), sqltypes.NewTimestamp("2021-10-20 15:02:10")},
 		},
 		{
 			name: "string equal time",
-			v1:   NewColumn(0), v2: NewColumn(1),
+			v1:   NewColumnWithCollation(0, defaultCollation()), v2: NewColumn(1),
 			out: &T, op: sqlparser.EqualOp,
 			row: []sqltypes.Value{sqltypes.NewVarChar("00:05:12"), sqltypes.NewTime("00:05:12")},
 		},
 		{
 			name: "string equal date",
-			v1:   NewColumn(0), v2: NewColumn(1),
+			v1:   NewColumnWithCollation(0, defaultCollation()), v2: NewColumn(1),
 			out: &T, op: sqlparser.EqualOp,
 			row: []sqltypes.Value{sqltypes.NewVarChar("2021-02-22"), sqltypes.NewDate("2021-02-22")},
 		},
 		{
 			name: "string not equal date (1, date on the RHS)",
-			v1:   NewColumn(0), v2: NewColumn(1),
+			v1:   NewColumnWithCollation(0, defaultCollation()), v2: NewColumn(1),
 			out: &T, op: sqlparser.NotEqualOp,
 			row: []sqltypes.Value{sqltypes.NewVarChar("2021-02-20"), sqltypes.NewDate("2021-03-30")},
 		},
 		{
 			name: "string not equal date (2, date on the LHS)",
-			v1:   NewColumn(0), v2: NewColumn(1),
+			v1:   NewColumn(0), v2: NewColumnWithCollation(1, defaultCollation()),
 			out: &T, op: sqlparser.NotEqualOp,
 			row: []sqltypes.Value{sqltypes.NewDate("2021-03-30"), sqltypes.NewVarChar("2021-02-20")},
 		},

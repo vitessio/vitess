@@ -90,17 +90,40 @@ func (c *compiler) compileComparison(expr *ComparisonExpr) (ctype, error) {
 	}
 
 	switch {
+	case compareAsDates(lt.Type, rt.Type):
+		c.asm.CmpDates()
 	case compareAsStrings(lt.Type, rt.Type):
 		if err := c.compareAsStrings(lt, rt); err != nil {
 			return ctype{}, err
 		}
-
 	case compareAsSameNumericType(lt.Type, rt.Type) || compareAsDecimal(lt.Type, rt.Type):
 		swapped = c.compareNumericTypes(lt, rt)
+	case compareAsDateAndString(lt.Type, rt.Type):
+		c.asm.CmpDateString()
+	case compareAsDateAndNumeric(lt.Type, rt.Type):
+		if sqltypes.IsDateOrTime(lt.Type) {
+			switch lt.Type {
+			case sqltypes.Date:
+				c.asm.Convert_date(2)
+			case sqltypes.Time:
+				c.asm.Convert_time(2)
+			case sqltypes.Timestamp, sqltypes.Datetime:
+				c.asm.Convert_datetime(2)
+			}
+		}
 
-	case compareAsDates(lt.Type, rt.Type) || compareAsDateAndString(lt.Type, rt.Type) || compareAsDateAndNumeric(lt.Type, rt.Type):
-		return ctype{}, c.unsupported(expr)
+		if sqltypes.IsDateOrTime(rt.Type) {
+			switch rt.Type {
+			case sqltypes.Date:
+				c.asm.Convert_date(1)
+			case sqltypes.Time:
+				c.asm.Convert_time(1)
+			case sqltypes.Timestamp, sqltypes.Datetime:
+				c.asm.Convert_datetime(1)
+			}
+		}
 
+		swapped = c.compareNumericTypes(lt, rt)
 	case compareAsJSON(lt.Type, rt.Type):
 		if err := c.compareAsJSON(lt, rt); err != nil {
 			return ctype{}, err
@@ -435,7 +458,8 @@ func (c *compiler) compileNot(expr *NotExpr) (ctype, error) {
 		c.asm.Convert_jB(1)
 		c.asm.Not_i()
 	default:
-		return ctype{}, vterrors.Errorf(vtrpc.Code_UNIMPLEMENTED, "unsupported Not check: %s", arg.Type)
+		c.asm.Convert_bB(1)
+		c.asm.Not_i()
 	}
 	c.asm.jumpDestination(skip)
 	return ctype{Type: sqltypes.Int64, Flag: flagNullable | flagIsBoolean, Col: collationNumeric}, nil

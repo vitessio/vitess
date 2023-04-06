@@ -226,6 +226,28 @@ func (ast *astCompiler) translateFuncExpr(fn *sqlparser.FuncExpr) (Expr, error) 
 			return nil, argError(method)
 		}
 		return &builtinSqrt{CallExpr: call}, nil
+	case "round":
+		switch len(args) {
+		case 1, 2:
+			return &builtinRound{CallExpr: call}, nil
+		default:
+			return nil, argError(method)
+		}
+	case "truncate":
+		if len(args) != 2 {
+			return nil, argError(method)
+		}
+		return &builtinTruncate{CallExpr: call}, nil
+	case "crc32":
+		if len(args) != 1 {
+			return nil, argError(method)
+		}
+		return &builtinCrc32{CallExpr: call}, nil
+	case "conv":
+		if len(args) != 3 {
+			return nil, argError(method)
+		}
+		return &builtinConv{CallExpr: call, collate: ast.cfg.Collation}, nil
 	case "lower", "lcase":
 		if len(args) != 1 {
 			return nil, argError(method)
@@ -288,6 +310,11 @@ func (ast *astCompiler) translateFuncExpr(fn *sqlparser.FuncExpr) (Expr, error) 
 			return nil, argError(method)
 		}
 		return &builtinCurdate{CallExpr: call}, nil
+	case "utc_date":
+		if len(args) != 0 {
+			return nil, argError(method)
+		}
+		return &builtinUtcDate{CallExpr: call}, nil
 	case "user", "current_user", "session_user", "system_user":
 		if len(args) != 0 {
 			return nil, argError(method)
@@ -303,6 +330,26 @@ func (ast *astCompiler) translateFuncExpr(fn *sqlparser.FuncExpr) (Expr, error) 
 			return nil, argError(method)
 		}
 		return &builtinVersion{CallExpr: call}, nil
+	case "md5":
+		if len(args) != 1 {
+			return nil, argError(method)
+		}
+		return &builtinMD5{CallExpr: call, collate: ast.cfg.Collation}, nil
+	case "random_bytes":
+		if len(args) != 1 {
+			return nil, argError(method)
+		}
+		return &builtinRandomBytes{CallExpr: call}, nil
+	case "sha1", "sha":
+		if len(args) != 1 {
+			return nil, argError(method)
+		}
+		return &builtinSHA1{CallExpr: call, collate: ast.cfg.Collation}, nil
+	case "sha2":
+		if len(args) != 2 {
+			return nil, argError(method)
+		}
+		return &builtinSHA2{CallExpr: call, collate: ast.cfg.Collation}, nil
 	default:
 		return nil, translateExprNotSupported(fn)
 	}

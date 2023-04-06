@@ -65,9 +65,9 @@ func intoJSONPath(e eval) (*json.Path, error) {
 
 func evalConvert_bj(e *evalBytes) *evalJSON {
 	if e.tt == int16(sqltypes.Bit) {
-		return json.NewBit(e.bytes)
+		return json.NewBit(e.string())
 	}
-	return json.NewBlob(e.bytes)
+	return json.NewBlob(e.string())
 }
 
 func evalConvert_fj(e *evalFloat) *evalJSON {
@@ -75,7 +75,7 @@ func evalConvert_fj(e *evalFloat) *evalJSON {
 	if bytes.IndexByte(f, '.') < 0 {
 		f = append(f, '.', '0')
 	}
-	return json.NewNumber(f)
+	return json.NewNumber(string(f), false)
 }
 
 func evalConvert_nj(e evalNumeric) *evalJSON {
@@ -85,7 +85,7 @@ func evalConvert_nj(e evalNumeric) *evalJSON {
 	if e == evalBoolFalse {
 		return json.ValueFalse
 	}
-	return json.NewNumber(e.ToRawBytes())
+	return json.NewNumber(string(e.ToRawBytes()), false)
 }
 
 func evalConvert_cj(e *evalBytes) (*evalJSON, error) {
@@ -102,19 +102,19 @@ func evalConvertArg_cj(e *evalBytes) (*evalJSON, error) {
 	if err != nil {
 		return nil, err
 	}
-	return json.NewString(jsonText), nil
+	return json.NewString(string(jsonText)), nil
 }
 
 func evalConvert_dj(e *evalBytes) *evalJSON {
-	return json.NewDate(e.bytes)
+	return json.NewDate(e.string())
 }
 
 func evalConvert_dtj(e *evalBytes) *evalJSON {
-	return json.NewDateTime(e.bytes)
+	return json.NewDateTime(e.string())
 }
 
 func evalConvert_tj(e *evalBytes) *evalJSON {
-	return json.NewTime(e.bytes)
+	return json.NewTime(e.string())
 }
 
 func evalToJSON(e eval) (*evalJSON, error) {

@@ -67,9 +67,7 @@ fi
 source "$NVM_DIR/nvm.sh"
 
 output "\nConfiguring Node.js $NODE_VERSION\n"
-nvm install "$NODE_VERSION" || fail "Could not install nvm $NODE_VERSION."
-nvm use "$NODE_VERSION" || fail "Could not use nvm $NODE_VERSION."
-nvm use "$NODE_VERSION" || fail "Could not use nvm $NODE_VERSION."
+nvm install "$NODE_VERSION" || fail "Could not install and use nvm $NODE_VERSION."
 
 # As a TODO, it'd be nice to make the assumption that vtadmin-web is already
 # installed and built (since we assume that `make` has already been run for

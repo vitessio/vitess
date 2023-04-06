@@ -18,6 +18,7 @@ package evalengine
 
 import (
 	"bytes"
+	"strings"
 	"time"
 
 	"vitess.io/vitess/go/mysql/datetime"
@@ -119,9 +120,13 @@ func compareNumeric(left, right eval) (int, error) {
 	return 1, nil
 }
 
+func validMessage(in string) string {
+	return strings.ToValidUTF8(strings.ReplaceAll(in, "\x00", ""), "?")
+}
+
 // matchExprWithAnyDateFormat formats the given expr (usually a string) to a date using the first format
 // that does not return an error.
-func matchExprWithAnyDateFormat(e eval) (t time.Time, err error) {
+func matchExprWithAnyDateFormat(e eval, errType sqltypes.Type) (t time.Time, err error) {
 	expr := e.(*evalBytes)
 	t, err = datetime.ParseDate(expr.string())
 	if err == nil {
@@ -131,7 +136,14 @@ func matchExprWithAnyDateFormat(e eval) (t time.Time, err error) {
 	if err == nil {
 		return
 	}
-	t, err = datetime.ParseTime(expr.string())
+	switch errType {
+	case sqltypes.Date:
+		return t, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongValue, "Incorrect DATE value: '%s'", validMessage(expr.string()))
+	case sqltypes.Datetime:
+		return t, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongValue, "Incorrect DATETIME value: '%s'", validMessage(expr.string()))
+	case sqltypes.Timestamp:
+		return t, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongValue, "Incorrect TIMESTAMP value: '%s'", validMessage(expr.string()))
+	}
 	return
 }
 
@@ -162,12 +174,12 @@ func compareDateAndString(l, r eval) (int, error) {
 		if err != nil {
 			return 0, err
 		}
-		rTime, err = matchExprWithAnyDateFormat(r)
+		rTime, err = matchExprWithAnyDateFormat(r, lb.SQLType())
 		if err != nil {
 			return 0, err
 		}
-	case typeIsTextual(lb.SQLType()):
-		lTime, err = matchExprWithAnyDateFormat(l)
+	case sqltypes.IsDate(rb.SQLType()):
+		lTime, err = matchExprWithAnyDateFormat(l, rb.SQLType())
 		if err != nil {
 			return 0, err
 		}

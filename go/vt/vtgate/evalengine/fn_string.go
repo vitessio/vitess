@@ -224,7 +224,7 @@ func (call *builtinRepeat) eval(env *ExpressionEnv) (eval, error) {
 		}
 	}
 
-	repeat := evalToNumeric(arg2).toInt64().i
+	repeat := evalToInt64(arg2).i
 	if repeat < 0 {
 		repeat = 0
 	}
