@@ -443,7 +443,7 @@ func (mysqld *Mysqld) startNoWait(ctx context.Context, cnf *Mycnf, mysqldArgs ..
 			err := cmd.Wait()
 			log.Infof("%v exit: %v", ts, err)
 
-			// The process exited. Trigger OnTerm callbacks, unless we were cancelled.
+			// The process exited. Trigger OnTerm callbacks, unless we were canceled.
 			select {
 			case <-cancel:
 			default:

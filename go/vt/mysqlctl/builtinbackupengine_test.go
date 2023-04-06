@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"strings"
 	"testing"
 	"time"
 
@@ -163,9 +164,9 @@ func TestExecuteBackup(t *testing.T) {
 	assert.False(t, ok)
 }
 
-// TestExecuteBackupWithCancelledContext tests the ability of the backup function to gracefully handle cases where errors
+// TestExecuteBackupWithCanceledContext tests the ability of the backup function to gracefully handle cases where errors
 // occur due to various reasons, such as context time cancel. The process should not panic in these situations.
-func TestExecuteBackupWithCancelledContext(t *testing.T) {
+func TestExecuteBackupWithCanceledContext(t *testing.T) {
 	// Set up local backup directory
 	id := fmt.Sprintf("%d", time.Now().UnixNano())
 	backupRoot := fmt.Sprintf("testdata/builtinbackup_test_%s", id)
@@ -245,7 +246,7 @@ func TestExecuteBackupWithCancelledContext(t *testing.T) {
 	assert.False(t, ok)
 }
 
-// TestExecuteRestoreWithCancelledContext tests the ability of the restore function to gracefully handle cases where errors
+// TestExecuteRestoreWithCanceledContext tests the ability of the restore function to gracefully handle cases where errors
 // occur due to various reasons, such as context time-outs. The process should not panic in these situations.
 func TestExecuteRestoreWithTimedOutContext(t *testing.T) {
 	// Set up local backup directory
@@ -369,9 +370,13 @@ func TestExecuteRestoreWithTimedOutContext(t *testing.T) {
 	// @executeRestoreFullBackup (https://github.com/vitessio/vitess/blob/main/go/vt/mysqlctl/builtinbackupengine.go#L806),
 	// therefore, ExecuteRestore will still pass. Once fixed (https://github.com/vitessio/vitess/issues/12830)
 	// the below asserts will start failing.
-	assert.NoError(t, err)
+	assert.Error(t, err)
 	assert.True(t, ok)
-	assert.NotNil(t, bm)
+	assert.Nil(t, bm)
+	// error message can contain any combination of "context deadline exceeded" or "context canceled"
+	if !strings.Contains(err.Error(), "context canceled") && !strings.Contains(err.Error(), "context deadline exceeded") {
+		assert.Fail(t, "Test should failed with either `context canceled` or `context deadline exceeded`")
+	}
 }
 
 // needInnoDBRedoLogSubdir indicates whether we need to create a redo log subdirectory.

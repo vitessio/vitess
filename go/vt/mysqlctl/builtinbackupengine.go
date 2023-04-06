@@ -527,7 +527,7 @@ func (be *BuiltinBackupEngine) backupFiles(
 			// unpredictability in my test cases, so in order to avoid that, I am adding this cancellation check.
 			select {
 			case <-ctx.Done():
-				log.Errorf("Context cancelled during %q backup", fe.Name)
+				log.Errorf("Context canceled during %q backup", fe.Name)
 				bh.RecordError(vterrors.Errorf(vtrpc.Code_CANCELED, "context canceled"))
 				return
 			default:
@@ -803,7 +803,7 @@ func (be *BuiltinBackupEngine) executeRestoreFullBackup(ctx context.Context, par
 
 	params.Logger.Infof("Restore: copying %v files", len(bm.FileEntries))
 
-	if _, err := be.restoreFiles(context.Background(), params, bh, bm); err != nil {
+	if _, err := be.restoreFiles(ctx, params, bh, bm); err != nil {
 		// don't delete the file here because that is how we detect an interrupted restore
 		return vterrors.Wrap(err, "failed to restore files")
 	}
@@ -816,7 +816,7 @@ func (be *BuiltinBackupEngine) executeRestoreFullBackup(ctx context.Context, par
 // The underlying mysql database is expected to be up and running.
 func (be *BuiltinBackupEngine) executeRestoreIncrementalBackup(ctx context.Context, params RestoreParams, bh backupstorage.BackupHandle, bm builtinBackupManifest) error {
 	params.Logger.Infof("Restoring incremental backup to position: %v", bm.Position)
-	createdDir, err := be.restoreFiles(context.Background(), params, bh, bm)
+	createdDir, err := be.restoreFiles(ctx, params, bh, bm)
 	defer os.RemoveAll(createdDir)
 	mysqld, ok := params.Mysqld.(*Mysqld)
 	if !ok {
@@ -913,7 +913,7 @@ func (be *BuiltinBackupEngine) restoreFiles(ctx context.Context, params RestoreP
 			// unpredictability in my test cases, so in order to avoid that, I am adding this cancellation check.
 			select {
 			case <-ctx.Done():
-				log.Errorf("Context cancelled during %q backup", fe.Name)
+				log.Errorf("Context canceled during %q backup", fe.Name)
 				rec.RecordError(vterrors.Errorf(vtrpc.Code_CANCELED, "context canceled"))
 				return
 			default:
