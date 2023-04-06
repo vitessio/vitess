@@ -748,6 +748,12 @@ func (vc *vcursorImpl) SetPlannerVersion(v plancontext.PlannerVersion) {
 	vc.safeSession.GetOrCreateOptions().PlannerVersion = v
 }
 
+func (vc *vcursorImpl) SetCriticality(criticality string) {
+	if criticality != "" {
+		vc.safeSession.GetOrCreateOptions().Criticality = criticality
+	}
+}
+
 func (vc *vcursorImpl) SetWorkloadName(workloadName string) {
 	if workloadName != "" {
 		vc.safeSession.GetOrCreateOptions().WorkloadName = workloadName

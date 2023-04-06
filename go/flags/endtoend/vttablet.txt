@@ -935,6 +935,8 @@ age_bad_rate_after_sec: 180
 bad_rate_increase: 0.1
 max_rate_approach_threshold: 0.9
 )
+  --tx-throttler-default-criticality int
+	Default criticality assigned to queries that lack criticality information.
   --tx-throttler-healthcheck-cells value
 	Synonym to -tx_throttler_healthcheck_cells
   --tx_throttler_config string

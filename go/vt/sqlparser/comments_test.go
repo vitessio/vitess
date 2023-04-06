@@ -479,3 +479,68 @@ func TestIgnoreMaxMaxMemoryRowsDirective(t *testing.T) {
 		})
 	}
 }
+
+func TestGetCriticalityFromStatement(t *testing.T) {
+	testCases := []struct {
+		query               string
+		expectedCriticality string
+		expectedError       error
+	}{
+		{
+			query:               "select * from a_table",
+			expectedCriticality: "",
+			expectedError:       nil,
+		},
+		{
+			query:               "select /*vt+ ANOTHER_DIRECTIVE=324 */ * from another_table",
+			expectedCriticality: "",
+			expectedError:       nil,
+		},
+		{
+			query:               "select /*vt+ CRITICALITY=33 */ * from another_table",
+			expectedCriticality: "33",
+			expectedError:       nil,
+		},
+		{
+			query:               "select /*vt+ CRITICALITY=200 */ * from another_table",
+			expectedCriticality: "",
+			expectedError:       ErrInvalidCriticality,
+		},
+		{
+			query:               "select /*vt+ CRITICALITY=-1 */ * from another_table",
+			expectedCriticality: "",
+			expectedError:       ErrInvalidCriticality,
+		},
+		{
+			query:               "select /*vt+ CRITICALITY=some_text */ * from another_table",
+			expectedCriticality: "",
+			expectedError:       ErrInvalidCriticality,
+		},
+		{
+			query:               "select /*vt+ CRITICALITY=0 */ * from another_table",
+			expectedCriticality: "0",
+			expectedError:       nil,
+		},
+		{
+			query:               "select /*vt+ CRITICALITY=100 */ * from another_table",
+			expectedCriticality: "100",
+			expectedError:       nil,
+		},
+	}
+
+	for _, testCase := range testCases {
+		theThestCase := testCase
+		t.Run(theThestCase.query, func(t *testing.T) {
+			t.Parallel()
+			stmt, err := Parse(theThestCase.query)
+			assert.NoError(t, err)
+			actualCriticality, actualError := GetCriticalityFromStatement(stmt)
+			if theThestCase.expectedError != nil {
+				assert.ErrorIs(t, actualError, theThestCase.expectedError)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, theThestCase.expectedCriticality, actualCriticality)
+			}
+		})
+	}
+}
