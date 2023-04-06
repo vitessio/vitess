@@ -187,6 +187,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfGeomFromTextExpr(in)
 	case *GeomFromWKBExpr:
 		return CloneRefOfGeomFromWKBExpr(in)
+	case *GeomPropertyFuncExpr:
+		return CloneRefOfGeomPropertyFuncExpr(in)
 	case GroupBy:
 		return CloneGroupBy(in)
 	case *GroupConcatExpr:
@@ -1412,6 +1414,16 @@ func CloneRefOfGeomFromWKBExpr(n *GeomFromWKBExpr) *GeomFromWKBExpr {
 	out.WkbBlob = CloneExpr(n.WkbBlob)
 	out.Srid = CloneExpr(n.Srid)
 	out.AxisOrderOpt = CloneExpr(n.AxisOrderOpt)
+	return &out
+}
+
+// CloneRefOfGeomPropertyFuncExpr creates a deep clone of the input.
+func CloneRefOfGeomPropertyFuncExpr(n *GeomPropertyFuncExpr) *GeomPropertyFuncExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Geom = CloneExpr(n.Geom)
 	return &out
 }
 
@@ -3395,6 +3407,8 @@ func CloneCallable(in Callable) Callable {
 		return CloneRefOfGeomFromTextExpr(in)
 	case *GeomFromWKBExpr:
 		return CloneRefOfGeomFromWKBExpr(in)
+	case *GeomPropertyFuncExpr:
+		return CloneRefOfGeomPropertyFuncExpr(in)
 	case *GroupConcatExpr:
 		return CloneRefOfGroupConcatExpr(in)
 	case *InsertExpr:
@@ -3667,6 +3681,8 @@ func CloneExpr(in Expr) Expr {
 		return CloneRefOfGeomFromTextExpr(in)
 	case *GeomFromWKBExpr:
 		return CloneRefOfGeomFromWKBExpr(in)
+	case *GeomPropertyFuncExpr:
+		return CloneRefOfGeomPropertyFuncExpr(in)
 	case *GroupConcatExpr:
 		return CloneRefOfGroupConcatExpr(in)
 	case *InsertExpr:

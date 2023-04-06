@@ -2258,6 +2258,24 @@ func AndExpressions(exprs ...Expr) Expr {
 var Equals = &Comparator{}
 
 // ToString returns the type as a string
+func (ty GeomPropertyType) ToString() string {
+	switch ty {
+	case IsEmpty:
+		return IsEmptyStr
+	case IsSimple:
+		return IsSimpleStr
+	case Envelope:
+		return EnvelopeStr
+	case GeometryType:
+		return GeometryTypeStr
+	case Dimension:
+		return DimensionStr
+	default:
+		return "Unknown GeomPropertyType"
+	}
+}
+
+// ToString returns the type as a string
 func (ty GeomFormatType) ToString() string {
 	switch ty {
 	case BinaryFormat:

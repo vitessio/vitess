@@ -2270,7 +2270,7 @@ INPUT
 select object_id, ST_geometrytype(geo), ST_ISSIMPLE(GEO), ST_ASTEXT(ST_centroid(geo)) from t1 where object_id=85984;
 END
 OUTPUT
-select object_id, ST_geometrytype(geo), ST_ISSIMPLE(GEO), st_astext(ST_centroid(geo)) from t1 where object_id = 85984
+select object_id, st_geometrytype(geo), st_issimple(GEO), st_astext(ST_centroid(geo)) from t1 where object_id = 85984
 END
 INPUT
 select @@global.optimizer_switch;
@@ -8168,7 +8168,7 @@ INPUT
 select ST_Astext(ST_Envelope(ST_MPointFromWKB(ST_AsWKB(MultiPoint(Point('0', '0'),Point('-0', '0'), Point('0', '-0')))))) as result;
 END
 OUTPUT
-select st_astext(ST_Envelope(st_multipointfromwkb(st_asbinary(multipoint(point('0', '0'), point('-0', '0'), point('0', '-0')))))) as result from dual
+select st_astext(st_envelope(st_multipointfromwkb(st_asbinary(multipoint(point('0', '0'), point('-0', '0'), point('0', '-0')))))) as result from dual
 END
 INPUT
 select constraint_name from information_schema.table_constraints where table_schema='test' order by constraint_name;
@@ -20378,7 +20378,7 @@ INPUT
 select ST_Astext(ST_Envelope(ST_MPointFromWKB(ST_AsWKB(MultiPoint(Point('0', '-0'),Point('-0', '0'), Point('0', '0')))))) as result;
 END
 OUTPUT
-select st_astext(ST_Envelope(st_multipointfromwkb(st_asbinary(multipoint(point('0', '-0'), point('-0', '0'), point('0', '0')))))) as result from dual
+select st_astext(st_envelope(st_multipointfromwkb(st_asbinary(multipoint(point('0', '-0'), point('-0', '0'), point('0', '0')))))) as result from dual
 END
 INPUT
 select date_add("9999-12-31 23:59:59",INTERVAL 1 SECOND);
@@ -22646,7 +22646,7 @@ INPUT
 select ST_geometryfromtext(b) IS NULL, ST_geometryfromwkb(b) IS NULL, ST_astext(b) IS NULL, ST_aswkb(b) IS NULL, ST_geometrytype(b) IS NULL, ST_centroid(b) IS NULL, ST_envelope(b) IS NULL, ST_startpoint(b) IS NULL, ST_endpoint(b) IS NULL, ST_exteriorring(b) IS NULL, ST_pointn(b, 1) IS NULL, ST_geometryn(b, 1) IS NULL, ST_interiorringn(b, 1) IS NULL, multipoint(b) IS NULL, ST_isempty(b) IS NULL, ST_issimple(b) IS NULL, ST_isclosed(b) IS NULL, ST_dimension(b) IS NULL, ST_numgeometries(b) IS NULL, ST_numinteriorrings(b) IS NULL, ST_numpoints(b) IS NULL, ST_area(b) IS NULL, ST_length(b) IS NULL, ST_srid(b) IS NULL, ST_x(b) IS NULL, ST_y(b) IS NULL from t1;
 END
 OUTPUT
-select st_geometryfromtext(b) is null, st_geometryfromwkb(b) is null, st_astext(b) is null, st_asbinary(b) is null, ST_geometrytype(b) is null, ST_centroid(b) is null, ST_envelope(b) is null, ST_startpoint(b) is null, ST_endpoint(b) is null, ST_exteriorring(b) is null, ST_pointn(b, 1) is null, ST_geometryn(b, 1) is null, ST_interiorringn(b, 1) is null, multipoint(b) is null, ST_isempty(b) is null, ST_issimple(b) is null, ST_isclosed(b) is null, ST_dimension(b) is null, ST_numgeometries(b) is null, ST_numinteriorrings(b) is null, ST_numpoints(b) is null, ST_area(b) is null, ST_length(b) is null, ST_srid(b) is null, ST_x(b) is null, ST_y(b) is null from t1
+select st_geometryfromtext(b) is null, st_geometryfromwkb(b) is null, st_astext(b) is null, st_asbinary(b) is null, st_geometrytype(b) is null, ST_centroid(b) is null, st_envelope(b) is null, ST_startpoint(b) is null, ST_endpoint(b) is null, ST_exteriorring(b) is null, ST_pointn(b, 1) is null, ST_geometryn(b, 1) is null, ST_interiorringn(b, 1) is null, multipoint(b) is null, st_isempty(b) is null, st_issimple(b) is null, ST_isclosed(b) is null, st_dimension(b) is null, ST_numgeometries(b) is null, ST_numinteriorrings(b) is null, ST_numpoints(b) is null, ST_area(b) is null, ST_length(b) is null, ST_srid(b) is null, ST_x(b) is null, ST_y(b) is null from t1
 END
 INPUT
 select inet6_ntoa(null),inet6_aton(null);
@@ -22778,7 +22778,7 @@ INPUT
 select object_id, ST_geometrytype(geo), ST_ISSIMPLE(GEO), ST_ASTEXT(ST_centroid(geo)) from t1 where object_id=85998;
 END
 OUTPUT
-select object_id, ST_geometrytype(geo), ST_ISSIMPLE(GEO), st_astext(ST_centroid(geo)) from t1 where object_id = 85998
+select object_id, st_geometrytype(geo), st_issimple(GEO), st_astext(ST_centroid(geo)) from t1 where object_id = 85998
 END
 INPUT
 select hex(cast(9007199254740994 as decimal(30,0)));
@@ -23120,5 +23120,5 @@ INPUT
 select ST_astext(ST_envelope(ST_PolyFromWKB(ST_AsWKB(Polygon(LineString(Point(0, 0), Point(30, 0), Point(30, 30), Point(1, 0), Point(0, 0)))))));
 END
 OUTPUT
-select st_astext(ST_envelope(st_polygonfromwkb(st_asbinary(polygon(linestring(point(0, 0), point(30, 0), point(30, 30), point(1, 0), point(0, 0))))))) from dual
+select st_astext(st_envelope(st_polygonfromwkb(st_asbinary(polygon(linestring(point(0, 0), point(30, 0), point(30, 30), point(1, 0), point(0, 0))))))) from dual
 END
