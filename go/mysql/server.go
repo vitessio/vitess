@@ -290,6 +290,7 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 		if x := recover(); x != nil {
 			log.Errorf("mysql_server caught panic:\n%v\n%s", x, tb.Stack(4))
 		}
+
 		// We call flush here in case there's a premature return after
 		// startWriterBuffering is called
 		c.flush()
@@ -303,6 +304,8 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 
 	// Adjust the count of open connections
 	defer connCount.Add(-1)
+
+	defer c.discardCursor()
 
 	// First build and send the server handshake packet.
 	salt, err := c.writeHandshakeV10(l.ServerVersion, l.authServer, l.TLSConfig != nil)

@@ -706,7 +706,7 @@ type testExec struct {
 	maxRows int
 }
 
-func clientExecute(t *testing.T, cConn *Conn, useCursor byte, maxRows int) *sqltypes.Result {
+func clientExecute(t *testing.T, cConn *Conn, useCursor byte, maxRows int) (*sqltypes.Result, serverStatus) {
 	if useCursor != 0 {
 		cConn.StatusFlags |= uint16(ServerCursorExists)
 	} else {
@@ -720,15 +720,15 @@ func clientExecute(t *testing.T, cConn *Conn, useCursor byte, maxRows int) *sqlt
 		t.Fatalf("WriteMockExecuteToConn failed with error: %v", err)
 	}
 
-	qr, _, _, err := cConn.ReadQueryResult(maxRows, true)
+	qr, status, _, err := cConn.ReadQueryResult(maxRows, true)
 	if err != nil {
 		t.Fatalf("ReadQueryResult failed with error: %v", err)
 	}
 
-	return qr
+	return qr, status
 }
 
-func clientFetch(t *testing.T, cConn *Conn, useCursor byte, maxRows int, fields []*querypb.Field) *sqltypes.Result {
+func clientFetch(t *testing.T, cConn *Conn, useCursor byte, maxRows int, fields []*querypb.Field) (*sqltypes.Result, serverStatus) {
 	// Write a COM_STMT_FETCH packet
 	mockPacket := []byte{ComStmtFetch, 0, 0, 0, 0, useCursor, 1, 0, 0, 0, 0, 1, 1, 128, 1}
 
@@ -736,12 +736,12 @@ func clientFetch(t *testing.T, cConn *Conn, useCursor byte, maxRows int, fields 
 		t.Fatalf("WriteMockDataToConn failed with error: %v", err)
 	}
 
-	qr, _, _, err := cConn.FetchQueryResult(maxRows, fields)
+	qr, status, _, err := cConn.FetchQueryResult(maxRows, fields)
 	if err != nil && err != io.EOF {
 		t.Fatalf("FetchQueryResult failed with error: %v", err)
 	}
 
-	return qr
+	return qr, status
 }
 
 func checkExecute(t *testing.T, sConn, cConn *Conn, test testExec) {
@@ -755,11 +755,12 @@ func checkExecute(t *testing.T, sConn, cConn *Conn, test testExec) {
 
 	// use go routine to emulate client calls
 	var qr *sqltypes.Result
+	var status serverStatus
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		qr = clientExecute(t, cConn, test.useCursor, test.maxRows)
+		qr, status = clientExecute(t, cConn, test.useCursor, test.maxRows)
 	}()
 
 	// handle a single client command
@@ -777,7 +778,7 @@ func checkExecute(t *testing.T, sConn, cConn *Conn, test testExec) {
 
 	// if not using cursor, we should have results without fetching
 	if test.useCursor == 0 {
-		if (sConn.StatusFlags & ServerCursorExists) != 0 {
+		if status.cursorExists() {
 			t.Fatalf("Server StatusFlag should indicate that Cursor does not exist")
 		}
 		if test.expectedNumRows != len(qr.Rows) {
@@ -786,15 +787,14 @@ func checkExecute(t *testing.T, sConn, cConn *Conn, test testExec) {
 		return
 	}
 
-	// using cursor, use client to fetch results
-	if (sConn.StatusFlags & ServerCursorExists) == 0 {
-		t.Fatalf("Server StatusFlag should indicate that Cursor exists")
+	if !status.cursorExists() {
+		t.Fatalf("Server StatusFlag should indicate that Cursor exists, status flags were: %d", status)
 	}
 
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		qr = clientFetch(t, cConn, test.useCursor, test.maxRows, fields)
+		qr, status = clientFetch(t, cConn, test.useCursor, test.maxRows, fields)
 	}()
 
 	// handle a single client command
@@ -805,34 +805,15 @@ func checkExecute(t *testing.T, sConn, cConn *Conn, test testExec) {
 	// wait until client fetches the rows
 	wg.Wait()
 
-	if (sConn.StatusFlags & ServerCursorExists) == 0 {
-		t.Fatalf("Server StatusFlag should indicate that Cursor exists")
+	if status.cursorExists() {
+		t.Fatalf("Server StatusFlag should not indicate a new Cursor")
+	}
+	if !status.cursorLastRowSent() {
+		t.Fatalf("Server StatusFlag should indicate that we exhausted the cursor")
 	}
 
 	if test.expectedNumRows != len(qr.Rows) {
 		t.Fatalf("Expected %d rows, Received %d", test.expectedNumRows, len(qr.Rows))
-	}
-
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		qr = clientFetch(t, cConn, test.useCursor, test.maxRows, fields)
-	}()
-
-	// handle a single client command
-	if err := sConn.handleNextCommand(&testHandler{}); err != nil {
-		t.Fatalf("handleNextComamnd failed with error: %v", err)
-	}
-
-	// wait until client fetches the rows
-	wg.Wait()
-
-	if (sConn.StatusFlags & ServerCursorExists) != 0 {
-		t.Fatalf("Server StatusFlag should indicate that Cursor does not exist")
-	}
-
-	if len(qr.Rows) != 0 {
-		t.Fatalf("Expected %d rows, Received %d", 0, len(qr.Rows))
 	}
 }
 
@@ -889,13 +870,21 @@ func TestExecuteQueries(t *testing.T) {
 		},
 	}
 
-	for _, test := range tests {
-		checkExecute(t, sConn, cConn, test)
-	}
+	t.Run("WithoutDeprecateEOF", func(t *testing.T) {
+		for _, test := range tests {
+			t.Run(test.query, func (t *testing.T) {
+				checkExecute(t, sConn, cConn, test)
+			})
+		}
+	})
 
 	sConn.Capabilities = CapabilityClientDeprecateEOF
 	cConn.Capabilities = CapabilityClientDeprecateEOF
-	for _, test := range tests {
-		checkExecute(t, sConn, cConn, test)
-	}
+	t.Run("WithDeprecateEOF", func(t *testing.T) {
+		for _, test := range tests {
+			t.Run(test.query, func (t *testing.T) {
+				checkExecute(t, sConn, cConn, test)
+			})
+		}
+	})
 }
