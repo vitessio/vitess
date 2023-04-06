@@ -32,7 +32,7 @@ import (
 // regexParams checks that argument names are in the form v1, v2, v3...
 var regexParams = regexp.MustCompile(`^v\d+`)
 
-func buildPrepareStmtPlan(ctx context.Context, vschema plancontext.VSchema, pStmt *sqlparser.PrepareStmt) (*planResult, error) {
+func prepareStmt(ctx context.Context, vschema plancontext.VSchema, pStmt *sqlparser.PrepareStmt) (*planResult, error) {
 	stmtName := pStmt.Name.Lowered()
 	vschema.ClearPrepareData(stmtName)
 
@@ -118,4 +118,20 @@ func buildExecuteStmtPlan(ctx context.Context, vschema plancontext.VSchema, eStm
 		tables: plan.TablesUsed,
 	}, nil
 
+}
+
+func dropPreparedStatement(
+	vschema plancontext.VSchema,
+	stmt *sqlparser.DeallocateStmt,
+) (*planResult, error) {
+	stmtName := stmt.Name.Lowered()
+	prepareData := vschema.GetPrepareData(stmtName)
+	if prepareData == nil {
+		return nil, vterrors.VT09011(stmtName, "DEALLOCATE PREPARE")
+	}
+
+	vschema.ClearPrepareData(stmtName)
+	return &planResult{
+		primitive: engine.NewRowsPrimitive(nil, nil),
+	}, nil
 }

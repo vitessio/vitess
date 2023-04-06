@@ -988,7 +988,7 @@ func (e *Executor) getPlan(
 	}
 
 	// Normalize if possible
-	shouldNormalize := e.canNormalizeStatement(stmt, vcursor.safeSession, setVarComment)
+	shouldNormalize := e.canNormalizeStatement(stmt, setVarComment)
 	parameterize := allowParameterization && shouldNormalize
 
 	rewriteASTResult, err := sqlparser.PrepareAST(
@@ -1064,7 +1064,7 @@ func (e *Executor) cacheAndBuildStatement(
 	return plan, err
 }
 
-func (e *Executor) canNormalizeStatement(stmt sqlparser.Statement, qo iQueryOption, setVarComment string) bool {
+func (e *Executor) canNormalizeStatement(stmt sqlparser.Statement, setVarComment string) bool {
 	return sqlparser.CanNormalize(stmt) || setVarComment != ""
 }
 

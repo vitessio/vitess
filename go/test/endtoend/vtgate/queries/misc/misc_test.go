@@ -295,4 +295,11 @@ func TestPrepareStatements(t *testing.T) {
 	mcmp.Exec(`select 1+2.0, 10/2.0 from t1 limit 1`)
 	mcmp.Exec(`select 1+'v', 10/'v' from t1 limit 1`)
 	mcmp.Exec(`select 1+9999999999999999999999999999, 10/9999999999999999999999999999 from t1 limit 1`)
+
+	mcmp.Exec("deallocate prepare prep_art")
+	_, err = mcmp.ExecAllowAndCompareError(`execute prep_art using @id1, @id1`)
+	assert.ErrorContains(t, err, "VT09011: Unknown prepared statement handler (prep_art) given to EXECUTE")
+
+	_, err = mcmp.ExecAllowAndCompareError("deallocate prepare prep_art")
+	assert.ErrorContains(t, err, "VT09011: Unknown prepared statement handler (prep_art) given to DEALLOCATE PREPARE")
 }
