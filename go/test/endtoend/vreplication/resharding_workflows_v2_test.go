@@ -22,6 +22,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -430,7 +431,7 @@ func testMoveTablesV2Workflow(t *testing.T) {
 }
 
 func testPartialSwitches(t *testing.T) {
-	//nothing switched
+	// nothing switched
 	require.Equal(t, getCurrentState(t), wrangler.WorkflowStateNotSwitched)
 	tstWorkflowSwitchReads(t, "replica,rdonly", "zone1")
 	nextState := "Reads partially switched. Replica switched in cells: zone1. Rdonly switched in cells: zone1. Writes Not Switched"
@@ -442,7 +443,7 @@ func testPartialSwitches(t *testing.T) {
 	checkStates(t, currentState, nextState)
 
 	tstWorkflowSwitchReads(t, "", "")
-	checkStates(t, nextState, nextState) //idempotency
+	checkStates(t, nextState, nextState) // idempotency
 
 	tstWorkflowSwitchWrites(t)
 	currentState = nextState
@@ -450,7 +451,7 @@ func testPartialSwitches(t *testing.T) {
 	checkStates(t, currentState, nextState)
 
 	tstWorkflowSwitchWrites(t)
-	checkStates(t, nextState, nextState) //idempotency
+	checkStates(t, nextState, nextState) // idempotency
 
 	keyspace := "product"
 	if currentWorkflowType == wrangler.ReshardWorkflow {
@@ -566,9 +567,9 @@ func setupCluster(t *testing.T) *VitessCluster {
 
 	vtgate = zone1.Vtgates[0]
 	require.NotNil(t, vtgate)
-	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", "product", "0"), 1)
-	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", "product", "0"), 2)
-	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.rdonly", "product", "0"), 1)
+	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", "product", "0"), 1, 30*time.Second)
+	require.NoError(t, vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", "product", "0"), 2, 30*time.Second))
+	require.NoError(t, vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.rdonly", "product", "0"), 1, 30*time.Second))
 
 	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 	verifyClusterHealth(t, vc)
@@ -586,24 +587,10 @@ func setupCustomerKeyspace(t *testing.T) {
 		customerVSchema, customerSchema, defaultReplicas, defaultRdonly, 200, nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", "customer", "-80"), 1); err != nil {
-		t.Fatal(err)
-	}
-	if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", "customer", "80-"), 1); err != nil {
-		t.Fatal(err)
-	}
-	if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", "customer", "-80"), 2); err != nil {
-		t.Fatal(err)
-	}
-	if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", "customer", "80-"), 2); err != nil {
-		t.Fatal(err)
-	}
-	if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.rdonly", "customer", "-80"), 1); err != nil {
-		t.Fatal(err)
-	}
-	if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.rdonly", "customer", "80-"), 1); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", "customer", "-80"), 2, 30*time.Second))
+	require.NoError(t, vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", "customer", "80-"), 2, 30*time.Second))
+	require.NoError(t, vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.rdonly", "customer", "-80"), 1, 30*time.Second))
+	require.NoError(t, vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.rdonly", "customer", "80-"), 1, 30*time.Second))
 	custKs := vc.Cells[defaultCell.Name].Keyspaces["customer"]
 	targetTab1 = custKs.Shards["-80"].Tablets["zone1-200"].Vttablet
 	targetTab2 = custKs.Shards["80-"].Tablets["zone1-300"].Vttablet
@@ -619,18 +606,14 @@ func setupCustomer2Keyspace(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, c2shard := range c2shards {
-		if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", c2keyspace, c2shard), 1); err != nil {
+		if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", c2keyspace, c2shard), 1, 30*time.Second); err != nil {
 			t.Fatal(err)
 		}
 		if defaultReplicas > 0 {
-			if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", c2keyspace, c2shard), defaultReplicas); err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", c2keyspace, c2shard), defaultReplicas, 30*time.Second))
 		}
 		if defaultRdonly > 0 {
-			if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.rdonly", c2keyspace, c2shard), defaultRdonly); err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.rdonly", c2keyspace, c2shard), defaultRdonly, 30*time.Second))
 		}
 	}
 }
@@ -749,15 +732,11 @@ func createAdditionalCustomerShards(t *testing.T, shards string) {
 	arrTargetShardNames := strings.Split(shards, ",")
 
 	for _, shardName := range arrTargetShardNames {
-		if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", ksName, shardName), 1); err != nil {
+		if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", ksName, shardName), 1, 2*time.Minute); err != nil {
 			require.NoError(t, err)
 		}
-		if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", ksName, shardName), 2); err != nil {
-			require.NoError(t, err)
-		}
-		if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.rdonly", ksName, shardName), 1); err != nil {
-			require.NoError(t, err)
-		}
+		require.NoError(t, vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", ksName, shardName), 2, 30*time.Second))
+		require.NoError(t, vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.rdonly", ksName, shardName), 1, 30*time.Second))
 	}
 	custKs := vc.Cells[defaultCell.Name].Keyspaces[ksName]
 	targetTab2 = custKs.Shards["80-c0"].Tablets["zone1-600"].Vttablet
