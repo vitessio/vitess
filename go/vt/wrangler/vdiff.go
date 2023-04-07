@@ -284,16 +284,18 @@ func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflowName, sou
 		// both sides. If that's the case, then let's see if the extra rows on
 		// both sides are actually different.
 		if (dr.ExtraRowsSource == dr.ExtraRowsTarget) && (dr.ExtraRowsSource <= maxExtraRowsToCompare) {
-			for i := range dr.ExtraRowsSourceDiffs {
+			for i := 0; i < len(dr.ExtraRowsSourceDiffs); i++ {
 				foundMatch := false
-				for j := range dr.ExtraRowsTargetDiffs {
+				for j := 0; j < len(dr.ExtraRowsTargetDiffs); j++ {
 					if reflect.DeepEqual(dr.ExtraRowsSourceDiffs[i], dr.ExtraRowsTargetDiffs[j]) {
 						dr.ExtraRowsSourceDiffs = append(dr.ExtraRowsSourceDiffs[:i], dr.ExtraRowsSourceDiffs[i+1:]...)
-						dr.ExtraRowsSource--
 						dr.ExtraRowsTargetDiffs = append(dr.ExtraRowsTargetDiffs[:j], dr.ExtraRowsTargetDiffs[j+1:]...)
+						dr.ExtraRowsSource--
 						dr.ExtraRowsTarget--
 						dr.ProcessedRows--
 						dr.MatchingRows++
+						// We've removed an element from dr.ExtraRowsSourceDiffs so we need to decrement i for the outer loop.
+						i--
 						foundMatch = true
 						break
 					}
