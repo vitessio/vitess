@@ -1740,11 +1740,6 @@ func TestTypes(t *testing.T) {
 }
 
 func TestJSON(t *testing.T) {
-	log.Errorf("TestJSON: flavor is %s", env.Flavor)
-	// JSON is supported only after mysql57.
-	if !strings.Contains(env.Flavor, "mysql57") {
-		return
-	}
 	if err := env.Mysqld.ExecuteSuperQuery(context.Background(), "create table vitess_json(id int default 1, val json, primary key(id))"); err != nil {
 		// If it's a syntax error, MySQL is an older version. Skip this test.
 		if strings.Contains(err.Error(), "syntax") {
@@ -2036,12 +2031,6 @@ func TestFilteredMultipleWhere(t *testing.T) {
 
 // TestGeneratedColumns just confirms that generated columns are sent in a vstream as expected
 func TestGeneratedColumns(t *testing.T) {
-	flavor := strings.ToLower(env.Flavor)
-	// Disable tests on percona (which identifies as mysql56) and mariadb platforms in CI since they
-	// generated columns support was added in 5.7 and mariadb added mysql compatible generated columns in 10.2
-	if !strings.Contains(flavor, "mysql57") && !strings.Contains(flavor, "mysql80") {
-		return
-	}
 	execStatements(t, []string{
 		"create table t1(id int, val varbinary(6), val2 varbinary(6) as (concat(id, val)), val3 varbinary(6) as (concat(val, id)), id2 int, primary key(id))",
 	})
