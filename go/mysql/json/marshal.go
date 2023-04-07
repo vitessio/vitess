@@ -36,7 +36,7 @@ func (v *Value) MarshalSQLTo(dst []byte) []byte {
 }
 
 func (v *Value) marshalSQLInternal(top bool, dst []byte) []byte {
-	switch v.t {
+	switch v.Type() {
 	case TypeObject:
 		dst = append(dst, "JSON_OBJECT("...)
 		for i, vv := range v.o.kvs {
@@ -60,7 +60,7 @@ func (v *Value) marshalSQLInternal(top bool, dst []byte) []byte {
 		}
 		dst = append(dst, ')')
 		return dst
-	case TypeString, typeRawString:
+	case TypeString:
 		if top {
 			dst = append(dst, "CAST(JSON_QUOTE("...)
 		}
