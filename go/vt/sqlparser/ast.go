@@ -2082,8 +2082,8 @@ func (node *DDL) Format(buf *TrackedBuffer) {
 				}
 			}
 
-			if !event.OnCompletionPreserve {
-				sb.WriteString("on completion not preserve ")
+			if event.OnCompletionPreserve {
+				sb.WriteString("on completion preserve ")
 			}
 			if event.Comment != nil {
 				sb.WriteString(fmt.Sprintf("comment %s ", event.Comment))
@@ -3177,6 +3177,12 @@ func (node *Explain) Format(buf *TrackedBuffer) {
 const (
 	CreateTriggerStr   = "create trigger"
 	CreateProcedureStr = "create procedure"
+	CreateEventStr = "create event"
+	CreateTableStr = "create table"
+
+	ProcedureStatusStr = "procedure status"
+	FunctionStatusStr = "function status"
+	TableStatusStr = "table status"
 )
 
 // Show represents a show statement.
@@ -3197,27 +3203,41 @@ type Show struct {
 
 // Format formats the node.
 func (node *Show) Format(buf *TrackedBuffer) {
-	if (node.Type == "tables" || node.Type == "columns" || node.Type == "fields" || node.Type == "triggers") && node.ShowTablesOpt != nil {
-		opt := node.ShowTablesOpt
-		buf.Myprintf("show ")
-		if node.Full {
-			buf.Myprintf("full ")
+	loweredType := strings.ToLower(node.Type)
+	switch loweredType {
+	case "tables", "columns", "fields":
+		if node.ShowTablesOpt != nil {
+			opt := node.ShowTablesOpt
+			buf.Myprintf("show ")
+			if node.Full {
+				buf.Myprintf("full ")
+			}
+			buf.Myprintf("%s", loweredType)
+			if (loweredType == "columns" || loweredType == "fields") && node.HasTable() {
+				buf.Myprintf(" from %v", node.Table)
+			}
+			if opt.DbName != "" {
+				buf.Myprintf(" from %s", opt.DbName)
+			}
+			if opt.AsOf != nil {
+				buf.Myprintf(" as of %v", opt.AsOf)
+			}
+			buf.Myprintf("%v", opt.Filter)
+			return
 		}
-		buf.Myprintf("%s", node.Type)
-		if (node.Type == "columns" || node.Type == "fields") && node.HasTable() {
-			buf.Myprintf(" from %v", node.Table)
+	case "triggers", "events":
+		if node.ShowTablesOpt != nil {
+			opt := node.ShowTablesOpt
+			buf.Myprintf("show ")
+			buf.Myprintf("%s", loweredType)
+			if opt.DbName != "" {
+				buf.Myprintf(" from %s", opt.DbName)
+			}
+			buf.Myprintf("%v", opt.Filter)
+			return
 		}
-		if opt.DbName != "" {
-			buf.Myprintf(" from %s", opt.DbName)
-		}
-		if opt.AsOf != nil {
-			buf.Myprintf(" as of %v", opt.AsOf)
-		}
-		buf.Myprintf("%v", opt.Filter)
-		return
-	}
-	if node.Type == "index" {
-		buf.Myprintf("show index from %v", node.Table)
+	case "index":
+		buf.Myprintf("show %s from %v", loweredType, node.Table)
 		if node.Database != "" {
 			buf.Myprintf(" from %s", node.Database)
 		}
@@ -3225,38 +3245,34 @@ func (node *Show) Format(buf *TrackedBuffer) {
 			buf.Myprintf(" where %v", node.ShowIndexFilterOpt)
 		}
 		return
-	}
-	if node.Type == CreateTriggerStr {
-		buf.Myprintf("show create trigger %v", node.Table)
+	case CreateTriggerStr, CreateProcedureStr, CreateEventStr:
+		buf.Myprintf("show %s %v", loweredType, node.Table)
 		return
-	}
-	if node.Type == CreateProcedureStr {
-		buf.Myprintf("show create procedure %v", node.Table)
-		return
-	}
-	if node.Type == "processlist" {
+	case CreateTableStr:
+		if node.HasTable() {
+			buf.Myprintf("show %s %v", loweredType, node.Table)
+
+			if node.ShowTablesOpt != nil {
+				if node.ShowTablesOpt.AsOf != nil {
+					buf.Myprintf(" as of %v", node.ShowTablesOpt.AsOf)
+				}
+			}
+			return
+		}
+	case "processlist":
 		buf.Myprintf("show ")
 		if node.Full {
 			buf.Myprintf("full ")
 		}
 		buf.Myprintf("processlist")
 		return
-	}
-	if node.Type == "procedure status" {
-		buf.Myprintf("show procedure status")
+	case ProcedureStatusStr, FunctionStatusStr:
+		buf.Myprintf("show %s", loweredType)
 		if node.Filter != nil {
 			buf.Myprintf("%v", node.Filter)
 		}
 		return
-	}
-	if node.Type == "function status" {
-		buf.Myprintf("show function status")
-		if node.Filter != nil {
-			buf.Myprintf("%v", node.Filter)
-		}
-		return
-	}
-	if strings.ToLower(node.Type) == "table status" {
+	case TableStatusStr:
 		buf.Myprintf("show table status")
 		if node.Database != "" {
 			buf.Myprintf(" from %s", node.Database)
@@ -3266,32 +3282,22 @@ func (node *Show) Format(buf *TrackedBuffer) {
 		}
 		return
 	}
-	if strings.ToLower(node.Type) == "create table" && node.HasTable() {
-		buf.Myprintf("show %s %v", node.Type, node.Table)
-
-		if node.ShowTablesOpt != nil {
-			if node.ShowTablesOpt.AsOf != nil {
-				buf.Myprintf(" as of %v", node.ShowTablesOpt.AsOf)
-			}
-		}
-		return
-	}
 
 	if node.Database != "" {
 		notExistsOpt := ""
 		if node.IfNotExists {
 			notExistsOpt = "if not exists "
 		}
-		buf.Myprintf("show %s %s%s", node.Type, notExistsOpt, node.Database)
+		buf.Myprintf("show %s %s%s", loweredType, notExistsOpt, node.Database)
 	} else {
 		if node.Scope != "" {
-			buf.Myprintf("show %s %s%v", node.Scope, node.Type, node.Filter)
+			buf.Myprintf("show %s %s%v", node.Scope, loweredType, node.Filter)
 		} else {
 			buf.Myprintf("show ")
 			if node.CountStar {
 				buf.Myprintf("count(*) ")
 			}
-			buf.Myprintf("%s%v%v", node.Type, node.Filter, node.Limit)
+			buf.Myprintf("%s%v%v", loweredType, node.Filter, node.Limit)
 		}
 	}
 

@@ -2017,7 +2017,7 @@ event_ends_opt:
 
 event_on_completion_preserve_opt:
   {
-    $$ = true
+    $$ = false
   }
 | ON COMPLETION PRESERVE
   {
@@ -4730,7 +4730,7 @@ show_statement:
 | SHOW CREATE TABLE table_name as_of_opt
   {
     showTablesOpt := &ShowTablesOpt{AsOf:$5}
-    $$ = &Show{Type: string($2) + " " + string($3), Table: $4, ShowTablesOpt: showTablesOpt}
+    $$ = &Show{Type: CreateTableStr, Table: $4, ShowTablesOpt: showTablesOpt}
   }
 | SHOW CREATE PROCEDURE table_name
   {
@@ -4743,6 +4743,10 @@ show_statement:
 | SHOW CREATE VIEW table_name
   {
     $$ = &Show{Type: string($2) + " " + string($3), Table: $4}
+  }
+| SHOW CREATE EVENT table_name
+  {
+    $$ = &Show{Type: CreateEventStr, Table: $4}
   }
 | SHOW DATABASES like_or_where_opt
   {
@@ -4798,9 +4802,9 @@ show_statement:
   {
     $$ = &Show{Type: string($3), Full: $2}
   }
-| SHOW full_opt TRIGGERS from_database_opt like_or_where_opt
+| SHOW TRIGGERS from_database_opt like_or_where_opt
   {
-    $$ = &Show{Type: string($3), ShowTablesOpt: &ShowTablesOpt{DbName: $4, Filter: $5}, Full: $2}
+    $$ = &Show{Type: string($2), ShowTablesOpt: &ShowTablesOpt{DbName: $3, Filter: $4}}
   }
 | SHOW show_session_or_global VARIABLES like_or_where_opt
   {
@@ -4861,6 +4865,10 @@ show_statement:
 | SHOW ERRORS limit_opt
   {
     $$ = &Show{Type: string($2), Limit: $3}
+  }
+| SHOW EVENTS from_database_opt like_or_where_opt
+  {
+    $$ = &Show{Type: string($2), ShowTablesOpt: &ShowTablesOpt{DbName: $3, Filter: $4}}
   }
 
 naked_like:
@@ -8521,6 +8529,7 @@ non_reserved_keyword2:
   ATTRIBUTE
 | COMMENT_KEYWORD
 | EVENT
+| EVENTS
 | EXECUTE
 | EXTRACT
 | FAILED_LOGIN_ATTEMPTS

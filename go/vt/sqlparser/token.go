@@ -294,6 +294,7 @@ var keywords = map[string]int{
 	"escape":                        ESCAPE,
 	"escaped":                       ESCAPED,
 	"event":                         EVENT,
+	"events":                        EVENTS,
 	"every":                         EVERY,
 	"except":                        EXCEPT,
 	"execute":                       EXECUTE,

@@ -1730,7 +1730,8 @@ var (
 		}, {
 			input: "show triggers like 'pattern'",
 		}, {
-			input: "show triggers where v = 'x'",
+			input: "show TRIGGERS where v = 'x'",
+			output: "show triggers where v = 'x'",
 		}, {
 			input:  "show variables",
 			output: "show variables",
@@ -2857,37 +2858,47 @@ var (
 		}, {
 			input:  "DROP TABLE `dual`",
 			output: "drop table `dual`",
-		},
-		{
+		}, {
 			input: "select EXTRACT(DAY from '2020-10-1')",
-		},
-		{
+		}, {
 			input:  "DROP EVENT event1",
 			output: "drop event event1",
-		},
-		{
+		}, {
 			input:  "DROP EVENT IF EXISTS event1",
 			output: "drop event if exists event1",
-		},
-		{
+		}, {
 			input:  "CREATE EVENT event1 ON SCHEDULE AT '2006-02-10 23:59:00' DO INSERT INTO test.totals VALUES (NOW())",
 			output: "create event event1 on schedule at '2006-02-10 23:59:00' do insert into test.totals values (NOW())",
-		},
-		{
+		}, {
 			input:  "CREATE DEFINER = `root`@`localhost` EVENT event1 ON SCHEDULE AT CURRENT_TIMESTAMP + INTERVAL 3 WEEK + INTERVAL 2 DAY DO INSERT INTO mytable VALUES (NOW())",
 			output: "create definer = `root`@`localhost` event event1 on schedule at CURRENT_TIMESTAMP() + interval 3 WEEK + interval 2 DAY do insert into mytable values (NOW())",
-		},
-		{
+		}, {
 			input:  "CREATE EVENT event1 ON SCHEDULE EVERY 1 MINUTE ENDS CURRENT_TIMESTAMP + INTERVAL 3 HOUR ON COMPLETION PRESERVE COMMENT 'new event' DO INSERT INTO mytable VALUES (1)",
-			output: "create event event1 on schedule every 1 MINUTE ends CURRENT_TIMESTAMP() + interval 3 HOUR comment 'new event' do insert into mytable values (1)",
-		},
-		{
+			output: "create event event1 on schedule every 1 MINUTE ends CURRENT_TIMESTAMP() + interval 3 HOUR on completion preserve comment 'new event' do insert into mytable values (1)",
+		}, {
 			input:  "CREATE EVENT event1 ON SCHEDULE EVERY 1 MINUTE STARTS CURRENT_TIMESTAMP + INTERVAL 2 HOUR ENDS CURRENT_TIMESTAMP + INTERVAL 3 HOUR ON COMPLETION NOT PRESERVE  DO INSERT INTO mytable VALUES (1)",
-			output: "create event event1 on schedule every 1 MINUTE starts CURRENT_TIMESTAMP() + interval 2 HOUR ends CURRENT_TIMESTAMP() + interval 3 HOUR on completion not preserve do insert into mytable values (1)",
-		},
-		{
+			output: "create event event1 on schedule every 1 MINUTE starts CURRENT_TIMESTAMP() + interval 2 HOUR ends CURRENT_TIMESTAMP() + interval 3 HOUR do insert into mytable values (1)",
+		}, {
 			input:  "CREATE EVENT e_call_myproc ON SCHEDULE AT CURRENT_TIMESTAMP + INTERVAL 1 DAY DO CALL myproc(5, 27)",
 			output: "create event e_call_myproc on schedule at CURRENT_TIMESTAMP() + interval 1 DAY do call myproc(5, 27)",
+		}, {
+			input: "SHOW EVENTS",
+			output: "show events",
+		}, {
+			input: "SHOW EVENTS FROM dbName",
+			output: "show events from dbName",
+		}, {
+			input: "SHOW EVENTS IN dbName",
+			output: "show events from dbName",
+		}, {
+			input: "SHOW EVENTS IN dbName LIKE 'pattern'",
+			output: "show events from dbName like 'pattern'",
+		}, {
+			input: "SHOW EVENTS FROM dbName WHERE status = 'enabled'",
+			output: "show events from dbName where `status` = 'enabled'",
+		}, {
+			input: "SHOW CREATE EVENT myevent",
+			output: "show create event myevent",
 		},
 	}
 	// Any tests that contain multiple statements within the body (such as BEGIN/END blocks) should go here.
