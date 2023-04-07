@@ -1639,6 +1639,8 @@ func TestPlayerDDL(t *testing.T) {
 		OnDdl:    binlogdatapb.OnDDLAction_EXEC_IGNORE,
 	}
 	execStatements(t, []string{fmt.Sprintf("create table %s.t2(id int, primary key(id))", vrepldb)})
+	defer execStatements(t, []string{fmt.Sprintf("drop table %s.t2", vrepldb)})
+
 	cancel, _ = startVReplication(t, bls, "")
 	execStatements(t, []string{"alter table t1 add column val1 varchar(128)"})
 	expectDBClientQueries(t, qh.Expect(
@@ -2719,7 +2721,6 @@ func TestGeneratedColumns(t *testing.T) {
 			{"1", "bbb1", "bbb", "11"},
 		},
 	}}
-
 	for _, tcases := range testcases {
 		execStatements(t, []string{tcases.input})
 		output := qh.Expect(tcases.output)
@@ -2797,8 +2798,6 @@ func TestPlayerInvalidDates(t *testing.T) {
 		expectNontxQueries(t, output)
 
 		if tcases.table != "" {
-			// without the sleep there is a flakiness where row inserted by vreplication is not visible to vdbclient
-			time.Sleep(100 * time.Millisecond)
 			expectData(t, tcases.table, tcases.data)
 		}
 	}

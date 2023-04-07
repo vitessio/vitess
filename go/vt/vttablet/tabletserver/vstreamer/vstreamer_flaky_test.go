@@ -2049,11 +2049,11 @@ func TestGeneratedColumns(t *testing.T) {
 		table: "t1",
 		db:    "vttest",
 		cols: []*TestColumn{
-			{name: "id", dataType: "INT32", colType: "", len: 11, charset: 63},
-			{name: "val", dataType: "VARBINARY", colType: "", len: 6, charset: 63},
-			{name: "val2", dataType: "VARBINARY", colType: "", len: 6, charset: 63},
-			{name: "val3", dataType: "VARBINARY", colType: "", len: 6, charset: 63},
-			{name: "id2", dataType: "INT32", colType: "", len: 11, charset: 63},
+			{name: "id", dataType: "INT32", colType: "int(11)", len: 11, charset: 63},
+			{name: "val", dataType: "VARBINARY", colType: "varbinary(6)", len: 6, charset: 63},
+			{name: "val2", dataType: "VARBINARY", colType: "varbinary(6)", len: 6, charset: 63},
+			{name: "val3", dataType: "VARBINARY", colType: "varbinary(6)", len: 6, charset: 63},
+			{name: "id2", dataType: "INT32", colType: "int(11)", len: 11, charset: 63},
 		},
 	}
 
@@ -2062,8 +2062,8 @@ func TestGeneratedColumns(t *testing.T) {
 		output: [][]string{{
 			`begin`,
 			fe.String(),
-			`type:ROW row_event:<table_name:"t1" row_changes:<after:<lengths:1 lengths:3 lengths:4 lengths:4 lengths:2 values:"1aaa1aaaaaa110" > > > `,
-			`type:ROW row_event:<table_name:"t1" row_changes:<after:<lengths:1 lengths:3 lengths:4 lengths:4 lengths:2 values:"2bbb2bbbbbb220" > > > `,
+			`type:ROW row_event:{table_name:"t1" row_changes:{after:{lengths:1 lengths:3 lengths:4 lengths:4 lengths:2 values:"1aaa1aaaaaa110"}}}`,
+			`type:ROW row_event:{table_name:"t1" row_changes:{after:{lengths:1 lengths:3 lengths:4 lengths:4 lengths:2 values:"2bbb2bbbbbb220"}}}`,
 			`gtid`,
 			`commit`,
 		}},
