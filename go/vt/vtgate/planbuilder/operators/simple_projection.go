@@ -25,9 +25,9 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
-// SimpleProjection is used to be selective about which columns to pass through
-// All it does is to map through columns from the input
-// It's used to limit the number of columns to hide result from the user that was not requested
+// SimpleProjection is used to be selective about which Columns to pass through
+// All it does is to map through Columns from the input
+// It's used to limit the number of Columns to hide result from the user that was not requested
 type SimpleProjection struct {
 	Source     ops.Operator
 	Columns    []int

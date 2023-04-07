@@ -31,7 +31,7 @@ import (
 )
 
 type (
-	// SelectExpr provides whether the columns is aggregation expression or not.
+	// SelectExpr provides whether the Columns is aggregation expression or not.
 	SelectExpr struct {
 		Col  sqlparser.SelectExpr
 		Aggr bool
@@ -617,18 +617,18 @@ func (qp *QueryProjection) FindSelectExprIndexForExpr(ctx *plancontext.PlanningC
 	return nil, nil
 }
 
-// AlignGroupByAndOrderBy aligns the group by and order by columns, so they are in the same order
+// AlignGroupByAndOrderBy aligns the group by and order by Columns, so they are in the same order
 // The GROUP BY clause is a set - the order between the elements does not make any difference,
 // so we can simply re-arrange the column order
-// We are also free to add more ORDER BY columns than the user asked for which we leverage,
-// so the input is already ordered according to the GROUP BY columns used
+// We are also free to add more ORDER BY Columns than the user asked for which we leverage,
+// so the input is already ordered according to the GROUP BY Columns used
 func (qp *QueryProjection) AlignGroupByAndOrderBy(ctx *plancontext.PlanningContext) {
 	// The ORDER BY can be performed before the OA
 
 	var newGrouping []GroupBy
 	if len(qp.OrderExprs) == 0 {
 		// The query didn't ask for any particular order, so we are free to add arbitrary ordering.
-		// We'll align the grouping and ordering by the output columns
+		// We'll align the grouping and ordering by the output Columns
 		newGrouping = qp.GetGrouping()
 		SortGrouping(newGrouping)
 		for _, groupBy := range newGrouping {

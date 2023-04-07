@@ -51,7 +51,7 @@ type (
 	VindexOption struct {
 		Ready  bool
 		Values []evalengine.Expr
-		// columns that we have seen so far. Used only for multi-column vindexes so that we can track how many columns part of the vindex we have seen
+		// Columns that we have seen so far. Used only for multi-column vindexes so that we can track how many Columns part of the vindex we have seen
 		ColsSeen    map[string]any
 		ValueExprs  []sqlparser.Expr
 		Predicates  []sqlparser.Expr

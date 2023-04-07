@@ -22,6 +22,7 @@ import (
 	"strconv"
 	"strings"
 
+	"vitess.io/vitess/go/slices2"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
 
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
@@ -65,9 +66,27 @@ func transformToLogicalPlan(ctx *plancontext.PlanningContext, op ops.Operator, i
 		return transformFilter(ctx, op)
 	case *operators.Horizon:
 		return transformHorizon(ctx, op, isRoot)
+	case *operators.Projection:
+		return transformProjection(ctx, op, isRoot)
 	}
 
 	return nil, vterrors.VT13001(fmt.Sprintf("unknown type encountered: %T (transformToLogicalPlan)", op))
+}
+
+func transformProjection(ctx *plancontext.PlanningContext, op *operators.Projection, root bool) (logicalPlan, error) {
+	plan, err := transformToLogicalPlan(ctx, op.Source, false)
+	if err != nil {
+		return nil, err
+	}
+
+	expressions := slices2.Map(op.Columns, func(from operators.ProjExpr) sqlparser.Expr {
+		return from.GetExpr()
+	})
+	return &projection{
+		source:      plan,
+		columnNames: op.ColumnNames,
+		columns:     expressions,
+	}, nil
 }
 
 func transformFilter(ctx *plancontext.PlanningContext, op *operators.Filter) (logicalPlan, error) {

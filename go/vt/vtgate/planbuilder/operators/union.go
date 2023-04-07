@@ -108,7 +108,7 @@ func (u *Union) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Ex
 
 			idx, ok := offsets[col.Name.Lowered()]
 			if !ok {
-				err = vterrors.VT13001("cannot push predicates on concatenate, missing columns from the UNION")
+				err = vterrors.VT13001("cannot push predicates on concatenate, missing Columns from the UNION")
 				cursor.StopTreeWalk()
 				return
 			}

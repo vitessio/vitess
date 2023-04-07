@@ -80,6 +80,25 @@ func BottomUp(
 	return op, nil
 }
 
+// FixedPointBottomUp rewrites an operator tree much like BottomUp does,
+// but does the rewriting repeatedly, until a tree walk is done with no changes to the tree.
+func FixedPointBottomUp(
+	root ops.Operator,
+	resolveID func(ops.Operator) semantics.TableSet,
+	visit VisitF,
+	shouldVisit ShouldVisit,
+) (op ops.Operator, err error) {
+	id := NewTree
+	op = root
+	for id == NewTree {
+		op, id, err = bottomUp(op, semantics.EmptyTableSet(), resolveID, visit, shouldVisit, true)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return op, nil
+}
+
 // BottomUp rewrites an operator tree from the bottom up. BottomUp applies a transformation function to
 // the given operator tree from the bottom up. Each callback [f] returns a TreeIdentity that is aggregated
 // into a final output indicating whether the operator tree was changed.

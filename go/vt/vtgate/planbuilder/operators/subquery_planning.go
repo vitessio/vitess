@@ -171,7 +171,7 @@ func isMergeable(ctx *plancontext.PlanningContext, query sqlparser.SelectStateme
 	if len(sel.GroupBy) > 0 {
 		// iff we are grouping, we need to check that we can perform the grouping inside a single shard, and we check that
 		// by checking that one of the grouping expressions used is a unique single column vindex.
-		// TODO: we could also support the case where all the columns of a multi-column vindex are used in the grouping
+		// TODO: we could also support the case where all the Columns of a multi-column vindex are used in the grouping
 		for _, gb := range sel.GroupBy {
 			if validVindex(gb) {
 				return true
@@ -325,9 +325,9 @@ func tryMergeSubqueryWithJoin(
 	return nil, nil
 }
 
-// rewriteColumnsInSubqueryOpForJoin rewrites the columns that appear from the other side
+// rewriteColumnsInSubqueryOpForJoin rewrites the Columns that appear from the other side
 // of the join. For example, let's say we merged a subquery on the right side of a join tree
-// If it was using any columns from the left side then they need to be replaced by bind variables supplied
+// If it was using any Columns from the left side then they need to be replaced by bind variables supplied
 // from that side.
 // outerTree is the joinTree within whose children the subquery lives in
 // the child of joinTree which does not contain the subquery is the otherTree
@@ -456,7 +456,7 @@ func createCorrelatedSubqueryOp(
 }
 
 // canMergeSubqueryOnColumnSelection will return true if the predicate used allows us to merge the two subqueries
-// into a single Route. This can be done if we are comparing two columns that contain data that is guaranteed
+// into a single Route. This can be done if we are comparing two Columns that contain data that is guaranteed
 // to exist on the same shard.
 func canMergeSubqueryOnColumnSelection(ctx *plancontext.PlanningContext, a, b *Route, predicate *sqlparser.ExtractedSubquery) bool {
 	left := predicate.OtherSide

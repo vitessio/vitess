@@ -29,10 +29,10 @@ import (
 
 var errNotHorizonPlanned = vterrors.VT12001("query cannot be fully operator planned")
 
-// pushOrExpandHorizon is the process of figuring out all necessary columns.
+// planHorizon2 is the process of figuring out all necessary Columns.
 // They can be needed because the user wants to return the value of a column,
 // or because we need a column for filtering, grouping or ordering
-func pushOrExpandHorizon(ctx *plancontext.PlanningContext, root ops.Operator) (ops.Operator, error) {
+func planHorizon2(ctx *plancontext.PlanningContext, root ops.Operator) (ops.Operator, error) {
 	// We only need to do column planning to the point we hit a Route.
 	// Everything underneath the route is handled by the mysql planner
 	stopAtRoute := func(operator ops.Operator) rewrite.VisitRule {
@@ -42,7 +42,7 @@ func pushOrExpandHorizon(ctx *plancontext.PlanningContext, root ops.Operator) (o
 	visitor := func(in ops.Operator, _ semantics.TableSet, isRoot bool) (ops.Operator, rewrite.TreeIdentity, error) {
 		switch in := in.(type) {
 		case *Horizon:
-			op, err := planHorizon(ctx, in, isRoot)
+			op, err := pushOrExpandHorizon(ctx, in)
 			if err != nil {
 				return nil, false, err
 			}
@@ -53,12 +53,14 @@ func pushOrExpandHorizon(ctx *plancontext.PlanningContext, root ops.Operator) (o
 				return nil, false, err
 			}
 			return op, rewrite.NewTree, err
+		case *Projection:
+			return tryPushingDownProjection(ctx, in, isRoot)
 		default:
 			return in, rewrite.SameTree, nil
 		}
 	}
 
-	newOp, err := rewrite.BottomUp(root, TableID, visitor, stopAtRoute)
+	newOp, err := rewrite.FixedPointBottomUp(root, TableID, visitor, stopAtRoute)
 	if err != nil {
 		if vterr, ok := err.(*vterrors.VitessError); ok && vterr.ID == "VT13001" {
 			// we encountered a bug. let's try to back out
@@ -70,7 +72,24 @@ func pushOrExpandHorizon(ctx *plancontext.PlanningContext, root ops.Operator) (o
 	return newOp, nil
 }
 
-func planOffsets(ctx *plancontext.PlanningContext, root ops.Operator) error {
+func tryPushingDownProjection(
+	ctx *plancontext.PlanningContext,
+	in *Projection,
+	root bool,
+) (ops.Operator, rewrite.TreeIdentity, error) {
+	switch src := in.Source.(type) {
+	case *Route:
+		op, err := rewrite.Swap(in, src)
+		if err != nil {
+			return nil, false, err
+		}
+		return op, rewrite.NewTree, nil
+	default:
+		return in, rewrite.SameTree, nil
+	}
+}
+
+func planOffsets(ctx *plancontext.PlanningContext, root ops.Operator) (ops.Operator, error) {
 	// We only need to do column planning to the point we hit a Route.
 	// Everything underneath the route is handled by the mysql planner
 	stopAtRoute := func(operator ops.Operator) rewrite.VisitRule {
@@ -78,42 +97,114 @@ func planOffsets(ctx *plancontext.PlanningContext, root ops.Operator) error {
 		return rewrite.VisitRule(!isRoute)
 	}
 	visitor := func(in ops.Operator, _ semantics.TableSet, _ bool) (ops.Operator, rewrite.TreeIdentity, error) {
-		switch in := in.(type) {
+		switch op := in.(type) {
 		case *Horizon:
 			return nil, false, vterrors.VT13001("should not see Horizons here")
 		case *Derived:
 			return nil, false, vterrors.VT13001("should not see Derived here")
 		case *Filter:
-			err := planFilter(ctx, in)
+			err := planFilter(ctx, op)
 			if err != nil {
 				return nil, false, err
 			}
-			return in, rewrite.SameTree, nil
+			return op, rewrite.SameTree, nil
+		case *Projection:
+			var err error
+			isSimple := true
+			for i, col := range op.Columns {
+				rewritten := sqlparser.CopyOnRewrite(col.GetExpr(), nil, func(cursor *sqlparser.CopyOnWriteCursor) {
+					col, ok := cursor.Node().(*sqlparser.ColName)
+					if !ok {
+						return
+					}
+					newSrc, offset, terr := op.Source.AddColumn(ctx, aeWrap(col))
+					if terr != nil {
+						err = terr
+					}
+					op.Source = newSrc
+					cursor.Replace(sqlparser.NewOffset(offset, col))
+				}, nil).(sqlparser.Expr)
+				if err != nil {
+					return nil, false, err
+				}
+
+				offset, ok := rewritten.(*sqlparser.Offset)
+				if ok {
+					// we got a pure offset back. No need to do anything else
+					op.Columns[i] = Offset{
+						Expr:   col.GetExpr(),
+						Offset: offset.V,
+					}
+					continue
+				}
+				isSimple = false
+
+				eexpr, err := evalengine.Translate(rewritten, nil)
+				if err != nil {
+					return nil, false, err
+				}
+
+				op.Columns[i] = Eval{
+					Expr:  rewritten,
+					EExpr: eexpr,
+				}
+			}
+			if !isSimple {
+				return op, rewrite.SameTree, nil
+			}
+
+			// is we were able to turn all the columns into offsets, we can use the SimpleProjection instead
+			sp := &SimpleProjection{
+				Source: op.Source,
+			}
+			for i, column := range op.Columns {
+				offset := column.(Offset)
+				sp.Columns = append(sp.Columns, offset.Offset)
+				sp.ASTColumns = append(sp.ASTColumns, &sqlparser.AliasedExpr{Expr: offset.Expr, As: sqlparser.NewIdentifierCI(op.ColumnNames[i])})
+			}
+			return sp, rewrite.NewTree, nil
+
 		default:
-			return in, rewrite.SameTree, nil
+			return op, rewrite.SameTree, nil
 		}
 	}
 
-	_, err := rewrite.BottomUp(root, TableID, visitor, stopAtRoute)
+	op, err := rewrite.BottomUp(root, TableID, visitor, stopAtRoute)
 	if err != nil {
 		if vterr, ok := err.(*vterrors.VitessError); ok && vterr.ID == "VT13001" {
 			// we encountered a bug. let's try to back out
-			return errNotHorizonPlanned
+			return nil, errNotHorizonPlanned
 		}
-		return err
+		return nil, err
 	}
 
-	return nil
-
+	return op, nil
 }
 
-func planHorizon(ctx *plancontext.PlanningContext, in *Horizon, isRoot bool) (ops.Operator, error) {
+func pushOrExpandHorizon(ctx *plancontext.PlanningContext, in *Horizon) (ops.Operator, error) {
 	rb, isRoute := in.Source.(*Route)
 	if isRoute && rb.IsSingleShard() && in.Select.GetLimit() == nil {
 		return rewrite.Swap(in, rb)
 	}
 
-	return planSelectExpressions(ctx, in, isRoot)
+	sel, isSel := in.selectStatement().(*sqlparser.Select)
+	if !isSel {
+		return nil, errNotHorizonPlanned
+	}
+
+	qp, err := CreateQPFromSelect(ctx, sel)
+	if err != nil {
+		return nil, err
+	}
+
+	needsOrdering := len(qp.OrderExprs) > 0
+	canPushDown := isRoute && sel.Having == nil && !needsOrdering
+
+	if canPushDown {
+		return rewrite.Swap(in, rb)
+	}
+
+	return expandHorizon(ctx, qp, in)
 }
 
 // horizonLike should be removed. we should use Horizon for both these cases
@@ -123,7 +214,7 @@ type horizonLike interface {
 	src() ops.Operator
 }
 
-func planSelectExpressions(ctx *plancontext.PlanningContext, in horizonLike, isRoot bool) (ops.Operator, error) {
+func planSelectExpressions(ctx *plancontext.PlanningContext, in horizonLike) (ops.Operator, error) {
 	sel, isSel := in.selectStatement().(*sqlparser.Select)
 	if !isSel {
 		return nil, errNotHorizonPlanned
@@ -139,20 +230,50 @@ func planSelectExpressions(ctx *plancontext.PlanningContext, in horizonLike, isR
 
 	needsOrdering := len(qp.OrderExprs) > 0
 	canPushDown := isRoute && sel.Having == nil && !needsOrdering
-	_, isDerived := src.(*Derived)
 
-	switch {
-	case qp.NeedsAggregation() || sel.Having != nil || sel.Limit != nil || isDerived || needsOrdering || qp.NeedsDistinct():
-		return nil, errNotHorizonPlanned
-	case canPushDown:
+	if canPushDown {
 		return rewrite.Swap(in, rb)
-	default:
-		return pushProjections(ctx, qp, src, isRoot)
 	}
+
+	return expandHorizon(ctx, qp, in)
 }
 
 func planDerived(ctx *plancontext.PlanningContext, in *Derived, isRoot bool) (ops.Operator, error) {
-	return planSelectExpressions(ctx, in, isRoot)
+	return planSelectExpressions(ctx, in)
+}
+
+func expandHorizon(ctx *plancontext.PlanningContext, qp *QueryProjection, horizon horizonLike) (ops.Operator, error) {
+	sel, isSel := horizon.selectStatement().(*sqlparser.Select)
+	if !isSel {
+		return nil, errNotHorizonPlanned
+	}
+
+	needsOrdering := len(qp.OrderExprs) > 0
+	src := horizon.src()
+	_, isDerived := src.(*Derived)
+
+	if qp.NeedsAggregation() || sel.Having != nil || sel.Limit != nil || isDerived || needsOrdering || qp.NeedsDistinct() {
+		return nil, errNotHorizonPlanned
+	}
+
+	proj := &Projection{
+		Source: src,
+	}
+
+	for _, e := range qp.SelectExprs {
+		expr, err := e.GetAliasedExpr()
+		if err != nil {
+			return nil, err
+		}
+		if !expr.As.IsEmpty() {
+			// we are not handling column names correct yet, so let's fail here for now
+			return nil, errNotHorizonPlanned
+		}
+		proj.Columns = append(proj.Columns, Expr{E: expr.Expr})
+		proj.ColumnNames = append(proj.ColumnNames, expr.ColumnName())
+	}
+
+	return proj, nil
 }
 
 func pushProjections(ctx *plancontext.PlanningContext, qp *QueryProjection, src ops.Operator, isRoot bool) (ops.Operator, error) {

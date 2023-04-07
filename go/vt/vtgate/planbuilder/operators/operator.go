@@ -28,8 +28,8 @@ The operators go through a few phases while planning:
    During this phase, we will also decide which join algorithms should be used on the vtgate level
 3. Columns & Aggregation
    Once we know which queries will be sent to the tablets, we go over the tree and decide which
-   columns each operator should output. At this point, we also do offset lookups,
-   so we know at runtime from which columns in the input table we need to read.
+   Columns each operator should output. At this point, we also do offset lookups,
+   so we know at runtime from which Columns in the input table we need to read.
 */
 package operators
 
@@ -68,9 +68,9 @@ func PlanQuery(ctx *plancontext.PlanningContext, selStmt sqlparser.Statement) (o
 
 	backup := Clone(op)
 
-	op, err = pushOrExpandHorizon(ctx, op)
+	op, err = planHorizon2(ctx, op)
 	if err == nil {
-		err = planOffsets(ctx, op)
+		op, err = planOffsets(ctx, op)
 		if err == nil {
 			op = stripSimpleProjection(op)
 		}
@@ -132,11 +132,11 @@ func (noInputs) SetInputs(ops []ops.Operator) {
 
 // AddColumn implements the Operator interface
 func (noColumns) AddColumn(*plancontext.PlanningContext, *sqlparser.AliasedExpr) (ops.Operator, int, error) {
-	return nil, 0, vterrors.VT13001("the noColumns operator cannot accept columns")
+	return nil, 0, vterrors.VT13001("the noColumns operator cannot accept Columns")
 }
 
 func (noColumns) GetColumns() ([]sqlparser.Expr, error) {
-	return nil, vterrors.VT13001("the noColumns operator cannot accept columns")
+	return nil, vterrors.VT13001("the noColumns operator cannot accept Columns")
 }
 
 // AddPredicate implements the Operator interface
