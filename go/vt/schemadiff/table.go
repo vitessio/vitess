@@ -332,6 +332,32 @@ func (c *CreateTableEntity) normalizeTableOptions() {
 	}
 }
 
+func (c *CreateTableEntity) GetCharset() string {
+	for _, opt := range c.CreateTable.TableSpec.Options {
+		opt.Name = strings.ToLower(opt.Name)
+		if opt.Name == "charset" {
+			opt.String = strings.ToLower(opt.String)
+			if collation, ok := collationEnv.CharsetAlias(opt.String); ok {
+				return collation
+			}
+		}
+	}
+	return ""
+}
+
+func (c *CreateTableEntity) GetCollation() string {
+	for _, opt := range c.CreateTable.TableSpec.Options {
+		opt.Name = strings.ToLower(opt.Name)
+		if opt.Name == "collate" {
+			opt.String = strings.ToLower(opt.String)
+			if collation, ok := collationEnv.CollationAlias(opt.String); ok {
+				return collation
+			}
+		}
+	}
+	return ""
+}
+
 func (c *CreateTableEntity) Clone() Entity {
 	return &CreateTableEntity{CreateTable: sqlparser.CloneRefOfCreateTable(c.CreateTable)}
 }

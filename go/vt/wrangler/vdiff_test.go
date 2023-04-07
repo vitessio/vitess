@@ -44,31 +44,37 @@ func TestVDiffPlanSuccess(t *testing.T) {
 			Columns:           []string{"c1", "c2"},
 			PrimaryKeyColumns: []string{"c1"},
 			Fields:            sqltypes.MakeTestFields("c1|c2", "int64|int64"),
+			Schema:            "create table t1(c1 bigint, c2 bigint, primary key(c1))",
 		}, {
 			Name:              "nonpktext",
 			Columns:           []string{"c1", "textcol"},
 			PrimaryKeyColumns: []string{"c1"},
 			Fields:            sqltypes.MakeTestFields("c1|textcol", "int64|varchar"),
+			Schema:            "create table nonpktext(c1 bigint, textcol text, primary key(c1))",
 		}, {
 			Name:              "pktext",
 			Columns:           []string{"textcol", "c2"},
 			PrimaryKeyColumns: []string{"textcol"},
 			Fields:            sqltypes.MakeTestFields("textcol|c2", "varchar|int64"),
+			Schema:            "create table pktext(textcol varchar(50), c2 bigint, primary key(textcol))",
 		}, {
 			Name:              "multipk",
 			Columns:           []string{"c1", "c2"},
 			PrimaryKeyColumns: []string{"c1", "c2"},
 			Fields:            sqltypes.MakeTestFields("c1|c2", "int64|int64"),
+			Schema:            "create table multipk(c1 bigint, c2 bigint, primary key(c1, c2))",
 		}, {
 			Name:              "aggr",
 			Columns:           []string{"c1", "c2", "c3", "c4"},
 			PrimaryKeyColumns: []string{"c1"},
 			Fields:            sqltypes.MakeTestFields("c1|c2|c3|c4", "int64|int64|int64|int64"),
+			Schema:            "create table aggr(c1 bigint, c2 bigint, c3 bigint, c4 bigint, primary key(c1))",
 		}, {
 			Name:              "datze",
 			Columns:           []string{"id", "dt"},
 			PrimaryKeyColumns: []string{"id"},
 			Fields:            sqltypes.MakeTestFields("id|dt", "int64|datetime"),
+			Schema:            "create table datze(id bigint, dt datetime, primary key(id))",
 		}},
 	}
 
@@ -208,12 +214,12 @@ func TestVDiffPlanSuccess(t *testing.T) {
 			targetTable:      "pktext",
 			sourceExpression: "select textcol, c2 from pktext order by textcol asc",
 			targetExpression: "select textcol, c2 from pktext order by textcol asc",
-			compareCols:      []compareColInfo{{0, collations.Collation(nil), true}, {1, collations.Collation(nil), false}},
-			comparePKs:       []compareColInfo{{0, collations.Collation(nil), true}},
+			compareCols:      []compareColInfo{{0, collations.Default().Get(), true}, {1, collations.Collation(nil), false}},
+			comparePKs:       []compareColInfo{{0, collations.Default().Get(), true}},
 			pkCols:           []int{0},
 			selectPks:        []int{0},
-			sourcePrimitive:  newMergeSorter(nil, []compareColInfo{{0, collations.Collation(nil), false}}),
-			targetPrimitive:  newMergeSorter(nil, []compareColInfo{{0, collations.Collation(nil), false}}),
+			sourcePrimitive:  newMergeSorter(nil, []compareColInfo{{0, collations.Default().Get(), false}}),
+			targetPrimitive:  newMergeSorter(nil, []compareColInfo{{0, collations.Default().Get(), false}}),
 		},
 	}, {
 		// pk text column, different order.
@@ -226,12 +232,12 @@ func TestVDiffPlanSuccess(t *testing.T) {
 			targetTable:      "pktext",
 			sourceExpression: "select c2, textcol from pktext order by textcol asc",
 			targetExpression: "select c2, textcol from pktext order by textcol asc",
-			compareCols:      []compareColInfo{{0, collations.Collation(nil), false}, {1, collations.Collation(nil), true}},
-			comparePKs:       []compareColInfo{{1, collations.Collation(nil), true}},
+			compareCols:      []compareColInfo{{0, collations.Collation(nil), false}, {1, collations.Default().Get(), true}},
+			comparePKs:       []compareColInfo{{1, collations.Default().Get(), true}},
 			pkCols:           []int{1},
 			selectPks:        []int{1},
-			sourcePrimitive:  newMergeSorter(nil, []compareColInfo{{1, collations.Collation(nil), false}}),
-			targetPrimitive:  newMergeSorter(nil, []compareColInfo{{1, collations.Collation(nil), false}}),
+			sourcePrimitive:  newMergeSorter(nil, []compareColInfo{{1, collations.Default().Get(), false}}),
+			targetPrimitive:  newMergeSorter(nil, []compareColInfo{{1, collations.Default().Get(), false}}),
 		},
 	}, {
 		// text column as expression.
@@ -244,12 +250,12 @@ func TestVDiffPlanSuccess(t *testing.T) {
 			targetTable:      "pktext",
 			sourceExpression: "select c2, a + b as textcol from pktext order by textcol asc",
 			targetExpression: "select c2, textcol from pktext order by textcol asc",
-			compareCols:      []compareColInfo{{0, collations.Collation(nil), false}, {1, collations.Collation(nil), true}},
-			comparePKs:       []compareColInfo{{1, collations.Collation(nil), true}},
+			compareCols:      []compareColInfo{{0, collations.Collation(nil), false}, {1, collations.Default().Get(), true}},
+			comparePKs:       []compareColInfo{{1, collations.Default().Get(), true}},
 			pkCols:           []int{1},
 			selectPks:        []int{1},
-			sourcePrimitive:  newMergeSorter(nil, []compareColInfo{{1, collations.Collation(nil), false}}),
-			targetPrimitive:  newMergeSorter(nil, []compareColInfo{{1, collations.Collation(nil), false}}),
+			sourcePrimitive:  newMergeSorter(nil, []compareColInfo{{1, collations.Default().Get(), false}}),
+			targetPrimitive:  newMergeSorter(nil, []compareColInfo{{1, collations.Default().Get(), false}}),
 		},
 	}, {
 		input: &binlogdatapb.Rule{
@@ -500,6 +506,7 @@ func TestVDiffUnsharded(t *testing.T) {
 			Columns:           []string{"c1", "c2"},
 			PrimaryKeyColumns: []string{"c1"},
 			Fields:            sqltypes.MakeTestFields("c1|c2", "int64|int64"),
+			Schema:            "create table t1(c1 bigint, c2 bigint, primary key(c1))",
 		}},
 	}
 	env.tmc.schema = schm
@@ -780,12 +787,14 @@ func TestVDiffSharded(t *testing.T) {
 			Columns:           []string{"c1", "c2"},
 			PrimaryKeyColumns: []string{"c1"},
 			Fields:            sqltypes.MakeTestFields("c1|c2", "int64|int64"),
+			Schema:            "create table t1(c1 bigint, c2 bigint, primary key(c1))",
 		},
 			{
 				Name:              "_t1_gho",
 				Columns:           []string{"c1", "c2", "c3"},
 				PrimaryKeyColumns: []string{"c2"},
 				Fields:            sqltypes.MakeTestFields("c1|c2|c3", "int64|int64|int64"),
+				Schema:            "create table _t1_gho(c1 bigint, c2 bigint, c3 bigint, primary key(c2))",
 			}},
 	}
 
@@ -848,6 +857,7 @@ func TestVDiffAggregates(t *testing.T) {
 			Columns:           []string{"c1", "c2", "c3"},
 			PrimaryKeyColumns: []string{"c1"},
 			Fields:            sqltypes.MakeTestFields("c1|c2|c3", "int64|int64|int64"),
+			Schema:            "create table t1(c1 bigint, c2 bigint, c3 bigint, primary key(c1))",
 		}},
 	}
 	env.tmc.schema = schm
@@ -915,6 +925,7 @@ func TestVDiffDefaults(t *testing.T) {
 			Columns:           []string{"c1", "c2"},
 			PrimaryKeyColumns: []string{"c1"},
 			Fields:            sqltypes.MakeTestFields("c1|c2", "int64|int64"),
+			Schema:            "create table t1(c1 bigint, c2 bigint, primary key(c1))",
 		}},
 	}
 	env.tmc.schema = schm
@@ -968,6 +979,7 @@ func TestVDiffReplicationWait(t *testing.T) {
 			Columns:           []string{"c1", "c2"},
 			PrimaryKeyColumns: []string{"c1"},
 			Fields:            sqltypes.MakeTestFields("c1|c2", "int64|int64"),
+			Schema:            "create table t1(c1 bigint, c2 bigint, primary key(c1))",
 		}},
 	}
 	env.tmc.schema = schm
@@ -1009,6 +1021,7 @@ func TestVDiffFindPKs(t *testing.T) {
 				Columns:           []string{"c1", "c2"},
 				PrimaryKeyColumns: []string{"c1"},
 				Fields:            sqltypes.MakeTestFields("c1|c2", "int64|int64"),
+				Schema:            "create table t1(c1 bigint, c2 bigint, primary key(c1))",
 			},
 			targetSelect: &sqlparser.Select{
 				SelectExprs: sqlparser.SelectExprs{
@@ -1034,6 +1047,7 @@ func TestVDiffFindPKs(t *testing.T) {
 				Columns:           []string{"c1", "c2", "c3", "c4"},
 				PrimaryKeyColumns: []string{"c1", "c4"},
 				Fields:            sqltypes.MakeTestFields("c1|c2|c3|c4", "int64|int64|varchar|int64"),
+				Schema:            "create table t1(c1 bigint, c2 bigint, c3 varchar(50), c4 bigint, primary key(c1, c4))",
 			},
 			targetSelect: &sqlparser.Select{
 				SelectExprs: sqlparser.SelectExprs{
@@ -1074,21 +1088,25 @@ func TestVDiffPlanInclude(t *testing.T) {
 			Columns:           []string{"c1", "c2"},
 			PrimaryKeyColumns: []string{"c1"},
 			Fields:            sqltypes.MakeTestFields("c1|c2", "int64|int64"),
+			Schema:            "create table t1(c1 bigint, c2 bigint, primary key(c1))",
 		}, {
 			Name:              "t2",
 			Columns:           []string{"c1", "c2"},
 			PrimaryKeyColumns: []string{"c1"},
 			Fields:            sqltypes.MakeTestFields("c1|c2", "int64|int64"),
+			Schema:            "create table t2(c1 bigint, c2 bigint, primary key(c1))",
 		}, {
 			Name:              "t3",
 			Columns:           []string{"c1", "c2"},
 			PrimaryKeyColumns: []string{"c1"},
 			Fields:            sqltypes.MakeTestFields("c1|c2", "int64|int64"),
+			Schema:            "create table t3(c1 bigint, c2 bigint, primary key(c1))",
 		}, {
 			Name:              "t4",
 			Columns:           []string{"c1", "c2"},
 			PrimaryKeyColumns: []string{"c1"},
 			Fields:            sqltypes.MakeTestFields("c1|c2", "int64|int64"),
+			Schema:            "create table t4(c1 bigint, c2 bigint, primary key(c1))",
 		}},
 	}
 

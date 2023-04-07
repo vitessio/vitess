@@ -39,6 +39,7 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/schema"
+	"vitess.io/vitess/go/vt/schemadiff"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -430,8 +431,13 @@ func (df *vdiff) buildVDiffPlan(ctx context.Context, filter *binlogdatapb.Filter
 	return nil
 }
 
-// findPKs identifies PKs and removes them from the columns to do data comparison
+// findPKs identifies PKs, determines any collations to be used for
+// them, and removes them from the columns to do data comparison.
 func findPKs(table *tabletmanagerdatapb.TableDefinition, targetSelect *sqlparser.Select, td *tableDiffer) (sqlparser.OrderBy, error) {
+	columnCollations, err := getColumnCollations(table)
+	if err != nil {
+		return nil, err
+	}
 	var orderby sqlparser.OrderBy
 	for _, pk := range table.PrimaryKeyColumns {
 		found := false
@@ -448,6 +454,7 @@ func findPKs(table *tabletmanagerdatapb.TableDefinition, targetSelect *sqlparser
 			}
 			if strings.EqualFold(pk, colname) {
 				td.compareCols[i].isPK = true
+				td.compareCols[i].collation = columnCollations[strings.ToLower(colname)]
 				td.comparePKs = append(td.comparePKs, td.compareCols[i])
 				td.selectPks = append(td.selectPks, i)
 				// We'll be comparing pks separately. So, remove them from compareCols.
@@ -466,6 +473,66 @@ func findPKs(table *tabletmanagerdatapb.TableDefinition, targetSelect *sqlparser
 		})
 	}
 	return orderby, nil
+}
+
+// getColumnCollations determines the explicit collation to use for each
+// column in the table definition leveraging MySQL's collation inheritence
+// rules.
+func getColumnCollations(table *tabletmanagerdatapb.TableDefinition) (map[string]collations.Collation, error) {
+	collationEnv := collations.Local()
+	createstmt, err := sqlparser.Parse(table.Schema)
+	if err != nil {
+		return nil, err
+	}
+	createtable, ok := createstmt.(*sqlparser.CreateTable)
+	if !ok {
+		return nil, fmt.Errorf("invalid table schema %s for table %s", table.Schema, table.Name)
+	}
+	tableschema, err := schemadiff.NewCreateTableEntity(createtable)
+	if err != nil {
+		return nil, err
+	}
+	tableCharset := tableschema.GetCharset()
+	tableCollation := tableschema.GetCollation()
+	columnCollations := make(map[string]collations.Collation)
+	for _, column := range tableschema.TableSpec.Columns {
+		// If it's not a character based type then no collation is used.
+		if !sqltypes.IsQuoted(column.Type.SQLType()) {
+			columnCollations[column.Name.Lowered()] = nil
+			continue
+		}
+		collationName := column.Type.Options.Collate
+		// If no explicit collation is specified for the column then we need
+		// to walk the inheritence tree.
+		if collationName == "" {
+			// If the column has a charset listed then the default collation
+			// for that charset is used.
+			if column.Type.Charset.Name != "" {
+				if defaultColumnCollation := collationEnv.DefaultCollationForCharset(column.Type.Charset.Name); defaultColumnCollation != nil {
+					collationName = defaultColumnCollation.Name()
+				}
+			} else {
+				// Use the collation inherited from the table.
+				if tableCollation != "" {
+					collationName = tableCollation
+				} else {
+					// If the table has a charset listed then the default
+					// collation for that charset is used.
+					if tableCharset != "" {
+						if defaultTableCollation := collationEnv.DefaultCollationForCharset(tableCharset); defaultTableCollation != nil {
+							collationName = defaultTableCollation.Name()
+						}
+					} else { // The table is using the global default charset.
+						if defaultCollation := collations.Default().Get(); defaultCollation != nil {
+							collationName = defaultCollation.Name()
+						}
+					}
+				}
+			}
+		}
+		columnCollations[column.Name.Lowered()] = collationEnv.LookupByName(collationName)
+	}
+	return columnCollations, nil
 }
 
 // If SourceTimeZone is defined in the BinlogSource, the VReplication workflow would have converted the datetime
@@ -603,7 +670,7 @@ func (df *vdiff) buildTablePlan(table *tabletmanagerdatapb.TableDefinition, quer
 		if err != nil {
 			return nil, err
 		}
-		_, ok := fields[colname]
+		_, ok = fields[colname]
 		if !ok {
 			return nil, fmt.Errorf("column %v not found in table %v", colname, table.Name)
 		}
