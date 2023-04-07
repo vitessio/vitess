@@ -74,8 +74,11 @@ func (wd *workflowDiffer) reconcileExtraRows(dr *DiffReport, maxExtraRowsToCompa
 					dr.ExtraRowsTarget--
 					dr.ProcessedRows--
 					dr.MatchingRows++
-					// We've removed an element from dr.ExtraRowsSourceDiffs so we need to decrement i for the outer loop.
+					// We've removed an element from both slices at the current index
+					// so we need to shift the counters back as well to process the
+					// new elements at the index and avoid using an index out of range.
 					i--
+					j--
 					foundMatch = true
 					break
 				}

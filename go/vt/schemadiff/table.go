@@ -332,6 +332,8 @@ func (c *CreateTableEntity) normalizeTableOptions() {
 	}
 }
 
+// GetCharset returns the explicit character set name specified
+// in the CREATE TABLE statement (if any).
 func (c *CreateTableEntity) GetCharset() string {
 	for _, opt := range c.CreateTable.TableSpec.Options {
 		opt.Name = strings.ToLower(opt.Name)
@@ -345,6 +347,8 @@ func (c *CreateTableEntity) GetCharset() string {
 	return ""
 }
 
+// GetCharset returns the explicit collation name specified
+// in the CREATE TABLE statement (if any).
 func (c *CreateTableEntity) GetCollation() string {
 	for _, opt := range c.CreateTable.TableSpec.Options {
 		opt.Name = strings.ToLower(opt.Name)

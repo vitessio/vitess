@@ -295,8 +295,11 @@ func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflowName, sou
 						dr.ExtraRowsTarget--
 						dr.ProcessedRows--
 						dr.MatchingRows++
-						// We've removed an element from dr.ExtraRowsSourceDiffs so we need to decrement i for the outer loop.
+						// We've removed an element from both slices at the current index
+						// so we need to shift the counters back as well to process the
+						// new elements at the index and avoid using an index out of range.
 						i--
+						j--
 						foundMatch = true
 						break
 					}
@@ -432,7 +435,7 @@ func (df *vdiff) buildVDiffPlan(ctx context.Context, filter *binlogdatapb.Filter
 }
 
 // findPKs identifies PKs, determines any collations to be used for
-// them, and removes them from the columns to do data comparison.
+// them, and removes them from the columns used for data comparison.
 func findPKs(table *tabletmanagerdatapb.TableDefinition, targetSelect *sqlparser.Select, td *tableDiffer) (sqlparser.OrderBy, error) {
 	columnCollations, err := getColumnCollations(table)
 	if err != nil {
@@ -475,7 +478,7 @@ func findPKs(table *tabletmanagerdatapb.TableDefinition, targetSelect *sqlparser
 	return orderby, nil
 }
 
-// getColumnCollations determines the explicit collation to use for each
+// getColumnCollations determines the proper collation to use for each
 // column in the table definition leveraging MySQL's collation inheritence
 // rules.
 func getColumnCollations(table *tabletmanagerdatapb.TableDefinition) (map[string]collations.Collation, error) {
@@ -486,11 +489,11 @@ func getColumnCollations(table *tabletmanagerdatapb.TableDefinition) (map[string
 	}
 	createtable, ok := createstmt.(*sqlparser.CreateTable)
 	if !ok {
-		return nil, fmt.Errorf("invalid table schema %s for table %s", table.Schema, table.Name)
+		return nil, vterrors.Wrapf(err, "invalid table schema %s for table %s", table.Schema, table.Name)
 	}
 	tableschema, err := schemadiff.NewCreateTableEntity(createtable)
 	if err != nil {
-		return nil, err
+		return nil, vterrors.Wrapf(err, "invalid table schema %s for table %s", table.Schema, table.Name)
 	}
 	tableCharset := tableschema.GetCharset()
 	tableCollation := tableschema.GetCollation()

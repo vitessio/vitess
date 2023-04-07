@@ -690,6 +690,7 @@ func insertInitialData(t *testing.T) {
 
 		waitForRowCount(t, vtgateConn, "product:0", "product", 2)
 		waitForRowCount(t, vtgateConn, "product:0", "customer", 3)
+		waitForRowCount(t, vtgateConn, "product:0", "vdiff_order", 190)
 		waitForQueryResult(t, vtgateConn, "product:0", "select * from merchant",
 			`[[VARCHAR("Monoprice") VARCHAR("eléctronics")] [VARCHAR("newegg") VARCHAR("elec†ronics")]]`)
 
