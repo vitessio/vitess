@@ -62,6 +62,7 @@ func TestBuildPlanSuccess(t *testing.T) {
 		},
 		table: "t1",
 		tablePlan: &tablePlan{
+			dbName:      vdiffDBName,
 			table:       testSchema.TableDefinitions[tableDefMap["t1"]],
 			sourceQuery: "select c1, c2 from t1 order by c1 asc",
 			targetQuery: "select c1, c2 from t1 order by c1 asc",
@@ -81,6 +82,7 @@ func TestBuildPlanSuccess(t *testing.T) {
 		},
 		table: "t1",
 		tablePlan: &tablePlan{
+			dbName:      vdiffDBName,
 			table:       testSchema.TableDefinitions[tableDefMap["t1"]],
 			sourceQuery: "select c1, c2 from t1 where in_keyrange('-80') order by c1 asc",
 			targetQuery: "select c1, c2 from t1 order by c1 asc",
@@ -100,6 +102,7 @@ func TestBuildPlanSuccess(t *testing.T) {
 		},
 		table: "t1",
 		tablePlan: &tablePlan{
+			dbName:      vdiffDBName,
 			table:       testSchema.TableDefinitions[tableDefMap["t1"]],
 			sourceQuery: "select c1, c2 from t1 order by c1 asc",
 			targetQuery: "select c1, c2 from t1 order by c1 asc",
@@ -119,6 +122,7 @@ func TestBuildPlanSuccess(t *testing.T) {
 		},
 		table: "t1",
 		tablePlan: &tablePlan{
+			dbName:      vdiffDBName,
 			table:       testSchema.TableDefinitions[tableDefMap["t1"]],
 			sourceQuery: "select c2, c1 from t1 order by c1 asc",
 			targetQuery: "select c2, c1 from t1 order by c1 asc",
@@ -138,6 +142,7 @@ func TestBuildPlanSuccess(t *testing.T) {
 		},
 		table: "t1",
 		tablePlan: &tablePlan{
+			dbName:      vdiffDBName,
 			table:       testSchema.TableDefinitions[tableDefMap["t1"]],
 			sourceQuery: "select c0 as c1, c2 from t2 order by c1 asc",
 			targetQuery: "select c1, c2 from t1 order by c1 asc",
@@ -158,6 +163,7 @@ func TestBuildPlanSuccess(t *testing.T) {
 		},
 		table: "nonpktext",
 		tablePlan: &tablePlan{
+			dbName:      vdiffDBName,
 			table:       testSchema.TableDefinitions[tableDefMap["nonpktext"]],
 			sourceQuery: "select c1, textcol from nonpktext order by c1 asc",
 			targetQuery: "select c1, textcol from nonpktext order by c1 asc",
@@ -178,6 +184,7 @@ func TestBuildPlanSuccess(t *testing.T) {
 		},
 		table: "nonpktext",
 		tablePlan: &tablePlan{
+			dbName:      vdiffDBName,
 			table:       testSchema.TableDefinitions[tableDefMap["nonpktext"]],
 			sourceQuery: "select textcol, c1 from nonpktext order by c1 asc",
 			targetQuery: "select textcol, c1 from nonpktext order by c1 asc",
@@ -198,6 +205,7 @@ func TestBuildPlanSuccess(t *testing.T) {
 		},
 		table: "pktext",
 		tablePlan: &tablePlan{
+			dbName:      vdiffDBName,
 			table:       testSchema.TableDefinitions[tableDefMap["pktext"]],
 			sourceQuery: "select textcol, c2 from pktext order by textcol asc",
 			targetQuery: "select textcol, c2 from pktext order by textcol asc",
@@ -218,6 +226,7 @@ func TestBuildPlanSuccess(t *testing.T) {
 		},
 		table: "pktext",
 		tablePlan: &tablePlan{
+			dbName:      vdiffDBName,
 			table:       testSchema.TableDefinitions[tableDefMap["pktext"]],
 			sourceQuery: "select c2, textcol from pktext order by textcol asc",
 			targetQuery: "select c2, textcol from pktext order by textcol asc",
@@ -238,6 +247,7 @@ func TestBuildPlanSuccess(t *testing.T) {
 		},
 		table: "pktext",
 		tablePlan: &tablePlan{
+			dbName:      vdiffDBName,
 			table:       testSchema.TableDefinitions[tableDefMap["pktext"]],
 			sourceQuery: "select c2, a + b as textcol from pktext order by textcol asc",
 			targetQuery: "select c2, textcol from pktext order by textcol asc",
@@ -257,6 +267,7 @@ func TestBuildPlanSuccess(t *testing.T) {
 		},
 		table: "multipk",
 		tablePlan: &tablePlan{
+			dbName:      vdiffDBName,
 			table:       testSchema.TableDefinitions[tableDefMap["multipk"]],
 			sourceQuery: "select c1, c2 from multipk order by c1 asc, c2 asc",
 			targetQuery: "select c1, c2 from multipk order by c1 asc, c2 asc",
@@ -283,6 +294,7 @@ func TestBuildPlanSuccess(t *testing.T) {
 		},
 		table: "t1",
 		tablePlan: &tablePlan{
+			dbName:      vdiffDBName,
 			table:       testSchema.TableDefinitions[tableDefMap["t1"]],
 			sourceQuery: "select c1, c2 from t1 where in_keyrange('-80') order by c1 asc",
 			targetQuery: "select c1, c2 from t1 order by c1 asc",
@@ -304,6 +316,7 @@ func TestBuildPlanSuccess(t *testing.T) {
 		},
 		table: "t1",
 		tablePlan: &tablePlan{
+			dbName:      vdiffDBName,
 			table:       testSchema.TableDefinitions[tableDefMap["t1"]],
 			sourceQuery: "select c1, c2 from t1 where c2 = 2 and in_keyrange('-80') order by c1 asc",
 			targetQuery: "select c1, c2 from t1 order by c1 asc",
@@ -325,6 +338,7 @@ func TestBuildPlanSuccess(t *testing.T) {
 		},
 		table: "t1",
 		tablePlan: &tablePlan{
+			dbName:      vdiffDBName,
 			table:       testSchema.TableDefinitions[tableDefMap["t1"]],
 			sourceQuery: "select c1, c2 from t1 where in_keyrange('-80') and c2 = 2 order by c1 asc",
 			targetQuery: "select c1, c2 from t1 order by c1 asc",
@@ -346,6 +360,7 @@ func TestBuildPlanSuccess(t *testing.T) {
 		},
 		table: "t1",
 		tablePlan: &tablePlan{
+			dbName:      vdiffDBName,
 			table:       testSchema.TableDefinitions[tableDefMap["t1"]],
 			sourceQuery: "select c1, c2 from t1 where c2 = 2 and c1 = 1 and in_keyrange('-80') order by c1 asc",
 			targetQuery: "select c1, c2 from t1 order by c1 asc",
@@ -367,6 +382,7 @@ func TestBuildPlanSuccess(t *testing.T) {
 		},
 		table: "t1",
 		tablePlan: &tablePlan{
+			dbName:      vdiffDBName,
 			table:       testSchema.TableDefinitions[tableDefMap["t1"]],
 			sourceQuery: "select c1, c2 from t1 where c2 = 2 and in_keyrange('-80') order by c1 asc",
 			targetQuery: "select c1, c2 from t1 order by c1 asc",
@@ -387,6 +403,7 @@ func TestBuildPlanSuccess(t *testing.T) {
 		},
 		table: "t1",
 		tablePlan: &tablePlan{
+			dbName:      vdiffDBName,
 			table:       testSchema.TableDefinitions[tableDefMap["t1"]],
 			sourceQuery: "select c1, c2 from t1 group by c1 order by c1 asc",
 			targetQuery: "select c1, c2 from t1 order by c1 asc",
@@ -407,6 +424,7 @@ func TestBuildPlanSuccess(t *testing.T) {
 		},
 		table: "aggr",
 		tablePlan: &tablePlan{
+			dbName:      vdiffDBName,
 			table:       testSchema.TableDefinitions[tableDefMap["aggr"]],
 			sourceQuery: "select c1, c2, count(*) as c3, sum(c4) as c4 from t1 group by c1 order by c1 asc",
 			targetQuery: "select c1, c2, c3, c4 from aggr order by c1 asc",
@@ -434,6 +452,7 @@ func TestBuildPlanSuccess(t *testing.T) {
 		sourceTimeZone: "US/Pacific",
 		table:          "datze",
 		tablePlan: &tablePlan{
+			dbName:      vdiffDBName,
 			table:       testSchema.TableDefinitions[tableDefMap["datze"]],
 			sourceQuery: "select id, dt from datze order by id asc",
 			targetQuery: "select id, convert_tz(dt, 'UTC', 'US/Pacific') as dt from datze order by id asc",
@@ -466,7 +485,8 @@ func TestBuildPlanSuccess(t *testing.T) {
 			dbc.ExpectRequestRE("select vdt.lastpk as lastpk, vdt.mismatch as mismatch, vdt.report as report", noResults, nil)
 			for _, pkCol := range tcase.tablePlan.comparePKs {
 				query, err := sqlparser.ParseAndBind(sqlSelectColumnCollation,
-					sqltypes.StringBindVariable(tcase.tablePlan.table.Name), sqltypes.StringBindVariable(pkCol.colName))
+					sqltypes.StringBindVariable(vdiffDBName), sqltypes.StringBindVariable(tcase.tablePlan.table.Name),
+					sqltypes.StringBindVariable(pkCol.colName))
 				require.NoError(t, err)
 				collationName := ""
 				if pkCol.collation != nil {

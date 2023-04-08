@@ -34,7 +34,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
 )
 
-const sqlSelectColumnCollation = "select collation_name from information_schema.columns where table_name=%a and column_name=%a"
+const sqlSelectColumnCollation = "select collation_name from information_schema.columns where table_schema=%a and table_name=%a and column_name=%a"
 
 type tablePlan struct {
 	// sourceQuery and targetQuery are select queries.
@@ -53,13 +53,17 @@ type tablePlan struct {
 
 	// selectPks is the list of pk columns as they appear in the select clause for the diff.
 	selectPks  []int
+	dbName     string
 	table      *tabletmanagerdatapb.TableDefinition
 	orderBy    sqlparser.OrderBy
 	aggregates []*engine.AggregateParams
 }
 
-func (td *tableDiffer) buildTablePlan(dbClient binlogplayer.DBClient) (*tablePlan, error) {
-	tp := &tablePlan{table: td.table}
+func (td *tableDiffer) buildTablePlan(dbClient binlogplayer.DBClient, dbName string) (*tablePlan, error) {
+	tp := &tablePlan{
+		table:  td.table,
+		dbName: dbName,
+	}
 	statement, err := sqlparser.Parse(td.sourceQuery)
 	if err != nil {
 		return nil, err
@@ -192,7 +196,7 @@ func (tp *tablePlan) findPKs(dbClient binlogplayer.DBClient, targetSelect *sqlpa
 				tp.compareCols[i].isPK = true
 				// We need to set the correct collation, if the column has one, to ensure
 				// proper ordering of the results when we later do the merge sort.
-				collationName, err := getColumnCollation(dbClient, tp.table.Name, colname)
+				collationName, err := getColumnCollation(dbClient, tp.dbName, tp.table.Name, colname)
 				if err != nil {
 					return err
 				}
@@ -218,9 +222,11 @@ func (tp *tablePlan) findPKs(dbClient binlogplayer.DBClient, targetSelect *sqlpa
 	return nil
 }
 
-func getColumnCollation(dbClient binlogplayer.DBClient, table, column string) (string, error) {
+// getColumnCollation queries the database to find the collation
+// to use for the given schema.table.column.
+func getColumnCollation(dbClient binlogplayer.DBClient, schema, table, column string) (string, error) {
 	query, err := sqlparser.ParseAndBind(sqlSelectColumnCollation,
-		sqltypes.StringBindVariable(table), sqltypes.StringBindVariable(column))
+		sqltypes.StringBindVariable(schema), sqltypes.StringBindVariable(table), sqltypes.StringBindVariable(column))
 	if err != nil {
 		return "", err
 	}

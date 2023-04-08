@@ -254,7 +254,7 @@ func (wd *workflowDiffer) buildPlan(dbClient binlogplayer.DBClient, filter *binl
 		}
 		td.lastPK = lastpkpb
 		wd.tableDiffers[table.Name] = td
-		if _, err := td.buildTablePlan(dbClient); err != nil {
+		if _, err := td.buildTablePlan(dbClient, wd.ct.vde.dbName); err != nil {
 			return err
 		}
 	}
