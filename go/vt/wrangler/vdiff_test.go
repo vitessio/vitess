@@ -1179,7 +1179,7 @@ func TestGetColumnCollations(t *testing.T) {
 		{
 			name: "char pk with table default charset",
 			table: &tabletmanagerdatapb.TableDefinition{
-				Schema: "create table t1 (c1 varchar(10), name varchar(10), primary key(c1)) charset=ucs2",
+				Schema: "create table t1 (c1 varchar(10), name varchar(10), primary key(c1)) default character set ucs2",
 			},
 			want: map[string]collations.Collation{
 				"c1":   collationEnv.DefaultCollationForCharset("ucs2"),
@@ -1197,7 +1197,17 @@ func TestGetColumnCollations(t *testing.T) {
 			},
 		},
 		{
-			name: "char pk with column charset",
+			name: "char pk with column charset override",
+			table: &tabletmanagerdatapb.TableDefinition{
+				Schema: "create table t1 (c1 varchar(10) charset sjis, name varchar(10), primary key(c1)) character set=utf8",
+			},
+			want: map[string]collations.Collation{
+				"c1":   collationEnv.DefaultCollationForCharset("sjis"),
+				"name": collationEnv.DefaultCollationForCharset("utf8mb3"),
+			},
+		},
+		{
+			name: "char pk with column collation override",
 			table: &tabletmanagerdatapb.TableDefinition{
 				Schema: "create table t1 (c1 varchar(10) collate hebrew_bin, name varchar(10), primary key(c1)) charset=hebrew",
 			},
@@ -1207,12 +1217,13 @@ func TestGetColumnCollations(t *testing.T) {
 			},
 		},
 		{
-			name: "char pk with column collation override",
+			name: "compound char int pk with column collation override",
 			table: &tabletmanagerdatapb.TableDefinition{
-				Schema: "create table t1 (c1 varchar(10) collate utf16_turkish_ci, name varchar(10), primary key(c1)) charset=utf16 collate=utf16_icelandic_ci",
+				Schema: "create table t1 (c1 varchar(10) collate utf16_turkish_ci, c2 int, name varchar(10), primary key(c1, c2)) charset=utf16 collate=utf16_icelandic_ci",
 			},
 			want: map[string]collations.Collation{
 				"c1":   collationEnv.LookupByName("utf16_turkish_ci"),
+				"c2":   collations.Collation(nil),
 				"name": collationEnv.LookupByName("utf16_icelandic_ci"),
 			},
 		},
