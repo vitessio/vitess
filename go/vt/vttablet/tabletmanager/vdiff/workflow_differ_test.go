@@ -581,7 +581,7 @@ func TestBuildPlanInclude(t *testing.T) {
 				"collation_name",
 				"varchar",
 			),
-				"",
+				"NULL",
 			), nil)
 		}
 		err = wd.buildPlan(dbc, filter, schm)
