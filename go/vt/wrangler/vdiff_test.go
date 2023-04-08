@@ -17,24 +17,23 @@ limitations under the License.
 package wrangler
 
 import (
+	"context"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/sqltypes"
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
-
-	"context"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
-	"vitess.io/vitess/go/sqltypes"
-	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
-	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 )
 
 func TestVDiffPlanSuccess(t *testing.T) {
@@ -1130,4 +1129,104 @@ func TestVDiffPlanInclude(t *testing.T) {
 	require.Equal(t, 4, len(df.differs))
 	err = df.buildVDiffPlan(context.Background(), filter, schm, []string{"t1", "t2", "t3", "t5"})
 	require.Error(t, err)
+}
+
+func TestGetColumnCollations(t *testing.T) {
+	collationEnv := collations.Local()
+	tests := []struct {
+		name    string
+		table   *tabletmanagerdatapb.TableDefinition
+		want    map[string]collations.Collation
+		wantErr bool
+	}{
+		{
+			name: "invalid schema",
+			table: &tabletmanagerdatapb.TableDefinition{
+				Schema: "wut is this",
+			},
+			wantErr: true,
+		},
+		{
+			name: "no char pk",
+			table: &tabletmanagerdatapb.TableDefinition{
+				Schema: "create table t1 (c1 int, name varchar(10), primary key(c1))",
+			},
+			want: map[string]collations.Collation{
+				"c1":   collations.Collation(nil),
+				"name": collations.Default().Get(),
+			},
+		},
+		{
+			name: "char pk with global default collation",
+			table: &tabletmanagerdatapb.TableDefinition{
+				Schema: "create table t1 (c1 varchar(10), name varchar(10), primary key(c1))",
+			},
+			want: map[string]collations.Collation{
+				"c1":   collations.Default().Get(),
+				"name": collations.Default().Get(),
+			},
+		},
+		{
+			name: "compound char int pk with global default collation",
+			table: &tabletmanagerdatapb.TableDefinition{
+				Schema: "create table t1 (c1 int, name varchar(10), primary key(c1, name))",
+			},
+			want: map[string]collations.Collation{
+				"c1":   collations.Collation(nil),
+				"name": collations.Default().Get(),
+			},
+		},
+		{
+			name: "char pk with table default charset",
+			table: &tabletmanagerdatapb.TableDefinition{
+				Schema: "create table t1 (c1 varchar(10), name varchar(10), primary key(c1)) charset=ucs2",
+			},
+			want: map[string]collations.Collation{
+				"c1":   collationEnv.DefaultCollationForCharset("ucs2"),
+				"name": collationEnv.DefaultCollationForCharset("ucs2"),
+			},
+		},
+		{
+			name: "char pk with table default collation",
+			table: &tabletmanagerdatapb.TableDefinition{
+				Schema: "create table t1 (c1 varchar(10), name varchar(10), primary key(c1)) charset=utf32 collate=utf32_icelandic_ci",
+			},
+			want: map[string]collations.Collation{
+				"c1":   collationEnv.LookupByName("utf32_icelandic_ci"),
+				"name": collationEnv.LookupByName("utf32_icelandic_ci"),
+			},
+		},
+		{
+			name: "char pk with column charset",
+			table: &tabletmanagerdatapb.TableDefinition{
+				Schema: "create table t1 (c1 varchar(10) collate hebrew_bin, name varchar(10), primary key(c1)) charset=hebrew",
+			},
+			want: map[string]collations.Collation{
+				"c1":   collationEnv.LookupByName("hebrew_bin"),
+				"name": collationEnv.DefaultCollationForCharset("hebrew"),
+			},
+		},
+		{
+			name: "char pk with column collation override",
+			table: &tabletmanagerdatapb.TableDefinition{
+				Schema: "create table t1 (c1 varchar(10) collate utf16_turkish_ci, name varchar(10), primary key(c1)) charset=utf16 collate=utf16_icelandic_ci",
+			},
+			want: map[string]collations.Collation{
+				"c1":   collationEnv.LookupByName("utf16_turkish_ci"),
+				"name": collationEnv.LookupByName("utf16_icelandic_ci"),
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := getColumnCollations(tt.table)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("getColumnCollations() error = %v, wantErr = %t", err, tt.wantErr)
+				return
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("getColumnCollations() = %+v, want %+v", got, tt.want)
+			}
+		})
+	}
 }

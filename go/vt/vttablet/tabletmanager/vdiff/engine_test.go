@@ -144,7 +144,7 @@ func TestVDiff(t *testing.T) {
 		"collation_name",
 		"varchar",
 	),
-		"",
+		"NULL",
 	), nil)
 	vdenv.dbClient.ExpectRequest(fmt.Sprintf("select table_name as table_name, table_rows as table_rows from INFORMATION_SCHEMA.TABLES where table_schema = '%s' and table_name in ('t1')", vdiffDBName), sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 		"table_name|table_rows",
