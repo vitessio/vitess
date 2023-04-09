@@ -207,7 +207,7 @@ func pushProjectionIntoJoin(
 			return 0, false, vterrors.VT12001("cross-shard query with aggregates")
 		}
 		// now we break the expression into left and right side dependencies and rewrite the left ones to bind variables
-		bvName, cols, rewrittenExpr, err := operators.BreakExpressionInLHSandRHS(ctx, expr.Expr, lhsSolves)
+		bvName, cols, rewrittenExpr, err := operators.BreakExpressionInLHSandRHSOld(ctx, expr.Expr, lhsSolves)
 		if err != nil {
 			return 0, false, err
 		}

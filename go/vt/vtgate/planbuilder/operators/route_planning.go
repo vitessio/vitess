@@ -50,7 +50,7 @@ type (
 // Here we try to merge query parts into the same route primitives. At the end of this process,
 // all the operators in the tree are guaranteed to be PhysicalOperators
 func transformToPhysical(ctx *plancontext.PlanningContext, in ops.Operator) (ops.Operator, error) {
-	op, err := rewrite.BottomUpAll(in, TableID, func(operator ops.Operator, ts semantics.TableSet, _ bool) (ops.Operator, rewrite.TreeIdentity, error) {
+	op, err := rewrite.BottomUpAll(in, TableID, func(operator ops.Operator, ts semantics.TableSet, _ bool) (ops.Operator, rewrite.ApplyResult, error) {
 		switch op := operator.(type) {
 		case *QueryGraph:
 			return optimizeQueryGraph(ctx, op)
@@ -84,7 +84,7 @@ func transformToPhysical(ctx *plancontext.PlanningContext, in ops.Operator) (ops
 	return Compact(ctx, op)
 }
 
-func optimizeFilter(op *Filter) (ops.Operator, rewrite.TreeIdentity, error) {
+func optimizeFilter(op *Filter) (ops.Operator, rewrite.ApplyResult, error) {
 	if route, ok := op.Source.(*Route); ok {
 		// let's push the filter into the route
 		op.Source = route.Source
@@ -95,7 +95,7 @@ func optimizeFilter(op *Filter) (ops.Operator, rewrite.TreeIdentity, error) {
 	return op, rewrite.SameTree, nil
 }
 
-func optimizeDerived(ctx *plancontext.PlanningContext, op *Derived) (ops.Operator, rewrite.TreeIdentity, error) {
+func optimizeDerived(ctx *plancontext.PlanningContext, op *Derived) (ops.Operator, rewrite.ApplyResult, error) {
 	innerRoute, ok := op.Source.(*Route)
 	if !ok {
 		return op, rewrite.SameTree, nil
@@ -112,7 +112,7 @@ func optimizeDerived(ctx *plancontext.PlanningContext, op *Derived) (ops.Operato
 	return innerRoute, rewrite.NewTree, nil
 }
 
-func optimizeJoin(ctx *plancontext.PlanningContext, op *Join) (ops.Operator, rewrite.TreeIdentity, error) {
+func optimizeJoin(ctx *plancontext.PlanningContext, op *Join) (ops.Operator, rewrite.ApplyResult, error) {
 	join, err := mergeOrJoin(ctx, op.LHS, op.RHS, sqlparser.SplitAndExpression(nil, op.Predicate), !op.LeftJoin)
 	if err != nil {
 		return nil, false, err
@@ -120,7 +120,7 @@ func optimizeJoin(ctx *plancontext.PlanningContext, op *Join) (ops.Operator, rew
 	return join, rewrite.NewTree, nil
 }
 
-func optimizeQueryGraph(ctx *plancontext.PlanningContext, op *QueryGraph) (result ops.Operator, changed rewrite.TreeIdentity, err error) {
+func optimizeQueryGraph(ctx *plancontext.PlanningContext, op *QueryGraph) (result ops.Operator, changed rewrite.ApplyResult, err error) {
 	changed = rewrite.NewTree
 	switch {
 	case ctx.PlannerVersion == querypb.ExecuteOptions_Gen4Left2Right:
@@ -675,7 +675,7 @@ func pushJoinPredicates(ctx *plancontext.PlanningContext, exprs []sqlparser.Expr
 	}
 
 	for _, expr := range exprs {
-		_, err := AddPredicate(op, ctx, expr, true, newFilter)
+		_, err := AddPredicate(ctx, op, expr, true, newFilter)
 		if err != nil {
 			return nil, err
 		}

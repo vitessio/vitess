@@ -19,6 +19,7 @@ package operators
 import (
 	"golang.org/x/exp/maps"
 	"golang.org/x/exp/slices"
+	"vitess.io/vitess/go/slices2"
 
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 
@@ -32,16 +33,6 @@ import (
 type ApplyJoin struct {
 	LHS, RHS ops.Operator
 
-	// Columns stores the column indexes of the columns coming from the left and right side
-	// negative value comes from LHS and positive from RHS
-	Columns []int
-
-	// ColumnsAST keeps track of what AST expression is represented in the Columns array
-	ColumnsAST []sqlparser.Expr
-
-	// Vars are the arguments that need to be copied from the LHS to the RHS
-	Vars map[string]int
-
 	// LeftJoin will be true in the case of an outer join
 	LeftJoin bool
 
@@ -49,7 +40,39 @@ type ApplyJoin struct {
 	// These are the same columns pushed on the LHS that are now used in the Vars field
 	LHSColumns []*sqlparser.ColName
 
+	// Before offset planning
+
+	// ColumnsAST keeps track of what AST expression is represented in the Columns array
+	ColumnsAST []JoinColumn
+
+	// After offset planning
+
+	// Columns stores the column indexes of the columns coming from the left and right side
+	// negative value comes from LHS and positive from RHS
+	Columns []int
+
+	// Vars are the arguments that need to be copied from the LHS to the RHS
+	Vars map[string]int
+
 	Predicate sqlparser.Expr
+}
+
+// JoinColumn is where we store information about columns passing through the join operator
+// It can be in one of three possible configurations:
+//   - Pure left
+//     We are projecting a column that comes from the left. The RHSExpr will be nil for these
+//   - Pure right
+//     We are projecting a column that comes from the right. The LHSExprs will be empty for these
+//   - Mix of data from left and right
+//     Here we need to transmit columns from the LHS to the RHS,
+//     so they can be used for the result of this expression that is using data from both sides.
+//     All fields will be used for these
+type JoinColumn struct {
+	Original       sqlparser.Expr // this is the original expression being passed through
+	BvNames        []string       // the BvNames and LHSCols line up
+	LHSExprs       []sqlparser.Expr
+	RHSExpr        sqlparser.Expr
+	IncomingOffset int
 }
 
 var _ ops.PhysicalOperator = (*ApplyJoin)(nil)
@@ -82,7 +105,7 @@ func (a *ApplyJoin) Clone(inputs []ops.Operator) ops.Operator {
 }
 
 func (a *ApplyJoin) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (ops.Operator, error) {
-	return AddPredicate(a, ctx, expr, false, newFilter)
+	return AddPredicate(ctx, a, expr, false, newFilter)
 }
 
 // Inputs implements the Operator interface
@@ -122,25 +145,6 @@ func (a *ApplyJoin) IsInner() bool {
 }
 
 func (a *ApplyJoin) AddJoinPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) error {
-	bvName, cols, predicate, err := BreakExpressionInLHSandRHS(ctx, expr, TableID(a.LHS))
-	if err != nil {
-		return err
-	}
-	for i, col := range cols {
-		offset, err := a.pushColLeft(ctx, aeWrap(col))
-		if err != nil {
-			return err
-		}
-		a.Vars[bvName[i]] = offset
-	}
-	a.LHSColumns = append(a.LHSColumns, cols...)
-
-	rhs, err := a.RHS.AddPredicate(ctx, predicate)
-	if err != nil {
-		return err
-	}
-	a.RHS = rhs
-
 	a.Predicate = ctx.SemTable.AndExpressions(expr, a.Predicate)
 	return nil
 }
@@ -164,57 +168,81 @@ func (a *ApplyJoin) pushColRight(ctx *plancontext.PlanningContext, e *sqlparser.
 }
 
 func (a *ApplyJoin) GetColumns() ([]sqlparser.Expr, error) {
-	return a.ColumnsAST, nil
+	columns := slices2.Map(a.ColumnsAST, jcToExpr)
+	return columns, nil
 }
 
+func jcToExpr(c JoinColumn) sqlparser.Expr { return c.Original }
+
 func (a *ApplyJoin) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr) (ops.Operator, int, error) {
-	if offset, found := canReuseColumn(ctx, a.ColumnsAST, expr.Expr); found {
+	if offset, found := canReuseColumn(ctx, a.ColumnsAST, expr.Expr, jcToExpr); found {
 		return a, offset, nil
 	}
 
+	side := chooseSide{
+		Expr: expr.Expr,
+		left: func() error {
+			offset, err := a.pushColLeft(ctx, expr)
+			if err != nil {
+				return err
+			}
+			a.Columns = append(a.Columns, -offset-1)
+			return nil
+		},
+		right: func() error {
+			offset, err := a.pushColRight(ctx, expr)
+			if err != nil {
+				return err
+			}
+			a.Columns = append(a.Columns, offset+1)
+			return nil
+		},
+		both: func() error {
+			col, err := BreakExpressionInLHSandRHS(ctx, expr.Expr, TableID(a.LHS))
+			if err != nil {
+				return err
+			}
+			for i, lhsExpr := range col.LHSExprs {
+				offset, err := a.pushColLeft(ctx, aeWrap(lhsExpr))
+				if err != nil {
+					return err
+				}
+				a.Vars[col.BvNames[i]] = offset
+			}
+			offset, err := a.pushColRight(ctx, aeWrap(col.RHSExpr))
+			if err != nil {
+				return err
+			}
+			a.Columns = append(a.Columns, offset+1)
+			return nil
+		},
+	}
+	err := a.Push(ctx, side)
+	if err != nil {
+		return nil, 0, err
+	}
+	return a, len(a.Columns) - 1, nil
+}
+
+func (a *ApplyJoin) Push(ctx *plancontext.PlanningContext, chooser chooseSide) error {
 	lhs := TableID(a.LHS)
 	rhs := TableID(a.RHS)
 	both := lhs.Merge(rhs)
-	deps := ctx.SemTable.RecursiveDeps(expr.Expr)
+	deps := ctx.SemTable.RecursiveDeps(chooser.Expr)
 
-	// if we get here, it's a new expression we are dealing with.
-	// We need to decide if we can push it all on either side,
-	// or if we have to break the expression into left and right parts
 	switch {
 	case deps.IsSolvedBy(lhs):
-		offset, err := a.pushColLeft(ctx, expr)
-		if err != nil {
-			return nil, 0, err
-		}
-		a.Columns = append(a.Columns, -offset-1)
+		return chooser.left()
 	case deps.IsSolvedBy(rhs):
-		offset, err := a.pushColRight(ctx, expr)
-		if err != nil {
-			return nil, 0, err
-		}
-		a.Columns = append(a.Columns, offset+1)
+		return chooser.right()
 	case deps.IsSolvedBy(both):
-		bvNames, lhsExprs, rhsExpr, err := BreakExpressionInLHSandRHS(ctx, expr.Expr, lhs)
-		if err != nil {
-			return nil, 0, err
-		}
-		for i, lhsExpr := range lhsExprs {
-			offset, err := a.pushColLeft(ctx, aeWrap(lhsExpr))
-			if err != nil {
-				return nil, 0, err
-			}
-			a.Vars[bvNames[i]] = offset
-		}
-		offset, err := a.pushColRight(ctx, aeWrap(rhsExpr))
-		if err != nil {
-			return nil, 0, err
-		}
-		a.Columns = append(a.Columns, offset+1)
+		return chooser.both()
 	default:
-		return nil, 0, vterrors.VT13002(sqlparser.String(expr))
+		return vterrors.VT13002(sqlparser.String(chooser.Expr))
 	}
+}
 
-	// the expression wasn't already there - let's add it
-	a.ColumnsAST = append(a.ColumnsAST, expr.Expr)
-	return a, len(a.Columns) - 1, nil
+type chooseSide struct {
+	Expr              sqlparser.Expr
+	left, right, both func() error
 }

@@ -166,7 +166,8 @@ func (d *Derived) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.Al
 		return nil, 0, vterrors.VT13001("cannot push non-colname expression to a derived table")
 	}
 
-	if offset, found := canReuseColumn(ctx, d.Columns, col); found {
+	identity := func(c *sqlparser.ColName) sqlparser.Expr { return c }
+	if offset, found := canReuseColumn(ctx, d.Columns, col, identity); found {
 		return d, offset, nil
 	}
 
@@ -191,13 +192,14 @@ func (d *Derived) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.Al
 
 // canReuseColumn is generic, so it can be used with slices of different types.
 // We don't care about the actual type, as long as we know it's a sqlparser.Expr
-func canReuseColumn[Expr sqlparser.Expr](
+func canReuseColumn[T any](
 	ctx *plancontext.PlanningContext,
-	columns []Expr,
+	columns []T,
 	col sqlparser.Expr,
+	f func(T) sqlparser.Expr,
 ) (offset int, found bool) {
 	for offset, column := range columns {
-		if ctx.SemTable.EqualsExpr(col, column) {
+		if ctx.SemTable.EqualsExpr(col, f(column)) {
 			return offset, true
 		}
 	}

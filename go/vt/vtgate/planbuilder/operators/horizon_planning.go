@@ -29,17 +29,12 @@ import (
 
 var errNotHorizonPlanned = vterrors.VT12001("query cannot be fully operator planned")
 
-// planHorizon2 is the process of figuring out all necessary Columns.
-// They can be needed because the user wants to return the value of a column,
-// or because we need a column for filtering, grouping or ordering
-func planHorizon2(ctx *plancontext.PlanningContext, root ops.Operator) (ops.Operator, error) {
-	// We only need to do column planning to the point we hit a Route.
-	// Everything underneath the route is handled by the mysql planner
-	stopAtRoute := func(operator ops.Operator) rewrite.VisitRule {
-		_, isRoute := operator.(*Route)
-		return rewrite.VisitRule(!isRoute)
-	}
-	visitor := func(in ops.Operator, _ semantics.TableSet, isRoot bool) (ops.Operator, rewrite.TreeIdentity, error) {
+// planHorizons is the process of figuring out how to perform the operations in the Horizon
+// If we can push it under a route - done.
+// If we can't, we will instead expand the Horizon into
+// smaller operators and try to push these down as far as possible
+func planHorizons(ctx *plancontext.PlanningContext, root ops.Operator) (ops.Operator, error) {
+	visitor := func(in ops.Operator, _ semantics.TableSet, isRoot bool) (ops.Operator, rewrite.ApplyResult, error) {
 		switch in := in.(type) {
 		case *Horizon:
 			op, err := pushOrExpandHorizon(ctx, in)
@@ -54,7 +49,7 @@ func planHorizon2(ctx *plancontext.PlanningContext, root ops.Operator) (ops.Oper
 			}
 			return op, rewrite.NewTree, err
 		case *Projection:
-			return tryPushingDownProjection(ctx, in, isRoot)
+			return tryPushingDownProjection(ctx, in)
 		default:
 			return in, rewrite.SameTree, nil
 		}
@@ -74,29 +69,86 @@ func planHorizon2(ctx *plancontext.PlanningContext, root ops.Operator) (ops.Oper
 
 func tryPushingDownProjection(
 	ctx *plancontext.PlanningContext,
-	in *Projection,
-	root bool,
-) (ops.Operator, rewrite.TreeIdentity, error) {
-	switch src := in.Source.(type) {
+	p *Projection,
+) (ops.Operator, rewrite.ApplyResult, error) {
+	switch src := p.Source.(type) {
 	case *Route:
-		op, err := rewrite.Swap(in, src)
+		op, err := rewrite.Swap(p, src)
 		if err != nil {
 			return nil, false, err
 		}
 		return op, rewrite.NewTree, nil
+	case *ApplyJoin:
+		lhs := TableID(src.LHS)
+		rhs := TableID(src.RHS)
+		both := lhs.Merge(rhs)
+		var lhsColumns []ProjExpr
+		var lhsColumnNames []string
+		var rhsColumns []ProjExpr
+		var rhsColumnNames []string
+		for idx, column := range p.Columns {
+			expr := column.GetExpr()
+			deps := ctx.SemTable.RecursiveDeps(expr)
+			var col JoinColumn
+			// if we get here, it's a new expression we are dealing with.
+			// We need to decide if we can push it all on either side,
+			// or if we have to break the expression into left and right parts
+			switch {
+			case deps.IsEmpty(), deps.IsSolvedBy(lhs):
+				lhsColumns = append(lhsColumns, column)
+				lhsColumnNames = append(lhsColumnNames, p.ColumnNames[idx])
+				col = JoinColumn{
+					Original: expr,
+					LHSExprs: []sqlparser.Expr{expr},
+				}
+			case deps.IsSolvedBy(rhs):
+				rhsColumns = append(rhsColumns, column)
+				rhsColumnNames = append(rhsColumnNames, p.ColumnNames[idx])
+				col = JoinColumn{
+					Original: expr,
+					RHSExpr:  expr,
+				}
+			case deps.IsSolvedBy(both):
+				var err error
+				col, err = BreakExpressionInLHSandRHS(ctx, expr, lhs)
+				if err != nil {
+					return nil, false, err
+				}
+
+				for _, lhsExpr := range col.LHSExprs {
+					lhsColumns = append(lhsColumns, &Expr{E: lhsExpr})
+					lhsColumnNames = append(lhsColumnNames, sqlparser.String(lhsExpr))
+				}
+
+				rhsColumns = append(rhsColumns, &Expr{E: col.RHSExpr})
+				rhsColumnNames = append(rhsColumnNames, p.ColumnNames[idx])
+			default:
+				return nil, false, vterrors.VT13002(sqlparser.String(expr))
+			}
+
+			src.ColumnsAST = append(src.ColumnsAST, col)
+		}
+		if len(lhsColumns) > 0 {
+			lhsProj := NewProjection(src.LHS)
+			lhsProj.ColumnNames = lhsColumnNames
+			lhsProj.Columns = lhsColumns
+			src.LHS = lhsProj
+		}
+		if len(rhsColumns) > 0 {
+			rhsProj := NewProjection(src.RHS)
+			rhsProj.ColumnNames = rhsColumnNames
+			rhsProj.Columns = rhsColumns
+			src.RHS = rhsProj
+		}
+		return src, rewrite.NewTree, nil
+
 	default:
-		return in, rewrite.SameTree, nil
+		return p, rewrite.SameTree, nil
 	}
 }
 
 func planOffsets(ctx *plancontext.PlanningContext, root ops.Operator) (ops.Operator, error) {
-	// We only need to do column planning to the point we hit a Route.
-	// Everything underneath the route is handled by the mysql planner
-	stopAtRoute := func(operator ops.Operator) rewrite.VisitRule {
-		_, isRoute := operator.(*Route)
-		return rewrite.VisitRule(!isRoute)
-	}
-	visitor := func(in ops.Operator, _ semantics.TableSet, _ bool) (ops.Operator, rewrite.TreeIdentity, error) {
+	visitor := func(in ops.Operator, _ semantics.TableSet, _ bool) (ops.Operator, rewrite.ApplyResult, error) {
 		switch op := in.(type) {
 		case *Horizon:
 			return nil, false, vterrors.VT13001("should not see Horizons here")
@@ -109,61 +161,9 @@ func planOffsets(ctx *plancontext.PlanningContext, root ops.Operator) (ops.Opera
 			}
 			return op, rewrite.SameTree, nil
 		case *Projection:
-			var err error
-			isSimple := true
-			for i, col := range op.Columns {
-				rewritten := sqlparser.CopyOnRewrite(col.GetExpr(), nil, func(cursor *sqlparser.CopyOnWriteCursor) {
-					col, ok := cursor.Node().(*sqlparser.ColName)
-					if !ok {
-						return
-					}
-					newSrc, offset, terr := op.Source.AddColumn(ctx, aeWrap(col))
-					if terr != nil {
-						err = terr
-					}
-					op.Source = newSrc
-					cursor.Replace(sqlparser.NewOffset(offset, col))
-				}, nil).(sqlparser.Expr)
-				if err != nil {
-					return nil, false, err
-				}
-
-				offset, ok := rewritten.(*sqlparser.Offset)
-				if ok {
-					// we got a pure offset back. No need to do anything else
-					op.Columns[i] = Offset{
-						Expr:   col.GetExpr(),
-						Offset: offset.V,
-					}
-					continue
-				}
-				isSimple = false
-
-				eexpr, err := evalengine.Translate(rewritten, nil)
-				if err != nil {
-					return nil, false, err
-				}
-
-				op.Columns[i] = Eval{
-					Expr:  rewritten,
-					EExpr: eexpr,
-				}
-			}
-			if !isSimple {
-				return op, rewrite.SameTree, nil
-			}
-
-			// is we were able to turn all the columns into offsets, we can use the SimpleProjection instead
-			sp := &SimpleProjection{
-				Source: op.Source,
-			}
-			for i, column := range op.Columns {
-				offset := column.(Offset)
-				sp.Columns = append(sp.Columns, offset.Offset)
-				sp.ASTColumns = append(sp.ASTColumns, &sqlparser.AliasedExpr{Expr: offset.Expr, As: sqlparser.NewIdentifierCI(op.ColumnNames[i])})
-			}
-			return sp, rewrite.NewTree, nil
-
+			return planOffsetsForProjection(ctx, op)
+		case *ApplyJoin:
+			return planOffsetsForJoin(ctx, op)
 		default:
 			return op, rewrite.SameTree, nil
 		}
@@ -179,6 +179,72 @@ func planOffsets(ctx *plancontext.PlanningContext, root ops.Operator) (ops.Opera
 	}
 
 	return op, nil
+}
+
+func planOffsetsForJoin(ctx *plancontext.PlanningContext, op *ApplyJoin) (ops.Operator, rewrite.ApplyResult, error) {
+	panic(12)
+}
+
+func stopAtRoute(operator ops.Operator) rewrite.VisitRule {
+	_, isRoute := operator.(*Route)
+	return rewrite.VisitRule(!isRoute)
+}
+
+func planOffsetsForProjection(ctx *plancontext.PlanningContext, op *Projection) (ops.Operator, rewrite.ApplyResult, error) {
+	var err error
+	isSimple := true
+	for i, col := range op.Columns {
+		rewritten := sqlparser.CopyOnRewrite(col.GetExpr(), nil, func(cursor *sqlparser.CopyOnWriteCursor) {
+			col, ok := cursor.Node().(*sqlparser.ColName)
+			if !ok {
+				return
+			}
+			newSrc, offset, terr := op.Source.AddColumn(ctx, aeWrap(col))
+			if terr != nil {
+				err = terr
+			}
+			op.Source = newSrc
+			cursor.Replace(sqlparser.NewOffset(offset, col))
+		}, nil).(sqlparser.Expr)
+		if err != nil {
+			return nil, false, err
+		}
+
+		offset, ok := rewritten.(*sqlparser.Offset)
+		if ok {
+			// we got a pure offset back. No need to do anything else
+			op.Columns[i] = Offset{
+				Expr:   col.GetExpr(),
+				Offset: offset.V,
+			}
+			continue
+		}
+		isSimple = false
+
+		eexpr, err := evalengine.Translate(rewritten, nil)
+		if err != nil {
+			return nil, false, err
+		}
+
+		op.Columns[i] = Eval{
+			Expr:  rewritten,
+			EExpr: eexpr,
+		}
+	}
+	if !isSimple {
+		return op, rewrite.SameTree, nil
+	}
+
+	// is we were able to turn all the columns into offsets, we can use the SimpleProjection instead
+	sp := &SimpleProjection{
+		Source: op.Source,
+	}
+	for i, column := range op.Columns {
+		offset := column.(Offset)
+		sp.Columns = append(sp.Columns, offset.Offset)
+		sp.ASTColumns = append(sp.ASTColumns, &sqlparser.AliasedExpr{Expr: offset.Expr, As: sqlparser.NewIdentifierCI(op.ColumnNames[i])})
+	}
+	return sp, rewrite.NewTree, nil
 }
 
 func pushOrExpandHorizon(ctx *plancontext.PlanningContext, in *Horizon) (ops.Operator, error) {

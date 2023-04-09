@@ -102,7 +102,8 @@ func addColumn(ctx *plancontext.PlanningContext, op ColNameColumns, e sqlparser.
 	}
 	sqlparser.RemoveKeyspaceFromColName(col)
 	cols := op.GetColNames()
-	if offset, found := canReuseColumn(ctx, cols, e); found {
+	colAsExpr := func(c *sqlparser.ColName) sqlparser.Expr { return c }
+	if offset, found := canReuseColumn(ctx, cols, e, colAsExpr); found {
 		return offset, nil
 	}
 	offset := len(cols)

@@ -18,7 +18,6 @@ package operators
 
 import (
 	"golang.org/x/exp/slices"
-
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
@@ -101,92 +100,6 @@ func (p *Projection) expressions() (result []sqlparser.Expr) {
 		result = append(result, col.GetExpr())
 	}
 	return
-}
-
-func (p *Projection) PushDown(ctx *plancontext.PlanningContext) (ops.Operator, error) {
-	// switch src := p.Source.(type) {
-	// case *Route:
-	// 	return rewrite.Swap(p, p.Source)
-	// case *ApplyJoin:
-	// 	lhs := TableID(src.LHS)
-	// 	rhs := TableID(src.RHS)
-	// 	both := lhs.Merge(rhs)
-	// 	var lhsColumns []ProjExpr
-	// 	var lhsColumnNames []string
-	// 	var rhsColumns []ProjExpr
-	// 	var rhsColumnNames []string
-	// 	for idx, column := range p.Columns {
-	// 		deps := ctx.SemTable.RecursiveDeps(column.GetExpr())
-	// 		// if we get here, it's a new expression we are dealing with.
-	// 		// We need to decide if we can push it all on either side,
-	// 		// or if we have to break the expression into left and right parts
-	// 		switch {
-	// 		case deps.IsEmpty(), deps.IsSolvedBy(lhs):
-	// 			lhsColumns = append(lhsColumns, column)
-	// 			lhsColumnNames = append(lhsColumnNames, p.ColumnNames[idx])
-	// 		case deps.IsSolvedBy(rhs):
-	// 			rhsColumns = append(rhsColumns, column)
-	// 			rhsColumnNames = append(rhsColumnNames, p.ColumnNames[idx])
-	// 		case deps.IsSolvedBy(both):
-	// 			bvNames, lhsExprs, rhsExpr, err := BreakExpressionInLHSandRHS(ctx, column.GetExpr(), lhs)
-	// 			if err != nil {
-	// 				return nil, err
-	// 			}
-	// 			src.LHSColumns = append(src.LHSColumns, lhsExprs...)
-	// 			for i, lhsExpr := range lhsExprs {
-	// 				lhsColumns = append(lhsColumns, &Expr{E: lhsExpr})
-	// 				lhsColumnNames = append(lhsColumnNames, lhsExpr.Name.String())
-	// 				src.VarsToExpr[bvNames[i]] = lhsExpr
-	// 			}
-	//
-	// 			rhsColumns = append(rhsColumns, &Expr{E: rhsExpr})
-	// 			rhsColumnNames = append(rhsColumnNames, p.ColumnNames[idx])
-	// 		default:
-	// 			return nil, vterrors.VT13002(sqlparser.String(column.GetExpr()))
-	// 		}
-	// 	}
-	// 	if len(lhsColumns) > 0 {
-	// 		lhsProj := NewProjection(src.LHS)
-	// 		lhsProj.ColumnNames = lhsColumnNames
-	// 		lhsProj.Columns = lhsColumns
-	// 		src.LHS = lhsProj
-	// 	}
-	// 	if len(rhsColumns) > 0 {
-	// 		rhsProj := NewProjection(src.RHS)
-	// 		rhsProj.ColumnNames = rhsColumnNames
-	// 		rhsProj.Columns = rhsColumns
-	// 		src.RHS = rhsProj
-	// 	}
-	// 	return src, nil
-	// }
-	// return p, nil
-	panic(12)
-}
-
-func (p *Projection) GetOffsetFor(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (int, error) {
-	// if offset, found := canReuseColumn(ctx, p.expressions(), GetExpr); found {
-	// 	return offset, nil
-	// }
-	//
-	// if ctx.SemTable.RecursiveDeps(GetExpr).IsEmpty() {
-	// 	// we are dealing with a literal or something like that. no need to push anything down to our source
-	// 	p.Columns = append(p.Columns, Eval{Expr: GetExpr})
-	// 	p.ColumnNames = append(p.ColumnNames, "")
-	// 	return len(p.Columns) - 1, nil
-	// }
-	//
-	// offset, err := p.Source.GetOffsetFor(ctx, GetExpr)
-	// if err != nil {
-	// 	return 0, err
-	// }
-	//
-	// p.Columns = append(p.Columns, Offset{
-	// 	Expr:   GetExpr,
-	// 	Offset: offset,
-	// })
-	//
-	// return len(p.Columns) - 1, nil
-	panic(12)
 }
 
 func (p *Projection) GetColumns() ([]sqlparser.Expr, error) {

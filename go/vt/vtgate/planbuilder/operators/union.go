@@ -154,7 +154,7 @@ func (u *Union) GetSelectFor(source int) (*sqlparser.Select, error) {
 	}
 }
 
-func (u *Union) Compact(*plancontext.PlanningContext) (ops.Operator, rewrite.TreeIdentity, error) {
+func (u *Union) Compact(*plancontext.PlanningContext) (ops.Operator, rewrite.ApplyResult, error) {
 	var newSources []ops.Operator
 	anythingChanged := false
 	for _, source := range u.Sources {

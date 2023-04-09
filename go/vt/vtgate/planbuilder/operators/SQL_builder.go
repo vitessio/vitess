@@ -105,6 +105,11 @@ func (qb *queryBuilder) addProjection(projection *sqlparser.AliasedExpr) {
 	sel.SelectExprs = append(sel.SelectExprs, projection)
 }
 
+func (qb *queryBuilder) clearProjections() {
+	sel := qb.sel.(*sqlparser.Select)
+	sel.SelectExprs = nil
+}
+
 func (qb *queryBuilder) joinInnerWith(other *queryBuilder, onCondition sqlparser.Expr) {
 	sel := qb.sel.(*sqlparser.Select)
 	otherSel := other.sel.(*sqlparser.Select)
@@ -311,6 +316,16 @@ func buildQuery(op ops.Operator, qb *queryBuilder) error {
 		}
 		for _, name := range op.Columns {
 			qb.addProjection(&sqlparser.AliasedExpr{Expr: name})
+		}
+	case *Projection:
+		err := buildQuery(op.Source, qb)
+		if err != nil {
+			return err
+		}
+
+		qb.clearProjections()
+		for i, column := range op.Columns {
+			qb.addProjection(&sqlparser.AliasedExpr{Expr: column.GetExpr(), As: sqlparser.NewIdentifierCI(op.ColumnNames[i])})
 		}
 	case *ApplyJoin:
 		err := buildQuery(op.LHS, qb)

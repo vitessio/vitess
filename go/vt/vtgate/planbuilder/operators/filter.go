@@ -100,7 +100,7 @@ func (f *Filter) GetColumns() ([]sqlparser.Expr, error) {
 	return f.Source.GetColumns()
 }
 
-func (f *Filter) Compact(*plancontext.PlanningContext) (ops.Operator, rewrite.TreeIdentity, error) {
+func (f *Filter) Compact(*plancontext.PlanningContext) (ops.Operator, rewrite.ApplyResult, error) {
 	if len(f.Predicates) == 0 {
 		return f.Source, rewrite.NewTree, nil
 	}

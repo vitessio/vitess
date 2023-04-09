@@ -30,23 +30,23 @@ type (
 		op ops.Operator, // op is the operator being visited
 		lhsTables semantics.TableSet, // lhsTables contains the TableSet for all table on the LHS of our parent
 		isRoot bool, // isRoot will be true for the root of the operator tree
-	) (ops.Operator, TreeIdentity, error)
+	) (ops.Operator, ApplyResult, error)
 
 	// ShouldVisit is used when we want to control which nodes and ancestors to visit and which to skip
 	ShouldVisit func(ops.Operator) VisitRule
 
-	// TreeIdentity tracks modifications to node and expression trees.
+	// ApplyResult tracks modifications to node and expression trees.
 	// Only return SameTree when it is acceptable to return the original
 	// input and discard the returned result as a performance improvement.
-	TreeIdentity bool
+	ApplyResult bool
 
 	// VisitRule signals to the rewriter if the children of this operator should be visited or not
 	VisitRule bool
 )
 
 const (
-	SameTree TreeIdentity = false
-	NewTree  TreeIdentity = true
+	SameTree ApplyResult = false
+	NewTree  ApplyResult = true
 
 	VisitChildren VisitRule = true
 	SkipChildren  VisitRule = false
@@ -54,7 +54,7 @@ const (
 
 // Visit allows for the walking of the operator tree. If any error is returned, the walk is aborted
 func Visit(root ops.Operator, visitor func(ops.Operator) error) error {
-	_, _, err := breakableTopDown(root, func(op ops.Operator) (ops.Operator, TreeIdentity, VisitRule, error) {
+	_, _, err := breakableTopDown(root, func(op ops.Operator) (ops.Operator, ApplyResult, VisitRule, error) {
 		err := visitor(op)
 		if err != nil {
 			return nil, SameTree, SkipChildren, err
@@ -65,7 +65,7 @@ func Visit(root ops.Operator, visitor func(ops.Operator) error) error {
 }
 
 // BottomUp rewrites an operator tree from the bottom up. BottomUp applies a transformation function to
-// the given operator tree from the bottom up. Each callback [f] returns a TreeIdentity that is aggregated
+// the given operator tree from the bottom up. Each callback [f] returns a ApplyResult that is aggregated
 // into a final output indicating whether the operator tree was changed.
 func BottomUp(
 	root ops.Operator,
@@ -100,7 +100,7 @@ func FixedPointBottomUp(
 }
 
 // BottomUp rewrites an operator tree from the bottom up. BottomUp applies a transformation function to
-// the given operator tree from the bottom up. Each callback [f] returns a TreeIdentity that is aggregated
+// the given operator tree from the bottom up. Each callback [f] returns a ApplyResult that is aggregated
 // into a final output indicating whether the operator tree was changed.
 func BottomUpAll(
 	root ops.Operator,
@@ -145,7 +145,7 @@ func bottomUp(
 	rewriter VisitF,
 	shouldVisit ShouldVisit,
 	isRoot bool,
-) (ops.Operator, TreeIdentity, error) {
+) (ops.Operator, ApplyResult, error) {
 	if !shouldVisit(root) {
 		return root, SameTree, nil
 	}
@@ -194,8 +194,8 @@ func bottomUp(
 
 func breakableTopDown(
 	in ops.Operator,
-	rewriter func(ops.Operator) (ops.Operator, TreeIdentity, VisitRule, error),
-) (ops.Operator, TreeIdentity, error) {
+	rewriter func(ops.Operator) (ops.Operator, ApplyResult, VisitRule, error),
+) (ops.Operator, ApplyResult, error) {
 	newOp, identity, visit, err := rewriter(in)
 	if err != nil || visit == SkipChildren {
 		return newOp, identity, err
