@@ -79,64 +79,74 @@ func tryPushingDownProjection(
 		}
 		return op, rewrite.NewTree, nil
 	case *ApplyJoin:
-		lhs := TableID(src.LHS)
-		rhs := TableID(src.RHS)
-		both := lhs.Merge(rhs)
-		var lhsColumns []ProjExpr
-		var lhsColumnNames []string
-		var rhsColumns []ProjExpr
-		var rhsColumnNames []string
-		for idx, column := range p.Columns {
-			expr := column.GetExpr()
-			deps := ctx.SemTable.RecursiveDeps(expr)
-			var col JoinColumn
-			// if we get here, it's a new expression we are dealing with.
-			// We need to decide if we can push it all on either side,
-			// or if we have to break the expression into left and right parts
-			switch {
-			case deps.IsEmpty(), deps.IsSolvedBy(lhs):
-				lhsColumns = append(lhsColumns, column)
-				lhsColumnNames = append(lhsColumnNames, p.ColumnNames[idx])
-				col = JoinColumn{
-					Original: expr,
-					LHSExprs: []sqlparser.Expr{expr},
+		var (
+			// by setting idx, in and expr, and then running src.Push(),
+			// we'll get the return data in the remaining variables
+			idx int
+			in  ProjExpr
+
+			// this is the output of running src.Push
+			lhsCols, rhsColumns []ProjExpr
+			lhsNames, rhsNames  []string
+			out                 JoinColumn
+			err                 error
+		)
+		chooser := chooseSide{
+			left: func() error {
+				lhsCols = append(lhsCols, in)
+				lhsNames = append(lhsNames, p.ColumnNames[idx])
+				out = JoinColumn{
+					Original: in.GetExpr(),
+					LHSExprs: []sqlparser.Expr{in.GetExpr()},
 				}
-			case deps.IsSolvedBy(rhs):
-				rhsColumns = append(rhsColumns, column)
-				rhsColumnNames = append(rhsColumnNames, p.ColumnNames[idx])
-				col = JoinColumn{
-					Original: expr,
-					RHSExpr:  expr,
+				return nil
+			},
+			right: func() error {
+				rhsColumns = append(rhsColumns, in)
+				rhsNames = append(rhsNames, p.ColumnNames[idx])
+				out = JoinColumn{
+					Original: in.GetExpr(),
+					RHSExpr:  in.GetExpr(),
 				}
-			case deps.IsSolvedBy(both):
-				var err error
-				col, err = BreakExpressionInLHSandRHS(ctx, expr, lhs)
+				return nil
+			},
+			both: func() error {
+				out, err = BreakExpressionInLHSandRHS(ctx, in.GetExpr(), TableID(src.LHS))
 				if err != nil {
-					return nil, false, err
+					return err
 				}
 
-				for _, lhsExpr := range col.LHSExprs {
-					lhsColumns = append(lhsColumns, &Expr{E: lhsExpr})
-					lhsColumnNames = append(lhsColumnNames, sqlparser.String(lhsExpr))
+				for _, lhsExpr := range out.LHSExprs {
+					lhsCols = append(lhsCols, &Expr{E: lhsExpr})
+					lhsNames = append(lhsNames, sqlparser.String(lhsExpr))
 				}
 
-				rhsColumns = append(rhsColumns, &Expr{E: col.RHSExpr})
-				rhsColumnNames = append(rhsColumnNames, p.ColumnNames[idx])
-			default:
-				return nil, false, vterrors.VT13002(sqlparser.String(expr))
-			}
+				rhsColumns = append(rhsColumns, &Expr{E: out.RHSExpr})
+				rhsNames = append(rhsNames, p.ColumnNames[idx])
 
-			src.ColumnsAST = append(src.ColumnsAST, col)
+				return nil
+			},
 		}
-		if len(lhsColumns) > 0 {
+
+		for idx = 0; idx < len(p.Columns); idx++ {
+			in = p.Columns[idx]
+			chooser.Expr = in.GetExpr()
+			err := src.Push(ctx, chooser)
+			if err != nil {
+				return nil, false, err
+			}
+			src.ColumnsAST = append(src.ColumnsAST, out)
+		}
+
+		if len(lhsCols) > 0 {
 			lhsProj := NewProjection(src.LHS)
-			lhsProj.ColumnNames = lhsColumnNames
-			lhsProj.Columns = lhsColumns
+			lhsProj.ColumnNames = lhsNames
+			lhsProj.Columns = lhsCols
 			src.LHS = lhsProj
 		}
 		if len(rhsColumns) > 0 {
 			rhsProj := NewProjection(src.RHS)
-			rhsProj.ColumnNames = rhsColumnNames
+			rhsProj.ColumnNames = rhsNames
 			rhsProj.Columns = rhsColumns
 			src.RHS = rhsProj
 		}
