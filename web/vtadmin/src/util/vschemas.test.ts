@@ -15,6 +15,7 @@
  */
 import { vtadmin as pb } from '../proto/vtadmin';
 import * as vs from './vschemas';
+import { describe, expect } from 'vitest';
 
 describe('getVindexesForTable', () => {
     const tests: {
