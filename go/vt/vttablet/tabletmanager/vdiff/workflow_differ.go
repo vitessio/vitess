@@ -287,6 +287,13 @@ func (wd *workflowDiffer) initVDiffTables(dbClient binlogplayer.DBClient) error 
 	tableIn := strings.Builder{}
 	n := 0
 	for tableName := range wd.tableDiffers {
+		// Update the table statistics for each table if requested.
+		if wd.opts.CoreOptions.UpdateTableStats {
+			stmt := sqlparser.BuildParsedQuery(sqlAnalyzeTable, wd.ct.vde.dbName, tableName)
+			if _, err := dbClient.ExecuteFetch(stmt.Query, -1); err != nil {
+				return err
+			}
+		}
 		tableIn.WriteString(encodeString(tableName))
 		if n++; n < len(wd.tableDiffers) {
 			tableIn.WriteByte(',')

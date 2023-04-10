@@ -356,5 +356,6 @@ func expectVDiffQueries(db *fakesqldb.DB) {
 	for _, query := range queries {
 		db.AddQuery(query, res)
 	}
+	db.AddQueryPattern("analyze table .*", res)
 	db.AddQueryPattern("delete from vd, vdt, vdl.*", res)
 }

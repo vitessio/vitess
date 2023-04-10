@@ -24364,6 +24364,9 @@ export namespace tabletmanagerdata {
 
         /** VDiffCoreOptions max_extra_rows_to_compare */
         max_extra_rows_to_compare?: (number|Long|null);
+
+        /** VDiffCoreOptions update_table_stats */
+        update_table_stats?: (boolean|null);
     }
 
     /** Represents a VDiffCoreOptions. */
@@ -24395,6 +24398,9 @@ export namespace tabletmanagerdata {
 
         /** VDiffCoreOptions max_extra_rows_to_compare. */
         public max_extra_rows_to_compare: (number|Long);
+
+        /** VDiffCoreOptions update_table_stats. */
+        public update_table_stats: boolean;
 
         /**
          * Creates a new VDiffCoreOptions instance using the specified properties.
