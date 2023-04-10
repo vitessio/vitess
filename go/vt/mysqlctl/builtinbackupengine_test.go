@@ -354,7 +354,6 @@ func TestExecuteRestoreWithTimedOutContext(t *testing.T) {
 	// Successful restore.
 	bm, err := be.ExecuteRestore(ctx, restoreParams, bh)
 	assert.NoError(t, err)
-	assert.True(t, ok)
 	assert.NotNil(t, bm)
 
 	// Restore using timed-out context
@@ -371,7 +370,6 @@ func TestExecuteRestoreWithTimedOutContext(t *testing.T) {
 	// therefore, ExecuteRestore will still pass. Once fixed (https://github.com/vitessio/vitess/issues/12830)
 	// the below asserts will start failing.
 	assert.Error(t, err)
-	assert.True(t, ok)
 	assert.Nil(t, bm)
 	// error message can contain any combination of "context deadline exceeded" or "context canceled"
 	if !strings.Contains(err.Error(), "context canceled") && !strings.Contains(err.Error(), "context deadline exceeded") {
