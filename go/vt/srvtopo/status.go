@@ -49,8 +49,8 @@ const TopoTemplate = `
   </tr>
   {{range $i, $skn := .SrvKeyspaceNames}}
   <tr>
-    <td>{{github_com_vitessio_vitess_vtctld_srv_cell $skn.Cell}}</td>
-    <td>{{range $j, $value := $skn.Value}}{{github_com_vitessio_vitess_vtctld_srv_keyspace $skn.Cell $value}}&nbsp;{{end}}</td>
+    <td>{{$skn.Cell}}</td>
+    <td>{{range $j, $value := $skn.Value}}{{$value}}&nbsp;{{end}}</td>
     <td>{{github_com_vitessio_vitess_srvtopo_ttl_time $skn.ExpirationTime}}</td>
     <td>{{if $skn.LastError}}({{github_com_vitessio_vitess_srvtopo_time_since $skn.LastQueryTime}}Ago) {{$skn.LastError}}{{end}}</td>
   </tr>
@@ -70,8 +70,8 @@ const TopoTemplate = `
   </tr>
   {{range $i, $sk := .SrvKeyspaces}}
   <tr>
-    <td>{{github_com_vitessio_vitess_vtctld_srv_cell $sk.Cell}}</td>
-    <td>{{github_com_vitessio_vitess_vtctld_srv_keyspace $sk.Cell $sk.Keyspace}}</td>
+    <td>{{$sk.Cell}}</td>
+    <td>{{$sk.Keyspace}}</td>
     <td>{{$sk.StatusAsHTML}}</td>
     <td>{{github_com_vitessio_vitess_srvtopo_ttl_time $sk.ExpirationTime}}</td>
     <td>{{if $sk.LastError}}({{github_com_vitessio_vitess_srvtopo_time_since $sk.LastErrorTime}} Ago) {{$sk.LastError}}{{end}}</td>
