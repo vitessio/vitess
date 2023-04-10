@@ -5,6 +5,7 @@
 - **[Major Changes](#major-changes)**
   - **[Breaking Changes](#breaking-changes)**
     - [Dedicated stats for VTGate Prepare operations](#dedicated-vtgate-prepare-stats)
+    - [VTAdmin web migrated from create-react-app to vite](#migrated-vtadmin)
     - [Keyspace name validation in TopoServer](#keyspace-name-validation)
     - [Shard name validation in TopoServer](#shard-name-validation)
   - **[New command line flags and behavior](#new-flag)**
@@ -52,6 +53,13 @@ Here is a (condensed) example of stats output:
 }
 ```
 
+#### <a id="migrated-vtadmin"/>VTAdmin web migrated to vite
+Previously, VTAdmin web used the Create React App framework to test, build, and serve the application. In v17, Create React App has been removed, and [Vite](https://vitejs.dev/) is used in its place. Some of the main changes include:
+- Vite uses `VITE_*` environment variables instead of `REACT_APP_*` environment variables
+- Vite uses `import.meta.env` in place of `process.env`
+- [Vitest](https://vitest.dev/) is used in place of Jest for testing
+- Our protobufjs generator now produces an es6 module instead of commonjs to better work with Vite's defaults
+- `public/index.html` has been moved to root directory in web/vtadmin
 
 #### <a id="keyspace-name-validation"> Keyspace name validation in TopoServer
 
