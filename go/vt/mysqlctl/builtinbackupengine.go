@@ -900,8 +900,6 @@ func (be *BuiltinBackupEngine) restoreFiles(ctx context.Context, params RestoreP
 		go func(i int) {
 			defer wg.Done()
 			fe := &fes[i]
-			//sema.Acquire(ctx, 1)
-			//defer sema.Release(1)
 			// Wait until we are ready to go, return if we encounter an error
 			acqErr := sema.Acquire(ctx, 1)
 			if acqErr != nil {
