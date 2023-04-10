@@ -23,7 +23,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"github.com/stretchr/testify/require"
@@ -129,7 +128,7 @@ func TestLimitExecute(t *testing.T) {
 		results: []*sqltypes.Result{inputResult},
 	}
 	l = &Limit{
-		Count: evalengine.NewBindVar("l", collations.TypedCollation{}),
+		Count: evalengine.NewBindVar("l"),
 		Input: fp,
 	}
 
@@ -342,8 +341,8 @@ func TestLimitOffsetExecute(t *testing.T) {
 	}
 
 	l = &Limit{
-		Count:  evalengine.NewBindVar("l", collations.TypedCollation{}),
-		Offset: evalengine.NewBindVar("o", collations.TypedCollation{}),
+		Count:  evalengine.NewBindVar("l"),
+		Offset: evalengine.NewBindVar("o"),
 		Input:  fp,
 	}
 	result, err = l.TryExecute(context.Background(), &noopVCursor{}, map[string]*querypb.BindVariable{"l": sqltypes.Int64BindVariable(1), "o": sqltypes.Int64BindVariable(1)}, false)
@@ -395,7 +394,7 @@ func TestLimitStreamExecute(t *testing.T) {
 
 	// Test with bind vars.
 	fp.rewind()
-	l.Count = evalengine.NewBindVar("l", collations.TypedCollation{})
+	l.Count = evalengine.NewBindVar("l")
 	results = nil
 	err = l.TryStreamExecute(context.Background(), &noopVCursor{}, map[string]*querypb.BindVariable{"l": sqltypes.Int64BindVariable(2)}, true, func(qr *sqltypes.Result) error {
 		results = append(results, qr)
@@ -539,17 +538,17 @@ func TestLimitInputFail(t *testing.T) {
 
 func TestLimitInvalidCount(t *testing.T) {
 	l := &Limit{
-		Count: evalengine.NewBindVar("l", collations.TypedCollation{}),
+		Count: evalengine.NewBindVar("l"),
 	}
-	_, _, err := l.getCountAndOffset(&noopVCursor{}, nil)
+	_, _, err := l.getCountAndOffset(context.Background(), &noopVCursor{}, nil)
 	assert.EqualError(t, err, "query arguments missing for l")
 
 	l.Count = evalengine.NewLiteralFloat(1.2)
-	_, _, err = l.getCountAndOffset(&noopVCursor{}, nil)
+	_, _, err = l.getCountAndOffset(context.Background(), &noopVCursor{}, nil)
 	assert.EqualError(t, err, "Cannot convert value to desired type")
 
 	l.Count = evalengine.NewLiteralUint(18446744073709551615)
-	_, _, err = l.getCountAndOffset(&noopVCursor{}, nil)
+	_, _, err = l.getCountAndOffset(context.Background(), &noopVCursor{}, nil)
 	assert.EqualError(t, err, "requested limit is out of range: 18446744073709551615")
 
 	// When going through the API, it should return the same error.

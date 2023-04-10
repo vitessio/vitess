@@ -2158,7 +2158,7 @@
   {
     "comment": "insert invalid index value",
     "query": "insert into music_extra(music_id, user_id) values(1, id)",
-    "plan": "column access not supported here"
+    "plan": "cannot lookup column (column access not supported here)"
   },
   {
     "comment": "insert invalid table",

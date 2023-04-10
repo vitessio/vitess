@@ -21,11 +21,12 @@ import (
 	"strconv"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/decimal"
+	"vitess.io/vitess/go/mysql/format"
+	"vitess.io/vitess/go/mysql/json"
 	"vitess.io/vitess/go/sqltypes"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/evalengine/internal/decimal"
-	"vitess.io/vitess/go/vt/vtgate/evalengine/internal/json"
 	"vitess.io/vitess/go/vt/vthash"
 )
 
@@ -36,6 +37,8 @@ const (
 	flagNull typeFlag = 1 << 0
 	// flagNullable marks that this value CAN be null
 	flagNullable typeFlag = 1 << 1
+	// flagIsBoolean marks that this value should be interpreted as boolean
+	flagIsBoolean typeFlag = 1 << 2
 
 	// flagIntegerUdf marks that this value is math.MinInt64, and will underflow if negated
 	flagIntegerUdf typeFlag = 1 << 5
@@ -51,6 +54,10 @@ const (
 	flagBit typeFlag = 1 << 9
 	// flagExplicitCollation marks that this value has an explicit collation
 	flagExplicitCollation typeFlag = 1 << 10
+
+	// flagAmbiguousType marks that the type of this value depends on the value at runtime
+	// and cannot be computed accurately
+	flagAmbiguousType typeFlag = 1 << 11
 
 	// flagIntegerRange are the flags that mark overflow/underflow in integers
 	flagIntegerRange = flagIntegerOvf | flagIntegerCap | flagIntegerUdf
@@ -100,7 +107,7 @@ func evalToSQLValueWithType(e eval, resultType sqltypes.Type) sqltypes.Value {
 		case *evalUint64:
 			return sqltypes.MakeTrusted(resultType, strconv.AppendUint(nil, e.u, 10))
 		case *evalFloat:
-			return sqltypes.MakeTrusted(resultType, FormatFloat(resultType, e.f))
+			return sqltypes.MakeTrusted(resultType, format.FormatFloat(resultType, e.f))
 		case *evalDecimal:
 			return sqltypes.MakeTrusted(resultType, e.dec.FormatMySQL(e.length))
 		}
@@ -124,7 +131,35 @@ func evalIsTruthy(e eval) boolean {
 	case *evalDecimal:
 		return makeboolean(!e.dec.IsZero())
 	case *evalBytes:
+		if e.isHexLiteral {
+			hex, ok := e.toNumericHex()
+			if !ok {
+				// overflow
+				return makeboolean(true)
+			}
+			return makeboolean(hex.u != 0)
+		}
 		return makeboolean(parseStringToFloat(e.string()) != 0.0)
+	case *evalJSON:
+		switch e.Type() {
+		case json.TypeNumber:
+			switch e.NumberType() {
+			case json.NumberTypeInteger:
+				if i, ok := e.Int64(); ok {
+					return makeboolean(i != 0)
+				}
+
+				d, _ := e.Decimal()
+				return makeboolean(!d.IsZero())
+			case json.NumberTypeDouble:
+				d, _ := e.Float64()
+				return makeboolean(d != 0.0)
+			default:
+				return makeboolean(parseStringToFloat(e.Raw()) != 0.0)
+			}
+		default:
+			return makeboolean(true)
+		}
 	default:
 		panic("unhandled case: evalIsTruthy")
 	}
@@ -158,9 +193,9 @@ func evalCoerce(e eval, typ sqltypes.Type, col collations.ID) (eval, error) {
 		f, _ := evalToNumeric(e).toFloat()
 		return f, nil
 	case sqltypes.Int8, sqltypes.Int16, sqltypes.Int32, sqltypes.Int64:
-		return evalToNumeric(e).toInt64(), nil
+		return evalToInt64(e), nil
 	case sqltypes.Uint8, sqltypes.Uint16, sqltypes.Uint32, sqltypes.Uint64:
-		return evalToNumeric(e).toUint64(), nil
+		return evalToInt64(e).toUint64(), nil
 	case sqltypes.Date, sqltypes.Datetime, sqltypes.Year, sqltypes.TypeJSON, sqltypes.Time, sqltypes.Bit:
 		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "Unsupported type conversion: %s", typ.String())
 	default:
@@ -311,7 +346,7 @@ func valueToEval(value sqltypes.Value, collation collations.TypedCollation) (eva
 		}
 	case sqltypes.IsBinary(tt):
 		return newEvalBinary(value.Raw()), nil
-	case sqltypes.IsDate(tt):
+	case sqltypes.IsDateOrTime(tt):
 		return newEvalRaw(value.Type(), value.Raw(), collationNumeric), nil
 	case sqltypes.IsNull(tt):
 		return nil, nil

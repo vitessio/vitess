@@ -23,12 +23,10 @@ import (
 
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
-	"vitess.io/vitess/go/vt/vtgate/semantics"
-
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
@@ -173,7 +171,7 @@ func buildInsertShardedPlan(ins *sqlparser.Insert, table *vindexes.Table, reserv
 			routeValues[vIdx][colIdx] = make([]evalengine.Expr, len(rows))
 			colNum := findOrAddColumn(ins, col)
 			for rowNum, row := range rows {
-				innerpv, err := evalengine.Translate(row[colNum], semantics.EmptySemTable())
+				innerpv, err := evalengine.Translate(row[colNum], nil)
 				if err != nil {
 					return nil, err
 				}
@@ -405,7 +403,7 @@ func modifyForAutoinc(ins *sqlparser.Insert, eins *engine.Insert) error {
 				row[colNum] = &sqlparser.NullVal{}
 			}
 
-			pv, err := evalengine.Translate(row[colNum], semantics.EmptySemTable())
+			pv, err := evalengine.Translate(row[colNum], nil)
 			if err != nil {
 				return err
 			}

@@ -82,6 +82,17 @@ var errExtract = regexp.MustCompile(`.*\(errno ([0-9]*)\) \(sqlstate ([0-9a-zA-Z
 
 // NewSQLErrorFromError returns a *SQLError from the provided error.
 // If it's not the right type, it still tries to get it from a regexp.
+// Notes about the `error` return type:
+// The function really returns *SQLError or `nil`. Seemingly, the function could just return
+// `*SQLError` type. However, it really must return `error`. The reason is the way `golang`
+// treats `nil` interfaces vs `nil` implementing values.
+// If this function were to return a nil `*SQLError`, the following undesired behavior would happen:
+//
+//	var err error
+//	err = NewSQLErrorFromError(nil) // returns a nil `*SQLError`
+//	if err != nil {
+//	  doSomething() // this actually runs
+//	}
 func NewSQLErrorFromError(err error) error {
 	if err == nil {
 		return nil
@@ -199,6 +210,7 @@ var stateToMysqlCode = map[vterrors.State]mysqlCode{
 	vterrors.NoSuchSession:                {num: ERUnknownComError, state: SSNetError},
 	vterrors.OperandColumns:               {num: EROperandColumns, state: SSWrongNumberOfColumns},
 	vterrors.WrongValueCountOnRow:         {num: ERWrongValueCountOnRow, state: SSWrongValueCountOnRow},
+	vterrors.UnknownTimeZone:              {num: ERUnknownTimeZone, state: SSUnknownSQLState},
 }
 
 func getStateToMySQLState(state vterrors.State) mysqlCode {

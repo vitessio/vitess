@@ -25,6 +25,8 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/mysql/datetime"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/sysvars"
@@ -545,6 +547,18 @@ func (session *SafeSession) HasSystemVariables() (found bool) {
 		found = true
 	})
 	return
+}
+
+func (session *SafeSession) TimeZone() *time.Location {
+	session.mu.Lock()
+	tz, ok := session.SystemVariables["time_zone"]
+	session.mu.Unlock()
+
+	if !ok {
+		return nil
+	}
+	loc, _ := datetime.ParseTimeZone(tz)
+	return loc
 }
 
 // SetOptions sets the options

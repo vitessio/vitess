@@ -1,0 +1,30 @@
+name: Assign Milestone
+
+on:
+  pull_request_target:
+    types: [opened]
+
+permissions: read-all
+
+env:
+  GH_TOKEN: ${{ github.token }}
+
+jobs:
+  build:
+    name: Assign Milestone
+    runs-on: ubuntu-22.04
+    permissions:
+      pull-requests: write
+
+    steps:
+      - name: Set up Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: 1.20.2
+
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Assign Milestone
+        run: |
+          gh pr edit ${{ github.event.number }} --milestone "v$(sed -n 's/.*versionName.*\"\([[:digit:]\.]*\).*\"/\1/p' ./go/vt/servenv/version.go)"

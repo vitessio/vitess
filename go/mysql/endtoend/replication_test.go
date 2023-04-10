@@ -18,6 +18,7 @@ package endtoend
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"reflect"
 	"strings"
@@ -28,14 +29,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
-
-	"context"
-
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/binlog"
 	"vitess.io/vitess/go/sqltypes"
-
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
 
 // connectForReplication is a helper method to connect for replication
@@ -1007,7 +1005,7 @@ func TestRowReplicationTypes(t *testing.T) {
 		if values[i+1].Type() != querypb.Type_EXPRESSION {
 			require.NoError(t, err)
 		}
-		if values[i+1].Type() == querypb.Type_TIMESTAMP && !bytes.HasPrefix(valueBytes, mysql.ZeroTimestamp) {
+		if values[i+1].Type() == querypb.Type_TIMESTAMP && !bytes.HasPrefix(valueBytes, binlog.ZeroTimestamp) {
 			// Values in the binary log are UTC. Let's convert them
 			// to whatever timezone the connection is using,
 			// so MySQL properly converts them back to UTC.
@@ -1075,7 +1073,7 @@ func valuesForTests(t *testing.T, rs *mysql.Rows, tm *mysql.TableMap, rowIndex i
 		}
 
 		// We have real data
-		value, l, err := mysql.CellValue(data, pos, tm.Types[c], tm.Metadata[c], &querypb.Field{Type: querypb.Type_UINT64})
+		value, l, err := binlog.CellValue(data, pos, tm.Types[c], tm.Metadata[c], &querypb.Field{Type: querypb.Type_UINT64})
 		if err != nil {
 			return nil, err
 		}

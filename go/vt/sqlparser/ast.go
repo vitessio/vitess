@@ -16,6 +16,8 @@ limitations under the License.
 
 package sqlparser
 
+import "vitess.io/vitess/go/sqltypes"
+
 /*
 This is the Vitess AST. This file should only contain pure struct declarations,
 or methods used to mark a struct as implementing an interface. All other methods
@@ -552,6 +554,12 @@ type (
 	Load struct {
 	}
 
+	// PurgeBinaryLogs represents a PURGE BINARY LOGS statement
+	PurgeBinaryLogs struct {
+		To     string
+		Before string
+	}
+
 	// Show represents a show statement.
 	Show struct {
 		Internal ShowInternal
@@ -739,6 +747,7 @@ func (*ExplainTab) iStatement()          {}
 func (*PrepareStmt) iStatement()         {}
 func (*ExecuteStmt) iStatement()         {}
 func (*DeallocateStmt) iStatement()      {}
+func (*PurgeBinaryLogs) iStatement()     {}
 
 func (*CreateView) iDDLStatement()    {}
 func (*AlterView) iDDLStatement()     {}
@@ -2036,7 +2045,7 @@ type (
 		SQLNode
 	}
 
-	// TableName represents a table  name.
+	// TableName represents a table name.
 	// Qualifier, if specified, represents a database or keyspace.
 	// TableName is a value struct whose fields are case sensitive.
 	// This means two TableName vars can be compared for equality
@@ -2263,7 +2272,10 @@ type (
 	}
 
 	// Argument represents bindvariable expression
-	Argument string
+	Argument struct {
+		Name string
+		Type sqltypes.Type
+	}
 
 	// NullVal represents a NULL value.
 	NullVal struct{}
@@ -2463,7 +2475,7 @@ type (
 	// supported functions are documented in the grammar
 	CurTimeFuncExpr struct {
 		Name IdentifierCI
-		Fsp  Expr // fractional seconds precision, integer from 0 to 6 or an Argument
+		Fsp  int // fractional seconds precision, integer from 0 to 6 or an Argument
 	}
 
 	// ExtractedSubquery is a subquery that has been extracted from the original AST
@@ -2503,7 +2515,7 @@ type (
 	// it is the column offset from the incoming result stream
 	Offset struct {
 		V        int
-		Original string
+		Original Expr
 	}
 
 	// JSONArrayExpr represents JSON_ARRAY()
@@ -2704,15 +2716,65 @@ type (
 		JSONValue Expr
 	}
 
-	//PointExpr represents POINT(x,y) expression
+	// PointExpr represents POINT(x,y) expression
 	PointExpr struct {
 		XCordinate Expr
 		YCordinate Expr
 	}
 
-	//LineString represents LineString(POINT(x,y), POINT(x,y), ..) expression
+	// LineString represents LineString(POINT(x,y), POINT(x,y), ..) expression
 	LineStringExpr struct {
 		PointParams Exprs
+	}
+
+	// PolygonExpr represents Polygon(LineString(POINT(x,y), POINT(x,y), ..)) expressions
+	PolygonExpr struct {
+		LinestringParams Exprs
+	}
+
+	// MultiPoint represents a geometry collection for points
+	MultiPointExpr struct {
+		PointParams Exprs
+	}
+
+	// MultiPoint represents a geometry collection for linestrings
+	MultiLinestringExpr struct {
+		LinestringParams Exprs
+	}
+
+	// MultiPolygon represents a geometry collection for polygons
+	MultiPolygonExpr struct {
+		PolygonParams Exprs
+	}
+
+	// GeomFromWktType is an enum to get the types of wkt functions with possible values: GeometryFromText GeometryCollectionFromText PointFromText LineStringFromText PolygonFromText MultiPointFromText MultiPolygonFromText MultiLinestringFromText
+	GeomFromWktType int8
+
+	GeomFromTextExpr struct {
+		Type         GeomFromWktType
+		WktText      Expr
+		Srid         Expr
+		AxisOrderOpt Expr
+	}
+
+	// GeomFromWkbType is an enum to get the types of wkt functions with possible values: GeometryFromWKB GeometryCollectionFromWKB PointFromWKB LineStringFromWKB PolygonFromWKB MultiPointFromWKB MultiPolygonFromWKB MultiLinestringFromWKB
+	GeomFromWkbType int8
+
+	GeomFromWKBExpr struct {
+		Type         GeomFromWkbType
+		WkbBlob      Expr
+		Srid         Expr
+		AxisOrderOpt Expr
+	}
+
+	// GeomFormatType is an enum to get the types of geom format functions with possible values: BinaryFormat TextFormat
+
+	GeomFormatType int8
+
+	GeomFormatExpr struct {
+		FormatType   GeomFormatType
+		Geom         Expr
+		AxisOrderOpt Expr
 	}
 
 	AggrFunc interface {
@@ -2955,7 +3017,7 @@ func (*BetweenExpr) iExpr()                        {}
 func (*IsExpr) iExpr()                             {}
 func (*ExistsExpr) iExpr()                         {}
 func (*Literal) iExpr()                            {}
-func (Argument) iExpr()                            {}
+func (*Argument) iExpr()                           {}
 func (*NullVal) iExpr()                            {}
 func (BoolVal) iExpr()                             {}
 func (*ColName) iExpr()                            {}
@@ -3043,6 +3105,13 @@ func (*Variance) iExpr()                           {}
 func (*Variable) iExpr()                           {}
 func (*PointExpr) iExpr()                          {}
 func (*LineStringExpr) iExpr()                     {}
+func (*PolygonExpr) iExpr()                        {}
+func (*MultiPolygonExpr) iExpr()                   {}
+func (*MultiPointExpr) iExpr()                     {}
+func (*MultiLinestringExpr) iExpr()                {}
+func (*GeomFromTextExpr) iExpr()                   {}
+func (*GeomFromWKBExpr) iExpr()                    {}
+func (*GeomFormatExpr) iExpr()                     {}
 
 // iCallable marks all expressions that represent function calls
 func (*FuncExpr) iCallable()                           {}
@@ -3098,6 +3167,13 @@ func (*PerformanceSchemaFuncExpr) iCallable()          {}
 func (*GTIDFuncExpr) iCallable()                       {}
 func (*PointExpr) iCallable()                          {}
 func (*LineStringExpr) iCallable()                     {}
+func (*PolygonExpr) iCallable()                        {}
+func (*MultiPolygonExpr) iCallable()                   {}
+func (*MultiPointExpr) iCallable()                     {}
+func (*MultiLinestringExpr) iCallable()                {}
+func (*GeomFromTextExpr) iCallable()                   {}
+func (*GeomFromWKBExpr) iCallable()                    {}
+func (*GeomFormatExpr) iCallable()                     {}
 
 func (*Sum) iCallable()       {}
 func (*Min) iCallable()       {}

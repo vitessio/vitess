@@ -17,9 +17,6 @@ limitations under the License.
 package evalengine
 
 import (
-	"fmt"
-	"strconv"
-
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -147,7 +144,7 @@ func ToFloat64(v sqltypes.Value) (float64, error) {
 }
 
 func LiteralToValue(literal *sqlparser.Literal) (sqltypes.Value, error) {
-	lit, err := (&astCompiler{}).translateLiteral(literal)
+	lit, err := translateLiteral(literal, collations.Default())
 	if err != nil {
 		return sqltypes.Value{}, err
 	}
@@ -174,29 +171,4 @@ func ToNative(v sqltypes.Value) (any, error) {
 		err = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v cannot be converted to a go type", v)
 	}
 	return out, err
-}
-
-func NormalizeValue(v sqltypes.Value, coll collations.ID) string {
-	typ := v.Type()
-	if typ == sqltypes.Null {
-		return "NULL"
-	}
-	if typ == sqltypes.VarChar && coll == collations.CollationBinaryID {
-		return fmt.Sprintf("VARBINARY(%q)", v.Raw())
-	}
-	if v.IsQuoted() || typ == sqltypes.Bit {
-		return fmt.Sprintf("%v(%q)", typ, v.Raw())
-	}
-	if typ == sqltypes.Float32 || typ == sqltypes.Float64 {
-		var bitsize = 64
-		if typ == sqltypes.Float32 {
-			bitsize = 32
-		}
-		f, err := strconv.ParseFloat(v.RawStr(), bitsize)
-		if err != nil {
-			panic(err)
-		}
-		return fmt.Sprintf("%v(%s)", typ, FormatFloat(typ, f))
-	}
-	return fmt.Sprintf("%v(%s)", typ, v.Raw())
 }

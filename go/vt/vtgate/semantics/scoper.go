@@ -21,7 +21,6 @@ import (
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/engine"
 
 	"vitess.io/vitess/go/vt/sqlparser"
 )
@@ -212,7 +211,7 @@ func (s *scoper) createSpecialScopePostProjection(parent sqlparser.SQLNode) erro
 			}
 			thisTableInfo := createVTableInfoForExpressions(sel.SelectExprs, nil /*needed for star expressions*/, s.org)
 			if len(tableInfo.cols) != len(thisTableInfo.cols) {
-				return engine.ErrWrongNumberOfColumnsInSelect
+				return vterrors.NewErrorf(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.WrongNumberOfColumnsInSelect, "The used SELECT statements have a different number of columns")
 			}
 			for i, col := range tableInfo.cols {
 				// at this stage, we don't store the actual dependencies, we only store the expressions.

@@ -116,6 +116,11 @@ func Init() {
 	defer mu.Unlock()
 	initStartTime = time.Now()
 
+	// Uptime metric
+	_ = stats.NewGaugeFunc("Uptime", "Uptime in nanoseconds", func() int64 {
+		return int64(time.Since(serverStart).Nanoseconds())
+	})
+
 	// Ignore SIGPIPE if specified
 	// The Go runtime catches SIGPIPE for us on all fds except stdout/stderr
 	// See https://golang.org/pkg/os/signal/#hdr-SIGPIPE
@@ -337,6 +342,8 @@ func ParseFlags(cmd string) {
 		_flag.Usage()
 		log.Exitf("%s doesn't take any positional arguments, got '%s'", cmd, strings.Join(args, " "))
 	}
+
+	logutil.PurgeLogs()
 }
 
 // GetFlagSetFor returns the flag set for a given command.
@@ -365,6 +372,8 @@ func ParseFlagsWithArgs(cmd string) []string {
 	if len(args) == 0 {
 		log.Exitf("%s expected at least one positional argument", cmd)
 	}
+
+	logutil.PurgeLogs()
 
 	return args
 }
@@ -397,6 +406,7 @@ func init() {
 		"vtgate",
 		"vtgateclienttest",
 		"vtgr",
+		"vtorc",
 		"vttablet",
 		"vttestserver",
 	} {

@@ -18,15 +18,14 @@ package evalengine
 
 import (
 	"bytes"
-	"encoding/base64"
 	"errors"
 	"fmt"
 
 	"vitess.io/vitess/go/mysql/collations/charset"
+	"vitess.io/vitess/go/mysql/json"
 	"vitess.io/vitess/go/sqltypes"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/evalengine/internal/json"
 )
 
 type errJSONType string
@@ -65,12 +64,10 @@ func intoJSONPath(e eval) (*json.Path, error) {
 }
 
 func evalConvert_bj(e *evalBytes) *evalJSON {
-	const prefix = "base64:type15:"
-
-	dst := make([]byte, len(prefix)+mysqlBase64.EncodedLen(len(e.bytes)))
-	copy(dst, prefix)
-	base64.StdEncoding.Encode(dst[len(prefix):], e.bytes)
-	return json.NewString(dst)
+	if e.tt == int16(sqltypes.Bit) {
+		return json.NewBit(e.string())
+	}
+	return json.NewBlob(e.string())
 }
 
 func evalConvert_fj(e *evalFloat) *evalJSON {
@@ -78,7 +75,7 @@ func evalConvert_fj(e *evalFloat) *evalJSON {
 	if bytes.IndexByte(f, '.') < 0 {
 		f = append(f, '.', '0')
 	}
-	return json.NewNumber(f)
+	return json.NewNumber(string(f), false)
 }
 
 func evalConvert_nj(e evalNumeric) *evalJSON {
@@ -88,7 +85,7 @@ func evalConvert_nj(e evalNumeric) *evalJSON {
 	if e == evalBoolFalse {
 		return json.ValueFalse
 	}
-	return json.NewNumber(e.ToRawBytes())
+	return json.NewNumber(string(e.ToRawBytes()), false)
 }
 
 func evalConvert_cj(e *evalBytes) (*evalJSON, error) {
@@ -96,7 +93,28 @@ func evalConvert_cj(e *evalBytes) (*evalJSON, error) {
 	if err != nil {
 		return nil, err
 	}
-	return json.NewString(jsonText), nil
+	var p json.Parser
+	return p.ParseBytes(jsonText)
+}
+
+func evalConvertArg_cj(e *evalBytes) (*evalJSON, error) {
+	jsonText, err := charset.Convert(nil, charset.Charset_utf8mb4{}, e.bytes, e.col.Collation.Get().Charset())
+	if err != nil {
+		return nil, err
+	}
+	return json.NewString(string(jsonText)), nil
+}
+
+func evalConvert_dj(e *evalBytes) *evalJSON {
+	return json.NewDate(e.string())
+}
+
+func evalConvert_dtj(e *evalBytes) *evalJSON {
+	return json.NewDateTime(e.string())
+}
+
+func evalConvert_tj(e *evalBytes) *evalJSON {
+	return json.NewTime(e.string())
 }
 
 func evalToJSON(e eval) (*evalJSON, error) {
@@ -110,10 +128,44 @@ func evalToJSON(e eval) (*evalJSON, error) {
 	case evalNumeric:
 		return evalConvert_nj(e), nil
 	case *evalBytes:
-		if sqltypes.IsBinary(e.SQLType()) {
+		switch {
+		case e.SQLType() == sqltypes.Date:
+			return evalConvert_dj(e), nil
+		case e.SQLType() == sqltypes.Datetime, e.SQLType() == sqltypes.Timestamp:
+			return evalConvert_dtj(e), nil
+		case e.SQLType() == sqltypes.Time:
+			return evalConvert_tj(e), nil
+		case sqltypes.IsBinary(e.SQLType()):
 			return evalConvert_bj(e), nil
 		}
 		return evalConvert_cj(e)
+	default:
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "Unsupported type conversion: %s AS JSON", e.SQLType())
+	}
+}
+
+func argToJSON(e eval) (*evalJSON, error) {
+	switch e := e.(type) {
+	case nil:
+		return json.ValueNull, nil
+	case *evalJSON:
+		return e, nil
+	case *evalFloat:
+		return evalConvert_fj(e), nil
+	case evalNumeric:
+		return evalConvert_nj(e), nil
+	case *evalBytes:
+		switch {
+		case e.SQLType() == sqltypes.Date:
+			return evalConvert_dj(e), nil
+		case e.SQLType() == sqltypes.Datetime, e.SQLType() == sqltypes.Timestamp:
+			return evalConvert_dtj(e), nil
+		case e.SQLType() == sqltypes.Time:
+			return evalConvert_tj(e), nil
+		case sqltypes.IsBinary(e.SQLType()):
+			return evalConvert_bj(e), nil
+		}
+		return evalConvertArg_cj(e)
 	default:
 		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "Unsupported type conversion: %s AS JSON", e.SQLType())
 	}

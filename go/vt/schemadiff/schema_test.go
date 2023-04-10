@@ -17,11 +17,14 @@ limitations under the License.
 package schemadiff
 
 import (
+	"sort"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/errors"
 
 	"vitess.io/vitess/go/vt/sqlparser"
 )
@@ -36,7 +39,7 @@ var createQueries = []string{
 	"create table t5(id int)",
 	"create view v2 as select * from v3, t2",
 	"create view v1 as select * from v3",
-	"create view v3 as select * from t3 as t3",
+	"create view v3 as select *, id+1 as id_plus, id+2 from t3 as t3",
 	"create view v0 as select 1 from DUAL",
 	"create view v9 as select 1",
 }
@@ -74,12 +77,12 @@ var expectSortedViewNames = []string{
 	"v6", // level 3
 }
 
-var toSQL = "CREATE TABLE `t1` (\n\t`id` int\n);\nCREATE TABLE `t2` (\n\t`id` int\n);\nCREATE TABLE `t3` (\n\t`id` int,\n\t`type` enum('foo', 'bar') NOT NULL DEFAULT 'foo'\n);\nCREATE TABLE `t5` (\n\t`id` int\n);\nCREATE VIEW `v0` AS SELECT 1 FROM `dual`;\nCREATE VIEW `v3` AS SELECT * FROM `t3` AS `t3`;\nCREATE VIEW `v9` AS SELECT 1 FROM `dual`;\nCREATE VIEW `v1` AS SELECT * FROM `v3`;\nCREATE VIEW `v2` AS SELECT * FROM `v3`, `t2`;\nCREATE VIEW `v4` AS SELECT * FROM `t2` AS `something_else`, `v3`;\nCREATE VIEW `v5` AS SELECT * FROM `t1`, (SELECT * FROM `v3`) AS `some_alias`;\nCREATE VIEW `v6` AS SELECT * FROM `v4`;\n"
+var toSQL = "CREATE TABLE `t1` (\n\t`id` int\n);\nCREATE TABLE `t2` (\n\t`id` int\n);\nCREATE TABLE `t3` (\n\t`id` int,\n\t`type` enum('foo', 'bar') NOT NULL DEFAULT 'foo'\n);\nCREATE TABLE `t5` (\n\t`id` int\n);\nCREATE VIEW `v0` AS SELECT 1 FROM `dual`;\nCREATE VIEW `v3` AS SELECT *, `id` + 1 AS `id_plus`, `id` + 2 FROM `t3` AS `t3`;\nCREATE VIEW `v9` AS SELECT 1 FROM `dual`;\nCREATE VIEW `v1` AS SELECT * FROM `v3`;\nCREATE VIEW `v2` AS SELECT * FROM `v3`, `t2`;\nCREATE VIEW `v4` AS SELECT * FROM `t2` AS `something_else`, `v3`;\nCREATE VIEW `v5` AS SELECT * FROM `t1`, (SELECT * FROM `v3`) AS `some_alias`;\nCREATE VIEW `v6` AS SELECT * FROM `v4`;\n"
 
 func TestNewSchemaFromQueries(t *testing.T) {
 	schema, err := NewSchemaFromQueries(createQueries)
 	assert.NoError(t, err)
-	assert.NotNil(t, schema)
+	require.NotNil(t, schema)
 
 	assert.Equal(t, expectSortedNames, schema.EntityNames())
 	assert.Equal(t, expectSortedTableNames, schema.TableNames())
@@ -89,7 +92,7 @@ func TestNewSchemaFromQueries(t *testing.T) {
 func TestNewSchemaFromSQL(t *testing.T) {
 	schema, err := NewSchemaFromSQL(strings.Join(createQueries, ";"))
 	assert.NoError(t, err)
-	assert.NotNil(t, schema)
+	require.NotNil(t, schema)
 
 	assert.Equal(t, expectSortedNames, schema.EntityNames())
 	assert.Equal(t, expectSortedTableNames, schema.TableNames())
@@ -111,9 +114,12 @@ func TestNewSchemaFromQueriesUnresolved(t *testing.T) {
 	queries := append(createQueries,
 		"create view v7 as select * from v8, t2",
 	)
-	_, err := NewSchemaFromQueries(queries)
+	schema, err := NewSchemaFromQueries(queries)
 	assert.Error(t, err)
 	assert.EqualError(t, err, (&ViewDependencyUnresolvedError{View: "v7"}).Error())
+	v := schema.sorted[len(schema.sorted)-1]
+	assert.IsType(t, &CreateViewEntity{}, v)
+	assert.Equal(t, "CREATE VIEW `v7` AS SELECT * FROM `v8`, `t2`", v.Create().CanonicalStatementString())
 }
 
 func TestNewSchemaFromQueriesUnresolvedAlias(t *testing.T) {
@@ -151,14 +157,15 @@ func TestNewSchemaFromQueriesLoop(t *testing.T) {
 		"create view v8 as select * from t1, v7",
 	)
 	_, err := NewSchemaFromQueries(queries)
-	assert.Error(t, err)
+	require.Error(t, err)
+	err = errors.UnwrapFirst(err)
 	assert.EqualError(t, err, (&ViewDependencyUnresolvedError{View: "v7"}).Error())
 }
 
 func TestToSQL(t *testing.T) {
 	schema, err := NewSchemaFromQueries(createQueries)
 	assert.NoError(t, err)
-	assert.NotNil(t, schema)
+	require.NotNil(t, schema)
 
 	sql := schema.ToSQL()
 	assert.Equal(t, toSQL, sql)
@@ -167,7 +174,7 @@ func TestToSQL(t *testing.T) {
 func TestCopy(t *testing.T) {
 	schema, err := NewSchemaFromQueries(createQueries)
 	assert.NoError(t, err)
-	assert.NotNil(t, schema)
+	require.NotNil(t, schema)
 
 	schemaClone := schema.copy()
 	assert.Equal(t, schema, schemaClone)
@@ -396,5 +403,313 @@ func TestInvalidTableForeignKeyReference(t *testing.T) {
 		_, err := NewSchemaFromQueries(fkQueries)
 		assert.Error(t, err)
 		assert.EqualError(t, err, (&ForeignKeyDependencyUnresolvedError{Table: "t11"}).Error())
+	}
+}
+
+func TestGetEntityColumnNames(t *testing.T) {
+	var queries = []string{
+		"create table t1(id int, state int, some char(5))",
+		"create table t2(id int primary key, c char(5))",
+		"create view v1 as select id as id from t1",
+		"create view v2 as select 3+1 as `id`, state as state, some as thing from t1",
+		"create view v3 as select `id` as `id`, state as state, thing as another from v2",
+		"create view v4 as select 1 as `ok` from dual",
+		"create view v5 as select 1 as `ok` from DUAL",
+		"create view v6 as select ok as `ok` from v5",
+		"create view v7 as select * from t1",
+		"create view v8 as select * from v7",
+		"create view v9 as select * from v8, v6",
+		"create view va as select * from v6, v8",
+		"create view vb as select *, now() from v8",
+	}
+
+	schema, err := NewSchemaFromQueries(queries)
+	require.NoError(t, err)
+	require.NotNil(t, schema)
+
+	expectedColNames := map[string]([]string){
+		"t1": []string{"id", "state", "some"},
+		"t2": []string{"id", "c"},
+		"v1": []string{"id"},
+		"v2": []string{"id", "state", "thing"},
+		"v3": []string{"id", "state", "another"},
+		"v4": []string{"ok"},
+		"v5": []string{"ok"},
+		"v6": []string{"ok"},
+		"v7": []string{"id", "state", "some"},
+		"v8": []string{"id", "state", "some"},
+		"v9": []string{"id", "state", "some", "ok"},
+		"va": []string{"ok", "id", "state", "some"},
+		"vb": []string{"id", "state", "some", "now()"},
+	}
+	entities := schema.Entities()
+	require.Equal(t, len(entities), len(expectedColNames))
+
+	tcmap := newDeclarativeSchemaInformation()
+	// we test by order of dependency:
+	for _, e := range entities {
+		tbl := e.Name()
+		t.Run(tbl, func(t *testing.T) {
+			identifiers, err := schema.getEntityColumnNames(tbl, tcmap)
+			assert.NoError(t, err)
+			names := []string{}
+			for _, ident := range identifiers {
+				names = append(names, ident.String())
+			}
+			// compare columns. We disregard order.
+			expectNames := expectedColNames[tbl][:]
+			sort.Strings(names)
+			sort.Strings(expectNames)
+			assert.Equal(t, expectNames, names)
+			// emulate the logic that fills known columns for known entities:
+			tcmap.addTable(tbl)
+			for _, name := range names {
+				tcmap.addColumn(tbl, name)
+			}
+		})
+	}
+}
+
+func TestViewReferences(t *testing.T) {
+	tt := []struct {
+		name      string
+		queries   []string
+		expectErr error
+	}{
+		{
+			name: "valid",
+			queries: []string{
+				"create table t1(id int, state int, some char(5))",
+				"create table t2(id int primary key, c char(5))",
+				"create view v1 as select id as id from t1",
+				"create view v2 as select 3+1 as `id`, state as state, some as thing from t1",
+				"create view v3 as select `id` as `id`, state as state, thing as another from v2",
+				"create view v4 as select 1 as `ok` from dual",
+				"create view v5 as select 1 as `ok` from DUAL",
+				"create view v6 as select ok as `ok` from v5",
+			},
+		},
+		{
+			name: "valid WHERE",
+			queries: []string{
+				"create table t1(id int primary key, c char(5))",
+				"create table t2(id int primary key, c char(5))",
+				"create view v1 as select c from t1 where id=3",
+			},
+		},
+		{
+			name: "invalid unqualified referenced column",
+			queries: []string{
+				"create table t1(id int primary key, c char(5))",
+				"create table t2(id int primary key, c char(5))",
+				"create view v1 as select unexpected from t1",
+			},
+			expectErr: &InvalidColumnReferencedInViewError{View: "v1", Column: "unexpected"},
+		},
+		{
+			name: "invalid unqualified referenced column in where clause",
+			queries: []string{
+				"create table t1(id int primary key, c char(5))",
+				"create table t2(id int primary key, c char(5))",
+				"create view v1 as select 1 from t1 where unexpected=3",
+			},
+			expectErr: &InvalidColumnReferencedInViewError{View: "v1", Column: "unexpected"},
+		},
+		{
+			name: "valid qualified",
+			queries: []string{
+				"create table t1(id int primary key, c char(5))",
+				"create table t2(id int primary key, c char(5))",
+				"create view v1 as select t1.c from t1 where t1.id=3",
+			},
+		},
+		{
+			name: "valid qualified, multiple tables",
+			queries: []string{
+				"create table t1(id int primary key, c char(5))",
+				"create table t2(id int primary key, c char(5))",
+				"create view v1 as select t1.c from t1, t2 where t2.id=3",
+			},
+		},
+		{
+			name: "invalid unqualified, multiple tables",
+			queries: []string{
+				"create table t1(id int primary key, c char(5))",
+				"create table t2(id int primary key, c char(5))",
+				"create view v1 as select c from t1, t2 where t2.id=3",
+			},
+			expectErr: &InvalidColumnReferencedInViewError{View: "v1", Column: "c", Ambiguous: true},
+		},
+		{
+			name: "invalid unqualified in WHERE clause, multiple tables",
+			queries: []string{
+				"create table t1(id int primary key, c char(5))",
+				"create table t2(id int primary key, c char(5))",
+				"create view v1 as select t2.c from t1, t2 where id=3",
+			},
+			expectErr: &InvalidColumnReferencedInViewError{View: "v1", Column: "id", Ambiguous: true},
+		},
+		{
+			name: "valid unqualified, multiple tables",
+			queries: []string{
+				"create table t1(id int primary key, c char(5))",
+				"create table t2(id int primary key, c char(5), only_in_t2 int)",
+				"create view v1 as select only_in_t2 from t1, t2 where t1.id=3",
+			},
+		},
+		{
+			name: "valid unqualified in WHERE clause, multiple tables",
+			queries: []string{
+				"create table t1(id int primary key, c char(5))",
+				"create table t2(id int primary key, c char(5), only_in_t2 int)",
+				"create view v1 as select t1.id from t1, t2 where only_in_t2=3",
+			},
+		},
+		{
+			name: "valid cascaded views",
+			queries: []string{
+				"create table t1(id int primary key, c char(5))",
+				"create view v1 as select id, c from t1 where id > 0",
+				"create view v2 as select * from v1 where id > 0",
+			},
+		},
+		{
+			name: "valid cascaded views, column aliases",
+			queries: []string{
+				"create table t1(id int primary key, c char(5))",
+				"create view v1 as select id, c as ch from t1 where id > 0",
+				"create view v2 as select ch from v1 where id > 0",
+			},
+		},
+		{
+			name: "valid cascaded views, column aliases in WHERE",
+			queries: []string{
+				"create table t1(id int primary key, c char(5))",
+				"create view v1 as select id as counter, c as ch from t1 where id > 0",
+				"create view v2 as select ch from v1 where counter > 0",
+			},
+		},
+		{
+			name: "valid cascaded views, aliased expression",
+			queries: []string{
+				"create table t1(id int primary key, c char(5))",
+				"create view v1 as select id+1 as counter, c as ch from t1 where id > 0",
+				"create view v2 as select ch from v1 where counter > 0",
+			},
+		},
+		{
+			name: "valid cascaded views, non aliased expression",
+			queries: []string{
+				"create table t1(id int primary key, c char(5))",
+				"create view v1 as select id+1, c as ch from t1 where id > 0",
+				"create view v2 as select ch from v1 where `id + 1` > 0",
+			},
+		},
+		{
+			name: "cascaded views, invalid column aliases",
+			queries: []string{
+				"create table t1(id int primary key, c char(5))",
+				"create view v1 as select id, c as ch from t1 where id > 0",
+				"create view v2 as select c from v1 where id > 0",
+			},
+			expectErr: &InvalidColumnReferencedInViewError{View: "v2", Column: "c"},
+		},
+		{
+			name: "cascaded views, column not in view",
+			queries: []string{
+				"create table t1(id int primary key, c char(5))",
+				"create view v1 as select id from t1 where c='x'",
+				"create view v2 as select c from v1 where id > 0",
+			},
+			expectErr: &InvalidColumnReferencedInViewError{View: "v2", Column: "c"},
+		},
+		{
+			name: "complex cascade",
+			queries: []string{
+				"create table t1(id int primary key, c char(5))",
+				"create table t2(id int primary key, n int, info int)",
+				"create view v1 as select id, c as ch from t1 where id > 0",
+				"create view v2 as select n as num, info from t2",
+				"create view v3 as select num, v1.id, ch from v1 join v2 using (id) where info > 5",
+			},
+		},
+		{
+			name: "valid dual",
+			queries: []string{
+				"create table t1(id int primary key, c char(5))",
+				"create view v1 as select 1 from dual",
+			},
+		},
+		{
+			name: "invalid dual column",
+			queries: []string{
+				"create table t1(id int primary key, c char(5))",
+				"create view v1 as select id from dual",
+			},
+			expectErr: &InvalidColumnReferencedInViewError{View: "v1", Column: "id"},
+		},
+		{
+			name: "invalid dual star",
+			queries: []string{
+				"create table t1(id int primary key, c char(5))",
+				"create view v1 as select * from dual",
+			},
+			expectErr: &InvalidStarExprInViewError{View: "v1"},
+		},
+		{
+			name: "valid star",
+			queries: []string{
+				"create table t1(id int primary key, c char(5))",
+				"create view v1 as select * from t1 where id > 0",
+			},
+		},
+		{
+			name: "valid star, cascaded",
+			queries: []string{
+				"create table t1(id int primary key, c char(5))",
+				"create view v1 as select t1.* from t1 where id > 0",
+				"create view v2 as select * from v1 where id > 0",
+			},
+		},
+		{
+			name: "valid star, two tables, cascaded",
+			queries: []string{
+				"create table t1(id int primary key, c char(5))",
+				"create table t2(id int primary key, ts timestamp)",
+				"create view v1 as select t1.* from t1, t2 where t1.id > 0",
+				"create view v2 as select * from v1 where c > 0",
+			},
+		},
+		{
+			name: "valid two star, two tables, cascaded",
+			queries: []string{
+				"create table t1(id int primary key, c char(5))",
+				"create table t2(id int primary key, ts timestamp)",
+				"create view v1 as select t1.*, t2.* from t1, t2 where t1.id > 0",
+				"create view v2 as select * from v1 where c > 0 and ts is not null",
+			},
+		},
+		{
+			name: "valid unqualified star, cascaded",
+			queries: []string{
+				"create table t1(id int primary key, c char(5))",
+				"create table t2(id int primary key, ts timestamp)",
+				"create view v1 as select * from t1, t2 where t1.id > 0",
+				"create view v2 as select * from v1 where c > 0 and ts is not null",
+			},
+		},
+	}
+	for _, ts := range tt {
+		t.Run(ts.name, func(t *testing.T) {
+			schema, err := NewSchemaFromQueries(ts.queries)
+			if ts.expectErr == nil {
+				require.NoError(t, err)
+				require.NotNil(t, schema)
+			} else {
+				require.Error(t, err)
+				err = errors.UnwrapFirst(err)
+				require.Equal(t, ts.expectErr, err, "received error: %v", err)
+			}
+		})
 	}
 }

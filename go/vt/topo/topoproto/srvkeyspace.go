@@ -17,8 +17,9 @@ limitations under the License.
 package topoproto
 
 import (
-	"bytes"
 	"sort"
+
+	"vitess.io/vitess/go/vt/key"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
@@ -29,18 +30,12 @@ type ShardReferenceArray []*topodatapb.ShardReference
 // Len implements sort.Interface
 func (sra ShardReferenceArray) Len() int { return len(sra) }
 
-// Len implements sort.Interface
+// Less implements sort.Interface
 func (sra ShardReferenceArray) Less(i, j int) bool {
-	if sra[i].KeyRange == nil || len(sra[i].KeyRange.Start) == 0 {
-		return true
-	}
-	if sra[j].KeyRange == nil || len(sra[j].KeyRange.Start) == 0 {
-		return false
-	}
-	return bytes.Compare(sra[i].KeyRange.Start, sra[j].KeyRange.Start) < 0
+	return key.KeyRangeLess(sra[i].KeyRange, sra[j].KeyRange)
 }
 
-// Len implements sort.Interface
+// Swap implements sort.Interface
 func (sra ShardReferenceArray) Swap(i, j int) {
 	sra[i], sra[j] = sra[j], sra[i]
 }

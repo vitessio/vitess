@@ -2458,7 +2458,7 @@
               "Sharded": true
             },
             "FieldQuery": "select u.m from `user` as u where 1 != 1",
-            "Query": "select u.m from `user` as u where u.id in (select m2 from `user` where `user`.id = u.id and `user`.col = :user_extra_col) and u.id in ::__vals",
+            "Query": "select u.m from `user` as u where u.id in (select m2 from `user` where `user`.id = u.id and `user`.col = :user_extra_col /* INT16 */) and u.id in ::__vals",
             "Table": "`user`",
             "Values": [
               "(:user_extra_col, INT64(1))"
@@ -2722,7 +2722,7 @@
               "Sharded": true
             },
             "FieldQuery": "select u.m from `user` as u where 1 != 1",
-            "Query": "select u.m from `user` as u where u.id in (select m2 from `user` where `user`.id = u.id and `user`.col = :user_extra_col and `user`.id in (select m3 from user_extra where user_extra.user_id = `user`.id)) and u.id in ::__vals",
+            "Query": "select u.m from `user` as u where u.id in (select m2 from `user` where `user`.id = u.id and `user`.col = :user_extra_col /* INT16 */ and `user`.id in (select m3 from user_extra where user_extra.user_id = `user`.id)) and u.id in ::__vals",
             "Table": "`user`",
             "Values": [
               "(:user_extra_col, INT64(1))"
@@ -2916,8 +2916,8 @@
   {
     "comment": "unresolved symbol in inner subquery.",
     "query": "select id from user where id = :a and user.col in (select user_extra.col from user_extra where user_extra.user_id = :a and foo.id = 1)",
-    "v3-plan": "VT03019: symbol foo.id not found",
-    "gen4-plan": "symbol foo.id not found"
+    "v3-plan": "VT03019: column foo.id not found",
+    "gen4-plan": "column 'foo.id' not found"
   },
   {
     "comment": "outer and inner subquery route by same outermost column value",

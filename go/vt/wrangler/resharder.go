@@ -317,7 +317,7 @@ func (rs *resharder) createStreams(ctx context.Context) error {
 		// copy excludeRules to prevent data race.
 		copyExcludeRules := append([]*binlogdatapb.Rule(nil), excludeRules...)
 		for _, source := range rs.sourceShards {
-			if !key.KeyRangesIntersect(target.KeyRange, source.KeyRange) {
+			if !key.KeyRangeIntersect(target.KeyRange, source.KeyRange) {
 				continue
 			}
 			filter := &binlogdatapb.Filter{

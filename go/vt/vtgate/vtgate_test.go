@@ -730,8 +730,8 @@ func TestMultiInternalSavepointVtGate(t *testing.T) {
 
 	testQueryLog(t, logChan, "Execute", "BEGIN", "begin", 0)
 	testQueryLog(t, logChan, "MarkSavepoint", "SAVEPOINT", "savepoint x", 0)
-	testQueryLog(t, logChan, "Execute", "INSERT", "insert into sp_tbl(user_id) values (:vtg1), (:vtg2)", 2)
+	testQueryLog(t, logChan, "Execute", "INSERT", "insert into sp_tbl(user_id) values (:vtg1 /* INT64 */), (:vtg2 /* INT64 */)", 2)
 	testQueryLog(t, logChan, "MarkSavepoint", "SAVEPOINT", "savepoint y", 2)
-	testQueryLog(t, logChan, "Execute", "INSERT", "insert into sp_tbl(user_id) values (:vtg1), (:vtg2)", 2)
-	testQueryLog(t, logChan, "Execute", "INSERT", "insert into sp_tbl(user_id) values (:vtg1)", 1)
+	testQueryLog(t, logChan, "Execute", "INSERT", "insert into sp_tbl(user_id) values (:vtg1 /* INT64 */), (:vtg2 /* INT64 */)", 2)
+	testQueryLog(t, logChan, "Execute", "INSERT", "insert into sp_tbl(user_id) values (:vtg1 /* INT64 */)", 1)
 }

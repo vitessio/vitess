@@ -50,7 +50,7 @@ type (
 // Here we try to merge query parts into the same route primitives. At the end of this process,
 // all the operators in the tree are guaranteed to be PhysicalOperators
 func transformToPhysical(ctx *plancontext.PlanningContext, in ops.Operator) (ops.Operator, error) {
-	op, err := rewrite.BottomUp(in, semantics.EmptyTableSet(), TableID, func(ts semantics.TableSet, operator ops.Operator) (ops.Operator, rewrite.TreeIdentity, error) {
+	op, err := rewrite.BottomUpAll(in, TableID, func(operator ops.Operator, ts semantics.TableSet) (ops.Operator, rewrite.TreeIdentity, error) {
 		switch op := operator.(type) {
 		case *QueryGraph:
 			return optimizeQueryGraph(ctx, op)
@@ -115,7 +115,7 @@ func optimizeDerived(ctx *plancontext.PlanningContext, op *Derived) (ops.Operato
 func optimizeJoin(ctx *plancontext.PlanningContext, op *Join) (ops.Operator, rewrite.TreeIdentity, error) {
 	join, err := mergeOrJoin(ctx, op.LHS, op.RHS, sqlparser.SplitAndExpression(nil, op.Predicate), !op.LeftJoin)
 	if err != nil {
-		return nil, rewrite.SameTree, err
+		return nil, false, err
 	}
 	return join, rewrite.NewTree, nil
 }
@@ -621,12 +621,12 @@ func gen4ValEqual(ctx *plancontext.PlanningContext, a, b sqlparser.Expr) bool {
 
 			return ctx.SemTable.DirectDeps(a) == ctx.SemTable.DirectDeps(b)
 		}
-	case sqlparser.Argument:
-		b, ok := b.(sqlparser.Argument)
+	case *sqlparser.Argument:
+		b, ok := b.(*sqlparser.Argument)
 		if !ok {
 			return false
 		}
-		return a == b
+		return a.Name == b.Name
 	case *sqlparser.Literal:
 		b, ok := b.(*sqlparser.Literal)
 		if !ok {

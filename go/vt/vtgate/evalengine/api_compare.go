@@ -94,7 +94,8 @@ func isByteComparable(typ sqltypes.Type, collationID collations.ID) bool {
 		return collationID == collations.CollationBinaryID
 	}
 	switch typ {
-	case sqltypes.Timestamp, sqltypes.Date, sqltypes.Time, sqltypes.Datetime, sqltypes.Enum, sqltypes.Set, sqltypes.TypeJSON, sqltypes.Bit:
+	case sqltypes.Timestamp, sqltypes.Date, sqltypes.Time, sqltypes.Datetime, sqltypes.Enum,
+		sqltypes.Set, sqltypes.TypeJSON, sqltypes.Bit, sqltypes.Geometry:
 		return true
 	default:
 		return false

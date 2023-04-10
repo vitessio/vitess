@@ -18,6 +18,7 @@ package operators
 
 import (
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
@@ -27,6 +28,10 @@ import (
 type Filter struct {
 	Source     ops.Operator
 	Predicates []sqlparser.Expr
+
+	// FinalPredicate is the evalengine expression that will finally be used.
+	// It contains the ANDed predicates in Predicates, with ColName:s replaced by Offset:s
+	FinalPredicate evalengine.Expr
 }
 
 var _ ops.PhysicalOperator = (*Filter)(nil)
@@ -77,8 +82,17 @@ func (f *Filter) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.E
 	return f, nil
 }
 
-func (f *Filter) AddColumn(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (int, error) {
-	return f.Source.AddColumn(ctx, expr)
+func (f *Filter) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, reuseCol bool) (ops.Operator, int, error) {
+	newSrc, offset, err := f.Source.AddColumn(ctx, expr, reuseCol)
+	if err != nil {
+		return nil, 0, err
+	}
+	f.Source = newSrc
+	return f, offset, nil
+}
+
+func (f *Filter) GetColumns() ([]sqlparser.Expr, error) {
+	return f.Source.GetColumns()
 }
 
 func (f *Filter) Compact(*plancontext.PlanningContext) (ops.Operator, rewrite.TreeIdentity, error) {

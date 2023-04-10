@@ -49,8 +49,9 @@ create table ` + "`Lead-1`(`Lead`" + ` binary(16), name varbinary(16), date1 dat
 create table _vt_PURGE_4f9194b43b2011eb8a0104ed332e05c2_20221210194431(id int, val varbinary(128), primary key(id), key(val));
 create table db_order_test (c_uuid varchar(64) not null default '', created_at datetime not null, dstuff varchar(128), dtstuff text, dbstuff blob, cstuff char(32), primary key (c_uuid,created_at), key (dstuff)) CHARSET=utf8mb4;
 create table datze (id int, dt1 datetime not null default current_timestamp, dt2 datetime not null, ts1 timestamp default current_timestamp, primary key (id), key (dt1));
+create table json_tbl (id int, j1 json, j2 json, primary key(id));
+create table geom_tbl (id int, g geometry, p point, ls linestring, pg polygon, mp multipoint, mls multilinestring, mpg multipolygon, gc geometrycollection, primary key(id));
 `
-
 	// These should always be ignored in vreplication
 	internalSchema = `
  create table _1e275eef_3b20_11eb_a38f_04ed332e05c2_20201210204529_gho(id int, val varbinary(128), primary key(id));
@@ -146,6 +147,22 @@ create table datze (id int, dt1 datetime not null default current_timestamp, dt2
         {
           "columns": ["c_uuid", "created_at"],
           "name": "xxhash"
+        }
+      ]
+    },
+    "geom_tbl": {
+      "column_vindexes": [
+         {
+           "column": "id",
+           "name": "reverse_bits"
+         }
+       ]
+    },
+    "json_tbl": {
+      "column_vindexes": [
+        {
+          "column": "id",
+          "name": "reverse_bits"
         }
       ]
     },
@@ -261,7 +278,23 @@ create table datze (id int, dt1 datetime not null default current_timestamp, dt2
         }
       ]
     },
-	"cproduct": {
+    "geom_tbl": {
+      "column_vindexes": [
+         {
+           "column": "id",
+           "name": "reverse_bits"
+         }
+       ]
+    },
+    "json_tbl": {
+      "column_vindexes": [
+        {
+          "column": "id",
+          "name": "reverse_bits"
+        }
+      ]
+    },
+    "cproduct": {
 		"type": "reference"
 	},
 	"vproduct": {
@@ -393,7 +426,6 @@ create table datze (id int, dt1 datetime not null default current_timestamp, dt2
 create table review(rid int, pid int, review varbinary(128), primary key(rid));
 create table rating(gid int, pid int, rating int, primary key(gid));
 `
-
 	initialExternalVSchema = `
 {
   "tables": {
@@ -402,4 +434,39 @@ create table rating(gid int, pid int, rating int, primary key(gid));
   }
 }
 `
+
+	jsonValues = []string{
+		`"abc"`,
+		`123`,
+		`{"foo": 456}`,
+		`{"bar": "foo"}`,
+		`[1, "abc", 932409834098324908234092834092834, 234234234234234234234234.2342342342349]`,
+		`{"a":2947293482093480923840923840923, "cba":334234234234234234234234234.234234239090}`,
+		`[1, "abc", -1, 0.2342342342349, {"a":"b","c":"d","ab":"abc","bc":["x","y"]}]`,
+		`{"a":2947293482093480923840923840923, "cba":{"a":2947293482093480923840923840923, "cba":334234234234234234234234234.234234239090}}`,
+		`{"asdf":{"foo":123}}`,
+		`{"a":"b","c":"d","ab":"abc","bc":["x","y"]}`,
+		`["here",["I","am"],"!!!"]`,
+		`{"scopes":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAEAAAAAAEAAAAAA8AAABgAAAAAABAAAACAAAAAAAAA"}`,
+		`"scalar string"`,
+		`"scalar stringscalar stringscalar stringscalar stringscalar stringscalar stringscalar stringscalar stringscalar stringscalar string"`,
+		`true`,
+		`false`,
+		`""`,
+		`-1`,
+		`1`,
+		`32767`,
+		`32768`,
+		`-32768`,
+		`-32769`,
+		`2.147483647e+09`,
+		`1.8446744073709552e+19`,
+		`-9.223372036854776e+18`,
+		`{}`,
+		`[]`,
+		`"2015-01-15 23:24:25.000000"`,
+		`"23:24:25.000000"`,
+		`"23:24:25.120000"`,
+		`"2015-01-15"`,
+	}
 )

@@ -44,7 +44,10 @@ var _ logicalPlan = (*projection)(nil)
 func (p *projection) WireupGen4(ctx *plancontext.PlanningContext) error {
 	columns := make([]evalengine.Expr, 0, len(p.columns))
 	for _, expr := range p.columns {
-		convert, err := evalengine.Translate(expr, ctx.SemTable)
+		convert, err := evalengine.Translate(expr, &evalengine.Config{
+			ResolveColumn: resolveFromPlan(ctx, p.source, false),
+			Collation:     ctx.SemTable.Collation,
+		})
 		if err != nil {
 			return err
 		}

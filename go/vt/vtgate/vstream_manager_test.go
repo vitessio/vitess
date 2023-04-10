@@ -889,9 +889,44 @@ func TestResolveVStreamParams(t *testing.T) {
 		input: &binlogdatapb.VGtid{
 			ShardGtids: []*binlogdatapb.ShardGtid{{
 				Keyspace: "TestVStream",
+				Gtid:     "other",
 			}},
 		},
-		err: "if shards are unspecified, the Gtid value must be 'current'",
+		err: "if shards are unspecified, the Gtid value must be 'current' or empty",
+	}, {
+		// Verify that the function maps the input missing the shard to a list of all shards in the topology.
+		input: &binlogdatapb.VGtid{
+			ShardGtids: []*binlogdatapb.ShardGtid{{
+				Keyspace: "TestVStream",
+			}},
+		},
+		output: &binlogdatapb.VGtid{
+			ShardGtids: []*binlogdatapb.ShardGtid{{
+				Keyspace: "TestVStream",
+				Shard:    "-20",
+			}, {
+				Keyspace: "TestVStream",
+				Shard:    "20-40",
+			}, {
+				Keyspace: "TestVStream",
+				Shard:    "40-60",
+			}, {
+				Keyspace: "TestVStream",
+				Shard:    "60-80",
+			}, {
+				Keyspace: "TestVStream",
+				Shard:    "80-a0",
+			}, {
+				Keyspace: "TestVStream",
+				Shard:    "a0-c0",
+			}, {
+				Keyspace: "TestVStream",
+				Shard:    "c0-e0",
+			}, {
+				Keyspace: "TestVStream",
+				Shard:    "e0-",
+			}},
+		},
 	}, {
 		input: &binlogdatapb.VGtid{
 			ShardGtids: []*binlogdatapb.ShardGtid{{
@@ -983,17 +1018,49 @@ func TestResolveVStreamParams(t *testing.T) {
 		assert.Equal(t, wantFilter, filter, tcase.input)
 		require.False(t, flags.MinimizeSkew)
 	}
-	// Special-case: empty keyspace because output is too big.
-	input := &binlogdatapb.VGtid{
-		ShardGtids: []*binlogdatapb.ShardGtid{{
-			Gtid: "current",
-		}},
+
+	// Special-case: empty keyspace or keyspace containing wildcards because output is too big.
+	// Verify that the function resolves input for multiple keyspaces into a list of all corresponding shards.
+	// Ensure that the number of shards returned is greater than the number of shards in a single keyspace named 'TestVStream.'
+	specialCases := []struct {
+		input *binlogdatapb.ShardGtid
+	}{
+		{
+			input: &binlogdatapb.ShardGtid{
+				Gtid: "current",
+			},
+		},
+		{
+			input: &binlogdatapb.ShardGtid{
+				Keyspace: "/.*",
+			},
+		},
+		{
+			input: &binlogdatapb.ShardGtid{
+				Keyspace: "/.*",
+				Gtid:     "current",
+			},
+		},
+		{
+			input: &binlogdatapb.ShardGtid{
+				Keyspace: "/Test.*",
+			},
+		},
 	}
-	vgtid, _, _, err := vsm.resolveParams(context.Background(), topodatapb.TabletType_REPLICA, input, nil, nil)
-	require.NoError(t, err, input)
-	if got, want := len(vgtid.ShardGtids), 8; want >= got {
-		t.Errorf("len(vgtid.ShardGtids): %v, must be >%d", got, want)
+	for _, tcase := range specialCases {
+		input := &binlogdatapb.VGtid{
+			ShardGtids: []*binlogdatapb.ShardGtid{tcase.input},
+		}
+		vgtid, _, _, err := vsm.resolveParams(context.Background(), topodatapb.TabletType_REPLICA, input, nil, nil)
+		require.NoError(t, err, tcase.input)
+		if got, expectTestVStreamShardNumber := len(vgtid.ShardGtids), 8; expectTestVStreamShardNumber >= got {
+			t.Errorf("len(vgtid.ShardGtids): %v, must be >%d", got, expectTestVStreamShardNumber)
+		}
+		for _, s := range vgtid.ShardGtids {
+			require.Equal(t, tcase.input.Gtid, s.Gtid)
+		}
 	}
+
 	for _, minimizeSkew := range []bool{true, false} {
 		t.Run(fmt.Sprintf("resolveParams MinimizeSkew %t", minimizeSkew), func(t *testing.T) {
 			flags := &vtgatepb.VStreamFlags{MinimizeSkew: minimizeSkew}

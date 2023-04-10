@@ -19,6 +19,9 @@ package testcases
 import (
 	"math"
 	"strconv"
+
+	"vitess.io/vitess/go/mysql/format"
+	"vitess.io/vitess/go/sqltypes"
 )
 
 var inputJSONObjects = []string{
@@ -44,17 +47,38 @@ var inputJSONPrimitives = []string{
 }
 
 var inputBitwise = []string{
-	"0", "1", "0xFF", "255", "1.0", "1.1", "-1", "-255", "7", "9", "13", "1.5", "-1.5",
+	"0", "1", "0xFF", "255", "1.0", "1.1", "-1", "-255", "7", "9", "13", "1.5", "-1.5", "'1.5'", "'-1.5'",
 	"0.0e0", "1.0e0", "255.0", "1.5e0", "-1.5e0", "1.1e0", "-1e0", "-255e0", "7e0", "9e0", "13e0",
 	strconv.FormatUint(math.MaxUint64, 10),
 	strconv.FormatUint(math.MaxInt64, 10),
+	strconv.FormatUint(math.MaxInt64+1, 10),
 	strconv.FormatInt(math.MinInt64, 10),
+	"18446744073709551616",
+	"-9223372036854775809",
 	`"foobar"`, `"foobar1234"`, `"0"`, "0x1", "-0x1", "X'ff'", "X'00'",
 	`"1abcd"`, "NULL", `_binary "foobar"`, `_binary "foobar1234"`,
 	"64", "'64'", "_binary '64'", "X'40'", "_binary X'40'",
 }
 
-var inputComparisonElement = []string{"NULL", "-1", "0", "1",
+var radianInputs = []string{
+	"0",
+	"1",
+	"-1",
+	"'1.5'",
+	"NULL",
+	"'ABC'",
+	"1.5e0",
+	"-1.5e0",
+	"9223372036854775810.4",
+	"-9223372036854775810.4",
+	string(format.FormatFloat(sqltypes.Float64, math.Pi)),
+	string(format.FormatFloat(sqltypes.Float64, math.MaxFloat64)),
+	string(format.FormatFloat(sqltypes.Float64, math.SmallestNonzeroFloat32)),
+	string(format.FormatFloat(sqltypes.Float64, math.SmallestNonzeroFloat64)),
+}
+
+var inputComparisonElement = []string{
+	"NULL", "-1", "0", "1",
 	`'foo'`, `'bar'`, `'FOO'`, `'BAR'`,
 	`'foo' collate utf8mb4_0900_as_cs`,
 	`'FOO' collate utf8mb4_0900_as_cs`,
@@ -65,7 +89,7 @@ var inputComparisonElement = []string{"NULL", "-1", "0", "1",
 var inputConversions = []string{
 	"0", "1", "255",
 	"0.0e0", "1.0e0", "1.5e0", "-1.5e0", "1.1e0", "-1.1e0", "-1.7e0",
-	"0.0", "0.000", "1.5", "-1.5", "1.1", "1.7", "-1.1", "-1.7",
+	"0.0", "0.000", "1.5", "-1.5", "1.1", "1.7", "-1.1", "-1.7", "'1.5'", "'-1.5'",
 	`'foobar'`, `_utf8 'foobar'`, `''`, `_binary 'foobar'`,
 	`0x0`, `0x1`, `0xff`, `X'00'`, `X'01'`, `X'ff'`,
 	"NULL", "true", "false",
@@ -73,6 +97,31 @@ var inputConversions = []string{
 	"18446744073709540000e0",
 	"-18446744073709540000e0",
 	"JSON_OBJECT()", "JSON_ARRAY()",
+	"time '10:04:58'", "time '101:34:58'", "time '5 10:34:58'", "date '2000-01-01'", "timestamp '2000-01-01 12:34:58'",
+	"'10:04:58'", "'101:34:58'", "'5 10:34:58'", "'2000-01-01'", "'2000-01-01 12:34:58'",
+	"cast(0 as json)", "cast(1 as json)",
+	"cast(true as json)", "cast(false as json)",
+	"cast('{}' as json)", "cast('[]' as json)",
+	"cast('null' as json)", "cast('true' as json)", "cast('false' as json)",
+	// JSON numbers
+	"cast('1' as json)", "cast('2' as json)", "cast('1.1' as json)", "cast('-1.1' as json)",
+	// JSON strings
+	"cast('\"foo\"' as json)", "cast('\"bar\"' as json)", "cast('invalid' as json)",
+	// JSON binary values
+	"cast(_binary' \"foo\"' as json)", "cast(_binary '\"bar\"' as json)",
+	"cast(0xFF666F6F626172FF as json)", "cast(0x666F6F626172FF as json)",
+	"cast(0b01 as json)", "cast(0b001 as json)",
+	// JSON arrays
+	"cast('[\"a\"]' as json)", "cast('[\"ab\"]' as json)",
+	"cast('[\"ab\", \"cd\", \"ef\"]' as json)", "cast('[\"ab\", \"ef\"]' as json)",
+	// JSON objects
+	"cast('{\"a\": 1, \"b\": 2}' as json)", "cast('{\"b\": 2, \"a\": 1}' as json)",
+	"cast('{\"c\": 1, \"b\": 2}' as json)", "cast('{\"b\": 2, \"c\": 1}' as json)",
+	"cast(' \"b\": 2}' as json)", "cast('\"a\": 1' as json)",
+	// JSON date, datetime & time
+	"cast(date '2000-01-01' as json)", "cast(date '2000-01-02' as json)",
+	"cast(timestamp '2000-01-01 12:34:58' as json)",
+	"cast(time '12:34:56' as json)", "cast(time '12:34:58' as json)", "cast(time '5 12:34:58' as json)",
 }
 
 const inputPi = "314159265358979323846264338327950288419716939937510582097494459"
@@ -106,4 +155,13 @@ var inputStrings = []string{
 	// "_utf16 'AabcÅå'",
 	// "_utf32 'AabcÅå'",
 	// "_ucs2 'AabcÅå'",
+}
+
+var inputConversionTypes = []string{
+	"BINARY", "BINARY(1)", "BINARY(0)", "BINARY(16)", "BINARY(-1)",
+	"CHAR", "CHAR(1)", "CHAR(0)", "CHAR(16)", "CHAR(-1)",
+	"NCHAR", "NCHAR(1)", "NCHAR(0)", "NCHAR(16)", "NCHAR(-1)",
+	"DECIMAL", "DECIMAL(0, 4)", "DECIMAL(12, 0)", "DECIMAL(12, 4)", "DECIMAL(60)",
+	"DOUBLE", "REAL",
+	"SIGNED", "UNSIGNED", "SIGNED INTEGER", "UNSIGNED INTEGER", "JSON",
 }
