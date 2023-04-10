@@ -126,8 +126,8 @@ const (
   </tr>
   {{range $i, $ts := .}}
   <tr>
-    <td>{{github_com_vitessio_vitess_vtctld_srv_cell $ts.Cell}}</td>
-    <td>{{github_com_vitessio_vitess_vtctld_srv_keyspace $ts.Cell $ts.Target.Keyspace}}</td>
+    <td>{{$ts.Cell}}</td>
+    <td>{{$ts.Target.Keyspace}}</td>
     <td>{{$ts.Target.Shard}}</td>
     <td>{{$ts.Target.TabletType}}</td>
     <td>{{$ts.StatusAsHTML}}</td>

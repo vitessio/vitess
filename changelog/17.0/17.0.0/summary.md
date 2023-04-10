@@ -15,6 +15,7 @@
     - [VTtablet Error count with code ](#vttablet-error-count-with-code)
     - [VReplication stream status for Prometheus](#vreplication-stream-status-for-prometheus)
   - **[Deprecations and Deletions](#deprecations-and-deletions)**
+    - [Deprecated Flags](#deprecated-flags)
     - [Deprecated Stats](#deprecated-stats)
   - **[VTTablet](#vttablet)**
     - [VTTablet: Initializing all replicas with super_read_only](#vttablet-initialization)
@@ -242,6 +243,10 @@ vttablet_v_replication_stream_state{counts="1",state="Running",workflow="commerc
 * Auto-population of DDL revert actions and tables at execution-time has been removed. This is now handled entirely at enqueue-time.
 * Backwards-compatibility for failed migrations without a `completed_timestamp` has been removed (see https://github.com/vitessio/vitess/issues/8499).
 * The deprecated `Key`, `Name`, `Up`, and `TabletExternallyReparentedTimestamp` fields were removed from the JSON representation of `TabletHealth` structures.
+
+### <a id="deprecated-flags"/>Deprecated Command Line Flags
+
+* Flag `vtctld_addr` has been deprecated and will be deleted in a future release. This affects the `vtgate`, `vttablet` and `vtcombo` binaries.
 
 ### <a id="deprecated-stats"/>Deprecated Stats
 
