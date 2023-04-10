@@ -18,7 +18,6 @@ package evalengine
 
 import (
 	"bytes"
-	"time"
 
 	"vitess.io/vitess/go/mysql/decimal"
 	"vitess.io/vitess/go/mysql/json"
@@ -117,33 +116,18 @@ func compareNumeric(left, right eval) (int, error) {
 	return 1, nil
 }
 
-// Date comparison based on:
-//   - https://dev.mysql.com/doc/refman/8.0/en/type-conversion.html
-//   - https://dev.mysql.com/doc/refman/8.0/en/date-and-time-type-conversion.html
-func compareDates(l, r *evalTemporal) (int, error) {
-	return compareGoTimes(l.toStdTime(time.Local), r.toStdTime(time.Local))
+func compareDates(l, r *evalTemporal) int {
+	return l.dt.Compare(r.dt)
 }
 
-func compareDateAndString(l, r eval) (int, error) {
-	var t1, t2 time.Time
+func compareDateAndString(l, r eval) int {
 	if tt, ok := l.(*evalTemporal); ok {
-		t1 = tt.toStdTime(time.Local)
-		t2 = r.(*evalBytes).toDateBestEffort().ToStdTime(time.Local)
-	} else if tt, ok := r.(*evalTemporal); ok {
-		t1 = l.(*evalBytes).toDateBestEffort().ToStdTime(time.Local)
-		t2 = tt.toStdTime(time.Local)
+		return tt.dt.Compare(r.(*evalBytes).toDateBestEffort())
 	}
-	return compareGoTimes(t1, t2)
-}
-
-func compareGoTimes(lTime, rTime time.Time) (int, error) {
-	if lTime.Before(rTime) {
-		return -1, nil
+	if tt, ok := r.(*evalTemporal); ok {
+		return l.(*evalBytes).toDateBestEffort().Compare(tt.dt)
 	}
-	if lTime.After(rTime) {
-		return 1, nil
-	}
-	return 0, nil
+	panic("unreachable")
 }
 
 // More on string collations coercibility on MySQL documentation:

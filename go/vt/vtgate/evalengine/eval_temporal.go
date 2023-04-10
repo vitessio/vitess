@@ -73,7 +73,7 @@ func (e *evalTemporal) toDateTime() *evalTemporal {
 	case sqltypes.Date:
 		return &evalTemporal{t: sqltypes.Datetime, dt: e.dt}
 	case sqltypes.Time:
-		return &evalTemporal{t: sqltypes.Time, dt: e.dt.Time.ToDateTime()}
+		return &evalTemporal{t: sqltypes.Datetime, dt: e.dt.Time.ToDateTime()}
 	default:
 		panic("unreachable")
 	}
@@ -187,20 +187,64 @@ func parseTime(s []byte) (*evalTemporal, error) {
 	return newEvalTime(t), nil
 }
 
-func evalToTime(e eval) (*evalTemporal, error) {
+func evalToTime(e eval) *evalTemporal {
 	switch e := e.(type) {
 	case *evalTemporal:
-		return e.toTime(), nil
+		return e.toTime()
 	case *evalBytes:
 		if t, ok := datetime.ParseTime(e.string()); ok {
-			return newEvalTime(t), nil
+			return newEvalTime(t)
 		}
-		return nil, errIncorrectTemporal("TIME", e.bytes)
-	case *evalInt64:
-		panic("TODO")
-	default:
-		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "type %v is not date-like", e.SQLType())
+	case evalNumeric:
+		if t, ok := datetime.ParseTimeInt64(e.toInt64().i); ok {
+			return newEvalTime(t)
+		}
+	case *evalJSON:
+		if t, ok := e.Time(); ok {
+			return newEvalTime(t)
+		}
 	}
+	return nil
+}
+
+func evalToDateTime(e eval) *evalTemporal {
+	switch e := e.(type) {
+	case *evalTemporal:
+		return e.toDateTime()
+	case *evalBytes:
+		if t, ok := datetime.ParseDateTime(e.string()); ok {
+			return newEvalDateTime(t)
+		}
+	case evalNumeric:
+		if t, ok := datetime.ParseDateTimeInt64(e.toInt64().i); ok {
+			return newEvalDateTime(t)
+		}
+	case *evalJSON:
+		if dt, ok := e.DateTime(); ok {
+			return newEvalDateTime(dt)
+		}
+	}
+	return nil
+}
+
+func evalToDate(e eval) *evalTemporal {
+	switch e := e.(type) {
+	case *evalTemporal:
+		return e.toDate()
+	case *evalBytes:
+		if t, ok := datetime.ParseDate(e.string()); ok {
+			return newEvalDate(t)
+		}
+	case evalNumeric:
+		if t, ok := datetime.ParseDateInt64(e.toInt64().i); ok {
+			return newEvalDate(t)
+		}
+	case *evalJSON:
+		if d, ok := e.Date(); ok {
+			return newEvalDate(d)
+		}
+	}
+	return nil
 }
 
 var _ eval = (*evalTemporal)(nil)

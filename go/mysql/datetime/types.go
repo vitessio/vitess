@@ -58,15 +58,7 @@ func (t Time) FormatInt64() (n int64) {
 }
 
 func (t Time) ToDateTime() (out DateTime) {
-	year, month, day := time.Now().Date()
-	return DateTime{
-		Date: Date{
-			year:  uint16(year),
-			month: uint8(month),
-			day:   uint8(day),
-		},
-		Time: t,
-	}
+	return FromStdTime(t.ToStdTime(time.Local))
 }
 
 func (t Time) IsZero() bool {
@@ -131,6 +123,13 @@ func (t Time) Compare(t2 Time) int {
 		return -1
 	}
 	if s1 > s2 {
+		return 1
+	}
+	ns1, ns2 := t.Nanosecond(), t2.Nanosecond()
+	if ns1 < ns2 {
+		return -1
+	}
+	if ns1 > ns2 {
 		return 1
 	}
 	return 0
@@ -264,6 +263,17 @@ func (dt DateTime) FormatInt64() int64 {
 }
 
 func (dt DateTime) Compare(dt2 DateTime) int {
+	zerodate1, zerodate2 := dt.Date.IsZero(), dt2.Date.IsZero()
+
+	switch {
+	case zerodate1 && zerodate2:
+		return dt.Time.Compare(dt2.Time)
+	case zerodate1 || zerodate2:
+		// if we're comparing a time to a datetime, we need to normalize them
+		// both into datetimes; this normalization is not trivial because negative
+		// times result in a date change, to let the standard library handle this
+		return dt.ToStdTime(time.Local).Compare(dt2.ToStdTime(time.Local))
+	}
 	if cmp := dt.Date.Compare(dt2.Date); cmp != 0 {
 		return cmp
 	}

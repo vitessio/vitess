@@ -740,7 +740,7 @@ func (asm *assembler) CmpDateString() {
 		l := env.vm.stack[env.vm.sp-2]
 		r := env.vm.stack[env.vm.sp-1]
 		env.vm.sp -= 2
-		env.vm.flags.cmp, env.vm.err = compareDateAndString(l, r)
+		env.vm.flags.cmp = compareDateAndString(l, r)
 		return 1
 	}, "CMP DATE|STRING(SP-2), DATE|STRING(SP-1)")
 }
@@ -752,7 +752,7 @@ func (asm *assembler) CmpDates() {
 		l := env.vm.stack[env.vm.sp-2].(*evalTemporal)
 		r := env.vm.stack[env.vm.sp-1].(*evalTemporal)
 		env.vm.sp -= 2
-		env.vm.flags.cmp, env.vm.err = compareDates(l, r)
+		env.vm.flags.cmp = compareDates(l, r)
 		return 1
 	}, "CMP DATE(SP-2), DATE(SP-1)")
 }

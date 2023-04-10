@@ -35,6 +35,11 @@ type timeparts struct {
 }
 
 func (tp *timeparts) toDateTime() (DateTime, bool) {
+	if tp.year == 0 && tp.month == 0 && tp.day == 0 && tp.hour == 0 && tp.min == 0 && tp.sec == 0 && tp.nsec == 0 {
+		// zero date
+		return DateTime{}, true
+	}
+
 	if tp.pmset && tp.hour < 12 {
 		tp.hour += 12
 	} else if tp.amset && tp.hour == 12 {

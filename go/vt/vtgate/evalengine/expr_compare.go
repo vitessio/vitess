@@ -213,13 +213,13 @@ func evalCompare(left, right eval) (comp int, err error) {
 
 	switch {
 	case compareAsDates(lt, rt):
-		return compareDates(left.(*evalTemporal), right.(*evalTemporal))
+		return compareDates(left.(*evalTemporal), right.(*evalTemporal)), nil
 	case compareAsStrings(lt, rt):
 		return compareStrings(left, right)
 	case compareAsSameNumericType(lt, rt) || compareAsDecimal(lt, rt):
 		return compareNumeric(left, right)
 	case compareAsDateAndString(lt, rt):
-		return compareDateAndString(left, right)
+		return compareDateAndString(left, right), nil
 	case compareAsDateAndNumeric(lt, rt):
 		if sqltypes.IsDateOrTime(lt) {
 			left = evalToNumeric(left)

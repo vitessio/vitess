@@ -98,7 +98,7 @@ func (s fmtMonth) format(dst []byte, t DateTime, prec uint8) []byte {
 
 func (s fmtMonth) parse(tp *timeparts, b string) (out string, ok bool) {
 	tp.month, out, ok = getnum(b, s.zero)
-	if ok && (tp.month < 1 || tp.month > 12) {
+	if ok && (tp.month < 0 || tp.month > 12) {
 		ok = false
 	}
 	return

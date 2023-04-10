@@ -202,3 +202,87 @@ func ParseDateTime(s string) (DateTime, bool) {
 	}
 	return DateTime{}, false
 }
+
+func ParseDateInt64(i int64) (d Date, ok bool) {
+	if i == 0 {
+		return d, true
+	}
+
+	d.day = uint8(i % 100)
+	i /= 100
+	if d.day == 0 || d.day > 31 {
+		return d, false
+	}
+
+	d.month = uint8(i % 100)
+	i /= 100
+	if d.month == 0 || d.month > 12 {
+		return d, false
+	}
+
+	d.year = uint16(i)
+	if d.year == 0 {
+		return d, false
+	}
+	if d.year < 100 {
+		if d.year < 70 {
+			d.year += 2000
+		} else {
+			d.year += 1900
+		}
+	}
+	if d.year < 1000 || d.year > 9999 {
+		return d, false
+	}
+	return d, true
+}
+
+func ParseTimeInt64(i int64) (t Time, ok bool) {
+	if i == 0 {
+		return t, true
+	}
+	neg := false
+	if i < 0 {
+		i = -i
+		neg = true
+	}
+
+	t.second = uint8(i % 100)
+	i /= 100
+	if t.second > 59 {
+		return t, false
+	}
+
+	t.minute = uint8(i % 100)
+	i /= 100
+	if t.minute > 59 {
+		return t, false
+	}
+
+	t.hour = uint16(i % 100)
+	if i/100 != 0 {
+		return t, false
+	}
+	if neg {
+		t.hour |= negMask
+	}
+	return t, true
+}
+
+func ParseDateTimeInt64(i int64) (dt DateTime, ok bool) {
+	t := i % 1000000
+	d := i / 1000000
+
+	if i == 0 {
+		return dt, true
+	}
+	if t == 0 || d == 0 {
+		return dt, false
+	}
+	dt.Time, ok = ParseTimeInt64(t)
+	if !ok {
+		return dt, false
+	}
+	dt.Date, ok = ParseDateInt64(d)
+	return dt, ok
+}

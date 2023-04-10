@@ -34,6 +34,7 @@ func TestParseDate(t *testing.T) {
 		output date
 		err    bool
 	}{
+		{input: "0000-00-00", output: date{}},
 		{input: "2022-10-12", output: date{2022, 10, 12}},
 		{input: "22-10-12", output: date{2022, 10, 12}},
 		{input: "20221012", output: date{2022, 10, 12}},
@@ -95,6 +96,7 @@ func TestParseTime(t *testing.T) {
 		norm   string
 		err    bool
 	}{
+		{input: "00:00:00", norm: "00:00:00", output: testTime{}},
 		{input: "11:12:13", norm: "11:12:13", output: testTime{11, 12, 13, 0, false}},
 		{input: "11:12:13.123456", norm: "11:12:13.123456", output: testTime{11, 12, 13, 123456000, false}},
 		{input: "3 11:12:13", norm: "83:12:13", output: testTime{3*24 + 11, 12, 13, 0, false}},
@@ -179,6 +181,7 @@ func TestParseDateTime(t *testing.T) {
 		output datetime
 		err    bool
 	}{
+		{input: "0000-00-00 00:00:00", output: datetime{}},
 		{input: "2022-10-12 11:12:13", output: datetime{2022, 10, 12, 11, 12, 13, 0}},
 		{input: "2022-10-12 11:12:13.123456", output: datetime{2022, 10, 12, 11, 12, 13, 123456000}},
 		{input: "20221012111213.123456", output: datetime{2022, 10, 12, 11, 12, 13, 123456000}},
