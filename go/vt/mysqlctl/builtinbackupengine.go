@@ -527,13 +527,14 @@ func (be *BuiltinBackupEngine) backupFiles(
 			// unpredictability in my test cases, so in order to avoid that, I am adding this cancellation check.
 			select {
 			case <-ctx.Done():
-				log.Errorf("Context canceled during %q backup", fe.Name)
+				log.Errorf("Context canceled or timed out during %q backup", fe.Name)
 				bh.RecordError(vterrors.Errorf(vtrpc.Code_CANCELED, "context canceled"))
 				return
 			default:
 			}
 
 			if bh.HasErrors() {
+				params.Logger.Infof("failed to backup files due to error.")
 				return
 			}
 
@@ -899,10 +900,12 @@ func (be *BuiltinBackupEngine) restoreFiles(ctx context.Context, params RestoreP
 		go func(i int) {
 			defer wg.Done()
 			fe := &fes[i]
+			//sema.Acquire(ctx, 1)
+			//defer sema.Release(1)
 			// Wait until we are ready to go, return if we encounter an error
 			acqErr := sema.Acquire(ctx, 1)
 			if acqErr != nil {
-				log.Errorf("Unable to acquire semaphore needed to backup file: %s, err: %s", fe.Name, acqErr.Error())
+				log.Errorf("Unable to acquire semaphore needed to restore file: %s, err: %s", fe.Name, acqErr.Error())
 				rec.RecordError(acqErr)
 				return
 			}
@@ -913,13 +916,14 @@ func (be *BuiltinBackupEngine) restoreFiles(ctx context.Context, params RestoreP
 			// unpredictability in my test cases, so in order to avoid that, I am adding this cancellation check.
 			select {
 			case <-ctx.Done():
-				log.Errorf("Context canceled during %q backup", fe.Name)
+				log.Errorf("Context canceled or timed out during %q restore", fe.Name)
 				rec.RecordError(vterrors.Errorf(vtrpc.Code_CANCELED, "context canceled"))
 				return
 			default:
 			}
 
 			if rec.HasErrors() {
+				params.Logger.Infof("Failed to restore files due to error.")
 				return
 			}
 
