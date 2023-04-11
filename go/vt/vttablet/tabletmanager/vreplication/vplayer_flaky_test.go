@@ -27,7 +27,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/spyzhov/ajson"
+	"github.com/nsf/jsondiff"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
@@ -2505,28 +2505,9 @@ func TestTimestamp(t *testing.T) {
 	expectData(t, "t1", [][]string{{"1", want, want}})
 }
 
-func shouldRunJSONTests(t *testing.T, name string) bool {
-	skipTest := true
-	flavors := []string{"mysql80", "mysql57"}
-	for _, flavor := range flavors {
-		if strings.EqualFold(env.Flavor, flavor) {
-			skipTest = false
-			break
-		}
-	}
-	if skipTest {
-		t.Logf("not running %s on %s", name, env.Flavor)
-		return false
-	}
-	return true
-}
-
 // TestPlayerJSONDocs validates more complex and 'large' json docs. It only validates that the data on target matches that on source.
 // TestPlayerTypes, above, also verifies the sql queries applied on the target.
 func TestPlayerJSONDocs(t *testing.T) {
-	if !shouldRunJSONTests(t, "TestPlayerJSONDocs") {
-		return
-	}
 	defer deleteTablet(addTablet(100))
 
 	execStatements(t, []string{
@@ -2603,9 +2584,6 @@ func TestPlayerJSONDocs(t *testing.T) {
 
 // TestPlayerJSONTwoColumns tests for two json columns in a table
 func TestPlayerJSONTwoColumns(t *testing.T) {
-	if !shouldRunJSONTests(t, "TestPlayerJSONTwoColumns") {
-		return
-	}
 	defer deleteTablet(addTablet(100))
 	execStatements(t, []string{
 		"create table vitess_json2(id int auto_increment, val json, val2 json, primary key(id))",
@@ -2878,13 +2856,12 @@ func expectJSON(t *testing.T, table string, values [][]string, id int, exec func
 		if qr.Rows[i][0].ToString() != row[0] {
 			t.Fatalf("Id mismatch: want %s, got %s", qr.Rows[i][0].ToString(), row[0])
 		}
-		got, err := ajson.Unmarshal([]byte(qr.Rows[i][1].ToString()))
-		require.NoError(t, err)
-		want, err := ajson.Unmarshal([]byte(row[1]))
-		require.NoError(t, err)
-		match, err := got.Eq(want)
-		require.NoError(t, err)
-		require.True(t, match)
+
+		opts := jsondiff.DefaultConsoleOptions()
+		compare, s := jsondiff.Compare(qr.Rows[i][1].Raw(), []byte(row[1]), &opts)
+		if compare != jsondiff.FullMatch {
+			t.Errorf("Diff:\n%s\n", s)
+		}
 	}
 }
 
