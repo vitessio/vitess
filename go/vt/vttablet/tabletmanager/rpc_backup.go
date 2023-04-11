@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"time"
+
 	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil"
 
@@ -108,9 +109,9 @@ func (tm *TabletManager) Backup(ctx context.Context, logger logutil.Logger, req 
 			// Find the correct primary tablet and set the replication source,
 			// since the primary could have changed while we executed the backup which can
 			// also affect whether we want to send semi sync acks or not.
-			tabletInfo, err := tm.TopoServer.GetTablet(ctx, tablet.Alias)
+			tabletInfo, err := tm.TopoServer.GetTablet(bgCtx, tablet.Alias)
 			if err != nil {
-				l.Errorf("Failed to fetch updated tablet info, error: %v", topodatapb.TabletType_BACKUP, originalType, err)
+				l.Errorf("Failed to fetch updated tablet info, error: %v", err)
 				return
 			}
 
@@ -119,12 +120,12 @@ func (tm *TabletManager) Backup(ctx context.Context, logger logutil.Logger, req 
 				return
 			}
 
-			shardPrimary, err := topotools.GetShardPrimaryForTablet(ctx, tm.TopoServer, tablet.Tablet)
+			shardPrimary, err := topotools.GetShardPrimaryForTablet(bgCtx, tm.TopoServer, tablet.Tablet)
 			if err != nil {
 				return
 			}
 
-			durabilityName, err := tm.TopoServer.GetKeyspaceDurability(ctx, tablet.Keyspace)
+			durabilityName, err := tm.TopoServer.GetKeyspaceDurability(bgCtx, tablet.Keyspace)
 			if err != nil {
 				l.Errorf("Failed to get durability policy, error: %v", err)
 				return
@@ -135,7 +136,7 @@ func (tm *TabletManager) Backup(ctx context.Context, logger logutil.Logger, req 
 			}
 
 			isSemiSync := reparentutil.IsReplicaSemiSync(durability, shardPrimary.Tablet, tabletInfo.Tablet)
-			if err := tm.SetReplicationSource(ctx, shardPrimary.Alias, 0, "", false, isSemiSync); err != nil {
+			if err := tm.setReplicationSourceLocked(bgCtx, shardPrimary.Alias, 0, "", false, convertBoolToSemiSyncAction(isSemiSync)); err != nil {
 				l.Errorf("Failed to set replication source, error: %v", err)
 			}
 		}()
