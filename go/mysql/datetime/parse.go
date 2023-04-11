@@ -56,7 +56,7 @@ func parsetimeSeconds(tp *timeparts, in string) (out string, ok bool) {
 			return "", false
 		case len(in) == 0:
 			return "", true
-		case len(in) > 2 && in[0] == '.' && isDigit(in, 1):
+		case len(in) > 1 && in[0] == '.' && isDigit(in, 1):
 			n := 2
 			for ; n < len(in) && isDigit(in, n); n++ {
 			}

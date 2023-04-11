@@ -98,6 +98,7 @@ func TestParseTime(t *testing.T) {
 	}{
 		{input: "00:00:00", norm: "00:00:00", output: testTime{}},
 		{input: "11:12:13", norm: "11:12:13", output: testTime{11, 12, 13, 0, false}},
+		{input: "11:12:13.1", norm: "11:12:13.100000", output: testTime{11, 12, 13, 100000000, false}},
 		{input: "11:12:13.123456", norm: "11:12:13.123456", output: testTime{11, 12, 13, 123456000, false}},
 		{input: "3 11:12:13", norm: "83:12:13", output: testTime{3*24 + 11, 12, 13, 0, false}},
 		{input: "3 41:12:13", norm: "113:12:13", output: testTime{3*24 + 41, 12, 13, 0, false}},
