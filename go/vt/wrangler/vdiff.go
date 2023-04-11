@@ -526,9 +526,7 @@ func getColumnCollations(table *tabletmanagerdatapb.TableDefinition) (map[string
 							collationName = defaultTableCollation.Name()
 						}
 					} else { // The table is using the global default charset and collation.
-						if defaultCollation := collations.Default().Get(); defaultCollation != nil {
-							collationName = defaultCollation.Name()
-						}
+						collationName = collations.Default().Get().Name()
 					}
 				}
 			}
