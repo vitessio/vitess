@@ -291,9 +291,11 @@ func (wd *workflowDiffer) initVDiffTables(dbClient binlogplayer.DBClient) error 
 		// Update the table statistics for each table if requested.
 		if wd.opts.CoreOptions.UpdateTableStats {
 			stmt := sqlparser.BuildParsedQuery(sqlAnalyzeTable, wd.ct.vde.dbName, tableName)
+			log.Infof("Updating the table stats for %s.%s using: %q", wd.ct.vde.dbName, tableName, stmt.Query)
 			if _, err := dbClient.ExecuteFetch(stmt.Query, -1); err != nil {
 				return err
 			}
+			log.Infof("Finished updating the table stats for %s.%s", wd.ct.vde.dbName, tableName)
 		}
 		tableIn.WriteString(encodeString(tableName))
 		if n++; n < len(wd.tableDiffers) {
