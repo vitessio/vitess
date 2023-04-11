@@ -35,7 +35,7 @@ type timeparts struct {
 }
 
 func (tp *timeparts) toDateTime() (DateTime, bool) {
-	if tp.year == 0 && tp.month == 0 && tp.day == 0 && tp.hour == 0 && tp.min == 0 && tp.sec == 0 && tp.nsec == 0 {
+	if tp.isZero() {
 		// zero date
 		return DateTime{}, true
 	}

@@ -1259,9 +1259,6 @@ func FnInfo(yield Query) {
 }
 
 func FnDateFormat(yield Query) {
-	// TODO
-	return
-
 	formats := []struct {
 		c    byte
 		expr string
@@ -1287,14 +1284,16 @@ func FnDateFormat(yield Query) {
 		{'S', "LPAD(SECOND(t),2,0)"},
 		{'s', "LPAD(SECOND(t),2,0)"},
 		{'T', ""},
-		{'U', "LPAD(WEEK(d,0),2,0)"},
-		{'u', "LPAD(WEEK(d,1),2,0)"},
-		{'V', "RIGHT(YEARWEEK(d,2),2)"},
-		{'v', "RIGHT(YEARWEEK(d,3),2)"},
+		// TODO
+		// {'U', "LPAD(WEEK(d,0),2,0)"},
+		// {'u', "LPAD(WEEK(d,1),2,0)"},
+		// {'V', "RIGHT(YEARWEEK(d,2),2)"},
+		// {'v', "RIGHT(YEARWEEK(d,3),2)"},
 		{'W', "DAYNAME(d)"},
 		{'w', "DAYOFWEEK(d)-1"},
-		{'X', "LEFT(YEARWEEK(d,2),4)"},
-		{'x', "LEFT(YEARWEEK(d,3),4)"},
+		// TODO
+		// {'X', "LEFT(YEARWEEK(d,2),4)"},
+		// {'x', "LEFT(YEARWEEK(d,3),4)"},
 		{'Y', "YEAR(d)"},
 		{'y', "RIGHT(YEAR(d),2)"},
 		{'%', ""},

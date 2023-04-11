@@ -132,24 +132,19 @@ func (b *builtinDateFormat) eval(env *ExpressionEnv) (eval, error) {
 	if date == nil || format == nil {
 		return nil, nil
 	}
-	panic("TODO")
+	t := evalToDateTime(date)
+	if t == nil {
+		return nil, nil
+	}
 
-	/*
-		t, err := evalToTime(date)
-		if err != nil {
-			return nil, err
-		}
-		f := evalToBinary(date)
-
-		d, err := datetime.Format(f.string(), t, 6)
-		if err != nil {
-			return nil, err
-		}
-		return newEvalText(d, defaultCoercionCollation(b.collate)), nil
-	*/
+	f := evalToBinary(format)
+	d, err := datetime.Format(f.string(), t.dt, datetime.DefaultPrecision)
+	if err != nil {
+		return nil, err
+	}
+	return newEvalText(d, defaultCoercionCollation(b.collate)), nil
 }
 
 func (b *builtinDateFormat) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
-	//TODO implement me
-	panic("implement me")
+	return sqltypes.VarChar, flagNullable
 }

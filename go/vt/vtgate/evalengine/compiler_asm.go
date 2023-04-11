@@ -3079,3 +3079,17 @@ func (asm *assembler) Fn_RandomBytes() {
 		return 1
 	}, "FN RANDOM_BYTES INT64(SP-1)")
 }
+
+func (asm *assembler) Fn_DATE_FORMAT(col collations.TypedCollation) {
+	asm.adjustStack(-1)
+	asm.emit(func(env *ExpressionEnv) int {
+		l := env.vm.stack[env.vm.sp-2].(*evalTemporal)
+		r := env.vm.stack[env.vm.sp-1].(*evalBytes)
+
+		var d []byte
+		d, env.vm.err = datetime.Format(r.string(), l.dt, datetime.DefaultPrecision)
+		env.vm.stack[env.vm.sp-2] = env.vm.arena.newEvalText(d, col)
+		env.vm.sp--
+		return 1
+	}, "FN DATE_FORMAT DATETIME(SP-2), VARBINARY(SP-1)")
+}

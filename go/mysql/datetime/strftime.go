@@ -42,6 +42,9 @@ func compile(ds map[byte]Spec, p string, exec func(Spec)) error {
 		}
 
 		if spec, ok := ds[p[1]]; ok {
+			if spec == nil {
+				return fmt.Errorf(`unsupported format specifier: %%%c`, p[1])
+			}
 			exec(spec)
 		} else {
 			exec(&fmtVerbatim{s: p[1:2]})

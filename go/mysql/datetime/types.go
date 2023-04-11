@@ -173,13 +173,11 @@ func (d Date) Hash(h *vthash.Hasher) {
 }
 
 func (dt Date) Weekday() time.Weekday {
-	// TODO: Implement this
-	return 0
+	return dt.ToStdTime(time.Local).Weekday()
 }
 
 func (dt Date) Yearday() int {
-	// TODO: Implement this
-	return 0
+	return dt.ToStdTime(time.Local).YearDay()
 }
 
 func (d Date) ISOWeek() (int, int) {

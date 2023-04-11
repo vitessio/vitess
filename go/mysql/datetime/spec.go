@@ -66,7 +66,7 @@ var shortMonthNames = []string{
 type fmtWeekdayNameShort struct{}
 
 func (fmtWeekdayNameShort) format(dst []byte, t DateTime, prec uint8) []byte {
-	return append(dst, t.Date.Weekday().String()[3:]...)
+	return append(dst, t.Date.Weekday().String()[:3]...)
 }
 
 func (fmtWeekdayNameShort) parse(_ *timeparts, b string) (out string, ok bool) {
@@ -77,7 +77,7 @@ func (fmtWeekdayNameShort) parse(_ *timeparts, b string) (out string, ok bool) {
 type fmtMonthNameShort struct{}
 
 func (fmtMonthNameShort) format(dst []byte, t DateTime, prec uint8) []byte {
-	return append(dst, time.Month(t.Date.Month()).String()[3:]...)
+	return append(dst, time.Month(t.Date.Month()).String()[:3]...)
 }
 
 func (fmtMonthNameShort) parse(tp *timeparts, b string) (out string, ok bool) {
@@ -111,7 +111,19 @@ func (s fmtMonth) numeric(t DateTime) (int, int) {
 type fmtMonthDaySuffix struct{}
 
 func (fmtMonthDaySuffix) format(dst []byte, t DateTime, prec uint8) []byte {
-	panic("TODO")
+	d := t.Date.Day()
+	dst = appendInt(dst, d, 0)
+
+	switch d % 10 {
+	case 1:
+		return append(dst, "st"...)
+	case 2:
+		return append(dst, "nd"...)
+	case 3:
+		return append(dst, "rd"...)
+	default:
+		return append(dst, "th"...)
+	}
 }
 
 func (d fmtMonthDaySuffix) parse(t *timeparts, bytes string) (string, bool) {
@@ -277,6 +289,7 @@ func (fmtFullTime12) format(dst []byte, t DateTime, prec uint8) []byte {
 	dst = (fmtMin{true}).format(dst, t, prec)
 	dst = append(dst, ':')
 	dst = (fmtSecond{true, false}).format(dst, t, prec)
+	dst = append(dst, ' ')
 	dst = (fmtAMorPM{}).format(dst, t, prec)
 	return dst
 }
