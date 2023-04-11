@@ -173,10 +173,10 @@ func (e *evalBytes) toTemporal() (*evalTemporal, error) {
 }
 
 func (e *evalBytes) toDateBestEffort() datetime.DateTime {
-	if t, ok := datetime.ParseDateTime(e.string()); ok {
+	if t, _ := datetime.ParseDateTime(e.string()); !t.IsZero() {
 		return t
 	}
-	if t, ok := datetime.ParseDate(e.string()); ok {
+	if t, _ := datetime.ParseDate(e.string()); !t.IsZero() {
 		return datetime.DateTime{Date: t}
 	}
 	return datetime.DateTime{}

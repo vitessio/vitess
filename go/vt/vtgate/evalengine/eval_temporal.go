@@ -192,12 +192,18 @@ func evalToTime(e eval) *evalTemporal {
 	case *evalTemporal:
 		return e.toTime()
 	case *evalBytes:
-		if t, ok := datetime.ParseTime(e.string()); ok {
+		if t, _ := datetime.ParseTime(e.string()); !t.IsZero() {
 			return newEvalTime(t)
+		}
+		if dt, _ := datetime.ParseDateTime(e.string()); !dt.IsZero() {
+			return newEvalTime(dt.Time)
 		}
 	case evalNumeric:
 		if t, ok := datetime.ParseTimeInt64(e.toInt64().i); ok {
 			return newEvalTime(t)
+		}
+		if dt, ok := datetime.ParseDateTimeInt64(e.toInt64().i); ok {
+			return newEvalTime(dt.Time)
 		}
 	case *evalJSON:
 		if t, ok := e.Time(); ok {
@@ -212,12 +218,18 @@ func evalToDateTime(e eval) *evalTemporal {
 	case *evalTemporal:
 		return e.toDateTime()
 	case *evalBytes:
-		if t, ok := datetime.ParseDateTime(e.string()); ok {
+		if t, _ := datetime.ParseDateTime(e.string()); !t.IsZero() {
 			return newEvalDateTime(t)
+		}
+		if d, _ := datetime.ParseDate(e.string()); !d.IsZero() {
+			return newEvalDateTime(datetime.DateTime{Date: d})
 		}
 	case evalNumeric:
 		if t, ok := datetime.ParseDateTimeInt64(e.toInt64().i); ok {
 			return newEvalDateTime(t)
+		}
+		if d, ok := datetime.ParseDateInt64(e.toInt64().i); ok {
+			return newEvalDateTime(datetime.DateTime{Date: d})
 		}
 	case *evalJSON:
 		if dt, ok := e.DateTime(); ok {
@@ -232,12 +244,18 @@ func evalToDate(e eval) *evalTemporal {
 	case *evalTemporal:
 		return e.toDate()
 	case *evalBytes:
-		if t, ok := datetime.ParseDate(e.string()); ok {
+		if t, _ := datetime.ParseDate(e.string()); !t.IsZero() {
 			return newEvalDate(t)
+		}
+		if dt, _ := datetime.ParseDateTime(e.string()); !dt.IsZero() {
+			return newEvalDate(dt.Date)
 		}
 	case evalNumeric:
 		if t, ok := datetime.ParseDateInt64(e.toInt64().i); ok {
 			return newEvalDate(t)
+		}
+		if dt, ok := datetime.ParseDateTimeInt64(e.toInt64().i); ok {
+			return newEvalDate(dt.Date)
 		}
 	case *evalJSON:
 		if d, ok := e.Date(); ok {
