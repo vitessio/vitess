@@ -31,6 +31,7 @@ import (
 	"github.com/nsf/jsondiff"
 	"github.com/stretchr/testify/require"
 
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sidecardb"
 
@@ -256,6 +257,7 @@ func TestPlan(t *testing.T) {
 	testFile(t, "info_schema80_cases.json", testOutputTempDir, vschemaWrapper, false)
 	testFile(t, "reference_cases.json", testOutputTempDir, vschemaWrapper, false)
 	testFile(t, "vexplain_cases.json", testOutputTempDir, vschemaWrapper, false)
+	testFile(t, "misc_cases.json", testOutputTempDir, vschemaWrapper, false)
 }
 
 func TestSystemTables57(t *testing.T) {
@@ -577,6 +579,51 @@ type vschemaWrapper struct {
 	sysVarEnabled bool
 	version       plancontext.PlannerVersion
 	enableViews   bool
+}
+
+func (vw *vschemaWrapper) GetPrepareData(stmtName string) *vtgatepb.PrepareData {
+	switch stmtName {
+	case "prep_one_param":
+		return &vtgatepb.PrepareData{
+			PrepareStatement: "select 1 from user where id = :v1",
+			ParamsCount:      1,
+		}
+	case "prep_in_param":
+		return &vtgatepb.PrepareData{
+			PrepareStatement: "select 1 from user where id in (:v1, :v2)",
+			ParamsCount:      2,
+		}
+	case "prep_no_param":
+		return &vtgatepb.PrepareData{
+			PrepareStatement: "select 1 from user",
+			ParamsCount:      0,
+		}
+	}
+	return nil
+}
+
+func (vw *vschemaWrapper) PlanPrepareStatement(ctx context.Context, query string) (*engine.Plan, sqlparser.Statement, error) {
+	plan, err := TestBuilder(query, vw, vw.currentDb())
+	if err != nil {
+		return nil, nil, err
+	}
+	stmt, _, err := sqlparser.Parse2(query)
+	if err != nil {
+		return nil, nil, err
+	}
+	return plan, stmt, nil
+}
+
+func (vw *vschemaWrapper) ClearPrepareData(lowered string) {
+}
+
+func (vw *vschemaWrapper) StorePrepareData(string, *vtgatepb.PrepareData) {}
+
+func (vw *vschemaWrapper) GetUDV(name string) *querypb.BindVariable {
+	if strings.EqualFold(name, "prep_stmt") {
+		return sqltypes.StringBindVariable("select * from user where id in (?, ?, ?)")
+	}
+	return nil
 }
 
 func (vw *vschemaWrapper) IsShardRoutingEnabled() bool {

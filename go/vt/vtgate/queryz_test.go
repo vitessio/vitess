@@ -44,7 +44,7 @@ func TestQueryzHandler(t *testing.T) {
 	_, err := executorExec(executor, sql, nil)
 	require.NoError(t, err)
 	executor.plans.Wait()
-	plan1 := assertCacheContains(t, executor, nil, sql)
+	plan1 := assertCacheContains(t, executor, nil, "select id from `user` where id = 1")
 	plan1.ExecTime = uint64(1 * time.Millisecond)
 
 	// scatter
@@ -52,7 +52,7 @@ func TestQueryzHandler(t *testing.T) {
 	_, err = executorExec(executor, sql, nil)
 	require.NoError(t, err)
 	executor.plans.Wait()
-	plan2 := assertCacheContains(t, executor, nil, sql)
+	plan2 := assertCacheContains(t, executor, nil, "select id from `user`")
 	plan2.ExecTime = uint64(1 * time.Second)
 
 	sql = "insert into user (id, name) values (:id, :name)"
@@ -62,10 +62,10 @@ func TestQueryzHandler(t *testing.T) {
 	})
 	require.NoError(t, err)
 	executor.plans.Wait()
-	plan3 := assertCacheContains(t, executor, nil, sql)
+	plan3 := assertCacheContains(t, executor, nil, "insert into `user`(id, `name`) values (:id, :name)")
 
 	// vindex insert from above execution
-	plan4 := assertCacheContains(t, executor, nil, "insert into name_user_map(name, user_id) values(:name_0, :user_id_0)")
+	plan4 := assertCacheContains(t, executor, nil, "insert into name_user_map(`name`, user_id) values (:name_0, :user_id_0)")
 
 	// same query again should add query counts to existing plans
 	sql = "insert into user (id, name) values (:id, :name)"
@@ -83,7 +83,7 @@ func TestQueryzHandler(t *testing.T) {
 	body, _ := io.ReadAll(resp.Body)
 	planPattern1 := []string{
 		`<tr class="low">`,
-		`<td>select id from user where id = 1</td>`,
+		"<td>select id from `user` where id = 1</td>",
 		`<td>1</td>`,
 		`<td>0.001000</td>`,
 		`<td>1</td>`,
@@ -100,7 +100,7 @@ func TestQueryzHandler(t *testing.T) {
 	checkQueryzHasPlan(t, planPattern1, plan1, body)
 	planPattern2 := []string{
 		`<tr class="high">`,
-		`<td>select id from user</td>`,
+		"<td>select id from `user`</td>",
 		`<td>1</td>`,
 		`<td>1.000000</td>`,
 		`<td>8</td>`,
@@ -117,7 +117,7 @@ func TestQueryzHandler(t *testing.T) {
 	checkQueryzHasPlan(t, planPattern2, plan2, body)
 	planPattern3 := []string{
 		`<tr class="medium">`,
-		`<td>insert into user.*</td>`,
+		"<td>insert into `user`.*</td>",
 		`<td>2</td>`,
 		`<td>0.100000</td>`,
 		`<td>2</td>`,

@@ -15774,7 +15774,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:4766
 		{
-			yyLOCAL = &DeallocateStmt{Type: DeallocateType, Comments: Comments(yyDollar[2].strs).Parsed(), Name: yyDollar[4].identifierCI}
+			yyLOCAL = &DeallocateStmt{Comments: Comments(yyDollar[2].strs).Parsed(), Name: yyDollar[4].identifierCI}
 		}
 		yyVAL.union = yyLOCAL
 	case 895:
@@ -15782,7 +15782,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:4770
 		{
-			yyLOCAL = &DeallocateStmt{Type: DropType, Comments: Comments(yyDollar[2].strs).Parsed(), Name: yyDollar[4].identifierCI}
+			yyLOCAL = &DeallocateStmt{Comments: Comments(yyDollar[2].strs).Parsed(), Name: yyDollar[4].identifierCI}
 		}
 		yyVAL.union = yyLOCAL
 	case 896:

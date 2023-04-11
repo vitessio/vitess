@@ -2707,10 +2707,10 @@ var (
 		output: "deallocate prepare stmt1",
 	}, {
 		input:  "DROP PREPARE stmt1",
-		output: "drop prepare stmt1",
+		output: "deallocate prepare stmt1",
 	}, {
 		input:  "DROP /* comment */ PREPARE stmt1",
-		output: "drop /* comment */ prepare stmt1",
+		output: "deallocate /* comment */ prepare stmt1",
 	}, {
 		input:  `SELECT JSON_PRETTY('{"a":"10","b":"15","x":"25"}')`,
 		output: `select json_pretty('{\"a\":\"10\",\"b\":\"15\",\"x\":\"25\"}') from dual`,

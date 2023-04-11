@@ -1440,18 +1440,6 @@ func (ty IndexHintType) ToString() string {
 }
 
 // ToString returns the type as a string
-func (ty DeallocateStmtType) ToString() string {
-	switch ty {
-	case DeallocateType:
-		return DeallocateStr
-	case DropType:
-		return DropStr
-	default:
-		return "Unknown Deallocate Statement Type"
-	}
-}
-
-// ToString returns the type as a string
 func (ty IndexHintForType) ToString() string {
 	switch ty {
 	case NoForType:
