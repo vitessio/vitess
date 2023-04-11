@@ -17,6 +17,7 @@ limitations under the License.
 package operators
 
 import (
+	"vitess.io/vitess/go/slices2"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
@@ -26,7 +27,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
-// planOffsets will walk the tree top down,
+// planOffsets will walk the tree top down, adding offset information to columns in the tree for use in further optimization,
 func planOffsets(ctx *plancontext.PlanningContext, root ops.Operator) (ops.Operator, error) {
 	visitor := func(in ops.Operator, _ semantics.TableSet, _ bool) (ops.Operator, rewrite.ApplyResult, error) {
 		var err error
@@ -84,6 +85,38 @@ func (a *ApplyJoin) planOffsets(ctx *plancontext.PlanningContext) error {
 		}
 	}
 
+	predicates := sqlparser.SplitAndExpression(nil, a.Predicate)
+	for _, pred := range predicates {
+		col, err := BreakExpressionInLHSandRHS(ctx, pred, TableID(a.LHS))
+		if err != nil {
+			return err
+		}
+		for i, lhsExpr := range col.LHSExprs {
+			offset, err := a.pushColLeft(ctx, aeWrap(lhsExpr))
+			if err != nil {
+				return err
+			}
+			a.Vars[col.BvNames[i]] = offset
+		}
+		lhsColumns := slices2.Map(col.LHSExprs, func(from sqlparser.Expr) *sqlparser.ColName {
+			col, ok := from.(*sqlparser.ColName)
+			if !ok {
+				// todo: there is no good reason to keep this limitation around
+				err = vterrors.VT13001("joins can only compare columns: %s", sqlparser.String(from))
+			}
+			return col
+		})
+		if err != nil {
+			return err
+		}
+		a.LHSColumns = append(a.LHSColumns, lhsColumns...)
+
+		rhs, err := a.RHS.AddPredicate(ctx, col.RHSExpr)
+		if err != nil {
+			return err
+		}
+		a.RHS = rhs
+	}
 	return nil
 }
 
