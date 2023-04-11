@@ -676,25 +676,10 @@ func CellValue(data []byte, pos int, typ byte, metadata uint16, field *querypb.F
 		}
 		pos += int(metadata)
 
-		var limitArray = func(data []byte, limit int) []byte {
-			if len(data) > limit {
-				return data[:limit]
-			}
-			return data
-		}
 		// For JSON, we parse the data, and emit SQL.
 		if typ == TypeJSON {
 			var err error
 			jsonData := data[pos : pos+l]
-
-			//s, err := getJSONValue(jsonData)
-			//if err != nil {
-			//	return sqltypes.NULL, 0, vterrors.Wrapf(err, "error stringifying JSON data %v", limitArray(jsonData, 100))
-			//}
-			//d := []byte(s)
-			_ = limitArray
-
-			// replace ajson-based parser with vitess json parser
 			jsonVal, err := ParseBinaryJSON(jsonData)
 			if err != nil {
 				panic(err)

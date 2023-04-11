@@ -65,7 +65,6 @@ require (
 	github.com/spf13/cobra v1.6.1
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.15.0
-	github.com/spyzhov/ajson v0.7.2
 	github.com/stretchr/testify v1.8.1
 	github.com/tchap/go-patricia v2.3.0+incompatible
 	github.com/tidwall/gjson v1.12.1
