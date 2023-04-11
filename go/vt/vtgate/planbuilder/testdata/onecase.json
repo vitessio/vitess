@@ -1,78 +1,9 @@
 [
   {
     "comment": "Add your test case here for debugging and run go test -run=One.",
-    "query": "select user.col+user.bar from user join user_extra",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select user.col+user.bar from user join user_extra",
-      "Instructions": {
-        "OperatorType": "Join",
-        "Variant": "Join",
-        "JoinColumnIndexes": "L:0",
-        "TableName": "`user`_user_extra",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select `user`.col + `user`.bar from `user` where 1 != 1",
-            "Query": "select `user`.col + `user`.bar from `user`",
-            "Table": "`user`"
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select 1 from user_extra where 1 != 1",
-            "Query": "select 1 from user_extra",
-            "Table": "user_extra"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
-      "QueryType": "SELECT",
-      "Original": "select user.col+user.bar from user join user_extra",
-      "Instructions": {
-        "OperatorType": "Join",
-        "Variant": "Join",
-        "JoinColumnIndexes": "L:0",
-        "TableName": "`user`_user_extra",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select `user`.col + `user`.bar from `user` where 1 != 1",
-            "Query": "select `user`.col + `user`.bar from `user`",
-            "Table": "`user`"
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select 1 from user_extra where 1 != 1",
-            "Query": "select 1 from user_extra",
-            "Table": "user_extra"
-          }
-        ]
-      },
-      "TablesUsed": [
-        "user.user",
-        "user.user_extra"
-      ]
+    "query": "",
+    "plan": {
+
     }
   }
 ]

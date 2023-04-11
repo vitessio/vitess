@@ -37,7 +37,7 @@ func planHorizons(ctx *plancontext.PlanningContext, root ops.Operator) (ops.Oper
 	visitor := func(in ops.Operator, _ semantics.TableSet, isRoot bool) (ops.Operator, rewrite.ApplyResult, error) {
 		switch in := in.(type) {
 		case *Horizon:
-			op, err := pushOrExpandHorizon(ctx, in)
+			op, err := pushOrExpandHorizon(ctx, in, isRoot)
 			if err != nil {
 				return nil, false, err
 			}
@@ -139,13 +139,19 @@ func tryPushingDownProjection(
 		}
 
 		if len(lhsCols) > 0 {
-			lhsProj := NewProjection(src.LHS)
+			lhsProj, err := createProjection(src.LHS)
+			if err != nil {
+				return nil, false, err
+			}
 			lhsProj.ColumnNames = lhsNames
 			lhsProj.Columns = lhsCols
 			src.LHS = lhsProj
 		}
 		if len(rhsColumns) > 0 {
-			rhsProj := NewProjection(src.RHS)
+			rhsProj, err := createProjection(src.RHS)
+			if err != nil {
+				return nil, false, err
+			}
 			rhsProj.ColumnNames = rhsNames
 			rhsProj.Columns = rhsColumns
 			src.RHS = rhsProj
@@ -192,6 +198,7 @@ func planOffsets(ctx *plancontext.PlanningContext, root ops.Operator) (ops.Opera
 
 func (a *ApplyJoin) planOffsets(ctx *plancontext.PlanningContext) error {
 	for _, col := range a.ColumnsAST {
+		// Read the type description for JoinColumn to understand the following code
 		for i, lhsExpr := range col.LHSExprs {
 			offset, err := a.pushColLeft(ctx, aeWrap(lhsExpr))
 			if err != nil {
@@ -277,7 +284,7 @@ func planOffsetsForProjection(ctx *plancontext.PlanningContext, op *Projection) 
 	return sp, rewrite.NewTree, nil
 }
 
-func pushOrExpandHorizon(ctx *plancontext.PlanningContext, in *Horizon) (ops.Operator, error) {
+func pushOrExpandHorizon(ctx *plancontext.PlanningContext, in *Horizon, isRoot bool) (ops.Operator, error) {
 	rb, isRoute := in.Source.(*Route)
 	if isRoute && rb.IsSingleShard() && in.Select.GetLimit() == nil {
 		return rewrite.Swap(in, rb)
@@ -300,7 +307,7 @@ func pushOrExpandHorizon(ctx *plancontext.PlanningContext, in *Horizon) (ops.Ope
 		return rewrite.Swap(in, rb)
 	}
 
-	return expandHorizon(ctx, qp, in)
+	return expandHorizon(ctx, qp, in, isRoot)
 }
 
 // horizonLike should be removed. we should use Horizon for both these cases
@@ -331,14 +338,14 @@ func planSelectExpressions(ctx *plancontext.PlanningContext, in horizonLike) (op
 		return rewrite.Swap(in, rb)
 	}
 
-	return expandHorizon(ctx, qp, in)
+	return expandHorizon(ctx, qp, in, false)
 }
 
 func planDerived(ctx *plancontext.PlanningContext, in *Derived, isRoot bool) (ops.Operator, error) {
 	return planSelectExpressions(ctx, in)
 }
 
-func expandHorizon(ctx *plancontext.PlanningContext, qp *QueryProjection, horizon horizonLike) (ops.Operator, error) {
+func expandHorizon(ctx *plancontext.PlanningContext, qp *QueryProjection, horizon horizonLike, isRoot bool) (ops.Operator, error) {
 	sel, isSel := horizon.selectStatement().(*sqlparser.Select)
 	if !isSel {
 		return nil, errNotHorizonPlanned

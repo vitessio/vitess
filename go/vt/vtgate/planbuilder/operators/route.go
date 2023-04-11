@@ -522,6 +522,19 @@ func (r *Route) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Ex
 	return r, err
 }
 
+func createProjection(src ops.Operator) (*Projection, error) {
+	proj := &Projection{Source: src}
+	cols, err := src.GetColumns()
+	if err != nil {
+		return nil, err
+	}
+	for _, col := range cols {
+		proj.Columns = append(proj.Columns, Expr{E: col})
+		proj.ColumnNames = append(proj.ColumnNames, sqlparser.String(col))
+	}
+	return proj, nil
+}
+
 func (r *Route) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr) (ops.Operator, int, error) {
 	removeKeyspaceFromSelectExpr(expr)
 
@@ -537,7 +550,10 @@ func (r *Route) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.Alia
 
 	proj, exists := r.Source.(*Projection)
 	if !exists {
-		proj = &Projection{Source: r.Source}
+		proj, err = createProjection(r.Source)
+		if err != nil {
+			return nil, 0, err
+		}
 		r.Source = proj
 
 		// add the existing columns of route to the projection.
