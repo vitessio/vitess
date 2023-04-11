@@ -275,8 +275,8 @@ func TestParserParse(t *testing.T) {
 
 	t.Run("invalid-number", func(t *testing.T) {
 		_, err := p.Parse("123+456")
-		if err != nil {
-			t.Fatalf("unexpected error when parsing int")
+		if err == nil {
+			t.Fatalf("unexpected lack of error when parsing int")
 		}
 	})
 
