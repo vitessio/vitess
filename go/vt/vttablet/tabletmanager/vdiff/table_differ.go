@@ -90,12 +90,6 @@ func (td *tableDiffer) initialize(ctx context.Context) error {
 	}
 	defer dbClient.Close()
 
-	if td.wd.opts.CoreOptions.UpdateTableStats {
-		if err := td.updateTableStats(dbClient); err != nil {
-			return vterrors.Wrapf(err, "error updating table stats for table %s", td.table.Name)
-		}
-	}
-
 	targetKeyspace := td.wd.ct.vde.thisTablet.Keyspace
 	log.Infof("Locking target keyspace %s", targetKeyspace)
 	ctx, unlock, lockErr := td.wd.ct.ts.LockKeyspace(ctx, targetKeyspace, "vdiff")
