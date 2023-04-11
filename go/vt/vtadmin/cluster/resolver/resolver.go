@@ -391,6 +391,7 @@ func (r *resolver) resolve() (*grpcresolver.State, error) {
 	defer cancel()
 
 	addrs, err := r.discoverAddrs(ctx, r.opts.DiscoveryTags)
+	log.Infof("Fetched discovery adresses for cluster %s and component %s: %+v", r.cluster, r.component, addrs)
 	if err != nil {
 		return nil, fmt.Errorf("failed to discover %ss (cluster %s): %w", r.component, r.cluster, err)
 	}
