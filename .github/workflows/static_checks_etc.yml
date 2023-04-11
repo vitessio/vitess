@@ -165,7 +165,7 @@ jobs:
 
       - name: Install golangci-lint
         if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.go_files == 'true'
-        run: go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.51.2
+        run: go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.52.2
 
       - name: Clean Env
         if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.go_files == 'true'
@@ -177,7 +177,7 @@ jobs:
 
       - name: Run golangci-lint
         if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.go_files == 'true'
-        run: $(go env GOPATH)/bin/golangci-lint run go/... || exit 1
+        run: $(go env GOPATH)/bin/golangci-lint run go/... --timeout 10m || exit 1
 
       - name: Run go mod tidy
         if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.go_files == 'true'
