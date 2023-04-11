@@ -44,7 +44,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v3
         with:
-          go-version: 1.20.2
+          go-version: 1.20.3
 
       - name: Get base dependencies
         run: |
