@@ -247,7 +247,7 @@ func TestExecuteBackupWithCanceledContext(t *testing.T) {
 }
 
 // TestExecuteRestoreWithCanceledContext tests the ability of the restore function to gracefully handle cases where errors
-// occur due to various reasons, such as context time-outs. The process should not panic in these situations.
+// occur due to various reasons, such as context timed-out. The process should not panic in these situations.
 func TestExecuteRestoreWithTimedOutContext(t *testing.T) {
 	// Set up local backup directory
 	id := fmt.Sprintf("%d", time.Now().UnixNano())
@@ -365,10 +365,7 @@ func TestExecuteRestoreWithTimedOutContext(t *testing.T) {
 	// Let the context timed out.
 	time.Sleep(1 * time.Second)
 	bm, err = be.ExecuteRestore(timedOutCtx, restoreParams, bh)
-	// ExecuteRestore should fail but since we are passing context.backgroun() in builtinbackupengine.go
-	// @executeRestoreFullBackup (https://github.com/vitessio/vitess/blob/main/go/vt/mysqlctl/builtinbackupengine.go#L806),
-	// therefore, ExecuteRestore will still pass. Once fixed (https://github.com/vitessio/vitess/issues/12830)
-	// the below asserts will start failing.
+	// ExecuteRestore should fail.
 	assert.Error(t, err)
 	assert.Nil(t, bm)
 	// error message can contain any combination of "context deadline exceeded" or "context canceled"
