@@ -301,6 +301,10 @@ func TestCompilerSingle(t *testing.T) {
 			expression: `time '10:04:58' < '101:34:58'`,
 			result:     `INT64(1)`,
 		},
+		{
+			expression: `1.7 / 173458`,
+			result:     `DECIMAL(0.00001)`,
+		},
 	}
 
 	for _, tc := range testCases {
