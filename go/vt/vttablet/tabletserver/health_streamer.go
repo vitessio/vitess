@@ -27,6 +27,8 @@ import (
 
 	"github.com/spf13/pflag"
 
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/planbuilder"
+
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sidecardb"
 
@@ -91,7 +93,6 @@ type healthStreamer struct {
 	signalWhenSchemaChange bool
 
 	viewsEnabled bool
-	views        map[string]string
 }
 
 func newHealthStreamer(env tabletenv.Env, alias *topodatapb.TabletAlias) *healthStreamer {
@@ -124,7 +125,6 @@ func newHealthStreamer(env tabletenv.Env, alias *topodatapb.TabletAlias) *health
 		conns:                  pool,
 		signalWhenSchemaChange: env.Config().SignalWhenSchemaChange,
 		viewsEnabled:           env.Config().EnableViews,
-		views:                  map[string]string{},
 	}
 	hs.unhealthyThreshold.Store(env.Config().Healthcheck.UnhealthyThresholdSeconds.Get().Nanoseconds())
 	return hs
@@ -349,7 +349,12 @@ func (hs *healthStreamer) reload() error {
 
 	views, err := hs.getChangedViewNames(ctx, conn)
 	if err != nil {
-		return err
+		if len(tables) == 0 {
+			return err
+		}
+		// there are some tables, we need to send that in the health stream.
+		// making views to nil will prevent any views notification.
+		views = nil
 	}
 
 	// no change detected
@@ -428,54 +433,127 @@ func (hs *healthStreamer) getChangedTableNames(ctx context.Context, conn *connpo
 	return tables, nil
 }
 
-func (hs *healthStreamer) getChangedViewNames(ctx context.Context, conn *connpool.DBConn) ([]string, error) {
+type viewDefAndStmt struct {
+	def  string
+	stmt string
+}
+
+func (hs *healthStreamer) getChangedViewNames(ctx context.Context, conn *connpool.DBConn) (views []string, err error) {
 	if !hs.viewsEnabled {
 		return nil, nil
 	}
-	var changedViews []string
-	views := map[string]string{}
 
+	/* Retrieve changed views */
 	callback := func(qr *sqltypes.Result) error {
 		for _, row := range qr.Rows {
-			viewName := row[0].ToString()
-			lastUpdTime := row[1].ToString()
-			views[viewName] = lastUpdTime
+			view := row[0].ToString()
+			views = append(views, view)
 		}
-
 		return nil
 	}
 	alloc := func() *sqltypes.Result { return &sqltypes.Result{} }
 	bufferSize := 1000
-	err := conn.Stream(ctx, sqlparser.BuildParsedQuery(mysql.SelectAllViews, sidecardb.GetIdentifier()).Query,
-		callback, alloc, bufferSize, 0)
+
+	viewChangeQuery := sqlparser.BuildParsedQuery(mysql.DetectViewChange, sidecardb.GetIdentifier()).Query
+	err = conn.Stream(ctx, viewChangeQuery, callback, alloc, bufferSize, 0)
+	if err != nil {
+		return
+	}
+
+	// If no change detected, then return
+	if len(views) == 0 {
+		return
+	}
+
+	/* Retrieve changed views definition */
+	viewsDefStmt := map[string]*viewDefAndStmt{}
+	callback = func(qr *sqltypes.Result) error {
+		for _, row := range qr.Rows {
+			viewsDefStmt[row[0].ToString()] = &viewDefAndStmt{def: row[1].ToString()}
+		}
+		return nil
+	}
+
+	var viewsBV *querypb.BindVariable
+	viewsBV, err = sqltypes.BuildBindVariable(views)
+	if err != nil {
+		return
+	}
+	bv := map[string]*querypb.BindVariable{"tableNames": viewsBV}
+
+	var viewsDefQuery string
+	viewsDefQuery = sqlparser.BuildParsedQuery(mysql.FetchViewDefinition).Query
+	var stmt sqlparser.Statement
+	stmt, err = sqlparser.Parse(viewsDefQuery)
+	if err != nil {
+		return
+	}
+	viewsDefQuery, err = planbuilder.GenerateFullQuery(stmt).GenerateQuery(bv, nil)
+	if err != nil {
+		return
+	}
+	err = conn.Stream(ctx, viewsDefQuery, callback, alloc, bufferSize, 0)
+	if err != nil {
+		return
+	}
+
+	/* Retrieve create statement for views */
+	for k, v := range viewsDefStmt {
+		res, err := conn.Exec(ctx, sqlparser.BuildParsedQuery(mysql.FetchCreateStatement, k).Query, 1, false)
+		if err != nil {
+			return nil, err
+		}
+		for _, row := range res.Rows {
+			v.stmt = row[1].ToString()
+		}
+	}
+
+	/* update the views copy table */
+	var clearViewQuery string
+	clearViewQuery = sqlparser.BuildParsedQuery(mysql.DeleteFromViewsTable, sidecardb.GetIdentifier()).Query
+	stmt, err = sqlparser.Parse(clearViewQuery)
+	if err != nil {
+		return
+	}
+	clearViewQuery, err = planbuilder.GenerateFullQuery(stmt).GenerateQuery(bv, nil)
+	if err != nil {
+		return
+	}
+
+	insertViewsQuery := sqlparser.BuildParsedQuery(mysql.InsertIntoViewsTable, sidecardb.GetIdentifier()).Query
+	stmt, err = sqlparser.Parse(insertViewsQuery)
+	if err != nil {
+		return
+	}
+	insertViewsParsedQuery := planbuilder.GenerateFullQuery(stmt)
+	if err != nil {
+		return
+	}
+
+	var insertViewQuery string
+	// Reload the views in a transaction.
+	_, err = conn.Exec(ctx, "begin", 1, false)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Exec(ctx, "rollback", 1, false)
+
+	_, err = conn.Exec(ctx, clearViewQuery, 1, false)
 	if err != nil {
 		return nil, err
 	}
 
-	// If no change detected, then return
-	if len(views) == 0 && len(hs.views) == 0 {
-		return nil, nil
-	}
-
-	for viewName, lastUpdTime := range views {
-		t, exists := hs.views[viewName]
-		if !exists { // new view added
-			changedViews = append(changedViews, viewName)
-			continue
+	for k, v := range viewsDefStmt {
+		bv["table_name"] = sqltypes.StringBindVariable(k)
+		bv["create_statement"] = sqltypes.StringBindVariable(v.stmt)
+		bv["view_definition"] = sqltypes.StringBindVariable(v.def)
+		insertViewQuery, err = insertViewsParsedQuery.GenerateQuery(bv, nil)
+		_, err = conn.Exec(ctx, insertViewQuery, 1, false)
+		if err != nil {
+			return
 		}
-		if t != lastUpdTime { // view updated
-			changedViews = append(changedViews, viewName)
-		}
-		delete(hs.views, viewName)
 	}
 
-	// views deleted
-	for viewName := range hs.views {
-		changedViews = append(changedViews, viewName)
-	}
-
-	// update hs.views with latest view info
-	hs.views = views
-
-	return changedViews, nil
+	_, err = conn.Exec(ctx, "commit", 1, false)
+	return
 }

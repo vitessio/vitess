@@ -190,7 +190,7 @@ func TestReloadSchema(t *testing.T) {
 			"product",
 			"users",
 		))
-	db.AddQuery(sqlparser.BuildParsedQuery(mysql.SelectAllViews, sidecardb.GetIdentifier()).Query, &sqltypes.Result{})
+	db.AddQuery(sqlparser.BuildParsedQuery(mysql.DetectViewChange, sidecardb.GetIdentifier()).Query, &sqltypes.Result{})
 
 	hs.InitDBConfig(target, configs.DbaWithDB())
 	hs.Open()
@@ -303,7 +303,7 @@ func TestInitialReloadSchema(t *testing.T) {
 			"product",
 			"users",
 		))
-	db.AddQuery(sqlparser.BuildParsedQuery(mysql.SelectAllViews, sidecardb.GetIdentifier()).Query, &sqltypes.Result{})
+	db.AddQuery(sqlparser.BuildParsedQuery(mysql.DetectViewChange, sidecardb.GetIdentifier()).Query, &sqltypes.Result{})
 
 	hs.InitDBConfig(target, configs.DbaWithDB())
 	hs.Open()
@@ -348,8 +348,16 @@ func TestReloadView(t *testing.T) {
 	target := &querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
 	configs := config.DB
 
+	db.AddQuery("begin", &sqltypes.Result{})
+	db.AddQuery("commit", &sqltypes.Result{})
+	db.AddQuery("rollback", &sqltypes.Result{})
 	db.AddQuery(sqlparser.BuildParsedQuery(mysql.DetectSchemaChangeOnlyBaseTable, sidecardb.GetIdentifier()).Query, &sqltypes.Result{})
-	db.AddQuery(sqlparser.BuildParsedQuery(mysql.SelectAllViews, sidecardb.GetIdentifier()).Query, &sqltypes.Result{})
+	db.AddQuery(sqlparser.BuildParsedQuery(mysql.DetectViewChange, sidecardb.GetIdentifier()).Query, &sqltypes.Result{})
+	db.AddQuery(sqlparser.BuildParsedQuery(mysql.DeleteFromViewsTable, sidecardb.GetIdentifier()).Query, &sqltypes.Result{})
+	db.AddQuery("select table_name, view_definition from information_schema.views where table_schema = database() and table_name in ('view_a', 'view_b')", &sqltypes.Result{})
+	db.AddQuery("select table_name, view_definition from information_schema.views where table_schema = database() and table_name in ('view_b')", &sqltypes.Result{})
+	db.AddQuery("select table_name, view_definition from information_schema.views where table_schema = database() and table_name in ('view_a', 'view_b', 'view_c')", &sqltypes.Result{})
+	db.AddQuery(mysql.FetchCreateStatement, &sqltypes.Result{})
 
 	hs.InitDBConfig(target, configs.DbaWithDB())
 	hs.Open()
@@ -360,23 +368,23 @@ func TestReloadView(t *testing.T) {
 		exp []string
 	}{{
 		// view_a and view_b added.
-		res: sqltypes.MakeTestResult(sqltypes.MakeTestFields("table_name|updated_at", "varchar|timestamp"),
-			"view_a|2023-01-12 14:23:33", "view_b|2023-01-12 15:23:33"),
+		res: sqltypes.MakeTestResult(sqltypes.MakeTestFields("table_name", "varchar"),
+			"view_a", "view_b"),
 		exp: []string{"view_a", "view_b"},
 	}, {
 		// view_b modified
-		res: sqltypes.MakeTestResult(sqltypes.MakeTestFields("table_name|updated_at", "varchar|timestamp"),
-			"view_a|2023-01-12 14:23:33", "view_b|2023-01-12 18:23:33"),
+		res: sqltypes.MakeTestResult(sqltypes.MakeTestFields("table_name", "varchar"),
+			"view_b"),
 		exp: []string{"view_b"},
 	}, {
 		// view_a modified, view_b deleted and view_c added.
-		res: sqltypes.MakeTestResult(sqltypes.MakeTestFields("table_name|updated_at", "varchar|timestamp"),
-			"view_a|2023-01-12 16:23:33", "view_c|2023-01-12 18:23:33"),
+		res: sqltypes.MakeTestResult(sqltypes.MakeTestFields("table_name", "varchar"),
+			"view_a", "view_b", "view_c"),
 		exp: []string{"view_a", "view_b", "view_c"},
 	}}
 
 	// setting first test case result.
-	db.AddQuery(sqlparser.BuildParsedQuery(mysql.SelectAllViews, sidecardb.GetIdentifier()).Query, tcases[0].res)
+	db.AddQuery(sqlparser.BuildParsedQuery(mysql.DetectViewChange, sidecardb.GetIdentifier()).Query, tcases[0].res)
 
 	var tcCount atomic.Int32
 	ch := make(chan struct{})
@@ -399,7 +407,7 @@ func TestReloadView(t *testing.T) {
 			if tcCount.Load() == int32(len(tcases)) {
 				return
 			}
-			db.AddQuery(sqlparser.BuildParsedQuery(mysql.SelectAllViews, sidecardb.GetIdentifier()).Query, tcases[tcCount.Load()].res)
+			db.AddQuery(sqlparser.BuildParsedQuery(mysql.DetectViewChange, sidecardb.GetIdentifier()).Query, tcases[tcCount.Load()].res)
 		case <-time.After(1000 * time.Second):
 			t.Fatalf("timed out")
 		}
