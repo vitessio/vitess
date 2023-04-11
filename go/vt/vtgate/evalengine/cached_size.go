@@ -573,6 +573,18 @@ func (cached *builtinDatabase) CachedSize(alloc bool) int64 {
 	size += cached.CallExpr.CachedSize(false)
 	return size
 }
+func (cached *builtinDateFormat) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field CallExpr vitess.io/vitess/go/vt/vtgate/evalengine.CallExpr
+	size += cached.CallExpr.CachedSize(false)
+	return size
+}
 func (cached *builtinDegrees) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -1100,6 +1112,16 @@ func (cached *evalInt64) CachedSize(alloc bool) int64 {
 	size := int64(0)
 	if alloc {
 		size += int64(8)
+	}
+	return size
+}
+func (cached *evalTemporal) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(16)
 	}
 	return size
 }
