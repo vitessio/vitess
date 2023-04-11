@@ -191,7 +191,9 @@ func (shard *Shard) Replica() *Vttablet {
 
 // CtrlCHandler handles the teardown for the ctrl-c.
 func (cluster *LocalProcessCluster) CtrlCHandler() {
+	cluster.mx.Lock()
 	cluster.Context, cluster.CancelFunc = context.WithCancel(context.Background())
+	cluster.mx.Unlock()
 
 	c := make(chan os.Signal, 2)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
