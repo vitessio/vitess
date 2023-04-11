@@ -93,13 +93,13 @@ func (c *compiler) compileConvert(conv *ConvertExpr) (ctype, error) {
 		}
 
 	case "DATE":
-		fallthrough
+		convt = c.compileToDate(arg, 1)
 
 	case "DATETIME":
-		fallthrough
+		convt = c.compileToDateTime(arg, 1)
 
 	case "TIME":
-		fallthrough
+		convt = c.compileToTime(arg, 1)
 
 	default:
 		return ctype{}, c.unsupported(conv)

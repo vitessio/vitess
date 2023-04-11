@@ -1071,6 +1071,48 @@ func (asm *assembler) Convert_xu(offset int) {
 	}, "CONV (SP-%d), UINT64", offset)
 }
 
+func (asm *assembler) Convert_xD(offset int) {
+	asm.emit(func(env *ExpressionEnv) int {
+		// Need to explicitly check here or we otherwise
+		// store a nil wrapper in an interface vs. a direct
+		// nil.
+		d := evalToDate(env.vm.stack[env.vm.sp-offset])
+		if d == nil {
+			env.vm.stack[env.vm.sp-offset] = nil
+		} else {
+			env.vm.stack[env.vm.sp-offset] = d
+		}
+		return 1
+	}, "CONV (SP-%d), DATE", offset)
+}
+
+func (asm *assembler) Convert_xDT(offset int) {
+	asm.emit(func(env *ExpressionEnv) int {
+		// Need to explicitly check here or we otherwise
+		// store a nil wrapper in an interface vs. a direct
+		// nil.
+		dt := evalToDateTime(env.vm.stack[env.vm.sp-offset])
+		if dt == nil {
+			env.vm.stack[env.vm.sp-offset] = nil
+		} else {
+			env.vm.stack[env.vm.sp-offset] = dt
+		}
+		return 1
+	}, "CONV (SP-%d), DATETIME", offset)
+}
+
+func (asm *assembler) Convert_xT(offset int) {
+	asm.emit(func(env *ExpressionEnv) int {
+		t := evalToTime(env.vm.stack[env.vm.sp-offset])
+		if t == nil {
+			env.vm.stack[env.vm.sp-offset] = nil
+		} else {
+			env.vm.stack[env.vm.sp-offset] = t
+		}
+		return 1
+	}, "CONV (SP-%d), TIME", offset)
+}
+
 func (asm *assembler) Div_dd() {
 	asm.adjustStack(-1)
 
