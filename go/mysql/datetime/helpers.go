@@ -148,13 +148,14 @@ func isDigit[bytes []byte | string](s bytes, i int) bool {
 // isNumber reports whether s is an integer or decimal number.
 // Returns the length of the integral part of the number if it's
 // a valid number.
+// It accepts trailing garbage but only after a dot.
 func isNumber[bytes []byte | string](s bytes) (int, bool) {
 	var dot bool
 	pos := -1
 	for i := 0; i < len(s); i++ {
 		if !isDigit(s, i) {
 			if dot {
-				return 0, false
+				return i, true
 			}
 			if s[i] == '.' {
 				dot = true

@@ -17,7 +17,9 @@ limitations under the License.
 package datetime
 
 import (
-	"strings"
+	"math"
+
+	"vitess.io/vitess/go/mysql/json/fastparse"
 )
 
 func parsetimeHours(tp *timeparts, in string) (out string, ok bool) {
@@ -56,8 +58,8 @@ func parsetimeSeconds(tp *timeparts, in string) (out string, ok bool) {
 			return "", false
 		case len(in) == 0:
 			return "", true
-		case len(in) > 1 && in[0] == '.' && isDigit(in, 1):
-			n := 2
+		case len(in) > 1 && in[0] == '.':
+			n := 1
 			for ; n < len(in) && isDigit(in, n); n++ {
 			}
 			tp.nsec, ok = parseNanoseconds(in, n)
@@ -70,34 +72,43 @@ func parsetimeSeconds(tp *timeparts, in string) (out string, ok bool) {
 func parsetimeAny(tp *timeparts, in string) (out string, ok bool) {
 	for i := 0; i < len(in); i++ {
 		switch r := in[i]; {
-		case (r >= '0' && r <= '9') || r == '.':
-			continue
 		case isSpace(r):
 			tp.day, in, ok = getnum(in, false)
-			if !ok || tp.day > 34 {
+			if !ok || tp.day > 34 || !isSpace(in[0]) {
+				tp.day = 0
 				return "", false
 			}
+
 			for len(in) > 0 && isSpace(in[0]) {
 				in = in[1:]
 			}
 			return parsetimeHours(tp, in)
 		case r == ':':
 			return parsetimeHours(tp, in)
-		default:
-			return "", false
 		}
 	}
 	return parsetimeNoDelimiters(tp, in)
 }
 
 func parsetimeNoDelimiters(tp *timeparts, in string) (out string, ok bool) {
-	integral := strings.IndexByte(in, '.')
-	if integral < 0 {
-		integral = len(in)
+	var integral int
+	for ; integral < len(in); integral++ {
+		if in[integral] == '.' || !isDigit(in, integral) {
+			break
+		}
 	}
 
 	switch integral {
-	case 5, 6:
+	default:
+		// MySQL limits this to a numeric value that fits in a 32-bit unsigned integer.
+		i, _ := fastparse.ParseInt64(in[:integral], 10)
+		if i > math.MaxUint32 {
+			return "", false
+		}
+		if i < -math.MaxUint32 {
+			return "", false
+		}
+
 		tp.hour, in, ok = getnuml(in, integral-4)
 		if !ok {
 			return
@@ -120,7 +131,7 @@ func parsetimeNoDelimiters(tp *timeparts, in string) (out string, ok bool) {
 		if !ok || tp.sec > 59 {
 			return "", false
 		}
-	default:
+	case 0:
 		return "", false
 	}
 
@@ -130,6 +141,17 @@ func parsetimeNoDelimiters(tp *timeparts, in string) (out string, ok bool) {
 		}
 		tp.nsec, ok = parseNanoseconds(in, n)
 		in = in[n:]
+	}
+
+	// Maximum time is 838:59:59, so we have to clamp
+	// it to that value here if we otherwise successfully
+	// parser the time.
+	if tp.day > 34 || tp.day == 34 && tp.hour > 22 {
+		tp.day = 34
+		tp.hour = 22
+		tp.min = 59
+		tp.sec = 59
+		ok = false
 	}
 
 	return in, ok
@@ -147,12 +169,9 @@ func ParseTime(in string) (t Time, ok bool) {
 
 	var tp timeparts
 	in, ok = parsetimeAny(&tp, in)
-	if !ok || len(in) > 0 {
-		return Time{}, false
-	}
 
 	hours := uint16(24*tp.day + tp.hour)
-	if neg {
+	if !tp.isZero() && neg {
 		hours |= negMask
 	}
 
@@ -161,7 +180,7 @@ func ParseTime(in string) (t Time, ok bool) {
 		minute:     uint8(tp.min),
 		second:     uint8(tp.sec),
 		nanosecond: uint32(tp.nsec),
-	}, true
+	}, ok && len(in) == 0
 }
 
 func ParseDate(s string) (Date, bool) {

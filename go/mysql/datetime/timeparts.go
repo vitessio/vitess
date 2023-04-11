@@ -73,17 +73,6 @@ func (tp *timeparts) toDateTime() (DateTime, bool) {
 	}, true
 }
 
-func (tp *timeparts) initYear(t time.Time) {
-	if tp.year == -1 {
-		var month time.Month
-		tp.year, month, tp.day = t.Date()
-		tp.month = int(month)
-	}
-}
-
-func (tp *timeparts) initHour(t time.Time) {
-	if tp.hour == -1 {
-		tp.hour, tp.min, tp.sec = t.Clock()
-		tp.nsec = t.Nanosecond()
-	}
+func (tp *timeparts) isZero() bool {
+	return tp.year == 0 && tp.month == 0 && tp.day == 0 && tp.hour == 0 && tp.min == 0 && tp.sec == 0 && tp.nsec == 0
 }

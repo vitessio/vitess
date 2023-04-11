@@ -97,18 +97,26 @@ func TestParseTime(t *testing.T) {
 		err    bool
 	}{
 		{input: "00:00:00", norm: "00:00:00", output: testTime{}},
+		{input: "00:00:00foo", norm: "00:00:00", output: testTime{}, err: true},
 		{input: "11:12:13", norm: "11:12:13", output: testTime{11, 12, 13, 0, false}},
+		{input: "11:12:13foo", norm: "11:12:13", output: testTime{11, 12, 13, 0, false}, err: true},
 		{input: "11:12:13.1", norm: "11:12:13.100000", output: testTime{11, 12, 13, 100000000, false}},
+		{input: "11:12:13.foo", norm: "11:12:13", output: testTime{11, 12, 13, 0, false}, err: true},
+		{input: "11:12:13.1foo", norm: "11:12:13.100000", output: testTime{11, 12, 13, 100000000, false}, err: true},
 		{input: "11:12:13.123456", norm: "11:12:13.123456", output: testTime{11, 12, 13, 123456000, false}},
+		{input: "11:12:13.123456foo", norm: "11:12:13.123456", output: testTime{11, 12, 13, 123456000, false}, err: true},
 		{input: "3 11:12:13", norm: "83:12:13", output: testTime{3*24 + 11, 12, 13, 0, false}},
+		{input: "3 11:12:13foo", norm: "83:12:13", output: testTime{3*24 + 11, 12, 13, 0, false}, err: true},
 		{input: "3 41:12:13", norm: "113:12:13", output: testTime{3*24 + 41, 12, 13, 0, false}},
-		{input: "35 11:12:13", err: true},
+		{input: "3 41:12:13foo", norm: "113:12:13", output: testTime{3*24 + 41, 12, 13, 0, false}, err: true},
+		{input: "35 11:12:13", norm: "00:00:00", err: true},
 		{input: "11:12", norm: "11:12:00", output: testTime{11, 12, 0, 0, false}},
 		{input: "5 11:12", norm: "131:12:00", output: testTime{5*24 + 11, 12, 0, 0, false}},
 		{input: "-2 11:12", norm: "-59:12:00", output: testTime{2*24 + 11, 12, 0, 0, true}},
-		{input: "--2 11:12", err: true},
+		{input: "--2 11:12", norm: "00:00:00", err: true},
+		{input: "nonsense", norm: "00:00:00", err: true},
 		{input: "2 11", norm: "59:00:00", output: testTime{2*24 + 11, 0, 0, 0, false}},
-		{input: "2 -11", err: true},
+		{input: "2 -11", norm: "48:00:00", output: testTime{2 * 24, 0, 0, 0, false}, err: true},
 		{input: "13", norm: "00:00:13", output: testTime{0, 0, 13, 0, false}},
 		{input: "111213", norm: "11:12:13", output: testTime{11, 12, 13, 0, false}},
 		{input: "111213.123456", norm: "11:12:13.123456", output: testTime{11, 12, 13, 123456000, false}},
@@ -123,36 +131,61 @@ func TestParseTime(t *testing.T) {
 		{input: "1111", norm: "00:11:11", output: testTime{0, 11, 11, 0, false}},
 		{input: "11111", norm: "01:11:11", output: testTime{1, 11, 11, 0, false}},
 		{input: "111111", norm: "11:11:11", output: testTime{11, 11, 11, 0, false}},
+		{input: "1foo", norm: "00:00:01", output: testTime{0, 0, 1, 0, false}, err: true},
+		{input: "11foo", norm: "00:00:11", output: testTime{0, 0, 11, 0, false}, err: true},
+		{input: "111foo", norm: "00:01:11", output: testTime{0, 1, 11, 0, false}, err: true},
+		{input: "1111foo", norm: "00:11:11", output: testTime{0, 11, 11, 0, false}, err: true},
+		{input: "11111foo", norm: "01:11:11", output: testTime{1, 11, 11, 0, false}, err: true},
+		{input: "111111foo", norm: "11:11:11", output: testTime{11, 11, 11, 0, false}, err: true},
+		{input: "1111111foo", norm: "111:11:11", output: testTime{111, 11, 11, 0, false}, err: true},
 		{input: "-1", norm: "-00:00:01", output: testTime{0, 0, 1, 0, true}},
 		{input: "-11", norm: "-00:00:11", output: testTime{0, 0, 11, 0, true}},
 		{input: "-111", norm: "-00:01:11", output: testTime{0, 1, 11, 0, true}},
 		{input: "-1111", norm: "-00:11:11", output: testTime{0, 11, 11, 0, true}},
 		{input: "-11111", norm: "-01:11:11", output: testTime{1, 11, 11, 0, true}},
 		{input: "-111111", norm: "-11:11:11", output: testTime{11, 11, 11, 0, true}},
+		{input: "-1111111", norm: "-111:11:11", output: testTime{111, 11, 11, 0, true}},
 		{input: "1", norm: "00:00:01", output: testTime{0, 0, 1, 0, false}},
 		{input: "11", norm: "00:00:11", output: testTime{0, 0, 11, 0, false}},
 		{input: "111", norm: "00:01:11", output: testTime{0, 1, 11, 0, false}},
 		{input: "1111", norm: "00:11:11", output: testTime{0, 11, 11, 0, false}},
 		{input: "11111", norm: "01:11:11", output: testTime{1, 11, 11, 0, false}},
 		{input: "111111", norm: "11:11:11", output: testTime{11, 11, 11, 0, false}},
+		{input: "1111111", norm: "111:11:11", output: testTime{111, 11, 11, 0, false}},
 		{input: "-1.1", norm: "-00:00:01.100000", output: testTime{0, 0, 1, 100000000, true}},
 		{input: "-11.1", norm: "-00:00:11.100000", output: testTime{0, 0, 11, 100000000, true}},
 		{input: "-111.1", norm: "-00:01:11.100000", output: testTime{0, 1, 11, 100000000, true}},
 		{input: "-1111.1", norm: "-00:11:11.100000", output: testTime{0, 11, 11, 100000000, true}},
 		{input: "-11111.1", norm: "-01:11:11.100000", output: testTime{1, 11, 11, 100000000, true}},
 		{input: "-111111.1", norm: "-11:11:11.100000", output: testTime{11, 11, 11, 100000000, true}},
+		{input: "-1111111.1", norm: "-111:11:11.100000", output: testTime{111, 11, 11, 100000000, true}},
 		{input: "1.1", norm: "00:00:01.100000", output: testTime{0, 0, 1, 100000000, false}},
 		{input: "11.1", norm: "00:00:11.100000", output: testTime{0, 0, 11, 100000000, false}},
 		{input: "111.1", norm: "00:01:11.100000", output: testTime{0, 1, 11, 100000000, false}},
 		{input: "1111.1", norm: "00:11:11.100000", output: testTime{0, 11, 11, 100000000, false}},
 		{input: "11111.1", norm: "01:11:11.100000", output: testTime{1, 11, 11, 100000000, false}},
 		{input: "111111.1", norm: "11:11:11.100000", output: testTime{11, 11, 11, 100000000, false}},
+		{input: "1111111.1", norm: "111:11:11.100000", output: testTime{111, 11, 11, 100000000, false}},
+		{input: "2000-01-01 12:34:58", norm: "00:00:00", err: true},
+		{input: "20000101", norm: "838:59:59", output: testTime{838, 59, 59, 0, false}, err: true},
+		{input: "-20000101", norm: "-838:59:59", output: testTime{838, 59, 59, 0, true}, err: true},
+		{input: "999995959", norm: "838:59:59", output: testTime{838, 59, 59, 0, false}, err: true},
+		{input: "-999995959", norm: "-838:59:59", output: testTime{838, 59, 59, 0, true}, err: true},
+		{input: "4294965959", norm: "838:59:59", output: testTime{838, 59, 59, 0, false}, err: true},
+		{input: "-4294965959", norm: "-838:59:59", output: testTime{838, 59, 59, 0, true}, err: true},
+		{input: "4294975959", norm: "00:00:00", err: true},
+		{input: "-4294975959", norm: "00:00:00", err: true},
 	}
 
 	for _, test := range tests {
 		t.Run(test.input, func(t *testing.T) {
 			got, ok := ParseTime(test.input)
 			if test.err {
+				assert.Equal(t, test.output.hour, got.Hour())
+				assert.Equal(t, test.output.minute, got.Minute())
+				assert.Equal(t, test.output.second, got.Second())
+				assert.Equal(t, test.output.nanosecond, got.Nanosecond())
+				assert.Equal(t, test.norm, string(got.AppendFormat(nil, 6)))
 				assert.Falsef(t, ok, "did not fail to parse %s", test.input)
 				return
 			}
