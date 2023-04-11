@@ -95,8 +95,8 @@ func (v *Value) marshalSQLInternal(top bool, dst []byte) []byte {
 			dst = append(dst, "CAST("...)
 		}
 		dst = append(dst, "time '"...)
-		dst = append(dst, "'"...)
 		dst = append(dst, v.MarshalTime()...)
+		dst = append(dst, "'"...)
 		if top {
 			dst = append(dst, " as JSON)"...)
 		}
