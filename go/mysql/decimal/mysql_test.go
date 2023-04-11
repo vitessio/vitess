@@ -470,7 +470,7 @@ func TestFormatAndRound(t *testing.T) {
 					got := string(d.formatFast(int(prec), true, false))
 
 					if expect != got {
-						t.Errorf("base: %de%d prec %d\nwant: %q\ngot:  %q", base, exp, prec, expect, got)
+						t.Errorf("base: %de%d prec %d\nwant: %q\ngot:  %q", b, exp, prec, expect, got)
 					}
 				}
 			}
