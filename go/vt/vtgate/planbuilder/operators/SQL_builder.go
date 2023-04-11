@@ -325,7 +325,11 @@ func buildQuery(op ops.Operator, qb *queryBuilder) error {
 
 		qb.clearProjections()
 		for i, column := range op.Columns {
-			qb.addProjection(&sqlparser.AliasedExpr{Expr: column.GetExpr(), As: sqlparser.NewIdentifierCI(op.ColumnNames[i])})
+			ae := &sqlparser.AliasedExpr{Expr: column.GetExpr()}
+			if op.ColumnNames[i] != "" {
+				ae.As = sqlparser.NewIdentifierCI(op.ColumnNames[i])
+			}
+			qb.addProjection(ae)
 		}
 	case *ApplyJoin:
 		err := buildQuery(op.LHS, qb)

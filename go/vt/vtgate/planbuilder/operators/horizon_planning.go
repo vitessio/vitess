@@ -366,7 +366,11 @@ func expandHorizon(ctx *plancontext.PlanningContext, qp *QueryProjection, horizo
 			return nil, errNotHorizonPlanned
 		}
 		proj.Columns = append(proj.Columns, Expr{E: expr.Expr})
-		proj.ColumnNames = append(proj.ColumnNames, expr.ColumnName())
+		colName := ""
+		if !expr.As.IsEmpty() {
+			colName = expr.ColumnName()
+		}
+		proj.ColumnNames = append(proj.ColumnNames, colName)
 	}
 
 	return proj, nil
