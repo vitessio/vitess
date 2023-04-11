@@ -670,13 +670,9 @@ type (
 	// DeallocateStmt represents a Deallocate Statement
 	// More info available on https://dev.mysql.com/doc/refman/8.0/en/deallocate-prepare.html
 	DeallocateStmt struct {
-		Type     DeallocateStmtType
 		Comments *ParsedComments
 		Name     IdentifierCI
 	}
-
-	// DeallocateStmtType is an enum to get types of deallocate
-	DeallocateStmtType int8
 
 	// IntervalTypes is an enum to get types of intervals
 	IntervalTypes int8
@@ -2767,6 +2763,16 @@ type (
 		AxisOrderOpt Expr
 	}
 
+	// GeomFormatType is an enum to get the types of geom format functions with possible values: BinaryFormat TextFormat
+
+	GeomFormatType int8
+
+	GeomFormatExpr struct {
+		FormatType   GeomFormatType
+		Geom         Expr
+		AxisOrderOpt Expr
+	}
+
 	AggrFunc interface {
 		Expr
 		AggrName() string
@@ -3101,6 +3107,7 @@ func (*MultiPointExpr) iExpr()                     {}
 func (*MultiLinestringExpr) iExpr()                {}
 func (*GeomFromTextExpr) iExpr()                   {}
 func (*GeomFromWKBExpr) iExpr()                    {}
+func (*GeomFormatExpr) iExpr()                     {}
 
 // iCallable marks all expressions that represent function calls
 func (*FuncExpr) iCallable()                           {}
@@ -3162,6 +3169,7 @@ func (*MultiPointExpr) iCallable()                     {}
 func (*MultiLinestringExpr) iCallable()                {}
 func (*GeomFromTextExpr) iCallable()                   {}
 func (*GeomFromWKBExpr) iCallable()                    {}
+func (*GeomFormatExpr) iCallable()                     {}
 
 func (*Sum) iCallable()       {}
 func (*Min) iCallable()       {}

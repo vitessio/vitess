@@ -42,8 +42,8 @@ var (
 
 	// DontEscape tells you if a character should not be escaped.
 	DontEscape = byte(255)
-
-	nullstr = []byte("null")
+	NullStr    = "null"
+	NullBytes  = []byte(NullStr)
 
 	// ErrIncompatibleTypeCast indicates a casting problem
 	ErrIncompatibleTypeCast = errors.New("Cannot convert value to desired type")
@@ -383,7 +383,7 @@ func (v Value) String() string {
 func (v Value) EncodeSQL(b BinWriter) {
 	switch {
 	case v.typ == Null:
-		b.Write(nullstr)
+		b.Write(NullBytes)
 	case v.IsQuoted():
 		encodeBytesSQL(v.val, b)
 	case v.typ == Bit:
@@ -398,7 +398,7 @@ func (v Value) EncodeSQL(b BinWriter) {
 func (v Value) EncodeSQLStringBuilder(b *strings.Builder) {
 	switch {
 	case v.typ == Null:
-		b.Write(nullstr)
+		b.Write(NullBytes)
 	case v.IsQuoted():
 		encodeBytesSQLStringBuilder(v.val, b)
 	case v.typ == Bit:
@@ -413,7 +413,7 @@ func (v Value) EncodeSQLStringBuilder(b *strings.Builder) {
 func (v Value) EncodeSQLBytes2(b *bytes2.Buffer) {
 	switch {
 	case v.typ == Null:
-		b.Write(nullstr)
+		b.Write(NullBytes)
 	case v.IsQuoted():
 		encodeBytesSQLBytes2(v.val, b)
 	case v.typ == Bit:
@@ -427,7 +427,7 @@ func (v Value) EncodeSQLBytes2(b *bytes2.Buffer) {
 func (v Value) EncodeASCII(b BinWriter) {
 	switch {
 	case v.typ == Null:
-		b.Write(nullstr)
+		b.Write(NullBytes)
 	case v.IsQuoted() || v.typ == Bit:
 		encodeBytesASCII(v.val, b)
 	default:
@@ -509,7 +509,7 @@ func (v Value) MarshalJSON() ([]byte, error) {
 	case v.IsQuoted() || v.typ == Bit:
 		return json.Marshal(v.ToString())
 	case v.typ == Null:
-		return nullstr, nil
+		return NullBytes, nil
 	}
 	return v.val, nil
 }

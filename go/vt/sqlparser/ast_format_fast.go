@@ -1384,8 +1384,7 @@ func (node *ExecuteStmt) formatFast(buf *TrackedBuffer) {
 
 // formatFast formats the node.
 func (node *DeallocateStmt) formatFast(buf *TrackedBuffer) {
-	buf.WriteString(node.Type.ToString())
-	buf.WriteByte(' ')
+	buf.WriteString("deallocate ")
 	node.Comments.formatFast(buf)
 	buf.WriteString("prepare ")
 	node.Name.formatFast(buf)
@@ -3706,6 +3705,18 @@ func (node *GeomFromWKBExpr) formatFast(buf *TrackedBuffer) {
 		buf.WriteString(", ")
 		buf.printExpr(node, node.Srid, true)
 	}
+	if node.AxisOrderOpt != nil {
+		buf.WriteString(", ")
+		buf.printExpr(node, node.AxisOrderOpt, true)
+	}
+	buf.WriteByte(')')
+}
+
+// formatFast formats the node
+func (node *GeomFormatExpr) formatFast(buf *TrackedBuffer) {
+	buf.WriteString(node.FormatType.ToString())
+	buf.WriteByte('(')
+	buf.printExpr(node, node.Geom, true)
 	if node.AxisOrderOpt != nil {
 		buf.WriteString(", ")
 		buf.printExpr(node, node.AxisOrderOpt, true)

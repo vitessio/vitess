@@ -15,6 +15,7 @@
  */
 import { getShardsByState, getShardSortRange, ShardRange, ShardsByState, ShardState } from './keyspaces';
 import { vtadmin as pb } from '../proto/vtadmin';
+import { describe, it, expect } from 'vitest';
 
 describe('getShardsByState', () => {
     const tests: {

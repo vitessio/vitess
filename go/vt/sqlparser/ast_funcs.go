@@ -1440,18 +1440,6 @@ func (ty IndexHintType) ToString() string {
 }
 
 // ToString returns the type as a string
-func (ty DeallocateStmtType) ToString() string {
-	switch ty {
-	case DeallocateType:
-		return DeallocateStr
-	case DropType:
-		return DropStr
-	default:
-		return "Unknown Deallocate Statement Type"
-	}
-}
-
-// ToString returns the type as a string
 func (ty IndexHintForType) ToString() string {
 	switch ty {
 	case NoForType:
@@ -2256,6 +2244,18 @@ func AndExpressions(exprs ...Expr) Expr {
 
 // Equals is the default Comparator for AST expressions.
 var Equals = &Comparator{}
+
+// ToString returns the type as a string
+func (ty GeomFormatType) ToString() string {
+	switch ty {
+	case BinaryFormat:
+		return BinaryFormatStr
+	case TextFormat:
+		return TextFormatStr
+	default:
+		return "Unknown GeomFormatType"
+	}
+}
 
 // ToString returns the type as a string
 func (ty GeomFromWktType) ToString() string {

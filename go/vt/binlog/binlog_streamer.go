@@ -18,15 +18,15 @@ package binlog
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"strings"
 
 	"google.golang.org/protobuf/proto"
 
-	"context"
-
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/binlog"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/dbconfigs"
@@ -758,7 +758,7 @@ func writeValuesAsSQL(sql *sqlparser.TrackedBuffer, tce *tableCacheEntry, rs *my
 		}
 
 		// We have real data.
-		value, l, err := mysql.CellValue(data, pos, tce.tm.Types[c], tce.tm.Metadata[c], &querypb.Field{Type: tce.ti.Fields[c].Type})
+		value, l, err := binlog.CellValue(data, pos, tce.tm.Types[c], tce.tm.Metadata[c], &querypb.Field{Type: tce.ti.Fields[c].Type})
 		if err != nil {
 			return keyspaceIDCell, nil, err
 		}
@@ -766,7 +766,7 @@ func writeValuesAsSQL(sql *sqlparser.TrackedBuffer, tce *tableCacheEntry, rs *my
 		if err != nil {
 			return sqltypes.Value{}, nil, err
 		}
-		if value.Type() == querypb.Type_TIMESTAMP && !bytes.HasPrefix(vBytes, mysql.ZeroTimestamp) {
+		if value.Type() == querypb.Type_TIMESTAMP && !bytes.HasPrefix(vBytes, binlog.ZeroTimestamp) {
 			// Values in the binary log are UTC. Let's convert them
 			// to whatever timezone the connection is using,
 			// so MySQL properly converts them back to UTC.
@@ -823,7 +823,7 @@ func writeIdentifiersAsSQL(sql *sqlparser.TrackedBuffer, tce *tableCacheEntry, r
 		sql.WriteByte('=')
 
 		// We have real data.
-		value, l, err := mysql.CellValue(data, pos, tce.tm.Types[c], tce.tm.Metadata[c], &querypb.Field{Type: tce.ti.Fields[c].Type})
+		value, l, err := binlog.CellValue(data, pos, tce.tm.Types[c], tce.tm.Metadata[c], &querypb.Field{Type: tce.ti.Fields[c].Type})
 		if err != nil {
 			return keyspaceIDCell, nil, err
 		}
@@ -831,7 +831,7 @@ func writeIdentifiersAsSQL(sql *sqlparser.TrackedBuffer, tce *tableCacheEntry, r
 		if err != nil {
 			return keyspaceIDCell, nil, err
 		}
-		if value.Type() == querypb.Type_TIMESTAMP && !bytes.HasPrefix(vBytes, mysql.ZeroTimestamp) {
+		if value.Type() == querypb.Type_TIMESTAMP && !bytes.HasPrefix(vBytes, binlog.ZeroTimestamp) {
 			// Values in the binary log are UTC. Let's convert them
 			// to whatever timezone the connection is using,
 			// so MySQL properly converts them back to UTC.

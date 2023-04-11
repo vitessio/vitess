@@ -39,12 +39,19 @@ jobs:
           if [ -z "${output}" ]; then
             exit 0
           fi
-          echo "create-pr=true" >> $GITHUB_OUTPUT
-
+          
           go_version=$(go run ./go/tools/go-upgrade/go-upgrade.go get go-version)
           bootstrap_version=$(go run ./go/tools/go-upgrade/go-upgrade.go get bootstrap-version)
           echo "go-version=${go_version}" >> $GITHUB_OUTPUT
           echo "bootstrap-version=${bootstrap_version}" >> $GITHUB_OUTPUT
+
+          # Check if the PR already exists, if it does then do not create new PR.
+          gh pr list -S "is:open [${{ matrix.branch }}] Upgrade the Golang version to go${go_version}" | grep "OPEN"
+          if [ $? -eq 0 ]; then
+            exit 0
+          fi
+
+          echo "create-pr=true" >> $GITHUB_OUTPUT
 
       - name: Create Pull Request
         if: steps.detect-and-update.outputs.create-pr == 'true'

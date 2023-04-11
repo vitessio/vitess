@@ -5,7 +5,9 @@
 - **[Major Changes](#major-changes)**
   - **[Breaking Changes](#breaking-changes)**
     - [Dedicated stats for VTGate Prepare operations](#dedicated-vtgate-prepare-stats)
+    - [VTAdmin web migrated from create-react-app to vite](#migrated-vtadmin)
     - [Keyspace name validation in TopoServer](#keyspace-name-validation)
+    - [Shard name validation in TopoServer](#shard-name-validation)
   - **[New command line flags and behavior](#new-flag)**
     - [Builtin backup: read buffering flags](#builtin-backup-read-buffering-flags)
   - **[New stats](#new-stats)**
@@ -13,6 +15,7 @@
     - [VTtablet Error count with code ](#vttablet-error-count-with-code)
     - [VReplication stream status for Prometheus](#vreplication-stream-status-for-prometheus)
   - **[Deprecations and Deletions](#deprecations-and-deletions)**
+    - [Deprecated Flags](#deprecated-flags)
     - [Deprecated Stats](#deprecated-stats)
   - **[VTTablet](#vttablet)**
     - [VTTablet: Initializing all replicas with super_read_only](#vttablet-initialization)
@@ -51,12 +54,25 @@ Here is a (condensed) example of stats output:
 }
 ```
 
+#### <a id="migrated-vtadmin"/>VTAdmin web migrated to vite
+Previously, VTAdmin web used the Create React App framework to test, build, and serve the application. In v17, Create React App has been removed, and [Vite](https://vitejs.dev/) is used in its place. Some of the main changes include:
+- Vite uses `VITE_*` environment variables instead of `REACT_APP_*` environment variables
+- Vite uses `import.meta.env` in place of `process.env`
+- [Vitest](https://vitest.dev/) is used in place of Jest for testing
+- Our protobufjs generator now produces an es6 module instead of commonjs to better work with Vite's defaults
+- `public/index.html` has been moved to root directory in web/vtadmin
 
 #### <a id="keyspace-name-validation"> Keyspace name validation in TopoServer
 
 Prior to v17, it was possible to create a keyspace with invalid characters, which would then be inaccessible to various cluster management operations.
 
 Keyspace names may no longer contain the forward slash ("/") character, and TopoServer's `GetKeyspace` and `CreateKeyspace` methods return an error if given such a name.
+
+#### <a id="shard-name-validation"> Shard name validation in TopoServer
+
+Prior to v17, it was possible to create a shard name with invalid characters, which would then be inaccessible to various cluster management operations.
+
+Shard names may no longer contain the forward slash ("/") character, and TopoServer's `CreateShard` method returns an error if given such a name.
 
 ### <a id="new-flag"/> New command line flags and behavior
 
@@ -227,6 +243,10 @@ vttablet_v_replication_stream_state{counts="1",state="Running",workflow="commerc
 * Auto-population of DDL revert actions and tables at execution-time has been removed. This is now handled entirely at enqueue-time.
 * Backwards-compatibility for failed migrations without a `completed_timestamp` has been removed (see https://github.com/vitessio/vitess/issues/8499).
 * The deprecated `Key`, `Name`, `Up`, and `TabletExternallyReparentedTimestamp` fields were removed from the JSON representation of `TabletHealth` structures.
+
+### <a id="deprecated-flags"/>Deprecated Command Line Flags
+
+* Flag `vtctld_addr` has been deprecated and will be deleted in a future release. This affects the `vtgate`, `vttablet` and `vtcombo` binaries.
 
 ### <a id="deprecated-stats"/>Deprecated Stats
 

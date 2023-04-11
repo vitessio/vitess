@@ -60,8 +60,14 @@ func (e *Executor) newExecute(
 		return err
 	}
 
-	// 2: Create a plan for the query
-	plan, stmt, err := e.getPlan(ctx, vcursor, query, comments, bindVars, safeSession, logStats)
+	// 2: Parse and Validate query
+	stmt, reservedVars, err := parseAndValidateQuery(query)
+	if err != nil {
+		return err
+	}
+
+	// 3: Create a plan for the query
+	plan, err := e.getPlan(ctx, vcursor, query, stmt, comments, bindVars, reservedVars, e.normalize, logStats)
 	execStart := e.logPlanningFinished(logStats, plan)
 
 	if err != nil {

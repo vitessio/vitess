@@ -18,6 +18,12 @@ package evalengine
 
 import (
 	"bytes"
+	"crypto/md5"
+	"crypto/rand"
+	"crypto/sha1"
+	"crypto/sha256"
+	"crypto/sha512"
+	"encoding/hex"
 	"errors"
 	"hash/crc32"
 	"math"
@@ -984,10 +990,10 @@ func (asm *assembler) Convert_nj(offset int, isBool bool) {
 			case 1:
 				env.vm.stack[env.vm.sp-offset] = json.ValueTrue
 			default:
-				env.vm.stack[env.vm.sp-offset] = json.NewNumber(intArg.ToRawBytes())
+				env.vm.stack[env.vm.sp-offset] = json.NewNumber(string(intArg.ToRawBytes()), false)
 			}
 		} else {
-			env.vm.stack[env.vm.sp-offset] = json.NewNumber(arg.ToRawBytes())
+			env.vm.stack[env.vm.sp-offset] = json.NewNumber(string(arg.ToRawBytes()), false)
 		}
 		return 1
 	}, "CONV numeric(SP-%d), JSON")
@@ -2069,7 +2075,7 @@ func (asm *assembler) Fn_JSON_KEYS(jp *json.Path) {
 			j := doc.(*evalJSON)
 			if obj, ok := j.Object(); ok {
 				var keys []*json.Value
-				obj.Visit(func(key []byte, _ *json.Value) {
+				obj.Visit(func(key string, _ *json.Value) {
 					keys = append(keys, json.NewString(key))
 				})
 				env.vm.stack[env.vm.sp-1] = json.NewArray(keys)
@@ -2090,7 +2096,7 @@ func (asm *assembler) Fn_JSON_KEYS(jp *json.Path) {
 			})
 			if obj != nil {
 				var keys []*json.Value
-				obj.Visit(func(key []byte, _ *json.Value) {
+				obj.Visit(func(key string, _ *json.Value) {
 					keys = append(keys, json.NewString(key))
 				})
 				env.vm.stack[env.vm.sp-1] = json.NewArray(keys)
@@ -2105,9 +2111,7 @@ func (asm *assembler) Fn_JSON_KEYS(jp *json.Path) {
 func (asm *assembler) Fn_JSON_OBJECT(args int) {
 	asm.adjustStack(-(args - 1))
 	asm.emit(func(env *ExpressionEnv) int {
-		j := json.NewObject()
-		obj, _ := j.Object()
-
+		var obj json.Object
 		for sp := env.vm.sp - args; sp < env.vm.sp; sp += 2 {
 			key := env.vm.stack[sp]
 			val := env.vm.stack[sp+1]
@@ -2119,7 +2123,7 @@ func (asm *assembler) Fn_JSON_OBJECT(args int) {
 
 			obj.Set(key.(*evalBytes).string(), val.(*evalJSON), json.Set)
 		}
-		env.vm.stack[env.vm.sp-args] = j
+		env.vm.stack[env.vm.sp-args] = json.NewObject(obj)
 		env.vm.sp -= args - 1
 		return 1
 	}, "FN JSON_ARRAY (SP-%d)...(SP-1)", args)
@@ -2990,4 +2994,89 @@ func (asm *assembler) Fn_Version() {
 		env.vm.sp++
 		return 1
 	}, "FN VERSION")
+}
+
+func (asm *assembler) Fn_MD5(col collations.TypedCollation) {
+	asm.emit(func(env *ExpressionEnv) int {
+		arg := env.vm.stack[env.vm.sp-1].(*evalBytes)
+
+		sum := md5.Sum(arg.bytes)
+		buf := make([]byte, hex.EncodedLen(len(sum)))
+		hex.Encode(buf, sum[:])
+
+		arg.tt = int16(sqltypes.VarChar)
+		arg.bytes = buf
+		arg.col = col
+		return 1
+	}, "FN MD5 VARBINARY(SP-1)")
+}
+
+func (asm *assembler) Fn_SHA1(col collations.TypedCollation) {
+	asm.emit(func(env *ExpressionEnv) int {
+		arg := env.vm.stack[env.vm.sp-1].(*evalBytes)
+
+		sum := sha1.Sum(arg.bytes)
+		buf := make([]byte, hex.EncodedLen(len(sum)))
+		hex.Encode(buf, sum[:])
+
+		arg.tt = int16(sqltypes.VarChar)
+		arg.bytes = buf
+		arg.col = col
+		return 1
+	}, "FN SHA1 VARBINARY(SP-1)")
+}
+
+func (asm *assembler) Fn_SHA2(col collations.TypedCollation) {
+	asm.adjustStack(-1)
+	asm.emit(func(env *ExpressionEnv) int {
+		arg := env.vm.stack[env.vm.sp-2].(*evalBytes)
+		bits := env.vm.stack[env.vm.sp-1].(*evalInt64)
+
+		var sum []byte
+		switch bits.i {
+		case 224:
+			s := sha256.Sum224(arg.bytes)
+			sum = s[:]
+		case 0, 256:
+			s := sha256.Sum256(arg.bytes)
+			sum = s[:]
+		case 384:
+			s := sha512.Sum384(arg.bytes)
+			sum = s[:]
+		case 512:
+			s := sha512.Sum512(arg.bytes)
+			sum = s[:]
+		default:
+			env.vm.stack[env.vm.sp-2] = nil
+			env.vm.sp--
+			return 1
+		}
+		buf := make([]byte, hex.EncodedLen(len(sum)))
+		hex.Encode(buf, sum[:])
+
+		arg.tt = int16(sqltypes.VarChar)
+		arg.bytes = buf
+		arg.col = col
+		env.vm.sp--
+		return 1
+	}, "FN SHA2 VARBINARY(SP-2), INT64(SP-1)")
+}
+
+func (asm *assembler) Fn_RandomBytes() {
+	asm.emit(func(env *ExpressionEnv) int {
+		size := env.vm.stack[env.vm.sp-1].(*evalInt64)
+		if size.i < 1 || size.i > 1024 {
+			env.vm.stack[env.vm.sp-1] = nil
+			return 1
+		}
+		buf := make([]byte, size.i)
+		_, env.vm.err = rand.Read(buf)
+		if env.vm.err != nil {
+			env.vm.stack[env.vm.sp-1] = nil
+			return 1
+		}
+
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalBinary(buf)
+		return 1
+	}, "FN RANDOM_BYTES INT64(SP-1)")
 }
