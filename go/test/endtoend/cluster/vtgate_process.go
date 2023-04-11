@@ -84,6 +84,7 @@ func (vtgate *VtgateProcess) Setup() (err error) {
 		"--tablet_types_to_wait", vtgate.TabletTypesToWait,
 		"--service_map", vtgate.ServiceMap,
 		"--mysql_auth_server_impl", vtgate.MySQLAuthServerImpl,
+		"--gateway_initial_tablet_timeout", "2m",
 	}
 	// If no explicit mysql_server_version has been specified then we autodetect
 	// the MySQL version that will be used for the test and base the vtgate's
@@ -142,7 +143,7 @@ func (vtgate *VtgateProcess) Setup() (err error) {
 		}
 	}()
 
-	timeout := time.Now().Add(60 * time.Second)
+	timeout := time.Now().Add(3 * time.Minute)
 	for time.Now().Before(timeout) {
 		if vtgate.WaitForStatus() {
 			return nil
