@@ -696,7 +696,7 @@ func (v *Value) MarshalTime() string {
 		seconds := (diff / time.Second)
 		fmt.Fprintf(&b, ":%02d", seconds)
 		diff -= seconds * time.Second
-		fmt.Fprintf(&b, ".%06d", diff)
+		fmt.Fprintf(&b, ".%06d", diff/1000)
 		return b.String()
 	}
 	return ""
