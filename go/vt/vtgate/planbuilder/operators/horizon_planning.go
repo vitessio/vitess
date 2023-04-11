@@ -168,9 +168,9 @@ func stopAtRoute(operator ops.Operator) rewrite.VisitRule {
 	return rewrite.VisitRule(!isRoute)
 }
 
-func pushOrExpandHorizon(ctx *plancontext.PlanningContext, in *Horizon, isRoot bool) (ops.Operator, error) {
-	rb, isRoute := in.Source.(*Route)
-	if isRoute && rb.IsSingleShard() && in.Select.GetLimit() == nil {
+func pushOrExpandHorizon(ctx *plancontext.PlanningContext, in horizonLike, isRoot bool) (ops.Operator, error) {
+	rb, isRoute := in.src().(*Route)
+	if isRoute && rb.IsSingleShard() && in.selectStatement().GetLimit() == nil {
 		return rewrite.Swap(in, rb)
 	}
 
@@ -185,7 +185,7 @@ func pushOrExpandHorizon(ctx *plancontext.PlanningContext, in *Horizon, isRoot b
 	}
 
 	needsOrdering := len(qp.OrderExprs) > 0
-	canPushDown := isRoute && sel.Having == nil && !needsOrdering
+	canPushDown := isRoute && sel.Having == nil && !needsOrdering && !qp.NeedsAggregation()
 
 	if canPushDown {
 		return rewrite.Swap(in, rb)
@@ -201,32 +201,8 @@ type horizonLike interface {
 	src() ops.Operator
 }
 
-func planSelectExpressions(ctx *plancontext.PlanningContext, in horizonLike) (ops.Operator, error) {
-	sel, isSel := in.selectStatement().(*sqlparser.Select)
-	if !isSel {
-		return nil, errNotHorizonPlanned
-	}
-
-	qp, err := CreateQPFromSelect(ctx, sel)
-	if err != nil {
-		return nil, err
-	}
-
-	src := in.src()
-	rb, isRoute := src.(*Route)
-
-	needsOrdering := len(qp.OrderExprs) > 0
-	canPushDown := isRoute && sel.Having == nil && !needsOrdering
-
-	if canPushDown {
-		return rewrite.Swap(in, rb)
-	}
-
-	return expandHorizon(ctx, qp, in, false)
-}
-
 func planDerived(ctx *plancontext.PlanningContext, in *Derived, isRoot bool) (ops.Operator, error) {
-	return planSelectExpressions(ctx, in)
+	return pushOrExpandHorizon(ctx, in, isRoot)
 }
 
 func expandHorizon(ctx *plancontext.PlanningContext, qp *QueryProjection, horizon horizonLike, isRoot bool) (ops.Operator, error) {
