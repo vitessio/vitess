@@ -868,17 +868,25 @@ func (v *Value) Type() Type {
 }
 
 func (v *Value) Date() (datetime.Date, bool) {
-	if v.t != TypeDate {
-		return datetime.Date{}, false
+	switch v.t {
+	case TypeDate:
+		return datetime.ParseDate(v.s)
+	case TypeDateTime:
+		dt, ok := datetime.ParseDateTime(v.s)
+		return dt.Date, ok
 	}
-	return datetime.ParseDate(v.s)
+	return datetime.Date{}, false
 }
 
 func (v *Value) DateTime() (datetime.DateTime, bool) {
-	if v.t != TypeDateTime {
-		return datetime.DateTime{}, false
+	switch v.t {
+	case TypeDate:
+		d, ok := datetime.ParseDate(v.s)
+		return datetime.DateTime{Date: d}, ok
+	case TypeDateTime:
+		return datetime.ParseDateTime(v.s)
 	}
-	return datetime.ParseDateTime(v.s)
+	return datetime.DateTime{}, false
 }
 
 func (v *Value) Time() (datetime.Time, bool) {
