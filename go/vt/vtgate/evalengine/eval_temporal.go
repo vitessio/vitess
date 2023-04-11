@@ -207,7 +207,7 @@ func evalToTime(e eval) *evalTemporal {
 		}
 	case *evalJSON:
 		if t, ok := e.Time(); ok {
-			return newEvalTime(t)
+			return newEvalTime(t.RoundForJSON())
 		}
 	}
 	return nil

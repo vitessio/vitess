@@ -305,6 +305,10 @@ func TestCompilerSingle(t *testing.T) {
 			expression: `1.7 / 173458`,
 			result:     `DECIMAL(0.00001)`,
 		},
+		{
+			expression: `cast(time '5 12:34:58' as json)`,
+			result:     `JSON("\"04:34:58.000000\"")`,
+		},
 	}
 
 	for _, tc := range testCases {

@@ -65,6 +65,21 @@ func (t Time) IsZero() bool {
 	return t.Hour() == 0 && t.Minute() == 0 && t.Second() == 0 && t.Nanosecond() == 0
 }
 
+// RoundForJSON rounds the time to the nearest 32nd hour. This is some really
+// weird behavior that MySQL does when it casts a JSON time back to a MySQL
+// TIME value. We just mimic the behavior here.
+func (t Time) RoundForJSON() Time {
+	if t.Hour() < 32 {
+		return t
+	}
+	res := t
+	res.hour = uint16(t.Hour() % 32)
+	if t.Neg() {
+		res.hour |= negMask
+	}
+	return res
+}
+
 func (t Time) Hour() int {
 	return int(t.hour & ^negMask)
 }
