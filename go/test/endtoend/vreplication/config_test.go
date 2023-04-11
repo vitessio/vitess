@@ -450,6 +450,7 @@ create table rating(gid int, pid int, rating int, primary key(gid));
 		`{"scopes":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAEAAAAAAEAAAAAA8AAABgAAAAAABAAAACAAAAAAAAA"}`,
 		`"scalar string"`,
 		`"scalar stringscalar stringscalar stringscalar stringscalar stringscalar stringscalar stringscalar stringscalar stringscalar string"`,
+		`"first line\\r\\nsecond line\\rline with escapes\\\\ \\r\\n"`,
 		`true`,
 		`false`,
 		`""`,
