@@ -423,7 +423,7 @@ const (
 	SecondMicrosecondStr = "second_microsecond"
 	YearMonthStr         = "year_month"
 
-	//GeomeFromWktType strings
+	// GeomeFromWktType strings
 	GeometryFromTextStr           = "st_geometryfromtext"
 	GeometryCollectionFromTextStr = "st_geometrycollectionfromtext"
 	PointFromTextStr              = "st_pointfromtext"
@@ -433,7 +433,7 @@ const (
 	PolygonFromTextStr            = "st_polygonfromtext"
 	MultiPolygonFromTextStr       = "st_multipolygonfromtext"
 
-	//GeomeFromWktType strings
+	// GeomeFromWktType strings
 	GeometryFromWKBStr           = "st_geometryfromwkb"
 	GeometryCollectionFromWKBStr = "st_geometrycollectionfromwkb"
 	PointFromWKBStr              = "st_pointfromwkb"
@@ -760,12 +760,6 @@ const (
 	IntoOutfile SelectIntoType = iota
 	IntoOutfileS3
 	IntoDumpfile
-)
-
-// Constant for Enum Type - DeallocateStmtType
-const (
-	DeallocateType DeallocateStmtType = iota
-	DropType
 )
 
 // Constant for Enum Type - JtOnResponseType
