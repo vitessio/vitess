@@ -91,6 +91,7 @@ func FixedPointBottomUp(
 	id := NewTree
 	op = root
 	for id == NewTree {
+		// Continue the top-down rewriting process as long as changes were made during the last traversal
 		op, id, err = bottomUp(op, semantics.EmptyTableSet(), resolveID, visit, shouldVisit, true)
 		if err != nil {
 			return nil, err
@@ -110,6 +111,36 @@ func BottomUpAll(
 	return BottomUp(root, resolveID, visit, func(ops.Operator) VisitRule {
 		return VisitChildren
 	})
+}
+
+// FixedPointTopDown rewrites an operator tree much like TopDown does,
+// but does the rewriting repeatedly, until a tree walk is done with no changes to the tree.
+//
+// Parameters:
+// - root: The root operator of the tree to be traversed.
+// - resolveID: A function to resolve the TableSet of an operator.
+// - visit: The VisitF function to be called for each visited operator.
+// - shouldVisit: The ShouldVisit function to control which nodes and ancestors to visit and which to skip.
+//
+// Returns:
+// - ops.Operator: The root of the (potentially) transformed operator tree.
+// - error: An error if any occurred during the traversal.
+func FixedPointTopDown(
+	root ops.Operator,
+	resolveID func(ops.Operator) semantics.TableSet,
+	visit VisitF,
+	shouldVisit ShouldVisit,
+) (op ops.Operator, err error) {
+	id := NewTree
+	op = root
+	// Continue the top-down rewriting process as long as changes were made during the last traversal
+	for id == NewTree {
+		op, id, err = topDown(op, semantics.EmptyTableSet(), resolveID, visit, shouldVisit, true)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return op, nil
 }
 
 // Swap takes a tree like a->b->c and swaps `a` and `b`, so we end up with b->a->c
@@ -218,4 +249,56 @@ func breakableTopDown(
 	}
 
 	return newOp, SameTree, nil
+}
+
+// topDown is a helper function that recursively traverses the operator tree from the
+// top down and applies the given transformation function. It also returns the ApplyResult
+// indicating whether the tree was changed
+func topDown(
+	root ops.Operator,
+	rootID semantics.TableSet,
+	resolveID func(ops.Operator) semantics.TableSet,
+	rewriter VisitF,
+	shouldVisit ShouldVisit,
+	isRoot bool,
+) (ops.Operator, ApplyResult, error) {
+	if !shouldVisit(root) {
+		return root, SameTree, nil
+	}
+
+	newOp, treeIdentity, err := rewriter(root, rootID, isRoot)
+	if err != nil {
+		return nil, false, err
+	}
+
+	if treeIdentity == NewTree {
+		root = newOp
+	}
+
+	oldInputs := root.Inputs()
+	anythingChanged := treeIdentity == NewTree
+	newInputs := make([]ops.Operator, len(oldInputs))
+	childID := rootID
+
+	type noLHSTableSet interface{ NoLHSTableSet() }
+
+	for i, operator := range oldInputs {
+		if _, isUnion := root.(noLHSTableSet); !isUnion && i > 0 {
+			childID = childID.Merge(resolveID(oldInputs[0]))
+		}
+		in, changed, err := topDown(operator, childID, resolveID, rewriter, shouldVisit, false)
+		if err != nil {
+			return nil, false, err
+		}
+		if changed == NewTree {
+			anythingChanged = true
+		}
+		newInputs[i] = in
+	}
+
+	if anythingChanged {
+		return root.Clone(newInputs), NewTree, nil
+	}
+
+	return root, SameTree, nil
 }

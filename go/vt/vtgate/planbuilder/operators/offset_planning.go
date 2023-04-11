@@ -48,7 +48,7 @@ func planOffsets(ctx *plancontext.PlanningContext, root ops.Operator) (ops.Opera
 		return in, rewrite.SameTree, nil
 	}
 
-	op, err := rewrite.BottomUp(root, TableID, visitor, stopAtRoute)
+	op, err := rewrite.FixedPointTopDown(root, TableID, visitor, stopAtRoute)
 	if err != nil {
 		if vterr, ok := err.(*vterrors.VitessError); ok && vterr.ID == "VT13001" {
 			// we encountered a bug. let's try to back out
