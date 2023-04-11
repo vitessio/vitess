@@ -673,6 +673,7 @@ func (v *Value) MarshalDateTime() string {
 
 func (v *Value) MarshalTime() string {
 	if t, ok := v.Time(); ok {
+		t = t.RoundForJSON()
 		diff := t.ToDuration()
 		var neg bool
 		if diff < 0 {
@@ -687,9 +688,7 @@ func (v *Value) MarshalTime() string {
 
 		hours := (diff / time.Hour)
 		diff -= hours * time.Hour
-		// For some reason MySQL wraps this around and loses data
-		// if it's more than 32 hours.
-		fmt.Fprintf(&b, "%02d", hours%32)
+		fmt.Fprintf(&b, "%02d", hours)
 		minutes := (diff / time.Minute)
 		fmt.Fprintf(&b, ":%02d", minutes)
 		diff -= minutes * time.Minute
