@@ -159,24 +159,23 @@ func tryPushingDownProjection(
 
 func planOffsets(ctx *plancontext.PlanningContext, root ops.Operator) (ops.Operator, error) {
 	visitor := func(in ops.Operator, _ semantics.TableSet, _ bool) (ops.Operator, rewrite.ApplyResult, error) {
+		var err error
 		switch op := in.(type) {
 		case *Horizon:
 			return nil, false, vterrors.VT13001("should not see Horizons here")
 		case *Derived:
 			return nil, false, vterrors.VT13001("should not see Derived here")
 		case *Filter:
-			err := planFilter(ctx, op)
-			if err != nil {
-				return nil, false, err
-			}
-			return op, rewrite.SameTree, nil
+			err = planFilter(ctx, op)
 		case *Projection:
 			return planOffsetsForProjection(ctx, op)
 		case *ApplyJoin:
-			return planOffsetsForJoin(ctx, op)
-		default:
-			return op, rewrite.SameTree, nil
+			err = op.planOffsets(ctx)
 		}
+		if err != nil {
+			return nil, false, err
+		}
+		return in, rewrite.SameTree, nil
 	}
 
 	op, err := rewrite.BottomUp(root, TableID, visitor, stopAtRoute)
@@ -191,8 +190,29 @@ func planOffsets(ctx *plancontext.PlanningContext, root ops.Operator) (ops.Opera
 	return op, nil
 }
 
-func planOffsetsForJoin(ctx *plancontext.PlanningContext, op *ApplyJoin) (ops.Operator, rewrite.ApplyResult, error) {
-	panic(12)
+func (a *ApplyJoin) planOffsets(ctx *plancontext.PlanningContext) error {
+	for _, col := range a.ColumnsAST {
+		for i, lhsExpr := range col.LHSExprs {
+			offset, err := a.pushColLeft(ctx, aeWrap(lhsExpr))
+			if err != nil {
+				return err
+			}
+			if col.RHSExpr == nil {
+				// if we don't have a RHS expr, it means that this is a pure LHS expression
+				a.Columns = append(a.Columns, -offset-1)
+			} else {
+				a.Vars[col.BvNames[i]] = offset
+			}
+		}
+		if col.RHSExpr != nil {
+			offset, err := a.pushColRight(ctx, aeWrap(col.RHSExpr))
+			if err != nil {
+				return err
+			}
+			a.Columns = append(a.Columns, offset+1)
+		}
+	}
+	return nil
 }
 
 func stopAtRoute(operator ops.Operator) rewrite.VisitRule {

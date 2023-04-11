@@ -18,6 +18,7 @@ package operators
 
 import (
 	"golang.org/x/exp/slices"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
@@ -55,8 +56,18 @@ type (
 )
 
 func (p *Projection) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr) (ops.Operator, int, error) {
-	// TODO implement me
-	panic("implement me")
+	colAsExpr := func(pe ProjExpr) sqlparser.Expr { return pe.GetExpr() }
+	if offset, found := canReuseColumn(ctx, p.Columns, expr.Expr, colAsExpr); found {
+		return p, offset, nil
+	}
+	sourceOp, offset, err := p.Source.AddColumn(ctx, expr)
+	if err != nil {
+		return nil, 0, err
+	}
+	p.Source = sourceOp
+	p.Columns = append(p.Columns, Offset{Offset: offset, Expr: expr.Expr})
+	p.ColumnNames = append(p.ColumnNames, expr.As.String())
+	return p, len(p.Columns) - 1, nil
 }
 
 func (po Offset) GetExpr() sqlparser.Expr { return po.Expr }

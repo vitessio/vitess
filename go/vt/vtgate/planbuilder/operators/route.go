@@ -523,12 +523,33 @@ func (r *Route) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Ex
 }
 
 func (r *Route) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr) (ops.Operator, int, error) {
-	newSrc, offset, err := r.Source.AddColumn(ctx, expr)
+	removeKeyspaceFromSelectExpr(expr)
+
+	// check if columns is already added.
+	cols, err := r.GetColumns()
 	if err != nil {
 		return nil, 0, err
 	}
-	r.Source = newSrc
-	return r, offset, nil
+	colAsExpr := func(e sqlparser.Expr) sqlparser.Expr { return e }
+	if offset, found := canReuseColumn(ctx, cols, expr.Expr, colAsExpr); found {
+		return r, offset, nil
+	}
+
+	proj, exists := r.Source.(*Projection)
+	if !exists {
+		proj = &Projection{Source: r.Source}
+		r.Source = proj
+
+		// add the existing columns of route to the projection.
+		for _, col := range cols {
+			proj.Columns = append(proj.Columns, Expr{E: col})
+			proj.ColumnNames = append(proj.ColumnNames, sqlparser.String(col))
+		}
+	}
+	// add the new column
+	proj.Columns = append(proj.Columns, Expr{E: expr.Expr})
+	proj.ColumnNames = append(proj.ColumnNames, expr.As.String())
+	return r, len(proj.Columns) - 1, nil
 }
 
 func (r *Route) GetColumns() ([]sqlparser.Expr, error) {

@@ -19,12 +19,11 @@ package operators
 import (
 	"golang.org/x/exp/maps"
 	"golang.org/x/exp/slices"
+
 	"vitess.io/vitess/go/slices2"
-
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
-
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
