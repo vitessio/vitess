@@ -20,6 +20,8 @@ import (
 	"context"
 	"fmt"
 	"time"
+	"vitess.io/vitess/go/vt/topotools"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil"
 
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
@@ -100,6 +102,41 @@ func (tm *TabletManager) Backup(ctx context.Context, logger logutil.Logger, req 
 			// Original type could be primary so pass in a real value for PrimaryTermStartTime
 			if err := tm.changeTypeLocked(bgCtx, originalType, DBActionNone, SemiSyncActionNone); err != nil {
 				l.Errorf("Failed to change tablet type from %v to %v, error: %v", topodatapb.TabletType_BACKUP, originalType, err)
+				return
+			}
+
+			// Find the correct primary tablet and set the replication source,
+			// since the primary could have changed while we executed the backup which can
+			// also affect whether we want to send semi sync acks or not.
+			tabletInfo, err := tm.TopoServer.GetTablet(ctx, tablet.Alias)
+			if err != nil {
+				l.Errorf("Failed to fetch updated tablet info, error: %v", topodatapb.TabletType_BACKUP, originalType, err)
+				return
+			}
+
+			// Do not do anything for primary tablets and when active reparenting is disabled
+			if mysqlctl.DisableActiveReparents || tabletInfo.Type == topodatapb.TabletType_PRIMARY {
+				return
+			}
+
+			shardPrimary, err := topotools.GetShardPrimaryForTablet(ctx, tm.TopoServer, tablet.Tablet)
+			if err != nil {
+				return
+			}
+
+			durabilityName, err := tm.TopoServer.GetKeyspaceDurability(ctx, tablet.Keyspace)
+			if err != nil {
+				l.Errorf("Failed to get durability policy, error: %v", err)
+				return
+			}
+			durability, err := reparentutil.GetDurabilityPolicy(durabilityName)
+			if err != nil {
+				l.Errorf("Failed to get durability with name %v, error: %v", durabilityName, err)
+			}
+
+			isSemiSync := reparentutil.IsReplicaSemiSync(durability, shardPrimary.Tablet, tabletInfo.Tablet)
+			if err := tm.SetReplicationSource(ctx, shardPrimary.Alias, 0, "", false, isSemiSync); err != nil {
+				l.Errorf("Failed to set replication source, error: %v", err)
 			}
 		}()
 	}
