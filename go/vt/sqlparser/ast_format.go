@@ -2837,6 +2837,5 @@ func (node *GeomFormatExpr) Format(buf *TrackedBuffer) {
 
 // Format formats the node
 func (node *GeomPropertyFuncExpr) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "%s(%v", node.Property.ToString(), node.Geom)
-	buf.WriteByte(')')
+	buf.astPrintf(node, "%s(%v)", node.Property.ToString(), node.Geom)
 }
