@@ -59,12 +59,11 @@ func planOffsets(ctx *plancontext.PlanningContext, root ops.Operator) (ops.Opera
 		return nil, err
 	}
 
-	return stripSimpleProjection(op), nil
+	return op, nil
 }
 
 func (p *Projection) planOffsetsForProjection(ctx *plancontext.PlanningContext) (ops.Operator, rewrite.ApplyResult, error) {
 	var err error
-	isSimple := true
 	for i, col := range p.Columns {
 		rewritten := sqlparser.CopyOnRewrite(col.GetExpr(), nil, func(cursor *sqlparser.CopyOnWriteCursor) {
 			col, ok := cursor.Node().(*sqlparser.ColName)
@@ -92,7 +91,6 @@ func (p *Projection) planOffsetsForProjection(ctx *plancontext.PlanningContext) 
 			}
 			continue
 		}
-		isSimple = false
 
 		eexpr, err := evalengine.Translate(rewritten, nil)
 		if err != nil {
@@ -104,20 +102,8 @@ func (p *Projection) planOffsetsForProjection(ctx *plancontext.PlanningContext) 
 			EExpr: eexpr,
 		}
 	}
-	if !isSimple {
-		return p, rewrite.SameTree, nil
-	}
 
-	// is we were able to turn all the columns into offsets, we can use the SimpleProjection instead
-	sp := &SimpleProjection{
-		Source: p.Source,
-	}
-	for i, column := range p.Columns {
-		offset := column.(Offset)
-		sp.Columns = append(sp.Columns, offset.Offset)
-		sp.ASTColumns = append(sp.ASTColumns, &sqlparser.AliasedExpr{Expr: offset.Expr, As: sqlparser.NewIdentifierCI(p.ColumnNames[i])})
-	}
-	return sp, rewrite.NewTree, nil
+	return p, rewrite.SameTree, nil
 }
 
 func planOffsetsOnJoins(ctx *plancontext.PlanningContext, op ops.Operator) error {

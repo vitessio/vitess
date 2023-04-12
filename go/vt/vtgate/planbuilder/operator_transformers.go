@@ -23,6 +23,7 @@ import (
 	"strings"
 
 	"vitess.io/vitess/go/slices2"
+
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
 
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
@@ -60,33 +61,68 @@ func transformToLogicalPlan(ctx *plancontext.PlanningContext, op ops.Operator, i
 		return transformCorrelatedSubQueryPlan(ctx, op)
 	case *operators.Derived:
 		return transformDerivedPlan(ctx, op)
-	case *operators.SimpleProjection:
-		return transformSimpleProjection(ctx, op)
 	case *operators.Filter:
 		return transformFilter(ctx, op)
 	case *operators.Horizon:
 		return transformHorizon(ctx, op, isRoot)
 	case *operators.Projection:
-		return transformProjection(ctx, op, isRoot)
+		return transformProjection(ctx, op)
 	}
 
 	return nil, vterrors.VT13001(fmt.Sprintf("unknown type encountered: %T (transformToLogicalPlan)", op))
 }
 
-func transformProjection(ctx *plancontext.PlanningContext, op *operators.Projection, root bool) (logicalPlan, error) {
-	plan, err := transformToLogicalPlan(ctx, op.Source, false)
+func transformProjection(ctx *plancontext.PlanningContext, op *operators.Projection) (logicalPlan, error) {
+	src, err := transformToLogicalPlan(ctx, op.Source, false)
 	if err != nil {
 		return nil, err
+	}
+
+	if cols := op.AllOffsets(); cols != nil {
+		// if all this op is doing is passing through columns from the input, we
+		// can use the faster SimpleProjection
+		return simplifyPlan(op, cols, src)
 	}
 
 	expressions := slices2.Map(op.Columns, func(from operators.ProjExpr) sqlparser.Expr {
 		return from.GetExpr()
 	})
+
 	return &projection{
-		source:      plan,
+		source:      src,
 		columnNames: op.ColumnNames,
 		columns:     expressions,
 	}, nil
+}
+
+func simplifyPlan(op *operators.Projection, cols []int, src logicalPlan) (logicalPlan, error) {
+	// all columns are just passing through something from below
+	columns, err := op.Source.GetColumns()
+	if err != nil {
+		return nil, err
+	}
+	if len(columns) == len(cols) && elementsMatchIndices(cols) {
+		// the columns are already in the right order. we don't need anything at all here
+		return src, nil
+	}
+	return &simpleProjection{
+		logicalPlanCommon: newBuilderCommon(src),
+		eSimpleProj: &engine.SimpleProjection{
+			Cols: cols,
+		},
+	}, nil
+}
+
+// elementsMatchIndices checks if the elements of the input slice match
+// their corresponding index values. It returns true if all elements match
+// their indices, and false otherwise.
+func elementsMatchIndices(in []int) bool {
+	for idx, val := range in {
+		if val != idx {
+			return false
+		}
+	}
+	return true
 }
 
 func transformFilter(ctx *plancontext.PlanningContext, op *operators.Filter) (logicalPlan, error) {
@@ -114,20 +150,6 @@ func transformFilter(ctx *plancontext.PlanningContext, op *operators.Filter) (lo
 		efilter: &engine.Filter{
 			Predicate:    predicate,
 			ASTPredicate: ast,
-		},
-	}, nil
-}
-
-func transformSimpleProjection(ctx *plancontext.PlanningContext, op *operators.SimpleProjection) (logicalPlan, error) {
-	src, err := transformToLogicalPlan(ctx, op.Source, false)
-	if err != nil {
-		return nil, err
-	}
-
-	return &simpleProjection{
-		logicalPlanCommon: newBuilderCommon(src),
-		eSimpleProj: &engine.SimpleProjection{
-			Cols: op.Columns,
 		},
 	}, nil
 }

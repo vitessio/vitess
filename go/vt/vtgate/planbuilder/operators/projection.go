@@ -118,3 +118,17 @@ func (p *Projection) GetColumns() ([]sqlparser.Expr, error) {
 }
 
 func (p *Projection) IPhysical() {}
+
+// AllOffsets returns a slice of integer offsets for all columns in the Projection
+// if all columns are of type Offset. If any column is not of type Offset, it returns nil.
+func (p *Projection) AllOffsets() (cols []int) {
+	for _, c := range p.Columns {
+		offset, ok := c.(Offset)
+		if !ok {
+			return nil
+		}
+
+		cols = append(cols, offset.Offset)
+	}
+	return
+}

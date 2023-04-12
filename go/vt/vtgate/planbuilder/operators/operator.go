@@ -142,30 +142,6 @@ func makeSureOutputIsCorrect(ctx *plancontext.PlanningContext, op ops.Operator, 
 	return nil
 }
 
-func stripSimpleProjection(op ops.Operator) ops.Operator {
-	sp, ok := op.(*SimpleProjection)
-	if !ok {
-		return op
-	}
-
-	srcColumns, err := sp.Source.GetColumns()
-	if err != nil {
-		return nil
-	}
-
-	if len(srcColumns) != len(sp.Columns) {
-		return op
-	} else {
-		for i, column := range sp.Columns {
-			if column != i {
-				return op
-			}
-		}
-	}
-
-	return sp.Source
-}
-
 // Inputs implements the Operator interface
 func (noInputs) Inputs() []ops.Operator {
 	return nil
