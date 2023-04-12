@@ -2813,3 +2813,24 @@ func (node *GeomFromTextExpr) Format(buf *TrackedBuffer) {
 	}
 	buf.WriteByte(')')
 }
+
+// Format formats the node
+func (node *GeomFromWKBExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "%s(%v", node.Type.ToString(), node.WkbBlob)
+	if node.Srid != nil {
+		buf.astPrintf(node, ", %v", node.Srid)
+	}
+	if node.AxisOrderOpt != nil {
+		buf.astPrintf(node, ", %v", node.AxisOrderOpt)
+	}
+	buf.WriteByte(')')
+}
+
+// Format formats the node
+func (node *GeomFormatExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "%s(%v", node.FormatType.ToString(), node.Geom)
+	if node.AxisOrderOpt != nil {
+		buf.astPrintf(node, ", %v", node.AxisOrderOpt)
+	}
+	buf.WriteByte(')')
+}

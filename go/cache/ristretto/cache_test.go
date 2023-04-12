@@ -26,6 +26,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/log"
+
 	"github.com/stretchr/testify/require"
 )
 
@@ -97,7 +99,7 @@ func TestCacheMaxCost(t *testing.T) {
 	for i := 0; i < 20; i++ {
 		time.Sleep(time.Second)
 		cacheCost := c.Metrics.CostAdded() - c.Metrics.CostEvicted()
-		t.Logf("total cache cost: %d\n", cacheCost)
+		log.Infof("total cache cost: %d", cacheCost)
 		require.True(t, float64(cacheCost) <= float64(1e6*1.05))
 	}
 	for i := 0; i < 8; i++ {

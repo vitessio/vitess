@@ -7,11 +7,13 @@
     - [Default Local Cell Preference for TabletPicker](#tablet-picker-cell-preference)
     - [Dedicated stats for VTGate Prepare operations](#dedicated-vtgate-prepare-stats)
     - [Keyspace name validation in TopoServer](#keyspace-name-validation)
+    - [Shard name validation in TopoServer](#shard-name-validation)
   - **[New command line flags and behavior](#new-flag)**
     - [Builtin backup: read buffering flags](#builtin-backup-read-buffering-flags)
   - **[New stats](#new-stats)**
     - [Detailed backup and restore stats](#detailed-backup-and-restore-stats)
     - [VTtablet Error count with code ](#vttablet-error-count-with-code)
+    - [VReplication stream status for Prometheus](#vreplication-stream-status-for-prometheus)
   - **[Deprecations and Deletions](#deprecations-and-deletions)**
     - [Deprecated Stats](#deprecated-stats)
   - **[VTTablet](#vttablet)**
@@ -79,6 +81,12 @@ Here is a (condensed) example of stats output:
 Prior to v17, it was possible to create a keyspace with invalid characters, which would then be inaccessible to various cluster management operations.
 
 Keyspace names may no longer contain the forward slash ("/") character, and TopoServer's `GetKeyspace` and `CreateKeyspace` methods return an error if given such a name.
+
+#### <a id="shard-name-validation"> Shard name validation in TopoServer
+
+Prior to v17, it was possible to create a shard name with invalid characters, which would then be inaccessible to various cluster management operations.
+
+Shard names may no longer contain the forward slash ("/") character, and TopoServer's `CreateShard` method returns an error if given such a name.
 
 ### <a id="new-flag"/> New command line flags and behavior
 
@@ -224,6 +232,24 @@ Some notes to help understand these metrics:
 
 We are introducing new error counter `QueryErrorCountsWithCode` for VTTablet. It is similar to existing [QueryErrorCounts](https://github.com/vitessio/vitess/blob/main/go/vt/vttablet/tabletserver/query_engine.go#L174) except it contains errorCode as additional dimension.
 We will deprecate `QueryErrorCounts` in v18.
+
+#### <a id="vreplication-stream-status-for-prometheus"/> VReplication stream status for Prometheus
+
+VReplication publishes the `VReplicationStreamState` status which reports the state of VReplication streams. For example, here's what it looks like in the local cluster example after the MoveTables step:
+
+```
+"VReplicationStreamState": {
+  "commerce2customer.1": "Running"
+}
+```
+
+Prior to v17, this data was not available via the Prometheus backend. In v17, workflow states are also published as a Prometheus gauge with a `state` label and a value of `1.0`. For example:
+
+```
+# HELP vttablet_v_replication_stream_state State of vreplication workflow
+# TYPE vttablet_v_replication_stream_state gauge
+vttablet_v_replication_stream_state{counts="1",state="Running",workflow="commerce2customer"} 1
+```
 
 ## <a id="deprecations-and-deletions"/> Deprecations and Deletions
 

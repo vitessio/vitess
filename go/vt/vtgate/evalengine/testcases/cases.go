@@ -83,6 +83,23 @@ var Cases = []TestCase{
 	{Run: FnRadians},
 	{Run: FnNow},
 	{Run: FnInfo},
+	{Run: FnExp},
+	{Run: FnLn},
+	{Run: FnLog},
+	{Run: FnLog10},
+	{Run: FnMod},
+	{Run: FnLog2},
+	{Run: FnPow},
+	{Run: FnSign},
+	{Run: FnSqrt},
+	{Run: FnRound},
+	{Run: FnTruncate},
+	{Run: FnCrc32},
+	{Run: FnConv},
+	{Run: FnMD5},
+	{Run: FnSHA1},
+	{Run: FnSHA2},
+	{Run: FnRandomBytes},
 }
 
 func JSONPathOperations(yield Query) {
@@ -351,6 +368,295 @@ func FnRadians(yield Query) {
 
 	for _, num := range inputBitwise {
 		yield(fmt.Sprintf("RADIANS(%s)", num), nil)
+	}
+}
+
+func FnExp(yield Query) {
+	for _, num := range radianInputs {
+		yield(fmt.Sprintf("EXP(%s)", num), nil)
+	}
+
+	for _, num := range inputBitwise {
+		yield(fmt.Sprintf("EXP(%s)", num), nil)
+	}
+}
+
+func FnLn(yield Query) {
+	for _, num := range radianInputs {
+		yield(fmt.Sprintf("LN(%s)", num), nil)
+	}
+
+	for _, num := range inputBitwise {
+		yield(fmt.Sprintf("LN(%s)", num), nil)
+	}
+}
+
+func FnLog(yield Query) {
+	for _, num := range radianInputs {
+		yield(fmt.Sprintf("LOG(%s)", num), nil)
+	}
+
+	for _, num := range inputBitwise {
+		yield(fmt.Sprintf("LOG(%s)", num), nil)
+	}
+
+	for _, num1 := range radianInputs {
+		for _, num2 := range radianInputs {
+			yield(fmt.Sprintf("LOG(%s, %s)", num1, num2), nil)
+		}
+		for _, num2 := range inputBitwise {
+			yield(fmt.Sprintf("LOG(%s, %s)", num1, num2), nil)
+		}
+	}
+
+	for _, num1 := range inputBitwise {
+		for _, num2 := range radianInputs {
+			yield(fmt.Sprintf("LOG(%s, %s)", num1, num2), nil)
+		}
+		for _, num2 := range inputBitwise {
+			yield(fmt.Sprintf("LOG(%s, %s)", num1, num2), nil)
+		}
+	}
+}
+
+func FnLog10(yield Query) {
+	for _, num := range radianInputs {
+		yield(fmt.Sprintf("LOG10(%s)", num), nil)
+	}
+
+	for _, num := range inputBitwise {
+		yield(fmt.Sprintf("LOG10(%s)", num), nil)
+	}
+}
+
+func FnMod(yield Query) {
+	for _, num1 := range radianInputs {
+		for _, num2 := range radianInputs {
+			yield(fmt.Sprintf("MOD(%s, %s)", num1, num2), nil)
+		}
+		for _, num2 := range inputBitwise {
+			yield(fmt.Sprintf("MOD(%s, %s)", num1, num2), nil)
+		}
+	}
+
+	for _, num1 := range inputBitwise {
+		for _, num2 := range radianInputs {
+			yield(fmt.Sprintf("MOD(%s, %s)", num1, num2), nil)
+		}
+		for _, num2 := range inputBitwise {
+			yield(fmt.Sprintf("MOD(%s, %s)", num1, num2), nil)
+		}
+	}
+}
+
+func FnLog2(yield Query) {
+	for _, num := range radianInputs {
+		yield(fmt.Sprintf("LOG2(%s)", num), nil)
+	}
+
+	for _, num := range inputBitwise {
+		yield(fmt.Sprintf("LOG2(%s)", num), nil)
+	}
+}
+
+func FnPow(yield Query) {
+	for _, num1 := range radianInputs {
+		for _, num2 := range radianInputs {
+			yield(fmt.Sprintf("POW(%s, %s)", num1, num2), nil)
+			yield(fmt.Sprintf("POWER(%s, %s)", num1, num2), nil)
+		}
+		for _, num2 := range inputBitwise {
+			yield(fmt.Sprintf("POW(%s, %s)", num1, num2), nil)
+			yield(fmt.Sprintf("POWER(%s, %s)", num1, num2), nil)
+		}
+	}
+
+	for _, num1 := range inputBitwise {
+		for _, num2 := range radianInputs {
+			yield(fmt.Sprintf("POW(%s, %s)", num1, num2), nil)
+			yield(fmt.Sprintf("POWER(%s, %s)", num1, num2), nil)
+		}
+		for _, num2 := range inputBitwise {
+			yield(fmt.Sprintf("POW(%s, %s)", num1, num2), nil)
+			yield(fmt.Sprintf("POWER(%s, %s)", num1, num2), nil)
+		}
+	}
+}
+
+func FnSign(yield Query) {
+	for _, num := range radianInputs {
+		yield(fmt.Sprintf("SIGN(%s)", num), nil)
+	}
+
+	for _, num := range inputBitwise {
+		yield(fmt.Sprintf("SIGN(%s)", num), nil)
+	}
+}
+
+func FnSqrt(yield Query) {
+	for _, num := range radianInputs {
+		yield(fmt.Sprintf("SQRT(%s)", num), nil)
+	}
+
+	for _, num := range inputBitwise {
+		yield(fmt.Sprintf("SQRT(%s)", num), nil)
+	}
+}
+
+func FnRound(yield Query) {
+	for _, num := range radianInputs {
+		yield(fmt.Sprintf("ROUND(%s)", num), nil)
+	}
+
+	for _, num := range inputBitwise {
+		yield(fmt.Sprintf("ROUND(%s)", num), nil)
+	}
+
+	for _, num1 := range radianInputs {
+		for _, num2 := range radianInputs {
+			yield(fmt.Sprintf("ROUND(%s, %s)", num1, num2), nil)
+		}
+		for _, num2 := range inputBitwise {
+			yield(fmt.Sprintf("ROUND(%s, %s)", num1, num2), nil)
+		}
+	}
+
+	for _, num1 := range inputBitwise {
+		for _, num2 := range radianInputs {
+			yield(fmt.Sprintf("ROUND(%s, %s)", num1, num2), nil)
+		}
+		for _, num2 := range inputBitwise {
+			yield(fmt.Sprintf("ROUND(%s, %s)", num1, num2), nil)
+		}
+	}
+}
+
+func FnTruncate(yield Query) {
+	for _, num1 := range radianInputs {
+		for _, num2 := range radianInputs {
+			yield(fmt.Sprintf("TRUNCATE(%s, %s)", num1, num2), nil)
+		}
+		for _, num2 := range inputBitwise {
+			yield(fmt.Sprintf("TRUNCATE(%s, %s)", num1, num2), nil)
+		}
+	}
+
+	for _, num1 := range inputBitwise {
+		for _, num2 := range radianInputs {
+			yield(fmt.Sprintf("TRUNCATE(%s, %s)", num1, num2), nil)
+		}
+		for _, num2 := range inputBitwise {
+			yield(fmt.Sprintf("TRUNCATE(%s, %s)", num1, num2), nil)
+		}
+	}
+}
+
+func FnCrc32(yield Query) {
+	for _, num := range radianInputs {
+		yield(fmt.Sprintf("CRC32(%s)", num), nil)
+	}
+
+	for _, num := range inputBitwise {
+		yield(fmt.Sprintf("CRC32(%s)", num), nil)
+	}
+
+	for _, num := range inputConversions {
+		yield(fmt.Sprintf("CRC32(%s)", num), nil)
+	}
+}
+
+func FnConv(yield Query) {
+	for _, num1 := range radianInputs {
+		for _, num2 := range radianInputs {
+			for _, num3 := range radianInputs {
+				yield(fmt.Sprintf("CONV(%s, %s, %s)", num1, num2, num3), nil)
+			}
+			for _, num3 := range inputBitwise {
+				yield(fmt.Sprintf("CONV(%s, %s, %s)", num1, num2, num3), nil)
+			}
+		}
+	}
+
+	for _, num1 := range radianInputs {
+		for _, num2 := range inputBitwise {
+			for _, num3 := range radianInputs {
+				yield(fmt.Sprintf("CONV(%s, %s, %s)", num1, num2, num3), nil)
+			}
+			for _, num3 := range inputBitwise {
+				yield(fmt.Sprintf("CONV(%s, %s, %s)", num1, num2, num3), nil)
+			}
+		}
+	}
+
+	for _, num1 := range inputBitwise {
+		for _, num2 := range inputBitwise {
+			for _, num3 := range radianInputs {
+				yield(fmt.Sprintf("CONV(%s, %s, %s)", num1, num2, num3), nil)
+			}
+			for _, num3 := range inputBitwise {
+				yield(fmt.Sprintf("CONV(%s, %s, %s)", num1, num2, num3), nil)
+			}
+		}
+	}
+}
+
+func FnMD5(yield Query) {
+	for _, num := range radianInputs {
+		yield(fmt.Sprintf("MD5(%s)", num), nil)
+	}
+
+	for _, num := range inputBitwise {
+		yield(fmt.Sprintf("MD5(%s)", num), nil)
+	}
+
+	for _, num := range inputConversions {
+		yield(fmt.Sprintf("MD5(%s)", num), nil)
+	}
+}
+
+func FnSHA1(yield Query) {
+	for _, num := range radianInputs {
+		yield(fmt.Sprintf("SHA1(%s)", num), nil)
+		yield(fmt.Sprintf("SHA(%s)", num), nil)
+	}
+
+	for _, num := range inputBitwise {
+		yield(fmt.Sprintf("SHA1(%s)", num), nil)
+		yield(fmt.Sprintf("SHA(%s)", num), nil)
+	}
+
+	for _, num := range inputConversions {
+		yield(fmt.Sprintf("SHA1(%s)", num), nil)
+		yield(fmt.Sprintf("SHA(%s)", num), nil)
+	}
+}
+
+func FnSHA2(yield Query) {
+	bitLengths := []string{"0", "224", "256", "384", "512", "1", "0.1", "256.1e0", "1-1", "128+128"}
+	for _, bits := range bitLengths {
+		for _, num := range radianInputs {
+			yield(fmt.Sprintf("SHA2(%s, %s)", num, bits), nil)
+		}
+
+		for _, num := range inputBitwise {
+			yield(fmt.Sprintf("SHA2(%s, %s)", num, bits), nil)
+		}
+
+		for _, num := range inputConversions {
+			yield(fmt.Sprintf("SHA2(%s, %s)", num, bits), nil)
+		}
+	}
+}
+
+func FnRandomBytes(yield Query) {
+	for _, num := range radianInputs {
+		yield(fmt.Sprintf("LENGTH(RANDOM_BYTES(%s))", num), nil)
+		yield(fmt.Sprintf("COLLATION(RANDOM_BYTES(%s))", num), nil)
+	}
+
+	for _, num := range inputBitwise {
+		yield(fmt.Sprintf("LENGTH(RANDOM_BYTES(%s))", num), nil)
+		yield(fmt.Sprintf("COLLATION(RANDOM_BYTES(%s))", num), nil)
 	}
 }
 
@@ -874,7 +1180,7 @@ func FnAscii(yield Query) {
 }
 
 func FnRepeat(yield Query) {
-	counts := []string{"-1", "1.2", "3", "1073741825"}
+	counts := []string{"-1", "1.9", "3", "1073741825", "'1.9'"}
 	for _, str := range inputStrings {
 		for _, cnt := range counts {
 			yield(fmt.Sprintf("repeat(%s, %s)", str, cnt), nil)
@@ -926,6 +1232,7 @@ func FnNow(yield Query) {
 		"UTC_TIMESTAMP(1)",
 		"CURDATE()", "CURRENT_DATE()", "CURRENT_DATE",
 		"UTC_TIME()", "UTC_TIME",
+		"UTC_DATE()", "UTC_DATE",
 		"UTC_TIME(1)",
 		"CURTIME()", "CURRENT_TIME()", "CURRENT_TIME",
 		"CURTIME(1)", "CURRENT_TIME(1)",

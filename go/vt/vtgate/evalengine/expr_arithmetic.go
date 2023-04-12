@@ -73,6 +73,9 @@ func makeNumericalType(t sqltypes.Type, f typeFlag) sqltypes.Type {
 	if t == sqltypes.VarBinary && (f&flagHex) != 0 {
 		return sqltypes.Uint64
 	}
+	if sqltypes.IsDateOrTime(t) {
+		return sqltypes.Int64
+	}
 	return sqltypes.Float64
 }
 

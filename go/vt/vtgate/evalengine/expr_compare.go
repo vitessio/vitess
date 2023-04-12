@@ -111,7 +111,7 @@ func (compareNullSafeEQ) compare(left, right eval) (boolean, error) {
 }
 
 func typeIsTextual(tt sqltypes.Type) bool {
-	return sqltypes.IsText(tt) || sqltypes.IsBinary(tt)
+	return sqltypes.IsText(tt) || sqltypes.IsBinary(tt) || tt == sqltypes.Time
 }
 
 func compareAsStrings(l, r sqltypes.Type) bool {
@@ -137,7 +137,7 @@ func compareAsDecimal(ltype, rtype sqltypes.Type) bool {
 }
 
 func compareAsDates(l, r sqltypes.Type) bool {
-	return sqltypes.IsDate(l) && sqltypes.IsDate(r)
+	return sqltypes.IsDateOrTime(l) && sqltypes.IsDateOrTime(r)
 }
 
 func compareAsDateAndString(l, r sqltypes.Type) bool {
@@ -145,7 +145,7 @@ func compareAsDateAndString(l, r sqltypes.Type) bool {
 }
 
 func compareAsDateAndNumeric(ltype, rtype sqltypes.Type) bool {
-	return sqltypes.IsDate(ltype) && sqltypes.IsNumber(rtype) || sqltypes.IsNumber(ltype) && sqltypes.IsDate(rtype)
+	return sqltypes.IsDateOrTime(ltype) && sqltypes.IsNumber(rtype) || sqltypes.IsNumber(ltype) && sqltypes.IsDateOrTime(rtype)
 }
 
 func compareAsTuples(left, right eval) (*evalTuple, *evalTuple, bool) {
@@ -212,21 +212,22 @@ func evalCompare(left, right eval) (comp int, err error) {
 	rt := right.SQLType()
 
 	switch {
+	case compareAsDates(lt, rt):
+		return compareDates(left, right)
 	case compareAsStrings(lt, rt):
 		return compareStrings(left, right)
 	case compareAsSameNumericType(lt, rt) || compareAsDecimal(lt, rt):
 		return compareNumeric(left, right)
-	case compareAsDates(lt, rt):
-		return compareDates(left, right)
 	case compareAsDateAndString(lt, rt):
 		return compareDateAndString(left, right)
 	case compareAsDateAndNumeric(lt, rt):
-		// TODO: support comparison between a date and a numeric value
-		// 		queries like the ones below should be supported:
-		// 			- select 1 where 20210101 = cast("2021-01-01" as date)
-		// 			- select 1 where 2021210101 = cast("2021-01-01" as date)
-		// 			- select 1 where 104200 = cast("10:42:00" as time)
-		return 0, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "cannot compare a date with a numeric value")
+		if sqltypes.IsDateOrTime(lt) {
+			left = evalToNumeric(left)
+		}
+		if sqltypes.IsDateOrTime(rt) {
+			right = evalToNumeric(right)
+		}
+		return compareNumeric(left, right)
 	case compareAsJSON(lt, rt):
 		return compareJSON(left, right)
 	case lt == sqltypes.Tuple || rt == sqltypes.Tuple:

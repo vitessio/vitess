@@ -19,14 +19,14 @@ package vreplication
 var dryRunResultsSwitchWritesCustomerShard = []string{
 	"Lock keyspace product",
 	"Lock keyspace customer",
-	"Stop writes on keyspace product, tables [Lead,Lead-1,customer,db_order_test]:",
+	"Stop writes on keyspace product, tables [Lead,Lead-1,customer,db_order_test,geom_tbl,json_tbl]:",
 	"/       Keyspace product, Shard 0 at Position",
 	"Wait for VReplication on stopped streams to catchup for up to 30s",
 	"Create reverse replication workflow p2c_reverse",
 	"Create journal entries on source databases",
-	"Enable writes on keyspace customer tables [Lead,Lead-1,customer,db_order_test]",
+	"Enable writes on keyspace customer tables [Lead,Lead-1,customer,db_order_test,geom_tbl,json_tbl]",
 	"Switch routing from keyspace product to keyspace customer",
-	"Routing rules for tables [Lead,Lead-1,customer,db_order_test] will be updated",
+	"Routing rules for tables [Lead,Lead-1,customer,db_order_test,geom_tbl,json_tbl] will be updated",
 	"Switch writes completed, freeze and delete vreplication streams on:",
 	"       tablet 200 ",
 	"       tablet 300 ",
@@ -41,8 +41,8 @@ var dryRunResultsSwitchWritesCustomerShard = []string{
 
 var dryRunResultsReadCustomerShard = []string{
 	"Lock keyspace product",
-	"Switch reads for tables [Lead,Lead-1,customer,db_order_test] to keyspace customer for tablet types [RDONLY,REPLICA]",
-	"Routing rules for tables [Lead,Lead-1,customer,db_order_test] will be updated",
+	"Switch reads for tables [Lead,Lead-1,customer,db_order_test,geom_tbl,json_tbl] to keyspace customer for tablet types [RDONLY,REPLICA]",
+	"Routing rules for tables [Lead,Lead-1,customer,db_order_test,geom_tbl,json_tbl] will be updated",
 	"Unlock keyspace product",
 }
 

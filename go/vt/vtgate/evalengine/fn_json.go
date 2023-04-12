@@ -150,9 +150,7 @@ func (call *builtinJSONUnquote) typeof(env *ExpressionEnv, fields []*querypb.Fie
 var errJSONKeyIsNil = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "JSON documents may not contain NULL member names.")
 
 func (call *builtinJSONObject) eval(env *ExpressionEnv) (eval, error) {
-	j := json.NewObject()
-	obj, _ := j.Object()
-
+	var obj json.Object
 	for i := 0; i < len(call.Arguments); i += 2 {
 		key, err := call.Arguments[i].eval(env)
 		if err != nil {
@@ -177,7 +175,7 @@ func (call *builtinJSONObject) eval(env *ExpressionEnv) (eval, error) {
 
 		obj.Set(key1.string(), val1, json.Set)
 	}
-	return j, nil
+	return json.NewObject(obj), nil
 }
 
 func (call *builtinJSONObject) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
@@ -385,7 +383,7 @@ func (call *builtinJSONKeys) eval(env *ExpressionEnv) (eval, error) {
 	}
 
 	var keys []*json.Value
-	obj.Visit(func(key []byte, _ *json.Value) {
+	obj.Visit(func(key string, _ *json.Value) {
 		keys = append(keys, json.NewString(key))
 	})
 	return json.NewArray(keys), nil

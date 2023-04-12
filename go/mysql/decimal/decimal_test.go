@@ -757,7 +757,7 @@ func TestDecimal_QuoRem(t *testing.T) {
 			t.Errorf("not fitting: d=%v, d2= %v, prec=%d, q=%v, r=%v",
 				d, d2, prec, q, r)
 		}
-		if !q.Equal(q.truncate(prec)) {
+		if !q.Equal(q.Truncate(prec)) {
 			t.Errorf("quotient wrong precision: d=%v, d2= %v, prec=%d, q=%v, r=%v",
 				d, d2, prec, q, r)
 		}
@@ -820,7 +820,7 @@ func TestDecimal_QuoRem2(t *testing.T) {
 				d, d2, prec, q, r)
 		}
 		// rule 2: q is integral multiple of 10^(-prec)
-		if !q.Equal(q.truncate(prec)) {
+		if !q.Equal(q.Truncate(prec)) {
 			t.Errorf("quotient wrong precision, d=%v, d2=%v, prec=%d, q=%v, r=%v",
 				d, d2, prec, q, r)
 		}

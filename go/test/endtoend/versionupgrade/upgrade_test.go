@@ -106,9 +106,6 @@ func TestMain(m *testing.M) {
 			return 1, err
 		}
 
-		// TODO: remove this once we upgrade to v12
-		// setting the planner version to 0, so the vtgate binary's default is used
-		clusterInstance.VtGatePlannerVersion = 0
 		vtgateInstance := clusterInstance.NewVtgateInstance()
 		// Start vtgate
 		if err := vtgateInstance.Setup(); err != nil {

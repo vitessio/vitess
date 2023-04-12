@@ -363,13 +363,13 @@ func TestNormalizeInvalidDates(t *testing.T) {
 		err error
 	}{{
 		in:  "select date'foo'",
-		err: vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongValue, "incorrect DATE value: '%s'", "foo"),
+		err: vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongValue, "Incorrect DATE value: '%s'", "foo"),
 	}, {
 		in:  "select time'foo'",
-		err: vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongValue, "incorrect TIME value: '%s'", "foo"),
+		err: vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongValue, "Incorrect TIME value: '%s'", "foo"),
 	}, {
 		in:  "select timestamp'foo'",
-		err: vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongValue, "incorrect DATETIME value: '%s'", "foo"),
+		err: vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongValue, "Incorrect DATETIME value: '%s'", "foo"),
 	}}
 	for _, tc := range testcases {
 		t.Run(tc.in, func(t *testing.T) {

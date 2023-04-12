@@ -107,19 +107,12 @@ jobs:
         if: steps.skip-workflow.outputs.skip-workflow == 'false' && (steps.changes.outputs.go_files == 'true' || steps.changes.outputs.parser_changes == 'true' || steps.changes.outputs.proto_changes == 'true')
         uses: actions/setup-go@v3
         with:
-          go-version: 1.20.1
+          go-version: 1.20.2
 
       - name: Tune the OS
         if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.go_files == 'true'
         run: |
           sudo sysctl -w net.ipv4.ip_local_port_range="22768 65535"
-
-      # TEMPORARY WHILE GITHUB FIXES THIS https://github.com/actions/virtual-environments/issues/3185
-      - name: Add the current IP address, long hostname and short hostname record to /etc/hosts file
-        if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.go_files == 'true'
-        run: |
-          echo -e "$(ip addr show eth0 | grep "inet\b" | awk '{print $2}' | cut -d/ -f1)\t$(hostname -f) $(hostname -s)" | sudo tee -a /etc/hosts
-      # DON'T FORGET TO REMOVE CODE ABOVE WHEN ISSUE IS ADRESSED!
 
       - name: Run go fmt
         if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.go_files == 'true'
@@ -174,7 +167,7 @@ jobs:
 
       - name: Install golangci-lint
         if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.go_files == 'true'
-        run: go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.51.2
+        run: go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.52.2
 
       - name: Clean Env
         if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.go_files == 'true'
@@ -186,7 +179,7 @@ jobs:
 
       - name: Run golangci-lint
         if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.go_files == 'true'
-        run: $(go env GOPATH)/bin/golangci-lint run go/... || exit 1
+        run: $(go env GOPATH)/bin/golangci-lint run go/... --timeout 10m || exit 1
 
       - name: Run go mod tidy
         if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.go_files == 'true'

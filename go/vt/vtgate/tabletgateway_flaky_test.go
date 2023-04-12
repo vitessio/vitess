@@ -197,6 +197,8 @@ func TestGatewayBufferingWhileReparenting(t *testing.T) {
 		queryChan <- struct{}{}
 	}()
 
+	require.Len(t, tg.hc.GetHealthyTabletStats(target), 0, "GetHealthyTabletStats has tablets even though it shouldn't")
+
 	// set the serving type for the new primary tablet true and broadcast it so that the buffering code registers this change
 	// this should stop the buffering and the query executed in the go routine should work. This should be done with some delay so
 	// that we know that the query was buffered
@@ -208,11 +210,15 @@ func TestGatewayBufferingWhileReparenting(t *testing.T) {
 	hc.SetServing(replicaTablet, true)
 	hc.Broadcast(replicaTablet)
 
+	newPrimary, ok := tg.kev.PrimaryIsNotServing(target)
+	require.EqualValues(t, 1, newPrimary.Uid)
+	require.False(t, ok, "PrimaryIsNotServing is not returning true")
+
 	// wait for the query to execute before checking for results
 	select {
 	case <-queryChan:
 		require.NoError(t, err)
-		require.Equal(t, res, sqlResult1)
+		require.Equal(t, sqlResult1, res)
 	case <-time.After(15 * time.Second):
 		t.Fatalf("timed out waiting for query to execute")
 	}

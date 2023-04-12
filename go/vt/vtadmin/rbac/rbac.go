@@ -105,8 +105,12 @@ const (
 
 	/* vschema resources */
 
-	SrvVSchemaResource Resource = "SrvVSchema"
-	VSchemaResource    Resource = "VSchema"
+	VSchemaResource Resource = "VSchema"
+
+	/* serving graph resources */
+
+	SrvKeyspaceResource Resource = "SrvKeyspace"
+	SrvVSchemaResource  Resource = "SrvVSchema"
 
 	/* misc resources */
 
