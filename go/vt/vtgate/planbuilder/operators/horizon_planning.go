@@ -79,9 +79,26 @@ func tryPushingDownProjection(
 		return op, rewrite.NewTree, nil
 	case *ApplyJoin:
 		return pushDownProjectionInApplyJoin(ctx, p, src)
+	case *Vindex:
+		return pushDownProjectionInVindex(ctx, p, src)
 	default:
 		return p, rewrite.SameTree, nil
 	}
+}
+
+func pushDownProjectionInVindex(
+	ctx *plancontext.PlanningContext,
+	p *Projection,
+	src *Vindex,
+) (ops.Operator, rewrite.ApplyResult, error) {
+	for _, column := range p.Columns {
+		expr := column.GetExpr()
+		_, _, err := src.AddColumn(ctx, aeWrap(expr))
+		if err != nil {
+			return nil, false, err
+		}
+	}
+	return src, rewrite.NewTree, nil
 }
 
 func pushDownProjectionInApplyJoin(ctx *plancontext.PlanningContext, p *Projection, src *ApplyJoin) (ops.Operator, rewrite.ApplyResult, error) {

@@ -59,7 +59,7 @@ func planOffsets(ctx *plancontext.PlanningContext, root ops.Operator) (ops.Opera
 		return nil, err
 	}
 
-	return op, nil
+	return stripSimpleProjection(op), nil
 }
 
 func (p *Projection) planOffsetsForProjection(ctx *plancontext.PlanningContext) (ops.Operator, rewrite.ApplyResult, error) {

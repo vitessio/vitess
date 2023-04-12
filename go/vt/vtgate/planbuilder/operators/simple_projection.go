@@ -36,12 +36,6 @@ type SimpleProjection struct {
 
 var _ ops.PhysicalOperator = (*SimpleProjection)(nil)
 
-func newSimpleProjection(src ops.Operator) *SimpleProjection {
-	return &SimpleProjection{
-		Source: src,
-	}
-}
-
 func (s *SimpleProjection) IPhysical() {}
 
 func (s *SimpleProjection) Clone(inputs []ops.Operator) ops.Operator {
