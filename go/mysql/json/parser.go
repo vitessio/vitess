@@ -196,44 +196,16 @@ func parseValue(s string, c *cache, depth int) (*Value, string, error) {
 		return ValueNull, s[len("null"):], nil
 	}
 
-	ns, tail, float, err := parseRawNumber(s)
-	if err != nil {
-		return nil, tail, fmt.Errorf("cannot parse number: %s", err)
-	}
-
-	if !float {
-		_, err := fastparse.ParseInt64(ns, 10)
-		if err == nil {
-			v := c.getValue()
-			v.t = TypeNumber
-			v.s = ns
-			v.n = NumberTypeSigned
-			return v, tail, nil
-		}
-		_, err = fastparse.ParseUint64(ns, 10)
-		if err == nil {
-			v := c.getValue()
-			v.t = TypeNumber
-			v.s = ns
-			v.n = NumberTypeUnsigned
-			return v, tail, nil
-		}
-	}
-
-	f, err := fastparse.ParseFloat64(ns)
-	if err != nil {
-		return nil, tail, fmt.Errorf("cannot parse number: %s", err)
+	flen, ok := readFloat(s)
+	if !ok {
+		return nil, s[flen:], fmt.Errorf("invalid number in JSON string: %q", s)
 	}
 
 	v := c.getValue()
 	v.t = TypeNumber
-	buf := format.FormatFloat(f)
-	if bytes.IndexByte(buf, '.') < 0 && bytes.IndexByte(buf, 'e') < 0 {
-		buf = append(buf, ".0"...)
-	}
-	v.s = hack.String(buf)
-	v.n = NumberTypeFloat
-	return v, tail, nil
+	v.s = s[:flen]
+	v.n = numberTypeRaw
+	return v, s[flen:], nil
 }
 
 func parseArray(s string, c *cache, depth int) (*Value, string, error) {
@@ -494,33 +466,63 @@ func parseRawString(s string) (string, string, error) {
 	}
 }
 
-func parseRawNumber(s string) (string, string, bool, error) {
-	// The caller must ensure len(s) > 0
+func readFloat(s string) (i int, ok bool) {
+	// optional sign
+	if i >= len(s) {
+		return
+	}
+	if s[i] == '+' || s[i] == '-' {
+		i++
+	}
 
-	var float bool
-	// Find the end of the number.
-	for i := 0; i < len(s); i++ {
-		ch := s[i]
-		if (ch >= '0' && ch <= '9') || ch == '.' || ch == '-' || ch == 'e' || ch == 'E' || ch == '+' {
-			if ch == '.' || ch == 'e' || ch == 'E' {
-				float = true
+	// digits
+	sawdot := false
+	sawdigits := false
+	nd := 0
+loop:
+	for ; i < len(s); i++ {
+		switch c := s[i]; true {
+		case c == '.':
+			if sawdot {
+				break loop
 			}
+			sawdot = true
+			continue
+
+		case '0' <= c && c <= '9':
+			sawdigits = true
+			if c == '0' && nd == 0 { // ignore leading zeros
+				continue
+			}
+			nd++
 			continue
 		}
-		if i == 0 || i == 1 && (s[0] == '-' || s[0] == '+') {
-			if len(s[i:]) >= 3 {
-				xs := s[i : i+3]
-				if strings.EqualFold(xs, "inf") || strings.EqualFold(xs, "nan") {
-					return s[:i+3], s[i+3:], true, nil
-				}
-			}
-			return "", s, false, fmt.Errorf("unexpected char: %q", s[:1])
-		}
-		ns := s[:i]
-		s = s[i:]
-		return ns, s, float, nil
+		break
 	}
-	return s, "", float, nil
+	if !sawdigits {
+		return
+	}
+
+	// optional exponent moves decimal point.
+	// if we read a very large, very long number,
+	// just be sure to move the decimal point by
+	// a lot (say, 100000).  it doesn't matter if it's
+	// not the exact number.
+	if i < len(s) && (s[i] == 'e' || s[i] == 'E') {
+		i++
+		if i >= len(s) {
+			return
+		}
+		if s[i] == '+' || s[i] == '-' {
+			i++
+		}
+		if i >= len(s) || s[i] < '0' || s[i] > '9' {
+			return
+		}
+		for ; i < len(s) && ('0' <= s[i] && s[i] <= '9'); i++ {
+		}
+	}
+	return i, true
 }
 
 // Object represents JSON object.
@@ -741,6 +743,14 @@ func (v *Value) MarshalTo(dst []byte) []byte {
 		dst[size-1] = '"'
 		return dst
 	case TypeNumber:
+		if v.NumberType() == NumberTypeFloat {
+			f, _ := v.Float64()
+			buf := format.FormatFloat(f)
+			if bytes.IndexByte(buf, '.') == -1 && bytes.IndexByte(buf, 'e') == -1 {
+				buf = append(buf, '.', '0')
+			}
+			return append(dst, buf...)
+		}
 		return append(dst, v.s...)
 	case TypeBoolean:
 		if v == ValueTrue {
@@ -771,7 +781,7 @@ func (v *Value) String() string {
 func (v *Value) ToBoolean() bool {
 	switch v.Type() {
 	case TypeNumber:
-		switch v.n {
+		switch v.NumberType() {
 		case NumberTypeSigned:
 			i, _ := v.Int64()
 			return i != 0
@@ -841,6 +851,7 @@ const (
 	NumberTypeUnsigned
 	NumberTypeDecimal
 	NumberTypeFloat
+	numberTypeRaw
 )
 
 // String returns string representation of t.
@@ -951,12 +962,30 @@ func (v *Value) NumberType() NumberType {
 	if v.t != TypeNumber {
 		return NumberTypeUnknown
 	}
+	if v.n == numberTypeRaw {
+		v.n = parseNumberType(v.s)
+	}
 	return v.n
 }
 
+func parseNumberType(ns string) NumberType {
+	_, err := fastparse.ParseInt64(ns, 10)
+	if err == nil {
+		return NumberTypeSigned
+	}
+	_, err = fastparse.ParseUint64(ns, 10)
+	if err == nil {
+		return NumberTypeUnsigned
+	}
+	_, err = fastparse.ParseFloat64(ns)
+	if err == nil {
+		return NumberTypeFloat
+	}
+	return NumberTypeUnknown
+}
+
 func (v *Value) Int64() (int64, bool) {
-	str := strings.TrimSpace(v.s)
-	i, err := fastparse.ParseInt64(str, 10)
+	i, err := fastparse.ParseInt64(v.s, 10)
 	if err != nil {
 		return i, false
 	}
@@ -964,8 +993,7 @@ func (v *Value) Int64() (int64, bool) {
 }
 
 func (v *Value) Uint64() (uint64, bool) {
-	str := strings.TrimSpace(v.s)
-	u, err := fastparse.ParseUint64(str, 10)
+	u, err := fastparse.ParseUint64(v.s, 10)
 	if err != nil {
 		return u, false
 	}
@@ -973,11 +1001,10 @@ func (v *Value) Uint64() (uint64, bool) {
 }
 
 func (v *Value) Float64() (float64, bool) {
-	str := strings.TrimSpace(v.s)
 	// We only care to parse as many of the initial float characters of the
 	// string as possible. This functionality is implemented in the `strconv` package
 	// of the standard library, but not exposed, so we hook into it.
-	val, _, err := hack.ParseFloatPrefix(str, 64)
+	val, _, err := hack.ParseFloatPrefix(v.s, 64)
 	if err != nil {
 		return val, false
 	}
@@ -985,8 +1012,7 @@ func (v *Value) Float64() (float64, bool) {
 }
 
 func (v *Value) Decimal() (decimal.Decimal, bool) {
-	str := strings.TrimSpace(v.s)
-	dec, err := decimal.NewFromString(str)
+	dec, err := decimal.NewFromString(v.s)
 	if err != nil {
 		return decimal.Zero, false
 	}

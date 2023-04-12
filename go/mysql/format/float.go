@@ -26,13 +26,14 @@ const expLowerThreshold = 0.000000000000001
 
 // FormatFloat formats a float64 as a byte string in a similar way to what MySQL does
 func FormatFloat(v float64) []byte {
-	if v >= expUpperThreshold || v <= -expUpperThreshold || (v < expLowerThreshold && v > -expLowerThreshold) {
-		return AppendFloat(nil, 'g', v)
-	}
-	return AppendFloat(nil, 'f', v)
+	return AppendFloat(nil, v)
 }
 
-func AppendFloat(buf []byte, format byte, f float64) []byte {
+func AppendFloat(buf []byte, f float64) []byte {
+	format := byte('f')
+	if f >= expUpperThreshold || f <= -expUpperThreshold || (f < expLowerThreshold && f > -expLowerThreshold) {
+		format = 'g'
+	}
 	// the float printer in MySQL does not add a positive sign before
 	// the exponent for positive exponents, but the Golang printer does
 	// do that, and there's no way to customize it, so we must strip the

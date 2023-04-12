@@ -25,55 +25,49 @@ import (
 
 func TestParseRawNumber(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
-		f := func(s, expectedRN, expectedTail string, expectedFloat bool) {
+		f := func(s, expectedRN, expectedTail string) {
 			t.Helper()
 
-			rn, tail, float, err := parseRawNumber(s)
-			if err != nil {
-				t.Fatalf("unexpected error: %s", err)
+			flen, ok := readFloat(s)
+			if !ok {
+				t.Fatalf("unexpected error when parsing '%s'", s)
 			}
+
+			rn, tail := s[:flen], s[flen:]
+
 			if rn != expectedRN {
 				t.Fatalf("unexpected raw number; got %q; want %q", rn, expectedRN)
 			}
 			if tail != expectedTail {
 				t.Fatalf("unexpected tail; got %q; want %q", tail, expectedTail)
 			}
-			if float != expectedFloat {
-				t.Fatalf("unexpected float; got %v; want %v", float, expectedFloat)
-			}
 		}
 
-		f("0", "0", "", false)
-		f("0tail", "0", "tail", false)
-		f("123", "123", "", false)
-		f("123tail", "123", "tail", false)
-		f("-123tail", "-123", "tail", false)
-		f("-12.345tail", "-12.345", "tail", true)
-		f("-12.345e67tail", "-12.345e67", "tail", true)
-		f("-12.345E+67 tail", "-12.345E+67", " tail", true)
-		f("-12.345E-67,tail", "-12.345E-67", ",tail", true)
-		f("-1234567.8e+90tail", "-1234567.8e+90", "tail", true)
-		f("12.tail", "12.", "tail", true)
-		f(".2tail", ".2", "tail", true)
-		f("-.2tail", "-.2", "tail", true)
-		f("NaN", "NaN", "", true)
-		f("nantail", "nan", "tail", true)
-		f("inf", "inf", "", true)
-		f("Inftail", "Inf", "tail", true)
-		f("-INF", "-INF", "", true)
-		f("-Inftail", "-Inf", "tail", true)
+		f("0", "0", "")
+		f("0tail", "0", "tail")
+		f("123", "123", "")
+		f("123tail", "123", "tail")
+		f("-123tail", "-123", "tail")
+		f("-12.345tail", "-12.345", "tail")
+		f("-12.345e67tail", "-12.345e67", "tail")
+		f("-12.345E+67 tail", "-12.345E+67", " tail")
+		f("-12.345E-67,tail", "-12.345E-67", ",tail")
+		f("-1234567.8e+90tail", "-1234567.8e+90", "tail")
+		f("12.tail", "12.", "tail")
+		f(".2tail", ".2", "tail")
+		f("-.2tail", "-.2", "tail")
 	})
 
 	t.Run("error", func(t *testing.T) {
 		f := func(s, expectedTail string) {
 			t.Helper()
 
-			_, tail, _, err := parseRawNumber(s)
-			if err == nil {
+			flen, ok := readFloat(s)
+			if ok {
 				t.Fatalf("expecting non-nil error")
 			}
-			if tail != expectedTail {
-				t.Fatalf("unexpected tail; got %q; want %q", tail, expectedTail)
+			if s[flen:] != expectedTail {
+				t.Fatalf("unexpected tail; got %q; want %q", s[flen:], expectedTail)
 			}
 		}
 
@@ -270,13 +264,6 @@ func TestParserParse(t *testing.T) {
 		}
 		if string(sb) != "fo\x19\\u" {
 			t.Fatalf("unexpected string; got %q; want %q", sb, "fo\x19\\u")
-		}
-	})
-
-	t.Run("invalid-number", func(t *testing.T) {
-		_, err := p.Parse("123+456")
-		if err == nil {
-			t.Fatalf("unexpected lack of error when parsing int")
 		}
 	})
 
@@ -519,7 +506,7 @@ func TestParserParse(t *testing.T) {
 		if tp != TypeNumber || tp.String() != "number" {
 			t.Fatalf("unexpected type obtained for integer: %#v", v)
 		}
-		if v.n != NumberTypeSigned {
+		if v.NumberType() != NumberTypeSigned {
 			t.Fatalf("unexpected non integer value: %#v", v)
 		}
 		s := v.String()
@@ -582,7 +569,7 @@ func TestParserParse(t *testing.T) {
 		if tp != TypeNumber || tp.String() != "number" {
 			t.Fatalf("unexpected type obtained for integer: %#v", v)
 		}
-		if v.n != NumberTypeFloat {
+		if v.NumberType() != NumberTypeFloat {
 			t.Fatalf("unexpected integer value: %#v", v)
 		}
 		s := v.String()
@@ -600,7 +587,7 @@ func TestParserParse(t *testing.T) {
 		if tp != TypeNumber || tp.String() != "number" {
 			t.Fatalf("unexpected type obtained for number: %#v", v)
 		}
-		if v.n != NumberTypeFloat {
+		if v.NumberType() != NumberTypeFloat {
 			t.Fatalf("unexpected integer value: %#v", v)
 		}
 		s := v.String()
@@ -618,7 +605,7 @@ func TestParserParse(t *testing.T) {
 		if tp != TypeNumber || tp.String() != "number" {
 			t.Fatalf("unexpected type obtained for number: %#v", v)
 		}
-		if v.n != NumberTypeFloat {
+		if v.NumberType() != NumberTypeFloat {
 			t.Fatalf("unexpected integer value: %#v", v)
 		}
 		s := v.String()
