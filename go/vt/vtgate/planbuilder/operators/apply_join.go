@@ -44,6 +44,9 @@ type ApplyJoin struct {
 	// ColumnsAST keeps track of what AST expression is represented in the Columns array
 	ColumnsAST []JoinColumn
 
+	// JoinPredicates are join predicates that have been broken up into left hand side and right hand side parts.
+	JoinPredicates []JoinColumn
+
 	// After offset planning
 
 	// Columns stores the column indexes of the columns coming from the left and right side
@@ -92,14 +95,15 @@ func (a *ApplyJoin) IPhysical() {}
 // Clone implements the Operator interface
 func (a *ApplyJoin) Clone(inputs []ops.Operator) ops.Operator {
 	return &ApplyJoin{
-		LHS:        inputs[0],
-		RHS:        inputs[1],
-		Columns:    slices.Clone(a.Columns),
-		ColumnsAST: slices.Clone(a.ColumnsAST),
-		Vars:       maps.Clone(a.Vars),
-		LeftJoin:   a.LeftJoin,
-		Predicate:  sqlparser.CloneExpr(a.Predicate),
-		LHSColumns: slices.Clone(a.LHSColumns),
+		LHS:            inputs[0],
+		RHS:            inputs[1],
+		Columns:        slices.Clone(a.Columns),
+		ColumnsAST:     slices.Clone(a.ColumnsAST),
+		JoinPredicates: slices.Clone(a.JoinPredicates),
+		Vars:           maps.Clone(a.Vars),
+		LeftJoin:       a.LeftJoin,
+		Predicate:      sqlparser.CloneExpr(a.Predicate),
+		LHSColumns:     slices.Clone(a.LHSColumns),
 	}
 }
 
@@ -145,6 +149,18 @@ func (a *ApplyJoin) IsInner() bool {
 
 func (a *ApplyJoin) AddJoinPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) error {
 	a.Predicate = ctx.SemTable.AndExpressions(expr, a.Predicate)
+
+	col, err := BreakExpressionInLHSandRHS(ctx, expr, TableID(a.LHS))
+	if err != nil {
+		return err
+	}
+	a.JoinPredicates = append(a.JoinPredicates, col)
+	rhs, err := a.RHS.AddPredicate(ctx, col.RHSExpr)
+	if err != nil {
+		return err
+	}
+	a.RHS = rhs
+
 	return nil
 }
 

@@ -85,12 +85,8 @@ func (a *ApplyJoin) planOffsets(ctx *plancontext.PlanningContext) error {
 		}
 	}
 
-	predicates := sqlparser.SplitAndExpression(nil, a.Predicate)
-	for _, pred := range predicates {
-		col, err := BreakExpressionInLHSandRHS(ctx, pred, TableID(a.LHS))
-		if err != nil {
-			return err
-		}
+	for _, col := range a.JoinPredicates {
+		var err error
 		for i, lhsExpr := range col.LHSExprs {
 			offset, err := a.pushColLeft(ctx, aeWrap(lhsExpr))
 			if err != nil {
@@ -110,12 +106,6 @@ func (a *ApplyJoin) planOffsets(ctx *plancontext.PlanningContext) error {
 			return err
 		}
 		a.LHSColumns = append(a.LHSColumns, lhsColumns...)
-
-		rhs, err := a.RHS.AddPredicate(ctx, col.RHSExpr)
-		if err != nil {
-			return err
-		}
-		a.RHS = rhs
 	}
 	return nil
 }
