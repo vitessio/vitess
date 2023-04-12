@@ -18,6 +18,7 @@ package vreplication
 
 import (
 	"fmt"
+	"math/rand"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -55,7 +56,7 @@ func TestMigrate(t *testing.T) {
 	defer vc.TearDown(t)
 
 	defaultCell = vc.Cells[defaultCellName]
-	vc.AddKeyspace(t, []*Cell{defaultCell}, "product", "0", initialProductVSchema, initialProductSchema, defaultReplicas, defaultRdonly, 100, nil)
+	vc.AddKeyspace(t, []*Cell{defaultCell}, "product", "0", initialProductVSchema, initialProductSchema, defaultReplicas, defaultRdonly, 100+rand.Intn(100), nil)
 	err := cluster.WaitForHealthyShard(vc.VtctldClient, "product", "0")
 	require.NoError(t, err)
 	vtgate = defaultCell.Vtgates[0]
@@ -74,7 +75,7 @@ func TestMigrate(t *testing.T) {
 	defer extVc.TearDown(t)
 
 	extCell2 := extVc.Cells[extCell]
-	extVc.AddKeyspace(t, []*Cell{extCell2}, "rating", "0", initialExternalVSchema, initialExternalSchema, 0, 0, 1000, nil)
+	extVc.AddKeyspace(t, []*Cell{extCell2}, "rating", "0", initialExternalVSchema, initialExternalSchema, 0, 0, 1000+rand.Intn(1000), nil)
 	extVtgate := extCell2.Vtgates[0]
 	require.NotNil(t, extVtgate)
 
