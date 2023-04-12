@@ -256,22 +256,17 @@ func evalToInt64(e eval) *evalInt64 {
 			return newEvalInt64(0)
 		case json.TypeNumber:
 			switch e.NumberType() {
-			case json.NumberTypeInteger:
-				i, ok := e.Int64()
-				if ok {
-					return newEvalInt64(i)
-				}
-				u, ok := e.Uint64()
-				if ok {
-					return newEvalInt64(int64(u))
-				}
-
-				d, ok := e.Decimal()
-				if !ok {
-					return newEvalInt64(0)
-				}
+			case json.NumberTypeSigned:
+				i, _ := e.Int64()
+				return newEvalInt64(i)
+			case json.NumberTypeUnsigned:
+				u, _ := e.Uint64()
+				// OMG, MySQL is really terrible at this.
+				return newEvalInt64(int64(u))
+			case json.NumberTypeDecimal:
+				d, _ := e.Decimal()
 				return newEvalInt64(decimalToInt64(d))
-			case json.NumberTypeDouble:
+			case json.NumberTypeFloat:
 				f, _ := e.Float64()
 				return newEvalInt64(floatToInt64(f))
 			default:

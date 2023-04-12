@@ -52,17 +52,17 @@ func TestBinaryJSON(t *testing.T) {
 		{
 			name:     `object {"a": 2}`,
 			data:     []byte{0, 1, 0, 12, 0, 11, 0, 1, 0, 5, 2, 0, 97},
-			expected: jsonObject(map[string]*json.Value{"a": json.NewNumber("2", true)}),
+			expected: jsonObject(map[string]*json.Value{"a": json.NewNumber("2", json.NumberTypeSigned)}),
 		},
 		{
 			name:     `nested object {"asdf":{"foo":123}}`,
 			data:     []byte{0, 1, 0, 29, 0, 11, 0, 4, 0, 0, 15, 0, 97, 115, 100, 102, 1, 0, 14, 0, 11, 0, 3, 0, 5, 123, 0, 102, 111, 111},
-			expected: jsonObject(map[string]*json.Value{"asdf": jsonObject(map[string]*json.Value{"foo": json.NewNumber("123", true)})}),
+			expected: jsonObject(map[string]*json.Value{"asdf": jsonObject(map[string]*json.Value{"foo": json.NewNumber("123", json.NumberTypeSigned)})}),
 		},
 		{
 			name:     `array [1,2]`,
 			data:     []byte{2, 2, 0, 10, 0, 5, 1, 0, 5, 2, 0},
-			expected: json.NewArray([]*json.Value{json.NewNumber("1", true), json.NewNumber("2", true)}),
+			expected: json.NewArray([]*json.Value{json.NewNumber("1", json.NumberTypeSigned), json.NewNumber("2", json.NumberTypeSigned)}),
 		},
 		{
 			name: `complex {"a":"b","c":"d","ab":"abc","bc":["x","y"]}`,
@@ -134,67 +134,67 @@ func TestBinaryJSON(t *testing.T) {
 		{
 			name:     `-1`,
 			data:     []byte{5, 255, 255},
-			expected: json.NewNumber("-1", true),
+			expected: json.NewNumber("-1", json.NumberTypeSigned),
 		},
 		{
 			name:     `1`,
 			data:     []byte{6, 1, 0},
-			expected: json.NewNumber("1", true),
+			expected: json.NewNumber("1", json.NumberTypeUnsigned),
 		},
 		{
 			name:     `32767`,
 			data:     []byte{5, 255, 127},
-			expected: json.NewNumber("32767", true),
+			expected: json.NewNumber("32767", json.NumberTypeSigned),
 		},
 		{
 			name:     `32768`,
 			data:     []byte{7, 0, 128, 0, 0},
-			expected: json.NewNumber("32768", true),
+			expected: json.NewNumber("32768", json.NumberTypeSigned),
 		},
 		{
 			name:     `-32769`,
 			data:     []byte{7, 255, 127, 255, 255},
-			expected: json.NewNumber("-32769", true),
+			expected: json.NewNumber("-32769", json.NumberTypeSigned),
 		},
 		{
 			name:     `2147483647`,
 			data:     []byte{7, 255, 255, 255, 127},
-			expected: json.NewNumber("2147483647", true),
+			expected: json.NewNumber("2147483647", json.NumberTypeSigned),
 		},
 		{
 			name:     `32768`,
 			data:     []byte{8, 0, 128, 0, 0},
-			expected: json.NewNumber("32768", true),
+			expected: json.NewNumber("32768", json.NumberTypeUnsigned),
 		},
 		{
 			name:     `2147483648`,
 			data:     []byte{9, 0, 0, 0, 128, 0, 0, 0, 0},
-			expected: json.NewNumber("2147483648", true),
+			expected: json.NewNumber("2147483648", json.NumberTypeSigned),
 		},
 		{
 			name:     `-2147483648`,
 			data:     []byte{7, 0, 0, 0, 128},
-			expected: json.NewNumber("-2147483648", true),
+			expected: json.NewNumber("-2147483648", json.NumberTypeSigned),
 		},
 		{
 			name:     `-2147483649`,
 			data:     []byte{9, 255, 255, 255, 127, 255, 255, 255, 255},
-			expected: json.NewNumber("-2147483649", true),
+			expected: json.NewNumber("-2147483649", json.NumberTypeSigned),
 		},
 		{
 			name:     `18446744073709551615`,
 			data:     []byte{10, 255, 255, 255, 255, 255, 255, 255, 255},
-			expected: json.NewNumber("18446744073709551615", true),
+			expected: json.NewNumber("18446744073709551615", json.NumberTypeUnsigned),
 		},
 		{
 			name:     `-9223372036854775808`,
 			data:     []byte{9, 0, 0, 0, 0, 0, 0, 0, 128},
-			expected: json.NewNumber("-9223372036854775808", true),
+			expected: json.NewNumber("-9223372036854775808", json.NumberTypeSigned),
 		},
 		{
 			name:     `3.14159`,
 			data:     []byte{11, 110, 134, 27, 240, 249, 33, 9, 64},
-			expected: json.NewNumber("3.14159", false),
+			expected: json.NewNumber("3.14159", json.NumberTypeFloat),
 		},
 		{
 			name:     `empty object {}`,
@@ -229,7 +229,7 @@ func TestBinaryJSON(t *testing.T) {
 		{
 			name:     `decimal "123456789.1234"`,
 			data:     []byte{15, 246, 8, 13, 4, 135, 91, 205, 21, 4, 210},
-			expected: json.NewNumber("123456789.1234", true),
+			expected: json.NewNumber("123456789.1234", json.NumberTypeDecimal),
 		},
 		{
 			name:     `bit literal [2 202 254]`,

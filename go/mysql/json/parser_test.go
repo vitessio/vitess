@@ -519,7 +519,7 @@ func TestParserParse(t *testing.T) {
 		if tp != TypeNumber || tp.String() != "number" {
 			t.Fatalf("unexpected type obtained for integer: %#v", v)
 		}
-		if !v.i {
+		if v.n != NumberTypeSigned {
 			t.Fatalf("unexpected non integer value: %#v", v)
 		}
 		s := v.String()
@@ -582,7 +582,7 @@ func TestParserParse(t *testing.T) {
 		if tp != TypeNumber || tp.String() != "number" {
 			t.Fatalf("unexpected type obtained for integer: %#v", v)
 		}
-		if v.i {
+		if v.n != NumberTypeFloat {
 			t.Fatalf("unexpected integer value: %#v", v)
 		}
 		s := v.String()
@@ -600,7 +600,7 @@ func TestParserParse(t *testing.T) {
 		if tp != TypeNumber || tp.String() != "number" {
 			t.Fatalf("unexpected type obtained for number: %#v", v)
 		}
-		if v.i {
+		if v.n != NumberTypeFloat {
 			t.Fatalf("unexpected integer value: %#v", v)
 		}
 		s := v.String()
@@ -618,7 +618,7 @@ func TestParserParse(t *testing.T) {
 		if tp != TypeNumber || tp.String() != "number" {
 			t.Fatalf("unexpected type obtained for number: %#v", v)
 		}
-		if v.i {
+		if v.n != NumberTypeFloat {
 			t.Fatalf("unexpected integer value: %#v", v)
 		}
 		s := v.String()

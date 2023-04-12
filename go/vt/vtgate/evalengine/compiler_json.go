@@ -52,8 +52,12 @@ func (c *compiler) compileToJSON(doct ctype, offset int) (ctype, error) {
 		return doct, nil
 	case sqltypes.Float64:
 		c.asm.Convert_fj(offset)
-	case sqltypes.Int64, sqltypes.Uint64, sqltypes.Decimal:
-		c.asm.Convert_nj(offset, doct.Flag&flagIsBoolean != 0)
+	case sqltypes.Int64:
+		c.asm.Convert_ij(offset, doct.Flag&flagIsBoolean != 0)
+	case sqltypes.Uint64:
+		c.asm.Convert_uj(offset)
+	case sqltypes.Decimal:
+		c.asm.Convert_dj(offset)
 	case sqltypes.VarChar:
 		c.asm.Convert_cj(offset)
 	case sqltypes.VarBinary:
@@ -74,8 +78,12 @@ func (c *compiler) compileArgToJSON(doct ctype, offset int) (ctype, error) {
 		return doct, nil
 	case sqltypes.Float64:
 		c.asm.Convert_fj(offset)
-	case sqltypes.Int64, sqltypes.Uint64, sqltypes.Decimal:
-		c.asm.Convert_nj(offset, doct.Flag&flagIsBoolean != 0)
+	case sqltypes.Int64:
+		c.asm.Convert_ij(offset, doct.Flag&flagIsBoolean != 0)
+	case sqltypes.Uint64:
+		c.asm.Convert_uj(offset)
+	case sqltypes.Decimal:
+		c.asm.Convert_dj(offset)
 	case sqltypes.VarChar:
 		c.asm.ConvertArg_cj(offset)
 	case sqltypes.VarBinary:

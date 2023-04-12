@@ -76,7 +76,7 @@ func evalConvert_fj(e *evalFloat) *evalJSON {
 	if bytes.IndexByte(f, '.') < 0 {
 		f = append(f, '.', '0')
 	}
-	return json.NewNumber(hack.String(f), false)
+	return json.NewNumber(hack.String(f), json.NumberTypeFloat)
 }
 
 func evalConvert_nj(e evalNumeric) *evalJSON {
@@ -86,7 +86,15 @@ func evalConvert_nj(e evalNumeric) *evalJSON {
 	if e == evalBoolFalse {
 		return json.ValueFalse
 	}
-	return json.NewNumber(hack.String(e.ToRawBytes()), e.SQLType() != sqltypes.Decimal)
+	switch e := e.(type) {
+	case *evalInt64:
+		return json.NewNumber(hack.String(e.ToRawBytes()), json.NumberTypeSigned)
+	case *evalUint64:
+		return json.NewNumber(hack.String(e.ToRawBytes()), json.NumberTypeUnsigned)
+	case *evalDecimal:
+		return json.NewNumber(hack.String(e.ToRawBytes()), json.NumberTypeDecimal)
+	}
+	panic("unreachable")
 }
 
 func evalConvert_cj(e *evalBytes) (*evalJSON, error) {

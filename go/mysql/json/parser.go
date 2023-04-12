@@ -207,7 +207,7 @@ func parseValue(s string, c *cache, depth int) (*Value, string, error) {
 			v := c.getValue()
 			v.t = TypeNumber
 			v.s = ns
-			v.i = true
+			v.n = NumberTypeSigned
 			return v, tail, nil
 		}
 		_, err = fastparse.ParseUint64(ns, 10)
@@ -215,7 +215,7 @@ func parseValue(s string, c *cache, depth int) (*Value, string, error) {
 			v := c.getValue()
 			v.t = TypeNumber
 			v.s = ns
-			v.i = true
+			v.n = NumberTypeUnsigned
 			return v, tail, nil
 		}
 	}
@@ -232,7 +232,7 @@ func parseValue(s string, c *cache, depth int) (*Value, string, error) {
 		buf = append(buf, ".0"...)
 	}
 	v.s = hack.String(buf)
-	v.i = false
+	v.n = NumberTypeFloat
 	return v, tail, nil
 }
 
@@ -655,11 +655,7 @@ type Value struct {
 	a []*Value
 	s string
 	t Type
-	// Flag to indicate if we have an arbitrary sized integer type
-	// or a floating point value if we have a number type. MySQL
-	// makes this distinction as well and keeps track of this type
-	// through JSON operations.
-	i bool
+	n NumberType
 }
 
 func (v *Value) MarshalDate() string {
@@ -691,13 +687,13 @@ func (v *Value) MarshalTime() string {
 			b.WriteByte('-')
 		}
 
-		hours := (diff / time.Hour)
+		hours := diff / time.Hour
 		diff -= hours * time.Hour
 		fmt.Fprintf(&b, "%02d", hours)
-		minutes := (diff / time.Minute)
+		minutes := diff / time.Minute
 		fmt.Fprintf(&b, ":%02d", minutes)
 		diff -= minutes * time.Minute
-		seconds := (diff / time.Second)
+		seconds := diff / time.Second
 		fmt.Fprintf(&b, ":%02d", seconds)
 		diff -= seconds * time.Second
 		fmt.Fprintf(&b, ".%06d", diff/1000)
@@ -772,6 +768,27 @@ func (v *Value) String() string {
 	return hack.String(b)
 }
 
+func (v *Value) ToBoolean() bool {
+	switch v.Type() {
+	case TypeNumber:
+		switch v.n {
+		case NumberTypeSigned:
+			i, _ := v.Int64()
+			return i != 0
+		case NumberTypeUnsigned:
+			i, _ := v.Uint64()
+			return i != 0
+		case NumberTypeFloat:
+			f, _ := v.Float64()
+			return f != 0.0
+		case NumberTypeDecimal:
+			d, _ := v.Decimal()
+			return !d.IsZero()
+		}
+	}
+	return true
+}
+
 // Type represents JSON type.
 type Type int32
 
@@ -792,7 +809,7 @@ const (
 	// TypeArray is JSON array type.
 	TypeArray
 
-	// TypeTrue is JSON boolean.
+	// TypeBoolean is JSON boolean.
 	TypeBoolean
 
 	// TypeDate is JSON date.
@@ -820,8 +837,10 @@ type NumberType int32
 
 const (
 	NumberTypeUnknown NumberType = iota
-	NumberTypeInteger
-	NumberTypeDouble
+	NumberTypeSigned
+	NumberTypeUnsigned
+	NumberTypeDecimal
+	NumberTypeFloat
 )
 
 // String returns string representation of t.
@@ -932,10 +951,7 @@ func (v *Value) NumberType() NumberType {
 	if v.t != TypeNumber {
 		return NumberTypeUnknown
 	}
-	if v.i {
-		return NumberTypeInteger
-	}
-	return NumberTypeDouble
+	return v.n
 }
 
 func (v *Value) Int64() (int64, bool) {

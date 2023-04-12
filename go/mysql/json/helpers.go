@@ -49,8 +49,8 @@ func NewObject(obj Object) *Value {
 	return &Value{o: obj, t: TypeObject}
 }
 
-func NewNumber(num string, i bool) *Value {
-	return &Value{s: string(num), t: TypeNumber, i: i}
+func NewNumber(num string, n NumberType) *Value {
+	return &Value{s: num, t: TypeNumber, n: n}
 }
 
 func NewString(raw string) *Value {

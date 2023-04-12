@@ -784,26 +784,8 @@ func (asm *assembler) Convert_TB(offset int) {
 
 func (asm *assembler) Convert_jB(offset int) {
 	asm.emit(func(env *ExpressionEnv) int {
-		b := false
 		arg := env.vm.stack[env.vm.sp-offset].(*evalJSON)
-		switch arg.Type() {
-		case json.TypeNumber:
-			switch arg.NumberType() {
-			case json.NumberTypeInteger:
-				if i, ok := arg.Int64(); ok {
-					b = i != 0
-				} else {
-					d, _ := arg.Decimal()
-					b = !d.IsZero()
-				}
-			case json.NumberTypeDouble:
-				d, _ := arg.Float64()
-				b = d != 0.0
-			}
-		default:
-			b = true
-		}
-		env.vm.stack[env.vm.sp-offset] = env.vm.arena.newEvalBool(b)
+		env.vm.stack[env.vm.sp-offset] = env.vm.arena.newEvalBool(arg.ToBoolean())
 		return 1
 	}, "CONV JSON(SP-%d), BOOL", offset)
 }
@@ -937,23 +919,35 @@ func (asm *assembler) Clamp_u(offset int, val uint64) {
 	}, "CLAMP UINT64(SP-%d), UINT64", offset)
 }
 
-func (asm *assembler) Convert_nj(offset int, isBool bool) {
+func (asm *assembler) Convert_ij(offset int, isBool bool) {
 	asm.emit(func(env *ExpressionEnv) int {
-		arg := env.vm.stack[env.vm.sp-offset].(evalNumeric)
-		if intArg, ok := arg.(*evalInt64); isBool && ok {
-			switch intArg.i {
-			case 0:
-				env.vm.stack[env.vm.sp-offset] = json.ValueFalse
-			case 1:
-				env.vm.stack[env.vm.sp-offset] = json.ValueTrue
-			default:
-				env.vm.stack[env.vm.sp-offset] = json.NewNumber(string(intArg.ToRawBytes()), true)
-			}
-		} else {
-			env.vm.stack[env.vm.sp-offset] = json.NewNumber(string(arg.ToRawBytes()), arg.SQLType() != sqltypes.Decimal)
+		arg := env.vm.stack[env.vm.sp-offset].(*evalInt64)
+		switch {
+		case isBool && arg.i == 0:
+			env.vm.stack[env.vm.sp-offset] = json.ValueFalse
+		case isBool && arg.i == 1:
+			env.vm.stack[env.vm.sp-offset] = json.ValueTrue
+		default:
+			env.vm.stack[env.vm.sp-offset] = json.NewNumber(string(arg.ToRawBytes()), json.NumberTypeSigned)
 		}
 		return 1
-	}, "CONV numeric(SP-%d), JSON")
+	}, "CONV INT64(SP-%d), JSON")
+}
+
+func (asm *assembler) Convert_uj(offset int) {
+	asm.emit(func(env *ExpressionEnv) int {
+		arg := env.vm.stack[env.vm.sp-offset].(*evalUint64)
+		env.vm.stack[env.vm.sp-offset] = json.NewNumber(string(arg.ToRawBytes()), json.NumberTypeUnsigned)
+		return 1
+	}, "CONV UINT64(SP-%d), JSON")
+}
+
+func (asm *assembler) Convert_dj(offset int) {
+	asm.emit(func(env *ExpressionEnv) int {
+		arg := env.vm.stack[env.vm.sp-offset].(*evalDecimal)
+		env.vm.stack[env.vm.sp-offset] = json.NewNumber(string(arg.ToRawBytes()), json.NumberTypeDecimal)
+		return 1
+	}, "CONV DECIMAL(SP-%d), JSON")
 }
 
 func (asm *assembler) Convert_Nj(offset int) {

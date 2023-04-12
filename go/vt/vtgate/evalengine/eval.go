@@ -153,25 +153,7 @@ func evalIsTruthy(e eval) boolean {
 		}
 		return makeboolean(parseStringToFloat(e.string()) != 0.0)
 	case *evalJSON:
-		switch e.Type() {
-		case json.TypeNumber:
-			switch e.NumberType() {
-			case json.NumberTypeInteger:
-				if i, ok := e.Int64(); ok {
-					return makeboolean(i != 0)
-				}
-
-				d, _ := e.Decimal()
-				return makeboolean(!d.IsZero())
-			case json.NumberTypeDouble:
-				d, _ := e.Float64()
-				return makeboolean(d != 0.0)
-			default:
-				return makeboolean(parseStringToFloat(e.Raw()) != 0.0)
-			}
-		default:
-			return makeboolean(true)
-		}
+		return makeboolean(e.ToBoolean())
 	case *evalTemporal:
 		return makeboolean(!e.isZero())
 	default:
