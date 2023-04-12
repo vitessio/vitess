@@ -81,7 +81,7 @@ func transformToPhysical(ctx *plancontext.PlanningContext, in ops.Operator) (ops
 		return nil, err
 	}
 
-	return Compact(ctx, op)
+	return compact(ctx, op)
 }
 
 func optimizeFilter(op *Filter) (ops.Operator, rewrite.ApplyResult, error) {

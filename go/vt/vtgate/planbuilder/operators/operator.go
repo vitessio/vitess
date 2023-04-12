@@ -58,35 +58,19 @@ func PlanQuery(ctx *plancontext.PlanningContext, selStmt sqlparser.Statement) (o
 		return nil, err
 	}
 
-	if err = CheckValid(op); err != nil {
+	if err = checkValid(op); err != nil {
 		return nil, err
 	}
 
-	op, err = transformToPhysical(ctx, op)
-	if err != nil {
+	if op, err = transformToPhysical(ctx, op); err != nil {
 		return nil, err
 	}
 
-	backup := Clone(op)
-
-	op, err = planHorizons(ctx, op)
-	if err == nil {
-		op, err = planOffsets(ctx, op)
-		if err == nil {
-			op = stripSimpleProjection(op)
-		}
-	}
-	if err == errNotHorizonPlanned {
-		op = backup
-		err := planOffsetsOnJoins(ctx, op)
-		if err != nil {
-			return nil, err
-		}
-	} else if err != nil {
+	if op, err = tryHorizonPlanning(ctx, op); err != nil {
 		return nil, err
 	}
 
-	if op, err = Compact(ctx, op); err != nil {
+	if op, err = compact(ctx, op); err != nil {
 		return nil, err
 	}
 
@@ -97,6 +81,25 @@ func PlanQuery(ctx *plancontext.PlanningContext, selStmt sqlparser.Statement) (o
 	}
 
 	return op, err
+}
+
+func tryHorizonPlanning(ctx *plancontext.PlanningContext, op ops.Operator) (output ops.Operator, err error) {
+	backup := Clone(op)
+	defer func() {
+		if err == errHorizonNotPlanned {
+			err = planOffsetsOnJoins(ctx, backup)
+			if err == nil {
+				output = backup
+			}
+		}
+	}()
+
+	output, err = planHorizons(ctx, op)
+	if err != nil {
+		return nil, err
+	}
+
+	return planOffsets(ctx, output)
 }
 
 func stripSimpleProjection(op ops.Operator) ops.Operator {

@@ -27,7 +27,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 )
 
-var errNotHorizonPlanned = vterrors.VT12001("query cannot be fully operator planned")
+var errHorizonNotPlanned = vterrors.VT12001("query cannot be fully operator planned")
 
 // planHorizons is the process of figuring out how to perform the operations in the Horizon
 // If we can push it under a route - done.
@@ -59,7 +59,7 @@ func planHorizons(ctx *plancontext.PlanningContext, root ops.Operator) (ops.Oper
 	if err != nil {
 		if vterr, ok := err.(*vterrors.VitessError); ok && vterr.ID == "VT13001" {
 			// we encountered a bug. let's try to back out
-			return nil, errNotHorizonPlanned
+			return nil, errHorizonNotPlanned
 		}
 		return nil, err
 	}
@@ -182,7 +182,7 @@ func pushOrExpandHorizon(ctx *plancontext.PlanningContext, in horizonLike) (ops.
 
 	sel, isSel := in.selectStatement().(*sqlparser.Select)
 	if !isSel {
-		return nil, errNotHorizonPlanned
+		return nil, errHorizonNotPlanned
 	}
 
 	qp, err := CreateQPFromSelect(ctx, sel)
@@ -214,7 +214,7 @@ func planDerived(ctx *plancontext.PlanningContext, in *Derived) (ops.Operator, e
 func expandHorizon(qp *QueryProjection, horizon horizonLike) (ops.Operator, error) {
 	sel, isSel := horizon.selectStatement().(*sqlparser.Select)
 	if !isSel {
-		return nil, errNotHorizonPlanned
+		return nil, errHorizonNotPlanned
 	}
 
 	needsOrdering := len(qp.OrderExprs) > 0
@@ -222,7 +222,7 @@ func expandHorizon(qp *QueryProjection, horizon horizonLike) (ops.Operator, erro
 	_, isDerived := src.(*Derived)
 
 	if qp.NeedsAggregation() || sel.Having != nil || sel.Limit != nil || isDerived || needsOrdering || qp.NeedsDistinct() || sel.Distinct {
-		return nil, errNotHorizonPlanned
+		return nil, errHorizonNotPlanned
 	}
 
 	proj := &Projection{
@@ -236,7 +236,7 @@ func expandHorizon(qp *QueryProjection, horizon horizonLike) (ops.Operator, erro
 		}
 		if !expr.As.IsEmpty() {
 			// we are not handling column names correct yet, so let's fail here for now
-			return nil, errNotHorizonPlanned
+			return nil, errHorizonNotPlanned
 		}
 		proj.Columns = append(proj.Columns, Expr{E: expr.Expr})
 		colName := ""

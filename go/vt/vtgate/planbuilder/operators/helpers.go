@@ -28,8 +28,8 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
-// Compact will optimise the operator tree into a smaller but equivalent version
-func Compact(ctx *plancontext.PlanningContext, op ops.Operator) (ops.Operator, error) {
+// compact will optimise the operator tree into a smaller but equivalent version
+func compact(ctx *plancontext.PlanningContext, op ops.Operator) (ops.Operator, error) {
 	type compactable interface {
 		// Compact implement this interface for operators that have easy to see optimisations
 		Compact(ctx *plancontext.PlanningContext) (ops.Operator, rewrite.ApplyResult, error)
@@ -45,7 +45,7 @@ func Compact(ctx *plancontext.PlanningContext, op ops.Operator) (ops.Operator, e
 	return newOp, err
 }
 
-func CheckValid(op ops.Operator) error {
+func checkValid(op ops.Operator) error {
 	type checkable interface {
 		CheckValid() error
 	}
