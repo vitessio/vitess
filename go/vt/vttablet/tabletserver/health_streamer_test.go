@@ -353,10 +353,12 @@ func TestReloadView(t *testing.T) {
 	db.AddQuery("rollback", &sqltypes.Result{})
 	db.AddQuery(sqlparser.BuildParsedQuery(mysql.DetectSchemaChangeOnlyBaseTable, sidecardb.GetIdentifier()).Query, &sqltypes.Result{})
 	db.AddQuery(sqlparser.BuildParsedQuery(mysql.DetectViewChange, sidecardb.GetIdentifier()).Query, &sqltypes.Result{})
-	db.AddQuery(sqlparser.BuildParsedQuery(mysql.DeleteFromViewsTable, sidecardb.GetIdentifier()).Query, &sqltypes.Result{})
 	db.AddQuery("select table_name, view_definition from information_schema.views where table_schema = database() and table_name in ('view_a', 'view_b')", &sqltypes.Result{})
 	db.AddQuery("select table_name, view_definition from information_schema.views where table_schema = database() and table_name in ('view_b')", &sqltypes.Result{})
 	db.AddQuery("select table_name, view_definition from information_schema.views where table_schema = database() and table_name in ('view_a', 'view_b', 'view_c')", &sqltypes.Result{})
+	db.AddQuery("delete from _vt.views where table_schema = database() and table_name in ('view_a', 'view_b')", &sqltypes.Result{})
+	db.AddQuery("delete from _vt.views where table_schema = database() and table_name in ('view_b')", &sqltypes.Result{})
+	db.AddQuery("delete from _vt.views where table_schema = database() and table_name in ('view_a', 'view_b', 'view_c')", &sqltypes.Result{})
 	db.AddQuery(mysql.FetchCreateStatement, &sqltypes.Result{})
 
 	hs.InitDBConfig(target, configs.DbaWithDB())
