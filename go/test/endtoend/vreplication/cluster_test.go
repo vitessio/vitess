@@ -666,7 +666,7 @@ func (vc *VitessCluster) teardown(t testing.TB) {
 	wg.Wait()
 	if err := vc.Vtctld.TearDown(); err != nil {
 		log.Infof("Error stopping Vtctld: %s, will retry...", err.Error())
-		if err := vc.Vtctld.TearDown(); err != nil {
+		if err = vc.Vtctld.TearDown(); err != nil {
 			log.Infof("Error stopping Vtctld on retry: %s, giving up.", err.Error())
 		}
 	} else {
@@ -687,7 +687,7 @@ func (vc *VitessCluster) teardown(t testing.TB) {
 	if vc.VTOrcProcess != nil {
 		if err := vc.VTOrcProcess.TearDown(); err != nil {
 			log.Infof("Error stopping VTOrc: %s", err.Error())
-			if err := vc.VTOrcProcess.TearDown(); err != nil {
+			if err = vc.VTOrcProcess.TearDown(); err != nil {
 				log.Infof("Error stopping VTOrc: %s, will retry...", err.Error())
 				if err = vc.VTOrcProcess.TearDown(); err != nil {
 					log.Infof("Error stopping VTOrc on retry: %s, giving up.", err.Error())
