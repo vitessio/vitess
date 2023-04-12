@@ -342,7 +342,7 @@ func (mysqld *Mysqld) RunMysqlUpgrade() error {
 }
 
 // Start will start the mysql daemon, either by running the
-// 'mysqld_start' hook, or by running mysqld_safe in the background.
+// 'mysqld_start' hook, or by running mysqld in the background.
 // If a mysqlctld address is provided in a flag, Start will run
 // remotely.  When waiting for mysqld to start, we will use
 // the dba user.
@@ -376,22 +376,15 @@ func (mysqld *Mysqld) startNoWait(ctx context.Context, cnf *Mycnf, mysqldArgs ..
 		// hook exists and worked, we can keep going
 		name = "mysqld_start hook" // nolint
 	case hook.HOOK_DOES_NOT_EXIST:
-		// hook doesn't exist, run mysqld_safe ourselves
-		log.Infof("%v: No mysqld_start hook, running mysqld_safe directly", ts)
+		// hook doesn't exist, run mysqld ourselves
+		log.Infof("%v: No mysqld_start hook, running mysqld directly", ts)
 		vtMysqlRoot, err := vtenv.VtMysqlRoot()
 		if err != nil {
 			return err
 		}
-		name, err = binaryPath(vtMysqlRoot, "mysqld_safe")
+		name, err = binaryPath(vtMysqlRoot, "mysqld")
 		if err != nil {
-			// The movement to use systemd means that mysqld_safe is not always provided.
-			// This should not be considered an issue do not generate a warning.
-			log.Infof("%v: trying to launch mysqld instead", err)
-			name, err = binaryPath(vtMysqlRoot, "mysqld")
-			// If this also fails, return an error.
-			if err != nil {
-				return err
-			}
+			return err
 		}
 		mysqlBaseDir, err := vtenv.VtMysqlBaseDir()
 		if err != nil {
