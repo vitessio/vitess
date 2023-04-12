@@ -5481,41 +5481,32 @@
         "TableName": "`user`_unsharded_unsharded",
         "Inputs": [
           {
-            "OperatorType": "SimpleProjection",
-            "Columns": [
-              0,
-              1
-            ],
+            "OperatorType": "Join",
+            "Variant": "Join",
+            "JoinColumnIndexes": "L:1,L:0",
+            "TableName": "`user`_unsharded",
             "Inputs": [
               {
-                "OperatorType": "Join",
-                "Variant": "Join",
-                "JoinColumnIndexes": "L:0,L:1",
-                "TableName": "`user`_unsharded",
-                "Inputs": [
-                  {
-                    "OperatorType": "Route",
-                    "Variant": "Scatter",
-                    "Keyspace": {
-                      "Name": "user",
-                      "Sharded": true
-                    },
-                    "FieldQuery": "select `user`.col1, 0 from `user` where 1 != 1",
-                    "Query": "select `user`.col1, 0 from `user`",
-                    "Table": "`user`"
-                  },
-                  {
-                    "OperatorType": "Route",
-                    "Variant": "Unsharded",
-                    "Keyspace": {
-                      "Name": "main",
-                      "Sharded": false
-                    },
-                    "FieldQuery": "select 1 from unsharded where 1 != 1",
-                    "Query": "select 1 from unsharded",
-                    "Table": "unsharded"
-                  }
-                ]
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select 0, `user`.col1 from `user` where 1 != 1",
+                "Query": "select 0, `user`.col1 from `user`",
+                "Table": "`user`"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "main",
+                  "Sharded": false
+                },
+                "FieldQuery": "select 1 from unsharded where 1 != 1",
+                "Query": "select 1 from unsharded",
+                "Table": "unsharded"
               }
             ]
           },

@@ -99,7 +99,43 @@ func tryHorizonPlanning(ctx *plancontext.PlanningContext, op ops.Operator) (outp
 		return nil, err
 	}
 
-	return planOffsets(ctx, output)
+	output, err = planOffsets(ctx, output)
+	if err != nil {
+		return nil, err
+	}
+
+	err = makeSureOutputIsCorrect(ctx, op, output)
+	if err != nil {
+		return nil, err
+	}
+
+	return
+}
+
+func makeSureOutputIsCorrect(ctx *plancontext.PlanningContext, op ops.Operator, output ops.Operator) error {
+	// next we use the original Horizon to make sure that the output columns line up with what the user asked for
+	// in the future, we'll tidy up the results. for now, we are just failing these queries and going back to the
+	// old horizon planning instead
+	horizon, ok := op.(*Horizon)
+	if !ok {
+		return nil
+	}
+
+	sel := sqlparser.GetFirstSelect(horizon.Select)
+	cols, err := output.GetColumns()
+	if err != nil {
+		return err
+	}
+	if len(sel.SelectExprs) != len(cols) {
+		return errHorizonNotPlanned
+	}
+	for i, expr := range sel.SelectExprs {
+		ae, ok := expr.(*sqlparser.AliasedExpr)
+		if !ok || !ctx.SemTable.EqualsExpr(ae.Expr, cols[i]) {
+			return errHorizonNotPlanned
+		}
+	}
+	return nil
 }
 
 func stripSimpleProjection(op ops.Operator) ops.Operator {
