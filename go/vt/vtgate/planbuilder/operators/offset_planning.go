@@ -122,6 +122,7 @@ func planOffsetsForProjection(ctx *plancontext.PlanningContext, op *Projection) 
 			newSrc, offset, terr := op.Source.AddColumn(ctx, aeWrap(col))
 			if terr != nil {
 				err = terr
+				return
 			}
 			op.Source = newSrc
 			cursor.Replace(sqlparser.NewOffset(offset, col))
