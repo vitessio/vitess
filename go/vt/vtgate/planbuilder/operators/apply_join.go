@@ -188,60 +188,40 @@ func (a *ApplyJoin) GetColumns() ([]sqlparser.Expr, error) {
 
 func jcToExpr(c JoinColumn) sqlparser.Expr { return c.Original }
 
+func (a *ApplyJoin) getJoinColumnFor(ctx *plancontext.PlanningContext, e sqlparser.Expr) (col JoinColumn, err error) {
+	col.Original = e
+	lhs := TableID(a.LHS)
+	rhs := TableID(a.RHS)
+	both := lhs.Merge(rhs)
+	deps := ctx.SemTable.RecursiveDeps(e)
+
+	switch {
+	case deps.IsSolvedBy(lhs):
+		col.LHSExprs = []sqlparser.Expr{e}
+	case deps.IsSolvedBy(rhs):
+		col.RHSExpr = e
+	case deps.IsSolvedBy(both):
+		col, err = BreakExpressionInLHSandRHS(ctx, e, TableID(a.LHS))
+		if err != nil {
+			return JoinColumn{}, err
+		}
+	default:
+		return JoinColumn{}, vterrors.VT13002(sqlparser.String(e))
+	}
+
+	return
+}
+
 func (a *ApplyJoin) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr) (ops.Operator, int, error) {
 	if offset, found := canReuseColumn(ctx, a.ColumnsAST, expr.Expr, jcToExpr); found {
 		return a, offset, nil
 	}
-	var col = JoinColumn{Original: expr.Expr}
-
-	side := chooseSide{
-		Expr: expr.Expr,
-		left: func() error {
-			col.LHSExprs = []sqlparser.Expr{expr.Expr}
-			return nil
-		},
-		right: func() error {
-			col.RHSExpr = expr.Expr
-			return nil
-		},
-		both: func() error {
-			var err error
-			col, err = BreakExpressionInLHSandRHS(ctx, expr.Expr, TableID(a.LHS))
-			if err != nil {
-				return err
-			}
-			return nil
-		},
-	}
-	err := a.Push(ctx, side)
+	col, err := a.getJoinColumnFor(ctx, expr.Expr)
 	if err != nil {
 		return nil, 0, err
 	}
 	a.ColumnsAST = append(a.ColumnsAST, col)
 	return a, len(a.ColumnsAST) - 1, nil
-}
-
-func (a *ApplyJoin) Push(ctx *plancontext.PlanningContext, chooser chooseSide) error {
-	lhs := TableID(a.LHS)
-	rhs := TableID(a.RHS)
-	both := lhs.Merge(rhs)
-	deps := ctx.SemTable.RecursiveDeps(chooser.Expr)
-
-	switch {
-	case deps.IsSolvedBy(lhs):
-		return chooser.left()
-	case deps.IsSolvedBy(rhs):
-		return chooser.right()
-	case deps.IsSolvedBy(both):
-		return chooser.both()
-	default:
-		return vterrors.VT13002(sqlparser.String(chooser.Expr))
-	}
-}
-
-type chooseSide struct {
-	Expr              sqlparser.Expr
-	left, right, both func() error
 }
 
 func (a *ApplyJoin) planOffsets(ctx *plancontext.PlanningContext) error {
@@ -299,4 +279,16 @@ func (a *ApplyJoin) addOffset(offset int) {
 		panic("should never pass through the same column")
 	}
 	a.Columns = append(a.Columns, offset)
+}
+
+func (jc JoinColumn) IsPureLeft() bool {
+	return jc.RHSExpr == nil
+}
+
+func (jc JoinColumn) IsPureRight() bool {
+	return len(jc.LHSExprs) == 0
+}
+
+func (jc JoinColumn) IsMixedLeftAndRight() bool {
+	return len(jc.LHSExprs) > 0 && jc.RHSExpr != nil
 }
