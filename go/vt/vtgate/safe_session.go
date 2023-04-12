@@ -151,11 +151,22 @@ func (session *SafeSession) ResetTx() {
 	session.mu.Lock()
 	defer session.mu.Unlock()
 	session.resetCommonLocked()
-	if !session.Session.InReservedConn {
-		session.ShardSessions = nil
-		session.PreSessions = nil
-		session.PostSessions = nil
+	// If settings pools is enabled on the vttablet.
+	// This variable will be true but there will not be a shard session with reserved connection id.
+	// So, we should check the shard session and not just this variable.
+	if session.Session.InReservedConn {
+		allSessions := append(session.ShardSessions, append(session.PreSessions, session.PostSessions...)...)
+		for _, ss := range allSessions {
+			if ss.ReservedId != 0 {
+				// found that reserved connection exists.
+				// abort here, we should keep the shard sessions.
+				return
+			}
+		}
 	}
+	session.ShardSessions = nil
+	session.PreSessions = nil
+	session.PostSessions = nil
 }
 
 // Reset clears the session
