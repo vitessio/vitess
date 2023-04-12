@@ -79,88 +79,94 @@ func tryPushingDownProjection(
 		}
 		return op, rewrite.NewTree, nil
 	case *ApplyJoin:
-		var (
-			// by setting idx, in and expr, and then running src.Push(),
-			// we'll get the return data in the remaining variables
-			idx int
-			in  ProjExpr
-
-			// this is the output of running src.Push
-			lhsCols, rhsColumns []ProjExpr
-			lhsNames, rhsNames  []string
-			out                 JoinColumn
-			err                 error
-		)
-		chooser := chooseSide{
-			left: func() error {
-				lhsCols = append(lhsCols, in)
-				lhsNames = append(lhsNames, p.ColumnNames[idx])
-				out = JoinColumn{
-					Original: in.GetExpr(),
-					LHSExprs: []sqlparser.Expr{in.GetExpr()},
-				}
-				return nil
-			},
-			right: func() error {
-				rhsColumns = append(rhsColumns, in)
-				rhsNames = append(rhsNames, p.ColumnNames[idx])
-				out = JoinColumn{
-					Original: in.GetExpr(),
-					RHSExpr:  in.GetExpr(),
-				}
-				return nil
-			},
-			both: func() error {
-				out, err = BreakExpressionInLHSandRHS(ctx, in.GetExpr(), TableID(src.LHS))
-				if err != nil {
-					return err
-				}
-
-				for _, lhsExpr := range out.LHSExprs {
-					lhsCols = append(lhsCols, &Expr{E: lhsExpr})
-					lhsNames = append(lhsNames, sqlparser.String(lhsExpr))
-				}
-
-				rhsColumns = append(rhsColumns, &Expr{E: out.RHSExpr})
-				rhsNames = append(rhsNames, p.ColumnNames[idx])
-
-				return nil
-			},
-		}
-
-		for idx = 0; idx < len(p.Columns); idx++ {
-			in = p.Columns[idx]
-			chooser.Expr = in.GetExpr()
-			err := src.Push(ctx, chooser)
-			if err != nil {
-				return nil, false, err
-			}
-			src.ColumnsAST = append(src.ColumnsAST, out)
-		}
-
-		if len(lhsCols) > 0 {
-			lhsProj, err := createProjection(src.LHS)
-			if err != nil {
-				return nil, false, err
-			}
-			lhsProj.ColumnNames = lhsNames
-			lhsProj.Columns = lhsCols
-			src.LHS = lhsProj
-		}
-		if len(rhsColumns) > 0 {
-			rhsProj, err := createProjection(src.RHS)
-			if err != nil {
-				return nil, false, err
-			}
-			rhsProj.ColumnNames = rhsNames
-			rhsProj.Columns = rhsColumns
-			src.RHS = rhsProj
-		}
-		return src, rewrite.NewTree, nil
-
+		return pushDownProjectionInApplyJoin(ctx, p, src)
 	default:
 		return p, rewrite.SameTree, nil
 	}
+}
+
+func pushDownProjectionInApplyJoin(ctx *plancontext.PlanningContext, p *Projection, src *ApplyJoin) (ops.Operator, rewrite.ApplyResult, error) {
+	var (
+		// by setting idx, in and expr, and then running src.Push(),
+		// we'll get the return data in the remaining variables
+		idx int
+		in  ProjExpr
+
+		// this is the output of running src.Push
+		lhsCols, rhsColumns []ProjExpr
+		lhsNames, rhsNames  []string
+		out                 JoinColumn
+		err                 error
+	)
+	chooser := chooseSide{
+		left: func() error {
+			lhsCols = append(lhsCols, in)
+			lhsNames = append(lhsNames, p.ColumnNames[idx])
+			out = JoinColumn{
+				Original: in.GetExpr(),
+				LHSExprs: []sqlparser.Expr{in.GetExpr()},
+			}
+			return nil
+		},
+		right: func() error {
+			rhsColumns = append(rhsColumns, in)
+			rhsNames = append(rhsNames, p.ColumnNames[idx])
+			out = JoinColumn{
+				Original: in.GetExpr(),
+				RHSExpr:  in.GetExpr(),
+			}
+			return nil
+		},
+		both: func() error {
+			out, err = BreakExpressionInLHSandRHS(ctx, in.GetExpr(), TableID(src.LHS))
+			if err != nil {
+				return err
+			}
+
+			for _, lhsExpr := range out.LHSExprs {
+				lhsCols = append(lhsCols, &Expr{E: lhsExpr})
+				lhsNames = append(lhsNames, sqlparser.String(lhsExpr))
+			}
+
+			rhsColumns = append(rhsColumns, &Expr{E: out.RHSExpr})
+			rhsNames = append(rhsNames, p.ColumnNames[idx])
+
+			return nil
+		},
+	}
+
+	for idx = 0; idx < len(p.Columns); idx++ {
+		in = p.Columns[idx]
+		chooser.Expr = in.GetExpr()
+		if _, found := canReuseColumn(ctx, src.ColumnsAST, chooser.Expr, jcToExpr); found {
+			continue
+		}
+		err := src.Push(ctx, chooser)
+		if err != nil {
+			return nil, false, err
+		}
+		src.ColumnsAST = append(src.ColumnsAST, out)
+	}
+
+	if len(lhsCols) > 0 {
+		lhsProj, err := createProjection(src.LHS)
+		if err != nil {
+			return nil, false, err
+		}
+		lhsProj.ColumnNames = lhsNames
+		lhsProj.Columns = lhsCols
+		src.LHS = lhsProj
+	}
+	if len(rhsColumns) > 0 {
+		rhsProj, err := createProjection(src.RHS)
+		if err != nil {
+			return nil, false, err
+		}
+		rhsProj.ColumnNames = rhsNames
+		rhsProj.Columns = rhsColumns
+		src.RHS = rhsProj
+	}
+	return src, rewrite.NewTree, nil
 }
 
 func stopAtRoute(operator ops.Operator) rewrite.VisitRule {
