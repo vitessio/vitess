@@ -100,7 +100,7 @@ func AddPredicate(
 // When a predicate uses information from an outer table, we can convert from an outer join to an inner join
 // if the predicate is "null-intolerant".
 //
-// Null-intolerant in this context means that the predicate will not be true if the table Columns are null.
+// Null-intolerant in this context means that the predicate will not be true if the table columns are null.
 //
 // Since an outer join is an inner join with the addition of all the rows from the left-hand side that
 // matched no rows on the right-hand, if we are later going to remove all the rows where the right-hand
