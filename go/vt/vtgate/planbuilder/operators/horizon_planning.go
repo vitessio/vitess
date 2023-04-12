@@ -185,7 +185,7 @@ func pushOrExpandHorizon(ctx *plancontext.PlanningContext, in horizonLike, isRoo
 	}
 
 	needsOrdering := len(qp.OrderExprs) > 0
-	canPushDown := isRoute && sel.Having == nil && !needsOrdering && !qp.NeedsAggregation()
+	canPushDown := isRoute && sel.Having == nil && !needsOrdering && !qp.NeedsAggregation() && !sel.Distinct
 
 	if canPushDown {
 		return rewrite.Swap(in, rb)
@@ -215,7 +215,7 @@ func expandHorizon(ctx *plancontext.PlanningContext, qp *QueryProjection, horizo
 	src := horizon.src()
 	_, isDerived := src.(*Derived)
 
-	if qp.NeedsAggregation() || sel.Having != nil || sel.Limit != nil || isDerived || needsOrdering || qp.NeedsDistinct() {
+	if qp.NeedsAggregation() || sel.Having != nil || sel.Limit != nil || isDerived || needsOrdering || qp.NeedsDistinct() || sel.Distinct {
 		return nil, errNotHorizonPlanned
 	}
 
