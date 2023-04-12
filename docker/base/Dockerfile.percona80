@@ -29,6 +29,9 @@ ARG BUILD_GIT_BRANCH
 # Allows docker builds to set the BUILD_GIT_REV
 ARG BUILD_GIT_REV
 
+# Allows docker builds to set the BUILD_TIME
+ARG BUILD_TIME
+
 # Re-copy sources from working tree
 COPY --chown=vitess:vitess . /vt/src/vitess.io/vitess
 
