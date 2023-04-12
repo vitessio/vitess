@@ -21,15 +21,15 @@ import (
 	"strconv"
 )
 
+const expUpperThreshold = 1000000000000000.0
+const expLowerThreshold = 0.000000000000001
+
 // FormatFloat formats a float64 as a byte string in a similar way to what MySQL does
 func FormatFloat(v float64) []byte {
-	g := AppendFloat(nil, 'g', v)
-	f := AppendFloat(nil, 'f', v)
-
-	if len(f) < len(g) {
-		return f
+	if v >= expUpperThreshold || v <= -expUpperThreshold || (v < expLowerThreshold && v > -expLowerThreshold) {
+		return AppendFloat(nil, 'g', v)
 	}
-	return g
+	return AppendFloat(nil, 'f', v)
 }
 
 func AppendFloat(buf []byte, format byte, f float64) []byte {
