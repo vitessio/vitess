@@ -133,9 +133,25 @@ func divideNumericWithError(left, right eval, precise bool) (eval, error) {
 	return mathDiv_xx(v1, v2, divPrecisionIncrement)
 }
 
-func integerDivideNumericWithError(left, right eval, precise bool) (eval, error) {
-	v1 := evalToNumeric(left)
-	v2 := evalToNumeric(right)
+func integerDivideConvert(arg eval) evalNumeric {
+	if dec, ok := arg.(evalNumeric); ok {
+		return dec
+	}
+
+	if b1, ok := arg.(*evalBytes); ok && b1.isHexLiteral {
+		hex, ok := b1.toNumericHex()
+		if !ok {
+			return newEvalDecimal(decimal.Zero, 0, 0)
+		}
+		return hex
+	}
+	return evalToDecimal(arg, 0, 0)
+}
+
+func integerDivideNumericWithError(left, right eval) (eval, error) {
+	v1 := integerDivideConvert(left)
+	v2 := integerDivideConvert(right)
+
 	switch v1 := v1.(type) {
 	case *evalInt64:
 		switch v2 := v2.(type) {

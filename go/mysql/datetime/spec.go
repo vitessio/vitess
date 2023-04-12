@@ -21,265 +21,531 @@ import (
 	"time"
 )
 
-var DefaultMySQLStrftime = map[byte]Spec{
-	'a': spec_a{},
-	'b': spec_b{},
-	'c': spec_cm{},
-	'D': spec_D{},
-	'd': spec_d{},
-	'e': spec_e{},
-	'f': spec_f{},
-	'H': spec_Hk{},
-	'h': spec_hIl{},
-	'I': spec_hIl{},
-	'i': spec_i{},
-	'j': spec_j{},
-	'k': spec_Hk{},
-	'l': spec_hIl{},
-	'M': spec_M{},
-	'm': spec_cm{},
-	'p': spec_p{},
-	'r': spec_r{},
-	'S': spec_Ss{},
-	's': spec_Ss{},
-	'T': spec_T{},
-	'U': spec_U{},
-	'u': spec_u{},
-	'V': spec_V{},
-	'v': spec_v{},
-	'W': spec_W{},
-	'w': spec_w{},
-	'X': spec_X{},
-	'x': spec_x{},
-	'Y': spec_Y{},
-	'y': spec_y{},
+type Spec interface {
+	parser
+	formatter
 }
 
-type spec_a struct{}
-type spec_b struct{}
-type spec_cm struct{}
-type spec_D struct{}
-type spec_d struct{}
-type spec_e struct{}
-type spec_f struct{}
-type spec_Hk struct{}
-type spec_hIl struct{}
-type spec_i struct{}
-type spec_j struct{}
-type spec_M struct{}
-type spec_p struct{}
-type spec_r struct{}
-type spec_Ss struct{}
-type spec_T struct{}
-type spec_U struct{}
-type spec_u struct{}
-type spec_V struct{}
-type spec_v struct{}
-type spec_W struct{}
-type spec_w struct{}
-type spec_X struct{}
-type spec_x struct{}
-type spec_Y struct{}
-type spec_y struct{}
-
-func (spec_a) format(ctx *formatctx, b []byte) []byte {
-	return append(b, ctx.t.Weekday().String()[3:]...)
+type formatter interface {
+	format(dst []byte, t DateTime, prec uint8) []byte
 }
 
-func (spec_b) format(ctx *formatctx, b []byte) []byte {
-	ctx.initYear()
-	return append(b, ctx.month.String()[3:]...)
+type parser interface {
+	parse(*timeparts, string) (string, bool)
 }
 
-func (spec_cm) format(ctx *formatctx, b []byte) []byte {
-	ctx.initYear()
-	return appendInt(b, int(ctx.month), 2)
+type numeric interface {
+	numeric(t DateTime) (int, int)
 }
 
-func (spec_d) format(ctx *formatctx, b []byte) []byte {
-	ctx.initYear()
-	return appendInt(b, ctx.day, 2)
+var shortDayNames = []string{
+	"Sun",
+	"Mon",
+	"Tue",
+	"Wed",
+	"Thu",
+	"Fri",
+	"Sat",
 }
 
-func (spec_D) format(ctx *formatctx, b []byte) []byte {
-	panic("TODO")
+var shortMonthNames = []string{
+	"Jan",
+	"Feb",
+	"Mar",
+	"Apr",
+	"May",
+	"Jun",
+	"Jul",
+	"Aug",
+	"Sep",
+	"Oct",
+	"Nov",
+	"Dec",
 }
 
-func (spec_e) format(ctx *formatctx, b []byte) []byte {
-	ctx.initYear()
-	return appendInt(b, ctx.day, 0)
+type fmtWeekdayNameShort struct{}
+
+func (fmtWeekdayNameShort) format(dst []byte, t DateTime, prec uint8) []byte {
+	return append(dst, t.Date.Weekday().String()[:3]...)
 }
 
-func (spec_f) format(ctx *formatctx, b []byte) []byte {
-	f := ctx.t.Nanosecond() / 1000
-	l := len(b)
+func (fmtWeekdayNameShort) parse(_ *timeparts, b string) (out string, ok bool) {
+	_, out, ok = lookup(shortDayNames, b)
+	return
+}
+
+type fmtMonthNameShort struct{}
+
+func (fmtMonthNameShort) format(dst []byte, t DateTime, prec uint8) []byte {
+	return append(dst, time.Month(t.Date.Month()).String()[:3]...)
+}
+
+func (fmtMonthNameShort) parse(tp *timeparts, b string) (out string, ok bool) {
+	tp.month, out, ok = lookup(shortMonthNames, b)
+	return
+}
+
+type fmtMonth struct {
+	zero bool
+}
+
+func (s fmtMonth) format(dst []byte, t DateTime, prec uint8) []byte {
+	if s.zero {
+		return appendInt(dst, t.Date.Month(), 2)
+	}
+	return appendInt(dst, t.Date.Month(), 0)
+}
+
+func (s fmtMonth) parse(tp *timeparts, b string) (out string, ok bool) {
+	tp.month, out, ok = getnum(b, s.zero)
+	if ok && (tp.month < 0 || tp.month > 12) {
+		ok = false
+	}
+	return
+}
+
+func (s fmtMonth) numeric(t DateTime) (int, int) {
+	return t.Date.Month(), 100
+}
+
+type fmtMonthDaySuffix struct{}
+
+func (fmtMonthDaySuffix) format(dst []byte, t DateTime, prec uint8) []byte {
+	d := t.Date.Day()
+	dst = appendInt(dst, d, 0)
+
+	switch d % 10 {
+	case 1:
+		return append(dst, "st"...)
+	case 2:
+		return append(dst, "nd"...)
+	case 3:
+		return append(dst, "rd"...)
+	default:
+		return append(dst, "th"...)
+	}
+}
+
+func (d fmtMonthDaySuffix) parse(t *timeparts, bytes string) (string, bool) {
+	//TODO implement me
+	panic("implement me")
+}
+
+type fmtDay struct {
+	zero bool
+}
+
+func (s fmtDay) format(dst []byte, t DateTime, prec uint8) []byte {
+	if s.zero {
+		return appendInt(dst, t.Date.Day(), 2)
+	}
+	return appendInt(dst, t.Date.Day(), 0)
+}
+
+func (s fmtDay) parse(tp *timeparts, b string) (out string, ok bool) {
+	tp.day, out, ok = getnum(b, s.zero)
+	return
+}
+
+func (fmtDay) numeric(t DateTime) (int, int) {
+	return t.Date.Day(), 100
+}
+
+type fmtNanoseconds struct{}
+
+func appendNsec(b []byte, nsec int, prec int) []byte {
+	f := nsec / 1000
+	l := len(b) + prec
 	b = appendInt(b, f, 6)
-	return b[:l+int(ctx.prec)]
+	for len(b) < l {
+		b = append(b, '0')
+	}
+	return b[:l]
 }
 
-func (spec_Hk) format(ctx *formatctx, b []byte) []byte {
-	ctx.initHour()
-	return appendInt(b, ctx.hour, 2)
+func (fmtNanoseconds) format(dst []byte, t DateTime, prec uint8) []byte {
+	return appendNsec(dst, t.Time.Nanosecond(), int(prec))
 }
 
-func (spec_hIl) format(ctx *formatctx, b []byte) []byte {
-	ctx.initHour()
-	hr := ctx.hour % 12
+func (f fmtNanoseconds) parse(t *timeparts, bytes string) (string, bool) {
+	//TODO implement me
+	panic("implement me")
+}
+
+type fmtHour24 struct {
+	zero bool
+}
+
+func (s fmtHour24) format(dst []byte, t DateTime, prec uint8) []byte {
+	if s.zero {
+		return appendInt(dst, t.Time.Hour(), 2)
+	}
+	return appendInt(dst, t.Time.Hour(), 0)
+}
+
+func (s fmtHour24) parse(tp *timeparts, b string) (out string, ok bool) {
+	tp.hour, out, ok = getnum(b, s.zero)
+	if tp.hour < 0 || 24 <= tp.hour {
+		ok = false
+	}
+	return
+}
+
+func (fmtHour24) numeric(t DateTime) (int, int) {
+	return t.Time.Hour(), 100
+}
+
+type fmtHour12 struct {
+	zero bool
+}
+
+func (f fmtHour12) format(dst []byte, t DateTime, prec uint8) []byte {
+	hr, _ := f.numeric(t)
+	if f.zero {
+		return appendInt(dst, hr, 2)
+	}
+	return appendInt(dst, hr, 0)
+}
+
+func (f fmtHour12) parse(tp *timeparts, b string) (out string, ok bool) {
+	tp.hour, out, ok = getnum(b, f.zero)
+	if tp.hour < 0 || 12 < tp.hour {
+		ok = false
+	}
+	return
+}
+
+func (f fmtHour12) numeric(t DateTime) (int, int) {
+	hr := t.Time.Hour() % 12
 	if hr == 0 {
 		hr = 12
 	}
-	return appendInt(b, hr, 2)
+	return hr, 100
 }
 
-func (spec_i) format(ctx *formatctx, b []byte) []byte {
-	ctx.initHour()
-	return appendInt(b, ctx.min, 2)
+type fmtMin struct {
+	zero bool
 }
 
-func (spec_j) format(ctx *formatctx, b []byte) []byte {
-	return appendInt(b, ctx.t.YearDay(), 3)
-}
-
-func (spec_M) format(ctx *formatctx, b []byte) []byte {
-	ctx.initYear()
-	return append(b, ctx.month.String()...)
-}
-
-func (spec_p) format(ctx *formatctx, b []byte) []byte {
-	ctx.initHour()
-	if ctx.hour < 12 {
-		return append(b, "AM"...)
+func (s fmtMin) format(dst []byte, t DateTime, prec uint8) []byte {
+	if s.zero {
+		return appendInt(dst, t.Time.Minute(), 2)
 	}
-	return append(b, "PM"...)
+	return appendInt(dst, t.Time.Minute(), 0)
 }
 
-func (spec_r) format(ctx *formatctx, b []byte) []byte {
-	b = (spec_hIl{}).format(ctx, b)
-	b = append(b, ':')
-	b = (spec_i{}).format(ctx, b)
-	b = append(b, ':')
-	b = (spec_Ss{}).format(ctx, b)
-	b = (spec_p{}).format(ctx, b)
-	return b
+func (s fmtMin) parse(tp *timeparts, b string) (out string, ok bool) {
+	tp.min, out, ok = getnum(b, s.zero)
+	if tp.min < 0 || 60 <= tp.min {
+		ok = false
+	}
+	return
 }
 
-func (spec_Ss) format(ctx *formatctx, b []byte) []byte {
-	ctx.initHour()
-	return appendInt(b, ctx.sec, 2)
+func (s fmtMin) numeric(t DateTime) (int, int) {
+	return t.Time.Minute(), 100
 }
 
-func (spec_T) format(ctx *formatctx, b []byte) []byte {
-	b = (spec_Hk{}).format(ctx, b)
-	b = append(b, ':')
-	b = (spec_i{}).format(ctx, b)
-	b = append(b, ':')
-	b = (spec_Ss{}).format(ctx, b)
-	return b
+type fmtZeroYearDay struct{}
+
+func (fmtZeroYearDay) format(dst []byte, t DateTime, prec uint8) []byte {
+	return appendInt(dst, t.Date.Yearday(), 3)
+}
+func (j fmtZeroYearDay) parse(t *timeparts, bytes string) (string, bool) {
+	//TODO implement me
+	panic("implement me")
 }
 
-func (spec_U) format(ctx *formatctx, b []byte) []byte {
+type fmtMonthName struct{}
+
+func (fmtMonthName) format(dst []byte, t DateTime, prec uint8) []byte {
+	return append(dst, time.Month(t.Date.Month()).String()...)
+}
+
+func (m fmtMonthName) parse(t *timeparts, bytes string) (string, bool) {
+	//TODO implement me
+	panic("implement me")
+}
+
+type fmtAMorPM struct{}
+
+func (fmtAMorPM) format(dst []byte, t DateTime, prec uint8) []byte {
+	if t.Time.Hour() < 12 {
+		return append(dst, "AM"...)
+	}
+	return append(dst, "PM"...)
+}
+
+func (p fmtAMorPM) parse(t *timeparts, bytes string) (string, bool) {
+	//TODO implement me
+	panic("implement me")
+}
+
+type fmtFullTime12 struct{}
+
+func (fmtFullTime12) format(dst []byte, t DateTime, prec uint8) []byte {
+	dst = (fmtHour12{true}).format(dst, t, prec)
+	dst = append(dst, ':')
+	dst = (fmtMin{true}).format(dst, t, prec)
+	dst = append(dst, ':')
+	dst = (fmtSecond{true, false}).format(dst, t, prec)
+	dst = append(dst, ' ')
+	dst = (fmtAMorPM{}).format(dst, t, prec)
+	return dst
+}
+
+func (r fmtFullTime12) parse(t *timeparts, bytes string) (string, bool) {
+	//TODO implement me
+	panic("implement me")
+}
+
+type fmtSecond struct {
+	zero bool
+	nsec bool
+}
+
+func (s fmtSecond) format(dst []byte, t DateTime, prec uint8) []byte {
+	if s.zero {
+		dst = appendInt(dst, t.Time.Second(), 2)
+	} else {
+		dst = appendInt(dst, t.Time.Second(), 0)
+	}
+	if s.nsec && prec > 0 && t.Time.Nanosecond() != 0 {
+		dst = append(dst, '.')
+		dst = appendNsec(dst, t.Time.Nanosecond(), int(prec))
+	}
+	return dst
+}
+
+func (s fmtSecond) parse(tp *timeparts, b string) (out string, ok bool) {
+	tp.sec, out, ok = getnum(b, s.zero)
+	if tp.sec < 0 || 60 <= tp.sec {
+		return "", false
+	}
+	if s.nsec && len(out) >= 2 && out[0] == '.' && isDigit(out, 1) {
+		n := 2
+		for ; n < len(out) && isDigit(out, n); n++ {
+		}
+		tp.nsec, ok = parseNanoseconds(out, n)
+		out = out[n:]
+	}
+	return
+}
+
+func (s fmtSecond) numeric(t DateTime) (int, int) {
+	return t.Time.Second(), 100
+}
+
+type fmtFullTime24 struct{}
+
+func (fmtFullTime24) format(dst []byte, t DateTime, prec uint8) []byte {
+	dst = (fmtHour24{true}).format(dst, t, prec)
+	dst = append(dst, ':')
+	dst = (fmtMin{true}).format(dst, t, prec)
+	dst = append(dst, ':')
+	dst = (fmtSecond{true, false}).format(dst, t, prec)
+	return dst
+}
+
+func (t2 fmtFullTime24) parse(t *timeparts, bytes string) (string, bool) {
+	//TODO implement me
+	panic("implement me")
+}
+
+type fmtWeek0 struct{}
+
+func (fmtWeek0) format(dst []byte, t DateTime, prec uint8) []byte {
 	panic("TODO")
 }
 
-func (spec_u) format(ctx *formatctx, b []byte) []byte {
+func (u fmtWeek0) parse(t *timeparts, bytes string) (string, bool) {
+	//TODO implement me
+	panic("implement me")
+}
+
+type fmtWeek1 struct{}
+
+func (fmtWeek1) format(dst []byte, t DateTime, prec uint8) []byte {
 	panic("TODO")
 }
 
-func (spec_V) format(ctx *formatctx, b []byte) []byte {
+func (u fmtWeek1) parse(t *timeparts, bytes string) (string, bool) {
+	//TODO implement me
+	panic("implement me")
+}
+
+type fmtWeek2 struct{}
+
+func (fmtWeek2) format(dst []byte, t DateTime, prec uint8) []byte {
 	panic("TODO")
 }
 
-func (spec_v) format(ctx *formatctx, b []byte) []byte {
-	_, week := ctx.t.ISOWeek()
-	return appendInt(b, week, 2)
+func (v fmtWeek2) parse(t *timeparts, bytes string) (string, bool) {
+	//TODO implement me
+	panic("implement me")
 }
 
-func (spec_X) format(ctx *formatctx, b []byte) []byte {
+type fmtWeek3 struct{}
+
+func (fmtWeek3) format(dst []byte, t DateTime, prec uint8) []byte {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (v fmtWeek3) parse(t *timeparts, bytes string) (string, bool) {
+	//TODO implement me
+	panic("implement me")
+}
+
+type fmtWeekdayName struct{}
+
+func (fmtWeekdayName) format(dst []byte, t DateTime, prec uint8) []byte {
+	return append(dst, t.Date.Weekday().String()...)
+}
+func (w fmtWeekdayName) parse(t *timeparts, bytes string) (string, bool) {
+	//TODO implement me
+	panic("implement me")
+}
+
+type fmtWeekday struct{}
+
+func (fmtWeekday) format(dst []byte, t DateTime, prec uint8) []byte {
+	return appendInt(dst, int(t.Date.Weekday()), 0)
+}
+func (w fmtWeekday) parse(t *timeparts, bytes string) (string, bool) {
+	//TODO implement me
+	panic("implement me")
+}
+
+type fmtYearForWeek2 struct{}
+
+func (fmtYearForWeek2) format(dst []byte, t DateTime, prec uint8) []byte {
 	panic("TODO")
 }
-
-func (spec_x) format(ctx *formatctx, b []byte) []byte {
-	year, _ := ctx.t.ISOWeek()
-	return appendInt(b, year, 4)
+func (x fmtYearForWeek2) parse(t *timeparts, bytes string) (string, bool) {
+	//TODO implement me
+	panic("implement me")
 }
 
-func (spec_W) format(ctx *formatctx, b []byte) []byte {
-	return append(b, ctx.t.Weekday().String()...)
+type fmtYearForWeek3 struct{}
+
+func (fmtYearForWeek3) format(dst []byte, t DateTime, prec uint8) []byte {
+	//TODO implement me
+	panic("implement me")
+}
+func (x fmtYearForWeek3) parse(t *timeparts, bytes string) (string, bool) {
+	//TODO implement me
+	panic("implement me")
 }
 
-func (spec_w) format(ctx *formatctx, b []byte) []byte {
-	return appendInt(b, int(ctx.t.Weekday()), 0)
+type fmtYearLong struct{}
+
+func (fmtYearLong) format(dst []byte, t DateTime, prec uint8) []byte {
+	return appendInt(dst, t.Date.Year(), 4)
 }
 
-func (spec_Y) format(ctx *formatctx, b []byte) []byte {
-	ctx.initYear()
-	return appendInt(b, ctx.year, 4)
+func (y fmtYearLong) parse(tp *timeparts, b string) (out string, ok bool) {
+	if len(b) >= 4 {
+		b, out = b[0:4], b[4:]
+		tp.year, ok = atoi(b)
+	}
+	return
 }
 
-func (spec_y) format(ctx *formatctx, b []byte) []byte {
-	ctx.initYear()
-	y := ctx.year
+func (y fmtYearLong) numeric(t DateTime) (int, int) {
+	return t.Date.Year(), 10000
+}
+
+type fmtYearShort struct{}
+
+func (f fmtYearShort) format(dst []byte, t DateTime, prec uint8) []byte {
+	y, _ := f.numeric(t)
+	return appendInt(dst, y, 2)
+}
+
+func (fmtYearShort) parse(tp *timeparts, b string) (out string, ok bool) {
+	if len(b) >= 2 {
+		b, out = b[0:2], b[2:]
+		if tp.year, ok = atoi(b); ok {
+			if tp.year >= 70 {
+				tp.year += 1900
+			} else {
+				tp.year += 2000
+			}
+		}
+	}
+	return
+}
+
+func (fmtYearShort) numeric(t DateTime) (int, int) {
+	y := t.Date.Year()
 	if y < 0 {
 		y = -y
 	}
-	return appendInt(b, y%100, 2)
+	return y % 100, 2
 }
 
-type formatctx struct {
-	t     time.Time
-	year  int
-	month time.Month
-	day   int
-	hour  int
-	min   int
-	sec   int
-	prec  uint8
-}
-
-func (f *formatctx) initYear() {
-	if f.year == -1 {
-		f.year, f.month, f.day = f.t.Date()
-	}
-}
-
-func (f *formatctx) initHour() {
-	if f.hour == -1 {
-		f.hour, f.min, f.sec = f.t.Clock()
-	}
-}
-
-func newformatctx(t time.Time, prec uint8) formatctx {
-	return formatctx{
-		t:    t,
-		year: -1,
-		hour: -1,
-		prec: prec,
-	}
-}
-
-// Spec is the interface that must be fulfilled by components that
-// implement the translation of specifications to actual time value.
-//
-// The Append method takes the accumulated byte buffer, and the time to
-// use to generate the textual representation. The resulting byte
-// sequence must be returned by this method, normally by using the
-// append() builtin function.
-type Spec interface {
-	format(*formatctx, []byte) []byte
-}
-
-type verbatimw struct {
+type fmtVerbatim struct {
 	s string
 }
 
-// Verbatim returns an Spec suitable for generating static text.
-// For static text, this method is slightly favorable than creating
-// your own appender, as adjacent verbatim blocks will be combined
-// at compile time to produce more efficient Appenders
-func Verbatim(s string) Spec {
-	return &verbatimw{s: s}
+func (v *fmtVerbatim) parse(t *timeparts, bytes string) (string, bool) {
+	//TODO implement me
+	panic("implement me")
 }
 
-func (v *verbatimw) format(_ *formatctx, b []byte) []byte {
-	return append(b, v.s...)
+func (v *fmtVerbatim) format(dst []byte, t DateTime, prec uint8) []byte {
+	return append(dst, v.s...)
+}
+
+type fmtSeparator byte
+
+func (s fmtSeparator) format(dst []byte, t DateTime, prec uint8) []byte {
+	return append(dst, byte(s))
+}
+
+func (s fmtSeparator) parse(_ *timeparts, b string) (string, bool) {
+	if len(b) > 0 {
+		return b[1:], isSeparator(b[0])
+	}
+	return "", false
+}
+
+func isSeparator(b byte) bool {
+	switch b {
+	case '!', '"', '#', '$', '%', '&', '\'', '(', ')', '*', '+', ',', '-', '.', '/', ':', ';', '<', '=', '>', '?', '@', '[', '\\', ']', '^', '_', '`', '{', '|', '}', '~':
+		return true
+	default:
+		return false
+	}
+}
+
+type fmtTimeSeparator struct{}
+
+func (s fmtTimeSeparator) format(dst []byte, t DateTime, prec uint8) []byte {
+	return append(dst, byte(' '))
+}
+
+func (s fmtTimeSeparator) parse(_ *timeparts, b string) (string, bool) {
+	if len(b) > 0 {
+		if b[0] == 'T' {
+			return b[1:], true
+		}
+		if isSpace(b[0]) {
+			for len(b) > 0 && isSpace(b[0]) {
+				b = b[1:]
+			}
+			return b, true
+		}
+	}
+	return "", false
+}
+
+func isSpace(b byte) bool {
+	switch b {
+	case ' ', '\t', '\n', '\v', '\r':
+		return true
+	default:
+		return false
+	}
 }

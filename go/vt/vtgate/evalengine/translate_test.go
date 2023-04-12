@@ -368,12 +368,6 @@ func TestTranslationFailures(t *testing.T) {
 		expectedErr string
 	}{
 		{
-			expression:  "cast('2023-01-07 12:34:56' as date)",
-			expectedErr: "Unsupported type conversion: DATE",
-		}, {
-			expression:  "cast('2023-01-07 12:34:56' as datetime(5))",
-			expectedErr: "Unsupported type conversion: DATETIME(5)",
-		}, {
 			expression:  "cast('3.4' as FLOAT)",
 			expectedErr: "Unsupported type conversion: FLOAT",
 		}, {

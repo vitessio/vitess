@@ -49,20 +49,20 @@ func NewObject(obj Object) *Value {
 	return &Value{o: obj, t: TypeObject}
 }
 
-func NewNumber(num string, i bool) *Value {
-	return &Value{s: string(num), t: TypeNumber, i: i}
+func NewNumber(num string, n NumberType) *Value {
+	return &Value{s: num, t: TypeNumber, n: n}
 }
 
 func NewString(raw string) *Value {
-	return &Value{s: string(raw), t: TypeString}
+	return &Value{s: raw, t: TypeString}
 }
 
 func NewBlob(raw string) *Value {
-	return &Value{s: string(raw), t: TypeBlob}
+	return &Value{s: raw, t: TypeBlob}
 }
 
 func NewBit(raw string) *Value {
-	return &Value{s: string(raw), t: TypeBit}
+	return &Value{s: raw, t: TypeBit}
 }
 
 func NewDate(raw string) *Value {

@@ -213,13 +213,13 @@ func evalCompare(left, right eval) (comp int, err error) {
 
 	switch {
 	case compareAsDates(lt, rt):
-		return compareDates(left, right)
+		return compareDates(left.(*evalTemporal), right.(*evalTemporal)), nil
 	case compareAsStrings(lt, rt):
 		return compareStrings(left, right)
 	case compareAsSameNumericType(lt, rt) || compareAsDecimal(lt, rt):
 		return compareNumeric(left, right)
 	case compareAsDateAndString(lt, rt):
-		return compareDateAndString(left, right)
+		return compareDateAndString(left, right), nil
 	case compareAsDateAndNumeric(lt, rt):
 		if sqltypes.IsDateOrTime(lt) {
 			left = evalToNumeric(left)
@@ -240,8 +240,8 @@ func evalCompare(left, right eval) (comp int, err error) {
 		// 		comparison of floating-point numbers."
 		//
 		//		https://dev.mysql.com/doc/refman/8.0/en/type-conversion.html
-		lf, _ := evalToNumeric(left).toFloat()
-		rf, _ := evalToNumeric(right).toFloat()
+		lf, _ := evalToFloat(left)
+		rf, _ := evalToFloat(right)
 		return compareNumeric(lf, rf)
 	}
 }
@@ -366,7 +366,7 @@ func (l *LikeExpr) eval(env *ExpressionEnv) (eval, error) {
 	}
 
 	var col collations.ID
-	left, right, col, err = mergeCollations(left, right)
+	left, right, col, err = mergeAndCoerceCollations(left, right)
 	if err != nil {
 		return nil, err
 	}

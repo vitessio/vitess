@@ -367,7 +367,7 @@ func (ast *astCompiler) translateIntegral(lit *sqlparser.Literal) (int, bool, er
 	if err != nil {
 		return 0, false, err
 	}
-	return int(evalToNumeric(literal.inner).toUint64().u), true, nil
+	return int(evalToInt64(literal.inner).toUint64().u), true, nil
 }
 
 func (ast *astCompiler) translateUnaryExpr(unary *sqlparser.UnaryExpr) (Expr, error) {

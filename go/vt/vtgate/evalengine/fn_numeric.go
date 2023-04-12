@@ -58,7 +58,7 @@ func (call *builtinCeil) eval(env *ExpressionEnv) (eval, error) {
 		}
 		return newEvalDecimalWithPrec(dec, 0), nil
 	default:
-		f, _ := evalToNumeric(num).toFloat()
+		f, _ := evalToFloat(num)
 		return newEvalFloat(math.Ceil(f.f)), nil
 	}
 }
@@ -103,7 +103,7 @@ func (call *builtinFloor) eval(env *ExpressionEnv) (eval, error) {
 		}
 		return newEvalDecimalWithPrec(dec, 0), nil
 	default:
-		f, _ := evalToNumeric(num).toFloat()
+		f, _ := evalToFloat(num)
 		return newEvalFloat(math.Floor(f.f)), nil
 	}
 }
@@ -150,7 +150,7 @@ func (call *builtinAbs) eval(env *ExpressionEnv) (eval, error) {
 	case *evalDecimal:
 		return newEvalDecimalWithPrec(num.dec.Abs(), num.length), nil
 	default:
-		f, _ := evalToNumeric(num).toFloat()
+		f, _ := evalToFloat(num)
 		return newEvalFloat(math.Abs(f.f)), nil
 	}
 }
@@ -200,7 +200,7 @@ func (call *builtinAcos) eval(env *ExpressionEnv) (eval, error) {
 		return nil, nil
 	}
 
-	f, _ := evalToNumeric(arg).toFloat()
+	f, _ := evalToFloat(arg)
 	if f.f < -1 || f.f > 1 {
 		return nil, nil
 	}
@@ -227,7 +227,7 @@ func (call *builtinAsin) eval(env *ExpressionEnv) (eval, error) {
 		return nil, nil
 	}
 
-	f, _ := evalToNumeric(arg).toFloat()
+	f, _ := evalToFloat(arg)
 	if f.f < -1 || f.f > 1 {
 		return nil, nil
 	}
@@ -254,7 +254,7 @@ func (call *builtinAtan) eval(env *ExpressionEnv) (eval, error) {
 		return nil, nil
 	}
 
-	f, _ := evalToNumeric(arg).toFloat()
+	f, _ := evalToFloat(arg)
 	return newEvalFloat(math.Atan(f.f)), nil
 }
 
@@ -278,8 +278,8 @@ func (call *builtinAtan2) eval(env *ExpressionEnv) (eval, error) {
 		return nil, nil
 	}
 
-	f1, _ := evalToNumeric(arg1).toFloat()
-	f2, _ := evalToNumeric(arg2).toFloat()
+	f1, _ := evalToFloat(arg1)
+	f2, _ := evalToFloat(arg2)
 	return newEvalFloat(math.Atan2(f1.f, f2.f)), nil
 }
 
@@ -303,7 +303,7 @@ func (call *builtinCos) eval(env *ExpressionEnv) (eval, error) {
 		return nil, nil
 	}
 
-	f, _ := evalToNumeric(arg).toFloat()
+	f, _ := evalToFloat(arg)
 	return newEvalFloat(math.Cos(f.f)), nil
 }
 
@@ -327,7 +327,7 @@ func (call *builtinCot) eval(env *ExpressionEnv) (eval, error) {
 		return nil, nil
 	}
 
-	f, _ := evalToNumeric(arg).toFloat()
+	f, _ := evalToFloat(arg)
 	return newEvalFloat(1.0 / math.Tan(f.f)), nil
 }
 
@@ -351,7 +351,7 @@ func (call *builtinSin) eval(env *ExpressionEnv) (eval, error) {
 		return nil, nil
 	}
 
-	f, _ := evalToNumeric(arg).toFloat()
+	f, _ := evalToFloat(arg)
 	return newEvalFloat(math.Sin(f.f)), nil
 }
 
@@ -375,7 +375,7 @@ func (call *builtinTan) eval(env *ExpressionEnv) (eval, error) {
 		return nil, nil
 	}
 
-	f, _ := evalToNumeric(arg).toFloat()
+	f, _ := evalToFloat(arg)
 	return newEvalFloat(math.Tan(f.f)), nil
 }
 
@@ -399,7 +399,7 @@ func (call *builtinDegrees) eval(env *ExpressionEnv) (eval, error) {
 		return nil, nil
 	}
 
-	f, _ := evalToNumeric(arg).toFloat()
+	f, _ := evalToFloat(arg)
 	return newEvalFloat(f.f * (180 / math.Pi)), nil
 }
 
@@ -423,7 +423,7 @@ func (call *builtinRadians) eval(env *ExpressionEnv) (eval, error) {
 		return nil, nil
 	}
 
-	f, _ := evalToNumeric(arg).toFloat()
+	f, _ := evalToFloat(arg)
 	return newEvalFloat(f.f * (math.Pi / 180)), nil
 }
 
@@ -447,7 +447,7 @@ func (call *builtinExp) eval(env *ExpressionEnv) (eval, error) {
 		return nil, nil
 	}
 
-	f, _ := evalToNumeric(arg).toFloat()
+	f, _ := evalToFloat(arg)
 	a := math.Exp(f.f)
 	if !isFinite(a) {
 		return nil, nil
@@ -475,7 +475,7 @@ func (call *builtinLn) eval(env *ExpressionEnv) (eval, error) {
 		return nil, nil
 	}
 
-	f, _ := evalToNumeric(arg).toFloat()
+	f, _ := evalToFloat(arg)
 	a, ok := math_log(f.f)
 	if !ok {
 		return nil, nil
@@ -503,8 +503,8 @@ func (call *builtinLog) eval(env *ExpressionEnv) (eval, error) {
 		return nil, nil
 	}
 
-	f1, _ := evalToNumeric(arg1).toFloat()
-	f2, _ := evalToNumeric(arg2).toFloat()
+	f1, _ := evalToFloat(arg1)
+	f2, _ := evalToFloat(arg2)
 
 	a, ok := math_logN(f1.f, f2.f)
 	if !ok {
@@ -533,7 +533,7 @@ func (call *builtinLog10) eval(env *ExpressionEnv) (eval, error) {
 		return nil, nil
 	}
 
-	f, _ := evalToNumeric(arg).toFloat()
+	f, _ := evalToFloat(arg)
 	a, ok := math_log10(f.f)
 	if !ok {
 		return nil, nil
@@ -562,7 +562,7 @@ func (call *builtinLog2) eval(env *ExpressionEnv) (eval, error) {
 		return nil, nil
 	}
 
-	f, _ := evalToNumeric(arg).toFloat()
+	f, _ := evalToFloat(arg)
 	a, ok := math_log2(f.f)
 	if !ok {
 		return nil, nil
@@ -590,8 +590,8 @@ func (call *builtinPow) eval(env *ExpressionEnv) (eval, error) {
 		return nil, nil
 	}
 
-	f1, _ := evalToNumeric(arg1).toFloat()
-	f2, _ := evalToNumeric(arg2).toFloat()
+	f1, _ := evalToFloat(arg1)
+	f2, _ := evalToFloat(arg2)
 
 	a := math.Pow(f1.f, f2.f)
 	if !isFinite(a) {
@@ -647,7 +647,7 @@ func (call *builtinSign) eval(env *ExpressionEnv) (eval, error) {
 			return newEvalInt64(0), nil
 		}
 	default:
-		f, _ := evalToNumeric(arg).toFloat()
+		f, _ := evalToFloat(arg)
 		if f.f < 0 {
 			return newEvalInt64(-1), nil
 		} else if f.f > 0 {
@@ -678,7 +678,7 @@ func (call *builtinSqrt) eval(env *ExpressionEnv) (eval, error) {
 		return nil, nil
 	}
 
-	f, _ := evalToNumeric(arg).toFloat()
+	f, _ := evalToFloat(arg)
 	a := math.Sqrt(f.f)
 	if !isFinite(a) {
 		return nil, nil
@@ -780,8 +780,8 @@ func clampRounding(round int64) int64 {
 	// iteration for very large numbers. We need to be able
 	// to at least truncate math.MaxFloat64 to 0 for the largest
 	// possible values.
-	if round < -1024 {
-		round = -1024
+	if round < -decimal.ExponentLimit {
+		round = -decimal.ExponentLimit
 	} else if round > 30 {
 		round = 30
 	}
@@ -917,7 +917,7 @@ func (call *builtinRound) eval(env *ExpressionEnv) (eval, error) {
 		}
 		return newEvalFloat(math.Round(arg.f*f) / f), nil
 	default:
-		v, _ := evalToNumeric(arg).toFloat()
+		v, _ := evalToFloat(arg)
 		if v.f == 0.0 {
 			return v, nil
 		}
@@ -1066,7 +1066,7 @@ func (call *builtinTruncate) eval(env *ExpressionEnv) (eval, error) {
 		}
 		return newEvalFloat(math.Trunc(arg.f*f) / f), nil
 	default:
-		v, _ := evalToNumeric(arg).toFloat()
+		v, _ := evalToFloat(arg)
 		if v.f == 0.0 {
 			return v, nil
 		}

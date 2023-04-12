@@ -20,9 +20,8 @@ import (
 	"fmt"
 	"math"
 	"strconv"
-	"strings"
 
-	"vitess.io/vitess/go/mysql/datetime"
+	"vitess.io/vitess/go/hack"
 	"vitess.io/vitess/go/mysql/decimal"
 	"vitess.io/vitess/go/mysql/format"
 	"vitess.io/vitess/go/mysql/json"
@@ -112,29 +111,6 @@ func evalToNumeric(e eval) evalNumeric {
 			}
 			return hex
 		}
-		switch e.SQLType() {
-		case sqltypes.Date:
-			dt, err := datetime.ParseDate(e.string())
-			if err != nil {
-				return newEvalInt64(0)
-			}
-			i, _ := strconv.ParseInt(dt.Format("20060102"), 10, 64)
-			return newEvalInt64(i)
-		case sqltypes.Timestamp, sqltypes.Datetime:
-			dt, err := datetime.ParseDateTime(e.string())
-			if err != nil {
-				return newEvalInt64(0)
-			}
-			i, _ := strconv.ParseInt(dt.Format("20060102150405"), 10, 64)
-			return newEvalInt64(i)
-		case sqltypes.Time:
-			_, n, err := datetime.ParseTime(e.string())
-			if err != nil {
-				return newEvalInt64(0)
-			}
-			i, _ := strconv.ParseInt(strings.ReplaceAll(n, ":", ""), 10, 64)
-			return newEvalInt64(i)
-		}
 		return &evalFloat{f: parseStringToFloat(e.string())}
 	case *evalJSON:
 		switch e.Type() {
@@ -144,25 +120,111 @@ func evalToNumeric(e eval) evalNumeric {
 			}
 			return &evalFloat{f: 0.0}
 		case json.TypeNumber:
-			switch e.NumberType() {
-			case json.NumberTypeInteger:
-				i, ok := e.Int64()
-				if ok {
-					return &evalInt64{i: i}
-				}
-				d, _ := e.Decimal()
-				return newEvalDecimalWithPrec(d, 0)
-			case json.NumberTypeDouble:
-				f, _ := e.Float64()
-				return &evalFloat{f: f}
-			default:
-				panic("unsupported")
-			}
+			f, _ := e.Float64()
+			return &evalFloat{f: f}
 		case json.TypeString:
 			return &evalFloat{f: parseStringToFloat(e.Raw())}
 		default:
 			return &evalFloat{f: 0}
 		}
+	case *evalTemporal:
+		return newEvalInt64(e.toInt64())
+	default:
+		panic("unsupported")
+	}
+}
+
+func evalToFloat(e eval) (*evalFloat, bool) {
+	switch e := e.(type) {
+	case *evalFloat:
+		return e, true
+	case evalNumeric:
+		return e.toFloat()
+	case *evalBytes:
+		if e.isHexLiteral {
+			hex, ok := e.toNumericHex()
+			if !ok {
+				// overflow
+				return newEvalFloat(0), false
+			}
+			f, ok := hex.toFloat()
+			if !ok {
+				return newEvalFloat(0), false
+			}
+			return f, true
+		}
+		val, _, err := hack.ParseFloatPrefix(e.string(), 64)
+		return &evalFloat{f: val}, err == nil
+	case *evalJSON:
+		switch e.Type() {
+		case json.TypeBoolean:
+			if e == json.ValueTrue {
+				return &evalFloat{f: 1.0}, true
+			}
+			return &evalFloat{f: 0.0}, true
+		case json.TypeNumber:
+			f, ok := e.Float64()
+			return &evalFloat{f: f}, ok
+		case json.TypeString:
+			val, _, err := hack.ParseFloatPrefix(e.Raw(), 64)
+			return &evalFloat{f: val}, err == nil
+		default:
+			return &evalFloat{f: 0}, true
+		}
+	case *evalTemporal:
+		return &evalFloat{f: float64(e.toInt64())}, true
+	default:
+		panic("unsupported")
+	}
+}
+
+func evalToDecimal(e eval, m, d int32) *evalDecimal {
+	switch e := e.(type) {
+	case evalNumeric:
+		return e.toDecimal(m, d)
+	case *evalBytes:
+		if e.isHexLiteral {
+			hex, ok := e.toNumericHex()
+			if !ok {
+				// overflow
+				return newEvalDecimal(decimal.Zero, m, d)
+			}
+			return hex.toDecimal(m, d)
+		}
+		dec, _ := decimal.NewFromString(e.string())
+		return newEvalDecimal(dec, m, d)
+	case *evalJSON:
+		switch e.Type() {
+		case json.TypeBoolean:
+			if e == json.ValueTrue {
+				return newEvalDecimal(decimal.NewFromInt(1), m, d)
+			}
+			return newEvalDecimal(decimal.Zero, m, d)
+		case json.TypeNumber:
+			// This is all super whacky, but it's how MySQL works...
+			// When the value fits in an integer, first convert to that
+			// and then to decimal.
+			i, ok := e.Int64()
+			if ok {
+				return newEvalDecimal(decimal.NewFromInt(i), m, d)
+			}
+			// But, if the value fits in an unsigned integer, convert to that
+			// and then cast it to a signed integer and then turn it into a decimal.
+			// SELECT CAST(CAST(18446744073709551615 AS JSON) AS DECIMAL) -> -1
+			u, ok := e.Uint64()
+			if ok {
+				return newEvalDecimal(decimal.NewFromInt(int64(u)), m, d)
+			}
+			dec, _ := e.Decimal()
+			return newEvalDecimal(dec, m, d)
+		case json.TypeString:
+			dec, _ := decimal.NewFromString(e.Raw())
+			return newEvalDecimal(dec, m, d)
+		default:
+			return newEvalDecimal(decimal.Zero, m, d)
+		}
+	case *evalTemporal:
+		return newEvalDecimal(decimal.NewFromInt(e.toInt64()), m, d)
 	default:
 		panic("unsupported")
 	}
@@ -172,11 +234,7 @@ func evalToInt64(e eval) *evalInt64 {
 	switch e := e.(type) {
 	case *evalInt64:
 		return e
-	case *evalUint64:
-		return e.toInt64()
-	case *evalFloat:
-		return e.toInt64()
-	case *evalDecimal:
+	case evalNumeric:
 		return e.toInt64()
 	case *evalBytes:
 		if e.isHexLiteral {
@@ -186,29 +244,6 @@ func evalToInt64(e eval) *evalInt64 {
 				return newEvalInt64(0)
 			}
 			return hex.toInt64()
-		}
-		switch e.SQLType() {
-		case sqltypes.Date:
-			dt, err := datetime.ParseDate(e.string())
-			if err != nil {
-				return newEvalInt64(0)
-			}
-			i, _ := strconv.ParseInt(dt.Format("20060102"), 10, 64)
-			return newEvalInt64(i)
-		case sqltypes.Timestamp, sqltypes.Datetime:
-			dt, err := datetime.ParseDateTime(e.string())
-			if err != nil {
-				return newEvalInt64(0)
-			}
-			i, _ := strconv.ParseInt(dt.Format("20060102150405"), 10, 64)
-			return newEvalInt64(i)
-		case sqltypes.Time:
-			_, n, err := datetime.ParseTime(e.string())
-			if err != nil {
-				return newEvalInt64(0)
-			}
-			i, _ := strconv.ParseInt(strings.ReplaceAll(n, ":", ""), 10, 64)
-			return newEvalInt64(i)
 		}
 		i, _ := fastparse.ParseInt64(e.string(), 10)
 		return newEvalInt64(i)
@@ -221,17 +256,17 @@ func evalToInt64(e eval) *evalInt64 {
 			return newEvalInt64(0)
 		case json.TypeNumber:
 			switch e.NumberType() {
-			case json.NumberTypeInteger:
-				i, ok := e.Int64()
-				if ok {
-					return newEvalInt64(i)
-				}
-				d, ok := e.Decimal()
-				if !ok {
-					return newEvalInt64(0)
-				}
+			case json.NumberTypeSigned:
+				i, _ := e.Int64()
+				return newEvalInt64(i)
+			case json.NumberTypeUnsigned:
+				u, _ := e.Uint64()
+				// OMG, MySQL is really terrible at this.
+				return newEvalInt64(int64(u))
+			case json.NumberTypeDecimal:
+				d, _ := e.Decimal()
 				return newEvalInt64(decimalToInt64(d))
-			case json.NumberTypeDouble:
+			case json.NumberTypeFloat:
 				f, _ := e.Float64()
 				return newEvalInt64(floatToInt64(f))
 			default:
@@ -243,6 +278,8 @@ func evalToInt64(e eval) *evalInt64 {
 		default:
 			return newEvalInt64(0)
 		}
+	case *evalTemporal:
+		return newEvalInt64(e.toInt64())
 	default:
 		panic(fmt.Sprintf("unsupported type: %T", e))
 	}
@@ -345,7 +382,7 @@ func (e *evalFloat) SQLType() sqltypes.Type {
 }
 
 func (e *evalFloat) ToRawBytes() []byte {
-	return format.FormatFloat(sqltypes.Float64, e.f)
+	return format.FormatFloat(e.f)
 }
 
 func (e *evalFloat) negate() evalNumeric {

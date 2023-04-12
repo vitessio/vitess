@@ -20,8 +20,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math/big"
-	"strings"
-	"time"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 
@@ -71,66 +69,33 @@ func (v *Value) marshalSQLInternal(top bool, dst []byte) []byte {
 		}
 		return dst
 	case TypeDate:
-		t, _ := v.Date()
-
 		if top {
 			dst = append(dst, "CAST("...)
 		}
 		dst = append(dst, "date '"...)
-		dst = append(dst, t.Format("2006-01-02")...)
+		dst = append(dst, v.MarshalDate()...)
 		dst = append(dst, "'"...)
 		if top {
 			dst = append(dst, " as JSON)"...)
 		}
 		return dst
 	case TypeDateTime:
-		t, _ := v.DateTime()
-
 		if top {
 			dst = append(dst, "CAST("...)
 		}
 		dst = append(dst, "timestamp '"...)
-		dst = append(dst, t.Format("2006-01-02 15:04:05.000000")...)
+		dst = append(dst, v.MarshalDateTime()...)
 		dst = append(dst, "'"...)
 		if top {
 			dst = append(dst, " as JSON)"...)
 		}
 		return dst
 	case TypeTime:
-		now := time.Now()
-		year, month, day := now.Date()
-
-		t, _ := v.Time()
-		diff := t.Sub(time.Date(year, month, day, 0, 0, 0, 0, time.UTC))
-		var neg bool
-		if diff < 0 {
-			diff = -diff
-			neg = true
-		}
-
-		b := strings.Builder{}
-		if neg {
-			b.WriteByte('-')
-		}
-
-		hours := (diff / time.Hour)
-		diff -= hours * time.Hour
-		// For some reason MySQL wraps this around and loses data
-		// if it's more than 32 hours.
-		fmt.Fprintf(&b, "%02d", hours%32)
-		minutes := (diff / time.Minute)
-		fmt.Fprintf(&b, ":%02d", minutes)
-		diff -= minutes * time.Minute
-		seconds := (diff / time.Second)
-		fmt.Fprintf(&b, ":%02d", seconds)
-		diff -= seconds * time.Second
-		fmt.Fprintf(&b, ".%06d", diff/time.Microsecond)
-
 		if top {
 			dst = append(dst, "CAST("...)
 		}
 		dst = append(dst, "time '"...)
-		dst = append(dst, b.String()...)
+		dst = append(dst, v.MarshalTime()...)
 		dst = append(dst, "'"...)
 		if top {
 			dst = append(dst, " as JSON)"...)

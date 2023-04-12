@@ -18,6 +18,7 @@ limitations under the License.
 package json
 
 import (
+	"bytes"
 	"encoding/base64"
 	"fmt"
 	"strconv"
@@ -28,6 +29,8 @@ import (
 	"golang.org/x/exp/slices"
 
 	"vitess.io/vitess/go/mysql/datetime"
+	"vitess.io/vitess/go/mysql/format"
+	"vitess.io/vitess/go/mysql/json/fastparse"
 
 	"vitess.io/vitess/go/hack"
 	"vitess.io/vitess/go/mysql/decimal"
@@ -193,14 +196,16 @@ func parseValue(s string, c *cache, depth int) (*Value, string, error) {
 		return ValueNull, s[len("null"):], nil
 	}
 
-	ns, tail, err := parseRawNumber(s)
-	if err != nil {
-		return nil, tail, fmt.Errorf("cannot parse number: %s", err)
+	flen, ok := readFloat(s)
+	if !ok {
+		return nil, s[flen:], fmt.Errorf("invalid number in JSON string: %q", s)
 	}
+
 	v := c.getValue()
 	v.t = TypeNumber
-	v.s = ns
-	return v, tail, nil
+	v.s = s[:flen]
+	v.n = numberTypeRaw
+	return v, s[flen:], nil
 }
 
 func parseArray(s string, c *cache, depth int) (*Value, string, error) {
@@ -461,29 +466,63 @@ func parseRawString(s string) (string, string, error) {
 	}
 }
 
-func parseRawNumber(s string) (string, string, error) {
-	// The caller must ensure len(s) > 0
+func readFloat(s string) (i int, ok bool) {
+	// optional sign
+	if i >= len(s) {
+		return
+	}
+	if s[i] == '+' || s[i] == '-' {
+		i++
+	}
 
-	// Find the end of the number.
-	for i := 0; i < len(s); i++ {
-		ch := s[i]
-		if (ch >= '0' && ch <= '9') || ch == '.' || ch == '-' || ch == 'e' || ch == 'E' || ch == '+' {
+	// digits
+	sawdot := false
+	sawdigits := false
+	nd := 0
+loop:
+	for ; i < len(s); i++ {
+		switch c := s[i]; true {
+		case c == '.':
+			if sawdot {
+				break loop
+			}
+			sawdot = true
+			continue
+
+		case '0' <= c && c <= '9':
+			sawdigits = true
+			if c == '0' && nd == 0 { // ignore leading zeros
+				continue
+			}
+			nd++
 			continue
 		}
-		if i == 0 || i == 1 && (s[0] == '-' || s[0] == '+') {
-			if len(s[i:]) >= 3 {
-				xs := s[i : i+3]
-				if strings.EqualFold(xs, "inf") || strings.EqualFold(xs, "nan") {
-					return s[:i+3], s[i+3:], nil
-				}
-			}
-			return "", s, fmt.Errorf("unexpected char: %q", s[:1])
-		}
-		ns := s[:i]
-		s = s[i:]
-		return ns, s, nil
+		break
 	}
-	return s, "", nil
+	if !sawdigits {
+		return
+	}
+
+	// optional exponent moves decimal point.
+	// if we read a very large, very long number,
+	// just be sure to move the decimal point by
+	// a lot (say, 100000).  it doesn't matter if it's
+	// not the exact number.
+	if i < len(s) && (s[i] == 'e' || s[i] == 'E') {
+		i++
+		if i >= len(s) {
+			return
+		}
+		if s[i] == '+' || s[i] == '-' {
+			i++
+		}
+		if i >= len(s) || s[i] < '0' || s[i] > '9' {
+			return
+		}
+		for ; i < len(s) && ('0' <= s[i] && s[i] <= '9'); i++ {
+		}
+	}
+	return i, true
 }
 
 // Object represents JSON object.
@@ -618,11 +657,51 @@ type Value struct {
 	a []*Value
 	s string
 	t Type
-	// Flag to indicate if we have an arbitrary sized integer type
-	// or a floating point value if we have a number type. MySQL
-	// makes this distinction as well and keeps track of this type
-	// through JSON operations.
-	i bool
+	n NumberType
+}
+
+func (v *Value) MarshalDate() string {
+	if d, ok := v.Date(); ok {
+		return d.ToStdTime(time.Local).Format("2006-01-02")
+	}
+	return ""
+}
+
+func (v *Value) MarshalDateTime() string {
+	if dt, ok := v.DateTime(); ok {
+		return dt.ToStdTime(time.Local).Format("2006-01-02 15:04:05.000000")
+	}
+	return ""
+}
+
+func (v *Value) MarshalTime() string {
+	if t, ok := v.Time(); ok {
+		t = t.RoundForJSON()
+		diff := t.ToDuration()
+		var neg bool
+		if diff < 0 {
+			diff = -diff
+			neg = true
+		}
+
+		b := strings.Builder{}
+		if neg {
+			b.WriteByte('-')
+		}
+
+		hours := diff / time.Hour
+		diff -= hours * time.Hour
+		fmt.Fprintf(&b, "%02d", hours)
+		minutes := diff / time.Minute
+		fmt.Fprintf(&b, ":%02d", minutes)
+		diff -= minutes * time.Minute
+		seconds := diff / time.Second
+		fmt.Fprintf(&b, ":%02d", seconds)
+		diff -= seconds * time.Second
+		fmt.Fprintf(&b, ".%06d", diff/1000)
+		return b.String()
+	}
+	return ""
 }
 
 // MarshalTo appends marshaled v to dst and returns the result.
@@ -648,41 +727,11 @@ func (v *Value) MarshalTo(dst []byte) []byte {
 	case TypeString:
 		return escapeString(dst, v.s)
 	case TypeDate:
-		t, _ := v.Date()
-		return escapeString(dst, t.Format("2006-01-02"))
+		return escapeString(dst, v.MarshalDate())
 	case TypeDateTime:
-		t, _ := v.DateTime()
-		return escapeString(dst, t.Format("2006-01-02 15:04:05.000000"))
+		return escapeString(dst, v.MarshalDateTime())
 	case TypeTime:
-		now := time.Now()
-		year, month, day := now.Date()
-
-		t, _ := v.Time()
-		diff := t.Sub(time.Date(year, month, day, 0, 0, 0, 0, time.UTC))
-		var neg bool
-		if diff < 0 {
-			diff = -diff
-			neg = true
-		}
-
-		b := strings.Builder{}
-		if neg {
-			b.WriteByte('-')
-		}
-
-		hours := (diff / time.Hour)
-		diff -= hours * time.Hour
-		// For some reason MySQL wraps this around and loses data
-		// if it's more than 32 hours.
-		fmt.Fprintf(&b, "%02d", hours%32)
-		minutes := (diff / time.Minute)
-		fmt.Fprintf(&b, ":%02d", minutes)
-		diff -= minutes * time.Minute
-		seconds := (diff / time.Second)
-		fmt.Fprintf(&b, ":%02d", seconds)
-		diff -= seconds * time.Second
-		fmt.Fprintf(&b, ".%06d", diff)
-		return escapeString(dst, b.String())
+		return escapeString(dst, v.MarshalTime())
 	case TypeBlob, TypeBit:
 		const prefix = "base64:type15:"
 
@@ -694,6 +743,14 @@ func (v *Value) MarshalTo(dst []byte) []byte {
 		dst[size-1] = '"'
 		return dst
 	case TypeNumber:
+		if v.NumberType() == NumberTypeFloat {
+			f, _ := v.Float64()
+			buf := format.FormatFloat(f)
+			if bytes.IndexByte(buf, '.') == -1 && bytes.IndexByte(buf, 'e') == -1 {
+				buf = append(buf, '.', '0')
+			}
+			return append(dst, buf...)
+		}
 		return append(dst, v.s...)
 	case TypeBoolean:
 		if v == ValueTrue {
@@ -721,6 +778,27 @@ func (v *Value) String() string {
 	return hack.String(b)
 }
 
+func (v *Value) ToBoolean() bool {
+	switch v.Type() {
+	case TypeNumber:
+		switch v.NumberType() {
+		case NumberTypeSigned:
+			i, _ := v.Int64()
+			return i != 0
+		case NumberTypeUnsigned:
+			i, _ := v.Uint64()
+			return i != 0
+		case NumberTypeFloat:
+			f, _ := v.Float64()
+			return f != 0.0
+		case NumberTypeDecimal:
+			d, _ := v.Decimal()
+			return !d.IsZero()
+		}
+	}
+	return true
+}
+
 // Type represents JSON type.
 type Type int32
 
@@ -741,7 +819,7 @@ const (
 	// TypeArray is JSON array type.
 	TypeArray
 
-	// TypeTrue is JSON boolean.
+	// TypeBoolean is JSON boolean.
 	TypeBoolean
 
 	// TypeDate is JSON date.
@@ -769,8 +847,11 @@ type NumberType int32
 
 const (
 	NumberTypeUnknown NumberType = iota
-	NumberTypeInteger
-	NumberTypeDouble
+	NumberTypeSigned
+	NumberTypeUnsigned
+	NumberTypeDecimal
+	NumberTypeFloat
+	numberTypeRaw
 )
 
 // String returns string representation of t.
@@ -820,37 +901,33 @@ func (v *Value) Type() Type {
 	return v.t
 }
 
-func (v *Value) Date() (time.Time, bool) {
-	if v.t != TypeDate {
-		return time.Time{}, false
+func (v *Value) Date() (datetime.Date, bool) {
+	switch v.t {
+	case TypeDate:
+		return datetime.ParseDate(v.s)
+	case TypeDateTime:
+		dt, ok := datetime.ParseDateTime(v.s)
+		return dt.Date, ok
 	}
-	t, err := datetime.ParseDate(v.s)
-	if err != nil {
-		return time.Time{}, false
-	}
-	return t, true
+	return datetime.Date{}, false
 }
 
-func (v *Value) DateTime() (time.Time, bool) {
-	if v.t != TypeDateTime {
-		return time.Time{}, false
+func (v *Value) DateTime() (datetime.DateTime, bool) {
+	switch v.t {
+	case TypeDate:
+		d, ok := datetime.ParseDate(v.s)
+		return datetime.DateTime{Date: d}, ok
+	case TypeDateTime:
+		return datetime.ParseDateTime(v.s)
 	}
-	t, err := datetime.ParseDateTime(v.s)
-	if err != nil {
-		return time.Time{}, false
-	}
-	return t, true
+	return datetime.DateTime{}, false
 }
 
-func (v *Value) Time() (time.Time, bool) {
+func (v *Value) Time() (datetime.Time, bool) {
 	if v.t != TypeTime {
-		return time.Time{}, false
+		return datetime.Time{}, false
 	}
-	t, _, err := datetime.ParseTime(v.s)
-	if err != nil {
-		return time.Time{}, false
-	}
-	return t, true
+	return datetime.ParseTime(v.s)
 }
 
 // Object returns the underlying JSON object for the v.
@@ -885,36 +962,57 @@ func (v *Value) NumberType() NumberType {
 	if v.t != TypeNumber {
 		return NumberTypeUnknown
 	}
-	if v.i {
-		return NumberTypeInteger
+	if v.n == numberTypeRaw {
+		v.n = parseNumberType(v.s)
 	}
-	return NumberTypeDouble
+	return v.n
+}
+
+func parseNumberType(ns string) NumberType {
+	_, err := fastparse.ParseInt64(ns, 10)
+	if err == nil {
+		return NumberTypeSigned
+	}
+	_, err = fastparse.ParseUint64(ns, 10)
+	if err == nil {
+		return NumberTypeUnsigned
+	}
+	_, err = fastparse.ParseFloat64(ns)
+	if err == nil {
+		return NumberTypeFloat
+	}
+	return NumberTypeUnknown
 }
 
 func (v *Value) Int64() (int64, bool) {
-	str := strings.TrimSpace(v.s)
-	i, err := strconv.ParseInt(str, 10, 64)
+	i, err := fastparse.ParseInt64(v.s, 10)
 	if err != nil {
-		return 0, false
+		return i, false
 	}
 	return i, true
 }
 
+func (v *Value) Uint64() (uint64, bool) {
+	u, err := fastparse.ParseUint64(v.s, 10)
+	if err != nil {
+		return u, false
+	}
+	return u, true
+}
+
 func (v *Value) Float64() (float64, bool) {
-	str := strings.TrimSpace(v.s)
 	// We only care to parse as many of the initial float characters of the
 	// string as possible. This functionality is implemented in the `strconv` package
 	// of the standard library, but not exposed, so we hook into it.
-	val, _, err := hack.ParseFloatPrefix(str, 64)
+	val, _, err := hack.ParseFloatPrefix(v.s, 64)
 	if err != nil {
-		return 0.0, false
+		return val, false
 	}
 	return val, true
 }
 
 func (v *Value) Decimal() (decimal.Decimal, bool) {
-	str := strings.TrimSpace(v.s)
-	dec, err := decimal.NewFromString(str)
+	dec, err := decimal.NewFromString(v.s)
 	if err != nil {
 		return decimal.Zero, false
 	}
