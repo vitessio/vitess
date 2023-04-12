@@ -808,7 +808,7 @@ func (cluster *LocalProcessCluster) ExecOnTablet(ctx context.Context, vttablet *
 		return nil, err
 	}
 
-	tablet, err := cluster.vtctlclientGetTablet(vttablet)
+	tablet, err := cluster.VtctlclientGetTablet(vttablet)
 	if err != nil {
 		return nil, err
 	}
@@ -851,7 +851,7 @@ func (cluster *LocalProcessCluster) ExecOnVTGate(ctx context.Context, addr strin
 // returns the responses. It returns an error if the stream ends with fewer than
 // `count` responses.
 func (cluster *LocalProcessCluster) StreamTabletHealth(ctx context.Context, vttablet *Vttablet, count int) (responses []*querypb.StreamHealthResponse, err error) {
-	tablet, err := cluster.vtctlclientGetTablet(vttablet)
+	tablet, err := cluster.VtctlclientGetTablet(vttablet)
 	if err != nil {
 		return nil, err
 	}
@@ -883,7 +883,7 @@ func (cluster *LocalProcessCluster) StreamTabletHealth(ctx context.Context, vtta
 	return responses, nil
 }
 
-func (cluster *LocalProcessCluster) vtctlclientGetTablet(tablet *Vttablet) (*topodatapb.Tablet, error) {
+func (cluster *LocalProcessCluster) VtctlclientGetTablet(tablet *Vttablet) (*topodatapb.Tablet, error) {
 	result, err := cluster.VtctlclientProcess.ExecuteCommandWithOutput("GetTablet", "--", tablet.Alias)
 	if err != nil {
 		return nil, err
