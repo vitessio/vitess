@@ -29,6 +29,10 @@ import (
 
 // planOffsets will walk the tree top down, adding offset information to columns in the tree for use in further optimization,
 func planOffsets(ctx *plancontext.PlanningContext, root ops.Operator) (ops.Operator, error) {
+	type offsettable interface {
+		planOffsets(ctx *plancontext.PlanningContext) error
+	}
+
 	visitor := func(in ops.Operator, _ semantics.TableSet, _ bool) (ops.Operator, rewrite.ApplyResult, error) {
 		var err error
 		switch op := in.(type) {
@@ -36,12 +40,10 @@ func planOffsets(ctx *plancontext.PlanningContext, root ops.Operator) (ops.Opera
 			return nil, false, vterrors.VT13001("should not see Horizons here")
 		case *Derived:
 			return nil, false, vterrors.VT13001("should not see Derived here")
-		case *Filter:
-			err = planFilter(ctx, op)
-		case *Projection:
-			return planOffsetsForProjection(ctx, op)
-		case *ApplyJoin:
+		case offsettable:
 			err = op.planOffsets(ctx)
+		case *Projection:
+			return op.planOffsetsForProjection(ctx)
 		}
 		if err != nil {
 			return nil, false, err
@@ -49,7 +51,7 @@ func planOffsets(ctx *plancontext.PlanningContext, root ops.Operator) (ops.Opera
 		return in, rewrite.SameTree, nil
 	}
 
-	op, err := rewrite.FixedPointTopDown(root, TableID, visitor, stopAtRoute)
+	op, err := rewrite.TopDown(root, TableID, visitor, stopAtRoute)
 	if err != nil {
 		if vterr, ok := err.(*vterrors.VitessError); ok && vterr.ID == "VT13001" {
 			// we encountered a bug. let's try to back out
@@ -110,21 +112,21 @@ func (a *ApplyJoin) planOffsets(ctx *plancontext.PlanningContext) error {
 	return nil
 }
 
-func planOffsetsForProjection(ctx *plancontext.PlanningContext, op *Projection) (ops.Operator, rewrite.ApplyResult, error) {
+func (p *Projection) planOffsetsForProjection(ctx *plancontext.PlanningContext) (ops.Operator, rewrite.ApplyResult, error) {
 	var err error
 	isSimple := true
-	for i, col := range op.Columns {
+	for i, col := range p.Columns {
 		rewritten := sqlparser.CopyOnRewrite(col.GetExpr(), nil, func(cursor *sqlparser.CopyOnWriteCursor) {
 			col, ok := cursor.Node().(*sqlparser.ColName)
 			if !ok {
 				return
 			}
-			newSrc, offset, terr := op.Source.AddColumn(ctx, aeWrap(col))
+			newSrc, offset, terr := p.Source.AddColumn(ctx, aeWrap(col))
 			if terr != nil {
 				err = terr
 				return
 			}
-			op.Source = newSrc
+			p.Source = newSrc
 			cursor.Replace(sqlparser.NewOffset(offset, col))
 		}, nil).(sqlparser.Expr)
 		if err != nil {
@@ -134,7 +136,7 @@ func planOffsetsForProjection(ctx *plancontext.PlanningContext, op *Projection) 
 		offset, ok := rewritten.(*sqlparser.Offset)
 		if ok {
 			// we got a pure offset back. No need to do anything else
-			op.Columns[i] = Offset{
+			p.Columns[i] = Offset{
 				Expr:   col.GetExpr(),
 				Offset: offset.V,
 			}
@@ -147,23 +149,23 @@ func planOffsetsForProjection(ctx *plancontext.PlanningContext, op *Projection) 
 			return nil, false, err
 		}
 
-		op.Columns[i] = Eval{
+		p.Columns[i] = Eval{
 			Expr:  rewritten,
 			EExpr: eexpr,
 		}
 	}
 	if !isSimple {
-		return op, rewrite.SameTree, nil
+		return p, rewrite.SameTree, nil
 	}
 
 	// is we were able to turn all the columns into offsets, we can use the SimpleProjection instead
 	sp := &SimpleProjection{
-		Source: op.Source,
+		Source: p.Source,
 	}
-	for i, column := range op.Columns {
+	for i, column := range p.Columns {
 		offset := column.(Offset)
 		sp.Columns = append(sp.Columns, offset.Offset)
-		sp.ASTColumns = append(sp.ASTColumns, &sqlparser.AliasedExpr{Expr: offset.Expr, As: sqlparser.NewIdentifierCI(op.ColumnNames[i])})
+		sp.ASTColumns = append(sp.ASTColumns, &sqlparser.AliasedExpr{Expr: offset.Expr, As: sqlparser.NewIdentifierCI(p.ColumnNames[i])})
 	}
 	return sp, rewrite.NewTree, nil
 }

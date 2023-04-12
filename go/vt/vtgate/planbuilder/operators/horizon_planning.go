@@ -37,13 +37,13 @@ func planHorizons(ctx *plancontext.PlanningContext, root ops.Operator) (ops.Oper
 	visitor := func(in ops.Operator, _ semantics.TableSet, isRoot bool) (ops.Operator, rewrite.ApplyResult, error) {
 		switch in := in.(type) {
 		case *Horizon:
-			op, err := pushOrExpandHorizon(ctx, in, isRoot)
+			op, err := pushOrExpandHorizon(ctx, in)
 			if err != nil {
 				return nil, false, err
 			}
 			return op, rewrite.NewTree, nil
 		case *Derived:
-			op, err := planDerived(ctx, in, isRoot)
+			op, err := planDerived(ctx, in)
 			if err != nil {
 				return nil, false, err
 			}
@@ -174,7 +174,7 @@ func stopAtRoute(operator ops.Operator) rewrite.VisitRule {
 	return rewrite.VisitRule(!isRoute)
 }
 
-func pushOrExpandHorizon(ctx *plancontext.PlanningContext, in horizonLike, isRoot bool) (ops.Operator, error) {
+func pushOrExpandHorizon(ctx *plancontext.PlanningContext, in horizonLike) (ops.Operator, error) {
 	rb, isRoute := in.src().(*Route)
 	if isRoute && rb.IsSingleShard() && in.selectStatement().GetLimit() == nil {
 		return rewrite.Swap(in, rb)
@@ -191,13 +191,13 @@ func pushOrExpandHorizon(ctx *plancontext.PlanningContext, in horizonLike, isRoo
 	}
 
 	needsOrdering := len(qp.OrderExprs) > 0
-	canPushDown := isRoute && sel.Having == nil && !needsOrdering && !qp.NeedsAggregation() && !sel.Distinct
+	canPushDown := isRoute && sel.Having == nil && !needsOrdering && !qp.NeedsAggregation() && !sel.Distinct && sel.Limit == nil
 
 	if canPushDown {
 		return rewrite.Swap(in, rb)
 	}
 
-	return expandHorizon(ctx, qp, in, isRoot)
+	return expandHorizon(qp, in)
 }
 
 // horizonLike should be removed. we should use Horizon for both these cases
@@ -207,11 +207,11 @@ type horizonLike interface {
 	src() ops.Operator
 }
 
-func planDerived(ctx *plancontext.PlanningContext, in *Derived, isRoot bool) (ops.Operator, error) {
-	return pushOrExpandHorizon(ctx, in, isRoot)
+func planDerived(ctx *plancontext.PlanningContext, in *Derived) (ops.Operator, error) {
+	return pushOrExpandHorizon(ctx, in)
 }
 
-func expandHorizon(ctx *plancontext.PlanningContext, qp *QueryProjection, horizon horizonLike, isRoot bool) (ops.Operator, error) {
+func expandHorizon(qp *QueryProjection, horizon horizonLike) (ops.Operator, error) {
 	sel, isSel := horizon.selectStatement().(*sqlparser.Select)
 	if !isSel {
 		return nil, errNotHorizonPlanned
@@ -253,13 +253,13 @@ func aeWrap(e sqlparser.Expr) *sqlparser.AliasedExpr {
 	return &sqlparser.AliasedExpr{Expr: e}
 }
 
-func planFilter(ctx *plancontext.PlanningContext, in *Filter) error {
+func (f *Filter) planOffsets(ctx *plancontext.PlanningContext) error {
 	resolveColumn := func(col *sqlparser.ColName) (int, error) {
-		newSrc, offset, err := in.Source.AddColumn(ctx, aeWrap(col))
+		newSrc, offset, err := f.Source.AddColumn(ctx, aeWrap(col))
 		if err != nil {
 			return 0, err
 		}
-		in.Source = newSrc
+		f.Source = newSrc
 		return offset, nil
 	}
 	cfg := &evalengine.Config{
@@ -268,11 +268,11 @@ func planFilter(ctx *plancontext.PlanningContext, in *Filter) error {
 		ResolveColumn: resolveColumn,
 	}
 
-	eexpr, err := evalengine.Translate(sqlparser.AndExpressions(in.Predicates...), cfg)
+	eexpr, err := evalengine.Translate(sqlparser.AndExpressions(f.Predicates...), cfg)
 	if err != nil {
 		return err
 	}
 
-	in.FinalPredicate = eexpr
+	f.FinalPredicate = eexpr
 	return nil
 }

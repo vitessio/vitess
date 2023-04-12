@@ -100,7 +100,7 @@ func FixedPointBottomUp(
 	return op, nil
 }
 
-// BottomUp rewrites an operator tree from the bottom up. BottomUp applies a transformation function to
+// BottomUpAll rewrites an operator tree from the bottom up. BottomUp applies a transformation function to
 // the given operator tree from the bottom up. Each callback [f] returns a ApplyResult that is aggregated
 // into a final output indicating whether the operator tree was changed.
 func BottomUpAll(
@@ -113,8 +113,9 @@ func BottomUpAll(
 	})
 }
 
-// FixedPointTopDown rewrites an operator tree much like TopDown does,
-// but does the rewriting repeatedly, until a tree walk is done with no changes to the tree.
+// TopDown rewrites an operator tree from the bottom up. BottomUp applies a transformation function to
+// the given operator tree from the bottom up. Each callback [f] returns a ApplyResult that is aggregated
+// into a final output indicating whether the operator tree was changed.
 //
 // Parameters:
 // - root: The root operator of the tree to be traversed.
@@ -125,7 +126,7 @@ func BottomUpAll(
 // Returns:
 // - ops.Operator: The root of the (potentially) transformed operator tree.
 // - error: An error if any occurred during the traversal.
-func FixedPointTopDown(
+func TopDown(
 	root ops.Operator,
 	resolveID func(ops.Operator) semantics.TableSet,
 	visit VisitF,
