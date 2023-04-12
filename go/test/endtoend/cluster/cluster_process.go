@@ -783,14 +783,14 @@ func (cluster *LocalProcessCluster) WaitForTabletsToHealthyInVtgate() (err error
 					rdonlyTabletCount++
 				}
 			}
-			if err = cluster.VtgateProcess.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", keyspace.Name, shard.Name), 1); err != nil {
+			if err = cluster.VtgateProcess.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", keyspace.Name, shard.Name), 1, 2*time.Minute); err != nil {
 				return err
 			}
 			if replicaTabletCount > 0 {
-				err = cluster.VtgateProcess.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", keyspace.Name, shard.Name), replicaTabletCount)
+				err = cluster.VtgateProcess.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", keyspace.Name, shard.Name), replicaTabletCount, 2*time.Minute)
 			}
 			if rdonlyTabletCount > 0 {
-				err = cluster.VtgateProcess.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.rdonly", keyspace.Name, shard.Name), rdonlyTabletCount)
+				err = cluster.VtgateProcess.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.rdonly", keyspace.Name, shard.Name), rdonlyTabletCount, 2*time.Minute)
 			}
 			if err != nil {
 				return err

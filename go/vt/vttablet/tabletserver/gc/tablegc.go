@@ -263,7 +263,6 @@ func (collector *TableGC) operate(ctx context.Context) {
 			}
 		case <-purgeRequestsChan:
 			{
-				log.Info("TableGC: purgeRequestsChan")
 				go func() {
 					tableName, err := collector.purge(ctx)
 					if err != nil {
