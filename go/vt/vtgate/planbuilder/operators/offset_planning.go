@@ -176,3 +176,14 @@ func planOffsetsForProjection(ctx *plancontext.PlanningContext, op *Projection) 
 	}
 	return sp, rewrite.NewTree, nil
 }
+
+func planOffsetsOnJoins(ctx *plancontext.PlanningContext, op ops.Operator) error {
+	err := rewrite.Visit(op, func(current ops.Operator) error {
+		join, ok := current.(*ApplyJoin)
+		if !ok {
+			return nil
+		}
+		return join.planOffsets(ctx)
+	})
+	return err
+}

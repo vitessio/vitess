@@ -51,6 +51,7 @@ type (
 	noPredicates struct{}
 )
 
+// PlanQuery creates a query plan for a given SQL statement
 func PlanQuery(ctx *plancontext.PlanningContext, selStmt sqlparser.Statement) (ops.Operator, error) {
 	op, err := createLogicalOperatorFromAST(ctx, selStmt)
 	if err != nil {
@@ -77,6 +78,10 @@ func PlanQuery(ctx *plancontext.PlanningContext, selStmt sqlparser.Statement) (o
 	}
 	if err == errNotHorizonPlanned {
 		op = backup
+		err := planOffsetsOnJoins(ctx, op)
+		if err != nil {
+			return nil, err
+		}
 	} else if err != nil {
 		return nil, err
 	}
