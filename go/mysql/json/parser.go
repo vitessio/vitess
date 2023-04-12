@@ -18,6 +18,7 @@ limitations under the License.
 package json
 
 import (
+	"bytes"
 	"encoding/base64"
 	"fmt"
 	"strconv"
@@ -226,7 +227,11 @@ func parseValue(s string, c *cache, depth int) (*Value, string, error) {
 
 	v := c.getValue()
 	v.t = TypeNumber
-	v.s = hack.String(format.FormatFloat(f))
+	buf := format.FormatFloat(f)
+	if bytes.IndexByte(buf, '.') < 0 && bytes.IndexByte(buf, 'e') < 0 {
+		buf = append(buf, ".0"...)
+	}
+	v.s = hack.String(buf)
 	v.i = false
 	return v, tail, nil
 }

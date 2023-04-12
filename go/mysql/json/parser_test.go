@@ -519,6 +519,9 @@ func TestParserParse(t *testing.T) {
 		if tp != TypeNumber || tp.String() != "number" {
 			t.Fatalf("unexpected type obtained for integer: %#v", v)
 		}
+		if !v.i {
+			t.Fatalf("unexpected non integer value: %#v", v)
+		}
 		s := v.String()
 		if s != "12345" {
 			t.Fatalf("unexpected string representation of integer; got %q; want %q", s, "12345")
@@ -573,15 +576,54 @@ func TestParserParse(t *testing.T) {
 	t.Run("float", func(t *testing.T) {
 		v, err := p.Parse("-12.345")
 		if err != nil {
-			t.Fatalf("cannot parse integer: %s", err)
+			t.Fatalf("cannot parse float: %s", err)
 		}
 		tp := v.Type()
 		if tp != TypeNumber || tp.String() != "number" {
 			t.Fatalf("unexpected type obtained for integer: %#v", v)
 		}
+		if v.i {
+			t.Fatalf("unexpected integer value: %#v", v)
+		}
 		s := v.String()
 		if s != "-12.345" {
 			t.Fatalf("unexpected string representation of integer; got %q; want %q", s, "-12.345")
+		}
+	})
+
+	t.Run("float with zero", func(t *testing.T) {
+		v, err := p.Parse("12.0")
+		if err != nil {
+			t.Fatalf("cannot parse float: %s", err)
+		}
+		tp := v.Type()
+		if tp != TypeNumber || tp.String() != "number" {
+			t.Fatalf("unexpected type obtained for number: %#v", v)
+		}
+		if v.i {
+			t.Fatalf("unexpected integer value: %#v", v)
+		}
+		s := v.String()
+		if s != "12.0" {
+			t.Fatalf("unexpected string representation of float; got %q; want %q", s, "12.0")
+		}
+	})
+
+	t.Run("float with large exponent", func(t *testing.T) {
+		v, err := p.Parse("1e100")
+		if err != nil {
+			t.Fatalf("cannot parse float: %s", err)
+		}
+		tp := v.Type()
+		if tp != TypeNumber || tp.String() != "number" {
+			t.Fatalf("unexpected type obtained for number: %#v", v)
+		}
+		if v.i {
+			t.Fatalf("unexpected integer value: %#v", v)
+		}
+		s := v.String()
+		if s != "1e100" {
+			t.Fatalf("unexpected string representation of float; got %q; want %q", s, "1e100")
 		}
 	})
 
