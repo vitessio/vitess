@@ -79,7 +79,11 @@ func (s *scoper) down(cursor *sqlparser.Cursor) error {
 			// can only see the two tables involved in the JOIN, and no other tables.
 			// To create this special context, we create a special scope here that is then merged with
 			// the surrounding scope when we come back out from the JOIN
-			nScope := newScope(nil)
+			var parenScope *scope
+			if len(s.scopes) >= 2 {
+				parenScope = s.scopes[len(s.scopes)-2]
+			}
+			nScope := newScope(parenScope)
 			nScope.stmt = cursor.Parent().(*sqlparser.Select)
 			s.push(nScope)
 		}
