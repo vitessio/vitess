@@ -24,10 +24,8 @@ import (
 	"unicode/utf8"
 
 	"vitess.io/vitess/go/mysql/collations"
-	"vitess.io/vitess/go/mysql/datetime"
 	"vitess.io/vitess/go/mysql/decimal"
 	"vitess.io/vitess/go/sqltypes"
-	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 // NullExpr is just what you are lead to believe
@@ -103,32 +101,31 @@ func NewLiteralString(val []byte, collation collations.TypedCollation) *Literal 
 
 // NewLiteralDateFromBytes returns a literal expression.
 func NewLiteralDateFromBytes(val []byte) (*Literal, error) {
-	_, err := datetime.ParseDate(string(val))
+	t, err := parseDate(val)
 	if err != nil {
 		return nil, err
 	}
-	return &Literal{newEvalRaw(querypb.Type_DATE, val, collationNumeric)}, nil
+	return &Literal{t}, nil
 }
 
 // NewLiteralTimeFromBytes returns a literal expression.
 // it validates the time by parsing it and checking the error.
 func NewLiteralTimeFromBytes(val []byte) (*Literal, error) {
-	_, normalized, err := datetime.ParseTime(string(val))
+	t, err := parseTime(val)
 	if err != nil {
 		return nil, err
 	}
-	// Convert days to only hours syntax as this is how MySQL normalizes as well.
-	return &Literal{newEvalRaw(querypb.Type_TIME, []byte(normalized), collationNumeric)}, nil
+	return &Literal{t}, nil
 }
 
 // NewLiteralDatetimeFromBytes returns a literal expression.
 // it validates the datetime by parsing it and checking the error.
 func NewLiteralDatetimeFromBytes(val []byte) (*Literal, error) {
-	_, err := datetime.ParseDateTime(string(val))
+	t, err := parseDateTime(val)
 	if err != nil {
 		return nil, err
 	}
-	return &Literal{newEvalRaw(querypb.Type_DATETIME, val, collationNumeric)}, nil
+	return &Literal{t}, nil
 }
 
 func parseHexLiteral(val []byte) ([]byte, error) {

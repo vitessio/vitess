@@ -101,9 +101,9 @@ func (c *ConvertExpr) eval(env *ExpressionEnv) (eval, error) {
 		return t, nil
 	case "DECIMAL":
 		m, d := c.decimalPrecision()
-		return evalToNumeric(e).toDecimal(m, d), nil
+		return evalToDecimal(e, m, d), nil
 	case "DOUBLE", "REAL":
-		f, _ := evalToNumeric(e).toFloat()
+		f, _ := evalToFloat(e)
 		return f, nil
 	case "FLOAT":
 		if c.HasLength {
@@ -119,7 +119,22 @@ func (c *ConvertExpr) eval(env *ExpressionEnv) (eval, error) {
 		return evalToInt64(e).toUint64(), nil
 	case "JSON":
 		return evalToJSON(e)
-	case "DATE", "DATETIME", "YEAR", "TIME":
+	case "DATETIME":
+		if dt := evalToDateTime(e); dt != nil {
+			return dt, nil
+		}
+		return nil, nil
+	case "DATE":
+		if d := evalToDate(e); d != nil {
+			return d, nil
+		}
+		return nil, nil
+	case "TIME":
+		if t := evalToTime(e); t != nil {
+			return t, nil
+		}
+		return nil, nil
+	case "YEAR":
 		return nil, c.returnUnsupportedError()
 	default:
 		panic("BUG: sqlparser emitted unknown type")
@@ -146,8 +161,14 @@ func (c *ConvertExpr) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqlty
 		return sqltypes.Uint64, f
 	case "JSON":
 		return sqltypes.TypeJSON, f
-	case "DATE", "DATETIME", "YEAR", "TIME":
-		return sqltypes.Null, f
+	case "DATE":
+		return sqltypes.Date, f
+	case "DATETIME":
+		return sqltypes.Datetime, f
+	case "TIME":
+		return sqltypes.Time, f
+	case "YEAR":
+		return sqltypes.Year, f
 	default:
 		panic("BUG: sqlparser emitted unknown type")
 	}

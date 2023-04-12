@@ -140,6 +140,8 @@ func (c *compiler) compileFn(call callable) (ctype, error) {
 		return c.compileFn_SHA2(call)
 	case *builtinRandomBytes:
 		return c.compileFn_RandomBytes(call)
+	case *builtinDateFormat:
+		return c.compileFn_DateFormat(call)
 	default:
 		return ctype{}, c.unsupported(call)
 	}
@@ -394,13 +396,7 @@ func (c *compiler) compileFn_HEX(call *builtinHex) (ctype, error) {
 	}
 
 	skip := c.compileNullCheck1(str)
-
-	col := collations.TypedCollation{
-		Collation:    c.cfg.Collation,
-		Coercibility: collations.CoerceCoercible,
-		Repertoire:   collations.RepertoireASCII,
-	}
-
+	col := defaultCoercionCollation(c.cfg.Collation)
 	t := sqltypes.VarChar
 	if str.Type == sqltypes.Blob || str.Type == sqltypes.TypeJSON {
 		t = sqltypes.Text
@@ -754,12 +750,7 @@ func (c *compiler) compileFn_CONV(expr callable) (ctype, error) {
 		c.asm.Fn_CONV_bu(3, 2)
 	}
 
-	col := collations.TypedCollation{
-		Collation:    c.cfg.Collation,
-		Coercibility: collations.CoerceCoercible,
-		Repertoire:   collations.RepertoireASCII,
-	}
-
+	col := defaultCoercionCollation(n.Col.Collation)
 	c.asm.Fn_CONV_uc(t, col)
 	c.asm.jumpDestination(skip)
 
@@ -798,13 +789,13 @@ func (c *compiler) compileFn_Now(call *builtinNow) (ctype, error) {
 	var t sqltypes.Type
 
 	if call.onlyTime {
-		format = formatTime[call.prec]
+		format = datetime.Time_hh_mm_ss
 		t = sqltypes.Time
 	} else {
-		format = formatDateTime[call.prec]
+		format = datetime.DateTime_YYYY_MM_DD_hh_mm_ss
 		t = sqltypes.Datetime
 	}
-	c.asm.Fn_Now(t, format, call.utc)
+	c.asm.Fn_Now(t, format, call.prec, call.utc)
 	return ctype{Type: t, Col: collationBinary}, nil
 }
 
@@ -819,7 +810,7 @@ func (c *compiler) compileFn_UtcDate(*builtinUtcDate) (ctype, error) {
 }
 
 func (c *compiler) compileFn_Sysdate(call *builtinSysdate) (ctype, error) {
-	c.asm.Fn_Sysdate(formatDateTime[call.prec])
+	c.asm.Fn_Sysdate(call.prec)
 	return ctype{Type: sqltypes.Datetime, Col: collationBinary}, nil
 }
 
@@ -846,17 +837,13 @@ func (c *compiler) compileFn_MD5(call *builtinMD5) (ctype, error) {
 
 	skip := c.compileNullCheck1(str)
 
-	col := collations.TypedCollation{
-		Collation:    c.cfg.Collation,
-		Coercibility: collations.CoerceCoercible,
-		Repertoire:   collations.RepertoireASCII,
-	}
-
 	switch {
 	case str.isTextual():
 	default:
 		c.asm.Convert_xb(1, sqltypes.Binary, 0, false)
 	}
+
+	col := defaultCoercionCollation(c.cfg.Collation)
 	c.asm.Fn_MD5(col)
 	c.asm.jumpDestination(skip)
 	return ctype{Type: sqltypes.VarChar, Col: col, Flag: str.Flag}, nil
@@ -870,17 +857,12 @@ func (c *compiler) compileFn_SHA1(call *builtinSHA1) (ctype, error) {
 
 	skip := c.compileNullCheck1(str)
 
-	col := collations.TypedCollation{
-		Collation:    c.cfg.Collation,
-		Coercibility: collations.CoerceCoercible,
-		Repertoire:   collations.RepertoireASCII,
-	}
-
 	switch {
 	case str.isTextual():
 	default:
 		c.asm.Convert_xb(1, sqltypes.Binary, 0, false)
 	}
+	col := defaultCoercionCollation(c.cfg.Collation)
 	c.asm.Fn_SHA1(col)
 	c.asm.jumpDestination(skip)
 	return ctype{Type: sqltypes.VarChar, Col: col, Flag: str.Flag}, nil
@@ -901,12 +883,6 @@ func (c *compiler) compileFn_SHA2(call *builtinSHA2) (ctype, error) {
 
 	skip2 := c.compileNullCheck1r(bits)
 
-	col := collations.TypedCollation{
-		Collation:    c.cfg.Collation,
-		Coercibility: collations.CoerceCoercible,
-		Repertoire:   collations.RepertoireASCII,
-	}
-
 	switch {
 	case str.isTextual():
 	default:
@@ -921,6 +897,8 @@ func (c *compiler) compileFn_SHA2(call *builtinSHA2) (ctype, error) {
 	default:
 		c.asm.Convert_xi(1)
 	}
+
+	col := defaultCoercionCollation(c.cfg.Collation)
 	c.asm.Fn_SHA2(col)
 	c.asm.jumpDestination(skip1, skip2)
 	return ctype{Type: sqltypes.VarChar, Col: col, Flag: str.Flag | flagNullable}, nil
@@ -946,4 +924,37 @@ func (c *compiler) compileFn_RandomBytes(call *builtinRandomBytes) (ctype, error
 	c.asm.Fn_RandomBytes()
 	c.asm.jumpDestination(skip)
 	return ctype{Type: sqltypes.VarBinary, Col: collationBinary, Flag: arg.Flag | flagNullable}, nil
+}
+
+func (c *compiler) compileFn_DateFormat(call *builtinDateFormat) (ctype, error) {
+	arg, err := c.compileExpr(call.Arguments[0])
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip1 := c.compileNullCheck1(arg)
+
+	format, err := c.compileExpr(call.Arguments[1])
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip2 := c.compileNullCheck1r(format)
+
+	switch arg.Type {
+	case sqltypes.Datetime, sqltypes.Date, sqltypes.Time:
+	default:
+		c.asm.Convert_xDT(2)
+	}
+
+	switch arg.Type {
+	case sqltypes.VarChar, sqltypes.VarBinary:
+	default:
+		c.asm.Convert_xb(1, sqltypes.VarBinary, 0, false)
+	}
+
+	col := defaultCoercionCollation(c.cfg.Collation)
+	c.asm.Fn_DATE_FORMAT(col)
+	c.asm.jumpDestination(skip1, skip2)
+	return ctype{Type: sqltypes.VarChar, Col: col, Flag: arg.Flag | flagNullable}, nil
 }

@@ -136,6 +136,6 @@ func TestMySQLGolden(t *testing.T) {
 
 func TestDebug1(t *testing.T) {
 	// Debug
-	eval, err := testSingle(t, `SELECT 0x1 IN (0xFF, 64)`)
+	eval, err := testSingle(t, `SELECT DATE_FORMAT(TIMESTAMP '1999-12-31 23:59:58.999', "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %W %w %Y %y %% ")`)
 	t.Logf("eval=%s err=%v coll=%s", eval.String(), err, eval.Collation().Get().Name())
 }

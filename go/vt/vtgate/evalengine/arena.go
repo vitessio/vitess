@@ -18,6 +18,7 @@ package evalengine
 
 import (
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/datetime"
 	"vitess.io/vitess/go/mysql/decimal"
 	"vitess.io/vitess/go/sqltypes"
 )
@@ -124,4 +125,23 @@ func (a *Arena) newEvalText(raw []byte, tc collations.TypedCollation) *evalBytes
 	b.col = tc
 	b.bytes = raw
 	return b
+}
+
+func (a *Arena) newEvalTime(time datetime.Time) *evalTemporal {
+	// TODO: reuse evalTemporal
+	return &evalTemporal{t: sqltypes.Time, dt: datetime.DateTime{Time: time}}
+}
+
+func (a *Arena) newEvalDateTime(dt datetime.DateTime) *evalTemporal {
+	// TODO: reuse evalTemporal
+	return &evalTemporal{t: sqltypes.Datetime, dt: dt}
+}
+
+func (a *Arena) newEvalDate(date datetime.Date) *evalTemporal {
+	// TODO: reuse evalTemporal
+	return &evalTemporal{t: sqltypes.Date, dt: datetime.DateTime{Date: date}}
+}
+
+func (a *Arena) newTemporal(t sqltypes.Type, dt datetime.DateTime) *evalTemporal {
+	return &evalTemporal{t: t, dt: dt}
 }
