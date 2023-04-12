@@ -23,7 +23,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
-// BreakExpressionInLHSandRHSOld takes an expression and
+// BreakExpressionInLHSandRHS takes an expression and
 // extracts the parts that are coming from one of the sides into `ColName`s that are needed
 func BreakExpressionInLHSandRHS(
 	ctx *plancontext.PlanningContext,

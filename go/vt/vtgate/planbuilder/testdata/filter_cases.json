@@ -5183,9 +5183,9 @@
               {
                 "OperatorType": "Join",
                 "Variant": "LeftJoin",
-                "JoinColumnIndexes": "L:1,R:0",
+                "JoinColumnIndexes": "L:0,R:0",
                 "JoinVars": {
-                  "user_col": 0
+                  "user_col": 1
                 },
                 "TableName": "`user`_user_extra",
                 "Inputs": [
@@ -5196,8 +5196,8 @@
                       "Name": "user",
                       "Sharded": true
                     },
-                    "FieldQuery": "select `user`.col, `user`.id from `user` where 1 != 1",
-                    "Query": "select `user`.col, `user`.id from `user`",
+                    "FieldQuery": "select `user`.id, `user`.col from `user` where 1 != 1",
+                    "Query": "select `user`.id, `user`.col from `user`",
                     "Table": "`user`"
                   },
                   {

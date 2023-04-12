@@ -17,7 +17,6 @@ limitations under the License.
 package operators
 
 import (
-	"vitess.io/vitess/go/slices2"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
@@ -61,55 +60,6 @@ func planOffsets(ctx *plancontext.PlanningContext, root ops.Operator) (ops.Opera
 	}
 
 	return op, nil
-}
-
-func (a *ApplyJoin) planOffsets(ctx *plancontext.PlanningContext) error {
-	for _, col := range a.ColumnsAST {
-		// Read the type description for JoinColumn to understand the following code
-		for i, lhsExpr := range col.LHSExprs {
-			offset, err := a.pushColLeft(ctx, aeWrap(lhsExpr))
-			if err != nil {
-				return err
-			}
-			if col.RHSExpr == nil {
-				// if we don't have a RHS expr, it means that this is a pure LHS expression
-				a.Columns = append(a.Columns, -offset-1)
-			} else {
-				a.Vars[col.BvNames[i]] = offset
-			}
-		}
-		if col.RHSExpr != nil {
-			offset, err := a.pushColRight(ctx, aeWrap(col.RHSExpr))
-			if err != nil {
-				return err
-			}
-			a.Columns = append(a.Columns, offset+1)
-		}
-	}
-
-	for _, col := range a.JoinPredicates {
-		var err error
-		for i, lhsExpr := range col.LHSExprs {
-			offset, err := a.pushColLeft(ctx, aeWrap(lhsExpr))
-			if err != nil {
-				return err
-			}
-			a.Vars[col.BvNames[i]] = offset
-		}
-		lhsColumns := slices2.Map(col.LHSExprs, func(from sqlparser.Expr) *sqlparser.ColName {
-			col, ok := from.(*sqlparser.ColName)
-			if !ok {
-				// todo: there is no good reason to keep this limitation around
-				err = vterrors.VT13001("joins can only compare columns: %s", sqlparser.String(from))
-			}
-			return col
-		})
-		if err != nil {
-			return err
-		}
-		a.LHSColumns = append(a.LHSColumns, lhsColumns...)
-	}
-	return nil
 }
 
 func (p *Projection) planOffsetsForProjection(ctx *plancontext.PlanningContext) (ops.Operator, rewrite.ApplyResult, error) {

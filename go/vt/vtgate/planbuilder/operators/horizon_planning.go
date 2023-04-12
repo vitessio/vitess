@@ -19,7 +19,6 @@ package operators
 import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
@@ -251,28 +250,4 @@ func expandHorizon(qp *QueryProjection, horizon horizonLike) (ops.Operator, erro
 
 func aeWrap(e sqlparser.Expr) *sqlparser.AliasedExpr {
 	return &sqlparser.AliasedExpr{Expr: e}
-}
-
-func (f *Filter) planOffsets(ctx *plancontext.PlanningContext) error {
-	resolveColumn := func(col *sqlparser.ColName) (int, error) {
-		newSrc, offset, err := f.Source.AddColumn(ctx, aeWrap(col))
-		if err != nil {
-			return 0, err
-		}
-		f.Source = newSrc
-		return offset, nil
-	}
-	cfg := &evalengine.Config{
-		ResolveType:   ctx.SemTable.TypeForExpr,
-		Collation:     ctx.SemTable.Collation,
-		ResolveColumn: resolveColumn,
-	}
-
-	eexpr, err := evalengine.Translate(sqlparser.AndExpressions(f.Predicates...), cfg)
-	if err != nil {
-		return err
-	}
-
-	f.FinalPredicate = eexpr
-	return nil
 }

@@ -70,11 +70,10 @@ type ApplyJoin struct {
 //     so they can be used for the result of this expression that is using data from both sides.
 //     All fields will be used for these
 type JoinColumn struct {
-	Original       sqlparser.Expr // this is the original expression being passed through
-	BvNames        []string       // the BvNames and LHSCols line up
-	LHSExprs       []sqlparser.Expr
-	RHSExpr        sqlparser.Expr
-	IncomingOffset int
+	Original sqlparser.Expr // this is the original expression being passed through
+	BvNames  []string       // the BvNames and LHSCols line up
+	LHSExprs []sqlparser.Expr
+	RHSExpr  sqlparser.Expr
 }
 
 var _ ops.PhysicalOperator = (*ApplyJoin)(nil)
@@ -193,42 +192,24 @@ func (a *ApplyJoin) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.
 	if offset, found := canReuseColumn(ctx, a.ColumnsAST, expr.Expr, jcToExpr); found {
 		return a, offset, nil
 	}
+	var col = JoinColumn{Original: expr.Expr}
 
 	side := chooseSide{
 		Expr: expr.Expr,
 		left: func() error {
-			offset, err := a.pushColLeft(ctx, expr)
-			if err != nil {
-				return err
-			}
-			a.Columns = append(a.Columns, -offset-1)
+			col.LHSExprs = []sqlparser.Expr{expr.Expr}
 			return nil
 		},
 		right: func() error {
-			offset, err := a.pushColRight(ctx, expr)
-			if err != nil {
-				return err
-			}
-			a.Columns = append(a.Columns, offset+1)
+			col.RHSExpr = expr.Expr
 			return nil
 		},
 		both: func() error {
-			col, err := BreakExpressionInLHSandRHS(ctx, expr.Expr, TableID(a.LHS))
+			var err error
+			col, err = BreakExpressionInLHSandRHS(ctx, expr.Expr, TableID(a.LHS))
 			if err != nil {
 				return err
 			}
-			for i, lhsExpr := range col.LHSExprs {
-				offset, err := a.pushColLeft(ctx, aeWrap(lhsExpr))
-				if err != nil {
-					return err
-				}
-				a.Vars[col.BvNames[i]] = offset
-			}
-			offset, err := a.pushColRight(ctx, aeWrap(col.RHSExpr))
-			if err != nil {
-				return err
-			}
-			a.Columns = append(a.Columns, offset+1)
 			return nil
 		},
 	}
@@ -236,7 +217,8 @@ func (a *ApplyJoin) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.
 	if err != nil {
 		return nil, 0, err
 	}
-	return a, len(a.Columns) - 1, nil
+	a.ColumnsAST = append(a.ColumnsAST, col)
+	return a, len(a.ColumnsAST) - 1, nil
 }
 
 func (a *ApplyJoin) Push(ctx *plancontext.PlanningContext, chooser chooseSide) error {
@@ -260,4 +242,61 @@ func (a *ApplyJoin) Push(ctx *plancontext.PlanningContext, chooser chooseSide) e
 type chooseSide struct {
 	Expr              sqlparser.Expr
 	left, right, both func() error
+}
+
+func (a *ApplyJoin) planOffsets(ctx *plancontext.PlanningContext) error {
+	for _, col := range a.ColumnsAST {
+		// Read the type description for JoinColumn to understand the following code
+		for i, lhsExpr := range col.LHSExprs {
+			offset, err := a.pushColLeft(ctx, aeWrap(lhsExpr))
+			if err != nil {
+				return err
+			}
+			if col.RHSExpr == nil {
+				// if we don't have a RHS expr, it means that this is a pure LHS expression
+				a.addOffset(-offset - 1)
+			} else {
+				a.Vars[col.BvNames[i]] = offset
+			}
+		}
+		if col.RHSExpr != nil {
+			offset, err := a.pushColRight(ctx, aeWrap(col.RHSExpr))
+			if err != nil {
+				return err
+			}
+			a.addOffset(offset + 1)
+		}
+	}
+
+	for _, col := range a.JoinPredicates {
+		var err error
+		for i, lhsExpr := range col.LHSExprs {
+			offset, err := a.pushColLeft(ctx, aeWrap(lhsExpr))
+			if err != nil {
+				return err
+			}
+			a.Vars[col.BvNames[i]] = offset
+		}
+		lhsColumns := slices2.Map(col.LHSExprs, func(from sqlparser.Expr) *sqlparser.ColName {
+			col, ok := from.(*sqlparser.ColName)
+			if !ok {
+				// todo: there is no good reason to keep this limitation around
+				err = vterrors.VT13001("joins can only compare columns: %s", sqlparser.String(from))
+			}
+			return col
+		})
+		if err != nil {
+			return err
+		}
+		a.LHSColumns = append(a.LHSColumns, lhsColumns...)
+	}
+	return nil
+}
+
+func (a *ApplyJoin) addOffset(offset int) {
+	index := slices.Index(a.Columns, offset)
+	if index != -1 {
+		panic("should never pass through the same column")
+	}
+	a.Columns = append(a.Columns, offset)
 }

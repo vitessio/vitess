@@ -132,15 +132,11 @@ func TopDown(
 	visit VisitF,
 	shouldVisit ShouldVisit,
 ) (op ops.Operator, err error) {
-	id := NewTree
-	op = root
-	// Continue the top-down rewriting process as long as changes were made during the last traversal
-	for id == NewTree {
-		op, id, err = topDown(op, semantics.EmptyTableSet(), resolveID, visit, shouldVisit, true)
-		if err != nil {
-			return nil, err
-		}
+	op, _, err = topDown(root, semantics.EmptyTableSet(), resolveID, visit, shouldVisit, true)
+	if err != nil {
+		return nil, err
 	}
+
 	return op, nil
 }
 

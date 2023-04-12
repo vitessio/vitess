@@ -778,14 +778,14 @@
         "Variant": "Join",
         "JoinColumnIndexes": "L:0",
         "JoinVars": {
-          "u1_col": 0
+          "u1_col": 1
         },
         "TableName": "`user`_`user`_`user`",
         "Inputs": [
           {
             "OperatorType": "Join",
             "Variant": "Join",
-            "JoinColumnIndexes": "L:1,L:0",
+            "JoinColumnIndexes": "L:0,L:1",
             "JoinVars": {
               "u1_col": 1
             },
