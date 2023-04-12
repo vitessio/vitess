@@ -115,7 +115,7 @@ func TestSetTable(t *testing.T) {
 				"col0",
 				"datetime",
 			),
-			"2020-10-28",
+			"2020-10-28 00:00:00",
 		)},
 		expectedQueryLog: []string{
 			`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
