@@ -907,8 +907,14 @@ func (tm *TabletManager) initializeReplication(ctx context.Context, tabletType t
 	}
 	// If using semi-sync, we need to enable it before connecting to primary.
 	// We should set the correct type, since it is used in replica semi-sync
+
+	semiSyncAction, err := tm.convertBoolToSemiSyncAction(reparentutil.IsReplicaSemiSync(durability, currentPrimary.Tablet, tablet))
+	if err != nil {
+		return nil, err
+	}
+
 	tablet.Type = tabletType
-	if err := tm.fixSemiSync(tabletType, convertBoolToSemiSyncAction(reparentutil.IsReplicaSemiSync(durability, currentPrimary.Tablet, tablet))); err != nil {
+	if err := tm.fixSemiSync(tabletType, semiSyncAction); err != nil {
 		return nil, err
 	}
 
