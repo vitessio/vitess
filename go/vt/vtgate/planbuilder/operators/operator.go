@@ -94,6 +94,13 @@ func tryHorizonPlanning(ctx *plancontext.PlanningContext, op ops.Operator) (outp
 		}
 	}()
 
+	_, ok := op.(*Horizon)
+
+	if !ok || len(ctx.SemTable.SubqueryMap) > 0 || len(ctx.SemTable.SubqueryRef) > 0 {
+		// we are not ready to deal with subqueries yet
+		return op, errHorizonNotPlanned
+	}
+
 	output, err = planHorizons(ctx, op)
 	if err != nil {
 		return nil, err
@@ -116,10 +123,7 @@ func makeSureOutputIsCorrect(ctx *plancontext.PlanningContext, op ops.Operator, 
 	// next we use the original Horizon to make sure that the output columns line up with what the user asked for
 	// in the future, we'll tidy up the results. for now, we are just failing these queries and going back to the
 	// old horizon planning instead
-	horizon, ok := op.(*Horizon)
-	if !ok {
-		return nil
-	}
+	horizon := op.(*Horizon)
 
 	sel := sqlparser.GetFirstSelect(horizon.Select)
 	cols, err := output.GetColumns()
