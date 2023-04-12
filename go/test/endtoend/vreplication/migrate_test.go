@@ -56,7 +56,8 @@ func TestMigrate(t *testing.T) {
 	defer vc.TearDown(t)
 
 	defaultCell = vc.Cells[defaultCellName]
-	vc.AddKeyspace(t, []*Cell{defaultCell}, "product", "0", initialProductVSchema, initialProductSchema, defaultReplicas, defaultRdonly, 100+rand.Intn(100), nil)
+	sourceUID := 100 + rand.Intn(100)
+	vc.AddKeyspace(t, []*Cell{defaultCell}, "product", "0", initialProductVSchema, initialProductSchema, defaultReplicas, defaultRdonly, sourceUID, nil)
 	err := cluster.WaitForHealthyShard(vc.VtctldClient, "product", "0")
 	require.NoError(t, err)
 	vtgate = defaultCell.Vtgates[0]
@@ -75,7 +76,8 @@ func TestMigrate(t *testing.T) {
 	defer extVc.TearDown(t)
 
 	extCell2 := extVc.Cells[extCell]
-	extVc.AddKeyspace(t, []*Cell{extCell2}, "rating", "0", initialExternalVSchema, initialExternalSchema, 0, 0, 1000+rand.Intn(1000), nil)
+	targetUID := 1000 + rand.Intn(1000)
+	extVc.AddKeyspace(t, []*Cell{extCell2}, "rating", "0", initialExternalVSchema, initialExternalSchema, 0, 0, targetUID, nil)
 	extVtgate := extCell2.Vtgates[0]
 	require.NotNil(t, extVtgate)
 
@@ -141,10 +143,10 @@ func TestMigrate(t *testing.T) {
 		}
 		expectNumberOfStreams(t, vtgateConn, "migrate", "e1", "product:0", 0)
 		var found bool
-		found, err = checkIfTableExists(t, vc, "zone1-100", "review")
+		found, err = checkIfTableExists(t, vc, fmt.Sprintf("%s-%d", defaultCellName, sourceUID), "review")
 		require.NoError(t, err)
 		require.False(t, found)
-		found, err = checkIfTableExists(t, vc, "zone1-100", "rating")
+		found, err = checkIfTableExists(t, vc, fmt.Sprintf("%s-%d", defaultCellName, sourceUID), "rating")
 		require.NoError(t, err)
 		require.False(t, found)
 	})
