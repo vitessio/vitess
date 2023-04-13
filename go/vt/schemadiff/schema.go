@@ -793,7 +793,7 @@ func (s *Schema) SchemaDiff(other *Schema, hints *DiffHints) (*SchemaDiff, error
 		return dependentDiffs, relationsMade
 	}
 
-	for _, diff := range schemaDiff.allDiffs() {
+	for _, diff := range schemaDiff.UnorderedDiffs() {
 		switch diff := diff.(type) {
 		case *CreateViewEntityDiff:
 			checkDependencies(diff, getViewDependentTableNames(diff.createView))

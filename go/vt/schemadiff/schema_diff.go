@@ -171,9 +171,11 @@ func (d *SchemaDiff) Empty() bool {
 	return len(d.diffs) == 0
 }
 
-// allDiffs returns all the diffs. These are not sorted by dependencies. These are basically
-// the original diffs, "flatteninf" any subsequent diffs they may have.
-func (d *SchemaDiff) allDiffs() []EntityDiff {
+// UnorderedDiffs returns all the diffs. These are not sorted by dependencies. These are basically
+// the original diffs, but "flattening" any subsequent diffs they may have. as result:
+// - Diffs in the returned slice have no subsequent diffs
+// - The returned slice may be longer than the number of diffs supplied by loadDiffs()
+func (d *SchemaDiff) UnorderedDiffs() []EntityDiff {
 	return d.diffs
 }
 
