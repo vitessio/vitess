@@ -38,14 +38,14 @@ var DefaultMySQLStrftime = map[byte]Spec{
 	'S': fmtSecond{true, false},
 	's': fmtSecond{true, false},
 	'T': fmtFullTime24{},
-	'U': nil, // fmtWeek0{}, // TODO
-	'u': nil, // fmtWeek1{}, // TODO
-	'V': nil, // fmtWeek2{}, // TODO
-	'v': nil, // fmtWeek3{}, // TODO
+	'U': fmtWeek0{},
+	'u': fmtWeek1{},
+	'V': fmtWeek2{},
+	'v': fmtWeek3{},
 	'W': fmtWeekdayName{},
 	'w': fmtWeekday{},
-	'X': nil, // fmtYearForWeek2{}, // TODO
-	'x': nil, // fmtYearForWeek3{}, // TODO
+	'X': fmtYearForWeek2{},
+	'x': fmtYearForWeek3{},
 	'Y': fmtYearLong{},
 	'y': fmtYearShort{},
 }
