@@ -1494,6 +1494,9 @@ func TestUpdateErrors(t *testing.T) {
 	}
 }
 
+// TestScopingSubQueryJoinClause tests the scoping behavior of a subquery containing a join clause.
+// The test ensures that the scoping analysis correctly identifies and handles the relationships
+// between the tables involved in the join operation with the outer query.
 func TestScopingSubQueryJoinClause(t *testing.T) {
 	query := "select (select 1 from u1 join u2 on u1.id = u2.id and u2.id = u3.id) x from u3"
 
