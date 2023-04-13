@@ -767,9 +767,11 @@ func (s *Schema) Apply(diffs []EntityDiff) (*Schema, error) {
 	return dup, nil
 }
 
-// SchemaDiff calulates a rich diff between this schema and the given schema. It is stronger than Diff().
-// On top of returning the list of diffs that can take this schema into the given schema, this function also
-// evaluates the dependencies between those diffs, if any.
+// SchemaDiff calulates a rich diff between this schema and the given schema. It builds on top of diff():
+// on top of the list of diffs that can take this schema into the given schema, this function also
+// evaluates the dependencies between those diffs, if any, and the resulting SchemaDiff object offers OrderedDiffs(),
+// the safe ordering of diffs that, when appleid sequentially, does not produce any conflicts and keeps schema valid
+// at each step.
 func (s *Schema) SchemaDiff(other *Schema, hints *DiffHints) (*SchemaDiff, error) {
 	diffs, err := s.diff(other, hints)
 	if err != nil {
