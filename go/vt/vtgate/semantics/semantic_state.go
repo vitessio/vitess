@@ -364,7 +364,7 @@ var _ evalengine.TranslationLookup = (*SemTable)(nil)
 var columnNotSupportedErr = vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "column access not supported here")
 
 // ColumnLookup implements the TranslationLookup interface
-func (st *SemTable) ColumnLookup(col *sqlparser.ColName) (int, error) {
+func (st *SemTable) ColumnLookup(*sqlparser.ColName) (int, error) {
 	return 0, columnNotSupportedErr
 }
 

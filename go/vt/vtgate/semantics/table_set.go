@@ -27,7 +27,7 @@ import (
 type TableSet bitset.Bitset
 
 // Format formats the TableSet.
-func (ts TableSet) Format(f fmt.State, verb rune) {
+func (ts TableSet) Format(f fmt.State, _ rune) {
 	first := true
 	fmt.Fprintf(f, "TableSet{")
 	bitset.Bitset(ts).ForEach(func(tid int) {
