@@ -165,6 +165,8 @@ func init() {
 
 	flag.BoolVar(&enableReplicationReporter, "enable_replication_reporter", false, "Use polling to track replication lag.")
 	flag.BoolVar(&currentConfig.EnableOnlineDDL, "queryserver_enable_online_ddl", true, "Enable online DDL.")
+
+	flag.BoolVar(&currentConfig.EnablePerWorkloadTableMetrics, "enable-per-workload-table-metrics", defaultConfig.EnablePerWorkloadTableMetrics, "If true, query counts and query error metrics include a label that identifies the workload")
 }
 
 // Init must be called after flag.Parse, and before doing any other operations.
@@ -286,6 +288,8 @@ type TabletConfig struct {
 
 	EnforceStrictTransTables bool `json:"-"`
 	EnableOnlineDDL          bool `json:"-"`
+
+	EnablePerWorkloadTableMetrics bool `json:"-"`
 }
 
 // ConnPoolConfig contains the config for a conn pool.
@@ -486,6 +490,8 @@ var defaultConfig = TabletConfig{
 
 	EnforceStrictTransTables: true,
 	EnableOnlineDDL:          true,
+
+	EnablePerWorkloadTableMetrics: false,
 }
 
 // defaultTxThrottlerConfig formats the default throttlerdata.Configuration
