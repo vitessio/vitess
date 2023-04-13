@@ -367,7 +367,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %token <str> LOCATE POSITION
 %token <str> ST_GeometryCollectionFromText ST_GeometryFromText ST_LineStringFromText ST_MultiLineStringFromText ST_MultiPointFromText ST_MultiPolygonFromText ST_PointFromText ST_PolygonFromText
 %token <str> ST_GeometryCollectionFromWKB ST_GeometryFromWKB ST_LineStringFromWKB ST_MultiLineStringFromWKB ST_MultiPointFromWKB ST_MultiPolygonFromWKB ST_PointFromWKB ST_PolygonFromWKB
-%token <str> ST_AsBinary ST_AsText
+%token <str> ST_AsBinary ST_AsText ST_Dimension ST_Envelope ST_IsSimple ST_IsEmpty ST_GeometryType
 
 // Match
 %token <str> MATCH AGAINST BOOLEAN LANGUAGE WITH QUERY EXPANSION WITHOUT VALIDATION
@@ -6108,6 +6108,26 @@ UTC_DATE func_paren_opt
 | ST_AsText openb expression ',' expression closeb
   {
     $$ = &GeomFormatExpr{ FormatType: TextFormat, Geom: $3, AxisOrderOpt: $5 }
+  }
+| ST_IsEmpty openb expression closeb
+  {
+    $$ = &GeomPropertyFuncExpr{ Property: IsEmpty, Geom: $3}
+  }
+| ST_IsSimple openb expression closeb
+  {
+    $$ = &GeomPropertyFuncExpr{ Property: IsSimple, Geom: $3}
+  }
+| ST_Dimension openb expression closeb
+  {
+    $$ = &GeomPropertyFuncExpr{ Property: Dimension, Geom: $3}
+  }
+| ST_Envelope openb expression closeb
+  {
+    $$ = &GeomPropertyFuncExpr{ Property: Envelope, Geom: $3}
+  }
+| ST_GeometryType openb expression closeb
+  {
+    $$ = &GeomPropertyFuncExpr{ Property: GeometryType, Geom: $3}
   }
 | ST_GeometryFromText openb expression closeb
   {

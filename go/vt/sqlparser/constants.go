@@ -446,6 +446,13 @@ const (
 	//GeomFormatExpr strings
 	TextFormatStr   = "st_astext"
 	BinaryFormatStr = "st_asbinary"
+
+	//GeomPropertyType strings
+	IsSimpleStr     = "st_issimple"
+	IsEmptyStr      = "st_isempty"
+	EnvelopeStr     = "st_envelope"
+	DimensionStr    = "st_dimension"
+	GeometryTypeStr = "st_geometrytype"
 )
 
 // Constants for Enum Type - Insert.Action
@@ -934,4 +941,13 @@ const (
 const (
 	TextFormat GeomFormatType = iota
 	BinaryFormat
+)
+
+// Enum Types of spatial property functions
+const (
+	IsSimple GeomPropertyType = iota
+	IsEmpty
+	Dimension
+	GeometryType
+	Envelope
 )
