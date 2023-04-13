@@ -664,11 +664,7 @@ func executeCheckAndRecoverFunction(analysisEntry inst.ReplicationAnalysis, cand
 		// run a cluster operation of our own.
 		if isClusterWideRecovery(checkAndRecoverFunctionCode) {
 			log.Infof("isClusterWideRecovery ---> 1, %+v detection", analysisEntry.Analysis)
-			if analysisEntry.Analysis == inst.DeadPrimary {
-				forceRefreshAllTabletsInShard(ctx, analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard, true)
-			} else {
-				forceRefreshAllTabletsInShard(ctx, analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard, false)
-			}
+			forceRefreshAllTabletsInShard(ctx, analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard, checkAndRecoverFunctionCode == recoverDeadPrimaryFunc)
 		} else {
 			// If we are not running a cluster-wide recovery, then it is only concerned with the specific tablet
 			// on which the failure occurred and the primary instance of the shard.
@@ -735,11 +731,7 @@ func executeCheckAndRecoverFunction(analysisEntry inst.ReplicationAnalysis, cand
 	// Instead we pass the background context. The call forceRefreshAllTabletsInShard handles adding a timeout to it for us.
 	if isClusterWideRecovery(checkAndRecoverFunctionCode) {
 		log.Infof("isClusterWideRecovery ---> 2, %+v detection", analysisEntry.Analysis)
-		if analysisEntry.Analysis == inst.DeadPrimary {
-			forceRefreshAllTabletsInShard(context.Background(), analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard, true)
-		} else {
-			forceRefreshAllTabletsInShard(context.Background(), analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard, false)
-		}
+		forceRefreshAllTabletsInShard(context.Background(), analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard, checkAndRecoverFunctionCode == recoverDeadPrimaryFunc)
 	} else {
 		// For all other recoveries, we would have changed the replication status of the analyzed tablet
 		// so it doesn't hurt to re-read the information of this tablet, otherwise we'll requeue the same recovery

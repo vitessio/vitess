@@ -41,7 +41,7 @@ import (
 )
 
 const (
-	discoveryMetricsName = "DISCOVERY_METRICS"
+	DiscoveryMetricsName = "DISCOVERY_METRICS"
 )
 
 // discoveryQueue is a channel of deduplicated instanceKey-s
@@ -59,7 +59,7 @@ var discoveryQueueLengthGauge = metrics.NewGauge()
 var discoveryRecentCountGauge = metrics.NewGauge()
 var isElectedGauge = metrics.NewGauge()
 var isHealthyGauge = metrics.NewGauge()
-var discoveryMetrics = collection.CreateOrReturnCollection(discoveryMetricsName)
+var DiscoveryMetrics = collection.CreateOrReturnCollection(DiscoveryMetricsName)
 
 var isElectedNode int64
 
@@ -116,7 +116,7 @@ func acceptSighupSignal() {
 			log.Infof("Received SIGHUP. Reloading configuration")
 			_ = inst.AuditOperation("reload-configuration", nil, "Triggered via SIGHUP")
 			config.Reload()
-			discoveryMetrics.SetExpirePeriod(time.Duration(config.DiscoveryCollectionRetentionSeconds) * time.Second)
+			DiscoveryMetrics.SetExpirePeriod(time.Duration(config.DiscoveryCollectionRetentionSeconds) * time.Second)
 		}
 	}()
 }
@@ -125,7 +125,7 @@ func acceptSighupSignal() {
 func closeVTOrc() {
 	log.Infof("Starting VTOrc shutdown")
 	atomic.StoreInt32(&hasReceivedSIGTERM, 1)
-	discoveryMetrics.StopAutoExpiration()
+	DiscoveryMetrics.StopAutoExpiration()
 	// Poke other go routines to stop cleanly here ...
 	_ = inst.AuditOperation("shutdown", nil, "Triggered via SIGTERM")
 	// wait for the locks to be released
@@ -179,7 +179,7 @@ func handleDiscoveryRequests() {
 }
 
 // DiscoverInstance will attempt to discover (poll) an instance (unless
-// it is already up to date) and will also ensure that its primary and
+// it is already up-to-date) and will also ensure that its primary and
 // replicas (if any) are also checked.
 func DiscoverInstance(instanceKey inst.InstanceKey, forceDiscovery bool) {
 	if inst.InstanceIsForgotten(&instanceKey) {
@@ -194,13 +194,16 @@ func DiscoverInstance(instanceKey inst.InstanceKey, forceDiscovery bool) {
 		"instance",
 		"total"})
 	latency.Start("total") // start the total stopwatch (not changed anywhere else)
-
+	var metric *discovery.Metric
 	defer func() {
 		latency.Stop("total")
 		discoveryTime := latency.Elapsed("total")
 		if discoveryTime > instancePollSecondsDuration() {
 			instancePollSecondsExceededCounter.Inc(1)
 			log.Warningf("discoverInstance exceeded InstancePollSeconds for %+v, took %.4fs", instanceKey, discoveryTime.Seconds())
+			if metric != nil {
+				metric.InstancePollSecondsDurationCount = 1
+			}
 		}
 	}()
 
@@ -250,14 +253,15 @@ func DiscoverInstance(instanceKey inst.InstanceKey, forceDiscovery bool) {
 
 	if instance == nil {
 		failedDiscoveriesCounter.Inc(1)
-		_ = discoveryMetrics.Append(&discovery.Metric{
+		metric = &discovery.Metric{
 			Timestamp:       time.Now(),
 			InstanceKey:     instanceKey,
 			TotalLatency:    totalLatency,
 			BackendLatency:  backendLatency,
 			InstanceLatency: instanceLatency,
 			Err:             err,
-		})
+		}
+		_ = DiscoveryMetrics.Append(metric)
 		if util.ClearToLog("discoverInstance", instanceKey.StringCode()) {
 			log.Warningf(" DiscoverInstance(%+v) instance is nil in %.3fs (Backend: %.3fs, Instance: %.3fs), error=%+v",
 				instanceKey,
@@ -269,14 +273,15 @@ func DiscoverInstance(instanceKey inst.InstanceKey, forceDiscovery bool) {
 		return
 	}
 
-	_ = discoveryMetrics.Append(&discovery.Metric{
+	metric = &discovery.Metric{
 		Timestamp:       time.Now(),
 		InstanceKey:     instanceKey,
 		TotalLatency:    totalLatency,
 		BackendLatency:  backendLatency,
 		InstanceLatency: instanceLatency,
 		Err:             nil,
-	})
+	}
+	_ = DiscoveryMetrics.Append(metric)
 }
 
 // onHealthTick handles the actions to take to discover/poll instances
