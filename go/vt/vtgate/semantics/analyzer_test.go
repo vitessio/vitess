@@ -309,7 +309,7 @@ func TestMissingTable(t *testing.T) {
 
 func TestUnknownColumnMap2(t *testing.T) {
 	varchar := querypb.Type_VARCHAR
-	int := querypb.Type_INT32
+	integer := querypb.Type_INT32
 
 	authoritativeTblA := vindexes.Table{
 		Name: sqlparser.NewTableIdent("a"),
@@ -335,7 +335,7 @@ func TestUnknownColumnMap2(t *testing.T) {
 		Name: sqlparser.NewTableIdent("a"),
 		Columns: []vindexes.Column{{
 			Name: sqlparser.NewColIdent("col"),
-			Type: int,
+			Type: integer,
 		}},
 		ColumnListAuthoritative: true,
 	}
@@ -343,7 +343,7 @@ func TestUnknownColumnMap2(t *testing.T) {
 		Name: sqlparser.NewTableIdent("b"),
 		Columns: []vindexes.Column{{
 			Name: sqlparser.NewColIdent("col"),
-			Type: int,
+			Type: integer,
 		}},
 		ColumnListAuthoritative: true,
 	}
@@ -380,7 +380,7 @@ func TestUnknownColumnMap2(t *testing.T) {
 		name:   "authoritative columns",
 		schema: map[string]*vindexes.Table{"a": &authoritativeTblA, "b": &authoritativeTblBWithInt},
 		err:    false,
-		typ:    &int,
+		typ:    &integer,
 	}, {
 		name:   "authoritative columns with overlap",
 		schema: map[string]*vindexes.Table{"a": &authoritativeTblAWithConflict, "b": &authoritativeTblB},
@@ -1408,6 +1408,28 @@ func TestSingleUnshardedKeyspace(t *testing.T) {
 			assert.Equal(t, test.unsharded, semTable.SingleUnshardedKeyspace())
 		})
 	}
+}
+
+// TestScopingSubQueryJoinClause tests the scoping behavior of a subquery containing a join clause.
+// The test ensures that the scoping analysis correctly identifies and handles the relationships
+// between the tables involved in the join operation with the outer query.
+func TestScopingSubQueryJoinClause(t *testing.T) {
+	query := "select (select 1 from u1 join u2 on u1.id = u2.id and u2.id = u3.id) x from u3"
+
+	parse, err := sqlparser.Parse(query)
+	require.NoError(t, err)
+
+	st, err := Analyze(parse, "user", &FakeSI{
+		Tables: map[string]*vindexes.Table{
+			"t": {Name: sqlparser.NewTableIdent("t")},
+		},
+	})
+	require.NoError(t, err)
+	require.NoError(t, st.NotUnshardedErr)
+
+	tb := st.DirectDeps(parse.(*sqlparser.Select).SelectExprs[0].(*sqlparser.AliasedExpr).Expr.(*sqlparser.Subquery).Select.(*sqlparser.Select).From[0].(*sqlparser.JoinTableExpr).Condition.On)
+	require.Equal(t, 3, tb.NumberOfTables())
+
 }
 
 var ks1 = &vindexes.Keyspace{
