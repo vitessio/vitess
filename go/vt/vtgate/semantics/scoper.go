@@ -45,6 +45,7 @@ type (
 		tables    []TableInfo
 		isUnion   bool
 		joinUsing map[string]TableSet
+		stmtScope bool
 	}
 )
 
@@ -61,11 +62,13 @@ func (s *scoper) down(cursor *sqlparser.Cursor) error {
 	switch node := node.(type) {
 	case *sqlparser.Update, *sqlparser.Delete:
 		currScope := newScope(s.currentScope())
+		currScope.stmtScope = true
 		s.push(currScope)
 
 		currScope.stmt = node.(sqlparser.Statement)
 	case *sqlparser.Select:
 		currScope := newScope(s.currentScope())
+		currScope.stmtScope = true
 		s.push(currScope)
 
 		// Needed for order by with Literal to find the Expression.
@@ -76,10 +79,10 @@ func (s *scoper) down(cursor *sqlparser.Cursor) error {
 	case sqlparser.TableExpr:
 		if isParentSelect(cursor) {
 			// when checking the expressions used in JOIN conditions, special rules apply where the ON expression
-			// can only see the two tables involved in the JOIN, and no other tables.
-			// To create this special context, we create a special scope here that is then merged with
-			// the surrounding scope when we come back out from the JOIN
-			nScope := newScope(nil)
+			// can only see the two tables involved in the JOIN, and no other tables of that select statement.
+			// They are allowed to see the tables of the outer select query.
+			// To create this special context, we will find the parent scope of the select statement involved.
+			nScope := newScope(s.currentScope().findParentScopeOfStatement())
 			nScope.stmt = cursor.Parent().(*sqlparser.Select)
 			s.push(nScope)
 		}
@@ -287,4 +290,15 @@ func (s *scope) prepareUsingMap() (result map[TableSet]map[string]TableSet) {
 		}
 	}
 	return
+}
+
+// findParentScopeOfStatement finds the scope that belongs to a statement.
+func (s *scope) findParentScopeOfStatement() *scope {
+	if s.stmtScope {
+		return s.parent
+	}
+	if s.parent == nil {
+		return nil
+	}
+	return s.parent.findParentScopeOfStatement()
 }
