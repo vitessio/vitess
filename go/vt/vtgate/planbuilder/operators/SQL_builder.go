@@ -365,38 +365,45 @@ func buildQuery(op ops.Operator, qb *queryBuilder) error {
 		if err != nil {
 			return err
 		}
-		sel := qb.sel.(*sqlparser.Select) // we can only handle SELECT in derived tables at the moment
-		qb.sel = nil
-		sqlparser.RemoveKeyspace(op.Query)
-		opQuery := op.Query.(*sqlparser.Select)
-		sel.Limit = opQuery.Limit
-		sel.OrderBy = opQuery.OrderBy
-		sel.GroupBy = opQuery.GroupBy
-		sel.Having = mergeHaving(sel.Having, opQuery.Having)
-		sel.SelectExprs = opQuery.SelectExprs
-		qb.addTableExpr(op.Alias, op.Alias, TableID(op), &sqlparser.DerivedTable{
-			Select: sel,
-		}, nil, op.ColumnAliases)
-		for _, col := range op.Columns {
-			qb.addProjection(&sqlparser.AliasedExpr{Expr: col})
-		}
 	case *Horizon:
 		err := buildQuery(op.Source, qb)
 		if err != nil {
 			return err
 		}
 
-		err = stripDownQuery(op.Select, qb.sel)
+		if op.TableID == nil {
+			err = stripDownQuery(op.Select, qb.sel)
+			if err != nil {
+				return err
+			}
+			_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+				if aliasedExpr, ok := node.(sqlparser.SelectExpr); ok {
+					removeKeyspaceFromSelectExpr(aliasedExpr)
+				}
+				return true, nil
+			}, qb.sel)
+			return nil
+		}
+		// derived table
+		sel := qb.sel.(*sqlparser.Select) // we can only handle SELECT in derived tables at the moment
+		qb.sel = nil
+		sqlparser.RemoveKeyspace(op.Select)
+		opQuery := op.Select.(*sqlparser.Select)
+		sel.Limit = opQuery.Limit
+		sel.OrderBy = opQuery.OrderBy
+		sel.GroupBy = opQuery.GroupBy
+		sel.Having = mergeHaving(sel.Having, opQuery.Having)
+		sel.SelectExprs = opQuery.SelectExprs
+		tableInfo, err := qb.ctx.SemTable.TableInfoFor(*op.TableID)
 		if err != nil {
 			return err
 		}
-		_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
-			if aliasedExpr, ok := node.(sqlparser.SelectExpr); ok {
-				removeKeyspaceFromSelectExpr(aliasedExpr)
-			}
-			return true, nil
-		}, qb.sel)
-		return nil
+		qb.addTableExpr(tableInfo.GetExpr().As.String(), tableInfo.GetExpr().As.String(), TableID(op), &sqlparser.DerivedTable{
+			Select: sel,
+		}, nil, op.ColumnAliases)
+		for _, col := range op.Columns {
+			qb.addProjection(&sqlparser.AliasedExpr{Expr: col})
+		}
 
 	default:
 		return vterrors.VT13001(fmt.Sprintf("do not know how to turn %T into SQL", op))

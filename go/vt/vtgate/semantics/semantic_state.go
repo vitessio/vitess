@@ -46,8 +46,8 @@ type (
 		// authoritative is true if we have exhaustive column information
 		authoritative() bool
 
-		// getExpr returns the AST struct behind this table
-		getExpr() *sqlparser.AliasedTableExpr
+		// GetExpr returns the AST struct behind this table
+		GetExpr() *sqlparser.AliasedTableExpr
 
 		// getColumns returns the known column information for this table
 		getColumns() []ColumnInfo
@@ -151,7 +151,7 @@ func EmptySemTable() *SemTable {
 // TableSetFor returns the bitmask for this particular table
 func (st *SemTable) TableSetFor(t *sqlparser.AliasedTableExpr) TableSet {
 	for idx, t2 := range st.Tables {
-		if t == t2.getExpr() {
+		if t == t2.GetExpr() {
 			return SingleTableSet(idx)
 		}
 	}
@@ -381,7 +381,7 @@ func (st *SemTable) SingleUnshardedKeyspace() (*vindexes.Keyspace, []*vindexes.T
 		vindexTable := table.GetVindexTable()
 
 		if vindexTable == nil {
-			_, isDT := table.getExpr().Expr.(*sqlparser.DerivedTable)
+			_, isDT := table.GetExpr().Expr.(*sqlparser.DerivedTable)
 			if isDT {
 				// derived tables are ok, as long as all real tables are from the same unsharded keyspace
 				// we check the real tables inside the derived table as well for same unsharded keyspace.
@@ -396,7 +396,7 @@ func (st *SemTable) SingleUnshardedKeyspace() (*vindexes.Keyspace, []*vindexes.T
 			}
 			return nil, nil
 		}
-		name, ok := table.getExpr().Expr.(sqlparser.TableName)
+		name, ok := table.GetExpr().Expr.(sqlparser.TableName)
 		if !ok {
 			return nil, nil
 		}

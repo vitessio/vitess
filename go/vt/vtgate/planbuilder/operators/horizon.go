@@ -17,10 +17,13 @@ limitations under the License.
 package operators
 
 import (
+	"golang.org/x/exp/slices"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
+	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 // Horizon is an operator that allows us to postpone planning things like SELECT/GROUP BY/ORDER BY/LIMIT until later.
@@ -31,23 +34,20 @@ import (
 // Project/Aggregate/Sort/Limit operations, some which can be pushed down,
 // and some that have to be evaluated at the vtgate level.
 type Horizon struct {
-	Source ops.Operator
-	Select sqlparser.SelectStatement
-}
+	Source  ops.Operator
+	Select  sqlparser.SelectStatement
+	TableID *semantics.TableSet
 
-func (h *Horizon) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr) (ops.Operator, int, error) {
-	return nil, 0, vterrors.VT13001("the Horizon operator cannot accept new columns")
-}
+	// ColumnAliases is alias assigned to the derived table
+	// e.g. select 1 from (select a, b from t) as d (x, y)
+	// x and y are the column alias available to outer query.
+	ColumnAliases sqlparser.Columns
 
-func (h *Horizon) GetColumns() (exprs []sqlparser.Expr, err error) {
-	for _, expr := range sqlparser.GetFirstSelect(h.Select).SelectExprs {
-		ae, ok := expr.(*sqlparser.AliasedExpr)
-		if !ok {
-			return nil, errHorizonNotPlanned
-		}
-		exprs = append(exprs, ae.Expr)
-	}
-	return
+	// Columns are columns exposed to outside of this operator
+	Columns []*sqlparser.ColName
+
+	// ColumnsOffset stores the offset to retrieve the column from the input source.
+	ColumnsOffset []int
 }
 
 var _ ops.Operator = (*Horizon)(nil)
@@ -64,10 +64,29 @@ func (h *Horizon) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.
 	return h, nil
 }
 
+func (h *Horizon) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr) (ops.Operator, int, error) {
+	return nil, 0, vterrors.VT13001("the Horizon operator cannot accept new columns")
+}
+
+func (h *Horizon) GetColumns() (exprs []sqlparser.Expr, err error) {
+	for _, expr := range sqlparser.GetFirstSelect(h.Select).SelectExprs {
+		ae, ok := expr.(*sqlparser.AliasedExpr)
+		if !ok {
+			return nil, errHorizonNotPlanned
+		}
+		exprs = append(exprs, sqlparser.NewColName(ae.ColumnName()))
+	}
+	return
+}
+
 func (h *Horizon) Clone(inputs []ops.Operator) ops.Operator {
 	return &Horizon{
-		Source: inputs[0],
-		Select: h.Select,
+		Source:        inputs[0],
+		Select:        h.Select,
+		TableID:       h.TableID,
+		ColumnAliases: h.ColumnAliases,
+		Columns:       sqlparser.CloneSliceOfRefOfColName(h.Columns),
+		ColumnsOffset: slices.Clone(h.ColumnsOffset),
 	}
 }
 
@@ -78,13 +97,4 @@ func (h *Horizon) Inputs() []ops.Operator {
 // SetInputs implements the Operator interface
 func (h *Horizon) SetInputs(ops []ops.Operator) {
 	h.Source = ops[0]
-}
-
-// TODO: REMOVE
-func (h *Horizon) selectStatement() sqlparser.SelectStatement {
-	return h.Select
-}
-
-func (h *Horizon) src() ops.Operator {
-	return h.Source
 }

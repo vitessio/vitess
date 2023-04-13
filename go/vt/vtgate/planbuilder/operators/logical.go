@@ -300,10 +300,11 @@ func getOperatorFromAliasedTableExpr(ctx *plancontext.PlanningContext, tableExpr
 			return nil, err
 		}
 		if horizon, ok := inner.(*Horizon); ok {
-			inner = horizon.Source
+			tableID := ctx.SemTable.TableSetFor(tableExpr)
+			horizon.TableID = &tableID
+			return horizon, nil
 		}
-
-		return &Derived{Alias: tableExpr.As.String(), Source: inner, Query: tbl.Select, ColumnAliases: tableExpr.Columns}, nil
+		panic(fmt.Sprintf("needs more info to implement: %T", inner))
 	default:
 		return nil, vterrors.VT13001(fmt.Sprintf("unable to use: %T", tbl))
 	}

@@ -19,6 +19,8 @@ package operators
 import (
 	"golang.org/x/exp/slices"
 
+	"vitess.io/vitess/go/vt/vtgate/semantics"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
@@ -32,6 +34,7 @@ type (
 		Source      ops.Operator
 		ColumnNames []string
 		Columns     []ProjExpr
+		TableID     *semantics.TableSet
 	}
 	ProjExpr interface {
 		GetExpr() sqlparser.Expr

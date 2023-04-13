@@ -41,12 +41,6 @@ func planHorizons(ctx *plancontext.PlanningContext, root ops.Operator) (ops.Oper
 				return nil, false, err
 			}
 			return op, rewrite.NewTree, nil
-		case *Derived:
-			op, err := planDerived(ctx, in)
-			if err != nil {
-				return nil, false, err
-			}
-			return op, rewrite.NewTree, err
 		case *Projection:
 			return tryPushingDownProjection(ctx, in)
 		default:
@@ -183,13 +177,13 @@ func stopAtRoute(operator ops.Operator) rewrite.VisitRule {
 	return rewrite.VisitRule(!isRoute)
 }
 
-func pushOrExpandHorizon(ctx *plancontext.PlanningContext, in horizonLike) (ops.Operator, error) {
-	rb, isRoute := in.src().(*Route)
-	if isRoute && rb.IsSingleShard() && in.selectStatement().GetLimit() == nil {
+func pushOrExpandHorizon(ctx *plancontext.PlanningContext, in *Horizon) (ops.Operator, error) {
+	rb, isRoute := in.Source.(*Route)
+	if isRoute && rb.IsSingleShard() && in.Select.GetLimit() == nil {
 		return rewrite.Swap(in, rb)
 	}
 
-	sel, isSel := in.selectStatement().(*sqlparser.Select)
+	sel, isSel := in.Select.(*sqlparser.Select)
 	if !isSel {
 		return nil, errHorizonNotPlanned
 	}
@@ -209,33 +203,21 @@ func pushOrExpandHorizon(ctx *plancontext.PlanningContext, in horizonLike) (ops.
 	return expandHorizon(qp, in)
 }
 
-// horizonLike should be removed. we should use Horizon for both these cases
-type horizonLike interface {
-	ops.Operator
-	selectStatement() sqlparser.SelectStatement
-	src() ops.Operator
-}
-
-func planDerived(ctx *plancontext.PlanningContext, in *Derived) (ops.Operator, error) {
-	return pushOrExpandHorizon(ctx, in)
-}
-
-func expandHorizon(qp *QueryProjection, horizon horizonLike) (ops.Operator, error) {
-	sel, isSel := horizon.selectStatement().(*sqlparser.Select)
+func expandHorizon(qp *QueryProjection, horizon *Horizon) (ops.Operator, error) {
+	sel, isSel := horizon.Select.(*sqlparser.Select)
 	if !isSel {
 		return nil, errHorizonNotPlanned
 	}
 
 	needsOrdering := len(qp.OrderExprs) > 0
-	src := horizon.src()
-	_, isDerived := src.(*Derived)
 
-	if qp.NeedsAggregation() || sel.Having != nil || sel.Limit != nil || isDerived || needsOrdering || qp.NeedsDistinct() || sel.Distinct {
+	if qp.NeedsAggregation() || sel.Having != nil || sel.Limit != nil || needsOrdering || qp.NeedsDistinct() || sel.Distinct {
 		return nil, errHorizonNotPlanned
 	}
 
 	proj := &Projection{
-		Source: src,
+		Source:  horizon.Source,
+		TableID: horizon.TableID,
 	}
 
 	for _, e := range qp.SelectExprs {

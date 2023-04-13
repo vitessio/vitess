@@ -367,7 +367,7 @@ func (r *earlyRewriter) expandTableColumns(
 		}
 
 		needsQualifier := len(tables) > 1
-		tableAliased := !tbl.getExpr().As.IsEmpty()
+		tableAliased := !tbl.GetExpr().As.IsEmpty()
 		withQualifier := needsQualifier || tableAliased
 		currTable := tbl.getTableSet(org)
 		usingCols := joinUsing[currTable]
