@@ -257,7 +257,6 @@ These stats are deprecated in v17.
 | `backup_duration_seconds` | `BackupDurationNanoseconds` |
 | `restore_duration_seconds` | `RestoreDurationNanoseconds` |
 
-
 ### <a id="vttablet"/> VTTablet
 #### <a id="vttablet-initialization"/> Initializing all replicas with super_read_only
 In order to prevent SUPER privileged users like `root` or `vt_dba` from producing errant GTIDs on replicas, all the replica MySQL servers are initialized with the MySQL
@@ -274,3 +273,16 @@ The default file can be found in `./config/init_db.sql`.
 
 #### <a id="deprecated-flags"/> Deprecated Flags
 The flag `use_super_read_only` is deprecated and will be removed in a later release.
+
+### Online DDL
+
+
+#### <a id="online-ddl-cut-over-threshold-flag" /> --cut-over-threshold DDL strategy flag
+
+Online DDL's strategy now accepts `--cut-over-threshold` (type: `duration`) flag.
+
+This flag stand for the timeout in a `vitess` migration's cut-over phase, which includes the final locking of tables before finalizing the migration.
+
+The value of the cut-over threshold should be high enough to support the async nature of vreplication catchup phase, as well as accommodate some replication lag. But it mustn't be too high. While cutting over, the migrated table is being locked, causing app connection and query pileup, consuming query buffers, and holding internal mutexes.
+
+Recommended range for this variable is `5s` - `30s`. Default: `10s`.
