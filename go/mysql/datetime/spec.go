@@ -355,7 +355,11 @@ func (t2 fmtFullTime24) parse(t *timeparts, bytes string) (string, bool) {
 type fmtWeek0 struct{}
 
 func (fmtWeek0) format(dst []byte, t DateTime, prec uint8) []byte {
-	panic("TODO")
+	year, week := t.Date.SundayWeek()
+	if year < t.Date.Year() {
+		week = 0
+	}
+	return appendInt(dst, week, 2)
 }
 
 func (u fmtWeek0) parse(t *timeparts, bytes string) (string, bool) {
@@ -366,7 +370,11 @@ func (u fmtWeek0) parse(t *timeparts, bytes string) (string, bool) {
 type fmtWeek1 struct{}
 
 func (fmtWeek1) format(dst []byte, t DateTime, prec uint8) []byte {
-	panic("TODO")
+	year, week := t.Date.ISOWeek()
+	if year < t.Date.Year() {
+		week = 0
+	}
+	return appendInt(dst, week, 2)
 }
 
 func (u fmtWeek1) parse(t *timeparts, bytes string) (string, bool) {
@@ -377,7 +385,8 @@ func (u fmtWeek1) parse(t *timeparts, bytes string) (string, bool) {
 type fmtWeek2 struct{}
 
 func (fmtWeek2) format(dst []byte, t DateTime, prec uint8) []byte {
-	panic("TODO")
+	_, week := t.Date.SundayWeek()
+	return appendInt(dst, week, 2)
 }
 
 func (v fmtWeek2) parse(t *timeparts, bytes string) (string, bool) {
@@ -388,8 +397,8 @@ func (v fmtWeek2) parse(t *timeparts, bytes string) (string, bool) {
 type fmtWeek3 struct{}
 
 func (fmtWeek3) format(dst []byte, t DateTime, prec uint8) []byte {
-	//TODO implement me
-	panic("implement me")
+	_, week := t.Date.ISOWeek()
+	return appendInt(dst, week, 2)
 }
 
 func (v fmtWeek3) parse(t *timeparts, bytes string) (string, bool) {
@@ -420,7 +429,8 @@ func (w fmtWeekday) parse(t *timeparts, bytes string) (string, bool) {
 type fmtYearForWeek2 struct{}
 
 func (fmtYearForWeek2) format(dst []byte, t DateTime, prec uint8) []byte {
-	panic("TODO")
+	year, _ := t.Date.SundayWeek()
+	return appendInt(dst, year, 4)
 }
 func (x fmtYearForWeek2) parse(t *timeparts, bytes string) (string, bool) {
 	//TODO implement me
@@ -430,8 +440,8 @@ func (x fmtYearForWeek2) parse(t *timeparts, bytes string) (string, bool) {
 type fmtYearForWeek3 struct{}
 
 func (fmtYearForWeek3) format(dst []byte, t DateTime, prec uint8) []byte {
-	//TODO implement me
-	panic("implement me")
+	year, _ := t.Date.ISOWeek()
+	return appendInt(dst, year, 4)
 }
 func (x fmtYearForWeek3) parse(t *timeparts, bytes string) (string, bool) {
 	//TODO implement me

@@ -197,7 +197,19 @@ func (dt Date) Yearday() int {
 }
 
 func (d Date) ISOWeek() (int, int) {
-	return 0, 0
+	return d.ToStdTime(time.Local).ISOWeek()
+}
+
+// SundayWeek returns the year and week number of the current
+// date, when week numbers are defined by starting on the first
+// Sunday of the year.
+func (d Date) SundayWeek() (int, int) {
+	t := d.ToStdTime(time.Local)
+	// Since the week numbers always start on a Sunday, we can look
+	// at the week number of Sunday itself. So we shift back to last
+	// Sunday we saw and compute the week number based on that.
+	sun := t.Add(-time.Duration(t.Weekday()) * 24 * time.Hour)
+	return sun.Year(), (sun.YearDay()-1)/7 + 1
 }
 
 func (dt DateTime) IsZero() bool {
