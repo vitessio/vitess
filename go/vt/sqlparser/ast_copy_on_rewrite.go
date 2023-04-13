@@ -186,6 +186,8 @@ func (c *cow) copyOnRewriteSQLNode(n SQLNode, parent SQLNode) (out SQLNode, chan
 		return c.copyOnRewriteRefOfGeomFromTextExpr(n, parent)
 	case *GeomFromWKBExpr:
 		return c.copyOnRewriteRefOfGeomFromWKBExpr(n, parent)
+	case *GeomPropertyFuncExpr:
+		return c.copyOnRewriteRefOfGeomPropertyFuncExpr(n, parent)
 	case GroupBy:
 		return c.copyOnRewriteGroupBy(n, parent)
 	case *GroupConcatExpr:
@@ -2385,6 +2387,28 @@ func (c *cow) copyOnRewriteRefOfGeomFromWKBExpr(n *GeomFromWKBExpr, parent SQLNo
 			res.WkbBlob, _ = _WkbBlob.(Expr)
 			res.Srid, _ = _Srid.(Expr)
 			res.AxisOrderOpt, _ = _AxisOrderOpt.(Expr)
+			out = &res
+			if c.cloned != nil {
+				c.cloned(n, out)
+			}
+			changed = true
+		}
+	}
+	if c.post != nil {
+		out, changed = c.postVisit(out, parent, changed)
+	}
+	return
+}
+func (c *cow) copyOnRewriteRefOfGeomPropertyFuncExpr(n *GeomPropertyFuncExpr, parent SQLNode) (out SQLNode, changed bool) {
+	if n == nil || c.cursor.stop {
+		return n, false
+	}
+	out = n
+	if c.pre == nil || c.pre(n, parent) {
+		_Geom, changedGeom := c.copyOnRewriteExpr(n.Geom, n)
+		if changedGeom {
+			res := *n
+			res.Geom, _ = _Geom.(Expr)
 			out = &res
 			if c.cloned != nil {
 				c.cloned(n, out)
@@ -6443,6 +6467,8 @@ func (c *cow) copyOnRewriteCallable(n Callable, parent SQLNode) (out SQLNode, ch
 		return c.copyOnRewriteRefOfGeomFromTextExpr(n, parent)
 	case *GeomFromWKBExpr:
 		return c.copyOnRewriteRefOfGeomFromWKBExpr(n, parent)
+	case *GeomPropertyFuncExpr:
+		return c.copyOnRewriteRefOfGeomPropertyFuncExpr(n, parent)
 	case *GroupConcatExpr:
 		return c.copyOnRewriteRefOfGroupConcatExpr(n, parent)
 	case *InsertExpr:
@@ -6703,6 +6729,8 @@ func (c *cow) copyOnRewriteExpr(n Expr, parent SQLNode) (out SQLNode, changed bo
 		return c.copyOnRewriteRefOfGeomFromTextExpr(n, parent)
 	case *GeomFromWKBExpr:
 		return c.copyOnRewriteRefOfGeomFromWKBExpr(n, parent)
+	case *GeomPropertyFuncExpr:
+		return c.copyOnRewriteRefOfGeomPropertyFuncExpr(n, parent)
 	case *GroupConcatExpr:
 		return c.copyOnRewriteRefOfGroupConcatExpr(n, parent)
 	case *InsertExpr:
