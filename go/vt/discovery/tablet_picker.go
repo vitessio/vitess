@@ -42,18 +42,22 @@ import (
 )
 
 type TabletPickerCellPreference int
-type TabletPickerTabletOrder int
 
 const (
 	// PreferLocalWithAlias gives preference to the local cell first, then specified cells, if any.
 	// This is the default when no other option is provided.
-	TabletPickerCellPreference_PreferLocalWithAlias TabletPickerCellPreference = 0
+	TabletPickerCellPreference_PreferLocalWithAlias TabletPickerCellPreference = iota
 	// OnlySpecified only picks tablets from the list of cells given.
-	TabletPickerCellPreference_OnlySpecified TabletPickerCellPreference = 1
+	TabletPickerCellPreference_OnlySpecified
+)
+
+type TabletPickerTabletOrder int
+
+const (
 	// All provided tablet types are given equal priority. This is the default.
-	TabletPickerTabletOrder_Any TabletPickerTabletOrder = 0
+	TabletPickerTabletOrder_Any TabletPickerTabletOrder = iota
 	// Provided tablet types are expected to be prioritized in the given order.
-	TabletPickerTabletOrder_InOrder TabletPickerTabletOrder = 1
+	TabletPickerTabletOrder_InOrder
 )
 
 var (
@@ -87,37 +91,40 @@ func SetTabletPickerRetryDelay(delay time.Duration) {
 	tabletPickerRetryDelay = delay
 }
 
-// type options struct {
-// 	cellPref    TabletPickerCellPreference
-// 	tabletOrder TabletPickerTabletOrder
-// }
-
 type TabletPickerOptions struct {
-	CellPref    string
-	TabletOrder string
+	CellPreference string
+	TabletOrder    string
 }
 
-func parseTabletPickerCellPreferenceString(str string) TabletPickerCellPreference {
+func parseTabletPickerCellPreferenceString(str string) (TabletPickerCellPreference, error) {
+	// return default if blank
+	if str == "" {
+		return TabletPickerCellPreference_PreferLocalWithAlias, nil
+	}
+
 	if c, ok := tabletPickerCellPreferenceMap[strings.ToLower(str)]; ok {
-		return c
+		return c, nil
 	}
 
-	log.Infof("Could not parse tablet picker cell preference string: %s, returning default", str)
-	return TabletPickerCellPreference_PreferLocalWithAlias
+	return -1, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid cell preference: %v", str)
 }
 
-func parseTabletPickerTabletOrderString(str string) TabletPickerTabletOrder {
-	if o, ok := tabletPickerTabletOrderMap[strings.ToLower(str)]; ok {
-		return o
+func parseTabletPickerTabletOrderString(str string) (TabletPickerTabletOrder, error) {
+	// return default if blank
+	if str == "" {
+		return TabletPickerTabletOrder_Any, nil
 	}
 
-	log.Infof("Could not parse tablet picker tablet order string: %s, returning default", str)
-	return TabletPickerTabletOrder_Any
+	if o, ok := tabletPickerTabletOrderMap[strings.ToLower(str)]; ok {
+		return o, nil
+	}
+
+	return -1, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid tablet order type: %v", str)
 }
 
 type localCellInfo struct {
-	localCell  string
-	aliasCells map[string]string
+	localCell    string
+	cellsInAlias map[string]string
 }
 
 // TabletPicker gives a simplified API for picking tablets.
@@ -161,13 +168,19 @@ func NewTabletPicker(
 	}
 
 	// Resolve tablet picker options
-	cellPref := parseTabletPickerCellPreferenceString(options.CellPref)
+	cellPref, err := parseTabletPickerCellPreferenceString(options.CellPreference)
+	if err != nil {
+		return nil, err
+	}
 
 	// For backward compatibility only parse the options for tablet ordering
 	// if the in_order hint wasn't already specified. Otherwise it could be overridden.
 	// We can remove this check once the in_order hint is deprecated.
 	if !inOrder {
-		order := parseTabletPickerTabletOrderString(options.TabletOrder)
+		order, err := parseTabletPickerTabletOrderString(options.TabletOrder)
+		if err != nil {
+			return nil, err
+		}
 		switch order {
 		case TabletPickerTabletOrder_Any:
 			inOrder = false
@@ -183,7 +196,7 @@ func NewTabletPicker(
 		}
 
 		// Add local cell to the list of cells for tablet picking.
-		// This will be de-deped later if the local cell already exists in the original list - see: dedupeCells()
+		// This will be de-duped later if the local cell already exists in the original list - see: dedupeCells()
 		cells = append(cells, localCell)
 		aliasName := topo.GetAliasByCell(ctx, ts, localCell)
 
@@ -208,7 +221,7 @@ func NewTabletPicker(
 	return &TabletPicker{
 		ts:            ts,
 		cells:         dedupeCells(cells),
-		localCellInfo: localCellInfo{localCell: localCell, aliasCells: aliasCellMap},
+		localCellInfo: localCellInfo{localCell: localCell, cellsInAlias: aliasCellMap},
 		keyspace:      keyspace,
 		shard:         shard,
 		tabletTypes:   tabletTypes,
@@ -217,6 +230,8 @@ func NewTabletPicker(
 	}, nil
 }
 
+// dedupeCells is used to remove duplicates in the cell list in case it is passed in
+// and exists in the local cell's alias. Can happen if CellPreference is PreferLocalWithAlias.
 func dedupeCells(cells []string) []string {
 	keys := make(map[string]bool)
 	dedupedCells := []string{}
@@ -230,11 +245,15 @@ func dedupeCells(cells []string) []string {
 	return dedupedCells
 }
 
+// prioritizeTablets orders the candidate pool of tablets based on CellPreference.
+// If CellPreference is PreferLocalWithAlias then tablets in the local cell will be prioritized for selection,
+// followed by the tablets within the local cell's alias, and finally any others specified by the client.
+// if CellPreference is OnlySpecified, then tablets will only be selected randomly from the cells specified by the client.
 func (tp *TabletPicker) prioritizeTablets(candidates []*topo.TabletInfo) (sameCell, sameAlias, allOthers []*topo.TabletInfo) {
 	for _, c := range candidates {
 		if c.Alias.Cell == tp.localCellInfo.localCell {
 			sameCell = append(sameCell, c)
-		} else if _, ok := tp.localCellInfo.aliasCells[c.Alias.Cell]; ok {
+		} else if _, ok := tp.localCellInfo.cellsInAlias[c.Alias.Cell]; ok {
 			sameAlias = append(sameAlias, c)
 		} else {
 			allOthers = append(allOthers, c)
@@ -374,10 +393,6 @@ func (tp *TabletPicker) GetMatchingTablets(ctx context.Context) []*topo.TabletIn
 				actualCells = append(actualCells, cell)
 			}
 		}
-
-		// Just in case a cell was passed in addition to its alias.
-		// Can happen if localPreference is not "". See NewTabletPicker
-		actualCells = dedupeCells(actualCells)
 
 		for _, cell := range actualCells {
 			shortCtx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)

@@ -230,7 +230,7 @@ func TestPickLocalPreferences(t *testing.T) {
 			inCells:       []string{"cell", "otherCell"},
 			localCell:     "cell",
 			inTabletTypes: "replica",
-			options:       TabletPickerOptions{CellPref: "OnlySpecified"},
+			options:       TabletPickerOptions{CellPreference: "OnlySpecified"},
 			tpCells:       []string{"cell", "otherCell"},
 			wantTablets:   []uint32{100, 101},
 		}, {
@@ -256,7 +256,7 @@ func TestPickLocalPreferences(t *testing.T) {
 			inCells:       []string{"cell", "otherCell"},
 			localCell:     "cell",
 			inTabletTypes: "replica,rdonly",
-			options:       TabletPickerOptions{CellPref: "OnlySpecified"},
+			options:       TabletPickerOptions{CellPreference: "OnlySpecified"},
 			tpCells:       []string{"cell", "otherCell"},
 			wantTablets:   []uint32{100, 101},
 		},
@@ -348,7 +348,7 @@ func TestPickUsingCellAlias_OnlySpecified(t *testing.T) {
 	want1 := addTablet(te, 100, topodatapb.TabletType_REPLICA, "cell", true, true)
 	defer deleteTablet(t, te, want1)
 
-	tp, err := NewTabletPicker(context.Background(), te.topoServ, []string{"cella"}, "cell", te.keyspace, te.shard, "replica", TabletPickerOptions{CellPref: "OnlySpecified"})
+	tp, err := NewTabletPicker(context.Background(), te.topoServ, []string{"cella"}, "cell", te.keyspace, te.shard, "replica", TabletPickerOptions{CellPreference: "OnlySpecified"})
 	require.NoError(t, err)
 
 	ctx1, cancel1 := context.WithTimeout(context.Background(), 200*time.Millisecond)
@@ -448,7 +448,7 @@ func TestPickError_LocalPreferenceDefault(t *testing.T) {
 func TestPickError_OnlySpecified(t *testing.T) {
 	te := newPickerTestEnv(t, []string{"cell"})
 
-	tp, err := NewTabletPicker(context.Background(), te.topoServ, te.cells, "cell", te.keyspace, te.shard, "replica", TabletPickerOptions{CellPref: "OnlySpecified"})
+	tp, err := NewTabletPicker(context.Background(), te.topoServ, te.cells, "cell", te.keyspace, te.shard, "replica", TabletPickerOptions{CellPreference: "OnlySpecified"})
 	require.NoError(t, err)
 	delay := GetTabletPickerRetryDelay()
 	defer func() {

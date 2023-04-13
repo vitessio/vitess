@@ -160,8 +160,8 @@ func (vsm *vstreamManager) VStream(ctx context.Context, tabletType topodatapb.Ta
 		ts:                 ts,
 		copyCompletedShard: make(map[string]struct{}),
 		tabletPickerOptions: discovery.TabletPickerOptions{
-			CellPref:    flags.GetCellPreference(),
-			TabletOrder: flags.GetTabletOrder(),
+			CellPreference: flags.GetCellPreference(),
+			TabletOrder:    flags.GetTabletOrder(),
 		},
 	}
 	return vs.stream(ctx)

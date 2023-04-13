@@ -26,7 +26,7 @@
 
 #### <a id="tablet-picker-cell-preference"/>Default Local Cell Preference for TabletPicker
 
-Adding options to the `TabletPicker` that allow for selecting cell preference in addition to changing default behavior to give priority to the local cell and any alias it belongs to. We are also introducing a new way to select tablet order which should eventually replace the in_order: hint currently included tabletTypesStr. The signature for creating a new `TabletPicker` now looks like:
+We added options to the `TabletPicker` that allow for specifying a cell preference in addition to making the default behavior to give priority to the local cell *and any alias it belongs to*. We are also introducing a new way to select tablet type preference which should eventually replace the `in_order:` hint currently used as a prefix for tablet types. The signature for creating a new `TabletPicker` now looks like:
 
 ```
 func NewTabletPicker(
@@ -40,9 +40,9 @@ func NewTabletPicker(
 
 Where ctx, localCell, option are all new parameters.
 
-`option` is of type `TabletPickerOptions` and includes two fields, `CellPref` and `TabletOrder`.
-`CellPref`:"PreferLocalWithAlias" (default, gives preference to vtgate's local cell) or "OnlySpecified" (only pick from the cells passed in by the client)
-`TabletOrder` -> "Any" (default, no ordering) or "InOrder" (in the order specified by the client)
+`option` is of type `TabletPickerOptions` and includes two fields, `CellPreference` and `TabletOrder`.
+CellPreference`: "PreferLocalWithAlias" (default) gives preference to vtgate's local cell, or "OnlySpecified" which only picks from the cells explicitly passed in by the client
+`TabletOrder`: "Any" (default) for no ordering or random, or "InOrder" to use the order specified by the client
 
 See [PR 12282 Description](https://github.com/vitessio/vitess/pull/12282) for examples on how this changes cell picking behavior.
 
