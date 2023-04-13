@@ -4836,7 +4836,7 @@
       "Instructions": {
         "OperatorType": "Join",
         "Variant": "Join",
-        "JoinColumnIndexes": "R:0,L:1",
+        "JoinColumnIndexes": "R:0,L:0",
         "JoinVars": {
           "ue_id": 0
         },
@@ -4849,8 +4849,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select ue.id, ue.id as ueid from user_extra as ue where 1 != 1",
-            "Query": "select ue.id, ue.id as ueid from user_extra as ue",
+            "FieldQuery": "select ue.id as ueid from user_extra as ue where 1 != 1",
+            "Query": "select ue.id as ueid from user_extra as ue",
             "Table": "user_extra"
           },
           {
@@ -6128,7 +6128,7 @@
       "Instructions": {
         "OperatorType": "Join",
         "Variant": "Join",
-        "JoinColumnIndexes": "L:1,L:2,L:3,R:0",
+        "JoinColumnIndexes": "L:0,L:1,L:2,R:0",
         "JoinVars": {
           "authoritative_col1": 0
         },
@@ -6141,8 +6141,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select authoritative.col1, authoritative.col1 as col1, authoritative.user_id as user_id, authoritative.col2 as col2 from authoritative where 1 != 1",
-            "Query": "select authoritative.col1, authoritative.col1 as col1, authoritative.user_id as user_id, authoritative.col2 as col2 from authoritative",
+            "FieldQuery": "select authoritative.col1 as col1, authoritative.user_id as user_id, authoritative.col2 as col2 from authoritative where 1 != 1",
+            "Query": "select authoritative.col1 as col1, authoritative.user_id as user_id, authoritative.col2 as col2 from authoritative",
             "Table": "authoritative"
           },
           {

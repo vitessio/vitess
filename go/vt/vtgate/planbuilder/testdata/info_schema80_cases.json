@@ -602,10 +602,10 @@
       "Instructions": {
         "OperatorType": "Join",
         "Variant": "Join",
-        "JoinColumnIndexes": "L:2,L:3",
+        "JoinColumnIndexes": "L:0,L:1",
         "JoinVars": {
-          "cc_constraint_name": 1,
-          "cc_constraint_schema": 0
+          "cc_constraint_name": 0,
+          "cc_constraint_schema": 2
         },
         "TableName": "information_schema.check_constraints_information_schema.table_constraints",
         "Inputs": [
@@ -616,8 +616,8 @@
               "Name": "main",
               "Sharded": false
             },
-            "FieldQuery": "select cc.constraint_schema, cc.constraint_name, cc.constraint_name as `name`, cc.check_clause as expression from information_schema.check_constraints as cc where 1 != 1",
-            "Query": "select cc.constraint_schema, cc.constraint_name, cc.constraint_name as `name`, cc.check_clause as expression from information_schema.check_constraints as cc where cc.constraint_schema = :__vtschemaname /* VARCHAR */",
+            "FieldQuery": "select cc.constraint_name as `name`, cc.check_clause as expression, cc.constraint_schema from information_schema.check_constraints as cc where 1 != 1",
+            "Query": "select cc.constraint_name as `name`, cc.check_clause as expression, cc.constraint_schema from information_schema.check_constraints as cc where cc.constraint_schema = :__vtschemaname /* VARCHAR */",
             "SysTableTableSchema": "[VARCHAR(\"constraint_schema\")]",
             "Table": "information_schema.check_constraints"
           },

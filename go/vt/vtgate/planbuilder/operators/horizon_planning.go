@@ -243,10 +243,6 @@ func expandHorizon(qp *QueryProjection, horizon horizonLike) (ops.Operator, erro
 		if err != nil {
 			return nil, err
 		}
-		if !expr.As.IsEmpty() {
-			// we are not handling column names correct yet, so let's fail here for now
-			return nil, errHorizonNotPlanned
-		}
 		proj.Columns = append(proj.Columns, Expr{E: expr.Expr})
 		colName := ""
 		if !expr.As.IsEmpty() {

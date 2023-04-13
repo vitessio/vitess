@@ -143,18 +143,18 @@
           {
             "OperatorType": "Join",
             "Variant": "Join",
-            "JoinColumnIndexes": "L:1,L:2,L:3,L:4",
+            "JoinColumnIndexes": "L:0,L:1,L:2,L:3",
             "JoinVars": {
-              "book6s_supplier5_id": 0
+              "book6s_supplier5_id": 4
             },
             "TableName": "author5s, book6s_book6s_order2s_supplier5s",
             "Inputs": [
               {
                 "OperatorType": "Join",
                 "Variant": "Join",
-                "JoinColumnIndexes": "L:0,L:2,L:3,L:4,L:5",
+                "JoinColumnIndexes": "L:0,L:1,L:2,L:3,L:4",
                 "JoinVars": {
-                  "book6s_id": 1
+                  "book6s_id": 5
                 },
                 "TableName": "author5s, book6s_book6s_order2s",
                 "Inputs": [
@@ -165,8 +165,8 @@
                       "Name": "user",
                       "Sharded": true
                     },
-                    "FieldQuery": "select book6s.supplier5_id, book6s.id, author5s.id as id, author5s.`name` as `name`, author5s.created_at as created_at, author5s.updated_at as updated_at from author5s, book6s where 1 != 1",
-                    "Query": "select book6s.supplier5_id, book6s.id, author5s.id as id, author5s.`name` as `name`, author5s.created_at as created_at, author5s.updated_at as updated_at from author5s, book6s where book6s.author5_id = author5s.id",
+                    "FieldQuery": "select author5s.id as id, author5s.`name` as `name`, author5s.created_at as created_at, author5s.updated_at as updated_at, book6s.supplier5_id, book6s.id from author5s, book6s where 1 != 1",
+                    "Query": "select author5s.id as id, author5s.`name` as `name`, author5s.created_at as created_at, author5s.updated_at as updated_at, book6s.supplier5_id, book6s.id from author5s, book6s where book6s.author5_id = author5s.id",
                     "Table": "author5s, book6s"
                   },
                   {
