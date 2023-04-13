@@ -6,6 +6,7 @@
   - **[Breaking Changes](#breaking-changes)**
     - [Dedicated stats for VTGate Prepare operations](#dedicated-vtgate-prepare-stats)
     - [Keyspace name validation in TopoServer](#keyspace-name-validation)
+    - [VtctldClient call to RestoreFromBackup using correct context](#VtctldClient-RestoreFromBackup)
   - **[New command line flags and behavior](#new-flag)**
     - [Builtin backup: read buffering flags](#builtin-backup-read-buffering-flags)
   - **[New stats](#new-stats)**
@@ -57,6 +58,14 @@ Here is a (condensed) example of stats output:
 Prior to v17, it was possible to create a keyspace with invalid characters, which would then be inaccessible to various cluster management operations.
 
 Keyspace names may no longer contain the forward slash ("/") character, and TopoServer's `GetKeyspace` and `CreateKeyspace` methods return an error if given such a name.
+
+#### <a id="VtctldClient-RestoreFromBackup"> VtctldClient call to RestoreFromBackup using correct context
+
+The VtctldClient calls for RestoreFromBackup initiate an asynchronous process to restore data from either the latest backup or the closest one before the specified backup-timestamp.
+Prior to v17, this asynchronous process could run indefinitely in the background since it was called using an empty background. In v17 [PR#12830](https://github.com/vitessio/vitess/issues/12830),
+this behavior was changed to use the same context with which the client called the RestoreFromBackup command, which uses action_timeout to wait for any command to finish.
+If you are using VtctldClient to initiate a restore, make sure you provide an appropriate value for action_timeout to give enough time for the restore process to complete.
+Otherwise, the restore will throw an error if the context expires before it completes.
 
 ### <a id="new-flag"/> New command line flags and behavior
 

@@ -362,7 +362,7 @@ func TestExecuteRestoreWithTimedOutContext(t *testing.T) {
 	restoreParams.Mysqld = mysqld
 	timedOutCtx, cancel := context.WithTimeout(ctx, 1*time.Second)
 	defer cancel()
-	// Let the context timed out.
+	// Let the context time out.
 	time.Sleep(1 * time.Second)
 	bm, err = be.ExecuteRestore(timedOutCtx, restoreParams, bh)
 	// ExecuteRestore should fail.
@@ -370,7 +370,7 @@ func TestExecuteRestoreWithTimedOutContext(t *testing.T) {
 	assert.Nil(t, bm)
 	// error message can contain any combination of "context deadline exceeded" or "context canceled"
 	if !strings.Contains(err.Error(), "context canceled") && !strings.Contains(err.Error(), "context deadline exceeded") {
-		assert.Fail(t, "Test should failed with either `context canceled` or `context deadline exceeded`")
+		assert.Fail(t, "Test should fail with either `context canceled` or `context deadline exceeded`")
 	}
 }
 
