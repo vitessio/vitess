@@ -222,7 +222,7 @@ func NewColumn(offset int) *Column {
 }
 
 func NewColumnWithCollation(offset int, coll collations.TypedCollation) *Column {
-	return &Column{Offset: offset, Collation: coll}
+	return &Column{Offset: offset, Type: -1, Collation: coll}
 }
 
 // NewTupleExpr returns a tuple expression
