@@ -445,7 +445,7 @@ func (s *Schema) ViewNames() []string {
 
 // Diff compares this schema with another schema, and sees what it takes to make this schema look
 // like the other. It returns a list of diffs.
-func (s *Schema) Diff(other *Schema, hints *DiffHints) (diffs []EntityDiff, err error) {
+func (s *Schema) diff(other *Schema, hints *DiffHints) (diffs []EntityDiff, err error) {
 	// dropped entities
 	var dropDiffs []EntityDiff
 	for _, e := range s.Entities() {
@@ -771,7 +771,7 @@ func (s *Schema) Apply(diffs []EntityDiff) (*Schema, error) {
 // On top of returning the list of diffs that can take this schema into the given schema, this function also
 // evaluates the dependencies between those diffs, if any.
 func (s *Schema) SchemaDiff(other *Schema, hints *DiffHints) (*SchemaDiff, error) {
-	diffs, err := s.Diff(other, hints)
+	diffs, err := s.diff(other, hints)
 	if err != nil {
 		return nil, err
 	}

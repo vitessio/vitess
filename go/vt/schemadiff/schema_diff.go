@@ -166,6 +166,11 @@ func (d *SchemaDiff) diffsByEntityName(name string) (diffs []EntityDiff) {
 	return diffs
 }
 
+// Empty returns 'true' when there are no diff entries
+func (d *SchemaDiff) Empty() bool {
+	return len(d.diffs) == 0
+}
+
 // allDiffs returns all the diffs. These are not sorted by dependencies. These are basically
 // the original diffs, "flatteninf" any subsequent diffs they may have.
 func (d *SchemaDiff) allDiffs() []EntityDiff {

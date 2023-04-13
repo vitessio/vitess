@@ -816,9 +816,9 @@ func TestDiffSchemas(t *testing.T) {
 					// validate schema1 unaffected by Apply
 					assert.Equal(t, schema1SQL, schema1.ToSQL())
 
-					appliedDiff, err := schema2.Diff(applied, hints)
+					appliedDiff, err := schema2.SchemaDiff(applied, hints)
 					require.NoError(t, err)
-					assert.Empty(t, appliedDiff)
+					assert.True(t, appliedDiff.Empty())
 					assert.Equal(t, schema2.ToQueries(), applied.ToQueries())
 				}
 			}
@@ -867,7 +867,9 @@ func TestSchemaApplyError(t *testing.T) {
 			assert.NoError(t, err)
 
 			{
-				diffs, err := schema1.Diff(schema2, hints)
+				diff, err := schema1.SchemaDiff(schema2, hints)
+				require.NoError(t, err)
+				diffs, err := diff.OrderedDiffs()
 				assert.NoError(t, err)
 				assert.NotEmpty(t, diffs)
 				_, err = schema1.Apply(diffs)
@@ -876,7 +878,9 @@ func TestSchemaApplyError(t *testing.T) {
 				require.Error(t, err, "expected error applying to schema2. diffs: %v", diffs)
 			}
 			{
-				diffs, err := schema2.Diff(schema1, hints)
+				diff, err := schema2.SchemaDiff(schema1, hints)
+				require.NoError(t, err)
+				diffs, err := diff.OrderedDiffs()
 				assert.NoError(t, err)
 				assert.NotEmpty(t, diffs, "schema1: %v, schema2: %v", schema1.ToSQL(), schema2.ToSQL())
 				_, err = schema2.Apply(diffs)
