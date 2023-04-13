@@ -423,7 +423,7 @@ const (
 	SecondMicrosecondStr = "second_microsecond"
 	YearMonthStr         = "year_month"
 
-	//GeomeFromWktType strings
+	// GeomeFromWktType strings
 	GeometryFromTextStr           = "st_geometryfromtext"
 	GeometryCollectionFromTextStr = "st_geometrycollectionfromtext"
 	PointFromTextStr              = "st_pointfromtext"
@@ -433,7 +433,7 @@ const (
 	PolygonFromTextStr            = "st_polygonfromtext"
 	MultiPolygonFromTextStr       = "st_multipolygonfromtext"
 
-	//GeomeFromWktType strings
+	// GeomeFromWktType strings
 	GeometryFromWKBStr           = "st_geometryfromwkb"
 	GeometryCollectionFromWKBStr = "st_geometrycollectionfromwkb"
 	PointFromWKBStr              = "st_pointfromwkb"
@@ -442,6 +442,17 @@ const (
 	MultiLinestringFromWKBStr    = "st_multilinestringfromwkb"
 	PolygonFromWKBStr            = "st_polygonfromwkb"
 	MultiPolygonFromWKBStr       = "st_multipolygonfromwkb"
+
+	//GeomFormatExpr strings
+	TextFormatStr   = "st_astext"
+	BinaryFormatStr = "st_asbinary"
+
+	//GeomPropertyType strings
+	IsSimpleStr     = "st_issimple"
+	IsEmptyStr      = "st_isempty"
+	EnvelopeStr     = "st_envelope"
+	DimensionStr    = "st_dimension"
+	GeometryTypeStr = "st_geometrytype"
 )
 
 // Constants for Enum Type - Insert.Action
@@ -758,12 +769,6 @@ const (
 	IntoDumpfile
 )
 
-// Constant for Enum Type - DeallocateStmtType
-const (
-	DeallocateType DeallocateStmtType = iota
-	DropType
-)
-
 // Constant for Enum Type - JtOnResponseType
 const (
 	ErrorJSONType JtOnResponseType = iota
@@ -930,4 +935,19 @@ const (
 	MultiPointFromWKB
 	MultiPolygonFromWKB
 	MultiLinestringFromWKB
+)
+
+// Enum Types of spatial format functions
+const (
+	TextFormat GeomFormatType = iota
+	BinaryFormat
+)
+
+// Enum Types of spatial property functions
+const (
+	IsSimple GeomPropertyType = iota
+	IsEmpty
+	Dimension
+	GeometryType
+	Envelope
 )

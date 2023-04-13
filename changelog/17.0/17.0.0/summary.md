@@ -5,7 +5,9 @@
 - **[Major Changes](#major-changes)**
   - **[Breaking Changes](#breaking-changes)**
     - [Dedicated stats for VTGate Prepare operations](#dedicated-vtgate-prepare-stats)
+    - [VTAdmin web migrated from create-react-app to vite](#migrated-vtadmin)
     - [Keyspace name validation in TopoServer](#keyspace-name-validation)
+    - [Shard name validation in TopoServer](#shard-name-validation)
     - [VtctldClient call to RestoreFromBackup using correct context](#VtctldClient-RestoreFromBackup)
   - **[New command line flags and behavior](#new-flag)**
     - [Builtin backup: read buffering flags](#builtin-backup-read-buffering-flags)
@@ -14,6 +16,7 @@
     - [VTtablet Error count with code ](#vttablet-error-count-with-code)
     - [VReplication stream status for Prometheus](#vreplication-stream-status-for-prometheus)
   - **[Deprecations and Deletions](#deprecations-and-deletions)**
+    - [Deprecated Flags](#deprecated-flags)
     - [Deprecated Stats](#deprecated-stats)
   - **[VTTablet](#vttablet)**
     - [VTTablet: Initializing all replicas with super_read_only](#vttablet-initialization)
@@ -52,12 +55,25 @@ Here is a (condensed) example of stats output:
 }
 ```
 
+#### <a id="migrated-vtadmin"/>VTAdmin web migrated to vite
+Previously, VTAdmin web used the Create React App framework to test, build, and serve the application. In v17, Create React App has been removed, and [Vite](https://vitejs.dev/) is used in its place. Some of the main changes include:
+- Vite uses `VITE_*` environment variables instead of `REACT_APP_*` environment variables
+- Vite uses `import.meta.env` in place of `process.env`
+- [Vitest](https://vitest.dev/) is used in place of Jest for testing
+- Our protobufjs generator now produces an es6 module instead of commonjs to better work with Vite's defaults
+- `public/index.html` has been moved to root directory in web/vtadmin
 
 #### <a id="keyspace-name-validation"> Keyspace name validation in TopoServer
 
 Prior to v17, it was possible to create a keyspace with invalid characters, which would then be inaccessible to various cluster management operations.
 
 Keyspace names may no longer contain the forward slash ("/") character, and TopoServer's `GetKeyspace` and `CreateKeyspace` methods return an error if given such a name.
+
+#### <a id="shard-name-validation"> Shard name validation in TopoServer
+
+Prior to v17, it was possible to create a shard name with invalid characters, which would then be inaccessible to various cluster management operations.
+
+Shard names may no longer contain the forward slash ("/") character, and TopoServer's `CreateShard` method returns an error if given such a name.
 
 #### <a id="VtctldClient-RestoreFromBackup"> VtctldClient call to RestoreFromBackup using correct context
 
@@ -237,6 +253,10 @@ vttablet_v_replication_stream_state{counts="1",state="Running",workflow="commerc
 * Backwards-compatibility for failed migrations without a `completed_timestamp` has been removed (see https://github.com/vitessio/vitess/issues/8499).
 * The deprecated `Key`, `Name`, `Up`, and `TabletExternallyReparentedTimestamp` fields were removed from the JSON representation of `TabletHealth` structures.
 
+### <a id="deprecated-flags"/>Deprecated Command Line Flags
+
+* Flag `vtctld_addr` has been deprecated and will be deleted in a future release. This affects the `vtgate`, `vttablet` and `vtcombo` binaries.
+
 ### <a id="deprecated-stats"/>Deprecated Stats
 
 These stats are deprecated in v17.
@@ -245,7 +265,6 @@ These stats are deprecated in v17.
 |-|-|
 | `backup_duration_seconds` | `BackupDurationNanoseconds` |
 | `restore_duration_seconds` | `RestoreDurationNanoseconds` |
-
 
 ### <a id="vttablet"/> VTTablet
 #### <a id="vttablet-initialization"/> Initializing all replicas with super_read_only
@@ -263,3 +282,16 @@ The default file can be found in `./config/init_db.sql`.
 
 #### <a id="deprecated-flags"/> Deprecated Flags
 The flag `use_super_read_only` is deprecated and will be removed in a later release.
+
+### Online DDL
+
+
+#### <a id="online-ddl-cut-over-threshold-flag" /> --cut-over-threshold DDL strategy flag
+
+Online DDL's strategy now accepts `--cut-over-threshold` (type: `duration`) flag.
+
+This flag stand for the timeout in a `vitess` migration's cut-over phase, which includes the final locking of tables before finalizing the migration.
+
+The value of the cut-over threshold should be high enough to support the async nature of vreplication catchup phase, as well as accommodate some replication lag. But it mustn't be too high. While cutting over, the migrated table is being locked, causing app connection and query pileup, consuming query buffers, and holding internal mutexes.
+
+Recommended range for this variable is `5s` - `30s`. Default: `10s`.

@@ -96,6 +96,11 @@ var Cases = []TestCase{
 	{Run: FnTruncate},
 	{Run: FnCrc32},
 	{Run: FnConv},
+	{Run: FnMD5},
+	{Run: FnSHA1},
+	{Run: FnSHA2},
+	{Run: FnRandomBytes},
+	{Run: FnDateFormat},
 }
 
 func JSONPathOperations(yield Query) {
@@ -593,6 +598,66 @@ func FnConv(yield Query) {
 				yield(fmt.Sprintf("CONV(%s, %s, %s)", num1, num2, num3), nil)
 			}
 		}
+	}
+}
+
+func FnMD5(yield Query) {
+	for _, num := range radianInputs {
+		yield(fmt.Sprintf("MD5(%s)", num), nil)
+	}
+
+	for _, num := range inputBitwise {
+		yield(fmt.Sprintf("MD5(%s)", num), nil)
+	}
+
+	for _, num := range inputConversions {
+		yield(fmt.Sprintf("MD5(%s)", num), nil)
+	}
+}
+
+func FnSHA1(yield Query) {
+	for _, num := range radianInputs {
+		yield(fmt.Sprintf("SHA1(%s)", num), nil)
+		yield(fmt.Sprintf("SHA(%s)", num), nil)
+	}
+
+	for _, num := range inputBitwise {
+		yield(fmt.Sprintf("SHA1(%s)", num), nil)
+		yield(fmt.Sprintf("SHA(%s)", num), nil)
+	}
+
+	for _, num := range inputConversions {
+		yield(fmt.Sprintf("SHA1(%s)", num), nil)
+		yield(fmt.Sprintf("SHA(%s)", num), nil)
+	}
+}
+
+func FnSHA2(yield Query) {
+	bitLengths := []string{"0", "224", "256", "384", "512", "1", "0.1", "256.1e0", "1-1", "128+128"}
+	for _, bits := range bitLengths {
+		for _, num := range radianInputs {
+			yield(fmt.Sprintf("SHA2(%s, %s)", num, bits), nil)
+		}
+
+		for _, num := range inputBitwise {
+			yield(fmt.Sprintf("SHA2(%s, %s)", num, bits), nil)
+		}
+
+		for _, num := range inputConversions {
+			yield(fmt.Sprintf("SHA2(%s, %s)", num, bits), nil)
+		}
+	}
+}
+
+func FnRandomBytes(yield Query) {
+	for _, num := range radianInputs {
+		yield(fmt.Sprintf("LENGTH(RANDOM_BYTES(%s))", num), nil)
+		yield(fmt.Sprintf("COLLATION(RANDOM_BYTES(%s))", num), nil)
+	}
+
+	for _, num := range inputBitwise {
+		yield(fmt.Sprintf("LENGTH(RANDOM_BYTES(%s))", num), nil)
+		yield(fmt.Sprintf("COLLATION(RANDOM_BYTES(%s))", num), nil)
 	}
 }
 
@@ -1190,5 +1255,64 @@ func FnInfo(yield Query) {
 	}
 	for _, fn := range fns {
 		yield(fn, nil)
+	}
+}
+
+func FnDateFormat(yield Query) {
+	formats := []struct {
+		c    byte
+		expr string
+	}{
+		{'a', "LEFT(DAYNAME(d),3)"},
+		{'b', "LEFT(MONTHNAME(d),3)"},
+		{'c', "MONTH(d)"},
+		{'D', ""},
+		{'d', "LPAD(DAYOFMONTH(d),0,2)"},
+		{'e', "DAYOFMONTH(d)"},
+		{'f', "LPAD(MICROSECOND(t),6,0)"},
+		{'H', "LPAD(HOUR(t),2,0)"},
+		{'h', ""},
+		{'I', ""},
+		{'i', "LPAD(MINUTE(t),2,0)"},
+		{'j', ""},
+		{'k', "HOUR(t)"},
+		{'l', ""},
+		{'M', "MONTHNAME(d)"},
+		{'m', "LPAD(MONTH(d),2,0)"},
+		{'p', ""},
+		{'r', ""},
+		{'S', "LPAD(SECOND(t),2,0)"},
+		{'s', "LPAD(SECOND(t),2,0)"},
+		{'T', ""},
+		// TODO
+		// {'U', "LPAD(WEEK(d,0),2,0)"},
+		// {'u', "LPAD(WEEK(d,1),2,0)"},
+		// {'V', "RIGHT(YEARWEEK(d,2),2)"},
+		// {'v', "RIGHT(YEARWEEK(d,3),2)"},
+		{'W', "DAYNAME(d)"},
+		{'w', "DAYOFWEEK(d)-1"},
+		// TODO
+		// {'X', "LEFT(YEARWEEK(d,2),4)"},
+		// {'x', "LEFT(YEARWEEK(d,3),4)"},
+		{'Y', "YEAR(d)"},
+		{'y', "RIGHT(YEAR(d),2)"},
+		{'%', ""},
+	}
+
+	dates := []string{
+		`TIMESTAMP '1999-12-31 23:59:58.999'`,
+		`TIMESTAMP '2000-01-02 03:04:05'`,
+	}
+
+	var buf strings.Builder
+	for _, f := range formats {
+		buf.WriteByte('%')
+		buf.WriteByte(f.c)
+		buf.WriteByte(' ')
+	}
+	format := buf.String()
+
+	for _, d := range dates {
+		yield(fmt.Sprintf("DATE_FORMAT(%s, %q)", d, format), nil)
 	}
 }

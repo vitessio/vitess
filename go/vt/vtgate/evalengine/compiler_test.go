@@ -145,11 +145,6 @@ func TestCompilerReference(t *testing.T) {
 				}
 
 				res, vmErr := func() (res evalengine.EvalResult, err error) {
-					defer func() {
-						if r := recover(); r != nil {
-							err = fmt.Errorf("PANIC: %v", r)
-						}
-					}()
 					res, err = env.EvaluateVM(converted.(*evalengine.CompiledExpr))
 					return
 				}()
@@ -294,6 +289,26 @@ func TestCompilerSingle(t *testing.T) {
 			expression: `CONV(-9223372036854775809, 13e0, 13e0)`,
 			result:     `VARCHAR("0")`,
 		},
+		{
+			expression: `0 + time '10:04:58'`,
+			result:     `INT64(100458)`,
+		},
+		{
+			expression: `0 + time '101:34:58'`,
+			result:     `INT64(1013458)`,
+		},
+		{
+			expression: `time '10:04:58' < '101:34:58'`,
+			result:     `INT64(1)`,
+		},
+		{
+			expression: `1.7 / 173458`,
+			result:     `DECIMAL(0.00001)`,
+		},
+		{
+			expression: `cast(time '5 12:34:58' as json)`,
+			result:     `JSON("\"04:34:58.000000\"")`,
+		},
 	}
 
 	for _, tc := range testCases {
@@ -339,7 +354,7 @@ func TestCompilerSingle(t *testing.T) {
 				}
 
 				if res.String() != tc.result {
-					t.Fatalf("bad evaluation from compiler: got %s, want %s (iteration %d)", res, tc.result, i)
+					t.Errorf("bad evaluation from compiler: got %s, want %s (iteration %d)", res, tc.result, i)
 				}
 			}
 		})

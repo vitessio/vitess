@@ -18,7 +18,6 @@ package evalengine
 
 import (
 	"encoding/binary"
-	"time"
 
 	"vitess.io/vitess/go/hack"
 	"vitess.io/vitess/go/mysql/collations"
@@ -107,13 +106,6 @@ func evalToVarchar(e eval, col collations.ID, convert bool) (*evalBytes, error) 
 
 func (e *evalBytes) Hash(h *vthash.Hasher) {
 	switch tt := e.SQLType(); {
-	case sqltypes.IsDate(tt):
-		t, err := e.parseDate()
-		if err != nil {
-			panic("parseDate() in evalBytes should never fail")
-		}
-		h.Write16(hashPrefixDate)
-		h.Write64(uint64(t.UnixNano()))
 	case tt == sqltypes.VarBinary:
 		h.Write16(hashPrefixBytes)
 		_, _ = h.Write(e.bytes)
@@ -170,18 +162,24 @@ func (e *evalBytes) truncateInPlace(size int) {
 	}
 }
 
-func (e *evalBytes) parseDate() (t time.Time, err error) {
-	switch e.SQLType() {
-	case sqltypes.Date:
-		t, err = datetime.ParseDate(e.string())
-	case sqltypes.Timestamp, sqltypes.Datetime:
-		t, err = datetime.ParseDateTime(e.string())
-	case sqltypes.Time:
-		t, _, err = datetime.ParseTime(e.string())
-	default:
-		err = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "type %v is not date-like", e.SQLType())
+func (e *evalBytes) toTemporal() (*evalTemporal, error) {
+	if t, ok := datetime.ParseDateTime(e.string()); ok {
+		return newEvalDateTime(t), nil
 	}
-	return
+	if t, ok := datetime.ParseDate(e.string()); ok {
+		return newEvalDate(t), nil
+	}
+	return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "type %v is not date-like", e.SQLType())
+}
+
+func (e *evalBytes) toDateBestEffort() datetime.DateTime {
+	if t, _ := datetime.ParseDateTime(e.string()); !t.IsZero() {
+		return t
+	}
+	if t, _ := datetime.ParseDate(e.string()); !t.IsZero() {
+		return datetime.DateTime{Date: t}
+	}
+	return datetime.DateTime{}
 }
 
 func (e *evalBytes) toNumericHex() (*evalUint64, bool) {

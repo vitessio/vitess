@@ -127,6 +127,7 @@ type (
 		SetTarget(target string) error
 
 		SetUDV(key string, value any) error
+		GetUDV(key string) *querypb.BindVariable
 
 		SetSysVar(name string, expr string)
 

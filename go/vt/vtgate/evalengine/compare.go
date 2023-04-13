@@ -18,13 +18,9 @@ package evalengine
 
 import (
 	"bytes"
-	"strings"
-	"time"
 
-	"vitess.io/vitess/go/mysql/datetime"
 	"vitess.io/vitess/go/mysql/decimal"
 	"vitess.io/vitess/go/mysql/json"
-	"vitess.io/vitess/go/sqltypes"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 )
@@ -120,91 +116,24 @@ func compareNumeric(left, right eval) (int, error) {
 	return 1, nil
 }
 
-func validMessage(in string) string {
-	return strings.ToValidUTF8(strings.ReplaceAll(in, "\x00", ""), "?")
+func compareDates(l, r *evalTemporal) int {
+	return l.dt.Compare(r.dt)
 }
 
-// matchExprWithAnyDateFormat formats the given expr (usually a string) to a date using the first format
-// that does not return an error.
-func matchExprWithAnyDateFormat(e eval, errType sqltypes.Type) (t time.Time, err error) {
-	expr := e.(*evalBytes)
-	t, err = datetime.ParseDate(expr.string())
-	if err == nil {
-		return
+func compareDateAndString(l, r eval) int {
+	if tt, ok := l.(*evalTemporal); ok {
+		return tt.dt.Compare(r.(*evalBytes).toDateBestEffort())
 	}
-	t, err = datetime.ParseDateTime(expr.string())
-	if err == nil {
-		return
+	if tt, ok := r.(*evalTemporal); ok {
+		return l.(*evalBytes).toDateBestEffort().Compare(tt.dt)
 	}
-	switch errType {
-	case sqltypes.Date:
-		return t, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongValue, "Incorrect DATE value: '%s'", validMessage(expr.string()))
-	case sqltypes.Datetime:
-		return t, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongValue, "Incorrect DATETIME value: '%s'", validMessage(expr.string()))
-	case sqltypes.Timestamp:
-		return t, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongValue, "Incorrect TIMESTAMP value: '%s'", validMessage(expr.string()))
-	}
-	return
-}
-
-// Date comparison based on:
-//   - https://dev.mysql.com/doc/refman/8.0/en/type-conversion.html
-//   - https://dev.mysql.com/doc/refman/8.0/en/date-and-time-type-conversion.html
-func compareDates(l, r eval) (int, error) {
-	lTime, err := l.(*evalBytes).parseDate()
-	if err != nil {
-		return 0, err
-	}
-	rTime, err := r.(*evalBytes).parseDate()
-	if err != nil {
-		return 0, err
-	}
-	return compareGoTimes(lTime, rTime)
-}
-
-func compareDateAndString(l, r eval) (int, error) {
-	lb := l.(*evalBytes)
-	rb := r.(*evalBytes)
-
-	var lTime, rTime time.Time
-	var err error
-	switch {
-	case sqltypes.IsDate(lb.SQLType()):
-		lTime, err = lb.parseDate()
-		if err != nil {
-			return 0, err
-		}
-		rTime, err = matchExprWithAnyDateFormat(r, lb.SQLType())
-		if err != nil {
-			return 0, err
-		}
-	case sqltypes.IsDate(rb.SQLType()):
-		lTime, err = matchExprWithAnyDateFormat(l, rb.SQLType())
-		if err != nil {
-			return 0, err
-		}
-		rTime, err = rb.parseDate()
-		if err != nil {
-			return 0, err
-		}
-	}
-	return compareGoTimes(lTime, rTime)
-}
-
-func compareGoTimes(lTime, rTime time.Time) (int, error) {
-	if lTime.Before(rTime) {
-		return -1, nil
-	}
-	if lTime.After(rTime) {
-		return 1, nil
-	}
-	return 0, nil
+	panic("unreachable")
 }
 
 // More on string collations coercibility on MySQL documentation:
 //   - https://dev.mysql.com/doc/refman/8.0/en/charset-collation-coercibility.html
 func compareStrings(l, r eval) (int, error) {
-	l, r, col, err := mergeCollations(l, r)
+	l, r, col, err := mergeAndCoerceCollations(l, r)
 	if err != nil {
 		return 0, err
 	}
@@ -212,7 +141,7 @@ func compareStrings(l, r eval) (int, error) {
 	if collation == nil {
 		panic("unknown collation after coercion")
 	}
-	return collation.Collate(l.(*evalBytes).bytes, r.(*evalBytes).bytes, false), nil
+	return collation.Collate(l.ToRawBytes(), r.ToRawBytes(), false), nil
 }
 
 func compareJSON(l, r eval) (int, error) {

@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package mysql
+package binlog
 
 import (
 	"bytes"
@@ -406,14 +406,14 @@ func TestCellLengthAndData(t *testing.T) {
 		data: []byte{0x0f, 0x00,
 			0, 1, 0, 14, 0, 11, 0, 1, 0, 12, 12, 0, 97, 1, 98},
 		out: sqltypes.MakeTrusted(sqltypes.Expression,
-			[]byte(`{"a":"b"}`)),
+			[]byte(`{"a": "b"}`)),
 	}, {
 		typ:      TypeJSON,
 		metadata: 4,
 		data: []byte{0x0f, 0x00, 0x00, 0x00,
 			0, 1, 0, 14, 0, 11, 0, 1, 0, 12, 12, 0, 97, 1, 98},
 		out: sqltypes.MakeTrusted(sqltypes.Expression,
-			[]byte(`{"a":"b"}`)),
+			[]byte(`{"a": "b"}`)),
 	}, {
 		typ:      TypeEnum,
 		metadata: 1,
@@ -543,7 +543,7 @@ func TestCellLengthAndData(t *testing.T) {
 		copy(padded[1:], tcase.data)
 
 		// Test cellLength.
-		l, err := cellLength(padded, 1, tcase.typ, tcase.metadata)
+		l, err := CellLength(padded, 1, tcase.typ, tcase.metadata)
 		if err != nil || l != len(tcase.data) {
 			t.Errorf("testcase cellLength(%v,%v) returned unexpected result: %v %v was expected %v <nil>",
 				tcase.typ, tcase.data, l, err, len(tcase.data))
@@ -552,8 +552,8 @@ func TestCellLengthAndData(t *testing.T) {
 		// Test CellValue.
 		out, l, err := CellValue(padded, 1, tcase.typ, tcase.metadata, &querypb.Field{Type: tcase.styp})
 		if err != nil || l != len(tcase.data) || out.Type() != tcase.out.Type() || !bytes.Equal(out.Raw(), tcase.out.Raw()) {
-			t.Errorf("testcase cellData(%v,%v) returned unexpected result: %v %v %v, was expecting %v %v <nil>",
-				tcase.typ, tcase.data, out, l, err, tcase.out, len(tcase.data))
+			t.Errorf("testcase cellData(%v,%v) returned unexpected result: %v %v %v, was expecting %v %v <nil>\nwant: %s\ngot:  %s",
+				tcase.typ, tcase.data, out, l, err, tcase.out, len(tcase.data), tcase.out.Raw(), out.Raw())
 		}
 	}
 }

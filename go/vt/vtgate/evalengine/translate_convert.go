@@ -111,7 +111,7 @@ func (ast *astCompiler) translateConvertExpr(expr sqlparser.Expr, convertType *s
 		if err != nil {
 			return nil, err
 		}
-	case "BINARY", "DOUBLE", "REAL", "SIGNED", "SIGNED INTEGER", "UNSIGNED", "UNSIGNED INTEGER", "JSON":
+	case "BINARY", "DOUBLE", "REAL", "SIGNED", "SIGNED INTEGER", "UNSIGNED", "UNSIGNED INTEGER", "JSON", "TIME", "DATETIME", "DATE":
 		// Supported types for conv expression
 	default:
 		// For unsupported types, we should return an error on translation instead of returning an error on runtime.

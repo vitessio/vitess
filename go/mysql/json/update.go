@@ -29,6 +29,10 @@ func (o *Object) Del(key string) {
 	}
 }
 
+func (o *Object) Add(key string, value *Value) {
+	o.kvs = append(o.kvs, kv{key, value})
+}
+
 // Set sets (key, value) entry in the o.
 //
 // The value must be unchanged during o lifetime.

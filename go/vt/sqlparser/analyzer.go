@@ -59,6 +59,9 @@ const (
 	StmtRevert
 	StmtShowMigrationLogs
 	StmtCommentOnly
+	StmtPrepare
+	StmtExecute
+	StmtDeallocate
 )
 
 // ASTToStatementType returns a StatementType from an AST stmt
@@ -114,6 +117,12 @@ func ASTToStatementType(stmt Statement) StatementType {
 		return StmtVStream
 	case *CommentOnly:
 		return StmtCommentOnly
+	case *PrepareStmt:
+		return StmtPrepare
+	case *ExecuteStmt:
+		return StmtExecute
+	case *DeallocateStmt:
+		return StmtDeallocate
 	default:
 		return StmtUnknown
 	}
@@ -299,6 +308,12 @@ func (s StatementType) String() string {
 		return "CALL_PROC"
 	case StmtCommentOnly:
 		return "COMMENT_ONLY"
+	case StmtPrepare:
+		return "PREPARE"
+	case StmtExecute:
+		return "EXECUTE"
+	case StmtDeallocate:
+		return "DEALLOCATE PREPARE"
 	default:
 		return "UNKNOWN"
 	}

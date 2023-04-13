@@ -32,6 +32,7 @@ import (
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/datetime"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -373,28 +374,28 @@ func compareResult(localErr, remoteErr error, localVal, remoteVal sqltypes.Value
 				localVal.String(), remoteVal.String(), localCollationName, remoteCollationName)
 		}
 	} else if localVal.IsDateTime() && remoteVal.IsDateTime() {
-		localDatetime, err := time.Parse("2006-01-02 15:04:05.999999", localVal.ToString())
-		if err != nil {
-			return fmt.Errorf("error converting local value to datetime: %w", err)
+		localDatetime, ok := datetime.ParseDateTime(localVal.ToString())
+		if !ok {
+			return fmt.Errorf("error converting local value '%s' to datetime", localVal)
 		}
-		remoteDatetime, err := time.Parse("2006-01-02 15:04:05.999999", remoteVal.ToString())
-		if err != nil {
-			return fmt.Errorf("error converting remote value to datetime: %w", err)
+		remoteDatetime, ok := datetime.ParseDateTime(remoteVal.ToString())
+		if !ok {
+			return fmt.Errorf("error converting remote value '%s' to datetime", remoteVal)
 		}
-		if !closeDatetime(localDatetime, remoteDatetime, 1*time.Second) {
+		if !closeDatetime(localDatetime.ToStdTime(time.Local), remoteDatetime.ToStdTime(time.Local), 1*time.Second) {
 			return fmt.Errorf("different results: %s; mysql response: %s (local collation: %s; mysql collation: %s)",
 				localVal.String(), remoteVal.String(), localCollationName, remoteCollationName)
 		}
 	} else if localVal.IsTime() && remoteVal.IsTime() {
-		localTime, err := time.Parse("15:04:05.999999", localVal.ToString())
-		if err != nil {
-			return fmt.Errorf("error converting local value to time: %w", err)
+		localTime, ok := datetime.ParseTime(localVal.ToString())
+		if !ok {
+			return fmt.Errorf("error converting local value '%s' to time", localVal)
 		}
-		remoteTime, err := time.Parse("15:04:05.999999", remoteVal.ToString())
-		if err != nil {
-			return fmt.Errorf("error converting remote value to time: %w", err)
+		remoteTime, ok := datetime.ParseTime(remoteVal.ToString())
+		if !ok {
+			return fmt.Errorf("error converting remote value '%s' to time", remoteVal)
 		}
-		if !closeDatetime(localTime, remoteTime, 1*time.Second) {
+		if !closeDatetime(localTime.ToStdTime(time.Local), remoteTime.ToStdTime(time.Local), 1*time.Second) {
 			return fmt.Errorf("different results: %s; mysql response: %s (local collation: %s; mysql collation: %s)",
 				localVal.String(), remoteVal.String(), localCollationName, remoteCollationName)
 		}
