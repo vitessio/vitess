@@ -752,16 +752,16 @@ func TestDiffSchemas(t *testing.T) {
 				"drop table t1",
 				"alter table t2 modify column id bigint",
 				"alter view v2 as select id from t2",
-				"create table t4 (\n\tid int,\n\tprimary key (id)\n)",
 				"create view v0 as select * from v2, t2",
+				"create table t4 (\n\tid int,\n\tprimary key (id)\n)",
 			},
 			cdiffs: []string{
 				"DROP VIEW `v1`",
 				"DROP TABLE `t1`",
 				"ALTER TABLE `t2` MODIFY COLUMN `id` bigint",
 				"ALTER VIEW `v2` AS SELECT `id` FROM `t2`",
-				"CREATE TABLE `t4` (\n\t`id` int,\n\tPRIMARY KEY (`id`)\n)",
 				"CREATE VIEW `v0` AS SELECT * FROM `v2`, `t2`",
+				"CREATE TABLE `t4` (\n\t`id` int,\n\tPRIMARY KEY (`id`)\n)",
 			},
 		},
 	}
