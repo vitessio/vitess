@@ -42,6 +42,11 @@ func (d *AlterTableEntityDiff) IsEmpty() bool {
 	return d.Statement() == nil
 }
 
+// EntityName implements EntityDiff
+func (d *AlterTableEntityDiff) EntityName() string {
+	return d.from.Name()
+}
+
 // Entities implements EntityDiff
 func (d *AlterTableEntityDiff) Entities() (from Entity, to Entity) {
 	return d.from, d.to
@@ -118,6 +123,11 @@ func (d *CreateTableEntityDiff) IsEmpty() bool {
 	return d.Statement() == nil
 }
 
+// EntityName implements EntityDiff
+func (d *CreateTableEntityDiff) EntityName() string {
+	return d.to.Name()
+}
+
 // Entities implements EntityDiff
 func (d *CreateTableEntityDiff) Entities() (from Entity, to Entity) {
 	return nil, &CreateTableEntity{CreateTable: d.createTable}
@@ -172,6 +182,11 @@ type DropTableEntityDiff struct {
 // IsEmpty implements EntityDiff
 func (d *DropTableEntityDiff) IsEmpty() bool {
 	return d.Statement() == nil
+}
+
+// EntityName implements EntityDiff
+func (d *DropTableEntityDiff) EntityName() string {
+	return d.from.Name()
 }
 
 // Entities implements EntityDiff
@@ -229,6 +244,11 @@ type RenameTableEntityDiff struct {
 // IsEmpty implements EntityDiff
 func (d *RenameTableEntityDiff) IsEmpty() bool {
 	return d.Statement() == nil
+}
+
+// EntityName implements EntityDiff
+func (d *RenameTableEntityDiff) EntityName() string {
+	return d.from.Name()
 }
 
 // Entities implements EntityDiff
@@ -342,7 +362,7 @@ const mysqlCollationVersion = "8.0.0"
 var collationEnv = collations.NewEnvironment(mysqlCollationVersion)
 
 func defaultCharset() string {
-	collation := collationEnv.LookupByID(collations.ID(collationEnv.DefaultConnectionCharset()))
+	collation := collations.ID(collationEnv.DefaultConnectionCharset()).Get()
 	if collation == nil {
 		return ""
 	}
@@ -434,6 +454,32 @@ func (c *CreateTableEntity) normalizeColumnOptions() {
 			// stored as a tinyint(1) and treated special.
 			if !isBool(col.Type) {
 				col.Type.Length = nil
+			}
+		}
+
+		// Normalize boolean to tinyint(1). Otherwise we get a diff if the desired schema has a boolean column because
+		// "show create table" reports it as a tinyint(1).
+		if col.Type.Type == "boolean" {
+			col.Type.Type = "tinyint"
+			col.Type.Length = &sqlparser.Literal{
+				Type: sqlparser.IntVal,
+				Val:  "1",
+			}
+
+			if col.Type.Options.Default != nil {
+				val, ok := col.Type.Options.Default.(sqlparser.BoolVal)
+				if ok {
+					defaultVal := "0"
+					if val {
+						defaultVal = "1"
+					}
+					col.Type.Options.Default = &sqlparser.Literal{
+						Type: sqlparser.StrVal,
+						Val:  defaultVal,
+					}
+				} else {
+					col.Type.Options.Default = nil
+				}
 			}
 		}
 
@@ -702,6 +748,7 @@ func (c *CreateTableEntity) Diff(other Entity, hints *DiffHints) (EntityDiff, er
 	if err != nil {
 		return nil, err
 	}
+
 	return d, nil
 }
 
@@ -724,6 +771,10 @@ func (c *CreateTableEntity) TableDiff(other *CreateTableEntity, hints *DiffHints
 	alterTable := &sqlparser.AlterTable{
 		Table: c.CreateTable.Table,
 	}
+	if hints.TableQualifierHint == TableQualifierDeclared {
+		alterTable.Table.Qualifier = other.Table.Qualifier
+	}
+
 	diffedTableCharset := ""
 	var parentAlterTableEntityDiff *AlterTableEntityDiff
 	var partitionSpecs []*sqlparser.PartitionSpec
@@ -752,7 +803,7 @@ func (c *CreateTableEntity) TableDiff(other *CreateTableEntity, hints *DiffHints
 		// ordered constraints for both tables:
 		t1Constraints := c.CreateTable.TableSpec.Constraints
 		t2Constraints := other.CreateTable.TableSpec.Constraints
-		c.diffConstraints(alterTable, t1Constraints, t2Constraints, hints)
+		c.diffConstraints(alterTable, c.Name(), t1Constraints, other.Name(), t2Constraints, hints)
 	}
 	{
 		// diff partitions
@@ -775,15 +826,35 @@ func (c *CreateTableEntity) TableDiff(other *CreateTableEntity, hints *DiffHints
 		}
 	}
 	tableSpecHasChanged := len(alterTable.AlterOptions) > 0 || alterTable.PartitionOption != nil || alterTable.PartitionSpec != nil
+
+	newAlterTableEntityDiff := func(alterTable *sqlparser.AlterTable) *AlterTableEntityDiff {
+		d := &AlterTableEntityDiff{alterTable: alterTable, from: c, to: other}
+
+		var algorithmValue sqlparser.AlgorithmValue
+
+		switch hints.AlterTableAlgorithmStrategy {
+		case AlterTableAlgorithmStrategyCopy:
+			algorithmValue = sqlparser.AlgorithmValue("COPY")
+		case AlterTableAlgorithmStrategyInplace:
+			algorithmValue = sqlparser.AlgorithmValue("INPLACE")
+		case AlterTableAlgorithmStrategyInstant:
+			algorithmValue = sqlparser.AlgorithmValue("INSTANT")
+		}
+		if algorithmValue != "" {
+			alterTable.AlterOptions = append(alterTable.AlterOptions, algorithmValue)
+		}
+		return d
+	}
 	if tableSpecHasChanged {
-		parentAlterTableEntityDiff = &AlterTableEntityDiff{alterTable: alterTable, from: c, to: other}
+		parentAlterTableEntityDiff = newAlterTableEntityDiff(alterTable)
+
 	}
 	for _, superfluousFulltextKey := range superfluousFulltextKeys {
 		alterTable := &sqlparser.AlterTable{
 			Table:        c.CreateTable.Table,
 			AlterOptions: []sqlparser.AlterOption{superfluousFulltextKey},
 		}
-		diff := &AlterTableEntityDiff{alterTable: alterTable, from: c, to: other}
+		diff := newAlterTableEntityDiff(alterTable)
 		// if we got superfluous fulltext keys, that means the table spec has changed, ie
 		// parentAlterTableEntityDiff is not nil
 		parentAlterTableEntityDiff.addSubsequentDiff(diff)
@@ -793,13 +864,15 @@ func (c *CreateTableEntity) TableDiff(other *CreateTableEntity, hints *DiffHints
 			Table:         c.CreateTable.Table,
 			PartitionSpec: partitionSpec,
 		}
-		diff := &AlterTableEntityDiff{alterTable: alterTable, from: c, to: other}
+		diff := newAlterTableEntityDiff(alterTable)
 		if parentAlterTableEntityDiff == nil {
 			parentAlterTableEntityDiff = diff
 		} else {
 			parentAlterTableEntityDiff.addSubsequentDiff(diff)
 		}
 	}
+	sortAlterOptions(parentAlterTableEntityDiff)
+
 	return parentAlterTableEntityDiff, nil
 }
 
@@ -1158,14 +1231,16 @@ func (c *CreateTableEntity) diffPartitions(alterTable *sqlparser.AlterTable,
 }
 
 func (c *CreateTableEntity) diffConstraints(alterTable *sqlparser.AlterTable,
+	t1Name string,
 	t1Constraints []*sqlparser.ConstraintDefinition,
+	t2Name string,
 	t2Constraints []*sqlparser.ConstraintDefinition,
 	hints *DiffHints,
 ) {
-	normalizeConstraintName := func(constraint *sqlparser.ConstraintDefinition) string {
+	normalizeConstraintName := func(tableName string, constraint *sqlparser.ConstraintDefinition) string {
 		switch hints.ConstraintNamesStrategy {
 		case ConstraintNamesIgnoreVitess:
-			return ExtractConstraintOriginalName(constraint.Name.String())
+			return ExtractConstraintOriginalName(tableName, constraint.Name.String())
 		case ConstraintNamesIgnoreAll:
 			return sqlparser.CanonicalString(constraint.Details)
 		case ConstraintNamesStrict:
@@ -1178,10 +1253,10 @@ func (c *CreateTableEntity) diffConstraints(alterTable *sqlparser.AlterTable,
 	t1ConstraintsMap := map[string]*sqlparser.ConstraintDefinition{}
 	t2ConstraintsMap := map[string]*sqlparser.ConstraintDefinition{}
 	for _, constraint := range t1Constraints {
-		t1ConstraintsMap[normalizeConstraintName(constraint)] = constraint
+		t1ConstraintsMap[normalizeConstraintName(t1Name, constraint)] = constraint
 	}
 	for _, constraint := range t2Constraints {
-		t2ConstraintsMap[normalizeConstraintName(constraint)] = constraint
+		t2ConstraintsMap[normalizeConstraintName(t2Name, constraint)] = constraint
 	}
 
 	dropConstraintStatement := func(constraint *sqlparser.ConstraintDefinition) *sqlparser.DropKey {
@@ -1194,7 +1269,7 @@ func (c *CreateTableEntity) diffConstraints(alterTable *sqlparser.AlterTable,
 	// evaluate dropped constraints
 	//
 	for _, t1Constraint := range t1Constraints {
-		if _, ok := t2ConstraintsMap[normalizeConstraintName(t1Constraint)]; !ok {
+		if _, ok := t2ConstraintsMap[normalizeConstraintName(t1Name, t1Constraint)]; !ok {
 			// constraint exists in t1 but not in t2, hence it is dropped
 			dropConstraint := dropConstraintStatement(t1Constraint)
 			alterTable.AlterOptions = append(alterTable.AlterOptions, dropConstraint)
@@ -1202,7 +1277,7 @@ func (c *CreateTableEntity) diffConstraints(alterTable *sqlparser.AlterTable,
 	}
 
 	for _, t2Constraint := range t2Constraints {
-		normalizedT2ConstraintName := normalizeConstraintName(t2Constraint)
+		normalizedT2ConstraintName := normalizeConstraintName(t2Name, t2Constraint)
 		// evaluate modified & added constraints:
 		//
 		if t1Constraint, ok := t1ConstraintsMap[normalizedT2ConstraintName]; ok {
@@ -1616,24 +1691,30 @@ func (c *CreateTableEntity) Drop() EntityDiff {
 }
 
 func sortAlterOptions(diff *AlterTableEntityDiff) {
+	if diff == nil {
+		return
+	}
 	optionOrder := func(opt sqlparser.AlterOption) int {
-		switch opt.(type) {
+		switch opt := opt.(type) {
 		case *sqlparser.DropKey:
-			return 1
-		case *sqlparser.DropColumn:
+			if opt.Type == sqlparser.ForeignKeyType {
+				return 1
+			}
 			return 2
-		case *sqlparser.ModifyColumn:
+		case *sqlparser.DropColumn:
 			return 3
-		case *sqlparser.RenameColumn:
+		case *sqlparser.ModifyColumn:
 			return 4
-		case *sqlparser.AddColumns:
+		case *sqlparser.RenameColumn:
 			return 5
-		case *sqlparser.AddIndexDefinition:
+		case *sqlparser.AddColumns:
 			return 6
-		case *sqlparser.AddConstraintDefinition:
+		case *sqlparser.AddIndexDefinition:
 			return 7
-		case sqlparser.TableOptions, *sqlparser.TableOptions:
+		case *sqlparser.AddConstraintDefinition:
 			return 8
+		case sqlparser.TableOptions, *sqlparser.TableOptions:
+			return 9
 		default:
 			return math.MaxInt
 		}
@@ -1990,6 +2071,8 @@ func (c *CreateTableEntity) apply(diff *AlterTableEntityDiff) error {
 					c.TableSpec.Options = append(c.TableSpec.Options, option)
 				}()
 			}
+		case sqlparser.AlgorithmValue:
+			// silently ignore. This has an operational effect on the MySQL engine, but has no semantical effect.
 		default:
 			return &UnsupportedApplyOperationError{Statement: sqlparser.CanonicalString(opt)}
 		}

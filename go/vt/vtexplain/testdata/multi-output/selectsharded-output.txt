@@ -9,29 +9,29 @@ select * from user /* scatter */
 ----------------------------------------------------------------------
 select * from user where id = 1 /* equal unique */
 
-1 ks_sharded/-40: select * from `user` where id = 1 limit 10001 /* equal unique */
+1 ks_sharded/-40: select * from `user` where id = 1 limit 10001 /* INT64 */ /* equal unique */
 
 ----------------------------------------------------------------------
 select * from user where id > 100 /* scatter range */
 
-1 ks_sharded/-40: select * from `user` where id > 100 limit 10001 /* scatter range */
-1 ks_sharded/40-80: select * from `user` where id > 100 limit 10001 /* scatter range */
-1 ks_sharded/80-c0: select * from `user` where id > 100 limit 10001 /* scatter range */
-1 ks_sharded/c0-: select * from `user` where id > 100 limit 10001 /* scatter range */
+1 ks_sharded/-40: select * from `user` where id > 100 limit 10001 /* INT64 */ /* scatter range */
+1 ks_sharded/40-80: select * from `user` where id > 100 limit 10001 /* INT64 */ /* scatter range */
+1 ks_sharded/80-c0: select * from `user` where id > 100 limit 10001 /* INT64 */ /* scatter range */
+1 ks_sharded/c0-: select * from `user` where id > 100 limit 10001 /* INT64 */ /* scatter range */
 
 ----------------------------------------------------------------------
 select * from user where name = 'bob' /* vindex lookup */
 
 1 ks_sharded/c0-: select `name`, user_id from name_user_map where `name` in ('bob') limit 10001 /* vindex lookup */
-2 ks_sharded/-40: select * from `user` where `name` = 'bob' limit 10001 /* vindex lookup */
+2 ks_sharded/-40: select * from `user` where `name` = 'bob' limit 10001 /* VARCHAR */ /* vindex lookup */
 
 ----------------------------------------------------------------------
 select * from user where name = 'bob' or nickname = 'bob' /* vindex lookup */
 
-1 ks_sharded/-40: select * from `user` where `name` = 'bob' or nickname = 'bob' limit 10001 /* vindex lookup */
-1 ks_sharded/40-80: select * from `user` where `name` = 'bob' or nickname = 'bob' limit 10001 /* vindex lookup */
-1 ks_sharded/80-c0: select * from `user` where `name` = 'bob' or nickname = 'bob' limit 10001 /* vindex lookup */
-1 ks_sharded/c0-: select * from `user` where `name` = 'bob' or nickname = 'bob' limit 10001 /* vindex lookup */
+1 ks_sharded/-40: select * from `user` where `name` = 'bob' or nickname = 'bob' limit 10001 /* VARCHAR */ /* vindex lookup */
+1 ks_sharded/40-80: select * from `user` where `name` = 'bob' or nickname = 'bob' limit 10001 /* VARCHAR */ /* vindex lookup */
+1 ks_sharded/80-c0: select * from `user` where `name` = 'bob' or nickname = 'bob' limit 10001 /* VARCHAR */ /* vindex lookup */
+1 ks_sharded/c0-: select * from `user` where `name` = 'bob' or nickname = 'bob' limit 10001 /* VARCHAR */ /* vindex lookup */
 
 ----------------------------------------------------------------------
 select u.id, u.name, u.nickname, n.info from user u join name_info n on u.name = n.name /* join on varchar */
@@ -48,13 +48,13 @@ select u.id, u.name, u.nickname, n.info from user u join name_info n on u.name =
 ----------------------------------------------------------------------
 select m.id, m.song, e.extra from music m join music_extra e on m.id = e.id where m.user_id = 100 /* join on int */
 
-1 ks_sharded/80-c0: select m.id, m.song from music as m where m.user_id = 100 limit 10001 /* join on int */
+1 ks_sharded/80-c0: select m.id, m.song from music as m where m.user_id = 100 limit 10001 /* INT64 */ /* join on int */
 2 ks_sharded/-40: select e.extra from music_extra as e where e.id = 1 limit 10001 /* join on int */
 
 ----------------------------------------------------------------------
 select count(*) from user where id = 1 /* point aggregate */
 
-1 ks_sharded/-40: select count(*) from `user` where id = 1 limit 10001 /* point aggregate */
+1 ks_sharded/-40: select count(*) from `user` where id = 1 limit 10001 /* INT64 */ /* point aggregate */
 
 ----------------------------------------------------------------------
 select count(*) from user where name in ('a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j') /* scatter aggregate */
@@ -145,48 +145,48 @@ select * from name_info order by info /* select * and order by varchar column */
 ----------------------------------------------------------------------
 select distinct(name) from user where id = 1 /* select distinct */
 
-1 ks_sharded/-40: select distinct `name` from `user` where id = 1 limit 10001 /* select distinct */
+1 ks_sharded/-40: select distinct `name` from `user` where id = 1 limit 10001 /* INT64 */ /* select distinct */
 
 ----------------------------------------------------------------------
 select distinct name from user where id = 1 /* select distinct */
 
-1 ks_sharded/-40: select distinct `name` from `user` where id = 1 limit 10001 /* select distinct */
+1 ks_sharded/-40: select distinct `name` from `user` where id = 1 limit 10001 /* INT64 */ /* select distinct */
 
 ----------------------------------------------------------------------
 select id, substring(name, 1, -1) from user where id = 123 /* select substring */
 
-1 ks_sharded/-40: select id, substr(`name`, 1, -1) from `user` where id = 123 limit 10001 /* select substring */
+1 ks_sharded/-40: select id, substr(`name`, 1, -1) from `user` where id = 123 limit 10001 /* INT64 */ /* select substring */
 
 ----------------------------------------------------------------------
 select id, substring_index(name, '123456', -1) from user where id = 123 /* select substring_index */
 
-1 ks_sharded/-40: select id, substring_index(`name`, '123456', -1) from `user` where id = 123 limit 10001 /* select substring_index */
+1 ks_sharded/-40: select id, substring_index(`name`, '123456', -1) from `user` where id = 123 limit 10001 /* INT64 */ /* select substring_index */
 
 ----------------------------------------------------------------------
 select id, case when name = 'alice' then 'ALICE' when name = 'bob' then 'BOB' end as name from user where id = 1 /* select case */
 
-1 ks_sharded/-40: select id, case when `name` = 'alice' then 'ALICE' when `name` = 'bob' then 'BOB' end as `name` from `user` where id = 1 limit 10001 /* select case */
+1 ks_sharded/-40: select id, case when `name` = 'alice' then 'ALICE' when `name` = 'bob' then 'BOB' end as `name` from `user` where id = 1 limit 10001 /* INT64 */ /* select case */
 
 ----------------------------------------------------------------------
 select id, case when name = 'alice' then 'ALICE' when name = 'bob' then 'BOB' else 'OTHER' end as name from user where id = 1 /* select case */
 
-1 ks_sharded/-40: select id, case when `name` = 'alice' then 'ALICE' when `name` = 'bob' then 'BOB' else 'OTHER' end as `name` from `user` where id = 1 limit 10001 /* select case */
+1 ks_sharded/-40: select id, case when `name` = 'alice' then 'ALICE' when `name` = 'bob' then 'BOB' else 'OTHER' end as `name` from `user` where id = 1 limit 10001 /* INT64 */ /* select case */
 
 ----------------------------------------------------------------------
 select id, case when substr(name, 1, 5) = 'alice' then 'ALICE' when name = 'bob' then 'BOB' else 'OTHER' end as name from user where id = 1 /* select case */
 
-1 ks_sharded/-40: select id, case when substr(`name`, 1, 5) = 'alice' then 'ALICE' when `name` = 'bob' then 'BOB' else 'OTHER' end as `name` from `user` where id = 1 limit 10001 /* select case */
+1 ks_sharded/-40: select id, case when substr(`name`, 1, 5) = 'alice' then 'ALICE' when `name` = 'bob' then 'BOB' else 'OTHER' end as `name` from `user` where id = 1 limit 10001 /* INT64 */ /* select case */
 
 ----------------------------------------------------------------------
 select id, 'abc' as test from user where id = 1 union all select id, 'def' as test from user where id = 1 union all select id, 'ghi' as test from user where id = 1 /* union all */
 
-1 ks_sharded/-40: select id, 'abc' as test from `user` where id = 1 union all select id, 'def' as test from `user` where id = 1 union all select id, 'ghi' as test from `user` where id = 1 limit 10001 /* union all */
+1 ks_sharded/-40: select id, 'abc' as test from `user` where id = 1 union all select id, 'def' as test from `user` where id = 1 union all select id, 'ghi' as test from `user` where id = 1 limit 10001 /* INT64 */ /* union all */
 
 ----------------------------------------------------------------------
 select id from user where not id in (select col from music where music.user_id = 42) and id in (select col from music where music.user_id = 411)
 
-1 ks_sharded/40-80: select col from music where music.user_id = 411 limit 10001
-2 ks_sharded/40-80: select col from music where music.user_id = 42 limit 10001
+1 ks_sharded/40-80: select col from music where music.user_id = 411 limit 10001 /* INT64 */
+2 ks_sharded/40-80: select col from music where music.user_id = 42 limit 10001 /* INT64 */
 
 ----------------------------------------------------------------------
 SELECT user.id, user.name, name_info.info FROM user INNER JOIN music ON (user.id = music.user_id) LEFT OUTER JOIN name_info ON (user.name = name_info.name)

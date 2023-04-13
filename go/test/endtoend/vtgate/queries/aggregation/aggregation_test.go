@@ -398,3 +398,40 @@ func TestAggregateLeftJoin(t *testing.T) {
 	mcmp.AssertMatches("SELECT count(*) FROM t1 LEFT JOIN t2 ON t1.t1_id = t2.id", `[[INT64(2)]]`)
 	mcmp.AssertMatches("SELECT sum(t1.shardkey) FROM t1 LEFT JOIN t2 ON t1.t1_id = t2.id", `[[DECIMAL(1)]]`)
 }
+
+// TestScalarAggregate tests validates that only count is returned and no additional field is returned.gst
+func TestScalarAggregate(t *testing.T) {
+	// disable schema tracking to have weight_string column added to query send down to mysql.
+	clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, "--schema_change_signal=false")
+	require.NoError(t,
+		clusterInstance.RestartVtgate())
+
+	// update vtgate params
+	vtParams = clusterInstance.GetVTParams(keyspaceName)
+
+	defer func() {
+		// roll it back
+		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, "--schema_change_signal")
+		require.NoError(t,
+			clusterInstance.RestartVtgate())
+		//  update vtgate params
+		vtParams = clusterInstance.GetVTParams(keyspaceName)
+
+	}()
+
+	mcmp, closer := start(t)
+	defer closer()
+
+	mcmp.Exec("insert into aggr_test(id, val1, val2) values(1,'a',1), (2,'A',1), (3,'b',1), (4,'c',3), (5,'c',4)")
+	mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ count(distinct val1) from aggr_test", `[[INT64(3)]]`)
+}
+
+func TestAggregationRandomOnAnAggregatedValue(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+
+	mcmp.Exec("insert into t10(k, a, b) values (0, 100, 10), (10, 200, 20);")
+
+	mcmp.AssertMatchesNoOrder("select /*vt+ PLANNER=gen4 */ A.a, A.b, (A.a / A.b) as d from (select sum(a) as a, sum(b) as b from t10 where a = 100) A;",
+		`[[DECIMAL(100) DECIMAL(10) DECIMAL(10.0000)]]`)
+}

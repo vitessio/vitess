@@ -52,10 +52,10 @@ var (
 <table width="100%" border="" frame="">
   <tr border="">
     <td width="25%" border="">
-      Alias: {{github_com_vitessio_vitess_vtctld_tablet .Tablet.AliasString}}<br>
-      Keyspace: {{github_com_vitessio_vitess_vtctld_keyspace .Tablet.Keyspace}} Shard: {{github_com_vitessio_vitess_vtctld_shard .Tablet.Keyspace .Tablet.Shard}} Tablet Type: {{.Tablet.Type}}<br>
-      SrvKeyspace: {{github_com_vitessio_vitess_vtctld_srv_keyspace .Tablet.Alias.Cell .Tablet.Keyspace}}<br>
-      Replication graph: {{github_com_vitessio_vitess_vtctld_replication .Tablet.Alias.Cell .Tablet.Keyspace .Tablet.Shard}}<br>
+      Alias: {{.Tablet.AliasString}}<br>
+      Keyspace: {{.Tablet.Keyspace}}<br>
+      Shard: {{.Tablet.Shard}}<br>
+      Tablet Type: {{.Tablet.Type}}<br>
       {{if .DeniedTables}}
         DeniedTables: {{range .DeniedTables}}{{.}} {{end}}<br>
       {{end}}

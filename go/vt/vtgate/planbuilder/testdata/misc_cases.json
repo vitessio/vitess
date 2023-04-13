@@ -1,0 +1,307 @@
+[
+  {
+    "comment": "prepare statement with select",
+    "query": "prepare prep from 'select * from user where id = ?'",
+    "v3-plan": {
+      "QueryType": "PREPARE",
+      "Original": "prepare prep from 'select * from user where id = ?'",
+      "Instructions": {
+        "OperatorType": "Rows"
+      }
+    },
+    "gen4-plan": {
+      "QueryType": "PREPARE",
+      "Original": "prepare prep from 'select * from user where id = ?'",
+      "Instructions": {
+        "OperatorType": "Rows"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "prepare statement with delete",
+    "query": "prepare prep from 'delete from user where id between ? and ?'",
+    "plan": {
+      "QueryType": "PREPARE",
+      "Original": "prepare prep from 'delete from user where id between ? and ?'",
+      "Instructions": {
+        "OperatorType": "Rows"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "prepare statement with drop",
+    "query": "prepare prep from 'drop table user'",
+    "plan": {
+      "QueryType": "PREPARE",
+      "Original": "prepare prep from 'drop table user'",
+      "Instructions": {
+        "OperatorType": "Rows"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "prepare statement with user defined variable",
+    "query": "prepare prep from @prep_stmt",
+    "v3-plan": {
+      "QueryType": "PREPARE",
+      "Original": "prepare prep from @prep_stmt",
+      "Instructions": {
+        "OperatorType": "Rows"
+      }
+    },
+    "gen4-plan": {
+      "QueryType": "PREPARE",
+      "Original": "prepare prep from @prep_stmt",
+      "Instructions": {
+        "OperatorType": "Rows"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "prepare statement with invalid query",
+    "query": "prepare prep from 'wrong query syntax'",
+    "plan": "syntax error at position 6 near 'wrong'"
+  },
+  {
+    "comment": "prepare statement with non existing variable",
+    "query": "prepare prep from @foo",
+    "plan": "VT03024: 'foo' user defined variable does not exists"
+  },
+  {
+    "comment": "execute one param statement",
+    "query": "execute prep_one_param using @foo",
+    "v3-plan": {
+      "QueryType": "EXECUTE",
+      "Original": "execute prep_one_param using @foo",
+      "Instructions": {
+        "OperatorType": "EXECUTE",
+        "Parameters": [
+          "foo"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from `user` where 1 != 1",
+            "Query": "select 1 from `user` where id = :v1",
+            "Table": "`user`",
+            "Values": [
+              ":v1"
+            ],
+            "Vindex": "user_index"
+          }
+        ]
+      }
+    },
+    "gen4-plan": {
+      "QueryType": "EXECUTE",
+      "Original": "execute prep_one_param using @foo",
+      "Instructions": {
+        "OperatorType": "EXECUTE",
+        "Parameters": [
+          "foo"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from `user` where 1 != 1",
+            "Query": "select 1 from `user` where id = :v1",
+            "Table": "`user`",
+            "Values": [
+              ":v1"
+            ],
+            "Vindex": "user_index"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "execute in param statement",
+    "query": "execute prep_in_param using @x, @y",
+    "v3-plan": {
+      "QueryType": "EXECUTE",
+      "Original": "execute prep_in_param using @x, @y",
+      "Instructions": {
+        "OperatorType": "EXECUTE",
+        "Parameters": [
+          "x",
+          "y"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "IN",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from `user` where 1 != 1",
+            "Query": "select 1 from `user` where id in ::__vals",
+            "Table": "`user`",
+            "Values": [
+              "(:v1, :v2)"
+            ],
+            "Vindex": "user_index"
+          }
+        ]
+      }
+    },
+    "gen4-plan": {
+      "QueryType": "EXECUTE",
+      "Original": "execute prep_in_param using @x, @y",
+      "Instructions": {
+        "OperatorType": "EXECUTE",
+        "Parameters": [
+          "x",
+          "y"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "IN",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from `user` where 1 != 1",
+            "Query": "select 1 from `user` where id in ::__vals",
+            "Table": "`user`",
+            "Values": [
+              "(:v1, :v2)"
+            ],
+            "Vindex": "user_index"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "execute no param statement",
+    "query": "execute prep_no_param",
+    "v3-plan": {
+      "QueryType": "EXECUTE",
+      "Original": "execute prep_no_param",
+      "Instructions": {
+        "OperatorType": "EXECUTE",
+        "Parameters": null,
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from `user` where 1 != 1",
+            "Query": "select 1 from `user`",
+            "Table": "`user`"
+          }
+        ]
+      }
+    },
+    "gen4-plan": {
+      "QueryType": "EXECUTE",
+      "Original": "execute prep_no_param",
+      "Instructions": {
+        "OperatorType": "EXECUTE",
+        "Parameters": null,
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from `user` where 1 != 1",
+            "Query": "select 1 from `user`",
+            "Table": "`user`"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "execute prepared statement does not exists",
+    "query": "execute not_prepared using @foo",
+    "plan": "VT09011: Unknown prepared statement handler (not_prepared) given to EXECUTE"
+  },
+  {
+    "comment": "execute wrong number of parameters",
+    "query": "execute prep_one_param",
+    "plan": "VT03025: Incorrect arguments to EXECUTE"
+  },
+  {
+    "comment": "execute wrong number of parameters",
+    "query": "execute prep_one_param using @foo, @bar",
+    "plan": "VT03025: Incorrect arguments to EXECUTE"
+  },
+  {
+    "comment": "prepare a dual query",
+    "query": "prepare prep_dual from 'select 1+?, 10/?'",
+    "v3-plan": {
+      "QueryType": "PREPARE",
+      "Original": "prepare prep_dual from 'select 1+?, 10/?'",
+      "Instructions": {
+        "OperatorType": "Rows"
+      }
+    },
+    "gen4-plan": {
+      "QueryType": "PREPARE",
+      "Original": "prepare prep_dual from 'select 1+?, 10/?'",
+      "Instructions": {
+        "OperatorType": "Rows"
+      },
+      "TablesUsed": [
+        "main.dual"
+      ]
+    }
+  },
+  {
+    "comment": "drop prepare",
+    "query": "drop prepare prep_no_param",
+    "plan": {
+      "QueryType": "DEALLOCATE PREPARE",
+      "Original": "drop prepare prep_no_param",
+      "Instructions": {
+        "OperatorType": "Rows"
+      }
+    }
+  },
+  {
+    "comment": "drop prepare that does not exists",
+    "query": "drop prepare prep_not_exist",
+    "plan": "VT09011: Unknown prepared statement handler (prep_not_exist) given to DEALLOCATE PREPARE"
+  }
+]

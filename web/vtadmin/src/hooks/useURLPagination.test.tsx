@@ -18,6 +18,7 @@ import { renderHook } from '@testing-library/react-hooks';
 import { createMemoryHistory, To } from 'history';
 import { Router } from 'react-router-dom';
 import { PaginationOpts, PaginationParams, useURLPagination } from './useURLPagination';
+import { describe, expect, test, vi } from 'vitest';
 
 describe('useURLPagination', () => {
     const tests: {
@@ -80,7 +81,7 @@ describe('useURLPagination', () => {
         '%s',
         (name: string, url: string, opts: PaginationOpts, expected: PaginationParams, redirectParams: To | null) => {
             const history = createMemoryHistory({ initialEntries: [url] });
-            jest.spyOn(history, 'replace');
+            vi.spyOn(history, 'replace');
 
             const { result } = renderHook(() => useURLPagination(opts), {
                 wrapper: ({ children }) => {

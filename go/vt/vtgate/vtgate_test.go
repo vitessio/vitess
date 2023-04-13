@@ -81,6 +81,8 @@ func init() {
 }
 
 func TestVTGateExecute(t *testing.T) {
+	counts := rpcVTGate.timings.Timings.Counts()
+
 	createSandbox(KsTestUnsharded)
 	hcVTGateTest.Reset()
 	sbc := hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1001, KsTestUnsharded, "0", topodatapb.TabletType_PRIMARY, true, 1, nil)
@@ -97,11 +99,123 @@ func TestVTGateExecute(t *testing.T) {
 	if err != nil {
 		t.Errorf("want nil, got %v", err)
 	}
+
 	want := *sandboxconn.SingleRowResult
 	want.StatusFlags = 0 // VTGate result set does not contain status flags in sqltypes.Result
 	utils.MustMatch(t, &want, qr)
 	if !proto.Equal(sbc.Options[0], executeOptions) {
 		t.Errorf("got ExecuteOptions \n%+v, want \n%+v", sbc.Options[0], executeOptions)
+	}
+
+	newCounts := rpcVTGate.timings.Timings.Counts()
+	require.Contains(t, newCounts, "All")
+	require.Equal(t, counts["All"]+1, newCounts["All"])
+	require.Contains(t, newCounts, "Execute..primary")
+	require.Equal(t, counts["Execute..primary"]+1, newCounts["Execute..primary"])
+
+	for k, v := range newCounts {
+		if strings.HasPrefix(k, "Prepare") {
+			require.Equal(t, v, counts[k])
+		}
+	}
+}
+
+func TestVTGateExecuteError(t *testing.T) {
+	counts := errorCounts.Counts()
+
+	createSandbox(KsTestUnsharded)
+	hcVTGateTest.Reset()
+	hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1001, KsTestUnsharded, "0", topodatapb.TabletType_PRIMARY, true, 1, nil)
+	_, qr, err := rpcVTGate.Execute(
+		context.Background(),
+		&vtgatepb.Session{
+			Autocommit:   true,
+			TargetString: "@primary",
+			Options:      executeOptions,
+		},
+		"bad select id from t1",
+		nil,
+	)
+	require.Error(t, err)
+	require.Nil(t, qr)
+
+	newCounts := errorCounts.Counts()
+	require.Contains(t, newCounts, "Execute..primary.INVALID_ARGUMENT")
+	require.Equal(t, counts["Execute..primary.INVALID_ARGUMENT"]+1, newCounts["Execute..primary.INVALID_ARGUMENT"])
+
+	for k, v := range newCounts {
+		if strings.HasPrefix(k, "Prepare") {
+			require.Equal(t, v, counts[k])
+		}
+	}
+}
+
+func TestVTGatePrepare(t *testing.T) {
+	counts := rpcVTGate.timings.Timings.Counts()
+
+	createSandbox(KsTestUnsharded)
+	hcVTGateTest.Reset()
+	sbc := hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1001, KsTestUnsharded, "0", topodatapb.TabletType_PRIMARY, true, 1, nil)
+	_, qr, err := rpcVTGate.Prepare(
+		context.Background(),
+		&vtgatepb.Session{
+			Autocommit:   true,
+			TargetString: "@primary",
+			Options:      executeOptions,
+		},
+		"select id from t1",
+		nil,
+	)
+	if err != nil {
+		t.Errorf("want nil, got %v", err)
+	}
+
+	want := sandboxconn.SingleRowResult.Fields
+	utils.MustMatch(t, want, qr)
+	if !proto.Equal(sbc.Options[0], executeOptions) {
+		t.Errorf("got ExecuteOptions \n%+v, want \n%+v", sbc.Options[0], executeOptions)
+	}
+
+	newCounts := rpcVTGate.timings.Timings.Counts()
+	require.Contains(t, newCounts, "All")
+	require.Equal(t, counts["All"]+1, newCounts["All"])
+	require.Contains(t, newCounts, "Prepare..primary")
+	require.Equal(t, counts["Prepare..primary"]+1, newCounts["Prepare..primary"])
+
+	for k, v := range newCounts {
+		if strings.HasPrefix(k, "Execute") {
+			require.Equal(t, v, counts[k])
+		}
+	}
+}
+
+func TestVTGatePrepareError(t *testing.T) {
+	counts := errorCounts.Counts()
+
+	createSandbox(KsTestUnsharded)
+	hcVTGateTest.Reset()
+	hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1001, KsTestUnsharded, "0", topodatapb.TabletType_PRIMARY, true, 1, nil)
+	_, qr, err := rpcVTGate.Prepare(
+		context.Background(),
+		&vtgatepb.Session{
+			Autocommit:   true,
+			TargetString: "@primary",
+			Options:      executeOptions,
+		},
+		"bad select id from t1",
+		nil,
+	)
+	require.Error(t, err)
+	require.Nil(t, qr)
+
+	newCounts := errorCounts.Counts()
+	require.Contains(t, newCounts, "Prepare..primary.INTERNAL")
+	require.Equal(t, counts["Prepare..primary.INTERNAL"]+1, newCounts["Prepare..primary.INTERNAL"])
+
+	for k, v := range newCounts {
+		if strings.HasPrefix(k, "Execute") {
+			require.Equal(t, v, counts[k])
+		}
 	}
 }
 
@@ -409,8 +523,8 @@ func TestErrorIssuesRollback(t *testing.T) {
 	if err != nil {
 		t.Fatalf("want nil, got %v", err)
 	}
-	if sbc.RollbackCount.Get() != 0 {
-		t.Errorf("want 0, got %d", sbc.RollbackCount.Get())
+	if sbc.RollbackCount.Load() != 0 {
+		t.Errorf("want 0, got %d", sbc.RollbackCount.Load())
 	}
 	sbc.MustFailCodes[vtrpcpb.Code_ABORTED] = 20
 	_, _, err = rpcVTGate.Execute(
@@ -422,10 +536,10 @@ func TestErrorIssuesRollback(t *testing.T) {
 	if err == nil {
 		t.Fatalf("want error but got nil")
 	}
-	if sbc.RollbackCount.Get() != 1 {
-		t.Errorf("want 1, got %d", sbc.RollbackCount.Get())
+	if sbc.RollbackCount.Load() != 1 {
+		t.Errorf("want 1, got %d", sbc.RollbackCount.Load())
 	}
-	sbc.RollbackCount.Set(0)
+	sbc.RollbackCount.Store(0)
 	sbc.MustFailCodes[vtrpcpb.Code_ABORTED] = 0
 
 	// Start a transaction, send one statement.
@@ -449,8 +563,8 @@ func TestErrorIssuesRollback(t *testing.T) {
 	if err != nil {
 		t.Fatalf("want nil, got %v", err)
 	}
-	if sbc.RollbackCount.Get() != 0 {
-		t.Errorf("want 0, got %d", sbc.RollbackCount.Get())
+	if sbc.RollbackCount.Load() != 0 {
+		t.Errorf("want 0, got %d", sbc.RollbackCount.Load())
 	}
 	sbc.MustFailCodes[vtrpcpb.Code_RESOURCE_EXHAUSTED] = 20
 	_, _, err = rpcVTGate.Execute(
@@ -462,10 +576,10 @@ func TestErrorIssuesRollback(t *testing.T) {
 	if err == nil {
 		t.Fatalf("want error but got nil")
 	}
-	if sbc.RollbackCount.Get() != 1 {
-		t.Errorf("want 1, got %d", sbc.RollbackCount.Get())
+	if sbc.RollbackCount.Load() != 1 {
+		t.Errorf("want 1, got %d", sbc.RollbackCount.Load())
 	}
-	sbc.RollbackCount.Set(0)
+	sbc.RollbackCount.Store(0)
 	sbc.MustFailCodes[vtrpcpb.Code_RESOURCE_EXHAUSTED] = 0
 
 	// Start a transaction, send one statement.
@@ -489,8 +603,8 @@ func TestErrorIssuesRollback(t *testing.T) {
 	if err != nil {
 		t.Fatalf("want nil, got %v", err)
 	}
-	if sbc.RollbackCount.Get() != 0 {
-		t.Errorf("want 0, got %d", sbc.RollbackCount.Get())
+	if sbc.RollbackCount.Load() != 0 {
+		t.Errorf("want 0, got %d", sbc.RollbackCount.Load())
 	}
 	sbc.MustFailCodes[vtrpcpb.Code_ALREADY_EXISTS] = 20
 	_, _, err = rpcVTGate.Execute(
@@ -502,8 +616,8 @@ func TestErrorIssuesRollback(t *testing.T) {
 	if err == nil {
 		t.Fatalf("want error but got nil")
 	}
-	if sbc.RollbackCount.Get() != 0 {
-		t.Errorf("want 0, got %d", sbc.RollbackCount.Get())
+	if sbc.RollbackCount.Load() != 0 {
+		t.Errorf("want 0, got %d", sbc.RollbackCount.Load())
 	}
 	sbc.MustFailCodes[vtrpcpb.Code_ALREADY_EXISTS] = 0
 }
@@ -616,8 +730,8 @@ func TestMultiInternalSavepointVtGate(t *testing.T) {
 
 	testQueryLog(t, logChan, "Execute", "BEGIN", "begin", 0)
 	testQueryLog(t, logChan, "MarkSavepoint", "SAVEPOINT", "savepoint x", 0)
-	testQueryLog(t, logChan, "Execute", "INSERT", "insert into sp_tbl(user_id) values (:vtg1), (:vtg2)", 2)
+	testQueryLog(t, logChan, "Execute", "INSERT", "insert into sp_tbl(user_id) values (:vtg1 /* INT64 */), (:vtg2 /* INT64 */)", 2)
 	testQueryLog(t, logChan, "MarkSavepoint", "SAVEPOINT", "savepoint y", 2)
-	testQueryLog(t, logChan, "Execute", "INSERT", "insert into sp_tbl(user_id) values (:vtg1), (:vtg2)", 2)
-	testQueryLog(t, logChan, "Execute", "INSERT", "insert into sp_tbl(user_id) values (:vtg1)", 1)
+	testQueryLog(t, logChan, "Execute", "INSERT", "insert into sp_tbl(user_id) values (:vtg1 /* INT64 */), (:vtg2 /* INT64 */)", 2)
+	testQueryLog(t, logChan, "Execute", "INSERT", "insert into sp_tbl(user_id) values (:vtg1 /* INT64 */)", 1)
 }

@@ -31,7 +31,9 @@ import (
 	"github.com/nsf/jsondiff"
 	"github.com/stretchr/testify/require"
 
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/sidecardb"
 
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 
@@ -47,6 +49,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -254,6 +257,7 @@ func TestPlan(t *testing.T) {
 	testFile(t, "info_schema80_cases.json", testOutputTempDir, vschemaWrapper, false)
 	testFile(t, "reference_cases.json", testOutputTempDir, vschemaWrapper, false)
 	testFile(t, "vexplain_cases.json", testOutputTempDir, vschemaWrapper, false)
+	testFile(t, "misc_cases.json", testOutputTempDir, vschemaWrapper, false)
 }
 
 func TestSystemTables57(t *testing.T) {
@@ -332,6 +336,15 @@ func TestOneWithTPCHVSchema(t *testing.T) {
 		v:             loadSchema(t, "vschemas/tpch_schema.json", true),
 		sysVarEnabled: true,
 	}
+
+	testFile(t, "onecase.json", "", vschema, false)
+}
+
+func TestOneWith57Version(t *testing.T) {
+	// first we move everything to use 5.7 logic
+	servenv.SetMySQLServerVersionForTest("5.7")
+	defer servenv.SetMySQLServerVersionForTest("")
+	vschema := &vschemaWrapper{v: loadSchema(t, "vschemas/schema.json", true)}
 
 	testFile(t, "onecase.json", "", vschema, false)
 }
@@ -437,6 +450,19 @@ func TestWithDefaultKeyspaceFromFile(t *testing.T) {
 		},
 		tabletType: topodatapb.TabletType_PRIMARY,
 	}
+	ts := memorytopo.NewServer("cell1")
+	ts.CreateKeyspace(context.Background(), "main", &topodatapb.Keyspace{})
+	ts.CreateKeyspace(context.Background(), "user", &topodatapb.Keyspace{})
+	// Create a cache to use for lookups of the sidecar database identifier
+	// in use by each keyspace.
+	_, created := sidecardb.NewIdentifierCache(func(ctx context.Context, keyspace string) (string, error) {
+		ki, err := ts.GetKeyspace(ctx, keyspace)
+		if err != nil {
+			return "", err
+		}
+		return ki.SidecarDbName, nil
+	})
+	require.True(t, created)
 
 	testOutputTempDir := makeTestOutput(t)
 	testFile(t, "alterVschema_cases.json", testOutputTempDir, vschema, false)
@@ -553,6 +579,51 @@ type vschemaWrapper struct {
 	sysVarEnabled bool
 	version       plancontext.PlannerVersion
 	enableViews   bool
+}
+
+func (vw *vschemaWrapper) GetPrepareData(stmtName string) *vtgatepb.PrepareData {
+	switch stmtName {
+	case "prep_one_param":
+		return &vtgatepb.PrepareData{
+			PrepareStatement: "select 1 from user where id = :v1",
+			ParamsCount:      1,
+		}
+	case "prep_in_param":
+		return &vtgatepb.PrepareData{
+			PrepareStatement: "select 1 from user where id in (:v1, :v2)",
+			ParamsCount:      2,
+		}
+	case "prep_no_param":
+		return &vtgatepb.PrepareData{
+			PrepareStatement: "select 1 from user",
+			ParamsCount:      0,
+		}
+	}
+	return nil
+}
+
+func (vw *vschemaWrapper) PlanPrepareStatement(ctx context.Context, query string) (*engine.Plan, sqlparser.Statement, error) {
+	plan, err := TestBuilder(query, vw, vw.currentDb())
+	if err != nil {
+		return nil, nil, err
+	}
+	stmt, _, err := sqlparser.Parse2(query)
+	if err != nil {
+		return nil, nil, err
+	}
+	return plan, stmt, nil
+}
+
+func (vw *vschemaWrapper) ClearPrepareData(lowered string) {
+}
+
+func (vw *vschemaWrapper) StorePrepareData(string, *vtgatepb.PrepareData) {}
+
+func (vw *vschemaWrapper) GetUDV(name string) *querypb.BindVariable {
+	if strings.EqualFold(name, "prep_stmt") {
+		return sqltypes.StringBindVariable("select * from user where id in (?, ?, ?)")
+	}
+	return nil
 }
 
 func (vw *vschemaWrapper) IsShardRoutingEnabled() bool {

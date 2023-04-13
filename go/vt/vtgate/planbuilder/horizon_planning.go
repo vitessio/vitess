@@ -20,6 +20,7 @@ import (
 	"fmt"
 
 	"vitess.io/vitess/go/sqltypes"
+	popcode "vitess.io/vitess/go/vt/vtgate/engine/opcode"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 
@@ -44,7 +45,7 @@ func (hp *horizonPlanning) planHorizon(ctx *plancontext.PlanningContext, plan lo
 	}
 
 	if isRoute && rb.isSingleShard() {
-		err := planSingleShardRoutePlan(hp.sel, rb)
+		err := planSingleRoutePlan(hp.sel, rb)
 		if err != nil {
 			return nil, err
 		}
@@ -60,7 +61,8 @@ func (hp *horizonPlanning) planHorizon(ctx *plancontext.PlanningContext, plan lo
 	// a simpleProjection. We create a new Route that contains the derived table in the
 	// FROM clause. Meaning that, when we push expressions to the select list of this
 	// new Route, we do not want them to rewrite them.
-	if _, isSimpleProj := plan.(*simpleProjection); isSimpleProj {
+	sp, derivedTable := plan.(*simpleProjection)
+	if derivedTable {
 		oldRewriteDerivedExpr := ctx.RewriteDerivedExpr
 		defer func() {
 			ctx.RewriteDerivedExpr = oldRewriteDerivedExpr
@@ -75,10 +77,11 @@ func (hp *horizonPlanning) planHorizon(ctx *plancontext.PlanningContext, plan lo
 	}
 
 	needsOrdering := len(hp.qp.OrderExprs) > 0
-	canShortcut := isRoute && hp.sel.Having == nil && !needsOrdering
 
 	// If we still have a HAVING clause, it's because it could not be pushed to the WHERE,
 	// so it probably has aggregations
+	canShortcut := isRoute && hp.sel.Having == nil && !needsOrdering
+
 	switch {
 	case hp.qp.NeedsAggregation() || hp.sel.Having != nil:
 		plan, err = hp.planAggregations(ctx, plan)
@@ -88,9 +91,29 @@ func (hp *horizonPlanning) planHorizon(ctx *plancontext.PlanningContext, plan lo
 		// if we already did sorting, we don't need to do it again
 		needsOrdering = needsOrdering && !hp.qp.CanPushDownSorting
 	case canShortcut:
-		err = planSingleShardRoutePlan(hp.sel, rb)
+		err = planSingleRoutePlan(hp.sel, rb)
 		if err != nil {
 			return nil, err
+		}
+	case derivedTable:
+		pusher := func(ae *sqlparser.AliasedExpr) (int, error) {
+			offset, _, err := pushProjection(ctx, ae, sp.input, true, true, false)
+			return offset, err
+		}
+		needsVtGate, projections, colNames, err := hp.qp.NeedsProjecting(ctx, pusher)
+		if err != nil {
+			return nil, err
+		}
+		if !needsVtGate {
+			break
+		}
+
+		// there were some expressions we could not push down entirely,
+		// so replace the simpleProjection with a real projection
+		plan = &projection{
+			source:      sp.input,
+			columns:     projections,
+			columnNames: colNames,
 		}
 	default:
 		err = pushProjections(ctx, plan, hp.qp.SelectExprs)
@@ -374,7 +397,7 @@ func generateAggregateParams(aggrs []operators.Aggr, aggrParamOffsets [][]offset
 		if proj != nil {
 			var aggrExpr sqlparser.Expr
 			for _, ofs := range paramOffset {
-				curr := &sqlparser.Offset{V: ofs.col}
+				curr := sqlparser.NewOffset(ofs.col, aggr.Func)
 				if aggrExpr == nil {
 					aggrExpr = curr
 				} else {
@@ -401,11 +424,11 @@ func generateAggregateParams(aggrs []operators.Aggr, aggrParamOffsets [][]offset
 			offset = incomingOffset
 		}
 
-		opcode := engine.AggregateSum
+		opcode := popcode.AggregateSum
 		switch aggr.OpCode {
-		case engine.AggregateMin, engine.AggregateMax, engine.AggregateRandom:
+		case popcode.AggregateMin, popcode.AggregateMax, popcode.AggregateRandom:
 			opcode = aggr.OpCode
-		case engine.AggregateCount, engine.AggregateCountStar, engine.AggregateCountDistinct, engine.AggregateSumDistinct:
+		case popcode.AggregateCount, popcode.AggregateCountStar, popcode.AggregateCountDistinct, popcode.AggregateSumDistinct:
 			if !pushed {
 				opcode = aggr.OpCode
 			}
@@ -729,9 +752,9 @@ func wrapAndPushExpr(ctx *plancontext.PlanningContext, expr sqlparser.Expr, weig
 			return 0, 0, vterrors.VT13001(fmt.Sprintf("in scatter query: complex ORDER BY expression: %s", sqlparser.String(expr)))
 		}
 	}
-	qt := ctx.SemTable.TypeFor(expr)
+	qt, _, found := ctx.SemTable.TypeForExpr(expr)
 	wsNeeded := true
-	if qt != nil && sqltypes.IsNumber(*qt) {
+	if found && sqltypes.IsNumber(qt) {
 		wsNeeded = false
 	}
 
@@ -1097,7 +1120,7 @@ func exprHasVindex(semTable *semantics.SemTable, expr sqlparser.Expr, hasToBeUni
 	return false
 }
 
-func planSingleShardRoutePlan(sel sqlparser.SelectStatement, rb *routeGen4) error {
+func planSingleRoutePlan(sel sqlparser.SelectStatement, rb *routeGen4) error {
 	err := stripDownQuery(sel, rb.Select)
 	if err != nil {
 		return err

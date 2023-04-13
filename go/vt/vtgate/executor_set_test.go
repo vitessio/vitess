@@ -455,7 +455,7 @@ func TestPlanExecutorSetUDV(t *testing.T) {
 		out: &vtgatepb.Session{UserDefinedVariables: createMap([]string{"foo"}, []any{2}), Autocommit: true},
 	}, {
 		in:  "set @foo = 2.1, @bar = 'baz'",
-		out: &vtgatepb.Session{UserDefinedVariables: createMap([]string{"foo", "bar"}, []any{sqltypes.DecimalFloat(2.1), "baz"}), Autocommit: true},
+		out: &vtgatepb.Session{UserDefinedVariables: createMap([]string{"foo", "bar"}, []any{sqltypes.DecimalString("2.1"), "baz"}), Autocommit: true},
 	}}
 	for _, tcase := range testcases {
 		t.Run(tcase.in, func(t *testing.T) {
@@ -603,7 +603,7 @@ func TestExecutorSetAndSelect(t *testing.T) {
 	session := NewAutocommitSession(&vtgatepb.Session{TargetString: KsTestUnsharded, EnableSystemSettings: true})
 	for _, tcase := range testcases {
 		t.Run(fmt.Sprintf("%s-%s", tcase.sysVar, tcase.val), func(t *testing.T) {
-			sbc.ExecCount.Set(0) // reset the value
+			sbc.ExecCount.Store(0) // reset the value
 
 			if tcase.val != "" {
 				// check query result for `select <new_setting> from dual where @@transaction_isolation != <new_setting>

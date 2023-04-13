@@ -64,6 +64,10 @@ func (er EvalResult) MustBoolean() bool {
 	return b
 }
 
+func (er EvalResult) ToBoolean() bool {
+	return evalIsTruthy(er.v) == boolTrue
+}
+
 // ToBooleanStrict is used when the casting to a boolean has to be minimally forgiving,
 // such as when assigning to a system variable that is expected to be a boolean
 func (er EvalResult) ToBooleanStrict() (bool, error) {
@@ -96,5 +100,5 @@ func (er EvalResult) ToBooleanStrict() (bool, error) {
 			return false, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "'%s' is not a boolean", v.string())
 		}
 	}
-	return false, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "'%s' is not a boolean", er.v.toRawBytes())
+	return false, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "'%s' is not a boolean", er.v.ToRawBytes())
 }

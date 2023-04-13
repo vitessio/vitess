@@ -1193,6 +1193,50 @@ func (c *Cluster) GetKeyspaces(ctx context.Context) ([]*vtadminpb.Keyspace, erro
 	return keyspaces, nil
 }
 
+// GetSrvKeyspaces returns all SrvKeyspaces for all keyspaces in a cluster.
+func (c *Cluster) GetSrvKeyspaces(ctx context.Context, cells []string) (map[string]*vtctldatapb.GetSrvKeyspacesResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "Cluster.GetKeyspaces")
+	AnnotateSpan(c, span)
+
+	defer span.Finish()
+	keyspaces, err := c.Vtctld.GetKeyspaces(ctx, &vtctldatapb.GetKeyspacesRequest{})
+	if err != nil {
+		return nil, fmt.Errorf("GetKeyspaces(cluster = %s): %w", c.ID, err)
+	}
+
+	var (
+		m            sync.Mutex
+		wg           sync.WaitGroup
+		rec          concurrency.AllErrorRecorder
+		srvKeyspaces = make(map[string]*vtctldatapb.GetSrvKeyspacesResponse, len(keyspaces.Keyspaces))
+	)
+
+	for _, keyspace := range keyspaces.Keyspaces {
+		wg.Add(1)
+
+		go func(keyspace *vtctldatapb.Keyspace) {
+			defer wg.Done()
+			srv_keyspaces, err := c.Vtctld.GetSrvKeyspaces(ctx, &vtctldatapb.GetSrvKeyspacesRequest{Keyspace: keyspace.Name, Cells: cells})
+			if err != nil {
+				rec.RecordError(fmt.Errorf("GetSrvKeyspaces(keyspace = %s): %w", keyspace.Name, err))
+				return
+			}
+
+			m.Lock()
+			srvKeyspaces[keyspace.Name] = srv_keyspaces
+			m.Unlock()
+		}(keyspace)
+	}
+
+	wg.Wait()
+
+	if rec.HasErrors() {
+		return nil, rec.Error()
+	}
+
+	return srvKeyspaces, nil
+}
+
 // GetTablets returns all tablets in the cluster.
 func (c *Cluster) GetTablets(ctx context.Context) ([]*vtadminpb.Tablet, error) {
 	span, ctx := trace.NewSpan(ctx, "Cluster.GetTablets")

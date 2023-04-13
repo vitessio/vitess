@@ -63,7 +63,8 @@ create table customer(cid int, name varbinary(128), meta json default null, typ 
 	vtgate = defaultCell.Vtgates[0]
 	require.NotNil(t, vtgate)
 
-	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", "product", "0"), 1)
+	err := cluster.WaitForHealthyShard(vc.VtctldClient, "product", "0")
+	require.NoError(t, err)
 
 	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 	defer vtgateConn.Close()
@@ -102,7 +103,7 @@ create table customer(cid int, name varbinary(128), meta json default null, typ 
 	for _, shard := range keyspaceTgt.Shards {
 		for _, tablet := range shard.Tablets {
 			t.Logf("catchup shard=%v, tablet=%v", shard.Name, tablet.Name)
-			tablet.Vttablet.WaitForVReplicationToCatchup(t, "stress_workflow", fmt.Sprintf("vt_%s", tablet.Vttablet.Keyspace), 5*time.Minute)
+			tablet.Vttablet.WaitForVReplicationToCatchup(t, "stress_workflow", fmt.Sprintf("vt_%s", tablet.Vttablet.Keyspace), sidecarDBName, 5*time.Minute)
 		}
 	}
 

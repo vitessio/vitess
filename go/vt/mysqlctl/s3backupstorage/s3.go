@@ -410,6 +410,11 @@ func (bs *S3BackupStorage) Close() error {
 	return nil
 }
 
+func (bs *S3BackupStorage) WithParams(params backupstorage.Params) backupstorage.BackupStorage {
+	// TODO(maxeng): return a new S3BackupStorage that uses params.
+	return bs
+}
+
 var _ backupstorage.BackupStorage = (*S3BackupStorage)(nil)
 
 // getLogLevel converts the string loglevel to an aws.LogLevelType

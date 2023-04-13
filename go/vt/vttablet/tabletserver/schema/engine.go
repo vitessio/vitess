@@ -28,20 +28,19 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sidecardb"
 
-	"vitess.io/vitess/go/stats"
-	"vitess.io/vitess/go/vt/dbconnpool"
-	"vitess.io/vitess/go/vt/schema"
-	"vitess.io/vitess/go/vt/servenv"
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
-
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/dbconfigs"
+	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/schema"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
@@ -129,11 +128,13 @@ func (se *Engine) InitDBConfig(cp dbconfigs.Connector) {
 	se.cp = cp
 }
 
-// syncSidecarDB is called either the first time a primary starts, or on subsequent loads, to possibly upgrade to a
-// new Vitess version. This is the only entry point into the sidecardb module to get the _vt database to the desired
-// schema for the running Vitess version.
-// There is some extra logging in here which can be removed in a future version (>v16) once the new schema init
-// functionality is stable.
+// syncSidecarDB is called either the first time a primary starts, or
+// on subsequent loads, to possibly upgrade to a new Vitess version.
+// This is the only entry point into the sidecardb module to get the
+// sidecar database to the desired schema for the running Vitess
+// version. There is some extra logging in here which can be removed
+// in a future version (>v16) once the new schema init functionality
+// is stable.
 func (se *Engine) syncSidecarDB(ctx context.Context, conn *dbconnpool.DBConnection) error {
 	log.Infof("In syncSidecarDB")
 	defer func(start time.Time) {
@@ -142,12 +143,12 @@ func (se *Engine) syncSidecarDB(ctx context.Context, conn *dbconnpool.DBConnecti
 
 	var exec sidecardb.Exec = func(ctx context.Context, query string, maxRows int, useDB bool) (*sqltypes.Result, error) {
 		if useDB {
-			_, err := conn.ExecuteFetch(sidecardb.UseSidecarDatabaseQuery, maxRows, false)
+			_, err := conn.ExecuteFetch(sqlparser.BuildParsedQuery("use %s", sidecardb.GetIdentifier()).Query, maxRows, false)
 			if err != nil {
 				return nil, err
 			}
 		}
-		return conn.ExecuteFetch(query, maxRows, false)
+		return conn.ExecuteFetch(query, maxRows, true)
 	}
 	if err := sidecardb.Init(ctx, exec); err != nil {
 		log.Errorf("Error in sidecardb.Init: %+v", err)
@@ -171,7 +172,7 @@ func (se *Engine) EnsureConnectionAndDB(tabletType topodatapb.TabletType) error 
 	conn, err := dbconnpool.NewDBConnection(ctx, se.env.Config().DB.AllPrivsWithDB())
 	if err == nil {
 		se.dbCreationFailed = false
-		// upgrade _vt if required, for a tablet with an existing database
+		// upgrade sidecar db if required, for a tablet with an existing database
 		if tabletType == topodatapb.TabletType_PRIMARY {
 			if err := se.syncSidecarDB(ctx, conn); err != nil {
 				conn.Close()
@@ -405,7 +406,7 @@ func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 	}
 	tableData, err := conn.Exec(ctx, showTablesQuery, maxTableCount, false)
 	if err != nil {
-		return err
+		return vterrors.Wrapf(err, "in Engine.reload(), reading tables")
 	}
 
 	err = se.updateInnoDBRowsRead(ctx, conn)
@@ -456,7 +457,7 @@ func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 		log.V(2).Infof("Reading schema for table: %s", tableName)
 		table, err := LoadTable(conn, se.cp.DBName(), tableName, row[3].ToString())
 		if err != nil {
-			rec.RecordError(err)
+			rec.RecordError(vterrors.Wrapf(err, "in Engine.reload(), reading table %s", tableName))
 			continue
 		}
 		if includeStats {
@@ -562,8 +563,9 @@ func (se *Engine) populatePrimaryKeys(ctx context.Context, conn *connpool.DBConn
 	return nil
 }
 
-// RegisterVersionEvent is called by the vstream when it encounters a version event (an insert into _vt.schema_tracking)
-// It triggers the historian to load the newer rows from the database to update its cache
+// RegisterVersionEvent is called by the vstream when it encounters a version event (an
+// insert into the schema_tracking table). It triggers the historian to load the newer
+// rows from the database to update its cache.
 func (se *Engine) RegisterVersionEvent() error {
 	return se.historian.RegisterVersionEvent()
 }

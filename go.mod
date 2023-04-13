@@ -1,6 +1,6 @@
 module vitess.io/vitess
 
-go 1.19
+go 1.20
 
 require (
 	cloud.google.com/go/storage v1.29.0
@@ -65,7 +65,6 @@ require (
 	github.com/spf13/cobra v1.6.1
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.15.0
-	github.com/spyzhov/ajson v0.7.2
 	github.com/stretchr/testify v1.8.1
 	github.com/tchap/go-patricia v2.3.0+incompatible
 	github.com/tidwall/gjson v1.12.1
@@ -80,11 +79,11 @@ require (
 	golang.org/x/crypto v0.5.0 // indirect
 	golang.org/x/lint v0.0.0-20210508222113-6edffad5e616
 	golang.org/x/mod v0.7.0 // indirect
-	golang.org/x/net v0.5.0
+	golang.org/x/net v0.7.0
 	golang.org/x/oauth2 v0.4.0
-	golang.org/x/sys v0.4.0 // indirect
-	golang.org/x/term v0.4.0
-	golang.org/x/text v0.6.0
+	golang.org/x/sys v0.5.0 // indirect
+	golang.org/x/term v0.5.0
+	golang.org/x/text v0.7.0
 	golang.org/x/time v0.3.0
 	golang.org/x/tools v0.5.0
 	google.golang.org/api v0.109.0
@@ -109,11 +108,13 @@ require (
 
 require (
 	github.com/bndr/gotabulate v1.1.2
+	github.com/hashicorp/go-version v1.6.0
 	github.com/kr/pretty v0.3.1
 	github.com/kr/text v0.2.0
 	github.com/nsf/jsondiff v0.0.0-20210926074059-1e845ec5d249
 	github.com/shirou/gopsutil/v3 v3.23.1
 	golang.org/x/exp v0.0.0-20230131160201-f062dba9d201
+	golang.org/x/sync v0.1.0
 	modernc.org/sqlite v1.20.3
 )
 

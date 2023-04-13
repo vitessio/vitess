@@ -20,7 +20,9 @@ import (
 	"context"
 	"net/http"
 
+	"vitess.io/vitess/go/sets"
 	"vitess.io/vitess/go/trace"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vtadmin/cache"
 	"vitess.io/vitess/go/vt/vtadmin/rbac"
 
@@ -84,6 +86,9 @@ func (api *API) Adapt(handler VTAdminHandler) http.HandlerFunc {
 			ctx = cache.NewIncomingRefreshContext(ctx)
 		}
 
+		// Transform any ?cluster query params to ?cluster_id.
+		deprecateQueryParam(r, "cluster_id", "cluster")
+
 		handler(ctx, Request{r}, api).Write(w)
 	}
 }
@@ -96,4 +101,22 @@ func (api *API) Options() Options {
 // Server returns the VTAdminServer wrapped by this API.
 func (api *API) Server() vtadminpb.VTAdminServer {
 	return api.server
+}
+
+func deprecateQueryParam(r *http.Request, newName string, oldName string) {
+	q := r.URL.Query()
+
+	if q.Has(oldName) {
+		log.Warningf("query param %s is deprecated in favor of %s. support for %s will be dropped in the next version", oldName, newName, oldName)
+
+		newVals := sets.New(q[newName]...)
+		for _, oldVal := range q[oldName] {
+			if !newVals.Has(oldVal) {
+				q.Add(newName, oldVal)
+			}
+		}
+
+		q.Del(oldName)
+		r.URL.RawQuery = q.Encode()
+	}
 }

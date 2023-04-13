@@ -30,6 +30,10 @@ var ErrKeyspaceNotFound = errors.New("keyspace not found")
 
 // ReadKeyspace reads the vitess keyspace record.
 func ReadKeyspace(keyspaceName string) (*topo.KeyspaceInfo, error) {
+	if err := topo.ValidateKeyspaceName(keyspaceName); err != nil {
+		return nil, err
+	}
+
 	query := `
 		select
 			keyspace_type,
@@ -43,7 +47,7 @@ func ReadKeyspace(keyspaceName string) (*topo.KeyspaceInfo, error) {
 		Keyspace: &topodatapb.Keyspace{},
 	}
 	err := db.QueryVTOrc(query, args, func(row sqlutils.RowMap) error {
-		keyspace.KeyspaceType = topodatapb.KeyspaceType(row.GetInt("keyspace_type"))
+		keyspace.KeyspaceType = topodatapb.KeyspaceType(row.GetInt32("keyspace_type"))
 		keyspace.DurabilityPolicy = row.GetString("durability_policy")
 		keyspace.SetKeyspaceName(keyspaceName)
 		return nil

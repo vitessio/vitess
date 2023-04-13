@@ -41,6 +41,7 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -75,8 +76,6 @@ var (
 
 	noScatter          bool
 	enableShardRouting bool
-
-	// TODO(deepthi): change these two vars to unexported and move to healthcheck.go when LegacyHealthcheck is removed
 
 	// healthCheckRetryDelay is the time to wait before retrying healthcheck
 	healthCheckRetryDelay = 2 * time.Millisecond
@@ -207,6 +206,7 @@ type VTGate struct {
 
 	// the throttled loggers for all errors, one per API entry
 	logExecute       *logutil.ThrottledLogger
+	logPrepare       *logutil.ThrottledLogger
 	logStreamExecute *logutil.ThrottledLogger
 }
 
@@ -260,11 +260,29 @@ func Init(
 	resolver := NewResolver(srvResolver, serv, cell, sc)
 	vsm := newVStreamManager(srvResolver, serv, cell)
 
+	ts, err := serv.GetTopoServer()
+	if err != nil {
+		log.Fatalf("Unable to get Topo server: %v", err)
+	}
+	// Create a global cache to use for lookups of the sidecar database
+	// identifier in use by each keyspace.
+	_, created := sidecardb.NewIdentifierCache(func(ctx context.Context, keyspace string) (string, error) {
+		ki, err := ts.GetKeyspace(ctx, keyspace)
+		if err != nil {
+			return "", err
+		}
+		return ki.SidecarDbName, nil
+	})
+	// This should never happen.
+	if !created {
+		log.Fatal("Failed to create a new sidecar database identifier cache during init as one already existed!")
+	}
+
 	var si SchemaInfo // default nil
 	var st *vtschema.Tracker
 	if enableSchemaChangeSignal {
 		st = vtschema.NewTracker(gw.hc.Subscribe(), schemaChangeUser, enableViews)
-		addKeyspaceToTracker(ctx, srvResolver, st, gw)
+		addKeyspacesToTracker(ctx, srvResolver, st, gw)
 		si = st
 	}
 
@@ -315,6 +333,7 @@ func Init(
 			[]string{"Operation", "Keyspace", "DbType"}),
 
 		logExecute:       logutil.NewThrottledLogger("Execute", 5*time.Second),
+		logPrepare:       logutil.NewThrottledLogger("Prepare", 5*time.Second),
 		logStreamExecute: logutil.NewThrottledLogger("StreamExecute", 5*time.Second),
 	}
 
@@ -342,7 +361,7 @@ func Init(
 	})
 	rpcVTGate.registerDebugHealthHandler()
 	rpcVTGate.registerDebugEnvHandler()
-	err := initQueryLogger(rpcVTGate)
+	err = initQueryLogger(rpcVTGate)
 	if err != nil {
 		log.Fatalf("error initializing query logger: %v", err)
 	}
@@ -351,7 +370,7 @@ func Init(
 	return rpcVTGate
 }
 
-func addKeyspaceToTracker(ctx context.Context, srvResolver *srvtopo.Resolver, st *vtschema.Tracker, gw *TabletGateway) {
+func addKeyspacesToTracker(ctx context.Context, srvResolver *srvtopo.Resolver, st *vtschema.Tracker, gw *TabletGateway) {
 	keyspaces, err := srvResolver.GetAllKeyspaces(ctx)
 	if err != nil {
 		log.Warningf("Unable to get all keyspaces: %v", err)
@@ -533,7 +552,7 @@ func (vtg *VTGate) ResolveTransaction(ctx context.Context, dtid string) error {
 func (vtg *VTGate) Prepare(ctx context.Context, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable) (newSession *vtgatepb.Session, fld []*querypb.Field, err error) {
 	// In this context, we don't care if we can't fully parse destination
 	destKeyspace, destTabletType, _, _ := vtg.executor.ParseDestinationTarget(session.TargetString)
-	statsKey := []string{"Execute", destKeyspace, topoproto.TabletTypeLString(destTabletType)}
+	statsKey := []string{"Prepare", destKeyspace, topoproto.TabletTypeLString(destTabletType)}
 	defer vtg.timings.Record(statsKey, time.Now())
 
 	if bvErr := sqltypes.ValidateBindVariables(bindVariables); bvErr != nil {
@@ -552,7 +571,7 @@ handleError:
 		"BindVariables": bindVariables,
 		"Session":       session,
 	}
-	err = recordAndAnnotateError(err, statsKey, query, vtg.logExecute)
+	err = recordAndAnnotateError(err, statsKey, query, vtg.logPrepare)
 	return session, nil, err
 }
 
@@ -563,7 +582,7 @@ func (vtg *VTGate) VStream(ctx context.Context, tabletType topodatapb.TabletType
 
 // GetGatewayCacheStatus returns a displayable version of the Gateway cache.
 func (vtg *VTGate) GetGatewayCacheStatus() TabletCacheStatusList {
-	return vtg.resolver.GetGatewayCacheStatus()
+	return vtg.gw.CacheStatus()
 }
 
 // VSchemaStats returns the loaded vschema stats.

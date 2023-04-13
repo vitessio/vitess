@@ -96,3 +96,16 @@ func TestSingleReplicaERS(t *testing.T) {
 	// Also check the writes succeed after failover
 	utils.ConfirmReplication(t, tablets[0], []*cluster.Vttablet{})
 }
+
+// TestTabletRestart tests that a running tablet can be  restarted and everything is still fine
+func TestTabletRestart(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	clusterInstance := utils.SetupReparentCluster(t, "semi_sync")
+	defer utils.TeardownCluster(clusterInstance)
+	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
+
+	utils.StopTablet(t, tablets[1], false)
+	tablets[1].VttabletProcess.ServingStatus = "SERVING"
+	err := tablets[1].VttabletProcess.Setup()
+	require.NoError(t, err)
+}

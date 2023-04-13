@@ -316,7 +316,7 @@ func SetupVttabletsAndVTOrcs(t *testing.T, clusterInfo *VTOrcClusterInfo, numRep
 // cleanAndStartVttablet cleans the MySQL instance underneath for running a new test. It also starts the vttablet.
 func cleanAndStartVttablet(t *testing.T, clusterInfo *VTOrcClusterInfo, vttablet *cluster.Vttablet) {
 	t.Helper()
-	// set super-read-only to false
+	// set super_read_only to false
 	_, err := RunSQL(t, "SET GLOBAL super_read_only = OFF", vttablet, "")
 	require.NoError(t, err)
 	// remove the databases if they exist
@@ -583,6 +583,26 @@ func RunSQL(t *testing.T, sql string, tablet *cluster.Vttablet, db string) (*sql
 
 	// RunSQL
 	return execute(t, conn, sql)
+}
+
+// RunSQLs is used to run a list of SQL statements on the given tablet
+func RunSQLs(t *testing.T, sqls []string, tablet *cluster.Vttablet, db string) error {
+	// Get Connection
+	tabletParams := getMysqlConnParam(tablet, db)
+	var timeoutDuration = time.Duration(5 * len(sqls))
+	ctx, cancel := context.WithTimeout(context.Background(), timeoutDuration*time.Second)
+	defer cancel()
+	conn, err := mysql.Connect(ctx, &tabletParams)
+	require.Nil(t, err)
+	defer conn.Close()
+
+	// Run SQLs
+	for _, sql := range sqls {
+		if _, err := execute(t, conn, sql); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func execute(t *testing.T, conn *mysql.Conn, query string) (*sqltypes.Result, error) {

@@ -24,13 +24,13 @@ import (
 	"sort"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
@@ -38,6 +38,7 @@ import (
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
@@ -45,10 +46,10 @@ import (
 )
 
 const (
-	reshardingJournalTableName = "_vt.resharding_journal"
-	vreplicationTableName      = "_vt.vreplication"
-	copyStateTableName         = "_vt.copy_state"
-	postCopyActionTableName    = "_vt.post_copy_action"
+	reshardingJournalTableName = "resharding_journal"
+	vreplicationTableName      = "vreplication"
+	copyStateTableName         = "copy_state"
+	postCopyActionTableName    = "post_copy_action"
 
 	maxRows                      = 10000
 	throttlerVReplicationAppName = "vreplication"
@@ -234,12 +235,16 @@ func (vre *Engine) openLocked(ctx context.Context) error {
 	return nil
 }
 
-var openRetryInterval = sync2.NewAtomicDuration(1 * time.Second)
+var openRetryInterval atomic.Int64
+
+func init() {
+	openRetryInterval.Store((1 * time.Second).Nanoseconds())
+}
 
 func (vre *Engine) retry(ctx context.Context, err error) {
 	log.Errorf("Error starting vreplication engine: %v, will keep retrying.", err)
 	for {
-		timer := time.NewTimer(openRetryInterval.Get())
+		timer := time.NewTimer(time.Duration(openRetryInterval.Load()))
 		select {
 		case <-ctx.Done():
 			timer.Stop()
@@ -374,7 +379,7 @@ func (vre *Engine) exec(query string, runAsAdmin bool) (*sqltypes.Result, error)
 	// Change the database to ensure that these events don't get
 	// replicated by another vreplication. This can happen when
 	// we reverse replication.
-	if _, err := dbClient.ExecuteFetch("use _vt", 1); err != nil {
+	if _, err := dbClient.ExecuteFetch(fmt.Sprintf("use %s", sidecardb.GetIdentifier()), 1); err != nil {
 		return nil, err
 	}
 
@@ -393,7 +398,21 @@ func (vre *Engine) exec(query string, runAsAdmin bool) (*sqltypes.Result, error)
 		}
 
 		vdbc := newVDBClient(dbClient, binlogplayer.NewStats())
-		for id := int32(qr.InsertID); id < int32(maxInsert); id++ {
+
+		// If we are creating multiple streams, for example in a
+		// merge workflow going from 2 shards to 1 shard, we
+		// will be inserting multiple rows. To get the ids of
+		// subsequent streams we need to know what the
+		// auto_increment_increment step is. In a multi-primary
+		// environment, like a Galera cluster, for example,
+		// we will often encounter auto_increment steps > 1.
+		autoIncrementStep, err := vre.getAutoIncrementStep(dbClient)
+		if err != nil {
+			return nil, err
+		}
+		firstID := int32(qr.InsertID)
+		lastID := firstID + int32(autoIncrementStep)*(int32(plan.numInserts)-1)
+		for id := firstID; id <= lastID; id += int32(autoIncrementStep) {
 			if ct := vre.controllers[id]; ct != nil {
 				// Unreachable. Just a failsafe.
 				ct.Stop()
@@ -842,6 +861,22 @@ func (vre *Engine) readAllRows(ctx context.Context) ([]map[string]string, error)
 		maps[i] = mrow
 	}
 	return maps, nil
+}
+
+func (vre *Engine) getAutoIncrementStep(dbClient binlogplayer.DBClient) (uint16, error) {
+	qr, err := dbClient.ExecuteFetch("select @@session.auto_increment_increment", 1)
+	if err != nil {
+		return 0, err
+	}
+	if len(qr.Rows) != 1 {
+		// Handles case where underlying mysql doesn't support auto_increment_increment for any reason.
+		return 1, nil
+	}
+	autoIncrement, err := qr.Rows[0][0].ToUint16()
+	if err != nil {
+		return 0, err
+	}
+	return autoIncrement, nil
 }
 
 func readRow(dbClient binlogplayer.DBClient, id int32) (map[string]string, error) {

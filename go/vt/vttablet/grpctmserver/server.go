@@ -343,14 +343,6 @@ func (s *server) GetReplicas(ctx context.Context, request *tabletmanagerdatapb.G
 	return response, err
 }
 
-func (s *server) VExec(ctx context.Context, request *tabletmanagerdatapb.VExecRequest) (response *tabletmanagerdatapb.VExecResponse, err error) {
-	defer s.tm.HandleRPCPanic(ctx, "VExec", request, response, true /*verbose*/, &err)
-	ctx = callinfo.GRPCCallInfo(ctx)
-	response = &tabletmanagerdatapb.VExecResponse{}
-	response.Result, err = s.tm.VExec(ctx, request.Query, request.Workflow, request.Keyspace)
-	return response, err
-}
-
 func (s *server) VReplicationExec(ctx context.Context, request *tabletmanagerdatapb.VReplicationExecRequest) (response *tabletmanagerdatapb.VReplicationExecResponse, err error) {
 	defer s.tm.HandleRPCPanic(ctx, "VReplicationExec", request, response, true /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
@@ -364,6 +356,13 @@ func (s *server) VReplicationWaitForPos(ctx context.Context, request *tabletmana
 	ctx = callinfo.GRPCCallInfo(ctx)
 	err = s.tm.VReplicationWaitForPos(ctx, request.Id, request.Position)
 	return &tabletmanagerdatapb.VReplicationWaitForPosResponse{}, err
+}
+
+func (s *server) UpdateVRWorkflow(ctx context.Context, request *tabletmanagerdatapb.UpdateVRWorkflowRequest) (response *tabletmanagerdatapb.UpdateVRWorkflowResponse, err error) {
+	defer s.tm.HandleRPCPanic(ctx, "UpdateVRWorkflow", request, response, true /*verbose*/, &err)
+	ctx = callinfo.GRPCCallInfo(ctx)
+	response = &tabletmanagerdatapb.UpdateVRWorkflowResponse{}
+	return s.tm.UpdateVRWorkflow(ctx, request)
 }
 
 func (s *server) VDiff(ctx context.Context, request *tabletmanagerdatapb.VDiffRequest) (response *tabletmanagerdatapb.VDiffResponse, err error) {

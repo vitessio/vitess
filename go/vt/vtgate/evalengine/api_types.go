@@ -17,6 +17,7 @@ limitations under the License.
 package evalengine
 
 import (
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -138,12 +139,12 @@ func ToFloat64(v sqltypes.Value) (float64, error) {
 	if err != nil {
 		return 0, err
 	}
-	f, _ := evalToNumeric(num).toFloat()
+	f, _ := evalToFloat(num)
 	return f.f, nil
 }
 
 func LiteralToValue(literal *sqlparser.Literal) (sqltypes.Value, error) {
-	lit, err := translateLiteral(literal, nil)
+	lit, err := translateLiteral(literal, collations.Default())
 	if err != nil {
 		return sqltypes.Value{}, err
 	}

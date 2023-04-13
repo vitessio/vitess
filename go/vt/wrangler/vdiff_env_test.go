@@ -19,7 +19,11 @@ package wrangler
 import (
 	"context"
 	"fmt"
+	"math/rand"
 	"sync"
+	"testing"
+
+	"vitess.io/vitess/go/mysql/fakesqldb"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/grpcclient"
@@ -62,25 +66,10 @@ type testVDiffEnv struct {
 	tablets map[int]*testVDiffTablet
 }
 
-// vdiffEnv has to be a global for RegisterDialer to work.
-var vdiffEnv *testVDiffEnv
-
-func init() {
-	tabletconn.RegisterDialer("VDiffTest", func(tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (queryservice.QueryService, error) {
-		vdiffEnv.mu.Lock()
-		defer vdiffEnv.mu.Unlock()
-		if qs, ok := vdiffEnv.tablets[int(tablet.Alias.Uid)]; ok {
-			return qs, nil
-		}
-		return nil, fmt.Errorf("tablet %d not found", tablet.Alias.Uid)
-	})
-}
-
 //----------------------------------------------
 // testVDiffEnv
 
-func newTestVDiffEnv(sourceShards, targetShards []string, query string, positions map[string]string) *testVDiffEnv {
-	tabletconntest.SetProtocol("go.vt.wrangler.vdiff_env_test", "VDiffTest")
+func newTestVDiffEnv(t testing.TB, sourceShards, targetShards []string, query string, positions map[string]string) *testVDiffEnv {
 	env := &testVDiffEnv{
 		workflow:   "vdiffTest",
 		tablets:    make(map[int]*testVDiffTablet),
@@ -90,6 +79,18 @@ func newTestVDiffEnv(sourceShards, targetShards []string, query string, position
 		tmc:        newTestVDiffTMClient(),
 	}
 	env.wr = New(logutil.NewConsoleLogger(), env.topoServ, env.tmc)
+
+	// Generate a unique dialer name.
+	dialerName := fmt.Sprintf("VDiffTest-%s-%d", t.Name(), rand.Intn(1000000000))
+	tabletconn.RegisterDialer(dialerName, func(tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (queryservice.QueryService, error) {
+		env.mu.Lock()
+		defer env.mu.Unlock()
+		if qs, ok := env.tablets[int(tablet.Alias.Uid)]; ok {
+			return qs, nil
+		}
+		return nil, fmt.Errorf("tablet %d not found", tablet.Alias.Uid)
+	})
+	tabletconntest.SetProtocol("go.vt.wrangler.vdiff_env_test", dialerName)
 
 	tabletID := 100
 	for _, shard := range sourceShards {
@@ -167,7 +168,6 @@ func newTestVDiffEnv(sourceShards, targetShards []string, query string, position
 
 		tabletID += 10
 	}
-	vdiffEnv = env
 	return env
 }
 
@@ -342,4 +342,19 @@ func (tmc *testVDiffTMClient) PrimaryPosition(ctx context.Context, tablet *topod
 		return "", fmt.Errorf("no primary position for %d", tablet.Alias.Uid)
 	}
 	return pos, nil
+}
+
+func expectVDiffQueries(db *fakesqldb.DB) {
+	res := &sqltypes.Result{}
+	queries := []string{
+		"USE `vt_ks`",
+		"USE `vt_ks1`",
+		"USE `vt_ks2`",
+		"optimize table _vt.copy_state",
+		"alter table _vt.copy_state auto_increment = 1",
+	}
+	for _, query := range queries {
+		db.AddQuery(query, res)
+	}
+	db.AddQueryPattern("delete from vd, vdt, vdl.*", res)
 }

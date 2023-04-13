@@ -19,6 +19,7 @@ package evalengine
 import (
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 )
@@ -54,6 +55,21 @@ func (c *ConvertExpr) returnUnsupportedError() error {
 	return err
 }
 
+func (c *ConvertExpr) decimalPrecision() (int32, int32) {
+	m := 10
+	d := 0
+	if c.HasLength {
+		m = c.Length
+	}
+	if c.HasScale {
+		d = c.Scale
+	}
+	if m == 0 && d == 0 {
+		m = 10
+	}
+	return int32(m), int32(d)
+}
+
 func (c *ConvertExpr) eval(env *ExpressionEnv) (eval, error) {
 	e, err := c.Inner.eval(env)
 	if err != nil {
@@ -69,10 +85,11 @@ func (c *ConvertExpr) eval(env *ExpressionEnv) (eval, error) {
 		if c.HasLength {
 			b.truncateInPlace(c.Length)
 		}
+		b.tt = int16(c.convertToBinaryType(e.SQLType()))
 		return b, nil
 
 	case "CHAR", "NCHAR":
-		t, err := evalToText(e, c.Collation, true)
+		t, err := evalToVarchar(e, c.Collation, true)
 		if err != nil {
 			// return NULL on error
 			return nil, nil
@@ -80,22 +97,13 @@ func (c *ConvertExpr) eval(env *ExpressionEnv) (eval, error) {
 		if c.HasLength {
 			t.truncateInPlace(c.Length)
 		}
+		t.tt = int16(c.convertToCharType(e.SQLType()))
 		return t, nil
 	case "DECIMAL":
-		m := 10
-		d := 0
-		if c.HasLength {
-			m = c.Length
-		}
-		if c.HasScale {
-			d = c.Scale
-		}
-		if m == 0 && d == 0 {
-			m = 10
-		}
-		return evalToNumeric(e).toDecimal(int32(m), int32(d)), nil
+		m, d := c.decimalPrecision()
+		return evalToDecimal(e, m, d), nil
 	case "DOUBLE", "REAL":
-		f, _ := evalToNumeric(e).toFloat()
+		f, _ := evalToFloat(e)
 		return f, nil
 	case "FLOAT":
 		if c.HasLength {
@@ -106,24 +114,41 @@ func (c *ConvertExpr) eval(env *ExpressionEnv) (eval, error) {
 		}
 		return nil, c.returnUnsupportedError()
 	case "SIGNED", "SIGNED INTEGER":
-		return evalToNumeric(e).toInt64(), nil
+		return evalToInt64(e), nil
 	case "UNSIGNED", "UNSIGNED INTEGER":
-		return evalToNumeric(e).toUint64(), nil
-	case "DATE", "DATETIME", "YEAR", "JSON", "TIME":
+		return evalToInt64(e).toUint64(), nil
+	case "JSON":
+		return evalToJSON(e)
+	case "DATETIME":
+		if dt := evalToDateTime(e); dt != nil {
+			return dt, nil
+		}
+		return nil, nil
+	case "DATE":
+		if d := evalToDate(e); d != nil {
+			return d, nil
+		}
+		return nil, nil
+	case "TIME":
+		if t := evalToTime(e); t != nil {
+			return t, nil
+		}
+		return nil, nil
+	case "YEAR":
 		return nil, c.returnUnsupportedError()
 	default:
 		panic("BUG: sqlparser emitted unknown type")
 	}
 }
 
-func (c *ConvertExpr) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
-	_, f := c.Inner.typeof(env)
+func (c *ConvertExpr) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	tt, f := c.Inner.typeof(env, fields)
 
 	switch c.Type {
 	case "BINARY":
-		return sqltypes.VarBinary, f
+		return c.convertToBinaryType(tt), f
 	case "CHAR", "NCHAR":
-		return sqltypes.VarChar, f | flagNullable
+		return c.convertToCharType(tt), f | flagNullable
 	case "DECIMAL":
 		return sqltypes.Decimal, f
 	case "DOUBLE", "REAL":
@@ -134,11 +159,43 @@ func (c *ConvertExpr) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
 		return sqltypes.Int64, f
 	case "UNSIGNED", "UNSIGNED INTEGER":
 		return sqltypes.Uint64, f
-	case "DATE", "DATETIME", "YEAR", "JSON", "TIME":
-		return sqltypes.Null, f
+	case "JSON":
+		return sqltypes.TypeJSON, f
+	case "DATE":
+		return sqltypes.Date, f
+	case "DATETIME":
+		return sqltypes.Datetime, f
+	case "TIME":
+		return sqltypes.Time, f
+	case "YEAR":
+		return sqltypes.Year, f
 	default:
 		panic("BUG: sqlparser emitted unknown type")
 	}
+}
+
+func (c *ConvertExpr) convertToBinaryType(tt sqltypes.Type) sqltypes.Type {
+	if c.HasLength {
+		if c.Length > 64*1024 {
+			return sqltypes.Blob
+		}
+	} else if tt == sqltypes.Blob || tt == sqltypes.TypeJSON {
+		return sqltypes.Blob
+	}
+	return sqltypes.VarBinary
+}
+
+func (c *ConvertExpr) convertToCharType(tt sqltypes.Type) sqltypes.Type {
+	if c.HasLength {
+		col := c.Collation.Get()
+		length := c.Length * col.Charset().MaxWidth()
+		if length > 64*1024 {
+			return sqltypes.Text
+		}
+	} else if tt == sqltypes.Blob || tt == sqltypes.TypeJSON {
+		return sqltypes.Text
+	}
+	return sqltypes.VarChar
 }
 
 func (c *ConvertUsingExpr) eval(env *ExpressionEnv) (eval, error) {
@@ -149,7 +206,7 @@ func (c *ConvertUsingExpr) eval(env *ExpressionEnv) (eval, error) {
 	if e == nil {
 		return nil, nil
 	}
-	e, err = evalToText(e, c.Collation, true)
+	e, err = evalToVarchar(e, c.Collation, true)
 	if err != nil {
 		// return NULL instead of error
 		return nil, nil
@@ -157,7 +214,7 @@ func (c *ConvertUsingExpr) eval(env *ExpressionEnv) (eval, error) {
 	return e, nil
 }
 
-func (c *ConvertUsingExpr) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
-	_, f := c.Inner.typeof(env)
+func (c *ConvertUsingExpr) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	_, f := c.Inner.typeof(env, fields)
 	return sqltypes.VarChar, f | flagNullable
 }

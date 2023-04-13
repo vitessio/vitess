@@ -17,9 +17,13 @@ limitations under the License.
 package misc
 
 import (
+	"database/sql"
 	"fmt"
+	"strconv"
 	"strings"
 	"testing"
+
+	_ "github.com/go-sql-driver/mysql"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -201,4 +205,101 @@ func TestOuterJoinWithPredicate(t *testing.T) {
 		`[[INT64(2) INT64(20)] [INT64(3) INT64(30)]]`)
 	mcmp.AssertMatchesNoOrder("select A.id1, B.id2 from t1 as A left join t1 as B on A.id1*10 = B.id2 WHERE B.id2 NOT BETWEEN 20 AND 30",
 		`[[INT64(0) INT64(0)] [INT64(1) INT64(10)] [INT64(4) INT64(40)]]`)
+}
+
+// This test ensures that we support PREPARE statement with 65530 parameters.
+// It opens a MySQL connection using the go-mysql driver and execute a select query
+// it then checks the result contains the proper rows and that it's not failing.
+func TestHighNumberOfParams(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+
+	mcmp.Exec("insert into t1(id1) values (0), (1), (2), (3), (4)")
+
+	paramCount := 65530
+
+	// create the value and argument slices used to build the prepare stmt
+	var vals []any
+	var params []string
+	for i := 0; i < paramCount; i++ {
+		vals = append(vals, strconv.Itoa(i))
+		params = append(params, "?")
+	}
+
+	// connect to the vitess cluster
+	db, err := sql.Open("mysql", fmt.Sprintf("@tcp(%s:%v)/%s", vtParams.Host, vtParams.Port, vtParams.DbName))
+	require.NoError(t, err)
+
+	// run the query
+	r, err := db.Query(fmt.Sprintf("SELECT /*vt+ QUERY_TIMEOUT_MS=10000 */ id1 FROM t1 WHERE id1 in (%s) ORDER BY id1 ASC", strings.Join(params, ", ")), vals...)
+	require.NoError(t, err)
+
+	// check the results we got, we should get 5 rows with each: 0, 1, 2, 3, 4
+	// count is the row number we are currently visiting, also correspond to the
+	// column value we expect.
+	count := 0
+	for r.Next() {
+		j := -1
+		err := r.Scan(&j)
+		require.NoError(t, err)
+		require.Equal(t, j, count)
+		count++
+	}
+	require.Equal(t, 5, count)
+}
+
+func TestPrepareStatements(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+
+	mcmp.Exec("insert into t1(id1, id2) values (0,0), (1,0), (2,0)")
+
+	// prepare query with equal sharding key
+	mcmp.Exec(`prepare prep_pk from 'select count(*) from t1 where id1 = ?'`)
+	mcmp.AssertMatches(`execute prep_pk using @id1`, `[[INT64(0)]]`)
+	mcmp.Exec(`set @id1 = 1`)
+	mcmp.AssertMatches(`execute prep_pk using @id1`, `[[INT64(1)]]`)
+
+	// prepare query with equal non sharding key
+	mcmp.Exec(`prepare prep_non_pk from 'select id1, id2 from t1 where id2 = ?'`)
+	mcmp.Exec(`set @id2 = 0`)
+	mcmp.AssertMatches(`execute prep_non_pk using @id1`, `[]`)
+	mcmp.AssertMatchesNoOrder(`execute prep_non_pk using @id2`, `[[INT64(0) INT64(0)] [INT64(1) INT64(0)] [INT64(2) INT64(0)]]`)
+
+	// prepare query with in on sharding key
+	mcmp.Exec(`prepare prep_in_pk from 'select id1, id2 from t1 where id1 in (?, ?)'`)
+	mcmp.AssertMatches(`execute prep_in_pk using @id1, @id1`, `[[INT64(1) INT64(0)]]`)
+	mcmp.AssertMatchesNoOrder(`execute prep_in_pk using @id1, @id2`, `[[INT64(0) INT64(0)] [INT64(1) INT64(0)]]`)
+
+	// Fail by providing wrong number of arguments
+	_, err := mcmp.ExecAllowAndCompareError(`execute prep_in_pk using @id1, @id1, @id`)
+	incorrectCount := "VT03025: Incorrect arguments to EXECUTE"
+	assert.ErrorContains(t, err, incorrectCount)
+	_, err = mcmp.ExecAllowAndCompareError(`execute prep_in_pk using @id1`)
+	assert.ErrorContains(t, err, incorrectCount)
+	_, err = mcmp.ExecAllowAndCompareError(`execute prep_in_pk`)
+	assert.ErrorContains(t, err, incorrectCount)
+
+	mcmp.Exec(`prepare prep_art from 'select 1+?, 10/?'`)
+	mcmp.Exec(`set @x1 = 1, @x2 = 2.0, @x3 = "v", @x4 = 9999999999999999999999999999`)
+
+	// We are not matching types and precision with mysql at the moment, so not comparing with `mcmp`
+	// This is because of the difference in how MySQL executes a raw query with literal values and
+	// the PREPARE/EXEC way that is missing type info at the PREPARE stage
+	utils.AssertMatches(t, mcmp.VtConn, `execute prep_art using @x1, @x1`, `[[INT64(2) DECIMAL(10.0000)]]`)
+	utils.AssertMatches(t, mcmp.VtConn, `execute prep_art using @x2, @x2`, `[[DECIMAL(3.0) DECIMAL(5.0000)]]`)
+	utils.AssertMatches(t, mcmp.VtConn, `execute prep_art using @x3, @x3`, `[[FLOAT64(1) NULL]]`)
+	utils.AssertMatches(t, mcmp.VtConn, `execute prep_art using @x4, @x4`, `[[DECIMAL(10000000000000000000000000000) DECIMAL(0.0000)]]`)
+
+	mcmp.Exec(`select 1+1, 10/1 from t1 limit 1`)
+	mcmp.Exec(`select 1+2.0, 10/2.0 from t1 limit 1`)
+	mcmp.Exec(`select 1+'v', 10/'v' from t1 limit 1`)
+	mcmp.Exec(`select 1+9999999999999999999999999999, 10/9999999999999999999999999999 from t1 limit 1`)
+
+	mcmp.Exec("deallocate prepare prep_art")
+	_, err = mcmp.ExecAllowAndCompareError(`execute prep_art using @id1, @id1`)
+	assert.ErrorContains(t, err, "VT09011: Unknown prepared statement handler (prep_art) given to EXECUTE")
+
+	_, err = mcmp.ExecAllowAndCompareError("deallocate prepare prep_art")
+	assert.ErrorContains(t, err, "VT09011: Unknown prepared statement handler (prep_art) given to DEALLOCATE PREPARE")
 }

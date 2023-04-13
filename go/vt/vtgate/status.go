@@ -48,12 +48,11 @@ const (
     background-color: #fff;
   }
 </style>
-<table>
+<table class="refreshRequired">
   <tr>
     <th>Keyspace</th>
     <th>Shard</th>
     <th>TabletType</th>
-    <th>Address</th>
     <th>Query Sent</th>
     <th>Query Error</th>
     <th>QPS (avg 1m)</th>
@@ -64,7 +63,6 @@ const (
     <td>{{$status.Keyspace}}</td>
     <td>{{$status.Shard}}</td>
     <td>{{$status.TabletType}}</td>
-    <td><a href="http://{{$status.Addr}}">{{$status.Name}}</a></td>
     <td>{{$status.QueryCount}}</td>
     <td>{{$status.QueryError}}</td>
     <td>{{$status.FormattedQPS}}</td>

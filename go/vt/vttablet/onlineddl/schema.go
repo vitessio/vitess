@@ -95,13 +95,14 @@ const (
 		WHERE
 			migration_uuid=%a
 	`
-	sqlUpdateMigrationReadyToComplete = `UPDATE _vt.schema_migrations
-			SET ready_to_complete=%a
+	sqlSetMigrationReadyToComplete = `UPDATE _vt.schema_migrations SET
+			ready_to_complete=1,
+			ready_to_complete_timestamp=NOW(6)
 		WHERE
 			migration_uuid=%a
 	`
-	sqlUpdateMigrationStowawayTable = `UPDATE _vt.schema_migrations
-			SET stowaway_table=%a
+	sqlClearMigrationReadyToComplete = `UPDATE _vt.schema_migrations SET
+			ready_to_complete=0
 		WHERE
 			migration_uuid=%a
 	`
@@ -133,6 +134,11 @@ const (
 	`
 	sqlUpdateArtifacts = `UPDATE _vt.schema_migrations
 			SET artifacts=concat(%a, ',', artifacts), cleanup_timestamp=NULL
+		WHERE
+			migration_uuid=%a
+	`
+	sqlClearSingleArtifact = `UPDATE _vt.schema_migrations
+			SET artifacts=replace(artifacts, concat(%a, ','), '')
 		WHERE
 			migration_uuid=%a
 	`
@@ -227,7 +233,7 @@ const (
 			migration_uuid=%a
 	`
 	sqlUpdateLastThrottled = `UPDATE _vt.schema_migrations
-			SET last_throttled_timestamp=FROM_UNIXTIME(%a), component_throttled=%a
+			SET last_throttled_timestamp=%a, component_throttled=%a
 		WHERE
 			migration_uuid=%a
 	`
@@ -278,7 +284,6 @@ const (
 	sqlSelectRunningMigrations = `SELECT
 			migration_uuid,
 			postpone_completion,
-			stowaway_table,
 			timestampdiff(second, started_timestamp, now()) as elapsed_seconds
 		FROM _vt.schema_migrations
 		WHERE
@@ -316,6 +321,7 @@ const (
 	`
 	sqlSelectPendingMigrations = `SELECT
 			migration_uuid,
+			migration_context,
 			keyspace,
 			mysql_table,
 			migration_status
@@ -353,6 +359,10 @@ const (
 			AND cleanup_timestamp IS NULL
 			AND completed_timestamp IS NULL
 	`
+	sqlShowMigrationsWhere = `SELECT *
+		FROM _vt.schema_migrations
+		%s
+	`
 	sqlSelectMigration = `SELECT
 			id,
 			migration_uuid,
@@ -381,8 +391,8 @@ const (
 			retain_artifacts_seconds,
 			is_view,
 			ready_to_complete,
+			ready_to_complete_timestamp is not null as was_ready_to_complete,
 			reverted_uuid,
-			stowaway_table,
 			rows_copied,
 			vitess_liveness_indicator,
 			user_throttle_ratio,
@@ -498,13 +508,14 @@ const (
 		END,
 		COUNT_COLUMN_IN_INDEX
 	`
-	sqlDropTrigger      = "DROP TRIGGER IF EXISTS `%a`.`%a`"
-	sqlShowTablesLike   = "SHOW TABLES LIKE '%a'"
-	sqlDropTable        = "DROP TABLE `%a`"
-	sqlShowColumnsFrom  = "SHOW COLUMNS FROM `%a`"
-	sqlShowTableStatus  = "SHOW TABLE STATUS LIKE '%a'"
-	sqlShowCreateTable  = "SHOW CREATE TABLE `%a`"
-	sqlGetAutoIncrement = `
+	sqlDropTrigger       = "DROP TRIGGER IF EXISTS `%a`.`%a`"
+	sqlShowTablesLike    = "SHOW TABLES LIKE '%a'"
+	sqlDropTable         = "DROP TABLE `%a`"
+	sqlDropTableIfExists = "DROP TABLE IF EXISTS `%a`"
+	sqlShowColumnsFrom   = "SHOW COLUMNS FROM `%a`"
+	sqlShowTableStatus   = "SHOW TABLE STATUS LIKE '%a'"
+	sqlShowCreateTable   = "SHOW CREATE TABLE `%a`"
+	sqlGetAutoIncrement  = `
 		SELECT
 			AUTO_INCREMENT
 		FROM INFORMATION_SCHEMA.TABLES

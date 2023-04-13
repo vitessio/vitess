@@ -71,6 +71,12 @@ func IsFloat(t querypb.Type) bool {
 	return int(t)&flagIsFloat == flagIsFloat
 }
 
+// IsDecimal returns true is querypb.Type is a decimal.
+// If you have a Value object, use its member function.
+func IsDecimal(t querypb.Type) bool {
+	return t == Decimal
+}
+
 // IsQuoted returns true if querypb.Type is a quoted text or binary.
 // If you have a Value object, use its member function.
 func IsQuoted(t querypb.Type) bool {
@@ -94,9 +100,14 @@ func IsNumber(t querypb.Type) bool {
 	return IsIntegral(t) || IsFloat(t) || t == Decimal
 }
 
-// IsDate returns true if the type represents a date and/or time.
-func IsDate(t querypb.Type) bool {
+// IsDateOrTime returns true if the type represents a date and/or time.
+func IsDateOrTime(t querypb.Type) bool {
 	return t == Datetime || t == Date || t == Timestamp || t == Time
+}
+
+// IsDate returns true if the type has a date component
+func IsDate(t querypb.Type) bool {
+	return t == Datetime || t == Date || t == Timestamp
 }
 
 // IsNull returns true if the type is NULL type

@@ -38,6 +38,8 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/sidecardb"
+	"vitess.io/vitess/go/vt/sqlparser"
 )
 
 // VttabletProcess is a generic handle for a running vttablet .
@@ -84,7 +86,6 @@ type VttabletProcess struct {
 
 // Setup starts vttablet process with required arguements
 func (vttablet *VttabletProcess) Setup() (err error) {
-
 	vttablet.proc = exec.Command(
 		vttablet.Binary,
 		"--topo_implementation", vttablet.CommonArg.TopoImplementation,
@@ -226,11 +227,11 @@ func (vttablet *VttabletProcess) GetConsolidations() (map[string]int, error) {
 			continue
 		}
 		countS := splits[0]
-		countI64, err := strconv.ParseInt(countS, 10, 32)
+		countI, err := strconv.Atoi(countS)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse consolidations count: %v", err)
 		}
-		result[strings.TrimSpace(splits[1])] = int(countI64)
+		result[strings.TrimSpace(splits[1])] = countI
 	}
 	if err := scanner.Err(); err != nil && !errors.Is(err, io.EOF) {
 		return nil, fmt.Errorf("failed to read consolidations: %v", err)
@@ -502,11 +503,19 @@ func (vttablet *VttabletProcess) ToggleProfiling() error {
 }
 
 // WaitForVReplicationToCatchup waits for "workflow" to finish copying
-func (vttablet *VttabletProcess) WaitForVReplicationToCatchup(t testing.TB, workflow, database string, duration time.Duration) {
+func (vttablet *VttabletProcess) WaitForVReplicationToCatchup(t testing.TB, workflow, database string, sidecarDBName string, duration time.Duration) {
+	if sidecarDBName == "" {
+		sidecarDBName = sidecardb.DefaultName
+	}
+	// Escape it if/as needed
+	ics := sqlparser.NewIdentifierCS(sidecarDBName)
+	sdbi := sqlparser.String(ics)
 	queries := [3]string{
-		fmt.Sprintf(`select count(*) from _vt.vreplication where workflow = "%s" and db_name = "%s" and pos = ''`, workflow, database),
-		"select count(*) from information_schema.tables where table_schema='_vt' and table_name='copy_state' limit 1;",
-		fmt.Sprintf(`select count(*) from _vt.copy_state where vrepl_id in (select id from _vt.vreplication where workflow = "%s" and db_name = "%s" )`, workflow, database),
+		sqlparser.BuildParsedQuery(`select count(*) from %s.vreplication where workflow = "%s" and db_name = "%s" and pos = ''`,
+			sdbi, workflow, database).Query,
+		sqlparser.BuildParsedQuery("select count(*) from information_schema.tables where table_schema='%s' and table_name='copy_state' limit 1", sidecarDBName).Query,
+		sqlparser.BuildParsedQuery(`select count(*) from %s.copy_state where vrepl_id in (select id from %s.vreplication where workflow = "%s" and db_name = "%s" )`,
+			sdbi, sdbi, workflow, database).Query,
 	}
 	results := [3]string{"[INT64(0)]", "[INT64(1)]", "[INT64(0)]"}
 

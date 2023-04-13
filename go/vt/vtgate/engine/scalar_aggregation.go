@@ -25,6 +25,7 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
+	. "vitess.io/vitess/go/vt/vtgate/engine/opcode"
 )
 
 var _ Primitive = (*ScalarAggregate)(nil)
@@ -122,7 +123,7 @@ func (sa *ScalarAggregate) TryExecute(ctx context.Context, vcursor VCursor, bind
 	}
 
 	out.Rows = [][]sqltypes.Value{resultRow}
-	return out, nil
+	return out.Truncate(sa.TruncateColumnCount), nil
 }
 
 // TryStreamExecute implements the Primitive interface

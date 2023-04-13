@@ -1,4 +1,4 @@
-CREATE TABLE tokens (
+CREATE TABLE IF NOT EXISTS tokens (
   page BIGINT(20) UNSIGNED,
   time_created_ns BIGINT(20) UNSIGNED,
   token VARCHAR(255) DEFAULT NULL,

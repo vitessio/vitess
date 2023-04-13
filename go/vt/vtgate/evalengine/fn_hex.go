@@ -21,12 +21,12 @@ import (
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vterrors"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 type builtinHex struct {
 	CallExpr
+	collate collations.ID
 }
 
 var _ Expr = (*builtinHex)(nil)
@@ -45,20 +45,21 @@ func (call *builtinHex) eval(env *ExpressionEnv) (eval, error) {
 	case *evalBytes:
 		encoded = hexEncodeBytes(arg.bytes)
 	case evalNumeric:
-		encoded = hexEncodeUint(arg.toUint64().u)
+		encoded = hexEncodeUint(uint64(arg.toInt64().i))
 	default:
-		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "Unsupported HEX argument: %s", arg.sqlType())
+		encoded = hexEncodeBytes(arg.ToRawBytes())
 	}
-
-	return newEvalText(encoded, collations.TypedCollation{
-		Collation:    env.DefaultCollation,
-		Coercibility: collations.CoerceCoercible,
-		Repertoire:   collations.RepertoireASCII,
-	}), nil
+	if arg.SQLType() == sqltypes.Blob || arg.SQLType() == sqltypes.TypeJSON {
+		return newEvalRaw(sqltypes.Text, encoded, defaultCoercionCollation(call.collate)), nil
+	}
+	return newEvalText(encoded, defaultCoercionCollation(call.collate)), nil
 }
 
-func (call *builtinHex) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
-	_, f := call.Arguments[0].typeof(env)
+func (call *builtinHex) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	tt, f := call.Arguments[0].typeof(env, fields)
+	if tt == sqltypes.Blob || tt == sqltypes.TypeJSON {
+		return sqltypes.Text, f
+	}
 	return sqltypes.VarChar, f
 }
 

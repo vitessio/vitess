@@ -20,11 +20,15 @@ import (
 	"fmt"
 	"strconv"
 
+	"vitess.io/vitess/go/hack"
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/decimal"
+	"vitess.io/vitess/go/mysql/format"
+	"vitess.io/vitess/go/mysql/json"
 	"vitess.io/vitess/go/sqltypes"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/evalengine/internal/decimal"
+	"vitess.io/vitess/go/vt/vthash"
 )
 
 type typeFlag uint32
@@ -34,6 +38,8 @@ const (
 	flagNull typeFlag = 1 << 0
 	// flagNullable marks that this value CAN be null
 	flagNullable typeFlag = 1 << 1
+	// flagIsBoolean marks that this value should be interpreted as boolean
+	flagIsBoolean typeFlag = 1 << 2
 
 	// flagIntegerUdf marks that this value is math.MinInt64, and will underflow if negated
 	flagIntegerUdf typeFlag = 1 << 5
@@ -50,21 +56,29 @@ const (
 	// flagExplicitCollation marks that this value has an explicit collation
 	flagExplicitCollation typeFlag = 1 << 10
 
+	// flagAmbiguousType marks that the type of this value depends on the value at runtime
+	// and cannot be computed accurately
+	flagAmbiguousType typeFlag = 1 << 11
+
 	// flagIntegerRange are the flags that mark overflow/underflow in integers
 	flagIntegerRange = flagIntegerOvf | flagIntegerCap | flagIntegerUdf
 )
 
 type eval interface {
-	toRawBytes() []byte
-	sqlType() sqltypes.Type
-	hash() (HashCode, error)
+	ToRawBytes() []byte
+	SQLType() sqltypes.Type
+}
+
+type hashable interface {
+	eval
+	Hash(h *vthash.Hasher)
 }
 
 func evalToSQLValue(e eval) sqltypes.Value {
 	if e == nil {
 		return sqltypes.NULL
 	}
-	return sqltypes.MakeTrusted(e.sqlType(), e.toRawBytes())
+	return sqltypes.MakeTrusted(e.SQLType(), e.ToRawBytes())
 }
 
 func evalToSQLValueWithType(e eval, resultType sqltypes.Type) sqltypes.Value {
@@ -87,19 +101,30 @@ func evalToSQLValueWithType(e eval, resultType sqltypes.Type) sqltypes.Value {
 		case *evalFloat:
 			return sqltypes.MakeTrusted(resultType, strconv.AppendUint(nil, uint64(e.f), 10))
 		}
-	case sqltypes.IsFloat(resultType) || resultType == sqltypes.Decimal:
+	case sqltypes.IsFloat(resultType):
 		switch e := e.(type) {
 		case *evalInt64:
 			return sqltypes.MakeTrusted(resultType, strconv.AppendInt(nil, e.i, 10))
 		case *evalUint64:
 			return sqltypes.MakeTrusted(resultType, strconv.AppendUint(nil, e.u, 10))
 		case *evalFloat:
-			return sqltypes.MakeTrusted(resultType, FormatFloat(resultType, e.f))
+			return sqltypes.MakeTrusted(resultType, format.FormatFloat(e.f))
+		case *evalDecimal:
+			return sqltypes.MakeTrusted(resultType, e.dec.FormatMySQL(e.length))
+		}
+	case sqltypes.IsDecimal(resultType):
+		switch e := e.(type) {
+		case *evalInt64:
+			return sqltypes.MakeTrusted(resultType, strconv.AppendInt(nil, e.i, 10))
+		case *evalUint64:
+			return sqltypes.MakeTrusted(resultType, strconv.AppendUint(nil, e.u, 10))
+		case *evalFloat:
+			return sqltypes.MakeTrusted(resultType, hack.StringBytes(strconv.FormatFloat(e.f, 'f', -1, 64)))
 		case *evalDecimal:
 			return sqltypes.MakeTrusted(resultType, e.dec.FormatMySQL(e.length))
 		}
 	default:
-		return sqltypes.MakeTrusted(resultType, e.toRawBytes())
+		return sqltypes.MakeTrusted(resultType, e.ToRawBytes())
 	}
 	return sqltypes.NULL
 }
@@ -118,7 +143,19 @@ func evalIsTruthy(e eval) boolean {
 	case *evalDecimal:
 		return makeboolean(!e.dec.IsZero())
 	case *evalBytes:
+		if e.isHexLiteral {
+			hex, ok := e.toNumericHex()
+			if !ok {
+				// overflow
+				return makeboolean(true)
+			}
+			return makeboolean(hex.u != 0)
+		}
 		return makeboolean(parseStringToFloat(e.string()) != 0.0)
+	case *evalJSON:
+		return makeboolean(e.ToBoolean())
+	case *evalTemporal:
+		return makeboolean(!e.isZero())
 	default:
 		panic("unhandled case: evalIsTruthy")
 	}
@@ -133,9 +170,9 @@ func evalCoerce(e eval, typ sqltypes.Type, col collations.ID) (eval, error) {
 	}
 	if typ == sqltypes.VarChar || typ == sqltypes.Char {
 		// if we have an explicit VARCHAR coercion, always force it so the collation is replaced in the target
-		return evalToText(e, col, false)
+		return evalToVarchar(e, col, false)
 	}
-	if e.sqlType() == typ {
+	if e.SQLType() == typ {
 		// nothing to be done here
 		return e, nil
 	}
@@ -147,14 +184,14 @@ func evalCoerce(e eval, typ sqltypes.Type, col collations.ID) (eval, error) {
 	case sqltypes.Char, sqltypes.VarChar:
 		panic("unreacheable")
 	case sqltypes.Decimal:
-		return evalToNumeric(e).toDecimal(0, 0), nil
+		return evalToDecimal(e, 0, 0), nil
 	case sqltypes.Float32, sqltypes.Float64:
-		f, _ := evalToNumeric(e).toFloat()
+		f, _ := evalToFloat(e)
 		return f, nil
 	case sqltypes.Int8, sqltypes.Int16, sqltypes.Int32, sqltypes.Int64:
-		return evalToNumeric(e).toInt64(), nil
+		return evalToInt64(e), nil
 	case sqltypes.Uint8, sqltypes.Uint16, sqltypes.Uint32, sqltypes.Uint64:
-		return evalToNumeric(e).toUint64(), nil
+		return evalToInt64(e).toUint64(), nil
 	case sqltypes.Date, sqltypes.Datetime, sqltypes.Year, sqltypes.TypeJSON, sqltypes.Time, sqltypes.Bit:
 		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "Unsupported type conversion: %s", typ.String())
 	default:
@@ -175,7 +212,7 @@ func valueToEvalCast(v sqltypes.Value, typ sqltypes.Type) (eval, error) {
 		case v.IsUnsigned():
 			uval, err := v.ToUint64()
 			return newEvalFloat(float64(uval)), err
-		case v.IsFloat() || v.Type() == sqltypes.Decimal:
+		case v.IsFloat() || v.IsDecimal():
 			fval, err := v.ToFloat64()
 			return newEvalFloat(fval), err
 		case v.IsText() || v.IsBinary():
@@ -184,10 +221,10 @@ func valueToEvalCast(v sqltypes.Value, typ sqltypes.Type) (eval, error) {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "coercion should not try to coerce this value to a float: %v", v)
 		}
 
-	case typ == sqltypes.Decimal:
+	case sqltypes.IsDecimal(typ):
 		var dec decimal.Decimal
 		switch {
-		case v.IsIntegral() || v.Type() == sqltypes.Decimal:
+		case v.IsIntegral() || v.IsDecimal():
 			var err error
 			dec, err = decimal.NewFromMySQL(v.Raw())
 			if err != nil {
@@ -305,10 +342,18 @@ func valueToEval(value sqltypes.Value, collation collations.TypedCollation) (eva
 		}
 	case sqltypes.IsBinary(tt):
 		return newEvalBinary(value.Raw()), nil
-	case sqltypes.IsDate(tt):
-		return newEvalRaw(value.Type(), value.Raw(), collationNumeric), nil
+	case tt == sqltypes.Date:
+		return parseDate(value.Raw())
+	case tt == sqltypes.Datetime || tt == sqltypes.Timestamp:
+		return parseDateTime(value.Raw())
+	case tt == sqltypes.Time:
+		return parseTime(value.Raw())
 	case sqltypes.IsNull(tt):
 		return nil, nil
+	case tt == sqltypes.TypeJSON:
+		var p json.Parser
+		j, err := p.ParseBytes(value.Raw())
+		return j, wrap(err)
 	default:
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Type is not supported: %q %s", value, value.Type())
 	}

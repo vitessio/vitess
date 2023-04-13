@@ -674,7 +674,7 @@ func (shard *GRShard) failoverLocked(ctx context.Context) error {
 		return err
 	}
 	shard.logger.Infof("Successfully failover MySQL to %v for %v", candidate.instanceKey.Hostname, formatKeyspaceShard(shard.KeyspaceShard))
-	if !shard.isActive.Get() {
+	if !shard.isActive.Load() {
 		shard.logger.Infof("Skip vttablet failover on an inactive shard %v", formatKeyspaceShard(shard.KeyspaceShard))
 		return nil
 	}

@@ -27,6 +27,7 @@ import (
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/inst"
+	"vitess.io/vitess/go/vt/vtorc/logic"
 	"vitess.io/vitess/go/vt/vtorc/server"
 
 	_ "github.com/go-sql-driver/mysql"
@@ -88,7 +89,7 @@ func TestReadTopologyInstanceBufferable(t *testing.T) {
 	assert.Equal(t, "ON", primaryInstance.GTIDMode)
 	assert.Equal(t, "FULL", primaryInstance.BinlogRowImage)
 	assert.Contains(t, primaryInstance.SelfBinlogCoordinates.LogFile, fmt.Sprintf("vt-0000000%d-bin", primary.TabletUID))
-	assert.Greater(t, primaryInstance.SelfBinlogCoordinates.LogPos, int64(0))
+	assert.Greater(t, primaryInstance.SelfBinlogCoordinates.LogPos, uint32(0))
 	assert.True(t, primaryInstance.SemiSyncPrimaryEnabled)
 	assert.True(t, primaryInstance.SemiSyncReplicaEnabled)
 	assert.True(t, primaryInstance.SemiSyncPrimaryStatus)
@@ -104,8 +105,19 @@ func TestReadTopologyInstanceBufferable(t *testing.T) {
 	assert.Equal(t, primaryInstance.ReplicationIOThreadState, inst.ReplicationThreadStateNoThread)
 	assert.Equal(t, primaryInstance.ReplicationSQLThreadState, inst.ReplicationThreadStateNoThread)
 
-	// insert an errant GTID in the replica
-	_, err = utils.RunSQL(t, "insert into vt_insert_test(id, msg) values (10173, 'test 178342')", replica, "vt_ks")
+	// Insert an errant GTID in the replica.
+	// The way to do this is to disable global recoveries, stop replication and inject an errant GTID.
+	// After this we restart the replication and enable the recoveries again.
+	err = logic.DisableRecovery()
+	require.NoError(t, err)
+	err = utils.RunSQLs(t, []string{`STOP SLAVE;`,
+		`SET GTID_NEXT="12345678-1234-1234-1234-123456789012:1";`,
+		`BEGIN;`, `COMMIT;`,
+		`SET GTID_NEXT="AUTOMATIC";`,
+		`START SLAVE;`,
+	}, replica, "")
+	require.NoError(t, err)
+	err = logic.EnableRecovery()
 	require.NoError(t, err)
 
 	replicaInstance, err := inst.ReadTopologyInstanceBufferable(&inst.InstanceKey{
@@ -126,7 +138,7 @@ func TestReadTopologyInstanceBufferable(t *testing.T) {
 	assert.Equal(t, "ON", replicaInstance.GTIDMode)
 	assert.Equal(t, "FULL", replicaInstance.BinlogRowImage)
 	assert.Contains(t, replicaInstance.SelfBinlogCoordinates.LogFile, fmt.Sprintf("vt-0000000%d-bin", replica.TabletUID))
-	assert.Greater(t, replicaInstance.SelfBinlogCoordinates.LogPos, int64(0))
+	assert.Greater(t, replicaInstance.SelfBinlogCoordinates.LogPos, uint32(0))
 	assert.False(t, replicaInstance.SemiSyncPrimaryEnabled)
 	assert.True(t, replicaInstance.SemiSyncReplicaEnabled)
 	assert.False(t, replicaInstance.SemiSyncPrimaryStatus)
@@ -144,11 +156,11 @@ func TestReadTopologyInstanceBufferable(t *testing.T) {
 	assert.True(t, replicaInstance.ReplicationIOThreadRuning)
 	assert.True(t, replicaInstance.ReplicationSQLThreadRuning)
 	assert.Equal(t, replicaInstance.ReadBinlogCoordinates.LogFile, primaryInstance.SelfBinlogCoordinates.LogFile)
-	assert.Greater(t, replicaInstance.ReadBinlogCoordinates.LogPos, int64(0))
+	assert.Greater(t, replicaInstance.ReadBinlogCoordinates.LogPos, uint32(0))
 	assert.Equal(t, replicaInstance.ExecBinlogCoordinates.LogFile, primaryInstance.SelfBinlogCoordinates.LogFile)
 	assert.LessOrEqual(t, replicaInstance.ExecBinlogCoordinates.LogPos, replicaInstance.ReadBinlogCoordinates.LogPos)
 	assert.Contains(t, replicaInstance.RelaylogCoordinates.LogFile, fmt.Sprintf("vt-0000000%d-relay", replica.TabletUID))
-	assert.Greater(t, replicaInstance.RelaylogCoordinates.LogPos, int64(0))
+	assert.Greater(t, replicaInstance.RelaylogCoordinates.LogPos, uint32(0))
 	assert.Empty(t, replicaInstance.LastIOError)
 	assert.Empty(t, replicaInstance.LastSQLError)
 	assert.EqualValues(t, 0, replicaInstance.SQLDelay)

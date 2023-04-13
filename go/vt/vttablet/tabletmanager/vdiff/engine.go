@@ -31,7 +31,6 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
@@ -64,8 +63,6 @@ type Engine struct {
 	// snapshotMu is used to ensure that only one vdiff snapshot cycle is active at a time,
 	// because we stop/start vreplication workflows during this process
 	snapshotMu sync.Mutex
-
-	vdiffSchemaCreateOnce sync.Once
 
 	// This should only be set when the engine is being used in tests. It then provides
 	// modified behavior for that env, e.g. not starting the retry goroutine. This should
@@ -169,12 +166,12 @@ func (vde *Engine) openLocked(ctx context.Context) error {
 	return nil
 }
 
-var openRetryInterval = sync2.NewAtomicDuration(1 * time.Second)
+var openRetryInterval = 1 * time.Second
 
 func (vde *Engine) retry(ctx context.Context, err error) {
 	log.Errorf("Error starting vdiff engine: %v, will keep retrying.", err)
 	for {
-		timer := time.NewTimer(openRetryInterval.Get())
+		timer := time.NewTimer(openRetryInterval)
 		select {
 		case <-ctx.Done():
 			timer.Stop()

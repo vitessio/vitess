@@ -94,7 +94,8 @@ func isByteComparable(typ sqltypes.Type, collationID collations.ID) bool {
 		return collationID == collations.CollationBinaryID
 	}
 	switch typ {
-	case sqltypes.Timestamp, sqltypes.Date, sqltypes.Time, sqltypes.Datetime, sqltypes.Enum, sqltypes.Set, sqltypes.TypeJSON, sqltypes.Bit:
+	case sqltypes.Timestamp, sqltypes.Date, sqltypes.Time, sqltypes.Datetime, sqltypes.Enum,
+		sqltypes.Set, sqltypes.TypeJSON, sqltypes.Bit, sqltypes.Geometry:
 		return true
 	default:
 		return false
@@ -132,10 +133,7 @@ func NullsafeCompare(v1, v2 sqltypes.Value, collationID collations.ID) (int, err
 
 	switch {
 	case sqltypes.IsText(typ):
-		if collationID == collations.Unknown {
-			return 0, UnsupportedCollationError{ID: collationID}
-		}
-		collation := collations.Local().LookupByID(collationID)
+		collation := collationID.Get()
 		if collation == nil {
 			return 0, UnsupportedCollationError{ID: collationID}
 		}

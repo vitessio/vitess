@@ -156,20 +156,20 @@ type Config struct {
 // It then sets the right value for cfg.SchemaDir.
 // At the end of the test, the caller should os.RemoveAll(cfg.SchemaDir).
 func (cfg *Config) InitSchemas(keyspace, schema string, vschema *vschemapb.Keyspace) error {
-	if cfg.SchemaDir != "" {
-		return fmt.Errorf("SchemaDir is already set to %v", cfg.SchemaDir)
-	}
-
-	// Create a base temporary directory.
-	tempSchemaDir, err := os.MkdirTemp("", "vttest")
-	if err != nil {
-		return err
+	schemaDir := cfg.SchemaDir
+	if schemaDir == "" {
+		// Create a base temporary directory.
+		tempSchemaDir, err := os.MkdirTemp("", "vttest")
+		if err != nil {
+			return err
+		}
+		schemaDir = tempSchemaDir
 	}
 
 	// Write the schema if set.
 	if schema != "" {
-		ksDir := path.Join(tempSchemaDir, keyspace)
-		err = os.Mkdir(ksDir, os.ModeDir|0775)
+		ksDir := path.Join(schemaDir, keyspace)
+		err := os.Mkdir(ksDir, os.ModeDir|0775)
 		if err != nil {
 			return err
 		}
@@ -182,7 +182,7 @@ func (cfg *Config) InitSchemas(keyspace, schema string, vschema *vschemapb.Keysp
 
 	// Write in the vschema if set.
 	if vschema != nil {
-		vschemaFilePath := path.Join(tempSchemaDir, keyspace, "vschema.json")
+		vschemaFilePath := path.Join(schemaDir, keyspace, "vschema.json")
 		vschemaJSON, err := json.Marshal(vschema)
 		if err != nil {
 			return err
@@ -191,7 +191,7 @@ func (cfg *Config) InitSchemas(keyspace, schema string, vschema *vschemapb.Keysp
 			return err
 		}
 	}
-	cfg.SchemaDir = tempSchemaDir
+	cfg.SchemaDir = schemaDir
 	return nil
 }
 
@@ -502,12 +502,11 @@ func (db *LocalCluster) loadSchema(shouldRunDatabaseMigrations bool) error {
 func (db *LocalCluster) createVTSchema() error {
 	var sidecardbExec sidecardb.Exec = func(ctx context.Context, query string, maxRows int, useDB bool) (*sqltypes.Result, error) {
 		if useDB {
-			if err := db.Execute([]string{sidecardb.UseSidecarDatabaseQuery}, ""); err != nil {
+			if err := db.Execute([]string{fmt.Sprintf("use %s", sidecardb.GetIdentifier())}, ""); err != nil {
 				return nil, err
 			}
 		}
-		err := db.Execute([]string{query}, "")
-		return &sqltypes.Result{}, err
+		return db.ExecuteFetch(query, "")
 	}
 
 	if err := sidecardb.Init(context.Background(), sidecardbExec); err != nil {
@@ -562,6 +561,21 @@ func (db *LocalCluster) Execute(sql []string, dbname string) error {
 
 	_, err = conn.ExecuteFetch("COMMIT", 0, false)
 	return err
+}
+
+// ExecuteFetch runs a SQL statement on the MySQL instance backing
+// this local cluster and returns the result.
+func (db *LocalCluster) ExecuteFetch(sql string, dbname string) (*sqltypes.Result, error) {
+	params := db.mysql.Params(dbname)
+	conn, err := mysql.Connect(context.Background(), &params)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+
+	log.Infof("ExecuteFetch(%s): \"%s\"", dbname, sql)
+	rs, err := conn.ExecuteFetch(sql, -1, true)
+	return rs, err
 }
 
 // Query runs a  SQL query on the MySQL instance backing this local cluster and returns

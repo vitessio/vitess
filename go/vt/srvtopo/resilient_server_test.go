@@ -23,18 +23,16 @@ import (
 	"html/template"
 	"reflect"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"vitess.io/vitess/go/vt/key"
 
-	"vitess.io/vitess/go/sync2"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
-	"vitess.io/vitess/go/vt/status"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 
@@ -107,9 +105,6 @@ func TestGetSrvKeyspace(t *testing.T) {
 
 	// make sure the HTML template works
 	funcs := map[string]any{}
-	for k, v := range status.StatusFuncs {
-		funcs[k] = v
-	}
 	for k, v := range StatusFuncs {
 		funcs[k] = v
 	}
@@ -805,7 +800,7 @@ func TestSrvKeyspaceListener(t *testing.T) {
 	rs := NewResilientServer(ts, "TestGetSrvKeyspaceWatcher")
 
 	ctx, cancel := context.WithCancel(context.Background())
-	var callbackCount sync2.AtomicInt32
+	var callbackCount atomic.Int32
 
 	// adding listener will perform callback.
 	rs.WatchSrvKeyspace(context.Background(), "test_cell", "test_ks", func(srvKs *topodatapb.SrvKeyspace, err error) bool {
@@ -835,5 +830,5 @@ func TestSrvKeyspaceListener(t *testing.T) {
 	}
 
 	// only 3 times the callback called for the listener
-	assert.EqualValues(t, 3, callbackCount.Get())
+	assert.EqualValues(t, 3, callbackCount.Load())
 }

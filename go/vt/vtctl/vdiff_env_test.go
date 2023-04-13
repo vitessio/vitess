@@ -19,7 +19,9 @@ package vtctl
 import (
 	"context"
 	"fmt"
+	"math/rand"
 	"sync"
+	"testing"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/grpcclient"
@@ -64,25 +66,10 @@ type testVDiffEnv struct {
 	tablets map[int]*testVDiffTablet
 }
 
-// vdiffEnv has to be a global for RegisterDialer to work.
-var vdiffEnv *testVDiffEnv
-
-func init() {
-	tabletconn.RegisterDialer("VDiffTest", func(tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (queryservice.QueryService, error) {
-		vdiffEnv.mu.Lock()
-		defer vdiffEnv.mu.Unlock()
-		if qs, ok := vdiffEnv.tablets[int(tablet.Alias.Uid)]; ok {
-			return qs, nil
-		}
-		return nil, fmt.Errorf("tablet %d not found", tablet.Alias.Uid)
-	})
-}
-
 //----------------------------------------------
 // testVDiffEnv
 
-func newTestVDiffEnv(sourceShards, targetShards []string, query string, positions map[string]string) *testVDiffEnv {
-	tabletconntest.SetProtocol("go.vt.vtctl.vdiff_env_test", "VDiffTest")
+func newTestVDiffEnv(t testing.TB, sourceShards, targetShards []string, query string, positions map[string]string) *testVDiffEnv {
 	env := &testVDiffEnv{
 		workflow:   "vdiffTest",
 		tablets:    make(map[int]*testVDiffTablet),
@@ -93,6 +80,18 @@ func newTestVDiffEnv(sourceShards, targetShards []string, query string, position
 		cmdlog:     logutil.NewMemoryLogger(),
 	}
 	env.wr = wrangler.NewTestWrangler(env.cmdlog, env.topoServ, env.tmc)
+
+	// Generate a unique dialer name.
+	dialerName := fmt.Sprintf("VDiffTest-%s-%d", t.Name(), rand.Intn(1000000000))
+	tabletconn.RegisterDialer(dialerName, func(tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (queryservice.QueryService, error) {
+		env.mu.Lock()
+		defer env.mu.Unlock()
+		if qs, ok := env.tablets[int(tablet.Alias.Uid)]; ok {
+			return qs, nil
+		}
+		return nil, fmt.Errorf("tablet %d not found", tablet.Alias.Uid)
+	})
+	tabletconntest.SetProtocol("go.vt.vtctl.vdiff_env_test", dialerName)
 
 	tabletID := 100
 	for _, shard := range sourceShards {

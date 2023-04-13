@@ -40,6 +40,8 @@ type Entity interface {
 type EntityDiff interface {
 	// IsEmpty returns true when the two entities are considered identical
 	IsEmpty() bool
+	// EntityName returns the name of affected entity
+	EntityName() string
 	// Entities returns the two diffed entitied, aka "from" and "to"
 	Entities() (from Entity, to Entity)
 	// Statement returns a valid SQL statement that applies the diff, e.g. an ALTER TABLE ...
@@ -94,6 +96,18 @@ const (
 	TableCharsetCollateIgnoreAlways
 )
 
+const (
+	TableQualifierDefault int = iota
+	TableQualifierDeclared
+)
+
+const (
+	AlterTableAlgorithmStrategyNone int = iota
+	AlterTableAlgorithmStrategyInstant
+	AlterTableAlgorithmStrategyInplace
+	AlterTableAlgorithmStrategyCopy
+)
+
 // DiffHints is an assortment of rules for diffing entities
 type DiffHints struct {
 	StrictIndexOrdering         bool
@@ -104,4 +118,12 @@ type DiffHints struct {
 	TableRenameStrategy         int
 	FullTextKeyStrategy         int
 	TableCharsetCollateStrategy int
+	TableQualifierHint          int
+	AlterTableAlgorithmStrategy int
 }
+
+const (
+	ApplyDiffsNoConstraint = "ApplyDiffsNoConstraint"
+	ApplyDiffsInOrder      = "ApplyDiffsInOrder"
+	ApplyDiffsSequential   = "ApplyDiffsSequential"
+)

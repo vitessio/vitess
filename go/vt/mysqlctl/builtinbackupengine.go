@@ -33,12 +33,14 @@ import (
 	"time"
 
 	"github.com/spf13/pflag"
+	"golang.org/x/sync/semaphore"
 
+	"vitess.io/vitess/go/ioutil"
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
+	stats "vitess.io/vitess/go/vt/mysqlctl/backupstats"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/servenv"
@@ -125,7 +127,7 @@ type FileEntry struct {
 }
 
 func init() {
-	for _, cmd := range []string{"vtcombo", "vttablet", "vttestserver", "vtctld", "vtctldclient"} {
+	for _, cmd := range []string{"vtbackup", "vtcombo", "vttablet", "vttestserver", "vtctld", "vtctldclient"} {
 		servenv.OnParseFor(cmd, registerBuiltinBackupEngineFlags)
 	}
 }
@@ -316,7 +318,8 @@ func (be *BuiltinBackupEngine) executeFullBackup(ctx context.Context, params Bac
 	// Save initial state so we can restore.
 	replicaStartRequired := false
 	sourceIsPrimary := false
-	readOnly := true //nolint
+	superReadOnly := true //nolint
+	readOnly := true      //nolint
 	var replicationPosition mysql.Position
 	semiSyncSource, semiSyncReplica := params.Mysqld.SemiSyncEnabled()
 
@@ -336,16 +339,30 @@ func (be *BuiltinBackupEngine) executeFullBackup(ctx context.Context, params Bac
 	// get the read-only flag
 	readOnly, err = params.Mysqld.IsReadOnly()
 	if err != nil {
-		return false, vterrors.Wrap(err, "can't get read-only status")
+		return false, vterrors.Wrap(err, "failed to get read_only status")
 	}
+	superReadOnly, err = params.Mysqld.IsSuperReadOnly()
+	if err != nil {
+		return false, vterrors.Wrap(err, "can't get super_read_only status")
+	}
+	log.Infof("Flag values during full backup, read_only: %v, super_read_only:%t", readOnly, superReadOnly)
 
 	// get the replication position
 	if sourceIsPrimary {
-		if !readOnly {
-			params.Logger.Infof("turning primary read-only before backup")
-			if err = params.Mysqld.SetReadOnly(true); err != nil {
-				return false, vterrors.Wrap(err, "can't set read-only status")
+		// No need to set read_only because super_read_only will implicitly set read_only to true as well.
+		if !superReadOnly {
+			params.Logger.Infof("Enabling super_read_only on primary prior to backup")
+			if _, err = params.Mysqld.SetSuperReadOnly(true); err != nil {
+				return false, vterrors.Wrap(err, "failed to enable super_read_only")
 			}
+			defer func() {
+				// Resetting super_read_only back to its original value
+				params.Logger.Infof("resetting mysqld super_read_only to %v", superReadOnly)
+				if _, err := params.Mysqld.SetSuperReadOnly(false); err != nil {
+					log.Error("Failed to set super_read_only back to its original value")
+				}
+			}()
+
 		}
 		replicationPosition, err = params.Mysqld.PrimaryPosition()
 		if err != nil {
@@ -396,9 +413,9 @@ func (be *BuiltinBackupEngine) executeFullBackup(ctx context.Context, params Bac
 		return usable, vterrors.Wrap(err, "can't restart mysqld")
 	}
 
-	// And set read-only mode
-	params.Logger.Infof("resetting mysqld read-only to %v", readOnly)
-	if err := params.Mysqld.SetReadOnly(readOnly); err != nil {
+	// Resetting super_read_only back to its original value
+	params.Logger.Infof("resetting mysqld super_read_only to %v", superReadOnly)
+	if _, err := params.Mysqld.SetSuperReadOnly(superReadOnly); err != nil {
 		return usable, err
 	}
 
@@ -489,24 +506,40 @@ func (be *BuiltinBackupEngine) backupFiles(
 	params.Logger.Infof("found %v files to backup", len(fes))
 
 	// Backup with the provided concurrency.
-	sema := sync2.NewSemaphore(params.Concurrency, 0)
+	sema := semaphore.NewWeighted(int64(params.Concurrency))
 	wg := sync.WaitGroup{}
 	for i := range fes {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
+			fe := &fes[i]
+			// Wait until we are ready to go, return if we encounter an error
+			acqErr := sema.Acquire(ctx, 1)
+			if acqErr != nil {
+				log.Errorf("Unable to acquire semaphore needed to backup file: %s, err: %s", fe.Name, acqErr.Error())
+				bh.RecordError(acqErr)
+				return
+			}
+			defer sema.Release(1)
+			// Check for context cancellation explicitly because, the way semaphore code is written, theoretically we might
+			// end up not throwing an error even after cancellation. Please see https://cs.opensource.google/go/x/sync/+/refs/tags/v0.1.0:semaphore/semaphore.go;l=66,
+			// which suggests that if the context is already done, `Acquire()` may still succeed without blocking. This introduces
+			// unpredictability in my test cases, so in order to avoid that, I am adding this cancellation check.
+			select {
+			case <-ctx.Done():
+				log.Errorf("Context cancelled during %q backup", fe.Name)
+				bh.RecordError(vterrors.Errorf(vtrpc.Code_CANCELED, "context canceled"))
+				return
+			default:
+			}
 
-			// Wait until we are ready to go, skip if we already
-			// encountered an error.
-			sema.Acquire()
-			defer sema.Release()
 			if bh.HasErrors() {
 				return
 			}
 
 			// Backup the individual file.
 			name := fmt.Sprintf("%v", i)
-			bh.RecordError(be.backupFile(ctx, params, bh, &fes[i], name))
+			bh.RecordError(be.backupFile(ctx, params, bh, fe, name))
 		}(i)
 	}
 
@@ -654,25 +687,42 @@ func (bp *backupPipe) ReportProgress(period time.Duration, logger logutil.Logger
 // backupFile backs up an individual file.
 func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupParams, bh backupstorage.BackupHandle, fe *FileEntry, name string) (finalErr error) {
 	// Open the source file for reading.
+	openSourceAt := time.Now()
 	source, err := fe.open(params.Cnf, true)
 	if err != nil {
 		return err
 	}
-	defer source.Close()
+	params.Stats.Scope(stats.Operation("Source:Open")).TimedIncrement(time.Since(openSourceAt))
+
+	defer func() {
+		closeSourceAt := time.Now()
+		source.Close()
+		params.Stats.Scope(stats.Operation("Source:Close")).TimedIncrement(time.Since(closeSourceAt))
+	}()
+
+	readStats := params.Stats.Scope(stats.Operation("Source:Read"))
+	timedSource := ioutil.NewMeteredReadCloser(source, readStats.TimedIncrementBytes)
 
 	fi, err := source.Stat()
 	if err != nil {
 		return err
 	}
 
-	params.Logger.Infof("Backing up file: %v", fe.Name)
+	br := newBackupReader(fe.Name, fi.Size(), timedSource)
+	go br.ReportProgress(builtinBackupProgress, params.Logger)
+
 	// Open the destination file for writing, and a buffer.
-	wc, err := bh.AddFile(ctx, name, fi.Size())
+	params.Logger.Infof("Backing up file: %v", fe.Name)
+	openDestAt := time.Now()
+	dest, err := bh.AddFile(ctx, name, fi.Size())
 	if err != nil {
 		return vterrors.Wrapf(err, "cannot add file: %v,%v", name, fe.Name)
 	}
+	params.Stats.Scope(stats.Operation("Destination:Open")).TimedIncrement(time.Since(openDestAt))
+
 	defer func(name, fileName string) {
-		if rerr := wc.Close(); rerr != nil {
+		closeDestAt := time.Now()
+		if rerr := dest.Close(); rerr != nil {
 			if finalErr != nil {
 				// We already have an error, just log this one.
 				params.Logger.Errorf2(rerr, "failed to close file %v,%v", name, fe.Name)
@@ -680,11 +730,13 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupPara
 				finalErr = rerr
 			}
 		}
+		params.Stats.Scope(stats.Operation("Destination:Close")).TimedIncrement(time.Since(closeDestAt))
 	}(name, fe.Name)
 
-	bw := newBackupWriter(fe.Name, builtinBackupStorageWriteBufferSize, fi.Size(), wc)
-	br := newBackupReader(fe.Name, fi.Size(), source)
-	go br.ReportProgress(builtinBackupProgress, params.Logger)
+	destStats := params.Stats.Scope(stats.Operation("Destination:Write"))
+	timedDest := ioutil.NewMeteredWriteCloser(dest, destStats.TimedIncrementBytes)
+
+	bw := newBackupWriter(fe.Name, builtinBackupStorageWriteBufferSize, fi.Size(), timedDest)
 
 	var reader io.Reader = br
 	var writer io.Writer = bw
@@ -700,7 +752,9 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupPara
 		if err != nil {
 			return vterrors.Wrap(err, "can't create compressor")
 		}
-		writer = compressor
+
+		compressStats := params.Stats.Scope(stats.Operation("Compressor:Write"))
+		writer = ioutil.NewMeteredWriter(compressor, compressStats.TimedIncrementBytes)
 	}
 
 	if builtinBackupFileReadBufferSize > 0 {
@@ -716,19 +770,25 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupPara
 
 	// Close gzip to flush it, after that all data is sent to writer.
 	if compressor != nil {
+		closeCompressorAt := time.Now()
 		if err = compressor.Close(); err != nil {
 			return vterrors.Wrap(err, "cannot close compressor")
 		}
+		params.Stats.Scope(stats.Operation("Compressor:Close")).TimedIncrement(time.Since(closeCompressorAt))
 	}
 
 	// Close the backupPipe to finish writing on destination.
+	closeWriterAt := time.Now()
 	if err = bw.Close(); err != nil {
 		return vterrors.Wrapf(err, "cannot flush destination: %v", name)
 	}
+	params.Stats.Scope(stats.Operation("Destination:Close")).TimedIncrement(time.Since(closeWriterAt))
 
+	closeReaderAt := time.Now()
 	if err := br.Close(); err != nil {
 		return vterrors.Wrap(err, "failed to close the source reader")
 	}
+	params.Stats.Scope(stats.Operation("Source:Close")).TimedIncrement(time.Since(closeReaderAt))
 
 	// Save the hash.
 	fe.Hash = bw.HashString()
@@ -756,7 +816,6 @@ func (be *BuiltinBackupEngine) executeRestoreFullBackup(ctx context.Context, par
 // The underlying mysql database is expected to be up and running.
 func (be *BuiltinBackupEngine) executeRestoreIncrementalBackup(ctx context.Context, params RestoreParams, bh backupstorage.BackupHandle, bm builtinBackupManifest) error {
 	params.Logger.Infof("Restoring incremental backup to position: %v", bm.Position)
-
 	createdDir, err := be.restoreFiles(context.Background(), params, bh, bm)
 	defer os.RemoveAll(createdDir)
 	mysqld, ok := params.Mysqld.(*Mysqld)
@@ -790,7 +849,6 @@ func (be *BuiltinBackupEngine) executeRestoreIncrementalBackup(ctx context.Conte
 func (be *BuiltinBackupEngine) ExecuteRestore(ctx context.Context, params RestoreParams, bh backupstorage.BackupHandle) (*BackupManifest, error) {
 
 	var bm builtinBackupManifest
-
 	if err := getBackupManifestInto(ctx, bh, &bm); err != nil {
 		return nil, err
 	}
@@ -833,23 +891,38 @@ func (be *BuiltinBackupEngine) restoreFiles(ctx context.Context, params RestoreP
 		}
 	}
 	fes := bm.FileEntries
-	sema := sync2.NewSemaphore(params.Concurrency, 0)
+	sema := semaphore.NewWeighted(int64(params.Concurrency))
 	rec := concurrency.AllErrorRecorder{}
 	wg := sync.WaitGroup{}
 	for i := range fes {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
+			fe := &fes[i]
+			// Wait until we are ready to go, return if we encounter an error
+			acqErr := sema.Acquire(ctx, 1)
+			if acqErr != nil {
+				log.Errorf("Unable to acquire semaphore needed to backup file: %s, err: %s", fe.Name, acqErr.Error())
+				rec.RecordError(acqErr)
+				return
+			}
+			defer sema.Release(1)
+			// Check for context cancellation explicitly because, the way semaphore code is written, theoretically we might
+			// end up not throwing an error even after cancellation. Please see https://cs.opensource.google/go/x/sync/+/refs/tags/v0.1.0:semaphore/semaphore.go;l=66,
+			// which suggests that if the context is already done, `Acquire()` may still succeed without blocking. This introduces
+			// unpredictability in my test cases, so in order to avoid that, I am adding this cancellation check.
+			select {
+			case <-ctx.Done():
+				log.Errorf("Context cancelled during %q backup", fe.Name)
+				bh.RecordError(vterrors.Errorf(vtrpc.Code_CANCELED, "context canceled"))
+				return
+			default:
+			}
 
-			// Wait until we are ready to go, skip if we already
-			// encountered an error.
-			sema.Acquire()
-			defer sema.Release()
 			if rec.HasErrors() {
 				return
 			}
 
-			fe := &fes[i]
 			fe.ParentPath = createdDir
 			// And restore the file.
 			name := fmt.Sprintf("%v", i)
@@ -867,19 +940,37 @@ func (be *BuiltinBackupEngine) restoreFiles(ctx context.Context, params RestoreP
 // restoreFile restores an individual file.
 func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, params RestoreParams, bh backupstorage.BackupHandle, fe *FileEntry, bm builtinBackupManifest, name string) (finalErr error) {
 	// Open the source file for reading.
+	openSourceAt := time.Now()
 	source, err := bh.ReadFile(ctx, name)
 	if err != nil {
 		return vterrors.Wrap(err, "can't open source file for reading")
 	}
-	defer source.Close()
+	params.Stats.Scope(stats.Operation("Source:Open")).TimedIncrement(time.Since(openSourceAt))
+
+	readStats := params.Stats.Scope(stats.Operation("Source:Read"))
+	timedSource := ioutil.NewMeteredReader(source, readStats.TimedIncrementBytes)
+
+	defer func() {
+		closeSourceAt := time.Now()
+		source.Close()
+		params.Stats.Scope(stats.Operation("Source:Close")).TimedIncrement(time.Since(closeSourceAt))
+	}()
+
+	br := newBackupReader(name, 0, timedSource)
+	go br.ReportProgress(builtinBackupProgress, params.Logger)
+	var reader io.Reader = br
 
 	// Open the destination file for writing.
-	dstFile, err := fe.open(params.Cnf, false)
+	openDestAt := time.Now()
+	dest, err := fe.open(params.Cnf, false)
 	if err != nil {
 		return vterrors.Wrap(err, "can't open destination file for writing")
 	}
+	params.Stats.Scope(stats.Operation("Destination:Open")).TimedIncrement(time.Since(openDestAt))
+
 	defer func() {
-		if cerr := dstFile.Close(); cerr != nil {
+		closeDestAt := time.Now()
+		if cerr := dest.Close(); cerr != nil {
 			if finalErr != nil {
 				// We already have an error, just log this one.
 				log.Errorf("failed to close file %v: %v", name, cerr)
@@ -887,18 +978,19 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, params RestorePa
 				finalErr = vterrors.Wrap(cerr, "failed to close destination file")
 			}
 		}
+		params.Stats.Scope(stats.Operation("Destination:Close")).TimedIncrement(time.Since(closeDestAt))
 	}()
 
-	bp := newBackupReader(name, 0, source)
-	go bp.ReportProgress(builtinBackupProgress, params.Logger)
+	writeStats := params.Stats.Scope(stats.Operation("Destination:Write"))
+	timedDest := ioutil.NewMeteredWriter(dest, writeStats.TimedIncrementBytes)
 
-	dst := bufio.NewWriterSize(dstFile, int(builtinBackupFileWriteBufferSize))
-	var reader io.Reader = bp
+	bufferedDest := bufio.NewWriterSize(timedDest, int(builtinBackupFileWriteBufferSize))
 
 	// Create the uncompresser if needed.
 	if !bm.SkipCompress {
 		var decompressor io.ReadCloser
 		var deCompressionEngine = bm.CompressionEngine
+
 		if deCompressionEngine == "" {
 			// for backward compatibility
 			deCompressionEngine = PgzipCompressor
@@ -920,7 +1012,11 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, params RestorePa
 			return vterrors.Wrap(err, "can't create decompressor")
 		}
 
+		decompressStats := params.Stats.Scope(stats.Operation("Decompressor:Read"))
+		reader = ioutil.NewMeteredReader(decompressor, decompressStats.TimedIncrementBytes)
+
 		defer func() {
+			closeDecompressorAt := time.Now()
 			if cerr := decompressor.Close(); cerr != nil {
 				params.Logger.Errorf("failed to close decompressor: %v", cerr)
 				if finalErr != nil {
@@ -930,29 +1026,33 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, params RestorePa
 					finalErr = vterrors.Wrap(cerr, "failed to close decompressor")
 				}
 			}
+			params.Stats.Scope(stats.Operation("Decompressor:Close")).TimedIncrement(time.Since(closeDecompressorAt))
 		}()
-		reader = decompressor
 	}
 
 	// Copy the data. Will also write to the hasher.
-	if _, err = io.Copy(dst, reader); err != nil {
+	if _, err = io.Copy(bufferedDest, reader); err != nil {
 		return vterrors.Wrap(err, "failed to copy file contents")
 	}
 
 	// Check the hash.
-	hash := bp.HashString()
+	hash := br.HashString()
 	if hash != fe.Hash {
 		return vterrors.Errorf(vtrpc.Code_INTERNAL, "hash mismatch for %v, got %v expected %v", fe.Name, hash, fe.Hash)
 	}
 
 	// Flush the buffer.
-	if err := dst.Flush(); err != nil {
+	closeDestAt := time.Now()
+	if err := bufferedDest.Flush(); err != nil {
 		return vterrors.Wrap(err, "failed to flush destination buffer")
 	}
+	params.Stats.Scope(stats.Operation("Destination:Close")).TimedIncrement(time.Since(closeDestAt))
 
-	if err := bp.Close(); err != nil {
+	closeSourceAt := time.Now()
+	if err := br.Close(); err != nil {
 		return vterrors.Wrap(err, "failed to close the source reader")
 	}
+	params.Stats.Scope(stats.Operation("Source:Close")).TimedIncrement(time.Since(closeSourceAt))
 
 	return nil
 }

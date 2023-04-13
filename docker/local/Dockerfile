@@ -1,4 +1,4 @@
-ARG bootstrap_version=14
+ARG bootstrap_version=17
 ARG image="vitess/bootstrap:${bootstrap_version}-common"
 
 FROM "${image}"
@@ -33,6 +33,10 @@ ENV PATH="/var/opt/etcd:${PATH}"
 
 RUN mkdir /vt/local
 COPY examples/local /vt/local
+
+# Copy the vtadmin web app to the correct location and npm install
+COPY --chown=vitess:vitess web /web
+RUN npm install /web/vtadmin
 
 RUN mkdir /vt/common
 COPY examples/common /vt/common

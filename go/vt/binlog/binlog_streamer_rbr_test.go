@@ -17,12 +17,12 @@ limitations under the License.
 package binlog
 
 import (
+	"context"
 	"reflect"
 	"testing"
 
-	"context"
-
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/binlog"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
@@ -59,8 +59,8 @@ func TestStreamerParseRBREvents(t *testing.T) {
 		Database: "vt_test_keyspace",
 		Name:     "vt_a",
 		Types: []byte{
-			mysql.TypeLong,
-			mysql.TypeVarchar,
+			binlog.TypeLong,
+			binlog.TypeVarchar,
 		},
 		CanBeNull: mysql.NewServerBitmap(2),
 		Metadata: []uint16{
@@ -305,8 +305,8 @@ func TestStreamerParseRBRNameEscapes(t *testing.T) {
 		Database: "vt_test_keyspace",
 		Name:     "insert",
 		Types: []byte{
-			mysql.TypeLong,
-			mysql.TypeVarchar,
+			binlog.TypeLong,
+			binlog.TypeVarchar,
 		},
 		CanBeNull: mysql.NewServerBitmap(2),
 		Metadata: []uint16{

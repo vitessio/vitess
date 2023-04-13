@@ -62,15 +62,24 @@ type vrStats struct {
 func (st *vrStats) register() {
 	stats.NewGaugeFunc("VReplicationStreamCount", "Number of vreplication streams", st.numControllers)
 	stats.NewGaugeFunc("VReplicationLagSecondsMax", "Max vreplication seconds behind primary", st.maxReplicationLagSeconds)
-	stats.Publish("VReplicationStreamState", stats.StringMapFunc(func() map[string]string {
-		st.mu.Lock()
-		defer st.mu.Unlock()
-		result := make(map[string]string, len(st.controllers))
-		for _, ct := range st.controllers {
-			result[ct.workflow+"."+fmt.Sprintf("%v", ct.id)] = ct.blpStats.State.Get()
-		}
-		return result
-	}))
+	stats.NewStringMapFuncWithMultiLabels(
+		"VReplicationStreamState",
+		"State of vreplication workflow",
+		[]string{"workflow", "counts"},
+		"state",
+		func() map[string]string {
+			st.mu.Lock()
+			defer st.mu.Unlock()
+			result := make(map[string]string, len(st.controllers))
+			for _, ct := range st.controllers {
+				state := ct.blpStats.State.Load()
+				if state != nil {
+					result[ct.workflow+"."+fmt.Sprintf("%v", ct.id)] = state.(string)
+				}
+			}
+			return result
+		},
+	)
 	stats.NewGaugesFuncWithMultiLabels(
 		"VReplicationLagSeconds",
 		"vreplication seconds behind primary per stream",
@@ -80,7 +89,7 @@ func (st *vrStats) register() {
 			defer st.mu.Unlock()
 			result := make(map[string]int64, len(st.controllers))
 			for _, ct := range st.controllers {
-				result[ct.source.Keyspace+"."+ct.source.Shard+"."+ct.workflow+"."+fmt.Sprintf("%v", ct.id)] = ct.blpStats.ReplicationLagSeconds.Get()
+				result[ct.source.Keyspace+"."+ct.source.Shard+"."+ct.workflow+"."+fmt.Sprintf("%v", ct.id)] = ct.blpStats.ReplicationLagSeconds.Load()
 			}
 			return result
 		})
@@ -93,7 +102,7 @@ func (st *vrStats) register() {
 			defer st.mu.Unlock()
 			result := int64(0)
 			for _, ct := range st.controllers {
-				result += ct.blpStats.ReplicationLagSeconds.Get()
+				result += ct.blpStats.ReplicationLagSeconds.Load()
 			}
 			return result
 		})
@@ -142,7 +151,7 @@ func (st *vrStats) register() {
 		defer st.mu.Unlock()
 		result := make(map[string]string, len(st.controllers))
 		for _, ct := range st.controllers {
-			result[fmt.Sprintf("%v", ct.id)] = ct.sourceTablet.Get()
+			result[fmt.Sprintf("%v", ct.id)] = ct.sourceTablet.Load().(string)
 		}
 		return result
 	}))
@@ -401,7 +410,7 @@ func (st *vrStats) maxReplicationLagSeconds() int64 {
 	defer st.mu.Unlock()
 	max := int64(0)
 	for _, ct := range st.controllers {
-		if cur := ct.blpStats.ReplicationLagSeconds.Get(); cur > max {
+		if cur := ct.blpStats.ReplicationLagSeconds.Load(); cur > max {
 			max = cur
 		}
 	}
@@ -424,11 +433,10 @@ func (st *vrStats) status() *EngineStatus {
 			StopPosition:          ct.stopPos,
 			LastPosition:          ct.blpStats.LastPosition().String(),
 			Heartbeat:             ct.blpStats.Heartbeat(),
-			ReplicationLagSeconds: ct.blpStats.ReplicationLagSeconds.Get(),
+			ReplicationLagSeconds: ct.blpStats.ReplicationLagSeconds.Load(),
 			Counts:                ct.blpStats.Timings.Counts(),
 			Rates:                 ct.blpStats.Rates.Get(),
-			State:                 ct.blpStats.State.Get(),
-			SourceTablet:          ct.sourceTablet.Get(),
+			SourceTablet:          ct.sourceTablet.Load().(string),
 			Messages:              ct.blpStats.MessageHistory(),
 			QueryCounts:           ct.blpStats.QueryCount.Counts(),
 			PhaseTimings:          ct.blpStats.PhaseTimings.Counts(),
@@ -437,6 +445,11 @@ func (st *vrStats) status() *EngineStatus {
 			NoopQueryCounts:       ct.blpStats.NoopQueryCount.Counts(),
 			TableCopyTimings:      ct.blpStats.TableCopyTimings.Counts(),
 		}
+		state := ct.blpStats.State.Load()
+		if state != nil {
+			status.Controllers[i].State = state.(string)
+		}
+
 		i++
 	}
 	sort.Slice(status.Controllers, func(i, j int) bool { return status.Controllers[i].Index < status.Controllers[j].Index })

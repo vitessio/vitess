@@ -28,7 +28,10 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/logutil"
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 )
 
 func TestVExec(t *testing.T) {
@@ -36,7 +39,7 @@ func TestVExec(t *testing.T) {
 	workflow := "wrWorkflow"
 	keyspace := "target"
 	query := "update _vt.vreplication set state = 'Running'"
-	env := newWranglerTestEnv([]string{"0"}, []string{"-80", "80-"}, "", nil, time.Now().Unix())
+	env := newWranglerTestEnv(t, []string{"0"}, []string{"-80", "80-"}, "", nil, time.Now().Unix())
 	defer env.close()
 	var logger = logutil.NewMemoryLogger()
 	wr := New(logger, env.topoServ, env.tmc)
@@ -180,21 +183,21 @@ func TestWorkflowListStreams(t *testing.T) {
 	ctx := context.Background()
 	workflow := "wrWorkflow"
 	keyspace := "target"
-	env := newWranglerTestEnv([]string{"0"}, []string{"-80", "80-"}, "", nil, 1234)
+	env := newWranglerTestEnv(t, []string{"0"}, []string{"-80", "80-"}, "", nil, 1234)
 	defer env.close()
 	logger := logutil.NewMemoryLogger()
 	wr := New(logger, env.topoServ, env.tmc)
 
-	_, err := wr.WorkflowAction(ctx, workflow, keyspace, "listall", false)
+	_, err := wr.WorkflowAction(ctx, workflow, keyspace, "listall", false, nil)
 	require.NoError(t, err)
 
-	_, err = wr.WorkflowAction(ctx, workflow, "badks", "show", false)
+	_, err = wr.WorkflowAction(ctx, workflow, "badks", "show", false, nil)
 	require.Errorf(t, err, "node doesn't exist: keyspaces/badks/shards")
 
-	_, err = wr.WorkflowAction(ctx, "badwf", keyspace, "show", false)
+	_, err = wr.WorkflowAction(ctx, "badwf", keyspace, "show", false, nil)
 	require.Errorf(t, err, "no streams found for workflow badwf in keyspace target")
 	logger.Clear()
-	_, err = wr.WorkflowAction(ctx, workflow, keyspace, "show", false)
+	_, err = wr.WorkflowAction(ctx, workflow, keyspace, "show", false, nil)
 	require.NoError(t, err)
 	want := `{
 	"Workflow": "wrWorkflow",
@@ -313,7 +316,7 @@ func TestWorkflowListStreams(t *testing.T) {
 	got = re.ReplaceAllLiteralString(got, `"MaxVReplicationTransactionLag": 0`)
 	require.Equal(t, want, got)
 
-	results, err := wr.execWorkflowAction(ctx, workflow, keyspace, "stop", false)
+	results, err := wr.execWorkflowAction(ctx, workflow, keyspace, "stop", false, nil)
 	require.Nil(t, err)
 
 	// convert map to list and sort it for comparison
@@ -327,7 +330,7 @@ func TestWorkflowListStreams(t *testing.T) {
 	require.ElementsMatch(t, wantResults, gotResults)
 
 	logger.Clear()
-	results, err = wr.execWorkflowAction(ctx, workflow, keyspace, "stop", true)
+	results, err = wr.execWorkflowAction(ctx, workflow, keyspace, "stop", true, nil)
 	require.Nil(t, err)
 	require.Equal(t, "map[]", fmt.Sprintf("%v", results))
 	dryRunResult := `Query: update _vt.vreplication set state = 'Stopped' where db_name = 'vt_target' and workflow = 'wrWorkflow'
@@ -355,7 +358,7 @@ func TestWorkflowListAll(t *testing.T) {
 	ctx := context.Background()
 	keyspace := "target"
 	workflow := "wrWorkflow"
-	env := newWranglerTestEnv([]string{"0"}, []string{"-80", "80-"}, "", nil, 0)
+	env := newWranglerTestEnv(t, []string{"0"}, []string{"-80", "80-"}, "", nil, 0)
 	defer env.close()
 	logger := logutil.NewMemoryLogger()
 	wr := New(logger, env.topoServ, env.tmc)
@@ -375,7 +378,7 @@ func TestVExecValidations(t *testing.T) {
 	workflow := "wf"
 	keyspace := "ks"
 	query := ""
-	env := newWranglerTestEnv([]string{"0"}, []string{"-80", "80-"}, "", nil, 0)
+	env := newWranglerTestEnv(t, []string{"0"}, []string{"-80", "80-"}, "", nil, 0)
 	defer env.close()
 
 	wr := New(logutil.NewConsoleLogger(), env.topoServ, env.tmc)
@@ -446,6 +449,90 @@ func TestVExecValidations(t *testing.T) {
 			sql, err := wr.getWorkflowActionQuery(a.name)
 			require.Equal(t, a.expectedError, err)
 			require.Equal(t, a.want, sql)
+		})
+	}
+}
+
+// TestWorkflowUpdate tests the vtctl client
+// Workflow command with the update action.
+// It only tests the dry-run output because
+// the actual execution happens in the
+// tabletmanager and the behavior is tested
+// there.
+func TestWorkflowUpdate(t *testing.T) {
+	ctx := context.Background()
+	workflow := "wrWorkflow"
+	keyspace := "target"
+	env := newWranglerTestEnv(t, []string{"0"}, []string{"-80", "80-"}, "", nil, 1234)
+	defer env.close()
+	logger := logutil.NewMemoryLogger()
+	wr := New(logger, env.topoServ, env.tmc)
+	nullSlice := textutil.SimulatedNullStringSlice                   // Used to represent a non-provided value
+	nullOnDDL := binlogdatapb.OnDDLAction(textutil.SimulatedNullInt) // Used to represent a non-provided value
+	tests := []struct {
+		name        string
+		cells       []string
+		tabletTypes []string
+		onDDL       binlogdatapb.OnDDLAction
+		output      string
+		wantErr     string
+	}{
+		{
+			name:        "no flags",
+			cells:       nullSlice,
+			tabletTypes: nullSlice,
+			onDDL:       nullOnDDL,
+			wantErr:     "no updates were provided; use --cells, --tablet-types, or --on-ddl to specify new values",
+		},
+		{
+			name:        "only cells",
+			cells:       []string{"zone1"},
+			tabletTypes: nullSlice,
+			onDDL:       nullOnDDL,
+			output:      "The following workflow fields will be updated:\n  cells=\"zone1\"\nOn the following tablets in the target keyspace for workflow wrWorkflow:\n  zone1-0000000200 (target/-80)\n  zone1-0000000210 (target/80-)\n",
+		},
+		{
+			name:        "only tablet types",
+			cells:       nullSlice,
+			tabletTypes: []string{"primary", "replica"},
+			onDDL:       nullOnDDL,
+			output:      "The following workflow fields will be updated:\n  tablet_types=\"primary,replica\"\nOn the following tablets in the target keyspace for workflow wrWorkflow:\n  zone1-0000000200 (target/-80)\n  zone1-0000000210 (target/80-)\n",
+		},
+		{
+			name:        "only on-ddl",
+			cells:       nullSlice,
+			tabletTypes: nullSlice,
+			onDDL:       binlogdatapb.OnDDLAction_EXEC_IGNORE,
+			output:      "The following workflow fields will be updated:\n  on_ddl=\"EXEC_IGNORE\"\nOn the following tablets in the target keyspace for workflow wrWorkflow:\n  zone1-0000000200 (target/-80)\n  zone1-0000000210 (target/80-)\n",
+		},
+		{
+			name:        "all flags",
+			cells:       []string{"zone1", "zone2"},
+			tabletTypes: []string{"rdonly", "spare"},
+			onDDL:       binlogdatapb.OnDDLAction_EXEC,
+			output:      "The following workflow fields will be updated:\n  cells=\"zone1,zone2\"\n  tablet_types=\"rdonly,spare\"\n  on_ddl=\"EXEC\"\nOn the following tablets in the target keyspace for workflow wrWorkflow:\n  zone1-0000000200 (target/-80)\n  zone1-0000000210 (target/80-)\n",
+		},
+	}
+
+	for _, tcase := range tests {
+		t.Run(tcase.name, func(t *testing.T) {
+			rpcReq := &tabletmanagerdatapb.UpdateVRWorkflowRequest{
+				Cells:       tcase.cells,
+				TabletTypes: tcase.tabletTypes,
+				OnDdl:       tcase.onDDL,
+			}
+
+			_, err := wr.WorkflowAction(ctx, workflow, keyspace, "update", true, rpcReq)
+			if tcase.wantErr != "" {
+				require.Error(t, err)
+				require.Equal(t, err.Error(), tcase.wantErr)
+			} else {
+				// Logger.String() adds additional newlines to each log line.
+				output := strings.ReplaceAll(logger.String(), "\n\n", "\n")
+				require.NoError(t, err)
+				require.Equal(t, tcase.output, output)
+			}
+			logger.Clear()
 		})
 	}
 }

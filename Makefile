@@ -159,19 +159,13 @@ install-testing: build
 vtctldclient: go/vt/proto/vtctlservice/vtctlservice.pb.go
 	make -C go/vt/vtctl/vtctldclient
 
-parser:
-	make -C go/vt/sqlparser
+sqlparser:
+	go generate ./go/vt/sqlparser/...
+
+codegen: sqlparser sizegen
 
 demo:
 	go install ./examples/demo/demo.go
-
-codegen: asthelpergen sizegen parser
-
-visitor: asthelpergen
-	echo "make visitor has been replaced by make asthelpergen"
-
-asthelpergen:
-	go generate ./go/vt/sqlparser/...
 
 sizegen:
 	go run ./go/tools/sizegen/sizegen.go \
@@ -251,7 +245,7 @@ PROTO_SRCS = $(wildcard proto/*.proto)
 PROTO_SRC_NAMES = $(basename $(notdir $(PROTO_SRCS)))
 PROTO_GO_OUTS = $(foreach name, $(PROTO_SRC_NAMES), go/vt/proto/$(name)/$(name).pb.go)
 # This rule rebuilds all the go files from the proto definitions for gRPC.
-proto: $(PROTO_GO_OUTS)
+proto: $(PROTO_GO_OUTS) vtadmin_web_proto_types
 
 ifndef NOBANNER
 	echo $$(date): Compiling proto definitions
@@ -275,7 +269,7 @@ $(PROTO_GO_OUTS): minimaltools install_protoc-gen-go proto/*.proto
 # This rule builds the bootstrap images for all flavors.
 DOCKER_IMAGES_FOR_TEST = mysql57 mysql80 percona57 percona80
 DOCKER_IMAGES = common $(DOCKER_IMAGES_FOR_TEST)
-BOOTSTRAP_VERSION=14
+BOOTSTRAP_VERSION=17
 ensure_bootstrap_version:
 	find docker/ -type f -exec sed -i "s/^\(ARG bootstrap_version\)=.*/\1=${BOOTSTRAP_VERSION}/" {} \;
 	sed -i 's/\(^.*flag.String(\"bootstrap-version\",\) *\"[^\"]\+\"/\1 \"${BOOTSTRAP_VERSION}\"/' test.go
@@ -302,6 +296,9 @@ define build_docker_image
 	if grep -q arm64 <<< ${2}; then \
 		echo "Building docker using arm64 buildx"; \
 		docker buildx build --platform linux/arm64 -f ${1} -t ${2} --build-arg bootstrap_version=${BOOTSTRAP_VERSION} .; \
+	elif [ $$(go env GOOS) != $$(go env GOHOSTOS) ] || [ $$(go env GOARCH) != $$(go env GOHOSTARCH) ]; then \
+		echo "Building docker using buildx --platform=$$(go env GOOS)/$$(go env GOARCH)"; \
+		docker buildx build --platform "$$(go env GOOS)/$$(go env GOARCH)" -f ${1} -t ${2} --build-arg bootstrap_version=${BOOTSTRAP_VERSION} .; \
 	else \
 		echo "Building docker using straight docker build"; \
 		docker build -f ${1} -t ${2} --build-arg bootstrap_version=${BOOTSTRAP_VERSION} .; \
