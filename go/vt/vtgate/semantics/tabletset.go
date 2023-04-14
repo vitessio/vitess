@@ -172,7 +172,7 @@ type TableSet struct {
 }
 
 // Format formats the TableSet.
-func (ts TableSet) Format(f fmt.State, verb rune) {
+func (ts TableSet) Format(f fmt.State, _ rune) {
 	first := true
 	fmt.Fprintf(f, "TableSet{")
 	ts.ForEachTable(func(tid int) {
