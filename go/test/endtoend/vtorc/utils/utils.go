@@ -970,7 +970,7 @@ func WaitForSuccessfulRecoveryCount(t *testing.T, vtorcInstance *cluster.VTOrcPr
 }
 
 // WaitForInstancePollSecondsExceededCount wait for 30 seconds and then query api/aggregated-discovery-metrics.
-// It expects to find minimum occurrence or equality of count of `keyName` provided.
+// It expects to find minimum occurrence or exact count of `keyName` provided.
 func WaitForInstancePollSecondsExceededCount(t *testing.T, vtorcInstance *cluster.VTOrcProcess, keyName string, minCountExpected float64, enforceEquality bool) {
 	t.Helper()
 	var sinceInSeconds = 30
