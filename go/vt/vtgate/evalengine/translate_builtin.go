@@ -355,6 +355,11 @@ func (ast *astCompiler) translateFuncExpr(fn *sqlparser.FuncExpr) (Expr, error) 
 			return nil, argError(method)
 		}
 		return &builtinSHA2{CallExpr: call, collate: ast.cfg.Collation}, nil
+	case "convert_tz":
+		if len(args) != 3 {
+			return nil, argError(method)
+		}
+		return &builtinConvertTz{CallExpr: call}, nil
 	default:
 		return nil, translateExprNotSupported(fn)
 	}

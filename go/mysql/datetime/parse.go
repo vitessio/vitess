@@ -19,6 +19,7 @@ package datetime
 import (
 	"math"
 
+	"vitess.io/vitess/go/mysql/decimal"
 	"vitess.io/vitess/go/mysql/json/fastparse"
 )
 
@@ -304,4 +305,33 @@ func ParseDateTimeInt64(i int64) (dt DateTime, ok bool) {
 	}
 	dt.Date, ok = ParseDateInt64(d)
 	return dt, ok
+}
+
+func ParseDateTimeFloat(f float64) (DateTime, bool) {
+	i, frac := math.Modf(f)
+	dt, ok := ParseDateTimeInt64(int64(i))
+	dt.Time.nanosecond = uint32(frac * 1e9)
+	return dt, ok
+}
+
+func ParseDateFloat(f float64) (Date, bool) {
+	i, _ := math.Modf(f)
+	return ParseDateInt64(int64(i))
+}
+
+func ParseDateTimeDecimal(d decimal.Decimal) (DateTime, bool) {
+	id, frac := d.QuoRem(decimal.New(1, 0), 0)
+	i, _ := id.Int64()
+	dt, ok := ParseDateTimeInt64(i)
+
+	nd := frac.Mul(decimal.New(1, 9))
+	n, _ := nd.Int64()
+	dt.Time.nanosecond = uint32(n)
+	return dt, ok
+}
+
+func ParseDateDecimal(d decimal.Decimal) (Date, bool) {
+	id, _ := d.QuoRem(decimal.New(1, 0), 0)
+	i, _ := id.Int64()
+	return ParseDateInt64(i)
 }

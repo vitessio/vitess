@@ -224,11 +224,32 @@ func evalToDateTime(e eval) *evalTemporal {
 		if d, _ := datetime.ParseDate(e.string()); !d.IsZero() {
 			return newEvalDateTime(datetime.DateTime{Date: d})
 		}
-	case evalNumeric:
-		if t, ok := datetime.ParseDateTimeInt64(e.toInt64().i); ok {
+	case *evalInt64:
+		if t, ok := datetime.ParseDateTimeInt64(e.i); ok {
 			return newEvalDateTime(t)
 		}
-		if d, ok := datetime.ParseDateInt64(e.toInt64().i); ok {
+		if d, ok := datetime.ParseDateInt64(e.i); ok {
+			return newEvalDateTime(datetime.DateTime{Date: d})
+		}
+	case *evalUint64:
+		if t, ok := datetime.ParseDateTimeInt64(int64(e.u)); ok {
+			return newEvalDateTime(t)
+		}
+		if d, ok := datetime.ParseDateInt64(int64(e.u)); ok {
+			return newEvalDateTime(datetime.DateTime{Date: d})
+		}
+	case *evalFloat:
+		if t, ok := datetime.ParseDateTimeFloat(e.f); ok {
+			return newEvalDateTime(t)
+		}
+		if d, ok := datetime.ParseDateFloat(e.f); ok {
+			return newEvalDateTime(datetime.DateTime{Date: d})
+		}
+	case *evalDecimal:
+		if t, ok := datetime.ParseDateTimeDecimal(e.dec); ok {
+			return newEvalDateTime(t)
+		}
+		if d, ok := datetime.ParseDateDecimal(e.dec); ok {
 			return newEvalDateTime(datetime.DateTime{Date: d})
 		}
 	case *evalJSON:

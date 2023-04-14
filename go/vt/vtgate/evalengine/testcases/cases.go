@@ -101,6 +101,7 @@ var Cases = []TestCase{
 	{Run: FnSHA2},
 	{Run: FnRandomBytes},
 	{Run: FnDateFormat},
+	{Run: FnConvertTz},
 }
 
 func JSONPathOperations(yield Query) {
@@ -1299,11 +1300,6 @@ func FnDateFormat(yield Query) {
 		{'%', ""},
 	}
 
-	dates := []string{
-		`TIMESTAMP '1999-12-31 23:59:58.999'`,
-		`TIMESTAMP '2000-01-02 03:04:05'`,
-	}
-
 	var buf strings.Builder
 	for _, f := range formats {
 		buf.WriteByte('%')
@@ -1312,7 +1308,35 @@ func FnDateFormat(yield Query) {
 	}
 	format := buf.String()
 
-	for _, d := range dates {
+	for _, d := range inputConversions {
 		yield(fmt.Sprintf("DATE_FORMAT(%s, %q)", d, format), nil)
+	}
+}
+
+func FnConvertTz(yield Query) {
+	timezoneInputs := []string{
+		"UTC",
+		"GMT",
+		"America/New_York",
+		"America/Los_Angeles",
+		"Europe/London",
+		"Europe/Amsterdam",
+		"+00:00",
+		"-00:00",
+		"+01:00",
+		"-01:00",
+		"+02:00",
+		"-02:00",
+		"+14:00",
+		"-13:00",
+		"bogus",
+	}
+	for _, num1 := range inputConversions {
+		for _, tzFrom := range timezoneInputs {
+			for _, tzTo := range timezoneInputs {
+				q := fmt.Sprintf("CONVERT_TZ(%s, '%s', '%s')", num1, tzFrom, tzTo)
+				yield(q, nil)
+			}
+		}
 	}
 }

@@ -114,12 +114,14 @@ func (fmtMonthDaySuffix) format(dst []byte, t DateTime, prec uint8) []byte {
 	d := t.Date.Day()
 	dst = appendInt(dst, d, 0)
 
-	switch d % 10 {
-	case 1:
+	switch {
+	case d >= 11 && d < 20:
+		return append(dst, "th"...)
+	case d%10 == 1:
 		return append(dst, "st"...)
-	case 2:
+	case d%10 == 2:
 		return append(dst, "nd"...)
-	case 3:
+	case d%10 == 3:
 		return append(dst, "rd"...)
 	default:
 		return append(dst, "th"...)
