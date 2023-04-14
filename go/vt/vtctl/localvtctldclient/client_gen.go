@@ -586,3 +586,8 @@ func (client *localVtctldClient) ValidateVersionKeyspace(ctx context.Context, in
 func (client *localVtctldClient) ValidateVersionShard(ctx context.Context, in *vtctldatapb.ValidateVersionShardRequest, opts ...grpc.CallOption) (*vtctldatapb.ValidateVersionShardResponse, error) {
 	return client.s.ValidateVersionShard(ctx, in)
 }
+
+// WorkflowUpdate is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) WorkflowUpdate(ctx context.Context, in *vtctldatapb.WorkflowUpdateRequest, opts ...grpc.CallOption) (*vtctldatapb.WorkflowUpdateResponse, error) {
+	return client.s.WorkflowUpdate(ctx, in)
+}

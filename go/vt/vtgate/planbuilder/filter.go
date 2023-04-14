@@ -17,7 +17,6 @@ limitations under the License.
 package planbuilder
 
 import (
-	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -31,43 +30,30 @@ type (
 		logicalPlanCommon
 		efilter *engine.Filter
 	}
-
-	simpleConverterLookup struct {
-		ctx               *plancontext.PlanningContext
-		plan              logicalPlan
-		canPushProjection bool
-	}
 )
 
 var _ logicalPlan = (*filter)(nil)
-var _ evalengine.TranslationLookup = (*simpleConverterLookup)(nil)
 
-func (s *simpleConverterLookup) ColumnLookup(col *sqlparser.ColName) (int, error) {
-	offset, added, err := pushProjection(s.ctx, &sqlparser.AliasedExpr{Expr: col}, s.plan, true, true, false)
-	if err != nil {
-		return 0, err
+func resolveFromPlan(ctx *plancontext.PlanningContext, plan logicalPlan, canPushProjection bool) evalengine.ColumnResolver {
+	return func(expr *sqlparser.ColName) (int, error) {
+		offset, added, err := pushProjection(ctx, &sqlparser.AliasedExpr{Expr: expr}, plan, true, true, false)
+		if err != nil {
+			return 0, err
+		}
+		if added && !canPushProjection {
+			return 0, vterrors.VT13001("column should not be pushed to projection while doing a column lookup")
+		}
+		return offset, nil
 	}
-	if added && !s.canPushProjection {
-		return 0, vterrors.VT13001("column should not be pushed to projection while doing a column lookup")
-	}
-	return offset, nil
-}
-
-func (s *simpleConverterLookup) CollationForExpr(expr sqlparser.Expr) collations.ID {
-	return s.ctx.SemTable.CollationForExpr(expr)
-}
-
-func (s *simpleConverterLookup) DefaultCollation() collations.ID {
-	return s.ctx.SemTable.Collation
 }
 
 // newFilter builds a new filter.
 func newFilter(ctx *plancontext.PlanningContext, plan logicalPlan, expr sqlparser.Expr) (*filter, error) {
-	scl := &simpleConverterLookup{
-		ctx:  ctx,
-		plan: plan,
-	}
-	predicate, err := evalengine.Translate(expr, scl)
+	predicate, err := evalengine.Translate(expr, &evalengine.Config{
+		ResolveColumn: resolveFromPlan(ctx, plan, false),
+		ResolveType:   ctx.SemTable.TypeForExpr,
+		Collation:     ctx.SemTable.Collation,
+	})
 	if err != nil {
 		return nil, err
 	}

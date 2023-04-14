@@ -54,8 +54,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfAlterVschema(parent, node, replacer)
 	case *AndExpr:
 		return a.rewriteRefOfAndExpr(parent, node, replacer)
-	case Argument:
-		return a.rewriteArgument(parent, node, replacer)
+	case *Argument:
+		return a.rewriteRefOfArgument(parent, node, replacer)
 	case *ArgumentLessWindowExpr:
 		return a.rewriteRefOfArgumentLessWindowExpr(parent, node, replacer)
 	case *AutoIncSpec:
@@ -180,6 +180,14 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfFuncExpr(parent, node, replacer)
 	case *GTIDFuncExpr:
 		return a.rewriteRefOfGTIDFuncExpr(parent, node, replacer)
+	case *GeomFormatExpr:
+		return a.rewriteRefOfGeomFormatExpr(parent, node, replacer)
+	case *GeomFromTextExpr:
+		return a.rewriteRefOfGeomFromTextExpr(parent, node, replacer)
+	case *GeomFromWKBExpr:
+		return a.rewriteRefOfGeomFromWKBExpr(parent, node, replacer)
+	case *GeomPropertyFuncExpr:
+		return a.rewriteRefOfGeomPropertyFuncExpr(parent, node, replacer)
 	case GroupBy:
 		return a.rewriteGroupBy(parent, node, replacer)
 	case *GroupConcatExpr:
@@ -294,6 +302,12 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfMin(parent, node, replacer)
 	case *ModifyColumn:
 		return a.rewriteRefOfModifyColumn(parent, node, replacer)
+	case *MultiLinestringExpr:
+		return a.rewriteRefOfMultiLinestringExpr(parent, node, replacer)
+	case *MultiPointExpr:
+		return a.rewriteRefOfMultiPointExpr(parent, node, replacer)
+	case *MultiPolygonExpr:
+		return a.rewriteRefOfMultiPolygonExpr(parent, node, replacer)
 	case *NTHValueExpr:
 		return a.rewriteRefOfNTHValueExpr(parent, node, replacer)
 	case *NamedWindow:
@@ -356,6 +370,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfPolygonExpr(parent, node, replacer)
 	case *PrepareStmt:
 		return a.rewriteRefOfPrepareStmt(parent, node, replacer)
+	case *PurgeBinaryLogs:
+		return a.rewriteRefOfPurgeBinaryLogs(parent, node, replacer)
 	case ReferenceAction:
 		return a.rewriteReferenceAction(parent, node, replacer)
 	case *ReferenceDefinition:
@@ -1024,6 +1040,30 @@ func (a *application) rewriteRefOfAndExpr(parent SQLNode, node *AndExpr, replace
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfArgument(parent SQLNode, node *Argument, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if a.post != nil {
+		if a.pre == nil {
+			a.cur.replacer = replacer
+			a.cur.parent = parent
+			a.cur.node = node
+		}
 		if !a.post(&a.cur) {
 			return false
 		}
@@ -2080,11 +2120,6 @@ func (a *application) rewriteRefOfCurTimeFuncExpr(parent SQLNode, node *CurTimeF
 	}) {
 		return false
 	}
-	if !a.rewriteExpr(node, node.Fsp, func(newNode, parent SQLNode) {
-		parent.(*CurTimeFuncExpr).Fsp = newNode.(Expr)
-	}) {
-		return false
-	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -2953,6 +2988,139 @@ func (a *application) rewriteRefOfGTIDFuncExpr(parent SQLNode, node *GTIDFuncExp
 	}
 	if !a.rewriteExpr(node, node.Channel, func(newNode, parent SQLNode) {
 		parent.(*GTIDFuncExpr).Channel = newNode.(Expr)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfGeomFormatExpr(parent SQLNode, node *GeomFormatExpr, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteExpr(node, node.Geom, func(newNode, parent SQLNode) {
+		parent.(*GeomFormatExpr).Geom = newNode.(Expr)
+	}) {
+		return false
+	}
+	if !a.rewriteExpr(node, node.AxisOrderOpt, func(newNode, parent SQLNode) {
+		parent.(*GeomFormatExpr).AxisOrderOpt = newNode.(Expr)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfGeomFromTextExpr(parent SQLNode, node *GeomFromTextExpr, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteExpr(node, node.WktText, func(newNode, parent SQLNode) {
+		parent.(*GeomFromTextExpr).WktText = newNode.(Expr)
+	}) {
+		return false
+	}
+	if !a.rewriteExpr(node, node.Srid, func(newNode, parent SQLNode) {
+		parent.(*GeomFromTextExpr).Srid = newNode.(Expr)
+	}) {
+		return false
+	}
+	if !a.rewriteExpr(node, node.AxisOrderOpt, func(newNode, parent SQLNode) {
+		parent.(*GeomFromTextExpr).AxisOrderOpt = newNode.(Expr)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfGeomFromWKBExpr(parent SQLNode, node *GeomFromWKBExpr, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteExpr(node, node.WkbBlob, func(newNode, parent SQLNode) {
+		parent.(*GeomFromWKBExpr).WkbBlob = newNode.(Expr)
+	}) {
+		return false
+	}
+	if !a.rewriteExpr(node, node.Srid, func(newNode, parent SQLNode) {
+		parent.(*GeomFromWKBExpr).Srid = newNode.(Expr)
+	}) {
+		return false
+	}
+	if !a.rewriteExpr(node, node.AxisOrderOpt, func(newNode, parent SQLNode) {
+		parent.(*GeomFromWKBExpr).AxisOrderOpt = newNode.(Expr)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfGeomPropertyFuncExpr(parent SQLNode, node *GeomPropertyFuncExpr, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteExpr(node, node.Geom, func(newNode, parent SQLNode) {
+		parent.(*GeomPropertyFuncExpr).Geom = newNode.(Expr)
 	}) {
 		return false
 	}
@@ -4732,6 +4900,87 @@ func (a *application) rewriteRefOfModifyColumn(parent SQLNode, node *ModifyColum
 	}
 	return true
 }
+func (a *application) rewriteRefOfMultiLinestringExpr(parent SQLNode, node *MultiLinestringExpr, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteExprs(node, node.LinestringParams, func(newNode, parent SQLNode) {
+		parent.(*MultiLinestringExpr).LinestringParams = newNode.(Exprs)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfMultiPointExpr(parent SQLNode, node *MultiPointExpr, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteExprs(node, node.PointParams, func(newNode, parent SQLNode) {
+		parent.(*MultiPointExpr).PointParams = newNode.(Exprs)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfMultiPolygonExpr(parent SQLNode, node *MultiPolygonExpr, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteExprs(node, node.PolygonParams, func(newNode, parent SQLNode) {
+		parent.(*MultiPolygonExpr).PolygonParams = newNode.(Exprs)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
 func (a *application) rewriteRefOfNTHValueExpr(parent SQLNode, node *NTHValueExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -4989,12 +5238,15 @@ func (a *application) rewriteRefOfOffset(parent SQLNode, node *Offset, replacer 
 			return true
 		}
 	}
+	if !a.rewriteExpr(node, node.Original, func(newNode, parent SQLNode) {
+		parent.(*Offset).Original = newNode.(Expr)
+	}) {
+		return false
+	}
 	if a.post != nil {
-		if a.pre == nil {
-			a.cur.replacer = replacer
-			a.cur.parent = parent
-			a.cur.node = node
-		}
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
 		if !a.post(&a.cur) {
 			return false
 		}
@@ -5700,6 +5952,30 @@ func (a *application) rewriteRefOfPrepareStmt(parent SQLNode, node *PrepareStmt,
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfPurgeBinaryLogs(parent SQLNode, node *PurgeBinaryLogs, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if a.post != nil {
+		if a.pre == nil {
+			a.cur.replacer = replacer
+			a.cur.parent = parent
+			a.cur.node = node
+		}
 		if !a.post(&a.cur) {
 			return false
 		}
@@ -8449,6 +8725,14 @@ func (a *application) rewriteCallable(parent SQLNode, node Callable, replacer re
 		return a.rewriteRefOfFuncExpr(parent, node, replacer)
 	case *GTIDFuncExpr:
 		return a.rewriteRefOfGTIDFuncExpr(parent, node, replacer)
+	case *GeomFormatExpr:
+		return a.rewriteRefOfGeomFormatExpr(parent, node, replacer)
+	case *GeomFromTextExpr:
+		return a.rewriteRefOfGeomFromTextExpr(parent, node, replacer)
+	case *GeomFromWKBExpr:
+		return a.rewriteRefOfGeomFromWKBExpr(parent, node, replacer)
+	case *GeomPropertyFuncExpr:
+		return a.rewriteRefOfGeomPropertyFuncExpr(parent, node, replacer)
 	case *GroupConcatExpr:
 		return a.rewriteRefOfGroupConcatExpr(parent, node, replacer)
 	case *InsertExpr:
@@ -8509,6 +8793,12 @@ func (a *application) rewriteCallable(parent SQLNode, node Callable, replacer re
 		return a.rewriteRefOfMemberOfExpr(parent, node, replacer)
 	case *Min:
 		return a.rewriteRefOfMin(parent, node, replacer)
+	case *MultiLinestringExpr:
+		return a.rewriteRefOfMultiLinestringExpr(parent, node, replacer)
+	case *MultiPointExpr:
+		return a.rewriteRefOfMultiPointExpr(parent, node, replacer)
+	case *MultiPolygonExpr:
+		return a.rewriteRefOfMultiPolygonExpr(parent, node, replacer)
 	case *NTHValueExpr:
 		return a.rewriteRefOfNTHValueExpr(parent, node, replacer)
 	case *NamedWindow:
@@ -8641,8 +8931,8 @@ func (a *application) rewriteExpr(parent SQLNode, node Expr, replacer replacerFu
 	switch node := node.(type) {
 	case *AndExpr:
 		return a.rewriteRefOfAndExpr(parent, node, replacer)
-	case Argument:
-		return a.rewriteArgument(parent, node, replacer)
+	case *Argument:
+		return a.rewriteRefOfArgument(parent, node, replacer)
 	case *ArgumentLessWindowExpr:
 		return a.rewriteRefOfArgumentLessWindowExpr(parent, node, replacer)
 	case *Avg:
@@ -8697,6 +8987,14 @@ func (a *application) rewriteExpr(parent SQLNode, node Expr, replacer replacerFu
 		return a.rewriteRefOfFuncExpr(parent, node, replacer)
 	case *GTIDFuncExpr:
 		return a.rewriteRefOfGTIDFuncExpr(parent, node, replacer)
+	case *GeomFormatExpr:
+		return a.rewriteRefOfGeomFormatExpr(parent, node, replacer)
+	case *GeomFromTextExpr:
+		return a.rewriteRefOfGeomFromTextExpr(parent, node, replacer)
+	case *GeomFromWKBExpr:
+		return a.rewriteRefOfGeomFromWKBExpr(parent, node, replacer)
+	case *GeomPropertyFuncExpr:
+		return a.rewriteRefOfGeomPropertyFuncExpr(parent, node, replacer)
 	case *GroupConcatExpr:
 		return a.rewriteRefOfGroupConcatExpr(parent, node, replacer)
 	case *InsertExpr:
@@ -8769,6 +9067,12 @@ func (a *application) rewriteExpr(parent SQLNode, node Expr, replacer replacerFu
 		return a.rewriteRefOfMemberOfExpr(parent, node, replacer)
 	case *Min:
 		return a.rewriteRefOfMin(parent, node, replacer)
+	case *MultiLinestringExpr:
+		return a.rewriteRefOfMultiLinestringExpr(parent, node, replacer)
+	case *MultiPointExpr:
+		return a.rewriteRefOfMultiPointExpr(parent, node, replacer)
+	case *MultiPolygonExpr:
+		return a.rewriteRefOfMultiPolygonExpr(parent, node, replacer)
 	case *NTHValueExpr:
 		return a.rewriteRefOfNTHValueExpr(parent, node, replacer)
 	case *NamedWindow:
@@ -8975,6 +9279,8 @@ func (a *application) rewriteStatement(parent SQLNode, node Statement, replacer 
 		return a.rewriteRefOfOtherRead(parent, node, replacer)
 	case *PrepareStmt:
 		return a.rewriteRefOfPrepareStmt(parent, node, replacer)
+	case *PurgeBinaryLogs:
+		return a.rewriteRefOfPurgeBinaryLogs(parent, node, replacer)
 	case *Release:
 		return a.rewriteRefOfRelease(parent, node, replacer)
 	case *RenameTable:
@@ -9039,27 +9345,6 @@ func (a *application) rewriteTableExpr(parent SQLNode, node TableExpr, replacer 
 	}
 }
 func (a *application) rewriteAlgorithmValue(parent SQLNode, node AlgorithmValue, replacer replacerFunc) bool {
-	if a.pre != nil {
-		a.cur.replacer = replacer
-		a.cur.parent = parent
-		a.cur.node = node
-		if !a.pre(&a.cur) {
-			return true
-		}
-	}
-	if a.post != nil {
-		if a.pre == nil {
-			a.cur.replacer = replacer
-			a.cur.parent = parent
-			a.cur.node = node
-		}
-		if !a.post(&a.cur) {
-			return false
-		}
-	}
-	return true
-}
-func (a *application) rewriteArgument(parent SQLNode, node Argument, replacer replacerFunc) bool {
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent

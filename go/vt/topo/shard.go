@@ -31,6 +31,7 @@ import (
 
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/event"
@@ -120,6 +121,10 @@ func IsShardUsingRangeBasedSharding(shard string) bool {
 // ValidateShardName takes a shard name and sanitizes it, and also returns
 // the KeyRange.
 func ValidateShardName(shard string) (string, *topodatapb.KeyRange, error) {
+	if strings.Contains(shard, "/") {
+		return "", nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "invalid shardId, may not contain '/': %v", shard)
+	}
+
 	if !IsShardUsingRangeBasedSharding(shard) {
 		return shard, nil, nil
 	}
@@ -304,7 +309,7 @@ func (ts *Server) CreateShard(ctx context.Context, keyspace, shard string) (err 
 		return err
 	}
 	for _, si := range sis {
-		if si.KeyRange == nil || key.KeyRangesIntersect(si.KeyRange, keyRange) {
+		if si.KeyRange == nil || key.KeyRangeIntersect(si.KeyRange, keyRange) {
 			value.IsPrimaryServing = false
 			break
 		}
@@ -339,8 +344,17 @@ func (ts *Server) GetOrCreateShard(ctx context.Context, keyspace, shard string) 
 		return
 	}
 
-	// create the keyspace, maybe it already exists
-	if err = ts.CreateKeyspace(ctx, keyspace, &topodatapb.Keyspace{}); err != nil && !IsErrType(err, NodeExists) {
+	// Create the keyspace, if it does not already exist.
+	// We store the sidecar database name in the keyspace record.
+	// If not already set, then it is set to the default (_vt) by
+	// the first tablet to start in the keyspace and is from
+	// then on immutable. Any other tablets that try to come up in
+	// this keyspace will be able to serve queries but will fail to
+	// fully initialize and perform certain operations (e.g.
+	// OnlineDDL or VReplication workflows) if they are using a
+	// different sidecar database name.
+	ksi := topodatapb.Keyspace{SidecarDbName: sidecardb.GetName()}
+	if err = ts.CreateKeyspace(ctx, keyspace, &ksi); err != nil && !IsErrType(err, NodeExists) {
 		return nil, vterrors.Wrapf(err, "CreateKeyspace(%v) failed", keyspace)
 	}
 

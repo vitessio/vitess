@@ -208,13 +208,13 @@
     "comment": "join in update tables",
     "query": "update user join user_extra on user.id = user_extra.id set user.name = 'foo'",
     "v3-plan": "VT12001: unsupported: multi-shard or vindex write statement",
-    "gen4-plan": "VT12001: unsupported: multiple tables in update"
+    "gen4-plan": "VT12001: unsupported: unaliased multiple tables in update"
   },
   {
     "comment": "multiple tables in update",
     "query": "update user as u, user_extra as ue set u.name = 'foo' where u.id = ue.id",
     "v3-plan": "VT12001: unsupported: multi-shard or vindex write statement",
-    "gen4-plan": "VT12001: unsupported: multiple tables in update"
+    "gen4-plan": "VT12001: unsupported: multiple (2) tables in update"
   },
   {
     "comment": "unsharded insert, unqualified names and auto-inc combined",
@@ -372,7 +372,7 @@
   {
     "comment": "create view with Cannot auto-resolve for cross-shard joins",
     "query": "create view user.view_a as select col from user join user_extra",
-    "v3-plan": "VT03019: symbol col not found",
+    "v3-plan": "VT03019: column col not found",
     "gen4-plan": "Column 'col' in field list is ambiguous"
   },
   {
@@ -414,7 +414,7 @@
   {
     "comment": "scatter aggregate with ambiguous aliases",
     "query": "select distinct a, b as a from user",
-    "v3-plan": "generating ORDER BY clause: VT03021: ambiguous symbol reference: a",
+    "v3-plan": "generating ORDER BY clause: VT03021: ambiguous column reference: a",
     "gen4-plan": "VT13001: [BUG] generating ORDER BY clause: ambiguous symbol reference: a"
   },
   {

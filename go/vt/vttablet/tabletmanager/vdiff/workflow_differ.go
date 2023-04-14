@@ -236,7 +236,7 @@ func (wd *workflowDiffer) buildPlan(dbClient binlogplayer.DBClient, filter *binl
 			buf := sqlparser.NewTrackedBuffer(nil)
 			buf.Myprintf("select * from %v", sqlparser.NewIdentifierCS(table.Name))
 			sourceQuery = buf.String()
-		case key.IsKeyRange(rule.Filter):
+		case key.IsValidKeyRange(rule.Filter):
 			buf := sqlparser.NewTrackedBuffer(nil)
 			buf.Myprintf("select * from %v where in_keyrange(%v)", sqlparser.NewIdentifierCS(table.Name), sqlparser.NewStrLiteral(rule.Filter))
 			sourceQuery = buf.String()

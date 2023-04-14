@@ -1047,7 +1047,7 @@ func (node *ExecuteStmt) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *DeallocateStmt) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "%s %vprepare %v", node.Type.ToString(), node.Comments, node.Name)
+	buf.astPrintf(node, "deallocate %vprepare %v", node.Comments, node.Name)
 }
 
 // Format formats the node.
@@ -1311,8 +1311,14 @@ func (node *Literal) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node.
-func (node Argument) Format(buf *TrackedBuffer) {
-	buf.WriteArg(":", string(node))
+func (node *Argument) Format(buf *TrackedBuffer) {
+	buf.WriteArg(":", node.Name)
+	if node.Type >= 0 {
+		// For bind variables that are statically typed, emit their type as an adjacent comment.
+		// This comment will be ignored by older versions of Vitess (and by MySQL) but will provide
+		// type safety when using the query as a cache key.
+		buf.astPrintf(node, " /* %s */", node.Type.String())
+	}
 }
 
 // Format formats the node.
@@ -1480,8 +1486,8 @@ func (node *WeightStringFuncExpr) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *CurTimeFuncExpr) Format(buf *TrackedBuffer) {
-	if node.Fsp != nil {
-		buf.astPrintf(node, "%#s(%v)", node.Name.String(), node.Fsp)
+	if node.Fsp > 0 {
+		buf.astPrintf(node, "%#s(%d)", node.Name.String(), node.Fsp)
 	} else {
 		buf.astPrintf(node, "%#s()", node.Name.String())
 	}
@@ -2770,4 +2776,66 @@ func (node *LineStringExpr) Format(buf *TrackedBuffer) {
 // Format formats the node.
 func (node *PolygonExpr) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "polygon(%v)", node.LinestringParams)
+}
+
+// Format formats the node.
+func (node *PurgeBinaryLogs) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "purge binary logs")
+	if node.To != "" {
+		buf.astPrintf(node, " to '%#s'", node.To)
+	} else {
+		buf.astPrintf(node, " before '%#s'", node.Before)
+	}
+}
+
+func (node *MultiPolygonExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "multipolygon(%v)", node.PolygonParams)
+}
+
+// Format formats the node.
+func (node *MultiPointExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "multipoint(%v)", node.PointParams)
+}
+
+// Format formats the node.
+func (node *MultiLinestringExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "multilinestring(%v)", node.LinestringParams)
+}
+
+// Format formats the node
+func (node *GeomFromTextExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "%s(%v", node.Type.ToString(), node.WktText)
+	if node.Srid != nil {
+		buf.astPrintf(node, ", %v", node.Srid)
+	}
+	if node.AxisOrderOpt != nil {
+		buf.astPrintf(node, ", %v", node.AxisOrderOpt)
+	}
+	buf.WriteByte(')')
+}
+
+// Format formats the node
+func (node *GeomFromWKBExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "%s(%v", node.Type.ToString(), node.WkbBlob)
+	if node.Srid != nil {
+		buf.astPrintf(node, ", %v", node.Srid)
+	}
+	if node.AxisOrderOpt != nil {
+		buf.astPrintf(node, ", %v", node.AxisOrderOpt)
+	}
+	buf.WriteByte(')')
+}
+
+// Format formats the node
+func (node *GeomFormatExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "%s(%v", node.FormatType.ToString(), node.Geom)
+	if node.AxisOrderOpt != nil {
+		buf.astPrintf(node, ", %v", node.AxisOrderOpt)
+	}
+	buf.WriteByte(')')
+}
+
+// Format formats the node
+func (node *GeomPropertyFuncExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "%s(%v)", node.Property.ToString(), node.Geom)
 }

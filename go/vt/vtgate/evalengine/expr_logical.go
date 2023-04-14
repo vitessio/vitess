@@ -19,13 +19,14 @@ package evalengine
 import (
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
 type (
 	LogicalExpr struct {
 		BinaryExpr
-		op     func(left, right boolean) boolean
+		op     func(left, right Expr, env *ExpressionEnv) (boolean, error)
 		opname string
 	}
 
@@ -100,55 +101,100 @@ func (left boolean) not() boolean {
 	}
 }
 
-func (left boolean) and(right boolean) boolean {
+func opAnd(le, re Expr, env *ExpressionEnv) (boolean, error) {
 	// Logical AND.
 	// Evaluates to 1 if all operands are nonzero and not NULL, to 0 if one or more operands are 0, otherwise NULL is returned.
+	l, err := le.eval(env)
+	if err != nil {
+		return boolNULL, err
+	}
+
+	left := evalIsTruthy(l)
+	if left == boolFalse {
+		return boolFalse, nil
+	}
+
+	r, err := re.eval(env)
+	if err != nil {
+		return boolNULL, err
+	}
+	right := evalIsTruthy(r)
+
 	switch {
 	case left == boolTrue && right == boolTrue:
-		return boolTrue
-	case left == boolFalse || right == boolFalse:
-		return boolFalse
+		return boolTrue, nil
+	case right == boolFalse:
+		return boolFalse, nil
 	default:
-		return boolNULL
+		return boolNULL, nil
 	}
 }
 
-func (left boolean) or(right boolean) boolean {
+func opOr(le, re Expr, env *ExpressionEnv) (boolean, error) {
 	// Logical OR. When both operands are non-NULL, the result is 1 if any operand is nonzero, and 0 otherwise.
 	// With a NULL operand, the result is 1 if the other operand is nonzero, and NULL otherwise.
 	// If both operands are NULL, the result is NULL.
+	l, err := le.eval(env)
+	if err != nil {
+		return boolNULL, err
+	}
+
+	left := evalIsTruthy(l)
+	if left == boolTrue {
+		return boolTrue, nil
+	}
+
+	r, err := re.eval(env)
+	if err != nil {
+		return boolNULL, err
+	}
+	right := evalIsTruthy(r)
+
 	switch {
 	case left == boolNULL:
 		if right == boolTrue {
-			return boolTrue
+			return boolTrue, nil
 		}
-		return boolNULL
+		return boolNULL, nil
 
 	case right == boolNULL:
-		if left == boolTrue {
-			return boolTrue
-		}
-		return boolNULL
+		return boolNULL, nil
 
 	default:
-		if left == boolTrue || right == boolTrue {
-			return boolTrue
+		if right == boolTrue {
+			return boolTrue, nil
 		}
-		return boolFalse
+		return boolFalse, nil
 	}
 }
 
-func (left boolean) xor(right boolean) boolean {
+func opXor(le, re Expr, env *ExpressionEnv) (boolean, error) {
 	// Logical XOR. Returns NULL if either operand is NULL.
 	// For non-NULL operands, evaluates to 1 if an odd number of operands is nonzero, otherwise 0 is returned.
+	l, err := le.eval(env)
+	if err != nil {
+		return boolNULL, err
+	}
+
+	left := evalIsTruthy(l)
+	if left == boolNULL {
+		return boolNULL, nil
+	}
+
+	r, err := re.eval(env)
+	if err != nil {
+		return boolNULL, err
+	}
+	right := evalIsTruthy(r)
+
 	switch {
 	case left == boolNULL || right == boolNULL:
-		return boolNULL
+		return boolNULL, nil
 	default:
 		if left != right {
-			return boolTrue
+			return boolTrue, nil
 		}
-		return boolFalse
+		return boolFalse, nil
 	}
 }
 
@@ -160,23 +206,20 @@ func (n *NotExpr) eval(env *ExpressionEnv) (eval, error) {
 	return evalIsTruthy(e).not().eval(), nil
 }
 
-func (n *NotExpr) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
-	_, flags := n.Inner.typeof(env)
-	return sqltypes.Uint64, flags
+func (n *NotExpr) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	_, flags := n.Inner.typeof(env, fields)
+	return sqltypes.Int64, flags | flagIsBoolean
 }
 
 func (l *LogicalExpr) eval(env *ExpressionEnv) (eval, error) {
-	left, right, err := l.arguments(env)
-	if err != nil {
-		return nil, err
-	}
-	return l.op(evalIsTruthy(left), evalIsTruthy(right)).eval(), nil
+	res, err := l.op(l.Left, l.Right, env)
+	return res.eval(), err
 }
 
-func (l *LogicalExpr) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
-	_, f1 := l.Left.typeof(env)
-	_, f2 := l.Right.typeof(env)
-	return sqltypes.Uint64, f1 | f2
+func (l *LogicalExpr) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	_, f1 := l.Left.typeof(env, fields)
+	_, f2 := l.Right.typeof(env, fields)
+	return sqltypes.Int64, f1 | f2 | flagIsBoolean
 }
 
 func (i *IsExpr) eval(env *ExpressionEnv) (eval, error) {
@@ -187,7 +230,7 @@ func (i *IsExpr) eval(env *ExpressionEnv) (eval, error) {
 	return newEvalBool(i.Check(e)), nil
 }
 
-func (i *IsExpr) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
+func (i *IsExpr) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
 	return sqltypes.Int64, 0
 }
 
@@ -238,21 +281,21 @@ func (c *CaseExpr) eval(env *ExpressionEnv) (eval, error) {
 	if !matched {
 		return nil, nil
 	}
-	t, _ := c.typeof(env)
+	t, _ := c.typeof(env, nil)
 	return evalCoerce(result, t, ca.result().Collation)
 }
 
-func (c *CaseExpr) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
+func (c *CaseExpr) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
 	var ta typeAggregation
 	var resultFlag typeFlag
 
 	for _, whenthen := range c.cases {
-		t, f := whenthen.then.typeof(env)
+		t, f := whenthen.then.typeof(env, fields)
 		ta.add(t, f)
 		resultFlag = resultFlag | f
 	}
 	if c.Else != nil {
-		t, f := c.Else.typeof(env)
+		t, f := c.Else.typeof(env, fields)
 		ta.add(t, f)
 		resultFlag = f
 	}

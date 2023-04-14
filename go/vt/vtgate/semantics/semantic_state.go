@@ -20,11 +20,9 @@ import (
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
-	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -131,6 +129,16 @@ func (st *SemTable) CopyDependencies(from, to sqlparser.Expr) {
 	st.Direct[to] = st.DirectDeps(from)
 }
 
+// CopyDependencies copies the dependencies from one expression into the other
+func (st *SemTable) Cloned(from, to sqlparser.SQLNode) {
+	f, fromOK := from.(sqlparser.Expr)
+	t, toOK := to.(sqlparser.Expr)
+	if !(fromOK && toOK) {
+		return
+	}
+	st.CopyDependencies(f, t)
+}
+
 // EmptySemTable creates a new empty SemTable
 func EmptySemTable() *SemTable {
 	return &SemTable{
@@ -232,13 +240,12 @@ func (st *SemTable) AddExprs(tbl *sqlparser.AliasedTableExpr, cols sqlparser.Sel
 	}
 }
 
-// TypeFor returns the type of expressions in the query
-func (st *SemTable) TypeFor(e sqlparser.Expr) *querypb.Type {
-	typ, found := st.ExprTypes[e]
-	if found {
-		return &typ.Type
+// TypeForExpr returns the type of expressions in the query
+func (st *SemTable) TypeForExpr(e sqlparser.Expr) (sqltypes.Type, collations.ID, bool) {
+	if typ, found := st.ExprTypes[e]; found {
+		return typ.Type, typ.Collation, true
 	}
-	return nil
+	return -1, collations.Unknown, false
 }
 
 // CollationForExpr returns the collation name of expressions in the query
@@ -358,8 +365,6 @@ func (st *SemTable) CopyExprInfo(src, dest sqlparser.Expr) {
 		st.ExprTypes[dest] = srcType
 	}
 }
-
-var _ evalengine.TranslationLookup = (*SemTable)(nil)
 
 var columnNotSupportedErr = vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "column access not supported here")
 

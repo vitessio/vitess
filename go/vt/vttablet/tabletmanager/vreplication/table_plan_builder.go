@@ -201,7 +201,7 @@ func buildTablePlan(tableName string, rule *binlogdatapb.Rule, colInfos []*Colum
 		buf := sqlparser.NewTrackedBuffer(nil)
 		buf.Myprintf("select * from %v", sqlparser.NewIdentifierCS(tableName))
 		query = buf.String()
-	case key.IsKeyRange(filter):
+	case key.IsValidKeyRange(filter):
 		buf := sqlparser.NewTrackedBuffer(nil)
 		buf.Myprintf("select * from %v where in_keyrange(%v)", sqlparser.NewIdentifierCS(tableName), sqlparser.NewStrLiteral(filter))
 		query = buf.String()
@@ -676,7 +676,7 @@ func (tpb *tablePlanBuilder) generateValuesPart(buf *sqlparser.TrackedBuffer, bv
 		case opExpr:
 			switch cexpr.colType {
 			case querypb.Type_JSON:
-				buf.Myprintf("convert(%v using utf8mb4)", cexpr.expr)
+				buf.Myprintf("%v", cexpr.expr)
 			case querypb.Type_DATETIME:
 				sourceTZ := tpb.source.SourceTimeZone
 				targetTZ := tpb.source.TargetTimeZone
@@ -780,7 +780,7 @@ func (tpb *tablePlanBuilder) generateUpdateStatement() *sqlparser.ParsedQuery {
 			bvf.mode = bvAfter
 			switch cexpr.colType {
 			case querypb.Type_JSON:
-				buf.Myprintf("convert(%v using utf8mb4)", cexpr.expr)
+				buf.Myprintf("%v", cexpr.expr)
 			case querypb.Type_DATETIME:
 				sourceTZ := tpb.source.SourceTimeZone
 				targetTZ := tpb.source.TargetTimeZone

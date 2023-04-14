@@ -27,7 +27,6 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/pools"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/trace"
@@ -35,6 +34,7 @@ import (
 	"vitess.io/vitess/go/vt/callinfo"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/schema"
+	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/tableacl"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -62,11 +62,11 @@ type QueryExecutor struct {
 	tsv            *TabletServer
 	tabletType     topodatapb.TabletType
 	setting        *pools.Setting
+	workload       string
 }
 
 const (
-	streamRowsSize         = 256
-	maxQueryBufferDuration = 15 * time.Second
+	streamRowsSize = 256
 )
 
 var (
@@ -132,11 +132,12 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 		vtErrorCode := vterrors.Code(err)
 		errCode = vtErrorCode.String()
 		if reply == nil {
-			qre.tsv.qe.AddStats(qre.plan.PlanID, tableName, 1, duration, mysqlTime, 0, 0, 1, errCode)
+			qre.tsv.qe.AddStats(qre.plan.PlanID, tableName, qre.options.GetWorkloadName(), 1, duration, mysqlTime, 0, 0, 1, errCode)
 			qre.plan.AddStats(1, duration, mysqlTime, 0, 0, 1)
 			return
 		}
-		qre.tsv.qe.AddStats(qre.plan.PlanID, tableName, 1, duration, mysqlTime, int64(reply.RowsAffected), int64(len(reply.Rows)), 0, errCode)
+
+		qre.tsv.qe.AddStats(qre.plan.PlanID, tableName, qre.options.GetWorkloadName(), 1, duration, mysqlTime, int64(reply.RowsAffected), int64(len(reply.Rows)), 0, errCode)
 		qre.plan.AddStats(1, duration, mysqlTime, reply.RowsAffected, uint64(len(reply.Rows)), 0)
 		qre.logStats.RowsAffected = int(reply.RowsAffected)
 		qre.logStats.Rows = reply.Rows
@@ -201,6 +202,8 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 		return qre.execAlterMigration()
 	case p.PlanRevertMigration:
 		return qre.execRevertMigration()
+	case p.PlanShowMigrations:
+		return qre.execShowMigrations()
 	case p.PlanShowMigrationLogs:
 		return qre.execShowMigrationLogs()
 	case p.PlanShowThrottledApps:
@@ -541,10 +544,11 @@ func (qre *QueryExecutor) checkPermissions() error {
 		username = ci.Username()
 	}
 
-	bufferingTimeoutCtx, cancel := context.WithTimeout(qre.ctx, maxQueryBufferDuration)
+	action, ruleCancelCtx, timeout, desc := qre.plan.Rules.GetAction(remoteAddr, username, qre.bindVars, qre.marginComments)
+
+	bufferingTimeoutCtx, cancel := context.WithTimeout(qre.ctx, timeout) // aborts buffering at given timeout
 	defer cancel()
 
-	action, ruleCancelCtx, desc := qre.plan.Rules.GetAction(remoteAddr, username, qre.bindVars, qre.marginComments)
 	switch action {
 	case rules.QRFail:
 		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "disallowed due to rule: %s", desc)
@@ -559,7 +563,7 @@ func (qre *QueryExecutor) checkPermissions() error {
 				// good! We have buffered the query, and buffering is completed
 			case <-bufferingTimeoutCtx.Done():
 				// Sorry, timeout while waiting for buffering to complete
-				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "buffer timeout in rule: %s", desc)
+				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "buffer timeout after %v in rule: %s", timeout, desc)
 			}
 		}
 	default:
@@ -708,7 +712,7 @@ func (*QueryExecutor) BeginAgain(ctx context.Context, dc *StatefulConnection) er
 }
 
 func (qre *QueryExecutor) execNextval() (*sqltypes.Result, error) {
-	env := evalengine.EnvWithBindVars(qre.bindVars, collations.Unknown)
+	env := evalengine.NewExpressionEnv(qre.ctx, qre.bindVars, nil)
 	result, err := env.Evaluate(qre.plan.NextCount)
 	if err != nil {
 		return nil, err
@@ -797,10 +801,12 @@ func (qre *QueryExecutor) execSelect() (*sqltypes.Result, error) {
 			conn, err := qre.getConn()
 
 			if err != nil {
-				q.Err = err
+				q.SetErr(err)
 			} else {
 				defer conn.Recycle()
-				q.Result, q.Err = qre.execDBConn(conn, sql, true)
+				res, err := qre.execDBConn(conn, sql, true)
+				q.SetResult(res)
+				q.SetErr(err)
 			}
 		} else {
 			qre.logStats.QuerySources |= tabletenv.QuerySourceConsolidator
@@ -808,10 +814,10 @@ func (qre *QueryExecutor) execSelect() (*sqltypes.Result, error) {
 			q.Wait()
 			qre.tsv.stats.WaitTimings.Record("Consolidations", startTime)
 		}
-		if q.Err != nil {
-			return nil, q.Err
+		if q.Err() != nil {
+			return nil, q.Err()
 		}
-		return q.Result.(*sqltypes.Result), nil
+		return q.Result(), nil
 	}
 	conn, err := qre.getConn()
 	if err != nil {
@@ -1054,6 +1060,13 @@ func (qre *QueryExecutor) execRevertMigration() (*sqltypes.Result, error) {
 	return qre.tsv.onlineDDLExecutor.SubmitMigration(qre.ctx, qre.plan.FullStmt)
 }
 
+func (qre *QueryExecutor) execShowMigrations() (*sqltypes.Result, error) {
+	if showStmt, ok := qre.plan.FullStmt.(*sqlparser.Show); ok {
+		return qre.tsv.onlineDDLExecutor.ShowMigrations(qre.ctx, showStmt)
+	}
+	return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "Expecting SHOW VITESS_MIGRATIONS plan")
+}
+
 func (qre *QueryExecutor) execShowMigrationLogs() (*sqltypes.Result, error) {
 	if showMigrationLogsStmt, ok := qre.plan.FullStmt.(*sqlparser.ShowMigrationLogs); ok {
 		return qre.tsv.onlineDDLExecutor.ShowMigrationLogs(qre.ctx, showMigrationLogsStmt)
@@ -1230,10 +1243,10 @@ func (qre *QueryExecutor) GetSchemaDefinitions(tableType querypb.SchemaTableType
 }
 
 func (qre *QueryExecutor) getViewDefinitions(viewNames []string, callback func(schemaRes *querypb.GetSchemaResponse) error) error {
-	query := mysql.FetchViews
+	query := sqlparser.BuildParsedQuery(mysql.FetchViews, sidecardb.GetIdentifier()).Query
 	var bindVars map[string]*querypb.BindVariable
 	if len(viewNames) > 0 {
-		query = mysql.FetchUpdatedViews
+		query = sqlparser.BuildParsedQuery(mysql.FetchUpdatedViews, sidecardb.GetIdentifier()).Query
 		bindVars = map[string]*querypb.BindVariable{
 			"viewnames": sqltypes.StringBindVariable(strings.Join(viewNames, ",")),
 		}

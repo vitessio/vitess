@@ -22,6 +22,7 @@ import (
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/collations/charset"
 	"vitess.io/vitess/go/sqltypes"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 type (
@@ -53,10 +54,10 @@ func (b *builtinCoalesce) eval(env *ExpressionEnv) (eval, error) {
 	return nil, nil
 }
 
-func (b *builtinCoalesce) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
+func (b *builtinCoalesce) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
 	var ta typeAggregation
 	for _, arg := range b.Arguments {
-		tt, f := arg.typeof(env)
+		tt, f := arg.typeof(env, fields)
 		ta.add(tt, f)
 	}
 	return ta.result(), flagNullable
@@ -157,13 +158,13 @@ func compareAllInteger_i(args []eval, cmp int) (eval, error) {
 }
 
 func compareAllFloat(args []eval, cmp int) (eval, error) {
-	candidateF, ok := evalToNumeric(args[0]).toFloat()
+	candidateF, ok := evalToFloat(args[0])
 	if !ok {
 		return nil, errDecimalOutOfRange
 	}
 
 	for _, arg := range args[1:] {
-		thisF, ok := evalToNumeric(arg).toFloat()
+		thisF, ok := evalToFloat(arg)
 		if !ok {
 			return nil, errDecimalOutOfRange
 		}
@@ -182,11 +183,11 @@ func evalDecimalPrecision(e eval) int32 {
 }
 
 func compareAllDecimal(args []eval, cmp int) (eval, error) {
-	decExtreme := evalToNumeric(args[0]).toDecimal(0, 0).dec
+	decExtreme := evalToDecimal(args[0], 0, 0).dec
 	precExtreme := evalDecimalPrecision(args[0])
 
 	for _, arg := range args[1:] {
-		d := evalToNumeric(arg).toDecimal(0, 0).dec
+		d := evalToDecimal(arg, 0, 0).dec
 		if (cmp < 0) == (d.Cmp(decExtreme) < 0) {
 			decExtreme = d
 		}
@@ -254,7 +255,7 @@ func (call *builtinMultiComparison) eval(env *ExpressionEnv) (eval, error) {
 	return getMultiComparisonFunc(args)(args, call.cmp)
 }
 
-func (call *builtinMultiComparison) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
+func (call *builtinMultiComparison) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
 	var (
 		integersI int
 		integersU int
@@ -266,7 +267,7 @@ func (call *builtinMultiComparison) typeof(env *ExpressionEnv) (sqltypes.Type, t
 	)
 
 	for _, expr := range call.Arguments {
-		tt, f := expr.typeof(env)
+		tt, f := expr.typeof(env, fields)
 		flags |= f
 
 		switch tt {

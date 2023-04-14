@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"math/rand"
 	"net/http"
 	"os"
 	"strings"
@@ -30,6 +31,7 @@ import (
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 
 	"github.com/stretchr/testify/assert"
@@ -378,7 +380,7 @@ func TestMultiCellVreplicationWorkflow(t *testing.T) {
 	require.NotNil(t, vtgate)
 	err := cluster.WaitForHealthyShard(vc.VtctldClient, keyspace, shard)
 	require.NoError(t, err)
-	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", keyspace, shard), 2)
+	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", keyspace, shard), 2, 30*time.Second)
 
 	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 	defer vtgateConn.Close()
@@ -386,6 +388,7 @@ func TestMultiCellVreplicationWorkflow(t *testing.T) {
 	insertInitialData(t)
 	shardCustomer(t, true, []*Cell{cell1, cell2}, cell2.Name, true)
 
+	checkIfDenyListExists(t, vc, "product:0", "customer")
 	// we tag along this test so as not to create the overhead of creating another cluster
 	testVStreamCellFlag(t)
 }
@@ -578,7 +581,7 @@ func TestCellAliasVreplicationWorkflow(t *testing.T) {
 	require.NotNil(t, vtgate)
 	err = cluster.WaitForHealthyShard(vc.VtctldClient, keyspace, shard)
 	require.NoError(t, err)
-	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", keyspace, shard), 2)
+	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", keyspace, shard), 2, 30*time.Second)
 
 	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 	defer vtgateConn.Close()
@@ -655,6 +658,26 @@ func testVStreamFrom(t *testing.T, table string, expectedRowCount int) {
 	}
 }
 
+const NumJSONRows = 100
+
+func insertJSONValues(t *testing.T) {
+	// insert null value combinations
+	execVtgateQuery(t, vtgateConn, "product:0", "insert into json_tbl(id) values(1)")
+	execVtgateQuery(t, vtgateConn, "product:0", "insert into json_tbl(id, j1) values(2, \"{}\")")
+	execVtgateQuery(t, vtgateConn, "product:0", "insert into json_tbl(id, j2) values(3, \"{}\")")
+
+	id := 4
+	q := "insert into json_tbl(id, j1, j2) values(%d, '%s', '%s')"
+	numJsonValues := len(jsonValues)
+	for id <= NumJSONRows {
+		id++
+		j1 := rand.Intn(numJsonValues)
+		j2 := rand.Intn(numJsonValues)
+		query := fmt.Sprintf(q, id, jsonValues[j1], jsonValues[j2])
+		execVtgateQuery(t, vtgateConn, "product:0", query)
+	}
+}
+
 func insertInitialData(t *testing.T) {
 	t.Run("insertInitialData", func(t *testing.T) {
 		log.Infof("Inserting initial data")
@@ -669,6 +692,8 @@ func insertInitialData(t *testing.T) {
 		waitForRowCount(t, vtgateConn, "product:0", "customer", 3)
 		waitForQueryResult(t, vtgateConn, "product:0", "select * from merchant",
 			`[[VARCHAR("Monoprice") VARCHAR("eléctronics")] [VARCHAR("newegg") VARCHAR("elec†ronics")]]`)
+
+		insertJSONValues(t)
 	})
 }
 
@@ -720,7 +745,7 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 		defaultCell := cells[0]
 		custKs := vc.Cells[defaultCell.Name].Keyspaces["customer"]
 
-		tables := "customer,Lead,Lead-1,db_order_test"
+		tables := "customer,Lead,Lead-1,db_order_test,geom_tbl,json_tbl"
 		moveTablesAction(t, "Create", sourceCellOrAlias, workflow, sourceKs, targetKs, tables)
 
 		customerTab1 := custKs.Shards["-80"].Tablets["zone1-200"].Vttablet
@@ -748,7 +773,7 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 		query := "select cid from customer"
 		require.True(t, validateThatQueryExecutesOnTablet(t, vtgateConn, productTab, "product", query, query))
 		insertQuery1 := "insert into customer(cid, name) values(1001, 'tempCustomer1')"
-		matchInsertQuery1 := "insert into customer(cid, `name`) values (:vtg1, :vtg2)"
+		matchInsertQuery1 := "insert into customer(cid, `name`) values (:vtg1 /* INT64 */, :vtg2 /* VARCHAR */)"
 		require.True(t, validateThatQueryExecutesOnTablet(t, vtgateConn, productTab, "product", insertQuery1, matchInsertQuery1))
 
 		// confirm that the backticking of table names in the routing rules works
@@ -789,7 +814,7 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 		ksShards := []string{"product/0", "customer/-80", "customer/80-"}
 		printShardPositions(vc, ksShards)
 		insertQuery2 := "insert into customer(name, cid) values('tempCustomer2', 100)"
-		matchInsertQuery2 := "insert into customer(`name`, cid) values (:vtg1, :_cid0)"
+		matchInsertQuery2 := "insert into customer(`name`, cid) values (:vtg1 /* VARCHAR */, :_cid0)"
 		require.False(t, validateThatQueryExecutesOnTablet(t, vtgateConn, productTab, "customer", insertQuery2, matchInsertQuery2))
 
 		insertQuery2 = "insert into customer(name, cid) values('tempCustomer3', 101)" // ID 101, hence due to reverse_bits in shard 80-
@@ -1331,7 +1356,7 @@ func waitForLowLag(t *testing.T, keyspace, workflow string) {
 }
 
 func catchup(t *testing.T, vttablet *cluster.VttabletProcess, workflow, info string) {
-	vttablet.WaitForVReplicationToCatchup(t, workflow, fmt.Sprintf("vt_%s", vttablet.Keyspace), maxWait)
+	vttablet.WaitForVReplicationToCatchup(t, workflow, fmt.Sprintf("vt_%s", vttablet.Keyspace), sidecarDBName, maxWait)
 }
 
 func moveTablesAction(t *testing.T, action, cell, workflow, sourceKs, targetKs, tables string, extraFlags ...string) {
@@ -1420,9 +1445,9 @@ func printSwitchWritesExtraDebug(t *testing.T, ksWorkflow, msg string) {
 		productTab := productKs.Shards["0"].Tablets["zone1-100"].Vttablet
 		tabs := []*cluster.VttabletProcess{productTab, customerTab1, customerTab2}
 		queries := []string{
-			"select  id, workflow, pos, stop_pos, cell, tablet_types, time_updated, transaction_timestamp, state, message from _vt.vreplication",
-			"select * from _vt.copy_state",
-			"select * from _vt.resharding_journal",
+			sqlparser.BuildParsedQuery("select  id, workflow, pos, stop_pos, cell, tablet_types, time_updated, transaction_timestamp, state, message from %s.vreplication", sidecarDBIdentifier).Query,
+			sqlparser.BuildParsedQuery("select * from %s.copy_state", sidecarDBIdentifier).Query,
+			sqlparser.BuildParsedQuery("select * from %s.resharding_journal", sidecarDBIdentifier).Query,
 		}
 		for _, tab := range tabs {
 			for _, query := range queries {

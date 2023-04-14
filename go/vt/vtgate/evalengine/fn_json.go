@@ -18,10 +18,11 @@ package evalengine
 
 import (
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/json"
 	"vitess.io/vitess/go/sqltypes"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/evalengine/internal/json"
 )
 
 type (
@@ -118,8 +119,8 @@ func builtin_JSON_EXTRACT(doc *json.Value, paths []eval) (eval, error) {
 	return json.NewArray(matches), nil
 }
 
-func (call *builtinJSONExtract) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
-	_, f := call.Arguments[0].typeof(env)
+func (call *builtinJSONExtract) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	_, f := call.Arguments[0].typeof(env, fields)
 	return sqltypes.TypeJSON, f
 }
 
@@ -141,22 +142,22 @@ func (call *builtinJSONUnquote) eval(env *ExpressionEnv) (eval, error) {
 	return newEvalRaw(sqltypes.Blob, j.MarshalTo(nil), collationJSON), nil
 }
 
-func (call *builtinJSONUnquote) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
-	_, f := call.Arguments[0].typeof(env)
+func (call *builtinJSONUnquote) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	_, f := call.Arguments[0].typeof(env, fields)
 	return sqltypes.Blob, f
 }
 
-func (call *builtinJSONObject) eval(env *ExpressionEnv) (eval, error) {
-	j := json.NewObject()
-	obj, _ := j.Object()
+var errJSONKeyIsNil = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "JSON documents may not contain NULL member names.")
 
+func (call *builtinJSONObject) eval(env *ExpressionEnv) (eval, error) {
+	var obj json.Object
 	for i := 0; i < len(call.Arguments); i += 2 {
 		key, err := call.Arguments[i].eval(env)
 		if err != nil {
 			return nil, err
 		}
 		if key == nil {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "JSON documents may not contain NULL member names.")
+			return nil, errJSONKeyIsNil
 		}
 		key1, err := evalToVarchar(key, collations.CollationUtf8mb4ID, true)
 		if err != nil {
@@ -167,17 +168,17 @@ func (call *builtinJSONObject) eval(env *ExpressionEnv) (eval, error) {
 		if err != nil {
 			return nil, err
 		}
-		val1, err := evalToJSON(val)
+		val1, err := argToJSON(val)
 		if err != nil {
 			return nil, err
 		}
 
 		obj.Set(key1.string(), val1, json.Set)
 	}
-	return j, nil
+	return json.NewObject(obj), nil
 }
 
-func (call *builtinJSONObject) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
+func (call *builtinJSONObject) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
 	return sqltypes.TypeJSON, 0
 }
 
@@ -188,7 +189,7 @@ func (call *builtinJSONArray) eval(env *ExpressionEnv) (eval, error) {
 		if err != nil {
 			return nil, err
 		}
-		arg1, err := evalToJSON(arg)
+		arg1, err := argToJSON(arg)
 		if err != nil {
 			return nil, err
 		}
@@ -197,7 +198,7 @@ func (call *builtinJSONArray) eval(env *ExpressionEnv) (eval, error) {
 	return json.NewArray(ary), nil
 }
 
-func (call *builtinJSONArray) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
+func (call *builtinJSONArray) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
 	return sqltypes.TypeJSON, 0
 }
 
@@ -216,8 +217,8 @@ func (call *builtinJSONDepth) eval(env *ExpressionEnv) (eval, error) {
 	return newEvalInt64(int64(j.Depth())), nil
 }
 
-func (call *builtinJSONDepth) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
-	_, f := call.Arguments[0].typeof(env)
+func (call *builtinJSONDepth) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	_, f := call.Arguments[0].typeof(env, fields)
 	return sqltypes.Int64, f
 }
 
@@ -259,8 +260,8 @@ func (call *builtinJSONLength) eval(env *ExpressionEnv) (eval, error) {
 	return newEvalInt64(int64(length)), nil
 }
 
-func (call *builtinJSONLength) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
-	_, f := call.Arguments[0].typeof(env)
+func (call *builtinJSONLength) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	_, f := call.Arguments[0].typeof(env, fields)
 	return sqltypes.Int64, f
 }
 
@@ -336,8 +337,8 @@ func errOneOrAll(fname string) error {
 	return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "The oneOrAll argument to %s may take these values: 'one' or 'all'.", fname)
 }
 
-func (call *builtinJSONContainsPath) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
-	_, f := call.Arguments[0].typeof(env)
+func (call *builtinJSONContainsPath) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	_, f := call.Arguments[0].typeof(env, fields)
 	return sqltypes.Int64, f
 }
 
@@ -382,13 +383,13 @@ func (call *builtinJSONKeys) eval(env *ExpressionEnv) (eval, error) {
 	}
 
 	var keys []*json.Value
-	obj.Visit(func(key []byte, _ *json.Value) {
+	obj.Visit(func(key string, _ *json.Value) {
 		keys = append(keys, json.NewString(key))
 	})
 	return json.NewArray(keys), nil
 }
 
-func (call *builtinJSONKeys) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
-	_, f := call.Arguments[0].typeof(env)
+func (call *builtinJSONKeys) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	_, f := call.Arguments[0].typeof(env, fields)
 	return sqltypes.TypeJSON, f | flagNullable
 }

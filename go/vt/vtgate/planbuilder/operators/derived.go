@@ -17,7 +17,11 @@ limitations under the License.
 package operators
 
 import (
+	"io"
+
 	"golang.org/x/exp/slices"
+
+	"vitess.io/vitess/go/slices2"
 
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 
@@ -125,6 +129,10 @@ func (d *Derived) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.
 	}
 
 	newExpr := semantics.RewriteDerivedTableExpression(expr, tableInfo)
+	if !canBePushedDownIntoDerived(newExpr) {
+		// if we have an aggregation, we don't want to push it inside
+		return &Filter{Source: d, Predicates: []sqlparser.Expr{expr}}, nil
+	}
 	d.Source, err = d.Source.AddPredicate(ctx, newExpr)
 	if err != nil {
 		return nil, err
@@ -132,28 +140,73 @@ func (d *Derived) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.
 	return d, nil
 }
 
-func (d *Derived) AddColumn(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (int, error) {
-	col, ok := expr.(*sqlparser.ColName)
+func canBePushedDownIntoDerived(expr sqlparser.Expr) (canBePushed bool) {
+	canBePushed = true
+	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+		switch node.(type) {
+		case *sqlparser.Max, *sqlparser.Min:
+			// empty by default
+		case sqlparser.AggrFunc:
+			canBePushed = false
+			return false, io.EOF
+		}
+		return true, nil
+	}, expr)
+	return
+}
+
+func (d *Derived) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, reuseCol bool) (ops.Operator, int, error) {
+	col, ok := expr.Expr.(*sqlparser.ColName)
 	if !ok {
-		return 0, vterrors.VT13001("cannot push non-colname expression to a derived table")
+		return nil, 0, vterrors.VT13001("cannot push non-colname expression to a derived table")
+	}
+
+	if offset, found := canReuseColumn(ctx, reuseCol, d.Columns, col); found {
+		return d, offset, nil
 	}
 
 	i, err := d.findOutputColumn(col)
 	if err != nil {
-		return 0, err
+		return nil, 0, err
 	}
 	var pos int
 	d.ColumnsOffset, pos = addToIntSlice(d.ColumnsOffset, i)
 
+	d.Columns = append(d.Columns, col)
 	// add it to the source if we were not already passing it through
 	if i <= -1 {
-		d.Columns = append(d.Columns, col)
-		_, err := d.Source.AddColumn(ctx, sqlparser.NewColName(col.Name.String()))
+		newSrc, _, err := d.Source.AddColumn(ctx, aeWrap(sqlparser.NewColName(col.Name.String())), true)
 		if err != nil {
-			return 0, err
+			return nil, 0, err
+		}
+		d.Source = newSrc
+	}
+	return d, pos, nil
+}
+
+// canReuseColumn is generic, so it can be used with slices of different types.
+// We don't care about the actual type, as long as we know it's a sqlparser.Expr
+func canReuseColumn[Expr sqlparser.Expr](
+	ctx *plancontext.PlanningContext,
+	reuseCol bool,
+	columns []Expr,
+	col sqlparser.Expr,
+) (offset int, found bool) {
+	if !reuseCol {
+		return
+	}
+
+	for offset, column := range columns {
+		if ctx.SemTable.EqualsExpr(col, column) {
+			return offset, true
 		}
 	}
-	return pos, nil
+
+	return
+}
+
+func (d *Derived) GetColumns() ([]sqlparser.Expr, error) {
+	return slices2.Map(d.Columns, colNameToExpr), nil
 }
 
 func addToIntSlice(columnOffset []int, valToAdd int) ([]int, int) {

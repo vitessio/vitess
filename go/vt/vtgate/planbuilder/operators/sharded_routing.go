@@ -25,6 +25,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
+	popcode "vitess.io/vitess/go/vt/vtgate/engine/opcode"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
@@ -600,14 +601,14 @@ func makeEvalEngineExpr(ctx *plancontext.PlanningContext, n sqlparser.Expr) eval
 			if extractedSubquery == nil {
 				continue
 			}
-			switch engine.PulloutOpcode(extractedSubquery.OpCode) {
-			case engine.PulloutIn, engine.PulloutNotIn:
+			switch popcode.PulloutOpcode(extractedSubquery.OpCode) {
+			case popcode.PulloutIn, popcode.PulloutNotIn:
 				expr = sqlparser.NewListArg(extractedSubquery.GetArgName())
-			case engine.PulloutValue, engine.PulloutExists:
+			case popcode.PulloutValue, popcode.PulloutExists:
 				expr = sqlparser.NewArgument(extractedSubquery.GetArgName())
 			}
 		}
-		ee, _ := evalengine.Translate(expr, ctx.SemTable)
+		ee, _ := evalengine.Translate(expr, &evalengine.Config{Collation: ctx.SemTable.Collation})
 		if ee != nil {
 			return ee
 		}

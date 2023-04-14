@@ -24,15 +24,15 @@ import (
 	"strings"
 	"testing"
 
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv/tabletenvtest"
-
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/key"
-	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv/tabletenvtest"
+
+	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 func defaultTestOpts() *Options {
@@ -261,7 +261,7 @@ func TestJSONOutput(t *testing.T) {
     "ks_sharded/-40": {
         "MysqlQueries": [
             {
-                "SQL": "select 1 from ` + "`user`" + ` where id = 1 limit 10001",
+                "SQL": "select 1 from ` + "`user`" + ` where id = 1 limit 10001 /* INT64 */",
                 "Time": 1
             }
         ],
@@ -271,7 +271,7 @@ func TestJSONOutput(t *testing.T) {
                     "#maxLimit": "10001",
                     "vtg1": "1"
                 },
-                "SQL": "select :vtg1 from ` + "`user`" + ` where id = :vtg1",
+                "SQL": "select :vtg1 /* INT64 */ from ` + "`user`" + ` where id = :vtg1 /* INT64 */",
                 "Time": 1
             }
         ]

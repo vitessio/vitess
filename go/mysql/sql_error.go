@@ -210,6 +210,9 @@ var stateToMysqlCode = map[vterrors.State]mysqlCode{
 	vterrors.NoSuchSession:                {num: ERUnknownComError, state: SSNetError},
 	vterrors.OperandColumns:               {num: EROperandColumns, state: SSWrongNumberOfColumns},
 	vterrors.WrongValueCountOnRow:         {num: ERWrongValueCountOnRow, state: SSWrongValueCountOnRow},
+	vterrors.WrongArguments:               {num: ERWrongArguments, state: SSUnknownSQLState},
+	vterrors.UnknownStmtHandler:           {num: ERUnknownStmtHandler, state: SSUnknownSQLState},
+	vterrors.UnknownTimeZone:              {num: ERUnknownTimeZone, state: SSUnknownSQLState},
 }
 
 func getStateToMySQLState(state vterrors.State) mysqlCode {
