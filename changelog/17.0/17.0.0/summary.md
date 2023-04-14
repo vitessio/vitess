@@ -8,7 +8,7 @@
     - [VTAdmin web migrated from create-react-app to vite](#migrated-vtadmin)
     - [Keyspace name validation in TopoServer](#keyspace-name-validation)
     - [Shard name validation in TopoServer](#shard-name-validation)
-    - [VtctldClient call to RestoreFromBackup using correct context](#VtctldClient-RestoreFromBackup)
+    - [VtctldClient command RestoreFromBackup will now use the correct context](#VtctldClient-RestoreFromBackup)
   - **[New command line flags and behavior](#new-flag)**
     - [Builtin backup: read buffering flags](#builtin-backup-read-buffering-flags)
   - **[New stats](#new-stats)**
@@ -75,13 +75,12 @@ Prior to v17, it was possible to create a shard name with invalid characters, wh
 
 Shard names may no longer contain the forward slash ("/") character, and TopoServer's `CreateShard` method returns an error if given such a name.
 
-#### <a id="VtctldClient-RestoreFromBackup"> VtctldClient call to RestoreFromBackup using correct context
+#### <a id="VtctldClient-RestoreFromBackup"> VtctldClient command RestoreFromBackup will now use the correct context
 
-The VtctldClient calls for RestoreFromBackup initiate an asynchronous process to restore data from either the latest backup or the closest one before the specified backup-timestamp.
-Prior to v17, this asynchronous process could run indefinitely in the background since it was called using an empty background. In v17 [PR#12830](https://github.com/vitessio/vitess/issues/12830),
-this behavior was changed to use the same context with which the client called the RestoreFromBackup command, which uses action_timeout to wait for any command to finish.
-If you are using VtctldClient to initiate a restore, make sure you provide an appropriate value for action_timeout to give enough time for the restore process to complete.
-Otherwise, the restore will throw an error if the context expires before it completes.
+The VtctldClient command RestoreFromBackup initiates an asynchronous process on the specified tablet to restore data from either the latest backup or the closest one before the specified backup-timestamp.
+Prior to v17, this asynchronous process could run indefinitely in the background since it was called using the background context. In v17 [PR#12830](https://github.com/vitessio/vitess/issues/12830),
+this behavior was changed to use a context with a timeout of `action_timeout`. If you are using VtctldClient to initiate a restore, make sure you provide an appropriate value for action_timeout to give enough
+time for the restore process to complete. Otherwise, the restore will throw an error if the context expires before it completes.
 
 ### <a id="new-flag"/> New command line flags and behavior
 
