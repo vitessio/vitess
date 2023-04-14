@@ -145,10 +145,11 @@ func problemsAPIHandler(response http.ResponseWriter, request *http.Request) {
 	returnAsJSON(response, http.StatusOK, instances)
 }
 
-// AggregatedDiscoveryMetricsAPIHandler is the handler for the problemsAPI endpoint
+// AggregatedDiscoveryMetricsAPIHandler is the handler for the discovery metrics endpoint
 func AggregatedDiscoveryMetricsAPIHandler(response http.ResponseWriter, request *http.Request) {
-	// This api also supports filtering by shard and keyspace provided.
+	// return metrics for last x seconds
 	qSeconds := request.URL.Query().Get("seconds")
+	// default to 60 seconds
 	seconds := 60
 	var err error
 	if qSeconds != "" {
