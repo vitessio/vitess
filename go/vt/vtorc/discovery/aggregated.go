@@ -25,7 +25,7 @@ import (
 )
 
 // AggregatedDiscoveryMetrics contains aggregated metrics for instance discovery.
-// Called from api/discovery-metrics-aggregated/:seconds
+// Called from api/discovery-metrics-aggregated?seconds=xxx
 type AggregatedDiscoveryMetrics struct {
 	FirstSeen                       time.Time // timestamp of the first data seen
 	LastSeen                        time.Time // timestamp of the last data seen

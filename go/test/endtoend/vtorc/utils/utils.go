@@ -969,45 +969,9 @@ func WaitForSuccessfulRecoveryCount(t *testing.T, vtorcInstance *cluster.VTOrcPr
 	assert.EqualValues(t, countExpected, successCount)
 }
 
-func WaitForInstancePollSecondsExceededCount_old(t *testing.T, vtorcInstance *cluster.VTOrcProcess, keyName string, countExpected int) {
-	t.Helper()
-	timeout := 30 * time.Second
-	startTime := time.Now()
-	var errThreshold = 0
-	var sinceInSeconds = 15
-	var occuranceCount = 0.0
-	for time.Since(startTime) < timeout {
-		statusCode, res, err := vtorcInstance.MakeAPICall("api/aggregated-discovery-metrics?seconds=" + strconv.Itoa(sinceInSeconds))
-		//sinceInSeconds++
-		if err != nil {
-			errThreshold++
-			continue
-		}
-		if statusCode == 200 {
-			resultMap := make(map[string]any)
-			err := json.Unmarshal([]byte(res), &resultMap)
-			if err != nil {
-				errThreshold++
-				continue
-			}
-			//successfulRecoveriesMap := resultMap["InstancePollSecondsExceeded"].(map[string]interface{})
-			successCount := resultMap[keyName]
-			if iSuccessCount, ok := successCount.(float64); ok {
-				occuranceCount += iSuccessCount
-				//if iSuccessCount <= successCount.(int) {
-				//	assert.Fail(t, "InstancePollSecondsExceeded should remain zero.")
-				//}
-			}
-
-		}
-		time.Sleep(time.Second)
-	}
-
-	assert.GreaterOrEqual(t, occuranceCount, countExpected)
-	assert.GreaterOrEqual(t, 5, errThreshold)
-}
-
-func WaitForInstancePollSecondsExceededCount(t *testing.T, vtorcInstance *cluster.VTOrcProcess, keyName string, countExpected float64, enforceEquality bool) {
+// WaitForInstancePollSecondsExceededCount wait for 30 seconds and then query api/aggregated-discovery-metrics.
+// It expects to find minimum occurrence or equality of count of `keyName` provided.
+func WaitForInstancePollSecondsExceededCount(t *testing.T, vtorcInstance *cluster.VTOrcProcess, keyName string, maxCountExpected float64, enforceEquality bool) {
 	t.Helper()
 	var sinceInSeconds = 30
 	duration := time.Duration(sinceInSeconds)
@@ -1026,9 +990,9 @@ func WaitForInstancePollSecondsExceededCount(t *testing.T, vtorcInstance *cluste
 		successCount := resultMap[keyName]
 		if iSuccessCount, ok := successCount.(float64); ok {
 			if enforceEquality {
-				assert.Equal(t, iSuccessCount, countExpected)
+				assert.Equal(t, iSuccessCount, maxCountExpected)
 			} else {
-				assert.GreaterOrEqual(t, iSuccessCount, countExpected)
+				assert.LessOrEqual(t, iSuccessCount, maxCountExpected)
 			}
 			return
 		}

@@ -59,7 +59,7 @@ var discoveryQueueLengthGauge = metrics.NewGauge()
 var discoveryRecentCountGauge = metrics.NewGauge()
 var isElectedGauge = metrics.NewGauge()
 var isHealthyGauge = metrics.NewGauge()
-var DiscoveryMetrics = collection.CreateOrReturnCollection(DiscoveryMetricsName)
+var discoveryMetrics = collection.CreateOrReturnCollection(DiscoveryMetricsName)
 
 var isElectedNode int64
 
@@ -116,7 +116,7 @@ func acceptSighupSignal() {
 			log.Infof("Received SIGHUP. Reloading configuration")
 			_ = inst.AuditOperation("reload-configuration", nil, "Triggered via SIGHUP")
 			config.Reload()
-			DiscoveryMetrics.SetExpirePeriod(time.Duration(config.DiscoveryCollectionRetentionSeconds) * time.Second)
+			discoveryMetrics.SetExpirePeriod(time.Duration(config.DiscoveryCollectionRetentionSeconds) * time.Second)
 		}
 	}()
 }
@@ -125,7 +125,7 @@ func acceptSighupSignal() {
 func closeVTOrc() {
 	log.Infof("Starting VTOrc shutdown")
 	atomic.StoreInt32(&hasReceivedSIGTERM, 1)
-	DiscoveryMetrics.StopAutoExpiration()
+	discoveryMetrics.StopAutoExpiration()
 	// Poke other go routines to stop cleanly here ...
 	_ = inst.AuditOperation("shutdown", nil, "Triggered via SIGTERM")
 	// wait for the locks to be released
@@ -207,10 +207,7 @@ func DiscoverInstance(instanceKey inst.InstanceKey, forceDiscovery bool) {
 		}
 	}()
 
-	id1 := uuid.New()
-	log.Infof("%v ResolveHostname start - %v", id1, instanceKey.Port)
 	_, _ = instanceKey.ResolveHostname()
-	log.Infof("%v ResolveHostname end - %v", id1, instanceKey.Port)
 	if !instanceKey.IsValid() {
 		return
 	}
@@ -224,10 +221,7 @@ func DiscoverInstance(instanceKey inst.InstanceKey, forceDiscovery bool) {
 	}
 
 	latency.Start("backend")
-	id2 := uuid.New()
-	log.Infof("%v ReadInstance start - %v", id2, instanceKey.Port)
 	instance, found, _ := inst.ReadInstance(&instanceKey)
-	log.Infof("%v ReadInstance end - %v", id2, instanceKey.Port)
 	latency.Stop("backend")
 	if !forceDiscovery && found && instance.IsUpToDate && instance.IsLastCheckValid {
 		// we've already discovered this one. Skip!
@@ -261,7 +255,7 @@ func DiscoverInstance(instanceKey inst.InstanceKey, forceDiscovery bool) {
 			InstanceLatency: instanceLatency,
 			Err:             err,
 		}
-		_ = DiscoveryMetrics.Append(metric)
+		_ = discoveryMetrics.Append(metric)
 		if util.ClearToLog("discoverInstance", instanceKey.StringCode()) {
 			log.Warningf(" DiscoverInstance(%+v) instance is nil in %.3fs (Backend: %.3fs, Instance: %.3fs), error=%+v",
 				instanceKey,
@@ -281,7 +275,7 @@ func DiscoverInstance(instanceKey inst.InstanceKey, forceDiscovery bool) {
 		InstanceLatency: instanceLatency,
 		Err:             nil,
 	}
-	_ = DiscoveryMetrics.Append(metric)
+	_ = discoveryMetrics.Append(metric)
 }
 
 // onHealthTick handles the actions to take to discover/poll instances

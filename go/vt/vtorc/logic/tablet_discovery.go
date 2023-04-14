@@ -24,7 +24,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/spf13/pflag"
 
 	"google.golang.org/protobuf/encoding/prototext"
@@ -165,14 +164,11 @@ func refreshTabletsInCell(ctx context.Context, cell string, loader func(instance
 // for a given shard. This function is meant to be called before or after a cluster-wide operation that we know will
 // change the replication information for the entire cluster drastically enough to warrant a full forceful refresh
 func forceRefreshAllTabletsInShard(ctx context.Context, keyspace, shard string, dontRefreshPrimary bool) {
-	var uid = uuid.New()
-	log.Infof("%v start force refresh of all tablets in shard - %v/%v", uid, keyspace, shard)
 	refreshCtx, refreshCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 	defer refreshCancel()
 	refreshTabletsInKeyspaceShard(refreshCtx, keyspace, shard, func(instanceKey *inst.InstanceKey) {
 		DiscoverInstance(*instanceKey, true)
 	}, true, dontRefreshPrimary)
-	log.Infof("%v end force refresh of all tablets in shard - %v/%v", uid, keyspace, shard)
 }
 
 // refreshTabletInfoOfShard only refreshes the tablet records from the topo-server for all the tablets

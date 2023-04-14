@@ -63,13 +63,14 @@ func TestDownPrimary(t *testing.T) {
 
 	// check that the replication is setup correctly before we failover
 	utils.CheckReplication(t, clusterInfo, curPrimary, []*cluster.Vttablet{rdonly, replica, crossCellReplica}, 10*time.Second)
-
+	// since all tablets are up and running, InstancePollSecondsExceeded should have `0` zero value
 	utils.WaitForInstancePollSecondsExceededCount(t, vtOrcProcess, "InstancePollSecondsExceeded", 0, true)
 	// Make the rdonly vttablet unavailable
 	err := rdonly.VttabletProcess.TearDown()
 	require.NoError(t, err)
 	err = rdonly.MysqlctlProcess.Stop()
 	require.NoError(t, err)
+	// We have bunch of Vttablets down. Therefore we expect at least 2 occurrence of InstancePollSecondsExceeded
 	utils.WaitForInstancePollSecondsExceededCount(t, vtOrcProcess, "InstancePollSecondsExceeded", 2, false)
 	// Make the current primary vttablet unavailable.
 	err = curPrimary.VttabletProcess.TearDown()

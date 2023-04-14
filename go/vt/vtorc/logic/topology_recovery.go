@@ -663,7 +663,6 @@ func executeCheckAndRecoverFunction(analysisEntry inst.ReplicationAnalysis, cand
 		// of a shard because a new tablet could have been promoted, and we need to have this visibility before we
 		// run a cluster operation of our own.
 		if isClusterWideRecovery(checkAndRecoverFunctionCode) {
-			log.Infof("isClusterWideRecovery ---> 1, %+v detection", analysisEntry.Analysis)
 			forceRefreshAllTabletsInShard(ctx, analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard, checkAndRecoverFunctionCode == recoverDeadPrimaryFunc)
 		} else {
 			// If we are not running a cluster-wide recovery, then it is only concerned with the specific tablet
@@ -730,7 +729,6 @@ func executeCheckAndRecoverFunction(analysisEntry inst.ReplicationAnalysis, cand
 	// For this refresh we don't use the same context that we used for the recovery, since that context might have expired or could expire soon
 	// Instead we pass the background context. The call forceRefreshAllTabletsInShard handles adding a timeout to it for us.
 	if isClusterWideRecovery(checkAndRecoverFunctionCode) {
-		log.Infof("isClusterWideRecovery ---> 2, %+v detection", analysisEntry.Analysis)
 		forceRefreshAllTabletsInShard(context.Background(), analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard, checkAndRecoverFunctionCode == recoverDeadPrimaryFunc)
 	} else {
 		// For all other recoveries, we would have changed the replication status of the analyzed tablet
