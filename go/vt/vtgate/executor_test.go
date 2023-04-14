@@ -1821,17 +1821,17 @@ func TestGetPlanNormalized(t *testing.T) {
 	assertCacheContains(t, r, want)
 }
 
-func TestGetPlanCriticalityCriticality(t *testing.T) {
+func TestGetPlanPriority(t *testing.T) {
 
 	testCases := []struct {
-		name                string
-		sql                 string
-		expectedCriticality string
-		expectedError       error
+		name             string
+		sql              string
+		expectedPriority string
+		expectedError    error
 	}{
-		{name: "empty criticality", sql: "select * from music_user_map", expectedCriticality: "", expectedError: nil},
-		{name: "Invalid criticality", sql: "select /*vt+ CRITICALITY=something */ * from music_user_map", expectedCriticality: "", expectedError: sqlparser.ErrInvalidCriticality},
-		{name: "Valid criticality", sql: "select /*vt+ CRITICALITY=33 */ * from music_user_map", expectedCriticality: "33", expectedError: nil},
+		{name: "empty priority", sql: "select * from music_user_map", expectedPriority: "", expectedError: nil},
+		{name: "Invalid priority", sql: "select /*vt+ PRIORITY=something */ * from music_user_map", expectedPriority: "", expectedError: sqlparser.ErrInvalidPriority},
+		{name: "Valid priority", sql: "select /*vt+ PRIORITY=33 */ * from music_user_map", expectedPriority: "33", expectedError: nil},
 	}
 
 	for _, aTestCase := range testCases {
@@ -1846,15 +1846,15 @@ func TestGetPlanCriticalityCriticality(t *testing.T) {
 
 			stmt1, err := sqlparser.Parse(testCase.sql)
 			assert.NoError(t, err)
-			crticalityFromStatement, _ := sqlparser.GetCriticalityFromStatement(stmt1)
+			crticalityFromStatement, _ := sqlparser.GetPriorityFromStatement(stmt1)
 
 			_, _, err = r.getPlan(context.Background(), vCursor, testCase.sql, makeComments("/* some comment */"), map[string]*querypb.BindVariable{}, &SafeSession{Session: &vtgatepb.Session{Options: &querypb.ExecuteOptions{}}}, logStats)
 			if testCase.expectedError != nil {
 				assert.ErrorIs(t, err, testCase.expectedError)
 			} else {
 				assert.NoError(t, err)
-				assert.Equal(t, testCase.expectedCriticality, crticalityFromStatement)
-				assert.Equal(t, testCase.expectedCriticality, vCursor.safeSession.Options.Criticality)
+				assert.Equal(t, testCase.expectedPriority, crticalityFromStatement)
+				assert.Equal(t, testCase.expectedPriority, vCursor.safeSession.Options.Priority)
 			}
 		})
 	}

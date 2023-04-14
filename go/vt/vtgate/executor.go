@@ -983,11 +983,11 @@ func (e *Executor) getPlan(ctx context.Context, vcursor *vcursorImpl, sql string
 	ignoreMaxMemoryRows := sqlparser.IgnoreMaxMaxMemoryRowsDirective(stmt)
 	vcursor.SetIgnoreMaxMemoryRows(ignoreMaxMemoryRows)
 	consolidator := sqlparser.Consolidator(stmt)
-	criticality, err := sqlparser.GetCriticalityFromStatement(stmt)
+	priority, err := sqlparser.GetPriorityFromStatement(stmt)
 	if err != nil {
 		return nil, nil, err
 	}
-	vcursor.SetCriticality(criticality)
+	vcursor.SetPriority(priority)
 	vcursor.SetConsolidator(consolidator)
 	vcursor.SetWorkloadName(sqlparser.GetWorkloadNameFromStatement(stmt))
 
