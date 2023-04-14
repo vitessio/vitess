@@ -7,6 +7,8 @@ concurrency:
   group: format('{0}-{1}', ${{ github.ref }}, 'Upgrade Downgrade Testing Reparent New VTTablet')
   cancel-in-progress: true
 
+permissions: read-all
+
 # This test ensures that our end-to-end tests work using Vitess components
 # (vtctl, vttablet, etc) built on different versions.
 
@@ -88,7 +90,7 @@ jobs:
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       uses: actions/setup-go@v3
       with:
-        go-version: 1.20.1
+        go-version: 1.20.3
 
     - name: Set up python
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'

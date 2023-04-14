@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"math/rand"
 	"net/http"
 	"os"
 	"strings"
@@ -379,7 +380,7 @@ func TestMultiCellVreplicationWorkflow(t *testing.T) {
 	require.NotNil(t, vtgate)
 	err := cluster.WaitForHealthyShard(vc.VtctldClient, keyspace, shard)
 	require.NoError(t, err)
-	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", keyspace, shard), 2)
+	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", keyspace, shard), 2, 30*time.Second)
 
 	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 	defer vtgateConn.Close()
@@ -580,7 +581,7 @@ func TestCellAliasVreplicationWorkflow(t *testing.T) {
 	require.NotNil(t, vtgate)
 	err = cluster.WaitForHealthyShard(vc.VtctldClient, keyspace, shard)
 	require.NoError(t, err)
-	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", keyspace, shard), 2)
+	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", keyspace, shard), 2, 30*time.Second)
 
 	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 	defer vtgateConn.Close()
@@ -657,6 +658,26 @@ func testVStreamFrom(t *testing.T, table string, expectedRowCount int) {
 	}
 }
 
+const NumJSONRows = 100
+
+func insertJSONValues(t *testing.T) {
+	// insert null value combinations
+	execVtgateQuery(t, vtgateConn, "product:0", "insert into json_tbl(id) values(1)")
+	execVtgateQuery(t, vtgateConn, "product:0", "insert into json_tbl(id, j1) values(2, \"{}\")")
+	execVtgateQuery(t, vtgateConn, "product:0", "insert into json_tbl(id, j2) values(3, \"{}\")")
+
+	id := 4
+	q := "insert into json_tbl(id, j1, j2) values(%d, '%s', '%s')"
+	numJsonValues := len(jsonValues)
+	for id <= NumJSONRows {
+		id++
+		j1 := rand.Intn(numJsonValues)
+		j2 := rand.Intn(numJsonValues)
+		query := fmt.Sprintf(q, id, jsonValues[j1], jsonValues[j2])
+		execVtgateQuery(t, vtgateConn, "product:0", query)
+	}
+}
+
 func insertInitialData(t *testing.T) {
 	t.Run("insertInitialData", func(t *testing.T) {
 		log.Infof("Inserting initial data")
@@ -671,6 +692,8 @@ func insertInitialData(t *testing.T) {
 		waitForRowCount(t, vtgateConn, "product:0", "customer", 3)
 		waitForQueryResult(t, vtgateConn, "product:0", "select * from merchant",
 			`[[VARCHAR("Monoprice") VARCHAR("eléctronics")] [VARCHAR("newegg") VARCHAR("elec†ronics")]]`)
+
+		insertJSONValues(t)
 	})
 }
 
@@ -722,7 +745,7 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 		defaultCell := cells[0]
 		custKs := vc.Cells[defaultCell.Name].Keyspaces["customer"]
 
-		tables := "customer,Lead,Lead-1,db_order_test"
+		tables := "customer,Lead,Lead-1,db_order_test,geom_tbl,json_tbl"
 		moveTablesAction(t, "Create", sourceCellOrAlias, workflow, sourceKs, targetKs, tables)
 
 		customerTab1 := custKs.Shards["-80"].Tablets["zone1-200"].Vttablet
@@ -750,7 +773,7 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 		query := "select cid from customer"
 		require.True(t, validateThatQueryExecutesOnTablet(t, vtgateConn, productTab, "product", query, query))
 		insertQuery1 := "insert into customer(cid, name) values(1001, 'tempCustomer1')"
-		matchInsertQuery1 := "insert into customer(cid, `name`) values (:vtg1, :vtg2)"
+		matchInsertQuery1 := "insert into customer(cid, `name`) values (:vtg1 /* INT64 */, :vtg2 /* VARCHAR */)"
 		require.True(t, validateThatQueryExecutesOnTablet(t, vtgateConn, productTab, "product", insertQuery1, matchInsertQuery1))
 
 		// confirm that the backticking of table names in the routing rules works
@@ -791,7 +814,7 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 		ksShards := []string{"product/0", "customer/-80", "customer/80-"}
 		printShardPositions(vc, ksShards)
 		insertQuery2 := "insert into customer(name, cid) values('tempCustomer2', 100)"
-		matchInsertQuery2 := "insert into customer(`name`, cid) values (:vtg1, :_cid0)"
+		matchInsertQuery2 := "insert into customer(`name`, cid) values (:vtg1 /* VARCHAR */, :_cid0)"
 		require.False(t, validateThatQueryExecutesOnTablet(t, vtgateConn, productTab, "customer", insertQuery2, matchInsertQuery2))
 
 		insertQuery2 = "insert into customer(name, cid) values('tempCustomer3', 101)" // ID 101, hence due to reverse_bits in shard 80-

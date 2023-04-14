@@ -5,12 +5,17 @@
 - **[Major Changes](#major-changes)**
   - **[Breaking Changes](#breaking-changes)**
     - [Dedicated stats for VTGate Prepare operations](#dedicated-vtgate-prepare-stats)
+    - [VTAdmin web migrated from create-react-app to vite](#migrated-vtadmin)
+    - [Keyspace name validation in TopoServer](#keyspace-name-validation)
+    - [Shard name validation in TopoServer](#shard-name-validation)
   - **[New command line flags and behavior](#new-flag)**
     - [Builtin backup: read buffering flags](#builtin-backup-read-buffering-flags)
   - **[New stats](#new-stats)**
     - [Detailed backup and restore stats](#detailed-backup-and-restore-stats)
     - [VTtablet Error count with code ](#vttablet-error-count-with-code)
+    - [VReplication stream status for Prometheus](#vreplication-stream-status-for-prometheus)
   - **[Deprecations and Deletions](#deprecations-and-deletions)**
+    - [Deprecated Flags](#deprecated-flags)
     - [Deprecated Stats](#deprecated-stats)
   - **[VTTablet](#vttablet)**
     - [VTTablet: Initializing all replicas with super_read_only](#vttablet-initialization)
@@ -48,6 +53,26 @@ Here is a (condensed) example of stats output:
   }
 }
 ```
+
+#### <a id="migrated-vtadmin"/>VTAdmin web migrated to vite
+Previously, VTAdmin web used the Create React App framework to test, build, and serve the application. In v17, Create React App has been removed, and [Vite](https://vitejs.dev/) is used in its place. Some of the main changes include:
+- Vite uses `VITE_*` environment variables instead of `REACT_APP_*` environment variables
+- Vite uses `import.meta.env` in place of `process.env`
+- [Vitest](https://vitest.dev/) is used in place of Jest for testing
+- Our protobufjs generator now produces an es6 module instead of commonjs to better work with Vite's defaults
+- `public/index.html` has been moved to root directory in web/vtadmin
+
+#### <a id="keyspace-name-validation"> Keyspace name validation in TopoServer
+
+Prior to v17, it was possible to create a keyspace with invalid characters, which would then be inaccessible to various cluster management operations.
+
+Keyspace names may no longer contain the forward slash ("/") character, and TopoServer's `GetKeyspace` and `CreateKeyspace` methods return an error if given such a name.
+
+#### <a id="shard-name-validation"> Shard name validation in TopoServer
+
+Prior to v17, it was possible to create a shard name with invalid characters, which would then be inaccessible to various cluster management operations.
+
+Shard names may no longer contain the forward slash ("/") character, and TopoServer's `CreateShard` method returns an error if given such a name.
 
 ### <a id="new-flag"/> New command line flags and behavior
 
@@ -194,12 +219,34 @@ Some notes to help understand these metrics:
 We are introducing new error counter `QueryErrorCountsWithCode` for VTTablet. It is similar to existing [QueryErrorCounts](https://github.com/vitessio/vitess/blob/main/go/vt/vttablet/tabletserver/query_engine.go#L174) except it contains errorCode as additional dimension.
 We will deprecate `QueryErrorCounts` in v18.
 
+#### <a id="vreplication-stream-status-for-prometheus"/> VReplication stream status for Prometheus
+
+VReplication publishes the `VReplicationStreamState` status which reports the state of VReplication streams. For example, here's what it looks like in the local cluster example after the MoveTables step:
+
+```
+"VReplicationStreamState": {
+  "commerce2customer.1": "Running"
+}
+```
+
+Prior to v17, this data was not available via the Prometheus backend. In v17, workflow states are also published as a Prometheus gauge with a `state` label and a value of `1.0`. For example:
+
+```
+# HELP vttablet_v_replication_stream_state State of vreplication workflow
+# TYPE vttablet_v_replication_stream_state gauge
+vttablet_v_replication_stream_state{counts="1",state="Running",workflow="commerce2customer"} 1
+```
+
 ## <a id="deprecations-and-deletions"/> Deprecations and Deletions
 
 * The deprecated `automation` and `automationservice` protobuf definitions and associated client and server packages have been removed.
 * Auto-population of DDL revert actions and tables at execution-time has been removed. This is now handled entirely at enqueue-time.
 * Backwards-compatibility for failed migrations without a `completed_timestamp` has been removed (see https://github.com/vitessio/vitess/issues/8499).
 * The deprecated `Key`, `Name`, `Up`, and `TabletExternallyReparentedTimestamp` fields were removed from the JSON representation of `TabletHealth` structures.
+
+### <a id="deprecated-flags"/>Deprecated Command Line Flags
+
+* Flag `vtctld_addr` has been deprecated and will be deleted in a future release. This affects the `vtgate`, `vttablet` and `vtcombo` binaries.
 
 ### <a id="deprecated-stats"/>Deprecated Stats
 
@@ -209,6 +256,7 @@ These stats are deprecated in v17.
 |-|-|
 | `backup_duration_seconds` | `BackupDurationNanoseconds` |
 | `restore_duration_seconds` | `RestoreDurationNanoseconds` |
+
 ### <a id="vttablet"/> VTTablet
 #### <a id="vttablet-initialization"/> Initializing all replicas with super_read_only
 In order to prevent SUPER privileged users like `root` or `vt_dba` from producing errant GTIDs on replicas, all the replica MySQL servers are initialized with the MySQL
@@ -218,5 +266,23 @@ MySQL replication no other component, offline system or operator can write direc
 
 Reference PR for this change is [PR #12206](https://github.com/vitessio/vitess/pull/12206)
 
+An important note regarding this change is how the default `init_db.sql` file has changed.
+This is even more important if you are running Vitess on the vitess-operator.
+You must ensure your `init_db.sql` is up-to-date with the new default for `v17.0.0`.
+The default file can be found in `./config/init_db.sql`.
+
 #### <a id="deprecated-flags"/> Deprecated Flags
 The flag `use_super_read_only` is deprecated and will be removed in a later release.
+
+### Online DDL
+
+
+#### <a id="online-ddl-cut-over-threshold-flag" /> --cut-over-threshold DDL strategy flag
+
+Online DDL's strategy now accepts `--cut-over-threshold` (type: `duration`) flag.
+
+This flag stand for the timeout in a `vitess` migration's cut-over phase, which includes the final locking of tables before finalizing the migration.
+
+The value of the cut-over threshold should be high enough to support the async nature of vreplication catchup phase, as well as accommodate some replication lag. But it mustn't be too high. While cutting over, the migrated table is being locked, causing app connection and query pileup, consuming query buffers, and holding internal mutexes.
+
+Recommended range for this variable is `5s` - `30s`. Default: `10s`.

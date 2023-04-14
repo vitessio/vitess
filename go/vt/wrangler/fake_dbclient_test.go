@@ -20,8 +20,8 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"sync"
 	"testing"
-	"unicode"
 
 	"github.com/stretchr/testify/assert"
 
@@ -64,6 +64,7 @@ func (dbrs *dbResults) exhausted() bool {
 
 // fakeDBClient fakes a binlog_player.DBClient.
 type fakeDBClient struct {
+	mu         sync.Mutex
 	name       string
 	queries    map[string]*dbResults
 	queriesRE  map[string]*dbResults
@@ -88,9 +89,8 @@ func newFakeDBClient(name string) *fakeDBClient {
 }
 
 func (dc *fakeDBClient) addQuery(query string, result *sqltypes.Result, err error) {
-	if testMode == "debug" {
-		log.Infof("%s::addQuery %s\n\n", dc.id(), query)
-	}
+	dc.mu.Lock()
+	defer dc.mu.Unlock()
 	dbr := &dbResult{result: result, err: err}
 	if dbrs, ok := dc.queries[query]; ok {
 		dbrs.results = append(dbrs.results, dbr)
@@ -100,9 +100,8 @@ func (dc *fakeDBClient) addQuery(query string, result *sqltypes.Result, err erro
 }
 
 func (dc *fakeDBClient) addQueryRE(query string, result *sqltypes.Result, err error) {
-	if testMode == "debug" {
-		log.Infof("%s::addQueryRE %s\n\n", dc.id(), query)
-	}
+	dc.mu.Lock()
+	defer dc.mu.Unlock()
 	dbr := &dbResult{result: result, err: err}
 	if dbrs, ok := dc.queriesRE[query]; ok {
 		dbrs.results = append(dbrs.results, dbr)
@@ -112,14 +111,15 @@ func (dc *fakeDBClient) addQueryRE(query string, result *sqltypes.Result, err er
 }
 
 func (dc *fakeDBClient) getInvariant(query string) *sqltypes.Result {
+	dc.mu.Lock()
+	defer dc.mu.Unlock()
 	return dc.invariants[query]
 }
 
 // note: addInvariant will replace a previous result for a query with the provided one: this is used in the tests
 func (dc *fakeDBClient) addInvariant(query string, result *sqltypes.Result) {
-	if testMode == "debug" {
-		log.Infof("%s::addInvariant %s\n\n", dc.id(), query)
-	}
+	dc.mu.Lock()
+	defer dc.mu.Unlock()
 	dc.invariants[query] = result
 }
 
@@ -158,10 +158,9 @@ func (dc *fakeDBClient) id() string {
 
 // ExecuteFetch is part of the DBClient interface
 func (dc *fakeDBClient) ExecuteFetch(query string, maxrows int) (*sqltypes.Result, error) {
+	dc.mu.Lock()
+	defer dc.mu.Unlock()
 	qr, err := dc.executeFetch(query, maxrows)
-	if testMode == "debug" {
-		log.Infof("%s::ExecuteFetch for >>>%s<<< returns >>>%v<<< error >>>%+v<<< ", dc.id(), query, qr, err)
-	}
 	return qr, err
 }
 
@@ -189,6 +188,8 @@ func (dc *fakeDBClient) executeFetch(query string, maxrows int) (*sqltypes.Resul
 }
 
 func (dc *fakeDBClient) verifyQueries(t *testing.T) {
+	dc.mu.Lock()
+	defer dc.mu.Unlock()
 	t.Helper()
 	for query, dbrs := range dc.queries {
 		if !dbrs.exhausted() {
@@ -200,18 +201,4 @@ func (dc *fakeDBClient) verifyQueries(t *testing.T) {
 			assert.FailNowf(t, "expected regex query did not get executed during the test", query)
 		}
 	}
-}
-
-// normalizeTestQuery removes all whitespace from the string
-// and makes the query lowercase to avoid brittleness in tests
-// due to case or whitespace differences.
-func normalizeTestQuery(spacey string) string {
-	var nospace strings.Builder
-	nospace.Grow(len(spacey))
-	for _, ch := range spacey {
-		if !unicode.IsSpace(ch) {
-			nospace.WriteRune(unicode.ToLower(ch))
-		}
-	}
-	return nospace.String()
 }

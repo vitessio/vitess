@@ -17,6 +17,7 @@ limitations under the License.
 package integration
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -31,7 +32,9 @@ import (
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/datetime"
 	"vitess.io/vitess/go/sqltypes"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/simplifier"
@@ -93,6 +96,7 @@ var (
 		regexp.MustCompile(`Cannot convert string '(.*?)' from \w+ to \w+`),
 		regexp.MustCompile(`Invalid JSON text in argument (\d+) to function (\w+): (.*?)`),
 		regexp.MustCompile(`Illegal mix of collations`),
+		regexp.MustCompile(`Incorrect (DATE|DATETIME) value`),
 	}
 )
 
@@ -122,7 +126,7 @@ func errorsMatch(remote, local error) bool {
 	return false
 }
 
-func evaluateLocalEvalengine(env *evalengine.ExpressionEnv, query string) (evalengine.EvalResult, sqltypes.Type, error) {
+func evaluateLocalEvalengine(env *evalengine.ExpressionEnv, query string, fields []*querypb.Field) (evalengine.EvalResult, sqltypes.Type, error) {
 	stmt, err := sqlparser.Parse(query)
 	if err != nil {
 		return evalengine.EvalResult{}, 0, err
@@ -135,8 +139,15 @@ func evaluateLocalEvalengine(env *evalengine.ExpressionEnv, query string) (evale
 				err = fmt.Errorf("PANIC during translate: %v", r)
 			}
 		}()
-		lookup := &evalengine.LookupIntegrationTest{Collation: collations.CollationUtf8mb4ID}
-		expr, err = evalengine.TranslateEx(astExpr, lookup, debugSimplify)
+		cfg := &evalengine.Config{
+			ResolveColumn: evalengine.FieldResolver(fields).Column,
+			Collation:     collations.CollationUtf8mb4ID,
+			Optimization:  evalengine.OptimizationLevelNone,
+		}
+		if debugSimplify {
+			cfg.Optimization = evalengine.OptimizationLevelSimplify
+		}
+		expr, err = evalengine.Translate(astExpr, cfg)
 		return
 	}()
 
@@ -152,7 +163,7 @@ func evaluateLocalEvalengine(env *evalengine.ExpressionEnv, query string) (evale
 		}()
 		eval, err = env.Evaluate(local)
 		if err == nil && debugCheckTypes {
-			tt, err = env.TypeOf(local)
+			tt, err = env.TypeOf(local, fields)
 			if errors.Is(err, evalengine.ErrAmbiguousType) {
 				tt = -1
 				err = nil
@@ -188,8 +199,8 @@ func TestGenerateFuzzCases(t *testing.T) {
 	compareWithMySQL := func(expr sqlparser.Expr) *mismatch {
 		query := "SELECT " + sqlparser.String(expr)
 
-		env := evalengine.EnvWithBindVars(nil, 255)
-		eval, _, localErr := evaluateLocalEvalengine(env, query)
+		env := evalengine.NewExpressionEnv(context.Background(), nil, nil)
+		eval, _, localErr := evaluateLocalEvalengine(env, query, nil)
 		remote, remoteErr := conn.ExecuteFetch(query, 1, false)
 
 		if localErr != nil && strings.Contains(localErr.Error(), "syntax error at position") {
@@ -296,7 +307,7 @@ type mismatch struct {
 
 const tolerance = 1e-14
 
-func close(a, b float64, decimals uint32) bool {
+func closeFloat(a, b float64, decimals uint32) bool {
 	if decimals > 0 {
 		ratio := math.Pow(10, float64(decimals))
 		a = math.Round(a*ratio) / ratio
@@ -312,24 +323,32 @@ func close(a, b float64, decimals uint32) bool {
 	return math.Abs((a-b)/b) < tolerance
 }
 
-func compareResult(localErr, remoteErr error, localVal, remoteVal sqltypes.Value, localCollation, remoteCollation collations.ID, decimals uint32) string {
+func closeDatetime(a, b time.Time, diff time.Duration) bool {
+	d := a.Sub(b)
+	if d < 0 {
+		d = -d
+	}
+	return d <= diff
+}
+
+func compareResult(localErr, remoteErr error, localVal, remoteVal sqltypes.Value, localCollation, remoteCollation collations.ID, decimals uint32) error {
 	if localErr != nil {
 		if remoteErr == nil {
-			return fmt.Sprintf("%v; mysql response: %s", localErr, remoteVal)
+			return fmt.Errorf("%w: mysql response: %s", localErr, remoteVal)
 		}
 		if !errorsMatch(remoteErr, localErr) {
-			return fmt.Sprintf("mismatch in errors: eval=%s; mysql response: %s", localErr.Error(), remoteErr.Error())
+			return fmt.Errorf("mismatch in errors: eval=%w; mysql response: %w", localErr, remoteErr)
 		}
-		return ""
+		return nil
 	}
 
 	if remoteErr != nil {
 		for _, ke := range knownErrors {
 			if ke.MatchString(remoteErr.Error()) {
-				return ""
+				return nil
 			}
 		}
-		return fmt.Sprintf("%v; mysql failed with: %s", localVal, remoteErr.Error())
+		return fmt.Errorf("%v; mysql failed with: %w", localVal, remoteErr)
 	}
 
 	var localCollationName string
@@ -344,29 +363,55 @@ func compareResult(localErr, remoteErr error, localVal, remoteVal sqltypes.Value
 	if localVal.IsFloat() && remoteVal.IsFloat() {
 		localFloat, err := localVal.ToFloat64()
 		if err != nil {
-			return fmt.Sprintf("error converting local value to float: %v", err)
+			return fmt.Errorf("error converting local value to float: %w", err)
 		}
 		remoteFloat, err := remoteVal.ToFloat64()
 		if err != nil {
-			return fmt.Sprintf("error converting remote value to float: %v", err)
+			return fmt.Errorf("error converting remote value to float: %w", err)
 		}
-		if !close(localFloat, remoteFloat, decimals) {
-			return fmt.Sprintf("different results: %s; mysql response: %s (local collation: %s; mysql collation: %s)",
+		if !closeFloat(localFloat, remoteFloat, decimals) {
+			return fmt.Errorf("different results: %s; mysql response: %s (local collation: %s; mysql collation: %s)",
+				localVal.String(), remoteVal.String(), localCollationName, remoteCollationName)
+		}
+	} else if localVal.IsDateTime() && remoteVal.IsDateTime() {
+		localDatetime, ok := datetime.ParseDateTime(localVal.ToString())
+		if !ok {
+			return fmt.Errorf("error converting local value '%s' to datetime", localVal)
+		}
+		remoteDatetime, ok := datetime.ParseDateTime(remoteVal.ToString())
+		if !ok {
+			return fmt.Errorf("error converting remote value '%s' to datetime", remoteVal)
+		}
+		if !closeDatetime(localDatetime.ToStdTime(time.Local), remoteDatetime.ToStdTime(time.Local), 1*time.Second) {
+			return fmt.Errorf("different results: %s; mysql response: %s (local collation: %s; mysql collation: %s)",
+				localVal.String(), remoteVal.String(), localCollationName, remoteCollationName)
+		}
+	} else if localVal.IsTime() && remoteVal.IsTime() {
+		localTime, ok := datetime.ParseTime(localVal.ToString())
+		if !ok {
+			return fmt.Errorf("error converting local value '%s' to time", localVal)
+		}
+		remoteTime, ok := datetime.ParseTime(remoteVal.ToString())
+		if !ok {
+			return fmt.Errorf("error converting remote value '%s' to time", remoteVal)
+		}
+		if !closeDatetime(localTime.ToStdTime(time.Local), remoteTime.ToStdTime(time.Local), 1*time.Second) {
+			return fmt.Errorf("different results: %s; mysql response: %s (local collation: %s; mysql collation: %s)",
 				localVal.String(), remoteVal.String(), localCollationName, remoteCollationName)
 		}
 	} else if localVal.String() != remoteVal.String() {
-		return fmt.Sprintf("different results: %s; mysql response: %s (local collation: %s; mysql collation: %s)",
+		return fmt.Errorf("different results: %s; mysql response: %s (local collation: %s; mysql collation: %s)",
 			localVal.String(), remoteVal.String(), localCollationName, remoteCollationName)
 	}
 	if localCollation != remoteCollation {
-		return fmt.Sprintf("different collations: %s; mysql response: %s (local result: %s; mysql result: %s)",
+		return fmt.Errorf("different collations: %s; mysql response: %s (local result: %s; mysql result: %s)",
 			localCollationName, remoteCollationName, localVal.String(), remoteVal.String(),
 		)
 	}
 
-	return ""
+	return nil
 }
 
 func (cr *mismatch) Error() string {
-	return compareResult(cr.localErr, cr.remoteErr, cr.localVal, cr.remoteVal, collations.Unknown, collations.Unknown, 0)
+	return compareResult(cr.localErr, cr.remoteErr, cr.localVal, cr.remoteVal, collations.Unknown, collations.Unknown, 0).Error()
 }

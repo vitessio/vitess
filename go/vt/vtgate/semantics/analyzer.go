@@ -80,6 +80,23 @@ func Analyze(statement sqlparser.Statement, currentDb string, si SchemaInformati
 	return semTable, nil
 }
 
+// AnalyzeStrict analyzes the parsed query, and fails the analysis for any possible errors
+func AnalyzeStrict(statement sqlparser.Statement, currentDb string, si SchemaInformation) (*SemTable, error) {
+	st, err := Analyze(statement, currentDb, si)
+	if err != nil {
+		return nil, err
+	}
+
+	if st.NotUnshardedErr != nil {
+		return nil, st.NotUnshardedErr
+	}
+	if st.NotSingleRouteErr != nil {
+		return nil, st.NotSingleRouteErr
+	}
+
+	return st, nil
+}
+
 func (a *analyzer) newSemTable(statement sqlparser.Statement, coll collations.ID) *SemTable {
 	var comments *sqlparser.ParsedComments
 	commentedStmt, isCommented := statement.(sqlparser.Commented)
@@ -109,7 +126,7 @@ func (a *analyzer) setError(err error) {
 	switch err := err.(type) {
 	case ProjError:
 		a.projErr = err.Inner
-	case UnshardedError:
+	case ShardedError:
 		a.unshardedErr = err.Inner
 	default:
 		if a.inProjection > 0 && vterrors.ErrState(err) == vterrors.NonUniqError {
@@ -259,11 +276,11 @@ func (a *analyzer) checkForInvalidConstructs(cursor *sqlparser.Cursor) error {
 	switch node := cursor.Node().(type) {
 	case *sqlparser.Update:
 		if len(node.TableExprs) != 1 {
-			return UnshardedError{Inner: &UnsupportedMultiTablesInUpdateError{ExprCount: len(node.TableExprs)}}
+			return ShardedError{Inner: &UnsupportedMultiTablesInUpdateError{ExprCount: len(node.TableExprs)}}
 		}
 		alias, isAlias := node.TableExprs[0].(*sqlparser.AliasedTableExpr)
 		if !isAlias {
-			return UnshardedError{Inner: &UnsupportedMultiTablesInUpdateError{NotAlias: true}}
+			return ShardedError{Inner: &UnsupportedMultiTablesInUpdateError{NotAlias: true}}
 		}
 		_, isDerived := alias.Expr.(*sqlparser.DerivedTable)
 		if isDerived {
@@ -362,12 +379,12 @@ func (p ProjError) Error() string {
 	return p.Inner.Error()
 }
 
-// UnshardedError is used to mark an error as something that should only be returned
+// ShardedError is used to mark an error as something that should only be returned
 // if the query is not unsharded
-type UnshardedError struct {
+type ShardedError struct {
 	Inner error
 }
 
-func (p UnshardedError) Error() string {
+func (p ShardedError) Error() string {
 	return p.Inner.Error()
 }

@@ -138,7 +138,7 @@ const (
 			migration_uuid=%a
 	`
 	sqlClearSingleArtifact = `UPDATE _vt.schema_migrations
-			SET artifacts=replace(artifacts, concat(%a, ','), ''), cleanup_timestamp=NULL
+			SET artifacts=replace(artifacts, concat(%a, ','), '')
 		WHERE
 			migration_uuid=%a
 	`
@@ -233,7 +233,7 @@ const (
 			migration_uuid=%a
 	`
 	sqlUpdateLastThrottled = `UPDATE _vt.schema_migrations
-			SET last_throttled_timestamp=FROM_UNIXTIME(%a), component_throttled=%a
+			SET last_throttled_timestamp=%a, component_throttled=%a
 		WHERE
 			migration_uuid=%a
 	`
@@ -358,6 +358,10 @@ const (
 			migration_status='failed'
 			AND cleanup_timestamp IS NULL
 			AND completed_timestamp IS NULL
+	`
+	sqlShowMigrationsWhere = `SELECT *
+		FROM _vt.schema_migrations
+		%s
 	`
 	sqlSelectMigration = `SELECT
 			id,

@@ -29,6 +29,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"vitess.io/vitess/go/vt/discovery"
+	"vitess.io/vitess/go/vt/throttler"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
@@ -79,7 +80,7 @@ func TestEnabledThrottler(t *testing.T) {
 	}
 
 	mockThrottler := NewMockThrottlerInterface(mockCtrl)
-	throttlerFactory = func(name, unit string, threadCount int, maxRate, maxReplicationLag int64) (ThrottlerInterface, error) {
+	throttlerFactory = func(name, unit string, threadCount int, maxRate int64, maxReplicationLagConfig throttler.MaxReplicationLagModuleConfig) (ThrottlerInterface, error) {
 		assert.Equal(t, 1, threadCount)
 		return mockThrottler, nil
 	}

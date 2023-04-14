@@ -18,13 +18,14 @@ package evalengine
 
 import (
 	"vitess.io/vitess/go/sqltypes"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 type (
 	// Expr is the interface that all evaluating expressions must implement
 	Expr interface {
 		eval(env *ExpressionEnv) (eval, error)
-		typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag)
+		typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag)
 		format(buf *formatter, depth int)
 		constant() bool
 		simplify(env *ExpressionEnv) error

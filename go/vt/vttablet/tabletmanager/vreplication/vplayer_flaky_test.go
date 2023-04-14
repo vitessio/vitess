@@ -27,7 +27,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/spyzhov/ajson"
+	"github.com/nsf/jsondiff"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
@@ -1371,19 +1371,7 @@ func TestPlayerRowMove(t *testing.T) {
 }
 
 func TestPlayerTypes(t *testing.T) {
-	log.Errorf("TestPlayerTypes: flavor is %s", env.Flavor)
-	enableJSONColumnTesting := false
-	flavor := strings.ToLower(env.Flavor)
-	// Disable tests on percona and mariadb platforms in CI since they
-	// either don't support JSON or JSON support is not enabled by default
-	if strings.Contains(flavor, "mysql57") || strings.Contains(flavor, "mysql80") {
-		log.Infof("Running JSON column type tests on flavor %s", flavor)
-		enableJSONColumnTesting = true
-	} else {
-		log.Warningf("Not running JSON column type tests on flavor %s", flavor)
-	}
 	defer deleteTablet(addTablet(100))
-
 	execStatements(t, []string{
 		"create table vitess_ints(tiny tinyint, tinyu tinyint unsigned, small smallint, smallu smallint unsigned, medium mediumint, mediumu mediumint unsigned, normal int, normalu int unsigned, big bigint, bigu bigint unsigned, y year, primary key(tiny))",
 		fmt.Sprintf("create table %s.vitess_ints(tiny tinyint, tinyu tinyint unsigned, small smallint, smallu smallint unsigned, medium mediumint, mediumu mediumint unsigned, normal int, normalu int unsigned, big bigint, bigu bigint unsigned, y year, primary key(tiny))", vrepldb),
@@ -1401,6 +1389,8 @@ func TestPlayerTypes(t *testing.T) {
 		fmt.Sprintf("create table %s.binary_pk(b binary(4), val varbinary(4), primary key(b))", vrepldb),
 		"create table vitess_decimal(id int, d1 decimal(8,0) default null, d2 decimal(8,0) default null, d3 decimal(8,0) default null, d4 decimal(8, 1), d5 decimal(8, 1), d6 decimal(8, 1), primary key(id))",
 		fmt.Sprintf("create table %s.vitess_decimal(id int, d1 decimal(8,0) default null, d2 decimal(8,0) default null, d3 decimal(8,0) default null, d4 decimal(8, 1), d5 decimal(8, 1), d6 decimal(8, 1), primary key(id))", vrepldb),
+		"create table vitess_json(id int auto_increment, val1 json, val2 json, val3 json, val4 json, val5 json, primary key(id))",
+		fmt.Sprintf("create table %s.vitess_json(id int, val1 json, val2 json, val3 json, val4 json, val5 json, primary key(id))", vrepldb),
 	})
 	defer execStatements(t, []string{
 		"drop table vitess_ints",
@@ -1419,18 +1409,10 @@ func TestPlayerTypes(t *testing.T) {
 		fmt.Sprintf("drop table %s.binary_pk", vrepldb),
 		"drop table vitess_decimal",
 		fmt.Sprintf("drop table %s.vitess_decimal", vrepldb),
+		"drop table vitess_json",
+		fmt.Sprintf("drop table %s.vitess_json", vrepldb),
 	})
-	if enableJSONColumnTesting {
-		execStatements(t, []string{
-			"create table vitess_json(id int auto_increment, val1 json, val2 json, val3 json, val4 json, val5 json, primary key(id))",
-			fmt.Sprintf("create table %s.vitess_json(id int, val1 json, val2 json, val3 json, val4 json, val5 json, primary key(id))", vrepldb),
-		})
-		defer execStatements(t, []string{
-			"drop table vitess_json",
-			fmt.Sprintf("drop table %s.vitess_json", vrepldb),
-		})
 
-	}
 	env.SchemaEngine.Reload(context.Background())
 
 	filter := &binlogdatapb.Filter{
@@ -1509,27 +1491,21 @@ func TestPlayerTypes(t *testing.T) {
 		data: [][]string{
 			{"a\000\000\000", "bbb"},
 		},
+	}, {
+		input:  "insert into vitess_json(val1,val2,val3,val4,val5) values (null,'{}','123','{\"a\":[42,100]}','{\"foo\": \"bar\"}')",
+		output: "insert into vitess_json(id,val1,val2,val3,val4,val5) values (1,CAST(null as JSON),JSON_OBJECT(),CAST(123 as JSON),JSON_OBJECT(_utf8mb4'a', JSON_ARRAY(42, 100)),JSON_OBJECT(_utf8mb4'foo', _utf8mb4'bar'))",
+		table:  "vitess_json",
+		data: [][]string{
+			{"1", "", "{}", "123", `{"a": [42, 100]}`, `{"foo": "bar"}`},
+		},
+	}, {
+		input:  "update vitess_json set val1 = '{\"bar\": \"foo\"}', val4 = '{\"a\": [98, 123]}', val5 = convert(x'7b7d' using utf8mb4)",
+		output: "update vitess_json set val1=JSON_OBJECT(_utf8mb4'bar', _utf8mb4'foo'), val2=JSON_OBJECT(), val3=CAST(123 as JSON), val4=JSON_OBJECT(_utf8mb4'a', JSON_ARRAY(98, 123)), val5=JSON_OBJECT() where id=1",
+		table:  "vitess_json",
+		data: [][]string{
+			{"1", `{"bar": "foo"}`, "{}", "123", `{"a": [98, 123]}`, `{}`},
+		},
 	}}
-	if enableJSONColumnTesting {
-		testcases = append(testcases, testcase{
-			input: "insert into vitess_json(val1,val2,val3,val4,val5) values (null,'{}','123','{\"a\":[42,100]}', '{\"foo\":\"bar\"}')",
-			output: "insert into vitess_json(id,val1,val2,val3,val4,val5) values (1," +
-				"convert(null using utf8mb4)," + "convert('{}' using utf8mb4)," + "convert('123' using utf8mb4)," +
-				"convert('{\\\"a\\\":[42,100]}' using utf8mb4)," + "convert('{\\\"foo\\\":\\\"bar\\\"}' using utf8mb4))",
-			table: "vitess_json",
-			data: [][]string{
-				{"1", "", "{}", "123", `{"a": [42, 100]}`, `{"foo": "bar"}`},
-			},
-		})
-		testcases = append(testcases, testcase{
-			input:  "update vitess_json set val4 = '{\"a\": [98, 123]}', val5 = convert(x'7b7d' using utf8mb4)",
-			output: "update vitess_json set val1=convert(null using utf8mb4), val2=convert('{}' using utf8mb4), val3=convert('123' using utf8mb4), val4=convert('{\\\"a\\\":[98,123]}' using utf8mb4), val5=convert('{}' using utf8mb4) where id=1",
-			table:  "vitess_json",
-			data: [][]string{
-				{"1", "", "{}", "123", `{"a": [98, 123]}`, `{}`},
-			},
-		})
-	}
 
 	for _, tcases := range testcases {
 		execStatements(t, []string{tcases.input})
@@ -1663,6 +1639,8 @@ func TestPlayerDDL(t *testing.T) {
 		OnDdl:    binlogdatapb.OnDDLAction_EXEC_IGNORE,
 	}
 	execStatements(t, []string{fmt.Sprintf("create table %s.t2(id int, primary key(id))", vrepldb)})
+	defer execStatements(t, []string{fmt.Sprintf("drop table %s.t2", vrepldb)})
+
 	cancel, _ = startVReplication(t, bls, "")
 	execStatements(t, []string{"alter table t1 add column val1 varchar(128)"})
 	expectDBClientQueries(t, qh.Expect(
@@ -2506,28 +2484,9 @@ func TestTimestamp(t *testing.T) {
 	expectData(t, "t1", [][]string{{"1", want, want}})
 }
 
-func shouldRunJSONTests(t *testing.T, name string) bool {
-	skipTest := true
-	flavors := []string{"mysql80", "mysql57"}
-	for _, flavor := range flavors {
-		if strings.EqualFold(env.Flavor, flavor) {
-			skipTest = false
-			break
-		}
-	}
-	if skipTest {
-		t.Logf("not running %s on %s", name, env.Flavor)
-		return false
-	}
-	return true
-}
-
 // TestPlayerJSONDocs validates more complex and 'large' json docs. It only validates that the data on target matches that on source.
 // TestPlayerTypes, above, also verifies the sql queries applied on the target.
 func TestPlayerJSONDocs(t *testing.T) {
-	if !shouldRunJSONTests(t, "TestPlayerJSONDocs") {
-		return
-	}
 	defer deleteTablet(addTablet(100))
 
 	execStatements(t, []string{
@@ -2604,9 +2563,6 @@ func TestPlayerJSONDocs(t *testing.T) {
 
 // TestPlayerJSONTwoColumns tests for two json columns in a table
 func TestPlayerJSONTwoColumns(t *testing.T) {
-	if !shouldRunJSONTests(t, "TestPlayerJSONTwoColumns") {
-		return
-	}
 	defer deleteTablet(addTablet(100))
 	execStatements(t, []string{
 		"create table vitess_json2(id int auto_increment, val json, val2 json, primary key(id))",
@@ -2697,12 +2653,6 @@ func TestVReplicationLogs(t *testing.T) {
 }
 
 func TestGeneratedColumns(t *testing.T) {
-	flavor := strings.ToLower(env.Flavor)
-	// Disable tests on percona (which identifies as mysql56) and mariadb platforms in CI since they
-	// generated columns support was added in 5.7 and mariadb added mysql compatible generated columns in 10.2
-	if !strings.Contains(flavor, "mysql57") && !strings.Contains(flavor, "mysql80") {
-		return
-	}
 	defer deleteTablet(addTablet(100))
 
 	execStatements(t, []string{
@@ -2771,7 +2721,6 @@ func TestGeneratedColumns(t *testing.T) {
 			{"1", "bbb1", "bbb", "11"},
 		},
 	}}
-
 	for _, tcases := range testcases {
 		execStatements(t, []string{tcases.input})
 		output := qh.Expect(tcases.output)
@@ -2849,8 +2798,6 @@ func TestPlayerInvalidDates(t *testing.T) {
 		expectNontxQueries(t, output)
 
 		if tcases.table != "" {
-			// without the sleep there is a flakiness where row inserted by vreplication is not visible to vdbclient
-			time.Sleep(100 * time.Millisecond)
 			expectData(t, tcases.table, tcases.data)
 		}
 	}
@@ -2879,13 +2826,12 @@ func expectJSON(t *testing.T, table string, values [][]string, id int, exec func
 		if qr.Rows[i][0].ToString() != row[0] {
 			t.Fatalf("Id mismatch: want %s, got %s", qr.Rows[i][0].ToString(), row[0])
 		}
-		got, err := ajson.Unmarshal([]byte(qr.Rows[i][1].ToString()))
-		require.NoError(t, err)
-		want, err := ajson.Unmarshal([]byte(row[1]))
-		require.NoError(t, err)
-		match, err := got.Eq(want)
-		require.NoError(t, err)
-		require.True(t, match)
+
+		opts := jsondiff.DefaultConsoleOptions()
+		compare, s := jsondiff.Compare(qr.Rows[i][1].Raw(), []byte(row[1]), &opts)
+		if compare != jsondiff.FullMatch {
+			t.Errorf("Diff:\n%s\n", s)
+		}
 	}
 }
 

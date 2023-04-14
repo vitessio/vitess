@@ -18,14 +18,13 @@ package evalengine
 
 import (
 	"encoding/binary"
-	"time"
 
 	"vitess.io/vitess/go/hack"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/collations/charset"
+	"vitess.io/vitess/go/mysql/datetime"
 	"vitess.io/vitess/go/sqltypes"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vthash"
 )
@@ -47,6 +46,13 @@ func newEvalRaw(typ sqltypes.Type, raw []byte, col collations.TypedCollation) *e
 
 func newEvalBytesHex(raw []byte) eval {
 	return &evalBytes{tt: int16(sqltypes.VarBinary), isHexLiteral: true, col: collationBinary, bytes: raw}
+}
+
+// newEvalBytesBit creates a new evalBytes for a bit literal.
+// Turns out that a bit literal is not actually typed with
+// sqltypes.Bit, but with sqltypes.VarBinary.
+func newEvalBytesBit(raw []byte) eval {
+	return &evalBytes{tt: int16(sqltypes.VarBinary), isBitLiteral: true, col: collationBinary, bytes: raw}
 }
 
 func newEvalBinary(raw []byte) *evalBytes {
@@ -100,13 +106,6 @@ func evalToVarchar(e eval, col collations.ID, convert bool) (*evalBytes, error) 
 
 func (e *evalBytes) Hash(h *vthash.Hasher) {
 	switch tt := e.SQLType(); {
-	case sqltypes.IsDate(tt):
-		t, err := e.parseDate()
-		if err != nil {
-			panic("parseDate() in evalBytes should never fail")
-		}
-		h.Write16(hashPrefixDate)
-		h.Write64(uint64(t.UnixNano()))
 	case tt == sqltypes.VarBinary:
 		h.Write16(hashPrefixBytes)
 		_, _ = h.Write(e.bytes)
@@ -163,18 +162,24 @@ func (e *evalBytes) truncateInPlace(size int) {
 	}
 }
 
-func (e *evalBytes) parseDate() (t time.Time, err error) {
-	switch e.SQLType() {
-	case sqltypes.Date:
-		t, err = sqlparser.ParseDate(e.string())
-	case sqltypes.Timestamp, sqltypes.Datetime:
-		t, err = sqlparser.ParseDateTime(e.string())
-	case sqltypes.Time:
-		t, err = sqlparser.ParseTime(e.string())
-	default:
-		err = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "type %v is not date-like", e.SQLType())
+func (e *evalBytes) toTemporal() (*evalTemporal, error) {
+	if t, ok := datetime.ParseDateTime(e.string()); ok {
+		return newEvalDateTime(t), nil
 	}
-	return
+	if t, ok := datetime.ParseDate(e.string()); ok {
+		return newEvalDate(t), nil
+	}
+	return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "type %v is not date-like", e.SQLType())
+}
+
+func (e *evalBytes) toDateBestEffort() datetime.DateTime {
+	if t, _ := datetime.ParseDateTime(e.string()); !t.IsZero() {
+		return t
+	}
+	if t, _ := datetime.ParseDate(e.string()); !t.IsZero() {
+		return datetime.DateTime{Date: t}
+	}
+	return datetime.DateTime{}
 }
 
 func (e *evalBytes) toNumericHex() (*evalUint64, bool) {

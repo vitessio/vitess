@@ -180,6 +180,9 @@ func TestExpandStar(t *testing.T) {
 			require.True(t, isSelectStatement, "analyzer expects a select statement")
 			st, err := Analyze(selectStatement, cDB, schemaInfo)
 			if tcase.expErr == "" {
+				require.NoError(t, err)
+				require.NoError(t, st.NotUnshardedErr)
+				require.NoError(t, st.NotSingleRouteErr)
 				found := 0
 			outer:
 				for _, selExpr := range selectStatement.SelectExprs {
@@ -204,9 +207,6 @@ func TestExpandStar(t *testing.T) {
 				} else {
 					require.Equal(t, tcase.colExpandedNumber, found)
 				}
-				require.NoError(t, err)
-				require.NoError(t, st.NotUnshardedErr)
-				require.NoError(t, st.NotSingleRouteErr)
 				assert.Equal(t, tcase.expSQL, sqlparser.String(selectStatement))
 			} else {
 				require.EqualError(t, err, tcase.expErr)

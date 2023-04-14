@@ -19,6 +19,7 @@ package evalengine
 import (
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 )
@@ -110,7 +111,7 @@ func (compareNullSafeEQ) compare(left, right eval) (boolean, error) {
 }
 
 func typeIsTextual(tt sqltypes.Type) bool {
-	return sqltypes.IsText(tt) || sqltypes.IsBinary(tt)
+	return sqltypes.IsText(tt) || sqltypes.IsBinary(tt) || tt == sqltypes.Time
 }
 
 func compareAsStrings(l, r sqltypes.Type) bool {
@@ -136,7 +137,7 @@ func compareAsDecimal(ltype, rtype sqltypes.Type) bool {
 }
 
 func compareAsDates(l, r sqltypes.Type) bool {
-	return sqltypes.IsDate(l) && sqltypes.IsDate(r)
+	return sqltypes.IsDateOrTime(l) && sqltypes.IsDateOrTime(r)
 }
 
 func compareAsDateAndString(l, r sqltypes.Type) bool {
@@ -144,7 +145,7 @@ func compareAsDateAndString(l, r sqltypes.Type) bool {
 }
 
 func compareAsDateAndNumeric(ltype, rtype sqltypes.Type) bool {
-	return sqltypes.IsDate(ltype) && sqltypes.IsNumber(rtype) || sqltypes.IsNumber(ltype) && sqltypes.IsDate(rtype)
+	return sqltypes.IsDateOrTime(ltype) && sqltypes.IsNumber(rtype) || sqltypes.IsNumber(ltype) && sqltypes.IsDateOrTime(rtype)
 }
 
 func compareAsTuples(left, right eval) (*evalTuple, *evalTuple, bool) {
@@ -154,6 +155,10 @@ func compareAsTuples(left, right eval) (*evalTuple, *evalTuple, bool) {
 		}
 	}
 	return nil, nil, false
+}
+
+func compareAsJSON(l, r sqltypes.Type) bool {
+	return l == sqltypes.TypeJSON || r == sqltypes.TypeJSON
 }
 
 func evalCompareNullSafe(lVal, rVal eval) (bool, error) {
@@ -207,21 +212,24 @@ func evalCompare(left, right eval) (comp int, err error) {
 	rt := right.SQLType()
 
 	switch {
+	case compareAsDates(lt, rt):
+		return compareDates(left.(*evalTemporal), right.(*evalTemporal)), nil
 	case compareAsStrings(lt, rt):
 		return compareStrings(left, right)
 	case compareAsSameNumericType(lt, rt) || compareAsDecimal(lt, rt):
 		return compareNumeric(left, right)
-	case compareAsDates(lt, rt):
-		return compareDates(left, right)
 	case compareAsDateAndString(lt, rt):
-		return compareDateAndString(left, right)
+		return compareDateAndString(left, right), nil
 	case compareAsDateAndNumeric(lt, rt):
-		// TODO: support comparison between a date and a numeric value
-		// 		queries like the ones below should be supported:
-		// 			- select 1 where 20210101 = cast("2021-01-01" as date)
-		// 			- select 1 where 2021210101 = cast("2021-01-01" as date)
-		// 			- select 1 where 104200 = cast("10:42:00" as time)
-		return 0, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "cannot compare a date with a numeric value")
+		if sqltypes.IsDateOrTime(lt) {
+			left = evalToNumeric(left)
+		}
+		if sqltypes.IsDateOrTime(rt) {
+			right = evalToNumeric(right)
+		}
+		return compareNumeric(left, right)
+	case compareAsJSON(lt, rt):
+		return compareJSON(left, right)
 	case lt == sqltypes.Tuple || rt == sqltypes.Tuple:
 		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: evalCompare: tuple comparison should be handled early")
 	default:
@@ -232,8 +240,8 @@ func evalCompare(left, right eval) (comp int, err error) {
 		// 		comparison of floating-point numbers."
 		//
 		//		https://dev.mysql.com/doc/refman/8.0/en/type-conversion.html
-		lf, _ := evalToNumeric(left).toFloat()
-		rf, _ := evalToNumeric(right).toFloat()
+		lf, _ := evalToFloat(left)
+		rf, _ := evalToFloat(right)
 		return compareNumeric(lf, rf)
 	}
 }
@@ -256,9 +264,20 @@ func evalCompareTuplesNullSafe(left, right []eval) (bool, error) {
 
 // eval implements the Expr interface
 func (c *ComparisonExpr) eval(env *ExpressionEnv) (eval, error) {
-	left, right, err := c.arguments(env)
+	left, err := c.Left.eval(env)
 	if err != nil {
 		return nil, err
+	}
+	if _, ok := c.Op.(compareNullSafeEQ); !ok && left == nil {
+		return nil, nil
+	}
+	right, err := c.Right.eval(env)
+	if err != nil {
+		return nil, err
+	}
+
+	if _, ok := c.Op.(compareNullSafeEQ); !ok && right == nil {
+		return nil, nil
 	}
 	cmp, err := c.Op.compare(left, right)
 	if err != nil {
@@ -268,9 +287,9 @@ func (c *ComparisonExpr) eval(env *ExpressionEnv) (eval, error) {
 }
 
 // typeof implements the Expr interface
-func (c *ComparisonExpr) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
-	_, f1 := c.Left.typeof(env)
-	_, f2 := c.Right.typeof(env)
+func (c *ComparisonExpr) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	_, f1 := c.Left.typeof(env, fields)
+	_, f2 := c.Right.typeof(env, fields)
 	return sqltypes.Int64, f1 | f2
 }
 
@@ -325,9 +344,9 @@ func (i *InExpr) eval(env *ExpressionEnv) (eval, error) {
 	return in.eval(), nil
 }
 
-func (i *InExpr) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
-	_, f1 := i.Left.typeof(env)
-	_, f2 := i.Right.typeof(env)
+func (i *InExpr) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	_, f1 := i.Left.typeof(env, fields)
+	_, f2 := i.Right.typeof(env, fields)
 	return sqltypes.Int64, f1 | f2
 }
 
@@ -347,7 +366,7 @@ func (l *LikeExpr) eval(env *ExpressionEnv) (eval, error) {
 	}
 
 	var col collations.ID
-	left, right, col, err = mergeCollations(left, right)
+	left, right, col, err = mergeAndCoerceCollations(left, right)
 	if err != nil {
 		return nil, err
 	}
@@ -367,8 +386,8 @@ func (l *LikeExpr) eval(env *ExpressionEnv) (eval, error) {
 }
 
 // typeof implements the ComparisonOp interface
-func (l *LikeExpr) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
-	_, f1 := l.Left.typeof(env)
-	_, f2 := l.Right.typeof(env)
+func (l *LikeExpr) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	_, f1 := l.Left.typeof(env, fields)
+	_, f2 := l.Right.typeof(env, fields)
 	return sqltypes.Int64, f1 | f2
 }

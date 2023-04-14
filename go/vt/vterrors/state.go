@@ -46,6 +46,7 @@ const (
 	DupFieldName
 	WrongValueCountOnRow
 	WrongValue
+	WrongArguments
 
 	// failed precondition
 	NoDB
@@ -54,6 +55,7 @@ const (
 	CantDoThisInTransaction
 	RequiresPrimaryKey
 	OperandColumns
+	UnknownStmtHandler
 
 	// not found
 	BadDb
@@ -82,6 +84,9 @@ const (
 
 	// server not available
 	ServerNotAvailable
+
+	// unknown timezone
+	UnknownTimeZone
 
 	// No state should be added below NumOfStates
 	NumOfStates

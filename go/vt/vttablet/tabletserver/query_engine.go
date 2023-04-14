@@ -145,7 +145,7 @@ type QueryEngine struct {
 	streamConns *connpool.Pool
 
 	// Services
-	consolidator       *sync2.Consolidator
+	consolidator       sync2.Consolidator
 	streamConsolidator *StreamConsolidator
 	// txSerializer protects vttablet from applications which try to concurrently
 	// UPDATE (or DELETE) a "hot" row (or range of rows).

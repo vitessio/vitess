@@ -194,7 +194,7 @@ type txThrottlerState struct {
 // in tests to generate mocks.
 type healthCheckFactoryFunc func(topoServer *topo.Server, cell string, cellsToWatch []string) discovery.HealthCheck
 type topologyWatcherFactoryFunc func(topoServer *topo.Server, hc discovery.HealthCheck, cell, keyspace, shard string, refreshInterval time.Duration, topoReadConcurrency int) TopologyWatcherInterface
-type throttlerFactoryFunc func(name, unit string, threadCount int, maxRate, maxReplicationLag int64) (ThrottlerInterface, error)
+type throttlerFactoryFunc func(name, unit string, threadCount int, maxRate int64, maxReplicationLagConfig throttler.MaxReplicationLagModuleConfig) (ThrottlerInterface, error)
 
 var (
 	healthCheckFactory     healthCheckFactoryFunc
@@ -213,8 +213,8 @@ func resetTxThrottlerFactories() {
 	topologyWatcherFactory = func(topoServer *topo.Server, hc discovery.HealthCheck, cell, keyspace, shard string, refreshInterval time.Duration, topoReadConcurrency int) TopologyWatcherInterface {
 		return discovery.NewCellTabletsWatcher(context.Background(), topoServer, hc, discovery.NewFilterByKeyspace([]string{keyspace}), cell, refreshInterval, true, topoReadConcurrency)
 	}
-	throttlerFactory = func(name, unit string, threadCount int, maxRate, maxReplicationLag int64) (ThrottlerInterface, error) {
-		return throttler.NewThrottler(name, unit, threadCount, maxRate, maxReplicationLag)
+	throttlerFactory = func(name, unit string, threadCount int, maxRate int64, maxReplicationLagConfig throttler.MaxReplicationLagModuleConfig) (ThrottlerInterface, error) {
+		return throttler.NewThrottlerFromConfig(name, unit, threadCount, maxRate, maxReplicationLagConfig, time.Now)
 	}
 }
 
@@ -292,12 +292,15 @@ func (t *TxThrottler) Throttle(priority int) (result bool) {
 }
 
 func newTxThrottlerState(config *txThrottlerConfig, keyspace, shard, cell string) (*txThrottlerState, error) {
+	maxReplicationLagModuleConfig := throttler.MaxReplicationLagModuleConfig{Configuration: config.throttlerConfig}
+
 	t, err := throttlerFactory(
 		TxThrottlerName,
 		"TPS",                           /* unit */
 		1,                               /* threadCount */
 		throttler.MaxRateModuleDisabled, /* maxRate */
-		config.throttlerConfig.MaxReplicationLagSec /* maxReplicationLag */)
+		maxReplicationLagModuleConfig,
+	)
 	if err != nil {
 		return nil, err
 	}

@@ -36,10 +36,10 @@ func GetVSchema(ctx context.Context, r Request, api *API) *JSONResponse {
 }
 
 // GetVSchemas implements the http wrapper for the
-// /vschemas[?cluster=[&cluster=]] route.
+// /vschemas[?cluster_id=[&cluster_id=]] route.
 func GetVSchemas(ctx context.Context, r Request, api *API) *JSONResponse {
 	vschemas, err := api.server.GetVSchemas(ctx, &vtadminpb.GetVSchemasRequest{
-		ClusterIds: r.URL.Query()["cluster"],
+		ClusterIds: r.URL.Query()["cluster_id"],
 	})
 
 	return NewJSONResponse(vschemas, err)

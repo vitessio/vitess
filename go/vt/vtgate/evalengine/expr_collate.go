@@ -17,13 +17,10 @@ limitations under the License.
 package evalengine
 
 import (
-	"strconv"
-	"strings"
-
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
@@ -49,6 +46,12 @@ var collationJSON = collations.TypedCollation{
 	Collation:    46, // utf8mb4_bin
 	Coercibility: collations.CoerceCoercible,
 	Repertoire:   collations.RepertoireUnicode,
+}
+
+var collationUtf8mb3 = collations.TypedCollation{
+	Collation:    collations.CollationUtf8ID,
+	Coercibility: collations.CoerceCoercible,
+	Repertoire:   collations.RepertoireASCII,
 }
 
 type (
@@ -78,43 +81,9 @@ func (c *CollateExpr) eval(env *ExpressionEnv) (eval, error) {
 	}
 }
 
-func (c *CollateExpr) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
-	t, f := c.Inner.typeof(env)
+func (c *CollateExpr) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	t, f := c.Inner.typeof(env, fields)
 	return t, f | flagExplicitCollation
-}
-
-type LookupDefaultCollation collations.ID
-
-func (d LookupDefaultCollation) ColumnLookup(_ *sqlparser.ColName) (int, error) {
-	return 0, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "column access not supported here")
-}
-
-func (d LookupDefaultCollation) CollationForExpr(_ sqlparser.Expr) collations.ID {
-	return collations.Unknown
-}
-
-func (d LookupDefaultCollation) DefaultCollation() collations.ID {
-	return collations.ID(d)
-}
-
-type LookupIntegrationTest struct {
-	Collation collations.ID
-}
-
-func (*LookupIntegrationTest) ColumnLookup(name *sqlparser.ColName) (int, error) {
-	n := name.CompliantName()
-	if strings.HasPrefix(n, "column") {
-		return strconv.Atoi(n[len("column"):])
-	}
-	return 0, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unknown column: %q", n)
-}
-
-func (tl *LookupIntegrationTest) CollationForExpr(_ sqlparser.Expr) collations.ID {
-	return tl.Collation
-}
-
-func (tl *LookupIntegrationTest) DefaultCollation() collations.ID {
-	return tl.Collation
 }
 
 func evalCollation(e eval) collations.TypedCollation {
@@ -132,36 +101,44 @@ func evalCollation(e eval) collations.TypedCollation {
 	}
 }
 
-func mergeCollations(left, right eval) (eval, eval, collations.ID, error) {
-	lc := evalCollation(left)
-	rc := evalCollation(right)
-	if lc.Collation == rc.Collation {
-		return left, right, lc.Collation, nil
+func mergeCollations(c1, c2 collations.TypedCollation, t1, t2 sqltypes.Type) (collations.TypedCollation, collations.Coercion, collations.Coercion, error) {
+	if c1.Collation == c2.Collation {
+		return c1, nil, nil, nil
 	}
 
-	lt := typeIsTextual(left.SQLType())
-	rt := typeIsTextual(right.SQLType())
+	lt := sqltypes.IsText(t1) || sqltypes.IsBinary(t1)
+	rt := sqltypes.IsText(t2) || sqltypes.IsBinary(t2)
 	if !lt || !rt {
 		if lt {
-			return left, right, lc.Collation, nil
+			return c1, nil, nil, nil
 		}
 		if rt {
-			return left, right, rc.Collation, nil
+			return c2, nil, nil, nil
 		}
-		return left, right, collations.CollationBinaryID, nil
+		return collationBinary, nil, nil, nil
 	}
 
 	env := collations.Local()
-	mc, coerceLeft, coerceRight, err := env.MergeCollations(lc, rc, collations.CoercionOptions{
+	return env.MergeCollations(c1, c2, collations.CoercionOptions{
 		ConvertToSuperset:   true,
 		ConvertWithCoercion: true,
 	})
+}
+
+func mergeAndCoerceCollations(left, right eval) (eval, eval, collations.ID, error) {
+	lt := left.SQLType()
+	rt := right.SQLType()
+
+	mc, coerceLeft, coerceRight, err := mergeCollations(evalCollation(left), evalCollation(right), lt, rt)
 	if err != nil {
 		return nil, nil, 0, err
 	}
+	if coerceLeft == nil && coerceRight == nil {
+		return left, right, mc.Collation, nil
+	}
 
-	left1 := newEvalRaw(left.SQLType(), left.(*evalBytes).bytes, mc)
-	right1 := newEvalRaw(right.SQLType(), right.(*evalBytes).bytes, mc)
+	left1 := newEvalRaw(lt, left.(*evalBytes).bytes, mc)
+	right1 := newEvalRaw(rt, right.(*evalBytes).bytes, mc)
 
 	if coerceLeft != nil {
 		left1.bytes, err = coerceLeft(nil, left1.bytes)

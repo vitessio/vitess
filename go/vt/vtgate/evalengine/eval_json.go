@@ -18,15 +18,15 @@ package evalengine
 
 import (
 	"bytes"
-	"encoding/base64"
 	"errors"
 	"fmt"
 
+	"vitess.io/vitess/go/hack"
 	"vitess.io/vitess/go/mysql/collations/charset"
+	"vitess.io/vitess/go/mysql/json"
 	"vitess.io/vitess/go/sqltypes"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/evalengine/internal/json"
 )
 
 type errJSONType string
@@ -65,12 +65,10 @@ func intoJSONPath(e eval) (*json.Path, error) {
 }
 
 func evalConvert_bj(e *evalBytes) *evalJSON {
-	const prefix = "base64:type15:"
-
-	dst := make([]byte, len(prefix)+mysqlBase64.EncodedLen(len(e.bytes)))
-	copy(dst, prefix)
-	base64.StdEncoding.Encode(dst[len(prefix):], e.bytes)
-	return json.NewString(dst)
+	if e.tt == int16(sqltypes.Bit) {
+		return json.NewBit(e.string())
+	}
+	return json.NewBlob(e.string())
 }
 
 func evalConvert_fj(e *evalFloat) *evalJSON {
@@ -78,7 +76,7 @@ func evalConvert_fj(e *evalFloat) *evalJSON {
 	if bytes.IndexByte(f, '.') < 0 {
 		f = append(f, '.', '0')
 	}
-	return json.NewNumber(f)
+	return json.NewNumber(hack.String(f), json.NumberTypeFloat)
 }
 
 func evalConvert_nj(e evalNumeric) *evalJSON {
@@ -88,7 +86,15 @@ func evalConvert_nj(e evalNumeric) *evalJSON {
 	if e == evalBoolFalse {
 		return json.ValueFalse
 	}
-	return json.NewNumber(e.ToRawBytes())
+	switch e := e.(type) {
+	case *evalInt64:
+		return json.NewNumber(hack.String(e.ToRawBytes()), json.NumberTypeSigned)
+	case *evalUint64:
+		return json.NewNumber(hack.String(e.ToRawBytes()), json.NumberTypeUnsigned)
+	case *evalDecimal:
+		return json.NewNumber(hack.String(e.ToRawBytes()), json.NumberTypeDecimal)
+	}
+	panic("unreachable")
 }
 
 func evalConvert_cj(e *evalBytes) (*evalJSON, error) {
@@ -105,7 +111,7 @@ func evalConvertArg_cj(e *evalBytes) (*evalJSON, error) {
 	if err != nil {
 		return nil, err
 	}
-	return json.NewString(jsonText), nil
+	return json.NewString(string(jsonText)), nil
 }
 
 func evalToJSON(e eval) (*evalJSON, error) {
@@ -123,6 +129,8 @@ func evalToJSON(e eval) (*evalJSON, error) {
 			return evalConvert_bj(e), nil
 		}
 		return evalConvert_cj(e)
+	case *evalTemporal:
+		return e.toJSON(), nil
 	default:
 		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "Unsupported type conversion: %s AS JSON", e.SQLType())
 	}
@@ -143,6 +151,8 @@ func argToJSON(e eval) (*evalJSON, error) {
 			return evalConvert_bj(e), nil
 		}
 		return evalConvertArg_cj(e)
+	case *evalTemporal:
+		return e.toJSON(), nil
 	default:
 		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "Unsupported type conversion: %s AS JSON", e.SQLType())
 	}
