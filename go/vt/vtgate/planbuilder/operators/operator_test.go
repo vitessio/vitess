@@ -25,17 +25,14 @@ import (
 	"strings"
 	"testing"
 
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
-
-	"vitess.io/vitess/go/vt/vtgate/engine"
-
-	"vitess.io/vitess/go/vt/vtgate/vindexes"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/sqlparser"
+	popcode "vitess.io/vitess/go/vt/vtgate/engine/opcode"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
 type lineCountingReader struct {
@@ -134,7 +131,7 @@ func testString(op interface{}) string { // TODO
 	case *SubQuery:
 		var inners []string
 		for _, sqOp := range op.Inner {
-			subquery := fmt.Sprintf("{\n\tType: %s", engine.PulloutOpcode(sqOp.ExtractedSubquery.OpCode).String())
+			subquery := fmt.Sprintf("{\n\tType: %s", popcode.PulloutOpcode(sqOp.ExtractedSubquery.OpCode).String())
 			if sqOp.ExtractedSubquery.GetArgName() != "" {
 				subquery += fmt.Sprintf("\n\tArgName: %s", sqOp.ExtractedSubquery.GetArgName())
 			}

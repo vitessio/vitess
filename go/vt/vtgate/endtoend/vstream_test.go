@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"regexp"
 	"sort"
 	"sync"
 	"testing"
@@ -372,7 +373,7 @@ func TestVStreamCopyUnspecifiedShardGtid(t *testing.T) {
 						return
 					} else if c.expectedEventNum < len(evs) {
 						printEvents(evs) // for debugging ci failures
-						require.FailNow(t, "len(events)=%v are not expected\n", len(evs))
+						require.FailNow(t, fmt.Sprintf("len(events)=%d are not expected\n", len(evs)))
 					}
 				case io.EOF:
 					log.Infof("stream ended\n")
@@ -465,7 +466,11 @@ func TestVStreamCopyResume(t *testing.T) {
 		`type:ROW row_event:{table_name:"ks.t1_copy_resume" row_changes:{after:{lengths:1 lengths:2 values:"990"}} keyspace:"ks" shard:"-80"} keyspace:"ks" shard:"-80"`,
 		`type:ROW timestamp:[0-9]+ row_event:{table_name:"ks.t1_copy_resume" row_changes:{before:{lengths:1 lengths:1 values:"99"} after:{lengths:1 lengths:2 values:"990"}} keyspace:"ks" shard:"-80"} current_time:[0-9]+ keyspace:"ks" shard:"-80"`,
 	}
+	redash80 := regexp.MustCompile(`(?i)type:VGTID vgtid:{shard_gtids:{keyspace:"ks" shard:"-80" gtid:".+" table_p_ks:{table_name:"t1_copy_resume" lastpk:{fields:{name:"id1" type:INT64} rows:{lengths:1 values:"[0-9]"}}}} shard_gtids:{keyspace:"ks" shard:"80-" gtid:".+"}} keyspace:"ks" shard:"(-80|80-)"`)
+	re80dash := regexp.MustCompile(`(?i)type:VGTID vgtid:{shard_gtids:{keyspace:"ks" shard:"-80" gtid:".+"} shard_gtids:{keyspace:"ks" shard:"80-" gtid:".+" table_p_ks:{table_name:"t1_copy_resume" lastpk:{fields:{name:"id1" type:INT64} rows:{lengths:1 values:"[0-9]"}}}}} keyspace:"ks" shard:"(-80|80-)"`)
+	both := regexp.MustCompile(`(?i)type:VGTID vgtid:{shard_gtids:{keyspace:"ks" shard:"-80" gtid:".+" table_p_ks:{table_name:"t1_copy_resume" lastpk:{fields:{name:"id1" type:INT64} rows:{lengths:1 values:"[0-9]"}}}} shard_gtids:{keyspace:"ks" shard:"80-" gtid:".+" table_p_ks:{table_name:"t1_copy_resume" lastpk:{fields:{name:"id1" type:INT64} rows:{lengths:1 values:"[0-9]"}}}}} keyspace:"ks" shard:"(-80|80-)"`)
 	var evs []*binlogdatapb.VEvent
+
 	for {
 		e, err := reader.Recv()
 		switch err {
@@ -481,10 +486,17 @@ func TestVStreamCopyResume(t *testing.T) {
 					printEvents(evs) // for debugging ci failures
 				}
 				if ev.Type == binlogdatapb.VEventType_VGTID {
-					// Validate that the vgtid event the client receives from the vstream copy has a complete TableLastPK proto message.
+					// Validate that the vgtid event the client receives from the vstream copy
+					// has a complete TableLastPK proto message.
 					// Also, to ensure that the client can resume properly, make sure that
 					// the Fields value is present in the sqltypes.Result field and not missing.
-					require.Regexp(t, `type:VGTID vgtid:{shard_gtids:{keyspace:"ks" shard:"-80" gtid:".+" table_p_ks:{table_name:"t1_copy_resume" lastpk:{fields:{name:"id1" type:INT64} rows:{lengths:1 values:"[0-9]"}}}} shard_gtids:{keyspace:"ks" shard:"80-" gtid:".+" table_p_ks:{table_name:"t1_copy_resume" lastpk:{fields:{name:"id1" type:INT64} rows:{lengths:1 values:"[0-9]"}}}}} keyspace:"ks" shard:"(80-|-80)"`, ev.String())
+					// It's not guaranteed that BOTH shards have streamed a row yet as the order
+					// of events in the stream is non-determinstic. So we check to be sure that
+					// at least one shard has copied rows and thus has a full TableLastPK proto
+					// message.
+					eventStr := ev.String()
+					require.True(t, redash80.MatchString(eventStr) || re80dash.MatchString(eventStr) || both.MatchString(eventStr),
+						"VGTID event does not have a complete TableLastPK proto message for either shard; event: %s", eventStr)
 				}
 			}
 			if expectedCatchupEvents == replCatchupEvents && expectedRowCopyEvents == rowCopyEvents {

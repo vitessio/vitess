@@ -74,7 +74,7 @@
   {
     "comment": "information schema join",
     "query": "select tables.TABLE_SCHEMA, files.`STATUS` from information_schema.tables join information_schema.files",
-    "v3-plan": "VT03019: symbol `tables`.TABLE_SCHEMA not found",
+    "v3-plan": "VT03019: column `tables`.TABLE_SCHEMA not found",
     "gen4-plan": {
       "QueryType": "SELECT",
       "Original": "select tables.TABLE_SCHEMA, files.`STATUS` from information_schema.tables join information_schema.files",
@@ -816,7 +816,7 @@
   {
     "comment": "subquery of information_schema with itself",
     "query": "select TABLES.CHECKSUM from information_schema.`TABLES` where `TABLE_NAME` in (select `TABLE_NAME` from information_schema.`COLUMNS`)",
-    "v3-plan": "VT03019: symbol `TABLES`.`CHECKSUM` not found",
+    "v3-plan": "VT03019: column `TABLES`.`CHECKSUM` not found",
     "gen4-plan": {
       "QueryType": "SELECT",
       "Original": "select TABLES.CHECKSUM from information_schema.`TABLES` where `TABLE_NAME` in (select `TABLE_NAME` from information_schema.`COLUMNS`)",
@@ -1117,7 +1117,7 @@
       "Instructions": {
         "OperatorType": "Join",
         "Variant": "Join",
-        "JoinColumnIndexes": "L:0",
+        "JoinColumnIndexes": "L:1",
         "JoinVars": {
           "x_COLUMN_NAME": 0
         },
@@ -1130,8 +1130,8 @@
               "Name": "main",
               "Sharded": false
             },
-            "FieldQuery": "select x.table_name from (select a.CONSTRAINT_CATALOG, a.CONSTRAINT_SCHEMA, a.CONSTRAINT_NAME, a.TABLE_CATALOG, a.TABLE_SCHEMA, a.TABLE_NAME, a.COLUMN_NAME, a.ORDINAL_POSITION, a.POSITION_IN_UNIQUE_CONSTRAINT, a.REFERENCED_TABLE_SCHEMA, a.REFERENCED_TABLE_NAME, a.REFERENCED_COLUMN_NAME from information_schema.key_column_usage as a where 1 != 1) as x where 1 != 1",
-            "Query": "select x.table_name from (select a.CONSTRAINT_CATALOG, a.CONSTRAINT_SCHEMA, a.CONSTRAINT_NAME, a.TABLE_CATALOG, a.TABLE_SCHEMA, a.TABLE_NAME, a.COLUMN_NAME, a.ORDINAL_POSITION, a.POSITION_IN_UNIQUE_CONSTRAINT, a.REFERENCED_TABLE_SCHEMA, a.REFERENCED_TABLE_NAME, a.REFERENCED_COLUMN_NAME from information_schema.key_column_usage as a) as x",
+            "FieldQuery": "select x.COLUMN_NAME, x.table_name from (select a.CONSTRAINT_CATALOG, a.CONSTRAINT_SCHEMA, a.CONSTRAINT_NAME, a.TABLE_CATALOG, a.TABLE_SCHEMA, a.TABLE_NAME, a.COLUMN_NAME, a.ORDINAL_POSITION, a.POSITION_IN_UNIQUE_CONSTRAINT, a.REFERENCED_TABLE_SCHEMA, a.REFERENCED_TABLE_NAME, a.REFERENCED_COLUMN_NAME from information_schema.key_column_usage as a where 1 != 1) as x where 1 != 1",
+            "Query": "select x.COLUMN_NAME, x.table_name from (select a.CONSTRAINT_CATALOG, a.CONSTRAINT_SCHEMA, a.CONSTRAINT_NAME, a.TABLE_CATALOG, a.TABLE_SCHEMA, a.TABLE_NAME, a.COLUMN_NAME, a.ORDINAL_POSITION, a.POSITION_IN_UNIQUE_CONSTRAINT, a.REFERENCED_TABLE_SCHEMA, a.REFERENCED_TABLE_NAME, a.REFERENCED_COLUMN_NAME from information_schema.key_column_usage as a) as x",
             "Table": "information_schema.key_column_usage"
           },
           {

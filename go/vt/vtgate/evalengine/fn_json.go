@@ -17,7 +17,6 @@ limitations under the License.
 package evalengine
 
 import (
-	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -146,6 +145,8 @@ func (call *builtinJSONUnquote) typeof(env *ExpressionEnv) (sqltypes.Type, typeF
 	return sqltypes.Blob, f
 }
 
+var errJSONKeyIsNil = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "JSON documents may not contain NULL member names.")
+
 func (call *builtinJSONObject) eval(env *ExpressionEnv) (eval, error) {
 	j := json.NewObject()
 	obj, _ := j.Object()
@@ -156,9 +157,9 @@ func (call *builtinJSONObject) eval(env *ExpressionEnv) (eval, error) {
 			return nil, err
 		}
 		if key == nil {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "JSON documents may not contain NULL member names.")
+			return nil, errJSONKeyIsNil
 		}
-		key1, err := evalToVarchar(key, collations.CollationUtf8mb4ID, true)
+		key1, err := evalToVarchar(key, env.DefaultCollation, true)
 		if err != nil {
 			return nil, err
 		}
@@ -167,7 +168,7 @@ func (call *builtinJSONObject) eval(env *ExpressionEnv) (eval, error) {
 		if err != nil {
 			return nil, err
 		}
-		val1, err := evalToJSON(val)
+		val1, err := argToJSON(val)
 		if err != nil {
 			return nil, err
 		}
@@ -188,7 +189,7 @@ func (call *builtinJSONArray) eval(env *ExpressionEnv) (eval, error) {
 		if err != nil {
 			return nil, err
 		}
-		arg1, err := evalToJSON(arg)
+		arg1, err := argToJSON(arg)
 		if err != nil {
 			return nil, err
 		}
