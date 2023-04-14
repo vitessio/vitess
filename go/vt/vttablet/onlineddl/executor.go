@@ -3629,7 +3629,7 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 					// is rogue. Maybe executed by another tablet. Anyway, if we don't own it, we can't
 					// complete the migration. Even if it runs, the logic around announcing it as complete
 					// is missing. So we may as well cancel it.
-					message := fmt.Sprintf("cancelling a gh-ost running migration %s which is not owned (not started, or is assumed to be terminated) by this executor", uuid)
+					message := fmt.Sprintf("cancelling a gh-ost running migration %s which is not owned by this executor. This can happen when the migration was started by a different tablet. Then, either a MySQL failure, a PRS, or ERS took place. gh-ost does not survive a MySQL restart or a shard failing over to a new PRIMARY", uuid)
 					cancellable = append(cancellable, newCancellableMigration(uuid, message))
 				}
 			}
