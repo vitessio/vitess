@@ -611,6 +611,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 		if err != nil {
 			return nil, err
 		}
+
 		if id == vs.journalTableID {
 			vevents, err = vs.processJournalEvent(vevents, plan, rows)
 		} else if id == vs.versionTableID {
@@ -887,9 +888,17 @@ func (vs *vstreamer) processRowEvent(vevents []*binlogdatapb.VEvent, plan *strea
 		rowChange := &binlogdatapb.RowChange{}
 		if beforeOK {
 			rowChange.Before = sqltypes.RowToProto3(beforeValues)
+			rowChange.BeforeNullColumns = &binlogdatapb.Bitmap{
+				Count: int64(row.NullIdentifyColumns.Count()),
+				Cols:  row.NullIdentifyColumns.Bits(),
+			}
 		}
 		if afterOK {
 			rowChange.After = sqltypes.RowToProto3(afterValues)
+			rowChange.AfterNullColumns = &binlogdatapb.Bitmap{
+				Count: int64(rows.DataColumns.Count()),
+				Cols:  rows.DataColumns.Bits(),
+			}
 		}
 		rowChanges = append(rowChanges, rowChange)
 	}
@@ -939,7 +948,8 @@ func (vs *vstreamer) extractRowAndFilter(plan *streamerPlan, data []byte, dataCo
 	pos := 0
 	for colNum := 0; colNum < dataColumns.Count(); colNum++ {
 		if !dataColumns.Bit(colNum) {
-			return false, nil, fmt.Errorf("partial row image encountered: ensure binlog_row_image is set to 'full'")
+			// return false, nil, fmt.Errorf("partial row image encountered: ensure binlog_row_image is set to 'full'")
+			continue
 		}
 		if nullColumns.Bit(valueIndex) {
 			valueIndex++

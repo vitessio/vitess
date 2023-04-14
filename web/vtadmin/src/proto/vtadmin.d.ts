@@ -27824,6 +27824,109 @@ export namespace binlogdata {
         COPY_COMPLETED = 20
     }
 
+    /** Properties of a Bitmap. */
+    interface IBitmap {
+
+        /** Bitmap count */
+        count?: (number|Long|null);
+
+        /** Bitmap cols */
+        cols?: (Uint8Array|null);
+    }
+
+    /** Represents a Bitmap. */
+    class Bitmap implements IBitmap {
+
+        /**
+         * Constructs a new Bitmap.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: binlogdata.IBitmap);
+
+        /** Bitmap count. */
+        public count: (number|Long);
+
+        /** Bitmap cols. */
+        public cols: Uint8Array;
+
+        /**
+         * Creates a new Bitmap instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns Bitmap instance
+         */
+        public static create(properties?: binlogdata.IBitmap): binlogdata.Bitmap;
+
+        /**
+         * Encodes the specified Bitmap message. Does not implicitly {@link binlogdata.Bitmap.verify|verify} messages.
+         * @param message Bitmap message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: binlogdata.IBitmap, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified Bitmap message, length delimited. Does not implicitly {@link binlogdata.Bitmap.verify|verify} messages.
+         * @param message Bitmap message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: binlogdata.IBitmap, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a Bitmap message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns Bitmap
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.Bitmap;
+
+        /**
+         * Decodes a Bitmap message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns Bitmap
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.Bitmap;
+
+        /**
+         * Verifies a Bitmap message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a Bitmap message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns Bitmap
+         */
+        public static fromObject(object: { [k: string]: any }): binlogdata.Bitmap;
+
+        /**
+         * Creates a plain object from a Bitmap message. Also converts values to other types if specified.
+         * @param message Bitmap
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: binlogdata.Bitmap, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this Bitmap to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for Bitmap
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
     /** Properties of a RowChange. */
     interface IRowChange {
 
@@ -27832,6 +27935,12 @@ export namespace binlogdata {
 
         /** RowChange after */
         after?: (query.IRow|null);
+
+        /** RowChange before_null_columns */
+        before_null_columns?: (binlogdata.IBitmap|null);
+
+        /** RowChange after_null_columns */
+        after_null_columns?: (binlogdata.IBitmap|null);
     }
 
     /** Represents a RowChange. */
@@ -27848,6 +27957,12 @@ export namespace binlogdata {
 
         /** RowChange after. */
         public after?: (query.IRow|null);
+
+        /** RowChange before_null_columns. */
+        public before_null_columns?: (binlogdata.IBitmap|null);
+
+        /** RowChange after_null_columns. */
+        public after_null_columns?: (binlogdata.IBitmap|null);
 
         /**
          * Creates a new RowChange instance using the specified properties.

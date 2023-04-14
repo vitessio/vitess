@@ -1,6 +1,6 @@
 insert into customer(cid, name, typ, sport, meta) values(1, 'Jøhn "❤️" Rizzolo',1,'football,baseball','{}');
 insert into customer(cid, name, typ, sport, meta) values(2, 'Paül','soho','cricket',convert(x'7b7d' using utf8mb4));
-insert into customer(cid, name, typ, sport) values(3, 'ringo','enterprise','');
+insert into customer(cid, name, typ, sport, blb) values(3, 'ringo','enterprise','','blob data');
 insert into merchant(mname, category) values('Monoprice', 'eléctronics');
 insert into merchant(mname, category) values('newegg', 'elec†ronics');
 insert into product(pid, description) values(1, 'keyböard ⌨️');

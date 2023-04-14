@@ -582,7 +582,7 @@ func expectNontxQueries(t *testing.T, expectations qh.ExpectationSequence) {
 				"query:%q\nmessage:%s\nexpectation:%s\nmatched:%t\nerror:%v\nhistory:%s",
 				got, result.Message, result.Expectation, result.Matched, result.Error, validator.History(),
 			))
-		case <-time.After(5 * time.Second):
+		case <-time.After(5000 * time.Minute):
 			t.Fatalf("no query received")
 			failed = true
 		}

@@ -448,6 +448,15 @@ func analyzeSelect(query string) (sel *sqlparser.Select, fromTable sqlparser.Ide
 	if len(sel.From) > 1 {
 		return nil, fromTable, fmt.Errorf("unsupported: %v", sqlparser.String(sel))
 	}
+
+	node2, ok2 := sel.From[0].(*sqlparser.JoinTableExpr)
+	if ok2 {
+		r, _ := node2.RightExpr.(*sqlparser.AliasedTableExpr)
+		l, _ := node2.LeftExpr.(*sqlparser.AliasedTableExpr)
+
+		log.Infof("JOOOOOOOOOOOIN %s, %s, %s", node2.Join.ToString(), sqlparser.GetTableName(r.Expr), sqlparser.GetTableName(l.Expr))
+		return sel, sqlparser.GetTableName(l.Expr), nil
+	}
 	node, ok := sel.From[0].(*sqlparser.AliasedTableExpr)
 	if !ok {
 		return nil, fromTable, fmt.Errorf("unsupported: %v", sqlparser.String(sel))

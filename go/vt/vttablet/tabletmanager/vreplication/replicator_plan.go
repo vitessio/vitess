@@ -22,6 +22,10 @@ import (
 	"sort"
 	"strings"
 
+	"golang.org/x/exp/slices"
+
+	"vitess.io/vitess/go/vt/log"
+
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/bytes2"
@@ -201,6 +205,7 @@ type TablePlan struct {
 	// PKReferences is used to check if an event changed
 	// a primary key column (row move).
 	PKReferences            []string
+	PKIndices               []bool
 	Stats                   *binlogplayer.Stats
 	FieldsToSkip            map[string]bool
 	ConvertCharset          map[string](*binlogdatapb.CharsetConversion)
@@ -351,6 +356,46 @@ func (tp *TablePlan) bindFieldVal(field *querypb.Field, val *sqltypes.Value) (*q
 	return sqltypes.ValueBindVariable(*val), nil
 }
 
+func (tp *TablePlan) removeNullColumns(query string, dataColumns *binlogdatapb.Bitmap) (string, error) {
+	var colsToRemove []int64
+	var numPKs int64
+	var i int64
+	for colNum := int64(0); colNum < dataColumns.Count; colNum++ {
+		if tp.PKIndices[colNum] {
+			log.Infof("PK: %d", colNum)
+			numPKs++
+			continue
+		}
+		byteIndex := colNum / 8
+		bitMask := byte(1 << (uint(colNum) & 0x7))
+		isPresent := dataColumns.Cols[byteIndex]&bitMask > 0
+		log.Infof(">>> byteIndex %q, bitMask %q, nc %q", byteIndex, bitMask, dataColumns.Cols)
+		if !isPresent {
+			log.Infof("col to remove %d", colNum)
+			colsToRemove = append(colsToRemove, i)
+		} else {
+			log.Infof("col NOT to remove %d", colNum)
+		}
+		i++
+	}
+	if len(colsToRemove) > 0 {
+		ast, err := sqlparser.Parse(query)
+		if err != nil {
+			return "", err
+		}
+		upd, ok := ast.(*sqlparser.Update)
+		if !ok {
+			return "", vterrors.New(vtrpcpb.Code_INTERNAL, fmt.Sprintf("Not a update query: %s", query))
+		}
+
+		for _, colIndex := range colsToRemove {
+			upd.Exprs = slices.Delete(upd.Exprs, int(colIndex), int(colIndex)+1)
+		}
+		return sqlparser.String(upd), nil
+	}
+	return query, nil
+}
+
 func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor func(string) (*sqltypes.Result, error)) (*sqltypes.Result, error) {
 	// MakeRowTrusted is needed here because Proto3ToResult is not convenient.
 	var before, after bool
@@ -402,7 +447,15 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 		return execParsedQuery(tp.Delete, bindvars, executor)
 	case before && after:
 		if !tp.pkChanged(bindvars) && !tp.HasExtraSourcePkColumns {
-			return execParsedQuery(tp.Update, bindvars, executor)
+			updateQuery, err := getQuery(tp.Update, bindvars)
+			if err != nil {
+				return nil, err
+			}
+			newUpdateQuery, err := tp.removeNullColumns(updateQuery, rowChange.AfterNullColumns)
+			if err != nil {
+				return nil, err
+			}
+			return executor(newUpdateQuery)
 		}
 		if tp.Delete != nil {
 			if _, err := execParsedQuery(tp.Delete, bindvars, executor); err != nil {
@@ -418,12 +471,19 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 	return nil, nil
 }
 
-func execParsedQuery(pq *sqlparser.ParsedQuery, bindvars map[string]*querypb.BindVariable, executor func(string) (*sqltypes.Result, error)) (*sqltypes.Result, error) {
+func getQuery(pq *sqlparser.ParsedQuery, bindvars map[string]*querypb.BindVariable) (string, error) {
 	sql, err := pq.GenerateQuery(bindvars, nil)
+	if err != nil {
+		return "", err
+	}
+	return sql, nil
+}
+func execParsedQuery(pq *sqlparser.ParsedQuery, bindvars map[string]*querypb.BindVariable, executor func(string) (*sqltypes.Result, error)) (*sqltypes.Result, error) {
+	query, err := getQuery(pq, bindvars)
 	if err != nil {
 		return nil, err
 	}
-	return executor(sql)
+	return executor(query)
 }
 
 func (tp *TablePlan) pkChanged(bindvars map[string]*querypb.BindVariable) bool {

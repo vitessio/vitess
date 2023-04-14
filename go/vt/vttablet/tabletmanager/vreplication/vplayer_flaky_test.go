@@ -38,6 +38,67 @@ import (
 	qh "vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication/queryhistory"
 )
 
+func TestPlayerBlob(t *testing.T) {
+	defer deleteTablet(addTablet(100))
+
+	execStatements(t, []string{
+		"create table t1(id int, val varchar(20), blb blob, primary key(id))",
+		fmt.Sprintf("create table %s.t1(id int, val varchar(20), blb blob, primary key(id))", vrepldb),
+	})
+	defer execStatements(t, []string{
+		"drop table t1",
+		fmt.Sprintf("drop table %s.t1", vrepldb),
+	})
+	env.SchemaEngine.Reload(context.Background())
+
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match:  "t1",
+			Filter: "select * from t1",
+		}},
+	}
+	bls := &binlogdatapb.BinlogSource{
+		Keyspace: env.KeyspaceName,
+		Shard:    env.ShardName,
+		Filter:   filter,
+		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
+	}
+	cancel, _ := startVReplication(t, bls, "")
+	defer cancel()
+
+	testcases := []struct {
+		input  string
+		output string
+		table  string
+		data   [][]string
+	}{{
+		input:  "insert into t1(id,val,blb) values (1,'aaa','blb1')",
+		output: "insert into t1(id,val,blb) values (1,'aaa','blb1')",
+		table:  "t1",
+		data: [][]string{
+			{"1", "aaa", "blb1"},
+		},
+	}, {
+		input:  "update t1 set val = 'bbb' where id = 1",
+		output: "update t1 set val = 'bbb' where id = 1",
+		table:  "t1",
+		data: [][]string{
+			{"1", "bbb", "blb1"},
+		},
+	}}
+
+	for _, tcases := range testcases {
+		execStatements(t, []string{tcases.input})
+		output := qh.Expect(tcases.output)
+		expectNontxQueries(t, output)
+		time.Sleep(1 * time.Second)
+		log.Flush()
+		if tcases.table != "" {
+			expectData(t, tcases.table, tcases.data)
+		}
+	}
+}
+
 func TestPlayerInvisibleColumns(t *testing.T) {
 	if !supportsInvisibleColumns() {
 		t.Skip()

@@ -761,6 +761,7 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 		// Confirm that the 0 scale decimal field, dec80, is replicated correctly
 		dec80Replicated := false
 		execVtgateQuery(t, vtgateConn, sourceKs, "update customer set dec80 = 0")
+		execVtgateQuery(t, vtgateConn, sourceKs, "update customer set blb = \"new blob data\" where cid=3")
 		waitForNoWorkflowLag(t, vc, targetKs, workflow)
 		for _, shard := range []string{"-80", "80-"} {
 			shardTarget := fmt.Sprintf("%s:%s", targetKs, shard)
