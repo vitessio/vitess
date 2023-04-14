@@ -135,61 +135,69 @@ func (r *earlyRewriter) expandStar(cursor *sqlparser.Cursor, node sqlparser.Sele
 	return nil
 }
 
-// rewriteHavingAndOrderBy rewrites columns on the ORDER BY/HAVING
-// clauses to use aliases from the SELECT expressions when available.
-// The scoping rules are:
-//   - A column identifier with no table qualifier that matches an alias introduced
-//     in SELECT points to that expression, and not at any table column
-//   - Except when expression aliased is an aggregation, and the column identifier in the
-//     HAVING/ORDER BY clause is inside an aggregation function
-//
-// This is a fucking weird scoping rule, but it's what MySQL seems to do... ¯\_(ツ)_/¯
+// rewriteHavingAndOrderBy rewrites columns in the ORDER BY and HAVING clauses to use aliases
+// from the SELECT expressions when applicable, following MySQL scoping rules:
+//   - A column identifier without a table qualifier that matches an alias introduced
+//     in SELECT points to that expression, not any table column.
+//   - However, if the aliased expression is an aggregation and the column identifier in
+//     the HAVING/ORDER BY clause is inside an aggregation function, the rule does not apply.
 func rewriteHavingAndOrderBy(node, parent sqlparser.SQLNode) {
-	// TODO - clean up and comment this mess
 	sel, isSel := parent.(*sqlparser.Select)
 	if !isSel {
 		return
 	}
 
-	sqlparser.SafeRewrite(node, func(node, _ sqlparser.SQLNode) bool {
-		_, isSubQ := node.(*sqlparser.Subquery)
-		return !isSubQ
-	}, func(cursor *sqlparser.Cursor) bool {
-		col, ok := cursor.Node().(*sqlparser.ColName)
-		if !ok {
-			return true
-		}
-		if !col.Qualifier.IsEmpty() {
-			return true
-		}
-		_, parentIsAggr := cursor.Parent().(sqlparser.AggrFunc)
-		for _, e := range sel.SelectExprs {
-			ae, ok := e.(*sqlparser.AliasedExpr)
-			if !ok || !ae.As.Equal(col.Name) {
-				continue
-			}
-			_, aliasPointsToAggr := ae.Expr.(sqlparser.AggrFunc)
-			if parentIsAggr && aliasPointsToAggr {
-				return false
+	sqlparser.SafeRewrite(node, avoidSubqueries,
+		func(cursor *sqlparser.Cursor) bool {
+			col, ok := cursor.Node().(*sqlparser.ColName)
+			if !ok || !col.Qualifier.IsEmpty() {
+				// we are only interested in columns not qualified by table names
+				return true
 			}
 
-			safeToRewrite := true
-			_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
-				switch node.(type) {
-				case *sqlparser.ColName:
-					safeToRewrite = false
-					return false, nil
-				case sqlparser.AggrFunc:
-					return false, nil
+			_, parentIsAggr := cursor.Parent().(sqlparser.AggrFunc)
+
+			// Iterate through SELECT expressions.
+			for _, e := range sel.SelectExprs {
+				ae, ok := e.(*sqlparser.AliasedExpr)
+				if !ok || !ae.As.Equal(col.Name) {
+					// we are searching for aliased expressions that match the column we have found
+					continue
 				}
-				return true, nil
-			}, ae.Expr)
-			if safeToRewrite {
-				cursor.Replace(ae.Expr)
+
+				expr := ae.Expr
+				if parentIsAggr {
+					if _, aliasPointsToAggr := expr.(sqlparser.AggrFunc); aliasPointsToAggr {
+						return false
+					}
+				}
+
+				if isSafeToRewrite(expr) {
+					cursor.Replace(expr)
+				}
 			}
+			return true
+		})
+}
+
+func avoidSubqueries(node, _ sqlparser.SQLNode) bool {
+	_, isSubQ := node.(*sqlparser.Subquery)
+	return !isSubQ
+}
+
+func isSafeToRewrite(e sqlparser.Expr) bool {
+	safeToRewrite := true
+	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+		switch node.(type) {
+		case *sqlparser.ColName:
+			safeToRewrite = false
+			return false, nil
+		case sqlparser.AggrFunc:
+			return false, nil
 		}
-		return true
-	})
+		return true, nil
+	}, e)
+	return safeToRewrite
 }
 
 func (r *earlyRewriter) rewriteOrderByExpr(node *sqlparser.Literal) (sqlparser.Expr, error) {
@@ -349,9 +357,14 @@ func (r *earlyRewriter) expandTableColumns(
 	org originable,
 ) (bool, sqlparser.SelectExprs, error) {
 	unknownTbl := true
-	var colNames sqlparser.SelectExprs
 	starExpanded := true
-	expandedColumns := map[sqlparser.TableName][]*sqlparser.ColName{}
+	state := &expanderState{
+		colNames:       []sqlparser.SelectExpr{},
+		needsQualifier: len(tables) > 1,
+		joinUsing:      joinUsing,
+		org:            org,
+	}
+
 	for _, tbl := range tables {
 		if !starExpr.TableName.IsEmpty() && !tbl.matches(starExpr.TableName) {
 			continue
@@ -361,79 +374,9 @@ func (r *earlyRewriter) expandTableColumns(
 			starExpanded = false
 			break
 		}
-		tblName, err := tbl.Name()
+		err := state.processColumnsFor(tbl)
 		if err != nil {
 			return false, nil, err
-		}
-
-		needsQualifier := len(tables) > 1
-		tableAliased := !tbl.getExpr().As.IsEmpty()
-		withQualifier := needsQualifier || tableAliased
-		currTable := tbl.getTableSet(org)
-		usingCols := joinUsing[currTable]
-		if usingCols == nil {
-			usingCols = map[string]TableSet{}
-		}
-
-		addColName := func(col ColumnInfo) {
-			var colName *sqlparser.ColName
-			var alias sqlparser.IdentifierCI
-			if withQualifier {
-				colName = sqlparser.NewColNameWithQualifier(col.Name, tblName)
-			} else {
-				colName = sqlparser.NewColName(col.Name)
-			}
-			if needsQualifier {
-				alias = sqlparser.NewIdentifierCI(col.Name)
-			}
-			colNames = append(colNames, &sqlparser.AliasedExpr{Expr: colName, As: alias})
-			vt := tbl.GetVindexTable()
-			if vt != nil {
-				keyspace := vt.Keyspace
-				var ks sqlparser.IdentifierCS
-				if keyspace != nil {
-					ks = sqlparser.NewIdentifierCS(keyspace.Name)
-				}
-				tblName := sqlparser.TableName{
-					Name:      tblName.Name,
-					Qualifier: ks,
-				}
-				expandedColumns[tblName] = append(expandedColumns[tblName], colName)
-			}
-		}
-
-		/*
-			Redundant column elimination and column ordering occurs according to standard SQL, producing this display order:
-			  *	First, coalesced common columns of the two joined tables, in the order in which they occur in the first table
-			  *	Second, columns unique to the first table, in order in which they occur in that table
-			  *	Third, columns unique to the second table, in order in which they occur in that table
-
-			From: https://dev.mysql.com/doc/refman/8.0/en/join.html
-		*/
-	outer:
-		// in this first loop we just find columns used in any JOIN USING used on this table
-		for _, col := range tbl.getColumns() {
-			ts, found := usingCols[col.Name]
-			if found {
-				for i, ts := range ts.Constituents() {
-					if ts == currTable {
-						if i == 0 {
-							addColName(col)
-						} else {
-							continue outer
-						}
-					}
-				}
-			}
-		}
-
-		// and this time around we are printing any columns not involved in any JOIN USING
-		for _, col := range tbl.getColumns() {
-			if ts, found := usingCols[col.Name]; found && currTable.IsSolvedBy(ts) {
-				continue
-			}
-
-			addColName(col)
 		}
 	}
 
@@ -441,8 +384,102 @@ func (r *earlyRewriter) expandTableColumns(
 		// This will only happen for case when starExpr has qualifier.
 		return false, nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.BadDb, "Unknown table '%s'", sqlparser.String(starExpr.TableName))
 	}
-	if starExpanded {
-		r.expandedColumns = expandedColumns
+	return starExpanded, state.colNames, nil
+}
+
+func (e *expanderState) processColumnsFor(tbl TableInfo) error {
+	tblName, err := tbl.Name()
+	if err != nil {
+		return err
 	}
-	return starExpanded, colNames, nil
+	currTable := tbl.getTableSet(e.org)
+	usingCols := e.joinUsing[currTable]
+	if usingCols == nil {
+		usingCols = map[string]TableSet{}
+	}
+
+	/*
+		Redundant column elimination and column ordering occurs according to standard SQL, producing this display order:
+		  *	First, coalesced common columns of the two joined tables, in the order in which they occur in the first table
+		  *	Second, columns unique to the first table, in order in which they occur in that table
+		  *	Third, columns unique to the second table, in order in which they occur in that table
+
+		From: https://dev.mysql.com/doc/refman/8.0/en/join.html
+	*/
+
+outer:
+	// in this first loop we just find columns used in any JOIN USING used on this table
+	for _, col := range tbl.getColumns() {
+		ts, found := usingCols[col.Name]
+		if found {
+			for i, ts := range ts.Constituents() {
+				if ts == currTable {
+					if i == 0 {
+						e.addColumn(col, tbl, tblName)
+					} else {
+						continue outer
+					}
+				}
+			}
+		}
+	}
+
+	// and this time around we are printing any columns not involved in any JOIN USING
+	for _, col := range tbl.getColumns() {
+		if ts, found := usingCols[col.Name]; found && currTable.IsSolvedBy(ts) {
+			continue
+		}
+
+		e.addColumn(col, tbl, tblName)
+	}
+	return nil
+}
+
+type expanderState struct {
+	needsQualifier bool
+	colNames       sqlparser.SelectExprs
+	joinUsing      map[TableSet]map[string]TableSet
+	org            originable
+}
+
+// addColumn adds columns to the expander state. If we have vschema info about the query,
+// we also store which columns were expanded
+func (e *expanderState) addColumn(col ColumnInfo, tbl TableInfo, tblName sqlparser.TableName) {
+	tableAliased := !tbl.getExpr().As.IsEmpty()
+	withQualifier := e.needsQualifier || tableAliased
+	var colName *sqlparser.ColName
+	var alias sqlparser.IdentifierCI
+	if withQualifier {
+		colName = sqlparser.NewColNameWithQualifier(col.Name, tblName)
+	} else {
+		colName = sqlparser.NewColName(col.Name)
+	}
+	if e.needsQualifier {
+		alias = sqlparser.NewIdentifierCI(col.Name)
+	}
+	e.colNames = append(e.colNames, &sqlparser.AliasedExpr{Expr: colName, As: alias})
+}
+
+// createAliasedExpr creates an AliasedExpr with a ColName and an optional alias based on the given ColumnInfo.
+// We need table qualifiers if there are more than one table in the FROM clause.
+// If we are adding qualifiers, we also add an alias so the qualifiers do not show
+// up in the result. For example, SELECT * FROM t1, t2 -> SELECT t1.col AS col, t2.col AS col ...
+func (e *expanderState) createAliasedExpr(
+	col ColumnInfo,
+	tbl TableInfo,
+	tblName sqlparser.TableName,
+) *sqlparser.AliasedExpr {
+	tableAliased := !tbl.getExpr().As.IsEmpty()
+	withQualifier := e.needsQualifier || tableAliased
+	var colName *sqlparser.ColName
+	var alias sqlparser.IdentifierCI
+	if withQualifier {
+		colName = sqlparser.NewColNameWithQualifier(col.Name, tblName)
+	} else {
+		colName = sqlparser.NewColName(col.Name)
+	}
+	if e.needsQualifier {
+		alias = sqlparser.NewIdentifierCI(col.Name)
+	}
+	return &sqlparser.AliasedExpr{Expr: colName, As: alias}
 }
