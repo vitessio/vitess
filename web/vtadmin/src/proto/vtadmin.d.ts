@@ -27936,11 +27936,8 @@ export namespace binlogdata {
         /** RowChange after */
         after?: (query.IRow|null);
 
-        /** RowChange before_null_columns */
-        before_null_columns?: (binlogdata.IBitmap|null);
-
-        /** RowChange after_null_columns */
-        after_null_columns?: (binlogdata.IBitmap|null);
+        /** RowChange data_columns */
+        data_columns?: (binlogdata.IBitmap|null);
     }
 
     /** Represents a RowChange. */
@@ -27958,11 +27955,8 @@ export namespace binlogdata {
         /** RowChange after. */
         public after?: (query.IRow|null);
 
-        /** RowChange before_null_columns. */
-        public before_null_columns?: (binlogdata.IBitmap|null);
-
-        /** RowChange after_null_columns. */
-        public after_null_columns?: (binlogdata.IBitmap|null);
+        /** RowChange data_columns. */
+        public data_columns?: (binlogdata.IBitmap|null);
 
         /**
          * Creates a new RowChange instance using the specified properties.

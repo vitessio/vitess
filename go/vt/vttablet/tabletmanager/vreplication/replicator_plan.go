@@ -22,6 +22,8 @@ import (
 	"sort"
 	"strings"
 
+	"vitess.io/vitess/go/vt/vttablet"
+
 	"golang.org/x/exp/slices"
 
 	"vitess.io/vitess/go/vt/log"
@@ -447,15 +449,19 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 		return execParsedQuery(tp.Delete, bindvars, executor)
 	case before && after:
 		if !tp.pkChanged(bindvars) && !tp.HasExtraSourcePkColumns {
-			updateQuery, err := getQuery(tp.Update, bindvars)
-			if err != nil {
-				return nil, err
+			if vttablet.BinlogRowImageFullOnly || rowChange.DataColumns.Count == 0 {
+				return execParsedQuery(tp.Update, bindvars, executor)
+			} else {
+				updateQuery, err := getQuery(tp.Update, bindvars)
+				if err != nil {
+					return nil, err
+				}
+				newUpdateQuery, err := tp.removeNullColumns(updateQuery, rowChange.DataColumns)
+				if err != nil {
+					return nil, err
+				}
+				return executor(newUpdateQuery)
 			}
-			newUpdateQuery, err := tp.removeNullColumns(updateQuery, rowChange.AfterNullColumns)
-			if err != nil {
-				return nil, err
-			}
-			return executor(newUpdateQuery)
 		}
 		if tp.Delete != nil {
 			if _, err := execParsedQuery(tp.Delete, bindvars, executor); err != nil {

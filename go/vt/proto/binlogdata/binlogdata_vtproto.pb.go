@@ -824,18 +824,8 @@ func (m *RowChange) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
-	if m.AfterNullColumns != nil {
-		size, err := m.AfterNullColumns.MarshalToSizedBufferVT(dAtA[:i])
-		if err != nil {
-			return 0, err
-		}
-		i -= size
-		i = encodeVarint(dAtA, i, uint64(size))
-		i--
-		dAtA[i] = 0x22
-	}
-	if m.BeforeNullColumns != nil {
-		size, err := m.BeforeNullColumns.MarshalToSizedBufferVT(dAtA[:i])
+	if m.DataColumns != nil {
+		size, err := m.DataColumns.MarshalToSizedBufferVT(dAtA[:i])
 		if err != nil {
 			return 0, err
 		}
@@ -2439,12 +2429,8 @@ func (m *RowChange) SizeVT() (n int) {
 		l = m.After.SizeVT()
 		n += 1 + l + sov(uint64(l))
 	}
-	if m.BeforeNullColumns != nil {
-		l = m.BeforeNullColumns.SizeVT()
-		n += 1 + l + sov(uint64(l))
-	}
-	if m.AfterNullColumns != nil {
-		l = m.AfterNullColumns.SizeVT()
+	if m.DataColumns != nil {
+		l = m.DataColumns.SizeVT()
 		n += 1 + l + sov(uint64(l))
 	}
 	n += len(m.unknownFields)
@@ -5248,7 +5234,7 @@ func (m *RowChange) UnmarshalVT(dAtA []byte) error {
 			iNdEx = postIndex
 		case 3:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field BeforeNullColumns", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field DataColumns", wireType)
 			}
 			var msglen int
 			for shift := uint(0); ; shift += 7 {
@@ -5275,46 +5261,10 @@ func (m *RowChange) UnmarshalVT(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			if m.BeforeNullColumns == nil {
-				m.BeforeNullColumns = &Bitmap{}
+			if m.DataColumns == nil {
+				m.DataColumns = &Bitmap{}
 			}
-			if err := m.BeforeNullColumns.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-				return err
-			}
-			iNdEx = postIndex
-		case 4:
-			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field AfterNullColumns", wireType)
-			}
-			var msglen int
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflow
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				msglen |= int(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			if msglen < 0 {
-				return ErrInvalidLength
-			}
-			postIndex := iNdEx + msglen
-			if postIndex < 0 {
-				return ErrInvalidLength
-			}
-			if postIndex > l {
-				return io.ErrUnexpectedEOF
-			}
-			if m.AfterNullColumns == nil {
-				m.AfterNullColumns = &Bitmap{}
-			}
-			if err := m.AfterNullColumns.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+			if err := m.DataColumns.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
 			iNdEx = postIndex

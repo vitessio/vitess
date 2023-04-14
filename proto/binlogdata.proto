@@ -318,8 +318,7 @@ message Bitmap {
 message RowChange {
   query.Row before = 1;
   query.Row after = 2;
-  Bitmap before_null_columns = 3;
-  Bitmap after_null_columns = 4;
+  Bitmap data_columns = 3;
 }
 
 // RowEvent represent row events for one table.

@@ -78,6 +78,44 @@ func (tfe *TestFieldEvent) String() string {
 	s += "}"
 	return s
 }
+func TestBlob(t *testing.T) {
+	execStatements(t, []string{
+		"create table t1(id int, blb blob, val varchar(4), primary key(id))",
+	})
+	defer execStatements(t, []string{
+		"drop table t1",
+	})
+	engine.se.Reload(context.Background())
+	queries := []string{
+		"begin",
+		"insert into t1 values (1, 'blob1', 'aaa')",
+		"update t1 set val = 'bbb'",
+		"commit",
+	}
+
+	fe := &TestFieldEvent{
+		table: "t1",
+		db:    "vttest",
+		cols: []*TestColumn{
+			{name: "id", dataType: "INT32", colType: "int(11)", len: 11, charset: 63},
+			{name: "blb", dataType: "BLOB", colType: "blob", len: 65535, charset: 63},
+			{name: "val", dataType: "VARCHAR", colType: "varchar(4)", len: 16, charset: 45},
+		},
+	}
+
+	testcases := []testcase{{
+		input: queries,
+		output: [][]string{{
+			"begin",
+			fe.String(),
+			`type:ROW row_event:{table_name:"t1" row_changes:{after:{lengths:1 lengths:5 lengths:3 values:"1blob1aaa"}}}`,
+			`type:ROW row_event:{table_name:"t1" row_changes:{before:{lengths:1 lengths:-1 lengths:3 values:"1aaa"} after:{lengths:1 lengths:-1 lengths:3 values:"1bbb"} data_columns:{count:3 cols:"\x05"}}}`,
+			"gtid",
+			"commit",
+		}},
+	}}
+	runCases(t, nil, testcases, "current", nil)
+}
 
 func TestSetAndEnum(t *testing.T) {
 	execStatements(t, []string{
@@ -2189,7 +2227,7 @@ func expectLog(ctx context.Context, t *testing.T, input any, ch <-chan []*binlog
 				}
 				want = env.RemoveAnyDeprecatedDisplayWidths(want)
 				if got := fmt.Sprintf("%v", evs[i]); got != want {
-					log.Errorf("%v (%d): event:\n%q, want\n%q", input, i, got, want)
+					//log.Errorf("\n%v (%d): event:\n%q, want\n%q", input, i, got, want)
 					t.Fatalf("%v (%d): event:\n%q, want\n%q", input, i, got, want)
 				}
 			}

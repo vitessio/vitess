@@ -19,8 +19,6 @@ package mysql
 import (
 	"fmt"
 
-	"vitess.io/vitess/go/vt/log"
-
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
 
@@ -287,7 +285,6 @@ func (b *Bitmap) Count() int {
 
 // Bits returns the underlying bitmap.
 func (b *Bitmap) Bits() []byte {
-	log.Infof(">>>>>>>>>. data %q", b.data)
 	return b.data[:]
 }
 
