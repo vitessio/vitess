@@ -123,7 +123,7 @@ func testTabletStatus(t *testing.T) {
 	require.NoError(t, err)
 	result := string(respByte)
 	log.Infof("Tablet status response: %v", result)
-	assert.True(t, strings.Contains(result, `Alias: <a href="http://localhost:`))
+	assert.True(t, strings.Contains(result, `/debug/health`))
 	assert.True(t, strings.Contains(result, `</html>`))
 }
 

@@ -397,7 +397,7 @@ func generateAggregateParams(aggrs []operators.Aggr, aggrParamOffsets [][]offset
 		if proj != nil {
 			var aggrExpr sqlparser.Expr
 			for _, ofs := range paramOffset {
-				curr := &sqlparser.Offset{V: ofs.col}
+				curr := sqlparser.NewOffset(ofs.col, aggr.Func)
 				if aggrExpr == nil {
 					aggrExpr = curr
 				} else {
@@ -752,9 +752,9 @@ func wrapAndPushExpr(ctx *plancontext.PlanningContext, expr sqlparser.Expr, weig
 			return 0, 0, vterrors.VT13001(fmt.Sprintf("in scatter query: complex ORDER BY expression: %s", sqlparser.String(expr)))
 		}
 	}
-	qt := ctx.SemTable.TypeFor(expr)
+	qt, _, found := ctx.SemTable.TypeForExpr(expr)
 	wsNeeded := true
-	if qt != nil && sqltypes.IsNumber(*qt) {
+	if found && sqltypes.IsNumber(qt) {
 		wsNeeded = false
 	}
 

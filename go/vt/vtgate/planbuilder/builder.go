@@ -17,12 +17,13 @@ limitations under the License.
 package planbuilder
 
 import (
+	"context"
 	"fmt"
 	"sort"
 
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 
-	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 
 	"vitess.io/vitess/go/vt/vterrors"
@@ -105,12 +106,12 @@ func TestBuilder(query string, vschema plancontext.VSchema, keyspace string) (*e
 	}
 
 	reservedVars := sqlparser.NewReservedVars("vtg", reserved)
-	return BuildFromStmt(query, result.AST, reservedVars, vschema, result.BindVarNeeds, true, true)
+	return BuildFromStmt(context.Background(), query, result.AST, reservedVars, vschema, result.BindVarNeeds, true, true)
 }
 
 // BuildFromStmt builds a plan based on the AST provided.
-func BuildFromStmt(query string, stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, bindVarNeeds *sqlparser.BindVarNeeds, enableOnlineDDL, enableDirectDDL bool) (*engine.Plan, error) {
-	planResult, err := createInstructionFor(query, stmt, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
+func BuildFromStmt(ctx context.Context, query string, stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, bindVarNeeds *sqlparser.BindVarNeeds, enableOnlineDDL, enableDirectDDL bool) (*engine.Plan, error) {
+	planResult, err := createInstructionFor(ctx, query, stmt, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
 	if err != nil {
 		return nil, err
 	}
@@ -202,7 +203,7 @@ func buildRoutePlan(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVa
 	return f(stmt, reservedVars, vschema)
 }
 
-func createInstructionFor(query string, stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, enableOnlineDDL, enableDirectDDL bool) (*planResult, error) {
+func createInstructionFor(ctx context.Context, query string, stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, enableOnlineDDL, enableDirectDDL bool) (*planResult, error) {
 	switch stmt := stmt.(type) {
 	case *sqlparser.Select:
 		configuredPlanner, err := getConfiguredPlanner(vschema, buildSelectPlan, stmt, query)
@@ -231,7 +232,7 @@ func createInstructionFor(query string, stmt sqlparser.Statement, reservedVars *
 		}
 		return buildRoutePlan(stmt, reservedVars, vschema, configuredPlanner)
 	case sqlparser.DDLStatement:
-		return buildGeneralDDLPlan(query, stmt, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
+		return buildGeneralDDLPlan(ctx, query, stmt, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
 	case *sqlparser.AlterMigration:
 		return buildAlterMigrationPlan(query, vschema, enableOnlineDDL)
 	case *sqlparser.RevertMigration:
@@ -247,9 +248,9 @@ func createInstructionFor(query string, stmt sqlparser.Statement, reservedVars *
 	case *sqlparser.Use:
 		return buildUsePlan(stmt)
 	case sqlparser.Explain:
-		return buildExplainPlan(stmt, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
+		return buildExplainPlan(ctx, stmt, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
 	case *sqlparser.VExplainStmt:
-		return buildVExplainPlan(stmt, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
+		return buildVExplainPlan(ctx, stmt, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
 	case *sqlparser.OtherRead, *sqlparser.OtherAdmin:
 		return buildOtherReadAndAdmin(query, vschema)
 	case *sqlparser.Set:
@@ -275,6 +276,12 @@ func createInstructionFor(query string, stmt sqlparser.Statement, reservedVars *
 		return buildStreamPlan(stmt, vschema)
 	case *sqlparser.VStream:
 		return buildVStreamPlan(stmt, vschema)
+	case *sqlparser.PrepareStmt:
+		return prepareStmt(ctx, vschema, stmt)
+	case *sqlparser.DeallocateStmt:
+		return dropPreparedStatement(vschema, stmt)
+	case *sqlparser.ExecuteStmt:
+		return buildExecuteStmtPlan(ctx, vschema, stmt)
 	case *sqlparser.CommentOnly:
 		// There is only a comment in the input.
 		// This is essentially a No-op

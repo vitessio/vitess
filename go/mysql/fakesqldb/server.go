@@ -450,7 +450,7 @@ func (db *DB) comQueryOrdered(query string) (*sqltypes.Result, error) {
 		if db.neverFail.Load() {
 			return &sqltypes.Result{}, nil
 		}
-		db.t.Errorf("%v: got unexpected out of bound fetch: %v >= %v", db.name, index, len(db.expectedExecuteFetch))
+		db.t.Errorf("%v: got unexpected out of bound fetch: %v >= %v (%s)", db.name, index, len(db.expectedExecuteFetch), query)
 		return nil, errors.New("unexpected out of bound fetch")
 	}
 
@@ -616,11 +616,15 @@ func (db *DB) GetQueryCalledNum(query string) int {
 
 // QueryLog returns the query log in a semicomma separated string
 func (db *DB) QueryLog() string {
+	db.mu.Lock()
+	defer db.mu.Unlock()
 	return strings.Join(db.querylog, ";")
 }
 
 // ResetQueryLog resets the query log
 func (db *DB) ResetQueryLog() {
+	db.mu.Lock()
+	defer db.mu.Unlock()
 	db.querylog = nil
 }
 

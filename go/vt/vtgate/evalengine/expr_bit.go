@@ -18,6 +18,7 @@ package evalengine
 
 import (
 	"vitess.io/vitess/go/sqltypes"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 )
@@ -75,12 +76,12 @@ func (b *BitwiseNotExpr) eval(env *ExpressionEnv) (eval, error) {
 		return newEvalBinary(out), nil
 	}
 
-	eu := evalToNumeric(e).toInt64()
+	eu := evalToInt64(e)
 	return newEvalUint64(^uint64(eu.i)), nil
 }
 
-func (b *BitwiseNotExpr) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
-	tt, f := b.Inner.typeof(env)
+func (b *BitwiseNotExpr) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	tt, f := b.Inner.typeof(env, fields)
 	if tt == sqltypes.VarBinary && f&(flagHex|flagBit) == 0 {
 		return sqltypes.VarBinary, f
 	}
@@ -206,8 +207,8 @@ func (bit *BitwiseExpr) eval(env *ExpressionEnv) (eval, error) {
 			}
 		}
 
-		lu := evalToNumeric(l).toInt64()
-		ru := evalToNumeric(r).toInt64()
+		lu := evalToInt64(l)
+		ru := evalToInt64(r)
 		return newEvalUint64(op.numeric(uint64(lu.i), uint64(ru.i))), nil
 
 	case opBitShift:
@@ -218,11 +219,11 @@ func (bit *BitwiseExpr) eval(env *ExpressionEnv) (eval, error) {
 			unsigned 64-bit integer as necessary.
 		*/
 		if l, ok := l.(*evalBytes); ok && l.isBinary() && !l.isHexOrBitLiteral() {
-			ru := evalToNumeric(r).toInt64()
+			ru := evalToInt64(r)
 			return newEvalBinary(op.binary(l.bytes, uint64(ru.i))), nil
 		}
-		lu := evalToNumeric(l).toInt64()
-		ru := evalToNumeric(r).toInt64()
+		lu := evalToInt64(l)
+		ru := evalToInt64(r)
 		return newEvalUint64(op.numeric(uint64(lu.i), uint64(ru.i))), nil
 
 	default:
@@ -230,9 +231,9 @@ func (bit *BitwiseExpr) eval(env *ExpressionEnv) (eval, error) {
 	}
 }
 
-func (bit *BitwiseExpr) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
-	t1, f1 := bit.Left.typeof(env)
-	t2, f2 := bit.Right.typeof(env)
+func (bit *BitwiseExpr) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	t1, f1 := bit.Left.typeof(env, fields)
+	t2, f2 := bit.Right.typeof(env, fields)
 
 	switch bit.Op.(type) {
 	case opBitBinary:

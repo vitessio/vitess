@@ -65,7 +65,6 @@ require (
 	github.com/spf13/cobra v1.6.1
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.15.0
-	github.com/spyzhov/ajson v0.7.2
 	github.com/stretchr/testify v1.8.1
 	github.com/tchap/go-patricia v2.3.0+incompatible
 	github.com/tidwall/gjson v1.12.1
@@ -109,6 +108,7 @@ require (
 
 require (
 	github.com/bndr/gotabulate v1.1.2
+	github.com/hashicorp/go-version v1.6.0
 	github.com/kr/pretty v0.3.1
 	github.com/kr/text v0.2.0
 	github.com/nsf/jsondiff v0.0.0-20210926074059-1e845ec5d249

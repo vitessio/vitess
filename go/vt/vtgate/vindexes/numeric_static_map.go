@@ -42,8 +42,9 @@ type NumericLookupTable map[uint64]uint64
 // NumericStaticMap is similar to vindex Numeric but first attempts a lookup via
 // a JSON file.
 type NumericStaticMap struct {
-	name   string
-	lookup NumericLookupTable
+	name    string
+	hashVdx Hashing
+	lookup  NumericLookupTable
 }
 
 func init() {
@@ -52,19 +53,49 @@ func init() {
 
 // NewNumericStaticMap creates a NumericStaticMap vindex.
 func NewNumericStaticMap(name string, params map[string]string) (Vindex, error) {
-	jsonPath, ok := params["json_path"]
-	if !ok {
-		return nil, errors.New("NumericStaticMap: Could not find `json_path` param in vschema")
+	jsonStr, jsok := params["json"]
+	jsonPath, jpok := params["json_path"]
+
+	if !jsok && !jpok {
+		return nil, errors.New("NumericStaticMap: Could not find either `json_path` params in vschema")
 	}
 
-	lt, err := loadNumericLookupTable(jsonPath)
-	if err != nil {
-		return nil, err
+	if jsok && jpok {
+		return nil, errors.New("NumericStaticMap: Found both `json` and `json_path` params in vschema")
+	}
+
+	var err error
+	var lt NumericLookupTable
+
+	if jpok {
+		lt, err = loadNumericLookupTable(jsonPath)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if jsok {
+		lt, err = parseNumericLookupTable([]byte(jsonStr))
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	var hashVdx Hashing
+
+	if s, ok := params["fallback_type"]; ok {
+		vindex, err := CreateVindex(s, name+"_hash", map[string]string{})
+		if err != nil {
+			return nil, err
+		}
+		hashVdx, _ = vindex.(Hashing) // We know this will not fail
+
 	}
 
 	return &NumericStaticMap{
-		name:   name,
-		lookup: lt,
+		hashVdx: hashVdx,
+		lookup:  lt,
+		name:    name,
 	}, nil
 }
 
@@ -121,22 +152,32 @@ func (vind *NumericStaticMap) Hash(id sqltypes.Value) ([]byte, error) {
 		return nil, err
 	}
 	lookupNum, ok := vind.lookup[num]
-	if ok {
+	if !ok {
+		// Not in lookup, use fallback hash
+		if vind.hashVdx != nil {
+			return vind.hashVdx.Hash(id)
+		}
+	} else {
 		num = lookupNum
 	}
+
 	var keybytes [8]byte
 	binary.BigEndian.PutUint64(keybytes[:], num)
 	return keybytes[:], nil
 }
 
 func loadNumericLookupTable(path string) (NumericLookupTable, error) {
-	var m map[string]uint64
-	lt := make(map[uint64]uint64)
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return lt, err
+		return nil, err
 	}
-	err = json.Unmarshal(data, &m)
+	return parseNumericLookupTable(data)
+}
+
+func parseNumericLookupTable(data []byte) (NumericLookupTable, error) {
+	var m map[string]uint64
+	lt := make(map[uint64]uint64)
+	err := json.Unmarshal(data, &m)
 	if err != nil {
 		return lt, err
 	}

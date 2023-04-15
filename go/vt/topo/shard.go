@@ -121,6 +121,10 @@ func IsShardUsingRangeBasedSharding(shard string) bool {
 // ValidateShardName takes a shard name and sanitizes it, and also returns
 // the KeyRange.
 func ValidateShardName(shard string) (string, *topodatapb.KeyRange, error) {
+	if strings.Contains(shard, "/") {
+		return "", nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "invalid shardId, may not contain '/': %v", shard)
+	}
+
 	if !IsShardUsingRangeBasedSharding(shard) {
 		return shard, nil, nil
 	}
@@ -305,7 +309,7 @@ func (ts *Server) CreateShard(ctx context.Context, keyspace, shard string) (err 
 		return err
 	}
 	for _, si := range sis {
-		if si.KeyRange == nil || key.KeyRangesIntersect(si.KeyRange, keyRange) {
+		if si.KeyRange == nil || key.KeyRangeIntersect(si.KeyRange, keyRange) {
 			value.IsPrimaryServing = false
 			break
 		}

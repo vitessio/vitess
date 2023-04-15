@@ -1740,11 +1740,6 @@ func TestTypes(t *testing.T) {
 }
 
 func TestJSON(t *testing.T) {
-	log.Errorf("TestJSON: flavor is %s", env.Flavor)
-	// JSON is supported only after mysql57.
-	if !strings.Contains(env.Flavor, "mysql57") {
-		return
-	}
 	if err := env.Mysqld.ExecuteSuperQuery(context.Background(), "create table vitess_json(id int default 1, val json, primary key(id))"); err != nil {
 		// If it's a syntax error, MySQL is an older version. Skip this test.
 		if strings.Contains(err.Error(), "syntax") {
@@ -1754,7 +1749,7 @@ func TestJSON(t *testing.T) {
 	}
 	defer execStatement(t, "drop table vitess_json")
 	engine.se.Reload(context.Background())
-	jsonValues := []string{"{}", "123456", `"vtTablet"`, `{"foo":"bar"}`, `["abc",3.14,true]`}
+	jsonValues := []string{"{}", "123456", `"vtTablet"`, `{"foo": "bar"}`, `["abc", 3.14, true]`}
 
 	var inputs, outputs []string
 	var outputsArray [][]string
@@ -1768,7 +1763,7 @@ func TestJSON(t *testing.T) {
 		outputs = []string{}
 		outputs = append(outputs, `begin`)
 		if !fieldAdded {
-			outputs = append(outputs, `type:FIELD field_event:{table_name:"vitess_json" fields:{name:"id" type:INT32 table:"vitess_json" org_table:"vitess_json" database:"vttest" org_name:"id" column_length:11 charset:63} fields:{name:"val" type:JSON table:"vitess_json" org_table:"vitess_json" database:"vttest" org_name:"val" column_length:4294967295 charset:63}}`)
+			outputs = append(outputs, `type:FIELD field_event:{table_name:"vitess_json" fields:{name:"id" type:INT32 table:"vitess_json" org_table:"vitess_json" database:"vttest" org_name:"id" column_length:11 charset:63 column_type:"int(11)"} fields:{name:"val" type:JSON table:"vitess_json" org_table:"vitess_json" database:"vttest" org_name:"val" column_length:4294967295 charset:63 column_type:"json"}}`)
 			fieldAdded = true
 		}
 		out := expect(val)
@@ -2036,12 +2031,6 @@ func TestFilteredMultipleWhere(t *testing.T) {
 
 // TestGeneratedColumns just confirms that generated columns are sent in a vstream as expected
 func TestGeneratedColumns(t *testing.T) {
-	flavor := strings.ToLower(env.Flavor)
-	// Disable tests on percona (which identifies as mysql56) and mariadb platforms in CI since they
-	// generated columns support was added in 5.7 and mariadb added mysql compatible generated columns in 10.2
-	if !strings.Contains(flavor, "mysql57") && !strings.Contains(flavor, "mysql80") {
-		return
-	}
 	execStatements(t, []string{
 		"create table t1(id int, val varbinary(6), val2 varbinary(6) as (concat(id, val)), val3 varbinary(6) as (concat(val, id)), id2 int, primary key(id))",
 	})
@@ -2060,11 +2049,11 @@ func TestGeneratedColumns(t *testing.T) {
 		table: "t1",
 		db:    "vttest",
 		cols: []*TestColumn{
-			{name: "id", dataType: "INT32", colType: "", len: 11, charset: 63},
-			{name: "val", dataType: "VARBINARY", colType: "", len: 6, charset: 63},
-			{name: "val2", dataType: "VARBINARY", colType: "", len: 6, charset: 63},
-			{name: "val3", dataType: "VARBINARY", colType: "", len: 6, charset: 63},
-			{name: "id2", dataType: "INT32", colType: "", len: 11, charset: 63},
+			{name: "id", dataType: "INT32", colType: "int(11)", len: 11, charset: 63},
+			{name: "val", dataType: "VARBINARY", colType: "varbinary(6)", len: 6, charset: 63},
+			{name: "val2", dataType: "VARBINARY", colType: "varbinary(6)", len: 6, charset: 63},
+			{name: "val3", dataType: "VARBINARY", colType: "varbinary(6)", len: 6, charset: 63},
+			{name: "id2", dataType: "INT32", colType: "int(11)", len: 11, charset: 63},
 		},
 	}
 
@@ -2073,8 +2062,8 @@ func TestGeneratedColumns(t *testing.T) {
 		output: [][]string{{
 			`begin`,
 			fe.String(),
-			`type:ROW row_event:<table_name:"t1" row_changes:<after:<lengths:1 lengths:3 lengths:4 lengths:4 lengths:2 values:"1aaa1aaaaaa110" > > > `,
-			`type:ROW row_event:<table_name:"t1" row_changes:<after:<lengths:1 lengths:3 lengths:4 lengths:4 lengths:2 values:"2bbb2bbbbbb220" > > > `,
+			`type:ROW row_event:{table_name:"t1" row_changes:{after:{lengths:1 lengths:3 lengths:4 lengths:4 lengths:2 values:"1aaa1aaaaaa110"}}}`,
+			`type:ROW row_event:{table_name:"t1" row_changes:{after:{lengths:1 lengths:3 lengths:4 lengths:4 lengths:2 values:"2bbb2bbbbbb220"}}}`,
 			`gtid`,
 			`commit`,
 		}},

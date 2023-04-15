@@ -7,6 +7,8 @@ concurrency:
   group: format('{0}-{1}', ${{ github.ref }}, 'Check Pull Request labels')
   cancel-in-progress: true
 
+permissions: read-all
+
 jobs:
   check_pull_request_labels:
     name: Check Pull Request labels

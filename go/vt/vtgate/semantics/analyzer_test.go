@@ -23,6 +23,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
@@ -123,10 +124,10 @@ func TestBindingSingleTableNegative(t *testing.T) {
 		t.Run(query, func(t *testing.T) {
 			parse, err := sqlparser.Parse(query)
 			require.NoError(t, err)
-			_, err = Analyze(parse, "d", &FakeSI{})
-			require.Error(t, err)
-			require.Contains(t, err.Error(), "symbol")
-			require.Contains(t, err.Error(), "not found")
+			st, err := Analyze(parse, "d", &FakeSI{})
+			require.NoError(t, err)
+			require.ErrorContains(t, st.NotUnshardedErr, "column")
+			require.ErrorContains(t, st.NotUnshardedErr, "not found")
 		})
 	}
 }
@@ -143,12 +144,13 @@ func TestBindingSingleAliasedTableNegative(t *testing.T) {
 		t.Run(query, func(t *testing.T) {
 			parse, err := sqlparser.Parse(query)
 			require.NoError(t, err)
-			_, err = Analyze(parse, "", &FakeSI{
+			st, err := Analyze(parse, "", &FakeSI{
 				Tables: map[string]*vindexes.Table{
 					"t": {Name: sqlparser.NewIdentifierCS("t")},
 				},
 			})
-			require.Error(t, err)
+			require.NoError(t, err)
+			require.Error(t, st.NotUnshardedErr)
 		})
 	}
 }
@@ -309,22 +311,19 @@ func TestMissingTable(t *testing.T) {
 	for _, query := range queries {
 		t.Run(query, func(t *testing.T) {
 			parse, _ := sqlparser.Parse(query)
-			_, err := Analyze(parse, "", &FakeSI{})
-			require.Error(t, err)
-			require.Contains(t, err.Error(), "symbol t.col not found")
+			st, err := Analyze(parse, "", &FakeSI{})
+			require.NoError(t, err)
+			require.ErrorContains(t, st.NotUnshardedErr, "column 't.col' not found")
 		})
 	}
 }
 
 func TestUnknownColumnMap2(t *testing.T) {
-	varchar := querypb.Type_VARCHAR
-	int := querypb.Type_INT32
-
 	authoritativeTblA := vindexes.Table{
 		Name: sqlparser.NewIdentifierCS("a"),
 		Columns: []vindexes.Column{{
 			Name: sqlparser.NewIdentifierCI("col2"),
-			Type: varchar,
+			Type: sqltypes.VarChar,
 		}},
 		ColumnListAuthoritative: true,
 	}
@@ -332,7 +331,7 @@ func TestUnknownColumnMap2(t *testing.T) {
 		Name: sqlparser.NewIdentifierCS("b"),
 		Columns: []vindexes.Column{{
 			Name: sqlparser.NewIdentifierCI("col"),
-			Type: varchar,
+			Type: sqltypes.VarChar,
 		}},
 		ColumnListAuthoritative: true,
 	}
@@ -344,7 +343,7 @@ func TestUnknownColumnMap2(t *testing.T) {
 		Name: sqlparser.NewIdentifierCS("a"),
 		Columns: []vindexes.Column{{
 			Name: sqlparser.NewIdentifierCI("col"),
-			Type: int,
+			Type: sqltypes.Int64,
 		}},
 		ColumnListAuthoritative: true,
 	}
@@ -352,7 +351,7 @@ func TestUnknownColumnMap2(t *testing.T) {
 		Name: sqlparser.NewIdentifierCS("b"),
 		Columns: []vindexes.Column{{
 			Name: sqlparser.NewIdentifierCI("col"),
-			Type: int,
+			Type: sqltypes.Int64,
 		}},
 		ColumnListAuthoritative: true,
 	}
@@ -361,7 +360,7 @@ func TestUnknownColumnMap2(t *testing.T) {
 		name   string
 		schema map[string]*vindexes.Table
 		err    bool
-		typ    *querypb.Type
+		typ    querypb.Type
 	}{{
 		name:   "no info about tables",
 		schema: map[string]*vindexes.Table{"a": {}, "b": {}},
@@ -374,22 +373,22 @@ func TestUnknownColumnMap2(t *testing.T) {
 		name:   "non authoritative columns - one authoritative and one not",
 		schema: map[string]*vindexes.Table{"a": &nonAuthoritativeTblA, "b": &authoritativeTblB},
 		err:    false,
-		typ:    &varchar,
+		typ:    sqltypes.VarChar,
 	}, {
 		name:   "non authoritative columns - one authoritative and one not",
 		schema: map[string]*vindexes.Table{"a": &authoritativeTblA, "b": &nonAuthoritativeTblB},
 		err:    false,
-		typ:    &varchar,
+		typ:    sqltypes.VarChar,
 	}, {
 		name:   "authoritative columns",
 		schema: map[string]*vindexes.Table{"a": &authoritativeTblA, "b": &authoritativeTblB},
 		err:    false,
-		typ:    &varchar,
+		typ:    sqltypes.VarChar,
 	}, {
 		name:   "authoritative columns",
 		schema: map[string]*vindexes.Table{"a": &authoritativeTblA, "b": &authoritativeTblBWithInt},
 		err:    false,
-		typ:    &int,
+		typ:    sqltypes.Int64,
 	}, {
 		name:   "authoritative columns with overlap",
 		schema: map[string]*vindexes.Table{"a": &authoritativeTblAWithConflict, "b": &authoritativeTblB},
@@ -411,7 +410,8 @@ func TestUnknownColumnMap2(t *testing.T) {
 					} else {
 						require.NoError(t, err)
 						require.NoError(t, tbl.NotSingleRouteErr)
-						typ := tbl.TypeFor(expr)
+						typ, _, found := tbl.TypeForExpr(expr)
+						assert.True(t, found)
 						assert.Equal(t, test.typ, typ)
 					}
 				})
@@ -462,23 +462,20 @@ func TestScoping(t *testing.T) {
 	}{
 		{
 			query:        "select 1 from u1, u2 left join u3 on u1.a = u2.a",
-			errorMessage: "symbol u1.a not found",
+			errorMessage: "column 'u1.a' not found",
 		},
 	}
 	for _, query := range queries {
 		t.Run(query.query, func(t *testing.T) {
 			parse, err := sqlparser.Parse(query.query)
 			require.NoError(t, err)
-			_, err = Analyze(parse, "user", &FakeSI{
+			st, err := Analyze(parse, "user", &FakeSI{
 				Tables: map[string]*vindexes.Table{
 					"t": {Name: sqlparser.NewIdentifierCS("t")},
 				},
 			})
-			if query.errorMessage == "" {
-				require.NoError(t, err)
-			} else {
-				require.EqualError(t, err, query.errorMessage)
-			}
+			require.NoError(t, err)
+			require.EqualError(t, st.NotUnshardedErr, query.errorMessage)
 		})
 	}
 }
@@ -870,9 +867,10 @@ func TestUnionOrderByRewrite(t *testing.T) {
 
 func TestInvalidQueries(t *testing.T) {
 	tcases := []struct {
-		sql  string
-		serr string
-		err  error
+		sql             string
+		serr            string
+		err             error
+		notUnshardedErr string
 	}{{
 		sql: "select t1.id, t1.col1 from t1 union select t2.uid from t2",
 		err: &UnionColumnsDoNotMatchError{FirstProj: 2, SecondProj: 1},
@@ -915,11 +913,11 @@ func TestInvalidQueries(t *testing.T) {
 		sql: "SELECT * FROM JSON_TABLE('[ {\"c1\": null} ]','$[*]' COLUMNS( c1 INT PATH '$.c1' ERROR ON ERROR )) as jt",
 		err: &JSONTablesError{},
 	}, {
-		sql:  "select does_not_exist from t1",
-		serr: "symbol t1.does_not_exist not found",
+		sql:             "select does_not_exist from t1",
+		notUnshardedErr: "column 'does_not_exist' not found in table 't1'",
 	}, {
-		sql:  "select t1.does_not_exist from t1, t2",
-		serr: "symbol t1.does_not_exist not found",
+		sql:             "select t1.does_not_exist from t1, t2",
+		notUnshardedErr: "column 't1.does_not_exist' not found",
 	}}
 
 	for _, tc := range tcases {
@@ -927,13 +925,16 @@ func TestInvalidQueries(t *testing.T) {
 			parse, err := sqlparser.Parse(tc.sql)
 			require.NoError(t, err)
 
-			_, err = Analyze(parse, "dbName", fakeSchemaInfo())
-			require.Error(t, err)
-			if tc.err != nil {
+			st, err := Analyze(parse, "dbName", fakeSchemaInfo())
+
+			switch {
+			case tc.err != nil:
+				require.Error(t, err)
 				require.Equal(t, tc.err, err)
-			}
-			if tc.serr != "" {
-				require.Equal(t, tc.serr, err.Error())
+			case tc.serr != "":
+				require.EqualError(t, err, tc.serr)
+			case tc.notUnshardedErr != "":
+				require.EqualError(t, st.NotUnshardedErr, tc.notUnshardedErr)
 			}
 		})
 	}
@@ -985,7 +986,7 @@ func TestScopingWDerivedTables(t *testing.T) {
 			expectation:          T2,
 		}, {
 			query:        "select t.id2 from (select foo as id from user) as t",
-			errorMessage: "symbol t.id2 not found",
+			errorMessage: "column 't.id2' not found",
 		}, {
 			query:                "select id from (select 42 as id) as t",
 			recursiveExpectation: T0,
@@ -996,7 +997,7 @@ func TestScopingWDerivedTables(t *testing.T) {
 			expectation:          T2,
 		}, {
 			query:        "select ks.t.id from (select 42 as id) as t",
-			errorMessage: "symbol ks.t.id not found",
+			errorMessage: "column 'ks.t.id' not found",
 		}, {
 			query:        "select * from (select id, id from user) as t",
 			errorMessage: "Duplicate column name 'id'",
@@ -1022,13 +1023,13 @@ func TestScopingWDerivedTables(t *testing.T) {
 			recursiveExpectation: T2,
 		}, {
 			query:        "select uu.test from (select id from t1) uu",
-			errorMessage: "symbol uu.test not found",
+			errorMessage: "column 'uu.test' not found",
 		}, {
 			query:        "select uu.id from (select id as col from t1) uu",
-			errorMessage: "symbol uu.id not found",
+			errorMessage: "column 'uu.id' not found",
 		}, {
 			query:        "select uu.id from (select id as col from t1) uu",
-			errorMessage: "symbol uu.id not found",
+			errorMessage: "column 'uu.id' not found",
 		}, {
 			query:                "select uu.id from (select id from t1) as uu where exists (select * from t2 as uu where uu.id = uu.uid)",
 			expectation:          T2,
@@ -1047,9 +1048,13 @@ func TestScopingWDerivedTables(t *testing.T) {
 					"t": {Name: sqlparser.NewIdentifierCS("t")},
 				},
 			})
-			if query.errorMessage != "" {
+
+			switch {
+			case query.errorMessage != "" && err != nil:
 				require.EqualError(t, err, query.errorMessage)
-			} else {
+			case query.errorMessage != "":
+				require.EqualError(t, st.NotUnshardedErr, query.errorMessage)
+			default:
 				require.NoError(t, err)
 				sel := parse.(*sqlparser.Select)
 				assert.Equal(t, query.recursiveExpectation, st.RecursiveDeps(extract(sel, 0)), "RecursiveDeps")
@@ -1487,6 +1492,28 @@ func TestUpdateErrors(t *testing.T) {
 			assert.EqualError(t, err, test.expectedError)
 		})
 	}
+}
+
+// TestScopingSubQueryJoinClause tests the scoping behavior of a subquery containing a join clause.
+// The test ensures that the scoping analysis correctly identifies and handles the relationships
+// between the tables involved in the join operation with the outer query.
+func TestScopingSubQueryJoinClause(t *testing.T) {
+	query := "select (select 1 from u1 join u2 on u1.id = u2.id and u2.id = u3.id) x from u3"
+
+	parse, err := sqlparser.Parse(query)
+	require.NoError(t, err)
+
+	st, err := Analyze(parse, "user", &FakeSI{
+		Tables: map[string]*vindexes.Table{
+			"t": {Name: sqlparser.NewIdentifierCS("t")},
+		},
+	})
+	require.NoError(t, err)
+	require.NoError(t, st.NotUnshardedErr)
+
+	tb := st.DirectDeps(parse.(*sqlparser.Select).SelectExprs[0].(*sqlparser.AliasedExpr).Expr.(*sqlparser.Subquery).Select.(*sqlparser.Select).From[0].(*sqlparser.JoinTableExpr).Condition.On)
+	require.Equal(t, 3, tb.NumberOfTables())
+
 }
 
 var ks1 = &vindexes.Keyspace{

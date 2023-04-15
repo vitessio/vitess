@@ -122,12 +122,12 @@ func (cmp *Comparator) SQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return cmp.RefOfAndExpr(a, b)
-	case Argument:
-		b, ok := inB.(Argument)
+	case *Argument:
+		b, ok := inB.(*Argument)
 		if !ok {
 			return false
 		}
-		return a == b
+		return cmp.RefOfArgument(a, b)
 	case *ArgumentLessWindowExpr:
 		b, ok := inB.(*ArgumentLessWindowExpr)
 		if !ok {
@@ -500,6 +500,30 @@ func (cmp *Comparator) SQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return cmp.RefOfGTIDFuncExpr(a, b)
+	case *GeomFormatExpr:
+		b, ok := inB.(*GeomFormatExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfGeomFormatExpr(a, b)
+	case *GeomFromTextExpr:
+		b, ok := inB.(*GeomFromTextExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfGeomFromTextExpr(a, b)
+	case *GeomFromWKBExpr:
+		b, ok := inB.(*GeomFromWKBExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfGeomFromWKBExpr(a, b)
+	case *GeomPropertyFuncExpr:
+		b, ok := inB.(*GeomPropertyFuncExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfGeomPropertyFuncExpr(a, b)
 	case GroupBy:
 		b, ok := inB.(GroupBy)
 		if !ok {
@@ -1740,6 +1764,18 @@ func (cmp *Comparator) RefOfAndExpr(a, b *AndExpr) bool {
 		cmp.Expr(a.Right, b.Right)
 }
 
+// RefOfArgument does deep equals between the two objects.
+func (cmp *Comparator) RefOfArgument(a, b *Argument) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Name == b.Name &&
+		a.Type == b.Type
+}
+
 // RefOfArgumentLessWindowExpr does deep equals between the two objects.
 func (cmp *Comparator) RefOfArgumentLessWindowExpr(a, b *ArgumentLessWindowExpr) bool {
 	if a == b {
@@ -2174,8 +2210,8 @@ func (cmp *Comparator) RefOfCurTimeFuncExpr(a, b *CurTimeFuncExpr) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return cmp.IdentifierCI(a.Name, b.Name) &&
-		cmp.Expr(a.Fsp, b.Fsp)
+	return a.Fsp == b.Fsp &&
+		cmp.IdentifierCI(a.Name, b.Name)
 }
 
 // RefOfDeallocateStmt does deep equals between the two objects.
@@ -2186,8 +2222,7 @@ func (cmp *Comparator) RefOfDeallocateStmt(a, b *DeallocateStmt) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return a.Type == b.Type &&
-		cmp.RefOfParsedComments(a.Comments, b.Comments) &&
+	return cmp.RefOfParsedComments(a.Comments, b.Comments) &&
 		cmp.IdentifierCI(a.Name, b.Name)
 }
 
@@ -2527,6 +2562,59 @@ func (cmp *Comparator) RefOfGTIDFuncExpr(a, b *GTIDFuncExpr) bool {
 		cmp.Expr(a.Set2, b.Set2) &&
 		cmp.Expr(a.Timeout, b.Timeout) &&
 		cmp.Expr(a.Channel, b.Channel)
+}
+
+// RefOfGeomFormatExpr does deep equals between the two objects.
+func (cmp *Comparator) RefOfGeomFormatExpr(a, b *GeomFormatExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.FormatType == b.FormatType &&
+		cmp.Expr(a.Geom, b.Geom) &&
+		cmp.Expr(a.AxisOrderOpt, b.AxisOrderOpt)
+}
+
+// RefOfGeomFromTextExpr does deep equals between the two objects.
+func (cmp *Comparator) RefOfGeomFromTextExpr(a, b *GeomFromTextExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Type == b.Type &&
+		cmp.Expr(a.WktText, b.WktText) &&
+		cmp.Expr(a.Srid, b.Srid) &&
+		cmp.Expr(a.AxisOrderOpt, b.AxisOrderOpt)
+}
+
+// RefOfGeomFromWKBExpr does deep equals between the two objects.
+func (cmp *Comparator) RefOfGeomFromWKBExpr(a, b *GeomFromWKBExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Type == b.Type &&
+		cmp.Expr(a.WkbBlob, b.WkbBlob) &&
+		cmp.Expr(a.Srid, b.Srid) &&
+		cmp.Expr(a.AxisOrderOpt, b.AxisOrderOpt)
+}
+
+// RefOfGeomPropertyFuncExpr does deep equals between the two objects.
+func (cmp *Comparator) RefOfGeomPropertyFuncExpr(a, b *GeomPropertyFuncExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Property == b.Property &&
+		cmp.Expr(a.Geom, b.Geom)
 }
 
 // GroupBy does deep equals between the two objects.
@@ -3345,7 +3433,7 @@ func (cmp *Comparator) RefOfOffset(a, b *Offset) bool {
 		return false
 	}
 	return a.V == b.V &&
-		a.Original == b.Original
+		cmp.Expr(a.Original, b.Original)
 }
 
 // OnDup does deep equals between the two objects.
@@ -4980,6 +5068,30 @@ func (cmp *Comparator) Callable(inA, inB Callable) bool {
 			return false
 		}
 		return cmp.RefOfGTIDFuncExpr(a, b)
+	case *GeomFormatExpr:
+		b, ok := inB.(*GeomFormatExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfGeomFormatExpr(a, b)
+	case *GeomFromTextExpr:
+		b, ok := inB.(*GeomFromTextExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfGeomFromTextExpr(a, b)
+	case *GeomFromWKBExpr:
+		b, ok := inB.(*GeomFromWKBExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfGeomFromWKBExpr(a, b)
+	case *GeomPropertyFuncExpr:
+		b, ok := inB.(*GeomPropertyFuncExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfGeomPropertyFuncExpr(a, b)
 	case *GroupConcatExpr:
 		b, ok := inB.(*GroupConcatExpr)
 		if !ok {
@@ -5484,12 +5596,12 @@ func (cmp *Comparator) Expr(inA, inB Expr) bool {
 			return false
 		}
 		return cmp.RefOfAndExpr(a, b)
-	case Argument:
-		b, ok := inB.(Argument)
+	case *Argument:
+		b, ok := inB.(*Argument)
 		if !ok {
 			return false
 		}
-		return a == b
+		return cmp.RefOfArgument(a, b)
 	case *ArgumentLessWindowExpr:
 		b, ok := inB.(*ArgumentLessWindowExpr)
 		if !ok {
@@ -5652,6 +5764,30 @@ func (cmp *Comparator) Expr(inA, inB Expr) bool {
 			return false
 		}
 		return cmp.RefOfGTIDFuncExpr(a, b)
+	case *GeomFormatExpr:
+		b, ok := inB.(*GeomFormatExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfGeomFormatExpr(a, b)
+	case *GeomFromTextExpr:
+		b, ok := inB.(*GeomFromTextExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfGeomFromTextExpr(a, b)
+	case *GeomFromWKBExpr:
+		b, ok := inB.(*GeomFromWKBExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfGeomFromWKBExpr(a, b)
+	case *GeomPropertyFuncExpr:
+		b, ok := inB.(*GeomPropertyFuncExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfGeomPropertyFuncExpr(a, b)
 	case *GroupConcatExpr:
 		b, ok := inB.(*GroupConcatExpr)
 		if !ok {

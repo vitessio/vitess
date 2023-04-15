@@ -271,12 +271,15 @@ type txThrottlerState struct {
 }
 
 func newTxThrottlerState(config *txThrottlerConfig, keyspace, shard, cell string) (*txThrottlerState, error) {
+	maxReplicationLagModuleConfig := throttler.MaxReplicationLagModuleConfig{Configuration: config.throttlerConfig}
+
 	t, err := throttlerFactory(
 		TxThrottlerName,
 		"TPS",                           /* unit */
 		1,                               /* threadCount */
 		throttler.MaxRateModuleDisabled, /* maxRate */
-		config.throttlerConfig.MaxReplicationLagSec /* maxReplicationLag */)
+		maxReplicationLagModuleConfig,
+	)
 	if err != nil {
 		return nil, err
 	}

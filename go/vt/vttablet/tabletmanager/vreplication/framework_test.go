@@ -621,15 +621,35 @@ func expectQueryResult(t *testing.T, query string, values [][]string) {
 func customExpectData(t *testing.T, table string, values [][]string, exec func(ctx context.Context, query string) (*sqltypes.Result, error)) {
 	t.Helper()
 
+	const timeout = 30 * time.Second
+	const tick = 100 * time.Millisecond
+
 	var query string
 	if len(strings.Split(table, ".")) == 1 {
 		query = fmt.Sprintf("select * from %s.%s", vrepldb, table)
 	} else {
 		query = fmt.Sprintf("select * from %s", table)
 	}
-	err := compareQueryResults(t, query, values, exec)
-	if err != nil {
-		require.FailNow(t, "data mismatch", err)
+
+	// without the sleep and retry there is a flakiness where rows inserted by vreplication are not immediately visible
+	// on the target for tests where we do not expect queries but just directly check the vreplicated data after inserting
+	// into the source.
+	tmr := time.NewTimer(timeout)
+	defer tmr.Stop()
+	var err error
+	for {
+		select {
+		case <-tmr.C:
+			if err != nil {
+				require.FailNow(t, "target has incorrect data", err)
+			}
+		default:
+			err = compareQueryResults(t, query, values, exec)
+			if err == nil {
+				return
+			}
+			time.Sleep(tick)
+		}
 	}
 }
 
@@ -650,7 +670,7 @@ func compareQueryResults(t *testing.T, query string, values [][]string,
 		}
 		for j, val := range row {
 			if got := qr.Rows[i][j].ToString(); got != val {
-				return fmt.Errorf("Mismatch at (%d, %d): %v, want %s", i, j, qr.Rows[i][j], val)
+				return fmt.Errorf("mismatch at (%d, %d): %v, want %s", i, j, qr.Rows[i][j], val)
 			}
 		}
 	}

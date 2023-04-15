@@ -20,16 +20,11 @@ import userEvent from '@testing-library/user-event';
 import { createMemoryHistory } from 'history';
 import { QueryClient, QueryClientProvider } from 'react-query';
 import { Router } from 'react-router-dom';
+import { describe, it, expect, vi } from 'vitest';
 
 import { CreateKeyspace } from './CreateKeyspace';
 import { vtadmin } from '../../../proto/vtadmin';
 import * as Snackbar from '../../Snackbar';
-
-const ORIGINAL_PROCESS_ENV = process.env;
-const TEST_PROCESS_ENV = {
-    ...process.env,
-    REACT_APP_VTADMIN_API_ADDRESS: '',
-};
 
 // This integration test verifies the behaviour from the form UI
 // all the way down to the network level (which we mock with msw).
@@ -39,30 +34,21 @@ const TEST_PROCESS_ENV = {
 describe('CreateKeyspace integration test', () => {
     const server = setupServer();
 
-    beforeAll(() => {
-        process.env = { ...TEST_PROCESS_ENV } as NodeJS.ProcessEnv;
-    });
-
-    afterEach(() => {
-        process.env = { ...TEST_PROCESS_ENV } as NodeJS.ProcessEnv;
-    });
-
     afterAll(() => {
-        process.env = { ...ORIGINAL_PROCESS_ENV };
         server.close();
     });
 
     it('successfully creates a keyspace', async () => {
-        jest.spyOn(global, 'fetch');
-        jest.spyOn(Snackbar, 'success');
+        vi.spyOn(global, 'fetch');
+        vi.spyOn(Snackbar, 'success');
 
         const cluster = { id: 'local', name: 'local' };
-
+        const apiAddr = import.meta.env.VITE_VTADMIN_API_ADDRESS;
         server.use(
-            rest.get('/api/clusters', (req, res, ctx) => {
+            rest.get(`${apiAddr}/api/clusters`, (req, res, ctx) => {
                 return res(ctx.json({ result: { clusters: [cluster] }, ok: true }));
             }),
-            rest.post('/api/keyspace/:clusterID', (req, res, ctx) => {
+            rest.post(`${apiAddr}/api/keyspace/:clusterID`, (req, res, ctx) => {
                 const data: vtadmin.ICreateKeyspaceResponse = {
                     keyspace: {
                         cluster: { id: cluster.id, name: cluster.name },
@@ -75,7 +61,7 @@ describe('CreateKeyspace integration test', () => {
         server.listen();
 
         const history = createMemoryHistory();
-        jest.spyOn(history, 'push');
+        vi.spyOn(history, 'push');
 
         const queryClient = new QueryClient({
             defaultOptions: { queries: { retry: false } },
@@ -116,7 +102,7 @@ describe('CreateKeyspace integration test', () => {
 
         // Assert that the client sent the correct API request
         expect(global.fetch).toHaveBeenCalledTimes(1);
-        expect(global.fetch).toHaveBeenCalledWith('/api/keyspace/local', {
+        expect(global.fetch).toHaveBeenCalledWith(`${apiAddr}/api/keyspace/local`, {
             credentials: undefined,
             body: JSON.stringify({
                 name: 'some-keyspace',
@@ -135,7 +121,7 @@ describe('CreateKeyspace integration test', () => {
 
         // Validate redirect to the new keyspace's detail page
         expect(history.push).toHaveBeenCalledTimes(1);
-        expect(history.push).toHaveBeenCalledWith('/keyspace/local/some-keyspace');
+        expect(history.push).toHaveBeenCalledWith(`/keyspace/local/some-keyspace`);
 
         // Validate that snackbar was triggered
         expect(Snackbar.success).toHaveBeenCalledTimes(1);

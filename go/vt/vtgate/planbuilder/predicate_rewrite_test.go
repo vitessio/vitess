@@ -26,7 +26,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
@@ -101,9 +100,13 @@ func TestFuzzRewriting(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			simplified := sqlparser.RewritePredicate(predicate)
 
-			original, err := evalengine.Translate(predicate, lookup{})
+			original, err := evalengine.Translate(predicate, &evalengine.Config{
+				ResolveColumn: resolveForFuzz,
+			})
 			require.NoError(t, err)
-			simpler, err := evalengine.Translate(simplified.(sqlparser.Expr), lookup{})
+			simpler, err := evalengine.Translate(simplified.(sqlparser.Expr), &evalengine.Config{
+				ResolveColumn: resolveForFuzz,
+			})
 			require.NoError(t, err)
 
 			env := evalengine.EmptyExpressionEnv()
@@ -139,17 +142,7 @@ func testValues(t *testing.T, env *evalengine.ExpressionEnv, i int, original, si
 	}
 }
 
-type lookup struct{}
-
-func (l lookup) ColumnLookup(col *sqlparser.ColName) (int, error) {
-	offsetStr := col.Name.String()[1:]
+func resolveForFuzz(colname *sqlparser.ColName) (int, error) {
+	offsetStr := colname.Name.String()[1:]
 	return strconv.Atoi(offsetStr)
-}
-
-func (l lookup) CollationForExpr(sqlparser.Expr) collations.ID {
-	return collations.Default()
-}
-
-func (l lookup) DefaultCollation() collations.ID {
-	return collations.Default()
 }

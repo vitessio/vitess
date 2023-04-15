@@ -55,8 +55,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfAlterVschema(in)
 	case *AndExpr:
 		return CloneRefOfAndExpr(in)
-	case Argument:
-		return in
+	case *Argument:
+		return CloneRefOfArgument(in)
 	case *ArgumentLessWindowExpr:
 		return CloneRefOfArgumentLessWindowExpr(in)
 	case *AutoIncSpec:
@@ -181,6 +181,14 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfFuncExpr(in)
 	case *GTIDFuncExpr:
 		return CloneRefOfGTIDFuncExpr(in)
+	case *GeomFormatExpr:
+		return CloneRefOfGeomFormatExpr(in)
+	case *GeomFromTextExpr:
+		return CloneRefOfGeomFromTextExpr(in)
+	case *GeomFromWKBExpr:
+		return CloneRefOfGeomFromWKBExpr(in)
+	case *GeomPropertyFuncExpr:
+		return CloneRefOfGeomPropertyFuncExpr(in)
 	case GroupBy:
 		return CloneGroupBy(in)
 	case *GroupConcatExpr:
@@ -701,6 +709,15 @@ func CloneRefOfAndExpr(n *AndExpr) *AndExpr {
 	return &out
 }
 
+// CloneRefOfArgument creates a deep clone of the input.
+func CloneRefOfArgument(n *Argument) *Argument {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	return &out
+}
+
 // CloneRefOfArgumentLessWindowExpr creates a deep clone of the input.
 func CloneRefOfArgumentLessWindowExpr(n *ArgumentLessWindowExpr) *ArgumentLessWindowExpr {
 	if n == nil {
@@ -1065,7 +1082,6 @@ func CloneRefOfCurTimeFuncExpr(n *CurTimeFuncExpr) *CurTimeFuncExpr {
 	}
 	out := *n
 	out.Name = CloneIdentifierCI(n.Name)
-	out.Fsp = CloneExpr(n.Fsp)
 	return &out
 }
 
@@ -1363,6 +1379,51 @@ func CloneRefOfGTIDFuncExpr(n *GTIDFuncExpr) *GTIDFuncExpr {
 	out.Set2 = CloneExpr(n.Set2)
 	out.Timeout = CloneExpr(n.Timeout)
 	out.Channel = CloneExpr(n.Channel)
+	return &out
+}
+
+// CloneRefOfGeomFormatExpr creates a deep clone of the input.
+func CloneRefOfGeomFormatExpr(n *GeomFormatExpr) *GeomFormatExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Geom = CloneExpr(n.Geom)
+	out.AxisOrderOpt = CloneExpr(n.AxisOrderOpt)
+	return &out
+}
+
+// CloneRefOfGeomFromTextExpr creates a deep clone of the input.
+func CloneRefOfGeomFromTextExpr(n *GeomFromTextExpr) *GeomFromTextExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.WktText = CloneExpr(n.WktText)
+	out.Srid = CloneExpr(n.Srid)
+	out.AxisOrderOpt = CloneExpr(n.AxisOrderOpt)
+	return &out
+}
+
+// CloneRefOfGeomFromWKBExpr creates a deep clone of the input.
+func CloneRefOfGeomFromWKBExpr(n *GeomFromWKBExpr) *GeomFromWKBExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.WkbBlob = CloneExpr(n.WkbBlob)
+	out.Srid = CloneExpr(n.Srid)
+	out.AxisOrderOpt = CloneExpr(n.AxisOrderOpt)
+	return &out
+}
+
+// CloneRefOfGeomPropertyFuncExpr creates a deep clone of the input.
+func CloneRefOfGeomPropertyFuncExpr(n *GeomPropertyFuncExpr) *GeomPropertyFuncExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Geom = CloneExpr(n.Geom)
 	return &out
 }
 
@@ -2082,6 +2143,7 @@ func CloneRefOfOffset(n *Offset) *Offset {
 		return nil
 	}
 	out := *n
+	out.Original = CloneExpr(n.Original)
 	return &out
 }
 
@@ -3339,6 +3401,14 @@ func CloneCallable(in Callable) Callable {
 		return CloneRefOfFuncExpr(in)
 	case *GTIDFuncExpr:
 		return CloneRefOfGTIDFuncExpr(in)
+	case *GeomFormatExpr:
+		return CloneRefOfGeomFormatExpr(in)
+	case *GeomFromTextExpr:
+		return CloneRefOfGeomFromTextExpr(in)
+	case *GeomFromWKBExpr:
+		return CloneRefOfGeomFromWKBExpr(in)
+	case *GeomPropertyFuncExpr:
+		return CloneRefOfGeomPropertyFuncExpr(in)
 	case *GroupConcatExpr:
 		return CloneRefOfGroupConcatExpr(in)
 	case *InsertExpr:
@@ -3549,8 +3619,8 @@ func CloneExpr(in Expr) Expr {
 	switch in := in.(type) {
 	case *AndExpr:
 		return CloneRefOfAndExpr(in)
-	case Argument:
-		return in
+	case *Argument:
+		return CloneRefOfArgument(in)
 	case *ArgumentLessWindowExpr:
 		return CloneRefOfArgumentLessWindowExpr(in)
 	case *Avg:
@@ -3605,6 +3675,14 @@ func CloneExpr(in Expr) Expr {
 		return CloneRefOfFuncExpr(in)
 	case *GTIDFuncExpr:
 		return CloneRefOfGTIDFuncExpr(in)
+	case *GeomFormatExpr:
+		return CloneRefOfGeomFormatExpr(in)
+	case *GeomFromTextExpr:
+		return CloneRefOfGeomFromTextExpr(in)
+	case *GeomFromWKBExpr:
+		return CloneRefOfGeomFromWKBExpr(in)
+	case *GeomPropertyFuncExpr:
+		return CloneRefOfGeomPropertyFuncExpr(in)
 	case *GroupConcatExpr:
 		return CloneRefOfGroupConcatExpr(in)
 	case *InsertExpr:

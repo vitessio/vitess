@@ -25,6 +25,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
@@ -50,12 +51,17 @@ var _ SessionActions = (*noopVCursor)(nil)
 type noopVCursor struct {
 }
 
+func (t *noopVCursor) GetUDV(key string) *querypb.BindVariable {
+	// TODO implement me
+	panic("implement me")
+}
+
 func (t *noopVCursor) InTransaction() bool {
 	return false
 }
 
 func (t *noopVCursor) SetCommitOrder(co vtgatepb.CommitOrder) {
-	//TODO implement me
+	// TODO implement me
 	panic("implement me")
 }
 
@@ -99,6 +105,10 @@ func (t *noopVCursor) SetContextWithValue(key, value interface{}) func() {
 // ConnCollation implements VCursor
 func (t *noopVCursor) ConnCollation() collations.ID {
 	return collations.CollationUtf8mb4ID
+}
+
+func (t *noopVCursor) TimeZone() *time.Location {
+	return nil
 }
 
 func (t *noopVCursor) ExecutePrimitive(ctx context.Context, primitive Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
@@ -361,6 +371,11 @@ type loggingVCursor struct {
 	ksShardMap map[string][]string
 
 	shardSession []*srvtopo.ResolvedShard
+}
+
+func (f *loggingVCursor) GetUDV(key string) *querypb.BindVariable {
+	// TODO implement me
+	panic("implement me")
 }
 
 type tableRoutes struct {

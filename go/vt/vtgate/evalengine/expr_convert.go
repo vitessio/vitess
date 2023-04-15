@@ -19,6 +19,7 @@ package evalengine
 import (
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 )
@@ -100,9 +101,9 @@ func (c *ConvertExpr) eval(env *ExpressionEnv) (eval, error) {
 		return t, nil
 	case "DECIMAL":
 		m, d := c.decimalPrecision()
-		return evalToNumeric(e).toDecimal(m, d), nil
+		return evalToDecimal(e, m, d), nil
 	case "DOUBLE", "REAL":
-		f, _ := evalToNumeric(e).toFloat()
+		f, _ := evalToFloat(e)
 		return f, nil
 	case "FLOAT":
 		if c.HasLength {
@@ -113,20 +114,35 @@ func (c *ConvertExpr) eval(env *ExpressionEnv) (eval, error) {
 		}
 		return nil, c.returnUnsupportedError()
 	case "SIGNED", "SIGNED INTEGER":
-		return evalToNumeric(e).toInt64(), nil
+		return evalToInt64(e), nil
 	case "UNSIGNED", "UNSIGNED INTEGER":
-		return evalToNumeric(e).toUint64(), nil
+		return evalToInt64(e).toUint64(), nil
 	case "JSON":
 		return evalToJSON(e)
-	case "DATE", "DATETIME", "YEAR", "TIME":
+	case "DATETIME":
+		if dt := evalToDateTime(e); dt != nil {
+			return dt, nil
+		}
+		return nil, nil
+	case "DATE":
+		if d := evalToDate(e); d != nil {
+			return d, nil
+		}
+		return nil, nil
+	case "TIME":
+		if t := evalToTime(e); t != nil {
+			return t, nil
+		}
+		return nil, nil
+	case "YEAR":
 		return nil, c.returnUnsupportedError()
 	default:
 		panic("BUG: sqlparser emitted unknown type")
 	}
 }
 
-func (c *ConvertExpr) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
-	tt, f := c.Inner.typeof(env)
+func (c *ConvertExpr) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	tt, f := c.Inner.typeof(env, fields)
 
 	switch c.Type {
 	case "BINARY":
@@ -145,8 +161,14 @@ func (c *ConvertExpr) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
 		return sqltypes.Uint64, f
 	case "JSON":
 		return sqltypes.TypeJSON, f
-	case "DATE", "DATETIME", "YEAR", "TIME":
-		return sqltypes.Null, f
+	case "DATE":
+		return sqltypes.Date, f
+	case "DATETIME":
+		return sqltypes.Datetime, f
+	case "TIME":
+		return sqltypes.Time, f
+	case "YEAR":
+		return sqltypes.Year, f
 	default:
 		panic("BUG: sqlparser emitted unknown type")
 	}
@@ -192,7 +214,7 @@ func (c *ConvertUsingExpr) eval(env *ExpressionEnv) (eval, error) {
 	return e, nil
 }
 
-func (c *ConvertUsingExpr) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
-	_, f := c.Inner.typeof(env)
+func (c *ConvertUsingExpr) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	_, f := c.Inner.typeof(env, fields)
 	return sqltypes.VarChar, f | flagNullable
 }

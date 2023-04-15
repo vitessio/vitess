@@ -47,7 +47,7 @@ func skipToEnd(yylex yyLexer) {
   yylex.(*Tokenizer).SkipToEnd = true
 }
 
-func bindVariable(yylex yyLexer, bvar string) {
+func markBindVariable(yylex yyLexer, bvar string) {
   yylex.(*Tokenizer).BindVars[bvar] = struct{}{}
 }
 
@@ -346,9 +346,9 @@ func bindVariable(yylex yyLexer, bvar string) {
 %token <str> NAMES GLOBAL SESSION ISOLATION LEVEL READ WRITE ONLY REPEATABLE COMMITTED UNCOMMITTED SERIALIZABLE
 
 // Functions
-%token <str> CURRENT_TIMESTAMP DATABASE CURRENT_DATE NOW
-%token <str> CURRENT_TIME LOCALTIME LOCALTIMESTAMP CURRENT_USER
-%token <str> UTC_DATE UTC_TIME UTC_TIMESTAMP
+%token <str> CURRENT_TIMESTAMP DATABASE CURRENT_DATE CURDATE NOW
+%token <str> CURTIME CURRENT_TIME LOCALTIME LOCALTIMESTAMP CURRENT_USER
+%token <str> UTC_DATE UTC_TIME UTC_TIMESTAMP SYSDATE
 %token <str> DAY DAY_HOUR DAY_MICROSECOND DAY_MINUTE DAY_SECOND HOUR HOUR_MICROSECOND HOUR_MINUTE HOUR_SECOND MICROSECOND MINUTE MINUTE_MICROSECOND MINUTE_SECOND MONTH QUARTER SECOND SECOND_MICROSECOND YEAR_MONTH WEEK
 %token <str> REPLACE
 %token <str> CONVERT CAST
@@ -365,6 +365,9 @@ func bindVariable(yylex yyLexer, bvar string) {
 %token <str> ExtractValue UpdateXML
 %token <str> GET_LOCK RELEASE_LOCK RELEASE_ALL_LOCKS IS_FREE_LOCK IS_USED_LOCK
 %token <str> LOCATE POSITION
+%token <str> ST_GeometryCollectionFromText ST_GeometryFromText ST_LineStringFromText ST_MultiLineStringFromText ST_MultiPointFromText ST_MultiPolygonFromText ST_PointFromText ST_PolygonFromText
+%token <str> ST_GeometryCollectionFromWKB ST_GeometryFromWKB ST_LineStringFromWKB ST_MultiLineStringFromWKB ST_MultiPointFromWKB ST_MultiPolygonFromWKB ST_PointFromWKB ST_PolygonFromWKB
+%token <str> ST_AsBinary ST_AsText ST_Dimension ST_Envelope ST_IsSimple ST_IsEmpty ST_GeometryType
 
 // Match
 %token <str> MATCH AGAINST BOOLEAN LANGUAGE WITH QUERY EXPANSION WITHOUT VALIDATION
@@ -545,7 +548,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <columnType> column_type
 %type <columnType> int_type decimal_type numeric_type time_type char_type spatial_type
 %type <literal> length_opt partition_comment partition_data_directory partition_index_directory
-%type <expr> func_datetime_precision
+%type <integer> func_datetime_precision
 %type <columnCharset> charset_opt
 %type <str> collate_opt
 %type <boolean> binary_opt
@@ -1644,6 +1647,10 @@ CURRENT_TIMESTAMP func_datetime_precision
   {
     $$ = &CurTimeFuncExpr{Name:NewIdentifierCI("now"), Fsp: $2}
   }
+| SYSDATE func_datetime_precision
+  {
+    $$ = &CurTimeFuncExpr{Name:NewIdentifierCI("sysdate"), Fsp: $2}
+  }
 
 signed_literal_or_null:
 signed_literal
@@ -1697,8 +1704,7 @@ text_literal
   }
 | VALUE_ARG
   {
-    $$ = NewArgument($1[1:])
-    bindVariable(yylex, $1[1:])
+    $$ = parseBindVariable(yylex, $1[1:])
   }
 | underscore_charsets BIT_LITERAL %prec UNARY
   {
@@ -1722,8 +1728,8 @@ text_literal
   }
 | underscore_charsets VALUE_ARG %prec UNARY
   {
-    bindVariable(yylex, $2[1:])
-    $$ = &IntroducerExpr{CharacterSet: $1, Expr: NewArgument($2[1:])}
+    arg := parseBindVariable(yylex, $2[1:])
+    $$ = &IntroducerExpr{CharacterSet: $1, Expr: arg}
   }
 | DATE STRING
   {
@@ -1947,8 +1953,7 @@ text_literal_or_arg:
   }
 | VALUE_ARG
   {
-    $$ = NewArgument($1[1:])
-    bindVariable(yylex, $1[1:])
+    $$ = parseBindVariable(yylex, $1[1:])
   }
 
 keys:
@@ -2863,7 +2868,11 @@ insert_method_options:
 | LAST
 
 table_opt_value:
-  reserved_sql_id
+  table_id '.' reserved_table_id
+  {
+    $$ = String(TableName{Qualifier: $1, Name: $3})
+  }
+| reserved_sql_id
   {
     $$ = $1.String()
   }
@@ -4755,11 +4764,11 @@ execute_statement_list_opt: // execute db.foo(@apa) using @foo, @bar
 deallocate_statement:
   DEALLOCATE comment_opt PREPARE sql_id
   {
-    $$ = &DeallocateStmt{Type:DeallocateType, Comments: Comments($2).Parsed(), Name:$4}
+    $$ = &DeallocateStmt{Comments: Comments($2).Parsed(), Name:$4}
   }
 | DROP comment_opt PREPARE sql_id
   {
-    $$ = &DeallocateStmt{Type: DropType, Comments: Comments($2).Parsed(), Name: $4}
+    $$ = &DeallocateStmt{Comments: Comments($2).Parsed(), Name: $4}
   }
 
 select_expression_list_opt:
@@ -5799,7 +5808,7 @@ col_tuple:
 | LIST_ARG
   {
     $$ = ListArg($1[2:])
-    bindVariable(yylex, $1[2:])
+    markBindVariable(yylex, $1[2:])
   }
 
 subquery:
@@ -5898,9 +5907,18 @@ UTC_DATE func_paren_opt
   {
     $$ = &FuncExpr{Name:NewIdentifierCI("current_date")}
   }
+| CURDATE func_paren_opt
+  {
+    $$ = &FuncExpr{Name:NewIdentifierCI("curdate")}
+  }
 | UTC_TIME func_datetime_precision
   {
     $$ = &CurTimeFuncExpr{Name:NewIdentifierCI("utc_time"), Fsp: $2}
+  }
+  // curtime
+| CURTIME func_datetime_precision
+  {
+    $$ = &CurTimeFuncExpr{Name:NewIdentifierCI("curtime"), Fsp: $2}
   }
   // curtime
 | CURRENT_TIME func_datetime_precision
@@ -6074,6 +6092,234 @@ UTC_DATE func_paren_opt
 | JSON_ARRAY openb expression_list_opt closeb
   {
     $$ = &JSONArrayExpr{ Params:$3 }
+  }
+| ST_AsBinary openb expression closeb
+  {
+    $$ = &GeomFormatExpr{ FormatType: BinaryFormat, Geom: $3}
+  }
+| ST_AsBinary openb expression ',' expression closeb
+  {
+    $$ = &GeomFormatExpr{ FormatType: BinaryFormat, Geom: $3, AxisOrderOpt: $5 }
+  }
+| ST_AsText openb expression closeb
+  {
+    $$ = &GeomFormatExpr{ FormatType: TextFormat, Geom: $3}
+  }
+| ST_AsText openb expression ',' expression closeb
+  {
+    $$ = &GeomFormatExpr{ FormatType: TextFormat, Geom: $3, AxisOrderOpt: $5 }
+  }
+| ST_IsEmpty openb expression closeb
+  {
+    $$ = &GeomPropertyFuncExpr{ Property: IsEmpty, Geom: $3}
+  }
+| ST_IsSimple openb expression closeb
+  {
+    $$ = &GeomPropertyFuncExpr{ Property: IsSimple, Geom: $3}
+  }
+| ST_Dimension openb expression closeb
+  {
+    $$ = &GeomPropertyFuncExpr{ Property: Dimension, Geom: $3}
+  }
+| ST_Envelope openb expression closeb
+  {
+    $$ = &GeomPropertyFuncExpr{ Property: Envelope, Geom: $3}
+  }
+| ST_GeometryType openb expression closeb
+  {
+    $$ = &GeomPropertyFuncExpr{ Property: GeometryType, Geom: $3}
+  }
+| ST_GeometryFromText openb expression closeb
+  {
+    $$ = &GeomFromTextExpr{ Type: GeometryFromText, WktText: $3 }
+  }
+| ST_GeometryFromText openb expression ',' expression closeb
+  {
+    $$ = &GeomFromTextExpr{ Type: GeometryFromText, WktText: $3, Srid: $5 }
+  }
+| ST_GeometryFromText openb expression ',' expression ',' expression closeb
+  {
+    $$ = &GeomFromTextExpr{ Type: GeometryFromText, WktText: $3, Srid: $5, AxisOrderOpt: $7 }
+  }
+|  ST_GeometryCollectionFromText openb expression closeb
+  {
+    $$ = &GeomFromTextExpr{ Type: GeometryCollectionFromText, WktText: $3 }
+  }
+| ST_GeometryCollectionFromText openb expression ',' expression closeb
+  {
+    $$ = &GeomFromTextExpr{ Type: GeometryCollectionFromText, WktText: $3, Srid: $5 }
+  }
+| ST_GeometryCollectionFromText openb expression ',' expression ',' expression closeb
+  {
+    $$ = &GeomFromTextExpr{ Type: GeometryCollectionFromText, WktText: $3, Srid: $5, AxisOrderOpt: $7 }
+  }
+| ST_LineStringFromText openb expression closeb
+  {
+    $$ = &GeomFromTextExpr{ Type: LineStringFromText, WktText: $3 }
+  }
+| ST_LineStringFromText openb expression ',' expression closeb
+  {
+    $$ = &GeomFromTextExpr{ Type: LineStringFromText, WktText: $3, Srid: $5 }
+  }
+| ST_LineStringFromText openb expression ',' expression ',' expression closeb
+  {
+    $$ = &GeomFromTextExpr{ Type: LineStringFromText, WktText: $3, Srid: $5, AxisOrderOpt: $7 }
+  }
+| ST_MultiLineStringFromText openb expression closeb
+  {
+    $$ = &GeomFromTextExpr{ Type: MultiLinestringFromText, WktText: $3 }
+  }
+| ST_MultiLineStringFromText openb expression ',' expression closeb
+  {
+    $$ = &GeomFromTextExpr{ Type: MultiLinestringFromText, WktText: $3, Srid: $5 }
+  }
+| ST_MultiLineStringFromText openb expression ',' expression ',' expression closeb
+  {
+    $$ = &GeomFromTextExpr{ Type: MultiLinestringFromText, WktText: $3, Srid: $5, AxisOrderOpt: $7 }
+  }
+| ST_MultiPointFromText openb expression closeb
+  {
+    $$ = &GeomFromTextExpr{ Type: MultiPointFromText, WktText: $3 }
+  }
+| ST_MultiPointFromText openb expression ',' expression closeb
+  {
+    $$ = &GeomFromTextExpr{ Type: MultiPointFromText, WktText: $3, Srid: $5 }
+  }
+| ST_MultiPointFromText openb expression ',' expression ',' expression closeb
+  {
+    $$ = &GeomFromTextExpr{ Type: MultiPointFromText, WktText: $3, Srid: $5, AxisOrderOpt: $7 }
+  }
+| ST_MultiPolygonFromText openb expression closeb
+  {
+    $$ = &GeomFromTextExpr{ Type: MultiPolygonFromText, WktText: $3 }
+  }
+| ST_MultiPolygonFromText openb expression ',' expression closeb
+  {
+    $$ = &GeomFromTextExpr{ Type: MultiPolygonFromText, WktText: $3, Srid: $5 }
+  }
+| ST_MultiPolygonFromText openb expression ',' expression ',' expression closeb
+  {
+    $$ = &GeomFromTextExpr{ Type: MultiPolygonFromText, WktText: $3, Srid: $5, AxisOrderOpt: $7 }
+  }
+| ST_PointFromText openb expression closeb
+  {
+    $$ = &GeomFromTextExpr{ Type: PointFromText, WktText: $3 }
+  }
+| ST_PointFromText openb expression ',' expression closeb
+  {
+    $$ = &GeomFromTextExpr{ Type: PointFromText, WktText: $3, Srid: $5 }
+  }
+| ST_PointFromText openb expression ',' expression ',' expression closeb
+  {
+    $$ = &GeomFromTextExpr{ Type: PointFromText, WktText: $3, Srid: $5, AxisOrderOpt: $7 }
+  }
+| ST_PolygonFromText openb expression closeb
+  {
+    $$ = &GeomFromTextExpr{ Type: PolygonFromText, WktText: $3 }
+  }
+| ST_PolygonFromText openb expression ',' expression closeb
+  {
+    $$ = &GeomFromTextExpr{ Type: PolygonFromText, WktText: $3, Srid: $5 }
+  }
+| ST_PolygonFromText openb expression ',' expression ',' expression closeb
+  {
+    $$ = &GeomFromTextExpr{ Type: PolygonFromText, WktText: $3, Srid: $5, AxisOrderOpt: $7 }
+  }
+| ST_GeometryFromWKB openb expression closeb
+  {
+    $$ = &GeomFromWKBExpr{ Type: GeometryFromWKB, WkbBlob: $3 }
+  }
+| ST_GeometryFromWKB openb expression ',' expression closeb
+  {
+    $$ = &GeomFromWKBExpr{ Type: GeometryFromWKB, WkbBlob: $3, Srid: $5 }
+  }
+| ST_GeometryFromWKB openb expression ',' expression ',' expression closeb
+  {
+    $$ = &GeomFromWKBExpr{ Type: GeometryFromWKB, WkbBlob: $3, Srid: $5, AxisOrderOpt: $7 }
+  }
+|  ST_GeometryCollectionFromWKB openb expression closeb
+  {
+    $$ = &GeomFromWKBExpr{ Type: GeometryCollectionFromWKB, WkbBlob: $3 }
+  }
+| ST_GeometryCollectionFromWKB openb expression ',' expression closeb
+  {
+    $$ = &GeomFromWKBExpr{ Type: GeometryCollectionFromWKB, WkbBlob: $3, Srid: $5 }
+  }
+| ST_GeometryCollectionFromWKB openb expression ',' expression ',' expression closeb
+  {
+    $$ = &GeomFromWKBExpr{ Type: GeometryCollectionFromWKB, WkbBlob: $3, Srid: $5, AxisOrderOpt: $7 }
+  }
+| ST_LineStringFromWKB openb expression closeb
+  {
+    $$ = &GeomFromWKBExpr{ Type: LineStringFromWKB, WkbBlob: $3 }
+  }
+| ST_LineStringFromWKB openb expression ',' expression closeb
+  {
+    $$ = &GeomFromWKBExpr{ Type: LineStringFromWKB, WkbBlob: $3, Srid: $5 }
+  }
+| ST_LineStringFromWKB openb expression ',' expression ',' expression closeb
+  {
+    $$ = &GeomFromWKBExpr{ Type: LineStringFromWKB, WkbBlob: $3, Srid: $5, AxisOrderOpt: $7 }
+  }
+| ST_MultiLineStringFromWKB openb expression closeb
+  {
+    $$ = &GeomFromWKBExpr{ Type: MultiLinestringFromWKB, WkbBlob: $3 }
+  }
+| ST_MultiLineStringFromWKB openb expression ',' expression closeb
+  {
+    $$ = &GeomFromWKBExpr{ Type: MultiLinestringFromWKB, WkbBlob: $3, Srid: $5 }
+  }
+| ST_MultiLineStringFromWKB openb expression ',' expression ',' expression closeb
+  {
+    $$ = &GeomFromWKBExpr{ Type: MultiLinestringFromWKB, WkbBlob: $3, Srid: $5, AxisOrderOpt: $7 }
+  }
+| ST_MultiPointFromWKB openb expression closeb
+  {
+    $$ = &GeomFromWKBExpr{ Type: MultiPointFromWKB, WkbBlob: $3 }
+  }
+| ST_MultiPointFromWKB openb expression ',' expression closeb
+  {
+    $$ = &GeomFromWKBExpr{ Type: MultiPointFromWKB, WkbBlob: $3, Srid: $5 }
+  }
+| ST_MultiPointFromWKB openb expression ',' expression ',' expression closeb
+  {
+    $$ = &GeomFromWKBExpr{ Type: MultiPointFromWKB, WkbBlob: $3, Srid: $5, AxisOrderOpt: $7 }
+  }
+| ST_MultiPolygonFromWKB openb expression closeb
+  {
+    $$ = &GeomFromWKBExpr{ Type: MultiPolygonFromWKB, WkbBlob: $3 }
+  }
+| ST_MultiPolygonFromWKB openb expression ',' expression closeb
+  {
+    $$ = &GeomFromWKBExpr{ Type: MultiPolygonFromWKB, WkbBlob: $3, Srid: $5 }
+  }
+| ST_MultiPolygonFromWKB openb expression ',' expression ',' expression closeb
+  {
+    $$ = &GeomFromWKBExpr{ Type: MultiPolygonFromWKB, WkbBlob: $3, Srid: $5, AxisOrderOpt: $7 }
+  }
+| ST_PointFromWKB openb expression closeb
+  {
+    $$ = &GeomFromWKBExpr{ Type: PointFromWKB, WkbBlob: $3 }
+  }
+| ST_PointFromWKB openb expression ',' expression closeb
+  {
+    $$ = &GeomFromWKBExpr{ Type: PointFromWKB, WkbBlob: $3, Srid: $5 }
+  }
+| ST_PointFromWKB openb expression ',' expression ',' expression closeb
+  {
+    $$ = &GeomFromWKBExpr{ Type: PointFromWKB, WkbBlob: $3, Srid: $5, AxisOrderOpt: $7 }
+  }
+| ST_PolygonFromWKB openb expression closeb
+  {
+    $$ = &GeomFromWKBExpr{ Type: PolygonFromWKB, WkbBlob: $3 }
+  }
+| ST_PolygonFromWKB openb expression ',' expression closeb
+  {
+    $$ = &GeomFromWKBExpr{ Type: PolygonFromWKB, WkbBlob: $3, Srid: $5 }
+  }
+| ST_PolygonFromWKB openb expression ',' expression ',' expression closeb
+  {
+    $$ = &GeomFromWKBExpr{ Type: PolygonFromWKB, WkbBlob: $3, Srid: $5, AxisOrderOpt: $7 }
   }
 | JSON_OBJECT openb json_object_param_opt closeb
   {
@@ -6259,8 +6505,7 @@ null_int_variable_arg:
   }
 | VALUE_ARG
   {
-    $$ = NewArgument($1[1:])
-    bindVariable(yylex, $1[1:])
+    $$ = parseBindVariable(yylex, $1[1:])
   }
 
 default_with_comma_opt:
@@ -6497,20 +6742,15 @@ func_paren_opt:
 func_datetime_precision:
   /* empty */
   {
-  	$$ = nil
+  	$$ = 0
   }
 | openb closeb
   {
-    $$ = nil
+    $$ = 0
   }
 | openb INTEGRAL closeb
   {
-  	$$ = NewIntLiteral($2)
-  }
-| openb VALUE_ARG closeb
-  {
-    $$ = NewArgument($2[1:])
-    bindVariable(yylex, $2[1:])
+      $$ = convertStringToInt($2)
   }
 
 /*
@@ -6750,8 +6990,7 @@ num_val:
   }
 | VALUE_ARG VALUES
   {
-    $$ = NewArgument($1[1:])
-    bindVariable(yylex, $1[1:])
+    $$ = parseBindVariable(yylex, $1[1:])
   }
 
 group_by_opt:
@@ -7447,6 +7686,7 @@ reserved_keyword:
 | CURRENT_DATE
 | CURRENT_TIME
 | CURRENT_TIMESTAMP
+| CURTIME
 | CURRENT_USER
 | SUBSTR
 | SUBSTRING
@@ -7548,6 +7788,7 @@ reserved_keyword:
 | SPATIAL
 | STORED
 | STRAIGHT_JOIN
+| SYSDATE
 | SYSTEM
 | TABLE
 | THEN
@@ -7895,6 +8136,24 @@ non_reserved_keyword:
 | STDDEV_POP %prec FUNCTION_CALL_NON_KEYWORD
 | STDDEV_SAMP %prec FUNCTION_CALL_NON_KEYWORD
 | STREAM
+| ST_AsBinary %prec FUNCTION_CALL_NON_KEYWORD
+| ST_AsText %prec FUNCTION_CALL_NON_KEYWORD
+| ST_GeometryCollectionFromText %prec FUNCTION_CALL_NON_KEYWORD
+| ST_GeometryFromText %prec FUNCTION_CALL_NON_KEYWORD
+| ST_LineStringFromText %prec FUNCTION_CALL_NON_KEYWORD
+| ST_MultiLineStringFromText %prec FUNCTION_CALL_NON_KEYWORD
+| ST_MultiPointFromText %prec FUNCTION_CALL_NON_KEYWORD
+| ST_MultiPolygonFromText %prec FUNCTION_CALL_NON_KEYWORD
+| ST_PointFromText %prec FUNCTION_CALL_NON_KEYWORD
+| ST_GeometryFromWKB %prec FUNCTION_CALL_NON_KEYWORD
+| ST_GeometryCollectionFromWKB %prec FUNCTION_CALL_NON_KEYWORD
+| ST_LineStringFromWKB %prec FUNCTION_CALL_NON_KEYWORD
+| ST_MultiLineStringFromWKB %prec FUNCTION_CALL_NON_KEYWORD
+| ST_MultiPointFromWKB %prec FUNCTION_CALL_NON_KEYWORD
+| ST_MultiPolygonFromWKB %prec FUNCTION_CALL_NON_KEYWORD
+| ST_PointFromWKB %prec FUNCTION_CALL_NON_KEYWORD
+| ST_PolygonFromWKB %prec FUNCTION_CALL_NON_KEYWORD
+| ST_PolygonFromText %prec FUNCTION_CALL_NON_KEYWORD
 | SUBPARTITION
 | SUBPARTITIONS
 | SUM %prec FUNCTION_CALL_NON_KEYWORD

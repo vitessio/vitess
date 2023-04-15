@@ -19,20 +19,18 @@ package evalengine
 import (
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
-	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
-type frame func(vm *VirtualMachine) int
+type frame func(env *ExpressionEnv) int
 
 type compiler struct {
-	asm              assembler
-	fields           []*querypb.Field
-	defaultCollation collations.ID
+	cfg *Config
+	asm assembler
 }
 
-type AssemblerLog interface {
+type CompilerLog interface {
 	Instruction(ins string, args ...any)
 	Stack(old, new int)
 }
@@ -41,38 +39,6 @@ type compiledCoercion struct {
 	col   collations.Collation
 	left  collations.Coercion
 	right collations.Coercion
-}
-
-type CompilerOption func(c *compiler)
-
-func WithAssemblerLog(log AssemblerLog) CompilerOption {
-	return func(c *compiler) {
-		c.asm.log = log
-	}
-}
-
-func WithDefaultCollation(collation collations.ID) CompilerOption {
-	return func(c *compiler) {
-		c.defaultCollation = collation
-	}
-}
-
-func Compile(expr Expr, fields []*querypb.Field, options ...CompilerOption) (*Program, error) {
-	comp := compiler{
-		fields:           fields,
-		defaultCollation: collations.Default(),
-	}
-	for _, opt := range options {
-		opt(&comp)
-	}
-	_, err := comp.compileExpr(expr)
-	if err != nil {
-		return nil, err
-	}
-	if comp.asm.stack.cur != 1 {
-		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "bad compilation: stack pointer at %d after compilation", comp.asm.stack.cur)
-	}
-	return &Program{code: comp.asm.ins, original: expr, stack: comp.asm.stack.max}, nil
 }
 
 type ctype struct {
@@ -106,11 +72,14 @@ func (c *compiler) compileExpr(expr Expr) (ctype, error) {
 			return ctype{}, err
 		}
 
-		t, f := expr.typeof(nil)
+		t, f := expr.typeof(nil, nil)
 		return ctype{t, f, evalCollation(expr.inner)}, nil
 
+	case *BindVariable:
+		return c.compileBindVar(expr)
+
 	case *Column:
-		return c.compileColumn(expr.Offset)
+		return c.compileColumn(expr)
 
 	case *ArithmeticExpr:
 		return c.compileArithmetic(expr)
@@ -165,56 +134,84 @@ func (c *compiler) compileExpr(expr Expr) (ctype, error) {
 	}
 }
 
-func (c *compiler) compileColumn(offset int) (ctype, error) {
-	if offset >= len(c.fields) {
-		return ctype{}, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "Missing field for column %d", offset)
+func (c *compiler) compileBindVar(bvar *BindVariable) (ctype, error) {
+	if !bvar.typed {
+		return ctype{}, c.unsupported(bvar)
 	}
 
-	field := c.fields[offset]
-	col := collations.TypedCollation{
-		Collation:    collations.ID(field.Charset),
-		Coercibility: collations.CoerceCoercible,
-		Repertoire:   collations.RepertoireASCII,
-	}
-	if col.Collation != collations.CollationBinaryID {
-		col.Repertoire = collations.RepertoireUnicode
-	}
-
-	switch tt := field.Type; {
+	switch tt := bvar.Type; {
 	case sqltypes.IsSigned(tt):
-		c.asm.PushColumn_i(offset)
+		c.asm.PushBVar_i(bvar.Key)
 	case sqltypes.IsUnsigned(tt):
-		c.asm.PushColumn_u(offset)
+		c.asm.PushBVar_u(bvar.Key)
 	case sqltypes.IsFloat(tt):
-		c.asm.PushColumn_f(offset)
+		c.asm.PushBVar_f(bvar.Key)
 	case sqltypes.IsDecimal(tt):
-		c.asm.PushColumn_d(offset)
+		c.asm.PushBVar_d(bvar.Key)
 	case sqltypes.IsText(tt):
 		if tt == sqltypes.HexNum {
-			c.asm.PushColumn_hexnum(offset)
+			c.asm.PushBVar_hexnum(bvar.Key)
 		} else if tt == sqltypes.HexVal {
-			c.asm.PushColumn_hexval(offset)
+			c.asm.PushBVar_hexval(bvar.Key)
 		} else {
-			c.asm.PushColumn_text(offset, col)
+			c.asm.PushBVar_text(bvar.Key, bvar.Collation)
 		}
 	case sqltypes.IsBinary(tt):
-		c.asm.PushColumn_bin(offset)
+		c.asm.PushBVar_bin(bvar.Key)
 	case sqltypes.IsNull(tt):
 		c.asm.PushNull()
 	case tt == sqltypes.TypeJSON:
-		c.asm.PushColumn_json(offset)
+		c.asm.PushBVar_json(bvar.Key)
 	default:
 		return ctype{}, vterrors.Errorf(vtrpc.Code_UNIMPLEMENTED, "Type is not supported: %s", tt)
 	}
 
-	var flag typeFlag
-	if (field.Flags & uint32(querypb.MySqlFlag_NOT_NULL_FLAG)) == 0 {
-		flag |= flagNullable
+	return ctype{
+		Type: bvar.Type,
+		Col:  bvar.Collation,
+	}, nil
+}
+
+func (c *compiler) compileColumn(column *Column) (ctype, error) {
+	if !column.typed {
+		return ctype{}, c.unsupported(column)
+	}
+
+	col := column.Collation
+	if col.Collation != collations.CollationBinaryID {
+		col.Repertoire = collations.RepertoireUnicode
+	}
+
+	switch tt := column.Type; {
+	case sqltypes.IsSigned(tt):
+		c.asm.PushColumn_i(column.Offset)
+	case sqltypes.IsUnsigned(tt):
+		c.asm.PushColumn_u(column.Offset)
+	case sqltypes.IsFloat(tt):
+		c.asm.PushColumn_f(column.Offset)
+	case sqltypes.IsDecimal(tt):
+		c.asm.PushColumn_d(column.Offset)
+	case sqltypes.IsText(tt):
+		if tt == sqltypes.HexNum {
+			c.asm.PushColumn_hexnum(column.Offset)
+		} else if tt == sqltypes.HexVal {
+			c.asm.PushColumn_hexval(column.Offset)
+		} else {
+			c.asm.PushColumn_text(column.Offset, col)
+		}
+	case sqltypes.IsBinary(tt):
+		c.asm.PushColumn_bin(column.Offset)
+	case sqltypes.IsNull(tt):
+		c.asm.PushNull()
+	case tt == sqltypes.TypeJSON:
+		c.asm.PushColumn_json(column.Offset)
+	default:
+		return ctype{}, vterrors.Errorf(vtrpc.Code_UNIMPLEMENTED, "Type is not supported: %s", tt)
 	}
 
 	return ctype{
-		Type: field.Type,
-		Flag: flag,
+		Type: column.Type,
+		Flag: flagNullable,
 		Col:  col,
 	}, nil
 }
@@ -230,13 +227,30 @@ func (c *compiler) compileTuple(tuple TupleExpr) (ctype, error) {
 	return ctype{Type: sqltypes.Tuple, Col: collationBinary}, nil
 }
 
-func (c *compiler) compileToNumeric(ct ctype, offset int) ctype {
+func (c *compiler) compileToNumeric(ct ctype, offset int, fallback sqltypes.Type) ctype {
 	if sqltypes.IsNumber(ct.Type) {
 		return ct
 	}
 	if ct.Type == sqltypes.VarBinary && (ct.Flag&flagHex) != 0 {
 		c.asm.Convert_hex(offset)
 		return ctype{sqltypes.Uint64, ct.Flag, collationNumeric}
+	}
+
+	if sqltypes.IsDateOrTime(ct.Type) {
+		c.asm.Convert_Ti(offset)
+		return ctype{sqltypes.Int64, ct.Flag, collationNumeric}
+	}
+
+	switch fallback {
+	case sqltypes.Int64:
+		c.asm.Convert_xi(offset)
+		return ctype{sqltypes.Int64, ct.Flag, collationNumeric}
+	case sqltypes.Uint64:
+		c.asm.Convert_xu(offset)
+		return ctype{sqltypes.Uint64, ct.Flag, collationNumeric}
+	case sqltypes.Decimal:
+		c.asm.Convert_xd(offset, 0, 0)
+		return ctype{sqltypes.Decimal, ct.Flag, collationNumeric}
 	}
 	c.asm.Convert_xf(offset)
 	return ctype{sqltypes.Float64, ct.Flag, collationNumeric}
@@ -337,6 +351,15 @@ func (c *compiler) compileNullCheck2(lt, rt ctype) *jump {
 	if lt.nullable() || rt.nullable() {
 		j := c.asm.jumpFrom()
 		c.asm.NullCheck2(j)
+		return j
+	}
+	return nil
+}
+
+func (c *compiler) compileNullCheck3(arg1, arg2, arg3 ctype) *jump {
+	if arg1.nullable() || arg2.nullable() || arg3.nullable() {
+		j := c.asm.jumpFrom()
+		c.asm.NullCheck3(j)
 		return j
 	}
 	return nil
