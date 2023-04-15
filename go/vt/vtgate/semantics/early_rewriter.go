@@ -327,67 +327,126 @@ func rewriteOrFalse(orExpr sqlparser.OrExpr) sqlparser.Expr {
 	return nil
 }
 
+// rewriteJoinUsing rewrites SQL JOINs that use the USING clause to their equivalent
+// JOINs with the ON condition. This function finds all the tables that have the
+// specified columns in the USING clause, constructs an equality predicate for
+// each pair of tables, and adds the resulting predicates to the WHERE clause
+// of the outermost SELECT statement.
+//
+// For example, given the query:
+//
+//	SELECT * FROM t1 JOIN t2 USING (col1, col2)
+//
+// The rewriteJoinUsing function will rewrite the query to:
+//
+//	SELECT * FROM t1 JOIN t2 ON (t1.col1 = t2.col1 AND t1.col2 = t2.col2)
+//
+// This function returns an error if it encounters a non-authoritative table or
+// if it cannot find a SELECT statement to add the WHERE predicate to.
 func rewriteJoinUsing(
 	current *scope,
 	using sqlparser.Columns,
 	org originable,
 ) error {
-	joinUsing := current.prepareUsingMap()
-	predicates := make([]sqlparser.Expr, 0, len(using))
-	for _, column := range using {
-		var foundTables []sqlparser.TableName
-		for _, tbl := range current.tables {
-			if !tbl.authoritative() {
-				return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "can't handle JOIN USING without authoritative tables")
-			}
-
-			currTable := tbl.getTableSet(org)
-			usingCols := joinUsing[currTable]
-			if usingCols == nil {
-				usingCols = map[string]TableSet{}
-			}
-			for _, col := range tbl.getColumns() {
-				_, found := usingCols[strings.ToLower(col.Name)]
-				if found {
-					tblName, err := tbl.Name()
-					if err != nil {
-						return err
-					}
-
-					foundTables = append(foundTables, tblName)
-					break // no need to look at other columns in this table
-				}
-			}
-		}
-		for i, lft := range foundTables {
-			for j := i + 1; j < len(foundTables); j++ {
-				rgt := foundTables[j]
-				predicates = append(predicates, &sqlparser.ComparisonExpr{
-					Operator: sqlparser.EqualOp,
-					Left:     sqlparser.NewColNameWithQualifier(column.String(), lft),
-					Right:    sqlparser.NewColNameWithQualifier(column.String(), rgt),
-				})
-			}
-		}
+	predicates, err := buildJoinPredicates(current, using, org)
+	if err != nil {
+		return err
 	}
-
-	// now, we go up the scope until we find a SELECT with a where clause we can add this predicate to
+	// now, we go up the scope until we find a SELECT
+	// with a where clause we can add this predicate to
 	for current != nil {
 		sel, found := current.stmt.(*sqlparser.Select)
-		if found {
-			if sel.Where == nil {
-				sel.Where = &sqlparser.Where{
-					Type: sqlparser.WhereClause,
-					Expr: sqlparser.AndExpressions(predicates...),
-				}
-			} else {
-				sel.Where.Expr = sqlparser.AndExpressions(append(predicates, sel.Where.Expr)...)
-			}
-			return nil
+		if !found {
+			current = current.parent
+			continue
 		}
-		current = current.parent
+		if sel.Where != nil {
+			predicates = append(predicates, sel.Where.Expr)
+			sel.Where = nil
+		}
+		sel.Where = &sqlparser.Where{
+			Type: sqlparser.WhereClause,
+			Expr: sqlparser.AndExpressions(predicates...),
+		}
+		return nil
 	}
 	return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "did not find WHERE clause")
+}
+
+// buildJoinPredicates constructs the join predicates for a given set of USING columns.
+// It returns a slice of sqlparser.Expr, each representing a join predicate for the given columns.
+func buildJoinPredicates(current *scope, using sqlparser.Columns, org originable) ([]sqlparser.Expr, error) {
+	joinUsing := current.prepareUsingMap()
+	var predicates []sqlparser.Expr
+
+	for _, column := range using {
+		foundTables, err := findTablesWithColumn(current, joinUsing, org, column)
+		if err != nil {
+			return nil, err
+		}
+
+		predicates = append(predicates, createComparisonPredicates(column, foundTables)...)
+	}
+
+	return predicates, nil
+}
+
+// findTablesWithColumn finds the tables with the specified column in the current scope.
+func findTablesWithColumn(current *scope, joinUsing map[TableSet]map[string]TableSet, org originable, column sqlparser.IdentifierCI) ([]sqlparser.TableName, error) {
+	var foundTables []sqlparser.TableName
+
+	for _, tbl := range current.tables {
+		if !tbl.authoritative() {
+			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "can't handle JOIN USING without authoritative tables")
+		}
+
+		currTable := tbl.getTableSet(org)
+		usingCols := joinUsing[currTable]
+		if usingCols == nil {
+			usingCols = map[string]TableSet{}
+		}
+
+		if hasColumnInTable(tbl, usingCols) {
+			tblName, err := tbl.Name()
+			if err != nil {
+				return nil, err
+			}
+			foundTables = append(foundTables, tblName)
+		}
+	}
+
+	return foundTables, nil
+}
+
+// hasColumnInTable checks if the specified table has the given column.
+func hasColumnInTable(tbl TableInfo, usingCols map[string]TableSet) bool {
+	for _, col := range tbl.getColumns() {
+		_, found := usingCols[strings.ToLower(col.Name)]
+		if found {
+			return true
+		}
+	}
+	return false
+}
+
+// createComparisonPredicates creates a list of comparison predicates between the given column and foundTables.
+func createComparisonPredicates(column sqlparser.IdentifierCI, foundTables []sqlparser.TableName) []sqlparser.Expr {
+	var predicates []sqlparser.Expr
+	for i, lft := range foundTables {
+		for j := i + 1; j < len(foundTables); j++ {
+			rgt := foundTables[j]
+			predicates = append(predicates, createComparisonBetween(column, lft, rgt))
+		}
+	}
+	return predicates
+}
+
+func createComparisonBetween(column sqlparser.IdentifierCI, lft, rgt sqlparser.TableName) *sqlparser.ComparisonExpr {
+	return &sqlparser.ComparisonExpr{
+		Operator: sqlparser.EqualOp,
+		Left:     sqlparser.NewColNameWithQualifier(column.String(), lft),
+		Right:    sqlparser.NewColNameWithQualifier(column.String(), rgt),
+	}
 }
 
 func (r *earlyRewriter) expandTableColumns(
