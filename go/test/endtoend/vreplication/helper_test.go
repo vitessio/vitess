@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"os/exec"
 	"regexp"
 	"sort"
@@ -639,4 +640,35 @@ func verifyCopyStateIsOptimized(t *testing.T, tablet *cluster.VttabletProcess) {
 			time.Sleep(defaultTick)
 		}
 	}
+}
+
+func setBinlogRowImageMode(t *testing.T, vc *VitessCluster, mode string) {
+	const ExtraCnf = "EXTRA_MY_CNF"
+	const BinlogRowImageCnf = "binlog-row-image.cnf"
+
+	// remove any existing extra cnfs for binlog row image
+	extraCnf := os.Getenv(ExtraCnf)
+	cnfs := strings.Split(extraCnf, ":")
+	var newCnfs []string
+	for _, cnf := range cnfs {
+		if !strings.Contains(cnf, BinlogRowImageCnf) {
+			newCnfs = append(newCnfs, cnf)
+		}
+	}
+
+	// if specified add extra cnf for binlog row image, otherwise we will have reverted any previous specification
+	if mode != "" {
+		cnfFilePath := fmt.Sprintf("%s/%s", vc.ClusterConfig.tmpDir, BinlogRowImageCnf)
+		f, err := os.Create(cnfFilePath)
+		require.NoError(t, err)
+		_, err = f.WriteString(fmt.Sprintf("\nbinlog_row_image='%s'\n", mode))
+		require.NoError(t, err)
+		err = f.Close()
+		require.NoError(t, err)
+
+		newCnfs = append(newCnfs, cnfFilePath)
+	}
+	err := os.Setenv(ExtraCnf, strings.Join(newCnfs, ":"))
+	require.NoError(t, err)
+	log.Infof("Setting extracnf to %s", os.Getenv(ExtraCnf))
 }

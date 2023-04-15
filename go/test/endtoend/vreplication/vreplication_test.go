@@ -567,6 +567,8 @@ func TestCellAliasVreplicationWorkflow(t *testing.T) {
 	keyspace := "product"
 	shard := "0"
 
+	setBinlogRowImageMode(t, vc, "noblob")
+	defer setBinlogRowImageMode(t, vc, "")
 	defer vc.TearDown(t)
 
 	cell1 := vc.Cells["zone1"]

@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"math"
 	"os"
-	"path"
 	"strconv"
 	"strings"
 	"sync"
@@ -31,8 +30,6 @@ import (
 	"github.com/nsf/jsondiff"
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/vt/dbconfigs"
-
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
@@ -40,34 +37,6 @@ import (
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	qh "vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication/queryhistory"
 )
-
-func allowNoBlob2(t *testing.T) func() {
-	extraMyCnf := path.Join("/tmp", "binlog.cnf")
-	f, err := os.Create(extraMyCnf)
-	require.NoError(t, err)
-	_, err = f.WriteString("\nbinlog_row_image=noblob\n")
-	require.NoError(t, err)
-	err = f.Close()
-	require.NoError(t, err)
-	err = os.Setenv("EXTRA_MY_CNF", extraMyCnf)
-	require.NoError(t, err)
-	return func() {
-		os.Setenv("EXTRA_MY_CNF", "")
-	}
-}
-
-func allowNoBlob(t *testing.T) func() {
-	externalConfig := map[string]*dbconfigs.DBConfigs{
-		"exta": env.Dbcfgs,
-		"extb": env.Dbcfgs,
-	}
-	env.Mysqld.ExecuteSuperQuery(context.Background(), "set @@global.binlog_row_image=noblob")
-	playerEngine = NewTestEngine(env.TopoServ, env.Cells[0], env.Mysqld, realDBClientFactory, realDBClientFactory, vrepldb, externalConfig)
-	playerEngine.Open(context.Background())
-	return func() {
-
-	}
-}
 
 func TestPlayerInvisibleColumns(t *testing.T) {
 	if !supportsInvisibleColumns() {
