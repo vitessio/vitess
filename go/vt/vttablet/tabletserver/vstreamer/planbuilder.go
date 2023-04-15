@@ -448,7 +448,6 @@ func analyzeSelect(query string) (sel *sqlparser.Select, fromTable sqlparser.Ide
 	if len(sel.From) > 1 {
 		return nil, fromTable, fmt.Errorf("unsupported: %v", sqlparser.String(sel))
 	}
-
 	node, ok := sel.From[0].(*sqlparser.AliasedTableExpr)
 	if !ok {
 		return nil, fromTable, fmt.Errorf("unsupported: %v", sqlparser.String(sel))

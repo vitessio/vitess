@@ -2227,7 +2227,7 @@ func expectLog(ctx context.Context, t *testing.T, input any, ch <-chan []*binlog
 				}
 				want = env.RemoveAnyDeprecatedDisplayWidths(want)
 				if got := fmt.Sprintf("%v", evs[i]); got != want {
-					//log.Errorf("\n%v (%d): event:\n%q, want\n%q", input, i, got, want)
+					log.Errorf("\n%v (%d): event:\n%q, want\n%q", input, i, got, want)
 					t.Fatalf("%v (%d): event:\n%q, want\n%q", input, i, got, want)
 				}
 			}

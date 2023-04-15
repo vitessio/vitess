@@ -174,7 +174,6 @@ func (te *Env) SetVSchema(vs string) error {
 // if the display width is less than the type width (8.0 no longer supports the 2 digit YEAR). So if the
 // test is running against MySQL 8.0 or later then you should use this function to replace e.g.
 // `int([0-9]*)` with `int` in the expected results string that we define in the test.
-
 func (te *Env) RemoveAnyDeprecatedDisplayWidths(orig string) string {
 	if te.DBType != string(mysqlctl.FlavorMySQL) || te.DBMajorVersion < 8 {
 		return orig

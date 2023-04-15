@@ -667,6 +667,7 @@ func setBinlogRowImageMode(t *testing.T, vc *VitessCluster, mode string) {
 		require.NoError(t, err)
 
 		newCnfs = append(newCnfs, cnfFilePath)
+		log.Infof("Using binlog row image %s", mode)
 	}
 	err := os.Setenv(ExtraCnf, strings.Join(newCnfs, ":"))
 	require.NoError(t, err)

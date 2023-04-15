@@ -415,7 +415,6 @@ func (tp *TablePlan) getPartialUpdateQuery(dataColumns *binlogdatapb.Bitmap) (*s
 	key := fmt.Sprintf("%x", dataColumns.Cols)
 	upd, ok := tp.PartialUpdates[key]
 	if ok {
-		log.Infof("Found key:%s, query: %s", key, upd.Query)
 		return upd, nil
 	}
 	upd = tp.TablePlanBuilder.createPartialUpdateQuery(dataColumns)
@@ -423,7 +422,6 @@ func (tp *TablePlan) getPartialUpdateQuery(dataColumns *binlogdatapb.Bitmap) (*s
 		return upd, vterrors.New(vtrpcpb.Code_INTERNAL, fmt.Sprintf("Unable to create partial update query for %s", tp.TargetName))
 	}
 	tp.PartialUpdates[key] = upd
-	log.Infof("Generated key:%s, query: %s", key, upd.Query)
 	return upd, nil
 }
 
@@ -434,19 +432,14 @@ func (tp *TablePlan) removeNullColumns(query string, dataColumns *binlogdatapb.B
 	var i int64
 	for colNum := int64(0); colNum < dataColumns.Count; colNum++ {
 		if tp.PKIndices[colNum] {
-			log.Infof("PK: %d", colNum)
 			numPKs++
 			continue
 		}
 		byteIndex := colNum / 8
 		bitMask := byte(1 << (uint(colNum) & 0x7))
 		isPresent := dataColumns.Cols[byteIndex]&bitMask > 0
-		log.Infof(">>> byteIndex %q, bitMask %q, nc %q", byteIndex, bitMask, dataColumns.Cols)
 		if !isPresent {
-			log.Infof("col to remove %d", colNum)
 			colsToRemove = append(colsToRemove, i)
-		} else {
-			log.Infof("col NOT to remove %d", colNum)
 		}
 		i++
 	}
