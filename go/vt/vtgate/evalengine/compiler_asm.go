@@ -1080,12 +1080,12 @@ func (asm *assembler) Convert_xD(offset int) {
 	}, "CONV (SP-%d), DATE", offset)
 }
 
-func (asm *assembler) Convert_xDT(offset int) {
+func (asm *assembler) Convert_xDT(offset, prec int) {
 	asm.emit(func(env *ExpressionEnv) int {
 		// Need to explicitly check here or we otherwise
 		// store a nil wrapper in an interface vs. a direct
 		// nil.
-		dt := evalToDateTime(env.vm.stack[env.vm.sp-offset])
+		dt := evalToDateTime(env.vm.stack[env.vm.sp-offset], prec)
 		if dt == nil {
 			env.vm.stack[env.vm.sp-offset] = nil
 		} else {
@@ -1095,12 +1095,12 @@ func (asm *assembler) Convert_xDT(offset int) {
 	}, "CONV (SP-%d), DATETIME", offset)
 }
 
-func (asm *assembler) Convert_xDT_nz(offset int) {
+func (asm *assembler) Convert_xDT_nz(offset, prec int) {
 	asm.emit(func(env *ExpressionEnv) int {
 		// Need to explicitly check here or we otherwise
 		// store a nil wrapper in an interface vs. a direct
 		// nil.
-		dt := evalToDateTime(env.vm.stack[env.vm.sp-offset])
+		dt := evalToDateTime(env.vm.stack[env.vm.sp-offset], prec)
 		if dt == nil || dt.isZero() {
 			env.vm.stack[env.vm.sp-offset] = nil
 		} else {
@@ -1110,9 +1110,9 @@ func (asm *assembler) Convert_xDT_nz(offset int) {
 	}, "CONV (SP-%d), DATETIME(NOZERO)", offset)
 }
 
-func (asm *assembler) Convert_xT(offset int) {
+func (asm *assembler) Convert_xT(offset, prec int) {
 	asm.emit(func(env *ExpressionEnv) int {
-		t := evalToTime(env.vm.stack[env.vm.sp-offset])
+		t := evalToTime(env.vm.stack[env.vm.sp-offset], prec)
 		if t == nil {
 			env.vm.stack[env.vm.sp-offset] = nil
 		} else {
@@ -1120,6 +1120,14 @@ func (asm *assembler) Convert_xT(offset int) {
 		}
 		return 1
 	}, "CONV (SP-%d), TIME", offset)
+}
+
+func (asm *assembler) Convert_tp(offset, prec int) {
+	asm.emit(func(env *ExpressionEnv) int {
+		arg := env.vm.stack[env.vm.sp-offset].(*evalTemporal)
+		arg.prec = uint8(prec)
+		return 1
+	}, "CONV (SP-%d), PRECISION", offset)
 }
 
 func (asm *assembler) Div_dd() {
@@ -3100,7 +3108,7 @@ func (asm *assembler) Fn_DATE_FORMAT(col collations.TypedCollation) {
 		r := env.vm.stack[env.vm.sp-1].(*evalBytes)
 
 		var d []byte
-		d, env.vm.err = datetime.Format(r.string(), l.dt, datetime.DefaultPrecision)
+		d, env.vm.err = datetime.Format(r.string(), l.dt, l.prec)
 		env.vm.stack[env.vm.sp-2] = env.vm.arena.newEvalText(d, col)
 		env.vm.sp--
 		return 1

@@ -136,16 +136,16 @@ func (b *builtinDateFormat) eval(env *ExpressionEnv) (eval, error) {
 	var t *evalTemporal
 	switch e := date.(type) {
 	case *evalTemporal:
-		t = e.toDateTime()
+		t = e.toDateTime(-1)
 	default:
-		t = evalToDateTime(date)
+		t = evalToDateTime(date, -1)
 		if t == nil || t.isZero() {
 			return nil, nil
 		}
 	}
 
 	f := evalToBinary(format)
-	d, err := datetime.Format(f.string(), t.dt, datetime.DefaultPrecision)
+	d, err := datetime.Format(f.string(), t.dt, t.prec)
 	if err != nil {
 		return nil, err
 	}

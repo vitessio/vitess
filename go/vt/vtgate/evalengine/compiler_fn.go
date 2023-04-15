@@ -939,7 +939,7 @@ func (c *compiler) compileFn_DateFormat(call *builtinDateFormat) (ctype, error) 
 	switch arg.Type {
 	case sqltypes.Datetime, sqltypes.Date:
 	default:
-		c.asm.Convert_xDT_nz(1)
+		c.asm.Convert_xDT_nz(1, -1)
 	}
 
 	format, err := c.compileExpr(call.Arguments[1])
@@ -949,7 +949,7 @@ func (c *compiler) compileFn_DateFormat(call *builtinDateFormat) (ctype, error) 
 
 	skip2 := c.compileNullCheck1r(format)
 
-	switch arg.Type {
+	switch format.Type {
 	case sqltypes.VarChar, sqltypes.VarBinary:
 	default:
 		c.asm.Convert_xb(1, sqltypes.VarBinary, 0, false)

@@ -54,7 +54,7 @@ func (t Time) AppendFormat(b []byte, prec uint8) []byte {
 	b = appendInt(b, t.Minute(), 2)
 	b = append(b, ':')
 	b = appendInt(b, t.Second(), 2)
-	if prec > 0 && t.Nanosecond() != 0 {
+	if prec > 0 {
 		b = append(b, '.')
 		b = appendNsec(b, t.Nanosecond(), int(prec))
 	}
@@ -110,6 +110,16 @@ func (t Time) Second() int {
 
 func (t Time) Nanosecond() int {
 	return int(t.nanosecond)
+}
+
+func (t Time) Precision() int {
+	prec := 0
+	mod := uint32(1000000)
+	for ns := t.nanosecond / 1000; ns > 0; ns %= mod {
+		mod /= 10
+		prec++
+	}
+	return prec
 }
 
 func (t Time) Neg() bool {

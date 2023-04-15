@@ -308,6 +308,9 @@ func ParseDateTimeInt64(i int64) (dt DateTime, ok bool) {
 }
 
 func ParseDateTimeFloat(f float64) (DateTime, bool) {
+	if f == 0.0 {
+		return DateTime{}, true
+	}
 	i, frac := math.Modf(f)
 	dt, ok := ParseDateTimeInt64(int64(i))
 	dt.Time.nanosecond = uint32(frac * 1e9)
@@ -315,11 +318,17 @@ func ParseDateTimeFloat(f float64) (DateTime, bool) {
 }
 
 func ParseDateFloat(f float64) (Date, bool) {
+	if f == 0.0 {
+		return Date{}, true
+	}
 	i, _ := math.Modf(f)
 	return ParseDateInt64(int64(i))
 }
 
 func ParseDateTimeDecimal(d decimal.Decimal) (DateTime, bool) {
+	if d.IsZero() {
+		return DateTime{}, true
+	}
 	id, frac := d.QuoRem(decimal.New(1, 0), 0)
 	i, _ := id.Int64()
 	dt, ok := ParseDateTimeInt64(i)
@@ -331,7 +340,33 @@ func ParseDateTimeDecimal(d decimal.Decimal) (DateTime, bool) {
 }
 
 func ParseDateDecimal(d decimal.Decimal) (Date, bool) {
+	if d.IsZero() {
+		return Date{}, true
+	}
 	id, _ := d.QuoRem(decimal.New(1, 0), 0)
 	i, _ := id.Int64()
 	return ParseDateInt64(i)
+}
+
+func ParseTimeFloat(f float64) (Time, bool) {
+	if f == 0.0 {
+		return Time{}, true
+	}
+	i, frac := math.Modf(f)
+	t, ok := ParseTimeInt64(int64(i))
+	t.nanosecond = uint32(math.Abs(frac * 1e9))
+	return t, ok
+}
+
+func ParseTimeDecimal(d decimal.Decimal) (Time, bool) {
+	if d.IsZero() {
+		return Time{}, true
+	}
+	id, frac := d.QuoRem(decimal.New(1, 0), 0)
+	i, _ := id.Int64()
+
+	t, ok := ParseTimeInt64(i)
+	rem, _ := frac.Abs().Mul(decimal.New(1e9, 0)).Int64()
+	t.nanosecond = uint32(rem)
+	return t, ok
 }

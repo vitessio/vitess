@@ -120,7 +120,7 @@ func (c *ConvertExpr) eval(env *ExpressionEnv) (eval, error) {
 	case "JSON":
 		return evalToJSON(e)
 	case "DATETIME":
-		if dt := evalToDateTime(e); dt != nil {
+		if dt := evalToDateTime(e, c.Length); dt != nil {
 			return dt, nil
 		}
 		return nil, nil
@@ -130,7 +130,7 @@ func (c *ConvertExpr) eval(env *ExpressionEnv) (eval, error) {
 		}
 		return nil, nil
 	case "TIME":
-		if t := evalToTime(e); t != nil {
+		if t := evalToTime(e, c.Length); t != nil {
 			return t, nil
 		}
 		return nil, nil

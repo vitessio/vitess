@@ -142,8 +142,3 @@ func (f *Strftime) Parse(s string) (DateTime, bool) {
 	t, s, ok := f.parse(s)
 	return t, ok && len(s) == 0
 }
-
-func (f *Strftime) ParseBestEffort(s string) (DateTime, bool) {
-	t, _, ok := f.parse(s)
-	return t, ok
-}
