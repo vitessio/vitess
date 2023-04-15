@@ -212,6 +212,9 @@ type TablePlan struct {
 	FieldsToSkip            map[string]bool
 	ConvertCharset          map[string](*binlogdatapb.CharsetConversion)
 	HasExtraSourcePkColumns bool
+
+	TablePlanBuilder *tablePlanBuilder
+	PartialUpdates   map[string]*sqlparser.ParsedQuery
 }
 
 // MarshalJSON performs a custom JSON Marshalling.
@@ -358,6 +361,73 @@ func (tp *TablePlan) bindFieldVal(field *querypb.Field, val *sqltypes.Value) (*q
 	return sqltypes.ValueBindVariable(*val), nil
 }
 
+func isBitSet(data []byte, index int) bool {
+	byteIndex := index / 8
+	bitMask := byte(1 << (uint(index) & 0x7))
+	return data[byteIndex]&bitMask > 0
+}
+
+func (tpb *tablePlanBuilder) createPartialUpdateQuery(dataColumns *binlogdatapb.Bitmap) *sqlparser.ParsedQuery {
+	bvf := &bindvarFormatter{}
+	buf := sqlparser.NewTrackedBuffer(bvf.formatter)
+	buf.Myprintf("update %v set ", tpb.name)
+	separator := ""
+	for i, cexpr := range tpb.colExprs {
+		if cexpr.isPK {
+			continue
+		}
+		if tpb.isColumnGenerated(cexpr.colName) {
+			continue
+		}
+		if int64(i) >= dataColumns.Count {
+			log.Errorf("Ran out of columns trying to generate query for %s", tpb.name.CompliantName())
+			return nil
+		}
+		if !isBitSet(dataColumns.Cols, i) {
+			continue
+		}
+		buf.Myprintf("%s%v=", separator, cexpr.colName)
+		separator = ", "
+		switch cexpr.operation {
+		case opExpr:
+			bvf.mode = bvAfter
+			switch cexpr.colType {
+			case querypb.Type_JSON:
+				buf.Myprintf("%v", cexpr.expr)
+			case querypb.Type_DATETIME:
+				sourceTZ := tpb.source.SourceTimeZone
+				targetTZ := tpb.source.TargetTimeZone
+				if sourceTZ != "" && targetTZ != "" {
+					buf.Myprintf("convert_tz(%v, '%s', '%s')", cexpr.expr, sourceTZ, targetTZ)
+				} else {
+					buf.Myprintf("%v", cexpr.expr)
+				}
+			default:
+				buf.Myprintf("%v", cexpr.expr)
+			}
+		}
+	}
+	tpb.generateWhere(buf, bvf)
+	return buf.ParsedQuery()
+}
+
+func (tp *TablePlan) getPartialUpdateQuery(dataColumns *binlogdatapb.Bitmap) (*sqlparser.ParsedQuery, error) {
+	key := fmt.Sprintf("%x", dataColumns.Cols)
+	upd, ok := tp.PartialUpdates[key]
+	if ok {
+		log.Infof("Found key:%s, query: %s", key, upd.Query)
+		return upd, nil
+	}
+	upd = tp.TablePlanBuilder.createPartialUpdateQuery(dataColumns)
+	if upd == nil {
+		return upd, vterrors.New(vtrpcpb.Code_INTERNAL, fmt.Sprintf("Unable to create partial update query for %s", tp.TargetName))
+	}
+	tp.PartialUpdates[key] = upd
+	log.Infof("Generated key:%s, query: %s", key, upd.Query)
+	return upd, nil
+}
+
+// unused now, was the initial non-optimal implementation, to be removed before PR
 func (tp *TablePlan) removeNullColumns(query string, dataColumns *binlogdatapb.Bitmap) (string, error) {
 	var colsToRemove []int64
 	var numPKs int64
@@ -452,15 +522,24 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 			if vttablet.BinlogRowImageFullOnly || rowChange.DataColumns == nil || rowChange.DataColumns.Count == 0 {
 				return execParsedQuery(tp.Update, bindvars, executor)
 			} else {
-				updateQuery, err := getQuery(tp.Update, bindvars)
-				if err != nil {
-					return nil, err
+				if true {
+					upd, err := tp.getPartialUpdateQuery(rowChange.DataColumns)
+					if err != nil {
+						return nil, err
+					}
+					return execParsedQuery(upd, bindvars, executor)
+				} else {
+					// unused now, was the initial non-optimal implementation, to be removed before PR
+					updateQuery, err := getQuery(tp.Update, bindvars)
+					if err != nil {
+						return nil, err
+					}
+					newUpdateQuery, err := tp.removeNullColumns(updateQuery, rowChange.DataColumns)
+					if err != nil {
+						return nil, err
+					}
+					return executor(newUpdateQuery)
 				}
-				newUpdateQuery, err := tp.removeNullColumns(updateQuery, rowChange.DataColumns)
-				if err != nil {
-					return nil, err
-				}
-				return executor(newUpdateQuery)
 			}
 		}
 		if tp.Delete != nil {

@@ -262,7 +262,7 @@ func TestVreplicationCopyThrottling(t *testing.T) {
 func TestBasicVreplicationWorkflow(t *testing.T) {
 	sourceKsOpts["DBTypeVersion"] = "mysql-5.7"
 	targetKsOpts["DBTypeVersion"] = "mysql-5.7"
-	testBasicVreplicationWorkflow(t)
+	testBasicVreplicationWorkflow(t, "noblob")
 }
 
 func TestVreplicationCopyParallel(t *testing.T) {
@@ -271,14 +271,14 @@ func TestVreplicationCopyParallel(t *testing.T) {
 	extraVTTabletArgs = []string{
 		parallelInsertWorkers,
 	}
-	testBasicVreplicationWorkflow(t)
+	testBasicVreplicationWorkflow(t, "")
 }
 
-func testBasicVreplicationWorkflow(t *testing.T) {
-	testVreplicationWorkflows(t, false)
+func testBasicVreplicationWorkflow(t *testing.T, binlogRowImage string) {
+	testVreplicationWorkflows(t, false, binlogRowImage)
 }
 
-func testVreplicationWorkflows(t *testing.T, minimal bool) {
+func testVreplicationWorkflows(t *testing.T, limited bool, binlogRowImage string) {
 	defaultCellName := "zone1"
 	allCells := []string{"zone1"}
 	allCellNames = "zone1"
@@ -290,6 +290,10 @@ func testVreplicationWorkflows(t *testing.T, minimal bool) {
 	defaultRdonly = 0
 	defer func() { defaultReplicas = 1 }()
 
+	if binlogRowImage != "" {
+		setBinlogRowImageMode(t, vc, binlogRowImage)
+		defer setBinlogRowImageMode(t, vc, "")
+	}
 	defer vc.TearDown(t)
 
 	defaultCell = vc.Cells[defaultCellName]
@@ -313,7 +317,7 @@ func testVreplicationWorkflows(t *testing.T, minimal bool) {
 	shardOrders(t)
 	shardMerchant(t)
 
-	if minimal {
+	if limited {
 		return
 	}
 
@@ -347,7 +351,7 @@ func testVreplicationWorkflows(t *testing.T, minimal bool) {
 func TestV2WorkflowsAcrossDBVersions(t *testing.T) {
 	sourceKsOpts["DBTypeVersion"] = "mysql-5.7"
 	targetKsOpts["DBTypeVersion"] = "mysql-8.0"
-	testBasicVreplicationWorkflow(t)
+	testBasicVreplicationWorkflow(t, "")
 }
 
 // TestMoveTablesMariaDBToMySQL tests that MoveTables works between a MariaDB source
@@ -356,7 +360,7 @@ func TestV2WorkflowsAcrossDBVersions(t *testing.T) {
 func TestMoveTablesMariaDBToMySQL(t *testing.T) {
 	sourceKsOpts["DBTypeVersion"] = "mariadb-10.10"
 	targetKsOpts["DBTypeVersion"] = "mysql-8.0"
-	testVreplicationWorkflows(t, true /* only do MoveTables */)
+	testVreplicationWorkflows(t, true /* only do MoveTables */, "")
 }
 
 func TestMultiCellVreplicationWorkflow(t *testing.T) {

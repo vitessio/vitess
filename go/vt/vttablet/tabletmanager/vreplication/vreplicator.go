@@ -196,6 +196,30 @@ func (vr *vreplicator) Replicate(ctx context.Context) error {
 	return err
 }
 
+func (vr *vreplicator) validateBinlogRowImage() error {
+	rs, err := vr.dbClient.Execute("select @@binlog_row_image")
+	if err != nil {
+		return err
+	}
+	if len(rs.Rows) != 1 {
+		return vterrors.New(vtrpcpb.Code_INTERNAL, fmt.Sprintf("'select @@binlog_row_image' returns an invalid result: %+v", rs.Rows))
+	}
+
+	binlogRowImage := strings.ToLower(rs.Rows[0][0].ToString())
+	switch binlogRowImage {
+	case "minimal":
+		return vterrors.New(vtrpcpb.Code_INTERNAL, "minimal binlog_row_image is not supported by Vitess VReplication")
+	case "noblob":
+		switch binlogdatapb.VReplicationWorkflowType(vr.WorkflowType) {
+		case binlogdatapb.VReplicationWorkflowType_MoveTables, binlogdatapb.VReplicationWorkflowType_Reshard:
+		default:
+			return vterrors.New(vtrpcpb.Code_INTERNAL, "noblob binlog_row_image is only supported for MoveTables/Reshard")
+		}
+	default:
+	}
+	return nil
+}
+
 func (vr *vreplicator) replicate(ctx context.Context) error {
 	// Manage SQL_MODE in the same way that mysqldump does.
 	// Save the original sql_mode, set it to a permissive mode,
@@ -231,6 +255,11 @@ func (vr *vreplicator) replicate(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
+
+		if err := vr.validateBinlogRowImage(); err != nil {
+			return err
+		}
+
 		// If any of the operations below changed state to Stopped or Error, we should return.
 		if settings.State == binlogplayer.BlpStopped || settings.State == binlogplayer.BlpError {
 			return nil

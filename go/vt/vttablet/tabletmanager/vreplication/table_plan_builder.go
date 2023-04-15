@@ -362,7 +362,9 @@ func (tpb *tablePlanBuilder) generate() *TablePlan {
 		PKIndices:               tpb.pkIndices,
 		Stats:                   tpb.stats,
 		FieldsToSkip:            fieldsToSkip,
-		HasExtraSourcePkColumns: (len(tpb.extraSourcePkCols) > 0),
+		HasExtraSourcePkColumns: len(tpb.extraSourcePkCols) > 0,
+		TablePlanBuilder:        tpb,
+		PartialUpdates:          make(map[string]*sqlparser.ParsedQuery, 0),
 	}
 }
 

@@ -2870,8 +2870,8 @@ func TestPlayerBlob(t *testing.T) {
 
 	defer deleteTablet(addTablet(100))
 	execStatements(t, []string{
-		"create table t1(id int, val varchar(20), blb blob, primary key(id))",
-		fmt.Sprintf("create table %s.t1(id int, val varchar(20), blb blob, primary key(id))", vrepldb),
+		"create table t1(id int, val1 varchar(20), blb1 blob, id2 int, blb2 longblob, val2 varbinary(10), primary key(id))",
+		fmt.Sprintf("create table %s.t1(id int, val1 varchar(20), blb1 blob, id2 int, blb2 longblob, val2 varbinary(10), primary key(id))", vrepldb),
 	})
 	defer execStatements(t, []string{
 		"drop table t1",
@@ -2900,18 +2900,39 @@ func TestPlayerBlob(t *testing.T) {
 		table  string
 		data   [][]string
 	}{{
-		input:  "insert into t1(id,val,blb) values (1,'aaa','blb1')",
-		output: "insert into t1(id,val,blb) values (1,'aaa','blb1')",
+		input:  "insert into t1(id,val1,blb1,id2,val2,blb2) values (1,'aaa','blb1',10,'AAA','blb2')",
+		output: "insert into t1(id,val1,blb1,id2,blb2,val2) values (1,'aaa','blb1',10,'blb2','AAA')",
 		table:  "t1",
 		data: [][]string{
-			{"1", "aaa", "blb1"},
+			{"1", "aaa", "blb1", "10", "blb2", "AAA"},
 		},
 	}, {
-		input:  "update t1 set val = 'bbb' where id = 1",
-		output: "update t1 set val = 'bbb' where id = 1",
+		input:  "update t1 set val1 = 'bbb' where id = 1",
+		output: "update t1 set val1='bbb', id2=10, val2='AAA' where id=1",
 		table:  "t1",
 		data: [][]string{
-			{"1", "bbb", "blb1"},
+			{"1", "bbb", "blb1", "10", "blb2", "AAA"},
+		},
+	}, {
+		input:  "update t1 set val2 = 'CCC', id2=99 where id = 1",
+		output: "update t1 set val1='bbb', id2=99, val2='CCC' where id=1",
+		table:  "t1",
+		data: [][]string{
+			{"1", "bbb", "blb1", "99", "blb2", "CCC"},
+		},
+	}, {
+		input:  "update t1 set blb2 = 'blb22' where id = 1",
+		output: "update t1 set val1='bbb', id2=99, blb2='blb22', val2='CCC' where id=1",
+		table:  "t1",
+		data: [][]string{
+			{"1", "bbb", "blb1", "99", "blb22", "CCC"},
+		},
+	}, {
+		input:  "update t1 set blb2 = 'blb222', blb1 = 'blb11' where id = 1",
+		output: "update t1 set val1='bbb', blb1='blb11', id2=99, blb2='blb222', val2='CCC' where id=1",
+		table:  "t1",
+		data: [][]string{
+			{"1", "bbb", "blb11", "99", "blb222", "CCC"},
 		},
 	}}
 
