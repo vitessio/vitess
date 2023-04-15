@@ -368,10 +368,7 @@ func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error)
 		stats.Component(backupstats.BackupEngine),
 		stats.Implementation(titleCase(backupEngineImplementation)),
 	)
-	manifest, err := re.ExecuteRestore(ctx, reParams, bh)
-	if err != nil {
-		return nil, err
-	}
+	manifest, restoreErr := re.ExecuteRestore(ctx, reParams, bh)
 
 	// mysqld needs to be running in order for mysql_upgrade to work.
 	// If we've just restored from a backup from previous MySQL version then mysqld
@@ -402,6 +399,13 @@ func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error)
 	err = params.Mysqld.Start(context.Background(), params.Cnf)
 	if err != nil {
 		return nil, err
+	}
+
+	// if we got restore error then after restarting MYSQL we should return back with error
+	// This is to ensure we bring replica back to its original state. But we won't remove
+	// sentinel file to indicate that restore failed.
+	if restoreErr != nil {
+		return nil, restoreErr
 	}
 
 	if handles := restorePath.IncrementalBackupHandles(); len(handles) > 0 {
