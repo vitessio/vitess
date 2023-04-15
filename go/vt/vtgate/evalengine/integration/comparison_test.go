@@ -81,7 +81,7 @@ func normalizeValue(v sqltypes.Value, coll collations.ID) sqltypes.Value {
 	return v
 }
 
-func compareRemoteExprEnv(t *testing.T, env *evalengine.ExpressionEnv, conn *mysql.Conn, expr string, fields []*querypb.Field) {
+func compareRemoteExprEnv(t *testing.T, env *evalengine.ExpressionEnv, conn *mysql.Conn, expr string, fields []*querypb.Field, exact bool) {
 	t.Helper()
 
 	localQuery := "SELECT " + expr
@@ -180,7 +180,7 @@ func compareRemoteExprEnv(t *testing.T, env *evalengine.ExpressionEnv, conn *mys
 		}
 	}
 
-	if err := compareResult(localErr, remoteErr, localVal, remoteVal, localCollation, remoteCollation, decimals); err != nil {
+	if err := compareResult(localErr, remoteErr, localVal, remoteVal, localCollation, remoteCollation, decimals, exact); err != nil {
 		t.Errorf("%s\nquery: %s (SIMPLIFY=%v)\nrow: %v", err, localQuery, debugSimplify, env.Row)
 	} else if debugPrintAll {
 		t.Logf("local=%s mysql=%s\nquery: %s\nrow: %v", localVal.String(), remoteVal.String(), localQuery, env.Row)
@@ -244,9 +244,9 @@ func TestMySQL(t *testing.T) {
 				Username: "vt_dba",
 			})
 			env := evalengine.NewExpressionEnv(ctx, nil, &vcursor{})
-			tc.Run(func(query string, row []sqltypes.Value) {
+			tc.Run(func(query string, row []sqltypes.Value, exact bool) {
 				env.Row = row
-				compareRemoteExprEnv(t, env, conn, query, tc.Schema)
+				compareRemoteExprEnv(t, env, conn, query, tc.Schema, exact)
 			})
 		})
 	}

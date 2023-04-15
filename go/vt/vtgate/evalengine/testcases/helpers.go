@@ -25,7 +25,7 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
-type Query func(query string, row []sqltypes.Value)
+type Query func(query string, row []sqltypes.Value, exact bool)
 type Runner func(yield Query)
 type TestCase struct {
 	Run    Runner

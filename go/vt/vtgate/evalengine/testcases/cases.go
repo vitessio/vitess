@@ -106,18 +106,18 @@ var Cases = []TestCase{
 
 func JSONPathOperations(yield Query) {
 	for _, obj := range inputJSONObjects {
-		yield(fmt.Sprintf("JSON_KEYS('%s')", obj), nil)
+		yield(fmt.Sprintf("JSON_KEYS('%s')", obj), nil, true)
 
 		for _, path1 := range inputJSONPaths {
-			yield(fmt.Sprintf("JSON_EXTRACT('%s', '%s')", obj, path1), nil)
-			yield(fmt.Sprintf("JSON_CONTAINS_PATH('%s', 'one', '%s')", obj, path1), nil)
-			yield(fmt.Sprintf("JSON_CONTAINS_PATH('%s', 'all', '%s')", obj, path1), nil)
-			yield(fmt.Sprintf("JSON_KEYS('%s', '%s')", obj, path1), nil)
+			yield(fmt.Sprintf("JSON_EXTRACT('%s', '%s')", obj, path1), nil, true)
+			yield(fmt.Sprintf("JSON_CONTAINS_PATH('%s', 'one', '%s')", obj, path1), nil, true)
+			yield(fmt.Sprintf("JSON_CONTAINS_PATH('%s', 'all', '%s')", obj, path1), nil, true)
+			yield(fmt.Sprintf("JSON_KEYS('%s', '%s')", obj, path1), nil, true)
 
 			for _, path2 := range inputJSONPaths {
-				yield(fmt.Sprintf("JSON_EXTRACT('%s', '%s', '%s')", obj, path1, path2), nil)
-				yield(fmt.Sprintf("JSON_CONTAINS_PATH('%s', 'one', '%s', '%s')", obj, path1, path2), nil)
-				yield(fmt.Sprintf("JSON_CONTAINS_PATH('%s', 'all', '%s', '%s')", obj, path1, path2), nil)
+				yield(fmt.Sprintf("JSON_EXTRACT('%s', '%s', '%s')", obj, path1, path2), nil, true)
+				yield(fmt.Sprintf("JSON_CONTAINS_PATH('%s', 'one', '%s', '%s')", obj, path1, path2), nil, true)
+				yield(fmt.Sprintf("JSON_CONTAINS_PATH('%s', 'all', '%s', '%s')", obj, path1, path2), nil, true)
 			}
 		}
 	}
@@ -125,21 +125,21 @@ func JSONPathOperations(yield Query) {
 
 func JSONArray(yield Query) {
 	for _, a := range inputJSONPrimitives {
-		yield(fmt.Sprintf("JSON_ARRAY(%s)", a), nil)
+		yield(fmt.Sprintf("JSON_ARRAY(%s)", a), nil, true)
 		for _, b := range inputJSONPrimitives {
-			yield(fmt.Sprintf("JSON_ARRAY(%s, %s)", a, b), nil)
+			yield(fmt.Sprintf("JSON_ARRAY(%s, %s)", a, b), nil, true)
 		}
 	}
-	yield("JSON_ARRAY()", nil)
+	yield("JSON_ARRAY()", nil, true)
 }
 
 func JSONObject(yield Query) {
 	for _, a := range inputJSONPrimitives {
 		for _, b := range inputJSONPrimitives {
-			yield(fmt.Sprintf("JSON_OBJECT(%s, %s)", a, b), nil)
+			yield(fmt.Sprintf("JSON_OBJECT(%s, %s)", a, b), nil, true)
 		}
 	}
-	yield("JSON_OBJECT()", nil)
+	yield("JSON_OBJECT()", nil, true)
 }
 
 func CharsetConversionOperators(yield Query) {
@@ -156,7 +156,7 @@ func CharsetConversionOperators(yield Query) {
 	for _, pfx := range introducers {
 		for _, lhs := range contents {
 			for _, rhs := range charsets {
-				yield(fmt.Sprintf("HEX(CONVERT(%s %s USING %s))", pfx, lhs, rhs), nil)
+				yield(fmt.Sprintf("HEX(CONVERT(%s %s USING %s))", pfx, lhs, rhs), nil, true)
 			}
 		}
 	}
@@ -178,7 +178,7 @@ func CaseExprWithPredicate(yield Query) {
 	for _, pred1 := range predicates {
 		for _, val1 := range elements {
 			for _, elseVal := range elements {
-				yield(fmt.Sprintf("case when %s then %s else %s end", pred1, val1, elseVal), nil)
+				yield(fmt.Sprintf("case when %s then %s else %s end", pred1, val1, elseVal), nil, true)
 			}
 		}
 	}
@@ -187,7 +187,7 @@ func CaseExprWithPredicate(yield Query) {
 		genSubsets(elements, 3, func(values []string) {
 			yield(fmt.Sprintf("case when %s then %s when %s then %s when %s then %s end",
 				predicates[0], values[0], predicates[1], values[1], predicates[2], values[2],
-			), nil)
+			), nil, true)
 		})
 	})
 }
@@ -207,13 +207,13 @@ func FnCeil(yield Query) {
 	}
 
 	for _, num := range ceilInputs {
-		yield(fmt.Sprintf("CEIL(%s)", num), nil)
-		yield(fmt.Sprintf("CEILING(%s)", num), nil)
+		yield(fmt.Sprintf("CEIL(%s)", num), nil, true)
+		yield(fmt.Sprintf("CEILING(%s)", num), nil, true)
 	}
 
 	for _, num := range inputBitwise {
-		yield(fmt.Sprintf("CEIL(%s)", num), nil)
-		yield(fmt.Sprintf("CEILING(%s)", num), nil)
+		yield(fmt.Sprintf("CEIL(%s)", num), nil, true)
+		yield(fmt.Sprintf("CEILING(%s)", num), nil, true)
 	}
 }
 
@@ -232,11 +232,11 @@ func FnFloor(yield Query) {
 	}
 
 	for _, num := range floorInputs {
-		yield(fmt.Sprintf("FLOOR(%s)", num), nil)
+		yield(fmt.Sprintf("FLOOR(%s)", num), nil, true)
 	}
 
 	for _, num := range inputBitwise {
-		yield(fmt.Sprintf("FLOOR(%s)", num), nil)
+		yield(fmt.Sprintf("FLOOR(%s)", num), nil, true)
 	}
 }
 
@@ -255,280 +255,280 @@ func FnAbs(yield Query) {
 	}
 
 	for _, num := range absInputs {
-		yield(fmt.Sprintf("ABS(%s)", num), nil)
+		yield(fmt.Sprintf("ABS(%s)", num), nil, true)
 	}
 
 	for _, num := range inputBitwise {
-		yield(fmt.Sprintf("ABS(%s)", num), nil)
+		yield(fmt.Sprintf("ABS(%s)", num), nil, true)
 	}
 }
 
 func FnPi(yield Query) {
-	yield("PI()+0.000000000000000000", nil)
+	yield("PI()+0.000000000000000000", nil, true)
 }
 
 func FnAcos(yield Query) {
 	for _, num := range radianInputs {
-		yield(fmt.Sprintf("ACOS(%s)", num), nil)
+		yield(fmt.Sprintf("ACOS(%s)", num), nil, true)
 	}
 
 	for _, num := range inputBitwise {
-		yield(fmt.Sprintf("ACOS(%s)", num), nil)
+		yield(fmt.Sprintf("ACOS(%s)", num), nil, true)
 	}
 }
 
 func FnAsin(yield Query) {
 	for _, num := range radianInputs {
-		yield(fmt.Sprintf("ASIN(%s)", num), nil)
+		yield(fmt.Sprintf("ASIN(%s)", num), nil, true)
 	}
 
 	for _, num := range inputBitwise {
-		yield(fmt.Sprintf("ASIN(%s)", num), nil)
+		yield(fmt.Sprintf("ASIN(%s)", num), nil, true)
 	}
 }
 
 func FnAtan(yield Query) {
 	for _, num := range radianInputs {
-		yield(fmt.Sprintf("ATAN(%s)", num), nil)
+		yield(fmt.Sprintf("ATAN(%s)", num), nil, true)
 	}
 
 	for _, num := range inputBitwise {
-		yield(fmt.Sprintf("ATAN(%s)", num), nil)
+		yield(fmt.Sprintf("ATAN(%s)", num), nil, true)
 	}
 }
 
 func FnAtan2(yield Query) {
 	for _, num1 := range radianInputs {
 		for _, num2 := range radianInputs {
-			yield(fmt.Sprintf("ATAN(%s, %s)", num1, num2), nil)
-			yield(fmt.Sprintf("ATAN2(%s, %s)", num1, num2), nil)
+			yield(fmt.Sprintf("ATAN(%s, %s)", num1, num2), nil, true)
+			yield(fmt.Sprintf("ATAN2(%s, %s)", num1, num2), nil, true)
 		}
 	}
 
 	for _, num1 := range inputBitwise {
 		for _, num2 := range inputBitwise {
-			yield(fmt.Sprintf("ATAN(%s, %s)", num1, num2), nil)
-			yield(fmt.Sprintf("ATAN2(%s, %s)", num1, num2), nil)
+			yield(fmt.Sprintf("ATAN(%s, %s)", num1, num2), nil, true)
+			yield(fmt.Sprintf("ATAN2(%s, %s)", num1, num2), nil, true)
 		}
 	}
 }
 
 func FnCos(yield Query) {
 	for _, num := range radianInputs {
-		yield(fmt.Sprintf("COS(%s)", num), nil)
+		yield(fmt.Sprintf("COS(%s)", num), nil, true)
 	}
 
 	for _, num := range inputBitwise {
-		yield(fmt.Sprintf("COS(%s)", num), nil)
+		yield(fmt.Sprintf("COS(%s)", num), nil, true)
 	}
 }
 
 func FnCot(yield Query) {
 	for _, num := range radianInputs {
-		yield(fmt.Sprintf("COT(%s)", num), nil)
+		yield(fmt.Sprintf("COT(%s)", num), nil, true)
 	}
 
 	for _, num := range inputBitwise {
-		yield(fmt.Sprintf("COT(%s)", num), nil)
+		yield(fmt.Sprintf("COT(%s)", num), nil, true)
 	}
 }
 
 func FnSin(yield Query) {
 	for _, num := range radianInputs {
-		yield(fmt.Sprintf("SIN(%s)", num), nil)
+		yield(fmt.Sprintf("SIN(%s)", num), nil, true)
 	}
 
 	for _, num := range inputBitwise {
-		yield(fmt.Sprintf("SIN(%s)", num), nil)
+		yield(fmt.Sprintf("SIN(%s)", num), nil, true)
 	}
 }
 
 func FnTan(yield Query) {
 	for _, num := range radianInputs {
-		yield(fmt.Sprintf("TAN(%s)", num), nil)
+		yield(fmt.Sprintf("TAN(%s)", num), nil, true)
 	}
 
 	for _, num := range inputBitwise {
-		yield(fmt.Sprintf("TAN(%s)", num), nil)
+		yield(fmt.Sprintf("TAN(%s)", num), nil, true)
 	}
 }
 
 func FnDegrees(yield Query) {
 	for _, num := range radianInputs {
-		yield(fmt.Sprintf("DEGREES(%s)", num), nil)
+		yield(fmt.Sprintf("DEGREES(%s)", num), nil, true)
 	}
 
 	for _, num := range inputBitwise {
-		yield(fmt.Sprintf("DEGREES(%s)", num), nil)
+		yield(fmt.Sprintf("DEGREES(%s)", num), nil, true)
 	}
 }
 
 func FnRadians(yield Query) {
 	for _, num := range radianInputs {
-		yield(fmt.Sprintf("RADIANS(%s)", num), nil)
+		yield(fmt.Sprintf("RADIANS(%s)", num), nil, true)
 	}
 
 	for _, num := range inputBitwise {
-		yield(fmt.Sprintf("RADIANS(%s)", num), nil)
+		yield(fmt.Sprintf("RADIANS(%s)", num), nil, true)
 	}
 }
 
 func FnExp(yield Query) {
 	for _, num := range radianInputs {
-		yield(fmt.Sprintf("EXP(%s)", num), nil)
+		yield(fmt.Sprintf("EXP(%s)", num), nil, true)
 	}
 
 	for _, num := range inputBitwise {
-		yield(fmt.Sprintf("EXP(%s)", num), nil)
+		yield(fmt.Sprintf("EXP(%s)", num), nil, true)
 	}
 }
 
 func FnLn(yield Query) {
 	for _, num := range radianInputs {
-		yield(fmt.Sprintf("LN(%s)", num), nil)
+		yield(fmt.Sprintf("LN(%s)", num), nil, true)
 	}
 
 	for _, num := range inputBitwise {
-		yield(fmt.Sprintf("LN(%s)", num), nil)
+		yield(fmt.Sprintf("LN(%s)", num), nil, true)
 	}
 }
 
 func FnLog(yield Query) {
 	for _, num := range radianInputs {
-		yield(fmt.Sprintf("LOG(%s)", num), nil)
+		yield(fmt.Sprintf("LOG(%s)", num), nil, true)
 	}
 
 	for _, num := range inputBitwise {
-		yield(fmt.Sprintf("LOG(%s)", num), nil)
+		yield(fmt.Sprintf("LOG(%s)", num), nil, true)
 	}
 
 	for _, num1 := range radianInputs {
 		for _, num2 := range radianInputs {
-			yield(fmt.Sprintf("LOG(%s, %s)", num1, num2), nil)
+			yield(fmt.Sprintf("LOG(%s, %s)", num1, num2), nil, true)
 		}
 		for _, num2 := range inputBitwise {
-			yield(fmt.Sprintf("LOG(%s, %s)", num1, num2), nil)
+			yield(fmt.Sprintf("LOG(%s, %s)", num1, num2), nil, true)
 		}
 	}
 
 	for _, num1 := range inputBitwise {
 		for _, num2 := range radianInputs {
-			yield(fmt.Sprintf("LOG(%s, %s)", num1, num2), nil)
+			yield(fmt.Sprintf("LOG(%s, %s)", num1, num2), nil, true)
 		}
 		for _, num2 := range inputBitwise {
-			yield(fmt.Sprintf("LOG(%s, %s)", num1, num2), nil)
+			yield(fmt.Sprintf("LOG(%s, %s)", num1, num2), nil, true)
 		}
 	}
 }
 
 func FnLog10(yield Query) {
 	for _, num := range radianInputs {
-		yield(fmt.Sprintf("LOG10(%s)", num), nil)
+		yield(fmt.Sprintf("LOG10(%s)", num), nil, true)
 	}
 
 	for _, num := range inputBitwise {
-		yield(fmt.Sprintf("LOG10(%s)", num), nil)
+		yield(fmt.Sprintf("LOG10(%s)", num), nil, true)
 	}
 }
 
 func FnMod(yield Query) {
 	for _, num1 := range radianInputs {
 		for _, num2 := range radianInputs {
-			yield(fmt.Sprintf("MOD(%s, %s)", num1, num2), nil)
+			yield(fmt.Sprintf("MOD(%s, %s)", num1, num2), nil, true)
 		}
 		for _, num2 := range inputBitwise {
-			yield(fmt.Sprintf("MOD(%s, %s)", num1, num2), nil)
+			yield(fmt.Sprintf("MOD(%s, %s)", num1, num2), nil, true)
 		}
 	}
 
 	for _, num1 := range inputBitwise {
 		for _, num2 := range radianInputs {
-			yield(fmt.Sprintf("MOD(%s, %s)", num1, num2), nil)
+			yield(fmt.Sprintf("MOD(%s, %s)", num1, num2), nil, true)
 		}
 		for _, num2 := range inputBitwise {
-			yield(fmt.Sprintf("MOD(%s, %s)", num1, num2), nil)
+			yield(fmt.Sprintf("MOD(%s, %s)", num1, num2), nil, true)
 		}
 	}
 }
 
 func FnLog2(yield Query) {
 	for _, num := range radianInputs {
-		yield(fmt.Sprintf("LOG2(%s)", num), nil)
+		yield(fmt.Sprintf("LOG2(%s)", num), nil, true)
 	}
 
 	for _, num := range inputBitwise {
-		yield(fmt.Sprintf("LOG2(%s)", num), nil)
+		yield(fmt.Sprintf("LOG2(%s)", num), nil, true)
 	}
 }
 
 func FnPow(yield Query) {
 	for _, num1 := range radianInputs {
 		for _, num2 := range radianInputs {
-			yield(fmt.Sprintf("POW(%s, %s)", num1, num2), nil)
-			yield(fmt.Sprintf("POWER(%s, %s)", num1, num2), nil)
+			yield(fmt.Sprintf("POW(%s, %s)", num1, num2), nil, true)
+			yield(fmt.Sprintf("POWER(%s, %s)", num1, num2), nil, true)
 		}
 		for _, num2 := range inputBitwise {
-			yield(fmt.Sprintf("POW(%s, %s)", num1, num2), nil)
-			yield(fmt.Sprintf("POWER(%s, %s)", num1, num2), nil)
+			yield(fmt.Sprintf("POW(%s, %s)", num1, num2), nil, true)
+			yield(fmt.Sprintf("POWER(%s, %s)", num1, num2), nil, true)
 		}
 	}
 
 	for _, num1 := range inputBitwise {
 		for _, num2 := range radianInputs {
-			yield(fmt.Sprintf("POW(%s, %s)", num1, num2), nil)
-			yield(fmt.Sprintf("POWER(%s, %s)", num1, num2), nil)
+			yield(fmt.Sprintf("POW(%s, %s)", num1, num2), nil, true)
+			yield(fmt.Sprintf("POWER(%s, %s)", num1, num2), nil, true)
 		}
 		for _, num2 := range inputBitwise {
-			yield(fmt.Sprintf("POW(%s, %s)", num1, num2), nil)
-			yield(fmt.Sprintf("POWER(%s, %s)", num1, num2), nil)
+			yield(fmt.Sprintf("POW(%s, %s)", num1, num2), nil, true)
+			yield(fmt.Sprintf("POWER(%s, %s)", num1, num2), nil, true)
 		}
 	}
 }
 
 func FnSign(yield Query) {
 	for _, num := range radianInputs {
-		yield(fmt.Sprintf("SIGN(%s)", num), nil)
+		yield(fmt.Sprintf("SIGN(%s)", num), nil, true)
 	}
 
 	for _, num := range inputBitwise {
-		yield(fmt.Sprintf("SIGN(%s)", num), nil)
+		yield(fmt.Sprintf("SIGN(%s)", num), nil, true)
 	}
 }
 
 func FnSqrt(yield Query) {
 	for _, num := range radianInputs {
-		yield(fmt.Sprintf("SQRT(%s)", num), nil)
+		yield(fmt.Sprintf("SQRT(%s)", num), nil, true)
 	}
 
 	for _, num := range inputBitwise {
-		yield(fmt.Sprintf("SQRT(%s)", num), nil)
+		yield(fmt.Sprintf("SQRT(%s)", num), nil, true)
 	}
 }
 
 func FnRound(yield Query) {
 	for _, num := range radianInputs {
-		yield(fmt.Sprintf("ROUND(%s)", num), nil)
+		yield(fmt.Sprintf("ROUND(%s)", num), nil, true)
 	}
 
 	for _, num := range inputBitwise {
-		yield(fmt.Sprintf("ROUND(%s)", num), nil)
+		yield(fmt.Sprintf("ROUND(%s)", num), nil, true)
 	}
 
 	for _, num1 := range radianInputs {
 		for _, num2 := range radianInputs {
-			yield(fmt.Sprintf("ROUND(%s, %s)", num1, num2), nil)
+			yield(fmt.Sprintf("ROUND(%s, %s)", num1, num2), nil, true)
 		}
 		for _, num2 := range inputBitwise {
-			yield(fmt.Sprintf("ROUND(%s, %s)", num1, num2), nil)
+			yield(fmt.Sprintf("ROUND(%s, %s)", num1, num2), nil, true)
 		}
 	}
 
 	for _, num1 := range inputBitwise {
 		for _, num2 := range radianInputs {
-			yield(fmt.Sprintf("ROUND(%s, %s)", num1, num2), nil)
+			yield(fmt.Sprintf("ROUND(%s, %s)", num1, num2), nil, true)
 		}
 		for _, num2 := range inputBitwise {
-			yield(fmt.Sprintf("ROUND(%s, %s)", num1, num2), nil)
+			yield(fmt.Sprintf("ROUND(%s, %s)", num1, num2), nil, true)
 		}
 	}
 }
@@ -536,34 +536,34 @@ func FnRound(yield Query) {
 func FnTruncate(yield Query) {
 	for _, num1 := range radianInputs {
 		for _, num2 := range radianInputs {
-			yield(fmt.Sprintf("TRUNCATE(%s, %s)", num1, num2), nil)
+			yield(fmt.Sprintf("TRUNCATE(%s, %s)", num1, num2), nil, true)
 		}
 		for _, num2 := range inputBitwise {
-			yield(fmt.Sprintf("TRUNCATE(%s, %s)", num1, num2), nil)
+			yield(fmt.Sprintf("TRUNCATE(%s, %s)", num1, num2), nil, true)
 		}
 	}
 
 	for _, num1 := range inputBitwise {
 		for _, num2 := range radianInputs {
-			yield(fmt.Sprintf("TRUNCATE(%s, %s)", num1, num2), nil)
+			yield(fmt.Sprintf("TRUNCATE(%s, %s)", num1, num2), nil, true)
 		}
 		for _, num2 := range inputBitwise {
-			yield(fmt.Sprintf("TRUNCATE(%s, %s)", num1, num2), nil)
+			yield(fmt.Sprintf("TRUNCATE(%s, %s)", num1, num2), nil, true)
 		}
 	}
 }
 
 func FnCrc32(yield Query) {
 	for _, num := range radianInputs {
-		yield(fmt.Sprintf("CRC32(%s)", num), nil)
+		yield(fmt.Sprintf("CRC32(%s)", num), nil, true)
 	}
 
 	for _, num := range inputBitwise {
-		yield(fmt.Sprintf("CRC32(%s)", num), nil)
+		yield(fmt.Sprintf("CRC32(%s)", num), nil, true)
 	}
 
 	for _, num := range inputConversions {
-		yield(fmt.Sprintf("CRC32(%s)", num), nil)
+		yield(fmt.Sprintf("CRC32(%s)", num), nil, true)
 	}
 }
 
@@ -571,10 +571,10 @@ func FnConv(yield Query) {
 	for _, num1 := range radianInputs {
 		for _, num2 := range radianInputs {
 			for _, num3 := range radianInputs {
-				yield(fmt.Sprintf("CONV(%s, %s, %s)", num1, num2, num3), nil)
+				yield(fmt.Sprintf("CONV(%s, %s, %s)", num1, num2, num3), nil, true)
 			}
 			for _, num3 := range inputBitwise {
-				yield(fmt.Sprintf("CONV(%s, %s, %s)", num1, num2, num3), nil)
+				yield(fmt.Sprintf("CONV(%s, %s, %s)", num1, num2, num3), nil, true)
 			}
 		}
 	}
@@ -582,10 +582,10 @@ func FnConv(yield Query) {
 	for _, num1 := range radianInputs {
 		for _, num2 := range inputBitwise {
 			for _, num3 := range radianInputs {
-				yield(fmt.Sprintf("CONV(%s, %s, %s)", num1, num2, num3), nil)
+				yield(fmt.Sprintf("CONV(%s, %s, %s)", num1, num2, num3), nil, true)
 			}
 			for _, num3 := range inputBitwise {
-				yield(fmt.Sprintf("CONV(%s, %s, %s)", num1, num2, num3), nil)
+				yield(fmt.Sprintf("CONV(%s, %s, %s)", num1, num2, num3), nil, true)
 			}
 		}
 	}
@@ -593,10 +593,10 @@ func FnConv(yield Query) {
 	for _, num1 := range inputBitwise {
 		for _, num2 := range inputBitwise {
 			for _, num3 := range radianInputs {
-				yield(fmt.Sprintf("CONV(%s, %s, %s)", num1, num2, num3), nil)
+				yield(fmt.Sprintf("CONV(%s, %s, %s)", num1, num2, num3), nil, true)
 			}
 			for _, num3 := range inputBitwise {
-				yield(fmt.Sprintf("CONV(%s, %s, %s)", num1, num2, num3), nil)
+				yield(fmt.Sprintf("CONV(%s, %s, %s)", num1, num2, num3), nil, true)
 			}
 		}
 	}
@@ -604,32 +604,32 @@ func FnConv(yield Query) {
 
 func FnMD5(yield Query) {
 	for _, num := range radianInputs {
-		yield(fmt.Sprintf("MD5(%s)", num), nil)
+		yield(fmt.Sprintf("MD5(%s)", num), nil, true)
 	}
 
 	for _, num := range inputBitwise {
-		yield(fmt.Sprintf("MD5(%s)", num), nil)
+		yield(fmt.Sprintf("MD5(%s)", num), nil, true)
 	}
 
 	for _, num := range inputConversions {
-		yield(fmt.Sprintf("MD5(%s)", num), nil)
+		yield(fmt.Sprintf("MD5(%s)", num), nil, true)
 	}
 }
 
 func FnSHA1(yield Query) {
 	for _, num := range radianInputs {
-		yield(fmt.Sprintf("SHA1(%s)", num), nil)
-		yield(fmt.Sprintf("SHA(%s)", num), nil)
+		yield(fmt.Sprintf("SHA1(%s)", num), nil, true)
+		yield(fmt.Sprintf("SHA(%s)", num), nil, true)
 	}
 
 	for _, num := range inputBitwise {
-		yield(fmt.Sprintf("SHA1(%s)", num), nil)
-		yield(fmt.Sprintf("SHA(%s)", num), nil)
+		yield(fmt.Sprintf("SHA1(%s)", num), nil, true)
+		yield(fmt.Sprintf("SHA(%s)", num), nil, true)
 	}
 
 	for _, num := range inputConversions {
-		yield(fmt.Sprintf("SHA1(%s)", num), nil)
-		yield(fmt.Sprintf("SHA(%s)", num), nil)
+		yield(fmt.Sprintf("SHA1(%s)", num), nil, true)
+		yield(fmt.Sprintf("SHA(%s)", num), nil, true)
 	}
 }
 
@@ -637,28 +637,28 @@ func FnSHA2(yield Query) {
 	bitLengths := []string{"0", "224", "256", "384", "512", "1", "0.1", "256.1e0", "1-1", "128+128"}
 	for _, bits := range bitLengths {
 		for _, num := range radianInputs {
-			yield(fmt.Sprintf("SHA2(%s, %s)", num, bits), nil)
+			yield(fmt.Sprintf("SHA2(%s, %s)", num, bits), nil, true)
 		}
 
 		for _, num := range inputBitwise {
-			yield(fmt.Sprintf("SHA2(%s, %s)", num, bits), nil)
+			yield(fmt.Sprintf("SHA2(%s, %s)", num, bits), nil, true)
 		}
 
 		for _, num := range inputConversions {
-			yield(fmt.Sprintf("SHA2(%s, %s)", num, bits), nil)
+			yield(fmt.Sprintf("SHA2(%s, %s)", num, bits), nil, true)
 		}
 	}
 }
 
 func FnRandomBytes(yield Query) {
 	for _, num := range radianInputs {
-		yield(fmt.Sprintf("LENGTH(RANDOM_BYTES(%s))", num), nil)
-		yield(fmt.Sprintf("COLLATION(RANDOM_BYTES(%s))", num), nil)
+		yield(fmt.Sprintf("LENGTH(RANDOM_BYTES(%s))", num), nil, true)
+		yield(fmt.Sprintf("COLLATION(RANDOM_BYTES(%s))", num), nil, true)
 	}
 
 	for _, num := range inputBitwise {
-		yield(fmt.Sprintf("LENGTH(RANDOM_BYTES(%s))", num), nil)
-		yield(fmt.Sprintf("COLLATION(RANDOM_BYTES(%s))", num), nil)
+		yield(fmt.Sprintf("LENGTH(RANDOM_BYTES(%s))", num), nil, true)
+		yield(fmt.Sprintf("COLLATION(RANDOM_BYTES(%s))", num), nil, true)
 	}
 }
 
@@ -672,7 +672,7 @@ func CaseExprWithValue(yield Query) {
 			if !(bugs{}).CanCompare(cmpbase, val1) {
 				continue
 			}
-			yield(fmt.Sprintf("case %s when %s then 1 else 0 end", cmpbase, val1), nil)
+			yield(fmt.Sprintf("case %s when %s then 1 else 0 end", cmpbase, val1), nil, true)
 		}
 	}
 }
@@ -690,17 +690,17 @@ func Base64(yield Query) {
 	}
 
 	for _, lhs := range inputs {
-		yield(fmt.Sprintf("FROM_BASE64(%s)", lhs), nil)
-		yield(fmt.Sprintf("TO_BASE64(%s)", lhs), nil)
+		yield(fmt.Sprintf("FROM_BASE64(%s)", lhs), nil, true)
+		yield(fmt.Sprintf("TO_BASE64(%s)", lhs), nil, true)
 	}
 }
 
 func Conversion(yield Query) {
 	for _, lhs := range inputConversions {
 		for _, rhs := range inputConversionTypes {
-			yield(fmt.Sprintf("CAST(%s AS %s)", lhs, rhs), nil)
-			yield(fmt.Sprintf("CONVERT(%s, %s)", lhs, rhs), nil)
-			yield(fmt.Sprintf("CAST(CAST(%s AS JSON) AS %s)", lhs, rhs), nil)
+			yield(fmt.Sprintf("CAST(%s AS %s)", lhs, rhs), nil, true)
+			yield(fmt.Sprintf("CONVERT(%s, %s)", lhs, rhs), nil, true)
+			yield(fmt.Sprintf("CAST(CAST(%s AS JSON) AS %s)", lhs, rhs), nil, true)
 		}
 	}
 }
@@ -709,8 +709,8 @@ func LargeDecimals(yield Query) {
 	var largepi = inputPi + inputPi
 
 	for pos := 0; pos < len(largepi); pos++ {
-		yield(fmt.Sprintf("%s.%s", largepi[:pos], largepi[pos:]), nil)
-		yield(fmt.Sprintf("-%s.%s", largepi[:pos], largepi[pos:]), nil)
+		yield(fmt.Sprintf("%s.%s", largepi[:pos], largepi[pos:]), nil, true)
+		yield(fmt.Sprintf("-%s.%s", largepi[:pos], largepi[pos:]), nil, true)
 	}
 }
 
@@ -718,8 +718,8 @@ func LargeIntegers(yield Query) {
 	var largepi = inputPi + inputPi
 
 	for pos := 1; pos < len(largepi); pos++ {
-		yield(largepi[:pos], nil)
-		yield(fmt.Sprintf("-%s", largepi[:pos]), nil)
+		yield(largepi[:pos], nil, true)
+		yield(fmt.Sprintf("-%s", largepi[:pos]), nil, true)
 	}
 }
 
@@ -727,7 +727,7 @@ func DecimalClamping(yield Query) {
 	for pos := 0; pos < len(inputPi); pos++ {
 		for m := 0; m < min(len(inputPi), 67); m += 2 {
 			for d := 0; d <= min(m, 33); d += 2 {
-				yield(fmt.Sprintf("CAST(%s.%s AS DECIMAL(%d, %d))", inputPi[:pos], inputPi[pos:], m, d), nil)
+				yield(fmt.Sprintf("CAST(%s.%s AS DECIMAL(%d, %d))", inputPi[:pos], inputPi[pos:], m, d), nil, true)
 			}
 		}
 	}
@@ -736,7 +736,7 @@ func DecimalClamping(yield Query) {
 func BitwiseOperatorsUnary(yield Query) {
 	for _, op := range []string{"~", "BIT_COUNT"} {
 		for _, rhs := range inputBitwise {
-			yield(fmt.Sprintf("%s(%s)", op, rhs), nil)
+			yield(fmt.Sprintf("%s(%s)", op, rhs), nil, true)
 		}
 	}
 }
@@ -745,13 +745,13 @@ func BitwiseOperators(yield Query) {
 	for _, op := range []string{"&", "|", "^", "<<", ">>"} {
 		for _, lhs := range inputBitwise {
 			for _, rhs := range inputBitwise {
-				yield(fmt.Sprintf("%s %s %s", lhs, op, rhs), nil)
+				yield(fmt.Sprintf("%s %s %s", lhs, op, rhs), nil, true)
 			}
 		}
 
 		for _, lhs := range inputConversions {
 			for _, rhs := range inputConversions {
-				yield(fmt.Sprintf("%s %s %s", lhs, op, rhs), nil)
+				yield(fmt.Sprintf("%s %s %s", lhs, op, rhs), nil, true)
 			}
 		}
 	}
@@ -767,7 +767,7 @@ func WeightString(yield Query) {
 	}
 
 	for _, i := range inputs {
-		yield(fmt.Sprintf("WEIGHT_STRING(%s)", i), nil)
+		yield(fmt.Sprintf("WEIGHT_STRING(%s)", i), nil, true)
 	}
 }
 
@@ -784,18 +784,18 @@ func FloatFormatting(yield Query) {
 	}
 
 	for _, f := range floats {
-		yield(fmt.Sprintf("%s + 0.0e0", f), nil)
-		yield(fmt.Sprintf("-%s", f), nil)
+		yield(fmt.Sprintf("%s + 0.0e0", f), nil, true)
+		yield(fmt.Sprintf("-%s", f), nil, true)
 	}
 
 	for i := 0; i < 64; i++ {
 		v := uint64(1) << i
-		yield(fmt.Sprintf("%d + 0.0e0", v), nil)
-		yield(fmt.Sprintf("%d + 0.0e0", v+1), nil)
-		yield(fmt.Sprintf("%d + 0.0e0", ^v), nil)
-		yield(fmt.Sprintf("-%de0", v), nil)
-		yield(fmt.Sprintf("-%de0", v+1), nil)
-		yield(fmt.Sprintf("-%de0", ^v), nil)
+		yield(fmt.Sprintf("%d + 0.0e0", v), nil, true)
+		yield(fmt.Sprintf("%d + 0.0e0", v+1), nil, true)
+		yield(fmt.Sprintf("%d + 0.0e0", ^v), nil, true)
+		yield(fmt.Sprintf("-%de0", v), nil, true)
+		yield(fmt.Sprintf("-%de0", v+1), nil, true)
+		yield(fmt.Sprintf("-%de0", ^v), nil, true)
 	}
 }
 
@@ -819,7 +819,7 @@ func UnderscoreAndPercentage(yield Query) {
 		`'poke\_mon' = 'poke\_mon'`,
 	}
 	for _, query := range queries {
-		yield(query, nil)
+		yield(query, nil, true)
 	}
 }
 
@@ -850,7 +850,7 @@ func Types(yield Query) {
 	}
 
 	for _, query := range queries {
-		yield(query, nil)
+		yield(query, nil, true)
 	}
 }
 
@@ -860,13 +860,13 @@ func Arithmetic(yield Query) {
 	for _, op := range operators {
 		for _, lhs := range inputConversions {
 			for _, rhs := range inputConversions {
-				yield(fmt.Sprintf("%s %s %s", lhs, op, rhs), nil)
+				yield(fmt.Sprintf("%s %s %s", lhs, op, rhs), nil, true)
 			}
 		}
 
 		for _, lhs := range inputBitwise {
 			for _, rhs := range inputBitwise {
-				yield(fmt.Sprintf("%s %s %s", lhs, op, rhs), nil)
+				yield(fmt.Sprintf("%s %s %s", lhs, op, rhs), nil, true)
 			}
 		}
 	}
@@ -882,9 +882,9 @@ func HexArithmetic(yield Query) {
 
 	for _, lhs := range cases {
 		for _, rhs := range cases {
-			yield(fmt.Sprintf("%s + %s", lhs, rhs), nil)
+			yield(fmt.Sprintf("%s + %s", lhs, rhs), nil, true)
 			// compare with negative values too
-			yield(fmt.Sprintf("-%s + -%s", lhs, rhs), nil)
+			yield(fmt.Sprintf("-%s + -%s", lhs, rhs), nil, true)
 		}
 	}
 }
@@ -912,7 +912,7 @@ func NumericTypes(yield Query) {
 	}
 
 	for _, rhs := range numbers {
-		yield(rhs, nil)
+		yield(rhs, nil, true)
 	}
 }
 
@@ -929,8 +929,8 @@ func NegateArithmetic(yield Query) {
 	}
 
 	for _, rhs := range cases {
-		yield(fmt.Sprintf("- %s", rhs), nil)
-		yield(fmt.Sprintf("-%s", rhs), nil)
+		yield(fmt.Sprintf("- %s", rhs), nil, true)
+		yield(fmt.Sprintf("-%s", rhs), nil, true)
 	}
 }
 
@@ -944,7 +944,7 @@ func CollationOperations(yield Query) {
 	}
 
 	for _, expr := range cases {
-		yield(expr, nil)
+		yield(expr, nil, true)
 	}
 }
 
@@ -966,7 +966,7 @@ func LikeComparison(yield Query) {
 
 	for _, lhs := range left {
 		for _, rhs := range right {
-			yield(fmt.Sprintf("%s LIKE %s", lhs, rhs), nil)
+			yield(fmt.Sprintf("%s LIKE %s", lhs, rhs), nil, true)
 		}
 	}
 }
@@ -1004,13 +1004,13 @@ func MultiComparisons(yield Query) {
 
 	for _, method := range []string{"LEAST", "GREATEST"} {
 		genSubsets(numbers, 2, func(arg []string) {
-			yield(fmt.Sprintf("%s(%s, %s)", method, arg[0], arg[1]), nil)
-			yield(fmt.Sprintf("%s(%s, %s)", method, arg[1], arg[0]), nil)
+			yield(fmt.Sprintf("%s(%s, %s)", method, arg[0], arg[1]), nil, true)
+			yield(fmt.Sprintf("%s(%s, %s)", method, arg[1], arg[0]), nil, true)
 		})
 
 		genSubsets(numbers, 3, func(arg []string) {
-			yield(fmt.Sprintf("%s(%s, %s, %s)", method, arg[0], arg[1], arg[2]), nil)
-			yield(fmt.Sprintf("%s(%s, %s, %s)", method, arg[2], arg[1], arg[0]), nil)
+			yield(fmt.Sprintf("%s(%s, %s, %s)", method, arg[0], arg[1], arg[2]), nil, true)
+			yield(fmt.Sprintf("%s(%s, %s, %s)", method, arg[2], arg[1], arg[0]), nil, true)
 		})
 	}
 }
@@ -1033,7 +1033,7 @@ func IsStatement(yield Query) {
 
 	for _, l := range left {
 		for _, r := range right {
-			yield(fmt.Sprintf("%s IS %s", l, r), nil)
+			yield(fmt.Sprintf("%s IS %s", l, r), nil, true)
 		}
 	}
 }
@@ -1042,7 +1042,7 @@ func NotStatement(yield Query) {
 	var ops = []string{"NOT", "!"}
 	for _, op := range ops {
 		for _, i := range inputConversions {
-			yield(fmt.Sprintf("%s %s", op, i), nil)
+			yield(fmt.Sprintf("%s %s", op, i), nil, true)
 		}
 	}
 }
@@ -1052,7 +1052,7 @@ func LogicalStatement(yield Query) {
 	for _, op := range ops {
 		for _, l := range inputConversions {
 			for _, r := range inputConversions {
-				yield(fmt.Sprintf("%s %s %s", l, op, r), nil)
+				yield(fmt.Sprintf("%s %s %s", l, op, r), nil, true)
 			}
 		}
 	}
@@ -1070,7 +1070,7 @@ func TupleComparisons(yield Query) {
 	for _, op := range operators {
 		for i := 0; i < len(tuples); i++ {
 			for j := 0; j < len(tuples); j++ {
-				yield(fmt.Sprintf("%s %s %s", tuples[i], op, tuples[j]), nil)
+				yield(fmt.Sprintf("%s %s %s", tuples[i], op, tuples[j]), nil, true)
 			}
 		}
 	}
@@ -1081,13 +1081,13 @@ func Comparisons(yield Query) {
 	for _, op := range operators {
 		for _, l := range inputComparisonElement {
 			for _, r := range inputComparisonElement {
-				yield(fmt.Sprintf("%s %s %s", l, op, r), nil)
+				yield(fmt.Sprintf("%s %s %s", l, op, r), nil, true)
 			}
 		}
 
 		for _, l := range inputConversions {
 			for _, r := range inputConversions {
-				yield(fmt.Sprintf("%s %s %s", l, op, r), nil)
+				yield(fmt.Sprintf("%s %s %s", l, op, r), nil, true)
 			}
 		}
 	}
@@ -1126,9 +1126,9 @@ func JSONExtract(yield Query) {
 		expr2 := fmt.Sprintf("cast(%s as char) <=> %s", expr0, expr1)
 
 		for _, row := range rows {
-			yield(expr0, []sqltypes.Value{row})
-			yield(expr1, []sqltypes.Value{row})
-			yield(expr2, []sqltypes.Value{row})
+			yield(expr0, []sqltypes.Value{row}, true)
+			yield(expr1, []sqltypes.Value{row}, true)
+			yield(expr2, []sqltypes.Value{row}, true)
 		}
 	}
 }
@@ -1143,41 +1143,41 @@ var JSONExtract_Schema = []*querypb.Field{
 
 func FnLower(yield Query) {
 	for _, str := range inputStrings {
-		yield(fmt.Sprintf("LOWER(%s)", str), nil)
-		yield(fmt.Sprintf("LCASE(%s)", str), nil)
+		yield(fmt.Sprintf("LOWER(%s)", str), nil, true)
+		yield(fmt.Sprintf("LCASE(%s)", str), nil, true)
 	}
 }
 
 func FnUpper(yield Query) {
 	for _, str := range inputStrings {
-		yield(fmt.Sprintf("UPPER(%s)", str), nil)
-		yield(fmt.Sprintf("UCASE(%s)", str), nil)
+		yield(fmt.Sprintf("UPPER(%s)", str), nil, true)
+		yield(fmt.Sprintf("UCASE(%s)", str), nil, true)
 	}
 }
 
 func FnCharLength(yield Query) {
 	for _, str := range inputStrings {
-		yield(fmt.Sprintf("CHAR_LENGTH(%s)", str), nil)
-		yield(fmt.Sprintf("CHARACTER_LENGTH(%s)", str), nil)
+		yield(fmt.Sprintf("CHAR_LENGTH(%s)", str), nil, true)
+		yield(fmt.Sprintf("CHARACTER_LENGTH(%s)", str), nil, true)
 	}
 }
 
 func FnLength(yield Query) {
 	for _, str := range inputStrings {
-		yield(fmt.Sprintf("LENGTH(%s)", str), nil)
-		yield(fmt.Sprintf("OCTET_LENGTH(%s)", str), nil)
+		yield(fmt.Sprintf("LENGTH(%s)", str), nil, true)
+		yield(fmt.Sprintf("OCTET_LENGTH(%s)", str), nil, true)
 	}
 }
 
 func FnBitLength(yield Query) {
 	for _, str := range inputStrings {
-		yield(fmt.Sprintf("BIT_LENGTH(%s)", str), nil)
+		yield(fmt.Sprintf("BIT_LENGTH(%s)", str), nil, true)
 	}
 }
 
 func FnAscii(yield Query) {
 	for _, str := range inputStrings {
-		yield(fmt.Sprintf("ASCII(%s)", str), nil)
+		yield(fmt.Sprintf("ASCII(%s)", str), nil, true)
 	}
 }
 
@@ -1185,22 +1185,22 @@ func FnRepeat(yield Query) {
 	counts := []string{"-1", "1.9", "3", "1073741825", "'1.9'"}
 	for _, str := range inputStrings {
 		for _, cnt := range counts {
-			yield(fmt.Sprintf("repeat(%s, %s)", str, cnt), nil)
+			yield(fmt.Sprintf("repeat(%s, %s)", str, cnt), nil, true)
 		}
 	}
 }
 
 func FnHex(yield Query) {
 	for _, str := range inputStrings {
-		yield(fmt.Sprintf("hex(%s)", str), nil)
+		yield(fmt.Sprintf("hex(%s)", str), nil, true)
 	}
 
 	for _, str := range inputConversions {
-		yield(fmt.Sprintf("hex(%s)", str), nil)
+		yield(fmt.Sprintf("hex(%s)", str), nil, true)
 	}
 
 	for _, str := range inputBitwise {
-		yield(fmt.Sprintf("hex(%s)", str), nil)
+		yield(fmt.Sprintf("hex(%s)", str), nil, true)
 	}
 }
 
@@ -1212,15 +1212,15 @@ func InStatement(yield Query) {
 		if !(bugs{}).CanCompare(inputs...) {
 			return
 		}
-		yield(fmt.Sprintf("%s IN (%s, %s)", inputs[0], inputs[1], inputs[2]), nil)
-		yield(fmt.Sprintf("%s IN (%s, %s)", inputs[2], inputs[1], inputs[0]), nil)
-		yield(fmt.Sprintf("%s IN (%s, %s)", inputs[1], inputs[0], inputs[2]), nil)
-		yield(fmt.Sprintf("%s IN (%s, %s, %s)", inputs[0], inputs[1], inputs[2], inputs[0]), nil)
+		yield(fmt.Sprintf("%s IN (%s, %s)", inputs[0], inputs[1], inputs[2]), nil, true)
+		yield(fmt.Sprintf("%s IN (%s, %s)", inputs[2], inputs[1], inputs[0]), nil, true)
+		yield(fmt.Sprintf("%s IN (%s, %s)", inputs[1], inputs[0], inputs[2]), nil, true)
+		yield(fmt.Sprintf("%s IN (%s, %s, %s)", inputs[0], inputs[1], inputs[2], inputs[0]), nil, true)
 
-		yield(fmt.Sprintf("%s NOT IN (%s, %s)", inputs[0], inputs[1], inputs[2]), nil)
-		yield(fmt.Sprintf("%s NOT IN (%s, %s)", inputs[2], inputs[1], inputs[0]), nil)
-		yield(fmt.Sprintf("%s NOT IN (%s, %s)", inputs[1], inputs[0], inputs[2]), nil)
-		yield(fmt.Sprintf("%s NOT IN (%s, %s, %s)", inputs[0], inputs[1], inputs[2], inputs[0]), nil)
+		yield(fmt.Sprintf("%s NOT IN (%s, %s)", inputs[0], inputs[1], inputs[2]), nil, true)
+		yield(fmt.Sprintf("%s NOT IN (%s, %s)", inputs[2], inputs[1], inputs[0]), nil, true)
+		yield(fmt.Sprintf("%s NOT IN (%s, %s)", inputs[1], inputs[0], inputs[2]), nil, true)
+		yield(fmt.Sprintf("%s NOT IN (%s, %s, %s)", inputs[0], inputs[1], inputs[2], inputs[0]), nil, true)
 	})
 }
 
@@ -1243,7 +1243,7 @@ func FnNow(yield Query) {
 		"SYSDATE(1)", "SYSDATE(2)", "SYSDATE(3)", "SYSDATE(4)", "SYSDATE(5)",
 	}
 	for _, fn := range fns {
-		yield(fn, nil)
+		yield(fn, nil, false)
 	}
 }
 
@@ -1255,7 +1255,7 @@ func FnInfo(yield Query) {
 		"VERSION()",
 	}
 	for _, fn := range fns {
-		yield(fn, nil)
+		yield(fn, nil, true)
 	}
 }
 
@@ -1309,7 +1309,7 @@ func FnDateFormat(yield Query) {
 	format := buf.String()
 
 	for _, d := range inputConversions {
-		yield(fmt.Sprintf("DATE_FORMAT(%s, %q)", d, format), nil)
+		yield(fmt.Sprintf("DATE_FORMAT(%s, %q)", d, format), nil, true)
 	}
 }
 

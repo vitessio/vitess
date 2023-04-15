@@ -331,7 +331,7 @@ func closeDatetime(a, b time.Time, diff time.Duration) bool {
 	return d <= diff
 }
 
-func compareResult(localErr, remoteErr error, localVal, remoteVal sqltypes.Value, localCollation, remoteCollation collations.ID, decimals uint32) error {
+func compareResult(localErr, remoteErr error, localVal, remoteVal sqltypes.Value, localCollation, remoteCollation collations.ID, decimals uint32, exact bool) error {
 	if localErr != nil {
 		if remoteErr == nil {
 			return fmt.Errorf("%w: mysql response: %s", localErr, remoteVal)
@@ -373,7 +373,7 @@ func compareResult(localErr, remoteErr error, localVal, remoteVal sqltypes.Value
 			return fmt.Errorf("different results: %s; mysql response: %s (local collation: %s; mysql collation: %s)",
 				localVal.String(), remoteVal.String(), localCollationName, remoteCollationName)
 		}
-	} else if localVal.IsDateTime() && remoteVal.IsDateTime() {
+	} else if !exact && localVal.IsDateTime() && remoteVal.IsDateTime() {
 		localDatetime, ok := datetime.ParseDateTime(localVal.ToString())
 		if !ok {
 			return fmt.Errorf("error converting local value '%s' to datetime", localVal)
@@ -386,7 +386,7 @@ func compareResult(localErr, remoteErr error, localVal, remoteVal sqltypes.Value
 			return fmt.Errorf("different results: %s; mysql response: %s (local collation: %s; mysql collation: %s)",
 				localVal.String(), remoteVal.String(), localCollationName, remoteCollationName)
 		}
-	} else if localVal.IsTime() && remoteVal.IsTime() {
+	} else if !exact && localVal.IsTime() && remoteVal.IsTime() {
 		localTime, ok := datetime.ParseTime(localVal.ToString())
 		if !ok {
 			return fmt.Errorf("error converting local value '%s' to time", localVal)
@@ -413,5 +413,5 @@ func compareResult(localErr, remoteErr error, localVal, remoteVal sqltypes.Value
 }
 
 func (cr *mismatch) Error() string {
-	return compareResult(cr.localErr, cr.remoteErr, cr.localVal, cr.remoteVal, collations.Unknown, collations.Unknown, 0).Error()
+	return compareResult(cr.localErr, cr.remoteErr, cr.localVal, cr.remoteVal, collations.Unknown, collations.Unknown, 0, true).Error()
 }
