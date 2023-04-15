@@ -18,6 +18,7 @@ package semantics
 
 import (
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
@@ -37,8 +38,17 @@ func (a *analyzer) checkForInvalidConstructs(cursor *sqlparser.Cursor) error {
 		return checkUnion(node)
 	case *sqlparser.JSONTableExpr:
 		return &JSONTablesError{}
+	case *sqlparser.DerivedTable:
+		return checkDerived(node)
 	}
 
+	return nil
+}
+
+func checkDerived(node *sqlparser.DerivedTable) error {
+	if node.Lateral {
+		return vterrors.VT12001("lateral derived tables")
+	}
 	return nil
 }
 

@@ -38,73 +38,113 @@ type earlyRewriter struct {
 func (r *earlyRewriter) down(cursor *sqlparser.Cursor) error {
 	switch node := cursor.Node().(type) {
 	case *sqlparser.Where:
-		if node.Type != sqlparser.HavingClause {
-			return nil
-		}
-		rewriteHavingAndOrderBy(node, cursor.Parent())
+		handleWhereClause(node, cursor.Parent())
 	case sqlparser.SelectExprs:
-		_, isSel := cursor.Parent().(*sqlparser.Select)
-		if !isSel {
-			return nil
-		}
-		err := r.expandStar(cursor, node)
-		if err != nil {
-			return err
-		}
+		return handleSelectExprs(r, cursor, node)
 	case *sqlparser.JoinTableExpr:
-		if node.Join == sqlparser.StraightJoinType {
-			node.Join = sqlparser.NormalJoinType
-			r.warning = "straight join is converted to normal join"
-		}
+		handleJoinTableExpr(r, node)
 	case sqlparser.OrderBy:
-		r.clause = "order clause"
-		rewriteHavingAndOrderBy(node, cursor.Parent())
+		handleOrderBy(r, cursor, node)
 	case *sqlparser.OrExpr:
-		newNode := rewriteOrFalse(*node)
-		if newNode != nil {
-			cursor.Replace(newNode)
-		}
+		rewriteOrExpr(cursor, node)
 	case sqlparser.GroupBy:
 		r.clause = "group statement"
-
 	case *sqlparser.Literal:
-		newNode, err := r.rewriteOrderByExpr(node)
-		if err != nil {
-			return err
-		}
-		if newNode != nil {
-			cursor.Replace(newNode)
-		}
+		return handleLiteral(r, cursor, node)
 	case *sqlparser.CollateExpr:
-		lit, ok := node.Expr.(*sqlparser.Literal)
-		if !ok {
-			return nil
-		}
-		newNode, err := r.rewriteOrderByExpr(lit)
-		if err != nil {
-			return err
-		}
-		if newNode != nil {
-			node.Expr = newNode
-		}
+		return handleCollateExpr(r, node)
 	case *sqlparser.ComparisonExpr:
-		lft, lftOK := node.Left.(sqlparser.ValTuple)
-		rgt, rgtOK := node.Right.(sqlparser.ValTuple)
-		if !lftOK || !rgtOK || len(lft) != len(rgt) || node.Operator != sqlparser.EqualOp {
-			return nil
-		}
-		var predicates []sqlparser.Expr
-		for i, l := range lft {
-			r := rgt[i]
-			predicates = append(predicates, &sqlparser.ComparisonExpr{
-				Operator: sqlparser.EqualOp,
-				Left:     l,
-				Right:    r,
-				Escape:   node.Escape,
-			})
-		}
-		cursor.Replace(sqlparser.AndExpressions(predicates...))
+		return handleComparisonExpr(cursor, node)
 	}
+	return nil
+}
+
+// handleWhereClause processes WHERE clauses, specifically the HAVING clause.
+func handleWhereClause(node *sqlparser.Where, parent sqlparser.SQLNode) {
+	if node.Type != sqlparser.HavingClause {
+		return
+	}
+	rewriteHavingAndOrderBy(node, parent)
+}
+
+// handleSelectExprs expands * in SELECT expressions.
+func handleSelectExprs(r *earlyRewriter, cursor *sqlparser.Cursor, node sqlparser.SelectExprs) error {
+	_, isSel := cursor.Parent().(*sqlparser.Select)
+	if !isSel {
+		return nil
+	}
+	return r.expandStar(cursor, node)
+}
+
+// handleJoinTableExpr processes JOIN table expressions and handles the Straight Join type.
+func handleJoinTableExpr(r *earlyRewriter, node *sqlparser.JoinTableExpr) {
+	if node.Join != sqlparser.StraightJoinType {
+		return
+	}
+	node.Join = sqlparser.NormalJoinType
+	r.warning = "straight join is converted to normal join"
+}
+
+// handleOrderBy processes the ORDER BY clause.
+func handleOrderBy(r *earlyRewriter, cursor *sqlparser.Cursor, node sqlparser.OrderBy) {
+	r.clause = "order clause"
+	rewriteHavingAndOrderBy(node, cursor.Parent())
+}
+
+// rewriteOrExpr rewrites OR expressions when the right side is FALSE.
+func rewriteOrExpr(cursor *sqlparser.Cursor, node *sqlparser.OrExpr) {
+	newNode := rewriteOrFalse(*node)
+	if newNode != nil {
+		cursor.Replace(newNode)
+	}
+}
+
+// handleLiteral processes literals within the context of ORDER BY expressions.
+func handleLiteral(r *earlyRewriter, cursor *sqlparser.Cursor, node *sqlparser.Literal) error {
+	newNode, err := r.rewriteOrderByExpr(node)
+	if err != nil {
+		return err
+	}
+	if newNode != nil {
+		cursor.Replace(newNode)
+	}
+	return nil
+}
+
+// handleCollateExpr processes COLLATE expressions.
+func handleCollateExpr(r *earlyRewriter, node *sqlparser.CollateExpr) error {
+	lit, ok := node.Expr.(*sqlparser.Literal)
+	if !ok {
+		return nil
+	}
+	newNode, err := r.rewriteOrderByExpr(lit)
+	if err != nil {
+		return err
+	}
+	if newNode != nil {
+		node.Expr = newNode
+	}
+	return nil
+}
+
+// handleComparisonExpr processes Comparison expressions, specifically for tuples with equal length and EqualOp operator.
+func handleComparisonExpr(cursor *sqlparser.Cursor, node *sqlparser.ComparisonExpr) error {
+	lft, lftOK := node.Left.(sqlparser.ValTuple)
+	rgt, rgtOK := node.Right.(sqlparser.ValTuple)
+	if !lftOK || !rgtOK || len(lft) != len(rgt) || node.Operator != sqlparser.EqualOp {
+		return nil
+	}
+	var predicates []sqlparser.Expr
+	for i, l := range lft {
+		r := rgt[i]
+		predicates = append(predicates, &sqlparser.ComparisonExpr{
+			Operator: sqlparser.EqualOp,
+			Left:     l,
+			Right:    r,
+			Escape:   node.Escape,
+		})
+	}
+	cursor.Replace(sqlparser.AndExpressions(predicates...))
 	return nil
 }
 
