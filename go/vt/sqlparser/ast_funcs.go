@@ -1008,12 +1008,12 @@ func (node *Select) GetColumns() SelectExprs {
 	return node.SelectExprs
 }
 
-// SetComments implements the SelectStatement interface
+// SetComments implements the Commented interface
 func (node *Select) SetComments(comments Comments) {
 	node.Comments = comments.Parsed()
 }
 
-// GetComments implements the SelectStatement interface
+// GetParsedComments implements the Commented interface
 func (node *Select) GetParsedComments() *ParsedComments {
 	return node.Comments
 }
