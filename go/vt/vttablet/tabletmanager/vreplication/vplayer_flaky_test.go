@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"path"
 	"strconv"
 	"strings"
 	"sync"
@@ -30,6 +31,8 @@ import (
 	"github.com/nsf/jsondiff"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/vt/dbconfigs"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
@@ -38,64 +41,31 @@ import (
 	qh "vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication/queryhistory"
 )
 
-func TestPlayerBlob(t *testing.T) {
-	defer deleteTablet(addTablet(100))
-
-	execStatements(t, []string{
-		"create table t1(id int, val varchar(20), blb blob, primary key(id))",
-		fmt.Sprintf("create table %s.t1(id int, val varchar(20), blb blob, primary key(id))", vrepldb),
-	})
-	defer execStatements(t, []string{
-		"drop table t1",
-		fmt.Sprintf("drop table %s.t1", vrepldb),
-	})
-	env.SchemaEngine.Reload(context.Background())
-
-	filter := &binlogdatapb.Filter{
-		Rules: []*binlogdatapb.Rule{{
-			Match:  "t1",
-			Filter: "select * from t1",
-		}},
+func allowNoBlob2(t *testing.T) func() {
+	extraMyCnf := path.Join("/tmp", "binlog.cnf")
+	f, err := os.Create(extraMyCnf)
+	require.NoError(t, err)
+	_, err = f.WriteString("\nbinlog_row_image=noblob\n")
+	require.NoError(t, err)
+	err = f.Close()
+	require.NoError(t, err)
+	err = os.Setenv("EXTRA_MY_CNF", extraMyCnf)
+	require.NoError(t, err)
+	return func() {
+		os.Setenv("EXTRA_MY_CNF", "")
 	}
-	bls := &binlogdatapb.BinlogSource{
-		Keyspace: env.KeyspaceName,
-		Shard:    env.ShardName,
-		Filter:   filter,
-		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
+}
+
+func allowNoBlob(t *testing.T) func() {
+	externalConfig := map[string]*dbconfigs.DBConfigs{
+		"exta": env.Dbcfgs,
+		"extb": env.Dbcfgs,
 	}
-	cancel, _ := startVReplication(t, bls, "")
-	defer cancel()
+	env.Mysqld.ExecuteSuperQuery(context.Background(), "set @@global.binlog_row_image=noblob")
+	playerEngine = NewTestEngine(env.TopoServ, env.Cells[0], env.Mysqld, realDBClientFactory, realDBClientFactory, vrepldb, externalConfig)
+	playerEngine.Open(context.Background())
+	return func() {
 
-	testcases := []struct {
-		input  string
-		output string
-		table  string
-		data   [][]string
-	}{{
-		input:  "insert into t1(id,val,blb) values (1,'aaa','blb1')",
-		output: "insert into t1(id,val,blb) values (1,'aaa','blb1')",
-		table:  "t1",
-		data: [][]string{
-			{"1", "aaa", "blb1"},
-		},
-	}, {
-		input:  "update t1 set val = 'bbb' where id = 1",
-		output: "update t1 set val = 'bbb' where id = 1",
-		table:  "t1",
-		data: [][]string{
-			{"1", "bbb", "blb1"},
-		},
-	}}
-
-	for _, tcases := range testcases {
-		execStatements(t, []string{tcases.input})
-		output := qh.Expect(tcases.output)
-		expectNontxQueries(t, output)
-		time.Sleep(1 * time.Second)
-		log.Flush()
-		if tcases.table != "" {
-			expectData(t, tcases.table, tcases.data)
-		}
 	}
 }
 
@@ -2923,4 +2893,67 @@ func startVReplication(t *testing.T, bls *binlogdatapb.BinlogSource, pos string)
 			expectDeleteQueries(t)
 		})
 	}, int(qr.InsertID)
+}
+func TestPlayerBlob(t *testing.T) {
+	if !runNoBlobTest {
+		t.Skip()
+	}
+
+	defer deleteTablet(addTablet(100))
+	execStatements(t, []string{
+		"create table t1(id int, val varchar(20), blb blob, primary key(id))",
+		fmt.Sprintf("create table %s.t1(id int, val varchar(20), blb blob, primary key(id))", vrepldb),
+	})
+	defer execStatements(t, []string{
+		"drop table t1",
+		fmt.Sprintf("drop table %s.t1", vrepldb),
+	})
+	env.SchemaEngine.Reload(context.Background())
+
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match:  "t1",
+			Filter: "select * from t1",
+		}},
+	}
+	bls := &binlogdatapb.BinlogSource{
+		Keyspace: env.KeyspaceName,
+		Shard:    env.ShardName,
+		Filter:   filter,
+		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
+	}
+	cancel, _ := startVReplication(t, bls, "")
+	defer cancel()
+
+	testcases := []struct {
+		input  string
+		output string
+		table  string
+		data   [][]string
+	}{{
+		input:  "insert into t1(id,val,blb) values (1,'aaa','blb1')",
+		output: "insert into t1(id,val,blb) values (1,'aaa','blb1')",
+		table:  "t1",
+		data: [][]string{
+			{"1", "aaa", "blb1"},
+		},
+	}, {
+		input:  "update t1 set val = 'bbb' where id = 1",
+		output: "update t1 set val = 'bbb' where id = 1",
+		table:  "t1",
+		data: [][]string{
+			{"1", "bbb", "blb1"},
+		},
+	}}
+
+	for _, tcases := range testcases {
+		execStatements(t, []string{tcases.input})
+		output := qh.Expect(tcases.output)
+		expectNontxQueries(t, output)
+		time.Sleep(1 * time.Second)
+		log.Flush()
+		if tcases.table != "" {
+			expectData(t, tcases.table, tcases.data)
+		}
+	}
 }

@@ -449,7 +449,7 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 		return execParsedQuery(tp.Delete, bindvars, executor)
 	case before && after:
 		if !tp.pkChanged(bindvars) && !tp.HasExtraSourcePkColumns {
-			if vttablet.BinlogRowImageFullOnly || rowChange.DataColumns.Count == 0 {
+			if vttablet.BinlogRowImageFullOnly || rowChange.DataColumns == nil || rowChange.DataColumns.Count == 0 {
 				return execParsedQuery(tp.Update, bindvars, executor)
 			} else {
 				updateQuery, err := getQuery(tp.Update, bindvars)

@@ -2,8 +2,6 @@
 # the test-suite which is currently MySQL 5.7 based
 # In future it should be renamed testsuite.cnf
 
-binlog_row_image=noblob
-
 innodb_buffer_pool_size = 32M
 innodb_flush_log_at_trx_commit = 0
 innodb_log_buffer_size = 1M
