@@ -2841,7 +2841,8 @@ func startVReplication(t *testing.T, bls *binlogdatapb.BinlogSource, pos string)
 	if pos == "" {
 		pos = primaryPosition(t)
 	}
-	query := binlogplayer.CreateVReplication("test", bls, pos, 9223372036854775807, 9223372036854775807, 0, vrepldb, 0, 0, false)
+	// fake workflow type as MoveTables so that we can test with "noblob" binlog row image
+	query := binlogplayer.CreateVReplication("test", bls, pos, 9223372036854775807, 9223372036854775807, 0, vrepldb, binlogdatapb.VReplicationWorkflowType_MoveTables, 0, false)
 	qr, err := playerEngine.Exec(query)
 	if err != nil {
 		t.Fatal(err)
