@@ -51,10 +51,6 @@ var (
 	throttlerFactory       throttlerFactoryFunc
 )
 
-func init() {
-	resetTxThrottlerFactories()
-}
-
 func resetTxThrottlerFactories() {
 	healthCheckFactory = func(topoServer *topo.Server, cell string, cellsToWatch []string) discovery.HealthCheck {
 		return discovery.NewHealthCheck(context.Background(), discovery.DefaultHealthCheckRetryDelay, discovery.DefaultHealthCheckTimeout, topoServer, cell, strings.Join(cellsToWatch, ","))
@@ -65,6 +61,10 @@ func resetTxThrottlerFactories() {
 	throttlerFactory = func(name, unit string, threadCount int, maxRate, maxReplicationLag int64) (ThrottlerInterface, error) {
 		return throttler.NewThrottler(name, unit, threadCount, maxRate, maxReplicationLag)
 	}
+}
+
+func init() {
+	resetTxThrottlerFactories()
 }
 
 // ThrottlerInterface defines the public interface that is implemented by go/vt/throttler.Throttler
@@ -153,7 +153,6 @@ func NewTxThrottler(env tabletenv.Env, topoServer *topo.Server) *TxThrottler {
 	} else {
 		log.Infof("Initialized transaction throttler with config: %+v", txThrottler.config)
 	}
-
 	return txThrottler
 }
 
