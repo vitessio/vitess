@@ -1304,7 +1304,7 @@ The above rules work for both JOIN and LEFT JOIN nodes.
 
 `(a left join b on a.id=b.id) join (c left join d on c.id=d.id) on b.id=d.id`
 
-*In the above case, rows from b or d could be NULL. Fortunately, in SQL, NULL != NULL. So, tde outer-scope join will succeed only if rows from b and d are not NULL. If they’re not NULL, they’re guaranteed to be from the same shard. So, this makes them groupable. In fact, in the above case, the left joins in the inner scope are unnecessary. They could have just been normal joins. However, things would be very different if one had used the null-safe equal operator (<=>) for joins. But we’ll not treat null-safe equal as a valid join operator.*
+*In the above case, rows from b or d could be NULL. Fortunately, in SQL, NULL != NULL. So, the outer-scope join will succeed only if rows from b and d are not NULL. If they’re not NULL, they’re guaranteed to be from the same shard. So, this makes them groupable. In fact, in the above case, the left joins in the inner scope are unnecessary. They could have just been normal joins. However, things would be very different if one had used the null-safe equal operator (<=>) for joins. But we’ll not treat null-safe equal as a valid join operator.*
 
 When two nodes are grouped, the current join condition becomes the root of the new group, and it gets a routing property:
 
