@@ -136,9 +136,9 @@ func (b *builtinDateFormat) eval(env *ExpressionEnv) (eval, error) {
 	var t *evalTemporal
 	switch e := date.(type) {
 	case *evalTemporal:
-		t = e.toDateTime(-1)
+		t = e.toDateTime(datetime.DefaultPrecision)
 	default:
-		t = evalToDateTime(date, -1)
+		t = evalToDateTime(date, datetime.DefaultPrecision)
 		if t == nil || t.isZero() {
 			return nil, nil
 		}
@@ -202,7 +202,7 @@ func (call *builtinConvertTz) eval(env *ExpressionEnv) (eval, error) {
 		return nil, nil
 	}
 
-	dt := evalToDateTime(n)
+	dt := evalToDateTime(n, -1)
 	if dt == nil || dt.isZero() {
 		return nil, nil
 	}
@@ -211,7 +211,7 @@ func (call *builtinConvertTz) eval(env *ExpressionEnv) (eval, error) {
 	if !ok {
 		return nil, nil
 	}
-	return newEvalDateTime(out), nil
+	return newEvalDateTime(out, int(dt.prec)), nil
 }
 
 func (call *builtinConvertTz) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {

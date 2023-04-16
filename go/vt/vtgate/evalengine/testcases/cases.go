@@ -1335,7 +1335,7 @@ func FnConvertTz(yield Query) {
 		for _, tzFrom := range timezoneInputs {
 			for _, tzTo := range timezoneInputs {
 				q := fmt.Sprintf("CONVERT_TZ(%s, '%s', '%s')", num1, tzFrom, tzTo)
-				yield(q, nil)
+				yield(q, nil, true)
 			}
 		}
 	}

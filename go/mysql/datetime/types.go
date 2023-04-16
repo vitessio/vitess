@@ -112,16 +112,6 @@ func (t Time) Nanosecond() int {
 	return int(t.nanosecond)
 }
 
-func (t Time) Precision() int {
-	prec := 0
-	mod := uint32(1000000)
-	for ns := t.nanosecond / 1000; ns > 0; ns %= mod {
-		mod /= 10
-		prec++
-	}
-	return prec
-}
-
 func (t Time) Neg() bool {
 	return t.hour&negMask != 0
 }
@@ -174,6 +164,39 @@ func (t Time) Compare(t2 Time) int {
 		return 1
 	}
 	return 0
+}
+
+func (t Time) Round(p int) (r Time) {
+	if t.nanosecond == 0 {
+		return t
+	}
+
+	n := int(t.nanosecond)
+	prec := precs[p]
+	s := (n / prec) * prec
+	l := s + prec
+
+	if n-s >= l-n {
+		n = l
+	} else {
+		n = s
+	}
+
+	r = t
+	if n == 1e9 {
+		r.second++
+		n = 0
+		if r.second == 60 {
+			r.minute++
+			r.second = 0
+			if r.minute == 60 {
+				r.hour++
+				r.minute = 0
+			}
+		}
+	}
+	r.nanosecond = uint32(n)
+	return r
 }
 
 func (d Date) IsZero() bool {
@@ -329,6 +352,31 @@ func (dt DateTime) Compare(dt2 DateTime) int {
 		return cmp
 	}
 	return dt.Time.Compare(dt2.Time)
+}
+
+func (dt DateTime) Round(p int) (r DateTime) {
+	if dt.Time.nanosecond == 0 {
+		return dt
+	}
+
+	n := dt.Time.Nanosecond()
+	prec := precs[p]
+	s := (n / prec) * prec
+	l := s + prec
+
+	if n-s >= l-n {
+		n = l
+	} else {
+		n = s
+	}
+
+	r = dt
+	if n == 1e9 {
+		r.Time.nanosecond = 0
+		return FromStdTime(r.ToStdTime(time.Local).Add(time.Second))
+	}
+	r.Time.nanosecond = uint32(n)
+	return r
 }
 
 func FromStdTime(t time.Time) DateTime {

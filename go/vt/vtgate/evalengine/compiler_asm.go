@@ -3147,7 +3147,7 @@ func (asm *assembler) Fn_CONVERT_TZ() {
 			env.vm.sp -= 2
 			return 1
 		}
-		env.vm.stack[env.vm.sp-3] = env.vm.arena.newEvalDateTime(dt)
+		env.vm.stack[env.vm.sp-3] = env.vm.arena.newEvalDateTime(dt, n.prec)
 		env.vm.sp -= 2
 		return 1
 	}, "FN CONVERT_TZ DATETIME(SP-3), VARBINARY(SP-2), VARBINARY(SP-1)")

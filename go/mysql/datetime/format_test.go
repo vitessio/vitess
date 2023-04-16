@@ -45,7 +45,7 @@ func TestFormattingFromMySQL(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.timestamp, func(t *testing.T) {
-			dt, ok := ParseDateTime(tc.timestamp)
+			dt, _, ok := ParseDateTime(tc.timestamp, -1)
 			require.True(t, ok)
 
 			eval, err := Format(FormatString, dt, 6)

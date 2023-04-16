@@ -161,7 +161,7 @@ func (e *evalBytes) truncateInPlace(size int) {
 }
 
 func (e *evalBytes) toDateBestEffort() datetime.DateTime {
-	if t, _ := datetime.ParseDateTime(e.string()); !t.IsZero() {
+	if t, _, _ := datetime.ParseDateTime(e.string(), -1); !t.IsZero() {
 		return t
 	}
 	if t, _ := datetime.ParseDate(e.string()); !t.IsZero() {

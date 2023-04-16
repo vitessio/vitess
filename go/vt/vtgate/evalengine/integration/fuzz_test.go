@@ -374,11 +374,11 @@ func compareResult(localErr, remoteErr error, localVal, remoteVal sqltypes.Value
 				localVal.String(), remoteVal.String(), localCollationName, remoteCollationName)
 		}
 	} else if !exact && localVal.IsDateTime() && remoteVal.IsDateTime() {
-		localDatetime, ok := datetime.ParseDateTime(localVal.ToString())
+		localDatetime, _, ok := datetime.ParseDateTime(localVal.ToString(), -1)
 		if !ok {
 			return fmt.Errorf("error converting local value '%s' to datetime", localVal)
 		}
-		remoteDatetime, ok := datetime.ParseDateTime(remoteVal.ToString())
+		remoteDatetime, _, ok := datetime.ParseDateTime(remoteVal.ToString(), -1)
 		if !ok {
 			return fmt.Errorf("error converting remote value '%s' to datetime", remoteVal)
 		}
@@ -387,11 +387,11 @@ func compareResult(localErr, remoteErr error, localVal, remoteVal sqltypes.Value
 				localVal.String(), remoteVal.String(), localCollationName, remoteCollationName)
 		}
 	} else if !exact && localVal.IsTime() && remoteVal.IsTime() {
-		localTime, ok := datetime.ParseTime(localVal.ToString())
+		localTime, _, ok := datetime.ParseTime(localVal.ToString(), -1)
 		if !ok {
 			return fmt.Errorf("error converting local value '%s' to time", localVal)
 		}
-		remoteTime, ok := datetime.ParseTime(remoteVal.ToString())
+		remoteTime, _, ok := datetime.ParseTime(remoteVal.ToString(), -1)
 		if !ok {
 			return fmt.Errorf("error converting remote value '%s' to time", remoteVal)
 		}

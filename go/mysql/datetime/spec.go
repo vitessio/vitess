@@ -328,7 +328,9 @@ func (s fmtSecond) parse(tp *timeparts, b string) (out string, ok bool) {
 		n := 2
 		for ; n < len(out) && isDigit(out, n); n++ {
 		}
-		tp.nsec, ok = parseNanoseconds(out, n)
+		var l int
+		tp.nsec, l, ok = parseNanoseconds(out, n)
+		tp.prec = uint8(l)
 		out = out[n:]
 	}
 	return

@@ -309,6 +309,22 @@ func TestCompilerSingle(t *testing.T) {
 			expression: `cast(time '5 12:34:58' as json)`,
 			result:     `JSON("\"04:34:58.000000\"")`,
 		},
+		{
+			expression: `CAST(20000229235959.999950 AS DATETIME(4))`,
+			result:     `DATETIME("2000-03-01 00:00:00.0000")`,
+		},
+		{
+			expression: `CAST(1.5678 AS TIME(2))`,
+			result:     `TIME("00:00:01.57")`,
+		},
+		{
+			expression: `CAST(235959.995 AS TIME(2))`,
+			result:     `TIME("24:00:00.00")`,
+		},
+		{
+			expression: `CAST(-235959.995 AS TIME(2))`,
+			result:     `TIME("-24:00:00.00")`,
+		},
 	}
 
 	for _, tc := range testCases {

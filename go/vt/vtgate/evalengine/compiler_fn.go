@@ -939,7 +939,7 @@ func (c *compiler) compileFn_DateFormat(call *builtinDateFormat) (ctype, error) 
 	switch arg.Type {
 	case sqltypes.Datetime, sqltypes.Date:
 	default:
-		c.asm.Convert_xDT_nz(1, -1)
+		c.asm.Convert_xDT_nz(1, datetime.DefaultPrecision)
 	}
 
 	format, err := c.compileExpr(call.Arguments[1])
@@ -995,7 +995,7 @@ func (c *compiler) compileFn_ConvertTz(call *builtinConvertTz) (ctype, error) {
 	switch n.Type {
 	case sqltypes.Datetime, sqltypes.Date:
 	default:
-		c.asm.Convert_xDT_nz(3)
+		c.asm.Convert_xDT_nz(3, -1)
 	}
 
 	c.asm.Fn_CONVERT_TZ()
