@@ -367,7 +367,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %token <str> LOCATE POSITION
 %token <str> ST_GeometryCollectionFromText ST_GeometryFromText ST_LineStringFromText ST_MultiLineStringFromText ST_MultiPointFromText ST_MultiPolygonFromText ST_PointFromText ST_PolygonFromText
 %token <str> ST_GeometryCollectionFromWKB ST_GeometryFromWKB ST_LineStringFromWKB ST_MultiLineStringFromWKB ST_MultiPointFromWKB ST_MultiPolygonFromWKB ST_PointFromWKB ST_PolygonFromWKB
-%token <str> ST_AsBinary ST_AsText ST_Dimension ST_Envelope ST_IsSimple ST_IsEmpty ST_GeometryType
+%token <str> ST_AsBinary ST_AsText ST_Dimension ST_Envelope ST_IsSimple ST_IsEmpty ST_GeometryType ST_X ST_Y ST_Latitude ST_Longitude
 
 // Match
 %token <str> MATCH AGAINST BOOLEAN LANGUAGE WITH QUERY EXPANSION WITHOUT VALIDATION
@@ -807,7 +807,7 @@ query_expression:
   }
 | with_clause query_expression_parens order_by_clause limit_opt
   {
-  		$2.SetWith($1)
+  	$2.SetWith($1)
 		$2.SetOrderBy($3)
 		$2.SetLimit($4)
 		$$ = $2
@@ -6128,6 +6128,38 @@ UTC_DATE func_paren_opt
 | ST_GeometryType openb expression closeb
   {
     $$ = &GeomPropertyFuncExpr{ Property: GeometryType, Geom: $3}
+  }
+| ST_Latitude openb expression closeb
+  {
+    $$ = &PointPropertyFuncExpr{ Property: Latitude, Point: $3}
+  }
+| ST_Latitude openb expression ',' expression closeb
+  {
+    $$ = &PointPropertyFuncExpr{ Property: Latitude, Point: $3, ValueToSet: $5}
+  }
+| ST_Longitude openb expression closeb
+  {
+    $$ = &PointPropertyFuncExpr{ Property: Longitude, Point: $3}
+  }
+| ST_Longitude openb expression ',' expression closeb
+  {
+    $$ = &PointPropertyFuncExpr{ Property: Longitude, Point: $3, ValueToSet: $5}
+  }
+| ST_X openb expression closeb
+  {
+    $$ = &PointPropertyFuncExpr{ Property: XCordinate, Point: $3}
+  }
+| ST_X openb expression ',' expression closeb
+  {
+    $$ = &PointPropertyFuncExpr{ Property: XCordinate, Point: $3, ValueToSet: $5}
+  }
+| ST_Y openb expression closeb
+  {
+    $$ = &PointPropertyFuncExpr{ Property: YCordinate, Point: $3}
+  }
+| ST_Y openb expression ',' expression closeb
+  {
+    $$ = &PointPropertyFuncExpr{ Property: YCordinate, Point: $3, ValueToSet: $5}
   }
 | ST_GeometryFromText openb expression closeb
   {
