@@ -27,6 +27,7 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/dbconfigs"
 
 	"github.com/spf13/pflag"
@@ -117,7 +118,7 @@ func cleanup() {
 	env.Close()
 }
 
-func setup(mode string) (func(), int) {
+func setup() (func(), int) {
 	globalDBQueries = make(chan string, 1000)
 	resetBinlogClient()
 	var err error
@@ -144,10 +145,6 @@ func setup(mode string) (func(), int) {
 		fmt.Fprintf(os.Stderr, "%v", err)
 		return nil, 1
 	}
-	if err := env.Mysqld.ExecuteSuperQuery(context.Background(), fmt.Sprintf("set @@global.binlog_row_image='%s'", mode)); err != nil {
-		fmt.Fprintf(os.Stderr, "%v", err)
-		return nil, 1
-	}
 	externalConfig := map[string]*dbconfigs.DBConfigs{
 		"exta": env.Dbcfgs,
 		"extb": env.Dbcfgs,
@@ -164,7 +161,7 @@ func TestMain(m *testing.M) {
 	binlogplayer.SetProtocol("vreplication_test_framework", "test")
 	_flag.ParseFlagsForTest()
 	exitCode := func() int {
-		_, ret := setup("full")
+		_, ret := setup()
 		if ret > 0 {
 			return ret
 		}
@@ -175,11 +172,16 @@ func TestMain(m *testing.M) {
 
 		cleanup()
 		runNoBlobTest = true
-		deferFunc, ret := setup("noblob")
+		if err := utils.SetBinlogRowImageMode("noblob", "/tmp"); err != nil {
+			panic(err)
+		}
+		defer utils.SetBinlogRowImageMode("", "/tmp")
+		deferFunc, ret := setup()
 		if ret > 0 {
 			return ret
 		}
-		defer deferFunc()
+		_ = deferFunc
+		//defer deferFunc()
 
 		ret = m.Run()
 		return ret

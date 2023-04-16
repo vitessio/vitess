@@ -24,8 +24,6 @@ import (
 
 	"vitess.io/vitess/go/vt/vttablet"
 
-	"golang.org/x/exp/slices"
-
 	"vitess.io/vitess/go/vt/log"
 
 	"google.golang.org/protobuf/proto"
@@ -214,6 +212,7 @@ type TablePlan struct {
 	HasExtraSourcePkColumns bool
 
 	TablePlanBuilder *tablePlanBuilder
+	PartialInserts   map[string]*sqlparser.ParsedQuery
 	PartialUpdates   map[string]*sqlparser.ParsedQuery
 }
 
@@ -367,6 +366,95 @@ func isBitSet(data []byte, index int) bool {
 	return data[byteIndex]&bitMask > 0
 }
 
+func (tpb *tablePlanBuilder) generatePartialValuesPart(buf *sqlparser.TrackedBuffer, bvf *bindvarFormatter, dataColumns *binlogdatapb.Bitmap) *sqlparser.ParsedQuery {
+	bvf.mode = bvAfter
+	separator := "("
+	for ind, cexpr := range tpb.colExprs {
+		if tpb.isColumnGenerated(cexpr.colName) {
+			continue
+		}
+		if !isBitSet(dataColumns.Cols, ind) {
+			continue
+		}
+		buf.Myprintf("%s", separator)
+		separator = ","
+		switch cexpr.operation {
+		case opExpr:
+			switch cexpr.colType {
+			case querypb.Type_JSON:
+				buf.Myprintf("%v", cexpr.expr)
+			case querypb.Type_DATETIME:
+				sourceTZ := tpb.source.SourceTimeZone
+				targetTZ := tpb.source.TargetTimeZone
+				if sourceTZ != "" && targetTZ != "" {
+					buf.Myprintf("convert_tz(%v, '%s', '%s')", cexpr.expr, sourceTZ, targetTZ)
+				} else {
+					buf.Myprintf("%v", cexpr.expr)
+				}
+			default:
+				buf.Myprintf("%v", cexpr.expr)
+			}
+		}
+	}
+	buf.Myprintf(")")
+	return buf.ParsedQuery()
+}
+
+func (tpb *tablePlanBuilder) generatePartialInsertPart(buf *sqlparser.TrackedBuffer, dataColumns *binlogdatapb.Bitmap) *sqlparser.ParsedQuery {
+	buf.Myprintf("insert into %v(", tpb.name)
+	separator := ""
+	for ind, cexpr := range tpb.colExprs {
+		if tpb.isColumnGenerated(cexpr.colName) {
+			continue
+		}
+		if !isBitSet(dataColumns.Cols, ind) {
+			continue
+		}
+		buf.Myprintf("%s%v", separator, cexpr.colName)
+		separator = ","
+	}
+	buf.Myprintf(")", tpb.name)
+	return buf.ParsedQuery()
+}
+
+func (tpb *tablePlanBuilder) generatePartialSelectPart(buf *sqlparser.TrackedBuffer, bvf *bindvarFormatter, dataColumns *binlogdatapb.Bitmap) *sqlparser.ParsedQuery {
+	bvf.mode = bvAfter
+	buf.WriteString(" select ")
+	separator := ""
+	for ind, cexpr := range tpb.colExprs {
+		if tpb.isColumnGenerated(cexpr.colName) {
+			continue
+		}
+		if !isBitSet(dataColumns.Cols, ind) {
+			continue
+		}
+		buf.Myprintf("%s", separator)
+		separator = ", "
+		buf.Myprintf("%v", cexpr.expr)
+
+	}
+	buf.WriteString(" from dual where ")
+	tpb.generatePKConstraint(buf, bvf)
+	return buf.ParsedQuery()
+}
+
+func (tpb *tablePlanBuilder) createPartialInsertQuery(dataColumns *binlogdatapb.Bitmap) *sqlparser.ParsedQuery {
+	bvf := &bindvarFormatter{}
+	buf := sqlparser.NewTrackedBuffer(bvf.formatter)
+
+	tpb.generatePartialInsertPart(buf, dataColumns)
+	if tpb.lastpk == nil {
+		// If there's no lastpk, generate straight values.
+		buf.Myprintf(" values ", tpb.name)
+		tpb.generatePartialValuesPart(buf, bvf, dataColumns)
+	} else {
+		// If there is a lastpk, generate values as a select from dual
+		// where the pks < lastpk
+		tpb.generatePartialSelectPart(buf, bvf, dataColumns)
+	}
+	return buf.ParsedQuery()
+}
+
 func (tpb *tablePlanBuilder) createPartialUpdateQuery(dataColumns *binlogdatapb.Bitmap) *sqlparser.ParsedQuery {
 	bvf := &bindvarFormatter{}
 	buf := sqlparser.NewTrackedBuffer(bvf.formatter)
@@ -410,6 +498,19 @@ func (tpb *tablePlanBuilder) createPartialUpdateQuery(dataColumns *binlogdatapb.
 	tpb.generateWhere(buf, bvf)
 	return buf.ParsedQuery()
 }
+func (tp *TablePlan) getPartialInsertQuery(dataColumns *binlogdatapb.Bitmap) (*sqlparser.ParsedQuery, error) {
+	key := fmt.Sprintf("%x", dataColumns.Cols)
+	ins, ok := tp.PartialInserts[key]
+	if ok {
+		return ins, nil
+	}
+	ins = tp.TablePlanBuilder.createPartialInsertQuery(dataColumns)
+	if ins == nil {
+		return ins, vterrors.New(vtrpcpb.Code_INTERNAL, fmt.Sprintf("Unable to create partial insert query for %s", tp.TargetName))
+	}
+	tp.PartialInserts[key] = ins
+	return ins, nil
+}
 
 func (tp *TablePlan) getPartialUpdateQuery(dataColumns *binlogdatapb.Bitmap) (*sqlparser.ParsedQuery, error) {
 	key := fmt.Sprintf("%x", dataColumns.Cols)
@@ -425,40 +526,14 @@ func (tp *TablePlan) getPartialUpdateQuery(dataColumns *binlogdatapb.Bitmap) (*s
 	return upd, nil
 }
 
-// unused now, was the initial non-optimal implementation, to be removed before PR
-func (tp *TablePlan) removeNullColumns(query string, dataColumns *binlogdatapb.Bitmap) (string, error) {
-	var colsToRemove []int64
-	var numPKs int64
-	var i int64
-	for colNum := int64(0); colNum < dataColumns.Count; colNum++ {
-		if tp.PKIndices[colNum] {
-			numPKs++
-			continue
-		}
-		byteIndex := colNum / 8
-		bitMask := byte(1 << (uint(colNum) & 0x7))
-		isPresent := dataColumns.Cols[byteIndex]&bitMask > 0
-		if !isPresent {
-			colsToRemove = append(colsToRemove, i)
-		}
-		i++
-	}
-	if len(colsToRemove) > 0 {
-		ast, err := sqlparser.Parse(query)
-		if err != nil {
-			return "", err
-		}
-		upd, ok := ast.(*sqlparser.Update)
-		if !ok {
-			return "", vterrors.New(vtrpcpb.Code_INTERNAL, fmt.Sprintf("Not a update query: %s", query))
-		}
+func (tp *TablePlan) isPartial(rowChange *binlogdatapb.RowChange) bool {
+	if vttablet.BinlogRowImageFullOnly ||
+		rowChange.DataColumns == nil ||
+		rowChange.DataColumns.Count == 0 {
 
-		for _, colIndex := range colsToRemove {
-			upd.Exprs = slices.Delete(upd.Exprs, int(colIndex), int(colIndex)+1)
-		}
-		return sqlparser.String(upd), nil
+		return false
 	}
-	return query, nil
+	return true
 }
 
 func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor func(string) (*sqltypes.Result, error)) (*sqltypes.Result, error) {
@@ -504,7 +579,15 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 		if tp.isOutsidePKRange(bindvars, before, after, "insert") {
 			return nil, nil
 		}
-		return execParsedQuery(tp.Insert, bindvars, executor)
+		if !tp.isPartial(rowChange) {
+			return execParsedQuery(tp.Insert, bindvars, executor)
+		} else {
+			ins, err := tp.getPartialInsertQuery(rowChange.DataColumns)
+			if err != nil {
+				return nil, err
+			}
+			return execParsedQuery(ins, bindvars, executor)
+		}
 	case before && !after:
 		if tp.Delete == nil {
 			return nil, nil
@@ -512,27 +595,14 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 		return execParsedQuery(tp.Delete, bindvars, executor)
 	case before && after:
 		if !tp.pkChanged(bindvars) && !tp.HasExtraSourcePkColumns {
-			if vttablet.BinlogRowImageFullOnly || rowChange.DataColumns == nil || rowChange.DataColumns.Count == 0 {
+			if !tp.isPartial(rowChange) {
 				return execParsedQuery(tp.Update, bindvars, executor)
 			} else {
-				if true {
-					upd, err := tp.getPartialUpdateQuery(rowChange.DataColumns)
-					if err != nil {
-						return nil, err
-					}
-					return execParsedQuery(upd, bindvars, executor)
-				} else {
-					// unused now, was the initial non-optimal implementation, to be removed before PR
-					updateQuery, err := getQuery(tp.Update, bindvars)
-					if err != nil {
-						return nil, err
-					}
-					newUpdateQuery, err := tp.removeNullColumns(updateQuery, rowChange.DataColumns)
-					if err != nil {
-						return nil, err
-					}
-					return executor(newUpdateQuery)
+				upd, err := tp.getPartialUpdateQuery(rowChange.DataColumns)
+				if err != nil {
+					return nil, err
 				}
+				return execParsedQuery(upd, bindvars, executor)
 			}
 		}
 		if tp.Delete != nil {
