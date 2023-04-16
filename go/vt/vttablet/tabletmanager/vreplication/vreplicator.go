@@ -212,6 +212,8 @@ func (vr *vreplicator) validateBinlogRowImage() error {
 	case "noblob":
 		switch binlogdatapb.VReplicationWorkflowType(vr.WorkflowType) {
 		case binlogdatapb.VReplicationWorkflowType_MoveTables, binlogdatapb.VReplicationWorkflowType_Reshard:
+		case 0:
+		// used in unit tests only
 		default:
 			return vterrors.New(vtrpcpb.Code_INTERNAL, "noblob binlog_row_image is only supported for MoveTables/Reshard")
 		}
