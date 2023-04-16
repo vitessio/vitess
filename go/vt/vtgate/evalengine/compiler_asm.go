@@ -29,7 +29,9 @@ import (
 	"math"
 	"math/bits"
 	"strconv"
+	"time"
 
+	"vitess.io/vitess/go/hack"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/collations/charset"
 	"vitess.io/vitess/go/mysql/datetime"
@@ -1078,6 +1080,21 @@ func (asm *assembler) Convert_xD(offset int) {
 		}
 		return 1
 	}, "CONV (SP-%d), DATE", offset)
+}
+
+func (asm *assembler) Convert_xD_nz(offset int) {
+	asm.emit(func(env *ExpressionEnv) int {
+		// Need to explicitly check here or we otherwise
+		// store a nil wrapper in an interface vs. a direct
+		// nil.
+		d := evalToDate(env.vm.stack[env.vm.sp-offset])
+		if d == nil || d.isZero() {
+			env.vm.stack[env.vm.sp-offset] = nil
+		} else {
+			env.vm.stack[env.vm.sp-offset] = d
+		}
+		return 1
+	}, "CONV (SP-%d), DATE(NOZERO)", offset)
 }
 
 func (asm *assembler) Convert_xDT(offset, prec int) {
@@ -3151,4 +3168,251 @@ func (asm *assembler) Fn_CONVERT_TZ() {
 		env.vm.sp -= 2
 		return 1
 	}, "FN CONVERT_TZ DATETIME(SP-3), VARBINARY(SP-2), VARBINARY(SP-1)")
+}
+
+func (asm *assembler) Fn_DAYOFMONTH() {
+	asm.emit(func(env *ExpressionEnv) int {
+		if env.vm.stack[env.vm.sp-1] == nil {
+			return 1
+		}
+		arg := env.vm.stack[env.vm.sp-1].(*evalTemporal)
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalInt64(int64(arg.dt.Date.Day()))
+		return 1
+	}, "FN DAYOFMONTH DATE(SP-1)")
+}
+
+func (asm *assembler) Fn_DAYOFWEEK() {
+	asm.emit(func(env *ExpressionEnv) int {
+		if env.vm.stack[env.vm.sp-1] == nil {
+			return 1
+		}
+		arg := env.vm.stack[env.vm.sp-1].(*evalTemporal)
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalInt64(int64(arg.dt.Date.Weekday() + 1))
+		return 1
+	}, "FN DAYOFWEEK DATE(SP-1)")
+}
+
+func (asm *assembler) Fn_DAYOFYEAR() {
+	asm.emit(func(env *ExpressionEnv) int {
+		if env.vm.stack[env.vm.sp-1] == nil {
+			return 1
+		}
+		arg := env.vm.stack[env.vm.sp-1].(*evalTemporal)
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalInt64(int64(arg.dt.Date.Yearday()))
+		return 1
+	}, "FN DAYOFYEAR DATE(SP-1)")
+}
+
+func (asm *assembler) Fn_HOUR() {
+	asm.emit(func(env *ExpressionEnv) int {
+		if env.vm.stack[env.vm.sp-1] == nil {
+			return 1
+		}
+		arg := env.vm.stack[env.vm.sp-1].(*evalTemporal)
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalInt64(int64(arg.dt.Time.Hour()))
+		return 1
+	}, "FN HOUR TIME(SP-1)")
+}
+
+func (asm *assembler) Fn_MICROSECOND() {
+	asm.emit(func(env *ExpressionEnv) int {
+		if env.vm.stack[env.vm.sp-1] == nil {
+			return 1
+		}
+		arg := env.vm.stack[env.vm.sp-1].(*evalTemporal)
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalInt64(int64(arg.dt.Time.Nanosecond() / 1000))
+		return 1
+	}, "FN MICROSECOND TIME(SP-1)")
+}
+
+func (asm *assembler) Fn_MINUTE() {
+	asm.emit(func(env *ExpressionEnv) int {
+		if env.vm.stack[env.vm.sp-1] == nil {
+			return 1
+		}
+		arg := env.vm.stack[env.vm.sp-1].(*evalTemporal)
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalInt64(int64(arg.dt.Time.Minute()))
+		return 1
+	}, "FN MINUTE TIME(SP-1)")
+}
+
+func (asm *assembler) Fn_MONTH() {
+	asm.emit(func(env *ExpressionEnv) int {
+		if env.vm.stack[env.vm.sp-1] == nil {
+			return 1
+		}
+		arg := env.vm.stack[env.vm.sp-1].(*evalTemporal)
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalInt64(int64(arg.dt.Date.Month()))
+		return 1
+	}, "FN MONTH DATE(SP-1)")
+}
+
+func (asm *assembler) Fn_MONTHNAME(col collations.TypedCollation) {
+	asm.emit(func(env *ExpressionEnv) int {
+		if env.vm.stack[env.vm.sp-1] == nil {
+			return 1
+		}
+		arg := env.vm.stack[env.vm.sp-1].(*evalTemporal)
+		m := arg.dt.Date.Month()
+		if m < 1 || m > 12 {
+			env.vm.stack[env.vm.sp-1] = nil
+			return 1
+		}
+
+		mb := hack.StringBytes(time.Month(arg.dt.Date.Month()).String())
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalText(mb, col)
+		return 1
+	}, "FN MONTHNAME DATE(SP-1)")
+}
+
+func (asm *assembler) Fn_QUARTER() {
+	asm.emit(func(env *ExpressionEnv) int {
+		if env.vm.stack[env.vm.sp-1] == nil {
+			return 1
+		}
+		arg := env.vm.stack[env.vm.sp-1].(*evalTemporal)
+		switch arg.dt.Date.Month() {
+		case 0:
+			env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalInt64(0)
+		case 1, 2, 3:
+			env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalInt64(1)
+		case 4, 5, 6:
+			env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalInt64(2)
+		case 7, 8, 9:
+			env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalInt64(3)
+		case 10, 11, 12:
+			env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalInt64(4)
+		}
+		return 1
+	}, "FN QUARTER DATE(SP-1)")
+}
+
+func (asm *assembler) Fn_SECOND() {
+	asm.emit(func(env *ExpressionEnv) int {
+		if env.vm.stack[env.vm.sp-1] == nil {
+			return 1
+		}
+		arg := env.vm.stack[env.vm.sp-1].(*evalTemporal)
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalInt64(int64(arg.dt.Time.Second()))
+		return 1
+	}, "FN SECOND TIME(SP-1)")
+}
+
+func (asm *assembler) Fn_WEEK0() {
+	asm.emit(func(env *ExpressionEnv) int {
+		if env.vm.stack[env.vm.sp-1] == nil {
+			return 1
+		}
+		arg := env.vm.stack[env.vm.sp-1].(*evalTemporal)
+		year, week := arg.dt.Date.SundayWeek()
+		if year < arg.dt.Date.Year() {
+			week = 0
+		}
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalInt64(int64(week))
+		return 1
+	}, "FN WEEK0 DATE(SP-1)")
+}
+
+func (asm *assembler) Fn_WEEK() {
+	asm.adjustStack(-1)
+	asm.emit(func(env *ExpressionEnv) int {
+		if env.vm.stack[env.vm.sp-2] == nil {
+			env.vm.sp--
+			return 1
+		}
+		arg := env.vm.stack[env.vm.sp-2].(*evalTemporal)
+		mode := env.vm.stack[env.vm.sp-1].(*evalInt64)
+
+		switch mode.i {
+		case 0:
+			year, week := arg.dt.Date.SundayWeek()
+			if year < arg.dt.Date.Year() {
+				week = 0
+			}
+			env.vm.stack[env.vm.sp-2] = env.vm.arena.newEvalInt64(int64(week))
+		case 1:
+			year, week := arg.dt.Date.ISOWeek()
+			if year < arg.dt.Date.Year() {
+				week = 0
+			}
+			env.vm.stack[env.vm.sp-2] = env.vm.arena.newEvalInt64(int64(week))
+		case 2:
+			_, week := arg.dt.Date.SundayWeek()
+			env.vm.stack[env.vm.sp-2] = env.vm.arena.newEvalInt64(int64(week))
+		case 3:
+			_, week := arg.dt.Date.ISOWeek()
+			env.vm.stack[env.vm.sp-2] = env.vm.arena.newEvalInt64(int64(week))
+		}
+		env.vm.sp--
+		return 1
+	}, "FN WEEK DATE(SP-1)")
+}
+
+func (asm *assembler) Fn_WEEKDAY() {
+	asm.emit(func(env *ExpressionEnv) int {
+		if env.vm.stack[env.vm.sp-1] == nil {
+			return 1
+		}
+		arg := env.vm.stack[env.vm.sp-1].(*evalTemporal)
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalInt64(int64(arg.dt.Date.Weekday()+6) % 7)
+		return 1
+	}, "FN WEEKDAY DATE(SP-1)")
+}
+
+func (asm *assembler) Fn_WEEKOFYEAR() {
+	asm.emit(func(env *ExpressionEnv) int {
+		if env.vm.stack[env.vm.sp-1] == nil {
+			return 1
+		}
+		arg := env.vm.stack[env.vm.sp-1].(*evalTemporal)
+		_, week := arg.dt.Date.ISOWeek()
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalInt64(int64(week))
+		return 1
+	}, "FN WEEKOFYEAR DATE(SP-1)")
+}
+
+func (asm *assembler) Fn_YEAR() {
+	asm.emit(func(env *ExpressionEnv) int {
+		if env.vm.stack[env.vm.sp-1] == nil {
+			return 1
+		}
+		arg := env.vm.stack[env.vm.sp-1].(*evalTemporal)
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalInt64(int64(arg.dt.Date.Year()))
+		return 1
+	}, "FN YEAR DATE(SP-1)")
+}
+
+func (asm *assembler) Fn_YEARWEEK0() {
+	asm.emit(func(env *ExpressionEnv) int {
+		if env.vm.stack[env.vm.sp-1] == nil {
+			return 1
+		}
+		arg := env.vm.stack[env.vm.sp-1].(*evalTemporal)
+		year, week := arg.dt.Date.SundayWeek()
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalInt64(int64(year*100 + week))
+		return 1
+	}, "FN YEARWEEK0 DATE(SP-1)")
+}
+
+func (asm *assembler) Fn_YEARWEEK() {
+	asm.adjustStack(-1)
+	asm.emit(func(env *ExpressionEnv) int {
+		if env.vm.stack[env.vm.sp-2] == nil {
+			env.vm.sp--
+			return 1
+		}
+		arg := env.vm.stack[env.vm.sp-2].(*evalTemporal)
+		mode := env.vm.stack[env.vm.sp-1].(*evalInt64)
+
+		switch mode.i {
+		case 0, 2:
+			year, week := arg.dt.Date.SundayWeek()
+			env.vm.stack[env.vm.sp-2] = env.vm.arena.newEvalInt64(int64(year*100 + week))
+		case 1, 3:
+			year, week := arg.dt.Date.ISOWeek()
+			env.vm.stack[env.vm.sp-2] = env.vm.arena.newEvalInt64(int64(year*100 + week))
+		}
+		env.vm.sp--
+		return 1
+	}, "FN YEARWEEK DATE(SP-1)")
 }

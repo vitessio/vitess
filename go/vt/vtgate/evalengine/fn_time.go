@@ -24,6 +24,8 @@ import (
 	"vitess.io/vitess/go/mysql/datetime"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 var SystemTime = time.Now
@@ -53,6 +55,75 @@ type (
 		CallExpr
 		collate collations.ID
 	}
+
+	builtinDate struct {
+		CallExpr
+	}
+
+	builtinDayOfMonth struct {
+		CallExpr
+	}
+
+	builtinDayOfWeek struct {
+		CallExpr
+	}
+
+	builtinDayOfYear struct {
+		CallExpr
+	}
+
+	builtinHour struct {
+		CallExpr
+	}
+
+	builtinMicrosecond struct {
+		CallExpr
+	}
+
+	builtinMinute struct {
+		CallExpr
+	}
+
+	builtinMonth struct {
+		CallExpr
+	}
+
+	builtinMonthName struct {
+		CallExpr
+		collate collations.ID
+	}
+
+	builtinQuarter struct {
+		CallExpr
+	}
+
+	builtinSecond struct {
+		CallExpr
+	}
+
+	builtinTime struct {
+		CallExpr
+	}
+
+	builtinWeek struct {
+		CallExpr
+	}
+
+	builtinWeekDay struct {
+		CallExpr
+	}
+
+	builtinWeekOfYear struct {
+		CallExpr
+	}
+
+	builtinYear struct {
+		CallExpr
+	}
+
+	builtinYearWeek struct {
+		CallExpr
+	}
 )
 
 var _ Expr = (*builtinNow)(nil)
@@ -60,6 +131,23 @@ var _ Expr = (*builtinSysdate)(nil)
 var _ Expr = (*builtinCurdate)(nil)
 var _ Expr = (*builtinUtcDate)(nil)
 var _ Expr = (*builtinDateFormat)(nil)
+var _ Expr = (*builtinDate)(nil)
+var _ Expr = (*builtinDayOfMonth)(nil)
+var _ Expr = (*builtinDayOfWeek)(nil)
+var _ Expr = (*builtinDayOfYear)(nil)
+var _ Expr = (*builtinHour)(nil)
+var _ Expr = (*builtinMicrosecond)(nil)
+var _ Expr = (*builtinMinute)(nil)
+var _ Expr = (*builtinMonth)(nil)
+var _ Expr = (*builtinMonthName)(nil)
+var _ Expr = (*builtinQuarter)(nil)
+var _ Expr = (*builtinSecond)(nil)
+var _ Expr = (*builtinTime)(nil)
+var _ Expr = (*builtinWeek)(nil)
+var _ Expr = (*builtinWeekDay)(nil)
+var _ Expr = (*builtinWeekOfYear)(nil)
+var _ Expr = (*builtinYear)(nil)
+var _ Expr = (*builtinYearWeek)(nil)
 
 func (call *builtinNow) eval(env *ExpressionEnv) (eval, error) {
 	now := env.time(call.utc)
@@ -217,4 +305,405 @@ func (call *builtinConvertTz) eval(env *ExpressionEnv) (eval, error) {
 func (call *builtinConvertTz) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
 	_, f := call.Arguments[0].typeof(env, fields)
 	return sqltypes.Datetime, f | flagNullable
+}
+
+func (b *builtinDate) eval(env *ExpressionEnv) (eval, error) {
+	date, err := b.arg1(env)
+	if err != nil {
+		return nil, err
+	}
+	if date == nil {
+		return nil, nil
+	}
+	d := evalToDate(date)
+	if d == nil {
+		return nil, nil
+	}
+	return d, nil
+}
+
+func (b *builtinDate) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	return sqltypes.Date, flagNullable
+}
+
+func (b *builtinDayOfMonth) eval(env *ExpressionEnv) (eval, error) {
+	date, err := b.arg1(env)
+	if err != nil {
+		return nil, err
+	}
+	if date == nil {
+		return nil, nil
+	}
+	d := evalToDate(date)
+	if d == nil {
+		return nil, nil
+	}
+	return newEvalInt64(int64(d.dt.Date.Day())), nil
+}
+
+func (b *builtinDayOfMonth) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	return sqltypes.Int64, flagNullable
+}
+
+func (b *builtinDayOfWeek) eval(env *ExpressionEnv) (eval, error) {
+	date, err := b.arg1(env)
+	if err != nil {
+		return nil, err
+	}
+	if date == nil {
+		return nil, nil
+	}
+	d := evalToDate(date)
+	if d == nil || d.isZero() {
+		return nil, nil
+	}
+	return newEvalInt64(int64(d.dt.Date.ToStdTime(time.Local).Weekday() + 1)), nil
+}
+
+func (b *builtinDayOfWeek) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	return sqltypes.Int64, flagNullable
+}
+
+func (b *builtinDayOfYear) eval(env *ExpressionEnv) (eval, error) {
+	date, err := b.arg1(env)
+	if err != nil {
+		return nil, err
+	}
+	if date == nil {
+		return nil, nil
+	}
+	d := evalToDate(date)
+	if d == nil || d.isZero() {
+		return nil, nil
+	}
+	return newEvalInt64(int64(d.dt.Date.ToStdTime(time.Local).YearDay())), nil
+}
+
+func (b *builtinDayOfYear) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	return sqltypes.Int64, flagNullable
+}
+
+func (b *builtinHour) eval(env *ExpressionEnv) (eval, error) {
+	date, err := b.arg1(env)
+	if err != nil {
+		return nil, err
+	}
+	if date == nil {
+		return nil, nil
+	}
+	d := evalToTime(date, -1)
+	if d == nil {
+		return nil, nil
+	}
+	return newEvalInt64(int64(d.dt.Time.Hour())), nil
+}
+
+func (b *builtinHour) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	return sqltypes.Int64, flagNullable
+}
+
+func (b *builtinMicrosecond) eval(env *ExpressionEnv) (eval, error) {
+	date, err := b.arg1(env)
+	if err != nil {
+		return nil, err
+	}
+	if date == nil {
+		return nil, nil
+	}
+	d := evalToTime(date, -1)
+	if d == nil {
+		return nil, nil
+	}
+	return newEvalInt64(int64(d.dt.Time.Nanosecond() / 1000)), nil
+}
+
+func (b *builtinMicrosecond) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	return sqltypes.Int64, flagNullable
+}
+
+func (b *builtinMinute) eval(env *ExpressionEnv) (eval, error) {
+	date, err := b.arg1(env)
+	if err != nil {
+		return nil, err
+	}
+	if date == nil {
+		return nil, nil
+	}
+	d := evalToTime(date, -1)
+	if d == nil {
+		return nil, nil
+	}
+	return newEvalInt64(int64(d.dt.Time.Minute())), nil
+}
+
+func (b *builtinMinute) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	return sqltypes.Int64, flagNullable
+}
+
+func (b *builtinMonth) eval(env *ExpressionEnv) (eval, error) {
+	date, err := b.arg1(env)
+	if err != nil {
+		return nil, err
+	}
+	if date == nil {
+		return nil, nil
+	}
+	d := evalToDate(date)
+	if d == nil {
+		return nil, nil
+	}
+	return newEvalInt64(int64(d.dt.Date.Month())), nil
+}
+
+func (b *builtinMonth) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	return sqltypes.Int64, flagNullable
+}
+
+func (b *builtinMonthName) eval(env *ExpressionEnv) (eval, error) {
+	date, err := b.arg1(env)
+	if err != nil {
+		return nil, err
+	}
+	if date == nil {
+		return nil, nil
+	}
+	d := evalToDate(date)
+	if d == nil {
+		return nil, nil
+	}
+	m := d.dt.Date.Month()
+	if m < 1 || m > 12 {
+		return nil, nil
+	}
+
+	return newEvalText(hack.StringBytes(time.Month(d.dt.Date.Month()).String()), defaultCoercionCollation(b.collate)), nil
+}
+
+func (b *builtinMonthName) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	return sqltypes.VarChar, flagNullable
+}
+
+func (b *builtinQuarter) eval(env *ExpressionEnv) (eval, error) {
+	date, err := b.arg1(env)
+	if err != nil {
+		return nil, err
+	}
+	if date == nil {
+		return nil, nil
+	}
+	d := evalToDate(date)
+	if d == nil {
+		return nil, nil
+	}
+	switch d.dt.Date.Month() {
+	case 0:
+		return newEvalInt64(0), nil
+	case 1, 2, 3:
+		return newEvalInt64(1), nil
+	case 4, 5, 6:
+		return newEvalInt64(2), nil
+	case 7, 8, 9:
+		return newEvalInt64(3), nil
+	case 10, 11, 12:
+		return newEvalInt64(4), nil
+	}
+	return nil, nil
+}
+
+func (b *builtinQuarter) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	return sqltypes.Int64, flagNullable
+}
+
+func (b *builtinSecond) eval(env *ExpressionEnv) (eval, error) {
+	date, err := b.arg1(env)
+	if err != nil {
+		return nil, err
+	}
+	if date == nil {
+		return nil, nil
+	}
+	d := evalToTime(date, -1)
+	if d == nil {
+		return nil, nil
+	}
+	return newEvalInt64(int64(d.dt.Time.Second())), nil
+}
+
+func (b *builtinSecond) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	return sqltypes.Int64, flagNullable
+}
+
+func (b *builtinTime) eval(env *ExpressionEnv) (eval, error) {
+	date, err := b.arg1(env)
+	if err != nil {
+		return nil, err
+	}
+	if date == nil {
+		return nil, nil
+	}
+	d := evalToTime(date, -1)
+	if d == nil {
+		return nil, nil
+	}
+	return d, nil
+}
+
+func (b *builtinTime) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	return sqltypes.Time, flagNullable
+}
+
+func (b *builtinWeek) eval(env *ExpressionEnv) (eval, error) {
+	date, err := b.arg1(env)
+	if err != nil {
+		return nil, err
+	}
+	if date == nil {
+		return nil, nil
+	}
+
+	d := evalToDate(date)
+	if d == nil || d.isZero() {
+		return nil, nil
+	}
+
+	mode := int64(0)
+	if len(b.Arguments) == 2 {
+		m, err := b.Arguments[1].eval(env)
+		if err != nil {
+			return nil, err
+		}
+		if m == nil {
+			return nil, nil
+		}
+		mode = evalToInt64(m).i
+	}
+
+	switch mode {
+	case 0:
+		year, week := d.dt.Date.SundayWeek()
+		if year < d.dt.Date.Year() {
+			week = 0
+		}
+		return newEvalInt64(int64(week)), nil
+	case 1:
+		year, week := d.dt.Date.ISOWeek()
+		if year < d.dt.Date.Year() {
+			week = 0
+		}
+		return newEvalInt64(int64(week)), nil
+	case 2:
+		_, week := d.dt.Date.SundayWeek()
+		return newEvalInt64(int64(week)), nil
+	case 3:
+		_, week := d.dt.Date.ISOWeek()
+		return newEvalInt64(int64(week)), nil
+	}
+
+	return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "Unsupported week mode: %d", mode)
+}
+
+func (b *builtinWeek) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	return sqltypes.Int64, flagNullable
+}
+
+func (b *builtinWeekDay) eval(env *ExpressionEnv) (eval, error) {
+	date, err := b.arg1(env)
+	if err != nil {
+		return nil, err
+	}
+	if date == nil {
+		return nil, nil
+	}
+	d := evalToDate(date)
+	if d == nil || d.isZero() {
+		return nil, nil
+	}
+	return newEvalInt64(int64(d.dt.Date.Weekday()+6) % 7), nil
+}
+
+func (b *builtinWeekDay) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	return sqltypes.Int64, flagNullable
+}
+
+func (b *builtinWeekOfYear) eval(env *ExpressionEnv) (eval, error) {
+	date, err := b.arg1(env)
+	if err != nil {
+		return nil, err
+	}
+	if date == nil {
+		return nil, nil
+	}
+	d := evalToDate(date)
+	if d == nil || d.isZero() {
+		return nil, nil
+	}
+
+	_, week := d.dt.Date.ISOWeek()
+	return newEvalInt64(int64(week)), nil
+}
+
+func (b *builtinWeekOfYear) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	return sqltypes.Int64, flagNullable
+}
+
+func (b *builtinYear) eval(env *ExpressionEnv) (eval, error) {
+	date, err := b.arg1(env)
+	if err != nil {
+		return nil, err
+	}
+	if date == nil {
+		return nil, nil
+	}
+	d := evalToDate(date)
+	if d == nil {
+		return nil, nil
+	}
+
+	return newEvalInt64(int64(d.dt.Date.Year())), nil
+}
+
+func (b *builtinYear) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	return sqltypes.Int64, flagNullable
+}
+
+func (b *builtinYearWeek) eval(env *ExpressionEnv) (eval, error) {
+	date, err := b.arg1(env)
+	if err != nil {
+		return nil, err
+	}
+	if date == nil {
+		return nil, nil
+	}
+
+	d := evalToDate(date)
+	if d == nil || d.isZero() {
+		return nil, nil
+	}
+
+	mode := int64(0)
+	if len(b.Arguments) == 2 {
+		m, err := b.Arguments[1].eval(env)
+		if err != nil {
+			return nil, err
+		}
+		if m == nil {
+			return nil, nil
+		}
+		mode = evalToInt64(m).i
+	}
+
+	switch mode {
+	case 0, 2:
+		year, week := d.dt.Date.SundayWeek()
+		return newEvalInt64(int64(year*100 + week)), nil
+	case 1, 3:
+		year, week := d.dt.Date.ISOWeek()
+		return newEvalInt64(int64(year*100 + week)), nil
+	}
+
+	return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "Unsupported week mode: %d", mode)
+}
+
+func (b *builtinYearWeek) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	return sqltypes.Int64, flagNullable
 }
