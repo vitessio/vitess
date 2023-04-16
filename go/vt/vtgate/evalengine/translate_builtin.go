@@ -315,6 +315,11 @@ func (ast *astCompiler) translateFuncExpr(fn *sqlparser.FuncExpr) (Expr, error) 
 			return nil, argError(method)
 		}
 		return &builtinUtcDate{CallExpr: call}, nil
+	case "date_format":
+		if len(args) != 2 {
+			return nil, argError(method)
+		}
+		return &builtinDateFormat{CallExpr: call, collate: ast.cfg.Collation}, nil
 	case "user", "current_user", "session_user", "system_user":
 		if len(args) != 0 {
 			return nil, argError(method)

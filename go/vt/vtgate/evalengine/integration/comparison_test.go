@@ -75,7 +75,7 @@ func normalizeValue(v sqltypes.Value, coll collations.ID) sqltypes.Value {
 		if err != nil {
 			panic(err)
 		}
-		return sqltypes.MakeTrusted(typ, format.FormatFloat(typ, f))
+		return sqltypes.MakeTrusted(typ, format.FormatFloat(f))
 	}
 	return v
 }

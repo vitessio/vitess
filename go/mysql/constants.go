@@ -426,6 +426,7 @@ const (
 	ERMasterFatalReadingBinlog      = ErrorCode(1236)
 	EROperandColumns                = ErrorCode(1241)
 	ERSubqueryNo1Row                = ErrorCode(1242)
+	ERUnknownStmtHandler            = ErrorCode(1243)
 	ERWarnDataOutOfRange            = ErrorCode(1264)
 	ERNonUpdateableTable            = ErrorCode(1288)
 	ERFeatureDisabled               = ErrorCode(1289)

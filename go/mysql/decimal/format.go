@@ -86,6 +86,7 @@ func (d *Decimal) formatSlow(trim bool) []byte {
 }
 
 var zeroByte = []byte{'0'}
+var oneByte = []byte{'1'}
 
 const smallsString = "00010203040506070809" +
 	"10111213141516171819" +
@@ -170,28 +171,41 @@ func (d *Decimal) formatFast(prec int, round bool, trim bool) []byte {
 		// Let's adjust prec accordingly based on the exponent for the number
 		// and iprec, which is the precision of our mantissa
 		iprec := len(integral)
+		adj := int(d.exp) + iprec
 		if d.exp > 0 {
-			prec += int(d.exp) + iprec
+			prec += adj
 		} else {
-			if adj := int(d.exp) + iprec; adj > -prec {
+			if adj > -prec {
 				prec += adj
 			} else {
 				prec = -prec
 			}
 		}
-		if prec > 0 {
+		switch {
+		case prec > 0:
 			var ovf int
 			// if prec > 0, perform string-based rounding on the integral to
 			integral, ovf = roundString(integral, prec)
 			exp = int(d.exp) + iprec - len(integral) + ovf
 			sign = d.value.Sign()
-		} else if prec < 0 {
-			integral = nil
+
+		case prec < 0:
+			// do not truncate to 0 if the precision is exactly equal to the adjustment.
+			// instead, we need to round based on the first digit of the integral
+			// part, which will be the last digit in the decimal
+			if adj == prec && integral[0] >= '5' {
+				integral = oneByte
+				sign = d.value.Sign()
+			} else {
+				integral = nil
+			}
 			prec = -prec
 			exp = -prec
-		} else {
+
+		default:
 			integral = zeroByte
 		}
+
 	} else {
 		exp = int(d.exp)
 		sign = d.value.Sign()

@@ -102,27 +102,11 @@ func (c *compiler) compileComparison(expr *ComparisonExpr) (ctype, error) {
 		c.asm.CmpDateString()
 	case compareAsDateAndNumeric(lt.Type, rt.Type):
 		if sqltypes.IsDateOrTime(lt.Type) {
-			switch lt.Type {
-			case sqltypes.Date:
-				c.asm.Convert_date(2)
-			case sqltypes.Time:
-				c.asm.Convert_time(2)
-			case sqltypes.Timestamp, sqltypes.Datetime:
-				c.asm.Convert_datetime(2)
-			}
+			c.asm.Convert_Ti(2)
 		}
-
 		if sqltypes.IsDateOrTime(rt.Type) {
-			switch rt.Type {
-			case sqltypes.Date:
-				c.asm.Convert_date(1)
-			case sqltypes.Time:
-				c.asm.Convert_time(1)
-			case sqltypes.Timestamp, sqltypes.Datetime:
-				c.asm.Convert_datetime(1)
-			}
+			c.asm.Convert_Ti(1)
 		}
-
 		swapped = c.compareNumericTypes(lt, rt)
 	case compareAsJSON(lt.Type, rt.Type):
 		if err := c.compareAsJSON(lt, rt); err != nil {
@@ -237,24 +221,10 @@ func (c *compiler) compareNumericTypes(lt ctype, rt ctype) (swapped bool) {
 }
 
 func (c *compiler) compareAsStrings(lt ctype, rt ctype) error {
-	var merged collations.TypedCollation
-	var coerceLeft collations.Coercion
-	var coerceRight collations.Coercion
-	var env = collations.Local()
-	var err error
-
-	if lt.Col.Collation != rt.Col.Collation {
-		merged, coerceLeft, coerceRight, err = env.MergeCollations(lt.Col, rt.Col, collations.CoercionOptions{
-			ConvertToSuperset:   true,
-			ConvertWithCoercion: true,
-		})
-	} else {
-		merged = lt.Col
-	}
+	merged, coerceLeft, coerceRight, err := mergeCollations(lt.Col, rt.Col, lt.Type, rt.Type)
 	if err != nil {
 		return err
 	}
-
 	if coerceLeft == nil && coerceRight == nil {
 		c.asm.CmpString_collate(merged.Collation.Get())
 	} else {
@@ -300,6 +270,8 @@ func (c *compiler) compileCheckTrue(when ctype, offset int) error {
 		c.asm.Convert_dB(offset)
 	case sqltypes.VarChar, sqltypes.VarBinary:
 		c.asm.Convert_bB(offset)
+	case sqltypes.Timestamp, sqltypes.Datetime, sqltypes.Time, sqltypes.Date:
+		c.asm.Convert_TB(offset)
 	case sqltypes.Null:
 		c.asm.SetBool(offset, false)
 	default:
@@ -457,6 +429,9 @@ func (c *compiler) compileNot(expr *NotExpr) (ctype, error) {
 	case sqltypes.TypeJSON:
 		c.asm.Convert_jB(1)
 		c.asm.Not_i()
+	case sqltypes.Time, sqltypes.Datetime, sqltypes.Date, sqltypes.Timestamp:
+		c.asm.Convert_TB(1)
+		c.asm.Not_i()
 	default:
 		c.asm.Convert_bB(1)
 		c.asm.Not_i()
@@ -489,6 +464,8 @@ func (c *compiler) compileLogical(expr *LogicalExpr) (ctype, error) {
 		}
 	case sqltypes.TypeJSON:
 		c.asm.Convert_jB(1)
+	case sqltypes.Time, sqltypes.Datetime, sqltypes.Date, sqltypes.Timestamp:
+		c.asm.Convert_TB(1)
 	default:
 		c.asm.Convert_bB(1)
 	}
@@ -518,6 +495,8 @@ func (c *compiler) compileLogical(expr *LogicalExpr) (ctype, error) {
 		}
 	case sqltypes.TypeJSON:
 		c.asm.Convert_jB(1)
+	case sqltypes.Time, sqltypes.Datetime, sqltypes.Date, sqltypes.Timestamp:
+		c.asm.Convert_TB(1)
 	default:
 		c.asm.Convert_bB(1)
 	}

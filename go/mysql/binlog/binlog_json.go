@@ -22,9 +22,9 @@ import (
 	"math"
 	"strconv"
 
+	"vitess.io/vitess/go/hack"
 	"vitess.io/vitess/go/mysql/format"
 	"vitess.io/vitess/go/mysql/json"
-	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -228,25 +228,33 @@ func binparserInt(typ jsonDataType, data []byte, pos int) (*json.Value, error) {
 		val = val + uint64(data[pos+i])<<(8*i)
 	}
 	var s string
-	var dbl bool
+	var n json.NumberType
 	switch typ {
 	case jsonInt16:
 		s = strconv.FormatInt(int64(int16(val)), 10)
+		n = json.NumberTypeSigned
 	case jsonUint16:
 		s = strconv.FormatUint(uint64(uint16(val)), 10)
+		n = json.NumberTypeUnsigned
 	case jsonInt32:
 		s = strconv.FormatInt(int64(int32(val)), 10)
+		n = json.NumberTypeSigned
 	case jsonUint32:
 		s = strconv.FormatUint(uint64(uint32(val)), 10)
+		n = json.NumberTypeUnsigned
 	case jsonInt64:
 		s = strconv.FormatInt(int64(val), 10)
+		n = json.NumberTypeSigned
 	case jsonUint64:
 		s = strconv.FormatUint(val, 10)
+		n = json.NumberTypeUnsigned
 	case jsonDouble:
-		dbl = true
-		s = string(format.FormatFloat(sqltypes.Float64, math.Float64frombits(val)))
+		s = hack.String(format.FormatFloat(math.Float64frombits(val)))
+		n = json.NumberTypeFloat
+	default:
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid int type: %d", typ)
 	}
-	return json.NewNumber(s, !dbl), nil
+	return json.NewNumber(s, n), nil
 }
 
 func binparserLiteral(_ jsonDataType, data []byte, pos int) (node *json.Value, err error) {
@@ -311,7 +319,7 @@ func binparserOpaque(_ jsonDataType, data []byte, pos int) (node *json.Value, er
 		if err != nil {
 			return nil, err
 		}
-		node = json.NewNumber(val.ToString(), true)
+		node = json.NewNumber(val.ToString(), json.NumberTypeDecimal)
 	case TypeVarchar, TypeVarString, TypeString, TypeBlob, TypeTinyBlob, TypeMediumBlob, TypeLongBlob:
 		node = json.NewBlob(string(data[pos+1:]))
 	case TypeBit:

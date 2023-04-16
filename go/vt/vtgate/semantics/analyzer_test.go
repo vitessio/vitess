@@ -1494,6 +1494,28 @@ func TestUpdateErrors(t *testing.T) {
 	}
 }
 
+// TestScopingSubQueryJoinClause tests the scoping behavior of a subquery containing a join clause.
+// The test ensures that the scoping analysis correctly identifies and handles the relationships
+// between the tables involved in the join operation with the outer query.
+func TestScopingSubQueryJoinClause(t *testing.T) {
+	query := "select (select 1 from u1 join u2 on u1.id = u2.id and u2.id = u3.id) x from u3"
+
+	parse, err := sqlparser.Parse(query)
+	require.NoError(t, err)
+
+	st, err := Analyze(parse, "user", &FakeSI{
+		Tables: map[string]*vindexes.Table{
+			"t": {Name: sqlparser.NewIdentifierCS("t")},
+		},
+	})
+	require.NoError(t, err)
+	require.NoError(t, st.NotUnshardedErr)
+
+	tb := st.DirectDeps(parse.(*sqlparser.Select).SelectExprs[0].(*sqlparser.AliasedExpr).Expr.(*sqlparser.Subquery).Select.(*sqlparser.Select).From[0].(*sqlparser.JoinTableExpr).Condition.On)
+	require.Equal(t, 3, tb.NumberOfTables())
+
+}
+
 var ks1 = &vindexes.Keyspace{
 	Name:    "ks1",
 	Sharded: false,

@@ -326,6 +326,8 @@ func (er *astRewriter) rewriteDown(node SQLNode, _ SQLNode) bool {
 	switch node := node.(type) {
 	case *Select:
 		er.visitSelect(node)
+	case *PrepareStmt, *ExecuteStmt:
+		return false // nothing to rewrite here.
 	}
 	return true
 }

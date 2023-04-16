@@ -66,8 +66,7 @@ type QueryExecutor struct {
 }
 
 const (
-	streamRowsSize         = 256
-	maxQueryBufferDuration = 15 * time.Second
+	streamRowsSize = 256
 )
 
 var (
@@ -545,10 +544,11 @@ func (qre *QueryExecutor) checkPermissions() error {
 		username = ci.Username()
 	}
 
-	bufferingTimeoutCtx, cancel := context.WithTimeout(qre.ctx, maxQueryBufferDuration)
+	action, ruleCancelCtx, timeout, desc := qre.plan.Rules.GetAction(remoteAddr, username, qre.bindVars, qre.marginComments)
+
+	bufferingTimeoutCtx, cancel := context.WithTimeout(qre.ctx, timeout) // aborts buffering at given timeout
 	defer cancel()
 
-	action, ruleCancelCtx, desc := qre.plan.Rules.GetAction(remoteAddr, username, qre.bindVars, qre.marginComments)
 	switch action {
 	case rules.QRFail:
 		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "disallowed due to rule: %s", desc)
@@ -563,7 +563,7 @@ func (qre *QueryExecutor) checkPermissions() error {
 				// good! We have buffered the query, and buffering is completed
 			case <-bufferingTimeoutCtx.Done():
 				// Sorry, timeout while waiting for buffering to complete
-				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "buffer timeout in rule: %s", desc)
+				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "buffer timeout after %v in rule: %s", timeout, desc)
 			}
 		}
 	default:

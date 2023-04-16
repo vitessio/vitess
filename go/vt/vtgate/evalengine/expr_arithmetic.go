@@ -149,7 +149,7 @@ func (op *opArithDiv) eval(left, right eval) (eval, error) {
 func (op *opArithDiv) String() string { return "/" }
 
 func (op *opArithIntDiv) eval(left, right eval) (eval, error) {
-	return integerDivideNumericWithError(left, right, true)
+	return integerDivideNumericWithError(left, right)
 }
 func (op *opArithIntDiv) String() string { return "DIV" }
 

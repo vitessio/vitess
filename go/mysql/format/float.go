@@ -19,21 +19,21 @@ package format
 import (
 	"bytes"
 	"strconv"
-
-	"vitess.io/vitess/go/sqltypes"
 )
 
+const expUpperThreshold = 1000000000000000.0
+const expLowerThreshold = 0.000000000000001
+
 // FormatFloat formats a float64 as a byte string in a similar way to what MySQL does
-func FormatFloat(typ sqltypes.Type, f float64) []byte {
-	return AppendFloat(nil, typ, f)
+func FormatFloat(v float64) []byte {
+	return AppendFloat(nil, v)
 }
 
-func AppendFloat(buf []byte, typ sqltypes.Type, f float64) []byte {
-	format := byte('g')
-	if typ == sqltypes.Decimal {
-		format = 'f'
+func AppendFloat(buf []byte, f float64) []byte {
+	format := byte('f')
+	if f >= expUpperThreshold || f <= -expUpperThreshold || (f < expLowerThreshold && f > -expLowerThreshold) {
+		format = 'g'
 	}
-
 	// the float printer in MySQL does not add a positive sign before
 	// the exponent for positive exponents, but the Golang printer does
 	// do that, and there's no way to customize it, so we must strip the

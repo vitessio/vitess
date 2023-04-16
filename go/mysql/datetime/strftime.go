@@ -20,18 +20,13 @@ package datetime
 import (
 	"fmt"
 	"strings"
-	"time"
 )
 
 func compile(ds map[byte]Spec, p string, exec func(Spec)) error {
 	for l := len(p); l > 0; l = len(p) {
-		// This is a really tight loop, so we don't even calls to
-		// Verbatim() to cuase extra stuff
-		var verbatim verbatimw
-
 		i := strings.IndexByte(p, '%')
 		if i < 0 {
-			exec(&verbatimw{s: p})
+			exec(&fmtVerbatim{s: p})
 			break
 		}
 		if i == l-1 {
@@ -42,15 +37,17 @@ func compile(ds map[byte]Spec, p string, exec func(Spec)) error {
 		// we already know that i < l - 1
 		// everything up to the i is verbatim
 		if i > 0 {
-			verbatim.s = p[:i]
-			exec(&verbatimw{s: p[:i]})
+			exec(&fmtVerbatim{s: p[:i]})
 			p = p[i:]
 		}
 
 		if spec, ok := ds[p[1]]; ok {
+			if spec == nil {
+				return fmt.Errorf(`unsupported format specifier: %%%c`, p[1])
+			}
 			exec(spec)
 		} else {
-			exec(&verbatimw{s: p[1:2]})
+			exec(&fmtVerbatim{s: p[1:2]})
 		}
 		p = p[2:]
 	}
@@ -64,11 +61,10 @@ func compile(ds map[byte]Spec, p string, exec func(Spec)) error {
 // If you know beforehand that you will be reusing the pattern
 // within your application, consider creating a `Strftime` object
 // and reusing it.
-func Format(p string, t time.Time, prec uint8) ([]byte, error) {
+func Format(p string, t DateTime, prec uint8) ([]byte, error) {
 	var dst []byte
-	var ctx = newformatctx(t, prec)
 	err := compile(DefaultMySQLStrftime, p, func(a Spec) {
-		dst = a.format(&ctx, dst)
+		dst = a.format(dst, t, prec)
 	})
 	return dst, err
 }
@@ -77,12 +73,11 @@ func Format(p string, t time.Time, prec uint8) ([]byte, error) {
 type Strftime struct {
 	pattern  string
 	compiled []Spec
-	prec     uint8
 }
 
 // New creates a new Strftime object. If the compilation fails, then
 // an error is returned in the second argument.
-func New(p string, prec uint8) (*Strftime, error) {
+func New(p string) (*Strftime, error) {
 	var list []Spec
 	err := compile(DefaultMySQLStrftime, p, func(a Spec) {
 		list = append(list, a)
@@ -90,7 +85,7 @@ func New(p string, prec uint8) (*Strftime, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Strftime{pattern: p, compiled: list, prec: prec}, nil
+	return &Strftime{pattern: p, compiled: list}, nil
 }
 
 // Pattern returns the original pattern string
@@ -98,22 +93,57 @@ func (f *Strftime) Pattern() string {
 	return f.pattern
 }
 
-func (f *Strftime) Format(t time.Time) []byte {
-	return f.format(make([]byte, 0, len(f.pattern)+10), t)
+func (f *Strftime) Format(dt DateTime, prec uint8) []byte {
+	return f.format(make([]byte, 0, len(f.pattern)+10), dt, prec)
 }
 
-func (f *Strftime) AppendFormat(dst []byte, t time.Time) []byte {
-	return f.format(dst, t)
+func (f *Strftime) AppendFormat(dst []byte, t DateTime, prec uint8) []byte {
+	return f.format(dst, t, prec)
 }
 
-func (f *Strftime) format(b []byte, t time.Time) []byte {
-	ctx := newformatctx(t, f.prec)
+func (f *Strftime) format(dst []byte, t DateTime, prec uint8) []byte {
 	for _, w := range f.compiled {
-		b = w.format(&ctx, b)
+		dst = w.format(dst, t, prec)
 	}
-	return b
+	return dst
 }
 
-func (f *Strftime) FormatString(tm time.Time) string {
-	return string(f.Format(tm))
+func (f *Strftime) FormatString(t DateTime, prec uint8) string {
+	return string(f.Format(t, prec))
+}
+
+func (f *Strftime) FormatNumeric(t DateTime) (n int64) {
+	for _, w := range f.compiled {
+		w := w.(numeric)
+		x, width := w.numeric(t)
+		n = n*int64(width) + int64(x)
+	}
+	return n
+}
+
+func (f *Strftime) parse(s string) (DateTime, string, bool) {
+	var tp timeparts
+	tp.month = -1
+	tp.day = -1
+	tp.yday = -1
+
+	var ok bool
+	for _, w := range f.compiled {
+		s, ok = w.parse(&tp, s)
+		if !ok {
+			return DateTime{}, "", false
+		}
+	}
+	t, ok := tp.toDateTime()
+	return t, s, ok
+}
+
+func (f *Strftime) Parse(s string) (DateTime, bool) {
+	t, s, ok := f.parse(s)
+	return t, ok && len(s) == 0
+}
+
+func (f *Strftime) ParseBestEffort(s string) (DateTime, bool) {
+	t, _, ok := f.parse(s)
+	return t, ok
 }

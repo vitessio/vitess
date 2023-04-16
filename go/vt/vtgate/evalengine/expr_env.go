@@ -22,6 +22,7 @@ import (
 	"strings"
 	"time"
 
+	"vitess.io/vitess/go/mysql/datetime"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/callerid"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -48,11 +49,11 @@ type (
 	}
 )
 
-func (env *ExpressionEnv) time(utc bool) time.Time {
+func (env *ExpressionEnv) time(utc bool) datetime.DateTime {
 	if utc {
-		return env.now.UTC()
+		return datetime.FromStdTime(env.now.UTC())
 	}
-	return env.now
+	return datetime.FromStdTime(env.now)
 }
 
 func (env *ExpressionEnv) currentUser() string {

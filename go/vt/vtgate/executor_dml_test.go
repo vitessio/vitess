@@ -52,7 +52,7 @@ func TestUpdateEqual(t *testing.T) {
 	}}
 	assertQueries(t, sbc1, wantQueries)
 	assertQueries(t, sbc2, nil)
-	testQueryLog(t, logChan, "TestExecute", "UPDATE", "update user set a=2 where id = 1", 1)
+	testQueryLog(t, logChan, "TestExecute", "UPDATE", "update `user` set a = 2 where id = 1", 1)
 
 	sbc1.Queries = nil
 	_, err = executorExec(executor, "update user set a=2 where id = 3", nil)
@@ -160,7 +160,7 @@ func TestUpdateFromSubQuery(t *testing.T) {
 	}}
 	assertQueries(t, sbc1, wantQueriesSbc1)
 	assertQueries(t, sbc2, wantQueriesSbc2)
-	testQueryLog(t, logChan, "TestExecute", "UPDATE", "update user set a=(select count(*) from user where id = 3) where id = 1", 2)
+	testQueryLog(t, logChan, "TestExecute", "UPDATE", "update `user` set a = (select count(*) from `user` where id = 3) where id = 1", 2)
 }
 
 func TestUpdateEqualWithNoVerifyAndWriteOnlyLookupUniqueVindexes(t *testing.T) {
@@ -1235,8 +1235,8 @@ func TestInsertSharded(t *testing.T) {
 	assertQueries(t, sbclookup, wantQueries)
 
 	testQueryLog(t, logChan, "MarkSavepoint", "SAVEPOINT", "savepoint x", 0)
-	testQueryLog(t, logChan, "VindexCreate", "INSERT", "insert into name_user_map(name, user_id) values(:name_0, :user_id_0)", 1)
-	testQueryLog(t, logChan, "TestExecute", "INSERT", "insert into user(id, v, name) values (1, 2, 'myname')", 1)
+	testQueryLog(t, logChan, "VindexCreate", "INSERT", "insert into name_user_map(`name`, user_id) values (:name_0, :user_id_0)", 1)
+	testQueryLog(t, logChan, "TestExecute", "INSERT", "insert into `user`(id, v, `name`) values (1, 2, 'myname')", 1)
 
 	sbc1.Queries = nil
 	sbclookup.Queries = nil
@@ -1261,8 +1261,8 @@ func TestInsertSharded(t *testing.T) {
 	}}
 	assertQueries(t, sbclookup, wantQueries)
 	testQueryLog(t, logChan, "MarkSavepoint", "SAVEPOINT", "savepoint x", 2)
-	testQueryLog(t, logChan, "VindexCreate", "INSERT", "insert into name_user_map(name, user_id) values(:name_0, :user_id_0)", 1)
-	testQueryLog(t, logChan, "TestExecute", "INSERT", "insert into user(id, v, name) values (3, 2, 'myname2')", 1)
+	testQueryLog(t, logChan, "VindexCreate", "INSERT", "insert into name_user_map(`name`, user_id) values (:name_0, :user_id_0)", 1)
+	testQueryLog(t, logChan, "TestExecute", "INSERT", "insert into `user`(id, v, `name`) values (3, 2, 'myname2')", 1)
 
 	sbc1.Queries = nil
 	_, err = executorExec(executor, "insert into user2(id, name, lastname) values (2, 'myname', 'mylastname')", nil)
@@ -1277,8 +1277,8 @@ func TestInsertSharded(t *testing.T) {
 	}}
 	assertQueries(t, sbc1, wantQueries)
 	testQueryLog(t, logChan, "MarkSavepoint", "SAVEPOINT", "savepoint x", 3)
-	testQueryLog(t, logChan, "VindexCreate", "INSERT", "insert into name_lastname_keyspace_id_map(name, lastname, keyspace_id) values(:name_0, :lastname_0, :keyspace_id_0)", 1)
-	testQueryLog(t, logChan, "TestExecute", "INSERT", "insert into user2(id, name, lastname) values (2, 'myname', 'mylastname')", 1)
+	testQueryLog(t, logChan, "VindexCreate", "INSERT", "insert into name_lastname_keyspace_id_map(`name`, lastname, keyspace_id) values (:name_0, :lastname_0, :keyspace_id_0)", 1)
+	testQueryLog(t, logChan, "TestExecute", "INSERT", "insert into user2(id, `name`, lastname) values (2, 'myname', 'mylastname')", 1)
 
 	// insert with binary values
 	executor.normalize = true
@@ -2360,7 +2360,7 @@ func TestUpdateReference(t *testing.T) {
 	assertQueries(t, sbc2, nil)
 	assertQueries(t, sbclookup, wantQueries)
 
-	testQueryLog(t, logChan, "TestExecute", "UPDATE", "update zip_detail set status = 'CLOSED' where id = 1", 1)
+	testQueryLog(t, logChan, "TestExecute", "UPDATE", "update zip_detail set `status` = 'CLOSED' where id = 1", 1)
 
 	sbclookup.Queries = nil
 
@@ -2375,7 +2375,7 @@ func TestUpdateReference(t *testing.T) {
 	assertQueries(t, sbclookup, wantQueries)
 
 	testQueryLog(t, logChan, "TestExecute", "UPDATE",
-		"update TestUnsharded.zip_detail set status = 'CLOSED' where id = 1", 1)
+		"update TestUnsharded.zip_detail set `status` = 'CLOSED' where id = 1", 1)
 
 	sbclookup.Queries = nil
 
@@ -2675,7 +2675,7 @@ func TestPartialVindexInsertQueryFailureAutoCommit(t *testing.T) {
 	wantQ[0].Sql = "insert into t1_lkp_idx(unq_col, keyspace_id) values (:_unq_col_1, :keyspace_id_1)"
 	assertQueriesWithSavepoint(t, sbc2, wantQ)
 
-	testQueryLog(t, logChan, "VindexCreate", "INSERT", "insert into t1_lkp_idx(unq_col, keyspace_id) values(:unq_col_0, :keyspace_id_0), (:unq_col_1, :keyspace_id_1)", 2)
+	testQueryLog(t, logChan, "VindexCreate", "INSERT", "insert into t1_lkp_idx(unq_col, keyspace_id) values (:unq_col_0, :keyspace_id_0), (:unq_col_1, :keyspace_id_1)", 2)
 	testQueryLog(t, logChan, "TestExecute", "INSERT", "insert into t1(id, unq_col) values (1, 1), (2, 3)", 0)
 }
 
@@ -2773,8 +2773,8 @@ func TestInsertSelectFromDual(t *testing.T) {
 		assertQueries(t, sbclookup, wantlkpQueries)
 
 		testQueryLog(t, logChan, "TestInsertSelect", "SET", wQuery, 0)
-		testQueryLog(t, logChan, "VindexCreate", "INSERT", "insert into name_user_map(name, user_id) values(:name_0, :user_id_0)", 1)
-		testQueryLog(t, logChan, "TestInsertSelect", "INSERT", "insert into user(id, v, name) select 1, 2, 'myname' from dual", 1)
+		testQueryLog(t, logChan, "VindexCreate", "INSERT", "insert into name_user_map(`name`, user_id) values (:name_0, :user_id_0)", 1)
+		testQueryLog(t, logChan, "TestInsertSelect", "INSERT", "insert into `user`(id, v, `name`) select 1, 2, 'myname' from dual", 1)
 	}
 }
 
@@ -2834,8 +2834,8 @@ func TestInsertSelectFromTable(t *testing.T) {
 		assertQueries(t, sbclookup, wantlkpQueries)
 
 		testQueryLog(t, logChan, "TestInsertSelect", "SET", wQuery, 0)
-		testQueryLog(t, logChan, "VindexCreate", "INSERT", "insert into name_user_map(name, user_id) values(:name_0, :user_id_0), (:name_1, :user_id_1), (:name_2, :user_id_2), (:name_3, :user_id_3), (:name_4, :user_id_4), (:name_5, :user_id_5), (:name_6, :user_id_6), (:name_7, :user_id_7)", 1)
-		testQueryLog(t, logChan, "TestInsertSelect", "INSERT", "insert into user(id, name) select c1, c2 from music", 9) // 8 from select and 1 from insert.
+		testQueryLog(t, logChan, "VindexCreate", "INSERT", "insert into name_user_map(`name`, user_id) values (:name_0, :user_id_0), (:name_1, :user_id_1), (:name_2, :user_id_2), (:name_3, :user_id_3), (:name_4, :user_id_4), (:name_5, :user_id_5), (:name_6, :user_id_6), (:name_7, :user_id_7)", 1)
+		testQueryLog(t, logChan, "TestInsertSelect", "INSERT", "insert into `user`(id, `name`) select c1, c2 from music", 9) // 8 from select and 1 from insert.
 	}
 }
 
@@ -2855,7 +2855,7 @@ func TestInsertReference(t *testing.T) {
 	assertQueries(t, sbc2, nil)
 	assertQueries(t, sbclookup, wantQueries)
 
-	testQueryLog(t, logChan, "TestExecute", "INSERT", "insert into zip_detail(id, status) values (1, 'CLOSED')", 1)
+	testQueryLog(t, logChan, "TestExecute", "INSERT", "insert into zip_detail(id, `status`) values (1, 'CLOSED')", 1)
 
 	sbclookup.Queries = nil
 
@@ -2870,7 +2870,7 @@ func TestInsertReference(t *testing.T) {
 	assertQueries(t, sbclookup, wantQueries)
 
 	testQueryLog(t, logChan, "TestExecute", "INSERT",
-		"insert into TestUnsharded.zip_detail(id, status) values (1, 'CLOSED')", 1)
+		"insert into TestUnsharded.zip_detail(id, `status`) values (1, 'CLOSED')", 1)
 
 	sbclookup.Queries = nil
 

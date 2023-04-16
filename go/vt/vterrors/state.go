@@ -46,6 +46,7 @@ const (
 	DupFieldName
 	WrongValueCountOnRow
 	WrongValue
+	WrongArguments
 
 	// failed precondition
 	NoDB
@@ -54,6 +55,7 @@ const (
 	CantDoThisInTransaction
 	RequiresPrimaryKey
 	OperandColumns
+	UnknownStmtHandler
 
 	// not found
 	BadDb
