@@ -325,14 +325,14 @@ func ParseDateTimeFloat(f float64, prec int) (DateTime, int, bool) {
 	nsec := int(frac * 1e9)
 	dt.Time.nanosecond = uint32(nsec)
 	if prec < 0 {
-		prec = precision(nsec)
+		prec = DefaultPrecision
 	} else {
 		dt = dt.Round(prec)
 	}
 	return dt, prec, ok
 }
 
-func ParseDateTimeDecimal(d decimal.Decimal, prec int) (DateTime, int, bool) {
+func ParseDateTimeDecimal(d decimal.Decimal, l int32, prec int) (DateTime, int, bool) {
 	id, frac := d.QuoRem(decimal.New(1, 0), 0)
 	i, _ := id.Int64()
 	dt, ok := ParseDateTimeInt64(i)
@@ -341,7 +341,7 @@ func ParseDateTimeDecimal(d decimal.Decimal, prec int) (DateTime, int, bool) {
 	dt.Time.nanosecond = uint32(rem)
 
 	if prec < 0 {
-		prec = precision(int(rem))
+		prec = int(l)
 	} else {
 		dt = dt.Round(prec)
 	}
@@ -366,14 +366,14 @@ func ParseTimeFloat(f float64, prec int) (Time, int, bool) {
 	t.nanosecond = uint32(ns)
 
 	if prec < 0 {
-		prec = precision(ns)
+		prec = DefaultPrecision
 	} else {
 		t = t.Round(prec)
 	}
 	return t, prec, ok
 }
 
-func ParseTimeDecimal(d decimal.Decimal, prec int) (Time, int, bool) {
+func ParseTimeDecimal(d decimal.Decimal, l int32, prec int) (Time, int, bool) {
 	id, frac := d.QuoRem(decimal.New(1, 0), 0)
 	i, _ := id.Int64()
 
@@ -382,7 +382,7 @@ func ParseTimeDecimal(d decimal.Decimal, prec int) (Time, int, bool) {
 	t.nanosecond = uint32(rem)
 
 	if prec < 0 {
-		prec = precision(int(rem))
+		prec = int(l)
 	} else {
 		t = t.Round(prec)
 	}

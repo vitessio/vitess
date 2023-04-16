@@ -229,10 +229,10 @@ func evalToTime(e eval, l int) *evalTemporal {
 			return newEvalTime(dt.Time, l)
 		}
 	case *evalDecimal:
-		if t, l, ok := datetime.ParseTimeDecimal(e.dec, l); ok {
+		if t, l, ok := datetime.ParseTimeDecimal(e.dec, e.length, l); ok {
 			return newEvalTime(t, l)
 		}
-		if dt, l, ok := datetime.ParseDateTimeDecimal(e.dec, l); ok {
+		if dt, l, ok := datetime.ParseDateTimeDecimal(e.dec, e.length, l); ok {
 			return newEvalTime(dt.Time, l)
 		}
 	case *evalJSON:
@@ -276,7 +276,7 @@ func evalToDateTime(e eval, l int) *evalTemporal {
 			return newEvalDateTime(datetime.DateTime{Date: d}, precision(l, 0))
 		}
 	case *evalDecimal:
-		if t, l, ok := datetime.ParseDateTimeDecimal(e.dec, l); ok {
+		if t, l, ok := datetime.ParseDateTimeDecimal(e.dec, e.length, l); ok {
 			return newEvalDateTime(t, l)
 		}
 		if d, ok := datetime.ParseDateDecimal(e.dec); ok {
