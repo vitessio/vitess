@@ -160,7 +160,11 @@ func DiffSchemasSQL(sql1 string, sql2 string, hints *DiffHints) ([]EntityDiff, e
 	if err != nil {
 		return nil, err
 	}
-	return schema1.Diff(schema2, hints)
+	diff, err := schema1.SchemaDiff(schema2, hints)
+	if err != nil {
+		return nil, err
+	}
+	return diff.OrderedDiffs()
 }
 
 // DiffSchemasSQL compares two schemas and returns the list of diffs that turn
@@ -172,5 +176,9 @@ func DiffSchemas(schema1 *Schema, schema2 *Schema, hints *DiffHints) ([]EntityDi
 	if schema2 == nil {
 		schema2 = newEmptySchema()
 	}
-	return schema1.Diff(schema2, hints)
+	diff, err := schema1.SchemaDiff(schema2, hints)
+	if err != nil {
+		return nil, err
+	}
+	return diff.OrderedDiffs()
 }
