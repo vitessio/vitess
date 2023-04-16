@@ -6,7 +6,7 @@ The goal of this document is to describe the guiding principles that will be use
 
 ### Prerequisites
 
-Before reading this doc you must be familiar with [vindexes](https://github.com/vitessio/vitess/blob/main/doc/V3VindexDesign.md), which is used as foundation for the arguments presented here.
+Before reading this doc you must be familiar with [vindexes](./V3VindexDesign.md), which is used as foundation for the arguments presented here.
 
 # Background
 
@@ -44,7 +44,7 @@ If the first phase of this document is implemented, VTGate will be able to suppo
 
 ### Joins
 
-`select a.col, b.col from a join b on b.id=a.id where a.id=:id` will get routed to the correct shard. Correspondingly, IN clauses will also will get correctly broken out and routed.
+`select a.col, b.col from a join b on b.id=a.id where a.id=:id` will get routed to the correct shard. Correspondingly, IN clauses will also get correctly broken out and routed.
 
 `select a.col, b.col from a join b on b.id=a.id `will get sent to all shards.
 
@@ -83,7 +83,7 @@ select b.col from b where b.id2=:_a_id and b.col > :_a_col
 
 Joins can also be cascased:
 
-`select a.col, b.col, c.col from a join b on b.i2=a.id join c on c.id3=b.id2 where a.id=:id`
+`select a.col, b.col, c.col from a join b on b.id2=a.id join c on c.id3=b.id2 where a.id=:id`
 
 will get rewritten as:
 
@@ -1194,7 +1194,7 @@ The overall strategy is as follows:
 
 In order to align ourselves with our priorities, we’ll start off with a limited set of primitives, and then we can expand from there.
 
-VTGate already has `Route` and `RouteMerge` as primitives. To this list, let’s add `Join` and `LeftJoin`. Using these primitives, we should be able to cover priorities 1-3 (mentioned in the [Prioritization](https://github.com/vitessio/vitess/blob/main/doc/V3HighLevelDesign.md#prioritization) section). So, any constructs that will require VTGate to do additional work will not be supported. Here’s a recap of what each primitive must do:
+VTGate already has `Route` and `RouteMerge` as primitives. To this list, let’s add `Join` and `LeftJoin`. Using these primitives, we should be able to cover priorities 1-3 (mentioned in the [Prioritization](#prioritization) section). So, any constructs that will require VTGate to do additional work will not be supported. Here’s a recap of what each primitive must do:
 
 * `Route`: Sends a query to a single shard or unsharded keyspace.
 * `RouteMerge`: Sends a (mostly) identical query to multiple shards and returns the combined results in no particular order.
@@ -1304,7 +1304,7 @@ The above rules work for both JOIN and LEFT JOIN nodes.
 
 `(a left join b on a.id=b.id) join (c left join d on c.id=d.id) on b.id=d.id`
 
-*In the above case, rows from b or c could be NULL. Fortunately, in SQL, NULL != NULL. So, the outer-scope join will succeed only if rows from b and c are not NULL. If they’re not NULL, they’re guaranteed to be from the same shard. So, this makes them groupable. In fact, in the above case, the left joins in the inner scope are unnecessary. They could have just been normal joins. However, things would be very different if one had used the null-safe equal operator (<=>) for joins. But we’ll not treat null-safe equal as a valid join operator.*
+*In the above case, rows from b or d could be NULL. Fortunately, in SQL, NULL != NULL. So, tde outer-scope join will succeed only if rows from b and d are not NULL. If they’re not NULL, they’re guaranteed to be from the same shard. So, this makes them groupable. In fact, in the above case, the left joins in the inner scope are unnecessary. They could have just been normal joins. However, things would be very different if one had used the null-safe equal operator (<=>) for joins. But we’ll not treat null-safe equal as a valid join operator.*
 
 When two nodes are grouped, the current join condition becomes the root of the new group, and it gets a routing property:
 
