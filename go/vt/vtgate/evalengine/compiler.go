@@ -63,6 +63,17 @@ func (c *compiler) unsupported(expr Expr) error {
 	return vterrors.Errorf(vtrpc.Code_UNIMPLEMENTED, "unsupported compilation for expression '%s'", FormatExpr(expr))
 }
 
+func (c *compiler) compile(expr Expr) (ctype, error) {
+	ct, err := c.compileExpr(expr)
+	if err != nil {
+		return ctype{}, err
+	}
+	if c.asm.stack.cur != 1 {
+		return ctype{}, vterrors.Errorf(vtrpc.Code_INTERNAL, "bad compilation: stack pointer at %d after compilation", c.asm.stack.cur)
+	}
+	return ct, nil
+}
+
 func (c *compiler) compileExpr(expr Expr) (ctype, error) {
 	switch expr := expr.(type) {
 	case *Literal:

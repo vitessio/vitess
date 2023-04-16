@@ -97,7 +97,7 @@ func (c *compiler) compileFn(call callable) (ctype, error) {
 	case *builtinLn:
 		return c.compileFn_math1(call, c.asm.Fn_LN, flagNullable)
 	case *builtinLog:
-		return c.compileFn_math1(call, c.asm.Fn_LOG, flagNullable)
+		return c.compileFn_LOG(call)
 	case *builtinLog10:
 		return c.compileFn_math1(call, c.asm.Fn_LOG10, flagNullable)
 	case *builtinLog2:
@@ -966,19 +966,16 @@ func (c *compiler) compileFn_ConvertTz(call *builtinConvertTz) (ctype, error) {
 	if err != nil {
 		return ctype{}, err
 	}
-
 	from, err := c.compileExpr(call.callable()[1])
 	if err != nil {
 		return ctype{}, err
 	}
-
 	to, err := c.compileExpr(call.callable()[2])
 	if err != nil {
 		return ctype{}, err
 	}
 
-	skip1 := c.compileNullCheck3(n, from, to)
-	var skip2 *jump
+	skip := c.compileNullCheck3(n, from, to)
 
 	switch {
 	case from.isTextual():
@@ -999,6 +996,6 @@ func (c *compiler) compileFn_ConvertTz(call *builtinConvertTz) (ctype, error) {
 	}
 
 	c.asm.Fn_CONVERT_TZ()
-	c.asm.jumpDestination(skip1, skip2)
+	c.asm.jumpDestination(skip)
 	return ctype{Type: sqltypes.Datetime, Col: collationBinary, Flag: n.Flag | flagNullable}, nil
 }
