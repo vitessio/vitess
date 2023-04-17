@@ -497,6 +497,32 @@ func getColumnCollations(table *tabletmanagerdatapb.TableDefinition) (map[string
 	}
 	tableCharset := tableschema.GetCharset()
 	tableCollation := tableschema.GetCollation()
+	// If no explicit collation is specified for the column then we need
+	// to walk the inheritence tree.
+	getColumnCollation := func(column *sqlparser.ColumnDefinition) collations.Collation {
+		// If there's an explicit collation listed then use that.
+		if column.Type.Options.Collate != "" {
+			return collationEnv.LookupByName(strings.ToLower(column.Type.Options.Collate))
+		}
+		// If the column has a charset listed then the default collation
+		// for that charset is used.
+		if column.Type.Charset.Name != "" {
+			return collationEnv.DefaultCollationForCharset(strings.ToLower(column.Type.Charset.Name))
+		}
+		// If the table has an explicit collation listed then use that.
+		if tableCollation != "" {
+			return collationEnv.LookupByName(strings.ToLower(tableCollation))
+		}
+		// If the table has a charset listed then use the default collation
+		// for that charset.
+		if tableCharset != "" {
+			return collationEnv.DefaultCollationForCharset(strings.ToLower(tableCharset))
+		}
+		// The table is using the global default charset and collation and
+		// we inherite that.
+		return collations.Default().Get()
+	}
+
 	columnCollations := make(map[string]collations.Collation)
 	for _, column := range tableschema.TableSpec.Columns {
 		// If it's not a character based type then no collation is used.
@@ -504,34 +530,7 @@ func getColumnCollations(table *tabletmanagerdatapb.TableDefinition) (map[string
 			columnCollations[column.Name.Lowered()] = nil
 			continue
 		}
-		collationName := column.Type.Options.Collate
-		// If no explicit collation is specified for the column then we need
-		// to walk the inheritence tree.
-		if collationName == "" {
-			// If the column has a charset listed then the default collation
-			// for that charset is used.
-			if column.Type.Charset.Name != "" {
-				if defaultColumnCollation := collationEnv.DefaultCollationForCharset(column.Type.Charset.Name); defaultColumnCollation != nil {
-					collationName = defaultColumnCollation.Name()
-				}
-			} else {
-				// Use the collation inherited from the table.
-				if tableCollation != "" {
-					collationName = tableCollation
-				} else {
-					// If the table has a charset listed then the default
-					// collation for that charset is used.
-					if tableCharset != "" {
-						if defaultTableCollation := collationEnv.DefaultCollationForCharset(tableCharset); defaultTableCollation != nil {
-							collationName = defaultTableCollation.Name()
-						}
-					} else { // The table is using the global default charset and collation.
-						collationName = collations.Default().Get().Name()
-					}
-				}
-			}
-		}
-		columnCollations[column.Name.Lowered()] = collationEnv.LookupByName(collationName)
+		columnCollations[column.Name.Lowered()] = getColumnCollation(column)
 	}
 	return columnCollations, nil
 }
