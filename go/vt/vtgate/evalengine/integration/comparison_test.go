@@ -81,7 +81,7 @@ func normalizeValue(v sqltypes.Value, coll collations.ID) sqltypes.Value {
 	return v
 }
 
-func compareRemoteExprEnv(t *testing.T, env *evalengine.ExpressionEnv, conn *mysql.Conn, expr string, fields []*querypb.Field, exact bool) {
+func compareRemoteExprEnv(t *testing.T, env *evalengine.ExpressionEnv, conn *mysql.Conn, expr string, fields []*querypb.Field, cmp *testcases.Comparison) {
 	t.Helper()
 
 	localQuery := "SELECT " + expr
@@ -134,13 +134,15 @@ func compareRemoteExprEnv(t *testing.T, env *evalengine.ExpressionEnv, conn *mys
 
 		remoteQuery = remoteQuery + " FROM vteval_test"
 	}
+	if cmp == nil {
+		cmp = &testcases.Comparison{}
+	}
 
 	local, localType, localErr := evaluateLocalEvalengine(env, localQuery, fields)
 	remote, remoteErr := conn.ExecuteFetch(remoteQuery, 1, true)
 
 	var localVal, remoteVal sqltypes.Value
 	var localCollation, remoteCollation collations.ID
-	var decimals uint32
 	if localErr == nil {
 		v := local.Value()
 		if debugCheckCollations {
@@ -166,7 +168,7 @@ func compareRemoteExprEnv(t *testing.T, env *evalengine.ExpressionEnv, conn *mys
 	if remoteErr == nil {
 		if debugNormalize {
 			remoteVal = normalizeValue(remote.Rows[0][0], collations.ID(remote.Fields[0].Charset))
-			decimals = remote.Fields[0].Decimals
+			cmp.Decimals = remote.Fields[0].Decimals
 		} else {
 			remoteVal = remote.Rows[0][0]
 		}
@@ -180,7 +182,18 @@ func compareRemoteExprEnv(t *testing.T, env *evalengine.ExpressionEnv, conn *mys
 		}
 	}
 
-	if err := compareResult(localErr, remoteErr, localVal, remoteVal, localCollation, remoteCollation, decimals, exact); err != nil {
+	localResult := Result{
+		Error:     localErr,
+		Value:     localVal,
+		Collation: localCollation,
+	}
+	remoteResult := Result{
+		Error:     remoteErr,
+		Value:     remoteVal,
+		Collation: remoteCollation,
+	}
+
+	if err := compareResult(localResult, remoteResult, cmp); err != nil {
 		t.Errorf("%s\nquery: %s (SIMPLIFY=%v)\nrow: %v", err, localQuery, debugSimplify, env.Row)
 	} else if debugPrintAll {
 		t.Logf("local=%s mysql=%s\nquery: %s\nrow: %v", localVal.String(), remoteVal.String(), localQuery, env.Row)
@@ -240,9 +253,9 @@ func TestMySQL(t *testing.T) {
 				Username: "vt_dba",
 			})
 			env := evalengine.NewExpressionEnv(ctx, nil, &vcursor{})
-			tc.Run(func(query string, row []sqltypes.Value, exact bool) {
+			tc.Run(func(query string, row []sqltypes.Value) {
 				env.Row = row
-				compareRemoteExprEnv(t, env, conn, query, tc.Schema, exact)
+				compareRemoteExprEnv(t, env, conn, query, tc.Schema, tc.Compare)
 			})
 		})
 	}

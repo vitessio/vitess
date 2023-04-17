@@ -105,7 +105,7 @@ func TestCompilerReference(t *testing.T) {
 			var supported, total int
 			env := evalengine.EmptyExpressionEnv()
 
-			tc.Run(func(query string, row []sqltypes.Value, _ bool) {
+			tc.Run(func(query string, row []sqltypes.Value) {
 				env.Row = row
 
 				stmt, err := sqlparser.ParseExpr(query)
