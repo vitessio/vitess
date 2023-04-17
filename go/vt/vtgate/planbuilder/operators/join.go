@@ -52,7 +52,12 @@ func (j *Join) Inputs() []ops.Operator {
 	return []ops.Operator{j.LHS, j.RHS}
 }
 
-func (j *Join) Compact(ctx *plancontext.PlanningContext) (ops.Operator, rewrite.TreeIdentity, error) {
+// SetInputs implements the Operator interface
+func (j *Join) SetInputs(ops []ops.Operator) {
+	j.LHS, j.RHS = ops[0], ops[1]
+}
+
+func (j *Join) Compact(ctx *plancontext.PlanningContext) (ops.Operator, rewrite.ApplyResult, error) {
 	if j.LeftJoin {
 		// we can't merge outer joins into a single QG
 		return j, rewrite.SameTree, nil
@@ -116,7 +121,7 @@ func createInnerJoin(ctx *plancontext.PlanningContext, tableExpr *sqlparser.Join
 }
 
 func (j *Join) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (ops.Operator, error) {
-	return AddPredicate(j, ctx, expr, false, newFilter)
+	return AddPredicate(ctx, j, expr, false, newFilter)
 }
 
 var _ JoinOp = (*Join)(nil)

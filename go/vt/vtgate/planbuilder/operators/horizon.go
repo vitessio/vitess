@@ -18,6 +18,7 @@ package operators
 
 import (
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
@@ -32,8 +33,21 @@ import (
 type Horizon struct {
 	Source ops.Operator
 	Select sqlparser.SelectStatement
+}
 
-	noColumns
+func (h *Horizon) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr) (ops.Operator, int, error) {
+	return nil, 0, vterrors.VT13001("the Horizon operator cannot accept new columns")
+}
+
+func (h *Horizon) GetColumns() (exprs []sqlparser.Expr, err error) {
+	for _, expr := range sqlparser.GetFirstSelect(h.Select).SelectExprs {
+		ae, ok := expr.(*sqlparser.AliasedExpr)
+		if !ok {
+			return nil, errHorizonNotPlanned
+		}
+		exprs = append(exprs, ae.Expr)
+	}
+	return
 }
 
 var _ ops.Operator = (*Horizon)(nil)
@@ -59,4 +73,17 @@ func (h *Horizon) Clone(inputs []ops.Operator) ops.Operator {
 
 func (h *Horizon) Inputs() []ops.Operator {
 	return []ops.Operator{h.Source}
+}
+
+// SetInputs implements the Operator interface
+func (h *Horizon) SetInputs(ops []ops.Operator) {
+	h.Source = ops[0]
+}
+
+func (h *Horizon) selectStatement() sqlparser.SelectStatement {
+	return h.Select
+}
+
+func (h *Horizon) src() ops.Operator {
+	return h.Source
 }
