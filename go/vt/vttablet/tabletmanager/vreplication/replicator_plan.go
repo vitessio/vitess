@@ -509,6 +509,7 @@ func (tp *TablePlan) getPartialInsertQuery(dataColumns *binlogdatapb.Bitmap) (*s
 		return ins, vterrors.New(vtrpcpb.Code_INTERNAL, fmt.Sprintf("Unable to create partial insert query for %s", tp.TargetName))
 	}
 	tp.PartialInserts[key] = ins
+	tp.Stats.PartialQueryCacheSize.Add([]string{"insert"}, 1)
 	return ins, nil
 }
 
@@ -523,6 +524,7 @@ func (tp *TablePlan) getPartialUpdateQuery(dataColumns *binlogdatapb.Bitmap) (*s
 		return upd, vterrors.New(vtrpcpb.Code_INTERNAL, fmt.Sprintf("Unable to create partial update query for %s", tp.TargetName))
 	}
 	tp.PartialUpdates[key] = upd
+	tp.Stats.PartialQueryCacheSize.Add([]string{"update"}, 1)
 	return upd, nil
 }
 
@@ -586,6 +588,7 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 			if err != nil {
 				return nil, err
 			}
+			tp.Stats.PartialQueryCount.Add([]string{"insert"}, 1)
 			return execParsedQuery(ins, bindvars, executor)
 		}
 	case before && !after:
@@ -602,6 +605,7 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 				if err != nil {
 					return nil, err
 				}
+				tp.Stats.PartialQueryCount.Add([]string{"update"}, 1)
 				return execParsedQuery(upd, bindvars, executor)
 			}
 		}

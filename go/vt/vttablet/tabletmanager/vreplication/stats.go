@@ -60,6 +60,7 @@ type vrStats struct {
 }
 
 func (st *vrStats) register() {
+
 	stats.NewGaugeFunc("VReplicationStreamCount", "Number of vreplication streams", st.numControllers)
 	stats.NewGaugeFunc("VReplicationLagSecondsMax", "Max vreplication seconds behind primary", st.maxReplicationLagSeconds)
 	stats.NewStringMapFuncWithMultiLabels(
@@ -214,7 +215,6 @@ func (st *vrStats) register() {
 			}
 			return result
 		})
-
 	stats.NewGaugesFuncWithMultiLabels(
 		"VReplicationQueryCount",
 		"vreplication query counts per stream",
@@ -382,6 +382,7 @@ func (st *vrStats) register() {
 			}
 			return result
 		})
+
 	stats.NewGaugesFuncWithMultiLabels(
 		"VReplicationTableCopyTimings",
 		"vreplication copy phase timings per table per stream",
@@ -397,6 +398,37 @@ func (st *vrStats) register() {
 			}
 			return result
 		})
+	stats.NewCountersFuncWithMultiLabels(
+		"VReplicationPartialQueryCount",
+		"count of partial queries per stream",
+		[]string{"source_keyspace", "source_shard", "workflow", "type"},
+		func() map[string]int64 {
+			st.mu.Lock()
+			defer st.mu.Unlock()
+			result := make(map[string]int64, len(st.controllers))
+			for _, ct := range st.controllers {
+				for typ, t := range ct.blpStats.PartialQueryCount.Counts() {
+					result[ct.source.Keyspace+"."+ct.source.Shard+"."+ct.workflow+"."+fmt.Sprintf("%v", ct.id)+"."+typ] = t
+				}
+			}
+			return result
+		})
+	stats.NewCountersFuncWithMultiLabels(
+		"VReplicationPartialQueryCacheSize",
+		"cache size for partial queries per stream",
+		[]string{"source_keyspace", "source_shard", "workflow", "type"},
+		func() map[string]int64 {
+			st.mu.Lock()
+			defer st.mu.Unlock()
+			result := make(map[string]int64, len(st.controllers))
+			for _, ct := range st.controllers {
+				for typ, t := range ct.blpStats.PartialQueryCacheSize.Counts() {
+					result[ct.source.Keyspace+"."+ct.source.Shard+"."+ct.workflow+"."+fmt.Sprintf("%v", ct.id)+"."+typ] = t
+				}
+			}
+			return result
+		})
+
 }
 
 func (st *vrStats) numControllers() int64 {

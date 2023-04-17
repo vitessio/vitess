@@ -2901,11 +2901,11 @@ func TestPlayerBlob(t *testing.T) {
 		table  string
 		data   [][]string
 	}{{
-		input:  "insert into t1(id,val1,blb1,id2,val2,blb2) values (1,'aaa','blb1',10,'AAA','blb2a')",
-		output: "insert into t1(id,val1,blb1,id2,blb2,val2) values (1,'aaa','blb1',10,'blb2a','AAA')",
+		input:  "insert into t1(id,val1,blb1,id2,val2) values (1,'aaa','blb1',10,'AAA')",
+		output: "insert into t1(id,val1,blb1,id2,val2) values (1,'aaa','blb1',10,'AAA')",
 		table:  "t1",
 		data: [][]string{
-			{"1", "aaa", "blb1", "10", "blb2a", "AAA"},
+			{"1", "aaa", "blb1", "10", "", "AAA"},
 		},
 	}, {
 		input:  "update t1 set blb2 = 'blb22' where id = 1",
@@ -2955,4 +2955,12 @@ func TestPlayerBlob(t *testing.T) {
 			expectData(t, tcases.table, tcases.data)
 		}
 	}
+	require.Equal(t, 1, len(globalStats.controllers))
+	stats := globalStats.controllers[1].blpStats
+	require.Equal(t, 2, len(stats.PartialQueryCount.Counts()))
+	require.Equal(t, 2, len(stats.PartialQueryCount.Counts()))
+	require.Equal(t, int64(1), stats.PartialQueryCacheSize.Counts()["insert"])
+	require.Equal(t, int64(1), stats.PartialQueryCount.Counts()["insert"])
+	require.Equal(t, int64(2), stats.PartialQueryCacheSize.Counts()["update"])
+	require.Equal(t, int64(4), stats.PartialQueryCount.Counts()["update"])
 }

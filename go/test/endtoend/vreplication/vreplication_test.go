@@ -291,8 +291,8 @@ func testVreplicationWorkflows(t *testing.T, limited bool, binlogRowImage string
 	defer func() { defaultReplicas = 1 }()
 
 	if binlogRowImage != "" {
-		require.NoError(t, utils.SetBinlogRowImageMode(binlogRowImage, vc.ClusterConfig.tmpDir))
-		defer utils.SetBinlogRowImageMode("", vc.ClusterConfig.tmpDir)
+		setBinlogRowImageMode(t, vc, "noblob")
+		defer setBinlogRowImageMode(t, vc, "")
 	}
 	defer vc.TearDown(t)
 
@@ -571,8 +571,8 @@ func TestCellAliasVreplicationWorkflow(t *testing.T) {
 	keyspace := "product"
 	shard := "0"
 
-	require.NoError(t, utils.SetBinlogRowImageMode("noblob", vc.ClusterConfig.tmpDir))
-	defer utils.SetBinlogRowImageMode("", vc.ClusterConfig.tmpDir)
+	setBinlogRowImageMode(t, vc, "noblob")
+	defer setBinlogRowImageMode(t, vc, "")
 	defer vc.TearDown(t)
 
 	cell1 := vc.Cells["zone1"]
