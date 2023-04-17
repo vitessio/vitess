@@ -172,5 +172,5 @@ var inputConversionTypes = []string{
 	"DECIMAL", "DECIMAL(0, 4)", "DECIMAL(12, 0)", "DECIMAL(12, 4)", "DECIMAL(60)",
 	"DOUBLE", "REAL",
 	"SIGNED", "UNSIGNED", "SIGNED INTEGER", "UNSIGNED INTEGER", "JSON",
-	"DATE", "DATETIME", "TIME",
+	"DATE", "DATETIME", "TIME", "DATETIME(6)", "TIME(6)",
 }

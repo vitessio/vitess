@@ -1095,6 +1095,21 @@ func (asm *assembler) Convert_xDT(offset int) {
 	}, "CONV (SP-%d), DATETIME", offset)
 }
 
+func (asm *assembler) Convert_xDT_nz(offset int) {
+	asm.emit(func(env *ExpressionEnv) int {
+		// Need to explicitly check here or we otherwise
+		// store a nil wrapper in an interface vs. a direct
+		// nil.
+		dt := evalToDateTime(env.vm.stack[env.vm.sp-offset])
+		if dt == nil || dt.isZero() {
+			env.vm.stack[env.vm.sp-offset] = nil
+		} else {
+			env.vm.stack[env.vm.sp-offset] = dt
+		}
+		return 1
+	}, "CONV (SP-%d), DATETIME(NOZERO)", offset)
+}
+
 func (asm *assembler) Convert_xT(offset int) {
 	asm.emit(func(env *ExpressionEnv) int {
 		t := evalToTime(env.vm.stack[env.vm.sp-offset])
@@ -3077,6 +3092,10 @@ func (asm *assembler) Fn_RandomBytes() {
 func (asm *assembler) Fn_DATE_FORMAT(col collations.TypedCollation) {
 	asm.adjustStack(-1)
 	asm.emit(func(env *ExpressionEnv) int {
+		if env.vm.stack[env.vm.sp-2] == nil {
+			env.vm.sp--
+			return 1
+		}
 		l := env.vm.stack[env.vm.sp-2].(*evalTemporal)
 		r := env.vm.stack[env.vm.sp-1].(*evalBytes)
 
@@ -3086,4 +3105,42 @@ func (asm *assembler) Fn_DATE_FORMAT(col collations.TypedCollation) {
 		env.vm.sp--
 		return 1
 	}, "FN DATE_FORMAT DATETIME(SP-2), VARBINARY(SP-1)")
+}
+
+func (asm *assembler) Fn_CONVERT_TZ() {
+	asm.adjustStack(-2)
+	asm.emit(func(env *ExpressionEnv) int {
+		if env.vm.stack[env.vm.sp-3] == nil {
+			env.vm.sp -= 2
+			return 1
+		}
+
+		n := env.vm.stack[env.vm.sp-3].(*evalTemporal)
+		f := env.vm.stack[env.vm.sp-2].(*evalBytes)
+		t := env.vm.stack[env.vm.sp-1].(*evalBytes)
+
+		fromTz, err := datetime.ParseTimeZone(f.string())
+		if err != nil {
+			env.vm.stack[env.vm.sp-3] = nil
+			env.vm.sp -= 2
+			return 1
+		}
+
+		toTz, err := datetime.ParseTimeZone(t.string())
+		if err != nil {
+			env.vm.stack[env.vm.sp-3] = nil
+			env.vm.sp -= 2
+			return 1
+		}
+
+		dt, ok := convertTz(n.dt, fromTz, toTz)
+		if !ok {
+			env.vm.stack[env.vm.sp-3] = nil
+			env.vm.sp -= 2
+			return 1
+		}
+		env.vm.stack[env.vm.sp-3] = env.vm.arena.newEvalDateTime(dt)
+		env.vm.sp -= 2
+		return 1
+	}, "FN CONVERT_TZ DATETIME(SP-3), VARBINARY(SP-2), VARBINARY(SP-1)")
 }
