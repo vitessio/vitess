@@ -690,6 +690,7 @@ func insertInitialData(t *testing.T) {
 
 		waitForRowCount(t, vtgateConn, "product:0", "product", 2)
 		waitForRowCount(t, vtgateConn, "product:0", "customer", 3)
+		waitForRowCount(t, vtgateConn, "product:0", "vdiff_order", 190)
 		waitForQueryResult(t, vtgateConn, "product:0", "select * from merchant",
 			`[[VARCHAR("Monoprice") VARCHAR("eléctronics")] [VARCHAR("newegg") VARCHAR("elec†ronics")]]`)
 
@@ -745,7 +746,7 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 		defaultCell := cells[0]
 		custKs := vc.Cells[defaultCell.Name].Keyspaces["customer"]
 
-		tables := "customer,Lead,Lead-1,db_order_test,geom_tbl,json_tbl"
+		tables := "customer,Lead,Lead-1,db_order_test,vdiff_order,geom_tbl,json_tbl"
 		moveTablesAction(t, "Create", sourceCellOrAlias, workflow, sourceKs, targetKs, tables)
 
 		customerTab1 := custKs.Shards["-80"].Tablets["zone1-200"].Vttablet
