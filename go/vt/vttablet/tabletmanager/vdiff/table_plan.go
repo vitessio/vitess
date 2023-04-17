@@ -249,11 +249,11 @@ func (tp *tablePlan) getPKColumnCollations(dbClient binlogplayer.DBClient) error
 	}
 	collationEnv := collations.Local()
 	for _, row := range qr.Named().Rows {
-		columnname := row["column_name"].ToString()
-		collatename := strings.ToLower(row["collation_name"].ToString())
+		columnName := row["column_name"].ToString()
+		collateName := strings.ToLower(row["collation_name"].ToString())
 		for i := range tp.comparePKs {
-			if strings.EqualFold(tp.comparePKs[i].colName, columnname) {
-				tp.comparePKs[i].collation = collationEnv.LookupByName(collatename)
+			if strings.EqualFold(tp.comparePKs[i].colName, columnName) {
+				tp.comparePKs[i].collation = collationEnv.LookupByName(collateName)
 				break
 			}
 		}
