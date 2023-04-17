@@ -27,7 +27,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-	"vitess.io/vitess/go/vt/vtgate/evalengine/testcases"
 
 	"github.com/spf13/pflag"
 
@@ -36,6 +35,7 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
+	"vitess.io/vitess/go/vt/vtgate/evalengine/testcases"
 	"vitess.io/vitess/go/vt/vtgate/simplifier"
 )
 
