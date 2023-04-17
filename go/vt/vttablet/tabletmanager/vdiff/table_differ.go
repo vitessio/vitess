@@ -780,8 +780,10 @@ func (td *tableDiffer) updateTableStats(dbClient binlogplayer.DBClient) error {
 		return err
 	}
 	// Now read the updated stats.
-	query, err := sqlparser.ParseAndBind(sqlGetTableRows, sqltypes.StringBindVariable(td.wd.ct.vde.dbName),
-		sqltypes.StringBindVariable(td.table.Name))
+	query, err := sqlparser.ParseAndBind(sqlGetTableRows,
+		sqltypes.StringBindVariable(td.wd.ct.vde.dbName),
+		sqltypes.StringBindVariable(td.table.Name),
+	)
 	if err != nil {
 		return err
 	}
@@ -803,8 +805,11 @@ func (td *tableDiffer) updateTableStats(dbClient binlogplayer.DBClient) error {
 		strVal, _ := row.ToString("table_rows")
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid value (%s) returned from %s: %v", strVal, query, err)
 	}
-	query, err = sqlparser.ParseAndBind(sqlUpdateTableRows, sqltypes.Int64BindVariable(tableRows), sqltypes.Int64BindVariable(td.wd.ct.id),
-		sqltypes.StringBindVariable(td.table.Name))
+	query, err = sqlparser.ParseAndBind(sqlUpdateTableRows,
+		sqltypes.Int64BindVariable(tableRows),
+		sqltypes.Int64BindVariable(td.wd.ct.id),
+		sqltypes.StringBindVariable(td.table.Name),
+	)
 	if err != nil {
 		return err
 	}

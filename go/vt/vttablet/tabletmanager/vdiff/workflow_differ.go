@@ -319,8 +319,11 @@ func (wd *workflowDiffer) initVDiffTables(dbClient binlogplayer.DBClient) error 
 		if len(qr.Rows) == 0 {
 			query = fmt.Sprintf(sqlNewVDiffTable, wd.ct.id, encodeString(tableName), tableRows)
 		} else if len(qr.Rows) == 1 {
-			query, err = sqlparser.ParseAndBind(sqlUpdateTableRows, sqltypes.Int64BindVariable(tableRows), sqltypes.Int64BindVariable(wd.ct.id),
-				sqltypes.StringBindVariable(tableName))
+			query, err = sqlparser.ParseAndBind(sqlUpdateTableRows,
+				sqltypes.Int64BindVariable(tableRows),
+				sqltypes.Int64BindVariable(wd.ct.id),
+				sqltypes.StringBindVariable(tableName),
+			)
 			if err != nil {
 				return err
 			}
