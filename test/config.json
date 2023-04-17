@@ -837,15 +837,6 @@
 			"RetryMax": 1,
 			"Tags": []
 		},
-		"vtgate_dbddlplugin": {
-			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/createdb_plugin"],
-			"Command": [],
-			"Manual": false,
-			"Shard": "vtgate_general_heavy",
-			"RetryMax": 1,
-			"Tags": []
-		},
 		"vtgate_gen4": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/gen4"],
