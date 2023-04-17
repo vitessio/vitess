@@ -205,7 +205,10 @@ func newTxThrottler(env tabletenv.Env, config *txThrottlerConfig) (*TxThrottler,
 
 // Open opens the transaction throttler. It must be called prior to 'Throttle'.
 func (t *TxThrottler) Open() (err error) {
-	if !t.config.enabled || t.state != nil {
+	if !t.config.enabled {
+		return nil
+	}
+	if t.state != nil {
 		return nil
 	}
 	log.Info("TxThrottler: opening")
@@ -218,7 +221,10 @@ func (t *TxThrottler) Open() (err error) {
 // It should be called after the throttler is no longer needed.
 // It's ok to call this method on a closed throttler--in which case the method does nothing.
 func (t *TxThrottler) Close() {
-	if !t.config.enabled || t.state == nil {
+	if !t.config.enabled {
+		return
+	}
+	if t.state == nil {
 		return
 	}
 	t.state.deallocateResources()
