@@ -108,6 +108,10 @@ type (
 		// ColumnEqualities is used for transitive closures (e.g., if a == b and b == c, then a == c).
 		ColumnEqualities map[columnName][]sqlparser.Expr
 
+		// ExpandedColumns is a map of all the added columns for a given table.
+		// The columns were added because of the use of `*` in the query
+		ExpandedColumns map[sqlparser.TableName][]*sqlparser.ColName
+
 		comparator *sqlparser.Comparator
 	}
 
