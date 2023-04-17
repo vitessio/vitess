@@ -31,7 +31,7 @@ import (
 )
 
 type (
-	// SelectExpr provides whether the columns is aggregation expression or not.
+	// SelectExpr provides whether the column is aggregation expression or not.
 	SelectExpr struct {
 		Col  sqlparser.SelectExpr
 		Aggr bool

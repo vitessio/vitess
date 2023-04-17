@@ -110,6 +110,11 @@ func (d *Derived) Inputs() []ops.Operator {
 	return []ops.Operator{d.Source}
 }
 
+// SetInputs implements the Operator interface
+func (d *Derived) SetInputs(ops []ops.Operator) {
+	d.Source = ops[0]
+}
+
 func (d *Derived) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (ops.Operator, error) {
 	if _, isUNion := d.Source.(*Union); isUNion {
 		// If we have a derived table on top of a UNION, we can let the UNION do the expression rewriting
@@ -155,13 +160,14 @@ func canBePushedDownIntoDerived(expr sqlparser.Expr) (canBePushed bool) {
 	return
 }
 
-func (d *Derived) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, reuseCol bool) (ops.Operator, int, error) {
+func (d *Derived) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr) (ops.Operator, int, error) {
 	col, ok := expr.Expr.(*sqlparser.ColName)
 	if !ok {
 		return nil, 0, vterrors.VT13001("cannot push non-colname expression to a derived table")
 	}
 
-	if offset, found := canReuseColumn(ctx, reuseCol, d.Columns, col); found {
+	identity := func(c *sqlparser.ColName) sqlparser.Expr { return c }
+	if offset, found := canReuseColumn(ctx, d.Columns, col, identity); found {
 		return d, offset, nil
 	}
 
@@ -175,7 +181,7 @@ func (d *Derived) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.Al
 	d.Columns = append(d.Columns, col)
 	// add it to the source if we were not already passing it through
 	if i <= -1 {
-		newSrc, _, err := d.Source.AddColumn(ctx, aeWrap(sqlparser.NewColName(col.Name.String())), true)
+		newSrc, _, err := d.Source.AddColumn(ctx, aeWrap(sqlparser.NewColName(col.Name.String())))
 		if err != nil {
 			return nil, 0, err
 		}
@@ -186,18 +192,14 @@ func (d *Derived) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.Al
 
 // canReuseColumn is generic, so it can be used with slices of different types.
 // We don't care about the actual type, as long as we know it's a sqlparser.Expr
-func canReuseColumn[Expr sqlparser.Expr](
+func canReuseColumn[T any](
 	ctx *plancontext.PlanningContext,
-	reuseCol bool,
-	columns []Expr,
+	columns []T,
 	col sqlparser.Expr,
+	f func(T) sqlparser.Expr,
 ) (offset int, found bool) {
-	if !reuseCol {
-		return
-	}
-
 	for offset, column := range columns {
-		if ctx.SemTable.EqualsExpr(col, column) {
+		if ctx.SemTable.EqualsExpr(col, f(column)) {
 			return offset, true
 		}
 	}
@@ -217,4 +219,13 @@ func addToIntSlice(columnOffset []int, valToAdd int) ([]int, int) {
 	}
 	columnOffset = append(columnOffset, valToAdd)
 	return columnOffset, len(columnOffset) - 1
+}
+
+// TODO: REMOVE
+func (d *Derived) selectStatement() sqlparser.SelectStatement {
+	return d.Query
+}
+
+func (d *Derived) src() ops.Operator {
+	return d.Source
 }
