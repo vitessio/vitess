@@ -483,22 +483,30 @@ func TestBuildPlanSuccess(t *testing.T) {
 			wd, err := newWorkflowDiffer(ct, vdiffenv.opts)
 			require.NoError(t, err)
 			dbc.ExpectRequestRE("select vdt.lastpk as lastpk, vdt.mismatch as mismatch, vdt.report as report", noResults, nil)
-			for _, pkCol := range tcase.tablePlan.comparePKs {
-				query, err := sqlparser.ParseAndBind(sqlSelectColumnCollation,
-					sqltypes.StringBindVariable(vdiffDBName), sqltypes.StringBindVariable(tcase.tablePlan.table.Name),
-					sqltypes.StringBindVariable(pkCol.colName))
-				require.NoError(t, err)
-				collationName := ""
-				if pkCol.collation != nil {
-					collationName = pkCol.collation.Name()
+			columnList := make([]string, len(tcase.tablePlan.comparePKs))
+			collationList := make([]string, len(tcase.tablePlan.comparePKs))
+			for i := range tcase.tablePlan.comparePKs {
+				columnList[i] = tcase.tablePlan.comparePKs[i].colName
+				if tcase.tablePlan.comparePKs[i].collation != nil {
+					collationList[i] = tcase.tablePlan.comparePKs[i].collation.Name()
+				} else {
+					collationList[i] = sqltypes.NULL.String()
 				}
-				dbc.ExpectRequest(query, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
-					"collation_name",
-					"varchar",
-				),
-					collationName,
-				), nil)
 			}
+			columnBV, err := sqltypes.BuildBindVariable(columnList)
+			require.NoError(t, err)
+			query, err := sqlparser.ParseAndBind(sqlSelectColumnCollations,
+				sqltypes.StringBindVariable(vdiffDBName),
+				sqltypes.StringBindVariable(tcase.tablePlan.table.Name),
+				columnBV,
+			)
+			require.NoError(t, err)
+			dbc.ExpectRequest(query, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+				"collation_name",
+				"varchar",
+			),
+				collationList...,
+			), nil)
 			err = wd.buildPlan(dbc, filter, testSchema)
 			require.NoError(t, err, tcase.input)
 			require.Equal(t, 1, len(wd.tableDiffers), tcase.input)
@@ -577,7 +585,7 @@ func TestBuildPlanInclude(t *testing.T) {
 						from _vt.vdiff as vd inner join _vt.vdiff_table as vdt on (vd.id = vdt.vdiff_id)
 						where vdt.vdiff_id = 1 and vdt.table_name = '%s'`, table)
 			dbc.ExpectRequest(query, noResults, nil)
-			dbc.ExpectRequestRE("select collation_name from information_schema.columns .*", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+			dbc.ExpectRequestRE("select column_name as column_name, collation_name as collation_name from information_schema.columns .*", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 				"collation_name",
 				"varchar",
 			),

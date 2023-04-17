@@ -34,7 +34,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
 )
 
-const sqlSelectColumnCollation = "select collation_name from information_schema.columns where table_schema=%a and table_name=%a and column_name=%a"
+const sqlSelectColumnCollations = "select column_name as column_name, collation_name as collation_name from information_schema.columns where table_schema=%a and table_name=%a and column_name in %a"
 
 type tablePlan struct {
 	// sourceQuery and targetQuery are select queries.
@@ -194,13 +194,6 @@ func (tp *tablePlan) findPKs(dbClient binlogplayer.DBClient, targetSelect *sqlpa
 			}
 			if strings.EqualFold(pk, colname) {
 				tp.compareCols[i].isPK = true
-				// We need to set the correct collation, if the column has one, to ensure
-				// proper ordering of the results when we later do the merge sort.
-				collationName, err := getColumnCollation(dbClient, tp.dbName, tp.table.Name, colname)
-				if err != nil {
-					return err
-				}
-				tp.compareCols[i].collation = collations.Local().LookupByName(collationName)
 				tp.comparePKs = append(tp.comparePKs, tp.compareCols[i])
 				tp.selectPks = append(tp.selectPks, i)
 				// We'll be comparing pks separately. So, remove them from compareCols.
@@ -218,24 +211,52 @@ func (tp *tablePlan) findPKs(dbClient binlogplayer.DBClient, targetSelect *sqlpa
 			Direction: sqlparser.AscOrder,
 		})
 	}
+	if err := tp.getPKColumnCollations(dbClient); err != nil {
+		return vterrors.Wrapf(err, "error getting PK column collations for table %s", tp.table.Name)
+	}
 	tp.orderBy = orderby
 	return nil
 }
 
-// getColumnCollation queries the database to find the collation
-// to use for the given schema.table.column.
-func getColumnCollation(dbClient binlogplayer.DBClient, schema, table, column string) (string, error) {
-	query, err := sqlparser.ParseAndBind(sqlSelectColumnCollation,
-		sqltypes.StringBindVariable(schema), sqltypes.StringBindVariable(table), sqltypes.StringBindVariable(column))
+// getPKColumnCollations queries the database to find the collation
+// to use for the each PK column used in the query to ensure proper
+// sorting when we do the merge sort and for the comparisons. It then
+// saves the collations in the tablePlan's comparePKs column info
+// structs for those subsequent operations.
+func (tp *tablePlan) getPKColumnCollations(dbClient binlogplayer.DBClient) error {
+	columnList := make([]string, len(tp.comparePKs))
+	for i := range tp.comparePKs {
+		columnList[i] = tp.comparePKs[i].colName
+	}
+	columnsBV, err := sqltypes.BuildBindVariable(columnList)
 	if err != nil {
-		return "", err
+		return err
 	}
-	qr, err := dbClient.ExecuteFetch(query, 1)
+	query, err := sqlparser.ParseAndBind(sqlSelectColumnCollations,
+		sqltypes.StringBindVariable(tp.dbName),
+		sqltypes.StringBindVariable(tp.table.Name),
+		columnsBV,
+	)
 	if err != nil {
-		return "", err
+		return err
 	}
-	if qr == nil || len(qr.Rows) != 1 {
-		return "", vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unexpected result for query %s: %+v", query, qr)
+	qr, err := dbClient.ExecuteFetch(query, len(tp.comparePKs))
+	if err != nil {
+		return err
 	}
-	return qr.Rows[0][0].ToString(), nil
+	if qr == nil || len(qr.Rows) != len(tp.comparePKs) {
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unexpected result for query %s: %+v", query, qr)
+	}
+	collationEnv := collations.Local()
+	for _, row := range qr.Named().Rows {
+		columnname := row["column_name"].ToString()
+		collatename := strings.ToLower(row["collation_name"].ToString())
+		for i := range tp.comparePKs {
+			if strings.EqualFold(tp.comparePKs[i].colName, columnname) {
+				tp.comparePKs[i].collation = collationEnv.LookupByName(collatename)
+				break
+			}
+		}
+	}
+	return nil
 }

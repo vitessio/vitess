@@ -217,14 +217,24 @@ func FetchBindVar(name string, bindVariables map[string]*querypb.BindVariable) (
 //	query, err := ParseAndBind("select * from tbl where name=%a", sqltypes.StringBindVariable("it's me"))
 func ParseAndBind(in string, binds ...*querypb.BindVariable) (query string, err error) {
 	vars := make([]any, len(binds))
-	for i := range binds {
-		vars[i] = fmt.Sprintf(":var%d", i)
+	for i, bv := range binds {
+		switch bv.Type {
+		case querypb.Type_TUPLE:
+			vars[i] = fmt.Sprintf("::vars%d", i)
+		default:
+			vars[i] = fmt.Sprintf(":var%d", i)
+		}
 	}
 	parsed := BuildParsedQuery(in, vars...)
 
 	bindVars := map[string]*querypb.BindVariable{}
-	for i := range binds {
-		bindVars[fmt.Sprintf("var%d", i)] = binds[i]
+	for i, bv := range binds {
+		switch bv.Type {
+		case querypb.Type_TUPLE:
+			bindVars[fmt.Sprintf("vars%d", i)] = binds[i]
+		default:
+			bindVars[fmt.Sprintf("var%d", i)] = binds[i]
+		}
 	}
 	return parsed.GenerateQuery(bindVars, nil)
 }
