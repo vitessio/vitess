@@ -8,6 +8,7 @@
     - [VTAdmin web migrated from create-react-app to vite](#migrated-vtadmin)
     - [Keyspace name validation in TopoServer](#keyspace-name-validation)
     - [Shard name validation in TopoServer](#shard-name-validation)
+    - [Compression CLI flags remove from vtctld and vtctldclient binaries](#remove-compression-flags-from-vtctld-binaries)
   - **[New command line flags and behavior](#new-flag)**
     - [Builtin backup: read buffering flags](#builtin-backup-read-buffering-flags)
   - **[New stats](#new-stats)**
@@ -73,6 +74,16 @@ Keyspace names may no longer contain the forward slash ("/") character, and Topo
 Prior to v17, it was possible to create a shard name with invalid characters, which would then be inaccessible to various cluster management operations.
 
 Shard names may no longer contain the forward slash ("/") character, and TopoServer's `CreateShard` method returns an error if given such a name.
+
+#### <a id="remove-compression-flags-from-vtctld-binaries"> Compression CLI flags remove from vtctld and vtctldclient binaries
+
+The CLI flags below were mistakenly added to `vtctld` and `vtctldclient` in v15. In v17, they are no longer present in those binaries.
+
+ * `--compression-engine-name`
+ * `--compression-level`
+ * `--external-compressor`
+ * `--external-compressor-extension`
+ * `--external-decompressor`
 
 ### <a id="new-flag"/> New command line flags and behavior
 
