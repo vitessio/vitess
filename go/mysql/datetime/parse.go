@@ -63,7 +63,9 @@ func parsetimeSeconds(tp *timeparts, in string) (out string, ok bool) {
 			n := 1
 			for ; n < len(in) && isDigit(in, n); n++ {
 			}
-			tp.nsec, ok = parseNanoseconds(in, n)
+			var l int
+			tp.nsec, l, ok = parseNanoseconds(in, n)
+			tp.prec = uint8(l)
 			return "", ok && len(in) == n
 		}
 	}
@@ -140,7 +142,9 @@ func parsetimeNoDelimiters(tp *timeparts, in string) (out string, ok bool) {
 		n := 1
 		for ; n < len(in) && isDigit(in, n); n++ {
 		}
-		tp.nsec, ok = parseNanoseconds(in, n)
+		var l int
+		tp.nsec, l, ok = parseNanoseconds(in, n)
+		tp.prec = uint8(l)
 		in = in[n:]
 	}
 
@@ -158,9 +162,9 @@ func parsetimeNoDelimiters(tp *timeparts, in string) (out string, ok bool) {
 	return in, ok
 }
 
-func ParseTime(in string) (t Time, ok bool) {
+func ParseTime(in string, prec int) (t Time, l int, ok bool) {
 	if len(in) == 0 {
-		return Time{}, false
+		return Time{}, 0, false
 	}
 	var neg bool
 	if in[0] == '-' {
@@ -176,51 +180,59 @@ func ParseTime(in string) (t Time, ok bool) {
 		hours |= negMask
 	}
 
-	return Time{
+	t = Time{
 		hour:       hours,
 		minute:     uint8(tp.min),
 		second:     uint8(tp.sec),
 		nanosecond: uint32(tp.nsec),
-	}, ok && len(in) == 0
+	}
+
+	if prec < 0 {
+		prec = int(tp.prec)
+	} else {
+		t = t.Round(prec)
+	}
+
+	return t, prec, ok && len(in) == 0
 }
 
 func ParseDate(s string) (Date, bool) {
 	if _, ok := isNumber(s); ok {
 		if len(s) >= 8 {
-			dt, ok := Date_YYYYMMDD.Parse(s)
+			dt, _, ok := Date_YYYYMMDD.Parse(s, 0)
 			return dt.Date, ok
 		}
-		dt, ok := Date_YYMMDD.Parse(s)
+		dt, _, ok := Date_YYMMDD.Parse(s, 0)
 		return dt.Date, ok
 	}
 
 	if len(s) >= 8 {
-		if t, ok := Date_YYYY_M_D.Parse(s); ok {
+		if t, _, ok := Date_YYYY_M_D.Parse(s, 0); ok {
 			return t.Date, true
 		}
 	}
 	if len(s) >= 6 {
-		if t, ok := Date_YY_M_D.Parse(s); ok {
+		if t, _, ok := Date_YY_M_D.Parse(s, 0); ok {
 			return t.Date, true
 		}
 	}
 	return Date{}, false
 }
 
-func ParseDateTime(s string) (DateTime, bool) {
-	if l, ok := isNumber(s); ok {
-		if l >= 14 {
-			return DateTime_YYYYMMDDhhmmss.Parse(s)
+func ParseDateTime(s string, l int) (DateTime, int, bool) {
+	if sl, ok := isNumber(s); ok {
+		if sl >= 14 {
+			return DateTime_YYYYMMDDhhmmss.Parse(s, l)
 		}
-		return DateTime_YYMMDDhhmmss.Parse(s)
+		return DateTime_YYMMDDhhmmss.Parse(s, l)
 	}
-	if t, ok := DateTime_YYYY_M_D_h_m_s.Parse(s); ok {
-		return t, true
+	if t, l, ok := DateTime_YYYY_M_D_h_m_s.Parse(s, l); ok {
+		return t, l, true
 	}
-	if t, ok := DateTime_YY_M_D_h_m_s.Parse(s); ok {
-		return t, true
+	if t, l, ok := DateTime_YY_M_D_h_m_s.Parse(s, l); ok {
+		return t, l, true
 	}
-	return DateTime{}, false
+	return DateTime{}, 0, false
 }
 
 func ParseDateInt64(i int64) (d Date, ok bool) {
@@ -307,11 +319,33 @@ func ParseDateTimeInt64(i int64) (dt DateTime, ok bool) {
 	return dt, ok
 }
 
-func ParseDateTimeFloat(f float64) (DateTime, bool) {
+func ParseDateTimeFloat(f float64, prec int) (DateTime, int, bool) {
 	i, frac := math.Modf(f)
 	dt, ok := ParseDateTimeInt64(int64(i))
-	dt.Time.nanosecond = uint32(frac * 1e9)
-	return dt, ok
+	nsec := int(frac * 1e9)
+	dt.Time.nanosecond = uint32(nsec)
+	if prec < 0 {
+		prec = DefaultPrecision
+	} else {
+		dt = dt.Round(prec)
+	}
+	return dt, prec, ok
+}
+
+func ParseDateTimeDecimal(d decimal.Decimal, l int32, prec int) (DateTime, int, bool) {
+	id, frac := d.QuoRem(decimal.New(1, 0), 0)
+	i, _ := id.Int64()
+	dt, ok := ParseDateTimeInt64(i)
+
+	rem, _ := frac.Mul(decimal.New(1, 9)).Int64()
+	dt.Time.nanosecond = uint32(rem)
+
+	if prec < 0 {
+		prec = int(l)
+	} else {
+		dt = dt.Round(prec)
+	}
+	return dt, prec, ok
 }
 
 func ParseDateFloat(f float64) (Date, bool) {
@@ -319,19 +353,38 @@ func ParseDateFloat(f float64) (Date, bool) {
 	return ParseDateInt64(int64(i))
 }
 
-func ParseDateTimeDecimal(d decimal.Decimal) (DateTime, bool) {
-	id, frac := d.QuoRem(decimal.New(1, 0), 0)
-	i, _ := id.Int64()
-	dt, ok := ParseDateTimeInt64(i)
-
-	nd := frac.Mul(decimal.New(1, 9))
-	n, _ := nd.Int64()
-	dt.Time.nanosecond = uint32(n)
-	return dt, ok
-}
-
 func ParseDateDecimal(d decimal.Decimal) (Date, bool) {
 	id, _ := d.QuoRem(decimal.New(1, 0), 0)
 	i, _ := id.Int64()
 	return ParseDateInt64(i)
+}
+
+func ParseTimeFloat(f float64, prec int) (Time, int, bool) {
+	i, frac := math.Modf(f)
+	t, ok := ParseTimeInt64(int64(i))
+	ns := int(math.Abs(frac * 1e9))
+	t.nanosecond = uint32(ns)
+
+	if prec < 0 {
+		prec = DefaultPrecision
+	} else {
+		t = t.Round(prec)
+	}
+	return t, prec, ok
+}
+
+func ParseTimeDecimal(d decimal.Decimal, l int32, prec int) (Time, int, bool) {
+	id, frac := d.QuoRem(decimal.New(1, 0), 0)
+	i, _ := id.Int64()
+
+	t, ok := ParseTimeInt64(i)
+	rem, _ := frac.Abs().Mul(decimal.New(1e9, 0)).Int64()
+	t.nanosecond = uint32(rem)
+
+	if prec < 0 {
+		prec = int(l)
+	} else {
+		t = t.Round(prec)
+	}
+	return t, prec, ok
 }

@@ -81,7 +81,7 @@ func normalizeValue(v sqltypes.Value, coll collations.ID) sqltypes.Value {
 	return v
 }
 
-func compareRemoteExprEnv(t *testing.T, env *evalengine.ExpressionEnv, conn *mysql.Conn, expr string, fields []*querypb.Field) {
+func compareRemoteExprEnv(t *testing.T, env *evalengine.ExpressionEnv, conn *mysql.Conn, expr string, fields []*querypb.Field, cmp *testcases.Comparison) {
 	t.Helper()
 
 	localQuery := "SELECT " + expr
@@ -134,13 +134,15 @@ func compareRemoteExprEnv(t *testing.T, env *evalengine.ExpressionEnv, conn *mys
 
 		remoteQuery = remoteQuery + " FROM vteval_test"
 	}
+	if cmp == nil {
+		cmp = &testcases.Comparison{}
+	}
 
 	local, localType, localErr := evaluateLocalEvalengine(env, localQuery, fields)
 	remote, remoteErr := conn.ExecuteFetch(remoteQuery, 1, true)
 
 	var localVal, remoteVal sqltypes.Value
 	var localCollation, remoteCollation collations.ID
-	var decimals uint32
 	if localErr == nil {
 		v := local.Value()
 		if debugCheckCollations {
@@ -166,7 +168,7 @@ func compareRemoteExprEnv(t *testing.T, env *evalengine.ExpressionEnv, conn *mys
 	if remoteErr == nil {
 		if debugNormalize {
 			remoteVal = normalizeValue(remote.Rows[0][0], collations.ID(remote.Fields[0].Charset))
-			decimals = remote.Fields[0].Decimals
+			cmp.Decimals = remote.Fields[0].Decimals
 		} else {
 			remoteVal = remote.Rows[0][0]
 		}
@@ -180,7 +182,18 @@ func compareRemoteExprEnv(t *testing.T, env *evalengine.ExpressionEnv, conn *mys
 		}
 	}
 
-	if err := compareResult(localErr, remoteErr, localVal, remoteVal, localCollation, remoteCollation, decimals); err != nil {
+	localResult := Result{
+		Error:     localErr,
+		Value:     localVal,
+		Collation: localCollation,
+	}
+	remoteResult := Result{
+		Error:     remoteErr,
+		Value:     remoteVal,
+		Collation: remoteCollation,
+	}
+
+	if err := compareResult(localResult, remoteResult, cmp); err != nil {
 		t.Errorf("%s\nquery: %s (SIMPLIFY=%v)\nrow: %v", err, localQuery, debugSimplify, env.Row)
 	} else if debugPrintAll {
 		t.Logf("local=%s mysql=%s\nquery: %s\nrow: %v", localVal.String(), remoteVal.String(), localQuery, env.Row)
@@ -198,30 +211,14 @@ func (vc *vcursor) TimeZone() *time.Location {
 	return time.Local
 }
 
-func TestMySQL(t *testing.T) {
-	var conn = mysqlconn(t)
-	defer conn.Close()
-
-	// We require MySQL 8.0 collations for the comparisons in the tests
-
-	servenv.SetMySQLServerVersionForTest(conn.ServerVersion)
-	collationEnv = collations.NewEnvironment(conn.ServerVersion)
-	servenv.OnParse(registerFlags)
-
+func initTimezoneData(t *testing.T, conn *mysql.Conn) {
 	// We load the timezone information into MySQL. The evalengine assumes
 	// our backend MySQL is configured with the timezone information as well
 	// for functions like CONVERT_TZ.
 	out, err := exec.Command("mysql_tzinfo_to_sql", "/usr/share/zoneinfo").Output()
-
 	if err != nil {
 		t.Fatalf("failed to retrieve timezone info: %v", err)
 	}
-
-	ks, err := conn.ExecuteFetch("select database()", 1, false)
-	if err != nil {
-		t.Fatalf("failed to retrieve current database: %v", err)
-	}
-	db := ks.Rows[0][0].ToString()
 
 	_, more, err := conn.ExecuteFetchMulti(fmt.Sprintf("USE mysql; %s\n", string(out)), -1, false)
 	if err != nil {
@@ -233,10 +230,22 @@ func TestMySQL(t *testing.T) {
 			t.Fatalf("failed to insert timezone info: %v", err)
 		}
 	}
-	_, err = conn.ExecuteFetch(fmt.Sprintf("USE %s", db), -1, false)
+	_, err = conn.ExecuteFetch(fmt.Sprintf("USE %s", connParams.DbName), -1, false)
 	if err != nil {
 		t.Fatalf("failed to switch back to database: %v", err)
 	}
+}
+
+func TestMySQL(t *testing.T) {
+	var conn = mysqlconn(t)
+	defer conn.Close()
+
+	// We require MySQL 8.0 collations for the comparisons in the tests
+
+	servenv.SetMySQLServerVersionForTest(conn.ServerVersion)
+	collationEnv = collations.NewEnvironment(conn.ServerVersion)
+	servenv.OnParse(registerFlags)
+	initTimezoneData(t, conn)
 
 	for _, tc := range testcases.Cases {
 		t.Run(tc.Name(), func(t *testing.T) {
@@ -246,7 +255,7 @@ func TestMySQL(t *testing.T) {
 			env := evalengine.NewExpressionEnv(ctx, nil, &vcursor{})
 			tc.Run(func(query string, row []sqltypes.Value) {
 				env.Row = row
-				compareRemoteExprEnv(t, env, conn, query, tc.Schema)
+				compareRemoteExprEnv(t, env, conn, query, tc.Schema, tc.Compare)
 			})
 		})
 	}

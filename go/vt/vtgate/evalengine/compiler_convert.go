@@ -96,10 +96,10 @@ func (c *compiler) compileConvert(conv *ConvertExpr) (ctype, error) {
 		convt = c.compileToDate(arg, 1)
 
 	case "DATETIME":
-		convt = c.compileToDateTime(arg, 1)
+		convt = c.compileToDateTime(arg, 1, conv.Length)
 
 	case "TIME":
-		convt = c.compileToTime(arg, 1)
+		convt = c.compileToTime(arg, 1, conv.Length)
 
 	default:
 		return ctype{}, c.unsupported(conv)

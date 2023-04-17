@@ -320,6 +320,95 @@ func (ast *astCompiler) translateFuncExpr(fn *sqlparser.FuncExpr) (Expr, error) 
 			return nil, argError(method)
 		}
 		return &builtinDateFormat{CallExpr: call, collate: ast.cfg.Collation}, nil
+	case "date":
+		if len(args) != 1 {
+			return nil, argError(method)
+		}
+		return &builtinDate{CallExpr: call}, nil
+	case "dayofmonth", "day":
+		if len(args) != 1 {
+			return nil, argError(method)
+		}
+		return &builtinDayOfMonth{CallExpr: call}, nil
+	case "dayofweek":
+		if len(args) != 1 {
+			return nil, argError(method)
+		}
+		return &builtinDayOfWeek{CallExpr: call}, nil
+	case "dayofyear":
+		if len(args) != 1 {
+			return nil, argError(method)
+		}
+		return &builtinDayOfYear{CallExpr: call}, nil
+	case "hour":
+		if len(args) != 1 {
+			return nil, argError(method)
+		}
+		return &builtinHour{CallExpr: call}, nil
+	case "microsecond":
+		if len(args) != 1 {
+			return nil, argError(method)
+		}
+		return &builtinMicrosecond{CallExpr: call}, nil
+	case "minute":
+		if len(args) != 1 {
+			return nil, argError(method)
+		}
+		return &builtinMinute{CallExpr: call}, nil
+	case "month":
+		if len(args) != 1 {
+			return nil, argError(method)
+		}
+		return &builtinMonth{CallExpr: call}, nil
+	case "monthname":
+		if len(args) != 1 {
+			return nil, argError(method)
+		}
+		return &builtinMonthName{CallExpr: call, collate: ast.cfg.Collation}, nil
+	case "quarter":
+		if len(args) != 1 {
+			return nil, argError(method)
+		}
+		return &builtinQuarter{CallExpr: call}, nil
+	case "second":
+		if len(args) != 1 {
+			return nil, argError(method)
+		}
+		return &builtinSecond{CallExpr: call}, nil
+	case "time":
+		if len(args) != 1 {
+			return nil, argError(method)
+		}
+		return &builtinTime{CallExpr: call}, nil
+	case "week":
+		switch len(args) {
+		case 1, 2:
+			return &builtinWeek{CallExpr: call}, nil
+		default:
+			return nil, argError(method)
+		}
+	case "weekday":
+		if len(args) != 1 {
+			return nil, argError(method)
+		}
+		return &builtinWeekDay{CallExpr: call}, nil
+	case "weekofyear":
+		if len(args) != 1 {
+			return nil, argError(method)
+		}
+		return &builtinWeekOfYear{CallExpr: call}, nil
+	case "year":
+		if len(args) != 1 {
+			return nil, argError(method)
+		}
+		return &builtinYear{CallExpr: call}, nil
+	case "yearweek":
+		switch len(args) {
+		case 1, 2:
+			return &builtinYearWeek{CallExpr: call}, nil
+		default:
+			return nil, argError(method)
+		}
 	case "user", "current_user", "session_user", "system_user":
 		if len(args) != 0 {
 			return nil, argError(method)

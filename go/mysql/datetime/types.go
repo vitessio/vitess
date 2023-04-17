@@ -54,7 +54,7 @@ func (t Time) AppendFormat(b []byte, prec uint8) []byte {
 	b = appendInt(b, t.Minute(), 2)
 	b = append(b, ':')
 	b = appendInt(b, t.Second(), 2)
-	if prec > 0 && t.Nanosecond() != 0 {
+	if prec > 0 {
 		b = append(b, '.')
 		b = appendNsec(b, t.Nanosecond(), int(prec))
 	}
@@ -166,6 +166,39 @@ func (t Time) Compare(t2 Time) int {
 	return 0
 }
 
+func (t Time) Round(p int) (r Time) {
+	if t.nanosecond == 0 {
+		return t
+	}
+
+	n := int(t.nanosecond)
+	prec := precs[p]
+	s := (n / prec) * prec
+	l := s + prec
+
+	if n-s >= l-n {
+		n = l
+	} else {
+		n = s
+	}
+
+	r = t
+	if n == 1e9 {
+		r.second++
+		n = 0
+		if r.second == 60 {
+			r.minute++
+			r.second = 0
+			if r.minute == 60 {
+				r.hour++
+				r.minute = 0
+			}
+		}
+	}
+	r.nanosecond = uint32(n)
+	return r
+}
+
 func (d Date) IsZero() bool {
 	return d.Year() == 0 && d.Month() == 0 && d.Day() == 0
 }
@@ -210,6 +243,69 @@ func (d Date) SundayWeek() (int, int) {
 	// Sunday we saw and compute the week number based on that.
 	sun := t.Add(-time.Duration(t.Weekday()) * 24 * time.Hour)
 	return sun.Year(), (sun.YearDay()-1)/7 + 1
+}
+
+const DefaultWeekMode = 0
+
+func (d Date) Week(mode int) int {
+	switch mode {
+	case 0:
+		year, week := d.SundayWeek()
+		if year < d.Year() {
+			return 0
+		}
+		return week
+	case 1:
+		year, week := d.ISOWeek()
+		if year < d.Year() {
+			return 0
+		}
+		return week
+	case 2:
+		_, week := d.SundayWeek()
+		return week
+	case 3:
+		_, week := d.ISOWeek()
+		return week
+	case 4, 5, 6, 7:
+		// TODO
+		return 0
+	default:
+		return d.Week(DefaultWeekMode)
+	}
+}
+
+func (d Date) YearWeek(mode int) int {
+	switch mode {
+	case 0, 2:
+		year, week := d.SundayWeek()
+		return year*100 + week
+	case 1, 3:
+		year, week := d.ISOWeek()
+		return year*100 + week
+	case 4, 5, 6, 7:
+		// TODO
+		return 0
+	default:
+		return d.YearWeek(DefaultWeekMode)
+	}
+}
+
+func (d Date) Quarter() int {
+	switch d.Month() {
+	case 0:
+		return 0
+	case 1, 2, 3:
+		return 1
+	case 4, 5, 6:
+		return 2
+	case 7, 8, 9:
+		return 3
+	case 10, 11, 12:
+		return 4
+	default:
+		panic("unreachable")
+	}
 }
 
 func (dt DateTime) IsZero() bool {
@@ -319,6 +415,31 @@ func (dt DateTime) Compare(dt2 DateTime) int {
 		return cmp
 	}
 	return dt.Time.Compare(dt2.Time)
+}
+
+func (dt DateTime) Round(p int) (r DateTime) {
+	if dt.Time.nanosecond == 0 {
+		return dt
+	}
+
+	n := dt.Time.Nanosecond()
+	prec := precs[p]
+	s := (n / prec) * prec
+	l := s + prec
+
+	if n-s >= l-n {
+		n = l
+	} else {
+		n = s
+	}
+
+	r = dt
+	if n == 1e9 {
+		r.Time.nanosecond = 0
+		return FromStdTime(r.ToStdTime(time.Local).Add(time.Second))
+	}
+	r.Time.nanosecond = uint32(n)
+	return r
 }
 
 func FromStdTime(t time.Time) DateTime {

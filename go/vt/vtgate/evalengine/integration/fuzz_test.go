@@ -21,7 +21,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"math"
 	"math/rand"
 	"os"
 	"regexp"
@@ -32,11 +31,11 @@ import (
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/mysql/collations"
-	"vitess.io/vitess/go/mysql/datetime"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
+	"vitess.io/vitess/go/vt/vtgate/evalengine/testcases"
 	"vitess.io/vitess/go/vt/vtgate/simplifier"
 )
 
@@ -305,113 +304,67 @@ type mismatch struct {
 	localVal, remoteVal sqltypes.Value
 }
 
-const tolerance = 1e-14
-
-func closeFloat(a, b float64, decimals uint32) bool {
-	if decimals > 0 {
-		ratio := math.Pow(10, float64(decimals))
-		a = math.Round(a*ratio) / ratio
-		b = math.Round(b*ratio) / ratio
-	}
-
-	if a == b {
-		return true
-	}
-	if b == 0 {
-		return math.Abs(a) < tolerance
-	}
-	return math.Abs((a-b)/b) < tolerance
+type Result struct {
+	Error     error
+	Value     sqltypes.Value
+	Collation collations.ID
 }
 
-func closeDatetime(a, b time.Time, diff time.Duration) bool {
-	d := a.Sub(b)
-	if d < 0 {
-		d = -d
-	}
-	return d <= diff
-}
-
-func compareResult(localErr, remoteErr error, localVal, remoteVal sqltypes.Value, localCollation, remoteCollation collations.ID, decimals uint32) error {
-	if localErr != nil {
-		if remoteErr == nil {
-			return fmt.Errorf("%w: mysql response: %s", localErr, remoteVal)
+func compareResult(local, remote Result, cmp *testcases.Comparison) error {
+	if local.Error != nil {
+		if remote.Error == nil {
+			return fmt.Errorf("%w: mysql response: %s", local.Error, remote.Value)
 		}
-		if !errorsMatch(remoteErr, localErr) {
-			return fmt.Errorf("mismatch in errors: eval=%w; mysql response: %w", localErr, remoteErr)
+		if !errorsMatch(remote.Error, local.Error) {
+			return fmt.Errorf("mismatch in errors: eval=%w; mysql response: %w", local.Error, remote.Error)
 		}
 		return nil
 	}
 
-	if remoteErr != nil {
+	if remote.Error != nil {
 		for _, ke := range knownErrors {
-			if ke.MatchString(remoteErr.Error()) {
+			if ke.MatchString(remote.Error.Error()) {
 				return nil
 			}
 		}
-		return fmt.Errorf("%v; mysql failed with: %w", localVal, remoteErr)
+		return fmt.Errorf("%v; mysql failed with: %w", local.Value, remote.Error)
 	}
 
 	var localCollationName string
 	var remoteCollationName string
-	if coll := localCollation.Get(); coll != nil {
+	if coll := local.Collation.Get(); coll != nil {
 		localCollationName = coll.Name()
 	}
-	if coll := remoteCollation.Get(); coll != nil {
+	if coll := remote.Collation.Get(); coll != nil {
 		remoteCollationName = coll.Name()
 	}
 
-	if localVal.IsFloat() && remoteVal.IsFloat() {
-		localFloat, err := localVal.ToFloat64()
-		if err != nil {
-			return fmt.Errorf("error converting local value to float: %w", err)
-		}
-		remoteFloat, err := remoteVal.ToFloat64()
-		if err != nil {
-			return fmt.Errorf("error converting remote value to float: %w", err)
-		}
-		if !closeFloat(localFloat, remoteFloat, decimals) {
-			return fmt.Errorf("different results: %s; mysql response: %s (local collation: %s; mysql collation: %s)",
-				localVal.String(), remoteVal.String(), localCollationName, remoteCollationName)
-		}
-	} else if localVal.IsDateTime() && remoteVal.IsDateTime() {
-		localDatetime, ok := datetime.ParseDateTime(localVal.ToString())
-		if !ok {
-			return fmt.Errorf("error converting local value '%s' to datetime", localVal)
-		}
-		remoteDatetime, ok := datetime.ParseDateTime(remoteVal.ToString())
-		if !ok {
-			return fmt.Errorf("error converting remote value '%s' to datetime", remoteVal)
-		}
-		if !closeDatetime(localDatetime.ToStdTime(time.Local), remoteDatetime.ToStdTime(time.Local), 1*time.Second) {
-			return fmt.Errorf("different results: %s; mysql response: %s (local collation: %s; mysql collation: %s)",
-				localVal.String(), remoteVal.String(), localCollationName, remoteCollationName)
-		}
-	} else if localVal.IsTime() && remoteVal.IsTime() {
-		localTime, ok := datetime.ParseTime(localVal.ToString())
-		if !ok {
-			return fmt.Errorf("error converting local value '%s' to time", localVal)
-		}
-		remoteTime, ok := datetime.ParseTime(remoteVal.ToString())
-		if !ok {
-			return fmt.Errorf("error converting remote value '%s' to time", remoteVal)
-		}
-		if !closeDatetime(localTime.ToStdTime(time.Local), remoteTime.ToStdTime(time.Local), 1*time.Second) {
-			return fmt.Errorf("different results: %s; mysql response: %s (local collation: %s; mysql collation: %s)",
-				localVal.String(), remoteVal.String(), localCollationName, remoteCollationName)
-		}
-	} else if localVal.String() != remoteVal.String() {
-		return fmt.Errorf("different results: %s; mysql response: %s (local collation: %s; mysql collation: %s)",
-			localVal.String(), remoteVal.String(), localCollationName, remoteCollationName)
+	equals, err := cmp.Equals(local.Value, remote.Value)
+	if err != nil {
+		return err
 	}
-	if localCollation != remoteCollation {
+	if !equals {
+		return fmt.Errorf("different results: %s; mysql response: %s (local collation: %s; mysql collation: %s)",
+			local.Value.String(), remote.Value.String(), localCollationName, remoteCollationName)
+	}
+	if local.Collation != remote.Collation {
 		return fmt.Errorf("different collations: %s; mysql response: %s (local result: %s; mysql result: %s)",
-			localCollationName, remoteCollationName, localVal.String(), remoteVal.String(),
+			localCollationName, remoteCollationName, local.Value.String(), remote.Value.String(),
 		)
 	}
-
 	return nil
 }
 
 func (cr *mismatch) Error() string {
-	return compareResult(cr.localErr, cr.remoteErr, cr.localVal, cr.remoteVal, collations.Unknown, collations.Unknown, 0).Error()
+	return compareResult(
+		Result{
+			Error: cr.localErr,
+			Value: cr.localVal,
+		},
+		Result{
+			Error: cr.remoteErr,
+			Value: cr.remoteVal,
+		},
+		&testcases.Comparison{},
+	).Error()
 }
