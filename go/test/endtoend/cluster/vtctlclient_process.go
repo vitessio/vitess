@@ -211,7 +211,6 @@ func (vtctlclient *VtctlClientProcess) ExecuteCommandWithOutput(args ...string) 
 		resultByte, err = tmpProcess.CombinedOutput()
 		resultStr = string(resultByte)
 		if err == nil || !shouldRetry(resultStr) {
-			log.Errorf("Fatal vtctlclient error encountered: %v; output: %s", err, resultStr)
 			break
 		}
 		time.Sleep(retryDelay)

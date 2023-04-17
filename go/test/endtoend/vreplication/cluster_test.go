@@ -618,10 +618,7 @@ func (vc *VitessCluster) teardown(t testing.TB) {
 	for _, cell := range vc.Cells {
 		for _, vtgate := range cell.Vtgates {
 			if err := vtgate.TearDown(); err != nil {
-				log.Errorf("Error in vtgate teardown - %s, will retry...", err.Error())
-				if err = vtgate.TearDown(); err != nil {
-					log.Errorf("Error in vtgate teardown retry - %s, giving up.", err.Error())
-				}
+				log.Errorf("Error in vtgate teardown - %s", err.Error())
 			} else {
 				log.Infof("vtgate teardown successful")
 			}
@@ -645,17 +642,11 @@ func (vc *VitessCluster) teardown(t testing.TB) {
 					defer wg.Done()
 					if tablet2.DbServer != nil && tablet2.DbServer.TabletUID > 0 {
 						if err := tablet2.DbServer.Stop(); err != nil {
-							log.Infof("Error stopping mysql process: %s, will retry...", err.Error())
-							if err = tablet2.DbServer.Stop(); err != nil {
-								log.Infof("Error stopping mysql process on retry: %s, giving up.", err.Error())
-							}
+							log.Infof("Error stopping mysql process: %s", err.Error())
 						}
 					}
 					if err := tablet2.Vttablet.TearDown(); err != nil {
-						log.Infof("Error stopping vttablet %s %s, will retry...", tablet2.Name, err.Error())
-						if err = tablet2.Vttablet.TearDown(); err != nil {
-							log.Infof("Error stopping vttablet on retry %s %s, giving up.", tablet2.Name, err.Error())
-						}
+						log.Infof("Error stopping vttablet %s %s", tablet2.Name, err.Error())
 					} else {
 						log.Infof("Successfully stopped vttablet %s", tablet2.Name)
 					}
@@ -665,20 +656,14 @@ func (vc *VitessCluster) teardown(t testing.TB) {
 	}
 	wg.Wait()
 	if err := vc.Vtctld.TearDown(); err != nil {
-		log.Infof("Error stopping Vtctld: %s, will retry...", err.Error())
-		if err = vc.Vtctld.TearDown(); err != nil {
-			log.Infof("Error stopping Vtctld on retry: %s, giving up.", err.Error())
-		}
+		log.Infof("Error stopping Vtctld:  %s", err.Error())
 	} else {
 		log.Info("Successfully stopped vtctld")
 	}
 
 	for _, cell := range vc.Cells {
 		if err := vc.Topo.TearDown(cell.Name, originalVtdataroot, vtdataroot, false, "etcd2"); err != nil {
-			log.Infof("Error in etcd teardown - %s, will retry...", err.Error())
-			if err = vc.Topo.TearDown(cell.Name, originalVtdataroot, vtdataroot, false, "etcd2"); err != nil {
-				log.Infof("Error in etcd teardown retry - %s, giving up.", err.Error())
-			}
+			log.Infof("Error in etcd teardown - %s", err.Error())
 		} else {
 			log.Infof("Successfully tore down topo %s", vc.Topo.Name)
 		}
@@ -687,12 +672,6 @@ func (vc *VitessCluster) teardown(t testing.TB) {
 	if vc.VTOrcProcess != nil {
 		if err := vc.VTOrcProcess.TearDown(); err != nil {
 			log.Infof("Error stopping VTOrc: %s", err.Error())
-			if err = vc.VTOrcProcess.TearDown(); err != nil {
-				log.Infof("Error stopping VTOrc: %s, will retry...", err.Error())
-				if err = vc.VTOrcProcess.TearDown(); err != nil {
-					log.Infof("Error stopping VTOrc on retry: %s, giving up.", err.Error())
-				}
-			}
 		}
 	}
 }
@@ -710,7 +689,7 @@ func (vc *VitessCluster) TearDown(t testing.TB) {
 	select {
 	case <-done:
 		log.Infof("TearDown() was successful")
-	case <-time.After(5 * time.Minute):
+	case <-time.After(1 * time.Minute):
 		log.Infof("TearDown() timed out")
 	}
 	// some processes seem to hang around for a bit
