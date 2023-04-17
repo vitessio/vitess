@@ -807,7 +807,7 @@ query_expression:
   }
 | with_clause query_expression_parens order_by_clause limit_opt
   {
-  	$2.SetWith($1)
+  		$2.SetWith($1)
 		$2.SetOrderBy($3)
 		$2.SetLimit($4)
 		$$ = $2
