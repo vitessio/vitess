@@ -142,6 +142,8 @@ func (c *compiler) compileFn(call callable) (ctype, error) {
 		return c.compileFn_RandomBytes(call)
 	case *builtinDateFormat:
 		return c.compileFn_DateFormat(call)
+	case *builtinConvertTz:
+		return c.compileFn_ConvertTz(call)
 	default:
 		return ctype{}, c.unsupported(call)
 	}
@@ -934,18 +936,18 @@ func (c *compiler) compileFn_DateFormat(call *builtinDateFormat) (ctype, error) 
 
 	skip1 := c.compileNullCheck1(arg)
 
+	switch arg.Type {
+	case sqltypes.Datetime, sqltypes.Date:
+	default:
+		c.asm.Convert_xDT_nz(1)
+	}
+
 	format, err := c.compileExpr(call.Arguments[1])
 	if err != nil {
 		return ctype{}, err
 	}
 
 	skip2 := c.compileNullCheck1r(format)
-
-	switch arg.Type {
-	case sqltypes.Datetime, sqltypes.Date, sqltypes.Time:
-	default:
-		c.asm.Convert_xDT(2)
-	}
 
 	switch arg.Type {
 	case sqltypes.VarChar, sqltypes.VarBinary:
@@ -957,4 +959,46 @@ func (c *compiler) compileFn_DateFormat(call *builtinDateFormat) (ctype, error) 
 	c.asm.Fn_DATE_FORMAT(col)
 	c.asm.jumpDestination(skip1, skip2)
 	return ctype{Type: sqltypes.VarChar, Col: col, Flag: arg.Flag | flagNullable}, nil
+}
+
+func (c *compiler) compileFn_ConvertTz(call *builtinConvertTz) (ctype, error) {
+	n, err := c.compileExpr(call.callable()[0])
+	if err != nil {
+		return ctype{}, err
+	}
+
+	from, err := c.compileExpr(call.callable()[1])
+	if err != nil {
+		return ctype{}, err
+	}
+
+	to, err := c.compileExpr(call.callable()[2])
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip1 := c.compileNullCheck3(n, from, to)
+	var skip2 *jump
+
+	switch {
+	case from.isTextual():
+	default:
+		c.asm.Convert_xb(2, sqltypes.VarBinary, 0, false)
+	}
+
+	switch {
+	case to.isTextual():
+	default:
+		c.asm.Convert_xb(1, sqltypes.VarBinary, 0, false)
+	}
+
+	switch n.Type {
+	case sqltypes.Datetime, sqltypes.Date:
+	default:
+		c.asm.Convert_xDT_nz(3)
+	}
+
+	c.asm.Fn_CONVERT_TZ()
+	c.asm.jumpDestination(skip1, skip2)
+	return ctype{Type: sqltypes.Datetime, Col: collationBinary, Flag: n.Flag | flagNullable}, nil
 }

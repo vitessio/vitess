@@ -19,6 +19,7 @@ package integration
 import (
 	"context"
 	"fmt"
+	"os/exec"
 	"strconv"
 	"strings"
 	"testing"
@@ -206,6 +207,36 @@ func TestMySQL(t *testing.T) {
 	servenv.SetMySQLServerVersionForTest(conn.ServerVersion)
 	collationEnv = collations.NewEnvironment(conn.ServerVersion)
 	servenv.OnParse(registerFlags)
+
+	// We load the timezone information into MySQL. The evalengine assumes
+	// our backend MySQL is configured with the timezone information as well
+	// for functions like CONVERT_TZ.
+	out, err := exec.Command("mysql_tzinfo_to_sql", "/usr/share/zoneinfo").Output()
+
+	if err != nil {
+		t.Fatalf("failed to retrieve timezone info: %v", err)
+	}
+
+	ks, err := conn.ExecuteFetch("select database()", 1, false)
+	if err != nil {
+		t.Fatalf("failed to retrieve current database: %v", err)
+	}
+	db := ks.Rows[0][0].ToString()
+
+	_, more, err := conn.ExecuteFetchMulti(fmt.Sprintf("USE mysql; %s\n", string(out)), -1, false)
+	if err != nil {
+		t.Fatalf("failed to insert timezone info: %v", err)
+	}
+	for more {
+		_, more, _, err = conn.ReadQueryResult(-1, false)
+		if err != nil {
+			t.Fatalf("failed to insert timezone info: %v", err)
+		}
+	}
+	_, err = conn.ExecuteFetch(fmt.Sprintf("USE %s", db), -1, false)
+	if err != nil {
+		t.Fatalf("failed to switch back to database: %v", err)
+	}
 
 	for _, tc := range testcases.Cases {
 		t.Run(tc.Name(), func(t *testing.T) {

@@ -19,6 +19,7 @@ package evalengine
 import (
 	"time"
 
+	"vitess.io/vitess/go/hack"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/datetime"
 	"vitess.io/vitess/go/sqltypes"
@@ -132,9 +133,15 @@ func (b *builtinDateFormat) eval(env *ExpressionEnv) (eval, error) {
 	if date == nil || format == nil {
 		return nil, nil
 	}
-	t := evalToDateTime(date)
-	if t == nil {
-		return nil, nil
+	var t *evalTemporal
+	switch e := date.(type) {
+	case *evalTemporal:
+		t = e.toDateTime()
+	default:
+		t = evalToDateTime(date)
+		if t == nil || t.isZero() {
+			return nil, nil
+		}
 	}
 
 	f := evalToBinary(format)
@@ -147,4 +154,67 @@ func (b *builtinDateFormat) eval(env *ExpressionEnv) (eval, error) {
 
 func (b *builtinDateFormat) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
 	return sqltypes.VarChar, flagNullable
+}
+
+type builtinConvertTz struct {
+	CallExpr
+}
+
+var _ Expr = (*builtinConvertTz)(nil)
+
+func convertTz(dt datetime.DateTime, from, to *time.Location) (datetime.DateTime, bool) {
+	buf := datetime.DateTime_YYYY_MM_DD_hh_mm_ss.Format(dt, datetime.DefaultPrecision)
+	ts, err := time.ParseInLocation(time.DateTime, hack.String(buf), from)
+	if err != nil {
+		return datetime.DateTime{}, false
+	}
+	return datetime.FromStdTime(ts.In(to)), true
+}
+
+func (call *builtinConvertTz) eval(env *ExpressionEnv) (eval, error) {
+	n, err := call.Arguments[0].eval(env)
+	if err != nil {
+		return nil, err
+	}
+	from, err := call.Arguments[1].eval(env)
+	if err != nil {
+		return nil, err
+	}
+	to, err := call.Arguments[2].eval(env)
+	if err != nil {
+		return nil, err
+	}
+
+	if n == nil || from == nil || to == nil {
+		return nil, nil
+	}
+
+	f := evalToBinary(from)
+	t := evalToBinary(to)
+
+	fromTz, err := datetime.ParseTimeZone(f.string())
+	if err != nil {
+		return nil, nil
+	}
+
+	toTz, err := datetime.ParseTimeZone(t.string())
+	if err != nil {
+		return nil, nil
+	}
+
+	dt := evalToDateTime(n)
+	if dt == nil || dt.isZero() {
+		return nil, nil
+	}
+
+	out, ok := convertTz(dt.dt, fromTz, toTz)
+	if !ok {
+		return nil, nil
+	}
+	return newEvalDateTime(out), nil
+}
+
+func (call *builtinConvertTz) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	_, f := call.Arguments[0].typeof(env, fields)
+	return sqltypes.Datetime, f | flagNullable
 }
