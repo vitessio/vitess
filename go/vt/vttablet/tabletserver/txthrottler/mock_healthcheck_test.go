@@ -137,6 +137,20 @@ func (mr *MockHealthCheckMockRecorder) GetTabletHealthByAlias(arg0 interface{}) 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTabletHealthByAlias", reflect.TypeOf((*MockHealthCheck)(nil).GetTabletHealthByAlias), arg0)
 }
 
+// LoadTabletsTrigger mocks base method.
+func (m *MockHealthCheck) LoadTabletsTrigger() chan struct{} {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "LoadTabletsTrigger")
+	ret0, _ := ret[0].(chan struct{})
+	return ret0
+}
+
+// LoadTabletsTrigger indicates an expected call of LoadTabletsTrigger.
+func (mr *MockHealthCheckMockRecorder) LoadTabletsTrigger() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LoadTabletsTrigger", reflect.TypeOf((*MockHealthCheck)(nil).LoadTabletsTrigger))
+}
+
 // RegisterStats mocks base method.
 func (m *MockHealthCheck) RegisterStats() {
 	m.ctrl.T.Helper()
