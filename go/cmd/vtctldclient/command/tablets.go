@@ -99,7 +99,7 @@ Note: hook names may not contain slash (/) characters.
 	}
 	// GetTablets makes a GetTablets gRPC call to a vtctld.
 	GetTablets = &cobra.Command{
-		Use:   "GetTablets [--strict] [{--cell $c1 [--cell $c2 ...], --keyspace $ks [--shard $shard], --tablet-alias $alias}]",
+		Use:   "GetTablets [--strict] [{--cell $c1 [--cell $c2 ...], [--tablet-type $t1] $ks [--shard $shard], --tablet-alias $alias}]",
 		Short: "Looks up tablets according to filter criteria.",
 		Long: `Looks up tablets according to the filter criteria.
 
@@ -109,6 +109,9 @@ be passed, and tablets are looked up by tablet alias only.
 If --keyspace is passed, then all tablets in the keyspace are retrieved. The
 --shard flag may also be passed to further narrow the set of tablets to that
 <keyspace/shard>. Passing --shard without also passing --keyspace will fail.
+
+If --tablet-type is passed, only tablets of the specified type will be
+returned.
 
 Passing --cell limits the set of tablets to those in the specified cells. The
 --cell flag accepts a CSV argument (e.g. --cell "c1,c2") and may be repeated
@@ -379,9 +382,10 @@ func commandGetTablet(cmd *cobra.Command, args []string) error {
 }
 
 var getTabletsOptions = struct {
-	Cells    []string
-	Keyspace string
-	Shard    string
+	Cells      []string
+	TabletType string
+	Keyspace   string
+	Shard      string
 
 	TabletAliasStrings []string
 
@@ -408,6 +412,8 @@ func commandGetTablets(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("--shard (= %s) cannot be passed when using --tablet-alias (= %v)", getTabletsOptions.Shard, getTabletsOptions.TabletAliasStrings)
 		case len(getTabletsOptions.Cells) > 0:
 			return fmt.Errorf("--cell (= %v) cannot be passed when using --tablet-alias (= %v)", getTabletsOptions.Cells, getTabletsOptions.TabletAliasStrings)
+		case len(getTabletsOptions.TabletType) > 0:
+			return fmt.Errorf("--tablet-type (= %s) cannot be passed when using --tablet-alias (= %v)", getTabletsOptions.TabletType, getTabletsOptions.TabletAliasStrings)
 		}
 
 		var err error
@@ -421,11 +427,20 @@ func commandGetTablets(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("--shard (= %s) cannot be passed without also passing --keyspace", getTabletsOptions.Shard)
 	}
 
+	tabletType := topodatapb.TabletType_UNKNOWN // Zero Value
+	if len(getTabletsOptions.TabletType) > 0 {
+		var err error
+		if tabletType, err = topoproto.ParseTabletType(getTabletsOptions.TabletType); err != nil {
+			return fmt.Errorf("invalid tablet type %s", getTabletsOptions.TabletType)
+		}
+	}
+
 	cli.FinishedParsing(cmd)
 
 	resp, err := client.GetTablets(commandCtx, &vtctldatapb.GetTabletsRequest{
 		TabletAliases: aliases,
 		Cells:         getTabletsOptions.Cells,
+		TabletType:    tabletType,
 		Keyspace:      getTabletsOptions.Keyspace,
 		Shard:         getTabletsOptions.Shard,
 		Strict:        getTabletsOptions.Strict,
@@ -634,6 +649,7 @@ func init() {
 
 	GetTablets.Flags().StringSliceVarP(&getTabletsOptions.TabletAliasStrings, "tablet-alias", "t", nil, "List of tablet aliases to filter by.")
 	GetTablets.Flags().StringSliceVarP(&getTabletsOptions.Cells, "cell", "c", nil, "List of cells to filter tablets by.")
+	GetTablets.Flags().StringVar(&getTabletsOptions.TabletType, "tablet-type", "", "Tablet type to filter by.")
 	GetTablets.Flags().StringVarP(&getTabletsOptions.Keyspace, "keyspace", "k", "", "Keyspace to filter tablets by.")
 	GetTablets.Flags().StringVarP(&getTabletsOptions.Shard, "shard", "s", "", "Shard to filter tablets by.")
 	GetTablets.Flags().StringVar(&getTabletsOptions.Format, "format", "awk", "Output format to use; valid choices are (json, awk).")
