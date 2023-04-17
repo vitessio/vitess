@@ -40,6 +40,7 @@ type ApplyJoin struct {
 	LHSColumns []*sqlparser.ColName
 
 	// Before offset planning
+	Predicate sqlparser.Expr
 
 	// ColumnsAST keeps track of what AST expression is represented in the Columns array
 	ColumnsAST []JoinColumn
@@ -55,8 +56,6 @@ type ApplyJoin struct {
 
 	// Vars are the arguments that need to be copied from the LHS to the RHS
 	Vars map[string]int
-
-	Predicate sqlparser.Expr
 }
 
 // JoinColumn is where we store information about columns passing through the join operator
@@ -182,8 +181,7 @@ func (a *ApplyJoin) pushColRight(ctx *plancontext.PlanningContext, e *sqlparser.
 }
 
 func (a *ApplyJoin) GetColumns() ([]sqlparser.Expr, error) {
-	columns := slices2.Map(a.ColumnsAST, jcToExpr)
-	return columns, nil
+	return slices2.Map(a.ColumnsAST, jcToExpr), nil
 }
 
 func jcToExpr(c JoinColumn) sqlparser.Expr { return c.Original }
@@ -224,7 +222,7 @@ func (a *ApplyJoin) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.
 	return a, len(a.ColumnsAST) - 1, nil
 }
 
-func (a *ApplyJoin) planOffsets(ctx *plancontext.PlanningContext) error {
+func (a *ApplyJoin) planOffsets(ctx *plancontext.PlanningContext) (err error) {
 	for _, col := range a.ColumnsAST {
 		// Read the type description for JoinColumn to understand the following code
 		for i, lhsExpr := range col.LHSExprs {
@@ -249,7 +247,6 @@ func (a *ApplyJoin) planOffsets(ctx *plancontext.PlanningContext) error {
 	}
 
 	for _, col := range a.JoinPredicates {
-		var err error
 		for i, lhsExpr := range col.LHSExprs {
 			offset, err := a.pushColLeft(ctx, aeWrap(lhsExpr))
 			if err != nil {

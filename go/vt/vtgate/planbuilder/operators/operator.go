@@ -123,13 +123,14 @@ func makeSureOutputIsCorrect(ctx *plancontext.PlanningContext, op ops.Operator, 
 	// next we use the original Horizon to make sure that the output columns line up with what the user asked for
 	// in the future, we'll tidy up the results. for now, we are just failing these queries and going back to the
 	// old horizon planning instead
-	horizon := op.(*Horizon)
-
-	sel := sqlparser.GetFirstSelect(horizon.Select)
 	cols, err := output.GetColumns()
 	if err != nil {
 		return err
 	}
+
+	horizon := op.(*Horizon)
+
+	sel := sqlparser.GetFirstSelect(horizon.Select)
 	if len(sel.SelectExprs) != len(cols) {
 		return errHorizonNotPlanned
 	}

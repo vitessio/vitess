@@ -80,7 +80,6 @@ func (h *Horizon) SetInputs(ops []ops.Operator) {
 	h.Source = ops[0]
 }
 
-// TODO: REMOVE
 func (h *Horizon) selectStatement() sqlparser.SelectStatement {
 	return h.Select
 }

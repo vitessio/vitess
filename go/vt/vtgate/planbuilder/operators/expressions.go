@@ -63,18 +63,3 @@ func BreakExpressionInLHSandRHS(
 	col.RHSExpr = rewrittenExpr
 	return
 }
-
-// BreakExpressionInLHSandRHSOld takes an expression and
-// extracts the parts that are coming from one of the sides into `ColName`s that are needed
-func BreakExpressionInLHSandRHSOld(
-	ctx *plancontext.PlanningContext,
-	expr sqlparser.Expr,
-	lhs semantics.TableSet,
-) (bvNames []string, columns []sqlparser.Expr, rewrittenExpr sqlparser.Expr, err error) {
-	col, err := BreakExpressionInLHSandRHS(ctx, expr, lhs)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-
-	return col.BvNames, col.LHSExprs, col.RHSExpr, nil
-}

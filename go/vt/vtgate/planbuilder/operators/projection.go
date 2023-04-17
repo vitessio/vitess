@@ -33,6 +33,7 @@ type (
 		ColumnNames []string
 		Columns     []ProjExpr
 	}
+
 	ProjExpr interface {
 		GetExpr() sqlparser.Expr
 	}

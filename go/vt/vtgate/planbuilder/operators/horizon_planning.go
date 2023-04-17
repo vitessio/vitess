@@ -72,11 +72,7 @@ func tryPushingDownProjection(
 ) (ops.Operator, rewrite.ApplyResult, error) {
 	switch src := p.Source.(type) {
 	case *Route:
-		op, err := rewrite.Swap(p, src)
-		if err != nil {
-			return nil, false, err
-		}
-		return op, rewrite.NewTree, nil
+		return pushDownProjectionIntoRoute(p, src)
 	case *ApplyJoin:
 		return pushDownProjectionInApplyJoin(ctx, p, src)
 	case *Vindex:
@@ -84,6 +80,14 @@ func tryPushingDownProjection(
 	default:
 		return p, rewrite.SameTree, nil
 	}
+}
+
+func pushDownProjectionIntoRoute(p *Projection, src ops.Operator) (ops.Operator, rewrite.ApplyResult, error) {
+	op, err := rewrite.Swap(p, src)
+	if err != nil {
+		return nil, false, err
+	}
+	return op, rewrite.NewTree, nil
 }
 
 func pushDownProjectionInVindex(
@@ -112,10 +116,10 @@ func pushDownProjectionInApplyJoin(ctx *plancontext.PlanningContext, p *Projecti
 		idx int
 		in  ProjExpr
 
-		// lhsCols and rhsColumns store the columns to be added to the left and right child projections.
+		// lhsCols and rhsCols store the columns to be added to the left and right child projections.
 		// lhsNames and rhsNames store the corresponding column names.
-		lhsCols, rhsColumns []ProjExpr
-		lhsNames, rhsNames  []string
+		lhsCols, rhsCols   []ProjExpr
+		lhsNames, rhsNames []string
 	)
 
 	// Iterate through each column in the Projection's columns.
@@ -140,7 +144,7 @@ func pushDownProjectionInApplyJoin(ctx *plancontext.PlanningContext, p *Projecti
 			lhsCols = append(lhsCols, in)
 			lhsNames = append(lhsNames, p.ColumnNames[idx])
 		case col.IsPureRight():
-			rhsColumns = append(rhsColumns, in)
+			rhsCols = append(rhsCols, in)
 			rhsNames = append(rhsNames, p.ColumnNames[idx])
 		case col.IsMixedLeftAndRight():
 			for _, lhsExpr := range col.LHSExprs {
@@ -148,7 +152,7 @@ func pushDownProjectionInApplyJoin(ctx *plancontext.PlanningContext, p *Projecti
 				lhsNames = append(lhsNames, sqlparser.String(lhsExpr))
 			}
 
-			rhsColumns = append(rhsColumns, &Expr{E: col.RHSExpr})
+			rhsCols = append(rhsCols, &Expr{E: col.RHSExpr})
 			rhsNames = append(rhsNames, p.ColumnNames[idx])
 		}
 
@@ -156,26 +160,33 @@ func pushDownProjectionInApplyJoin(ctx *plancontext.PlanningContext, p *Projecti
 		src.ColumnsAST = append(src.ColumnsAST, col)
 	}
 
+	var err error
+
 	// Create and update the Projection operators for the left and right children, if needed.
-	if len(lhsCols) > 0 {
-		lhsProj, err := createProjection(src.LHS)
-		if err != nil {
-			return nil, false, err
-		}
-		lhsProj.ColumnNames = lhsNames
-		lhsProj.Columns = lhsCols
-		src.LHS = lhsProj
+	src.LHS, err = createProjectionWithTheseColumns(src.LHS, lhsNames, lhsCols)
+	if err != nil {
+		return nil, false, err
 	}
-	if len(rhsColumns) > 0 {
-		rhsProj, err := createProjection(src.RHS)
-		if err != nil {
-			return nil, false, err
-		}
-		rhsProj.ColumnNames = rhsNames
-		rhsProj.Columns = rhsColumns
-		src.RHS = rhsProj
+
+	src.RHS, err = createProjectionWithTheseColumns(src.RHS, rhsNames, rhsCols)
+	if err != nil {
+		return nil, false, err
 	}
+
 	return src, rewrite.NewTree, nil
+}
+
+func createProjectionWithTheseColumns(src ops.Operator, colNames []string, columns []ProjExpr) (ops.Operator, error) {
+	if len(columns) == 0 {
+		return src, nil
+	}
+	proj, err := createProjection(src)
+	if err != nil {
+		return nil, err
+	}
+	proj.ColumnNames = colNames
+	proj.Columns = columns
+	return proj, nil
 }
 
 func stopAtRoute(operator ops.Operator) rewrite.VisitRule {
