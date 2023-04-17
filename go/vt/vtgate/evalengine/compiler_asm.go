@@ -3271,18 +3271,7 @@ func (asm *assembler) Fn_QUARTER() {
 			return 1
 		}
 		arg := env.vm.stack[env.vm.sp-1].(*evalTemporal)
-		switch arg.dt.Date.Month() {
-		case 0:
-			env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalInt64(0)
-		case 1, 2, 3:
-			env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalInt64(1)
-		case 4, 5, 6:
-			env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalInt64(2)
-		case 7, 8, 9:
-			env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalInt64(3)
-		case 10, 11, 12:
-			env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalInt64(4)
-		}
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalInt64(int64(arg.dt.Date.Quarter()))
 		return 1
 	}, "FN QUARTER DATE(SP-1)")
 }
@@ -3304,10 +3293,7 @@ func (asm *assembler) Fn_WEEK0() {
 			return 1
 		}
 		arg := env.vm.stack[env.vm.sp-1].(*evalTemporal)
-		year, week := arg.dt.Date.SundayWeek()
-		if year < arg.dt.Date.Year() {
-			week = 0
-		}
+		week := arg.dt.Date.Week(0)
 		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalInt64(int64(week))
 		return 1
 	}, "FN WEEK0 DATE(SP-1)")
@@ -3322,27 +3308,8 @@ func (asm *assembler) Fn_WEEK() {
 		}
 		arg := env.vm.stack[env.vm.sp-2].(*evalTemporal)
 		mode := env.vm.stack[env.vm.sp-1].(*evalInt64)
-
-		switch mode.i {
-		case 0:
-			year, week := arg.dt.Date.SundayWeek()
-			if year < arg.dt.Date.Year() {
-				week = 0
-			}
-			env.vm.stack[env.vm.sp-2] = env.vm.arena.newEvalInt64(int64(week))
-		case 1:
-			year, week := arg.dt.Date.ISOWeek()
-			if year < arg.dt.Date.Year() {
-				week = 0
-			}
-			env.vm.stack[env.vm.sp-2] = env.vm.arena.newEvalInt64(int64(week))
-		case 2:
-			_, week := arg.dt.Date.SundayWeek()
-			env.vm.stack[env.vm.sp-2] = env.vm.arena.newEvalInt64(int64(week))
-		case 3:
-			_, week := arg.dt.Date.ISOWeek()
-			env.vm.stack[env.vm.sp-2] = env.vm.arena.newEvalInt64(int64(week))
-		}
+		week := arg.dt.Date.Week(int(mode.i))
+		env.vm.stack[env.vm.sp-2] = env.vm.arena.newEvalInt64(int64(week))
 		env.vm.sp--
 		return 1
 	}, "FN WEEK DATE(SP-1)")
@@ -3388,8 +3355,8 @@ func (asm *assembler) Fn_YEARWEEK0() {
 			return 1
 		}
 		arg := env.vm.stack[env.vm.sp-1].(*evalTemporal)
-		year, week := arg.dt.Date.SundayWeek()
-		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalInt64(int64(year*100 + week))
+		yw := arg.dt.Date.YearWeek(0)
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalInt64(int64(yw))
 		return 1
 	}, "FN YEARWEEK0 DATE(SP-1)")
 }
@@ -3403,15 +3370,8 @@ func (asm *assembler) Fn_YEARWEEK() {
 		}
 		arg := env.vm.stack[env.vm.sp-2].(*evalTemporal)
 		mode := env.vm.stack[env.vm.sp-1].(*evalInt64)
-
-		switch mode.i {
-		case 0, 2:
-			year, week := arg.dt.Date.SundayWeek()
-			env.vm.stack[env.vm.sp-2] = env.vm.arena.newEvalInt64(int64(year*100 + week))
-		case 1, 3:
-			year, week := arg.dt.Date.ISOWeek()
-			env.vm.stack[env.vm.sp-2] = env.vm.arena.newEvalInt64(int64(year*100 + week))
-		}
+		yw := arg.dt.Date.YearWeek(int(mode.i))
+		env.vm.stack[env.vm.sp-2] = env.vm.arena.newEvalInt64(int64(yw))
 		env.vm.sp--
 		return 1
 	}, "FN YEARWEEK DATE(SP-1)")

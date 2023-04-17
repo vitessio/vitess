@@ -245,6 +245,69 @@ func (d Date) SundayWeek() (int, int) {
 	return sun.Year(), (sun.YearDay()-1)/7 + 1
 }
 
+const DefaultWeekMode = 0
+
+func (d Date) Week(mode int) int {
+	switch mode {
+	case 0:
+		year, week := d.SundayWeek()
+		if year < d.Year() {
+			return 0
+		}
+		return week
+	case 1:
+		year, week := d.ISOWeek()
+		if year < d.Year() {
+			return 0
+		}
+		return week
+	case 2:
+		_, week := d.SundayWeek()
+		return week
+	case 3:
+		_, week := d.ISOWeek()
+		return week
+	case 4, 5, 6, 7:
+		// TODO
+		return 0
+	default:
+		return d.Week(DefaultWeekMode)
+	}
+}
+
+func (d Date) YearWeek(mode int) int {
+	switch mode {
+	case 0, 2:
+		year, week := d.SundayWeek()
+		return year*100 + week
+	case 1, 3:
+		year, week := d.ISOWeek()
+		return year*100 + week
+	case 4, 5, 6, 7:
+		// TODO
+		return 0
+	default:
+		return d.YearWeek(DefaultWeekMode)
+	}
+}
+
+func (d Date) Quarter() int {
+	switch d.Month() {
+	case 0:
+		return 0
+	case 1, 2, 3:
+		return 1
+	case 4, 5, 6:
+		return 2
+	case 7, 8, 9:
+		return 3
+	case 10, 11, 12:
+		return 4
+	default:
+		panic("unreachable")
+	}
+}
+
 func (dt DateTime) IsZero() bool {
 	return dt.Date.IsZero() && dt.Time.IsZero()
 }

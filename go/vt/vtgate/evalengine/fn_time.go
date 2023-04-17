@@ -24,8 +24,6 @@ import (
 	"vitess.io/vitess/go/mysql/datetime"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vterrors"
 )
 
 var SystemTime = time.Now
@@ -495,19 +493,7 @@ func (b *builtinQuarter) eval(env *ExpressionEnv) (eval, error) {
 	if d == nil {
 		return nil, nil
 	}
-	switch d.dt.Date.Month() {
-	case 0:
-		return newEvalInt64(0), nil
-	case 1, 2, 3:
-		return newEvalInt64(1), nil
-	case 4, 5, 6:
-		return newEvalInt64(2), nil
-	case 7, 8, 9:
-		return newEvalInt64(3), nil
-	case 10, 11, 12:
-		return newEvalInt64(4), nil
-	}
-	return nil, nil
+	return newEvalInt64(int64(d.dt.Date.Quarter())), nil
 }
 
 func (b *builtinQuarter) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
@@ -578,28 +564,8 @@ func (b *builtinWeek) eval(env *ExpressionEnv) (eval, error) {
 		mode = evalToInt64(m).i
 	}
 
-	switch mode {
-	case 0:
-		year, week := d.dt.Date.SundayWeek()
-		if year < d.dt.Date.Year() {
-			week = 0
-		}
-		return newEvalInt64(int64(week)), nil
-	case 1:
-		year, week := d.dt.Date.ISOWeek()
-		if year < d.dt.Date.Year() {
-			week = 0
-		}
-		return newEvalInt64(int64(week)), nil
-	case 2:
-		_, week := d.dt.Date.SundayWeek()
-		return newEvalInt64(int64(week)), nil
-	case 3:
-		_, week := d.dt.Date.ISOWeek()
-		return newEvalInt64(int64(week)), nil
-	}
-
-	return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "Unsupported week mode: %d", mode)
+	week := d.dt.Date.Week(int(mode))
+	return newEvalInt64(int64(week)), nil
 }
 
 func (b *builtinWeek) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
@@ -692,16 +658,8 @@ func (b *builtinYearWeek) eval(env *ExpressionEnv) (eval, error) {
 		mode = evalToInt64(m).i
 	}
 
-	switch mode {
-	case 0, 2:
-		year, week := d.dt.Date.SundayWeek()
-		return newEvalInt64(int64(year*100 + week)), nil
-	case 1, 3:
-		year, week := d.dt.Date.ISOWeek()
-		return newEvalInt64(int64(year*100 + week)), nil
-	}
-
-	return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "Unsupported week mode: %d", mode)
+	week := d.dt.Date.YearWeek(int(mode))
+	return newEvalInt64(int64(week)), nil
 }
 
 func (b *builtinYearWeek) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
