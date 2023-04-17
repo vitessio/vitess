@@ -144,7 +144,8 @@ type expectedVDiff2Result struct {
 func doVdiff2(t *testing.T, keyspace, workflow, cells string, want *expectedVDiff2Result) {
 	ksWorkflow := fmt.Sprintf("%s.%s", keyspace, workflow)
 	t.Run(fmt.Sprintf("vdiff2 %s", ksWorkflow), func(t *testing.T) {
-		uuid, _ := performVDiff2Action(t, ksWorkflow, cells, "create", "", false, "--auto-retry")
+		// update-table-stats is needed in order to test progress reports.
+		uuid, _ := performVDiff2Action(t, ksWorkflow, cells, "create", "", false, "--auto-retry", "--update-table-stats")
 		info := waitForVDiff2ToComplete(t, ksWorkflow, cells, uuid, time.Time{})
 
 		require.Equal(t, workflow, info.Workflow)
