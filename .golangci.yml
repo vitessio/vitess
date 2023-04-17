@@ -154,4 +154,4 @@ issues:
 
 # https://github.com/golangci/golangci/wiki/Configuration
 service:
-  golangci-lint-version: 1.52.2 # use the fixed version to not introduce new linters unexpectedly
+  golangci-lint-version: 1.51.2 # use the fixed version to not introduce new linters unexpectedly
