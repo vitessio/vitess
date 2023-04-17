@@ -63,6 +63,34 @@ func (call *builtinHex) typeof(env *ExpressionEnv, fields []*querypb.Field) (sql
 	return sqltypes.VarChar, f
 }
 
+func (call *builtinHex) compile(c *compiler) (ctype, error) {
+	str, err := call.Arguments[0].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip := c.compileNullCheck1(str)
+	col := defaultCoercionCollation(c.cfg.Collation)
+	t := sqltypes.VarChar
+	if str.Type == sqltypes.Blob || str.Type == sqltypes.TypeJSON {
+		t = sqltypes.Text
+	}
+
+	switch {
+	case sqltypes.IsNumber(str.Type), sqltypes.IsDecimal(str.Type):
+		c.asm.Fn_HEX_d(col)
+	case str.isTextual():
+		c.asm.Fn_HEX_c(t, col)
+	default:
+		c.asm.Convert_xc(1, t, c.cfg.Collation, 0, false)
+		c.asm.Fn_HEX_c(t, col)
+	}
+
+	c.asm.jumpDestination(skip)
+
+	return ctype{Type: t, Col: col}, nil
+}
+
 const hextable = "0123456789ABCDEF"
 
 func hexEncodeBytes(src []byte) []byte {

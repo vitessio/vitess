@@ -69,3 +69,15 @@ func (l *Literal) typeof(*ExpressionEnv, []*querypb.Field) (sqltypes.Type, typeF
 	}
 	return l.inner.SQLType(), f
 }
+
+func (l *Literal) compile(c *compiler) (ctype, error) {
+	if l.inner == nil {
+		c.asm.PushNull()
+	} else if err := c.asm.PushLiteral(l.inner); err != nil {
+		return ctype{}, err
+	}
+
+	t, f := l.typeof(nil, nil)
+	return ctype{t, f, evalCollation(l.inner)}, nil
+
+}

@@ -22,6 +22,7 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vthash"
 )
 
 type (
@@ -293,6 +294,147 @@ func (c *ComparisonExpr) typeof(env *ExpressionEnv, fields []*querypb.Field) (sq
 	return sqltypes.Int64, f1 | f2
 }
 
+func (expr *ComparisonExpr) compileAsTuple(c *compiler) (ctype, error) {
+	switch expr.Op.(type) {
+	case compareNullSafeEQ:
+		c.asm.CmpTupleNullsafe()
+		return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: flagIsBoolean}, nil
+	case compareEQ:
+		c.asm.CmpTuple(true)
+		c.asm.Cmp_eq_n()
+	case compareNE:
+		c.asm.CmpTuple(true)
+		c.asm.Cmp_ne_n()
+	case compareLT:
+		c.asm.CmpTuple(false)
+		c.asm.Cmp_lt_n()
+	case compareLE:
+		c.asm.CmpTuple(false)
+		c.asm.Cmp_le_n()
+	case compareGT:
+		c.asm.CmpTuple(false)
+		c.asm.Cmp_gt_n()
+	case compareGE:
+		c.asm.CmpTuple(false)
+		c.asm.Cmp_ge_n()
+	default:
+		panic("invalid comparison operator")
+	}
+	return ctype{Type: sqltypes.Int64, Flag: flagNullable | flagIsBoolean, Col: collationNumeric}, nil
+}
+
+func (expr *ComparisonExpr) compile(c *compiler) (ctype, error) {
+	lt, err := expr.Left.compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	var skip1 *jump
+	switch expr.Op.(type) {
+	case compareNullSafeEQ:
+	default:
+		skip1 = c.compileNullCheck1(lt)
+	}
+
+	rt, err := expr.Right.compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	if lt.Type == sqltypes.Tuple || rt.Type == sqltypes.Tuple {
+		if lt.Type != rt.Type {
+			return ctype{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "did not typecheck tuples during comparison")
+		}
+		return expr.compileAsTuple(c)
+	}
+
+	swapped := false
+	var skip2 *jump
+
+	switch expr.Op.(type) {
+	case compareNullSafeEQ:
+		skip2 = c.asm.jumpFrom()
+		c.asm.Cmp_nullsafe(skip2)
+	default:
+		skip2 = c.compileNullCheck1r(rt)
+	}
+
+	switch {
+	case compareAsDates(lt.Type, rt.Type):
+		c.asm.CmpDates()
+	case compareAsStrings(lt.Type, rt.Type):
+		if err := c.compareAsStrings(lt, rt); err != nil {
+			return ctype{}, err
+		}
+	case compareAsSameNumericType(lt.Type, rt.Type) || compareAsDecimal(lt.Type, rt.Type):
+		swapped = c.compareNumericTypes(lt, rt)
+	case compareAsDateAndString(lt.Type, rt.Type):
+		c.asm.CmpDateString()
+	case compareAsDateAndNumeric(lt.Type, rt.Type):
+		if sqltypes.IsDateOrTime(lt.Type) {
+			c.asm.Convert_Ti(2)
+			lt.Type = sqltypes.Int64
+		}
+		if sqltypes.IsDateOrTime(rt.Type) {
+			c.asm.Convert_Ti(1)
+			rt.Type = sqltypes.Int64
+		}
+		swapped = c.compareNumericTypes(lt, rt)
+	case compareAsJSON(lt.Type, rt.Type):
+		if err := c.compareAsJSON(lt, rt); err != nil {
+			return ctype{}, err
+		}
+
+	default:
+		lt = c.compileToFloat(lt, 2)
+		rt = c.compileToFloat(rt, 1)
+		c.asm.CmpNum_ff()
+	}
+
+	cmptype := ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: flagIsBoolean}
+
+	switch expr.Op.(type) {
+	case compareEQ:
+		c.asm.Cmp_eq()
+	case compareNE:
+		c.asm.Cmp_ne()
+	case compareLT:
+		if swapped {
+			c.asm.Cmp_gt()
+		} else {
+			c.asm.Cmp_lt()
+		}
+	case compareLE:
+		if swapped {
+			c.asm.Cmp_ge()
+		} else {
+			c.asm.Cmp_le()
+		}
+	case compareGT:
+		if swapped {
+			c.asm.Cmp_lt()
+		} else {
+			c.asm.Cmp_gt()
+		}
+	case compareGE:
+		if swapped {
+			c.asm.Cmp_le()
+		} else {
+			c.asm.Cmp_ge()
+		}
+	case compareNullSafeEQ:
+		c.asm.jumpDestination(skip2)
+		c.asm.Cmp_eq()
+		return cmptype, nil
+
+	default:
+		panic("unexpected comparison operator")
+	}
+
+	c.asm.jumpDestination(skip1, skip2)
+	return cmptype, nil
+}
+
 func evalInExpr(lhs eval, rhs *evalTuple) (boolean, error) {
 	if lhs == nil {
 		return boolNULL, nil
@@ -350,6 +492,57 @@ func (i *InExpr) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.T
 	return sqltypes.Int64, f1 | f2
 }
 
+func (i *InExpr) compileTable(lhs ctype, rhs TupleExpr) map[vthash.Hash]struct{} {
+	var (
+		table  = make(map[vthash.Hash]struct{})
+		hasher = vthash.New()
+	)
+
+	for _, expr := range rhs {
+		lit, ok := expr.(*Literal)
+		if !ok {
+			return nil
+		}
+		inner, ok := lit.inner.(hashable)
+		if !ok {
+			return nil
+		}
+
+		thisColl := evalCollation(lit.inner).Collation
+		thisTyp := lit.inner.SQLType()
+
+		if thisTyp != lhs.Type || thisColl != lhs.Col.Collation {
+			return nil
+		}
+
+		inner.Hash(&hasher)
+		table[hasher.Sum128()] = struct{}{}
+		hasher.Reset()
+	}
+
+	return table
+}
+
+func (expr *InExpr) compile(c *compiler) (ctype, error) {
+	lhs, err := expr.Left.compile(c)
+	if err != nil {
+		return ctype{}, nil
+	}
+
+	rhs := expr.Right.(TupleExpr)
+
+	if table := expr.compileTable(lhs, rhs); table != nil {
+		c.asm.In_table(expr.Negate, table)
+	} else {
+		_, err := rhs.compile(c)
+		if err != nil {
+			return ctype{}, err
+		}
+		c.asm.In_slow(expr.Negate)
+	}
+	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: flagIsBoolean}, nil
+}
+
 func (l *LikeExpr) matchWildcard(left, right []byte, coll collations.ID) bool {
 	if l.Match != nil && l.MatchCollation == coll {
 		return l.Match.Match(left)
@@ -390,4 +583,72 @@ func (l *LikeExpr) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes
 	_, f1 := l.Left.typeof(env, fields)
 	_, f2 := l.Right.typeof(env, fields)
 	return sqltypes.Int64, f1 | f2
+}
+
+func (expr *LikeExpr) compile(c *compiler) (ctype, error) {
+	lt, err := expr.Left.compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	rt, err := expr.Right.compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip := c.compileNullCheck2(lt, rt)
+
+	if !lt.isTextual() {
+		c.asm.Convert_xc(2, sqltypes.VarChar, c.cfg.Collation, 0, false)
+		lt.Col = collations.TypedCollation{
+			Collation:    c.cfg.Collation,
+			Coercibility: collations.CoerceCoercible,
+			Repertoire:   collations.RepertoireASCII,
+		}
+	}
+
+	if !rt.isTextual() {
+		c.asm.Convert_xc(1, sqltypes.VarChar, c.cfg.Collation, 0, false)
+		rt.Col = collations.TypedCollation{
+			Collation:    c.cfg.Collation,
+			Coercibility: collations.CoerceCoercible,
+			Repertoire:   collations.RepertoireASCII,
+		}
+	}
+
+	var merged collations.TypedCollation
+	var coerceLeft collations.Coercion
+	var coerceRight collations.Coercion
+	var env = collations.Local()
+
+	if lt.Col.Collation != rt.Col.Collation {
+		merged, coerceLeft, coerceRight, err = env.MergeCollations(lt.Col, rt.Col, collations.CoercionOptions{
+			ConvertToSuperset:   true,
+			ConvertWithCoercion: true,
+		})
+	} else {
+		merged = lt.Col
+	}
+	if err != nil {
+		return ctype{}, err
+	}
+
+	if coerceLeft == nil && coerceRight == nil {
+		c.asm.Like_collate(expr, merged.Collation.Get())
+	} else {
+		if coerceLeft == nil {
+			coerceLeft = func(dst, in []byte) ([]byte, error) { return in, nil }
+		}
+		if coerceRight == nil {
+			coerceRight = func(dst, in []byte) ([]byte, error) { return in, nil }
+		}
+		c.asm.Like_coerce(expr, &compiledCoercion{
+			col:   merged.Collation.Get(),
+			left:  coerceLeft,
+			right: coerceRight,
+		})
+	}
+
+	c.asm.jumpDestination(skip)
+	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: flagIsBoolean}, nil
 }

@@ -97,3 +97,41 @@ func (bv *BindVariable) typeof(env *ExpressionEnv, _ []*querypb.Field) (sqltypes
 		return tt, 0
 	}
 }
+
+func (bvar *BindVariable) compile(c *compiler) (ctype, error) {
+	if !bvar.typed {
+		return ctype{}, c.unsupported(bvar)
+	}
+
+	switch tt := bvar.Type; {
+	case sqltypes.IsSigned(tt):
+		c.asm.PushBVar_i(bvar.Key)
+	case sqltypes.IsUnsigned(tt):
+		c.asm.PushBVar_u(bvar.Key)
+	case sqltypes.IsFloat(tt):
+		c.asm.PushBVar_f(bvar.Key)
+	case sqltypes.IsDecimal(tt):
+		c.asm.PushBVar_d(bvar.Key)
+	case sqltypes.IsText(tt):
+		if tt == sqltypes.HexNum {
+			c.asm.PushBVar_hexnum(bvar.Key)
+		} else if tt == sqltypes.HexVal {
+			c.asm.PushBVar_hexval(bvar.Key)
+		} else {
+			c.asm.PushBVar_text(bvar.Key, bvar.Collation)
+		}
+	case sqltypes.IsBinary(tt):
+		c.asm.PushBVar_bin(bvar.Key)
+	case sqltypes.IsNull(tt):
+		c.asm.PushNull()
+	case tt == sqltypes.TypeJSON:
+		c.asm.PushBVar_json(bvar.Key)
+	default:
+		return ctype{}, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "Type is not supported: %s", tt)
+	}
+
+	return ctype{
+		Type: bvar.Type,
+		Col:  bvar.Collation,
+	}, nil
+}

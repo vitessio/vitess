@@ -165,6 +165,21 @@ func (call *builtinNow) typeof(_ *ExpressionEnv, _ []*querypb.Field) (sqltypes.T
 	return sqltypes.Datetime, 0
 }
 
+func (call *builtinNow) compile(c *compiler) (ctype, error) {
+	var format *datetime.Strftime
+	var t sqltypes.Type
+
+	if call.onlyTime {
+		format = datetime.Time_hh_mm_ss
+		t = sqltypes.Time
+	} else {
+		format = datetime.DateTime_YYYY_MM_DD_hh_mm_ss
+		t = sqltypes.Datetime
+	}
+	c.asm.Fn_Now(t, format, call.prec, call.utc)
+	return ctype{Type: t, Col: collationBinary}, nil
+}
+
 func (call *builtinNow) constant() bool {
 	return false
 }
@@ -181,6 +196,11 @@ func (call *builtinSysdate) typeof(_ *ExpressionEnv, _ []*querypb.Field) (sqltyp
 	return sqltypes.Datetime, 0
 }
 
+func (call *builtinSysdate) compile(c *compiler) (ctype, error) {
+	c.asm.Fn_Sysdate(call.prec)
+	return ctype{Type: sqltypes.Datetime, Col: collationBinary}, nil
+}
+
 func (call *builtinSysdate) constant() bool {
 	return false
 }
@@ -194,6 +214,11 @@ func (call *builtinCurdate) typeof(_ *ExpressionEnv, _ []*querypb.Field) (sqltyp
 	return sqltypes.Date, 0
 }
 
+func (*builtinCurdate) compile(c *compiler) (ctype, error) {
+	c.asm.Fn_Curdate()
+	return ctype{Type: sqltypes.Date, Col: collationBinary}, nil
+}
+
 func (call *builtinCurdate) constant() bool {
 	return false
 }
@@ -205,6 +230,11 @@ func (call *builtinUtcDate) eval(env *ExpressionEnv) (eval, error) {
 
 func (call *builtinUtcDate) typeof(_ *ExpressionEnv, _ []*querypb.Field) (sqltypes.Type, typeFlag) {
 	return sqltypes.Date, 0
+}
+
+func (*builtinUtcDate) compile(c *compiler) (ctype, error) {
+	c.asm.Fn_UtcDate()
+	return ctype{Type: sqltypes.Date, Col: collationBinary}, nil
 }
 
 func (call *builtinUtcDate) constant() bool {
@@ -240,6 +270,39 @@ func (b *builtinDateFormat) eval(env *ExpressionEnv) (eval, error) {
 
 func (b *builtinDateFormat) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
 	return sqltypes.VarChar, flagNullable
+}
+
+func (call *builtinDateFormat) compile(c *compiler) (ctype, error) {
+	arg, err := call.Arguments[0].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip1 := c.compileNullCheck1(arg)
+
+	switch arg.Type {
+	case sqltypes.Datetime, sqltypes.Date:
+	default:
+		c.asm.Convert_xDT_nz(1, datetime.DefaultPrecision)
+	}
+
+	format, err := call.Arguments[1].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip2 := c.compileNullCheck1r(format)
+
+	switch format.Type {
+	case sqltypes.VarChar, sqltypes.VarBinary:
+	default:
+		c.asm.Convert_xb(1, sqltypes.VarBinary, 0, false)
+	}
+
+	col := defaultCoercionCollation(c.cfg.Collation)
+	c.asm.Fn_DATE_FORMAT(col)
+	c.asm.jumpDestination(skip1, skip2)
+	return ctype{Type: sqltypes.VarChar, Col: col, Flag: arg.Flag | flagNullable}, nil
 }
 
 type builtinConvertTz struct {
@@ -305,6 +368,45 @@ func (call *builtinConvertTz) typeof(env *ExpressionEnv, fields []*querypb.Field
 	return sqltypes.Datetime, f | flagNullable
 }
 
+func (call *builtinConvertTz) compile(c *compiler) (ctype, error) {
+	n, err := call.Arguments[0].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+	from, err := call.Arguments[1].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+	to, err := call.Arguments[2].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip := c.compileNullCheck3(n, from, to)
+
+	switch {
+	case from.isTextual():
+	default:
+		c.asm.Convert_xb(2, sqltypes.VarBinary, 0, false)
+	}
+
+	switch {
+	case to.isTextual():
+	default:
+		c.asm.Convert_xb(1, sqltypes.VarBinary, 0, false)
+	}
+
+	switch n.Type {
+	case sqltypes.Datetime, sqltypes.Date:
+	default:
+		c.asm.Convert_xDT_nz(3, -1)
+	}
+
+	c.asm.Fn_CONVERT_TZ()
+	c.asm.jumpDestination(skip)
+	return ctype{Type: sqltypes.Datetime, Col: collationBinary, Flag: n.Flag | flagNullable}, nil
+}
+
 func (b *builtinDate) eval(env *ExpressionEnv) (eval, error) {
 	date, err := b.arg1(env)
 	if err != nil {
@@ -322,6 +424,24 @@ func (b *builtinDate) eval(env *ExpressionEnv) (eval, error) {
 
 func (b *builtinDate) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
 	return sqltypes.Date, flagNullable
+}
+
+func (call *builtinDate) compile(c *compiler) (ctype, error) {
+	arg, err := call.Arguments[0].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip := c.compileNullCheck1(arg)
+
+	switch arg.Type {
+	case sqltypes.Date:
+	default:
+		c.asm.Convert_xD(1)
+	}
+
+	c.asm.jumpDestination(skip)
+	return ctype{Type: sqltypes.Date, Col: collationBinary, Flag: arg.Flag | flagNullable}, nil
 }
 
 func (b *builtinDayOfMonth) eval(env *ExpressionEnv) (eval, error) {
@@ -343,6 +463,24 @@ func (b *builtinDayOfMonth) typeof(env *ExpressionEnv, fields []*querypb.Field) 
 	return sqltypes.Int64, flagNullable
 }
 
+func (call *builtinDayOfMonth) compile(c *compiler) (ctype, error) {
+	arg, err := call.Arguments[0].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip := c.compileNullCheck1(arg)
+
+	switch arg.Type {
+	case sqltypes.Date, sqltypes.Datetime:
+	default:
+		c.asm.Convert_xD(1)
+	}
+	c.asm.Fn_DAYOFMONTH()
+	c.asm.jumpDestination(skip)
+	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: arg.Flag | flagNullable}, nil
+}
+
 func (b *builtinDayOfWeek) eval(env *ExpressionEnv) (eval, error) {
 	date, err := b.arg1(env)
 	if err != nil {
@@ -360,6 +498,24 @@ func (b *builtinDayOfWeek) eval(env *ExpressionEnv) (eval, error) {
 
 func (b *builtinDayOfWeek) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
 	return sqltypes.Int64, flagNullable
+}
+
+func (call *builtinDayOfWeek) compile(c *compiler) (ctype, error) {
+	arg, err := call.Arguments[0].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip := c.compileNullCheck1(arg)
+
+	switch arg.Type {
+	case sqltypes.Date, sqltypes.Datetime:
+	default:
+		c.asm.Convert_xD_nz(1)
+	}
+	c.asm.Fn_DAYOFWEEK()
+	c.asm.jumpDestination(skip)
+	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: arg.Flag | flagNullable}, nil
 }
 
 func (b *builtinDayOfYear) eval(env *ExpressionEnv) (eval, error) {
@@ -381,6 +537,24 @@ func (b *builtinDayOfYear) typeof(env *ExpressionEnv, fields []*querypb.Field) (
 	return sqltypes.Int64, flagNullable
 }
 
+func (call *builtinDayOfYear) compile(c *compiler) (ctype, error) {
+	arg, err := call.Arguments[0].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip := c.compileNullCheck1(arg)
+
+	switch arg.Type {
+	case sqltypes.Date, sqltypes.Datetime:
+	default:
+		c.asm.Convert_xD_nz(1)
+	}
+	c.asm.Fn_DAYOFYEAR()
+	c.asm.jumpDestination(skip)
+	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: arg.Flag | flagNullable}, nil
+}
+
 func (b *builtinHour) eval(env *ExpressionEnv) (eval, error) {
 	date, err := b.arg1(env)
 	if err != nil {
@@ -398,6 +572,24 @@ func (b *builtinHour) eval(env *ExpressionEnv) (eval, error) {
 
 func (b *builtinHour) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
 	return sqltypes.Int64, flagNullable
+}
+
+func (call *builtinHour) compile(c *compiler) (ctype, error) {
+	arg, err := call.Arguments[0].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip := c.compileNullCheck1(arg)
+
+	switch arg.Type {
+	case sqltypes.Date, sqltypes.Datetime, sqltypes.Time:
+	default:
+		c.asm.Convert_xT(1, -1)
+	}
+	c.asm.Fn_HOUR()
+	c.asm.jumpDestination(skip)
+	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: arg.Flag | flagNullable}, nil
 }
 
 func (b *builtinMicrosecond) eval(env *ExpressionEnv) (eval, error) {
@@ -419,6 +611,24 @@ func (b *builtinMicrosecond) typeof(env *ExpressionEnv, fields []*querypb.Field)
 	return sqltypes.Int64, flagNullable
 }
 
+func (call *builtinMicrosecond) compile(c *compiler) (ctype, error) {
+	arg, err := call.Arguments[0].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip := c.compileNullCheck1(arg)
+
+	switch arg.Type {
+	case sqltypes.Date, sqltypes.Datetime, sqltypes.Time:
+	default:
+		c.asm.Convert_xT(1, -1)
+	}
+	c.asm.Fn_MICROSECOND()
+	c.asm.jumpDestination(skip)
+	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: arg.Flag | flagNullable}, nil
+}
+
 func (b *builtinMinute) eval(env *ExpressionEnv) (eval, error) {
 	date, err := b.arg1(env)
 	if err != nil {
@@ -438,6 +648,24 @@ func (b *builtinMinute) typeof(env *ExpressionEnv, fields []*querypb.Field) (sql
 	return sqltypes.Int64, flagNullable
 }
 
+func (call *builtinMinute) compile(c *compiler) (ctype, error) {
+	arg, err := call.Arguments[0].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip := c.compileNullCheck1(arg)
+
+	switch arg.Type {
+	case sqltypes.Date, sqltypes.Datetime, sqltypes.Time:
+	default:
+		c.asm.Convert_xT(1, -1)
+	}
+	c.asm.Fn_MINUTE()
+	c.asm.jumpDestination(skip)
+	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: arg.Flag | flagNullable}, nil
+}
+
 func (b *builtinMonth) eval(env *ExpressionEnv) (eval, error) {
 	date, err := b.arg1(env)
 	if err != nil {
@@ -455,6 +683,24 @@ func (b *builtinMonth) eval(env *ExpressionEnv) (eval, error) {
 
 func (b *builtinMonth) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
 	return sqltypes.Int64, flagNullable
+}
+
+func (call *builtinMonth) compile(c *compiler) (ctype, error) {
+	arg, err := call.Arguments[0].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip := c.compileNullCheck1(arg)
+
+	switch arg.Type {
+	case sqltypes.Date, sqltypes.Datetime:
+	default:
+		c.asm.Convert_xD(1)
+	}
+	c.asm.Fn_MONTH()
+	c.asm.jumpDestination(skip)
+	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: arg.Flag | flagNullable}, nil
 }
 
 func (b *builtinMonthName) eval(env *ExpressionEnv) (eval, error) {
@@ -481,6 +727,25 @@ func (b *builtinMonthName) typeof(env *ExpressionEnv, fields []*querypb.Field) (
 	return sqltypes.VarChar, flagNullable
 }
 
+func (call *builtinMonthName) compile(c *compiler) (ctype, error) {
+	arg, err := call.Arguments[0].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip := c.compileNullCheck1(arg)
+
+	switch arg.Type {
+	case sqltypes.Date, sqltypes.Datetime:
+	default:
+		c.asm.Convert_xD(1)
+	}
+	col := defaultCoercionCollation(call.collate)
+	c.asm.Fn_MONTHNAME(col)
+	c.asm.jumpDestination(skip)
+	return ctype{Type: sqltypes.VarChar, Col: col, Flag: arg.Flag | flagNullable}, nil
+}
+
 func (b *builtinQuarter) eval(env *ExpressionEnv) (eval, error) {
 	date, err := b.arg1(env)
 	if err != nil {
@@ -498,6 +763,24 @@ func (b *builtinQuarter) eval(env *ExpressionEnv) (eval, error) {
 
 func (b *builtinQuarter) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
 	return sqltypes.Int64, flagNullable
+}
+
+func (call *builtinQuarter) compile(c *compiler) (ctype, error) {
+	arg, err := call.Arguments[0].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip := c.compileNullCheck1(arg)
+
+	switch arg.Type {
+	case sqltypes.Date, sqltypes.Datetime:
+	default:
+		c.asm.Convert_xD(1)
+	}
+	c.asm.Fn_QUARTER()
+	c.asm.jumpDestination(skip)
+	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: arg.Flag | flagNullable}, nil
 }
 
 func (b *builtinSecond) eval(env *ExpressionEnv) (eval, error) {
@@ -519,6 +802,24 @@ func (b *builtinSecond) typeof(env *ExpressionEnv, fields []*querypb.Field) (sql
 	return sqltypes.Int64, flagNullable
 }
 
+func (call *builtinSecond) compile(c *compiler) (ctype, error) {
+	arg, err := call.Arguments[0].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip := c.compileNullCheck1(arg)
+
+	switch arg.Type {
+	case sqltypes.Date, sqltypes.Datetime, sqltypes.Time:
+	default:
+		c.asm.Convert_xT(1, -1)
+	}
+	c.asm.Fn_SECOND()
+	c.asm.jumpDestination(skip)
+	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: arg.Flag | flagNullable}, nil
+}
+
 func (b *builtinTime) eval(env *ExpressionEnv) (eval, error) {
 	date, err := b.arg1(env)
 	if err != nil {
@@ -536,6 +837,23 @@ func (b *builtinTime) eval(env *ExpressionEnv) (eval, error) {
 
 func (b *builtinTime) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
 	return sqltypes.Time, flagNullable
+}
+
+func (call *builtinTime) compile(c *compiler) (ctype, error) {
+	arg, err := call.Arguments[0].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip := c.compileNullCheck1(arg)
+
+	switch arg.Type {
+	case sqltypes.Time:
+	default:
+		c.asm.Convert_xT(1, -1)
+	}
+	c.asm.jumpDestination(skip)
+	return ctype{Type: sqltypes.Time, Col: collationBinary, Flag: arg.Flag | flagNullable}, nil
 }
 
 func (b *builtinWeek) eval(env *ExpressionEnv) (eval, error) {
@@ -572,6 +890,37 @@ func (b *builtinWeek) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqlty
 	return sqltypes.Int64, flagNullable
 }
 
+func (call *builtinWeek) compile(c *compiler) (ctype, error) {
+	arg, err := call.Arguments[0].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip1 := c.compileNullCheck1(arg)
+	var skip2 *jump
+
+	switch arg.Type {
+	case sqltypes.Date, sqltypes.Datetime:
+	default:
+		c.asm.Convert_xD_nz(1)
+	}
+
+	if len(call.Arguments) == 1 {
+		c.asm.Fn_WEEK0()
+	} else {
+		mode, err := call.Arguments[1].compile(c)
+		if err != nil {
+			return ctype{}, err
+		}
+		skip2 = c.compileNullCheck1r(mode)
+		c.asm.Convert_xi(1)
+		c.asm.Fn_WEEK()
+	}
+
+	c.asm.jumpDestination(skip1, skip2)
+	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: arg.Flag | flagNullable}, nil
+}
+
 func (b *builtinWeekDay) eval(env *ExpressionEnv) (eval, error) {
 	date, err := b.arg1(env)
 	if err != nil {
@@ -589,6 +938,25 @@ func (b *builtinWeekDay) eval(env *ExpressionEnv) (eval, error) {
 
 func (b *builtinWeekDay) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
 	return sqltypes.Int64, flagNullable
+}
+
+func (call *builtinWeekDay) compile(c *compiler) (ctype, error) {
+	arg, err := call.Arguments[0].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip := c.compileNullCheck1(arg)
+
+	switch arg.Type {
+	case sqltypes.Date, sqltypes.Datetime:
+	default:
+		c.asm.Convert_xD_nz(1)
+	}
+
+	c.asm.Fn_WEEKDAY()
+	c.asm.jumpDestination(skip)
+	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: arg.Flag | flagNullable}, nil
 }
 
 func (b *builtinWeekOfYear) eval(env *ExpressionEnv) (eval, error) {
@@ -612,6 +980,25 @@ func (b *builtinWeekOfYear) typeof(env *ExpressionEnv, fields []*querypb.Field) 
 	return sqltypes.Int64, flagNullable
 }
 
+func (call *builtinWeekOfYear) compile(c *compiler) (ctype, error) {
+	arg, err := call.Arguments[0].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip := c.compileNullCheck1(arg)
+
+	switch arg.Type {
+	case sqltypes.Date, sqltypes.Datetime:
+	default:
+		c.asm.Convert_xD_nz(1)
+	}
+
+	c.asm.Fn_WEEKOFYEAR()
+	c.asm.jumpDestination(skip)
+	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: arg.Flag | flagNullable}, nil
+}
+
 func (b *builtinYear) eval(env *ExpressionEnv) (eval, error) {
 	date, err := b.arg1(env)
 	if err != nil {
@@ -630,6 +1017,25 @@ func (b *builtinYear) eval(env *ExpressionEnv) (eval, error) {
 
 func (b *builtinYear) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
 	return sqltypes.Int64, flagNullable
+}
+
+func (call *builtinYear) compile(c *compiler) (ctype, error) {
+	arg, err := call.Arguments[0].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip := c.compileNullCheck1(arg)
+
+	switch arg.Type {
+	case sqltypes.Date, sqltypes.Datetime:
+	default:
+		c.asm.Convert_xD(1)
+	}
+
+	c.asm.Fn_YEAR()
+	c.asm.jumpDestination(skip)
+	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: arg.Flag | flagNullable}, nil
 }
 
 func (b *builtinYearWeek) eval(env *ExpressionEnv) (eval, error) {
@@ -664,4 +1070,35 @@ func (b *builtinYearWeek) eval(env *ExpressionEnv) (eval, error) {
 
 func (b *builtinYearWeek) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
 	return sqltypes.Int64, flagNullable
+}
+
+func (call *builtinYearWeek) compile(c *compiler) (ctype, error) {
+	arg, err := call.Arguments[0].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip1 := c.compileNullCheck1(arg)
+	var skip2 *jump
+
+	switch arg.Type {
+	case sqltypes.Date, sqltypes.Datetime:
+	default:
+		c.asm.Convert_xD_nz(1)
+	}
+
+	if len(call.Arguments) == 1 {
+		c.asm.Fn_YEARWEEK0()
+	} else {
+		mode, err := call.Arguments[1].compile(c)
+		if err != nil {
+			return ctype{}, err
+		}
+		skip2 = c.compileNullCheck1r(mode)
+		c.asm.Convert_xi(1)
+		c.asm.Fn_YEARWEEK()
+	}
+
+	c.asm.jumpDestination(skip1, skip2)
+	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: arg.Flag | flagNullable}, nil
 }
