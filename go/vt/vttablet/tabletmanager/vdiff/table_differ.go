@@ -409,14 +409,14 @@ func (td *tableDiffer) streamOneShard(ctx context.Context, participant *shardStr
 }
 
 func (td *tableDiffer) setupRowSorters() {
-	// combine all sources into a slice and create a merge sorter for it
+	// Combine all sources into a slice and create a merge sorter for it.
 	sources := make(map[string]*shardStreamer)
 	for shard, source := range td.wd.ct.sources {
 		sources[shard] = source.shardStreamer
 	}
 	td.sourcePrimitive = newMergeSorter(sources, td.tablePlan.comparePKs)
 
-	// create a merge sorter for the target
+	// Create a merge sorter for the target.
 	targets := make(map[string]*shardStreamer)
 	targets[td.wd.ct.targetShardStreamer.shard] = td.wd.ct.targetShardStreamer
 	td.targetPrimitive = newMergeSorter(targets, td.tablePlan.comparePKs)
@@ -624,10 +624,12 @@ func (td *tableDiffer) compare(sourceRow, targetRow []sqltypes.Value, cols []com
 			continue
 		}
 		compareIndex := col.colIndex
-		var c int
-		var err error
-		var collationID collations.ID
-		// if the collation is nil or unknown, use binary collation to compare as bytes
+		var (
+			c           int
+			err         error
+			collationID collations.ID
+		)
+		// If the collation is nil or unknown, use binary collation to compare as bytes.
 		if col.collation == nil {
 			collationID = collations.CollationBinaryID
 		} else {

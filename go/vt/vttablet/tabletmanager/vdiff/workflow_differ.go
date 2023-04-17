@@ -64,16 +64,21 @@ func newWorkflowDiffer(ct *controller, opts *tabletmanagerdatapb.VDiffOptions) (
 // both sides are actually different.
 func (wd *workflowDiffer) reconcileExtraRows(dr *DiffReport, maxExtraRowsToCompare int64) {
 	if (dr.ExtraRowsSource == dr.ExtraRowsTarget) && (dr.ExtraRowsSource <= maxExtraRowsToCompare) {
-		for i := range dr.ExtraRowsSourceDiffs {
+		for i := 0; i < len(dr.ExtraRowsSourceDiffs); i++ {
 			foundMatch := false
-			for j := range dr.ExtraRowsTargetDiffs {
+			for j := 0; j < len(dr.ExtraRowsTargetDiffs); j++ {
 				if reflect.DeepEqual(dr.ExtraRowsSourceDiffs[i], dr.ExtraRowsTargetDiffs[j]) {
 					dr.ExtraRowsSourceDiffs = append(dr.ExtraRowsSourceDiffs[:i], dr.ExtraRowsSourceDiffs[i+1:]...)
-					dr.ExtraRowsSource--
 					dr.ExtraRowsTargetDiffs = append(dr.ExtraRowsTargetDiffs[:j], dr.ExtraRowsTargetDiffs[j+1:]...)
+					dr.ExtraRowsSource--
 					dr.ExtraRowsTarget--
 					dr.ProcessedRows--
 					dr.MatchingRows++
+					// We've removed an element from both slices at the current index
+					// so we need to shift the counters back as well to process the
+					// new elements at the index and avoid using an index out of range.
+					i--
+					j--
 					foundMatch = true
 					break
 				}
@@ -249,7 +254,7 @@ func (wd *workflowDiffer) buildPlan(dbClient binlogplayer.DBClient, filter *binl
 		}
 		td.lastPK = lastpkpb
 		wd.tableDiffers[table.Name] = td
-		if _, err := td.buildTablePlan(); err != nil {
+		if _, err := td.buildTablePlan(dbClient, wd.ct.vde.dbName); err != nil {
 			return err
 		}
 	}
