@@ -906,7 +906,7 @@ func (v *Value) Date() (datetime.Date, bool) {
 	case TypeDate:
 		return datetime.ParseDate(v.s)
 	case TypeDateTime:
-		dt, ok := datetime.ParseDateTime(v.s)
+		dt, _, ok := datetime.ParseDateTime(v.s, datetime.DefaultPrecision)
 		return dt.Date, ok
 	}
 	return datetime.Date{}, false
@@ -918,7 +918,8 @@ func (v *Value) DateTime() (datetime.DateTime, bool) {
 		d, ok := datetime.ParseDate(v.s)
 		return datetime.DateTime{Date: d}, ok
 	case TypeDateTime:
-		return datetime.ParseDateTime(v.s)
+		dt, _, ok := datetime.ParseDateTime(v.s, datetime.DefaultPrecision)
+		return dt, ok
 	}
 	return datetime.DateTime{}, false
 }
@@ -927,7 +928,8 @@ func (v *Value) Time() (datetime.Time, bool) {
 	if v.t != TypeTime {
 		return datetime.Time{}, false
 	}
-	return datetime.ParseTime(v.s)
+	t, _, ok := datetime.ParseTime(v.s, datetime.DefaultPrecision)
+	return t, ok
 }
 
 // Object returns the underlying JSON object for the v.

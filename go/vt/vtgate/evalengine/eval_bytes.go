@@ -24,8 +24,6 @@ import (
 	"vitess.io/vitess/go/mysql/collations/charset"
 	"vitess.io/vitess/go/mysql/datetime"
 	"vitess.io/vitess/go/sqltypes"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vthash"
 )
 
@@ -162,18 +160,8 @@ func (e *evalBytes) truncateInPlace(size int) {
 	}
 }
 
-func (e *evalBytes) toTemporal() (*evalTemporal, error) {
-	if t, ok := datetime.ParseDateTime(e.string()); ok {
-		return newEvalDateTime(t), nil
-	}
-	if t, ok := datetime.ParseDate(e.string()); ok {
-		return newEvalDate(t), nil
-	}
-	return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "type %v is not date-like", e.SQLType())
-}
-
 func (e *evalBytes) toDateBestEffort() datetime.DateTime {
-	if t, _ := datetime.ParseDateTime(e.string()); !t.IsZero() {
+	if t, _, _ := datetime.ParseDateTime(e.string(), -1); !t.IsZero() {
 		return t
 	}
 	if t, _ := datetime.ParseDate(e.string()); !t.IsZero() {
