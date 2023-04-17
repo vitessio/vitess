@@ -24,6 +24,7 @@ import (
 
 	"google.golang.org/protobuf/encoding/prototext"
 
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 
 	"vitess.io/vitess/go/vt/schema"
@@ -292,6 +293,15 @@ func (wd *workflowDiffer) initVDiffTables(dbClient binlogplayer.DBClient) error 
 	tableIn := strings.Builder{}
 	n := 0
 	for tableName := range wd.tableDiffers {
+		// Update the table statistics for each table if requested.
+		if wd.opts.CoreOptions.UpdateTableStats {
+			stmt := sqlparser.BuildParsedQuery(sqlAnalyzeTable, wd.ct.vde.dbName, tableName)
+			log.Infof("Updating the table stats for %s.%s using: %q", wd.ct.vde.dbName, tableName, stmt.Query)
+			if _, err := dbClient.ExecuteFetch(stmt.Query, -1); err != nil {
+				return err
+			}
+			log.Infof("Finished updating the table stats for %s.%s", wd.ct.vde.dbName, tableName)
+		}
 		tableIn.WriteString(encodeString(tableName))
 		if n++; n < len(wd.tableDiffers) {
 			tableIn.WriteByte(',')
@@ -314,7 +324,14 @@ func (wd *workflowDiffer) initVDiffTables(dbClient binlogplayer.DBClient) error 
 		if len(qr.Rows) == 0 {
 			query = fmt.Sprintf(sqlNewVDiffTable, wd.ct.id, encodeString(tableName), tableRows)
 		} else if len(qr.Rows) == 1 {
-			query = fmt.Sprintf(sqlUpdateTableRows, tableRows, wd.ct.id, encodeString(tableName))
+			query, err = sqlparser.ParseAndBind(sqlUpdateTableRows,
+				sqltypes.Int64BindVariable(tableRows),
+				sqltypes.Int64BindVariable(wd.ct.id),
+				sqltypes.StringBindVariable(tableName),
+			)
+			if err != nil {
+				return err
+			}
 		} else {
 			return fmt.Errorf("invalid state found for vdiff table %s for vdiff_id %d on tablet %s",
 				tableName, wd.ct.id, wd.ct.vde.thisTablet.Alias)

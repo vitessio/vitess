@@ -772,6 +772,55 @@ func (td *tableDiffer) adjustForSourceTimeZone(targetSelectExprs sqlparser.Selec
 	return targetSelectExprs
 }
 
+// updateTableStats runs ANALYZE TABLE on the table in order to update the
+// statistics, then it reads those updated stats (specifically the number of
+// rows in the table) and saves them in the vdiff_table record.
+func (td *tableDiffer) updateTableStats(dbClient binlogplayer.DBClient) error {
+	// First update the stats.
+	stmt := sqlparser.BuildParsedQuery(sqlAnalyzeTable, td.wd.ct.vde.dbName, td.table.Name)
+	if _, err := dbClient.ExecuteFetch(stmt.Query, -1); err != nil {
+		return err
+	}
+	// Now read the updated stats.
+	query, err := sqlparser.ParseAndBind(sqlGetTableRows,
+		sqltypes.StringBindVariable(td.wd.ct.vde.dbName),
+		sqltypes.StringBindVariable(td.table.Name),
+	)
+	if err != nil {
+		return err
+	}
+	isqr, err := dbClient.ExecuteFetch(query, 1)
+	if err != nil {
+		return err
+	}
+	if isqr == nil || len(isqr.Rows) != 1 {
+		rows := 0
+		if isqr != nil {
+			rows = len(isqr.Rows)
+		}
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected number of rows returned from %s: %d", query, rows)
+	}
+	// And finally save the updated stats.
+	row := isqr.Named().Row()
+	tableRows, err := row.ToInt64("table_rows")
+	if err != nil {
+		strVal, _ := row.ToString("table_rows")
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid value (%s) returned from %s: %v", strVal, query, err)
+	}
+	query, err = sqlparser.ParseAndBind(sqlUpdateTableRows,
+		sqltypes.Int64BindVariable(tableRows),
+		sqltypes.Int64BindVariable(td.wd.ct.id),
+		sqltypes.StringBindVariable(td.table.Name),
+	)
+	if err != nil {
+		return err
+	}
+	if _, err := dbClient.ExecuteFetch(query, 1); err != nil {
+		return err
+	}
+	return nil
+}
+
 func getColumnNameForSelectExpr(selectExpression sqlparser.SelectExpr) (string, error) {
 	aliasedExpr := selectExpression.(*sqlparser.AliasedExpr)
 	expr := aliasedExpr.Expr
