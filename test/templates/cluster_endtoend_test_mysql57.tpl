@@ -118,7 +118,7 @@ jobs:
         sudo service etcd stop
 
         # install JUnit report formatter
-        go install github.com/jstemmer/go-junit-report@HEAD
+        go install github.com/jstemmer/go-junit-report@master
 
         {{if .InstallXtraBackup}}
 

@@ -102,7 +102,7 @@ jobs:
         go mod download
 
         # install JUnit report formatter
-        go install github.com/jstemmer/go-junit-report@HEAD
+        go install github.com/jstemmer/go-junit-report@master
 
         sudo apt-get install percona-xtrabackup-80 lz4
 
