@@ -24,6 +24,7 @@ import (
 
 	"github.com/spf13/pflag"
 	"google.golang.org/protobuf/encoding/prototext"
+	"k8s.io/apimachinery/pkg/util/json"
 
 	"vitess.io/vitess/go/cache"
 	"vitess.io/vitess/go/flagutil"
@@ -333,6 +334,20 @@ type TabletConfig struct {
 	EnableViews bool `json:"-"`
 
 	EnablePerWorkloadTableMetrics bool `json:"-"`
+}
+
+func (cfg *TabletConfig) UnmarshalJSON(data []byte) error {
+	type TCProxy TabletConfig
+
+	tmp := struct {
+		TCProxy
+		SchemaReloadIntervalSeconds *deprecated.Float64Seconds `json:"schemaReloadIntervalSeconds,omitempty"`
+	}{
+		TCProxy:                     TCProxy(*cfg),
+		SchemaReloadIntervalSeconds: &cfg.SchemaReloadIntervalSeconds,
+	}
+
+	return json.Unmarshal(data, &tmp)
 }
 
 // ConnPoolConfig contains the config for a conn pool.
