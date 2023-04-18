@@ -481,23 +481,38 @@ func (hs *healthStreamer) getChangedViewNames(ctx context.Context, conn *connpoo
 	}
 	bv := map[string]*querypb.BindVariable{"tableNames": viewsBV}
 
-	var viewsDefQuery string
-	viewsDefQuery = sqlparser.BuildParsedQuery(mysql.FetchViewDefinition).Query
-	var stmt sqlparser.Statement
-	stmt, err = sqlparser.Parse(viewsDefQuery)
-	if err != nil {
-		return
-	}
-	viewsDefQuery, err = planbuilder.GenerateFullQuery(stmt).GenerateQuery(bv, nil)
-	if err != nil {
-		return
-	}
-	err = conn.Stream(ctx, viewsDefQuery, callback, alloc, bufferSize, 0)
+	err = hs.getViewDefinition(ctx, conn, bv, callback, alloc, bufferSize)
 	if err != nil {
 		return
 	}
 
 	/* Retrieve create statement for views */
+	viewsDefStmt, err = hs.getCreateViewStatement(ctx, conn, viewsDefStmt)
+	if err != nil {
+		return
+	}
+
+	/* update the views copy table */
+	err = hs.updateViewsTable(ctx, conn, bv, viewsDefStmt)
+	return
+}
+
+func (hs *healthStreamer) getViewDefinition(ctx context.Context, conn *connpool.DBConn, bv map[string]*querypb.BindVariable, callback func(qr *sqltypes.Result) error, alloc func() *sqltypes.Result, bufferSize int) error {
+	var viewsDefQuery string
+	viewsDefQuery = sqlparser.BuildParsedQuery(mysql.FetchViewDefinition).Query
+
+	stmt, err := sqlparser.Parse(viewsDefQuery)
+	if err != nil {
+		return err
+	}
+	viewsDefQuery, err = planbuilder.GenerateFullQuery(stmt).GenerateQuery(bv, nil)
+	if err != nil {
+		return err
+	}
+	return conn.Stream(ctx, viewsDefQuery, callback, alloc, bufferSize, 0)
+}
+
+func (hs *healthStreamer) getCreateViewStatement(ctx context.Context, conn *connpool.DBConn, viewsDefStmt map[string]*viewDefAndStmt) (map[string]*viewDefAndStmt, error) {
 	for k, v := range viewsDefStmt {
 		res, err := conn.Exec(ctx, sqlparser.BuildParsedQuery(mysql.FetchCreateStatement, k).Query, 1, false)
 		if err != nil {
@@ -507,53 +522,53 @@ func (hs *healthStreamer) getChangedViewNames(ctx context.Context, conn *connpoo
 			v.stmt = row[1].ToString()
 		}
 	}
+	return viewsDefStmt, nil
+}
 
-	/* update the views copy table */
-	var clearViewQuery string
-	clearViewQuery = sqlparser.BuildParsedQuery(mysql.DeleteFromViewsTable, sidecardb.GetIdentifier()).Query
-	stmt, err = sqlparser.Parse(clearViewQuery)
+func (hs *healthStreamer) updateViewsTable(ctx context.Context, conn *connpool.DBConn, bv map[string]*querypb.BindVariable, viewsDefStmt map[string]*viewDefAndStmt) error {
+	stmt, err := sqlparser.Parse(
+		sqlparser.BuildParsedQuery(mysql.DeleteFromViewsTable, sidecardb.GetIdentifier()).Query)
 	if err != nil {
-		return
+		return err
 	}
-	clearViewQuery, err = planbuilder.GenerateFullQuery(stmt).GenerateQuery(bv, nil)
+	clearViewQuery, err := planbuilder.GenerateFullQuery(stmt).GenerateQuery(bv, nil)
 	if err != nil {
-		return
+		return err
 	}
 
-	insertViewsQuery := sqlparser.BuildParsedQuery(mysql.InsertIntoViewsTable, sidecardb.GetIdentifier()).Query
-	stmt, err = sqlparser.Parse(insertViewsQuery)
+	stmt, err = sqlparser.Parse(
+		sqlparser.BuildParsedQuery(mysql.InsertIntoViewsTable, sidecardb.GetIdentifier()).Query)
 	if err != nil {
-		return
+		return err
 	}
 	insertViewsParsedQuery := planbuilder.GenerateFullQuery(stmt)
-	if err != nil {
-		return
-	}
 
-	var insertViewQuery string
 	// Reload the views in a transaction.
 	_, err = conn.Exec(ctx, "begin", 1, false)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	defer conn.Exec(ctx, "rollback", 1, false)
 
 	_, err = conn.Exec(ctx, clearViewQuery, 1, false)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	for k, v := range viewsDefStmt {
 		bv["table_name"] = sqltypes.StringBindVariable(k)
 		bv["create_statement"] = sqltypes.StringBindVariable(v.stmt)
 		bv["view_definition"] = sqltypes.StringBindVariable(v.def)
-		insertViewQuery, err = insertViewsParsedQuery.GenerateQuery(bv, nil)
+		insertViewQuery, err := insertViewsParsedQuery.GenerateQuery(bv, nil)
+		if err != nil {
+			return err
+		}
 		_, err = conn.Exec(ctx, insertViewQuery, 1, false)
 		if err != nil {
-			return
+			return err
 		}
 	}
 
 	_, err = conn.Exec(ctx, "commit", 1, false)
-	return
+	return err
 }
