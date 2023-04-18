@@ -78,7 +78,10 @@ func (tfe *TestFieldEvent) String() string {
 	s += "}"
 	return s
 }
-func TestBlob(t *testing.T) {
+
+func TestNoBlob(t *testing.T) {
+	newEngine(t, "noblob")
+	defer newEngine(t, "full")
 	execStatements(t, []string{
 		"create table t1(id int, blb blob, val varchar(4), primary key(id))",
 	})
@@ -1893,38 +1896,10 @@ func TestMinimalMode(t *testing.T) {
 		t.Skip()
 	}
 
-	execStatements(t, []string{
-		"create table t1(id int, val1 varbinary(128), val2 varbinary(128), primary key(id))",
-		"insert into t1 values(1, 'aaa', 'bbb')",
-	})
-	defer execStatements(t, []string{
-		"drop table t1",
-	})
-	engine.se.Reload(context.Background())
-
-	// Record position before the next few statements.
-	pos := primaryPosition(t)
-	execStatements(t, []string{
-		"set @@session.binlog_row_image='minimal'",
-		"update t1 set val1='bbb' where id=1",
-		"set @@session.binlog_row_image='full'",
-	})
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	ch := make(chan []*binlogdatapb.VEvent)
-	go func() {
-		for evs := range ch {
-			t.Errorf("received: %v", evs)
-		}
-	}()
-	defer close(ch)
-	err := vstream(ctx, t, pos, nil, nil, ch)
-	want := "partial row image encountered"
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("err: %v, must contain '%s'", err, want)
-	}
+	newEngine(t, "minimal")
+	defer newEngine(t, "full")
+	err := engine.Stream(context.Background(), "current", nil, nil, func(evs []*binlogdatapb.VEvent) error { return nil })
+	require.Error(t, err, "minimal binlog_row_image is not supported by Vitess VReplication")
 }
 
 func TestStatementMode(t *testing.T) {
