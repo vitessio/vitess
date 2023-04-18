@@ -245,10 +245,49 @@ func (d Date) SundayWeek() (int, int) {
 	return sun.Year(), (sun.YearDay()-1)/7 + 1
 }
 
+// MondayWeek returns the year and week number of the current
+// date, when week numbers are defined by starting on the first
+// Monday of the year.
+func (d Date) MondayWeek() (int, int) {
+	t := d.ToStdTime(time.Local)
+	// Since the week numbers always start on a Monday, we can look
+	// at the week number of Monday itself. So we shift back to last
+	// Monday we saw and compute the week number based on that.
+	wd := (t.Weekday() + 6) % 7
+	mon := t.Add(-time.Duration(wd) * 24 * time.Hour)
+	return mon.Year(), (mon.YearDay()-1)/7 + 1
+}
+
+// Sunday4DayWeek returns the year and week number of the current
+// date, when week numbers are defined by starting on the Sunday
+// where week 1 is defined as having at least 4 days in the new
+// year.
+func (d Date) Sunday4DayWeek() (int, int) {
+	t := d.ToStdTime(time.Local)
+
+	// In this format, the first Wednesday of the year is always
+	// in the first week. So we can look at the week number of
+	// Wednesday in the same week. On days before Wednesday, we need
+	// to move the time forward to Wednesday, on days after we need to
+	// move it back to Wednesday.
+	var wed time.Time
+
+	switch wd := t.Weekday(); {
+	case wd == 3:
+		wed = t
+	case wd < 3:
+		wed = t.Add(time.Duration(3-t.Weekday()) * 24 * time.Hour)
+	case wd > 3:
+		wed = t.Add(-time.Duration(t.Weekday()-3) * 24 * time.Hour)
+	}
+
+	return wed.Year(), (wed.YearDay()-1)/7 + 1
+}
+
 const DefaultWeekMode = 0
 
 func (d Date) Week(mode int) int {
-	switch mode {
+	switch mode & 7 {
 	case 0:
 		year, week := d.SundayWeek()
 		if year < d.Year() {
@@ -267,9 +306,24 @@ func (d Date) Week(mode int) int {
 	case 3:
 		_, week := d.ISOWeek()
 		return week
-	case 4, 5, 6, 7:
-		// TODO
-		return 0
+	case 4:
+		year, week := d.Sunday4DayWeek()
+		if year < d.Year() {
+			return 0
+		}
+		return week
+	case 5:
+		year, week := d.MondayWeek()
+		if year < d.Year() {
+			return 0
+		}
+		return week
+	case 6:
+		_, week := d.Sunday4DayWeek()
+		return week
+	case 7:
+		_, week := d.MondayWeek()
+		return week
 	default:
 		return d.Week(DefaultWeekMode)
 	}
