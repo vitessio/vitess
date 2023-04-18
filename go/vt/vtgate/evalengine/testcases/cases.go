@@ -1302,16 +1302,14 @@ func FnDateFormat(yield Query) {
 		{'S', "LPAD(SECOND(t),2,0)"},
 		{'s', "LPAD(SECOND(t),2,0)"},
 		{'T', ""},
-		// TODO
-		// {'U', "LPAD(WEEK(d,0),2,0)"},
-		// {'u', "LPAD(WEEK(d,1),2,0)"},
-		// {'V', "RIGHT(YEARWEEK(d,2),2)"},
-		// {'v', "RIGHT(YEARWEEK(d,3),2)"},
+		{'U', "LPAD(WEEK(d,0),2,0)"},
+		{'u', "LPAD(WEEK(d,1),2,0)"},
+		{'V', "RIGHT(YEARWEEK(d,2),2)"},
+		{'v', "RIGHT(YEARWEEK(d,3),2)"},
 		{'W', "DAYNAME(d)"},
 		{'w', "DAYOFWEEK(d)-1"},
-		// TODO
-		// {'X', "LEFT(YEARWEEK(d,2),4)"},
-		// {'x', "LEFT(YEARWEEK(d,3),4)"},
+		{'X', "LEFT(YEARWEEK(d,2),4)"},
+		{'x', "LEFT(YEARWEEK(d,3),4)"},
 		{'Y', "YEAR(d)"},
 		{'y', "RIGHT(YEAR(d),2)"},
 		{'%', ""},
@@ -1432,7 +1430,7 @@ func FnTime(yield Query) {
 }
 
 func FnWeek(yield Query) {
-	for i := 0; i < 4; i++ {
+	for i := 0; i < 16; i++ {
 		for _, d := range inputConversions {
 			yield(fmt.Sprintf("WEEK(%s, %d)", d, i), nil)
 		}
