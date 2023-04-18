@@ -641,7 +641,8 @@ func init() {
 
 	GetTablets.Flags().StringSliceVarP(&getTabletsOptions.TabletAliasStrings, "tablet-alias", "t", nil, "List of tablet aliases to filter by.")
 	GetTablets.Flags().StringSliceVarP(&getTabletsOptions.Cells, "cell", "c", nil, "List of cells to filter tablets by.")
-	GetTablets.Flags().Var((*topoproto.TabletTypeFlag)(&getTabletsOptions.TabletType), "tablet-type", fmt.Sprintf("Tablet type to filter by (%s).", strings.Join(topoproto.MakeUniqueStringTypeList(topoproto.AllTabletTypes), ",")))
+	GetTablets.Flags().Var((*topoproto.TabletTypeFlag)(&getTabletsOptions.TabletType), "tablet-type", fmt.Sprintf("Tablet type to filter by (%s).",
+		strings.Join(topoproto.MakeUniqueStringTypeList(topoproto.AllTabletTypes), ",")))
 	GetTablets.Flags().StringVarP(&getTabletsOptions.Keyspace, "keyspace", "k", "", "Keyspace to filter tablets by.")
 	GetTablets.Flags().StringVarP(&getTabletsOptions.Shard, "shard", "s", "", "Shard to filter tablets by.")
 	GetTablets.Flags().StringVar(&getTabletsOptions.Format, "format", "awk", "Output format to use; valid choices are (json, awk).")
