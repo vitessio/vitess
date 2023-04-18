@@ -234,13 +234,13 @@ func MakeStringTypeList(types []topodatapb.TabletType) []string {
 // AllTabletTypes.
 func MakeUniqueStringTypeList(types []topodatapb.TabletType) []string {
 	strs := make([]string, 0, len(types))
-	seen := make(map[string]bool)
+	seen := make(map[string]struct{})
 	for _, t := range types {
-		if seen[t.String()] {
+		if _, exists := seen[t.String()]; exists {
 			continue
 		}
 		strs = append(strs, strings.ToLower(t.String()))
-		seen[t.String()] = true
+		seen[t.String()] = struct{}{}
 	}
 	sort.Strings(strs)
 	return strs

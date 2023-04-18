@@ -99,25 +99,26 @@ Note: hook names may not contain slash (/) characters.
 	}
 	// GetTablets makes a GetTablets gRPC call to a vtctld.
 	GetTablets = &cobra.Command{
-		Use:   "GetTablets [--strict] [{--cell $c1 [--cell $c2 ...], [--tablet-type $t1] $ks [--shard $shard], --tablet-alias $alias}]",
+		Use:   "GetTablets [--strict] [{--cell $c1 [--cell $c2 ...] [--tablet-type $t1] [--keyspace $ks [--shard $shard]], --tablet-alias $alias}]",
 		Short: "Looks up tablets according to filter criteria.",
-		Long: `Looks up tablets according to the filter criteria.
+		Long: fmt.Sprintf(`Looks up tablets according to the filter criteria.
 
-If --tablet-alias is passed, none of the other filters (keyspace, shard, cell) may
-be passed, and tablets are looked up by tablet alias only.
+If --tablet-alias is passed, none of the other filters (tablet-type, keyspace,
+shard, cell) may be passed, and tablets are looked up by tablet alias only.
 
 If --keyspace is passed, then all tablets in the keyspace are retrieved. The
 --shard flag may also be passed to further narrow the set of tablets to that
 <keyspace/shard>. Passing --shard without also passing --keyspace will fail.
 
 If --tablet-type is passed, only tablets of the specified type will be
-returned.
+returned. Valid tablet types are:
+"%s".
 
 Passing --cell limits the set of tablets to those in the specified cells. The
 --cell flag accepts a CSV argument (e.g. --cell "c1,c2") and may be repeated
 (e.g. --cell "c1" --cell "c2").
 
-Valid output formats are "awk" and "json".`,
+Valid output formats are "awk" and "json".`, strings.Join(topoproto.MakeUniqueStringTypeList(topoproto.AllTabletTypes), "\", \"")),
 		DisableFlagsInUseLine: true,
 		Args:                  cobra.NoArgs,
 		RunE:                  commandGetTablets,
@@ -641,8 +642,7 @@ func init() {
 
 	GetTablets.Flags().StringSliceVarP(&getTabletsOptions.TabletAliasStrings, "tablet-alias", "t", nil, "List of tablet aliases to filter by.")
 	GetTablets.Flags().StringSliceVarP(&getTabletsOptions.Cells, "cell", "c", nil, "List of cells to filter tablets by.")
-	GetTablets.Flags().Var((*topoproto.TabletTypeFlag)(&getTabletsOptions.TabletType), "tablet-type", fmt.Sprintf("Tablet type to filter by (%s).",
-		strings.Join(topoproto.MakeUniqueStringTypeList(topoproto.AllTabletTypes), ",")))
+	GetTablets.Flags().Var((*topoproto.TabletTypeFlag)(&getTabletsOptions.TabletType), "tablet-type", "Tablet type to filter by (e.g. primary or replica).")
 	GetTablets.Flags().StringVarP(&getTabletsOptions.Keyspace, "keyspace", "k", "", "Keyspace to filter tablets by.")
 	GetTablets.Flags().StringVarP(&getTabletsOptions.Shard, "shard", "s", "", "Shard to filter tablets by.")
 	GetTablets.Flags().StringVar(&getTabletsOptions.Format, "format", "awk", "Output format to use; valid choices are (json, awk).")
