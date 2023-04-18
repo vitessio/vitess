@@ -187,13 +187,6 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 		return qre.execOther()
 	case p.PlanInsert, p.PlanUpdate, p.PlanDelete, p.PlanInsertMessage, p.PlanDDL, p.PlanLoad:
 		return qre.execAutocommit(qre.txConnExec)
-	case p.PlanViewDDL:
-		switch qre.plan.FullStmt.(type) {
-		case *sqlparser.DropView:
-			return qre.execAutocommit(qre.execDropViewDDL)
-		default:
-			return qre.execAsTransaction(qre.execViewDDL)
-		}
 	case p.PlanUpdateLimit, p.PlanDeleteLimit:
 		return qre.execAsTransaction(qre.txConnExec)
 	case p.PlanCallProc:
@@ -301,113 +294,6 @@ func (qre *QueryExecutor) txConnExec(conn *StatefulConnection) (*sqltypes.Result
 		return qre.execProc(conn)
 	}
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] %s unexpected plan type", qre.plan.PlanID.String())
-}
-
-func (qre *QueryExecutor) execViewDDL(conn *StatefulConnection) (*sqltypes.Result, error) {
-	var err error
-	switch stmt := qre.plan.FullStmt.(type) {
-	case *sqlparser.CreateView:
-		_, err = qre.execCreateViewDDL(conn, stmt)
-	case *sqlparser.AlterView:
-		_, err = qre.execAlterViewDDL(conn, stmt)
-	default:
-		err = vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: unexpected view DDL type: %T", qre.plan.FullStmt)
-	}
-	if err != nil {
-		return nil, err
-	}
-	// We need to use a different connection for executing the DDL on MySQL
-	// because the previous DMLs are running in a transaction and we don't want to autocommit
-	// those changes.
-	ddlConn, err := qre.getConn()
-	if err != nil {
-		return nil, err
-	}
-	defer ddlConn.Recycle()
-	// If MySQL fails, then we will Rollback the changes.
-	return ddlConn.Exec(qre.ctx, sqlparser.String(qre.plan.FullStmt), 1000, true)
-}
-
-func (qre *QueryExecutor) execCreateViewDDL(conn *StatefulConnection, stmt *sqlparser.CreateView) (*sqltypes.Result, error) {
-	bindVars := generateBindVarsForViewDDLInsert(stmt)
-	sql, _, err := qre.generateFinalSQL(qre.plan.FullQuery, bindVars)
-	if err != nil {
-		return nil, err
-	}
-	qr, err := execWithDDLView(qre.ctx, conn, sql)
-	if err != nil {
-		sqlErr, isSQLErr := mysql.NewSQLErrorFromError(err).(*mysql.SQLError)
-		// If it is a MySQL error and its code is of duplicate entry,
-		// then we would return duplicate create view error.
-		if isSQLErr && sqlErr.Number() == mysql.ERDupEntry {
-			return nil, vterrors.Errorf(vtrpcpb.Code_ALREADY_EXISTS, "Table '%s' already exists", stmt.ViewName.Name.String())
-		}
-		return nil, err
-	}
-	return qr, nil
-}
-
-func (qre *QueryExecutor) execAlterViewDDL(conn *StatefulConnection, stmt *sqlparser.AlterView) (*sqltypes.Result, error) {
-	createViewDDL := &sqlparser.CreateView{
-		ViewName:    stmt.ViewName,
-		Algorithm:   stmt.Algorithm,
-		Definer:     stmt.Definer,
-		Security:    stmt.Security,
-		Columns:     stmt.Columns,
-		Select:      stmt.Select,
-		CheckOption: stmt.CheckOption,
-		Comments:    stmt.Comments,
-	}
-	bindVars := generateBindVarsForViewDDLInsert(createViewDDL)
-	sql, _, err := qre.generateFinalSQL(qre.plan.FullQuery, bindVars)
-	if err != nil {
-		return nil, err
-	}
-	qr, err := execWithDDLView(qre.ctx, conn, sql)
-	if err != nil {
-		return nil, err
-	}
-	if qr.RowsAffected == 0 {
-		return nil, vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "Table '%s' does not exist", stmt.ViewName.Name.String())
-	}
-	return qr, nil
-}
-
-func (qre *QueryExecutor) execDropViewDDL(conn *StatefulConnection) (*sqltypes.Result, error) {
-	viewsMap := make(map[string]int)
-	stmt := qre.plan.FullStmt.(*sqlparser.DropView)
-	var viewNames []string
-	for pos, view := range stmt.FromTables {
-		viewName := view.Name.String()
-		if _, exists := viewsMap[viewName]; exists {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Not unique view: '%s'", viewName)
-		}
-		viewNames = append(viewNames, viewName)
-		viewsMap[viewName] = pos
-	}
-	viewNamesBV, err := sqltypes.BuildBindVariable(viewNames)
-	if err != nil {
-		return nil, err
-	}
-	bindVars := map[string]*querypb.BindVariable{
-		"table_name": viewNamesBV,
-	}
-
-	sql, _, err := qre.generateFinalSQL(qre.plan.FullQuery, bindVars)
-	if err != nil {
-		return nil, err
-	}
-	_, err = execWithDDLView(qre.ctx, conn, sql)
-	if err != nil {
-		return nil, err
-	}
-
-	// Drop the view on MySQL too.
-	return conn.Exec(qre.ctx, sqlparser.String(qre.plan.FullStmt), 1000, true)
-}
-
-func execWithDDLView(ctx context.Context, conn *StatefulConnection, sql string) (*sqltypes.Result, error) {
-	return conn.Exec(ctx, sql, 10000, true)
 }
 
 // Stream performs a streaming query execution.
