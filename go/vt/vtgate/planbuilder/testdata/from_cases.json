@@ -674,9 +674,9 @@
       "Instructions": {
         "OperatorType": "Join",
         "Variant": "Join",
-        "JoinColumnIndexes": "L:1",
+        "JoinColumnIndexes": "L:0",
         "JoinVars": {
-          "music_id": 0
+          "music_id": 1
         },
         "TableName": "music_`user`",
         "Inputs": [
@@ -687,8 +687,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select music.id, music.foo from music where 1 != 1",
-            "Query": "select music.id, music.foo from music where music.col = 42",
+            "FieldQuery": "select music.foo, music.id from music where 1 != 1",
+            "Query": "select music.foo, music.id from music where music.col = 42",
             "Table": "music"
           },
           {
@@ -895,9 +895,9 @@
       "Instructions": {
         "OperatorType": "Join",
         "Variant": "LeftJoin",
-        "JoinColumnIndexes": "L:1",
+        "JoinColumnIndexes": "L:0",
         "JoinVars": {
-          "u_a": 0
+          "u_a": 1
         },
         "TableName": "`user`_unsharded",
         "Inputs": [
@@ -908,8 +908,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select u.a, u.col from `user` as u where 1 != 1",
-            "Query": "select u.a, u.col from `user` as u",
+            "FieldQuery": "select u.col, u.a from `user` as u where 1 != 1",
+            "Query": "select u.col, u.a from `user` as u",
             "Table": "`user`"
           },
           {
@@ -940,16 +940,16 @@
       "Instructions": {
         "OperatorType": "Join",
         "Variant": "LeftJoin",
-        "JoinColumnIndexes": "L:1,R:0",
+        "JoinColumnIndexes": "L:0,R:0",
         "JoinVars": {
-          "m1_col": 0
+          "m1_col": 1
         },
         "TableName": "`user`_unsharded_unsharded",
         "Inputs": [
           {
             "OperatorType": "Join",
             "Variant": "LeftJoin",
-            "JoinColumnIndexes": "R:0,L:0",
+            "JoinColumnIndexes": "L:0,R:0",
             "JoinVars": {
               "user_col": 0
             },
@@ -1748,9 +1748,9 @@
       "Instructions": {
         "OperatorType": "Join",
         "Variant": "Join",
-        "JoinColumnIndexes": "L:1",
+        "JoinColumnIndexes": "L:0",
         "JoinVars": {
-          "user_id": 0
+          "user_id": 1
         },
         "TableName": "`user`_user_extra",
         "Inputs": [
@@ -1761,8 +1761,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select `user`.id, `user`.col from `user` where 1 != 1",
-            "Query": "select `user`.id, `user`.col from `user`",
+            "FieldQuery": "select `user`.col, `user`.id from `user` where 1 != 1",
+            "Query": "select `user`.col, `user`.id from `user`",
             "Table": "`user`"
           },
           {
@@ -2088,9 +2088,9 @@
       "Instructions": {
         "OperatorType": "Join",
         "Variant": "Join",
-        "JoinColumnIndexes": "L:1",
+        "JoinColumnIndexes": "L:0",
         "JoinVars": {
-          "user_name": 0
+          "user_name": 1
         },
         "TableName": "`user`_user_extra",
         "Inputs": [
@@ -2101,8 +2101,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select `user`.`name`, `user`.col from `user` where 1 != 1",
-            "Query": "select `user`.`name`, `user`.col from `user`",
+            "FieldQuery": "select `user`.col, `user`.`name` from `user` where 1 != 1",
+            "Query": "select `user`.col, `user`.`name` from `user`",
             "Table": "`user`"
           },
           {
@@ -3160,8 +3160,8 @@
         "Variant": "Join",
         "JoinColumnIndexes": "L:1",
         "JoinVars": {
-          "t_col1": 0,
-          "t_id": 1
+          "t_col1": 1,
+          "t_id": 0
         },
         "TableName": "`user`_user_extra_unsharded",
         "Inputs": [
@@ -4112,9 +4112,9 @@
       "Instructions": {
         "OperatorType": "Join",
         "Variant": "Join",
-        "JoinColumnIndexes": "L:1,R:0",
+        "JoinColumnIndexes": "L:0,R:0",
         "JoinVars": {
-          "user_col2": 0
+          "user_col2": 1
         },
         "TableName": "`user`_unsharded",
         "Inputs": [
@@ -4125,8 +4125,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select `user`.col2, `user`.col1 from `user` where 1 != 1",
-            "Query": "select `user`.col2, `user`.col1 from `user`",
+            "FieldQuery": "select `user`.col1, `user`.col2 from `user` where 1 != 1",
+            "Query": "select `user`.col1, `user`.col2 from `user`",
             "Table": "`user`"
           },
           {
@@ -4749,9 +4749,9 @@
       "Instructions": {
         "OperatorType": "Join",
         "Variant": "Join",
-        "JoinColumnIndexes": "L:1",
+        "JoinColumnIndexes": "L:0",
         "JoinVars": {
-          "ue_id": 0
+          "ue_id": 1
         },
         "TableName": "music, user_extra_`user`",
         "Inputs": [
@@ -4762,8 +4762,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select ue.id, 1 from user_extra as ue, music as m where 1 != 1",
-            "Query": "select ue.id, 1 from user_extra as ue, music as m where m.user_id = ue.user_id",
+            "FieldQuery": "select 1, ue.id from user_extra as ue, music as m where 1 != 1",
+            "Query": "select 1, ue.id from user_extra as ue, music as m where m.user_id = ue.user_id",
             "Table": "music, user_extra"
           },
           {
@@ -4836,7 +4836,7 @@
       "Instructions": {
         "OperatorType": "Join",
         "Variant": "Join",
-        "JoinColumnIndexes": "R:0,L:1",
+        "JoinColumnIndexes": "R:0,L:0",
         "JoinVars": {
           "ue_id": 0
         },
@@ -4849,8 +4849,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select ue.id, ue.id as ueid from user_extra as ue where 1 != 1",
-            "Query": "select ue.id, ue.id as ueid from user_extra as ue",
+            "FieldQuery": "select ue.id as ueid from user_extra as ue where 1 != 1",
+            "Query": "select ue.id as ueid from user_extra as ue",
             "Table": "user_extra"
           },
           {
@@ -5429,9 +5429,9 @@
       "Instructions": {
         "OperatorType": "Join",
         "Variant": "Join",
-        "JoinColumnIndexes": "L:1",
+        "JoinColumnIndexes": "L:0",
         "JoinVars": {
-          "u_intcol": 0
+          "u_intcol": 1
         },
         "TableName": "`user`_`user`",
         "Inputs": [
@@ -5442,8 +5442,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select u.intcol, u.id from `user` as u where 1 != 1",
-            "Query": "select u.intcol, u.id from `user` as u",
+            "FieldQuery": "select u.id, u.intcol from `user` as u where 1 != 1",
+            "Query": "select u.id, u.intcol from `user` as u",
             "Table": "`user`"
           },
           {
@@ -5481,41 +5481,32 @@
         "TableName": "`user`_unsharded_unsharded",
         "Inputs": [
           {
-            "OperatorType": "SimpleProjection",
-            "Columns": [
-              0,
-              1
-            ],
+            "OperatorType": "Join",
+            "Variant": "Join",
+            "JoinColumnIndexes": "L:1,L:0",
+            "TableName": "`user`_unsharded",
             "Inputs": [
               {
-                "OperatorType": "Join",
-                "Variant": "Join",
-                "JoinColumnIndexes": "L:0,L:1",
-                "TableName": "`user`_unsharded",
-                "Inputs": [
-                  {
-                    "OperatorType": "Route",
-                    "Variant": "Scatter",
-                    "Keyspace": {
-                      "Name": "user",
-                      "Sharded": true
-                    },
-                    "FieldQuery": "select `user`.col1, 0 from `user` where 1 != 1",
-                    "Query": "select `user`.col1, 0 from `user`",
-                    "Table": "`user`"
-                  },
-                  {
-                    "OperatorType": "Route",
-                    "Variant": "Unsharded",
-                    "Keyspace": {
-                      "Name": "main",
-                      "Sharded": false
-                    },
-                    "FieldQuery": "select 1 from unsharded where 1 != 1",
-                    "Query": "select 1 from unsharded",
-                    "Table": "unsharded"
-                  }
-                ]
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select 0, `user`.col1 from `user` where 1 != 1",
+                "Query": "select 0, `user`.col1 from `user`",
+                "Table": "`user`"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "main",
+                  "Sharded": false
+                },
+                "FieldQuery": "select 1 from unsharded where 1 != 1",
+                "Query": "select 1 from unsharded",
+                "Table": "unsharded"
               }
             ]
           },
@@ -5547,7 +5538,7 @@
       "Instructions": {
         "OperatorType": "SimpleProjection",
         "Columns": [
-          1
+          0
         ],
         "Inputs": [
           {
@@ -5557,9 +5548,9 @@
               {
                 "OperatorType": "Join",
                 "Variant": "LeftJoin",
-                "JoinColumnIndexes": "R:0,L:1",
+                "JoinColumnIndexes": "L:0,R:0",
                 "JoinVars": {
-                  "user_col": 0
+                  "user_col": 1
                 },
                 "TableName": "`user`_user_extra",
                 "Inputs": [
@@ -5570,8 +5561,8 @@
                       "Name": "user",
                       "Sharded": true
                     },
-                    "FieldQuery": "select `user`.col, `user`.id from `user` where 1 != 1",
-                    "Query": "select `user`.col, `user`.id from `user`",
+                    "FieldQuery": "select `user`.id, `user`.col from `user` where 1 != 1",
+                    "Query": "select `user`.id, `user`.col from `user`",
                     "Table": "`user`"
                   },
                   {
@@ -5975,9 +5966,9 @@
           {
             "OperatorType": "Join",
             "Variant": "LeftJoin",
-            "JoinColumnIndexes": "L:1,R:0",
+            "JoinColumnIndexes": "L:0,R:0",
             "JoinVars": {
-              "user_col": 0
+              "user_col": 1
             },
             "TableName": "`user`_user_extra",
             "Inputs": [
@@ -5988,8 +5979,8 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select `user`.col, `user`.id from `user` where 1 != 1",
-                "Query": "select `user`.col, `user`.id from `user`",
+                "FieldQuery": "select `user`.id, `user`.col from `user` where 1 != 1",
+                "Query": "select `user`.id, `user`.col from `user`",
                 "Table": "`user`"
               },
               {
@@ -6137,7 +6128,7 @@
       "Instructions": {
         "OperatorType": "Join",
         "Variant": "Join",
-        "JoinColumnIndexes": "L:1,L:2,L:3,R:0",
+        "JoinColumnIndexes": "L:0,L:1,L:2,R:0",
         "JoinVars": {
           "authoritative_col1": 0
         },
@@ -6150,8 +6141,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select authoritative.col1, authoritative.col1 as col1, authoritative.user_id as user_id, authoritative.col2 as col2 from authoritative where 1 != 1",
-            "Query": "select authoritative.col1, authoritative.col1 as col1, authoritative.user_id as user_id, authoritative.col2 as col2 from authoritative",
+            "FieldQuery": "select authoritative.col1 as col1, authoritative.user_id as user_id, authoritative.col2 as col2 from authoritative where 1 != 1",
+            "Query": "select authoritative.col1 as col1, authoritative.user_id as user_id, authoritative.col2 as col2 from authoritative",
             "Table": "authoritative"
           },
           {
@@ -6303,7 +6294,7 @@
       "Instructions": {
         "OperatorType": "SimpleProjection",
         "Columns": [
-          1
+          0
         ],
         "Inputs": [
           {
@@ -6313,9 +6304,9 @@
               {
                 "OperatorType": "Join",
                 "Variant": "LeftJoin",
-                "JoinColumnIndexes": "R:0,L:1",
+                "JoinColumnIndexes": "L:0,R:0",
                 "JoinVars": {
-                  "user_col": 0
+                  "user_col": 1
                 },
                 "TableName": "`user`_user_extra",
                 "Inputs": [
@@ -6326,8 +6317,8 @@
                       "Name": "user",
                       "Sharded": true
                     },
-                    "FieldQuery": "select `user`.col, `user`.id from `user` where 1 != 1",
-                    "Query": "select `user`.col, `user`.id from `user`",
+                    "FieldQuery": "select `user`.id, `user`.col from `user` where 1 != 1",
+                    "Query": "select `user`.id, `user`.col from `user`",
                     "Table": "`user`"
                   },
                   {

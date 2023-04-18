@@ -30,6 +30,7 @@ var (
 	ErrUnexpectedTableSpec            = errors.New("unexpected table spec")
 	ErrExpectedCreateTable            = errors.New("expected a CREATE TABLE statement")
 	ErrExpectedCreateView             = errors.New("expected a CREATE VIEW statement")
+	ErrImpossibleDiffOrder            = errors.New("Impossible diff sequence")
 )
 
 type UnsupportedEntityError struct {

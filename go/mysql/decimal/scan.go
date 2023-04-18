@@ -23,8 +23,8 @@ import (
 	"math"
 	"math/big"
 	"math/bits"
-	"strconv"
-	"strings"
+
+	"vitess.io/vitess/go/mysql/json/fastparse"
 )
 
 var errOverflow = errors.New("overflow")
@@ -138,83 +138,102 @@ func NewFromMySQL(s []byte) (Decimal, error) {
 	return Decimal{value: value, exp: -int32(len(fractional))}, nil
 }
 
+const ExponentLimit = 1024
+
 // NewFromString returns a new Decimal from a string representation.
 // Trailing zeroes are not trimmed.
+// In case of an error, we still return the parsed value up to that
+// point.
 //
 // Example:
 //
 //	d, err := NewFromString("-123.45")
 //	d2, err := NewFromString(".0001")
 //	d3, err := NewFromString("1.47000")
-func NewFromString(value string) (Decimal, error) {
-	originalInput := value
-	var intString string
+func NewFromString(s string) (d Decimal, err error) {
+	maxLen := len(s)
+	if maxLen > math.MaxInt32 {
+		maxLen = math.MaxInt32
+	}
+
+	dotPos := -1
+	expPos := -1
+	i := 0
+	var num bool
 	var exp int64
-
-	// Check if number is using scientific notation
-	eIndex := strings.IndexAny(value, "Ee")
-	if eIndex != -1 {
-		expInt, err := strconv.ParseInt(value[eIndex+1:], 10, 32)
-		if err != nil {
-			if e, ok := err.(*strconv.NumError); ok && e.Err == strconv.ErrRange {
-				return Decimal{}, fmt.Errorf("can't convert %s to decimal: fractional part too long", value)
+next:
+	for i < maxLen {
+		switch {
+		case s[i] == '-':
+			// Negative sign is allowed at the start and at the start
+			// of the exponent.
+			if i != 0 && expPos == -1 && i != expPos+1 {
+				break next
 			}
-			return Decimal{}, fmt.Errorf("can't convert %s to decimal: exponent is not numeric", value)
-		}
-		value = value[:eIndex]
-		exp = expInt
-	}
-
-	pIndex := -1
-	vLen := len(value)
-	for i := 0; i < vLen; i++ {
-		if value[i] == '.' {
-			if pIndex > -1 {
-				return Decimal{}, fmt.Errorf("can't convert %s to decimal: too many .s", value)
+		case s[i] >= '0' && s[i] <= '9':
+			num = true
+		case s[i] == '.':
+			if dotPos == -1 && expPos == -1 {
+				dotPos = i
+			} else {
+				break next
 			}
-			pIndex = i
+		case s[i] == 'e' || s[i] == 'E':
+			if expPos == -1 {
+				expPos = i
+				num = false
+			} else {
+				break next
+			}
+		default:
+			break next
 		}
+		i++
 	}
 
-	if pIndex == -1 {
-		// There is no decimal point, we can just parse the original string as
-		// an int
-		intString = value
+	// If we have a small total string or until the first dot,
+	// we can fast parse it as an integer.
+	var si string
+	switch {
+	case dotPos == -1 && expPos == -1:
+		si = s[:i]
+	case expPos == -1:
+		si = s[:dotPos] + s[dotPos+1:i]
+		exp -= int64(i - dotPos - 1)
+	case dotPos == -1:
+		si = s[:expPos]
+	default:
+		si = s[:dotPos] + s[dotPos+1:expPos]
+		exp -= int64(expPos - dotPos - 1)
+	}
+
+	if len(si) <= 18 {
+		v, _ := fastparse.ParseInt64(si, 10)
+		d.value = big.NewInt(v)
 	} else {
-		if pIndex+1 < vLen {
-			intString = value[:pIndex] + value[pIndex+1:]
-		} else {
-			intString = value[:pIndex]
-		}
-		expInt := -len(value[pIndex+1:])
-		exp += int64(expInt)
+		d.value = new(big.Int)
+		d.value.SetString(si, 10)
 	}
 
-	var dValue *big.Int
-	// strconv.ParseInt is faster than new(big.Int).SetString so this is just a shortcut for strings we know won't overflow
-	if len(intString) <= 18 {
-		parsed64, err := strconv.ParseInt(intString, 10, 64)
-		if err != nil {
-			return Decimal{}, fmt.Errorf("can't convert %s to decimal", value)
+	var expOverflow bool
+	if expPos != -1 {
+		e, _ := fastparse.ParseInt64(s[expPos+1:i], 10)
+		switch {
+		case e > ExponentLimit:
+			e = ExponentLimit
+			expOverflow = true
+		case e < -ExponentLimit:
+			e = -ExponentLimit
+			expOverflow = true
 		}
-		dValue = big.NewInt(parsed64)
-	} else {
-		dValue = new(big.Int)
-		_, ok := dValue.SetString(intString, 10)
-		if !ok {
-			return Decimal{}, fmt.Errorf("can't convert %s to decimal", value)
-		}
+		exp += e
 	}
 
-	if exp < math.MinInt32 || exp > math.MaxInt32 {
-		// NOTE(vadim): I doubt a string could realistically be this long
-		return Decimal{}, fmt.Errorf("can't convert %s to decimal: fractional part too long", originalInput)
+	d.exp = int32(exp)
+	if !num || i < maxLen || expOverflow {
+		err = fmt.Errorf("invalid decimal string: %q", s)
 	}
-
-	return Decimal{
-		value: dValue,
-		exp:   int32(exp),
-	}, nil
+	return d, err
 }
 
 // RequireFromString returns a new Decimal from a string representation

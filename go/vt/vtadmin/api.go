@@ -180,17 +180,26 @@ func NewAPI(clusters []*cluster.Cluster, opts Options) *API {
 	}
 
 	// Middlewares are executed in order of addition. Our ordering (all
-	// middlewares being optional) is:
-	// 	1. CORS. CORS is a special case and is applied globally, the rest are applied only to the subrouter.
-	//	2. Compression
-	//	3. Tracing
-	//	4. Authentication
+	// middlewares except the panic handler being optional) is:
+	//  1. Panic recovery (applied globally)
+	// 	2. CORS. CORS is a special case and is applied globally, the rest are applied only to the subrouter.
+	//	3. Compression
+	//	4. Tracing
+	//	5. Authentication
+	globalMiddlewares := []mux.MiddlewareFunc{
+		vthandlers.PanicRecoveryHandler,
+	}
 	middlewares := []mux.MiddlewareFunc{}
 
 	if len(opts.HTTPOpts.CORSOrigins) > 0 {
-		serv.Router().Use(handlers.CORS(
-			handlers.AllowCredentials(), handlers.AllowedOrigins(opts.HTTPOpts.CORSOrigins), handlers.AllowedMethods([]string{"GET", "HEAD", "POST", "PUT", "DELETE", "OPTIONS"})))
+		corsHandler := handlers.CORS(
+			handlers.AllowCredentials(),
+			handlers.AllowedOrigins(opts.HTTPOpts.CORSOrigins),
+			handlers.AllowedMethods([]string{"GET", "HEAD", "POST", "PUT", "DELETE", "OPTIONS"}),
+		)
+		globalMiddlewares = append(globalMiddlewares, corsHandler)
 	}
+	serv.Router().Use(globalMiddlewares...)
 
 	if !opts.HTTPOpts.DisableCompression {
 		middlewares = append(middlewares, handlers.CompressHandler)

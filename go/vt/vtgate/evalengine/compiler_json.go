@@ -52,20 +52,20 @@ func (c *compiler) compileToJSON(doct ctype, offset int) (ctype, error) {
 		return doct, nil
 	case sqltypes.Float64:
 		c.asm.Convert_fj(offset)
-	case sqltypes.Int64, sqltypes.Uint64, sqltypes.Decimal:
-		c.asm.Convert_nj(offset, doct.Flag&flagIsBoolean != 0)
+	case sqltypes.Int64:
+		c.asm.Convert_ij(offset, doct.Flag&flagIsBoolean != 0)
+	case sqltypes.Uint64:
+		c.asm.Convert_uj(offset)
+	case sqltypes.Decimal:
+		c.asm.Convert_dj(offset)
 	case sqltypes.VarChar:
 		c.asm.Convert_cj(offset)
 	case sqltypes.VarBinary:
 		c.asm.Convert_bj(offset)
 	case sqltypes.Null:
 		c.asm.Convert_Nj(offset)
-	case sqltypes.Date:
-		c.asm.Convert_dj(offset)
-	case sqltypes.Datetime, sqltypes.Timestamp:
-		c.asm.Convert_dtj(offset)
-	case sqltypes.Time:
-		c.asm.Convert_tj(offset)
+	case sqltypes.Date, sqltypes.Datetime, sqltypes.Timestamp, sqltypes.Time:
+		c.asm.Convert_Tj(offset)
 	default:
 		return ctype{}, vterrors.Errorf(vtrpc.Code_UNIMPLEMENTED, "Unsupported type conversion: %s AS JSON", doct.Type)
 	}
@@ -78,22 +78,20 @@ func (c *compiler) compileArgToJSON(doct ctype, offset int) (ctype, error) {
 		return doct, nil
 	case sqltypes.Float64:
 		c.asm.Convert_fj(offset)
-	case sqltypes.Int64, sqltypes.Uint64, sqltypes.Decimal:
-		c.asm.Convert_nj(offset, doct.Flag&flagIsBoolean != 0)
+	case sqltypes.Int64:
+		c.asm.Convert_ij(offset, doct.Flag&flagIsBoolean != 0)
+	case sqltypes.Uint64:
+		c.asm.Convert_uj(offset)
+	case sqltypes.Decimal:
+		c.asm.Convert_dj(offset)
 	case sqltypes.VarChar:
 		c.asm.ConvertArg_cj(offset)
 	case sqltypes.VarBinary:
 		c.asm.Convert_bj(offset)
 	case sqltypes.Null:
 		c.asm.Convert_Nj(offset)
-	case sqltypes.Date:
-		c.asm.Convert_dj(offset)
-	case sqltypes.Datetime:
-		c.asm.Convert_dtj(offset)
-	case sqltypes.Timestamp:
-		c.asm.Convert_dtj(offset)
-	case sqltypes.Time:
-		c.asm.Convert_tj(offset)
+	case sqltypes.Date, sqltypes.Datetime, sqltypes.Timestamp, sqltypes.Time:
+		c.asm.Convert_Tj(offset)
 	default:
 		return ctype{}, vterrors.Errorf(vtrpc.Code_UNIMPLEMENTED, "Unsupported type conversion: %s AS JSON", doct.Type)
 	}

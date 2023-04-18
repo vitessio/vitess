@@ -63,6 +63,17 @@ func (c *compiler) unsupported(expr Expr) error {
 	return vterrors.Errorf(vtrpc.Code_UNIMPLEMENTED, "unsupported compilation for expression '%s'", FormatExpr(expr))
 }
 
+func (c *compiler) compile(expr Expr) (ctype, error) {
+	ct, err := c.compileExpr(expr)
+	if err != nil {
+		return ctype{}, err
+	}
+	if c.asm.stack.cur != 1 {
+		return ctype{}, vterrors.Errorf(vtrpc.Code_INTERNAL, "bad compilation: stack pointer at %d after compilation", c.asm.stack.cur)
+	}
+	return ct, nil
+}
+
 func (c *compiler) compileExpr(expr Expr) (ctype, error) {
 	switch expr := expr.(type) {
 	case *Literal:
@@ -227,7 +238,7 @@ func (c *compiler) compileTuple(tuple TupleExpr) (ctype, error) {
 	return ctype{Type: sqltypes.Tuple, Col: collationBinary}, nil
 }
 
-func (c *compiler) compileToNumeric(ct ctype, offset int) ctype {
+func (c *compiler) compileToNumeric(ct ctype, offset int, fallback sqltypes.Type) ctype {
 	if sqltypes.IsNumber(ct.Type) {
 		return ct
 	}
@@ -237,15 +248,20 @@ func (c *compiler) compileToNumeric(ct ctype, offset int) ctype {
 	}
 
 	if sqltypes.IsDateOrTime(ct.Type) {
-		switch ct.Type {
-		case sqltypes.Date:
-			c.asm.Convert_date(offset)
-		case sqltypes.Time:
-			c.asm.Convert_time(offset)
-		case sqltypes.Timestamp, sqltypes.Datetime:
-			c.asm.Convert_datetime(offset)
-		}
+		c.asm.Convert_Ti(offset)
 		return ctype{sqltypes.Int64, ct.Flag, collationNumeric}
+	}
+
+	switch fallback {
+	case sqltypes.Int64:
+		c.asm.Convert_xi(offset)
+		return ctype{sqltypes.Int64, ct.Flag, collationNumeric}
+	case sqltypes.Uint64:
+		c.asm.Convert_xu(offset)
+		return ctype{sqltypes.Uint64, ct.Flag, collationNumeric}
+	case sqltypes.Decimal:
+		c.asm.Convert_xd(offset, 0, 0)
+		return ctype{sqltypes.Decimal, ct.Flag, collationNumeric}
 	}
 	c.asm.Convert_xf(offset)
 	return ctype{sqltypes.Float64, ct.Flag, collationNumeric}

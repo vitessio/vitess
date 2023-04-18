@@ -51,7 +51,7 @@ type (
 	VindexOption struct {
 		Ready  bool
 		Values []evalengine.Expr
-		// columns that we have seen so far. Used only for multi-column vindexes so that we can track how many columns part of the vindex we have seen
+		// Columns that we have seen so far. Used only for multi-column vindexes so that we can track how many Columns part of the vindex we have seen
 		ColsSeen    map[string]any
 		ValueExprs  []sqlparser.Expr
 		Predicates  []sqlparser.Expr
@@ -187,6 +187,11 @@ func (r *Route) Clone(inputs []ops.Operator) ops.Operator {
 // Inputs implements the Operator interface
 func (r *Route) Inputs() []ops.Operator {
 	return []ops.Operator{r.Source}
+}
+
+// SetInputs implements the Operator interface
+func (r *Route) SetInputs(ops []ops.Operator) {
+	r.Source = ops[0]
 }
 
 func createOption(
@@ -517,13 +522,50 @@ func (r *Route) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Ex
 	return r, err
 }
 
-func (r *Route) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, reuseCol bool) (ops.Operator, int, error) {
-	newSrc, offset, err := r.Source.AddColumn(ctx, expr, reuseCol)
+func createProjection(src ops.Operator) (*Projection, error) {
+	proj := &Projection{Source: src}
+	cols, err := src.GetColumns()
+	if err != nil {
+		return nil, err
+	}
+	for _, col := range cols {
+		proj.Columns = append(proj.Columns, Expr{E: col})
+		proj.ColumnNames = append(proj.ColumnNames, sqlparser.String(col))
+	}
+	return proj, nil
+}
+
+func (r *Route) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr) (ops.Operator, int, error) {
+	removeKeyspaceFromSelectExpr(expr)
+
+	// check if columns is already added.
+	cols, err := r.GetColumns()
 	if err != nil {
 		return nil, 0, err
 	}
-	r.Source = newSrc
-	return r, offset, nil
+	colAsExpr := func(e sqlparser.Expr) sqlparser.Expr { return e }
+	if offset, found := canReuseColumn(ctx, cols, expr.Expr, colAsExpr); found {
+		return r, offset, nil
+	}
+
+	proj, exists := r.Source.(*Projection)
+	if !exists {
+		proj, err = createProjection(r.Source)
+		if err != nil {
+			return nil, 0, err
+		}
+		r.Source = proj
+
+		// add the existing columns of route to the projection.
+		for _, col := range cols {
+			proj.Columns = append(proj.Columns, Expr{E: col})
+			proj.ColumnNames = append(proj.ColumnNames, sqlparser.String(col))
+		}
+	}
+	// add the new column
+	proj.Columns = append(proj.Columns, Expr{E: expr.Expr})
+	proj.ColumnNames = append(proj.ColumnNames, expr.As.String())
+	return r, len(proj.Columns) - 1, nil
 }
 
 func (r *Route) GetColumns() ([]sqlparser.Expr, error) {

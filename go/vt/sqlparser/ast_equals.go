@@ -518,6 +518,12 @@ func (cmp *Comparator) SQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return cmp.RefOfGeomFromWKBExpr(a, b)
+	case *GeomPropertyFuncExpr:
+		b, ok := inB.(*GeomPropertyFuncExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfGeomPropertyFuncExpr(a, b)
 	case GroupBy:
 		b, ok := inB.(GroupBy)
 		if !ok {
@@ -2597,6 +2603,18 @@ func (cmp *Comparator) RefOfGeomFromWKBExpr(a, b *GeomFromWKBExpr) bool {
 		cmp.Expr(a.WkbBlob, b.WkbBlob) &&
 		cmp.Expr(a.Srid, b.Srid) &&
 		cmp.Expr(a.AxisOrderOpt, b.AxisOrderOpt)
+}
+
+// RefOfGeomPropertyFuncExpr does deep equals between the two objects.
+func (cmp *Comparator) RefOfGeomPropertyFuncExpr(a, b *GeomPropertyFuncExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Property == b.Property &&
+		cmp.Expr(a.Geom, b.Geom)
 }
 
 // GroupBy does deep equals between the two objects.
@@ -5068,6 +5086,12 @@ func (cmp *Comparator) Callable(inA, inB Callable) bool {
 			return false
 		}
 		return cmp.RefOfGeomFromWKBExpr(a, b)
+	case *GeomPropertyFuncExpr:
+		b, ok := inB.(*GeomPropertyFuncExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfGeomPropertyFuncExpr(a, b)
 	case *GroupConcatExpr:
 		b, ok := inB.(*GroupConcatExpr)
 		if !ok {
@@ -5758,6 +5782,12 @@ func (cmp *Comparator) Expr(inA, inB Expr) bool {
 			return false
 		}
 		return cmp.RefOfGeomFromWKBExpr(a, b)
+	case *GeomPropertyFuncExpr:
+		b, ok := inB.(*GeomPropertyFuncExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfGeomPropertyFuncExpr(a, b)
 	case *GroupConcatExpr:
 		b, ok := inB.(*GroupConcatExpr)
 		if !ok {

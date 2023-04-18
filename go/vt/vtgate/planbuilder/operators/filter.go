@@ -60,6 +60,11 @@ func (f *Filter) Inputs() []ops.Operator {
 	return []ops.Operator{f.Source}
 }
 
+// SetInputs implements the Operator interface
+func (f *Filter) SetInputs(ops []ops.Operator) {
+	f.Source = ops[0]
+}
+
 // UnsolvedPredicates implements the unresolved interface
 func (f *Filter) UnsolvedPredicates(st *semantics.SemTable) []sqlparser.Expr {
 	var result []sqlparser.Expr
@@ -82,8 +87,8 @@ func (f *Filter) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.E
 	return f, nil
 }
 
-func (f *Filter) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, reuseCol bool) (ops.Operator, int, error) {
-	newSrc, offset, err := f.Source.AddColumn(ctx, expr, reuseCol)
+func (f *Filter) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr) (ops.Operator, int, error) {
+	newSrc, offset, err := f.Source.AddColumn(ctx, expr)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -95,7 +100,7 @@ func (f *Filter) GetColumns() ([]sqlparser.Expr, error) {
 	return f.Source.GetColumns()
 }
 
-func (f *Filter) Compact(*plancontext.PlanningContext) (ops.Operator, rewrite.TreeIdentity, error) {
+func (f *Filter) Compact(*plancontext.PlanningContext) (ops.Operator, rewrite.ApplyResult, error) {
 	if len(f.Predicates) == 0 {
 		return f.Source, rewrite.NewTree, nil
 	}
@@ -107,4 +112,28 @@ func (f *Filter) Compact(*plancontext.PlanningContext) (ops.Operator, rewrite.Tr
 	f.Source = other.Source
 	f.Predicates = append(f.Predicates, other.Predicates...)
 	return f, rewrite.NewTree, nil
+}
+
+func (f *Filter) planOffsets(ctx *plancontext.PlanningContext) error {
+	resolveColumn := func(col *sqlparser.ColName) (int, error) {
+		newSrc, offset, err := f.Source.AddColumn(ctx, aeWrap(col))
+		if err != nil {
+			return 0, err
+		}
+		f.Source = newSrc
+		return offset, nil
+	}
+	cfg := &evalengine.Config{
+		ResolveType:   ctx.SemTable.TypeForExpr,
+		Collation:     ctx.SemTable.Collation,
+		ResolveColumn: resolveColumn,
+	}
+
+	eexpr, err := evalengine.Translate(sqlparser.AndExpressions(f.Predicates...), cfg)
+	if err != nil {
+		return err
+	}
+
+	f.FinalPredicate = eexpr
+	return nil
 }

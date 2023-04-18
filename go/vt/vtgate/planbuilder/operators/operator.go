@@ -51,35 +51,96 @@ type (
 	noPredicates struct{}
 )
 
+// PlanQuery creates a query plan for a given SQL statement
 func PlanQuery(ctx *plancontext.PlanningContext, selStmt sqlparser.Statement) (ops.Operator, error) {
 	op, err := createLogicalOperatorFromAST(ctx, selStmt)
 	if err != nil {
 		return nil, err
 	}
 
-	if err = CheckValid(op); err != nil {
+	if err = checkValid(op); err != nil {
 		return nil, err
 	}
 
-	op, err = transformToPhysical(ctx, op)
+	if op, err = transformToPhysical(ctx, op); err != nil {
+		return nil, err
+	}
+
+	if op, err = tryHorizonPlanning(ctx, op); err != nil {
+		return nil, err
+	}
+
+	if op, err = compact(ctx, op); err != nil {
+		return nil, err
+	}
+
+	_, isRoute := op.(*Route)
+	if !isRoute && ctx.SemTable.NotSingleRouteErr != nil {
+		// If we got here, we don't have a single shard plan
+		return nil, ctx.SemTable.NotSingleRouteErr
+	}
+
+	return op, err
+}
+
+func tryHorizonPlanning(ctx *plancontext.PlanningContext, op ops.Operator) (output ops.Operator, err error) {
+	backup := Clone(op)
+	defer func() {
+		if err == errHorizonNotPlanned {
+			err = planOffsetsOnJoins(ctx, backup)
+			if err == nil {
+				output = backup
+			}
+		}
+	}()
+
+	_, ok := op.(*Horizon)
+
+	if !ok || len(ctx.SemTable.SubqueryMap) > 0 || len(ctx.SemTable.SubqueryRef) > 0 {
+		// we are not ready to deal with subqueries yet
+		return op, errHorizonNotPlanned
+	}
+
+	output, err = planHorizons(ctx, op)
 	if err != nil {
 		return nil, err
 	}
 
-	backup := Clone(op)
-
-	op, err = planColumns(ctx, op)
-	if err == errNotHorizonPlanned {
-		op = backup
-	} else if err != nil {
+	output, err = planOffsets(ctx, output)
+	if err != nil {
 		return nil, err
 	}
 
-	if op, err = Compact(ctx, op); err != nil {
+	err = makeSureOutputIsCorrect(ctx, op, output)
+	if err != nil {
 		return nil, err
 	}
 
-	return op, err
+	return
+}
+
+func makeSureOutputIsCorrect(ctx *plancontext.PlanningContext, op ops.Operator, output ops.Operator) error {
+	// next we use the original Horizon to make sure that the output columns line up with what the user asked for
+	// in the future, we'll tidy up the results. for now, we are just failing these queries and going back to the
+	// old horizon planning instead
+	cols, err := output.GetColumns()
+	if err != nil {
+		return err
+	}
+
+	horizon := op.(*Horizon)
+
+	sel := sqlparser.GetFirstSelect(horizon.Select)
+	if len(sel.SelectExprs) != len(cols) {
+		return errHorizonNotPlanned
+	}
+	for i, expr := range sel.SelectExprs {
+		ae, ok := expr.(*sqlparser.AliasedExpr)
+		if !ok || !ctx.SemTable.EqualsExpr(ae.Expr, cols[i]) {
+			return errHorizonNotPlanned
+		}
+	}
+	return nil
 }
 
 // Inputs implements the Operator interface
@@ -87,8 +148,15 @@ func (noInputs) Inputs() []ops.Operator {
 	return nil
 }
 
+// SetInputs implements the Operator interface
+func (noInputs) SetInputs(ops []ops.Operator) {
+	if len(ops) > 0 {
+		panic("the noInputs operator does not have inputs")
+	}
+}
+
 // AddColumn implements the Operator interface
-func (noColumns) AddColumn(*plancontext.PlanningContext, *sqlparser.AliasedExpr, bool) (ops.Operator, int, error) {
+func (noColumns) AddColumn(*plancontext.PlanningContext, *sqlparser.AliasedExpr) (ops.Operator, int, error) {
 	return nil, 0, vterrors.VT13001("the noColumns operator cannot accept columns")
 }
 

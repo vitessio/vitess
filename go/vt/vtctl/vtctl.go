@@ -2149,7 +2149,14 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *pfl
 			return err
 		}
 		s += fmt.Sprintf("The following vreplication streams exist for workflow %s.%s:\n\n", target, workflowName)
-		for ksShard := range res.ShardStatuses {
+
+		// Sort the results for consistent and intuitive output.
+		ksShardKeys := make([]string, 0, len(res.ShardStatuses))
+		for ksShardKey := range res.ShardStatuses {
+			ksShardKeys = append(ksShardKeys, ksShardKey)
+		}
+		sort.Strings(ksShardKeys)
+		for _, ksShard := range ksShardKeys {
 			statuses := res.ShardStatuses[ksShard].PrimaryReplicationStatuses
 			for _, st := range statuses {
 				msg := ""

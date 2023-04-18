@@ -102,7 +102,7 @@ func TestOperator(t *testing.T) {
 			ctx := plancontext.NewPlanningContext(nil, semTable, nil, 0)
 			optree, err := createLogicalOperatorFromAST(ctx, stmt)
 			require.NoError(t, err)
-			optree, err = Compact(ctx, optree)
+			optree, err = compact(ctx, optree)
 			require.NoError(t, err)
 			output := testString(optree)
 			assert.Equal(t, tc.expected, output)

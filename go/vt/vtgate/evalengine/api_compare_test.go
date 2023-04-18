@@ -860,7 +860,7 @@ func TestCompareDates(t *testing.T) {
 		{
 			name: "date equal time",
 			v1:   NewColumn(0), v2: NewColumn(1),
-			out: &T, op: sqlparser.EqualOp,
+			out: &F, op: sqlparser.EqualOp,
 			row: []sqltypes.Value{sqltypes.NewDate(time.Now().Format("2006-01-02")), sqltypes.NewTime("00:00:00")},
 		},
 		{

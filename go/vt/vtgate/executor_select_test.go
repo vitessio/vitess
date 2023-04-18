@@ -2411,13 +2411,13 @@ func TestLeftJoin(t *testing.T) {
 	defer QueryLogger.Unsubscribe(logChan)
 	result1 := []*sqltypes.Result{{
 		Fields: []*querypb.Field{
-			{Name: "col", Type: sqltypes.Int32},
 			{Name: "id", Type: sqltypes.Int32},
+			{Name: "col", Type: sqltypes.Int32},
 		},
 		InsertID: 0,
 		Rows: [][]sqltypes.Value{{
-			sqltypes.NewInt32(3),
 			sqltypes.NewInt32(1),
+			sqltypes.NewInt32(3),
 		}},
 	}}
 	emptyResult := []*sqltypes.Result{{
@@ -2452,13 +2452,13 @@ func TestLeftJoinStream(t *testing.T) {
 	executor, sbc1, sbc2, _ := createExecutorEnv()
 	result1 := []*sqltypes.Result{{
 		Fields: []*querypb.Field{
-			{Name: "col", Type: sqltypes.Int32},
 			{Name: "id", Type: sqltypes.Int32},
+			{Name: "col", Type: sqltypes.Int32},
 		},
 		InsertID: 0,
 		Rows: [][]sqltypes.Value{{
-			sqltypes.NewInt32(3),
 			sqltypes.NewInt32(1),
+			sqltypes.NewInt32(3),
 		}},
 	}}
 	emptyResult := []*sqltypes.Result{{

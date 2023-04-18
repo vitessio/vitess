@@ -139,7 +139,7 @@ func ToFloat64(v sqltypes.Value) (float64, error) {
 	if err != nil {
 		return 0, err
 	}
-	f, _ := evalToNumeric(num).toFloat()
+	f, _ := evalToFloat(num)
 	return f.f, nil
 }
 

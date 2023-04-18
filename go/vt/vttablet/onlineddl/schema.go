@@ -233,7 +233,7 @@ const (
 			migration_uuid=%a
 	`
 	sqlUpdateLastThrottled = `UPDATE _vt.schema_migrations
-			SET last_throttled_timestamp=FROM_UNIXTIME(%a), component_throttled=%a
+			SET last_throttled_timestamp=%a, component_throttled=%a
 		WHERE
 			migration_uuid=%a
 	`

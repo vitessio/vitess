@@ -29,8 +29,9 @@ import (
 	"math"
 	"math/bits"
 	"strconv"
-	"strings"
+	"time"
 
+	"vitess.io/vitess/go/hack"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/collations/charset"
 	"vitess.io/vitess/go/mysql/datetime"
@@ -689,10 +690,10 @@ func (asm *assembler) CmpString_collate(collation collations.Collation) {
 	asm.adjustStack(-2)
 
 	asm.emit(func(env *ExpressionEnv) int {
-		l := env.vm.stack[env.vm.sp-2].(*evalBytes)
-		r := env.vm.stack[env.vm.sp-1].(*evalBytes)
+		l := env.vm.stack[env.vm.sp-2]
+		r := env.vm.stack[env.vm.sp-1]
 		env.vm.sp -= 2
-		env.vm.flags.cmp = collation.Collate(l.bytes, r.bytes, false)
+		env.vm.flags.cmp = collation.Collate(l.ToRawBytes(), r.ToRawBytes(), false)
 		return 1
 	}, "CMP VARCHAR(SP-2), VARCHAR(SP-1) COLLATE '%s'", collation.Name())
 }
@@ -738,10 +739,10 @@ func (asm *assembler) CmpDateString() {
 	asm.adjustStack(-2)
 
 	asm.emit(func(env *ExpressionEnv) int {
-		l := env.vm.stack[env.vm.sp-2].(*evalBytes)
-		r := env.vm.stack[env.vm.sp-1].(*evalBytes)
+		l := env.vm.stack[env.vm.sp-2]
+		r := env.vm.stack[env.vm.sp-1]
 		env.vm.sp -= 2
-		env.vm.flags.cmp, env.vm.err = compareDateAndString(l, r)
+		env.vm.flags.cmp = compareDateAndString(l, r)
 		return 1
 	}, "CMP DATE|STRING(SP-2), DATE|STRING(SP-1)")
 }
@@ -750,10 +751,10 @@ func (asm *assembler) CmpDates() {
 	asm.adjustStack(-2)
 
 	asm.emit(func(env *ExpressionEnv) int {
-		l := env.vm.stack[env.vm.sp-2].(*evalBytes)
-		r := env.vm.stack[env.vm.sp-1].(*evalBytes)
+		l := env.vm.stack[env.vm.sp-2].(*evalTemporal)
+		r := env.vm.stack[env.vm.sp-1].(*evalTemporal)
 		env.vm.sp -= 2
-		env.vm.flags.cmp, env.vm.err = compareDates(l, r)
+		env.vm.flags.cmp = compareDates(l, r)
 		return 1
 	}, "CMP DATE(SP-2), DATE(SP-1)")
 }
@@ -775,28 +776,18 @@ func (asm *assembler) Convert_bB(offset int) {
 	}, "CONV VARBINARY(SP-%d), BOOL", offset)
 }
 
+func (asm *assembler) Convert_TB(offset int) {
+	asm.emit(func(env *ExpressionEnv) int {
+		arg := env.vm.stack[env.vm.sp-offset]
+		env.vm.stack[env.vm.sp-offset] = env.vm.arena.newEvalBool(arg != nil && !arg.(*evalTemporal).isZero())
+		return 1
+	}, "CONV SQLTYPES(SP-%d), BOOL", offset)
+}
+
 func (asm *assembler) Convert_jB(offset int) {
 	asm.emit(func(env *ExpressionEnv) int {
-		b := false
 		arg := env.vm.stack[env.vm.sp-offset].(*evalJSON)
-		switch arg.Type() {
-		case json.TypeNumber:
-			switch arg.NumberType() {
-			case json.NumberTypeInteger:
-				if i, ok := arg.Int64(); ok {
-					b = i != 0
-				} else {
-					d, _ := arg.Decimal()
-					b = !d.IsZero()
-				}
-			case json.NumberTypeDouble:
-				d, _ := arg.Float64()
-				b = d != 0.0
-			}
-		default:
-			b = true
-		}
-		env.vm.stack[env.vm.sp-offset] = env.vm.arena.newEvalBool(b)
+		env.vm.stack[env.vm.sp-offset] = env.vm.arena.newEvalBool(arg.ToBoolean())
 		return 1
 	}, "CONV JSON(SP-%d), BOOL", offset)
 }
@@ -825,28 +816,12 @@ func (asm *assembler) Convert_cj(offset int) {
 	}, "CONV VARCHAR(SP-%d), JSON", offset)
 }
 
-func (asm *assembler) Convert_dj(offset int) {
+func (asm *assembler) Convert_Tj(offset int) {
 	asm.emit(func(env *ExpressionEnv) int {
-		arg := env.vm.stack[env.vm.sp-offset].(*evalBytes)
-		env.vm.stack[env.vm.sp-offset] = evalConvert_dj(arg)
+		arg := env.vm.stack[env.vm.sp-offset].(*evalTemporal)
+		env.vm.stack[env.vm.sp-offset] = arg.toJSON()
 		return 1
-	}, "CONV DATE(SP-%d), JSON", offset)
-}
-
-func (asm *assembler) Convert_dtj(offset int) {
-	asm.emit(func(env *ExpressionEnv) int {
-		arg := env.vm.stack[env.vm.sp-offset].(*evalBytes)
-		env.vm.stack[env.vm.sp-offset] = evalConvert_dtj(arg)
-		return 1
-	}, "CONV DATETIME(SP-%d), JSON", offset)
-}
-
-func (asm *assembler) Convert_tj(offset int) {
-	asm.emit(func(env *ExpressionEnv) int {
-		arg := env.vm.stack[env.vm.sp-offset].(*evalBytes)
-		env.vm.stack[env.vm.sp-offset] = evalConvert_tj(arg)
-		return 1
-	}, "CONV TIME(SP-%d), JSON", offset)
+	}, "CONV SQLTIME(SP-%d), JSON", offset)
 }
 
 func (asm *assembler) Convert_dB(offset int) {
@@ -896,46 +871,12 @@ func (asm *assembler) Convert_hex(offset int) {
 	}, "CONV VARBINARY(SP-%d), HEX", offset)
 }
 
-func (asm *assembler) Convert_date(offset int) {
+func (asm *assembler) Convert_Ti(offset int) {
 	asm.emit(func(env *ExpressionEnv) int {
-		v := env.vm.stack[env.vm.sp-offset].(*evalBytes)
-		t, err := datetime.ParseDate(v.string())
-		if err != nil {
-			env.vm.err = err
-			return 1
-		}
-		i, _ := strconv.ParseInt(t.Format("20060102"), 10, 64)
-		env.vm.stack[env.vm.sp-offset] = env.vm.arena.newEvalInt64(i)
+		v := env.vm.stack[env.vm.sp-offset].(*evalTemporal)
+		env.vm.stack[env.vm.sp-offset] = env.vm.arena.newEvalInt64(v.toInt64())
 		return 1
-	}, "CONV DATE(SP-%d), INT64", offset)
-}
-
-func (asm *assembler) Convert_datetime(offset int) {
-	asm.emit(func(env *ExpressionEnv) int {
-		v := env.vm.stack[env.vm.sp-offset].(*evalBytes)
-		t, err := datetime.ParseDateTime(v.string())
-		if err != nil {
-			env.vm.err = err
-			return 1
-		}
-		i, _ := strconv.ParseInt(t.Format("20060102150405"), 10, 64)
-		env.vm.stack[env.vm.sp-offset] = env.vm.arena.newEvalInt64(i)
-		return 1
-	}, "CONV DATETIME(SP-%d), INT64", offset)
-}
-
-func (asm *assembler) Convert_time(offset int) {
-	asm.emit(func(env *ExpressionEnv) int {
-		v := env.vm.stack[env.vm.sp-offset].(*evalBytes)
-		_, n, err := datetime.ParseTime(v.string())
-		if err != nil {
-			env.vm.err = err
-			return 1
-		}
-		i, _ := strconv.ParseInt(strings.ReplaceAll(n, ":", ""), 10, 64)
-		env.vm.stack[env.vm.sp-offset] = env.vm.arena.newEvalInt64(i)
-		return 1
-	}, "CONV TIME(SP-%d), INT64", offset)
+	}, "CONV SQLTIME(SP-%d), INT64", offset)
 }
 
 func (asm *assembler) Convert_iB(offset int) {
@@ -980,23 +921,35 @@ func (asm *assembler) Clamp_u(offset int, val uint64) {
 	}, "CLAMP UINT64(SP-%d), UINT64", offset)
 }
 
-func (asm *assembler) Convert_nj(offset int, isBool bool) {
+func (asm *assembler) Convert_ij(offset int, isBool bool) {
 	asm.emit(func(env *ExpressionEnv) int {
-		arg := env.vm.stack[env.vm.sp-offset].(evalNumeric)
-		if intArg, ok := arg.(*evalInt64); isBool && ok {
-			switch intArg.i {
-			case 0:
-				env.vm.stack[env.vm.sp-offset] = json.ValueFalse
-			case 1:
-				env.vm.stack[env.vm.sp-offset] = json.ValueTrue
-			default:
-				env.vm.stack[env.vm.sp-offset] = json.NewNumber(string(intArg.ToRawBytes()), false)
-			}
-		} else {
-			env.vm.stack[env.vm.sp-offset] = json.NewNumber(string(arg.ToRawBytes()), false)
+		arg := env.vm.stack[env.vm.sp-offset].(*evalInt64)
+		switch {
+		case isBool && arg.i == 0:
+			env.vm.stack[env.vm.sp-offset] = json.ValueFalse
+		case isBool && arg.i == 1:
+			env.vm.stack[env.vm.sp-offset] = json.ValueTrue
+		default:
+			env.vm.stack[env.vm.sp-offset] = json.NewNumber(string(arg.ToRawBytes()), json.NumberTypeSigned)
 		}
 		return 1
-	}, "CONV numeric(SP-%d), JSON")
+	}, "CONV INT64(SP-%d), JSON")
+}
+
+func (asm *assembler) Convert_uj(offset int) {
+	asm.emit(func(env *ExpressionEnv) int {
+		arg := env.vm.stack[env.vm.sp-offset].(*evalUint64)
+		env.vm.stack[env.vm.sp-offset] = json.NewNumber(string(arg.ToRawBytes()), json.NumberTypeUnsigned)
+		return 1
+	}, "CONV UINT64(SP-%d), JSON")
+}
+
+func (asm *assembler) Convert_dj(offset int) {
+	asm.emit(func(env *ExpressionEnv) int {
+		arg := env.vm.stack[env.vm.sp-offset].(*evalDecimal)
+		env.vm.stack[env.vm.sp-offset] = json.NewNumber(string(arg.ToRawBytes()), json.NumberTypeDecimal)
+		return 1
+	}, "CONV DECIMAL(SP-%d), JSON")
 }
 
 func (asm *assembler) Convert_Nj(offset int) {
@@ -1086,14 +1039,14 @@ func (asm *assembler) Convert_xc(offset int, t sqltypes.Type, collation collatio
 
 func (asm *assembler) Convert_xd(offset int, m, d int32) {
 	asm.emit(func(env *ExpressionEnv) int {
-		env.vm.stack[env.vm.sp-offset] = evalToNumeric(env.vm.stack[env.vm.sp-offset]).toDecimal(m, d)
+		env.vm.stack[env.vm.sp-offset] = evalToDecimal(env.vm.stack[env.vm.sp-offset], m, d)
 		return 1
 	}, "CONV (SP-%d), DECIMAL", offset)
 }
 
 func (asm *assembler) Convert_xf(offset int) {
 	asm.emit(func(env *ExpressionEnv) int {
-		env.vm.stack[env.vm.sp-offset], _ = evalToNumeric(env.vm.stack[env.vm.sp-offset]).toFloat()
+		env.vm.stack[env.vm.sp-offset], _ = evalToFloat(env.vm.stack[env.vm.sp-offset])
 		return 1
 	}, "CONV (SP-%d), FLOAT64", offset)
 }
@@ -1112,6 +1065,86 @@ func (asm *assembler) Convert_xu(offset int) {
 		env.vm.stack[env.vm.sp-offset] = env.vm.arena.newEvalUint64(uint64(arg.i))
 		return 1
 	}, "CONV (SP-%d), UINT64", offset)
+}
+
+func (asm *assembler) Convert_xD(offset int) {
+	asm.emit(func(env *ExpressionEnv) int {
+		// Need to explicitly check here or we otherwise
+		// store a nil wrapper in an interface vs. a direct
+		// nil.
+		d := evalToDate(env.vm.stack[env.vm.sp-offset])
+		if d == nil {
+			env.vm.stack[env.vm.sp-offset] = nil
+		} else {
+			env.vm.stack[env.vm.sp-offset] = d
+		}
+		return 1
+	}, "CONV (SP-%d), DATE", offset)
+}
+
+func (asm *assembler) Convert_xD_nz(offset int) {
+	asm.emit(func(env *ExpressionEnv) int {
+		// Need to explicitly check here or we otherwise
+		// store a nil wrapper in an interface vs. a direct
+		// nil.
+		d := evalToDate(env.vm.stack[env.vm.sp-offset])
+		if d == nil || d.isZero() {
+			env.vm.stack[env.vm.sp-offset] = nil
+		} else {
+			env.vm.stack[env.vm.sp-offset] = d
+		}
+		return 1
+	}, "CONV (SP-%d), DATE(NOZERO)", offset)
+}
+
+func (asm *assembler) Convert_xDT(offset, prec int) {
+	asm.emit(func(env *ExpressionEnv) int {
+		// Need to explicitly check here or we otherwise
+		// store a nil wrapper in an interface vs. a direct
+		// nil.
+		dt := evalToDateTime(env.vm.stack[env.vm.sp-offset], prec)
+		if dt == nil {
+			env.vm.stack[env.vm.sp-offset] = nil
+		} else {
+			env.vm.stack[env.vm.sp-offset] = dt
+		}
+		return 1
+	}, "CONV (SP-%d), DATETIME", offset)
+}
+
+func (asm *assembler) Convert_xDT_nz(offset, prec int) {
+	asm.emit(func(env *ExpressionEnv) int {
+		// Need to explicitly check here or we otherwise
+		// store a nil wrapper in an interface vs. a direct
+		// nil.
+		dt := evalToDateTime(env.vm.stack[env.vm.sp-offset], prec)
+		if dt == nil || dt.isZero() {
+			env.vm.stack[env.vm.sp-offset] = nil
+		} else {
+			env.vm.stack[env.vm.sp-offset] = dt
+		}
+		return 1
+	}, "CONV (SP-%d), DATETIME(NOZERO)", offset)
+}
+
+func (asm *assembler) Convert_xT(offset, prec int) {
+	asm.emit(func(env *ExpressionEnv) int {
+		t := evalToTime(env.vm.stack[env.vm.sp-offset], prec)
+		if t == nil {
+			env.vm.stack[env.vm.sp-offset] = nil
+		} else {
+			env.vm.stack[env.vm.sp-offset] = t
+		}
+		return 1
+	}, "CONV (SP-%d), TIME", offset)
+}
+
+func (asm *assembler) Convert_tp(offset, prec int) {
+	asm.emit(func(env *ExpressionEnv) int {
+		arg := env.vm.stack[env.vm.sp-offset].(*evalTemporal)
+		arg.prec = uint8(prec)
+		return 1
+	}, "CONV (SP-%d), PRECISION", offset)
 }
 
 func (asm *assembler) Div_dd() {
@@ -2912,19 +2945,19 @@ func cmpnum[N interface{ int64 | uint64 | float64 }](a, b N) int {
 	}
 }
 
-func (asm *assembler) Fn_Now(t querypb.Type, format *datetime.Strftime, utc bool) {
+func (asm *assembler) Fn_Now(t querypb.Type, format *datetime.Strftime, prec uint8, utc bool) {
 	asm.adjustStack(1)
 	asm.emit(func(env *ExpressionEnv) int {
 		val := env.vm.arena.newEvalBytesEmpty()
 		val.tt = int16(t)
-		val.bytes = format.Format(env.time(utc))
+		val.bytes = format.Format(env.time(utc), prec)
 		env.vm.stack[env.vm.sp] = val
 		env.vm.sp++
 		return 1
 	}, "FN NOW")
 }
 
-func (asm *assembler) Fn_Sysdate(format *datetime.Strftime) {
+func (asm *assembler) Fn_Sysdate(prec uint8) {
 	asm.adjustStack(1)
 	asm.emit(func(env *ExpressionEnv) int {
 		val := env.vm.arena.newEvalBytesEmpty()
@@ -2933,7 +2966,7 @@ func (asm *assembler) Fn_Sysdate(format *datetime.Strftime) {
 		if tz := env.currentTimezone(); tz != nil {
 			now = now.In(tz)
 		}
-		val.bytes = format.Format(now)
+		val.bytes = datetime.FromStdTime(now).Format(prec)
 		env.vm.stack[env.vm.sp] = val
 		env.vm.sp++
 		return 1
@@ -2945,7 +2978,7 @@ func (asm *assembler) Fn_Curdate() {
 	asm.emit(func(env *ExpressionEnv) int {
 		val := env.vm.arena.newEvalBytesEmpty()
 		val.tt = int16(sqltypes.Date)
-		val.bytes = formatDate.Format(env.time(false))
+		val.bytes = datetime.Date_YYYY_MM_DD.Format(env.time(false), 0)
 		env.vm.stack[env.vm.sp] = val
 		env.vm.sp++
 		return 1
@@ -2957,7 +2990,7 @@ func (asm *assembler) Fn_UtcDate() {
 	asm.emit(func(env *ExpressionEnv) int {
 		val := env.vm.arena.newEvalBytesEmpty()
 		val.tt = int16(sqltypes.Date)
-		val.bytes = formatDate.Format(env.time(true))
+		val.bytes = datetime.Date_YYYY_MM_DD.Format(env.time(true), 0)
 		env.vm.stack[env.vm.sp] = val
 		env.vm.sp++
 		return 1
@@ -3079,4 +3112,267 @@ func (asm *assembler) Fn_RandomBytes() {
 		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalBinary(buf)
 		return 1
 	}, "FN RANDOM_BYTES INT64(SP-1)")
+}
+
+func (asm *assembler) Fn_DATE_FORMAT(col collations.TypedCollation) {
+	asm.adjustStack(-1)
+	asm.emit(func(env *ExpressionEnv) int {
+		if env.vm.stack[env.vm.sp-2] == nil {
+			env.vm.sp--
+			return 1
+		}
+		l := env.vm.stack[env.vm.sp-2].(*evalTemporal)
+		r := env.vm.stack[env.vm.sp-1].(*evalBytes)
+
+		var d []byte
+		d, env.vm.err = datetime.Format(r.string(), l.dt, l.prec)
+		env.vm.stack[env.vm.sp-2] = env.vm.arena.newEvalText(d, col)
+		env.vm.sp--
+		return 1
+	}, "FN DATE_FORMAT DATETIME(SP-2), VARBINARY(SP-1)")
+}
+
+func (asm *assembler) Fn_CONVERT_TZ() {
+	asm.adjustStack(-2)
+	asm.emit(func(env *ExpressionEnv) int {
+		if env.vm.stack[env.vm.sp-3] == nil {
+			env.vm.sp -= 2
+			return 1
+		}
+
+		n := env.vm.stack[env.vm.sp-3].(*evalTemporal)
+		f := env.vm.stack[env.vm.sp-2].(*evalBytes)
+		t := env.vm.stack[env.vm.sp-1].(*evalBytes)
+
+		fromTz, err := datetime.ParseTimeZone(f.string())
+		if err != nil {
+			env.vm.stack[env.vm.sp-3] = nil
+			env.vm.sp -= 2
+			return 1
+		}
+
+		toTz, err := datetime.ParseTimeZone(t.string())
+		if err != nil {
+			env.vm.stack[env.vm.sp-3] = nil
+			env.vm.sp -= 2
+			return 1
+		}
+
+		dt, ok := convertTz(n.dt, fromTz, toTz)
+		if !ok {
+			env.vm.stack[env.vm.sp-3] = nil
+			env.vm.sp -= 2
+			return 1
+		}
+		env.vm.stack[env.vm.sp-3] = env.vm.arena.newEvalDateTime(dt, n.prec)
+		env.vm.sp -= 2
+		return 1
+	}, "FN CONVERT_TZ DATETIME(SP-3), VARBINARY(SP-2), VARBINARY(SP-1)")
+}
+
+func (asm *assembler) Fn_DAYOFMONTH() {
+	asm.emit(func(env *ExpressionEnv) int {
+		if env.vm.stack[env.vm.sp-1] == nil {
+			return 1
+		}
+		arg := env.vm.stack[env.vm.sp-1].(*evalTemporal)
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalInt64(int64(arg.dt.Date.Day()))
+		return 1
+	}, "FN DAYOFMONTH DATE(SP-1)")
+}
+
+func (asm *assembler) Fn_DAYOFWEEK() {
+	asm.emit(func(env *ExpressionEnv) int {
+		if env.vm.stack[env.vm.sp-1] == nil {
+			return 1
+		}
+		arg := env.vm.stack[env.vm.sp-1].(*evalTemporal)
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalInt64(int64(arg.dt.Date.Weekday() + 1))
+		return 1
+	}, "FN DAYOFWEEK DATE(SP-1)")
+}
+
+func (asm *assembler) Fn_DAYOFYEAR() {
+	asm.emit(func(env *ExpressionEnv) int {
+		if env.vm.stack[env.vm.sp-1] == nil {
+			return 1
+		}
+		arg := env.vm.stack[env.vm.sp-1].(*evalTemporal)
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalInt64(int64(arg.dt.Date.Yearday()))
+		return 1
+	}, "FN DAYOFYEAR DATE(SP-1)")
+}
+
+func (asm *assembler) Fn_HOUR() {
+	asm.emit(func(env *ExpressionEnv) int {
+		if env.vm.stack[env.vm.sp-1] == nil {
+			return 1
+		}
+		arg := env.vm.stack[env.vm.sp-1].(*evalTemporal)
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalInt64(int64(arg.dt.Time.Hour()))
+		return 1
+	}, "FN HOUR TIME(SP-1)")
+}
+
+func (asm *assembler) Fn_MICROSECOND() {
+	asm.emit(func(env *ExpressionEnv) int {
+		if env.vm.stack[env.vm.sp-1] == nil {
+			return 1
+		}
+		arg := env.vm.stack[env.vm.sp-1].(*evalTemporal)
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalInt64(int64(arg.dt.Time.Nanosecond() / 1000))
+		return 1
+	}, "FN MICROSECOND TIME(SP-1)")
+}
+
+func (asm *assembler) Fn_MINUTE() {
+	asm.emit(func(env *ExpressionEnv) int {
+		if env.vm.stack[env.vm.sp-1] == nil {
+			return 1
+		}
+		arg := env.vm.stack[env.vm.sp-1].(*evalTemporal)
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalInt64(int64(arg.dt.Time.Minute()))
+		return 1
+	}, "FN MINUTE TIME(SP-1)")
+}
+
+func (asm *assembler) Fn_MONTH() {
+	asm.emit(func(env *ExpressionEnv) int {
+		if env.vm.stack[env.vm.sp-1] == nil {
+			return 1
+		}
+		arg := env.vm.stack[env.vm.sp-1].(*evalTemporal)
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalInt64(int64(arg.dt.Date.Month()))
+		return 1
+	}, "FN MONTH DATE(SP-1)")
+}
+
+func (asm *assembler) Fn_MONTHNAME(col collations.TypedCollation) {
+	asm.emit(func(env *ExpressionEnv) int {
+		if env.vm.stack[env.vm.sp-1] == nil {
+			return 1
+		}
+		arg := env.vm.stack[env.vm.sp-1].(*evalTemporal)
+		m := arg.dt.Date.Month()
+		if m < 1 || m > 12 {
+			env.vm.stack[env.vm.sp-1] = nil
+			return 1
+		}
+
+		mb := hack.StringBytes(time.Month(arg.dt.Date.Month()).String())
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalText(mb, col)
+		return 1
+	}, "FN MONTHNAME DATE(SP-1)")
+}
+
+func (asm *assembler) Fn_QUARTER() {
+	asm.emit(func(env *ExpressionEnv) int {
+		if env.vm.stack[env.vm.sp-1] == nil {
+			return 1
+		}
+		arg := env.vm.stack[env.vm.sp-1].(*evalTemporal)
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalInt64(int64(arg.dt.Date.Quarter()))
+		return 1
+	}, "FN QUARTER DATE(SP-1)")
+}
+
+func (asm *assembler) Fn_SECOND() {
+	asm.emit(func(env *ExpressionEnv) int {
+		if env.vm.stack[env.vm.sp-1] == nil {
+			return 1
+		}
+		arg := env.vm.stack[env.vm.sp-1].(*evalTemporal)
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalInt64(int64(arg.dt.Time.Second()))
+		return 1
+	}, "FN SECOND TIME(SP-1)")
+}
+
+func (asm *assembler) Fn_WEEK0() {
+	asm.emit(func(env *ExpressionEnv) int {
+		if env.vm.stack[env.vm.sp-1] == nil {
+			return 1
+		}
+		arg := env.vm.stack[env.vm.sp-1].(*evalTemporal)
+		week := arg.dt.Date.Week(0)
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalInt64(int64(week))
+		return 1
+	}, "FN WEEK0 DATE(SP-1)")
+}
+
+func (asm *assembler) Fn_WEEK() {
+	asm.adjustStack(-1)
+	asm.emit(func(env *ExpressionEnv) int {
+		if env.vm.stack[env.vm.sp-2] == nil {
+			env.vm.sp--
+			return 1
+		}
+		arg := env.vm.stack[env.vm.sp-2].(*evalTemporal)
+		mode := env.vm.stack[env.vm.sp-1].(*evalInt64)
+		week := arg.dt.Date.Week(int(mode.i))
+		env.vm.stack[env.vm.sp-2] = env.vm.arena.newEvalInt64(int64(week))
+		env.vm.sp--
+		return 1
+	}, "FN WEEK DATE(SP-1)")
+}
+
+func (asm *assembler) Fn_WEEKDAY() {
+	asm.emit(func(env *ExpressionEnv) int {
+		if env.vm.stack[env.vm.sp-1] == nil {
+			return 1
+		}
+		arg := env.vm.stack[env.vm.sp-1].(*evalTemporal)
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalInt64(int64(arg.dt.Date.Weekday()+6) % 7)
+		return 1
+	}, "FN WEEKDAY DATE(SP-1)")
+}
+
+func (asm *assembler) Fn_WEEKOFYEAR() {
+	asm.emit(func(env *ExpressionEnv) int {
+		if env.vm.stack[env.vm.sp-1] == nil {
+			return 1
+		}
+		arg := env.vm.stack[env.vm.sp-1].(*evalTemporal)
+		_, week := arg.dt.Date.ISOWeek()
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalInt64(int64(week))
+		return 1
+	}, "FN WEEKOFYEAR DATE(SP-1)")
+}
+
+func (asm *assembler) Fn_YEAR() {
+	asm.emit(func(env *ExpressionEnv) int {
+		if env.vm.stack[env.vm.sp-1] == nil {
+			return 1
+		}
+		arg := env.vm.stack[env.vm.sp-1].(*evalTemporal)
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalInt64(int64(arg.dt.Date.Year()))
+		return 1
+	}, "FN YEAR DATE(SP-1)")
+}
+
+func (asm *assembler) Fn_YEARWEEK0() {
+	asm.emit(func(env *ExpressionEnv) int {
+		if env.vm.stack[env.vm.sp-1] == nil {
+			return 1
+		}
+		arg := env.vm.stack[env.vm.sp-1].(*evalTemporal)
+		yw := arg.dt.Date.YearWeek(0)
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalInt64(int64(yw))
+		return 1
+	}, "FN YEARWEEK0 DATE(SP-1)")
+}
+
+func (asm *assembler) Fn_YEARWEEK() {
+	asm.adjustStack(-1)
+	asm.emit(func(env *ExpressionEnv) int {
+		if env.vm.stack[env.vm.sp-2] == nil {
+			env.vm.sp--
+			return 1
+		}
+		arg := env.vm.stack[env.vm.sp-2].(*evalTemporal)
+		mode := env.vm.stack[env.vm.sp-1].(*evalInt64)
+		yw := arg.dt.Date.YearWeek(int(mode.i))
+		env.vm.stack[env.vm.sp-2] = env.vm.arena.newEvalInt64(int64(yw))
+		env.vm.sp--
+		return 1
+	}, "FN YEARWEEK DATE(SP-1)")
 }

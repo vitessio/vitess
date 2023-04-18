@@ -97,7 +97,7 @@ func (c *compiler) compileFn(call callable) (ctype, error) {
 	case *builtinLn:
 		return c.compileFn_math1(call, c.asm.Fn_LN, flagNullable)
 	case *builtinLog:
-		return c.compileFn_math1(call, c.asm.Fn_LOG, flagNullable)
+		return c.compileFn_LOG(call)
 	case *builtinLog10:
 		return c.compileFn_math1(call, c.asm.Fn_LOG10, flagNullable)
 	case *builtinLog2:
@@ -140,6 +140,44 @@ func (c *compiler) compileFn(call callable) (ctype, error) {
 		return c.compileFn_SHA2(call)
 	case *builtinRandomBytes:
 		return c.compileFn_RandomBytes(call)
+	case *builtinDateFormat:
+		return c.compileFn_DateFormat(call)
+	case *builtinConvertTz:
+		return c.compileFn_ConvertTz(call)
+	case *builtinDate:
+		return c.compileFn_Date(call)
+	case *builtinDayOfMonth:
+		return c.compileFn_DayOfMonth(call)
+	case *builtinDayOfWeek:
+		return c.compileFn_DayOfWeek(call)
+	case *builtinDayOfYear:
+		return c.compileFn_DayOfYear(call)
+	case *builtinHour:
+		return c.compileFn_Hour(call)
+	case *builtinMicrosecond:
+		return c.compileFn_Microsecond(call)
+	case *builtinMinute:
+		return c.compileFn_Minute(call)
+	case *builtinMonth:
+		return c.compileFn_Month(call)
+	case *builtinMonthName:
+		return c.compileFn_MonthName(call)
+	case *builtinQuarter:
+		return c.compileFn_Quarter(call)
+	case *builtinSecond:
+		return c.compileFn_Second(call)
+	case *builtinTime:
+		return c.compileFn_Time(call)
+	case *builtinWeek:
+		return c.compileFn_Week(call)
+	case *builtinWeekDay:
+		return c.compileFn_WeekDay(call)
+	case *builtinWeekOfYear:
+		return c.compileFn_WeekOfYear(call)
+	case *builtinYear:
+		return c.compileFn_Year(call)
+	case *builtinYearWeek:
+		return c.compileFn_YearWeek(call)
 	default:
 		return ctype{}, c.unsupported(call)
 	}
@@ -394,13 +432,7 @@ func (c *compiler) compileFn_HEX(call *builtinHex) (ctype, error) {
 	}
 
 	skip := c.compileNullCheck1(str)
-
-	col := collations.TypedCollation{
-		Collation:    c.cfg.Collation,
-		Coercibility: collations.CoerceCoercible,
-		Repertoire:   collations.RepertoireASCII,
-	}
-
+	col := defaultCoercionCollation(c.cfg.Collation)
 	t := sqltypes.VarChar
 	if str.Type == sqltypes.Blob || str.Type == sqltypes.TypeJSON {
 		t = sqltypes.Text
@@ -533,6 +565,25 @@ func (c *compiler) compileFn_ATAN2(expr *builtinAtan2) (ctype, error) {
 	c.compileToFloat(arg1, 2)
 	c.compileToFloat(arg2, 1)
 	c.asm.Fn_ATAN2()
+	c.asm.jumpDestination(skip)
+	return ctype{Type: sqltypes.Float64, Col: collationNumeric, Flag: arg1.Flag | arg2.Flag}, nil
+}
+
+func (c *compiler) compileFn_LOG(expr *builtinLog) (ctype, error) {
+	arg1, err := c.compileExpr(expr.Arguments[0])
+	if err != nil {
+		return ctype{}, err
+	}
+
+	arg2, err := c.compileExpr(expr.Arguments[1])
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip := c.compileNullCheck2(arg1, arg2)
+	c.compileToFloat(arg1, 2)
+	c.compileToFloat(arg2, 1)
+	c.asm.Fn_LOG()
 	c.asm.jumpDestination(skip)
 	return ctype{Type: sqltypes.Float64, Col: collationNumeric, Flag: arg1.Flag | arg2.Flag}, nil
 }
@@ -754,12 +805,7 @@ func (c *compiler) compileFn_CONV(expr callable) (ctype, error) {
 		c.asm.Fn_CONV_bu(3, 2)
 	}
 
-	col := collations.TypedCollation{
-		Collation:    c.cfg.Collation,
-		Coercibility: collations.CoerceCoercible,
-		Repertoire:   collations.RepertoireASCII,
-	}
-
+	col := defaultCoercionCollation(n.Col.Collation)
 	c.asm.Fn_CONV_uc(t, col)
 	c.asm.jumpDestination(skip)
 
@@ -798,13 +844,13 @@ func (c *compiler) compileFn_Now(call *builtinNow) (ctype, error) {
 	var t sqltypes.Type
 
 	if call.onlyTime {
-		format = formatTime[call.prec]
+		format = datetime.Time_hh_mm_ss
 		t = sqltypes.Time
 	} else {
-		format = formatDateTime[call.prec]
+		format = datetime.DateTime_YYYY_MM_DD_hh_mm_ss
 		t = sqltypes.Datetime
 	}
-	c.asm.Fn_Now(t, format, call.utc)
+	c.asm.Fn_Now(t, format, call.prec, call.utc)
 	return ctype{Type: t, Col: collationBinary}, nil
 }
 
@@ -819,7 +865,7 @@ func (c *compiler) compileFn_UtcDate(*builtinUtcDate) (ctype, error) {
 }
 
 func (c *compiler) compileFn_Sysdate(call *builtinSysdate) (ctype, error) {
-	c.asm.Fn_Sysdate(formatDateTime[call.prec])
+	c.asm.Fn_Sysdate(call.prec)
 	return ctype{Type: sqltypes.Datetime, Col: collationBinary}, nil
 }
 
@@ -846,17 +892,13 @@ func (c *compiler) compileFn_MD5(call *builtinMD5) (ctype, error) {
 
 	skip := c.compileNullCheck1(str)
 
-	col := collations.TypedCollation{
-		Collation:    c.cfg.Collation,
-		Coercibility: collations.CoerceCoercible,
-		Repertoire:   collations.RepertoireASCII,
-	}
-
 	switch {
 	case str.isTextual():
 	default:
 		c.asm.Convert_xb(1, sqltypes.Binary, 0, false)
 	}
+
+	col := defaultCoercionCollation(c.cfg.Collation)
 	c.asm.Fn_MD5(col)
 	c.asm.jumpDestination(skip)
 	return ctype{Type: sqltypes.VarChar, Col: col, Flag: str.Flag}, nil
@@ -870,17 +912,12 @@ func (c *compiler) compileFn_SHA1(call *builtinSHA1) (ctype, error) {
 
 	skip := c.compileNullCheck1(str)
 
-	col := collations.TypedCollation{
-		Collation:    c.cfg.Collation,
-		Coercibility: collations.CoerceCoercible,
-		Repertoire:   collations.RepertoireASCII,
-	}
-
 	switch {
 	case str.isTextual():
 	default:
 		c.asm.Convert_xb(1, sqltypes.Binary, 0, false)
 	}
+	col := defaultCoercionCollation(c.cfg.Collation)
 	c.asm.Fn_SHA1(col)
 	c.asm.jumpDestination(skip)
 	return ctype{Type: sqltypes.VarChar, Col: col, Flag: str.Flag}, nil
@@ -901,12 +938,6 @@ func (c *compiler) compileFn_SHA2(call *builtinSHA2) (ctype, error) {
 
 	skip2 := c.compileNullCheck1r(bits)
 
-	col := collations.TypedCollation{
-		Collation:    c.cfg.Collation,
-		Coercibility: collations.CoerceCoercible,
-		Repertoire:   collations.RepertoireASCII,
-	}
-
 	switch {
 	case str.isTextual():
 	default:
@@ -921,6 +952,8 @@ func (c *compiler) compileFn_SHA2(call *builtinSHA2) (ctype, error) {
 	default:
 		c.asm.Convert_xi(1)
 	}
+
+	col := defaultCoercionCollation(c.cfg.Collation)
 	c.asm.Fn_SHA2(col)
 	c.asm.jumpDestination(skip1, skip2)
 	return ctype{Type: sqltypes.VarChar, Col: col, Flag: str.Flag | flagNullable}, nil
@@ -946,4 +979,413 @@ func (c *compiler) compileFn_RandomBytes(call *builtinRandomBytes) (ctype, error
 	c.asm.Fn_RandomBytes()
 	c.asm.jumpDestination(skip)
 	return ctype{Type: sqltypes.VarBinary, Col: collationBinary, Flag: arg.Flag | flagNullable}, nil
+}
+
+func (c *compiler) compileFn_DateFormat(call *builtinDateFormat) (ctype, error) {
+	arg, err := c.compileExpr(call.Arguments[0])
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip1 := c.compileNullCheck1(arg)
+
+	switch arg.Type {
+	case sqltypes.Datetime, sqltypes.Date:
+	default:
+		c.asm.Convert_xDT_nz(1, datetime.DefaultPrecision)
+	}
+
+	format, err := c.compileExpr(call.Arguments[1])
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip2 := c.compileNullCheck1r(format)
+
+	switch format.Type {
+	case sqltypes.VarChar, sqltypes.VarBinary:
+	default:
+		c.asm.Convert_xb(1, sqltypes.VarBinary, 0, false)
+	}
+
+	col := defaultCoercionCollation(c.cfg.Collation)
+	c.asm.Fn_DATE_FORMAT(col)
+	c.asm.jumpDestination(skip1, skip2)
+	return ctype{Type: sqltypes.VarChar, Col: col, Flag: arg.Flag | flagNullable}, nil
+}
+
+func (c *compiler) compileFn_ConvertTz(call *builtinConvertTz) (ctype, error) {
+	n, err := c.compileExpr(call.callable()[0])
+	if err != nil {
+		return ctype{}, err
+	}
+	from, err := c.compileExpr(call.callable()[1])
+	if err != nil {
+		return ctype{}, err
+	}
+	to, err := c.compileExpr(call.callable()[2])
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip := c.compileNullCheck3(n, from, to)
+
+	switch {
+	case from.isTextual():
+	default:
+		c.asm.Convert_xb(2, sqltypes.VarBinary, 0, false)
+	}
+
+	switch {
+	case to.isTextual():
+	default:
+		c.asm.Convert_xb(1, sqltypes.VarBinary, 0, false)
+	}
+
+	switch n.Type {
+	case sqltypes.Datetime, sqltypes.Date:
+	default:
+		c.asm.Convert_xDT_nz(3, -1)
+	}
+
+	c.asm.Fn_CONVERT_TZ()
+	c.asm.jumpDestination(skip)
+	return ctype{Type: sqltypes.Datetime, Col: collationBinary, Flag: n.Flag | flagNullable}, nil
+}
+
+func (c *compiler) compileFn_Date(call *builtinDate) (ctype, error) {
+	arg, err := c.compileExpr(call.Arguments[0])
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip := c.compileNullCheck1(arg)
+
+	switch arg.Type {
+	case sqltypes.Date:
+	default:
+		c.asm.Convert_xD(1)
+	}
+
+	c.asm.jumpDestination(skip)
+	return ctype{Type: sqltypes.Date, Col: collationBinary, Flag: arg.Flag | flagNullable}, nil
+}
+
+func (c *compiler) compileFn_DayOfMonth(call *builtinDayOfMonth) (ctype, error) {
+	arg, err := c.compileExpr(call.Arguments[0])
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip := c.compileNullCheck1(arg)
+
+	switch arg.Type {
+	case sqltypes.Date, sqltypes.Datetime:
+	default:
+		c.asm.Convert_xD(1)
+	}
+	c.asm.Fn_DAYOFMONTH()
+	c.asm.jumpDestination(skip)
+	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: arg.Flag | flagNullable}, nil
+}
+
+func (c *compiler) compileFn_DayOfWeek(call *builtinDayOfWeek) (ctype, error) {
+	arg, err := c.compileExpr(call.Arguments[0])
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip := c.compileNullCheck1(arg)
+
+	switch arg.Type {
+	case sqltypes.Date, sqltypes.Datetime:
+	default:
+		c.asm.Convert_xD_nz(1)
+	}
+	c.asm.Fn_DAYOFWEEK()
+	c.asm.jumpDestination(skip)
+	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: arg.Flag | flagNullable}, nil
+}
+
+func (c *compiler) compileFn_DayOfYear(call *builtinDayOfYear) (ctype, error) {
+	arg, err := c.compileExpr(call.Arguments[0])
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip := c.compileNullCheck1(arg)
+
+	switch arg.Type {
+	case sqltypes.Date, sqltypes.Datetime:
+	default:
+		c.asm.Convert_xD_nz(1)
+	}
+	c.asm.Fn_DAYOFYEAR()
+	c.asm.jumpDestination(skip)
+	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: arg.Flag | flagNullable}, nil
+}
+
+func (c *compiler) compileFn_Hour(call *builtinHour) (ctype, error) {
+	arg, err := c.compileExpr(call.Arguments[0])
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip := c.compileNullCheck1(arg)
+
+	switch arg.Type {
+	case sqltypes.Date, sqltypes.Datetime, sqltypes.Time:
+	default:
+		c.asm.Convert_xT(1, -1)
+	}
+	c.asm.Fn_HOUR()
+	c.asm.jumpDestination(skip)
+	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: arg.Flag | flagNullable}, nil
+}
+
+func (c *compiler) compileFn_Microsecond(call *builtinMicrosecond) (ctype, error) {
+	arg, err := c.compileExpr(call.Arguments[0])
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip := c.compileNullCheck1(arg)
+
+	switch arg.Type {
+	case sqltypes.Date, sqltypes.Datetime, sqltypes.Time:
+	default:
+		c.asm.Convert_xT(1, -1)
+	}
+	c.asm.Fn_MICROSECOND()
+	c.asm.jumpDestination(skip)
+	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: arg.Flag | flagNullable}, nil
+}
+
+func (c *compiler) compileFn_Minute(call *builtinMinute) (ctype, error) {
+	arg, err := c.compileExpr(call.Arguments[0])
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip := c.compileNullCheck1(arg)
+
+	switch arg.Type {
+	case sqltypes.Date, sqltypes.Datetime, sqltypes.Time:
+	default:
+		c.asm.Convert_xT(1, -1)
+	}
+	c.asm.Fn_MINUTE()
+	c.asm.jumpDestination(skip)
+	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: arg.Flag | flagNullable}, nil
+}
+
+func (c *compiler) compileFn_Month(call *builtinMonth) (ctype, error) {
+	arg, err := c.compileExpr(call.Arguments[0])
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip := c.compileNullCheck1(arg)
+
+	switch arg.Type {
+	case sqltypes.Date, sqltypes.Datetime:
+	default:
+		c.asm.Convert_xD(1)
+	}
+	c.asm.Fn_MONTH()
+	c.asm.jumpDestination(skip)
+	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: arg.Flag | flagNullable}, nil
+}
+
+func (c *compiler) compileFn_MonthName(call *builtinMonthName) (ctype, error) {
+	arg, err := c.compileExpr(call.Arguments[0])
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip := c.compileNullCheck1(arg)
+
+	switch arg.Type {
+	case sqltypes.Date, sqltypes.Datetime:
+	default:
+		c.asm.Convert_xD(1)
+	}
+	col := defaultCoercionCollation(call.collate)
+	c.asm.Fn_MONTHNAME(col)
+	c.asm.jumpDestination(skip)
+	return ctype{Type: sqltypes.VarChar, Col: col, Flag: arg.Flag | flagNullable}, nil
+}
+
+func (c *compiler) compileFn_Quarter(call *builtinQuarter) (ctype, error) {
+	arg, err := c.compileExpr(call.Arguments[0])
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip := c.compileNullCheck1(arg)
+
+	switch arg.Type {
+	case sqltypes.Date, sqltypes.Datetime:
+	default:
+		c.asm.Convert_xD(1)
+	}
+	c.asm.Fn_QUARTER()
+	c.asm.jumpDestination(skip)
+	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: arg.Flag | flagNullable}, nil
+}
+
+func (c *compiler) compileFn_Second(call *builtinSecond) (ctype, error) {
+	arg, err := c.compileExpr(call.Arguments[0])
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip := c.compileNullCheck1(arg)
+
+	switch arg.Type {
+	case sqltypes.Date, sqltypes.Datetime, sqltypes.Time:
+	default:
+		c.asm.Convert_xT(1, -1)
+	}
+	c.asm.Fn_SECOND()
+	c.asm.jumpDestination(skip)
+	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: arg.Flag | flagNullable}, nil
+}
+
+func (c *compiler) compileFn_Time(call *builtinTime) (ctype, error) {
+	arg, err := c.compileExpr(call.Arguments[0])
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip := c.compileNullCheck1(arg)
+
+	switch arg.Type {
+	case sqltypes.Time:
+	default:
+		c.asm.Convert_xT(1, -1)
+	}
+	c.asm.jumpDestination(skip)
+	return ctype{Type: sqltypes.Time, Col: collationBinary, Flag: arg.Flag | flagNullable}, nil
+}
+
+func (c *compiler) compileFn_Week(call *builtinWeek) (ctype, error) {
+	arg, err := c.compileExpr(call.Arguments[0])
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip1 := c.compileNullCheck1(arg)
+	var skip2 *jump
+
+	switch arg.Type {
+	case sqltypes.Date, sqltypes.Datetime:
+	default:
+		c.asm.Convert_xD_nz(1)
+	}
+
+	if len(call.Arguments) == 1 {
+		c.asm.Fn_WEEK0()
+	} else {
+
+		mode, err := c.compileExpr(call.Arguments[1])
+		if err != nil {
+			return ctype{}, err
+		}
+		skip2 = c.compileNullCheck1r(mode)
+		c.asm.Convert_xi(1)
+		c.asm.Fn_WEEK()
+	}
+
+	c.asm.jumpDestination(skip1, skip2)
+	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: arg.Flag | flagNullable}, nil
+}
+
+func (c *compiler) compileFn_WeekDay(call *builtinWeekDay) (ctype, error) {
+	arg, err := c.compileExpr(call.Arguments[0])
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip := c.compileNullCheck1(arg)
+
+	switch arg.Type {
+	case sqltypes.Date, sqltypes.Datetime:
+	default:
+		c.asm.Convert_xD_nz(1)
+	}
+
+	c.asm.Fn_WEEKDAY()
+	c.asm.jumpDestination(skip)
+	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: arg.Flag | flagNullable}, nil
+}
+
+func (c *compiler) compileFn_WeekOfYear(call *builtinWeekOfYear) (ctype, error) {
+	arg, err := c.compileExpr(call.Arguments[0])
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip := c.compileNullCheck1(arg)
+
+	switch arg.Type {
+	case sqltypes.Date, sqltypes.Datetime:
+	default:
+		c.asm.Convert_xD_nz(1)
+	}
+
+	c.asm.Fn_WEEKOFYEAR()
+	c.asm.jumpDestination(skip)
+	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: arg.Flag | flagNullable}, nil
+}
+
+func (c *compiler) compileFn_Year(call *builtinYear) (ctype, error) {
+	arg, err := c.compileExpr(call.Arguments[0])
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip := c.compileNullCheck1(arg)
+
+	switch arg.Type {
+	case sqltypes.Date, sqltypes.Datetime:
+	default:
+		c.asm.Convert_xD(1)
+	}
+
+	c.asm.Fn_YEAR()
+	c.asm.jumpDestination(skip)
+	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: arg.Flag | flagNullable}, nil
+}
+
+func (c *compiler) compileFn_YearWeek(call *builtinYearWeek) (ctype, error) {
+	arg, err := c.compileExpr(call.Arguments[0])
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip1 := c.compileNullCheck1(arg)
+	var skip2 *jump
+
+	switch arg.Type {
+	case sqltypes.Date, sqltypes.Datetime:
+	default:
+		c.asm.Convert_xD_nz(1)
+	}
+
+	if len(call.Arguments) == 1 {
+		c.asm.Fn_YEARWEEK0()
+	} else {
+
+		mode, err := c.compileExpr(call.Arguments[1])
+		if err != nil {
+			return ctype{}, err
+		}
+		skip2 = c.compileNullCheck1r(mode)
+		c.asm.Convert_xi(1)
+		c.asm.Fn_YEARWEEK()
+	}
+
+	c.asm.jumpDestination(skip1, skip2)
+	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: arg.Flag | flagNullable}, nil
 }

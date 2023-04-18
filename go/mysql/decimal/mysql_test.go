@@ -428,6 +428,7 @@ func BenchmarkFormatting(b *testing.B) {
 
 var bigBases = []uint64{
 	3141592653589793238,
+	6283185307179586476,
 	math.MaxUint64,
 	1,
 	1000000000000000000,
@@ -456,19 +457,21 @@ func TestFormatFast(t *testing.T) {
 
 func TestFormatAndRound(t *testing.T) {
 	for _, neg := range []bool{false, true} {
-		b := new(big.Int).SetUint64(bigBases[0])
-		if neg {
-			b = b.Neg(b)
-		}
-		for prec := int32(1); prec < 32; prec++ {
-			for exp := -100; exp <= 100; exp++ {
-				var d = Decimal{value: b, exp: int32(exp)}
+		for _, base := range bigBases {
+			b := new(big.Int).SetUint64(base)
+			if neg {
+				b = b.Neg(b)
+			}
+			for prec := int32(1); prec < 32; prec++ {
+				for exp := -100; exp <= 100; exp++ {
+					var d = Decimal{value: b, exp: int32(exp)}
 
-				expect := d.StringFixed(prec)
-				got := string(d.formatFast(int(prec), true, false))
+					expect := d.StringFixed(prec)
+					got := string(d.formatFast(int(prec), true, false))
 
-				if expect != got {
-					t.Errorf("base: %de%d prec %d\nwant: %q\ngot:  %q", bigBases[0], exp, prec, expect, got)
+					if expect != got {
+						t.Errorf("base: %de%d prec %d\nwant: %q\ngot:  %q", b, exp, prec, expect, got)
+					}
 				}
 			}
 		}
