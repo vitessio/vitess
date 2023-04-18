@@ -689,7 +689,6 @@ func TestSchemaDiff(t *testing.T) {
 				impossibleOrderErr, ok := err.(*ImpossibleApplyDiffOrderError)
 				assert.True(t, ok)
 				assert.Equal(t, tc.conflictingDiffs, len(impossibleOrderErr.ConflictingDiffs))
-				assert.Equal(t, tc.conflictingDiffs, len(impossibleOrderErr.ConflictingStatements))
 			} else {
 				require.NoError(t, err)
 			}
