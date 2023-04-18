@@ -545,12 +545,6 @@ func (e *Executor) createOnlineDDLUser(ctx context.Context) (password string, er
 			return password, err
 		}
 	}
-	for _, query := range sqlGrantOnlineDDLSuper {
-		parsed := sqlparser.BuildParsedQuery(query, onlineDDLGrant)
-		conn.ExecuteFetch(parsed.Query, 0, false)
-		// We ignore failure, since we might not be able to grant
-		// SUPER privs (e.g. Aurora)
-	}
 	for _, query := range sqlGrantOnlineDDLUser {
 		parsed := sqlparser.BuildParsedQuery(query, onlineDDLGrant)
 		if _, err := conn.ExecuteFetch(parsed.Query, 0, false); err != nil {
