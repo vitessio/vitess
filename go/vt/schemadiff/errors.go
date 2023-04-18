@@ -19,6 +19,7 @@ package schemadiff
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	"vitess.io/vitess/go/sqlescape"
 )
@@ -30,8 +31,23 @@ var (
 	ErrUnexpectedTableSpec            = errors.New("unexpected table spec")
 	ErrExpectedCreateTable            = errors.New("expected a CREATE TABLE statement")
 	ErrExpectedCreateView             = errors.New("expected a CREATE VIEW statement")
-	ErrImpossibleDiffOrder            = errors.New("Impossible diff sequence")
 )
+
+type ImpossibleApplyDiffOrderError struct {
+	UnorderedDiffs        []EntityDiff
+	ConflictingDiffs      []EntityDiff
+	ConflictingStatements []string
+}
+
+func (e *ImpossibleApplyDiffOrderError) Error() string {
+	var b strings.Builder
+	b.WriteString("no valid applicable order for diffs. Diffs found conflicting:")
+	for _, diff := range e.ConflictingStatements {
+		b.WriteString("\n")
+		b.WriteString(diff)
+	}
+	return b.String()
+}
 
 type UnsupportedEntityError struct {
 	Entity    string
