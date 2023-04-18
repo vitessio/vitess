@@ -12,14 +12,16 @@
     - [Builtin backup: read buffering flags](#builtin-backup-read-buffering-flags)
   - **[New stats](#new-stats)**
     - [Detailed backup and restore stats](#detailed-backup-and-restore-stats)
-    - [VTtablet Error count with code ](#vttablet-error-count-with-code)
+    - [VTtablet Error count with code](#vttablet-error-count-with-code)
     - [VReplication stream status for Prometheus](#vreplication-stream-status-for-prometheus)
   - **[Deprecations and Deletions](#deprecations-and-deletions)**
     - [Deprecated Flags](#deprecated-flags)
     - [Deprecated Stats](#deprecated-stats)
+  - **[Vtctld](#vtctld)**
+    - [Deprecated Flags](#vtctld-deprecated-flags)
   - **[VTTablet](#vttablet)**
     - [VTTablet: Initializing all replicas with super_read_only](#vttablet-initialization)
-    - [Deprecated Flags](#deprecated-flags)
+    - [Deprecated Flags](#vttablet-deprecated-flags)
 
 ## <a id="major-changes"/> Major Changes
 
@@ -257,6 +259,14 @@ These stats are deprecated in v17.
 | `backup_duration_seconds` | `BackupDurationNanoseconds` |
 | `restore_duration_seconds` | `RestoreDurationNanoseconds` |
 
+### <a id="vtctld"/> Vtctld
+
+#### <a id="vtctld-deprecated-flags"/> Deprecated Flags
+
+The flag `schema_change_check_interval` used to accept either a Go duration value (e.g. `1m` or `30s`) or a bare integer, which was treated as seconds.
+This behavior was deprecated in v15.0.0 and has been removed.
+`schema_change_check_interval` now **only** accepts Go duration values.
+
 ### <a id="vttablet"/> VTTablet
 #### <a id="vttablet-initialization"/> Initializing all replicas with super_read_only
 In order to prevent SUPER privileged users like `root` or `vt_dba` from producing errant GTIDs on replicas, all the replica MySQL servers are initialized with the MySQL
@@ -271,7 +281,7 @@ This is even more important if you are running Vitess on the vitess-operator.
 You must ensure your `init_db.sql` is up-to-date with the new default for `v17.0.0`.
 The default file can be found in `./config/init_db.sql`.
 
-#### <a id="deprecated-flags"/> Deprecated Flags
+#### <a id="vttablet-deprecated-flags"/> Deprecated Flags
 The flag `use_super_read_only` is deprecated and will be removed in a later release.
 
 ### Online DDL
