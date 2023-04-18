@@ -57,8 +57,6 @@ var (
 	// vreplicationMinimumHeartbeatUpdateInterval overrides vreplicationHeartbeatUpdateInterval if the latter is higher than this
 	// to ensure that it satisfies liveness criteria implicitly expected by internal processes like Online DDL
 	vreplicationMinimumHeartbeatUpdateInterval = 60
-
-	vreplicationExperimentalFlagOptimizeInserts int64 = 1
 )
 
 const (

@@ -27,6 +27,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/vttablet"
+
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/dbconfigs"
 
@@ -128,7 +130,7 @@ func setup() (func(), int) {
 		return nil, 1
 	}
 
-	vreplicationExperimentalFlags = 0
+	vttablet.VReplicationExperimentalFlags = 0
 
 	// engines cannot be initialized in testenv because it introduces
 	// circular dependencies.

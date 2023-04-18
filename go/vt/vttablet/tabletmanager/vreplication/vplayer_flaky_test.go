@@ -27,6 +27,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/vttablet"
+
 	"github.com/nsf/jsondiff"
 	"github.com/stretchr/testify/require"
 
@@ -2868,7 +2870,12 @@ func TestPlayerBlob(t *testing.T) {
 	if !runNoBlobTest {
 		t.Skip()
 	}
-
+	oldVreplicationExperimentalFlags := vttablet.VReplicationExperimentalFlags
+	vttablet.VReplicationExperimentalFlags = vttablet.VReplicationExperimentalFlagAllowNoBlobBinlogRowImage
+	// Extra reset at the end in case we return prematurely.
+	defer func() {
+		vttablet.VReplicationExperimentalFlags = oldVreplicationExperimentalFlags
+	}()
 	defer deleteTablet(addTablet(100))
 	execStatements(t, []string{
 		"create table t1(id int, val1 varchar(20), blb1 blob, id2 int, blb2 longblob, val2 varbinary(10), primary key(id))",

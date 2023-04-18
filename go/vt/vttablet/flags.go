@@ -6,12 +6,18 @@ import (
 	"vitess.io/vitess/go/vt/servenv"
 )
 
-var BinlogRowImageFullOnly = false
+const (
+	VReplicationExperimentalFlagOptimizeInserts           = int64(1)
+	VReplicationExperimentalFlagAllowNoBlobBinlogRowImage = int64(2)
+)
+
+var VReplicationExperimentalFlags = VReplicationExperimentalFlagOptimizeInserts | VReplicationExperimentalFlagAllowNoBlobBinlogRowImage
 
 func init() {
 	servenv.OnParseFor("vttablet", registerFlags)
 }
 
 func registerFlags(fs *pflag.FlagSet) {
-	fs.BoolVar(&BinlogRowImageFullOnly, "binlog-row-image-full", BinlogRowImageFullOnly, "If true, do not allow noblob or minimal binlog-row-image. Set to false for also allowing noblob and minimal")
+	fs.Int64Var(&VReplicationExperimentalFlags, "vreplication_experimental_flags", VReplicationExperimentalFlags,
+		"(Bitmask) of experimental features in vreplication to enable")
 }
