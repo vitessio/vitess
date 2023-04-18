@@ -2899,7 +2899,7 @@ func TestPlayerBlob(t *testing.T) {
 		Filter:   filter,
 		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
 	}
-	cancel, _ := startVReplication(t, bls, "")
+	cancel, vrId := startVReplication(t, bls, "")
 	defer cancel()
 
 	testcases := []struct {
@@ -2962,8 +2962,7 @@ func TestPlayerBlob(t *testing.T) {
 			expectData(t, tcases.table, tcases.data)
 		}
 	}
-	require.Equal(t, 1, len(globalStats.controllers))
-	stats := globalStats.controllers[1].blpStats
+	stats := globalStats.controllers[int32(vrId)].blpStats
 	require.Equal(t, 2, len(stats.PartialQueryCount.Counts()))
 	require.Equal(t, 2, len(stats.PartialQueryCount.Counts()))
 	require.Equal(t, int64(1), stats.PartialQueryCacheSize.Counts()["insert"])

@@ -163,16 +163,16 @@ func TestMain(m *testing.M) {
 	binlogplayer.SetProtocol("vreplication_test_framework", "test")
 	_flag.ParseFlagsForTest()
 	exitCode := func() int {
-		//_, ret := setup()
-		//if ret > 0 {
-		//	return ret
-		//}
-		//ret = m.Run()
-		//if ret > 0 {
-		//	return ret
-		//}
+		_, ret := setup()
+		if ret > 0 {
+			return ret
+		}
+		ret = m.Run()
+		if ret > 0 {
+			return ret
+		}
 
-		//cleanup()
+		cleanup()
 		runNoBlobTest = true
 		if err := utils.SetBinlogRowImageMode("noblob", "/tmp"); err != nil {
 			panic(err)
