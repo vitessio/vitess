@@ -530,7 +530,7 @@ func TestSchemaEngineCloseTickRace(t *testing.T) {
 func newEngine(queryCacheSize int, reloadTime time.Duration, idleTimeout time.Duration, db *fakesqldb.DB) *Engine {
 	config := tabletenv.NewDefaultConfig()
 	config.QueryCacheSize = queryCacheSize
-	config.SchemaReloadIntervalSeconds.Set(reloadTime)
+	config.SchemaReloadIntervalSeconds.Set(reloadTime.String())
 	config.OltpReadPool.IdleTimeoutSeconds.Set(idleTimeout)
 	config.OlapReadPool.IdleTimeoutSeconds.Set(idleTimeout)
 	config.TxPool.IdleTimeoutSeconds.Set(idleTimeout)

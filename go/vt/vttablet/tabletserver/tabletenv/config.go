@@ -27,6 +27,7 @@ import (
 
 	"vitess.io/vitess/go/cache"
 	"vitess.io/vitess/go/flagutil"
+	"vitess.io/vitess/go/flagutil/deprecated"
 	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
@@ -113,7 +114,9 @@ func registerTabletEnvFlags(fs *pflag.FlagSet) {
 	fs.IntVar(&currentConfig.QueryCacheSize, "queryserver-config-query-cache-size", defaultConfig.QueryCacheSize, "query server query cache size, maximum number of queries to be cached. vttablet analyzes every incoming query and generate a query plan, these plans are being cached in a lru cache. This config controls the capacity of the lru cache.")
 	fs.Int64Var(&currentConfig.QueryCacheMemory, "queryserver-config-query-cache-memory", defaultConfig.QueryCacheMemory, "query server query cache size in bytes, maximum amount of memory to be used for caching. vttablet analyzes every incoming query and generate a query plan, these plans are being cached in a lru cache. This config controls the capacity of the lru cache.")
 	fs.BoolVar(&currentConfig.QueryCacheLFU, "queryserver-config-query-cache-lfu", defaultConfig.QueryCacheLFU, "query server cache algorithm. when set to true, a new cache algorithm based on a TinyLFU admission policy will be used to improve cache behavior and prevent pollution from sparse queries")
-	SecondsVar(fs, &currentConfig.SchemaReloadIntervalSeconds, "queryserver-config-schema-reload-time", defaultConfig.SchemaReloadIntervalSeconds, "query server schema reload time, how often vttablet reloads schemas from underlying MySQL instance in seconds. vttablet keeps table schemas in its own memory and periodically refreshes it from MySQL. This config controls the reload time.")
+
+	currentConfig.SchemaReloadIntervalSeconds = deprecated.NewFloat64Seconds("queryserver-config-schema-reload-time", defaultConfig.SchemaReloadIntervalSeconds.Get())
+	fs.Var(&currentConfig.SchemaReloadIntervalSeconds, "queryserver-config-schema-reload-time", "query server schema reload time, how often vttablet reloads schemas from underlying MySQL instance in seconds. vttablet keeps table schemas in its own memory and periodically refreshes it from MySQL. This config controls the reload time.")
 	SecondsVar(fs, &currentConfig.SignalSchemaChangeReloadIntervalSeconds, "queryserver-config-schema-change-signal-interval", defaultConfig.SignalSchemaChangeReloadIntervalSeconds, "query server schema change signal interval defines at which interval the query server shall send schema updates to vtgate.")
 	fs.BoolVar(&currentConfig.SignalWhenSchemaChange, "queryserver-config-schema-change-signal", defaultConfig.SignalWhenSchemaChange, "query server schema signal, will signal connected vtgates that schema has changed whenever this is detected. VTGates will need to have -schema_change_signal enabled for this to work")
 	SecondsVar(fs, &currentConfig.Olap.TxTimeoutSeconds, "queryserver-config-olap-transaction-timeout", defaultConfig.Olap.TxTimeoutSeconds, "query server transaction timeout (in seconds), after which a transaction in an OLAP session will be killed")
@@ -284,23 +287,23 @@ type TabletConfig struct {
 	ReplicationTracker ReplicationTrackerConfig `json:"replicationTracker,omitempty"`
 
 	// Consolidator can be enable, disable, or notOnPrimary. Default is enable.
-	Consolidator                            string  `json:"consolidator,omitempty"`
-	PassthroughDML                          bool    `json:"passthroughDML,omitempty"`
-	StreamBufferSize                        int     `json:"streamBufferSize,omitempty"`
-	ConsolidatorStreamTotalSize             int64   `json:"consolidatorStreamTotalSize,omitempty"`
-	ConsolidatorStreamQuerySize             int64   `json:"consolidatorStreamQuerySize,omitempty"`
-	QueryCacheSize                          int     `json:"queryCacheSize,omitempty"`
-	QueryCacheMemory                        int64   `json:"queryCacheMemory,omitempty"`
-	QueryCacheLFU                           bool    `json:"queryCacheLFU,omitempty"`
-	SchemaReloadIntervalSeconds             Seconds `json:"schemaReloadIntervalSeconds,omitempty"`
-	SignalSchemaChangeReloadIntervalSeconds Seconds `json:"signalSchemaChangeReloadIntervalSeconds,omitempty"`
-	WatchReplication                        bool    `json:"watchReplication,omitempty"`
-	TrackSchemaVersions                     bool    `json:"trackSchemaVersions,omitempty"`
-	TerseErrors                             bool    `json:"terseErrors,omitempty"`
-	AnnotateQueries                         bool    `json:"annotateQueries,omitempty"`
-	MessagePostponeParallelism              int     `json:"messagePostponeParallelism,omitempty"`
-	DeprecatedCacheResultFields             bool    `json:"cacheResultFields,omitempty"`
-	SignalWhenSchemaChange                  bool    `json:"signalWhenSchemaChange,omitempty"`
+	Consolidator                            string                    `json:"consolidator,omitempty"`
+	PassthroughDML                          bool                      `json:"passthroughDML,omitempty"`
+	StreamBufferSize                        int                       `json:"streamBufferSize,omitempty"`
+	ConsolidatorStreamTotalSize             int64                     `json:"consolidatorStreamTotalSize,omitempty"`
+	ConsolidatorStreamQuerySize             int64                     `json:"consolidatorStreamQuerySize,omitempty"`
+	QueryCacheSize                          int                       `json:"queryCacheSize,omitempty"`
+	QueryCacheMemory                        int64                     `json:"queryCacheMemory,omitempty"`
+	QueryCacheLFU                           bool                      `json:"queryCacheLFU,omitempty"`
+	SchemaReloadIntervalSeconds             deprecated.Float64Seconds `json:"schemaReloadIntervalSeconds,omitempty"`
+	SignalSchemaChangeReloadIntervalSeconds Seconds                   `json:"signalSchemaChangeReloadIntervalSeconds,omitempty"`
+	WatchReplication                        bool                      `json:"watchReplication,omitempty"`
+	TrackSchemaVersions                     bool                      `json:"trackSchemaVersions,omitempty"`
+	TerseErrors                             bool                      `json:"terseErrors,omitempty"`
+	AnnotateQueries                         bool                      `json:"annotateQueries,omitempty"`
+	MessagePostponeParallelism              int                       `json:"messagePostponeParallelism,omitempty"`
+	DeprecatedCacheResultFields             bool                      `json:"cacheResultFields,omitempty"`
+	SignalWhenSchemaChange                  bool                      `json:"signalWhenSchemaChange,omitempty"`
 
 	ExternalConnections map[string]*dbconfigs.DBConfigs `json:"externalConnections,omitempty"`
 
@@ -556,7 +559,7 @@ var defaultConfig = TabletConfig{
 	QueryCacheSize:                          int(cache.DefaultConfig.MaxEntries),
 	QueryCacheMemory:                        cache.DefaultConfig.MaxMemoryUsage,
 	QueryCacheLFU:                           cache.DefaultConfig.LFU,
-	SchemaReloadIntervalSeconds:             30 * 60,
+	SchemaReloadIntervalSeconds:             deprecated.NewFloat64Seconds("queryserver-config-schema-reload-time", 30*time.Minute),
 	SignalSchemaChangeReloadIntervalSeconds: 5,
 	MessagePostponeParallelism:              4,
 	DeprecatedCacheResultFields:             true,
