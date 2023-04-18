@@ -325,6 +325,18 @@ func TestCompilerSingle(t *testing.T) {
 			expression: `CAST(-235959.995 AS TIME(2))`,
 			result:     `TIME("-24:00:00.00")`,
 		},
+		{
+			expression: `WEEK('2000-01-02', 6)`,
+			result:     `INT64(1)`,
+		},
+		{
+			expression: `WEEK(date '2000-01-01', 4)`,
+			result:     `INT64(0)`,
+		},
+		{
+			expression: `WEEK(date '2023-04-11', 6)`,
+			result:     `INT64(15)`,
+		},
 	}
 
 	for _, tc := range testCases {
