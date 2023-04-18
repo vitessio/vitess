@@ -59,3 +59,7 @@ func (f *Float64Seconds) Set(arg string) error {
 }
 
 func (f Float64Seconds) Get() time.Duration { return f.val }
+
+func (f *Float64Seconds) UnmarshalJSON(data []byte) error {
+	return f.Set(string(data))
+}
