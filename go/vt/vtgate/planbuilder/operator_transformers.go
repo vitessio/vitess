@@ -67,6 +67,8 @@ func transformToLogicalPlan(ctx *plancontext.PlanningContext, op ops.Operator, i
 		return transformHorizon(ctx, op, isRoot)
 	case *operators.Projection:
 		return transformProjection(ctx, op)
+	case *operators.Limit:
+		return transformLimit(ctx, op)
 	}
 
 	return nil, vterrors.VT13001(fmt.Sprintf("unknown type encountered: %T (transformToLogicalPlan)", op))
@@ -687,6 +689,15 @@ func transformDerivedPlan(ctx *plancontext.PlanningContext, op *operators.Derive
 		SelectExprs: selectExprs,
 	}
 	return plan, nil
+}
+
+func transformLimit(ctx *plancontext.PlanningContext, op *operators.Limit) (logicalPlan, error) {
+	plan, err := transformToLogicalPlan(ctx, op.Source, false)
+	if err != nil {
+		return nil, err
+	}
+
+	return createLimit(plan, op.AST)
 }
 
 type subQReplacer struct {
