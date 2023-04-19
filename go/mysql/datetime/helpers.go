@@ -240,19 +240,6 @@ func isLeap(year int) bool {
 	return year%4 == 0 && (year%100 != 0 || year%400 == 0)
 }
 
-var precs []int = []int{1e9, 1e8, 1e7, 1e6, 1e5, 1e4, 1e3, 1e2, 1e1, 1e0}
-
-func precision(n int) int {
-	l := 9
-	for l > 0 {
-		if n%precs[l] != 0 {
-			break
-		}
-		l--
-	}
-	return l + 1
-}
-
 func parseNanoseconds[bytes []byte | string](value bytes, nbytes int) (ns int, l int, ok bool) {
 	if value[0] != '.' {
 		return 0, 0, false
