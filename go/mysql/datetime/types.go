@@ -166,6 +166,8 @@ func (t Time) Compare(t2 Time) int {
 	return 0
 }
 
+var precs = []int{1e9, 1e8, 1e7, 1e6, 1e5, 1e4, 1e3, 1e2, 1e1, 1e0}
+
 func (t Time) Round(p int) (r Time) {
 	if t.nanosecond == 0 {
 		return t

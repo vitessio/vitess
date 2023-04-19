@@ -265,7 +265,6 @@ func (config *Configuration) ToJSONString() string {
 
 // Config is *the* configuration instance, used globally to get configuration data
 var Config = newConfiguration()
-var readFileNames []string
 
 func newConfiguration() *Configuration {
 	return &Configuration{
@@ -582,7 +581,6 @@ func ForceRead(fileName string) *Configuration {
 	if err != nil {
 		log.Fatal("Cannot read config file:", fileName, err)
 	}
-	readFileNames = []string{fileName}
 	return Config
 }
 
