@@ -20,9 +20,7 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"math/rand"
 	"net/http"
-	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -664,76 +662,6 @@ func testVStreamFrom(t *testing.T, table string, expectedRowCount int) {
 	}
 }
 
-const NumJSONRows = 100
-
-func insertJSONValues(t *testing.T) {
-	// insert null value combinations
-	execVtgateQuery(t, vtgateConn, "product:0", "insert into json_tbl(id) values(1)")
-	execVtgateQuery(t, vtgateConn, "product:0", "insert into json_tbl(id, j1) values(2, \"{}\")")
-	execVtgateQuery(t, vtgateConn, "product:0", "insert into json_tbl(id, j2) values(3, \"{}\")")
-
-	id := 4
-	q := "insert into json_tbl(id, j1, j2) values(%d, '%s', '%s')"
-	numJsonValues := len(jsonValues)
-	for id <= NumJSONRows {
-		id++
-		j1 := rand.Intn(numJsonValues)
-		j2 := rand.Intn(numJsonValues)
-		query := fmt.Sprintf(q, id, jsonValues[j1], jsonValues[j2])
-		execVtgateQuery(t, vtgateConn, "product:0", query)
-	}
-}
-
-func insertInitialData(t *testing.T) {
-	t.Run("insertInitialData", func(t *testing.T) {
-		log.Infof("Inserting initial data")
-		lines, _ := os.ReadFile("unsharded_init_data.sql")
-		execMultipleQueries(t, vtgateConn, "product:0", string(lines))
-		execVtgateQuery(t, vtgateConn, "product:0", "insert into customer_seq(id, next_id, cache) values(0, 100, 100);")
-		execVtgateQuery(t, vtgateConn, "product:0", "insert into order_seq(id, next_id, cache) values(0, 100, 100);")
-		execVtgateQuery(t, vtgateConn, "product:0", "insert into customer_seq2(id, next_id, cache) values(0, 100, 100);")
-		log.Infof("Done inserting initial data")
-
-		waitForRowCount(t, vtgateConn, "product:0", "product", 2)
-		waitForRowCount(t, vtgateConn, "product:0", "customer", 3)
-		waitForRowCount(t, vtgateConn, "product:0", "vdiff_order", 190)
-		waitForQueryResult(t, vtgateConn, "product:0", "select * from merchant",
-			`[[VARCHAR("Monoprice") VARCHAR("eléctronics")] [VARCHAR("newegg") VARCHAR("elec†ronics")]]`)
-
-		insertJSONValues(t)
-	})
-}
-
-// insertMoreCustomers creates additional customers.
-// Note: this will only work when the customer sequence is in place.
-func insertMoreCustomers(t *testing.T, numCustomers int) {
-	sql := "insert into customer (name) values "
-	i := 0
-	for i < numCustomers {
-		i++
-		sql += fmt.Sprintf("('customer%d')", i)
-		if i != numCustomers {
-			sql += ","
-		}
-	}
-	execVtgateQuery(t, vtgateConn, "customer", sql)
-}
-
-func insertMoreProducts(t *testing.T) {
-	sql := "insert into product(pid, description) values(3, 'cpu'),(4, 'camera'),(5, 'mouse');"
-	execVtgateQuery(t, vtgateConn, "product", sql)
-}
-
-func insertMoreProductsForSourceThrottler(t *testing.T) {
-	sql := "insert into product(pid, description) values(103, 'new-cpu'),(104, 'new-camera'),(105, 'new-mouse');"
-	execVtgateQuery(t, vtgateConn, "product", sql)
-}
-
-func insertMoreProductsForTargetThrottler(t *testing.T) {
-	sql := "insert into product(pid, description) values(203, 'new-cpu'),(204, 'new-camera'),(205, 'new-mouse');"
-	execVtgateQuery(t, vtgateConn, "product", sql)
-}
-
 func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAlias string, withOpenTx bool) {
 	t.Run("shardCustomer", func(t *testing.T) {
 		workflow := "p2c"
@@ -752,7 +680,7 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 		defaultCell := cells[0]
 		custKs := vc.Cells[defaultCell.Name].Keyspaces["customer"]
 
-		tables := "customer,Lead,Lead-1,db_order_test,vdiff_order,geom_tbl,json_tbl"
+		tables := "customer,Lead,Lead-1,db_order_test,geom_tbl,json_tbl,blob_tbl,vdiff_order"
 		moveTablesAction(t, "Create", sourceCellOrAlias, workflow, sourceKs, targetKs, tables)
 
 		customerTab1 := custKs.Shards["-80"].Tablets["zone1-200"].Vttablet
