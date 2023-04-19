@@ -14,34 +14,33 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package deprecated
+package flagutil
 
 import (
 	"strconv"
 	"time"
 
-	"vitess.io/vitess/go/flagutil"
 	"vitess.io/vitess/go/vt/log"
 )
 
-type Float64Seconds struct {
+type DeprecatedFloat64Seconds struct {
 	name string
 	val  time.Duration
 }
 
-var _ flagutil.Value[time.Duration] = (*Float64Seconds)(nil)
+var _ Value[time.Duration] = (*DeprecatedFloat64Seconds)(nil)
 
-func NewFloat64Seconds(name string, defVal time.Duration) Float64Seconds {
-	return Float64Seconds{
+func NewDeprecatedFloat64Seconds(name string, defVal time.Duration) DeprecatedFloat64Seconds {
+	return DeprecatedFloat64Seconds{
 		name: name,
 		val:  defVal,
 	}
 }
 
-func (f *Float64Seconds) String() string { return f.val.String() }
-func (f *Float64Seconds) Type() string   { return "duration" }
+func (f *DeprecatedFloat64Seconds) String() string { return f.val.String() }
+func (f *DeprecatedFloat64Seconds) Type() string   { return "duration" }
 
-func (f *Float64Seconds) Set(arg string) error {
+func (f *DeprecatedFloat64Seconds) Set(arg string) error {
 	v, err := time.ParseDuration(arg)
 	if err != nil {
 		log.Warningf("failed to parse %s as duration (err: %v); falling back to parsing to %s as seconds. this is deprecated and will be removed in a future release", f.name, err, f.val)
@@ -58,8 +57,8 @@ func (f *Float64Seconds) Set(arg string) error {
 	return nil
 }
 
-func (f Float64Seconds) Get() time.Duration { return f.val }
+func (f DeprecatedFloat64Seconds) Get() time.Duration { return f.val }
 
-func (f *Float64Seconds) UnmarshalJSON(data []byte) error {
+func (f *DeprecatedFloat64Seconds) UnmarshalJSON(data []byte) error {
 	return f.Set(string(data))
 }
