@@ -821,44 +821,6 @@ func ReadLostInRecoveryInstances(keyspace string, shard string) ([](*Instance), 
 	return readInstancesByCondition(condition, sqlutils.Args(DowntimeLostInRecoveryMessage, keyspace, shard), "keyspace asc, shard asc, replication_depth asc")
 }
 
-// readUnseenPrimaryKeys will read list of primaries that have never been seen, and yet whose replicas
-// seem to be replicating.
-func readUnseenPrimaryKeys() ([]InstanceKey, error) {
-	res := []InstanceKey{}
-
-	err := db.QueryVTOrcRowsMap(`
-			SELECT DISTINCT
-			    replica_instance.source_host, replica_instance.source_port
-			FROM
-			    database_instance replica_instance
-			        LEFT JOIN
-			    hostname_resolve ON (replica_instance.source_host = hostname_resolve.hostname)
-			        LEFT JOIN
-			    database_instance primary_instance ON (
-			    	COALESCE(hostname_resolve.resolved_hostname, replica_instance.source_host) = primary_instance.hostname
-			    	and replica_instance.source_port = primary_instance.port)
-			WHERE
-			    primary_instance.last_checked IS NULL
-			    and replica_instance.source_host != ''
-			    and replica_instance.source_host != '_'
-			    and replica_instance.source_port > 0
-			    and replica_instance.replica_io_running = 1
-			`, func(m sqlutils.RowMap) error {
-		instanceKey, _ := NewResolveInstanceKey(m.GetString("source_host"), m.GetInt("source_port"))
-		// we ignore the error. It can be expected that we are unable to resolve the hostname.
-		// Maybe that's how we got here in the first place!
-		res = append(res, *instanceKey)
-
-		return nil
-	})
-	if err != nil {
-		log.Error(err)
-		return res, err
-	}
-
-	return res, nil
-}
-
 // ForgetUnseenInstancesDifferentlyResolved will purge instances which are invalid, and whose hostname
 // appears on the hostname_resolved table; this means some time in the past their hostname was unresovled, and now
 // resovled to a different value; the old hostname is never accessed anymore and the old entry should be removed.
