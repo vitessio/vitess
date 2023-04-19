@@ -17,6 +17,7 @@ limitations under the License.
 package tabletenv
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"sync"
@@ -24,7 +25,6 @@ import (
 
 	"github.com/spf13/pflag"
 	"google.golang.org/protobuf/encoding/prototext"
-	"k8s.io/apimachinery/pkg/util/json"
 
 	"vitess.io/vitess/go/cache"
 	"vitess.io/vitess/go/flagutil"
