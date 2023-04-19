@@ -173,21 +173,6 @@ func (bh *S3BackupHandle) AddFile(ctx context.Context, filename string, filesize
 		})
 		object := objName(bh.dir, bh.name, filename)
 
-		// Under the hood, (*Uploader).Upload breaks the input into chunks
-		// and sends them to S3 in parallel.
-		//
-		// "S3:Upload" measures the start-to-end time of the operation,
-		// rather than timing individual chunks.
-		//
-		// This metric encompasses:
-		// - HTTP calls to S3.
-		// - Marshal requests and unmarshal responses.
-		// - Retry attempts and any sleep in between retries.
-		uploadStats := bh.bs.params.Stats.Scope(stats.Operation("S3:Upload"))
-		startAt := time.Now()
-		defer func() {
-			uploadStats.TimedIncrement(time.Since(startAt))
-		}()
 		_, err := uploader.Upload(&s3manager.UploadInput{
 			Bucket:               &bucket,
 			Key:                  object,
@@ -482,7 +467,26 @@ func (bs *S3BackupStorage) client() (*s3.S3, error) {
 			})
 		}
 
-		bs._client = s3.New(session, &awsConfig)
+		svc := s3.New(session, &awsConfig)
+
+		// Instrument bytes transferred and duration of each HTTP call to AWS.
+		//
+		// Note that calls may happen in parallel and may be retried, so the
+		// total time instrumented may exceed the time of backup and restore
+		// operations.
+		sendStats := bs.params.Stats.Scope(stats.Operation("AWS:Request:Send"))
+		svc.Handlers.CompleteAttempt.PushBack(func(r *request.Request) {
+			var b int64
+			if r.HTTPRequest != nil && r.HTTPRequest.ContentLength > 0 {
+				b += r.HTTPRequest.ContentLength
+			}
+			if r.HTTPResponse != nil && r.HTTPResponse.ContentLength > 0 {
+				b += r.HTTPResponse.ContentLength
+			}
+			sendStats.TimedIncrementBytes(int(b), time.Since(r.AttemptTime))
+		})
+
+		bs._client = svc
 
 		if len(bucket) == 0 {
 			return nil, fmt.Errorf("--s3_backup_storage_bucket required")
