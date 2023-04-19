@@ -759,7 +759,7 @@ func terminatedRestore(t *testing.T) {
 	// backup the replica
 	err := localCluster.VtctlclientProcess.ExecuteCommand("Backup", replica1.Alias)
 	require.Nil(t, err)
-	checkTabletType(t, primary.Alias, topodata.TabletType_REPLICA)
+	checkTabletType(t, replica1.Alias, topodata.TabletType_REPLICA)
 
 	verifyTabletBackupStats(t, replica1.VttabletProcess.GetVars())
 
@@ -804,7 +804,6 @@ func checkTabletType(t *testing.T, alias string, tabletType topodata.TabletType)
 		var tabletPB topodata.Tablet
 		err = json.Unmarshal([]byte(output), &tabletPB)
 		require.Nil(t, err)
-		fmt.Printf("gettablet on %s %v %v \n", alias, tabletType, tabletPB.Type)
 		if tabletType == tabletPB.Type {
 			return
 		}
