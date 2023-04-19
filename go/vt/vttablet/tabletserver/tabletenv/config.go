@@ -350,6 +350,23 @@ func (cfg *TabletConfig) UnmarshalJSON(data []byte) error {
 	return json.Unmarshal(data, &tmp)
 }
 
+func (cfg *TabletConfig) MarshalJSON() ([]byte, error) {
+	type TCProxy TabletConfig
+
+	tmp := struct {
+		TCProxy
+		SchemaReloadIntervalSeconds string `json:"schemaReloadIntervalSeconds,omitempty"`
+	}{
+		TCProxy: TCProxy(*cfg),
+	}
+
+	if d := cfg.SchemaReloadIntervalSeconds.Get(); d != 0 {
+		tmp.SchemaReloadIntervalSeconds = d.String()
+	}
+
+	return json.Marshal(&tmp)
+}
+
 // ConnPoolConfig contains the config for a conn pool.
 type ConnPoolConfig struct {
 	Size               int     `json:"size,omitempty"`
