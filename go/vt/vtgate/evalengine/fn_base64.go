@@ -94,6 +94,37 @@ func (call *builtinToBase64) typeof(env *ExpressionEnv, fields []*querypb.Field)
 	return sqltypes.VarChar, f
 }
 
+func (call *builtinToBase64) compile(c *compiler) (ctype, error) {
+	str, err := call.Arguments[0].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip := c.compileNullCheck1(str)
+
+	t := sqltypes.VarChar
+	if str.Type == sqltypes.Blob || str.Type == sqltypes.TypeJSON {
+		t = sqltypes.Text
+	}
+
+	switch {
+	case str.isTextual():
+	default:
+		c.asm.Convert_xb(1, t, 0, false)
+	}
+
+	col := collations.TypedCollation{
+		Collation:    c.cfg.Collation,
+		Coercibility: collations.CoerceCoercible,
+		Repertoire:   collations.RepertoireASCII,
+	}
+
+	c.asm.Fn_TO_BASE64(t, col)
+	c.asm.jumpDestination(skip)
+
+	return ctype{Type: t, Col: col}, nil
+}
+
 func (call *builtinFromBase64) eval(env *ExpressionEnv) (eval, error) {
 	arg, err := call.arg1(env)
 	if err != nil {
@@ -120,4 +151,29 @@ func (call *builtinFromBase64) typeof(env *ExpressionEnv, fields []*querypb.Fiel
 		return sqltypes.Blob, f | flagNullable
 	}
 	return sqltypes.VarBinary, f | flagNullable
+}
+
+func (call *builtinFromBase64) compile(c *compiler) (ctype, error) {
+	str, err := call.Arguments[0].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip := c.compileNullCheck1(str)
+
+	t := sqltypes.VarBinary
+	if str.Type == sqltypes.Blob || str.Type == sqltypes.TypeJSON {
+		t = sqltypes.Blob
+	}
+
+	switch {
+	case str.isTextual():
+	default:
+		c.asm.Convert_xb(1, t, 0, false)
+	}
+
+	c.asm.Fn_FROM_BASE64(t)
+	c.asm.jumpDestination(skip)
+
+	return ctype{Type: t, Col: collationBinary}, nil
 }
