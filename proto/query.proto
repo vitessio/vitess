@@ -327,9 +327,9 @@ message ExecuteOptions {
   // in metrics and tracing spans.
   string WorkloadName = 15;
 
-  // criticality specifies the criticality of the query, between 0 and 100. This is leveraged by the transaction
+  // priority specifies the priority of the query, between 0 and 100. This is leveraged by the transaction
   // throttler to determine whether, under resource contention, a query should or should not be throttled.
-  string criticality = 16;
+  string priority = 16;
 }
 
 // Field describes a single column returned by a query

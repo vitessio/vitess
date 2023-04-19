@@ -47,16 +47,16 @@ const (
 	DirectiveQueryPlanner = "PLANNER"
 	// DirectiveWorkloadName specifies the name of the client application workload issuing the query.
 	DirectiveWorkloadName = "WORKLOAD_NAME"
-	// DirectiveCriticality specifies the criticality of a workload. It should be an integer between 0 and 100, where
-	// 100 is the highest criticality, and 0 is the lowest one.
-	DirectiveCriticality = "CRITICALITY"
+	// DirectivePriority specifies the priority of a workload. It should be an integer between 0 and 100, where
+	// 100 is the highest priority, and 0 is the lowest one.
+	DirectivePriority = "PRIORITY"
 
-	// MaxCriticalityValue specifies the maximum value allowed for criticality. Valid criticality values are
-	// between zero and MaxCriticalityValue.
-	MaxCriticalityValue = 100
+	// MaxPriorityValue specifies the maximum value allowed for priority. Valid priority values are
+	// between zero and MaxPriorityValue.
+	MaxPriorityValue = 100
 )
 
-var ErrInvalidCriticality = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Invalid criticality value specified in query")
+var ErrInvalidPriority = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Invalid priority value specified in query")
 
 func isNonSpace(r rune) bool {
 	return !unicode.IsSpace(r)
@@ -384,27 +384,27 @@ func CommentsForStatement(stmt Statement) Comments {
 	return nil
 }
 
-// GetCriticalityFromStatement gets the criticality from the provided Statement, using DirectiveCriticality
-func GetCriticalityFromStatement(statement Statement) (string, error) {
+// GetPriorityFromStatement gets the priority from the provided Statement, using DirectivePriority
+func GetPriorityFromStatement(statement Statement) (string, error) {
 	commentedStatement, ok := statement.(Commented)
 	// This would mean that the statement lacks comments, so we can't obtain the workload from it. Hence default to
-	// empty criticality
+	// empty priority
 	if !ok {
 		return "", nil
 	}
 
 	directives := commentedStatement.GetParsedComments().Directives()
-	criticality := directives.GetString(DirectiveCriticality, "")
-	if !ok || criticality == "" {
+	priority := directives.GetString(DirectivePriority, "")
+	if priority == "" {
 		return "", nil
 	}
 
-	intCriticality, err := strconv.Atoi(criticality)
-	if err != nil || intCriticality < 0 || intCriticality > MaxCriticalityValue {
-		return "", ErrInvalidCriticality
+	intPriority, err := strconv.Atoi(priority)
+	if err != nil || intPriority < 0 || intPriority > MaxPriorityValue {
+		return "", ErrInvalidPriority
 	}
 
-	return criticality, nil
+	return priority, nil
 }
 
 // GetWorkloadNameFromStatement gets the workload name from the provided Statement, using workloadLabel as the name of

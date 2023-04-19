@@ -254,7 +254,7 @@ func (t *noopVCursor) SetPlannerVersion(querypb.ExecuteOptions_PlannerVersion) {
 	panic("implement me")
 }
 
-func (t *noopVCursor) SetCriticality(string) {
+func (t *noopVCursor) SetPriority(string) {
 	panic("implement me")
 }
 
@@ -710,7 +710,7 @@ func (f *loggingVCursor) SetPlannerVersion(querypb.ExecuteOptions_PlannerVersion
 	panic("implement me")
 }
 
-func (f *loggingVCursor) SetCriticality(string) {
+func (f *loggingVCursor) SetPriority(string) {
 	panic("implement me")
 }
 

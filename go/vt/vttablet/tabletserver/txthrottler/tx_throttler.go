@@ -268,7 +268,7 @@ func (t *TxThrottler) Close() {
 // It returns true if the transaction should not proceed (the caller
 // should back off). Throttle requires that Open() was previously called
 // successfully.
-func (t *TxThrottler) Throttle(criticality int) (result bool) {
+func (t *TxThrottler) Throttle(priority int) (result bool) {
 	if !t.config.enabled {
 		return false
 	}
@@ -276,9 +276,9 @@ func (t *TxThrottler) Throttle(criticality int) (result bool) {
 		panic("BUG: Throttle() called on a closed TxThrottler")
 	}
 
-	// Throttle according to both what the throttle state says, and the criticality. Workloads with higher criticality
+	// Throttle according to both what the throttle state says, and the priority. Workloads with higher priority
 	// are less likely to be throttled.
-	result = t.state.throttle() && rand.Intn(sqlparser.MaxCriticalityValue) > criticality
+	result = t.state.throttle() && rand.Intn(sqlparser.MaxPriorityValue) > priority
 	t.requestsTotal.Add(1)
 	if result {
 		t.requestsThrottled.Add(1)

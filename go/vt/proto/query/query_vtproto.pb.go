@@ -377,10 +377,10 @@ func (m *ExecuteOptions) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
-	if len(m.Criticality) > 0 {
-		i -= len(m.Criticality)
-		copy(dAtA[i:], m.Criticality)
-		i = encodeVarint(dAtA, i, uint64(len(m.Criticality)))
+	if len(m.Priority) > 0 {
+		i -= len(m.Priority)
+		copy(dAtA[i:], m.Priority)
+		i = encodeVarint(dAtA, i, uint64(len(m.Priority)))
 		i--
 		dAtA[i] = 0x1
 		i--
@@ -4253,7 +4253,7 @@ func (m *ExecuteOptions) SizeVT() (n int) {
 	if l > 0 {
 		n += 1 + l + sov(uint64(l))
 	}
-	l = len(m.Criticality)
+	l = len(m.Priority)
 	if l > 0 {
 		n += 2 + l + sov(uint64(l))
 	}
@@ -6828,7 +6828,7 @@ func (m *ExecuteOptions) UnmarshalVT(dAtA []byte) error {
 			iNdEx = postIndex
 		case 16:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Criticality", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field Priority", wireType)
 			}
 			var stringLen uint64
 			for shift := uint(0); ; shift += 7 {
@@ -6856,7 +6856,7 @@ func (m *ExecuteOptions) UnmarshalVT(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.Criticality = string(dAtA[iNdEx:postIndex])
+			m.Priority = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex

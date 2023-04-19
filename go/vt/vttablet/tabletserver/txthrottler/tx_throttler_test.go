@@ -138,7 +138,7 @@ func TestEnabledThrottler(t *testing.T) {
 	assert.Equal(t, int64(2), throttler.requestsTotal.Get())
 	assert.Equal(t, int64(1), throttler.requestsThrottled.Get())
 
-	// This call should not throttle due to criticality. Check that's the case and counters agree.
+	// This call should not throttle due to priority. Check that's the case and counters agree.
 	assert.False(t, throttler.Throttle(100))
 	assert.Equal(t, int64(3), throttler.requestsTotal.Get())
 	assert.Equal(t, int64(1), throttler.requestsThrottled.Get())
