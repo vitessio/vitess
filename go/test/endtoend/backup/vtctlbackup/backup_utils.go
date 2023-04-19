@@ -753,12 +753,13 @@ func terminatedRestore(t *testing.T) {
 
 	checkTabletType(t, replica1.Alias, topodata.TabletType_REPLICA)
 	terminateBackup(t, replica1.Alias)
-	// if restore fails then the tablet type remains `RESTORE`. It does not get back to its original type.
+	// If backup fails then the tablet type goes back to original type.
 	checkTabletType(t, replica1.Alias, topodata.TabletType_REPLICA)
 
 	// backup the replica
 	err := localCluster.VtctlclientProcess.ExecuteCommand("Backup", replica1.Alias)
 	require.Nil(t, err)
+	checkTabletType(t, primary.Alias, topodata.TabletType_REPLICA)
 
 	verifyTabletBackupStats(t, replica1.VttabletProcess.GetVars())
 
@@ -778,12 +779,11 @@ func terminatedRestore(t *testing.T) {
 
 	checkTabletType(t, primary.Alias, topodata.TabletType_REPLICA)
 	terminateRestore(t)
-	// if restore fails then the tablet type remains `RESTORE`. It does not get back to its original type.
+	// If restore fails then the tablet type goes back to original type.
 	checkTabletType(t, primary.Alias, topodata.TabletType_REPLICA)
 
 	err = localCluster.VtctlclientProcess.ExecuteCommand("RestoreFromBackup", primary.Alias)
 	require.Nil(t, err)
-
 	checkTabletType(t, primary.Alias, topodata.TabletType_REPLICA)
 
 	_, err = os.Stat(path.Join(primary.VttabletProcess.Directory, "restore_in_progress"))
@@ -805,7 +805,6 @@ func checkTabletType(t *testing.T, alias string, tabletType topodata.TabletType)
 		err = json.Unmarshal([]byte(output), &tabletPB)
 		require.Nil(t, err)
 		fmt.Printf("gettablet on %s %v %v \n", alias, tabletType, tabletPB.Type)
-		//assert.Equal(t, tabletType, topodata.TabletType_REPLICA)
 		if tabletType == tabletPB.Type {
 			return
 		}
