@@ -245,6 +245,10 @@ func (ev filePosFakeEvent) Rows(BinlogFormat, *TableMap) (Rows, error) {
 	return Rows{}, nil
 }
 
+func (ev filePosFakeEvent) TransactionPayload(BinlogFormat) ([]BinlogEvent, error) {
+	return []BinlogEvent{}, nil
+}
+
 func (ev filePosFakeEvent) NextLogFile(BinlogFormat) (string, uint64, error) {
 	return "", 0, nil
 }
@@ -253,7 +257,7 @@ func (ev filePosFakeEvent) IsPseudo() bool {
 	return false
 }
 
-func (ev filePosFakeEvent) IsCompressed() bool {
+func (ev filePosFakeEvent) IsTransactionPayload() bool {
 	return false
 }
 

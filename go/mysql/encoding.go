@@ -214,6 +214,16 @@ func readUint64(data []byte, pos int) (uint64, int, bool) {
 	return binary.LittleEndian.Uint64(data[pos : pos+8]), pos + 8, true
 }
 
+// readFixedLenUint64 reads a uint64 from a fixed-length slice
+// of bytes in little endian format.
+func readFixedLenUint64(data []byte) uint64 {
+	var val uint64 = 0
+	for i, b := range data {
+		val |= uint64(b) << (uint(i) * 8)
+	}
+	return val
+}
+
 func readLenEncInt(data []byte, pos int) (uint64, int, bool) {
 	if pos >= len(data) {
 		return 0, 0, false
