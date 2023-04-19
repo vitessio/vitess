@@ -236,7 +236,7 @@ Usage of vttablet:
       --queryserver-config-terse-errors                                  prevent bind vars from escaping in client error messages
       --queryserver-config-transaction-cap int                           query server transaction cap is the maximum number of transactions allowed to happen at any given point of a time for a single vttablet. E.g. by setting transaction cap to 100, there are at most 100 transactions will be processed by a vttablet and the 101th transaction will be blocked (and fail if it cannot get connection within specified timeout) (default 20)
       --queryserver-config-transaction-timeout float                     query server transaction timeout (in seconds), a transaction will be killed if it takes longer than this value (default 30)
-      --queryserver-config-truncate-error-len int                        truncate errors sent to client if they are above this value (0 means do not truncate)
+      --queryserver-config-truncate-error-len int                        truncate errors sent to client if they are longer than this value (0 means do not truncate)
       --queryserver-config-txpool-timeout float                          query server transaction pool timeout, it is how long vttablet waits if tx pool is full (default 1)
       --queryserver-config-txpool-waiter-cap int                         query server transaction pool waiter limit, this is the maximum number of transactions that can be queued waiting to get a connection (default 5000)
       --queryserver-config-warn-result-size int                          query server result size warning threshold, warn if number of rows returned from vttablet for non-streaming queries exceeds this

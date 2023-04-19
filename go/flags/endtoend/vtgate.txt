@@ -199,7 +199,7 @@ Usage of vtgate:
       --vmodule moduleSpec                                               comma-separated list of pattern=N settings for file-filtered logging
       --vschema_ddl_authorized_users string                              List of users authorized to execute vschema ddl operations, or '%' to allow all users.
       --vtgate-config-terse-errors                                       prevent bind vars from escaping in returned errors
-      --vtgate-config-truncate-error-len int                             truncate errors sent to client if they are above this value (0 means do not truncate)
+      --vtgate-config-truncate-error-len int                             truncate errors sent to client if they are longer than this value (0 means do not truncate)
       --warn_memory_rows int                                             Warning threshold for in-memory results. A row count higher than this amount will cause the VtGateWarnings.ResultsExceeded counter to be incremented. (default 30000)
       --warn_payload_size int                                            The warning threshold for query payloads in bytes. A payload greater than this threshold will cause the VtGateWarnings.WarnPayloadSizeExceeded counter to be incremented.
       --warn_sharded_only                                                If any features that are only available in unsharded mode are used, query execution warnings will be added to the session
