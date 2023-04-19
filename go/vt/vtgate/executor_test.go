@@ -1826,10 +1826,12 @@ func TestGetPlanPriority(t *testing.T) {
 		expectedPriority string
 		expectedError    error
 	}{
-		{name: "empty priority", sql: "select * from music_user_map", expectedPriority: "", expectedError: nil},
 		{name: "Invalid priority", sql: "select /*vt+ PRIORITY=something */ * from music_user_map", expectedPriority: "", expectedError: sqlparser.ErrInvalidPriority},
 		{name: "Valid priority", sql: "select /*vt+ PRIORITY=33 */ * from music_user_map", expectedPriority: "33", expectedError: nil},
+		{name: "empty priority", sql: "select * from music_user_map", expectedPriority: "", expectedError: nil},
 	}
+
+	session := NewSafeSession(&vtgatepb.Session{TargetString: "@unknown", Options: &querypb.ExecuteOptions{}})
 
 	for _, aTestCase := range testCases {
 		testCase := aTestCase
@@ -1838,7 +1840,7 @@ func TestGetPlanPriority(t *testing.T) {
 			r, _, _, _ := createExecutorEnv()
 			r.normalize = true
 			logStats := logstats.NewLogStats(ctx, "Test", "", "", nil)
-			vCursor, err := newVCursorImpl(NewSafeSession(&vtgatepb.Session{TargetString: "@unknown", Options: &querypb.ExecuteOptions{}}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, false, pv)
+			vCursor, err := newVCursorImpl(session, makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, false, pv)
 			assert.NoError(t, err)
 
 			stmt, err := sqlparser.Parse(testCase.sql)

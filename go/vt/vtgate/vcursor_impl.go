@@ -849,9 +849,8 @@ func (vc *vcursorImpl) SetPlannerVersion(v plancontext.PlannerVersion) {
 }
 
 func (vc *vcursorImpl) SetPriority(priority string) {
-	if priority != "" {
-		vc.safeSession.GetOrCreateOptions().Priority = priority
-	}
+	vc.safeSession.GetOrCreateOptions().Priority = priority
+
 }
 
 // SetConsolidator implements the SessionActions interface
