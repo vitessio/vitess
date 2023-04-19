@@ -551,7 +551,17 @@ func (vc *VitessCluster) AddShards(t *testing.T, cells []*Cell, keyspace *Keyspa
 			for ind, proc := range dbProcesses {
 				log.Infof("Waiting for mysql process for tablet %s", tablets[ind].Name)
 				if err := proc.Wait(); err != nil {
-					t.Fatalf("%v :: Unable to start mysql server for %v", err, tablets[ind].Vttablet)
+					// Retry starting the database process before giving up.
+					t.Logf("%v :: Unable to start mysql server for %v. Will retry...", err, tablets[ind].Vttablet)
+					tablets[ind].DbServer.CleanupFiles(tablets[ind].Vttablet.TabletUID)
+					time.Sleep(1 * time.Second)
+					dbcmd, err := tablets[ind].DbServer.StartProcess()
+					require.NoError(t, err)
+					if err = dbcmd.Wait(); err != nil {
+						output, _ := dbcmd.CombinedOutput()
+						t.Fatalf("%v :: Unable to start mysql server for %v; Output: %s", err,
+							tablets[ind].Vttablet, string(output))
+					}
 				}
 			}
 			for ind, tablet := range tablets {
