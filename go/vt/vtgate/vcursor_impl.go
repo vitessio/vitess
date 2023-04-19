@@ -849,7 +849,11 @@ func (vc *vcursorImpl) SetPlannerVersion(v plancontext.PlannerVersion) {
 }
 
 func (vc *vcursorImpl) SetPriority(priority string) {
-	vc.safeSession.GetOrCreateOptions().Priority = priority
+	if priority != "" {
+		vc.safeSession.GetOrCreateOptions().Priority = priority
+	} else if vc.safeSession.Options != nil && vc.safeSession.Options.Priority != "" {
+		vc.safeSession.Options.Priority = ""
+	}
 
 }
 
