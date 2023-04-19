@@ -17,6 +17,7 @@ limitations under the License.
 package main
 
 import (
+	"fmt"
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/acl"
@@ -44,6 +45,8 @@ var (
 )
 
 func main() {
+	fmt.Println("AACU vtctld main")
+
 	servenv.ParseFlags("vtctld")
 	servenv.Init()
 	defer servenv.Close()

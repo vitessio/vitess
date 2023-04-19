@@ -2280,6 +2280,8 @@ func (s *VtctldServer) PingTablet(ctx context.Context, req *vtctldatapb.PingTabl
 
 // PlannedReparentShard is part of the vtctldservicepb.VtctldServer interface.
 func (s *VtctldServer) PlannedReparentShard(ctx context.Context, req *vtctldatapb.PlannedReparentShardRequest) (resp *vtctldatapb.PlannedReparentShardResponse, err error) {
+	fmt.Println("AACU VtctldServer.PlannedReparentShard")
+
 	span, ctx := trace.NewSpan(ctx, "VtctldServer.PlannedReparentShard")
 	defer span.Finish()
 
