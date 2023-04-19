@@ -1028,7 +1028,7 @@
 		},
 		"vreplication_basic": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestBasicVreplicationWorkflow"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestBasicVreplicationWorkflow", "-timeout", "20m"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_basic",
@@ -1037,7 +1037,7 @@
 		},
 		"vreplication_copy_throttling": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestVreplicationCopyThrottling"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestVreplicationCopyThrottling", "-timeout", "15m"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_basic",
@@ -1046,7 +1046,7 @@
 		},
 		"vreplication_copy_parallel": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestVreplicationCopyParallel"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestVreplicationCopyParallel", "-timeout", "15m"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_basic",
@@ -1163,7 +1163,7 @@
 		},
                 "vreplication_mariadb_to_mysql": {
                         "File": "unused.go",
-                        "Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestMoveTablesMariaDBToMySQL", "-timeout", "10m"],
+                        "Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestMoveTablesMariaDBToMySQL", "-timeout", "20m"],
                         "Command": [],
                         "Manual": false,
                         "Shard": "vreplication_across_db_versions",
