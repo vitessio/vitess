@@ -18,6 +18,8 @@ package evalengine
 
 import (
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/collations/charset"
+	"vitess.io/vitess/go/mysql/json"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -64,7 +66,7 @@ func (c *compiler) unsupported(expr Expr) error {
 }
 
 func (c *compiler) compile(expr Expr) (ctype, error) {
-	ct, err := c.compileExpr(expr)
+	ct, err := expr.compile(c)
 	if err != nil {
 		return ctype{}, err
 	}
@@ -72,170 +74,6 @@ func (c *compiler) compile(expr Expr) (ctype, error) {
 		return ctype{}, vterrors.Errorf(vtrpc.Code_INTERNAL, "bad compilation: stack pointer at %d after compilation", c.asm.stack.cur)
 	}
 	return ct, nil
-}
-
-func (c *compiler) compileExpr(expr Expr) (ctype, error) {
-	switch expr := expr.(type) {
-	case *Literal:
-		if expr.inner == nil {
-			c.asm.PushNull()
-		} else if err := c.asm.PushLiteral(expr.inner); err != nil {
-			return ctype{}, err
-		}
-
-		t, f := expr.typeof(nil, nil)
-		return ctype{t, f, evalCollation(expr.inner)}, nil
-
-	case *BindVariable:
-		return c.compileBindVar(expr)
-
-	case *Column:
-		return c.compileColumn(expr)
-
-	case *ArithmeticExpr:
-		return c.compileArithmetic(expr)
-
-	case *BitwiseExpr:
-		return c.compileBitwise(expr)
-
-	case *BitwiseNotExpr:
-		return c.compileBitwiseNot(expr)
-
-	case *NegateExpr:
-		return c.compileNegate(expr)
-
-	case *ComparisonExpr:
-		return c.compileComparison(expr)
-
-	case *CollateExpr:
-		return c.compileCollate(expr)
-
-	case *ConvertExpr:
-		return c.compileConvert(expr)
-
-	case *ConvertUsingExpr:
-		return c.compileConvertUsing(expr)
-
-	case *CaseExpr:
-		return c.compileCase(expr)
-
-	case *LikeExpr:
-		return c.compileLike(expr)
-
-	case *IsExpr:
-		return c.compileIs(expr)
-
-	case *InExpr:
-		return c.compileIn(expr)
-
-	case *NotExpr:
-		return c.compileNot(expr)
-
-	case *LogicalExpr:
-		return c.compileLogical(expr)
-
-	case callable:
-		return c.compileFn(expr)
-
-	case TupleExpr:
-		return c.compileTuple(expr)
-
-	default:
-		return ctype{}, c.unsupported(expr)
-	}
-}
-
-func (c *compiler) compileBindVar(bvar *BindVariable) (ctype, error) {
-	if !bvar.typed {
-		return ctype{}, c.unsupported(bvar)
-	}
-
-	switch tt := bvar.Type; {
-	case sqltypes.IsSigned(tt):
-		c.asm.PushBVar_i(bvar.Key)
-	case sqltypes.IsUnsigned(tt):
-		c.asm.PushBVar_u(bvar.Key)
-	case sqltypes.IsFloat(tt):
-		c.asm.PushBVar_f(bvar.Key)
-	case sqltypes.IsDecimal(tt):
-		c.asm.PushBVar_d(bvar.Key)
-	case sqltypes.IsText(tt):
-		if tt == sqltypes.HexNum {
-			c.asm.PushBVar_hexnum(bvar.Key)
-		} else if tt == sqltypes.HexVal {
-			c.asm.PushBVar_hexval(bvar.Key)
-		} else {
-			c.asm.PushBVar_text(bvar.Key, bvar.Collation)
-		}
-	case sqltypes.IsBinary(tt):
-		c.asm.PushBVar_bin(bvar.Key)
-	case sqltypes.IsNull(tt):
-		c.asm.PushNull()
-	case tt == sqltypes.TypeJSON:
-		c.asm.PushBVar_json(bvar.Key)
-	default:
-		return ctype{}, vterrors.Errorf(vtrpc.Code_UNIMPLEMENTED, "Type is not supported: %s", tt)
-	}
-
-	return ctype{
-		Type: bvar.Type,
-		Col:  bvar.Collation,
-	}, nil
-}
-
-func (c *compiler) compileColumn(column *Column) (ctype, error) {
-	if !column.typed {
-		return ctype{}, c.unsupported(column)
-	}
-
-	col := column.Collation
-	if col.Collation != collations.CollationBinaryID {
-		col.Repertoire = collations.RepertoireUnicode
-	}
-
-	switch tt := column.Type; {
-	case sqltypes.IsSigned(tt):
-		c.asm.PushColumn_i(column.Offset)
-	case sqltypes.IsUnsigned(tt):
-		c.asm.PushColumn_u(column.Offset)
-	case sqltypes.IsFloat(tt):
-		c.asm.PushColumn_f(column.Offset)
-	case sqltypes.IsDecimal(tt):
-		c.asm.PushColumn_d(column.Offset)
-	case sqltypes.IsText(tt):
-		if tt == sqltypes.HexNum {
-			c.asm.PushColumn_hexnum(column.Offset)
-		} else if tt == sqltypes.HexVal {
-			c.asm.PushColumn_hexval(column.Offset)
-		} else {
-			c.asm.PushColumn_text(column.Offset, col)
-		}
-	case sqltypes.IsBinary(tt):
-		c.asm.PushColumn_bin(column.Offset)
-	case sqltypes.IsNull(tt):
-		c.asm.PushNull()
-	case tt == sqltypes.TypeJSON:
-		c.asm.PushColumn_json(column.Offset)
-	default:
-		return ctype{}, vterrors.Errorf(vtrpc.Code_UNIMPLEMENTED, "Type is not supported: %s", tt)
-	}
-
-	return ctype{
-		Type: column.Type,
-		Flag: flagNullable,
-		Col:  col,
-	}, nil
-}
-
-func (c *compiler) compileTuple(tuple TupleExpr) (ctype, error) {
-	for _, arg := range tuple {
-		_, err := c.compileExpr(arg)
-		if err != nil {
-			return ctype{}, err
-		}
-	}
-	c.asm.PackTuple(len(tuple))
-	return ctype{Type: sqltypes.Tuple, Col: collationBinary}, nil
 }
 
 func (c *compiler) compileToNumeric(ct ctype, offset int, fallback sqltypes.Type) ctype {
@@ -340,6 +178,38 @@ func (c *compiler) compileToDecimal(ct ctype, offset int) ctype {
 	return ctype{sqltypes.Decimal, ct.Flag, collationNumeric}
 }
 
+func (c *compiler) compileToDate(doct ctype, offset int) ctype {
+	switch doct.Type {
+	case sqltypes.Date:
+		return doct
+	default:
+		c.asm.Convert_xD(offset)
+	}
+	return ctype{Type: sqltypes.Date, Col: collationBinary, Flag: flagNullable}
+}
+
+func (c *compiler) compileToDateTime(doct ctype, offset, prec int) ctype {
+	switch doct.Type {
+	case sqltypes.Datetime:
+		c.asm.Convert_tp(offset, prec)
+		return doct
+	default:
+		c.asm.Convert_xDT(offset, prec)
+	}
+	return ctype{Type: sqltypes.Datetime, Col: collationBinary, Flag: flagNullable}
+}
+
+func (c *compiler) compileToTime(doct ctype, offset, prec int) ctype {
+	switch doct.Type {
+	case sqltypes.Time:
+		c.asm.Convert_tp(offset, prec)
+		return doct
+	default:
+		c.asm.Convert_xT(offset, prec)
+	}
+	return ctype{Type: sqltypes.Time, Col: collationBinary, Flag: flagNullable}
+}
+
 func (c *compiler) compileNullCheck1(ct ctype) *jump {
 	if ct.nullable() {
 		j := c.asm.jumpFrom()
@@ -372,6 +242,252 @@ func (c *compiler) compileNullCheck3(arg1, arg2, arg3 ctype) *jump {
 		j := c.asm.jumpFrom()
 		c.asm.NullCheck3(j)
 		return j
+	}
+	return nil
+}
+
+func (c *compiler) compileNumericPriority(lt, rt ctype) (ctype, ctype, bool) {
+	switch lt.Type {
+	case sqltypes.Int64:
+		if rt.Type == sqltypes.Uint64 || rt.Type == sqltypes.Float64 || rt.Type == sqltypes.Decimal {
+			return rt, lt, true
+		}
+	case sqltypes.Uint64:
+		if rt.Type == sqltypes.Float64 || rt.Type == sqltypes.Decimal {
+			return rt, lt, true
+		}
+	case sqltypes.Decimal:
+		if rt.Type == sqltypes.Float64 {
+			return rt, lt, true
+		}
+	}
+	return lt, rt, false
+}
+
+func (c *compiler) compareNumericTypes(lt ctype, rt ctype) (swapped bool) {
+	switch lt.Type {
+	case sqltypes.Int64:
+		switch rt.Type {
+		case sqltypes.Int64:
+			c.asm.CmpNum_ii()
+		case sqltypes.Uint64:
+			c.asm.CmpNum_iu(2, 1)
+		case sqltypes.Float64:
+			c.asm.CmpNum_if(2, 1)
+		case sqltypes.Decimal:
+			c.asm.CmpNum_id(2, 1)
+		}
+	case sqltypes.Uint64:
+		switch rt.Type {
+		case sqltypes.Int64:
+			c.asm.CmpNum_iu(1, 2)
+			swapped = true
+		case sqltypes.Uint64:
+			c.asm.CmpNum_uu()
+		case sqltypes.Float64:
+			c.asm.CmpNum_uf(2, 1)
+		case sqltypes.Decimal:
+			c.asm.CmpNum_ud(2, 1)
+		}
+	case sqltypes.Float64:
+		switch rt.Type {
+		case sqltypes.Int64:
+			c.asm.CmpNum_if(1, 2)
+			swapped = true
+		case sqltypes.Uint64:
+			c.asm.CmpNum_uf(1, 2)
+			swapped = true
+		case sqltypes.Float64:
+			c.asm.CmpNum_ff()
+		case sqltypes.Decimal:
+			c.asm.CmpNum_fd(2, 1)
+		}
+
+	case sqltypes.Decimal:
+		switch rt.Type {
+		case sqltypes.Int64:
+			c.asm.CmpNum_id(1, 2)
+			swapped = true
+		case sqltypes.Uint64:
+			c.asm.CmpNum_ud(1, 2)
+			swapped = true
+		case sqltypes.Float64:
+			c.asm.CmpNum_fd(1, 2)
+			swapped = true
+		case sqltypes.Decimal:
+			c.asm.CmpNum_dd()
+		}
+	}
+	return
+}
+
+func (c *compiler) compareAsStrings(lt ctype, rt ctype) error {
+	merged, coerceLeft, coerceRight, err := mergeCollations(lt.Col, rt.Col, lt.Type, rt.Type)
+	if err != nil {
+		return err
+	}
+	if coerceLeft == nil && coerceRight == nil {
+		c.asm.CmpString_collate(merged.Collation.Get())
+	} else {
+		if coerceLeft == nil {
+			coerceLeft = func(dst, in []byte) ([]byte, error) { return in, nil }
+		}
+		if coerceRight == nil {
+			coerceRight = func(dst, in []byte) ([]byte, error) { return in, nil }
+		}
+		c.asm.CmpString_coerce(&compiledCoercion{
+			col:   merged.Collation.Get(),
+			left:  coerceLeft,
+			right: coerceRight,
+		})
+	}
+	return nil
+}
+
+func isEncodingJSONSafe(col collations.ID) bool {
+	switch col.Get().Charset().(type) {
+	case charset.Charset_utf8mb4, charset.Charset_utf8mb3, charset.Charset_binary:
+		return true
+	default:
+		return false
+	}
+}
+
+func (c *compiler) compileParseJSON(fn string, doct ctype, offset int) (ctype, error) {
+	switch doct.Type {
+	case sqltypes.TypeJSON:
+	case sqltypes.VarChar, sqltypes.VarBinary:
+		c.asm.Parse_j(offset)
+	default:
+		return ctype{}, errJSONType(fn)
+	}
+	return ctype{Type: sqltypes.TypeJSON, Flag: doct.Flag, Col: collationJSON}, nil
+}
+
+func (c *compiler) compileToJSON(doct ctype, offset int) (ctype, error) {
+	switch doct.Type {
+	case sqltypes.TypeJSON:
+		return doct, nil
+	case sqltypes.Float64:
+		c.asm.Convert_fj(offset)
+	case sqltypes.Int64:
+		c.asm.Convert_ij(offset, doct.Flag&flagIsBoolean != 0)
+	case sqltypes.Uint64:
+		c.asm.Convert_uj(offset)
+	case sqltypes.Decimal:
+		c.asm.Convert_dj(offset)
+	case sqltypes.VarChar:
+		c.asm.Convert_cj(offset)
+	case sqltypes.VarBinary:
+		c.asm.Convert_bj(offset)
+	case sqltypes.Null:
+		c.asm.Convert_Nj(offset)
+	case sqltypes.Date, sqltypes.Datetime, sqltypes.Timestamp, sqltypes.Time:
+		c.asm.Convert_Tj(offset)
+	default:
+		return ctype{}, vterrors.Errorf(vtrpc.Code_UNIMPLEMENTED, "Unsupported type conversion: %s AS JSON", doct.Type)
+	}
+	return ctype{Type: sqltypes.TypeJSON, Col: collationJSON}, nil
+}
+
+func (c *compiler) compileArgToJSON(doct ctype, offset int) (ctype, error) {
+	switch doct.Type {
+	case sqltypes.TypeJSON:
+		return doct, nil
+	case sqltypes.Float64:
+		c.asm.Convert_fj(offset)
+	case sqltypes.Int64:
+		c.asm.Convert_ij(offset, doct.Flag&flagIsBoolean != 0)
+	case sqltypes.Uint64:
+		c.asm.Convert_uj(offset)
+	case sqltypes.Decimal:
+		c.asm.Convert_dj(offset)
+	case sqltypes.VarChar:
+		c.asm.ConvertArg_cj(offset)
+	case sqltypes.VarBinary:
+		c.asm.Convert_bj(offset)
+	case sqltypes.Null:
+		c.asm.Convert_Nj(offset)
+	case sqltypes.Date, sqltypes.Datetime, sqltypes.Timestamp, sqltypes.Time:
+		c.asm.Convert_Tj(offset)
+	default:
+		return ctype{}, vterrors.Errorf(vtrpc.Code_UNIMPLEMENTED, "Unsupported type conversion: %s AS JSON", doct.Type)
+	}
+	return ctype{Type: sqltypes.TypeJSON, Col: collationJSON}, nil
+}
+
+func (c *compiler) compileToJSONKey(key ctype) error {
+	if key.Type == sqltypes.Null {
+		return errJSONKeyIsNil
+	}
+	if key.Type == sqltypes.VarChar && isEncodingJSONSafe(key.Col.Collation) {
+		return nil
+	}
+	if key.Type == sqltypes.VarBinary {
+		return nil
+	}
+	c.asm.Convert_xc(1, sqltypes.VarChar, c.cfg.Collation, 0, false)
+	return nil
+}
+
+func (c *compiler) jsonExtractPath(expr Expr) (*json.Path, error) {
+	path, ok := expr.(*Literal)
+	if !ok {
+		return nil, errJSONPath
+	}
+	pathBytes, ok := path.inner.(*evalBytes)
+	if !ok {
+		return nil, errJSONPath
+	}
+	var parser json.PathParser
+	return parser.ParseBytes(pathBytes.bytes)
+}
+
+func (c *compiler) jsonExtractOneOrAll(fname string, expr Expr) (jsonMatch, error) {
+	lit, ok := expr.(*Literal)
+	if !ok {
+		return jsonMatchInvalid, errOneOrAll(fname)
+	}
+	b, ok := lit.inner.(*evalBytes)
+	if !ok {
+		return jsonMatchInvalid, errOneOrAll(fname)
+	}
+	return intoOneOrAll(fname, b.string())
+}
+
+func (c *compiler) compareAsJSON(lt ctype, rt ctype) error {
+	_, err := c.compileArgToJSON(lt, 2)
+	if err != nil {
+		return err
+	}
+
+	_, err = c.compileArgToJSON(rt, 1)
+	if err != nil {
+		return err
+	}
+	c.asm.CmpJSON()
+
+	return nil
+}
+
+func (c *compiler) compileCheckTrue(when ctype, offset int) error {
+	switch when.Type {
+	case sqltypes.Int64:
+		c.asm.Convert_iB(offset)
+	case sqltypes.Uint64:
+		c.asm.Convert_uB(offset)
+	case sqltypes.Float64:
+		c.asm.Convert_fB(offset)
+	case sqltypes.Decimal:
+		c.asm.Convert_dB(offset)
+	case sqltypes.VarChar, sqltypes.VarBinary:
+		c.asm.Convert_bB(offset)
+	case sqltypes.Timestamp, sqltypes.Datetime, sqltypes.Time, sqltypes.Date:
+		c.asm.Convert_TB(offset)
+	case sqltypes.Null:
+		c.asm.SetBool(offset, false)
+	default:
+		return vterrors.Errorf(vtrpc.Code_UNIMPLEMENTED, "unsupported Truth check: %s", when.Type)
 	}
 	return nil
 }

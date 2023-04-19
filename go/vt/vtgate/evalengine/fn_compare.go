@@ -23,6 +23,8 @@ import (
 	"vitess.io/vitess/go/mysql/collations/charset"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 type (
@@ -61,6 +63,10 @@ func (b *builtinCoalesce) typeof(env *ExpressionEnv, fields []*querypb.Field) (s
 		ta.add(tt, f)
 	}
 	return ta.result(), flagNullable
+}
+
+func (b *builtinCoalesce) compile(c *compiler) (ctype, error) {
+	return ctype{}, c.unsupported(b)
 }
 
 func getMultiComparisonFunc(args []eval) multiComparisonFunc {
@@ -314,6 +320,107 @@ func (call *builtinMultiComparison) typeof(env *ExpressionEnv, fields []*querypb
 		}
 	}
 	panic("unexpected argument type")
+}
+
+func (call *builtinMultiComparison) compile_c(c *compiler, args []ctype) (ctype, error) {
+	env := collations.Local()
+
+	var ca collationAggregation
+	for _, arg := range args {
+		if err := ca.add(env, arg.Col); err != nil {
+			return ctype{}, err
+		}
+	}
+
+	tc := ca.result()
+	c.asm.Fn_MULTICMP_c(len(args), call.cmp < 0, tc)
+	return ctype{Type: sqltypes.VarChar, Col: tc}, nil
+}
+
+func (call *builtinMultiComparison) compile_d(c *compiler, args []ctype) (ctype, error) {
+	for i, tt := range args {
+		c.compileToDecimal(tt, len(args)-i)
+	}
+	c.asm.Fn_MULTICMP_d(len(args), call.cmp < 0)
+	return ctype{Type: sqltypes.Decimal, Col: collationNumeric}, nil
+}
+
+func (call *builtinMultiComparison) compile(c *compiler) (ctype, error) {
+	var (
+		signed   int
+		unsigned int
+		floats   int
+		decimals int
+		text     int
+		binary   int
+		args     []ctype
+	)
+
+	/*
+		If any argument is NULL, the result is NULL. No comparison is needed.
+		If all arguments are integer-valued, they are compared as integers.
+		If at least one argument is double precision, they are compared as double-precision values. Otherwise, if at least one argument is a DECIMAL value, they are compared as DECIMAL values.
+		If the arguments comprise a mix of numbers and strings, they are compared as strings.
+		If any argument is a nonbinary (character) string, the arguments are compared as nonbinary strings.
+		In all other cases, the arguments are compared as binary strings.
+	*/
+
+	for _, expr := range call.Arguments {
+		tt, err := expr.compile(c)
+		if err != nil {
+			return ctype{}, err
+		}
+
+		args = append(args, tt)
+
+		switch tt.Type {
+		case sqltypes.Int64:
+			signed++
+		case sqltypes.Uint64:
+			unsigned++
+		case sqltypes.Float64:
+			floats++
+		case sqltypes.Decimal:
+			decimals++
+		case sqltypes.Text, sqltypes.VarChar:
+			text++
+		case sqltypes.Blob, sqltypes.Binary, sqltypes.VarBinary:
+			binary++
+		default:
+			return ctype{}, c.unsupported(call)
+		}
+	}
+
+	if signed+unsigned == len(args) {
+		if signed == len(args) {
+			c.asm.Fn_MULTICMP_i(len(args), call.cmp < 0)
+			return ctype{Type: sqltypes.Int64, Col: collationNumeric}, nil
+		}
+		if unsigned == len(args) {
+			c.asm.Fn_MULTICMP_u(len(args), call.cmp < 0)
+			return ctype{Type: sqltypes.Uint64, Col: collationNumeric}, nil
+		}
+		return call.compile_d(c, args)
+	}
+	if binary > 0 || text > 0 {
+		if text > 0 {
+			return call.compile_c(c, args)
+		}
+		c.asm.Fn_MULTICMP_b(len(args), call.cmp < 0)
+		return ctype{Type: sqltypes.VarBinary, Col: collationBinary}, nil
+	} else {
+		if floats > 0 {
+			for i, tt := range args {
+				c.compileToFloat(tt, len(args)-i)
+			}
+			c.asm.Fn_MULTICMP_f(len(args), call.cmp < 0)
+			return ctype{Type: sqltypes.Float64, Col: collationNumeric}, nil
+		}
+		if decimals > 0 {
+			return call.compile_d(c, args)
+		}
+	}
+	return ctype{}, vterrors.Errorf(vtrpc.Code_INTERNAL, "unexpected argument for GREATEST/LEAST")
 }
 
 type typeAggregation struct {

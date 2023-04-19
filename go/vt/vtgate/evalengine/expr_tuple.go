@@ -43,3 +43,14 @@ func (t TupleExpr) eval(env *ExpressionEnv) (eval, error) {
 func (t TupleExpr) typeof(*ExpressionEnv, []*querypb.Field) (sqltypes.Type, typeFlag) {
 	return sqltypes.Tuple, flagNullable
 }
+
+func (tuple TupleExpr) compile(c *compiler) (ctype, error) {
+	for _, arg := range tuple {
+		_, err := arg.compile(c)
+		if err != nil {
+			return ctype{}, err
+		}
+	}
+	c.asm.PackTuple(len(tuple))
+	return ctype{Type: sqltypes.Tuple, Col: collationBinary}, nil
+}
