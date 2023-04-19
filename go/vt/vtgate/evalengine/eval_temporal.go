@@ -6,6 +6,7 @@ import (
 
 	"vitess.io/vitess/go/hack"
 	"vitess.io/vitess/go/mysql/datetime"
+	"vitess.io/vitess/go/mysql/decimal"
 	"vitess.io/vitess/go/mysql/json"
 	"vitess.io/vitess/go/sqltypes"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -54,6 +55,32 @@ func (e *evalTemporal) toInt64() int64 {
 	}
 }
 
+func (e *evalTemporal) toFloat() float64 {
+	switch e.SQLType() {
+	case sqltypes.Date:
+		return float64(e.dt.Date.FormatInt64())
+	case sqltypes.Datetime:
+		return e.dt.FormatFloat64()
+	case sqltypes.Time:
+		return e.dt.Time.FormatFloat64()
+	default:
+		panic("unreachable")
+	}
+}
+
+func (e *evalTemporal) toDecimal() decimal.Decimal {
+	switch e.SQLType() {
+	case sqltypes.Date:
+		return decimal.NewFromInt(e.dt.Date.FormatInt64())
+	case sqltypes.Datetime:
+		return e.dt.FormatDecimal()
+	case sqltypes.Time:
+		return e.dt.Time.FormatDecimal()
+	default:
+		panic("unreachable")
+	}
+}
+
 func (e *evalTemporal) toJSON() *evalJSON {
 	switch e.SQLType() {
 	case sqltypes.Date:
@@ -70,9 +97,9 @@ func (e *evalTemporal) toJSON() *evalJSON {
 func (e *evalTemporal) toDateTime(l int) *evalTemporal {
 	switch e.SQLType() {
 	case sqltypes.Datetime, sqltypes.Date:
-		return &evalTemporal{t: sqltypes.Datetime, dt: e.dt, prec: uint8(l)}
+		return &evalTemporal{t: sqltypes.Datetime, dt: e.dt.Round(l), prec: uint8(l)}
 	case sqltypes.Time:
-		return &evalTemporal{t: sqltypes.Datetime, dt: e.dt.Time.ToDateTime(), prec: uint8(l)}
+		return &evalTemporal{t: sqltypes.Datetime, dt: e.dt.Time.Round(l).ToDateTime(), prec: uint8(l)}
 	default:
 		panic("unreachable")
 	}
@@ -81,13 +108,13 @@ func (e *evalTemporal) toDateTime(l int) *evalTemporal {
 func (e *evalTemporal) toTime(l int) *evalTemporal {
 	switch e.SQLType() {
 	case sqltypes.Datetime:
-		dt := datetime.DateTime{Time: e.dt.Time}
+		dt := datetime.DateTime{Time: e.dt.Time.Round(l)}
 		return &evalTemporal{t: sqltypes.Time, dt: dt, prec: uint8(l)}
 	case sqltypes.Date:
 		// Zero-time
 		return &evalTemporal{t: sqltypes.Time, prec: uint8(l)}
 	case sqltypes.Time:
-		return &evalTemporal{t: sqltypes.Time, dt: e.dt, prec: uint8(l)}
+		return &evalTemporal{t: sqltypes.Time, dt: e.dt.Round(l), prec: uint8(l)}
 	default:
 		panic("unreachable")
 	}
@@ -118,10 +145,7 @@ func (e *evalTemporal) toStdTime(loc *time.Location) time.Time {
 }
 
 func newEvalDateTime(dt datetime.DateTime, l int) *evalTemporal {
-	if l < 0 || l > 6 {
-		panic("invalid precision")
-	}
-	return &evalTemporal{t: sqltypes.Datetime, dt: dt, prec: uint8(l)}
+	return &evalTemporal{t: sqltypes.Datetime, dt: dt.Round(l), prec: uint8(l)}
 }
 
 func newEvalDate(d datetime.Date) *evalTemporal {
@@ -129,7 +153,7 @@ func newEvalDate(d datetime.Date) *evalTemporal {
 }
 
 func newEvalTime(time datetime.Time, l int) *evalTemporal {
-	return &evalTemporal{t: sqltypes.Time, dt: datetime.DateTime{Time: time}, prec: uint8(l)}
+	return &evalTemporal{t: sqltypes.Time, dt: datetime.DateTime{Time: time.Round(l)}, prec: uint8(l)}
 }
 
 func sanitizeErrorValue(s []byte) []byte {
