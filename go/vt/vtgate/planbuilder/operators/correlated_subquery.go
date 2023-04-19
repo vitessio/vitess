@@ -67,6 +67,11 @@ func (s *SubQueryOp) Inputs() []ops.Operator {
 	return []ops.Operator{s.Outer, s.Inner}
 }
 
+// SetInputs implements the Operator interface
+func (s *SubQueryOp) SetInputs(ops []ops.Operator) {
+	s.Outer, s.Inner = ops[0], ops[1]
+}
+
 // IPhysical implements the PhysicalOperator interface
 func (c *CorrelatedSubQueryOp) IPhysical() {}
 
@@ -92,4 +97,9 @@ func (c *CorrelatedSubQueryOp) Clone(inputs []ops.Operator) ops.Operator {
 // Inputs implements the Operator interface
 func (c *CorrelatedSubQueryOp) Inputs() []ops.Operator {
 	return []ops.Operator{c.Outer, c.Inner}
+}
+
+// SetInputs implements the Operator interface
+func (c *CorrelatedSubQueryOp) SetInputs(ops []ops.Operator) {
+	c.Outer, c.Inner = ops[0], ops[1]
 }

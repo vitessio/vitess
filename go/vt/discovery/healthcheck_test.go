@@ -32,7 +32,6 @@ import (
 
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/grpcclient"
-	"vitess.io/vitess/go/vt/status"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -1223,7 +1222,7 @@ func TestTemplate(t *testing.T) {
 		Target:       &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
 		TabletsStats: ts,
 	}
-	templ := template.New("").Funcs(status.StatusFuncs)
+	templ := template.New("")
 	templ, err := templ.Parse(HealthCheckTemplate)
 	require.Nil(t, err, "error parsing template: %v", err)
 	wr := &bytes.Buffer{}
@@ -1250,7 +1249,7 @@ func TestDebugURLFormatting(t *testing.T) {
 		Target:       &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
 		TabletsStats: ts,
 	}
-	templ := template.New("").Funcs(status.StatusFuncs)
+	templ := template.New("")
 	templ, err := templ.Parse(HealthCheckTemplate)
 	require.Nil(t, err, "error parsing template")
 	wr := &bytes.Buffer{}

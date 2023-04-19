@@ -602,10 +602,10 @@
       "Instructions": {
         "OperatorType": "Join",
         "Variant": "Join",
-        "JoinColumnIndexes": "L:2,L:3",
+        "JoinColumnIndexes": "L:0,L:1",
         "JoinVars": {
-          "cc_constraint_name": 1,
-          "cc_constraint_schema": 0
+          "cc_constraint_name": 0,
+          "cc_constraint_schema": 2
         },
         "TableName": "information_schema.check_constraints_information_schema.table_constraints",
         "Inputs": [
@@ -616,8 +616,8 @@
               "Name": "main",
               "Sharded": false
             },
-            "FieldQuery": "select cc.constraint_schema, cc.constraint_name, cc.constraint_name as `name`, cc.check_clause as expression from information_schema.check_constraints as cc where 1 != 1",
-            "Query": "select cc.constraint_schema, cc.constraint_name, cc.constraint_name as `name`, cc.check_clause as expression from information_schema.check_constraints as cc where cc.constraint_schema = :__vtschemaname /* VARCHAR */",
+            "FieldQuery": "select cc.constraint_name as `name`, cc.check_clause as expression, cc.constraint_schema from information_schema.check_constraints as cc where 1 != 1",
+            "Query": "select cc.constraint_name as `name`, cc.check_clause as expression, cc.constraint_schema from information_schema.check_constraints as cc where cc.constraint_schema = :__vtschemaname /* VARCHAR */",
             "SysTableTableSchema": "[VARCHAR(\"constraint_schema\")]",
             "Table": "information_schema.check_constraints"
           },
@@ -1117,9 +1117,9 @@
       "Instructions": {
         "OperatorType": "Join",
         "Variant": "Join",
-        "JoinColumnIndexes": "L:1",
+        "JoinColumnIndexes": "L:0",
         "JoinVars": {
-          "x_COLUMN_NAME": 0
+          "x_COLUMN_NAME": 1
         },
         "TableName": "information_schema.key_column_usage_`user`",
         "Inputs": [
@@ -1130,8 +1130,8 @@
               "Name": "main",
               "Sharded": false
             },
-            "FieldQuery": "select x.COLUMN_NAME, x.table_name from (select a.CONSTRAINT_CATALOG, a.CONSTRAINT_SCHEMA, a.CONSTRAINT_NAME, a.TABLE_CATALOG, a.TABLE_SCHEMA, a.TABLE_NAME, a.COLUMN_NAME, a.ORDINAL_POSITION, a.POSITION_IN_UNIQUE_CONSTRAINT, a.REFERENCED_TABLE_SCHEMA, a.REFERENCED_TABLE_NAME, a.REFERENCED_COLUMN_NAME from information_schema.key_column_usage as a where 1 != 1) as x where 1 != 1",
-            "Query": "select x.COLUMN_NAME, x.table_name from (select a.CONSTRAINT_CATALOG, a.CONSTRAINT_SCHEMA, a.CONSTRAINT_NAME, a.TABLE_CATALOG, a.TABLE_SCHEMA, a.TABLE_NAME, a.COLUMN_NAME, a.ORDINAL_POSITION, a.POSITION_IN_UNIQUE_CONSTRAINT, a.REFERENCED_TABLE_SCHEMA, a.REFERENCED_TABLE_NAME, a.REFERENCED_COLUMN_NAME from information_schema.key_column_usage as a) as x",
+            "FieldQuery": "select x.table_name, x.COLUMN_NAME from (select a.CONSTRAINT_CATALOG, a.CONSTRAINT_SCHEMA, a.CONSTRAINT_NAME, a.TABLE_CATALOG, a.TABLE_SCHEMA, a.TABLE_NAME, a.COLUMN_NAME, a.ORDINAL_POSITION, a.POSITION_IN_UNIQUE_CONSTRAINT, a.REFERENCED_TABLE_SCHEMA, a.REFERENCED_TABLE_NAME, a.REFERENCED_COLUMN_NAME from information_schema.key_column_usage as a where 1 != 1) as x where 1 != 1",
+            "Query": "select x.table_name, x.COLUMN_NAME from (select a.CONSTRAINT_CATALOG, a.CONSTRAINT_SCHEMA, a.CONSTRAINT_NAME, a.TABLE_CATALOG, a.TABLE_SCHEMA, a.TABLE_NAME, a.COLUMN_NAME, a.ORDINAL_POSITION, a.POSITION_IN_UNIQUE_CONSTRAINT, a.REFERENCED_TABLE_SCHEMA, a.REFERENCED_TABLE_NAME, a.REFERENCED_COLUMN_NAME from information_schema.key_column_usage as a) as x",
             "Table": "information_schema.key_column_usage"
           },
           {

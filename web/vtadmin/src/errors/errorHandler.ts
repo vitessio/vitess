@@ -58,16 +58,16 @@ export const notify = (error: Error, metadata?: object) => {
 };
 
 /**
- * sanitizeEnv serializes process.env into an object that's sent to
+ * sanitizeEnv serializes import.meta.env into an object that's sent to
  * configured error handlers, for extra debugging context.
  * Implemented as an allow list, rather than as a block list, to avoid
  * leaking sensitive environment variables, like API keys.
  */
 const sanitizeEnv = () =>
     pick(env(), [
-        'REACT_APP_BUILD_BRANCH',
-        'REACT_APP_BUILD_SHA',
-        'REACT_APP_ENABLE_EXPERIMENTAL_TABLET_DEBUG_VARS',
-        'REACT_APP_FETCH_CREDENTIALS',
-        'REACT_APP_VTADMIN_API_ADDRESS',
+        'VITE_BUILD_BRANCH',
+        'VITE_BUILD_SHA',
+        'VITE_ENABLE_EXPERIMENTAL_TABLET_DEBUG_VARS',
+        'VITE_FETCH_CREDENTIALS',
+        'VITE_VTADMIN_API_ADDRESS',
     ]);

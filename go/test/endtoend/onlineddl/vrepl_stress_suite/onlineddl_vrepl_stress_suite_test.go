@@ -422,7 +422,7 @@ func TestMain(m *testing.M) {
 		clusterInstance.VtctldExtraArgs = []string{
 			"--schema_change_dir", schemaChangeDirectory,
 			"--schema_change_controller", "local",
-			"--schema_change_check_interval", "1",
+			"--schema_change_check_interval", "1s",
 		}
 
 		// --vstream_packet_size is set to a small value that ensures we get multiple stream iterations,

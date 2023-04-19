@@ -77,14 +77,14 @@ func TestNormalize(t *testing.T) {
 		in:      "select * from t where foobar = 1.2",
 		outstmt: "select * from t where foobar = :foobar /* DECIMAL */",
 		outbv: map[string]*querypb.BindVariable{
-			"foobar": sqltypes.DecimalBindVariable(1.2),
+			"foobar": sqltypes.DecimalBindVariable("1.2"),
 		},
 	}, {
 		// multiple vals
 		in:      "select * from t where foo = 1.2 and bar = 2",
 		outstmt: "select * from t where foo = :foo /* DECIMAL */ and bar = :bar /* INT64 */",
 		outbv: map[string]*querypb.BindVariable{
-			"foo": sqltypes.DecimalBindVariable(1.2),
+			"foo": sqltypes.DecimalBindVariable("1.2"),
 			"bar": sqltypes.Int64BindVariable(2),
 		},
 	}, {

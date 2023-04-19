@@ -27,7 +27,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
-func optimizeSubQuery(ctx *plancontext.PlanningContext, op *SubQuery, ts semantics.TableSet) (ops.Operator, rewrite.TreeIdentity, error) {
+func optimizeSubQuery(ctx *plancontext.PlanningContext, op *SubQuery, ts semantics.TableSet) (ops.Operator, rewrite.ApplyResult, error) {
 	var unmerged []*SubQueryOp
 
 	// first loop over the subqueries and try to merge them into the outer plan
@@ -361,7 +361,7 @@ func rewriteColumnsInSubqueryOpForJoin(
 			return true
 		}
 		// if it does not exist, then push this as an output column there and add it to the joinVars
-		newInnerOp, offset, err := resultInnerOp.AddColumn(ctx, aeWrap(node), true)
+		newInnerOp, offset, err := resultInnerOp.AddColumn(ctx, aeWrap(node))
 		if err != nil {
 			rewriteError = err
 			return false
@@ -427,7 +427,7 @@ func createCorrelatedSubqueryOp(
 			bindVars[node] = bindVar
 
 			// if it does not exist, then push this as an output column in the outerOp and add it to the joinVars
-			newOuterOp, offset, err := resultOuterOp.AddColumn(ctx, aeWrap(node), true)
+			newOuterOp, offset, err := resultOuterOp.AddColumn(ctx, aeWrap(node))
 			if err != nil {
 				rewriteError = err
 				return true

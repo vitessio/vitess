@@ -42,6 +42,11 @@ func (d *AlterTableEntityDiff) IsEmpty() bool {
 	return d.Statement() == nil
 }
 
+// EntityName implements EntityDiff
+func (d *AlterTableEntityDiff) EntityName() string {
+	return d.from.Name()
+}
+
 // Entities implements EntityDiff
 func (d *AlterTableEntityDiff) Entities() (from Entity, to Entity) {
 	return d.from, d.to
@@ -118,6 +123,11 @@ func (d *CreateTableEntityDiff) IsEmpty() bool {
 	return d.Statement() == nil
 }
 
+// EntityName implements EntityDiff
+func (d *CreateTableEntityDiff) EntityName() string {
+	return d.to.Name()
+}
+
 // Entities implements EntityDiff
 func (d *CreateTableEntityDiff) Entities() (from Entity, to Entity) {
 	return nil, &CreateTableEntity{CreateTable: d.createTable}
@@ -172,6 +182,11 @@ type DropTableEntityDiff struct {
 // IsEmpty implements EntityDiff
 func (d *DropTableEntityDiff) IsEmpty() bool {
 	return d.Statement() == nil
+}
+
+// EntityName implements EntityDiff
+func (d *DropTableEntityDiff) EntityName() string {
+	return d.from.Name()
 }
 
 // Entities implements EntityDiff
@@ -229,6 +244,11 @@ type RenameTableEntityDiff struct {
 // IsEmpty implements EntityDiff
 func (d *RenameTableEntityDiff) IsEmpty() bool {
 	return d.Statement() == nil
+}
+
+// EntityName implements EntityDiff
+func (d *RenameTableEntityDiff) EntityName() string {
+	return d.from.Name()
 }
 
 // Entities implements EntityDiff
@@ -330,6 +350,36 @@ func (c *CreateTableEntity) normalizeTableOptions() {
 			opt.String = strings.ToUpper(opt.String)
 		}
 	}
+}
+
+// GetCharset returns the explicit character set name specified
+// in the CREATE TABLE statement (if any).
+func (c *CreateTableEntity) GetCharset() string {
+	for _, opt := range c.CreateTable.TableSpec.Options {
+		if strings.ToLower(opt.Name) == "charset" {
+			opt.String = strings.ToLower(opt.String)
+			if charsetName, ok := collationEnv.CharsetAlias(opt.String); ok {
+				return charsetName
+			}
+			return opt.String
+		}
+	}
+	return ""
+}
+
+// GetCollation returns the explicit collation name specified
+// in the CREATE TABLE statement (if any).
+func (c *CreateTableEntity) GetCollation() string {
+	for _, opt := range c.CreateTable.TableSpec.Options {
+		if strings.ToLower(opt.Name) == "collate" {
+			opt.String = strings.ToLower(opt.String)
+			if collationName, ok := collationEnv.CollationAlias(opt.String); ok {
+				return collationName
+			}
+			return opt.String
+		}
+	}
+	return ""
 }
 
 func (c *CreateTableEntity) Clone() Entity {
@@ -728,6 +778,7 @@ func (c *CreateTableEntity) Diff(other Entity, hints *DiffHints) (EntityDiff, er
 	if err != nil {
 		return nil, err
 	}
+
 	return d, nil
 }
 
@@ -850,6 +901,8 @@ func (c *CreateTableEntity) TableDiff(other *CreateTableEntity, hints *DiffHints
 			parentAlterTableEntityDiff.addSubsequentDiff(diff)
 		}
 	}
+	sortAlterOptions(parentAlterTableEntityDiff)
+
 	return parentAlterTableEntityDiff, nil
 }
 
@@ -1668,24 +1721,30 @@ func (c *CreateTableEntity) Drop() EntityDiff {
 }
 
 func sortAlterOptions(diff *AlterTableEntityDiff) {
+	if diff == nil {
+		return
+	}
 	optionOrder := func(opt sqlparser.AlterOption) int {
-		switch opt.(type) {
+		switch opt := opt.(type) {
 		case *sqlparser.DropKey:
-			return 1
-		case *sqlparser.DropColumn:
+			if opt.Type == sqlparser.ForeignKeyType {
+				return 1
+			}
 			return 2
-		case *sqlparser.ModifyColumn:
+		case *sqlparser.DropColumn:
 			return 3
-		case *sqlparser.RenameColumn:
+		case *sqlparser.ModifyColumn:
 			return 4
-		case *sqlparser.AddColumns:
+		case *sqlparser.RenameColumn:
 			return 5
-		case *sqlparser.AddIndexDefinition:
+		case *sqlparser.AddColumns:
 			return 6
-		case *sqlparser.AddConstraintDefinition:
+		case *sqlparser.AddIndexDefinition:
 			return 7
-		case sqlparser.TableOptions, *sqlparser.TableOptions:
+		case *sqlparser.AddConstraintDefinition:
 			return 8
+		case sqlparser.TableOptions, *sqlparser.TableOptions:
+			return 9
 		default:
 			return math.MaxInt
 		}

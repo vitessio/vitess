@@ -29,7 +29,7 @@ func (c *compiler) compileNegate(expr *NegateExpr) (ctype, error) {
 	}
 
 	skip := c.compileNullCheck1(arg)
-	arg = c.compileToNumeric(arg, 1)
+	arg = c.compileToNumeric(arg, 1, sqltypes.Float64)
 	var neg sqltypes.Type
 
 	switch arg.Type {
@@ -110,8 +110,8 @@ func (c *compiler) compileArithmeticAdd(left, right Expr) (ctype, error) {
 	swap := false
 	skip2 := c.compileNullCheck1r(rt)
 
-	lt = c.compileToNumeric(lt, 2)
-	rt = c.compileToNumeric(rt, 1)
+	lt = c.compileToNumeric(lt, 2, sqltypes.Float64)
+	rt = c.compileToNumeric(rt, 1, sqltypes.Float64)
 	lt, rt, swap = c.compileNumericPriority(lt, rt)
 
 	var sumtype sqltypes.Type
@@ -163,8 +163,8 @@ func (c *compiler) compileArithmeticSub(left, right Expr) (ctype, error) {
 	}
 
 	skip2 := c.compileNullCheck1r(rt)
-	lt = c.compileToNumeric(lt, 2)
-	rt = c.compileToNumeric(rt, 1)
+	lt = c.compileToNumeric(lt, 2, sqltypes.Float64)
+	rt = c.compileToNumeric(rt, 1, sqltypes.Float64)
 
 	var subtype sqltypes.Type
 
@@ -242,8 +242,8 @@ func (c *compiler) compileArithmeticMul(left, right Expr) (ctype, error) {
 
 	swap := false
 	skip2 := c.compileNullCheck1r(rt)
-	lt = c.compileToNumeric(lt, 2)
-	rt = c.compileToNumeric(rt, 1)
+	lt = c.compileToNumeric(lt, 2, sqltypes.Float64)
+	rt = c.compileToNumeric(rt, 1, sqltypes.Float64)
 	lt, rt, swap = c.compileNumericPriority(lt, rt)
 
 	var multype sqltypes.Type
@@ -295,8 +295,8 @@ func (c *compiler) compileArithmeticDiv(left, right Expr) (ctype, error) {
 	}
 	skip2 := c.compileNullCheck1r(rt)
 
-	lt = c.compileToNumeric(lt, 2)
-	rt = c.compileToNumeric(rt, 1)
+	lt = c.compileToNumeric(lt, 2, sqltypes.Float64)
+	rt = c.compileToNumeric(rt, 1, sqltypes.Float64)
 
 	ct := ctype{Col: collationNumeric, Flag: flagNullable}
 	if lt.Type == sqltypes.Float64 || rt.Type == sqltypes.Float64 {
@@ -327,8 +327,8 @@ func (c *compiler) compileArithmeticIntDiv(left, right Expr) (ctype, error) {
 	}
 
 	skip2 := c.compileNullCheck1r(rt)
-	lt = c.compileToNumeric(lt, 2)
-	rt = c.compileToNumeric(rt, 1)
+	lt = c.compileToNumeric(lt, 2, sqltypes.Decimal)
+	rt = c.compileToNumeric(rt, 1, sqltypes.Decimal)
 
 	ct := ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: flagNullable}
 	switch lt.Type {
@@ -407,8 +407,8 @@ func (c *compiler) compileArithmeticMod(left, right Expr) (ctype, error) {
 	}
 
 	skip2 := c.compileNullCheck1r(rt)
-	lt = c.compileToNumeric(lt, 2)
-	rt = c.compileToNumeric(rt, 1)
+	lt = c.compileToNumeric(lt, 2, sqltypes.Float64)
+	rt = c.compileToNumeric(rt, 1, sqltypes.Float64)
 
 	ct := ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: flagNullable}
 	switch lt.Type {

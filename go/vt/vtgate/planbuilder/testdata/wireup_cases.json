@@ -45,9 +45,9 @@
       "Instructions": {
         "OperatorType": "Join",
         "Variant": "Join",
-        "JoinColumnIndexes": "L:1,R:0,L:2",
+        "JoinColumnIndexes": "L:0,R:0,L:1",
         "JoinVars": {
-          "e_id": 0
+          "e_id": 1
         },
         "TableName": "user_extra_`user`",
         "Inputs": [
@@ -58,8 +58,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select e.id, e.col, e.id as eid from user_extra as e where 1 != 1",
-            "Query": "select e.id, e.col, e.id as eid from user_extra as e",
+            "FieldQuery": "select e.col, e.id as eid from user_extra as e where 1 != 1",
+            "Query": "select e.col, e.id as eid from user_extra as e",
             "Table": "user_extra"
           },
           {
@@ -131,9 +131,9 @@
       "Instructions": {
         "OperatorType": "Join",
         "Variant": "Join",
-        "JoinColumnIndexes": "L:1,R:0,L:2",
+        "JoinColumnIndexes": "L:0,R:0,L:1",
         "JoinVars": {
-          "e_id": 0
+          "e_id": 1
         },
         "TableName": "user_extra_`user`",
         "Inputs": [
@@ -144,8 +144,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select e.id, e.col, e.id as eid from user_extra as e where 1 != 1",
-            "Query": "select e.id, e.col, e.id as eid from user_extra as e where e.col = :uid",
+            "FieldQuery": "select e.col, e.id as eid from user_extra as e where 1 != 1",
+            "Query": "select e.col, e.id as eid from user_extra as e where e.col = :uid",
             "Table": "user_extra"
           },
           {
@@ -253,9 +253,9 @@
           {
             "OperatorType": "Join",
             "Variant": "Join",
-            "JoinColumnIndexes": "L:1",
+            "JoinColumnIndexes": "L:0",
             "JoinVars": {
-              "u1_col": 0
+              "u1_col": 1
             },
             "TableName": "`user`_`user`",
             "Inputs": [
@@ -266,8 +266,8 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select u1.col, u1.id from `user` as u1 where 1 != 1",
-                "Query": "select u1.col, u1.id from `user` as u1",
+                "FieldQuery": "select u1.id, u1.col from `user` as u1 where 1 != 1",
+                "Query": "select u1.id, u1.col from `user` as u1",
                 "Table": "`user`"
               },
               {
@@ -496,9 +496,9 @@
           {
             "OperatorType": "Join",
             "Variant": "Join",
-            "JoinColumnIndexes": "L:1",
+            "JoinColumnIndexes": "L:0",
             "JoinVars": {
-              "u1_col": 0
+              "u1_col": 1
             },
             "TableName": "`user`_`user`",
             "Inputs": [
@@ -509,8 +509,8 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select u1.col, u1.id from `user` as u1 where 1 != 1",
-                "Query": "select u1.col, u1.id from `user` as u1 where u1.col = :u3_col",
+                "FieldQuery": "select u1.id, u1.col from `user` as u1 where 1 != 1",
+                "Query": "select u1.id, u1.col from `user` as u1 where u1.col = :u3_col",
                 "Table": "`user`"
               },
               {
@@ -661,9 +661,9 @@
               {
                 "OperatorType": "Join",
                 "Variant": "Join",
-                "JoinColumnIndexes": "L:1",
+                "JoinColumnIndexes": "L:0",
                 "JoinVars": {
-                  "u1_col": 0
+                  "u1_col": 1
                 },
                 "TableName": "`user`_`user`",
                 "Inputs": [
@@ -674,8 +674,8 @@
                       "Name": "user",
                       "Sharded": true
                     },
-                    "FieldQuery": "select u1.col, u1.id from `user` as u1 where 1 != 1",
-                    "Query": "select u1.col, u1.id from `user` as u1 where u1.col = :u4_col",
+                    "FieldQuery": "select u1.id, u1.col from `user` as u1 where 1 != 1",
+                    "Query": "select u1.id, u1.col from `user` as u1 where u1.col = :u4_col",
                     "Table": "`user`"
                   },
                   {
@@ -776,9 +776,9 @@
       "Instructions": {
         "OperatorType": "Join",
         "Variant": "Join",
-        "JoinColumnIndexes": "L:1",
+        "JoinColumnIndexes": "L:0",
         "JoinVars": {
-          "u1_col": 0
+          "u1_col": 1
         },
         "TableName": "`user`_`user`_`user`",
         "Inputs": [
@@ -787,7 +787,7 @@
             "Variant": "Join",
             "JoinColumnIndexes": "L:0,L:1",
             "JoinVars": {
-              "u1_col": 0
+              "u1_col": 1
             },
             "TableName": "`user`_`user`",
             "Inputs": [
@@ -798,8 +798,8 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select u1.col, u1.id from `user` as u1 where 1 != 1",
-                "Query": "select u1.col, u1.id from `user` as u1",
+                "FieldQuery": "select u1.id, u1.col from `user` as u1 where 1 != 1",
+                "Query": "select u1.id, u1.col from `user` as u1",
                 "Table": "`user`"
               },
               {
@@ -887,9 +887,9 @@
       "Instructions": {
         "OperatorType": "Join",
         "Variant": "Join",
-        "JoinColumnIndexes": "R:0,L:1",
+        "JoinColumnIndexes": "R:0,L:0",
         "JoinVars": {
-          "unsharded_id": 0
+          "unsharded_id": 1
         },
         "TableName": "unsharded_`weird``name`",
         "Inputs": [
@@ -900,8 +900,8 @@
               "Name": "main",
               "Sharded": false
             },
-            "FieldQuery": "select unsharded.id, unsharded.b from unsharded where 1 != 1",
-            "Query": "select unsharded.id, unsharded.b from unsharded",
+            "FieldQuery": "select unsharded.b, unsharded.id from unsharded where 1 != 1",
+            "Query": "select unsharded.b, unsharded.id from unsharded",
             "Table": "unsharded"
           },
           {
@@ -973,9 +973,9 @@
       "Instructions": {
         "OperatorType": "Join",
         "Variant": "Join",
-        "JoinColumnIndexes": "L:1",
+        "JoinColumnIndexes": "L:0",
         "JoinVars": {
-          "unsharded_id": 0
+          "unsharded_id": 1
         },
         "TableName": "unsharded_`weird``name`",
         "Inputs": [
@@ -986,8 +986,8 @@
               "Name": "main",
               "Sharded": false
             },
-            "FieldQuery": "select unsharded.id, unsharded.b from unsharded where 1 != 1",
-            "Query": "select unsharded.id, unsharded.b from unsharded",
+            "FieldQuery": "select unsharded.b, unsharded.id from unsharded where 1 != 1",
+            "Query": "select unsharded.b, unsharded.id from unsharded",
             "Table": "unsharded"
           },
           {

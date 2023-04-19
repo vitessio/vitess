@@ -190,7 +190,7 @@ func TestReloadSchema(t *testing.T) {
 			"product",
 			"users",
 		))
-	db.AddQuery(sqlparser.BuildParsedQuery(mysql.SelectAllViews, sidecardb.GetIdentifier()).Query, &sqltypes.Result{})
+	db.AddQuery(sqlparser.BuildParsedQuery(mysql.DetectViewChange, sidecardb.GetIdentifier()).Query, &sqltypes.Result{})
 
 	hs.InitDBConfig(target, configs.DbaWithDB())
 	hs.Open()
@@ -303,7 +303,7 @@ func TestInitialReloadSchema(t *testing.T) {
 			"product",
 			"users",
 		))
-	db.AddQuery(sqlparser.BuildParsedQuery(mysql.SelectAllViews, sidecardb.GetIdentifier()).Query, &sqltypes.Result{})
+	db.AddQuery(sqlparser.BuildParsedQuery(mysql.DetectViewChange, sidecardb.GetIdentifier()).Query, &sqltypes.Result{})
 
 	hs.InitDBConfig(target, configs.DbaWithDB())
 	hs.Open()
@@ -348,35 +348,84 @@ func TestReloadView(t *testing.T) {
 	target := &querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
 	configs := config.DB
 
+	db.AddQuery("begin", &sqltypes.Result{})
+	db.AddQuery("commit", &sqltypes.Result{})
+	db.AddQuery("rollback", &sqltypes.Result{})
 	db.AddQuery(sqlparser.BuildParsedQuery(mysql.DetectSchemaChangeOnlyBaseTable, sidecardb.GetIdentifier()).Query, &sqltypes.Result{})
-	db.AddQuery(sqlparser.BuildParsedQuery(mysql.SelectAllViews, sidecardb.GetIdentifier()).Query, &sqltypes.Result{})
+	db.AddQuery(sqlparser.BuildParsedQuery(mysql.DetectViewChange, sidecardb.GetIdentifier()).Query, &sqltypes.Result{})
 
 	hs.InitDBConfig(target, configs.DbaWithDB())
 	hs.Open()
 	defer hs.Close()
 
+	showCreateViewFields := sqltypes.MakeTestFields(
+		"View|Create View|character_set_client|collation_connection",
+		"varchar|text|varchar|varchar")
 	tcases := []struct {
-		res *sqltypes.Result
-		exp []string
+		tbl            *sqltypes.Result
+		def            *sqltypes.Result
+		stmt           []*sqltypes.Result
+		expTbl         []string
+		expDefQuery    string
+		expStmtQuery   []string
+		expClearQuery  string
+		expInsertQuery []string
 	}{{
 		// view_a and view_b added.
-		res: sqltypes.MakeTestResult(sqltypes.MakeTestFields("table_name|updated_at", "varchar|timestamp"),
-			"view_a|2023-01-12 14:23:33", "view_b|2023-01-12 15:23:33"),
-		exp: []string{"view_a", "view_b"},
+		tbl: sqltypes.MakeTestResult(sqltypes.MakeTestFields("table_name", "varchar"),
+			"view_a", "view_b"),
+		def: sqltypes.MakeTestResult(sqltypes.MakeTestFields("table_name|view_definition", "varchar|text"),
+			"view_a|def_a", "view_b|def_b"),
+		stmt: []*sqltypes.Result{sqltypes.MakeTestResult(showCreateViewFields, "view_a|create_view_a|utf8|utf8_general_ci"),
+			sqltypes.MakeTestResult(showCreateViewFields, "view_b|create_view_b|utf8|utf8_general_ci")},
+		expTbl:        []string{"view_a", "view_b"},
+		expDefQuery:   "select table_name, view_definition from information_schema.views where table_schema = database() and table_name in ('view_a', 'view_b')",
+		expStmtQuery:  []string{"show create table view_a", "show create table view_b"},
+		expClearQuery: "delete from _vt.views where table_schema = database() and table_name in ('view_a', 'view_b')",
+		expInsertQuery: []string{
+			"insert into _vt.views(table_schema, table_name, create_statement, view_definition) values (database(), 'view_a', 'create_view_a', 'def_a')",
+			"insert into _vt.views(table_schema, table_name, create_statement, view_definition) values (database(), 'view_b', 'create_view_b', 'def_b')",
+		},
 	}, {
 		// view_b modified
-		res: sqltypes.MakeTestResult(sqltypes.MakeTestFields("table_name|updated_at", "varchar|timestamp"),
-			"view_a|2023-01-12 14:23:33", "view_b|2023-01-12 18:23:33"),
-		exp: []string{"view_b"},
+		tbl: sqltypes.MakeTestResult(sqltypes.MakeTestFields("table_name", "varchar"),
+			"view_b"),
+		def: sqltypes.MakeTestResult(sqltypes.MakeTestFields("table_name|view_definition", "varchar|text"),
+			"view_b|def_mod_b"),
+		stmt:          []*sqltypes.Result{sqltypes.MakeTestResult(showCreateViewFields, "view_b|create_view_mod_b|utf8|utf8_general_ci")},
+		expTbl:        []string{"view_b"},
+		expDefQuery:   "select table_name, view_definition from information_schema.views where table_schema = database() and table_name in ('view_b')",
+		expStmtQuery:  []string{"show create table view_b"},
+		expClearQuery: "delete from _vt.views where table_schema = database() and table_name in ('view_b')",
+		expInsertQuery: []string{
+			"insert into _vt.views(table_schema, table_name, create_statement, view_definition) values (database(), 'view_b', 'create_view_mod_b', 'def_mod_b')",
+		},
 	}, {
 		// view_a modified, view_b deleted and view_c added.
-		res: sqltypes.MakeTestResult(sqltypes.MakeTestFields("table_name|updated_at", "varchar|timestamp"),
-			"view_a|2023-01-12 16:23:33", "view_c|2023-01-12 18:23:33"),
-		exp: []string{"view_a", "view_b", "view_c"},
+		tbl: sqltypes.MakeTestResult(sqltypes.MakeTestFields("table_name", "varchar"),
+			"view_a", "view_b", "view_c"),
+		def: sqltypes.MakeTestResult(sqltypes.MakeTestFields("table_name|view_definition", "varchar|text"),
+			"view_a|def_mod_a", "view_c|def_c"),
+		stmt: []*sqltypes.Result{sqltypes.MakeTestResult(showCreateViewFields, "view_a|create_view_mod_a|utf8|utf8_general_ci"),
+			sqltypes.MakeTestResult(showCreateViewFields, "view_c|create_view_c|utf8|utf8_general_ci")},
+		expTbl:        []string{"view_a", "view_b", "view_c"},
+		expDefQuery:   "select table_name, view_definition from information_schema.views where table_schema = database() and table_name in ('view_a', 'view_b', 'view_c')",
+		expStmtQuery:  []string{"show create table view_a", "show create table view_c"},
+		expClearQuery: "delete from _vt.views where table_schema = database() and table_name in ('view_a', 'view_b', 'view_c')",
+		expInsertQuery: []string{
+			"insert into _vt.views(table_schema, table_name, create_statement, view_definition) values (database(), 'view_a', 'create_view_mod_a', 'def_mod_a')",
+			"insert into _vt.views(table_schema, table_name, create_statement, view_definition) values (database(), 'view_c', 'create_view_c', 'def_c')",
+		},
 	}}
 
 	// setting first test case result.
-	db.AddQuery(sqlparser.BuildParsedQuery(mysql.SelectAllViews, sidecardb.GetIdentifier()).Query, tcases[0].res)
+	db.AddQuery(sqlparser.BuildParsedQuery(mysql.DetectViewChange, sidecardb.GetIdentifier()).Query, tcases[0].tbl)
+	db.AddQuery(tcases[0].expDefQuery, tcases[0].def)
+	for idx, stmt := range tcases[0].stmt {
+		db.AddQuery(tcases[0].expStmtQuery[idx], stmt)
+		db.AddQuery(tcases[0].expInsertQuery[idx], &sqltypes.Result{})
+	}
+	db.AddQuery(tcases[0].expClearQuery, &sqltypes.Result{})
 
 	var tcCount atomic.Int32
 	ch := make(chan struct{})
@@ -385,8 +434,9 @@ func TestReloadView(t *testing.T) {
 		hs.Stream(ctx, func(response *querypb.StreamHealthResponse) error {
 			if response.RealtimeStats.ViewSchemaChanged != nil {
 				sort.Strings(response.RealtimeStats.ViewSchemaChanged)
-				assert.Equal(t, tcases[tcCount.Load()].exp, response.RealtimeStats.ViewSchemaChanged)
+				assert.Equal(t, tcases[tcCount.Load()].expTbl, response.RealtimeStats.ViewSchemaChanged)
 				tcCount.Add(1)
+				db.AddQuery(sqlparser.BuildParsedQuery(mysql.DetectViewChange, sidecardb.GetIdentifier()).Query, &sqltypes.Result{})
 				ch <- struct{}{}
 			}
 			return nil
@@ -399,8 +449,15 @@ func TestReloadView(t *testing.T) {
 			if tcCount.Load() == int32(len(tcases)) {
 				return
 			}
-			db.AddQuery(sqlparser.BuildParsedQuery(mysql.SelectAllViews, sidecardb.GetIdentifier()).Query, tcases[tcCount.Load()].res)
-		case <-time.After(1000 * time.Second):
+			idx := tcCount.Load()
+			db.AddQuery(tcases[idx].expDefQuery, tcases[idx].def)
+			for i, stmt := range tcases[idx].stmt {
+				db.AddQuery(tcases[idx].expStmtQuery[i], stmt)
+				db.AddQuery(tcases[idx].expInsertQuery[i], &sqltypes.Result{})
+			}
+			db.AddQuery(tcases[idx].expClearQuery, &sqltypes.Result{})
+			db.AddQuery(sqlparser.BuildParsedQuery(mysql.DetectViewChange, sidecardb.GetIdentifier()).Query, tcases[idx].tbl)
+		case <-time.After(10 * time.Second):
 			t.Fatalf("timed out")
 		}
 	}

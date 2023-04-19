@@ -7933,5 +7933,32 @@
         "main.unsharded_a"
       ]
     }
+  },
+  {
+    "comment": "subquery having join table on clause, using column reference of outer select table",
+    "query": "select (select 1 from user u1 join user u2 on u1.id = u2.id and u1.id = u3.id) subquery from user u3 where u3.id = 1",
+    "v3-plan": "VT03019: column u3.id not found",
+    "gen4-plan": {
+      "QueryType": "SELECT",
+      "Original": "select (select 1 from user u1 join user u2 on u1.id = u2.id and u1.id = u3.id) subquery from user u3 where u3.id = 1",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select (select 1 from `user` as u1 join `user` as u2 on u1.id = u2.id and u1.id = u3.id where 1 != 1) as subquery from `user` as u3 where 1 != 1",
+        "Query": "select (select 1 from `user` as u1 join `user` as u2 on u1.id = u2.id and u1.id = u3.id) as subquery from `user` as u3 where u3.id = 1",
+        "Table": "`user`",
+        "Values": [
+          "INT64(1)"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
   }
 ]

@@ -505,9 +505,9 @@
       "Instructions": {
         "OperatorType": "Join",
         "Variant": "Join",
-        "JoinColumnIndexes": "L:1,L:0,R:0",
+        "JoinColumnIndexes": "L:0,L:1,R:0",
         "JoinVars": {
-          "user_index_id": 0
+          "user_index_id": 1
         },
         "TableName": "_unsharded",
         "Inputs": [
@@ -515,8 +515,8 @@
             "OperatorType": "VindexFunc",
             "Variant": "VindexMap",
             "Columns": [
-              0,
-              1
+              1,
+              0
             ],
             "Fields": {
               "id": "VARBINARY",
@@ -593,9 +593,9 @@
       "Instructions": {
         "OperatorType": "Join",
         "Variant": "Join",
-        "JoinColumnIndexes": "L:1,R:0",
+        "JoinColumnIndexes": "L:0,R:0",
         "JoinVars": {
-          "user_index_id": 0
+          "user_index_id": 1
         },
         "TableName": "_unsharded",
         "Inputs": [
@@ -603,8 +603,8 @@
             "OperatorType": "VindexFunc",
             "Variant": "VindexMap",
             "Columns": [
-              0,
-              1
+              1,
+              0
             ],
             "Fields": {
               "id": "VARBINARY",
@@ -681,9 +681,9 @@
       "Instructions": {
         "OperatorType": "Join",
         "Variant": "Join",
-        "JoinColumnIndexes": "L:1,R:0",
+        "JoinColumnIndexes": "L:0,R:0",
         "JoinVars": {
-          "ui_id": 0
+          "ui_id": 1
         },
         "TableName": "_unsharded",
         "Inputs": [
@@ -691,8 +691,8 @@
             "OperatorType": "VindexFunc",
             "Variant": "VindexMap",
             "Columns": [
-              0,
-              1
+              1,
+              0
             ],
             "Fields": {
               "id": "VARBINARY",

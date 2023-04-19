@@ -1059,7 +1059,7 @@ func TestSelectBindvars(t *testing.T) {
 		"foo2|1",
 	)})
 
-	sql := "select id from user where id = :id"
+	sql := "select id from `user` where id = :id"
 	_, err := executorExec(executor, sql, map[string]*querypb.BindVariable{
 		"id": sqltypes.Int64BindVariable(1),
 	})
@@ -1074,7 +1074,7 @@ func TestSelectBindvars(t *testing.T) {
 	testQueryLog(t, logChan, "TestExecute", "SELECT", sql, 1)
 
 	// Test with StringBindVariable
-	sql = "select id from user where name in (:name1, :name2)"
+	sql = "select id from `user` where `name` in (:name1, :name2)"
 	_, err = executorExec(executor, sql, map[string]*querypb.BindVariable{
 		"name1": sqltypes.StringBindVariable("foo1"),
 		"name2": sqltypes.StringBindVariable("foo2"),
@@ -1090,12 +1090,12 @@ func TestSelectBindvars(t *testing.T) {
 	}}
 	utils.MustMatch(t, wantQueries, sbc1.Queries)
 	sbc1.Queries = nil
-	testQueryLog(t, logChan, "VindexLookup", "SELECT", "select name, user_id from name_user_map where name in ::name", 1)
-	testQueryLog(t, logChan, "VindexLookup", "SELECT", "select name, user_id from name_user_map where name in ::name", 1)
-	testQueryLog(t, logChan, "TestExecute", "SELECT", sql, 1)
+	testQueryLog(t, logChan, "VindexLookup", "SELECT", "select `name`, user_id from name_user_map where `name` in ::name", 1)
+	testQueryLog(t, logChan, "VindexLookup", "SELECT", "select `name`, user_id from name_user_map where `name` in ::name", 1)
+	testQueryLog(t, logChan, "TestExecute", "SELECT", "select id from `user` where `name` in (:name1, :name2)", 1)
 
 	// Test with BytesBindVariable
-	sql = "select id from user where name in (:name1, :name2)"
+	sql = "select id from `user` where `name` in (:name1, :name2)"
 	_, err = executorExec(executor, sql, map[string]*querypb.BindVariable{
 		"name1": sqltypes.BytesBindVariable([]byte("foo1")),
 		"name2": sqltypes.BytesBindVariable([]byte("foo2")),
@@ -1109,8 +1109,8 @@ func TestSelectBindvars(t *testing.T) {
 		},
 	}}
 	utils.MustMatch(t, wantQueries, sbc1.Queries)
-	testQueryLog(t, logChan, "VindexLookup", "SELECT", "select name, user_id from name_user_map where name in ::name", 1)
-	testQueryLog(t, logChan, "VindexLookup", "SELECT", "select name, user_id from name_user_map where name in ::name", 1)
+	testQueryLog(t, logChan, "VindexLookup", "SELECT", "select `name`, user_id from name_user_map where `name` in ::name", 1)
+	testQueryLog(t, logChan, "VindexLookup", "SELECT", "select `name`, user_id from name_user_map where `name` in ::name", 1)
 	testQueryLog(t, logChan, "TestExecute", "SELECT", sql, 1)
 
 	// Test no match in the lookup vindex
@@ -1151,8 +1151,8 @@ func TestSelectBindvars(t *testing.T) {
 
 	utils.MustMatch(t, wantLookupQueries, lookup.Queries)
 
-	testQueryLog(t, logChan, "VindexLookup", "SELECT", "select name, user_id from name_user_map where name in ::name", 1)
-	testQueryLog(t, logChan, "TestExecute", "SELECT", sql, 1)
+	testQueryLog(t, logChan, "VindexLookup", "SELECT", "select `name`, user_id from name_user_map where `name` in ::name", 1)
+	testQueryLog(t, logChan, "TestExecute", "SELECT", "select id from `user` where `name` = :name", 1)
 
 }
 
@@ -1520,7 +1520,7 @@ func TestSelectScatter(t *testing.T) {
 	logChan := QueryLogger.Subscribe("Test")
 	defer QueryLogger.Unsubscribe(logChan)
 
-	sql := "select id from user"
+	sql := "select id from `user`"
 	_, err := executorExec(executor, sql, nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
@@ -1558,7 +1558,7 @@ func TestSelectScatterPartial(t *testing.T) {
 
 	// Fail 1 of N without the directive fails the whole operation
 	conns[2].MustFailCodes[vtrpcpb.Code_RESOURCE_EXHAUSTED] = 1000
-	results, err := executorExec(executor, "select id from user", nil)
+	results, err := executorExec(executor, "select id from `user`", nil)
 	wantErr := "TestExecutor.40-60.primary"
 	if err == nil || !strings.Contains(err.Error(), wantErr) {
 		t.Errorf("want error %v, got %v", wantErr, err)
@@ -1569,7 +1569,7 @@ func TestSelectScatterPartial(t *testing.T) {
 	if results != nil {
 		t.Errorf("want nil results, got %v", results)
 	}
-	testQueryLog(t, logChan, "TestExecute", "SELECT", "select id from user", 8)
+	testQueryLog(t, logChan, "TestExecute", "SELECT", "select id from `user`", 8)
 
 	// Fail 1 of N with the directive succeeds with 7 rows
 	results, err = executorExec(executor, "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from user", nil)
@@ -1577,7 +1577,7 @@ func TestSelectScatterPartial(t *testing.T) {
 	if results == nil || len(results.Rows) != 7 {
 		t.Errorf("want 7 results, got %v", results)
 	}
-	testQueryLog(t, logChan, "TestExecute", "SELECT", "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from user", 8)
+	testQueryLog(t, logChan, "TestExecute", "SELECT", "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from `user`", 8)
 
 	// When all shards fail, the execution should also fail
 	conns[0].MustFailCodes[vtrpcpb.Code_RESOURCE_EXHAUSTED] = 1000
@@ -1590,7 +1590,7 @@ func TestSelectScatterPartial(t *testing.T) {
 
 	_, err = executorExec(executor, "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from user", nil)
 	require.Error(t, err)
-	testQueryLog(t, logChan, "TestExecute", "SELECT", "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from user", 8)
+	testQueryLog(t, logChan, "TestExecute", "SELECT", "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from `user`", 8)
 
 	_, err = executorExec(executor, "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from user order by id", nil)
 	require.Error(t, err)
@@ -1618,17 +1618,17 @@ func TestSelectScatterPartialOLAP(t *testing.T) {
 
 	// Fail 1 of N without the directive fails the whole operation
 	conns[2].MustFailCodes[vtrpcpb.Code_RESOURCE_EXHAUSTED] = 1000
-	results, err := executorStream(executor, "select id from user")
+	results, err := executorStream(executor, "select id from `user`")
 	assert.EqualError(t, err, "target: TestExecutor.40-60.primary: RESOURCE_EXHAUSTED error")
 	assert.Equal(t, vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.Code(err))
 	assert.Nil(t, results)
-	testQueryLog(t, logChan, "TestExecuteStream", "SELECT", "select id from user", 8)
+	testQueryLog(t, logChan, "TestExecuteStream", "SELECT", "select id from `user`", 8)
 
 	// Fail 1 of N with the directive succeeds with 7 rows
 	results, err = executorStream(executor, "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from user")
 	require.NoError(t, err)
 	assert.EqualValues(t, 7, len(results.Rows))
-	testQueryLog(t, logChan, "TestExecuteStream", "SELECT", "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from user", 8)
+	testQueryLog(t, logChan, "TestExecuteStream", "SELECT", "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from `user`", 8)
 
 	// If all shards fail, the operation should also fail
 	conns[0].MustFailCodes[vtrpcpb.Code_RESOURCE_EXHAUSTED] = 1000
@@ -1641,7 +1641,7 @@ func TestSelectScatterPartialOLAP(t *testing.T) {
 
 	_, err = executorStream(executor, "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from user")
 	require.Error(t, err)
-	testQueryLog(t, logChan, "TestExecuteStream", "SELECT", "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from user", 8)
+	testQueryLog(t, logChan, "TestExecuteStream", "SELECT", "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from `user`", 8)
 
 	_, err = executorStream(executor, "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from user order by id")
 	require.Error(t, err)
@@ -1677,30 +1677,30 @@ func TestSelectScatterPartialOLAP2(t *testing.T) {
 	sbc0Th := ths[0]
 	sbc0Th.Serving = false
 
-	results, err := executorStream(executor, "select id from user")
+	results, err := executorStream(executor, "select id from `user`")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), `no healthy tablet available for 'keyspace:"TestExecutor" shard:"40-60"`)
 	assert.Equal(t, vtrpcpb.Code_UNAVAILABLE, vterrors.Code(err))
 	assert.Nil(t, results)
-	testQueryLog(t, logChan, "TestExecuteStream", "SELECT", "select id from user", 8)
+	testQueryLog(t, logChan, "TestExecuteStream", "SELECT", "select id from `user`", 8)
 
 	// Fail 1 of N with the directive succeeds with 7 rows
 	results, err = executorStream(executor, "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from user")
 	require.NoError(t, err)
 	assert.EqualValues(t, 7, len(results.Rows))
-	testQueryLog(t, logChan, "TestExecuteStream", "SELECT", "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from user", 8)
+	testQueryLog(t, logChan, "TestExecuteStream", "SELECT", "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from `user`", 8)
 
 	// order by
 	results, err = executorStream(executor, "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from user order by id")
 	require.NoError(t, err)
 	assert.EqualValues(t, 7, len(results.Rows))
-	testQueryLog(t, logChan, "TestExecuteStream", "SELECT", "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from user order by id", 8)
+	testQueryLog(t, logChan, "TestExecuteStream", "SELECT", "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from `user` order by id asc", 8)
 
 	// order by and limit
 	results, err = executorStream(executor, "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from user order by id limit 5")
 	require.NoError(t, err)
 	assert.EqualValues(t, 5, len(results.Rows))
-	testQueryLog(t, logChan, "TestExecuteStream", "SELECT", "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from user order by id limit 5", 8)
+	testQueryLog(t, logChan, "TestExecuteStream", "SELECT", "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from `user` order by id asc limit 5", 8)
 }
 
 func TestStreamSelectScatter(t *testing.T) {
@@ -1718,7 +1718,7 @@ func TestStreamSelectScatter(t *testing.T) {
 	}
 	executor := createExecutor(serv, cell, resolver)
 
-	sql := "select id from user"
+	sql := "select id from `user`"
 	result, err := executorStream(executor, sql)
 	require.NoError(t, err)
 	wantResult := &sqltypes.Result{
@@ -2272,7 +2272,7 @@ func TestSimpleJoin(t *testing.T) {
 		t.Errorf("result: %+v, want %+v", result, wantResult)
 	}
 
-	testQueryLog(t, logChan, "TestExecute", "SELECT", sql, 2)
+	testQueryLog(t, logChan, "TestExecute", "SELECT", "select u1.id, u2.id from `user` as u1 join `user` as u2 where u1.id = 1 and u2.id = 3", 2)
 }
 
 func TestJoinComments(t *testing.T) {
@@ -2294,7 +2294,7 @@ func TestJoinComments(t *testing.T) {
 	}}
 	utils.MustMatch(t, wantQueries, sbc2.Queries)
 
-	testQueryLog(t, logChan, "TestExecute", "SELECT", sql, 2)
+	testQueryLog(t, logChan, "TestExecute", "SELECT", "select u1.id, u2.id from `user` as u1 join `user` as u2 where u1.id = 1 and u2.id = 3 /* trailing */", 2)
 }
 
 func TestSimpleJoinStream(t *testing.T) {
@@ -2332,7 +2332,7 @@ func TestSimpleJoinStream(t *testing.T) {
 		t.Errorf("result: %+v, want %+v", result, wantResult)
 	}
 
-	testQueryLog(t, logChan, "TestExecuteStream", "SELECT", sql, 2)
+	testQueryLog(t, logChan, "TestExecuteStream", "SELECT", "select u1.id, u2.id from `user` as u1 join `user` as u2 where u1.id = 1 and u2.id = 3", 2)
 }
 
 func TestVarJoin(t *testing.T) {
@@ -2367,7 +2367,7 @@ func TestVarJoin(t *testing.T) {
 		t.Errorf("sbc2.Queries: %s, want %s\n", got, want)
 	}
 
-	testQueryLog(t, logChan, "TestExecute", "SELECT", sql, 2)
+	testQueryLog(t, logChan, "TestExecute", "SELECT", "select u1.id, u2.id from `user` as u1 join `user` as u2 on u2.id = u1.col where u1.id = 1", 2)
 }
 
 func TestVarJoinStream(t *testing.T) {
@@ -2402,7 +2402,7 @@ func TestVarJoinStream(t *testing.T) {
 		t.Errorf("sbc2.Queries: %s, want %s\n", got, want)
 	}
 
-	testQueryLog(t, logChan, "TestExecuteStream", "SELECT", sql, 2)
+	testQueryLog(t, logChan, "TestExecuteStream", "SELECT", "select u1.id, u2.id from `user` as u1 join `user` as u2 on u2.id = u1.col where u1.id = 1", 2)
 }
 
 func TestLeftJoin(t *testing.T) {
@@ -2411,13 +2411,13 @@ func TestLeftJoin(t *testing.T) {
 	defer QueryLogger.Unsubscribe(logChan)
 	result1 := []*sqltypes.Result{{
 		Fields: []*querypb.Field{
-			{Name: "col", Type: sqltypes.Int32},
 			{Name: "id", Type: sqltypes.Int32},
+			{Name: "col", Type: sqltypes.Int32},
 		},
 		InsertID: 0,
 		Rows: [][]sqltypes.Value{{
-			sqltypes.NewInt32(3),
 			sqltypes.NewInt32(1),
+			sqltypes.NewInt32(3),
 		}},
 	}}
 	emptyResult := []*sqltypes.Result{{
@@ -2445,20 +2445,20 @@ func TestLeftJoin(t *testing.T) {
 	if !result.Equal(wantResult) {
 		t.Errorf("result: \n%+v, want \n%+v", result, wantResult)
 	}
-	testQueryLog(t, logChan, "TestExecute", "SELECT", sql, 2)
+	testQueryLog(t, logChan, "TestExecute", "SELECT", "select u1.id, u2.id from `user` as u1 left join `user` as u2 on u2.id = u1.col where u1.id = 1", 2)
 }
 
 func TestLeftJoinStream(t *testing.T) {
 	executor, sbc1, sbc2, _ := createExecutorEnv()
 	result1 := []*sqltypes.Result{{
 		Fields: []*querypb.Field{
-			{Name: "col", Type: sqltypes.Int32},
 			{Name: "id", Type: sqltypes.Int32},
+			{Name: "col", Type: sqltypes.Int32},
 		},
 		InsertID: 0,
 		Rows: [][]sqltypes.Value{{
-			sqltypes.NewInt32(3),
 			sqltypes.NewInt32(1),
+			sqltypes.NewInt32(3),
 		}},
 	}}
 	emptyResult := []*sqltypes.Result{{
@@ -2815,7 +2815,7 @@ func TestSelectBindvarswithPrepare(t *testing.T) {
 	logChan := QueryLogger.Subscribe("Test")
 	defer QueryLogger.Unsubscribe(logChan)
 
-	sql := "select id from user where id = :id"
+	sql := "select id from `user` where id = :id"
 	_, err := executorPrepare(executor, sql, map[string]*querypb.BindVariable{
 		"id": sqltypes.Int64BindVariable(1),
 	})
@@ -3070,12 +3070,12 @@ func TestSelectScatterFails(t *testing.T) {
 	logChan := QueryLogger.Subscribe("Test")
 	defer QueryLogger.Unsubscribe(logChan)
 
-	_, err := executorExecSession(executor, "select id from user", nil, sess)
+	_, err := executorExecSession(executor, "select id from `user`", nil, sess)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "scatter")
 
 	// Run the test again, to ensure it behaves the same for a cached query
-	_, err = executorExecSession(executor, "select id from user", nil, sess)
+	_, err = executorExecSession(executor, "select id from `user`", nil, sess)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "scatter")
 

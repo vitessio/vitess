@@ -289,6 +289,54 @@ func TestCompilerSingle(t *testing.T) {
 			expression: `CONV(-9223372036854775809, 13e0, 13e0)`,
 			result:     `VARCHAR("0")`,
 		},
+		{
+			expression: `0 + time '10:04:58'`,
+			result:     `INT64(100458)`,
+		},
+		{
+			expression: `0 + time '101:34:58'`,
+			result:     `INT64(1013458)`,
+		},
+		{
+			expression: `time '10:04:58' < '101:34:58'`,
+			result:     `INT64(1)`,
+		},
+		{
+			expression: `1.7 / 173458`,
+			result:     `DECIMAL(0.00001)`,
+		},
+		{
+			expression: `cast(time '5 12:34:58' as json)`,
+			result:     `JSON("\"04:34:58.000000\"")`,
+		},
+		{
+			expression: `CAST(20000229235959.999950 AS DATETIME(4))`,
+			result:     `DATETIME("2000-03-01 00:00:00.0000")`,
+		},
+		{
+			expression: `CAST(1.5678 AS TIME(2))`,
+			result:     `TIME("00:00:01.57")`,
+		},
+		{
+			expression: `CAST(235959.995 AS TIME(2))`,
+			result:     `TIME("24:00:00.00")`,
+		},
+		{
+			expression: `CAST(-235959.995 AS TIME(2))`,
+			result:     `TIME("-24:00:00.00")`,
+		},
+		{
+			expression: `WEEK('2000-01-02', 6)`,
+			result:     `INT64(1)`,
+		},
+		{
+			expression: `WEEK(date '2000-01-01', 4)`,
+			result:     `INT64(0)`,
+		},
+		{
+			expression: `WEEK(date '2023-04-11', 6)`,
+			result:     `INT64(15)`,
+		},
 	}
 
 	for _, tc := range testCases {
@@ -334,7 +382,7 @@ func TestCompilerSingle(t *testing.T) {
 				}
 
 				if res.String() != tc.result {
-					t.Fatalf("bad evaluation from compiler: got %s, want %s (iteration %d)", res, tc.result, i)
+					t.Errorf("bad evaluation from compiler: got %s, want %s (iteration %d)", res, tc.result, i)
 				}
 			}
 		})
