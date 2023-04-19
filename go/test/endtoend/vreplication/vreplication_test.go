@@ -219,10 +219,11 @@ func TestVreplicationCopyThrottling(t *testing.T) {
 	defaultCell = vc.Cells[cell]
 	// To test vstreamer source throttling for the MoveTables operation
 	maxSourceTrxHistory := int64(5)
+	targetSourceTrxHistory := maxSourceTrxHistory * 5 // Go well beyond the threshold
 	extraVTTabletArgs = []string{
 		// We rely on holding open transactions to generate innodb history so extend the timeout
 		// to avoid flakiness when the CI is very slow.
-		fmt.Sprintf("--queryserver-config-transaction-timeout=%d", int64(defaultTimeout.Seconds())*3),
+		fmt.Sprintf("--queryserver-config-transaction-timeout=%d", int64(transactionTimeout.Seconds())),
 		fmt.Sprintf("--vreplication_copy_phase_max_innodb_history_list_length=%d", maxSourceTrxHistory),
 		parallelInsertWorkers,
 	}
@@ -244,13 +245,13 @@ func TestVreplicationCopyThrottling(t *testing.T) {
 	// have an InnoDB History List length that is less than specified in the tablet's config.
 	// We update rows in a table not part of the MoveTables operation so that we're not blocking
 	// on the LOCK TABLE call but rather the InnoDB History List length.
-	trxConn := generateInnoDBRowHistory(t, sourceKs, maxSourceTrxHistory)
+	trxConn := generateInnoDBRowHistory(t, sourceKs, targetSourceTrxHistory)
 	// History should have been generated on the source primary tablet
-	waitForInnoDBHistoryLength(t, vc.getPrimaryTablet(t, sourceKs, shard), maxSourceTrxHistory)
+	waitForInnoDBHistoryLength(t, vc.getPrimaryTablet(t, sourceKs, shard), targetSourceTrxHistory)
 	// We need to force primary tablet types as the history list has been increased on the source primary
 	// We use a small timeout and ignore errors as we don't expect the MoveTables to start here
 	// because of the InnoDB History List length.
-	moveTablesActionWithTabletTypes(t, "Create", defaultCell.Name, workflow, sourceKs, targetKs, table, "primary", 5*time.Second, true)
+	moveTablesActionWithTabletTypes(t, "Create", defaultCell.Name, workflow, sourceKs, targetKs, table, "primary", 1*time.Second, true)
 	// Wait for the copy phase to start
 	waitForWorkflowState(t, vc, fmt.Sprintf("%s.%s", targetKs, workflow), workflowStateCopying)
 	// The initial copy phase should be blocking on the history list
@@ -1528,6 +1529,7 @@ func waitForInnoDBHistoryLength(t *testing.T, tablet *cluster.VttabletProcess, e
 		historyLen, err = res.Rows[0][0].ToInt64()
 		require.NoError(t, err)
 		if historyLen > expectedLength {
+			log.Infof("Reached at least the expected InnoDB history length; expected: %d, seen: %d", expectedLength, historyLen)
 			return
 		}
 		select {

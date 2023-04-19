@@ -48,6 +48,7 @@ const (
 	defaultTick          = 1 * time.Second
 	defaultTimeout       = 30 * time.Second
 	workflowStateTimeout = 90 * time.Second
+	transactionTimeout   = 3 * time.Minute
 	workflowStateCopying = "Copying" // nolint
 	workflowStateRunning = "Running" // nolint
 	workflowStateStopped = "Stopped" // nolint
