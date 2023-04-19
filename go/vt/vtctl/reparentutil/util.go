@@ -74,6 +74,8 @@ func ChooseNewPrimary(
 		tabletPositions []mysql.Position
 	)
 
+	logger.Printf("AACU ChooseNewPrimary(primaryCell:%q tabletMap:%v)", primaryCell, tabletMap)
+
 	for _, tablet := range tabletMap {
 		switch {
 		case primaryCell != "" && tablet.Alias.Cell != primaryCell:
@@ -101,6 +103,8 @@ func ChooseNewPrimary(
 
 	wg.Wait()
 
+	logger.Printf("AACU ChooseNewPrimary(validTablets:%v)", validTablets)
+
 	// return nothing if there are no valid tablets available
 	if len(validTablets) == 0 {
 		return nil, nil
@@ -111,6 +115,8 @@ func ChooseNewPrimary(
 	if err != nil {
 		return nil, err
 	}
+
+	logger.Printf("AACU ChooseNewPrimary(validTablets[0].Alias:%v)", validTablets[0].Alias)
 
 	return validTablets[0].Alias, nil
 }

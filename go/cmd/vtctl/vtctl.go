@@ -116,6 +116,8 @@ func main() {
 	args := servenv.ParseFlagsWithArgs("vtctl")
 	action := args[0]
 
+	log.Warningf("AACU main action: %q", action)
+
 	startMsg := fmt.Sprintf("USER=%v SUDO_USER=%v %v", os.Getenv("USER"), os.Getenv("SUDO_USER"), strings.Join(os.Args, " "))
 
 	if syslogger, err := syslog.New(syslog.LOG_INFO, "vtctl "); err == nil {
