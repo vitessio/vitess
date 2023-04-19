@@ -241,7 +241,7 @@ func (d Date) SundayWeek() (int, int) {
 	// Since the week numbers always start on a Sunday, we can look
 	// at the week number of Sunday itself. So we shift back to last
 	// Sunday we saw and compute the week number based on that.
-	sun := t.Add(-time.Duration(t.Weekday()) * 24 * time.Hour)
+	sun := t.AddDate(0, 0, -int(t.Weekday()))
 	return sun.Year(), (sun.YearDay()-1)/7 + 1
 }
 
@@ -254,7 +254,7 @@ func (d Date) MondayWeek() (int, int) {
 	// at the week number of Monday itself. So we shift back to last
 	// Monday we saw and compute the week number based on that.
 	wd := (t.Weekday() + 6) % 7
-	mon := t.Add(-time.Duration(wd) * 24 * time.Hour)
+	mon := t.AddDate(0, 0, -int(wd))
 	return mon.Year(), (mon.YearDay()-1)/7 + 1
 }
 
@@ -276,9 +276,9 @@ func (d Date) Sunday4DayWeek() (int, int) {
 	case wd == 3:
 		wed = t
 	case wd < 3:
-		wed = t.Add(time.Duration(3-t.Weekday()) * 24 * time.Hour)
+		wed = t.AddDate(0, 0, int(3-t.Weekday()))
 	case wd > 3:
-		wed = t.Add(-time.Duration(t.Weekday()-3) * 24 * time.Hour)
+		wed = t.AddDate(0, 0, -int(t.Weekday()-3))
 	}
 
 	return wed.Year(), (wed.YearDay()-1)/7 + 1
