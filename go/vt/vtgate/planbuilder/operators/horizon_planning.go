@@ -42,13 +42,15 @@ func planHorizons(ctx *plancontext.PlanningContext, root ops.Operator) (ops.Oper
 			}
 			return op, rewrite.NewTree, nil
 		case *Derived:
-			op, err := planDerived(ctx, in)
+			op, err := pushOrExpandHorizon(ctx, in)
 			if err != nil {
 				return nil, false, err
 			}
 			return op, rewrite.NewTree, err
 		case *Projection:
 			return tryPushingDownProjection(ctx, in)
+		case *Limit:
+			return tryPushingDownLimit(in)
 		default:
 			return in, rewrite.SameTree, nil
 		}
@@ -194,9 +196,68 @@ func stopAtRoute(operator ops.Operator) rewrite.VisitRule {
 	return rewrite.VisitRule(!isRoute)
 }
 
+func tryPushingDownLimit(in *Limit) (ops.Operator, rewrite.ApplyResult, error) {
+	switch src := in.Source.(type) {
+	case *Route:
+		return tryPushingDownLimitInRoute(in, src)
+	case *Projection:
+		newOp, err := rewrite.Swap(in, src)
+		if err != nil {
+			return nil, false, err
+		}
+		return newOp, rewrite.NewTree, nil
+	default:
+		if in.Pushed {
+			return in, rewrite.SameTree, nil
+		}
+		return setUpperLimit(in)
+	}
+}
+
+func setUpperLimit(in *Limit) (ops.Operator, rewrite.ApplyResult, error) {
+	visitor := func(op ops.Operator, _ semantics.TableSet, _ bool) (ops.Operator, rewrite.ApplyResult, error) {
+		return op, rewrite.SameTree, nil
+	}
+	shouldVisit := func(op ops.Operator) rewrite.VisitRule {
+		switch op := op.(type) {
+		case *Join, *ApplyJoin:
+			// we can't push limits down on either side
+			return rewrite.SkipChildren
+		case *Route:
+			newSrc := &Limit{
+				Source: op.Source,
+				AST:    &sqlparser.Limit{Rowcount: sqlparser.NewArgument("__upper_limit")},
+				Pushed: false,
+			}
+			op.Source = newSrc
+			return rewrite.SkipChildren
+		default:
+			return rewrite.VisitChildren
+		}
+	}
+
+	_, err := rewrite.TopDown(in.Source, TableID, visitor, shouldVisit)
+	if err != nil {
+		return nil, false, err
+	}
+	return in, rewrite.SameTree, nil
+}
+
+func tryPushingDownLimitInRoute(in *Limit, src *Route) (ops.Operator, rewrite.ApplyResult, error) {
+	if src.IsSingleShard() {
+		newOp, err := rewrite.Swap(in, src)
+		if err != nil {
+			return nil, false, err
+		}
+		return newOp, rewrite.NewTree, nil
+	}
+
+	return setUpperLimit(in)
+}
+
 func pushOrExpandHorizon(ctx *plancontext.PlanningContext, in horizonLike) (ops.Operator, error) {
 	rb, isRoute := in.src().(*Route)
-	if isRoute && rb.IsSingleShard() && in.selectStatement().GetLimit() == nil {
+	if isRoute && rb.IsSingleShard() {
 		return rewrite.Swap(in, rb)
 	}
 
@@ -227,10 +288,6 @@ type horizonLike interface {
 	src() ops.Operator
 }
 
-func planDerived(ctx *plancontext.PlanningContext, in *Derived) (ops.Operator, error) {
-	return pushOrExpandHorizon(ctx, in)
-}
-
 func expandHorizon(qp *QueryProjection, horizon horizonLike) (ops.Operator, error) {
 	sel, isSel := horizon.selectStatement().(*sqlparser.Select)
 	if !isSel {
@@ -241,15 +298,34 @@ func expandHorizon(qp *QueryProjection, horizon horizonLike) (ops.Operator, erro
 	src := horizon.src()
 	_, isDerived := src.(*Derived)
 
-	if qp.NeedsAggregation() || sel.Having != nil || sel.Limit != nil || isDerived || needsOrdering || qp.NeedsDistinct() || sel.Distinct {
+	if qp.NeedsAggregation() || sel.Having != nil || isDerived || needsOrdering || qp.NeedsDistinct() || sel.Distinct {
 		return nil, errHorizonNotPlanned
 	}
 
+	op, err := createProjectionFromSelect(src, qp.SelectExprs)
+	if err != nil {
+		return nil, err
+	}
+
+	if sel.Limit != nil {
+		op = &Limit{
+			Source: op,
+			AST:    sel.Limit,
+		}
+	}
+
+	return op, nil
+}
+
+func createProjectionFromSelect(src ops.Operator, selectExprs []SelectExpr) (ops.Operator, error) {
 	proj := &Projection{
 		Source: src,
 	}
 
-	for _, e := range qp.SelectExprs {
+	for _, e := range selectExprs {
+		if _, isStar := e.Col.(*sqlparser.StarExpr); isStar {
+			return nil, errHorizonNotPlanned
+		}
 		expr, err := e.GetAliasedExpr()
 		if err != nil {
 			return nil, err
@@ -261,7 +337,6 @@ func expandHorizon(qp *QueryProjection, horizon horizonLike) (ops.Operator, erro
 		}
 		proj.ColumnNames = append(proj.ColumnNames, colName)
 	}
-
 	return proj, nil
 }
 
