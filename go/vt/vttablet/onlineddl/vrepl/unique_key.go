@@ -33,7 +33,7 @@ func UniqueKeyValidForIteration(uniqueKey *UniqueKey) bool {
 		return false
 	}
 	if uniqueKey.HasSubpart {
-		// vreplication does not fully supports partial keys, such as:
+		// vreplication does not fully support indexes on column prefixes such as:
 		//   UNIQUE KEY `name_idx` (`name`(15))
 		// "HasSubpart" means some column covered by the index has a key length spec.
 		return false
