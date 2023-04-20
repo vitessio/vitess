@@ -104,7 +104,8 @@ func registerTabletEnvFlags(fs *pflag.FlagSet) {
 	fs.IntVar(&currentConfig.TxPool.PrefillParallelism, "queryserver-config-transaction-prefill-parallelism", defaultConfig.TxPool.PrefillParallelism, "Query server transaction prefill parallelism, a non-zero value will prefill the pool using the specified parallism.")
 	_ = fs.MarkDeprecated("queryserver-config-transaction-prefill-parallelism", "it will be removed in a future release.")
 	fs.IntVar(&currentConfig.MessagePostponeParallelism, "queryserver-config-message-postpone-cap", defaultConfig.MessagePostponeParallelism, "query server message postpone cap is the maximum number of messages that can be postponed at any given time. Set this number to substantially lower than transaction cap, so that the transaction pool isn't exhausted by the message subsystem.")
-	SecondsVar(fs, &currentConfig.Oltp.TxTimeoutSeconds, "queryserver-config-transaction-timeout", defaultConfig.Oltp.TxTimeoutSeconds, "query server transaction timeout (in seconds), a transaction will be killed if it takes longer than this value")
+	currentConfig.Oltp.TxTimeoutSeconds = defaultConfig.Oltp.TxTimeoutSeconds.Clone()
+	fs.Var(&currentConfig.Oltp.TxTimeoutSeconds, currentConfig.Oltp.TxTimeoutSeconds.Name(), "query server transaction timeout (in seconds), a transaction will be killed if it takes longer than this value")
 	currentConfig.GracePeriods.ShutdownSeconds = flagutil.NewDeprecatedFloat64Seconds(defaultConfig.GracePeriods.ShutdownSeconds.Name(), defaultConfig.GracePeriods.TransitionSeconds.Get())
 	fs.Var(&currentConfig.GracePeriods.ShutdownSeconds, currentConfig.GracePeriods.ShutdownSeconds.Name(), "how long to wait (in seconds) for queries and transactions to complete during graceful shutdown.")
 	fs.IntVar(&currentConfig.Oltp.MaxRows, "queryserver-config-max-result-size", defaultConfig.Oltp.MaxRows, "query server max result size, maximum number of rows allowed to return from vttablet for non-streaming queries.")
@@ -122,7 +123,8 @@ func registerTabletEnvFlags(fs *pflag.FlagSet) {
 	fs.Var(&currentConfig.SignalSchemaChangeReloadIntervalSeconds, currentConfig.SignalSchemaChangeReloadIntervalSeconds.Name(), "query server schema change signal interval defines at which interval the query server shall send schema updates to vtgate.")
 	fs.BoolVar(&currentConfig.SignalWhenSchemaChange, "queryserver-config-schema-change-signal", defaultConfig.SignalWhenSchemaChange, "query server schema signal, will signal connected vtgates that schema has changed whenever this is detected. VTGates will need to have -schema_change_signal enabled for this to work")
 	SecondsVar(fs, &currentConfig.Olap.TxTimeoutSeconds, "queryserver-config-olap-transaction-timeout", defaultConfig.Olap.TxTimeoutSeconds, "query server transaction timeout (in seconds), after which a transaction in an OLAP session will be killed")
-	SecondsVar(fs, &currentConfig.Oltp.QueryTimeoutSeconds, "queryserver-config-query-timeout", defaultConfig.Oltp.QueryTimeoutSeconds, "query server query timeout (in seconds), this is the query timeout in vttablet side. If a query takes more than this timeout, it will be killed.")
+	currentConfig.Oltp.QueryTimeoutSeconds = defaultConfig.Oltp.QueryTimeoutSeconds.Clone()
+	fs.Var(&currentConfig.Oltp.QueryTimeoutSeconds, currentConfig.Oltp.QueryTimeoutSeconds.Name(), "query server query timeout (in seconds), this is the query timeout in vttablet side. If a query takes more than this timeout, it will be killed.")
 	SecondsVar(fs, &currentConfig.OltpReadPool.TimeoutSeconds, "queryserver-config-query-pool-timeout", defaultConfig.OltpReadPool.TimeoutSeconds, "query server query pool timeout (in seconds), it is how long vttablet waits for a connection from the query pool. If set to 0 (default) then the overall query timeout is used instead.")
 	SecondsVar(fs, &currentConfig.OlapReadPool.TimeoutSeconds, "queryserver-config-stream-pool-timeout", defaultConfig.OlapReadPool.TimeoutSeconds, "query server stream pool timeout (in seconds), it is how long vttablet waits for a connection from the stream pool. If set to 0 (default) then there is no timeout.")
 	SecondsVar(fs, &currentConfig.TxPool.TimeoutSeconds, "queryserver-config-txpool-timeout", defaultConfig.TxPool.TimeoutSeconds, "query server transaction pool timeout, it is how long vttablet waits if tx pool is full")
@@ -380,10 +382,32 @@ type OlapConfig struct {
 
 // OltpConfig contains the config for oltp settings.
 type OltpConfig struct {
-	QueryTimeoutSeconds Seconds `json:"queryTimeoutSeconds,omitempty"`
-	TxTimeoutSeconds    Seconds `json:"txTimeoutSeconds,omitempty"`
-	MaxRows             int     `json:"maxRows,omitempty"`
-	WarnRows            int     `json:"warnRows,omitempty"`
+	QueryTimeoutSeconds flagutil.DeprecatedFloat64Seconds `json:"queryTimeoutSeconds,omitempty"`
+	TxTimeoutSeconds    flagutil.DeprecatedFloat64Seconds `json:"txTimeoutSeconds,omitempty"`
+	MaxRows             int                               `json:"maxRows,omitempty"`
+	WarnRows            int                               `json:"warnRows,omitempty"`
+}
+
+func (cfg *OltpConfig) MarshalJSON() ([]byte, error) {
+	type Proxy OltpConfig
+
+	tmp := struct {
+		Proxy
+		QueryTimeoutSeconds string `json:"queryTimeoutSeconds,omitempty"`
+		TxTimeoutSeconds    string `json:"txTimeoutSeconds,omitempty"`
+	}{
+		Proxy: Proxy(*cfg),
+	}
+
+	if d := cfg.QueryTimeoutSeconds.Get(); d != 0 {
+		tmp.QueryTimeoutSeconds = d.String()
+	}
+
+	if d := cfg.TxTimeoutSeconds.Get(); d != 0 {
+		tmp.TxTimeoutSeconds = d.String()
+	}
+
+	return json.Marshal(&tmp)
 }
 
 // HotRowProtectionConfig contains the config for hot row protection.
@@ -532,7 +556,7 @@ func (c *TabletConfig) SetTxTimeoutForWorkload(val time.Duration, workload query
 	case querypb.ExecuteOptions_OLAP:
 		c.Olap.TxTimeoutSeconds.Set(val)
 	case querypb.ExecuteOptions_OLTP:
-		c.Oltp.TxTimeoutSeconds.Set(val)
+		_ = c.Oltp.TxTimeoutSeconds.Set(val.String())
 	default:
 		panic(fmt.Sprintf("unsupported workload type: %v", workload))
 	}
@@ -623,8 +647,8 @@ var defaultConfig = TabletConfig{
 		TxTimeoutSeconds: 30,
 	},
 	Oltp: OltpConfig{
-		QueryTimeoutSeconds: 30,
-		TxTimeoutSeconds:    30,
+		QueryTimeoutSeconds: flagutil.NewDeprecatedFloat64Seconds("queryserver-config-query-timeout", 30*time.Second),
+		TxTimeoutSeconds:    flagutil.NewDeprecatedFloat64Seconds("queryserver-config-transaction-timeout", 30*time.Second),
 		MaxRows:             10000,
 	},
 	Healthcheck: HealthcheckConfig{

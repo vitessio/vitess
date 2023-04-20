@@ -116,7 +116,7 @@ func StartServer(connParams, connAppDebugParams mysql.ConnParams, dbName string)
 	_ = config.SignalSchemaChangeReloadIntervalSeconds.Set("2100ms")
 	config.SignalWhenSchemaChange = true
 	_ = config.Healthcheck.IntervalSeconds.Set("100ms")
-	config.Oltp.TxTimeoutSeconds = 5
+	_ = config.Oltp.TxTimeoutSeconds.Set("5s")
 	config.Olap.TxTimeoutSeconds = 5
 	config.EnableViews = true
 	gotBytes, _ := yaml2.Marshal(config)
