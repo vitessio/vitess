@@ -3512,42 +3512,16 @@ func commandUpdateThrottlerConfig(ctx context.Context, wr *wrangler.Wrangler, su
 
 	keyspace := subFlags.Arg(0)
 
-	update := func(throttlerConfig *topodatapb.ThrottlerConfig) *topodatapb.ThrottlerConfig {
-		if throttlerConfig == nil {
-			throttlerConfig = &topodatapb.ThrottlerConfig{}
-		}
-		if customQuerySet {
-			// custom query provided
-			throttlerConfig.CustomQuery = *customQuery
-			throttlerConfig.Threshold = *threshold // allowed to be zero/negative because who knows what kind of custom query this is
-		} else {
-			// no custom query, throttler works by querying replication lag. We only allow positive values
-			if *threshold > 0 {
-				throttlerConfig.Threshold = *threshold
-			}
-		}
-		if *enable {
-			throttlerConfig.Enabled = true
-		}
-		if *disable {
-			throttlerConfig.Enabled = false
-		}
-		if *checkAsCheckSelf {
-			throttlerConfig.CheckAsCheckSelf = true
-		}
-		if *checkAsCheckShard {
-			throttlerConfig.CheckAsCheckSelf = false
-		}
-		return throttlerConfig
-	}
-
-	ctx, unlock, lockErr := wr.TopoServer().LockKeyspace(ctx, keyspace, "UpdateThrottlerConfig")
-	if lockErr != nil {
-		return lockErr
-	}
-	defer unlock(&err)
-
-	_, err = wr.TopoServer().UpdateSrvKeyspaceThrottlerConfig(ctx, keyspace, []string{}, update)
+	_, err = wr.VtctldServer().UpdateThrottlerConfig(ctx, &vtctldatapb.UpdateThrottlerConfigRequest{
+		Keyspace:          keyspace,
+		Enable:            *enable,
+		Disable:           *disable,
+		CustomQuery:       *customQuery,
+		CustomQuerySet:    customQuerySet,
+		Threshold:         *threshold,
+		CheckAsCheckSelf:  *checkAsCheckSelf,
+		CheckAsCheckShard: *checkAsCheckShard,
+	})
 	return err
 }
 
