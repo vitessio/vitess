@@ -115,9 +115,10 @@ func registerTabletEnvFlags(fs *pflag.FlagSet) {
 	fs.Int64Var(&currentConfig.QueryCacheMemory, "queryserver-config-query-cache-memory", defaultConfig.QueryCacheMemory, "query server query cache size in bytes, maximum amount of memory to be used for caching. vttablet analyzes every incoming query and generate a query plan, these plans are being cached in a lru cache. This config controls the capacity of the lru cache.")
 	fs.BoolVar(&currentConfig.QueryCacheLFU, "queryserver-config-query-cache-lfu", defaultConfig.QueryCacheLFU, "query server cache algorithm. when set to true, a new cache algorithm based on a TinyLFU admission policy will be used to improve cache behavior and prevent pollution from sparse queries")
 
-	currentConfig.SchemaReloadIntervalSeconds = flagutil.NewDeprecatedFloat64Seconds("queryserver-config-schema-reload-time", defaultConfig.SchemaReloadIntervalSeconds.Get())
-	fs.Var(&currentConfig.SchemaReloadIntervalSeconds, "queryserver-config-schema-reload-time", "query server schema reload time, how often vttablet reloads schemas from underlying MySQL instance in seconds. vttablet keeps table schemas in its own memory and periodically refreshes it from MySQL. This config controls the reload time.")
-	SecondsVar(fs, &currentConfig.SignalSchemaChangeReloadIntervalSeconds, "queryserver-config-schema-change-signal-interval", defaultConfig.SignalSchemaChangeReloadIntervalSeconds, "query server schema change signal interval defines at which interval the query server shall send schema updates to vtgate.")
+	currentConfig.SchemaReloadIntervalSeconds = defaultConfig.SchemaReloadIntervalSeconds.Clone()
+	fs.Var(&currentConfig.SchemaReloadIntervalSeconds, currentConfig.SchemaReloadIntervalSeconds.Name(), "query server schema reload time, how often vttablet reloads schemas from underlying MySQL instance in seconds. vttablet keeps table schemas in its own memory and periodically refreshes it from MySQL. This config controls the reload time.")
+	currentConfig.SignalSchemaChangeReloadIntervalSeconds = defaultConfig.SignalSchemaChangeReloadIntervalSeconds.Clone()
+	fs.Var(&currentConfig.SignalSchemaChangeReloadIntervalSeconds, currentConfig.SignalSchemaChangeReloadIntervalSeconds.Name(), "query server schema change signal interval defines at which interval the query server shall send schema updates to vtgate.")
 	fs.BoolVar(&currentConfig.SignalWhenSchemaChange, "queryserver-config-schema-change-signal", defaultConfig.SignalWhenSchemaChange, "query server schema signal, will signal connected vtgates that schema has changed whenever this is detected. VTGates will need to have -schema_change_signal enabled for this to work")
 	SecondsVar(fs, &currentConfig.Olap.TxTimeoutSeconds, "queryserver-config-olap-transaction-timeout", defaultConfig.Olap.TxTimeoutSeconds, "query server transaction timeout (in seconds), after which a transaction in an OLAP session will be killed")
 	SecondsVar(fs, &currentConfig.Oltp.QueryTimeoutSeconds, "queryserver-config-query-timeout", defaultConfig.Oltp.QueryTimeoutSeconds, "query server query timeout (in seconds), this is the query timeout in vttablet side. If a query takes more than this timeout, it will be killed.")
@@ -296,7 +297,7 @@ type TabletConfig struct {
 	QueryCacheMemory                        int64                             `json:"queryCacheMemory,omitempty"`
 	QueryCacheLFU                           bool                              `json:"queryCacheLFU,omitempty"`
 	SchemaReloadIntervalSeconds             flagutil.DeprecatedFloat64Seconds `json:"schemaReloadIntervalSeconds,omitempty"`
-	SignalSchemaChangeReloadIntervalSeconds Seconds                           `json:"signalSchemaChangeReloadIntervalSeconds,omitempty"`
+	SignalSchemaChangeReloadIntervalSeconds flagutil.DeprecatedFloat64Seconds `json:"signalSchemaChangeReloadIntervalSeconds,omitempty"`
 	WatchReplication                        bool                              `json:"watchReplication,omitempty"`
 	TrackSchemaVersions                     bool                              `json:"trackSchemaVersions,omitempty"`
 	TerseErrors                             bool                              `json:"terseErrors,omitempty"`
@@ -340,13 +341,18 @@ func (cfg *TabletConfig) MarshalJSON() ([]byte, error) {
 
 	tmp := struct {
 		TCProxy
-		SchemaReloadIntervalSeconds string `json:"schemaReloadIntervalSeconds,omitempty"`
+		SchemaReloadIntervalSeconds             string `json:"schemaReloadIntervalSeconds,omitempty"`
+		SignalSchemaChangeReloadIntervalSeconds string `json:"signalSchemaChangeReloadIntervalSeconds,omitempty"`
 	}{
 		TCProxy: TCProxy(*cfg),
 	}
 
 	if d := cfg.SchemaReloadIntervalSeconds.Get(); d != 0 {
 		tmp.SchemaReloadIntervalSeconds = d.String()
+	}
+
+	if d := cfg.SignalSchemaChangeReloadIntervalSeconds.Get(); d != 0 {
+		tmp.SignalSchemaChangeReloadIntervalSeconds = d.String()
 	}
 
 	return json.Marshal(&tmp)
@@ -577,7 +583,7 @@ var defaultConfig = TabletConfig{
 	QueryCacheMemory:                        cache.DefaultConfig.MaxMemoryUsage,
 	QueryCacheLFU:                           cache.DefaultConfig.LFU,
 	SchemaReloadIntervalSeconds:             flagutil.NewDeprecatedFloat64Seconds("queryserver-config-schema-reload-time", 30*time.Minute),
-	SignalSchemaChangeReloadIntervalSeconds: 5,
+	SignalSchemaChangeReloadIntervalSeconds: flagutil.NewDeprecatedFloat64Seconds("queryserver-config-schema-change-signal-interval", 5*time.Second),
 	MessagePostponeParallelism:              4,
 	DeprecatedCacheResultFields:             true,
 	SignalWhenSchemaChange:                  true,
