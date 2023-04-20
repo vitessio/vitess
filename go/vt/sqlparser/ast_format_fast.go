@@ -146,7 +146,7 @@ func (node *Insert) formatFast(buf *TrackedBuffer) {
 		buf.WriteString(node.Ignore.ToString())
 		buf.WriteString("into ")
 
-		node.Table.formatFast(buf)
+		node.Table.Expr.formatFast(buf)
 
 		node.Partitions.formatFast(buf)
 
@@ -165,7 +165,7 @@ func (node *Insert) formatFast(buf *TrackedBuffer) {
 		buf.WriteString(node.Ignore.ToString())
 		buf.WriteString("into ")
 
-		node.Table.formatFast(buf)
+		node.Table.Expr.formatFast(buf)
 
 		node.Partitions.formatFast(buf)
 
@@ -184,7 +184,7 @@ func (node *Insert) formatFast(buf *TrackedBuffer) {
 		buf.WriteString(node.Ignore.ToString())
 		buf.WriteString("into ")
 
-		node.Table.formatFast(buf)
+		node.Table.Expr.formatFast(buf)
 
 		node.Partitions.formatFast(buf)
 

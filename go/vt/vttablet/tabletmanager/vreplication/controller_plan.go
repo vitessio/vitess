@@ -81,10 +81,14 @@ func buildInsertPlan(ins *sqlparser.Insert) (*controllerPlan, error) {
 	if ins == nil {
 		return nil, fmt.Errorf("BUG: invalid nil INSERT statement found when building VReplication plan")
 	}
-	if ins.Table.Qualifier.String() != sidecardb.GetName() && ins.Table.Qualifier.String() != sidecardb.DefaultName {
-		return nil, fmt.Errorf("invalid database name: %s", ins.Table.Qualifier.String())
+	tableName, err := ins.Table.TableName()
+	if err != nil {
+		return nil, err
 	}
-	switch ins.Table.Name.String() {
+	if tableName.Qualifier.String() != sidecardb.GetName() && tableName.Qualifier.String() != sidecardb.DefaultName {
+		return nil, fmt.Errorf("invalid database name: %s", tableName.Qualifier.String())
+	}
+	switch tableName.Name.String() {
 	case reshardingJournalTableName:
 		return &controllerPlan{
 			opcode: reshardingJournalQuery,
@@ -92,7 +96,7 @@ func buildInsertPlan(ins *sqlparser.Insert) (*controllerPlan, error) {
 	case vreplicationTableName:
 		// no-op
 	default:
-		return nil, fmt.Errorf("invalid table name: %s", ins.Table.Name.String())
+		return nil, fmt.Errorf("invalid table name: %s", tableName.Name.String())
 	}
 	if ins.Action != sqlparser.InsertAct {
 		return nil, fmt.Errorf("unsupported construct: %v", sqlparser.String(ins))

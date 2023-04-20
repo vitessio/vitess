@@ -38,13 +38,15 @@ func buildInsertPlan(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedV
 	if err != nil {
 		return nil, err
 	}
-	exprs := sqlparser.TableExprs{&sqlparser.AliasedTableExpr{Expr: ins.Table}}
+	exprs := sqlparser.TableExprs{ins.Table}
 	rb, err := pb.processDMLTable(exprs, reservedVars, nil)
 	if err != nil {
 		return nil, err
 	}
 	// The table might have been routed to a different one.
-	ins.Table = exprs[0].(*sqlparser.AliasedTableExpr).Expr.(sqlparser.TableName)
+	ins.Table = exprs[0].(*sqlparser.AliasedTableExpr)
+	// remove any alias added from routing table. insert query does not support table alias.
+	ins.Table.As = sqlparser.NewIdentifierCS("")
 	if rb.eroute.TargetDestination != nil {
 		return nil, vterrors.VT12001("INSERT with a target destination")
 	}
