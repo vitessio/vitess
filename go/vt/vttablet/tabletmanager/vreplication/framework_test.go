@@ -183,7 +183,7 @@ func TestMain(m *testing.M) {
 			return ret
 		}
 		_ = deferFunc
-		defer deferFunc()
+		//defer deferFunc()
 
 		ret = m.Run()
 		return ret

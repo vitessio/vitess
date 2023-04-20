@@ -2804,78 +2804,17 @@ func TestPlayerInvalidDates(t *testing.T) {
 		}
 	}
 }
-func expectJSON(t *testing.T, table string, values [][]string, id int, exec func(ctx context.Context, query string) (*sqltypes.Result, error)) {
-	t.Helper()
 
-	var query string
-	if len(strings.Split(table, ".")) == 1 {
-		query = fmt.Sprintf("select * from %s.%s where id=%d", vrepldb, table, id)
-	} else {
-		query = fmt.Sprintf("select * from %s where id=%d", table, id)
-	}
-	qr, err := exec(context.Background(), query)
-	if err != nil {
-		t.Error(err)
-		return
-	}
-	if len(values) != len(qr.Rows) {
-		t.Fatalf("row counts don't match: %d, want %d", len(qr.Rows), len(values))
-	}
-	for i, row := range values {
-		if len(row) != len(qr.Rows[i]) {
-			t.Fatalf("Too few columns, \nrow: %d, \nresult: %d:%v, \nwant: %d:%v", i, len(qr.Rows[i]), qr.Rows[i], len(row), row)
-		}
-		if qr.Rows[i][0].ToString() != row[0] {
-			t.Fatalf("Id mismatch: want %s, got %s", qr.Rows[i][0].ToString(), row[0])
-		}
-
-		opts := jsondiff.DefaultConsoleOptions()
-		compare, s := jsondiff.Compare(qr.Rows[i][1].Raw(), []byte(row[1]), &opts)
-		if compare != jsondiff.FullMatch {
-			t.Errorf("Diff:\n%s\n", s)
-		}
-	}
-}
-
-func startVReplication(t *testing.T, bls *binlogdatapb.BinlogSource, pos string) (cancelFunc func(), id int) {
-	t.Helper()
-
-	if pos == "" {
-		pos = primaryPosition(t)
-	}
-	// fake workflow type as MoveTables so that we can test with "noblob" binlog row image
-	query := binlogplayer.CreateVReplication("test", bls, pos, 9223372036854775807, 9223372036854775807, 0, vrepldb, binlogdatapb.VReplicationWorkflowType_MoveTables, 0, false)
-	qr, err := playerEngine.Exec(query)
-	if err != nil {
-		t.Fatal(err)
-	}
-	expectDBClientQueries(t, qh.Expect(
-		"/insert into _vt.vreplication",
-		"/update _vt.vreplication set message='Picked source tablet.*",
-		"/update _vt.vreplication set state='Running'",
-	))
-	var once sync.Once
-	return func() {
-		t.Helper()
-		once.Do(func() {
-			query := fmt.Sprintf("delete from _vt.vreplication where id = %d", qr.InsertID)
-			if _, err := playerEngine.Exec(query); err != nil {
-				t.Fatal(err)
-			}
-			expectDeleteQueries(t)
-		})
-	}, int(qr.InsertID)
-}
 func TestPlayerBlob(t *testing.T) {
 	if !runNoBlobTest {
 		t.Skip()
 	}
 	oldVreplicationExperimentalFlags := vttablet.VReplicationExperimentalFlags
 	vttablet.VReplicationExperimentalFlags = vttablet.VReplicationExperimentalFlagAllowNoBlobBinlogRowImage
-	// Extra reset at the end in case we return prematurely.
 	defer func() {
 		vttablet.VReplicationExperimentalFlags = oldVreplicationExperimentalFlags
 	}()
+
 	defer deleteTablet(addTablet(100))
 	execStatements(t, []string{
 		"create table t1(id int, val1 varchar(20), blb1 blob, id2 int, blb2 longblob, val2 varbinary(10), primary key(id))",
@@ -2969,4 +2908,67 @@ func TestPlayerBlob(t *testing.T) {
 	require.Equal(t, int64(1), stats.PartialQueryCount.Counts()["insert"])
 	require.Equal(t, int64(2), stats.PartialQueryCacheSize.Counts()["update"])
 	require.Equal(t, int64(4), stats.PartialQueryCount.Counts()["update"])
+}
+
+func expectJSON(t *testing.T, table string, values [][]string, id int, exec func(ctx context.Context, query string) (*sqltypes.Result, error)) {
+	t.Helper()
+
+	var query string
+	if len(strings.Split(table, ".")) == 1 {
+		query = fmt.Sprintf("select * from %s.%s where id=%d", vrepldb, table, id)
+	} else {
+		query = fmt.Sprintf("select * from %s where id=%d", table, id)
+	}
+	qr, err := exec(context.Background(), query)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	if len(values) != len(qr.Rows) {
+		t.Fatalf("row counts don't match: %d, want %d", len(qr.Rows), len(values))
+	}
+	for i, row := range values {
+		if len(row) != len(qr.Rows[i]) {
+			t.Fatalf("Too few columns, \nrow: %d, \nresult: %d:%v, \nwant: %d:%v", i, len(qr.Rows[i]), qr.Rows[i], len(row), row)
+		}
+		if qr.Rows[i][0].ToString() != row[0] {
+			t.Fatalf("Id mismatch: want %s, got %s", qr.Rows[i][0].ToString(), row[0])
+		}
+
+		opts := jsondiff.DefaultConsoleOptions()
+		compare, s := jsondiff.Compare(qr.Rows[i][1].Raw(), []byte(row[1]), &opts)
+		if compare != jsondiff.FullMatch {
+			t.Errorf("Diff:\n%s\n", s)
+		}
+	}
+}
+
+func startVReplication(t *testing.T, bls *binlogdatapb.BinlogSource, pos string) (cancelFunc func(), id int) {
+	t.Helper()
+
+	if pos == "" {
+		pos = primaryPosition(t)
+	}
+	// fake workflow type as MoveTables so that we can test with "noblob" binlog row image
+	query := binlogplayer.CreateVReplication("test", bls, pos, 9223372036854775807, 9223372036854775807, 0, vrepldb, binlogdatapb.VReplicationWorkflowType_MoveTables, 0, false)
+	qr, err := playerEngine.Exec(query)
+	if err != nil {
+		t.Fatal(err)
+	}
+	expectDBClientQueries(t, qh.Expect(
+		"/insert into _vt.vreplication",
+		"/update _vt.vreplication set message='Picked source tablet.*",
+		"/update _vt.vreplication set state='Running'",
+	))
+	var once sync.Once
+	return func() {
+		t.Helper()
+		once.Do(func() {
+			query := fmt.Sprintf("delete from _vt.vreplication where id = %d", qr.InsertID)
+			if _, err := playerEngine.Exec(query); err != nil {
+				t.Fatal(err)
+			}
+			expectDeleteQueries(t)
+		})
+	}, int(qr.InsertID)
 }

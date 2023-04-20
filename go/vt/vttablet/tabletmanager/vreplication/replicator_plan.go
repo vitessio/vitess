@@ -22,8 +22,6 @@ import (
 	"sort"
 	"strings"
 
-	"vitess.io/vitess/go/vt/log"
-
 	"vitess.io/vitess/go/vt/vttablet"
 
 	"google.golang.org/protobuf/proto"
@@ -411,7 +409,6 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 				return nil, err
 			}
 			tp.Stats.PartialQueryCount.Add([]string{"insert"}, 1)
-			log.Infof(">>>>>>>>>> PartialQueryCount insert %d", tp.Stats.PartialQueryCount.Counts()["insert"])
 			return execParsedQuery(ins, bindvars, executor)
 		}
 	case before && !after:
@@ -429,7 +426,6 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 					return nil, err
 				}
 				tp.Stats.PartialQueryCount.Add([]string{"update"}, 1)
-				log.Infof(">>>>>>>>>> PartialQueryCount update %d", tp.Stats.PartialQueryCount.Counts()["update"])
 				return execParsedQuery(upd, bindvars, executor)
 			}
 		}
