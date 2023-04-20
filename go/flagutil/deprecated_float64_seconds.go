@@ -57,6 +57,14 @@ func (f *DeprecatedFloat64Seconds) Set(arg string) error {
 	return nil
 }
 
+func (f DeprecatedFloat64Seconds) Clone() DeprecatedFloat64Seconds {
+	return DeprecatedFloat64Seconds{
+		name: f.name,
+		val:  f.val,
+	}
+}
+
+func (f DeprecatedFloat64Seconds) Name() string       { return f.name }
 func (f DeprecatedFloat64Seconds) Get() time.Duration { return f.val }
 
 func (f *DeprecatedFloat64Seconds) UnmarshalJSON(data []byte) error {
