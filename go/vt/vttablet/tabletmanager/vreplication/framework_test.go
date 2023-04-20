@@ -163,6 +163,10 @@ func TestMain(m *testing.M) {
 	binlogplayer.SetProtocol("vreplication_test_framework", "test")
 	_flag.ParseFlagsForTest()
 	exitCode := func() int {
+		if err := utils.SetBinlogRowImageMode("full", "/tmp"); err != nil {
+			panic(err)
+		}
+		defer utils.SetBinlogRowImageMode("", "/tmp")
 		_, ret := setup()
 		if ret > 0 {
 			return ret

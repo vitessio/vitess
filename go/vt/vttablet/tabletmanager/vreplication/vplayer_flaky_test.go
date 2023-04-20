@@ -2819,10 +2819,14 @@ func TestPlayerBlob(t *testing.T) {
 	execStatements(t, []string{
 		"create table t1(id int, val1 varchar(20), blb1 blob, id2 int, blb2 longblob, val2 varbinary(10), primary key(id))",
 		fmt.Sprintf("create table %s.t1(id int, val1 varchar(20), blb1 blob, id2 int, blb2 longblob, val2 varbinary(10), primary key(id))", vrepldb),
+		"create table t2(id int, val1 varchar(20), txt1 text, id2 int, val2 varbinary(10), primary key(id))",
+		fmt.Sprintf("create table %s.t2(id int, val1 varchar(20), txt1 text, id2 int, val2 varbinary(10), primary key(id))", vrepldb),
 	})
 	defer execStatements(t, []string{
 		"drop table t1",
 		fmt.Sprintf("drop table %s.t1", vrepldb),
+		"drop table t2",
+		fmt.Sprintf("drop table %s.t2", vrepldb),
 	})
 	env.SchemaEngine.Reload(context.Background())
 
@@ -2830,6 +2834,9 @@ func TestPlayerBlob(t *testing.T) {
 		Rules: []*binlogdatapb.Rule{{
 			Match:  "t1",
 			Filter: "select * from t1",
+		}, {
+			Match:  "t2",
+			Filter: "select * from t2",
 		}},
 	}
 	bls := &binlogdatapb.BinlogSource{
@@ -2889,6 +2896,27 @@ func TestPlayerBlob(t *testing.T) {
 		data: [][]string{
 			{"1", "bbb", "blb11", "99", "blb222", "CCC"},
 		},
+	}, { //"create table t2(id int, val1 varchar(20), txt1 text, id2 int, val2 varbinary(10), primary key(id))",
+		input:  "insert into t2(id,val1,id2,val2) values (1,'aaa',10,'AAA')",
+		output: "insert into t2(id,val1,id2,val2) values (1,'aaa',10,'AAA')",
+		table:  "t2",
+		data: [][]string{
+			{"1", "aaa", "", "10", "AAA"},
+		},
+	}, {
+		input:  "update t2 set txt1 = 'txt1' where id = 1",
+		output: "update t2 set val1='aaa', txt1='txt1', id2=10, val2='AAA' where id=1",
+		table:  "t2",
+		data: [][]string{
+			{"1", "aaa", "txt1", "10", "AAA"},
+		},
+	}, {
+		input:  "update t2 set val2 = 'BBB' where id = 1",
+		output: "update t2 set val1='aaa', id2=10, val2='BBB' where id=1",
+		table:  "t2",
+		data: [][]string{
+			{"1", "aaa", "txt1", "10", "BBB"},
+		},
 	}}
 
 	for _, tcases := range testcases {
@@ -2904,10 +2932,10 @@ func TestPlayerBlob(t *testing.T) {
 	stats := globalStats.controllers[int32(vrId)].blpStats
 	require.Equal(t, 2, len(stats.PartialQueryCount.Counts()))
 	require.Equal(t, 2, len(stats.PartialQueryCount.Counts()))
-	require.Equal(t, int64(1), stats.PartialQueryCacheSize.Counts()["insert"])
-	require.Equal(t, int64(1), stats.PartialQueryCount.Counts()["insert"])
-	require.Equal(t, int64(2), stats.PartialQueryCacheSize.Counts()["update"])
-	require.Equal(t, int64(4), stats.PartialQueryCount.Counts()["update"])
+	require.Equal(t, int64(2), stats.PartialQueryCacheSize.Counts()["insert"])
+	require.Equal(t, int64(2), stats.PartialQueryCount.Counts()["insert"])
+	require.Equal(t, int64(3), stats.PartialQueryCacheSize.Counts()["update"])
+	require.Equal(t, int64(5), stats.PartialQueryCount.Counts()["update"])
 }
 
 func expectJSON(t *testing.T, table string, values [][]string, id int, exec func(ctx context.Context, query string) (*sqltypes.Result, error)) {

@@ -25,7 +25,6 @@ func insertInitialData(t *testing.T) {
 			`[[VARCHAR("Monoprice") VARCHAR("eléctronics")] [VARCHAR("newegg") VARCHAR("elec†ronics")]]`)
 
 		insertJSONValues(t)
-		insertIntoBlobTable(t)
 	})
 }
 
@@ -79,13 +78,16 @@ func insertMoreProductsForTargetThrottler(t *testing.T) {
 	execVtgateQuery(t, vtgateConn, "product", sql)
 }
 
-// create table blob_tbl (id int, val1 varchar(20), blb1 blob, val2 varbinary(20), blb2 longblob, txt1 text, blb3 tinyblob, txt2 longtext, blb4 mediumblob, primary key(id));
 var blobTableQueries = []string{
-	"insert into blob_tbl(id, val1, txt1) values (1, '   ', '                ')",
-	"insert into blob_tbl(id, val1, blb1, blb2) values (2, 'val1_aaa', 'blb1_aaaaaaaaaa', 'blb2_AAAAAAAAAAAAAAA')",
-	"update blob_tbl set val1 = 'val1_uuuuu', blb2 = 'blb2_uuuuuuuuuuuu' where id = 1",
-	"insert into blob_tbl(id, val2, txt1, txt2, blb4) values (3, 'val2_bbbbbb', 'txt1_bbbbbbbbbbb', 'txt2_bbbbbbbbbbb', 'blb4_BBBBBBBBBBBBBBBBBB')",
-	"update blob_tbl set txt1 = 'txt1_wwwwwwwwww', blb3 = 'blb3_wwwwwwwwww'",
+	"insert into blob_tbl(id, val1, txt1) values (1, 'Jøhn \"❤️\" Paül','Jøhn \"❤️\" Paül keyböard ⌨️ jo˙n')",
+	"insert into blob_tbl(id, val1, blb1, blb2) values (2, 'val1_aaa', 'blb1_aaa', 'blb2_AAAA')",
+	"update blob_tbl set val1 = 'val1_bbb', blb2 = 'blb2_bbb' where id = 1",
+	"insert into blob_tbl(id, val2, txt1, txt2, blb4) values (3, 'val2_ccc', 'txt1_ccc', 'txt2_ccc', 'blb4_CCC')",
+	"update blob_tbl set txt1 = 'txt1_ddd'",
+	"update blob_tbl set blb3 = 'blb3_eee'",
+	"delete from blob_tbl where id = 2",
+	"insert into blob_tbl(id, val2, txt1, txt2, blb4) values (4, 'val2_fff', 'txt1_fff', 'txt2_fff', 'blb4_FFF')",
+	"update blob_tbl set txt1 = 'txt1_eee', blb3 = 'blb3_eee' where id = 4",
 }
 
 func insertIntoBlobTable(t *testing.T) {

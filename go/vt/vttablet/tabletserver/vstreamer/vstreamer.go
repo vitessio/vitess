@@ -893,7 +893,9 @@ func (vs *vstreamer) processRowEvent(vevents []*binlogdatapb.VEvent, plan *strea
 		}
 		if afterOK {
 			rowChange.After = sqltypes.RowToProto3(afterValues)
-			if (vttablet.VReplicationExperimentalFlags /**/ & /**/ vttablet.VReplicationExperimentalFlagAllowNoBlobBinlogRowImage == vttablet.VReplicationExperimentalFlagAllowNoBlobBinlogRowImage) && partial {
+			if (vttablet.VReplicationExperimentalFlags /**/ & /**/ vttablet.VReplicationExperimentalFlagAllowNoBlobBinlogRowImage != 0) &&
+				partial {
+
 				rowChange.DataColumns = &binlogdatapb.Bitmap{
 					Count: int64(rows.DataColumns.Count()),
 					Cols:  rows.DataColumns.Bits(),
@@ -950,7 +952,6 @@ func (vs *vstreamer) extractRowAndFilter(plan *streamerPlan, data []byte, dataCo
 	for colNum := 0; colNum < dataColumns.Count(); colNum++ {
 		if !dataColumns.Bit(colNum) {
 			if vttablet.VReplicationExperimentalFlags /**/ & /**/ vttablet.VReplicationExperimentalFlagAllowNoBlobBinlogRowImage == 0 {
-				log.Errorf("Flags are %v, %v", vttablet.VReplicationExperimentalFlags, vttablet.VReplicationExperimentalFlagAllowNoBlobBinlogRowImage)
 				return false, nil, false, fmt.Errorf("partial row image encountered: ensure binlog_row_image is set to 'full'")
 			} else {
 				partial = true

@@ -692,6 +692,10 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 		catchup(t, customerTab1, workflow, workflowType)
 		catchup(t, customerTab2, workflow, workflowType)
 
+		// The wait in the next code block which checks that customer.dec80 is updated, also confirms that the
+		// blob-related dmls we execute here are vreplicated.
+		insertIntoBlobTable(t)
+
 		// Confirm that the 0 scale decimal field, dec80, is replicated correctly
 		dec80Replicated := false
 		execVtgateQuery(t, vtgateConn, sourceKs, "update customer set dec80 = 0")
@@ -705,6 +709,35 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 			}
 		}
 		require.Equal(t, true, dec80Replicated)
+
+		tablet200Port := custKs.Shards["-80"].Tablets["zone1-200"].Vttablet.Port
+		tablet300Port := custKs.Shards["80-"].Tablets["zone1-300"].Vttablet.Port
+
+		getPartialMetrics := func(t *testing.T, port int) (int, int, int, int) {
+			vars := getDebugVars(t, port)
+			cacheSizes := vars["VReplicationPartialQueryCacheSize"].(map[string]interface{})
+			queryCounts := vars["VReplicationPartialQueryCount"].(map[string]interface{})
+			inserts := int(cacheSizes["product.0.p2c.1.insert"].(float64))
+			updates := int(cacheSizes["product.0.p2c.1.update"].(float64))
+			insertQueries := int(queryCounts["product.0.p2c.1.insert"].(float64))
+			updateQueries := int(queryCounts["product.0.p2c.1.update"].(float64))
+			return inserts, updates, insertQueries, updateQueries
+		}
+		t.Run("validate partial query counts", func(t *testing.T) {
+			totalInserts, totalUpdates, totalInsertQueries, totalUpdateQueries := 0, 0, 0, 0
+			for _, port := range []int{tablet200Port, tablet300Port} {
+				insertCount, updateCount, insertQueries, updateQueries := getPartialMetrics(t, port)
+				totalInserts += insertCount
+				totalUpdates += updateCount
+				totalInsertQueries += insertQueries
+				totalUpdateQueries += updateQueries
+			}
+			// Counts are total queries from `blobTableQueries` across shards + customer updates from above
+			require.Equal(t, 4, totalInserts)
+			require.Equal(t, 8, totalUpdates)
+			require.Equal(t, 4, totalInsertQueries)
+			require.Equal(t, 11, totalUpdateQueries)
+		})
 
 		query := "select cid from customer"
 		require.True(t, validateThatQueryExecutesOnTablet(t, vtgateConn, productTab, "product", query, query))
