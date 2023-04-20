@@ -352,6 +352,16 @@ func (ast *astCompiler) translateFuncExpr(fn *sqlparser.FuncExpr) (Expr, error) 
 			return nil, argError(method)
 		}
 		return &builtinHour{CallExpr: call}, nil
+	case "makedate":
+		if len(args) != 2 {
+			return nil, argError(method)
+		}
+		return &builtinMakedate{CallExpr: call}, nil
+	case "maketime":
+		if len(args) != 3 {
+			return nil, argError(method)
+		}
+		return &builtinMaketime{CallExpr: call}, nil
 	case "microsecond":
 		if len(args) != 1 {
 			return nil, argError(method)
