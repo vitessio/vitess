@@ -1485,14 +1485,16 @@ func (tsv *TabletServer) handlePanicAndSendLogStats(
 		// the log message is controlled by SanitizeLogMessages.
 		// We are handling an unrecoverable panic, so the cost of the dual message handling is
 		// not a concern.
-		var messagef, errMessage, logMessage string
+		var messagef, logMessage, query, truncatedQuery string
 		messagef = fmt.Sprintf("Uncaught panic for %%v:\n%v\n%s", x, tb.Stack(4) /* Skip the last 4 boiler-plate frames. */)
-		errMessage = fmt.Sprintf(messagef, queryAsString(sql, bindVariables, tsv.TerseErrors))
-		terr := vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "%s", errMessage)
+		query = queryAsString(sql, bindVariables, tsv.TerseErrors, false)
+		terr := vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "%s", fmt.Sprintf(messagef, query))
 		if tsv.TerseErrors == tsv.Config().SanitizeLogMessages {
-			logMessage = errMessage
+			truncatedQuery = queryAsString(sql, bindVariables, tsv.TerseErrors, true)
+			logMessage = fmt.Sprintf(messagef, truncatedQuery)
 		} else {
-			logMessage = fmt.Sprintf(messagef, queryAsString(sql, bindVariables, tsv.Config().SanitizeLogMessages))
+			truncatedQuery = queryAsString(sql, bindVariables, tsv.Config().SanitizeLogMessages, true)
+			logMessage = fmt.Sprintf(messagef, truncatedQuery)
 		}
 		log.Error(logMessage)
 		tsv.stats.InternalErrors.Add("Panic", 1)
@@ -1551,12 +1553,12 @@ func (tsv *TabletServer) convertAndLogError(ctx context.Context, sql string, bin
 		sqlState := sqlErr.SQLState()
 		errnum := sqlErr.Number()
 		if tsv.TerseErrors && errCode != vtrpcpb.Code_FAILED_PRECONDITION {
-			err = vterrors.Errorf(errCode, "(errno %d) (sqlstate %s)%s: %s", errnum, sqlState, callerID, queryAsString(sql, bindVariables, tsv.TerseErrors))
+			err = vterrors.Errorf(errCode, "(errno %d) (sqlstate %s)%s: %s", errnum, sqlState, callerID, queryAsString(sql, bindVariables, tsv.TerseErrors, false))
 			if logMethod != nil {
 				message = fmt.Sprintf("(errno %d) (sqlstate %s)%s: %s", errnum, sqlState, callerID, truncateSQLAndBindVars(sql, bindVariables, tsv.Config().SanitizeLogMessages))
 			}
 		} else {
-			err = vterrors.Errorf(errCode, "%s (errno %d) (sqlstate %s)%s: %s", sqlErr.Message, errnum, sqlState, callerID, queryAsString(sql, bindVariables, false))
+			err = vterrors.Errorf(errCode, "%s (errno %d) (sqlstate %s)%s: %s", sqlErr.Message, errnum, sqlState, callerID, queryAsString(sql, bindVariables, false, false))
 			if logMethod != nil {
 				message = fmt.Sprintf("%s (errno %d) (sqlstate %s)%s: %s", sqlErr.Message, errnum, sqlState, callerID, truncateSQLAndBindVars(sql, bindVariables, tsv.Config().SanitizeLogMessages))
 			}
@@ -2035,7 +2037,7 @@ func (tsv *TabletServer) ConsolidatorMode() string {
 
 // queryAsString returns a readable normalized version of the query and if sanitize
 // is false it also includes the bind variables.
-func queryAsString(sql string, bindVariables map[string]*querypb.BindVariable, sanitize bool) string {
+func queryAsString(sql string, bindVariables map[string]*querypb.BindVariable, sanitize bool, truncateForLog bool) string {
 	buf := &bytes.Buffer{}
 	// sql is the normalized query without the bind vars
 	fmt.Fprintf(buf, "Sql: %q", sql)
@@ -2058,7 +2060,12 @@ func queryAsString(sql string, bindVariables map[string]*querypb.BindVariable, s
 		}
 	}
 	fmt.Fprintf(buf, "}")
-	return buf.String()
+	query := buf.String()
+	if truncateForLog {
+		return sqlparser.TruncateForLog(query)
+	} else {
+		return query
+	}
 }
 
 // withTimeout returns a context based on the specified timeout.
