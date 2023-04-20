@@ -172,8 +172,8 @@ func (bh *S3BackupHandle) AddFile(ctx context.Context, filename string, filesize
 			u.PartSize = partSizeBytes
 		})
 		object := objName(bh.dir, bh.name, filename)
-
-		_, err := uploader.Upload(&s3manager.UploadInput{
+		sendStats := bh.bs.params.Stats.Scope(stats.Operation("AWS:Request:Send"))
+		_, err := uploader.UploadWithContext(ctx, &s3manager.UploadInput{
 			Bucket:               &bucket,
 			Key:                  object,
 			Body:                 reader,
@@ -181,7 +181,11 @@ func (bh *S3BackupHandle) AddFile(ctx context.Context, filename string, filesize
 			SSECustomerAlgorithm: bh.bs.s3SSE.customerAlg,
 			SSECustomerKey:       bh.bs.s3SSE.customerKey,
 			SSECustomerKeyMD5:    bh.bs.s3SSE.customerMd5,
-		})
+		}, s3manager.WithUploaderRequestOptions(func(r *request.Request) {
+			r.Handlers.CompleteAttempt.PushBack(func(r *request.Request) {
+				sendStats.TimedIncrement(time.Since(r.AttemptTime))
+			})
+		}))
 		if err != nil {
 			reader.CloseWithError(err)
 			bh.RecordError(err)
@@ -209,24 +213,22 @@ func (bh *S3BackupHandle) AbortBackup(ctx context.Context) error {
 }
 
 // ReadFile is part of the backupstorage.BackupHandle interface.
-//
-// We don't add any backupstats instrumentation here because all of the time
-// spent here is captured elsewhere.
-//
-// ReadFile includes the time it takes to run (*request).Send in the AWS SDK,
-// which is captured in "Source:Open" in the builtin backup engine. Likewise,
-// the time it takes to read the response is in "Source:Read".
 func (bh *S3BackupHandle) ReadFile(ctx context.Context, filename string) (io.ReadCloser, error) {
 	if !bh.readOnly {
 		return nil, fmt.Errorf("ReadFile cannot be called on read-write backup")
 	}
 	object := objName(bh.dir, bh.name, filename)
-	out, err := bh.client.GetObject(&s3.GetObjectInput{
+	sendStats := bh.bs.params.Stats.Scope(stats.Operation("AWS:Request:Send"))
+	out, err := bh.client.GetObjectWithContext(ctx, &s3.GetObjectInput{
 		Bucket:               &bucket,
 		Key:                  object,
 		SSECustomerAlgorithm: bh.bs.s3SSE.customerAlg,
 		SSECustomerKey:       bh.bs.s3SSE.customerKey,
 		SSECustomerKeyMD5:    bh.bs.s3SSE.customerMd5,
+	}, func(r *request.Request) {
+		r.Handlers.CompleteAttempt.PushBack(func(r *request.Request) {
+			sendStats.TimedIncrement(time.Since(r.AttemptTime))
+		})
 	})
 	if err != nil {
 		return nil, err
@@ -467,26 +469,7 @@ func (bs *S3BackupStorage) client() (*s3.S3, error) {
 			})
 		}
 
-		svc := s3.New(session, &awsConfig)
-
-		// Instrument bytes transferred and duration of each HTTP call to AWS.
-		//
-		// Note that calls may happen in parallel and may be retried, so the
-		// total time instrumented may exceed the time of backup and restore
-		// operations.
-		sendStats := bs.params.Stats.Scope(stats.Operation("AWS:Request:Send"))
-		svc.Handlers.CompleteAttempt.PushBack(func(r *request.Request) {
-			var b int64
-			if r.HTTPRequest != nil && r.HTTPRequest.ContentLength > 0 {
-				b += r.HTTPRequest.ContentLength
-			}
-			if r.HTTPResponse != nil && r.HTTPResponse.ContentLength > 0 {
-				b += r.HTTPResponse.ContentLength
-			}
-			sendStats.TimedIncrementBytes(int(b), time.Since(r.AttemptTime))
-		})
-
-		bs._client = svc
+		bs._client = s3.New(session, &awsConfig)
 
 		if len(bucket) == 0 {
 			return nil, fmt.Errorf("--s3_backup_storage_bucket required")
