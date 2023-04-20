@@ -335,25 +335,6 @@ type TabletConfig struct {
 	EnablePerWorkloadTableMetrics bool `json:"-"`
 }
 
-func (cfg *TabletConfig) UnmarshalJSON(data []byte) error {
-	type TCProxy TabletConfig
-
-	tmp := struct {
-		TCProxy
-		SchemaReloadIntervalSeconds *flagutil.DeprecatedFloat64Seconds `json:"schemaReloadIntervalSeconds,omitempty"`
-	}{
-		TCProxy:                     TCProxy(*cfg),
-		SchemaReloadIntervalSeconds: &cfg.SchemaReloadIntervalSeconds,
-	}
-
-	if err := json.Unmarshal(data, &tmp); err != nil {
-		return err
-	}
-
-	cfg.SchemaReloadIntervalSeconds.Set(tmp.SchemaReloadIntervalSeconds.String())
-	return nil
-}
-
 func (cfg *TabletConfig) MarshalJSON() ([]byte, error) {
 	type TCProxy TabletConfig
 
