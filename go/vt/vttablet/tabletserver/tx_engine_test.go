@@ -47,7 +47,7 @@ func TestTxEngineClose(t *testing.T) {
 	config.DB = newDBConfigs(db)
 	config.TxPool.Size = 10
 	config.Oltp.TxTimeoutSeconds = 0.1
-	config.GracePeriods.ShutdownSeconds = 0
+	_ = config.GracePeriods.ShutdownSeconds.Set("0s")
 	te := NewTxEngine(tabletenv.NewEnv(config, "TabletServerTest"))
 
 	// Normal close.
@@ -530,7 +530,7 @@ func setupTxEngine(db *fakesqldb.DB) *TxEngine {
 	config.DB = newDBConfigs(db)
 	config.TxPool.Size = 10
 	config.Oltp.TxTimeoutSeconds = 0.1
-	config.GracePeriods.ShutdownSeconds = 0
+	_ = config.GracePeriods.ShutdownSeconds.Set("0s")
 	te := NewTxEngine(tabletenv.NewEnv(config, "TabletServerTest"))
 	return te
 }

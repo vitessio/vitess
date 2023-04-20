@@ -105,7 +105,8 @@ func registerTabletEnvFlags(fs *pflag.FlagSet) {
 	_ = fs.MarkDeprecated("queryserver-config-transaction-prefill-parallelism", "it will be removed in a future release.")
 	fs.IntVar(&currentConfig.MessagePostponeParallelism, "queryserver-config-message-postpone-cap", defaultConfig.MessagePostponeParallelism, "query server message postpone cap is the maximum number of messages that can be postponed at any given time. Set this number to substantially lower than transaction cap, so that the transaction pool isn't exhausted by the message subsystem.")
 	SecondsVar(fs, &currentConfig.Oltp.TxTimeoutSeconds, "queryserver-config-transaction-timeout", defaultConfig.Oltp.TxTimeoutSeconds, "query server transaction timeout (in seconds), a transaction will be killed if it takes longer than this value")
-	SecondsVar(fs, &currentConfig.GracePeriods.ShutdownSeconds, "shutdown_grace_period", defaultConfig.GracePeriods.ShutdownSeconds, "how long to wait (in seconds) for queries and transactions to complete during graceful shutdown.")
+	currentConfig.GracePeriods.ShutdownSeconds = flagutil.NewDeprecatedFloat64Seconds(defaultConfig.GracePeriods.ShutdownSeconds.Name(), defaultConfig.GracePeriods.TransitionSeconds.Get())
+	fs.Var(&currentConfig.GracePeriods.ShutdownSeconds, currentConfig.GracePeriods.ShutdownSeconds.Name(), "how long to wait (in seconds) for queries and transactions to complete during graceful shutdown.")
 	fs.IntVar(&currentConfig.Oltp.MaxRows, "queryserver-config-max-result-size", defaultConfig.Oltp.MaxRows, "query server max result size, maximum number of rows allowed to return from vttablet for non-streaming queries.")
 	fs.IntVar(&currentConfig.Oltp.WarnRows, "queryserver-config-warn-result-size", defaultConfig.Oltp.WarnRows, "query server result size warning threshold, warn if number of rows returned from vttablet for non-streaming queries exceeds this")
 	fs.BoolVar(&currentConfig.PassthroughDML, "queryserver-config-passthrough-dmls", defaultConfig.PassthroughDML, "query server pass through all dml statements without rewriting")
@@ -248,7 +249,7 @@ func Init() {
 	currentConfig.Healthcheck.IntervalSeconds.Set(healthCheckInterval)
 	currentConfig.Healthcheck.DegradedThresholdSeconds.Set(degradedThreshold)
 	currentConfig.Healthcheck.UnhealthyThresholdSeconds.Set(unhealthyThreshold)
-	currentConfig.GracePeriods.TransitionSeconds.Set(transitionGracePeriod)
+	_ = currentConfig.GracePeriods.TransitionSeconds.Set(transitionGracePeriod.String())
 
 	switch streamlog.GetQueryLogFormat() {
 	case streamlog.QueryLogFormatText:
@@ -400,8 +401,30 @@ type HealthcheckConfig struct {
 // GracePeriodsConfig contains various grace periods.
 // TODO(sougou): move lameduck here?
 type GracePeriodsConfig struct {
-	ShutdownSeconds   Seconds `json:"shutdownSeconds,omitempty"`
-	TransitionSeconds Seconds `json:"transitionSeconds,omitempty"`
+	ShutdownSeconds   flagutil.DeprecatedFloat64Seconds `json:"shutdownSeconds,omitempty"`
+	TransitionSeconds flagutil.DeprecatedFloat64Seconds `json:"transitionSeconds,omitempty"`
+}
+
+func (cfg *GracePeriodsConfig) MarshalJSON() ([]byte, error) {
+	type Proxy GracePeriodsConfig
+
+	tmp := struct {
+		Proxy
+		ShutdownSeconds   string `json:"shutdownSeconds,omitempty"`
+		TransitionSeconds string `json:"transitionSeconds,omitempty"`
+	}{
+		Proxy: Proxy(*cfg),
+	}
+
+	if d := cfg.ShutdownSeconds.Get(); d != 0 {
+		tmp.ShutdownSeconds = d.String()
+	}
+
+	if d := cfg.TransitionSeconds.Get(); d != 0 {
+		tmp.TransitionSeconds = d.String()
+	}
+
+	return json.Marshal(&tmp)
 }
 
 // ReplicationTrackerConfig contains the config for the replication tracker.
@@ -577,6 +600,13 @@ var defaultConfig = TabletConfig{
 		IntervalSeconds:           20,
 		DegradedThresholdSeconds:  30,
 		UnhealthyThresholdSeconds: 7200,
+	},
+	GracePeriods: GracePeriodsConfig{
+		// TODO (ajm188) remove after these are durations. it's not necessary
+		// for production code because it's the zero value, but it's required
+		// for tests to pass (which require the name field to be present for
+		// deep equality).
+		ShutdownSeconds: flagutil.NewDeprecatedFloat64Seconds("shutdown_grace_period", 0),
 	},
 	ReplicationTracker: ReplicationTrackerConfig{
 		Mode:                     Disable,
