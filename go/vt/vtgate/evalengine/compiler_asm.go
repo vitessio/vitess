@@ -3300,6 +3300,101 @@ func (asm *assembler) Fn_HOUR() {
 	}, "FN HOUR TIME(SP-1)")
 }
 
+func (asm *assembler) Fn_MAKEDATE() {
+	asm.adjustStack(-1)
+	asm.emit(func(env *ExpressionEnv) int {
+		y := env.vm.stack[env.vm.sp-1].(*evalInt64)
+		yd := env.vm.stack[env.vm.sp-2].(*evalInt64)
+
+		t := yearDayToTime(y.i, yd.i)
+		if t.IsZero() {
+			env.vm.stack[env.vm.sp-2] = nil
+		} else {
+			env.vm.stack[env.vm.sp-2] = env.vm.arena.newEvalDate(datetime.FromStdTime(t).Date)
+		}
+		env.vm.sp--
+		return 1
+	}, "FN MAKEDATE INT64(SP-2) INT64(SP-1)")
+}
+
+func (asm *assembler) Fn_MAKETIME_i() {
+	asm.adjustStack(-2)
+	asm.emit(func(env *ExpressionEnv) int {
+		h := env.vm.stack[env.vm.sp-3].(*evalInt64)
+		m := env.vm.stack[env.vm.sp-2].(*evalInt64)
+		s := env.vm.stack[env.vm.sp-1].(*evalInt64)
+
+		i, ok := makeTime_i(h.i, m.i, s.i)
+		if !ok {
+			env.vm.stack[env.vm.sp-3] = nil
+			env.vm.sp -= 2
+			return 1
+		}
+		t, ok := datetime.ParseTimeInt64(i)
+		if !ok {
+			env.vm.stack[env.vm.sp-3] = nil
+			env.vm.sp -= 2
+			return 1
+		}
+
+		env.vm.stack[env.vm.sp-3] = env.vm.arena.newEvalTime(t, 0)
+		env.vm.sp -= 2
+		return 1
+	}, "FN MAKETIME INT64(SP-3) INT64(SP-2) INT64(SP-1)")
+}
+
+func (asm *assembler) Fn_MAKETIME_d() {
+	asm.adjustStack(-2)
+	asm.emit(func(env *ExpressionEnv) int {
+		h := env.vm.stack[env.vm.sp-3].(*evalInt64)
+		m := env.vm.stack[env.vm.sp-2].(*evalInt64)
+		s := env.vm.stack[env.vm.sp-1].(*evalDecimal)
+
+		d, ok := makeTime_d(h.i, m.i, s.dec)
+		if !ok {
+			env.vm.stack[env.vm.sp-3] = nil
+			env.vm.sp -= 2
+			return 1
+		}
+		t, l, ok := datetime.ParseTimeDecimal(d, s.length, -1)
+		if !ok {
+			env.vm.stack[env.vm.sp-3] = nil
+			env.vm.sp -= 2
+			return 1
+		}
+
+		env.vm.stack[env.vm.sp-3] = env.vm.arena.newEvalTime(t, l)
+		env.vm.sp -= 2
+		return 1
+	}, "FN MAKETIME INT64(SP-3) INT64(SP-2) DECIMAL(SP-1)")
+}
+
+func (asm *assembler) Fn_MAKETIME_f() {
+	asm.adjustStack(-2)
+	asm.emit(func(env *ExpressionEnv) int {
+		h := env.vm.stack[env.vm.sp-3].(*evalInt64)
+		m := env.vm.stack[env.vm.sp-2].(*evalInt64)
+		s := env.vm.stack[env.vm.sp-1].(*evalFloat)
+
+		f, ok := makeTime_f(h.i, m.i, s.f)
+		if !ok {
+			env.vm.stack[env.vm.sp-3] = nil
+			env.vm.sp -= 2
+			return 1
+		}
+		t, l, ok := datetime.ParseTimeFloat(f, -1)
+		if !ok {
+			env.vm.stack[env.vm.sp-3] = nil
+			env.vm.sp -= 2
+			return 1
+		}
+
+		env.vm.stack[env.vm.sp-3] = env.vm.arena.newEvalTime(t, l)
+		env.vm.sp -= 2
+		return 1
+	}, "FN MAKETIME INT64(SP-3) INT64(SP-2) FLOAT(SP-1)")
+}
+
 func (asm *assembler) Fn_MICROSECOND() {
 	asm.emit(func(env *ExpressionEnv) int {
 		if env.vm.stack[env.vm.sp-1] == nil {
