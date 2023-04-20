@@ -98,7 +98,7 @@ func newEvalBool(b bool) *evalInt64 {
 	return evalBoolFalse
 }
 
-func evalToNumeric(e eval) evalNumeric {
+func evalToNumeric(e eval, preciseDatetime bool) evalNumeric {
 	switch e := e.(type) {
 	case evalNumeric:
 		return e
@@ -128,7 +128,13 @@ func evalToNumeric(e eval) evalNumeric {
 			return &evalFloat{f: 0}
 		}
 	case *evalTemporal:
-		return newEvalInt64(e.toInt64())
+		if preciseDatetime {
+			if e.prec == 0 {
+				return newEvalInt64(e.toInt64())
+			}
+			return newEvalDecimalWithPrec(e.toDecimal(), int32(e.prec))
+		}
+		return &evalFloat{f: e.toFloat()}
 	default:
 		panic("unsupported")
 	}
@@ -172,9 +178,9 @@ func evalToFloat(e eval) (*evalFloat, bool) {
 			return &evalFloat{f: 0}, true
 		}
 	case *evalTemporal:
-		return &evalFloat{f: float64(e.toInt64())}, true
+		return &evalFloat{f: e.toFloat()}, true
 	default:
-		panic("unsupported")
+		panic(fmt.Sprintf("unsupported type %T", e))
 	}
 }
 
@@ -201,22 +207,26 @@ func evalToDecimal(e eval, m, d int32) *evalDecimal {
 			}
 			return newEvalDecimal(decimal.Zero, m, d)
 		case json.TypeNumber:
-			// This is all super whacky, but it's how MySQL works...
-			// When the value fits in an integer, first convert to that
-			// and then to decimal.
-			i, ok := e.Int64()
-			if ok {
+			switch e.NumberType() {
+			case json.NumberTypeSigned:
+				i, _ := e.Int64()
 				return newEvalDecimal(decimal.NewFromInt(i), m, d)
-			}
-			// But, if the value fits in an unsigned integer, convert to that
-			// and then cast it to a signed integer and then turn it into a decimal.
-			// SELECT CAST(CAST(18446744073709551615 AS JSON) AS DECIMAL) -> -1
-			u, ok := e.Uint64()
-			if ok {
+			case json.NumberTypeUnsigned:
+				// If the value fits in an unsigned integer, convert to that
+				// and then cast it to a signed integer and then turn it into a decimal.
+				// SELECT CAST(CAST(18446744073709551615 AS JSON) AS DECIMAL) -> -1
+				u, _ := e.Uint64()
 				return newEvalDecimal(decimal.NewFromInt(int64(u)), m, d)
+			case json.NumberTypeDecimal:
+				dec, _ := e.Decimal()
+				return newEvalDecimal(dec, m, d)
+			case json.NumberTypeFloat:
+				f, _ := e.Float64()
+				dec := decimal.NewFromFloat(f)
+				return newEvalDecimal(dec, m, d)
+			default:
+				panic("unreachable")
 			}
-			dec, _ := e.Decimal()
-			return newEvalDecimal(dec, m, d)
 		case json.TypeString:
 			dec, _ := decimal.NewFromString(e.Raw())
 			return newEvalDecimal(dec, m, d)
@@ -224,7 +234,7 @@ func evalToDecimal(e eval, m, d int32) *evalDecimal {
 			return newEvalDecimal(decimal.Zero, m, d)
 		}
 	case *evalTemporal:
-		return newEvalDecimal(decimal.NewFromInt(e.toInt64()), m, d)
+		return newEvalDecimal(e.toDecimal(), m, d)
 	default:
 		panic("unsupported")
 	}

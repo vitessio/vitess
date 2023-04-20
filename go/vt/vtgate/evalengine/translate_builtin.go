@@ -340,6 +340,13 @@ func (ast *astCompiler) translateFuncExpr(fn *sqlparser.FuncExpr) (Expr, error) 
 			return nil, argError(method)
 		}
 		return &builtinDayOfYear{CallExpr: call}, nil
+	case "from_unixtime":
+		switch len(args) {
+		case 1, 2:
+			return &builtinFromUnixtime{CallExpr: call, collate: ast.cfg.Collation}, nil
+		default:
+			return nil, argError(method)
+		}
 	case "hour":
 		if len(args) != 1 {
 			return nil, argError(method)
@@ -380,6 +387,13 @@ func (ast *astCompiler) translateFuncExpr(fn *sqlparser.FuncExpr) (Expr, error) 
 			return nil, argError(method)
 		}
 		return &builtinTime{CallExpr: call}, nil
+	case "unix_timestamp":
+		switch len(args) {
+		case 0, 1:
+			return &builtinUnixTimestamp{CallExpr: call}, nil
+		default:
+			return nil, argError(method)
+		}
 	case "week":
 		switch len(args) {
 		case 1, 2:

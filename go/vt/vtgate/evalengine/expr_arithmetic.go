@@ -67,27 +67,28 @@ func (b *ArithmeticExpr) eval(env *ExpressionEnv) (eval, error) {
 	return b.Op.eval(left, right)
 }
 
-func makeNumericalType(t sqltypes.Type, f typeFlag) sqltypes.Type {
+func makeNumericalType(t sqltypes.Type, f typeFlag) (sqltypes.Type, typeFlag) {
 	if sqltypes.IsNumber(t) {
-		return t
+		return t, f
 	}
 	if t == sqltypes.VarBinary && (f&flagHex) != 0 {
-		return sqltypes.Uint64
+		return sqltypes.Uint64, f
 	}
 	if sqltypes.IsDateOrTime(t) {
-		return sqltypes.Int64
+		return sqltypes.Int64, f | flagAmbiguousType
 	}
-	return sqltypes.Float64
+	return sqltypes.Float64, f
 }
 
 // typeof implements the Expr interface
 func (b *ArithmeticExpr) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
 	t1, f1 := b.Left.typeof(env, fields)
 	t2, f2 := b.Right.typeof(env, fields)
-	flags := f1 | f2
 
-	t1 = makeNumericalType(t1, f1)
-	t2 = makeNumericalType(t2, f2)
+	t1, f1 = makeNumericalType(t1, f1)
+	t2, f2 = makeNumericalType(t2, f2)
+
+	flags := f1 | f2
 
 	switch b.Op.(type) {
 	case *opArithDiv:
@@ -153,8 +154,8 @@ func (op *opArithAdd) compile(c *compiler, left, right Expr) (ctype, error) {
 	swap := false
 	skip2 := c.compileNullCheck1r(rt)
 
-	lt = c.compileToNumeric(lt, 2, sqltypes.Float64)
-	rt = c.compileToNumeric(rt, 1, sqltypes.Float64)
+	lt = c.compileToNumeric(lt, 2, sqltypes.Float64, true)
+	rt = c.compileToNumeric(rt, 1, sqltypes.Float64, true)
 	lt, rt, swap = c.compileNumericPriority(lt, rt)
 
 	var sumtype sqltypes.Type
@@ -211,8 +212,8 @@ func (op *opArithSub) compile(c *compiler, left, right Expr) (ctype, error) {
 	}
 
 	skip2 := c.compileNullCheck1r(rt)
-	lt = c.compileToNumeric(lt, 2, sqltypes.Float64)
-	rt = c.compileToNumeric(rt, 1, sqltypes.Float64)
+	lt = c.compileToNumeric(lt, 2, sqltypes.Float64, true)
+	rt = c.compileToNumeric(rt, 1, sqltypes.Float64, true)
 
 	var subtype sqltypes.Type
 
@@ -296,8 +297,8 @@ func (op *opArithMul) compile(c *compiler, left, right Expr) (ctype, error) {
 
 	swap := false
 	skip2 := c.compileNullCheck1r(rt)
-	lt = c.compileToNumeric(lt, 2, sqltypes.Float64)
-	rt = c.compileToNumeric(rt, 1, sqltypes.Float64)
+	lt = c.compileToNumeric(lt, 2, sqltypes.Float64, true)
+	rt = c.compileToNumeric(rt, 1, sqltypes.Float64, true)
 	lt, rt, swap = c.compileNumericPriority(lt, rt)
 
 	var multype sqltypes.Type
@@ -355,8 +356,8 @@ func (op *opArithDiv) compile(c *compiler, left, right Expr) (ctype, error) {
 	}
 	skip2 := c.compileNullCheck1r(rt)
 
-	lt = c.compileToNumeric(lt, 2, sqltypes.Float64)
-	rt = c.compileToNumeric(rt, 1, sqltypes.Float64)
+	lt = c.compileToNumeric(lt, 2, sqltypes.Float64, true)
+	rt = c.compileToNumeric(rt, 1, sqltypes.Float64, true)
 
 	ct := ctype{Col: collationNumeric, Flag: flagNullable}
 	if lt.Type == sqltypes.Float64 || rt.Type == sqltypes.Float64 {
@@ -393,8 +394,8 @@ func (op *opArithIntDiv) compile(c *compiler, left, right Expr) (ctype, error) {
 	}
 
 	skip2 := c.compileNullCheck1r(rt)
-	lt = c.compileToNumeric(lt, 2, sqltypes.Decimal)
-	rt = c.compileToNumeric(rt, 1, sqltypes.Decimal)
+	lt = c.compileToNumeric(lt, 2, sqltypes.Decimal, true)
+	rt = c.compileToNumeric(rt, 1, sqltypes.Decimal, true)
 
 	ct := ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: flagNullable}
 	switch lt.Type {
@@ -479,8 +480,8 @@ func (op *opArithMod) compile(c *compiler, left, right Expr) (ctype, error) {
 	}
 
 	skip2 := c.compileNullCheck1r(rt)
-	lt = c.compileToNumeric(lt, 2, sqltypes.Float64)
-	rt = c.compileToNumeric(rt, 1, sqltypes.Float64)
+	lt = c.compileToNumeric(lt, 2, sqltypes.Float64, true)
+	rt = c.compileToNumeric(rt, 1, sqltypes.Float64, true)
 
 	ct := ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: flagNullable}
 	switch lt.Type {
@@ -545,7 +546,7 @@ func (n *NegateExpr) eval(env *ExpressionEnv) (eval, error) {
 	if e == nil {
 		return nil, nil
 	}
-	return evalToNumeric(e).negate(), nil
+	return evalToNumeric(e, false).negate(), nil
 }
 
 func (n *NegateExpr) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
@@ -577,7 +578,7 @@ func (expr *NegateExpr) compile(c *compiler) (ctype, error) {
 	}
 
 	skip := c.compileNullCheck1(arg)
-	arg = c.compileToNumeric(arg, 1, sqltypes.Float64)
+	arg = c.compileToNumeric(arg, 1, sqltypes.Float64, false)
 	var neg sqltypes.Type
 
 	switch arg.Type {

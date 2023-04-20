@@ -223,10 +223,10 @@ func evalCompare(left, right eval) (comp int, err error) {
 		return compareDateAndString(left, right), nil
 	case compareAsDateAndNumeric(lt, rt):
 		if sqltypes.IsDateOrTime(lt) {
-			left = evalToNumeric(left)
+			left = evalToNumeric(left, false)
 		}
 		if sqltypes.IsDateOrTime(rt) {
-			right = evalToNumeric(right)
+			right = evalToNumeric(right, false)
 		}
 		return compareNumeric(left, right)
 	case compareAsJSON(lt, rt):
