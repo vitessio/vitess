@@ -174,9 +174,13 @@ func registerTabletEnvFlags(fs *pflag.FlagSet) {
 	_ = fs.MarkDeprecated("enable_query_plan_field_caching", "it will be removed in a future release.")
 	_ = fs.MarkDeprecated("enable-query-plan-field-caching", "it will be removed in a future release.")
 
-	fs.DurationVar(&healthCheckInterval, "health_check_interval", 20*time.Second, "Interval between health checks")
-	fs.DurationVar(&degradedThreshold, "degraded_threshold", 30*time.Second, "replication lag after which a replica is considered degraded")
-	fs.DurationVar(&unhealthyThreshold, "unhealthy_threshold", 2*time.Hour, "replication lag after which a replica is considered unhealthy")
+	currentConfig.Healthcheck.IntervalSeconds = flagutil.NewDeprecatedFloat64Seconds(defaultConfig.Healthcheck.IntervalSeconds.Name(), defaultConfig.Healthcheck.IntervalSeconds.Get())
+	currentConfig.Healthcheck.DegradedThresholdSeconds = flagutil.NewDeprecatedFloat64Seconds(defaultConfig.Healthcheck.DegradedThresholdSeconds.Name(), defaultConfig.Healthcheck.DegradedThresholdSeconds.Get())
+	currentConfig.Healthcheck.UnhealthyThresholdSeconds = flagutil.NewDeprecatedFloat64Seconds(defaultConfig.Healthcheck.UnhealthyThresholdSeconds.Name(), defaultConfig.Healthcheck.UnhealthyThresholdSeconds.Get())
+
+	fs.DurationVar(&healthCheckInterval, currentConfig.Healthcheck.IntervalSeconds.Name(), currentConfig.Healthcheck.IntervalSeconds.Get(), "Interval between health checks")
+	fs.DurationVar(&degradedThreshold, currentConfig.Healthcheck.DegradedThresholdSeconds.Name(), currentConfig.Healthcheck.DegradedThresholdSeconds.Get(), "replication lag after which a replica is considered degraded")
+	fs.DurationVar(&unhealthyThreshold, currentConfig.Healthcheck.UnhealthyThresholdSeconds.Name(), currentConfig.Healthcheck.UnhealthyThresholdSeconds.Get(), "replication lag after which a replica is considered unhealthy")
 	fs.DurationVar(&transitionGracePeriod, "serving_state_grace_period", 0, "how long to pause after broadcasting health to vtgate, before enforcing a new serving state")
 
 	fs.BoolVar(&enableReplicationReporter, "enable_replication_reporter", false, "Use polling to track replication lag.")
@@ -246,9 +250,9 @@ func Init() {
 		currentConfig.ReplicationTracker.Mode = Disable
 	}
 
-	currentConfig.Healthcheck.IntervalSeconds.Set(healthCheckInterval)
-	currentConfig.Healthcheck.DegradedThresholdSeconds.Set(degradedThreshold)
-	currentConfig.Healthcheck.UnhealthyThresholdSeconds.Set(unhealthyThreshold)
+	_ = currentConfig.Healthcheck.IntervalSeconds.Set(healthCheckInterval.String())
+	_ = currentConfig.Healthcheck.DegradedThresholdSeconds.Set(degradedThreshold.String())
+	_ = currentConfig.Healthcheck.UnhealthyThresholdSeconds.Set(unhealthyThreshold.String())
 	_ = currentConfig.GracePeriods.TransitionSeconds.Set(transitionGracePeriod.String())
 
 	switch streamlog.GetQueryLogFormat() {
@@ -393,9 +397,36 @@ type HotRowProtectionConfig struct {
 
 // HealthcheckConfig contains the config for healthcheck.
 type HealthcheckConfig struct {
-	IntervalSeconds           Seconds `json:"intervalSeconds,omitempty"`
-	DegradedThresholdSeconds  Seconds `json:"degradedThresholdSeconds,omitempty"`
-	UnhealthyThresholdSeconds Seconds `json:"unhealthyThresholdSeconds,omitempty"`
+	IntervalSeconds           flagutil.DeprecatedFloat64Seconds `json:"intervalSeconds,omitempty"`
+	DegradedThresholdSeconds  flagutil.DeprecatedFloat64Seconds `json:"degradedThresholdSeconds,omitempty"`
+	UnhealthyThresholdSeconds flagutil.DeprecatedFloat64Seconds `json:"unhealthyThresholdSeconds,omitempty"`
+}
+
+func (cfg *HealthcheckConfig) MarshalJSON() ([]byte, error) {
+	type Proxy HealthcheckConfig
+
+	tmp := struct {
+		Proxy
+		IntervalSeconds           string `json:"intervalSeconds,omitempty"`
+		DegradedThresholdSeconds  string `json:"degradedThresholdSeconds,omitempty"`
+		UnhealthyThresholdSeconds string `json:"unhealthyThresholdSeconds,omitempty"`
+	}{
+		Proxy: Proxy(*cfg),
+	}
+
+	if d := cfg.IntervalSeconds.Get(); d != 0 {
+		tmp.IntervalSeconds = d.String()
+	}
+
+	if d := cfg.DegradedThresholdSeconds.Get(); d != 0 {
+		tmp.DegradedThresholdSeconds = d.String()
+	}
+
+	if d := cfg.UnhealthyThresholdSeconds.Get(); d != 0 {
+		tmp.UnhealthyThresholdSeconds = d.String()
+	}
+
+	return json.Marshal(&tmp)
 }
 
 // GracePeriodsConfig contains various grace periods.
@@ -597,9 +628,9 @@ var defaultConfig = TabletConfig{
 		MaxRows:             10000,
 	},
 	Healthcheck: HealthcheckConfig{
-		IntervalSeconds:           20,
-		DegradedThresholdSeconds:  30,
-		UnhealthyThresholdSeconds: 7200,
+		IntervalSeconds:           flagutil.NewDeprecatedFloat64Seconds("health_check_interval", 20*time.Second),
+		DegradedThresholdSeconds:  flagutil.NewDeprecatedFloat64Seconds("degraded_threshold", 30*time.Second),
+		UnhealthyThresholdSeconds: flagutil.NewDeprecatedFloat64Seconds("unhealthy_threshold", 2*time.Hour),
 	},
 	GracePeriods: GracePeriodsConfig{
 		// TODO (ajm188) remove after these are durations. it's not necessary

@@ -125,9 +125,9 @@ consolidatorStreamQuerySize: 2097152
 consolidatorStreamTotalSize: 134217728
 gracePeriods: {}
 healthcheck:
-  degradedThresholdSeconds: 30
-  intervalSeconds: 20
-  unhealthyThresholdSeconds: 7200
+  degradedThresholdSeconds: 30s
+  intervalSeconds: 20s
+  unhealthyThresholdSeconds: 2h0m0s
 hotRowProtection:
   maxConcurrency: 5
   maxGlobalQueueSize: 1000
@@ -207,9 +207,9 @@ func TestFlags(t *testing.T) {
 	want.TxPool.IdleTimeoutSeconds = 1800
 	want.HotRowProtection.Mode = Disable
 	want.Consolidator = Enable
-	want.Healthcheck.IntervalSeconds = 20
-	want.Healthcheck.DegradedThresholdSeconds = 30
-	want.Healthcheck.UnhealthyThresholdSeconds = 7200
+	want.Healthcheck.IntervalSeconds.Set("20s")
+	want.Healthcheck.DegradedThresholdSeconds.Set("30s")
+	want.Healthcheck.UnhealthyThresholdSeconds.Set("2h")
 	want.ReplicationTracker.HeartbeatIntervalSeconds.Set("1s")
 	want.ReplicationTracker.Mode = Disable
 	assert.Equal(t, want.DB, currentConfig.DB)
@@ -291,21 +291,21 @@ func TestFlags(t *testing.T) {
 	assert.Equal(t, want, currentConfig)
 
 	healthCheckInterval = 1 * time.Second
-	currentConfig.Healthcheck.IntervalSeconds = 0
+	currentConfig.Healthcheck.IntervalSeconds.Set("0s")
 	Init()
-	want.Healthcheck.IntervalSeconds = 1
+	want.Healthcheck.IntervalSeconds.Set("1s")
 	assert.Equal(t, want, currentConfig)
 
 	degradedThreshold = 2 * time.Second
-	currentConfig.Healthcheck.DegradedThresholdSeconds = 0
+	currentConfig.Healthcheck.DegradedThresholdSeconds.Set("0s")
 	Init()
-	want.Healthcheck.DegradedThresholdSeconds = 2
+	want.Healthcheck.DegradedThresholdSeconds.Set("2s")
 	assert.Equal(t, want, currentConfig)
 
 	unhealthyThreshold = 3 * time.Second
-	currentConfig.Healthcheck.UnhealthyThresholdSeconds = 0
+	currentConfig.Healthcheck.UnhealthyThresholdSeconds.Set("0s")
 	Init()
-	want.Healthcheck.UnhealthyThresholdSeconds = 3
+	want.Healthcheck.UnhealthyThresholdSeconds.Set("3s")
 	assert.Equal(t, want, currentConfig)
 
 	transitionGracePeriod = 4 * time.Second
