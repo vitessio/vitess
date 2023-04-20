@@ -200,6 +200,7 @@ func TestIfDiscoveringHappenedLaterInHealthCheck(t *testing.T) {
 	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 1, nil, cluster.VTOrcConfiguration{
 		PreventCrossDataCenterPrimaryFailover: true,
 		RecoveryPeriodBlockSeconds:            5,
+		TopoInformationRefreshSeconds:         5,
 	}, 1, "")
 	vtorc := clusterInfo.ClusterInstance.VTOrcProcesses[0]
 	// Call API with retry to ensure health service is up

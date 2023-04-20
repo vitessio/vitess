@@ -754,8 +754,7 @@ func MakeAPICallRetry(t *testing.T, vtorc *cluster.VTOrcProcess, url string, ret
 			t.Fatal("timed out waiting for api to work")
 			return
 		default:
-			status, response, err := MakeAPICall(t, vtorc, url)
-			require.NoError(t, err)
+			status, response, _ := MakeAPICall(t, vtorc, url)
 			if retry(status, response) {
 				time.Sleep(1 * time.Second)
 				break
