@@ -19,19 +19,31 @@ package vreplication
 import (
 	"fmt"
 
+	"vitess.io/vitess/go/vt/vttablet"
+
 	"vitess.io/vitess/go/vt/log"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vttablet"
 )
 
+// isBitSet returns true if the bit at index is set
 func isBitSet(data []byte, index int) bool {
 	byteIndex := index / 8
 	bitMask := byte(1 << (uint(index) & 0x7))
 	return data[byteIndex]&bitMask > 0
+}
+
+func (tp *TablePlan) isPartial(rowChange *binlogdatapb.RowChange) bool {
+	if (vttablet.VReplicationExperimentalFlags /**/ & /**/ vttablet.VReplicationExperimentalFlagAllowNoBlobBinlogRowImage) == 0 ||
+		rowChange.DataColumns == nil ||
+		rowChange.DataColumns.Count == 0 {
+
+		return false
+	}
+	return true
 }
 
 func (tpb *tablePlanBuilder) generatePartialValuesPart(buf *sqlparser.TrackedBuffer, bvf *bindvarFormatter, dataColumns *binlogdatapb.Bitmap) *sqlparser.ParsedQuery {
@@ -194,14 +206,4 @@ func (tp *TablePlan) getPartialUpdateQuery(dataColumns *binlogdatapb.Bitmap) (*s
 	tp.PartialUpdates[key] = upd
 	tp.Stats.PartialQueryCacheSize.Add([]string{"update"}, 1)
 	return upd, nil
-}
-
-func (tp *TablePlan) isPartial(rowChange *binlogdatapb.RowChange) bool {
-	if (vttablet.VReplicationExperimentalFlags /**/ & /**/ vttablet.VReplicationExperimentalFlagAllowNoBlobBinlogRowImage) == 0 ||
-		rowChange.DataColumns == nil ||
-		rowChange.DataColumns.Count == 0 {
-
-		return false
-	}
-	return true
 }

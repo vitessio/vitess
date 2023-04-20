@@ -940,6 +940,10 @@ func (vs *vstreamer) rebuildPlans() error {
 	return nil
 }
 
+// extractRowAndFilter takes the data and bitmaps from the binlog events and returns the following
+//   - true, if row needs to be skipped because of workflow filter rules
+//   - data values, array of one value per column
+//   - true, if the row image was partial (i.e. binlog_row_image=noblob and dml doesn't update one or more blob/text columns)
 func (vs *vstreamer) extractRowAndFilter(plan *streamerPlan, data []byte, dataColumns, nullColumns mysql.Bitmap) (bool, []sqltypes.Value, bool, error) {
 	if len(data) == 0 {
 		return false, nil, false, nil

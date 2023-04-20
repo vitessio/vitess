@@ -79,6 +79,8 @@ func (tfe *TestFieldEvent) String() string {
 	return s
 }
 
+// TestPlayerNoBlob sets up a new environment with mysql running with binlog_row_image as noblob. It confirms that
+// the VEvents created are correct: that they don't contain the missing columns and that the DataColumns bitmap is sent
 func TestNoBlob(t *testing.T) {
 	newEngine(t, "noblob")
 	defer newEngine(t, "full")
@@ -1913,6 +1915,7 @@ func TestJournal(t *testing.T) {
 	runCases(t, nil, testcases, "", nil)
 }
 
+// TestMinimalMode confirms that we don't support minimal binlog_row_image mode.
 func TestMinimalMode(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
@@ -2224,7 +2227,7 @@ func expectLog(ctx context.Context, t *testing.T, input any, ch <-chan []*binlog
 				}
 				want = env.RemoveAnyDeprecatedDisplayWidths(want)
 				if got := fmt.Sprintf("%v", evs[i]); got != want {
-					log.Errorf("\n%v (%d): event:\n%q, want\n%q", input, i, got, want)
+					log.Errorf("%v (%d): event:\n%q, want\n%q", input, i, got, want)
 					t.Fatalf("%v (%d): event:\n%q, want\n%q", input, i, got, want)
 				}
 			}

@@ -194,6 +194,12 @@ func (vr *vreplicator) Replicate(ctx context.Context) error {
 	return err
 }
 
+// We do not support "minimal" at the moment. "noblob" will provide significant performance improvements. Implementing
+// "minimal" will result in a lot of edge cases which will not work, in Online DDL and Materialize. We will be
+// soon supporting MySQL binlog compression which should provide some benefits similar to "minimal" in terms of storage
+// and performance.
+// To start with, we only allow "noblob" for MoveTables and Reshard. We need to identify edge cases for other workflow
+// types like Online DDL and Materialize and add validations before we open it up for all workflow types.
 func (vr *vreplicator) validateBinlogRowImage() error {
 	rs, err := vr.dbClient.Execute("select @@binlog_row_image")
 	if err != nil {

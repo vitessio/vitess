@@ -1,3 +1,19 @@
+/*
+Copyright 2023 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package utils
 
 import (
@@ -6,6 +22,8 @@ import (
 	"strings"
 )
 
+// SetBinlogRowImageMode  creates a temp cnf file to set binlog_row_image to noblob for vreplication unit tests.
+// It adds it to the EXTRA_MY_CNF environment variable which appends text from them into my.cnf.
 func SetBinlogRowImageMode(mode string, cnfDir string) error {
 	const ExtraCnf = "EXTRA_MY_CNF"
 	const BinlogRowImageCnf = "binlog-row-image.cnf"
@@ -22,7 +40,7 @@ func SetBinlogRowImageMode(mode string, cnfDir string) error {
 		}
 	}
 
-	// if specified add extra cnf for binlog row image, otherwise we will have reverted any previous specification
+	// If specified add extra cnf for binlog row image, otherwise we will have reverted any previous specification.
 	if mode != "" {
 		cnfPath := fmt.Sprintf("%s/%s", cnfDir, BinlogRowImageCnf)
 		f, err := os.Create(cnfPath)

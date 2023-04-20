@@ -2805,7 +2805,11 @@ func TestPlayerInvalidDates(t *testing.T) {
 	}
 }
 
-func TestPlayerBlob(t *testing.T) {
+// TestPlayerNoBlob sets up a new environment with mysql running with binlog_row_image as noblob. It creates DMLs for
+// tables with blob and text columns and executes DMLs with different combinations of columns with and without
+// blob/text columns. It confirms that we handle the partial images sent by vstreamer and generates the correct
+// dmls on the target.
+func TestPlayerNoBlob(t *testing.T) {
 	if !runNoBlobTest {
 		t.Skip()
 	}

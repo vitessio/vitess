@@ -132,8 +132,7 @@ func setup() (func(), int) {
 
 	vttablet.VReplicationExperimentalFlags = 0
 
-	// engines cannot be initialized in testenv because it introduces
-	// circular dependencies.
+	// Engines cannot be initialized in testenv because it introduces circular dependencies.
 	streamerEngine = vstreamer.NewEngine(env.TabletEnv, env.SrvTopo, env.SchemaEngine, nil, env.Cells[0])
 	streamerEngine.InitDBConfig(env.KeyspaceName, env.ShardName)
 	streamerEngine.Open()

@@ -276,6 +276,7 @@ func testBasicVreplicationWorkflow(t *testing.T, binlogRowImage string) {
 	testVreplicationWorkflows(t, false, binlogRowImage)
 }
 
+// If limited == true, we only run a limited set of workflows.
 func testVreplicationWorkflows(t *testing.T, limited bool, binlogRowImage string) {
 	defaultCellName := "zone1"
 	allCells := []string{"zone1"}
@@ -709,7 +710,7 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 		}
 		require.Equal(t, true, dec80Replicated)
 
-		// confirm that all partial query metrics get updated when we are testing the noblob mode
+		// Confirm that all partial query metrics get updated when we are testing the noblob mode.
 		t.Run("validate partial query counts", func(t *testing.T) {
 			if !isBinlogRowImageNoBlob(t, productTab) {
 				return
@@ -724,7 +725,7 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 				totalInsertQueries += insertQueries
 				totalUpdateQueries += updateQueries
 			}
-			// Counts are total queries from `blobTableQueries` across shards + customer updates from above
+			// Counts are total queries from `blobTableQueries` across shards + customer updates from above.
 			require.NotZero(t, totalInserts)
 			require.NotZero(t, totalUpdates)
 			require.NotZero(t, totalInsertQueries)

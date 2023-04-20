@@ -653,11 +653,14 @@ func verifyCopyStateIsOptimized(t *testing.T, tablet *cluster.VttabletProcess) {
 		}
 	}
 }
+
+// The mysqld initialization looks at the EXTRA_MY_CNF environment variable and appends text from them into my.cnf.
+// We use this feature to set binlog_row_image to noblob for specific e2e tests.
 func setBinlogRowImageMode(t *testing.T, vc *VitessCluster, mode string) {
 	const ExtraCnf = "EXTRA_MY_CNF"
 	const BinlogRowImageCnf = "binlog-row-image.cnf"
 
-	// remove any existing extra cnfs for binlog row image
+	// Remove any existing extra cnfs for binlog row image.
 	extraCnf := os.Getenv(ExtraCnf)
 	cnfs := strings.Split(extraCnf, ":")
 	var newCnfs []string
@@ -667,7 +670,7 @@ func setBinlogRowImageMode(t *testing.T, vc *VitessCluster, mode string) {
 		}
 	}
 
-	// if specified add extra cnf for binlog row image, otherwise we will have reverted any previous specification
+	// If specified, add extra cnf for binlog row image, otherwise we will have reverted any previous specification.
 	if mode != "" {
 		cnfFilePath := fmt.Sprintf("%s/%s", vc.ClusterConfig.tmpDir, BinlogRowImageCnf)
 		f, err := os.Create(cnfFilePath)

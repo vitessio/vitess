@@ -197,6 +197,7 @@ func (vse *Engine) vschema() *vindexes.VSchema {
 	return vse.lvschema.vschema
 }
 
+// Only support full and noblob binlog_row_image modes.
 func (vse *Engine) validateBinlogRowImage(ctx context.Context, db dbconfigs.Connector) error {
 	conn, err := db.Connect(ctx)
 	if err != nil {

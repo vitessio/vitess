@@ -31,9 +31,10 @@ import (
 )
 
 var (
-	engine                                 *Engine
-	env                                    *testenv.Env
-	schemaDir                              string
+	engine    *Engine
+	env       *testenv.Env
+	schemaDir string
+
 	ignoreKeyspaceShardInFieldAndRowEvents bool
 )
 

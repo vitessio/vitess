@@ -202,7 +202,8 @@ type TablePlan struct {
 	ConvertIntToEnum map[string]bool
 	// PKReferences is used to check if an event changed
 	// a primary key column (row move).
-	PKReferences            []string
+	PKReferences []string
+	// PKIndices is an array, length = #columns, true if column is part of the PK
 	PKIndices               []bool
 	Stats                   *binlogplayer.Stats
 	FieldsToSkip            map[string]bool
@@ -210,8 +211,12 @@ type TablePlan struct {
 	HasExtraSourcePkColumns bool
 
 	TablePlanBuilder *tablePlanBuilder
-	PartialInserts   map[string]*sqlparser.ParsedQuery
-	PartialUpdates   map[string]*sqlparser.ParsedQuery
+	// PartialInserts is a dynamically generated cache of insert ParsedQueries, which update only some columns.
+	// This is when we use a binlog_row_image which is not "full". The key is a serialized bitmap of data columns
+	// which are sent as part of the RowEvent.
+	PartialInserts map[string]*sqlparser.ParsedQuery
+	// PartialUpdates are same as PartialInserts, but for update statements
+	PartialUpdates map[string]*sqlparser.ParsedQuery
 }
 
 // MarshalJSON performs a custom JSON Marshalling.
