@@ -1858,12 +1858,12 @@ func (cached *Insert) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(144)
+		size += int64(128)
 	}
 	// field Comments *vitess.io/vitess/go/vt/sqlparser.ParsedComments
 	size += cached.Comments.CachedSize(true)
-	// field Table vitess.io/vitess/go/vt/sqlparser.TableName
-	size += cached.Table.CachedSize(false)
+	// field Table *vitess.io/vitess/go/vt/sqlparser.AliasedTableExpr
+	size += cached.Table.CachedSize(true)
 	// field Partitions vitess.io/vitess/go/vt/sqlparser.Partitions
 	{
 		size += hack.RuntimeAllocSize(int64(cap(cached.Partitions)) * int64(32))

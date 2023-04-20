@@ -325,7 +325,7 @@ type (
 		Action     InsertAction
 		Comments   *ParsedComments
 		Ignore     Ignore
-		Table      TableName
+		Table      *AliasedTableExpr
 		Partitions Partitions
 		Columns    Columns
 		Rows       InsertRows
