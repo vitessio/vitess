@@ -151,7 +151,7 @@ queryCacheLFU: true
 queryCacheMemory: 33554432
 queryCacheSize: 5000
 replicationTracker:
-  heartbeatIntervalSeconds: 0.25
+  heartbeatIntervalSeconds: 250ms
   mode: disable
 rowStreamer:
   maxInnoDBTrxHistLen: 1000000
@@ -210,7 +210,7 @@ func TestFlags(t *testing.T) {
 	want.Healthcheck.IntervalSeconds = 20
 	want.Healthcheck.DegradedThresholdSeconds = 30
 	want.Healthcheck.UnhealthyThresholdSeconds = 7200
-	want.ReplicationTracker.HeartbeatIntervalSeconds = 1
+	want.ReplicationTracker.HeartbeatIntervalSeconds.Set("1s")
 	want.ReplicationTracker.Mode = Disable
 	assert.Equal(t, want.DB, currentConfig.DB)
 	assert.Equal(t, want, currentConfig)
@@ -266,28 +266,28 @@ func TestFlags(t *testing.T) {
 	enableHeartbeat = true
 	heartbeatInterval = 1 * time.Second
 	currentConfig.ReplicationTracker.Mode = ""
-	currentConfig.ReplicationTracker.HeartbeatIntervalSeconds = 0
+	currentConfig.ReplicationTracker.HeartbeatIntervalSeconds.Set("0s")
 	Init()
 	want.ReplicationTracker.Mode = Heartbeat
-	want.ReplicationTracker.HeartbeatIntervalSeconds = 1
+	want.ReplicationTracker.HeartbeatIntervalSeconds.Set("1s")
 	assert.Equal(t, want, currentConfig)
 
 	enableHeartbeat = false
 	heartbeatInterval = 1 * time.Second
 	currentConfig.ReplicationTracker.Mode = ""
-	currentConfig.ReplicationTracker.HeartbeatIntervalSeconds = 0
+	currentConfig.ReplicationTracker.HeartbeatIntervalSeconds.Set("0s")
 	Init()
 	want.ReplicationTracker.Mode = Disable
-	want.ReplicationTracker.HeartbeatIntervalSeconds = 1
+	want.ReplicationTracker.HeartbeatIntervalSeconds.Set("1s")
 	assert.Equal(t, want, currentConfig)
 
 	enableReplicationReporter = true
 	heartbeatInterval = 1 * time.Second
 	currentConfig.ReplicationTracker.Mode = ""
-	currentConfig.ReplicationTracker.HeartbeatIntervalSeconds = 0
+	currentConfig.ReplicationTracker.HeartbeatIntervalSeconds.Set("0s")
 	Init()
 	want.ReplicationTracker.Mode = Polling
-	want.ReplicationTracker.HeartbeatIntervalSeconds = 1
+	want.ReplicationTracker.HeartbeatIntervalSeconds.Set("1s")
 	assert.Equal(t, want, currentConfig)
 
 	healthCheckInterval = 1 * time.Second

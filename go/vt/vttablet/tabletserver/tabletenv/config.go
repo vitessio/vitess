@@ -225,7 +225,7 @@ func Init() {
 	}
 
 	if heartbeatInterval == 0 {
-		heartbeatInterval = time.Duration(defaultConfig.ReplicationTracker.HeartbeatIntervalSeconds*1000) * time.Millisecond
+		heartbeatInterval = defaultConfig.ReplicationTracker.HeartbeatIntervalSeconds.Get()
 	}
 	if heartbeatInterval > time.Second {
 		heartbeatInterval = time.Second
@@ -233,8 +233,8 @@ func Init() {
 	if heartbeatOnDemandDuration < 0 {
 		heartbeatOnDemandDuration = 0
 	}
-	currentConfig.ReplicationTracker.HeartbeatIntervalSeconds.Set(heartbeatInterval)
-	currentConfig.ReplicationTracker.HeartbeatOnDemandSeconds.Set(heartbeatOnDemandDuration)
+	_ = currentConfig.ReplicationTracker.HeartbeatIntervalSeconds.Set(heartbeatInterval.String())
+	_ = currentConfig.ReplicationTracker.HeartbeatOnDemandSeconds.Set(heartbeatOnDemandDuration.String())
 
 	switch {
 	case enableHeartbeat:
@@ -407,9 +407,31 @@ type GracePeriodsConfig struct {
 // ReplicationTrackerConfig contains the config for the replication tracker.
 type ReplicationTrackerConfig struct {
 	// Mode can be disable, polling or heartbeat. Default is disable.
-	Mode                     string  `json:"mode,omitempty"`
-	HeartbeatIntervalSeconds Seconds `json:"heartbeatIntervalSeconds,omitempty"`
-	HeartbeatOnDemandSeconds Seconds `json:"heartbeatOnDemandSeconds,omitempty"`
+	Mode                     string                            `json:"mode,omitempty"`
+	HeartbeatIntervalSeconds flagutil.DeprecatedFloat64Seconds `json:"heartbeatIntervalSeconds,omitempty"`
+	HeartbeatOnDemandSeconds flagutil.DeprecatedFloat64Seconds `json:"heartbeatOnDemandSeconds,omitempty"`
+}
+
+func (cfg *ReplicationTrackerConfig) MarshalJSON() ([]byte, error) {
+	type Proxy ReplicationTrackerConfig
+
+	tmp := struct {
+		Proxy
+		HeartbeatIntervalSeconds string `json:"heartbeatIntervalSeconds,omitempty"`
+		HeartbeatOnDemandSeconds string `json:"heartbeatOnDemandSeconds,omitempty"`
+	}{
+		Proxy: Proxy(*cfg),
+	}
+
+	if d := cfg.HeartbeatIntervalSeconds.Get(); d != 0 {
+		tmp.HeartbeatIntervalSeconds = d.String()
+	}
+
+	if d := cfg.HeartbeatOnDemandSeconds.Get(); d != 0 {
+		tmp.HeartbeatOnDemandSeconds = d.String()
+	}
+
+	return json.Marshal(&tmp)
 }
 
 // TransactionLimitConfig captures configuration of transaction pool slots
@@ -558,7 +580,8 @@ var defaultConfig = TabletConfig{
 	},
 	ReplicationTracker: ReplicationTrackerConfig{
 		Mode:                     Disable,
-		HeartbeatIntervalSeconds: 0.25,
+		HeartbeatIntervalSeconds: flagutil.NewDeprecatedFloat64Seconds("heartbeat_interval", 250*time.Millisecond),
+		HeartbeatOnDemandSeconds: flagutil.NewDeprecatedFloat64Seconds("heartbeat_on_demand_duration", 0),
 	},
 	HotRowProtection: HotRowProtectionConfig{
 		Mode: Disable,
