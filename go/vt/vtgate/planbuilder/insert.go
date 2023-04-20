@@ -31,42 +31,43 @@ import (
 )
 
 // buildInsertPlan builds the route for an INSERT statement.
-func buildInsertPlan(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema) (*planResult, error) {
-	pb := newStmtAwarePrimitiveBuilder(vschema, newJointab(reservedVars), stmt)
-	ins := stmt.(*sqlparser.Insert)
-	err := checkUnsupportedExpressions(ins)
+func buildInsertPlan(string) stmtPlanner {
+	return func(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema) (*planResult, error) {
+		pb := newStmtAwarePrimitiveBuilder(vschema, newJointab(reservedVars), stmt)
+		ins := stmt.(*sqlparser.Insert)
+		err := checkUnsupportedExpressions(ins)
 	if err != nil {
 		return nil, err
-	}
-	exprs := sqlparser.TableExprs{ins.Table}
-	rb, err := pb.processDMLTable(exprs, reservedVars, nil)
-	if err != nil {
-		return nil, err
-	}
-	// The table might have been routed to a different one.
-	ins.Table = exprs[0].(*sqlparser.AliasedTableExpr)
-	// remove any alias added from routing table. insert query does not support table alias.
-	ins.Table.As = sqlparser.NewIdentifierCS("")
-	if rb.eroute.TargetDestination != nil {
-		return nil, vterrors.VT12001("INSERT with a target destination")
-	}
+	}exprs := sqlparser.TableExprs{ins.Table}
+		rb, err := pb.processDMLTable(exprs, reservedVars, nil)
+		if err != nil {
+			return nil, err
+		}
+		// The table might have been routed to a different one.
+		ins.Table = exprs[0].(*sqlparser.AliasedTableExpr)
+		// remove any alias added from routing table. insert query does not support table alias.
+		ins.Table.As = sqlparser.NewIdentifierCS("")
+		if rb.eroute.TargetDestination != nil {
+			return nil, vterrors.VT12001("INSERT with a target destination")
+		}
 
-	if len(pb.st.tables) != 1 {
-		// Unreachable.
-		return nil, vterrors.VT12001("multi-table INSERT statement in a sharded keyspace")
+		if len(pb.st.tables) != 1 {
+			// Unreachable.
+			return nil, vterrors.VT12001("multi-table INSERT statement in a sharded keyspace")
+		}
+		var vschemaTable *vindexes.Table
+		for _, tval := range pb.st.tables {
+			// There is only one table.
+			vschemaTable = tval.vschemaTable
+		}
+		if !rb.eroute.Keyspace.Sharded {
+			return buildInsertUnshardedPlan(ins, vschemaTable, reservedVars, vschema)
+		}
+		if ins.Action == sqlparser.ReplaceAct {
+			return nil, vterrors.VT12001("REPLACE INTO with sharded keyspace")
+		}
+		return buildInsertShardedPlan(ins, vschemaTable, reservedVars, vschema)
 	}
-	var vschemaTable *vindexes.Table
-	for _, tval := range pb.st.tables {
-		// There is only one table.
-		vschemaTable = tval.vschemaTable
-	}
-	if !rb.eroute.Keyspace.Sharded {
-		return buildInsertUnshardedPlan(ins, vschemaTable, reservedVars, vschema)
-	}
-	if ins.Action == sqlparser.ReplaceAct {
-		return nil, vterrors.VT12001("REPLACE INTO with sharded keyspace")
-	}
-	return buildInsertShardedPlan(ins, vschemaTable, reservedVars, vschema)
 }
 
 func buildInsertUnshardedPlan(ins *sqlparser.Insert, table *vindexes.Table, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema) (*planResult, error) {
