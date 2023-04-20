@@ -874,9 +874,21 @@ func (asm *assembler) Convert_hex(offset int) {
 func (asm *assembler) Convert_Ti(offset int) {
 	asm.emit(func(env *ExpressionEnv) int {
 		v := env.vm.stack[env.vm.sp-offset].(*evalTemporal)
+		if v.prec != 0 {
+			env.vm.err = errDeoptimize
+			return 1
+		}
 		env.vm.stack[env.vm.sp-offset] = env.vm.arena.newEvalInt64(v.toInt64())
 		return 1
 	}, "CONV SQLTIME(SP-%d), INT64", offset)
+}
+
+func (asm *assembler) Convert_Tf(offset int) {
+	asm.emit(func(env *ExpressionEnv) int {
+		v := env.vm.stack[env.vm.sp-offset].(*evalTemporal)
+		env.vm.stack[env.vm.sp-offset] = env.vm.arena.newEvalFloat(v.toFloat())
+		return 1
+	}, "CONV SQLTIME(SP-%d), FLOAT64", offset)
 }
 
 func (asm *assembler) Convert_iB(offset int) {
@@ -1142,6 +1154,7 @@ func (asm *assembler) Convert_xT(offset, prec int) {
 func (asm *assembler) Convert_tp(offset, prec int) {
 	asm.emit(func(env *ExpressionEnv) int {
 		arg := env.vm.stack[env.vm.sp-offset].(*evalTemporal)
+		arg.dt = arg.dt.Round(prec)
 		arg.prec = uint8(prec)
 		return 1
 	}, "CONV (SP-%d), PRECISION", offset)
@@ -3164,7 +3177,7 @@ func (asm *assembler) Fn_CONVERT_TZ() {
 			env.vm.sp -= 2
 			return 1
 		}
-		env.vm.stack[env.vm.sp-3] = env.vm.arena.newEvalDateTime(dt, n.prec)
+		env.vm.stack[env.vm.sp-3] = env.vm.arena.newEvalDateTime(dt, int(n.prec))
 		env.vm.sp -= 2
 		return 1
 	}, "FN CONVERT_TZ DATETIME(SP-3), VARBINARY(SP-2), VARBINARY(SP-1)")
@@ -3201,6 +3214,79 @@ func (asm *assembler) Fn_DAYOFYEAR() {
 		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalInt64(int64(arg.dt.Date.Yearday()))
 		return 1
 	}, "FN DAYOFYEAR DATE(SP-1)")
+}
+
+func (asm *assembler) Fn_FROM_UNIXTIME_i() {
+	asm.emit(func(env *ExpressionEnv) int {
+		arg := env.vm.stack[env.vm.sp-1].(*evalInt64)
+		if arg.i < 0 || arg.i > maxUnixtime {
+			env.vm.stack[env.vm.sp-1] = nil
+			return 1
+		}
+		t := time.Unix(arg.i, 0)
+		if tz := env.currentTimezone(); tz != nil {
+			t = t.In(tz)
+		}
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalDateTime(datetime.FromStdTime(t), 0)
+		return 1
+	}, "FN FROM_UNIXTIME INT64(SP-1)")
+}
+
+func (asm *assembler) Fn_FROM_UNIXTIME_u() {
+	asm.emit(func(env *ExpressionEnv) int {
+		arg := env.vm.stack[env.vm.sp-1].(*evalUint64)
+		if arg.u > maxUnixtime {
+			env.vm.stack[env.vm.sp-1] = nil
+			return 1
+		}
+		t := time.Unix(int64(arg.u), 0)
+		if tz := env.currentTimezone(); tz != nil {
+			t = t.In(tz)
+		}
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalDateTime(datetime.FromStdTime(t), 0)
+		return 1
+	}, "FN FROM_UNIXTIME UINT64(SP-1)")
+}
+
+func (asm *assembler) Fn_FROM_UNIXTIME_d() {
+	asm.emit(func(env *ExpressionEnv) int {
+		arg := env.vm.stack[env.vm.sp-1].(*evalDecimal)
+		if arg.dec.Sign() < 0 {
+			env.vm.stack[env.vm.sp-1] = nil
+			return 1
+		}
+
+		sd, fd := arg.dec.QuoRem(decimal.New(1, 0), 0)
+		sec, _ := sd.Int64()
+		if sec > maxUnixtime {
+			env.vm.stack[env.vm.sp-1] = nil
+			return 1
+		}
+		frac, _ := fd.Mul(decimal.New(1, 9)).Int64()
+		t := time.Unix(sec, frac)
+		if tz := env.currentTimezone(); tz != nil {
+			t = t.In(tz)
+		}
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalDateTime(datetime.FromStdTime(t), int(arg.length))
+		return 1
+	}, "FN FROM_UNIXTIME DECIMAL(SP-1)")
+}
+
+func (asm *assembler) Fn_FROM_UNIXTIME_f() {
+	asm.emit(func(env *ExpressionEnv) int {
+		arg := env.vm.stack[env.vm.sp-1].(*evalFloat)
+		if arg.f < 0 || arg.f > maxUnixtime {
+			env.vm.stack[env.vm.sp-1] = nil
+			return 1
+		}
+		sec, frac := math.Modf(arg.f)
+		t := time.Unix(int64(sec), int64(frac*1e9))
+		if tz := env.currentTimezone(); tz != nil {
+			t = t.In(tz)
+		}
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalDateTime(datetime.FromStdTime(t), 6)
+		return 1
+	}, "FN FROM_UNIXTIME FLOAT(SP-1)")
 }
 
 func (asm *assembler) Fn_HOUR() {
@@ -3285,6 +3371,26 @@ func (asm *assembler) Fn_SECOND() {
 		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalInt64(int64(arg.dt.Time.Second()))
 		return 1
 	}, "FN SECOND TIME(SP-1)")
+}
+
+func (asm *assembler) Fn_UNIX_TIMESTAMP0() {
+	asm.adjustStack(1)
+	asm.emit(func(env *ExpressionEnv) int {
+		env.vm.stack[env.vm.sp] = env.vm.arena.newEvalInt64(env.now.Unix())
+		env.vm.sp++
+		return 1
+	}, "FN UNIX_TIMESTAMP")
+}
+
+func (asm *assembler) Fn_UNIX_TIMESTAMP1() {
+	asm.emit(func(env *ExpressionEnv) int {
+		res := dateTimeUnixTimestamp(env, env.vm.stack[env.vm.sp-1])
+		if _, ok := res.(*evalInt64); !ok {
+			env.vm.err = errDeoptimize
+		}
+		env.vm.stack[env.vm.sp-1] = res
+		return 1
+	}, "FN UNIX_TIMESTAMP (SP-1)")
 }
 
 func (asm *assembler) Fn_WEEK0() {

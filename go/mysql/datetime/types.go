@@ -19,6 +19,7 @@ package datetime
 import (
 	"time"
 
+	"vitess.io/vitess/go/mysql/decimal"
 	"vitess.io/vitess/go/vt/vthash"
 )
 
@@ -66,11 +67,30 @@ func (t Time) Format(prec uint8) []byte {
 }
 
 func (t Time) FormatInt64() (n int64) {
-	v := int64(t.Hour())*10000 + int64(t.Minute())*100 + int64(t.Second())
+	tr := t.Round(0)
+	v := int64(tr.Hour())*10000 + int64(tr.Minute())*100 + int64(tr.Second())
 	if t.Neg() {
 		return -v
 	}
 	return v
+}
+
+func (t Time) FormatFloat64() (n float64) {
+	v := float64(t.Hour())*10000 + float64(t.Minute())*100 + float64(t.Second()) + float64(t.Nanosecond())/1e9
+	if t.Neg() {
+		return -v
+	}
+	return v
+}
+
+func (t Time) FormatDecimal() decimal.Decimal {
+	v := int64(t.Hour())*10000 + int64(t.Minute())*100 + int64(t.Second())
+	dec := decimal.NewFromInt(v)
+	dec = dec.Add(decimal.New(int64(t.Nanosecond()), -9))
+	if t.Neg() {
+		dec = dec.Neg()
+	}
+	return dec
 }
 
 func (t Time) ToDateTime() (out DateTime) {
@@ -452,7 +472,16 @@ func (d Date) Compare(d2 Date) int {
 }
 
 func (dt DateTime) FormatInt64() int64 {
-	return dt.Date.FormatInt64()*1000000 + dt.Time.FormatInt64()
+	d := dt.Round(0)
+	return d.Date.FormatInt64()*1000000 + d.Time.FormatInt64()
+}
+
+func (dt DateTime) FormatFloat64() float64 {
+	return float64(dt.Date.FormatInt64()*1000000) + dt.Time.FormatFloat64()
+}
+
+func (dt DateTime) FormatDecimal() decimal.Decimal {
+	return decimal.New(dt.Date.FormatInt64(), 6).Add(dt.Time.FormatDecimal())
 }
 
 func (dt DateTime) Compare(dt2 DateTime) int {
