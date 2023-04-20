@@ -108,6 +108,8 @@ var Cases = []TestCase{
 	{Run: FnDayOfYear},
 	{Run: FnFromUnixtime},
 	{Run: FnHour},
+	{Run: FnMakedate},
+	{Run: FnMaketime},
 	{Run: FnMicroSecond},
 	{Run: FnMinute},
 	{Run: FnMonth},
@@ -1368,6 +1370,29 @@ func FnFromUnixtime(yield Query) {
 func FnHour(yield Query) {
 	for _, d := range inputConversions {
 		yield(fmt.Sprintf("HOUR(%s)", d), nil)
+	}
+}
+
+func FnMakedate(yield Query) {
+	for _, y := range inputConversions {
+		for _, d := range inputConversions {
+			yield(fmt.Sprintf("MAKEDATE(%s, %s)", y, d), nil)
+		}
+	}
+}
+
+func FnMaketime(yield Query) {
+	// Don't use inputConversions for minutes as those are simplest
+	// and otherwise we explode in test runtime.
+	minutes := []string{
+		"''", "0", "'3'", "59", "60", "0xFF666F6F626172FF", "18446744073709551615",
+	}
+	for _, h := range inputConversions {
+		for _, m := range minutes {
+			for _, s := range inputConversions {
+				yield(fmt.Sprintf("MAKETIME(%s, %s, %s)", h, m, s), nil)
+			}
+		}
 	}
 }
 

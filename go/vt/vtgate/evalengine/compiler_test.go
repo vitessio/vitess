@@ -340,6 +340,14 @@ func TestCompilerSingle(t *testing.T) {
 			expression: `WEEK(date '2014-10-26', 6)`,
 			result:     `INT64(44)`,
 		},
+		{
+			expression: `MAKEDATE(cast('invalid' as json), NULL)`,
+			result:     `NULL`,
+		},
+		{
+			expression: `MAKETIME(NULL, '', cast('invalid' as json))`,
+			result:     `NULL`,
+		},
 	}
 
 	for _, tc := range testCases {
