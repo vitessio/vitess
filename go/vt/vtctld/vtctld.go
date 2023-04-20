@@ -46,6 +46,7 @@ func init() {
 
 func registerVtctldFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&durabilityPolicy, "durability_policy", durabilityPolicy, "type of durability to enforce. Default is none. Other values are dictated by registered plugins")
+	fs.MarkDeprecated("durability_policy", "Set the correct durability policy in the keyspace information instead.")
 	fs.BoolVar(&sanitizeLogMessages, "vtctld_sanitize_log_messages", sanitizeLogMessages, "When true, vtctld sanitizes logging.")
 }
 
