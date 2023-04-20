@@ -267,7 +267,7 @@ The flag `schema_change_check_interval` used to accept either a Go duration valu
 This behavior was deprecated in v15.0.0 and has been removed.
 `schema_change_check_interval` now **only** accepts Go duration values.
 
-The flag `durability_policy` is no longer used by vtctld. Instead it reads the durability policy from the keyspace information for all the keyspaces.
+The flag `durability_policy` is no longer used by vtctld. Instead it reads the durability policies for all keyspaces from the topology server.
 
 ### <a id="vttablet"/> VTTablet
 #### <a id="vttablet-initialization"/> Initializing all replicas with super_read_only
