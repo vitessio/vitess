@@ -18,10 +18,11 @@ package tabletserver
 
 import (
 	"fmt"
-	"html/template"
 	"net/http"
 	"sort"
 	"time"
+
+	"github.com/google/safehtml/template"
 
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/vt/log"

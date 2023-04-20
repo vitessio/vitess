@@ -20,13 +20,13 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"html/template"
 	"io"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/google/safehtml/template"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
