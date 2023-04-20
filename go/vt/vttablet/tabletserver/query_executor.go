@@ -62,7 +62,6 @@ type QueryExecutor struct {
 	tsv            *TabletServer
 	tabletType     topodatapb.TabletType
 	setting        *pools.Setting
-	workload       string
 }
 
 const (
@@ -1111,13 +1110,6 @@ func (qre *QueryExecutor) recordUserQuery(queryType string, duration int64) {
 	tableName := qre.plan.TableName().String()
 	qre.tsv.Stats().UserTableQueryCount.Add([]string{tableName, username, queryType}, 1)
 	qre.tsv.Stats().UserTableQueryTimesNs.Add([]string{tableName, username, queryType}, duration)
-}
-
-func generateBindVarsForViewDDLInsert(createView *sqlparser.CreateView) map[string]*querypb.BindVariable {
-	bindVars := make(map[string]*querypb.BindVariable)
-	bindVars["table_name"] = sqltypes.StringBindVariable(createView.ViewName.Name.String())
-	bindVars["create_statement"] = sqltypes.StringBindVariable(sqlparser.String(createView))
-	return bindVars
 }
 
 func (qre *QueryExecutor) GetSchemaDefinitions(tableType querypb.SchemaTableType, tableNames []string, callback func(schemaRes *querypb.GetSchemaResponse) error) error {
