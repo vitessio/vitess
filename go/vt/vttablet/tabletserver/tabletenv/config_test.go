@@ -135,7 +135,7 @@ hotRowProtection:
   mode: disable
 messagePostponeParallelism: 4
 olap:
-  txTimeoutSeconds: 30
+  txTimeoutSeconds: 30s
 olapReadPool:
   idleTimeoutSeconds: 1800
   size: 200

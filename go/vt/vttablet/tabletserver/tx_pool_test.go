@@ -464,7 +464,7 @@ func TestTxTimeoutKillsOlapTransactions(t *testing.T) {
 	env.Config().TxPool.Size = 1
 	env.Config().TxPool.MaxWaiters = 0
 	_ = env.Config().Oltp.TxTimeoutSeconds.Set("1s")
-	env.Config().Olap.TxTimeoutSeconds = 2
+	_ = env.Config().Olap.TxTimeoutSeconds.Set("2s")
 	_, txPool, _, closer := setupWithEnv(t, env)
 	defer closer()
 	startingKills := txPool.env.Stats().KillCounters.Counts()["Transactions"]
@@ -499,7 +499,7 @@ func TestTxTimeoutNotEnforcedForZeroLengthTimeouts(t *testing.T) {
 	env.Config().TxPool.Size = 2
 	env.Config().TxPool.MaxWaiters = 0
 	_ = env.Config().Oltp.TxTimeoutSeconds.Set("0s")
-	env.Config().Olap.TxTimeoutSeconds = 0
+	_ = env.Config().Olap.TxTimeoutSeconds.Set("0s")
 	_, txPool, _, closer := setupWithEnv(t, env)
 	defer closer()
 	startingKills := txPool.env.Stats().KillCounters.Counts()["Transactions"]
@@ -539,7 +539,7 @@ func TestTxTimeoutReservedConn(t *testing.T) {
 	env.Config().TxPool.Size = 1
 	env.Config().TxPool.MaxWaiters = 0
 	_ = env.Config().Oltp.TxTimeoutSeconds.Set("1s")
-	env.Config().Olap.TxTimeoutSeconds = 2
+	_ = env.Config().Olap.TxTimeoutSeconds.Set("2s")
 	_, txPool, _, closer := setupWithEnv(t, env)
 	defer closer()
 	startingRcKills := txPool.env.Stats().KillCounters.Counts()["ReservedConnection"]
@@ -579,7 +579,7 @@ func TestTxTimeoutReusedReservedConn(t *testing.T) {
 	env.Config().TxPool.Size = 1
 	env.Config().TxPool.MaxWaiters = 0
 	_ = env.Config().Oltp.TxTimeoutSeconds.Set("1s")
-	env.Config().Olap.TxTimeoutSeconds = 2
+	_ = env.Config().Olap.TxTimeoutSeconds.Set("2s")
 	_, txPool, _, closer := setupWithEnv(t, env)
 	defer closer()
 	startingRcKills := txPool.env.Stats().KillCounters.Counts()["ReservedConnection"]

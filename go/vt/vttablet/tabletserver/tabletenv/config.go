@@ -122,7 +122,8 @@ func registerTabletEnvFlags(fs *pflag.FlagSet) {
 	currentConfig.SignalSchemaChangeReloadIntervalSeconds = defaultConfig.SignalSchemaChangeReloadIntervalSeconds.Clone()
 	fs.Var(&currentConfig.SignalSchemaChangeReloadIntervalSeconds, currentConfig.SignalSchemaChangeReloadIntervalSeconds.Name(), "query server schema change signal interval defines at which interval the query server shall send schema updates to vtgate.")
 	fs.BoolVar(&currentConfig.SignalWhenSchemaChange, "queryserver-config-schema-change-signal", defaultConfig.SignalWhenSchemaChange, "query server schema signal, will signal connected vtgates that schema has changed whenever this is detected. VTGates will need to have -schema_change_signal enabled for this to work")
-	SecondsVar(fs, &currentConfig.Olap.TxTimeoutSeconds, "queryserver-config-olap-transaction-timeout", defaultConfig.Olap.TxTimeoutSeconds, "query server transaction timeout (in seconds), after which a transaction in an OLAP session will be killed")
+	currentConfig.Olap.TxTimeoutSeconds = defaultConfig.Olap.TxTimeoutSeconds.Clone()
+	fs.Var(&currentConfig.Olap.TxTimeoutSeconds, defaultConfig.Olap.TxTimeoutSeconds.Name(), "query server transaction timeout (in seconds), after which a transaction in an OLAP session will be killed")
 	currentConfig.Oltp.QueryTimeoutSeconds = defaultConfig.Oltp.QueryTimeoutSeconds.Clone()
 	fs.Var(&currentConfig.Oltp.QueryTimeoutSeconds, currentConfig.Oltp.QueryTimeoutSeconds.Name(), "query server query timeout (in seconds), this is the query timeout in vttablet side. If a query takes more than this timeout, it will be killed.")
 	SecondsVar(fs, &currentConfig.OltpReadPool.TimeoutSeconds, "queryserver-config-query-pool-timeout", defaultConfig.OltpReadPool.TimeoutSeconds, "query server query pool timeout (in seconds), it is how long vttablet waits for a connection from the query pool. If set to 0 (default) then the overall query timeout is used instead.")
@@ -377,7 +378,24 @@ type ConnPoolConfig struct {
 
 // OlapConfig contains the config for olap settings.
 type OlapConfig struct {
-	TxTimeoutSeconds Seconds `json:"txTimeoutSeconds,omitempty"`
+	TxTimeoutSeconds flagutil.DeprecatedFloat64Seconds `json:"txTimeoutSeconds,omitempty"`
+}
+
+func (cfg *OlapConfig) MarshalJSON() ([]byte, error) {
+	type Proxy OlapConfig
+
+	tmp := struct {
+		Proxy
+		TxTimeoutSeconds string `json:"txTimeoutSeconds,omitempty"`
+	}{
+		Proxy: Proxy(*cfg),
+	}
+
+	if d := cfg.TxTimeoutSeconds.Get(); d != 0 {
+		tmp.TxTimeoutSeconds = d.String()
+	}
+
+	return json.Marshal(&tmp)
 }
 
 // OltpConfig contains the config for oltp settings.
@@ -554,7 +572,7 @@ func (c *TabletConfig) Clone() *TabletConfig {
 func (c *TabletConfig) SetTxTimeoutForWorkload(val time.Duration, workload querypb.ExecuteOptions_Workload) {
 	switch workload {
 	case querypb.ExecuteOptions_OLAP:
-		c.Olap.TxTimeoutSeconds.Set(val)
+		_ = c.Olap.TxTimeoutSeconds.Set(val.String())
 	case querypb.ExecuteOptions_OLTP:
 		_ = c.Oltp.TxTimeoutSeconds.Set(val.String())
 	default:
@@ -644,7 +662,7 @@ var defaultConfig = TabletConfig{
 		MaxWaiters:         5000,
 	},
 	Olap: OlapConfig{
-		TxTimeoutSeconds: 30,
+		TxTimeoutSeconds: flagutil.NewDeprecatedFloat64Seconds("queryserver-config-olap-transaction-timeout", 30*time.Second),
 	},
 	Oltp: OltpConfig{
 		QueryTimeoutSeconds: flagutil.NewDeprecatedFloat64Seconds("queryserver-config-query-timeout", 30*time.Second),
