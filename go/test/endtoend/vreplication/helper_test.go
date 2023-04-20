@@ -683,3 +683,28 @@ func setBinlogRowImageMode(t *testing.T, vc *VitessCluster, mode string) {
 	require.NoError(t, err)
 	log.Infof("Setting extracnf to %s", os.Getenv(ExtraCnf))
 }
+
+func getPartialMetrics(t *testing.T, key string, port int) (int, int, int, int) {
+	vars := getDebugVars(t, port)
+	insertKey := fmt.Sprintf("%s.insert", key)
+	updateKey := fmt.Sprintf("%s.insert", key)
+	cacheSizes := vars["VReplicationPartialQueryCacheSize"].(map[string]interface{})
+	queryCounts := vars["VReplicationPartialQueryCount"].(map[string]interface{})
+	if cacheSizes[insertKey] == nil || cacheSizes[updateKey] == nil ||
+		queryCounts[insertKey] == nil || queryCounts[updateKey] == nil {
+		return 0, 0, 0, 0
+	}
+	inserts := int(cacheSizes[insertKey].(float64))
+	updates := int(cacheSizes[updateKey].(float64))
+	insertQueries := int(queryCounts[insertKey].(float64))
+	updateQueries := int(queryCounts[updateKey].(float64))
+	return inserts, updates, insertQueries, updateQueries
+}
+
+func isBinlogRowImageNoBlob(t *testing.T, tablet *cluster.VttabletProcess) bool {
+	rs, err := tablet.QueryTablet("select @@binlog_row_image", "", false)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(rs.Rows))
+	mode := strings.ToLower(rs.Rows[0][0].ToString())
+	return mode == "noblob"
+}

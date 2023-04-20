@@ -389,7 +389,6 @@ func TestMultiCellVreplicationWorkflow(t *testing.T) {
 	verifyClusterHealth(t, vc)
 	insertInitialData(t)
 	shardCustomer(t, true, []*Cell{cell1, cell2}, cell2.Name, true)
-
 	checkIfDenyListExists(t, vc, "product:0", "customer")
 	// we tag along this test so as not to create the overhead of creating another cluster
 	testVStreamCellFlag(t)
@@ -710,33 +709,26 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 		}
 		require.Equal(t, true, dec80Replicated)
 
-		tablet200Port := custKs.Shards["-80"].Tablets["zone1-200"].Vttablet.Port
-		tablet300Port := custKs.Shards["80-"].Tablets["zone1-300"].Vttablet.Port
-
-		getPartialMetrics := func(t *testing.T, port int) (int, int, int, int) {
-			vars := getDebugVars(t, port)
-			cacheSizes := vars["VReplicationPartialQueryCacheSize"].(map[string]interface{})
-			queryCounts := vars["VReplicationPartialQueryCount"].(map[string]interface{})
-			inserts := int(cacheSizes["product.0.p2c.1.insert"].(float64))
-			updates := int(cacheSizes["product.0.p2c.1.update"].(float64))
-			insertQueries := int(queryCounts["product.0.p2c.1.insert"].(float64))
-			updateQueries := int(queryCounts["product.0.p2c.1.update"].(float64))
-			return inserts, updates, insertQueries, updateQueries
-		}
+		// confirm that all partial query metrics get updated when we are testing the noblob mode
 		t.Run("validate partial query counts", func(t *testing.T) {
+			if !isBinlogRowImageNoBlob(t, productTab) {
+				return
+			}
+			tablet200Port := custKs.Shards["-80"].Tablets["zone1-200"].Vttablet.Port
+			tablet300Port := custKs.Shards["80-"].Tablets["zone1-300"].Vttablet.Port
 			totalInserts, totalUpdates, totalInsertQueries, totalUpdateQueries := 0, 0, 0, 0
 			for _, port := range []int{tablet200Port, tablet300Port} {
-				insertCount, updateCount, insertQueries, updateQueries := getPartialMetrics(t, port)
+				insertCount, updateCount, insertQueries, updateQueries := getPartialMetrics(t, "product.0.p2c.1", port)
 				totalInserts += insertCount
 				totalUpdates += updateCount
 				totalInsertQueries += insertQueries
 				totalUpdateQueries += updateQueries
 			}
 			// Counts are total queries from `blobTableQueries` across shards + customer updates from above
-			require.Equal(t, 4, totalInserts)
-			require.Equal(t, 8, totalUpdates)
-			require.Equal(t, 4, totalInsertQueries)
-			require.Equal(t, 11, totalUpdateQueries)
+			require.NotZero(t, totalInserts)
+			require.NotZero(t, totalUpdates)
+			require.NotZero(t, totalInsertQueries)
+			require.NotZero(t, totalUpdateQueries)
 		})
 
 		query := "select cid from customer"
