@@ -32,6 +32,7 @@ import (
 var lastHealthCheckUnixNano int64
 var lastGoodHealthCheckUnixNano int64
 var LastContinousCheckHealthy int64
+var HitAtLeastOneDiscovery atomic.Bool
 
 var lastHealthCheckCache = cache.New(config.HealthPollSeconds*time.Second, time.Second)
 
@@ -73,6 +74,7 @@ type HealthStatus struct {
 	Hostname           string
 	Token              string
 	IsActiveNode       bool
+	IsDiscovering      bool
 	ActiveNode         *NodeHealth
 	Error              error
 	AvailableNodes     [](*NodeHealth)
@@ -119,6 +121,7 @@ func HealthTest() (health *HealthStatus, err error) {
 		return health, err
 	}
 	health.Healthy = healthy
+	health.IsDiscovering = HitAtLeastOneDiscovery.Load()
 
 	if health.ActiveNode, health.IsActiveNode, err = ElectedNode(); err != nil {
 		health.Error = err

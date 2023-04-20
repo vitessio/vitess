@@ -155,7 +155,6 @@ func waitForLocksRelease() {
 // instance discovery per entry.
 func handleDiscoveryRequests() {
 	discoveryQueue = discovery.CreateOrReturnQueue("DEFAULT")
-
 	// create a pool of discovery workers
 	for i := uint(0); i < config.DiscoveryMaxConcurrency; i++ {
 		go func() {
@@ -178,7 +177,7 @@ func handleDiscoveryRequests() {
 }
 
 // DiscoverInstance will attempt to discover (poll) an instance (unless
-// it is already up to date) and will also ensure that its primary and
+// it is already up-to-date) and will also ensure that its primary and
 // replicas (if any) are also checked.
 func DiscoverInstance(instanceKey inst.InstanceKey, forceDiscovery bool) {
 	if inst.InstanceIsForgotten(&instanceKey) {
@@ -267,12 +266,14 @@ func DiscoverInstance(instanceKey inst.InstanceKey, forceDiscovery bool) {
 		InstanceLatency: instanceLatency,
 		Err:             nil,
 	})
+	// we turn on HitAtLeastOneDiscovery first time
+	// con: this will result in extra memory hit for every recovery cycle.
+	process.HitAtLeastOneDiscovery.CompareAndSwap(false, true)
 }
 
 // onHealthTick handles the actions to take to discover/poll instances
 func onHealthTick() {
 	wasAlreadyElected := IsLeader()
-
 	{
 		myIsElectedNode, err := process.AttemptElection()
 		if err != nil {

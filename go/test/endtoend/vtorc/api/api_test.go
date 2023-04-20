@@ -18,14 +18,17 @@ package api
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/vtorc/utils"
+	"vitess.io/vitess/go/vt/vtorc/process"
 )
 
 // make an api call to /api/problems endpoint
@@ -63,14 +66,17 @@ func TestProblemsAPI(t *testing.T) {
 
 	t.Run("Health API", func(t *testing.T) {
 		// Check that VTOrc is healthy
-		status, resp := utils.MakeAPICall(t, vtorc, "/debug/health")
+		status, resp, err := utils.MakeAPICall(t, vtorc, "/debug/health")
+		require.NoError(t, err)
 		assert.Equal(t, 200, status)
+		require.NoError(t, err)
 		assert.Contains(t, resp, `"Healthy": true,`)
 	})
 
 	t.Run("Liveness API", func(t *testing.T) {
 		// Check that VTOrc is live
-		status, resp := utils.MakeAPICall(t, vtorc, "/debug/liveness")
+		status, resp, err := utils.MakeAPICall(t, vtorc, "/debug/liveness")
+		require.NoError(t, err)
 		assert.Equal(t, 200, status)
 		assert.Empty(t, resp)
 	})
@@ -82,7 +88,8 @@ func TestProblemsAPI(t *testing.T) {
 
 	t.Run("Disable Recoveries API", func(t *testing.T) {
 		// Disable recoveries of VTOrc
-		status, resp := utils.MakeAPICall(t, vtorc, "/api/disable-global-recoveries")
+		status, resp, err := utils.MakeAPICall(t, vtorc, "/api/disable-global-recoveries")
+		require.NoError(t, err)
 		assert.Equal(t, 200, status)
 		assert.Equal(t, "Global recoveries disabled\n", resp)
 	})
@@ -103,29 +110,34 @@ func TestProblemsAPI(t *testing.T) {
 		assert.Contains(t, resp, `"Analysis": "ReplicationStopped"`)
 
 		// Verify that filtering also works in the API as intended
-		status, resp = utils.MakeAPICall(t, vtorc, "/api/replication-analysis?keyspace=ks&shard=0")
+		status, resp, err = utils.MakeAPICall(t, vtorc, "/api/replication-analysis?keyspace=ks&shard=0")
+		require.NoError(t, err)
 		assert.Equal(t, 200, status, resp)
 		assert.Contains(t, resp, fmt.Sprintf(`"Port": %d`, replica.MySQLPort))
 
 		// Verify that filtering by keyspace also works in the API as intended
-		status, resp = utils.MakeAPICall(t, vtorc, "/api/replication-analysis?keyspace=ks")
+		status, resp, err = utils.MakeAPICall(t, vtorc, "/api/replication-analysis?keyspace=ks")
+		require.NoError(t, err)
 		assert.Equal(t, 200, status, resp)
 		assert.Contains(t, resp, fmt.Sprintf(`"Port": %d`, replica.MySQLPort))
 
 		// Check that filtering using keyspace and shard works
-		status, resp = utils.MakeAPICall(t, vtorc, "/api/replication-analysis?keyspace=ks&shard=80-")
+		status, resp, err = utils.MakeAPICall(t, vtorc, "/api/replication-analysis?keyspace=ks&shard=80-")
+		require.NoError(t, err)
 		assert.Equal(t, 200, status, resp)
 		assert.Equal(t, "[]", resp)
 
 		// Check that filtering using just the shard fails
-		status, resp = utils.MakeAPICall(t, vtorc, "/api/replication-analysis?shard=0")
+		status, resp, err = utils.MakeAPICall(t, vtorc, "/api/replication-analysis?shard=0")
+		require.NoError(t, err)
 		assert.Equal(t, 400, status, resp)
 		assert.Equal(t, "Filtering by shard without keyspace isn't supported\n", resp)
 	})
 
 	t.Run("Enable Recoveries API", func(t *testing.T) {
 		// Enable recoveries of VTOrc
-		status, resp := utils.MakeAPICall(t, vtorc, "/api/enable-global-recoveries")
+		status, resp, err := utils.MakeAPICall(t, vtorc, "/api/enable-global-recoveries")
+		require.NoError(t, err)
 		assert.Equal(t, 200, status)
 		assert.Equal(t, "Global recoveries enabled\n", resp)
 
@@ -156,23 +168,69 @@ func TestProblemsAPI(t *testing.T) {
 		assert.Contains(t, resp, fmt.Sprintf(`"InstanceAlias": "%v"`, replica.Alias))
 
 		// Check that filtering using keyspace and shard works
-		status, resp = utils.MakeAPICall(t, vtorc, "/api/problems?keyspace=ks&shard=0")
+		status, resp, err = utils.MakeAPICall(t, vtorc, "/api/problems?keyspace=ks&shard=0")
+		require.NoError(t, err)
 		assert.Equal(t, 200, status, resp)
 		assert.Contains(t, resp, fmt.Sprintf(`"InstanceAlias": "%v"`, replica.Alias))
 
 		// Check that filtering using keyspace works
-		status, resp = utils.MakeAPICall(t, vtorc, "/api/problems?keyspace=ks")
+		status, resp, err = utils.MakeAPICall(t, vtorc, "/api/problems?keyspace=ks")
+		require.NoError(t, err)
 		assert.Equal(t, 200, status, resp)
 		assert.Contains(t, resp, fmt.Sprintf(`"InstanceAlias": "%v"`, replica.Alias))
 
 		// Check that filtering using keyspace and shard works
-		status, resp = utils.MakeAPICall(t, vtorc, "/api/problems?keyspace=ks&shard=80-")
+		status, resp, err = utils.MakeAPICall(t, vtorc, "/api/problems?keyspace=ks&shard=80-")
+		require.NoError(t, err)
 		assert.Equal(t, 200, status, resp)
 		assert.Equal(t, "null", resp)
 
 		// Check that filtering using just the shard fails
-		status, resp = utils.MakeAPICall(t, vtorc, "/api/problems?shard=0")
+		status, resp, err = utils.MakeAPICall(t, vtorc, "/api/problems?shard=0")
+		require.NoError(t, err)
 		assert.Equal(t, 400, status, resp)
 		assert.Equal(t, "Filtering by shard without keyspace isn't supported\n", resp)
 	})
+}
+
+// TestIfDiscoveringHappenedLaterInHealthCheck checks that `IsDiscovering` flag in `HealthStatus` turns `true`, sometime
+// after flag `Healthy` turns `true`.
+func TestIfDiscoveringHappenedLaterInHealthCheck(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 1, nil, cluster.VTOrcConfiguration{
+		PreventCrossDataCenterPrimaryFailover: true,
+		RecoveryPeriodBlockSeconds:            5,
+	}, 1, "")
+	vtorc := clusterInfo.ClusterInstance.VTOrcProcesses[0]
+	// Call API with retry to ensure health service is up
+	status, resp := utils.MakeAPICallRetry(t, vtorc, "/debug/health", func(code int, response string) bool {
+		return code == 0 && (strings.Contains(response, "connection refused") || strings.Contains(response, ""))
+	})
+	assert.Equal(t, 200, status)
+	// Since TopoInformationRefreshSeconds is default to 3s for this test. This will ensure there will ~3 seconds
+	// delay between `Healthy` and `IsDiscovering` to turn `true`
+	assert.Contains(t, resp, `"Healthy": true,`)
+	assert.Contains(t, resp, `"IsDiscovering": false`)
+	startTime := time.Now()
+	for {
+		// Check that VTOrc is healthy
+		status, resp, err := utils.MakeAPICall(t, vtorc, "/debug/health")
+		require.NoError(t, err)
+		assert.Equal(t, 200, status)
+		var healthStatus process.HealthStatus
+		err = json2.Unmarshal([]byte(resp), &healthStatus)
+		assert.Nil(t, err)
+		assert.Equal(t, healthStatus.Healthy, true)
+		if healthStatus.IsDiscovering {
+			timeForIsRecovering := time.Now()
+			require.Greater(t, timeForIsRecovering, startTime)
+			return
+		}
+		if time.Since(startTime) > 10*time.Second {
+			// time out
+			t.Fatal("timed out waiting for `timeForIsRecovering` to turned `true`")
+			return
+		}
+		time.Sleep(1 * time.Second)
+	}
 }
