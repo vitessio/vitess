@@ -38,6 +38,8 @@ func gen4Planner(query string, plannerVersion querypb.ExecuteOptions_PlannerVers
 			return gen4UpdateStmtPlanner(plannerVersion, stmt, reservedVars, vschema)
 		case *sqlparser.Delete:
 			return gen4DeleteStmtPlanner(plannerVersion, stmt, reservedVars, vschema)
+		case *sqlparser.Insert:
+			return gen4InsertStmtPlanner(plannerVersion, stmt, reservedVars, vschema)
 		default:
 			return nil, vterrors.VT12001(fmt.Sprintf("%T", stmt))
 		}
@@ -395,6 +397,67 @@ func gen4DeleteStmtPlanner(
 	}
 
 	plan, err = pushCommentDirectivesOnPlan(plan, deleteStmt)
+	if err != nil {
+		return nil, err
+	}
+
+	setLockOnAllSelect(plan)
+
+	if err := plan.WireupGen4(ctx); err != nil {
+		return nil, err
+	}
+
+	return newPlanResult(plan.Primitive(), operators.TablesUsed(op)...), nil
+}
+
+func gen4InsertStmtPlanner(version querypb.ExecuteOptions_PlannerVersion, insStmt *sqlparser.Insert, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema) (*planResult, error) {
+	ksName := ""
+	if ks, _ := vschema.DefaultKeyspace(); ks != nil {
+		ksName = ks.Name
+	}
+	semTable, err := semantics.Analyze(insStmt, ksName, vschema)
+	if err != nil {
+		return nil, err
+	}
+	// record any warning as planner warning.
+	vschema.PlannerWarning(semTable.Warning)
+
+	err = rewriteRoutedTables(insStmt, vschema)
+	if err != nil {
+		return nil, err
+	}
+
+	if ks, tables := semTable.SingleUnshardedKeyspace(); ks != nil {
+		eIns := &engine.Insert{}
+		eIns.Keyspace = ks
+		eIns.Table = tables[0]
+		eIns.Opcode = engine.InsertUnsharded
+		eIns.Query = generateQuery(insStmt)
+		return newPlanResult(eIns, operators.QualifiedTables(ks, tables)...), nil
+	}
+
+	if semTable.NotUnshardedErr != nil {
+		return nil, semTable.NotUnshardedErr
+	}
+
+	err = queryRewrite(semTable, reservedVars, insStmt)
+	if err != nil {
+		return nil, err
+	}
+
+	ctx := plancontext.NewPlanningContext(reservedVars, semTable, vschema, version)
+
+	op, err := operators.PlanQuery(ctx, insStmt)
+	if err != nil {
+		return nil, err
+	}
+
+	plan, err := transformToLogicalPlan(ctx, op, true)
+	if err != nil {
+		return nil, err
+	}
+
+	plan, err = pushCommentDirectivesOnPlan(plan, insStmt)
 	if err != nil {
 		return nil, err
 	}

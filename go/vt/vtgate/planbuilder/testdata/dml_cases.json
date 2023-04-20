@@ -1476,7 +1476,7 @@
         },
         "TargetTabletType": "PRIMARY",
         "MultiShardAutocommit": false,
-        "Query": "insert into unsharded select id from unsharded_auto for update",
+        "Query": "insert into unsharded select id from unsharded_auto",
         "TableName": "unsharded"
       },
       "TablesUsed": [
@@ -1519,7 +1519,7 @@
         },
         "TargetTabletType": "PRIMARY",
         "MultiShardAutocommit": false,
-        "Query": "insert into unsharded select id from unsharded join unsharded_auto for update",
+        "Query": "insert into unsharded select id from unsharded join unsharded_auto",
         "TableName": "unsharded"
       },
       "TablesUsed": [
@@ -2093,7 +2093,7 @@
         },
         "TargetTabletType": "PRIMARY",
         "MultiShardAutocommit": false,
-        "Query": "insert into unsharded select 1 from dual union select 1 from dual for update",
+        "Query": "insert into unsharded select 1 from dual union select 1 from dual",
         "TableName": "unsharded"
       },
       "TablesUsed": [
@@ -2312,7 +2312,7 @@
         },
         "TargetTabletType": "PRIMARY",
         "MultiShardAutocommit": false,
-        "Query": "replace into unsharded select id from unsharded_auto for update",
+        "Query": "replace into unsharded select id from unsharded_auto",
         "TableName": "unsharded"
       },
       "TablesUsed": [
@@ -3840,7 +3840,7 @@
         },
         "TargetTabletType": "PRIMARY",
         "MultiShardAutocommit": false,
-        "Query": "insert into user_privacy_consents(user_id, accepted_at) select user_id, accepted_at from (select 1 as user_id, 1629194864 as accepted_at from dual) as tmp where not exists (select 1 from user_privacy_consents where user_id = 1 limit 1) for update",
+        "Query": "insert into user_privacy_consents(user_id, accepted_at) select user_id, accepted_at from (select 1 as user_id, 1629194864 as accepted_at from dual) as tmp where not exists (select 1 from user_privacy_consents where user_id = 1 limit 1)",
         "TableName": "user_privacy_consents"
       },
       "TablesUsed": [
@@ -5448,7 +5448,7 @@
         },
         "TargetTabletType": "PRIMARY",
         "MultiShardAutocommit": false,
-        "Query": "insert into unsharded(col) select col from unsharded_auto for update",
+        "Query": "insert into unsharded(col) select col from unsharded_auto",
         "TableName": "unsharded"
       },
       "TablesUsed": [

@@ -407,6 +407,7 @@ func (st *SemTable) SingleUnshardedKeyspace() (*vindexes.Keyspace, []*vindexes.T
 		if vindexTable.Type != "" {
 			// A reference table is not an issue when seeing if a query is going to an unsharded keyspace
 			if vindexTable.Type == vindexes.TypeReference {
+				tables = append(tables, vindexTable)
 				continue
 			}
 			return nil, nil

@@ -214,7 +214,11 @@ func createInstructionFor(ctx context.Context, query string, stmt sqlparser.Stat
 		}
 		return buildRoutePlan(stmt, reservedVars, vschema, configuredPlanner)
 	case *sqlparser.Insert:
-		return buildRoutePlan(stmt, reservedVars, vschema, buildInsertPlan)
+		configuredPlanner, err := getConfiguredPlanner(vschema, buildInsertPlan, stmt, query)
+		if err != nil {
+			return nil, err
+		}
+		return buildRoutePlan(stmt, reservedVars, vschema, configuredPlanner)
 	case *sqlparser.Update:
 		configuredPlanner, err := getConfiguredPlanner(vschema, buildUpdatePlan, stmt, query)
 		if err != nil {
