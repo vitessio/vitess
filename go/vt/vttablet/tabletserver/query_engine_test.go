@@ -297,9 +297,9 @@ func TestStatsURL(t *testing.T) {
 func newTestQueryEngine(idleTimeout time.Duration, strict bool, dbcfgs *dbconfigs.DBConfigs) *QueryEngine {
 	config := tabletenv.NewDefaultConfig()
 	config.DB = dbcfgs
-	config.OltpReadPool.IdleTimeoutSeconds.Set(idleTimeout)
-	config.OlapReadPool.IdleTimeoutSeconds.Set(idleTimeout)
-	config.TxPool.IdleTimeoutSeconds.Set(idleTimeout)
+	_ = config.OltpReadPool.IdleTimeoutSeconds.Set(idleTimeout.String())
+	_ = config.OlapReadPool.IdleTimeoutSeconds.Set(idleTimeout.String())
+	_ = config.TxPool.IdleTimeoutSeconds.Set(idleTimeout.String())
 	env := tabletenv.NewEnv(config, "TabletServerTest")
 	se := schema.NewEngine(env)
 	qe := NewQueryEngine(env, se)

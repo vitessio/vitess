@@ -188,3 +188,8 @@ func DualFormatBoolVar(fs *pflag.FlagSet, p *bool, name string, value bool, usag
 		fs.BoolVar(p, dashes, *p, fmt.Sprintf("Synonym to -%s", underscores))
 	}
 }
+
+type Value[T any] interface {
+	pflag.Value
+	Get() T
+}
