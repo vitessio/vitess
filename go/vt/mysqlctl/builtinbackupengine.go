@@ -51,7 +51,7 @@ import (
 )
 
 const (
-	builtinBackupEngineName = "builtin"
+	BuiltinBackupEngineName = "builtin"
 	autoIncrementalFromPos  = "auto"
 	dataDictionaryFile      = "mysql.ibd"
 )
@@ -573,7 +573,7 @@ func (be *BuiltinBackupEngine) backupFiles(
 	bm := &builtinBackupManifest{
 		// Common base fields
 		BackupManifest: BackupManifest{
-			BackupMethod:   builtinBackupEngineName,
+			BackupMethod:   BuiltinBackupEngineName,
 			Position:       replicationPosition,
 			PurgedPosition: purgedPosition,
 			FromPosition:   fromPosition,
@@ -779,17 +779,13 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupPara
 	}
 
 	// Close the backupPipe to finish writing on destination.
-	closeWriterAt := time.Now()
 	if err = bw.Close(); err != nil {
 		return vterrors.Wrapf(err, "cannot flush destination: %v", name)
 	}
-	params.Stats.Scope(stats.Operation("Destination:Close")).TimedIncrement(time.Since(closeWriterAt))
 
-	closeReaderAt := time.Now()
 	if err := br.Close(); err != nil {
 		return vterrors.Wrap(err, "failed to close the source reader")
 	}
-	params.Stats.Scope(stats.Operation("Source:Close")).TimedIncrement(time.Since(closeReaderAt))
 
 	// Save the hash.
 	fe.Hash = bw.HashString()
@@ -1044,17 +1040,13 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, params RestorePa
 	}
 
 	// Flush the buffer.
-	closeDestAt := time.Now()
 	if err := bufferedDest.Flush(); err != nil {
 		return vterrors.Wrap(err, "failed to flush destination buffer")
 	}
-	params.Stats.Scope(stats.Operation("Destination:Close")).TimedIncrement(time.Since(closeDestAt))
 
-	closeSourceAt := time.Now()
 	if err := br.Close(); err != nil {
 		return vterrors.Wrap(err, "failed to close the source reader")
 	}
-	params.Stats.Scope(stats.Operation("Source:Close")).TimedIncrement(time.Since(closeSourceAt))
 
 	return nil
 }
