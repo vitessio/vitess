@@ -325,6 +325,29 @@ func TestCompilerSingle(t *testing.T) {
 			expression: `CAST(-235959.995 AS TIME(2))`,
 			result:     `TIME("-24:00:00.00")`,
 		},
+		{
+			expression: `WEEK('2000-01-02', 6)`,
+			result:     `INT64(1)`,
+		},
+		{
+			expression: `WEEK(date '2000-01-01', 4)`,
+			result:     `INT64(0)`,
+		},
+		{
+			// This is the day of DST change in Europe/Amsterdam when
+			// the year started on a Wednesday. Regression test for
+			// using 24 hour time diffing instead of days.
+			expression: `WEEK(date '2014-10-26', 6)`,
+			result:     `INT64(44)`,
+		},
+		{
+			expression: `MAKEDATE(cast('invalid' as json), NULL)`,
+			result:     `NULL`,
+		},
+		{
+			expression: `MAKETIME(NULL, '', cast('invalid' as json))`,
+			result:     `NULL`,
+		},
 	}
 
 	for _, tc := range testCases {

@@ -278,6 +278,7 @@ func stripDownQuery(from, to sqlparser.SelectStatement) error {
 		toNode.Having = node.Having
 		toNode.OrderBy = node.OrderBy
 		toNode.Comments = node.Comments
+		toNode.Limit = node.Limit
 		toNode.SelectExprs = node.SelectExprs
 		for _, expr := range toNode.SelectExprs {
 			removeKeyspaceFromSelectExpr(expr)
@@ -317,9 +318,20 @@ func buildQuery(op ops.Operator, qb *queryBuilder) error {
 		return buildDerived(op, qb)
 	case *Horizon:
 		return buildHorizon(op, qb)
+	case *Limit:
+		return buildLimit(op, qb)
 	default:
 		return vterrors.VT13001(fmt.Sprintf("do not know how to turn %T into SQL", op))
 	}
+	return nil
+}
+
+func buildLimit(op *Limit, qb *queryBuilder) error {
+	err := buildQuery(op.Source, qb)
+	if err != nil {
+		return err
+	}
+	qb.sel.SetLimit(op.AST)
 	return nil
 }
 

@@ -198,6 +198,67 @@ func (c *ConvertExpr) convertToCharType(tt sqltypes.Type) sqltypes.Type {
 	return sqltypes.VarChar
 }
 
+func (conv *ConvertExpr) compile(c *compiler) (ctype, error) {
+	arg, err := conv.Inner.compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip := c.compileNullCheck1(arg)
+	var convt ctype
+
+	switch conv.Type {
+	case "BINARY":
+		convt = ctype{Type: conv.convertToBinaryType(arg.Type), Col: collationBinary}
+		c.asm.Convert_xb(1, convt.Type, conv.Length, conv.HasLength)
+
+	case "CHAR", "NCHAR":
+		convt = ctype{
+			Type: conv.convertToCharType(arg.Type),
+			Col:  collations.TypedCollation{Collation: conv.Collation},
+		}
+		c.asm.Convert_xc(1, convt.Type, convt.Col.Collation, conv.Length, conv.HasLength)
+
+	case "DECIMAL":
+		convt = ctype{Type: sqltypes.Decimal, Col: collationNumeric}
+		m, d := conv.decimalPrecision()
+		c.asm.Convert_xd(1, m, d)
+
+	case "DOUBLE", "REAL":
+		convt = c.compileToFloat(arg, 1)
+
+	case "SIGNED", "SIGNED INTEGER":
+		convt = c.compileToInt64(arg, 1)
+
+	case "UNSIGNED", "UNSIGNED INTEGER":
+		convt = c.compileToUint64(arg, 1)
+
+	case "JSON":
+		// TODO: what does NULL map to?
+		convt, err = c.compileToJSON(arg, 1)
+		if err != nil {
+			return ctype{}, err
+		}
+
+	case "DATE":
+		convt = c.compileToDate(arg, 1)
+
+	case "DATETIME":
+		convt = c.compileToDateTime(arg, 1, conv.Length)
+
+	case "TIME":
+		convt = c.compileToTime(arg, 1, conv.Length)
+
+	default:
+		return ctype{}, c.unsupported(conv)
+	}
+
+	c.asm.jumpDestination(skip)
+	convt.Flag = arg.Flag | flagNullable
+	return convt, nil
+
+}
+
 func (c *ConvertUsingExpr) eval(env *ExpressionEnv) (eval, error) {
 	e, err := c.Inner.eval(env)
 	if err != nil {
@@ -217,4 +278,22 @@ func (c *ConvertUsingExpr) eval(env *ExpressionEnv) (eval, error) {
 func (c *ConvertUsingExpr) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
 	_, f := c.Inner.typeof(env, fields)
 	return sqltypes.VarChar, f | flagNullable
+}
+
+func (conv *ConvertUsingExpr) compile(c *compiler) (ctype, error) {
+	ct, err := conv.Inner.compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip := c.compileNullCheck1(ct)
+	c.asm.Convert_xc(1, sqltypes.VarChar, conv.Collation, 0, false)
+	c.asm.jumpDestination(skip)
+
+	col := collations.TypedCollation{
+		Collation:    conv.Collation,
+		Coercibility: collations.CoerceCoercible,
+		Repertoire:   collations.RepertoireASCII,
+	}
+	return ctype{Type: sqltypes.VarChar, Flag: flagNullable, Col: col}, nil
 }

@@ -295,6 +295,14 @@ func TestOne(t *testing.T) {
 	testFile(t, "onecase.json", "", vschema, false)
 }
 
+func TestOneTPCC(t *testing.T) {
+	vschema := &vschemaWrapper{
+		v: loadSchema(t, "vschemas/tpcc_schema.json", true),
+	}
+
+	testFile(t, "onecase.json", "", vschema, false)
+}
+
 func TestOneWithMainAsDefault(t *testing.T) {
 	vschema := &vschemaWrapper{
 		v: loadSchema(t, "vschemas/schema.json", true),

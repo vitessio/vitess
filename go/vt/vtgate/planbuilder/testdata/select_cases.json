@@ -7580,27 +7580,19 @@
         "TableName": "user_extra_`user`",
         "Inputs": [
           {
-            "OperatorType": "SimpleProjection",
-            "Columns": [
-              0
-            ],
+            "OperatorType": "Limit",
+            "Count": "INT64(10)",
             "Inputs": [
               {
-                "OperatorType": "Limit",
-                "Count": "INT64(10)",
-                "Inputs": [
-                  {
-                    "OperatorType": "Route",
-                    "Variant": "Scatter",
-                    "Keyspace": {
-                      "Name": "user",
-                      "Sharded": true
-                    },
-                    "FieldQuery": "select user_id from user_extra where 1 != 1",
-                    "Query": "select user_id from user_extra limit :__upper_limit",
-                    "Table": "user_extra"
-                  }
-                ]
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select user_id from user_extra where 1 != 1",
+                "Query": "select user_id from user_extra limit :__upper_limit",
+                "Table": "user_extra"
               }
             ]
           },

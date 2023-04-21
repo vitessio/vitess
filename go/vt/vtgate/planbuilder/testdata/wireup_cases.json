@@ -1069,9 +1069,9 @@
           {
             "OperatorType": "Join",
             "Variant": "Join",
-            "JoinColumnIndexes": "L:1,R:0",
+            "JoinColumnIndexes": "L:0,R:0",
             "JoinVars": {
-              "u_col": 0
+              "u_col": 1
             },
             "TableName": "`user`_user_extra",
             "Inputs": [
@@ -1082,8 +1082,8 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select u.col, u.id from `user` as u where 1 != 1",
-                "Query": "select u.col, u.id from `user` as u",
+                "FieldQuery": "select u.id, u.col from `user` as u where 1 != 1",
+                "Query": "select u.id, u.col from `user` as u",
                 "Table": "`user`"
               },
               {

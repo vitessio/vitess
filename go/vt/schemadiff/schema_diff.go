@@ -251,7 +251,10 @@ func (d *SchemaDiff) OrderedDiffs() ([]EntityDiff, error) {
 		})
 		if !foundValidPathForClass {
 			// In this equivalence class, there is no valid permutation. We cannot linearize the diffs.
-			return nil, ErrImpossibleDiffOrder
+			return nil, &ImpossibleApplyDiffOrderError{
+				UnorderedDiffs:   d.UnorderedDiffs(),
+				ConflictingDiffs: classDiffs,
+			}
 		}
 		// Done taking care of this equivalence class.
 	}
