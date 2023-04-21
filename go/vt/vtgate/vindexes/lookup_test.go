@@ -119,7 +119,7 @@ func TestLookupNonUniqueNew(t *testing.T) {
 	l = createLookup(t, "lookup", true)
 	assert.True(t, l.(*LookupNonUnique).writeOnly, "Create(lookup, false)")
 
-	_, err := CreateVindex("lookup", "lookup", map[string]string{
+	_, _, err := CreateVindex("lookup", "lookup", map[string]string{
 		"table":      "t",
 		"from":       "fromc",
 		"to":         "toc",
@@ -177,7 +177,7 @@ func TestLookupNonUniqueMap(t *testing.T) {
 }
 
 func TestLookupNonUniqueMapAutocommit(t *testing.T) {
-	vindex, err := CreateVindex("lookup", "lookup", map[string]string{
+	vindex, _, err := CreateVindex("lookup", "lookup", map[string]string{
 		"table":      "t",
 		"from":       "fromc",
 		"to":         "toc",
@@ -282,7 +282,7 @@ func TestLookupNonUniqueVerify(t *testing.T) {
 }
 
 func TestLookupNonUniqueNoVerify(t *testing.T) {
-	vindex, err := CreateVindex("lookup", "lookup", map[string]string{
+	vindex, _, err := CreateVindex("lookup", "lookup", map[string]string{
 		"table":     "t",
 		"from":      "fromc",
 		"to":        "toc",
@@ -305,7 +305,7 @@ func TestLookupNonUniqueNoVerify(t *testing.T) {
 }
 
 func TestLookupUniqueNoVerify(t *testing.T) {
-	vindex, err := CreateVindex("lookup_unique", "lookup_unique", map[string]string{
+	vindex, _, err := CreateVindex("lookup_unique", "lookup_unique", map[string]string{
 		"table":     "t",
 		"from":      "fromc",
 		"to":        "toc",
@@ -328,7 +328,7 @@ func TestLookupUniqueNoVerify(t *testing.T) {
 }
 
 func TestLookupNonUniqueVerifyAutocommit(t *testing.T) {
-	vindex, err := CreateVindex("lookup", "lookup", map[string]string{
+	vindex, _, err := CreateVindex("lookup", "lookup", map[string]string{
 		"table":      "t",
 		"from":       "fromc",
 		"to":         "toc",
@@ -414,7 +414,7 @@ func TestLookupNonUniqueCreate(t *testing.T) {
 }
 
 func TestLookupNonUniqueCreateAutocommit(t *testing.T) {
-	lookupNonUnique, err := CreateVindex("lookup", "lookup", map[string]string{
+	lookupNonUnique, _, err := CreateVindex("lookup", "lookup", map[string]string{
 		"table":      "t",
 		"from":       "from1,from2",
 		"to":         "toc",
@@ -479,7 +479,7 @@ func TestLookupNonUniqueDelete(t *testing.T) {
 }
 
 func TestLookupNonUniqueDeleteAutocommit(t *testing.T) {
-	lookupNonUnique, _ := CreateVindex("lookup", "lookup", map[string]string{
+	lookupNonUnique, _, _ := CreateVindex("lookup", "lookup", map[string]string{
 		"table":      "t",
 		"from":       "fromc",
 		"to":         "toc",
@@ -567,7 +567,7 @@ func TestLookupUniqueMapResult(t *testing.T) {
 }
 
 func TestLookupNonUniqueCreateMultiShardAutocommit(t *testing.T) {
-	lookupNonUnique, err := CreateVindex("lookup", "lookup", map[string]string{
+	lookupNonUnique, _, err := CreateVindex("lookup", "lookup", map[string]string{
 		"table":                  "t",
 		"from":                   "from1,from2",
 		"to":                     "toc",
@@ -604,7 +604,7 @@ func createLookup(t *testing.T, name string, writeOnly bool) SingleColumn {
 	if writeOnly {
 		write = "true"
 	}
-	l, err := CreateVindex(name, name, map[string]string{
+	l, _, err := CreateVindex(name, name, map[string]string{
 		"table":      "t",
 		"from":       "fromc",
 		"to":         "toc",

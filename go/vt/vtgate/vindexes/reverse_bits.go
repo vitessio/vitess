@@ -43,8 +43,8 @@ type ReverseBits struct {
 }
 
 // newReverseBits creates a new ReverseBits.
-func newReverseBits(name string, _ map[string]string) (Vindex, error) {
-	return &ReverseBits{name: name}, nil
+func newReverseBits(name string, _ map[string]string) (Vindex, []VindexWarning, error) {
+	return &ReverseBits{name: name}, nil, nil
 }
 
 // String returns the name of the vindex.

@@ -31,7 +31,7 @@ import (
 var numeric SingleColumn
 
 func init() {
-	vindex, _ := CreateVindex("numeric", "num", nil)
+	vindex, _, _ := CreateVindex("numeric", "num", nil)
 	numeric = vindex.(SingleColumn)
 }
 

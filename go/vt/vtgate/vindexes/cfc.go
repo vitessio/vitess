@@ -105,7 +105,7 @@ type cfcCommon struct {
 }
 
 // NewCFC creates a new CFC vindex
-func NewCFC(name string, params map[string]string) (Vindex, error) {
+func NewCFC(name string, params map[string]string) (Vindex, []VindexWarning, error) {
 	ss := &cfcCommon{
 		name: name,
 	}
@@ -115,25 +115,25 @@ func NewCFC(name string, params map[string]string) (Vindex, error) {
 	}
 
 	if params == nil {
-		return cfc, nil
+		return cfc, nil, nil
 	}
 
 	switch h := params["hash"]; h {
 	case "":
-		return cfc, nil
+		return cfc, nil, nil
 	case "md5":
 		ss.hash = md5hash
 	case "xxhash64":
 		ss.hash = xxhash64
 	default:
-		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "invalid hash %s to CFC vindex %s", h, name)
+		return nil, nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "invalid hash %s to CFC vindex %s", h, name)
 	}
 
 	var offsets []int
 	if p := params["offsets"]; p == "" {
-		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "CFC vindex requires offsets when hash is defined")
+		return nil, nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "CFC vindex requires offsets when hash is defined")
 	} else if err := json.Unmarshal([]byte(p), &offsets); err != nil || !validOffsets(offsets) {
-		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "invalid offsets %s to CFC vindex %s. expected sorted positive ints in brackets", p, name)
+		return nil, nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "invalid offsets %s to CFC vindex %s. expected sorted positive ints in brackets", p, name)
 	}
 	// remove duplicates
 	prev := -1
@@ -144,7 +144,7 @@ func NewCFC(name string, params map[string]string) (Vindex, error) {
 		prev = off
 	}
 
-	return cfc, nil
+	return cfc, nil, nil
 }
 
 func validOffsets(offsets []int) bool {

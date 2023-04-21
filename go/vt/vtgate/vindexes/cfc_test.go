@@ -103,7 +103,7 @@ func TestCFCBuildCFC(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.testName, func(t *testing.T) {
-			cfc, err := NewCFC("cfc", tc.params)
+			cfc, _, err := NewCFC("cfc", tc.params)
 			assertEqualVtError(t, tc.err, err)
 			if cfc != nil {
 				assert.EqualValues(t, tc.offsets, cfc.(*CFC).offsets)
@@ -117,7 +117,7 @@ func TestCFCBuildCFC(t *testing.T) {
 }
 
 func makeCFC(t *testing.T, params map[string]string) *CFC {
-	vind, err := NewCFC("cfc", params)
+	vind, _, err := NewCFC("cfc", params)
 	require.NoError(t, err)
 	cfc, ok := vind.(*CFC)
 	require.True(t, ok)

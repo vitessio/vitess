@@ -74,12 +74,12 @@ type ConsistentLookup struct {
 //	table: name of the backing table. It can be qualified by the keyspace.
 //	from: list of columns in the table that have the 'from' values of the lookup vindex.
 //	to: The 'to' column name of the table.
-func newConsistentLookup(name string, m map[string]string) (Vindex, error) {
+func newConsistentLookup(name string, m map[string]string) (Vindex, []VindexWarning, error) {
 	clc, err := newCLCommon(name, m)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return &ConsistentLookup{clCommon: clc}, nil
+	return &ConsistentLookup{clCommon: clc}, nil, nil
 }
 
 // Cost returns the cost of this vindex as 20.
@@ -178,12 +178,12 @@ type ConsistentLookupUnique struct {
 //	table: name of the backing table. It can be qualified by the keyspace.
 //	from: list of columns in the table that have the 'from' values of the lookup vindex.
 //	to: The 'to' column name of the table.
-func newConsistentLookupUnique(name string, m map[string]string) (Vindex, error) {
+func newConsistentLookupUnique(name string, m map[string]string) (Vindex, []VindexWarning, error) {
 	clc, err := newCLCommon(name, m)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return &ConsistentLookupUnique{clCommon: clc}, nil
+	return &ConsistentLookupUnique{clCommon: clc}, nil, nil
 }
 
 // Cost returns the cost of this vindex as 10.

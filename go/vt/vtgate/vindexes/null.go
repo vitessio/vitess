@@ -39,9 +39,9 @@ type Null struct {
 	name string
 }
 
-// NewNull creates a new Null.
-func NewNull(name string, _ map[string]string) (Vindex, error) {
-	return &Null{name: name}, nil
+// newNull creates a new Null.
+func newNull(name string, _ map[string]string) (Vindex, []VindexWarning, error) {
+	return &Null{name: name}, nil, nil
 }
 
 // String returns the name of the vindex.
@@ -84,7 +84,7 @@ func (vind *Null) Verify(ctx context.Context, vcursor VCursor, ids []sqltypes.Va
 
 func init() {
 	Register("null", &vindexFactory{
-		create: NewNull,
+		create: newNull,
 		params: nil,
 	})
 }

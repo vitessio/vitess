@@ -55,10 +55,10 @@ type RegionExperimental struct {
 // NewRegionExperimental creates a RegionExperimental vindex.
 // The supplied map requires all the fields of "consistent_lookup_unique".
 // Additionally, it requires a region_bytes argument whose value can be "1", or "2".
-func NewRegionExperimental(name string, m map[string]string) (Vindex, error) {
+func NewRegionExperimental(name string, m map[string]string) (Vindex, []VindexWarning, error) {
 	rbs, ok := m["region_bytes"]
 	if !ok {
-		return nil, fmt.Errorf("region_experimental missing region_bytes param")
+		return nil, nil, fmt.Errorf("region_experimental missing region_bytes param")
 	}
 	var rb int
 	switch rbs {
@@ -67,12 +67,12 @@ func NewRegionExperimental(name string, m map[string]string) (Vindex, error) {
 	case "2":
 		rb = 2
 	default:
-		return nil, fmt.Errorf("region_bits must be 1 or 2: %v", rbs)
+		return nil, nil, fmt.Errorf("region_bits must be 1 or 2: %v", rbs)
 	}
 	return &RegionExperimental{
 		name:        name,
 		regionBytes: rb,
-	}, nil
+	}, nil, nil
 }
 
 // String returns the name of the vindex.

@@ -36,8 +36,8 @@ type BinaryMD5 struct {
 }
 
 // newBinaryMD5 creates a new BinaryMD5.
-func newBinaryMD5(name string, _ map[string]string) (Vindex, error) {
-	return &BinaryMD5{name: name}, nil
+func newBinaryMD5(name string, _ map[string]string) (Vindex, []VindexWarning, error) {
+	return &BinaryMD5{name: name}, nil, nil
 }
 
 // String returns the name of the vindex.

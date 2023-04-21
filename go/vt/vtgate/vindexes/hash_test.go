@@ -31,7 +31,7 @@ import (
 var hash SingleColumn
 
 func init() {
-	hv, err := CreateVindex("hash", "nn", map[string]string{})
+	hv, _, err := CreateVindex("hash", "nn", map[string]string{})
 	if err != nil {
 		panic(err)
 	}

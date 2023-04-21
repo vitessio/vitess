@@ -79,7 +79,7 @@ type (
 		// vindex can pass params to a sub-vindex.
 		AllowUnknownParams() bool
 		// Create creates the vindex with the provided name and input params.
-		Create(string, map[string]string) (Vindex, error)
+		Create(string, map[string]string) (Vindex, []VindexWarning, error)
 		// Params describes params that the vindex accepts.
 		Params() []VindexParam
 	}
@@ -90,6 +90,8 @@ type (
 		// Name of the param.
 		Name() string
 	}
+
+	VindexWarning = error
 
 	// SingleColumn defines the interface for a single column vindex.
 	SingleColumn interface {
@@ -180,7 +182,7 @@ type (
 
 	vindexFactory struct {
 		allowUnknownParams bool
-		create             func(string, map[string]string) (Vindex, error)
+		create             func(string, map[string]string) (Vindex, []VindexWarning, error)
 		params             []VindexParam
 	}
 
@@ -196,7 +198,7 @@ func (f *vindexFactory) AllowUnknownParams() bool {
 	return f.allowUnknownParams
 }
 
-func (f *vindexFactory) Create(name string, params map[string]string) (Vindex, error) {
+func (f *vindexFactory) Create(name string, params map[string]string) (Vindex, []VindexWarning, error) {
 	return f.create(name, params)
 }
 
@@ -228,10 +230,10 @@ func Register(vindexType string, vindexFactory VindexFactory) {
 
 // CreateVindex creates a vindex of the specified type using the
 // supplied params. The type must have been previously registered.
-func CreateVindex(vindexType, name string, params map[string]string) (Vindex, error) {
+func CreateVindex(vindexType, name string, params map[string]string) (vindex Vindex, warnings []error, err error) {
 	factory, ok := registry[vindexType]
 	if !ok {
-		return nil, vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "vindexType %q not found", vindexType)
+		return nil, nil, vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "vindexType %q not found", vindexType)
 	}
 	validParamsByName := make(map[string]VindexParam)
 	for _, param := range factory.Params() {
@@ -239,10 +241,12 @@ func CreateVindex(vindexType, name string, params map[string]string) (Vindex, er
 	}
 	for name := range params {
 		if _, ok := validParamsByName[name]; !ok && !factory.AllowUnknownParams() {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unknown param '%s'", name)
+			warnings = append(warnings, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unknown param '%s'", name))
 		}
 	}
-	return factory.Create(name, params)
+	vindex, moreWarnings, err := factory.Create(name, params)
+	warnings = append(warnings, moreWarnings...)
+	return
 }
 
 // Map invokes the Map implementation supplied by the vindex.

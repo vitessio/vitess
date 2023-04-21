@@ -80,7 +80,7 @@ func TestLookupUnicodeLooseMD5HashMap(t *testing.T) {
 }
 
 func TestLookupUnicodeLooseMD5HashMapAutocommit(t *testing.T) {
-	vindex, err := CreateVindex("lookup_unicodeloosemd5_hash", "lookup", map[string]string{
+	vindex, _, err := CreateVindex("lookup_unicodeloosemd5_hash", "lookup", map[string]string{
 		"table":      "t",
 		"from":       "fromc",
 		"to":         "toc",
@@ -212,7 +212,7 @@ func TestLookupUnicodeLooseMD5HashVerify(t *testing.T) {
 }
 
 func TestLookupUnicodeLooseMD5HashVerifyAutocommit(t *testing.T) {
-	vindex, err := CreateVindex("lookup_unicodeloosemd5_hash", "lookup", map[string]string{
+	vindex, _, err := CreateVindex("lookup_unicodeloosemd5_hash", "lookup", map[string]string{
 		"table":      "t",
 		"from":       "fromc",
 		"to":         "toc",
@@ -297,7 +297,7 @@ func TestLookupUnicodeLooseMD5HashCreate(t *testing.T) {
 }
 
 func TestLookupUnicodeLooseMD5HashCreateAutocommit(t *testing.T) {
-	lookupNonUnique, err := CreateVindex("lookup_unicodeloosemd5_hash", "lookup", map[string]string{
+	lookupNonUnique, _, err := CreateVindex("lookup_unicodeloosemd5_hash", "lookup", map[string]string{
 		"table":      "t",
 		"from":       "from1,from2",
 		"to":         "toc",
@@ -336,7 +336,7 @@ func TestLookupUnicodeLooseMD5HashCreateAutocommit(t *testing.T) {
 }
 
 func TestLookupUnicodeLooseMD5HashCreateMultiShardAutocommit(t *testing.T) {
-	lookupNonUnique, err := CreateVindex("lookup_unicodeloosemd5_hash", "lookup", map[string]string{
+	lookupNonUnique, _, err := CreateVindex("lookup_unicodeloosemd5_hash", "lookup", map[string]string{
 		"table":                  "t",
 		"from":                   "from1,from2",
 		"to":                     "toc",
@@ -416,7 +416,7 @@ func TestLookupUnicodeLooseMD5HashDelete(t *testing.T) {
 }
 
 func TestLookupUnicodeLooseMD5HashDeleteAutocommit(t *testing.T) {
-	lookupNonUnique, _ := CreateVindex("lookup_unicodeloosemd5_hash", "lookup", map[string]string{
+	lookupNonUnique, _, _ := CreateVindex("lookup_unicodeloosemd5_hash", "lookup", map[string]string{
 		"table":      "t",
 		"from":       "fromc",
 		"to":         "toc",

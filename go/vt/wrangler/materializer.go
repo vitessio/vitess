@@ -495,7 +495,7 @@ func (wr *Wrangler) prepareCreateLookup(ctx context.Context, keyspace string, sp
 	// it will need to match this vindex exactly, including the write_only setting.
 	vindex.Params["write_only"] = "true"
 	// See if we can create the vindex without errors.
-	if _, err := vindexes.CreateVindex(vindex.Type, vindexName, vindex.Params); err != nil {
+	if _, _, err := vindexes.CreateVindex(vindex.Type, vindexName, vindex.Params); err != nil {
 		return nil, nil, nil, err
 	}
 

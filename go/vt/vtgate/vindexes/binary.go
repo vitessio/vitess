@@ -37,8 +37,8 @@ type Binary struct {
 }
 
 // NewBinary creates a new Binary.
-func NewBinary(name string, _ map[string]string) (Vindex, error) {
-	return &Binary{name: name}, nil
+func NewBinary(name string, _ map[string]string) (Vindex, []VindexWarning, error) {
+	return &Binary{name: name}, nil, nil
 }
 
 // String returns the name of the vindex.

@@ -78,23 +78,23 @@ type LookupUnicodeLooseMD5Hash struct {
 //
 //	autocommit: setting this to "true" will cause inserts to upsert and deletes to be ignored.
 //	write_only: in this mode, Map functions return the full keyrange causing a full scatter.
-func newLookupUnicodeLooseMD5Hash(name string, m map[string]string) (Vindex, error) {
+func newLookupUnicodeLooseMD5Hash(name string, m map[string]string) (Vindex, []VindexWarning, error) {
 	lh := &LookupUnicodeLooseMD5Hash{name: name}
 
 	cc, err := parseCommonConfig(m)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	lh.writeOnly, err = boolFromMap(m, "write_only")
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	// if autocommit is on for non-unique lookup, upsert should also be on.
 	if err := lh.lkp.Init(m, cc.autocommit, cc.autocommit || cc.multiShardAutocommit, cc.multiShardAutocommit); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return lh, nil
+	return lh, nil, nil
 }
 
 // String returns the name of the vindex.
@@ -304,23 +304,23 @@ type LookupUnicodeLooseMD5HashUnique struct {
 //
 //	autocommit: setting this to "true" will cause deletes to be ignored.
 //	write_only: in this mode, Map functions return the full keyrange causing a full scatter.
-func newLookupUnicodeLooseMD5HashUnique(name string, m map[string]string) (Vindex, error) {
+func newLookupUnicodeLooseMD5HashUnique(name string, m map[string]string) (Vindex, []VindexWarning, error) {
 	lhu := &LookupUnicodeLooseMD5HashUnique{name: name}
 
 	cc, err := parseCommonConfig(m)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	lhu.writeOnly, err = boolFromMap(m, "write_only")
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	// Don't allow upserts for unique vindexes.
 	if err := lhu.lkp.Init(m, cc.autocommit, false, cc.multiShardAutocommit); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return lhu, nil
+	return lhu, nil, nil
 }
 
 // String returns the name of the vindex.

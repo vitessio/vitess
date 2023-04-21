@@ -58,10 +58,10 @@ import (
 )
 
 type vindexFactory struct {
-	create func(string, map[string]string) (vindexes.Vindex, error)
+	create func(string, map[string]string) (vindexes.Vindex, []vindexes.VindexWarning, error)
 }
 
-func (f *vindexFactory) Create(name string, params map[string]string) (vindexes.Vindex, error) {
+func (f *vindexFactory) Create(name string, params map[string]string) (vindexes.Vindex, []vindexes.VindexWarning, error) {
 	return f.create(name, params)
 }
 
@@ -87,8 +87,8 @@ func (*hashIndex) Map(ctx context.Context, vcursor vindexes.VCursor, ids []sqlty
 	return nil, nil
 }
 
-func newHashIndex(name string, _ map[string]string) (vindexes.Vindex, error) {
-	return &hashIndex{name: name}, nil
+func newHashIndex(name string, _ map[string]string) (vindexes.Vindex, []vindexes.VindexWarning, error) {
+	return &hashIndex{name: name}, nil, nil
 }
 
 // lookupIndex is a unique Vindex, and satisfies Lookup.
@@ -114,8 +114,8 @@ func (*lookupIndex) Update(context.Context, vindexes.VCursor, []sqltypes.Value, 
 	return nil
 }
 
-func newLookupIndex(name string, _ map[string]string) (vindexes.Vindex, error) {
-	return &lookupIndex{name: name}, nil
+func newLookupIndex(name string, _ map[string]string) (vindexes.Vindex, []vindexes.VindexWarning, error) {
+	return &lookupIndex{name: name}, nil, nil
 }
 
 var _ vindexes.Lookup = (*lookupIndex)(nil)
@@ -152,8 +152,8 @@ func (*nameLkpIndex) MapResult([]sqltypes.Value, []*sqltypes.Result) ([]key.Dest
 	return nil, nil
 }
 
-func newNameLkpIndex(name string, _ map[string]string) (vindexes.Vindex, error) {
-	return &nameLkpIndex{name: name}, nil
+func newNameLkpIndex(name string, _ map[string]string) (vindexes.Vindex, []vindexes.VindexWarning, error) {
+	return &nameLkpIndex{name: name}, nil, nil
 }
 
 var _ vindexes.Vindex = (*nameLkpIndex)(nil)
@@ -183,8 +183,8 @@ func (*costlyIndex) Update(context.Context, vindexes.VCursor, []sqltypes.Value, 
 	return nil
 }
 
-func newCostlyIndex(name string, _ map[string]string) (vindexes.Vindex, error) {
-	return &costlyIndex{name: name}, nil
+func newCostlyIndex(name string, _ map[string]string) (vindexes.Vindex, []vindexes.VindexWarning, error) {
+	return &costlyIndex{name: name}, nil, nil
 }
 
 var _ vindexes.Vindex = (*costlyIndex)(nil)
@@ -195,8 +195,8 @@ type multiColIndex struct {
 	name string
 }
 
-func newMultiColIndex(name string, _ map[string]string) (vindexes.Vindex, error) {
-	return &multiColIndex{name: name}, nil
+func newMultiColIndex(name string, _ map[string]string) (vindexes.Vindex, []vindexes.VindexWarning, error) {
+	return &multiColIndex{name: name}, nil, nil
 }
 
 var _ vindexes.MultiColumn = (*multiColIndex)(nil)

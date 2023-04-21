@@ -424,7 +424,7 @@ func buildKeyspaceReferences(vschema *VSchema, ksvschema *KeyspaceSchema) error 
 func buildTables(ks *vschemapb.Keyspace, vschema *VSchema, ksvschema *KeyspaceSchema) error {
 	keyspace := ksvschema.Keyspace
 	for vname, vindexInfo := range ks.Vindexes {
-		vindex, err := CreateVindex(vindexInfo.Type, vname, vindexInfo.Params)
+		vindex, _, err := CreateVindex(vindexInfo.Type, vname, vindexInfo.Params)
 		if err != nil {
 			return err
 		}

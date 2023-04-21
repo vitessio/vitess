@@ -33,7 +33,7 @@ import (
 var xxHash SingleColumn
 
 func init() {
-	hv, err := CreateVindex("xxhash", "xxhash_name", map[string]string{})
+	hv, _, err := CreateVindex("xxhash", "xxhash_name", map[string]string{})
 	if err != nil {
 		panic(err)
 	}

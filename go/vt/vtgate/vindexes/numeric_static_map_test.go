@@ -33,7 +33,7 @@ import (
 func createVindex() (SingleColumn, error) {
 	m := make(map[string]string)
 	m["json_path"] = "testdata/numeric_static_map_test.json"
-	vindex, err := CreateVindex("numeric_static_map", "numericStaticMap", m)
+	vindex, _, err := CreateVindex("numeric_static_map", "numericStaticMap", m)
 	if err != nil {
 		panic(err)
 	}
@@ -43,7 +43,7 @@ func createVindex() (SingleColumn, error) {
 // createVindexWithParams creates the "numeric_static_map" vindex object with the
 // provided params.
 func createVindexWithParams(params map[string]string) (SingleColumn, error) {
-	vindex, err := CreateVindex("numeric_static_map", "numericStaticMapWithParams", params)
+	vindex, _, err := CreateVindex("numeric_static_map", "numericStaticMapWithParams", params)
 	if err != nil {
 		return nil, err
 	}

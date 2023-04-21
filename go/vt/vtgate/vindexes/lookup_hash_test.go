@@ -40,7 +40,7 @@ func TestLookupHashNew(t *testing.T) {
 		t.Errorf("Create(lookup, false): %v, want %v", got, want)
 	}
 
-	_, err := CreateVindex("lookup_hash", "lookup_hash", map[string]string{
+	_, _, err := CreateVindex("lookup_hash", "lookup_hash", map[string]string{
 		"table":      "t",
 		"from":       "fromc",
 		"to":         "toc",

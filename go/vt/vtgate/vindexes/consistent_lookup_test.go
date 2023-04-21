@@ -449,7 +449,7 @@ func createConsistentLookup(t *testing.T, name string, writeOnly bool) SingleCol
 	if writeOnly {
 		write = "true"
 	}
-	l, err := CreateVindex(name, name, map[string]string{
+	l, _, err := CreateVindex(name, name, map[string]string{
 		"table":      "t",
 		"from":       "fromc1,fromc2",
 		"to":         "toc",

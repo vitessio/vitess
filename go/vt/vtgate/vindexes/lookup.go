@@ -196,29 +196,29 @@ func (ln *LookupNonUnique) Query() (selQuery string, arguments []string) {
 //	autocommit: setting this to "true" will cause inserts to upsert and deletes to be ignored.
 //	write_only: in this mode, Map functions return the full keyrange causing a full scatter.
 //	no_verify: in this mode, Verify will always succeed.
-func NewLookup(name string, m map[string]string) (Vindex, error) {
+func NewLookup(name string, m map[string]string) (Vindex, []VindexWarning, error) {
 	lookup := &LookupNonUnique{name: name}
 
 	cc, err := parseCommonConfig(m)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	lookup.writeOnly, err = boolFromMap(m, "write_only")
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	lookup.noVerify, err = boolFromMap(m, "no_verify")
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	// if autocommit is on for non-unique lookup, upsert should also be on.
 	upsert := cc.autocommit || cc.multiShardAutocommit
 	if err := lookup.lkp.Init(m, cc.autocommit, upsert, cc.multiShardAutocommit); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return lookup, nil
+	return lookup, nil, nil
 }
 
 func ksidsToValues(ksids [][]byte) []sqltypes.Value {
@@ -264,28 +264,28 @@ func (lu *LookupUnique) AutoCommitEnabled() bool {
 //
 //	autocommit: setting this to "true" will cause deletes to be ignored.
 //	write_only: in this mode, Map functions return the full keyrange causing a full scatter.
-func NewLookupUnique(name string, m map[string]string) (Vindex, error) {
+func NewLookupUnique(name string, m map[string]string) (Vindex, []VindexWarning, error) {
 	lu := &LookupUnique{name: name}
 
 	cc, err := parseCommonConfig(m)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	lu.writeOnly, err = boolFromMap(m, "write_only")
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	lu.noVerify, err = boolFromMap(m, "no_verify")
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	// Don't allow upserts for unique vindexes.
 	if err := lu.lkp.Init(m, cc.autocommit, false /* upsert */, cc.multiShardAutocommit); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return lu, nil
+	return lu, nil, nil
 }
 
 // String returns the name of the vindex.

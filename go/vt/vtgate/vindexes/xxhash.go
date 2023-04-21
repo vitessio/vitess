@@ -39,8 +39,8 @@ type XXHash struct {
 }
 
 // newXXHash creates a new XXHash.
-func newXXHash(name string, _ map[string]string) (Vindex, error) {
-	return &XXHash{name: name}, nil
+func newXXHash(name string, _ map[string]string) (Vindex, []VindexWarning, error) {
+	return &XXHash{name: name}, nil, nil
 }
 
 // String returns the name of the vindex.

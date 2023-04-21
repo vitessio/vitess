@@ -40,8 +40,8 @@ type UnicodeLooseMD5 struct {
 }
 
 // newUnicodeLooseMD5 creates a new UnicodeLooseMD5.
-func newUnicodeLooseMD5(name string, _ map[string]string) (Vindex, error) {
-	return &UnicodeLooseMD5{name: name}, nil
+func newUnicodeLooseMD5(name string, _ map[string]string) (Vindex, []VindexWarning, error) {
+	return &UnicodeLooseMD5{name: name}, nil, nil
 }
 
 // String returns the name of the vindex.

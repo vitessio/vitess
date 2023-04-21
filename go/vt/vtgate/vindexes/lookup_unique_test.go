@@ -36,7 +36,7 @@ func TestLookupUniqueNew(t *testing.T) {
 		t.Errorf("Create(lookup, false): %v, want %v", got, want)
 	}
 
-	vindex, _ := CreateVindex("lookup_unique", "lookup_unique", map[string]string{
+	vindex, _, _ := CreateVindex("lookup_unique", "lookup_unique", map[string]string{
 		"table":      "t",
 		"from":       "fromc",
 		"to":         "toc",
@@ -47,7 +47,7 @@ func TestLookupUniqueNew(t *testing.T) {
 		t.Errorf("Create(lookup, false): %v, want %v", got, want)
 	}
 
-	_, err := CreateVindex("lookup_unique", "lookup_unique", map[string]string{
+	_, _, err := CreateVindex("lookup_unique", "lookup_unique", map[string]string{
 		"table":      "t",
 		"from":       "fromc",
 		"to":         "toc",
@@ -154,7 +154,7 @@ func TestLookupUniqueVerifyWriteOnly(t *testing.T) {
 }
 
 func TestLookupUniqueCreate(t *testing.T) {
-	lookupUnique, err := CreateVindex("lookup_unique", "lookup_unique", map[string]string{
+	lookupUnique, _, err := CreateVindex("lookup_unique", "lookup_unique", map[string]string{
 		"table":      "t",
 		"from":       "from",
 		"to":         "toc",

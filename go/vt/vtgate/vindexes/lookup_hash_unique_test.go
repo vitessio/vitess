@@ -35,7 +35,7 @@ func TestLookupHashUniqueNew(t *testing.T) {
 		t.Errorf("Create(lookup, false): %v, want %v", got, want)
 	}
 
-	vindex, _ := CreateVindex("lookup_hash_unique", "lookup_hash_unique", map[string]string{
+	vindex, _, _ := CreateVindex("lookup_hash_unique", "lookup_hash_unique", map[string]string{
 		"table":      "t",
 		"from":       "fromc",
 		"to":         "toc",
@@ -46,7 +46,7 @@ func TestLookupHashUniqueNew(t *testing.T) {
 		t.Errorf("Create(lookup, false): %v, want %v", got, want)
 	}
 
-	_, err := CreateVindex("lookup_hash_unique", "lookup_hash_unique", map[string]string{
+	_, _, err := CreateVindex("lookup_hash_unique", "lookup_hash_unique", map[string]string{
 		"table":      "t",
 		"from":       "fromc",
 		"to":         "toc",

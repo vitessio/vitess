@@ -48,8 +48,8 @@ type Hash struct {
 }
 
 // NewHash creates a new Hash.
-func NewHash(name string, _ map[string]string) (Vindex, error) {
-	return &Hash{name: name}, nil
+func NewHash(name string, _ map[string]string) (Vindex, []VindexWarning, error) {
+	return &Hash{name: name}, nil, nil
 }
 
 // String returns the name of the vindex.

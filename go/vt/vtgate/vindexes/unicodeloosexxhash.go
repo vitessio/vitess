@@ -40,8 +40,8 @@ type UnicodeLooseXXHash struct {
 }
 
 // newUnicodeLooseXXHash creates a new UnicodeLooseXXHash struct.
-func newUnicodeLooseXXHash(name string, _ map[string]string) (Vindex, error) {
-	return &UnicodeLooseXXHash{name: name}, nil
+func newUnicodeLooseXXHash(name string, _ map[string]string) (Vindex, []VindexWarning, error) {
+	return &UnicodeLooseXXHash{name: name}, nil, nil
 }
 
 // String returns the name of the vindex.

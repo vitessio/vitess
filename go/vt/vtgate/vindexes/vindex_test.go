@@ -27,7 +27,7 @@ import (
 )
 
 func TestVindexMap(t *testing.T) {
-	ge, err := createRegionVindex(t, "region_experimental", "f1,f2", 1)
+	ge, _, err := createRegionVindex(t, "region_experimental", "f1,f2", 1)
 	assert.NoError(t, err)
 
 	got, err := Map(context.Background(), ge, nil, [][]sqltypes.Value{{
@@ -40,7 +40,7 @@ func TestVindexMap(t *testing.T) {
 	}
 	assert.Equal(t, want, got)
 
-	hash, err := CreateVindex("hash", "hash", nil)
+	hash, _, err := CreateVindex("hash", "hash", nil)
 	assert.NoError(t, err)
 	got, err = Map(context.Background(), hash, nil, [][]sqltypes.Value{{
 		sqltypes.NewInt64(1),
@@ -53,7 +53,7 @@ func TestVindexMap(t *testing.T) {
 }
 
 func TestVindexVerify(t *testing.T) {
-	ge, err := createRegionVindex(t, "region_experimental", "f1,f2", 1)
+	ge, _, err := createRegionVindex(t, "region_experimental", "f1,f2", 1)
 	assert.NoError(t, err)
 
 	got, err := Verify(context.Background(), ge, nil, [][]sqltypes.Value{{
@@ -66,7 +66,7 @@ func TestVindexVerify(t *testing.T) {
 	want := []bool{true}
 	assert.Equal(t, want, got)
 
-	hash, err := CreateVindex("hash", "hash", nil)
+	hash, _, err := CreateVindex("hash", "hash", nil)
 	assert.NoError(t, err)
 	got, err = Verify(context.Background(), hash, nil, [][]sqltypes.Value{{
 		sqltypes.NewInt64(1),

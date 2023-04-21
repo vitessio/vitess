@@ -55,22 +55,22 @@ type NumericStaticMap struct {
 
 func init() {
 	Register("numeric_static_map", &vindexFactory{
-		create: NewNumericStaticMap,
+		create: newNumericStaticMap,
 		params: numericStaticMapParams,
 	})
 }
 
-// NewNumericStaticMap creates a NumericStaticMap vindex.
-func NewNumericStaticMap(name string, params map[string]string) (Vindex, error) {
+// newNumericStaticMap creates a NumericStaticMap vindex.
+func newNumericStaticMap(name string, params map[string]string) (Vindex, []VindexWarning, error) {
 	jsonStr, jsok := params["json"]
 	jsonPath, jpok := params["json_path"]
 
 	if !jsok && !jpok {
-		return nil, errors.New("NumericStaticMap: Could not find either `json_path` params in vschema")
+		return nil, nil, errors.New("NumericStaticMap: Could not find either `json_path` params in vschema")
 	}
 
 	if jsok && jpok {
-		return nil, errors.New("NumericStaticMap: Found both `json` and `json_path` params in vschema")
+		return nil, nil, errors.New("NumericStaticMap: Found both `json` and `json_path` params in vschema")
 	}
 
 	var err error
@@ -79,23 +79,24 @@ func NewNumericStaticMap(name string, params map[string]string) (Vindex, error) 
 	if jpok {
 		lt, err = loadNumericLookupTable(jsonPath)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	}
 
 	if jsok {
 		lt, err = parseNumericLookupTable([]byte(jsonStr))
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	}
 
 	var hashVdx Hashing
+	var warnings []VindexWarning
 
 	if s, ok := params["fallback_type"]; ok {
-		vindex, err := CreateVindex(s, name+"_hash", map[string]string{})
+		vindex, warnings, err := CreateVindex(s, name+"_hash", map[string]string{})
 		if err != nil {
-			return nil, err
+			return nil, warnings, err
 		}
 		hashVdx, _ = vindex.(Hashing) // We know this will not fail
 
@@ -105,7 +106,7 @@ func NewNumericStaticMap(name string, params map[string]string) (Vindex, error) 
 		hashVdx: hashVdx,
 		lookup:  lt,
 		name:    name,
-	}, nil
+	}, warnings, nil
 }
 
 // String returns the name of the vindex.

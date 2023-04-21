@@ -34,7 +34,7 @@ import (
 var binOnlyVindex SingleColumn
 
 func init() {
-	vindex, _ := CreateVindex("binary", "binary_varchar", nil)
+	vindex, _, _ := CreateVindex("binary", "binary_varchar", nil)
 	binOnlyVindex = vindex.(SingleColumn)
 }
 

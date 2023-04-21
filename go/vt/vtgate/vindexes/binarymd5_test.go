@@ -33,7 +33,7 @@ import (
 var binVindex SingleColumn
 
 func init() {
-	vindex, _ := CreateVindex("binary_md5", "binary_md5_varchar", nil)
+	vindex, _, _ := CreateVindex("binary_md5", "binary_md5_varchar", nil)
 	binVindex = vindex.(SingleColumn)
 }
 

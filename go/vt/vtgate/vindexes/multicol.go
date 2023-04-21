@@ -55,18 +55,18 @@ var (
 )
 
 // newMultiCol creates a new MultiCol.
-func newMultiCol(name string, m map[string]string) (Vindex, error) {
+func newMultiCol(name string, m map[string]string) (Vindex, []error, error) {
 	colCount, err := getColumnCount(m)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	columnBytes, err := getColumnBytes(m, colCount)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	columnVdx, vindexCost, err := getColumnVindex(m, colCount)
+	columnVdx, vindexCost, warns, err := getColumnVindex(m, colCount)
 	if err != nil {
-		return nil, err
+		return nil, warns, err
 	}
 
 	return &MultiCol{
@@ -75,7 +75,7 @@ func newMultiCol(name string, m map[string]string) (Vindex, error) {
 		noOfCols:    colCount,
 		columnVdx:   columnVdx,
 		columnBytes: columnBytes,
-	}, nil
+	}, warns, nil
 }
 
 func (m *MultiCol) String() string {
@@ -165,14 +165,14 @@ func init() {
 	})
 }
 
-func getColumnVindex(m map[string]string, colCount int) (map[int]Hashing, int, error) {
+func getColumnVindex(m map[string]string, colCount int) (map[int]Hashing, int, []error, error) {
 	var colVdxs []string
 	colVdxsStr, ok := m[paramColumnVindex]
 	if ok {
 		colVdxs = strings.Split(colVdxsStr, ",")
 	}
 	if len(colVdxs) > colCount {
-		return nil, 0, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "number of vindex function provided are more than column count in the parameter '%s'", paramColumnVindex)
+		return nil, 0, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "number of vindex function provided are more than column count in the parameter '%s'", paramColumnVindex)
 	}
 	columnVdx := make(map[int]Hashing, colCount)
 	vindexCost := 0
@@ -194,18 +194,18 @@ func getColumnVindex(m map[string]string, colCount int) (map[int]Hashing, int, e
 			}
 		}
 		// TODO: reuse vindex. avoid creating same vindex.
-		vdx, err := CreateVindex(selVdx, selVdx, subParams)
+		vdx, warns, err := CreateVindex(selVdx, selVdx, subParams)
 		if err != nil {
-			return nil, 0, err
+			return nil, 0, warns, err
 		}
 		hashVdx, isHashVdx := vdx.(Hashing)
 		if !isHashVdx || !vdx.IsUnique() || vdx.NeedsVCursor() {
-			return nil, 0, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "multicol vindex supports vindexes that exports hashing function, are unique and are non-lookup vindex, passed vindex '%s' is invalid", selVdx)
+			return nil, 0, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "multicol vindex supports vindexes that exports hashing function, are unique and are non-lookup vindex, passed vindex '%s' is invalid", selVdx)
 		}
 		vindexCost = vindexCost + vdx.Cost()
 		columnVdx[i] = hashVdx
 	}
-	return columnVdx, vindexCost, nil
+	return columnVdx, vindexCost, nil, nil
 }
 
 func getColumnBytes(m map[string]string, colCount int) (map[int]int, error) {

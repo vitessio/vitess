@@ -29,7 +29,7 @@ import (
 )
 
 func TestMultiColMisc(t *testing.T) {
-	vindex, err := CreateVindex("multicol", "multicol_misc", map[string]string{
+	vindex, _, err := CreateVindex("multicol", "multicol_misc", map[string]string{
 		"column_count": "3",
 	})
 	require.NoError(t, err)
@@ -45,7 +45,7 @@ func TestMultiColMisc(t *testing.T) {
 }
 
 func TestMultiColMap(t *testing.T) {
-	vindex, err := CreateVindex("multicol", "multicol_map", map[string]string{
+	vindex, _, err := CreateVindex("multicol", "multicol_map", map[string]string{
 		"column_count": "3",
 	})
 	require.NoError(t, err)

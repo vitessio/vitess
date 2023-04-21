@@ -31,7 +31,7 @@ import (
 )
 
 func TestRegionExperimentalMisc(t *testing.T) {
-	ge, err := createRegionVindex(t, "region_experimental", "f1,f2", 1)
+	ge, _, err := createRegionVindex(t, "region_experimental", "f1,f2", 1)
 	require.NoError(t, err)
 	assert.Equal(t, 1, ge.Cost())
 	assert.Equal(t, "region_experimental", ge.String())
@@ -40,7 +40,7 @@ func TestRegionExperimentalMisc(t *testing.T) {
 }
 
 func TestRegionExperimentalMap(t *testing.T) {
-	vindex, err := createRegionVindex(t, "region_experimental", "f1,f2", 1)
+	vindex, _, err := createRegionVindex(t, "region_experimental", "f1,f2", 1)
 	assert.NoError(t, err)
 	ge := vindex.(MultiColumn)
 	got, err := ge.Map(context.Background(), nil, [][]sqltypes.Value{{
@@ -73,7 +73,7 @@ func TestRegionExperimentalMap(t *testing.T) {
 }
 
 func TestRegionExperimentalMapMulti2(t *testing.T) {
-	vindex, err := createRegionVindex(t, "region_experimental", "f1,f2", 2)
+	vindex, _, err := createRegionVindex(t, "region_experimental", "f1,f2", 2)
 	assert.NoError(t, err)
 	ge := vindex.(MultiColumn)
 	got, err := ge.Map(context.Background(), nil, [][]sqltypes.Value{{
@@ -97,7 +97,7 @@ func TestRegionExperimentalMapMulti2(t *testing.T) {
 }
 
 func TestRegionExperimentalVerifyMulti(t *testing.T) {
-	vindex, err := createRegionVindex(t, "region_experimental", "f1,f2", 1)
+	vindex, _, err := createRegionVindex(t, "region_experimental", "f1,f2", 1)
 	assert.NoError(t, err)
 	ge := vindex.(MultiColumn)
 	vals := [][]sqltypes.Value{{
@@ -123,13 +123,13 @@ func TestRegionExperimentalVerifyMulti(t *testing.T) {
 }
 
 func TestRegionExperimentalCreateErrors(t *testing.T) {
-	_, err := createRegionVindex(t, "region_experimental", "f1,f2", 3)
+	_, _, err := createRegionVindex(t, "region_experimental", "f1,f2", 3)
 	assert.EqualError(t, err, "region_bits must be 1 or 2: 3")
-	_, err = CreateVindex("region_experimental", "region_experimental", nil)
+	_, _, err = CreateVindex("region_experimental", "region_experimental", nil)
 	assert.EqualError(t, err, "region_experimental missing region_bytes param")
 }
 
-func createRegionVindex(t *testing.T, name, from string, rb int) (Vindex, error) {
+func createRegionVindex(t *testing.T, name, from string, rb int) (Vindex, []VindexWarning, error) {
 	return CreateVindex(name, name, map[string]string{
 		"region_bytes": strconv.Itoa(rb),
 	})
