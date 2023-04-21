@@ -8,9 +8,11 @@
     - [VTAdmin web migrated from create-react-app to vite](#migrated-vtadmin)
     - [Keyspace name validation in TopoServer](#keyspace-name-validation)
     - [Shard name validation in TopoServer](#shard-name-validation)
+    - [Compression CLI flags removed from vtctld and vtctldclient binaries](#remove-compression-flags-from-vtctld-binaries)
     - [VtctldClient command RestoreFromBackup will now use the correct context](#VtctldClient-RestoreFromBackup)
   - **[New command line flags and behavior](#new-flag)**
     - [Builtin backup: read buffering flags](#builtin-backup-read-buffering-flags)
+    - [Manifest backup external decompressor command](#manifest-backup-external-decompressor-command)
   - **[New stats](#new-stats)**
     - [Detailed backup and restore stats](#detailed-backup-and-restore-stats)
     - [VTtablet Error count with code](#vttablet-error-count-with-code)
@@ -111,6 +113,20 @@ These flags are applicable to the following programs:
 - `vtctld`
 - `vttablet`
 - `vttestserver`
+
+#### <a id="manifest-backup-external-decompressor-command" /> Manifest backup external decompressor command
+
+Add a new builtin/xtrabackup flag `--manifest-external-decompressor`. When set the value of that flag is stored in the manifest field `ExternalDecompressor`. This manifest field may be consulted when decompressing a backup that was compressed with an external command.
+
+This feature enables the following flow:
+
+ 1. Take a backup using an external compressor
+    ```
+     Backup --compression-engine=external \
+            --external-compressor=zstd \
+            --manifest-external-decompressor="zstd -d"
+    ```
+ 2. Restore that backup with a mere `Restore` command, without having to specify `--external-decompressor`.
 
 ### <a id="new-stats"/> New stats
 
