@@ -72,7 +72,7 @@ func (ev binlogEvent) IsTransactionPayload() bool {
 func (ev binlogEvent) TransactionPayload(format BinlogFormat) ([]BinlogEvent, error) {
 	tp := &TransactionPayload{}
 	if err := tp.Decode(ev.Bytes()[format.HeaderLength:]); err != nil {
-		return nil, err
+		return nil, vterrors.Wrapf(err, "error decoding transaction payload event")
 	}
 	return tp.Events, nil
 }
@@ -97,7 +97,10 @@ func (tp *TransactionPayload) read(data []byte) error {
 	pos := uint64(0)
 
 	for {
-		fieldType := readFixedLenUint64(data[pos : pos+1])
+		fieldType, ok := readFixedLenUint64(data[pos : pos+1])
+		if !ok {
+			return vterrors.New(vtrpcpb.Code_INTERNAL, "error reading field type")
+		}
 		log.Infof("Compressed payload event; field type: %d", fieldType)
 		pos++
 
@@ -106,19 +109,31 @@ func (tp *TransactionPayload) read(data []byte) error {
 			log.Infof("Compressed payload event; found header end mark; payload: %s", hex.EncodeToString(tp.Payload))
 			break
 		} else {
-			fieldLen := readFixedLenUint64(data[pos : pos+1])
+			fieldLen, ok := readFixedLenUint64(data[pos : pos+1])
+			if !ok {
+				return vterrors.New(vtrpcpb.Code_INTERNAL, "error reading field length")
+			}
 			log.Infof("Compressed payload event; for field type %d, field length: %d", fieldType, fieldLen)
 			pos++
 
 			switch fieldType {
 			case payloadSizeField:
-				tp.Size = readFixedLenUint64(data[pos : pos+fieldLen])
+				tp.Size, ok = readFixedLenUint64(data[pos : pos+fieldLen])
+				if !ok {
+					return vterrors.New(vtrpcpb.Code_INTERNAL, "error reading payload size")
+				}
 				log.Infof("Compressed payload event; compressed size: %d", tp.Size)
 			case payloadCompressionTypeField:
-				tp.CompressionType = readFixedLenUint64(data[pos : pos+fieldLen])
+				tp.CompressionType, ok = readFixedLenUint64(data[pos : pos+fieldLen])
+				if !ok {
+					return vterrors.New(vtrpcpb.Code_INTERNAL, "error reading compression type")
+				}
 				log.Infof("Compressed payload event; compression type: %s", transactionPayloadCompressionTypes[tp.CompressionType])
 			case payloadUncompressedSizeField:
-				tp.UncompressedSize = readFixedLenUint64(data[pos : pos+fieldLen])
+				tp.UncompressedSize, ok = readFixedLenUint64(data[pos : pos+fieldLen])
+				if !ok {
+					return vterrors.New(vtrpcpb.Code_INTERNAL, "error reading uncompressed payload size")
+				}
 				log.Infof("Compressed payload event; uncompressed size: %d", tp.UncompressedSize)
 			}
 
