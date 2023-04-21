@@ -44,9 +44,7 @@ const (
 )
 
 const (
-	fixedEventHeaderLength = 19
-	eventLenOffset         = 9
-	logPosOffset           = 13
+	binlogEventLenOffset = 9
 )
 
 // Compression algorithms (only zstd is supported today in 8.0):
@@ -59,6 +57,14 @@ const (
 var transactionPayloadCompressionTypes = map[uint64]string{
 	transactionPayloadCompressionZstd: "ZSTD",
 	transactionPayloadCompressionNone: "NONE",
+}
+
+type TransactionPayload struct {
+	Size             uint64
+	UncompressedSize uint64
+	CompressionType  uint64
+	Payload          []byte
+	Events           []BinlogEvent
 }
 
 // IsTransactionPayload returns true if a compressed transaction payload
@@ -75,14 +81,6 @@ func (ev binlogEvent) TransactionPayload(format BinlogFormat) ([]BinlogEvent, er
 		return nil, vterrors.Wrapf(err, "error decoding transaction payload event")
 	}
 	return tp.Events, nil
-}
-
-type TransactionPayload struct {
-	Size             uint64
-	UncompressedSize uint64
-	CompressionType  uint64
-	Payload          []byte
-	Events           []BinlogEvent
 }
 
 func (tp *TransactionPayload) Decode(data []byte) error {
@@ -161,19 +159,20 @@ func (tp *TransactionPayload) decode() error {
 	pos := uint32(0)
 
 	for {
-		if pos+logPosOffset > decompressedPayloadLen { // No more events in the payload
+		eventLenPosEnd := pos + binlogEventLenOffset + 4
+		if eventLenPosEnd > decompressedPayloadLen { // No more events in the payload
 			break
 		}
-		eventLen := binary.LittleEndian.Uint32(decompressedPayload[pos+eventLenOffset : pos+logPosOffset])
+		eventLen := binary.LittleEndian.Uint32(decompressedPayload[pos+binlogEventLenOffset : eventLenPosEnd])
 		if pos+eventLen > decompressedPayloadLen {
 			return vterrors.New(vtrpcpb.Code_INTERNAL,
-				fmt.Sprintf("[BUG] event length of %d at pos %d in uncompressed transaction payload is larger than expected payload length of %d",
+				fmt.Sprintf("[BUG] event length of %d at pos %d in uncompressed transaction payload is beyond the expected payload length of %d",
 					eventLen, pos, decompressedPayloadLen))
 		}
 		eventData := decompressedPayload[pos : pos+eventLen]
 		ble := NewMysql56BinlogEvent(eventData)
-		log.Infof("Decoded binlog event from uncompressed payload (length: %d): %s",
-			eventLen, hex.EncodeToString(ble.Bytes()))
+		log.Infof("Decoded binlog event from uncompressed payload (length: %d, type: %d): Bytes: %v",
+			eventLen, ble.(mysql56BinlogEvent).Type(), ble.Bytes())
 		tp.Events = append(tp.Events, ble)
 
 		pos += eventLen

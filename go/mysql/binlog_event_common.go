@@ -50,10 +50,16 @@ import (
 //	http://dev.mysql.com/doc/internals/en/event-header-fields.html
 type binlogEvent []byte
 
+const (
+	binlogFixedHeaderLen  = 19
+	binlogEventTypeOffset = 4
+	binlogChecksumLen     = 4
+)
+
 // dataBytes returns the event bytes without header prefix and without checksum suffix
 func (ev binlogEvent) dataBytes(f BinlogFormat) []byte {
 	data := ev.Bytes()[f.HeaderLength:]
-	data = data[0 : len(data)-4]
+	data = data[0 : len(data)-binlogChecksumLen]
 	return data
 }
 
@@ -62,14 +68,14 @@ func (ev binlogEvent) IsValid() bool {
 	bufLen := len(ev.Bytes())
 
 	// The buffer must be at least 19 bytes to contain a valid header.
-	if bufLen < 19 {
+	if bufLen < binlogFixedHeaderLen {
 		return false
 	}
 
 	// It's now safe to use methods that examine header fields.
 	// Let's see if the event is right about its own size.
 	evLen := ev.Length()
-	if evLen < 19 || evLen != uint32(bufLen) {
+	if evLen < binlogFixedHeaderLen || evLen != uint32(bufLen) {
 		return false
 	}
 
@@ -86,7 +92,7 @@ func (ev binlogEvent) Bytes() []byte {
 
 // Type returns the type_code field from the header.
 func (ev binlogEvent) Type() byte {
-	return ev.Bytes()[4]
+	return ev.Bytes()[binlogEventTypeOffset]
 }
 
 // Flags returns the flags field from the header.
@@ -206,7 +212,7 @@ func (ev binlogEvent) IsPseudo() bool {
 func (ev binlogEvent) Format() (f BinlogFormat, err error) {
 	// FORMAT_DESCRIPTION_EVENT has a fixed header size of 19
 	// because we have to read it before we know the header_length.
-	data := ev.Bytes()[19:]
+	data := ev.Bytes()[binlogFixedHeaderLen:]
 
 	f.FormatVersion = binary.LittleEndian.Uint16(data[:2])
 	if f.FormatVersion != 4 {
@@ -214,8 +220,8 @@ func (ev binlogEvent) Format() (f BinlogFormat, err error) {
 	}
 	f.ServerVersion = string(bytes.TrimRight(data[2:2+50], "\x00"))
 	f.HeaderLength = data[2+50+4]
-	if f.HeaderLength < 19 {
-		return f, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "header length = %d, should be >= 19", f.HeaderLength)
+	if f.HeaderLength < binlogFixedHeaderLen {
+		return f, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "header length = %d, should be >= %d", f.HeaderLength, binlogFixedHeaderLen)
 	}
 
 	// MySQL/MariaDB 5.6.1+ always adds a 4-byte checksum to the end of a

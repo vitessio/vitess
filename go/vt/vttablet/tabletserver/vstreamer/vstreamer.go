@@ -629,16 +629,20 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 			return nil, err
 		}
 	case ev.IsTransactionPayload():
-		log.Infof("VReplication found compressed transaction payload event: %+v, with bytes: %s",
+		log.Infof("VStreamer found compressed transaction payload event: %+v, with bytes: %s",
 			ev, string(ev.Bytes()))
 		if !vs.pos.MatchesFlavor(mysql.Mysql56FlavorID) {
-			return nil, fmt.Errorf("compressed transaction events are not supported with database flavor %s",
+			return nil, fmt.Errorf("compressed transaction payload events are not supported with database flavor %s",
 				vs.vse.env.Config().DB.Flavor)
 		}
 		tpevents, err := ev.TransactionPayload(vs.format)
 		if err != nil {
 			return nil, err
 		}
+		// Events inside the payload don't have their own checksum.
+		ogcsa := vs.format.ChecksumAlgorithm
+		defer func() { vs.format.ChecksumAlgorithm = ogcsa }()
+		vs.format.ChecksumAlgorithm = mysql.BinlogChecksumAlgOff
 		for _, tpevent := range tpevents {
 			tpvevents, err := vs.parseEvent(tpevent)
 			if err != nil {
