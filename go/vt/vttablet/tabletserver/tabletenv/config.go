@@ -17,6 +17,7 @@ limitations under the License.
 package tabletenv
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"sync"
@@ -103,8 +104,10 @@ func registerTabletEnvFlags(fs *pflag.FlagSet) {
 	fs.IntVar(&currentConfig.TxPool.PrefillParallelism, "queryserver-config-transaction-prefill-parallelism", defaultConfig.TxPool.PrefillParallelism, "Query server transaction prefill parallelism, a non-zero value will prefill the pool using the specified parallism.")
 	_ = fs.MarkDeprecated("queryserver-config-transaction-prefill-parallelism", "it will be removed in a future release.")
 	fs.IntVar(&currentConfig.MessagePostponeParallelism, "queryserver-config-message-postpone-cap", defaultConfig.MessagePostponeParallelism, "query server message postpone cap is the maximum number of messages that can be postponed at any given time. Set this number to substantially lower than transaction cap, so that the transaction pool isn't exhausted by the message subsystem.")
-	SecondsVar(fs, &currentConfig.Oltp.TxTimeoutSeconds, "queryserver-config-transaction-timeout", defaultConfig.Oltp.TxTimeoutSeconds, "query server transaction timeout (in seconds), a transaction will be killed if it takes longer than this value")
-	SecondsVar(fs, &currentConfig.GracePeriods.ShutdownSeconds, "shutdown_grace_period", defaultConfig.GracePeriods.ShutdownSeconds, "how long to wait (in seconds) for queries and transactions to complete during graceful shutdown.")
+	currentConfig.Oltp.TxTimeoutSeconds = defaultConfig.Oltp.TxTimeoutSeconds.Clone()
+	fs.Var(&currentConfig.Oltp.TxTimeoutSeconds, currentConfig.Oltp.TxTimeoutSeconds.Name(), "query server transaction timeout (in seconds), a transaction will be killed if it takes longer than this value")
+	currentConfig.GracePeriods.ShutdownSeconds = flagutil.NewDeprecatedFloat64Seconds(defaultConfig.GracePeriods.ShutdownSeconds.Name(), defaultConfig.GracePeriods.TransitionSeconds.Get())
+	fs.Var(&currentConfig.GracePeriods.ShutdownSeconds, currentConfig.GracePeriods.ShutdownSeconds.Name(), "how long to wait (in seconds) for queries and transactions to complete during graceful shutdown.")
 	fs.IntVar(&currentConfig.Oltp.MaxRows, "queryserver-config-max-result-size", defaultConfig.Oltp.MaxRows, "query server max result size, maximum number of rows allowed to return from vttablet for non-streaming queries.")
 	fs.IntVar(&currentConfig.Oltp.WarnRows, "queryserver-config-warn-result-size", defaultConfig.Oltp.WarnRows, "query server result size warning threshold, warn if number of rows returned from vttablet for non-streaming queries exceeds this")
 	fs.BoolVar(&currentConfig.PassthroughDML, "queryserver-config-passthrough-dmls", defaultConfig.PassthroughDML, "query server pass through all dml statements without rewriting")
@@ -113,16 +116,26 @@ func registerTabletEnvFlags(fs *pflag.FlagSet) {
 	fs.IntVar(&currentConfig.QueryCacheSize, "queryserver-config-query-cache-size", defaultConfig.QueryCacheSize, "query server query cache size, maximum number of queries to be cached. vttablet analyzes every incoming query and generate a query plan, these plans are being cached in a lru cache. This config controls the capacity of the lru cache.")
 	fs.Int64Var(&currentConfig.QueryCacheMemory, "queryserver-config-query-cache-memory", defaultConfig.QueryCacheMemory, "query server query cache size in bytes, maximum amount of memory to be used for caching. vttablet analyzes every incoming query and generate a query plan, these plans are being cached in a lru cache. This config controls the capacity of the lru cache.")
 	fs.BoolVar(&currentConfig.QueryCacheLFU, "queryserver-config-query-cache-lfu", defaultConfig.QueryCacheLFU, "query server cache algorithm. when set to true, a new cache algorithm based on a TinyLFU admission policy will be used to improve cache behavior and prevent pollution from sparse queries")
-	SecondsVar(fs, &currentConfig.SchemaReloadIntervalSeconds, "queryserver-config-schema-reload-time", defaultConfig.SchemaReloadIntervalSeconds, "query server schema reload time, how often vttablet reloads schemas from underlying MySQL instance in seconds. vttablet keeps table schemas in its own memory and periodically refreshes it from MySQL. This config controls the reload time.")
-	SecondsVar(fs, &currentConfig.SignalSchemaChangeReloadIntervalSeconds, "queryserver-config-schema-change-signal-interval", defaultConfig.SignalSchemaChangeReloadIntervalSeconds, "query server schema change signal interval defines at which interval the query server shall send schema updates to vtgate.")
+
+	currentConfig.SchemaReloadIntervalSeconds = defaultConfig.SchemaReloadIntervalSeconds.Clone()
+	fs.Var(&currentConfig.SchemaReloadIntervalSeconds, currentConfig.SchemaReloadIntervalSeconds.Name(), "query server schema reload time, how often vttablet reloads schemas from underlying MySQL instance in seconds. vttablet keeps table schemas in its own memory and periodically refreshes it from MySQL. This config controls the reload time.")
+	currentConfig.SignalSchemaChangeReloadIntervalSeconds = defaultConfig.SignalSchemaChangeReloadIntervalSeconds.Clone()
+	fs.Var(&currentConfig.SignalSchemaChangeReloadIntervalSeconds, currentConfig.SignalSchemaChangeReloadIntervalSeconds.Name(), "query server schema change signal interval defines at which interval the query server shall send schema updates to vtgate.")
 	fs.BoolVar(&currentConfig.SignalWhenSchemaChange, "queryserver-config-schema-change-signal", defaultConfig.SignalWhenSchemaChange, "query server schema signal, will signal connected vtgates that schema has changed whenever this is detected. VTGates will need to have -schema_change_signal enabled for this to work")
-	SecondsVar(fs, &currentConfig.Olap.TxTimeoutSeconds, "queryserver-config-olap-transaction-timeout", defaultConfig.Olap.TxTimeoutSeconds, "query server transaction timeout (in seconds), after which a transaction in an OLAP session will be killed")
-	SecondsVar(fs, &currentConfig.Oltp.QueryTimeoutSeconds, "queryserver-config-query-timeout", defaultConfig.Oltp.QueryTimeoutSeconds, "query server query timeout (in seconds), this is the query timeout in vttablet side. If a query takes more than this timeout, it will be killed.")
-	SecondsVar(fs, &currentConfig.OltpReadPool.TimeoutSeconds, "queryserver-config-query-pool-timeout", defaultConfig.OltpReadPool.TimeoutSeconds, "query server query pool timeout (in seconds), it is how long vttablet waits for a connection from the query pool. If set to 0 (default) then the overall query timeout is used instead.")
-	SecondsVar(fs, &currentConfig.OlapReadPool.TimeoutSeconds, "queryserver-config-stream-pool-timeout", defaultConfig.OlapReadPool.TimeoutSeconds, "query server stream pool timeout (in seconds), it is how long vttablet waits for a connection from the stream pool. If set to 0 (default) then there is no timeout.")
-	SecondsVar(fs, &currentConfig.TxPool.TimeoutSeconds, "queryserver-config-txpool-timeout", defaultConfig.TxPool.TimeoutSeconds, "query server transaction pool timeout, it is how long vttablet waits if tx pool is full")
-	SecondsVar(fs, &currentConfig.OltpReadPool.IdleTimeoutSeconds, "queryserver-config-idle-timeout", defaultConfig.OltpReadPool.IdleTimeoutSeconds, "query server idle timeout (in seconds), vttablet manages various mysql connection pools. This config means if a connection has not been used in given idle timeout, this connection will be removed from pool. This effectively manages number of connection objects and optimize the pool performance.")
-	SecondsVar(fs, &currentConfig.OltpReadPool.MaxLifetimeSeconds, "queryserver-config-pool-conn-max-lifetime", defaultConfig.OltpReadPool.MaxLifetimeSeconds, "query server connection max lifetime (in seconds), vttablet manages various mysql connection pools. This config means if a connection has lived at least this long, it connection will be removed from pool upon the next time it is returned to the pool.")
+	currentConfig.Olap.TxTimeoutSeconds = defaultConfig.Olap.TxTimeoutSeconds.Clone()
+	fs.Var(&currentConfig.Olap.TxTimeoutSeconds, defaultConfig.Olap.TxTimeoutSeconds.Name(), "query server transaction timeout (in seconds), after which a transaction in an OLAP session will be killed")
+	currentConfig.Oltp.QueryTimeoutSeconds = defaultConfig.Oltp.QueryTimeoutSeconds.Clone()
+	fs.Var(&currentConfig.Oltp.QueryTimeoutSeconds, currentConfig.Oltp.QueryTimeoutSeconds.Name(), "query server query timeout (in seconds), this is the query timeout in vttablet side. If a query takes more than this timeout, it will be killed.")
+	currentConfig.OltpReadPool.TimeoutSeconds = defaultConfig.OltpReadPool.TimeoutSeconds.Clone()
+	fs.Var(&currentConfig.OltpReadPool.TimeoutSeconds, currentConfig.OltpReadPool.TimeoutSeconds.Name(), "query server query pool timeout (in seconds), it is how long vttablet waits for a connection from the query pool. If set to 0 (default) then the overall query timeout is used instead.")
+	currentConfig.OlapReadPool.TimeoutSeconds = defaultConfig.OlapReadPool.TimeoutSeconds.Clone()
+	fs.Var(&currentConfig.OlapReadPool.TimeoutSeconds, currentConfig.OlapReadPool.TimeoutSeconds.Name(), "query server stream pool timeout (in seconds), it is how long vttablet waits for a connection from the stream pool. If set to 0 (default) then there is no timeout.")
+	currentConfig.TxPool.TimeoutSeconds = defaultConfig.TxPool.TimeoutSeconds.Clone()
+	fs.Var(&currentConfig.TxPool.TimeoutSeconds, currentConfig.TxPool.TimeoutSeconds.Name(), "query server transaction pool timeout, it is how long vttablet waits if tx pool is full")
+	currentConfig.OltpReadPool.IdleTimeoutSeconds = defaultConfig.OltpReadPool.IdleTimeoutSeconds.Clone()
+	fs.Var(&currentConfig.OltpReadPool.IdleTimeoutSeconds, currentConfig.OltpReadPool.IdleTimeoutSeconds.Name(), "query server idle timeout (in seconds), vttablet manages various mysql connection pools. This config means if a connection has not been used in given idle timeout, this connection will be removed from pool. This effectively manages number of connection objects and optimize the pool performance.")
+	currentConfig.OltpReadPool.MaxLifetimeSeconds = defaultConfig.OltpReadPool.MaxLifetimeSeconds.Clone()
+	fs.Var(&currentConfig.OltpReadPool.MaxLifetimeSeconds, currentConfig.OltpReadPool.MaxLifetimeSeconds.Name(), "query server connection max lifetime (in seconds), vttablet manages various mysql connection pools. This config means if a connection has lived at least this long, it connection will be removed from pool upon the next time it is returned to the pool.")
 	fs.IntVar(&currentConfig.OltpReadPool.MaxWaiters, "queryserver-config-query-pool-waiter-cap", defaultConfig.OltpReadPool.MaxWaiters, "query server query pool waiter limit, this is the maximum number of queries that can be queued waiting to get a connection")
 	fs.IntVar(&currentConfig.OlapReadPool.MaxWaiters, "queryserver-config-stream-pool-waiter-cap", defaultConfig.OlapReadPool.MaxWaiters, "query server stream pool waiter limit, this is the maximum number of streaming queries that can be queued waiting to get a connection")
 	fs.IntVar(&currentConfig.TxPool.MaxWaiters, "queryserver-config-txpool-waiter-cap", defaultConfig.TxPool.MaxWaiters, "query server transaction pool waiter limit, this is the maximum number of transactions that can be queued waiting to get a connection")
@@ -169,9 +182,13 @@ func registerTabletEnvFlags(fs *pflag.FlagSet) {
 	_ = fs.MarkDeprecated("enable_query_plan_field_caching", "it will be removed in a future release.")
 	_ = fs.MarkDeprecated("enable-query-plan-field-caching", "it will be removed in a future release.")
 
-	fs.DurationVar(&healthCheckInterval, "health_check_interval", 20*time.Second, "Interval between health checks")
-	fs.DurationVar(&degradedThreshold, "degraded_threshold", 30*time.Second, "replication lag after which a replica is considered degraded")
-	fs.DurationVar(&unhealthyThreshold, "unhealthy_threshold", 2*time.Hour, "replication lag after which a replica is considered unhealthy")
+	currentConfig.Healthcheck.IntervalSeconds = flagutil.NewDeprecatedFloat64Seconds(defaultConfig.Healthcheck.IntervalSeconds.Name(), defaultConfig.Healthcheck.IntervalSeconds.Get())
+	currentConfig.Healthcheck.DegradedThresholdSeconds = flagutil.NewDeprecatedFloat64Seconds(defaultConfig.Healthcheck.DegradedThresholdSeconds.Name(), defaultConfig.Healthcheck.DegradedThresholdSeconds.Get())
+	currentConfig.Healthcheck.UnhealthyThresholdSeconds = flagutil.NewDeprecatedFloat64Seconds(defaultConfig.Healthcheck.UnhealthyThresholdSeconds.Name(), defaultConfig.Healthcheck.UnhealthyThresholdSeconds.Get())
+
+	fs.DurationVar(&healthCheckInterval, currentConfig.Healthcheck.IntervalSeconds.Name(), currentConfig.Healthcheck.IntervalSeconds.Get(), "Interval between health checks")
+	fs.DurationVar(&degradedThreshold, currentConfig.Healthcheck.DegradedThresholdSeconds.Name(), currentConfig.Healthcheck.DegradedThresholdSeconds.Get(), "replication lag after which a replica is considered degraded")
+	fs.DurationVar(&unhealthyThreshold, currentConfig.Healthcheck.UnhealthyThresholdSeconds.Name(), currentConfig.Healthcheck.UnhealthyThresholdSeconds.Get(), "replication lag after which a replica is considered unhealthy")
 	fs.DurationVar(&transitionGracePeriod, "serving_state_grace_period", 0, "how long to pause after broadcasting health to vtgate, before enforcing a new serving state")
 
 	fs.BoolVar(&enableReplicationReporter, "enable_replication_reporter", false, "Use polling to track replication lag.")
@@ -196,10 +213,10 @@ var (
 func Init() {
 	// IdleTimeout is only initialized for OltpReadPool , but the other pools need to inherit the value.
 	// TODO(sougou): Make a decision on whether this should be global or per-pool.
-	currentConfig.OlapReadPool.IdleTimeoutSeconds = currentConfig.OltpReadPool.IdleTimeoutSeconds
-	currentConfig.TxPool.IdleTimeoutSeconds = currentConfig.OltpReadPool.IdleTimeoutSeconds
-	currentConfig.OlapReadPool.MaxLifetimeSeconds = currentConfig.OltpReadPool.MaxLifetimeSeconds
-	currentConfig.TxPool.MaxLifetimeSeconds = currentConfig.OltpReadPool.MaxLifetimeSeconds
+	_ = currentConfig.OlapReadPool.IdleTimeoutSeconds.Set(currentConfig.OltpReadPool.IdleTimeoutSeconds.Get().String())
+	_ = currentConfig.TxPool.IdleTimeoutSeconds.Set(currentConfig.OltpReadPool.IdleTimeoutSeconds.Get().String())
+	_ = currentConfig.OlapReadPool.MaxLifetimeSeconds.Set(currentConfig.OltpReadPool.MaxLifetimeSeconds.Get().String())
+	_ = currentConfig.TxPool.MaxLifetimeSeconds.Set(currentConfig.OltpReadPool.MaxLifetimeSeconds.Get().String())
 
 	if enableHotRowProtection {
 		if enableHotRowProtectionDryRun {
@@ -221,7 +238,7 @@ func Init() {
 	}
 
 	if heartbeatInterval == 0 {
-		heartbeatInterval = time.Duration(defaultConfig.ReplicationTracker.HeartbeatIntervalSeconds*1000) * time.Millisecond
+		heartbeatInterval = defaultConfig.ReplicationTracker.HeartbeatIntervalSeconds.Get()
 	}
 	if heartbeatInterval > time.Second {
 		heartbeatInterval = time.Second
@@ -229,8 +246,8 @@ func Init() {
 	if heartbeatOnDemandDuration < 0 {
 		heartbeatOnDemandDuration = 0
 	}
-	currentConfig.ReplicationTracker.HeartbeatIntervalSeconds.Set(heartbeatInterval)
-	currentConfig.ReplicationTracker.HeartbeatOnDemandSeconds.Set(heartbeatOnDemandDuration)
+	_ = currentConfig.ReplicationTracker.HeartbeatIntervalSeconds.Set(heartbeatInterval.String())
+	_ = currentConfig.ReplicationTracker.HeartbeatOnDemandSeconds.Set(heartbeatOnDemandDuration.String())
 
 	switch {
 	case enableHeartbeat:
@@ -241,10 +258,10 @@ func Init() {
 		currentConfig.ReplicationTracker.Mode = Disable
 	}
 
-	currentConfig.Healthcheck.IntervalSeconds.Set(healthCheckInterval)
-	currentConfig.Healthcheck.DegradedThresholdSeconds.Set(degradedThreshold)
-	currentConfig.Healthcheck.UnhealthyThresholdSeconds.Set(unhealthyThreshold)
-	currentConfig.GracePeriods.TransitionSeconds.Set(transitionGracePeriod)
+	_ = currentConfig.Healthcheck.IntervalSeconds.Set(healthCheckInterval.String())
+	_ = currentConfig.Healthcheck.DegradedThresholdSeconds.Set(degradedThreshold.String())
+	_ = currentConfig.Healthcheck.UnhealthyThresholdSeconds.Set(unhealthyThreshold.String())
+	_ = currentConfig.GracePeriods.TransitionSeconds.Set(transitionGracePeriod.String())
 
 	switch streamlog.GetQueryLogFormat() {
 	case streamlog.QueryLogFormatText:
@@ -284,23 +301,23 @@ type TabletConfig struct {
 	ReplicationTracker ReplicationTrackerConfig `json:"replicationTracker,omitempty"`
 
 	// Consolidator can be enable, disable, or notOnPrimary. Default is enable.
-	Consolidator                            string  `json:"consolidator,omitempty"`
-	PassthroughDML                          bool    `json:"passthroughDML,omitempty"`
-	StreamBufferSize                        int     `json:"streamBufferSize,omitempty"`
-	ConsolidatorStreamTotalSize             int64   `json:"consolidatorStreamTotalSize,omitempty"`
-	ConsolidatorStreamQuerySize             int64   `json:"consolidatorStreamQuerySize,omitempty"`
-	QueryCacheSize                          int     `json:"queryCacheSize,omitempty"`
-	QueryCacheMemory                        int64   `json:"queryCacheMemory,omitempty"`
-	QueryCacheLFU                           bool    `json:"queryCacheLFU,omitempty"`
-	SchemaReloadIntervalSeconds             Seconds `json:"schemaReloadIntervalSeconds,omitempty"`
-	SignalSchemaChangeReloadIntervalSeconds Seconds `json:"signalSchemaChangeReloadIntervalSeconds,omitempty"`
-	WatchReplication                        bool    `json:"watchReplication,omitempty"`
-	TrackSchemaVersions                     bool    `json:"trackSchemaVersions,omitempty"`
-	TerseErrors                             bool    `json:"terseErrors,omitempty"`
-	AnnotateQueries                         bool    `json:"annotateQueries,omitempty"`
-	MessagePostponeParallelism              int     `json:"messagePostponeParallelism,omitempty"`
-	DeprecatedCacheResultFields             bool    `json:"cacheResultFields,omitempty"`
-	SignalWhenSchemaChange                  bool    `json:"signalWhenSchemaChange,omitempty"`
+	Consolidator                            string                            `json:"consolidator,omitempty"`
+	PassthroughDML                          bool                              `json:"passthroughDML,omitempty"`
+	StreamBufferSize                        int                               `json:"streamBufferSize,omitempty"`
+	ConsolidatorStreamTotalSize             int64                             `json:"consolidatorStreamTotalSize,omitempty"`
+	ConsolidatorStreamQuerySize             int64                             `json:"consolidatorStreamQuerySize,omitempty"`
+	QueryCacheSize                          int                               `json:"queryCacheSize,omitempty"`
+	QueryCacheMemory                        int64                             `json:"queryCacheMemory,omitempty"`
+	QueryCacheLFU                           bool                              `json:"queryCacheLFU,omitempty"`
+	SchemaReloadIntervalSeconds             flagutil.DeprecatedFloat64Seconds `json:"schemaReloadIntervalSeconds,omitempty"`
+	SignalSchemaChangeReloadIntervalSeconds flagutil.DeprecatedFloat64Seconds `json:"signalSchemaChangeReloadIntervalSeconds,omitempty"`
+	WatchReplication                        bool                              `json:"watchReplication,omitempty"`
+	TrackSchemaVersions                     bool                              `json:"trackSchemaVersions,omitempty"`
+	TerseErrors                             bool                              `json:"terseErrors,omitempty"`
+	AnnotateQueries                         bool                              `json:"annotateQueries,omitempty"`
+	MessagePostponeParallelism              int                               `json:"messagePostponeParallelism,omitempty"`
+	DeprecatedCacheResultFields             bool                              `json:"cacheResultFields,omitempty"`
+	SignalWhenSchemaChange                  bool                              `json:"signalWhenSchemaChange,omitempty"`
 
 	ExternalConnections map[string]*dbconfigs.DBConfigs `json:"externalConnections,omitempty"`
 
@@ -332,27 +349,115 @@ type TabletConfig struct {
 	EnablePerWorkloadTableMetrics bool `json:"-"`
 }
 
+func (cfg *TabletConfig) MarshalJSON() ([]byte, error) {
+	type TCProxy TabletConfig
+
+	tmp := struct {
+		TCProxy
+		SchemaReloadIntervalSeconds             string `json:"schemaReloadIntervalSeconds,omitempty"`
+		SignalSchemaChangeReloadIntervalSeconds string `json:"signalSchemaChangeReloadIntervalSeconds,omitempty"`
+	}{
+		TCProxy: TCProxy(*cfg),
+	}
+
+	if d := cfg.SchemaReloadIntervalSeconds.Get(); d != 0 {
+		tmp.SchemaReloadIntervalSeconds = d.String()
+	}
+
+	if d := cfg.SignalSchemaChangeReloadIntervalSeconds.Get(); d != 0 {
+		tmp.SignalSchemaChangeReloadIntervalSeconds = d.String()
+	}
+
+	return json.Marshal(&tmp)
+}
+
 // ConnPoolConfig contains the config for a conn pool.
 type ConnPoolConfig struct {
-	Size               int     `json:"size,omitempty"`
-	TimeoutSeconds     Seconds `json:"timeoutSeconds,omitempty"`
-	IdleTimeoutSeconds Seconds `json:"idleTimeoutSeconds,omitempty"`
-	MaxLifetimeSeconds Seconds `json:"maxLifetimeSeconds,omitempty"`
-	PrefillParallelism int     `json:"prefillParallelism,omitempty"`
-	MaxWaiters         int     `json:"maxWaiters,omitempty"`
+	Size               int                               `json:"size,omitempty"`
+	TimeoutSeconds     flagutil.DeprecatedFloat64Seconds `json:"timeoutSeconds,omitempty"`
+	IdleTimeoutSeconds flagutil.DeprecatedFloat64Seconds `json:"idleTimeoutSeconds,omitempty"`
+	MaxLifetimeSeconds flagutil.DeprecatedFloat64Seconds `json:"maxLifetimeSeconds,omitempty"`
+	PrefillParallelism int                               `json:"prefillParallelism,omitempty"`
+	MaxWaiters         int                               `json:"maxWaiters,omitempty"`
+}
+
+func (cfg *ConnPoolConfig) MarshalJSON() ([]byte, error) {
+	type Proxy ConnPoolConfig
+
+	tmp := struct {
+		Proxy
+		TimeoutSeconds     string `json:"timeoutSeconds,omitempty"`
+		IdleTimeoutSeconds string `json:"idleTimeoutSeconds,omitempty"`
+		MaxLifetimeSeconds string `json:"maxLifetimeSeconds,omitempty"`
+	}{
+		Proxy: Proxy(*cfg),
+	}
+
+	if d := cfg.TimeoutSeconds.Get(); d != 0 {
+		tmp.TimeoutSeconds = d.String()
+	}
+
+	if d := cfg.IdleTimeoutSeconds.Get(); d != 0 {
+		tmp.IdleTimeoutSeconds = d.String()
+	}
+
+	if d := cfg.MaxLifetimeSeconds.Get(); d != 0 {
+		tmp.MaxLifetimeSeconds = d.String()
+	}
+
+	return json.Marshal(&tmp)
 }
 
 // OlapConfig contains the config for olap settings.
 type OlapConfig struct {
-	TxTimeoutSeconds Seconds `json:"txTimeoutSeconds,omitempty"`
+	TxTimeoutSeconds flagutil.DeprecatedFloat64Seconds `json:"txTimeoutSeconds,omitempty"`
+}
+
+func (cfg *OlapConfig) MarshalJSON() ([]byte, error) {
+	type Proxy OlapConfig
+
+	tmp := struct {
+		Proxy
+		TxTimeoutSeconds string `json:"txTimeoutSeconds,omitempty"`
+	}{
+		Proxy: Proxy(*cfg),
+	}
+
+	if d := cfg.TxTimeoutSeconds.Get(); d != 0 {
+		tmp.TxTimeoutSeconds = d.String()
+	}
+
+	return json.Marshal(&tmp)
 }
 
 // OltpConfig contains the config for oltp settings.
 type OltpConfig struct {
-	QueryTimeoutSeconds Seconds `json:"queryTimeoutSeconds,omitempty"`
-	TxTimeoutSeconds    Seconds `json:"txTimeoutSeconds,omitempty"`
-	MaxRows             int     `json:"maxRows,omitempty"`
-	WarnRows            int     `json:"warnRows,omitempty"`
+	QueryTimeoutSeconds flagutil.DeprecatedFloat64Seconds `json:"queryTimeoutSeconds,omitempty"`
+	TxTimeoutSeconds    flagutil.DeprecatedFloat64Seconds `json:"txTimeoutSeconds,omitempty"`
+	MaxRows             int                               `json:"maxRows,omitempty"`
+	WarnRows            int                               `json:"warnRows,omitempty"`
+}
+
+func (cfg *OltpConfig) MarshalJSON() ([]byte, error) {
+	type Proxy OltpConfig
+
+	tmp := struct {
+		Proxy
+		QueryTimeoutSeconds string `json:"queryTimeoutSeconds,omitempty"`
+		TxTimeoutSeconds    string `json:"txTimeoutSeconds,omitempty"`
+	}{
+		Proxy: Proxy(*cfg),
+	}
+
+	if d := cfg.QueryTimeoutSeconds.Get(); d != 0 {
+		tmp.QueryTimeoutSeconds = d.String()
+	}
+
+	if d := cfg.TxTimeoutSeconds.Get(); d != 0 {
+		tmp.TxTimeoutSeconds = d.String()
+	}
+
+	return json.Marshal(&tmp)
 }
 
 // HotRowProtectionConfig contains the config for hot row protection.
@@ -366,24 +471,95 @@ type HotRowProtectionConfig struct {
 
 // HealthcheckConfig contains the config for healthcheck.
 type HealthcheckConfig struct {
-	IntervalSeconds           Seconds `json:"intervalSeconds,omitempty"`
-	DegradedThresholdSeconds  Seconds `json:"degradedThresholdSeconds,omitempty"`
-	UnhealthyThresholdSeconds Seconds `json:"unhealthyThresholdSeconds,omitempty"`
+	IntervalSeconds           flagutil.DeprecatedFloat64Seconds `json:"intervalSeconds,omitempty"`
+	DegradedThresholdSeconds  flagutil.DeprecatedFloat64Seconds `json:"degradedThresholdSeconds,omitempty"`
+	UnhealthyThresholdSeconds flagutil.DeprecatedFloat64Seconds `json:"unhealthyThresholdSeconds,omitempty"`
+}
+
+func (cfg *HealthcheckConfig) MarshalJSON() ([]byte, error) {
+	type Proxy HealthcheckConfig
+
+	tmp := struct {
+		Proxy
+		IntervalSeconds           string `json:"intervalSeconds,omitempty"`
+		DegradedThresholdSeconds  string `json:"degradedThresholdSeconds,omitempty"`
+		UnhealthyThresholdSeconds string `json:"unhealthyThresholdSeconds,omitempty"`
+	}{
+		Proxy: Proxy(*cfg),
+	}
+
+	if d := cfg.IntervalSeconds.Get(); d != 0 {
+		tmp.IntervalSeconds = d.String()
+	}
+
+	if d := cfg.DegradedThresholdSeconds.Get(); d != 0 {
+		tmp.DegradedThresholdSeconds = d.String()
+	}
+
+	if d := cfg.UnhealthyThresholdSeconds.Get(); d != 0 {
+		tmp.UnhealthyThresholdSeconds = d.String()
+	}
+
+	return json.Marshal(&tmp)
 }
 
 // GracePeriodsConfig contains various grace periods.
 // TODO(sougou): move lameduck here?
 type GracePeriodsConfig struct {
-	ShutdownSeconds   Seconds `json:"shutdownSeconds,omitempty"`
-	TransitionSeconds Seconds `json:"transitionSeconds,omitempty"`
+	ShutdownSeconds   flagutil.DeprecatedFloat64Seconds `json:"shutdownSeconds,omitempty"`
+	TransitionSeconds flagutil.DeprecatedFloat64Seconds `json:"transitionSeconds,omitempty"`
+}
+
+func (cfg *GracePeriodsConfig) MarshalJSON() ([]byte, error) {
+	type Proxy GracePeriodsConfig
+
+	tmp := struct {
+		Proxy
+		ShutdownSeconds   string `json:"shutdownSeconds,omitempty"`
+		TransitionSeconds string `json:"transitionSeconds,omitempty"`
+	}{
+		Proxy: Proxy(*cfg),
+	}
+
+	if d := cfg.ShutdownSeconds.Get(); d != 0 {
+		tmp.ShutdownSeconds = d.String()
+	}
+
+	if d := cfg.TransitionSeconds.Get(); d != 0 {
+		tmp.TransitionSeconds = d.String()
+	}
+
+	return json.Marshal(&tmp)
 }
 
 // ReplicationTrackerConfig contains the config for the replication tracker.
 type ReplicationTrackerConfig struct {
 	// Mode can be disable, polling or heartbeat. Default is disable.
-	Mode                     string  `json:"mode,omitempty"`
-	HeartbeatIntervalSeconds Seconds `json:"heartbeatIntervalSeconds,omitempty"`
-	HeartbeatOnDemandSeconds Seconds `json:"heartbeatOnDemandSeconds,omitempty"`
+	Mode                     string                            `json:"mode,omitempty"`
+	HeartbeatIntervalSeconds flagutil.DeprecatedFloat64Seconds `json:"heartbeatIntervalSeconds,omitempty"`
+	HeartbeatOnDemandSeconds flagutil.DeprecatedFloat64Seconds `json:"heartbeatOnDemandSeconds,omitempty"`
+}
+
+func (cfg *ReplicationTrackerConfig) MarshalJSON() ([]byte, error) {
+	type Proxy ReplicationTrackerConfig
+
+	tmp := struct {
+		Proxy
+		HeartbeatIntervalSeconds string `json:"heartbeatIntervalSeconds,omitempty"`
+		HeartbeatOnDemandSeconds string `json:"heartbeatOnDemandSeconds,omitempty"`
+	}{
+		Proxy: Proxy(*cfg),
+	}
+
+	if d := cfg.HeartbeatIntervalSeconds.Get(); d != 0 {
+		tmp.HeartbeatIntervalSeconds = d.String()
+	}
+
+	if d := cfg.HeartbeatOnDemandSeconds.Get(); d != 0 {
+		tmp.HeartbeatOnDemandSeconds = d.String()
+	}
+
+	return json.Marshal(&tmp)
 }
 
 // TransactionLimitConfig captures configuration of transaction pool slots
@@ -428,9 +604,9 @@ func (c *TabletConfig) Clone() *TabletConfig {
 func (c *TabletConfig) SetTxTimeoutForWorkload(val time.Duration, workload querypb.ExecuteOptions_Workload) {
 	switch workload {
 	case querypb.ExecuteOptions_OLAP:
-		c.Olap.TxTimeoutSeconds.Set(val)
+		_ = c.Olap.TxTimeoutSeconds.Set(val.String())
 	case querypb.ExecuteOptions_OLTP:
-		c.Oltp.TxTimeoutSeconds.Set(val)
+		_ = c.Oltp.TxTimeoutSeconds.Set(val.String())
 	default:
 		panic(fmt.Sprintf("unsupported workload type: %v", workload))
 	}
@@ -503,36 +679,54 @@ func (c *TabletConfig) verifyTransactionLimitConfig() error {
 // They actually get overwritten during Init.
 var defaultConfig = TabletConfig{
 	OltpReadPool: ConnPoolConfig{
-		Size:               16,
-		IdleTimeoutSeconds: 30 * 60,
+		Size: 16,
+		// TODO (ajm188): remove the zero-value ones after these are durations.
+		// See the comment below in GracePeriodsConfig as to why they are needed
+		// for now.
+		TimeoutSeconds:     flagutil.NewDeprecatedFloat64Seconds("queryserver-config-query-pool-timeout", 0),
+		IdleTimeoutSeconds: flagutil.NewDeprecatedFloat64Seconds("queryserver-config-idle-timeout", 30*time.Minute),
+		MaxLifetimeSeconds: flagutil.NewDeprecatedFloat64Seconds("queryserver-config-pool-conn-max-lifetime", 0),
 		MaxWaiters:         5000,
 	},
 	OlapReadPool: ConnPoolConfig{
-		Size:               200,
-		IdleTimeoutSeconds: 30 * 60,
+		Size: 200,
+		// TODO (ajm188): remove the zero-value ones after these are durations.
+		// See the comment below in GracePeriodsConfig as to why they are needed
+		// for now.
+		TimeoutSeconds:     flagutil.NewDeprecatedFloat64Seconds("queryserver-config-stream-pool-timeout", 0),
+		IdleTimeoutSeconds: flagutil.NewDeprecatedFloat64Seconds("queryserver-config-stream-pool-timeout", 30*time.Minute),
 	},
 	TxPool: ConnPoolConfig{
-		Size:               20,
-		TimeoutSeconds:     1,
-		IdleTimeoutSeconds: 30 * 60,
+		Size:           20,
+		TimeoutSeconds: flagutil.NewDeprecatedFloat64Seconds("queryserver-config-txpool-timeout", time.Second),
+		// No actual flag for this one, but has non-zero value
+		IdleTimeoutSeconds: flagutil.NewDeprecatedFloat64Seconds("queryserver-config-txpool-idle-timeout", 30*time.Minute),
 		MaxWaiters:         5000,
 	},
 	Olap: OlapConfig{
-		TxTimeoutSeconds: 30,
+		TxTimeoutSeconds: flagutil.NewDeprecatedFloat64Seconds("queryserver-config-olap-transaction-timeout", 30*time.Second),
 	},
 	Oltp: OltpConfig{
-		QueryTimeoutSeconds: 30,
-		TxTimeoutSeconds:    30,
+		QueryTimeoutSeconds: flagutil.NewDeprecatedFloat64Seconds("queryserver-config-query-timeout", 30*time.Second),
+		TxTimeoutSeconds:    flagutil.NewDeprecatedFloat64Seconds("queryserver-config-transaction-timeout", 30*time.Second),
 		MaxRows:             10000,
 	},
 	Healthcheck: HealthcheckConfig{
-		IntervalSeconds:           20,
-		DegradedThresholdSeconds:  30,
-		UnhealthyThresholdSeconds: 7200,
+		IntervalSeconds:           flagutil.NewDeprecatedFloat64Seconds("health_check_interval", 20*time.Second),
+		DegradedThresholdSeconds:  flagutil.NewDeprecatedFloat64Seconds("degraded_threshold", 30*time.Second),
+		UnhealthyThresholdSeconds: flagutil.NewDeprecatedFloat64Seconds("unhealthy_threshold", 2*time.Hour),
+	},
+	GracePeriods: GracePeriodsConfig{
+		// TODO (ajm188) remove after these are durations. it's not necessary
+		// for production code because it's the zero value, but it's required
+		// for tests to pass (which require the name field to be present for
+		// deep equality).
+		ShutdownSeconds: flagutil.NewDeprecatedFloat64Seconds("shutdown_grace_period", 0),
 	},
 	ReplicationTracker: ReplicationTrackerConfig{
 		Mode:                     Disable,
-		HeartbeatIntervalSeconds: 0.25,
+		HeartbeatIntervalSeconds: flagutil.NewDeprecatedFloat64Seconds("heartbeat_interval", 250*time.Millisecond),
+		HeartbeatOnDemandSeconds: flagutil.NewDeprecatedFloat64Seconds("heartbeat_on_demand_duration", 0),
 	},
 	HotRowProtection: HotRowProtectionConfig{
 		Mode: Disable,
@@ -556,8 +750,8 @@ var defaultConfig = TabletConfig{
 	QueryCacheSize:                          int(cache.DefaultConfig.MaxEntries),
 	QueryCacheMemory:                        cache.DefaultConfig.MaxMemoryUsage,
 	QueryCacheLFU:                           cache.DefaultConfig.LFU,
-	SchemaReloadIntervalSeconds:             30 * 60,
-	SignalSchemaChangeReloadIntervalSeconds: 5,
+	SchemaReloadIntervalSeconds:             flagutil.NewDeprecatedFloat64Seconds("queryserver-config-schema-reload-time", 30*time.Minute),
+	SignalSchemaChangeReloadIntervalSeconds: flagutil.NewDeprecatedFloat64Seconds("queryserver-config-schema-change-signal-interval", 5*time.Second),
 	MessagePostponeParallelism:              4,
 	DeprecatedCacheResultFields:             true,
 	SignalWhenSchemaChange:                  true,
