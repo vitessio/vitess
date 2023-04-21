@@ -689,7 +689,11 @@ var defaultConfig = TabletConfig{
 		MaxWaiters:         5000,
 	},
 	OlapReadPool: ConnPoolConfig{
-		Size:               200,
+		Size: 200,
+		// TODO (ajm188): remove the zero-value ones after these are durations.
+		// See the comment below in GracePeriodsConfig as to why they are needed
+		// for now.
+		TimeoutSeconds:     flagutil.NewDeprecatedFloat64Seconds("queryserver-config-stream-pool-timeout", 0),
 		IdleTimeoutSeconds: flagutil.NewDeprecatedFloat64Seconds("queryserver-config-stream-pool-timeout", 30*time.Minute),
 	},
 	TxPool: ConnPoolConfig{
