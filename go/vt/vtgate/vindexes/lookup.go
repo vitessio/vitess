@@ -34,11 +34,23 @@ var (
 	_ SingleColumn   = (*LookupNonUnique)(nil)
 	_ Lookup         = (*LookupNonUnique)(nil)
 	_ LookupPlanable = (*LookupNonUnique)(nil)
+
+	lookupParams = append(
+		append(make([]VindexParam, 0), lookupCommonParams...),
+		&vindexParam{name: "no_verify"},
+		&vindexParam{name: "write_only"},
+	)
 )
 
 func init() {
-	Register("lookup", NewLookup)
-	Register("lookup_unique", NewLookupUnique)
+	Register("lookup", &vindexFactory{
+		create: NewLookup,
+		params: lookupParams,
+	})
+	Register("lookup_unique", &vindexFactory{
+		create: NewLookupUnique,
+		params: lookupParams,
+	})
 }
 
 // LookupNonUnique defines a vindex that uses a lookup table and create a mapping between from ids and KeyspaceId.

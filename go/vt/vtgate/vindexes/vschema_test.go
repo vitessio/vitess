@@ -41,8 +41,7 @@ import (
 
 // cheapVindex is a Functional, Unique Vindex.
 type cheapVindex struct {
-	name   string
-	Params map[string]string
+	name string
 }
 
 func (v *cheapVindex) String() string   { return v.name }
@@ -56,16 +55,15 @@ func (*cheapVindex) Map(ctx context.Context, vcursor VCursor, ids []sqltypes.Val
 	return nil, nil
 }
 
-func NewCheapVindex(name string, params map[string]string) (Vindex, error) {
-	return &cheapVindex{name: name, Params: params}, nil
+func NewCheapVindex(name string, _ map[string]string) (Vindex, error) {
+	return &cheapVindex{name: name}, nil
 }
 
 var _ SingleColumn = (*stFU)(nil)
 
 // stFU is a Functional, Unique Vindex.
 type stFU struct {
-	name   string
-	Params map[string]string
+	name string
 }
 
 func (v *stFU) String() string   { return v.name }
@@ -79,16 +77,15 @@ func (*stFU) Map(ctx context.Context, vcursor VCursor, ids []sqltypes.Value) ([]
 	return nil, nil
 }
 
-func NewSTFU(name string, params map[string]string) (Vindex, error) {
-	return &stFU{name: name, Params: params}, nil
+func NewSTFU(name string, _ map[string]string) (Vindex, error) {
+	return &stFU{name: name}, nil
 }
 
 var _ SingleColumn = (*stFU)(nil)
 
 // stFN is a Functional, NonUnique Vindex.
 type stFN struct {
-	name   string
-	Params map[string]string
+	name string
 }
 
 func (v *stFN) String() string   { return v.name }
@@ -102,16 +99,15 @@ func (*stFN) Map(ctx context.Context, vcursor VCursor, ids []sqltypes.Value) ([]
 	return nil, nil
 }
 
-func NewSTFN(name string, params map[string]string) (Vindex, error) {
-	return &stFN{name: name, Params: params}, nil
+func NewSTFN(name string, _ map[string]string) (Vindex, error) {
+	return &stFN{name: name}, nil
 }
 
 var _ SingleColumn = (*stFN)(nil)
 
 // stLN is a Lookup, NonUnique Vindex.
 type stLN struct {
-	name   string
-	Params map[string]string
+	name string
 }
 
 func (v *stLN) String() string   { return v.name }
@@ -130,8 +126,8 @@ func (*stLN) Update(context.Context, VCursor, []sqltypes.Value, []byte, []sqltyp
 	return nil
 }
 
-func NewSTLN(name string, params map[string]string) (Vindex, error) {
-	return &stLN{name: name, Params: params}, nil
+func NewSTLN(name string, _ map[string]string) (Vindex, error) {
+	return &stLN{name: name}, nil
 }
 
 var _ SingleColumn = (*stLN)(nil)
@@ -139,8 +135,7 @@ var _ Lookup = (*stLN)(nil)
 
 // stLU is a Lookup, Unique Vindex.
 type stLU struct {
-	name   string
-	Params map[string]string
+	name string
 }
 
 func (v *stLU) String() string   { return v.name }
@@ -159,8 +154,8 @@ func (*stLU) Update(context.Context, VCursor, []sqltypes.Value, []byte, []sqltyp
 	return nil
 }
 
-func NewSTLU(name string, params map[string]string) (Vindex, error) {
-	return &stLU{name: name, Params: params}, nil
+func NewSTLU(name string, _ map[string]string) (Vindex, error) {
+	return &stLU{name: name}, nil
 }
 
 var _ SingleColumn = (*stLO)(nil)
@@ -206,8 +201,7 @@ var _ Lookup = (*stLO)(nil)
 
 // mcFU is a multi-column Functional, Unique Vindex.
 type mcFU struct {
-	name   string
-	Params map[string]string
+	name string
 }
 
 func (v *mcFU) String() string   { return v.name }
@@ -222,21 +216,45 @@ func (*mcFU) Map(ctx context.Context, vcursor VCursor, rowsColValues [][]sqltype
 }
 func (*mcFU) PartialVindex() bool { return false }
 
-func NewMCFU(name string, params map[string]string) (Vindex, error) {
-	return &mcFU{name: name, Params: params}, nil
+func NewMCFU(name string, _ map[string]string) (Vindex, error) {
+	return &mcFU{name: name}, nil
 }
 
 var _ MultiColumn = (*mcFU)(nil)
 
 func init() {
-	Register("cheap", NewCheapVindex)
-	Register("stfu", NewSTFU)
-	Register("stfn", NewSTFN)
-	Register("stln", NewSTLN)
-	Register("stlu", NewSTLU)
-	Register("stlo", NewSTLO)
-	Register("region_experimental_test", NewRegionExperimental)
-	Register("mcfu", NewMCFU)
+	Register("cheap", &vindexFactory{
+		create: NewCheapVindex,
+		params: nil,
+	})
+	Register("stfu", &vindexFactory{
+		create: NewSTFU,
+		params: nil,
+	})
+	Register("stfn", &vindexFactory{
+		create: NewSTFN,
+		params: nil,
+	})
+	Register("stln", &vindexFactory{
+		create: NewSTLN,
+		params: nil,
+	})
+	Register("stlu", &vindexFactory{
+		create: NewSTLU,
+		params: nil,
+	})
+	Register("stlo", &vindexFactory{
+		create: NewSTLO,
+		params: nil,
+	})
+	Register("region_experimental_test", &vindexFactory{
+		create: NewRegionExperimental,
+		params: regionExperimentalParams,
+	})
+	Register("mcfu", &vindexFactory{
+		create: NewMCFU,
+		params: nil,
+	})
 }
 
 func TestUnshardedVSchemaValid(t *testing.T) {
@@ -406,10 +424,9 @@ func TestShardedVSchemaOwned(t *testing.T) {
 				Sharded: true,
 				Vindexes: map[string]*vschemapb.Vindex{
 					"stfu1": {
-						Type: "stfu",
-						Params: map[string]string{
-							"stfu1": "1"},
-						Owner: "t1"},
+						Type:   "stfu",
+						Params: map[string]string{},
+						Owner:  "t1"},
 					"stln1": {
 						Type:  "stln",
 						Owner: "t1"}},
@@ -429,10 +446,7 @@ func TestShardedVSchemaOwned(t *testing.T) {
 	t1, err := got.FindTable("sharded", "t1")
 	require.NoError(t, err)
 
-	vindex1 := &stFU{
-		name: "stfu1",
-		Params: map[string]string{
-			"stfu1": "1"}}
+	vindex1 := &stFU{name: "stfu1"}
 	assertVindexMatches(t, t1.ColumnVindexes[0], vindex1, "stfu1", false)
 
 	vindex2 := &stLN{name: "stln1"}
@@ -876,12 +890,7 @@ func TestFindVindexForSharding(t *testing.T) {
 		Name:    "sharded",
 		Sharded: true,
 	}
-	vindex1 := &stFU{
-		name: "stfu1",
-		Params: map[string]string{
-			"stfu1": "1",
-		},
-	}
+	vindex1 := &stFU{name: "stfu1"}
 	vindex2 := &stLN{name: "stln1"}
 	t1 := &Table{
 		Name:     sqlparser.NewIdentifierCS("t1"),
@@ -959,12 +968,7 @@ func TestFindVindexForSharding2(t *testing.T) {
 		Sharded: true,
 	}
 	vindex1 := &stLU{name: "stlu1"}
-	vindex2 := &stFU{
-		name: "stfu1",
-		Params: map[string]string{
-			"stfu1": "1",
-		},
-	}
+	vindex2 := &stFU{name: "stfu1"}
 	t1 := &Table{
 		Name:     sqlparser.NewIdentifierCS("t1"),
 		Keyspace: ks,
@@ -1002,10 +1006,9 @@ func TestShardedVSchemaMultiColumnVindex(t *testing.T) {
 				Sharded: true,
 				Vindexes: map[string]*vschemapb.Vindex{
 					"stfu1": {
-						Type: "stfu",
-						Params: map[string]string{
-							"stfu1": "1"},
-						Owner: "t1"}},
+						Type:   "stfu",
+						Params: map[string]string{},
+						Owner:  "t1"}},
 				Tables: map[string]*vschemapb.Table{
 					"t1": {
 						ColumnVindexes: []*vschemapb.ColumnVindex{{
@@ -1019,12 +1022,7 @@ func TestShardedVSchemaMultiColumnVindex(t *testing.T) {
 		Name:    "sharded",
 		Sharded: true,
 	}
-	vindex1 := &stFU{
-		name: "stfu1",
-		Params: map[string]string{
-			"stfu1": "1",
-		},
-	}
+	vindex1 := &stFU{name: "stfu1"}
 	t1 := &Table{
 		Name:     sqlparser.NewIdentifierCS("t1"),
 		Keyspace: ks,
@@ -1873,10 +1871,8 @@ func TestSequence(t *testing.T) {
 				Sharded: true,
 				Vindexes: map[string]*vschemapb.Vindex{
 					"stfu1": {
-						Type: "stfu",
-						Params: map[string]string{
-							"stfu1": "1",
-						},
+						Type:   "stfu",
+						Params: map[string]string{},
 					},
 				},
 				Tables: map[string]*vschemapb.Table{
@@ -1927,12 +1923,7 @@ func TestSequence(t *testing.T) {
 		Keyspace: ksu,
 		Type:     "sequence",
 	}
-	vindex1 := &stFU{
-		name: "stfu1",
-		Params: map[string]string{
-			"stfu1": "1",
-		},
-	}
+	vindex1 := &stFU{name: "stfu1"}
 	t1 := &Table{
 		Name:     sqlparser.NewIdentifierCS("t1"),
 		Keyspace: kss,
@@ -2152,10 +2143,8 @@ func TestFindTable(t *testing.T) {
 				Sharded: true,
 				Vindexes: map[string]*vschemapb.Vindex{
 					"stfu1": {
-						Type: "stfu",
-						Params: map[string]string{
-							"stfu1": "1",
-						},
+						Type:   "stfu",
+						Params: map[string]string{},
 					},
 				},
 				Tables: map[string]*vschemapb.Table{
@@ -2536,7 +2525,7 @@ func TestVSchemaPBJSON(t *testing.T) {
 }
 
 func TestVSchemaJSON(t *testing.T) {
-	lkp, _ := NewLookupHash("n2", map[string]string{
+	lkp, _ := newLookupHash("n2", map[string]string{
 		"from":  "f",
 		"table": "t",
 		"to":    "2",

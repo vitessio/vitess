@@ -19,6 +19,7 @@ package vindexes
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
@@ -69,6 +70,27 @@ type (
 		// NeedsVCursor returns true if the Vindex makes calls into the
 		// VCursor. Such vindexes cannot be used by vreplication.
 		NeedsVCursor() bool
+	}
+
+	// VindexFactory must be registered by every vindex. It contains functions
+	// and metadata which describe how to create the vindex.
+	VindexFactory interface {
+		// AllowUnknownParams will ignore unknown params. This is useful if a
+		// vindex can pass params to a sub-vindex.
+		AllowUnknownParams() bool
+		// Create creates the vindex with the provided name and input params.
+		Create(string, map[string]string) (Vindex, error)
+		// Params describes params that the vindex accepts.
+		Params() []VindexParam
+	}
+
+	// VindexParam describes a param which a vindex accepts as input to its
+	// registered factory.
+	VindexParam interface {
+		// Name of the param.
+		Name() string
+		// Required params must be passed to the factory.
+		Required() bool
 	}
 
 	// SingleColumn defines the interface for a single column vindex.
@@ -158,33 +180,79 @@ type (
 		SetOwnerInfo(keyspace, table string, cols []sqlparser.IdentifierCI) error
 	}
 
-	// A NewVindexFunc is a function that creates a Vindex based on the
-	// properties specified in the input map. Every vindex must
-	// register a NewVindexFunc under a unique vindexType.
-	NewVindexFunc func(string, map[string]string) (Vindex, error)
+	vindexFactory struct {
+		allowUnknownParams bool
+		create             func(string, map[string]string) (Vindex, error)
+		params             []VindexParam
+	}
+
+	vindexParam struct {
+		name     string
+		required bool
+	}
 )
 
-var registry = make(map[string]NewVindexFunc)
+var registry = make(map[string]VindexFactory)
+var mu = &sync.Mutex{}
 
-// Register registers a vindex under the specified vindexType.
+func (f *vindexFactory) AllowUnknownParams() bool {
+	return f.allowUnknownParams
+}
+
+func (f *vindexFactory) Create(name string, params map[string]string) (Vindex, error) {
+	return f.create(name, params)
+}
+
+func (f *vindexFactory) Params() []VindexParam {
+	return f.params
+}
+
+func (p *vindexParam) Name() string {
+	return p.name
+}
+
+func (p *vindexParam) Required() bool {
+	return p.required
+}
+
+// Register registers a vindex factory under the specified vindexType.
 // A duplicate vindexType will generate a panic.
 // New vindexes will be created using these functions at the
 // time of vschema loading.
-func Register(vindexType string, newVindexFunc NewVindexFunc) {
+func Register(vindexType string, vindexFactory VindexFactory) {
 	if _, ok := registry[vindexType]; ok {
 		panic(fmt.Sprintf("%s is already registered", vindexType))
 	}
-	registry[vindexType] = newVindexFunc
+	uniqParamsByName := make(map[string]bool)
+	for _, p := range vindexFactory.Params() {
+		if _, ok := uniqParamsByName[p.Name()]; ok {
+			panic(fmt.Sprintf("%s has duplicate params with name %q", vindexType, p.Name()))
+		}
+		uniqParamsByName[p.Name()] = true
+	}
+	registry[vindexType] = vindexFactory
 }
 
 // CreateVindex creates a vindex of the specified type using the
 // supplied params. The type must have been previously registered.
 func CreateVindex(vindexType, name string, params map[string]string) (Vindex, error) {
-	f, ok := registry[vindexType]
+	factory, ok := registry[vindexType]
 	if !ok {
-		return nil, fmt.Errorf("vindexType %q not found", vindexType)
+		return nil, vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "vindexType %q not found", vindexType)
 	}
-	return f(name, params)
+	validParamsByName := make(map[string]VindexParam)
+	for _, param := range factory.Params() {
+		validParamsByName[param.Name()] = param
+		if _, ok := params[param.Name()]; param.Required() && !ok {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "missing required param '%s'", param.Name())
+		}
+	}
+	for name := range params {
+		if _, ok := validParamsByName[name]; !ok && !factory.AllowUnknownParams() {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unknown param '%s'", name)
+		}
+	}
+	return factory.Create(name, params)
 }
 
 // Map invokes the Map implementation supplied by the vindex.

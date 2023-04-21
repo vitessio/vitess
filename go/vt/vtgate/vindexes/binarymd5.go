@@ -35,8 +35,8 @@ type BinaryMD5 struct {
 	name string
 }
 
-// NewBinaryMD5 creates a new BinaryMD5.
-func NewBinaryMD5(name string, _ map[string]string) (Vindex, error) {
+// newBinaryMD5 creates a new BinaryMD5.
+func newBinaryMD5(name string, _ map[string]string) (Vindex, error) {
 	return &BinaryMD5{name: name}, nil
 }
 
@@ -100,5 +100,8 @@ func vMD5Hash(source []byte) []byte {
 }
 
 func init() {
-	Register("binary_md5", NewBinaryMD5)
+	Register("binary_md5", &vindexFactory{
+		create: newBinaryMD5,
+		params: nil,
+	})
 }

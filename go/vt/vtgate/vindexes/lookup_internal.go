@@ -44,6 +44,24 @@ var (
 		readLockShared:    "lock in share mode",
 		readLockNone:      "",
 	}
+
+	// lookupInternalParams are used by both lookup_* vindexes and the newer
+	// consistent_lookup_* vindexes.
+	lookupInternalParams = []VindexParam{
+		&vindexParam{name: "table", required: true},
+		&vindexParam{name: "from", required: true},
+		&vindexParam{name: "to", required: true},
+		&vindexParam{name: "ignore_nulls"},
+		&vindexParam{name: "batch_lookup"},
+		&vindexParam{name: "read_lock"},
+	}
+
+	// lookupCommonParams are used only by lookup_* vindexes.
+	lookupCommonParams = append(
+		append(make([]VindexParam, 0), lookupInternalParams...),
+		&vindexParam{name: "autocommit"},
+		&vindexParam{name: "multi_shard_autocommit"},
+	)
 )
 
 // lookupInternal implements the functions for the Lookup vindexes.

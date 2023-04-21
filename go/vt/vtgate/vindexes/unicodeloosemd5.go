@@ -39,8 +39,8 @@ type UnicodeLooseMD5 struct {
 	name string
 }
 
-// NewUnicodeLooseMD5 creates a new UnicodeLooseMD5.
-func NewUnicodeLooseMD5(name string, _ map[string]string) (Vindex, error) {
+// newUnicodeLooseMD5 creates a new UnicodeLooseMD5.
+func newUnicodeLooseMD5(name string, _ map[string]string) (Vindex, error) {
 	return &UnicodeLooseMD5{name: name}, nil
 }
 
@@ -95,5 +95,8 @@ func (vind *UnicodeLooseMD5) Hash(id sqltypes.Value) ([]byte, error) {
 }
 
 func init() {
-	Register("unicode_loose_md5", NewUnicodeLooseMD5)
+	Register("unicode_loose_md5", &vindexFactory{
+		create: newUnicodeLooseMD5,
+		params: nil,
+	})
 }

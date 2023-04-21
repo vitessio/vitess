@@ -29,7 +29,7 @@ import (
 )
 
 func TestMultiColMisc(t *testing.T) {
-	vindex, err := CreateVindex("multicol", "multicol", map[string]string{
+	vindex, err := CreateVindex("multicol", "multicol_misc", map[string]string{
 		"column_count": "3",
 	})
 	require.NoError(t, err)
@@ -38,14 +38,14 @@ func TestMultiColMisc(t *testing.T) {
 	assert.True(t, isMultiColVdx)
 
 	assert.Equal(t, 3, multiColVdx.Cost())
-	assert.Equal(t, "multicol", multiColVdx.String())
+	assert.Equal(t, "multicol_misc", multiColVdx.String())
 	assert.True(t, multiColVdx.IsUnique())
 	assert.False(t, multiColVdx.NeedsVCursor())
 	assert.True(t, multiColVdx.PartialVindex())
 }
 
 func TestMultiColMap(t *testing.T) {
-	vindex, err := CreateVindex("multicol", "multicol", map[string]string{
+	vindex, err := CreateVindex("multicol", "multicol_map", map[string]string{
 		"column_count": "3",
 	})
 	require.NoError(t, err)

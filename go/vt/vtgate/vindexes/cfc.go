@@ -28,6 +28,11 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
+var cfcParams = []VindexParam{
+	&vindexParam{name: "hash"},
+	&vindexParam{name: "offsets"},
+}
+
 // CFC is Concatenated Fixed-width Composite Vindex.
 //
 // The purpose of this vindex is to shard the rows based on the prefix of
@@ -406,5 +411,8 @@ func xxhash64(in []byte) []byte {
 }
 
 func init() {
-	Register("cfc", NewCFC)
+	Register("cfc", &vindexFactory{
+		create: NewCFC,
+		params: cfcParams,
+	})
 }

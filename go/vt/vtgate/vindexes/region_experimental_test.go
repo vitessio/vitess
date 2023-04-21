@@ -126,14 +126,11 @@ func TestRegionExperimentalCreateErrors(t *testing.T) {
 	_, err := createRegionVindex(t, "region_experimental", "f1,f2", 3)
 	assert.EqualError(t, err, "region_bits must be 1 or 2: 3")
 	_, err = CreateVindex("region_experimental", "region_experimental", nil)
-	assert.EqualError(t, err, "region_experimental missing region_bytes param")
+	assert.EqualError(t, err, "missing required param 'region_bytes'")
 }
 
 func createRegionVindex(t *testing.T, name, from string, rb int) (Vindex, error) {
 	return CreateVindex(name, name, map[string]string{
 		"region_bytes": strconv.Itoa(rb),
-		"table":        "t",
-		"from":         from,
-		"to":           "toc",
 	})
 }

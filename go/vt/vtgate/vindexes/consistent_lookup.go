@@ -44,11 +44,22 @@ var (
 	_ Lookup         = (*ConsistentLookup)(nil)
 	_ WantOwnerInfo  = (*ConsistentLookup)(nil)
 	_ LookupPlanable = (*ConsistentLookup)(nil)
+
+	consistentLookupParams = append(
+		append(make([]VindexParam, 0), lookupInternalParams...),
+		&vindexParam{name: "write_only"},
+	)
 )
 
 func init() {
-	Register("consistent_lookup", NewConsistentLookup)
-	Register("consistent_lookup_unique", NewConsistentLookupUnique)
+	Register("consistent_lookup", &vindexFactory{
+		create: newConsistentLookup,
+		params: consistentLookupParams,
+	})
+	Register("consistent_lookup_unique", &vindexFactory{
+		create: newConsistentLookupUnique,
+		params: consistentLookupParams,
+	})
 }
 
 // ConsistentLookup is a non-unique lookup vindex that can stay
@@ -57,13 +68,13 @@ type ConsistentLookup struct {
 	*clCommon
 }
 
-// NewConsistentLookup creates a ConsistentLookup vindex.
+// newConsistentLookup creates a ConsistentLookup vindex.
 // The supplied map has the following required fields:
 //
 //	table: name of the backing table. It can be qualified by the keyspace.
 //	from: list of columns in the table that have the 'from' values of the lookup vindex.
 //	to: The 'to' column name of the table.
-func NewConsistentLookup(name string, m map[string]string) (Vindex, error) {
+func newConsistentLookup(name string, m map[string]string) (Vindex, error) {
 	clc, err := newCLCommon(name, m)
 	if err != nil {
 		return nil, err
@@ -161,13 +172,13 @@ type ConsistentLookupUnique struct {
 	*clCommon
 }
 
-// NewConsistentLookupUnique creates a ConsistentLookupUnique vindex.
+// newConsistentLookupUnique creates a ConsistentLookupUnique vindex.
 // The supplied map has the following required fields:
 //
 //	table: name of the backing table. It can be qualified by the keyspace.
 //	from: list of columns in the table that have the 'from' values of the lookup vindex.
 //	to: The 'to' column name of the table.
-func NewConsistentLookupUnique(name string, m map[string]string) (Vindex, error) {
+func newConsistentLookupUnique(name string, m map[string]string) (Vindex, error) {
 	clc, err := newCLCommon(name, m)
 	if err != nil {
 		return nil, err

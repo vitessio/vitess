@@ -39,8 +39,8 @@ type UnicodeLooseXXHash struct {
 	name string
 }
 
-// NewUnicodeLooseXXHash creates a new UnicodeLooseXXHash struct.
-func NewUnicodeLooseXXHash(name string, _ map[string]string) (Vindex, error) {
+// newUnicodeLooseXXHash creates a new UnicodeLooseXXHash struct.
+func newUnicodeLooseXXHash(name string, _ map[string]string) (Vindex, error) {
 	return &UnicodeLooseXXHash{name: name}, nil
 }
 
@@ -95,5 +95,8 @@ func (vind *UnicodeLooseXXHash) Hash(id sqltypes.Value) ([]byte, error) {
 }
 
 func init() {
-	Register("unicode_loose_xxhash", NewUnicodeLooseXXHash)
+	Register("unicode_loose_xxhash", &vindexFactory{
+		create: newUnicodeLooseXXHash,
+		params: nil,
+	})
 }

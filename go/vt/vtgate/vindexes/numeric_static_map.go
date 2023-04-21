@@ -34,6 +34,12 @@ import (
 var (
 	_ SingleColumn = (*NumericStaticMap)(nil)
 	_ Hashing      = (*NumericStaticMap)(nil)
+
+	numericStaticMapParams = []VindexParam{
+		&vindexParam{name: "json"},
+		&vindexParam{name: "json_path"},
+		&vindexParam{name: "fallback_type"},
+	}
 )
 
 // NumericLookupTable stores the mapping of keys.
@@ -48,7 +54,10 @@ type NumericStaticMap struct {
 }
 
 func init() {
-	Register("numeric_static_map", NewNumericStaticMap)
+	Register("numeric_static_map", &vindexFactory{
+		create: NewNumericStaticMap,
+		params: numericStaticMapParams,
+	})
 }
 
 // NewNumericStaticMap creates a NumericStaticMap vindex.

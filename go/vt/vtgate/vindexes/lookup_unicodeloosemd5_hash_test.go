@@ -84,7 +84,6 @@ func TestLookupUnicodeLooseMD5HashMapAutocommit(t *testing.T) {
 		"table":      "t",
 		"from":       "fromc",
 		"to":         "toc",
-		"hash_from":  "true",
 		"autocommit": "true",
 	})
 	if err != nil {

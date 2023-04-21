@@ -38,8 +38,8 @@ type XXHash struct {
 	name string
 }
 
-// NewXXHash creates a new XXHash.
-func NewXXHash(name string, _ map[string]string) (Vindex, error) {
+// newXXHash creates a new XXHash.
+func newXXHash(name string, _ map[string]string) (Vindex, error) {
 	return &XXHash{name: name}, nil
 }
 
@@ -98,7 +98,10 @@ func (vind *XXHash) Hash(id sqltypes.Value) ([]byte, error) {
 }
 
 func init() {
-	Register("xxhash", NewXXHash)
+	Register("xxhash", &vindexFactory{
+		create: newXXHash,
+		params: nil,
+	})
 }
 
 func vXXHash(shardKey []byte) []byte {

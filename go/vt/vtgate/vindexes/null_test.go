@@ -31,7 +31,7 @@ import (
 var null SingleColumn
 
 func init() {
-	hv, err := CreateVindex("null", "nn", map[string]string{"Table": "t", "Column": "c"})
+	hv, err := CreateVindex("null", "nn", map[string]string{})
 	if err != nil {
 		panic(err)
 	}

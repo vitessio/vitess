@@ -42,8 +42,8 @@ type ReverseBits struct {
 	name string
 }
 
-// NewReverseBits creates a new ReverseBits.
-func NewReverseBits(name string, m map[string]string) (Vindex, error) {
+// newReverseBits creates a new ReverseBits.
+func newReverseBits(name string, _ map[string]string) (Vindex, error) {
 	return &ReverseBits{name: name}, nil
 }
 
@@ -116,7 +116,10 @@ func (vind *ReverseBits) Hash(id sqltypes.Value) ([]byte, error) {
 }
 
 func init() {
-	Register("reverse_bits", NewReverseBits)
+	Register("reverse_bits", &vindexFactory{
+		create: newReverseBits,
+		params: nil,
+	})
 }
 
 func reverse(shardKey uint64) []byte {

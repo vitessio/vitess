@@ -40,8 +40,8 @@ type Numeric struct {
 	name string
 }
 
-// NewNumeric creates a Numeric vindex.
-func NewNumeric(name string, _ map[string]string) (Vindex, error) {
+// newNumeric creates a Numeric vindex.
+func newNumeric(name string, _ map[string]string) (Vindex, error) {
 	return &Numeric{name: name}, nil
 }
 
@@ -116,5 +116,8 @@ func (*Numeric) Hash(id sqltypes.Value) ([]byte, error) {
 }
 
 func init() {
-	Register("numeric", NewNumeric)
+	Register("numeric", &vindexFactory{
+		create: newNumeric,
+		params: nil,
+	})
 }

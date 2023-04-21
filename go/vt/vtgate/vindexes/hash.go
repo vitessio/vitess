@@ -140,7 +140,10 @@ func init() {
 	if err != nil {
 		panic(err)
 	}
-	Register("hash", NewHash)
+	Register("hash", &vindexFactory{
+		create: NewHash,
+		params: nil,
+	})
 }
 
 func vhash(shardKey uint64) []byte {

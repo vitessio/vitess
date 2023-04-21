@@ -37,11 +37,22 @@ var (
 	_ SingleColumn   = (*LookupUnicodeLooseMD5HashUnique)(nil)
 	_ Lookup         = (*LookupUnicodeLooseMD5HashUnique)(nil)
 	_ LookupPlanable = (*LookupUnicodeLooseMD5HashUnique)(nil)
+
+	lookupUnicodeLooseMD5HashParams = append(
+		append(make([]VindexParam, 0), lookupCommonParams...),
+		&vindexParam{name: "write_only"},
+	)
 )
 
 func init() {
-	Register("lookup_unicodeloosemd5_hash", NewLookupUnicodeLooseMD5Hash)
-	Register("lookup_unicodeloosemd5_hash_unique", NewLookupUnicodeLooseMD5HashUnique)
+	Register("lookup_unicodeloosemd5_hash", &vindexFactory{
+		create: newLookupUnicodeLooseMD5Hash,
+		params: lookupUnicodeLooseMD5HashParams,
+	})
+	Register("lookup_unicodeloosemd5_hash_unique", &vindexFactory{
+		create: newLookupUnicodeLooseMD5HashUnique,
+		params: lookupUnicodeLooseMD5HashParams,
+	})
 }
 
 //====================================================================
@@ -56,7 +67,7 @@ type LookupUnicodeLooseMD5Hash struct {
 	lkp       lookupInternal
 }
 
-// NewLookupUnicodeLooseMD5Hash creates a LookupUnicodeLooseMD5Hash vindex.
+// newLookupUnicodeLooseMD5Hash creates a LookupUnicodeLooseMD5Hash vindex.
 // The supplied map has the following required fields:
 //
 //	table: name of the backing table. It can be qualified by the keyspace.
@@ -67,7 +78,7 @@ type LookupUnicodeLooseMD5Hash struct {
 //
 //	autocommit: setting this to "true" will cause inserts to upsert and deletes to be ignored.
 //	write_only: in this mode, Map functions return the full keyrange causing a full scatter.
-func NewLookupUnicodeLooseMD5Hash(name string, m map[string]string) (Vindex, error) {
+func newLookupUnicodeLooseMD5Hash(name string, m map[string]string) (Vindex, error) {
 	lh := &LookupUnicodeLooseMD5Hash{name: name}
 
 	cc, err := parseCommonConfig(m)
@@ -282,7 +293,7 @@ type LookupUnicodeLooseMD5HashUnique struct {
 	lkp       lookupInternal
 }
 
-// NewLookupUnicodeLooseMD5HashUnique creates a LookupUnicodeLooseMD5HashUnique vindex.
+// newLookupUnicodeLooseMD5HashUnique creates a LookupUnicodeLooseMD5HashUnique vindex.
 // The supplied map has the following required fields:
 //
 //	table: name of the backing table. It can be qualified by the keyspace.
@@ -293,7 +304,7 @@ type LookupUnicodeLooseMD5HashUnique struct {
 //
 //	autocommit: setting this to "true" will cause deletes to be ignored.
 //	write_only: in this mode, Map functions return the full keyrange causing a full scatter.
-func NewLookupUnicodeLooseMD5HashUnique(name string, m map[string]string) (Vindex, error) {
+func newLookupUnicodeLooseMD5HashUnique(name string, m map[string]string) (Vindex, error) {
 	lhu := &LookupUnicodeLooseMD5HashUnique{name: name}
 
 	cc, err := parseCommonConfig(m)

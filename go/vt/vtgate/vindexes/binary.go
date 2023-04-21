@@ -104,5 +104,8 @@ func (*Binary) ReverseMap(_ VCursor, ksids [][]byte) ([]sqltypes.Value, error) {
 }
 
 func init() {
-	Register("binary", NewBinary)
+	Register("binary", &vindexFactory{
+		create: NewBinary,
+		params: nil,
+	})
 }

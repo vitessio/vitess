@@ -30,10 +30,17 @@ import (
 
 var (
 	_ MultiColumn = (*RegionExperimental)(nil)
+
+	regionExperimentalParams = []VindexParam{
+		&vindexParam{name: "region_bytes", required: true},
+	}
 )
 
 func init() {
-	Register("region_experimental", NewRegionExperimental)
+	Register("region_experimental", &vindexFactory{
+		create: NewRegionExperimental,
+		params: regionExperimentalParams,
+	})
 }
 
 // RegionExperimental is a multi-column unique vindex. The first column is prefixed

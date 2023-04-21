@@ -34,10 +34,18 @@ import (
 
 var (
 	_ MultiColumn = (*RegionJSON)(nil)
+
+	regionJSONParams = []VindexParam{
+		&vindexParam{name: "region_map", required: true},
+		&vindexParam{name: "region_bytes", required: true},
+	}
 )
 
 func init() {
-	Register("region_json", NewRegionJSON)
+	Register("region_json", &vindexFactory{
+		create: newRegionJSON,
+		params: regionJSONParams,
+	})
 }
 
 // RegionMap is used to store mapping of country to region
@@ -54,11 +62,11 @@ type RegionJSON struct {
 	regionBytes int
 }
 
-// NewRegionJSON creates a RegionJson vindex.
+// newRegionJSON creates a RegionJson vindex.
 // The supplied map requires all the fields of "RegionExperimental".
 // Additionally, it requires a region_map argument representing the path to a json file
 // containing a map of country to region.
-func NewRegionJSON(name string, m map[string]string) (Vindex, error) {
+func newRegionJSON(name string, m map[string]string) (Vindex, error) {
 	rmPath := m["region_map"]
 	rmap := make(map[string]uint64)
 	data, err := os.ReadFile(rmPath)

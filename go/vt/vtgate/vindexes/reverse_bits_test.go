@@ -31,7 +31,7 @@ import (
 var reverseBits SingleColumn
 
 func init() {
-	hv, err := CreateVindex("reverse_bits", "rr", map[string]string{"Table": "t", "Column": "c"})
+	hv, err := CreateVindex("reverse_bits", "rr", map[string]string{})
 	if err != nil {
 		panic(err)
 	}
