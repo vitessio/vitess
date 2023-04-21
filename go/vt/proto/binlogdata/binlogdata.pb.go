@@ -1327,6 +1327,7 @@ func (x *Bitmap) GetCols() []byte {
 // If Before is set and not After, it's a delete.
 // If After is set and not Before, it's an insert.
 // If both are set, it's an update.
+// DataColumns is a bitmap of all columns: bit set if column is present in the after image
 type RowChange struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
