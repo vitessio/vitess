@@ -274,7 +274,7 @@ func TestTxPoolWaitTimeoutError(t *testing.T) {
 	env := newEnv("TabletServerTest")
 	env.Config().TxPool.Size = 1
 	env.Config().TxPool.MaxWaiters = 0
-	env.Config().TxPool.TimeoutSeconds = 1
+	_ = env.Config().TxPool.TimeoutSeconds.Set("1s")
 	// given
 	db, txPool, _, closer := setupWithEnv(t, env)
 	defer closer()
@@ -759,11 +759,11 @@ func newEnv(exporterName string) tabletenv.Env {
 	config := tabletenv.NewDefaultConfig()
 	config.TxPool.Size = 300
 	_ = config.Oltp.TxTimeoutSeconds.Set("30s")
-	config.TxPool.TimeoutSeconds = 40
+	_ = config.TxPool.TimeoutSeconds.Set("40s")
 	config.TxPool.MaxWaiters = 500000
-	config.OltpReadPool.IdleTimeoutSeconds = 30
-	config.OlapReadPool.IdleTimeoutSeconds = 30
-	config.TxPool.IdleTimeoutSeconds = 30
+	_ = config.OltpReadPool.IdleTimeoutSeconds.Set("30s")
+	_ = config.OlapReadPool.IdleTimeoutSeconds.Set("30s")
+	_ = config.TxPool.IdleTimeoutSeconds.Set("30s")
 	env := tabletenv.NewEnv(config, exporterName)
 	return env
 }

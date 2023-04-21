@@ -42,17 +42,19 @@ func TestConfigParse(t *testing.T) {
 		},
 		OltpReadPool: ConnPoolConfig{
 			Size:               16,
-			TimeoutSeconds:     10,
-			IdleTimeoutSeconds: 20,
 			PrefillParallelism: 30,
 			MaxWaiters:         40,
-			MaxLifetimeSeconds: 50,
 		},
 		RowStreamer: RowStreamerConfig{
 			MaxInnoDBTrxHistLen: 1000,
 			MaxMySQLReplLagSecs: 400,
 		},
 	}
+
+	_ = cfg.OltpReadPool.TimeoutSeconds.Set("10s")
+	_ = cfg.OltpReadPool.IdleTimeoutSeconds.Set("20s")
+	_ = cfg.OltpReadPool.MaxLifetimeSeconds.Set("50s")
+
 	gotBytes, err := yaml2.Marshal(&cfg)
 	require.NoError(t, err)
 	wantBytes := `db:
@@ -78,12 +80,12 @@ olap: {}
 olapReadPool: {}
 oltp: {}
 oltpReadPool:
-  idleTimeoutSeconds: 20
-  maxLifetimeSeconds: 50
+  idleTimeoutSeconds: 20s
+  maxLifetimeSeconds: 50s
   maxWaiters: 40
   prefillParallelism: 30
   size: 16
-  timeoutSeconds: 10
+  timeoutSeconds: 10s
 replicationTracker: {}
 rowStreamer:
   maxInnoDBTrxHistLen: 1000
@@ -137,14 +139,14 @@ messagePostponeParallelism: 4
 olap:
   txTimeoutSeconds: 30s
 olapReadPool:
-  idleTimeoutSeconds: 1800
+  idleTimeoutSeconds: 30m0s
   size: 200
 oltp:
   maxRows: 10000
   queryTimeoutSeconds: 30s
   txTimeoutSeconds: 30s
 oltpReadPool:
-  idleTimeoutSeconds: 1800
+  idleTimeoutSeconds: 30m0s
   maxWaiters: 5000
   size: 16
 queryCacheLFU: true
@@ -161,10 +163,10 @@ signalSchemaChangeReloadIntervalSeconds: 5s
 signalWhenSchemaChange: true
 streamBufferSize: 32768
 txPool:
-  idleTimeoutSeconds: 1800
+  idleTimeoutSeconds: 30m0s
   maxWaiters: 5000
   size: 20
-  timeoutSeconds: 1
+  timeoutSeconds: 1s
 `
 	utils.MustMatch(t, want, string(gotBytes))
 }
@@ -176,17 +178,18 @@ func TestClone(t *testing.T) {
 	cfg1 := &TabletConfig{
 		OltpReadPool: ConnPoolConfig{
 			Size:               16,
-			TimeoutSeconds:     10,
-			IdleTimeoutSeconds: 20,
 			PrefillParallelism: 30,
 			MaxWaiters:         40,
-			MaxLifetimeSeconds: 50,
 		},
 		RowStreamer: RowStreamerConfig{
 			MaxInnoDBTrxHistLen: 1000000,
 			MaxMySQLReplLagSecs: 43200,
 		},
 	}
+	_ = cfg1.OltpReadPool.TimeoutSeconds.Set("10s")
+	_ = cfg1.OltpReadPool.IdleTimeoutSeconds.Set("20s")
+	_ = cfg1.OltpReadPool.MaxLifetimeSeconds.Set("50s")
+
 	cfg2 := cfg1.Clone()
 	assert.Equal(t, cfg1, cfg2)
 	cfg1.OltpReadPool.Size = 10
@@ -203,14 +206,14 @@ func TestFlags(t *testing.T) {
 
 	// Simple Init.
 	Init()
-	want.OlapReadPool.IdleTimeoutSeconds = 1800
-	want.TxPool.IdleTimeoutSeconds = 1800
+	_ = want.OlapReadPool.IdleTimeoutSeconds.Set("30m")
+	_ = want.TxPool.IdleTimeoutSeconds.Set("30m")
 	want.HotRowProtection.Mode = Disable
 	want.Consolidator = Enable
-	want.Healthcheck.IntervalSeconds.Set("20s")
-	want.Healthcheck.DegradedThresholdSeconds.Set("30s")
-	want.Healthcheck.UnhealthyThresholdSeconds.Set("2h")
-	want.ReplicationTracker.HeartbeatIntervalSeconds.Set("1s")
+	_ = want.Healthcheck.IntervalSeconds.Set("20s")
+	_ = want.Healthcheck.DegradedThresholdSeconds.Set("30s")
+	_ = want.Healthcheck.UnhealthyThresholdSeconds.Set("2h")
+	_ = want.ReplicationTracker.HeartbeatIntervalSeconds.Set("1s")
 	want.ReplicationTracker.Mode = Disable
 	assert.Equal(t, want.DB, currentConfig.DB)
 	assert.Equal(t, want, currentConfig)

@@ -126,11 +126,16 @@ func registerTabletEnvFlags(fs *pflag.FlagSet) {
 	fs.Var(&currentConfig.Olap.TxTimeoutSeconds, defaultConfig.Olap.TxTimeoutSeconds.Name(), "query server transaction timeout (in seconds), after which a transaction in an OLAP session will be killed")
 	currentConfig.Oltp.QueryTimeoutSeconds = defaultConfig.Oltp.QueryTimeoutSeconds.Clone()
 	fs.Var(&currentConfig.Oltp.QueryTimeoutSeconds, currentConfig.Oltp.QueryTimeoutSeconds.Name(), "query server query timeout (in seconds), this is the query timeout in vttablet side. If a query takes more than this timeout, it will be killed.")
-	SecondsVar(fs, &currentConfig.OltpReadPool.TimeoutSeconds, "queryserver-config-query-pool-timeout", defaultConfig.OltpReadPool.TimeoutSeconds, "query server query pool timeout (in seconds), it is how long vttablet waits for a connection from the query pool. If set to 0 (default) then the overall query timeout is used instead.")
-	SecondsVar(fs, &currentConfig.OlapReadPool.TimeoutSeconds, "queryserver-config-stream-pool-timeout", defaultConfig.OlapReadPool.TimeoutSeconds, "query server stream pool timeout (in seconds), it is how long vttablet waits for a connection from the stream pool. If set to 0 (default) then there is no timeout.")
-	SecondsVar(fs, &currentConfig.TxPool.TimeoutSeconds, "queryserver-config-txpool-timeout", defaultConfig.TxPool.TimeoutSeconds, "query server transaction pool timeout, it is how long vttablet waits if tx pool is full")
-	SecondsVar(fs, &currentConfig.OltpReadPool.IdleTimeoutSeconds, "queryserver-config-idle-timeout", defaultConfig.OltpReadPool.IdleTimeoutSeconds, "query server idle timeout (in seconds), vttablet manages various mysql connection pools. This config means if a connection has not been used in given idle timeout, this connection will be removed from pool. This effectively manages number of connection objects and optimize the pool performance.")
-	SecondsVar(fs, &currentConfig.OltpReadPool.MaxLifetimeSeconds, "queryserver-config-pool-conn-max-lifetime", defaultConfig.OltpReadPool.MaxLifetimeSeconds, "query server connection max lifetime (in seconds), vttablet manages various mysql connection pools. This config means if a connection has lived at least this long, it connection will be removed from pool upon the next time it is returned to the pool.")
+	currentConfig.OltpReadPool.TimeoutSeconds = defaultConfig.OltpReadPool.TimeoutSeconds.Clone()
+	fs.Var(&currentConfig.OltpReadPool.TimeoutSeconds, currentConfig.OltpReadPool.TimeoutSeconds.Name(), "query server query pool timeout (in seconds), it is how long vttablet waits for a connection from the query pool. If set to 0 (default) then the overall query timeout is used instead.")
+	currentConfig.OlapReadPool.TimeoutSeconds = defaultConfig.OlapReadPool.TimeoutSeconds.Clone()
+	fs.Var(&currentConfig.OlapReadPool.TimeoutSeconds, currentConfig.OlapReadPool.TimeoutSeconds.Name(), "query server stream pool timeout (in seconds), it is how long vttablet waits for a connection from the stream pool. If set to 0 (default) then there is no timeout.")
+	currentConfig.TxPool.TimeoutSeconds = defaultConfig.TxPool.TimeoutSeconds.Clone()
+	fs.Var(&currentConfig.TxPool.TimeoutSeconds, currentConfig.TxPool.TimeoutSeconds.Name(), "query server transaction pool timeout, it is how long vttablet waits if tx pool is full")
+	currentConfig.OltpReadPool.IdleTimeoutSeconds = defaultConfig.OltpReadPool.IdleTimeoutSeconds.Clone()
+	fs.Var(&currentConfig.OltpReadPool.IdleTimeoutSeconds, currentConfig.OltpReadPool.IdleTimeoutSeconds.Name(), "query server idle timeout (in seconds), vttablet manages various mysql connection pools. This config means if a connection has not been used in given idle timeout, this connection will be removed from pool. This effectively manages number of connection objects and optimize the pool performance.")
+	currentConfig.OltpReadPool.MaxLifetimeSeconds = defaultConfig.OltpReadPool.MaxLifetimeSeconds.Clone()
+	fs.Var(&currentConfig.OltpReadPool.MaxLifetimeSeconds, currentConfig.OltpReadPool.MaxLifetimeSeconds.Name(), "query server connection max lifetime (in seconds), vttablet manages various mysql connection pools. This config means if a connection has lived at least this long, it connection will be removed from pool upon the next time it is returned to the pool.")
 	fs.IntVar(&currentConfig.OltpReadPool.MaxWaiters, "queryserver-config-query-pool-waiter-cap", defaultConfig.OltpReadPool.MaxWaiters, "query server query pool waiter limit, this is the maximum number of queries that can be queued waiting to get a connection")
 	fs.IntVar(&currentConfig.OlapReadPool.MaxWaiters, "queryserver-config-stream-pool-waiter-cap", defaultConfig.OlapReadPool.MaxWaiters, "query server stream pool waiter limit, this is the maximum number of streaming queries that can be queued waiting to get a connection")
 	fs.IntVar(&currentConfig.TxPool.MaxWaiters, "queryserver-config-txpool-waiter-cap", defaultConfig.TxPool.MaxWaiters, "query server transaction pool waiter limit, this is the maximum number of transactions that can be queued waiting to get a connection")
@@ -208,10 +213,10 @@ var (
 func Init() {
 	// IdleTimeout is only initialized for OltpReadPool , but the other pools need to inherit the value.
 	// TODO(sougou): Make a decision on whether this should be global or per-pool.
-	currentConfig.OlapReadPool.IdleTimeoutSeconds = currentConfig.OltpReadPool.IdleTimeoutSeconds
-	currentConfig.TxPool.IdleTimeoutSeconds = currentConfig.OltpReadPool.IdleTimeoutSeconds
-	currentConfig.OlapReadPool.MaxLifetimeSeconds = currentConfig.OltpReadPool.MaxLifetimeSeconds
-	currentConfig.TxPool.MaxLifetimeSeconds = currentConfig.OltpReadPool.MaxLifetimeSeconds
+	_ = currentConfig.OlapReadPool.IdleTimeoutSeconds.Set(currentConfig.OltpReadPool.IdleTimeoutSeconds.Get().String())
+	_ = currentConfig.TxPool.IdleTimeoutSeconds.Set(currentConfig.OltpReadPool.IdleTimeoutSeconds.Get().String())
+	_ = currentConfig.OlapReadPool.MaxLifetimeSeconds.Set(currentConfig.OltpReadPool.MaxLifetimeSeconds.Get().String())
+	_ = currentConfig.TxPool.MaxLifetimeSeconds.Set(currentConfig.OltpReadPool.MaxLifetimeSeconds.Get().String())
 
 	if enableHotRowProtection {
 		if enableHotRowProtectionDryRun {
@@ -368,12 +373,39 @@ func (cfg *TabletConfig) MarshalJSON() ([]byte, error) {
 
 // ConnPoolConfig contains the config for a conn pool.
 type ConnPoolConfig struct {
-	Size               int     `json:"size,omitempty"`
-	TimeoutSeconds     Seconds `json:"timeoutSeconds,omitempty"`
-	IdleTimeoutSeconds Seconds `json:"idleTimeoutSeconds,omitempty"`
-	MaxLifetimeSeconds Seconds `json:"maxLifetimeSeconds,omitempty"`
-	PrefillParallelism int     `json:"prefillParallelism,omitempty"`
-	MaxWaiters         int     `json:"maxWaiters,omitempty"`
+	Size               int                               `json:"size,omitempty"`
+	TimeoutSeconds     flagutil.DeprecatedFloat64Seconds `json:"timeoutSeconds,omitempty"`
+	IdleTimeoutSeconds flagutil.DeprecatedFloat64Seconds `json:"idleTimeoutSeconds,omitempty"`
+	MaxLifetimeSeconds flagutil.DeprecatedFloat64Seconds `json:"maxLifetimeSeconds,omitempty"`
+	PrefillParallelism int                               `json:"prefillParallelism,omitempty"`
+	MaxWaiters         int                               `json:"maxWaiters,omitempty"`
+}
+
+func (cfg *ConnPoolConfig) MarshalJSON() ([]byte, error) {
+	type Proxy ConnPoolConfig
+
+	tmp := struct {
+		Proxy
+		TimeoutSeconds     string `json:"timeoutSeconds,omitempty"`
+		IdleTimeoutSeconds string `json:"idleTimeoutSeconds,omitempty"`
+		MaxLifetimeSeconds string `json:"maxLifetimeSeconds,omitempty"`
+	}{
+		Proxy: Proxy(*cfg),
+	}
+
+	if d := cfg.TimeoutSeconds.Get(); d != 0 {
+		tmp.TimeoutSeconds = d.String()
+	}
+
+	if d := cfg.IdleTimeoutSeconds.Get(); d != 0 {
+		tmp.IdleTimeoutSeconds = d.String()
+	}
+
+	if d := cfg.MaxLifetimeSeconds.Get(); d != 0 {
+		tmp.MaxLifetimeSeconds = d.String()
+	}
+
+	return json.Marshal(&tmp)
 }
 
 // OlapConfig contains the config for olap settings.
@@ -647,18 +679,24 @@ func (c *TabletConfig) verifyTransactionLimitConfig() error {
 // They actually get overwritten during Init.
 var defaultConfig = TabletConfig{
 	OltpReadPool: ConnPoolConfig{
-		Size:               16,
-		IdleTimeoutSeconds: 30 * 60,
+		Size: 16,
+		// TODO (ajm188): remove the zero-value ones after these are durations.
+		// See the comment below in GracePeriodsConfig as to why they are needed
+		// for now.
+		TimeoutSeconds:     flagutil.NewDeprecatedFloat64Seconds("queryserver-config-query-pool-timeout", 0),
+		IdleTimeoutSeconds: flagutil.NewDeprecatedFloat64Seconds("queryserver-config-idle-timeout", 30*time.Minute),
+		MaxLifetimeSeconds: flagutil.NewDeprecatedFloat64Seconds("queryserver-config-pool-conn-max-lifetime", 0),
 		MaxWaiters:         5000,
 	},
 	OlapReadPool: ConnPoolConfig{
 		Size:               200,
-		IdleTimeoutSeconds: 30 * 60,
+		IdleTimeoutSeconds: flagutil.NewDeprecatedFloat64Seconds("queryserver-config-stream-pool-timeout", 30*time.Minute),
 	},
 	TxPool: ConnPoolConfig{
-		Size:               20,
-		TimeoutSeconds:     1,
-		IdleTimeoutSeconds: 30 * 60,
+		Size:           20,
+		TimeoutSeconds: flagutil.NewDeprecatedFloat64Seconds("queryserver-config-txpool-timeout", time.Second),
+		// No actual flag for this one, but has non-zero value
+		IdleTimeoutSeconds: flagutil.NewDeprecatedFloat64Seconds("queryserver-config-txpool-idle-timeout", 30*time.Minute),
 		MaxWaiters:         5000,
 	},
 	Olap: OlapConfig{
