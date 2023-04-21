@@ -2764,7 +2764,6 @@ type (
 	}
 
 	// GeomFormatType is an enum to get the types of geom format functions with possible values: BinaryFormat TextFormat
-
 	GeomFormatType int8
 
 	GeomFormatExpr struct {
@@ -2774,7 +2773,6 @@ type (
 	}
 
 	// GeomPropertyType is an enum to get the types of geom format functions with possible values: Dimension Envelope IsSimple IsEmpty GeometryType
-
 	GeomPropertyType int8
 
 	GeomPropertyFuncExpr struct {
@@ -2783,7 +2781,6 @@ type (
 	}
 
 	// PointPropertyType is an enum to get the types of geom format functions with possible values: XCordinate YCordinate Latitude Longitude
-
 	PointPropertyType int8
 
 	PointPropertyFuncExpr struct {
