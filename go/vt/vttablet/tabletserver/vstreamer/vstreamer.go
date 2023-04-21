@@ -457,8 +457,6 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 		// Insert/Delete/Update are supported only to be used in the context of external mysql streams where source databases
 		// could be using SBR. Vitess itself will never run into cases where it needs to consume non rbr statements.
 
-		log.Errorf("DEBUG Query: %s", q.SQL)
-
 		switch cat := sqlparser.Preview(q.SQL); cat {
 		case sqlparser.StmtInsert:
 			mustSend := mustSendStmt(q, vs.cp.DBName())
@@ -640,8 +638,8 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 			return nil, err
 		}
 		// Events inside the payload don't have their own checksum.
-		ogcsa := vs.format.ChecksumAlgorithm
-		defer func() { vs.format.ChecksumAlgorithm = ogcsa }()
+		ogca := vs.format.ChecksumAlgorithm
+		defer func() { vs.format.ChecksumAlgorithm = ogca }()
 		vs.format.ChecksumAlgorithm = mysql.BinlogChecksumAlgOff
 		for _, tpevent := range tpevents {
 			tpvevents, err := vs.parseEvent(tpevent)

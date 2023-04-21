@@ -159,7 +159,7 @@ func (tp *TransactionPayload) read(data []byte) error {
 			if !ok {
 				return vterrors.New(vtrpcpb.Code_INTERNAL, "error reading field length")
 			}
-			log.Infof("Compressed payload event; for field type %d, field length: %d", fieldType, fieldLen)
+			log.Infof("Compressed payload event; for field type: %d, field length: %d", fieldType, fieldLen)
 			pos++
 
 			switch fieldType {
@@ -232,7 +232,7 @@ func (tp *TransactionPayload) decode() error {
 // Decompress the payload's bytes.
 func (tp *TransactionPayload) decompress() ([]byte, error) {
 	if len(tp.Payload) == 0 {
-		return []byte{}, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "cannot decompress missing bytes")
+		return []byte{}, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "cannot decompress empty payload")
 	}
 
 	in := bytes.NewReader(tp.Payload)
