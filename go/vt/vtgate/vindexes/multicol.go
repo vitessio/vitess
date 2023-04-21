@@ -48,7 +48,7 @@ const (
 
 var (
 	multiColParams = []VindexParam{
-		&vindexParam{name: paramColumnCount, required: true},
+		&vindexParam{name: paramColumnCount},
 		&vindexParam{name: paramColumnBytes},
 		&vindexParam{name: paramColumnVindex},
 	}

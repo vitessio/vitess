@@ -57,6 +57,22 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
+type vindexFactory struct {
+	create func(string, map[string]string) (vindexes.Vindex, error)
+}
+
+func (f *vindexFactory) Create(name string, params map[string]string) (vindexes.Vindex, error) {
+	return f.create(name, params)
+}
+
+func (f *vindexFactory) AllowUnknownParams() bool {
+	return true
+}
+
+func (f *vindexFactory) Params() []vindexes.VindexParam {
+	return nil
+}
+
 // hashIndex is a functional, unique Vindex.
 type hashIndex struct{ name string }
 
@@ -206,11 +222,11 @@ func (m *multiColIndex) PartialVindex() bool {
 }
 
 func init() {
-	vindexes.Register("hash_test", newHashIndex)
-	vindexes.Register("lookup_test", newLookupIndex)
-	vindexes.Register("name_lkp_test", newNameLkpIndex)
-	vindexes.Register("costly", newCostlyIndex)
-	vindexes.Register("multiCol_test", newMultiColIndex)
+	vindexes.Register("hash_test", &vindexFactory{create: newHashIndex})
+	vindexes.Register("lookup_test", &vindexFactory{create: newLookupIndex})
+	vindexes.Register("name_lkp_test", &vindexFactory{create: newNameLkpIndex})
+	vindexes.Register("costly", &vindexFactory{create: newCostlyIndex})
+	vindexes.Register("multiCol_test", &vindexFactory{create: newMultiColIndex})
 }
 
 func makeTestOutput(t *testing.T) string {

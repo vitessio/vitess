@@ -126,7 +126,7 @@ func TestRegionExperimentalCreateErrors(t *testing.T) {
 	_, err := createRegionVindex(t, "region_experimental", "f1,f2", 3)
 	assert.EqualError(t, err, "region_bits must be 1 or 2: 3")
 	_, err = CreateVindex("region_experimental", "region_experimental", nil)
-	assert.EqualError(t, err, "missing required param 'region_bytes'")
+	assert.EqualError(t, err, "region_experimental missing region_bytes param")
 }
 
 func createRegionVindex(t *testing.T, name, from string, rb int) (Vindex, error) {

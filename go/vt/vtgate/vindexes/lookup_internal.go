@@ -48,9 +48,9 @@ var (
 	// lookupInternalParams are used by both lookup_* vindexes and the newer
 	// consistent_lookup_* vindexes.
 	lookupInternalParams = []VindexParam{
-		&vindexParam{name: "table", required: true},
-		&vindexParam{name: "from", required: true},
-		&vindexParam{name: "to", required: true},
+		&vindexParam{name: "table"},
+		&vindexParam{name: "from"},
+		&vindexParam{name: "to"},
 		&vindexParam{name: "ignore_nulls"},
 		&vindexParam{name: "batch_lookup"},
 		&vindexParam{name: "read_lock"},

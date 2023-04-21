@@ -32,7 +32,7 @@ var (
 	_ MultiColumn = (*RegionExperimental)(nil)
 
 	regionExperimentalParams = []VindexParam{
-		&vindexParam{name: "region_bytes", required: true},
+		&vindexParam{name: "region_bytes"},
 	}
 )
 

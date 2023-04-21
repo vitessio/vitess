@@ -1179,10 +1179,9 @@ func TestCreateCustomizedVindex(t *testing.T) {
 			"v": {
 				Type: "lookup_unique",
 				Params: map[string]string{
-					"table":     "ks.lkp",
-					"from":      "c1",
-					"to":        "col2",
-					"data_type": "bigint(20)",
+					"table": "ks.lkp",
+					"from":  "c1",
+					"to":    "col2",
 				},
 				Owner: "t1",
 			},
@@ -1231,7 +1230,6 @@ func TestCreateCustomizedVindex(t *testing.T) {
 					"table":      "ks.lkp",
 					"from":       "c1",
 					"to":         "col2",
-					"data_type":  "bigint(20)",
 					"write_only": "true",
 				},
 				Owner: "t1",
@@ -1450,6 +1448,7 @@ func TestCreateLookupVindexFailures(t *testing.T) {
 					Params: map[string]string{
 						"table": "targetks.t",
 						"from":  "c1,c2",
+						"to":    "c3",
 					},
 				},
 			},
@@ -1464,6 +1463,7 @@ func TestCreateLookupVindexFailures(t *testing.T) {
 					Params: map[string]string{
 						"table": "targetks.t",
 						"from":  "c1",
+						"to":    "c2",
 					},
 				},
 			},
@@ -1478,6 +1478,7 @@ func TestCreateLookupVindexFailures(t *testing.T) {
 					Params: map[string]string{
 						"table": "targetks.t",
 						"from":  "c1,c2",
+						"to":    "c2",
 					},
 				},
 			},
@@ -1520,6 +1521,7 @@ func TestCreateLookupVindexFailures(t *testing.T) {
 					Params: map[string]string{
 						"table": "targetks.t",
 						"from":  "c1",
+						"to":    "c2",
 					},
 					Owner: "otherTable",
 				},
@@ -1569,6 +1571,7 @@ func TestCreateLookupVindexFailures(t *testing.T) {
 					Params: map[string]string{
 						"table": "targetks.t",
 						"from":  "c1",
+						"to":    "c2",
 					},
 					Owner: "t1",
 				},
@@ -2450,6 +2453,11 @@ func TestMaterializerNoGoodVindex(t *testing.T) {
 		Vindexes: map[string]*vschemapb.Vindex{
 			"lookup_unique": {
 				Type: "lookup_unique",
+				Params: map[string]string{
+					"table": "t1",
+					"from":  "c1",
+					"to":    "c2",
+				},
 			},
 		},
 		Tables: map[string]*vschemapb.Table{

@@ -89,8 +89,6 @@ type (
 	VindexParam interface {
 		// Name of the param.
 		Name() string
-		// Required params must be passed to the factory.
-		Required() bool
 	}
 
 	// SingleColumn defines the interface for a single column vindex.
@@ -187,8 +185,7 @@ type (
 	}
 
 	vindexParam struct {
-		name     string
-		required bool
+		name string
 	}
 )
 
@@ -209,10 +206,6 @@ func (f *vindexFactory) Params() []VindexParam {
 
 func (p *vindexParam) Name() string {
 	return p.name
-}
-
-func (p *vindexParam) Required() bool {
-	return p.required
 }
 
 // Register registers a vindex factory under the specified vindexType.
@@ -243,9 +236,6 @@ func CreateVindex(vindexType, name string, params map[string]string) (Vindex, er
 	validParamsByName := make(map[string]VindexParam)
 	for _, param := range factory.Params() {
 		validParamsByName[param.Name()] = param
-		if _, ok := params[param.Name()]; param.Required() && !ok {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "missing required param '%s'", param.Name())
-		}
 	}
 	for name := range params {
 		if _, ok := validParamsByName[name]; !ok && !factory.AllowUnknownParams() {

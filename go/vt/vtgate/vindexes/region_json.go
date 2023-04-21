@@ -36,8 +36,8 @@ var (
 	_ MultiColumn = (*RegionJSON)(nil)
 
 	regionJSONParams = []VindexParam{
-		&vindexParam{name: "region_map", required: true},
-		&vindexParam{name: "region_bytes", required: true},
+		&vindexParam{name: "region_map"},
+		&vindexParam{name: "region_bytes"},
 	}
 )
 
