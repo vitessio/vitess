@@ -75,6 +75,54 @@ func (ev binlogEvent) IsTransactionPayload() bool {
 
 // TransactionPayload returns the BinlogEvents contained within the
 // compressed transaction.
+// The following event types are compressed as part of the transaction payload:
+//
+//	QUERY_EVENT = 2,
+//	INTVAR_EVENT = 5,
+//	APPEND_BLOCK_EVENT = 9,
+//	DELETE_FILE_EVENT = 11,
+//	RAND_EVENT = 13,
+//	USER_VAR_EVENT = 14,
+//	XID_EVENT = 16,
+//	BEGIN_LOAD_QUERY_EVENT = 17,
+//	EXECUTE_LOAD_QUERY_EVENT = 18,
+//	TABLE_MAP_EVENT = 19,
+//	WRITE_ROWS_EVENT_V1 = 23,
+//	UPDATE_ROWS_EVENT_V1 = 24,
+//	DELETE_ROWS_EVENT_V1 = 25,
+//	IGNORABLE_LOG_EVENT = 28,
+//	ROWS_QUERY_LOG_EVENT = 29,
+//	WRITE_ROWS_EVENT = 30,
+//	UPDATE_ROWS_EVENT = 31,
+//	DELETE_ROWS_EVENT = 32,
+//	XA_PREPARE_LOG_EVENT = 38,
+//	PARTIAL_UPDATE_ROWS_EVENT = 39,
+//
+// When the transaction compression is enabled, the GTID log event has the following
+// fields:
+// +-----------------------------------------+
+// | field_type (1-9 bytes)                  |
+// +-----------------------------------------+
+// | field_size (1-9 bytes)                  |
+// +-----------------------------------------+
+// | m_payload (1 to N bytes)                |
+// +-----------------------------------------+
+// | field_type (1-9 bytes)                  |
+// +-----------------------------------------+
+// | field_size (1-9 bytes)                  |
+// +-----------------------------------------+
+// | m_compression_type (1 to 9 bytes)       |
+// +-----------------------------------------+
+// | field_type (1-9 bytes)                  |
+// +-----------------------------------------+
+// | field_size (1-9 bytes)                  |
+// +-----------------------------------------+
+// | m_uncompressed_size size (0 to 9 bytes) |
+// +-----------------------------------------+
+//
+// We need to extract the compressed transaction payload from the GTID event, uncompress it
+// with zstd, and then process the events (e.g. Query and Row events) that make up the
+// transaction.
 func (ev binlogEvent) TransactionPayload(format BinlogFormat) ([]BinlogEvent, error) {
 	tp := &TransactionPayload{}
 	if err := tp.Decode(ev.Bytes()[format.HeaderLength:]); err != nil {
