@@ -156,16 +156,20 @@ func setup() (func(), int) {
 	return cleanup, 0
 }
 
+// We run Tests twice, first with full binlog_row_image, then with noblob.
 var runNoBlobTest = false
+
+// We use this tempDir for creating the external cnfs, since we create the test cluster afterwards.
+const tempDir = "/tmp"
 
 func TestMain(m *testing.M) {
 	binlogplayer.SetProtocol("vreplication_test_framework", "test")
 	_flag.ParseFlagsForTest()
 	exitCode := func() int {
-		if err := utils.SetBinlogRowImageMode("full", "/tmp"); err != nil {
+		if err := utils.SetBinlogRowImageMode("full", tempDir); err != nil {
 			panic(err)
 		}
-		defer utils.SetBinlogRowImageMode("", "/tmp")
+		defer utils.SetBinlogRowImageMode("", tempDir)
 		_, ret := setup()
 		if ret > 0 {
 			return ret
@@ -177,10 +181,10 @@ func TestMain(m *testing.M) {
 
 		cleanup()
 		runNoBlobTest = true
-		if err := utils.SetBinlogRowImageMode("noblob", "/tmp"); err != nil {
+		if err := utils.SetBinlogRowImageMode("noblob", tempDir); err != nil {
 			panic(err)
 		}
-		defer utils.SetBinlogRowImageMode("", "/tmp")
+		defer utils.SetBinlogRowImageMode("", tempDir)
 		deferFunc, ret := setup()
 		if ret > 0 {
 			return ret
