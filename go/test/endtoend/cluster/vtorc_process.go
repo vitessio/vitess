@@ -77,6 +77,9 @@ func (config *VTOrcConfiguration) AddDefaults(webPort int) {
 	if config.RecoveryPeriodBlockSeconds == 0 {
 		config.RecoveryPeriodBlockSeconds = 1
 	}
+	if config.TopoInformationRefreshSeconds == 0 {
+		config.TopoInformationRefreshSeconds = 1
+	}
 	config.ListenAddress = fmt.Sprintf(":%d", webPort)
 }
 
