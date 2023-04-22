@@ -52,9 +52,6 @@ func (h *Horizon) GetColumns() (exprs []*sqlparser.AliasedExpr, err error) {
 }
 
 var _ ops.Operator = (*Horizon)(nil)
-var _ ops.PhysicalOperator = (*Horizon)(nil)
-
-func (h *Horizon) IPhysical() {}
 
 func (h *Horizon) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (ops.Operator, error) {
 	newSrc, err := h.Source.AddPredicate(ctx, expr)

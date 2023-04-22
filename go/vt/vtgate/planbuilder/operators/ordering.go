@@ -29,11 +29,7 @@ type Ordering struct {
 	Offset  []int
 	WOffset []int
 
-	// Pushed marks whether the limit has been pushed down to the inputs but still need to keep the operator around.
-	// For example, `select * from user order by id limit 10`. Even after we push the limit to the route, we need a limit on top
-	// since it is a scatter.
-	Pushed bool
-	Order  []ops.OrderBy
+	Order []ops.OrderBy
 }
 
 func (o *Ordering) Clone(inputs []ops.Operator) ops.Operator {
@@ -41,7 +37,6 @@ func (o *Ordering) Clone(inputs []ops.Operator) ops.Operator {
 		Source:  inputs[0],
 		Offset:  slices.Clone(o.Offset),
 		WOffset: slices.Clone(o.WOffset),
-		Pushed:  o.Pushed,
 		Order:   slices.Clone(o.Order),
 	}
 }
@@ -79,8 +74,6 @@ func (o *Ordering) GetColumns() ([]*sqlparser.AliasedExpr, error) {
 func (o *Ordering) GetOrdering() ([]ops.OrderBy, error) {
 	return o.Order, nil
 }
-
-func (o *Ordering) IPhysical() {}
 
 func (o *Ordering) planOffsets(ctx *plancontext.PlanningContext) error {
 	for _, order := range o.Order {

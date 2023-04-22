@@ -34,15 +34,10 @@ type Delete struct {
 	noPredicates
 }
 
-var _ ops.PhysicalOperator = (*Delete)(nil)
-
 // Introduces implements the PhysicalOperator interface
 func (d *Delete) Introduces() semantics.TableSet {
 	return d.QTable.ID
 }
-
-// IPhysical implements the PhysicalOperator interface
-func (d *Delete) IPhysical() {}
 
 // Clone implements the Operator interface
 func (d *Delete) Clone(inputs []ops.Operator) ops.Operator {

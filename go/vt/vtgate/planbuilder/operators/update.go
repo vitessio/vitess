@@ -37,15 +37,10 @@ type Update struct {
 	noPredicates
 }
 
-var _ ops.PhysicalOperator = (*Update)(nil)
-
 // Introduces implements the PhysicalOperator interface
 func (u *Update) Introduces() semantics.TableSet {
 	return u.QTable.ID
 }
-
-// IPhysical implements the PhysicalOperator interface
-func (u *Update) IPhysical() {}
 
 // Clone implements the Operator interface
 func (u *Update) Clone(inputs []ops.Operator) ops.Operator {

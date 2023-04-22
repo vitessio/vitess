@@ -34,16 +34,11 @@ type Filter struct {
 	FinalPredicate evalengine.Expr
 }
 
-var _ ops.PhysicalOperator = (*Filter)(nil)
-
 func newFilter(op ops.Operator, expr sqlparser.Expr) ops.Operator {
 	return &Filter{
 		Source: op, Predicates: []sqlparser.Expr{expr},
 	}
 }
-
-// IPhysical implements the PhysicalOperator interface
-func (f *Filter) IPhysical() {}
 
 // Clone implements the Operator interface
 func (f *Filter) Clone(inputs []ops.Operator) ops.Operator {

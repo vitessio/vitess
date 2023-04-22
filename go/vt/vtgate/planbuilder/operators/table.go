@@ -40,11 +40,6 @@ type (
 	}
 )
 
-var _ ops.PhysicalOperator = (*Table)(nil)
-
-// IPhysical implements the PhysicalOperator interface
-func (to *Table) IPhysical() {}
-
 // Clone implements the Operator interface
 func (to *Table) Clone([]ops.Operator) ops.Operator {
 	var columns []*sqlparser.ColName

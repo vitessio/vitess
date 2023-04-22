@@ -132,8 +132,6 @@ func (p *Projection) GetOrdering() ([]ops.OrderBy, error) {
 	return p.Source.GetOrdering()
 }
 
-func (p *Projection) IPhysical() {}
-
 // AllOffsets returns a slice of integer offsets for all columns in the Projection
 // if all columns are of type Offset. If any column is not of type Offset, it returns nil.
 func (p *Projection) AllOffsets() (cols []int) {
@@ -172,31 +170,32 @@ func (p *Projection) Description() ops.OpDescription {
 	}
 }
 
-func (p *Projection) Compact(ctx *plancontext.PlanningContext) (ops.Operator, rewrite.ApplyResult, error) {
+func (p *Projection) Compact(*plancontext.PlanningContext) (ops.Operator, rewrite.ApplyResult, error) {
 	switch src := p.Source.(type) {
 	case *Route:
 		return p.compactWithRoute(src)
 	case *ApplyJoin:
-		var newColumns []int
-		var newColumnsAST []JoinColumn
-		for _, col := range p.Columns {
-			offset, ok := col.(Offset)
-			if !ok {
-				return p, rewrite.SameTree, nil
-			}
-
-			newColumns = append(newColumns, src.Columns[offset.Offset])
-			newColumnsAST = append(newColumnsAST, src.ColumnsAST[offset.Offset])
-		}
-
-		if !slices.Equal(src.Columns, newColumns) {
-			fmt.Println("w00t")
-		}
-		src.Columns = newColumns
-		src.ColumnsAST = newColumnsAST
-		return src, rewrite.NewTree, nil
+		return p.compactWithJoin(src)
 	}
 	return p, rewrite.SameTree, nil
+}
+
+func (p *Projection) compactWithJoin(src *ApplyJoin) (ops.Operator, rewrite.ApplyResult, error) {
+	var newColumns []int
+	var newColumnsAST []JoinColumn
+	for _, col := range p.Columns {
+		offset, ok := col.(Offset)
+		if !ok {
+			return p, rewrite.SameTree, nil
+		}
+
+		newColumns = append(newColumns, src.Columns[offset.Offset])
+		newColumnsAST = append(newColumnsAST, src.ColumnsAST[offset.Offset])
+	}
+
+	src.Columns = newColumns
+	src.ColumnsAST = newColumnsAST
+	return src, rewrite.NewTree, nil
 }
 
 func (p *Projection) compactWithRoute(rb *Route) (ops.Operator, rewrite.ApplyResult, error) {

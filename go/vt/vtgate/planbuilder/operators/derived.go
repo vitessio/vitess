@@ -45,11 +45,6 @@ type Derived struct {
 	ColumnsOffset []int
 }
 
-var _ ops.PhysicalOperator = (*Derived)(nil)
-
-// IPhysical implements the PhysicalOperator interface
-func (d *Derived) IPhysical() {}
-
 // Clone implements the Operator interface
 func (d *Derived) Clone(inputs []ops.Operator) ops.Operator {
 	return &Derived{

@@ -34,11 +34,6 @@ type Union struct {
 	noColumns
 }
 
-var _ ops.PhysicalOperator = (*Union)(nil)
-
-// IPhysical implements the PhysicalOperator interface
-func (u *Union) IPhysical() {}
-
 // Clone implements the Operator interface
 func (u *Union) Clone(inputs []ops.Operator) ops.Operator {
 	newOp := *u

@@ -101,8 +101,6 @@ type (
 	}
 )
 
-var _ ops.PhysicalOperator = (*Route)(nil)
-
 // UpdateRoutingLogic first checks if we are dealing with a predicate that
 func UpdateRoutingLogic(ctx *plancontext.PlanningContext, expr sqlparser.Expr, r Routing) (Routing, error) {
 	ks := r.Keyspace()
@@ -178,9 +176,6 @@ func isConstantFalse(expr sqlparser.Expr) bool {
 	}
 	return !b
 }
-
-// IPhysical implements the PhysicalOperator interface
-func (*Route) IPhysical() {}
 
 // Cost implements the Operator interface
 func (r *Route) Cost() int {
@@ -566,12 +561,6 @@ func (r *Route) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.Alia
 			return nil, 0, err
 		}
 		r.Source = proj
-
-		//// add the existing columns of route to the projection.
-		//for _, col := range cols {
-		//	proj.Columns = append(proj.Columns, Expr{E: col.Expr})
-		//	proj.ColumnNames = append(proj.ColumnNames, sqlparser.String(col))
-		//}
 	}
 	// add the new column
 	proj.Columns = append(proj.Columns, Expr{E: expr.Expr})
@@ -612,7 +601,7 @@ func (r *Route) planOffsets(ctx *plancontext.PlanningContext) (err error) {
 		return nil
 	}
 
-	// if we are getting results from multiple shards, we need to do a merge-join
+	// if we are getting results from multiple shards, we need to do a merge-sort
 	// between them to get the final output correctly sorted
 	ordering, err := r.Source.GetOrdering()
 	if err != nil || len(ordering) == 0 {
@@ -679,7 +668,6 @@ func (r *Route) Description() ops.OpDescription {
 		OperatorType: "Route",
 		Other: map[string]any{
 			"OpCode":   r.Routing.OpCode(),
-			"Cost":     r.Routing.Cost(),
 			"Keyspace": r.Routing.Keyspace(),
 		},
 	}

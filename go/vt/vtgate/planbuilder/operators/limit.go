@@ -73,8 +73,6 @@ func (l *Limit) GetOrdering() ([]ops.OrderBy, error) {
 	return l.Source.GetOrdering()
 }
 
-func (l *Limit) IPhysical() {}
-
 func (l *Limit) Description() ops.OpDescription {
 	other := map[string]any{}
 	if l.AST.Offset != nil {

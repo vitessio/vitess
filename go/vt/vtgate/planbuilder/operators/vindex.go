@@ -56,16 +56,11 @@ func (v *Vindex) Introduces() semantics.TableSet {
 	return v.Solved
 }
 
-// IPhysical implements the PhysicalOperator interface
-func (v *Vindex) IPhysical() {}
-
 // Clone implements the Operator interface
 func (v *Vindex) Clone([]ops.Operator) ops.Operator {
 	clone := *v
 	return &clone
 }
-
-var _ ops.PhysicalOperator = (*Vindex)(nil)
 
 func (v *Vindex) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr) (ops.Operator, int, error) {
 	offset, err := addColumn(ctx, v, expr.Expr)

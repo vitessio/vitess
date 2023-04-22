@@ -75,8 +75,6 @@ type JoinColumn struct {
 	RHSExpr  sqlparser.Expr
 }
 
-var _ ops.PhysicalOperator = (*ApplyJoin)(nil)
-
 func NewApplyJoin(lhs, rhs ops.Operator, predicate sqlparser.Expr, leftOuterJoin bool) *ApplyJoin {
 	return &ApplyJoin{
 		LHS:       lhs,
@@ -86,9 +84,6 @@ func NewApplyJoin(lhs, rhs ops.Operator, predicate sqlparser.Expr, leftOuterJoin
 		LeftJoin:  leftOuterJoin,
 	}
 }
-
-// IPhysical implements the PhysicalOperator interface
-func (a *ApplyJoin) IPhysical() {}
 
 // Clone implements the Operator interface
 func (a *ApplyJoin) Clone(inputs []ops.Operator) ops.Operator {

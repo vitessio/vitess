@@ -46,12 +46,6 @@ type (
 	}
 )
 
-var _ ops.PhysicalOperator = (*SubQueryOp)(nil)
-var _ ops.PhysicalOperator = (*CorrelatedSubQueryOp)(nil)
-
-// IPhysical implements the PhysicalOperator interface
-func (s *SubQueryOp) IPhysical() {}
-
 // Clone implements the Operator interface
 func (s *SubQueryOp) Clone(inputs []ops.Operator) ops.Operator {
 	result := &SubQueryOp{
@@ -82,9 +76,6 @@ func (s *SubQueryOp) Description() ops.OpDescription {
 		Variant:      "Apply",
 	}
 }
-
-// IPhysical implements the PhysicalOperator interface
-func (c *CorrelatedSubQueryOp) IPhysical() {}
 
 // Clone implements the Operator interface
 func (c *CorrelatedSubQueryOp) Clone(inputs []ops.Operator) ops.Operator {
