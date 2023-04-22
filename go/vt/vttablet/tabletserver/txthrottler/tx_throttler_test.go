@@ -140,26 +140,30 @@ func TestEnabledThrottler(t *testing.T) {
 func TestNewTxThrottler(t *testing.T) {
 	config := tabletenv.NewDefaultConfig()
 	env := tabletenv.NewEnv(config, t.Name())
+
 	{
 		// disabled config
-		_, err := newTxThrottler(env, &txThrottlerConfig{enabled: false})
+		throttler, err := newTxThrottler(env, &txThrottlerConfig{enabled: false})
 		assert.Nil(t, err)
+		assert.NotNil(t, throttler)
 	}
 	{
-		// enabled w/incomplete config
-		_, err := newTxThrottler(env, &txThrottlerConfig{
+		// enabled with invalid throttler config
+		throttler, err := newTxThrottler(env, &txThrottlerConfig{
 			enabled:         true,
 			throttlerConfig: &throttlerdatapb.Configuration{},
 		})
 		assert.NotNil(t, err)
+		assert.Nil(t, throttler)
 	}
 	{
 		// enabled
-		_, err := newTxThrottler(env, &txThrottlerConfig{
+		throttler, err := newTxThrottler(env, &txThrottlerConfig{
 			enabled:          true,
-			healthCheckCells: []string{t.Name()},
+			healthCheckCells: []string{"cell1"},
 			throttlerConfig:  throttler.DefaultMaxReplicationLagModuleConfig().Configuration,
 		})
 		assert.Nil(t, err)
+		assert.NotNil(t, throttler)
 	}
 }
