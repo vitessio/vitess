@@ -35,6 +35,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	throttlerdatapb "vitess.io/vitess/go/vt/proto/throttlerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
@@ -134,4 +135,31 @@ func TestEnabledThrottler(t *testing.T) {
 	assert.Equal(t, int64(1), throttler.requestsThrottled.Get())
 	throttler.Close()
 	assert.Zero(t, throttler.throttlerRunning.Get())
+}
+
+func TestNewTxThrottler(t *testing.T) {
+	config := tabletenv.NewDefaultConfig()
+	env := tabletenv.NewEnv(config, t.Name())
+	{
+		// disabled config
+		_, err := newTxThrottler(env, &txThrottlerConfig{enabled: false})
+		assert.Nil(t, err)
+	}
+	{
+		// enabled w/incomplete config
+		_, err := newTxThrottler(env, &txThrottlerConfig{
+			enabled:         true,
+			throttlerConfig: &throttlerdatapb.Configuration{},
+		})
+		assert.NotNil(t, err)
+	}
+	{
+		// enabled
+		_, err := newTxThrottler(env, &txThrottlerConfig{
+			enabled:          true,
+			healthCheckCells: []string{t.Name()},
+			throttlerConfig:  throttler.DefaultMaxReplicationLagModuleConfig().Configuration,
+		})
+		assert.Nil(t, err)
+	}
 }
