@@ -96,8 +96,16 @@ func (h *Horizon) GetOrdering() ([]ops.OrderBy, error) {
 	return h.QP.OrderExprs, nil
 }
 
-func (h *Horizon) getQP() *QueryProjection {
-	return h.QP
+func (h *Horizon) getQP(ctx *plancontext.PlanningContext) (*QueryProjection, error) {
+	if h.QP != nil {
+		return h.QP, nil
+	}
+	qp, err := CreateQPFromSelect(ctx, h.Select.(*sqlparser.Select))
+	if err != nil {
+		return nil, err
+	}
+	h.QP = qp
+	return h.QP, nil
 }
 func (h *Horizon) setQP(qp *QueryProjection) {
 	h.QP = qp

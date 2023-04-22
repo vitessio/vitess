@@ -267,16 +267,17 @@ func getOperatorFromJoinTableExpr(ctx *plancontext.PlanningContext, tableExpr *s
 }
 
 func getOperatorFromAliasedTableExpr(ctx *plancontext.PlanningContext, tableExpr *sqlparser.AliasedTableExpr) (ops.Operator, error) {
+	tableID := ctx.SemTable.TableSetFor(tableExpr)
 	switch tbl := tableExpr.Expr.(type) {
 	case sqlparser.TableName:
-		tableID := ctx.SemTable.TableSetFor(tableExpr)
+		tableID := tableID
 		tableInfo, err := ctx.SemTable.TableInfoFor(tableID)
 		if err != nil {
 			return nil, err
 		}
 
 		if vt, isVindex := tableInfo.(*semantics.VindexTable); isVindex {
-			solves := ctx.SemTable.TableSetFor(tableExpr)
+			solves := tableID
 			return &Vindex{
 				Table: VindexTable{
 					TableID: tableID,
@@ -302,7 +303,13 @@ func getOperatorFromAliasedTableExpr(ctx *plancontext.PlanningContext, tableExpr
 			inner = horizon.Source
 		}
 
-		return &Derived{Alias: tableExpr.As.String(), Source: inner, Query: tbl.Select, ColumnAliases: tableExpr.Columns}, nil
+		return &Derived{
+			TableId:       tableID,
+			Alias:         tableExpr.As.String(),
+			Source:        inner,
+			Query:         tbl.Select,
+			ColumnAliases: tableExpr.Columns,
+		}, nil
 	default:
 		return nil, vterrors.VT13001(fmt.Sprintf("unable to use: %T", tbl))
 	}

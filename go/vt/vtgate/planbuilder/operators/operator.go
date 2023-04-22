@@ -111,7 +111,7 @@ func tryHorizonPlanning(ctx *plancontext.PlanningContext, root ops.Operator) (ou
 		return nil, err
 	}
 
-	err = makeSureOutputIsCorrect(ctx, root, output)
+	output, err = makeSureOutputIsCorrect(ctx, root, output)
 	if err != nil {
 		return nil, err
 	}
@@ -119,32 +119,38 @@ func tryHorizonPlanning(ctx *plancontext.PlanningContext, root ops.Operator) (ou
 	return
 }
 
-func makeSureOutputIsCorrect(ctx *plancontext.PlanningContext, oldHorizon ops.Operator, output ops.Operator) error {
+func makeSureOutputIsCorrect(ctx *plancontext.PlanningContext, oldHorizon ops.Operator, output ops.Operator) (ops.Operator, error) {
 	// next we use the original Horizon to make sure that the output columns line up with what the user asked for
 	// in the future, we'll tidy up the results. for now, we are just failing these queries and going back to the
 	// old horizon planning instead
 	cols, err := output.GetColumns()
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	horizon := oldHorizon.(*Horizon)
 
 	sel := sqlparser.GetFirstSelect(horizon.Select)
 	if len(sel.SelectExprs) != len(cols) {
-		if route, isRoute := output.(*Route); isRoute {
+		route := passthroughColumns(output)
+		if route != nil {
 			route.ResultColumns = len(sel.SelectExprs)
-			return nil
-		}
-		return errHorizonNotPlanned()
-	}
-	for i, expr := range sel.SelectExprs {
-		ae, ok := expr.(*sqlparser.AliasedExpr)
-		if !ok || !ctx.SemTable.EqualsExpr(ae.Expr, cols[i].Expr) {
-			return errHorizonNotPlanned()
+			return output, nil
 		}
 	}
-	return nil
+	qp, err := horizon.getQP(ctx)
+	if err != nil {
+		return nil, err
+	}
+	proj, err := createProjectionFromSelect(output, qp.SelectExprs)
+	if err != nil {
+		return nil, err
+	}
+	err = proj.passThroughAllColumns(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return proj, nil
 }
 
 // Inputs implements the Operator interface
@@ -171,4 +177,25 @@ func (noColumns) GetColumns() ([]*sqlparser.AliasedExpr, error) {
 // AddPredicate implements the Operator interface
 func (noPredicates) AddPredicate(*plancontext.PlanningContext, sqlparser.Expr) (ops.Operator, error) {
 	return nil, vterrors.VT13001("the noColumns operator cannot accept predicates")
+}
+
+func passthroughColumns(op ops.Operator) *Route {
+	route, isRoute := op.(*Route)
+	if isRoute {
+		return route
+	}
+
+	inputs := op.Inputs()
+	if len(inputs) != 1 {
+		return nil
+	}
+
+	switch op.(type) {
+	case *Limit:
+		// empty by design
+	default:
+		return nil
+	}
+
+	return passthroughColumns(inputs[0])
 }

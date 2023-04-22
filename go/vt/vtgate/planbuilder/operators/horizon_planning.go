@@ -155,7 +155,7 @@ func pushDownProjectionInApplyJoin(ctx *plancontext.PlanningContext, p *Projecti
 		lhsCols, rhsCols   []ProjExpr
 		lhsNames, rhsNames []string
 	)
-
+	src.ColumnsAST = nil
 	// Iterate through each column in the Projection's columns.
 	for idx = 0; idx < len(p.Columns); idx++ {
 		in = p.Columns[idx]
@@ -198,12 +198,12 @@ func pushDownProjectionInApplyJoin(ctx *plancontext.PlanningContext, p *Projecti
 	var err error
 
 	// Create and update the Projection operators for the left and right children, if needed.
-	src.LHS, err = createProjectionWithTheseColumns(src.LHS, lhsNames, lhsCols)
+	src.LHS, err = createProjectionWithTheseColumns(src.LHS, lhsNames, lhsCols, p.TableID, p.Alias)
 	if err != nil {
 		return nil, false, err
 	}
 
-	src.RHS, err = createProjectionWithTheseColumns(src.RHS, rhsNames, rhsCols)
+	src.RHS, err = createProjectionWithTheseColumns(src.RHS, rhsNames, rhsCols, p.TableID, p.Alias)
 	if err != nil {
 		return nil, false, err
 	}
@@ -211,7 +211,13 @@ func pushDownProjectionInApplyJoin(ctx *plancontext.PlanningContext, p *Projecti
 	return src, rewrite.NewTree, nil
 }
 
-func createProjectionWithTheseColumns(src ops.Operator, colNames []string, columns []ProjExpr) (ops.Operator, error) {
+func createProjectionWithTheseColumns(
+	src ops.Operator,
+	colNames []string,
+	columns []ProjExpr,
+	tableID *semantics.TableSet,
+	alias string,
+) (ops.Operator, error) {
 	if len(columns) == 0 {
 		return src, nil
 	}
@@ -221,6 +227,8 @@ func createProjectionWithTheseColumns(src ops.Operator, colNames []string, colum
 	}
 	proj.ColumnNames = colNames
 	proj.Columns = columns
+	proj.TableID = tableID
+	proj.Alias = alias
 	return proj, nil
 }
 
@@ -281,6 +289,11 @@ func tryPushingDownLimitInRoute(in *Limit, src *Route) (ops.Operator, rewrite.Ap
 }
 
 func pushOrExpandHorizon(ctx *plancontext.PlanningContext, in horizonLike) (ops.Operator, error) {
+	if derived, ok := in.(*Derived); ok {
+		if len(derived.ColumnAliases) > 0 {
+			return nil, errHorizonNotPlanned()
+		}
+	}
 	rb, isRoute := in.src().(*Route)
 	if isRoute && rb.IsSingleShard() {
 		return rewrite.Swap(in, rb)
@@ -291,11 +304,10 @@ func pushOrExpandHorizon(ctx *plancontext.PlanningContext, in horizonLike) (ops.
 		return nil, errHorizonNotPlanned()
 	}
 
-	qp, err := CreateQPFromSelect(ctx, sel)
+	qp, err := in.getQP(ctx)
 	if err != nil {
 		return nil, err
 	}
-	in.setQP(qp)
 
 	needsOrdering := len(qp.OrderExprs) > 0
 	canPushDown := isRoute && sel.Having == nil && !needsOrdering && !qp.NeedsAggregation() && !sel.Distinct && sel.Limit == nil
@@ -304,7 +316,12 @@ func pushOrExpandHorizon(ctx *plancontext.PlanningContext, in horizonLike) (ops.
 		return rewrite.Swap(in, rb)
 	}
 
-	return expandHorizon(in)
+	if _, ok := in.(*Derived); ok {
+		// we're still not ready if we have to expand the derived table horizon
+		return nil, errHorizonNotPlanned()
+	}
+
+	return expandHorizon(ctx, in)
 }
 
 // horizonLike should be removed. we should use Horizon for both these cases
@@ -312,28 +329,35 @@ type horizonLike interface {
 	ops.Operator
 	selectStatement() sqlparser.SelectStatement
 	src() ops.Operator
-	getQP() *QueryProjection
-	setQP(*QueryProjection)
+	getQP(ctx *plancontext.PlanningContext) (*QueryProjection, error)
 }
 
-func expandHorizon(horizon horizonLike) (ops.Operator, error) {
+func expandHorizon(ctx *plancontext.PlanningContext, horizon horizonLike) (ops.Operator, error) {
 	sel, isSel := horizon.selectStatement().(*sqlparser.Select)
 	if !isSel {
 		return nil, errHorizonNotPlanned()
 	}
-	qp := horizon.getQP()
-
-	src := horizon.src()
-	_, isDerived := src.(*Derived)
-
-	if qp.NeedsAggregation() || sel.Having != nil || isDerived || qp.NeedsDistinct() || sel.Distinct {
-		return nil, errHorizonNotPlanned()
-	}
-
-	op, err := createProjectionFromSelect(src, qp.SelectExprs)
+	qp, err := horizon.getQP(ctx)
 	if err != nil {
 		return nil, err
 	}
+
+	src := horizon.src()
+
+	if qp.NeedsAggregation() || sel.Having != nil || qp.NeedsDistinct() || sel.Distinct {
+		return nil, errHorizonNotPlanned()
+	}
+
+	var op ops.Operator
+	proj, err := createProjectionFromSelect(src, qp.SelectExprs)
+	if err != nil {
+		return nil, err
+	}
+	if derived, isDerived := horizon.(*Derived); isDerived {
+		id := derived.TableId
+		proj.TableID = &id
+	}
+	op = proj
 
 	if qp.OrderExprs != nil {
 		op = &Ordering{
@@ -352,7 +376,7 @@ func expandHorizon(horizon horizonLike) (ops.Operator, error) {
 	return op, nil
 }
 
-func createProjectionFromSelect(src ops.Operator, selectExprs []SelectExpr) (ops.Operator, error) {
+func createProjectionFromSelect(src ops.Operator, selectExprs []SelectExpr) (*Projection, error) {
 	proj := &Projection{
 		Source: src,
 	}

@@ -606,49 +606,58 @@
       "QueryType": "SELECT",
       "Original": "select user.col1 as a, user.col2 b, music.col3 c from user, music where user.id = music.id and user.id = 1 order by c",
       "Instructions": {
-        "OperatorType": "Sort",
-        "Variant": "Memory",
-        "OrderBy": "(2|3) ASC",
-        "ResultColumns": 3,
+        "OperatorType": "SimpleProjection",
+        "Columns": [
+          0,
+          1,
+          2
+        ],
         "Inputs": [
           {
-            "OperatorType": "Join",
-            "Variant": "Join",
-            "JoinColumnIndexes": "L:1,L:2,R:0,R:1",
-            "JoinVars": {
-              "user_id": 0
-            },
-            "TableName": "`user`_music",
+            "OperatorType": "Sort",
+            "Variant": "Memory",
+            "OrderBy": "(3|4) ASC",
             "Inputs": [
               {
-                "OperatorType": "Route",
-                "Variant": "EqualUnique",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
+                "OperatorType": "Join",
+                "Variant": "Join",
+                "JoinColumnIndexes": "L:0,L:1,R:0,R:1,R:2",
+                "JoinVars": {
+                  "user_id": 2
                 },
-                "FieldQuery": "select `user`.id, `user`.col1 as a, `user`.col2 as b from `user` where 1 != 1",
-                "Query": "select `user`.id, `user`.col1 as a, `user`.col2 as b from `user` where `user`.id = 1",
-                "Table": "`user`",
-                "Values": [
-                  "INT64(1)"
-                ],
-                "Vindex": "user_index"
-              },
-              {
-                "OperatorType": "Route",
-                "Variant": "EqualUnique",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select music.col3 as c, weight_string(music.col3) from music where 1 != 1",
-                "Query": "select music.col3 as c, weight_string(music.col3) from music where music.id = :user_id",
-                "Table": "music",
-                "Values": [
-                  ":user_id"
-                ],
-                "Vindex": "music_user_map"
+                "TableName": "`user`_music",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "EqualUnique",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select `user`.col1 as a, `user`.col2 as b, `user`.id from `user` where 1 != 1",
+                    "Query": "select `user`.col1 as a, `user`.col2 as b, `user`.id from `user` where `user`.id = 1",
+                    "Table": "`user`",
+                    "Values": [
+                      "INT64(1)"
+                    ],
+                    "Vindex": "user_index"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "EqualUnique",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select music.col3 as c, c, weight_string(music.col3) from music where 1 != 1",
+                    "Query": "select music.col3 as c, c, weight_string(music.col3) from music where music.id = :user_id",
+                    "Table": "music",
+                    "Values": [
+                      ":user_id"
+                    ],
+                    "Vindex": "music_user_map"
+                  }
+                ]
               }
             ]
           }
@@ -720,49 +729,58 @@
       "QueryType": "SELECT",
       "Original": "select user.col1 as a, user.col2, music.col3 from user join music on user.id = music.id where user.id = 1 order by 1 asc, 3 desc, 2 asc",
       "Instructions": {
-        "OperatorType": "Sort",
-        "Variant": "Memory",
-        "OrderBy": "(0|3) ASC, (2|4) DESC, (1|5) ASC",
-        "ResultColumns": 3,
+        "OperatorType": "SimpleProjection",
+        "Columns": [
+          0,
+          1,
+          2
+        ],
         "Inputs": [
           {
-            "OperatorType": "Join",
-            "Variant": "Join",
-            "JoinColumnIndexes": "L:1,L:2,R:0,L:3,R:1,L:4",
-            "JoinVars": {
-              "user_id": 0
-            },
-            "TableName": "`user`_music",
+            "OperatorType": "Sort",
+            "Variant": "Memory",
+            "OrderBy": "(3|4) ASC, (2|5) DESC, (1|6) ASC",
             "Inputs": [
               {
-                "OperatorType": "Route",
-                "Variant": "EqualUnique",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
+                "OperatorType": "Join",
+                "Variant": "Join",
+                "JoinColumnIndexes": "L:0,L:1,R:0,L:2,L:3,R:1,L:4",
+                "JoinVars": {
+                  "user_id": 5
                 },
-                "FieldQuery": "select `user`.id, `user`.col1 as a, `user`.col2, weight_string(`user`.col1), weight_string(`user`.col2) from `user` where 1 != 1",
-                "Query": "select `user`.id, `user`.col1 as a, `user`.col2, weight_string(`user`.col1), weight_string(`user`.col2) from `user` where `user`.id = 1",
-                "Table": "`user`",
-                "Values": [
-                  "INT64(1)"
-                ],
-                "Vindex": "user_index"
-              },
-              {
-                "OperatorType": "Route",
-                "Variant": "EqualUnique",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select music.col3, weight_string(music.col3) from music where 1 != 1",
-                "Query": "select music.col3, weight_string(music.col3) from music where music.id = :user_id",
-                "Table": "music",
-                "Values": [
-                  ":user_id"
-                ],
-                "Vindex": "music_user_map"
+                "TableName": "`user`_music",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "EqualUnique",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select `user`.col1 as a, `user`.col2, a, weight_string(`user`.col1), weight_string(`user`.col2), `user`.id from `user` where 1 != 1",
+                    "Query": "select `user`.col1 as a, `user`.col2, a, weight_string(`user`.col1), weight_string(`user`.col2), `user`.id from `user` where `user`.id = 1",
+                    "Table": "`user`",
+                    "Values": [
+                      "INT64(1)"
+                    ],
+                    "Vindex": "user_index"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "EqualUnique",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select music.col3, weight_string(music.col3) from music where 1 != 1",
+                    "Query": "select music.col3, weight_string(music.col3) from music where music.id = :user_id",
+                    "Table": "music",
+                    "Values": [
+                      ":user_id"
+                    ],
+                    "Vindex": "music_user_map"
+                  }
+                ]
               }
             ]
           }
@@ -823,38 +841,47 @@
       "QueryType": "SELECT",
       "Original": "select u.a, u.textcol1, un.col2 from user u join unsharded un order by u.textcol1, un.col2",
       "Instructions": {
-        "OperatorType": "Sort",
-        "Variant": "Memory",
-        "OrderBy": "(1|3) ASC COLLATE latin1_swedish_ci, (2|4) ASC",
-        "ResultColumns": 3,
+        "OperatorType": "SimpleProjection",
+        "Columns": [
+          0,
+          1,
+          2
+        ],
         "Inputs": [
           {
-            "OperatorType": "Join",
-            "Variant": "Join",
-            "JoinColumnIndexes": "L:0,L:1,R:0,L:2,R:1",
-            "TableName": "`user`_unsharded",
+            "OperatorType": "Sort",
+            "Variant": "Memory",
+            "OrderBy": "1 ASC COLLATE latin1_swedish_ci, (2|3) ASC",
             "Inputs": [
               {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select u.a, u.textcol1, weight_string(u.textcol1) from `user` as u where 1 != 1",
-                "Query": "select u.a, u.textcol1, weight_string(u.textcol1) from `user` as u",
-                "Table": "`user`"
-              },
-              {
-                "OperatorType": "Route",
-                "Variant": "Unsharded",
-                "Keyspace": {
-                  "Name": "main",
-                  "Sharded": false
-                },
-                "FieldQuery": "select un.col2, weight_string(un.col2) from unsharded as un where 1 != 1",
-                "Query": "select un.col2, weight_string(un.col2) from unsharded as un",
-                "Table": "unsharded"
+                "OperatorType": "Join",
+                "Variant": "Join",
+                "JoinColumnIndexes": "L:0,L:1,R:0,R:1",
+                "TableName": "`user`_unsharded",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select u.a, u.textcol1 from `user` as u where 1 != 1",
+                    "Query": "select u.a, u.textcol1 from `user` as u",
+                    "Table": "`user`"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Unsharded",
+                    "Keyspace": {
+                      "Name": "main",
+                      "Sharded": false
+                    },
+                    "FieldQuery": "select un.col2, weight_string(un.col2) from unsharded as un where 1 != 1",
+                    "Query": "select un.col2, weight_string(un.col2) from unsharded as un",
+                    "Table": "unsharded"
+                  }
+                ]
               }
             ]
           }
@@ -915,38 +942,47 @@
       "QueryType": "SELECT",
       "Original": "select u.a, u.textcol1, un.col2 from unsharded un join user u order by u.textcol1, un.col2",
       "Instructions": {
-        "OperatorType": "Sort",
-        "Variant": "Memory",
-        "OrderBy": "(1|3) ASC COLLATE latin1_swedish_ci, (2|4) ASC",
-        "ResultColumns": 3,
+        "OperatorType": "SimpleProjection",
+        "Columns": [
+          0,
+          1,
+          2
+        ],
         "Inputs": [
           {
-            "OperatorType": "Join",
-            "Variant": "Join",
-            "JoinColumnIndexes": "R:0,R:1,L:0,R:2,L:1",
-            "TableName": "unsharded_`user`",
+            "OperatorType": "Sort",
+            "Variant": "Memory",
+            "OrderBy": "1 ASC COLLATE latin1_swedish_ci, (2|3) ASC",
             "Inputs": [
               {
-                "OperatorType": "Route",
-                "Variant": "Unsharded",
-                "Keyspace": {
-                  "Name": "main",
-                  "Sharded": false
-                },
-                "FieldQuery": "select un.col2, weight_string(un.col2) from unsharded as un where 1 != 1",
-                "Query": "select un.col2, weight_string(un.col2) from unsharded as un",
-                "Table": "unsharded"
-              },
-              {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select u.a, u.textcol1, weight_string(u.textcol1) from `user` as u where 1 != 1",
-                "Query": "select u.a, u.textcol1, weight_string(u.textcol1) from `user` as u",
-                "Table": "`user`"
+                "OperatorType": "Join",
+                "Variant": "Join",
+                "JoinColumnIndexes": "R:0,R:1,L:0,L:1",
+                "TableName": "unsharded_`user`",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Unsharded",
+                    "Keyspace": {
+                      "Name": "main",
+                      "Sharded": false
+                    },
+                    "FieldQuery": "select un.col2, weight_string(un.col2) from unsharded as un where 1 != 1",
+                    "Query": "select un.col2, weight_string(un.col2) from unsharded as un",
+                    "Table": "unsharded"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select u.a, u.textcol1 from `user` as u where 1 != 1",
+                    "Query": "select u.a, u.textcol1 from `user` as u",
+                    "Table": "`user`"
+                  }
+                ]
               }
             ]
           }

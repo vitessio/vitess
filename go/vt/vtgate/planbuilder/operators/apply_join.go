@@ -284,21 +284,21 @@ func (a *ApplyJoin) planOffsets(ctx *plancontext.PlanningContext) (err error) {
 }
 
 func (a *ApplyJoin) addOffset(offset int) {
-	index := slices.Index(a.Columns, offset)
-	if index != -1 {
-		panic("should never pass through the same column")
-	}
 	a.Columns = append(a.Columns, offset)
 }
 
 func (a *ApplyJoin) Description() ops.OpDescription {
+	other := map[string]any{}
+	if len(a.Columns) > 0 {
+		other["OutputColumns"] = a.Columns
+	}
+	if a.Predicate != nil {
+		other["Predicate"] = sqlparser.String(a.Predicate)
+	}
 	return ops.OpDescription{
 		OperatorType: "Join",
 		Variant:      "Apply",
-		Other: map[string]any{
-			"Predicate":     sqlparser.String(a.Predicate),
-			"OutputColumns": a.Columns,
-		},
+		Other:        other,
 	}
 }
 

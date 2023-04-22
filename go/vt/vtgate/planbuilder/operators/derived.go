@@ -30,7 +30,8 @@ import (
 )
 
 type Derived struct {
-	Source ops.Operator
+	Source  ops.Operator
+	TableId semantics.TableSet
 
 	// QP contains the QueryProjection for this op
 	QP *QueryProjection
@@ -58,6 +59,7 @@ func (d *Derived) Clone(inputs []ops.Operator) ops.Operator {
 		ColumnAliases: sqlparser.CloneColumns(d.ColumnAliases),
 		Columns:       slices.Clone(d.Columns),
 		ColumnsOffset: slices.Clone(d.ColumnsOffset),
+		TableId:       d.TableId,
 	}
 }
 
@@ -245,8 +247,16 @@ func (d *Derived) src() ops.Operator {
 	return d.Source
 }
 
-func (d *Derived) getQP() *QueryProjection {
-	return d.QP
+func (d *Derived) getQP(ctx *plancontext.PlanningContext) (*QueryProjection, error) {
+	if d.QP != nil {
+		return d.QP, nil
+	}
+	qp, err := CreateQPFromSelect(ctx, d.Query.(*sqlparser.Select))
+	if err != nil {
+		return nil, err
+	}
+	d.QP = qp
+	return d.QP, nil
 }
 func (d *Derived) setQP(qp *QueryProjection) {
 	d.QP = qp
