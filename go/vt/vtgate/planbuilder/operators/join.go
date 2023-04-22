@@ -154,3 +154,12 @@ func (j *Join) AddJoinPredicate(ctx *plancontext.PlanningContext, expr sqlparser
 	j.Predicate = ctx.SemTable.AndExpressions(j.Predicate, expr)
 	return nil
 }
+
+func (j *Join) Description() ops.OpDescription {
+	return ops.OpDescription{
+		OperatorType: "Join",
+		Other: map[string]any{
+			"Predicate": sqlparser.String(j.Predicate),
+		},
+	}
+}

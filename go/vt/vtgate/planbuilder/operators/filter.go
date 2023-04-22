@@ -137,3 +137,12 @@ func (f *Filter) planOffsets(ctx *plancontext.PlanningContext) error {
 	f.FinalPredicate = eexpr
 	return nil
 }
+
+func (f *Filter) Description() ops.OpDescription {
+	return ops.OpDescription{
+		OperatorType: "Filter",
+		Other: map[string]any{
+			"Predicate": sqlparser.String(sqlparser.AndExpressions(f.Predicates...)),
+		},
+	}
+}
