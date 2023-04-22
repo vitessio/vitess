@@ -96,7 +96,7 @@ func (f *Filter) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.Ali
 	return f, offset, nil
 }
 
-func (f *Filter) GetColumns() ([]sqlparser.Expr, error) {
+func (f *Filter) GetColumns() ([]*sqlparser.AliasedExpr, error) {
 	return f.Source.GetColumns()
 }
 

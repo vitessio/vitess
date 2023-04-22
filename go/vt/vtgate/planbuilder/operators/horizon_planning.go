@@ -130,12 +130,13 @@ func pushDownProjectionInApplyJoin(ctx *plancontext.PlanningContext, p *Projecti
 		expr := in.GetExpr()
 
 		// Check if the current expression can reuse an existing column in the ApplyJoin.
-		if _, found := canReuseColumn(ctx, src.ColumnsAST, expr, jcToExpr); found {
+		if _, found := canReuseColumn(ctx, src.ColumnsAST, expr, jcToAliasedExpr); found {
 			continue
 		}
 
 		// Get a JoinColumn for the current expression.
-		col, err := src.getJoinColumnFor(ctx, expr)
+		colName := p.ColumnNames[idx]
+		col, err := src.getJoinColumnFor(ctx, &sqlparser.AliasedExpr{Expr: expr, As: sqlparser.NewIdentifierCI(colName)})
 		if err != nil {
 			return nil, false, err
 		}
@@ -144,18 +145,18 @@ func pushDownProjectionInApplyJoin(ctx *plancontext.PlanningContext, p *Projecti
 		switch {
 		case col.IsPureLeft():
 			lhsCols = append(lhsCols, in)
-			lhsNames = append(lhsNames, p.ColumnNames[idx])
+			lhsNames = append(lhsNames, colName)
 		case col.IsPureRight():
 			rhsCols = append(rhsCols, in)
-			rhsNames = append(rhsNames, p.ColumnNames[idx])
+			rhsNames = append(rhsNames, colName)
 		case col.IsMixedLeftAndRight():
 			for _, lhsExpr := range col.LHSExprs {
 				lhsCols = append(lhsCols, &Expr{E: lhsExpr})
-				lhsNames = append(lhsNames, sqlparser.String(lhsExpr))
+				lhsNames = append(lhsNames, "")
 			}
 
 			rhsCols = append(rhsCols, &Expr{E: col.RHSExpr})
-			rhsNames = append(rhsNames, p.ColumnNames[idx])
+			rhsNames = append(rhsNames, colName)
 		}
 
 		// Add the new JoinColumn to the ApplyJoin's ColumnsAST.

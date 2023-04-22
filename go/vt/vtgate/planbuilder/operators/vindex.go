@@ -76,9 +76,14 @@ func (v *Vindex) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.Ali
 	return v, offset, nil
 }
 
-func colNameToExpr(c *sqlparser.ColName) sqlparser.Expr { return c }
+func colNameToExpr(c *sqlparser.ColName) *sqlparser.AliasedExpr {
+	return &sqlparser.AliasedExpr{
+		Expr: c,
+		As:   sqlparser.IdentifierCI{},
+	}
+}
 
-func (v *Vindex) GetColumns() ([]sqlparser.Expr, error) {
+func (v *Vindex) GetColumns() ([]*sqlparser.AliasedExpr, error) {
 	return slices2.Map(v.Columns, colNameToExpr), nil
 }
 

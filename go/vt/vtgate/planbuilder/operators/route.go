@@ -529,7 +529,7 @@ func createProjection(src ops.Operator) (*Projection, error) {
 		return nil, err
 	}
 	for _, col := range cols {
-		proj.Columns = append(proj.Columns, Expr{E: col})
+		proj.Columns = append(proj.Columns, Expr{E: col.Expr})
 		proj.ColumnNames = append(proj.ColumnNames, sqlparser.String(col))
 	}
 	return proj, nil
@@ -543,7 +543,7 @@ func (r *Route) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.Alia
 	if err != nil {
 		return nil, 0, err
 	}
-	colAsExpr := func(e sqlparser.Expr) sqlparser.Expr { return e }
+	colAsExpr := func(e *sqlparser.AliasedExpr) sqlparser.Expr { return e.Expr }
 	if offset, found := canReuseColumn(ctx, cols, expr.Expr, colAsExpr); found {
 		return r, offset, nil
 	}
@@ -558,7 +558,7 @@ func (r *Route) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.Alia
 
 		// add the existing columns of route to the projection.
 		for _, col := range cols {
-			proj.Columns = append(proj.Columns, Expr{E: col})
+			proj.Columns = append(proj.Columns, Expr{E: col.Expr})
 			proj.ColumnNames = append(proj.ColumnNames, sqlparser.String(col))
 		}
 	}
@@ -568,7 +568,7 @@ func (r *Route) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.Alia
 	return r, len(proj.Columns) - 1, nil
 }
 
-func (r *Route) GetColumns() ([]sqlparser.Expr, error) {
+func (r *Route) GetColumns() ([]*sqlparser.AliasedExpr, error) {
 	return r.Source.GetColumns()
 }
 

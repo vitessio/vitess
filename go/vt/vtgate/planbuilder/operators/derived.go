@@ -21,8 +21,6 @@ import (
 
 	"golang.org/x/exp/slices"
 
-	"vitess.io/vitess/go/slices2"
-
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -207,8 +205,15 @@ func canReuseColumn[T any](
 	return
 }
 
-func (d *Derived) GetColumns() ([]sqlparser.Expr, error) {
-	return slices2.Map(d.Columns, colNameToExpr), nil
+func (d *Derived) GetColumns() (exprs []*sqlparser.AliasedExpr, err error) {
+	for _, expr := range sqlparser.GetFirstSelect(d.Query).SelectExprs {
+		ae, ok := expr.(*sqlparser.AliasedExpr)
+		if !ok {
+			return nil, errHorizonNotPlanned
+		}
+		exprs = append(exprs, ae)
+	}
+	return
 }
 
 func addToIntSlice(columnOffset []int, valToAdd int) ([]int, int) {

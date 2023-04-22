@@ -77,7 +77,7 @@ func (to *Table) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.Ali
 	return to, offset, nil
 }
 
-func (to *Table) GetColumns() ([]sqlparser.Expr, error) {
+func (to *Table) GetColumns() ([]*sqlparser.AliasedExpr, error) {
 	return slices2.Map(to.Columns, colNameToExpr), nil
 }
 

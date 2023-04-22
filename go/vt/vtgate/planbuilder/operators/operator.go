@@ -136,7 +136,7 @@ func makeSureOutputIsCorrect(ctx *plancontext.PlanningContext, op ops.Operator, 
 	}
 	for i, expr := range sel.SelectExprs {
 		ae, ok := expr.(*sqlparser.AliasedExpr)
-		if !ok || !ctx.SemTable.EqualsExpr(ae.Expr, cols[i]) {
+		if !ok || !ctx.SemTable.EqualsExpr(ae.Expr, cols[i].Expr) {
 			return errHorizonNotPlanned
 		}
 	}
@@ -160,7 +160,7 @@ func (noColumns) AddColumn(*plancontext.PlanningContext, *sqlparser.AliasedExpr)
 	return nil, 0, vterrors.VT13001("the noColumns operator cannot accept columns")
 }
 
-func (noColumns) GetColumns() ([]sqlparser.Expr, error) {
+func (noColumns) GetColumns() ([]*sqlparser.AliasedExpr, error) {
 	return nil, vterrors.VT13001("the noColumns operator cannot accept columns")
 }
 

@@ -6018,8 +6018,8 @@
         "Variant": "LeftJoin",
         "JoinColumnIndexes": "R:0",
         "JoinVars": {
-          "user_col": 0,
-          "user_foo": 1
+          "user_col": 1,
+          "user_foo": 0
         },
         "TableName": "`user`_user_extra",
         "Inputs": [
@@ -6030,8 +6030,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select `user`.col, `user`.foo from `user` where 1 != 1",
-            "Query": "select `user`.col, `user`.foo from `user`",
+            "FieldQuery": "select `user`.foo, `user`.col from `user` where 1 != 1",
+            "Query": "select `user`.foo, `user`.col from `user`",
             "Table": "`user`"
           },
           {

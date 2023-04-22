@@ -107,14 +107,18 @@ func (p *Projection) AddPredicate(ctx *plancontext.PlanningContext, expr sqlpars
 	return p, nil
 }
 
-func (p *Projection) expressions() (result []sqlparser.Expr) {
-	for _, col := range p.Columns {
-		result = append(result, col.GetExpr())
+func (p *Projection) expressions() (result []*sqlparser.AliasedExpr) {
+	for i, col := range p.Columns {
+		expr := col.GetExpr()
+		result = append(result, &sqlparser.AliasedExpr{
+			Expr: expr,
+			As:   sqlparser.NewIdentifierCI(p.ColumnNames[i]),
+		})
 	}
 	return
 }
 
-func (p *Projection) GetColumns() ([]sqlparser.Expr, error) {
+func (p *Projection) GetColumns() ([]*sqlparser.AliasedExpr, error) {
 	return p.expressions(), nil
 }
 

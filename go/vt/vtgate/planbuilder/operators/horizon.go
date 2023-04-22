@@ -39,13 +39,13 @@ func (h *Horizon) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.Al
 	return nil, 0, vterrors.VT13001("the Horizon operator cannot accept new columns")
 }
 
-func (h *Horizon) GetColumns() (exprs []sqlparser.Expr, err error) {
+func (h *Horizon) GetColumns() (exprs []*sqlparser.AliasedExpr, err error) {
 	for _, expr := range sqlparser.GetFirstSelect(h.Select).SelectExprs {
 		ae, ok := expr.(*sqlparser.AliasedExpr)
 		if !ok {
 			return nil, errHorizonNotPlanned
 		}
-		exprs = append(exprs, ae.Expr)
+		exprs = append(exprs, ae)
 	}
 	return
 }

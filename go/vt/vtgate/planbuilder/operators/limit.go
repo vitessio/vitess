@@ -65,7 +65,7 @@ func (l *Limit) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.Alia
 	return l, offset, nil
 }
 
-func (l *Limit) GetColumns() ([]sqlparser.Expr, error) {
+func (l *Limit) GetColumns() ([]*sqlparser.AliasedExpr, error) {
 	return l.Source.GetColumns()
 }
 
