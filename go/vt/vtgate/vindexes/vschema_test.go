@@ -2525,11 +2525,14 @@ func TestVSchemaPBJSON(t *testing.T) {
 }
 
 func TestVSchemaJSON(t *testing.T) {
-	lkp, _, _ := newLookupHash("n2", map[string]string{
+	lkp, warnings, err := newLookupHash("n2", map[string]string{
 		"from":  "f",
 		"table": "t",
 		"to":    "2",
 	})
+	require.Empty(t, warnings)
+	require.NoError(t, err)
+
 	in := map[string]*KeyspaceSchema{
 		"unsharded": {
 			Keyspace: &Keyspace{

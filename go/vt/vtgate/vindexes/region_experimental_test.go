@@ -123,9 +123,11 @@ func TestRegionExperimentalVerifyMulti(t *testing.T) {
 }
 
 func TestRegionExperimentalCreateErrors(t *testing.T) {
-	_, _, err := createRegionVindex(t, "region_experimental", "f1,f2", 3)
+	_, warnings, err := createRegionVindex(t, "region_experimental", "f1,f2", 3)
+	require.Empty(t, warnings)
 	assert.EqualError(t, err, "region_bits must be 1 or 2: 3")
-	_, _, err = CreateVindex("region_experimental", "region_experimental", nil)
+	_, warnings, err = CreateVindex("region_experimental", "region_experimental", nil)
+	require.Empty(t, warnings)
 	assert.EqualError(t, err, "region_experimental missing region_bytes param")
 }
 

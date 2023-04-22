@@ -35,23 +35,27 @@ func TestLookupHashUniqueNew(t *testing.T) {
 		t.Errorf("Create(lookup, false): %v, want %v", got, want)
 	}
 
-	vindex, _, _ := CreateVindex("lookup_hash_unique", "lookup_hash_unique", map[string]string{
+	vindex, warnings, err := CreateVindex("lookup_hash_unique", "lookup_hash_unique", map[string]string{
 		"table":      "t",
 		"from":       "fromc",
 		"to":         "toc",
 		"write_only": "true",
 	})
+	require.Empty(t, warnings)
+	require.NoError(t, err)
+
 	l = vindex.(SingleColumn)
 	if want, got := l.(*LookupHashUnique).writeOnly, true; got != want {
 		t.Errorf("Create(lookup, false): %v, want %v", got, want)
 	}
 
-	_, _, err := CreateVindex("lookup_hash_unique", "lookup_hash_unique", map[string]string{
+	_, warnings, err = CreateVindex("lookup_hash_unique", "lookup_hash_unique", map[string]string{
 		"table":      "t",
 		"from":       "fromc",
 		"to":         "toc",
 		"write_only": "invalid",
 	})
+	require.Empty(t, warnings)
 	want := "write_only value must be 'true' or 'false': 'invalid'"
 	if err == nil || err.Error() != want {
 		t.Errorf("Create(bad_scatter): %v, want %s", err, want)

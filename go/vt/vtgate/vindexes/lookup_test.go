@@ -119,12 +119,13 @@ func TestLookupNonUniqueNew(t *testing.T) {
 	l = createLookup(t, "lookup", true)
 	assert.True(t, l.(*LookupNonUnique).writeOnly, "Create(lookup, false)")
 
-	_, _, err := CreateVindex("lookup", "lookup", map[string]string{
+	_, warnings, err := CreateVindex("lookup", "lookup", map[string]string{
 		"table":      "t",
 		"from":       "fromc",
 		"to":         "toc",
 		"write_only": "invalid",
 	})
+	require.Empty(t, warnings)
 	require.EqualError(t, err, "write_only value must be 'true' or 'false': 'invalid'")
 }
 
@@ -479,15 +480,17 @@ func TestLookupNonUniqueDelete(t *testing.T) {
 }
 
 func TestLookupNonUniqueDeleteAutocommit(t *testing.T) {
-	lookupNonUnique, _, _ := CreateVindex("lookup", "lookup", map[string]string{
+	lookupNonUnique, warnings, err := CreateVindex("lookup", "lookup", map[string]string{
 		"table":      "t",
 		"from":       "fromc",
 		"to":         "toc",
 		"autocommit": "true",
 	})
+	require.Empty(t, warnings)
+	require.NoError(t, err)
 	vc := &vcursor{}
 
-	err := lookupNonUnique.(Lookup).Delete(context.Background(), vc, [][]sqltypes.Value{{sqltypes.NewInt64(1)}, {sqltypes.NewInt64(2)}}, []byte("test"))
+	err = lookupNonUnique.(Lookup).Delete(context.Background(), vc, [][]sqltypes.Value{{sqltypes.NewInt64(1)}, {sqltypes.NewInt64(2)}}, []byte("test"))
 	require.NoError(t, err)
 
 	utils.MustMatch(t, []*querypb.BoundQuery(nil), vc.queries)

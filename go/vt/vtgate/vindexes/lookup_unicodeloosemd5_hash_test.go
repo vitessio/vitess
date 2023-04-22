@@ -416,15 +416,18 @@ func TestLookupUnicodeLooseMD5HashDelete(t *testing.T) {
 }
 
 func TestLookupUnicodeLooseMD5HashDeleteAutocommit(t *testing.T) {
-	lookupNonUnique, _, _ := CreateVindex("lookup_unicodeloosemd5_hash", "lookup", map[string]string{
+	lookupNonUnique, warnings, err := CreateVindex("lookup_unicodeloosemd5_hash", "lookup", map[string]string{
 		"table":      "t",
 		"from":       "fromc",
 		"to":         "toc",
 		"autocommit": "true",
 	})
+	require.Empty(t, warnings)
+	require.NoError(t, err)
+
 	vc := &vcursor{}
 
-	err := lookupNonUnique.(Lookup).Delete(context.Background(), vc, [][]sqltypes.Value{{sqltypes.NewInt64(10)}, {sqltypes.NewInt64(20)}}, []byte("\x16k@\xb4J\xbaK\xd6"))
+	err = lookupNonUnique.(Lookup).Delete(context.Background(), vc, [][]sqltypes.Value{{sqltypes.NewInt64(10)}, {sqltypes.NewInt64(20)}}, []byte("\x16k@\xb4J\xbaK\xd6"))
 	require.NoError(t, err)
 
 	wantqueries := []*querypb.BoundQuery(nil)
