@@ -44,7 +44,7 @@ var (
 
 func init() {
 	Register("lookup", &vindexFactory{
-		create: NewLookup,
+		create: newLookup,
 		params: lookupParams,
 	})
 	Register("lookup_unique", &vindexFactory{
@@ -184,7 +184,7 @@ func (ln *LookupNonUnique) Query() (selQuery string, arguments []string) {
 	return ln.lkp.query()
 }
 
-// NewLookup creates a LookupNonUnique vindex.
+// newLookup creates a LookupNonUnique vindex.
 // The supplied map has the following required fields:
 //
 //	table: name of the backing table. It can be qualified by the keyspace.
@@ -196,7 +196,7 @@ func (ln *LookupNonUnique) Query() (selQuery string, arguments []string) {
 //	autocommit: setting this to "true" will cause inserts to upsert and deletes to be ignored.
 //	write_only: in this mode, Map functions return the full keyrange causing a full scatter.
 //	no_verify: in this mode, Verify will always succeed.
-func NewLookup(name string, m map[string]string) (Vindex, []VindexWarning, error) {
+func newLookup(name string, m map[string]string) (Vindex, []VindexWarning, error) {
 	lookup := &LookupNonUnique{name: name}
 
 	cc, err := parseCommonConfig(m)

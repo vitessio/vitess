@@ -104,8 +104,8 @@ type cfcCommon struct {
 	offsets []int
 }
 
-// NewCFC creates a new CFC vindex
-func NewCFC(name string, params map[string]string) (Vindex, []VindexWarning, error) {
+// newCFC creates a new CFC vindex
+func newCFC(name string, params map[string]string) (Vindex, []VindexWarning, error) {
 	ss := &cfcCommon{
 		name: name,
 	}
@@ -412,7 +412,7 @@ func xxhash64(in []byte) []byte {
 
 func init() {
 	Register("cfc", &vindexFactory{
-		create: NewCFC,
+		create: newCFC,
 		params: cfcParams,
 	})
 }

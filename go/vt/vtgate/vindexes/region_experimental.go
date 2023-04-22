@@ -38,7 +38,7 @@ var (
 
 func init() {
 	Register("region_experimental", &vindexFactory{
-		create: NewRegionExperimental,
+		create: newRegionExperimental,
 		params: regionExperimentalParams,
 	})
 }
@@ -52,10 +52,10 @@ type RegionExperimental struct {
 	regionBytes int
 }
 
-// NewRegionExperimental creates a RegionExperimental vindex.
+// newRegionExperimental creates a RegionExperimental vindex.
 // The supplied map requires all the fields of "consistent_lookup_unique".
 // Additionally, it requires a region_bytes argument whose value can be "1", or "2".
-func NewRegionExperimental(name string, m map[string]string) (Vindex, []VindexWarning, error) {
+func newRegionExperimental(name string, m map[string]string) (Vindex, []VindexWarning, error) {
 	rbs, ok := m["region_bytes"]
 	if !ok {
 		return nil, nil, fmt.Errorf("region_experimental missing region_bytes param")

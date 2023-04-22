@@ -597,7 +597,7 @@ func TestPlanBuilderFilterComparison(t *testing.T) {
 			Type: sqltypes.VarBinary,
 		}},
 	}
-	hashVindex, _, err := vindexes.NewHash("hash", nil)
+	hashVindex, _, err := vindexes.CreateVindex("hash", "hash", nil)
 	require.NoError(t, err)
 	testcases := []struct {
 		name       string

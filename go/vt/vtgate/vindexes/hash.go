@@ -47,8 +47,8 @@ type Hash struct {
 	name string
 }
 
-// NewHash creates a new Hash.
-func NewHash(name string, _ map[string]string) (Vindex, []VindexWarning, error) {
+// newHash creates a new Hash.
+func newHash(name string, _ map[string]string) (Vindex, []VindexWarning, error) {
 	return &Hash{name: name}, nil, nil
 }
 
@@ -141,7 +141,7 @@ func init() {
 		panic(err)
 	}
 	Register("hash", &vindexFactory{
-		create: NewHash,
+		create: newHash,
 		params: nil,
 	})
 }

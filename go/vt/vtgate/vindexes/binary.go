@@ -36,8 +36,8 @@ type Binary struct {
 	name string
 }
 
-// NewBinary creates a new Binary.
-func NewBinary(name string, _ map[string]string) (Vindex, []VindexWarning, error) {
+// newBinary creates a new Binary.
+func newBinary(name string, _ map[string]string) (Vindex, []VindexWarning, error) {
 	return &Binary{name: name}, nil, nil
 }
 
@@ -105,7 +105,7 @@ func (*Binary) ReverseMap(_ VCursor, ksids [][]byte) ([]sqltypes.Value, error) {
 
 func init() {
 	Register("binary", &vindexFactory{
-		create: NewBinary,
+		create: newBinary,
 		params: nil,
 	})
 }

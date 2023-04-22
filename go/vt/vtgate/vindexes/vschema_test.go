@@ -248,7 +248,7 @@ func init() {
 		params: nil,
 	})
 	Register("region_experimental_test", &vindexFactory{
-		create: NewRegionExperimental,
+		create: newRegionExperimental,
 		params: regionExperimentalParams,
 	})
 	Register("mcfu", &vindexFactory{

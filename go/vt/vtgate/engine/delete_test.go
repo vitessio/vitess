@@ -64,7 +64,7 @@ func TestDeleteUnsharded(t *testing.T) {
 }
 
 func TestDeleteEqual(t *testing.T) {
-	vindex, _, _ := vindexes.NewHash("", nil)
+	vindex, _, _ := vindexes.CreateVindex("hash", "", nil)
 	del := &Delete{
 		DML: &DML{
 			RoutingParameters: &RoutingParameters{
@@ -96,7 +96,7 @@ func TestDeleteEqual(t *testing.T) {
 }
 
 func TestDeleteEqualMultiCol(t *testing.T) {
-	vindex, _, _ := vindexes.NewRegionExperimental("", map[string]string{"region_bytes": "1"})
+	vindex, _, _ := vindexes.CreateVindex("region_experimental", "", map[string]string{"region_bytes": "1"})
 	del := &Delete{
 		DML: &DML{
 			RoutingParameters: &RoutingParameters{
@@ -555,7 +555,7 @@ func TestDeleteInChangedVindexMultiCol(t *testing.T) {
 }
 
 func TestDeleteEqualSubshard(t *testing.T) {
-	vindex, _, _ := vindexes.NewRegionExperimental("", map[string]string{"region_bytes": "1"})
+	vindex, _, _ := vindexes.CreateVindex("region_experimental", "", map[string]string{"region_bytes": "1"})
 	del := &Delete{
 		DML: &DML{
 			RoutingParameters: &RoutingParameters{
