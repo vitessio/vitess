@@ -100,6 +100,10 @@ func (f *Filter) GetColumns() ([]*sqlparser.AliasedExpr, error) {
 	return f.Source.GetColumns()
 }
 
+func (f *Filter) GetOrdering() ([]ops.OrderBy, error) {
+	return f.Source.GetOrdering()
+}
+
 func (f *Filter) Compact(*plancontext.PlanningContext) (ops.Operator, rewrite.ApplyResult, error) {
 	if len(f.Predicates) == 0 {
 		return f.Source, rewrite.NewTree, nil

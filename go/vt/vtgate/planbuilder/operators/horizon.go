@@ -33,9 +33,10 @@ import (
 type Horizon struct {
 	Source ops.Operator
 	Select sqlparser.SelectStatement
+	QP     *QueryProjection
 }
 
-func (h *Horizon) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr) (ops.Operator, int, error) {
+func (h *Horizon) AddColumn(*plancontext.PlanningContext, *sqlparser.AliasedExpr) (ops.Operator, int, error) {
 	return nil, 0, vterrors.VT13001("the Horizon operator cannot accept new columns")
 }
 
@@ -43,7 +44,7 @@ func (h *Horizon) GetColumns() (exprs []*sqlparser.AliasedExpr, err error) {
 	for _, expr := range sqlparser.GetFirstSelect(h.Select).SelectExprs {
 		ae, ok := expr.(*sqlparser.AliasedExpr)
 		if !ok {
-			return nil, errHorizonNotPlanned
+			return nil, errHorizonNotPlanned()
 		}
 		exprs = append(exprs, ae)
 	}
@@ -86,6 +87,20 @@ func (h *Horizon) selectStatement() sqlparser.SelectStatement {
 
 func (h *Horizon) src() ops.Operator {
 	return h.Source
+}
+
+func (h *Horizon) GetOrdering() ([]ops.OrderBy, error) {
+	if h.QP == nil {
+		return nil, vterrors.VT13001("QP should already be here")
+	}
+	return h.QP.OrderExprs, nil
+}
+
+func (h *Horizon) getQP() *QueryProjection {
+	return h.QP
+}
+func (h *Horizon) setQP(qp *QueryProjection) {
+	h.QP = qp
 }
 
 func (h *Horizon) Description() ops.OpDescription {

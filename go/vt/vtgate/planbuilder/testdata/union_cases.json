@@ -2287,7 +2287,8 @@
   {
     "comment": "union with invalid order by clause with table qualifier",
     "query": "select id from user union select 3 order by id",
-    "plan": "VT12001: unsupported: ORDER BY on top of UNION"
+    "v3-plan": "VT12001: unsupported: ORDER BY on top of UNION",
+    "gen4-plan": "VT13001: [BUG] ORDER BY in complex query *planbuilder.distinct"
   },
   {
     "comment": "select 1 from (select id+42 as foo from user union select 1+id as foo from unsharded) as t",

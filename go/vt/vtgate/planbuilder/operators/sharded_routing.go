@@ -328,7 +328,7 @@ func (tr *ShardedRouting) Cost() int {
 	case engine.Scatter:
 		return 20
 	default:
-		panic("this switch should be exhaustive")
+		return 0
 	}
 }
 

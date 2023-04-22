@@ -259,13 +259,13 @@ func topDown(
 	shouldVisit ShouldVisit,
 	isRoot bool,
 ) (ops.Operator, ApplyResult, error) {
-	if !shouldVisit(root) {
-		return root, SameTree, nil
-	}
-
 	newOp, treeIdentity, err := rewriter(root, rootID, isRoot)
 	if err != nil {
 		return nil, false, err
+	}
+
+	if !shouldVisit(root) {
+		return newOp, treeIdentity, nil
 	}
 
 	if treeIdentity == NewTree {

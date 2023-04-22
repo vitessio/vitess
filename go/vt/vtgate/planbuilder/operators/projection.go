@@ -122,6 +122,10 @@ func (p *Projection) GetColumns() ([]*sqlparser.AliasedExpr, error) {
 	return p.expressions(), nil
 }
 
+func (p *Projection) GetOrdering() ([]ops.OrderBy, error) {
+	return p.Source.GetOrdering()
+}
+
 func (p *Projection) IPhysical() {}
 
 // AllOffsets returns a slice of integer offsets for all columns in the Projection

@@ -54,7 +54,7 @@ func planOffsets(ctx *plancontext.PlanningContext, root ops.Operator) (ops.Opera
 	if err != nil {
 		if vterr, ok := err.(*vterrors.VitessError); ok && vterr.ID == "VT13001" {
 			// we encountered a bug. let's try to back out
-			return nil, errHorizonNotPlanned
+			return nil, errHorizonNotPlanned()
 		}
 		return nil, err
 	}

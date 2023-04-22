@@ -69,6 +69,10 @@ func (l *Limit) GetColumns() ([]*sqlparser.AliasedExpr, error) {
 	return l.Source.GetColumns()
 }
 
+func (l *Limit) GetOrdering() ([]ops.OrderBy, error) {
+	return l.Source.GetOrdering()
+}
+
 func (l *Limit) IPhysical() {}
 
 func (l *Limit) Description() ops.OpDescription {

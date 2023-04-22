@@ -29,7 +29,7 @@ type Union struct {
 	Distinct bool
 
 	// TODO this should be removed. For now it's used to fail queries
-	Ordering sqlparser.OrderBy
+	Ordering []ops.OrderBy
 
 	noColumns
 }
@@ -44,6 +44,10 @@ func (u *Union) Clone(inputs []ops.Operator) ops.Operator {
 	newOp := *u
 	newOp.Sources = inputs
 	return &newOp
+}
+
+func (u *Union) GetOrdering() ([]ops.OrderBy, error) {
+	return u.Ordering, nil
 }
 
 // Inputs implements the Operator interface

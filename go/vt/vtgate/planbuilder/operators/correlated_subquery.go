@@ -62,6 +62,10 @@ func (s *SubQueryOp) Clone(inputs []ops.Operator) ops.Operator {
 	return result
 }
 
+func (s *SubQueryOp) GetOrdering() ([]ops.OrderBy, error) {
+	return s.Outer.GetOrdering()
+}
+
 // Inputs implements the Operator interface
 func (s *SubQueryOp) Inputs() []ops.Operator {
 	return []ops.Operator{s.Outer, s.Inner}
@@ -99,6 +103,10 @@ func (c *CorrelatedSubQueryOp) Clone(inputs []ops.Operator) ops.Operator {
 		Vars:       vars,
 	}
 	return result
+}
+
+func (c *CorrelatedSubQueryOp) GetOrdering() ([]ops.OrderBy, error) {
+	return c.Outer.GetOrdering()
 }
 
 // Inputs implements the Operator interface

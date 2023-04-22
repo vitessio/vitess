@@ -32,6 +32,9 @@ import (
 type Derived struct {
 	Source ops.Operator
 
+	// QP contains the QueryProjection for this op
+	QP *QueryProjection
+
 	Query         sqlparser.SelectStatement
 	Alias         string
 	ColumnAliases sqlparser.Columns
@@ -209,11 +212,18 @@ func (d *Derived) GetColumns() (exprs []*sqlparser.AliasedExpr, err error) {
 	for _, expr := range sqlparser.GetFirstSelect(d.Query).SelectExprs {
 		ae, ok := expr.(*sqlparser.AliasedExpr)
 		if !ok {
-			return nil, errHorizonNotPlanned
+			return nil, errHorizonNotPlanned()
 		}
 		exprs = append(exprs, ae)
 	}
 	return
+}
+
+func (d *Derived) GetOrdering() ([]ops.OrderBy, error) {
+	if d.QP == nil {
+		return nil, vterrors.VT13001("QP should already be here")
+	}
+	return d.QP.OrderExprs, nil
 }
 
 func addToIntSlice(columnOffset []int, valToAdd int) ([]int, int) {
@@ -233,6 +243,13 @@ func (d *Derived) selectStatement() sqlparser.SelectStatement {
 
 func (d *Derived) src() ops.Operator {
 	return d.Source
+}
+
+func (d *Derived) getQP() *QueryProjection {
+	return d.QP
+}
+func (d *Derived) setQP(qp *QueryProjection) {
+	d.QP = qp
 }
 
 func (d *Derived) Description() ops.OpDescription {

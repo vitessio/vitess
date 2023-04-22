@@ -59,6 +59,10 @@ func (u *Update) Clone(inputs []ops.Operator) ops.Operator {
 	}
 }
 
+func (u *Update) GetOrdering() ([]ops.OrderBy, error) {
+	return nil, nil
+}
+
 func (u *Update) TablesUsed() []string {
 	if u.VTable != nil {
 		return SingleQualifiedIdentifier(u.VTable.Keyspace, u.VTable.Name)

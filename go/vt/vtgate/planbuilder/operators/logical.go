@@ -100,7 +100,6 @@ func createOperatorFromUnion(ctx *plancontext.PlanningContext, node *sqlparser.U
 	union := &Union{
 		Distinct: node.Distinct,
 		Sources:  []ops.Operator{opLHS, opRHS},
-		Ordering: node.OrderBy,
 	}
 	return &Horizon{Source: union, Select: node}, nil
 }

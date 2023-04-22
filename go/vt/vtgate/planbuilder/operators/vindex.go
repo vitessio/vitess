@@ -87,6 +87,10 @@ func (v *Vindex) GetColumns() ([]*sqlparser.AliasedExpr, error) {
 	return slices2.Map(v.Columns, colNameToExpr), nil
 }
 
+func (v *Vindex) GetOrdering() ([]ops.OrderBy, error) {
+	return nil, nil
+}
+
 func (v *Vindex) GetColNames() []*sqlparser.ColName {
 	return v.Columns
 }

@@ -83,10 +83,10 @@ func PlanQuery(ctx *plancontext.PlanningContext, selStmt sqlparser.Statement) (o
 	return op, err
 }
 
-func tryHorizonPlanning(ctx *plancontext.PlanningContext, op ops.Operator) (output ops.Operator, err error) {
-	backup := Clone(op)
+func tryHorizonPlanning(ctx *plancontext.PlanningContext, root ops.Operator) (output ops.Operator, err error) {
+	backup := Clone(root)
 	defer func() {
-		if err == errHorizonNotPlanned {
+		if err == errHorizonNotPlanned() {
 			err = planOffsetsOnJoins(ctx, backup)
 			if err == nil {
 				output = backup
@@ -94,14 +94,14 @@ func tryHorizonPlanning(ctx *plancontext.PlanningContext, op ops.Operator) (outp
 		}
 	}()
 
-	_, ok := op.(*Horizon)
+	_, ok := root.(*Horizon)
 
 	if !ok || len(ctx.SemTable.SubqueryMap) > 0 || len(ctx.SemTable.SubqueryRef) > 0 {
 		// we are not ready to deal with subqueries yet
-		return op, errHorizonNotPlanned
+		return root, errHorizonNotPlanned()
 	}
 
-	output, err = planHorizons(ctx, op)
+	output, err = planHorizons(ctx, root)
 	if err != nil {
 		return nil, err
 	}
@@ -111,7 +111,7 @@ func tryHorizonPlanning(ctx *plancontext.PlanningContext, op ops.Operator) (outp
 		return nil, err
 	}
 
-	err = makeSureOutputIsCorrect(ctx, op, output)
+	err = makeSureOutputIsCorrect(ctx, root, output)
 	if err != nil {
 		return nil, err
 	}
@@ -119,7 +119,7 @@ func tryHorizonPlanning(ctx *plancontext.PlanningContext, op ops.Operator) (outp
 	return
 }
 
-func makeSureOutputIsCorrect(ctx *plancontext.PlanningContext, op ops.Operator, output ops.Operator) error {
+func makeSureOutputIsCorrect(ctx *plancontext.PlanningContext, oldHorizon ops.Operator, output ops.Operator) error {
 	// next we use the original Horizon to make sure that the output columns line up with what the user asked for
 	// in the future, we'll tidy up the results. for now, we are just failing these queries and going back to the
 	// old horizon planning instead
@@ -128,16 +128,20 @@ func makeSureOutputIsCorrect(ctx *plancontext.PlanningContext, op ops.Operator, 
 		return err
 	}
 
-	horizon := op.(*Horizon)
+	horizon := oldHorizon.(*Horizon)
 
 	sel := sqlparser.GetFirstSelect(horizon.Select)
 	if len(sel.SelectExprs) != len(cols) {
-		return errHorizonNotPlanned
+		if route, isRoute := output.(*Route); isRoute {
+			route.ResultColumns = len(sel.SelectExprs)
+			return nil
+		}
+		return errHorizonNotPlanned()
 	}
 	for i, expr := range sel.SelectExprs {
 		ae, ok := expr.(*sqlparser.AliasedExpr)
 		if !ok || !ctx.SemTable.EqualsExpr(ae.Expr, cols[i].Expr) {
-			return errHorizonNotPlanned
+			return errHorizonNotPlanned()
 		}
 	}
 	return nil
