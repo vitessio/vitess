@@ -51,6 +51,10 @@ var (
 	throttlerFactory       throttlerFactoryFunc
 )
 
+func init() {
+	resetTxThrottlerFactories()
+}
+
 func resetTxThrottlerFactories() {
 	healthCheckFactory = func(topoServer *topo.Server, cell string, cellsToWatch []string) discovery.HealthCheck {
 		return discovery.NewHealthCheck(context.Background(), discovery.DefaultHealthCheckRetryDelay, discovery.DefaultHealthCheckTimeout, topoServer, cell, strings.Join(cellsToWatch, ","))
@@ -61,10 +65,6 @@ func resetTxThrottlerFactories() {
 	throttlerFactory = func(name, unit string, threadCount int, maxRate int64, maxReplicationLagConfig throttler.MaxReplicationLagModuleConfig) (ThrottlerInterface, error) {
 		return throttler.NewThrottlerFromConfig(name, unit, threadCount, maxRate, maxReplicationLagConfig, time.Now)
 	}
-}
-
-func init() {
-	resetTxThrottlerFactories()
 }
 
 // ThrottlerInterface defines the public interface that is implemented by go/vt/throttler.Throttler
@@ -184,6 +184,33 @@ func tryCreateTxThrottler(env tabletenv.Env, topoServer *topo.Server) (*TxThrott
 	})
 }
 
+// txThrottlerConfig holds the parameters that need to be
+// passed when constructing a TxThrottler object.
+type txThrottlerConfig struct {
+	// enabled is true if the transaction throttler is enabled. All methods
+	// of a disabled transaction throttler do nothing and Throttle() always
+	// returns false.
+	enabled bool
+
+	topoServer      *topo.Server
+	throttlerConfig *throttlerdatapb.Configuration
+	// healthCheckCells stores the cell names in which running vttablets will be monitored for
+	// replication lag.
+	healthCheckCells []string
+}
+
+// txThrottlerState holds the state of an open TxThrottler object.
+type txThrottlerState struct {
+	// throttleMu serializes calls to throttler.Throttler.Throttle(threadId).
+	// That method is required to be called in serial for each threadId.
+	throttleMu      sync.Mutex
+	throttler       ThrottlerInterface
+	stopHealthCheck context.CancelFunc
+
+	healthCheck      discovery.HealthCheck
+	topologyWatchers []TopologyWatcherInterface
+}
+
 func newTxThrottler(env tabletenv.Env, config *txThrottlerConfig) (*TxThrottler, error) {
 	if config.enabled {
 		// Verify config.
@@ -238,7 +265,7 @@ func (t *TxThrottler) Close() {
 // should back off). Throttle requires that Open() was previously called
 // successfully.
 func (t *TxThrottler) Throttle() (result bool) {
-	if !t.config.enabled || t.state == nil {
+	if !t.config.enabled {
 		return false
 	}
 	result = t.state.throttle()
@@ -247,33 +274,6 @@ func (t *TxThrottler) Throttle() (result bool) {
 		t.requestsThrottled.Add(1)
 	}
 	return result
-}
-
-// txThrottlerConfig holds the parameters that need to be
-// passed when constructing a TxThrottler object.
-type txThrottlerConfig struct {
-	// enabled is true if the transaction throttler is enabled. All methods
-	// of a disabled transaction throttler do nothing and Throttle() always
-	// returns false.
-	enabled bool
-
-	topoServer      *topo.Server
-	throttlerConfig *throttlerdatapb.Configuration
-	// healthCheckCells stores the cell names in which running vttablets will be monitored for
-	// replication lag.
-	healthCheckCells []string
-}
-
-// txThrottlerState holds the state of an open TxThrottler object.
-type txThrottlerState struct {
-	// throttleMu serializes calls to throttler.Throttler.Throttle(threadId).
-	// That method is required to be called in serial for each threadId.
-	throttleMu      sync.Mutex
-	throttler       ThrottlerInterface
-	stopHealthCheck context.CancelFunc
-
-	healthCheck      discovery.HealthCheck
-	topologyWatchers []TopologyWatcherInterface
 }
 
 func newTxThrottlerState(config *txThrottlerConfig, keyspace, shard, cell string) (*txThrottlerState, error) {
