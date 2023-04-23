@@ -21,10 +21,34 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 )
+
+func init() {
+	Register("allow_unknown_params", &vindexFactory{
+		allowUnknownParams: true,
+		create: func(_ string, _ map[string]string) (Vindex, []VindexWarning, error) {
+			return nil, nil, nil
+		},
+		params: []VindexParam{
+			&vindexParam{name: "option1"},
+			&vindexParam{name: "option2"},
+		},
+	})
+	Register("warn_unknown_params", &vindexFactory{
+		allowUnknownParams: false,
+		create: func(_ string, _ map[string]string) (Vindex, []VindexWarning, error) {
+			return nil, nil, nil
+		},
+		params: []VindexParam{
+			&vindexParam{name: "option1"},
+			&vindexParam{name: "option2"},
+		},
+	})
+}
 
 func TestVindexMap(t *testing.T) {
 	ge, _, err := createRegionVindex(t, "region_experimental", "f1,f2", 1)
@@ -75,4 +99,41 @@ func TestVindexVerify(t *testing.T) {
 	})
 	assert.NoError(t, err)
 	assert.Equal(t, want, got)
+}
+
+func TestCreateVindexAllowUnknownParams(t *testing.T) {
+	vindex, warnings, err := CreateVindex(
+		"allow_unknown_params",
+		"allow_unknown_params",
+		map[string]string{
+			"option1": "value1",
+			"option2": "value2",
+			"option3": "value3",
+			"option4": "value4",
+		},
+	)
+
+	require.Nil(t, vindex)
+	require.NoError(t, err)
+	require.Len(t, warnings, 0)
+}
+
+func TestCreateVindexWarnUnknownParams(t *testing.T) {
+	vindex, warnings, err := CreateVindex(
+		"warn_unknown_params",
+		"warn_unknown_params",
+		map[string]string{
+			"option1": "value1",
+			"option2": "value2",
+			"option3": "value3",
+			"option4": "value4",
+		},
+	)
+
+	require.Nil(t, vindex)
+	require.NoError(t, err)
+
+	require.Len(t, warnings, 2)
+	require.EqualError(t, warnings[0], "unknown param 'option3'")
+	require.EqualError(t, warnings[1], "unknown param 'option4'")
 }

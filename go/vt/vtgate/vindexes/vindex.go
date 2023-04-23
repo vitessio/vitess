@@ -19,7 +19,6 @@ package vindexes
 import (
 	"context"
 	"fmt"
-	"sync"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
@@ -192,7 +191,6 @@ type (
 )
 
 var registry = make(map[string]VindexFactory)
-var mu = &sync.Mutex{}
 
 func (f *vindexFactory) AllowUnknownParams() bool {
 	return f.allowUnknownParams
