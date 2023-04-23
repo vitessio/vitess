@@ -278,6 +278,17 @@ func (a *ApplyJoin) addOffset(offset int) {
 	a.Columns = append(a.Columns, offset)
 }
 
+func (a *ApplyJoin) Description() ops.OpDescription {
+	return ops.OpDescription{
+		OperatorType: "Join",
+		Variant:      "Apply",
+		Other: map[string]any{
+			"Predicate":     sqlparser.String(a.Predicate),
+			"OutputColumns": a.Columns,
+		},
+	}
+}
+
 func (jc JoinColumn) IsPureLeft() bool {
 	return jc.RHSExpr == nil
 }

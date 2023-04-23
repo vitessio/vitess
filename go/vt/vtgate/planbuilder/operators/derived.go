@@ -229,3 +229,9 @@ func (d *Derived) selectStatement() sqlparser.SelectStatement {
 func (d *Derived) src() ops.Operator {
 	return d.Source
 }
+
+func (d *Derived) Description() ops.OpDescription {
+	return ops.OpDescription{
+		OperatorType: "Derived",
+	}
+}

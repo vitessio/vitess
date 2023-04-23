@@ -87,3 +87,9 @@ func (h *Horizon) selectStatement() sqlparser.SelectStatement {
 func (h *Horizon) src() ops.Operator {
 	return h.Source
 }
+
+func (h *Horizon) Description() ops.OpDescription {
+	return ops.OpDescription{
+		OperatorType: "Horizon",
+	}
+}

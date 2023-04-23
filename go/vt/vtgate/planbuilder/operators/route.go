@@ -583,3 +583,14 @@ func (r *Route) TablesUsed() []string {
 	}
 	return collect()
 }
+
+func (r *Route) Description() ops.OpDescription {
+	return ops.OpDescription{
+		OperatorType: "Route",
+		Other: map[string]any{
+			"OpCode":   r.Routing.OpCode(),
+			"Cost":     r.Routing.Cost(),
+			"Keyspace": r.Routing.Keyspace(),
+		},
+	}
+}
