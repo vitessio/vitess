@@ -27,11 +27,29 @@ import (
 	"vitess.io/vitess/go/vt/key"
 )
 
+type testVindex struct{}
+
+func (v *testVindex) Cost() int {
+	return 0
+}
+
+func (v *testVindex) String() string {
+	return ""
+}
+
+func (v *testVindex) IsUnique() bool {
+	return false
+}
+
+func (v *testVindex) NeedsVCursor() bool {
+	return false
+}
+
 func init() {
 	Register("allow_unknown_params", &vindexFactory{
 		allowUnknownParams: true,
 		create: func(_ string, _ map[string]string) (Vindex, []VindexWarning, error) {
-			return nil, nil, nil
+			return &testVindex{}, nil, nil
 		},
 		params: []VindexParam{
 			&vindexParam{name: "option1"},
@@ -41,7 +59,7 @@ func init() {
 	Register("warn_unknown_params", &vindexFactory{
 		allowUnknownParams: false,
 		create: func(_ string, _ map[string]string) (Vindex, []VindexWarning, error) {
-			return nil, nil, nil
+			return &testVindex{}, nil, nil
 		},
 		params: []VindexParam{
 			&vindexParam{name: "option1"},
@@ -113,7 +131,7 @@ func TestCreateVindexAllowUnknownParams(t *testing.T) {
 		},
 	)
 
-	require.Nil(t, vindex)
+	require.NotNil(t, vindex)
 	require.NoError(t, err)
 	require.Len(t, warnings, 0)
 }
@@ -130,10 +148,14 @@ func TestCreateVindexWarnUnknownParams(t *testing.T) {
 		},
 	)
 
-	require.Nil(t, vindex)
+	require.NotNil(t, vindex)
 	require.NoError(t, err)
 
 	require.Len(t, warnings, 2)
-	require.EqualError(t, warnings[0], "unknown param 'option3'")
-	require.EqualError(t, warnings[1], "unknown param 'option4'")
+	for _, msg := range []string{"unknown param 'option3'", "unknown param 'option4'"} {
+		if msg == warnings[0].Error() || msg == warnings[1].Error() {
+			continue
+		}
+		require.Fail(t, "expected one warning to have error message: %s", msg)
+	}
 }

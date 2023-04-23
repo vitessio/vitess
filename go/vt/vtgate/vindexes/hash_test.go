@@ -147,3 +147,15 @@ func TestHashReverseMapNeg(t *testing.T) {
 		t.Error(err)
 	}
 }
+
+func TestCreateVindexHashParams(t *testing.T) {
+	vindex, warnings, err := CreateVindex("hash", "hash", nil)
+	require.NotNil(t, vindex)
+	require.Empty(t, warnings)
+	require.NoError(t, err)
+
+	vindex, warnings, err = CreateVindex("hash", "hash", map[string]string{"hello": "world"})
+	require.NotNil(t, vindex)
+	require.Len(t, warnings, 1)
+	require.NoError(t, err)
+}

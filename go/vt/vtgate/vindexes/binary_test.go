@@ -103,3 +103,15 @@ func TestBinaryReverseMap(t *testing.T) {
 		t.Errorf("ReverseMap(): %v, want %s", err, wantErr)
 	}
 }
+
+func TestCreateVindexBinaryParams(t *testing.T) {
+	vindex, warnings, err := CreateVindex("binary", "binary", nil)
+	require.NotNil(t, vindex)
+	require.Empty(t, warnings)
+	require.NoError(t, err)
+
+	vindex, warnings, err = CreateVindex("binary", "binary", map[string]string{"hello": "world"})
+	require.NotNil(t, vindex)
+	require.Len(t, warnings, 1)
+	require.NoError(t, err)
+}

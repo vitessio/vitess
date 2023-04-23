@@ -134,3 +134,15 @@ func benchmarkMD5HashBytes(b *testing.B, input []byte) {
 		sinkMD5 = vMD5Hash(input)
 	}
 }
+
+func TestCreateVindexBinaryMD5Params(t *testing.T) {
+	vindex, warnings, err := CreateVindex("binary_md5", "binary_md5", nil)
+	require.NotNil(t, vindex)
+	require.Empty(t, warnings)
+	require.NoError(t, err)
+
+	vindex, warnings, err = CreateVindex("binary_md5", "binary_md5", map[string]string{"hello": "world"})
+	require.NotNil(t, vindex)
+	require.Len(t, warnings, 1)
+	require.NoError(t, err)
+}
