@@ -70,3 +70,17 @@ func (l *Limit) GetColumns() ([]sqlparser.Expr, error) {
 }
 
 func (l *Limit) IPhysical() {}
+
+func (l *Limit) Description() ops.OpDescription {
+	other := map[string]any{}
+	if l.AST.Offset != nil {
+		other["Offset"] = sqlparser.String(l.AST.Offset)
+	}
+	if l.AST.Rowcount != nil {
+		other["RowCount"] = sqlparser.String(l.AST.Rowcount)
+	}
+	return ops.OpDescription{
+		OperatorType: "Limit",
+		Other:        other,
+	}
+}

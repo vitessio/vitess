@@ -133,3 +133,12 @@ func (p *Projection) AllOffsets() (cols []int) {
 	}
 	return
 }
+
+func (p *Projection) Description() ops.OpDescription {
+	return ops.OpDescription{
+		OperatorType: "Projection",
+		Other: map[string]any{
+			"OutputColumns": p.ColumnNames,
+		},
+	}
+}

@@ -60,3 +60,9 @@ func (d *Delete) TablesUsed() []string {
 	}
 	return nil
 }
+
+func (d *Delete) Description() ops.OpDescription {
+	return ops.OpDescription{
+		OperatorType: "Delete",
+	}
+}

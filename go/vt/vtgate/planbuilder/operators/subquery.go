@@ -118,3 +118,14 @@ func createSubqueryFromStatement(ctx *plancontext.PlanningContext, stmt sqlparse
 	}
 	return subq, nil
 }
+
+func (s *SubQuery) Description() ops.OpDescription {
+	return ops.OpDescription{
+		OperatorType: "SubQuery",
+	}
+}
+func (s *SubQueryInner) Description() ops.OpDescription {
+	return ops.OpDescription{
+		OperatorType: "SubQueryInner",
+	}
+}
