@@ -29,6 +29,8 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 var binOnlyVindex SingleColumn
@@ -36,6 +38,53 @@ var binOnlyVindex SingleColumn
 func init() {
 	vindex, _, _ := CreateVindex("binary", "binary_varchar", nil)
 	binOnlyVindex = vindex.(SingleColumn)
+}
+
+func binaryCreateVindexTestCase(
+	testName string,
+	vindexParams map[string]string,
+	expectErr error,
+	expectWarnings []VindexWarning,
+) createVindexTestCase {
+	return createVindexTestCase{
+		testName: testName,
+
+		vindexType:   "binary",
+		vindexName:   "binary",
+		vindexParams: vindexParams,
+
+		expectCost:         0,
+		expectErr:          expectErr,
+		expectIsUnique:     true,
+		expectNeedsVCursor: false,
+		expectString:       "binary",
+		expectWarnings:     expectWarnings,
+	}
+}
+
+func TestBinaryCreateVindex(t *testing.T) {
+	cases := []createVindexTestCase{
+		binaryCreateVindexTestCase(
+			"no params",
+			nil,
+			nil,
+			nil,
+		),
+		binaryCreateVindexTestCase(
+			"empty params",
+			map[string]string{},
+			nil,
+			nil,
+		),
+		binaryCreateVindexTestCase(
+			"unknown params",
+			map[string]string{"hello": "world"},
+			nil,
+			[]VindexWarning{vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "unknown param 'hello'")},
+		),
+	}
+
+	testCreateVindexes(t, cases)
 }
 
 func TestBinaryInfo(t *testing.T) {
@@ -102,16 +151,4 @@ func TestBinaryReverseMap(t *testing.T) {
 	if err == nil || err.Error() != wantErr {
 		t.Errorf("ReverseMap(): %v, want %s", err, wantErr)
 	}
-}
-
-func TestCreateVindexBinaryParams(t *testing.T) {
-	vindex, warnings, err := CreateVindex("binary", "binary", nil)
-	require.NotNil(t, vindex)
-	require.Empty(t, warnings)
-	require.NoError(t, err)
-
-	vindex, warnings, err = CreateVindex("binary", "binary", map[string]string{"hello": "world"})
-	require.NotNil(t, vindex)
-	require.Len(t, warnings, 1)
-	require.NoError(t, err)
 }

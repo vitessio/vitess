@@ -40,6 +40,60 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
+func consistentLookupCreateVindexTestCase(
+	testName string,
+	vindexParams map[string]string,
+	expectErr error,
+	expectWarnings []VindexWarning,
+) createVindexTestCase {
+	return createVindexTestCase{
+		testName: testName,
+
+		vindexType:   "consistent_lookup",
+		vindexName:   "consistent_lookup",
+		vindexParams: vindexParams,
+
+		expectCost:         20,
+		expectErr:          expectErr,
+		expectIsUnique:     false,
+		expectNeedsVCursor: true,
+		expectString:       "consistent_lookup",
+		expectWarnings:     expectWarnings,
+	}
+}
+
+func consistentLookupUniqueCreateVindexTestCase(
+	testName string,
+	vindexParams map[string]string,
+	expectErr error,
+	expectWarnings []VindexWarning,
+) createVindexTestCase {
+	return createVindexTestCase{
+		testName: testName,
+
+		vindexType:   "consistent_lookup_unique",
+		vindexName:   "consistent_lookup_unique",
+		vindexParams: vindexParams,
+
+		expectCost:         10,
+		expectErr:          expectErr,
+		expectIsUnique:     true,
+		expectNeedsVCursor: true,
+		expectString:       "consistent_lookup_unique",
+		expectWarnings:     expectWarnings,
+	}
+}
+
+func TestConsistentLookupCreateVindex(t *testing.T) {
+	testCaseFs := []func(string, map[string]string, error, []VindexWarning) createVindexTestCase{
+		consistentLookupCreateVindexTestCase,
+		consistentLookupUniqueCreateVindexTestCase,
+	}
+	for _, testCaseF := range testCaseFs {
+		testLookupCreateVindexInternalCases(t, testCaseF)
+	}
+}
+
 func TestConsistentLookupInit(t *testing.T) {
 	lookup := createConsistentLookup(t, "consistent_lookup", true)
 	cols := []sqlparser.IdentifierCI{

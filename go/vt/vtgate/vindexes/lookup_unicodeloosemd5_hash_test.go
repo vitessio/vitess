@@ -37,6 +37,32 @@ const (
 	hashed40 uint64 = 16576388050845489136
 )
 
+func lookupUnicodeLooseMD5HashCreateVindexTestCase(
+	testName string,
+	vindexParams map[string]string,
+	expectErr error,
+	expectWarnings []VindexWarning,
+) createVindexTestCase {
+	return createVindexTestCase{
+		testName: testName,
+
+		vindexType:   "lookup_unicodeloosemd5_hash",
+		vindexName:   "lookup_unicodeloosemd5_hash",
+		vindexParams: vindexParams,
+
+		expectCost:         20,
+		expectErr:          expectErr,
+		expectIsUnique:     false,
+		expectNeedsVCursor: true,
+		expectString:       "lookup_unicodeloosemd5_hash",
+		expectWarnings:     expectWarnings,
+	}
+}
+
+func TestLookupUnicodeLooseMD5HashCreateVindex(t *testing.T) {
+	testLookupCreateVindexCommonCases(t, lookupUnicodeLooseMD5HashCreateVindexTestCase)
+}
+
 func TestLookupUnicodeLooseMD5HashMap(t *testing.T) {
 	lookup := createLookup(t, "lookup_unicodeloosemd5_hash", false)
 	vc := &vcursor{numRows: 2, keys: []sqltypes.Value{sqltypes.NewUint64(hashed10), sqltypes.NewUint64(hashed20)}}

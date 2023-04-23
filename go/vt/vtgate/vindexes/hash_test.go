@@ -26,6 +26,8 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 var hash SingleColumn
@@ -36,6 +38,53 @@ func init() {
 		panic(err)
 	}
 	hash = hv.(SingleColumn)
+}
+
+func hashCreateVindexTestCase(
+	testName string,
+	vindexParams map[string]string,
+	expectErr error,
+	expectWarnings []VindexWarning,
+) createVindexTestCase {
+	return createVindexTestCase{
+		testName: testName,
+
+		vindexType:   "hash",
+		vindexName:   "hash",
+		vindexParams: vindexParams,
+
+		expectCost:         1,
+		expectErr:          expectErr,
+		expectIsUnique:     true,
+		expectNeedsVCursor: false,
+		expectString:       "hash",
+		expectWarnings:     expectWarnings,
+	}
+}
+
+func TestHashCreateVindex(t *testing.T) {
+	cases := []createVindexTestCase{
+		hashCreateVindexTestCase(
+			"no params",
+			nil,
+			nil,
+			nil,
+		),
+		hashCreateVindexTestCase(
+			"empty params",
+			map[string]string{},
+			nil,
+			nil,
+		),
+		hashCreateVindexTestCase(
+			"unknown params",
+			map[string]string{"hello": "world"},
+			nil,
+			[]VindexWarning{vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "unknown param 'hello'")},
+		),
+	}
+
+	testCreateVindexes(t, cases)
 }
 
 func TestHashInfo(t *testing.T) {
@@ -146,16 +195,4 @@ func TestHashReverseMapNeg(t *testing.T) {
 	if err.Error() != want {
 		t.Error(err)
 	}
-}
-
-func TestCreateVindexHashParams(t *testing.T) {
-	vindex, warnings, err := CreateVindex("hash", "hash", nil)
-	require.NotNil(t, vindex)
-	require.Empty(t, warnings)
-	require.NoError(t, err)
-
-	vindex, warnings, err = CreateVindex("hash", "hash", map[string]string{"hello": "world"})
-	require.NotNil(t, vindex)
-	require.Len(t, warnings, 1)
-	require.NoError(t, err)
 }

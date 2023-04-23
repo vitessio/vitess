@@ -45,6 +45,13 @@ var (
 		readLockNone:      "",
 	}
 
+	// lookupCommonParams are used only by lookup_* vindexes.
+	lookupCommonParams = append(
+		append(make([]VindexParam, 0), lookupInternalParams...),
+		&vindexParam{name: "autocommit"},
+		&vindexParam{name: "multi_shard_autocommit"},
+	)
+
 	// lookupInternalParams are used by both lookup_* vindexes and the newer
 	// consistent_lookup_* vindexes.
 	lookupInternalParams = []VindexParam{
@@ -55,13 +62,6 @@ var (
 		&vindexParam{name: "batch_lookup"},
 		&vindexParam{name: "read_lock"},
 	}
-
-	// lookupCommonParams are used only by lookup_* vindexes.
-	lookupCommonParams = append(
-		append(make([]VindexParam, 0), lookupInternalParams...),
-		&vindexParam{name: "autocommit"},
-		&vindexParam{name: "multi_shard_autocommit"},
-	)
 )
 
 // lookupInternal implements the functions for the Lookup vindexes.
@@ -98,7 +98,7 @@ func (lkp *lookupInternal) Init(lookupQueryParams map[string]string, autocommit,
 	}
 	if readLock, ok := lookupQueryParams["read_lock"]; ok {
 		if _, valid := readLockExprs[readLock]; !valid {
-			return fmt.Errorf("invalid read_lock value: %s", readLock)
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid read_lock value: %s", readLock)
 		}
 		lkp.ReadLock = readLock
 	}

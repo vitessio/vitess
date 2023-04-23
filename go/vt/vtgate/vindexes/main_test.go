@@ -45,6 +45,10 @@ func testCreateVindex(
 			tc.vindexParams,
 		)
 		assertEqualVtError(t, tc.expectErr, err)
+		if err == nil {
+			assert.NotNil(t, vdx)
+		}
+		require.Equal(t, len(tc.expectWarnings), len(warnings))
 		for _, expectWarning := range tc.expectWarnings {
 			found := false
 			for _, warning := range warnings {

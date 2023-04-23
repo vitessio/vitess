@@ -34,6 +34,9 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 // LookupNonUnique tests are more comprehensive than others.
@@ -110,6 +113,238 @@ func (vc *vcursor) execute(query string, bindvars map[string]*querypb.BindVariab
 		return &sqltypes.Result{}, nil
 	}
 	panic("unexpected")
+}
+
+func lookupCreateVindexTestCase(
+	testName string,
+	vindexParams map[string]string,
+	expectErr error,
+	expectWarnings []VindexWarning,
+) createVindexTestCase {
+	return createVindexTestCase{
+		testName: testName,
+
+		vindexType:   "lookup",
+		vindexName:   "lookup",
+		vindexParams: vindexParams,
+
+		expectCost:         20,
+		expectErr:          expectErr,
+		expectIsUnique:     false,
+		expectNeedsVCursor: true,
+		expectString:       "lookup",
+		expectWarnings:     expectWarnings,
+	}
+}
+
+func lookupUniqueCreateVindexTestCase(
+	testName string,
+	vindexParams map[string]string,
+	expectErr error,
+	expectWarnings []VindexWarning,
+) createVindexTestCase {
+	return createVindexTestCase{
+		testName: testName,
+
+		vindexType:   "lookup_unique",
+		vindexName:   "lookup_unique",
+		vindexParams: vindexParams,
+
+		expectCost:         10,
+		expectErr:          expectErr,
+		expectIsUnique:     true,
+		expectNeedsVCursor: true,
+		expectString:       "lookup_unique",
+		expectWarnings:     expectWarnings,
+	}
+}
+
+func testLookupCreateVindexCommonCases(t *testing.T, testCaseF func(string, map[string]string, error, []VindexWarning) createVindexTestCase) {
+	testLookupCreateVindexInternalCases(t, testCaseF)
+
+	cases := []createVindexTestCase{
+		testCaseF(
+			"autocommit true",
+			map[string]string{"autocommit": "true"},
+			nil,
+			nil,
+		),
+		testCaseF(
+			"autocommit false",
+			map[string]string{"autocommit": "false"},
+			nil,
+			nil,
+		),
+		testCaseF(
+			"autocommit reject not bool",
+			map[string]string{"autocommit": "hello"},
+			vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "autocommit value must be 'true' or 'false': 'hello'"),
+			nil,
+		),
+		testCaseF(
+			"multi_shard_autocommit true",
+			map[string]string{"multi_shard_autocommit": "true"},
+			nil,
+			nil,
+		),
+		testCaseF(
+			"multi_shard_autocommit false",
+			map[string]string{"multi_shard_autocommit": "false"},
+			nil,
+			nil,
+		),
+		testCaseF(
+			"multi_shard_autocommit reject not bool",
+			map[string]string{"multi_shard_autocommit": "hello"},
+			vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "multi_shard_autocommit value must be 'true' or 'false': 'hello'"),
+			nil,
+		),
+	}
+
+	testCreateVindexes(t, cases)
+}
+
+func testLookupCreateVindexInternalCases(t *testing.T, testCaseF func(string, map[string]string, error, []VindexWarning) createVindexTestCase) {
+	cases := []createVindexTestCase{
+		// TODO(maxeng): make table, to, from required params.
+		testCaseF(
+			"no params",
+			nil,
+			nil,
+			nil,
+		),
+		testCaseF(
+			"empty params",
+			map[string]string{},
+			nil,
+			nil,
+		),
+		testCaseF(
+			"batch_lookup true",
+			map[string]string{"batch_lookup": "true"},
+			nil,
+			nil,
+		),
+		testCaseF(
+			"batch_lookup false",
+			map[string]string{"batch_lookup": "false"},
+			nil,
+			nil,
+		),
+		testCaseF(
+			"batch_lookup reject not bool",
+			map[string]string{"batch_lookup": "hello"},
+			vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "batch_lookup value must be 'true' or 'false': 'hello'"),
+			nil,
+		),
+		testCaseF(
+			"ignore_nulls true",
+			map[string]string{"ignore_nulls": "true"},
+			nil,
+			nil,
+		),
+		testCaseF(
+			"ignore_nulls false",
+			map[string]string{"ignore_nulls": "false"},
+			nil,
+			nil,
+		),
+		testCaseF(
+			"ignore_nulls reject not bool",
+			map[string]string{"ignore_nulls": "hello"},
+			vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "ignore_nulls value must be 'true' or 'false': 'hello'"),
+			nil,
+		),
+		testCaseF(
+			"read_lock exclusive",
+			map[string]string{"read_lock": "exclusive"},
+			nil,
+			nil,
+		),
+		testCaseF(
+			"read_lock shared",
+			map[string]string{"read_lock": "shared"},
+			nil,
+			nil,
+		),
+		testCaseF(
+			"read_lock none",
+			map[string]string{"read_lock": "none"},
+			nil,
+			nil,
+		),
+		testCaseF(
+			"read_lock reject unknown values",
+			map[string]string{"read_lock": "unknown"},
+			vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid read_lock value: unknown"),
+			nil,
+		),
+		testCaseF(
+			"ignore_nulls reject not bool",
+			map[string]string{"ignore_nulls": "hello"},
+			vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "ignore_nulls value must be 'true' or 'false': 'hello'"),
+			nil,
+		),
+		testCaseF(
+			"write_only true",
+			map[string]string{"write_only": "true"},
+			nil,
+			nil,
+		),
+		testCaseF(
+			"write_only false",
+			map[string]string{"write_only": "false"},
+			nil,
+			nil,
+		),
+		testCaseF(
+			"write_only reject not bool",
+			map[string]string{"write_only": "hello"},
+			vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "write_only value must be 'true' or 'false': 'hello'"),
+			nil,
+		),
+		testCaseF(
+			"unknown params",
+			map[string]string{"hello": "world"},
+			nil,
+			[]VindexWarning{vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "unknown param 'hello'")},
+		),
+	}
+
+	testCreateVindexes(t, cases)
+}
+
+func TestLookupCreateVindex(t *testing.T) {
+	testCaseFs := []func(string, map[string]string, error, []VindexWarning) createVindexTestCase{
+		lookupCreateVindexTestCase,
+		lookupUniqueCreateVindexTestCase,
+	}
+	for _, testCaseF := range testCaseFs {
+		testLookupCreateVindexCommonCases(t, testCaseF)
+
+		cases := []createVindexTestCase{
+			testCaseF(
+				"no_verify true",
+				map[string]string{"no_verify": "true"},
+				nil,
+				nil,
+			),
+			testCaseF(
+				"no_verify false",
+				map[string]string{"no_verify": "false"},
+				nil,
+				nil,
+			),
+			testCaseF(
+				"no_verify reject not bool",
+				map[string]string{"no_verify": "hello"},
+				vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "no_verify value must be 'true' or 'false': 'hello'"),
+				nil,
+			),
+		}
+
+		testCreateVindexes(t, cases)
+	}
 }
 
 func TestLookupNonUniqueNew(t *testing.T) {
