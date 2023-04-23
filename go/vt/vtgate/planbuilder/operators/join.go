@@ -167,3 +167,7 @@ func (j *Join) Description() ops.OpDescription {
 		},
 	}
 }
+
+func (j *Join) ShortDescription() string {
+	return sqlparser.String(j.Predicate)
+}

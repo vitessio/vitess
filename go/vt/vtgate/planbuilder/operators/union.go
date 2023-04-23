@@ -199,3 +199,7 @@ func (u *Union) Description() ops.OpDescription {
 		OperatorType: "Union",
 	}
 }
+
+func (u *Union) ShortDescription() string {
+	return ""
+}

@@ -120,3 +120,7 @@ func (to *Table) Description() ops.OpDescription {
 		Other:        map[string]any{"Columns": columns},
 	}
 }
+
+func (to *Table) ShortDescription() string {
+	return to.VTable.String()
+}

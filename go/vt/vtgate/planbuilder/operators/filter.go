@@ -145,3 +145,7 @@ func (f *Filter) Description() ops.OpDescription {
 		},
 	}
 }
+
+func (f *Filter) ShortDescription() string {
+	return sqlparser.String(sqlparser.AndExpressions(f.Predicates...))
+}

@@ -70,3 +70,7 @@ func (u *Update) Description() ops.OpDescription {
 		OperatorType: "Update",
 	}
 }
+
+func (u *Update) ShortDescription() string {
+	return u.VTable.String()
+}

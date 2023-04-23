@@ -262,3 +262,7 @@ func (d *Derived) Description() ops.OpDescription {
 		OperatorType: "Derived",
 	}
 }
+
+func (d *Derived) ShortDescription() string {
+	return d.Alias
+}

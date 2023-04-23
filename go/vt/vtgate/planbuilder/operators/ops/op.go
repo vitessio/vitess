@@ -50,6 +50,7 @@ type (
 		GetColumns() ([]*sqlparser.AliasedExpr, error)
 
 		Description() OpDescription
+		ShortDescription() string
 
 		GetOrdering() ([]OrderBy, error)
 	}

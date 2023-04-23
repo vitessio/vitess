@@ -170,6 +170,10 @@ func (p *Projection) Description() ops.OpDescription {
 	}
 }
 
+func (p *Projection) ShortDescription() string {
+	return strings.Join(p.ColumnNames, ", ")
+}
+
 func (p *Projection) Compact(*plancontext.PlanningContext) (ops.Operator, rewrite.ApplyResult, error) {
 	switch src := p.Source.(type) {
 	case *Route:

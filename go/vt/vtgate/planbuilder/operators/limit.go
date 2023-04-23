@@ -86,3 +86,7 @@ func (l *Limit) Description() ops.OpDescription {
 		Other:        other,
 	}
 }
+
+func (l *Limit) ShortDescription() string {
+	return sqlparser.String(l.AST)
+}

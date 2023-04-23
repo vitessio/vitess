@@ -77,6 +77,10 @@ func (s *SubQueryOp) Description() ops.OpDescription {
 	}
 }
 
+func (s *SubQueryOp) ShortDescription() string {
+	return ""
+}
+
 // Clone implements the Operator interface
 func (c *CorrelatedSubQueryOp) Clone(inputs []ops.Operator) ops.Operator {
 	columns := make([]*sqlparser.ColName, len(c.LHSColumns))
@@ -115,4 +119,8 @@ func (c *CorrelatedSubQueryOp) Description() ops.OpDescription {
 		OperatorType: "SubQuery",
 		Variant:      "Correlated",
 	}
+}
+
+func (c *CorrelatedSubQueryOp) ShortDescription() string {
+	return ""
 }

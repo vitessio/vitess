@@ -17,6 +17,8 @@ limitations under the License.
 package operators
 
 import (
+	"fmt"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
@@ -64,4 +66,8 @@ func (d *Delete) Description() ops.OpDescription {
 	return ops.OpDescription{
 		OperatorType: "Delete",
 	}
+}
+
+func (d *Delete) ShortDescription() string {
+	return fmt.Sprintf("%s.%s %s", d.VTable.Keyspace.Name, d.VTable.Name.String(), sqlparser.String(d.AST.Where))
 }

@@ -113,3 +113,7 @@ func (h *Horizon) Description() ops.OpDescription {
 		OperatorType: "Horizon",
 	}
 }
+
+func (h *Horizon) ShortDescription() string {
+	return ""
+}

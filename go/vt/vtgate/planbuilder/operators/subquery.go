@@ -132,8 +132,17 @@ func (s *SubQuery) Description() ops.OpDescription {
 		OperatorType: "SubQuery",
 	}
 }
+
 func (s *SubQueryInner) Description() ops.OpDescription {
 	return ops.OpDescription{
 		OperatorType: "SubQueryInner",
 	}
+}
+
+func (s *SubQuery) ShortDescription() string {
+	return ""
+}
+
+func (s *SubQueryInner) ShortDescription() string {
+	return ""
 }

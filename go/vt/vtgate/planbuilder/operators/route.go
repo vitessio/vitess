@@ -17,6 +17,8 @@ limitations under the License.
 package operators
 
 import (
+	"fmt"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -671,4 +673,12 @@ func (r *Route) Description() ops.OpDescription {
 			"Keyspace": r.Routing.Keyspace(),
 		},
 	}
+}
+
+func (r *Route) ShortDescription() string {
+	ks := r.Routing.Keyspace()
+	if ks == nil {
+		return r.Routing.OpCode().String()
+	}
+	return fmt.Sprintf("%s on %s", r.Routing.OpCode().String(), ks.Name)
 }

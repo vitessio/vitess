@@ -17,7 +17,11 @@ limitations under the License.
 package operators
 
 import (
+	"strings"
+
 	"golang.org/x/exp/slices"
+
+	"vitess.io/vitess/go/slices2"
 
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
@@ -106,4 +110,11 @@ func (o *Ordering) Description() ops.OpDescription {
 		OperatorType: "Ordering",
 		Other:        map[string]any{},
 	}
+}
+
+func (o *Ordering) ShortDescription() string {
+	ordering := slices2.Map(o.Order, func(o ops.OrderBy) string {
+		return sqlparser.String(o.Inner)
+	})
+	return strings.Join(ordering, ", ")
 }

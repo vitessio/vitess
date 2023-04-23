@@ -297,6 +297,10 @@ func (a *ApplyJoin) Description() ops.OpDescription {
 	}
 }
 
+func (a *ApplyJoin) ShortDescription() string {
+	return sqlparser.String(a.Predicate)
+}
+
 func (jc JoinColumn) IsPureLeft() bool {
 	return jc.RHSExpr == nil
 }
