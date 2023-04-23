@@ -1058,6 +1058,12 @@ func (cmp *Comparator) SQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return cmp.RefOfPointExpr(a, b)
+	case *PointPropertyFuncExpr:
+		b, ok := inB.(*PointPropertyFuncExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfPointPropertyFuncExpr(a, b)
 	case *PolygonExpr:
 		b, ok := inB.(*PolygonExpr)
 		if !ok {
@@ -3692,6 +3698,19 @@ func (cmp *Comparator) RefOfPointExpr(a, b *PointExpr) bool {
 		cmp.Expr(a.YCordinate, b.YCordinate)
 }
 
+// RefOfPointPropertyFuncExpr does deep equals between the two objects.
+func (cmp *Comparator) RefOfPointPropertyFuncExpr(a, b *PointPropertyFuncExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Property == b.Property &&
+		cmp.Expr(a.Point, b.Point) &&
+		cmp.Expr(a.ValueToSet, b.ValueToSet)
+}
+
 // RefOfPolygonExpr does deep equals between the two objects.
 func (cmp *Comparator) RefOfPolygonExpr(a, b *PolygonExpr) bool {
 	if a == b {
@@ -5320,6 +5339,12 @@ func (cmp *Comparator) Callable(inA, inB Callable) bool {
 			return false
 		}
 		return cmp.RefOfPointExpr(a, b)
+	case *PointPropertyFuncExpr:
+		b, ok := inB.(*PointPropertyFuncExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfPointPropertyFuncExpr(a, b)
 	case *PolygonExpr:
 		b, ok := inB.(*PolygonExpr)
 		if !ok {
@@ -6076,6 +6101,12 @@ func (cmp *Comparator) Expr(inA, inB Expr) bool {
 			return false
 		}
 		return cmp.RefOfPointExpr(a, b)
+	case *PointPropertyFuncExpr:
+		b, ok := inB.(*PointPropertyFuncExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfPointPropertyFuncExpr(a, b)
 	case *PolygonExpr:
 		b, ok := inB.(*PolygonExpr)
 		if !ok {

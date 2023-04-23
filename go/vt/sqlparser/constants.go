@@ -443,16 +443,22 @@ const (
 	PolygonFromWKBStr            = "st_polygonfromwkb"
 	MultiPolygonFromWKBStr       = "st_multipolygonfromwkb"
 
-	//GeomFormatExpr strings
+	// GeomFormatExpr strings
 	TextFormatStr   = "st_astext"
 	BinaryFormatStr = "st_asbinary"
 
-	//GeomPropertyType strings
+	// GeomPropertyType strings
 	IsSimpleStr     = "st_issimple"
 	IsEmptyStr      = "st_isempty"
 	EnvelopeStr     = "st_envelope"
 	DimensionStr    = "st_dimension"
 	GeometryTypeStr = "st_geometrytype"
+
+	// PointPropertyType strings
+	XCordinateStr = "st_x"
+	YCordinateStr = "st_y"
+	LatitudeStr   = "st_latitude"
+	LongitudeStr  = "st_longitude"
 )
 
 // Constants for Enum Type - Insert.Action
@@ -950,4 +956,12 @@ const (
 	Dimension
 	GeometryType
 	Envelope
+)
+
+// Enum Types of point property functions
+const (
+	XCordinate PointPropertyType = iota
+	YCordinate
+	Latitude
+	Longitude
 )
