@@ -366,6 +366,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfPerformanceSchemaFuncExpr(parent, node, replacer)
 	case *PointExpr:
 		return a.rewriteRefOfPointExpr(parent, node, replacer)
+	case *PointPropertyFuncExpr:
+		return a.rewriteRefOfPointPropertyFuncExpr(parent, node, replacer)
 	case *PolygonExpr:
 		return a.rewriteRefOfPolygonExpr(parent, node, replacer)
 	case *PrepareStmt:
@@ -5894,6 +5896,38 @@ func (a *application) rewriteRefOfPointExpr(parent SQLNode, node *PointExpr, rep
 	}
 	return true
 }
+func (a *application) rewriteRefOfPointPropertyFuncExpr(parent SQLNode, node *PointPropertyFuncExpr, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteExpr(node, node.Point, func(newNode, parent SQLNode) {
+		parent.(*PointPropertyFuncExpr).Point = newNode.(Expr)
+	}) {
+		return false
+	}
+	if !a.rewriteExpr(node, node.ValueToSet, func(newNode, parent SQLNode) {
+		parent.(*PointPropertyFuncExpr).ValueToSet = newNode.(Expr)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
 func (a *application) rewriteRefOfPolygonExpr(parent SQLNode, node *PolygonExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -8809,6 +8843,8 @@ func (a *application) rewriteCallable(parent SQLNode, node Callable, replacer re
 		return a.rewriteRefOfPerformanceSchemaFuncExpr(parent, node, replacer)
 	case *PointExpr:
 		return a.rewriteRefOfPointExpr(parent, node, replacer)
+	case *PointPropertyFuncExpr:
+		return a.rewriteRefOfPointPropertyFuncExpr(parent, node, replacer)
 	case *PolygonExpr:
 		return a.rewriteRefOfPolygonExpr(parent, node, replacer)
 	case *RegexpInstrExpr:
@@ -9091,6 +9127,8 @@ func (a *application) rewriteExpr(parent SQLNode, node Expr, replacer replacerFu
 		return a.rewriteRefOfPerformanceSchemaFuncExpr(parent, node, replacer)
 	case *PointExpr:
 		return a.rewriteRefOfPointExpr(parent, node, replacer)
+	case *PointPropertyFuncExpr:
+		return a.rewriteRefOfPointPropertyFuncExpr(parent, node, replacer)
 	case *PolygonExpr:
 		return a.rewriteRefOfPolygonExpr(parent, node, replacer)
 	case *RegexpInstrExpr:
