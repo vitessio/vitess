@@ -22,14 +22,19 @@ import (
 	"strings"
 )
 
+const (
+	ExtraCnf          = "EXTRA_MY_CNF"
+	BinlogRowImageCnf = "binlog-row-image.cnf"
+)
+
 // SetBinlogRowImageMode  creates a temp cnf file to set binlog_row_image to noblob for vreplication unit tests.
 // It adds it to the EXTRA_MY_CNF environment variable which appends text from them into my.cnf.
 func SetBinlogRowImageMode(mode string, cnfDir string) error {
-	const ExtraCnf = "EXTRA_MY_CNF"
-	const BinlogRowImageCnf = "binlog-row-image.cnf"
 	var newCnfs []string
 
 	// remove any existing extra cnfs for binlog row image
+	cnfPath := fmt.Sprintf("%s/%s", cnfDir, BinlogRowImageCnf)
+	os.Remove(cnfPath)
 	extraCnf := strings.TrimSpace(os.Getenv(ExtraCnf))
 	if extraCnf != "" {
 		cnfs := strings.Split(extraCnf, ":")
@@ -42,7 +47,6 @@ func SetBinlogRowImageMode(mode string, cnfDir string) error {
 
 	// If specified add extra cnf for binlog row image, otherwise we will have reverted any previous specification.
 	if mode != "" {
-		cnfPath := fmt.Sprintf("%s/%s", cnfDir, BinlogRowImageCnf)
 		f, err := os.Create(cnfPath)
 		if err != nil {
 			return err
