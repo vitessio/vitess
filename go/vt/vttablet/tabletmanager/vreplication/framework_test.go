@@ -170,7 +170,7 @@ func TestMain(m *testing.M) {
 			panic(err)
 		}
 		defer utils.SetBinlogRowImageMode("", tempDir)
-		_, ret := setup()
+		cancel, ret := setup()
 		if ret > 0 {
 			return ret
 		}
@@ -179,19 +179,17 @@ func TestMain(m *testing.M) {
 			return ret
 		}
 
-		cleanup()
+		cancel()
 		runNoBlobTest = true
 		if err := utils.SetBinlogRowImageMode("noblob", tempDir); err != nil {
 			panic(err)
 		}
 		defer utils.SetBinlogRowImageMode("", tempDir)
-		deferFunc, ret := setup()
+		cancel, ret = setup()
 		if ret > 0 {
 			return ret
 		}
-		_ = deferFunc
-		defer deferFunc()
-
+		defer cancel()
 		ret = m.Run()
 		return ret
 
