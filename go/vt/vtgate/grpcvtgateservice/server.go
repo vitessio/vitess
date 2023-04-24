@@ -46,13 +46,15 @@ const (
 )
 
 var (
-	useEffective       bool
-	useEffectiveGroups bool
+	useEffective                    bool
+	useEffectiveGroups              bool
+	useStaticAuthenticationIdentity bool
 )
 
 func registerFlags(fs *pflag.FlagSet) {
 	fs.BoolVar(&useEffective, "grpc_use_effective_callerid", false, "If set, and SSL is not used, will set the immediate caller id from the effective caller id's principal.")
 	fs.BoolVar(&useEffectiveGroups, "grpc-use-effective-groups", false, "If set, and SSL is not used, will set the immediate caller's security groups from the effective caller id's groups.")
+	fs.BoolVar(&useStaticAuthenticationIdentity, "grpc-use-static-authentication-callerid", false, "If set, will set the immediate caller id to the username authenticated by the static auth plugin.")
 }
 
 func init() {
@@ -95,8 +97,10 @@ func immediateCallerIDFromCert(ctx context.Context) (string, []string) {
 }
 
 func immediateCallerID(ctx context.Context) (string, []string) {
-	if immediate := servenv.StaticAuthUsernameFromContext(ctx); immediate != "" {
-		return immediate, nil
+	if useStaticAuthenticationIdentity {
+		if immediate := servenv.StaticAuthUsernameFromContext(ctx); immediate != "" {
+			return immediate, nil
+		}
 	}
 	return immediateCallerIDFromCert(ctx)
 }
