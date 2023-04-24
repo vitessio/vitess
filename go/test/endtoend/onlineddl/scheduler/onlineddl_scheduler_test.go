@@ -44,7 +44,8 @@ import (
 )
 
 const (
-	anyErrorIndicator = "<any-error-of-any-kind>"
+	anyErrorIndicator    = "<any-error-of-any-kind>"
+	migrationWaitTimeout = 60 * time.Second
 )
 
 type testOnlineDDLStatementParams struct {
@@ -368,13 +369,13 @@ func testScheduler(t *testing.T) {
 	t.Run("CREATE TABLEs t1, t1", func(t *testing.T) {
 		{ // The table does not exist
 			t1uuid = testOnlineDDLStatement(t, createParams(createT1Statement, ddlStrategy, "vtgate", "just-created", "", false))
-			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusComplete)
+			onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, migrationWaitTimeout, schema.OnlineDDLStatusComplete)
 			checkTable(t, t1Name, true)
 		}
 		{
 			// The table does not exist
 			t2uuid = testOnlineDDLStatement(t, createParams(createT2Statement, ddlStrategy, "vtgate", "just-created", "", false))
-			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t2uuid, schema.OnlineDDLStatusComplete)
+			onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t2uuid, migrationWaitTimeout, schema.OnlineDDLStatusComplete)
 			checkTable(t, t2Name, true)
 		}
 		testTableSequentialTimes(t, t1uuid, t2uuid)
@@ -458,7 +459,7 @@ func testScheduler(t *testing.T) {
 			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
 			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
 		})
-		t.Run("wait for t1 complete", func(t *testing.T) {
+		t.Run("wait for t2 complete", func(t *testing.T) {
 			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t2uuid, normalWaitTime, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
 			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
 		})
@@ -1085,7 +1086,7 @@ DROP TABLE IF EXISTS stress_test
 	// init-cleanup
 	t.Run("init DROP TABLE", func(t *testing.T) {
 		uuid := testOnlineDDLStatement(t, createParams(dropIfExistsStatement, onlineSingletonDDLStrategy, "vtgate", "", "", "", false))
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, migrationWaitTimeout, schema.OnlineDDLStatusComplete)
 		checkTable(t, tableName, false)
 	})
 
@@ -1094,28 +1095,28 @@ DROP TABLE IF EXISTS stress_test
 		// The table does not exist
 		uuid := testOnlineDDLStatement(t, createParams(createStatement, onlineSingletonDDLStrategy, "vtgate", "", "", "", false))
 		uuids = append(uuids, uuid)
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, migrationWaitTimeout, schema.OnlineDDLStatusComplete)
 		checkTable(t, tableName, true)
 	})
 	t.Run("revert CREATE TABLE", func(t *testing.T) {
 		// The table existed, so it will now be dropped (renamed)
 		uuid := testRevertMigration(t, createRevertParams(uuids[len(uuids)-1], onlineSingletonDDLStrategy, "vtgate", "", "", false))
 		uuids = append(uuids, uuid)
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, migrationWaitTimeout, schema.OnlineDDLStatusComplete)
 		checkTable(t, tableName, false)
 	})
 	t.Run("revert revert CREATE TABLE", func(t *testing.T) {
 		// Table was dropped (renamed) so it will now be restored
 		uuid := testRevertMigration(t, createRevertParams(uuids[len(uuids)-1], onlineSingletonDDLStrategy, "vtgate", "", "", false))
 		uuids = append(uuids, uuid)
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, migrationWaitTimeout, schema.OnlineDDLStatusComplete)
 		checkTable(t, tableName, true)
 	})
 
 	var throttledUUID string
 	t.Run("throttled migration", func(t *testing.T) {
 		throttledUUID = testOnlineDDLStatement(t, createParams(alterTableThrottlingStatement, "gh-ost --singleton --max-load=Threads_running=1", "vtgate", "", "hint_col", "", false))
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, throttledUUID, schema.OnlineDDLStatusRunning)
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, throttledUUID, migrationWaitTimeout, schema.OnlineDDLStatusRunning)
 	})
 	t.Run("failed singleton migration, vtgate", func(t *testing.T) {
 		uuid := testOnlineDDLStatement(t, createParams(alterTableThrottlingStatement, "gh-ost --singleton --max-load=Threads_running=1", "vtgate", "", "hint_col", "rejected", true))
@@ -1138,13 +1139,13 @@ DROP TABLE IF EXISTS stress_test
 	})
 	t.Run("successful gh-ost alter, vtctl", func(t *testing.T) {
 		uuid := testOnlineDDLStatement(t, createParams(alterTableTrivialStatement, "gh-ost --singleton", "vtctl", "", "hint_col", "", false))
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, migrationWaitTimeout, schema.OnlineDDLStatusComplete)
 		onlineddl.CheckCancelMigration(t, &vtParams, shards, uuid, false)
 		onlineddl.CheckRetryMigration(t, &vtParams, shards, uuid, false)
 	})
 	t.Run("successful gh-ost alter, vtgate", func(t *testing.T) {
 		uuid := testOnlineDDLStatement(t, createParams(alterTableTrivialStatement, "gh-ost --singleton", "vtgate", "", "hint_col", "", false))
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, migrationWaitTimeout, schema.OnlineDDLStatusComplete)
 		onlineddl.CheckCancelMigration(t, &vtParams, shards, uuid, false)
 		onlineddl.CheckRetryMigration(t, &vtParams, shards, uuid, false)
 	})
@@ -1152,7 +1153,7 @@ DROP TABLE IF EXISTS stress_test
 	t.Run("successful online alter, vtgate", func(t *testing.T) {
 		uuid := testOnlineDDLStatement(t, createParams(alterTableTrivialStatement, onlineSingletonDDLStrategy, "vtgate", "", "hint_col", "", false))
 		uuids = append(uuids, uuid)
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, migrationWaitTimeout, schema.OnlineDDLStatusComplete)
 		onlineddl.CheckCancelMigration(t, &vtParams, shards, uuid, false)
 		onlineddl.CheckRetryMigration(t, &vtParams, shards, uuid, false)
 		checkTable(t, tableName, true)
@@ -1161,7 +1162,7 @@ DROP TABLE IF EXISTS stress_test
 		// The table existed, so it will now be dropped (renamed)
 		uuid := testRevertMigration(t, createRevertParams(uuids[len(uuids)-1], onlineSingletonDDLStrategy, "vtctl", "", "", false))
 		uuids = append(uuids, uuid)
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, migrationWaitTimeout, schema.OnlineDDLStatusComplete)
 		checkTable(t, tableName, true)
 	})
 
@@ -1172,7 +1173,7 @@ DROP TABLE IF EXISTS stress_test
 		throttledUUIDs = strings.Split(uuidList, "\n")
 		assert.Equal(t, 3, len(throttledUUIDs))
 		for _, uuid := range throttledUUIDs {
-			onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusQueued, schema.OnlineDDLStatusReady, schema.OnlineDDLStatusRunning)
+			onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, migrationWaitTimeout, schema.OnlineDDLStatusQueued, schema.OnlineDDLStatusReady, schema.OnlineDDLStatusRunning)
 		}
 	})
 	t.Run("failed migrations, singleton-context", func(t *testing.T) {
@@ -1180,13 +1181,13 @@ DROP TABLE IF EXISTS stress_test
 	})
 	t.Run("terminate throttled migrations", func(t *testing.T) {
 		for _, uuid := range throttledUUIDs {
-			onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusQueued, schema.OnlineDDLStatusReady, schema.OnlineDDLStatusRunning)
+			onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, migrationWaitTimeout, schema.OnlineDDLStatusQueued, schema.OnlineDDLStatusReady, schema.OnlineDDLStatusRunning)
 			onlineddl.CheckCancelMigration(t, &vtParams, shards, uuid, true)
 		}
 		time.Sleep(2 * time.Second)
 		for _, uuid := range throttledUUIDs {
 			uuid = strings.TrimSpace(uuid)
-			onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusFailed, schema.OnlineDDLStatusCancelled)
+			onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, migrationWaitTimeout, schema.OnlineDDLStatusFailed, schema.OnlineDDLStatusCancelled)
 		}
 	})
 
@@ -1196,7 +1197,7 @@ DROP TABLE IF EXISTS stress_test
 		assert.Equal(t, 3, len(uuidSlice))
 		for _, uuid := range uuidSlice {
 			uuid = strings.TrimSpace(uuid)
-			onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+			onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, migrationWaitTimeout, schema.OnlineDDLStatusComplete)
 		}
 	})
 
@@ -1205,14 +1206,14 @@ DROP TABLE IF EXISTS stress_test
 	t.Run("online DROP TABLE", func(t *testing.T) {
 		uuid := testOnlineDDLStatement(t, createParams(dropStatement, onlineSingletonDDLStrategy, "vtgate", "", "", "", false))
 		uuids = append(uuids, uuid)
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, migrationWaitTimeout, schema.OnlineDDLStatusComplete)
 		checkTable(t, tableName, false)
 	})
 	t.Run("revert DROP TABLE", func(t *testing.T) {
 		// This will recreate the table (well, actually, rename it back into place)
 		uuid := testRevertMigration(t, createRevertParams(uuids[len(uuids)-1], onlineSingletonDDLStrategy, "vttablet", "", "", false))
 		uuids = append(uuids, uuid)
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, migrationWaitTimeout, schema.OnlineDDLStatusComplete)
 		checkTable(t, tableName, true)
 	})
 
@@ -1241,7 +1242,7 @@ DROP TABLE IF EXISTS stress_test
 		// revert is running but has no --singleton-context. Our next migration should be able to run.
 		uuid := testOnlineDDLStatement(t, createParams(dropNonexistentTableStatement, "vitess --allow-concurrent --singleton-context", "vtctl", "migrate:ctx", "", "", false))
 		uuids = append(uuids, uuid)
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, migrationWaitTimeout, schema.OnlineDDLStatusComplete)
 		onlineddl.CheckCancelMigration(t, &vtParams, shards, revertUUID, true)
 		status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, revertUUID, 20*time.Second, schema.OnlineDDLStatusFailed, schema.OnlineDDLStatusCancelled)
 		fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
@@ -1518,19 +1519,19 @@ func testDeclarative(t *testing.T) {
 	t.Run("init: drop table", func(t *testing.T) {
 		// IF EXISTS is not supported in -declarative
 		uuid := testOnlineDDL(t, dropIfExistsStatement, "online", "vtgate", "", "")
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, migrationWaitTimeout, schema.OnlineDDLStatusComplete)
 	})
 	t.Run("init: drop view base table", func(t *testing.T) {
 		// IF EXISTS is not supported in -declarative
 		uuid := testOnlineDDL(t, dropViewBaseTableStatement, "online", "vtgate", "", "")
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, migrationWaitTimeout, schema.OnlineDDLStatusComplete)
 	})
 
 	// VIEWS
 	t.Run("create base table for view", func(t *testing.T) {
 		uuid := testOnlineDDL(t, createViewBaseTableStatement, declarativeStrategy, "vtgate", "", "")
 		uuids = append(uuids, uuid)
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, migrationWaitTimeout, schema.OnlineDDLStatusComplete)
 		checkTable(t, viewBaseTableName, true)
 	})
 	// CREATE VIEW 1
@@ -1538,7 +1539,7 @@ func testDeclarative(t *testing.T) {
 		// The table does not exist
 		uuid := testOnlineDDL(t, createViewStatement1, declarativeStrategy, "vtgate", "success_create1", "")
 		uuids = append(uuids, uuid)
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, migrationWaitTimeout, schema.OnlineDDLStatusComplete)
 		onlineddl.CheckMigrationArtifacts(t, &vtParams, shards, uuid, true)
 		checkTable(t, viewName, true)
 	})
@@ -1547,7 +1548,7 @@ func testDeclarative(t *testing.T) {
 		// The exists with exact same schema
 		uuid := testOnlineDDL(t, createViewStatement1, declarativeStrategy, "vtgate", "success_create1", "")
 		uuids = append(uuids, uuid)
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, migrationWaitTimeout, schema.OnlineDDLStatusComplete)
 		onlineddl.CheckMigrationArtifacts(t, &vtParams, shards, uuid, false)
 		checkTable(t, viewName, true)
 	})
@@ -1555,7 +1556,7 @@ func testDeclarative(t *testing.T) {
 		// Reverting a noop changes nothing
 		uuid := testRevertMigration(t, createRevertParams(uuids[len(uuids)-1]))
 		uuids = append(uuids, uuid)
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, migrationWaitTimeout, schema.OnlineDDLStatusComplete)
 		checkMigratedTable(t, viewName, "success_create1")
 		checkTable(t, viewName, true)
 	})
@@ -1564,7 +1565,7 @@ func testDeclarative(t *testing.T) {
 		// IF NOT EXISTS is not supported in -declarative
 		uuid := testOnlineDDL(t, createOrReplaceViewStatement, declarativeStrategy, "vtgate", "", "")
 		uuids = append(uuids, uuid)
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusFailed)
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, migrationWaitTimeout, schema.OnlineDDLStatusFailed)
 		checkMigratedTable(t, viewName, "success_create1")
 		checkTable(t, viewName, true)
 	})
@@ -1572,7 +1573,7 @@ func testDeclarative(t *testing.T) {
 		// IF NOT EXISTS is not supported in -declarative
 		uuid := testOnlineDDL(t, alterViewStatement, declarativeStrategy, "vtgate", "", "")
 		uuids = append(uuids, uuid)
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusFailed)
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, migrationWaitTimeout, schema.OnlineDDLStatusFailed)
 		checkMigratedTable(t, viewName, "success_create1")
 		checkTable(t, viewName, true)
 	})
@@ -1580,14 +1581,14 @@ func testDeclarative(t *testing.T) {
 		// IF NOT EXISTS is not supported in -declarative
 		uuid := testOnlineDDL(t, dropViewIfExistsStatement, declarativeStrategy, "vtgate", "", "")
 		uuids = append(uuids, uuid)
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusFailed)
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, migrationWaitTimeout, schema.OnlineDDLStatusFailed)
 		checkMigratedTable(t, viewName, "success_create1")
 		checkTable(t, viewName, true)
 	})
 	t.Run("declarative DROP VIEW", func(t *testing.T) {
 		uuid := testOnlineDDL(t, dropViewStatement, declarativeStrategy, "vtgate", "", "")
 		uuids = append(uuids, uuid)
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, migrationWaitTimeout, schema.OnlineDDLStatusComplete)
 		onlineddl.CheckMigrationArtifacts(t, &vtParams, shards, uuid, true)
 		checkTable(t, viewName, false)
 	})
@@ -1598,7 +1599,7 @@ func testDeclarative(t *testing.T) {
 		// The table does not exist
 		uuid := testOnlineDDL(t, createViewStatement1, declarativeStrategy, "vtgate", "success_create1", "")
 		uuids = append(uuids, uuid)
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, migrationWaitTimeout, schema.OnlineDDLStatusComplete)
 		onlineddl.CheckMigrationArtifacts(t, &vtParams, shards, uuid, true)
 		checkTable(t, viewName, true)
 	})
@@ -1607,7 +1608,7 @@ func testDeclarative(t *testing.T) {
 		// The table exists with different schema
 		uuid := testOnlineDDL(t, createViewStatement2, declarativeStrategy, "vtgate", "success_create2", "")
 		uuids = append(uuids, uuid)
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, migrationWaitTimeout, schema.OnlineDDLStatusComplete)
 		onlineddl.CheckMigrationArtifacts(t, &vtParams, shards, uuid, true)
 		checkTable(t, viewName, true)
 	})
@@ -1615,7 +1616,7 @@ func testDeclarative(t *testing.T) {
 		// Reverting back to 1st version
 		uuid := testRevertMigration(t, createRevertParams(uuids[len(uuids)-1]))
 		uuids = append(uuids, uuid)
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, migrationWaitTimeout, schema.OnlineDDLStatusComplete)
 		checkMigratedTable(t, viewName, "success_create1")
 		checkTable(t, viewName, true)
 	})
@@ -1623,7 +1624,7 @@ func testDeclarative(t *testing.T) {
 		// Table exists
 		uuid := testOnlineDDL(t, dropViewStatement, declarativeStrategy, "vtgate", "", "")
 		uuids = append(uuids, uuid)
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, migrationWaitTimeout, schema.OnlineDDLStatusComplete)
 		onlineddl.CheckMigrationArtifacts(t, &vtParams, shards, uuid, true)
 		checkTable(t, viewName, false)
 	})
@@ -1631,7 +1632,7 @@ func testDeclarative(t *testing.T) {
 		// This will recreate the table (well, actually, rename it back into place)
 		uuid := testRevertMigration(t, createRevertParams(uuids[len(uuids)-1]))
 		uuids = append(uuids, uuid)
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, migrationWaitTimeout, schema.OnlineDDLStatusComplete)
 		checkTable(t, viewName, true)
 		checkMigratedTable(t, viewName, "success_create1")
 	})
@@ -1639,13 +1640,13 @@ func testDeclarative(t *testing.T) {
 		// This will reapply DROP VIEW
 		uuid := testRevertMigration(t, createRevertParams(uuids[len(uuids)-1]))
 		uuids = append(uuids, uuid)
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, migrationWaitTimeout, schema.OnlineDDLStatusComplete)
 		checkTable(t, viewName, false)
 	})
 	t.Run("declarative DROP VIEW where view does not exist", func(t *testing.T) {
 		uuid := testOnlineDDL(t, dropViewStatement, declarativeStrategy, "vtgate", "", "")
 		uuids = append(uuids, uuid)
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, migrationWaitTimeout, schema.OnlineDDLStatusComplete)
 		onlineddl.CheckMigrationArtifacts(t, &vtParams, shards, uuid, false)
 		checkTable(t, viewName, false)
 	})
@@ -1653,7 +1654,7 @@ func testDeclarative(t *testing.T) {
 		// Table will not be recreated because it didn't exist during the previous DROP VIEW
 		uuid := testRevertMigration(t, createRevertParams(uuids[len(uuids)-1]))
 		uuids = append(uuids, uuid)
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, migrationWaitTimeout, schema.OnlineDDLStatusComplete)
 		checkTable(t, viewName, false)
 	})
 	// View dropped. Let's start afresh.
@@ -1665,7 +1666,7 @@ func testDeclarative(t *testing.T) {
 		// The table does not exist
 		uuid := testOnlineDDL(t, createStatement1, declarativeStrategy, "vtgate", "create1", "")
 		uuids = append(uuids, uuid)
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, migrationWaitTimeout, schema.OnlineDDLStatusComplete)
 		onlineddl.CheckMigrationArtifacts(t, &vtParams, shards, uuid, true)
 		checkTable(t, tableName, true)
 		initTable(t)
@@ -1676,7 +1677,7 @@ func testDeclarative(t *testing.T) {
 		// The exists with exact same schema
 		uuid := testOnlineDDL(t, createStatement1, declarativeStrategy, "vtgate", "create1", "")
 		uuids = append(uuids, uuid)
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, migrationWaitTimeout, schema.OnlineDDLStatusComplete)
 		onlineddl.CheckMigrationArtifacts(t, &vtParams, shards, uuid, false)
 		checkTable(t, tableName, true)
 		testSelectTableMetrics(t)
@@ -1685,7 +1686,7 @@ func testDeclarative(t *testing.T) {
 		// Reverting a noop changes nothing
 		uuid := testRevertMigration(t, createRevertParams(uuids[len(uuids)-1]))
 		uuids = append(uuids, uuid)
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, migrationWaitTimeout, schema.OnlineDDLStatusComplete)
 		checkMigratedTable(t, tableName, "create1")
 		checkTable(t, tableName, true)
 		testSelectTableMetrics(t)
@@ -1693,7 +1694,7 @@ func testDeclarative(t *testing.T) {
 	t.Run("declarative DROP TABLE", func(t *testing.T) {
 		uuid := testOnlineDDL(t, dropStatement, declarativeStrategy, "vtgate", "", "")
 		uuids = append(uuids, uuid)
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, migrationWaitTimeout, schema.OnlineDDLStatusComplete)
 		onlineddl.CheckMigrationArtifacts(t, &vtParams, shards, uuid, true)
 		checkTable(t, tableName, false)
 	})
@@ -1704,7 +1705,7 @@ func testDeclarative(t *testing.T) {
 		// The table does not exist
 		uuid := testOnlineDDL(t, createStatement1, declarativeStrategy, "vtgate", "create1", "")
 		uuids = append(uuids, uuid)
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, migrationWaitTimeout, schema.OnlineDDLStatusComplete)
 		onlineddl.CheckMigrationArtifacts(t, &vtParams, shards, uuid, true)
 		checkTable(t, tableName, true)
 		initTable(t)
@@ -1715,7 +1716,7 @@ func testDeclarative(t *testing.T) {
 		// The table exists with different schema
 		uuid := testOnlineDDL(t, createStatement2, declarativeStrategy, "vtgate", "create2", "")
 		uuids = append(uuids, uuid)
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, migrationWaitTimeout, schema.OnlineDDLStatusComplete)
 		onlineddl.CheckMigrationArtifacts(t, &vtParams, shards, uuid, true)
 		checkTable(t, tableName, true)
 		testSelectTableMetrics(t)
@@ -1724,7 +1725,7 @@ func testDeclarative(t *testing.T) {
 		// Reverting back to 1st version
 		uuid := testRevertMigration(t, createRevertParams(uuids[len(uuids)-1]))
 		uuids = append(uuids, uuid)
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, migrationWaitTimeout, schema.OnlineDDLStatusComplete)
 		checkMigratedTable(t, tableName, "create1")
 		checkTable(t, tableName, true)
 		testSelectTableMetrics(t)
@@ -1733,7 +1734,7 @@ func testDeclarative(t *testing.T) {
 		// Table exists
 		uuid := testOnlineDDL(t, dropStatement, declarativeStrategy, "vtgate", "", "")
 		uuids = append(uuids, uuid)
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, migrationWaitTimeout, schema.OnlineDDLStatusComplete)
 		onlineddl.CheckMigrationArtifacts(t, &vtParams, shards, uuid, true)
 		checkTable(t, tableName, false)
 	})
@@ -1741,7 +1742,7 @@ func testDeclarative(t *testing.T) {
 		// This will recreate the table (well, actually, rename it back into place)
 		uuid := testRevertMigration(t, createRevertParams(uuids[len(uuids)-1]))
 		uuids = append(uuids, uuid)
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, migrationWaitTimeout, schema.OnlineDDLStatusComplete)
 		checkTable(t, tableName, true)
 		checkMigratedTable(t, tableName, "create1")
 		testSelectTableMetrics(t)
@@ -1750,13 +1751,13 @@ func testDeclarative(t *testing.T) {
 		// This will reapply DROP TABLE
 		uuid := testRevertMigration(t, createRevertParams(uuids[len(uuids)-1]))
 		uuids = append(uuids, uuid)
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, migrationWaitTimeout, schema.OnlineDDLStatusComplete)
 		checkTable(t, tableName, false)
 	})
 	t.Run("declarative DROP TABLE where table does not exist", func(t *testing.T) {
 		uuid := testOnlineDDL(t, dropStatement, declarativeStrategy, "vtgate", "", "")
 		uuids = append(uuids, uuid)
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, migrationWaitTimeout, schema.OnlineDDLStatusComplete)
 		onlineddl.CheckMigrationArtifacts(t, &vtParams, shards, uuid, false)
 		checkTable(t, tableName, false)
 	})
@@ -1764,7 +1765,7 @@ func testDeclarative(t *testing.T) {
 		// Table will not be recreated because it didn't exist during the previous DROP TABLE
 		uuid := testRevertMigration(t, createRevertParams(uuids[len(uuids)-1]))
 		uuids = append(uuids, uuid)
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, migrationWaitTimeout, schema.OnlineDDLStatusComplete)
 		checkTable(t, tableName, false)
 	})
 	// Table dropped. Let's start afresh.
@@ -1774,7 +1775,7 @@ func testDeclarative(t *testing.T) {
 		// The table does not exist
 		uuid := testOnlineDDL(t, createStatement1, declarativeStrategy, "vtgate", "create1", "")
 		uuids = append(uuids, uuid)
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, migrationWaitTimeout, schema.OnlineDDLStatusComplete)
 		onlineddl.CheckMigrationArtifacts(t, &vtParams, shards, uuid, true)
 		checkTable(t, tableName, true)
 		initTable(t)
@@ -1785,7 +1786,7 @@ func testDeclarative(t *testing.T) {
 		// The table exists but with different schema
 		uuid := testOnlineDDL(t, createStatement2, declarativeStrategy, "vtgate", "create2", "")
 		uuids = append(uuids, uuid)
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, migrationWaitTimeout, schema.OnlineDDLStatusComplete)
 		onlineddl.CheckMigrationArtifacts(t, &vtParams, shards, uuid, true)
 		checkTable(t, tableName, true)
 		testSelectTableMetrics(t)
@@ -1795,7 +1796,7 @@ func testDeclarative(t *testing.T) {
 		// The table exists but with different schema
 		uuid := testOnlineDDL(t, createStatement1, declarativeStrategy, "vtgate", "create1", "")
 		uuids = append(uuids, uuid)
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, migrationWaitTimeout, schema.OnlineDDLStatusComplete)
 		onlineddl.CheckMigrationArtifacts(t, &vtParams, shards, uuid, true)
 		checkTable(t, tableName, true)
 		testSelectTableMetrics(t)
@@ -1804,7 +1805,7 @@ func testDeclarative(t *testing.T) {
 		// Reverting back to previous version
 		uuid := testRevertMigration(t, createRevertParams(uuids[len(uuids)-1]))
 		uuids = append(uuids, uuid)
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, migrationWaitTimeout, schema.OnlineDDLStatusComplete)
 		checkMigratedTable(t, tableName, "create2")
 		checkTable(t, tableName, true)
 		testSelectTableMetrics(t)
@@ -1813,7 +1814,7 @@ func testDeclarative(t *testing.T) {
 		// ALTER is not supported in -declarative
 		uuid := testOnlineDDL(t, alterStatement, declarativeStrategy, "vtgate", "", "")
 		uuids = append(uuids, uuid)
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusFailed)
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, migrationWaitTimeout, schema.OnlineDDLStatusFailed)
 		checkMigratedTable(t, tableName, "create2")
 		checkTable(t, tableName, true)
 		testSelectTableMetrics(t)
@@ -1822,7 +1823,7 @@ func testDeclarative(t *testing.T) {
 		// IF NOT EXISTS is not supported in -declarative
 		uuid := testOnlineDDL(t, createIfNotExistsStatement, declarativeStrategy, "vtgate", "", "")
 		uuids = append(uuids, uuid)
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusFailed)
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, migrationWaitTimeout, schema.OnlineDDLStatusFailed)
 		checkMigratedTable(t, tableName, "create2")
 		checkTable(t, tableName, true)
 		testSelectTableMetrics(t)
@@ -1831,7 +1832,7 @@ func testDeclarative(t *testing.T) {
 		// IF EXISTS is not supported in -declarative
 		uuid := testOnlineDDL(t, dropIfExistsStatement, declarativeStrategy, "vtgate", "", "")
 		uuids = append(uuids, uuid)
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusFailed)
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, migrationWaitTimeout, schema.OnlineDDLStatusFailed)
 		checkMigratedTable(t, tableName, "create2")
 		checkTable(t, tableName, true)
 		testSelectTableMetrics(t)
@@ -1842,7 +1843,7 @@ func testDeclarative(t *testing.T) {
 		// unrelated error.
 		uuid := testOnlineDDL(t, createIfNotExistsStatement, "online", "vtgate", "", "")
 		uuids = append(uuids, uuid)
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, migrationWaitTimeout, schema.OnlineDDLStatusComplete)
 		// the table existed, so we expect no changes in this non-declarative DDL
 		checkMigratedTable(t, tableName, "create2")
 		checkTable(t, tableName, true)
@@ -1851,7 +1852,7 @@ func testDeclarative(t *testing.T) {
 	t.Run("CREATE TABLE with zero date and --allow-zero-in-date is successful", func(t *testing.T) {
 		uuid := testOnlineDDL(t, createStatementZeroDate, "online --allow-zero-in-date", "vtgate", "", "")
 		uuids = append(uuids, uuid)
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, migrationWaitTimeout, schema.OnlineDDLStatusComplete)
 		checkMigratedTable(t, "zerodate_test", "create_with_zero")
 		checkTable(t, tableName, true)
 		testSelectTableMetrics(t)
@@ -1859,7 +1860,7 @@ func testDeclarative(t *testing.T) {
 	t.Run("CREATE TABLE with zero date and --allow-zero-in-date is successful", func(t *testing.T) {
 		uuid := testOnlineDDL(t, createStatementZeroDate, "online -declarative --allow-zero-in-date", "vtgate", "", "")
 		uuids = append(uuids, uuid)
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, migrationWaitTimeout, schema.OnlineDDLStatusComplete)
 		checkMigratedTable(t, "zerodate_test", "create_with_zero")
 		checkTable(t, tableName, true)
 		testSelectTableMetrics(t)
@@ -1867,7 +1868,7 @@ func testDeclarative(t *testing.T) {
 	t.Run("CREATE TABLE with zero date and --allow-zero-in-date is successful", func(t *testing.T) {
 		uuid := testOnlineDDL(t, createStatementZeroDate2, "online -declarative --allow-zero-in-date", "vtgate", "", "")
 		uuids = append(uuids, uuid)
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, migrationWaitTimeout, schema.OnlineDDLStatusComplete)
 		checkMigratedTable(t, "zerodate_test", "create_with_zero2")
 		checkTable(t, tableName, true)
 		testSelectTableMetrics(t)
@@ -1879,7 +1880,7 @@ func testDeclarative(t *testing.T) {
 	t.Run("Trivial statement with request context is successful", func(t *testing.T) {
 		uuid := testOnlineDDL(t, trivialAlterStatement, "online", "vtctl", "", "")
 		uuids = append(uuids, uuid)
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, migrationWaitTimeout, schema.OnlineDDLStatusComplete)
 		// the table existed, so we expect no changes in this non-declarative DDL
 		checkTable(t, tableName, true)
 
@@ -1893,7 +1894,7 @@ func testDeclarative(t *testing.T) {
 	t.Run("Duplicate trivial statement with request context is successful", func(t *testing.T) {
 		uuid := testOnlineDDL(t, trivialAlterStatement, "online", "vtctl", "", "")
 		uuids = append(uuids, uuid)
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, migrationWaitTimeout, schema.OnlineDDLStatusComplete)
 		// the table existed, so we expect no changes in this non-declarative DDL
 		checkTable(t, tableName, true)
 
@@ -2055,7 +2056,7 @@ func testForeignKeys(t *testing.T) {
 				for _, statement := range createStatements {
 					t.Run(statement, func(t *testing.T) {
 						uuid := testStatement(t, statement, ddlStrategyAllowFK, "", false)
-						onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+						onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, migrationWaitTimeout, schema.OnlineDDLStatusComplete)
 					})
 				}
 			})
@@ -2070,11 +2071,11 @@ func testForeignKeys(t *testing.T) {
 			t.Run("run migration", func(t *testing.T) {
 				if testcase.allowForeignKeys {
 					uuid = testStatement(t, testcase.sql, ddlStrategyAllowFK, testcase.expectHint, false)
-					onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+					onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, migrationWaitTimeout, schema.OnlineDDLStatusComplete)
 				} else {
 					uuid = testStatement(t, testcase.sql, ddlStrategy, "", true)
 					if uuid != "" {
-						onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusFailed)
+						onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, migrationWaitTimeout, schema.OnlineDDLStatusFailed)
 					}
 				}
 			})
