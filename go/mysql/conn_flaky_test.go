@@ -1017,7 +1017,7 @@ func TestTruncateErrorLen(t *testing.T) {
 	assert.EqualValues(data[0], ErrPacket, "ErrPacket")
 
 	err = ParseErrorPacket(data)
-	utils.MustMatch(t, err, NewSQLError(ERUnknownError, SSUnknownSQLState, "unknown error: Loooooooooooooooo"), "")
+	utils.MustMatch(t, err, NewSQLError(ERUnknownError, SSUnknownSQLState, "unknown error: Loooo [TRUNCATED]"), "")
 }
 
 var _ Handler = (*testRun)(nil)

@@ -1637,7 +1637,7 @@ func TestSanitizeMessagesNoBindVars(t *testing.T) {
 
 func TestTruncateErrorLen(t *testing.T) {
 	config := tabletenv.NewDefaultConfig()
-	config.TruncateErrorLen = 8
+	config.TruncateErrorLen = 32
 	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), &topodatapb.TabletAlias{})
 	tl := newTestLogger()
 	defer tl.Close()
@@ -1645,10 +1645,10 @@ func TestTruncateErrorLen(t *testing.T) {
 		ctx,
 		"select 42 from dual",
 		nil,
-		vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Looooooooooooooong error"),
+		vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Looooooooooooooooooooooooooooooooong error"),
 		nil,
 	)
-	want := "Looooooo"
+	want := "Looooooooooooooooooo [TRUNCATED]"
 	require.Error(t, err)
 	assert.Equal(t, err.Error(), want)
 	want = "Sql: \"select 42 from dual\", BindVars: {}"

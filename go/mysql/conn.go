@@ -843,7 +843,7 @@ func (c *Conn) writeErrorPacketFromErrorAndLog(err error) bool {
 func (c *Conn) writeErrorPacket(errorCode ErrorCode, sqlState string, format string, args ...any) error {
 	errorMessage := fmt.Sprintf(format, args...)
 	if c.listener != nil && c.listener.truncateErrorLen > 0 && len(errorMessage) > c.listener.truncateErrorLen {
-		errorMessage = errorMessage[:c.listener.truncateErrorLen]
+		errorMessage = vterrors.TruncateError(errorMessage, c.listener.truncateErrorLen)
 	}
 	length := 1 + 2 + 1 + 5 + len(errorMessage)
 	data, pos := c.startEphemeralPacketWithHeader(length)

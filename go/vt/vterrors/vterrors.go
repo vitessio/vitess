@@ -361,5 +361,19 @@ func Print(err error) string {
 	return fmt.Sprintf("%v: %v\n", Code(err), err.Error())
 }
 
+// TruncateError truncates error messages that are longer than the
+// specified length.
+func TruncateError(msg string, max int) string {
+	if max <= 0 || len(msg) <= max {
+		return msg
+	}
+
+	if max <= 12 {
+		return "[TRUNCATED]"
+	}
+
+	return msg[:max-12] + " [TRUNCATED]"
+}
+
 func (f *fundamental) ErrorState() State       { return f.state }
 func (f *fundamental) ErrorCode() vtrpcpb.Code { return f.code }

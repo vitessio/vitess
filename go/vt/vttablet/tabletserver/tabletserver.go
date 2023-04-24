@@ -1566,7 +1566,7 @@ func (tsv *TabletServer) convertAndLogError(ctx context.Context, sql string, bin
 
 	errStr := err.Error()
 	if tsv.TruncateErrorLen > 0 && len(errStr) > tsv.TruncateErrorLen {
-		err = vterrors.New(vterrors.Code(err), errStr[:tsv.TruncateErrorLen])
+		err = vterrors.New(vterrors.Code(err), vterrors.TruncateError(errStr, tsv.TruncateErrorLen))
 	}
 
 	return err
