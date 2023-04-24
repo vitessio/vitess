@@ -627,7 +627,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 			return nil, err
 		}
 	case ev.IsTransactionPayload():
-		log.Infof("VStreamer found compressed transaction payload event: %+v, with bytes: %s",
+		log.V(5).Infof("VStreamer found compressed transaction payload event: %+v, with bytes: %s",
 			ev, string(ev.Bytes()))
 		if !vs.pos.MatchesFlavor(mysql.Mysql56FlavorID) {
 			return nil, fmt.Errorf("compressed transaction payload events are not supported with database flavor %s",

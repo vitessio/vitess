@@ -132,7 +132,7 @@ func (ev binlogEvent) TransactionPayload(format BinlogFormat) ([]BinlogEvent, er
 }
 
 func (tp *TransactionPayload) Decode(data []byte) error {
-	log.Infof("Compressed payload event; Len: %d :: Bytes: %v", len(data), data)
+	log.V(5).Infof("Compressed payload event; Len: %d :: Bytes: %v", len(data), data)
 	if err := tp.read(data); err != nil {
 		return err
 	}
@@ -147,19 +147,19 @@ func (tp *TransactionPayload) read(data []byte) error {
 		if !ok {
 			return vterrors.New(vtrpcpb.Code_INTERNAL, "error reading field type")
 		}
-		log.Infof("Compressed payload event; field type: %d", fieldType)
+		log.V(5).Infof("Compressed payload event; field type: %d", fieldType)
 		pos++
 
 		if fieldType == payloadHeaderEndMark {
 			tp.Payload = data[pos:]
-			log.Infof("Compressed payload event; found header end mark; payload: %s", hex.EncodeToString(tp.Payload))
+			log.V(5).Infof("Compressed payload event; found header end mark; payload: %s", hex.EncodeToString(tp.Payload))
 			break
 		} else {
 			fieldLen, ok := readFixedLenUint64(data[pos : pos+1])
 			if !ok {
 				return vterrors.New(vtrpcpb.Code_INTERNAL, "error reading field length")
 			}
-			log.Infof("Compressed payload event; for field type: %d, field length: %d", fieldType, fieldLen)
+			log.V(5).Infof("Compressed payload event; for field type: %d, field length: %d", fieldType, fieldLen)
 			pos++
 
 			switch fieldType {
@@ -168,24 +168,23 @@ func (tp *TransactionPayload) read(data []byte) error {
 				if !ok {
 					return vterrors.New(vtrpcpb.Code_INTERNAL, "error reading payload size")
 				}
-				log.Infof("Compressed payload event; compressed size: %d", tp.Size)
+				log.V(5).Infof("Compressed payload event; compressed size: %d", tp.Size)
 			case payloadCompressionTypeField:
 				tp.CompressionType, ok = readFixedLenUint64(data[pos : pos+fieldLen])
 				if !ok {
 					return vterrors.New(vtrpcpb.Code_INTERNAL, "error reading compression type")
 				}
-				log.Infof("Compressed payload event; compression type: %s", transactionPayloadCompressionTypes[tp.CompressionType])
+				log.V(5).Infof("Compressed payload event; compression type: %s", transactionPayloadCompressionTypes[tp.CompressionType])
 			case payloadUncompressedSizeField:
 				tp.UncompressedSize, ok = readFixedLenUint64(data[pos : pos+fieldLen])
 				if !ok {
 					return vterrors.New(vtrpcpb.Code_INTERNAL, "error reading uncompressed payload size")
 				}
-				log.Infof("Compressed payload event; uncompressed size: %d", tp.UncompressedSize)
+				log.V(5).Infof("Compressed payload event; uncompressed size: %d", tp.UncompressedSize)
 			}
 
 			pos += fieldLen
 		}
-		log.Flush()
 	}
 
 	return nil
@@ -202,7 +201,7 @@ func (tp *TransactionPayload) decode() error {
 	if err != nil {
 		return vterrors.Wrapf(err, "error decompressing transaction payload")
 	}
-	log.Infof("Decompressed payload (length: %d): %s", decompressedPayloadLen, hex.EncodeToString(decompressedPayload))
+	log.V(5).Infof("Decompressed payload (length: %d): %s", decompressedPayloadLen, hex.EncodeToString(decompressedPayload))
 
 	pos := uint32(0)
 
@@ -219,7 +218,7 @@ func (tp *TransactionPayload) decode() error {
 		}
 		eventData := decompressedPayload[pos : pos+eventLen]
 		ble := NewMysql56BinlogEvent(eventData)
-		log.Infof("Decoded binlog event from uncompressed payload (length: %d, type: %d): Bytes: %v",
+		log.V(5).Infof("Decoded binlog event from uncompressed payload (length: %d, type: %d): Bytes: %v",
 			eventLen, ble.(mysql56BinlogEvent).Type(), ble.Bytes())
 		tp.Events = append(tp.Events, ble)
 
@@ -250,7 +249,7 @@ func (tp *TransactionPayload) decompress() ([]byte, error) {
 		return []byte{}, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT,
 			fmt.Sprintf("decompressed size %d does not match expected size %d", written, tp.UncompressedSize))
 	}
-	log.Infof("Decompressed %d bytes to %d bytes; Value: %s", len(tp.Payload), written, out.(*bytes.Buffer).String())
+	log.V(5).Infof("Decompressed %d bytes to %d bytes; Value: %s", len(tp.Payload), written, out.(*bytes.Buffer).String())
 
 	return out.(*bytes.Buffer).Bytes(), nil
 }
