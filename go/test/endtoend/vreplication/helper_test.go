@@ -18,6 +18,8 @@ package vreplication
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"net/http"
@@ -639,4 +641,15 @@ func verifyCopyStateIsOptimized(t *testing.T, tablet *cluster.VttabletProcess) {
 			time.Sleep(defaultTick)
 		}
 	}
+}
+
+// randHex can be used to generate random strings of
+// hex characters to the given length. This can e.g.
+// be used to generate and insert test data.
+func randHex(n int) (string, error) {
+	bytes := make([]byte, n)
+	if _, err := rand.Read(bytes); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(bytes), nil
 }
