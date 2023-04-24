@@ -315,7 +315,7 @@ type TabletConfig struct {
 	WatchReplication                        bool                              `json:"watchReplication,omitempty"`
 	TrackSchemaVersions                     bool                              `json:"trackSchemaVersions,omitempty"`
 	TerseErrors                             bool                              `json:"terseErrors,omitempty"`
- 	TruncateErrorLen                        int                               `json:"truncateErrorLen,omitempty"`
+	TruncateErrorLen                        int                               `json:"truncateErrorLen,omitempty"`
 	AnnotateQueries                         bool                              `json:"annotateQueries,omitempty"`
 	MessagePostponeParallelism              int                               `json:"messagePostponeParallelism,omitempty"`
 	DeprecatedCacheResultFields             bool                              `json:"cacheResultFields,omitempty"`
