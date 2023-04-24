@@ -25,6 +25,8 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 var charVindexMD5 SingleColumn
@@ -32,6 +34,55 @@ var charVindexMD5 SingleColumn
 func init() {
 	vindex, _, _ := CreateVindex("unicode_loose_md5", "utf8ch", nil)
 	charVindexMD5 = vindex.(SingleColumn)
+}
+
+func unicodeLooseMD5CreateVindexTestCase(
+	testName string,
+	vindexParams map[string]string,
+	expectErr error,
+	expectWarnings []VindexWarning,
+) createVindexTestCase {
+	return createVindexTestCase{
+		testName: testName,
+
+		vindexType:   "unicode_loose_md5",
+		vindexName:   "unicode_loose_md5",
+		vindexParams: vindexParams,
+
+		expectCost:         1,
+		expectErr:          expectErr,
+		expectIsUnique:     true,
+		expectNeedsVCursor: false,
+		expectString:       "unicode_loose_md5",
+		expectWarnings:     expectWarnings,
+	}
+}
+
+func TestUnicodeLooseMD5CreateVindex(t *testing.T) {
+	cases := []createVindexTestCase{
+		unicodeLooseMD5CreateVindexTestCase(
+			"no params",
+			nil,
+			nil,
+			nil,
+		),
+		unicodeLooseMD5CreateVindexTestCase(
+			"empty params",
+			map[string]string{},
+			nil,
+			nil,
+		),
+		unicodeLooseMD5CreateVindexTestCase(
+			"unknown params",
+			map[string]string{
+				"hello": "world",
+			},
+			nil,
+			[]VindexWarning{vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "unknown param 'hello'")},
+		),
+	}
+
+	testCreateVindexes(t, cases)
 }
 
 func TestUnicodeLooseMD5Info(t *testing.T) {
