@@ -3731,3 +3731,15 @@ func (node *GeomPropertyFuncExpr) formatFast(buf *TrackedBuffer) {
 	buf.printExpr(node, node.Geom, true)
 	buf.WriteByte(')')
 }
+
+// formatFast formats the node
+func (node *PointPropertyFuncExpr) formatFast(buf *TrackedBuffer) {
+	buf.WriteString(node.Property.ToString())
+	buf.WriteByte('(')
+	buf.printExpr(node, node.Point, true)
+	if node.ValueToSet != nil {
+		buf.WriteString(", ")
+		buf.printExpr(node, node.ValueToSet, true)
+	}
+	buf.WriteByte(')')
+}

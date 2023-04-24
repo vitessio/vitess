@@ -19,7 +19,6 @@ package cluster
 import (
 	"context"
 	"fmt"
-	"html/template"
 	"os"
 	"os/exec"
 	"path"
@@ -27,6 +26,8 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/google/safehtml/template"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/log"

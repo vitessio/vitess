@@ -17,11 +17,13 @@ limitations under the License.
 package evalengine
 
 import (
+	"math"
 	"time"
 
 	"vitess.io/vitess/go/hack"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/datetime"
+	"vitess.io/vitess/go/mysql/decimal"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
@@ -70,7 +72,20 @@ type (
 		CallExpr
 	}
 
+	builtinFromUnixtime struct {
+		CallExpr
+		collate collations.ID
+	}
+
 	builtinHour struct {
+		CallExpr
+	}
+
+	builtinMakedate struct {
+		CallExpr
+	}
+
+	builtinMaketime struct {
 		CallExpr
 	}
 
@@ -100,6 +115,10 @@ type (
 	}
 
 	builtinTime struct {
+		CallExpr
+	}
+
+	builtinUnixTimestamp struct {
 		CallExpr
 	}
 
@@ -134,6 +153,9 @@ var _ Expr = (*builtinDayOfMonth)(nil)
 var _ Expr = (*builtinDayOfWeek)(nil)
 var _ Expr = (*builtinDayOfYear)(nil)
 var _ Expr = (*builtinHour)(nil)
+var _ Expr = (*builtinFromUnixtime)(nil)
+var _ Expr = (*builtinMakedate)(nil)
+var _ Expr = (*builtinMaketime)(nil)
 var _ Expr = (*builtinMicrosecond)(nil)
 var _ Expr = (*builtinMinute)(nil)
 var _ Expr = (*builtinMonth)(nil)
@@ -141,6 +163,7 @@ var _ Expr = (*builtinMonthName)(nil)
 var _ Expr = (*builtinQuarter)(nil)
 var _ Expr = (*builtinSecond)(nil)
 var _ Expr = (*builtinTime)(nil)
+var _ Expr = (*builtinUnixTimestamp)(nil)
 var _ Expr = (*builtinWeek)(nil)
 var _ Expr = (*builtinWeekDay)(nil)
 var _ Expr = (*builtinWeekOfYear)(nil)
@@ -555,6 +578,156 @@ func (call *builtinDayOfYear) compile(c *compiler) (ctype, error) {
 	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: arg.Flag | flagNullable}, nil
 }
 
+const maxUnixtime = 32536771200
+
+func (b *builtinFromUnixtime) eval(env *ExpressionEnv) (eval, error) {
+	ts, err := b.arg1(env)
+	if err != nil {
+		return nil, err
+	}
+
+	if ts == nil {
+		return nil, nil
+	}
+
+	prec := 0
+	var sec, frac int64
+
+	switch ts := ts.(type) {
+	case *evalInt64:
+		sec = ts.i
+	case *evalUint64:
+		sec = int64(ts.u)
+	case *evalFloat:
+		sf, ff := math.Modf(ts.f)
+		sec = int64(sf)
+		frac = int64(ff * 1e9)
+		prec = 6
+	case *evalDecimal:
+		sd, fd := ts.dec.QuoRem(decimal.New(1, 0), 0)
+		sec, _ = sd.Int64()
+		frac, _ = fd.Mul(decimal.New(1, 9)).Int64()
+		prec = int(ts.length)
+	case *evalTemporal:
+		if ts.prec == 0 {
+			sec = ts.toInt64()
+		} else {
+			dec := ts.toDecimal()
+			sd, fd := dec.QuoRem(decimal.New(1, 0), 0)
+			sec, _ = sd.Int64()
+			frac, _ = fd.Mul(decimal.New(1, 9)).Int64()
+			prec = int(ts.prec)
+		}
+	case *evalBytes:
+		if ts.isHexOrBitLiteral() {
+			u, _ := ts.toNumericHex()
+			sec = int64(u.u)
+		} else {
+			f, _ := evalToFloat(ts)
+			sf, ff := math.Modf(f.f)
+			sec = int64(sf)
+			frac = int64(ff * 1e9)
+			prec = 6
+		}
+	default:
+		f, _ := evalToFloat(ts)
+		sf, ff := math.Modf(f.f)
+		sec = int64(sf)
+		frac = int64(ff * 1e9)
+		prec = 6
+	}
+
+	if sec < 0 || sec >= maxUnixtime {
+		return nil, nil
+	}
+
+	t := time.Unix(sec, frac)
+	if tz := env.currentTimezone(); tz != nil {
+		t = t.In(tz)
+	}
+
+	dt := newEvalDateTime(datetime.FromStdTime(t), prec)
+
+	if len(b.Arguments) == 1 {
+		return dt, nil
+	}
+
+	format, err := b.Arguments[1].eval(env)
+	if err != nil {
+		return nil, err
+	}
+	f := evalToBinary(format)
+	d, err := datetime.Format(f.string(), dt.dt, dt.prec)
+	if err != nil {
+		return nil, err
+	}
+	return newEvalText(d, defaultCoercionCollation(b.collate)), nil
+}
+
+func (b *builtinFromUnixtime) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	_, f := b.Arguments[0].typeof(env, fields)
+	if len(b.Arguments) == 1 {
+		return sqltypes.Datetime, f | flagNullable
+	}
+	return sqltypes.VarChar, f | flagNullable
+}
+
+func (call *builtinFromUnixtime) compile(c *compiler) (ctype, error) {
+	arg, err := c.compile(call.Arguments[0])
+	if err != nil {
+		return ctype{}, err
+	}
+	skip1 := c.compileNullCheck1(arg)
+
+	switch arg.Type {
+	case sqltypes.Int64:
+		c.asm.Fn_FROM_UNIXTIME_i()
+	case sqltypes.Uint64:
+		c.asm.Fn_FROM_UNIXTIME_u()
+	case sqltypes.Float64:
+		c.asm.Fn_FROM_UNIXTIME_f()
+	case sqltypes.Decimal:
+		c.asm.Fn_FROM_UNIXTIME_d()
+	case sqltypes.Datetime, sqltypes.Date, sqltypes.Time:
+		c.asm.Convert_Ti(1)
+		c.asm.Fn_FROM_UNIXTIME_i()
+	case sqltypes.VarChar, sqltypes.VarBinary:
+		if arg.isHexOrBitLiteral() {
+			c.asm.Convert_xu(1)
+			c.asm.Fn_FROM_UNIXTIME_u()
+		} else {
+			c.asm.Convert_xf(1)
+			c.asm.Fn_FROM_UNIXTIME_f()
+		}
+	default:
+		c.asm.Convert_xf(1)
+		c.asm.Fn_FROM_UNIXTIME_f()
+	}
+
+	if len(call.Arguments) == 1 {
+		c.asm.jumpDestination(skip1)
+		return ctype{Type: sqltypes.Datetime, Col: collationBinary, Flag: arg.Flag | flagNullable}, nil
+	}
+
+	format, err := call.Arguments[1].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip2 := c.compileNullCheck1r(format)
+
+	switch format.Type {
+	case sqltypes.VarChar, sqltypes.VarBinary:
+	default:
+		c.asm.Convert_xb(1, sqltypes.VarBinary, 0, false)
+	}
+
+	col := defaultCoercionCollation(c.cfg.Collation)
+	c.asm.Fn_DATE_FORMAT(col)
+	c.asm.jumpDestination(skip1, skip2)
+	return ctype{Type: sqltypes.VarChar, Col: col, Flag: arg.Flag | flagNullable}, nil
+}
+
 func (b *builtinHour) eval(env *ExpressionEnv) (eval, error) {
 	date, err := b.arg1(env)
 	if err != nil {
@@ -590,6 +763,330 @@ func (call *builtinHour) compile(c *compiler) (ctype, error) {
 	c.asm.Fn_HOUR()
 	c.asm.jumpDestination(skip)
 	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: arg.Flag | flagNullable}, nil
+}
+
+func yearDayToTime(y, yd int64) time.Time {
+	if y >= 0 && y < 100 {
+		if y < 70 {
+			y += 2000
+		} else {
+			y += 1900
+		}
+	}
+
+	if y < 0 || y > 9999 || yd < 1 || yd > math.MaxInt32 {
+		return time.Time{}
+	}
+	t := time.Date(int(y), time.January, 1, 0, 0, 0, 0, time.Local).AddDate(0, 0, int(yd-1))
+	if t.Year() > 9999 {
+		return time.Time{}
+	}
+	return t
+}
+
+func (b *builtinMakedate) eval(env *ExpressionEnv) (eval, error) {
+	// For some reason, MySQL first evaluates the year day argument.
+	yearDay, err := b.Arguments[1].eval(env)
+	if err != nil {
+		return nil, err
+	}
+	if yearDay == nil {
+		return nil, nil
+	}
+
+	year, err := b.Arguments[0].eval(env)
+	if err != nil {
+		return nil, err
+	}
+	if year == nil {
+		return nil, nil
+	}
+
+	y := evalToInt64(year).i
+	yd := evalToInt64(yearDay).i
+
+	t := yearDayToTime(y, yd)
+	if t.IsZero() {
+		return nil, nil
+	}
+	return newEvalDate(datetime.FromStdTime(t).Date), nil
+}
+
+func (b *builtinMakedate) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	_, f1 := b.Arguments[0].typeof(env, fields)
+	_, f2 := b.Arguments[1].typeof(env, fields)
+	return sqltypes.Date, f1 | f2 | flagNullable
+}
+
+func (call *builtinMakedate) compile(c *compiler) (ctype, error) {
+	// Similar here, we have to evaluate these in reverse order as well.
+	yearDay, err := call.Arguments[1].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip1 := c.compileNullCheck1(yearDay)
+
+	year, err := call.Arguments[0].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip2 := c.compileNullCheck1r(year)
+
+	switch yearDay.Type {
+	case sqltypes.Int64:
+	default:
+		c.asm.Convert_xi(2)
+	}
+
+	switch year.Type {
+	case sqltypes.Int64:
+	default:
+		c.asm.Convert_xi(1)
+	}
+
+	c.asm.Fn_MAKEDATE()
+	c.asm.jumpDestination(skip1, skip2)
+	return ctype{Type: sqltypes.Date, Col: collationBinary, Flag: year.Flag | yearDay.Flag | flagNullable}, nil
+}
+
+func clampHourMinute(h, m int64) (int64, int64, bool, bool) {
+	var clamped bool
+	if h > 838 || h < -838 {
+		clamped = true
+		if h > 0 {
+			h = 838
+		} else {
+			h = -838
+		}
+		m = 59
+	}
+	neg := h < 0
+	if neg {
+		h = -h
+	}
+	return h, m, neg, clamped
+}
+
+func makeTime_i(h, m, s int64) (int64, bool) {
+	if m < 0 || m > 59 || s < 0 || s > 59 {
+		return 0, false
+	}
+
+	h, m, neg, clamped := clampHourMinute(h, m)
+	if clamped {
+		s = 59
+	}
+
+	v := h*10000 + m*100 + s
+	if neg {
+		v = -v
+	}
+	return v, true
+}
+
+func makeTime_d(h, m int64, s decimal.Decimal) (decimal.Decimal, bool) {
+	if m < 0 || m > 59 || s.Sign() < 0 || s.Cmp(decimal.NewFromInt(60)) >= 0 {
+		return decimal.Zero, false
+	}
+
+	h, m, neg, clamped := clampHourMinute(h, m)
+	if clamped {
+		s = decimal.NewFromInt(59)
+	}
+
+	dec := decimal.NewFromInt(h*10000 + m*100).Add(s)
+	if neg {
+		dec = dec.Neg()
+	}
+	return dec, true
+}
+
+func makeTime_f(h, m int64, s float64) (float64, bool) {
+	if m < 0 || m > 59 || s < 0.0 || s >= 60.0 {
+		return 0, false
+	}
+
+	h, m, neg, clamped := clampHourMinute(h, m)
+	if clamped {
+		s = 59.0
+	}
+
+	v := float64(h*10000+m*100) + s
+	if neg {
+		v = -v
+	}
+	return v, true
+}
+
+func (b *builtinMaketime) eval(env *ExpressionEnv) (eval, error) {
+	hour, err := b.Arguments[0].eval(env)
+	if err != nil {
+		return nil, err
+	}
+	if hour == nil {
+		return nil, nil
+	}
+	min, err := b.Arguments[1].eval(env)
+	if err != nil {
+		return nil, err
+	}
+	if min == nil {
+		return nil, nil
+	}
+	sec, err := b.Arguments[2].eval(env)
+	if err != nil {
+		return nil, err
+	}
+	if sec == nil {
+		return nil, nil
+	}
+
+	var h int64
+	switch hour := hour.(type) {
+	case *evalInt64:
+		h = hour.i
+	case *evalUint64:
+		if hour.u > math.MaxInt64 {
+			h = math.MaxInt64
+		} else {
+			h = int64(hour.u)
+		}
+	case *evalBytes:
+		if hour.isHexOrBitLiteral() {
+			hex, ok := hour.toNumericHex()
+			if ok {
+				if hex.u > math.MaxInt64 {
+					h = math.MaxInt64
+				} else {
+					h = int64(hex.u)
+				}
+			}
+		} else {
+			h = evalToInt64(hour).i
+		}
+	default:
+		h = evalToInt64(hour).i
+	}
+
+	m := evalToInt64(min).i
+	s := evalToNumeric(sec, false)
+
+	var ok bool
+	var t datetime.Time
+	var l int
+	switch s := s.(type) {
+	case *evalInt64:
+		var v int64
+		v, ok = makeTime_i(h, m, s.i)
+		if !ok {
+			return nil, nil
+		}
+		t, ok = datetime.ParseTimeInt64(v)
+	case *evalUint64:
+		var v int64
+		v, ok = makeTime_i(h, m, int64(s.u))
+		if !ok {
+			return nil, nil
+		}
+		t, ok = datetime.ParseTimeInt64(v)
+	case *evalDecimal:
+		var v decimal.Decimal
+		v, ok = makeTime_d(h, m, s.dec)
+		if !ok {
+			return nil, nil
+		}
+		t, l, ok = datetime.ParseTimeDecimal(v, s.length, -1)
+	case *evalFloat:
+		var v float64
+		v, ok = makeTime_f(h, m, s.f)
+		if !ok {
+			return nil, nil
+		}
+		t, l, ok = datetime.ParseTimeFloat(v, -1)
+	}
+	if !ok {
+		return nil, nil
+	}
+
+	return newEvalTime(t, l), nil
+}
+
+func (b *builtinMaketime) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	_, f1 := b.Arguments[0].typeof(env, fields)
+	_, f2 := b.Arguments[1].typeof(env, fields)
+	_, f3 := b.Arguments[2].typeof(env, fields)
+	return sqltypes.Time, f1 | f2 | f3 | flagNullable
+}
+
+func (call *builtinMaketime) compile(c *compiler) (ctype, error) {
+	hour, err := call.Arguments[0].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+	skip1 := c.compileNullCheck1(hour)
+
+	min, err := call.Arguments[1].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+	skip2 := c.compileNullCheck1r(min)
+
+	sec, err := call.Arguments[2].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+	skip3 := c.compileNullCheck3(hour, min, sec)
+
+	switch hour.Type {
+	case sqltypes.Int64:
+	case sqltypes.Uint64:
+		c.asm.Clamp_u(3, math.MaxInt64)
+		c.asm.Convert_xi(3)
+	case sqltypes.VarChar, sqltypes.VarBinary:
+		if hour.isHexOrBitLiteral() {
+			c.asm.Convert_xu(3)
+			c.asm.Clamp_u(3, math.MaxInt64)
+			c.asm.Convert_xi(3)
+		} else {
+			c.asm.Convert_xi(3)
+		}
+	default:
+		c.asm.Convert_xi(3)
+	}
+
+	switch min.Type {
+	case sqltypes.Int64:
+	default:
+		c.asm.Convert_xi(2)
+	}
+
+	switch sec.Type {
+	case sqltypes.Int64:
+		c.asm.Fn_MAKETIME_i()
+	case sqltypes.Uint64:
+		c.asm.Convert_ui(1)
+		c.asm.Fn_MAKETIME_i()
+	case sqltypes.Decimal:
+		c.asm.Fn_MAKETIME_d()
+	case sqltypes.Float64:
+		c.asm.Fn_MAKETIME_f()
+	case sqltypes.VarChar, sqltypes.VarBinary:
+		if sec.isHexOrBitLiteral() {
+			c.asm.Convert_xi(1)
+			c.asm.Fn_MAKETIME_i()
+		} else {
+			c.asm.Convert_xf(1)
+			c.asm.Fn_MAKETIME_f()
+		}
+	default:
+		c.asm.Convert_xf(1)
+		c.asm.Fn_MAKETIME_f()
+	}
+
+	c.asm.jumpDestination(skip1, skip2, skip3)
+	return ctype{Type: sqltypes.Time, Col: collationBinary, Flag: hour.Flag | min.Flag | sec.Flag | flagNullable}, nil
 }
 
 func (b *builtinMicrosecond) eval(env *ExpressionEnv) (eval, error) {
@@ -854,6 +1351,95 @@ func (call *builtinTime) compile(c *compiler) (ctype, error) {
 	}
 	c.asm.jumpDestination(skip)
 	return ctype{Type: sqltypes.Time, Col: collationBinary, Flag: arg.Flag | flagNullable}, nil
+}
+
+func dateTimeUnixTimestamp(env *ExpressionEnv, date eval) evalNumeric {
+	var dt *evalTemporal
+	switch e := date.(type) {
+	case *evalTemporal:
+		dt = e.toDateTime(int(e.prec))
+	default:
+		dt = evalToDateTime(date, -1)
+		if dt == nil || dt.isZero() {
+			var prec int32
+			switch d := date.(type) {
+			case *evalInt64, *evalUint64:
+				return newEvalInt64(0)
+			case *evalDecimal:
+				prec = d.length
+			case *evalBytes:
+				if d.isHexLiteral {
+					return newEvalInt64(0)
+				}
+				prec = 6
+			default:
+				prec = 6
+			}
+			return newEvalDecimalWithPrec(decimal.Zero, prec)
+		}
+	}
+
+	tz := env.currentTimezone()
+	if tz == nil {
+		tz = time.Local
+	}
+
+	ts := dt.dt.ToStdTime(tz)
+	if dt.prec == 0 {
+		return newEvalInt64(ts.Unix())
+	}
+	dec := decimal.New(ts.Unix(), 0)
+	dec = dec.Add(decimal.New(int64(dt.dt.Time.Nanosecond()), -9))
+	return newEvalDecimalWithPrec(dec, int32(dt.prec))
+}
+
+func (b *builtinUnixTimestamp) eval(env *ExpressionEnv) (eval, error) {
+	if len(b.Arguments) == 0 {
+		return newEvalInt64(env.now.Unix()), nil
+	}
+
+	date, err := b.arg1(env)
+	if err != nil {
+		return nil, err
+	}
+
+	if date == nil {
+		return nil, nil
+	}
+
+	return dateTimeUnixTimestamp(env, date), nil
+}
+
+func (b *builtinUnixTimestamp) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	if len(b.Arguments) == 0 {
+		return sqltypes.Int64, 0
+	}
+	_, f := b.Arguments[0].typeof(env, fields)
+	return sqltypes.Int64, f | flagAmbiguousType
+}
+
+func (call *builtinUnixTimestamp) constant() bool {
+	if len(call.Arguments) == 0 {
+		return false
+	}
+	return call.Arguments[0].constant()
+}
+
+func (call *builtinUnixTimestamp) compile(c *compiler) (ctype, error) {
+	if len(call.Arguments) == 0 {
+		c.asm.Fn_UNIX_TIMESTAMP0()
+		return ctype{Type: sqltypes.Int64, Col: collationNumeric}, nil
+	}
+
+	arg, err := c.compile(call.Arguments[0])
+	if err != nil {
+		return ctype{}, err
+	}
+	skip := c.compileNullCheck1(arg)
+
+	c.asm.Fn_UNIX_TIMESTAMP1()
+	c.asm.jumpDestination(skip)
+	return ctype{Type: sqltypes.Int64, Col: collationBinary, Flag: arg.Flag | flagAmbiguousType}, nil
 }
 
 func (b *builtinWeek) eval(env *ExpressionEnv) (eval, error) {

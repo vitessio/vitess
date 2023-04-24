@@ -59,8 +59,8 @@ func addNumericWithError(left, right eval) (eval, error) {
 }
 
 func subtractNumericWithError(left, right eval) (eval, error) {
-	v1 := evalToNumeric(left)
-	v2 := evalToNumeric(right)
+	v1 := evalToNumeric(left, true)
+	v2 := evalToNumeric(right, true)
 	switch v1 := v1.(type) {
 	case *evalInt64:
 		switch v2 := v2.(type) {
@@ -118,8 +118,8 @@ func multiplyNumericWithError(left, right eval) (eval, error) {
 }
 
 func divideNumericWithError(left, right eval, precise bool) (eval, error) {
-	v1 := evalToNumeric(left)
-	v2 := evalToNumeric(right)
+	v1 := evalToNumeric(left, true)
+	v2 := evalToNumeric(right, true)
 	if v1, ok := v1.(*evalFloat); ok {
 		return mathDiv_fx(v1.f, v2)
 	}
@@ -195,8 +195,8 @@ func integerDivideNumericWithError(left, right eval) (eval, error) {
 }
 
 func modNumericWithError(left, right eval, precise bool) (eval, error) {
-	v1 := evalToNumeric(left)
-	v2 := evalToNumeric(right)
+	v1 := evalToNumeric(left, true)
+	v2 := evalToNumeric(right, true)
 
 	switch v1 := v1.(type) {
 	case *evalInt64:
@@ -254,8 +254,8 @@ func modNumericWithError(left, right eval, precise bool) (eval, error) {
 // makeNumericAndPrioritize reorders the input parameters
 // to be Float64, Decimal, Uint64, Int64.
 func makeNumericAndPrioritize(left, right eval) (evalNumeric, evalNumeric) {
-	i1 := evalToNumeric(left)
-	i2 := evalToNumeric(right)
+	i1 := evalToNumeric(left, true)
+	i2 := evalToNumeric(right, true)
 	switch i1.SQLType() {
 	case sqltypes.Int64:
 		if i2.SQLType() == sqltypes.Uint64 || i2.SQLType() == sqltypes.Float64 || i2.SQLType() == sqltypes.Decimal {

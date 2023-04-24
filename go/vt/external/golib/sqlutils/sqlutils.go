@@ -25,7 +25,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -290,64 +289,6 @@ func QueryRowsMap(db *sql.DB, query string, on_row func(RowMap) error, args ...a
 	return
 }
 
-// queryResultData returns a raw array of rows for a given query, optionally reading and returning column names
-func queryResultData(db *sql.DB, query string, retrieveColumns bool, args ...any) (resultData ResultData, columns []string, err error) {
-	defer func() {
-		if derr := recover(); derr != nil {
-			err = fmt.Errorf("QueryRowsMap unexpected error: %+v", derr)
-		}
-	}()
-
-	var rows *sql.Rows
-	rows, err = db.Query(query, args...)
-	if err != nil && err != sql.ErrNoRows {
-		log.Error(err)
-		return EmptyResultData, columns, err
-	}
-	defer rows.Close()
-
-	if retrieveColumns {
-		// Don't pay if you don't want to
-		columns, _ = rows.Columns()
-	}
-	resultData = ResultData{}
-	err = ScanRowsToArrays(rows, func(rowData []CellData) error {
-		resultData = append(resultData, rowData)
-		return nil
-	})
-	return resultData, columns, err
-}
-
-// QueryResultData returns a raw array of rows
-func QueryResultData(db *sql.DB, query string, args ...any) (ResultData, error) {
-	resultData, _, err := queryResultData(db, query, false, args...)
-	return resultData, err
-}
-
-// QueryResultDataNamed returns a raw array of rows, with column names
-func QueryNamedResultData(db *sql.DB, query string, args ...any) (NamedResultData, error) {
-	resultData, columns, err := queryResultData(db, query, true, args...)
-	return NamedResultData{Columns: columns, Data: resultData}, err
-}
-
-// QueryRowsMapBuffered reads data from the database into a buffer, and only then applies the given function per row.
-// This allows the application to take its time with processing the data, albeit consuming as much memory as required by
-// the result set.
-func QueryRowsMapBuffered(db *sql.DB, query string, on_row func(RowMap) error, args ...any) error {
-	resultData, columns, err := queryResultData(db, query, true, args...)
-	if err != nil {
-		// Already logged
-		return err
-	}
-	for _, row := range resultData {
-		err = on_row(rowToMap(row, columns))
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 // ExecNoPrepare executes given query using given args on given DB, without using prepared statements.
 func ExecNoPrepare(db *sql.DB, query string, args ...any) (res sql.Result, err error) {
 	defer func() {
@@ -363,46 +304,6 @@ func ExecNoPrepare(db *sql.DB, query string, args ...any) (res sql.Result, err e
 	return res, err
 }
 
-// ExecQuery executes given query using given args on given DB. It will safele prepare, execute and close
-// the statement.
-func execInternal(silent bool, db *sql.DB, query string, args ...any) (res sql.Result, err error) {
-	defer func() {
-		if derr := recover(); derr != nil {
-			err = fmt.Errorf("execInternal unexpected error: %+v", derr)
-		}
-	}()
-	var stmt *sql.Stmt
-	stmt, err = db.Prepare(query)
-	if err != nil {
-		return nil, err
-	}
-	defer stmt.Close()
-	res, err = stmt.Exec(args...)
-	if err != nil && !silent {
-		log.Error(err)
-	}
-	return res, err
-}
-
-// Exec executes given query using given args on given DB. It will safele prepare, execute and close
-// the statement.
-func Exec(db *sql.DB, query string, args ...any) (sql.Result, error) {
-	return execInternal(false, db, query, args...)
-}
-
-// ExecSilently acts like Exec but does not report any error
-func ExecSilently(db *sql.DB, query string, args ...any) (sql.Result, error) {
-	return execInternal(true, db, query, args...)
-}
-
-func InClauseStringValues(terms []string) string {
-	quoted := []string{}
-	for _, s := range terms {
-		quoted = append(quoted, fmt.Sprintf("'%s'", strings.Replace(s, ",", "''", -1)))
-	}
-	return strings.Join(quoted, ", ")
-}
-
 // Convert variable length arguments into arguments array
 func Args(args ...any) []any {
 	return args
@@ -413,34 +314,4 @@ func NilIfZero(i int64) any {
 		return nil
 	}
 	return i
-}
-
-func ScanTable(db *sql.DB, tableName string) (NamedResultData, error) {
-	query := fmt.Sprintf("select * from %s", tableName)
-	return QueryNamedResultData(db, query)
-}
-
-func WriteTable(db *sql.DB, tableName string, data NamedResultData) (err error) {
-	if len(data.Data) == 0 {
-		return nil
-	}
-	if len(data.Columns) == 0 {
-		return nil
-	}
-	placeholders := make([]string, len(data.Columns))
-	for i := range placeholders {
-		placeholders[i] = "?"
-	}
-	query := fmt.Sprintf(
-		`replace into %s (%s) values (%s)`,
-		tableName,
-		strings.Join(data.Columns, ","),
-		strings.Join(placeholders, ","),
-	)
-	for _, rowData := range data.Data {
-		if _, execErr := db.Exec(query, rowData.Args()...); execErr != nil {
-			err = execErr
-		}
-	}
-	return err
 }

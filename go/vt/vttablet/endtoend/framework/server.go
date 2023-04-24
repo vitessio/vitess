@@ -112,12 +112,12 @@ func StartServer(connParams, connAppDebugParams mysql.ConnParams, dbName string)
 	config.TwoPCCoordinatorAddress = "fake"
 	config.HotRowProtection.Mode = tabletenv.Enable
 	config.TrackSchemaVersions = true
-	config.GracePeriods.ShutdownSeconds = 2
-	config.SignalSchemaChangeReloadIntervalSeconds = tabletenv.Seconds(2.1)
+	_ = config.GracePeriods.ShutdownSeconds.Set("2s")
+	_ = config.SignalSchemaChangeReloadIntervalSeconds.Set("2100ms")
 	config.SignalWhenSchemaChange = true
-	config.Healthcheck.IntervalSeconds = 0.1
-	config.Oltp.TxTimeoutSeconds = 5
-	config.Olap.TxTimeoutSeconds = 5
+	_ = config.Healthcheck.IntervalSeconds.Set("100ms")
+	_ = config.Oltp.TxTimeoutSeconds.Set("5s")
+	_ = config.Olap.TxTimeoutSeconds.Set("5s")
 	config.EnableViews = true
 	gotBytes, _ := yaml2.Marshal(config)
 	log.Infof("Config:\n%s", gotBytes)

@@ -106,7 +106,10 @@ var Cases = []TestCase{
 	{Run: FnDayOfMonth},
 	{Run: FnDayOfWeek},
 	{Run: FnDayOfYear},
+	{Run: FnFromUnixtime},
 	{Run: FnHour},
+	{Run: FnMakedate},
+	{Run: FnMaketime},
 	{Run: FnMicroSecond},
 	{Run: FnMinute},
 	{Run: FnMonth},
@@ -114,6 +117,7 @@ var Cases = []TestCase{
 	{Run: FnQuarter},
 	{Run: FnSecond},
 	{Run: FnTime},
+	{Run: FnUnixTimestamp},
 	{Run: FnWeek},
 	{Run: FnWeekDay},
 	{Run: FnWeekOfYear},
@@ -949,6 +953,11 @@ func NegateArithmetic(yield Query) {
 		yield(fmt.Sprintf("- %s", rhs), nil)
 		yield(fmt.Sprintf("-%s", rhs), nil)
 	}
+
+	for _, rhs := range inputConversions {
+		yield(fmt.Sprintf("- %s", rhs), nil)
+		yield(fmt.Sprintf("-%s", rhs), nil)
+	}
 }
 
 func CollationOperations(yield Query) {
@@ -1277,46 +1286,8 @@ func FnInfo(yield Query) {
 }
 
 func FnDateFormat(yield Query) {
-	formats := []struct {
-		c    byte
-		expr string
-	}{
-		{'a', "LEFT(DAYNAME(d),3)"},
-		{'b', "LEFT(MONTHNAME(d),3)"},
-		{'c', "MONTH(d)"},
-		{'D', ""},
-		{'d', "LPAD(DAYOFMONTH(d),0,2)"},
-		{'e', "DAYOFMONTH(d)"},
-		{'f', "LPAD(MICROSECOND(t),6,0)"},
-		{'H', "LPAD(HOUR(t),2,0)"},
-		{'h', ""},
-		{'I', ""},
-		{'i', "LPAD(MINUTE(t),2,0)"},
-		{'j', ""},
-		{'k', "HOUR(t)"},
-		{'l', ""},
-		{'M', "MONTHNAME(d)"},
-		{'m', "LPAD(MONTH(d),2,0)"},
-		{'p', ""},
-		{'r', ""},
-		{'S', "LPAD(SECOND(t),2,0)"},
-		{'s', "LPAD(SECOND(t),2,0)"},
-		{'T', ""},
-		{'U', "LPAD(WEEK(d,0),2,0)"},
-		{'u', "LPAD(WEEK(d,1),2,0)"},
-		{'V', "RIGHT(YEARWEEK(d,2),2)"},
-		{'v', "RIGHT(YEARWEEK(d,3),2)"},
-		{'W', "DAYNAME(d)"},
-		{'w', "DAYOFWEEK(d)-1"},
-		{'X', "LEFT(YEARWEEK(d,2),4)"},
-		{'x', "LEFT(YEARWEEK(d,3),4)"},
-		{'Y', "YEAR(d)"},
-		{'y', "RIGHT(YEAR(d),2)"},
-		{'%', ""},
-	}
-
 	var buf strings.Builder
-	for _, f := range formats {
+	for _, f := range dateFormats {
 		buf.WriteByte('%')
 		buf.WriteByte(f.c)
 		buf.WriteByte(' ')
@@ -1381,9 +1352,47 @@ func FnDayOfYear(yield Query) {
 	}
 }
 
+func FnFromUnixtime(yield Query) {
+	var buf strings.Builder
+	for _, f := range dateFormats {
+		buf.WriteByte('%')
+		buf.WriteByte(f.c)
+		buf.WriteByte(' ')
+	}
+	format := buf.String()
+
+	for _, d := range inputConversions {
+		yield(fmt.Sprintf("FROM_UNIXTIME(%s)", d), nil)
+		yield(fmt.Sprintf("FROM_UNIXTIME(%s, %q)", d, format), nil)
+	}
+}
+
 func FnHour(yield Query) {
 	for _, d := range inputConversions {
 		yield(fmt.Sprintf("HOUR(%s)", d), nil)
+	}
+}
+
+func FnMakedate(yield Query) {
+	for _, y := range inputConversions {
+		for _, d := range inputConversions {
+			yield(fmt.Sprintf("MAKEDATE(%s, %s)", y, d), nil)
+		}
+	}
+}
+
+func FnMaketime(yield Query) {
+	// Don't use inputConversions for minutes as those are simplest
+	// and otherwise we explode in test runtime.
+	minutes := []string{
+		"''", "0", "'3'", "59", "60", "0xFF666F6F626172FF", "18446744073709551615",
+	}
+	for _, h := range inputConversions {
+		for _, m := range minutes {
+			for _, s := range inputConversions {
+				yield(fmt.Sprintf("MAKETIME(%s, %s, %s)", h, m, s), nil)
+			}
+		}
 	}
 }
 
@@ -1426,6 +1435,15 @@ func FnSecond(yield Query) {
 func FnTime(yield Query) {
 	for _, d := range inputConversions {
 		yield(fmt.Sprintf("TIME(%s)", d), nil)
+	}
+}
+
+func FnUnixTimestamp(yield Query) {
+	yield("UNIX_TIMESTAMP()", nil)
+
+	for _, d := range inputConversions {
+		yield(fmt.Sprintf("UNIX_TIMESTAMP(%s)", d), nil)
+		yield(fmt.Sprintf("UNIX_TIMESTAMP(%s) + 1", d), nil)
 	}
 }
 

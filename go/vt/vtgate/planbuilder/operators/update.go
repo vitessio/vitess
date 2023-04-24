@@ -65,3 +65,9 @@ func (u *Update) TablesUsed() []string {
 	}
 	return nil
 }
+
+func (u *Update) Description() ops.OpDescription {
+	return ops.OpDescription{
+		OperatorType: "Update",
+	}
+}

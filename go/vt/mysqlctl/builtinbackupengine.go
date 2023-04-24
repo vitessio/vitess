@@ -527,13 +527,14 @@ func (be *BuiltinBackupEngine) backupFiles(
 			// unpredictability in my test cases, so in order to avoid that, I am adding this cancellation check.
 			select {
 			case <-ctx.Done():
-				log.Errorf("Context cancelled during %q backup", fe.Name)
+				log.Errorf("Context canceled or timed out during %q backup", fe.Name)
 				bh.RecordError(vterrors.Errorf(vtrpc.Code_CANCELED, "context canceled"))
 				return
 			default:
 			}
 
 			if bh.HasErrors() {
+				params.Logger.Infof("failed to backup files due to error.")
 				return
 			}
 
@@ -803,7 +804,7 @@ func (be *BuiltinBackupEngine) executeRestoreFullBackup(ctx context.Context, par
 
 	params.Logger.Infof("Restore: copying %v files", len(bm.FileEntries))
 
-	if _, err := be.restoreFiles(context.Background(), params, bh, bm); err != nil {
+	if _, err := be.restoreFiles(ctx, params, bh, bm); err != nil {
 		// don't delete the file here because that is how we detect an interrupted restore
 		return vterrors.Wrap(err, "failed to restore files")
 	}
@@ -816,7 +817,7 @@ func (be *BuiltinBackupEngine) executeRestoreFullBackup(ctx context.Context, par
 // The underlying mysql database is expected to be up and running.
 func (be *BuiltinBackupEngine) executeRestoreIncrementalBackup(ctx context.Context, params RestoreParams, bh backupstorage.BackupHandle, bm builtinBackupManifest) error {
 	params.Logger.Infof("Restoring incremental backup to position: %v", bm.Position)
-	createdDir, err := be.restoreFiles(context.Background(), params, bh, bm)
+	createdDir, err := be.restoreFiles(ctx, params, bh, bm)
 	defer os.RemoveAll(createdDir)
 	mysqld, ok := params.Mysqld.(*Mysqld)
 	if !ok {
@@ -902,7 +903,7 @@ func (be *BuiltinBackupEngine) restoreFiles(ctx context.Context, params RestoreP
 			// Wait until we are ready to go, return if we encounter an error
 			acqErr := sema.Acquire(ctx, 1)
 			if acqErr != nil {
-				log.Errorf("Unable to acquire semaphore needed to backup file: %s, err: %s", fe.Name, acqErr.Error())
+				log.Errorf("Unable to acquire semaphore needed to restore file: %s, err: %s", fe.Name, acqErr.Error())
 				rec.RecordError(acqErr)
 				return
 			}
@@ -913,13 +914,14 @@ func (be *BuiltinBackupEngine) restoreFiles(ctx context.Context, params RestoreP
 			// unpredictability in my test cases, so in order to avoid that, I am adding this cancellation check.
 			select {
 			case <-ctx.Done():
-				log.Errorf("Context cancelled during %q backup", fe.Name)
-				bh.RecordError(vterrors.Errorf(vtrpc.Code_CANCELED, "context canceled"))
+				log.Errorf("Context canceled or timed out during %q restore", fe.Name)
+				rec.RecordError(vterrors.Errorf(vtrpc.Code_CANCELED, "context canceled"))
 				return
 			default:
 			}
 
 			if rec.HasErrors() {
+				params.Logger.Infof("Failed to restore files due to error.")
 				return
 			}
 

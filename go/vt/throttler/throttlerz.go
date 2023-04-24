@@ -17,10 +17,10 @@ limitations under the License.
 package throttler
 
 import (
-	"html/template"
 	"net/http"
 	"strings"
 
+	"github.com/google/safehtml/template"
 	"golang.org/x/exp/slices"
 
 	"vitess.io/vitess/go/vt/log"

@@ -17,7 +17,6 @@ limitations under the License.
 package servenv
 
 import (
-	"html/template"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -25,6 +24,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/google/safehtml/template"
 	"github.com/stretchr/testify/require"
 )
 

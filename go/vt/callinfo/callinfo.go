@@ -19,9 +19,9 @@ limitations under the License.
 package callinfo
 
 import (
-	"html/template"
-
 	"context"
+
+	"github.com/google/safehtml"
 )
 
 // CallInfo is the extra data stored in the Context
@@ -36,7 +36,7 @@ type CallInfo interface {
 	Text() string
 
 	// HTML represents this rpc call connection in a web-friendly way.
-	HTML() template.HTML
+	HTML() safehtml.HTML
 }
 
 // internal type and value
@@ -57,8 +57,8 @@ func FromContext(ctx context.Context) (CallInfo, bool) {
 
 // HTMLFromContext returns that value of HTML() from the context, or "" if we're
 // not able to recover one
-func HTMLFromContext(ctx context.Context) template.HTML {
-	var h template.HTML
+func HTMLFromContext(ctx context.Context) safehtml.HTML {
+	var h safehtml.HTML
 	ci, ok := FromContext(ctx)
 	if ok {
 		return ci.HTML()

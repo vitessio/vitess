@@ -1,3 +1,5 @@
+//go:build !race
+
 /*
 Copyright 2021 The Vitess Authors.
 

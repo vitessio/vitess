@@ -18,12 +18,12 @@ package throttler
 
 import (
 	"fmt"
-	"html/template"
 	"io"
 	"net/http"
 	"strings"
 	"time"
 
+	"github.com/google/safehtml/template"
 	"golang.org/x/exp/slices"
 
 	"vitess.io/vitess/go/vt/logz"

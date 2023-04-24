@@ -19,6 +19,7 @@ package datetime
 import (
 	"time"
 
+	"vitess.io/vitess/go/mysql/decimal"
 	"vitess.io/vitess/go/vt/vthash"
 )
 
@@ -66,11 +67,30 @@ func (t Time) Format(prec uint8) []byte {
 }
 
 func (t Time) FormatInt64() (n int64) {
-	v := int64(t.Hour())*10000 + int64(t.Minute())*100 + int64(t.Second())
+	tr := t.Round(0)
+	v := int64(tr.Hour())*10000 + int64(tr.Minute())*100 + int64(tr.Second())
 	if t.Neg() {
 		return -v
 	}
 	return v
+}
+
+func (t Time) FormatFloat64() (n float64) {
+	v := float64(t.Hour())*10000 + float64(t.Minute())*100 + float64(t.Second()) + float64(t.Nanosecond())/1e9
+	if t.Neg() {
+		return -v
+	}
+	return v
+}
+
+func (t Time) FormatDecimal() decimal.Decimal {
+	v := int64(t.Hour())*10000 + int64(t.Minute())*100 + int64(t.Second())
+	dec := decimal.NewFromInt(v)
+	dec = dec.Add(decimal.New(int64(t.Nanosecond()), -9))
+	if t.Neg() {
+		dec = dec.Neg()
+	}
+	return dec
 }
 
 func (t Time) ToDateTime() (out DateTime) {
@@ -166,6 +186,8 @@ func (t Time) Compare(t2 Time) int {
 	return 0
 }
 
+var precs = []int{1e9, 1e8, 1e7, 1e6, 1e5, 1e4, 1e3, 1e2, 1e1, 1e0}
+
 func (t Time) Round(p int) (r Time) {
 	if t.nanosecond == 0 {
 		return t
@@ -241,7 +263,7 @@ func (d Date) SundayWeek() (int, int) {
 	// Since the week numbers always start on a Sunday, we can look
 	// at the week number of Sunday itself. So we shift back to last
 	// Sunday we saw and compute the week number based on that.
-	sun := t.Add(-time.Duration(t.Weekday()) * 24 * time.Hour)
+	sun := t.AddDate(0, 0, -int(t.Weekday()))
 	return sun.Year(), (sun.YearDay()-1)/7 + 1
 }
 
@@ -254,7 +276,7 @@ func (d Date) MondayWeek() (int, int) {
 	// at the week number of Monday itself. So we shift back to last
 	// Monday we saw and compute the week number based on that.
 	wd := (t.Weekday() + 6) % 7
-	mon := t.Add(-time.Duration(wd) * 24 * time.Hour)
+	mon := t.AddDate(0, 0, -int(wd))
 	return mon.Year(), (mon.YearDay()-1)/7 + 1
 }
 
@@ -276,9 +298,9 @@ func (d Date) Sunday4DayWeek() (int, int) {
 	case wd == 3:
 		wed = t
 	case wd < 3:
-		wed = t.Add(time.Duration(3-t.Weekday()) * 24 * time.Hour)
+		wed = t.AddDate(0, 0, int(3-t.Weekday()))
 	case wd > 3:
-		wed = t.Add(-time.Duration(t.Weekday()-3) * 24 * time.Hour)
+		wed = t.AddDate(0, 0, -int(t.Weekday()-3))
 	}
 
 	return wed.Year(), (wed.YearDay()-1)/7 + 1
@@ -450,7 +472,16 @@ func (d Date) Compare(d2 Date) int {
 }
 
 func (dt DateTime) FormatInt64() int64 {
-	return dt.Date.FormatInt64()*1000000 + dt.Time.FormatInt64()
+	d := dt.Round(0)
+	return d.Date.FormatInt64()*1000000 + d.Time.FormatInt64()
+}
+
+func (dt DateTime) FormatFloat64() float64 {
+	return float64(dt.Date.FormatInt64()*1000000) + dt.Time.FormatFloat64()
+}
+
+func (dt DateTime) FormatDecimal() decimal.Decimal {
+	return decimal.New(dt.Date.FormatInt64(), 6).Add(dt.Time.FormatDecimal())
 }
 
 func (dt DateTime) Compare(dt2 DateTime) int {

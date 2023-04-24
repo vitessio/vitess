@@ -48,11 +48,22 @@ type (
 		AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr) (Operator, int, error)
 
 		GetColumns() ([]sqlparser.Expr, error)
+
+		Description() OpDescription
 	}
 
 	// PhysicalOperator means that this operator is ready to be turned into a logical plan
 	PhysicalOperator interface {
 		Operator
 		IPhysical()
+	}
+
+	OpDescription struct {
+		OperatorType string
+		Variant      string
+		Other        map[string]any
+
+		// This field will be filled in by the JSON producer. No need to set it manually
+		Inputs []OpDescription
 	}
 )

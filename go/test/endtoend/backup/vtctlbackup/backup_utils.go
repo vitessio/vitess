@@ -751,9 +751,15 @@ func terminatedRestore(t *testing.T) {
 	// previous test to complete (suspicion: MySQL does not fully start)
 	time.Sleep(5 * time.Second)
 
+	checkTabletType(t, replica1.Alias, topodata.TabletType_REPLICA)
+	terminateBackup(t, replica1.Alias)
+	// If backup fails then the tablet type goes back to original type.
+	checkTabletType(t, replica1.Alias, topodata.TabletType_REPLICA)
+
 	// backup the replica
 	err := localCluster.VtctlclientProcess.ExecuteCommand("Backup", replica1.Alias)
 	require.Nil(t, err)
+	checkTabletType(t, replica1.Alias, topodata.TabletType_REPLICA)
 
 	verifyTabletBackupStats(t, replica1.VttabletProcess.GetVars())
 
@@ -771,18 +777,14 @@ func terminatedRestore(t *testing.T) {
 	_, err = replica1.VttabletProcess.QueryTablet("insert into vt_insert_test (msg) values ('test3')", keyspaceName, true)
 	require.Nil(t, err)
 
+	checkTabletType(t, primary.Alias, topodata.TabletType_REPLICA)
 	terminateRestore(t)
+	// If restore fails then the tablet type goes back to original type.
+	checkTabletType(t, primary.Alias, topodata.TabletType_REPLICA)
 
 	err = localCluster.VtctlclientProcess.ExecuteCommand("RestoreFromBackup", primary.Alias)
 	require.Nil(t, err)
-
-	output, err := localCluster.VtctlclientProcess.ExecuteCommandWithOutput("GetTablet", primary.Alias)
-	require.Nil(t, err)
-
-	var tabletPB topodata.Tablet
-	err = json.Unmarshal([]byte(output), &tabletPB)
-	require.Nil(t, err)
-	assert.Equal(t, tabletPB.Type, topodata.TabletType_REPLICA)
+	checkTabletType(t, primary.Alias, topodata.TabletType_REPLICA)
 
 	_, err = os.Stat(path.Join(primary.VttabletProcess.Directory, "restore_in_progress"))
 	assert.True(t, os.IsNotExist(err))
@@ -792,6 +794,22 @@ func terminatedRestore(t *testing.T) {
 	verifyTabletRestoreStats(t, primary.VttabletProcess.GetVars())
 
 	stopAllTablets()
+}
+
+func checkTabletType(t *testing.T, alias string, tabletType topodata.TabletType) {
+	// for loop for 15 seconds to check if tablet type is correct
+	for i := 0; i < 15; i++ {
+		output, err := localCluster.VtctlclientProcess.ExecuteCommandWithOutput("GetTablet", alias)
+		require.Nil(t, err)
+		var tabletPB topodata.Tablet
+		err = json.Unmarshal([]byte(output), &tabletPB)
+		require.Nil(t, err)
+		if tabletType == tabletPB.Type {
+			return
+		}
+		time.Sleep(1 * time.Second)
+	}
+	require.Failf(t, "checkTabletType failed.", "Tablet type is not correct. Expected: %v", tabletType)
 }
 
 // test_backup will:
@@ -925,6 +943,40 @@ func verifySemiSyncStatus(t *testing.T, vttablet *cluster.Vttablet, expectedStat
 	status, err = vttablet.VttabletProcess.GetDBStatus("rpl_semi_sync_slave_status", keyspaceName)
 	require.Nil(t, err)
 	assert.Equal(t, status, expectedStatus)
+}
+
+func terminateBackup(t *testing.T, alias string) {
+	stopBackupMsg := "Done taking Backup"
+	if useXtrabackup {
+		stopBackupMsg = "Starting backup with"
+		useXtrabackup = false
+		defer func() {
+			useXtrabackup = true
+		}()
+	}
+
+	args := append([]string{"--server", localCluster.VtctlclientProcess.Server, "--alsologtostderr"}, "Backup", "--", alias)
+	tmpProcess := exec.Command(
+		"vtctlclient",
+		args...,
+	)
+
+	reader, _ := tmpProcess.StderrPipe()
+	err := tmpProcess.Start()
+	require.Nil(t, err)
+	found := false
+
+	scanner := bufio.NewScanner(reader)
+
+	for scanner.Scan() {
+		text := scanner.Text()
+		if strings.Contains(text, stopBackupMsg) {
+			tmpProcess.Process.Signal(syscall.SIGTERM)
+			found = true //nolint
+			return
+		}
+	}
+	assert.True(t, found, "backup message not found")
 }
 
 func terminateRestore(t *testing.T) {

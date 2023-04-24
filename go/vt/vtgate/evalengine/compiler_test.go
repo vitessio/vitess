@@ -334,8 +334,19 @@ func TestCompilerSingle(t *testing.T) {
 			result:     `INT64(0)`,
 		},
 		{
-			expression: `WEEK(date '2023-04-11', 6)`,
-			result:     `INT64(15)`,
+			// This is the day of DST change in Europe/Amsterdam when
+			// the year started on a Wednesday. Regression test for
+			// using 24 hour time diffing instead of days.
+			expression: `WEEK(date '2014-10-26', 6)`,
+			result:     `INT64(44)`,
+		},
+		{
+			expression: `MAKEDATE(cast('invalid' as json), NULL)`,
+			result:     `NULL`,
+		},
+		{
+			expression: `MAKETIME(NULL, '', cast('invalid' as json))`,
+			result:     `NULL`,
 		},
 	}
 

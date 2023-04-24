@@ -145,3 +145,7 @@ func (v *Vindex) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.E
 func (v *Vindex) TablesUsed() []string {
 	return []string{v.Table.Table.Name.String()}
 }
+
+func (v *Vindex) Description() ops.OpDescription {
+	return ops.OpDescription{OperatorType: "Vindex"}
+}

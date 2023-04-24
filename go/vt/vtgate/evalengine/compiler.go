@@ -76,7 +76,7 @@ func (c *compiler) compile(expr Expr) (ctype, error) {
 	return ct, nil
 }
 
-func (c *compiler) compileToNumeric(ct ctype, offset int, fallback sqltypes.Type) ctype {
+func (c *compiler) compileToNumeric(ct ctype, offset int, fallback sqltypes.Type, preciseDatetime bool) ctype {
 	if sqltypes.IsNumber(ct.Type) {
 		return ct
 	}
@@ -86,8 +86,12 @@ func (c *compiler) compileToNumeric(ct ctype, offset int, fallback sqltypes.Type
 	}
 
 	if sqltypes.IsDateOrTime(ct.Type) {
-		c.asm.Convert_Ti(offset)
-		return ctype{sqltypes.Int64, ct.Flag, collationNumeric}
+		if preciseDatetime {
+			c.asm.Convert_Ti(offset)
+			return ctype{sqltypes.Int64, ct.Flag, collationNumeric}
+		}
+		c.asm.Convert_Tf(offset)
+		return ctype{sqltypes.Float64, ct.Flag, collationNumeric}
 	}
 
 	switch fallback {
