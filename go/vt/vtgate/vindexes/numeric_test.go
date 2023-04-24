@@ -32,7 +32,13 @@ import (
 var numeric SingleColumn
 
 func init() {
-	vindex, _, _ := CreateVindex("numeric", "num", nil)
+	vindex, warnings, err := CreateVindex("numeric", "num", nil)
+	if err != nil {
+		panic(err)
+	}
+	if len(warnings) > 0 {
+		panic("numeric test init: expected 0 warnings")
+	}
 	numeric = vindex.(SingleColumn)
 }
 

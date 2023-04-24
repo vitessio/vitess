@@ -30,7 +30,13 @@ import (
 var charVindexXXHash SingleColumn
 
 func init() {
-	vindex, _, _ := CreateVindex("unicode_loose_xxhash", "utf8ch", nil)
+	vindex, warnings, err := CreateVindex("unicode_loose_xxhash", "utf8ch", nil)
+	if err != nil {
+		panic(err)
+	}
+	if len(warnings) > 0 {
+		panic("unicode_loose_xxhash test init: expected 0 warnings")
+	}
 	charVindexXXHash = vindex.(SingleColumn)
 }
 

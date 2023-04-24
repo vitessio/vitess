@@ -35,7 +35,13 @@ import (
 var binOnlyVindex SingleColumn
 
 func init() {
-	vindex, _, _ := CreateVindex("binary", "binary_varchar", nil)
+	vindex, warnings, err := CreateVindex("binary", "binary_varchar", nil)
+	if err != nil {
+		panic(err)
+	}
+	if len(warnings) > 0 {
+		panic("binary test init: expected 0 warnings")
+	}
 	binOnlyVindex = vindex.(SingleColumn)
 }
 

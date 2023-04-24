@@ -34,7 +34,13 @@ import (
 var binVindex SingleColumn
 
 func init() {
-	vindex, _, _ := CreateVindex("binary_md5", "binary_md5_varchar", nil)
+	vindex, warnings, err := CreateVindex("binary_md5", "binary_md5_varchar", nil)
+	if err != nil {
+		panic(err)
+	}
+	if len(warnings) > 0 {
+		panic("binary_md5 test init: expected 0 warnings")
+	}
 	binVindex = vindex.(SingleColumn)
 }
 

@@ -30,7 +30,13 @@ import (
 var charVindexMD5 SingleColumn
 
 func init() {
-	vindex, _, _ := CreateVindex("unicode_loose_md5", "utf8ch", nil)
+	vindex, warnings, err := CreateVindex("unicode_loose_md5", "utf8ch", nil)
+	if err != nil {
+		panic(err)
+	}
+	if len(warnings) > 0 {
+		panic("unicode_loose_md5 test init: expected 0 warnings")
+	}
 	charVindexMD5 = vindex.(SingleColumn)
 }
 
