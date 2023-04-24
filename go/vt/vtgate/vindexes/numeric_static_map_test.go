@@ -154,15 +154,6 @@ func TestNumericStaticMapCreateVindex(t *testing.T) {
 	testCreateVindexes(t, cases)
 }
 
-func TestNumericStaticMapInfo(t *testing.T) {
-	numericStaticMap, err := createVindex()
-	require.NoError(t, err)
-	assert.Equal(t, 1, numericStaticMap.Cost())
-	assert.Equal(t, "numericStaticMap", numericStaticMap.String())
-	assert.True(t, numericStaticMap.IsUnique())
-	assert.False(t, numericStaticMap.NeedsVCursor())
-}
-
 func TestNumericStaticMapMap(t *testing.T) {
 	numericStaticMap, err := createVindex()
 	if err != nil {

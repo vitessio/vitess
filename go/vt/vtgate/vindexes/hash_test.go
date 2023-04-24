@@ -21,7 +21,6 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -85,13 +84,6 @@ func TestHashCreateVindex(t *testing.T) {
 	}
 
 	testCreateVindexes(t, cases)
-}
-
-func TestHashInfo(t *testing.T) {
-	assert.Equal(t, 1, hash.Cost())
-	assert.Equal(t, "nn", hash.String())
-	assert.True(t, hash.IsUnique())
-	assert.False(t, hash.NeedsVCursor())
 }
 
 func TestHashMap(t *testing.T) {

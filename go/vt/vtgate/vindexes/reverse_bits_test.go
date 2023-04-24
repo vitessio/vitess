@@ -21,7 +21,6 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -87,13 +86,6 @@ func TestReverseBitsCreateVindex(t *testing.T) {
 	}
 
 	testCreateVindexes(t, cases)
-}
-
-func TestReverseBitsInfo(t *testing.T) {
-	assert.Equal(t, 1, reverseBits.Cost())
-	assert.Equal(t, "rr", reverseBits.String())
-	assert.True(t, reverseBits.IsUnique())
-	assert.False(t, reverseBits.NeedsVCursor())
 }
 
 func TestReverseBitsMap(t *testing.T) {

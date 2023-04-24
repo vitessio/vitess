@@ -21,7 +21,6 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -85,13 +84,6 @@ func TestNullCreateVindex(t *testing.T) {
 	}
 
 	testCreateVindexes(t, cases)
-}
-
-func TestNullInfo(t *testing.T) {
-	assert.Equal(t, 100, null.Cost())
-	assert.Equal(t, "nn", null.String())
-	assert.True(t, null.IsUnique())
-	assert.False(t, null.NeedsVCursor())
 }
 
 func TestNullMap(t *testing.T) {

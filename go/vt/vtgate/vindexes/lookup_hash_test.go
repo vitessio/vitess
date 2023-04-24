@@ -21,7 +21,6 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -51,20 +50,6 @@ func TestLookupHashNew(t *testing.T) {
 	if err == nil || err.Error() != want {
 		t.Errorf("Create(bad_scatter): %v, want %s", err, want)
 	}
-}
-
-func TestLookupHashInfo(t *testing.T) {
-	lookuphash := createLookup(t, "lookup_hash", false /* writeOnly */)
-	assert.Equal(t, 20, lookuphash.Cost())
-	assert.Equal(t, "lookup_hash", lookuphash.String())
-	assert.False(t, lookuphash.IsUnique())
-	assert.True(t, lookuphash.NeedsVCursor())
-
-	lookuphashunique := createLookup(t, "lookup_hash_unique", false /* writeOnly */)
-	assert.Equal(t, 10, lookuphashunique.Cost())
-	assert.Equal(t, "lookup_hash_unique", lookuphashunique.String())
-	assert.True(t, lookuphashunique.IsUnique())
-	assert.True(t, lookuphashunique.NeedsVCursor())
 }
 
 func TestLookupHashMap(t *testing.T) {

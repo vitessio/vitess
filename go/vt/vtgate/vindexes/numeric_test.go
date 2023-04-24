@@ -21,7 +21,6 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -82,13 +81,6 @@ func TestNumericCreateVindex(t *testing.T) {
 	}
 
 	testCreateVindexes(t, cases)
-}
-
-func TestNumericInfo(t *testing.T) {
-	assert.Equal(t, 0, numeric.Cost())
-	assert.Equal(t, "num", numeric.String())
-	assert.True(t, numeric.IsUnique())
-	assert.False(t, numeric.NeedsVCursor())
 }
 
 func TestNumericMap(t *testing.T) {

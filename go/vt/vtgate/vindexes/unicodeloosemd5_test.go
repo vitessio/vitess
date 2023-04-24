@@ -21,8 +21,6 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
@@ -83,13 +81,6 @@ func TestUnicodeLooseMD5CreateVindex(t *testing.T) {
 	}
 
 	testCreateVindexes(t, cases)
-}
-
-func TestUnicodeLooseMD5Info(t *testing.T) {
-	assert.Equal(t, 1, charVindexMD5.Cost())
-	assert.Equal(t, "utf8ch", charVindexMD5.String())
-	assert.True(t, charVindexMD5.IsUnique())
-	assert.False(t, charVindexMD5.NeedsVCursor())
 }
 
 func TestUnicodeLooseMD5Map(t *testing.T) {

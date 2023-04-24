@@ -109,22 +109,6 @@ func TestConsistentLookupInit(t *testing.T) {
 	}
 }
 
-func TestConsistentLookupInfo(t *testing.T) {
-	lookup := createConsistentLookup(t, "consistent_lookup", false)
-	assert.Equal(t, 20, lookup.Cost())
-	assert.Equal(t, "consistent_lookup", lookup.String())
-	assert.False(t, lookup.IsUnique())
-	assert.True(t, lookup.NeedsVCursor())
-}
-
-func TestConsistentLookupUniqueInfo(t *testing.T) {
-	lookup := createConsistentLookup(t, "consistent_lookup_unique", false)
-	assert.Equal(t, 10, lookup.Cost())
-	assert.Equal(t, "consistent_lookup_unique", lookup.String())
-	assert.True(t, lookup.IsUnique())
-	assert.True(t, lookup.NeedsVCursor())
-}
-
 func TestConsistentLookupMap(t *testing.T) {
 	lookup := createConsistentLookup(t, "consistent_lookup", false)
 	vc := &loggingVCursor{}

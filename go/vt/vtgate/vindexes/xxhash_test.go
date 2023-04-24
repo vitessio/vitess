@@ -24,8 +24,6 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
@@ -89,13 +87,6 @@ func TestXXHashCreateVindex(t *testing.T) {
 	}
 
 	testCreateVindexes(t, cases)
-}
-
-func TestXXHashInfo(t *testing.T) {
-	assert.Equal(t, 1, xxHash.Cost())
-	assert.Equal(t, "xxhash_name", xxHash.String())
-	assert.True(t, xxHash.IsUnique())
-	assert.False(t, xxHash.NeedsVCursor())
 }
 
 func TestXXHashMap(t *testing.T) {

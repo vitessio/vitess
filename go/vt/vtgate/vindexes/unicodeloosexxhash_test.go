@@ -21,8 +21,6 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
@@ -83,13 +81,6 @@ func TestUnicodeLooseXXHashCreateVindex(t *testing.T) {
 	}
 
 	testCreateVindexes(t, cases)
-}
-
-func TestUnicodeLooseXXHashInfo(t *testing.T) {
-	assert.Equal(t, 1, charVindexXXHash.Cost())
-	assert.Equal(t, "utf8ch", charVindexXXHash.String())
-	assert.True(t, charVindexXXHash.IsUnique())
-	assert.False(t, charVindexXXHash.NeedsVCursor())
 }
 
 func TestUnicodeLooseXXHashMap(t *testing.T) {

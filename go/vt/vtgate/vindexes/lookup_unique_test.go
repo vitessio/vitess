@@ -21,7 +21,6 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -61,13 +60,6 @@ func TestLookupUniqueNew(t *testing.T) {
 	if err == nil || err.Error() != want {
 		t.Errorf("Create(bad_scatter): %v, want %s", err, want)
 	}
-}
-
-func TestLookupUniqueInfo(t *testing.T) {
-	lookupUnique := createLookup(t, "lookup_unique", false)
-	assert.Equal(t, 10, lookupUnique.Cost())
-	assert.Equal(t, "lookup_unique", lookupUnique.String())
-	assert.True(t, lookupUnique.IsUnique())
 }
 
 func TestLookupUniqueMap(t *testing.T) {

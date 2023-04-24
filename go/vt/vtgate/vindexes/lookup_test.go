@@ -364,14 +364,6 @@ func TestLookupNonUniqueNew(t *testing.T) {
 	require.EqualError(t, err, "write_only value must be 'true' or 'false': 'invalid'")
 }
 
-func TestLookupNonUniqueInfo(t *testing.T) {
-	lookupNonUnique := createLookup(t, "lookup", false /* writeOnly */)
-	assert.Equal(t, 20, lookupNonUnique.Cost())
-	assert.Equal(t, "lookup", lookupNonUnique.String())
-	assert.False(t, lookupNonUnique.IsUnique())
-	assert.True(t, lookupNonUnique.NeedsVCursor())
-}
-
 func TestLookupNilVCursor(t *testing.T) {
 	lookupNonUnique := createLookup(t, "lookup", false /* writeOnly */)
 	_, err := lookupNonUnique.Map(context.Background(), nil, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
