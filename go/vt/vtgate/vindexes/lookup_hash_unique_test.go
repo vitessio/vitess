@@ -28,6 +28,32 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
+func lookupHashUniqueCreateVindexTestCase(
+	testName string,
+	vindexParams map[string]string,
+	expectErr error,
+	expectWarnings []VindexWarning,
+) createVindexTestCase {
+	return createVindexTestCase{
+		testName: testName,
+
+		vindexType:   "lookup_hash_unique",
+		vindexName:   "lookup_hash_unique",
+		vindexParams: vindexParams,
+
+		expectCost:         10,
+		expectErr:          expectErr,
+		expectIsUnique:     true,
+		expectNeedsVCursor: true,
+		expectString:       "lookup_hash_unique",
+		expectWarnings:     expectWarnings,
+	}
+}
+
+func TestLookupHashUniqueCreateVindex(t *testing.T) {
+	testLookupCreateVindexCommonCases(t, lookupHashUniqueCreateVindexTestCase)
+}
+
 func TestLookupHashUniqueNew(t *testing.T) {
 	l := createLookup(t, "lookup_hash_unique", false /* writeOnly */)
 	if want, got := l.(*LookupHashUnique).writeOnly, false; got != want {
