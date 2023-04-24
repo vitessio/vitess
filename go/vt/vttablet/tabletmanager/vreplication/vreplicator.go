@@ -198,8 +198,8 @@ func (vr *vreplicator) Replicate(ctx context.Context) error {
 // "minimal" will result in a lot of edge cases which will not work, in Online DDL and Materialize. We will be
 // soon supporting MySQL binlog compression which should provide some benefits similar to "minimal" in terms of storage
 // and performance.
-// To start with, we only allow "noblob" for MoveTables and Reshard. We need to identify edge cases for other workflow
-// types like Online DDL and Materialize and add validations before we open it up for all workflow types.
+// To start with, we only allow "noblob" for MoveTables, Reshard and Online DDL. We need to identify edge cases for
+// other workflow types like Materialize and add validations before we open it up for all workflow types.
 func (vr *vreplicator) validateBinlogRowImage() error {
 	rs, err := vr.dbClient.Execute("select @@binlog_row_image")
 	if err != nil {
@@ -211,17 +211,20 @@ func (vr *vreplicator) validateBinlogRowImage() error {
 
 	binlogRowImage := strings.ToLower(rs.Rows[0][0].ToString())
 	switch binlogRowImage {
-	case "minimal":
-		return vterrors.New(vtrpcpb.Code_INTERNAL, "minimal binlog_row_image is not supported by Vitess VReplication")
+	case "full":
 	case "noblob":
 		switch binlogdatapb.VReplicationWorkflowType(vr.WorkflowType) {
-		case binlogdatapb.VReplicationWorkflowType_MoveTables, binlogdatapb.VReplicationWorkflowType_Reshard:
+		case binlogdatapb.VReplicationWorkflowType_MoveTables,
+			binlogdatapb.VReplicationWorkflowType_Reshard,
+			binlogdatapb.VReplicationWorkflowType_OnlineDDL:
 		case 0:
 		// used in unit tests only
 		default:
-			return vterrors.New(vtrpcpb.Code_INTERNAL, "noblob binlog_row_image is only supported for MoveTables/Reshard")
+			return vterrors.New(vtrpcpb.Code_INTERNAL,
+				fmt.Sprintf("noblob binlog_row_image is not supported for %s", binlogdatapb.VReplicationWorkflowType_name[vr.WorkflowType]))
 		}
 	default:
+		return vterrors.New(vtrpcpb.Code_INTERNAL, fmt.Sprintf("%s binlog_row_image is not supported by Vitess VReplication", binlogRowImage))
 	}
 	return nil
 }

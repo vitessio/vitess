@@ -406,15 +406,15 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 		if tp.isOutsidePKRange(bindvars, before, after, "insert") {
 			return nil, nil
 		}
-		if !tp.isPartial(rowChange) {
-			return execParsedQuery(tp.Insert, bindvars, executor)
-		} else {
+		if tp.isPartial(rowChange) {
 			ins, err := tp.getPartialInsertQuery(rowChange.DataColumns)
 			if err != nil {
 				return nil, err
 			}
 			tp.Stats.PartialQueryCount.Add([]string{"insert"}, 1)
 			return execParsedQuery(ins, bindvars, executor)
+		} else {
+			return execParsedQuery(tp.Insert, bindvars, executor)
 		}
 	case before && !after:
 		if tp.Delete == nil {
@@ -423,15 +423,15 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 		return execParsedQuery(tp.Delete, bindvars, executor)
 	case before && after:
 		if !tp.pkChanged(bindvars) && !tp.HasExtraSourcePkColumns {
-			if !tp.isPartial(rowChange) {
-				return execParsedQuery(tp.Update, bindvars, executor)
-			} else {
+			if tp.isPartial(rowChange) {
 				upd, err := tp.getPartialUpdateQuery(rowChange.DataColumns)
 				if err != nil {
 					return nil, err
 				}
 				tp.Stats.PartialQueryCount.Add([]string{"update"}, 1)
 				return execParsedQuery(upd, bindvars, executor)
+			} else {
+				return execParsedQuery(tp.Update, bindvars, executor)
 			}
 		}
 		if tp.Delete != nil {

@@ -86,7 +86,7 @@ func TestNoBlob(t *testing.T) {
 	defer newEngine(t, "full")
 	execStatements(t, []string{
 		"create table t1(id int, blb blob, val varchar(4), primary key(id))",
-		"create table t2(id int, txt text, val varchar(4), primary key(id))",
+		"create table t2(id int, txt text, val varchar(4), unique key(id, val))",
 	})
 	defer execStatements(t, []string{
 		"drop table t1",
@@ -136,7 +136,7 @@ func TestNoBlob(t *testing.T) {
 			"begin",
 			fe2.String(),
 			`type:ROW row_event:{table_name:"t2" row_changes:{after:{lengths:1 lengths:5 lengths:3 values:"1text1aaa"}}}`,
-			`type:ROW row_event:{table_name:"t2" row_changes:{before:{lengths:1 lengths:-1 lengths:3 values:"1aaa"} after:{lengths:1 lengths:-1 lengths:3 values:"1bbb"} data_columns:{count:3 cols:"\x05"}}}`,
+			`type:ROW row_event:{table_name:"t2" row_changes:{before:{lengths:1 lengths:5 lengths:3 values:"1text1aaa"} after:{lengths:1 lengths:-1 lengths:3 values:"1bbb"} data_columns:{count:3 cols:"\x05"}}}`,
 			"gtid",
 			"commit",
 		}},
