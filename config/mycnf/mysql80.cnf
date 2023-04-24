@@ -7,7 +7,6 @@ gtid_mode = ON
 enforce_gtid_consistency
 relay_log_recovery = 1
 binlog_expire_logs_seconds = 259200
-binlog-transaction-compression = ON
 
 # disable mysqlx
 mysqlx = 0

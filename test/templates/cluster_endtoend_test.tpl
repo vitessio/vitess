@@ -178,6 +178,12 @@ jobs:
         EOF
         {{end}}
 
+        {{if .EnableBinlogTransactionCompression}}
+        cat <<-EOF>>./config/mycnf/mysql80.cnf
+        binlog-transaction-compression=ON
+        EOF
+        {{end}}
+
         # run the tests however you normally do, then produce a JUnit XML file
         eatmydata -- go run test.go -docker={{if .Docker}}true -flavor={{.Platform}}{{else}}false{{end}} -follow -shard {{.Shard}}{{if .PartialKeyspace}} -partial-keyspace=true {{end}} | tee -a output.txt | go-junit-report -set-exit-code > report.xml
 
