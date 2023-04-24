@@ -63,6 +63,11 @@ func (s *SubQueryInner) Inputs() []ops.Operator {
 	return []ops.Operator{s.Inner}
 }
 
+// SetInputs implements the Operator interface
+func (s *SubQueryInner) SetInputs(ops []ops.Operator) {
+	s.Inner = ops[0]
+}
+
 // Clone implements the Operator interface
 func (s *SubQuery) Clone(inputs []ops.Operator) ops.Operator {
 	result := &SubQuery{
@@ -87,6 +92,11 @@ func (s *SubQuery) Inputs() []ops.Operator {
 	return operators
 }
 
+// SetInputs implements the Operator interface
+func (s *SubQuery) SetInputs(ops []ops.Operator) {
+	s.Outer = ops[0]
+}
+
 func createSubqueryFromStatement(ctx *plancontext.PlanningContext, stmt sqlparser.Statement) (*SubQuery, error) {
 	if len(ctx.SemTable.SubqueryMap[stmt]) == 0 {
 		return nil, nil
@@ -107,4 +117,15 @@ func createSubqueryFromStatement(ctx *plancontext.PlanningContext, stmt sqlparse
 		})
 	}
 	return subq, nil
+}
+
+func (s *SubQuery) Description() ops.OpDescription {
+	return ops.OpDescription{
+		OperatorType: "SubQuery",
+	}
+}
+func (s *SubQueryInner) Description() ops.OpDescription {
+	return ops.OpDescription{
+		OperatorType: "SubQueryInner",
+	}
 }

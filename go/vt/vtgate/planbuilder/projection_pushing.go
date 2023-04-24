@@ -207,22 +207,22 @@ func pushProjectionIntoJoin(
 			return 0, false, vterrors.VT12001("cross-shard query with aggregates")
 		}
 		// now we break the expression into left and right side dependencies and rewrite the left ones to bind variables
-		bvName, cols, rewrittenExpr, err := operators.BreakExpressionInLHSandRHS(ctx, expr.Expr, lhsSolves)
+		joinCol, err := operators.BreakExpressionInLHSandRHS(ctx, expr.Expr, lhsSolves)
 		if err != nil {
 			return 0, false, err
 		}
 		// go over all the columns coming from the left side of the tree and push them down. While at it, also update the bind variable map.
 		// It is okay to reuse the columns on the left side since
 		// the final expression which will be selected will be pushed into the right side.
-		for i, col := range cols {
+		for i, col := range joinCol.LHSExprs {
 			colOffset, _, err := pushProjection(ctx, &sqlparser.AliasedExpr{Expr: col}, node.Left, inner, true, false)
 			if err != nil {
 				return 0, false, err
 			}
-			node.Vars[bvName[i]] = colOffset
+			node.Vars[joinCol.BvNames[i]] = colOffset
 		}
 		// push the rewritten expression on the right side of the tree. Here we should take care whether we want to reuse the expression or not.
-		expr.Expr = rewrittenExpr
+		expr.Expr = joinCol.RHSExpr
 		offset, added, err := pushProjection(ctx, expr, node.Right, inner && node.Opcode != engine.LeftJoin, passDownReuseCol, false)
 		if err != nil {
 			return 0, false, err

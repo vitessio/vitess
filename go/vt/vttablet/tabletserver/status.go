@@ -36,7 +36,7 @@ const (
 	unhappyClass   = "unhappy"
 )
 
-var (
+const (
 	// This template is a slight duplicate of the one in go/cmd/vttablet/status.go.
 	headerTemplate = `
 <style>

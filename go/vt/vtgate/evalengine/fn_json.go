@@ -19,6 +19,7 @@ package evalengine
 import (
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/json"
+	"vitess.io/vitess/go/slices2"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -124,6 +125,35 @@ func (call *builtinJSONExtract) typeof(env *ExpressionEnv, fields []*querypb.Fie
 	return sqltypes.TypeJSON, f
 }
 
+func (call *builtinJSONExtract) compile(c *compiler) (ctype, error) {
+	doct, err := call.Arguments[0].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	if slices2.All(call.Arguments[1:], func(expr Expr) bool { return expr.constant() }) {
+		paths := make([]*json.Path, 0, len(call.Arguments[1:]))
+
+		for _, arg := range call.Arguments[1:] {
+			jp, err := c.jsonExtractPath(arg)
+			if err != nil {
+				return ctype{}, err
+			}
+			paths = append(paths, jp)
+		}
+
+		jt, err := c.compileParseJSON("JSON_EXTRACT", doct, 1)
+		if err != nil {
+			return ctype{}, err
+		}
+
+		c.asm.Fn_JSON_EXTRACT0(paths)
+		return jt, nil
+	}
+
+	return ctype{}, c.unsupported(call)
+}
+
 func (call *builtinJSONUnquote) eval(env *ExpressionEnv) (eval, error) {
 	arg, err := call.arg1(env)
 	if err != nil {
@@ -145,6 +175,23 @@ func (call *builtinJSONUnquote) eval(env *ExpressionEnv) (eval, error) {
 func (call *builtinJSONUnquote) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
 	_, f := call.Arguments[0].typeof(env, fields)
 	return sqltypes.Blob, f
+}
+
+func (call *builtinJSONUnquote) compile(c *compiler) (ctype, error) {
+	arg, err := call.Arguments[0].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip := c.compileNullCheck1(arg)
+	_, err = c.compileParseJSON("JSON_UNQUOTE", arg, 1)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	c.asm.Fn_JSON_UNQUOTE()
+	c.asm.jumpDestination(skip)
+	return ctype{Type: sqltypes.Blob, Flag: flagNullable, Col: collationJSON}, nil
 }
 
 var errJSONKeyIsNil = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "JSON documents may not contain NULL member names.")
@@ -182,6 +229,28 @@ func (call *builtinJSONObject) typeof(env *ExpressionEnv, fields []*querypb.Fiel
 	return sqltypes.TypeJSON, 0
 }
 
+func (call *builtinJSONObject) compile(c *compiler) (ctype, error) {
+	for i := 0; i < len(call.Arguments); i += 2 {
+		key, err := call.Arguments[i].compile(c)
+		if err != nil {
+			return ctype{}, err
+		}
+		if err := c.compileToJSONKey(key); err != nil {
+			return ctype{}, err
+		}
+		val, err := call.Arguments[i+1].compile(c)
+		if err != nil {
+			return ctype{}, err
+		}
+		_, err = c.compileArgToJSON(val, 1)
+		if err != nil {
+			return ctype{}, err
+		}
+	}
+	c.asm.Fn_JSON_OBJECT(len(call.Arguments))
+	return ctype{Type: sqltypes.TypeJSON, Col: collationJSON}, nil
+}
+
 func (call *builtinJSONArray) eval(env *ExpressionEnv) (eval, error) {
 	ary := make([]*json.Value, 0, len(call.Arguments))
 	for _, arg := range call.Arguments {
@@ -202,6 +271,22 @@ func (call *builtinJSONArray) typeof(env *ExpressionEnv, fields []*querypb.Field
 	return sqltypes.TypeJSON, 0
 }
 
+func (call *builtinJSONArray) compile(c *compiler) (ctype, error) {
+	for _, arg := range call.Arguments {
+		tt, err := arg.compile(c)
+		if err != nil {
+			return ctype{}, err
+		}
+
+		_, err = c.compileArgToJSON(tt, 1)
+		if err != nil {
+			return ctype{}, err
+		}
+	}
+	c.asm.Fn_JSON_ARRAY(len(call.Arguments))
+	return ctype{Type: sqltypes.TypeJSON, Col: collationJSON}, nil
+}
+
 func (call *builtinJSONDepth) eval(env *ExpressionEnv) (eval, error) {
 	arg, err := call.arg1(env)
 	if err != nil {
@@ -220,6 +305,10 @@ func (call *builtinJSONDepth) eval(env *ExpressionEnv) (eval, error) {
 func (call *builtinJSONDepth) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
 	_, f := call.Arguments[0].typeof(env, fields)
 	return sqltypes.Int64, f
+}
+
+func (call *builtinJSONDepth) compile(c *compiler) (ctype, error) {
+	return ctype{}, c.unsupported(call)
 }
 
 func (call *builtinJSONLength) eval(env *ExpressionEnv) (eval, error) {
@@ -265,6 +354,10 @@ func (call *builtinJSONLength) typeof(env *ExpressionEnv, fields []*querypb.Fiel
 	return sqltypes.Int64, f
 }
 
+func (call *builtinJSONLength) compile(c *compiler) (ctype, error) {
+	return ctype{}, c.unsupported(call)
+}
+
 func (call *builtinJSONContainsPath) eval(env *ExpressionEnv) (eval, error) {
 	args, err := call.args(env)
 	if err != nil {
@@ -301,6 +394,44 @@ func (call *builtinJSONContainsPath) eval(env *ExpressionEnv) (eval, error) {
 		}
 	}
 	return newEvalBool(match == jsonMatchAll), nil
+}
+
+func (call *builtinJSONContainsPath) compile(c *compiler) (ctype, error) {
+	doct, err := call.Arguments[0].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	if !call.Arguments[1].constant() {
+		return ctype{}, c.unsupported(call)
+	}
+
+	if !slices2.All(call.Arguments[2:], func(expr Expr) bool { return expr.constant() }) {
+		return ctype{}, c.unsupported(call)
+	}
+
+	match, err := c.jsonExtractOneOrAll("JSON_CONTAINS_PATH", call.Arguments[1])
+	if err != nil {
+		return ctype{}, err
+	}
+
+	paths := make([]*json.Path, 0, len(call.Arguments[2:]))
+
+	for _, arg := range call.Arguments[2:] {
+		jp, err := c.jsonExtractPath(arg)
+		if err != nil {
+			return ctype{}, err
+		}
+		paths = append(paths, jp)
+	}
+
+	_, err = c.compileParseJSON("JSON_CONTAINS_PATH", doct, 1)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	c.asm.Fn_JSON_CONTAINS_PATH(match, paths)
+	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: flagIsBoolean}, nil
 }
 
 type jsonMatch int8
@@ -392,4 +523,30 @@ func (call *builtinJSONKeys) eval(env *ExpressionEnv) (eval, error) {
 func (call *builtinJSONKeys) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
 	_, f := call.Arguments[0].typeof(env, fields)
 	return sqltypes.TypeJSON, f | flagNullable
+}
+
+func (call *builtinJSONKeys) compile(c *compiler) (ctype, error) {
+	doc, err := call.Arguments[0].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	_, err = c.compileParseJSON("JSON_KEYS", doc, 1)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	var jp *json.Path
+	if len(call.Arguments) == 2 {
+		jp, err = c.jsonExtractPath(call.Arguments[1])
+		if err != nil {
+			return ctype{}, err
+		}
+		if jp.ContainsWildcards() {
+			return ctype{}, errInvalidPathForTransform
+		}
+	}
+
+	c.asm.Fn_JSON_KEYS(jp)
+	return ctype{Type: sqltypes.TypeJSON, Flag: flagNullable, Col: collationJSON}, nil
 }

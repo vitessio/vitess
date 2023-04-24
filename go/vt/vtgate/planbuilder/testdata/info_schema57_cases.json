@@ -1035,9 +1035,9 @@
       "Instructions": {
         "OperatorType": "Join",
         "Variant": "Join",
-        "JoinColumnIndexes": "L:1",
+        "JoinColumnIndexes": "L:0",
         "JoinVars": {
-          "x_COLUMN_NAME": 0
+          "x_COLUMN_NAME": 1
         },
         "TableName": "information_schema.key_column_usage_`user`",
         "Inputs": [
@@ -1048,8 +1048,8 @@
               "Name": "main",
               "Sharded": false
             },
-            "FieldQuery": "select x.COLUMN_NAME, x.table_name from (select a.CONSTRAINT_CATALOG, a.CONSTRAINT_SCHEMA, a.CONSTRAINT_NAME, a.TABLE_CATALOG, a.TABLE_SCHEMA, a.TABLE_NAME, a.COLUMN_NAME, a.ORDINAL_POSITION, a.POSITION_IN_UNIQUE_CONSTRAINT, a.REFERENCED_TABLE_SCHEMA, a.REFERENCED_TABLE_NAME, a.REFERENCED_COLUMN_NAME from information_schema.key_column_usage as a where 1 != 1) as x where 1 != 1",
-            "Query": "select x.COLUMN_NAME, x.table_name from (select a.CONSTRAINT_CATALOG, a.CONSTRAINT_SCHEMA, a.CONSTRAINT_NAME, a.TABLE_CATALOG, a.TABLE_SCHEMA, a.TABLE_NAME, a.COLUMN_NAME, a.ORDINAL_POSITION, a.POSITION_IN_UNIQUE_CONSTRAINT, a.REFERENCED_TABLE_SCHEMA, a.REFERENCED_TABLE_NAME, a.REFERENCED_COLUMN_NAME from information_schema.key_column_usage as a) as x",
+            "FieldQuery": "select x.table_name, x.COLUMN_NAME from (select a.CONSTRAINT_CATALOG, a.CONSTRAINT_SCHEMA, a.CONSTRAINT_NAME, a.TABLE_CATALOG, a.TABLE_SCHEMA, a.TABLE_NAME, a.COLUMN_NAME, a.ORDINAL_POSITION, a.POSITION_IN_UNIQUE_CONSTRAINT, a.REFERENCED_TABLE_SCHEMA, a.REFERENCED_TABLE_NAME, a.REFERENCED_COLUMN_NAME from information_schema.key_column_usage as a where 1 != 1) as x where 1 != 1",
+            "Query": "select x.table_name, x.COLUMN_NAME from (select a.CONSTRAINT_CATALOG, a.CONSTRAINT_SCHEMA, a.CONSTRAINT_NAME, a.TABLE_CATALOG, a.TABLE_SCHEMA, a.TABLE_NAME, a.COLUMN_NAME, a.ORDINAL_POSITION, a.POSITION_IN_UNIQUE_CONSTRAINT, a.REFERENCED_TABLE_SCHEMA, a.REFERENCED_TABLE_NAME, a.REFERENCED_COLUMN_NAME from information_schema.key_column_usage as a) as x",
             "Table": "information_schema.key_column_usage"
           },
           {

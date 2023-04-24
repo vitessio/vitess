@@ -240,19 +240,19 @@ func isLeap(year int) bool {
 	return year%4 == 0 && (year%100 != 0 || year%400 == 0)
 }
 
-func parseNanoseconds[bytes []byte | string](value bytes, nbytes int) (ns int, ok bool) {
+func parseNanoseconds[bytes []byte | string](value bytes, nbytes int) (ns int, l int, ok bool) {
 	if value[0] != '.' {
-		return 0, false
+		return 0, 0, false
 	}
 	if nbytes > 10 {
 		value = value[:10]
 		nbytes = 10
 	}
 	if ns, ok = atoi(value[1:nbytes]); !ok {
-		return 0, false
+		return 0, 0, false
 	}
 	if ns < 0 {
-		return 0, false
+		return 0, 0, false
 	}
 	// We need nanoseconds, which means scaling by the number
 	// of missing digits in the format, maximum length 10.
@@ -260,5 +260,11 @@ func parseNanoseconds[bytes []byte | string](value bytes, nbytes int) (ns int, o
 	for i := 0; i < scaleDigits; i++ {
 		ns *= 10
 	}
+
+	l = nbytes - 1
+	if l > 6 {
+		l = 6
+	}
+
 	return
 }

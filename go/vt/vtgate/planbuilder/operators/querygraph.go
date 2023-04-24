@@ -215,3 +215,15 @@ func (qt *QueryTable) Clone() *QueryTable {
 		IsInfSchema: qt.IsInfSchema,
 	}
 }
+
+func (qg *QueryGraph) Description() ops.OpDescription {
+	var tables []string
+	for _, table := range qg.Tables {
+		tables = append(tables, sqlparser.String(table.Table))
+	}
+
+	return ops.OpDescription{
+		OperatorType: "QueryGraph",
+		Other:        map[string]any{"Tables": tables},
+	}
+}

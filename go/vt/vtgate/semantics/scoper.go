@@ -61,79 +61,101 @@ func (s *scoper) down(cursor *sqlparser.Cursor) error {
 	node := cursor.Node()
 	switch node := node.(type) {
 	case *sqlparser.Update, *sqlparser.Delete:
-		currScope := newScope(s.currentScope())
-		currScope.stmtScope = true
-		s.push(currScope)
-
-		currScope.stmt = node.(sqlparser.Statement)
+		s.pushDMLScope(node)
 	case *sqlparser.Select:
-		currScope := newScope(s.currentScope())
-		currScope.stmtScope = true
-		s.push(currScope)
-
-		// Needed for order by with Literal to find the Expression.
-		currScope.stmt = node
-
-		s.rScope[node] = currScope
-		s.wScope[node] = newScope(nil)
+		s.pushSelectScope(node)
 	case sqlparser.TableExpr:
-		if isParentSelect(cursor) {
-			// when checking the expressions used in JOIN conditions, special rules apply where the ON expression
-			// can only see the two tables involved in the JOIN, and no other tables of that select statement.
-			// They are allowed to see the tables of the outer select query.
-			// To create this special context, we will find the parent scope of the select statement involved.
-			nScope := newScope(s.currentScope().findParentScopeOfStatement())
-			nScope.stmt = cursor.Parent().(*sqlparser.Select)
-			s.push(nScope)
-		}
+		s.enterJoinScope(cursor)
 	case sqlparser.SelectExprs:
-		sel, parentIsSelect := cursor.Parent().(*sqlparser.Select)
-		if !parentIsSelect {
-			break
-		}
-
-		// adding a vTableInfo for each SELECT, so it can be used by GROUP BY, HAVING, ORDER BY
-		// the vTableInfo we are creating here should not be confused with derived tables' vTableInfo
-		wScope, exists := s.wScope[sel]
-		if !exists {
-			break
-		}
-		wScope.tables = []TableInfo{createVTableInfoForExpressions(node, s.currentScope().tables, s.org)}
+		s.copySelectExprs(cursor, node)
 	case sqlparser.OrderBy:
-		if isParentSelectStatement(cursor) {
-			err := s.createSpecialScopePostProjection(cursor.Parent())
-			if err != nil {
-				return err
-			}
-			for _, order := range node {
-				lit := keepIntLiteral(order.Expr)
-				if lit != nil {
-					s.specialExprScopes[lit] = s.currentScope()
-				}
-			}
-		}
+		return s.addColumnInfoForOrderBy(cursor, node)
 	case sqlparser.GroupBy:
-		err := s.createSpecialScopePostProjection(cursor.Parent())
-		if err != nil {
-			return err
-		}
-		for _, expr := range node {
-			lit := keepIntLiteral(expr)
-			if lit != nil {
-				s.specialExprScopes[lit] = s.currentScope()
-			}
-		}
+		return s.addColumnInfoForGroupBy(cursor, node)
 	case *sqlparser.Where:
 		if node.Type != sqlparser.HavingClause {
 			break
 		}
 		return s.createSpecialScopePostProjection(cursor.Parent())
-	case *sqlparser.DerivedTable:
-		if node.Lateral {
-			return vterrors.VT12001("lateral derived tables")
+	}
+	return nil
+}
+
+func (s *scoper) addColumnInfoForGroupBy(cursor *sqlparser.Cursor, node sqlparser.GroupBy) error {
+	err := s.createSpecialScopePostProjection(cursor.Parent())
+	if err != nil {
+		return err
+	}
+	for _, expr := range node {
+		lit := keepIntLiteral(expr)
+		if lit != nil {
+			s.specialExprScopes[lit] = s.currentScope()
 		}
 	}
 	return nil
+}
+
+func (s *scoper) addColumnInfoForOrderBy(cursor *sqlparser.Cursor, node sqlparser.OrderBy) error {
+	if isParentSelectStatement(cursor) {
+		err := s.createSpecialScopePostProjection(cursor.Parent())
+		if err != nil {
+			return err
+		}
+		for _, order := range node {
+			lit := keepIntLiteral(order.Expr)
+			if lit != nil {
+				s.specialExprScopes[lit] = s.currentScope()
+			}
+		}
+	}
+	return nil
+}
+
+func (s *scoper) copySelectExprs(cursor *sqlparser.Cursor, node sqlparser.SelectExprs) {
+	sel, parentIsSelect := cursor.Parent().(*sqlparser.Select)
+	if !parentIsSelect {
+		return
+	}
+
+	// adding a vTableInfo for each SELECT, so it can be used by GROUP BY, HAVING, ORDER BY
+	// the vTableInfo we are creating here should not be confused with derived tables' vTableInfo
+	wScope, exists := s.wScope[sel]
+	if !exists {
+		return
+	}
+	wScope.tables = []TableInfo{createVTableInfoForExpressions(node, s.currentScope().tables, s.org)}
+}
+
+func (s *scoper) enterJoinScope(cursor *sqlparser.Cursor) {
+	if isParentSelect(cursor) {
+		// when checking the expressions used in JOIN conditions, special rules apply where the ON expression
+		// can only see the two tables involved in the JOIN, and no other tables of that select statement.
+		// They are allowed to see the tables of the outer select query.
+		// To create this special context, we will find the parent scope of the select statement involved.
+		nScope := newScope(s.currentScope().findParentScopeOfStatement())
+		nScope.stmt = cursor.Parent().(*sqlparser.Select)
+		s.push(nScope)
+	}
+}
+
+func (s *scoper) pushSelectScope(node *sqlparser.Select) {
+	currScope := newScope(s.currentScope())
+	currScope.stmtScope = true
+	s.push(currScope)
+
+	// Needed for order by with Literal to find the Expression.
+	currScope.stmt = node
+
+	s.rScope[node] = currScope
+	s.wScope[node] = newScope(nil)
+}
+
+func (s *scoper) pushDMLScope(node sqlparser.SQLNode) {
+	currScope := newScope(s.currentScope())
+	currScope.stmtScope = true
+	s.push(currScope)
+
+	currScope.stmt = node.(sqlparser.Statement)
 }
 
 func keepIntLiteral(e sqlparser.Expr) *sqlparser.Literal {

@@ -114,12 +114,14 @@ func (fmtMonthDaySuffix) format(dst []byte, t DateTime, prec uint8) []byte {
 	d := t.Date.Day()
 	dst = appendInt(dst, d, 0)
 
-	switch d % 10 {
-	case 1:
+	switch {
+	case d >= 11 && d < 20:
+		return append(dst, "th"...)
+	case d%10 == 1:
 		return append(dst, "st"...)
-	case 2:
+	case d%10 == 2:
 		return append(dst, "nd"...)
-	case 3:
+	case d%10 == 3:
 		return append(dst, "rd"...)
 	default:
 		return append(dst, "th"...)
@@ -151,7 +153,7 @@ func (fmtDay) numeric(t DateTime) (int, int) {
 	return t.Date.Day(), 100
 }
 
-type fmtNanoseconds struct{}
+type fmtMicroseconds struct{}
 
 func appendNsec(b []byte, nsec int, prec int) []byte {
 	f := nsec / 1000
@@ -163,11 +165,11 @@ func appendNsec(b []byte, nsec int, prec int) []byte {
 	return b[:l]
 }
 
-func (fmtNanoseconds) format(dst []byte, t DateTime, prec uint8) []byte {
-	return appendNsec(dst, t.Time.Nanosecond(), int(prec))
+func (fmtMicroseconds) format(dst []byte, t DateTime, prec uint8) []byte {
+	return appendNsec(dst, t.Time.Nanosecond(), 6)
 }
 
-func (f fmtNanoseconds) parse(t *timeparts, bytes string) (string, bool) {
+func (f fmtMicroseconds) parse(t *timeparts, bytes string) (string, bool) {
 	//TODO implement me
 	panic("implement me")
 }
@@ -310,7 +312,7 @@ func (s fmtSecond) format(dst []byte, t DateTime, prec uint8) []byte {
 	} else {
 		dst = appendInt(dst, t.Time.Second(), 0)
 	}
-	if s.nsec && prec > 0 && t.Time.Nanosecond() != 0 {
+	if s.nsec && prec > 0 {
 		dst = append(dst, '.')
 		dst = appendNsec(dst, t.Time.Nanosecond(), int(prec))
 	}
@@ -326,7 +328,9 @@ func (s fmtSecond) parse(tp *timeparts, b string) (out string, ok bool) {
 		n := 2
 		for ; n < len(out) && isDigit(out, n); n++ {
 		}
-		tp.nsec, ok = parseNanoseconds(out, n)
+		var l int
+		tp.nsec, l, ok = parseNanoseconds(out, n)
+		tp.prec = uint8(l)
 		out = out[n:]
 	}
 	return

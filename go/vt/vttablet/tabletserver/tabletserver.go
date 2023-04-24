@@ -1733,10 +1733,6 @@ func (tsv *TabletServer) registerHealthzHealthHandler() {
 }
 
 func (tsv *TabletServer) healthzHandler(w http.ResponseWriter, r *http.Request) {
-	if err := acl.CheckAccessHTTP(r, acl.MONITORING); err != nil {
-		acl.SendError(w, err)
-		return
-	}
 	if (tsv.sm.wantState == StateServing || tsv.sm.wantState == StateNotConnected) && !tsv.sm.IsServing() {
 		http.Error(w, "500 internal server error: vttablet is not serving", http.StatusInternalServerError)
 		return
