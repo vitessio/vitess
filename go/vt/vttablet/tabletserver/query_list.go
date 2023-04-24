@@ -18,10 +18,11 @@ package tabletserver
 
 import (
 	"context"
-	"html/template"
 	"sort"
 	"sync"
 	"time"
+
+	"github.com/google/safehtml"
 
 	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/vt/callinfo"
@@ -128,7 +129,7 @@ func (ql *QueryList) TerminateAll() {
 type QueryDetailzRow struct {
 	Type              string
 	Query             string
-	ContextHTML       template.HTML
+	ContextHTML       safehtml.HTML
 	Start             time.Time
 	Duration          time.Duration
 	ConnID            int64

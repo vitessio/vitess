@@ -484,7 +484,7 @@ type ControllerStatus struct {
 	TableCopyTimings      map[string]int64
 }
 
-var vreplicationTemplate = `
+const vreplicationTemplate = `
 {{if .IsOpen}}VReplication state: Open</br>
 <table>
   <tr>
