@@ -20,8 +20,9 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
-	"fmt"
 
+	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -58,7 +59,7 @@ type RegionExperimental struct {
 func newRegionExperimental(name string, m map[string]string) (Vindex, []VindexWarning, error) {
 	rbs, ok := m["region_bytes"]
 	if !ok {
-		return nil, nil, fmt.Errorf("region_experimental missing region_bytes param")
+		return nil, nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "region_experimental missing region_bytes param")
 	}
 	var rb int
 	switch rbs {
@@ -67,7 +68,7 @@ func newRegionExperimental(name string, m map[string]string) (Vindex, []VindexWa
 	case "2":
 		rb = 2
 	default:
-		return nil, nil, fmt.Errorf("region_bits must be 1 or 2: %v", rbs)
+		return nil, nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "region_bytes must be 1 or 2: %v", rbs)
 	}
 	return &RegionExperimental{
 		name:        name,
