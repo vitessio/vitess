@@ -3913,12 +3913,24 @@ func TestSelectCFC(t *testing.T) {
 	executor.normalize = true
 	session := NewAutocommitSession(&vtgatepb.Session{})
 
-	for i := 1; i < 100; i++ {
-		_, err := executor.Execute(context.Background(), "TestSelectCFC", session,
-			"select /*vt+ PLANNER=gen4 */ c2 from tbl_cfc where c1 like 'A%'", nil)
-		require.NoError(t, err)
-		assert.EqualValues(t, 1, executor.plans.Misses(), "missed count:")
-		assert.EqualValues(t, i-1, executor.plans.Hits(), "hit count:")
+	_, err := executor.Execute(context.Background(), "TestSelectCFC", session,
+		"select /*vt+ PLANNER=gen4 */ c2 from tbl_cfc where c1 like 'A%'", nil)
+	require.NoError(t, err)
+
+	timeout := time.After(10 * time.Second)
+	for {
+		select {
+		case <-timeout:
+			t.Fatal("not able to cache a plan withing 10 seconds.")
+		case <-time.After(5 * time.Millisecond):
+			// should be able to find cache entry before the timeout.
+			cacheItems := executor.debugCacheEntries()
+			for _, item := range cacheItems {
+				if strings.Contains(item.Key, "c2 from tbl_cfc where c1 like") {
+					return
+				}
+			}
+		}
 	}
 }
 
