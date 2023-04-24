@@ -26,6 +26,8 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 var null SingleColumn
@@ -36,6 +38,53 @@ func init() {
 		panic(err)
 	}
 	null = hv.(SingleColumn)
+}
+
+func nullCreateVindexTestCase(
+	testName string,
+	vindexParams map[string]string,
+	expectErr error,
+	expectWarnings []VindexWarning,
+) createVindexTestCase {
+	return createVindexTestCase{
+		testName: testName,
+
+		vindexType:   "null",
+		vindexName:   "null",
+		vindexParams: vindexParams,
+
+		expectCost:         100,
+		expectErr:          expectErr,
+		expectIsUnique:     true,
+		expectNeedsVCursor: false,
+		expectString:       "null",
+		expectWarnings:     expectWarnings,
+	}
+}
+
+func TestNullCreateVindex(t *testing.T) {
+	cases := []createVindexTestCase{
+		nullCreateVindexTestCase(
+			"no params",
+			nil,
+			nil,
+			nil,
+		),
+		nullCreateVindexTestCase(
+			"empty params",
+			map[string]string{},
+			nil,
+			nil,
+		),
+		nullCreateVindexTestCase(
+			"unknown params",
+			map[string]string{"hello": "world"},
+			nil,
+			[]VindexWarning{vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "unknown param 'hello'")},
+		),
+	}
+
+	testCreateVindexes(t, cases)
 }
 
 func TestNullInfo(t *testing.T) {

@@ -181,6 +181,16 @@ func TestMulticolCreateVindex(t *testing.T) {
 			vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "number of columns not provided in the parameter 'column_count'"),
 			nil,
 		),
+		multicolCreateVindexTestCase(
+			"allow unknown params",
+			map[string]string{
+				"column_count": "1",
+				"hello":        "world",
+			},
+			1,
+			nil,
+			nil,
+		),
 	}
 
 	testCreateVindexes(t, cases)

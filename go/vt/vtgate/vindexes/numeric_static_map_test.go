@@ -18,6 +18,7 @@ package vindexes
 
 import (
 	"context"
+	"errors"
 	"reflect"
 	"testing"
 
@@ -26,6 +27,8 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 // createVindex creates the "numeric_static_map" vindex object which is used by
@@ -48,6 +51,107 @@ func createVindexWithParams(params map[string]string) (SingleColumn, error) {
 		return nil, err
 	}
 	return vindex.(SingleColumn), nil
+}
+
+func numericStaticMapCreateVindexTestCase(
+	testName string,
+	vindexParams map[string]string,
+	expectErr error,
+	expectWarnings []VindexWarning,
+) createVindexTestCase {
+	return createVindexTestCase{
+		testName: testName,
+
+		vindexType:   "numeric_static_map",
+		vindexName:   "numeric_static_map",
+		vindexParams: vindexParams,
+
+		expectCost:         1,
+		expectErr:          expectErr,
+		expectIsUnique:     true,
+		expectNeedsVCursor: false,
+		expectString:       "numeric_static_map",
+		expectWarnings:     expectWarnings,
+	}
+}
+
+func TestNumericStaticMapCreateVindex(t *testing.T) {
+	cases := []createVindexTestCase{
+		numericStaticMapCreateVindexTestCase(
+			"no params invalid, require either json_path or json",
+			nil,
+			vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "NumericStaticMap: Could not find either `json_path` or `json` params in vschema"),
+			nil,
+		),
+		numericStaticMapCreateVindexTestCase(
+			"empty params invalid, require either json_path or json",
+			map[string]string{},
+			vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "NumericStaticMap: Could not find either `json_path` or `json` params in vschema"),
+			nil,
+		),
+		numericStaticMapCreateVindexTestCase(
+			"json_path and json mutually exclusive",
+			map[string]string{
+				"json":      "{}",
+				"json_path": "/path/to/map.json",
+			},
+			vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "NumericStaticMap: Found both `json` and `json_path` params in vschema"),
+			nil,
+		),
+		numericStaticMapCreateVindexTestCase(
+			"json_path must exist",
+			map[string]string{
+				"json_path": "/path/to/map.json",
+			},
+			errors.New("open /path/to/map.json: no such file or directory"),
+			nil,
+		),
+		numericStaticMapCreateVindexTestCase(
+			"json ok",
+			map[string]string{
+				"json": "{}",
+			},
+			nil,
+			nil,
+		),
+		numericStaticMapCreateVindexTestCase(
+			"json must be valid syntax",
+			map[string]string{
+				"json": "{]",
+			},
+			errors.New("invalid character ']' looking for beginning of object key string"),
+			nil,
+		),
+		numericStaticMapCreateVindexTestCase(
+			"fallback_type ok",
+			map[string]string{
+				"json":          "{}",
+				"fallback_type": "binary",
+			},
+			nil,
+			nil,
+		),
+		numericStaticMapCreateVindexTestCase(
+			"fallback_type must be valid vindex type",
+			map[string]string{
+				"json":          "{}",
+				"fallback_type": "not_found",
+			},
+			vterrors.Errorf(vtrpc.Code_NOT_FOUND, "vindexType %q not found", "not_found"),
+			nil,
+		),
+		numericStaticMapCreateVindexTestCase(
+			"unknown params",
+			map[string]string{
+				"json":  "{}",
+				"hello": "world",
+			},
+			nil,
+			[]VindexWarning{vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "unknown param 'hello'")},
+		),
+	}
+
+	testCreateVindexes(t, cases)
 }
 
 func TestNumericStaticMapInfo(t *testing.T) {

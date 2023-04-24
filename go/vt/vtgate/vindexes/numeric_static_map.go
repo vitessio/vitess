@@ -21,10 +21,11 @@ import (
 	"context"
 	"encoding/binary"
 	"encoding/json"
-	"errors"
 	"os"
 	"strconv"
 
+	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -66,11 +67,11 @@ func newNumericStaticMap(name string, params map[string]string) (Vindex, []Vinde
 	jsonPath, jpok := params["json_path"]
 
 	if !jsok && !jpok {
-		return nil, nil, errors.New("NumericStaticMap: Could not find either `json_path` params in vschema")
+		return nil, nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "NumericStaticMap: Could not find either `json_path` or `json` params in vschema")
 	}
 
 	if jsok && jpok {
-		return nil, nil, errors.New("NumericStaticMap: Found both `json` and `json_path` params in vschema")
+		return nil, nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "NumericStaticMap: Found both `json` and `json_path` params in vschema")
 	}
 
 	var err error
@@ -99,7 +100,6 @@ func newNumericStaticMap(name string, params map[string]string) (Vindex, []Vinde
 			return nil, warnings, err
 		}
 		hashVdx, _ = vindex.(Hashing) // We know this will not fail
-
 	}
 
 	return &NumericStaticMap{
