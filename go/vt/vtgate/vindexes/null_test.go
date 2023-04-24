@@ -32,9 +32,12 @@ import (
 var null SingleColumn
 
 func init() {
-	hv, _, err := CreateVindex("null", "nn", map[string]string{})
+	hv, warnings, err := CreateVindex("null", "nn", map[string]string{})
 	if err != nil {
 		panic(err)
+	}
+	if len(warnings) > 0 {
+		panic("null test init: expected 0 warnings")
 	}
 	null = hv.(SingleColumn)
 }

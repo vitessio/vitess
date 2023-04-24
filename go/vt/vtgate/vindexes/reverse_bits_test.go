@@ -32,9 +32,12 @@ import (
 var reverseBits SingleColumn
 
 func init() {
-	hv, _, err := CreateVindex("reverse_bits", "rr", map[string]string{})
+	hv, warnings, err := CreateVindex("reverse_bits", "rr", map[string]string{})
 	if err != nil {
 		panic(err)
+	}
+	if len(warnings) > 0 {
+		panic("reverse_bits test init: expected 0 warnings")
 	}
 	reverseBits = hv.(SingleColumn)
 }

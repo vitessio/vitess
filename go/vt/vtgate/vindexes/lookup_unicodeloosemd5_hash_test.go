@@ -106,7 +106,7 @@ func TestLookupUnicodeLooseMD5HashMap(t *testing.T) {
 }
 
 func TestLookupUnicodeLooseMD5HashMapAutocommit(t *testing.T) {
-	vindex, _, err := CreateVindex("lookup_unicodeloosemd5_hash", "lookup", map[string]string{
+	vindex, warnings, err := CreateVindex("lookup_unicodeloosemd5_hash", "lookup", map[string]string{
 		"table":      "t",
 		"from":       "fromc",
 		"to":         "toc",
@@ -115,6 +115,7 @@ func TestLookupUnicodeLooseMD5HashMapAutocommit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	require.Empty(t, warnings)
 	lookupNonUnique := vindex.(SingleColumn)
 	vc := &vcursor{numRows: 2, keys: []sqltypes.Value{sqltypes.NewUint64(hashed10), sqltypes.NewUint64(hashed20)}}
 
@@ -238,7 +239,7 @@ func TestLookupUnicodeLooseMD5HashVerify(t *testing.T) {
 }
 
 func TestLookupUnicodeLooseMD5HashVerifyAutocommit(t *testing.T) {
-	vindex, _, err := CreateVindex("lookup_unicodeloosemd5_hash", "lookup", map[string]string{
+	vindex, warnings, err := CreateVindex("lookup_unicodeloosemd5_hash", "lookup", map[string]string{
 		"table":      "t",
 		"from":       "fromc",
 		"to":         "toc",
@@ -247,6 +248,7 @@ func TestLookupUnicodeLooseMD5HashVerifyAutocommit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	require.Empty(t, warnings)
 	lookupNonUnique := vindex.(SingleColumn)
 	vc := &vcursor{numRows: 1}
 
@@ -323,7 +325,7 @@ func TestLookupUnicodeLooseMD5HashCreate(t *testing.T) {
 }
 
 func TestLookupUnicodeLooseMD5HashCreateAutocommit(t *testing.T) {
-	lookupNonUnique, _, err := CreateVindex("lookup_unicodeloosemd5_hash", "lookup", map[string]string{
+	lookupNonUnique, warnings, err := CreateVindex("lookup_unicodeloosemd5_hash", "lookup", map[string]string{
 		"table":      "t",
 		"from":       "from1,from2",
 		"to":         "toc",
@@ -332,6 +334,7 @@ func TestLookupUnicodeLooseMD5HashCreateAutocommit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	require.Empty(t, warnings)
 	vc := &vcursor{}
 
 	err = lookupNonUnique.(Lookup).Create(context.Background(), vc, [][]sqltypes.Value{{
@@ -362,7 +365,7 @@ func TestLookupUnicodeLooseMD5HashCreateAutocommit(t *testing.T) {
 }
 
 func TestLookupUnicodeLooseMD5HashCreateMultiShardAutocommit(t *testing.T) {
-	lookupNonUnique, _, err := CreateVindex("lookup_unicodeloosemd5_hash", "lookup", map[string]string{
+	lookupNonUnique, warnings, err := CreateVindex("lookup_unicodeloosemd5_hash", "lookup", map[string]string{
 		"table":                  "t",
 		"from":                   "from1,from2",
 		"to":                     "toc",
@@ -371,6 +374,7 @@ func TestLookupUnicodeLooseMD5HashCreateMultiShardAutocommit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	require.Empty(t, warnings)
 	vc := &vcursor{}
 
 	err = lookupNonUnique.(Lookup).Create(context.Background(), vc, [][]sqltypes.Value{{

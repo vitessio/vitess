@@ -197,10 +197,11 @@ func TestMulticolCreateVindex(t *testing.T) {
 }
 
 func TestMultiColMisc(t *testing.T) {
-	vindex, _, err := CreateVindex("multicol", "multicol_misc", map[string]string{
+	vindex, warnings, err := CreateVindex("multicol", "multicol_misc", map[string]string{
 		"column_count": "3",
 	})
 	require.NoError(t, err)
+	require.Empty(t, warnings)
 
 	multiColVdx, isMultiColVdx := vindex.(*MultiCol)
 	assert.True(t, isMultiColVdx)
@@ -213,10 +214,11 @@ func TestMultiColMisc(t *testing.T) {
 }
 
 func TestMultiColMap(t *testing.T) {
-	vindex, _, err := CreateVindex("multicol", "multicol_map", map[string]string{
+	vindex, warnings, err := CreateVindex("multicol", "multicol_map", map[string]string{
 		"column_count": "3",
 	})
 	require.NoError(t, err)
+	require.Empty(t, warnings)
 	mutiCol := vindex.(MultiColumn)
 
 	got, err := mutiCol.Map(context.Background(), nil, [][]sqltypes.Value{{

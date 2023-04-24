@@ -33,9 +33,12 @@ import (
 var xxHash SingleColumn
 
 func init() {
-	hv, _, err := CreateVindex("xxhash", "xxhash_name", map[string]string{})
+	hv, warnings, err := CreateVindex("xxhash", "xxhash_name", map[string]string{})
 	if err != nil {
 		panic(err)
+	}
+	if len(warnings) > 0 {
+		panic("xxhash test init: expected 0 warnings")
 	}
 	xxHash = hv.(SingleColumn)
 }

@@ -126,7 +126,7 @@ func TestCFCCreateVindex(t *testing.T) {
 }
 
 func TestCFCCreateVindexOptions(t *testing.T) {
-	vdx, _, err := CreateVindex(
+	vdx, warnings, err := CreateVindex(
 		"cfc",
 		"normal",
 		map[string]string{
@@ -136,6 +136,7 @@ func TestCFCCreateVindexOptions(t *testing.T) {
 	)
 	require.NotNil(t, vdx)
 	require.Nil(t, err)
+	require.Empty(t, warnings)
 	require.EqualValues(t, vdx.(*CFC).offsets, []int{3, 7})
 }
 

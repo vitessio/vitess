@@ -405,13 +405,14 @@ func TestLookupNonUniqueMap(t *testing.T) {
 }
 
 func TestLookupNonUniqueMapAutocommit(t *testing.T) {
-	vindex, _, err := CreateVindex("lookup", "lookup", map[string]string{
+	vindex, warnings, err := CreateVindex("lookup", "lookup", map[string]string{
 		"table":      "t",
 		"from":       "fromc",
 		"to":         "toc",
 		"autocommit": "true",
 	})
 	require.NoError(t, err)
+	require.Empty(t, warnings)
 	lookupNonUnique := vindex.(SingleColumn)
 	vc := &vcursor{numRows: 2}
 
@@ -510,13 +511,14 @@ func TestLookupNonUniqueVerify(t *testing.T) {
 }
 
 func TestLookupNonUniqueNoVerify(t *testing.T) {
-	vindex, _, err := CreateVindex("lookup", "lookup", map[string]string{
+	vindex, warnings, err := CreateVindex("lookup", "lookup", map[string]string{
 		"table":     "t",
 		"from":      "fromc",
 		"to":        "toc",
 		"no_verify": "true",
 	})
 	require.NoError(t, err)
+	require.Empty(t, warnings)
 	lookupNonUnique := vindex.(SingleColumn)
 	vc := &vcursor{numRows: 1}
 
@@ -533,13 +535,14 @@ func TestLookupNonUniqueNoVerify(t *testing.T) {
 }
 
 func TestLookupUniqueNoVerify(t *testing.T) {
-	vindex, _, err := CreateVindex("lookup_unique", "lookup_unique", map[string]string{
+	vindex, warnings, err := CreateVindex("lookup_unique", "lookup_unique", map[string]string{
 		"table":     "t",
 		"from":      "fromc",
 		"to":        "toc",
 		"no_verify": "true",
 	})
 	require.NoError(t, err)
+	require.Empty(t, warnings)
 	lookupUnique := vindex.(SingleColumn)
 	vc := &vcursor{numRows: 1}
 
@@ -556,12 +559,13 @@ func TestLookupUniqueNoVerify(t *testing.T) {
 }
 
 func TestLookupNonUniqueVerifyAutocommit(t *testing.T) {
-	vindex, _, err := CreateVindex("lookup", "lookup", map[string]string{
+	vindex, warnings, err := CreateVindex("lookup", "lookup", map[string]string{
 		"table":      "t",
 		"from":       "fromc",
 		"to":         "toc",
 		"autocommit": "true",
 	})
+	require.Empty(t, warnings)
 	require.NoError(t, err)
 	lookupNonUnique := vindex.(SingleColumn)
 	vc := &vcursor{numRows: 1}
@@ -642,12 +646,13 @@ func TestLookupNonUniqueCreate(t *testing.T) {
 }
 
 func TestLookupNonUniqueCreateAutocommit(t *testing.T) {
-	lookupNonUnique, _, err := CreateVindex("lookup", "lookup", map[string]string{
+	lookupNonUnique, warnings, err := CreateVindex("lookup", "lookup", map[string]string{
 		"table":      "t",
 		"from":       "from1,from2",
 		"to":         "toc",
 		"autocommit": "true",
 	})
+	require.Empty(t, warnings)
 	require.NoError(t, err)
 	vc := &vcursor{}
 
@@ -797,12 +802,13 @@ func TestLookupUniqueMapResult(t *testing.T) {
 }
 
 func TestLookupNonUniqueCreateMultiShardAutocommit(t *testing.T) {
-	lookupNonUnique, _, err := CreateVindex("lookup", "lookup", map[string]string{
+	lookupNonUnique, warnings, err := CreateVindex("lookup", "lookup", map[string]string{
 		"table":                  "t",
 		"from":                   "from1,from2",
 		"to":                     "toc",
 		"multi_shard_autocommit": "true",
 	})
+	require.Empty(t, warnings)
 	require.NoError(t, err)
 
 	vc := &vcursor{}
@@ -834,12 +840,13 @@ func createLookup(t *testing.T, name string, writeOnly bool) SingleColumn {
 	if writeOnly {
 		write = "true"
 	}
-	l, _, err := CreateVindex(name, name, map[string]string{
+	l, warnings, err := CreateVindex(name, name, map[string]string{
 		"table":      "t",
 		"from":       "fromc",
 		"to":         "toc",
 		"write_only": write,
 	})
 	require.NoError(t, err)
+	require.Empty(t, warnings)
 	return l.(SingleColumn)
 }

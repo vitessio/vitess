@@ -32,7 +32,10 @@ import (
 var hash SingleColumn
 
 func init() {
-	hv, _, err := CreateVindex("hash", "nn", map[string]string{})
+	hv, warnings, err := CreateVindex("hash", "nn", map[string]string{})
+	if len(warnings) > 0 {
+		panic("hash test init: got warnings when expected none")
+	}
 	if err != nil {
 		panic(err)
 	}

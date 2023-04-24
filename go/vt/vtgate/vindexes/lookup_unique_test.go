@@ -150,7 +150,7 @@ func TestLookupUniqueVerifyWriteOnly(t *testing.T) {
 }
 
 func TestLookupUniqueCreate(t *testing.T) {
-	lookupUnique, _, err := CreateVindex("lookup_unique", "lookup_unique", map[string]string{
+	lookupUnique, warnings, err := CreateVindex("lookup_unique", "lookup_unique", map[string]string{
 		"table":      "t",
 		"from":       "from",
 		"to":         "toc",
@@ -159,6 +159,7 @@ func TestLookupUniqueCreate(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	require.Empty(t, warnings)
 	vc := &vcursor{}
 
 	err = lookupUnique.(Lookup).Create(context.Background(), vc, [][]sqltypes.Value{{sqltypes.NewInt64(1)}}, [][]byte{[]byte("test")}, false /* ignoreMode */)

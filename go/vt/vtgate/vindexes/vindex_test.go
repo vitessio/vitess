@@ -82,8 +82,9 @@ func TestVindexMap(t *testing.T) {
 	}
 	assert.Equal(t, want, got)
 
-	hash, _, err := CreateVindex("hash", "hash", nil)
+	hash, warnings, err := CreateVindex("hash", "hash", nil)
 	assert.NoError(t, err)
+	require.Empty(t, warnings)
 	got, err = Map(context.Background(), hash, nil, [][]sqltypes.Value{{
 		sqltypes.NewInt64(1),
 	}})
@@ -108,8 +109,9 @@ func TestVindexVerify(t *testing.T) {
 	want := []bool{true}
 	assert.Equal(t, want, got)
 
-	hash, _, err := CreateVindex("hash", "hash", nil)
+	hash, warnings, err := CreateVindex("hash", "hash", nil)
 	assert.NoError(t, err)
+	require.Empty(t, warnings)
 	got, err = Verify(context.Background(), hash, nil, [][]sqltypes.Value{{
 		sqltypes.NewInt64(1),
 	}}, [][]byte{
