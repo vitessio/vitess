@@ -260,8 +260,8 @@ func TestVreplicationCopyThrottling(t *testing.T) {
 }
 
 func TestBasicVreplicationWorkflow(t *testing.T) {
-	sourceKsOpts["DBTypeVersion"] = "mysql-5.7"
-	targetKsOpts["DBTypeVersion"] = "mysql-5.7"
+	sourceKsOpts["DBTypeVersion"] = "mysql-8.0"
+	targetKsOpts["DBTypeVersion"] = "mysql-8.0"
 	testBasicVreplicationWorkflow(t)
 }
 
