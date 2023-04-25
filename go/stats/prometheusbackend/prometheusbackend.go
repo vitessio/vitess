@@ -44,7 +44,7 @@ func Init(namespace string) {
 	stats.Register(be.publishPrometheusMetric)
 }
 
-// PublishPromMetric is used to publish the metric to Prometheus.
+// publishPrometheusMetric is used to publish the metric to Prometheus.
 func (be PromBackend) publishPrometheusMetric(name string, v expvar.Var) {
 	switch st := v.(type) {
 	case *stats.Counter:
@@ -109,7 +109,7 @@ func labelsToSnake(labels []string) []string {
 	return output
 }
 
-// normalizeMetricForPrometheus produces a compliant name by applying
+// normalizeMetric produces a compliant name by applying
 // special case conversions and then applying a camel case to snake case converter.
 func normalizeMetric(name string) string {
 	// Special cases
