@@ -31,12 +31,6 @@
     "gen4-plan": "VT12001: unsupported: '*' expression in cross-shard query"
   },
   {
-    "comment": "order by rand on a cross-shard subquery",
-    "query": "select id from (select user.id, user.col from user join user_extra) as t order by rand()",
-    "v3-plan": "VT12001: unsupported: memory sort: complex ORDER BY expression: rand()",
-    "gen4-plan": "VT13001: [BUG] in scatter query: complex ORDER BY expression: rand()"
-  },
-  {
     "comment": "natural join",
     "query": "select * from user natural join user_extra",
     "plan": "VT12001: unsupported: natural join"
@@ -114,18 +108,6 @@
     "query": "select id from user group by id, (select id from user_extra)",
     "v3-plan": "VT12001: unsupported: subqueries disallowed in sqlparser.GroupBy",
     "gen4-plan": "VT12001: unsupported: subqueries in GROUP BY"
-  },
-  {
-    "comment": "Order by uses cross-shard expression",
-    "query": "select id from user order by id+1",
-    "v3-plan": "VT12001: unsupported: in scatter query: complex ORDER BY expression: id + 1",
-    "gen4-plan": "VT13001: [BUG] in scatter query: complex ORDER BY expression: id + 1"
-  },
-  {
-    "comment": "Order by column number with collate",
-    "query": "select user.col1 as a from user order by 1 collate utf8_general_ci",
-    "v3-plan": "VT12001: unsupported: in scatter query: complex ORDER BY expression: 1 collate utf8_general_ci",
-    "gen4-plan": "VT13001: [BUG] in scatter query: complex ORDER BY expression: a collate utf8_general_ci"
   },
   {
     "comment": "subqueries in delete",

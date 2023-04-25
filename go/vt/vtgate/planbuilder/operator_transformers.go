@@ -69,9 +69,45 @@ func transformToLogicalPlan(ctx *plancontext.PlanningContext, op ops.Operator, i
 		return transformProjection(ctx, op)
 	case *operators.Limit:
 		return transformLimit(ctx, op)
+	case *operators.Ordering:
+		return transformOrdering(ctx, op)
 	}
 
 	return nil, vterrors.VT13001(fmt.Sprintf("unknown type encountered: %T (transformToLogicalPlan)", op))
+}
+
+func transformOrdering(ctx *plancontext.PlanningContext, op *operators.Ordering) (logicalPlan, error) {
+	plan, err := transformToLogicalPlan(ctx, op.Source, false)
+	if err != nil {
+		return nil, err
+	}
+
+	return createMemorySort(ctx, plan, op)
+}
+
+func createMemorySort(ctx *plancontext.PlanningContext, src logicalPlan, ordering *operators.Ordering) (logicalPlan, error) {
+	primitive := &engine.MemorySort{}
+	ms := &memorySort{
+		resultsBuilder: resultsBuilder{
+			logicalPlanCommon: newBuilderCommon(src),
+			weightStrings:     make(map[*resultColumn]int),
+			truncater:         primitive,
+		},
+		eMemorySort: primitive,
+	}
+
+	for idx, order := range ordering.Order {
+		collationID := ctx.SemTable.CollationForExpr(order.WeightStrExpr)
+		ms.eMemorySort.OrderBy = append(ms.eMemorySort.OrderBy, engine.OrderByParams{
+			Col:               ordering.Offset[idx],
+			WeightStringCol:   ordering.WOffset[idx],
+			Desc:              order.Inner.Direction == sqlparser.DescOrder,
+			StarColFixedIndex: ordering.Offset[idx],
+			CollationID:       collationID,
+		})
+	}
+
+	return ms, nil
 }
 
 func transformProjection(ctx *plancontext.PlanningContext, op *operators.Projection) (logicalPlan, error) {
@@ -233,8 +269,9 @@ func routeToEngineRoute(ctx *plancontext.PlanningContext, op *operators.Route) (
 	}
 
 	return &engine.Route{
-		TableName:         strings.Join(tableNames, ", "),
-		RoutingParameters: rp,
+		TableName:           strings.Join(tableNames, ", "),
+		RoutingParameters:   rp,
+		TruncateColumnCount: op.ResultColumns,
 	}, nil
 }
 
@@ -265,6 +302,15 @@ func transformRoutePlan(ctx *plancontext.PlanningContext, op *operators.Route) (
 	}
 	replaceSubQuery(ctx, sel)
 	eroute, err := routeToEngineRoute(ctx, op)
+	for _, order := range op.Ordering {
+		collation := ctx.SemTable.CollationForExpr(order.AST)
+		eroute.OrderBy = append(eroute.OrderBy, engine.OrderByParams{
+			Col:             order.Offset,
+			WeightStringCol: order.WOffset,
+			Desc:            order.Direction == sqlparser.DescOrder,
+			CollationID:     collation,
+		})
+	}
 	if err != nil {
 		return nil, err
 	}

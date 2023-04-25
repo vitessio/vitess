@@ -46,12 +46,6 @@ type (
 	}
 )
 
-var _ ops.PhysicalOperator = (*SubQueryOp)(nil)
-var _ ops.PhysicalOperator = (*CorrelatedSubQueryOp)(nil)
-
-// IPhysical implements the PhysicalOperator interface
-func (s *SubQueryOp) IPhysical() {}
-
 // Clone implements the Operator interface
 func (s *SubQueryOp) Clone(inputs []ops.Operator) ops.Operator {
 	result := &SubQueryOp{
@@ -60,6 +54,10 @@ func (s *SubQueryOp) Clone(inputs []ops.Operator) ops.Operator {
 		Extracted: s.Extracted,
 	}
 	return result
+}
+
+func (s *SubQueryOp) GetOrdering() ([]ops.OrderBy, error) {
+	return s.Outer.GetOrdering()
 }
 
 // Inputs implements the Operator interface
@@ -79,8 +77,9 @@ func (s *SubQueryOp) Description() ops.OpDescription {
 	}
 }
 
-// IPhysical implements the PhysicalOperator interface
-func (c *CorrelatedSubQueryOp) IPhysical() {}
+func (s *SubQueryOp) ShortDescription() string {
+	return ""
+}
 
 // Clone implements the Operator interface
 func (c *CorrelatedSubQueryOp) Clone(inputs []ops.Operator) ops.Operator {
@@ -101,6 +100,10 @@ func (c *CorrelatedSubQueryOp) Clone(inputs []ops.Operator) ops.Operator {
 	return result
 }
 
+func (c *CorrelatedSubQueryOp) GetOrdering() ([]ops.OrderBy, error) {
+	return c.Outer.GetOrdering()
+}
+
 // Inputs implements the Operator interface
 func (c *CorrelatedSubQueryOp) Inputs() []ops.Operator {
 	return []ops.Operator{c.Outer, c.Inner}
@@ -116,4 +119,8 @@ func (c *CorrelatedSubQueryOp) Description() ops.OpDescription {
 		OperatorType: "SubQuery",
 		Variant:      "Correlated",
 	}
+}
+
+func (c *CorrelatedSubQueryOp) ShortDescription() string {
+	return ""
 }
