@@ -17,11 +17,9 @@ limitations under the License.
 package mysql
 
 import (
-	"bytes"
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
-	"io"
 
 	"github.com/klauspost/compress/zstd"
 
@@ -58,6 +56,9 @@ var transactionPayloadCompressionTypes = map[uint64]string{
 	transactionPayloadCompressionZstd: "ZSTD",
 	transactionPayloadCompressionNone: "NONE",
 }
+
+// Create a reader that caches decompressors.
+var decoder, _ = zstd.NewReader(nil, zstd.WithDecoderConcurrency(0))
 
 type TransactionPayload struct {
 	Size             uint64
@@ -234,22 +235,15 @@ func (tp *TransactionPayload) decompress() ([]byte, error) {
 		return []byte{}, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "cannot decompress empty payload")
 	}
 
-	in := bytes.NewReader(tp.Payload)
-	d, err := zstd.NewReader(in)
+	decompressedBytes, err := decoder.DecodeAll(tp.Payload, nil)
 	if err != nil {
 		return nil, err
 	}
-	defer d.Close()
-	out := io.Writer(&bytes.Buffer{})
-	written, err := io.Copy(out, d)
-	if err != nil {
-		return []byte{}, err
-	}
-	if written != int64(tp.UncompressedSize) {
+	if uint64(len(decompressedBytes)) != tp.UncompressedSize {
 		return []byte{}, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT,
-			fmt.Sprintf("decompressed size %d does not match expected size %d", written, tp.UncompressedSize))
+			fmt.Sprintf("decompressed size %d does not match expected size %d", len(decompressedBytes), tp.UncompressedSize))
 	}
-	log.V(5).Infof("Decompressed %d bytes to %d bytes; Value: %s", len(tp.Payload), written, out.(*bytes.Buffer).String())
+	log.V(5).Infof("Decompressed %d bytes to %d bytes; Value: %s", len(tp.Payload), len(decompressedBytes), string(decompressedBytes))
 
-	return out.(*bytes.Buffer).Bytes(), nil
+	return decompressedBytes, nil
 }
