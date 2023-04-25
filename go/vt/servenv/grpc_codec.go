@@ -55,7 +55,7 @@ func (vtprotoCodec) Unmarshal(data []byte, v any) error {
 	case proto.Message:
 		return proto.Unmarshal(data, v)
 	default:
-		return fmt.Errorf("failed to unmarshal, message is %T, want proto.Message", v)
+		return fmt.Errorf("failed to unmarshal, message is %T, want proto.Message or must satisfy the vtprotoMessage interface", v)
 	}
 }
 
