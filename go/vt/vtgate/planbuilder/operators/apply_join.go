@@ -69,13 +69,11 @@ type ApplyJoin struct {
 //     so they can be used for the result of this expression that is using data from both sides.
 //     All fields will be used for these
 type JoinColumn struct {
-	Original sqlparser.Expr // this is the original expression being passed through
-	BvNames  []string       // the BvNames and LHSCols line up
+	Original *sqlparser.AliasedExpr // this is the original expression being passed through
+	BvNames  []string               // the BvNames and LHSCols line up
 	LHSExprs []sqlparser.Expr
 	RHSExpr  sqlparser.Expr
 }
-
-var _ ops.PhysicalOperator = (*ApplyJoin)(nil)
 
 func NewApplyJoin(lhs, rhs ops.Operator, predicate sqlparser.Expr, leftOuterJoin bool) *ApplyJoin {
 	return &ApplyJoin{
@@ -86,9 +84,6 @@ func NewApplyJoin(lhs, rhs ops.Operator, predicate sqlparser.Expr, leftOuterJoin
 		LeftJoin:  leftOuterJoin,
 	}
 }
-
-// IPhysical implements the PhysicalOperator interface
-func (a *ApplyJoin) IPhysical() {}
 
 // Clone implements the Operator interface
 func (a *ApplyJoin) Clone(inputs []ops.Operator) ops.Operator {
@@ -180,26 +175,35 @@ func (a *ApplyJoin) pushColRight(ctx *plancontext.PlanningContext, e *sqlparser.
 	return offset, nil
 }
 
-func (a *ApplyJoin) GetColumns() ([]sqlparser.Expr, error) {
+func (a *ApplyJoin) GetColumns() ([]*sqlparser.AliasedExpr, error) {
 	return slices2.Map(a.ColumnsAST, jcToExpr), nil
 }
 
-func jcToExpr(c JoinColumn) sqlparser.Expr { return c.Original }
+func (a *ApplyJoin) GetOrdering() ([]ops.OrderBy, error) {
+	return a.LHS.GetOrdering()
+}
 
-func (a *ApplyJoin) getJoinColumnFor(ctx *plancontext.PlanningContext, e sqlparser.Expr) (col JoinColumn, err error) {
-	col.Original = e
+func jcToExpr(c JoinColumn) *sqlparser.AliasedExpr {
+	return c.Original
+}
+
+func (a *ApplyJoin) getJoinColumnFor(ctx *plancontext.PlanningContext, e *sqlparser.AliasedExpr) (col JoinColumn, err error) {
+	defer func() {
+		col.Original = e
+	}()
 	lhs := TableID(a.LHS)
 	rhs := TableID(a.RHS)
 	both := lhs.Merge(rhs)
-	deps := ctx.SemTable.RecursiveDeps(e)
+	expr := e.Expr
+	deps := ctx.SemTable.RecursiveDeps(expr)
 
 	switch {
 	case deps.IsSolvedBy(lhs):
-		col.LHSExprs = []sqlparser.Expr{e}
+		col.LHSExprs = []sqlparser.Expr{expr}
 	case deps.IsSolvedBy(rhs):
-		col.RHSExpr = e
+		col.RHSExpr = expr
 	case deps.IsSolvedBy(both):
-		col, err = BreakExpressionInLHSandRHS(ctx, e, TableID(a.LHS))
+		col, err = BreakExpressionInLHSandRHS(ctx, expr, TableID(a.LHS))
 		if err != nil {
 			return JoinColumn{}, err
 		}
@@ -210,11 +214,15 @@ func (a *ApplyJoin) getJoinColumnFor(ctx *plancontext.PlanningContext, e sqlpars
 	return
 }
 
+func jcToAliasedExpr(column JoinColumn) sqlparser.Expr {
+	return column.Original.Expr
+}
+
 func (a *ApplyJoin) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr) (ops.Operator, int, error) {
-	if offset, found := canReuseColumn(ctx, a.ColumnsAST, expr.Expr, jcToExpr); found {
+	if offset, found := canReuseColumn(ctx, a.ColumnsAST, expr.Expr, jcToAliasedExpr); found {
 		return a, offset, nil
 	}
-	col, err := a.getJoinColumnFor(ctx, expr.Expr)
+	col, err := a.getJoinColumnFor(ctx, expr)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -271,22 +279,26 @@ func (a *ApplyJoin) planOffsets(ctx *plancontext.PlanningContext) (err error) {
 }
 
 func (a *ApplyJoin) addOffset(offset int) {
-	index := slices.Index(a.Columns, offset)
-	if index != -1 {
-		panic("should never pass through the same column")
-	}
 	a.Columns = append(a.Columns, offset)
 }
 
 func (a *ApplyJoin) Description() ops.OpDescription {
+	other := map[string]any{}
+	if len(a.Columns) > 0 {
+		other["OutputColumns"] = a.Columns
+	}
+	if a.Predicate != nil {
+		other["Predicate"] = sqlparser.String(a.Predicate)
+	}
 	return ops.OpDescription{
 		OperatorType: "Join",
 		Variant:      "Apply",
-		Other: map[string]any{
-			"Predicate":     sqlparser.String(a.Predicate),
-			"OutputColumns": a.Columns,
-		},
+		Other:        other,
 	}
+}
+
+func (a *ApplyJoin) ShortDescription() string {
+	return sqlparser.String(a.Predicate)
 }
 
 func (jc JoinColumn) IsPureLeft() bool {

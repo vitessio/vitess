@@ -22,6 +22,7 @@ import (
 	"sort"
 	"strings"
 
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 
@@ -44,18 +45,12 @@ type (
 		HasAggr            bool
 		Distinct           bool
 		groupByExprs       []GroupBy
-		OrderExprs         []OrderBy
+		OrderExprs         []ops.OrderBy
 		CanPushDownSorting bool
 		HasStar            bool
 
 		// AddedColumn keeps a counter for expressions added to solve HAVING expressions the user is not selecting
 		AddedColumn int
-	}
-
-	// OrderBy contains the expression to used in order by and also if ordering is needed at VTGate level then what the weight_string function expression to be sent down for evaluation.
-	OrderBy struct {
-		Inner         *sqlparser.Order
-		WeightStrExpr sqlparser.Expr
 	}
 
 	// GroupBy contains the expression to used in group by and also if grouping is needed at VTGate level then what the weight_string function expression to be sent down for evaluation.
@@ -88,8 +83,8 @@ type (
 	}
 )
 
-func (b GroupBy) AsOrderBy() OrderBy {
-	return OrderBy{
+func (b GroupBy) AsOrderBy() ops.OrderBy {
+	return ops.OrderBy{
 		Inner: &sqlparser.Order{
 			Expr:      b.Inner,
 			Direction: sqlparser.AscOrder,
@@ -298,7 +293,7 @@ func (qp *QueryProjection) addOrderBy(orderBy sqlparser.OrderBy) error {
 			// ORDER BY null can safely be ignored
 			continue
 		}
-		qp.OrderExprs = append(qp.OrderExprs, OrderBy{
+		qp.OrderExprs = append(qp.OrderExprs, ops.OrderBy{
 			Inner: &sqlparser.Order{
 				Expr:      expr,
 				Direction: order.Direction,

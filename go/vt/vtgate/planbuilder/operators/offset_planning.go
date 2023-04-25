@@ -54,7 +54,7 @@ func planOffsets(ctx *plancontext.PlanningContext, root ops.Operator) (ops.Opera
 	if err != nil {
 		if vterr, ok := err.(*vterrors.VitessError); ok && vterr.ID == "VT13001" {
 			// we encountered a bug. let's try to back out
-			return nil, errHorizonNotPlanned
+			return nil, errHorizonNotPlanned()
 		}
 		return nil, err
 	}
@@ -66,17 +66,22 @@ func (p *Projection) planOffsetsForProjection(ctx *plancontext.PlanningContext) 
 	var err error
 	for i, col := range p.Columns {
 		rewritten := sqlparser.CopyOnRewrite(col.GetExpr(), nil, func(cursor *sqlparser.CopyOnWriteCursor) {
-			col, ok := cursor.Node().(*sqlparser.ColName)
+			column := cursor.Node()
+			expr, ok := column.(sqlparser.Expr)
 			if !ok {
 				return
 			}
-			newSrc, offset, terr := p.Source.AddColumn(ctx, aeWrap(col))
+			if !fetchByOffset(column) {
+				return
+			}
+
+			newSrc, offset, terr := p.Source.AddColumn(ctx, aeWrap(expr))
 			if terr != nil {
 				err = terr
 				return
 			}
 			p.Source = newSrc
-			cursor.Replace(sqlparser.NewOffset(offset, col))
+			cursor.Replace(sqlparser.NewOffset(offset, expr))
 		}, nil).(sqlparser.Expr)
 		if err != nil {
 			return nil, false, err
@@ -104,6 +109,32 @@ func (p *Projection) planOffsetsForProjection(ctx *plancontext.PlanningContext) 
 	}
 
 	return p, rewrite.SameTree, nil
+}
+
+func (p *Projection) passThroughAllColumns(ctx *plancontext.PlanningContext) error {
+
+	for i, col := range p.Columns {
+		newSrc, offset, err := p.Source.AddColumn(ctx, aeWrap(col.GetExpr()))
+		if err != nil {
+			return err
+		}
+		p.Source = newSrc
+		p.Columns[i] = Offset{
+			Expr:   col.GetExpr(),
+			Offset: offset,
+		}
+	}
+
+	return nil
+}
+
+func fetchByOffset(e sqlparser.SQLNode) bool {
+	switch e.(type) {
+	case *sqlparser.ColName, sqlparser.AggrFunc:
+		return true
+	default:
+		return false
+	}
 }
 
 func planOffsetsOnJoins(ctx *plancontext.PlanningContext, op ops.Operator) error {
