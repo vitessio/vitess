@@ -28,8 +28,8 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
-// This file contains code related to handling compression related events.
-// More specifically today, compressed transaction payloads:
+// This file contains code related to handling compression related
+// events. More specifically today, compressed transaction payloads:
 // See: https://dev.mysql.com/doc/refman/en/binary-log-transaction-compression.html
 
 // Transaction Payload wire protocol fields:
@@ -41,11 +41,8 @@ const (
 	payloadUncompressedSizeField
 )
 
-const (
-	binlogEventLenOffset = 9
-)
-
-// Compression algorithms (only zstd is supported today in 8.0):
+// Compression algorithms that are supported (only zstd today
+// in MySQL 8.0):
 // https://dev.mysql.com/doc/refman/8.0/en/binary-log-transaction-compression.html
 const (
 	transactionPayloadCompressionZstd = 0
@@ -58,49 +55,50 @@ var transactionPayloadCompressionTypes = map[uint64]string{
 }
 
 // Create a reader that caches decompressors.
-var decoder, _ = zstd.NewReader(nil, zstd.WithDecoderConcurrency(0))
+var zstdDecoder, _ = zstd.NewReader(nil, zstd.WithDecoderConcurrency(0))
 
 type TransactionPayload struct {
 	Size             uint64
-	UncompressedSize uint64
 	CompressionType  uint64
+	UncompressedSize uint64
 	Payload          []byte
 	Events           []BinlogEvent
 }
 
-// IsTransactionPayload returns true if a compressed transaction payload
-// event is found (binlog_transaction_compression=ON).
+// IsTransactionPayload returns true if a compressed transaction
+// payload event is found (binlog_transaction_compression=ON).
 func (ev binlogEvent) IsTransactionPayload() bool {
 	return ev.Type() == eTransactionPayloadEvent
 }
 
-// TransactionPayload returns the BinlogEvents contained within the
-// compressed transaction.
-// The following event types are compressed as part of the transaction payload:
+// TransactionPayload returns the BinlogEvents contained within
+// the compressed transaction.
+// The following event types are compressed as part of the
+// transaction payload:
 //
-//	QUERY_EVENT = 2,
-//	INTVAR_EVENT = 5,
-//	APPEND_BLOCK_EVENT = 9,
-//	DELETE_FILE_EVENT = 11,
-//	RAND_EVENT = 13,
-//	USER_VAR_EVENT = 14,
-//	XID_EVENT = 16,
-//	BEGIN_LOAD_QUERY_EVENT = 17,
-//	EXECUTE_LOAD_QUERY_EVENT = 18,
-//	TABLE_MAP_EVENT = 19,
-//	WRITE_ROWS_EVENT_V1 = 23,
-//	UPDATE_ROWS_EVENT_V1 = 24,
-//	DELETE_ROWS_EVENT_V1 = 25,
-//	IGNORABLE_LOG_EVENT = 28,
-//	ROWS_QUERY_LOG_EVENT = 29,
-//	WRITE_ROWS_EVENT = 30,
-//	UPDATE_ROWS_EVENT = 31,
-//	DELETE_ROWS_EVENT = 32,
-//	XA_PREPARE_LOG_EVENT = 38,
-//	PARTIAL_UPDATE_ROWS_EVENT = 39,
+//	QUERY_EVENT = 2
+//	INTVAR_EVENT = 5
+//	APPEND_BLOCK_EVENT = 9
+//	DELETE_FILE_EVENT = 11
+//	RAND_EVENT = 13
+//	USER_VAR_EVENT = 14
+//	XID_EVENT = 16
+//	BEGIN_LOAD_QUERY_EVENT = 17
+//	EXECUTE_LOAD_QUERY_EVENT = 18
+//	TABLE_MAP_EVENT = 19
+//	WRITE_ROWS_EVENT_V1 = 23
+//	UPDATE_ROWS_EVENT_V1 = 24
+//	DELETE_ROWS_EVENT_V1 = 25
+//	IGNORABLE_LOG_EVENT = 28
+//	ROWS_QUERY_LOG_EVENT = 29
+//	WRITE_ROWS_EVENT = 30
+//	UPDATE_ROWS_EVENT = 31
+//	DELETE_ROWS_EVENT = 32
+//	XA_PREPARE_LOG_EVENT = 38
+//	PARTIAL_UPDATE_ROWS_EVENT = 39
 //
-// When the transaction compression is enabled, the GTID log event has the following
-// fields:
+// When transaction compression is enabled, the GTID log event has
+// the following fields:
 // +-----------------------------------------+
 // | field_type (1-9 bytes)                  |
 // +-----------------------------------------+
@@ -121,9 +119,9 @@ func (ev binlogEvent) IsTransactionPayload() bool {
 // | m_uncompressed_size size (0 to 9 bytes) |
 // +-----------------------------------------+
 //
-// We need to extract the compressed transaction payload from the GTID event, uncompress it
-// with zstd, and then process the events (e.g. Query and Row events) that make up the
-// transaction.
+// We need to extract the compressed transaction payload from the GTID
+// event, decompress it with zstd, and then process the internal events
+// (e.g. Query and Row events) that make up the transaction.
 func (ev binlogEvent) TransactionPayload(format BinlogFormat) ([]BinlogEvent, error) {
 	tp := &TransactionPayload{}
 	if err := tp.Decode(ev.Bytes()[format.HeaderLength:]); err != nil {
@@ -132,14 +130,19 @@ func (ev binlogEvent) TransactionPayload(format BinlogFormat) ([]BinlogEvent, er
 	return tp.Events, nil
 }
 
+// Decode decodes and decompresses the payload.
 func (tp *TransactionPayload) Decode(data []byte) error {
-	log.V(5).Infof("Compressed payload event; Len: %d :: Bytes: %v", len(data), data)
+	log.V(5).Infof("Compressed payload event; length: %d, bytes: %v", len(data), data)
 	if err := tp.read(data); err != nil {
 		return err
 	}
 	return tp.decode()
 }
 
+// read unmarshalls the transaction payload event into the
+// TransactionPayload struct. The compressed payload itself will still
+// need to be decoded -- meaning decompressing it and extracting the
+// internal events.
 func (tp *TransactionPayload) read(data []byte) error {
 	pos := uint64(0)
 
@@ -153,14 +156,14 @@ func (tp *TransactionPayload) read(data []byte) error {
 
 		if fieldType == payloadHeaderEndMark {
 			tp.Payload = data[pos:]
-			log.V(5).Infof("Compressed payload event; found header end mark; payload: %s", hex.EncodeToString(tp.Payload))
+			log.V(5).Infof("Compressed payload event; found header end mark; payload as hex: %s", hex.EncodeToString(tp.Payload))
 			break
 		} else {
 			fieldLen, ok := readFixedLenUint64(data[pos : pos+1])
 			if !ok {
 				return vterrors.New(vtrpcpb.Code_INTERNAL, "error reading field length")
 			}
-			log.V(5).Infof("Compressed payload event; for field type: %d, field length: %d", fieldType, fieldLen)
+			log.V(5).Infof("Compressed payload event; field type: %d, field length: %d", fieldType, fieldLen)
 			pos++
 
 			switch fieldType {
@@ -191,6 +194,8 @@ func (tp *TransactionPayload) read(data []byte) error {
 	return nil
 }
 
+// decode decompresses the payload and extracts the internal binlog
+// events.
 func (tp *TransactionPayload) decode() error {
 	if tp.CompressionType != transactionPayloadCompressionZstd {
 		return vterrors.New(vtrpcpb.Code_INTERNAL,
@@ -202,7 +207,7 @@ func (tp *TransactionPayload) decode() error {
 	if err != nil {
 		return vterrors.Wrapf(err, "error decompressing transaction payload")
 	}
-	log.V(5).Infof("Decompressed payload (length: %d): %s", decompressedPayloadLen, hex.EncodeToString(decompressedPayload))
+	log.V(5).Infof("Decompressed payload as hex (length: %d): %s", decompressedPayloadLen, hex.EncodeToString(decompressedPayload))
 
 	pos := uint64(0)
 
@@ -214,12 +219,12 @@ func (tp *TransactionPayload) decode() error {
 		eventLen := uint64(binary.LittleEndian.Uint32(decompressedPayload[pos+binlogEventLenOffset : eventLenPosEnd]))
 		if pos+eventLen > decompressedPayloadLen {
 			return vterrors.New(vtrpcpb.Code_INTERNAL,
-				fmt.Sprintf("[BUG] event length of %d at pos %d in uncompressed transaction payload is beyond the expected payload length of %d",
+				fmt.Sprintf("[BUG] event length of %d at pos %d in decompressed transaction payload is beyond the expected payload length of %d",
 					eventLen, pos, decompressedPayloadLen))
 		}
 		eventData := decompressedPayload[pos : pos+eventLen]
 		ble := NewMysql56BinlogEvent(eventData)
-		log.V(5).Infof("Decoded binlog event from uncompressed payload (length: %d, type: %d): Bytes: %v",
+		log.V(5).Infof("Decoded binlog event from decompressed payload (length: %d, type: %d): Bytes: %v",
 			eventLen, ble.(mysql56BinlogEvent).Type(), ble.Bytes())
 		tp.Events = append(tp.Events, ble)
 
@@ -229,13 +234,13 @@ func (tp *TransactionPayload) decode() error {
 	return nil
 }
 
-// Decompress the payload's bytes.
+// Decompress the payload.
 func (tp *TransactionPayload) decompress() ([]byte, error) {
 	if len(tp.Payload) == 0 {
 		return []byte{}, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "cannot decompress empty payload")
 	}
 
-	decompressedBytes, err := decoder.DecodeAll(tp.Payload, nil)
+	decompressedBytes, err := zstdDecoder.DecodeAll(tp.Payload, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -243,7 +248,7 @@ func (tp *TransactionPayload) decompress() ([]byte, error) {
 		return []byte{}, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT,
 			fmt.Sprintf("decompressed size %d does not match expected size %d", len(decompressedBytes), tp.UncompressedSize))
 	}
-	log.V(5).Infof("Decompressed %d bytes to %d bytes; Value: %s", len(tp.Payload), len(decompressedBytes), string(decompressedBytes))
+	log.V(5).Infof("Decompressed %d bytes to %d bytes; string value: %s", len(tp.Payload), len(decompressedBytes), string(decompressedBytes))
 
 	return decompressedBytes, nil
 }

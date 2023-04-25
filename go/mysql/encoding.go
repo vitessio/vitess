@@ -217,8 +217,8 @@ func readUint64(data []byte, pos int) (uint64, int, bool) {
 // readFixedLenUint64 reads a uint64 from a fixed-length slice
 // of bytes in little endian format.
 // This is used for variable length fields in MySQL packets that
-// are always stored in 1,3,4,or 9 bytes -- with the first byte
-// skipped when the length is > 1 byte.
+// are always stored in 1, 3, 4, or 9 bytes -- with the first
+// byte skipped when the length is > 1 byte.
 // It returns the read value and a boolean indicating if the
 // read failed.
 func readFixedLenUint64(data []byte) (uint64, bool) {

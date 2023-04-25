@@ -110,7 +110,7 @@ const (
 	//eViewChangeEvent         = 37
 	//eXAPrepareLogEvent       = 38
 
-	// Transaction_payload_event when binlog compression is turned on.
+	// Transaction_payload_event when binlog_transaction_compression=ON.
 	eTransactionPayloadEvent = 40
 
 	// MariaDB specific values. They start at 160.

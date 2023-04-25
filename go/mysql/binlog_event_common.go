@@ -51,9 +51,14 @@ import (
 type binlogEvent []byte
 
 const (
-	binlogFixedHeaderLen  = 19
+	// Default length of the fixed header for v4 events.
+	binlogFixedHeaderLen = 19
+	// The offset from 0 where the type is stored as 1 byte.
 	binlogEventTypeOffset = 4
-	binlogChecksumLen     = 4
+	// Offset from 0 where the 4 byte length is stored.
+	binlogEventLenOffset = 9
+	// Byte length of the checksum suffix.
+	binlogChecksumLen = 4
 )
 
 // dataBytes returns the event bytes without header prefix and without checksum suffix
