@@ -39,18 +39,12 @@ var _errHorizonNotPlanned = vterrors.VT12001("query cannot be fully operator pla
 func planHorizons(ctx *plancontext.PlanningContext, root ops.Operator) (ops.Operator, error) {
 	visitor := func(in ops.Operator, _ semantics.TableSet, isRoot bool) (ops.Operator, rewrite.ApplyResult, error) {
 		switch in := in.(type) {
-		case *Horizon:
+		case horizonLike:
 			op, err := pushOrExpandHorizon(ctx, in)
 			if err != nil {
 				return nil, false, err
 			}
 			return op, rewrite.NewTree, nil
-		case *Derived:
-			op, err := pushOrExpandHorizon(ctx, in)
-			if err != nil {
-				return nil, false, err
-			}
-			return op, rewrite.NewTree, err
 		case *Projection:
 			return tryPushingDownProjection(ctx, in)
 		case *Limit:
@@ -167,7 +161,7 @@ func pushDownProjectionInApplyJoin(
 		expr := in.GetExpr()
 
 		// Check if the current expression can reuse an existing column in the ApplyJoin.
-		if _, found := canReuseColumn(ctx, src.ColumnsAST, expr, jcToAliasedExpr); found {
+		if _, found := canReuseColumn(ctx, src.ColumnsAST, expr, joinColumnToExpr); found {
 			continue
 		}
 

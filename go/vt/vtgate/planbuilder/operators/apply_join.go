@@ -176,15 +176,19 @@ func (a *ApplyJoin) pushColRight(ctx *plancontext.PlanningContext, e *sqlparser.
 }
 
 func (a *ApplyJoin) GetColumns() ([]*sqlparser.AliasedExpr, error) {
-	return slices2.Map(a.ColumnsAST, jcToExpr), nil
+	return slices2.Map(a.ColumnsAST, joinColumnToAliasedExpr), nil
 }
 
 func (a *ApplyJoin) GetOrdering() ([]ops.OrderBy, error) {
 	return a.LHS.GetOrdering()
 }
 
-func jcToExpr(c JoinColumn) *sqlparser.AliasedExpr {
+func joinColumnToAliasedExpr(c JoinColumn) *sqlparser.AliasedExpr {
 	return c.Original
+}
+
+func joinColumnToExpr(column JoinColumn) sqlparser.Expr {
+	return column.Original.Expr
 }
 
 func (a *ApplyJoin) getJoinColumnFor(ctx *plancontext.PlanningContext, e *sqlparser.AliasedExpr) (col JoinColumn, err error) {
@@ -214,12 +218,8 @@ func (a *ApplyJoin) getJoinColumnFor(ctx *plancontext.PlanningContext, e *sqlpar
 	return
 }
 
-func jcToAliasedExpr(column JoinColumn) sqlparser.Expr {
-	return column.Original.Expr
-}
-
 func (a *ApplyJoin) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr) (ops.Operator, int, error) {
-	if offset, found := canReuseColumn(ctx, a.ColumnsAST, expr.Expr, jcToAliasedExpr); found {
+	if offset, found := canReuseColumn(ctx, a.ColumnsAST, expr.Expr, joinColumnToExpr); found {
 		return a, offset, nil
 	}
 	col, err := a.getJoinColumnFor(ctx, expr)
