@@ -5432,7 +5432,7 @@ spec:
                   fieldPath: metadata.name
             - name: OPERATOR_NAME
               value: vitess-operator
-          image: planetscale/vitess-operator:v2.7.4
+          image: planetscale/vitess-operator:v2.7.5
           name: vitess-operator
           resources:
             limits:
