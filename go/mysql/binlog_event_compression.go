@@ -198,20 +198,20 @@ func (tp *TransactionPayload) decode() error {
 	}
 
 	decompressedPayload, err := tp.decompress()
-	decompressedPayloadLen := uint32(len(decompressedPayload))
+	decompressedPayloadLen := uint64(len(decompressedPayload))
 	if err != nil {
 		return vterrors.Wrapf(err, "error decompressing transaction payload")
 	}
 	log.V(5).Infof("Decompressed payload (length: %d): %s", decompressedPayloadLen, hex.EncodeToString(decompressedPayload))
 
-	pos := uint32(0)
+	pos := uint64(0)
 
 	for {
 		eventLenPosEnd := pos + binlogEventLenOffset + 4
 		if eventLenPosEnd > decompressedPayloadLen { // No more events in the payload
 			break
 		}
-		eventLen := binary.LittleEndian.Uint32(decompressedPayload[pos+binlogEventLenOffset : eventLenPosEnd])
+		eventLen := uint64(binary.LittleEndian.Uint32(decompressedPayload[pos+binlogEventLenOffset : eventLenPosEnd]))
 		if pos+eventLen > decompressedPayloadLen {
 			return vterrors.New(vtrpcpb.Code_INTERNAL,
 				fmt.Sprintf("[BUG] event length of %d at pos %d in uncompressed transaction payload is beyond the expected payload length of %d",
