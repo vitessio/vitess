@@ -607,8 +607,19 @@ var commands = []commandGroup{
 					" \nvtctl OnlineDDL test_keyspace show running" +
 					" \nvtctl OnlineDDL test_keyspace show complete" +
 					" \nvtctl OnlineDDL test_keyspace show failed" +
+					" \nvtctl OnlineDDL test_keyspace cleanup 82fa54ac_e83e_11ea_96b7_f875a4d24e90" +
 					" \nvtctl OnlineDDL test_keyspace retry 82fa54ac_e83e_11ea_96b7_f875a4d24e90" +
-					" \nvtctl OnlineDDL test_keyspace cancel 82fa54ac_e83e_11ea_96b7_f875a4d24e90",
+					" \nvtctl OnlineDDL test_keyspace cancel 82fa54ac_e83e_11ea_96b7_f875a4d24e90" +
+					" \nvtctl OnlineDDL test_keyspace cancel-all" +
+					" \nvtctl OnlineDDL test_keyspace launch 82fa54ac_e83e_11ea_96b7_f875a4d24e90" +
+					" \nvtctl OnlineDDL test_keyspace launch-all" +
+					" \nvtctl OnlineDDL test_keyspace complete 82fa54ac_e83e_11ea_96b7_f875a4d24e90" +
+					" \nvtctl OnlineDDL test_keyspace complete-all" +
+					" \nvtctl OnlineDDL test_keyspace throttle 82fa54ac_e83e_11ea_96b7_f875a4d24e90" +
+					" \nvtctl OnlineDDL test_keyspace throttle-all" +
+					" \nvtctl OnlineDDL test_keyspace unthrottle 82fa54ac_e83e_11ea_96b7_f875a4d24e90" +
+					" \nvtctl OnlineDDL test_keyspace unthrottle-all" +
+					"",
 			},
 			{
 				name:   "ValidateVersionShard",
@@ -2987,11 +2998,31 @@ func commandOnlineDDL(ctx context.Context, wr *wrangler.Wrangler, subFlags *pfla
 			return fmt.Errorf("UUID required")
 		}
 		applySchemaQuery, bindErr = sqlparser.ParseAndBind(`alter vitess_migration %a retry`, sqltypes.StringBindVariable(arg))
+	case "cleanup":
+		if arg == "" {
+			return fmt.Errorf("UUID required")
+		}
+		applySchemaQuery, bindErr = sqlparser.ParseAndBind(`alter vitess_migration %a cleanup`, sqltypes.StringBindVariable(arg))
+	case "launch":
+		if arg == "" {
+			return fmt.Errorf("UUID required")
+		}
+		applySchemaQuery, bindErr = sqlparser.ParseAndBind(`alter vitess_migration %a launch`, sqltypes.StringBindVariable(arg))
+	case "launch-all":
+		if arg != "" {
+			return fmt.Errorf("UUID not allowed in %s", command)
+		}
+		applySchemaQuery = `alter vitess_migration launch all`
 	case "complete":
 		if arg == "" {
 			return fmt.Errorf("UUID required")
 		}
 		applySchemaQuery, bindErr = sqlparser.ParseAndBind(`alter vitess_migration %a complete`, sqltypes.StringBindVariable(arg))
+	case "complete-all":
+		if arg != "" {
+			return fmt.Errorf("UUID not allowed in %s", command)
+		}
+		applySchemaQuery = `alter vitess_migration complete all`
 	case "cancel":
 		if arg == "" {
 			return fmt.Errorf("UUID required")
@@ -3002,6 +3033,26 @@ func commandOnlineDDL(ctx context.Context, wr *wrangler.Wrangler, subFlags *pfla
 			return fmt.Errorf("UUID not allowed in %s", command)
 		}
 		applySchemaQuery = `alter vitess_migration cancel all`
+	case "throttle":
+		if arg == "" {
+			return fmt.Errorf("UUID required")
+		}
+		applySchemaQuery, bindErr = sqlparser.ParseAndBind(`alter vitess_migration %a throttle`, sqltypes.StringBindVariable(arg))
+	case "unthrottle":
+		if arg == "" {
+			return fmt.Errorf("UUID required")
+		}
+		applySchemaQuery, bindErr = sqlparser.ParseAndBind(`alter vitess_migration %a unthrottle`, sqltypes.StringBindVariable(arg))
+	case "throttle-all":
+		if arg != "" {
+			return fmt.Errorf("UUID not allowed in %s", command)
+		}
+		applySchemaQuery = `alter vitess_migration throttle all`
+	case "unthrottle-all":
+		if arg != "" {
+			return fmt.Errorf("UUID not allowed in %s", command)
+		}
+		applySchemaQuery = `alter vitess_migration unthrottle all`
 	default:
 		return fmt.Errorf("Unknown OnlineDDL command: %s", command)
 	}
