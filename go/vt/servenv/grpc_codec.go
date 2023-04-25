@@ -44,7 +44,7 @@ func (vtprotoCodec) Marshal(v any) ([]byte, error) {
 	case proto.Message:
 		return proto.Marshal(v)
 	default:
-		return nil, fmt.Errorf("failed to marshal, message is %T, want proto.Message", v)
+		return nil, fmt.Errorf("failed to marshal, message is %T, want proto.Message or must satisfy the vtprotoMessage interface", v)
 	}
 }
 
