@@ -568,13 +568,6 @@ const (
 	sqlFindProcess        = "SELECT id, Info as info FROM information_schema.processlist WHERE id=%a AND Info LIKE %a"
 )
 
-const (
-	retryMigrationHint     = "retry"
-	cancelMigrationHint    = "cancel"
-	cancelAllMigrationHint = "cancel-all"
-	completeMigrationHint  = "complete"
-)
-
 var (
 	sqlCreateOnlineDDLUser = []string{
 		`CREATE USER IF NOT EXISTS %s IDENTIFIED BY '%s'`,
