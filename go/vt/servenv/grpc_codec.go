@@ -44,7 +44,7 @@ func (vtprotoCodec) Marshal(v any) ([]byte, error) {
 	case proto.Message:
 		return proto.Marshal(v)
 	default:
-		return nil, fmt.Errorf("failed to marshal, message is %T, want proto.Message or must satisfy the vtprotoMessage interface", v)
+		return nil, fmt.Errorf("failed to marshal, message is %T, must satisfy the vtprotoMessage interface or want proto.Message", v)
 	}
 }
 
@@ -55,7 +55,7 @@ func (vtprotoCodec) Unmarshal(data []byte, v any) error {
 	case proto.Message:
 		return proto.Unmarshal(data, v)
 	default:
-		return fmt.Errorf("failed to unmarshal, message is %T, want proto.Message or must satisfy the vtprotoMessage interface", v)
+		return fmt.Errorf("failed to unmarshal, message is %T, must satisfy the vtprotoMessage interface or want proto.Message", v)
 	}
 }
 
