@@ -23,6 +23,7 @@ import (
 	"os"
 	"path"
 	"testing"
+
 	"vitess.io/vitess/go/vt/callerid"
 
 	"github.com/stretchr/testify/assert"
@@ -76,6 +77,7 @@ var (
 )
 
 func TestMain(m *testing.M) {
+
 	defer cluster.PanicHandler(nil)
 	flag.Parse()
 
