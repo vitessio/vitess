@@ -270,7 +270,6 @@ func getOperatorFromAliasedTableExpr(ctx *plancontext.PlanningContext, tableExpr
 	tableID := ctx.SemTable.TableSetFor(tableExpr)
 	switch tbl := tableExpr.Expr.(type) {
 	case sqlparser.TableName:
-		tableID := tableID
 		tableInfo, err := ctx.SemTable.TableInfoFor(tableID)
 		if err != nil {
 			return nil, err

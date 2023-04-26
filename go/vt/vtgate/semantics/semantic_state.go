@@ -46,8 +46,8 @@ type (
 		// authoritative is true if we have exhaustive column information
 		authoritative() bool
 
-		// getExpr returns the AST struct behind this table
-		getExpr() *sqlparser.AliasedTableExpr
+		// GetExpr returns the AST struct behind this table
+		GetExpr() *sqlparser.AliasedTableExpr
 
 		// getColumns returns the known column information for this table
 		getColumns() []ColumnInfo
@@ -138,6 +138,19 @@ func (st *SemTable) CopyDependencies(from, to sqlparser.Expr) {
 	st.Direct[to] = st.DirectDeps(from)
 }
 
+// CopyDependenciesOnSQLNodes copies the dependencies from one expression into the other
+func (st *SemTable) CopyDependenciesOnSQLNodes(from, to sqlparser.SQLNode) {
+	f, ok := from.(sqlparser.Expr)
+	if !ok {
+		return
+	}
+	t, ok := to.(sqlparser.Expr)
+	if !ok {
+		return
+	}
+	st.CopyDependencies(f, t)
+}
+
 // Cloned copies the dependencies from one expression into the other
 func (st *SemTable) Cloned(from, to sqlparser.SQLNode) {
 	f, fromOK := from.(sqlparser.Expr)
@@ -160,7 +173,7 @@ func EmptySemTable() *SemTable {
 // TableSetFor returns the bitmask for this particular table
 func (st *SemTable) TableSetFor(t *sqlparser.AliasedTableExpr) TableSet {
 	for idx, t2 := range st.Tables {
-		if t == t2.getExpr() {
+		if t == t2.GetExpr() {
 			return SingleTableSet(idx)
 		}
 	}
@@ -384,7 +397,7 @@ func (st *SemTable) SingleUnshardedKeyspace() (*vindexes.Keyspace, []*vindexes.T
 		vindexTable := table.GetVindexTable()
 
 		if vindexTable == nil {
-			_, isDT := table.getExpr().Expr.(*sqlparser.DerivedTable)
+			_, isDT := table.GetExpr().Expr.(*sqlparser.DerivedTable)
 			if isDT {
 				// derived tables are ok, as long as all real tables are from the same unsharded keyspace
 				// we check the real tables inside the derived table as well for same unsharded keyspace.
@@ -399,7 +412,7 @@ func (st *SemTable) SingleUnshardedKeyspace() (*vindexes.Keyspace, []*vindexes.T
 			}
 			return nil, nil
 		}
-		name, ok := table.getExpr().Expr.(sqlparser.TableName)
+		name, ok := table.GetExpr().Expr.(sqlparser.TableName)
 		if !ok {
 			return nil, nil
 		}

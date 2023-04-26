@@ -104,6 +104,7 @@ func (h *Horizon) getQP(ctx *plancontext.PlanningContext) (*QueryProjection, err
 	h.QP = qp
 	return h.QP, nil
 }
+
 func (h *Horizon) setQP(qp *QueryProjection) {
 	h.QP = qp
 }

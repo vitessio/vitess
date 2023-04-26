@@ -39,18 +39,12 @@ var _errHorizonNotPlanned = vterrors.VT12001("query cannot be fully operator pla
 func planHorizons(ctx *plancontext.PlanningContext, root ops.Operator) (ops.Operator, error) {
 	visitor := func(in ops.Operator, _ semantics.TableSet, isRoot bool) (ops.Operator, rewrite.ApplyResult, error) {
 		switch in := in.(type) {
-		case *Horizon:
+		case horizonLike:
 			op, err := pushOrExpandHorizon(ctx, in)
 			if err != nil {
 				return nil, false, err
 			}
 			return op, rewrite.NewTree, nil
-		case *Derived:
-			op, err := pushOrExpandHorizon(ctx, in)
-			if err != nil {
-				return nil, false, err
-			}
-			return op, rewrite.NewTree, err
 		case *Projection:
 			return tryPushingDownProjection(ctx, in)
 		case *Limit:
@@ -161,38 +155,18 @@ func pushDownProjectionInApplyJoin(
 	lhs, rhs := &projector{}, &projector{}
 
 	src.ColumnsAST = nil
-	// Iterate through each column in the Projection's columns.
 	for idx := 0; idx < len(p.Columns); idx++ {
-		in := p.Columns[idx]
-		expr := in.GetExpr()
-
-		// Check if the current expression can reuse an existing column in the ApplyJoin.
-		if _, found := canReuseColumn(ctx, src.ColumnsAST, expr, jcToAliasedExpr); found {
-			continue
-		}
-
-		// Get a JoinColumn for the current expression.
-		colName := p.ColumnNames[idx]
-		col, err := src.getJoinColumnFor(ctx, &sqlparser.AliasedExpr{Expr: expr, As: sqlparser.NewIdentifierCI(colName)})
+		err := splitProjectionAcrossJoin(ctx, src, lhs, rhs, p.Columns[idx], p.ColumnNames[idx])
 		if err != nil {
 			return nil, false, err
 		}
+	}
 
-		// Update the left and right child columns and names based on the JoinColumn type.
-		switch {
-		case col.IsPureLeft():
-			lhs.add(in, colName)
-		case col.IsPureRight():
-			rhs.add(in, colName)
-		case col.IsMixedLeftAndRight():
-			for _, lhsExpr := range col.LHSExprs {
-				lhs.add(&Expr{E: lhsExpr}, "")
-			}
-			rhs.add(&Expr{E: col.RHSExpr}, colName)
+	if p.TableID != nil {
+		err := exposeColumnsThroughDerivedTable(ctx, p, src, lhs)
+		if err != nil {
+			return nil, false, err
 		}
-
-		// Add the new JoinColumn to the ApplyJoin's ColumnsAST.
-		src.ColumnsAST = append(src.ColumnsAST, col)
 	}
 
 	var err error
@@ -209,6 +183,106 @@ func pushDownProjectionInApplyJoin(
 	}
 
 	return src, rewrite.NewTree, nil
+}
+
+// splitProjectionAcrossJoin creates JoinColumns for all projections,
+// and pushes down columns as needed between the LHS and RHS of a join
+func splitProjectionAcrossJoin(
+	ctx *plancontext.PlanningContext,
+	join *ApplyJoin,
+	lhs, rhs *projector,
+	in ProjExpr,
+	colName string,
+) error {
+	expr := in.GetExpr()
+
+	// Check if the current expression can reuse an existing column in the ApplyJoin.
+	if _, found := canReuseColumn(ctx, join.ColumnsAST, expr, joinColumnToExpr); found {
+		return nil
+	}
+
+	// Get a JoinColumn for the current expression.
+	col, err := join.getJoinColumnFor(ctx, &sqlparser.AliasedExpr{Expr: expr, As: sqlparser.NewIdentifierCI(colName)})
+	if err != nil {
+		return err
+	}
+
+	// Update the left and right child columns and names based on the JoinColumn type.
+	switch {
+	case col.IsPureLeft():
+		lhs.add(in, colName)
+	case col.IsPureRight():
+		rhs.add(in, colName)
+	case col.IsMixedLeftAndRight():
+		for _, lhsExpr := range col.LHSExprs {
+			lhs.add(&Expr{E: lhsExpr}, "")
+		}
+		rhs.add(&Expr{E: col.RHSExpr}, colName)
+	}
+
+	// Add the new JoinColumn to the ApplyJoin's ColumnsAST.
+	join.ColumnsAST = append(join.ColumnsAST, col)
+	return nil
+}
+
+// exposeColumnsThroughDerivedTable rewrites expressions within a join that is inside a derived table
+// in order to make them accessible outside the derived table. This is necessary when swapping the
+// positions of the derived table and join operation.
+//
+// For example, consider the input query:
+// select ... from (select T1.foo from T1 join T2 on T1.id = T2.id) as t
+// If we push the derived table under the join, with T1 on the LHS of the join, we need to expose
+// the values of T1.id through the derived table, or they will not be accessible on the RHS.
+//
+// The function iterates through each join predicate, rewriting the expressions in the predicate's
+// LHS expressions to include the derived table. This allows the expressions to be accessed outside
+// the derived table.
+func exposeColumnsThroughDerivedTable(ctx *plancontext.PlanningContext, p *Projection, src *ApplyJoin, lhs *projector) error {
+	derivedTbl, err := ctx.SemTable.TableInfoFor(*p.TableID)
+	if err != nil {
+		return err
+	}
+	derivedTblName, err := derivedTbl.Name()
+	if err != nil {
+		return err
+	}
+	for _, predicate := range src.JoinPredicates {
+		for idx, expr := range predicate.LHSExprs {
+			tbl, err := ctx.SemTable.TableInfoForExpr(expr)
+			if err != nil {
+				return err
+			}
+			tblExpr := tbl.GetExpr()
+			tblName, err := tblExpr.TableName()
+			if err != nil {
+				return err
+			}
+
+			expr = semantics.RewriteDerivedTableExpression(expr, derivedTbl)
+			out, err := prefixColNames(tblName, expr)
+			if err != nil {
+				return err
+			}
+
+			alias := sqlparser.UnescapedString(out)
+			predicate.LHSExprs[idx] = sqlparser.NewColNameWithQualifier(alias, derivedTblName)
+			lhs.add(&Expr{E: out}, alias)
+		}
+	}
+	return nil
+}
+
+// prefixColNames adds qualifier prefixes to all ColName:s.
+// We want to be more explicit than the user was to make sure we never produce invalid SQL
+func prefixColNames(tblName sqlparser.TableName, e sqlparser.Expr) (out sqlparser.Expr, err error) {
+	out = sqlparser.CopyOnRewrite(e, nil, func(cursor *sqlparser.CopyOnWriteCursor) {
+		col, ok := cursor.Node().(*sqlparser.ColName)
+		if !ok {
+			return
+		}
+		col.Qualifier = tblName
+	}, nil).(sqlparser.Expr)
+	return
 }
 
 func createProjectionWithTheseColumns(
@@ -315,11 +389,6 @@ func pushOrExpandHorizon(ctx *plancontext.PlanningContext, in horizonLike) (ops.
 		return rewrite.Swap(in, rb)
 	}
 
-	if _, ok := in.(*Derived); ok {
-		// we're still not ready if we have to expand the derived table horizon
-		return nil, errHorizonNotPlanned()
-	}
-
 	return expandHorizon(ctx, in)
 }
 
@@ -355,6 +424,7 @@ func expandHorizon(ctx *plancontext.PlanningContext, horizon horizonLike) (ops.O
 	if derived, isDerived := horizon.(*Derived); isDerived {
 		id := derived.TableId
 		proj.TableID = &id
+		proj.Alias = derived.Alias
 	}
 	op = proj
 

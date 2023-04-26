@@ -494,22 +494,20 @@
       "QueryType": "SELECT",
       "Original": "select id from (select user.id, user.col from user join user_extra) as t order by id",
       "Instructions": {
-        "OperatorType": "Sort",
-        "Variant": "Memory",
-        "OrderBy": "(0|1) ASC",
-        "ResultColumns": 1,
+        "OperatorType": "SimpleProjection",
+        "Columns": [
+          0
+        ],
         "Inputs": [
           {
-            "OperatorType": "SimpleProjection",
-            "Columns": [
-              0,
-              2
-            ],
+            "OperatorType": "Sort",
+            "Variant": "Memory",
+            "OrderBy": "(0|1) ASC",
             "Inputs": [
               {
                 "OperatorType": "Join",
                 "Variant": "Join",
-                "JoinColumnIndexes": "L:0,L:1,L:2",
+                "JoinColumnIndexes": "L:0,L:1",
                 "TableName": "`user`_user_extra",
                 "Inputs": [
                   {
@@ -519,8 +517,8 @@
                       "Name": "user",
                       "Sharded": true
                     },
-                    "FieldQuery": "select `user`.id, `user`.col, weight_string(`user`.id) from `user` where 1 != 1",
-                    "Query": "select `user`.id, `user`.col, weight_string(`user`.id) from `user`",
+                    "FieldQuery": "select id, weight_string(id) from (select `user`.id, `user`.col from `user` where 1 != 1) as t where 1 != 1",
+                    "Query": "select id, weight_string(id) from (select `user`.id, `user`.col from `user`) as t",
                     "Table": "`user`"
                   },
                   {

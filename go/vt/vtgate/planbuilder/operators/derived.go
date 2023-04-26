@@ -253,6 +253,7 @@ func (d *Derived) getQP(ctx *plancontext.PlanningContext) (*QueryProjection, err
 	d.QP = qp
 	return d.QP, nil
 }
+
 func (d *Derived) setQP(qp *QueryProjection) {
 	d.QP = qp
 }
