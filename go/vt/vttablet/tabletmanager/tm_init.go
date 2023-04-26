@@ -711,7 +711,7 @@ func (tm *TabletManager) findMysqlPort(retryInterval time.Duration) {
 	for {
 		time.Sleep(retryInterval)
 		mport, err := tm.MysqlDaemon.GetMysqlPort()
-		if err != nil {
+		if err != nil || mport == 0 {
 			continue
 		}
 		log.Infof("Identified mysql port: %v", mport)
