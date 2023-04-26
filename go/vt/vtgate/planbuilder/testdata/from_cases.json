@@ -3166,41 +3166,32 @@
         "TableName": "`user`_user_extra_unsharded",
         "Inputs": [
           {
-            "OperatorType": "SimpleProjection",
-            "Columns": [
-              1,
-              0
-            ],
+            "OperatorType": "Join",
+            "Variant": "Join",
+            "JoinColumnIndexes": "L:0,L:1",
+            "TableName": "`user`_user_extra",
             "Inputs": [
               {
-                "OperatorType": "Join",
-                "Variant": "Join",
-                "JoinColumnIndexes": "L:0,L:1",
-                "TableName": "`user`_user_extra",
-                "Inputs": [
-                  {
-                    "OperatorType": "Route",
-                    "Variant": "Scatter",
-                    "Keyspace": {
-                      "Name": "user",
-                      "Sharded": true
-                    },
-                    "FieldQuery": "select `user`.id, `user`.col1 from `user` where 1 != 1",
-                    "Query": "select `user`.id, `user`.col1 from `user`",
-                    "Table": "`user`"
-                  },
-                  {
-                    "OperatorType": "Route",
-                    "Variant": "Scatter",
-                    "Keyspace": {
-                      "Name": "user",
-                      "Sharded": true
-                    },
-                    "FieldQuery": "select 1 from user_extra where 1 != 1",
-                    "Query": "select 1 from user_extra",
-                    "Table": "user_extra"
-                  }
-                ]
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select t.col1, t.id from (select `user`.id, `user`.col1 from `user` where 1 != 1) as t where 1 != 1",
+                "Query": "select t.col1, t.id from (select `user`.id, `user`.col1 from `user`) as t",
+                "Table": "`user`"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select 1 from user_extra where 1 != 1",
+                "Query": "select 1 from user_extra",
+                "Table": "user_extra"
               }
             ]
           },
@@ -3276,43 +3267,35 @@
       "QueryType": "SELECT",
       "Original": "select t.id from (select user.id, user.col1 from user join user_extra on user_extra.col = user.col) as t",
       "Instructions": {
-        "OperatorType": "SimpleProjection",
-        "Columns": [
-          0
-        ],
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "L:0",
+        "JoinVars": {
+          "user_col": 1
+        },
+        "TableName": "`user`_user_extra",
         "Inputs": [
           {
-            "OperatorType": "Join",
-            "Variant": "Join",
-            "JoinColumnIndexes": "L:1,L:2",
-            "JoinVars": {
-              "user_col": 0
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
             },
-            "TableName": "`user`_user_extra",
-            "Inputs": [
-              {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select `user`.col, `user`.id, `user`.col1 from `user` where 1 != 1",
-                "Query": "select `user`.col, `user`.id, `user`.col1 from `user`",
-                "Table": "`user`"
-              },
-              {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select 1 from user_extra where 1 != 1",
-                "Query": "select 1 from user_extra where user_extra.col = :user_col",
-                "Table": "user_extra"
-              }
-            ]
+            "FieldQuery": "select t.id, t.`user.col` from (select `user`.id, `user`.col1, `user`.col as `user.col` from `user` where 1 != 1) as t where 1 != 1",
+            "Query": "select t.id, t.`user.col` from (select `user`.id, `user`.col1, `user`.col as `user.col` from `user`) as t",
+            "Table": "`user`"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from user_extra where 1 != 1",
+            "Query": "select 1 from user_extra where user_extra.col = :user_col",
+            "Table": "user_extra"
           }
         ]
       },
@@ -3407,40 +3390,32 @@
             "Table": "unsharded_a"
           },
           {
-            "OperatorType": "SimpleProjection",
-            "Columns": [
-              1
-            ],
+            "OperatorType": "Join",
+            "Variant": "Join",
+            "JoinColumnIndexes": "L:0",
+            "TableName": "`user`_user_extra",
             "Inputs": [
               {
-                "OperatorType": "Join",
-                "Variant": "Join",
-                "JoinColumnIndexes": "L:0,L:1",
-                "TableName": "`user`_user_extra",
-                "Inputs": [
-                  {
-                    "OperatorType": "Route",
-                    "Variant": "Scatter",
-                    "Keyspace": {
-                      "Name": "user",
-                      "Sharded": true
-                    },
-                    "FieldQuery": "select `user`.id, `user`.col1 from `user` where 1 != 1",
-                    "Query": "select `user`.id, `user`.col1 from `user`",
-                    "Table": "`user`"
-                  },
-                  {
-                    "OperatorType": "Route",
-                    "Variant": "Scatter",
-                    "Keyspace": {
-                      "Name": "user",
-                      "Sharded": true
-                    },
-                    "FieldQuery": "select 1 from user_extra where 1 != 1",
-                    "Query": "select 1 from user_extra",
-                    "Table": "user_extra"
-                  }
-                ]
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select t.col1 from (select `user`.id, `user`.col1 from `user` where 1 != 1) as t where 1 != 1",
+                "Query": "select t.col1 from (select `user`.id, `user`.col1 from `user`) as t",
+                "Table": "`user`"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select 1 from user_extra where 1 != 1",
+                "Query": "select 1 from user_extra",
+                "Table": "user_extra"
               }
             ]
           }
@@ -3481,44 +3456,36 @@
             "Table": "unsharded_a"
           },
           {
-            "OperatorType": "SimpleProjection",
-            "Columns": [
-              1
-            ],
+            "OperatorType": "Join",
+            "Variant": "Join",
+            "JoinColumnIndexes": "L:0",
+            "TableName": "`user`_user_extra",
             "Inputs": [
               {
-                "OperatorType": "Join",
-                "Variant": "Join",
-                "JoinColumnIndexes": "L:0,L:1",
-                "TableName": "`user`_user_extra",
-                "Inputs": [
-                  {
-                    "OperatorType": "Route",
-                    "Variant": "EqualUnique",
-                    "Keyspace": {
-                      "Name": "user",
-                      "Sharded": true
-                    },
-                    "FieldQuery": "select `user`.id, `user`.col1 from `user` where 1 != 1",
-                    "Query": "select `user`.id, `user`.col1 from `user` where `user`.id = :ua_id",
-                    "Table": "`user`",
-                    "Values": [
-                      ":ua_id"
-                    ],
-                    "Vindex": "user_index"
-                  },
-                  {
-                    "OperatorType": "Route",
-                    "Variant": "Scatter",
-                    "Keyspace": {
-                      "Name": "user",
-                      "Sharded": true
-                    },
-                    "FieldQuery": "select 1 from user_extra where 1 != 1",
-                    "Query": "select 1 from user_extra",
-                    "Table": "user_extra"
-                  }
-                ]
+                "OperatorType": "Route",
+                "Variant": "EqualUnique",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select t.col1 from (select `user`.id, `user`.col1 from `user` where 1 != 1) as t where 1 != 1",
+                "Query": "select t.col1 from (select `user`.id, `user`.col1 from `user` where `user`.id = :ua_id) as t",
+                "Table": "`user`",
+                "Values": [
+                  ":ua_id"
+                ],
+                "Vindex": "user_index"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select 1 from user_extra where 1 != 1",
+                "Query": "select 1 from user_extra",
+                "Table": "user_extra"
               }
             ]
           }
@@ -4298,41 +4265,32 @@
       "QueryType": "SELECT",
       "Original": "select id, t.id from (select user.id from user join user_extra) as t",
       "Instructions": {
-        "OperatorType": "SimpleProjection",
-        "Columns": [
-          0,
-          0
-        ],
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "L:0,L:0",
+        "TableName": "`user`_user_extra",
         "Inputs": [
           {
-            "OperatorType": "Join",
-            "Variant": "Join",
-            "JoinColumnIndexes": "L:0",
-            "TableName": "`user`_user_extra",
-            "Inputs": [
-              {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select `user`.id from `user` where 1 != 1",
-                "Query": "select `user`.id from `user`",
-                "Table": "`user`"
-              },
-              {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select 1 from user_extra where 1 != 1",
-                "Query": "select 1 from user_extra",
-                "Table": "user_extra"
-              }
-            ]
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id from (select `user`.id from `user` where 1 != 1) as t where 1 != 1",
+            "Query": "select id from (select `user`.id from `user`) as t",
+            "Table": "`user`"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from user_extra where 1 != 1",
+            "Query": "select 1 from user_extra",
+            "Table": "user_extra"
           }
         ]
       },
@@ -5013,44 +4971,36 @@
       "QueryType": "SELECT",
       "Original": "select id from (select user.id, user.col from user join user_extra) as t where id=5",
       "Instructions": {
-        "OperatorType": "SimpleProjection",
-        "Columns": [
-          0
-        ],
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "L:0",
+        "TableName": "`user`_user_extra",
         "Inputs": [
           {
-            "OperatorType": "Join",
-            "Variant": "Join",
-            "JoinColumnIndexes": "L:0,L:1",
-            "TableName": "`user`_user_extra",
-            "Inputs": [
-              {
-                "OperatorType": "Route",
-                "Variant": "EqualUnique",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select `user`.id, `user`.col from `user` where 1 != 1",
-                "Query": "select `user`.id, `user`.col from `user` where `user`.id = 5",
-                "Table": "`user`",
-                "Values": [
-                  "INT64(5)"
-                ],
-                "Vindex": "user_index"
-              },
-              {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select 1 from user_extra where 1 != 1",
-                "Query": "select 1 from user_extra",
-                "Table": "user_extra"
-              }
-            ]
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id from (select `user`.id, `user`.col from `user` where 1 != 1) as t where 1 != 1",
+            "Query": "select id from (select `user`.id, `user`.col from `user` where `user`.id = 5) as t",
+            "Table": "`user`",
+            "Values": [
+              "INT64(5)"
+            ],
+            "Vindex": "user_index"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from user_extra where 1 != 1",
+            "Query": "select 1 from user_extra",
+            "Table": "user_extra"
           }
         ]
       },
@@ -5068,40 +5018,32 @@
       "QueryType": "SELECT",
       "Original": "select id+1 from (select user.id, user.col from user join user_extra) as t",
       "Instructions": {
-        "OperatorType": "SimpleProjection",
-        "Columns": [
-          2
-        ],
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "L:0",
+        "TableName": "`user`_user_extra",
         "Inputs": [
           {
-            "OperatorType": "Join",
-            "Variant": "Join",
-            "JoinColumnIndexes": "L:0,L:1,L:2",
-            "TableName": "`user`_user_extra",
-            "Inputs": [
-              {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select `user`.id, `user`.col, `user`.id + 1 from `user` where 1 != 1",
-                "Query": "select `user`.id, `user`.col, `user`.id + 1 from `user`",
-                "Table": "`user`"
-              },
-              {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select 1 from user_extra where 1 != 1",
-                "Query": "select 1 from user_extra",
-                "Table": "user_extra"
-              }
-            ]
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id + 1 from (select `user`.id, `user`.col from `user` where 1 != 1) as t where 1 != 1",
+            "Query": "select id + 1 from (select `user`.id, `user`.col from `user`) as t",
+            "Table": "`user`"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from user_extra where 1 != 1",
+            "Query": "select 1 from user_extra",
+            "Table": "user_extra"
           }
         ]
       },
@@ -5499,48 +5441,39 @@
       "Instructions": {
         "OperatorType": "Join",
         "Variant": "Join",
-        "JoinColumnIndexes": "L:1",
+        "JoinColumnIndexes": "L:0",
         "JoinVars": {
-          "t_col1": 0
+          "t_col1": 1
         },
         "TableName": "`user`_unsharded_unsharded",
         "Inputs": [
           {
-            "OperatorType": "SimpleProjection",
-            "Columns": [
-              0,
-              1
-            ],
+            "OperatorType": "Join",
+            "Variant": "Join",
+            "JoinColumnIndexes": "L:0,L:1",
+            "TableName": "`user`_unsharded",
             "Inputs": [
               {
-                "OperatorType": "Join",
-                "Variant": "Join",
-                "JoinColumnIndexes": "L:0,L:1",
-                "TableName": "`user`_unsharded",
-                "Inputs": [
-                  {
-                    "OperatorType": "Route",
-                    "Variant": "Scatter",
-                    "Keyspace": {
-                      "Name": "user",
-                      "Sharded": true
-                    },
-                    "FieldQuery": "select `user`.col1, 0 from `user` where 1 != 1",
-                    "Query": "select `user`.col1, 0 from `user`",
-                    "Table": "`user`"
-                  },
-                  {
-                    "OperatorType": "Route",
-                    "Variant": "Unsharded",
-                    "Keyspace": {
-                      "Name": "main",
-                      "Sharded": false
-                    },
-                    "FieldQuery": "select 1 from unsharded where 1 != 1",
-                    "Query": "select 1 from unsharded",
-                    "Table": "unsharded"
-                  }
-                ]
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select 0, t.col1 from (select `user`.col1 from `user` where 1 != 1) as t where 1 != 1",
+                "Query": "select 0, t.col1 from (select `user`.col1 from `user`) as t",
+                "Table": "`user`"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "main",
+                  "Sharded": false
+                },
+                "FieldQuery": "select 1 from unsharded where 1 != 1",
+                "Query": "select 1 from unsharded",
+                "Table": "unsharded"
               }
             ]
           },
@@ -5882,40 +5815,32 @@
             "TableName": "`user`_user_extra_user_extra",
             "Inputs": [
               {
-                "OperatorType": "SimpleProjection",
-                "Columns": [
-                  0
-                ],
+                "OperatorType": "Join",
+                "Variant": "Join",
+                "JoinColumnIndexes": "L:0",
+                "TableName": "`user`_user_extra",
                 "Inputs": [
                   {
-                    "OperatorType": "Join",
-                    "Variant": "Join",
-                    "JoinColumnIndexes": "L:0",
-                    "TableName": "`user`_user_extra",
-                    "Inputs": [
-                      {
-                        "OperatorType": "Route",
-                        "Variant": "Scatter",
-                        "Keyspace": {
-                          "Name": "user",
-                          "Sharded": true
-                        },
-                        "FieldQuery": "select `user`.col from `user` where 1 != 1",
-                        "Query": "select `user`.col from `user`",
-                        "Table": "`user`"
-                      },
-                      {
-                        "OperatorType": "Route",
-                        "Variant": "Scatter",
-                        "Keyspace": {
-                          "Name": "user",
-                          "Sharded": true
-                        },
-                        "FieldQuery": "select 1 from user_extra where 1 != 1",
-                        "Query": "select 1 from user_extra",
-                        "Table": "user_extra"
-                      }
-                    ]
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select u.col from (select `user`.col from `user` where 1 != 1) as u where 1 != 1",
+                    "Query": "select u.col from (select `user`.col from `user`) as u",
+                    "Table": "`user`"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select 1 from user_extra where 1 != 1",
+                    "Query": "select 1 from user_extra",
+                    "Table": "user_extra"
                   }
                 ]
               },

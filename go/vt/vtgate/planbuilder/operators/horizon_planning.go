@@ -189,6 +189,40 @@ func pushDownProjectionInApplyJoin(
 		src.ColumnsAST = append(src.ColumnsAST, col)
 	}
 
+	if p.TableID != nil {
+		derivedTbl, err := ctx.SemTable.TableInfoFor(*p.TableID)
+		if err != nil {
+			return nil, false, err
+		}
+		derivedTblName, err := derivedTbl.Name()
+		if err != nil {
+			return nil, false, err
+		}
+		for _, predicate := range src.JoinPredicates {
+			for idx, expr := range predicate.LHSExprs {
+				tbl, err := ctx.SemTable.TableInfoForExpr(expr)
+				if err != nil {
+					return nil, false, err
+				}
+				tblExpr := tbl.GetExpr()
+				tblName, err := tblExpr.TableName()
+				if err != nil {
+					return nil, false, err
+				}
+
+				expr = semantics.RewriteDerivedTableExpression(expr, derivedTbl)
+				out, err := prefixColNames(tblName, expr)
+				if err != nil {
+					return nil, false, err
+				}
+
+				alias := sqlparser.UnescapedString(out)
+				predicate.LHSExprs[idx] = sqlparser.NewColNameWithQualifier(alias, derivedTblName)
+				lhs.add(&Expr{E: out}, alias)
+			}
+		}
+	}
+
 	var err error
 
 	// Create and update the Projection operators for the left and right children, if needed.
@@ -203,6 +237,17 @@ func pushDownProjectionInApplyJoin(
 	}
 
 	return src, rewrite.NewTree, nil
+}
+
+func prefixColNames(tblName sqlparser.TableName, e sqlparser.Expr) (out sqlparser.Expr, err error) {
+	out = sqlparser.CopyOnRewrite(e, nil, func(cursor *sqlparser.CopyOnWriteCursor) {
+		col, ok := cursor.Node().(*sqlparser.ColName)
+		if !ok {
+			return
+		}
+		col.Qualifier = tblName
+	}, nil).(sqlparser.Expr)
+	return
 }
 
 func createProjectionWithTheseColumns(
@@ -309,11 +354,6 @@ func pushOrExpandHorizon(ctx *plancontext.PlanningContext, in horizonLike) (ops.
 		return rewrite.Swap(in, rb)
 	}
 
-	if _, ok := in.(*Derived); ok {
-		// we're still not ready if we have to expand the derived table horizon
-		return nil, errHorizonNotPlanned()
-	}
-
 	return expandHorizon(ctx, in)
 }
 
@@ -349,6 +389,7 @@ func expandHorizon(ctx *plancontext.PlanningContext, horizon horizonLike) (ops.O
 	if derived, isDerived := horizon.(*Derived); isDerived {
 		id := derived.TableId
 		proj.TableID = &id
+		proj.Alias = derived.Alias
 	}
 	op = proj
 
