@@ -27,6 +27,11 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/vttablet"
+
+	"vitess.io/vitess/go/test/utils"
+	"vitess.io/vitess/go/vt/dbconfigs"
+
 	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
@@ -35,7 +40,6 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
-	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv"
@@ -110,46 +114,85 @@ func init() {
 	heartbeatRe = regexp.MustCompile(`update _vt.vreplication set time_updated=\d+ where id=\d+`)
 }
 
+func cleanup() {
+	playerEngine.Close()
+	streamerEngine.Close()
+	env.Close()
+}
+
+func setup() (func(), int) {
+	globalDBQueries = make(chan string, 1000)
+	resetBinlogClient()
+	var err error
+	env, err = testenv.Init()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "%v", err)
+		return nil, 1
+	}
+
+	vttablet.VReplicationExperimentalFlags = 0
+
+	// Engines cannot be initialized in testenv because it introduces circular dependencies.
+	streamerEngine = vstreamer.NewEngine(env.TabletEnv, env.SrvTopo, env.SchemaEngine, nil, env.Cells[0])
+	streamerEngine.InitDBConfig(env.KeyspaceName, env.ShardName)
+	streamerEngine.Open()
+
+	if err := env.Mysqld.ExecuteSuperQuery(context.Background(), fmt.Sprintf("create database %s", vrepldb)); err != nil {
+		fmt.Fprintf(os.Stderr, "%v", err)
+		return nil, 1
+	}
+
+	if err := env.Mysqld.ExecuteSuperQuery(context.Background(), "set @@global.innodb_lock_wait_timeout=1"); err != nil {
+		fmt.Fprintf(os.Stderr, "%v", err)
+		return nil, 1
+	}
+	externalConfig := map[string]*dbconfigs.DBConfigs{
+		"exta": env.Dbcfgs,
+		"extb": env.Dbcfgs,
+	}
+	playerEngine = NewTestEngine(env.TopoServ, env.Cells[0], env.Mysqld, realDBClientFactory, realDBClientFactory, vrepldb, externalConfig)
+	playerEngine.Open(context.Background())
+
+	return cleanup, 0
+}
+
+// We run Tests twice, first with full binlog_row_image, then with noblob.
+var runNoBlobTest = false
+
+// We use this tempDir for creating the external cnfs, since we create the test cluster afterwards.
+const tempDir = "/tmp"
+
 func TestMain(m *testing.M) {
 	binlogplayer.SetProtocol("vreplication_test_framework", "test")
 	_flag.ParseFlagsForTest()
 	exitCode := func() int {
-		var err error
-		env, err = testenv.Init()
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "%v", err)
-			return 1
+		if err := utils.SetBinlogRowImageMode("full", tempDir); err != nil {
+			panic(err)
 		}
-		defer env.Close()
-
-		vreplicationExperimentalFlags = 0
-
-		// engines cannot be initialized in testenv because it introduces
-		// circular dependencies.
-		streamerEngine = vstreamer.NewEngine(env.TabletEnv, env.SrvTopo, env.SchemaEngine, nil, env.Cells[0])
-		streamerEngine.InitDBConfig(env.KeyspaceName, env.ShardName)
-		streamerEngine.Open()
-		defer streamerEngine.Close()
-
-		if err := env.Mysqld.ExecuteSuperQuery(context.Background(), fmt.Sprintf("create database %s", vrepldb)); err != nil {
-			fmt.Fprintf(os.Stderr, "%v", err)
-			return 1
+		defer utils.SetBinlogRowImageMode("", tempDir)
+		cancel, ret := setup()
+		if ret > 0 {
+			return ret
+		}
+		ret = m.Run()
+		if ret > 0 {
+			return ret
 		}
 
-		if err := env.Mysqld.ExecuteSuperQuery(context.Background(), "set @@global.innodb_lock_wait_timeout=1"); err != nil {
-			fmt.Fprintf(os.Stderr, "%v", err)
-			return 1
+		cancel()
+		runNoBlobTest = true
+		if err := utils.SetBinlogRowImageMode("noblob", tempDir); err != nil {
+			panic(err)
 		}
-
-		externalConfig := map[string]*dbconfigs.DBConfigs{
-			"exta": env.Dbcfgs,
-			"extb": env.Dbcfgs,
+		defer utils.SetBinlogRowImageMode("", tempDir)
+		cancel, ret = setup()
+		if ret > 0 {
+			return ret
 		}
-		playerEngine = NewTestEngine(env.TopoServ, env.Cells[0], env.Mysqld, realDBClientFactory, realDBClientFactory, vrepldb, externalConfig)
-		playerEngine.Open(context.Background())
-		defer playerEngine.Close()
+		defer cancel()
+		ret = m.Run()
+		return ret
 
-		return m.Run()
 	}()
 	os.Exit(exitCode)
 }

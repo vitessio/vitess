@@ -23,6 +23,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/vttablet"
+
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
 
@@ -46,29 +48,29 @@ func commonVcopierTestCases() []vcopierTestCase {
 	return []vcopierTestCase{
 		// Default experimental flags.
 		{
-			vreplicationExperimentalFlags: vreplicationExperimentalFlags,
+			vreplicationExperimentalFlags: vttablet.VReplicationExperimentalFlags,
 		},
 		// Parallel bulk inserts enabled with 4 workers.
 		{
-			vreplicationExperimentalFlags:     vreplicationExperimentalFlags,
+			vreplicationExperimentalFlags:     vttablet.VReplicationExperimentalFlags,
 			vreplicationParallelInsertWorkers: 4,
 		},
 	}
 }
 
 func testVcopierTestCases(t *testing.T, test func(*testing.T), cases []vcopierTestCase) {
-	oldVreplicationExperimentalFlags := vreplicationExperimentalFlags
+	oldVreplicationExperimentalFlags := vttablet.VReplicationExperimentalFlags
 	oldVreplicationParallelInsertWorkers := vreplicationParallelInsertWorkers
 	// Extra reset at the end in case we return prematurely.
 	defer func() {
-		vreplicationExperimentalFlags = oldVreplicationExperimentalFlags
+		vttablet.VReplicationExperimentalFlags = oldVreplicationExperimentalFlags
 		vreplicationParallelInsertWorkers = oldVreplicationParallelInsertWorkers
 	}()
 
 	for _, tc := range cases {
 		tc := tc // Avoid export loop bugs.
 		// Set test flags.
-		vreplicationExperimentalFlags = tc.vreplicationExperimentalFlags
+		vttablet.VReplicationExperimentalFlags = tc.vreplicationExperimentalFlags
 		vreplicationParallelInsertWorkers = tc.vreplicationParallelInsertWorkers
 		// Run test case.
 		t.Run(
@@ -79,7 +81,7 @@ func testVcopierTestCases(t *testing.T, test func(*testing.T), cases []vcopierTe
 			test,
 		)
 		// Reset.
-		vreplicationExperimentalFlags = oldVreplicationExperimentalFlags
+		vttablet.VReplicationExperimentalFlags = oldVreplicationExperimentalFlags
 		vreplicationParallelInsertWorkers = oldVreplicationParallelInsertWorkers
 	}
 }
@@ -1092,11 +1094,11 @@ func TestPlayerCopyWildcardTableContinuation(t *testing.T) {
 	testVcopierTestCases(t, testPlayerCopyWildcardTableContinuation, []vcopierTestCase{
 		// Optimize inserts without parallel inserts.
 		{
-			vreplicationExperimentalFlags: vreplicationExperimentalFlagOptimizeInserts,
+			vreplicationExperimentalFlags: vttablet.VReplicationExperimentalFlagOptimizeInserts,
 		},
 		// Optimize inserts with parallel inserts.
 		{
-			vreplicationExperimentalFlags:     vreplicationExperimentalFlagOptimizeInserts,
+			vreplicationExperimentalFlags:     vttablet.VReplicationExperimentalFlagOptimizeInserts,
 			vreplicationParallelInsertWorkers: 4,
 		},
 	})
@@ -1161,7 +1163,7 @@ func testPlayerCopyWildcardTableContinuation(t *testing.T) {
 		expectDeleteQueries(t)
 	}()
 
-	optimizeInsertsEnabled := vreplicationExperimentalFlags /**/ & /**/ vreplicationExperimentalFlagOptimizeInserts != 0
+	optimizeInsertsEnabled := vttablet.VReplicationExperimentalFlags /**/ & /**/ vttablet.VReplicationExperimentalFlagOptimizeInserts != 0
 
 	expectNontxQueries(t, qh.Expect(
 		"/insert into _vt.vreplication",
@@ -1194,10 +1196,10 @@ func testPlayerCopyWildcardTableContinuation(t *testing.T) {
 // TestPlayerCopyWildcardTableContinuationWithOptimizeInserts tests the copy workflow where tables have been partially copied
 // enabling the optimize inserts functionality
 func TestPlayerCopyWildcardTableContinuationWithOptimizeInserts(t *testing.T) {
-	oldVreplicationExperimentalFlags := vreplicationExperimentalFlags
-	vreplicationExperimentalFlags = vreplicationExperimentalFlagOptimizeInserts
+	oldVreplicationExperimentalFlags := vttablet.VReplicationExperimentalFlags
+	vttablet.VReplicationExperimentalFlags = vttablet.VReplicationExperimentalFlagOptimizeInserts
 	defer func() {
-		vreplicationExperimentalFlags = oldVreplicationExperimentalFlags
+		vttablet.VReplicationExperimentalFlags = oldVreplicationExperimentalFlags
 	}()
 
 	defer deleteTablet(addTablet(100))
