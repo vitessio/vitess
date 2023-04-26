@@ -896,7 +896,7 @@ func (vs *vstreamer) processRowEvent(vevents []*binlogdatapb.VEvent, plan *strea
 			if (vttablet.VReplicationExperimentalFlags /**/ & /**/ vttablet.VReplicationExperimentalFlagAllowNoBlobBinlogRowImage != 0) &&
 				partial {
 
-				rowChange.DataColumns = &binlogdatapb.Bitmap{
+				rowChange.DataColumns = &binlogdatapb.RowChange_Bitmap{
 					Count: int64(rows.DataColumns.Count()),
 					Cols:  rows.DataColumns.Bits(),
 				}

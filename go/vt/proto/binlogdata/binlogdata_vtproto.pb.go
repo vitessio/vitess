@@ -749,7 +749,7 @@ func (m *BinlogSource) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	return len(dAtA) - i, nil
 }
 
-func (m *Bitmap) MarshalVT() (dAtA []byte, err error) {
+func (m *RowChange_Bitmap) MarshalVT() (dAtA []byte, err error) {
 	if m == nil {
 		return nil, nil
 	}
@@ -762,12 +762,12 @@ func (m *Bitmap) MarshalVT() (dAtA []byte, err error) {
 	return dAtA[:n], nil
 }
 
-func (m *Bitmap) MarshalToVT(dAtA []byte) (int, error) {
+func (m *RowChange_Bitmap) MarshalToVT(dAtA []byte) (int, error) {
 	size := m.SizeVT()
 	return m.MarshalToSizedBufferVT(dAtA[:size])
 }
 
-func (m *Bitmap) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
+func (m *RowChange_Bitmap) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m == nil {
 		return 0, nil
 	}
@@ -2398,7 +2398,7 @@ func (m *BinlogSource) SizeVT() (n int) {
 	return n
 }
 
-func (m *Bitmap) SizeVT() (n int) {
+func (m *RowChange_Bitmap) SizeVT() (n int) {
 	if m == nil {
 		return 0
 	}
@@ -5027,7 +5027,7 @@ func (m *BinlogSource) UnmarshalVT(dAtA []byte) error {
 	}
 	return nil
 }
-func (m *Bitmap) UnmarshalVT(dAtA []byte) error {
+func (m *RowChange_Bitmap) UnmarshalVT(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
@@ -5050,10 +5050,10 @@ func (m *Bitmap) UnmarshalVT(dAtA []byte) error {
 		fieldNum := int32(wire >> 3)
 		wireType := int(wire & 0x7)
 		if wireType == 4 {
-			return fmt.Errorf("proto: Bitmap: wiretype end group for non-group")
+			return fmt.Errorf("proto: RowChange_Bitmap: wiretype end group for non-group")
 		}
 		if fieldNum <= 0 {
-			return fmt.Errorf("proto: Bitmap: illegal tag %d (wire type %d)", fieldNum, wire)
+			return fmt.Errorf("proto: RowChange_Bitmap: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
 		case 1:
@@ -5262,7 +5262,7 @@ func (m *RowChange) UnmarshalVT(dAtA []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			if m.DataColumns == nil {
-				m.DataColumns = &Bitmap{}
+				m.DataColumns = &RowChange_Bitmap{}
 			}
 			if err := m.DataColumns.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
 				return err

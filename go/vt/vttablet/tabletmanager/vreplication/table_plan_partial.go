@@ -46,7 +46,7 @@ func (tp *TablePlan) isPartial(rowChange *binlogdatapb.RowChange) bool {
 	return true
 }
 
-func (tpb *tablePlanBuilder) generatePartialValuesPart(buf *sqlparser.TrackedBuffer, bvf *bindvarFormatter, dataColumns *binlogdatapb.Bitmap) *sqlparser.ParsedQuery {
+func (tpb *tablePlanBuilder) generatePartialValuesPart(buf *sqlparser.TrackedBuffer, bvf *bindvarFormatter, dataColumns *binlogdatapb.RowChange_Bitmap) *sqlparser.ParsedQuery {
 	bvf.mode = bvAfter
 	separator := "("
 	for ind, cexpr := range tpb.colExprs {
@@ -80,7 +80,7 @@ func (tpb *tablePlanBuilder) generatePartialValuesPart(buf *sqlparser.TrackedBuf
 	return buf.ParsedQuery()
 }
 
-func (tpb *tablePlanBuilder) generatePartialInsertPart(buf *sqlparser.TrackedBuffer, dataColumns *binlogdatapb.Bitmap) *sqlparser.ParsedQuery {
+func (tpb *tablePlanBuilder) generatePartialInsertPart(buf *sqlparser.TrackedBuffer, dataColumns *binlogdatapb.RowChange_Bitmap) *sqlparser.ParsedQuery {
 	buf.Myprintf("insert into %v(", tpb.name)
 	separator := ""
 	for ind, cexpr := range tpb.colExprs {
@@ -97,7 +97,7 @@ func (tpb *tablePlanBuilder) generatePartialInsertPart(buf *sqlparser.TrackedBuf
 	return buf.ParsedQuery()
 }
 
-func (tpb *tablePlanBuilder) generatePartialSelectPart(buf *sqlparser.TrackedBuffer, bvf *bindvarFormatter, dataColumns *binlogdatapb.Bitmap) *sqlparser.ParsedQuery {
+func (tpb *tablePlanBuilder) generatePartialSelectPart(buf *sqlparser.TrackedBuffer, bvf *bindvarFormatter, dataColumns *binlogdatapb.RowChange_Bitmap) *sqlparser.ParsedQuery {
 	bvf.mode = bvAfter
 	buf.WriteString(" select ")
 	separator := ""
@@ -118,7 +118,7 @@ func (tpb *tablePlanBuilder) generatePartialSelectPart(buf *sqlparser.TrackedBuf
 	return buf.ParsedQuery()
 }
 
-func (tpb *tablePlanBuilder) createPartialInsertQuery(dataColumns *binlogdatapb.Bitmap) *sqlparser.ParsedQuery {
+func (tpb *tablePlanBuilder) createPartialInsertQuery(dataColumns *binlogdatapb.RowChange_Bitmap) *sqlparser.ParsedQuery {
 	bvf := &bindvarFormatter{}
 	buf := sqlparser.NewTrackedBuffer(bvf.formatter)
 
@@ -135,7 +135,7 @@ func (tpb *tablePlanBuilder) createPartialInsertQuery(dataColumns *binlogdatapb.
 	return buf.ParsedQuery()
 }
 
-func (tpb *tablePlanBuilder) createPartialUpdateQuery(dataColumns *binlogdatapb.Bitmap) *sqlparser.ParsedQuery {
+func (tpb *tablePlanBuilder) createPartialUpdateQuery(dataColumns *binlogdatapb.RowChange_Bitmap) *sqlparser.ParsedQuery {
 	bvf := &bindvarFormatter{}
 	buf := sqlparser.NewTrackedBuffer(bvf.formatter)
 	buf.Myprintf("update %v set ", tpb.name)
@@ -178,7 +178,7 @@ func (tpb *tablePlanBuilder) createPartialUpdateQuery(dataColumns *binlogdatapb.
 	tpb.generateWhere(buf, bvf)
 	return buf.ParsedQuery()
 }
-func (tp *TablePlan) getPartialInsertQuery(dataColumns *binlogdatapb.Bitmap) (*sqlparser.ParsedQuery, error) {
+func (tp *TablePlan) getPartialInsertQuery(dataColumns *binlogdatapb.RowChange_Bitmap) (*sqlparser.ParsedQuery, error) {
 	key := fmt.Sprintf("%x", dataColumns.Cols)
 	ins, ok := tp.PartialInserts[key]
 	if ok {
@@ -186,14 +186,14 @@ func (tp *TablePlan) getPartialInsertQuery(dataColumns *binlogdatapb.Bitmap) (*s
 	}
 	ins = tp.TablePlanBuilder.createPartialInsertQuery(dataColumns)
 	if ins == nil {
-		return ins, vterrors.New(vtrpcpb.Code_INTERNAL, fmt.Sprintf("Unable to create partial insert query for %s", tp.TargetName))
+		return ins, vterrors.New(vtrpcpb.Code_INTERNAL, fmt.Sprintf("unable to create partial insert query for %s", tp.TargetName))
 	}
 	tp.PartialInserts[key] = ins
 	tp.Stats.PartialQueryCacheSize.Add([]string{"insert"}, 1)
 	return ins, nil
 }
 
-func (tp *TablePlan) getPartialUpdateQuery(dataColumns *binlogdatapb.Bitmap) (*sqlparser.ParsedQuery, error) {
+func (tp *TablePlan) getPartialUpdateQuery(dataColumns *binlogdatapb.RowChange_Bitmap) (*sqlparser.ParsedQuery, error) {
 	key := fmt.Sprintf("%x", dataColumns.Cols)
 	upd, ok := tp.PartialUpdates[key]
 	if ok {
@@ -201,7 +201,7 @@ func (tp *TablePlan) getPartialUpdateQuery(dataColumns *binlogdatapb.Bitmap) (*s
 	}
 	upd = tp.TablePlanBuilder.createPartialUpdateQuery(dataColumns)
 	if upd == nil {
-		return upd, vterrors.New(vtrpcpb.Code_INTERNAL, fmt.Sprintf("Unable to create partial update query for %s", tp.TargetName))
+		return upd, vterrors.New(vtrpcpb.Code_INTERNAL, fmt.Sprintf("unable to create partial update query for %s", tp.TargetName))
 	}
 	tp.PartialUpdates[key] = upd
 	tp.Stats.PartialQueryCacheSize.Add([]string{"update"}, 1)

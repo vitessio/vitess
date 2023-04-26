@@ -304,7 +304,7 @@ Recommended range for this variable is `5s` - `30s`. Default: `10s`.
 
 #### <a id="noblob"/> Support for the `noblob` binlog row image mode 
 The `noblob` binlog row image is now supported by the MoveTables and Reshard VReplication workflows. If the source 
-or target database has this mode, other workflows like Online DDL, Materialize and CreateLookupVindex will error out.
+or target database has this mode, other workflows like OnlineDDL, Materialize and CreateLookupVindex will error out.
 The row events streamed by the VStream API, where blobs and text columns have not changed, will contain null values 
 for those columns, indicated by a `length:-1`.
 

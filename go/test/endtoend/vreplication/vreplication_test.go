@@ -715,11 +715,14 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 			if !isBinlogRowImageNoBlob(t, productTab) {
 				return
 			}
-			tablet200Port := custKs.Shards["-80"].Tablets["zone1-200"].Vttablet.Port
-			tablet300Port := custKs.Shards["80-"].Tablets["zone1-300"].Vttablet.Port
+
+			// the two primaries of the new reshard targets
+			tablet200 := custKs.Shards["-80"].Tablets["zone1-200"].Vttablet
+			tablet300 := custKs.Shards["80-"].Tablets["zone1-300"].Vttablet
+
 			totalInserts, totalUpdates, totalInsertQueries, totalUpdateQueries := 0, 0, 0, 0
-			for _, port := range []int{tablet200Port, tablet300Port} {
-				insertCount, updateCount, insertQueries, updateQueries := getPartialMetrics(t, "product.0.p2c.1", port)
+			for _, tab := range []*cluster.VttabletProcess{tablet200, tablet300} {
+				insertCount, updateCount, insertQueries, updateQueries := getPartialMetrics(t, "product.0.p2c.1", tab)
 				totalInserts += insertCount
 				totalUpdates += updateCount
 				totalInsertQueries += insertQueries
