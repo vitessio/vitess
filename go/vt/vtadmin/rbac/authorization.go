@@ -33,21 +33,21 @@ type Authorizer struct {
 // To get an authorizer that permits all access, including from unauthenticated
 // actors, provide the following:
 //
-// 	authz, err := rbac.NewAuthorizer(&rbac.Config{
-// 		Rules: []*struct {
-// 			Resource string
-// 			Actions  []string
-// 			Subjects []string
-// 			Clusters []string
-// 		}{
-// 			{
-// 				Resource: "*",
-// 				Actions:  []string{"*"},
-// 				Subjects: []string{"*"},
-// 				Clusters: []string{"*"},
-// 			},
-// 		},
-// 	})
+//	authz, err := rbac.NewAuthorizer(&rbac.Config{
+//		Rules: []*struct {
+//			Resource string
+//			Actions  []string
+//			Subjects []string
+//			Clusters []string
+//		}{
+//			{
+//				Resource: "*",
+//				Actions:  []string{"*"},
+//				Subjects: []string{"*"},
+//				Clusters: []string{"*"},
+//			},
+//		},
+//	})
 func NewAuthorizer(cfg *Config) (*Authorizer, error) {
 	if err := cfg.Reify(); err != nil {
 		return nil, err

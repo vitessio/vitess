@@ -20,7 +20,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"os/exec"
@@ -109,15 +108,7 @@ func (vtgate *VtgateProcess) Setup() (err error) {
 		args = append(args, "--mysql_server_version", mysqlvers)
 	}
 	if vtgate.PlannerVersion > 0 {
-		v, err := GetMajorVersion("vtgate")
-		if err != nil {
-			return err
-		}
-		plannerFlag := "--planner-version"
-		if v < 14 {
-			plannerFlag = "--planner_version"
-		}
-		args = append(args, plannerFlag, vtgate.PlannerVersion.String())
+		args = append(args, "--planner-version", vtgate.PlannerVersion.String())
 	}
 	if vtgate.SysVarSetEnabled {
 		args = append(args, "--enable_system_settings")
@@ -172,10 +163,9 @@ func (vtgate *VtgateProcess) WaitForStatus() bool {
 	if err != nil {
 		return false
 	}
-	if resp.StatusCode == 200 {
-		return true
-	}
-	return false
+	defer resp.Body.Close()
+
+	return resp.StatusCode == 200
 }
 
 // GetStatusForTabletOfShard function gets status for a specific tablet of a shard in keyspace
@@ -185,6 +175,8 @@ func (vtgate *VtgateProcess) GetStatusForTabletOfShard(name string, endPointsCou
 	if err != nil {
 		return false
 	}
+	defer resp.Body.Close()
+
 	if resp.StatusCode == 200 {
 		resultMap := make(map[string]any)
 		respByte, _ := io.ReadAll(resp.Body)
@@ -266,7 +258,7 @@ func VtgateProcessInstance(
 		Binary:                "vtgate",
 		FileToLogQueries:      path.Join(tmpDirectory, "/vtgate_querylog.txt"),
 		Directory:             os.Getenv("VTDATAROOT"),
-		ServiceMap:            "grpc-tabletmanager,grpc-throttler,grpc-queryservice,grpc-updatestream,grpc-vtctl,grpc-vtworker,grpc-vtgateservice",
+		ServiceMap:            "grpc-tabletmanager,grpc-throttler,grpc-queryservice,grpc-updatestream,grpc-vtctl,grpc-vtgateservice",
 		LogDir:                tmpDirectory,
 		Port:                  port,
 		GrpcPort:              grpcPort,
@@ -294,6 +286,8 @@ func (vtgate *VtgateProcess) GetVars() (map[string]any, error) {
 	if err != nil {
 		return nil, fmt.Errorf("error getting response from %s", vtgate.VerifyURL)
 	}
+	defer resp.Body.Close()
+
 	if resp.StatusCode == 200 {
 		respByte, _ := io.ReadAll(resp.Body)
 		err := json.Unmarshal(respByte, &resultMap)
@@ -313,7 +307,8 @@ func (vtgate *VtgateProcess) ReadVSchema() (*interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
-	res, err := ioutil.ReadAll(resp.Body)
+	defer resp.Body.Close()
+	res, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
 	}

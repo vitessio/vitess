@@ -69,7 +69,7 @@ func NewSchemaFromEntities(entities []Entity) (*Schema, error) {
 
 // NewSchemaFromStatements creates a valid and normalized schema based on list of valid statements
 func NewSchemaFromStatements(statements []sqlparser.Statement) (*Schema, error) {
-	entities := []Entity{}
+	entities := make([]Entity, 0, len(statements))
 	for _, s := range statements {
 		switch stmt := s.(type) {
 		case *sqlparser.CreateTable:
@@ -93,7 +93,7 @@ func NewSchemaFromStatements(statements []sqlparser.Statement) (*Schema, error) 
 
 // NewSchemaFromQueries creates a valid and normalized schema based on list of queries
 func NewSchemaFromQueries(queries []string) (*Schema, error) {
-	statements := []sqlparser.Statement{}
+	statements := make([]sqlparser.Statement, 0, len(queries))
 	for _, q := range queries {
 		stmt, err := sqlparser.ParseStrictDDL(q)
 		if err != nil {
@@ -107,7 +107,7 @@ func NewSchemaFromQueries(queries []string) (*Schema, error) {
 // NewSchemaFromSQL creates a valid and normalized schema based on a SQL blob that contains
 // CREATE statements for various objects (tables, views)
 func NewSchemaFromSQL(sql string) (*Schema, error) {
-	statements := []sqlparser.Statement{}
+	var statements []sqlparser.Statement
 	tokenizer := sqlparser.NewStringTokenizer(sql)
 	for {
 		stmt, err := sqlparser.ParseNextStrictDDL(tokenizer)
@@ -143,8 +143,8 @@ func getViewDependentTableNames(createView *sqlparser.CreateView) (names []strin
 // normalize is called as part of Schema creation process. The user may only get a hold of normalized schema.
 // It validates some cross-entity constraints, and orders entity based on dependencies (e.g. tables, views that read from tables, 2nd level views, etc.)
 func (s *Schema) normalize() error {
-	s.named = map[string]Entity{}
-	s.sorted = []Entity{}
+	s.named = make(map[string]Entity, len(s.tables)+len(s.views))
+	s.sorted = make([]Entity, 0, len(s.tables)+len(s.views))
 	// Verify no two entities share same name
 	for _, t := range s.tables {
 		name := t.Name()
@@ -174,7 +174,7 @@ func (s *Schema) normalize() error {
 	// We actually prioritise all tables first, then views.
 	// If a view v1 depends on v2, then v2 must come before v1, even though v1
 	// precedes v2 alphabetically
-	dependencyLevels := map[string]int{}
+	dependencyLevels := make(map[string]int, len(s.tables)+len(s.views))
 	for _, t := range s.tables {
 		s.sorted = append(s.sorted, t)
 		dependencyLevels[t.Name()] = 0
@@ -204,25 +204,25 @@ func (s *Schema) normalize() error {
 	// - etc.
 	// we stop when we have been unable to find a view in an iteration.
 	for iterationLevel := 1; ; iterationLevel++ {
-		handledAnyViewsInItration := false
+		handledAnyViewsInIteration := false
 		for _, v := range s.views {
 			name := v.Name()
 			if _, ok := dependencyLevels[name]; ok {
 				// already handled; skip
 				continue
 			}
-			// Not handled. Is this view dependant on already handled objects?
-			dependentNames, err := getViewDependentTableNames(&v.CreateView)
+			// Not handled. Is this view dependent on already handled objects?
+			dependentNames, err := getViewDependentTableNames(v.CreateView)
 			if err != nil {
 				return err
 			}
 			if allNamesFoundInLowerLevel(dependentNames, iterationLevel) {
 				s.sorted = append(s.sorted, v)
 				dependencyLevels[v.Name()] = iterationLevel
-				handledAnyViewsInItration = true
+				handledAnyViewsInIteration = true
 			}
 		}
-		if !handledAnyViewsInItration {
+		if !handledAnyViewsInIteration {
 			break
 		}
 	}
@@ -230,7 +230,13 @@ func (s *Schema) normalize() error {
 		// We have leftover views. This can happen if the schema definition is invalid:
 		// - a view depends on a nonexistent table
 		// - two views have a circular dependency
-		return ErrViewDependencyUnresolved
+		for _, v := range s.views {
+			if _, ok := dependencyLevels[v.Name()]; !ok {
+				// We _know_ that in this iteration, at least one view is found unassigned a dependency level.
+				// We return the first one.
+				return &ViewDependencyUnresolvedError{View: v.ViewName.Name.String()}
+			}
+		}
 	}
 	return nil
 }
@@ -269,7 +275,7 @@ func (s *Schema) TableNames() []string {
 	return names
 }
 
-// Tables returns this schema's views in good order (may be applied without error)
+// Views returns this schema's views in good order (may be applied without error)
 func (s *Schema) Views() []*CreateViewEntity {
 	var views []*CreateViewEntity
 	for _, entity := range s.sorted {
@@ -293,14 +299,17 @@ func (s *Schema) ViewNames() []string {
 // like the other. It returns a list of diffs.
 func (s *Schema) Diff(other *Schema, hints *DiffHints) (diffs []EntityDiff, err error) {
 	// dropped entities
+	var dropDiffs []EntityDiff
 	for _, e := range s.Entities() {
 		if _, ok := other.named[e.Name()]; !ok {
 			// other schema does not have the entity
-			diffs = append(diffs, e.Drop())
+			dropDiffs = append(dropDiffs, e.Drop())
 		}
 	}
 	// We iterate by order of "other" schema because we need to construct queries that will be valid
 	// for that schema (we need to maintain view dependencies according to target, not according to source)
+	var alterDiffs []EntityDiff
+	var createDiffs []EntityDiff
 	for _, e := range other.Entities() {
 		if fromEntity, ok := s.named[e.Name()]; ok {
 			// entities exist by same name in both schemas. Let's diff them.
@@ -313,8 +322,8 @@ func (s *Schema) Diff(other *Schema, hints *DiffHints) (diffs []EntityDiff, err 
 				// hence the error.
 				// But in our schema context, we know better. We know we should DROP the one, CREATE the other.
 				// We proceed to do that, and implicitly ignore the error
-				diffs = append(diffs, fromEntity.Drop())
-				diffs = append(diffs, e.Create())
+				dropDiffs = append(dropDiffs, fromEntity.Drop())
+				createDiffs = append(createDiffs, e.Create())
 				// And we're good. We can move on to comparing next entity.
 			case err != nil:
 				// Any other kind of error
@@ -322,16 +331,93 @@ func (s *Schema) Diff(other *Schema, hints *DiffHints) (diffs []EntityDiff, err 
 			default:
 				// No error, let's check the diff:
 				if diff != nil && !diff.IsEmpty() {
-					diffs = append(diffs, diff)
+					alterDiffs = append(alterDiffs, diff)
 				}
 			}
 		} else { // !ok
 			// Added entity
 			// this schema does not have the entity
-			diffs = append(diffs, e.Create())
+			createDiffs = append(createDiffs, e.Create())
 		}
 	}
+	dropDiffs, createDiffs, renameDiffs := s.heuristicallyDetectTableRenames(dropDiffs, createDiffs, hints)
+	diffs = append(diffs, dropDiffs...)
+	diffs = append(diffs, alterDiffs...)
+	diffs = append(diffs, createDiffs...)
+	diffs = append(diffs, renameDiffs...)
+
 	return diffs, err
+}
+
+func (s *Schema) heuristicallyDetectTableRenames(
+	dropDiffs []EntityDiff,
+	createDiffs []EntityDiff,
+	hints *DiffHints,
+) (
+	updatedDropDiffs []EntityDiff,
+	updatedCreateDiffs []EntityDiff,
+	renameDiffs []EntityDiff,
+) {
+	renameDiffs = []EntityDiff{}
+
+	findRenamedTable := func() bool {
+		// What we're doing next is to try and identify a table RENAME.
+		// We do so by cross-referencing dropped and created tables.
+		// The check is heuristic, and looks like this:
+		// We consider a table renamed iff:
+		// - the DROP and CREATE table definitions are identical other than the table name
+		// In the case where multiple dropped tables have identical schema, and likewise multiple created tables
+		// have identical schemas, schemadiff makes an arbitrary match.
+		// Once we heuristically decide that we found a RENAME, we cancel the DROP,
+		// cancel the CREATE, and inject a RENAME in place of both.
+
+		// findRenamedTable cross-references dropped and created tables to find a single renamed table. If such is found:
+		// we remove the entry from DROPped tables, remove the entry from CREATEd tables, add an entry for RENAMEd tables,
+		// and return 'true'.
+		// Successive calls to this function will then find the next heuristic RENAMEs.
+		// the function returns 'false' if it is unable to heuristically find a RENAME.
+		for iDrop, drop1 := range dropDiffs {
+			for iCreate, create2 := range createDiffs {
+				dropTableDiff, ok := drop1.(*DropTableEntityDiff)
+				if !ok {
+					continue
+				}
+				createTableDiff, ok := create2.(*CreateTableEntityDiff)
+				if !ok {
+					continue
+				}
+				if !dropTableDiff.from.identicalOtherThanName(createTableDiff.to) {
+					continue
+				}
+				// Yes, it looks like those tables have the exact same spec, just with different names.
+				dropDiffs = append(dropDiffs[0:iDrop], dropDiffs[iDrop+1:]...)
+				createDiffs = append(createDiffs[0:iCreate], createDiffs[iCreate+1:]...)
+				renameTable := &sqlparser.RenameTable{
+					TablePairs: []*sqlparser.RenameTablePair{
+						{FromTable: dropTableDiff.from.Table, ToTable: createTableDiff.to.Table},
+					},
+				}
+				renameTableEntityDiff := &RenameTableEntityDiff{
+					from:        dropTableDiff.from,
+					to:          createTableDiff.to,
+					renameTable: renameTable,
+				}
+				renameDiffs = append(renameDiffs, renameTableEntityDiff)
+				return true
+			}
+		}
+		return false
+	}
+	switch hints.TableRenameStrategy {
+	case TableRenameAssumeDifferent:
+		// do nothing
+	case TableRenameHeuristicStatement:
+		for findRenamedTable() {
+			// Iteratively detect all RENAMEs
+		}
+	}
+
+	return dropDiffs, createDiffs, renameDiffs
 }
 
 // Entity returns an entity by name, or nil if nonexistent
@@ -357,7 +443,7 @@ func (s *Schema) View(name string) *CreateViewEntity {
 
 // ToStatements returns an ordered list of statements which can be applied to create the schema
 func (s *Schema) ToStatements() []sqlparser.Statement {
-	stmts := []sqlparser.Statement{}
+	stmts := make([]sqlparser.Statement, 0, len(s.Entities()))
 	for _, e := range s.Entities() {
 		stmts = append(stmts, e.Create().Statement())
 	}
@@ -366,7 +452,7 @@ func (s *Schema) ToStatements() []sqlparser.Statement {
 
 // ToQueries returns an ordered list of queries which can be applied to create the schema
 func (s *Schema) ToQueries() []string {
-	queries := []string{}
+	queries := make([]string, 0, len(s.Entities()))
 	for _, e := range s.Entities() {
 		queries = append(queries, e.Create().CanonicalStatementString())
 	}
@@ -383,6 +469,23 @@ func (s *Schema) ToSQL() string {
 	return buf.String()
 }
 
+// copy returns a shallow copy of the schema. This is used when applying changes for example.
+// applying changes will ensure we copy new entities themselves separately.
+func (s *Schema) copy() *Schema {
+	dup := newEmptySchema()
+	dup.tables = make([]*CreateTableEntity, len(s.tables))
+	copy(dup.tables, s.tables)
+	dup.views = make([]*CreateViewEntity, len(s.views))
+	copy(dup.views, s.views)
+	dup.named = make(map[string]Entity, len(s.named))
+	for k, v := range s.named {
+		dup.named[k] = v
+	}
+	dup.sorted = make([]Entity, len(s.sorted))
+	copy(dup.sorted, s.sorted)
+	return dup
+}
+
 // apply attempts to apply given list of diffs to this object.
 // These diffs are CREATE/DROP/ALTER TABLE/VIEW.
 func (s *Schema) apply(diffs []EntityDiff) error {
@@ -394,7 +497,7 @@ func (s *Schema) apply(diffs []EntityDiff) error {
 			if _, ok := s.named[name]; ok {
 				return &ApplyDuplicateEntityError{Entity: name}
 			}
-			s.tables = append(s.tables, &CreateTableEntity{CreateTable: *diff.createTable})
+			s.tables = append(s.tables, &CreateTableEntity{CreateTable: diff.createTable})
 			_, s.named[name] = diff.Entities()
 		case *CreateViewEntityDiff:
 			// We expect the view to not exist
@@ -402,7 +505,7 @@ func (s *Schema) apply(diffs []EntityDiff) error {
 			if _, ok := s.named[name]; ok {
 				return &ApplyDuplicateEntityError{Entity: name}
 			}
-			s.views = append(s.views, &CreateViewEntity{CreateView: *diff.createView})
+			s.views = append(s.views, &CreateViewEntity{CreateView: diff.createView})
 			_, s.named[name] = diff.Entities()
 		case *DropTableEntityDiff:
 			// We expect the table to exist
@@ -476,6 +579,21 @@ func (s *Schema) apply(diffs []EntityDiff) error {
 			if !found {
 				return &ApplyViewNotFoundError{View: diff.from.ViewName.Name.String()}
 			}
+		case *RenameTableEntityDiff:
+			// We expect the table to exist
+			found := false
+			for i, t := range s.tables {
+				if name := t.Table.Name.String(); name == diff.from.Table.Name.String() {
+					s.tables[i] = diff.to
+					delete(s.named, name)
+					s.named[diff.to.Table.Name.String()] = diff.to
+					found = true
+					break
+				}
+			}
+			if !found {
+				return &ApplyTableNotFoundError{Table: diff.from.Table.Name.String()}
+			}
 		default:
 			return &UnsupportedApplyOperationError{Statement: diff.CanonicalStatementString()}
 		}
@@ -490,14 +608,7 @@ func (s *Schema) apply(diffs []EntityDiff) error {
 // These diffs are CREATE/DROP/ALTER TABLE/VIEW.
 // The operation does not modify this object. Instead, if successful, a new (modified) Schema is returned.
 func (s *Schema) Apply(diffs []EntityDiff) (*Schema, error) {
-	// we export to queries, then import back.
-	// The reason we don't just clone this object's fields, or even export/import to Statements,
-	// is that we want this schema to be immutable an unaffected by the apply() on the duplicate.
-	// statements/slices/maps will have shared pointers and changes will propagate back to this schema.
-	dup, err := NewSchemaFromQueries(s.ToQueries())
-	if err != nil {
-		return nil, err
-	}
+	dup := s.copy()
 	for k, v := range s.named {
 		dup.named[k] = v
 	}

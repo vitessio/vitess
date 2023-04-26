@@ -61,7 +61,7 @@ func TestNoSSE(t *testing.T) {
 }
 
 func TestSSEAws(t *testing.T) {
-	sse = aws.String("aws:kms")
+	sse = "aws:kms"
 	sseData := S3ServerSideEncryption{}
 	err := sseData.init()
 	require.NoErrorf(t, err, "init() expected to succeed")
@@ -91,7 +91,7 @@ func TestSSECustomerFileNotFound(t *testing.T) {
 	err = os.Remove(tempFile.Name())
 	require.NoErrorf(t, err, "Remove() expected to succeed")
 
-	sse = aws.String(sseCustomerPrefix + tempFile.Name())
+	sse = sseCustomerPrefix + tempFile.Name()
 	sseData := S3ServerSideEncryption{}
 	err = sseData.init()
 	require.Errorf(t, err, "init() expected to fail")
@@ -110,7 +110,7 @@ func TestSSECustomerFileBinaryKey(t *testing.T) {
 	err = tempFile.Close()
 	require.NoErrorf(t, err, "Close() expected to succeed")
 
-	sse = aws.String(sseCustomerPrefix + tempFile.Name())
+	sse = sseCustomerPrefix + tempFile.Name()
 	sseData := S3ServerSideEncryption{}
 	err = sseData.init()
 	require.NoErrorf(t, err, "init() expected to succeed")
@@ -145,7 +145,7 @@ func TestSSECustomerFileBase64Key(t *testing.T) {
 	err = tempFile.Close()
 	require.NoErrorf(t, err, "Close() expected to succeed")
 
-	sse = aws.String(sseCustomerPrefix + tempFile.Name())
+	sse = sseCustomerPrefix + tempFile.Name()
 	sseData := S3ServerSideEncryption{}
 	err = sseData.init()
 	require.NoErrorf(t, err, "init() expected to succeed")

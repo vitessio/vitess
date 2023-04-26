@@ -262,6 +262,10 @@ func TestArithmetics(t *testing.T) {
 			v1:  NewUint64(maxUint64),
 			v2:  NewInt64(2),
 			err: dataOutOfRangeError(maxUint64, 2, "BIGINT UNSIGNED", "+").Error(),
+		}, {
+			v1:  sqltypes.NewHexNum([]byte("0x9")),
+			v2:  NewInt64(1),
+			out: NewUint64(10),
 		}},
 	}, {
 		operator: "/",

@@ -440,6 +440,9 @@ func startVStreamCopy(ctx context.Context, t *testing.T, filter *binlogdatapb.Fi
 				if ev.Type == binlogdatapb.VEventType_HEARTBEAT {
 					continue
 				}
+				if ev.Throttled {
+					continue
+				}
 				cb := getEventCallback(ev)
 				if cb != nil {
 					cb()

@@ -166,7 +166,6 @@ func CopyShardReplications(ctx context.Context, fromTS, toTS *topo.Server) {
 				sri, err := fromTS.GetShardReplication(ctx, cell, keyspace, shard)
 				if err != nil {
 					log.Fatalf("GetShardReplication(%v, %v, %v): %v", cell, keyspace, shard, err)
-					continue
 				}
 
 				sriNodes := map[string]struct{}{}

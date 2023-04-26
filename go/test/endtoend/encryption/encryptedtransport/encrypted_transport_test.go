@@ -63,6 +63,8 @@ import (
 	"path"
 	"testing"
 
+	"github.com/pkg/errors"
+
 	"vitess.io/vitess/go/test/endtoend/encryption"
 
 	"vitess.io/vitess/go/vt/proto/vtrpc"
@@ -191,25 +193,32 @@ func TestSecureTransport(t *testing.T) {
 	assert.Contains(t, err.Error(), "Select command denied to user")
 	assert.Contains(t, err.Error(), "for table 'vt_insert_test' (ACL check error)")
 
+	useEffectiveCallerID(ctx, t)
+	useEffectiveGroups(ctx, t)
+
+	clusterInstance.Teardown()
+}
+
+func useEffectiveCallerID(ctx context.Context, t *testing.T) {
 	// now restart vtgate in the mode where we don't use SSL
 	// for client connections, but we copy effective caller id
 	// into immediate caller id.
 	clusterInstance.VtGateExtraArgs = []string{"--grpc_use_effective_callerid"}
 	clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, tabletConnExtraArgs("vttablet-client-1")...)
-	err = clusterInstance.RestartVtgate()
+	err := clusterInstance.RestartVtgate()
 	require.NoError(t, err)
 
-	grpcAddress = fmt.Sprintf("%s:%d", "localhost", clusterInstance.VtgateProcess.GrpcPort)
+	grpcAddress := fmt.Sprintf("%s:%d", "localhost", clusterInstance.VtgateProcess.GrpcPort)
 
 	setSSLInfoEmpty()
 
 	// get vitess client
-	vc, err = getVitessClient(grpcAddress)
+	vc, err := getVitessClient(grpcAddress)
 	require.NoError(t, err)
 
 	// test with empty effective caller Id
-	request = getRequest("select * from vt_insert_test")
-	qr, err = vc.Execute(ctx, request)
+	request := getRequest("select * from vt_insert_test")
+	qr, err := vc.Execute(ctx, request)
 	require.NoError(t, err)
 	err = vterrors.FromVTRPC(qr.Error)
 	require.Error(t, err)
@@ -237,8 +246,57 @@ func TestSecureTransport(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "Select command denied to user")
 	assert.Contains(t, err.Error(), "for table 'vt_insert_test' (ACL check error)")
+}
 
-	clusterInstance.Teardown()
+func useEffectiveGroups(ctx context.Context, t *testing.T) {
+	// now restart vtgate in the mode where we don't use SSL
+	// for client connections, but we copy effective caller's groups
+	// into immediate caller id.
+	clusterInstance.VtGateExtraArgs = []string{"--grpc_use_effective_callerid", "--grpc-use-effective-groups"}
+	clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, tabletConnExtraArgs("vttablet-client-1")...)
+	err := clusterInstance.RestartVtgate()
+	require.NoError(t, err)
+
+	grpcAddress := fmt.Sprintf("%s:%d", "localhost", clusterInstance.VtgateProcess.GrpcPort)
+
+	setSSLInfoEmpty()
+
+	// get vitess client
+	vc, err := getVitessClient(grpcAddress)
+	require.NoError(t, err)
+
+	// test with empty effective caller Id
+	request := getRequest("select * from vt_insert_test")
+	qr, err := vc.Execute(ctx, request)
+	require.NoError(t, err)
+	err = vterrors.FromVTRPC(qr.Error)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "Select command denied to user")
+	assert.Contains(t, err.Error(), "for table 'vt_insert_test' (ACL check error)")
+
+	// 'vtgate client 1' is authorized to access vt_insert_test
+	callerID := &vtrpc.CallerID{
+		Principal: "my-caller",
+		Groups:    []string{"vtgate client 1"},
+	}
+	request = getRequestWithCallerID(callerID, "select * from vt_insert_test")
+	qr, err = vc.Execute(ctx, request)
+	require.NoError(t, err)
+	err = vterrors.FromVTRPC(qr.Error)
+	require.NoError(t, err)
+
+	// 'vtgate client 2' is not authorized to access vt_insert_test
+	callerID = &vtrpc.CallerID{
+		Principal: "my-caller",
+		Groups:    []string{"vtgate client 2"},
+	}
+	request = getRequestWithCallerID(callerID, "select * from vt_insert_test")
+	qr, err = vc.Execute(ctx, request)
+	require.NoError(t, err)
+	err = vterrors.FromVTRPC(qr.Error)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "Select command denied to user")
+	assert.Contains(t, err.Error(), "for table 'vt_insert_test' (ACL check error)")
 }
 
 func clusterSetUp(t *testing.T) (int, error) {
@@ -247,7 +305,7 @@ func clusterSetUp(t *testing.T) (int, error) {
 
 	// Start topo server
 	if err := clusterInstance.StartTopo(); err != nil {
-		return 1, err
+		return 1, errors.Wrap(err, "unable to start topo")
 	}
 
 	// create all certs
@@ -330,7 +388,7 @@ func clusterSetUp(t *testing.T) (int, error) {
 	for _, proc := range mysqlProcesses {
 		err := proc.Wait()
 		if err != nil {
-			return 1, err
+			return 1, errors.Wrap(err, "unable to wait on mysql process")
 		}
 	}
 	return 0, nil
@@ -340,11 +398,11 @@ func createIntermediateCA(ca string, serial string, name string, commonName stri
 	log.Infof("Creating intermediate signed cert and key %s", commonName)
 	tmpProcess := exec.Command(
 		"vttlstest",
+		"CreateIntermediateCA",
 		"--root", certDirectory,
-		"CreateIntermediateCA", "--",
 		"--parent", ca,
 		"--serial", serial,
-		"--common_name", commonName,
+		"--common-name", commonName,
 		name)
 	return tmpProcess.Run()
 }
@@ -353,11 +411,11 @@ func createSignedCert(ca string, serial string, name string, commonName string) 
 	log.Infof("Creating signed cert and key %s", commonName)
 	tmpProcess := exec.Command(
 		"vttlstest",
+		"CreateSignedCert",
 		"--root", certDirectory,
-		"CreateSignedCert", "--",
 		"--parent", ca,
 		"--serial", serial,
-		"--common_name", commonName,
+		"--common-name", commonName,
 		name)
 	return tmpProcess.Run()
 }

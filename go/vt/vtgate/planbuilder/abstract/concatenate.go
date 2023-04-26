@@ -40,7 +40,7 @@ func (*Concatenate) iLogical() {}
 func (c *Concatenate) TableID() semantics.TableSet {
 	var tableSet semantics.TableSet
 	for _, source := range c.Sources {
-		tableSet.MergeInPlace(source.TableID())
+		tableSet = tableSet.Merge(source.TableID())
 	}
 	return tableSet
 }

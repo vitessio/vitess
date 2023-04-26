@@ -34,6 +34,7 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/json2"
+	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
@@ -72,6 +73,9 @@ func (vte *VTExplain) initVtgateExecutor(vSchemaStr, ksShardMapStr string, opts 
 	streamSize := 10
 	var schemaTracker vtgate.SchemaInfo // no schema tracker for these tests
 	vte.vtgateExecutor = vtgate.NewExecutor(context.Background(), vte.explainTopo, vtexplainCell, resolver, opts.Normalize, false, streamSize, cache.DefaultConfig, schemaTracker, false, opts.PlannerVersion)
+
+	queryLogBufferSize := 10
+	vtgate.QueryLogger = streamlog.New("VTGate", queryLogBufferSize)
 
 	return nil
 }
@@ -127,6 +131,14 @@ func (vte *VTExplain) buildTopology(opts *Options, vschemaStr string, ksShardMap
 		vte.explainTopo.KeyspaceShards[ks] = make(map[string]*topodatapb.ShardReference)
 
 		for _, shard := range shards {
+			// If the topology is in the middle of a reshard, there can be two shards covering the same key range (e.g.
+			// both source shard 80- and target shard 80-c0 cover the keyrange 80-c0). For the purposes of explain, we
+			// should only consider the one that is serving, hence we skip the ones not serving. Otherwise, vtexplain
+			// gives inconsistent results - sometimes it will route the query being explained to the source shard, and
+			// sometimes to the destination shard. See https://github.com/vitessio/vitess/issues/11632 .
+			if shardInfo, ok := ksShardMap[ks][shard.Name]; ok && !shardInfo.IsPrimaryServing {
+				continue
+			}
 			hostname := fmt.Sprintf("%s/%s", ks, shard.Name)
 			log.Infof("registering test tablet %s for keyspace %s shard %s", hostname, ks, shard.Name)
 

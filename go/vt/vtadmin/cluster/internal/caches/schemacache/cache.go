@@ -109,6 +109,10 @@ func (opts LoadOptions) isFullPayload() bool {
 		return false
 	}
 
+	if opts.BaseRequest.TableSchemaOnly {
+		return false
+	}
+
 	if !opts.AggregateSizes {
 		return false
 	}

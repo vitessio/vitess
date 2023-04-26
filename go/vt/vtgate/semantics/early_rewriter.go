@@ -33,41 +33,28 @@ type earlyRewriter struct {
 
 func (r *earlyRewriter) down(cursor *sqlparser.Cursor) error {
 	switch node := cursor.Node().(type) {
+	case *sqlparser.Where:
+		if node.Type != sqlparser.HavingClause {
+			return nil
+		}
+		rewriteHavingAndOrderBy(cursor, node)
 	case sqlparser.SelectExprs:
 		_, isSel := cursor.Parent().(*sqlparser.Select)
 		if !isSel {
 			return nil
 		}
-		currentScope := r.scoper.currentScope()
-		var selExprs sqlparser.SelectExprs
-		changed := false
-		for _, selectExpr := range node {
-			starExpr, isStarExpr := selectExpr.(*sqlparser.StarExpr)
-			if !isStarExpr {
-				selExprs = append(selExprs, selectExpr)
-				continue
-			}
-			starExpanded, colNames, err := expandTableColumns(starExpr, currentScope.tables, r.binder.usingJoinInfo, r.scoper.org)
-			if err != nil {
-				return err
-			}
-			if !starExpanded || colNames == nil {
-				selExprs = append(selExprs, selectExpr)
-				continue
-			}
-			selExprs = append(selExprs, colNames...)
-			changed = true
-		}
-		if changed {
-			cursor.ReplaceAndRevisit(selExprs)
+		err := r.expandStar(cursor, node)
+		if err != nil {
+			return err
 		}
 	case *sqlparser.JoinTableExpr:
 		if node.Join == sqlparser.StraightJoinType {
 			node.Join = sqlparser.NormalJoinType
 			r.warning = "straight join is converted to normal join"
 		}
-	case *sqlparser.Order:
+	case sqlparser.OrderBy:
 		r.clause = "order clause"
+		rewriteHavingAndOrderBy(cursor, node)
 	case sqlparser.GroupBy:
 		r.clause = "group statement"
 
@@ -93,6 +80,87 @@ func (r *earlyRewriter) down(cursor *sqlparser.Cursor) error {
 		}
 	}
 	return nil
+}
+
+func (r *earlyRewriter) expandStar(cursor *sqlparser.Cursor, node sqlparser.SelectExprs) error {
+	currentScope := r.scoper.currentScope()
+	var selExprs sqlparser.SelectExprs
+	changed := false
+	for _, selectExpr := range node {
+		starExpr, isStarExpr := selectExpr.(*sqlparser.StarExpr)
+		if !isStarExpr {
+			selExprs = append(selExprs, selectExpr)
+			continue
+		}
+		starExpanded, colNames, err := expandTableColumns(starExpr, currentScope.tables, r.binder.usingJoinInfo, r.scoper.org)
+		if err != nil {
+			return err
+		}
+		if !starExpanded || colNames == nil {
+			selExprs = append(selExprs, selectExpr)
+			continue
+		}
+		selExprs = append(selExprs, colNames...)
+		changed = true
+	}
+	if changed {
+		cursor.ReplaceAndRevisit(selExprs)
+	}
+	return nil
+}
+
+// rewriteHavingAndOrderBy rewrites columns on the ORDER BY/HAVING
+// clauses to use aliases from the SELECT expressions when available.
+// The scoping rules are:
+//   - A column identifier with no table qualifier that matches an alias introduced
+//     in SELECT points to that expression, and not at any table column
+//   - Except when expression aliased is an aggregation, and the column identifier in the
+//     HAVING/ORDER BY clause is inside an aggregation function
+//
+// This is a fucking weird scoping rule, but it's what MySQL seems to do... ¯\_(ツ)_/¯
+func rewriteHavingAndOrderBy(cursor *sqlparser.Cursor, node sqlparser.SQLNode) {
+	sel, isSel := cursor.Parent().(*sqlparser.Select)
+	if !isSel {
+		return
+	}
+	sqlparser.Rewrite(node, func(inner *sqlparser.Cursor) bool {
+		switch col := inner.Node().(type) {
+		case *sqlparser.Subquery:
+			return false
+		case *sqlparser.ColName:
+			if !col.Qualifier.IsEmpty() {
+				return false
+			}
+			_, parentIsAggr := inner.Parent().(sqlparser.AggrFunc)
+			for _, e := range sel.SelectExprs {
+				ae, ok := e.(*sqlparser.AliasedExpr)
+				if !ok {
+					continue
+				}
+				if ae.As.Equal(col.Name) {
+					_, aliasPointsToAggr := ae.Expr.(sqlparser.AggrFunc)
+					if parentIsAggr && aliasPointsToAggr {
+						return false
+					}
+
+					safeToRewrite := true
+					sqlparser.Rewrite(ae.Expr, func(cursor *sqlparser.Cursor) bool {
+						switch cursor.Node().(type) {
+						case *sqlparser.ColName:
+							safeToRewrite = false
+						case sqlparser.AggrFunc:
+							return false
+						}
+						return true
+					}, nil)
+					if safeToRewrite {
+						inner.Replace(ae.Expr)
+					}
+				}
+			}
+		}
+		return true
+	}, nil)
 }
 
 func (r *earlyRewriter) rewriteOrderByExpr(node *sqlparser.Literal) (sqlparser.Expr, error) {
@@ -246,14 +314,14 @@ func expandTableColumns(
 
 		addColName := func(col ColumnInfo) {
 			var colName *sqlparser.ColName
-			var alias sqlparser.ColIdent
+			var alias sqlparser.IdentifierCI
 			if withQualifier {
 				colName = sqlparser.NewColNameWithQualifier(col.Name, tblName)
 			} else {
 				colName = sqlparser.NewColName(col.Name)
 			}
 			if withAlias {
-				alias = sqlparser.NewColIdent(col.Name)
+				alias = sqlparser.NewIdentifierCI(col.Name)
 			}
 			colNames = append(colNames, &sqlparser.AliasedExpr{Expr: colName, As: alias})
 		}
@@ -272,7 +340,7 @@ func expandTableColumns(
 			ts, found := usingCols[col.Name]
 			if found {
 				for i, ts := range ts.Constituents() {
-					if ts.Equals(currTable) {
+					if ts == currTable {
 						if i == 0 {
 							addColName(col)
 						} else {

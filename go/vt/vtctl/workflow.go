@@ -18,8 +18,9 @@ package vtctl
 
 import (
 	"context"
-	"flag"
 	"fmt"
+
+	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/vt/workflow"
 	"vitess.io/vitess/go/vt/wrangler"
@@ -83,7 +84,7 @@ func init() {
 	})
 }
 
-func commandWorkflowCreate(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+func commandWorkflowCreate(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {
 	if WorkflowManager == nil {
 		return fmt.Errorf("no workflow.Manager registered")
 	}
@@ -109,7 +110,7 @@ func commandWorkflowCreate(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 	return nil
 }
 
-func commandWorkflowStart(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+func commandWorkflowStart(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {
 	if WorkflowManager == nil {
 		return fmt.Errorf("no workflow.Manager registered")
 	}
@@ -124,7 +125,7 @@ func commandWorkflowStart(ctx context.Context, wr *wrangler.Wrangler, subFlags *
 	return WorkflowManager.Start(ctx, uuid)
 }
 
-func commandWorkflowStop(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+func commandWorkflowStop(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {
 	if WorkflowManager == nil {
 		return fmt.Errorf("no workflow.Manager registered")
 	}
@@ -139,7 +140,7 @@ func commandWorkflowStop(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 	return WorkflowManager.Stop(ctx, uuid)
 }
 
-func commandWorkflowDelete(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+func commandWorkflowDelete(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {
 	if WorkflowManager == nil {
 		return fmt.Errorf("no workflow.Manager registered")
 	}
@@ -154,7 +155,7 @@ func commandWorkflowDelete(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 	return WorkflowManager.Delete(ctx, uuid)
 }
 
-func commandWorkflowWait(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+func commandWorkflowWait(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {
 	if WorkflowManager == nil {
 		return fmt.Errorf("no workflow.Manager registered")
 	}
@@ -169,7 +170,7 @@ func commandWorkflowWait(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 	return WorkflowManager.Wait(ctx, uuid)
 }
 
-func commandWorkflowTree(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+func commandWorkflowTree(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {
 	if WorkflowManager == nil {
 		return fmt.Errorf("no workflow.Manager registered")
 	}
@@ -189,7 +190,7 @@ func commandWorkflowTree(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 	return nil
 }
 
-func commandWorkflowAction(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+func commandWorkflowAction(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {
 	if WorkflowManager == nil {
 		return fmt.Errorf("no workflow.Manager registered")
 	}

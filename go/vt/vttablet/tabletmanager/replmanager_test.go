@@ -29,19 +29,19 @@ import (
 )
 
 func TestReplManagerSetTabletType(t *testing.T) {
-	defer func(saved bool) { *mysqlctl.DisableActiveReparents = saved }(*mysqlctl.DisableActiveReparents)
-	*mysqlctl.DisableActiveReparents = true
+	defer func(saved bool) { mysqlctl.DisableActiveReparents = saved }(mysqlctl.DisableActiveReparents)
+	mysqlctl.DisableActiveReparents = true
 
 	tm := &TabletManager{}
 	tm.replManager = newReplManager(context.Background(), tm, 100*time.Millisecond)
 
 	// DisableActiveReparents == true should result in no-op
-	*mysqlctl.DisableActiveReparents = true
+	mysqlctl.DisableActiveReparents = true
 	tm.replManager.SetTabletType(topodatapb.TabletType_REPLICA)
 	assert.False(t, tm.replManager.ticks.Running())
 
 	// primary should stop the manager
-	*mysqlctl.DisableActiveReparents = false
+	mysqlctl.DisableActiveReparents = false
 	tm.replManager.ticks.Start(nil)
 	tm.replManager.SetTabletType(topodatapb.TabletType_PRIMARY)
 	assert.False(t, tm.replManager.ticks.Running())
@@ -61,20 +61,20 @@ func TestReplManagerSetTabletType(t *testing.T) {
 }
 
 func TestReplManagerSetReplicationStopped(t *testing.T) {
-	defer func(saved bool) { *mysqlctl.DisableActiveReparents = saved }(*mysqlctl.DisableActiveReparents)
-	*mysqlctl.DisableActiveReparents = true
+	defer func(saved bool) { mysqlctl.DisableActiveReparents = saved }(mysqlctl.DisableActiveReparents)
+	mysqlctl.DisableActiveReparents = true
 
 	tm := &TabletManager{}
 	tm.replManager = newReplManager(context.Background(), tm, 100*time.Millisecond)
 
 	// DisableActiveReparents == true should result in no-op
-	*mysqlctl.DisableActiveReparents = true
+	mysqlctl.DisableActiveReparents = true
 	tm.replManager.setReplicationStopped(true)
 	assert.False(t, tm.replManager.ticks.Running())
 	tm.replManager.setReplicationStopped(false)
 	assert.False(t, tm.replManager.ticks.Running())
 
-	*mysqlctl.DisableActiveReparents = false
+	mysqlctl.DisableActiveReparents = false
 	tm.replManager.setReplicationStopped(false)
 	assert.True(t, tm.replManager.ticks.Running())
 	tm.replManager.setReplicationStopped(true)
@@ -82,12 +82,12 @@ func TestReplManagerSetReplicationStopped(t *testing.T) {
 }
 
 func TestReplManagerReset(t *testing.T) {
-	defer func(saved bool) { *mysqlctl.DisableActiveReparents = saved }(*mysqlctl.DisableActiveReparents)
+	defer func(saved bool) { mysqlctl.DisableActiveReparents = saved }(mysqlctl.DisableActiveReparents)
 
 	tm := &TabletManager{}
 	tm.replManager = newReplManager(context.Background(), tm, 100*time.Millisecond)
 
-	*mysqlctl.DisableActiveReparents = false
+	mysqlctl.DisableActiveReparents = false
 	tm.replManager.setReplicationStopped(false)
 	assert.True(t, tm.replManager.ticks.Running())
 	// reset should not affect the ticks, but the replication stopped should be false
@@ -105,7 +105,7 @@ func TestReplManagerReset(t *testing.T) {
 	tm.replManager.setReplicationStopped(true)
 	assert.True(t, tm.replManager.replicationStopped())
 	// DisableActiveReparents == true should result in no-op
-	*mysqlctl.DisableActiveReparents = true
+	mysqlctl.DisableActiveReparents = true
 	tm.replManager.reset()
 	assert.True(t, tm.replManager.replicationStopped())
 }

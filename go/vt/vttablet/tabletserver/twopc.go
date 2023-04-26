@@ -262,7 +262,7 @@ func (tpc *TwoPC) DeleteRedo(ctx context.Context, conn *StatefulConnection, dtid
 
 // ReadAllRedo returns all the prepared transactions from the redo logs.
 func (tpc *TwoPC) ReadAllRedo(ctx context.Context) (prepared, failed []*tx.PreparedTx, err error) {
-	conn, err := tpc.readPool.Get(ctx)
+	conn, err := tpc.readPool.Get(ctx, nil)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -306,7 +306,7 @@ func (tpc *TwoPC) ReadAllRedo(ctx context.Context) (prepared, failed []*tx.Prepa
 
 // CountUnresolvedRedo returns the number of prepared transactions that are still unresolved.
 func (tpc *TwoPC) CountUnresolvedRedo(ctx context.Context, unresolvedTime time.Time) (int64, error) {
-	conn, err := tpc.readPool.Get(ctx)
+	conn, err := tpc.readPool.Get(ctx, nil)
 	if err != nil {
 		return 0, err
 	}
@@ -391,7 +391,7 @@ func (tpc *TwoPC) DeleteTransaction(ctx context.Context, conn *StatefulConnectio
 
 // ReadTransaction returns the metadata for the transaction.
 func (tpc *TwoPC) ReadTransaction(ctx context.Context, dtid string) (*querypb.TransactionMetadata, error) {
-	conn, err := tpc.readPool.Get(ctx)
+	conn, err := tpc.readPool.Get(ctx, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -441,7 +441,7 @@ func (tpc *TwoPC) ReadTransaction(ctx context.Context, dtid string) (*querypb.Tr
 // ReadAbandoned returns the list of abandoned transactions
 // and their associated start time.
 func (tpc *TwoPC) ReadAbandoned(ctx context.Context, abandonTime time.Time) (map[string]time.Time, error) {
-	conn, err := tpc.readPool.Get(ctx)
+	conn, err := tpc.readPool.Get(ctx, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -467,7 +467,7 @@ func (tpc *TwoPC) ReadAbandoned(ctx context.Context, abandonTime time.Time) (map
 
 // ReadAllTransactions returns info about all distributed transactions.
 func (tpc *TwoPC) ReadAllTransactions(ctx context.Context) ([]*tx.DistributedTx, error) {
-	conn, err := tpc.readPool.Get(ctx)
+	conn, err := tpc.readPool.Get(ctx, nil)
 	if err != nil {
 		return nil, err
 	}

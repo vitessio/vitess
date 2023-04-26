@@ -22,6 +22,8 @@ import (
 	"testing"
 	"time"
 
+	"google.golang.org/grpc/credentials/insecure"
+
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/net/nettest"
 	"google.golang.org/grpc"
@@ -62,7 +64,7 @@ func TestServer(t *testing.T) {
 	}
 	close(readyCh)
 
-	conn, err := grpc.Dial(lis.Addr().String(), grpc.WithInsecure(), grpc.WithBlock())
+	conn, err := grpc.Dial(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock())
 	assert.NoError(t, err)
 
 	defer conn.Close()

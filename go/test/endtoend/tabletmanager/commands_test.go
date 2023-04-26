@@ -36,8 +36,10 @@ import (
 )
 
 var (
-	getSchemaT1Results = "CREATE TABLE `t1` (\n  `id` bigint(20) NOT NULL,\n  `value` varchar(16) DEFAULT NULL,\n  PRIMARY KEY (`id`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8"
-	getSchemaV1Results = fmt.Sprintf("CREATE ALGORITHM=UNDEFINED DEFINER=`%s`@`%s` SQL SECURITY DEFINER VIEW {{.DatabaseName}}.`v1` AS select {{.DatabaseName}}.`t1`.`id` AS `id`,{{.DatabaseName}}.`t1`.`value` AS `value` from {{.DatabaseName}}.`t1`", username, hostname)
+	getSchemaT1Results8030 = "CREATE TABLE `t1` (\n  `id` bigint NOT NULL,\n  `value` varchar(16) DEFAULT NULL,\n  PRIMARY KEY (`id`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3"
+	getSchemaT1Results80   = "CREATE TABLE `t1` (\n  `id` bigint NOT NULL,\n  `value` varchar(16) DEFAULT NULL,\n  PRIMARY KEY (`id`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8"
+	getSchemaT1Results57   = "CREATE TABLE `t1` (\n  `id` bigint(20) NOT NULL,\n  `value` varchar(16) DEFAULT NULL,\n  PRIMARY KEY (`id`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8"
+	getSchemaV1Results     = fmt.Sprintf("CREATE ALGORITHM=UNDEFINED DEFINER=`%s`@`%s` SQL SECURITY DEFINER VIEW {{.DatabaseName}}.`v1` AS select {{.DatabaseName}}.`t1`.`id` AS `id`,{{.DatabaseName}}.`t1`.`value` AS `value` from {{.DatabaseName}}.`t1`", username, hostname)
 )
 
 // TabletCommands tests the basic tablet commands
@@ -58,22 +60,9 @@ func TestTabletCommands(t *testing.T) {
 	utils.Exec(t, conn, "insert into t1(id, value) values(1,'a'), (2,'b')")
 	checkDataOnReplica(t, replicaConn, `[[VARCHAR("a")] [VARCHAR("b")]]`)
 
-	// test exclude_field_names to vttablet works as expected
-	sql := "select id, value from t1"
-	args := []string{
-		"VtTabletExecute", "--",
-		"--options", "included_fields:TYPE_ONLY",
-		"--json",
-		primaryTablet.Alias,
-		sql,
-	}
-	result, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput(args...)
-	require.Nil(t, err)
-	assertExcludeFields(t, result)
-
 	// make sure direct dba queries work
-	sql = "select * from t1"
-	result, err = clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("ExecuteFetchAsDba", "--", "--json", primaryTablet.Alias, sql)
+	sql := "select * from t1"
+	result, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("ExecuteFetchAsDba", "--", "--json", primaryTablet.Alias, sql)
 	require.Nil(t, err)
 	assertExecuteFetch(t, result)
 
@@ -241,7 +230,7 @@ func TestGetSchema(t *testing.T) {
 	require.Nil(t, err)
 
 	t1Create := gjson.Get(res, "table_definitions.#(name==\"t1\").schema")
-	assert.Equal(t, getSchemaT1Results, t1Create.String())
+	assert.Contains(t, []string{getSchemaT1Results8030, getSchemaT1Results80, getSchemaT1Results57}, t1Create.String())
 	v1Create := gjson.Get(res, "table_definitions.#(name==\"v1\").schema")
 	assert.Equal(t, getSchemaV1Results, v1Create.String())
 }

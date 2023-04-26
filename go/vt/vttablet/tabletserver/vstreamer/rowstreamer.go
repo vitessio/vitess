@@ -19,12 +19,14 @@ package vstreamer
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/textutil"
+	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -34,6 +36,10 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
+)
+
+var (
+	rowStreamertHeartbeatInterval = 10 * time.Second
 )
 
 // RowStreamer exposes an externally usable interface to rowStreamer.
@@ -72,6 +78,8 @@ type rowStreamer struct {
 	sendQuery     string
 	vse           *Engine
 	pktsize       PacketSizer
+
+	throttleResponseRateLimiter *timer.RateLimiter
 }
 
 func newRowStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine, query string, lastpk []sqltypes.Value, vschema *localVSchema, send func(*binlogdatapb.VStreamRowsResponse) error, vse *Engine) *rowStreamer {
@@ -87,6 +95,8 @@ func newRowStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engi
 		vschema: vschema,
 		vse:     vse,
 		pktsize: DefaultPacketSizer(),
+
+		throttleResponseRateLimiter: timer.NewRateLimiter(rowStreamertHeartbeatInterval),
 	}
 }
 
@@ -157,7 +167,7 @@ func (rs *rowStreamer) buildPlan() error {
 	}
 
 	directives := sel.Comments.Directives()
-	if s := directives.GetString("ukColumns", ""); s != "" {
+	if s, found := directives.GetString("ukColumns", ""); found {
 		rs.ukColumnNames, err = textutil.SplitUnescape(s, ",")
 		if err != nil {
 			return err
@@ -181,7 +191,7 @@ func (rs *rowStreamer) buildPKColumnsFromUniqueKey() ([]int, error) {
 	// We wish to utilize a UNIQUE KEY which is not the PRIMARY KEY/
 
 	for _, colName := range rs.ukColumnNames {
-		index := rs.plan.Table.FindColumn(sqlparser.NewColIdent(colName))
+		index := rs.plan.Table.FindColumn(sqlparser.NewIdentifierCI(colName))
 		if index < 0 {
 			return pkColumns, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "column %v is listed as unique key, but not present in table %v", colName, rs.plan.Table.Name)
 		}
@@ -225,13 +235,15 @@ func (rs *rowStreamer) buildSelect() (string, error) {
 	prefix := ""
 	for _, col := range rs.plan.Table.Fields {
 		if rs.plan.isConvertColumnUsingUTF8(col.Name) {
-			buf.Myprintf("%sconvert(%v using utf8mb4) as %v", prefix, sqlparser.NewColIdent(col.Name), sqlparser.NewColIdent(col.Name))
+			buf.Myprintf("%sconvert(%v using utf8mb4) as %v", prefix, sqlparser.NewIdentifierCI(col.Name), sqlparser.NewIdentifierCI(col.Name))
+		} else if funcExpr := rs.plan.getColumnFuncExpr(col.Name); funcExpr != nil {
+			buf.Myprintf("%s%s as %v", prefix, sqlparser.String(funcExpr), sqlparser.NewIdentifierCI(col.Name))
 		} else {
-			buf.Myprintf("%s%v", prefix, sqlparser.NewColIdent(col.Name))
+			buf.Myprintf("%s%v", prefix, sqlparser.NewIdentifierCI(col.Name))
 		}
 		prefix = ", "
 	}
-	buf.Myprintf(" from %v", sqlparser.NewTableIdent(rs.plan.Table.Name))
+	buf.Myprintf(" from %v", sqlparser.NewIdentifierCS(rs.plan.Table.Name))
 	if len(rs.lastpk) != 0 {
 		if len(rs.lastpk) != len(rs.pkColumns) {
 			return "", fmt.Errorf("primary key values don't match length: %v vs %v", rs.lastpk, rs.pkColumns)
@@ -247,32 +259,42 @@ func (rs *rowStreamer) buildSelect() (string, error) {
 			buf.Myprintf("%s(", prefix)
 			prefix = " or "
 			for i, pk := range rs.pkColumns[:lastcol] {
-				buf.Myprintf("%v = ", sqlparser.NewColIdent(rs.plan.Table.Fields[pk].Name))
+				buf.Myprintf("%v = ", sqlparser.NewIdentifierCI(rs.plan.Table.Fields[pk].Name))
 				rs.lastpk[i].EncodeSQL(buf)
 				buf.Myprintf(" and ")
 			}
-			buf.Myprintf("%v > ", sqlparser.NewColIdent(rs.plan.Table.Fields[rs.pkColumns[lastcol]].Name))
+			buf.Myprintf("%v > ", sqlparser.NewIdentifierCI(rs.plan.Table.Fields[rs.pkColumns[lastcol]].Name))
 			rs.lastpk[lastcol].EncodeSQL(buf)
 			buf.Myprintf(")")
 		}
 	}
-	buf.Myprintf(" order by ", sqlparser.NewTableIdent(rs.plan.Table.Name))
+	buf.Myprintf(" order by ", sqlparser.NewIdentifierCS(rs.plan.Table.Name))
 	prefix = ""
 	for _, pk := range rs.pkColumns {
-		buf.Myprintf("%s%v", prefix, sqlparser.NewColIdent(rs.plan.Table.Fields[pk].Name))
+		buf.Myprintf("%s%v", prefix, sqlparser.NewIdentifierCI(rs.plan.Table.Fields[pk].Name))
 		prefix = ", "
 	}
 	return buf.String(), nil
 }
 
 func (rs *rowStreamer) streamQuery(conn *snapshotConn, send func(*binlogdatapb.VStreamRowsResponse) error) error {
+
+	var sendMu sync.Mutex
+	safeSend := func(r *binlogdatapb.VStreamRowsResponse) error {
+		sendMu.Lock()
+		defer sendMu.Unlock()
+		return send(r)
+	}
 	// Let's wait until MySQL is in good shape to stream rows
 	if err := rs.vse.waitForMySQL(rs.ctx, rs.cp, rs.plan.Table.Name); err != nil {
 		return err
 	}
 
 	log.Infof("Streaming query: %v\n", rs.sendQuery)
-	gtid, err := conn.streamWithSnapshot(rs.ctx, rs.plan.Table.Name, rs.sendQuery)
+	gtid, rotatedLog, err := conn.streamWithSnapshot(rs.ctx, rs.plan.Table.Name, rs.sendQuery)
+	if rotatedLog {
+		rs.vse.vstreamerFlushedBinlogs.Add(1)
+	}
 	if err != nil {
 		return err
 	}
@@ -295,7 +317,7 @@ func (rs *rowStreamer) streamQuery(conn *snapshotConn, send func(*binlogdatapb.V
 		charsets[i] = collations.ID(fld.Charset)
 	}
 
-	err = send(&binlogdatapb.VStreamRowsResponse{
+	err = safeSend(&binlogdatapb.VStreamRowsResponse{
 		Fields:   rs.plan.fields(),
 		Pkfields: pkfields,
 		Gtid:     gtid,
@@ -303,6 +325,15 @@ func (rs *rowStreamer) streamQuery(conn *snapshotConn, send func(*binlogdatapb.V
 	if err != nil {
 		return fmt.Errorf("stream send error: %v", err)
 	}
+
+	// streamQuery sends heartbeats as long as it operates
+	heartbeatTicker := time.NewTicker(rowStreamertHeartbeatInterval)
+	defer heartbeatTicker.Stop()
+	go func() {
+		for range heartbeatTicker.C {
+			safeSend(&binlogdatapb.VStreamRowsResponse{Heartbeat: true})
+		}
+	}()
 
 	var response binlogdatapb.VStreamRowsResponse
 	var rows []*querypb.Row
@@ -320,6 +351,9 @@ func (rs *rowStreamer) streamQuery(conn *snapshotConn, send func(*binlogdatapb.V
 
 		// check throttler.
 		if !rs.vse.throttlerClient.ThrottleCheckOKOrWait(rs.ctx) {
+			rs.throttleResponseRateLimiter.Do(func() error {
+				return safeSend(&binlogdatapb.VStreamRowsResponse{Throttled: true})
+			})
 			continue
 		}
 
@@ -358,7 +392,7 @@ func (rs *rowStreamer) streamQuery(conn *snapshotConn, send func(*binlogdatapb.V
 			rs.vse.rowStreamerNumRows.Add(int64(len(response.Rows)))
 			rs.vse.rowStreamerNumPackets.Add(int64(1))
 			startSend := time.Now()
-			err = send(&response)
+			err = safeSend(&response)
 			if err != nil {
 				return err
 			}
@@ -373,7 +407,7 @@ func (rs *rowStreamer) streamQuery(conn *snapshotConn, send func(*binlogdatapb.V
 		response.Lastpk = sqltypes.RowToProto3(lastpk)
 
 		rs.vse.rowStreamerNumRows.Add(int64(len(response.Rows)))
-		err = send(&response)
+		err = safeSend(&response)
 		if err != nil {
 			return err
 		}

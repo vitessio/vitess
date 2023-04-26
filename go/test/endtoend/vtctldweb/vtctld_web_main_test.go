@@ -37,7 +37,7 @@ import (
 	"vitess.io/vitess/go/vt/vttest"
 )
 
-//nolint
+// nolint
 var (
 	localCluster    *vttest.LocalCluster
 	hostname        = "localhost" //nolint

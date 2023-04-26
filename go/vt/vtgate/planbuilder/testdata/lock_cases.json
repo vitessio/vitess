@@ -1,0 +1,193 @@
+[
+  {
+    "comment": "get_lock from dual",
+    "query": "select get_lock('xyz', 10) from dual",
+    "v3-plan": {
+      "QueryType": "SELECT",
+      "Original": "select get_lock('xyz', 10) from dual",
+      "Instructions": {
+        "OperatorType": "Lock",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "KeyspaceID(00)",
+        "FieldQuery": "select get_lock('xyz', 10) from dual where 1 != 1",
+        "lock_func": [
+          "get_lock('xyz', 10)"
+        ]
+      }
+    },
+    "gen4-plan": {
+      "QueryType": "SELECT",
+      "Original": "select get_lock('xyz', 10) from dual",
+      "Instructions": {
+        "OperatorType": "Lock",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "KeyspaceID(00)",
+        "FieldQuery": "select get_lock('xyz', 10) from dual where 1 != 1",
+        "lock_func": [
+          "get_lock('xyz', 10)"
+        ]
+      },
+      "TablesUsed": [
+        "main.dual"
+      ]
+    }
+  },
+  {
+    "comment": "is_free_lock from dual",
+    "query": "select is_free_lock('xyz') from dual",
+    "v3-plan": {
+      "QueryType": "SELECT",
+      "Original": "select is_free_lock('xyz') from dual",
+      "Instructions": {
+        "OperatorType": "Lock",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "KeyspaceID(00)",
+        "FieldQuery": "select is_free_lock('xyz') from dual where 1 != 1",
+        "lock_func": [
+          "is_free_lock('xyz')"
+        ]
+      }
+    },
+    "gen4-plan": {
+      "QueryType": "SELECT",
+      "Original": "select is_free_lock('xyz') from dual",
+      "Instructions": {
+        "OperatorType": "Lock",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "KeyspaceID(00)",
+        "FieldQuery": "select is_free_lock('xyz') from dual where 1 != 1",
+        "lock_func": [
+          "is_free_lock('xyz')"
+        ]
+      },
+      "TablesUsed": [
+        "main.dual"
+      ]
+    }
+  },
+  {
+    "comment": "get_lock from dual prepare query",
+    "query": "select get_lock(?, ?)",
+    "v3-plan": {
+      "QueryType": "SELECT",
+      "Original": "select get_lock(?, ?)",
+      "Instructions": {
+        "OperatorType": "Lock",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "KeyspaceID(00)",
+        "FieldQuery": "select get_lock(:v1, :v2) from dual where 1 != 1",
+        "lock_func": [
+          "get_lock(:v1, :v2)"
+        ]
+      }
+    },
+    "gen4-plan": {
+      "QueryType": "SELECT",
+      "Original": "select get_lock(?, ?)",
+      "Instructions": {
+        "OperatorType": "Lock",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "KeyspaceID(00)",
+        "FieldQuery": "select get_lock(:v1, :v2) from dual where 1 != 1",
+        "lock_func": [
+          "get_lock(:v1, :v2)"
+        ]
+      },
+      "TablesUsed": [
+        "main.dual"
+      ]
+    }
+  },
+  {
+    "comment": "lock tables read",
+    "query": "lock tables t as x read local",
+    "plan": {
+      "QueryType": "LOCK_TABLES",
+      "Original": "lock tables t as x read local",
+      "Instructions": {
+        "OperatorType": "Rows"
+      }
+    }
+  },
+  {
+    "comment": "lock tables write",
+    "query": "lock tables t low_priority write",
+    "plan": {
+      "QueryType": "LOCK_TABLES",
+      "Original": "lock tables t low_priority write",
+      "Instructions": {
+        "OperatorType": "Rows"
+      }
+    }
+  },
+  {
+    "comment": "unlock tables",
+    "query": "unlock tables",
+    "plan": {
+      "QueryType": "UNLOCK_TABLES",
+      "Original": "unlock tables",
+      "Instructions": {
+        "OperatorType": "Rows"
+      }
+    }
+  },
+  {
+    "comment": "multiple lock functions",
+    "query": "select get_lock('xyz', 10), is_free_lock('abc') from dual",
+    "v3-plan": {
+      "QueryType": "SELECT",
+      "Original": "select get_lock('xyz', 10), is_free_lock('abc') from dual",
+      "Instructions": {
+        "OperatorType": "Lock",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "KeyspaceID(00)",
+        "FieldQuery": "select get_lock('xyz', 10), is_free_lock('abc') from dual where 1 != 1",
+        "lock_func": [
+          "get_lock('xyz', 10)",
+          "is_free_lock('abc')"
+        ]
+      }
+    },
+    "gen4-plan": {
+      "QueryType": "SELECT",
+      "Original": "select get_lock('xyz', 10), is_free_lock('abc') from dual",
+      "Instructions": {
+        "OperatorType": "Lock",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "KeyspaceID(00)",
+        "FieldQuery": "select get_lock('xyz', 10), is_free_lock('abc') from dual where 1 != 1",
+        "lock_func": [
+          "get_lock('xyz', 10)",
+          "is_free_lock('abc')"
+        ]
+      },
+      "TablesUsed": [
+        "main.dual"
+      ]
+    }
+  }
+]

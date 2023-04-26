@@ -1,0 +1,1495 @@
+[
+  {
+    "comment": "TPC-H query 1",
+    "query": "select l_returnflag, l_linestatus, sum(l_quantity) as sum_qty, sum(l_extendedprice) as sum_base_price, sum(l_extendedprice * (1 - l_discount)) as sum_disc_price, sum(l_extendedprice * (1 - l_discount) * (1 + l_tax)) as sum_charge, avg(l_quantity) as avg_qty, avg(l_extendedprice) as avg_price, avg(l_discount) as avg_disc, count(*) as count_order from lineitem where l_shipdate <= '1998-12-01' - interval '108' day group by l_returnflag, l_linestatus order by l_returnflag, l_linestatus",
+    "v3-plan": "unsupported: in scatter query: complex aggregate expression",
+    "gen4-plan": "unsupported: in scatter query: aggregation function 'avg'"
+  },
+  {
+    "comment": "TPC-H query 2",
+    "query": "select s_acctbal, s_name, n_name, p_partkey, p_mfgr, s_address, s_phone, s_comment from part, supplier, partsupp, nation, region where p_partkey = ps_partkey and s_suppkey = ps_suppkey and p_size = 15 and p_type like '%BRASS' and s_nationkey = n_nationkey and n_regionkey = r_regionkey and r_name = 'EUROPE' and ps_supplycost = ( select min(ps_supplycost) from partsupp, supplier, nation, region where p_partkey = ps_partkey and s_suppkey = ps_suppkey and s_nationkey = n_nationkey and n_regionkey = r_regionkey and r_name = 'EUROPE' ) order by s_acctbal desc, n_name, s_name, p_partkey limit 10",
+    "v3-plan": "symbol p_partkey not found",
+    "gen4-plan": "unsupported: cross-shard correlated subquery"
+  },
+  {
+    "comment": "TPC-H query 3",
+    "query": "select l_orderkey, sum(l_extendedprice * (1 - l_discount)) as revenue, o_orderdate, o_shippriority from customer, orders, lineitem where c_mktsegment = 'BUILDING' and c_custkey = o_custkey and l_orderkey = o_orderkey and o_orderdate < date('1995-03-15') and l_shipdate > date('1995-03-15') group by l_orderkey, o_orderdate, o_shippriority order by revenue desc, o_orderdate limit 10",
+    "v3-plan": "unsupported: cross-shard query with aggregates",
+    "gen4-plan": {
+      "QueryType": "SELECT",
+      "Original": "select l_orderkey, sum(l_extendedprice * (1 - l_discount)) as revenue, o_orderdate, o_shippriority from customer, orders, lineitem where c_mktsegment = 'BUILDING' and c_custkey = o_custkey and l_orderkey = o_orderkey and o_orderdate < date('1995-03-15') and l_shipdate > date('1995-03-15') group by l_orderkey, o_orderdate, o_shippriority order by revenue desc, o_orderdate limit 10",
+      "Instructions": {
+        "OperatorType": "Limit",
+        "Count": "INT64(10)",
+        "Inputs": [
+          {
+            "OperatorType": "Sort",
+            "Variant": "Memory",
+            "OrderBy": "1 DESC, (2|5) ASC",
+            "ResultColumns": 4,
+            "Inputs": [
+              {
+                "OperatorType": "Aggregate",
+                "Variant": "Ordered",
+                "Aggregates": "sum(1) AS revenue",
+                "GroupBy": "(0|6), (2|5), (3|4)",
+                "Inputs": [
+                  {
+                    "OperatorType": "Projection",
+                    "Expressions": [
+                      "[COLUMN 0] as l_orderkey",
+                      "([COLUMN 6] * [COLUMN 7]) * [COLUMN 8] as revenue",
+                      "[COLUMN 1] as o_orderdate",
+                      "[COLUMN 2] as o_shippriority",
+                      "[COLUMN 5]",
+                      "[COLUMN 4]",
+                      "[COLUMN 3]"
+                    ],
+                    "Inputs": [
+                      {
+                        "OperatorType": "Sort",
+                        "Variant": "Memory",
+                        "OrderBy": "(0|3) ASC, (1|4) ASC, (2|5) ASC",
+                        "Inputs": [
+                          {
+                            "OperatorType": "Join",
+                            "Variant": "Join",
+                            "JoinColumnIndexes": "L:0,R:0,R:1,L:2,R:2,R:3,L:1,R:4,R:5",
+                            "JoinVars": {
+                              "l_orderkey": 0
+                            },
+                            "TableName": "lineitem_orders_customer",
+                            "Inputs": [
+                              {
+                                "OperatorType": "Route",
+                                "Variant": "Scatter",
+                                "Keyspace": {
+                                  "Name": "main",
+                                  "Sharded": true
+                                },
+                                "FieldQuery": "select l_orderkey, sum(l_extendedprice * (1 - l_discount)) as revenue, weight_string(l_orderkey) from lineitem where 1 != 1 group by l_orderkey, weight_string(l_orderkey)",
+                                "Query": "select l_orderkey, sum(l_extendedprice * (1 - l_discount)) as revenue, weight_string(l_orderkey) from lineitem where l_shipdate > date('1995-03-15') group by l_orderkey, weight_string(l_orderkey)",
+                                "Table": "lineitem"
+                              },
+                              {
+                                "OperatorType": "Join",
+                                "Variant": "Join",
+                                "JoinColumnIndexes": "L:3,L:5,L:4,L:6,L:1,R:1",
+                                "JoinVars": {
+                                  "o_custkey": 0
+                                },
+                                "TableName": "orders_customer",
+                                "Inputs": [
+                                  {
+                                    "OperatorType": "Route",
+                                    "Variant": "EqualUnique",
+                                    "Keyspace": {
+                                      "Name": "main",
+                                      "Sharded": true
+                                    },
+                                    "FieldQuery": "select o_custkey, count(*), weight_string(o_custkey), o_orderdate, weight_string(o_orderdate), o_shippriority, weight_string(o_shippriority) from orders where 1 != 1 group by o_custkey, weight_string(o_custkey), o_orderdate, weight_string(o_orderdate), o_shippriority, weight_string(o_shippriority)",
+                                    "Query": "select o_custkey, count(*), weight_string(o_custkey), o_orderdate, weight_string(o_orderdate), o_shippriority, weight_string(o_shippriority) from orders where o_orderdate < date('1995-03-15') and o_orderkey = :l_orderkey group by o_custkey, weight_string(o_custkey), o_orderdate, weight_string(o_orderdate), o_shippriority, weight_string(o_shippriority)",
+                                    "Table": "orders",
+                                    "Values": [
+                                      ":l_orderkey"
+                                    ],
+                                    "Vindex": "hash"
+                                  },
+                                  {
+                                    "OperatorType": "Route",
+                                    "Variant": "EqualUnique",
+                                    "Keyspace": {
+                                      "Name": "main",
+                                      "Sharded": true
+                                    },
+                                    "FieldQuery": "select 1, count(*) from customer where 1 != 1 group by 1",
+                                    "Query": "select 1, count(*) from customer where c_mktsegment = 'BUILDING' and c_custkey = :o_custkey group by 1",
+                                    "Table": "customer",
+                                    "Values": [
+                                      ":o_custkey"
+                                    ],
+                                    "Vindex": "hash"
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.customer",
+        "main.lineitem",
+        "main.orders"
+      ]
+    }
+  },
+  {
+    "comment": "TPC-H query 4",
+    "query": "select o_orderpriority, count(*) as order_count from orders where o_orderdate >= date('1993-07-01') and o_orderdate < date('1993-07-01') + interval '3' month and exists ( select * from lineitem where l_orderkey = o_orderkey and l_commitdate < l_receiptdate ) group by o_orderpriority order by o_orderpriority",
+    "v3-plan": "symbol o_orderkey not found in table or subquery",
+    "gen4-plan": {
+      "QueryType": "SELECT",
+      "Original": "select o_orderpriority, count(*) as order_count from orders where o_orderdate >= date('1993-07-01') and o_orderdate < date('1993-07-01') + interval '3' month and exists ( select * from lineitem where l_orderkey = o_orderkey and l_commitdate < l_receiptdate ) group by o_orderpriority order by o_orderpriority",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Ordered",
+        "Aggregates": "sum_count_star(1) AS order_count",
+        "GroupBy": "(0|2)",
+        "ResultColumns": 2,
+        "Inputs": [
+          {
+            "OperatorType": "Projection",
+            "Expressions": [
+              "[COLUMN 1] as o_orderpriority",
+              "[COLUMN 2] as order_count",
+              "[COLUMN 3]"
+            ],
+            "Inputs": [
+              {
+                "OperatorType": "SemiJoin",
+                "JoinVars": {
+                  "o_orderkey": 0
+                },
+                "TableName": "orders_lineitem",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "main",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select o_orderkey, o_orderpriority, count(*) as order_count, weight_string(o_orderpriority), weight_string(o_orderkey) from orders where 1 != 1 group by o_orderpriority, weight_string(o_orderpriority), o_orderkey, weight_string(o_orderkey)",
+                    "OrderBy": "(1|3) ASC",
+                    "Query": "select o_orderkey, o_orderpriority, count(*) as order_count, weight_string(o_orderpriority), weight_string(o_orderkey) from orders where o_orderdate >= date('1993-07-01') and o_orderdate < date('1993-07-01') + interval '3' month group by o_orderpriority, weight_string(o_orderpriority), o_orderkey, weight_string(o_orderkey) order by o_orderpriority asc",
+                    "Table": "orders"
+                  },
+                  {
+                    "OperatorType": "VindexLookup",
+                    "Variant": "EqualUnique",
+                    "Keyspace": {
+                      "Name": "main",
+                      "Sharded": true
+                    },
+                    "Values": [
+                      ":o_orderkey"
+                    ],
+                    "Vindex": "lineitem_map",
+                    "Inputs": [
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "IN",
+                        "Keyspace": {
+                          "Name": "main",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select l_orderkey, l_linenumber from lineitem_map where 1 != 1",
+                        "Query": "select l_orderkey, l_linenumber from lineitem_map where l_orderkey in ::__vals",
+                        "Table": "lineitem_map",
+                        "Values": [
+                          ":l_orderkey"
+                        ],
+                        "Vindex": "md5"
+                      },
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "ByDestination",
+                        "Keyspace": {
+                          "Name": "main",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select 1 from lineitem where 1 != 1",
+                        "Query": "select 1 from lineitem where l_commitdate < l_receiptdate and l_orderkey = :o_orderkey",
+                        "Table": "lineitem"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.lineitem",
+        "main.orders"
+      ]
+    }
+  },
+  {
+    "comment": "TPC-H query 5 - Gen4 produces plan but the plan output is flaky",
+    "query": "select n_name, sum(l_extendedprice * (1 - l_discount)) as revenue from customer, orders, lineitem, supplier, nation, region where c_custkey = o_custkey and l_orderkey = o_orderkey and l_suppkey = s_suppkey and c_nationkey = s_nationkey and s_nationkey = n_nationkey and n_regionkey = r_regionkey and r_name = 'ASIA' and o_orderdate >= date('1994-01-01') and o_orderdate < date('1994-01-01') + interval '1' year group by n_name order by revenue desc",
+    "v3-plan": "unsupported: cross-shard query with aggregates",
+    "gen4-plan": {
+      "QueryType": "SELECT",
+      "Original": "select n_name, sum(l_extendedprice * (1 - l_discount)) as revenue from customer, orders, lineitem, supplier, nation, region where c_custkey = o_custkey and l_orderkey = o_orderkey and l_suppkey = s_suppkey and c_nationkey = s_nationkey and s_nationkey = n_nationkey and n_regionkey = r_regionkey and r_name = 'ASIA' and o_orderdate >= date('1994-01-01') and o_orderdate < date('1994-01-01') + interval '1' year group by n_name order by revenue desc",
+      "Instructions": {
+        "OperatorType": "Sort",
+        "Variant": "Memory",
+        "OrderBy": "1 DESC",
+        "ResultColumns": 2,
+        "Inputs": [
+          {
+            "OperatorType": "Aggregate",
+            "Variant": "Ordered",
+            "Aggregates": "sum(1) AS revenue",
+            "GroupBy": "(0|2)",
+            "Inputs": [
+              {
+                "OperatorType": "Projection",
+                "Expressions": [
+                  "[COLUMN 0] as n_name",
+                  "(((([COLUMN 2] * [COLUMN 3]) * [COLUMN 4]) * [COLUMN 5]) * [COLUMN 6]) * [COLUMN 7] as revenue",
+                  "[COLUMN 1]"
+                ],
+                "Inputs": [
+                  {
+                    "OperatorType": "Sort",
+                    "Variant": "Memory",
+                    "OrderBy": "(0|1) ASC",
+                    "Inputs": [
+                      {
+                        "OperatorType": "Join",
+                        "Variant": "Join",
+                        "JoinColumnIndexes": "R:0,R:1,L:3,L:4,L:5,L:6,R:2,R:3",
+                        "JoinVars": {
+                          "s_nationkey": 0
+                        },
+                        "TableName": "orders_customer_lineitem_supplier_nation_region",
+                        "Inputs": [
+                          {
+                            "OperatorType": "Join",
+                            "Variant": "Join",
+                            "JoinColumnIndexes": "R:0,R:1,R:2,L:6,L:7,R:3,R:4",
+                            "JoinVars": {
+                              "c_nationkey": 1,
+                              "o_orderkey": 0
+                            },
+                            "TableName": "orders_customer_lineitem_supplier",
+                            "Inputs": [
+                              {
+                                "OperatorType": "Join",
+                                "Variant": "Join",
+                                "JoinColumnIndexes": "L:1,R:0,L:1,R:0,L:4,R:2,L:2,R:1",
+                                "JoinVars": {
+                                  "o_custkey": 0
+                                },
+                                "TableName": "orders_customer",
+                                "Inputs": [
+                                  {
+                                    "OperatorType": "Route",
+                                    "Variant": "Scatter",
+                                    "Keyspace": {
+                                      "Name": "main",
+                                      "Sharded": true
+                                    },
+                                    "FieldQuery": "select o_custkey, o_orderkey, count(*), weight_string(o_custkey), weight_string(o_orderkey) from orders where 1 != 1 group by o_custkey, weight_string(o_custkey), o_orderkey, weight_string(o_orderkey)",
+                                    "Query": "select o_custkey, o_orderkey, count(*), weight_string(o_custkey), weight_string(o_orderkey) from orders where o_orderdate >= date('1994-01-01') and o_orderdate < date('1994-01-01') + interval '1' year group by o_custkey, weight_string(o_custkey), o_orderkey, weight_string(o_orderkey)",
+                                    "Table": "orders"
+                                  },
+                                  {
+                                    "OperatorType": "Route",
+                                    "Variant": "EqualUnique",
+                                    "Keyspace": {
+                                      "Name": "main",
+                                      "Sharded": true
+                                    },
+                                    "FieldQuery": "select c_nationkey, count(*), weight_string(c_nationkey) from customer where 1 != 1 group by c_nationkey, weight_string(c_nationkey)",
+                                    "Query": "select c_nationkey, count(*), weight_string(c_nationkey) from customer where c_custkey = :o_custkey group by c_nationkey, weight_string(c_nationkey)",
+                                    "Table": "customer",
+                                    "Values": [
+                                      ":o_custkey"
+                                    ],
+                                    "Vindex": "hash"
+                                  }
+                                ]
+                              },
+                              {
+                                "OperatorType": "Join",
+                                "Variant": "Join",
+                                "JoinColumnIndexes": "R:0,R:0,R:2,L:1,R:1",
+                                "JoinVars": {
+                                  "l_suppkey": 0
+                                },
+                                "TableName": "lineitem_supplier",
+                                "Inputs": [
+                                  {
+                                    "OperatorType": "VindexLookup",
+                                    "Variant": "EqualUnique",
+                                    "Keyspace": {
+                                      "Name": "main",
+                                      "Sharded": true
+                                    },
+                                    "Values": [
+                                      ":o_orderkey"
+                                    ],
+                                    "Vindex": "lineitem_map",
+                                    "Inputs": [
+                                      {
+                                        "OperatorType": "Route",
+                                        "Variant": "IN",
+                                        "Keyspace": {
+                                          "Name": "main",
+                                          "Sharded": true
+                                        },
+                                        "FieldQuery": "select l_orderkey, l_linenumber from lineitem_map where 1 != 1",
+                                        "Query": "select l_orderkey, l_linenumber from lineitem_map where l_orderkey in ::__vals",
+                                        "Table": "lineitem_map",
+                                        "Values": [
+                                          ":l_orderkey"
+                                        ],
+                                        "Vindex": "md5"
+                                      },
+                                      {
+                                        "OperatorType": "Route",
+                                        "Variant": "ByDestination",
+                                        "Keyspace": {
+                                          "Name": "main",
+                                          "Sharded": true
+                                        },
+                                        "FieldQuery": "select l_suppkey, sum(l_extendedprice * (1 - l_discount)) as revenue, weight_string(l_suppkey) from lineitem where 1 != 1 group by l_suppkey, weight_string(l_suppkey)",
+                                        "Query": "select l_suppkey, sum(l_extendedprice * (1 - l_discount)) as revenue, weight_string(l_suppkey) from lineitem where l_orderkey = :o_orderkey group by l_suppkey, weight_string(l_suppkey)",
+                                        "Table": "lineitem"
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "OperatorType": "Route",
+                                    "Variant": "EqualUnique",
+                                    "Keyspace": {
+                                      "Name": "main",
+                                      "Sharded": true
+                                    },
+                                    "FieldQuery": "select s_nationkey, count(*), weight_string(s_nationkey) from supplier where 1 != 1 group by s_nationkey, weight_string(s_nationkey)",
+                                    "Query": "select s_nationkey, count(*), weight_string(s_nationkey) from supplier where s_suppkey = :l_suppkey and s_nationkey = :c_nationkey group by s_nationkey, weight_string(s_nationkey)",
+                                    "Table": "supplier",
+                                    "Values": [
+                                      ":l_suppkey"
+                                    ],
+                                    "Vindex": "hash"
+                                  }
+                                ]
+                              }
+                            ]
+                          },
+                          {
+                            "OperatorType": "Join",
+                            "Variant": "Join",
+                            "JoinColumnIndexes": "L:3,L:4,L:1,R:1",
+                            "JoinVars": {
+                              "n_regionkey": 0
+                            },
+                            "TableName": "nation_region",
+                            "Inputs": [
+                              {
+                                "OperatorType": "Route",
+                                "Variant": "EqualUnique",
+                                "Keyspace": {
+                                  "Name": "main",
+                                  "Sharded": true
+                                },
+                                "FieldQuery": "select n_regionkey, count(*), weight_string(n_regionkey), n_name, weight_string(n_name) from nation where 1 != 1 group by n_regionkey, weight_string(n_regionkey), n_name, weight_string(n_name)",
+                                "Query": "select n_regionkey, count(*), weight_string(n_regionkey), n_name, weight_string(n_name) from nation where n_nationkey = :s_nationkey group by n_regionkey, weight_string(n_regionkey), n_name, weight_string(n_name)",
+                                "Table": "nation",
+                                "Values": [
+                                  ":s_nationkey"
+                                ],
+                                "Vindex": "hash"
+                              },
+                              {
+                                "OperatorType": "Route",
+                                "Variant": "EqualUnique",
+                                "Keyspace": {
+                                  "Name": "main",
+                                  "Sharded": true
+                                },
+                                "FieldQuery": "select 1, count(*) from region where 1 != 1 group by 1",
+                                "Query": "select 1, count(*) from region where r_name = 'ASIA' and r_regionkey = :n_regionkey group by 1",
+                                "Table": "region",
+                                "Values": [
+                                  ":n_regionkey"
+                                ],
+                                "Vindex": "hash"
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.customer",
+        "main.lineitem",
+        "main.nation",
+        "main.orders",
+        "main.region",
+        "main.supplier"
+      ]
+    }
+  },
+  {
+    "comment": "TPC-H query 6",
+    "query": "select sum(l_extendedprice * l_discount) as revenue from lineitem where l_shipdate >= date('1994-01-01') and l_shipdate < date('1994-01-01') + interval '1' year and l_discount between 0.06 - 0.01 and 0.06 + 0.01 and l_quantity < 24",
+    "v3-plan": {
+      "QueryType": "SELECT",
+      "Original": "select sum(l_extendedprice * l_discount) as revenue from lineitem where l_shipdate >= date('1994-01-01') and l_shipdate < date('1994-01-01') + interval '1' year and l_discount between 0.06 - 0.01 and 0.06 + 0.01 and l_quantity < 24",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "sum(0)",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": true
+            },
+            "FieldQuery": "select sum(l_extendedprice * l_discount) as revenue from lineitem where 1 != 1",
+            "Query": "select sum(l_extendedprice * l_discount) as revenue from lineitem where l_shipdate >= date('1994-01-01') and l_shipdate < date('1994-01-01') + interval '1' year and l_discount between 0.06 - 0.01 and 0.06 + 0.01 and l_quantity < 24",
+            "Table": "lineitem"
+          }
+        ]
+      }
+    },
+    "gen4-plan": {
+      "QueryType": "SELECT",
+      "Original": "select sum(l_extendedprice * l_discount) as revenue from lineitem where l_shipdate >= date('1994-01-01') and l_shipdate < date('1994-01-01') + interval '1' year and l_discount between 0.06 - 0.01 and 0.06 + 0.01 and l_quantity < 24",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "sum(0) AS revenue",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": true
+            },
+            "FieldQuery": "select sum(l_extendedprice * l_discount) as revenue from lineitem where 1 != 1",
+            "Query": "select sum(l_extendedprice * l_discount) as revenue from lineitem where l_shipdate >= date('1994-01-01') and l_shipdate < date('1994-01-01') + interval '1' year and l_discount between 0.06 - 0.01 and 0.06 + 0.01 and l_quantity < 24",
+            "Table": "lineitem"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.lineitem"
+      ]
+    }
+  },
+  {
+    "comment": "TPC-H query 7",
+    "query": "select supp_nation, cust_nation, l_year, sum(volume) as revenue from (select n1.n_name as supp_nation, n2.n_name as cust_nation, extract(year from l_shipdate) as l_year, l_extendedprice * (1 - l_discount) as volume from supplier, lineitem, orders, customer, nation n1, nation n2 where s_suppkey = l_suppkey and o_orderkey = l_orderkey and c_custkey = o_custkey and s_nationkey = n1.n_nationkey and c_nationkey = n2.n_nationkey and ((n1.n_name = 'FRANCE' and n2.n_name = 'GERMANY') or (n1.n_name = 'GERMANY' and n2.n_name = 'FRANCE')) and l_shipdate between date('1995-01-01') and date('1996-12-31')) as shipping group by supp_nation, cust_nation, l_year order by supp_nation, cust_nation, l_year",
+    "v3-plan": "unsupported: cross-shard query with aggregates",
+    "gen4-plan": {
+      "QueryType": "SELECT",
+      "Original": "select supp_nation, cust_nation, l_year, sum(volume) as revenue from (select n1.n_name as supp_nation, n2.n_name as cust_nation, extract(year from l_shipdate) as l_year, l_extendedprice * (1 - l_discount) as volume from supplier, lineitem, orders, customer, nation n1, nation n2 where s_suppkey = l_suppkey and o_orderkey = l_orderkey and c_custkey = o_custkey and s_nationkey = n1.n_nationkey and c_nationkey = n2.n_nationkey and ((n1.n_name = 'FRANCE' and n2.n_name = 'GERMANY') or (n1.n_name = 'GERMANY' and n2.n_name = 'FRANCE')) and l_shipdate between date('1995-01-01') and date('1996-12-31')) as shipping group by supp_nation, cust_nation, l_year order by supp_nation, cust_nation, l_year",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Ordered",
+        "Aggregates": "sum(3) AS revenue",
+        "GroupBy": "(0|6), (1|5), (2|4)",
+        "ResultColumns": 4,
+        "Inputs": [
+          {
+            "OperatorType": "Projection",
+            "Expressions": [
+              "[COLUMN 4] as supp_nation",
+              "[COLUMN 5] as cust_nation",
+              "[COLUMN 6] as l_year",
+              "(((([COLUMN 10] * [COLUMN 11]) * [COLUMN 12]) * [COLUMN 13]) * [COLUMN 14]) * [COLUMN 15] as revenue",
+              "[COLUMN 9]",
+              "[COLUMN 8]",
+              "[COLUMN 7]"
+            ],
+            "Inputs": [
+              {
+                "OperatorType": "Sort",
+                "Variant": "Memory",
+                "OrderBy": "(0|16) ASC, (1|17) ASC, (2|18) ASC",
+                "Inputs": [
+                  {
+                    "OperatorType": "Join",
+                    "Variant": "Join",
+                    "JoinColumnIndexes": "L:3,R:0,L:4,L:5,L:9,R:1,L:10,L:14,R:2,L:15,L:16,L:17,L:18,L:19,R:3,R:4,L:20,R:5,L:21",
+                    "JoinVars": {
+                      "n1_n_name": 2,
+                      "o_custkey": 0
+                    },
+                    "TableName": "lineitem_orders_supplier_nation_customer_nation",
+                    "Inputs": [
+                      {
+                        "OperatorType": "Join",
+                        "Variant": "Join",
+                        "JoinColumnIndexes": "L:1,R:0,R:1,R:2,L:2,L:3,L:5,R:3,R:4,R:5,L:6,L:8,R:6,R:7,R:8,L:9,L:10,L:11,R:9,R:10,R:11,L:12",
+                        "JoinVars": {
+                          "l_suppkey": 0
+                        },
+                        "TableName": "lineitem_orders_supplier_nation",
+                        "Inputs": [
+                          {
+                            "OperatorType": "Join",
+                            "Variant": "Join",
+                            "JoinColumnIndexes": "L:1,R:0,L:2,L:3,L:1,R:0,L:2,L:6,R:2,L:7,L:4,R:1,L:8",
+                            "JoinVars": {
+                              "l_orderkey": 0
+                            },
+                            "TableName": "lineitem_orders",
+                            "Inputs": [
+                              {
+                                "OperatorType": "Route",
+                                "Variant": "Scatter",
+                                "Keyspace": {
+                                  "Name": "main",
+                                  "Sharded": true
+                                },
+                                "FieldQuery": "select l_orderkey, l_suppkey, extract(year from l_shipdate) as l_year, l_extendedprice * (1 - l_discount) as volume, sum(volume) as revenue, weight_string(l_orderkey), weight_string(l_suppkey), weight_string(extract(year from l_shipdate)), weight_string(extract(year from l_shipdate)) from lineitem where 1 != 1 group by l_orderkey, weight_string(l_orderkey), l_suppkey, weight_string(l_suppkey), l_year, weight_string(l_year)",
+                                "Query": "select l_orderkey, l_suppkey, extract(year from l_shipdate) as l_year, l_extendedprice * (1 - l_discount) as volume, sum(volume) as revenue, weight_string(l_orderkey), weight_string(l_suppkey), weight_string(extract(year from l_shipdate)), weight_string(extract(year from l_shipdate)) from lineitem where l_shipdate between date('1995-01-01') and date('1996-12-31') group by l_orderkey, weight_string(l_orderkey), l_suppkey, weight_string(l_suppkey), l_year, weight_string(l_year)",
+                                "Table": "lineitem"
+                              },
+                              {
+                                "OperatorType": "Route",
+                                "Variant": "EqualUnique",
+                                "Keyspace": {
+                                  "Name": "main",
+                                  "Sharded": true
+                                },
+                                "FieldQuery": "select o_custkey, count(*), weight_string(o_custkey) from orders where 1 != 1 group by o_custkey, weight_string(o_custkey)",
+                                "Query": "select o_custkey, count(*), weight_string(o_custkey) from orders where o_orderkey = :l_orderkey group by o_custkey, weight_string(o_custkey)",
+                                "Table": "orders",
+                                "Values": [
+                                  ":l_orderkey"
+                                ],
+                                "Vindex": "hash"
+                              }
+                            ]
+                          },
+                          {
+                            "OperatorType": "Join",
+                            "Variant": "Join",
+                            "JoinColumnIndexes": "R:0,R:0,R:1,R:0,R:0,R:1,R:3,R:3,R:4,L:1,R:2,R:5",
+                            "JoinVars": {
+                              "s_nationkey": 0
+                            },
+                            "TableName": "supplier_nation",
+                            "Inputs": [
+                              {
+                                "OperatorType": "Route",
+                                "Variant": "EqualUnique",
+                                "Keyspace": {
+                                  "Name": "main",
+                                  "Sharded": true
+                                },
+                                "FieldQuery": "select s_nationkey, count(*), weight_string(s_nationkey) from supplier where 1 != 1 group by s_nationkey, weight_string(s_nationkey)",
+                                "Query": "select s_nationkey, count(*), weight_string(s_nationkey) from supplier where s_suppkey = :l_suppkey group by s_nationkey, weight_string(s_nationkey)",
+                                "Table": "supplier",
+                                "Values": [
+                                  ":l_suppkey"
+                                ],
+                                "Vindex": "hash"
+                              },
+                              {
+                                "OperatorType": "Route",
+                                "Variant": "EqualUnique",
+                                "Keyspace": {
+                                  "Name": "main",
+                                  "Sharded": true
+                                },
+                                "FieldQuery": "select n1.n_name, n1.n_name as supp_nation, count(*), weight_string(n1.n_name), weight_string(n1.n_name), weight_string(n1.n_name) from nation as n1 where 1 != 1 group by n1.n_name, weight_string(n1.n_name), supp_nation, weight_string(supp_nation)",
+                                "Query": "select n1.n_name, n1.n_name as supp_nation, count(*), weight_string(n1.n_name), weight_string(n1.n_name), weight_string(n1.n_name) from nation as n1 where n1.n_nationkey = :s_nationkey group by n1.n_name, weight_string(n1.n_name), supp_nation, weight_string(supp_nation)",
+                                "Table": "nation",
+                                "Values": [
+                                  ":s_nationkey"
+                                ],
+                                "Vindex": "hash"
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "OperatorType": "Join",
+                        "Variant": "Join",
+                        "JoinColumnIndexes": "R:0,R:0,R:2,L:1,R:1,R:3",
+                        "JoinVars": {
+                          "c_nationkey": 0
+                        },
+                        "TableName": "customer_nation",
+                        "Inputs": [
+                          {
+                            "OperatorType": "Route",
+                            "Variant": "EqualUnique",
+                            "Keyspace": {
+                              "Name": "main",
+                              "Sharded": true
+                            },
+                            "FieldQuery": "select c_nationkey, count(*), weight_string(c_nationkey) from customer where 1 != 1 group by c_nationkey, weight_string(c_nationkey)",
+                            "Query": "select c_nationkey, count(*), weight_string(c_nationkey) from customer where c_custkey = :o_custkey group by c_nationkey, weight_string(c_nationkey)",
+                            "Table": "customer",
+                            "Values": [
+                              ":o_custkey"
+                            ],
+                            "Vindex": "hash"
+                          },
+                          {
+                            "OperatorType": "Route",
+                            "Variant": "EqualUnique",
+                            "Keyspace": {
+                              "Name": "main",
+                              "Sharded": true
+                            },
+                            "FieldQuery": "select n2.n_name as cust_nation, count(*), weight_string(n2.n_name), weight_string(n2.n_name) from nation as n2 where 1 != 1 group by cust_nation, weight_string(cust_nation)",
+                            "Query": "select n2.n_name as cust_nation, count(*), weight_string(n2.n_name), weight_string(n2.n_name) from nation as n2 where n2.n_nationkey = :c_nationkey and (:n1_n_name = 'FRANCE' and n2.n_name = 'GERMANY' or :n1_n_name = 'GERMANY' and n2.n_name = 'FRANCE') group by cust_nation, weight_string(cust_nation)",
+                            "Table": "nation",
+                            "Values": [
+                              ":c_nationkey"
+                            ],
+                            "Vindex": "hash"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.customer",
+        "main.lineitem",
+        "main.nation",
+        "main.orders",
+        "main.supplier"
+      ]
+    }
+  },
+  {
+    "comment": "TPC-H query 8",
+    "query": "select o_year, sum(case when nation = 'BRAZIL' then volume else 0 end) / sum(volume) as mkt_share from ( select extract(year from o_orderdate) as o_year, l_extendedprice * (1 - l_discount) as volume, n2.n_name as nation from part, supplier, lineitem, orders, customer, nation n1, nation n2, region where p_partkey = l_partkey and s_suppkey = l_suppkey and l_orderkey = o_orderkey and o_custkey = c_custkey and c_nationkey = n1.n_nationkey and n1.n_regionkey = r_regionkey and r_name = 'AMERICA' and s_nationkey = n2.n_nationkey and o_orderdate between date '1995-01-01' and date('1996-12-31') and p_type = 'ECONOMY ANODIZED STEEL' ) as all_nations group by o_year order by o_year",
+    "v3-plan": "unsupported: cross-shard query with aggregates",
+    "gen4-plan": "unsupported: in scatter query: complex aggregate expression"
+  },
+  {
+    "comment": "TPC-H query 9",
+    "query": "select nation, o_year, sum(amount) as sum_profit from ( select n_name as nation, extract(year from o_orderdate) as o_year, l_extendedprice * (1 - l_discount) - ps_supplycost * l_quantity as amount from part, supplier, lineitem, partsupp, orders, nation where s_suppkey = l_suppkey and ps_suppkey = l_suppkey and ps_partkey = l_partkey and p_partkey = l_partkey and o_orderkey = l_orderkey and s_nationkey = n_nationkey and p_name like '%green%' ) as profit group by nation, o_year order by nation, o_year desc",
+    "v3-plan": "unsupported: cross-shard query with aggregates",
+    "gen4-plan": "aggregation on columns from different sources not supported yet"
+  },
+  {
+    "comment": "TPC-H query 10",
+    "query": "select c_custkey, c_name, sum(l_extendedprice * (1 - l_discount)) as revenue, c_acctbal, n_name, c_address, c_phone, c_comment from customer, orders, lineitem, nation where c_custkey = o_custkey and l_orderkey = o_orderkey and o_orderdate >= date('1993-10-01') and o_orderdate < date('1993-10-01') + interval '3' month and l_returnflag = 'R' and c_nationkey = n_nationkey group by c_custkey, c_name, c_acctbal, c_phone, n_name, c_address, c_comment order by revenue desc limit 20",
+    "v3-plan": "unsupported: cross-shard query with aggregates",
+    "gen4-plan": {
+      "QueryType": "SELECT",
+      "Original": "select c_custkey, c_name, sum(l_extendedprice * (1 - l_discount)) as revenue, c_acctbal, n_name, c_address, c_phone, c_comment from customer, orders, lineitem, nation where c_custkey = o_custkey and l_orderkey = o_orderkey and o_orderdate >= date('1993-10-01') and o_orderdate < date('1993-10-01') + interval '3' month and l_returnflag = 'R' and c_nationkey = n_nationkey group by c_custkey, c_name, c_acctbal, c_phone, n_name, c_address, c_comment order by revenue desc limit 20",
+      "Instructions": {
+        "OperatorType": "Limit",
+        "Count": "INT64(20)",
+        "Inputs": [
+          {
+            "OperatorType": "Sort",
+            "Variant": "Memory",
+            "OrderBy": "2 DESC",
+            "ResultColumns": 8,
+            "Inputs": [
+              {
+                "OperatorType": "Aggregate",
+                "Variant": "Ordered",
+                "Aggregates": "sum(2) AS revenue",
+                "GroupBy": "(0|14), (1|13), (3|12), (6|11), (4|10), (5|9), (7|8)",
+                "Inputs": [
+                  {
+                    "OperatorType": "Projection",
+                    "Expressions": [
+                      "[COLUMN 0] as c_custkey",
+                      "[COLUMN 1] as c_name",
+                      "(([COLUMN 14] * [COLUMN 15]) * [COLUMN 16]) * [COLUMN 17] as revenue",
+                      "[COLUMN 2] as c_acctbal",
+                      "[COLUMN 4] as n_name",
+                      "[COLUMN 5] as c_address",
+                      "[COLUMN 3] as c_phone",
+                      "[COLUMN 6] as c_comment",
+                      "[COLUMN 13]",
+                      "[COLUMN 12]",
+                      "[COLUMN 11]",
+                      "[COLUMN 10]",
+                      "[COLUMN 9]",
+                      "[COLUMN 8]",
+                      "[COLUMN 7]"
+                    ],
+                    "Inputs": [
+                      {
+                        "OperatorType": "Sort",
+                        "Variant": "Memory",
+                        "OrderBy": "(0|7) ASC, (1|8) ASC, (2|9) ASC, (3|10) ASC, (4|11) ASC, (5|12) ASC, (6|13) ASC",
+                        "Inputs": [
+                          {
+                            "OperatorType": "Join",
+                            "Variant": "Join",
+                            "JoinColumnIndexes": "R:0,R:1,R:2,R:3,R:4,R:5,R:6,R:7,R:8,R:9,R:10,R:11,R:12,R:13,L:3,L:4,R:14,R:15",
+                            "JoinVars": {
+                              "o_custkey": 0
+                            },
+                            "TableName": "orders_lineitem_customer_nation",
+                            "Inputs": [
+                              {
+                                "OperatorType": "Join",
+                                "Variant": "Join",
+                                "JoinColumnIndexes": "L:1,L:1,L:4,L:2,R:1",
+                                "JoinVars": {
+                                  "o_orderkey": 0
+                                },
+                                "TableName": "orders_lineitem",
+                                "Inputs": [
+                                  {
+                                    "OperatorType": "Route",
+                                    "Variant": "Scatter",
+                                    "Keyspace": {
+                                      "Name": "main",
+                                      "Sharded": true
+                                    },
+                                    "FieldQuery": "select o_orderkey, o_custkey, count(*), weight_string(o_orderkey), weight_string(o_custkey) from orders where 1 != 1 group by o_orderkey, weight_string(o_orderkey), o_custkey, weight_string(o_custkey)",
+                                    "Query": "select o_orderkey, o_custkey, count(*), weight_string(o_orderkey), weight_string(o_custkey) from orders where o_orderdate >= date('1993-10-01') and o_orderdate < date('1993-10-01') + interval '3' month group by o_orderkey, weight_string(o_orderkey), o_custkey, weight_string(o_custkey)",
+                                    "Table": "orders"
+                                  },
+                                  {
+                                    "OperatorType": "VindexLookup",
+                                    "Variant": "EqualUnique",
+                                    "Keyspace": {
+                                      "Name": "main",
+                                      "Sharded": true
+                                    },
+                                    "Values": [
+                                      ":o_orderkey"
+                                    ],
+                                    "Vindex": "lineitem_map",
+                                    "Inputs": [
+                                      {
+                                        "OperatorType": "Route",
+                                        "Variant": "IN",
+                                        "Keyspace": {
+                                          "Name": "main",
+                                          "Sharded": true
+                                        },
+                                        "FieldQuery": "select l_orderkey, l_linenumber from lineitem_map where 1 != 1",
+                                        "Query": "select l_orderkey, l_linenumber from lineitem_map where l_orderkey in ::__vals",
+                                        "Table": "lineitem_map",
+                                        "Values": [
+                                          ":l_orderkey"
+                                        ],
+                                        "Vindex": "md5"
+                                      },
+                                      {
+                                        "OperatorType": "Route",
+                                        "Variant": "ByDestination",
+                                        "Keyspace": {
+                                          "Name": "main",
+                                          "Sharded": true
+                                        },
+                                        "FieldQuery": "select 1, sum(l_extendedprice * (1 - l_discount)) as revenue from lineitem where 1 != 1 group by 1",
+                                        "Query": "select 1, sum(l_extendedprice * (1 - l_discount)) as revenue from lineitem where l_returnflag = 'R' and l_orderkey = :o_orderkey group by 1",
+                                        "Table": "lineitem"
+                                      }
+                                    ]
+                                  }
+                                ]
+                              },
+                              {
+                                "OperatorType": "Join",
+                                "Variant": "Join",
+                                "JoinColumnIndexes": "L:3,L:5,L:7,L:9,R:1,L:11,L:13,L:4,L:6,L:8,L:10,R:2,L:12,L:14,L:1,R:0",
+                                "JoinVars": {
+                                  "c_nationkey": 0
+                                },
+                                "TableName": "customer_nation",
+                                "Inputs": [
+                                  {
+                                    "OperatorType": "Route",
+                                    "Variant": "EqualUnique",
+                                    "Keyspace": {
+                                      "Name": "main",
+                                      "Sharded": true
+                                    },
+                                    "FieldQuery": "select c_nationkey, count(*), weight_string(c_nationkey), c_custkey, weight_string(c_custkey), c_name, weight_string(c_name), c_acctbal, weight_string(c_acctbal), c_phone, weight_string(c_phone), c_address, weight_string(c_address), c_comment, weight_string(c_comment) from customer where 1 != 1 group by c_nationkey, weight_string(c_nationkey), c_custkey, weight_string(c_custkey), c_name, weight_string(c_name), c_acctbal, weight_string(c_acctbal), c_phone, weight_string(c_phone), c_address, weight_string(c_address), c_comment, weight_string(c_comment)",
+                                    "Query": "select c_nationkey, count(*), weight_string(c_nationkey), c_custkey, weight_string(c_custkey), c_name, weight_string(c_name), c_acctbal, weight_string(c_acctbal), c_phone, weight_string(c_phone), c_address, weight_string(c_address), c_comment, weight_string(c_comment) from customer where c_custkey = :o_custkey group by c_nationkey, weight_string(c_nationkey), c_custkey, weight_string(c_custkey), c_name, weight_string(c_name), c_acctbal, weight_string(c_acctbal), c_phone, weight_string(c_phone), c_address, weight_string(c_address), c_comment, weight_string(c_comment)",
+                                    "Table": "customer",
+                                    "Values": [
+                                      ":o_custkey"
+                                    ],
+                                    "Vindex": "hash"
+                                  },
+                                  {
+                                    "OperatorType": "Route",
+                                    "Variant": "EqualUnique",
+                                    "Keyspace": {
+                                      "Name": "main",
+                                      "Sharded": true
+                                    },
+                                    "FieldQuery": "select count(*), n_name, weight_string(n_name) from nation where 1 != 1 group by n_name, weight_string(n_name)",
+                                    "Query": "select count(*), n_name, weight_string(n_name) from nation where n_nationkey = :c_nationkey group by n_name, weight_string(n_name)",
+                                    "Table": "nation",
+                                    "Values": [
+                                      ":c_nationkey"
+                                    ],
+                                    "Vindex": "hash"
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.customer",
+        "main.lineitem",
+        "main.nation",
+        "main.orders"
+      ]
+    }
+  },
+  {
+    "comment": "TPC-H query 11",
+    "query": "select ps_partkey, sum(ps_supplycost * ps_availqty) as value from partsupp, supplier, nation where ps_suppkey = s_suppkey and s_nationkey = n_nationkey and n_name = 'GERMANY' group by ps_partkey  having sum(ps_supplycost * ps_availqty) > ( select sum(ps_supplycost * ps_availqty) * 0.00001000000 from partsupp, supplier, nation where ps_suppkey = s_suppkey and s_nationkey = n_nationkey and n_name = 'GERMANY' ) order by value desc",
+    "v3-plan": "unsupported: cross-shard query with aggregates",
+    "gen4-plan": "unsupported: in scatter query: complex aggregate expression"
+  },
+  {
+    "comment": "TPC-H query 12",
+    "query": "select l_shipmode, sum(case when o_orderpriority = '1-URGENT' or o_orderpriority = '2-HIGH' then 1 else 0 end) as high_line_count, sum(case when o_orderpriority <> '1-URGENT' and o_orderpriority <> '2-HIGH' then 1 else 0 end) as low_line_count from orders, lineitem where o_orderkey = l_orderkey and l_shipmode in ('MAIL', 'SHIP') and l_commitdate < l_receiptdate and l_shipdate < l_commitdate and l_receiptdate >= date('1994-01-01') and l_receiptdate < date('1994-01-01') + interval '1' year group by l_shipmode order by l_shipmode",
+    "v3-plan": "unsupported: cross-shard query with aggregates",
+    "gen4-plan": {
+      "QueryType": "SELECT",
+      "Original": "select l_shipmode, sum(case when o_orderpriority = '1-URGENT' or o_orderpriority = '2-HIGH' then 1 else 0 end) as high_line_count, sum(case when o_orderpriority <> '1-URGENT' and o_orderpriority <> '2-HIGH' then 1 else 0 end) as low_line_count from orders, lineitem where o_orderkey = l_orderkey and l_shipmode in ('MAIL', 'SHIP') and l_commitdate < l_receiptdate and l_shipdate < l_commitdate and l_receiptdate >= date('1994-01-01') and l_receiptdate < date('1994-01-01') + interval '1' year group by l_shipmode order by l_shipmode",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Ordered",
+        "Aggregates": "sum(1) AS high_line_count, sum(2) AS low_line_count",
+        "GroupBy": "(0|3)",
+        "ResultColumns": 3,
+        "Inputs": [
+          {
+            "OperatorType": "Projection",
+            "Expressions": [
+              "[COLUMN 0] as l_shipmode",
+              "[COLUMN 2] * [COLUMN 3] as high_line_count",
+              "[COLUMN 4] * [COLUMN 5] as low_line_count",
+              "[COLUMN 1]"
+            ],
+            "Inputs": [
+              {
+                "OperatorType": "Sort",
+                "Variant": "Memory",
+                "OrderBy": "(0|1) ASC",
+                "Inputs": [
+                  {
+                    "OperatorType": "Join",
+                    "Variant": "Join",
+                    "JoinColumnIndexes": "R:1,R:2,L:1,R:0,L:2,R:0",
+                    "JoinVars": {
+                      "o_orderkey": 0
+                    },
+                    "TableName": "orders_lineitem",
+                    "Inputs": [
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "Scatter",
+                        "Keyspace": {
+                          "Name": "main",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select o_orderkey, sum(case when o_orderpriority = '1-URGENT' or o_orderpriority = '2-HIGH' then 1 else 0 end) as high_line_count, sum(case when o_orderpriority != '1-URGENT' and o_orderpriority != '2-HIGH' then 1 else 0 end) as low_line_count, weight_string(o_orderkey) from orders where 1 != 1 group by o_orderkey, weight_string(o_orderkey)",
+                        "Query": "select o_orderkey, sum(case when o_orderpriority = '1-URGENT' or o_orderpriority = '2-HIGH' then 1 else 0 end) as high_line_count, sum(case when o_orderpriority != '1-URGENT' and o_orderpriority != '2-HIGH' then 1 else 0 end) as low_line_count, weight_string(o_orderkey) from orders group by o_orderkey, weight_string(o_orderkey)",
+                        "Table": "orders"
+                      },
+                      {
+                        "OperatorType": "VindexLookup",
+                        "Variant": "EqualUnique",
+                        "Keyspace": {
+                          "Name": "main",
+                          "Sharded": true
+                        },
+                        "Values": [
+                          ":o_orderkey"
+                        ],
+                        "Vindex": "lineitem_map",
+                        "Inputs": [
+                          {
+                            "OperatorType": "Route",
+                            "Variant": "IN",
+                            "Keyspace": {
+                              "Name": "main",
+                              "Sharded": true
+                            },
+                            "FieldQuery": "select l_orderkey, l_linenumber from lineitem_map where 1 != 1",
+                            "Query": "select l_orderkey, l_linenumber from lineitem_map where l_orderkey in ::__vals",
+                            "Table": "lineitem_map",
+                            "Values": [
+                              ":l_orderkey"
+                            ],
+                            "Vindex": "md5"
+                          },
+                          {
+                            "OperatorType": "Route",
+                            "Variant": "ByDestination",
+                            "Keyspace": {
+                              "Name": "main",
+                              "Sharded": true
+                            },
+                            "FieldQuery": "select count(*), l_shipmode, weight_string(l_shipmode) from lineitem where 1 != 1 group by l_shipmode, weight_string(l_shipmode)",
+                            "Query": "select count(*), l_shipmode, weight_string(l_shipmode) from lineitem where l_shipmode in ('MAIL', 'SHIP') and l_commitdate < l_receiptdate and l_shipdate < l_commitdate and l_receiptdate >= date('1994-01-01') and l_receiptdate < date('1994-01-01') + interval '1' year and l_orderkey = :o_orderkey group by l_shipmode, weight_string(l_shipmode)",
+                            "Table": "lineitem"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.lineitem",
+        "main.orders"
+      ]
+    }
+  },
+  {
+    "comment": "TPC-H query 13",
+    "query": "select c_count, count(*) as custdist from ( select c_custkey, count(o_orderkey) from customer left outer join orders on c_custkey = o_custkey and o_comment not like '%special%requests%' group by c_custkey ) as c_orders(c_custkey, c_count) group by c_count order by custdist desc, c_count desc",
+    "plan": "using aggregation on top of a *planbuilder.orderedAggregate plan is not yet supported"
+  },
+  {
+    "comment": "TPC-H query 14",
+    "query": "select 100.00 * sum(case when p_type like 'PROMO%' then l_extendedprice * (1 - l_discount) else 0 end) /  sum(l_extendedprice * (1 - l_discount)) as promo_revenue from lineitem, part where l_partkey = p_partkey and l_shipdate >= date('1995-09-01') and l_shipdate < date('1995-09-01') + interval '1' month",
+    "v3-plan": "unsupported: cross-shard query with aggregates",
+    "gen4-plan": "unsupported: in scatter query: complex aggregate expression"
+  },
+  {
+    "comment": "TPC-H query 15 view\n#\"with revenue0(supplier_no, total_revenue) as (select l_suppkey, sum(l_extendedprice * (1 - l_discount))  from lineitem where l_shipdate >= date('1996-01-01') and l_shipdate < date('1996-01-01') + interval '3' month group by l_suppkey )\"\n#\"syntax error at position 236\"\n#Gen4 plan same as above\n# TPC-H query 15",
+    "query": "select s_suppkey, s_name, s_address, s_phone, total_revenue from supplier, revenue0 where s_suppkey = supplier_no and total_revenue = ( select max(total_revenue) from revenue0 ) order by s_suppkey",
+    "v3-plan": {
+      "QueryType": "SELECT",
+      "Original": "select s_suppkey, s_name, s_address, s_phone, total_revenue from supplier, revenue0 where s_suppkey = supplier_no and total_revenue = ( select max(total_revenue) from revenue0 ) order by s_suppkey",
+      "Instructions": {
+        "OperatorType": "Subquery",
+        "Variant": "PulloutValue",
+        "PulloutVars": [
+          "__sq_has_values1",
+          "__sq1"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Aggregate",
+            "Variant": "Scalar",
+            "Aggregates": "max(0)",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "main",
+                  "Sharded": true
+                },
+                "FieldQuery": "select max(total_revenue) from revenue0 where 1 != 1",
+                "Query": "select max(total_revenue) from revenue0",
+                "Table": "revenue0"
+              }
+            ]
+          },
+          {
+            "OperatorType": "Join",
+            "Variant": "Join",
+            "JoinColumnIndexes": "L:0,L:1,L:2,L:3,R:0",
+            "JoinVars": {
+              "s_suppkey": 0
+            },
+            "TableName": "supplier_revenue0",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "main",
+                  "Sharded": true
+                },
+                "FieldQuery": "select s_suppkey, s_name, s_address, s_phone, weight_string(s_suppkey) from supplier where 1 != 1",
+                "OrderBy": "(0|4) ASC",
+                "Query": "select s_suppkey, s_name, s_address, s_phone, weight_string(s_suppkey) from supplier order by s_suppkey asc",
+                "ResultColumns": 4,
+                "Table": "supplier"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "EqualUnique",
+                "Keyspace": {
+                  "Name": "main",
+                  "Sharded": true
+                },
+                "FieldQuery": "select total_revenue from revenue0 where 1 != 1",
+                "Query": "select total_revenue from revenue0 where supplier_no = :s_suppkey and total_revenue = :__sq1",
+                "Table": "revenue0",
+                "Values": [
+                  ":s_suppkey"
+                ],
+                "Vindex": "hash"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "gen4-plan": {
+      "QueryType": "SELECT",
+      "Original": "select s_suppkey, s_name, s_address, s_phone, total_revenue from supplier, revenue0 where s_suppkey = supplier_no and total_revenue = ( select max(total_revenue) from revenue0 ) order by s_suppkey",
+      "Instructions": {
+        "OperatorType": "Subquery",
+        "Variant": "PulloutValue",
+        "PulloutVars": [
+          "__sq_has_values1",
+          "__sq1"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Aggregate",
+            "Variant": "Scalar",
+            "Aggregates": "max(0) AS max(total_revenue)",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "main",
+                  "Sharded": true
+                },
+                "FieldQuery": "select max(total_revenue) from revenue0 where 1 != 1",
+                "Query": "select max(total_revenue) from revenue0",
+                "Table": "revenue0"
+              }
+            ]
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": true
+            },
+            "FieldQuery": "select s_suppkey, s_name, s_address, s_phone, total_revenue, weight_string(s_suppkey) from supplier, revenue0 where 1 != 1",
+            "OrderBy": "(0|5) ASC",
+            "Query": "select s_suppkey, s_name, s_address, s_phone, total_revenue, weight_string(s_suppkey) from supplier, revenue0 where total_revenue = :__sq1 and s_suppkey = supplier_no order by s_suppkey asc",
+            "ResultColumns": 5,
+            "Table": "revenue0, supplier"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.revenue0",
+        "main.supplier"
+      ]
+    }
+  },
+  {
+    "comment": "TPC-H query 16",
+    "query": "select p_brand, p_type, p_size, count(distinct ps_suppkey) as supplier_cnt from partsupp, part where p_partkey = ps_partkey and p_brand <> 'Brand#45' and p_type not like 'MEDIUM POLISHED%' and p_size in (49, 14, 23, 45, 19, 3, 36, 9) and ps_suppkey not in ( select s_suppkey from supplier where s_comment like '%Customer%Complaints%' ) group by p_brand, p_type, p_size order by supplier_cnt desc, p_brand, p_type, p_size",
+    "v3-plan": "unsupported: cross-shard query with aggregates",
+    "gen4-plan": "using aggregation on top of a *planbuilder.pulloutSubquery plan is not yet supported"
+  },
+  {
+    "comment": "TPC-H query 17",
+    "query": "select sum(l_extendedprice) / 7.0 as avg_yearly from lineitem, part where p_partkey = l_partkey and p_brand = 'Brand#23' and p_container = 'MED BOX' and l_quantity < ( select 0.2 * avg(l_quantity) from lineitem where l_partkey = p_partkey )",
+    "v3-plan": "symbol p_partkey not found in table or subquery",
+    "gen4-plan": "unsupported: cross-shard correlated subquery"
+  },
+  {
+    "comment": "TPC-H query 18",
+    "query": "select c_name, c_custkey, o_orderkey, o_orderdate, o_totalprice, sum(l_quantity) from customer, orders, lineitem where o_orderkey in ( select l_orderkey from lineitem group by l_orderkey having sum(l_quantity) > 300 ) and c_custkey = o_custkey and o_orderkey = l_orderkey group by c_name, c_custkey, o_orderkey, o_orderdate, o_totalprice order by o_totalprice desc, o_orderdate limit 100",
+    "v3-plan": "unsupported: cross-shard query with aggregates",
+    "gen4-plan": {
+      "QueryType": "SELECT",
+      "Original": "select c_name, c_custkey, o_orderkey, o_orderdate, o_totalprice, sum(l_quantity) from customer, orders, lineitem where o_orderkey in ( select l_orderkey from lineitem group by l_orderkey having sum(l_quantity) > 300 ) and c_custkey = o_custkey and o_orderkey = l_orderkey group by c_name, c_custkey, o_orderkey, o_orderdate, o_totalprice order by o_totalprice desc, o_orderdate limit 100",
+      "Instructions": {
+        "OperatorType": "Limit",
+        "Count": "INT64(100)",
+        "Inputs": [
+          {
+            "OperatorType": "Aggregate",
+            "Variant": "Ordered",
+            "Aggregates": "sum(5) AS sum(l_quantity)",
+            "GroupBy": "(4|10), (3|9), (0|8), (1|7), (2|6)",
+            "ResultColumns": 6,
+            "Inputs": [
+              {
+                "OperatorType": "Projection",
+                "Expressions": [
+                  "[COLUMN 2] as c_name",
+                  "[COLUMN 3] as c_custkey",
+                  "[COLUMN 4] as o_orderkey",
+                  "[COLUMN 1] as o_orderdate",
+                  "[COLUMN 0] as o_totalprice",
+                  "([COLUMN 10] * [COLUMN 11]) * [COLUMN 12] as sum(l_quantity)",
+                  "[COLUMN 9]",
+                  "[COLUMN 8]",
+                  "[COLUMN 7]",
+                  "[COLUMN 6]",
+                  "[COLUMN 5]"
+                ],
+                "Inputs": [
+                  {
+                    "OperatorType": "Join",
+                    "Variant": "Join",
+                    "JoinColumnIndexes": "L:2,L:3,L:4,L:5,L:6,L:8,L:9,L:10,L:11,L:12,L:13,L:14,R:1",
+                    "JoinVars": {
+                      "o_orderkey": 0
+                    },
+                    "TableName": "orders_customer_lineitem",
+                    "Inputs": [
+                      {
+                        "OperatorType": "Sort",
+                        "Variant": "Memory",
+                        "OrderBy": "(2|8) DESC, (3|9) ASC, (4|10) ASC, (5|11) ASC, (0|7) ASC",
+                        "Inputs": [
+                          {
+                            "OperatorType": "Join",
+                            "Variant": "Join",
+                            "JoinColumnIndexes": "L:1,L:1,L:5,L:7,R:1,R:3,L:1,L:4,L:6,L:8,R:2,R:4,L:4,L:2,R:0",
+                            "JoinVars": {
+                              "o_custkey": 0
+                            },
+                            "TableName": "orders_customer",
+                            "Inputs": [
+                              {
+                                "OperatorType": "Route",
+                                "Variant": "IN",
+                                "Keyspace": {
+                                  "Name": "main",
+                                  "Sharded": true
+                                },
+                                "FieldQuery": "select o_custkey, o_orderkey, count(*), weight_string(o_custkey), weight_string(o_orderkey), o_totalprice, weight_string(o_totalprice), o_orderdate, weight_string(o_orderdate) from orders where 1 != 1 group by o_custkey, weight_string(o_custkey), o_orderkey, weight_string(o_orderkey), o_totalprice, weight_string(o_totalprice), o_orderdate, weight_string(o_orderdate)",
+                                "Query": "select o_custkey, o_orderkey, count(*), weight_string(o_custkey), weight_string(o_orderkey), o_totalprice, weight_string(o_totalprice), o_orderdate, weight_string(o_orderdate) from orders where :o_orderkey in (select l_orderkey from lineitem group by l_orderkey having sum(l_quantity) > 300) group by o_custkey, weight_string(o_custkey), o_orderkey, weight_string(o_orderkey), o_totalprice, weight_string(o_totalprice), o_orderdate, weight_string(o_orderdate)",
+                                "Table": "orders",
+                                "Values": [
+                                  ":__sq1"
+                                ],
+                                "Vindex": "hash"
+                              },
+                              {
+                                "OperatorType": "Route",
+                                "Variant": "EqualUnique",
+                                "Keyspace": {
+                                  "Name": "main",
+                                  "Sharded": true
+                                },
+                                "FieldQuery": "select count(*), c_name, weight_string(c_name), c_custkey, weight_string(c_custkey) from customer where 1 != 1 group by c_name, weight_string(c_name), c_custkey, weight_string(c_custkey)",
+                                "Query": "select count(*), c_name, weight_string(c_name), c_custkey, weight_string(c_custkey) from customer where c_custkey = :o_custkey group by c_name, weight_string(c_name), c_custkey, weight_string(c_custkey)",
+                                "Table": "customer",
+                                "Values": [
+                                  ":o_custkey"
+                                ],
+                                "Vindex": "hash"
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "OperatorType": "VindexLookup",
+                        "Variant": "EqualUnique",
+                        "Keyspace": {
+                          "Name": "main",
+                          "Sharded": true
+                        },
+                        "Values": [
+                          ":o_orderkey"
+                        ],
+                        "Vindex": "lineitem_map",
+                        "Inputs": [
+                          {
+                            "OperatorType": "Route",
+                            "Variant": "IN",
+                            "Keyspace": {
+                              "Name": "main",
+                              "Sharded": true
+                            },
+                            "FieldQuery": "select l_orderkey, l_linenumber from lineitem_map where 1 != 1",
+                            "Query": "select l_orderkey, l_linenumber from lineitem_map where l_orderkey in ::__vals",
+                            "Table": "lineitem_map",
+                            "Values": [
+                              ":l_orderkey"
+                            ],
+                            "Vindex": "md5"
+                          },
+                          {
+                            "OperatorType": "Route",
+                            "Variant": "ByDestination",
+                            "Keyspace": {
+                              "Name": "main",
+                              "Sharded": true
+                            },
+                            "FieldQuery": "select 1, sum(l_quantity) from lineitem where 1 != 1 group by 1",
+                            "Query": "select 1, sum(l_quantity) from lineitem where l_orderkey = :o_orderkey group by 1",
+                            "Table": "lineitem"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.customer",
+        "main.lineitem",
+        "main.orders"
+      ]
+    }
+  },
+  {
+    "comment": "TPC-H query 19",
+    "query": "select sum(l_extendedprice* (1 - l_discount)) as revenue from lineitem, part where ( p_partkey = l_partkey and p_brand = 'Brand#12' and p_container in ('SM CASE', 'SM BOX', 'SM PACK', 'SM PKG') and l_quantity >= 1 and l_quantity <= 1 + 10 and p_size between 1 and 5 and l_shipmode in ('AIR', 'AIR REG') and l_shipinstruct = 'DELIVER IN PERSON' ) or ( p_partkey = l_partkey and p_brand = 'Brand#23' and p_container in ('MED BAG', 'MED BOX', 'MED PKG', 'MED PACK') and l_quantity >= 10 and l_quantity <= 10 + 10 and p_size between 1 and 10 and l_shipmode in ('AIR', 'AIR REG') and l_shipinstruct = 'DELIVER IN PERSON' ) or ( p_partkey = l_partkey and p_brand = 'Brand#34' and p_container in ('LG CASE', 'LG BOX', 'LG PACK', 'LG PKG') and l_quantity >= 20 and l_quantity <= 20 + 10 and p_size between 1 and 15 and l_shipmode in ('AIR', 'AIR REG') and l_shipinstruct = 'DELIVER IN PERSON' )",
+    "v3-plan": "unsupported: cross-shard query with aggregates",
+    "gen4-plan": {
+      "QueryType": "SELECT",
+      "Original": "select sum(l_extendedprice* (1 - l_discount)) as revenue from lineitem, part where ( p_partkey = l_partkey and p_brand = 'Brand#12' and p_container in ('SM CASE', 'SM BOX', 'SM PACK', 'SM PKG') and l_quantity >= 1 and l_quantity <= 1 + 10 and p_size between 1 and 5 and l_shipmode in ('AIR', 'AIR REG') and l_shipinstruct = 'DELIVER IN PERSON' ) or ( p_partkey = l_partkey and p_brand = 'Brand#23' and p_container in ('MED BAG', 'MED BOX', 'MED PKG', 'MED PACK') and l_quantity >= 10 and l_quantity <= 10 + 10 and p_size between 1 and 10 and l_shipmode in ('AIR', 'AIR REG') and l_shipinstruct = 'DELIVER IN PERSON' ) or ( p_partkey = l_partkey and p_brand = 'Brand#34' and p_container in ('LG CASE', 'LG BOX', 'LG PACK', 'LG PKG') and l_quantity >= 20 and l_quantity <= 20 + 10 and p_size between 1 and 15 and l_shipmode in ('AIR', 'AIR REG') and l_shipinstruct = 'DELIVER IN PERSON' )",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "sum(0) AS revenue",
+        "Inputs": [
+          {
+            "OperatorType": "Projection",
+            "Expressions": [
+              "[COLUMN 0] * [COLUMN 1] as revenue"
+            ],
+            "Inputs": [
+              {
+                "OperatorType": "Join",
+                "Variant": "Join",
+                "JoinColumnIndexes": "L:4,R:1",
+                "JoinVars": {
+                  "l_partkey": 0,
+                  "l_quantity": 1,
+                  "l_shipinstruct": 3,
+                  "l_shipmode": 2
+                },
+                "TableName": "lineitem_part",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "main",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select l_partkey, l_quantity, l_shipmode, l_shipinstruct, sum(l_extendedprice * (1 - l_discount)) as revenue, weight_string(l_partkey), weight_string(l_quantity), weight_string(l_shipmode), weight_string(l_shipinstruct) from lineitem where 1 != 1 group by l_partkey, weight_string(l_partkey), l_quantity, weight_string(l_quantity), l_shipmode, weight_string(l_shipmode), l_shipinstruct, weight_string(l_shipinstruct)",
+                    "Query": "select l_partkey, l_quantity, l_shipmode, l_shipinstruct, sum(l_extendedprice * (1 - l_discount)) as revenue, weight_string(l_partkey), weight_string(l_quantity), weight_string(l_shipmode), weight_string(l_shipinstruct) from lineitem group by l_partkey, weight_string(l_partkey), l_quantity, weight_string(l_quantity), l_shipmode, weight_string(l_shipmode), l_shipinstruct, weight_string(l_shipinstruct)",
+                    "Table": "lineitem"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "main",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select 1, count(*) from part where 1 != 1 group by 1",
+                    "Query": "select 1, count(*) from part where p_partkey = :l_partkey and p_brand = 'Brand#12' and p_container in ('SM CASE', 'SM BOX', 'SM PACK', 'SM PKG') and :l_quantity >= 1 and :l_quantity <= 1 + 10 and p_size between 1 and 5 and :l_shipmode in ('AIR', 'AIR REG') and :l_shipinstruct = 'DELIVER IN PERSON' or p_partkey = :l_partkey and p_brand = 'Brand#23' and p_container in ('MED BAG', 'MED BOX', 'MED PKG', 'MED PACK') and :l_quantity >= 10 and :l_quantity <= 10 + 10 and p_size between 1 and 10 and :l_shipmode in ('AIR', 'AIR REG') and :l_shipinstruct = 'DELIVER IN PERSON' or p_partkey = :l_partkey and p_brand = 'Brand#34' and p_container in ('LG CASE', 'LG BOX', 'LG PACK', 'LG PKG') and :l_quantity >= 20 and :l_quantity <= 20 + 10 and p_size between 1 and 15 and :l_shipmode in ('AIR', 'AIR REG') and :l_shipinstruct = 'DELIVER IN PERSON' group by 1",
+                    "Table": "part"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.lineitem",
+        "main.part"
+      ]
+    }
+  },
+  {
+    "comment": "TPC-H query 20",
+    "query": "select s_name, s_address from supplier, nation where s_suppkey in ( select ps_suppkey from partsupp where ps_partkey in ( select p_partkey from part where p_name like 'forest%' ) and ps_availqty > ( select 0.5 * sum(l_quantity) from lineitem where l_partkey = ps_partkey and l_suppkey = ps_suppkey and l_shipdate >= date('1994-01-01') and l_shipdate < date('1994-01-01') + interval '1' year ) ) and s_nationkey = n_nationkey and n_name = 'CANADA' order by s_name",
+    "v3-plan": "symbol ps_partkey not found in table or subquery",
+    "gen4-plan": "unsupported: cross-shard correlated subquery"
+  },
+  {
+    "comment": "TPC-H query 21",
+    "query": "select s_name, count(*) as numwait from supplier, lineitem l1, orders, nation where s_suppkey = l1.l_suppkey and o_orderkey = l1.l_orderkey and o_orderstatus = 'F' and l1.l_receiptdate > l1.l_commitdate and exists ( select * from lineitem l2 where l2.l_orderkey = l1.l_orderkey and l2.l_suppkey <> l1.l_suppkey ) and not exists ( select * from lineitem l3 where l3.l_orderkey = l1.l_orderkey and l3.l_suppkey <> l1.l_suppkey and l3.l_receiptdate > l3.l_commitdate ) and s_nationkey = n_nationkey and n_name = 'SAUDI ARABIA' group by s_name order by numwait desc, s_name limit 100",
+    "v3-plan": "unsupported: cross-shard query with aggregates",
+    "gen4-plan": {
+      "QueryType": "SELECT",
+      "Original": "select s_name, count(*) as numwait from supplier, lineitem l1, orders, nation where s_suppkey = l1.l_suppkey and o_orderkey = l1.l_orderkey and o_orderstatus = 'F' and l1.l_receiptdate > l1.l_commitdate and exists ( select * from lineitem l2 where l2.l_orderkey = l1.l_orderkey and l2.l_suppkey <> l1.l_suppkey ) and not exists ( select * from lineitem l3 where l3.l_orderkey = l1.l_orderkey and l3.l_suppkey <> l1.l_suppkey and l3.l_receiptdate > l3.l_commitdate ) and s_nationkey = n_nationkey and n_name = 'SAUDI ARABIA' group by s_name order by numwait desc, s_name limit 100",
+      "Instructions": {
+        "OperatorType": "Limit",
+        "Count": "INT64(100)",
+        "Inputs": [
+          {
+            "OperatorType": "Sort",
+            "Variant": "Memory",
+            "OrderBy": "1 DESC, (0|2) ASC",
+            "ResultColumns": 2,
+            "Inputs": [
+              {
+                "OperatorType": "Aggregate",
+                "Variant": "Ordered",
+                "Aggregates": "sum_count_star(1) AS numwait",
+                "GroupBy": "(0|2)",
+                "Inputs": [
+                  {
+                    "OperatorType": "Projection",
+                    "Expressions": [
+                      "[COLUMN 0] as s_name",
+                      "(([COLUMN 2] * [COLUMN 3]) * [COLUMN 4]) * [COLUMN 5] as numwait",
+                      "[COLUMN 1]"
+                    ],
+                    "Inputs": [
+                      {
+                        "OperatorType": "Sort",
+                        "Variant": "Memory",
+                        "OrderBy": "(0|1) ASC",
+                        "Inputs": [
+                          {
+                            "OperatorType": "Join",
+                            "Variant": "Join",
+                            "JoinColumnIndexes": "R:0,R:1,L:3,L:4,R:2,R:3",
+                            "JoinVars": {
+                              "l1_l_suppkey": 0
+                            },
+                            "TableName": "lineitem_orders_supplier_nation",
+                            "Inputs": [
+                              {
+                                "OperatorType": "Join",
+                                "Variant": "Join",
+                                "JoinColumnIndexes": "L:1,L:1,L:4,L:2,R:1",
+                                "JoinVars": {
+                                  "l1_l_orderkey": 0
+                                },
+                                "TableName": "lineitem_orders",
+                                "Inputs": [
+                                  {
+                                    "OperatorType": "Route",
+                                    "Variant": "Scatter",
+                                    "Keyspace": {
+                                      "Name": "main",
+                                      "Sharded": true
+                                    },
+                                    "FieldQuery": "select l1.l_orderkey, l1.l_suppkey, count(*) as numwait, weight_string(l1.l_orderkey), weight_string(l1.l_suppkey) from lineitem as l1 where 1 != 1 group by l1.l_orderkey, weight_string(l1.l_orderkey), l1.l_suppkey, weight_string(l1.l_suppkey)",
+                                    "Query": "select l1.l_orderkey, l1.l_suppkey, count(*) as numwait, weight_string(l1.l_orderkey), weight_string(l1.l_suppkey) from lineitem as l1 where l1.l_receiptdate > l1.l_commitdate and exists (select 1 from lineitem as l2 where l2.l_orderkey = l1.l_orderkey and l2.l_suppkey != l1.l_suppkey limit 1) and not exists (select 1 from lineitem as l3 where l3.l_orderkey = l1.l_orderkey and l3.l_suppkey != l1.l_suppkey and l3.l_receiptdate > l3.l_commitdate limit 1) group by l1.l_orderkey, weight_string(l1.l_orderkey), l1.l_suppkey, weight_string(l1.l_suppkey)",
+                                    "Table": "lineitem"
+                                  },
+                                  {
+                                    "OperatorType": "Route",
+                                    "Variant": "EqualUnique",
+                                    "Keyspace": {
+                                      "Name": "main",
+                                      "Sharded": true
+                                    },
+                                    "FieldQuery": "select 1, count(*) as numwait from orders where 1 != 1 group by 1",
+                                    "Query": "select 1, count(*) as numwait from orders where o_orderstatus = 'F' and exists (select 1 from lineitem as l2 where l2.l_orderkey = l1.l_orderkey and l2.l_suppkey != l1.l_suppkey limit 1) and not exists (select 1 from lineitem as l3 where l3.l_orderkey = l1.l_orderkey and l3.l_suppkey != l1.l_suppkey and l3.l_receiptdate > l3.l_commitdate limit 1) and o_orderkey = :l1_l_orderkey group by 1",
+                                    "Table": "orders",
+                                    "Values": [
+                                      ":l1_l_orderkey"
+                                    ],
+                                    "Vindex": "hash"
+                                  }
+                                ]
+                              },
+                              {
+                                "OperatorType": "Join",
+                                "Variant": "Join",
+                                "JoinColumnIndexes": "L:3,L:4,L:1,R:1",
+                                "JoinVars": {
+                                  "s_nationkey": 0
+                                },
+                                "TableName": "supplier_nation",
+                                "Inputs": [
+                                  {
+                                    "OperatorType": "Route",
+                                    "Variant": "EqualUnique",
+                                    "Keyspace": {
+                                      "Name": "main",
+                                      "Sharded": true
+                                    },
+                                    "FieldQuery": "select s_nationkey, count(*) as numwait, weight_string(s_nationkey), s_name, weight_string(s_name) from supplier where 1 != 1 group by s_nationkey, weight_string(s_nationkey), s_name, weight_string(s_name)",
+                                    "Query": "select s_nationkey, count(*) as numwait, weight_string(s_nationkey), s_name, weight_string(s_name) from supplier where exists (select 1 from lineitem as l2 where l2.l_orderkey = l1.l_orderkey and l2.l_suppkey != l1.l_suppkey limit 1) and not exists (select 1 from lineitem as l3 where l3.l_orderkey = l1.l_orderkey and l3.l_suppkey != l1.l_suppkey and l3.l_receiptdate > l3.l_commitdate limit 1) and s_suppkey = :l1_l_suppkey group by s_nationkey, weight_string(s_nationkey), s_name, weight_string(s_name)",
+                                    "Table": "supplier",
+                                    "Values": [
+                                      ":l1_l_suppkey"
+                                    ],
+                                    "Vindex": "hash"
+                                  },
+                                  {
+                                    "OperatorType": "Route",
+                                    "Variant": "EqualUnique",
+                                    "Keyspace": {
+                                      "Name": "main",
+                                      "Sharded": true
+                                    },
+                                    "FieldQuery": "select 1, count(*) as numwait from nation where 1 != 1 group by 1",
+                                    "Query": "select 1, count(*) as numwait from nation where n_name = 'SAUDI ARABIA' and exists (select 1 from lineitem as l2 where l2.l_orderkey = l1.l_orderkey and l2.l_suppkey != l1.l_suppkey limit 1) and not exists (select 1 from lineitem as l3 where l3.l_orderkey = l1.l_orderkey and l3.l_suppkey != l1.l_suppkey and l3.l_receiptdate > l3.l_commitdate limit 1) and n_nationkey = :s_nationkey group by 1",
+                                    "Table": "nation",
+                                    "Values": [
+                                      ":s_nationkey"
+                                    ],
+                                    "Vindex": "hash"
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.lineitem",
+        "main.nation",
+        "main.orders",
+        "main.supplier"
+      ]
+    }
+  },
+  {
+    "comment": "TPC-H query 22",
+    "query": "select cntrycode, count(*) as numcust, sum(c_acctbal) as totacctbal from ( select substring(c_phone from 1 for 2) as cntrycode, c_acctbal from customer where substring(c_phone from 1 for 2) in ('13', '31', '23', '29', '30', '18', '17') and c_acctbal > ( select avg(c_acctbal) from customer where c_acctbal > 0.00 and substring(c_phone from 1 for 2) in ('13', '31', '23', '29', '30', '18', '17') ) and not exists ( select * from orders where o_custkey = c_custkey ) ) as custsale group by cntrycode order by cntrycode",
+    "v3-plan": "symbol c_custkey not found in table or subquery",
+    "gen4-plan": "exists sub-queries are only supported with AND clause"
+  }
+]

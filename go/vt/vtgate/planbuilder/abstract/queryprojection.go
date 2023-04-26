@@ -71,6 +71,7 @@ type (
 	// Aggr encodes all information needed for aggregation functions
 	Aggr struct {
 		Original *sqlparser.AliasedExpr
+		Func     sqlparser.AggrFunc
 		OpCode   engine.AggregateOpcode
 		Alias    string
 		// The index at which the user expects to see this aggregated function. Set to nil, if the user does not ask for it
@@ -187,8 +188,7 @@ func (ar *AggrRewriter) Rewrite() func(*sqlparser.Cursor) bool {
 			return false
 		}
 		sqlNode := cursor.Node()
-		if sqlparser.IsAggregation(sqlNode) {
-			fExp := sqlNode.(*sqlparser.FuncExpr)
+		if fExp, ok := sqlNode.(sqlparser.AggrFunc); ok {
 			for offset, expr := range ar.qp.SelectExprs {
 				ae, err := expr.GetAliasedExpr()
 				if err != nil {
@@ -302,46 +302,16 @@ func (qp *QueryProjection) GetGrouping() []GroupBy {
 
 func checkForInvalidAggregations(exp *sqlparser.AliasedExpr) error {
 	return sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
-		fExpr, ok := node.(*sqlparser.FuncExpr)
-		if ok && fExpr.IsAggregate() {
-			if len(fExpr.Exprs) != 1 {
-				return false, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.SyntaxError, "aggregate functions take a single argument '%s'", sqlparser.String(fExpr))
+		if aggrFunc, isAggregate := node.(sqlparser.AggrFunc); isAggregate {
+			if aggrFunc.GetArgs() != nil &&
+				len(aggrFunc.GetArgs()) != 1 {
+				return false, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.SyntaxError, "aggregate functions take a single argument '%s'", sqlparser.String(node))
 			}
+			return true, nil
 		}
+
 		return true, nil
 	}, exp.Expr)
-}
-
-func (qp *QueryProjection) getNonAggrExprNotMatchingGroupByExprs() sqlparser.SelectExpr {
-	for _, expr := range qp.SelectExprs {
-		if expr.Aggr {
-			continue
-		}
-		if !qp.isExprInGroupByExprs(expr) {
-			return expr.Col
-		}
-	}
-	for _, order := range qp.OrderExprs {
-		if !qp.isOrderByExprInGroupBy(order) {
-			return &sqlparser.AliasedExpr{
-				Expr: order.Inner.Expr,
-			}
-		}
-	}
-	return nil
-}
-
-func (qp *QueryProjection) isOrderByExprInGroupBy(order OrderBy) bool {
-	// ORDER BY NULL or Aggregation functions need not be present in group by
-	if sqlparser.IsNull(order.Inner.Expr) || sqlparser.IsAggregation(order.WeightStrExpr) {
-		return true
-	}
-	for _, groupByExpr := range qp.groupByExprs {
-		if sqlparser.EqualsExpr(groupByExpr.WeightStrExpr, order.WeightStrExpr) {
-			return true
-		}
-	}
-	return false
 }
 
 func (qp *QueryProjection) isExprInGroupByExprs(expr SelectExpr) bool {
@@ -454,10 +424,7 @@ func (qp *QueryProjection) NeedsDistinct() bool {
 func (qp *QueryProjection) AggregationExpressions() (out []Aggr, err error) {
 orderBy:
 	for _, orderExpr := range qp.OrderExprs {
-		if qp.isOrderByExprInGroupBy(orderExpr) {
-			continue orderBy
-		}
-		orderExpr := orderExpr.Inner.Expr
+		orderExpr := orderExpr.WeightStrExpr
 		for _, expr := range qp.SelectExprs {
 			col, ok := expr.Col.(*sqlparser.AliasedExpr)
 			if !ok {
@@ -493,25 +460,25 @@ orderBy:
 			}
 			continue
 		}
-
-		fExpr, isFunc := aliasedExpr.Expr.(*sqlparser.FuncExpr)
-		if !isFunc {
+		fnc, isAggregate := aliasedExpr.Expr.(sqlparser.AggrFunc)
+		if !isAggregate {
 			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: in scatter query: complex aggregate expression")
 		}
 
-		funcName := fExpr.Name.Lowered()
-		opcode, found := engine.SupportedAggregates[funcName]
+		opcode, found := engine.SupportedAggregates[strings.ToLower(fnc.AggrName())]
 		if !found {
-			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: in scatter query: aggregation function '%s'", funcName)
+			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: in scatter query: aggregation function '%s'", fnc.AggrName())
 		}
 
 		if opcode == engine.AggregateCount {
-			if _, isStar := fExpr.Exprs[0].(*sqlparser.StarExpr); isStar {
+			if _, isStar := fnc.(*sqlparser.CountStar); isStar {
 				opcode = engine.AggregateCountStar
 			}
 		}
 
-		if fExpr.Distinct {
+		aggr, _ := aliasedExpr.Expr.(sqlparser.AggrFunc)
+
+		if aggr.IsDistinct() {
 			switch opcode {
 			case engine.AggregateCount:
 				opcode = engine.AggregateCountDistinct
@@ -522,10 +489,11 @@ orderBy:
 
 		out = append(out, Aggr{
 			Original: aliasedExpr,
+			Func:     aggr,
 			OpCode:   opcode,
 			Alias:    aliasedExpr.ColumnName(),
 			Index:    &idxCopy,
-			Distinct: fExpr.Distinct,
+			Distinct: aggr.IsDistinct(),
 		})
 	}
 	return
@@ -609,7 +577,7 @@ func (qp *QueryProjection) GetColumnCount() int {
 
 func checkForInvalidGroupingExpressions(expr sqlparser.Expr) error {
 	return sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
-		if sqlparser.IsAggregation(node) {
+		if _, isAggregate := node.(sqlparser.AggrFunc); isAggregate {
 			return false, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongGroupField, "Can't group on '%s'", sqlparser.String(expr))
 		}
 		_, isSubQ := node.(*sqlparser.Subquery)

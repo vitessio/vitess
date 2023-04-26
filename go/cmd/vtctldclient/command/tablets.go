@@ -73,6 +73,14 @@ Note: hook names may not contain slash (/) characters.
 		Args:                  cobra.MinimumNArgs(2),
 		RunE:                  commandExecuteHook,
 	}
+	// GetFullStatus makes a FullStatus gRPC call to a vttablet.
+	GetFullStatus = &cobra.Command{
+		Use:                   "GetFullStatus <alias>",
+		Short:                 "Outputs a JSON structure that contains full status of MySQL including the replication information, semi-sync information, GTID information among others.",
+		DisableFlagsInUseLine: true,
+		Args:                  cobra.ExactArgs(1),
+		RunE:                  commandGetFullStatus,
+	}
 	// GetPermissions makes a GetPermissions gRPC call to a vtctld.
 	GetPermissions = &cobra.Command{
 		Use:                   "GetPermissions <tablet_alias>",
@@ -296,6 +304,30 @@ func commandExecuteHook(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Printf("%s\n", data)
+	return nil
+}
+
+func commandGetFullStatus(cmd *cobra.Command, args []string) error {
+	aliasStr := cmd.Flags().Arg(0)
+	alias, err := topoproto.ParseTabletAlias(aliasStr)
+	if err != nil {
+		return err
+	}
+
+	cli.FinishedParsing(cmd)
+
+	resp, err := client.GetFullStatus(commandCtx, &vtctldatapb.GetFullStatusRequest{TabletAlias: alias})
+	if err != nil {
+		return err
+	}
+
+	data, err := cli.MarshalJSON(resp.Status)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("%s\n", data)
+
 	return nil
 }
 
@@ -596,6 +628,7 @@ func init() {
 	Root.AddCommand(DeleteTablets)
 
 	Root.AddCommand(ExecuteHook)
+	Root.AddCommand(GetFullStatus)
 	Root.AddCommand(GetPermissions)
 	Root.AddCommand(GetTablet)
 

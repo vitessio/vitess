@@ -1,0 +1,12 @@
+name: Code Freeze
+on:
+  pull_request:
+
+jobs:
+  build:
+    name: Code Freeze
+    runs-on: ubuntu-latest
+    steps:
+    - name: Fail if Code Freeze is enabled
+      run: |
+        exit 0

@@ -21,6 +21,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
@@ -50,7 +51,7 @@ type logicalPlan interface {
 	Wireup(lp logicalPlan, jt *jointab) error
 
 	// WireupGen4 does the wire up work for the Gen4 planner
-	WireupGen4(semTable *semantics.SemTable) error
+	WireupGen4(*plancontext.PlanningContext) error
 
 	// SupplyVar finds the common root between from and to. If it's
 	// the common root, it supplies the requested var to the rhs tree.
@@ -131,7 +132,7 @@ func (*gen4Plan) SupplyWeightString(int, bool) (weightcolNumber int, err error) 
 // v3Plan implements methods that are only used by gen4
 type v3Plan struct{}
 
-func (*v3Plan) WireupGen4(*semantics.SemTable) error {
+func (*v3Plan) WireupGen4(*plancontext.PlanningContext) error {
 	panic("[BUG]: should not be called. This is a V3 primitive")
 }
 
@@ -218,8 +219,8 @@ func (bc *logicalPlanCommon) Wireup(plan logicalPlan, jt *jointab) error {
 	return bc.input.Wireup(plan, jt)
 }
 
-func (bc *logicalPlanCommon) WireupGen4(semTable *semantics.SemTable) error {
-	return bc.input.WireupGen4(semTable)
+func (bc *logicalPlanCommon) WireupGen4(ctx *plancontext.PlanningContext) error {
+	return bc.input.WireupGen4(ctx)
 }
 
 func (bc *logicalPlanCommon) SupplyVar(from, to int, col *sqlparser.ColName, varname string) {

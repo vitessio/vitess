@@ -328,11 +328,16 @@ func (rs *resharder) createStreams(ctx context.Context) error {
 				Filter:        filter,
 				StopAfterCopy: rs.stopAfterCopy,
 			}
-			ig.AddRow(rs.workflow, bls, "", rs.cell, rs.tabletTypes)
+			ig.AddRow(rs.workflow, bls, "", rs.cell, rs.tabletTypes,
+				int64(binlogdatapb.VReplicationWorkflowType_Reshard),
+				int64(binlogdatapb.VReplicationWorkflowSubType_None))
 		}
 
 		for _, rstream := range rs.refStreams {
-			ig.AddRow(rstream.workflow, rstream.bls, "", rstream.cell, rstream.tabletTypes)
+			ig.AddRow(rstream.workflow, rstream.bls, "", rstream.cell, rstream.tabletTypes,
+				//todo: fix based on original stream
+				int64(binlogdatapb.VReplicationWorkflowType_Reshard),
+				int64(binlogdatapb.VReplicationWorkflowSubType_None))
 		}
 		query := ig.String()
 		if _, err := rs.wr.tmc.VReplicationExec(ctx, targetPrimary.Tablet, query); err != nil {

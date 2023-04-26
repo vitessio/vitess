@@ -29,10 +29,11 @@ import (
 // when needed.  It is meant to be used during transitions from one
 // topo.Server to another.
 //
-// - primary: we read everything from it, and write to it. We also create
+//   - primary: we read everything from it, and write to it. We also create
 //     LeaderParticipation from it.
-// - secondary: we write to it as well, but we usually don't fail.
-// - we lock primary/secondary if reverseLockOrder is False,
+//   - secondary: we write to it as well, but we usually don't fail.
+//   - we lock primary/secondary if reverseLockOrder is False,
+//
 // or secondary/primary if reverseLockOrder is True.
 type TeeFactory struct {
 	primary          *topo.Server
@@ -164,8 +165,12 @@ func (c *TeeConn) Delete(ctx context.Context, filePath string, version topo.Vers
 }
 
 // Watch is part of the topo.Conn interface
-func (c *TeeConn) Watch(ctx context.Context, filePath string) (*topo.WatchData, <-chan *topo.WatchData, topo.CancelFunc) {
+func (c *TeeConn) Watch(ctx context.Context, filePath string) (*topo.WatchData, <-chan *topo.WatchData, error) {
 	return c.primary.Watch(ctx, filePath)
+}
+
+func (c *TeeConn) WatchRecursive(ctx context.Context, path string) ([]*topo.WatchDataRecursive, <-chan *topo.WatchDataRecursive, error) {
+	return c.primary.WatchRecursive(ctx, path)
 }
 
 //

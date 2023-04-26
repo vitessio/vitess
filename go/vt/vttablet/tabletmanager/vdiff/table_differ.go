@@ -24,6 +24,8 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/vt/proto/topodata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 
 	"google.golang.org/protobuf/encoding/prototext"
@@ -45,6 +47,9 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
 )
+
+// how long to wait for background operations to complete
+var BackgroundOperationTimeout = topo.RemoteOperationTimeout * 4
 
 // compareColInfo contains the metadata for a column of the table being diffed
 type compareColInfo struct {
@@ -105,7 +110,13 @@ func (td *tableDiffer) initialize(ctx context.Context) error {
 		return err
 	}
 	defer func() {
-		if err := td.restartTargetVReplicationStreams(ctx); err != nil {
+		// We use a new context as we want to reset the state even
+		// when the parent context has timed out or been canceled.
+		log.Infof("Restarting the %q VReplication workflow on target tablets in keyspace %q",
+			td.wd.ct.workflow, targetKeyspace)
+		restartCtx, restartCancel := context.WithTimeout(context.Background(), BackgroundOperationTimeout)
+		defer restartCancel()
+		if err := td.restartTargetVReplicationStreams(restartCtx); err != nil {
 			log.Errorf("error restarting target streams: %v", err)
 		}
 	}()
@@ -132,7 +143,7 @@ func (td *tableDiffer) initialize(ctx context.Context) error {
 func (td *tableDiffer) stopTargetVReplicationStreams(ctx context.Context, dbClient binlogplayer.DBClient) error {
 	log.Infof("stopTargetVReplicationStreams")
 	ct := td.wd.ct
-	query := fmt.Sprintf("update _vt.vreplication set state = 'Stopped' %s", ct.workflowFilter)
+	query := fmt.Sprintf("update _vt.vreplication set state = 'Stopped', message='for vdiff' %s", ct.workflowFilter)
 	if _, err := ct.vde.vre.Exec(query); err != nil {
 		return err
 	}
@@ -140,7 +151,7 @@ func (td *tableDiffer) stopTargetVReplicationStreams(ctx context.Context, dbClie
 
 	// update position of all source streams
 	query = fmt.Sprintf("select id, source, pos from _vt.vreplication %s", ct.workflowFilter)
-	qr, err := withDDL.Exec(ctx, query, dbClient.ExecuteFetch, dbClient.ExecuteFetch)
+	qr, err := dbClient.ExecuteFetch(query, -1)
 	if err != nil {
 		return err
 	}
@@ -152,7 +163,8 @@ func (td *tableDiffer) stopTargetVReplicationStreams(ctx context.Context, dbClie
 			return err
 		}
 		if mpos.IsZero() {
-			return fmt.Errorf("stream %d has not started", id)
+			return fmt.Errorf("stream %d has not started on tablet %v",
+				id, td.wd.ct.vde.thisTablet.Alias)
 		}
 		sourceBytes, err := row["source"].ToBytes()
 		if err != nil {
@@ -191,12 +203,22 @@ func (td *tableDiffer) selectTablets(ctx context.Context, cell, tabletTypes stri
 	var wg sync.WaitGroup
 	ct := td.wd.ct
 	var err1, err2 error
+
+	// For Mount+Migrate, the source tablets will be in a different
+	// Vitess cluster with its own TopoServer.
+	sourceTopoServer := ct.ts
+	if ct.externalCluster != "" {
+		extTS, err := ct.ts.OpenExternalVitessClusterServer(ctx, ct.externalCluster)
+		if err != nil {
+			return err
+		}
+		sourceTopoServer = extTS
+	}
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
 		err1 = td.forEachSource(func(source *migrationSource) error {
-			// TODO: handle external sources to support Mount+Migrate
-			tablet, err := pickTablet(ctx, ct.ts, cell, ct.sourceKeyspace, source.shard, tabletTypes)
+			tablet, err := pickTablet(ctx, sourceTopoServer, cell, ct.sourceKeyspace, source.shard, tabletTypes)
 			if err != nil {
 				return err
 			}
@@ -308,16 +330,26 @@ func (td *tableDiffer) startSourceDataStreams(ctx context.Context) error {
 
 func (td *tableDiffer) restartTargetVReplicationStreams(ctx context.Context) error {
 	ct := td.wd.ct
-	query := fmt.Sprintf("update _vt.vreplication set state='Running', message='', stop_pos='' where db_name=%s and workflow=%s", encodeString(ct.vde.dbName), encodeString(ct.workflow))
-	log.Infof("restarting target replication with %s", query)
-	_, err := ct.tmc.VReplicationExec(ctx, ct.vde.thisTablet, query)
+	query := fmt.Sprintf("update _vt.vreplication set state='Running', message='', stop_pos='' where db_name=%s and workflow=%s",
+		encodeString(ct.vde.dbName), encodeString(ct.workflow))
+	log.Infof("Restarting the %q VReplication workflow using %q", ct.workflow, query)
+	var err error
+	// Let's retry a few times if we get a retryable error.
+	for i := 1; i <= 3; i++ {
+		_, err := ct.tmc.VReplicationExec(ctx, ct.vde.thisTablet, query)
+		if err == nil || !mysql.IsEphemeralError(err) {
+			break
+		}
+		log.Warningf("Encountered the following error while restarting the %q VReplication workflow, will retry (attempt #%d): %v",
+			ct.workflow, i, err)
+	}
 	return err
 }
 
 func (td *tableDiffer) streamOneShard(ctx context.Context, participant *shardStreamer, query string, lastPK *querypb.QueryResult, gtidch chan string) {
-	log.Infof("streamOneShard Start %s", participant.tablet.Alias.String())
+	log.Infof("streamOneShard Start on %s using query: %s", participant.tablet.Alias.String(), query)
 	defer func() {
-		log.Infof("streamOneShard End %s", participant.tablet.Alias.String())
+		log.Infof("streamOneShard End on %s", participant.tablet.Alias.String())
 		close(participant.result)
 		close(gtidch)
 	}()
@@ -334,7 +366,8 @@ func (td *tableDiffer) streamOneShard(ctx context.Context, participant *shardStr
 			TabletType: participant.tablet.Type,
 		}
 		var fields []*querypb.Field
-		return conn.VStreamRows(ctx, target, query, lastPK, func(vsrRaw *binlogdatapb.VStreamRowsResponse) error {
+		req := &binlogdatapb.VStreamRowsRequest{Target: target, Query: query, Lastpk: lastPK}
+		return conn.VStreamRows(ctx, req, func(vsrRaw *binlogdatapb.VStreamRowsResponse) error {
 			// We clone (deep copy) the VStreamRowsResponse -- which contains a vstream packet with N rows and
 			// their corresponding GTID position/snapshot along with the LastPK in the row set -- so that we
 			// can safely process it while the next VStreamRowsResponse message is getting prepared by the
@@ -346,7 +379,8 @@ func (td *tableDiffer) streamOneShard(ctx context.Context, participant *shardStr
 
 			if len(fields) == 0 {
 				if len(vsr.Fields) == 0 {
-					return fmt.Errorf("did not received expected fields in response %+v", vsr)
+					return fmt.Errorf("did not received expected fields in response %+v on tablet %v",
+						vsr, td.wd.ct.vde.thisTablet.Alias)
 				}
 				fields = vsr.Fields
 				gtidch <- vsr.Gtid
@@ -405,24 +439,52 @@ func (td *tableDiffer) diff(ctx context.Context, rowsToCompare *int64, debug, on
 	}
 	defer dbClient.Close()
 
+	// We need to continue were we left off when appropriate. This can be an
+	// auto-retry on error, or a manual retry via the resume command.
+	// Otherwise the existing state will be empty and we start from scratch.
+	query := fmt.Sprintf(sqlGetVDiffTable, td.wd.ct.id, encodeString(td.table.Name))
+	cs, err := dbClient.ExecuteFetch(query, -1)
+	if err != nil {
+		return nil, err
+	}
+	if len(cs.Rows) == 0 {
+		return nil, fmt.Errorf("no state found for vdiff table %s for vdiff_id %d on tablet %v",
+			td.table.Name, td.wd.ct.id, td.wd.ct.vde.thisTablet.Alias)
+	} else if len(cs.Rows) > 1 {
+		return nil, fmt.Errorf("invalid state found for vdiff table %s (multiple records) for vdiff_id %d on tablet %v",
+			td.table.Name, td.wd.ct.id, td.wd.ct.vde.thisTablet.Alias)
+	}
+	curState := cs.Named().Row()
+	mismatch := curState.AsBool("mismatch", false)
+	dr := &DiffReport{}
+	if rpt := curState.AsBytes("report", []byte("{}")); json.Valid(rpt) {
+		if err = json.Unmarshal(rpt, dr); err != nil {
+			return nil, err
+		}
+	}
+	dr.TableName = td.table.Name
+
 	sourceExecutor := newPrimitiveExecutor(ctx, td.sourcePrimitive, "source")
 	targetExecutor := newPrimitiveExecutor(ctx, td.targetPrimitive, "target")
-	dr := &DiffReport{TableName: td.table.Name}
 	var sourceRow, lastProcessedRow, targetRow []sqltypes.Value
-	var err error
 	advanceSource := true
 	advanceTarget := true
-	mismatch := false
 
 	// Save our progress when we finish the run
 	defer func() {
-		if err := td.updateTableProgress(dbClient, dr.ProcessedRows, lastProcessedRow); err != nil {
+		if err := td.updateTableProgress(dbClient, dr, lastProcessedRow); err != nil {
 			log.Errorf("Failed to update vdiff progress on %s table: %v", td.table.Name, err)
 		}
 	}()
 
 	for {
 		lastProcessedRow = sourceRow
+
+		select {
+		case <-ctx.Done():
+			return nil, vterrors.Errorf(vtrpcpb.Code_CANCELED, "context has expired")
+		default:
+		}
 
 		if !mismatch && dr.MismatchedRows > 0 {
 			mismatch = true
@@ -549,7 +611,7 @@ func (td *tableDiffer) diff(ctx context.Context, rowsToCompare *int64, debug, on
 		// approximate progress information but without too much overhead for when it's not
 		// needed or even desired.
 		if dr.ProcessedRows%1e4 == 0 {
-			if err := td.updateTableProgress(dbClient, dr.ProcessedRows, sourceRow); err != nil {
+			if err := td.updateTableProgress(dbClient, dr, sourceRow); err != nil {
 				return nil, err
 			}
 		}
@@ -582,23 +644,26 @@ func (td *tableDiffer) compare(sourceRow, targetRow []sqltypes.Value, cols []com
 	return 0, nil
 }
 
-func (td *tableDiffer) updateTableProgress(dbClient binlogplayer.DBClient, numRows int64, lastRow []sqltypes.Value) error {
+func (td *tableDiffer) updateTableProgress(dbClient binlogplayer.DBClient, dr *DiffReport, lastRow []sqltypes.Value) error {
+	if dr == nil {
+		return fmt.Errorf("cannot update progress with a nil diff report")
+	}
 	var lastPK []byte
 	var err error
 	var query string
+	rpt, err := json.Marshal(dr)
+	if err != nil {
+		return err
+	}
 	if lastRow != nil {
 		lastPK, err = td.lastPKFromRow(lastRow)
 		if err != nil {
 			return err
 		}
-		query = fmt.Sprintf(sqlUpdateTableProgress, numRows, encodeString(string(lastPK)), td.wd.ct.id, encodeString(td.table.Name))
-	} else if numRows != 0 {
-		// This should never happen
-		return fmt.Errorf("invalid vdiff state detected, %d row(s) were processed but the row data is missing", numRows)
+
+		query = fmt.Sprintf(sqlUpdateTableProgress, dr.ProcessedRows, encodeString(string(lastPK)), encodeString(string(rpt)), td.wd.ct.id, encodeString(td.table.Name))
 	} else {
-		// We didn't process any rows this time around so reflect that and keep any
-		// lastpk from a previous run. This is only relevant for RESUMEd vdiffs.
-		query = fmt.Sprintf(sqlUpdateTableNoProgress, numRows, td.wd.ct.id, encodeString(td.table.Name))
+		query = fmt.Sprintf(sqlUpdateTableNoProgress, dr.ProcessedRows, encodeString(string(rpt)), td.wd.ct.id, encodeString(td.table.Name))
 	}
 	if _, err := dbClient.ExecuteFetch(query, 1); err != nil {
 		return err
@@ -606,20 +671,32 @@ func (td *tableDiffer) updateTableProgress(dbClient binlogplayer.DBClient, numRo
 	return nil
 }
 
-func (td *tableDiffer) updateTableState(ctx context.Context, dbClient binlogplayer.DBClient, tableName string, state VDiffState, dr *DiffReport) error {
-	reportJSON := "{}"
+func (td *tableDiffer) updateTableState(ctx context.Context, dbClient binlogplayer.DBClient, state VDiffState) error {
+	query := fmt.Sprintf(sqlUpdateTableState, encodeString(string(state)), td.wd.ct.id, encodeString(td.table.Name))
+	if _, err := dbClient.ExecuteFetch(query, 1); err != nil {
+		return err
+	}
+	insertVDiffLog(ctx, dbClient, td.wd.ct.id, fmt.Sprintf("%s: table %s", state, encodeString(td.table.Name)))
+
+	return nil
+}
+
+func (td *tableDiffer) updateTableStateAndReport(ctx context.Context, dbClient binlogplayer.DBClient, state VDiffState, dr *DiffReport) error {
+	var report string
 	if dr != nil {
 		reportJSONBytes, err := json.Marshal(dr)
 		if err != nil {
 			return err
 		}
-		reportJSON = string(reportJSONBytes)
+		report = string(reportJSONBytes)
+	} else {
+		report = "{}"
 	}
-	query := fmt.Sprintf(sqlUpdateTableState, encodeString(string(state)), encodeString(reportJSON), td.wd.ct.id, encodeString(tableName))
-	if _, err := withDDL.Exec(ctx, query, dbClient.ExecuteFetch, dbClient.ExecuteFetch); err != nil {
+	query := fmt.Sprintf(sqlUpdateTableStateAndReport, encodeString(string(state)), dr.ProcessedRows, encodeString(report), td.wd.ct.id, encodeString(td.table.Name))
+	if _, err := dbClient.ExecuteFetch(query, 1); err != nil {
 		return err
 	}
-	insertVDiffLog(ctx, dbClient, td.wd.ct.id, fmt.Sprintf("%s: table %s", state, encodeString(tableName)))
+	insertVDiffLog(ctx, dbClient, td.wd.ct.id, fmt.Sprintf("%s: table %s", state, encodeString(td.table.Name)))
 
 	return nil
 }
@@ -645,4 +722,65 @@ func (td *tableDiffer) lastPKFromRow(row []sqltypes.Value) ([]byte, error) {
 		Rows:   []*querypb.Row{sqltypes.RowToProto3(pkVals)},
 	})
 	return buf, err
+}
+
+// If SourceTimeZone is defined in the BinlogSource (_vt.vreplication.source), the
+// VReplication workflow would have converted the datetime columns expecting the
+// source to have been in the SourceTimeZone and target in TargetTimeZone. We need
+// to do the reverse conversion in VDiff before the comparison.
+func (td *tableDiffer) adjustForSourceTimeZone(targetSelectExprs sqlparser.SelectExprs, fields map[string]querypb.Type) sqlparser.SelectExprs {
+	if td.wd.ct.sourceTimeZone == "" {
+		return targetSelectExprs
+	}
+	log.Infof("source time zone specified: %s", td.wd.ct.sourceTimeZone)
+	var newSelectExprs sqlparser.SelectExprs
+	var modified bool
+	for _, expr := range targetSelectExprs {
+		converted := false
+		switch selExpr := expr.(type) {
+		case *sqlparser.AliasedExpr:
+			if colAs, ok := selExpr.Expr.(*sqlparser.ColName); ok {
+				var convertTZFuncExpr *sqlparser.FuncExpr
+				colName := colAs.Name.Lowered()
+				fieldType := fields[colName]
+				if fieldType == querypb.Type_DATETIME {
+					convertTZFuncExpr = &sqlparser.FuncExpr{
+						Name: sqlparser.NewIdentifierCI("convert_tz"),
+						Exprs: sqlparser.SelectExprs{
+							expr,
+							&sqlparser.AliasedExpr{Expr: sqlparser.NewStrLiteral(td.wd.ct.targetTimeZone)},
+							&sqlparser.AliasedExpr{Expr: sqlparser.NewStrLiteral(td.wd.ct.sourceTimeZone)},
+						},
+					}
+					log.Infof("converting datetime column %s using convert_tz()", colName)
+					newSelectExprs = append(newSelectExprs, &sqlparser.AliasedExpr{Expr: convertTZFuncExpr, As: colAs.Name})
+					converted = true
+					modified = true
+				}
+			}
+		}
+		if !converted { // not datetime
+			newSelectExprs = append(newSelectExprs, expr)
+		}
+	}
+	if modified { // at least one datetime was found
+		log.Infof("Found datetime columns when SourceTimeZone was set, resetting target SelectExprs after convert_tz()")
+		return newSelectExprs
+	}
+	return targetSelectExprs
+}
+
+func getColumnNameForSelectExpr(selectExpression sqlparser.SelectExpr) (string, error) {
+	aliasedExpr := selectExpression.(*sqlparser.AliasedExpr)
+	expr := aliasedExpr.Expr
+	var colname string
+	switch t := expr.(type) {
+	case *sqlparser.ColName:
+		colname = t.Name.Lowered()
+	case *sqlparser.FuncExpr: // only in case datetime was converted using convert_tz()
+		colname = aliasedExpr.As.Lowered()
+	default:
+		return "", fmt.Errorf("found target SelectExpr which was neither ColName nor FuncExpr: %+v", aliasedExpr)
+	}
+	return colname, nil
 }

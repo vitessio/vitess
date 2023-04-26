@@ -216,25 +216,44 @@ func (stc *ScatterConn) ExecuteMultiShard(
 					retryRequest(func() {
 						// we seem to have lost our connection. it was a reserved connection, let's try to recreate it
 						info.actionNeeded = reserve
-						innerqr, reservedID, alias, err = qs.ReserveExecute(ctx, rs.Target, session.SetPreQueries(), queries[i].Sql, queries[i].BindVariables, 0 /*transactionId*/, opts)
+						var state queryservice.ReservedState
+						state, innerqr, err = qs.ReserveExecute(ctx, rs.Target, session.SetPreQueries(), queries[i].Sql, queries[i].BindVariables, 0 /*transactionId*/, opts)
+						reservedID = state.ReservedID
+						alias = state.TabletAlias
 					})
 				}
 			case begin:
-				innerqr, transactionID, alias, err = qs.BeginExecute(ctx, rs.Target, session.SavePoints(), queries[i].Sql, queries[i].BindVariables, reservedID, opts)
+				var state queryservice.TransactionState
+				state, innerqr, err = qs.BeginExecute(ctx, rs.Target, session.SavePoints(), queries[i].Sql, queries[i].BindVariables, reservedID, opts)
+				transactionID = state.TransactionID
+				alias = state.TabletAlias
 				if err != nil {
 					retryRequest(func() {
 						// we seem to have lost our connection. it was a reserved connection, let's try to recreate it
 						info.actionNeeded = reserveBegin
-						innerqr, transactionID, reservedID, alias, err = qs.ReserveBeginExecute(ctx, rs.Target, session.SetPreQueries(), session.SavePoints(), queries[i].Sql, queries[i].BindVariables, opts)
+						var state queryservice.ReservedTransactionState
+						state, innerqr, err = qs.ReserveBeginExecute(ctx, rs.Target, session.SetPreQueries(), session.SavePoints(), queries[i].Sql, queries[i].BindVariables, opts)
+						transactionID = state.TransactionID
+						reservedID = state.ReservedID
+						alias = state.TabletAlias
 					})
 				}
 			case reserve:
-				innerqr, reservedID, alias, err = qs.ReserveExecute(ctx, rs.Target, session.SetPreQueries(), queries[i].Sql, queries[i].BindVariables, transactionID, opts)
+				var state queryservice.ReservedState
+				state, innerqr, err = qs.ReserveExecute(ctx, rs.Target, session.SetPreQueries(), queries[i].Sql, queries[i].BindVariables, transactionID, opts)
+				reservedID = state.ReservedID
+				alias = state.TabletAlias
 			case reserveBegin:
-				innerqr, transactionID, reservedID, alias, err = qs.ReserveBeginExecute(ctx, rs.Target, session.SetPreQueries(), session.SavePoints(), queries[i].Sql, queries[i].BindVariables, opts)
+				var state queryservice.ReservedTransactionState
+				state, innerqr, err = qs.ReserveBeginExecute(ctx, rs.Target, session.SetPreQueries(), session.SavePoints(), queries[i].Sql, queries[i].BindVariables, opts)
+				transactionID = state.TransactionID
+				reservedID = state.ReservedID
+				alias = state.TabletAlias
 			default:
 				return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unexpected actionNeeded on query execution: %v", info.actionNeeded)
 			}
+			session.logging.log(rs.Target, queries[i].Sql, info.actionNeeded == begin || info.actionNeeded == reserveBegin, queries[i].BindVariables)
+
 			// We need to new shard info irrespective of the error.
 			newInfo := info.updateTransactionAndReservedID(transactionID, reservedID, alias)
 			if err != nil {
@@ -244,15 +263,15 @@ func (stc *ScatterConn) ExecuteMultiShard(
 			defer mu.Unlock()
 
 			// Don't append more rows if row count is exceeded.
-			if ignoreMaxMemoryRows || len(qr.Rows) <= *maxMemoryRows {
+			if ignoreMaxMemoryRows || len(qr.Rows) <= maxMemoryRows {
 				qr.AppendResult(innerqr)
 			}
 			return newInfo, nil
 		},
 	)
 
-	if !ignoreMaxMemoryRows && len(qr.Rows) > *maxMemoryRows {
-		return nil, []error{vterrors.NewErrorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.NetPacketTooLarge, "in-memory row count exceeded allowed limit of %d", *maxMemoryRows)}
+	if !ignoreMaxMemoryRows && len(qr.Rows) > maxMemoryRows {
+		return nil, []error{vterrors.NewErrorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.NetPacketTooLarge, "in-memory row count exceeded allowed limit of %d", maxMemoryRows)}
 	}
 
 	return qr, allErrors.GetErrors()
@@ -394,25 +413,44 @@ func (stc *ScatterConn) StreamExecuteMulti(
 					retryRequest(func() {
 						// we seem to have lost our connection. it was a reserved connection, let's try to recreate it
 						info.actionNeeded = reserve
-						reservedID, alias, err = qs.ReserveStreamExecute(ctx, rs.Target, session.SetPreQueries(), query, bindVars[i], 0 /*transactionId*/, opts, callback)
+						var state queryservice.ReservedState
+						state, err = qs.ReserveStreamExecute(ctx, rs.Target, session.SetPreQueries(), query, bindVars[i], 0 /*transactionId*/, opts, callback)
+						reservedID = state.ReservedID
+						alias = state.TabletAlias
 					})
 				}
 			case begin:
-				transactionID, alias, err = qs.BeginStreamExecute(ctx, rs.Target, session.SavePoints(), query, bindVars[i], reservedID, opts, callback)
+				var state queryservice.TransactionState
+				state, err = qs.BeginStreamExecute(ctx, rs.Target, session.SavePoints(), query, bindVars[i], reservedID, opts, callback)
+				transactionID = state.TransactionID
+				alias = state.TabletAlias
 				if err != nil {
 					retryRequest(func() {
 						// we seem to have lost our connection. it was a reserved connection, let's try to recreate it
 						info.actionNeeded = reserveBegin
-						transactionID, reservedID, alias, err = qs.ReserveBeginStreamExecute(ctx, rs.Target, session.SetPreQueries(), session.SavePoints(), query, bindVars[i], opts, callback)
+						var state queryservice.ReservedTransactionState
+						state, err = qs.ReserveBeginStreamExecute(ctx, rs.Target, session.SetPreQueries(), session.SavePoints(), query, bindVars[i], opts, callback)
+						transactionID = state.TransactionID
+						reservedID = state.ReservedID
+						alias = state.TabletAlias
 					})
 				}
 			case reserve:
-				reservedID, alias, err = qs.ReserveStreamExecute(ctx, rs.Target, session.SetPreQueries(), query, bindVars[i], transactionID, opts, callback)
+				var state queryservice.ReservedState
+				state, err = qs.ReserveStreamExecute(ctx, rs.Target, session.SetPreQueries(), query, bindVars[i], transactionID, opts, callback)
+				reservedID = state.ReservedID
+				alias = state.TabletAlias
 			case reserveBegin:
-				transactionID, reservedID, alias, err = qs.ReserveBeginStreamExecute(ctx, rs.Target, session.SetPreQueries(), session.SavePoints(), query, bindVars[i], opts, callback)
+				var state queryservice.ReservedTransactionState
+				state, err = qs.ReserveBeginStreamExecute(ctx, rs.Target, session.SetPreQueries(), session.SavePoints(), query, bindVars[i], opts, callback)
+				transactionID = state.TransactionID
+				reservedID = state.ReservedID
+				alias = state.TabletAlias
 			default:
 				return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unexpected actionNeeded on query execution: %v", info.actionNeeded)
 			}
+			session.logging.log(rs.Target, query, info.actionNeeded == begin || info.actionNeeded == reserveBegin, bindVars[i])
+
 			// We need to new shard info irrespective of the error.
 			newInfo := info.updateTransactionAndReservedID(transactionID, reservedID, alias)
 			if err != nil {
@@ -598,7 +636,10 @@ func (stc *ScatterConn) multiGoTransaction(
 		startTime, statsKey := stc.startAction(name, rs.Target)
 		defer stc.endAction(startTime, allErrors, statsKey, &err, session)
 
-		shardActionInfo := actionInfo(ctx, rs.Target, session, autocommit)
+		shardActionInfo, err := actionInfo(ctx, rs.Target, session, autocommit, stc.txConn.mode)
+		if err != nil {
+			return
+		}
 		updated, err := action(rs, i, shardActionInfo)
 		if updated == nil {
 			return
@@ -691,7 +732,10 @@ func (stc *ScatterConn) ExecuteLock(ctx context.Context, rs *srvtopo.ResolvedSha
 			session.UpdateLockHeartbeat()
 		}
 	case reserve:
-		qr, reservedID, alias, err = qs.ReserveExecute(ctx, rs.Target, session.SetPreQueries(), query.Sql, query.BindVariables, 0 /* transactionID */, opts)
+		var state queryservice.ReservedState
+		state, qr, err = qs.ReserveExecute(ctx, rs.Target, session.SetPreQueries(), query.Sql, query.BindVariables, 0 /* transactionID */, opts)
+		reservedID = state.ReservedID
+		alias = state.TabletAlias
 		if err != nil && reservedID != 0 {
 			_ = stc.txConn.ReleaseLock(ctx, session)
 		}
@@ -747,19 +791,22 @@ func requireNewQS(err error, target *querypb.Target) bool {
 }
 
 // actionInfo looks at the current session, and returns information about what needs to be done for this tablet
-func actionInfo(ctx context.Context, target *querypb.Target, session *SafeSession, autocommit bool) *shardActionInfo {
+func actionInfo(ctx context.Context, target *querypb.Target, session *SafeSession, autocommit bool, txMode vtgatepb.TransactionMode) (*shardActionInfo, error) {
 	if !(session.InTransaction() || session.InReservedConn()) {
-		return &shardActionInfo{}
+		return &shardActionInfo{}, nil
 	}
 	ignoreSession := ctx.Value(engine.IgnoreReserveTxn)
 	if ignoreSession != nil {
-		return &shardActionInfo{}
+		return &shardActionInfo{}, nil
 	}
 	// No need to protect ourselves from the race condition between
 	// Find and AppendOrUpdate. The higher level functions ensure that no
 	// duplicate (target) tuples can execute
 	// this at the same time.
-	transactionID, reservedID, alias := session.Find(target.Keyspace, target.Shard, target.TabletType)
+	transactionID, reservedID, alias, err := session.FindAndChangeSessionIfInSingleTxMode(target.Keyspace, target.Shard, target.TabletType, txMode)
+	if err != nil {
+		return nil, err
+	}
 
 	shouldReserve := session.InReservedConn() && reservedID == 0
 	shouldBegin := session.InTransaction() && transactionID == 0 && !autocommit
@@ -779,7 +826,7 @@ func actionInfo(ctx context.Context, target *querypb.Target, session *SafeSessio
 		transactionID: transactionID,
 		reservedID:    reservedID,
 		alias:         alias,
-	}
+	}, nil
 }
 
 // lockInfo looks at the current session, and returns information about what needs to be done for this tablet
@@ -792,12 +839,12 @@ func lockInfo(target *querypb.Target, session *SafeSession, lockFuncType sqlpars
 		info.reservedID = session.LockSession.ReservedId
 		info.alias = session.LockSession.TabletAlias
 	}
-	// TODO: after release 14.0, uncomment this line.
-	// This commented for backward compatiblity as there is a specific check in vttablet for lock functions,
-	// to always be on reserved connection.
-	//if lockFuncType != sqlparser.GetLock {
-	//	return info, nil
-	//}
+	// Only GetLock needs to start a reserved connection.
+	// Once in reserved connection, it will be used for other calls as well.
+	// But, we don't want to start a reserved connection for other calls like IsFreeLock, IsUsedLock, etc.
+	if lockFuncType != sqlparser.GetLock {
+		return info, nil
+	}
 	if info.reservedID == 0 {
 		info.actionNeeded = reserve
 	}

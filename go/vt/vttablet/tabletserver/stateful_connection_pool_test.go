@@ -42,11 +42,11 @@ func TestActivePoolClientRowsFound(t *testing.T) {
 	startNormalSize := pool.conns.Available()
 	startFoundRowsSize := pool.foundRowsPool.Available()
 
-	conn1, err := pool.NewConn(ctx, &querypb.ExecuteOptions{})
+	conn1, err := pool.NewConn(ctx, &querypb.ExecuteOptions{}, nil)
 	require.NoError(t, err)
 	assert.Equal(t, startNormalSize-1, pool.conns.Available(), "default pool not used")
 
-	conn2, err := pool.NewConn(ctx, &querypb.ExecuteOptions{ClientFoundRows: true})
+	conn2, err := pool.NewConn(ctx, &querypb.ExecuteOptions{ClientFoundRows: true}, nil)
 	require.NoError(t, err)
 	assert.Equal(t, startFoundRowsSize-1, pool.conns.Available(), "foundRows pool not used")
 
@@ -62,15 +62,15 @@ func TestActivePoolForAllTxProps(t *testing.T) {
 	defer db.Close()
 	pool := newActivePool()
 	pool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
-	conn1, err := pool.NewConn(ctx, &querypb.ExecuteOptions{})
+	conn1, err := pool.NewConn(ctx, &querypb.ExecuteOptions{}, nil)
 	require.NoError(t, err)
 	conn1.txProps = &tx.Properties{}
 
-	conn2, err := pool.NewConn(ctx, &querypb.ExecuteOptions{})
+	conn2, err := pool.NewConn(ctx, &querypb.ExecuteOptions{}, nil)
 	require.NoError(t, err)
 	// for the second connection, we are not going to set a tx state
 
-	conn3, err := pool.NewConn(ctx, &querypb.ExecuteOptions{})
+	conn3, err := pool.NewConn(ctx, &querypb.ExecuteOptions{}, nil)
 	require.NoError(t, err)
 	conn3.txProps = &tx.Properties{}
 
@@ -90,20 +90,20 @@ func TestStatefulPoolShutdownNonTx(t *testing.T) {
 	pool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
 
 	// conn1 non-tx, not in use.
-	conn1, err := pool.NewConn(ctx, &querypb.ExecuteOptions{})
+	conn1, err := pool.NewConn(ctx, &querypb.ExecuteOptions{}, nil)
 	require.NoError(t, err)
 	conn1.Taint(ctx, nil)
 	conn1.Unlock()
 
 	// conn2 tx, not in use.
-	conn2, err := pool.NewConn(ctx, &querypb.ExecuteOptions{})
+	conn2, err := pool.NewConn(ctx, &querypb.ExecuteOptions{}, nil)
 	require.NoError(t, err)
 	conn2.Taint(ctx, nil)
 	conn2.txProps = &tx.Properties{}
 	conn2.Unlock()
 
 	// conn3 non-tx, in use.
-	conn3, err := pool.NewConn(ctx, &querypb.ExecuteOptions{})
+	conn3, err := pool.NewConn(ctx, &querypb.ExecuteOptions{}, nil)
 	require.NoError(t, err)
 	conn3.Taint(ctx, nil)
 
@@ -128,13 +128,13 @@ func TestStatefulPoolShutdownAll(t *testing.T) {
 	pool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
 
 	// conn1 not in use
-	conn1, err := pool.NewConn(ctx, &querypb.ExecuteOptions{})
+	conn1, err := pool.NewConn(ctx, &querypb.ExecuteOptions{}, nil)
 	require.NoError(t, err)
 	conn1.txProps = &tx.Properties{}
 	conn1.Unlock()
 
 	// conn2 in use.
-	conn2, err := pool.NewConn(ctx, &querypb.ExecuteOptions{})
+	conn2, err := pool.NewConn(ctx, &querypb.ExecuteOptions{}, nil)
 	require.NoError(t, err)
 	conn2.txProps = &tx.Properties{}
 
@@ -162,7 +162,7 @@ func TestExecWithAbortedCtx(t *testing.T) {
 	defer db.Close()
 	pool := newActivePool()
 	pool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
-	conn, err := pool.NewConn(ctx, &querypb.ExecuteOptions{})
+	conn, err := pool.NewConn(ctx, &querypb.ExecuteOptions{}, nil)
 	require.NoError(t, err)
 	cancel()
 	_, err = conn.Exec(ctx, "", 0, false)
@@ -174,7 +174,7 @@ func TestExecWithDbconnClosed(t *testing.T) {
 	defer db.Close()
 	pool := newActivePool()
 	pool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
-	conn, err := pool.NewConn(ctx, &querypb.ExecuteOptions{})
+	conn, err := pool.NewConn(ctx, &querypb.ExecuteOptions{}, nil)
 	require.NoError(t, err)
 	conn.Close()
 
@@ -187,7 +187,7 @@ func TestExecWithDbconnClosedHavingTx(t *testing.T) {
 	defer db.Close()
 	pool := newActivePool()
 	pool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
-	conn, err := pool.NewConn(ctx, &querypb.ExecuteOptions{})
+	conn, err := pool.NewConn(ctx, &querypb.ExecuteOptions{}, nil)
 	require.NoError(t, err)
 	conn.txProps = &tx.Properties{Conclusion: "foobar"}
 	conn.Close()
@@ -201,13 +201,13 @@ func TestFailOnConnectionRegistering(t *testing.T) {
 	defer db.Close()
 	pool := newActivePool()
 	pool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
-	conn, err := pool.NewConn(ctx, &querypb.ExecuteOptions{})
+	conn, err := pool.NewConn(ctx, &querypb.ExecuteOptions{}, nil)
 	require.NoError(t, err)
 	defer conn.Close()
 
 	pool.lastID.Set(conn.ConnID - 1)
 
-	_, err = pool.NewConn(ctx, &querypb.ExecuteOptions{})
+	_, err = pool.NewConn(ctx, &querypb.ExecuteOptions{}, nil)
 	require.Error(t, err, "already present")
 }
 

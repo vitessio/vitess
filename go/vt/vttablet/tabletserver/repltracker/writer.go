@@ -101,8 +101,8 @@ func newHeartbeatWriter(env tabletenv.Env, alias *topodatapb.TabletAlias) *heart
 		errorLog:         logutil.NewThrottledLogger("HeartbeatWriter", 60*time.Second),
 		// We make this pool size 2; to prevent pool exhausted
 		// stats from incrementing continually, and causing concern
-		appPool:      dbconnpool.NewConnectionPool("HeartbeatWriteAppPool", 2, *mysqlctl.DbaIdleTimeout, *mysqlctl.PoolDynamicHostnameResolution),
-		allPrivsPool: dbconnpool.NewConnectionPool("HeartbeatWriteAllPrivsPool", 2, *mysqlctl.DbaIdleTimeout, *mysqlctl.PoolDynamicHostnameResolution),
+		appPool:      dbconnpool.NewConnectionPool("HeartbeatWriteAppPool", 2, mysqlctl.DbaIdleTimeout, mysqlctl.PoolDynamicHostnameResolution),
+		allPrivsPool: dbconnpool.NewConnectionPool("HeartbeatWriteAllPrivsPool", 2, mysqlctl.DbaIdleTimeout, mysqlctl.PoolDynamicHostnameResolution),
 	}
 	if w.onDemandDuration > 0 {
 		// see RequestHeartbeats() for use of onDemandRequestTicks
@@ -238,9 +238,20 @@ func (w *heartbeatWriter) enableWrites(enable bool) {
 	if w.ticks == nil {
 		return
 	}
-	if enable {
-		w.ticks.Start(w.writeHeartbeat)
-	} else {
+	switch enable {
+	case true:
+		// We must combat a potential race condition: the writer is Open, and a request comes
+		// to enableWrites(true), but simultaneously the writes gets Close()d.
+		// We must not send any more ticks while the writer is closed.
+		go func() {
+			w.mu.Lock()
+			defer w.mu.Unlock()
+			if !w.isOpen {
+				return
+			}
+			w.ticks.Start(w.writeHeartbeat)
+		}()
+	case false:
 		w.ticks.Stop()
 		if w.onDemandDuration > 0 {
 			// Let the next RequestHeartbeats() go through

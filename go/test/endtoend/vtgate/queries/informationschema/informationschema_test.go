@@ -38,10 +38,7 @@ func start(t *testing.T) (utils.MySQLCompare, func()) {
 	deleteAll := func() {
 		_, _ = utils.ExecAllowError(t, mcmp.VtConn, "set workload = oltp")
 
-		tables := []string{
-			"t1", "t1_id2_idx", "vstream_test", "t2", "t2_id4_idx", "t3", "t3_id7_idx", "t4",
-			"t4_id2_idx", "t5_null_vindex", "t6", "t6_id2_idx", "t7_xxhash", "t7_xxhash_idx", "t7_fk", "t8",
-		}
+		tables := []string{"t1", "t1_id2_idx", "t7_xxhash", "t7_xxhash_idx", "t7_fk"}
 		for _, table := range tables {
 			_, _ = mcmp.ExecAndIgnore("delete from " + table)
 		}
@@ -57,6 +54,9 @@ func start(t *testing.T) (utils.MySQLCompare, func()) {
 }
 
 func TestDbNameOverride(t *testing.T) {
+	if clusterInstance.HasPartialKeyspaces {
+		t.Skip("test can randomly select one of the shards, and the shards are in different keyspaces")
+	}
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -68,6 +68,9 @@ func TestDbNameOverride(t *testing.T) {
 }
 
 func TestInformationSchemaQuery(t *testing.T) {
+	if clusterInstance.HasPartialKeyspaces {
+		t.Skip("test can randomly select one of the shards, and the shards are in different keyspaces")
+	}
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -106,7 +109,9 @@ func TestFKConstraintUsingInformationSchema(t *testing.T) {
 	defer closer()
 
 	query := "select  fk.referenced_table_name as to_table, fk.referenced_column_name as primary_key, fk.column_name as `column`, fk.constraint_name as name, rc.update_rule as on_update, rc.delete_rule as on_delete from information_schema.referential_constraints as rc join information_schema.key_column_usage as fk on fk.constraint_schema = rc.constraint_schema and fk.constraint_name = rc.constraint_name where fk.referenced_column_name is not null and fk.table_schema = database() and fk.table_name = 't7_fk' and rc.constraint_schema = database() and rc.table_name = 't7_fk'"
-	mcmp.AssertMatches(query, `[[VARCHAR("t7_xxhash") VARCHAR("uid") VARCHAR("t7_uid") VARCHAR("t7_fk_ibfk_1") VARCHAR("CASCADE") VARCHAR("SET NULL")]]`)
+	mcmp.AssertMatchesAny(query,
+		`[[VARBINARY("t7_xxhash") VARCHAR("uid") VARCHAR("t7_uid") VARCHAR("t7_fk_ibfk_1") BINARY("CASCADE") BINARY("SET NULL")]]`,
+		`[[VARCHAR("t7_xxhash") VARCHAR("uid") VARCHAR("t7_uid") VARCHAR("t7_fk_ibfk_1") VARCHAR("CASCADE") VARCHAR("SET NULL")]]`)
 }
 
 func TestConnectWithSystemSchema(t *testing.T) {
@@ -138,6 +143,9 @@ func TestUseSystemSchema(t *testing.T) {
 }
 
 func TestSystemSchemaQueryWithoutQualifier(t *testing.T) {
+	if clusterInstance.HasPartialKeyspaces {
+		t.Skip("partial keyspace detected, skipping test")
+	}
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -171,6 +179,9 @@ func TestSystemSchemaQueryWithoutQualifier(t *testing.T) {
 }
 
 func TestMultipleSchemaPredicates(t *testing.T) {
+	if clusterInstance.HasPartialKeyspaces {
+		t.Skip("test can randomly select one of the shards, and the shards are in different keyspaces")
+	}
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -191,4 +202,25 @@ func TestMultipleSchemaPredicates(t *testing.T) {
 	_, err := mcmp.VtConn.ExecuteFetch(query, 1000, true)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "specifying two different database in the query is not supported")
+}
+
+func TestInfrSchemaAndUnionAll(t *testing.T) {
+	clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, "--planner-version=gen4")
+	require.NoError(t,
+		clusterInstance.RestartVtgate())
+
+	vtConnParams := clusterInstance.GetVTParams(keyspaceName)
+	vtConnParams.DbName = keyspaceName
+	conn, err := mysql.Connect(context.Background(), &vtConnParams)
+	require.NoError(t, err)
+
+	for _, workload := range []string{"oltp", "olap"} {
+		t.Run(workload, func(t *testing.T) {
+			utils.Exec(t, conn, fmt.Sprintf("set workload = %s", workload))
+			utils.Exec(t, conn, "start transaction")
+			utils.Exec(t, conn, `select connection_id()`)
+			utils.Exec(t, conn, `(select 'corder' from t1 limit 1) union all (select 'customer' from t7_xxhash limit 1)`)
+			utils.Exec(t, conn, "rollback")
+		})
+	}
 }

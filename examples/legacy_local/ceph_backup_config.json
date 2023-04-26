@@ -1,6 +1,0 @@
-{
-  "accessKey" : "AccessKey",
-  "secretKey" : "SecretKey",
-  "endPoint"  : "URL",
-  "useSSL"    : true
-}

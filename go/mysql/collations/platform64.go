@@ -27,4 +27,4 @@ const (
 )
 
 // Generate all the metadata used for collations from the JSON data dumped from MySQL
-//go:generate go run ./tools/makecolldata/ -embed=true
+//go:generate go run ./tools/makecolldata/ --embed=true

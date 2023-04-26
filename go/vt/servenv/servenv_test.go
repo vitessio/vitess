@@ -67,7 +67,7 @@ func TestFireOnCloseHooksTimeout(t *testing.T) {
 
 	// we deliberatly test the flag to make sure it's not accidently set to a
 	// high value.
-	if finished, want := fireOnCloseHooks(*onCloseTimeout), false; finished != want {
+	if finished, want := fireOnCloseHooks(onCloseTimeout), false; finished != want {
 		t.Errorf("finished = %v, want %v", finished, want)
 	}
 }

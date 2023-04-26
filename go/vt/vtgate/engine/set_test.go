@@ -17,6 +17,7 @@ limitations under the License.
 package engine
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"testing"
@@ -59,7 +60,7 @@ func TestSetSystemVariableAsString(t *testing.T) {
 			"foobar",
 		)},
 	}
-	_, err := set.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
+	_, err := set.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 
 	vc.ExpectLog(t, []string{
@@ -578,7 +579,7 @@ func TestSetTable(t *testing.T) {
 				multiShardErrs: []error{tc.execErr},
 				disableSetVar:  tc.disableSetVar,
 			}
-			_, err := set.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
+			_, err := set.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 			if tc.expectedError == "" {
 				require.NoError(t, err)
 			} else {
@@ -618,7 +619,7 @@ func TestSysVarSetErr(t *testing.T) {
 		shards:         []string{"-20", "20-"},
 		multiShardErrs: []error{fmt.Errorf("error")},
 	}
-	_, err := set.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
+	_, err := set.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 	require.EqualError(t, err, "error")
 	vc.ExpectLog(t, expectedQueryLog)
 }

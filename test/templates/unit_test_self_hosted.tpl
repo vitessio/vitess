@@ -17,7 +17,7 @@ jobs:
             skip='true'
           fi
           echo Skip ${skip}
-          echo "::set-output name=skip-workflow::${skip}"
+          echo "skip-workflow=${skip}" >> $GITHUB_OUTPUT
 
       - name: Check out code
         if: steps.skip-workflow.outputs.skip-workflow == 'false'
@@ -35,12 +35,13 @@ jobs:
               - 'test.go'
               - 'Makefile'
               - 'build.env'
-              - 'go.[sumod]'
+              - 'go.sum'
+              - 'go.mod'
               - 'proto/*.proto'
               - 'tools/**'
               - 'config/**'
               - 'bootstrap.sh'
-              - '.github/workflows/**'
+              - '.github/workflows/{{.FileName}}'
 
       - name: Build Docker Image
         if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.unit_tests == 'true'

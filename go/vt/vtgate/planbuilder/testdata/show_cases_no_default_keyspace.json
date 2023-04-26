@@ -1,0 +1,115 @@
+[
+  {
+    "comment": "show columns from user keyspace",
+    "query": "show full columns from user_extra",
+    "plan": {
+      "QueryType": "SHOW",
+      "Original": "show full columns from user_extra",
+      "Instructions": {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetDestination": "AnyShard()",
+        "Query": "show full columns from user_extra",
+        "SingleShardOnly": true
+      }
+    }
+  },
+  {
+    "comment": "show columns from routed table",
+    "query": "show full fields from `route1`",
+    "plan": {
+      "QueryType": "SHOW",
+      "Original": "show full fields from `route1`",
+      "Instructions": {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetDestination": "AnyShard()",
+        "Query": "show full columns from `user`",
+        "SingleShardOnly": true
+      }
+    }
+  },
+  {
+    "comment": "show variables",
+    "query": "show variables",
+    "plan": {
+      "QueryType": "SHOW",
+      "Original": "show variables",
+      "Instructions": {
+        "OperatorType": "ReplaceVariables",
+        "Inputs": [
+          {
+            "OperatorType": "Send",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "TargetDestination": "AnyShard()",
+            "Query": "show variables",
+            "SingleShardOnly": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "comment": "show full columns from system schema",
+    "query": "show full columns from sys.sys_config",
+    "plan": {
+      "QueryType": "SHOW",
+      "Original": "show full columns from sys.sys_config",
+      "Instructions": {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "AnyShard()",
+        "Query": "show full columns from sys.sys_config",
+        "SingleShardOnly": true
+      }
+    }
+  },
+  {
+    "comment": "show full columns from system schema replacing qualifier",
+    "query": "show full columns from x.sys_config from sys",
+    "plan": {
+      "QueryType": "SHOW",
+      "Original": "show full columns from x.sys_config from sys",
+      "Instructions": {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "AnyShard()",
+        "Query": "show full columns from sys.sys_config",
+        "SingleShardOnly": true
+      }
+    }
+  },
+  {
+    "comment": "show global status",
+    "query": "show global status",
+    "plan": {
+      "QueryType": "SHOW",
+      "Original": "show global status",
+      "Instructions": {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "AnyShard()",
+        "Query": "show global status",
+        "SingleShardOnly": true
+      }
+    }
+  }
+]

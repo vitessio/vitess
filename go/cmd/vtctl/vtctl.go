@@ -18,9 +18,7 @@ package main
 
 import (
 	"context"
-	"flag"
 	"fmt"
-	"io"
 	"log/syslog"
 	"os"
 	"os/signal"
@@ -28,6 +26,9 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/spf13/pflag"
+
+	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/cmd"
 	"vitess.io/vitess/go/cmd/vtctldclient/command"
 	"vitess.io/vitess/go/exit"
@@ -42,29 +43,54 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 	"vitess.io/vitess/go/vt/workflow"
 	"vitess.io/vitess/go/vt/wrangler"
-
-	// Include deprecation warnings for soon-to-be-unsupported flag invocations.
-	_flag "vitess.io/vitess/go/internal/flag"
 )
 
 var (
-	waitTime     = flag.Duration("wait-time", 24*time.Hour, "time to wait on an action")
-	detachedMode = flag.Bool("detach", false, "detached mode - run vtcl detached from the terminal")
-	_            = flag.String("durability_policy", "none", "type of durability to enforce. Default is none. Other values are dictated by registered plugins")
+	waitTime     = 24 * time.Hour
+	detachedMode bool
 )
 
 func init() {
-	logger := logutil.NewConsoleLogger()
-	flag.CommandLine.SetOutput(logutil.NewLoggerWriter(logger))
-	_flag.SetUsage(flag.CommandLine, _flag.UsageOptions{
-		Preface: func(w io.Writer) {
+	servenv.OnParse(func(fs *pflag.FlagSet) {
+		// N.B. This is necessary for subcommand pflag parsing when not using
+		// cobra (cobra is where we're headed, but for `vtctl` it's a big lift
+		// before the RC cut).
+		//
+		// Essentially, the situation we have here is that commands look like:
+		//
+		//	`vtctl [global flags] <command> [subcommand flags]`
+		//
+		// Since the default behavior of pflag is to allow "interspersed" flag
+		// and positional arguments, this means that the initial servenv parse
+		// will complain if _any_ subocmmand's flag is provided; for example, if
+		// you were to invoke
+		//
+		//	`vtctl AddCellInfo --root /vitess/global --server_address "1.2.3.4" global
+		//
+		// then you would get the error "unknown flag --root", even though that
+		// is a valid flag for the AddCellInfo flag.
+		//
+		// By disabling interspersal on the top-level parse, anything after the
+		// command name ("AddCellInfo", in this example) will be forwarded to
+		// the subcommand's flag set for further parsing.
+		fs.SetInterspersed(false)
+
+		logger := logutil.NewConsoleLogger()
+		fs.SetOutput(logutil.NewLoggerWriter(logger))
+		fs.Usage = func() {
 			logger.Printf("Usage: %s [global parameters] command [command parameters]\n", os.Args[0])
 			logger.Printf("\nThe global optional parameters are:\n")
-		},
-		Epilogue: func(w io.Writer) {
+
+			logger.Printf("%s\n", fs.FlagUsages())
+
 			logger.Printf("\nThe commands are listed below, sorted by group. Use '%s <command> -h' for more help.\n\n", os.Args[0])
 			vtctl.PrintAllCommands(logger)
-		},
+		}
+
+		fs.DurationVar(&waitTime, "wait-time", waitTime, "time to wait on an action")
+		fs.BoolVar(&detachedMode, "detach", detachedMode, "detached mode - run vtcl detached from the terminal")
+
+		acl.RegisterFlags(fs)
 	})
 }
 
@@ -83,7 +109,7 @@ func main() {
 	defer exit.RecoverAll()
 	defer logutil.Flush()
 
-	if *detachedMode {
+	if detachedMode {
 		// this method will call os.Exit and kill this process
 		cmd.DetachFromTerminalAndExit()
 	}
@@ -109,7 +135,7 @@ func main() {
 
 	vtctl.WorkflowManager = workflow.NewManager(ts)
 
-	ctx, cancel := context.WithTimeout(context.Background(), *waitTime)
+	ctx, cancel := context.WithTimeout(context.Background(), waitTime)
 	installSignalHandlers(cancel)
 
 	// (TODO:ajm188) <Begin backwards compatibility support>.
@@ -153,17 +179,19 @@ func main() {
 	default:
 		log.Warningf("WARNING: vtctl should only be used for VDiff workflows. Consider using vtctldclient for all other commands.")
 
+		wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
+
 		if args[0] == "--" {
+			vtctl.PrintDoubleDashDeprecationNotice(wr)
 			args = args[1:]
 		}
 
 		action = args[0]
-		wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 		err := vtctl.RunCommand(ctx, wr, args)
 		cancel()
 		switch err {
 		case vtctl.ErrUnknownCommand:
-			flag.Usage()
+			pflag.Usage()
 			exit.Return(1)
 		case nil:
 			// keep going

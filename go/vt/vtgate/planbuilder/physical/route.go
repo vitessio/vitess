@@ -187,7 +187,7 @@ func (r *Route) searchForNewVindexes(ctx *plancontext.PlanningContext, predicate
 }
 
 func (r *Route) planComparison(ctx *plancontext.PlanningContext, cmp *sqlparser.ComparisonExpr) (found bool, exitEarly bool, err error) {
-	if sqlparser.IsNull(cmp.Left) || sqlparser.IsNull(cmp.Right) {
+	if cmp.Operator != sqlparser.NullSafeEqualOp && (sqlparser.IsNull(cmp.Left) || sqlparser.IsNull(cmp.Right)) {
 		// we are looking at ANDed predicates in the WHERE clause.
 		// since we know that nothing returns true when compared to NULL,
 		// so we can safely bail out here
@@ -498,6 +498,12 @@ func (r *Route) planInOp(ctx *plancontext.PlanningContext, cmp *sqlparser.Compar
 	switch left := cmp.Left.(type) {
 	case *sqlparser.ColName:
 		vdValue := cmp.Right
+
+		valTuple, isTuple := vdValue.(sqlparser.ValTuple)
+		if isTuple && len(valTuple) == 1 {
+			return r.planEqualOp(ctx, &sqlparser.ComparisonExpr{Left: left, Right: valTuple[0], Operator: sqlparser.EqualOp})
+		}
+
 		value := r.makeEvalEngineExpr(ctx, vdValue)
 		if value == nil {
 			return false
@@ -600,6 +606,8 @@ func (r *Route) planCompositeInOpRecursive(
 	return foundVindex
 }
 
+// Reset all vindex predicates on this route and re-build their options from
+// the list of seen routing predicates.
 func (r *Route) resetRoutingSelections(ctx *plancontext.PlanningContext) error {
 	switch r.RouteOpCode {
 	case engine.DBA, engine.Next, engine.Reference, engine.Unsharded:

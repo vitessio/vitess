@@ -31,17 +31,6 @@ func testAllImplementations(t *testing.T, runTest func(t *testing.T, fail failov
 		})
 	})
 
-	t.Run("LegacyHealthCheck", func(t *testing.T) {
-		t.Helper()
-		runTest(t, func(buf *Buffer, tablet *topodatapb.Tablet, keyspace, shard string, now time.Time) {
-			buf.StatsUpdate(&discovery.LegacyTabletStats{
-				Tablet:                              tablet,
-				Target:                              &query.Target{Keyspace: keyspace, Shard: shard, TabletType: topodatapb.TabletType_PRIMARY},
-				TabletExternallyReparentedTimestamp: now.Unix(),
-			})
-		})
-	})
-
 	t.Run("KeyspaceEvent", func(t *testing.T) {
 		t.Helper()
 		runTest(t, func(buf *Buffer, tablet *topodatapb.Tablet, keyspace, shard string, now time.Time) {

@@ -99,45 +99,60 @@ CREATE TABLE test_vdx (
 	`
 )
 
+var enableSettingsPool bool
+
 func TestMain(m *testing.M) {
 	defer cluster.PanicHandler(nil)
 	flag.Parse()
 
-	exitCode := func() int {
-		clusterInstance = cluster.NewCluster(cell, hostname)
-		defer clusterInstance.Teardown()
+	code := runAllTests(m)
+	if code != 0 {
+		os.Exit(code)
+	}
 
-		// Start topo server
-		if err := clusterInstance.StartTopo(); err != nil {
-			return 1
-		}
+	println("running with settings pool enabled")
+	// run again with settings pool enabled.
+	enableSettingsPool = true
+	code = runAllTests(m)
+	os.Exit(code)
+}
 
-		// Start keyspace
-		keyspace := &cluster.Keyspace{
-			Name:      keyspaceName,
-			SchemaSQL: sqlSchema,
-			VSchema:   vSchema,
-		}
-		clusterInstance.VtTabletExtraArgs = []string{"--queryserver-config-transaction-timeout", "5"}
-		if err := clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 1, false); err != nil {
-			return 1
-		}
+func runAllTests(m *testing.M) int {
+	clusterInstance = cluster.NewCluster(cell, hostname)
+	defer clusterInstance.Teardown()
 
-		// Start vtgate
-		// This test requires setting the mysql_server_version vtgate flag
-		// to 5.7 regardless of the actual MySQL version used for the tests.
-		clusterInstance.VtGateExtraArgs = []string{"--lock_heartbeat_time", "2s", "--mysql_server_version", "5.7.0"}
-		if err := clusterInstance.StartVtgate(); err != nil {
-			return 1
-		}
+	// Start topo server
+	if err := clusterInstance.StartTopo(); err != nil {
+		return 1
+	}
 
-		vtParams = mysql.ConnParams{
-			Host: clusterInstance.Hostname,
-			Port: clusterInstance.VtgateMySQLPort,
-		}
-		return m.Run()
-	}()
-	os.Exit(exitCode)
+	// Start keyspace
+	keyspace := &cluster.Keyspace{
+		Name:      keyspaceName,
+		SchemaSQL: sqlSchema,
+		VSchema:   vSchema,
+	}
+	clusterInstance.VtTabletExtraArgs = []string{"--queryserver-config-transaction-timeout", "5"}
+	if enableSettingsPool {
+		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, "--queryserver-enable-settings-pool")
+	}
+	if err := clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 1, false); err != nil {
+		return 1
+	}
+
+	// Start vtgate
+	// This test requires setting the mysql_server_version vtgate flag
+	// to 5.7 regardless of the actual MySQL version used for the tests.
+	clusterInstance.VtGateExtraArgs = []string{"--lock_heartbeat_time", "2s", "--mysql_server_version", "5.7.0"}
+	if err := clusterInstance.StartVtgate(); err != nil {
+		return 1
+	}
+
+	vtParams = mysql.ConnParams{
+		Host: clusterInstance.Hostname,
+		Port: clusterInstance.VtgateMySQLPort,
+	}
+	return m.Run()
 }
 
 func assertIsEmpty(t *testing.T, conn *mysql.Conn, query string) {

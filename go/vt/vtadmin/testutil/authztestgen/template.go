@@ -176,3 +176,8 @@ func testClusters(t testing.TB) []*cluster.Cluster {
 	return testutil.BuildClusters(t, configs...)
 }
 `
+
+const _doct = `{{ range .Methods -}}
+{{ formatDocRow . }}
+{{ end -}}
+`

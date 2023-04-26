@@ -43,6 +43,7 @@ const (
 	MixOfGroupFuncAndFields
 	DupFieldName
 	WrongValueCountOnRow
+	WrongValue
 
 	// failed precondition
 	NoDB

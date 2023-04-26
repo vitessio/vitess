@@ -18,7 +18,6 @@ package main
 
 import (
 	"bytes"
-	"flag"
 	"fmt"
 	"go/types"
 	"log"
@@ -27,12 +26,13 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/dave/jennifer/jen"
+	"github.com/spf13/pflag"
+	"golang.org/x/tools/go/packages"
+
 	"vitess.io/vitess/go/hack"
 	"vitess.io/vitess/go/tools/common"
 	"vitess.io/vitess/go/tools/goimports"
-
-	"github.com/dave/jennifer/jen"
-	"golang.org/x/tools/go/packages"
 )
 
 const licenseFileHeader = `Copyright 2021 The Vitess Authors.
@@ -495,14 +495,15 @@ func (t *typePaths) Set(path string) error {
 }
 
 func main() {
-	var patterns typePaths
-	var generate typePaths
-	var verify bool
+	var (
+		patterns, generate []string
+		verify             bool
+	)
 
-	flag.Var(&patterns, "in", "Go packages to load the generator")
-	flag.Var(&generate, "gen", "Typename of the Go struct to generate size info for")
-	flag.BoolVar(&verify, "verify", false, "ensure that the generated files are correct")
-	flag.Parse()
+	pflag.StringSliceVar(&patterns, "in", nil, "Go packages to load the generator")
+	pflag.StringSliceVar(&generate, "gen", nil, "Typename of the Go struct to generate size info for")
+	pflag.BoolVar(&verify, "verify", false, "ensure that the generated files are correct")
+	pflag.Parse()
 
 	result, err := GenerateSizeHelpers(patterns, generate)
 	if err != nil {

@@ -104,7 +104,9 @@ func TestMain(m *testing.M) {
 			SchemaSQL: SchemaSQL,
 			VSchema:   VSchema,
 		}
-		clusterInstance.VtTabletExtraArgs = []string{"--queryserver-config-transaction-timeout", "3"}
+		clusterInstance.VtTabletExtraArgs = []string{
+			"--queryserver-config-transaction-timeout", "3",
+		}
 		if err := clusterInstance.StartKeyspace(*Keyspace, []string{"-80", "80-"}, 1, false); err != nil {
 			log.Fatal(err.Error())
 			return 1

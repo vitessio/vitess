@@ -135,7 +135,7 @@ func TestIdent(t *testing.T) {
 	for _, test := range tests {
 		got := TabletIdent(test.tablet)
 		if got != test.ident {
-			t.Errorf("TableIdent mismatch: got %s want %s", got, test.ident)
+			t.Errorf("TabletIdent mismatch: got %s want %s", got, test.ident)
 		}
 	}
 }

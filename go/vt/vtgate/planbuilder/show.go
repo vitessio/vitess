@@ -46,21 +46,28 @@ const (
 	charset = "charset"
 )
 
-func buildShowPlan(sql string, stmt *sqlparser.Show, _ *sqlparser.ReservedVars, vschema plancontext.VSchema) (engine.Primitive, error) {
+func buildShowPlan(sql string, stmt *sqlparser.Show, _ *sqlparser.ReservedVars, vschema plancontext.VSchema) (*planResult, error) {
 	if vschema.Destination() != nil {
 		return buildByPassDDLPlan(sql, vschema)
 	}
 
+	var prim engine.Primitive
+	var err error
 	switch show := stmt.Internal.(type) {
 	case *sqlparser.ShowBasic:
-		return buildShowBasicPlan(show, vschema)
+		prim, err = buildShowBasicPlan(show, vschema)
 	case *sqlparser.ShowCreate:
-		return buildShowCreatePlan(show, vschema)
+		prim, err = buildShowCreatePlan(show, vschema)
 	case *sqlparser.ShowOther:
-		return buildShowOtherPlan(sql, vschema)
+		prim, err = buildShowOtherPlan(sql, vschema)
 	default:
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG]: undefined show type: %T", stmt.Internal)
 	}
+	if err != nil {
+		return nil, err
+	}
+
+	return newPlanResult(prim), nil
 }
 
 func buildShowOtherPlan(sql string, vschema plancontext.VSchema) (engine.Primitive, error) {
@@ -112,7 +119,7 @@ func buildShowBasicPlan(show *sqlparser.ShowBasic, vschema plancontext.VSchema) 
 	case sqlparser.VitessTarget:
 		return buildShowTargetPlan(vschema)
 	case sqlparser.VschemaTables:
-		return buildVschemaTablesPlan(show, vschema)
+		return buildVschemaTablesPlan(vschema)
 	case sqlparser.VschemaVindexes:
 		return buildVschemaVindexesPlan(show, vschema)
 	}
@@ -165,9 +172,9 @@ func buildVariablePlan(show *sqlparser.ShowBasic, vschema plancontext.VSchema) (
 
 func buildShowTblPlan(show *sqlparser.ShowBasic, vschema plancontext.VSchema) (engine.Primitive, error) {
 	if !show.DbName.IsEmpty() {
-		show.Tbl.Qualifier = sqlparser.NewTableIdent(show.DbName.String())
+		show.Tbl.Qualifier = sqlparser.NewIdentifierCS(show.DbName.String())
 		// Remove Database Name from the query.
-		show.DbName = sqlparser.NewTableIdent("")
+		show.DbName = sqlparser.NewIdentifierCS("")
 	}
 
 	dest := key.Destination(key.DestinationAnyShard{})
@@ -188,7 +195,7 @@ func buildShowTblPlan(show *sqlparser.ShowBasic, vschema plancontext.VSchema) (e
 			return nil, vterrors.NewErrorf(vtrpcpb.Code_NOT_FOUND, vterrors.UnknownTable, "Table '%s' doesn't exist", show.Tbl.Name.String())
 		}
 		// Update the table.
-		show.Tbl.Qualifier = sqlparser.NewTableIdent("")
+		show.Tbl.Qualifier = sqlparser.NewIdentifierCS("")
 		show.Tbl.Name = table.Name
 
 		if destination != nil {
@@ -222,11 +229,11 @@ func buildDBPlan(show *sqlparser.ShowBasic, vschema plancontext.VSchema) (engine
 		filter = regexp.MustCompile(".*")
 	}
 
-	//rows := make([][]sqltypes.Value, 0, len(ks)+4)
+	// rows := make([][]sqltypes.Value, 0, len(ks)+4)
 	var rows [][]sqltypes.Value
 
 	if show.Command == sqlparser.Database {
-		//Hard code default databases
+		// Hard code default databases
 		ks = append(ks, &vindexes.Keyspace{Name: "information_schema"},
 			&vindexes.Keyspace{Name: "mysql"},
 			&vindexes.Keyspace{Name: "sys"},
@@ -287,7 +294,7 @@ func buildPlanWithDB(show *sqlparser.ShowBasic, vschema plancontext.VSchema) (en
 		dbDestination = ks.Name
 	} else {
 		// Remove Database Name from the query.
-		show.DbName = sqlparser.NewTableIdent("")
+		show.DbName = sqlparser.NewIdentifierCS("")
 	}
 	destination, keyspace, _, err := vschema.TargetDestination(dbDestination)
 	if err != nil {
@@ -298,7 +305,7 @@ func buildPlanWithDB(show *sqlparser.ShowBasic, vschema plancontext.VSchema) (en
 	}
 
 	if dbName.IsEmpty() {
-		dbName = sqlparser.NewTableIdent(keyspace.Name)
+		dbName = sqlparser.NewIdentifierCS(keyspace.Name)
 	}
 
 	query := sqlparser.String(show)
@@ -495,7 +502,7 @@ func buildCreateTblPlan(show *sqlparser.ShowCreate, vschema plancontext.VSchema)
 		if destKs != nil {
 			dest = destKs
 		}
-		show.Op.Qualifier = sqlparser.NewTableIdent("")
+		show.Op.Qualifier = sqlparser.NewIdentifierCS("")
 		show.Op.Name = tbl.Name
 	}
 
@@ -522,7 +529,7 @@ func buildCreatePlan(show *sqlparser.ShowCreate, vschema plancontext.VSchema) (e
 		}
 		dbName = ks.Name
 	} else {
-		show.Op.Qualifier = sqlparser.NewTableIdent("")
+		show.Op.Qualifier = sqlparser.NewIdentifierCS("")
 	}
 
 	dest, ks, _, err := vschema.TargetDestination(dbName)
@@ -638,7 +645,7 @@ func buildEnginesPlan() (engine.Primitive, error) {
 		buildVarCharFields("Engine", "Support", "Comment", "Transactions", "XA", "Savepoints")), nil
 }
 
-func buildVschemaTablesPlan(show *sqlparser.ShowBasic, vschema plancontext.VSchema) (engine.Primitive, error) {
+func buildVschemaTablesPlan(vschema plancontext.VSchema) (engine.Primitive, error) {
 	vs := vschema.GetVSchema()
 	ks, err := vschema.DefaultKeyspace()
 	if err != nil {

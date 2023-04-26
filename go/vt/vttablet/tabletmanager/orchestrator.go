@@ -18,7 +18,6 @@ package tabletmanager
 
 import (
 	"encoding/json"
-	"flag"
 	"fmt"
 	"io"
 	"net/http"
@@ -27,21 +26,42 @@ import (
 	"strconv"
 	"time"
 
-	"vitess.io/vitess/go/vt/vterrors"
+	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/log"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vterrors"
+
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 var (
-	orcAddr     = flag.String("orc_api_url", "", "Address of Orchestrator's HTTP API (e.g. http://host:port/api/). Leave empty to disable Orchestrator integration.")
-	orcUser     = flag.String("orc_api_user", "", "(Optional) Basic auth username to authenticate with Orchestrator's HTTP API. Leave empty to disable basic auth.")
-	orcPassword = flag.String("orc_api_password", "", "(Optional) Basic auth password to authenticate with Orchestrator's HTTP API.")
-	orcTimeout  = flag.Duration("orc_timeout", 30*time.Second, "Timeout for calls to Orchestrator's HTTP API")
-	orcInterval = flag.Duration("orc_discover_interval", 0, "How often to ping Orchestrator's HTTP API endpoint to tell it we exist. 0 means never.")
+	orcAddr     string
+	orcUser     string
+	orcPassword string
+	orcTimeout  = 30 * time.Second
+	orcInterval time.Duration
 )
+
+func init() {
+	servenv.OnParseFor("vtcombo", registerOrcFlags)
+	servenv.OnParseFor("vttablet", registerOrcFlags)
+}
+
+func registerOrcFlags(fs *pflag.FlagSet) {
+	fs.StringVar(&orcAddr, "orc_api_url", orcAddr, "Address of Orchestrator's HTTP API (e.g. http://host:port/api/). Leave empty to disable Orchestrator integration.")
+	_ = fs.MarkDeprecated("orc_api_url", "Orchestrator integration is deprecated. Consider using VTOrc instead")
+	fs.StringVar(&orcUser, "orc_api_user", orcUser, "(Optional) Basic auth username to authenticate with Orchestrator's HTTP API. Leave empty to disable basic auth.")
+	_ = fs.MarkDeprecated("orc_api_user", "Orchestrator integration is deprecated. Consider using VTOrc instead")
+	fs.StringVar(&orcPassword, "orc_api_password", orcPassword, "(Optional) Basic auth password to authenticate with Orchestrator's HTTP API.")
+	_ = fs.MarkDeprecated("orc_api_password", "Orchestrator integration is deprecated. Consider using VTOrc instead")
+	fs.DurationVar(&orcTimeout, "orc_timeout", orcTimeout, "Timeout for calls to Orchestrator's HTTP API.")
+	_ = fs.MarkDeprecated("orc_timeout", "Orchestrator integration is deprecated. Consider using VTOrc instead")
+	fs.DurationVar(&orcInterval, "orc_discover_interval", orcInterval, "How often to ping Orchestrator's HTTP API endpoint to tell it we exist. 0 means never.")
+	_ = fs.MarkDeprecated("orc_discover_interval", "Orchestrator integration is deprecated. Consider using VTOrc instead")
+}
 
 type orcClient struct {
 	apiRoot    *url.URL
@@ -51,17 +71,18 @@ type orcClient struct {
 // newOrcClient creates a client for the Orchestrator HTTP API.
 // It should only be called after flags have been parsed.
 func newOrcClient() (*orcClient, error) {
-	if *orcAddr == "" {
+	if orcAddr == "" {
 		// Orchestrator integration is disabled.
 		return nil, nil
 	}
-	apiRoot, err := url.Parse(*orcAddr)
+	log.Errorf("Orchestrator integration has been deprecated. Consider using VTOrc instead.")
+	apiRoot, err := url.Parse(orcAddr)
 	if err != nil {
-		return nil, vterrors.Wrapf(err, "can't parse -orc_api_url flag value (%v)", *orcAddr)
+		return nil, vterrors.Wrapf(err, "can't parse --orc_api_url flag value (%v)", orcAddr)
 	}
 	return &orcClient{
 		apiRoot:    apiRoot,
-		httpClient: &http.Client{Timeout: *orcTimeout},
+		httpClient: &http.Client{Timeout: orcTimeout},
 	}, nil
 }
 
@@ -69,14 +90,14 @@ func newOrcClient() (*orcClient, error) {
 // The Tablet is read from the given tm each time before calling discover().
 // Usually this will be launched as a background goroutine.
 func (orc *orcClient) DiscoverLoop(tm *TabletManager) {
-	if *orcInterval == 0 {
+	if orcInterval == 0 {
 		// 0 means never.
 		return
 	}
-	log.Infof("Starting periodic Orchestrator self-registration: API URL = %v, interval = %v", *orcAddr, *orcInterval)
+	log.Infof("Starting periodic Orchestrator self-registration: API URL = %v, interval = %v", orcAddr, orcInterval)
 
 	// Randomly vary the interval by +/- 25% to reduce the potential for spikes.
-	ticker := timer.NewRandTicker(*orcInterval, *orcInterval/4)
+	ticker := timer.NewRandTicker(orcInterval, orcInterval/4)
 
 	// Remember whether we've most recently succeeded or failed.
 	var lastErr error
@@ -189,8 +210,8 @@ func (orc *orcClient) apiGet(pathParts ...string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	if *orcUser != "" {
-		req.SetBasicAuth(*orcUser, *orcPassword)
+	if orcUser != "" {
+		req.SetBasicAuth(orcUser, orcPassword)
 	}
 	resp, err := orc.httpClient.Do(req)
 	if err != nil {

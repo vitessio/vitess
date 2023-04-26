@@ -50,13 +50,11 @@ func booleanValues(astExpr sqlparser.Expr) evalengine.Expr {
 		}
 	case *sqlparser.ColName:
 		//set autocommit = on
-		if node.Name.AtCount() == sqlparser.NoAt {
-			switch node.Name.Lowered() {
-			case "on":
-				return ON
-			case "off":
-				return OFF
-			}
+		switch node.Name.Lowered() {
+		case "on":
+			return ON
+		case "off":
+			return OFF
 		}
 	}
 	return nil

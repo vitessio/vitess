@@ -49,7 +49,7 @@ func TestRegisterService(t *testing.T) {
 		return tracer, tracer, nil
 	}
 
-	tracingServer = &fakeName
+	tracingServer = fakeName
 
 	serviceName := "vtservice"
 	closer := StartTracing(serviceName)

@@ -17,15 +17,17 @@ limitations under the License.
 package grpcvtctlclient
 
 import (
-	"flag"
 	"fmt"
 	"io"
 	"net"
 	"os"
 	"testing"
 
+	"github.com/spf13/pflag"
+	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 
+	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctlserver"
 	"vitess.io/vitess/go/vt/vtctl/vtctlclienttest"
@@ -99,7 +101,14 @@ func TestVtctlAuthClient(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	flag.Set("grpc_auth_static_client_creds", f.Name())
+	fs := pflag.NewFlagSet("", pflag.ContinueOnError)
+	grpcclient.RegisterFlags(fs)
+
+	err = fs.Parse([]string{
+		"--grpc_auth_static_client_creds",
+		f.Name(),
+	})
+	require.NoError(t, err, "failed to set `--grpc_auth_static_client_creds=%s`", f.Name())
 
 	// Create a VtctlClient gRPC client to talk to the fake server
 	client, err := gRPCVtctlClientFactory(fmt.Sprintf("localhost:%v", port))

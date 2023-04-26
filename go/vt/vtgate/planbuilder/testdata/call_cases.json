@@ -1,0 +1,58 @@
+[
+  {
+    "comment": "simple call proc on current keyspace",
+    "query": "call proc()",
+    "plan": {
+      "QueryType": "CALL_PROC",
+      "Original": "call proc()",
+      "Instructions": {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "AnyShard()",
+        "Query": "call proc()"
+      }
+    }
+  },
+  {
+    "comment": "call qualified keyspace",
+    "query": "call main.proc()",
+    "plan": {
+      "QueryType": "CALL_PROC",
+      "Original": "call main.proc()",
+      "Instructions": {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "AnyShard()",
+        "Query": "call proc()"
+      }
+    }
+  },
+  {
+    "comment": "CALL not allowed on sharded keyspaces",
+    "query": "call user.proc()",
+    "plan": "CALL is not supported for sharded database"
+  },
+  {
+    "comment": "CALL with expressions and parameters",
+    "query": "call proc(1, 'foo', @var)",
+    "plan": {
+      "QueryType": "CALL_PROC",
+      "Original": "call proc(1, 'foo', @var)",
+      "Instructions": {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "AnyShard()",
+        "Query": "call proc(1, 'foo', :__vtudvvar)"
+      }
+    }
+  }
+]

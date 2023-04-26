@@ -24,9 +24,9 @@ import (
 
 // GetShardReplicationPositions implements the http wrapper for /shard_replication_positions.
 // Query params:
-//	- cluster: repeated, cluster ID
-// 	- keyspace: repeated, keyspace names
-//	- keyspace_shard: repeated, keyspace shard names
+//   - cluster: repeated, cluster ID
+//   - keyspace: repeated, keyspace names
+//   - keyspace_shard: repeated, keyspace shard names
 func GetShardReplicationPositions(ctx context.Context, r Request, api *API) *JSONResponse {
 	query := r.URL.Query()
 

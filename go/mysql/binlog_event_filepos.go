@@ -84,9 +84,10 @@ func (ev *filePosBinlogEvent) nextPosition(f BinlogFormat) int {
 // rotate implements BinlogEvent.Rotate().
 //
 // Expected format (L = total length of event data):
-//   # bytes  field
-//   8        position
-//   8:L      file
+//
+//	# bytes  field
+//	8        position
+//	8:L      file
 func (ev *filePosBinlogEvent) rotate(f BinlogFormat) (int, string) {
 	data := ev.Bytes()[f.HeaderLength:]
 	pos := binary.LittleEndian.Uint64(data[0:8])

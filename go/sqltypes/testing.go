@@ -29,10 +29,12 @@ import (
 // reduced and readability improved.
 
 // MakeTestFields builds a []*querypb.Field for testing.
-//   fields := sqltypes.MakeTestFields(
-//     "a|b",
-//     "int64|varchar",
-//   )
+//
+//	fields := sqltypes.MakeTestFields(
+//	  "a|b",
+//	  "int64|varchar",
+//	)
+//
 // The field types are as defined in querypb and are case
 // insensitive. Column delimiters must be used only to sepearate
 // strings and not at the beginning or the end.
@@ -50,11 +52,13 @@ func MakeTestFields(names, types string) []*querypb.Field {
 }
 
 // MakeTestResult builds a *sqltypes.Result object for testing.
-//   result := sqltypes.MakeTestResult(
-//     fields,
-//     " 1|a",
-//     "10|abcd",
-//   )
+//
+//	result := sqltypes.MakeTestResult(
+//	  fields,
+//	  " 1|a",
+//	  "10|abcd",
+//	)
+//
 // The field type values are set as the types for the rows built.
 // Spaces are trimmed from row values. "null" is treated as NULL.
 func MakeTestResult(fields []*querypb.Field, rows ...string) *Result {
@@ -77,13 +81,15 @@ func MakeTestResult(fields []*querypb.Field, rows ...string) *Result {
 }
 
 // MakeTestStreamingResults builds a list of results for streaming.
-//   results := sqltypes.MakeStreamingResults(
-//     fields,
-//		 "1|a",
-//     "2|b",
-//     "---",
-//     "c|c",
-//   )
+//
+//	  results := sqltypes.MakeStreamingResults(
+//	    fields,
+//			 "1|a",
+//	    "2|b",
+//	    "---",
+//	    "c|c",
+//	  )
+//
 // The first result contains only the fields. Subsequent results
 // are built using the field types. Every input that starts with a "-"
 // is treated as streaming delimiter for one result. A final

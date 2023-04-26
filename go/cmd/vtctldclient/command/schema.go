@@ -19,7 +19,7 @@ package command
 import (
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"strings"
 	"time"
 
@@ -112,7 +112,7 @@ func commandApplySchema(cmd *cobra.Command, args []string) error {
 			return errors.New("Exactly one of --sql and --sql-file must be specified, not both.") // nolint
 		}
 
-		data, err := ioutil.ReadFile(applySchemaOptions.SQLFile)
+		data, err := os.ReadFile(applySchemaOptions.SQLFile)
 		if err != nil {
 			return err
 		}
@@ -156,11 +156,12 @@ func commandApplySchema(cmd *cobra.Command, args []string) error {
 }
 
 var getSchemaOptions = struct {
-	Tables         []string
-	ExcludeTables  []string
-	IncludeViews   bool
-	TableNamesOnly bool
-	TableSizesOnly bool
+	Tables          []string
+	ExcludeTables   []string
+	IncludeViews    bool
+	TableNamesOnly  bool
+	TableSizesOnly  bool
+	TableSchemaOnly bool
 }{}
 
 func commandGetSchema(cmd *cobra.Command, args []string) error {
@@ -176,12 +177,13 @@ func commandGetSchema(cmd *cobra.Command, args []string) error {
 	cli.FinishedParsing(cmd)
 
 	resp, err := client.GetSchema(commandCtx, &vtctldatapb.GetSchemaRequest{
-		TabletAlias:    alias,
-		Tables:         getSchemaOptions.Tables,
-		ExcludeTables:  getSchemaOptions.ExcludeTables,
-		IncludeViews:   getSchemaOptions.IncludeViews,
-		TableNamesOnly: getSchemaOptions.TableNamesOnly,
-		TableSizesOnly: getSchemaOptions.TableSizesOnly,
+		TabletAlias:     alias,
+		Tables:          getSchemaOptions.Tables,
+		ExcludeTables:   getSchemaOptions.ExcludeTables,
+		IncludeViews:    getSchemaOptions.IncludeViews,
+		TableNamesOnly:  getSchemaOptions.TableNamesOnly,
+		TableSizesOnly:  getSchemaOptions.TableSizesOnly,
+		TableSchemaOnly: getSchemaOptions.TableSchemaOnly,
 	})
 	if err != nil {
 		return err
@@ -291,7 +293,7 @@ func init() {
 	ApplySchema.Flags().DurationVar(&applySchemaOptions.WaitReplicasTimeout, "wait-replicas-timeout", wrangler.DefaultWaitReplicasTimeout, "Amount of time to wait for replicas to receive the schema change via replication.")
 	ApplySchema.Flags().BoolVar(&applySchemaOptions.SkipPreflight, "skip-preflight", false, "Skip pre-apply schema checks, and directly forward schema change query to shards.")
 	ApplySchema.Flags().StringVar(&applySchemaOptions.CallerID, "caller-id", "", "Effective caller ID used for the operation and should map to an ACL name which grants this identity the necessary permissions to perform the operation (this is only necessary when strict table ACLs are used).")
-	ApplySchema.Flags().StringSliceVar(&applySchemaOptions.SQL, "sql", nil, "Semicolon-delimited, repeatable SQL commands to apply. Exactly one of --sql|--sql-file is required.")
+	ApplySchema.Flags().StringArrayVar(&applySchemaOptions.SQL, "sql", nil, "Semicolon-delimited, repeatable SQL commands to apply. Exactly one of --sql|--sql-file is required.")
 	ApplySchema.Flags().StringVar(&applySchemaOptions.SQLFile, "sql-file", "", "Path to a file containing semicolon-delimited SQL commands to apply. Exactly one of --sql|--sql-file is required.")
 
 	Root.AddCommand(ApplySchema)
@@ -301,6 +303,7 @@ func init() {
 	GetSchema.Flags().BoolVar(&getSchemaOptions.IncludeViews, "include-views", false, "Includes views in the output in addition to base tables.")
 	GetSchema.Flags().BoolVarP(&getSchemaOptions.TableNamesOnly, "table-names-only", "n", false, "Display only table names in the result.")
 	GetSchema.Flags().BoolVarP(&getSchemaOptions.TableSizesOnly, "table-sizes-only", "s", false, "Display only size information for matching tables. Ignored if --table-names-only is set.")
+	GetSchema.Flags().BoolVarP(&getSchemaOptions.TableSchemaOnly, "table-schema-only", "", false, "Skip introspecting columns and fields metadata.")
 
 	Root.AddCommand(GetSchema)
 

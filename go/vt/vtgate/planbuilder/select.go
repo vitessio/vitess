@@ -20,9 +20,9 @@ import (
 	"errors"
 	"fmt"
 
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
+	"vitess.io/vitess/go/vt/log"
 
-	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 
 	"vitess.io/vitess/go/vt/key"
 
@@ -36,7 +36,7 @@ import (
 )
 
 func buildSelectPlan(query string) stmtPlanner {
-	return func(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema) (engine.Primitive, error) {
+	return func(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema) (*planResult, error) {
 		sel := stmt.(*sqlparser.Select)
 		if sel.With != nil {
 			return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: with expression in select statement")
@@ -47,7 +47,7 @@ func buildSelectPlan(query string) stmtPlanner {
 			return nil, err
 		}
 		if p != nil {
-			return p, nil
+			return newPlanResult(p), nil
 		}
 
 		getPlan := func(sel *sqlparser.Select) (logicalPlan, error) {
@@ -70,7 +70,7 @@ func buildSelectPlan(query string) stmtPlanner {
 			// by transforming the predicates to CNF, the planner will sometimes find better plans
 			primitive := rewriteToCNFAndReplan(stmt, getPlan)
 			if primitive != nil {
-				return primitive, nil
+				return newPlanResult(primitive), nil
 			}
 		}
 		primitive := plan.Primitive()
@@ -84,7 +84,7 @@ func buildSelectPlan(query string) stmtPlanner {
 			}
 		}
 
-		return primitive, nil
+		return newPlanResult(primitive), nil
 	}
 }
 
@@ -301,10 +301,7 @@ func buildSQLCalcFoundRowsPlan(
 	sel2.Limit = nil
 
 	countStartExpr := []sqlparser.SelectExpr{&sqlparser.AliasedExpr{
-		Expr: &sqlparser.FuncExpr{
-			Name:  sqlparser.NewColIdent("count"),
-			Exprs: []sqlparser.SelectExpr{&sqlparser.StarExpr{}},
-		},
+		Expr: &sqlparser.CountStar{},
 	}}
 	if sel2.GroupBy == nil && sel2.Having == nil {
 		// if there is no grouping, we can use the same query and
@@ -319,7 +316,7 @@ func buildSQLCalcFoundRowsPlan(
 			From: []sqlparser.TableExpr{
 				&sqlparser.AliasedTableExpr{
 					Expr: &sqlparser.DerivedTable{Select: sel2},
-					As:   sqlparser.NewTableIdent("t"),
+					As:   sqlparser.NewIdentifierCS("t"),
 				},
 			},
 		}

@@ -48,6 +48,11 @@ type DiffReport struct {
 	MismatchedRowsDiffs  []*DiffMismatch `json:"MismatchedRowsSample,omitempty"`
 }
 
+type ProgressReport struct {
+	Percentage float64
+	ETA        string `json:"ETA,omitempty"` // a formatted date
+}
+
 // DiffMismatch is a sample of row diffs between source and target.
 type DiffMismatch struct {
 	Source *RowDiff `json:"Source,omitempty"`

@@ -17,6 +17,7 @@ limitations under the License.
 package engine
 
 import (
+	"context"
 	"testing"
 
 	"vitess.io/vitess/go/test/utils"
@@ -75,7 +76,7 @@ func TestSemiJoinExecute(t *testing.T) {
 		},
 		Cols: []int{-1, -2, -3},
 	}
-	r, err := jn.TryExecute(&noopVCursor{}, bv, true)
+	r, err := jn.TryExecute(context.Background(), &noopVCursor{}, bv, true)
 	require.NoError(t, err)
 	leftPrim.ExpectLog(t, []string{
 		`Execute a: type:INT64 value:"10" true`,

@@ -17,123 +17,75 @@ limitations under the License.
 package newfeaturetest
 
 import (
-	"context"
 	"strconv"
 	"testing"
-	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"google.golang.org/protobuf/encoding/protojson"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/reparent/utils"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
+	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 )
 
-// ERS TESTS
-
-func TestRecoverWithMultipleFailures(t *testing.T) {
+// TestCrossCellDurability tests 2 things -
+// 1. When PRS is run with the cross_cell durability policy setup, then the semi-sync settings on all the tablets are as expected
+// 2. Bringing up a new vttablet should have its replication and semi-sync setup correctly without any external interference
+func TestCrossCellDurability(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	clusterInstance := utils.SetupReparentCluster(t, true)
+	clusterInstance := utils.SetupReparentCluster(t, "cross_cell")
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
+
 	utils.ConfirmReplication(t, tablets[0], []*cluster.Vttablet{tablets[1], tablets[2], tablets[3]})
 
-	// make tablets[1] a rdonly tablet.
-	err := clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeTabletType", tablets[1].Alias, "rdonly")
-	require.NoError(t, err)
+	// When tablets[0] is the primary, the only tablet in a different cell is tablets[3].
+	// So the other two should have semi-sync turned off
+	utils.CheckSemiSyncSetupCorrectly(t, tablets[0], "ON")
+	utils.CheckSemiSyncSetupCorrectly(t, tablets[3], "ON")
+	utils.CheckSemiSyncSetupCorrectly(t, tablets[1], "OFF")
+	utils.CheckSemiSyncSetupCorrectly(t, tablets[2], "OFF")
 
-	// Confirm that replication is still working as intended
-	utils.ConfirmReplication(t, tablets[0], tablets[1:])
-
-	// Make the rdonly and primary tablets and databases unavailable.
-	utils.StopTablet(t, tablets[1], true)
-	utils.StopTablet(t, tablets[0], true)
-
-	// We expect this to succeed since we only have 1 primary eligible tablet which is down
-	out, err := utils.Ers(clusterInstance, nil, "30s", "10s")
+	// Run forced reparent operation, this should proceed unimpeded.
+	out, err := utils.Prs(t, clusterInstance, tablets[3])
 	require.NoError(t, err, out)
 
-	newPrimary := utils.GetNewPrimary(t, clusterInstance)
-	utils.ConfirmReplication(t, newPrimary, []*cluster.Vttablet{tablets[2], tablets[3]})
-}
+	utils.ConfirmReplication(t, tablets[3], []*cluster.Vttablet{tablets[0], tablets[1], tablets[2]})
 
-// TestERSFailFast tests that ERS will fail fast if it cannot find any tablet which can be safely promoted instead of promoting
-// a tablet and hanging while inserting a row in the reparent journal on getting semi-sync ACKs
-func TestERSFailFast(t *testing.T) {
-	defer cluster.PanicHandler(t)
-	clusterInstance := utils.SetupReparentCluster(t, true)
-	defer utils.TeardownCluster(clusterInstance)
-	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
-	utils.ConfirmReplication(t, tablets[0], []*cluster.Vttablet{tablets[1], tablets[2], tablets[3]})
-
-	// make tablets[1] a rdonly tablet.
-	err := clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeTabletType", tablets[1].Alias, "rdonly")
-	require.NoError(t, err)
-
-	// Confirm that replication is still working as intended
-	utils.ConfirmReplication(t, tablets[0], tablets[1:])
-
-	strChan := make(chan string)
-	go func() {
-		// We expect this to fail since we have ignored all replica tablets and only the rdonly is left, which is not capable of sending semi-sync ACKs
-		out, err := utils.ErsIgnoreTablet(clusterInstance, tablets[2], "240s", "90s", []*cluster.Vttablet{tablets[0], tablets[3]}, false)
-		require.Error(t, err)
-		strChan <- out
-	}()
-
-	select {
-	case out := <-strChan:
-		require.Contains(t, out, "proposed primary zone1-0000000103 will not be able to make forward progress on being promoted")
-	case <-time.After(60 * time.Second):
-		require.Fail(t, "Emergency Reparent Shard did not fail in 60 seconds")
+	// All the tablets will have semi-sync setup since tablets[3] is in Cell2 and all
+	// others are in Cell1, so all of them are eligible to send semi-sync ACKs
+	for _, tablet := range tablets {
+		utils.CheckSemiSyncSetupCorrectly(t, tablet, "ON")
 	}
-}
 
-// TestReplicationStopped checks that ERS ignores the tablets that have sql thread stopped.
-// If there are more than 1, we also fail.
-func TestReplicationStopped(t *testing.T) {
-	defer cluster.PanicHandler(t)
-	clusterInstance := utils.SetupReparentCluster(t, true)
-	defer utils.TeardownCluster(clusterInstance)
-	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
-	utils.ConfirmReplication(t, tablets[0], []*cluster.Vttablet{tablets[1], tablets[2], tablets[3]})
-
-	err := clusterInstance.VtctlclientProcess.ExecuteCommand("ExecuteFetchAsDba", tablets[1].Alias, `STOP SLAVE SQL_THREAD;`)
-	require.NoError(t, err)
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ExecuteFetchAsDba", tablets[2].Alias, `STOP SLAVE;`)
-	require.NoError(t, err)
-	// Run an additional command in the current primary which will only be acked by tablets[3] and be in its relay log.
-	insertedVal := utils.ConfirmReplication(t, tablets[0], nil)
-	// Failover to tablets[3]
-	_, err = utils.Ers(clusterInstance, tablets[3], "60s", "30s")
-	require.Error(t, err, "ERS should fail with 2 replicas having replication stopped")
-
-	// Start replication back on tablet[1]
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ExecuteFetchAsDba", tablets[1].Alias, `START SLAVE;`)
-	require.NoError(t, err)
-	// Failover to tablets[3] again. This time it should succeed
-	out, err := utils.Ers(clusterInstance, tablets[3], "60s", "30s")
-	require.NoError(t, err, out)
-	// Verify that the tablet has the inserted value
-	err = utils.CheckInsertedValues(context.Background(), t, tablets[3], insertedVal)
-	require.NoError(t, err)
-	// Confirm that replication is setup correctly from tablets[3] to tablets[0]
-	utils.ConfirmReplication(t, tablets[3], tablets[:1])
-	// Confirm that tablets[2] which had replication stopped initially still has its replication stopped
-	utils.CheckReplicationStatus(context.Background(), t, tablets[2], false, false)
+	for i, supportsBackup := range []bool{false, true} {
+		// Bring up a new replica tablet
+		// In this new tablet, we do not disable active reparents, otherwise replication will not be started.
+		newReplica := utils.StartNewVTTablet(t, clusterInstance, 300+i, supportsBackup)
+		// Add the tablet to the list of tablets in this shard
+		clusterInstance.Keyspaces[0].Shards[0].Vttablets = append(clusterInstance.Keyspaces[0].Shards[0].Vttablets, newReplica)
+		// Check that we can replicate to it and semi-sync is setup correctly on it
+		utils.ConfirmReplication(t, tablets[3], []*cluster.Vttablet{tablets[0], tablets[1], tablets[2], newReplica})
+		utils.CheckSemiSyncSetupCorrectly(t, newReplica, "ON")
+	}
 }
 
 // TestFullStatus tests that the RPC FullStatus works as intended.
 func TestFullStatus(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	clusterInstance := utils.SetupReparentCluster(t, true)
+	clusterInstance := utils.SetupReparentCluster(t, "semi_sync")
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 	utils.ConfirmReplication(t, tablets[0], []*cluster.Vttablet{tablets[1], tablets[2], tablets[3]})
 
 	// Check that full status gives the correct result for a primary tablet
-	primaryStatus, err := utils.TmcFullStatus(context.Background(), tablets[0])
+	primaryStatusString, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("GetFullStatus", tablets[0].Alias)
+	require.NoError(t, err)
+	primaryStatus := &replicationdatapb.FullStatus{}
+	err = protojson.Unmarshal([]byte(primaryStatusString), primaryStatus)
 	require.NoError(t, err)
 	assert.NotEmpty(t, primaryStatus.ServerUuid)
 	assert.NotEmpty(t, primaryStatus.ServerId)
@@ -158,7 +110,10 @@ func TestFullStatus(t *testing.T) {
 	assert.NotEmpty(t, primaryStatus.VersionComment)
 
 	// Check that full status gives the correct result for a replica tablet
-	replicaStatus, err := utils.TmcFullStatus(context.Background(), tablets[1])
+	replicaStatusString, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("GetFullStatus", tablets[1].Alias)
+	require.NoError(t, err)
+	replicaStatus := &replicationdatapb.FullStatus{}
+	err = protojson.Unmarshal([]byte(replicaStatusString), replicaStatus)
 	require.NoError(t, err)
 	assert.NotEmpty(t, replicaStatus.ServerUuid)
 	assert.NotEmpty(t, replicaStatus.ServerId)

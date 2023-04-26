@@ -48,6 +48,9 @@ message CallerID {
   // is responsible for generating is request. Suggested values are a
   // servlet name or an API endpoint name.
   string subcomponent = 3;
+
+  // set of security groups that should be assigned to this caller.
+  repeated string groups = 4;
 }
 
 // Code represents canonical error codes. The names, numbers and comments

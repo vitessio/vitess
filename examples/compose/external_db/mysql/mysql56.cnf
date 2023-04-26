@@ -19,9 +19,8 @@ innodb_use_native_aio = 0
 # (when the master goes away). Here we just load the plugin so it's
 # available if desired, but it's disabled at startup.
 #
-# If the -enable_semi_sync flag is used, VTTablet will enable semi-sync
-# at the proper time when replication is set up, or when masters are
-# promoted or demoted.
+# VTTablet will enable semi-sync at the proper time when replication is set up,
+# or when a primary is promoted or demoted based on the durability policy configured.
 plugin-load = rpl_semi_sync_master=semisync_master.so;rpl_semi_sync_slave=semisync_slave.so
 
 # When semi-sync is enabled, don't allow fallback to async

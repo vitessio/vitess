@@ -42,10 +42,10 @@ func TestPlayerCopyCharPK(t *testing.T) {
 	reset := vstreamer.AdjustPacketSize(1)
 	defer reset()
 
-	savedCopyPhaseDuration := *copyPhaseDuration
+	savedCopyPhaseDuration := copyPhaseDuration
 	// copyPhaseDuration should be low enough to have time to send one row.
-	*copyPhaseDuration = 500 * time.Millisecond
-	defer func() { *copyPhaseDuration = savedCopyPhaseDuration }()
+	copyPhaseDuration = 500 * time.Millisecond
+	defer func() { copyPhaseDuration = savedCopyPhaseDuration }()
 
 	savedWaitRetryTime := waitRetryTime
 	// waitRetry time should be very low to cause the wait loop to execute multipel times.
@@ -103,7 +103,7 @@ func TestPlayerCopyCharPK(t *testing.T) {
 		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
 	}
 
-	query := binlogplayer.CreateVReplicationState("test", bls, "", binlogplayer.VReplicationInit, playerEngine.dbName)
+	query := binlogplayer.CreateVReplicationState("test", bls, "", binlogplayer.VReplicationInit, playerEngine.dbName, 0, 0)
 	qr, err := playerEngine.Exec(query)
 	if err != nil {
 		t.Fatal(err)
@@ -143,10 +143,10 @@ func TestPlayerCopyVarcharPKCaseInsensitive(t *testing.T) {
 	reset := vstreamer.AdjustPacketSize(1)
 	defer reset()
 
-	savedCopyPhaseDuration := *copyPhaseDuration
+	savedCopyPhaseDuration := copyPhaseDuration
 	// copyPhaseDuration should be low enough to have time to send one row.
-	*copyPhaseDuration = 500 * time.Millisecond
-	defer func() { *copyPhaseDuration = savedCopyPhaseDuration }()
+	copyPhaseDuration = 500 * time.Millisecond
+	defer func() { copyPhaseDuration = savedCopyPhaseDuration }()
 
 	savedWaitRetryTime := waitRetryTime
 	// waitRetry time should be very low to cause the wait loop to execute multipel times.
@@ -204,7 +204,7 @@ func TestPlayerCopyVarcharPKCaseInsensitive(t *testing.T) {
 		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
 	}
 
-	query := binlogplayer.CreateVReplicationState("test", bls, "", binlogplayer.VReplicationInit, playerEngine.dbName)
+	query := binlogplayer.CreateVReplicationState("test", bls, "", binlogplayer.VReplicationInit, playerEngine.dbName, 0, 0)
 	qr, err := playerEngine.Exec(query)
 	if err != nil {
 		t.Fatal(err)
@@ -247,10 +247,10 @@ func TestPlayerCopyVarcharCompositePKCaseSensitiveCollation(t *testing.T) {
 	reset := vstreamer.AdjustPacketSize(1)
 	defer reset()
 
-	savedCopyPhaseDuration := *copyPhaseDuration
+	savedCopyPhaseDuration := copyPhaseDuration
 	// copyPhaseDuration should be low enough to have time to send one row.
-	*copyPhaseDuration = 500 * time.Millisecond
-	defer func() { *copyPhaseDuration = savedCopyPhaseDuration }()
+	copyPhaseDuration = 500 * time.Millisecond
+	defer func() { copyPhaseDuration = savedCopyPhaseDuration }()
 
 	savedWaitRetryTime := waitRetryTime
 	// waitRetry time should be very low to cause the wait loop to execute multipel times.
@@ -308,7 +308,7 @@ func TestPlayerCopyVarcharCompositePKCaseSensitiveCollation(t *testing.T) {
 		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
 	}
 
-	query := binlogplayer.CreateVReplicationState("test", bls, "", binlogplayer.VReplicationInit, playerEngine.dbName)
+	query := binlogplayer.CreateVReplicationState("test", bls, "", binlogplayer.VReplicationInit, playerEngine.dbName, 0, 0)
 	qr, err := playerEngine.Exec(query)
 	if err != nil {
 		t.Fatal(err)
@@ -382,7 +382,7 @@ func TestPlayerCopyTablesWithFK(t *testing.T) {
 		Filter:   filter,
 		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
 	}
-	query := binlogplayer.CreateVReplicationState("test", bls, "", binlogplayer.VReplicationInit, playerEngine.dbName)
+	query := binlogplayer.CreateVReplicationState("test", bls, "", binlogplayer.VReplicationInit, playerEngine.dbName, 0, 0)
 	qr, err := playerEngine.Exec(query)
 	require.NoError(t, err)
 
@@ -449,9 +449,9 @@ func TestPlayerCopyTables(t *testing.T) {
 	defer deleteTablet(addTablet(100))
 
 	execStatements(t, []string{
-		"create table src1(id int, val varbinary(128), primary key(id))",
-		"insert into src1 values(2, 'bbb'), (1, 'aaa')",
-		fmt.Sprintf("create table %s.dst1(id int, val varbinary(128), val2 varbinary(128), primary key(id))", vrepldb),
+		"create table src1(id int, val varbinary(128), d decimal(8,0), primary key(id))",
+		"insert into src1 values(2, 'bbb', 1), (1, 'aaa', 0)",
+		fmt.Sprintf("create table %s.dst1(id int, val varbinary(128), val2 varbinary(128), d decimal(8,0), primary key(id))", vrepldb),
 		"create table yes(id int, val varbinary(128), primary key(id))",
 		fmt.Sprintf("create table %s.yes(id int, val varbinary(128), primary key(id))", vrepldb),
 		"create table no(id int, val varbinary(128), primary key(id))",
@@ -468,7 +468,7 @@ func TestPlayerCopyTables(t *testing.T) {
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
 			Match:  "dst1",
-			Filter: "select id, val, val as val2 from src1",
+			Filter: "select id, val, val as val2, d from src1",
 		}, {
 			Match: "/yes",
 		}},
@@ -480,7 +480,7 @@ func TestPlayerCopyTables(t *testing.T) {
 		Filter:   filter,
 		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
 	}
-	query := binlogplayer.CreateVReplicationState("test", bls, "", binlogplayer.VReplicationInit, playerEngine.dbName)
+	query := binlogplayer.CreateVReplicationState("test", bls, "", binlogplayer.VReplicationInit, playerEngine.dbName, 0, 0)
 	qr, err := playerEngine.Exec(query)
 	if err != nil {
 		t.Fatal(err)
@@ -504,7 +504,7 @@ func TestPlayerCopyTables(t *testing.T) {
 		// The first fast-forward has no starting point. So, it just saves the current position.
 		"/update _vt.vreplication set pos=",
 		"begin",
-		"insert into dst1(id,val,val2) values (1,'aaa','aaa'), (2,'bbb','bbb')",
+		"insert into dst1(id,val,val2,d) values (1,'aaa','aaa',0), (2,'bbb','bbb',1)",
 		`/update _vt.copy_state set lastpk='fields:{name:\\"id\\" type:INT32} rows:{lengths:1 values:\\"2\\"}' where vrepl_id=.*`,
 		"commit",
 		// copy of dst1 is done: delete from copy_state.
@@ -519,8 +519,8 @@ func TestPlayerCopyTables(t *testing.T) {
 		"/update _vt.vreplication set state='Running'",
 	})
 	expectData(t, "dst1", [][]string{
-		{"1", "aaa", "aaa"},
-		{"2", "bbb", "bbb"},
+		{"1", "aaa", "aaa", "0"},
+		{"2", "bbb", "bbb", "1"},
 	})
 	expectData(t, "yes", [][]string{})
 	validateCopyRowCountStat(t, 2)
@@ -554,10 +554,10 @@ func TestPlayerCopyBigTable(t *testing.T) {
 	reset := vstreamer.AdjustPacketSize(1)
 	defer reset()
 
-	savedCopyPhaseDuration := *copyPhaseDuration
+	savedCopyPhaseDuration := copyPhaseDuration
 	// copyPhaseDuration should be low enough to have time to send one row.
-	*copyPhaseDuration = 500 * time.Millisecond
-	defer func() { *copyPhaseDuration = savedCopyPhaseDuration }()
+	copyPhaseDuration = 500 * time.Millisecond
+	defer func() { copyPhaseDuration = savedCopyPhaseDuration }()
 
 	savedWaitRetryTime := waitRetryTime
 	// waitRetry time should be very low to cause the wait loop to execute multiple times.
@@ -615,7 +615,7 @@ func TestPlayerCopyBigTable(t *testing.T) {
 		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
 	}
 
-	query := binlogplayer.CreateVReplicationState("test", bls, "", binlogplayer.VReplicationInit, playerEngine.dbName)
+	query := binlogplayer.CreateVReplicationState("test", bls, "", binlogplayer.VReplicationInit, playerEngine.dbName, 0, 0)
 	qr, err := playerEngine.Exec(query)
 	if err != nil {
 		t.Fatal(err)
@@ -670,10 +670,10 @@ func TestPlayerCopyWildcardRule(t *testing.T) {
 	reset := vstreamer.AdjustPacketSize(1)
 	defer reset()
 
-	savedCopyPhaseDuration := *copyPhaseDuration
+	savedCopyPhaseDuration := copyPhaseDuration
 	// copyPhaseDuration should be low enough to have time to send one row.
-	*copyPhaseDuration = 500 * time.Millisecond
-	defer func() { *copyPhaseDuration = savedCopyPhaseDuration }()
+	copyPhaseDuration = 500 * time.Millisecond
+	defer func() { copyPhaseDuration = savedCopyPhaseDuration }()
 
 	savedWaitRetryTime := waitRetryTime
 	// waitRetry time should be very low to cause the wait loop to execute multipel times.
@@ -730,7 +730,7 @@ func TestPlayerCopyWildcardRule(t *testing.T) {
 		Filter:   filter,
 		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
 	}
-	query := binlogplayer.CreateVReplicationState("test", bls, "", binlogplayer.VReplicationInit, playerEngine.dbName)
+	query := binlogplayer.CreateVReplicationState("test", bls, "", binlogplayer.VReplicationInit, playerEngine.dbName, 0, 0)
 	qr, err := playerEngine.Exec(query)
 	if err != nil {
 		t.Fatal(err)
@@ -847,7 +847,7 @@ func TestPlayerCopyTableContinuation(t *testing.T) {
 		Filter:   filter,
 		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
 	}
-	query := binlogplayer.CreateVReplicationState("test", bls, "", binlogplayer.BlpStopped, playerEngine.dbName)
+	query := binlogplayer.CreateVReplicationState("test", bls, "", binlogplayer.BlpStopped, playerEngine.dbName, 0, 0)
 	qr, err := playerEngine.Exec(query)
 	if err != nil {
 		t.Fatal(err)
@@ -966,7 +966,7 @@ func TestPlayerCopyWildcardTableContinuation(t *testing.T) {
 		Filter:   filter,
 		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
 	}
-	query := binlogplayer.CreateVReplicationState("test", bls, "", binlogplayer.BlpStopped, playerEngine.dbName)
+	query := binlogplayer.CreateVReplicationState("test", bls, "", binlogplayer.BlpStopped, playerEngine.dbName, 0, 0)
 	qr, err := playerEngine.Exec(query)
 	if err != nil {
 		t.Fatal(err)
@@ -1016,10 +1016,10 @@ func TestPlayerCopyWildcardTableContinuation(t *testing.T) {
 // TestPlayerCopyWildcardTableContinuationWithOptimizeInserts tests the copy workflow where tables have been partially copied
 // enabling the optimize inserts functionality
 func TestPlayerCopyWildcardTableContinuationWithOptimizeInserts(t *testing.T) {
-	oldVreplicationExperimentalFlags := *vreplicationExperimentalFlags
-	*vreplicationExperimentalFlags = vreplicationExperimentalFlagOptimizeInserts
+	oldVreplicationExperimentalFlags := vreplicationExperimentalFlags
+	vreplicationExperimentalFlags = vreplicationExperimentalFlagOptimizeInserts
 	defer func() {
-		*vreplicationExperimentalFlags = oldVreplicationExperimentalFlags
+		vreplicationExperimentalFlags = oldVreplicationExperimentalFlags
 	}()
 
 	defer deleteTablet(addTablet(100))
@@ -1053,7 +1053,7 @@ func TestPlayerCopyWildcardTableContinuationWithOptimizeInserts(t *testing.T) {
 		Filter:   filter,
 		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
 	}
-	query := binlogplayer.CreateVReplicationState("test", bls, "", binlogplayer.BlpStopped, playerEngine.dbName)
+	query := binlogplayer.CreateVReplicationState("test", bls, "", binlogplayer.BlpStopped, playerEngine.dbName, 0, 0)
 	qr, err := playerEngine.Exec(query)
 	if err != nil {
 		t.Fatal(err)
@@ -1118,7 +1118,7 @@ func TestPlayerCopyTablesNone(t *testing.T) {
 		Filter:   filter,
 		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
 	}
-	query := binlogplayer.CreateVReplicationState("test", bls, "", binlogplayer.VReplicationInit, playerEngine.dbName)
+	query := binlogplayer.CreateVReplicationState("test", bls, "", binlogplayer.VReplicationInit, playerEngine.dbName, 0, 0)
 	qr, err := playerEngine.Exec(query)
 	if err != nil {
 		t.Fatal(err)
@@ -1168,7 +1168,7 @@ func TestPlayerCopyTablesStopAfterCopy(t *testing.T) {
 		OnDdl:         binlogdatapb.OnDDLAction_IGNORE,
 		StopAfterCopy: true,
 	}
-	query := binlogplayer.CreateVReplicationState("test", bls, "", binlogplayer.VReplicationInit, playerEngine.dbName)
+	query := binlogplayer.CreateVReplicationState("test", bls, "", binlogplayer.VReplicationInit, playerEngine.dbName, 0, 0)
 	qr, err := playerEngine.Exec(query)
 	if err != nil {
 		t.Fatal(err)
@@ -1220,14 +1220,14 @@ func TestPlayerCopyTableCancel(t *testing.T) {
 	})
 	env.SchemaEngine.Reload(context.Background())
 
-	saveTimeout := *copyPhaseDuration
-	*copyPhaseDuration = 1 * time.Millisecond
-	defer func() { *copyPhaseDuration = saveTimeout }()
+	saveTimeout := copyPhaseDuration
+	copyPhaseDuration = 1 * time.Millisecond
+	defer func() { copyPhaseDuration = saveTimeout }()
 
 	// Set a hook to reset the copy timeout after first call.
 	vstreamRowsHook = func(ctx context.Context) {
 		<-ctx.Done()
-		*copyPhaseDuration = saveTimeout
+		copyPhaseDuration = saveTimeout
 		vstreamRowsHook = nil
 	}
 
@@ -1244,7 +1244,7 @@ func TestPlayerCopyTableCancel(t *testing.T) {
 		Filter:   filter,
 		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
 	}
-	query := binlogplayer.CreateVReplicationState("test", bls, "", binlogplayer.VReplicationInit, playerEngine.dbName)
+	query := binlogplayer.CreateVReplicationState("test", bls, "", binlogplayer.VReplicationInit, playerEngine.dbName, 0, 0)
 	qr, err := playerEngine.Exec(query)
 	if err != nil {
 		t.Fatal(err)
@@ -1326,7 +1326,7 @@ func TestPlayerCopyTablesWithGeneratedColumn(t *testing.T) {
 		Filter:   filter,
 		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
 	}
-	query := binlogplayer.CreateVReplicationState("test", bls, "", binlogplayer.VReplicationInit, playerEngine.dbName)
+	query := binlogplayer.CreateVReplicationState("test", bls, "", binlogplayer.VReplicationInit, playerEngine.dbName, 0, 0)
 	qr, err := playerEngine.Exec(query)
 	if err != nil {
 		t.Fatal(err)
@@ -1403,7 +1403,7 @@ func TestCopyTablesWithInvalidDates(t *testing.T) {
 		Filter:   filter,
 		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
 	}
-	query := binlogplayer.CreateVReplicationState("test", bls, "", binlogplayer.VReplicationInit, playerEngine.dbName)
+	query := binlogplayer.CreateVReplicationState("test", bls, "", binlogplayer.VReplicationInit, playerEngine.dbName, 0, 0)
 	qr, err := playerEngine.Exec(query)
 	require.NoError(t, err)
 
@@ -1484,7 +1484,7 @@ func TestCopyInvisibleColumns(t *testing.T) {
 		Filter:   filter,
 		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
 	}
-	query := binlogplayer.CreateVReplicationState("test", bls, "", binlogplayer.VReplicationInit, playerEngine.dbName)
+	query := binlogplayer.CreateVReplicationState("test", bls, "", binlogplayer.VReplicationInit, playerEngine.dbName, 0, 0)
 	qr, err := playerEngine.Exec(query)
 	if err != nil {
 		t.Fatal(err)

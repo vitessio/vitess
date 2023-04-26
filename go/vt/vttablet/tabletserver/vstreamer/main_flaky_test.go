@@ -17,13 +17,13 @@ limitations under the License.
 package vstreamer
 
 import (
-	"flag"
 	"fmt"
 	"os"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
+	_flag "vitess.io/vitess/go/internal/flag"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
@@ -38,11 +38,8 @@ var (
 )
 
 func TestMain(m *testing.M) {
-	flag.Parse() // Do not remove this comment, import into google3 depends on it
+	_flag.ParseFlagsForTest()
 	ignoreKeyspaceShardInFieldAndRowEvents = true
-	if testing.Short() {
-		os.Exit(m.Run())
-	}
 
 	exitCode := func() int {
 		var err error

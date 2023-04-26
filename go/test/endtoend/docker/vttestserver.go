@@ -132,7 +132,7 @@ func convertToStringSlice(intSlice []int) []string {
 	return stringSlice
 }
 
-//makeVttestserverDockerImages creates the vttestserver docker images for both MySQL57 and MySQL80
+// makeVttestserverDockerImages creates the vttestserver docker images for both MySQL57 and MySQL80
 func makeVttestserverDockerImages() error {
 	mainVitessPath := path.Join(os.Getenv("PWD"), "../../../..")
 	dockerFilePath := path.Join(mainVitessPath, "docker/vttestserver/Dockerfile.mysql57")

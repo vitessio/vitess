@@ -19,6 +19,8 @@ package vreplication
 import (
 	"reflect"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 type testControllerPlan struct {
@@ -221,34 +223,32 @@ func TestControllerPlan(t *testing.T) {
 		err: "syntax error at position 4 near 'bad'",
 	}, {
 		in:  "set a = 1",
-		err: "unsupported construct: set a = 1",
+		err: "unsupported construct: set @@a = 1",
 	}}
 	for _, tcase := range tcases {
-		pl, err := buildControllerPlan(tcase.in)
-		if err != nil {
-			if err.Error() != tcase.err {
-				t.Errorf("getPlan(%v) error:\n%v, want\n%v", tcase.in, err, tcase.err)
+		t.Run(tcase.in, func(t *testing.T) {
+			pl, err := buildControllerPlan(tcase.in)
+			if tcase.err != "" {
+				require.EqualError(t, err, tcase.err)
+				return
 			}
-			continue
-		}
-		if tcase.err != "" {
-			t.Errorf("getPlan(%v) error:\n%v, want\n%v", tcase.in, err, tcase.err)
-			continue
-		}
-		gotPlan := &testControllerPlan{
-			query:      pl.query,
-			opcode:     pl.opcode,
-			numInserts: pl.numInserts,
-			selector:   pl.selector,
-		}
-		if pl.applier != nil {
-			gotPlan.applier = pl.applier.Query
-		}
-		if pl.delCopyState != nil {
-			gotPlan.delCopyState = pl.delCopyState.Query
-		}
-		if !reflect.DeepEqual(gotPlan, tcase.plan) {
-			t.Errorf("getPlan(%v):\n%+v, want\n%+v", tcase.in, gotPlan, tcase.plan)
-		}
+			require.NoError(t, err)
+
+			gotPlan := &testControllerPlan{
+				query:      pl.query,
+				opcode:     pl.opcode,
+				numInserts: pl.numInserts,
+				selector:   pl.selector,
+			}
+			if pl.applier != nil {
+				gotPlan.applier = pl.applier.Query
+			}
+			if pl.delCopyState != nil {
+				gotPlan.delCopyState = pl.delCopyState.Query
+			}
+			if !reflect.DeepEqual(gotPlan, tcase.plan) {
+				t.Errorf("getPlan(%v):\n%+v, want\n%+v", tcase.in, gotPlan, tcase.plan)
+			}
+		})
 	}
 }

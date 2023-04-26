@@ -43,7 +43,7 @@ sleep 5
 echo "add $cell CellInfo"
 set +e
 # shellcheck disable=SC2086
-vtctl $TOPOLOGY_FLAGS VtctldCommand AddCellInfo -- \
+vtctl $TOPOLOGY_FLAGS VtctldCommand AddCellInfo \
   --root "vitess/$cell" \
   --server-address "${CONSUL_SERVER}:${consul_http_port}" \
   "$cell"

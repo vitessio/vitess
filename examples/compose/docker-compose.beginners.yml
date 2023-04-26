@@ -58,21 +58,21 @@ services:
       - "3306"
 
   vtctld:
-    image: vitess/lite:${VITESS_TAG:-latest}
+    image: vitess/lite:v15.0.2
     ports:
       - "15000:$WEB_PORT"
       - "$GRPC_PORT"
     command: ["sh", "-c", " /vt/bin/vtctld \
         $TOPOLOGY_FLAGS \
-        -cell $CELL \
-        -workflow_manager_init \
-        -workflow_manager_use_election \
-        -service_map 'grpc-vtctl,grpc-vtctld' \
-        -backup_storage_implementation file \
-        -file_backup_storage_root /vt/vtdataroot/backups \
-        -logtostderr=true \
-        -port $WEB_PORT \
-        -grpc_port $GRPC_PORT
+        --cell $CELL \
+        --workflow_manager_init \
+        --workflow_manager_use_election \
+        --service_map 'grpc-vtctl,grpc-vtctld' \
+        --backup_storage_implementation file \
+        --file_backup_storage_root /vt/vtdataroot/backups \
+        --logtostderr=true \
+        --port $WEB_PORT \
+        --grpc_port $GRPC_PORT
         "]
     depends_on:
       - consul1
@@ -83,23 +83,23 @@ services:
         condition: service_healthy
 
   vtgate:
-    image: vitess/lite:${VITESS_TAG:-latest}
+    image: vitess/lite:v15.0.2
     ports:
       - "15099:$WEB_PORT"
       - "$GRPC_PORT"
       - "15306:$MYSQL_PORT"
     command: ["sh", "-c", "/vt/bin/vtgate \
         $TOPOLOGY_FLAGS \
-        -logtostderr=true \
-        -port $WEB_PORT \
-        -grpc_port $GRPC_PORT \
-        -mysql_server_port $MYSQL_PORT \
-        -mysql_auth_server_impl none \
-        -cell $CELL \
-        -cells_to_watch $CELL \
-        -tablet_types_to_wait PRIMARY,REPLICA \
-        -service_map 'grpc-vtgateservice' \
-        -enable_system_settings=true \
+        --logtostderr=true \
+        --port $WEB_PORT \
+        --grpc_port $GRPC_PORT \
+        --mysql_server_port $MYSQL_PORT \
+        --mysql_auth_server_impl none \
+        --cell $CELL \
+        --cells_to_watch $CELL \
+        --tablet_types_to_wait PRIMARY,REPLICA \
+        --service_map 'grpc-vtgateservice' \
+        --enable_system_settings=true \
         "]
     volumes:
       - ".:/script"
@@ -113,7 +113,7 @@ services:
         condition: service_healthy
 
   schemaload:
-    image: vitess/lite:${VITESS_TAG:-latest}
+    image: vitess/lite:v15.0.2
     command:
     - sh
     - -c
@@ -146,12 +146,12 @@ services:
     environment:
       - KEYSPACES=$KEYSPACE
       - GRPC_PORT=15999
-    image: vitess/lite:${VITESS_TAG:-latest}
+    image: vitess/lite:v15.0.2
     volumes:
       - .:/script
 
   vttablet100:
-    image: vitess/lite:${VITESS_TAG:-latest}
+    image: vitess/lite:v15.0.2
     ports:
       - "15100:$WEB_PORT"
       - "$GRPC_PORT"
@@ -183,7 +183,7 @@ services:
       retries: 15
 
   vttablet101:
-    image: vitess/lite:${VITESS_TAG:-latest}
+    image: vitess/lite:v15.0.2
     ports:
       - "15101:$WEB_PORT"
       - "$GRPC_PORT"
@@ -215,7 +215,7 @@ services:
       retries: 15
 
   vttablet102:
-    image: vitess/lite:${VITESS_TAG:-latest}
+    image: vitess/lite:v15.0.2
     ports:
       - "15102:$WEB_PORT"
       - "$GRPC_PORT"
@@ -247,7 +247,7 @@ services:
       retries: 15
 
   vttablet103:
-    image: vitess/lite:${VITESS_TAG:-latest}
+    image: vitess/lite:v15.0.2
     ports:
       - "15103:$WEB_PORT"
       - "$GRPC_PORT"
@@ -279,16 +279,17 @@ services:
       retries: 15
 
   vtorc:
-    image: vitess/lite:${VITESS_TAG:-latest}
+    image: vitess/lite:v15.0.2
     command: ["sh", "-c", "/script/vtorc-up.sh"]
     depends_on:
       - vtctld
       - set_keyspace_durability_policy
     ports:
-      - "13000:3000"
+      - "13000:8080"
     volumes:
       - ".:/script"
     environment:
+      - WEB_PORT=8080
       - TOPOLOGY_FLAGS
       - WEB_PORT
       - GRPC_PORT
@@ -302,13 +303,13 @@ services:
       - DB_PASS
       - DB_CHARSET
     healthcheck:
-      test: ["CMD-SHELL","curl -s --fail --show-error localhost:3000/api/status"]
+      test: ["CMD-SHELL","curl -s --fail --show-error localhost:8080/debug/health"]
       interval: 5s
       timeout: 10s
       retries: 15
 
   vreplication:
-    image: vitess/lite:${VITESS_TAG:-latest}
+    image: vitess/lite:v15.0.2
     volumes:
       - ".:/script"
     environment:

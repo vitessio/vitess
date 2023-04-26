@@ -1,7 +1,6 @@
 ## Summary
 
 - [Gen4 is now the default planner](#gen4-is-now-the-default-planner)
-- [Schema tracking is no longer experimental](#schema-tracking-is-no-longer-experimental)
 - [New query support](#new-query-support)
 - [Command-line syntax deprecations](#command-line-syntax-deprecations)
 - [New command line flags and behavior](#new-command-line-flags-and-behavior)
@@ -18,23 +17,19 @@
 ## Known Issues
 
 - [VTOrc doesn't discover the tablets](https://github.com/vitessio/vitess/issues/10650) of a keyspace if the durability policy doesn't exist in the topo server when it comes up. This can be resolved by restarting VTOrc.
+- [Corrupted results for non-full-group-by queries with JOINs](https://github.com/vitessio/vitess/issues/11625). This can be resolved by using full-group-by queries.
 
 ## Major Changes
 
 ### Gen4 is now the default planner
 
 The new planner has been in the works since end of 2020, and it's finally grown enough to be able to become the default planner for Vitess.
-This means that many more queries are supported on sharded keyspaces, and old queries might get planned better than before. 
+This means that many more queries are supported on sharded keyspaces, and old queries might get planned better than before.
 You can always roll back to the earlier planner, either by providing the flag `--planner-version=V3` to `vtgate`, or by adding a comment to individual queries, like so:
 
 ```sql
 select /*vt+ PLANNER=V3 */ name, count(*) from users
 ```
-
-### Schema Tracking is no longer experimental
-
-Schema tracking is now GA. It is enabled by default. Schema tracking allows the Gen4 planner to plan many more queries.
-This can be turned off if necessary by changing the [relevant flags](https://vitess.io/docs/14.0/reference/features/schema-tracking/) on VTGate and VTTablet.
 
 ### New query support
 
@@ -135,10 +130,10 @@ In previous releases, the `discoverygateway` was deprecated. In Vitess 14 it is 
 
 #### Deprecation of --planner_version
 
-The flag `--planner_version` is deprecated and will be removed in `v15`. 
-Some binaries used `--planner_version`, and some used `--planner-version`. 
+The flag `--planner_version` is deprecated and will be removed in `v15`.
+Some binaries used `--planner_version`, and some used `--planner-version`.
 This has been made consistent - all binaries that allow you to configure the planner now take `--planner-version`.
-All uses of the underscore form have been deprecated and will be removed in `v15`. 
+All uses of the underscore form have been deprecated and will be removed in `v15`.
 
 ### Online DDL changes
 

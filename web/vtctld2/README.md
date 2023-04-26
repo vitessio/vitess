@@ -42,7 +42,7 @@ Note: the local docker install will also start a vtctld admin UI on http://local
 
 ### Building for production
 
-In production, the vtctld UI is hosted with [go.rice](https://github.com/GeertJohan/go.rice). All front-end assets must be built, minified, and embedded in the executable.
+In production, the vtctld UI is hosted with `go embed`. All front-end assets must be built, minified, and embedded in the executable.
 
 If you're ready to open a pull request for your changes, or if you want to do a production build just for fun... :)
 
@@ -50,7 +50,7 @@ If you're ready to open a pull request for your changes, or if you want to do a 
 make web_build
 ```
 
-This will regenerate a bunch of files in the `web/vtctld2/dist/` directory, as well as update the embedded files in `rice-box.go`. Make sure you commit these generated files to your branch when opening your pull request.
+This will regenerate a bunch of files in the `web/vtctld2/app/` directory. Make sure you commit these generated files to your branch when opening your pull request.
 
 To then verify your changes using the built files:
 - Rebuild the vtctld with `make build`

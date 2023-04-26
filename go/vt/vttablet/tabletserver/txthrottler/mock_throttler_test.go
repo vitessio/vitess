@@ -78,13 +78,13 @@ func (mr *MockThrottlerInterfaceMockRecorder) MaxRate() *gomock.Call {
 }
 
 // RecordReplicationLag mocks base method.
-func (m *MockThrottlerInterface) RecordReplicationLag(arg0 time.Time, arg1 *discovery.LegacyTabletStats) {
+func (m *MockThrottlerInterface) RecordReplicationLag(arg0 time.Time, arg1 *discovery.TabletHealth) {
 	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "RecordReplicationLag", arg0, arg1)
 }
 
 // RecordReplicationLag indicates an expected call of RecordReplicationLag.
-func (mr *MockThrottlerInterfaceMockRecorder) RecordReplicationLag(arg0, arg1 any) *gomock.Call {
+func (mr *MockThrottlerInterfaceMockRecorder) RecordReplicationLag(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RecordReplicationLag", reflect.TypeOf((*MockThrottlerInterface)(nil).RecordReplicationLag), arg0, arg1)
 }
@@ -108,7 +108,7 @@ func (m *MockThrottlerInterface) SetMaxRate(arg0 int64) {
 }
 
 // SetMaxRate indicates an expected call of SetMaxRate.
-func (mr *MockThrottlerInterfaceMockRecorder) SetMaxRate(arg0 any) *gomock.Call {
+func (mr *MockThrottlerInterfaceMockRecorder) SetMaxRate(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetMaxRate", reflect.TypeOf((*MockThrottlerInterface)(nil).SetMaxRate), arg0)
 }
@@ -120,7 +120,7 @@ func (m *MockThrottlerInterface) ThreadFinished(arg0 int) {
 }
 
 // ThreadFinished indicates an expected call of ThreadFinished.
-func (mr *MockThrottlerInterfaceMockRecorder) ThreadFinished(arg0 any) *gomock.Call {
+func (mr *MockThrottlerInterfaceMockRecorder) ThreadFinished(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ThreadFinished", reflect.TypeOf((*MockThrottlerInterface)(nil).ThreadFinished), arg0)
 }
@@ -134,7 +134,7 @@ func (m *MockThrottlerInterface) Throttle(arg0 int) time.Duration {
 }
 
 // Throttle indicates an expected call of Throttle.
-func (mr *MockThrottlerInterfaceMockRecorder) Throttle(arg0 any) *gomock.Call {
+func (mr *MockThrottlerInterfaceMockRecorder) Throttle(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Throttle", reflect.TypeOf((*MockThrottlerInterface)(nil).Throttle), arg0)
 }
@@ -148,7 +148,7 @@ func (m *MockThrottlerInterface) UpdateConfiguration(arg0 *throttlerdata.Configu
 }
 
 // UpdateConfiguration indicates an expected call of UpdateConfiguration.
-func (mr *MockThrottlerInterfaceMockRecorder) UpdateConfiguration(arg0, arg1 any) *gomock.Call {
+func (mr *MockThrottlerInterfaceMockRecorder) UpdateConfiguration(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateConfiguration", reflect.TypeOf((*MockThrottlerInterface)(nil).UpdateConfiguration), arg0, arg1)
 }

@@ -37,11 +37,6 @@ func (f *Filter) TableID() semantics.TableSet {
 	return f.Source.TableID()
 }
 
-// PushPredicate implements the PhysicalOperator interface
-func (f *Filter) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) error {
-	panic("unimplemented")
-}
-
 // UnsolvedPredicates implements the PhysicalOperator interface
 func (f *Filter) UnsolvedPredicates(semTable *semantics.SemTable) []sqlparser.Expr {
 	panic("implement me")

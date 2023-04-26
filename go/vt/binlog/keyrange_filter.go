@@ -27,11 +27,11 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
-// KeyRangeFilterFunc returns a function that calls callback only if statements
+// keyRangeFilterFunc returns a function that calls callback only if statements
 // in the transaction match the specified keyrange. The resulting function can be
 // passed into the Streamer: bls.Stream(file, pos, sendTransaction) ->
-// bls.Stream(file, pos, KeyRangeFilterFunc(keyrange, sendTransaction))
-func KeyRangeFilterFunc(keyrange *topodatapb.KeyRange, callback func(*binlogdatapb.BinlogTransaction) error) sendTransactionFunc {
+// bls.Stream(file, pos, keyRangeFilterFunc(keyrange, sendTransaction))
+func keyRangeFilterFunc(keyrange *topodatapb.KeyRange, callback func(*binlogdatapb.BinlogTransaction) error) sendTransactionFunc {
 	return func(eventToken *querypb.EventToken, statements []FullBinlogStatement) error {
 		matched := false
 		filtered := make([]*binlogdatapb.BinlogTransaction_Statement, 0, len(statements))

@@ -18,12 +18,12 @@ limitations under the License.
 package filecustomrule
 
 import (
-	"flag"
 	"os"
 	"path"
 	"time"
 
 	"github.com/fsnotify/fsnotify"
+	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv"
@@ -34,11 +34,20 @@ import (
 var (
 	// Actual FileCustomRule object in charge of rule updates
 	fileCustomRule = NewFileCustomRule()
-	// Commandline flag to specify rule path
-	fileRulePath = flag.String("filecustomrules", "", "file based custom rule path")
 
-	fileRuleShouldWatch = flag.Bool("filecustomrules_watch", false, "set up a watch on the target file and reload query rules when it changes")
+	// Commandline flag to specify rule path
+	fileRulePath        string
+	fileRuleShouldWatch bool
 )
+
+func registerFlags(fs *pflag.FlagSet) {
+	fs.StringVar(&fileRulePath, "filecustomrules", fileRulePath, "file based custom rule path")
+	fs.BoolVar(&fileRuleShouldWatch, "filecustomrules_watch", fileRuleShouldWatch, "set up a watch on the target file and reload query rules when it changes")
+}
+
+func init() {
+	servenv.OnParseFor("vttablet", registerFlags)
+}
 
 // FileCustomRule is an implementation of CustomRuleManager, it reads custom query
 // rules from local file for once and push it to vttablet
@@ -105,16 +114,16 @@ func (fcr *FileCustomRule) GetRules() (qrs *rules.Rules, version int64, err erro
 
 // ActivateFileCustomRules activates this static file based custom rule mechanism
 func ActivateFileCustomRules(qsc tabletserver.Controller) {
-	if *fileRulePath != "" {
+	if fileRulePath != "" {
 		qsc.RegisterQueryRuleSource(FileCustomRuleSource)
-		fileCustomRule.Open(qsc, *fileRulePath)
+		fileCustomRule.Open(qsc, fileRulePath)
 
-		if !*fileRuleShouldWatch {
+		if !fileRuleShouldWatch {
 			return
 		}
 
-		baseDir := path.Dir(*fileRulePath)
-		ruleFileName := path.Base(*fileRulePath)
+		baseDir := path.Dir(fileRulePath)
+		ruleFileName := path.Base(fileRulePath)
 
 		watcher, err := fsnotify.NewWatcher()
 		if err != nil {
@@ -132,16 +141,16 @@ func ActivateFileCustomRules(qsc tabletserver.Controller) {
 					if path.Base(evt.Name) != ruleFileName {
 						continue
 					}
-					if err := fileCustomRule.Open(tsc, *fileRulePath); err != nil {
-						log.Infof("Failed to load custom rules from %q: %v", *fileRulePath, err)
+					if err := fileCustomRule.Open(tsc, fileRulePath); err != nil {
+						log.Infof("Failed to load custom rules from %q: %v", fileRulePath, err)
 					} else {
-						log.Infof("Loaded custom rules from %q", *fileRulePath)
+						log.Infof("Loaded custom rules from %q", fileRulePath)
 					}
 				case err, ok := <-watcher.Errors:
 					if !ok {
 						return
 					}
-					log.Errorf("Error watching %v: %v", *fileRulePath, err)
+					log.Errorf("Error watching %v: %v", fileRulePath, err)
 				}
 			}
 		}(qsc)

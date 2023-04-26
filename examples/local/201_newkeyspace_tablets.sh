@@ -32,7 +32,19 @@ for i in ${BASETABLETNUM}00 ${BASETABLETNUM}01 ${BASETABLETNUM}02; do
         SHARD=${SHARD} CELL=zone1 KEYSPACE=${KEYSPACE} TABLET_UID=$i ./scripts/vttablet-up.sh
 done
 
-vtctldclient InitShardPrimary --force "${KEYSPACE}/${SHARD}" "zone1-${BASETABLETNUM}00"
+# Wait for all the tablets to be up and registered in the topology server
+for _ in $(seq 0 200); do
+	vtctldclient GetTablets --keyspace "${KEYSPACE}" --shard "${SHARD}" | wc -l | grep -q "3" && break
+	sleep 1
+done;
+vtctldclient GetTablets --keyspace "${KEYSPACE}" --shard "${SHARD}" | wc -l | grep -q "3" || (echo "Timed out waiting for tablets to be up in ${KEYSPACE}/${SHARD}" && exit 1)
+
+# Wait for a primary tablet to be elected in the shard
+for _ in $(seq 0 200); do
+	vtctldclient GetTablets --keyspace "${KEYSPACE}" --shard "${SHARD}" | grep -q "primary" && break
+	sleep 1
+done;
+vtctldclient GetTablets --keyspace "${KEYSPACE}" --shard "${SHARD}" | grep "primary" || (echo "Timed out waiting for primary to be elected in ${KEYSPACE}/${SHARD}" && exit 1)
 
 # Go back to the original ${PWD} in the parent shell
 popd >/dev/null

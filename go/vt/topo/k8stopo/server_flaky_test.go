@@ -18,7 +18,6 @@ package k8stopo
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"os"
 	"os/exec"
@@ -27,6 +26,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
 	extensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -97,10 +97,8 @@ func TestKubernetesTopo(t *testing.T) {
 		}
 
 		crdFile, err := os.Open("./VitessTopoNodes-crd.yaml")
-		if err != nil {
-			t.Fatal(err)
-			defer crdFile.Close()
-		}
+		require.NoError(t, err)
+		defer crdFile.Close()
 
 		crd := &extensionsv1.CustomResourceDefinition{}
 
@@ -115,7 +113,12 @@ func TestKubernetesTopo(t *testing.T) {
 	}
 
 	serverAddr := "default"
-	flag.Set("topo_k8s_kubeconfig", testConfigPath)
+
+	oldKubeConfigPath := kubeconfigPath
+	kubeconfigPath = testConfigPath
+	defer func() {
+		kubeconfigPath = oldKubeConfigPath
+	}()
 
 	// Run the test suite.
 	testIndex := 0

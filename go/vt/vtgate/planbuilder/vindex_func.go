@@ -19,6 +19,8 @@ package planbuilder
 import (
 	"fmt"
 
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
+
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -71,7 +73,7 @@ func newVindexFunc(alias sqlparser.TableName, vindex vindexes.SingleColumn) (*vi
 	}
 
 	for _, colName := range colnames {
-		t.addColumn(sqlparser.NewColIdent(colName), &column{origin: vf})
+		t.addColumn(sqlparser.NewIdentifierCI(colName), &column{origin: vf})
 	}
 	t.isAuthoritative = true
 
@@ -107,7 +109,7 @@ func (vf *vindexFunc) Wireup(logicalPlan, *jointab) error {
 }
 
 // WireupGen4 implements the logicalPlan interface
-func (vf *vindexFunc) WireupGen4(*semantics.SemTable) error {
+func (vf *vindexFunc) WireupGen4(*plancontext.PlanningContext) error {
 	return nil
 }
 

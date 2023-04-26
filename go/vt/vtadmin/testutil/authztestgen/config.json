@@ -23,7 +23,7 @@
                 {
                     "field": "FindAllShardsInKeyspaceResults",
                     "type": "map[string]struct{\nResponse *vtctldatapb.FindAllShardsInKeyspaceResponse\nError error}",
-                    "value": "\"test\": {\nResponse: &vtctldatapb.FindAllShardsInKeyspaceResponse{\nShards: map[string]*vtctldatapb.Shard{\n\"-\": {\nKeyspace: \"test\",\nName: \"-\",\nShard: &topodatapb.Shard{\nKeyRange: &topodatapb.KeyRange{},\n},\n},\n},\n},\n},"
+                    "value": "\"test\": {\nResponse: &vtctldatapb.FindAllShardsInKeyspaceResponse{\nShards: map[string]*vtctldatapb.Shard{\n\"-\": {\nKeyspace: \"test\",\nName: \"-\",\nShard: &topodatapb.Shard{\nKeyRange: &topodatapb.KeyRange{},\nIsPrimaryServing: true,\n},\n},\n},\n},\n},"
                 },
                 {
                     "field": "GetBackupsResults",

@@ -68,11 +68,11 @@ message Keyspace {
   // shards inside this keyspace. Ignored if redirect is set.
   repeated Shard shards = 2;
 
-  // sharding_column_name for this keyspace. Used for v2 calls, but not for v3.
-  string sharding_column_name = 3;
+  // OBSOLETE string sharding_column_name = 3;
+  reserved 3;
 
-  // sharding_column_type for this keyspace. Used for v2 calls, but not for v3.
-  string sharding_column_type = 4;
+  // OBSOLETE string sharding_column_type = 4;
+  reserved 4;
 
   // redirects all traffic to another keyspace. If set, shards is ignored.
   string served_from = 5;

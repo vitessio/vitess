@@ -19,6 +19,7 @@ package discovery
 import (
 	"fmt"
 	"testing"
+	"time"
 
 	"vitess.io/vitess/go/test/utils"
 
@@ -26,13 +27,25 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 )
 
+func init() {
+	lowReplicationLag = 30 * time.Second
+	highReplicationLagMinServing = 2 * time.Hour
+	minNumTablets = 2
+	legacyReplicationLagAlgorithm = true
+}
+
+// testSetLegacyReplicationLagAlgorithm is a test helper function, if this is used by a production code path, something is wrong.
+func testSetLegacyReplicationLagAlgorithm(newLegacy bool) {
+	legacyReplicationLagAlgorithm = newLegacy
+}
+
 // testSetMinNumTablets is a test helper function, if this is used by a production code path, something is wrong.
 func testSetMinNumTablets(newMin int) {
-	*minNumTablets = newMin
+	minNumTablets = newMin
 }
 
 func TestFilterByReplicationLagUnhealthy(t *testing.T) {
-	// 1 healthy serving tablet, 1 not healhty
+	// 1 healthy serving tablet, 1 not healthy
 	ts1 := &TabletHealth{
 		Tablet:  topo.NewTablet(1, "cell", "host1"),
 		Serving: true,

@@ -594,7 +594,7 @@ func TestBuildPlayerPlan(t *testing.T) {
 				Filter: "select hour(distinct c1) as a from t1",
 			}},
 		},
-		err: "unexpected: hour(distinct c1)",
+		err: "syntax error at position 21 near 'distinct'",
 	}, {
 		// funcs need alias
 		input: &binlogdatapb.Filter{
@@ -621,7 +621,7 @@ func TestBuildPlayerPlan(t *testing.T) {
 				Filter: "select sum(*) as c from t1",
 			}},
 		},
-		err: "unexpected: sum(*)",
+		err: "syntax error at position 13",
 	}, {
 		// sum should have only one argument
 		input: &binlogdatapb.Filter{
@@ -630,7 +630,7 @@ func TestBuildPlayerPlan(t *testing.T) {
 				Filter: "select sum(a, b) as c from t1",
 			}},
 		},
-		err: "unexpected: sum(a, b)",
+		err: "syntax error at position 14",
 	}, {
 		// no complex expr in sum
 		input: &binlogdatapb.Filter{

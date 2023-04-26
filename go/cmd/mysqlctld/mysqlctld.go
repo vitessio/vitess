@@ -20,12 +20,13 @@ limitations under the License.
 package main
 
 import (
-	"flag"
+	"context"
 	"os"
 	"time"
 
-	"context"
+	"github.com/spf13/pflag"
 
+	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/exit"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
@@ -39,26 +40,39 @@ var (
 	mysqld *mysqlctl.Mysqld
 	cnf    *mysqlctl.Mycnf
 
-	mysqlPort   = flag.Int("mysql_port", 3306, "mysql port")
-	tabletUID   = flag.Uint("tablet_uid", 41983, "tablet uid")
-	mysqlSocket = flag.String("mysql_socket", "", "path to the mysql socket")
+	mysqlPort   = 3306
+	tabletUID   = uint(41983)
+	mysqlSocket string
 
 	// mysqlctl init flags
-	waitTime      = flag.Duration("wait_time", 5*time.Minute, "how long to wait for mysqld startup or shutdown")
-	initDBSQLFile = flag.String("init_db_sql_file", "", "path to .sql file to run after mysql_install_db")
+	waitTime      = 5 * time.Minute
+	initDBSQLFile string
 )
 
 func init() {
 	servenv.RegisterDefaultFlags()
 	servenv.RegisterDefaultSocketFileFlags()
+	servenv.RegisterFlags()
+	servenv.RegisterGRPCServerFlags()
+	servenv.RegisterGRPCServerAuthFlags()
+	servenv.RegisterServiceMapFlag()
+	// mysqlctld only starts and stops mysql, only needs dba.
+	dbconfigs.RegisterFlags(dbconfigs.Dba)
+	servenv.OnParse(func(fs *pflag.FlagSet) {
+		fs.IntVar(&mysqlPort, "mysql_port", mysqlPort, "MySQL port")
+		fs.UintVar(&tabletUID, "tablet_uid", tabletUID, "Tablet UID")
+		fs.StringVar(&mysqlSocket, "mysql_socket", mysqlSocket, "Path to the mysqld socket file")
+		fs.DurationVar(&waitTime, "wait_time", waitTime, "How long to wait for mysqld startup or shutdown")
+		fs.StringVar(&initDBSQLFile, "init_db_sql_file", initDBSQLFile, "Path to .sql file to run after mysqld initialization")
+
+		acl.RegisterFlags(fs)
+	})
 }
 
 func main() {
 	defer exit.Recover()
 	defer logutil.Flush()
 
-	// mysqlctld only starts and stops mysql, only needs dba.
-	dbconfigs.RegisterFlags(dbconfigs.Dba)
 	servenv.ParseFlags("mysqlctld")
 
 	// We'll register this OnTerm handler before mysqld starts, so we get notified
@@ -69,21 +83,21 @@ func main() {
 	}
 
 	// Start or Init mysqld as needed.
-	ctx, cancel := context.WithTimeout(context.Background(), *waitTime)
-	mycnfFile := mysqlctl.MycnfFile(uint32(*tabletUID))
+	ctx, cancel := context.WithTimeout(context.Background(), waitTime)
+	mycnfFile := mysqlctl.MycnfFile(uint32(tabletUID))
 	if _, statErr := os.Stat(mycnfFile); os.IsNotExist(statErr) {
 		// Generate my.cnf from scratch and use it to find mysqld.
 		log.Infof("mycnf file (%s) doesn't exist, initializing", mycnfFile)
 
 		var err error
-		mysqld, cnf, err = mysqlctl.CreateMysqldAndMycnf(uint32(*tabletUID), *mysqlSocket, int32(*mysqlPort))
+		mysqld, cnf, err = mysqlctl.CreateMysqldAndMycnf(uint32(tabletUID), mysqlSocket, int32(mysqlPort))
 		if err != nil {
 			log.Errorf("failed to initialize mysql config: %v", err)
 			exit.Return(1)
 		}
 		mysqld.OnTerm(onTermFunc)
 
-		if err := mysqld.Init(ctx, cnf, *initDBSQLFile); err != nil {
+		if err := mysqld.Init(ctx, cnf, initDBSQLFile); err != nil {
 			log.Errorf("failed to initialize mysql data dir and start mysqld: %v", err)
 			exit.Return(1)
 		}
@@ -92,7 +106,7 @@ func main() {
 		log.Infof("mycnf file (%s) already exists, starting without init", mycnfFile)
 
 		var err error
-		mysqld, cnf, err = mysqlctl.OpenMysqldAndMycnf(uint32(*tabletUID))
+		mysqld, cnf, err = mysqlctl.OpenMysqldAndMycnf(uint32(tabletUID))
 		if err != nil {
 			log.Errorf("failed to find mysql config: %v", err)
 			exit.Return(1)

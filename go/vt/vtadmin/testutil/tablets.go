@@ -24,8 +24,7 @@ import (
 // TopodataTabletsFromVTAdminTablets returns a slice of topodatapb.Tablet
 // objects from a slice of vtadminpb.Tablet objects. It is the equivalent of
 //
-//		map(func(t *vtadminpb.Tablet) (*topodatapb.Tablet) { return t.Tablet }, tablets)
-//
+//	map(func(t *vtadminpb.Tablet) (*topodatapb.Tablet) { return t.Tablet }, tablets)
 func TopodataTabletsFromVTAdminTablets(tablets []*vtadminpb.Tablet) []*topodatapb.Tablet {
 	results := make([]*topodatapb.Tablet, len(tablets))
 

@@ -18,12 +18,14 @@ package vtgateconn
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"sync"
 
+	"github.com/spf13/pflag"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/servenv"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -31,10 +33,27 @@ import (
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 )
 
-var (
-	// VtgateProtocol defines the RPC implementation used for connecting to vtgate.
-	VtgateProtocol = flag.String("vtgate_protocol", "grpc", "how to talk to vtgate")
-)
+// vtgateProtocol defines the RPC implementation used for connecting to vtgate.
+var vtgateProtocol = "grpc"
+
+func registerFlags(fs *pflag.FlagSet) {
+	fs.StringVar(&vtgateProtocol, "vtgate_protocol", vtgateProtocol, "how to talk to vtgate")
+}
+
+func init() {
+	servenv.OnParseFor("vttablet", registerFlags)
+	servenv.OnParseFor("vtclient", registerFlags)
+}
+
+// GetVTGateProtocol returns the protocol used to connect to vtgate as provided in the flag.
+func GetVTGateProtocol() string {
+	return vtgateProtocol
+}
+
+// SetVTGateProtocol set the protocol to be used to connect to vtgate.
+func SetVTGateProtocol(protocol string) {
+	vtgateProtocol = protocol
+}
 
 // VTGateConn is the client API object to talk to vtgate.
 // It can support concurrent sessions.
@@ -209,5 +228,5 @@ func DialProtocol(ctx context.Context, protocol string, address string) (*VTGate
 // Dial dials using the command-line specified protocol, and returns
 // the *VTGateConn.
 func Dial(ctx context.Context, address string) (*VTGateConn, error) {
-	return DialProtocol(ctx, *VtgateProtocol, address)
+	return DialProtocol(ctx, vtgateProtocol, address)
 }

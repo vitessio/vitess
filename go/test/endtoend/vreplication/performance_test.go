@@ -79,11 +79,11 @@ create table customer(cid int, name varbinary(128), meta json default null, typ 
 		}
 	})
 
-	validateCount(t, vtgateConn, "stress_src:0", "largebin", insertCount)
+	waitForRowCount(t, vtgateConn, "stress_src:0", "largebin", insertCount)
 
 	t.Logf("creating new keysepace '%s'", targetKs)
 	vc.AddKeyspace(t, []*Cell{defaultCell}, targetKs, "0", initialStressVSchema, initialStressSchema, 0, 0, 200, nil)
-	validateCount(t, vtgateConn, "stress_tgt:0", "largebin", 0)
+	waitForRowCount(t, vtgateConn, "stress_tgt:0", "largebin", 0)
 
 	t.Logf("moving 'largebin' table...")
 	moveStart := time.Now()
@@ -115,5 +115,5 @@ create table customer(cid int, name varbinary(128), meta json default null, typ 
 	}
 
 	t.Logf("finished catching up after MoveTables (%v)", time.Since(moveStart))
-	validateCount(t, vtgateConn, "stress_tgt:0", "largebin", insertCount)
+	waitForRowCount(t, vtgateConn, "stress_tgt:0", "largebin", insertCount)
 }

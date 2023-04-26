@@ -54,10 +54,11 @@ func (ev mysql56BinlogEvent) IsGTID() bool {
 // GTID implements BinlogEvent.GTID().
 //
 // Expected format:
-//   # bytes   field
-//   1         flags
-//   16        SID (server UUID)
-//   8         GNO (sequence number, signed int)
+//
+//	# bytes   field
+//	1         flags
+//	16        SID (server UUID)
+//	8         GNO (sequence number, signed int)
 func (ev mysql56BinlogEvent) GTID(f BinlogFormat) (GTID, bool, error) {
 	data := ev.Bytes()[f.HeaderLength:]
 	var sid SID

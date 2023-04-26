@@ -225,6 +225,10 @@ func (s *shrinker) fillQueue() bool {
 			}
 			s.queue = append(s.queue, expr.Expr)
 		}
+	case sqlparser.AggrFunc:
+		for _, ae := range e.GetArgs() {
+			s.queue = append(s.queue, ae)
+		}
 	case *sqlparser.ColName:
 		// we can try to replace the column with a literal value
 		s.queue = []sqlparser.Expr{sqlparser.NewIntLiteral("0")}

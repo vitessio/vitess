@@ -54,14 +54,15 @@ func (g *generator) atMaxDepth() bool {
 	return g.depth >= g.maxDepth
 }
 
-/* Creates a random expression. It builds an expression tree using the following constructs:
-    - true/false
-    - AND/OR/NOT
-    - string literalrs, numeric literals (-/+ 1000)
-    - =, >, <, >=, <=, <=>, !=
-	- &, |, ^, +, -, *, /, div, %, <<, >>
-    - IN, BETWEEN and CASE
-	- IS NULL, IS NOT NULL, IS TRUE, IS NOT TRUE, IS FALSE, IS NOT FALSE
+/*
+	 Creates a random expression. It builds an expression tree using the following constructs:
+	    - true/false
+	    - AND/OR/NOT
+	    - string literalrs, numeric literals (-/+ 1000)
+	    - =, >, <, >=, <=, <=>, !=
+		- &, |, ^, +, -, *, /, div, %, <<, >>
+	    - IN, BETWEEN and CASE
+		- IS NULL, IS NOT NULL, IS TRUE, IS NOT TRUE, IS FALSE, IS NOT FALSE
 
 Note: It's important to update this method so that it produces all expressions that need precedence checking.
 It's currently missing function calls and string operators

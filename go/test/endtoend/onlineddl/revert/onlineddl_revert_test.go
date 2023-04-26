@@ -212,6 +212,7 @@ func TestMain(m *testing.M) {
 			"--heartbeat_on_demand_duration", "5s",
 			"--migration_check_interval", "5s",
 			"--queryserver-config-schema-change-signal-interval", "0.1",
+			"--watch_replication_stream",
 		}
 		clusterInstance.VtGateExtraArgs = []string{
 			"--ddl_strategy", "online",

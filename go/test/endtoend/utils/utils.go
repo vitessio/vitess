@@ -44,18 +44,18 @@ func AssertMatches(t testing.TB, conn *mysql.Conn, query, expected string) {
 	}
 }
 
-// AssertMatchesOneOf ensures the given query produces one of the expected results.
-// useful when a test can give different results depending on mysql flavor
-func AssertMatchesOneOf(t testing.TB, conn *mysql.Conn, query string, expectedValues ...string) {
+// AssertMatchesAny ensures the given query produces any one of the expected results.
+func AssertMatchesAny(t testing.TB, conn *mysql.Conn, query string, expected ...string) {
 	t.Helper()
 	qr := Exec(t, conn, query)
 	got := fmt.Sprintf("%v", qr.Rows)
-	for _, expected := range expectedValues {
-		if cmp.Equal(expected, got) {
+	for _, e := range expected {
+		diff := cmp.Diff(e, got)
+		if diff == "" {
 			return
 		}
 	}
-	t.Errorf("Query: %s (-want +got):\n%+v\nGot:%s", query, expectedValues, got)
+	t.Errorf("Query: %s (-want +got):\n%v\nGot:%s", query, expected, got)
 }
 
 // AssertMatchesCompareMySQL executes the given query on both Vitess and MySQL and make sure
@@ -175,7 +175,7 @@ func AssertMatchesWithTimeout(t *testing.T, conn *mysql.Conn, query, expected st
 }
 
 // WaitForAuthoritative waits for a table to become authoritative
-func WaitForAuthoritative(t *testing.T, cluster *cluster.LocalProcessCluster, ks, tbl string) error {
+func WaitForAuthoritative(t *testing.T, vtgateProcess cluster.VtgateProcess, ks, tbl string) error {
 	timeout := time.After(10 * time.Second)
 	for {
 		select {
@@ -183,7 +183,7 @@ func WaitForAuthoritative(t *testing.T, cluster *cluster.LocalProcessCluster, ks
 			return fmt.Errorf("schema tracking didn't mark table t2 as authoritative until timeout")
 		default:
 			time.Sleep(1 * time.Second)
-			res, err := cluster.VtgateProcess.ReadVSchema()
+			res, err := vtgateProcess.ReadVSchema()
 			require.NoError(t, err, res)
 			t2Map := getTableT2Map(res, ks, tbl)
 			authoritative, fieldPresent := t2Map["column_list_authoritative"]

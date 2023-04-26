@@ -34,13 +34,17 @@ var (
 	QueryzHandler = "/debug/queryz"
 
 	// QueryLogger enables streaming logging of queries
-	QueryLogger = streamlog.New("VTGate", 10)
+	QueryLogger *streamlog.StreamLogger
 
 	// queryLogToFile controls whether query logs are sent to a file
 	queryLogToFile = flag.String("log_queries_to_file", "", "Enable query logging to the specified file")
+
+	// queryLogBufferSize controls how many query logs will be buffered before dropping them if logging is not fast enough
+	queryLogBufferSize = flag.Int("querylog-buffer-size", 10, "Maximum number of buffered query logs before throttling log output")
 )
 
 func initQueryLogger(vtg *VTGate) error {
+	QueryLogger = streamlog.New("VTGate", *queryLogBufferSize)
 	QueryLogger.ServeLogs(QueryLogHandler, streamlog.GetFormatter(QueryLogger))
 
 	http.HandleFunc(QueryLogzHandler, func(w http.ResponseWriter, r *http.Request) {

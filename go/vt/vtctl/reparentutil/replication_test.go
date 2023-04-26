@@ -248,9 +248,9 @@ func (fake *stopReplicationAndBuildStatusMapsTestTMClient) DemotePrimary(ctx con
 	return nil, assert.AnError
 }
 
-func (fake *stopReplicationAndBuildStatusMapsTestTMClient) StopReplicationAndGetStatus(ctx context.Context, tablet *topodatapb.Tablet, mode replicationdatapb.StopReplicationMode) (*replicationdatapb.Status, *replicationdatapb.StopReplicationStatus, error) {
+func (fake *stopReplicationAndBuildStatusMapsTestTMClient) StopReplicationAndGetStatus(ctx context.Context, tablet *topodatapb.Tablet, mode replicationdatapb.StopReplicationMode) (*replicationdatapb.StopReplicationStatus, error) {
 	if tablet.Alias == nil {
-		return nil, nil, assert.AnError
+		return nil, assert.AnError
 	}
 
 	key := topoproto.TabletAliasString(tablet.Alias)
@@ -259,15 +259,15 @@ func (fake *stopReplicationAndBuildStatusMapsTestTMClient) StopReplicationAndGet
 		select {
 		case <-time.After(delay):
 		case <-ctx.Done():
-			return nil, nil, ctx.Err()
+			return nil, ctx.Err()
 		}
 	}
 
 	if result, ok := fake.stopReplicationAndGetStatusResults[key]; ok {
-		return /* unused by the code under test */ nil, result.StopStatus, result.Err
+		return result.StopStatus, result.Err
 	}
 
-	return nil, nil, assert.AnError
+	return nil, assert.AnError
 }
 
 func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {

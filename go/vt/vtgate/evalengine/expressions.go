@@ -27,6 +27,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/evalengine/internal/decimal"
 )
@@ -78,6 +79,14 @@ type (
 		Left, Right Expr
 	}
 )
+
+func (expr *BinaryExpr) LeftExpr() Expr {
+	return expr.Left
+}
+
+func (expr *BinaryExpr) RightExpr() Expr {
+	return expr.Right
+}
 
 var _ Expr = (*Literal)(nil)
 var _ Expr = (*BindVariable)(nil)
@@ -140,6 +149,10 @@ func (env *ExpressionEnv) subexpr(expr Expr, nth int) (Expr, int) {
 	case *BindVariable:
 		tt, _ := expr.typeof(env)
 		if tt == sqltypes.Tuple {
+			return nil, 1
+		}
+	case *Literal:
+		if expr.Val.typeof() == sqltypes.Tuple {
 			return nil, 1
 		}
 	case TupleExpr:
@@ -369,6 +382,41 @@ func NewLiteralString(val []byte, collation collations.TypedCollation) *Literal 
 	return lit
 }
 
+// NewLiteralDateFromBytes returns a literal expression.
+func NewLiteralDateFromBytes(val []byte) (*Literal, error) {
+	_, err := sqlparser.ParseDate(string(val))
+	if err != nil {
+		return nil, err
+	}
+	lit := &Literal{}
+	lit.Val.setRaw(querypb.Type_DATE, val, collationNumeric)
+	return lit, nil
+}
+
+// NewLiteralTimeFromBytes returns a literal expression.
+// it validates the time by parsing it and checking the error.
+func NewLiteralTimeFromBytes(val []byte) (*Literal, error) {
+	_, err := sqlparser.ParseTime(string(val))
+	if err != nil {
+		return nil, err
+	}
+	lit := &Literal{}
+	lit.Val.setRaw(querypb.Type_TIME, val, collationNumeric)
+	return lit, nil
+}
+
+// NewLiteralDatetimeFromBytes returns a literal expression.
+// it validates the datetime by parsing it and checking the error.
+func NewLiteralDatetimeFromBytes(val []byte) (*Literal, error) {
+	_, err := sqlparser.ParseDateTime(string(val))
+	if err != nil {
+		return nil, err
+	}
+	lit := &Literal{}
+	lit.Val.setRaw(querypb.Type_DATETIME, val, collationNumeric)
+	return lit, nil
+}
+
 func parseHexLiteral(val []byte) ([]byte, error) {
 	raw := make([]byte, hex.DecodedLen(len(val)))
 	if _, err := hex.Decode(raw, val); err != nil {
@@ -496,13 +544,17 @@ func (bv *BindVariable) eval(env *ExpressionEnv, result *EvalResult) {
 // typeof implements the Expr interface
 func (bv *BindVariable) typeof(env *ExpressionEnv) (sqltypes.Type, flag) {
 	bvar := bv.bvar(env)
-	if bvar.Type == sqltypes.Null {
+	switch bvar.Type {
+	case sqltypes.Null:
 		return sqltypes.Null, flagNull | flagNullable
+	case sqltypes.HexNum, sqltypes.HexVal:
+		return sqltypes.VarBinary, flagHex
+	default:
+		if bv.coerceType >= 0 {
+			return bv.coerceType, 0
+		}
+		return bvar.Type, 0
 	}
-	if bv.coerceType >= 0 {
-		return bv.coerceType, 0
-	}
-	return bvar.Type, 0
 }
 
 // eval implements the Expr interface

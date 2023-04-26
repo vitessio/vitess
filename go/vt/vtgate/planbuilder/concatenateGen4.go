@@ -21,6 +21,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
@@ -55,9 +56,9 @@ func (c *concatenateGen4) Wireup(plan logicalPlan, jt *jointab) error {
 }
 
 // WireupGen4 implements the logicalPlan interface
-func (c *concatenateGen4) WireupGen4(semTable *semantics.SemTable) error {
+func (c *concatenateGen4) WireupGen4(ctx *plancontext.PlanningContext) error {
 	for _, source := range c.sources {
-		err := source.WireupGen4(semTable)
+		err := source.WireupGen4(ctx)
 		if err != nil {
 			return err
 		}
@@ -103,7 +104,7 @@ func (c *concatenateGen4) Rewrite(inputs ...logicalPlan) error {
 func (c *concatenateGen4) ContainsTables() semantics.TableSet {
 	var tableSet semantics.TableSet
 	for _, source := range c.sources {
-		tableSet.MergeInPlace(source.ContainsTables())
+		tableSet = tableSet.Merge(source.ContainsTables())
 	}
 	return tableSet
 }

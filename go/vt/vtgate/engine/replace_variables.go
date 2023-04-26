@@ -17,6 +17,8 @@ limitations under the License.
 package engine
 
 import (
+	"context"
+
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
@@ -50,8 +52,8 @@ func (r *ReplaceVariables) GetTableName() string {
 }
 
 // TryExecute implements the Primitive interface
-func (r *ReplaceVariables) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	qr, err := vcursor.ExecutePrimitive(r.Input, bindVars, wantfields)
+func (r *ReplaceVariables) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+	qr, err := vcursor.ExecutePrimitive(ctx, r.Input, bindVars, wantfields)
 	if err != nil {
 		return nil, err
 	}
@@ -60,18 +62,18 @@ func (r *ReplaceVariables) TryExecute(vcursor VCursor, bindVars map[string]*quer
 }
 
 // TryStreamExecute implements the Primitive interface
-func (r *ReplaceVariables) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (r *ReplaceVariables) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	innerCallback := callback
 	callback = func(result *sqltypes.Result) error {
 		replaceVariables(result, bindVars)
 		return innerCallback(result)
 	}
-	return vcursor.StreamExecutePrimitive(r.Input, bindVars, wantfields, callback)
+	return vcursor.StreamExecutePrimitive(ctx, r.Input, bindVars, wantfields, callback)
 }
 
 // GetFields implements the Primitive interface
-func (r *ReplaceVariables) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	return r.Input.GetFields(vcursor, bindVars)
+func (r *ReplaceVariables) GetFields(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+	return r.Input.GetFields(ctx, vcursor, bindVars)
 }
 
 // Inputs implements the Primitive interface

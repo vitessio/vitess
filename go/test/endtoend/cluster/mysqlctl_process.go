@@ -65,7 +65,16 @@ func (mysqlctl *MysqlctlProcess) InitDb() (err error) {
 
 // Start executes mysqlctl command to start mysql instance
 func (mysqlctl *MysqlctlProcess) Start() (err error) {
-	tmpProcess, err := mysqlctl.StartProcess()
+	tmpProcess, err := mysqlctl.startProcess(true)
+	if err != nil {
+		return err
+	}
+	return tmpProcess.Wait()
+}
+
+// StartProvideInit executes mysqlctl command to start mysql instance
+func (mysqlctl *MysqlctlProcess) StartProvideInit(init bool) (err error) {
+	tmpProcess, err := mysqlctl.startProcess(init)
 	if err != nil {
 		return err
 	}
@@ -74,6 +83,10 @@ func (mysqlctl *MysqlctlProcess) Start() (err error) {
 
 // StartProcess starts the mysqlctl and returns the process reference
 func (mysqlctl *MysqlctlProcess) StartProcess() (*exec.Cmd, error) {
+	return mysqlctl.startProcess(true)
+}
+
+func (mysqlctl *MysqlctlProcess) startProcess(init bool) (*exec.Cmd, error) {
 	tmpProcess := exec.Command(
 		mysqlctl.Binary,
 		"--log_dir", mysqlctl.LogDirectory,
@@ -120,8 +133,10 @@ ssl_key={{.Dir}}/server-001-key.pem
 			tmpProcess.Env = append(tmpProcess.Env, "VTDATAROOT="+os.Getenv("VTDATAROOT"))
 		}
 
-		tmpProcess.Args = append(tmpProcess.Args, "init", "--",
-			"--init_db_sql_file", mysqlctl.InitDBFile)
+		if init {
+			tmpProcess.Args = append(tmpProcess.Args, "init", "--",
+				"--init_db_sql_file", mysqlctl.InitDBFile)
+		}
 	}
 	tmpProcess.Args = append(tmpProcess.Args, "start")
 	log.Infof("Starting mysqlctl with command: %v", tmpProcess.Args)

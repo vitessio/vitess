@@ -18,16 +18,15 @@ limitations under the License.
 Package topotools contains high level functions based on vt/topo and
 vt/actionnode. It should not depend on anything else that's higher
 level. In particular, it cannot depend on:
-- vt/wrangler: much higher level, wrangler depends on topotools.
-- vt/tabletmanager/initiator: we don't want the various remote
-  protocol dependencies here.
+  - vt/wrangler: much higher level, wrangler depends on topotools.
+  - vt/tabletmanager/initiator: we don't want the various remote
+    protocol dependencies here.
 
 topotools is used by wrangler, so it ends up in all tools using
 wrangler (vtctl, vtctld, ...). It is also included by vttablet, so it contains:
-- most of the logic to create a shard / keyspace (tablet's init code)
-- some of the logic to perform a TabletExternallyReparented (RPC call
-  to primary vttablet to let it know it's the primary).
-
+  - most of the logic to create a shard / keyspace (tablet's init code)
+  - some of the logic to perform a TabletExternallyReparented (RPC call
+    to primary vttablet to let it know it's the primary).
 */
 package topotools
 

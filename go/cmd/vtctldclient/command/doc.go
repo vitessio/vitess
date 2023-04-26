@@ -43,6 +43,7 @@ exception here, not the rule). Commands should also prevent individual flag
 names from polluting the package namespace.
 
 A good pattern we have found is to do the following:
+
 	package command
 
 	// (imports ...)

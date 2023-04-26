@@ -181,7 +181,7 @@ func (tqsc *Controller) OnlineDDLExecutor() vexec.Executor {
 	return nil
 }
 
-//ClearQueryPlanCache is part of the tabletserver.Controller interface
+// ClearQueryPlanCache is part of the tabletserver.Controller interface
 func (tqsc *Controller) ClearQueryPlanCache() {
 }
 

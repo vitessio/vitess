@@ -269,8 +269,8 @@ func (updateStream *UpdateStreamImpl) StreamKeyRange(ctx context.Context, positi
 	defer streamCount.Add("KeyRange", -1)
 	log.Infof("ServeUpdateStream starting @ %#v", pos)
 
-	// Calls cascade like this: binlog.Streamer->KeyRangeFilterFunc->func(*binlogdatapb.BinlogTransaction)->callback
-	f := KeyRangeFilterFunc(keyRange, func(trans *binlogdatapb.BinlogTransaction) error {
+	// Calls cascade like this: binlog.Streamer->keyRangeFilterFunc->func(*binlogdatapb.BinlogTransaction)->callback
+	f := keyRangeFilterFunc(keyRange, func(trans *binlogdatapb.BinlogTransaction) error {
 		keyrangeStatements.Add(int64(len(trans.Statements)))
 		keyrangeTransactions.Add(1)
 		return callback(trans)
@@ -309,8 +309,8 @@ func (updateStream *UpdateStreamImpl) StreamTables(ctx context.Context, position
 	defer streamCount.Add("Tables", -1)
 	log.Infof("ServeUpdateStream starting @ %#v", pos)
 
-	// Calls cascade like this: binlog.Streamer->TablesFilterFunc->func(*binlogdatapb.BinlogTransaction)->callback
-	f := TablesFilterFunc(tables, func(trans *binlogdatapb.BinlogTransaction) error {
+	// Calls cascade like this: binlog.Streamer->tablesFilterFunc->func(*binlogdatapb.BinlogTransaction)->callback
+	f := tablesFilterFunc(tables, func(trans *binlogdatapb.BinlogTransaction) error {
 		tablesStatements.Add(int64(len(trans.Statements)))
 		tablesTransactions.Add(1)
 		return callback(trans)

@@ -26,8 +26,6 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/test/endtoend/utils"
-
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
@@ -90,8 +88,6 @@ func TestMain(m *testing.M) {
 }
 
 func TestSchemaTrackingError(t *testing.T) {
-	utils.SkipIfBinaryIsBelowVersion(t, 14, "vtgate")
-
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)

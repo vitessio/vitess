@@ -94,9 +94,7 @@ func RebuildKeyspaceLocked(ctx context.Context, log logutil.Logger, ts *topo.Ser
 			return err
 		}
 		srvKeyspaceMap[cell] = &topodatapb.SrvKeyspace{
-			ShardingColumnName: ki.ShardingColumnName,
-			ShardingColumnType: ki.ShardingColumnType,
-			ServedFrom:         ki.ComputeCellServedFrom(cell),
+			ServedFrom: ki.ComputeCellServedFrom(cell),
 		}
 	}
 

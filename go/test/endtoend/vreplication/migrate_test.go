@@ -19,7 +19,6 @@ package vreplication
 import (
 	"fmt"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -48,15 +47,6 @@ func TestMigrate(t *testing.T) {
 	cells := []string{"zone1"}
 	allCellNames = "zone1"
 	vc = NewVitessCluster(t, "TestMigrate", cells, mainClusterConfig)
-
-	// VDiff2 does not support this mount+migrate use case today
-	// TODO: add support for this in the tablet picker phase
-	if runVDiffsSideBySide {
-		runVDiffsSideBySide = false
-		defer func() {
-			runVDiffsSideBySide = true
-		}()
-	}
 
 	require.NotNil(t, vc)
 	defaultReplicas = 0
@@ -117,15 +107,14 @@ func TestMigrate(t *testing.T) {
 			"--source=ext1.rating", "create", ksWorkflow); err != nil {
 			t.Fatalf("Migrate command failed with %+v : %s\n", err, output)
 		}
-		time.Sleep(1 * time.Second) // wait for migrate to run
+		waitForWorkflowState(t, vc, ksWorkflow, workflowStateRunning)
 		expectNumberOfStreams(t, vtgateConn, "migrate", "e1", "product:0", 1)
-		validateCount(t, vtgateConn, "product:0", "rating", 2)
-		validateCount(t, vtgateConn, "product:0", "review", 3)
+		waitForRowCount(t, vtgateConn, "product:0", "rating", 2)
+		waitForRowCount(t, vtgateConn, "product:0", "review", 3)
 		execVtgateQuery(t, extVtgateConn, "rating", "insert into review(rid, pid, review) values(4, 1, 'review4');")
 		execVtgateQuery(t, extVtgateConn, "rating", "insert into rating(gid, pid, rating) values(3, 1, 3);")
-		time.Sleep(1 * time.Second) // wait for stream to find row
-		validateCount(t, vtgateConn, "product:0", "rating", 3)
-		validateCount(t, vtgateConn, "product:0", "review", 4)
+		waitForRowCount(t, vtgateConn, "product:0", "rating", 3)
+		waitForRowCount(t, vtgateConn, "product:0", "review", 4)
 		vdiff1(t, ksWorkflow, "extcell1")
 
 		if output, err = vc.VtctlClient.ExecuteCommandWithOutput("Migrate", "complete", ksWorkflow); err != nil {
@@ -142,8 +131,8 @@ func TestMigrate(t *testing.T) {
 			t.Fatalf("Migrate command failed with %+v : %s\n", err, output)
 		}
 		expectNumberOfStreams(t, vtgateConn, "migrate", "e1", "product:0", 1)
-		validateCount(t, vtgateConn, "product:0", "rating", 0)
-		validateCount(t, vtgateConn, "product:0", "review", 0)
+		waitForRowCount(t, vtgateConn, "product:0", "rating", 0)
+		waitForRowCount(t, vtgateConn, "product:0", "review", 0)
 		if output, err = vc.VtctlClient.ExecuteCommandWithOutput("Migrate", "cancel", ksWorkflow); err != nil {
 			t.Fatalf("Migrate command failed with %+v : %s\n", err, output)
 		}

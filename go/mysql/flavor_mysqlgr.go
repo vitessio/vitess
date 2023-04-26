@@ -261,6 +261,8 @@ func (mysqlGRFlavor) supportsCapability(serverVersion string, capability FlavorC
 		return ServerVersionAtLeast(serverVersion, 5, 7, 0)
 	case MySQLUpgradeInServerFlavorCapability:
 		return ServerVersionAtLeast(serverVersion, 8, 0, 16)
+	case DynamicRedoLogCapacityFlavorCapability:
+		return ServerVersionAtLeast(serverVersion, 8, 0, 30)
 	default:
 		return false, nil
 	}

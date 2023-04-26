@@ -63,8 +63,8 @@ func TestBindingSubquery(t *testing.T) {
 			selStmt := parse.(*sqlparser.Select)
 			semTable, err := semantics.Analyze(selStmt, "d", &semantics.FakeSI{
 				Tables: map[string]*vindexes.Table{
-					"tabl": {Name: sqlparser.NewTableIdent("tabl")},
-					"foo":  {Name: sqlparser.NewTableIdent("foo")},
+					"tabl": {Name: sqlparser.NewIdentifierCS("tabl")},
+					"foo":  {Name: sqlparser.NewIdentifierCS("foo")},
 				},
 			})
 			require.NoError(t, err)

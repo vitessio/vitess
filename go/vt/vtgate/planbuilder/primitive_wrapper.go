@@ -21,6 +21,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
@@ -30,7 +31,7 @@ type primitiveWrapper struct {
 	gen4Plan
 }
 
-func (p *primitiveWrapper) WireupGen4(*semantics.SemTable) error {
+func (p *primitiveWrapper) WireupGen4(*plancontext.PlanningContext) error {
 	return nil
 }
 

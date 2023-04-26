@@ -25,34 +25,34 @@ type BindVarNeeds struct {
 	otherRewrites bool
 }
 
-//MergeWith adds bind vars needs coming from sub scopes
+// MergeWith adds bind vars needs coming from sub scopes
 func (bvn *BindVarNeeds) MergeWith(other *BindVarNeeds) {
 	bvn.NeedFunctionResult = append(bvn.NeedFunctionResult, other.NeedFunctionResult...)
 	bvn.NeedSystemVariable = append(bvn.NeedSystemVariable, other.NeedSystemVariable...)
 	bvn.NeedUserDefinedVariables = append(bvn.NeedUserDefinedVariables, other.NeedUserDefinedVariables...)
 }
 
-//AddFuncResult adds a function bindvar need
+// AddFuncResult adds a function bindvar need
 func (bvn *BindVarNeeds) AddFuncResult(name string) {
 	bvn.NeedFunctionResult = append(bvn.NeedFunctionResult, name)
 }
 
-//AddSysVar adds a system variable bindvar need
+// AddSysVar adds a system variable bindvar need
 func (bvn *BindVarNeeds) AddSysVar(name string) {
 	bvn.NeedSystemVariable = append(bvn.NeedSystemVariable, name)
 }
 
-//AddUserDefVar adds a user defined variable bindvar need
+// AddUserDefVar adds a user defined variable bindvar need
 func (bvn *BindVarNeeds) AddUserDefVar(name string) {
 	bvn.NeedUserDefinedVariables = append(bvn.NeedUserDefinedVariables, name)
 }
 
-//NeedsFuncResult says if a function result needs to be provided
+// NeedsFuncResult says if a function result needs to be provided
 func (bvn *BindVarNeeds) NeedsFuncResult(name string) bool {
 	return contains(bvn.NeedFunctionResult, name)
 }
 
-//NeedsSysVar says if a function result needs to be provided
+// NeedsSysVar says if a function result needs to be provided
 func (bvn *BindVarNeeds) NeedsSysVar(name string) bool {
 	return contains(bvn.NeedSystemVariable, name)
 }

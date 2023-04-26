@@ -59,10 +59,11 @@ const (
 // VSchema represents the denormalized version of SrvVSchema,
 // used for building routing plans.
 type VSchema struct {
-	RoutingRules   map[string]*RoutingRule `json:"routing_rules"`
-	uniqueTables   map[string]*Table
-	uniqueVindexes map[string]Vindex
-	Keyspaces      map[string]*KeyspaceSchema `json:"keyspaces"`
+	RoutingRules      map[string]*RoutingRule `json:"routing_rules"`
+	uniqueTables      map[string]*Table
+	uniqueVindexes    map[string]Vindex
+	Keyspaces         map[string]*KeyspaceSchema `json:"keyspaces"`
+	ShardRoutingRules map[string]string          `json:"shard_routing_rules"`
 }
 
 // RoutingRule represents one routing rule.
@@ -78,7 +79,7 @@ func (rr *RoutingRule) MarshalJSON() ([]byte, error) {
 	}
 	tables := make([]string, 0, len(rr.Tables))
 	for _, t := range rr.Tables {
-		tables = append(tables, t.Keyspace.Name+"."+t.Name.String())
+		tables = append(tables, t.ToString())
 	}
 
 	return json.Marshal(tables)
@@ -86,16 +87,16 @@ func (rr *RoutingRule) MarshalJSON() ([]byte, error) {
 
 // Table represents a table in VSchema.
 type Table struct {
-	Type                    string               `json:"type,omitempty"`
-	Name                    sqlparser.TableIdent `json:"name"`
-	Keyspace                *Keyspace            `json:"-"`
-	ColumnVindexes          []*ColumnVindex      `json:"column_vindexes,omitempty"`
-	Ordered                 []*ColumnVindex      `json:"ordered,omitempty"`
-	Owned                   []*ColumnVindex      `json:"owned,omitempty"`
-	AutoIncrement           *AutoIncrement       `json:"auto_increment,omitempty"`
-	Columns                 []Column             `json:"columns,omitempty"`
-	Pinned                  []byte               `json:"pinned,omitempty"`
-	ColumnListAuthoritative bool                 `json:"column_list_authoritative,omitempty"`
+	Type                    string                 `json:"type,omitempty"`
+	Name                    sqlparser.IdentifierCS `json:"name"`
+	Keyspace                *Keyspace              `json:"-"`
+	ColumnVindexes          []*ColumnVindex        `json:"column_vindexes,omitempty"`
+	Ordered                 []*ColumnVindex        `json:"ordered,omitempty"`
+	Owned                   []*ColumnVindex        `json:"owned,omitempty"`
+	AutoIncrement           *AutoIncrement         `json:"auto_increment,omitempty"`
+	Columns                 []Column               `json:"columns,omitempty"`
+	Pinned                  []byte                 `json:"pinned,omitempty"`
+	ColumnListAuthoritative bool                   `json:"column_list_authoritative,omitempty"`
 }
 
 // Keyspace contains the keyspcae info for each Table.
@@ -106,11 +107,11 @@ type Keyspace struct {
 
 // ColumnVindex contains the index info for each index of a table.
 type ColumnVindex struct {
-	Columns  []sqlparser.ColIdent `json:"columns"`
-	Type     string               `json:"type"`
-	Name     string               `json:"name"`
-	Owned    bool                 `json:"owned,omitempty"`
-	Vindex   Vindex               `json:"vindex"`
+	Columns  []sqlparser.IdentifierCI `json:"columns"`
+	Type     string                   `json:"type"`
+	Name     string                   `json:"name"`
+	Owned    bool                     `json:"owned,omitempty"`
+	Vindex   Vindex                   `json:"vindex"`
 	isUnique bool
 	cost     int
 	partial  bool
@@ -136,9 +137,9 @@ func (c *ColumnVindex) IsPartialVindex() bool {
 
 // Column describes a column.
 type Column struct {
-	Name          sqlparser.ColIdent `json:"name"`
-	Type          querypb.Type       `json:"type"`
-	CollationName string             `json:"collation_name"`
+	Name          sqlparser.IdentifierCI `json:"name"`
+	Type          querypb.Type           `json:"type"`
+	CollationName string                 `json:"collation_name"`
 }
 
 // MarshalJSON returns a JSON representation of Column.
@@ -182,8 +183,8 @@ func (ks *KeyspaceSchema) MarshalJSON() ([]byte, error) {
 
 // AutoIncrement contains the auto-inc information for a table.
 type AutoIncrement struct {
-	Column   sqlparser.ColIdent `json:"column"`
-	Sequence *Table             `json:"sequence"`
+	Column   sqlparser.IdentifierCI `json:"column"`
+	Sequence *Table                 `json:"sequence"`
 }
 
 // BuildVSchema builds a VSchema from a SrvVSchema.
@@ -198,6 +199,7 @@ func BuildVSchema(source *vschemapb.SrvVSchema) (vschema *VSchema) {
 	resolveAutoIncrement(source, vschema)
 	addDual(vschema)
 	buildRoutingRule(source, vschema)
+	buildShardRoutingRule(source, vschema)
 	return vschema
 }
 
@@ -265,7 +267,7 @@ func buildTables(ks *vschemapb.Keyspace, vschema *VSchema, ksvschema *KeyspaceSc
 	}
 	for tname, table := range ks.Tables {
 		t := &Table{
-			Name:                    sqlparser.NewTableIdent(tname),
+			Name:                    sqlparser.NewIdentifierCS(tname),
 			Keyspace:                keyspace,
 			ColumnListAuthoritative: table.ColumnListAuthoritative,
 		}
@@ -296,7 +298,7 @@ func buildTables(ks *vschemapb.Keyspace, vschema *VSchema, ksvschema *KeyspaceSc
 		// Initialize Columns.
 		colNames := make(map[string]bool)
 		for _, col := range table.Columns {
-			name := sqlparser.NewColIdent(col.Name)
+			name := sqlparser.NewIdentifierCI(col.Name)
 			if colNames[name.Lowered()] {
 				return fmt.Errorf("duplicate column name '%v' for table: %s", name, tname)
 			}
@@ -315,18 +317,18 @@ func buildTables(ks *vschemapb.Keyspace, vschema *VSchema, ksvschema *KeyspaceSc
 			if _, ok := vindex.(Lookup); ok && vindexInfo.Owner == tname {
 				owned = true
 			}
-			var columns []sqlparser.ColIdent
+			var columns []sqlparser.IdentifierCI
 			if ind.Column != "" {
 				if len(ind.Columns) > 0 {
 					return fmt.Errorf("can't use column and columns at the same time in vindex (%s) and table (%s)", ind.Name, tname)
 				}
-				columns = []sqlparser.ColIdent{sqlparser.NewColIdent(ind.Column)}
+				columns = []sqlparser.IdentifierCI{sqlparser.NewIdentifierCI(ind.Column)}
 			} else {
 				if len(ind.Columns) == 0 {
 					return fmt.Errorf("must specify at least one column for vindex (%s) and table (%s)", ind.Name, tname)
 				}
 				for _, indCol := range ind.Columns {
-					columns = append(columns, sqlparser.NewColIdent(indCol))
+					columns = append(columns, sqlparser.NewIdentifierCI(indCol))
 				}
 			}
 			columnVindex := &ColumnVindex{
@@ -422,7 +424,7 @@ func resolveAutoIncrement(source *vschemapb.SrvVSchema, vschema *VSchema) {
 				continue
 			}
 			t.AutoIncrement = &AutoIncrement{
-				Column:   sqlparser.NewColIdent(table.AutoIncrement.Column),
+				Column:   sqlparser.NewIdentifierCI(table.AutoIncrement.Column),
 				Sequence: seq,
 			}
 		}
@@ -435,7 +437,7 @@ func addDual(vschema *VSchema) {
 	first := ""
 	for ksname, ks := range vschema.Keyspaces {
 		t := &Table{
-			Name:     sqlparser.NewTableIdent("dual"),
+			Name:     sqlparser.NewIdentifierCS("dual"),
 			Keyspace: ks.Keyspace,
 			Type:     TypeReference,
 		}
@@ -526,6 +528,16 @@ outer:
 	}
 }
 
+func buildShardRoutingRule(source *vschemapb.SrvVSchema, vschema *VSchema) {
+	if source.ShardRoutingRules == nil || len(source.ShardRoutingRules.Rules) == 0 {
+		return
+	}
+	vschema.ShardRoutingRules = make(map[string]string)
+	for _, rule := range source.ShardRoutingRules.Rules {
+		vschema.ShardRoutingRules[getShardRoutingRulesKey(rule.FromKeyspace, rule.Shard)] = rule.ToKeyspace
+	}
+}
+
 // FindTable returns a pointer to the Table. If a keyspace is specified, only tables
 // from that keyspace are searched. If the specified keyspace is unsharded
 // and no tables matched, it's considered valid: FindTable will construct a table
@@ -561,7 +573,7 @@ func (vschema *VSchema) findTable(keyspace, tablename string) (*Table, error) {
 				if ks.Keyspace.Sharded {
 					return nil, nil
 				}
-				return &Table{Name: sqlparser.NewTableIdent(tablename), Keyspace: ks.Keyspace}, nil
+				return &Table{Name: sqlparser.NewIdentifierCS(tablename), Keyspace: ks.Keyspace}, nil
 			}
 		}
 		return table, nil
@@ -575,7 +587,7 @@ func (vschema *VSchema) findTable(keyspace, tablename string) (*Table, error) {
 		if ks.Keyspace.Sharded {
 			return nil, nil
 		}
-		return &Table{Name: sqlparser.NewTableIdent(tablename), Keyspace: ks.Keyspace}, nil
+		return &Table{Name: sqlparser.NewIdentifierCS(tablename), Keyspace: ks.Keyspace}, nil
 	}
 	return table, nil
 }
@@ -649,6 +661,21 @@ func (vschema *VSchema) FindVindex(keyspace, name string) (Vindex, error) {
 		return nil, vterrors.NewErrorf(vtrpcpb.Code_NOT_FOUND, vterrors.BadDb, "Unknown database '%s' in vschema", keyspace)
 	}
 	return ks.Vindexes[name], nil
+}
+
+func getShardRoutingRulesKey(keyspace, shard string) string {
+	return fmt.Sprintf("%s.%s", keyspace, shard)
+}
+
+// FindRoutedShard looks up shard routing rules and returns the target keyspace if applicable
+func (vschema *VSchema) FindRoutedShard(keyspace, shard string) (string, error) {
+	if len(vschema.ShardRoutingRules) == 0 {
+		return keyspace, nil
+	}
+	if ks, ok := vschema.ShardRoutingRules[getShardRoutingRulesKey(keyspace, shard)]; ok {
+		return ks, nil
+	}
+	return keyspace, nil
 }
 
 // ByCost provides the interface needed for ColumnVindexes to
@@ -759,4 +786,13 @@ func FindVindexForSharding(tableName string, colVindexes []*ColumnVindex) (*Colu
 		return nil, fmt.Errorf("could not find a vindex to use for sharding table %v", tableName)
 	}
 	return result, nil
+}
+
+// ToString prints the table name
+func (t *Table) ToString() string {
+	res := ""
+	if t.Keyspace != nil {
+		res = t.Keyspace.Name + "."
+	}
+	return res + t.Name.String()
 }

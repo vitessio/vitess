@@ -18,32 +18,39 @@ package grpctmclient
 
 import (
 	"context"
-	"flag"
 	"io"
 	"sort"
 	"sync"
 	"time"
 
+	"github.com/spf13/pflag"
 	"google.golang.org/grpc"
 
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/grpcclient"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
 	tabletmanagerservicepb "vitess.io/vitess/go/vt/proto/tabletmanagerservice"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
-var (
-	defaultPoolCapacity = flag.Int("tablet_manager_grpc_connpool_size", 100, "number of tablets to keep tmclient connections open to")
-)
+var defaultPoolCapacity = 100
+
+func registerCachedClientFlags(fs *pflag.FlagSet) {
+	fs.IntVar(&defaultPoolCapacity, "tablet_manager_grpc_connpool_size", defaultPoolCapacity, "number of tablets to keep tmclient connections open to")
+}
 
 func init() {
 	tmclient.RegisterTabletManagerClientFactory("grpc-cached", func() tmclient.TabletManagerClient {
-		return NewCachedConnClient(*defaultPoolCapacity)
+		return NewCachedConnClient(defaultPoolCapacity)
 	})
+
+	for _, cmd := range _binaries {
+		servenv.OnParseFor(cmd, registerCachedClientFlags)
+	}
 }
 
 // closeFunc allows a standalone function to implement io.Closer, similar to
@@ -182,18 +189,18 @@ func (dialer *cachedConnDialer) tryFromCache(addr string, locker sync.Locker) (c
 }
 
 // pollOnce is called on each iteration of the polling loop in dial(). It:
-// - locks the conns cache for writes
-// - attempts to get a connection from the cache. If found, redial() it and exit.
-// - peeks at the head of the eviction queue. if the peeked conn has no refs, it
-//   is unused, and can be evicted to make room for the new connection to addr.
-//   If the peeked conn has refs, exit.
-// - pops the conn we just peeked from the queue, deletes it from the cache, and
-//   close the underlying ClientConn for that conn.
-// - attempt a newdial. if the newdial fails, it will release a slot on the
-//   connWaitSema, so another dial() call can successfully acquire it to dial
-//   a new conn. if the newdial succeeds, we will have evicted one conn, but
-//   added another, so the net change is 0, and no changes to the connWaitSema
-//   are made.
+//   - locks the conns cache for writes
+//   - attempts to get a connection from the cache. If found, redial() it and exit.
+//   - peeks at the head of the eviction queue. if the peeked conn has no refs, it
+//     is unused, and can be evicted to make room for the new connection to addr.
+//     If the peeked conn has refs, exit.
+//   - pops the conn we just peeked from the queue, deletes it from the cache, and
+//     close the underlying ClientConn for that conn.
+//   - attempt a newdial. if the newdial fails, it will release a slot on the
+//     connWaitSema, so another dial() call can successfully acquire it to dial
+//     a new conn. if the newdial succeeds, we will have evicted one conn, but
+//     added another, so the net change is 0, and no changes to the connWaitSema
+//     are made.
 //
 // It returns a TabletManagerClient impl, an io.Closer, a flag to indicate
 // whether the dial() poll loop should exit, and an error.
@@ -230,7 +237,7 @@ func (dialer *cachedConnDialer) pollOnce(ctx context.Context, addr string) (clie
 // It returns the three-tuple of client-interface, closer, and error that the
 // main dial func returns.
 func (dialer *cachedConnDialer) newdial(ctx context.Context, addr string) (tabletmanagerservicepb.TabletManagerClient, io.Closer, error) {
-	opt, err := grpcclient.SecureDialOption(*cert, *key, *ca, *crl, *name)
+	opt, err := grpcclient.SecureDialOption(cert, key, ca, crl, name)
 	if err != nil {
 		dialer.connWaitSema.Release()
 		return nil, nil, err

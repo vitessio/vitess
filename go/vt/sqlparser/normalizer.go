@@ -17,6 +17,9 @@ limitations under the License.
 package sqlparser
 
 import (
+	"fmt"
+	"strconv"
+
 	"vitess.io/vitess/go/sqltypes"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -39,10 +42,11 @@ func Normalize(stmt Statement, reserved *ReservedVars, bindVars map[string]*quer
 }
 
 type normalizer struct {
-	bindVars map[string]*querypb.BindVariable
-	reserved *ReservedVars
-	vals     map[string]string
-	err      error
+	bindVars  map[string]*querypb.BindVariable
+	reserved  *ReservedVars
+	vals      map[string]string
+	err       error
+	inDerived bool
 }
 
 func newNormalizer(reserved *ReservedVars, bindVars map[string]*querypb.BindVariable) *normalizer {
@@ -62,8 +66,12 @@ func (nz *normalizer) WalkStatement(cursor *Cursor) bool {
 	case *Set, *Show, *Begin, *Commit, *Rollback, *Savepoint, *SetTransaction, DDLStatement, *SRollback, *Release, *OtherAdmin, *OtherRead:
 		return false
 	case *Select:
+		_, isDerived := cursor.Parent().(*DerivedTable)
+		var tmp bool
+		tmp, nz.inDerived = nz.inDerived, isDerived
 		_ = Rewrite(node, nz.WalkSelect, nil)
 		// Don't continue
+		nz.inDerived = tmp
 		return false
 	case *Literal:
 		nz.convertLiteral(node, cursor)
@@ -82,6 +90,19 @@ func (nz *normalizer) WalkStatement(cursor *Cursor) bool {
 // WalkSelect normalizes the AST in Select mode.
 func (nz *normalizer) WalkSelect(cursor *Cursor) bool {
 	switch node := cursor.Node().(type) {
+	case *Select:
+		_, isDerived := cursor.Parent().(*DerivedTable)
+		if !isDerived {
+			return true
+		}
+		var tmp bool
+		tmp, nz.inDerived = nz.inDerived, isDerived
+		_ = Rewrite(node, nz.WalkSelect, nil)
+		// Don't continue
+		nz.inDerived = tmp
+		return false
+	case SelectExprs:
+		return !nz.inDerived
 	case *Literal:
 		nz.convertLiteralDedup(node, cursor)
 	case *ComparisonExpr:
@@ -103,7 +124,24 @@ func (nz *normalizer) WalkSelect(cursor *Cursor) bool {
 	return nz.err == nil // only continue if we haven't found any errors
 }
 
+func validateLiteral(node *Literal) (err error) {
+	switch node.Type {
+	case DateVal:
+		_, err = ParseDate(node.Val)
+	case TimeVal:
+		_, err = ParseTime(node.Val)
+	case TimestampVal:
+		_, err = ParseDateTime(node.Val)
+	}
+	return err
+}
+
 func (nz *normalizer) convertLiteralDedup(node *Literal, cursor *Cursor) {
+	err := validateLiteral(node)
+	if err != nil {
+		nz.err = err
+	}
+
 	// If value is too long, don't dedup.
 	// Such values are most likely not for vindexes.
 	// We save a lot of CPU because we avoid building
@@ -114,7 +152,7 @@ func (nz *normalizer) convertLiteralDedup(node *Literal, cursor *Cursor) {
 	}
 
 	// Make the bindvar
-	bval := nz.sqlToBindvar(node)
+	bval := SQLToBindvar(node)
 	if bval == nil {
 		return
 	}
@@ -143,7 +181,12 @@ func (nz *normalizer) convertLiteralDedup(node *Literal, cursor *Cursor) {
 
 // convertLiteral converts an Literal without the dedup.
 func (nz *normalizer) convertLiteral(node *Literal, cursor *Cursor) {
-	bval := nz.sqlToBindvar(node)
+	err := validateLiteral(node)
+	if err != nil {
+		nz.err = err
+	}
+
+	bval := SQLToBindvar(node)
 	if bval == nil {
 		return
 	}
@@ -173,7 +216,7 @@ func (nz *normalizer) convertComparison(node *ComparisonExpr) {
 		Type: querypb.Type_TUPLE,
 	}
 	for _, val := range tupleVals {
-		bval := nz.sqlToBindvar(val)
+		bval := SQLToBindvar(val)
 		if bval == nil {
 			return
 		}
@@ -188,7 +231,7 @@ func (nz *normalizer) convertComparison(node *ComparisonExpr) {
 	node.Right = ListArg(bvname)
 }
 
-func (nz *normalizer) sqlToBindvar(node SQLNode) *querypb.BindVariable {
+func SQLToBindvar(node SQLNode) *querypb.BindVariable {
 	if node, ok := node.(*Literal); ok {
 		var v sqltypes.Value
 		var err error
@@ -207,11 +250,28 @@ func (nz *normalizer) sqlToBindvar(node SQLNode) *querypb.BindVariable {
 			// We parse the `x'7b7d'` string literal into a hex encoded string of `7b7d` in the parser
 			// We need to re-encode it back to the original MySQL query format before passing it on as a bindvar value to MySQL
 			var vbytes []byte
-			vbytes, err = node.encodeHexValToMySQLQueryFormat()
+			vbytes, err = node.encodeHexOrBitValToMySQLQueryFormat()
 			if err != nil {
 				return nil
 			}
 			v, err = sqltypes.NewValue(sqltypes.HexVal, vbytes)
+		case BitVal:
+			// Convert bit value to hex number in parameterized query format
+			var ui uint64
+			ui, err = strconv.ParseUint(string(node.Bytes()), 2, 64)
+			if err != nil {
+				return nil
+			}
+			v, err = sqltypes.NewValue(sqltypes.HexNum, []byte(fmt.Sprintf("0x%x", ui)))
+		case DateVal:
+			v, err = sqltypes.NewValue(sqltypes.Date, node.Bytes())
+		case TimeVal:
+			v, err = sqltypes.NewValue(sqltypes.Time, node.Bytes())
+		case TimestampVal:
+			// This is actually a DATETIME MySQL type. The timestamp literal
+			// syntax is part of the SQL standard and MySQL DATETIME matches
+			// the type best.
+			v, err = sqltypes.NewValue(sqltypes.Datetime, node.Bytes())
 		default:
 			return nil
 		}

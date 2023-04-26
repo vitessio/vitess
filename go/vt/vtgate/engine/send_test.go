@@ -17,6 +17,7 @@ limitations under the License.
 package engine
 
 import (
+	"context"
 	"errors"
 	"testing"
 
@@ -146,7 +147,7 @@ func TestSendTable(t *testing.T) {
 				MultishardAutocommit: tc.multiShardAutocommit,
 			}
 			vc := &loggingVCursor{shards: tc.shards}
-			_, err := send.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
+			_, err := send.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 			if tc.expectedError != "" {
 				require.EqualError(t, err, tc.expectedError)
 			} else {
@@ -156,12 +157,12 @@ func TestSendTable(t *testing.T) {
 
 			// Failure cases
 			vc = &loggingVCursor{shardErr: errors.New("shard_error")}
-			_, err = send.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
+			_, err = send.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 			require.EqualError(t, err, "shard_error")
 
 			if !tc.sharded {
 				vc = &loggingVCursor{}
-				_, err = send.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
+				_, err = send.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 				require.EqualError(t, err, "Keyspace does not have exactly one shard: []")
 			}
 		})
@@ -308,7 +309,7 @@ func TestSendGetFields(t *testing.T) {
 		SingleShardOnly:   false,
 	}
 	vc := &loggingVCursor{shards: []string{"-20", "20-"}, results: results}
-	qr, err := send.GetFields(vc, map[string]*querypb.BindVariable{})
+	qr, err := send.GetFields(context.Background(), vc, map[string]*querypb.BindVariable{})
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,

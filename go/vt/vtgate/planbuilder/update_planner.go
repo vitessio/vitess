@@ -30,23 +30,26 @@ import (
 )
 
 // buildUpdatePlan returns a stmtPlanner that builds the instructions for an UPDATE statement.
-func buildUpdatePlan(query string) stmtPlanner {
-	return func(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema) (engine.Primitive, error) {
+func buildUpdatePlan(string) stmtPlanner {
+	return func(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema) (*planResult, error) {
 		upd := stmt.(*sqlparser.Update)
 		if upd.With != nil {
 			return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: with expression in update statement")
 		}
-		dml, ksidVindex, err := buildDMLPlan(vschema, "update", stmt, reservedVars, upd.TableExprs, upd.Where, upd.OrderBy, upd.Limit, upd.Comments, upd.Exprs)
+		dml, tables, ksidVindex, err := buildDMLPlan(vschema, "update", stmt, reservedVars, upd.TableExprs, upd.Where, upd.OrderBy, upd.Limit, upd.Comments, upd.Exprs)
 		if err != nil {
 			return nil, err
 		}
 		eupd := &engine.Update{DML: dml}
 
 		if dml.Opcode == engine.Unsharded {
-			return eupd, nil
+			return newPlanResult(eupd, tables...), nil
 		}
-
-		cvv, ovq, err := buildChangedVindexesValues(upd, eupd.Table, ksidVindex.Columns)
+		eupdTable, err := eupd.GetSingleTable()
+		if err != nil {
+			return nil, err
+		}
+		cvv, ovq, err := buildChangedVindexesValues(upd, eupdTable, ksidVindex.Columns)
 		if err != nil {
 			return nil, err
 		}
@@ -56,14 +59,14 @@ func buildUpdatePlan(query string) stmtPlanner {
 			eupd.KsidVindex = ksidVindex.Vindex
 			eupd.KsidLength = len(ksidVindex.Columns)
 		}
-		return eupd, nil
+		return newPlanResult(eupd, tables...), nil
 	}
 }
 
 // buildChangedVindexesValues adds to the plan all the lookup vindexes that are changing.
 // Updates can only be performed to secondary lookup vindexes with no complex expressions
 // in the set clause.
-func buildChangedVindexesValues(update *sqlparser.Update, table *vindexes.Table, ksidCols []sqlparser.ColIdent) (map[string]*engine.VindexValues, string, error) {
+func buildChangedVindexesValues(update *sqlparser.Update, table *vindexes.Table, ksidCols []sqlparser.IdentifierCI) (map[string]*engine.VindexValues, string, error) {
 	changedVindexes := make(map[string]*engine.VindexValues)
 	buf, offset := initialQuery(ksidCols, table)
 	for i, vindex := range table.ColumnVindexes {
@@ -126,7 +129,7 @@ func buildChangedVindexesValues(update *sqlparser.Update, table *vindexes.Table,
 	return changedVindexes, buf.String(), nil
 }
 
-func initialQuery(ksidCols []sqlparser.ColIdent, table *vindexes.Table) (*sqlparser.TrackedBuffer, int) {
+func initialQuery(ksidCols []sqlparser.IdentifierCI, table *vindexes.Table) (*sqlparser.TrackedBuffer, int) {
 	buf := sqlparser.NewTrackedBuffer(nil)
 	offset := 0
 	for _, col := range ksidCols {

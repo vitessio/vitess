@@ -77,8 +77,8 @@ func TestRecalculatePKColsInfoByColumnNames(t *testing.T) {
 func TestPrimaryKeyEquivalentColumns(t *testing.T) {
 	ctx := context.Background()
 	testEnv, err := testenv.Init()
-	defer testEnv.Close()
 	require.NoError(t, err)
+	defer testEnv.Close()
 	tests := []struct {
 		name    string
 		table   string

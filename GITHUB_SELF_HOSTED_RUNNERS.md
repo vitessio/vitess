@@ -22,9 +22,9 @@ access to Vitess.
    3. `tar xzf ./actions-runner-linux-x64-2.280.3.tar.gz`
    4. `./config.sh --url https://github.com/vitessio/vitess --token <token> --name github-runner-<num>`
    5. With a screen execute `./run.sh`
-8. Set up a cron job to remove docker volumes and images every week
+8. Set up a cron job to remove docker volumes and images every other weekday
    1. `crontab -e`
-   2. Within the file add a line `8 5 * * 6 docker system prune -f --volumes --all`
+   2. Within the file add a line `0 5 * * 1,3,5 docker system prune -f --volumes --all`
 9. Vtorc, Cluster 14 and some other tests use multiple MySQL instances which are all brought up with asynchronous I/O setup in InnoDB. This sometimes leads to us hitting the Linux asynchronous I/O limit.
 To fix this we increase the default limit on the self-hosted runners by -
    1. To set the aio-max-nr value, add the following line to the /etc/sysctl.conf file:

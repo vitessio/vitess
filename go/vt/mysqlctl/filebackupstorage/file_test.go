@@ -32,7 +32,7 @@ import (
 // setupFileBackupStorage creates a temporary directory, and
 // returns a FileBackupStorage based on it
 func setupFileBackupStorage(t *testing.T) *FileBackupStorage {
-	*FileBackupStorageRoot = t.TempDir()
+	FileBackupStorageRoot = t.TempDir()
 	return &FileBackupStorage{}
 }
 

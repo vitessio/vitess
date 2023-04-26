@@ -26,11 +26,6 @@ scrape_configs:
           - 'vttablet202:8080'
           - 'vttablet301:8080'
           - 'vttablet302:8080'
-  - job_name: vitess-vtworker
-    metrics_path: /metrics
-    static_configs:
-      - targets:
-          - 'vtwork:8080'
   # Mock mysql exporter for vttablet 
   - job_name: mysql
     metrics_path: /metrics

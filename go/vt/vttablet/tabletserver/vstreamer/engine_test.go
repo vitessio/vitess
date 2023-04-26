@@ -17,11 +17,10 @@ limitations under the License.
 package vstreamer
 
 import (
+	"context"
 	"encoding/json"
 	"testing"
 	"time"
-
-	"context"
 
 	"github.com/stretchr/testify/require"
 
@@ -143,16 +142,15 @@ func TestUpdateVSchema(t *testing.T) {
         "hash": {}
       }
     }
-  }
+  },
+  "shard_routing_rules": null
 }`
-
 	b, err := json.MarshalIndent(engine.vschema(), "", "  ")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := string(b); got != want {
-		t.Errorf("vschema:\n%s, want:\n%s", got, want)
-	}
+	got := string(b)
+	require.Equal(t, want, got)
 }
 
 func expectUpdateCount(t *testing.T, wantCount int64) int64 {

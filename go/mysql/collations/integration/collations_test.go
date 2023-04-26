@@ -20,7 +20,6 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/hex"
-	"flag"
 	"fmt"
 	"os"
 	"path"
@@ -28,6 +27,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/text/encoding/unicode/utf32"
 
@@ -44,7 +44,7 @@ var collationEnv *collations.Environment
 func init() {
 	// We require MySQL 8.0 collations for the comparisons in the tests
 	mySQLVersion := "8.0.0"
-	servenv.MySQLServerVersion = &mySQLVersion
+	servenv.SetMySQLServerVersionForTest(mySQLVersion)
 	collationEnv = collations.NewEnvironment(mySQLVersion)
 }
 
@@ -185,7 +185,7 @@ func processSQLTest(t *testing.T, testfile string, conn *mysql.Conn) {
 	}
 }
 
-var testOneCollation = flag.String("test-one-collation", "", "")
+var testOneCollation = pflag.String("test-one-collation", "", "")
 
 func TestCollationsOnMysqld(t *testing.T) {
 	conn := mysqlconn(t)

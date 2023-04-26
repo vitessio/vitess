@@ -95,13 +95,13 @@ func (cfg *Config) Type() string { return "cluster.Config" }
 // Set is part of the flag.Value interface. Each flag is parsed according to the
 // following DSN:
 //
-// 		id= // ID or shortname of the cluster.
-//		name= // Name of the cluster.
-// 		discovery= // Name of the discovery implementation
-// 		discovery-.*= // Per-discovery-implementation flags. These are passed to
-//		              // a given discovery implementation's constructor.
-//		vtsql-.*= // VtSQL-specific flags. Further parsing of these is delegated
-// 		          // to the vtsql package.
+//	id= // ID or shortname of the cluster.
+//	name= // Name of the cluster.
+//	discovery= // Name of the discovery implementation
+//	discovery-.*= // Per-discovery-implementation flags. These are passed to
+//	              // a given discovery implementation's constructor.
+//	vtsql-.*= // VtSQL-specific flags. Further parsing of these is delegated
+//	          // to the vtsql package.
 func (cfg *Config) Set(value string) error {
 	if cfg.DiscoveryFlagsByImpl == nil {
 		cfg.DiscoveryFlagsByImpl = map[string]map[string]string{}

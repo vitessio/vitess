@@ -19,8 +19,9 @@ limitations under the License.
 package cephbackupstorage
 
 import (
+	"context"
 	"encoding/json"
-	"flag"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -28,22 +29,31 @@ import (
 	"strings"
 	"sync"
 
-	"errors"
-
-	"context"
-
 	minio "github.com/minio/minio-go"
+	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
+	"vitess.io/vitess/go/vt/servenv"
 )
 
 var (
 	// configFilePath is where the configs/credentials for backups will be stored.
-	configFilePath = flag.String("ceph_backup_storage_config", "ceph_backup_config.json",
-		"Path to JSON config file for ceph backup storage")
+	configFilePath string
 )
+
+func registerFlags(fs *pflag.FlagSet) {
+	fs.StringVar(&configFilePath, "ceph_backup_storage_config", "ceph_backup_config.json",
+		"Path to JSON config file for ceph backup storage.")
+}
+
+func init() {
+	servenv.OnParseFor("vtbackup", registerFlags)
+	servenv.OnParseFor("vtctl", registerFlags)
+	servenv.OnParseFor("vtctld", registerFlags)
+	servenv.OnParseFor("vttablet", registerFlags)
+}
 
 var storageConfig struct {
 	AccessKey string `json:"accessKey"`
@@ -278,7 +288,7 @@ func (bs *CephBackupStorage) client() (*minio.Client, error) {
 	defer bs.mu.Unlock()
 
 	if bs._client == nil {
-		configFile, err := os.Open(*configFilePath)
+		configFile, err := os.Open(configFilePath)
 		if err != nil {
 			return nil, fmt.Errorf("file not present : %v", err)
 		}
@@ -308,7 +318,6 @@ func init() {
 
 // objName joins path parts into an object name.
 // Unlike path.Join, it doesn't collapse ".." or strip trailing slashes.
-// It also adds the value of the -gcs_backup_storage_root flag if set.
 func objName(parts ...string) string {
 	return strings.Join(parts, "/")
 }

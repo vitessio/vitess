@@ -70,7 +70,7 @@ func (td *tableDiffer) buildTablePlan() (*tablePlan, error) {
 		case *sqlparser.StarExpr:
 			// If it's a '*' expression, expand column list from the schema.
 			for _, fld := range tp.table.Fields {
-				aliased := &sqlparser.AliasedExpr{Expr: &sqlparser.ColName{Name: sqlparser.NewColIdent(fld.Name)}}
+				aliased := &sqlparser.AliasedExpr{Expr: &sqlparser.ColName{Name: sqlparser.NewIdentifierCI(fld.Name)}}
 				sourceSelect.SelectExprs = append(sourceSelect.SelectExprs, aliased)
 				targetSelect.SelectExprs = append(targetSelect.SelectExprs, aliased)
 			}
@@ -90,8 +90,8 @@ func (td *tableDiffer) buildTablePlan() (*tablePlan, error) {
 			targetSelect.SelectExprs = append(targetSelect.SelectExprs, &sqlparser.AliasedExpr{Expr: targetCol})
 
 			// Check if it's an aggregate expression
-			if expr, ok := selExpr.Expr.(*sqlparser.FuncExpr); ok {
-				switch fname := expr.Name.Lowered(); fname {
+			if expr, ok := selExpr.Expr.(sqlparser.AggrFunc); ok {
+				switch fname := strings.ToLower(expr.AggrName()); fname {
 				case "count", "sum":
 					// this will only work as long as aggregates can be pushed down to tablets
 					// this won't work: "select count(*) from (select id from t limit 1)"
@@ -113,18 +113,21 @@ func (td *tableDiffer) buildTablePlan() (*tablePlan, error) {
 		fields[strings.ToLower(field.Name)] = field.Type
 	}
 
+	targetSelect.SelectExprs = td.adjustForSourceTimeZone(targetSelect.SelectExprs, fields)
 	// Start with adding all columns for comparison.
 	tp.compareCols = make([]compareColInfo, len(sourceSelect.SelectExprs))
 	for i := range tp.compareCols {
 		tp.compareCols[i].colIndex = i
-
-		colname := targetSelect.SelectExprs[i].(*sqlparser.AliasedExpr).Expr.(*sqlparser.ColName).Name.Lowered()
+		colname, err := getColumnNameForSelectExpr(targetSelect.SelectExprs[i])
+		if err != nil {
+			return nil, err
+		}
 		_, ok := fields[colname]
 		if !ok {
-			return nil, fmt.Errorf("column %v not found in table %v", colname, tp.table.Name)
+			return nil, fmt.Errorf("column %v not found in table %v on tablet %v",
+				colname, tp.table.Name, td.wd.ct.vde.thisTablet.Alias)
 		}
 		tp.compareCols[i].colName = colname
-
 	}
 
 	sourceSelect.From = sel.From
@@ -133,7 +136,7 @@ func (td *tableDiffer) buildTablePlan() (*tablePlan, error) {
 	targetSelect.From = sqlparser.TableExprs{
 		&sqlparser.AliasedTableExpr{
 			Expr: &sqlparser.TableName{
-				Name: sqlparser.NewTableIdent(tp.table.Name),
+				Name: sqlparser.NewIdentifierCS(tp.table.Name),
 			},
 		},
 	}
@@ -153,13 +156,15 @@ func (td *tableDiffer) buildTablePlan() (*tablePlan, error) {
 
 	tp.sourceQuery = sqlparser.String(sourceSelect)
 	tp.targetQuery = sqlparser.String(targetSelect)
+	log.Info("VDiff query on source: %v", tp.sourceQuery)
+	log.Info("VDiff query on target: %v", tp.targetQuery)
 
 	tp.aggregates = aggregates
 	td.tablePlan = tp
 	return tp, err
 }
 
-// findPKs identifies PKs and removes them from the columns to do data comparison
+// findPKs identifies PKs and removes them from the columns to do data comparison.
 func (tp *tablePlan) findPKs(targetSelect *sqlparser.Select) error {
 	var orderby sqlparser.OrderBy
 	for _, pk := range tp.table.PrimaryKeyColumns {
@@ -190,7 +195,7 @@ func (tp *tablePlan) findPKs(targetSelect *sqlparser.Select) error {
 			return fmt.Errorf("column %v not found in table %v", pk, tp.table.Name)
 		}
 		orderby = append(orderby, &sqlparser.Order{
-			Expr:      &sqlparser.ColName{Name: sqlparser.NewColIdent(pk)},
+			Expr:      &sqlparser.ColName{Name: sqlparser.NewIdentifierCI(pk)},
 			Direction: sqlparser.AscOrder,
 		})
 	}

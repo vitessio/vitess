@@ -17,6 +17,7 @@ limitations under the License.
 package tabletserver
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strings"
@@ -34,8 +35,6 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
-
-	"context"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
@@ -59,11 +58,11 @@ func TestTxEngineClose(t *testing.T) {
 
 	// Normal close with timeout wait.
 	te.AcceptReadWrite()
-	c, beginSQL, err := te.txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil)
+	c, beginSQL, _, err := te.txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil, nil)
 	require.NoError(t, err)
 	require.Equal(t, "begin", beginSQL)
 	c.Unlock()
-	c, beginSQL, err = te.txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil)
+	c, beginSQL, _, err = te.txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil, nil)
 	require.NoError(t, err)
 	require.Equal(t, "begin", beginSQL)
 	c.Unlock()
@@ -75,7 +74,7 @@ func TestTxEngineClose(t *testing.T) {
 
 	// Immediate close.
 	te.AcceptReadOnly()
-	c, _, err = te.txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil)
+	c, _, _, err = te.txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -87,7 +86,7 @@ func TestTxEngineClose(t *testing.T) {
 	// Normal close with short grace period.
 	te.shutdownGracePeriod = 25 * time.Millisecond
 	te.AcceptReadWrite()
-	c, _, err = te.txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil)
+	c, _, _, err = te.txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil, nil)
 	require.NoError(t, err)
 	c.Unlock()
 	start = time.Now()
@@ -98,7 +97,7 @@ func TestTxEngineClose(t *testing.T) {
 	// Normal close with short grace period, but pool gets empty early.
 	te.shutdownGracePeriod = 25 * time.Millisecond
 	te.AcceptReadWrite()
-	c, _, err = te.txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil)
+	c, _, _, err = te.txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil, nil)
 	require.NoError(t, err)
 	c.Unlock()
 	go func() {
@@ -114,7 +113,7 @@ func TestTxEngineClose(t *testing.T) {
 
 	// Immediate close, but connection is in use.
 	te.AcceptReadOnly()
-	c, _, err = te.txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil)
+	c, _, _, err = te.txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil, nil)
 	require.NoError(t, err)
 	go func() {
 		time.Sleep(100 * time.Millisecond)
@@ -135,7 +134,7 @@ func TestTxEngineClose(t *testing.T) {
 	te.AcceptReadWrite()
 	_, err = te.Reserve(ctx, &querypb.ExecuteOptions{}, 0, nil)
 	require.NoError(t, err)
-	_, err = te.ReserveBegin(ctx, &querypb.ExecuteOptions{}, nil, nil)
+	_, _, err = te.ReserveBegin(ctx, &querypb.ExecuteOptions{}, nil, nil)
 	require.NoError(t, err)
 	start = time.Now()
 	te.Close()
@@ -152,17 +151,17 @@ func TestTxEngineBegin(t *testing.T) {
 	config.DB = newDBConfigs(db)
 	te := NewTxEngine(tabletenv.NewEnv(config, "TabletServerTest"))
 
-	for _, exec := range []func() (int64, error){
-		func() (int64, error) {
-			tx, _, err := te.Begin(ctx, nil, 0, &querypb.ExecuteOptions{})
-			return tx, err
+	for _, exec := range []func() (int64, string, error){
+		func() (int64, string, error) {
+			tx, _, schemaStateChanges, err := te.Begin(ctx, nil, 0, nil, &querypb.ExecuteOptions{})
+			return tx, schemaStateChanges, err
 		},
-		func() (int64, error) {
+		func() (int64, string, error) {
 			return te.ReserveBegin(ctx, &querypb.ExecuteOptions{}, nil, nil)
 		},
 	} {
 		te.AcceptReadOnly()
-		tx1, err := exec()
+		tx1, _, err := exec()
 		require.NoError(t, err)
 		_, _, err = te.Commit(ctx, tx1)
 		require.NoError(t, err)
@@ -170,7 +169,7 @@ func TestTxEngineBegin(t *testing.T) {
 		db.ResetQueryLog()
 
 		te.AcceptReadWrite()
-		tx2, err := exec()
+		tx2, _, err := exec()
 		require.NoError(t, err)
 		_, _, err = te.Commit(ctx, tx2)
 		require.NoError(t, err)
@@ -178,11 +177,11 @@ func TestTxEngineBegin(t *testing.T) {
 		db.ResetQueryLog()
 
 		te.transition(Transitioning)
-		_, err = exec()
+		_, _, err = exec()
 		assert.EqualError(t, err, "tx engine can't accept new connections in state Transitioning")
 
 		te.transition(NotServing)
-		_, err = exec()
+		_, _, err = exec()
 		assert.EqualError(t, err, "tx engine can't accept new connections in state NotServing")
 	}
 
@@ -197,7 +196,7 @@ func TestTxEngineRenewFails(t *testing.T) {
 	te := NewTxEngine(tabletenv.NewEnv(config, "TabletServerTest"))
 	te.AcceptReadOnly()
 	options := &querypb.ExecuteOptions{}
-	connID, err := te.ReserveBegin(ctx, options, nil, nil)
+	connID, _, err := te.ReserveBegin(ctx, options, nil, nil)
 	require.NoError(t, err)
 
 	conn, err := te.txPool.GetAndLock(connID, "for test")
@@ -205,7 +204,7 @@ func TestTxEngineRenewFails(t *testing.T) {
 	conn.Unlock() // but we keep holding on to it... sneaky....
 
 	// this next bit sets up the scp so our renew will fail
-	conn2, err := te.txPool.scp.NewConn(ctx, options)
+	conn2, err := te.txPool.scp.NewConn(ctx, options, nil)
 	require.NoError(t, err)
 	defer conn2.Release(tx.TxCommit)
 	te.txPool.scp.lastID.Set(conn2.ConnID - 1)
@@ -552,7 +551,7 @@ func startTransaction(te *TxEngine, writeTransaction bool) error {
 	} else {
 		options.TransactionIsolation = querypb.ExecuteOptions_CONSISTENT_SNAPSHOT_READ_ONLY
 	}
-	_, _, err := te.Begin(context.Background(), nil, 0, options)
+	_, _, _, err := te.Begin(context.Background(), nil, 0, nil, options)
 	return err
 }
 
@@ -568,7 +567,7 @@ func TestTxEngineFailReserve(t *testing.T) {
 	_, err := te.Reserve(ctx, options, 0, nil)
 	assert.EqualError(t, err, "tx engine can't accept new connections in state NotServing")
 
-	_, err = te.ReserveBegin(ctx, options, nil, nil)
+	_, _, err = te.ReserveBegin(ctx, options, nil, nil)
 	assert.EqualError(t, err, "tx engine can't accept new connections in state NotServing")
 
 	te.AcceptReadOnly()
@@ -577,14 +576,14 @@ func TestTxEngineFailReserve(t *testing.T) {
 	_, err = te.Reserve(ctx, options, 0, []string{"dummy_query"})
 	assert.EqualError(t, err, "unknown error: failed executing dummy_query (errno 1105) (sqlstate HY000) during query: dummy_query")
 
-	_, err = te.ReserveBegin(ctx, options, []string{"dummy_query"}, nil)
+	_, _, err = te.ReserveBegin(ctx, options, []string{"dummy_query"}, nil)
 	assert.EqualError(t, err, "unknown error: failed executing dummy_query (errno 1105) (sqlstate HY000) during query: dummy_query")
 
 	nonExistingID := int64(42)
 	_, err = te.Reserve(ctx, options, nonExistingID, nil)
 	assert.EqualError(t, err, "transaction 42: not found")
 
-	txID, _, err := te.Begin(ctx, nil, 0, options)
+	txID, _, _, err := te.Begin(ctx, nil, 0, nil, options)
 	require.NoError(t, err)
 	conn, err := te.txPool.GetAndLock(txID, "for test")
 	require.NoError(t, err)

@@ -18,6 +18,7 @@ package engine
 
 import (
 	"container/heap"
+	"context"
 	"fmt"
 	"math"
 	"reflect"
@@ -65,13 +66,13 @@ func (ms *MemorySort) SetTruncateColumnCount(count int) {
 }
 
 // TryExecute satisfies the Primitive interface.
-func (ms *MemorySort) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+func (ms *MemorySort) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	count, err := ms.fetchCount(vcursor, bindVars)
 	if err != nil {
 		return nil, err
 	}
 
-	result, err := vcursor.ExecutePrimitive(ms.Input, bindVars, wantfields)
+	result, err := vcursor.ExecutePrimitive(ctx, ms.Input, bindVars, wantfields)
 	if err != nil {
 		return nil, err
 	}
@@ -91,7 +92,7 @@ func (ms *MemorySort) TryExecute(vcursor VCursor, bindVars map[string]*querypb.B
 }
 
 // TryStreamExecute satisfies the Primitive interface.
-func (ms *MemorySort) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (ms *MemorySort) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	count, err := ms.fetchCount(vcursor, bindVars)
 	if err != nil {
 		return err
@@ -107,7 +108,7 @@ func (ms *MemorySort) TryStreamExecute(vcursor VCursor, bindVars map[string]*que
 		comparers: extractSlices(ms.OrderBy),
 		reverse:   true,
 	}
-	err = vcursor.StreamExecutePrimitive(ms.Input, bindVars, wantfields, func(qr *sqltypes.Result) error {
+	err = vcursor.StreamExecutePrimitive(ctx, ms.Input, bindVars, wantfields, func(qr *sqltypes.Result) error {
 		if len(qr.Fields) != 0 {
 			if err := cb(&sqltypes.Result{Fields: qr.Fields}); err != nil {
 				return err
@@ -143,8 +144,8 @@ func (ms *MemorySort) TryStreamExecute(vcursor VCursor, bindVars map[string]*que
 }
 
 // GetFields satisfies the Primitive interface.
-func (ms *MemorySort) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	return ms.Input.GetFields(vcursor, bindVars)
+func (ms *MemorySort) GetFields(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+	return ms.Input.GetFields(ctx, vcursor, bindVars)
 }
 
 // Inputs returns the input to memory sort

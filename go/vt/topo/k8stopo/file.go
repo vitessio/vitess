@@ -19,6 +19,7 @@ package k8stopo
 import (
 	"bytes"
 	"compress/gzip"
+	"context"
 	"encoding/base64"
 	"fmt"
 	"hash/fnv"
@@ -27,8 +28,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"context"
 
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -243,11 +242,16 @@ func (s *Server) List(ctx context.Context, filePathPrefix string) ([]topo.KVInfo
 	if len(nodes) == 0 {
 		return results, topo.NewError(topo.NoNode, filePathPrefix)
 	}
+	rootPrefix := filepath.Join(s.root, filePathPrefix)
 	for _, node := range nodes {
-		if strings.HasPrefix(node.Data.Value, filePathPrefix) {
+		if strings.HasPrefix(node.Data.Key, rootPrefix) {
+			out, err := unpackValue([]byte(node.Data.Value))
+			if err != nil {
+				return results, convertError(err, node.Data.Key)
+			}
 			results = append(results, topo.KVInfo{
 				Key:     []byte(node.Data.Key),
-				Value:   []byte(node.Data.Value),
+				Value:   out,
 				Version: KubernetesVersion(node.GetResourceVersion()),
 			})
 		}

@@ -150,7 +150,7 @@ func buildUpdatePlan(upd *sqlparser.Update) (*controllerPlan, error) {
 	upd.Where = &sqlparser.Where{
 		Type: sqlparser.WhereClause,
 		Expr: &sqlparser.ComparisonExpr{
-			Left:     &sqlparser.ColName{Name: sqlparser.NewColIdent("id")},
+			Left:     &sqlparser.ColName{Name: sqlparser.NewIdentifierCI("id")},
 			Operator: sqlparser.InOp,
 			Right:    sqlparser.ListArg("ids"),
 		},
@@ -192,7 +192,7 @@ func buildDeletePlan(del *sqlparser.Delete) (*controllerPlan, error) {
 	del.Where = &sqlparser.Where{
 		Type: sqlparser.WhereClause,
 		Expr: &sqlparser.ComparisonExpr{
-			Left:     &sqlparser.ColName{Name: sqlparser.NewColIdent("id")},
+			Left:     &sqlparser.ColName{Name: sqlparser.NewIdentifierCI("id")},
 			Operator: sqlparser.InOp,
 			Right:    sqlparser.ListArg("ids"),
 		},
@@ -204,7 +204,7 @@ func buildDeletePlan(del *sqlparser.Delete) (*controllerPlan, error) {
 	copyStateWhere := &sqlparser.Where{
 		Type: sqlparser.WhereClause,
 		Expr: &sqlparser.ComparisonExpr{
-			Left:     &sqlparser.ColName{Name: sqlparser.NewColIdent("vrepl_id")},
+			Left:     &sqlparser.ColName{Name: sqlparser.NewIdentifierCI("vrepl_id")},
 			Operator: sqlparser.InOp,
 			Right:    sqlparser.ListArg("ids"),
 		},

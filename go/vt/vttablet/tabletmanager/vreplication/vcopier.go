@@ -168,7 +168,7 @@ func (vc *vcopier) catchup(ctx context.Context, copyState map[string]*sqltypes.R
 	// Wait for catchup.
 	tkr := time.NewTicker(waitRetryTime)
 	defer tkr.Stop()
-	seconds := int64(*replicaLagTolerance / time.Second)
+	seconds := int64(replicaLagTolerance / time.Second)
 	for {
 		sbm := vc.vr.stats.ReplicationLagSeconds.Get()
 		if sbm < seconds {
@@ -212,7 +212,7 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 		return fmt.Errorf("plan not found for table: %s, current plans are: %#v", tableName, plan.TargetTables)
 	}
 
-	ctx, cancel := context.WithTimeout(ctx, *copyPhaseDuration)
+	ctx, cancel := context.WithTimeout(ctx, copyPhaseDuration)
 	defer cancel()
 
 	var lastpkpb *querypb.QueryResult
@@ -238,9 +238,19 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 				return io.EOF
 			default:
 			}
+			if rows.Throttled {
+				_ = vc.vr.updateTimeThrottled(RowStreamerComponentName)
+				return nil
+			}
+			if rows.Heartbeat {
+				_ = vc.vr.updateHeartbeatTime(time.Now().Unix())
+				return nil
+			}
 			// verify throttler is happy, otherwise keep looping
 			if vc.vr.vre.throttlerClient.ThrottleCheckOKOrWaitAppName(ctx, vc.throttlerAppName) {
-				break
+				break // out of 'for' loop
+			} else { // we're throttled
+				_ = vc.vr.updateTimeThrottled(VCopierComponentName)
 			}
 		}
 		if vc.tablePlan == nil {
@@ -348,7 +358,7 @@ func (vc *vcopier) fastForward(ctx context.Context, copyState map[string]*sqltyp
 		return err
 	}
 	if settings.StartPos.IsZero() {
-		update := binlogplayer.GenerateUpdatePos(vc.vr.id, pos, time.Now().Unix(), 0, vc.vr.stats.CopyRowCount.Get(), *vreplicationStoreCompressedGTID)
+		update := binlogplayer.GenerateUpdatePos(vc.vr.id, pos, time.Now().Unix(), 0, vc.vr.stats.CopyRowCount.Get(), vreplicationStoreCompressedGTID)
 		_, err := vc.vr.dbClient.Execute(update)
 		return err
 	}

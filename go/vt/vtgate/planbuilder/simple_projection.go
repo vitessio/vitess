@@ -42,7 +42,7 @@ type simpleProjection struct {
 }
 
 // newSimpleProjection builds a new simpleProjection.
-func newSimpleProjection(alias sqlparser.TableIdent, plan logicalPlan) (*simpleProjection, *symtab, error) {
+func newSimpleProjection(alias sqlparser.IdentifierCS, plan logicalPlan) (*simpleProjection, *symtab, error) {
 	sq := &simpleProjection{
 		logicalPlanCommon: newBuilderCommon(plan),
 		eSimpleProj:       &engine.SimpleProjection{},

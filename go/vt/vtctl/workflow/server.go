@@ -415,7 +415,7 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 		shardStreamKey := fmt.Sprintf("%s/%s", tablet.Shard, tablet.AliasString())
 		shardStream, ok := workflow.ShardStreams[shardStreamKey]
 		if !ok {
-			ctx, cancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+			ctx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 			defer cancel()
 
 			si, err := s.ts.GetShard(ctx, req.Keyspace, tablet.Shard)

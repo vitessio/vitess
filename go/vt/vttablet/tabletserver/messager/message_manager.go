@@ -168,7 +168,7 @@ type messageManager struct {
 	tsv TabletService
 	vs  VStreamer
 
-	name         sqlparser.TableIdent
+	name         sqlparser.IdentifierCS
 	fieldResult  *sqltypes.Result
 	ackWaitTime  time.Duration
 	purgeAfter   time.Duration
@@ -284,7 +284,7 @@ func newMessageManager(tsv TabletService, vs VStreamer, table *schema.Table, pos
 	return mm
 }
 
-func buildPostponeQuery(name sqlparser.TableIdent, minBackoff, maxBackoff time.Duration) *sqlparser.ParsedQuery {
+func buildPostponeQuery(name sqlparser.IdentifierCS, minBackoff, maxBackoff time.Duration) *sqlparser.ParsedQuery {
 	var args []any
 
 	// since messages are immediately postponed upon sending, we need to add exponential backoff on top
@@ -337,9 +337,9 @@ func buildSelectColumnList(t *schema.Table) string {
 	for i, c := range t.MessageInfo.Fields {
 		// Column names may have to be escaped.
 		if i == 0 {
-			buf.Myprintf("%v", sqlparser.NewColIdent(c.Name))
+			buf.Myprintf("%v", sqlparser.NewIdentifierCI(c.Name))
 		} else {
-			buf.Myprintf(", %v", sqlparser.NewColIdent(c.Name))
+			buf.Myprintf(", %v", sqlparser.NewIdentifierCI(c.Name))
 		}
 	}
 	return buf.String()

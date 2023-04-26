@@ -74,8 +74,6 @@ export class KeyspaceService {
             keyspace.addNonservingShard(shard);
           }
         });
-        keyspace.shardingColumnName = shardingData.sharding_column_name || '';
-        keyspace.shardingColumnType = shardingData.sharding_column_type || '';
         return keyspace;
       });
   }

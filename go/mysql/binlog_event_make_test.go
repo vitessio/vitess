@@ -292,7 +292,7 @@ func TestTableMapEvent(t *testing.T) {
 
 	tableID := event.TableID(f)
 	if tableID != 0x102030405060 {
-		t.Fatalf("NewTableMapEvent().TableID returned %x", tableID)
+		t.Fatalf("NewTableMapEvent().ID returned %x", tableID)
 	}
 	gotTm, err := event.TableMap(f)
 	if err != nil {
@@ -310,9 +310,9 @@ func TestRowsEvent(t *testing.T) {
 	/*
 		    Reason for nolint
 		    Used in line 384 to 387
-		    tableID = event.TableID(f)
+		    tableID = event.ID(f)
 				if tableID != 0x102030405060 {
-					t.Fatalf("NewRowsEvent().TableID returned %x", tableID)
+					t.Fatalf("NewRowsEvent().ID returned %x", tableID)
 				}
 	*/
 	tableID := uint64(0x102030405060) //nolint
@@ -388,7 +388,7 @@ func TestRowsEvent(t *testing.T) {
 
 	tableID = event.TableID(f)
 	if tableID != 0x102030405060 {
-		t.Fatalf("NewRowsEvent().TableID returned %x", tableID)
+		t.Fatalf("NewRowsEvent().ID returned %x", tableID)
 	}
 	gotRows, err := event.Rows(f, tm)
 	if err != nil {

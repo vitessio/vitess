@@ -36,56 +36,55 @@ var ErrStreamClosed = errors.New("stream closed for sending")
 // parameterized Send/Recv methods typically called by gRPC streaming servers
 // and clients. For example, in the localvtctldclient:
 //
-// 	type backupStreamAdapter struct {
-// 		*grpcshim.BidiStream
-// 		ch chan *vtctldatapb.BackupResponse
-// 	}
+//	type backupStreamAdapter struct {
+//		*grpcshim.BidiStream
+//		ch chan *vtctldatapb.BackupResponse
+//	}
 //
-// 	func (stream *backupStreamAdapter) Recv() (*vtctldatapb.BackupResponse, error) {
-// 		select {
-// 		case <-stream.Context().Done():
-// 			return nil, stream.Context().Err()
-// 		case <-stream.Closed():
-// 			// Stream has been closed for future sends. If there are messages that
-// 			// have already been sent, receive them until there are no more. After
-// 			// all sent messages have been received, Recv will return the CloseErr.
-// 			select {
-// 			case msg := <-stream.ch:
-// 				return msg, nil
-// 			default:
-// 				return nil, stream.CloseErr()
-// 			}
-// 		case err := <-stream.ErrCh:
-// 			return nil, err
-// 		case msg := <-stream.ch:
-// 			return msg, nil
-// 		}
-// 	}
+//	func (stream *backupStreamAdapter) Recv() (*vtctldatapb.BackupResponse, error) {
+//		select {
+//		case <-stream.Context().Done():
+//			return nil, stream.Context().Err()
+//		case <-stream.Closed():
+//			// Stream has been closed for future sends. If there are messages that
+//			// have already been sent, receive them until there are no more. After
+//			// all sent messages have been received, Recv will return the CloseErr.
+//			select {
+//			case msg := <-stream.ch:
+//				return msg, nil
+//			default:
+//				return nil, stream.CloseErr()
+//			}
+//		case err := <-stream.ErrCh:
+//			return nil, err
+//		case msg := <-stream.ch:
+//			return msg, nil
+//		}
+//	}
 //
-// 	func (stream *backupStreamAdapter) Send(msg *vtctldatapb.BackupResponse) error {
-// 		select {
-// 		case <-stream.Context().Done():
-// 			return stream.Context().Err()
+//	func (stream *backupStreamAdapter) Send(msg *vtctldatapb.BackupResponse) error {
+//		select {
+//		case <-stream.Context().Done():
+//			return stream.Context().Err()
 //		case <-stream.Closed():
 //			return grpcshim.ErrStreamClosed
-// 		case stream.ch <- msg:
-// 			return nil
-// 		}
-// 	}
+//		case stream.ch <- msg:
+//			return nil
+//		}
+//	}
 //
-// 	// Backup is part of the vtctlservicepb.VtctldClient interface.
-// 	func (client *localVtctldClient) Backup(ctx context.Context, in *vtctldatapb.BackupRequest, opts ...grpc.CallOption) (vtctlservicepb.Vtctld_BackupClient, error) {
-// 		stream := &backupStreamAdapter{
-// 			BidiStream: grpcshim.NewBidiStream(ctx),
-// 			ch:         make(chan *vtctldatapb.BackupResponse, 1),
-// 		}
-// 		go func() {
-// 			err := client.s.Backup(in, stream)
-// 			stream.CloseWithError(err)
-// 		}()
-// 		return stream, nil
-// 	}
-//
+//	// Backup is part of the vtctlservicepb.VtctldClient interface.
+//	func (client *localVtctldClient) Backup(ctx context.Context, in *vtctldatapb.BackupRequest, opts ...grpc.CallOption) (vtctlservicepb.Vtctld_BackupClient, error) {
+//		stream := &backupStreamAdapter{
+//			BidiStream: grpcshim.NewBidiStream(ctx),
+//			ch:         make(chan *vtctldatapb.BackupResponse, 1),
+//		}
+//		go func() {
+//			err := client.s.Backup(in, stream)
+//			stream.CloseWithError(err)
+//		}()
+//		return stream, nil
+//	}
 type BidiStream struct {
 	// ErrCh receives errors mid-stream, and should be selected on with the
 	// same priority as stream.ch and stream/send contexts' cancellations in

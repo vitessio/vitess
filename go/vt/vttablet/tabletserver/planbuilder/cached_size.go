@@ -59,8 +59,6 @@ func (cached *Plan) CachedSize(alloc bool) int64 {
 			size += elem.CachedSize(false)
 		}
 	}
-	// field FieldQuery *vitess.io/vitess/go/vt/sqlparser.ParsedQuery
-	size += cached.FieldQuery.CachedSize(true)
 	// field FullQuery *vitess.io/vitess/go/vt/sqlparser.ParsedQuery
 	size += cached.FullQuery.CachedSize(true)
 	// field NextCount vitess.io/vitess/go/vt/vtgate/evalengine.Expr

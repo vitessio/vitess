@@ -17,33 +17,36 @@ limitations under the License.
 package main
 
 import (
-	"flag"
 	"log"
 	"os"
 
-	"vitess.io/vitess/go/tools/goimports"
+	"github.com/spf13/pflag"
 
-	. "vitess.io/vitess/go/tools/asthelpergen"
+	"vitess.io/vitess/go/tools/asthelpergen"
+
+	"vitess.io/vitess/go/tools/goimports"
 )
 
 func main() {
-	var patterns TypePaths
-	var generate, except string
-	var verify bool
+	var (
+		patterns         []string
+		generate, except string
+		verify           bool
+	)
 
-	flag.Var(&patterns, "in", "Go packages to load the generator")
-	flag.StringVar(&generate, "iface", "", "Root interface generate rewriter for")
-	flag.BoolVar(&verify, "verify", false, "ensure that the generated files are correct")
-	flag.StringVar(&except, "except", "", "don't deep clone these types")
-	flag.Parse()
+	pflag.StringSliceVar(&patterns, "in", nil, "Go packages to load the generator")
+	pflag.StringVar(&generate, "iface", "", "Root interface generate rewriter for")
+	pflag.BoolVar(&verify, "verify", false, "ensure that the generated files are correct")
+	pflag.StringVar(&except, "except", "", "don't deep clone these types")
+	pflag.Parse()
 
-	result, err := GenerateASTHelpers(patterns, generate, except)
+	result, err := asthelpergen.GenerateASTHelpers(patterns, generate, except)
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	if verify {
-		for _, err := range VerifyFilesOnDisk(result) {
+		for _, err := range asthelpergen.VerifyFilesOnDisk(result) {
 			log.Fatal(err)
 		}
 		log.Printf("%d files OK", len(result))

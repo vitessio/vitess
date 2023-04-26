@@ -3209,7 +3209,8 @@ func testClusters(t testing.TB) []*cluster.Cluster {
 									Keyspace: "test",
 									Name:     "-",
 									Shard: &topodatapb.Shard{
-										KeyRange: &topodatapb.KeyRange{},
+										KeyRange:         &topodatapb.KeyRange{},
+										IsPrimaryServing: true,
 									},
 								},
 							},

@@ -22,25 +22,26 @@
 // Then run:
 // vitess$ . dev.env
 // vitess$ cd examples/local
-// vitess/examples/local$ go run client.go -server=localhost:15991
+// vitess/examples/local$ go run client.go --server=localhost:15991
 package main
 
 import (
-	"flag"
 	"fmt"
 	"math/rand"
 	"os"
 	"time"
 
+	"github.com/spf13/pflag"
+
 	"vitess.io/vitess/go/vt/vitessdriver"
 )
 
 var (
-	server = flag.String("server", "", "vtgate server to connect to")
+	server = pflag.String("server", "", "vtgate server to connect to")
 )
 
 func main() {
-	flag.Parse()
+	pflag.Parse()
 	rand.Seed(time.Now().UnixNano())
 
 	// Connect to vtgate.

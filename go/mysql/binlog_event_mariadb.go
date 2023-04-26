@@ -54,10 +54,11 @@ func (ev mariadbBinlogEvent) IsGTID() bool {
 // GTID implements BinlogEvent.GTID().
 //
 // Expected format:
-//   # bytes   field
-//   8         sequence number
-//   4         domain ID
-//   1         flags2
+//
+//	# bytes   field
+//	8         sequence number
+//	4         domain ID
+//	1         flags2
 func (ev mariadbBinlogEvent) GTID(f BinlogFormat) (GTID, bool, error) {
 	const FLStandalone = 1
 

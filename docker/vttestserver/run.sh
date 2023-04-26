@@ -31,16 +31,16 @@ rm -vf "$VTDATAROOT"/"$tablet_dir"/{mysql.sock,mysql.sock.lock}
 
 # Run the vttestserver binary
 /vt/bin/vttestserver \
-	-port "$PORT" \
-	-keyspaces "$KEYSPACES" \
-	-num_shards "$NUM_SHARDS" \
-	-mysql_bind_host "${MYSQL_BIND_HOST:-127.0.0.1}" \
-	-mysql_server_version "${MYSQL_SERVER_VERSION:-$1}" \
-	-charset "${CHARSET:-utf8mb4}" \
-	-foreign_key_mode "${FOREIGN_KEY_MODE:-allow}" \
-	-enable_online_ddl="${ENABLE_ONLINE_DDL:-true}" \
-	-enable_direct_ddl="${ENABLE_DIRECT_DDL:-true}" \
-	-planner-version="${PLANNER_VERSION:-v3}" \
-	-vschema_ddl_authorized_users=% \
-	-schema_dir="/vt/schema/"
+	--port "$PORT" \
+	--keyspaces "$KEYSPACES" \
+	--num_shards "$NUM_SHARDS" \
+	--mysql_bind_host "${MYSQL_BIND_HOST:-127.0.0.1}" \
+	--mysql_server_version "${MYSQL_SERVER_VERSION:-$1}" \
+	--charset "${CHARSET:-utf8mb4}" \
+	--foreign_key_mode "${FOREIGN_KEY_MODE:-allow}" \
+	--enable_online_ddl="${ENABLE_ONLINE_DDL:-true}" \
+	--enable_direct_ddl="${ENABLE_DIRECT_DDL:-true}" \
+	--planner-version="${PLANNER_VERSION:-v3}" \
+	--vschema_ddl_authorized_users=% \
+	--schema_dir="/vt/schema/"
 

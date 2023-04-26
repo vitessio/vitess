@@ -135,6 +135,21 @@ func TestGetFlavor(t *testing.T) {
 			capability: MySQLJSONFlavorCapability,
 			isCapable:  true,
 		},
+		{
+			version:    "8.0.30",
+			capability: DynamicRedoLogCapacityFlavorCapability,
+			isCapable:  true,
+		},
+		{
+			version:    "8.0.29",
+			capability: DynamicRedoLogCapacityFlavorCapability,
+			isCapable:  false,
+		},
+		{
+			version:    "5.7.38",
+			capability: DynamicRedoLogCapacityFlavorCapability,
+			isCapable:  false,
+		},
 	}
 	for _, tc := range testcases {
 		name := fmt.Sprintf("%s %v", tc.version, tc.capability)

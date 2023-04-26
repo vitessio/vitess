@@ -208,6 +208,7 @@ func addTablet(t *testing.T, tabletUID int, tabletType string) *cluster.Vttablet
 	err = proc.Wait()
 	require.Nil(t, err)
 
+	tablet.VttabletProcess.ServingStatus = ""
 	err = tablet.VttabletProcess.Setup()
 	require.Nil(t, err)
 

@@ -329,7 +329,7 @@ func (rb *route) SupplyWeightString(colNumber int, alsoAddToGroupBy bool) (weigh
 		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected AST struct for query %T", s.SelectExprs[colNumber])
 	}
 	weightStringExpr := &sqlparser.FuncExpr{
-		Name: sqlparser.NewColIdent("weight_string"),
+		Name: sqlparser.NewIdentifierCI("weight_string"),
 		Exprs: []sqlparser.SelectExpr{
 			&sqlparser.AliasedExpr{
 				Expr: aliasExpr.Expr,
@@ -850,11 +850,10 @@ func (rb *route) exprIsValue(expr sqlparser.Expr) bool {
 }
 
 // queryTimeout returns DirectiveQueryTimeout value if set, otherwise returns 0.
-func queryTimeout(d sqlparser.CommentDirectives) int {
-	if val, ok := d[sqlparser.DirectiveQueryTimeout]; ok {
-		if intVal, err := strconv.Atoi(val); err == nil {
-			return intVal
-		}
+func queryTimeout(d *sqlparser.CommentDirectives) int {
+	val, _ := d.GetString(sqlparser.DirectiveQueryTimeout, "0")
+	if intVal, err := strconv.Atoi(val); err == nil {
+		return intVal
 	}
 	return 0
 }
