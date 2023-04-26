@@ -320,6 +320,7 @@ func validateReceivedEvents(t *testing.T) {
 
 func resetMetrics(t *testing.T) {
 	engine.vstreamerEventsStreamed.Reset()
+	engine.vstreamerCompressedTransactionsDecoded.Reset()
 	engine.resultStreamerNumRows.Reset()
 	engine.rowStreamerNumRows.Reset()
 	engine.vstreamerPhaseTimings.Reset()
