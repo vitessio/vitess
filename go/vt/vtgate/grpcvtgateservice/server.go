@@ -96,25 +96,35 @@ func immediateCallerIDFromCert(ctx context.Context) (string, []string) {
 	return cert.Subject.CommonName, cert.DNSNames
 }
 
-func immediateCallerID(ctx context.Context) (string, []string) {
-	if useStaticAuthenticationIdentity {
-		if immediate := servenv.StaticAuthUsernameFromContext(ctx); immediate != "" {
-			return immediate, nil
-		}
+// immediateCallerIdFromStaticAuthentication extracts the username of the current
+// static authentication context and returns that to the caller.
+func immediateCallerIdFromStaticAuthentication(ctx context.Context) (string, []string) {
+	if immediate := servenv.StaticAuthUsernameFromContext(ctx); immediate != "" {
+		return immediate, nil
 	}
-	return immediateCallerIDFromCert(ctx)
+
+	return "", nil
 }
 
 // withCallerIDContext creates a context that extracts what we need
 // from the incoming call and can be forwarded for use when talking to vttablet.
 func withCallerIDContext(ctx context.Context, effectiveCallerID *vtrpcpb.CallerID) context.Context {
-	immediate, securityGroups := immediateCallerID(ctx)
+	// The client cert common name (if using mTLS)
+	immediate, securityGroups := immediateCallerIDFromCert(ctx)
+
+	// The effective caller id (if --grpc_use_effective_callerid=true)
 	if immediate == "" && useEffective && effectiveCallerID != nil {
 		immediate = effectiveCallerID.Principal
 		if useEffectiveGroups && len(effectiveCallerID.Groups) > 0 {
 			securityGroups = effectiveCallerID.Groups
 		}
 	}
+
+	// The static auth username (if --grpc-use-static-authentication-callerid=true)
+	if immediate == "" && useStaticAuthenticationIdentity {
+		immediate, securityGroups = immediateCallerIdFromStaticAuthentication(ctx)
+	}
+
 	if immediate == "" {
 		immediate = unsecureClient
 	}
