@@ -565,8 +565,25 @@ func (e *expanderState) addColumn(col ColumnInfo, tbl TableInfo, tblName sqlpars
 	if e.needsQualifier {
 		alias = sqlparser.NewIdentifierCI(col.Name)
 	}
-	e.expandedColumns[tblName] = append(e.expandedColumns[tblName], colName)
 	e.colNames = append(e.colNames, &sqlparser.AliasedExpr{Expr: colName, As: alias})
+	e.storeExpandInfo(tbl, tblName, colName)
+}
+
+func (e *expanderState) storeExpandInfo(tbl TableInfo, tblName sqlparser.TableName, colName *sqlparser.ColName) {
+	vt := tbl.GetVindexTable()
+	if vt == nil {
+		return
+	}
+	keyspace := vt.Keyspace
+	var ks sqlparser.IdentifierCS
+	if keyspace != nil {
+		ks = sqlparser.NewIdentifierCS(keyspace.Name)
+	}
+	tblName = sqlparser.TableName{
+		Name:      tblName.Name,
+		Qualifier: ks,
+	}
+	e.expandedColumns[tblName] = append(e.expandedColumns[tblName], colName)
 }
 
 // createAliasedExpr creates an AliasedExpr with a ColName and an optional alias based on the given ColumnInfo.
