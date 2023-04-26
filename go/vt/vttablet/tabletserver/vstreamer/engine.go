@@ -129,7 +129,7 @@ func NewEngine(env tabletenv.Env, ts srvtopo.Server, se *schema.Engine, lagThrot
 		vstreamerPhaseTimings:                  env.Exporter().NewTimings("VStreamerPhaseTiming", "Time taken for different phases during vstream copy", "phase-timing"),
 		vstreamerCount:                         env.Exporter().NewGauge("VStreamerCount", "Current number of vstreamers"),
 		vstreamerEventsStreamed:                env.Exporter().NewCounter("VStreamerEventsStreamed", "Count of events streamed in VStream API"),
-		vstreamerCompressedTransactionsDecoded: env.Exporter().NewCounter("VStreamerCompressedTransactionsDecoded", "Count of compressed transaction payloads (MySQL's binlog_transaction_compression=ON) decoded in the VStream API"),
+		vstreamerCompressedTransactionsDecoded: env.Exporter().NewCounter("VStreamerCompressedTransactionsDecoded", "Count of compressed transactions (MySQL's binlog_transaction_compression=ON) decoded in the VStream API"),
 		vstreamerPacketSize:                    env.Exporter().NewGaugeFunc("VStreamPacketSize", "Max packet size for sending vstreamer events", getPacketSize),
 		vstreamerNumPackets:                    env.Exporter().NewCounter("VStreamerNumPackets", "Number of packets in vstreamer"),
 		resultStreamerNumPackets:               env.Exporter().NewCounter("ResultStreamerNumPackets", "Number of packets in result streamer"),
