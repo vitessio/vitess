@@ -372,7 +372,6 @@ func buildProjection(op *Projection, qb *queryBuilder) error {
 
 	qb.clearProjections()
 
-	// we are creating the select here
 	for i, column := range op.Columns {
 		ae := &sqlparser.AliasedExpr{Expr: column.GetExpr()}
 		if op.ColumnNames[i] != "" {

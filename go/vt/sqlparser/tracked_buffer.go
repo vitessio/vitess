@@ -45,9 +45,9 @@ type TrackedBuffer struct {
 type escapeType int
 
 const (
-	EscapeKeywords escapeType = iota
+	escapeKeywords escapeType = iota
 	escapeAllIdentifiers
-	EscapeNoIdentifiers
+	escapeNoIdentifiers
 )
 
 // NewTrackedBuffer creates a new TrackedBuffer.
@@ -100,7 +100,7 @@ func (buf *TrackedBuffer) SetEscapeAllIdentifiers() {
 // Enabling this option will prevent the optimized fastFormat routines from running.
 func (buf *TrackedBuffer) SetEscapeNoIdentifier() {
 	buf.fast = false
-	buf.escape = EscapeNoIdentifiers
+	buf.escape = escapeNoIdentifiers
 }
 
 // WriteNode function, initiates the writing of a single SQLNode tree by passing

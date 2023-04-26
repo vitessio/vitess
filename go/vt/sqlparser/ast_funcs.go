@@ -920,7 +920,7 @@ func containEscapableChars(s string, at AtCount) bool {
 }
 
 func formatID(buf *TrackedBuffer, original string, at AtCount) {
-	if buf.escape == EscapeNoIdentifiers {
+	if buf.escape == escapeNoIdentifiers {
 		buf.WriteString(original)
 		return
 	}
