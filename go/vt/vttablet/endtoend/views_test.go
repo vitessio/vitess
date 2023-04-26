@@ -269,6 +269,7 @@ func TestViewAndTableUnique(t *testing.T) {
 func TestGetSchemaRPC(t *testing.T) {
 	client := framework.NewClient()
 
+	client.Execute("delete from _vt.views", nil)
 	viewSchemaDef, err := client.GetSchema(querypb.SchemaTableType_VIEWS)
 	require.NoError(t, err)
 	require.Zero(t, len(viewSchemaDef))
