@@ -209,7 +209,6 @@ func TestGatewayBufferingWhileReparenting(t *testing.T) {
 	hc.SetTabletType(replicaTablet, topodatapb.TabletType_PRIMARY)
 	hc.SetServing(replicaTablet, true)
 	hc.Broadcast(replicaTablet)
-
 	newPrimary, ok := tg.kev.PrimaryIsNotServing(target)
 	require.EqualValues(t, 1, newPrimary.Uid)
 	require.False(t, ok, "PrimaryIsNotServing is not returning true")

@@ -23,6 +23,8 @@
   - **[VTTablet](#vttablet)**
     - [VTTablet: Initializing all replicas with super_read_only](#vttablet-initialization)
     - [Deprecated Flags](#vttablet-deprecated-flags)
+  - **[VReplication](#VReplication)**
+    - [Support for the `noblob` binlog row image mode](#noblob)
 
 ## <a id="major-changes"/> Major Changes
 
@@ -296,7 +298,6 @@ The flag `use_super_read_only` is deprecated and will be removed in a later rele
 
 ### Online DDL
 
-
 #### <a id="online-ddl-cut-over-threshold-flag" /> --cut-over-threshold DDL strategy flag
 
 Online DDL's strategy now accepts `--cut-over-threshold` (type: `duration`) flag.
@@ -306,3 +307,13 @@ This flag stand for the timeout in a `vitess` migration's cut-over phase, which 
 The value of the cut-over threshold should be high enough to support the async nature of vreplication catchup phase, as well as accommodate some replication lag. But it mustn't be too high. While cutting over, the migrated table is being locked, causing app connection and query pileup, consuming query buffers, and holding internal mutexes.
 
 Recommended range for this variable is `5s` - `30s`. Default: `10s`.
+
+### <a id="vreplication"/> VReplication
+
+#### <a id="noblob"/> Support for the `noblob` binlog row image mode 
+The `noblob` binlog row image is now supported by the MoveTables and Reshard VReplication workflows. If the source 
+or target database has this mode, other workflows like OnlineDDL, Materialize and CreateLookupVindex will error out.
+The row events streamed by the VStream API, where blobs and text columns have not changed, will contain null values 
+for those columns, indicated by a `length:-1`.
+
+Reference PR for this change is [PR #12905](https://github.com/vitessio/vitess/pull/12905)

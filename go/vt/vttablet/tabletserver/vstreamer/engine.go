@@ -197,9 +197,39 @@ func (vse *Engine) vschema() *vindexes.VSchema {
 	return vse.lvschema.vschema
 }
 
+// Only support full and noblob binlog_row_image modes.
+func (vse *Engine) validateBinlogRowImage(ctx context.Context, db dbconfigs.Connector) error {
+	conn, err := db.Connect(ctx)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	rs, err := conn.ExecuteFetch("select @@binlog_row_image", 1, false)
+	if err != nil {
+		return err
+	}
+	if len(rs.Rows) != 1 {
+		return vterrors.New(vtrpcpb.Code_INTERNAL, fmt.Sprintf("'select @@binlog_row_image' returns an invalid result: %+v", rs.Rows))
+	}
+
+	binlogRowImage := strings.ToLower(rs.Rows[0][0].ToString())
+	switch binlogRowImage {
+	case "minimal":
+		return vterrors.New(vtrpcpb.Code_INTERNAL, "minimal binlog_row_image is not supported by Vitess VReplication")
+	default:
+	}
+	return nil
+}
+
 // Stream starts a new stream.
 // This streams events from the binary logs
 func (vse *Engine) Stream(ctx context.Context, startPos string, tablePKs []*binlogdatapb.TableLastPK, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
+
+	if err := vse.validateBinlogRowImage(ctx, vse.se.GetDBConnector()); err != nil {
+		return err
+	}
+
 	// Ensure vschema is initialized and the watcher is started.
 	// Starting of the watcher has to be delayed till the first call to Stream
 	// because this overhead should be incurred only if someone uses this feature.
