@@ -132,7 +132,7 @@ func makeSureOutputIsCorrect(ctx *plancontext.PlanningContext, oldHorizon ops.Op
 
 	sel := sqlparser.GetFirstSelect(horizon.Select)
 	if len(sel.SelectExprs) != len(cols) {
-		route := passthroughColumns(output)
+		route := getRouteIfPassThroughColumns(output)
 		if route != nil {
 			route.ResultColumns = len(sel.SelectExprs)
 			return output, nil
@@ -179,7 +179,11 @@ func (noPredicates) AddPredicate(*plancontext.PlanningContext, sqlparser.Expr) (
 	return nil, vterrors.VT13001("the noColumns operator cannot accept predicates")
 }
 
-func passthroughColumns(op ops.Operator) *Route {
+// getRouteIfPassThroughColumns will return the route that is feeding this operator,
+// if it can be reached only through operators that pass through all columns
+// This is used to limit the number of columns passed through by asking the route
+// to truncate the results
+func getRouteIfPassThroughColumns(op ops.Operator) *Route {
 	route, isRoute := op.(*Route)
 	if isRoute {
 		return route
@@ -197,5 +201,5 @@ func passthroughColumns(op ops.Operator) *Route {
 		return nil
 	}
 
-	return passthroughColumns(inputs[0])
+	return getRouteIfPassThroughColumns(inputs[0])
 }

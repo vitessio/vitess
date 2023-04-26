@@ -125,6 +125,9 @@ func (p *Projection) expressions() (result []*sqlparser.AliasedExpr) {
 }
 
 func (p *Projection) GetColumns() ([]*sqlparser.AliasedExpr, error) {
+	if p.TableID != nil {
+		return nil, nil
+	}
 	return p.expressions(), nil
 }
 
@@ -171,7 +174,21 @@ func (p *Projection) Description() ops.OpDescription {
 }
 
 func (p *Projection) ShortDescription() string {
-	return strings.Join(p.ColumnNames, ", ")
+	var columns []string
+	if p.Alias != "" {
+		columns = append(columns, "derived["+p.Alias+"]")
+	}
+	for i, column := range p.Columns {
+		expr := sqlparser.String(column.GetExpr())
+		alias := p.ColumnNames[i]
+		if alias == "" {
+			columns = append(columns, expr)
+			continue
+		}
+		columns = append(columns, fmt.Sprintf("%s AS %s", expr, alias))
+
+	}
+	return strings.Join(columns, ", ")
 }
 
 func (p *Projection) Compact(*plancontext.PlanningContext) (ops.Operator, rewrite.ApplyResult, error) {

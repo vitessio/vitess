@@ -553,7 +553,7 @@ type expanderState struct {
 // addColumn adds columns to the expander state. If we have vschema info about the query,
 // we also store which columns were expanded
 func (e *expanderState) addColumn(col ColumnInfo, tbl TableInfo, tblName sqlparser.TableName) {
-	tableAliased := !tbl.getExpr().As.IsEmpty()
+	tableAliased := !tbl.GetExpr().As.IsEmpty()
 	withQualifier := e.needsQualifier || tableAliased
 	var colName *sqlparser.ColName
 	var alias sqlparser.IdentifierCI
@@ -595,7 +595,7 @@ func (e *expanderState) createAliasedExpr(
 	tbl TableInfo,
 	tblName sqlparser.TableName,
 ) *sqlparser.AliasedExpr {
-	tableAliased := !tbl.getExpr().As.IsEmpty()
+	tableAliased := !tbl.GetExpr().As.IsEmpty()
 	withQualifier := e.needsQualifier || tableAliased
 	var colName *sqlparser.ColName
 	var alias sqlparser.IdentifierCI

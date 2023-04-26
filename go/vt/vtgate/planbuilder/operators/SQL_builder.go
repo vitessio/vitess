@@ -371,6 +371,7 @@ func buildProjection(op *Projection, qb *queryBuilder) error {
 	}
 
 	qb.clearProjections()
+
 	for i, column := range op.Columns {
 		ae := &sqlparser.AliasedExpr{Expr: column.GetExpr()}
 		if op.ColumnNames[i] != "" {
@@ -378,6 +379,17 @@ func buildProjection(op *Projection, qb *queryBuilder) error {
 		}
 		qb.addProjection(ae)
 	}
+
+	// if the projection is on derived table, we use the select we have
+	// created above and transform it into a derived table
+	if op.TableID != nil {
+		sel := qb.sel.(*sqlparser.Select)
+		qb.sel = nil
+		qb.addTableExpr(op.Alias, op.Alias, TableID(op), &sqlparser.DerivedTable{
+			Select: sel,
+		}, nil, nil)
+	}
+
 	return nil
 }
 

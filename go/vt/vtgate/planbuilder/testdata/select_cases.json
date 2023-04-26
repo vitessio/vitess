@@ -2319,41 +2319,32 @@
       "QueryType": "SELECT",
       "Original": "select * from (select user.id id1, user_extra.id id2 from user join user_extra) as t",
       "Instructions": {
-        "OperatorType": "SimpleProjection",
-        "Columns": [
-          0,
-          1
-        ],
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "L:0,R:0",
+        "TableName": "`user`_user_extra",
         "Inputs": [
           {
-            "OperatorType": "Join",
-            "Variant": "Join",
-            "JoinColumnIndexes": "L:0,R:0",
-            "TableName": "`user`_user_extra",
-            "Inputs": [
-              {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select `user`.id as id1 from `user` where 1 != 1",
-                "Query": "select `user`.id as id1 from `user`",
-                "Table": "`user`"
-              },
-              {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select user_extra.id as id2 from user_extra where 1 != 1",
-                "Query": "select user_extra.id as id2 from user_extra",
-                "Table": "user_extra"
-              }
-            ]
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select t.id1 from (select `user`.id as id1 from `user` where 1 != 1) as t where 1 != 1",
+            "Query": "select t.id1 from (select `user`.id as id1 from `user`) as t",
+            "Table": "`user`"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select t.id2 from (select user_extra.id as id2 from user_extra where 1 != 1) as t where 1 != 1",
+            "Query": "select t.id2 from (select user_extra.id as id2 from user_extra) as t",
+            "Table": "user_extra"
           }
         ]
       },
@@ -7580,27 +7571,19 @@
         "TableName": "user_extra_`user`",
         "Inputs": [
           {
-            "OperatorType": "SimpleProjection",
-            "Columns": [
-              0
-            ],
+            "OperatorType": "Limit",
+            "Count": "INT64(10)",
             "Inputs": [
               {
-                "OperatorType": "Limit",
-                "Count": "INT64(10)",
-                "Inputs": [
-                  {
-                    "OperatorType": "Route",
-                    "Variant": "Scatter",
-                    "Keyspace": {
-                      "Name": "user",
-                      "Sharded": true
-                    },
-                    "FieldQuery": "select user_id from user_extra where 1 != 1",
-                    "Query": "select user_id from user_extra limit :__upper_limit",
-                    "Table": "user_extra"
-                  }
-                ]
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select ue.user_id from (select user_id from user_extra where 1 != 1) as ue where 1 != 1",
+                "Query": "select ue.user_id from (select user_id from user_extra) as ue limit :__upper_limit",
+                "Table": "user_extra"
               }
             ]
           },
