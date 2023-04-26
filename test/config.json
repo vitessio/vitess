@@ -878,7 +878,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/grpc_server_auth_static"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "vtgate_general_acls",
+			"Shard": "vtgate_general_heavy",
 			"RetryMax": 1,
 			"Tags": []
 		},
@@ -887,7 +887,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/grpc_server_acls"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "vtgate_general_acls",
+			"Shard": "vtgate_general_heavy",
 			"RetryMax": 1,
 			"Tags": []
 		},
