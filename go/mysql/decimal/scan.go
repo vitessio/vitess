@@ -24,7 +24,7 @@ import (
 	"math/big"
 	"math/bits"
 
-	"vitess.io/vitess/go/mysql/json/fastparse"
+	"vitess.io/vitess/go/mysql/fastparse"
 )
 
 var errOverflow = errors.New("overflow")
@@ -161,6 +161,13 @@ func NewFromString(s string) (d Decimal, err error) {
 	i := 0
 	var num bool
 	var exp int64
+
+	for i < maxLen {
+		if !isSpace(s[i]) {
+			break
+		}
+		i++
+	}
 next:
 	for i < maxLen {
 		switch {
@@ -208,7 +215,8 @@ next:
 	}
 
 	if len(si) <= 18 {
-		v, _ := fastparse.ParseInt64(si, 10)
+		var v int64
+		v, err = fastparse.ParseInt64(si, 10)
 		d.value = big.NewInt(v)
 	} else {
 		d.value = new(big.Int)
@@ -230,6 +238,14 @@ next:
 	}
 
 	d.exp = int32(exp)
+
+	for i < maxLen {
+		if !isSpace(s[i]) {
+			break
+		}
+		i++
+	}
+
 	if !num || i < maxLen || expOverflow {
 		err = fmt.Errorf("invalid decimal string: %q", s)
 	}
@@ -344,4 +360,13 @@ func parseLargeDecimal(integral, fractional []byte) (*big.Int, error) {
 		z = mulAddWW(z, z, pow(b1, i), di)
 	}
 	return new(big.Int).SetBits(z), nil
+}
+
+func isSpace(c byte) bool {
+	switch c {
+	case ' ', '\t', '\n', '\r':
+		return true
+	default:
+		return false
+	}
 }
