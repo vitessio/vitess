@@ -320,8 +320,22 @@ func buildQuery(op ops.Operator, qb *queryBuilder) error {
 		return buildHorizon(op, qb)
 	case *Limit:
 		return buildLimit(op, qb)
+	case *Ordering:
+		return buildOrdering(op, qb)
 	default:
 		return vterrors.VT13001(fmt.Sprintf("do not know how to turn %T into SQL", op))
+	}
+	return nil
+}
+
+func buildOrdering(op *Ordering, qb *queryBuilder) error {
+	err := buildQuery(op.Source, qb)
+	if err != nil {
+		return err
+	}
+
+	for _, order := range op.Order {
+		qb.sel.AddOrder(order.Inner)
 	}
 	return nil
 }

@@ -26,7 +26,11 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 )
 
-var errHorizonNotPlanned = vterrors.VT12001("query cannot be fully operator planned")
+func errHorizonNotPlanned() error {
+	return _errHorizonNotPlanned
+}
+
+var _errHorizonNotPlanned = vterrors.VT12001("query cannot be fully operator planned")
 
 // planHorizons is the process of figuring out how to perform the operations in the Horizon
 // If we can push it under a route - done.
@@ -51,6 +55,8 @@ func planHorizons(ctx *plancontext.PlanningContext, root ops.Operator) (ops.Oper
 			return tryPushingDownProjection(ctx, in)
 		case *Limit:
 			return tryPushingDownLimit(in)
+		case *Ordering:
+			return tryPushingDownOrdering(ctx, in)
 		default:
 			return in, rewrite.SameTree, nil
 		}
@@ -60,12 +66,38 @@ func planHorizons(ctx *plancontext.PlanningContext, root ops.Operator) (ops.Oper
 	if err != nil {
 		if vterr, ok := err.(*vterrors.VitessError); ok && vterr.ID == "VT13001" {
 			// we encountered a bug. let's try to back out
-			return nil, errHorizonNotPlanned
+			return nil, errHorizonNotPlanned()
 		}
 		return nil, err
 	}
 
 	return newOp, nil
+}
+
+func tryPushingDownOrdering(ctx *plancontext.PlanningContext, in *Ordering) (ops.Operator, rewrite.ApplyResult, error) {
+	switch src := in.Source.(type) {
+	case *Route:
+		return swap(in, src)
+	case *ApplyJoin:
+		if canPushLeft(ctx, src, in.Order) {
+			// ApplyJoin is stable in regard to the columns coming from the LHS,
+			// so if all the ordering columns come from the LHS, we can push down the Ordering there
+			src.LHS, in.Source = in, src.LHS
+			return src, rewrite.NewTree, nil
+		}
+	}
+	return in, rewrite.SameTree, nil
+}
+
+func canPushLeft(ctx *plancontext.PlanningContext, aj *ApplyJoin, order []ops.OrderBy) bool {
+	lhs := TableID(aj.LHS)
+	for _, order := range order {
+		deps := ctx.SemTable.DirectDeps(order.Inner.Expr)
+		if !deps.IsSolvedBy(lhs) {
+			return false
+		}
+	}
+	return true
 }
 
 func tryPushingDownProjection(
@@ -74,7 +106,7 @@ func tryPushingDownProjection(
 ) (ops.Operator, rewrite.ApplyResult, error) {
 	switch src := p.Source.(type) {
 	case *Route:
-		return pushDownProjectionIntoRoute(p, src)
+		return swap(p, src)
 	case *ApplyJoin:
 		return pushDownProjectionInApplyJoin(ctx, p, src)
 	case *Vindex:
@@ -84,8 +116,8 @@ func tryPushingDownProjection(
 	}
 }
 
-func pushDownProjectionIntoRoute(p *Projection, src ops.Operator) (ops.Operator, rewrite.ApplyResult, error) {
-	op, err := rewrite.Swap(p, src)
+func swap(a, b ops.Operator) (ops.Operator, rewrite.ApplyResult, error) {
+	op, err := rewrite.Swap(a, b)
 	if err != nil {
 		return nil, false, err
 	}
@@ -107,35 +139,41 @@ func pushDownProjectionInVindex(
 	return src, rewrite.NewTree, nil
 }
 
+type projector struct {
+	cols  []ProjExpr
+	names []string
+}
+
+func (p *projector) add(e ProjExpr, alias string) {
+	p.cols = append(p.cols, e)
+	p.names = append(p.names, alias)
+}
+
 // pushDownProjectionInApplyJoin pushes down a projection operation into an ApplyJoin operation.
 // It processes each input column and creates new JoinColumns for the ApplyJoin operation based on
 // the input column's expression. It also creates new Projection operators for the left and right
 // children of the ApplyJoin operation, if needed.
-func pushDownProjectionInApplyJoin(ctx *plancontext.PlanningContext, p *Projection, src *ApplyJoin) (ops.Operator, rewrite.ApplyResult, error) {
-	var (
-		// idx is the current column index in the Projection's columns.
-		// in is the current column's ProjExpr.
-		idx int
-		in  ProjExpr
+func pushDownProjectionInApplyJoin(
+	ctx *plancontext.PlanningContext,
+	p *Projection,
+	src *ApplyJoin,
+) (ops.Operator, rewrite.ApplyResult, error) {
+	lhs, rhs := &projector{}, &projector{}
 
-		// lhsCols and rhsCols store the columns to be added to the left and right child projections.
-		// lhsNames and rhsNames store the corresponding column names.
-		lhsCols, rhsCols   []ProjExpr
-		lhsNames, rhsNames []string
-	)
-
+	src.ColumnsAST = nil
 	// Iterate through each column in the Projection's columns.
-	for idx = 0; idx < len(p.Columns); idx++ {
-		in = p.Columns[idx]
+	for idx := 0; idx < len(p.Columns); idx++ {
+		in := p.Columns[idx]
 		expr := in.GetExpr()
 
 		// Check if the current expression can reuse an existing column in the ApplyJoin.
-		if _, found := canReuseColumn(ctx, src.ColumnsAST, expr, jcToExpr); found {
+		if _, found := canReuseColumn(ctx, src.ColumnsAST, expr, jcToAliasedExpr); found {
 			continue
 		}
 
 		// Get a JoinColumn for the current expression.
-		col, err := src.getJoinColumnFor(ctx, expr)
+		colName := p.ColumnNames[idx]
+		col, err := src.getJoinColumnFor(ctx, &sqlparser.AliasedExpr{Expr: expr, As: sqlparser.NewIdentifierCI(colName)})
 		if err != nil {
 			return nil, false, err
 		}
@@ -143,19 +181,14 @@ func pushDownProjectionInApplyJoin(ctx *plancontext.PlanningContext, p *Projecti
 		// Update the left and right child columns and names based on the JoinColumn type.
 		switch {
 		case col.IsPureLeft():
-			lhsCols = append(lhsCols, in)
-			lhsNames = append(lhsNames, p.ColumnNames[idx])
+			lhs.add(in, colName)
 		case col.IsPureRight():
-			rhsCols = append(rhsCols, in)
-			rhsNames = append(rhsNames, p.ColumnNames[idx])
+			rhs.add(in, colName)
 		case col.IsMixedLeftAndRight():
 			for _, lhsExpr := range col.LHSExprs {
-				lhsCols = append(lhsCols, &Expr{E: lhsExpr})
-				lhsNames = append(lhsNames, sqlparser.String(lhsExpr))
+				lhs.add(&Expr{E: lhsExpr}, "")
 			}
-
-			rhsCols = append(rhsCols, &Expr{E: col.RHSExpr})
-			rhsNames = append(rhsNames, p.ColumnNames[idx])
+			rhs.add(&Expr{E: col.RHSExpr}, colName)
 		}
 
 		// Add the new JoinColumn to the ApplyJoin's ColumnsAST.
@@ -165,12 +198,12 @@ func pushDownProjectionInApplyJoin(ctx *plancontext.PlanningContext, p *Projecti
 	var err error
 
 	// Create and update the Projection operators for the left and right children, if needed.
-	src.LHS, err = createProjectionWithTheseColumns(src.LHS, lhsNames, lhsCols)
+	src.LHS, err = createProjectionWithTheseColumns(src.LHS, lhs, p.TableID, p.Alias)
 	if err != nil {
 		return nil, false, err
 	}
 
-	src.RHS, err = createProjectionWithTheseColumns(src.RHS, rhsNames, rhsCols)
+	src.RHS, err = createProjectionWithTheseColumns(src.RHS, rhs, p.TableID, p.Alias)
 	if err != nil {
 		return nil, false, err
 	}
@@ -178,16 +211,23 @@ func pushDownProjectionInApplyJoin(ctx *plancontext.PlanningContext, p *Projecti
 	return src, rewrite.NewTree, nil
 }
 
-func createProjectionWithTheseColumns(src ops.Operator, colNames []string, columns []ProjExpr) (ops.Operator, error) {
-	if len(columns) == 0 {
+func createProjectionWithTheseColumns(
+	src ops.Operator,
+	p *projector,
+	tableID *semantics.TableSet,
+	alias string,
+) (ops.Operator, error) {
+	if len(p.cols) == 0 {
 		return src, nil
 	}
 	proj, err := createProjection(src)
 	if err != nil {
 		return nil, err
 	}
-	proj.ColumnNames = colNames
-	proj.Columns = columns
+	proj.ColumnNames = p.names
+	proj.Columns = p.cols
+	proj.TableID = tableID
+	proj.Alias = alias
 	return proj, nil
 }
 
@@ -201,11 +241,7 @@ func tryPushingDownLimit(in *Limit) (ops.Operator, rewrite.ApplyResult, error) {
 	case *Route:
 		return tryPushingDownLimitInRoute(in, src)
 	case *Projection:
-		newOp, err := rewrite.Swap(in, src)
-		if err != nil {
-			return nil, false, err
-		}
-		return newOp, rewrite.NewTree, nil
+		return swap(in, src)
 	default:
 		if in.Pushed {
 			return in, rewrite.SameTree, nil
@@ -245,17 +281,18 @@ func setUpperLimit(in *Limit) (ops.Operator, rewrite.ApplyResult, error) {
 
 func tryPushingDownLimitInRoute(in *Limit, src *Route) (ops.Operator, rewrite.ApplyResult, error) {
 	if src.IsSingleShard() {
-		newOp, err := rewrite.Swap(in, src)
-		if err != nil {
-			return nil, false, err
-		}
-		return newOp, rewrite.NewTree, nil
+		return swap(in, src)
 	}
 
 	return setUpperLimit(in)
 }
 
 func pushOrExpandHorizon(ctx *plancontext.PlanningContext, in horizonLike) (ops.Operator, error) {
+	if derived, ok := in.(*Derived); ok {
+		if len(derived.ColumnAliases) > 0 {
+			return nil, errHorizonNotPlanned()
+		}
+	}
 	rb, isRoute := in.src().(*Route)
 	if isRoute && rb.IsSingleShard() {
 		return rewrite.Swap(in, rb)
@@ -263,10 +300,10 @@ func pushOrExpandHorizon(ctx *plancontext.PlanningContext, in horizonLike) (ops.
 
 	sel, isSel := in.selectStatement().(*sqlparser.Select)
 	if !isSel {
-		return nil, errHorizonNotPlanned
+		return nil, errHorizonNotPlanned()
 	}
 
-	qp, err := CreateQPFromSelect(ctx, sel)
+	qp, err := in.getQP(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -278,7 +315,12 @@ func pushOrExpandHorizon(ctx *plancontext.PlanningContext, in horizonLike) (ops.
 		return rewrite.Swap(in, rb)
 	}
 
-	return expandHorizon(qp, in)
+	if _, ok := in.(*Derived); ok {
+		// we're still not ready if we have to expand the derived table horizon
+		return nil, errHorizonNotPlanned()
+	}
+
+	return expandHorizon(ctx, in)
 }
 
 // horizonLike should be removed. we should use Horizon for both these cases
@@ -286,25 +328,41 @@ type horizonLike interface {
 	ops.Operator
 	selectStatement() sqlparser.SelectStatement
 	src() ops.Operator
+	getQP(ctx *plancontext.PlanningContext) (*QueryProjection, error)
 }
 
-func expandHorizon(qp *QueryProjection, horizon horizonLike) (ops.Operator, error) {
+func expandHorizon(ctx *plancontext.PlanningContext, horizon horizonLike) (ops.Operator, error) {
 	sel, isSel := horizon.selectStatement().(*sqlparser.Select)
 	if !isSel {
-		return nil, errHorizonNotPlanned
+		return nil, errHorizonNotPlanned()
 	}
-
-	needsOrdering := len(qp.OrderExprs) > 0
-	src := horizon.src()
-	_, isDerived := src.(*Derived)
-
-	if qp.NeedsAggregation() || sel.Having != nil || isDerived || needsOrdering || qp.NeedsDistinct() || sel.Distinct {
-		return nil, errHorizonNotPlanned
-	}
-
-	op, err := createProjectionFromSelect(src, qp.SelectExprs)
+	qp, err := horizon.getQP(ctx)
 	if err != nil {
 		return nil, err
+	}
+
+	src := horizon.src()
+
+	if qp.NeedsAggregation() || sel.Having != nil || qp.NeedsDistinct() || sel.Distinct {
+		return nil, errHorizonNotPlanned()
+	}
+
+	var op ops.Operator
+	proj, err := createProjectionFromSelect(src, qp.SelectExprs)
+	if err != nil {
+		return nil, err
+	}
+	if derived, isDerived := horizon.(*Derived); isDerived {
+		id := derived.TableId
+		proj.TableID = &id
+	}
+	op = proj
+
+	if qp.OrderExprs != nil {
+		op = &Ordering{
+			Source: op,
+			Order:  qp.OrderExprs,
+		}
 	}
 
 	if sel.Limit != nil {
@@ -317,14 +375,14 @@ func expandHorizon(qp *QueryProjection, horizon horizonLike) (ops.Operator, erro
 	return op, nil
 }
 
-func createProjectionFromSelect(src ops.Operator, selectExprs []SelectExpr) (ops.Operator, error) {
+func createProjectionFromSelect(src ops.Operator, selectExprs []SelectExpr) (*Projection, error) {
 	proj := &Projection{
 		Source: src,
 	}
 
 	for _, e := range selectExprs {
 		if _, isStar := e.Col.(*sqlparser.StarExpr); isStar {
-			return nil, errHorizonNotPlanned
+			return nil, errHorizonNotPlanned()
 		}
 		expr, err := e.GetAliasedExpr()
 		if err != nil {

@@ -18,7 +18,6 @@ package operators
 
 import (
 	"bytes"
-	"fmt"
 	"io"
 
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
@@ -67,16 +66,6 @@ func transformToPhysical(ctx *plancontext.PlanningContext, in ops.Operator) (ops
 		}
 	})
 
-	if err != nil {
-		return nil, err
-	}
-
-	err = rewrite.Visit(op, func(op ops.Operator) error {
-		if _, isPhys := op.(ops.PhysicalOperator); !isPhys {
-			return vterrors.VT13001(fmt.Sprintf("failed to transform %T to a physical operator", op))
-		}
-		return nil
-	})
 	if err != nil {
 		return nil, err
 	}

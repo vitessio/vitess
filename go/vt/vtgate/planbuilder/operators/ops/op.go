@@ -47,23 +47,26 @@ type (
 		// The offset to the column is returned.
 		AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr) (Operator, int, error)
 
-		GetColumns() ([]sqlparser.Expr, error)
+		GetColumns() ([]*sqlparser.AliasedExpr, error)
 
 		Description() OpDescription
+		ShortDescription() string
+
+		GetOrdering() ([]OrderBy, error)
 	}
 
-	// PhysicalOperator means that this operator is ready to be turned into a logical plan
-	PhysicalOperator interface {
-		Operator
-		IPhysical()
+	// OrderBy contains the expression to used in order by and also if ordering is needed at VTGate level then what the weight_string function expression to be sent down for evaluation.
+	OrderBy struct {
+		Inner         *sqlparser.Order
+		WeightStrExpr sqlparser.Expr
 	}
 
 	OpDescription struct {
 		OperatorType string
-		Variant      string
-		Other        map[string]any
+		Variant      string         `json:",omitempty"`
+		Other        map[string]any `json:",omitempty"`
 
 		// This field will be filled in by the JSON producer. No need to set it manually
-		Inputs []OpDescription
+		Inputs []OpDescription `json:",omitempty"`
 	}
 )

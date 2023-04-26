@@ -79,6 +79,71 @@ func (tfe *TestFieldEvent) String() string {
 	return s
 }
 
+// TestPlayerNoBlob sets up a new environment with mysql running with binlog_row_image as noblob. It confirms that
+// the VEvents created are correct: that they don't contain the missing columns and that the DataColumns bitmap is sent
+func TestNoBlob(t *testing.T) {
+	newEngine(t, "noblob")
+	defer newEngine(t, "full")
+	execStatements(t, []string{
+		"create table t1(id int, blb blob, val varchar(4), primary key(id))",
+		"create table t2(id int, txt text, val varchar(4), unique key(id, val))",
+	})
+	defer execStatements(t, []string{
+		"drop table t1",
+		"drop table t2",
+	})
+	engine.se.Reload(context.Background())
+	queries := []string{
+		"begin",
+		"insert into t1 values (1, 'blob1', 'aaa')",
+		"update t1 set val = 'bbb'",
+		"commit",
+		"begin",
+		"insert into t2 values (1, 'text1', 'aaa')",
+		"update t2 set val = 'bbb'",
+		"commit",
+	}
+
+	fe1 := &TestFieldEvent{
+		table: "t1",
+		db:    "vttest",
+		cols: []*TestColumn{
+			{name: "id", dataType: "INT32", colType: "int(11)", len: 11, charset: 63},
+			{name: "blb", dataType: "BLOB", colType: "blob", len: 65535, charset: 63},
+			{name: "val", dataType: "VARCHAR", colType: "varchar(4)", len: 16, charset: 45},
+		},
+	}
+	fe2 := &TestFieldEvent{
+		table: "t2",
+		db:    "vttest",
+		cols: []*TestColumn{
+			{name: "id", dataType: "INT32", colType: "int(11)", len: 11, charset: 63},
+			{name: "txt", dataType: "TEXT", colType: "text", len: 262140, charset: 45},
+			{name: "val", dataType: "VARCHAR", colType: "varchar(4)", len: 16, charset: 45},
+		},
+	}
+
+	testcases := []testcase{{
+		input: queries,
+		output: [][]string{{
+			"begin",
+			fe1.String(),
+			`type:ROW row_event:{table_name:"t1" row_changes:{after:{lengths:1 lengths:5 lengths:3 values:"1blob1aaa"}}}`,
+			`type:ROW row_event:{table_name:"t1" row_changes:{before:{lengths:1 lengths:-1 lengths:3 values:"1aaa"} after:{lengths:1 lengths:-1 lengths:3 values:"1bbb"} data_columns:{count:3 cols:"\x05"}}}`,
+			"gtid",
+			"commit",
+		}, {
+			"begin",
+			fe2.String(),
+			`type:ROW row_event:{table_name:"t2" row_changes:{after:{lengths:1 lengths:5 lengths:3 values:"1text1aaa"}}}`,
+			`type:ROW row_event:{table_name:"t2" row_changes:{before:{lengths:1 lengths:5 lengths:3 values:"1text1aaa"} after:{lengths:1 lengths:-1 lengths:3 values:"1bbb"} data_columns:{count:3 cols:"\x05"}}}`,
+			"gtid",
+			"commit",
+		}},
+	}}
+	runCases(t, nil, testcases, "current", nil)
+}
+
 func TestSetAndEnum(t *testing.T) {
 	execStatements(t, []string{
 		"create table t1(id int, val binary(4), color set('red','green','blue'), size enum('S','M','L'), primary key(id))",
@@ -1850,43 +1915,16 @@ func TestJournal(t *testing.T) {
 	runCases(t, nil, testcases, "", nil)
 }
 
+// TestMinimalMode confirms that we don't support minimal binlog_row_image mode.
 func TestMinimalMode(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
 	}
 
-	execStatements(t, []string{
-		"create table t1(id int, val1 varbinary(128), val2 varbinary(128), primary key(id))",
-		"insert into t1 values(1, 'aaa', 'bbb')",
-	})
-	defer execStatements(t, []string{
-		"drop table t1",
-	})
-	engine.se.Reload(context.Background())
-
-	// Record position before the next few statements.
-	pos := primaryPosition(t)
-	execStatements(t, []string{
-		"set @@session.binlog_row_image='minimal'",
-		"update t1 set val1='bbb' where id=1",
-		"set @@session.binlog_row_image='full'",
-	})
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	ch := make(chan []*binlogdatapb.VEvent)
-	go func() {
-		for evs := range ch {
-			t.Errorf("received: %v", evs)
-		}
-	}()
-	defer close(ch)
-	err := vstream(ctx, t, pos, nil, nil, ch)
-	want := "partial row image encountered"
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("err: %v, must contain '%s'", err, want)
-	}
+	newEngine(t, "minimal")
+	defer newEngine(t, "full")
+	err := engine.Stream(context.Background(), "current", nil, nil, func(evs []*binlogdatapb.VEvent) error { return nil })
+	require.Error(t, err, "minimal binlog_row_image is not supported by Vitess VReplication")
 }
 
 func TestStatementMode(t *testing.T) {

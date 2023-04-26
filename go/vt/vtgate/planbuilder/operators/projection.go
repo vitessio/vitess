@@ -17,7 +17,13 @@ limitations under the License.
 package operators
 
 import (
+	"fmt"
+	"strings"
+
 	"golang.org/x/exp/slices"
+
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
+	"vitess.io/vitess/go/vt/vtgate/semantics"
 
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
@@ -32,6 +38,10 @@ type (
 		Source      ops.Operator
 		ColumnNames []string
 		Columns     []ProjExpr
+
+		// TableID will be non-nil for derived tables
+		TableID *semantics.TableSet
+		Alias   string
 	}
 
 	ProjExpr interface {
@@ -75,17 +85,13 @@ func (po Offset) GetExpr() sqlparser.Expr { return po.Expr }
 func (po Eval) GetExpr() sqlparser.Expr   { return po.Expr }
 func (po Expr) GetExpr() sqlparser.Expr   { return po.E }
 
-func NewProjection(src ops.Operator) *Projection {
-	return &Projection{
-		Source: src,
-	}
-}
-
 func (p *Projection) Clone(inputs []ops.Operator) ops.Operator {
 	return &Projection{
 		Source:      inputs[0],
 		ColumnNames: slices.Clone(p.ColumnNames),
 		Columns:     slices.Clone(p.Columns),
+		TableID:     p.TableID,
+		Alias:       p.Alias,
 	}
 }
 
@@ -107,18 +113,24 @@ func (p *Projection) AddPredicate(ctx *plancontext.PlanningContext, expr sqlpars
 	return p, nil
 }
 
-func (p *Projection) expressions() (result []sqlparser.Expr) {
-	for _, col := range p.Columns {
-		result = append(result, col.GetExpr())
+func (p *Projection) expressions() (result []*sqlparser.AliasedExpr) {
+	for i, col := range p.Columns {
+		expr := col.GetExpr()
+		result = append(result, &sqlparser.AliasedExpr{
+			Expr: expr,
+			As:   sqlparser.NewIdentifierCI(p.ColumnNames[i]),
+		})
 	}
 	return
 }
 
-func (p *Projection) GetColumns() ([]sqlparser.Expr, error) {
+func (p *Projection) GetColumns() ([]*sqlparser.AliasedExpr, error) {
 	return p.expressions(), nil
 }
 
-func (p *Projection) IPhysical() {}
+func (p *Projection) GetOrdering() ([]ops.OrderBy, error) {
+	return p.Source.GetOrdering()
+}
 
 // AllOffsets returns a slice of integer offsets for all columns in the Projection
 // if all columns are of type Offset. If any column is not of type Offset, it returns nil.
@@ -135,10 +147,76 @@ func (p *Projection) AllOffsets() (cols []int) {
 }
 
 func (p *Projection) Description() ops.OpDescription {
+	var columns []string
+	for i, col := range p.Columns {
+		alias := p.ColumnNames[i]
+		if alias == "" {
+			columns = append(columns, sqlparser.String(col.GetExpr()))
+		} else {
+			columns = append(columns, fmt.Sprintf("%s AS %s", sqlparser.String(col.GetExpr()), alias))
+		}
+	}
+
+	other := map[string]any{
+		"OutputColumns": strings.Join(columns, ", "),
+	}
+	if p.TableID != nil {
+		other["Derived"] = true
+		other["Alias"] = p.Alias
+	}
 	return ops.OpDescription{
 		OperatorType: "Projection",
-		Other: map[string]any{
-			"OutputColumns": p.ColumnNames,
-		},
+		Other:        other,
 	}
+}
+
+func (p *Projection) ShortDescription() string {
+	return strings.Join(p.ColumnNames, ", ")
+}
+
+func (p *Projection) Compact(*plancontext.PlanningContext) (ops.Operator, rewrite.ApplyResult, error) {
+	switch src := p.Source.(type) {
+	case *Route:
+		return p.compactWithRoute(src)
+	case *ApplyJoin:
+		return p.compactWithJoin(src)
+	}
+	return p, rewrite.SameTree, nil
+}
+
+func (p *Projection) compactWithJoin(src *ApplyJoin) (ops.Operator, rewrite.ApplyResult, error) {
+	var newColumns []int
+	var newColumnsAST []JoinColumn
+	for _, col := range p.Columns {
+		offset, ok := col.(Offset)
+		if !ok {
+			return p, rewrite.SameTree, nil
+		}
+
+		newColumns = append(newColumns, src.Columns[offset.Offset])
+		newColumnsAST = append(newColumnsAST, src.ColumnsAST[offset.Offset])
+	}
+
+	src.Columns = newColumns
+	src.ColumnsAST = newColumnsAST
+	return src, rewrite.NewTree, nil
+}
+
+func (p *Projection) compactWithRoute(rb *Route) (ops.Operator, rewrite.ApplyResult, error) {
+	for i, col := range p.Columns {
+		offset, ok := col.(Offset)
+		if !ok || offset.Offset != i {
+			return p, rewrite.SameTree, nil
+		}
+	}
+	columns, err := rb.GetColumns()
+	if err != nil {
+		return nil, false, err
+	}
+
+	if len(columns) == len(p.Columns) {
+		return rb, rewrite.NewTree, nil
+	}
+	rb.ResultColumns = len(columns)
+	return rb, rewrite.SameTree, nil
 }

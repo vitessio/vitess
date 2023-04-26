@@ -29,21 +29,20 @@ type Union struct {
 	Distinct bool
 
 	// TODO this should be removed. For now it's used to fail queries
-	Ordering sqlparser.OrderBy
+	Ordering []ops.OrderBy
 
 	noColumns
 }
-
-var _ ops.PhysicalOperator = (*Union)(nil)
-
-// IPhysical implements the PhysicalOperator interface
-func (u *Union) IPhysical() {}
 
 // Clone implements the Operator interface
 func (u *Union) Clone(inputs []ops.Operator) ops.Operator {
 	newOp := *u
 	newOp.Sources = inputs
 	return &newOp
+}
+
+func (u *Union) GetOrdering() ([]ops.OrderBy, error) {
+	return u.Ordering, nil
 }
 
 // Inputs implements the Operator interface
@@ -199,4 +198,8 @@ func (u *Union) Description() ops.OpDescription {
 	return ops.OpDescription{
 		OperatorType: "Union",
 	}
+}
+
+func (u *Union) ShortDescription() string {
+	return ""
 }

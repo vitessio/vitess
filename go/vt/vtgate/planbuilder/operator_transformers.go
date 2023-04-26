@@ -69,9 +69,45 @@ func transformToLogicalPlan(ctx *plancontext.PlanningContext, op ops.Operator, i
 		return transformProjection(ctx, op)
 	case *operators.Limit:
 		return transformLimit(ctx, op)
+	case *operators.Ordering:
+		return transformOrdering(ctx, op)
 	}
 
 	return nil, vterrors.VT13001(fmt.Sprintf("unknown type encountered: %T (transformToLogicalPlan)", op))
+}
+
+func transformOrdering(ctx *plancontext.PlanningContext, op *operators.Ordering) (logicalPlan, error) {
+	plan, err := transformToLogicalPlan(ctx, op.Source, false)
+	if err != nil {
+		return nil, err
+	}
+
+	return createMemorySort(ctx, plan, op)
+}
+
+func createMemorySort(ctx *plancontext.PlanningContext, src logicalPlan, ordering *operators.Ordering) (logicalPlan, error) {
+	primitive := &engine.MemorySort{}
+	ms := &memorySort{
+		resultsBuilder: resultsBuilder{
+			logicalPlanCommon: newBuilderCommon(src),
+			weightStrings:     make(map[*resultColumn]int),
+			truncater:         primitive,
+		},
+		eMemorySort: primitive,
+	}
+
+	for idx, order := range ordering.Order {
+		collationID := ctx.SemTable.CollationForExpr(order.WeightStrExpr)
+		ms.eMemorySort.OrderBy = append(ms.eMemorySort.OrderBy, engine.OrderByParams{
+			Col:               ordering.Offset[idx],
+			WeightStringCol:   ordering.WOffset[idx],
+			Desc:              order.Inner.Direction == sqlparser.DescOrder,
+			StarColFixedIndex: ordering.Offset[idx],
+			CollationID:       collationID,
+		})
+	}
+
+	return ms, nil
 }
 
 func transformProjection(ctx *plancontext.PlanningContext, op *operators.Projection) (logicalPlan, error) {
@@ -233,8 +269,9 @@ func routeToEngineRoute(ctx *plancontext.PlanningContext, op *operators.Route) (
 	}
 
 	return &engine.Route{
-		TableName:         strings.Join(tableNames, ", "),
-		RoutingParameters: rp,
+		TableName:           strings.Join(tableNames, ", "),
+		RoutingParameters:   rp,
+		TruncateColumnCount: op.ResultColumns,
 	}, nil
 }
 
@@ -265,6 +302,15 @@ func transformRoutePlan(ctx *plancontext.PlanningContext, op *operators.Route) (
 	}
 	replaceSubQuery(ctx, sel)
 	eroute, err := routeToEngineRoute(ctx, op)
+	for _, order := range op.Ordering {
+		collation := ctx.SemTable.CollationForExpr(order.AST)
+		eroute.OrderBy = append(eroute.OrderBy, engine.OrderByParams{
+			Col:             order.Offset,
+			WeightStringCol: order.WOffset,
+			Desc:            order.Direction == sqlparser.DescOrder,
+			CollationID:     collation,
+		})
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -524,25 +570,22 @@ func pushWeightStringForDistinct(ctx *plancontext.PlanningContext, plan logicalP
 		}
 		node.noNeedToTypeCheck = append(node.noNeedToTypeCheck, newOffset)
 	case *joinGen4:
-		lhsSolves := node.Left.ContainsTables()
-		rhsSolves := node.Right.ContainsTables()
-		expr := node.OutputColumns()[offset]
-		aliasedExpr, isAliased := expr.(*sqlparser.AliasedExpr)
-		if !isAliased {
-			return 0, vterrors.VT13001("cannot convert JOIN output columns to an aliased-expression")
-		}
-		deps := ctx.SemTable.RecursiveDeps(aliasedExpr.Expr)
+		joinOffset := node.Cols[offset]
 		switch {
-		case deps.IsSolvedBy(lhsSolves):
-			offset, err = pushWeightStringForDistinct(ctx, node.Left, offset)
-			node.Cols = append(node.Cols, -(offset + 1))
-		case deps.IsSolvedBy(rhsSolves):
-			offset, err = pushWeightStringForDistinct(ctx, node.Right, offset)
-			node.Cols = append(node.Cols, offset+1)
+		case joinOffset < 0:
+			offset, err = pushWeightStringForDistinct(ctx, node.Left, -(joinOffset + 1))
+			offset = -(offset + 1)
+		case joinOffset > 0:
+			offset, err = pushWeightStringForDistinct(ctx, node.Right, joinOffset-1)
+			offset = offset + 1
 		default:
-			return 0, vterrors.VT12001("push DISTINCT WEIGHT_STRING to both sides of the join")
+			return 0, vterrors.VT13001("wrong column offset in join plan to push DISTINCT WEIGHT_STRING")
 		}
-		newOffset = len(node.Cols) - 1
+		if err != nil {
+			return 0, err
+		}
+		newOffset = len(node.Cols)
+		node.Cols = append(node.Cols, offset)
 	default:
 		return 0, vterrors.VT13001(fmt.Sprintf("pushWeightStringForDistinct on %T", plan))
 	}

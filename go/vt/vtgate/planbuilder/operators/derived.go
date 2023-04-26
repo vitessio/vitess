@@ -21,8 +21,6 @@ import (
 
 	"golang.org/x/exp/slices"
 
-	"vitess.io/vitess/go/slices2"
-
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -32,7 +30,11 @@ import (
 )
 
 type Derived struct {
-	Source ops.Operator
+	Source  ops.Operator
+	TableId semantics.TableSet
+
+	// QP contains the QueryProjection for this op
+	QP *QueryProjection
 
 	Query         sqlparser.SelectStatement
 	Alias         string
@@ -43,11 +45,6 @@ type Derived struct {
 	ColumnsOffset []int
 }
 
-var _ ops.PhysicalOperator = (*Derived)(nil)
-
-// IPhysical implements the PhysicalOperator interface
-func (d *Derived) IPhysical() {}
-
 // Clone implements the Operator interface
 func (d *Derived) Clone(inputs []ops.Operator) ops.Operator {
 	return &Derived{
@@ -57,6 +54,7 @@ func (d *Derived) Clone(inputs []ops.Operator) ops.Operator {
 		ColumnAliases: sqlparser.CloneColumns(d.ColumnAliases),
 		Columns:       slices.Clone(d.Columns),
 		ColumnsOffset: slices.Clone(d.ColumnsOffset),
+		TableId:       d.TableId,
 	}
 }
 
@@ -207,8 +205,22 @@ func canReuseColumn[T any](
 	return
 }
 
-func (d *Derived) GetColumns() ([]sqlparser.Expr, error) {
-	return slices2.Map(d.Columns, colNameToExpr), nil
+func (d *Derived) GetColumns() (exprs []*sqlparser.AliasedExpr, err error) {
+	for _, expr := range sqlparser.GetFirstSelect(d.Query).SelectExprs {
+		ae, ok := expr.(*sqlparser.AliasedExpr)
+		if !ok {
+			return nil, errHorizonNotPlanned()
+		}
+		exprs = append(exprs, ae)
+	}
+	return
+}
+
+func (d *Derived) GetOrdering() ([]ops.OrderBy, error) {
+	if d.QP == nil {
+		return nil, vterrors.VT13001("QP should already be here")
+	}
+	return d.QP.OrderExprs, nil
 }
 
 func addToIntSlice(columnOffset []int, valToAdd int) ([]int, int) {
@@ -230,8 +242,27 @@ func (d *Derived) src() ops.Operator {
 	return d.Source
 }
 
+func (d *Derived) getQP(ctx *plancontext.PlanningContext) (*QueryProjection, error) {
+	if d.QP != nil {
+		return d.QP, nil
+	}
+	qp, err := CreateQPFromSelect(ctx, d.Query.(*sqlparser.Select))
+	if err != nil {
+		return nil, err
+	}
+	d.QP = qp
+	return d.QP, nil
+}
+func (d *Derived) setQP(qp *QueryProjection) {
+	d.QP = qp
+}
+
 func (d *Derived) Description() ops.OpDescription {
 	return ops.OpDescription{
 		OperatorType: "Derived",
 	}
+}
+
+func (d *Derived) ShortDescription() string {
+	return d.Alias
 }
