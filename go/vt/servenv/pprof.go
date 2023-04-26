@@ -342,4 +342,5 @@ func init() {
 		fs.StringSliceVar(&pprofFlag, "pprof", pprofFlag, "enable profiling")
 	})
 	OnInit(pprofInit)
+	OnInit(HTTPRegisterProfile)
 }

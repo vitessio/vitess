@@ -19,7 +19,6 @@ package servenv
 import (
 	"io"
 	"net/http"
-	"net/http/httptest"
 	"regexp"
 	"strings"
 	"testing"
@@ -43,7 +42,7 @@ func init() {
 }
 
 func TestStatus(t *testing.T) {
-	server := httptest.NewServer(nil)
+	server := HTTPTestServer()
 	defer server.Close()
 
 	resp, err := http.Get(server.URL + StatusURLPath())
@@ -68,7 +67,7 @@ func TestStatus(t *testing.T) {
 }
 
 func TestNamedStatus(t *testing.T) {
-	server := httptest.NewServer(nil)
+	server := HTTPTestServer()
 	defer server.Close()
 
 	name := "test"
