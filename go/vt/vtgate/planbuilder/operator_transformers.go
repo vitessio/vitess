@@ -363,25 +363,22 @@ func pushWeightStringForDistinct(ctx *plancontext.PlanningContext, plan logicalP
 		}
 		node.noNeedToTypeCheck = append(node.noNeedToTypeCheck, newOffset)
 	case *joinGen4:
-		lhsSolves := node.Left.ContainsTables()
-		rhsSolves := node.Right.ContainsTables()
-		expr := node.OutputColumns()[offset]
-		aliasedExpr, isAliased := expr.(*sqlparser.AliasedExpr)
-		if !isAliased {
-			return 0, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "cannot convert select expression to an aliased expression")
-		}
-		deps := ctx.SemTable.RecursiveDeps(aliasedExpr.Expr)
+		joinOffset := node.Cols[offset]
 		switch {
-		case deps.IsSolvedBy(lhsSolves):
-			offset, err = pushWeightStringForDistinct(ctx, node.Left, offset)
-			node.Cols = append(node.Cols, -(offset + 1))
-		case deps.IsSolvedBy(rhsSolves):
-			offset, err = pushWeightStringForDistinct(ctx, node.Right, offset)
-			node.Cols = append(node.Cols, offset+1)
+		case joinOffset < 0:
+			offset, err = pushWeightStringForDistinct(ctx, node.Left, -(joinOffset + 1))
+			offset = -(offset + 1)
+		case joinOffset > 0:
+			offset, err = pushWeightStringForDistinct(ctx, node.Right, joinOffset-1)
+			offset = offset + 1
 		default:
-			return 0, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "cannot push distinct weight string to both sides of the join")
+			return 0, vterrors.New(vtrpcpb.Code_INTERNAL, "[BUG]: wrong column offset in join plan to push DISTINCT WEIGHT_STRING")
 		}
-		newOffset = len(node.Cols) - 1
+		if err != nil {
+			return 0, err
+		}
+		newOffset = len(node.Cols)
+		node.Cols = append(node.Cols, offset)
 	default:
 		return 0, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "bug: not supported pushWeightStringForDistinct on %T", plan)
 	}
