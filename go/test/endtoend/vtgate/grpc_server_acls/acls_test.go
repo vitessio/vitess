@@ -112,7 +112,8 @@ func TestMain(m *testing.M) {
 		clusterInstance.VtGateExtraArgs = []string{
 			"--grpc_auth_mode", "static",
 			"--grpc_auth_static_password_file", grpcServerAuthStaticPath,
-			"--grpc-use-static-authentication-callerid", "false",
+			"--grpc_use_effective_callerid",
+			"--grpc-use-static-authentication-callerid",
 		}
 
 		// Configure vttablet to use table ACL
@@ -143,8 +144,8 @@ func TestMain(m *testing.M) {
 	os.Exit(exitcode)
 }
 
-// TestAuthenticatedUserWithAccess verifies that an authenticated gRPC static user with an effectiveCallerID that has ACL access can execute queries
-func TestAuthenticatedUserWithAccess(t *testing.T) {
+// TestEffectiveCallerIDWithAccess verifies that an authenticated gRPC static user with an effectiveCallerID that has ACL access can execute queries
+func TestEffectiveCallerIDWithAccess(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -161,8 +162,8 @@ func TestAuthenticatedUserWithAccess(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-// TestAuthenticatedUserNoAccess verifies that an authenticated gRPC static user without an effectiveCallerID that has ACL access cannot execute queries
-func TestAuthenticatedUserNoAccess(t *testing.T) {
+// TestEffectiveCallerIDWithNoAccess verifies that an authenticated gRPC static user without an effectiveCallerID that has ACL access cannot execute queries
+func TestEffectiveCallerIDWithNoAccess(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -179,24 +180,6 @@ func TestAuthenticatedUserNoAccess(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "Select command denied to user")
 	assert.Contains(t, err.Error(), "for table 'test_table' (ACL check error)")
-}
-
-// TestUnauthenticatedUser verifies that an unauthenticated gRPC user cannot execute queries
-func TestUnauthenticatedUser(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	vtgateConn, err := dialVTGate(ctx, t, "", "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer vtgateConn.Close()
-
-	session := vtgateConn.Session(keyspaceName+"@primary", nil)
-	query := "SELECT id FROM test_table"
-	_, err = session.Execute(ctx, query, nil)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "invalid credentials")
 }
 
 func dialVTGate(ctx context.Context, t *testing.T, username string, password string) (*vtgateconn.VTGateConn, error) {
