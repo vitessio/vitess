@@ -17,8 +17,10 @@ limitations under the License.
 package mysql
 
 import (
+	"bytes"
 	"encoding/binary"
 	"fmt"
+	"io"
 
 	"github.com/klauspost/compress/zstd"
 
@@ -52,8 +54,15 @@ var transactionPayloadCompressionTypes = map[uint64]string{
 	transactionPayloadCompressionNone: "NONE",
 }
 
-// Create a reader that caches decompressors.
+// Create a reader that caches decompressors. This is used for
+// smaller events that we want to handle entirely using in-memory
+// buffers.
 var zstdDecoder, _ = zstd.NewReader(nil, zstd.WithDecoderConcurrency(0))
+
+// At what size should we switch from the in-memory buffer
+// decoding to streaming mode -- which is slower, but does not
+// require everything be done in memory.
+const zstdInMemoryDecompressorMaxSize = 128 << (10 * 2) // 128MB
 
 type TransactionPayload struct {
 	Size             uint64
@@ -227,11 +236,32 @@ func (tp *TransactionPayload) decompress() ([]byte, error) {
 	if len(tp.Payload) == 0 {
 		return []byte{}, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "cannot decompress empty payload")
 	}
+	var (
+		decompressedBytes []byte
+		err               error
+	)
 
-	decompressedBytes, err := zstdDecoder.DecodeAll(tp.Payload, nil)
-	if err != nil {
-		return nil, err
+	// Switch to slower but less memory intensive stream mode for larger payloads.
+	if tp.UncompressedSize > zstdInMemoryDecompressorMaxSize {
+		in := bytes.NewReader(tp.Payload)
+		streamDecoder, err := zstd.NewReader(in)
+		if err != nil {
+			return nil, err
+		}
+		defer streamDecoder.Close()
+		out := io.Writer(&bytes.Buffer{})
+		_, err = io.Copy(out, streamDecoder)
+		if err != nil {
+			return nil, err
+		}
+		decompressedBytes = out.(*bytes.Buffer).Bytes()
+	} else { // Process smaller payloads using in-memory buffers.
+		decompressedBytes, err = zstdDecoder.DecodeAll(tp.Payload, nil)
+		if err != nil {
+			return nil, err
+		}
 	}
+
 	if uint64(len(decompressedBytes)) != tp.UncompressedSize {
 		return []byte{}, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT,
 			fmt.Sprintf("decompressed size %d does not match expected size %d", len(decompressedBytes), tp.UncompressedSize))
