@@ -22,6 +22,7 @@ import (
 	"vitess.io/vitess/go/vt/servenv/internal/mux"
 )
 
+// HTTPTestServer returns a httptest.Server for the internal servenv mux.
 func HTTPTestServer() *httptest.Server {
 	return httptest.NewServer(mux.Mux)
 }

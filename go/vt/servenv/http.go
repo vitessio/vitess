@@ -25,14 +25,17 @@ import (
 	"vitess.io/vitess/go/vt/servenv/internal/mux"
 )
 
+// HTTPHandle registers the given handler for the internal servenv mux.
 func HTTPHandle(pattern string, handler http.Handler) {
 	mux.Mux.Handle(pattern, handler)
 }
 
+// HTTPHandleFunc registers the given handler func for the internal servenv mux.
 func HTTPHandleFunc(pattern string, handler func(http.ResponseWriter, *http.Request)) {
 	mux.Mux.HandleFunc(pattern, handler)
 }
 
+// HTTPServe starts the HTTP server for the internal servenv mux on the listener.
 func HTTPServe(l net.Listener) error {
 	err := http.Serve(l, mux.Mux)
 	if errors.Is(err, http.ErrServerClosed) || errors.Is(err, net.ErrClosed) {
@@ -41,6 +44,7 @@ func HTTPServe(l net.Listener) error {
 	return err
 }
 
+// HTTPRegisterProfile registers the default pprof HTTP endpoints with the internal servenv mux.
 func HTTPRegisterProfile() {
 	HTTPHandleFunc("/debug/pprof/", pprof.Index)
 	HTTPHandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
