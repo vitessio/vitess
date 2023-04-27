@@ -770,13 +770,15 @@ func TestDiffSchemas(t *testing.T) {
 			hints := &DiffHints{
 				TableRenameStrategy: ts.tableRename,
 			}
-			diffs, err := DiffSchemasSQL(ts.from, ts.to, hints)
+			diff, err := DiffSchemasSQL(ts.from, ts.to, hints)
 			if ts.expectError != "" {
 				require.Error(t, err)
 				assert.Contains(t, err.Error(), ts.expectError)
 			} else {
 				assert.NoError(t, err)
 
+				diffs, err := diff.OrderedDiffs()
+				assert.NoError(t, err)
 				statements := []string{}
 				cstatements := []string{}
 				for _, d := range diffs {
