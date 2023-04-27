@@ -348,6 +348,22 @@ func TestCompilerSingle(t *testing.T) {
 			expression: `MAKETIME(NULL, '', cast('invalid' as json))`,
 			result:     `NULL`,
 		},
+		{
+			expression: `1 = ' 1 '`,
+			result:     `INT64(1)`,
+		},
+		{
+			expression: `CAST(' 0 ' AS TIME)`,
+			result:     `TIME("00:00:00")`,
+		},
+		{
+			expression: `CAST('0' AS TIME)`,
+			result:     `TIME("00:00:00")`,
+		},
+		{
+			expression: `timestamp '2000-01-01 10:34:58.978654' DIV '\t1 foo\t'`,
+			result:     `INT64(20000101103458)`,
+		},
 	}
 
 	for _, tc := range testCases {
