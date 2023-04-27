@@ -321,7 +321,7 @@ func (throttler *Throttler) WatchSrvKeyspaceCallback(srvks *topodatapb.SrvKeyspa
 		// Throttler is running and we should apply the config change through Operate()
 		// or else we get into race conditions.
 		go func() {
-			log.Infof("Throttler: submitting a throttler config apply message")
+			log.Infof("Throttler: submitting a throttler config apply message with: %+v", srvks.ThrottlerConfig)
 			throttler.throttlerConfigChan <- throttlerConfig
 		}()
 	} else {
