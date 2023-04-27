@@ -1,5 +1,5 @@
 /*
-Copyright 2022 The Vitess Authors.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,17 +14,15 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package main
+package testutils
 
 import (
-	"net/http"
+	"net/http/httptest"
 
-	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/servenv/internal/mux"
 )
 
-func init() {
-	// Anything unrecognized gets redirected to the status page.
-	servenv.HTTPHandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, "/debug/status", http.StatusFound)
-	})
+// HTTPTestServer returns a httptest.Server for the internal servenv mux.
+func HTTPTestServer() *httptest.Server {
+	return httptest.NewServer(mux.Mux)
 }

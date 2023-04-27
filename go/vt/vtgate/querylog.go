@@ -21,6 +21,7 @@ import (
 	"sync"
 
 	"vitess.io/vitess/go/streamlog"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vtgate/logstats"
 )
 
@@ -49,13 +50,13 @@ func initQueryLogger(vtg *VTGate) error {
 	SetQueryLogger(streamlog.New[*logstats.LogStats]("VTGate", queryLogBufferSize))
 	QueryLogger.ServeLogs(QueryLogHandler, streamlog.GetFormatter(QueryLogger))
 
-	http.HandleFunc(QueryLogzHandler, func(w http.ResponseWriter, r *http.Request) {
+	servenv.HTTPHandleFunc(QueryLogzHandler, func(w http.ResponseWriter, r *http.Request) {
 		ch := QueryLogger.Subscribe("querylogz")
 		defer QueryLogger.Unsubscribe(ch)
 		querylogzHandler(ch, w, r)
 	})
 
-	http.HandleFunc(QueryzHandler, func(w http.ResponseWriter, r *http.Request) {
+	servenv.HTTPHandleFunc(QueryzHandler, func(w http.ResponseWriter, r *http.Request) {
 		queryzHandler(vtg.executor, w, r)
 	})
 

@@ -348,7 +348,7 @@ func NewHealthCheck(ctx context.Context, retryDelay, healthCheckTimeout time.Dur
 
 	hc.topoWatchers = topoWatchers
 	healthcheckOnce.Do(func() {
-		http.Handle("/debug/gateway", hc)
+		servenv.HTTPHandle("/debug/gateway", hc)
 	})
 
 	// start the topo watches here
