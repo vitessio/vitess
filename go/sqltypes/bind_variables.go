@@ -422,6 +422,8 @@ func FormatBindVariables(bindVariables map[string]*querypb.BindVariable, full, a
 			}
 			if IsIntegral(v.Type) || IsFloat(v.Type) {
 				fmt.Fprintf(&buf, "%q: {\"type\": %q, \"value\": %v}", k, v.Type, string(v.Value))
+			} else if IsBinary(v.Type) {
+				fmt.Fprintf(&buf, "%q: {\"type\": %q, \"value\": %q}", k, v.Type, strconv.Quote(string(v.Value)))
 			} else {
 				fmt.Fprintf(&buf, "%q: {\"type\": %q, \"value\": %q}", k, v.Type, string(v.Value))
 			}

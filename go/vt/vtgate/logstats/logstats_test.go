@@ -68,6 +68,7 @@ func TestLogStatsFormat(t *testing.T) {
 	params := map[string][]string{"full": {}}
 	intBindVar := map[string]*querypb.BindVariable{"intVal": sqltypes.Int64BindVariable(1)}
 	stringBindVar := map[string]*querypb.BindVariable{"strVal": sqltypes.StringBindVariable("abc")}
+	bytesBindVar := map[string]*querypb.BindVariable{"bytesVal": sqltypes.BytesBindVariable([]byte("\x16k@\xb4J\xbaK\xd6"))}
 
 	tests := []struct {
 		name     string
@@ -116,6 +117,16 @@ func TestLogStatsFormat(t *testing.T) {
 			format:   "json",
 			expected: "{\"ActiveKeyspace\":\"db\",\"BindVars\":\"[REDACTED]\",\"Cached Plan\":false,\"CommitTime\":0,\"Effective Caller\":\"\",\"End\":\"2017-01-01 01:02:04.000001\",\"Error\":\"\",\"ExecuteTime\":0,\"ImmediateCaller\":\"\",\"Method\":\"test\",\"PlanTime\":0,\"RemoteAddr\":\"\",\"RowsAffected\":0,\"SQL\":\"sql1\",\"SessionUUID\":\"suuid\",\"ShardQueries\":0,\"Start\":\"2017-01-01 01:02:03.000000\",\"StmtType\":\"\",\"TablesUsed\":[\"ks1.tbl1\",\"ks2.tbl2\"],\"TabletType\":\"PRIMARY\",\"TotalTime\":1.000001,\"Username\":\"\"}",
 			bindVars: stringBindVar,
+		}, { // 8
+			redact:   false,
+			format:   "json",
+			expected: "{\"ActiveKeyspace\":\"db\",\"BindVars\":{\"bytesVal\":{\"type\":\"VARBINARY\",\"value\":\"\\\"\\\\x16k@\\\\xb4J\\\\xbaK\\\\xd6\\\"\"}},\"Cached Plan\":false,\"CommitTime\":0,\"Effective Caller\":\"\",\"End\":\"2017-01-01 01:02:04.000001\",\"Error\":\"\",\"ExecuteTime\":0,\"ImmediateCaller\":\"\",\"Method\":\"test\",\"PlanTime\":0,\"RemoteAddr\":\"\",\"RowsAffected\":0,\"SQL\":\"sql1\",\"SessionUUID\":\"suuid\",\"ShardQueries\":0,\"Start\":\"2017-01-01 01:02:03.000000\",\"StmtType\":\"\",\"TablesUsed\":[\"ks1.tbl1\",\"ks2.tbl2\"],\"TabletType\":\"PRIMARY\",\"TotalTime\":1.000001,\"Username\":\"\"}",
+			bindVars: bytesBindVar,
+		}, { // 9
+			redact:   false,
+			format:   "text",
+			expected: "test\t\t\t''\t''\t2017-01-01 01:02:03.000000\t2017-01-01 01:02:04.000001\t1.000001\t0.000000\t0.000000\t0.000000\t\t\"sql1\"\tmap[bytesVal:type:VARBINARY value:\"\\x16k@\\xb4J\\xbaK\\xd6\"]\t0\t0\t\"\"\t\"PRIMARY\"\t\"suuid\"\tfalse\t[\"ks1.tbl1\",\"ks2.tbl2\"]\t\"db\"\n",
+			bindVars: bytesBindVar,
 		},
 	}
 
