@@ -148,15 +148,7 @@ func TestMain(m *testing.M) {
 }
 
 func throttleCheck(tablet *cluster.Vttablet) (*http.Response, error) {
-	read := func() (*http.Response, error) {
-		return httpClient.Get(fmt.Sprintf("http://localhost:%d/%s", tablet.HTTPPort, checkAPIPath))
-	}
-	resp, err := read()
-	// Retry one time if we got an ephemeral 500 error.
-	if resp.StatusCode == http.StatusInternalServerError {
-		resp.Body.Close()
-		return read()
-	}
+	resp, err := httpClient.Get(fmt.Sprintf("http://localhost:%d/%s", tablet.HTTPPort, checkAPIPath))
 	return resp, err
 }
 
