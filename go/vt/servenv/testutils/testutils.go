@@ -14,30 +14,14 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package servenv
+package testutils
 
 import (
-	"io"
-	"net/http"
-	"testing"
+	"net/http/httptest"
 
-	"vitess.io/vitess/go/vt/servenv/testutils"
+	"vitess.io/vitess/go/vt/servenv/internal/mux"
 )
 
-func TestLivenessHandler(t *testing.T) {
-	server := testutils.HTTPTestServer()
-	defer server.Close()
-
-	resp, err := http.Get(server.URL + "/debug/liveness")
-	if err != nil {
-		t.Fatalf("http.Get: %v", err)
-	}
-	defer resp.Body.Close()
-
-	// Make sure we can read the body, even though it's empty.
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		t.Fatalf("io.ReadAll: %v", err)
-	}
-	t.Logf("body: %q", body)
+func HTTPTestServer() *httptest.Server {
+	return httptest.NewServer(mux.Mux)
 }

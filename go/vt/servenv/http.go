@@ -1,33 +1,44 @@
+/*
+Copyright 2023 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package servenv
 
 import (
 	"errors"
 	"net"
 	"net/http"
-	"net/http/httptest"
 	"net/http/pprof"
+
+	"vitess.io/vitess/go/vt/servenv/internal/mux"
 )
 
-var mux = http.NewServeMux()
-
 func HTTPHandle(pattern string, handler http.Handler) {
-	mux.Handle(pattern, handler)
+	mux.Mux.Handle(pattern, handler)
 }
 
 func HTTPHandleFunc(pattern string, handler func(http.ResponseWriter, *http.Request)) {
-	mux.HandleFunc(pattern, handler)
+	mux.Mux.HandleFunc(pattern, handler)
 }
 
 func HTTPServe(l net.Listener) error {
-	err := http.Serve(l, mux)
+	err := http.Serve(l, mux.Mux)
 	if errors.Is(err, http.ErrServerClosed) || errors.Is(err, net.ErrClosed) {
 		return nil
 	}
 	return err
-}
-
-func HTTPTestServer() *httptest.Server {
-	return httptest.NewServer(mux)
 }
 
 func HTTPRegisterProfile() {
