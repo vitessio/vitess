@@ -310,7 +310,7 @@ func (throttler *Throttler) normalizeThrottlerConfig(thottlerConfig *topodatapb.
 }
 
 func (throttler *Throttler) WatchSrvKeyspaceCallback(srvks *topodatapb.SrvKeyspace, err error) bool {
-	log.Infof("Throttler: WatchSrvKeyspaceCallback")
+	log.Infof("Throttler: WatchSrvKeyspaceCallback called with: %+v", srvks)
 	if err != nil {
 		log.Errorf("WatchSrvKeyspaceCallback error: %v", err)
 		return false
