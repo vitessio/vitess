@@ -338,7 +338,7 @@ func (throttler *Throttler) applyThrottlerConfig(ctx context.Context, throttlerC
 	if !throttlerConfigViaTopo {
 		return
 	}
-	log.Infof("Throttler: applying topo config")
+	log.Infof("Throttler: applying topo config: %+v", srvks.ThrottlerConfig)
 	if throttlerConfig.CustomQuery == "" {
 		throttler.metricsQuery.Store(sqlparser.BuildParsedQuery(defaultReplicationLagQuery, sidecardb.GetIdentifier()).Query)
 	} else {
