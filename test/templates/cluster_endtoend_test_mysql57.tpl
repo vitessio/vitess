@@ -118,7 +118,7 @@ jobs:
         sudo service etcd stop
 
         # install JUnit report formatter
-        go install github.com/jstemmer/go-junit-report/v2@latest
+        go install github.com/vitessio/go-junit-report@cherry-pick-v2
 
         {{if .InstallXtraBackup}}
 

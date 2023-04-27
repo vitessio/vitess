@@ -134,7 +134,7 @@ jobs:
         go install golang.org/x/tools/cmd/goimports@latest
         
         # install JUnit report formatter
-        go install github.com/jstemmer/go-junit-report/v2@latest
+        go install github.com/vitessio/go-junit-report@cherry-pick-v2
 
     - name: Run make tools
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.unit_tests == 'true'
