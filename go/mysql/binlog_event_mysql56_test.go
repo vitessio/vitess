@@ -134,9 +134,9 @@ func TestMysql56DecodeTransactionPayload(t *testing.T) {
 			rows, err := ev.Rows(format, tableMap)
 			require.NoError(t, err)
 			for i := range rows.Rows {
-				rowStrs, err := rows.StringValuesForTests(tableMap, i)
+				rowStr, err := rows.StringValuesForTests(tableMap, i)
 				require.NoError(t, err)
-				eventStrs = append(eventStrs, fmt.Sprintf("%v", rowStrs))
+				eventStrs = append(eventStrs, fmt.Sprintf("%v", rowStr))
 			}
 		case ev.IsXID():
 			eventStrs = append(eventStrs, "COMMIT")
