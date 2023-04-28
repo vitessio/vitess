@@ -62,7 +62,7 @@ var zstdDecoder, _ = zstd.NewReader(nil, zstd.WithDecoderConcurrency(0))
 // At what size should we switch from the in-memory buffer
 // decoding to streaming mode -- which is slower, but does not
 // require everything be done in memory.
-const zstdInMemoryDecompressorMaxSize = 128 << (10 * 2) // 128MB
+const zstdInMemoryDecompressorMaxSize = 128 << (10 * 2) // 128MiB
 
 type TransactionPayload struct {
 	Size             uint64
