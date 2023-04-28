@@ -87,8 +87,8 @@ func (ev mariadbBinlogEvent) StripChecksum(f BinlogFormat) (BinlogEvent, []byte,
 		// Checksum is the last 4 bytes of the event buffer.
 		data := ev.Bytes()
 		length := len(data)
-		checksum := data[length-binlogChecksumLen:]
-		data = data[:length-binlogChecksumLen]
+		checksum := data[length-BinlogCRC32ChecksumLen:]
+		data = data[:length-BinlogCRC32ChecksumLen]
 		return mariadbBinlogEvent{binlogEvent: binlogEvent(data)}, checksum, nil
 	}
 }

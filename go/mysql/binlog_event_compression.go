@@ -45,13 +45,13 @@ const (
 // in MySQL 8.0):
 // https://dev.mysql.com/doc/refman/8.0/en/binary-log-transaction-compression.html
 const (
-	transactionPayloadCompressionZstd = 0
-	transactionPayloadCompressionNone = 255
+	TransactionPayloadCompressionZstd = 0
+	TransactionPayloadCompressionNone = 255
 )
 
-var transactionPayloadCompressionTypes = map[uint64]string{
-	transactionPayloadCompressionZstd: "ZSTD",
-	transactionPayloadCompressionNone: "NONE",
+var TransactionPayloadCompressionTypes = map[uint64]string{
+	TransactionPayloadCompressionZstd: "ZSTD",
+	TransactionPayloadCompressionNone: "NONE",
 }
 
 // Create a reader that caches decompressors. This is used for
@@ -161,43 +161,41 @@ func (tp *TransactionPayload) read(data []byte) error {
 
 		if fieldType == payloadHeaderEndMark {
 			tp.Payload = data[pos:]
-			break
-		} else {
-			fieldLen, ok := readFixedLenUint64(data[pos : pos+1])
-			if !ok {
-				return vterrors.New(vtrpcpb.Code_INTERNAL, "error reading field length")
-			}
-			pos++
-
-			switch fieldType {
-			case payloadSizeField:
-				tp.Size, ok = readFixedLenUint64(data[pos : pos+fieldLen])
-				if !ok {
-					return vterrors.New(vtrpcpb.Code_INTERNAL, "error reading payload size")
-				}
-			case payloadCompressionTypeField:
-				tp.CompressionType, ok = readFixedLenUint64(data[pos : pos+fieldLen])
-				if !ok {
-					return vterrors.New(vtrpcpb.Code_INTERNAL, "error reading compression type")
-				}
-			case payloadUncompressedSizeField:
-				tp.UncompressedSize, ok = readFixedLenUint64(data[pos : pos+fieldLen])
-				if !ok {
-					return vterrors.New(vtrpcpb.Code_INTERNAL, "error reading uncompressed payload size")
-				}
-			}
-
-			pos += fieldLen
+			return nil // we're done
 		}
-	}
 
-	return nil
+		fieldLen, ok := readFixedLenUint64(data[pos : pos+1])
+		if !ok {
+			return vterrors.New(vtrpcpb.Code_INTERNAL, "error reading field length")
+		}
+		pos++
+
+		switch fieldType {
+		case payloadSizeField:
+			tp.Size, ok = readFixedLenUint64(data[pos : pos+fieldLen])
+			if !ok {
+				return vterrors.New(vtrpcpb.Code_INTERNAL, "error reading payload size")
+			}
+		case payloadCompressionTypeField:
+			tp.CompressionType, ok = readFixedLenUint64(data[pos : pos+fieldLen])
+			if !ok {
+				return vterrors.New(vtrpcpb.Code_INTERNAL, "error reading compression type")
+			}
+		case payloadUncompressedSizeField:
+			tp.UncompressedSize, ok = readFixedLenUint64(data[pos : pos+fieldLen])
+			if !ok {
+				return vterrors.New(vtrpcpb.Code_INTERNAL, "error reading uncompressed payload size")
+			}
+		}
+
+		pos += fieldLen
+	}
 }
 
 // decode decompresses the payload and extracts the internal binlog
 // events.
 func (tp *TransactionPayload) decode() error {
-	if tp.CompressionType != transactionPayloadCompressionZstd {
+	if tp.CompressionType != TransactionPayloadCompressionZstd {
 		return vterrors.New(vtrpcpb.Code_INTERNAL,
 			fmt.Sprintf("TransactionPayload has unsupported compression type of %d", tp.CompressionType))
 	}
@@ -211,11 +209,11 @@ func (tp *TransactionPayload) decode() error {
 	pos := uint64(0)
 
 	for {
-		eventLenPosEnd := pos + binlogEventLenOffset + 4
+		eventLenPosEnd := pos + BinlogEventLenOffset + 4
 		if eventLenPosEnd > decompressedPayloadLen { // No more events in the payload
 			break
 		}
-		eventLen := uint64(binary.LittleEndian.Uint32(decompressedPayload[pos+binlogEventLenOffset : eventLenPosEnd]))
+		eventLen := uint64(binary.LittleEndian.Uint32(decompressedPayload[pos+BinlogEventLenOffset : eventLenPosEnd]))
 		if pos+eventLen > decompressedPayloadLen {
 			return vterrors.New(vtrpcpb.Code_INTERNAL,
 				fmt.Sprintf("[BUG] event length of %d at pos %d in decompressed transaction payload is beyond the expected payload length of %d",
