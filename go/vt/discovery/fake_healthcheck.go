@@ -176,8 +176,8 @@ func (fhc *FakeHealthCheck) SetTabletType(tablet *topodatapb.Tablet, tabletType 
 func (fhc *FakeHealthCheck) Unsubscribe(c chan *TabletHealth) {
 }
 
-// LoadTabletsTrigger is not implemented.
-func (fhc *FakeHealthCheck) LoadTabletsTrigger() chan struct{} {
+// GetLoadTabletsTrigger is not implemented.
+func (fhc *FakeHealthCheck) GetLoadTabletsTrigger() chan struct{} {
 	return nil
 }
 

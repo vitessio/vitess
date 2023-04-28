@@ -231,8 +231,8 @@ type HealthCheck interface {
 	// Unsubscribe removes a listener.
 	Unsubscribe(c chan *TabletHealth)
 
-	// LoadTabletsTrigger returns a channel that is used to inform when to load tablets.
-	LoadTabletsTrigger() chan struct{}
+	// GetLoadTabletsTrigger returns a channel that is used to inform when to load tablets.
+	GetLoadTabletsTrigger() chan struct{}
 }
 
 var _ HealthCheck = (*HealthCheckImpl)(nil)
@@ -606,8 +606,8 @@ func (hc *HealthCheckImpl) broadcast(th *TabletHealth) {
 	}
 }
 
-// LoadTabletsTrigger returns a channel that is used to inform when to load tablets.
-func (hc *HealthCheckImpl) LoadTabletsTrigger() chan struct{} {
+// GetLoadTabletsTrigger returns a channel that is used to inform when to load tablets.
+func (hc *HealthCheckImpl) GetLoadTabletsTrigger() chan struct{} {
 	return hc.loadTabletsTrigger
 }
 

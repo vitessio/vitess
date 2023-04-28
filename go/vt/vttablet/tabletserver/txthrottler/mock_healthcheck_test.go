@@ -107,6 +107,20 @@ func (mr *MockHealthCheckMockRecorder) GetHealthyTabletStats(arg0 interface{}) *
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetHealthyTabletStats", reflect.TypeOf((*MockHealthCheck)(nil).GetHealthyTabletStats), arg0)
 }
 
+// GetLoadTabletsTrigger mocks base method.
+func (m *MockHealthCheck) GetLoadTabletsTrigger() chan struct{} {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetLoadTabletsTrigger")
+	ret0, _ := ret[0].(chan struct{})
+	return ret0
+}
+
+// GetLoadTabletsTrigger indicates an expected call of GetLoadTabletsTrigger.
+func (mr *MockHealthCheckMockRecorder) GetLoadTabletsTrigger() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLoadTabletsTrigger", reflect.TypeOf((*MockHealthCheck)(nil).GetLoadTabletsTrigger))
+}
+
 // GetTabletHealth mocks base method.
 func (m *MockHealthCheck) GetTabletHealth(arg0 discovery.KeyspaceShardTabletType, arg1 *topodata.TabletAlias) (*discovery.TabletHealth, error) {
 	m.ctrl.T.Helper()
@@ -135,20 +149,6 @@ func (m *MockHealthCheck) GetTabletHealthByAlias(arg0 *topodata.TabletAlias) (*d
 func (mr *MockHealthCheckMockRecorder) GetTabletHealthByAlias(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTabletHealthByAlias", reflect.TypeOf((*MockHealthCheck)(nil).GetTabletHealthByAlias), arg0)
-}
-
-// LoadTabletsTrigger mocks base method.
-func (m *MockHealthCheck) LoadTabletsTrigger() chan struct{} {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "LoadTabletsTrigger")
-	ret0, _ := ret[0].(chan struct{})
-	return ret0
-}
-
-// LoadTabletsTrigger indicates an expected call of LoadTabletsTrigger.
-func (mr *MockHealthCheckMockRecorder) LoadTabletsTrigger() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LoadTabletsTrigger", reflect.TypeOf((*MockHealthCheck)(nil).LoadTabletsTrigger))
 }
 
 // RegisterStats mocks base method.
