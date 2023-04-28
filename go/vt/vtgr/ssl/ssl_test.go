@@ -2,37 +2,16 @@ package ssl_test
 
 import (
 	"crypto/tls"
-	"crypto/x509"
-	"encoding/pem"
-	"fmt"
-	nethttp "net/http"
 	"os"
-	"reflect"
-	"strings"
 	"syscall"
 	"testing"
 
-	"vitess.io/vitess/go/vt/vtgr/config"
 	"vitess.io/vitess/go/vt/vtgr/ssl"
 )
 
 /*
 	This file has been copied over from VTOrc package
 */
-
-func TestHasString(t *testing.T) {
-	elem := "foo"
-	a1 := []string{"bar", "foo", "baz"}
-	a2 := []string{"bar", "fuu", "baz"}
-	good := ssl.HasString(elem, a1)
-	if !good {
-		t.Errorf("Didn't find %s in array %s", elem, strings.Join(a1, ", "))
-	}
-	bad := ssl.HasString(elem, a2)
-	if bad {
-		t.Errorf("Unexpectedly found %s in array %s", elem, strings.Join(a2, ", "))
-	}
-}
 
 // TODO: Build a fake CA and make sure it loads up
 func TestNewTLSConfig(t *testing.T) {
@@ -68,88 +47,6 @@ func TestNewTLSConfig(t *testing.T) {
 	}
 }
 
-func TestStatus(t *testing.T) {
-	var validOUs []string
-	url := fmt.Sprintf("http://example.com%s", config.Config.StatusEndpoint)
-
-	req, err := nethttp.NewRequest("GET", url, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	config.Config.StatusOUVerify = false
-	if err := ssl.Verify(req, validOUs); err != nil {
-		t.Errorf("Failed even with verification off")
-	}
-	config.Config.StatusOUVerify = true
-	if err := ssl.Verify(req, validOUs); err == nil {
-		t.Errorf("Did not fail on with bad verification")
-	}
-}
-
-func TestVerify(t *testing.T) {
-	var validOUs []string
-
-	req, err := nethttp.NewRequest("GET", "http://example.com/foo", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if err := ssl.Verify(req, validOUs); err == nil {
-		t.Errorf("Did not fail on lack of TLS config")
-	}
-
-	pemBlock, _ := pem.Decode([]byte(pemCertificate))
-	cert, err := x509.ParseCertificate(pemBlock.Bytes)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	var tcs tls.ConnectionState
-	req.TLS = &tcs
-
-	if err := ssl.Verify(req, validOUs); err == nil {
-		t.Errorf("Found a valid OU without any being available")
-	}
-
-	// Set a fake OU
-	cert.Subject.OrganizationalUnit = []string{"testing"}
-
-	// Pretend our request had a certificate
-	req.TLS.PeerCertificates = []*x509.Certificate{cert}
-	req.TLS.VerifiedChains = [][]*x509.Certificate{req.TLS.PeerCertificates}
-
-	// Look for fake OU
-	validOUs = []string{"testing"}
-
-	if err := ssl.Verify(req, validOUs); err != nil {
-		t.Errorf("Failed to verify certificate OU")
-	}
-}
-
-func TestReadPEMData(t *testing.T) {
-	pemCertFile := writeFakeFile(pemCertificate)
-	defer syscall.Unlink(pemCertFile)
-	pemPKFile := writeFakeFile(pemPrivateKey)
-	defer syscall.Unlink(pemPKFile)
-	pemPKWPFile := writeFakeFile(pemPrivateKeyWithPass)
-	defer syscall.Unlink(pemPKWPFile)
-	_, err := ssl.ReadPEMData(pemCertFile, []byte{})
-	if err != nil {
-		t.Errorf("Failed to decode certificate: %s", err)
-	}
-	pemNoPassBytes, err := ssl.ReadPEMData(pemPKFile, []byte{})
-	if err != nil {
-		t.Errorf("Failed to decode private key: %s", err)
-	}
-	pemPassBytes, err := ssl.ReadPEMData(pemPKWPFile, []byte("testing"))
-	if err != nil {
-		t.Errorf("Failed to decode private key with password: %s", err)
-	}
-	if reflect.DeepEqual(pemPassBytes, pemNoPassBytes) {
-		t.Errorf("PEM encoding failed after password removal")
-	}
-}
-
 func TestAppendKeyPair(t *testing.T) {
 	c, err := ssl.NewTLSConfig("", false, tls.VersionTLS12)
 	if err != nil {
@@ -162,34 +59,6 @@ func TestAppendKeyPair(t *testing.T) {
 
 	if err := ssl.AppendKeyPair(c, pemCertFile, pemPKFile); err != nil {
 		t.Errorf("Failed to append certificate and key to tls config: %s", err)
-	}
-}
-
-func TestAppendKeyPairWithPassword(t *testing.T) {
-	c, err := ssl.NewTLSConfig("", false, tls.VersionTLS12)
-	if err != nil {
-		t.Fatal(err)
-	}
-	pemCertFile := writeFakeFile(pemCertificate)
-	defer syscall.Unlink(pemCertFile)
-	pemPKFile := writeFakeFile(pemPrivateKeyWithPass)
-	defer syscall.Unlink(pemPKFile)
-
-	if err := ssl.AppendKeyPairWithPassword(c, pemCertFile, pemPKFile, []byte("testing")); err != nil {
-		t.Errorf("Failed to append certificate and key to tls config: %s", err)
-	}
-}
-
-func TestIsEncryptedPEM(t *testing.T) {
-	pemPKFile := writeFakeFile(pemPrivateKey)
-	defer syscall.Unlink(pemPKFile)
-	pemPKWPFile := writeFakeFile(pemPrivateKeyWithPass)
-	defer syscall.Unlink(pemPKWPFile)
-	if ssl.IsEncryptedPEM(pemPKFile) {
-		t.Errorf("Incorrectly identified unencrypted PEM as encrypted")
-	}
-	if !ssl.IsEncryptedPEM(pemPKWPFile) {
-		t.Errorf("Incorrectly identified encrypted PEM as unencrypted")
 	}
 }
 
@@ -251,35 +120,4 @@ P97c9hoEEW9OYaIQgr1cvUES0S8ieBZxPVX11HazPUO0/5a68ijyyCD4D5xM53gf
 DU9NwQKBgQCmVthQi65xcc4mgCIwXtBZWXeaPv5x0dLEXIC5EoN6eXLK9iW//7cE
 hhawtJtl+J6laB+TkEGQsyhc4v85WcywdisyR7LR7CUqFYJMKeE/VtTVKnYbfq54
 rHoQS9YotByBwPtRx0V93gkc+KWBOGmSBBxKj7lrBkYkcWAiRfpJjg==
------END RSA PRIVATE KEY-----`
-
-const pemPrivateKeyWithPass = `-----BEGIN RSA PRIVATE KEY-----
-Proc-Type: 4,ENCRYPTED
-DEK-Info: DES-EDE3-CBC,3EABF60A784F9065
-
-IDGYvdRJXvBt5vEDI9caEYJ2vvVmoqmxTKvheNX0aLSXUl/p8hIZ25kd/4mpmI3m
-irQdEe2JuNh4/fPDe6Agg6mX6mYCVbiupfXdFKkqJzndW/O5nEQ4yuRgi0fO4wcH
-OM/kTS8/7UaKfCuWFa71ywh1WeStFDBwsMQqLdFFeuQ/JC6g2tZW6xzCBE0BVIkq
-6OWXmWumXMufhOdpb9sNoc3lbdOi037V886o0cIRQp4qPepElhhhplrhaJZBSxiP
-TUldExbtYCN1APhrgUp1RpxIWHNLezjhUYLGooxb6SqinpLd9ia2uFotwNDeX7/T
-dMPQPtgdFwvoCtWn9oVWp+regdZPacABLsvtTD4NS8h13BKzBmAqtYfHJk44u/Tv
-6PcCb9xHI7+YpNJznrHiCtALWkfG56mDjp0SP+OKjsYMjo317D+x892i2XT79k2T
-0IM0OUPizVkN5c7uDQBHqxmE9JVQT7QFMy1P57nWPsmG5o7e9Y/klaPQzi04FWEh
-YAEZrU5/FQlFziu3/Jw6WwQnm3IqJP6iMlnR9Y5iZCZQnLhcJNIxxOJ/+cVH4dVD
-jIHztasHgbfld045Ua7nk91VyFP5pWRPFacJ74D+xm/1IjF/+9Uj3NQX88Swig0Q
-Fi7+eJ1XtCI0YdUqiUdp8QaS1GnFzibSIcXCbLLEn0Cgh/3CFXUyh92M4GIgvmcI
-/hi4nUDa3nLYDHyOZubFLERb+Zr3EFzNXX4Ga3fcNH0deluxW4tda+QCk0ud6k9N
-y2bCcAVnvbB+yX2s7CSVq+eaT/4JLIJY5AlrISRwYtG57SR/DN9HuU99dD30k581
-PmarIt4VAakjXo/Zqd1AMh+ofbC/Qm7jBwbPGPZAM/FjpnVsvaXsdChI19Az72v3
-wiLOKEw8M23vV4/E7QwW3Pp/RPyUZk6HAlBuLXbcyZHOOV4WPsKrI46BBXL8Qf4X
-5kpRITFFUaFu3aaO7mloVAoneEKusKJgKOAwWifRI3jf6fH9B8qDA0jQpWRNpLs4
-3A2qrOyHQ9SMoBr7ya8Vs2BMdfqAmOyiUdVzLr2EjnRxa7f3/7/sdzD1aaIJa2TM
-kjpKgFMq5B/FRVmuAvKyEF52A/b6L9EpinyB53DzWnIw9W5zdjjRkuxmGmv1R94A
-gJvbONh955cinHft0rm0hdKo77wDvXZdX5ZeITjOwJ0d/VBHYDGUonDVgnAVLcz+
-n1BS+oOS1xLG/EJOGqtNYihVuCkbIwwdAVhc7pKo3nIbLyrKFKFyh/Br11PPBris
-nlWo8BWSoFv7gKOftkulHJFAVekisaXe4OIcYMATeLvDfAnBDJrNHZn0HcyHI51L
-3EhCCPJrrmfNv+QMdPk6LTts5YIdhNRSV5PR2X8ZshChod7atyrw+Wm+LCcy3h1G
-xIVNracpnna+Ic5M8EIJZgLOH7IjDFS1EcPjz5em0rVqGGsLDvxmRo2ZJTPSHlpM
-8q6VJEIso5sfoauf+fX+y7xk1CpFG8NkXSplbiYmZXdB1zepV1a/ZiW2uU7hEAV7
-oMEzoBEIw3wTuRasixjH7Z6i8PvF3eUKXCIt0UiwTmWdCCW37c5eqjguyp9aLDtc
 -----END RSA PRIVATE KEY-----`

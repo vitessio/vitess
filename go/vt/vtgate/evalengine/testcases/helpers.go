@@ -17,10 +17,14 @@ limitations under the License.
 package testcases
 
 import (
+	"fmt"
+	"math"
 	"reflect"
 	"runtime"
 	"strings"
+	"time"
 
+	"vitess.io/vitess/go/mysql/datetime"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
@@ -28,8 +32,9 @@ import (
 type Query func(query string, row []sqltypes.Value)
 type Runner func(yield Query)
 type TestCase struct {
-	Run    Runner
-	Schema []*querypb.Field
+	Run     Runner
+	Schema  []*querypb.Field
+	Compare *Comparison
 }
 
 func (tc TestCase) Name() string {
@@ -134,4 +139,71 @@ func (bugs) CanCompare(elems ...string) bool {
 		}
 	}
 	return true
+}
+
+type Comparison struct {
+	Decimals  uint32
+	LooseTime bool
+}
+
+func (cmp *Comparison) closeDatetime(a, b time.Time, diff time.Duration) bool {
+	d := a.Sub(b)
+	if d < 0 {
+		d = -d
+	}
+	return d <= diff
+}
+
+func (cmp *Comparison) closeFloat(a, b float64) bool {
+	const tolerance = 1e-14
+
+	if cmp.Decimals > 0 {
+		ratio := math.Pow(10, float64(cmp.Decimals))
+		a = math.Round(a*ratio) / ratio
+		b = math.Round(b*ratio) / ratio
+	}
+	if a == b {
+		return true
+	}
+	if b == 0 {
+		return math.Abs(a) < tolerance
+	}
+	return math.Abs((a-b)/b) < tolerance
+}
+
+func (cmp *Comparison) Equals(local, remote sqltypes.Value) (bool, error) {
+	switch {
+	case local.IsFloat() && remote.IsFloat():
+		localFloat, err := local.ToFloat64()
+		if err != nil {
+			return false, fmt.Errorf("error converting local value to float: %w", err)
+		}
+		remoteFloat, err := remote.ToFloat64()
+		if err != nil {
+			return false, fmt.Errorf("error converting remote value to float: %w", err)
+		}
+		return cmp.closeFloat(localFloat, remoteFloat), nil
+	case cmp.LooseTime && local.IsDateTime() && remote.IsDateTime():
+		localDatetime, _, ok := datetime.ParseDateTime(local.ToString(), -1)
+		if !ok {
+			return false, fmt.Errorf("error converting local value '%s' to datetime", local)
+		}
+		remoteDatetime, _, ok := datetime.ParseDateTime(remote.ToString(), -1)
+		if !ok {
+			return false, fmt.Errorf("error converting remote value '%s' to datetime", remote)
+		}
+		return cmp.closeDatetime(localDatetime.ToStdTime(time.Local), remoteDatetime.ToStdTime(time.Local), 1*time.Second), nil
+	case cmp.LooseTime && local.IsTime() && remote.IsTime():
+		localTime, _, ok := datetime.ParseTime(local.ToString(), -1)
+		if !ok {
+			return false, fmt.Errorf("error converting local value '%s' to time", local)
+		}
+		remoteTime, _, ok := datetime.ParseTime(remote.ToString(), -1)
+		if !ok {
+			return false, fmt.Errorf("error converting remote value '%s' to time", remote)
+		}
+		return cmp.closeDatetime(localTime.ToStdTime(time.Local), remoteTime.ToStdTime(time.Local), 1*time.Second), nil
+	default:
+		return local.String() == remote.String(), nil
+	}
 }

@@ -18,7 +18,8 @@ package fakecallinfo
 
 import (
 	"fmt"
-	"html/template"
+
+	"github.com/google/safehtml"
 )
 
 // FakeCallInfo gives a fake Callinfo usable in callinfo
@@ -26,7 +27,7 @@ type FakeCallInfo struct {
 	Remote string
 	Method string
 	User   string
-	Html   string
+	Html   safehtml.HTML
 }
 
 // RemoteAddr returns the remote address.
@@ -45,6 +46,6 @@ func (fci *FakeCallInfo) Text() string {
 }
 
 // HTML returns the html.
-func (fci *FakeCallInfo) HTML() template.HTML {
-	return template.HTML(fci.Html)
+func (fci *FakeCallInfo) HTML() safehtml.HTML {
+	return fci.Html
 }

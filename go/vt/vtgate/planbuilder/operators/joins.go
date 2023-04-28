@@ -34,7 +34,13 @@ type JoinOp interface {
 	AddJoinPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) error
 }
 
-func AddPredicate(join JoinOp, ctx *plancontext.PlanningContext, expr sqlparser.Expr, joinPredicates bool, newFilter func(ops.Operator, sqlparser.Expr) ops.Operator) (ops.Operator, error) {
+func AddPredicate(
+	ctx *plancontext.PlanningContext,
+	join JoinOp,
+	expr sqlparser.Expr,
+	joinPredicates bool,
+	newFilter func(ops.Operator, sqlparser.Expr) ops.Operator,
+) (ops.Operator, error) {
 	deps := ctx.SemTable.RecursiveDeps(expr)
 	switch {
 	case deps.IsSolvedBy(TableID(join.GetLHS())):

@@ -43,7 +43,7 @@ var (
 	dbCredentialFile         string
 	InsertTabletTemplateKsID = `insert into %s (id, msg) values (%d, '%s') /* id:%d */`
 	defaultOperationTimeout  = 60 * time.Second
-	defeaultRetryDelay       = 1 * time.Second
+	defaultRetryDelay        = 1 * time.Second
 )
 
 // Restart restarts vttablet and mysql.
@@ -54,15 +54,17 @@ func (tablet *Vttablet) Restart() error {
 
 	if tablet.MysqlctlProcess.TabletUID > 0 {
 		tablet.MysqlctlProcess.Stop()
+		tablet.MysqlctldProcess.WaitForMysqlCtldShutdown()
 		tablet.VttabletProcess.TearDown()
-		os.RemoveAll(tablet.VttabletProcess.Directory)
+		tablet.MysqlctldProcess.CleanupFiles(tablet.TabletUID)
 
 		return tablet.MysqlctlProcess.Start()
 	}
 
 	tablet.MysqlctldProcess.Stop()
+	tablet.MysqlctldProcess.WaitForMysqlCtldShutdown()
 	tablet.VttabletProcess.TearDown()
-	os.RemoveAll(tablet.VttabletProcess.Directory)
+	tablet.MysqlctldProcess.CleanupFiles(tablet.TabletUID)
 
 	return tablet.MysqlctldProcess.Start()
 }
@@ -441,6 +443,6 @@ func WaitForHealthyShard(vtctldclient *VtctldClientProcess, keyspace, shard stri
 		default:
 		}
 
-		time.Sleep(defeaultRetryDelay)
+		time.Sleep(defaultRetryDelay)
 	}
 }

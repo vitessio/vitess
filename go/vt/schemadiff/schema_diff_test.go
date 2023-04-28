@@ -99,7 +99,7 @@ func TestPermutations(t *testing.T) {
 			schemaDiff, err := fromSchema.SchemaDiff(toSchema, hints)
 			require.NoError(t, err)
 
-			allDiffs := schemaDiff.allDiffs()[:]
+			allDiffs := schemaDiff.UnorderedDiffs()
 			require.Equal(t, tc.expectDiffs, len(allDiffs))
 
 			toSingleString := func(diffs []EntityDiff) string {
@@ -112,7 +112,7 @@ func TestPermutations(t *testing.T) {
 			t.Run("no early break", func(t *testing.T) {
 				iteration := 0
 				allPerms := map[string]bool{}
-				allDiffs := schemaDiff.allDiffs()
+				allDiffs := schemaDiff.UnorderedDiffs()
 				originalSingleString := toSingleString(allDiffs)
 				earlyBreak := permutateDiffs(allDiffs, func(pdiffs []EntityDiff) (earlyBreak bool) {
 					// cover all permutations
@@ -132,7 +132,7 @@ func TestPermutations(t *testing.T) {
 			})
 			t.Run("early break", func(t *testing.T) {
 				allPerms := map[string]bool{}
-				allDiffs := schemaDiff.allDiffs()[:]
+				allDiffs := schemaDiff.UnorderedDiffs()
 				originalSingleString := toSingleString(allDiffs)
 				earlyBreak := permutateDiffs(allDiffs, func(pdiffs []EntityDiff) (earlyBreak bool) {
 					// Single visit
@@ -164,14 +164,14 @@ func TestSchemaDiff(t *testing.T) {
 		}
 	)
 	tt := []struct {
-		name            string
-		fromQueries     []string
-		toQueries       []string
-		expectDiffs     int
-		expectDeps      int
-		sequential      bool
-		impossibleOrder bool
-		entityOrder     []string // names of tables/views in expected diff order
+		name             string
+		fromQueries      []string
+		toQueries        []string
+		expectDiffs      int
+		expectDeps       int
+		sequential       bool
+		conflictingDiffs int
+		entityOrder      []string // names of tables/views in expected diff order
 	}{
 		{
 			name:        "no change",
@@ -287,10 +287,10 @@ func TestSchemaDiff(t *testing.T) {
 				"create table t2 (id int primary key, ts timestamp);",
 				"create view v1 as select the_id from t1",
 			},
-			expectDiffs:     2,
-			expectDeps:      1,
-			entityOrder:     []string{"t1", "v1"},
-			impossibleOrder: true,
+			expectDiffs:      2,
+			expectDeps:       1,
+			entityOrder:      []string{"t1", "v1"},
+			conflictingDiffs: 2,
 		},
 		{
 			name: "alter table, add view",
@@ -450,9 +450,9 @@ func TestSchemaDiff(t *testing.T) {
 				"create table t1 (id int primary key, newcol int not null);",
 				"create view v1 as select id, newcol from t1",
 			},
-			expectDiffs:     2,
-			expectDeps:      1,
-			impossibleOrder: true,
+			expectDiffs:      2,
+			expectDeps:       1,
+			conflictingDiffs: 2,
 		},
 
 		// FKs
@@ -644,10 +644,10 @@ func TestSchemaDiff(t *testing.T) {
 				"create table t1 (id int primary key, q int, key q_idx (q));",
 				"create table t2 (id int primary key, q int, key q_idx (q), foreign key (q) references t1 (q) on delete no action);",
 			},
-			expectDiffs:     2,
-			expectDeps:      1,
-			sequential:      true,
-			impossibleOrder: true,
+			expectDiffs:      2,
+			expectDeps:       1,
+			sequential:       true,
+			conflictingDiffs: 2,
 		},
 	}
 	hints := &DiffHints{RangeRotationStrategy: RangeRotationDistinctStatements}
@@ -667,25 +667,28 @@ func TestSchemaDiff(t *testing.T) {
 			schemaDiff, err := fromSchema.SchemaDiff(toSchema, hints)
 			require.NoError(t, err)
 
-			allDiffs := schemaDiff.allDiffs()
+			allDiffs := schemaDiff.UnorderedDiffs()
 			allDiffsStatements := []string{}
 			for _, diff := range allDiffs {
 				allDiffsStatements = append(allDiffsStatements, diff.CanonicalStatementString())
 			}
 			assert.Equalf(t, tc.expectDiffs, len(allDiffs), "found diffs: %v", allDiffsStatements)
 
-			deps := schemaDiff.AllDeps()
+			deps := schemaDiff.AllDependenciess()
 			depsKeys := []string{}
 			for _, dep := range deps {
 				depsKeys = append(depsKeys, dep.hashKey())
 			}
 			assert.Equalf(t, tc.expectDeps, len(deps), "found deps: %v", depsKeys)
-			assert.Equal(t, tc.sequential, schemaDiff.HasSequentialExecutionDeps())
+			assert.Equal(t, tc.sequential, schemaDiff.HasSequentialExecutionDependencies())
 
 			orderedDiffs, err := schemaDiff.OrderedDiffs()
-			if tc.impossibleOrder {
+			if tc.conflictingDiffs > 0 {
+				require.Greater(t, tc.conflictingDiffs, 1) // self integrity. If there's a conflict, then obviously there's at least two conflicting diffs (a single diff has nothing to conflict with)
 				assert.Error(t, err)
-				assert.Equal(t, ErrImpossibleDiffOrder, err)
+				impossibleOrderErr, ok := err.(*ImpossibleApplyDiffOrderError)
+				assert.True(t, ok)
+				assert.Equal(t, tc.conflictingDiffs, len(impossibleOrderErr.ConflictingDiffs))
 			} else {
 				require.NoError(t, err)
 			}
@@ -693,7 +696,7 @@ func TestSchemaDiff(t *testing.T) {
 			for _, diff := range orderedDiffs {
 				diffStatementStrings = append(diffStatementStrings, diff.CanonicalStatementString())
 			}
-			if !tc.impossibleOrder {
+			if tc.conflictingDiffs == 0 {
 				// validate that the order of diffs is as expected (we don't check for the full diff statement,
 				// just for the order of affected tables/views)
 				require.NotNil(t, tc.entityOrder) // making sure we explicitly specified expected order

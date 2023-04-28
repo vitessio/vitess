@@ -18,13 +18,11 @@ package evalengine
 
 import (
 	"math"
-	"strings"
 
 	"golang.org/x/exp/constraints"
 
 	"vitess.io/vitess/go/mysql/decimal"
 
-	"vitess.io/vitess/go/hack"
 	"vitess.io/vitess/go/sqltypes"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -59,8 +57,8 @@ func addNumericWithError(left, right eval) (eval, error) {
 }
 
 func subtractNumericWithError(left, right eval) (eval, error) {
-	v1 := evalToNumeric(left)
-	v2 := evalToNumeric(right)
+	v1 := evalToNumeric(left, true)
+	v2 := evalToNumeric(right, true)
 	switch v1 := v1.(type) {
 	case *evalInt64:
 		switch v2 := v2.(type) {
@@ -118,8 +116,8 @@ func multiplyNumericWithError(left, right eval) (eval, error) {
 }
 
 func divideNumericWithError(left, right eval, precise bool) (eval, error) {
-	v1 := evalToNumeric(left)
-	v2 := evalToNumeric(right)
+	v1 := evalToNumeric(left, true)
+	v2 := evalToNumeric(right, true)
 	if v1, ok := v1.(*evalFloat); ok {
 		return mathDiv_fx(v1.f, v2)
 	}
@@ -195,8 +193,8 @@ func integerDivideNumericWithError(left, right eval) (eval, error) {
 }
 
 func modNumericWithError(left, right eval, precise bool) (eval, error) {
-	v1 := evalToNumeric(left)
-	v2 := evalToNumeric(right)
+	v1 := evalToNumeric(left, true)
+	v2 := evalToNumeric(right, true)
 
 	switch v1 := v1.(type) {
 	case *evalInt64:
@@ -254,8 +252,8 @@ func modNumericWithError(left, right eval, precise bool) (eval, error) {
 // makeNumericAndPrioritize reorders the input parameters
 // to be Float64, Decimal, Uint64, Int64.
 func makeNumericAndPrioritize(left, right eval) (evalNumeric, evalNumeric) {
-	i1 := evalToNumeric(left)
-	i2 := evalToNumeric(right)
+	i1 := evalToNumeric(left, true)
+	i2 := evalToNumeric(right, true)
 	switch i1.SQLType() {
 	case sqltypes.Int64:
 		if i2.SQLType() == sqltypes.Uint64 || i2.SQLType() == sqltypes.Float64 || i2.SQLType() == sqltypes.Decimal {
@@ -717,17 +715,4 @@ func mathMod_dd0(v1, v2 *evalDecimal) (decimal.Decimal, int32) {
 	}
 	_, rem := v1.dec.QuoRem(v2.dec, 0)
 	return rem, length
-}
-
-func parseStringToFloat(str string) float64 {
-	str = strings.TrimSpace(str)
-
-	// We only care to parse as many of the initial float characters of the
-	// string as possible. This functionality is implemented in the `strconv` package
-	// of the standard library, but not exposed, so we hook into it.
-	val, _, err := hack.ParseFloatPrefix(str, 64)
-	if err != nil {
-		return 0.0
-	}
-	return val
 }

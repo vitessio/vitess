@@ -18,8 +18,10 @@ package datetime
 
 import (
 	"math"
+	"strings"
 
-	"vitess.io/vitess/go/mysql/json/fastparse"
+	"vitess.io/vitess/go/mysql/decimal"
+	"vitess.io/vitess/go/mysql/fastparse"
 )
 
 func parsetimeHours(tp *timeparts, in string) (out string, ok bool) {
@@ -62,7 +64,9 @@ func parsetimeSeconds(tp *timeparts, in string) (out string, ok bool) {
 			n := 1
 			for ; n < len(in) && isDigit(in, n); n++ {
 			}
-			tp.nsec, ok = parseNanoseconds(in, n)
+			var l int
+			tp.nsec, l, ok = parseNanoseconds(in, n)
+			tp.prec = uint8(l)
 			return "", ok && len(in) == n
 		}
 	}
@@ -70,17 +74,24 @@ func parsetimeSeconds(tp *timeparts, in string) (out string, ok bool) {
 }
 
 func parsetimeAny(tp *timeparts, in string) (out string, ok bool) {
+	orig := in
 	for i := 0; i < len(in); i++ {
 		switch r := in[i]; {
 		case isSpace(r):
 			tp.day, in, ok = getnum(in, false)
-			if !ok || tp.day > 34 || !isSpace(in[0]) {
+			if !ok || !isSpace(in[0]) {
 				tp.day = 0
-				return "", false
+				return parsetimeNoDelimiters(tp, orig)
 			}
-
 			for len(in) > 0 && isSpace(in[0]) {
 				in = in[1:]
+			}
+			if !isDigit(in, 0) {
+				tp.day = 0
+				return parsetimeNoDelimiters(tp, orig)
+			}
+			if tp.day > 34 {
+				return "", clampTimeparts(tp)
 			}
 			return parsetimeHours(tp, in)
 		case r == ':':
@@ -139,10 +150,16 @@ func parsetimeNoDelimiters(tp *timeparts, in string) (out string, ok bool) {
 		n := 1
 		for ; n < len(in) && isDigit(in, n); n++ {
 		}
-		tp.nsec, ok = parseNanoseconds(in, n)
+		var l int
+		tp.nsec, l, ok = parseNanoseconds(in, n)
+		tp.prec = uint8(l)
 		in = in[n:]
 	}
 
+	return in, clampTimeparts(tp) && ok
+}
+
+func clampTimeparts(tp *timeparts) bool {
 	// Maximum time is 838:59:59, so we have to clamp
 	// it to that value here if we otherwise successfully
 	// parser the time.
@@ -151,15 +168,15 @@ func parsetimeNoDelimiters(tp *timeparts, in string) (out string, ok bool) {
 		tp.hour = 22
 		tp.min = 59
 		tp.sec = 59
-		ok = false
+		return false
 	}
-
-	return in, ok
+	return true
 }
 
-func ParseTime(in string) (t Time, ok bool) {
+func ParseTime(in string, prec int) (t Time, l int, ok bool) {
+	in = strings.Trim(in, " \t\r\n")
 	if len(in) == 0 {
-		return Time{}, false
+		return Time{}, 0, false
 	}
 	var neg bool
 	if in[0] == '-' {
@@ -169,57 +186,66 @@ func ParseTime(in string) (t Time, ok bool) {
 
 	var tp timeparts
 	in, ok = parsetimeAny(&tp, in)
+	ok = clampTimeparts(&tp) && ok
 
 	hours := uint16(24*tp.day + tp.hour)
 	if !tp.isZero() && neg {
 		hours |= negMask
 	}
 
-	return Time{
+	t = Time{
 		hour:       hours,
 		minute:     uint8(tp.min),
 		second:     uint8(tp.sec),
 		nanosecond: uint32(tp.nsec),
-	}, ok && len(in) == 0
+	}
+
+	if prec < 0 {
+		prec = int(tp.prec)
+	} else {
+		t = t.Round(prec)
+	}
+
+	return t, prec, ok && len(in) == 0
 }
 
 func ParseDate(s string) (Date, bool) {
 	if _, ok := isNumber(s); ok {
 		if len(s) >= 8 {
-			dt, ok := Date_YYYYMMDD.Parse(s)
+			dt, _, ok := Date_YYYYMMDD.Parse(s, 0)
 			return dt.Date, ok
 		}
-		dt, ok := Date_YYMMDD.Parse(s)
+		dt, _, ok := Date_YYMMDD.Parse(s, 0)
 		return dt.Date, ok
 	}
 
 	if len(s) >= 8 {
-		if t, ok := Date_YYYY_M_D.Parse(s); ok {
+		if t, _, ok := Date_YYYY_M_D.Parse(s, 0); ok {
 			return t.Date, true
 		}
 	}
 	if len(s) >= 6 {
-		if t, ok := Date_YY_M_D.Parse(s); ok {
+		if t, _, ok := Date_YY_M_D.Parse(s, 0); ok {
 			return t.Date, true
 		}
 	}
 	return Date{}, false
 }
 
-func ParseDateTime(s string) (DateTime, bool) {
-	if l, ok := isNumber(s); ok {
-		if l >= 14 {
-			return DateTime_YYYYMMDDhhmmss.Parse(s)
+func ParseDateTime(s string, l int) (DateTime, int, bool) {
+	if sl, ok := isNumber(s); ok {
+		if sl >= 14 {
+			return DateTime_YYYYMMDDhhmmss.Parse(s, l)
 		}
-		return DateTime_YYMMDDhhmmss.Parse(s)
+		return DateTime_YYMMDDhhmmss.Parse(s, l)
 	}
-	if t, ok := DateTime_YYYY_M_D_h_m_s.Parse(s); ok {
-		return t, true
+	if t, l, ok := DateTime_YYYY_M_D_h_m_s.Parse(s, l); ok {
+		return t, l, true
 	}
-	if t, ok := DateTime_YY_M_D_h_m_s.Parse(s); ok {
-		return t, true
+	if t, l, ok := DateTime_YY_M_D_h_m_s.Parse(s, l); ok {
+		return t, l, true
 	}
-	return DateTime{}, false
+	return DateTime{}, 0, false
 }
 
 func ParseDateInt64(i int64) (d Date, ok bool) {
@@ -278,10 +304,10 @@ func ParseTimeInt64(i int64) (t Time, ok bool) {
 		return t, false
 	}
 
-	t.hour = uint16(i % 100)
-	if i/100 != 0 {
+	if i > 838 {
 		return t, false
 	}
+	t.hour = uint16(i)
 	if neg {
 		t.hour |= negMask
 	}
@@ -304,4 +330,74 @@ func ParseDateTimeInt64(i int64) (dt DateTime, ok bool) {
 	}
 	dt.Date, ok = ParseDateInt64(d)
 	return dt, ok
+}
+
+func ParseDateTimeFloat(f float64, prec int) (DateTime, int, bool) {
+	i, frac := math.Modf(f)
+	dt, ok := ParseDateTimeInt64(int64(i))
+	nsec := int(frac * 1e9)
+	dt.Time.nanosecond = uint32(nsec)
+	if prec < 0 {
+		prec = DefaultPrecision
+	} else {
+		dt = dt.Round(prec)
+	}
+	return dt, prec, ok
+}
+
+func ParseDateTimeDecimal(d decimal.Decimal, l int32, prec int) (DateTime, int, bool) {
+	id, frac := d.QuoRem(decimal.New(1, 0), 0)
+	i, _ := id.Int64()
+	dt, ok := ParseDateTimeInt64(i)
+
+	rem, _ := frac.Mul(decimal.New(1, 9)).Int64()
+	dt.Time.nanosecond = uint32(rem)
+
+	if prec < 0 {
+		prec = int(l)
+	} else {
+		dt = dt.Round(prec)
+	}
+	return dt, prec, ok
+}
+
+func ParseDateFloat(f float64) (Date, bool) {
+	i, _ := math.Modf(f)
+	return ParseDateInt64(int64(i))
+}
+
+func ParseDateDecimal(d decimal.Decimal) (Date, bool) {
+	id, _ := d.QuoRem(decimal.New(1, 0), 0)
+	i, _ := id.Int64()
+	return ParseDateInt64(i)
+}
+
+func ParseTimeFloat(f float64, prec int) (Time, int, bool) {
+	i, frac := math.Modf(f)
+	t, ok := ParseTimeInt64(int64(i))
+	ns := int(math.Abs(frac * 1e9))
+	t.nanosecond = uint32(ns)
+
+	if prec < 0 {
+		prec = DefaultPrecision
+	} else {
+		t = t.Round(prec)
+	}
+	return t, prec, ok
+}
+
+func ParseTimeDecimal(d decimal.Decimal, l int32, prec int) (Time, int, bool) {
+	id, frac := d.QuoRem(decimal.New(1, 0), 0)
+	i, _ := id.Int64()
+
+	t, ok := ParseTimeInt64(i)
+	rem, _ := frac.Abs().Mul(decimal.New(1e9, 0)).Int64()
+	t.nanosecond = uint32(rem)
+
+	if prec < 0 {
+		prec = int(l)
+	} else {
+		t = t.Round(prec)
+	}
+	return t, prec, ok
 }

@@ -23,6 +23,7 @@ import (
 	"vitess.io/vitess/go/hack"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/decimal"
+	"vitess.io/vitess/go/mysql/fastparse"
 	"vitess.io/vitess/go/mysql/format"
 	"vitess.io/vitess/go/mysql/json"
 	"vitess.io/vitess/go/sqltypes"
@@ -151,7 +152,8 @@ func evalIsTruthy(e eval) boolean {
 			}
 			return makeboolean(hex.u != 0)
 		}
-		return makeboolean(parseStringToFloat(e.string()) != 0.0)
+		f, _ := fastparse.ParseFloat64(e.string())
+		return makeboolean(f != 0.0)
 	case *evalJSON:
 		return makeboolean(e.ToBoolean())
 	case *evalTemporal:
@@ -216,7 +218,8 @@ func valueToEvalCast(v sqltypes.Value, typ sqltypes.Type) (eval, error) {
 			fval, err := v.ToFloat64()
 			return newEvalFloat(fval), err
 		case v.IsText() || v.IsBinary():
-			return newEvalFloat(parseStringToFloat(v.RawStr())), nil
+			fval, _ := fastparse.ParseFloat64(v.RawStr())
+			return newEvalFloat(fval), nil
 		default:
 			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "coercion should not try to coerce this value to a float: %v", v)
 		}
@@ -237,8 +240,8 @@ func valueToEvalCast(v sqltypes.Value, typ sqltypes.Type) (eval, error) {
 			}
 			dec = decimal.NewFromFloat(fval)
 		case v.IsText() || v.IsBinary():
-			fval := parseStringToFloat(v.RawStr())
-			dec = decimal.NewFromFloat(fval)
+			fval, _ := fastparse.ParseFloat64(v.RawStr())
+			return newEvalFloat(fval), nil
 		default:
 			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "coercion should not try to coerce this value to a decimal: %v", v)
 		}

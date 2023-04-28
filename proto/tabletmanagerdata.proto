@@ -535,6 +535,7 @@ message VDiffCoreOptions {
   int64 sample_pct = 5;
   int64 timeout_seconds = 6;
   int64 max_extra_rows_to_compare = 7;
+  bool update_table_stats = 8;
 }
 
 message VDiffOptions {

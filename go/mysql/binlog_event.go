@@ -283,6 +283,11 @@ func (b *Bitmap) Count() int {
 	return b.count
 }
 
+// Bits returns the underlying bitmap.
+func (b *Bitmap) Bits() []byte {
+	return b.data[:]
+}
+
 // Bit returned the value of a given bit in the Bitmap.
 func (b *Bitmap) Bit(index int) bool {
 	byteIndex := index / 8

@@ -283,8 +283,9 @@ func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.L
 		// Do nothing here, let the rest of code run
 		params.Logger.Infof("Dry run. No changes made")
 	default:
+		bgCtx := context.Background()
 		// If anything failed, we should reset the original tablet type
-		if err := tm.tmState.ChangeTabletType(ctx, originalType, DBActionNone); err != nil {
+		if err := tm.tmState.ChangeTabletType(bgCtx, originalType, DBActionNone); err != nil {
 			log.Errorf("Could not change back to original tablet type %v: %v", originalType, err)
 		}
 		return vterrors.Wrap(err, "Can't restore backup")
@@ -305,7 +306,8 @@ func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.L
 	}
 	params.Logger.Infof("Restore: changing tablet type to %v for %s", originalType, tm.tabletAlias.String())
 	// Change type back to original type if we're ok to serve.
-	return tm.tmState.ChangeTabletType(ctx, originalType, DBActionNone)
+	bgCtx := context.Background()
+	return tm.tmState.ChangeTabletType(bgCtx, originalType, DBActionNone)
 }
 
 // restoreToTimeFromBinlog restores to the snapshot time of the keyspace

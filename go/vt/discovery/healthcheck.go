@@ -37,13 +37,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"hash/crc32"
-	"html/template"
 	"net/http"
 	"sort"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/google/safehtml/template"
+	"github.com/google/safehtml/template/uncheckedconversions"
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/netutil"
@@ -141,7 +142,7 @@ const (
 // ParseTabletURLTemplateFromFlag loads or reloads the URL template.
 func ParseTabletURLTemplateFromFlag() {
 	tabletURLTemplate = template.New("")
-	_, err := tabletURLTemplate.Parse(TabletURLTemplateString)
+	_, err := tabletURLTemplate.ParseFromTrustedTemplate(uncheckedconversions.TrustedTemplateFromStringKnownToSatisfyTypeContract(TabletURLTemplateString))
 	if err != nil {
 		log.Exitf("error parsing template: %v", err)
 	}
@@ -236,15 +237,10 @@ type HealthCheck interface {
 
 var _ HealthCheck = (*HealthCheckImpl)(nil)
 
-// Target includes cell which we ignore here
+// KeyFromTarget includes cell which we ignore here
 // because tabletStatsCache is intended to be per-cell
 func KeyFromTarget(target *query.Target) KeyspaceShardTabletType {
 	return KeyspaceShardTabletType(fmt.Sprintf("%s.%s.%s", target.Keyspace, target.Shard, topoproto.TabletTypeLString(target.TabletType)))
-}
-
-// KeyFromTablet returns the KeyspaceShardTabletType that matches the given topodata.Tablet
-func KeyFromTablet(tablet *topodata.Tablet) KeyspaceShardTabletType {
-	return KeyspaceShardTabletType(fmt.Sprintf("%s.%s.%s", tablet.Keyspace, tablet.Shard, topoproto.TabletTypeLString(tablet.Type)))
 }
 
 // HealthCheckImpl performs health checking and stores the results.
@@ -359,7 +355,7 @@ func NewHealthCheck(ctx context.Context, retryDelay, healthCheckTimeout time.Dur
 
 	hc.topoWatchers = topoWatchers
 	healthcheckOnce.Do(func() {
-		http.Handle("/debug/gateway", hc)
+		servenv.HTTPHandle("/debug/gateway", hc)
 	})
 
 	// start the topo watches here
