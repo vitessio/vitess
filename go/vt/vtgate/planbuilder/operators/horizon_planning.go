@@ -83,30 +83,36 @@ func tryPushingDownAggregator(ctx *plancontext.PlanningContext, aggregator *Aggr
 			return swap(aggregator, src)
 		}
 
+		// Add comments
+		var ordering []ops.OrderBy
+
 		// if we are pushing down through a sharded route,
 		// we need to do a bit of aggregation even after pushing it down under the route
 		aggregator.Pushed = true
-		underRoute := &Aggregator{
+		aggrBelowRoute := &Aggregator{
 			Source:  src.Source,
 			Columns: slices.Clone(aggregator.Columns),
 			Pushed:  false,
 		}
 		for i, col := range aggregator.Columns {
-			aggr, ok := col.(Aggr)
-			if !ok {
-				continue
+			switch param := col.(type) {
+			case Aggr:
+				switch param.OpCode {
+				case opcode.AggregateCount, opcode.AggregateCountStar, opcode.AggregateCountDistinct:
+					param.OpCode = opcode.AggregateSum
+				}
+				aggregator.Columns[i] = param
+			case GroupBy:
+				ordering = append(ordering, param.AsOrderBy())
 			}
-
-			switch aggr.OpCode {
-			case opcode.AggregateCount, opcode.AggregateCountStar, opcode.AggregateCountDistinct:
-				aggr.OpCode = opcode.AggregateSum
-			default:
-				// do nothing
-			}
-
-			aggregator.Columns[i] = aggr
 		}
-		src.Source = underRoute
+		if len(ordering) > 0 {
+			aggregator.Source = &Ordering{
+				Source: src,
+				Order:  ordering,
+			}
+		}
+		src.Source = aggrBelowRoute
 		return aggregator, rewrite.NewTree, nil
 	default:
 		return aggregator, rewrite.SameTree, nil

@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"strings"
 
+	"golang.org/x/exp/slices"
+
 	"vitess.io/vitess/go/slices2"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -37,7 +39,9 @@ type Aggregator struct {
 
 func (a *Aggregator) Clone(inputs []ops.Operator) ops.Operator {
 	return &Aggregator{
-		Source: inputs[0],
+		Source:  inputs[0],
+		Columns: slices.Clone(a.Columns),
+		Pushed:  a.Pushed,
 	}
 }
 
@@ -115,9 +119,12 @@ func (a *Aggregator) planOffsets(ctx *plancontext.PlanningContext) error {
 	for idx, column := range a.Columns {
 		switch col := column.(type) {
 		case Aggr:
-			arg := col.Func.GetArg()
-			if arg == nil {
-				arg = sqlparser.NewIntLiteral("1")
+			arg := col.Original.Expr
+			if col.Func != nil {
+				arg = col.Func.GetArg()
+				if arg == nil {
+					arg = sqlparser.NewIntLiteral("1")
+				}
 			}
 			newSrc, offset, err := a.Source.AddColumn(ctx, aeWrap(arg), false)
 			if err != nil {
