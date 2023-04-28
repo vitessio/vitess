@@ -85,3 +85,9 @@ var dryRunResultsSwitchWritesM2m3 = []string{
 	"       Keyspace merchant-type, Shard c0-, Tablet 1800, Workflow m2m3, DbName vt_merchant-type",
 	"Unlock keyspace merchant-type",
 }
+
+var dryRunResultsSwitchReadM2m3 = []string{
+	"Lock keyspace merchant-type",
+	"Switch reads from keyspace merchant-type to keyspace merchant-type for shards -80,80- to shards -40,40-c0,c0-",
+	"Unlock keyspace merchant-type",
+}
