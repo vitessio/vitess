@@ -137,7 +137,7 @@ func TestHealthCheckExternallyReparentNewTablet(t *testing.T) {
 
 	// verify output of `show vitess_tablets` and `INSERT` statement
 	vtgateConn, err := mysql.Connect(ctx, &vtParams)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	defer vtgateConn.Close()
 
 	// add a new tablet
@@ -189,10 +189,10 @@ func addTablet(t *testing.T, tabletUID int, tabletType string) *cluster.Vttablet
 	}
 	// Start Mysqlctl process
 	mysqlctlProcess, err := cluster.MysqlCtlProcessInstanceOptionalInit(tablet.TabletUID, tablet.MySQLPort, clusterInstance.TmpDirectory, !clusterInstance.ReusingVTDATAROOT)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	tablet.MysqlctlProcess = *mysqlctlProcess
 	proc, err := tablet.MysqlctlProcess.StartProcess()
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	// Start vttablet process
 	tablet.VttabletProcess = cluster.VttabletProcessInstance(
@@ -212,11 +212,11 @@ func addTablet(t *testing.T, tabletUID int, tabletType string) *cluster.Vttablet
 
 	// wait for mysqld to be ready
 	err = proc.Wait()
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	tablet.VttabletProcess.ServingStatus = ""
 	err = tablet.VttabletProcess.Setup()
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	serving := tablet.VttabletProcess.WaitForStatus("SERVING", time.Duration(60*time.Second))
 	assert.Equal(t, serving, true, "Tablet did not become ready within a reasonable time")
@@ -237,7 +237,7 @@ func deleteTablet(t *testing.T, tablet *cluster.Vttablet) {
 	wg.Wait()
 
 	err := clusterInstance.VtctlclientProcess.ExecuteCommand("DeleteTablet", tablet.Alias)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	t.Logf("Deleted tablet: %s", tablet.Alias)
 }
