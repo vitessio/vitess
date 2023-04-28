@@ -543,7 +543,7 @@ func createProjection(src ops.Operator) (*Projection, error) {
 	return proj, nil
 }
 
-func (r *Route) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr) (ops.Operator, int, error) {
+func (r *Route) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, reuseExisting bool) (ops.Operator, int, error) {
 	removeKeyspaceFromSelectExpr(expr)
 
 	// check if columns is already added.
@@ -551,7 +551,9 @@ func (r *Route) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.Alia
 	if err != nil {
 		return nil, 0, err
 	}
-	colAsExpr := func(e *sqlparser.AliasedExpr) sqlparser.Expr { return e.Expr }
+	colAsExpr := func(e *sqlparser.AliasedExpr) sqlparser.Expr {
+		return e.Expr
+	}
 	if offset, found := canReuseColumn(ctx, cols, expr.Expr, colAsExpr); found {
 		return r, offset, nil
 	}
@@ -635,7 +637,7 @@ func (r *Route) planOffsets(ctx *plancontext.PlanningContext) (err error) {
 		}
 		if ctx.SemTable.NeedsWeightString(order.WeightStrExpr) {
 			wrap := aeWrap(weightStringFor(order.WeightStrExpr))
-			_, offset, err = r.AddColumn(ctx, wrap)
+			_, offset, err = r.AddColumn(ctx, wrap, true)
 			if err != nil {
 				return err
 			}
@@ -658,7 +660,7 @@ func (r *Route) getOffsetFor(ctx *plancontext.PlanningContext, order ops.OrderBy
 		}
 	}
 
-	_, offset, err := r.AddColumn(ctx, aeWrap(order.Inner.Expr))
+	_, offset, err := r.AddColumn(ctx, aeWrap(order.Inner.Expr), true)
 	if err != nil {
 		return 0, err
 	}

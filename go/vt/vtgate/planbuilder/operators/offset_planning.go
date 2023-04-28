@@ -75,7 +75,7 @@ func (p *Projection) planOffsetsForProjection(ctx *plancontext.PlanningContext) 
 				return
 			}
 
-			newSrc, offset, terr := p.Source.AddColumn(ctx, aeWrap(expr))
+			newSrc, offset, terr := p.Source.AddColumn(ctx, aeWrap(expr), true)
 			if terr != nil {
 				err = terr
 				return
@@ -114,7 +114,7 @@ func (p *Projection) planOffsetsForProjection(ctx *plancontext.PlanningContext) 
 func (p *Projection) passThroughAllColumns(ctx *plancontext.PlanningContext) error {
 
 	for i, col := range p.Columns {
-		newSrc, offset, err := p.Source.AddColumn(ctx, aeWrap(col.GetExpr()))
+		newSrc, offset, err := p.Source.AddColumn(ctx, aeWrap(col.GetExpr()), true)
 		if err != nil {
 			return err
 		}

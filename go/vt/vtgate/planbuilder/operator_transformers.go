@@ -23,7 +23,6 @@ import (
 	"strings"
 
 	"vitess.io/vitess/go/slices2"
-
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
 
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
@@ -71,9 +70,47 @@ func transformToLogicalPlan(ctx *plancontext.PlanningContext, op ops.Operator, i
 		return transformLimit(ctx, op)
 	case *operators.Ordering:
 		return transformOrdering(ctx, op)
+	case *operators.Aggregator:
+		return transformAggregator(ctx, op)
 	}
 
 	return nil, vterrors.VT13001(fmt.Sprintf("unknown type encountered: %T (transformToLogicalPlan)", op))
+}
+
+func transformAggregator(ctx *plancontext.PlanningContext, op *operators.Aggregator) (logicalPlan, error) {
+	plan, err := transformToLogicalPlan(ctx, op.Source, false)
+	if err != nil {
+		return nil, err
+	}
+
+	oa := &orderedAggregate{
+		resultsBuilder: resultsBuilder{
+			logicalPlanCommon: newBuilderCommon(plan),
+			weightStrings:     make(map[*resultColumn]int),
+		},
+	}
+	for idx, col := range op.Columns {
+		switch param := col.(type) {
+		case operators.Aggr:
+			oa.aggregates = append(oa.aggregates, &engine.AggregateParams{
+				Opcode:     param.OpCode,
+				Col:        idx,
+				Alias:      param.Alias,
+				Expr:       param.Func,
+				Original:   param.Original,
+				OrigOpcode: param.OriginalOpCode,
+			})
+		case operators.GroupBy:
+			oa.groupByKeys = append(oa.groupByKeys, &engine.GroupByParams{
+				KeyCol: idx,
+				// TODO: WeightStringCol: 0,
+				Expr:        param.Inner,
+				FromGroupBy: true,
+				CollationID: ctx.SemTable.CollationForExpr(param.WeightStrExpr),
+			})
+		}
+	}
+	return oa, nil
 }
 
 func transformOrdering(ctx *plancontext.PlanningContext, op *operators.Ordering) (logicalPlan, error) {

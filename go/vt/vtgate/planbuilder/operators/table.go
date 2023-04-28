@@ -63,7 +63,7 @@ func (to *Table) AddPredicate(_ *plancontext.PlanningContext, expr sqlparser.Exp
 	return newFilter(to, expr), nil
 }
 
-func (to *Table) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr) (ops.Operator, int, error) {
+func (to *Table) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, reuseExisting bool) (ops.Operator, int, error) {
 	offset, err := addColumn(ctx, to, expr.Expr)
 	if err != nil {
 		return nil, 0, err

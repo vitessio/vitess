@@ -22,7 +22,7 @@ The operators go through a few phases while planning:
    It will contain logical joins - we still haven't decided on the join algorithm to use yet.
    At the leaves, it will contain QueryGraphs - these are the tables in the FROM clause
    that we can easily do join ordering on. The logical tree will represent the full query,
-   including projections, grouping, ordering and so on.
+   including projections, Grouping, ordering and so on.
 2. Physical
    Once the logical plan has been fully built, we go bottom up and plan which routes that will be used.
    During this phase, we will also decide which join algorithms should be used on the vtgate level
@@ -86,6 +86,8 @@ func PlanQuery(ctx *plancontext.PlanningContext, selStmt sqlparser.Statement) (o
 func tryHorizonPlanning(ctx *plancontext.PlanningContext, root ops.Operator) (output ops.Operator, err error) {
 	backup := Clone(root)
 	defer func() {
+		// If we get the below error.
+		// We will be using old horizon planning.
 		if err == errHorizonNotPlanned() {
 			err = planOffsetsOnJoins(ctx, backup)
 			if err == nil {
@@ -131,18 +133,22 @@ func makeSureOutputIsCorrect(ctx *plancontext.PlanningContext, oldHorizon ops.Op
 	horizon := oldHorizon.(*Horizon)
 
 	sel := sqlparser.GetFirstSelect(horizon.Select)
-	if len(sel.SelectExprs) != len(cols) {
-		route := getRouteIfPassThroughColumns(output)
-		if route != nil {
-			route.ResultColumns = len(sel.SelectExprs)
-			return output, nil
-		}
+
+	if len(sel.SelectExprs) == len(cols) {
+		return output, nil
 	}
+
+	route := getRouteIfPassThroughColumns(output)
+	if route != nil {
+		route.ResultColumns = len(sel.SelectExprs)
+		return output, nil
+	}
+
 	qp, err := horizon.getQP(ctx)
 	if err != nil {
 		return nil, err
 	}
-	proj, err := createProjectionFromSelect(output, qp.SelectExprs)
+	proj, err := createProjection2(qp, output)
 	if err != nil {
 		return nil, err
 	}
@@ -166,7 +172,7 @@ func (noInputs) SetInputs(ops []ops.Operator) {
 }
 
 // AddColumn implements the Operator interface
-func (noColumns) AddColumn(*plancontext.PlanningContext, *sqlparser.AliasedExpr) (ops.Operator, int, error) {
+func (noColumns) AddColumn(*plancontext.PlanningContext, *sqlparser.AliasedExpr, bool) (ops.Operator, int, error) {
 	return nil, 0, vterrors.VT13001("the noColumns operator cannot accept columns")
 }
 

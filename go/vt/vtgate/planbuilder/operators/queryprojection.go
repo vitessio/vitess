@@ -22,13 +22,15 @@ import (
 	"sort"
 	"strings"
 
+	"golang.org/x/exp/slices"
+
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
-	popcode "vitess.io/vitess/go/vt/vtgate/engine/opcode"
+	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
 )
 
 type (
@@ -67,13 +69,20 @@ type (
 
 	// Aggr encodes all information needed for aggregation functions
 	Aggr struct {
-		Original *sqlparser.AliasedExpr
-		Func     sqlparser.AggrFunc
-		OpCode   popcode.AggregateOpcode
-		Alias    string
+		Original       *sqlparser.AliasedExpr
+		Func           sqlparser.AggrFunc
+		OpCode         opcode.AggregateOpcode
+		OriginalOpCode opcode.AggregateOpcode
+
+		Alias string
 		// The index at which the user expects to see this aggregated function. Set to nil, if the user does not ask for it
 		Index    *int
 		Distinct bool
+	}
+
+	// AggrColumn is either an Aggr or a GroupBy - the only types of columns allowed on an Aggregator
+	AggrColumn interface {
+		GetOriginal() *sqlparser.AliasedExpr
 	}
 
 	AggrRewriter struct {
@@ -111,6 +120,14 @@ func (b GroupBy) AsAliasedExpr() *sqlparser.AliasedExpr {
 	return &sqlparser.AliasedExpr{
 		Expr: b.WeightStrExpr,
 	}
+}
+
+func (b GroupBy) GetOriginal() *sqlparser.AliasedExpr {
+	return b.aliasedExpr
+}
+
+func (a Aggr) GetOriginal() *sqlparser.AliasedExpr {
+	return a.Original
 }
 
 // GetExpr returns the underlying sqlparser.Expr of our SelectExpr
@@ -308,9 +325,7 @@ func (qp *QueryProjection) addOrderBy(orderBy sqlparser.OrderBy) error {
 
 // GetGrouping returns a copy of the grouping parameters of the QP
 func (qp *QueryProjection) GetGrouping() []GroupBy {
-	out := make([]GroupBy, len(qp.groupByExprs))
-	copy(out, qp.groupByExprs)
-	return out
+	return slices.Clone(qp.groupByExprs)
 }
 
 func checkForInvalidAggregations(exp *sqlparser.AliasedExpr) error {
@@ -531,6 +546,9 @@ orderBy:
 		qp.AddedColumn++
 	}
 
+	// Here we go over the expressions we are returning. Since we know we are aggregating,
+	// all expressions have to be either grouping expressions or aggregate expressions.
+	// If we find an expression that is neither, we treat is as a special aggregation function AggrRandom
 	for idx, expr := range qp.SelectExprs {
 		aliasedExpr, err := expr.GetAliasedExpr()
 		if err != nil {
@@ -543,7 +561,7 @@ orderBy:
 			if !qp.isExprInGroupByExprs(ctx, expr) {
 				out = append(out, Aggr{
 					Original: aliasedExpr,
-					OpCode:   popcode.AggregateRandom,
+					OpCode:   opcode.AggregateRandom,
 					Alias:    aliasedExpr.ColumnName(),
 					Index:    &idxCopy,
 				})
@@ -555,32 +573,32 @@ orderBy:
 			return nil, vterrors.VT12001("in scatter query: complex aggregate expression")
 		}
 
-		opcode, found := popcode.SupportedAggregates[strings.ToLower(fnc.AggrName())]
+		code, found := opcode.SupportedAggregates[strings.ToLower(fnc.AggrName())]
 		if !found {
 			return nil, vterrors.VT12001(fmt.Sprintf("in scatter query: aggregation function '%s'", fnc.AggrName()))
 		}
 
-		if opcode == popcode.AggregateCount {
+		if code == opcode.AggregateCount {
 			if _, isStar := fnc.(*sqlparser.CountStar); isStar {
-				opcode = popcode.AggregateCountStar
+				code = opcode.AggregateCountStar
 			}
 		}
 
 		aggr, _ := aliasedExpr.Expr.(sqlparser.AggrFunc)
 
 		if aggr.IsDistinct() {
-			switch opcode {
-			case popcode.AggregateCount:
-				opcode = popcode.AggregateCountDistinct
-			case popcode.AggregateSum:
-				opcode = popcode.AggregateSumDistinct
+			switch code {
+			case opcode.AggregateCount:
+				code = opcode.AggregateCountDistinct
+			case opcode.AggregateSum:
+				code = opcode.AggregateSumDistinct
 			}
 		}
 
 		out = append(out, Aggr{
 			Original: aliasedExpr,
 			Func:     aggr,
-			OpCode:   opcode,
+			OpCode:   code,
 			Alias:    aliasedExpr.ColumnName(),
 			Index:    &idxCopy,
 			Distinct: aggr.IsDistinct(),

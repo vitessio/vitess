@@ -17,8 +17,11 @@ limitations under the License.
 package operators
 
 import (
+	"golang.org/x/exp/slices"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
@@ -51,6 +54,8 @@ func planHorizons(ctx *plancontext.PlanningContext, root ops.Operator) (ops.Oper
 			return tryPushingDownLimit(in)
 		case *Ordering:
 			return tryPushingDownOrdering(ctx, in)
+		case *Aggregator:
+			return tryPushingDownAggregator(ctx, in)
 		default:
 			return in, rewrite.SameTree, nil
 		}
@@ -66,6 +71,46 @@ func planHorizons(ctx *plancontext.PlanningContext, root ops.Operator) (ops.Oper
 	}
 
 	return newOp, nil
+}
+
+func tryPushingDownAggregator(ctx *plancontext.PlanningContext, aggregator *Aggregator) (ops.Operator, rewrite.ApplyResult, error) {
+	if aggregator.Pushed {
+		return aggregator, rewrite.SameTree, nil
+	}
+	switch src := aggregator.Source.(type) {
+	case *Route:
+		if src.IsSingleShard() {
+			return swap(aggregator, src)
+		}
+
+		// if we are pushing down through a sharded route,
+		// we need to do a bit of aggregation even after pushing it down under the route
+		aggregator.Pushed = true
+		underRoute := &Aggregator{
+			Source:  src.Source,
+			Columns: slices.Clone(aggregator.Columns),
+			Pushed:  false,
+		}
+		for i, col := range aggregator.Columns {
+			aggr, ok := col.(Aggr)
+			if !ok {
+				continue
+			}
+
+			switch aggr.OpCode {
+			case opcode.AggregateCount, opcode.AggregateCountStar, opcode.AggregateCountDistinct:
+				aggr.OpCode = opcode.AggregateSum
+			default:
+				// do nothing
+			}
+
+			aggregator.Columns[i] = aggr
+		}
+		src.Source = underRoute
+		return aggregator, rewrite.NewTree, nil
+	default:
+		return aggregator, rewrite.SameTree, nil
+	}
 }
 
 func tryPushingDownOrdering(ctx *plancontext.PlanningContext, in *Ordering) (ops.Operator, rewrite.ApplyResult, error) {
@@ -125,7 +170,7 @@ func pushDownProjectionInVindex(
 ) (ops.Operator, rewrite.ApplyResult, error) {
 	for _, column := range p.Columns {
 		expr := column.GetExpr()
-		_, _, err := src.AddColumn(ctx, aeWrap(expr))
+		_, _, err := src.AddColumn(ctx, aeWrap(expr), true)
 		if err != nil {
 			return nil, false, err
 		}
@@ -410,23 +455,14 @@ func expandHorizon(ctx *plancontext.PlanningContext, horizon horizonLike) (ops.O
 		return nil, err
 	}
 
-	src := horizon.src()
-
-	if qp.NeedsAggregation() || sel.Having != nil || qp.NeedsDistinct() || sel.Distinct {
+	if sel.Having != nil || qp.NeedsDistinct() || sel.Distinct {
 		return nil, errHorizonNotPlanned()
 	}
 
-	var op ops.Operator
-	proj, err := createProjectionFromSelect(src, qp.SelectExprs)
+	op, err := createProjectionFromSelect(ctx, horizon)
 	if err != nil {
 		return nil, err
 	}
-	if derived, isDerived := horizon.(*Derived); isDerived {
-		id := derived.TableId
-		proj.TableID = &id
-		proj.Alias = derived.Alias
-	}
-	op = proj
 
 	if qp.OrderExprs != nil {
 		op = &Ordering{
@@ -445,12 +481,60 @@ func expandHorizon(ctx *plancontext.PlanningContext, horizon horizonLike) (ops.O
 	return op, nil
 }
 
-func createProjectionFromSelect(src ops.Operator, selectExprs []SelectExpr) (*Projection, error) {
+func createProjectionFromSelect(ctx *plancontext.PlanningContext, horizon horizonLike) (ops.Operator, error) {
+
+	qp, err := horizon.getQP(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	if !qp.NeedsAggregation() {
+		proj, err := createProjection2(qp, horizon.src())
+		if err != nil {
+			return nil, err
+		}
+		if derived, isDerived := horizon.(*Derived); isDerived {
+			id := derived.TableId
+			proj.TableID = &id
+			proj.Alias = derived.Alias
+		}
+		return proj, nil
+	}
+
+	// TODO: move column gathering to the QP
+	grouping := qp.GetGrouping()
+	aggregations, err := qp.AggregationExpressions(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	a := &Aggregator{
+		Source: horizon.src(),
+	}
+outer:
+	for _, expr := range qp.SelectExprs {
+		for _, groupBy := range grouping {
+			if expr.Col == groupBy.GetOriginal() {
+				a.Columns = append(a.Columns, groupBy)
+				continue outer
+			}
+		}
+		for _, aggr := range aggregations {
+			if expr.Col == aggr.GetOriginal() {
+				a.Columns = append(a.Columns, aggr)
+				continue outer
+			}
+		}
+	}
+	return a, nil
+}
+
+func createProjection2(qp *QueryProjection, src ops.Operator) (*Projection, error) {
 	proj := &Projection{
 		Source: src,
 	}
 
-	for _, e := range selectExprs {
+	for _, e := range qp.SelectExprs {
 		if _, isStar := e.Col.(*sqlparser.StarExpr); isStar {
 			return nil, errHorizonNotPlanned()
 		}

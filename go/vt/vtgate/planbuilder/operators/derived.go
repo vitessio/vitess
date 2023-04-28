@@ -158,7 +158,7 @@ func canBePushedDownIntoDerived(expr sqlparser.Expr) (canBePushed bool) {
 	return
 }
 
-func (d *Derived) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr) (ops.Operator, int, error) {
+func (d *Derived) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, reuseExisting bool) (ops.Operator, int, error) {
 	col, ok := expr.Expr.(*sqlparser.ColName)
 	if !ok {
 		return nil, 0, vterrors.VT13001("cannot push non-colname expression to a derived table")
@@ -179,7 +179,7 @@ func (d *Derived) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.Al
 	d.Columns = append(d.Columns, col)
 	// add it to the source if we were not already passing it through
 	if i <= -1 {
-		newSrc, _, err := d.Source.AddColumn(ctx, aeWrap(sqlparser.NewColName(col.Name.String())))
+		newSrc, _, err := d.Source.AddColumn(ctx, aeWrap(sqlparser.NewColName(col.Name.String())), true)
 		if err != nil {
 			return nil, 0, err
 		}

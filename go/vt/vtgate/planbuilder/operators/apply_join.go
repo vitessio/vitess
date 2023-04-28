@@ -158,7 +158,7 @@ func (a *ApplyJoin) AddJoinPredicate(ctx *plancontext.PlanningContext, expr sqlp
 }
 
 func (a *ApplyJoin) pushColLeft(ctx *plancontext.PlanningContext, e *sqlparser.AliasedExpr) (int, error) {
-	newLHS, offset, err := a.LHS.AddColumn(ctx, e)
+	newLHS, offset, err := a.LHS.AddColumn(ctx, e, true)
 	if err != nil {
 		return 0, err
 	}
@@ -167,7 +167,7 @@ func (a *ApplyJoin) pushColLeft(ctx *plancontext.PlanningContext, e *sqlparser.A
 }
 
 func (a *ApplyJoin) pushColRight(ctx *plancontext.PlanningContext, e *sqlparser.AliasedExpr) (int, error) {
-	newRHS, offset, err := a.RHS.AddColumn(ctx, e)
+	newRHS, offset, err := a.RHS.AddColumn(ctx, e, true)
 	if err != nil {
 		return 0, err
 	}
@@ -218,7 +218,7 @@ func (a *ApplyJoin) getJoinColumnFor(ctx *plancontext.PlanningContext, e *sqlpar
 	return
 }
 
-func (a *ApplyJoin) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr) (ops.Operator, int, error) {
+func (a *ApplyJoin) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, reuseExisting bool) (ops.Operator, int, error) {
 	if offset, found := canReuseColumn(ctx, a.ColumnsAST, expr.Expr, joinColumnToExpr); found {
 		return a, offset, nil
 	}

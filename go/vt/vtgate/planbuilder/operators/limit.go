@@ -56,8 +56,8 @@ func (l *Limit) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Ex
 	return l, nil
 }
 
-func (l *Limit) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr) (ops.Operator, int, error) {
-	newSrc, offset, err := l.Source.AddColumn(ctx, expr)
+func (l *Limit) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, reuseExisting bool) (ops.Operator, int, error) {
+	newSrc, offset, err := l.Source.AddColumn(ctx, expr, reuseExisting)
 	if err != nil {
 		return nil, 0, err
 	}

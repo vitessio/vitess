@@ -66,12 +66,12 @@ type (
 	}
 )
 
-func (p *Projection) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr) (ops.Operator, int, error) {
+func (p *Projection) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, reuseExisting bool) (ops.Operator, int, error) {
 	colAsExpr := func(pe ProjExpr) sqlparser.Expr { return pe.GetExpr() }
 	if offset, found := canReuseColumn(ctx, p.Columns, expr.Expr, colAsExpr); found {
 		return p, offset, nil
 	}
-	sourceOp, offset, err := p.Source.AddColumn(ctx, expr)
+	sourceOp, offset, err := p.Source.AddColumn(ctx, expr, true)
 	if err != nil {
 		return nil, 0, err
 	}

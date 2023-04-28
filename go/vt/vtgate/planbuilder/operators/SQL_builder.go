@@ -322,8 +322,28 @@ func buildQuery(op ops.Operator, qb *queryBuilder) error {
 		return buildLimit(op, qb)
 	case *Ordering:
 		return buildOrdering(op, qb)
+	case *Aggregator:
+		return buildAggregation(op, qb)
 	default:
 		return vterrors.VT13001(fmt.Sprintf("do not know how to turn %T into SQL", op))
+	}
+	return nil
+}
+
+func buildAggregation(op *Aggregator, qb *queryBuilder) error {
+	err := buildQuery(op.Source, qb)
+	if err != nil {
+		return err
+	}
+
+	qb.clearProjections()
+
+	columns, err := op.GetColumns()
+	if err != nil {
+		return err
+	}
+	for _, column := range columns {
+		qb.addProjection(column)
 	}
 	return nil
 }
