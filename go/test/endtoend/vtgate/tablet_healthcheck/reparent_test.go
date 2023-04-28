@@ -25,7 +25,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
@@ -219,7 +218,7 @@ func addTablet(t *testing.T, tabletUID int, tabletType string) *cluster.Vttablet
 	require.NoError(t, err)
 
 	serving := tablet.VttabletProcess.WaitForStatus("SERVING", time.Duration(60*time.Second))
-	assert.Equal(t, serving, true, "Tablet did not become ready within a reasonable time")
+	require.Equal(t, serving, true, "Tablet did not become ready within a reasonable time")
 
 	t.Logf("Added tablet: %s", tablet.Alias)
 	return tablet
