@@ -5,8 +5,13 @@ on:
     - cron: "0 0 * * *" # Runs every day at midnight UTC
   workflow_dispatch:
 
+permissions: read-all
+
 jobs:
   update_golang_version:
+    permissions:
+      contents: write
+      pull-requests: write
     strategy:
       matrix:
         branch: [ main, release-16.0, release-15.0, release-14.0 ]

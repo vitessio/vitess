@@ -13,7 +13,8 @@ jobs:
   build:
     name: Create Release
     runs-on: ubuntu-22.04
-    permissions: write-all
+    permissions:
+      contents: write
     steps:
 
     - name: Set up Go
