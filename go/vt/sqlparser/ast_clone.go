@@ -277,6 +277,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfLimit(in)
 	case *LineStringExpr:
 		return CloneRefOfLineStringExpr(in)
+	case *LinestrPropertyFuncExpr:
+		return CloneRefOfLinestrPropertyFuncExpr(in)
 	case ListArg:
 		return in
 	case *Literal:
@@ -1911,6 +1913,17 @@ func CloneRefOfLineStringExpr(n *LineStringExpr) *LineStringExpr {
 	return &out
 }
 
+// CloneRefOfLinestrPropertyFuncExpr creates a deep clone of the input.
+func CloneRefOfLinestrPropertyFuncExpr(n *LinestrPropertyFuncExpr) *LinestrPropertyFuncExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Linestring = CloneExpr(n.Linestring)
+	out.PropertyDefArg = CloneExpr(n.PropertyDefArg)
+	return &out
+}
+
 // CloneRefOfLiteral creates a deep clone of the input.
 func CloneRefOfLiteral(n *Literal) *Literal {
 	if n == nil {
@@ -3472,6 +3485,8 @@ func CloneCallable(in Callable) Callable {
 		return CloneRefOfLagLeadExpr(in)
 	case *LineStringExpr:
 		return CloneRefOfLineStringExpr(in)
+	case *LinestrPropertyFuncExpr:
+		return CloneRefOfLinestrPropertyFuncExpr(in)
 	case *LocateExpr:
 		return CloneRefOfLocateExpr(in)
 	case *MatchExpr:
@@ -3754,6 +3769,8 @@ func CloneExpr(in Expr) Expr {
 		return CloneRefOfLagLeadExpr(in)
 	case *LineStringExpr:
 		return CloneRefOfLineStringExpr(in)
+	case *LinestrPropertyFuncExpr:
+		return CloneRefOfLinestrPropertyFuncExpr(in)
 	case ListArg:
 		return in
 	case *Literal:

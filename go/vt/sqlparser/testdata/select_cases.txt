@@ -6338,7 +6338,7 @@ INPUT
 select ST_Length(ST_MLineFromWKB(0x0000000005000000020000000002000000035FB317E5EF3AB327E3A4B378469B67320000000000000000C0240000000000003FF05FD8ADAB9F560000000000000000000000000200000003000000000000000000000000000000000000000000000000BFF08B439581062540240000000000004341C37937E08000)) as length;
 END
 OUTPUT
-select ST_Length(st_multilinestringfromwkb(0x0000000005000000020000000002000000035FB317E5EF3AB327E3A4B378469B67320000000000000000C0240000000000003FF05FD8ADAB9F560000000000000000000000000200000003000000000000000000000000000000000000000000000000BFF08B439581062540240000000000004341C37937E08000)) as length from dual
+select st_length(st_multilinestringfromwkb(0x0000000005000000020000000002000000035FB317E5EF3AB327E3A4B378469B67320000000000000000C0240000000000003FF05FD8ADAB9F560000000000000000000000000200000003000000000000000000000000000000000000000000000000BFF08B439581062540240000000000004341C37937E08000)) as length from dual
 END
 INPUT
 select host,db,user,select_priv,insert_priv from mysql.db where db="mysqltest1";
@@ -6668,7 +6668,7 @@ INPUT
 select ST_NUMPOINTS(ST_EXTERIORRING(@buff)) from t1;
 END
 OUTPUT
-select ST_NUMPOINTS(ST_EXTERIORRING(@buff)) from t1
+select st_numpoints(ST_EXTERIORRING(@buff)) from t1
 END
 INPUT
 select fld1,fld3 FROM t2 where fld1 like "25050_";
@@ -21146,7 +21146,7 @@ INPUT
 select ST_NUMPOINTS(ST_EXTERIORRING(ST_buffer(geom,2))) from t1;
 END
 OUTPUT
-select ST_NUMPOINTS(ST_EXTERIORRING(ST_buffer(geom, 2))) from t1
+select st_numpoints(ST_EXTERIORRING(ST_buffer(geom, 2))) from t1
 END
 INPUT
 select 0=0,1>0,1>=1,1<0,1<=0,1!=0,strcmp("abc","abcd"),strcmp("b","a"),strcmp("a","a");
@@ -22646,7 +22646,7 @@ INPUT
 select ST_geometryfromtext(b) IS NULL, ST_geometryfromwkb(b) IS NULL, ST_astext(b) IS NULL, ST_aswkb(b) IS NULL, ST_geometrytype(b) IS NULL, ST_centroid(b) IS NULL, ST_envelope(b) IS NULL, ST_startpoint(b) IS NULL, ST_endpoint(b) IS NULL, ST_exteriorring(b) IS NULL, ST_pointn(b, 1) IS NULL, ST_geometryn(b, 1) IS NULL, ST_interiorringn(b, 1) IS NULL, multipoint(b) IS NULL, ST_isempty(b) IS NULL, ST_issimple(b) IS NULL, ST_isclosed(b) IS NULL, ST_dimension(b) IS NULL, ST_numgeometries(b) IS NULL, ST_numinteriorrings(b) IS NULL, ST_numpoints(b) IS NULL, ST_area(b) IS NULL, ST_length(b) IS NULL, ST_srid(b) IS NULL, ST_x(b) IS NULL, ST_y(b) IS NULL from t1;
 END
 OUTPUT
-select st_geometryfromtext(b) is null, st_geometryfromwkb(b) is null, st_astext(b) is null, st_asbinary(b) is null, st_geometrytype(b) is null, ST_centroid(b) is null, st_envelope(b) is null, ST_startpoint(b) is null, ST_endpoint(b) is null, ST_exteriorring(b) is null, ST_pointn(b, 1) is null, ST_geometryn(b, 1) is null, ST_interiorringn(b, 1) is null, multipoint(b) is null, st_isempty(b) is null, st_issimple(b) is null, ST_isclosed(b) is null, st_dimension(b) is null, ST_numgeometries(b) is null, ST_numinteriorrings(b) is null, ST_numpoints(b) is null, ST_area(b) is null, ST_length(b) is null, ST_srid(b) is null, st_x(b) is null, st_y(b) is null from t1
+select st_geometryfromtext(b) is null, st_geometryfromwkb(b) is null, st_astext(b) is null, st_asbinary(b) is null, st_geometrytype(b) is null, ST_centroid(b) is null, st_envelope(b) is null, st_startpoint(b) is null, st_endpoint(b) is null, ST_exteriorring(b) is null, st_pointn(b, 1) is null, ST_geometryn(b, 1) is null, ST_interiorringn(b, 1) is null, multipoint(b) is null, st_isempty(b) is null, st_issimple(b) is null, st_isclosed(b) is null, st_dimension(b) is null, ST_numgeometries(b) is null, ST_numinteriorrings(b) is null, st_numpoints(b) is null, ST_area(b) is null, st_length(b) is null, ST_srid(b) is null, st_x(b) is null, st_y(b) is null from t1
 END
 INPUT
 select inet6_ntoa(null),inet6_aton(null);

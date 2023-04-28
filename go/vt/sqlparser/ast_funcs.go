@@ -2284,6 +2284,26 @@ func (ty PointPropertyType) ToString() string {
 }
 
 // ToString returns the type as a string
+func (ty LinestrPropType) ToString() string {
+	switch ty {
+	case EndPoint:
+		return EndPointStr
+	case IsClosed:
+		return IsClosedStr
+	case Length:
+		return LengthStr
+	case NumPoints:
+		return NumPointsStr
+	case PointN:
+		return PointNStr
+	case StartPoint:
+		return StartPointStr
+	default:
+		return "Unknown LinestrPropType"
+	}
+}
+
+// ToString returns the type as a string
 func (ty GeomFormatType) ToString() string {
 	switch ty {
 	case BinaryFormat:
