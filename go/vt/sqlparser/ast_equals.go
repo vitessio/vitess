@@ -2178,7 +2178,7 @@ func (cmp *Comparator) RefOfCountStar(a, b *CountStar) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return true
+	return a.inner == b.inner
 }
 
 // RefOfCreateDatabase does deep equals between the two objects.

@@ -35,13 +35,17 @@ type Aggregator struct {
 
 	// Pushed will be set to true once this aggregation has been pushed deeper in the tree
 	Pushed bool
+
+	// Original will only be true for the original aggregator created from the AST
+	Original bool
 }
 
 func (a *Aggregator) Clone(inputs []ops.Operator) ops.Operator {
 	return &Aggregator{
-		Source:  inputs[0],
-		Columns: slices.Clone(a.Columns),
-		Pushed:  a.Pushed,
+		Source:   inputs[0],
+		Columns:  slices.Clone(a.Columns),
+		Pushed:   a.Pushed,
+		Original: a.Original,
 	}
 }
 
@@ -83,7 +87,13 @@ func (a *Aggregator) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser
 		}
 	}
 
-	return nil, 0, vterrors.VT12001("column not found on Aggregator")
+	// if we didn't already have this column, we add it as a grouping
+	a.Columns = append(a.Columns, &GroupBy{
+		Inner:       expr.Expr,
+		aliasedExpr: expr,
+	})
+
+	return a, len(a.Columns) - 1, nil
 }
 
 func (a *Aggregator) GetColumns() (columns []*sqlparser.AliasedExpr, err error) {
@@ -99,14 +109,22 @@ func (a *Aggregator) Description() ops.OpDescription {
 }
 
 func (a *Aggregator) ShortDescription() string {
-	columns, err := a.GetColumns()
-	if err != nil {
-		return "error " + err.Error()
-	}
-	columnnStrings := slices2.Map(columns, func(from *sqlparser.AliasedExpr) string {
-		return sqlparser.String(from)
+	var grouping []string
+
+	columnnStrings := slices2.Map(a.Columns, func(from AggrColumn) string {
+		gb, ok := from.(*GroupBy)
+		if ok {
+			grouping = append(grouping, sqlparser.String(gb.Inner))
+		}
+		return from.GetOriginal().ColumnName()
 	})
-	return strings.Join(columnnStrings, ", ")
+
+	gb := ""
+	if len(grouping) > 0 {
+		gb = " group by " + strings.Join(grouping, ",")
+	}
+
+	return strings.Join(columnnStrings, ", ") + gb
 }
 
 func (a *Aggregator) GetOrdering() ([]ops.OrderBy, error) {
@@ -118,7 +136,7 @@ var _ ops.Operator = (*Aggregator)(nil)
 func (a *Aggregator) planOffsets(ctx *plancontext.PlanningContext) error {
 	for idx, column := range a.Columns {
 		switch col := column.(type) {
-		case Aggr:
+		case *Aggr:
 			arg := col.Original.Expr
 			if col.Func != nil {
 				arg = col.Func.GetArg()
@@ -134,7 +152,7 @@ func (a *Aggregator) planOffsets(ctx *plancontext.PlanningContext) error {
 				return vterrors.VT13001("the input column and output columns need to be aligned")
 			}
 			a.Source = newSrc
-		case GroupBy:
+		case *GroupBy:
 			newSrc, offset, err := a.Source.AddColumn(ctx, aeWrap(col.Inner), true)
 			if err != nil {
 				return err
@@ -143,6 +161,18 @@ func (a *Aggregator) planOffsets(ctx *plancontext.PlanningContext) error {
 			if offset != idx {
 				return vterrors.VT13001("the input column and output columns need to be aligned")
 			}
+			if !ctx.SemTable.NeedsWeightString(col.WeightStrExpr) {
+				col.WOffset = -1
+				continue
+			}
+
+			wsExpr := &sqlparser.WeightStringFuncExpr{Expr: col.WeightStrExpr}
+			newSrc, offset, err = a.Source.AddColumn(ctx, aeWrap(wsExpr), true)
+			if err != nil {
+				return err
+			}
+			col.WOffset = offset
+			a.Source = newSrc
 		}
 
 	}

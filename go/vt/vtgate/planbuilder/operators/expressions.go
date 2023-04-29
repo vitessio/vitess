@@ -31,11 +31,25 @@ func BreakExpressionInLHSandRHS(
 	lhs semantics.TableSet,
 ) (col JoinColumn, err error) {
 	rewrittenExpr := sqlparser.CopyOnRewrite(expr, nil, func(cursor *sqlparser.CopyOnWriteCursor) {
-		node, ok := cursor.Node().(*sqlparser.ColName)
-		if !ok {
+		var getColName func() string
+		node := cursor.Node()
+		switch node := node.(type) {
+		case *sqlparser.ColName:
+			getColName = func() string {
+				node.Qualifier.Qualifier = sqlparser.NewIdentifierCS("")
+				return node.CompliantName()
+			}
+		case sqlparser.AggrFunc:
+			getColName = func() string {
+				return sqlparser.CompliantString(node)
+			}
+
+		default:
 			return
 		}
-		deps := ctx.SemTable.RecursiveDeps(node)
+		expr := node.(sqlparser.Expr)
+
+		deps := ctx.SemTable.RecursiveDeps(expr)
 		if deps.IsEmpty() {
 			err = vterrors.VT13001("unknown column. has the AST been copied?")
 			cursor.StopTreeWalk()
@@ -45,14 +59,13 @@ func BreakExpressionInLHSandRHS(
 			return
 		}
 
-		node.Qualifier.Qualifier = sqlparser.NewIdentifierCS("")
-		col.LHSExprs = append(col.LHSExprs, node)
-		bvName := node.CompliantName()
+		col.LHSExprs = append(col.LHSExprs, expr)
+		bvName := getColName()
 		col.BvNames = append(col.BvNames, bvName)
 		arg := sqlparser.NewArgument(bvName)
 		// we are replacing one of the sides of the comparison with an argument,
 		// but we don't want to lose the type information we have, so we copy it over
-		ctx.SemTable.CopyExprInfo(node, arg)
+		ctx.SemTable.CopyExprInfo(expr, arg)
 		cursor.Replace(arg)
 	}, nil).(sqlparser.Expr)
 

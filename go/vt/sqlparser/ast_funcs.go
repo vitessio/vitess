@@ -933,6 +933,11 @@ func writeEscapedString(buf *TrackedBuffer, original string) {
 	buf.WriteByte('`')
 }
 
+func CompliantString(in SQLNode) string {
+	s := String(in)
+	return compliantName(s)
+}
+
 func compliantName(in string) string {
 	var buf strings.Builder
 	for i, c := range in {

@@ -344,7 +344,7 @@ func buildAggregation(op *Aggregator, qb *queryBuilder) error {
 	qb.clearProjections()
 
 	for _, column := range op.Columns {
-		if _, isGroupBy := column.(GroupBy); isGroupBy {
+		if _, isGroupBy := column.(*GroupBy); isGroupBy {
 			qb.addGroupBy(column.GetOriginal())
 		}
 		qb.addProjection(column.GetOriginal())

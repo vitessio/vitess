@@ -17,11 +17,8 @@ limitations under the License.
 package operators
 
 import (
-	"golang.org/x/exp/slices"
-
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
@@ -73,52 +70,6 @@ func planHorizons(ctx *plancontext.PlanningContext, root ops.Operator) (ops.Oper
 	return newOp, nil
 }
 
-func tryPushingDownAggregator(ctx *plancontext.PlanningContext, aggregator *Aggregator) (ops.Operator, rewrite.ApplyResult, error) {
-	if aggregator.Pushed {
-		return aggregator, rewrite.SameTree, nil
-	}
-	switch src := aggregator.Source.(type) {
-	case *Route:
-		if src.IsSingleShard() {
-			return swap(aggregator, src)
-		}
-
-		// Add comments
-		var ordering []ops.OrderBy
-
-		// if we are pushing down through a sharded route,
-		// we need to do a bit of aggregation even after pushing it down under the route
-		aggregator.Pushed = true
-		aggrBelowRoute := &Aggregator{
-			Source:  src.Source,
-			Columns: slices.Clone(aggregator.Columns),
-			Pushed:  false,
-		}
-		for i, col := range aggregator.Columns {
-			switch param := col.(type) {
-			case Aggr:
-				switch param.OpCode {
-				case opcode.AggregateCount, opcode.AggregateCountStar, opcode.AggregateCountDistinct:
-					param.OpCode = opcode.AggregateSum
-				}
-				aggregator.Columns[i] = param
-			case GroupBy:
-				ordering = append(ordering, param.AsOrderBy())
-			}
-		}
-		if len(ordering) > 0 {
-			aggregator.Source = &Ordering{
-				Source: src,
-				Order:  ordering,
-			}
-		}
-		src.Source = aggrBelowRoute
-		return aggregator, rewrite.NewTree, nil
-	default:
-		return aggregator, rewrite.SameTree, nil
-	}
-}
-
 func tryPushingDownOrdering(ctx *plancontext.PlanningContext, in *Ordering) (ops.Operator, rewrite.ApplyResult, error) {
 	switch src := in.Source.(type) {
 	case *Route:
@@ -130,6 +81,10 @@ func tryPushingDownOrdering(ctx *plancontext.PlanningContext, in *Ordering) (ops
 			src.LHS, in.Source = in, src.LHS
 			return src, rewrite.NewTree, nil
 		}
+	case *Ordering:
+		// we'll just remove the order underneath. The top order replaces whatever was incoming
+		in.Source = src.Source
+		return in, rewrite.NewTree, nil
 	}
 	return in, rewrite.SameTree, nil
 }
@@ -488,7 +443,6 @@ func expandHorizon(ctx *plancontext.PlanningContext, horizon horizonLike) (ops.O
 }
 
 func createProjectionFromSelect(ctx *plancontext.PlanningContext, horizon horizonLike) (ops.Operator, error) {
-
 	qp, err := horizon.getQP(ctx)
 	if err != nil {
 		return nil, err
@@ -515,19 +469,22 @@ func createProjectionFromSelect(ctx *plancontext.PlanningContext, horizon horizo
 	}
 
 	a := &Aggregator{
-		Source: horizon.src(),
+		Source:   horizon.src(),
+		Original: true,
 	}
 outer:
 	for _, expr := range qp.SelectExprs {
 		for _, groupBy := range grouping {
 			if expr.Col == groupBy.GetOriginal() {
-				a.Columns = append(a.Columns, groupBy)
+				gb := groupBy
+				a.Columns = append(a.Columns, &gb)
 				continue outer
 			}
 		}
 		for _, aggr := range aggregations {
 			if expr.Col == aggr.GetOriginal() {
-				a.Columns = append(a.Columns, aggr)
+				clone := aggr
+				a.Columns = append(a.Columns, &clone)
 				continue outer
 			}
 		}

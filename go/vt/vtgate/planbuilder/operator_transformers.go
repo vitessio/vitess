@@ -91,7 +91,7 @@ func transformAggregator(ctx *plancontext.PlanningContext, op *operators.Aggrega
 	}
 	for idx, col := range op.Columns {
 		switch param := col.(type) {
-		case operators.Aggr:
+		case *operators.Aggr:
 			oa.aggregates = append(oa.aggregates, &engine.AggregateParams{
 				Opcode:     param.OpCode,
 				Col:        idx,
@@ -100,13 +100,13 @@ func transformAggregator(ctx *plancontext.PlanningContext, op *operators.Aggrega
 				Original:   param.Original,
 				OrigOpcode: param.OriginalOpCode,
 			})
-		case operators.GroupBy:
+		case *operators.GroupBy:
 			oa.groupByKeys = append(oa.groupByKeys, &engine.GroupByParams{
-				KeyCol: idx,
-				// TODO: WeightStringCol: 0,
-				Expr:        param.Inner,
-				FromGroupBy: true,
-				CollationID: ctx.SemTable.CollationForExpr(param.WeightStrExpr),
+				KeyCol:          idx,
+				WeightStringCol: param.WOffset,
+				Expr:            param.Inner,
+				FromGroupBy:     true,
+				CollationID:     ctx.SemTable.CollationForExpr(param.WeightStrExpr),
 			})
 		}
 	}

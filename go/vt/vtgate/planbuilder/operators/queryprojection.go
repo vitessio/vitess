@@ -60,6 +60,8 @@ type (
 		Inner         sqlparser.Expr
 		WeightStrExpr sqlparser.Expr
 
+		WOffset int
+
 		// The index at which the user expects to see this column. Set to nil, if the user does not ask for it
 		InnerIndex *int
 
@@ -122,11 +124,11 @@ func (b GroupBy) AsAliasedExpr() *sqlparser.AliasedExpr {
 	}
 }
 
-func (b GroupBy) GetOriginal() *sqlparser.AliasedExpr {
+func (b *GroupBy) GetOriginal() *sqlparser.AliasedExpr {
 	return b.aliasedExpr
 }
 
-func (a Aggr) GetOriginal() *sqlparser.AliasedExpr {
+func (a *Aggr) GetOriginal() *sqlparser.AliasedExpr {
 	return a.Original
 }
 
@@ -719,4 +721,11 @@ func CompareRefInt(a *int, b *int) bool {
 		return true
 	}
 	return *a < *b
+}
+
+func (a *Aggr) Clone() *Aggr {
+	clone := *a
+	clone.Original = sqlparser.CloneRefOfAliasedExpr(a.Original)
+	clone.Func = sqlparser.CloneAggrFunc(a.Func)
+	return &clone
 }
