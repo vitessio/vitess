@@ -89,8 +89,8 @@ func (ev mysql56BinlogEvent) StripChecksum(f BinlogFormat) (BinlogEvent, []byte,
 		// Checksum is the last 4 bytes of the event buffer.
 		data := ev.Bytes()
 		length := len(data)
-		checksum := data[length-4:]
-		data = data[:length-4]
+		checksum := data[length-BinlogCRC32ChecksumLen:]
+		data = data[:length-BinlogCRC32ChecksumLen]
 		return mysql56BinlogEvent{binlogEvent: binlogEvent(data)}, checksum, nil
 	default:
 		// MySQL 5.6 does not guarantee that future checksum algorithms will be

@@ -258,8 +258,8 @@ func TestVreplicationCopyThrottling(t *testing.T) {
 }
 
 func TestBasicVreplicationWorkflow(t *testing.T) {
-	sourceKsOpts["DBTypeVersion"] = "mysql-5.7"
-	targetKsOpts["DBTypeVersion"] = "mysql-5.7"
+	sourceKsOpts["DBTypeVersion"] = "mysql-8.0"
+	targetKsOpts["DBTypeVersion"] = "mysql-8.0"
 	testBasicVreplicationWorkflow(t, "noblob")
 }
 
@@ -440,11 +440,13 @@ func TestVStreamFlushBinlog(t *testing.T) {
 	require.Equal(t, flushCount, int64(0), "VStreamerFlushedBinlogs should be 0")
 
 	// Generate a lot of binlog event bytes
-	targetBinlogSize := vstreamer.GetBinlogRotationThreshold() + 16
+	targetBinlogSize := vstreamer.GetBinlogRotationThreshold() + 1024
 	vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
-	queryF := "insert into db_order_test (c_uuid, dbstuff, created_at) values ('%d', repeat('A', 65000), now())"
-	for i := 100; i < 5000; i++ {
-		res, err := vtgateConn.ExecuteFetch(fmt.Sprintf(queryF, i), -1, false)
+	queryF := "insert into db_order_test (c_uuid, dbstuff, created_at) values ('%d', '%s', now())"
+	for i := 100; i < 10000; i++ {
+		randStr, err := randHex(6500)
+		require.NoError(t, err)
+		res, err := vtgateConn.ExecuteFetch(fmt.Sprintf(queryF, i, randStr), -1, false)
 		require.NoError(t, err)
 		require.Greater(t, res.RowsAffected, uint64(0))
 

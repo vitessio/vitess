@@ -37,7 +37,7 @@ require (
 	github.com/icrowley/fake v0.0.0-20180203215853-4178557ae428
 	github.com/imdario/mergo v0.3.13 // indirect
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
-	github.com/klauspost/compress v1.15.15
+	github.com/klauspost/compress v1.16.5
 	github.com/klauspost/pgzip v1.2.5
 	github.com/krishicks/yaml-patch v0.0.10
 	github.com/magiconair/properties v1.8.7
