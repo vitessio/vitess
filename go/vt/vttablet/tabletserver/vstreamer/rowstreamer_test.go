@@ -262,6 +262,43 @@ func TestStreamRowsKeyRange(t *testing.T) {
 	checkStream(t, "select * from t1 where in_keyrange('-80')", nil, wantQuery, wantStream)
 }
 
+// TestStreamRowsFilterSparse tests the functionality where lastPK will be sent periodically if the number of
+// filtered rows exceeds a threshold.
+func TestStreamRowsFilterSparse(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+	oldRowStreamerMaxFilteredRowsBeforeLastPK := rowStreamerMaxFilteredRowsBeforeLastPK
+	defer func() {
+		rowStreamerMaxFilteredRowsBeforeLastPK = oldRowStreamerMaxFilteredRowsBeforeLastPK
+	}()
+	rowStreamerMaxFilteredRowsBeforeLastPK = 2
+
+	engine.rowStreamerNumPackets.Reset()
+	engine.rowStreamerNumRows.Reset()
+
+	execStatements(t, []string{
+		"create table t1(id1 int, id2 int, val varbinary(128), primary key(id1))",
+		"insert into t1 values (1, 100, 'aaa'), (2, 200, 'bbb'), (3, 200, 'ccc'), (4, 100, 'ddd'), (5, 900, 'eee')",
+	})
+
+	defer execStatements(t, []string{
+		"drop table t1",
+	})
+	engine.se.Reload(context.Background())
+
+	wantStream := []string{
+		`fields:{name:"id1" type:INT32 table:"t1" org_table:"t1" database:"vttest" org_name:"id1" column_length:11 charset:63} fields:{name:"val" type:VARBINARY table:"t1" org_table:"t1" database:"vttest" org_name:"val" column_length:128 charset:63} pkfields:{name:"id1" type:INT32}`,
+		`pkfields:{name:"id1" type:INT32} lastpk:{lengths:1 values:"2"}`,
+		`pkfields:{name:"id1" type:INT32} lastpk:{lengths:1 values:"4"}`,
+		`rows:{lengths:1 lengths:3 values:"5eee"} lastpk:{lengths:1 values:"5"}`,
+	}
+	wantQuery := "select id1, id2, val from t1 order by id1"
+	checkStream(t, "select id1, val from t1 where id2 = 900", nil, wantQuery, wantStream)
+	require.Equal(t, int64(0), engine.rowStreamerNumPackets.Get())
+	require.Equal(t, int64(1), engine.rowStreamerNumRows.Get())
+}
+
 func TestStreamRowsFilterInt(t *testing.T) {
 	if testing.Short() {
 		t.Skip()

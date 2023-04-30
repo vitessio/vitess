@@ -322,7 +322,19 @@ func (st *vrStats) register() {
 			}
 			return result
 		})
-
+	stats.NewGaugesFuncWithMultiLabels(
+		"VReplicationFilteredRowsCopyStateSyncCount",
+		"Number of times the last pk was sent when a set of previous rows were filtered",
+		[]string{"source_keyspace", "source_shard", "workflow", "counts"},
+		func() map[string]int64 {
+			st.mu.Lock()
+			defer st.mu.Unlock()
+			result := make(map[string]int64, len(st.controllers))
+			for _, ct := range st.controllers {
+				result[ct.source.Keyspace+"."+ct.source.Shard+"."+ct.workflow+"."+fmt.Sprintf("%v", ct.id)] = ct.blpStats.FilteredRowsCopyStateSyncCount.Get()
+			}
+			return result
+		})
 	stats.NewCounterFunc(
 		"VReplicationCopyLoopCountTotal",
 		"Number of times the copy phase looped aggregated across streams",

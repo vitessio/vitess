@@ -40,6 +40,10 @@ import (
 
 var (
 	rowStreamertHeartbeatInterval = 10 * time.Second
+	// If the rowstreamer filters rowStreamerMaxFilteredRowsBeforeLastPK without sending a response, send the lastPK.
+	// Otherwise, materialize workflows which filter out a large number of rows, for example can stall because they
+	// reach the copy timeout before they receive any response.
+	rowStreamerMaxFilteredRowsBeforeLastPK = 10000
 )
 
 // RowStreamer exposes an externally usable interface to rowStreamer.
@@ -339,7 +343,8 @@ func (rs *rowStreamer) streamQuery(conn *snapshotConn, send func(*binlogdatapb.V
 	var rows []*querypb.Row
 	var rowCount int
 	var mysqlrow []sqltypes.Value
-
+	filteredRows := 0
+	mustSendLastPK := false
 	filtered := make([]sqltypes.Value, len(rs.plan.ColExprs))
 	lastpk := make([]sqltypes.Value, len(rs.pkColumns))
 	byteCount := 0
@@ -383,14 +388,28 @@ func (rs *rowStreamer) streamQuery(conn *snapshotConn, send func(*binlogdatapb.V
 			}
 			byteCount += sqltypes.RowToProto3Inplace(filtered, rows[rowCount])
 			rowCount++
+		} else {
+			filteredRows++
+			if filteredRows >= rowStreamerMaxFilteredRowsBeforeLastPK {
+				mustSendLastPK = true
+				filteredRows = 0
+			}
 		}
 
-		if rs.pktsize.ShouldSend(byteCount) {
+		mustSendPacket := rs.pktsize.ShouldSend(byteCount)
+		if mustSendPacket {
+			rs.vse.rowStreamerNumPackets.Add(int64(1))
+		}
+		if mustSendLastPK && rowCount == 0 {
+			response.Pkfields = pkfields
+		}
+
+		if mustSendPacket || mustSendLastPK {
 			response.Rows = rows[:rowCount]
 			response.Lastpk = sqltypes.RowToProto3(lastpk)
 
 			rs.vse.rowStreamerNumRows.Add(int64(len(response.Rows)))
-			rs.vse.rowStreamerNumPackets.Add(int64(1))
+
 			startSend := time.Now()
 			err = safeSend(&response)
 			if err != nil {
@@ -399,6 +418,8 @@ func (rs *rowStreamer) streamQuery(conn *snapshotConn, send func(*binlogdatapb.V
 			rs.pktsize.Record(byteCount, time.Since(startSend))
 			rowCount = 0
 			byteCount = 0
+			mustSendLastPK = false
+			response.Pkfields = nil
 		}
 	}
 

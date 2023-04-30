@@ -373,6 +373,15 @@ func (vc *vcopier) catchup(ctx context.Context, copyState map[string]*sqltypes.R
 	}
 }
 
+func (vc *vcopier) getCopyStateInsertParsedQuery(tableName string) *sqlparser.ParsedQuery {
+	buf := sqlparser.NewTrackedBuffer(nil)
+	buf.Myprintf(
+		"insert into _vt.copy_state (lastpk, vrepl_id, table_name) values (%a, %s, %s)", ":lastpk",
+		strconv.Itoa(int(vc.vr.id)),
+		encodeString(tableName))
+	return buf.ParsedQuery()
+}
+
 // copyTable performs the synchronized copy of the next set of rows from
 // the current table being copied. Each packet received is transactionally
 // committed with the lastpk. This allows for consistent resumability.
@@ -420,6 +429,7 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 
 	// Use this for task sequencing.
 	var prevCh <-chan *vcopierCopyTaskResult
+	addLatestCopyState := vc.getCopyStateInsertParsedQuery(tableName)
 
 	serr := vc.vr.sourceVStreamer.VStreamRows(ctx, initialPlan.SendRule.Filter, lastpkpb, func(rows *binlogdatapb.VStreamRowsResponse) error {
 		for {
@@ -487,15 +497,17 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 				return err
 			}
 			pkfields = append(pkfields, rows.Pkfields...)
-			buf := sqlparser.NewTrackedBuffer(nil)
-			buf.Myprintf(
-				"insert into _vt.copy_state (lastpk, vrepl_id, table_name) values (%a, %s, %s)", ":lastpk",
-				strconv.Itoa(int(vc.vr.id)),
-				encodeString(tableName))
-			addLatestCopyState := buf.ParsedQuery()
+
 			copyWorkQueue.open(addLatestCopyState, pkfields, tablePlan)
 		}
 		if len(rows.Rows) == 0 {
+			// Periodic sync of lastPK for workflows where a large number of intermediate rows are filtered out.
+			if rows.Lastpk != nil && rows.Pkfields != nil {
+				vc.vr.stats.FilteredRowsCopyStateSyncCount.Add(1)
+				if err := insertCopyState(vc.vr.dbClient, addLatestCopyState, rows.Pkfields, rows.Lastpk); err != nil {
+					return err
+				}
+			}
 			return nil
 		}
 
@@ -1115,10 +1127,10 @@ END:
 	return result
 }
 
-func (vbc *vcopierCopyWorker) insertCopyState(ctx context.Context, lastpk *querypb.Row) error {
+func insertCopyState(vdbClient *vdbClient, copyStateInsert *sqlparser.ParsedQuery, pkfields []*querypb.Field, lastpk *querypb.Row) error {
 	var buf []byte
 	buf, err := prototext.Marshal(&querypb.QueryResult{
-		Fields: vbc.pkfields,
+		Fields: pkfields,
 		Rows:   []*querypb.Row{lastpk},
 	})
 	if err != nil {
@@ -1130,14 +1142,18 @@ func (vbc *vcopierCopyWorker) insertCopyState(ctx context.Context, lastpk *query
 			Value: buf,
 		},
 	}
-	copyStateInsert, err := vbc.copyStateInsert.GenerateQuery(bv, nil)
+	copyStateInsertQuery, err := copyStateInsert.GenerateQuery(bv, nil)
 	if err != nil {
 		return err
 	}
-	if _, err := vbc.vdbClient.Execute(copyStateInsert); err != nil {
+	if _, err := vdbClient.Execute(copyStateInsertQuery); err != nil {
 		return err
 	}
 	return nil
+}
+
+func (vbc *vcopierCopyWorker) insertCopyState(ctx context.Context, lastpk *querypb.Row) error {
+	return insertCopyState(vbc.vdbClient, vbc.copyStateInsert, vbc.pkfields, lastpk)
 }
 
 func (vbc *vcopierCopyWorker) insertRows(ctx context.Context, rows []*querypb.Row) (*sqltypes.Result, error) {

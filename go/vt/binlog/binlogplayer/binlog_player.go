@@ -99,6 +99,8 @@ type Stats struct {
 	ErrorCounts    *stats.CountersWithMultiLabels
 	NoopQueryCount *stats.CountersWithSingleLabel
 
+	FilteredRowsCopyStateSyncCount *stats.Counter
+
 	VReplicationLags     *stats.Timings
 	VReplicationLagRates *stats.Rates
 
@@ -169,6 +171,7 @@ func NewStats() *Stats {
 	bps.TableCopyTimings = stats.NewTimings("", "", "Table")
 	bps.PartialQueryCacheSize = stats.NewCountersWithMultiLabels("", "", []string{"type"})
 	bps.PartialQueryCount = stats.NewCountersWithMultiLabels("", "", []string{"type"})
+	bps.FilteredRowsCopyStateSyncCount = stats.NewCounter("", "")
 	return bps
 }
 
