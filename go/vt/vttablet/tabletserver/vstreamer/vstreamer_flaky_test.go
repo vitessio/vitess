@@ -2109,6 +2109,46 @@ func TestGeneratedColumns(t *testing.T) {
 	runCases(t, nil, testcases, "current", nil)
 }
 
+// TestGeneratedInvisiblePrimaryKey validates that generated invisible primary keys are sent in row events.
+func TestGeneratedInvisiblePrimaryKey(t *testing.T) {
+	execStatements(t, []string{
+		"SET sql_generate_invisible_primary_key=ON;",
+		"create table t1(val varbinary(6))",
+	})
+	defer execStatements(t, []string{
+		"drop table t1",
+	})
+	engine.se.Reload(context.Background())
+	queries := []string{
+		"begin",
+		"insert into t1 values ('aaa')",
+		"update t1 set val = 'bbb' where my_row_id = 1",
+		"commit",
+	}
+
+	fe := &TestFieldEvent{
+		table: "t1",
+		db:    "vttest",
+		cols: []*TestColumn{
+			{name: "my_row_id", dataType: "UINT64", colType: "bigint unsigned", len: 20, charset: 63},
+			{name: "val", dataType: "VARBINARY", colType: "varbinary(6)", len: 6, charset: 63},
+		},
+	}
+
+	testcases := []testcase{{
+		input: queries,
+		output: [][]string{{
+			`begin`,
+			fe.String(),
+			`type:ROW row_event:{table_name:"t1" row_changes:{after:{lengths:1 lengths:3 values:"1aaa"}}}`,
+			`type:ROW row_event:{table_name:"t1" row_changes:{before:{lengths:1 lengths:3 values:"1aaa"} after:{lengths:1 lengths:3 values:"1bbb"}}}`,
+			`gtid`,
+			`commit`,
+		}},
+	}}
+	runCases(t, nil, testcases, "current", nil)
+}
+
 func runCases(t *testing.T, filter *binlogdatapb.Filter, testcases []testcase, position string, tablePK []*binlogdatapb.TableLastPK) {
 
 	ctx, cancel := context.WithCancel(context.Background())
