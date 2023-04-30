@@ -321,7 +321,7 @@ func (throttler *Throttler) WatchSrvKeyspaceCallback(srvks *topodatapb.SrvKeyspa
 		// Throttler is running and we should apply the config change through Operate()
 		// or else we get into race conditions.
 		go func() {
-			log.Infof("Throttler: submitting a throttler config apply message with: %+v", srvks.ThrottlerConfig)
+			log.Infof("Throttler: submitting a throttler config apply message with: %+v", throttlerConfig)
 			throttler.throttlerConfigChan <- throttlerConfig
 		}()
 	} else {
@@ -338,7 +338,7 @@ func (throttler *Throttler) applyThrottlerConfig(ctx context.Context, throttlerC
 	if !throttlerConfigViaTopo {
 		return
 	}
-	log.Infof("Throttler: applying topo config: %+v", srvks.ThrottlerConfig)
+	log.Infof("Throttler: applying topo config: %+v", throttlerConfig)
 	if throttlerConfig.CustomQuery == "" {
 		throttler.metricsQuery.Store(sqlparser.BuildParsedQuery(defaultReplicationLagQuery, sidecardb.GetIdentifier()).Query)
 	} else {
