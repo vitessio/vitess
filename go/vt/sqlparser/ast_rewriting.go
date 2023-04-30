@@ -571,10 +571,17 @@ func (er *astRewriter) funcRewrite(cursor *Cursor, node *FuncExpr) {
 	if !found || (bindVar == DBVarName && !er.shouldRewriteDatabaseFunc) {
 		return
 	}
+
+	// Don't rewrite `last_insert_id` function call if an argument is given
+	if len(node.Exprs) > 0 && node.Name.Lowered() == "last_insert_id" {
+		return
+	}
+
 	if len(node.Exprs) > 0 {
 		er.err = vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "Argument to %s() not supported", node.Name.Lowered())
 		return
 	}
+
 	cursor.Replace(bindVarExpression(bindVar))
 	er.bindVars.AddFuncResult(bindVar)
 }

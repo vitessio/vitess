@@ -68,6 +68,9 @@ func TestRewrites(in *testing.T) {
 		expected:                    "SELECT :__vtenable_system_settings as `@@enable_system_settings`",
 		sessionEnableSystemSettings: true,
 	}, {
+		in:       "SELECT last_insert_id(10)",
+		expected: "SELECT last_insert_id(10)",
+	}, {
 		in:       "SELECT last_insert_id()",
 		expected: "SELECT :__lastInsertId as `last_insert_id()`",
 		liid:     true,
