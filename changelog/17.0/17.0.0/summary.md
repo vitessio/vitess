@@ -20,6 +20,8 @@
     - [Deprecated Stats](#deprecated-stats)
   - **[Vtctld](#vtctld)**
     - [Deprecated Flags](#vtctld-deprecated-flags)
+  - **[VReplication](#VReplication)**
+    - [Support for MySQL 8.0 `binlog_transaction_compression`](#binlog-compression)
   - **[VTTablet](#vttablet)**
     - [VTTablet: Initializing all replicas with super_read_only](#vttablet-initialization)
     - [Deprecated Flags](#vttablet-deprecated-flags)
@@ -317,3 +319,15 @@ The row events streamed by the VStream API, where blobs and text columns have no
 for those columns, indicated by a `length:-1`.
 
 Reference PR for this change is [PR #12905](https://github.com/vitessio/vitess/pull/12905)
+
+#### <a id="binlog-compression"/> Support for MySQL 8.0 binary log transaction compression
+MySQL 8.0 added support for [binary log compression via transaction (GTID) compression in 8.0.20](https://dev.mysql.com/blog-archive/mysql-8-0-20-replication-enhancements/).
+You can read more about this feature here: https://dev.mysql.com/doc/refman/8.0/en/binary-log-transaction-compression.html
+
+This can — at the cost of increased CPU usage — dramatically reduce the amount of data sent over the wire for MySQL replication while also dramatically reducing the overall
+storage space needed to retain binary logs (for replication, backup and recovery, CDC, etc). For larger installations this was a very desirable feature and while you could
+technically use it with Vitess (the MySQL replica-sets making up each shard could use it fine) there was one very big limitation — [VReplication workflows](https://vitess.io/docs/reference/vreplication/vreplication/)
+would not work. Given the criticality of VReplication workflows within Vitess, this meant that in practice this MySQL feature was not usable within Vitess clusters.
+
+We have addressed this issue in [PR #12950](https://github.com/vitessio/vitess/pull/12950) by adding support for processing the compressed transaction events in VReplication,
+without any (known) limitations.
