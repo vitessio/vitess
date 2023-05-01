@@ -295,7 +295,7 @@ func TestPickLocalPreferences(t *testing.T) {
 	}
 }
 
-func TestPickUsingCellAlias_LocalPreferenceDefault(t *testing.T) {
+func TestPickCellPreferenceLocalCell(t *testing.T) {
 	// test env puts all cells into an alias called "cella"
 	te := newPickerTestEnv(t, []string{"cell", "otherCell"})
 	want1 := addTablet(te, 100, topodatapb.TabletType_REPLICA, "cell", true, true)
@@ -311,25 +311,17 @@ func TestPickUsingCellAlias_LocalPreferenceDefault(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, proto.Equal(want1, tablet), "Pick: %v, want %v", tablet, want1)
 
-	// create a tablet in the other cell, it should be picked
-	deleteTablet(t, te, want1)
+	// create a tablet in the other cell
 	want2 := addTablet(te, 101, topodatapb.TabletType_REPLICA, "otherCell", true, true)
 	defer deleteTablet(t, te, want2)
+
 	ctx2, cancel2 := context.WithTimeout(context.Background(), 200*time.Millisecond)
 	defer cancel2()
-	tablet, err = tp.PickForStreaming(ctx2)
-	require.NoError(t, err)
-	assert.True(t, proto.Equal(want2, tablet), "Pick: %v, want %v", tablet, want2)
-
-	// addTablet again and test that only the local cell one is picked
-	want1 = addTablet(te, 100, topodatapb.TabletType_REPLICA, "cell", true, true)
-	ctx3, cancel3 := context.WithTimeout(context.Background(), 200*time.Millisecond)
-	defer cancel3()
 
 	// In 20 attempts, only tablet in "cell" will be picked because we give local cell priority by default
 	var picked1, picked2 bool
 	for i := 0; i < 20; i++ {
-		tablet, err := tp.PickForStreaming(ctx3)
+		tablet, err := tp.PickForStreaming(ctx2)
 		require.NoError(t, err)
 		if proto.Equal(tablet, want1) {
 			picked1 = true
@@ -342,7 +334,23 @@ func TestPickUsingCellAlias_LocalPreferenceDefault(t *testing.T) {
 	assert.False(t, picked2)
 }
 
-func TestPickUsingCellAlias_OnlySpecified(t *testing.T) {
+func TestPickCellPreferenceLocalAlias(t *testing.T) {
+	// test env puts all cells into an alias called "cella"
+	te := newPickerTestEnv(t, []string{"cell", "otherCell"})
+	tp, err := NewTabletPicker(context.Background(), te.topoServ, []string{"cella"}, "cell", te.keyspace, te.shard, "replica", TabletPickerOptions{})
+	require.NoError(t, err)
+
+	// create a tablet in the other cell, it should be picked
+	want := addTablet(te, 101, topodatapb.TabletType_REPLICA, "otherCell", true, true)
+	defer deleteTablet(t, te, want)
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	tablet, err := tp.PickForStreaming(ctx)
+	require.NoError(t, err)
+	assert.True(t, proto.Equal(want, tablet), "Pick: %v, want %v", tablet, want)
+}
+
+func TestPickUsingCellAliasOnlySpecified(t *testing.T) {
 	// test env puts all cells into an alias called "cella"
 	te := newPickerTestEnv(t, []string{"cell", "otherCell"})
 	want1 := addTablet(te, 100, topodatapb.TabletType_REPLICA, "cell", true, true)
@@ -417,7 +425,7 @@ func TestTabletAppearsDuringSleep(t *testing.T) {
 	assert.True(t, proto.Equal(want, got), "Pick: %v, want %v", got, want)
 }
 
-func TestPickError_LocalPreferenceDefault(t *testing.T) {
+func TestPickErrorLocalPreferenceDefault(t *testing.T) {
 	te := newPickerTestEnv(t, []string{"cell"})
 	_, err := NewTabletPicker(context.Background(), te.topoServ, te.cells, "cell", te.keyspace, te.shard, "badtype", TabletPickerOptions{})
 	assert.EqualError(t, err, "failed to parse list of tablet types: badtype")
@@ -445,7 +453,7 @@ func TestPickError_LocalPreferenceDefault(t *testing.T) {
 	require.Greater(t, globalTPStats.noTabletFoundError.Counts()["cell_cella.ks.0.replica"], int64(0))
 }
 
-func TestPickError_OnlySpecified(t *testing.T) {
+func TestPickErrorOnlySpecified(t *testing.T) {
 	te := newPickerTestEnv(t, []string{"cell"})
 
 	tp, err := NewTabletPicker(context.Background(), te.topoServ, te.cells, "cell", te.keyspace, te.shard, "replica", TabletPickerOptions{CellPreference: "OnlySpecified"})

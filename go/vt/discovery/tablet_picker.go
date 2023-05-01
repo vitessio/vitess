@@ -192,7 +192,7 @@ func NewTabletPicker(
 	aliasCellMap := make(map[string]string)
 	if cellPref == TabletPickerCellPreference_PreferLocalWithAlias {
 		if localCell == "" {
-			return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "Cannot have local cell preference without local cell")
+			return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot have local cell preference without local cell")
 		}
 
 		// Add local cell to the list of cells for tablet picking.
@@ -204,7 +204,7 @@ func NewTabletPicker(
 		if aliasName != localCell {
 			alias, err := ts.GetCellsAlias(ctx, aliasName, false)
 			if err != nil {
-				return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, fmt.Sprintf("Error fetching local cell alias: %s", err.Error()))
+				return nil, vterrors.Wrap(err, "error fetching local cell alias")
 			}
 
 			// Add the aliasName to the list of cells for tablet picking.
@@ -248,7 +248,7 @@ func dedupeCells(cells []string) []string {
 // prioritizeTablets orders the candidate pool of tablets based on CellPreference.
 // If CellPreference is PreferLocalWithAlias then tablets in the local cell will be prioritized for selection,
 // followed by the tablets within the local cell's alias, and finally any others specified by the client.
-// if CellPreference is OnlySpecified, then tablets will only be selected randomly from the cells specified by the client.
+// If CellPreference is OnlySpecified, then tablets will only be selected randomly from the cells specified by the client.
 func (tp *TabletPicker) prioritizeTablets(candidates []*topo.TabletInfo) (sameCell, sameAlias, allOthers []*topo.TabletInfo) {
 	for _, c := range candidates {
 		if c.Alias.Cell == tp.localCellInfo.localCell {
@@ -281,8 +281,8 @@ func (tp *TabletPicker) orderByTabletType(candidates []*topo.TabletInfo) []*topo
 }
 
 // PickForStreaming picks an available tablet.
-// All tablets that belong to tp.cells are evaluated and one is
-// chosen at random.
+// Selection is based on CellPreference.
+// See prioritizeTablets for prioritization logic.
 func (tp *TabletPicker) PickForStreaming(ctx context.Context) (*topodatapb.Tablet, error) {
 	rand.Seed(time.Now().UnixNano())
 	// keep trying at intervals (tabletPickerRetryDelay) until a tablet is found
