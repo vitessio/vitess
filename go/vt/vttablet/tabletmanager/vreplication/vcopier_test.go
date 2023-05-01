@@ -1406,6 +1406,9 @@ func TestPlayerCopyTablesGIPK(t *testing.T) {
 }
 
 func testPlayerCopyTablesGIPK(t *testing.T) {
+	if !env.HasCapability(testenv.ServerCapabilityGeneratedInvisiblePrimaryKey) {
+		t.Skip("skipping test as server does not support invisible primary keys")
+	}
 	defer deleteTablet(addTablet(100))
 
 	execStatements(t, []string{
