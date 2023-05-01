@@ -26,6 +26,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer/testenv"
+
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/vt/log"
@@ -2111,6 +2113,9 @@ func TestGeneratedColumns(t *testing.T) {
 
 // TestGeneratedInvisiblePrimaryKey validates that generated invisible primary keys are sent in row events.
 func TestGeneratedInvisiblePrimaryKey(t *testing.T) {
+	if !env.HasCapability(testenv.ServerCapabilityGeneratedInvisiblePrimaryKey) {
+		t.Skip("skipping test as server does not support invisible primary keys")
+	}
 	execStatements(t, []string{
 		"SET sql_generate_invisible_primary_key=ON;",
 		"create table t1(val varbinary(6))",
