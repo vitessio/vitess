@@ -15,6 +15,10 @@ func validateObjectName(name string) error {
 		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "empty name")
 	}
 
+	if len(name) > 64 {
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "name %v is too long", name)
+	}
+
 	for _, c := range name {
 		switch {
 		case 'a' <= c && c <= 'z':
@@ -22,7 +26,7 @@ func validateObjectName(name string) error {
 		case '0' <= c && c <= '9':
 		case c == '-' || c == '_':
 		default:
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid character %v in name %v", c, name)
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid character %s in name %v", string(c), name)
 		}
 	}
 
