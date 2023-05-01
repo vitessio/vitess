@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/yaml2"
 
@@ -89,7 +90,12 @@ func StartCustomServer(connParams, connAppDebugParams mysql.ConnParams, dbName s
 		return vterrors.Wrap(err, "could not start listener")
 	}
 	ServerAddress = fmt.Sprintf("http://%s", ln.Addr().String())
-	go http.Serve(ln, nil)
+	go func() {
+		err := servenv.HTTPServe(ln)
+		if err != nil {
+			log.Errorf("HTTPServe failed: %v", err)
+		}
+	}()
 	for {
 		time.Sleep(10 * time.Millisecond)
 		response, err := http.Get(fmt.Sprintf("%s/debug/vars", ServerAddress))

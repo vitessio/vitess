@@ -65,11 +65,13 @@ func (l *Limit) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.Alia
 	return l, offset, nil
 }
 
-func (l *Limit) GetColumns() ([]sqlparser.Expr, error) {
+func (l *Limit) GetColumns() ([]*sqlparser.AliasedExpr, error) {
 	return l.Source.GetColumns()
 }
 
-func (l *Limit) IPhysical() {}
+func (l *Limit) GetOrdering() ([]ops.OrderBy, error) {
+	return l.Source.GetOrdering()
+}
 
 func (l *Limit) Description() ops.OpDescription {
 	other := map[string]any{}
@@ -83,4 +85,8 @@ func (l *Limit) Description() ops.OpDescription {
 		OperatorType: "Limit",
 		Other:        other,
 	}
+}
+
+func (l *Limit) ShortDescription() string {
+	return sqlparser.String(l.AST)
 }

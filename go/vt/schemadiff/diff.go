@@ -148,10 +148,10 @@ func DiffViews(create1 *sqlparser.CreateView, create2 *sqlparser.CreateView, hin
 	}
 }
 
-// DiffSchemasSQL compares two schemas and returns the list of diffs that turn
+// DiffSchemasSQL compares two schemas and returns the rich diff that turns
 // 1st schema into 2nd. Schemas are build from SQL, each of which can contain an arbitrary number of
 // CREATE TABLE and CREATE VIEW statements.
-func DiffSchemasSQL(sql1 string, sql2 string, hints *DiffHints) ([]EntityDiff, error) {
+func DiffSchemasSQL(sql1 string, sql2 string, hints *DiffHints) (*SchemaDiff, error) {
 	schema1, err := NewSchemaFromSQL(sql1)
 	if err != nil {
 		return nil, err
@@ -160,25 +160,17 @@ func DiffSchemasSQL(sql1 string, sql2 string, hints *DiffHints) ([]EntityDiff, e
 	if err != nil {
 		return nil, err
 	}
-	diff, err := schema1.SchemaDiff(schema2, hints)
-	if err != nil {
-		return nil, err
-	}
-	return diff.OrderedDiffs()
+	return schema1.SchemaDiff(schema2, hints)
 }
 
 // DiffSchemasSQL compares two schemas and returns the list of diffs that turn
 // 1st schema into 2nd. Any of the schemas may be nil.
-func DiffSchemas(schema1 *Schema, schema2 *Schema, hints *DiffHints) ([]EntityDiff, error) {
+func DiffSchemas(schema1 *Schema, schema2 *Schema, hints *DiffHints) (*SchemaDiff, error) {
 	if schema1 == nil {
 		schema1 = newEmptySchema()
 	}
 	if schema2 == nil {
 		schema2 = newEmptySchema()
 	}
-	diff, err := schema1.SchemaDiff(schema2, hints)
-	if err != nil {
-		return nil, err
-	}
-	return diff.OrderedDiffs()
+	return schema1.SchemaDiff(schema2, hints)
 }

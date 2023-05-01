@@ -553,7 +553,7 @@ type expanderState struct {
 // addColumn adds columns to the expander state. If we have vschema info about the query,
 // we also store which columns were expanded
 func (e *expanderState) addColumn(col ColumnInfo, tbl TableInfo, tblName sqlparser.TableName) {
-	tableAliased := !tbl.getExpr().As.IsEmpty()
+	tableAliased := !tbl.GetExpr().As.IsEmpty()
 	withQualifier := e.needsQualifier || tableAliased
 	var colName *sqlparser.ColName
 	var alias sqlparser.IdentifierCI
@@ -565,8 +565,25 @@ func (e *expanderState) addColumn(col ColumnInfo, tbl TableInfo, tblName sqlpars
 	if e.needsQualifier {
 		alias = sqlparser.NewIdentifierCI(col.Name)
 	}
-	e.expandedColumns[tblName] = append(e.expandedColumns[tblName], colName)
 	e.colNames = append(e.colNames, &sqlparser.AliasedExpr{Expr: colName, As: alias})
+	e.storeExpandInfo(tbl, tblName, colName)
+}
+
+func (e *expanderState) storeExpandInfo(tbl TableInfo, tblName sqlparser.TableName, colName *sqlparser.ColName) {
+	vt := tbl.GetVindexTable()
+	if vt == nil {
+		return
+	}
+	keyspace := vt.Keyspace
+	var ks sqlparser.IdentifierCS
+	if keyspace != nil {
+		ks = sqlparser.NewIdentifierCS(keyspace.Name)
+	}
+	tblName = sqlparser.TableName{
+		Name:      tblName.Name,
+		Qualifier: ks,
+	}
+	e.expandedColumns[tblName] = append(e.expandedColumns[tblName], colName)
 }
 
 // createAliasedExpr creates an AliasedExpr with a ColName and an optional alias based on the given ColumnInfo.
@@ -578,7 +595,7 @@ func (e *expanderState) createAliasedExpr(
 	tbl TableInfo,
 	tblName sqlparser.TableName,
 ) *sqlparser.AliasedExpr {
-	tableAliased := !tbl.getExpr().As.IsEmpty()
+	tableAliased := !tbl.GetExpr().As.IsEmpty()
 	withQualifier := e.needsQualifier || tableAliased
 	var colName *sqlparser.ColName
 	var alias sqlparser.IdentifierCI
