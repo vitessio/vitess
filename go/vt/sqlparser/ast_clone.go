@@ -187,6 +187,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfGeomFromTextExpr(in)
 	case *GeomFromWKBExpr:
 		return CloneRefOfGeomFromWKBExpr(in)
+	case *GeomPropertyFuncExpr:
+		return CloneRefOfGeomPropertyFuncExpr(in)
 	case GroupBy:
 		return CloneGroupBy(in)
 	case *GroupConcatExpr:
@@ -365,6 +367,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfPerformanceSchemaFuncExpr(in)
 	case *PointExpr:
 		return CloneRefOfPointExpr(in)
+	case *PointPropertyFuncExpr:
+		return CloneRefOfPointPropertyFuncExpr(in)
 	case *PolygonExpr:
 		return CloneRefOfPolygonExpr(in)
 	case *PrepareStmt:
@@ -1415,6 +1419,16 @@ func CloneRefOfGeomFromWKBExpr(n *GeomFromWKBExpr) *GeomFromWKBExpr {
 	return &out
 }
 
+// CloneRefOfGeomPropertyFuncExpr creates a deep clone of the input.
+func CloneRefOfGeomPropertyFuncExpr(n *GeomPropertyFuncExpr) *GeomPropertyFuncExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Geom = CloneExpr(n.Geom)
+	return &out
+}
+
 // CloneGroupBy creates a deep clone of the input.
 func CloneGroupBy(n GroupBy) GroupBy {
 	if n == nil {
@@ -2352,6 +2366,17 @@ func CloneRefOfPointExpr(n *PointExpr) *PointExpr {
 	out := *n
 	out.XCordinate = CloneExpr(n.XCordinate)
 	out.YCordinate = CloneExpr(n.YCordinate)
+	return &out
+}
+
+// CloneRefOfPointPropertyFuncExpr creates a deep clone of the input.
+func CloneRefOfPointPropertyFuncExpr(n *PointPropertyFuncExpr) *PointPropertyFuncExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Point = CloneExpr(n.Point)
+	out.ValueToSet = CloneExpr(n.ValueToSet)
 	return &out
 }
 
@@ -3395,6 +3420,8 @@ func CloneCallable(in Callable) Callable {
 		return CloneRefOfGeomFromTextExpr(in)
 	case *GeomFromWKBExpr:
 		return CloneRefOfGeomFromWKBExpr(in)
+	case *GeomPropertyFuncExpr:
+		return CloneRefOfGeomPropertyFuncExpr(in)
 	case *GroupConcatExpr:
 		return CloneRefOfGroupConcatExpr(in)
 	case *InsertExpr:
@@ -3471,6 +3498,8 @@ func CloneCallable(in Callable) Callable {
 		return CloneRefOfPerformanceSchemaFuncExpr(in)
 	case *PointExpr:
 		return CloneRefOfPointExpr(in)
+	case *PointPropertyFuncExpr:
+		return CloneRefOfPointPropertyFuncExpr(in)
 	case *PolygonExpr:
 		return CloneRefOfPolygonExpr(in)
 	case *RegexpInstrExpr:
@@ -3667,6 +3696,8 @@ func CloneExpr(in Expr) Expr {
 		return CloneRefOfGeomFromTextExpr(in)
 	case *GeomFromWKBExpr:
 		return CloneRefOfGeomFromWKBExpr(in)
+	case *GeomPropertyFuncExpr:
+		return CloneRefOfGeomPropertyFuncExpr(in)
 	case *GroupConcatExpr:
 		return CloneRefOfGroupConcatExpr(in)
 	case *InsertExpr:
@@ -3763,6 +3794,8 @@ func CloneExpr(in Expr) Expr {
 		return CloneRefOfPerformanceSchemaFuncExpr(in)
 	case *PointExpr:
 		return CloneRefOfPointExpr(in)
+	case *PointPropertyFuncExpr:
+		return CloneRefOfPointPropertyFuncExpr(in)
 	case *PolygonExpr:
 		return CloneRefOfPolygonExpr(in)
 	case *RegexpInstrExpr:

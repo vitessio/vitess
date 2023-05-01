@@ -367,7 +367,7 @@ func (ast *astCompiler) translateIntegral(lit *sqlparser.Literal) (int, bool, er
 	if err != nil {
 		return 0, false, err
 	}
-	return int(evalToNumeric(literal.inner).toUint64().u), true, nil
+	return int(evalToInt64(literal.inner).toUint64().u), true, nil
 }
 
 func (ast *astCompiler) translateUnaryExpr(unary *sqlparser.UnaryExpr) (Expr, error) {
@@ -574,10 +574,7 @@ func Translate(e sqlparser.Expr, cfg *Config) (Expr, error) {
 	if cfg.Optimization >= OptimizationLevelCompile && ast.untyped == 0 {
 		comp := compiler{cfg: cfg}
 		var ct ctype
-		if ct, cfg.CompilerErr = comp.compileExpr(expr); cfg.CompilerErr == nil {
-			if comp.asm.stack.cur != 1 {
-				return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "bad compilation: stack pointer at %d after compilation", comp.asm.stack.cur)
-			}
+		if ct, cfg.CompilerErr = comp.compile(expr); cfg.CompilerErr == nil {
 			expr = &CompiledExpr{code: comp.asm.ins, original: expr, stack: comp.asm.stack.max, typed: ct.Type}
 		}
 	}

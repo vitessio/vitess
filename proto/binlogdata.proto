@@ -162,7 +162,7 @@ message Rule {
 
   // SourceUniqueKeyColumns represents the ordered columns in the index used by rowstreamer to iterate the table
   // It is comma delimited, as in col1,col2,col3 (tokens are escaped via net/url)
-   string source_unique_key_columns = 5;
+  string source_unique_key_columns = 5;
 
   // TargetUniqueKeyColumns represents the ordered columns in that index used by vcopier and vplayer to apply rows
   // It is comma delimited, as in col1,col2,col3 (tokens are escaped via net/url)
@@ -306,13 +306,20 @@ enum VEventType {
   COPY_COMPLETED = 20;
 }
 
+
 // RowChange represents one row change.
 // If Before is set and not After, it's a delete.
 // If After is set and not Before, it's an insert.
 // If both are set, it's an update.
 message RowChange {
+  message Bitmap {
+    int64 count = 1;
+    bytes cols = 2;
+  }
   query.Row before = 1;
   query.Row after = 2;
+  // DataColumns is a bitmap of all columns: bit is set if column is present in the after image
+  Bitmap data_columns = 3;
 }
 
 // RowEvent represent row events for one table.
@@ -430,13 +437,13 @@ message VEvent {
 }
 
 message MinimalTable {
-    string name = 1;
-    repeated query.Field fields = 2;
-    repeated int64 p_k_columns = 3;
+  string name = 1;
+  repeated query.Field fields = 2;
+  repeated int64 p_k_columns = 3;
 }
 
 message MinimalSchema {
-    repeated MinimalTable tables = 1;
+  repeated MinimalTable tables = 1;
 }
 
 // VStreamRequest is the payload for VStreamer

@@ -29,7 +29,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
-var createQueries = []string{
+var schemaTestCreateQueries = []string{
 	"create view v5 as select * from t1, (select * from v3) as some_alias",
 	"create table t3(id int, type enum('foo', 'bar') NOT NULL DEFAULT 'foo')",
 	"create table t1(id int)",
@@ -44,7 +44,7 @@ var createQueries = []string{
 	"create view v9 as select 1",
 }
 
-var expectSortedNames = []string{
+var schemaTestExpectSortedNames = []string{
 	"t1",
 	"t2",
 	"t3",
@@ -59,14 +59,14 @@ var expectSortedNames = []string{
 	"v6", // level 3
 }
 
-var expectSortedTableNames = []string{
+var schemaTestExpectSortedTableNames = []string{
 	"t1",
 	"t2",
 	"t3",
 	"t5",
 }
 
-var expectSortedViewNames = []string{
+var schemaTestExpectSortedViewNames = []string{
 	"v0", // level 1 ("dual" is an implicit table)
 	"v3", // level 1
 	"v9", // level 1 (no source table)
@@ -77,31 +77,31 @@ var expectSortedViewNames = []string{
 	"v6", // level 3
 }
 
-var toSQL = "CREATE TABLE `t1` (\n\t`id` int\n);\nCREATE TABLE `t2` (\n\t`id` int\n);\nCREATE TABLE `t3` (\n\t`id` int,\n\t`type` enum('foo', 'bar') NOT NULL DEFAULT 'foo'\n);\nCREATE TABLE `t5` (\n\t`id` int\n);\nCREATE VIEW `v0` AS SELECT 1 FROM `dual`;\nCREATE VIEW `v3` AS SELECT *, `id` + 1 AS `id_plus`, `id` + 2 FROM `t3` AS `t3`;\nCREATE VIEW `v9` AS SELECT 1 FROM `dual`;\nCREATE VIEW `v1` AS SELECT * FROM `v3`;\nCREATE VIEW `v2` AS SELECT * FROM `v3`, `t2`;\nCREATE VIEW `v4` AS SELECT * FROM `t2` AS `something_else`, `v3`;\nCREATE VIEW `v5` AS SELECT * FROM `t1`, (SELECT * FROM `v3`) AS `some_alias`;\nCREATE VIEW `v6` AS SELECT * FROM `v4`;\n"
+var schemaTestToSQL = "CREATE TABLE `t1` (\n\t`id` int\n);\nCREATE TABLE `t2` (\n\t`id` int\n);\nCREATE TABLE `t3` (\n\t`id` int,\n\t`type` enum('foo', 'bar') NOT NULL DEFAULT 'foo'\n);\nCREATE TABLE `t5` (\n\t`id` int\n);\nCREATE VIEW `v0` AS SELECT 1 FROM `dual`;\nCREATE VIEW `v3` AS SELECT *, `id` + 1 AS `id_plus`, `id` + 2 FROM `t3` AS `t3`;\nCREATE VIEW `v9` AS SELECT 1 FROM `dual`;\nCREATE VIEW `v1` AS SELECT * FROM `v3`;\nCREATE VIEW `v2` AS SELECT * FROM `v3`, `t2`;\nCREATE VIEW `v4` AS SELECT * FROM `t2` AS `something_else`, `v3`;\nCREATE VIEW `v5` AS SELECT * FROM `t1`, (SELECT * FROM `v3`) AS `some_alias`;\nCREATE VIEW `v6` AS SELECT * FROM `v4`;\n"
 
 func TestNewSchemaFromQueries(t *testing.T) {
-	schema, err := NewSchemaFromQueries(createQueries)
+	schema, err := NewSchemaFromQueries(schemaTestCreateQueries)
 	assert.NoError(t, err)
 	require.NotNil(t, schema)
 
-	assert.Equal(t, expectSortedNames, schema.EntityNames())
-	assert.Equal(t, expectSortedTableNames, schema.TableNames())
-	assert.Equal(t, expectSortedViewNames, schema.ViewNames())
+	assert.Equal(t, schemaTestExpectSortedNames, schema.EntityNames())
+	assert.Equal(t, schemaTestExpectSortedTableNames, schema.TableNames())
+	assert.Equal(t, schemaTestExpectSortedViewNames, schema.ViewNames())
 }
 
 func TestNewSchemaFromSQL(t *testing.T) {
-	schema, err := NewSchemaFromSQL(strings.Join(createQueries, ";"))
+	schema, err := NewSchemaFromSQL(strings.Join(schemaTestCreateQueries, ";"))
 	assert.NoError(t, err)
 	require.NotNil(t, schema)
 
-	assert.Equal(t, expectSortedNames, schema.EntityNames())
-	assert.Equal(t, expectSortedTableNames, schema.TableNames())
-	assert.Equal(t, expectSortedViewNames, schema.ViewNames())
+	assert.Equal(t, schemaTestExpectSortedNames, schema.EntityNames())
+	assert.Equal(t, schemaTestExpectSortedTableNames, schema.TableNames())
+	assert.Equal(t, schemaTestExpectSortedViewNames, schema.ViewNames())
 }
 
 func TestNewSchemaFromQueriesWithDuplicate(t *testing.T) {
 	// v2 already exists
-	queries := append(createQueries,
+	queries := append(schemaTestCreateQueries,
 		"create view v2 as select * from v1, t2",
 	)
 	_, err := NewSchemaFromQueries(queries)
@@ -111,7 +111,7 @@ func TestNewSchemaFromQueriesWithDuplicate(t *testing.T) {
 
 func TestNewSchemaFromQueriesUnresolved(t *testing.T) {
 	// v8 does not exist
-	queries := append(createQueries,
+	queries := append(schemaTestCreateQueries,
 		"create view v7 as select * from v8, t2",
 	)
 	schema, err := NewSchemaFromQueries(queries)
@@ -124,7 +124,7 @@ func TestNewSchemaFromQueriesUnresolved(t *testing.T) {
 
 func TestNewSchemaFromQueriesUnresolvedAlias(t *testing.T) {
 	// v8 does not exist
-	queries := append(createQueries,
+	queries := append(schemaTestCreateQueries,
 		"create view v7 as select * from something_else as t1, t2",
 	)
 	_, err := NewSchemaFromQueries(queries)
@@ -152,7 +152,7 @@ func TestNewSchemaFromQueriesViewFromDualImplicit(t *testing.T) {
 
 func TestNewSchemaFromQueriesLoop(t *testing.T) {
 	// v7 and v8 depend on each other
-	queries := append(createQueries,
+	queries := append(schemaTestCreateQueries,
 		"create view v7 as select * from v8, t2",
 		"create view v8 as select * from t1, v7",
 	)
@@ -163,16 +163,16 @@ func TestNewSchemaFromQueriesLoop(t *testing.T) {
 }
 
 func TestToSQL(t *testing.T) {
-	schema, err := NewSchemaFromQueries(createQueries)
+	schema, err := NewSchemaFromQueries(schemaTestCreateQueries)
 	assert.NoError(t, err)
 	require.NotNil(t, schema)
 
 	sql := schema.ToSQL()
-	assert.Equal(t, toSQL, sql)
+	assert.Equal(t, schemaTestToSQL, sql)
 }
 
 func TestCopy(t *testing.T) {
-	schema, err := NewSchemaFromQueries(createQueries)
+	schema, err := NewSchemaFromQueries(schemaTestCreateQueries)
 	assert.NoError(t, err)
 	require.NotNil(t, schema)
 
@@ -224,8 +224,7 @@ func TestGetViewDependentTableNames(t *testing.T) {
 			createView, ok := stmt.(*sqlparser.CreateView)
 			require.True(t, ok)
 
-			tables, err := getViewDependentTableNames(createView)
-			assert.NoError(t, err)
+			tables := getViewDependentTableNames(createView)
 			assert.Equal(t, ts.tables, tables)
 		})
 	}
@@ -265,8 +264,7 @@ func TestGetForeignKeyParentTableNames(t *testing.T) {
 			createTable, ok := stmt.(*sqlparser.CreateTable)
 			require.True(t, ok)
 
-			tables, err := getForeignKeyParentTableNames(createTable)
-			assert.NoError(t, err)
+			tables := getForeignKeyParentTableNames(createTable)
 			assert.Equal(t, ts.tables, tables)
 		})
 	}

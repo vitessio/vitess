@@ -21,7 +21,6 @@ import (
 	"strconv"
 
 	"vitess.io/vitess/go/mysql/format"
-	"vitess.io/vitess/go/sqltypes"
 )
 
 var inputJSONObjects = []string{
@@ -71,10 +70,10 @@ var radianInputs = []string{
 	"-1.5e0",
 	"9223372036854775810.4",
 	"-9223372036854775810.4",
-	string(format.FormatFloat(sqltypes.Float64, math.Pi)),
-	string(format.FormatFloat(sqltypes.Float64, math.MaxFloat64)),
-	string(format.FormatFloat(sqltypes.Float64, math.SmallestNonzeroFloat32)),
-	string(format.FormatFloat(sqltypes.Float64, math.SmallestNonzeroFloat64)),
+	string(format.FormatFloat(math.Pi)),
+	string(format.FormatFloat(math.MaxFloat64)),
+	string(format.FormatFloat(math.SmallestNonzeroFloat32)),
+	string(format.FormatFloat(math.SmallestNonzeroFloat64)),
 }
 
 var inputComparisonElement = []string{
@@ -87,24 +86,34 @@ var inputComparisonElement = []string{
 }
 
 var inputConversions = []string{
-	"0", "1", "255",
+	"0", "1", "255", "' 0 '", "' 1 '", "' 255 '", `'\t1foo\t'`, "' 255 foo'",
 	"0.0e0", "1.0e0", "1.5e0", "-1.5e0", "1.1e0", "-1.1e0", "-1.7e0",
 	"0.0", "0.000", "1.5", "-1.5", "1.1", "1.7", "-1.1", "-1.7", "'1.5'", "'-1.5'",
 	`'foobar'`, `_utf8 'foobar'`, `''`, `_binary 'foobar'`,
 	`0x0`, `0x1`, `0xff`, `X'00'`, `X'01'`, `X'ff'`,
 	"NULL", "true", "false",
 	"0xFF666F6F626172FF", "0x666F6F626172FF", "0xFF666F6F626172",
+	"9223372036854775807", "-9223372036854775808", "18446744073709551615",
 	"18446744073709540000e0",
 	"-18446744073709540000e0",
 	"JSON_OBJECT()", "JSON_ARRAY()",
-	"time '10:04:58'", "time '101:34:58'", "time '5 10:34:58'", "date '2000-01-01'", "timestamp '2000-01-01 12:34:58'",
+	"time '10:04:58'", "time '31:34:58'", "time '32:34:58'", "time '101:34:58'", "time '5 10:34:58'", "date '2000-01-01'",
+	"timestamp '2000-01-01 10:34:58'", "timestamp '2000-01-01 10:34:58.123456'", "timestamp '2000-01-01 10:34:58.978654'",
+	"20000101103458", "20000101103458.1234", "20000101103458.123456", "20000101", "103458", "103458.123456",
+	"'20000101103458'", "'20000101103458.1234'", "'20000101103458.123456'", "'20000101'", "'103458'", "'103458.123456'",
+	"'20000101103458foo'", "'20000101103458.1234foo'", "'20000101103458.123456foo'", "'20000101foo'", "'103458foo'", "'103458.123456foo'",
+	"time '-10:04:58'", "time '-31:34:58'", "time '-32:34:58'",
+	"time '-101:34:58'", "time '-5 10:34:58'",
 	"'10:04:58'", "'101:34:58'", "'5 10:34:58'", "'2000-01-01'", "'2000-01-01 12:34:58'",
 	"cast(0 as json)", "cast(1 as json)",
 	"cast(true as json)", "cast(false as json)",
 	"cast('{}' as json)", "cast('[]' as json)",
 	"cast('null' as json)", "cast('true' as json)", "cast('false' as json)",
 	// JSON numbers
+	"cast(1 as json)", "cast(2 as json)", "cast(1.1 as json)", "cast(-1.1 as json)",
+	"cast(9223372036854775807 as json)", "cast(18446744073709551615 as json)",
 	"cast('1' as json)", "cast('2' as json)", "cast('1.1' as json)", "cast('-1.1' as json)",
+	"cast('9223372036854775807' as json)", "cast('18446744073709551615' as json)",
 	// JSON strings
 	"cast('\"foo\"' as json)", "cast('\"bar\"' as json)", "cast('invalid' as json)",
 	// JSON binary values
@@ -161,7 +170,46 @@ var inputConversionTypes = []string{
 	"BINARY", "BINARY(1)", "BINARY(0)", "BINARY(16)", "BINARY(-1)",
 	"CHAR", "CHAR(1)", "CHAR(0)", "CHAR(16)", "CHAR(-1)",
 	"NCHAR", "NCHAR(1)", "NCHAR(0)", "NCHAR(16)", "NCHAR(-1)",
-	"DECIMAL", "DECIMAL(0, 4)", "DECIMAL(12, 0)", "DECIMAL(12, 4)", "DECIMAL(60)",
+	"DECIMAL", "DECIMAL(0, 4)", "DECIMAL(12, 0)", "DECIMAL(12, 4)", "DECIMAL(60)", "DECIMAL(60, 6)",
 	"DOUBLE", "REAL",
 	"SIGNED", "UNSIGNED", "SIGNED INTEGER", "UNSIGNED INTEGER", "JSON",
+	"DATE", "DATETIME", "TIME", "DATETIME(4)", "TIME(4)", "DATETIME(6)", "TIME(6)",
+}
+
+var dateFormats = []struct {
+	c    byte
+	expr string
+}{
+	{'a', "LEFT(DAYNAME(d),3)"},
+	{'b', "LEFT(MONTHNAME(d),3)"},
+	{'c', "MONTH(d)"},
+	{'D', ""},
+	{'d', "LPAD(DAYOFMONTH(d),0,2)"},
+	{'e', "DAYOFMONTH(d)"},
+	{'f', "LPAD(MICROSECOND(t),6,0)"},
+	{'H', "LPAD(HOUR(t),2,0)"},
+	{'h', ""},
+	{'I', ""},
+	{'i', "LPAD(MINUTE(t),2,0)"},
+	{'j', ""},
+	{'k', "HOUR(t)"},
+	{'l', ""},
+	{'M', "MONTHNAME(d)"},
+	{'m', "LPAD(MONTH(d),2,0)"},
+	{'p', ""},
+	{'r', ""},
+	{'S', "LPAD(SECOND(t),2,0)"},
+	{'s', "LPAD(SECOND(t),2,0)"},
+	{'T', ""},
+	{'U', "LPAD(WEEK(d,0),2,0)"},
+	{'u', "LPAD(WEEK(d,1),2,0)"},
+	{'V', "RIGHT(YEARWEEK(d,2),2)"},
+	{'v', "RIGHT(YEARWEEK(d,3),2)"},
+	{'W', "DAYNAME(d)"},
+	{'w', "DAYOFWEEK(d)-1"},
+	{'X', "LEFT(YEARWEEK(d,2),4)"},
+	{'x', "LEFT(YEARWEEK(d,3),4)"},
+	{'Y', "YEAR(d)"},
+	{'y', "RIGHT(YEAR(d),2)"},
+	{'%', ""},
 }

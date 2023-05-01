@@ -152,6 +152,14 @@ message Session {
 
   // query_timeout is the maximum amount of time a query is permitted to run
   int64 query_timeout = 25;
+
+  map<string, PrepareData> prepare_statement = 26;
+}
+
+// PrepareData keeps the prepared statement and other information related for execution of it.
+message PrepareData {
+  string prepare_statement = 1;
+  int32 params_count = 2;
 }
 
 // ReadAfterWrite contains information regarding gtid set and timeout

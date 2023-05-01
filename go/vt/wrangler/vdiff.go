@@ -39,6 +39,7 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/schema"
+	"vitess.io/vitess/go/vt/schemadiff"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -284,16 +285,21 @@ func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflowName, sou
 		// both sides. If that's the case, then let's see if the extra rows on
 		// both sides are actually different.
 		if (dr.ExtraRowsSource == dr.ExtraRowsTarget) && (dr.ExtraRowsSource <= maxExtraRowsToCompare) {
-			for i := range dr.ExtraRowsSourceDiffs {
+			for i := 0; i < len(dr.ExtraRowsSourceDiffs); i++ {
 				foundMatch := false
-				for j := range dr.ExtraRowsTargetDiffs {
+				for j := 0; j < len(dr.ExtraRowsTargetDiffs); j++ {
 					if reflect.DeepEqual(dr.ExtraRowsSourceDiffs[i], dr.ExtraRowsTargetDiffs[j]) {
 						dr.ExtraRowsSourceDiffs = append(dr.ExtraRowsSourceDiffs[:i], dr.ExtraRowsSourceDiffs[i+1:]...)
-						dr.ExtraRowsSource--
 						dr.ExtraRowsTargetDiffs = append(dr.ExtraRowsTargetDiffs[:j], dr.ExtraRowsTargetDiffs[j+1:]...)
+						dr.ExtraRowsSource--
 						dr.ExtraRowsTarget--
 						dr.ProcessedRows--
 						dr.MatchingRows++
+						// We've removed an element from both slices at the current index
+						// so we need to shift the counters back as well to process the
+						// new elements at the index and avoid using an index out of range.
+						i--
+						j--
 						foundMatch = true
 						break
 					}
@@ -428,8 +434,13 @@ func (df *vdiff) buildVDiffPlan(ctx context.Context, filter *binlogdatapb.Filter
 	return nil
 }
 
-// findPKs identifies PKs and removes them from the columns to do data comparison
+// findPKs identifies PKs, determines any collations to be used for
+// them, and removes them from the columns used for data comparison.
 func findPKs(table *tabletmanagerdatapb.TableDefinition, targetSelect *sqlparser.Select, td *tableDiffer) (sqlparser.OrderBy, error) {
+	columnCollations, err := getColumnCollations(table)
+	if err != nil {
+		return nil, err
+	}
 	var orderby sqlparser.OrderBy
 	for _, pk := range table.PrimaryKeyColumns {
 		found := false
@@ -446,6 +457,7 @@ func findPKs(table *tabletmanagerdatapb.TableDefinition, targetSelect *sqlparser
 			}
 			if strings.EqualFold(pk, colname) {
 				td.compareCols[i].isPK = true
+				td.compareCols[i].collation = columnCollations[strings.ToLower(colname)]
 				td.comparePKs = append(td.comparePKs, td.compareCols[i])
 				td.selectPks = append(td.selectPks, i)
 				// We'll be comparing pks separately. So, remove them from compareCols.
@@ -464,6 +476,63 @@ func findPKs(table *tabletmanagerdatapb.TableDefinition, targetSelect *sqlparser
 		})
 	}
 	return orderby, nil
+}
+
+// getColumnCollations determines the proper collation to use for each
+// column in the table definition leveraging MySQL's collation inheritence
+// rules.
+func getColumnCollations(table *tabletmanagerdatapb.TableDefinition) (map[string]collations.Collation, error) {
+	collationEnv := collations.Local()
+	createstmt, err := sqlparser.Parse(table.Schema)
+	if err != nil {
+		return nil, err
+	}
+	createtable, ok := createstmt.(*sqlparser.CreateTable)
+	if !ok {
+		return nil, vterrors.Wrapf(err, "invalid table schema %s for table %s", table.Schema, table.Name)
+	}
+	tableschema, err := schemadiff.NewCreateTableEntity(createtable)
+	if err != nil {
+		return nil, vterrors.Wrapf(err, "invalid table schema %s for table %s", table.Schema, table.Name)
+	}
+	tableCharset := tableschema.GetCharset()
+	tableCollation := tableschema.GetCollation()
+	// If no explicit collation is specified for the column then we need
+	// to walk the inheritence tree.
+	getColumnCollation := func(column *sqlparser.ColumnDefinition) collations.Collation {
+		// If there's an explicit collation listed then use that.
+		if column.Type.Options.Collate != "" {
+			return collationEnv.LookupByName(strings.ToLower(column.Type.Options.Collate))
+		}
+		// If the column has a charset listed then the default collation
+		// for that charset is used.
+		if column.Type.Charset.Name != "" {
+			return collationEnv.DefaultCollationForCharset(strings.ToLower(column.Type.Charset.Name))
+		}
+		// If the table has an explicit collation listed then use that.
+		if tableCollation != "" {
+			return collationEnv.LookupByName(strings.ToLower(tableCollation))
+		}
+		// If the table has a charset listed then use the default collation
+		// for that charset.
+		if tableCharset != "" {
+			return collationEnv.DefaultCollationForCharset(strings.ToLower(tableCharset))
+		}
+		// The table is using the global default charset and collation and
+		// we inherite that.
+		return collations.Default().Get()
+	}
+
+	columnCollations := make(map[string]collations.Collation)
+	for _, column := range tableschema.TableSpec.Columns {
+		// If it's not a character based type then no collation is used.
+		if !sqltypes.IsQuoted(column.Type.SQLType()) {
+			columnCollations[column.Name.Lowered()] = nil
+			continue
+		}
+		columnCollations[column.Name.Lowered()] = getColumnCollation(column)
+	}
+	return columnCollations, nil
 }
 
 // If SourceTimeZone is defined in the BinlogSource, the VReplication workflow would have converted the datetime
@@ -601,7 +670,7 @@ func (df *vdiff) buildTablePlan(table *tabletmanagerdatapb.TableDefinition, quer
 		if err != nil {
 			return nil, err
 		}
-		_, ok := fields[colname]
+		_, ok = fields[colname]
 		if !ok {
 			return nil, fmt.Errorf("column %v not found in table %v", colname, table.Name)
 		}

@@ -367,7 +367,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %token <str> LOCATE POSITION
 %token <str> ST_GeometryCollectionFromText ST_GeometryFromText ST_LineStringFromText ST_MultiLineStringFromText ST_MultiPointFromText ST_MultiPolygonFromText ST_PointFromText ST_PolygonFromText
 %token <str> ST_GeometryCollectionFromWKB ST_GeometryFromWKB ST_LineStringFromWKB ST_MultiLineStringFromWKB ST_MultiPointFromWKB ST_MultiPolygonFromWKB ST_PointFromWKB ST_PolygonFromWKB
-%token <str> ST_AsBinary ST_AsText
+%token <str> ST_AsBinary ST_AsText ST_Dimension ST_Envelope ST_IsSimple ST_IsEmpty ST_GeometryType ST_X ST_Y ST_Latitude ST_Longitude
 
 // Match
 %token <str> MATCH AGAINST BOOLEAN LANGUAGE WITH QUERY EXPANSION WITHOUT VALIDATION
@@ -4764,11 +4764,11 @@ execute_statement_list_opt: // execute db.foo(@apa) using @foo, @bar
 deallocate_statement:
   DEALLOCATE comment_opt PREPARE sql_id
   {
-    $$ = &DeallocateStmt{Type:DeallocateType, Comments: Comments($2).Parsed(), Name:$4}
+    $$ = &DeallocateStmt{Comments: Comments($2).Parsed(), Name:$4}
   }
 | DROP comment_opt PREPARE sql_id
   {
-    $$ = &DeallocateStmt{Type: DropType, Comments: Comments($2).Parsed(), Name: $4}
+    $$ = &DeallocateStmt{Comments: Comments($2).Parsed(), Name: $4}
   }
 
 select_expression_list_opt:
@@ -6108,6 +6108,58 @@ UTC_DATE func_paren_opt
 | ST_AsText openb expression ',' expression closeb
   {
     $$ = &GeomFormatExpr{ FormatType: TextFormat, Geom: $3, AxisOrderOpt: $5 }
+  }
+| ST_IsEmpty openb expression closeb
+  {
+    $$ = &GeomPropertyFuncExpr{ Property: IsEmpty, Geom: $3}
+  }
+| ST_IsSimple openb expression closeb
+  {
+    $$ = &GeomPropertyFuncExpr{ Property: IsSimple, Geom: $3}
+  }
+| ST_Dimension openb expression closeb
+  {
+    $$ = &GeomPropertyFuncExpr{ Property: Dimension, Geom: $3}
+  }
+| ST_Envelope openb expression closeb
+  {
+    $$ = &GeomPropertyFuncExpr{ Property: Envelope, Geom: $3}
+  }
+| ST_GeometryType openb expression closeb
+  {
+    $$ = &GeomPropertyFuncExpr{ Property: GeometryType, Geom: $3}
+  }
+| ST_Latitude openb expression closeb
+  {
+    $$ = &PointPropertyFuncExpr{ Property: Latitude, Point: $3}
+  }
+| ST_Latitude openb expression ',' expression closeb
+  {
+    $$ = &PointPropertyFuncExpr{ Property: Latitude, Point: $3, ValueToSet: $5}
+  }
+| ST_Longitude openb expression closeb
+  {
+    $$ = &PointPropertyFuncExpr{ Property: Longitude, Point: $3}
+  }
+| ST_Longitude openb expression ',' expression closeb
+  {
+    $$ = &PointPropertyFuncExpr{ Property: Longitude, Point: $3, ValueToSet: $5}
+  }
+| ST_X openb expression closeb
+  {
+    $$ = &PointPropertyFuncExpr{ Property: XCordinate, Point: $3}
+  }
+| ST_X openb expression ',' expression closeb
+  {
+    $$ = &PointPropertyFuncExpr{ Property: XCordinate, Point: $3, ValueToSet: $5}
+  }
+| ST_Y openb expression closeb
+  {
+    $$ = &PointPropertyFuncExpr{ Property: YCordinate, Point: $3}
+  }
+| ST_Y openb expression ',' expression closeb
+  {
+    $$ = &PointPropertyFuncExpr{ Property: YCordinate, Point: $3, ValueToSet: $5}
   }
 | ST_GeometryFromText openb expression closeb
   {

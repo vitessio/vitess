@@ -18,10 +18,10 @@ package evalengine
 
 import (
 	"math"
-	"strconv"
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/decimal"
+	"vitess.io/vitess/go/mysql/fastparse"
 	"vitess.io/vitess/go/sqltypes"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -94,7 +94,7 @@ func NullsafeHashcode128(hash *vthash.Hasher, v sqltypes.Value, collation collat
 		case v.IsFloat() || v.IsDecimal():
 			f, err = v.ToFloat64()
 		case v.IsQuoted():
-			f = parseStringToFloat(v.RawStr())
+			f, _ = fastparse.ParseFloat64(v.RawStr())
 		default:
 			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected type %v", v.Type())
 		}
@@ -123,9 +123,9 @@ func NullsafeHashcode128(hash *vthash.Hasher, v sqltypes.Value, collation collat
 			}
 			i = int64(fval)
 		case v.IsQuoted():
-			i, err = strconv.ParseInt(v.RawStr(), 10, 64)
+			i, err = fastparse.ParseInt64(v.RawStr(), 10)
 			if err != nil {
-				fval := parseStringToFloat(v.RawStr())
+				fval, _ := fastparse.ParseFloat64(v.RawStr())
 				if fval != math.Trunc(fval) {
 					return ErrHashCoercionIsNotExact
 				}
@@ -163,9 +163,9 @@ func NullsafeHashcode128(hash *vthash.Hasher, v sqltypes.Value, collation collat
 			}
 			u = uint64(fval)
 		case v.IsQuoted():
-			u, err = strconv.ParseUint(v.RawStr(), 10, 64)
+			u, err = fastparse.ParseUint64(v.RawStr(), 10)
 			if err != nil {
-				fval := parseStringToFloat(v.RawStr())
+				fval, _ := fastparse.ParseFloat64(v.RawStr())
 				if fval != math.Trunc(fval) || fval < 0 {
 					return ErrHashCoercionIsNotExact
 				}
@@ -208,7 +208,7 @@ func NullsafeHashcode128(hash *vthash.Hasher, v sqltypes.Value, collation collat
 			}
 			dec = decimal.NewFromFloat(fval)
 		case v.IsText() || v.IsBinary():
-			fval := parseStringToFloat(v.RawStr())
+			fval, _ := fastparse.ParseFloat64(v.RawStr())
 			dec = decimal.NewFromFloat(fval)
 		default:
 			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "coercion should not try to coerce this value to a decimal: %v", v)

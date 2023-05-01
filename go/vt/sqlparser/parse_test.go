@@ -359,6 +359,45 @@ var (
 		input:  "SELECT ST_AsWKB(ST_GeomCollFromText(g, 4326, 'axis-order=lat-long'))",
 		output: "select st_asbinary(st_geometrycollectionfromtext(g, 4326, 'axis-order=lat-long')) from dual",
 	}, {
+		input:  "SELECT ST_Dimension(ST_GeomFromText('LineString(1 1,2 2)'))",
+		output: "select st_dimension(st_geometryfromtext('LineString(1 1,2 2)')) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_Envelope(ST_GeomFromText('LineString(1 1,2 2)')))",
+		output: "select st_astext(st_envelope(st_geometryfromtext('LineString(1 1,2 2)'))) from dual",
+	}, {
+		input:  "SELECT ST_IsSimple(ST_GeomFromText('POINT(1 1)'))",
+		output: "select st_issimple(st_geometryfromtext('POINT(1 1)')) from dual",
+	}, {
+		input:  "SELECT ST_GeometryType(ST_GeomFromText('POINT(1 1)'))",
+		output: "select st_geometrytype(st_geometryfromtext('POINT(1 1)')) from dual",
+	}, {
+		input:  "SELECT ST_IsEmpty(ST_GeomFromText('POINT(1 1)'))",
+		output: "select st_isempty(st_geometryfromtext('POINT(1 1)')) from dual",
+	}, {
+		input:  "SELECT ST_Latitude(@pt);",
+		output: "select st_latitude(@pt) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_Latitude(@pt, 10));",
+		output: "select st_astext(st_latitude(@pt, 10)) from dual",
+	}, {
+		input:  "SELECT ST_Longitude(@pt);",
+		output: "select st_longitude(@pt) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_Longitude(@pt, 10));",
+		output: "select st_astext(st_longitude(@pt, 10)) from dual",
+	}, {
+		input:  "SELECT ST_X(@pt);",
+		output: "select st_x(@pt) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_X(@pt, 10));",
+		output: "select st_astext(st_x(@pt, 10)) from dual",
+	}, {
+		input:  "SELECT ST_Y(@pt);",
+		output: "select st_y(@pt) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_Y(@pt, 10));",
+		output: "select st_astext(st_y(@pt, 10)) from dual",
+	}, {
 		input:  "WITH RECURSIVE  odd_num_cte (id, n) AS (SELECT 1, 1 union all SELECT id+1, n+2 from odd_num_cte where id < 5) SELECT * FROM odd_num_cte",
 		output: "with recursive odd_num_cte(id, n) as (select 1, 1 from dual union all select id + 1, n + 2 from odd_num_cte where id < 5) select * from odd_num_cte",
 	}, {
@@ -2707,10 +2746,10 @@ var (
 		output: "deallocate prepare stmt1",
 	}, {
 		input:  "DROP PREPARE stmt1",
-		output: "drop prepare stmt1",
+		output: "deallocate prepare stmt1",
 	}, {
 		input:  "DROP /* comment */ PREPARE stmt1",
-		output: "drop /* comment */ prepare stmt1",
+		output: "deallocate /* comment */ prepare stmt1",
 	}, {
 		input:  `SELECT JSON_PRETTY('{"a":"10","b":"15","x":"25"}')`,
 		output: `select json_pretty('{\"a\":\"10\",\"b\":\"15\",\"x\":\"25\"}') from dual`,

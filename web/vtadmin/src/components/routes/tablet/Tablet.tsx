@@ -122,7 +122,7 @@ export const Tablet = () => {
                         <div>
                             <Code code={JSON.stringify(tablet, null, 2)} />
 
-                            {env().REACT_APP_ENABLE_EXPERIMENTAL_TABLET_DEBUG_VARS && (
+                            {env().VITE_ENABLE_EXPERIMENTAL_TABLET_DEBUG_VARS && (
                                 <Code code={JSON.stringify(debugVars, null, 2)} />
                             )}
                         </div>

@@ -186,6 +186,8 @@ func (c *cow) copyOnRewriteSQLNode(n SQLNode, parent SQLNode) (out SQLNode, chan
 		return c.copyOnRewriteRefOfGeomFromTextExpr(n, parent)
 	case *GeomFromWKBExpr:
 		return c.copyOnRewriteRefOfGeomFromWKBExpr(n, parent)
+	case *GeomPropertyFuncExpr:
+		return c.copyOnRewriteRefOfGeomPropertyFuncExpr(n, parent)
 	case GroupBy:
 		return c.copyOnRewriteGroupBy(n, parent)
 	case *GroupConcatExpr:
@@ -364,6 +366,8 @@ func (c *cow) copyOnRewriteSQLNode(n SQLNode, parent SQLNode) (out SQLNode, chan
 		return c.copyOnRewriteRefOfPerformanceSchemaFuncExpr(n, parent)
 	case *PointExpr:
 		return c.copyOnRewriteRefOfPointExpr(n, parent)
+	case *PointPropertyFuncExpr:
+		return c.copyOnRewriteRefOfPointPropertyFuncExpr(n, parent)
 	case *PolygonExpr:
 		return c.copyOnRewriteRefOfPolygonExpr(n, parent)
 	case *PrepareStmt:
@@ -2397,6 +2401,28 @@ func (c *cow) copyOnRewriteRefOfGeomFromWKBExpr(n *GeomFromWKBExpr, parent SQLNo
 	}
 	return
 }
+func (c *cow) copyOnRewriteRefOfGeomPropertyFuncExpr(n *GeomPropertyFuncExpr, parent SQLNode) (out SQLNode, changed bool) {
+	if n == nil || c.cursor.stop {
+		return n, false
+	}
+	out = n
+	if c.pre == nil || c.pre(n, parent) {
+		_Geom, changedGeom := c.copyOnRewriteExpr(n.Geom, n)
+		if changedGeom {
+			res := *n
+			res.Geom, _ = _Geom.(Expr)
+			out = &res
+			if c.cloned != nil {
+				c.cloned(n, out)
+			}
+			changed = true
+		}
+	}
+	if c.post != nil {
+		out, changed = c.postVisit(out, parent, changed)
+	}
+	return
+}
 func (c *cow) copyOnRewriteGroupBy(n GroupBy, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -4389,6 +4415,30 @@ func (c *cow) copyOnRewriteRefOfPointExpr(n *PointExpr, parent SQLNode) (out SQL
 			res := *n
 			res.XCordinate, _ = _XCordinate.(Expr)
 			res.YCordinate, _ = _YCordinate.(Expr)
+			out = &res
+			if c.cloned != nil {
+				c.cloned(n, out)
+			}
+			changed = true
+		}
+	}
+	if c.post != nil {
+		out, changed = c.postVisit(out, parent, changed)
+	}
+	return
+}
+func (c *cow) copyOnRewriteRefOfPointPropertyFuncExpr(n *PointPropertyFuncExpr, parent SQLNode) (out SQLNode, changed bool) {
+	if n == nil || c.cursor.stop {
+		return n, false
+	}
+	out = n
+	if c.pre == nil || c.pre(n, parent) {
+		_Point, changedPoint := c.copyOnRewriteExpr(n.Point, n)
+		_ValueToSet, changedValueToSet := c.copyOnRewriteExpr(n.ValueToSet, n)
+		if changedPoint || changedValueToSet {
+			res := *n
+			res.Point, _ = _Point.(Expr)
+			res.ValueToSet, _ = _ValueToSet.(Expr)
 			out = &res
 			if c.cloned != nil {
 				c.cloned(n, out)
@@ -6443,6 +6493,8 @@ func (c *cow) copyOnRewriteCallable(n Callable, parent SQLNode) (out SQLNode, ch
 		return c.copyOnRewriteRefOfGeomFromTextExpr(n, parent)
 	case *GeomFromWKBExpr:
 		return c.copyOnRewriteRefOfGeomFromWKBExpr(n, parent)
+	case *GeomPropertyFuncExpr:
+		return c.copyOnRewriteRefOfGeomPropertyFuncExpr(n, parent)
 	case *GroupConcatExpr:
 		return c.copyOnRewriteRefOfGroupConcatExpr(n, parent)
 	case *InsertExpr:
@@ -6519,6 +6571,8 @@ func (c *cow) copyOnRewriteCallable(n Callable, parent SQLNode) (out SQLNode, ch
 		return c.copyOnRewriteRefOfPerformanceSchemaFuncExpr(n, parent)
 	case *PointExpr:
 		return c.copyOnRewriteRefOfPointExpr(n, parent)
+	case *PointPropertyFuncExpr:
+		return c.copyOnRewriteRefOfPointPropertyFuncExpr(n, parent)
 	case *PolygonExpr:
 		return c.copyOnRewriteRefOfPolygonExpr(n, parent)
 	case *RegexpInstrExpr:
@@ -6703,6 +6757,8 @@ func (c *cow) copyOnRewriteExpr(n Expr, parent SQLNode) (out SQLNode, changed bo
 		return c.copyOnRewriteRefOfGeomFromTextExpr(n, parent)
 	case *GeomFromWKBExpr:
 		return c.copyOnRewriteRefOfGeomFromWKBExpr(n, parent)
+	case *GeomPropertyFuncExpr:
+		return c.copyOnRewriteRefOfGeomPropertyFuncExpr(n, parent)
 	case *GroupConcatExpr:
 		return c.copyOnRewriteRefOfGroupConcatExpr(n, parent)
 	case *InsertExpr:
@@ -6799,6 +6855,8 @@ func (c *cow) copyOnRewriteExpr(n Expr, parent SQLNode) (out SQLNode, changed bo
 		return c.copyOnRewriteRefOfPerformanceSchemaFuncExpr(n, parent)
 	case *PointExpr:
 		return c.copyOnRewriteRefOfPointExpr(n, parent)
+	case *PointPropertyFuncExpr:
+		return c.copyOnRewriteRefOfPointPropertyFuncExpr(n, parent)
 	case *PolygonExpr:
 		return c.copyOnRewriteRefOfPolygonExpr(n, parent)
 	case *RegexpInstrExpr:

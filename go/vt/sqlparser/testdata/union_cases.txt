@@ -2,7 +2,7 @@ INPUT
 SELECT ST_ASTEXT(ST_UNION(ST_ENVELOPE(ST_GEOMFROMTEXT('LINESTRING(5 9,-1 10,-2 -6,2 9,2 0,3 6,-3 3,9 -2,-3 -10,-7 -4,1 4)')),                        ST_UNION(ST_GEOMFROMTEXT('MULTILINESTRING((6 -8,10 -8,3 0,-6 1,0 8,-1 8,-3 -3,6 -6,0 6,1 -6,-1 7,8 3),(-9 -10,-4 0,0 1,-9 1,6 9,-8 7,-2 -6,2 10,-1 -5,3 -5,-1 -10))'),                                  ST_GEOMFROMTEXT('MULTILINESTRING((8 7,2 6,-6 -8,-2 10,4 1,9 7,5 9,4 1,8 2,-2 10,8 -5))')))) as result;
 END
 OUTPUT
-select st_astext(ST_UNION(ST_ENVELOPE(st_geometryfromtext('LINESTRING(5 9,-1 10,-2 -6,2 9,2 0,3 6,-3 3,9 -2,-3 -10,-7 -4,1 4)')), ST_UNION(st_geometryfromtext('MULTILINESTRING((6 -8,10 -8,3 0,-6 1,0 8,-1 8,-3 -3,6 -6,0 6,1 -6,-1 7,8 3),(-9 -10,-4 0,0 1,-9 1,6 9,-8 7,-2 -6,2 10,-1 -5,3 -5,-1 -10))'), st_geometryfromtext('MULTILINESTRING((8 7,2 6,-6 -8,-2 10,4 1,9 7,5 9,4 1,8 2,-2 10,8 -5))')))) as result from dual
+select st_astext(ST_UNION(st_envelope(st_geometryfromtext('LINESTRING(5 9,-1 10,-2 -6,2 9,2 0,3 6,-3 3,9 -2,-3 -10,-7 -4,1 4)')), ST_UNION(st_geometryfromtext('MULTILINESTRING((6 -8,10 -8,3 0,-6 1,0 8,-1 8,-3 -3,6 -6,0 6,1 -6,-1 7,8 3),(-9 -10,-4 0,0 1,-9 1,6 9,-8 7,-2 -6,2 10,-1 -5,3 -5,-1 -10))'), st_geometryfromtext('MULTILINESTRING((8 7,2 6,-6 -8,-2 10,4 1,9 7,5 9,4 1,8 2,-2 10,8 -5))')))) as result from dual
 END
 INPUT
 SELECT i FROM t2 UNION SELECT c FROM t1;

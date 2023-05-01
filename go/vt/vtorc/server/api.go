@@ -24,6 +24,7 @@ import (
 
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vtorc/inst"
 	"vitess.io/vitess/go/vt/vtorc/logic"
 	"vitess.io/vitess/go/vt/vtorc/process"
@@ -101,7 +102,7 @@ func getACLPermissionLevelForAPI(apiEndpoint string) string {
 // RegisterVTOrcAPIEndpoints is used to register the VTOrc API endpoints
 func RegisterVTOrcAPIEndpoints() {
 	for _, apiPath := range vtorcAPIPaths {
-		http.Handle(apiPath, apiHandler)
+		servenv.HTTPHandle(apiPath, apiHandler)
 	}
 }
 

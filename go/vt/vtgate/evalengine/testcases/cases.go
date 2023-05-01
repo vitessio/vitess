@@ -81,7 +81,7 @@ var Cases = []TestCase{
 	{Run: FnTan},
 	{Run: FnDegrees},
 	{Run: FnRadians},
-	{Run: FnNow},
+	{Run: FnNow, Compare: &Comparison{LooseTime: true}},
 	{Run: FnInfo},
 	{Run: FnExp},
 	{Run: FnLn},
@@ -100,6 +100,29 @@ var Cases = []TestCase{
 	{Run: FnSHA1},
 	{Run: FnSHA2},
 	{Run: FnRandomBytes},
+	{Run: FnDateFormat},
+	{Run: FnConvertTz},
+	{Run: FnDate},
+	{Run: FnDayOfMonth},
+	{Run: FnDayOfWeek},
+	{Run: FnDayOfYear},
+	{Run: FnFromUnixtime},
+	{Run: FnHour},
+	{Run: FnMakedate},
+	{Run: FnMaketime},
+	{Run: FnMicroSecond},
+	{Run: FnMinute},
+	{Run: FnMonth},
+	{Run: FnMonthName},
+	{Run: FnQuarter},
+	{Run: FnSecond},
+	{Run: FnTime},
+	{Run: FnUnixTimestamp},
+	{Run: FnWeek},
+	{Run: FnWeekDay},
+	{Run: FnWeekOfYear},
+	{Run: FnYear},
+	{Run: FnYearWeek},
 }
 
 func JSONPathOperations(yield Query) {
@@ -680,6 +703,8 @@ func Base64(yield Query) {
 		`'bGlnaHQgdw=='`,
 		`'bGlnaHQgd28='`,
 		`'bGlnaHQgd29y'`,
+		// MySQL trims whitespace
+		`'  \t\r\n  bGlnaHQgd28=  \n \t '`,
 	}
 
 	inputs = append(inputs, inputConversions...)
@@ -927,6 +952,11 @@ func NegateArithmetic(yield Query) {
 	}
 
 	for _, rhs := range cases {
+		yield(fmt.Sprintf("- %s", rhs), nil)
+		yield(fmt.Sprintf("-%s", rhs), nil)
+	}
+
+	for _, rhs := range inputConversions {
 		yield(fmt.Sprintf("- %s", rhs), nil)
 		yield(fmt.Sprintf("-%s", rhs), nil)
 	}
@@ -1254,5 +1284,207 @@ func FnInfo(yield Query) {
 	}
 	for _, fn := range fns {
 		yield(fn, nil)
+	}
+}
+
+func FnDateFormat(yield Query) {
+	var buf strings.Builder
+	for _, f := range dateFormats {
+		buf.WriteByte('%')
+		buf.WriteByte(f.c)
+		buf.WriteByte(' ')
+	}
+	format := buf.String()
+
+	for _, d := range inputConversions {
+		yield(fmt.Sprintf("DATE_FORMAT(%s, %q)", d, format), nil)
+	}
+}
+
+func FnConvertTz(yield Query) {
+	timezoneInputs := []string{
+		"UTC",
+		"GMT",
+		"America/New_York",
+		"America/Los_Angeles",
+		"Europe/London",
+		"Europe/Amsterdam",
+		"+00:00",
+		"-00:00",
+		"+01:00",
+		"-01:00",
+		"+02:00",
+		"-02:00",
+		"+14:00",
+		"-13:00",
+		"bogus",
+	}
+	for _, num1 := range inputConversions {
+		for _, tzFrom := range timezoneInputs {
+			for _, tzTo := range timezoneInputs {
+				q := fmt.Sprintf("CONVERT_TZ(%s, '%s', '%s')", num1, tzFrom, tzTo)
+				yield(q, nil)
+			}
+		}
+	}
+}
+
+func FnDate(yield Query) {
+	for _, d := range inputConversions {
+		yield(fmt.Sprintf("DATE(%s)", d), nil)
+	}
+}
+
+func FnDayOfMonth(yield Query) {
+	for _, d := range inputConversions {
+		yield(fmt.Sprintf("DAYOFMONTH(%s)", d), nil)
+		yield(fmt.Sprintf("DAY(%s)", d), nil)
+	}
+}
+
+func FnDayOfWeek(yield Query) {
+	for _, d := range inputConversions {
+		yield(fmt.Sprintf("DAYOFWEEK(%s)", d), nil)
+	}
+}
+
+func FnDayOfYear(yield Query) {
+	for _, d := range inputConversions {
+		yield(fmt.Sprintf("DAYOFYEAR(%s)", d), nil)
+	}
+}
+
+func FnFromUnixtime(yield Query) {
+	var buf strings.Builder
+	for _, f := range dateFormats {
+		buf.WriteByte('%')
+		buf.WriteByte(f.c)
+		buf.WriteByte(' ')
+	}
+	format := buf.String()
+
+	for _, d := range inputConversions {
+		yield(fmt.Sprintf("FROM_UNIXTIME(%s)", d), nil)
+		yield(fmt.Sprintf("FROM_UNIXTIME(%s, %q)", d, format), nil)
+	}
+}
+
+func FnHour(yield Query) {
+	for _, d := range inputConversions {
+		yield(fmt.Sprintf("HOUR(%s)", d), nil)
+	}
+}
+
+func FnMakedate(yield Query) {
+	for _, y := range inputConversions {
+		for _, d := range inputConversions {
+			yield(fmt.Sprintf("MAKEDATE(%s, %s)", y, d), nil)
+		}
+	}
+}
+
+func FnMaketime(yield Query) {
+	// Don't use inputConversions for minutes as those are simplest
+	// and otherwise we explode in test runtime.
+	minutes := []string{
+		"''", "0", "'3'", "59", "60", "0xFF666F6F626172FF", "18446744073709551615",
+	}
+	for _, h := range inputConversions {
+		for _, m := range minutes {
+			for _, s := range inputConversions {
+				yield(fmt.Sprintf("MAKETIME(%s, %s, %s)", h, m, s), nil)
+			}
+		}
+	}
+}
+
+func FnMicroSecond(yield Query) {
+	for _, d := range inputConversions {
+		yield(fmt.Sprintf("MICROSECOND(%s)", d), nil)
+	}
+}
+
+func FnMinute(yield Query) {
+	for _, d := range inputConversions {
+		yield(fmt.Sprintf("MINUTE(%s)", d), nil)
+	}
+}
+
+func FnMonth(yield Query) {
+	for _, d := range inputConversions {
+		yield(fmt.Sprintf("MONTH(%s)", d), nil)
+	}
+}
+
+func FnMonthName(yield Query) {
+	for _, d := range inputConversions {
+		yield(fmt.Sprintf("MONTHNAME(%s)", d), nil)
+	}
+}
+
+func FnQuarter(yield Query) {
+	for _, d := range inputConversions {
+		yield(fmt.Sprintf("QUARTER(%s)", d), nil)
+	}
+}
+
+func FnSecond(yield Query) {
+	for _, d := range inputConversions {
+		yield(fmt.Sprintf("SECOND(%s)", d), nil)
+	}
+}
+
+func FnTime(yield Query) {
+	for _, d := range inputConversions {
+		yield(fmt.Sprintf("TIME(%s)", d), nil)
+	}
+}
+
+func FnUnixTimestamp(yield Query) {
+	yield("UNIX_TIMESTAMP()", nil)
+
+	for _, d := range inputConversions {
+		yield(fmt.Sprintf("UNIX_TIMESTAMP(%s)", d), nil)
+		yield(fmt.Sprintf("UNIX_TIMESTAMP(%s) + 1", d), nil)
+	}
+}
+
+func FnWeek(yield Query) {
+	for i := 0; i < 16; i++ {
+		for _, d := range inputConversions {
+			yield(fmt.Sprintf("WEEK(%s, %d)", d, i), nil)
+		}
+	}
+	for _, d := range inputConversions {
+		yield(fmt.Sprintf("WEEK(%s)", d), nil)
+	}
+}
+
+func FnWeekDay(yield Query) {
+	for _, d := range inputConversions {
+		yield(fmt.Sprintf("WEEKDAY(%s)", d), nil)
+	}
+}
+
+func FnWeekOfYear(yield Query) {
+	for _, d := range inputConversions {
+		yield(fmt.Sprintf("WEEKOFYEAR(%s)", d), nil)
+	}
+}
+
+func FnYear(yield Query) {
+	for _, d := range inputConversions {
+		yield(fmt.Sprintf("YEAR(%s)", d), nil)
+	}
+}
+
+func FnYearWeek(yield Query) {
+	for i := 0; i < 4; i++ {
+		for _, d := range inputConversions {
+			yield(fmt.Sprintf("YEARWEEK(%s, %d)", d, i), nil)
+		}
+	}
+	for _, d := range inputConversions {
+		yield(fmt.Sprintf("YEARWEEK(%s)", d), nil)
 	}
 }

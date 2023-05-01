@@ -108,6 +108,8 @@ or
 Since [Pull Request #11989](https://github.com/vitessio/vitess/pull/11989), VTGate advertises MySQL version 8.0.30. This is a breaking change for clients that rely on the VTGate advertised MySQL version and still use MySQL 5.7.
 The users can set the `mysql_server_version` flag to advertise the correct version.
 
+It is worth noting that [the feature to avoid using reserved connections](https://vitess.io/docs/16.0/reference/query-serving/reserved-conn/#avoiding-the-use-of-reserved-connections) depends on the `mysql_server_version` CLI flag, which default value has been changed from `5.7.9-vitess` to `8.0.30-vitess`. We recommend that users running MySQL 5.7 set vtgate's `mysql_server_version` CLI flag to `5.7.9-vitess` to prevent the queries from being unexpectedly rewritten.
+
 #### <a id="default-mysql-version"/>Default MySQL version on Docker
 
 The default major MySQL version used by our `vitess/lite:latest` image is going from `5.7` to `8.0`. Additionally, the patch version of MySQL80 has been upgraded from `8.0.23` to `8.0.30`.

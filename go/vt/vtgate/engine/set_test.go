@@ -115,12 +115,12 @@ func TestSetTable(t *testing.T) {
 				"col0",
 				"datetime",
 			),
-			"2020-10-28",
+			"2020-10-28 00:00:00",
 		)},
 		expectedQueryLog: []string{
 			`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
 			`ExecuteMultiShard ks.-20: select now() from dual {} false false`,
-			`UDV set with (x,DATETIME("2020-10-28"))`,
+			`UDV set with (x,DATETIME("2020-10-28 00:00:00"))`,
 		},
 		input: &Send{
 			Keyspace:          ks,

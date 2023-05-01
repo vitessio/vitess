@@ -1505,6 +1505,20 @@ func (cached *GeomFromWKBExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+func (cached *GeomPropertyFuncExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(24)
+	}
+	// field Geom vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Geom.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	return size
+}
 func (cached *GroupConcatExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -3046,6 +3060,24 @@ func (cached *PointExpr) CachedSize(alloc bool) int64 {
 	}
 	// field YCordinate vitess.io/vitess/go/vt/sqlparser.Expr
 	if cc, ok := cached.YCordinate.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	return size
+}
+func (cached *PointPropertyFuncExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field Point vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Point.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field ValueToSet vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.ValueToSet.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
 	return size

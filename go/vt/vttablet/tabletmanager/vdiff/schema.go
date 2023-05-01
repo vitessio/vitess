@@ -17,8 +17,9 @@ limitations under the License.
 package vdiff
 
 const (
-	sqlNewVDiff    = "insert into _vt.vdiff(keyspace, workflow, state, options, shard, db_name, vdiff_uuid) values(%s, %s, '%s', %s, '%s', '%s', '%s')"
-	sqlResumeVDiff = `update _vt.vdiff as vd, _vt.vdiff_table as vdt set vd.options = %s, vd.started_at = NULL, vd.completed_at = NULL, vd.state = 'pending',
+	sqlAnalyzeTable = "analyze table `%s`.`%s`"
+	sqlNewVDiff     = "insert into _vt.vdiff(keyspace, workflow, state, options, shard, db_name, vdiff_uuid) values(%s, %s, '%s', %s, '%s', '%s', '%s')"
+	sqlResumeVDiff  = `update _vt.vdiff as vd, _vt.vdiff_table as vdt set vd.options = %s, vd.started_at = NULL, vd.completed_at = NULL, vd.state = 'pending',
 					vdt.state = 'pending' where vd.vdiff_uuid = %s and vd.id = vdt.vdiff_id and vd.state in ('completed', 'stopped')
 					and vdt.state in ('completed', 'stopped')`
 	sqlRetryVDiff = `update _vt.vdiff as vd left join _vt.vdiff_table as vdt on (vd.id = vdt.vdiff_id) set vd.state = 'pending',
@@ -46,13 +47,14 @@ const (
 	sqlGetVDiffsToRetry     = "select * from _vt.vdiff where state = 'error' and json_unquote(json_extract(options, '$.core_options.auto_retry')) = 'true'"
 	sqlGetVDiffID           = "select id as id from _vt.vdiff where vdiff_uuid = %s"
 	sqlGetAllVDiffs         = "select * from _vt.vdiff order by id desc"
+	sqlGetTableRows         = "select table_rows as table_rows from INFORMATION_SCHEMA.TABLES where table_schema = %a and table_name = %a"
 	sqlGetAllTableRows      = "select table_name as table_name, table_rows as table_rows from INFORMATION_SCHEMA.TABLES where table_schema = %s and table_name in (%s)"
 
 	sqlNewVDiffTable = "insert into _vt.vdiff_table(vdiff_id, table_name, state, table_rows) values(%d, %s, 'pending', %d)"
 	sqlGetVDiffTable = `select vdt.lastpk as lastpk, vdt.mismatch as mismatch, vdt.report as report
 						from _vt.vdiff as vd inner join _vt.vdiff_table as vdt on (vd.id = vdt.vdiff_id)
 						where vdt.vdiff_id = %d and vdt.table_name = %s`
-	sqlUpdateTableRows           = "update _vt.vdiff_table set table_rows = %d where vdiff_id = %d and table_name = %s"
+	sqlUpdateTableRows           = "update _vt.vdiff_table set table_rows = %a where vdiff_id = %a and table_name = %a"
 	sqlUpdateTableProgress       = "update _vt.vdiff_table set rows_compared = %d, lastpk = %s, report = %s where vdiff_id = %d and table_name = %s"
 	sqlUpdateTableNoProgress     = "update _vt.vdiff_table set rows_compared = %d, report = %s where vdiff_id = %d and table_name = %s"
 	sqlUpdateTableState          = "update _vt.vdiff_table set state = %s where vdiff_id = %d and table_name = %s"

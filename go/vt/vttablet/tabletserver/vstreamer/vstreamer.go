@@ -23,6 +23,8 @@ import (
 	"io"
 	"time"
 
+	"vitess.io/vitess/go/vt/vttablet"
+
 	"google.golang.org/protobuf/encoding/prototext"
 
 	"vitess.io/vitess/go/mysql"
@@ -611,6 +613,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 		if err != nil {
 			return nil, err
 		}
+
 		if id == vs.journalTableID {
 			vevents, err = vs.processJournalEvent(vevents, plan, rows)
 		} else if id == vs.versionTableID {
@@ -626,9 +629,27 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 		if err != nil {
 			return nil, err
 		}
-	case ev.IsCompressed():
-		log.Errorf("VReplication does not handle binlog compression")
-		return nil, fmt.Errorf("VReplication does not handle binlog compression")
+	case ev.IsTransactionPayload():
+		if !vs.pos.MatchesFlavor(mysql.Mysql56FlavorID) {
+			return nil, fmt.Errorf("compressed transaction payload events are not supported with database flavor %s",
+				vs.vse.env.Config().DB.Flavor)
+		}
+		tpevents, err := ev.TransactionPayload(vs.format)
+		if err != nil {
+			return nil, err
+		}
+		// Events inside the payload don't have their own checksum.
+		ogca := vs.format.ChecksumAlgorithm
+		defer func() { vs.format.ChecksumAlgorithm = ogca }()
+		vs.format.ChecksumAlgorithm = mysql.BinlogChecksumAlgOff
+		for _, tpevent := range tpevents {
+			tpvevents, err := vs.parseEvent(tpevent)
+			if err != nil {
+				return nil, vterrors.Wrap(err, "failed to parse transaction payload's internal event")
+			}
+			vevents = append(vevents, tpvevents...)
+		}
+		vs.vse.vstreamerCompressedTransactionsDecoded.Add(1)
 	}
 	for _, vevent := range vevents {
 		vevent.Timestamp = int64(ev.Timestamp())
@@ -835,7 +856,7 @@ func (vs *vstreamer) processJournalEvent(vevents []*binlogdatapb.VEvent, plan *s
 	}
 nextrow:
 	for _, row := range rows.Rows {
-		afterOK, afterValues, err := vs.extractRowAndFilter(plan, row.Data, rows.DataColumns, row.NullColumns)
+		afterOK, afterValues, _, err := vs.extractRowAndFilter(plan, row.Data, rows.DataColumns, row.NullColumns)
 		if err != nil {
 			return nil, err
 		}
@@ -873,11 +894,11 @@ nextrow:
 func (vs *vstreamer) processRowEvent(vevents []*binlogdatapb.VEvent, plan *streamerPlan, rows mysql.Rows) ([]*binlogdatapb.VEvent, error) {
 	rowChanges := make([]*binlogdatapb.RowChange, 0, len(rows.Rows))
 	for _, row := range rows.Rows {
-		beforeOK, beforeValues, err := vs.extractRowAndFilter(plan, row.Identify, rows.IdentifyColumns, row.NullIdentifyColumns)
+		beforeOK, beforeValues, _, err := vs.extractRowAndFilter(plan, row.Identify, rows.IdentifyColumns, row.NullIdentifyColumns)
 		if err != nil {
 			return nil, err
 		}
-		afterOK, afterValues, err := vs.extractRowAndFilter(plan, row.Data, rows.DataColumns, row.NullColumns)
+		afterOK, afterValues, partial, err := vs.extractRowAndFilter(plan, row.Data, rows.DataColumns, row.NullColumns)
 		if err != nil {
 			return nil, err
 		}
@@ -890,6 +911,14 @@ func (vs *vstreamer) processRowEvent(vevents []*binlogdatapb.VEvent, plan *strea
 		}
 		if afterOK {
 			rowChange.After = sqltypes.RowToProto3(afterValues)
+			if (vttablet.VReplicationExperimentalFlags /**/ & /**/ vttablet.VReplicationExperimentalFlagAllowNoBlobBinlogRowImage != 0) &&
+				partial {
+
+				rowChange.DataColumns = &binlogdatapb.RowChange_Bitmap{
+					Count: int64(rows.DataColumns.Count()),
+					Cols:  rows.DataColumns.Bits(),
+				}
+			}
 		}
 		rowChanges = append(rowChanges, rowChange)
 	}
@@ -929,17 +958,27 @@ func (vs *vstreamer) rebuildPlans() error {
 	return nil
 }
 
-func (vs *vstreamer) extractRowAndFilter(plan *streamerPlan, data []byte, dataColumns, nullColumns mysql.Bitmap) (bool, []sqltypes.Value, error) {
+// extractRowAndFilter takes the data and bitmaps from the binlog events and returns the following
+//   - true, if row needs to be skipped because of workflow filter rules
+//   - data values, array of one value per column
+//   - true, if the row image was partial (i.e. binlog_row_image=noblob and dml doesn't update one or more blob/text columns)
+func (vs *vstreamer) extractRowAndFilter(plan *streamerPlan, data []byte, dataColumns, nullColumns mysql.Bitmap) (bool, []sqltypes.Value, bool, error) {
 	if len(data) == 0 {
-		return false, nil, nil
+		return false, nil, false, nil
 	}
 	values := make([]sqltypes.Value, dataColumns.Count())
 	charsets := make([]collations.ID, len(values))
 	valueIndex := 0
 	pos := 0
+	partial := false
 	for colNum := 0; colNum < dataColumns.Count(); colNum++ {
 		if !dataColumns.Bit(colNum) {
-			return false, nil, fmt.Errorf("partial row image encountered: ensure binlog_row_image is set to 'full'")
+			if vttablet.VReplicationExperimentalFlags /**/ & /**/ vttablet.VReplicationExperimentalFlagAllowNoBlobBinlogRowImage == 0 {
+				return false, nil, false, fmt.Errorf("partial row image encountered: ensure binlog_row_image is set to 'full'")
+			} else {
+				partial = true
+			}
+			continue
 		}
 		if nullColumns.Bit(valueIndex) {
 			valueIndex++
@@ -949,7 +988,7 @@ func (vs *vstreamer) extractRowAndFilter(plan *streamerPlan, data []byte, dataCo
 		if err != nil {
 			log.Errorf("extractRowAndFilter: %s, table: %s, colNum: %d, fields: %+v, current values: %+v",
 				err, plan.Table.Name, colNum, plan.Table.Fields, values)
-			return false, nil, err
+			return false, nil, false, err
 		}
 		pos += l
 
@@ -959,7 +998,7 @@ func (vs *vstreamer) extractRowAndFilter(plan *streamerPlan, data []byte, dataCo
 	}
 	filtered := make([]sqltypes.Value, len(plan.ColExprs))
 	ok, err := plan.filter(values, filtered, charsets)
-	return ok, filtered, err
+	return ok, filtered, partial, err
 }
 
 func wrapError(err error, stopPos mysql.Position, vse *Engine) error {

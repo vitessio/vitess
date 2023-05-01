@@ -191,10 +191,8 @@ const Advanced: React.FC = () => {
         }
     );
 
-    const [
-        validateVersionShardResponse,
-        setValidateVersionShardResponse,
-    ] = useState<vtctldata.ValidateVersionShardResponse | null>(null);
+    const [validateVersionShardResponse, setValidateVersionShardResponse] =
+        useState<vtctldata.ValidateVersionShardResponse | null>(null);
 
     const validateVersionShardMutation = useValidateVersionShard(
         {

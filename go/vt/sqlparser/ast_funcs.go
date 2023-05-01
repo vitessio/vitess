@@ -920,8 +920,12 @@ func containEscapableChars(s string, at AtCount) bool {
 }
 
 func formatID(buf *TrackedBuffer, original string, at AtCount) {
+	if buf.escape == escapeNoIdentifiers {
+		buf.WriteString(original)
+		return
+	}
 	_, isKeyword := keywordLookupTable.LookupString(original)
-	if buf.escape || isKeyword || containEscapableChars(original, at) {
+	if buf.escape == escapeAllIdentifiers || isKeyword || containEscapableChars(original, at) {
 		writeEscapedString(buf, original)
 	} else {
 		buf.WriteString(original)
@@ -1008,12 +1012,12 @@ func (node *Select) GetColumns() SelectExprs {
 	return node.SelectExprs
 }
 
-// SetComments implements the SelectStatement interface
+// SetComments implements the Commented interface
 func (node *Select) SetComments(comments Comments) {
 	node.Comments = comments.Parsed()
 }
 
-// GetComments implements the SelectStatement interface
+// GetParsedComments implements the Commented interface
 func (node *Select) GetParsedComments() *ParsedComments {
 	return node.Comments
 }
@@ -1436,18 +1440,6 @@ func (ty IndexHintType) ToString() string {
 		return ForceStr
 	default:
 		return "Unknown IndexHintType"
-	}
-}
-
-// ToString returns the type as a string
-func (ty DeallocateStmtType) ToString() string {
-	switch ty {
-	case DeallocateType:
-		return DeallocateStr
-	case DropType:
-		return DropStr
-	default:
-		return "Unknown Deallocate Statement Type"
 	}
 }
 
@@ -2256,6 +2248,40 @@ func AndExpressions(exprs ...Expr) Expr {
 
 // Equals is the default Comparator for AST expressions.
 var Equals = &Comparator{}
+
+// ToString returns the type as a string
+func (ty GeomPropertyType) ToString() string {
+	switch ty {
+	case IsEmpty:
+		return IsEmptyStr
+	case IsSimple:
+		return IsSimpleStr
+	case Envelope:
+		return EnvelopeStr
+	case GeometryType:
+		return GeometryTypeStr
+	case Dimension:
+		return DimensionStr
+	default:
+		return "Unknown GeomPropertyType"
+	}
+}
+
+// ToString returns the type as a string
+func (ty PointPropertyType) ToString() string {
+	switch ty {
+	case XCordinate:
+		return XCordinateStr
+	case YCordinate:
+		return YCordinateStr
+	case Latitude:
+		return LatitudeStr
+	case Longitude:
+		return LongitudeStr
+	default:
+		return "Unknown PointPropertyType"
+	}
+}
 
 // ToString returns the type as a string
 func (ty GeomFormatType) ToString() string {

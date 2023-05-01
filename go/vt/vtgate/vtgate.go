@@ -77,8 +77,6 @@ var (
 	noScatter          bool
 	enableShardRouting bool
 
-	// TODO(deepthi): change these two vars to unexported and move to healthcheck.go when LegacyHealthcheck is removed
-
 	// healthCheckRetryDelay is the time to wait before retrying healthcheck
 	healthCheckRetryDelay = 2 * time.Millisecond
 	// healthCheckTimeout is the timeout on the RPC call to tablets
@@ -411,13 +409,13 @@ func resolveAndLoadKeyspace(ctx context.Context, srvResolver *srvtopo.Resolver, 
 }
 
 func (vtg *VTGate) registerDebugEnvHandler() {
-	http.HandleFunc("/debug/env", func(w http.ResponseWriter, r *http.Request) {
+	servenv.HTTPHandleFunc("/debug/env", func(w http.ResponseWriter, r *http.Request) {
 		debugEnvHandler(vtg, w, r)
 	})
 }
 
 func (vtg *VTGate) registerDebugHealthHandler() {
-	http.HandleFunc("/debug/health", func(w http.ResponseWriter, r *http.Request) {
+	servenv.HTTPHandleFunc("/debug/health", func(w http.ResponseWriter, r *http.Request) {
 		if err := acl.CheckAccessHTTP(r, acl.MONITORING); err != nil {
 			acl.SendError(w, err)
 			return
@@ -584,7 +582,7 @@ func (vtg *VTGate) VStream(ctx context.Context, tabletType topodatapb.TabletType
 
 // GetGatewayCacheStatus returns a displayable version of the Gateway cache.
 func (vtg *VTGate) GetGatewayCacheStatus() TabletCacheStatusList {
-	return vtg.resolver.GetGatewayCacheStatus()
+	return vtg.gw.CacheStatus()
 }
 
 // VSchemaStats returns the loaded vschema stats.

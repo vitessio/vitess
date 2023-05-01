@@ -390,7 +390,7 @@ var commands = []commandGroup{
 			{
 				name:   "CreateKeyspace",
 				method: commandCreateKeyspace,
-				params: "[--sharding_column_name=name] [--sharding_column_type=type] [--served_from=tablettype1:ks1,tablettype2:ks2,...] [--force] [--keyspace_type=type] [--base_keyspace=base_keyspace] [--snapshot_time=time] [--durability-policy=policy_name] [--sidecar-db-name=db_name] <keyspace name>",
+				params: "[--served_from=tablettype1:ks1,tablettype2:ks2,...] [--force] [--keyspace_type=type] [--base_keyspace=base_keyspace] [--snapshot_time=time] [--durability-policy=policy_name] [--sidecar-db-name=db_name] <keyspace name>",
 				help:   "Creates the specified keyspace. keyspace_type can be NORMAL or SNAPSHOT. For a SNAPSHOT keyspace you must specify the name of a base_keyspace, and a snapshot_time in UTC, in RFC3339 time format, e.g. 2006-01-02T15:04:05+00:00",
 			},
 			{
@@ -2149,7 +2149,14 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *pfl
 			return err
 		}
 		s += fmt.Sprintf("The following vreplication streams exist for workflow %s.%s:\n\n", target, workflowName)
-		for ksShard := range res.ShardStatuses {
+
+		// Sort the results for consistent and intuitive output.
+		ksShardKeys := make([]string, 0, len(res.ShardStatuses))
+		for ksShardKey := range res.ShardStatuses {
+			ksShardKeys = append(ksShardKeys, ksShardKey)
+		}
+		sort.Strings(ksShardKeys)
+		for _, ksShard := range ksShardKeys {
 			statuses := res.ShardStatuses[ksShard].PrimaryReplicationStatuses
 			for _, st := range statuses {
 				msg := ""
@@ -3505,42 +3512,16 @@ func commandUpdateThrottlerConfig(ctx context.Context, wr *wrangler.Wrangler, su
 
 	keyspace := subFlags.Arg(0)
 
-	update := func(throttlerConfig *topodatapb.ThrottlerConfig) *topodatapb.ThrottlerConfig {
-		if throttlerConfig == nil {
-			throttlerConfig = &topodatapb.ThrottlerConfig{}
-		}
-		if customQuerySet {
-			// custom query provided
-			throttlerConfig.CustomQuery = *customQuery
-			throttlerConfig.Threshold = *threshold // allowed to be zero/negative because who knows what kind of custom query this is
-		} else {
-			// no custom query, throttler works by querying replication lag. We only allow positive values
-			if *threshold > 0 {
-				throttlerConfig.Threshold = *threshold
-			}
-		}
-		if *enable {
-			throttlerConfig.Enabled = true
-		}
-		if *disable {
-			throttlerConfig.Enabled = false
-		}
-		if *checkAsCheckSelf {
-			throttlerConfig.CheckAsCheckSelf = true
-		}
-		if *checkAsCheckShard {
-			throttlerConfig.CheckAsCheckSelf = false
-		}
-		return throttlerConfig
-	}
-
-	ctx, unlock, lockErr := wr.TopoServer().LockKeyspace(ctx, keyspace, "UpdateThrottlerConfig")
-	if lockErr != nil {
-		return lockErr
-	}
-	defer unlock(&err)
-
-	_, err = wr.TopoServer().UpdateSrvKeyspaceThrottlerConfig(ctx, keyspace, []string{}, update)
+	_, err = wr.VtctldServer().UpdateThrottlerConfig(ctx, &vtctldatapb.UpdateThrottlerConfigRequest{
+		Keyspace:          keyspace,
+		Enable:            *enable,
+		Disable:           *disable,
+		CustomQuery:       *customQuery,
+		CustomQuerySet:    customQuerySet,
+		Threshold:         *threshold,
+		CheckAsCheckSelf:  *checkAsCheckSelf,
+		CheckAsCheckShard: *checkAsCheckShard,
+	})
 	return err
 }
 

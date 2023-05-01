@@ -29,8 +29,8 @@ func BreakExpressionInLHSandRHS(
 	ctx *plancontext.PlanningContext,
 	expr sqlparser.Expr,
 	lhs semantics.TableSet,
-) (bvNames []string, columns []*sqlparser.ColName, rewrittenExpr sqlparser.Expr, err error) {
-	rewrittenExpr = sqlparser.CopyOnRewrite(expr, nil, func(cursor *sqlparser.CopyOnWriteCursor) {
+) (col JoinColumn, err error) {
+	rewrittenExpr := sqlparser.CopyOnRewrite(expr, nil, func(cursor *sqlparser.CopyOnWriteCursor) {
 		node, ok := cursor.Node().(*sqlparser.ColName)
 		if !ok {
 			return
@@ -46,9 +46,9 @@ func BreakExpressionInLHSandRHS(
 		}
 
 		node.Qualifier.Qualifier = sqlparser.NewIdentifierCS("")
-		columns = append(columns, node)
+		col.LHSExprs = append(col.LHSExprs, node)
 		bvName := node.CompliantName()
-		bvNames = append(bvNames, bvName)
+		col.BvNames = append(col.BvNames, bvName)
 		arg := sqlparser.NewArgument(bvName)
 		// we are replacing one of the sides of the comparison with an argument,
 		// but we don't want to lose the type information we have, so we copy it over
@@ -57,8 +57,9 @@ func BreakExpressionInLHSandRHS(
 	}, nil).(sqlparser.Expr)
 
 	if err != nil {
-		return nil, nil, nil, err
+		return JoinColumn{}, err
 	}
 	ctx.JoinPredicates[expr] = append(ctx.JoinPredicates[expr], rewrittenExpr)
+	col.RHSExpr = rewrittenExpr
 	return
 }
