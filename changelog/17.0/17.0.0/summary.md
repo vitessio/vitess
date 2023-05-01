@@ -73,13 +73,13 @@ Previously, VTAdmin web used the Create React App framework to test, build, and 
 
 Prior to v17, it was possible to create a keyspace with invalid characters, which would then be inaccessible to various cluster management operations.
 
-Keyspace names may no longer contain the forward slash ("/") character, and TopoServer's `GetKeyspace` and `CreateKeyspace` methods return an error if given such a name.
+Keyspace names are restricted to using only ASCII characters, digits and `_` and `-`. TopoServer's `GetKeyspace` and `CreateKeyspace` methods return an error if given an invalid name.
 
 #### <a id="shard-name-validation"> Shard name validation in TopoServer
 
 Prior to v17, it was possible to create a shard name with invalid characters, which would then be inaccessible to various cluster management operations.
 
-Shard names may no longer contain the forward slash ("/") character, and TopoServer's `CreateShard` method returns an error if given such a name.
+Shard names are restricted to using only ASCII characters, digits and `_` and `-`. TopoServer's `GetShard` and `CreateShard` methods return an error if given an invalid name.
 
 #### <a id="VtctldClient-RestoreFromBackup"> VtctldClient command RestoreFromBackup will now use the correct context
 
