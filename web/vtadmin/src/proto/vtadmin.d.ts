@@ -20567,6 +20567,248 @@ export namespace tabletmanagerdata {
         public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
+    /** Properties of a MoveTablesCreateRequest. */
+    interface IMoveTablesCreateRequest {
+
+        /** MoveTablesCreateRequest workflow */
+        workflow?: (string|null);
+
+        /** MoveTablesCreateRequest source_keyspace */
+        source_keyspace?: (string|null);
+
+        /** MoveTablesCreateRequest target_keyspace */
+        target_keyspace?: (string|null);
+
+        /** MoveTablesCreateRequest binlog_source */
+        binlog_source?: (binlogdata.IBinlogSource|null);
+
+        /** MoveTablesCreateRequest cells */
+        cells?: (string[]|null);
+
+        /** MoveTablesCreateRequest tablet_types */
+        tablet_types?: (topodata.TabletType[]|null);
+
+        /** MoveTablesCreateRequest auto_start */
+        auto_start?: (boolean|null);
+
+        /** MoveTablesCreateRequest drop_foreign_keys */
+        drop_foreign_keys?: (boolean|null);
+
+        /** MoveTablesCreateRequest defer_secondary_keys */
+        defer_secondary_keys?: (boolean|null);
+    }
+
+    /** Represents a MoveTablesCreateRequest. */
+    class MoveTablesCreateRequest implements IMoveTablesCreateRequest {
+
+        /**
+         * Constructs a new MoveTablesCreateRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: tabletmanagerdata.IMoveTablesCreateRequest);
+
+        /** MoveTablesCreateRequest workflow. */
+        public workflow: string;
+
+        /** MoveTablesCreateRequest source_keyspace. */
+        public source_keyspace: string;
+
+        /** MoveTablesCreateRequest target_keyspace. */
+        public target_keyspace: string;
+
+        /** MoveTablesCreateRequest binlog_source. */
+        public binlog_source?: (binlogdata.IBinlogSource|null);
+
+        /** MoveTablesCreateRequest cells. */
+        public cells: string[];
+
+        /** MoveTablesCreateRequest tablet_types. */
+        public tablet_types: topodata.TabletType[];
+
+        /** MoveTablesCreateRequest auto_start. */
+        public auto_start: boolean;
+
+        /** MoveTablesCreateRequest drop_foreign_keys. */
+        public drop_foreign_keys: boolean;
+
+        /** MoveTablesCreateRequest defer_secondary_keys. */
+        public defer_secondary_keys: boolean;
+
+        /**
+         * Creates a new MoveTablesCreateRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns MoveTablesCreateRequest instance
+         */
+        public static create(properties?: tabletmanagerdata.IMoveTablesCreateRequest): tabletmanagerdata.MoveTablesCreateRequest;
+
+        /**
+         * Encodes the specified MoveTablesCreateRequest message. Does not implicitly {@link tabletmanagerdata.MoveTablesCreateRequest.verify|verify} messages.
+         * @param message MoveTablesCreateRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: tabletmanagerdata.IMoveTablesCreateRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified MoveTablesCreateRequest message, length delimited. Does not implicitly {@link tabletmanagerdata.MoveTablesCreateRequest.verify|verify} messages.
+         * @param message MoveTablesCreateRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: tabletmanagerdata.IMoveTablesCreateRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a MoveTablesCreateRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns MoveTablesCreateRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): tabletmanagerdata.MoveTablesCreateRequest;
+
+        /**
+         * Decodes a MoveTablesCreateRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns MoveTablesCreateRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): tabletmanagerdata.MoveTablesCreateRequest;
+
+        /**
+         * Verifies a MoveTablesCreateRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a MoveTablesCreateRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns MoveTablesCreateRequest
+         */
+        public static fromObject(object: { [k: string]: any }): tabletmanagerdata.MoveTablesCreateRequest;
+
+        /**
+         * Creates a plain object from a MoveTablesCreateRequest message. Also converts values to other types if specified.
+         * @param message MoveTablesCreateRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: tabletmanagerdata.MoveTablesCreateRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this MoveTablesCreateRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for MoveTablesCreateRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a MoveTablesCreateResponse. */
+    interface IMoveTablesCreateResponse {
+
+        /** MoveTablesCreateResponse result */
+        result?: (query.IQueryResult|null);
+    }
+
+    /** Represents a MoveTablesCreateResponse. */
+    class MoveTablesCreateResponse implements IMoveTablesCreateResponse {
+
+        /**
+         * Constructs a new MoveTablesCreateResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: tabletmanagerdata.IMoveTablesCreateResponse);
+
+        /** MoveTablesCreateResponse result. */
+        public result?: (query.IQueryResult|null);
+
+        /**
+         * Creates a new MoveTablesCreateResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns MoveTablesCreateResponse instance
+         */
+        public static create(properties?: tabletmanagerdata.IMoveTablesCreateResponse): tabletmanagerdata.MoveTablesCreateResponse;
+
+        /**
+         * Encodes the specified MoveTablesCreateResponse message. Does not implicitly {@link tabletmanagerdata.MoveTablesCreateResponse.verify|verify} messages.
+         * @param message MoveTablesCreateResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: tabletmanagerdata.IMoveTablesCreateResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified MoveTablesCreateResponse message, length delimited. Does not implicitly {@link tabletmanagerdata.MoveTablesCreateResponse.verify|verify} messages.
+         * @param message MoveTablesCreateResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: tabletmanagerdata.IMoveTablesCreateResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a MoveTablesCreateResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns MoveTablesCreateResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): tabletmanagerdata.MoveTablesCreateResponse;
+
+        /**
+         * Decodes a MoveTablesCreateResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns MoveTablesCreateResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): tabletmanagerdata.MoveTablesCreateResponse;
+
+        /**
+         * Verifies a MoveTablesCreateResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a MoveTablesCreateResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns MoveTablesCreateResponse
+         */
+        public static fromObject(object: { [k: string]: any }): tabletmanagerdata.MoveTablesCreateResponse;
+
+        /**
+         * Creates a plain object from a MoveTablesCreateResponse message. Also converts values to other types if specified.
+         * @param message MoveTablesCreateResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: tabletmanagerdata.MoveTablesCreateResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this MoveTablesCreateResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for MoveTablesCreateResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
     /** Properties of a ReplicationStatusRequest. */
     interface IReplicationStatusRequest {
     }
@@ -50635,6 +50877,230 @@ export namespace vtctldata {
 
         /**
          * Gets the default type url for InitShardPrimaryResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a MoveTablesCreateRequest. */
+    interface IMoveTablesCreateRequest {
+
+        /** MoveTablesCreateRequest tablet_request */
+        tablet_request?: (tabletmanagerdata.IMoveTablesCreateRequest|null);
+
+        /** MoveTablesCreateRequest all_tables */
+        all_tables?: (boolean|null);
+
+        /** MoveTablesCreateRequest include_tables */
+        include_tables?: (string[]|null);
+
+        /** MoveTablesCreateRequest exclude_tables */
+        exclude_tables?: (string[]|null);
+
+        /** MoveTablesCreateRequest timeout */
+        timeout?: (vttime.IDuration|null);
+    }
+
+    /** Represents a MoveTablesCreateRequest. */
+    class MoveTablesCreateRequest implements IMoveTablesCreateRequest {
+
+        /**
+         * Constructs a new MoveTablesCreateRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IMoveTablesCreateRequest);
+
+        /** MoveTablesCreateRequest tablet_request. */
+        public tablet_request?: (tabletmanagerdata.IMoveTablesCreateRequest|null);
+
+        /** MoveTablesCreateRequest all_tables. */
+        public all_tables: boolean;
+
+        /** MoveTablesCreateRequest include_tables. */
+        public include_tables: string[];
+
+        /** MoveTablesCreateRequest exclude_tables. */
+        public exclude_tables: string[];
+
+        /** MoveTablesCreateRequest timeout. */
+        public timeout?: (vttime.IDuration|null);
+
+        /**
+         * Creates a new MoveTablesCreateRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns MoveTablesCreateRequest instance
+         */
+        public static create(properties?: vtctldata.IMoveTablesCreateRequest): vtctldata.MoveTablesCreateRequest;
+
+        /**
+         * Encodes the specified MoveTablesCreateRequest message. Does not implicitly {@link vtctldata.MoveTablesCreateRequest.verify|verify} messages.
+         * @param message MoveTablesCreateRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IMoveTablesCreateRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified MoveTablesCreateRequest message, length delimited. Does not implicitly {@link vtctldata.MoveTablesCreateRequest.verify|verify} messages.
+         * @param message MoveTablesCreateRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IMoveTablesCreateRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a MoveTablesCreateRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns MoveTablesCreateRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.MoveTablesCreateRequest;
+
+        /**
+         * Decodes a MoveTablesCreateRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns MoveTablesCreateRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.MoveTablesCreateRequest;
+
+        /**
+         * Verifies a MoveTablesCreateRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a MoveTablesCreateRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns MoveTablesCreateRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.MoveTablesCreateRequest;
+
+        /**
+         * Creates a plain object from a MoveTablesCreateRequest message. Also converts values to other types if specified.
+         * @param message MoveTablesCreateRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.MoveTablesCreateRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this MoveTablesCreateRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for MoveTablesCreateRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a MoveTablesCreateResponse. */
+    interface IMoveTablesCreateResponse {
+
+        /** MoveTablesCreateResponse summary */
+        summary?: (string|null);
+
+        /** MoveTablesCreateResponse details */
+        details?: (string|null);
+    }
+
+    /** Represents a MoveTablesCreateResponse. */
+    class MoveTablesCreateResponse implements IMoveTablesCreateResponse {
+
+        /**
+         * Constructs a new MoveTablesCreateResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IMoveTablesCreateResponse);
+
+        /** MoveTablesCreateResponse summary. */
+        public summary: string;
+
+        /** MoveTablesCreateResponse details. */
+        public details: string;
+
+        /**
+         * Creates a new MoveTablesCreateResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns MoveTablesCreateResponse instance
+         */
+        public static create(properties?: vtctldata.IMoveTablesCreateResponse): vtctldata.MoveTablesCreateResponse;
+
+        /**
+         * Encodes the specified MoveTablesCreateResponse message. Does not implicitly {@link vtctldata.MoveTablesCreateResponse.verify|verify} messages.
+         * @param message MoveTablesCreateResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IMoveTablesCreateResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified MoveTablesCreateResponse message, length delimited. Does not implicitly {@link vtctldata.MoveTablesCreateResponse.verify|verify} messages.
+         * @param message MoveTablesCreateResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IMoveTablesCreateResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a MoveTablesCreateResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns MoveTablesCreateResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.MoveTablesCreateResponse;
+
+        /**
+         * Decodes a MoveTablesCreateResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns MoveTablesCreateResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.MoveTablesCreateResponse;
+
+        /**
+         * Verifies a MoveTablesCreateResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a MoveTablesCreateResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns MoveTablesCreateResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.MoveTablesCreateResponse;
+
+        /**
+         * Creates a plain object from a MoveTablesCreateResponse message. Also converts values to other types if specified.
+         * @param message MoveTablesCreateResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.MoveTablesCreateResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this MoveTablesCreateResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for MoveTablesCreateResponse
          * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
          * @returns The default type url
          */

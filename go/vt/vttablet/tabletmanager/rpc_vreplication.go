@@ -25,6 +25,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/textutil"
 
+	"vitess.io/vitess/go/vt/log"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
@@ -33,29 +34,57 @@ import (
 )
 
 const (
+	workflowType    = binlogdatapb.VReplicationWorkflowType_MoveTables
+	workflowSubType = binlogdatapb.VReplicationWorkflowSubType_None
+
+	// Create a new MoveTables VReplication workflow record.
+	sqlMoveTablesCreate = "insert into %s.vreplication(workflow, source, pos, max_tps, max_replication_lag, cell, tablet_types, time_updated, transaction_timestamp, state, db_name, workflow_type, workflow_sub_type, defer_secondary_keys) values (%a, %a, '', 0, 0, %a, %a, now(), 0, %a, %a, %a, %a, %a)"
 	// Retrieve the current configuration values for a workflow's vreplication stream.
 	sqlSelectVRWorkflowConfig = "select id, source, cell, tablet_types from %s.vreplication where workflow = %a"
 	// Update the configuration values for a workflow's vreplication stream.
 	sqlUpdateVRWorkflowConfig = "update %s.vreplication set source = %a, cell = %a, tablet_types = %a where id = %a"
 )
 
-// VReplicationExec executes a vreplication command.
-func (tm *TabletManager) VReplicationExec(ctx context.Context, query string) (*querypb.QueryResult, error) {
-	// Replace any provided sidecar databsae qualifiers with the correct one.
-	uq, err := sqlparser.ReplaceTableQualifiers(query, sidecardb.DefaultName, sidecardb.GetName())
-	if err != nil {
-		return nil, err
+func (tm *TabletManager) MoveTablesCreate(ctx context.Context, req *tabletmanagerdatapb.MoveTablesCreateRequest) (*tabletmanagerdatapb.MoveTablesCreateResponse, error) {
+	tabletTypes := strings.Builder{}
+	for i, tabletType := range req.TabletTypes {
+		if i > 0 {
+			tabletTypes.WriteString(",")
+		}
+		tabletTypes.WriteString(tabletType.String())
 	}
-	qr, err := tm.VREngine.ExecWithDBA(uq)
-	if err != nil {
-		return nil, err
-	}
-	return sqltypes.ResultToProto3(qr), nil
-}
 
-// VReplicationWaitForPos waits for the specified position.
-func (tm *TabletManager) VReplicationWaitForPos(ctx context.Context, id int32, pos string) error {
-	return tm.VREngine.WaitForPos(ctx, id, pos)
+	source, err := prototext.Marshal(req.BinlogSource)
+	if err != nil {
+		return nil, err
+	}
+	wfState := "Stopped"
+	if req.AutoStart {
+		wfState = "Running"
+	}
+	bindVars := map[string]*querypb.BindVariable{
+		"wf":  sqltypes.StringBindVariable(req.Workflow),
+		"sc":  sqltypes.StringBindVariable(string(source)),
+		"cl":  sqltypes.StringBindVariable(strings.Join(req.Cells, ",")),
+		"tt":  sqltypes.StringBindVariable(tabletTypes.String()),
+		"st":  sqltypes.StringBindVariable(wfState),
+		"db":  sqltypes.StringBindVariable(tm.DBConfigs.DBName),
+		"wt":  sqltypes.Int64BindVariable(int64(workflowType)),
+		"wst": sqltypes.Int64BindVariable(int64(workflowSubType)),
+		"ds":  sqltypes.BoolBindVariable(req.DeferSecondaryKeys),
+	}
+	parsed := sqlparser.BuildParsedQuery(sqlMoveTablesCreate, sidecardb.GetIdentifier(), ":wf", ":sc", ":cl", ":tt", ":st", ":db", ":wt", ":wst", ":ds")
+	stmt, err := parsed.GenerateQuery(bindVars, nil)
+	if err != nil {
+		return nil, err
+	}
+	log.Errorf("MoveTablesCreate SQL: %s", stmt)
+	res, err := tm.VREngine.Exec(stmt)
+
+	if err != nil {
+		return nil, err
+	}
+	return &tabletmanagerdatapb.MoveTablesCreateResponse{Result: sqltypes.ResultToProto3(res)}, nil
 }
 
 // UpdateVRWorkflow updates the sidecar databases's vreplication
@@ -132,4 +161,23 @@ func (tm *TabletManager) UpdateVRWorkflow(ctx context.Context, req *tabletmanage
 		return nil, err
 	}
 	return &tabletmanagerdatapb.UpdateVRWorkflowResponse{Result: sqltypes.ResultToProto3(res)}, nil
+}
+
+// VReplicationExec executes a vreplication command.
+func (tm *TabletManager) VReplicationExec(ctx context.Context, query string) (*querypb.QueryResult, error) {
+	// Replace any provided sidecar databsae qualifiers with the correct one.
+	uq, err := sqlparser.ReplaceTableQualifiers(query, sidecardb.DefaultName, sidecardb.GetName())
+	if err != nil {
+		return nil, err
+	}
+	qr, err := tm.VREngine.ExecWithDBA(uq)
+	if err != nil {
+		return nil, err
+	}
+	return sqltypes.ResultToProto3(qr), nil
+}
+
+// VReplicationWaitForPos waits for the specified position.
+func (tm *TabletManager) VReplicationWaitForPos(ctx context.Context, id int32, pos string) error {
+	return tm.VREngine.WaitForPos(ctx, id, pos)
 }

@@ -156,6 +156,9 @@ service Vtctld {
   // PlannedReparentShard or EmergencyReparentShard should be used in those
   // cases instead.
   rpc InitShardPrimary(vtctldata.InitShardPrimaryRequest) returns (vtctldata.InitShardPrimaryResponse) {};
+  // MoveTablesCreate creates a workflow which moves one or more tables from a
+  // source keyspace to a target keyspace.
+  rpc MoveTablesCreate(vtctldata.MoveTablesCreateRequest) returns (vtctldata.MoveTablesCreateResponse) {};
   // PingTablet checks that the specified tablet is awake and responding to RPCs.
   // This command can be blocked by other in-flight operations.
   rpc PingTablet(vtctldata.PingTabletRequest) returns (vtctldata.PingTabletResponse) {};

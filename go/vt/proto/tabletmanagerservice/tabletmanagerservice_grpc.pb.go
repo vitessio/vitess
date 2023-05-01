@@ -69,6 +69,7 @@ type TabletManagerClient interface {
 	// GetReplicas asks for the list of mysql replicas
 	GetReplicas(ctx context.Context, in *tabletmanagerdata.GetReplicasRequest, opts ...grpc.CallOption) (*tabletmanagerdata.GetReplicasResponse, error)
 	// VReplication API
+	MoveTablesCreate(ctx context.Context, in *tabletmanagerdata.MoveTablesCreateRequest, opts ...grpc.CallOption) (*tabletmanagerdata.MoveTablesCreateResponse, error)
 	VReplicationExec(ctx context.Context, in *tabletmanagerdata.VReplicationExecRequest, opts ...grpc.CallOption) (*tabletmanagerdata.VReplicationExecResponse, error)
 	VReplicationWaitForPos(ctx context.Context, in *tabletmanagerdata.VReplicationWaitForPosRequest, opts ...grpc.CallOption) (*tabletmanagerdata.VReplicationWaitForPosResponse, error)
 	UpdateVRWorkflow(ctx context.Context, in *tabletmanagerdata.UpdateVRWorkflowRequest, opts ...grpc.CallOption) (*tabletmanagerdata.UpdateVRWorkflowResponse, error)
@@ -367,6 +368,15 @@ func (c *tabletManagerClient) GetReplicas(ctx context.Context, in *tabletmanager
 	return out, nil
 }
 
+func (c *tabletManagerClient) MoveTablesCreate(ctx context.Context, in *tabletmanagerdata.MoveTablesCreateRequest, opts ...grpc.CallOption) (*tabletmanagerdata.MoveTablesCreateResponse, error) {
+	out := new(tabletmanagerdata.MoveTablesCreateResponse)
+	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/MoveTablesCreate", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *tabletManagerClient) VReplicationExec(ctx context.Context, in *tabletmanagerdata.VReplicationExecRequest, opts ...grpc.CallOption) (*tabletmanagerdata.VReplicationExecResponse, error) {
 	out := new(tabletmanagerdata.VReplicationExecResponse)
 	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/VReplicationExec", in, out, opts...)
@@ -634,6 +644,7 @@ type TabletManagerServer interface {
 	// GetReplicas asks for the list of mysql replicas
 	GetReplicas(context.Context, *tabletmanagerdata.GetReplicasRequest) (*tabletmanagerdata.GetReplicasResponse, error)
 	// VReplication API
+	MoveTablesCreate(context.Context, *tabletmanagerdata.MoveTablesCreateRequest) (*tabletmanagerdata.MoveTablesCreateResponse, error)
 	VReplicationExec(context.Context, *tabletmanagerdata.VReplicationExecRequest) (*tabletmanagerdata.VReplicationExecResponse, error)
 	VReplicationWaitForPos(context.Context, *tabletmanagerdata.VReplicationWaitForPosRequest) (*tabletmanagerdata.VReplicationWaitForPosResponse, error)
 	UpdateVRWorkflow(context.Context, *tabletmanagerdata.UpdateVRWorkflowRequest) (*tabletmanagerdata.UpdateVRWorkflowResponse, error)
@@ -760,6 +771,9 @@ func (UnimplementedTabletManagerServer) StartReplicationUntilAfter(context.Conte
 }
 func (UnimplementedTabletManagerServer) GetReplicas(context.Context, *tabletmanagerdata.GetReplicasRequest) (*tabletmanagerdata.GetReplicasResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetReplicas not implemented")
+}
+func (UnimplementedTabletManagerServer) MoveTablesCreate(context.Context, *tabletmanagerdata.MoveTablesCreateRequest) (*tabletmanagerdata.MoveTablesCreateResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method MoveTablesCreate not implemented")
 }
 func (UnimplementedTabletManagerServer) VReplicationExec(context.Context, *tabletmanagerdata.VReplicationExecRequest) (*tabletmanagerdata.VReplicationExecResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method VReplicationExec not implemented")
@@ -1335,6 +1349,24 @@ func _TabletManager_GetReplicas_Handler(srv interface{}, ctx context.Context, de
 	return interceptor(ctx, in, info, handler)
 }
 
+func _TabletManager_MoveTablesCreate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(tabletmanagerdata.MoveTablesCreateRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TabletManagerServer).MoveTablesCreate(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/tabletmanagerservice.TabletManager/MoveTablesCreate",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TabletManagerServer).MoveTablesCreate(ctx, req.(*tabletmanagerdata.MoveTablesCreateRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _TabletManager_VReplicationExec_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(tabletmanagerdata.VReplicationExecRequest)
 	if err := dec(in); err != nil {
@@ -1801,6 +1833,10 @@ var TabletManager_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetReplicas",
 			Handler:    _TabletManager_GetReplicas_Handler,
+		},
+		{
+			MethodName: "MoveTablesCreate",
+			Handler:    _TabletManager_MoveTablesCreate_Handler,
 		},
 		{
 			MethodName: "VReplicationExec",

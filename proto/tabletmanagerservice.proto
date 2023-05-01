@@ -112,6 +112,7 @@ service TabletManager {
   rpc GetReplicas(tabletmanagerdata.GetReplicasRequest) returns (tabletmanagerdata.GetReplicasResponse) {};
 
   // VReplication API
+  rpc MoveTablesCreate(tabletmanagerdata.MoveTablesCreateRequest) returns (tabletmanagerdata.MoveTablesCreateResponse) {};
   rpc VReplicationExec(tabletmanagerdata.VReplicationExecRequest) returns(tabletmanagerdata.VReplicationExecResponse) {};
   rpc VReplicationWaitForPos(tabletmanagerdata.VReplicationWaitForPosRequest) returns(tabletmanagerdata.VReplicationWaitForPosResponse) {};
   rpc UpdateVRWorkflow(tabletmanagerdata.UpdateVRWorkflowRequest) returns(tabletmanagerdata.UpdateVRWorkflowResponse) {};

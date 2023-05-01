@@ -275,6 +275,27 @@ message ExecuteFetchAsAppResponse {
   query.QueryResult result = 1;
 }
 
+message MoveTablesCreateRequest {
+  string workflow = 1;
+  string source_keyspace = 2;
+  string target_keyspace = 3;
+  binlogdata.BinlogSource binlog_source = 4;
+  // optional parameters.
+  repeated string cells = 5;
+  // TabletTypes is the list of tablet types to use when selecting source tablets.
+  repeated topodata.TabletType tablet_types = 6;
+  // AutoStart specifies if the workflow should be started automatically after creation.
+  bool auto_start = 7;
+  bool drop_foreign_keys = 8;
+  // DeferSecondaryKeys specifies if secondary keys should be created in one shot after table
+  // copy finishes.
+  bool defer_secondary_keys = 9;
+}
+
+message MoveTablesCreateResponse {
+  query.QueryResult result = 1;
+}
+
 message ReplicationStatusRequest {
 }
 

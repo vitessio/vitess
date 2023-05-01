@@ -861,6 +861,14 @@ func (itmc *internalTabletManagerClient) WaitForPosition(context.Context, *topod
 	return fmt.Errorf("not implemented in vtcombo")
 }
 
+//
+// VReplication related methods
+//
+
+func (itmc *internalTabletManagerClient) MoveTablesCreate(context.Context, *topodatapb.Tablet, *tabletmanagerdatapb.MoveTablesCreateRequest) (*tabletmanagerdatapb.MoveTablesCreateResponse, error) {
+	return nil, fmt.Errorf("not implemented in vtcombo")
+}
+
 func (itmc *internalTabletManagerClient) VReplicationExec(context.Context, *topodatapb.Tablet, string) (*querypb.QueryResult, error) {
 	return nil, fmt.Errorf("not implemented in vtcombo")
 }

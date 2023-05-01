@@ -2256,6 +2256,23 @@ func (s *VtctldServer) InitShardPrimaryLocked(
 	return nil
 }
 
+// MoveTablesCreate is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) MoveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTablesCreateRequest) (resp *vtctldatapb.MoveTablesCreateResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.MoveTablesCreate")
+	defer span.Finish()
+
+	defer panicHandler(&err)
+
+	span.Annotate("keyspace", req.TabletRequest.TargetKeyspace)
+	span.Annotate("workflow", req.TabletRequest.Workflow)
+	span.Annotate("cells", req.TabletRequest.Cells)
+	span.Annotate("tablet_types", req.TabletRequest.TabletTypes)
+	span.Annotate("on_ddl", req.TabletRequest.BinlogSource.OnDdl)
+
+	resp, err = s.ws.MoveTablesCreate(ctx, req)
+	return resp, err
+}
+
 // PingTablet is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) PingTablet(ctx context.Context, req *vtctldatapb.PingTabletRequest) (resp *vtctldatapb.PingTabletResponse, err error) {
 	span, ctx := trace.NewSpan(ctx, "VtctldServer.PingTablet")

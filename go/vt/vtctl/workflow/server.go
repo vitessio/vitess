@@ -20,6 +20,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"hash/fnv"
+	"math"
 	"sort"
 	"strings"
 	"sync"
@@ -33,7 +35,10 @@ import (
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/schema"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vtctl/workflow/vexec"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
@@ -41,9 +46,18 @@ import (
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/proto/vttime"
+)
+
+const (
+	createDDLAsCopy                = "copy"
+	createDDLAsCopyDropConstraint  = "copy:drop_constraint"
+	createDDLAsCopyDropForeignKeys = "copy:drop_foreign_keys"
 )
 
 var (
@@ -752,6 +766,216 @@ func (s *Server) getWorkflowCopyStates(ctx context.Context, tablet *topo.TabletI
 	return copyStates, nil
 }
 
+// MoveTablesCreate is part of the vtctlservicepb.VtctldServer interface.
+// It passes the embedded TabletRequest object to the given keyspace's
+// target primary tablets that will be executing the workflow.
+func (s *Server) MoveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTablesCreateRequest) (*vtctldatapb.MoveTablesCreateResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "workflow.Server.MoveTablesCreate")
+	defer span.Finish()
+
+	span.Annotate("keyspace", req.TabletRequest.TargetKeyspace)
+	span.Annotate("workflow", req.TabletRequest.Workflow)
+	span.Annotate("cells", req.TabletRequest.Cells)
+	span.Annotate("tablet_types", req.TabletRequest.TabletTypes)
+	span.Annotate("on_ddl", req.TabletRequest.BinlogSource.OnDdl)
+
+	exists, err := s.doesWorkflowExist(ctx, req.TabletRequest.TargetKeyspace, req.TabletRequest.Workflow)
+	if err != nil {
+		return nil, err
+	}
+	if exists {
+		return nil, vterrors.Errorf(vtrpc.Code_ALREADY_EXISTS, "the %s workflow already exists in the %s keyspace",
+			req.TabletRequest.Workflow, req.TabletRequest.TargetKeyspace)
+	}
+
+	sourceKeyspace := req.TabletRequest.SourceKeyspace
+	targetKeyspace := req.TabletRequest.TargetKeyspace
+	var externalTopo *topo.Server
+
+	if req.TabletRequest.BinlogSource.ExternalCluster != "" { // when the source is an external mysql cluster mounted using the Mount command
+		externalTopo, err = s.ts.OpenExternalVitessClusterServer(ctx, req.TabletRequest.BinlogSource.ExternalCluster)
+		if err != nil {
+			return nil, err
+		}
+		s.ts = externalTopo
+		log.Infof("Successfully opened external topo: %+v", externalTopo)
+	}
+
+	var vschema *vschemapb.Keyspace
+	vschema, err = s.ts.GetVSchema(ctx, targetKeyspace)
+	if err != nil {
+		return nil, err
+	}
+	if vschema == nil {
+		return nil, fmt.Errorf("no vschema found for target keyspace %s", targetKeyspace)
+	}
+
+	ksTables, err := s.getTablesInKeyspace(ctx, sourceKeyspace)
+	log.Errorf("DEBUG: ksTables: %v", ksTables)
+	if err != nil {
+		return nil, err
+	}
+	if len(req.IncludeTables) > 0 {
+		log.Errorf("DEBUG: InlucdeTables: %v", req.IncludeTables)
+		err = s.validateSourceTablesExist(ctx, sourceKeyspace, ksTables, req.IncludeTables)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		if req.AllTables {
+			log.Errorf("DEBUG: AllTables: %v", req.AllTables)
+			req.IncludeTables = ksTables
+		} else {
+			return nil, fmt.Errorf("no tables to move")
+		}
+	}
+	if len(req.ExcludeTables) > 0 {
+		log.Errorf("DEBUG: ExludeTables: %v", req.ExcludeTables)
+		err = s.validateSourceTablesExist(ctx, sourceKeyspace, ksTables, req.ExcludeTables)
+		if err != nil {
+			return nil, err
+		}
+	}
+	var tables2 []string
+	for _, t := range req.IncludeTables {
+		if shouldInclude(t, req.ExcludeTables) {
+			tables2 = append(tables2, t)
+		}
+	}
+	req.IncludeTables = tables2
+	log.Errorf("DEBUG: IncludeTables after: %v", req.IncludeTables)
+	if len(req.IncludeTables) == 0 {
+		return nil, fmt.Errorf("no tables to move")
+	}
+	log.Errorf("Found tables to move: %s", strings.Join(req.IncludeTables, ","))
+
+	if !vschema.Sharded {
+		if err := s.addTablesToVSchema(ctx, sourceKeyspace, vschema, req.IncludeTables, externalTopo == nil); err != nil {
+			return nil, err
+		}
+	}
+	if externalTopo == nil {
+		// Save routing rules before vschema. If we save vschema first, and routing rules
+		// fails to save, we may generate duplicate table errors.
+		rules, err := topotools.GetRoutingRules(ctx, s.ts)
+		if err != nil {
+			return nil, err
+		}
+		for _, table := range req.IncludeTables {
+			toSource := []string{sourceKeyspace + "." + table}
+			rules[table] = toSource
+			rules[table+"@replica"] = toSource
+			rules[table+"@rdonly"] = toSource
+			rules[targetKeyspace+"."+table] = toSource
+			rules[targetKeyspace+"."+table+"@replica"] = toSource
+			rules[targetKeyspace+"."+table+"@rdonly"] = toSource
+			rules[targetKeyspace+"."+table] = toSource
+			rules[sourceKeyspace+"."+table+"@replica"] = toSource
+			rules[sourceKeyspace+"."+table+"@rdonly"] = toSource
+		}
+		if err := topotools.SaveRoutingRules(ctx, s.ts, rules); err != nil {
+			return nil, err
+		}
+
+		if vschema != nil {
+			// We added to the vschema.
+			if err := s.ts.SaveVSchema(ctx, targetKeyspace, vschema); err != nil {
+				return nil, err
+			}
+		}
+	}
+	if err := s.ts.RebuildSrvVSchema(ctx, nil); err != nil {
+		return nil, err
+	}
+
+	if req.TabletRequest.BinlogSource.SourceTimeZone != "" {
+		req.TabletRequest.BinlogSource.TargetTimeZone = "UTC"
+	}
+
+	req.TabletRequest.BinlogSource.Filter = &binlogdatapb.Filter{}
+	req.TabletRequest.BinlogSource.Filter.Rules = make([]*binlogdatapb.Rule, 0, len(req.IncludeTables))
+	for _, table := range req.IncludeTables {
+		buf := sqlparser.NewTrackedBuffer(nil)
+		buf.Myprintf("select * from %v", sqlparser.NewIdentifierCS(table))
+		req.TabletRequest.BinlogSource.Filter.Rules = append(req.TabletRequest.BinlogSource.Filter.Rules,
+			&binlogdatapb.Rule{
+				Match:  table,
+				Filter: buf.String(),
+			},
+		)
+	}
+
+	/*
+			mz, err := wr.prepareMaterializerStreams(ctx, ms)
+			if err != nil {
+				return nil, err
+			}
+
+		if req.TabletRequest.BinlogSource.SourceTimeZone != "" {
+			if err := s.checkTZConversion(ctx, req.TabletRequest.BinlogSource.SourceTimeZone); err != nil {
+				return nil, err
+			}
+		}
+
+			migrationID, err := getMigrationID(targetKeyspace, tabletShards)
+			if err != nil {
+				return nil, err
+			}
+
+			if req.TabletRequest.BinlogSource.ExternalCluster == "" {
+				exists, tablets, err := s.checkIfPreviousJournalExists(ctx, mz, migrationID)
+				if err != nil {
+					return err
+				}
+				if exists {
+					log.Errorf("Found a previous journal entry for %d", migrationID)
+					msg := fmt.Sprintf("found an entry from a previous run for migration id %d in _vt.resharding_journal of tablets %s,",
+						migrationID, strings.Join(tablets, ","))
+					msg += fmt.Sprintf("please review and delete it before proceeding and restart the workflow using the Workflow %s.%s start",
+						req.TabletRequest.Workflow, targetKeyspace)
+					return nil, fmt.Errorf(msg)
+				}
+			}
+	*/
+
+	vx := vexec.NewVExec(req.TabletRequest.TargetKeyspace, req.TabletRequest.Workflow, s.ts, s.tmc)
+	callback := func(ctx context.Context, tablet *topo.TabletInfo) (*querypb.QueryResult, error) {
+		res, err := s.tmc.MoveTablesCreate(ctx, tablet.Tablet, req.TabletRequest)
+		if err != nil {
+			return nil, err
+		}
+		return res.Result, err
+	}
+	res, err := vx.CallbackContext(ctx, callback)
+	if err != nil {
+		if topo.IsErrType(err, topo.NoNode) {
+			return nil, vterrors.Wrapf(err, "%s keyspace does not exist", req.TabletRequest.TargetKeyspace)
+		}
+		return nil, err
+	}
+
+	if len(res) == 0 {
+		return nil, fmt.Errorf("failed to create the %s workflow does in the %s keyspace",
+			req.TabletRequest.Workflow, req.TabletRequest.TargetKeyspace)
+	}
+
+	response := &vtctldatapb.MoveTablesCreateResponse{}
+	response.Summary = fmt.Sprintf("Successfully created the %s workflow on (%d) target primary tablets in the %s keyspace",
+		req.TabletRequest.Workflow, len(res), req.TabletRequest.TargetKeyspace)
+	/*
+		details := make([]*vtctldatapb.WorkflowUpdateResponse_TabletInfo, 0, len(res))
+		for tinfo, tres := range res {
+			result := &vtctldatapb.WorkflowUpdateResponse_TabletInfo{
+				Tablet:  fmt.Sprintf("%s-%d (%s/%s)", tinfo.Alias.Cell, tinfo.Alias.Uid, tinfo.Keyspace, tinfo.Shard),
+				Changed: tres.RowsAffected > 0, // Can be more than one with shard merges
+			}
+			details = append(details, result)
+		}
+		response.Details = details
+	*/
+	return response, nil
+}
+
 // WorkflowUpdate is part of the vtctlservicepb.VtctldServer interface.
 // It passes the embedded TabletRequest object to the given keyspace's
 // target primary tablets that are participating in the given workflow.
@@ -797,4 +1021,137 @@ func (s *Server) WorkflowUpdate(ctx context.Context, req *vtctldatapb.WorkflowUp
 	}
 	response.Details = details
 	return response, nil
+}
+
+func (s *Server) doesWorkflowExist(ctx context.Context, keyspace, workflow string) (bool, error) {
+	req := &vtctldatapb.GetWorkflowsRequest{
+		Keyspace: keyspace,
+	}
+	resp, err := s.GetWorkflows(ctx, req)
+	if err != nil {
+		return false, err
+	}
+	for _, wf := range resp.GetWorkflows() {
+		if wf.Name == workflow {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func (s *Server) getTablesInKeyspace(ctx context.Context, keyspace string) ([]string, error) {
+	shards, err := s.ts.GetServingShards(ctx, keyspace)
+	if err != nil {
+		return nil, err
+	}
+	if len(shards) == 0 {
+		return nil, fmt.Errorf("keyspace %s has no shards", keyspace)
+	}
+	primary := shards[0].PrimaryAlias
+	if primary == nil {
+		return nil, fmt.Errorf("shard does not have a primary: %v", shards[0].ShardName())
+	}
+	allTables := []string{"/.*/"}
+
+	ti, err := s.ts.GetTablet(ctx, primary)
+	if err != nil {
+		return nil, err
+	}
+	req := &tabletmanagerdatapb.GetSchemaRequest{Tables: allTables}
+	schema, err := s.tmc.GetSchema(ctx, ti.Tablet, req)
+	if err != nil {
+		return nil, err
+	}
+	log.Infof("got table schemas from source primary %v.", primary)
+
+	var sourceTables []string
+	for _, td := range schema.TableDefinitions {
+		sourceTables = append(sourceTables, td.Name)
+	}
+	return sourceTables, nil
+}
+
+func (s *Server) validateSourceTablesExist(ctx context.Context, sourceKeyspace string, ksTables, tables []string) error {
+	// validate that tables provided are present in the source keyspace
+	var missingTables []string
+	for _, table := range tables {
+		if schema.IsInternalOperationTableName(table) {
+			continue
+		}
+		found := false
+
+		for _, ksTable := range ksTables {
+			if table == ksTable {
+				found = true
+				break
+			}
+		}
+		if !found {
+			missingTables = append(missingTables, table)
+		}
+	}
+	if len(missingTables) > 0 {
+		return fmt.Errorf("table(s) not found in source keyspace %s: %s", sourceKeyspace, strings.Join(missingTables, ","))
+	}
+	return nil
+}
+
+// addTablesToVSchema adds tables to an (unsharded) vschema. Depending on copyAttributes It will also add any sequence info
+// that is associated with a table by copying it from the vschema of the source keyspace.
+// For a migrate workflow we do not copy attributes since the source keyspace is just a proxy to import data into Vitess
+// Todo: For now we only copy sequence but later we may also want to copy other attributes like authoritative column flag and list of columns
+func (s *Server) addTablesToVSchema(ctx context.Context, sourceKeyspace string, targetVSchema *vschemapb.Keyspace, tables []string, copyAttributes bool) error {
+	if targetVSchema.Tables == nil {
+		targetVSchema.Tables = make(map[string]*vschemapb.Table)
+	}
+	for _, table := range tables {
+		targetVSchema.Tables[table] = &vschemapb.Table{}
+	}
+
+	if copyAttributes { // if source keyspace is provided, copy over the sequence info.
+		srcVSchema, err := s.ts.GetVSchema(ctx, sourceKeyspace)
+		if err != nil {
+			return err
+		}
+		for _, table := range tables {
+			srcTable, ok := srcVSchema.Tables[table]
+			if ok {
+				targetVSchema.Tables[table].AutoIncrement = srcTable.AutoIncrement
+			}
+		}
+
+	}
+	return nil
+}
+
+func shouldInclude(table string, excludes []string) bool {
+	// We filter out internal tables elsewhere when processing SchemaDefinition
+	// structures built from the GetSchema database related API calls. In this
+	// case, however, the table list comes from the user via the -tables flag
+	// so we need to filter out internal table names here in case a user has
+	// explicitly specified some.
+	// This could happen if there's some automated tooling that creates the list of
+	// tables to explicitly specify.
+	// But given that this should never be done in practice, we ignore the request.
+	if schema.IsInternalOperationTableName(table) {
+		return false
+	}
+	for _, t := range excludes {
+		if t == table {
+			return false
+		}
+	}
+	return true
+}
+
+// getMigrationID produces a reproducible hash based on the input parameters.
+func getMigrationID(targetKeyspace string, shardTablets []string) (int64, error) {
+	sort.Strings(shardTablets)
+	hasher := fnv.New64()
+	hasher.Write([]byte(targetKeyspace))
+	for _, str := range shardTablets {
+		hasher.Write([]byte(str))
+	}
+	// Convert to int64 after dropping the highest bit.
+	return int64(hasher.Sum64() & math.MaxInt64), nil
 }

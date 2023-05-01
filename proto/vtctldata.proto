@@ -811,6 +811,21 @@ message InitShardPrimaryResponse {
   repeated logutil.Event events = 1;
 }
 
+message MoveTablesCreateRequest {
+  // The request gets passed on to each primary tablet involved
+  // in the workflow via the MoveTablesCreate tabletmanager RPC.
+  tabletmanagerdata.MoveTablesCreateRequest tablet_request = 1;
+  bool all_tables = 2;
+  repeated string include_tables = 3;
+  repeated string exclude_tables = 4;
+  vttime.Duration timeout = 5;
+}
+
+message MoveTablesCreateResponse {
+  string summary = 1;
+  string details = 2;
+}
+
 message PingTabletRequest {
   topodata.TabletAlias tablet_alias = 1;
 }
