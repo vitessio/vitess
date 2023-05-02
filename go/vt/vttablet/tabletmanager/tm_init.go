@@ -910,12 +910,14 @@ func (tm *TabletManager) initializeReplication(ctx context.Context, tabletType t
 
 	semiSyncAction, err := tm.convertBoolToSemiSyncAction(reparentutil.IsReplicaSemiSync(durability, currentPrimary.Tablet, tablet))
 	if err != nil {
-		return nil, err
+		panic(err)
+		//return nil, err
 	}
 
 	tablet.Type = tabletType
 	if err := tm.fixSemiSync(tabletType, semiSyncAction); err != nil {
-		return nil, err
+		panic(err)
+		//return nil, err
 	}
 
 	// Set primary and start replication.

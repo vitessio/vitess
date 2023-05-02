@@ -255,7 +255,8 @@ func (tm *TabletManager) StartReplication(ctx context.Context, semiSync bool) er
 
 	semiSyncAction, err := tm.convertBoolToSemiSyncAction(semiSync)
 	if err != nil {
-		return err
+		panic(err)
+		//return err
 	}
 
 	if err := tm.fixSemiSync(tm.Tablet().Type, semiSyncAction); err != nil {
@@ -332,20 +333,23 @@ func (tm *TabletManager) InitPrimary(ctx context.Context, semiSync bool) (string
 
 	semiSyncAction, err := tm.convertBoolToSemiSyncAction(semiSync)
 	if err != nil {
-		return "", err
+		panic(err)
+		//return "", err
 	}
 
 	// Set the server read-write, from now on we can accept real
 	// client writes. Note that if semi-sync replication is enabled,
 	// we'll still need some replicas to be able to commit transactions.
 	if err := tm.changeTypeLocked(ctx, topodatapb.TabletType_PRIMARY, DBActionSetReadWrite, semiSyncAction); err != nil {
-		return "", err
+		panic(err)
+		//return "", err
 	}
 
 	// Enforce semi-sync after changing the tablet type to PRIMARY. Otherwise, the
 	// primary will hang while trying to create the database.
 	if err := tm.fixSemiSync(topodatapb.TabletType_PRIMARY, semiSyncAction); err != nil {
-		return "", err
+		panic(err)
+		//return "", err
 	}
 
 	return mysql.EncodePosition(pos), nil
@@ -405,7 +409,8 @@ func (tm *TabletManager) InitReplica(ctx context.Context, parent *topodatapb.Tab
 		tt = topodatapb.TabletType_REPLICA
 	}
 	if err := tm.fixSemiSync(tt, semiSyncAction); err != nil {
-		return err
+		panic(err)
+		//return err
 	}
 
 	if err := tm.MysqlDaemon.SetReplicationPosition(ctx, pos); err != nil {
@@ -540,7 +545,8 @@ func (tm *TabletManager) UndoDemotePrimary(ctx context.Context, semiSync bool) e
 
 	semiSyncAction, err := tm.convertBoolToSemiSyncAction(semiSync)
 	if err != nil {
-		return err
+		panic(err)
+		//return err
 	}
 
 	// If using semi-sync, we need to enable source-side.
@@ -866,12 +872,14 @@ func (tm *TabletManager) PromoteReplica(ctx context.Context, semiSync bool) (str
 
 	semiSyncAction, err := tm.convertBoolToSemiSyncAction(semiSync)
 	if err != nil {
-		return "", err
+		panic(err)
+		//return "", err
 	}
 
 	// If using semi-sync, we need to enable it before going read-write.
 	if err := tm.fixSemiSync(topodatapb.TabletType_PRIMARY, semiSyncAction); err != nil {
-		return "", err
+		panic(err)
+		//return "", err
 	}
 
 	if err := tm.changeTypeLocked(ctx, topodatapb.TabletType_PRIMARY, DBActionSetReadWrite, SemiSyncActionNone); err != nil {

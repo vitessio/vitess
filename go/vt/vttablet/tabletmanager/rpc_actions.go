@@ -17,7 +17,6 @@ limitations under the License.
 package tabletmanager
 
 import (
-	"errors"
 	"fmt"
 	"time"
 
@@ -86,7 +85,8 @@ func (tm *TabletManager) ChangeType(ctx context.Context, tabletType topodatapb.T
 
 	semiSyncAction, err := tm.convertBoolToSemiSyncAction(semiSync)
 	if err != nil {
-		return err
+		panic(err)
+		//return err
 	}
 
 	return tm.changeTypeLocked(ctx, tabletType, DBActionNone, semiSyncAction)
@@ -152,7 +152,8 @@ func (tm *TabletManager) RunHealthCheck(ctx context.Context) {
 func (tm *TabletManager) convertBoolToSemiSyncAction(semiSync bool) (SemiSyncAction, error) {
 	semiSyncExtensionLoaded, err := tm.MysqlDaemon.SemiSyncExtensionLoaded()
 	if err != nil {
-		return SemiSyncActionNone, err
+		panic(err)
+		//return SemiSyncActionNone, err
 	}
 
 	if semiSyncExtensionLoaded {
@@ -163,7 +164,8 @@ func (tm *TabletManager) convertBoolToSemiSyncAction(semiSync bool) (SemiSyncAct
 		}
 	} else {
 		if semiSync {
-			return SemiSyncActionNone, errors.New("semi-sync plugins are not loaded.")
+			panic(err)
+			//return SemiSyncActionNone, errors.New("semi-sync plugins are not loaded.")
 		} else {
 			return SemiSyncActionNone, nil
 		}
