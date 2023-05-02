@@ -20573,29 +20573,23 @@ export namespace tabletmanagerdata {
         /** MoveTablesCreateRequest workflow */
         workflow?: (string|null);
 
-        /** MoveTablesCreateRequest source_keyspace */
-        source_keyspace?: (string|null);
-
-        /** MoveTablesCreateRequest target_keyspace */
-        target_keyspace?: (string|null);
-
         /** MoveTablesCreateRequest binlog_source */
-        binlog_source?: (binlogdata.IBinlogSource|null);
+        binlog_source?: (binlogdata.IBinlogSource[]|null);
 
         /** MoveTablesCreateRequest cells */
         cells?: (string[]|null);
 
         /** MoveTablesCreateRequest tablet_types */
-        tablet_types?: (topodata.TabletType[]|null);
+        tablet_types?: (string[]|null);
 
-        /** MoveTablesCreateRequest auto_start */
-        auto_start?: (boolean|null);
-
-        /** MoveTablesCreateRequest drop_foreign_keys */
-        drop_foreign_keys?: (boolean|null);
+        /** MoveTablesCreateRequest workflow_sub_type */
+        workflow_sub_type?: (binlogdata.VReplicationWorkflowSubType|null);
 
         /** MoveTablesCreateRequest defer_secondary_keys */
         defer_secondary_keys?: (boolean|null);
+
+        /** MoveTablesCreateRequest auto_start */
+        auto_start?: (boolean|null);
     }
 
     /** Represents a MoveTablesCreateRequest. */
@@ -20610,29 +20604,23 @@ export namespace tabletmanagerdata {
         /** MoveTablesCreateRequest workflow. */
         public workflow: string;
 
-        /** MoveTablesCreateRequest source_keyspace. */
-        public source_keyspace: string;
-
-        /** MoveTablesCreateRequest target_keyspace. */
-        public target_keyspace: string;
-
         /** MoveTablesCreateRequest binlog_source. */
-        public binlog_source?: (binlogdata.IBinlogSource|null);
+        public binlog_source: binlogdata.IBinlogSource[];
 
         /** MoveTablesCreateRequest cells. */
         public cells: string[];
 
         /** MoveTablesCreateRequest tablet_types. */
-        public tablet_types: topodata.TabletType[];
+        public tablet_types: string[];
 
-        /** MoveTablesCreateRequest auto_start. */
-        public auto_start: boolean;
-
-        /** MoveTablesCreateRequest drop_foreign_keys. */
-        public drop_foreign_keys: boolean;
+        /** MoveTablesCreateRequest workflow_sub_type. */
+        public workflow_sub_type: binlogdata.VReplicationWorkflowSubType;
 
         /** MoveTablesCreateRequest defer_secondary_keys. */
         public defer_secondary_keys: boolean;
+
+        /** MoveTablesCreateRequest auto_start. */
+        public auto_start: boolean;
 
         /**
          * Creates a new MoveTablesCreateRequest instance using the specified properties.

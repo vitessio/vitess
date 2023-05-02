@@ -46,43 +46,39 @@ const (
 )
 
 func (tm *TabletManager) MoveTablesCreate(ctx context.Context, req *tabletmanagerdatapb.MoveTablesCreateRequest) (*tabletmanagerdatapb.MoveTablesCreateResponse, error) {
-	tabletTypes := strings.Builder{}
-	for i, tabletType := range req.TabletTypes {
-		if i > 0 {
-			tabletTypes.WriteString(",")
+	res := &sqltypes.Result{}
+	for _, bls := range req.BinlogSource {
+		source, err := prototext.Marshal(bls)
+		if err != nil {
+			return nil, err
 		}
-		tabletTypes.WriteString(tabletType.String())
-	}
+		wfState := "Stopped"
+		if req.AutoStart {
+			wfState = "Running"
+		}
+		bindVars := map[string]*querypb.BindVariable{
+			"wf":  sqltypes.StringBindVariable(req.Workflow),
+			"sc":  sqltypes.StringBindVariable(string(source)),
+			"cl":  sqltypes.StringBindVariable(strings.Join(req.Cells, ",")),
+			"tt":  sqltypes.StringBindVariable(strings.Join(req.TabletTypes, ",")),
+			"st":  sqltypes.StringBindVariable(wfState),
+			"db":  sqltypes.StringBindVariable(tm.DBConfigs.DBName),
+			"wt":  sqltypes.Int64BindVariable(int64(workflowType)),
+			"wst": sqltypes.Int64BindVariable(int64(req.WorkflowSubType)),
+			"ds":  sqltypes.BoolBindVariable(req.DeferSecondaryKeys),
+		}
+		parsed := sqlparser.BuildParsedQuery(sqlMoveTablesCreate, sidecardb.GetIdentifier(), ":wf", ":sc", ":cl", ":tt", ":st", ":db", ":wt", ":wst", ":ds")
+		stmt, err := parsed.GenerateQuery(bindVars, nil)
+		if err != nil {
+			return nil, err
+		}
+		log.Errorf("MoveTablesCreate SQL: %s", stmt)
+		streamres, err := tm.VREngine.Exec(stmt)
 
-	source, err := prototext.Marshal(req.BinlogSource)
-	if err != nil {
-		return nil, err
-	}
-	wfState := "Stopped"
-	if req.AutoStart {
-		wfState = "Running"
-	}
-	bindVars := map[string]*querypb.BindVariable{
-		"wf":  sqltypes.StringBindVariable(req.Workflow),
-		"sc":  sqltypes.StringBindVariable(string(source)),
-		"cl":  sqltypes.StringBindVariable(strings.Join(req.Cells, ",")),
-		"tt":  sqltypes.StringBindVariable(tabletTypes.String()),
-		"st":  sqltypes.StringBindVariable(wfState),
-		"db":  sqltypes.StringBindVariable(tm.DBConfigs.DBName),
-		"wt":  sqltypes.Int64BindVariable(int64(workflowType)),
-		"wst": sqltypes.Int64BindVariable(int64(workflowSubType)),
-		"ds":  sqltypes.BoolBindVariable(req.DeferSecondaryKeys),
-	}
-	parsed := sqlparser.BuildParsedQuery(sqlMoveTablesCreate, sidecardb.GetIdentifier(), ":wf", ":sc", ":cl", ":tt", ":st", ":db", ":wt", ":wst", ":ds")
-	stmt, err := parsed.GenerateQuery(bindVars, nil)
-	if err != nil {
-		return nil, err
-	}
-	log.Errorf("MoveTablesCreate SQL: %s", stmt)
-	res, err := tm.VREngine.Exec(stmt)
-
-	if err != nil {
-		return nil, err
+		if err != nil {
+			return nil, err
+		}
+		res.RowsAffected += streamres.RowsAffected
 	}
 	return &tabletmanagerdatapb.MoveTablesCreateResponse{Result: sqltypes.ResultToProto3(res)}, nil
 }

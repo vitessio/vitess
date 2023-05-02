@@ -61,7 +61,34 @@ type materializer struct {
 	isPartial     bool
 }
 
-func (mz *materializer) prepareMaterializerStreams() error {
+func (mz *materializer) prepareMaterializerStreams() (map[string][]*binlogdatapb.BinlogSource, error) {
+	if err := validateNewWorkflow(mz.ctx, mz.ts, mz.tmc, mz.ms.TargetKeyspace, mz.ms.Workflow); err != nil {
+		return nil, err
+	}
+	err := mz.buildMaterializer()
+	if err != nil {
+		return nil, err
+	}
+	if mz.isPartial {
+		if err := createDefaultShardRoutingRules(mz.ctx, mz.ms, mz.ts); err != nil {
+			return nil, err
+		}
+	}
+	if err := mz.deploySchema(); err != nil {
+		return nil, err
+	}
+	blsMap := make(map[string][]*binlogdatapb.BinlogSource, len(mz.targetShards))
+	for _, targetShard := range mz.targetShards {
+		blses, err := mz.generateBinlogSources(mz.ctx, targetShard)
+		if err != nil {
+			return nil, err
+		}
+		blsMap[targetShard.ShardName()] = blses
+	}
+	return blsMap, nil
+}
+
+func (mz *materializer) createMaterializerStreams() error {
 	if err := validateNewWorkflow(mz.ctx, mz.ts, mz.tmc, mz.ms.TargetKeyspace, mz.ms.Workflow); err != nil {
 		return err
 	}
@@ -89,7 +116,6 @@ func (mz *materializer) prepareMaterializerStreams() error {
 		return err
 	}
 	return nil
-
 }
 
 func (mz *materializer) generateInserts(ctx context.Context, targetShard *topo.ShardInfo) (string, error) {
@@ -197,6 +223,97 @@ func (mz *materializer) generateInserts(ctx context.Context, targetShard *topo.S
 			workflowSubType, mz.ms.DeferSecondaryKeys)
 	}
 	return ig.String(), nil
+}
+
+func (mz *materializer) generateBinlogSources(ctx context.Context, targetShard *topo.ShardInfo) ([]*binlogdatapb.BinlogSource, error) {
+	blses := make([]*binlogdatapb.BinlogSource, 0, len(mz.sourceShards))
+	for _, sourceShard := range mz.sourceShards {
+		// Don't create streams from sources which won't contain data for the target shard.
+		// We only do it for MoveTables for now since this doesn't hold for materialize flows
+		// where the target's sharding key might differ from that of the source
+		if mz.ms.MaterializationIntent == vtctldatapb.MaterializationIntent_MOVETABLES &&
+			!key.KeyRangeIntersect(sourceShard.KeyRange, targetShard.KeyRange) {
+			continue
+		}
+		bls := &binlogdatapb.BinlogSource{
+			Keyspace:        mz.ms.SourceKeyspace,
+			Shard:           sourceShard.ShardName(),
+			Filter:          &binlogdatapb.Filter{},
+			StopAfterCopy:   mz.ms.StopAfterCopy,
+			ExternalCluster: mz.ms.ExternalCluster,
+			SourceTimeZone:  mz.ms.SourceTimeZone,
+			TargetTimeZone:  mz.ms.TargetTimeZone,
+			OnDdl:           binlogdatapb.OnDDLAction(binlogdatapb.OnDDLAction_value[mz.ms.OnDdl]),
+		}
+		for _, ts := range mz.ms.TableSettings {
+			rule := &binlogdatapb.Rule{
+				Match: ts.TargetTable,
+			}
+
+			if ts.SourceExpression == "" {
+				bls.Filter.Rules = append(bls.Filter.Rules, rule)
+				continue
+			}
+
+			// Validate non-empty query.
+			stmt, err := sqlparser.Parse(ts.SourceExpression)
+			if err != nil {
+				return nil, err
+			}
+			sel, ok := stmt.(*sqlparser.Select)
+			if !ok {
+				return nil, fmt.Errorf("unrecognized statement: %s", ts.SourceExpression)
+			}
+			filter := ts.SourceExpression
+			if mz.targetVSchema.Keyspace.Sharded && mz.targetVSchema.Tables[ts.TargetTable].Type != vindexes.TypeReference {
+				cv, err := vindexes.FindBestColVindex(mz.targetVSchema.Tables[ts.TargetTable])
+				if err != nil {
+					return nil, err
+				}
+				mappedCols := make([]*sqlparser.ColName, 0, len(cv.Columns))
+				for _, col := range cv.Columns {
+					colName, err := matchColInSelect(col, sel)
+					if err != nil {
+						return nil, err
+					}
+					mappedCols = append(mappedCols, colName)
+				}
+				subExprs := make(sqlparser.SelectExprs, 0, len(mappedCols)+2)
+				for _, mappedCol := range mappedCols {
+					subExprs = append(subExprs, &sqlparser.AliasedExpr{Expr: mappedCol})
+				}
+				vindexName := fmt.Sprintf("%s.%s", mz.ms.TargetKeyspace, cv.Name)
+				subExprs = append(subExprs, &sqlparser.AliasedExpr{Expr: sqlparser.NewStrLiteral(vindexName)})
+				subExprs = append(subExprs, &sqlparser.AliasedExpr{Expr: sqlparser.NewStrLiteral("{{.keyrange}}")})
+				inKeyRange := &sqlparser.FuncExpr{
+					Name:  sqlparser.NewIdentifierCI("in_keyrange"),
+					Exprs: subExprs,
+				}
+				if sel.Where != nil {
+					sel.Where = &sqlparser.Where{
+						Type: sqlparser.WhereClause,
+						Expr: &sqlparser.AndExpr{
+							Left:  inKeyRange,
+							Right: sel.Where.Expr,
+						},
+					}
+				} else {
+					sel.Where = &sqlparser.Where{
+						Type: sqlparser.WhereClause,
+						Expr: inKeyRange,
+					}
+				}
+
+				filter = sqlparser.String(sel)
+			}
+
+			rule.Filter = filter
+
+			bls.Filter.Rules = append(bls.Filter.Rules, rule)
+		}
+		blses = append(blses, bls)
+	}
+	return blses, nil
 }
 
 func (mz *materializer) deploySchema() error {
@@ -418,7 +535,7 @@ func Materialize(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManage
 		ms:       ms,
 	}
 
-	err := mz.prepareMaterializerStreams()
+	err := mz.createMaterializerStreams()
 	if err != nil {
 		return err
 	}

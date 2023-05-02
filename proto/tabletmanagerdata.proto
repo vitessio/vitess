@@ -277,19 +277,17 @@ message ExecuteFetchAsAppResponse {
 
 message MoveTablesCreateRequest {
   string workflow = 1;
-  string source_keyspace = 2;
-  string target_keyspace = 3;
-  binlogdata.BinlogSource binlog_source = 4;
+  repeated binlogdata.BinlogSource binlog_source = 2;
   // optional parameters.
-  repeated string cells = 5;
+  repeated string cells = 3;
   // TabletTypes is the list of tablet types to use when selecting source tablets.
-  repeated topodata.TabletType tablet_types = 6;
-  // AutoStart specifies if the workflow should be started automatically after creation.
-  bool auto_start = 7;
-  bool drop_foreign_keys = 8;
+  repeated string tablet_types = 4;
+  binlogdata.VReplicationWorkflowSubType workflow_sub_type = 5;
   // DeferSecondaryKeys specifies if secondary keys should be created in one shot after table
   // copy finishes.
-  bool defer_secondary_keys = 9;
+  bool defer_secondary_keys = 6;
+  // AutoStart specifies if the workflow should be started when created.
+  bool auto_start = 7;
 }
 
 message MoveTablesCreateResponse {

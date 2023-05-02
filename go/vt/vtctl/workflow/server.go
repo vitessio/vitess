@@ -46,6 +46,7 @@ import (
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
@@ -908,7 +909,7 @@ func (s *Server) MoveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 		tmc:      s.tmc,
 		ms:       ms,
 	}
-	err = mz.prepareMaterializerStreams()
+	blsMap, err := mz.prepareMaterializerStreams()
 	if err != nil {
 		return nil, err
 	}
@@ -943,6 +944,40 @@ func (s *Server) MoveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 			return nil, fmt.Errorf(msg)
 		}
 	}
+
+	workflowSubType := binlogdatapb.VReplicationWorkflowSubType_None
+	if mz.isPartial {
+		workflowSubType = binlogdatapb.VReplicationWorkflowSubType_Partial
+	}
+	mtcr := &tabletmanagerdatapb.MoveTablesCreateRequest{
+		Workflow:           req.Workflow,
+		Cells:              req.Cells,
+		TabletTypes:        req.TabletTypes,
+		WorkflowSubType:    workflowSubType,
+		DeferSecondaryKeys: req.DeferSecondaryKeys,
+	}
+
+	vx := vexec.NewVExec(req.TargetKeyspace, req.Workflow, s.ts, s.tmc)
+	callback := func(ctx context.Context, tablet *topo.TabletInfo) (*querypb.QueryResult, error) {
+		mtcr.BinlogSource = blsMap[tablet.Shard]
+		res, err := s.tmc.MoveTablesCreate(ctx, tablet.Tablet, mtcr)
+		if err != nil {
+			return nil, err
+		}
+		return res.Result, err
+	}
+	res, err := vx.CallbackContext(ctx, callback)
+	if err != nil {
+		if topo.IsErrType(err, topo.NoNode) {
+			return nil, vterrors.Wrapf(err, "%s keyspace does not exist", req.TargetKeyspace)
+		}
+		return nil, err
+	}
+
+	if len(res) == 0 {
+		return nil, fmt.Errorf("the %s workflow does not exist in the %s keyspace", req.Workflow, req.TargetKeyspace)
+	}
+
 	if req.AutoStart {
 		err = mz.startStreams(ctx)
 	}

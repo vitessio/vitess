@@ -2113,26 +2113,6 @@ func (m *MoveTablesCreateRequest) MarshalToSizedBufferVT(dAtA []byte) (int, erro
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
-	if m.DeferSecondaryKeys {
-		i--
-		if m.DeferSecondaryKeys {
-			dAtA[i] = 1
-		} else {
-			dAtA[i] = 0
-		}
-		i--
-		dAtA[i] = 0x48
-	}
-	if m.DropForeignKeys {
-		i--
-		if m.DropForeignKeys {
-			dAtA[i] = 1
-		} else {
-			dAtA[i] = 0
-		}
-		i--
-		dAtA[i] = 0x40
-	}
 	if m.AutoStart {
 		i--
 		if m.AutoStart {
@@ -2143,26 +2123,29 @@ func (m *MoveTablesCreateRequest) MarshalToSizedBufferVT(dAtA []byte) (int, erro
 		i--
 		dAtA[i] = 0x38
 	}
-	if len(m.TabletTypes) > 0 {
-		var pksize2 int
-		for _, num := range m.TabletTypes {
-			pksize2 += sov(uint64(num))
-		}
-		i -= pksize2
-		j1 := i
-		for _, num1 := range m.TabletTypes {
-			num := uint64(num1)
-			for num >= 1<<7 {
-				dAtA[j1] = uint8(uint64(num)&0x7f | 0x80)
-				num >>= 7
-				j1++
-			}
-			dAtA[j1] = uint8(num)
-			j1++
-		}
-		i = encodeVarint(dAtA, i, uint64(pksize2))
+	if m.DeferSecondaryKeys {
 		i--
-		dAtA[i] = 0x32
+		if m.DeferSecondaryKeys {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x30
+	}
+	if m.WorkflowSubType != 0 {
+		i = encodeVarint(dAtA, i, uint64(m.WorkflowSubType))
+		i--
+		dAtA[i] = 0x28
+	}
+	if len(m.TabletTypes) > 0 {
+		for iNdEx := len(m.TabletTypes) - 1; iNdEx >= 0; iNdEx-- {
+			i -= len(m.TabletTypes[iNdEx])
+			copy(dAtA[i:], m.TabletTypes[iNdEx])
+			i = encodeVarint(dAtA, i, uint64(len(m.TabletTypes[iNdEx])))
+			i--
+			dAtA[i] = 0x22
+		}
 	}
 	if len(m.Cells) > 0 {
 		for iNdEx := len(m.Cells) - 1; iNdEx >= 0; iNdEx-- {
@@ -2170,32 +2153,20 @@ func (m *MoveTablesCreateRequest) MarshalToSizedBufferVT(dAtA []byte) (int, erro
 			copy(dAtA[i:], m.Cells[iNdEx])
 			i = encodeVarint(dAtA, i, uint64(len(m.Cells[iNdEx])))
 			i--
-			dAtA[i] = 0x2a
+			dAtA[i] = 0x1a
 		}
 	}
-	if m.BinlogSource != nil {
-		size, err := m.BinlogSource.MarshalToSizedBufferVT(dAtA[:i])
-		if err != nil {
-			return 0, err
+	if len(m.BinlogSource) > 0 {
+		for iNdEx := len(m.BinlogSource) - 1; iNdEx >= 0; iNdEx-- {
+			size, err := m.BinlogSource[iNdEx].MarshalToSizedBufferVT(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarint(dAtA, i, uint64(size))
+			i--
+			dAtA[i] = 0x12
 		}
-		i -= size
-		i = encodeVarint(dAtA, i, uint64(size))
-		i--
-		dAtA[i] = 0x22
-	}
-	if len(m.TargetKeyspace) > 0 {
-		i -= len(m.TargetKeyspace)
-		copy(dAtA[i:], m.TargetKeyspace)
-		i = encodeVarint(dAtA, i, uint64(len(m.TargetKeyspace)))
-		i--
-		dAtA[i] = 0x1a
-	}
-	if len(m.SourceKeyspace) > 0 {
-		i -= len(m.SourceKeyspace)
-		copy(dAtA[i:], m.SourceKeyspace)
-		i = encodeVarint(dAtA, i, uint64(len(m.SourceKeyspace)))
-		i--
-		dAtA[i] = 0x12
 	}
 	if len(m.Workflow) > 0 {
 		i -= len(m.Workflow)
@@ -5603,17 +5574,11 @@ func (m *MoveTablesCreateRequest) SizeVT() (n int) {
 	if l > 0 {
 		n += 1 + l + sov(uint64(l))
 	}
-	l = len(m.SourceKeyspace)
-	if l > 0 {
-		n += 1 + l + sov(uint64(l))
-	}
-	l = len(m.TargetKeyspace)
-	if l > 0 {
-		n += 1 + l + sov(uint64(l))
-	}
-	if m.BinlogSource != nil {
-		l = m.BinlogSource.SizeVT()
-		n += 1 + l + sov(uint64(l))
+	if len(m.BinlogSource) > 0 {
+		for _, e := range m.BinlogSource {
+			l = e.SizeVT()
+			n += 1 + l + sov(uint64(l))
+		}
 	}
 	if len(m.Cells) > 0 {
 		for _, s := range m.Cells {
@@ -5622,19 +5587,18 @@ func (m *MoveTablesCreateRequest) SizeVT() (n int) {
 		}
 	}
 	if len(m.TabletTypes) > 0 {
-		l = 0
-		for _, e := range m.TabletTypes {
-			l += sov(uint64(e))
+		for _, s := range m.TabletTypes {
+			l = len(s)
+			n += 1 + l + sov(uint64(l))
 		}
-		n += 1 + sov(uint64(l)) + l
 	}
-	if m.AutoStart {
-		n += 2
-	}
-	if m.DropForeignKeys {
-		n += 2
+	if m.WorkflowSubType != 0 {
+		n += 1 + sov(uint64(m.WorkflowSubType))
 	}
 	if m.DeferSecondaryKeys {
+		n += 2
+	}
+	if m.AutoStart {
 		n += 2
 	}
 	n += len(m.unknownFields)
@@ -11223,70 +11187,6 @@ func (m *MoveTablesCreateRequest) UnmarshalVT(dAtA []byte) error {
 			iNdEx = postIndex
 		case 2:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field SourceKeyspace", wireType)
-			}
-			var stringLen uint64
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflow
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				stringLen |= uint64(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			intStringLen := int(stringLen)
-			if intStringLen < 0 {
-				return ErrInvalidLength
-			}
-			postIndex := iNdEx + intStringLen
-			if postIndex < 0 {
-				return ErrInvalidLength
-			}
-			if postIndex > l {
-				return io.ErrUnexpectedEOF
-			}
-			m.SourceKeyspace = string(dAtA[iNdEx:postIndex])
-			iNdEx = postIndex
-		case 3:
-			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field TargetKeyspace", wireType)
-			}
-			var stringLen uint64
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflow
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				stringLen |= uint64(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			intStringLen := int(stringLen)
-			if intStringLen < 0 {
-				return ErrInvalidLength
-			}
-			postIndex := iNdEx + intStringLen
-			if postIndex < 0 {
-				return ErrInvalidLength
-			}
-			if postIndex > l {
-				return io.ErrUnexpectedEOF
-			}
-			m.TargetKeyspace = string(dAtA[iNdEx:postIndex])
-			iNdEx = postIndex
-		case 4:
-			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field BinlogSource", wireType)
 			}
 			var msglen int
@@ -11314,14 +11214,12 @@ func (m *MoveTablesCreateRequest) UnmarshalVT(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			if m.BinlogSource == nil {
-				m.BinlogSource = &binlogdata.BinlogSource{}
-			}
-			if err := m.BinlogSource.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+			m.BinlogSource = append(m.BinlogSource, &binlogdata.BinlogSource{})
+			if err := m.BinlogSource[len(m.BinlogSource)-1].UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
 			iNdEx = postIndex
-		case 5:
+		case 3:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field Cells", wireType)
 			}
@@ -11353,75 +11251,77 @@ func (m *MoveTablesCreateRequest) UnmarshalVT(dAtA []byte) error {
 			}
 			m.Cells = append(m.Cells, string(dAtA[iNdEx:postIndex]))
 			iNdEx = postIndex
-		case 6:
-			if wireType == 0 {
-				var v topodata.TabletType
-				for shift := uint(0); ; shift += 7 {
-					if shift >= 64 {
-						return ErrIntOverflow
-					}
-					if iNdEx >= l {
-						return io.ErrUnexpectedEOF
-					}
-					b := dAtA[iNdEx]
-					iNdEx++
-					v |= topodata.TabletType(b&0x7F) << shift
-					if b < 0x80 {
-						break
-					}
-				}
-				m.TabletTypes = append(m.TabletTypes, v)
-			} else if wireType == 2 {
-				var packedLen int
-				for shift := uint(0); ; shift += 7 {
-					if shift >= 64 {
-						return ErrIntOverflow
-					}
-					if iNdEx >= l {
-						return io.ErrUnexpectedEOF
-					}
-					b := dAtA[iNdEx]
-					iNdEx++
-					packedLen |= int(b&0x7F) << shift
-					if b < 0x80 {
-						break
-					}
-				}
-				if packedLen < 0 {
-					return ErrInvalidLength
-				}
-				postIndex := iNdEx + packedLen
-				if postIndex < 0 {
-					return ErrInvalidLength
-				}
-				if postIndex > l {
-					return io.ErrUnexpectedEOF
-				}
-				var elementCount int
-				if elementCount != 0 && len(m.TabletTypes) == 0 {
-					m.TabletTypes = make([]topodata.TabletType, 0, elementCount)
-				}
-				for iNdEx < postIndex {
-					var v topodata.TabletType
-					for shift := uint(0); ; shift += 7 {
-						if shift >= 64 {
-							return ErrIntOverflow
-						}
-						if iNdEx >= l {
-							return io.ErrUnexpectedEOF
-						}
-						b := dAtA[iNdEx]
-						iNdEx++
-						v |= topodata.TabletType(b&0x7F) << shift
-						if b < 0x80 {
-							break
-						}
-					}
-					m.TabletTypes = append(m.TabletTypes, v)
-				}
-			} else {
+		case 4:
+			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field TabletTypes", wireType)
 			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.TabletTypes = append(m.TabletTypes, string(dAtA[iNdEx:postIndex]))
+			iNdEx = postIndex
+		case 5:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field WorkflowSubType", wireType)
+			}
+			m.WorkflowSubType = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.WorkflowSubType |= binlogdata.VReplicationWorkflowSubType(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 6:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field DeferSecondaryKeys", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.DeferSecondaryKeys = bool(v != 0)
 		case 7:
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field AutoStart", wireType)
@@ -11442,46 +11342,6 @@ func (m *MoveTablesCreateRequest) UnmarshalVT(dAtA []byte) error {
 				}
 			}
 			m.AutoStart = bool(v != 0)
-		case 8:
-			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field DropForeignKeys", wireType)
-			}
-			var v int
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflow
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				v |= int(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			m.DropForeignKeys = bool(v != 0)
-		case 9:
-			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field DeferSecondaryKeys", wireType)
-			}
-			var v int
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflow
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				v |= int(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			m.DeferSecondaryKeys = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := skip(dAtA[iNdEx:])
