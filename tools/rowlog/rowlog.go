@@ -387,7 +387,7 @@ func getTablet(ctx context.Context, ts *topo.Server, cells []string, keyspace st
 		"0",
 		"primary",
 		discovery.TabletPickerOptions{
-			CellPref: "OnlySpecified",
+			CellPreference: "OnlySpecified",
 		},
 	)
 	if err != nil {
