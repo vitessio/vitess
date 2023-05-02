@@ -54,6 +54,7 @@ func TestPlayerGeneratedInvisiblePrimaryKey(t *testing.T) {
 		fmt.Sprintf("create table %s.t1(my_row_id int, val varbinary(128), primary key(my_row_id))", vrepldb),
 	})
 	defer execStatements(t, []string{
+		"SET sql_generate_invisible_primary_key=OFF;",
 		"drop table t1",
 		fmt.Sprintf("drop table %s.t1", vrepldb),
 	})

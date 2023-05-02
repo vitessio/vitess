@@ -2121,6 +2121,7 @@ func TestGeneratedInvisiblePrimaryKey(t *testing.T) {
 		"create table t1(val varbinary(6))",
 	})
 	defer execStatements(t, []string{
+		"SET sql_generate_invisible_primary_key=OFF;",
 		"drop table t1",
 	})
 	engine.se.Reload(context.Background())
