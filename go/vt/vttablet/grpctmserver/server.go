@@ -354,6 +354,13 @@ func (s *server) CreateVRWorkflow(ctx context.Context, request *tabletmanagerdat
 	return s.tm.CreateVRWorkflow(ctx, request)
 }
 
+func (s *server) DeleteVRWorkflow(ctx context.Context, request *tabletmanagerdatapb.DeleteVRWorkflowRequest) (response *tabletmanagerdatapb.DeleteVRWorkflowResponse, err error) {
+	defer s.tm.HandleRPCPanic(ctx, "CreateVRWorkflow", request, response, true /*verbose*/, &err)
+	ctx = callinfo.GRPCCallInfo(ctx)
+	response = &tabletmanagerdatapb.DeleteVRWorkflowResponse{}
+	return s.tm.DeleteVRWorkflow(ctx, request)
+}
+
 func (s *server) VReplicationExec(ctx context.Context, request *tabletmanagerdatapb.VReplicationExecRequest) (response *tabletmanagerdatapb.VReplicationExecResponse, err error) {
 	defer s.tm.HandleRPCPanic(ctx, "VReplicationExec", request, response, true /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)

@@ -696,6 +696,19 @@ func (client *Client) CreateVRWorkflow(ctx context.Context, tablet *topodatapb.T
 	return response, nil
 }
 
+func (client *Client) DeleteVRWorkflow(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.DeleteVRWorkflowRequest) (*tabletmanagerdatapb.DeleteVRWorkflowResponse, error) {
+	c, closer, err := client.dialer.dial(ctx, tablet)
+	if err != nil {
+		return nil, err
+	}
+	defer closer.Close()
+	response, err := c.DeleteVRWorkflow(ctx, request)
+	if err != nil {
+		return nil, err
+	}
+	return response, nil
+}
+
 // VReplicationExec is part of the tmclient.TabletManagerClient interface.
 func (client *Client) VReplicationExec(ctx context.Context, tablet *topodatapb.Tablet, query string) (*querypb.QueryResult, error) {
 	c, closer, err := client.dialer.dial(ctx, tablet)

@@ -52,6 +52,17 @@ var (
 		RunE:                  commandGetWorkflows,
 	}
 
+	// WorkflowDelete makes a WorkflowDelete gRPC call to a vtctld.
+	WorkflowDelete = &cobra.Command{
+		Use:                   "delete",
+		Short:                 "Delete a VReplication workflow",
+		Example:               `vtctldclient --server=localhost:15999 workflow --keyspace=customer delete --workflow=commerce2customer"`,
+		DisableFlagsInUseLine: true,
+		Aliases:               []string{"Delete"},
+		Args:                  cobra.NoArgs,
+		RunE:                  commandMoveTablesCancel,
+	}
+
 	// WorkflowUpdate makes a WorkflowUpdate gRPC call to a vtctld.
 	WorkflowUpdate = &cobra.Command{
 		Use:                   "update",
@@ -136,6 +147,28 @@ var (
 	}{}
 )
 
+func commandWorkflowDelete(cmd *cobra.Command, args []string) error {
+	cli.FinishedParsing(cmd)
+
+	req := &vtctldatapb.WorkflowDeleteRequest{
+		Keyspace: moveTablesOptions.TargetKeyspace,
+		Workflow: moveTablesOptions.Workflow,
+	}
+	resp, err := client.WorkflowDelete(commandCtx, req)
+	if err != nil {
+		return err
+	}
+
+	data, err := cli.MarshalJSON(resp)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("%s\n", data)
+
+	return nil
+}
+
 func commandWorkflowUpdate(cmd *cobra.Command, args []string) error {
 	cli.FinishedParsing(cmd)
 
@@ -190,4 +223,6 @@ func init() {
 	WorkflowUpdate.Flags().StringSliceVarP(&workflowUpdateOptions.TabletTypes, "tablet-types", "t", nil, "New source tablet types to replicate from (e.g. PRIMARY,REPLICA,RDONLY)")
 	WorkflowUpdate.Flags().StringVar(&workflowUpdateOptions.OnDDL, "on-ddl", "", "New instruction on what to do when DDL is encountered in the VReplication stream. Possible values are IGNORE, STOP, EXEC, and EXEC_IGNORE")
 	Workflow.AddCommand(WorkflowUpdate)
+
+	Workflow.AddCommand(WorkflowDelete)
 }

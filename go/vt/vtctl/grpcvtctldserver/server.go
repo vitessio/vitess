@@ -4372,6 +4372,20 @@ func (s *VtctldServer) ValidateVSchema(ctx context.Context, req *vtctldatapb.Val
 	return resp, err
 }
 
+// WorkflowDelete is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) WorkflowDelete(ctx context.Context, req *vtctldatapb.WorkflowDeleteRequest) (resp *vtctldatapb.WorkflowDeleteResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.WorkflowDelete")
+	defer span.Finish()
+
+	defer panicHandler(&err)
+
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("workflow", req.Workflow)
+
+	resp, err = s.ws.WorkflowDelete(ctx, req)
+	return resp, err
+}
+
 // WorkflowUpdate is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) WorkflowUpdate(ctx context.Context, req *vtctldatapb.WorkflowUpdateRequest) (resp *vtctldatapb.WorkflowUpdateResponse, err error) {
 	span, ctx := trace.NewSpan(ctx, "VtctldServer.WorkflowUpdate")

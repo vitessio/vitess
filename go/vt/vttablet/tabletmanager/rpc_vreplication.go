@@ -36,6 +36,8 @@ import (
 const (
 	// Create a new MoveTables VReplication workflow record.
 	sqlCreateVRWorkflow = "insert into %s.vreplication(workflow, source, pos, max_tps, max_replication_lag, cell, tablet_types, time_updated, transaction_timestamp, state, db_name, workflow_type, workflow_sub_type, defer_secondary_keys) values (%a, %a, '', 0, 0, %a, %a, now(), 0, %a, %a, %a, %a, %a)"
+	// Delete vreplication records for the given workflow.
+	sqlDeleteVRWorkflow = "delete from %s.vreplication where workflow = %a and db_name = %a"
 	// Retrieve the current configuration values for a workflow's vreplication stream.
 	sqlSelectVRWorkflowConfig = "select id, source, cell, tablet_types from %s.vreplication where workflow = %a"
 	// Update the configuration values for a workflow's vreplication stream.
@@ -78,6 +80,28 @@ func (tm *TabletManager) CreateVRWorkflow(ctx context.Context, req *tabletmanage
 		res.RowsAffected += streamres.RowsAffected
 	}
 	return &tabletmanagerdatapb.CreateVRWorkflowResponse{Result: sqltypes.ResultToProto3(res)}, nil
+}
+
+func (tm *TabletManager) DeleteVRWorkflow(ctx context.Context, req *tabletmanagerdatapb.DeleteVRWorkflowRequest) (*tabletmanagerdatapb.DeleteVRWorkflowResponse, error) {
+	res := &sqltypes.Result{}
+	bindVars := map[string]*querypb.BindVariable{
+		"wf": sqltypes.StringBindVariable(req.Workflow),
+		"db": sqltypes.StringBindVariable(tm.DBConfigs.DBName),
+	}
+	parsed := sqlparser.BuildParsedQuery(sqlDeleteVRWorkflow, sidecardb.GetIdentifier(), ":wf", ":db")
+	stmt, err := parsed.GenerateQuery(bindVars, nil)
+	if err != nil {
+		return nil, err
+	}
+	log.Errorf("DeleteVRWorkflow SQL: %s", stmt)
+	streamres, err := tm.VREngine.Exec(stmt)
+
+	if err != nil {
+		return nil, err
+	}
+	res.RowsAffected += streamres.RowsAffected
+
+	return &tabletmanagerdatapb.DeleteVRWorkflowResponse{Result: sqltypes.ResultToProto3(res)}, nil
 }
 
 // UpdateVRWorkflow updates the sidecar databases's vreplication

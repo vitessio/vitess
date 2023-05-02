@@ -45,6 +45,17 @@ See the --help output for each command for more details.`,
 		Args:                  cobra.ExactArgs(1),
 	}
 
+	// MoveTablesCancel makes a MoveTablesCancel gRPC call to a vtctld.
+	MoveTablesCancel = &cobra.Command{
+		Use:                   "Cancel",
+		Short:                 "Cancel a MoveTables VReplication workflow",
+		Example:               `vtctldclient --server=localhost:15999 MoveTables --workflow "commerce2customer" --target-keyspace "customer" Cancel`,
+		DisableFlagsInUseLine: true,
+		Aliases:               []string{"cancel"},
+		Args:                  cobra.NoArgs,
+		RunE:                  commandMoveTablesCancel,
+	}
+
 	// MoveTablesCreate makes a MoveTablesCreate gRPC call to a vtctld.
 	MoveTablesCreate = &cobra.Command{
 		Use:                   "Create",
@@ -81,17 +92,6 @@ See the --help output for each command for more details.`,
 			return nil
 		},
 		RunE: commandMoveTablesCreate,
-	}
-
-	// MoveTablesCancel makes a MoveTablesCancel gRPC call to a vtctld.
-	MoveTablesCancel = &cobra.Command{
-		Use:                   "Cancel",
-		Short:                 "Cancel a MoveTables VReplication workflow",
-		Example:               `vtctldclient --server=localhost:15999 MoveTables --workflow "commerce2customer" --target-keyspace "customer" Cancel`,
-		DisableFlagsInUseLine: true,
-		Aliases:               []string{"cancel"},
-		Args:                  cobra.NoArgs,
-		RunE:                  commandMoveTablesCancel,
 	}
 )
 

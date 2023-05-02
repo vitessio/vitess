@@ -869,6 +869,10 @@ func (itmc *internalTabletManagerClient) CreateVRWorkflow(context.Context, *topo
 	return nil, fmt.Errorf("not implemented in vtcombo")
 }
 
+func (itmc *internalTabletManagerClient) DeleteVRWorkflow(context.Context, *topodatapb.Tablet, *tabletmanagerdatapb.DeleteVRWorkflowRequest) (*tabletmanagerdatapb.DeleteVRWorkflowResponse, error) {
+	return nil, fmt.Errorf("not implemented in vtcombo")
+}
+
 func (itmc *internalTabletManagerClient) VReplicationExec(context.Context, *topodatapb.Tablet, string) (*querypb.QueryResult, error) {
 	return nil, fmt.Errorf("not implemented in vtcombo")
 }

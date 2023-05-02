@@ -174,6 +174,7 @@ type TabletManagerClient interface {
 	//
 
 	CreateVRWorkflow(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.CreateVRWorkflowRequest) (*tabletmanagerdatapb.CreateVRWorkflowResponse, error)
+	DeleteVRWorkflow(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.DeleteVRWorkflowRequest) (*tabletmanagerdatapb.DeleteVRWorkflowResponse, error)
 	UpdateVRWorkflow(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.UpdateVRWorkflowRequest) (*tabletmanagerdatapb.UpdateVRWorkflowResponse, error)
 	// VReplicationExec executes a VReplication command
 	VReplicationExec(ctx context.Context, tablet *topodatapb.Tablet, query string) (*querypb.QueryResult, error)

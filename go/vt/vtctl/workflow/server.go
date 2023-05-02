@@ -986,6 +986,50 @@ func (s *Server) MoveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 	return nil, err
 }
 
+// WorkflowCreate is part of the vtctlservicepb.VtctldServer interface.
+// It passes on the request to the target primary tablets that are
+// participating in the given workflow.
+func (s *Server) WorkflowDelete(ctx context.Context, req *vtctldatapb.WorkflowDeleteRequest) (*vtctldatapb.WorkflowDeleteResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "workflow.Server.WorkflowDelete")
+	defer span.Finish()
+
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("workflow", req.Workflow)
+
+	vx := vexec.NewVExec(req.Keyspace, req.Workflow, s.ts, s.tmc)
+	callback := func(ctx context.Context, tablet *topo.TabletInfo) (*querypb.QueryResult, error) {
+		res, err := s.tmc.DeleteVRWorkflow(ctx, tablet.Tablet, nil)
+		if err != nil {
+			return nil, err
+		}
+		return res.Result, err
+	}
+	res, err := vx.CallbackContext(ctx, callback)
+	if err != nil {
+		if topo.IsErrType(err, topo.NoNode) {
+			return nil, vterrors.Wrapf(err, "%s keyspace does not exist", req.Keyspace)
+		}
+		return nil, err
+	}
+
+	if len(res) == 0 {
+		return nil, fmt.Errorf("the %s workflow does not exist in the %s keyspace", req.Workflow, req.Keyspace)
+	}
+
+	response := &vtctldatapb.WorkflowDeleteResponse{}
+	response.Summary = fmt.Sprintf("Successfully updated the %s workflow on (%d) target primary tablets in the %s keyspace", req.Workflow, len(res), req.Keyspace)
+	details := make([]*vtctldatapb.WorkflowDeleteResponse_TabletInfo, 0, len(res))
+	for tinfo, tres := range res {
+		result := &vtctldatapb.WorkflowDeleteResponse_TabletInfo{
+			Tablet:  fmt.Sprintf("%s-%d (%s/%s)", tinfo.Alias.Cell, tinfo.Alias.Uid, tinfo.Keyspace, tinfo.Shard),
+			Deleted: tres.RowsAffected > 0, // Can be more than one with shard merges
+		}
+		details = append(details, result)
+	}
+	response.Details = details
+	return response, nil
+}
+
 // WorkflowUpdate is part of the vtctlservicepb.VtctldServer interface.
 // It passes the embedded TabletRequest object to the given keyspace's
 // target primary tablets that are participating in the given workflow.
