@@ -2053,12 +2053,7 @@
             ]
           }
         ]
-      },
-      "TablesUsed": [
-        "main.unsharded",
-        "user.authoritative",
-        "user.user"
-      ]
+      }
     }
   }
 ]
