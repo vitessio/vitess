@@ -225,7 +225,7 @@ func (hs *healthStreamer) unregister(ch chan *querypb.StreamHealthResponse) {
 	delete(hs.clients, ch)
 }
 
-func (hs *healthStreamer) ChangeState(tabletType topodatapb.TabletType, terTimestamp time.Time, lag time.Duration, err error, serving bool) {
+func (hs *healthStreamer) ChangeState(tabletType topodatapb.TabletType, terTimestamp time.Time, lag time.Duration, throttlerReplicationLag time.Duration, err error, serving bool) {
 	hs.mu.Lock()
 	defer hs.mu.Unlock()
 
@@ -245,6 +245,8 @@ func (hs *healthStreamer) ChangeState(tabletType topodatapb.TabletType, terTimes
 
 	hs.state.RealtimeStats.FilteredReplicationLagSeconds, hs.state.RealtimeStats.BinlogPlayersCount = blpFunc()
 	hs.state.RealtimeStats.Qps = hs.stats.QPSRates.TotalRate()
+
+	hs.state.RealtimeStats.ThrottlerReplicationLagSeconds = throttlerReplicationLag.Seconds()
 
 	shr := proto.Clone(hs.state).(*querypb.StreamHealthResponse)
 
