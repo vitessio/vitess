@@ -878,6 +878,14 @@ message RealtimeStats {
 
   // view_schema_changed is to provide list of views that have schema changes detected by the tablet.
   repeated string view_schema_changed = 8;
+
+  // ThrottlerReplicationLagSeconds measures MySQL replication lag in subsecond precision,
+  // and is used by the tablet throttler.
+  double throttler_replication_lag_seconds = 9;
+
+  // ThrottlerCustomMetric stores the result of a tablet throttler's custom query (if exists)
+  // and is used by the tablet throttler.
+  double throttler_custom_metric = 10;
 }
 
 // AggregateStats contains information about the health of a group of
