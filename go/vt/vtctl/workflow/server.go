@@ -50,14 +50,7 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
-	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/proto/vttime"
-)
-
-const (
-	createDDLAsCopy                = "copy"
-	createDDLAsCopyDropConstraint  = "copy:drop_constraint"
-	createDDLAsCopyDropForeignKeys = "copy:drop_foreign_keys"
 )
 
 var (
@@ -779,18 +772,12 @@ func (s *Server) MoveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 	span.Annotate("tablet_types", req.TabletRequest.TabletTypes)
 	span.Annotate("on_ddl", req.TabletRequest.BinlogSource.OnDdl)
 
-	exists, err := s.doesWorkflowExist(ctx, req.TabletRequest.TargetKeyspace, req.TabletRequest.Workflow)
-	if err != nil {
-		return nil, err
-	}
-	if exists {
-		return nil, vterrors.Errorf(vtrpc.Code_ALREADY_EXISTS, "the %s workflow already exists in the %s keyspace",
-			req.TabletRequest.Workflow, req.TabletRequest.TargetKeyspace)
-	}
-
 	sourceKeyspace := req.TabletRequest.SourceKeyspace
 	targetKeyspace := req.TabletRequest.TargetKeyspace
-	var externalTopo *topo.Server
+	var (
+		externalTopo *topo.Server
+		err          error
+	)
 
 	if req.TabletRequest.BinlogSource.ExternalCluster != "" { // when the source is an external mysql cluster mounted using the Mount command
 		externalTopo, err = s.ts.OpenExternalVitessClusterServer(ctx, req.TabletRequest.BinlogSource.ExternalCluster)
@@ -905,75 +892,98 @@ func (s *Server) MoveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 		)
 	}
 
-	/*
-			mz, err := wr.prepareMaterializerStreams(ctx, ms)
-			if err != nil {
-				return nil, err
-			}
+	tabletTypes := strings.Builder{}
+	for i, tt := range req.TabletRequest.TabletTypes {
+		tabletTypes.WriteString(tt.String())
+		if i != len(req.TabletRequest.TabletTypes)-1 {
+			tabletTypes.WriteString(",")
+		}
+	}
+	tableSettings := make([]*vtctldatapb.TableMaterializeSettings, len(req.TabletRequest.BinlogSource.Tables))
+	for i, table := range req.TabletRequest.BinlogSource.Tables {
+		tableSettings[i] = &vtctldatapb.TableMaterializeSettings{
+			TargetTable: table,
+		}
+	}
+	ms := &vtctldatapb.MaterializeSettings{
+		Workflow:              req.TabletRequest.Workflow,
+		SourceKeyspace:        req.TabletRequest.SourceKeyspace,
+		TargetKeyspace:        req.TabletRequest.TargetKeyspace,
+		Cell:                  strings.Join(req.TabletRequest.Cells, ","),
+		TabletTypes:           tabletTypes.String(),
+		OnDdl:                 binlogdatapb.OnDDLAction_name[int32(req.TabletRequest.BinlogSource.OnDdl)],
+		MaterializationIntent: vtctldatapb.MaterializationIntent_MOVETABLES,
+		TableSettings:         tableSettings,
+	}
 
+	err = Materialize(ctx, s.ts, s.tmc, ms)
+	if err != nil {
+		return nil, err
+	}
+
+	/*
 		if req.TabletRequest.BinlogSource.SourceTimeZone != "" {
 			if err := s.checkTZConversion(ctx, req.TabletRequest.BinlogSource.SourceTimeZone); err != nil {
 				return nil, err
 			}
 		}
 
-			migrationID, err := getMigrationID(targetKeyspace, tabletShards)
-			if err != nil {
-				return nil, err
-			}
-
-			if req.TabletRequest.BinlogSource.ExternalCluster == "" {
-				exists, tablets, err := s.checkIfPreviousJournalExists(ctx, mz, migrationID)
-				if err != nil {
-					return err
-				}
-				if exists {
-					log.Errorf("Found a previous journal entry for %d", migrationID)
-					msg := fmt.Sprintf("found an entry from a previous run for migration id %d in _vt.resharding_journal of tablets %s,",
-						migrationID, strings.Join(tablets, ","))
-					msg += fmt.Sprintf("please review and delete it before proceeding and restart the workflow using the Workflow %s.%s start",
-						req.TabletRequest.Workflow, targetKeyspace)
-					return nil, fmt.Errorf(msg)
-				}
-			}
-	*/
-
-	vx := vexec.NewVExec(req.TabletRequest.TargetKeyspace, req.TabletRequest.Workflow, s.ts, s.tmc)
-	callback := func(ctx context.Context, tablet *topo.TabletInfo) (*querypb.QueryResult, error) {
-		res, err := s.tmc.MoveTablesCreate(ctx, tablet.Tablet, req.TabletRequest)
+		migrationID, err := getMigrationID(targetKeyspace, tabletShards)
 		if err != nil {
 			return nil, err
 		}
-		return res.Result, err
-	}
-	res, err := vx.CallbackContext(ctx, callback)
-	if err != nil {
-		if topo.IsErrType(err, topo.NoNode) {
-			return nil, vterrors.Wrapf(err, "%s keyspace does not exist", req.TabletRequest.TargetKeyspace)
-		}
-		return nil, err
-	}
 
-	if len(res) == 0 {
-		return nil, fmt.Errorf("failed to create the %s workflow does in the %s keyspace",
-			req.TabletRequest.Workflow, req.TabletRequest.TargetKeyspace)
-	}
-
-	response := &vtctldatapb.MoveTablesCreateResponse{}
-	response.Summary = fmt.Sprintf("Successfully created the %s workflow on (%d) target primary tablets in the %s keyspace",
-		req.TabletRequest.Workflow, len(res), req.TabletRequest.TargetKeyspace)
-	/*
-		details := make([]*vtctldatapb.WorkflowUpdateResponse_TabletInfo, 0, len(res))
-		for tinfo, tres := range res {
-			result := &vtctldatapb.WorkflowUpdateResponse_TabletInfo{
-				Tablet:  fmt.Sprintf("%s-%d (%s/%s)", tinfo.Alias.Cell, tinfo.Alias.Uid, tinfo.Keyspace, tinfo.Shard),
-				Changed: tres.RowsAffected > 0, // Can be more than one with shard merges
+		if req.TabletRequest.BinlogSource.ExternalCluster == "" {
+			exists, tablets, err := s.checkIfPreviousJournalExists(ctx, mz, migrationID)
+			if err != nil {
+				return err
 			}
-			details = append(details, result)
+			if exists {
+				log.Errorf("Found a previous journal entry for %d", migrationID)
+				msg := fmt.Sprintf("found an entry from a previous run for migration id %d in _vt.resharding_journal of tablets %s,",
+					migrationID, strings.Join(tablets, ","))
+				msg += fmt.Sprintf("please review and delete it before proceeding and restart the workflow using the Workflow %s.%s start",
+					req.TabletRequest.Workflow, targetKeyspace)
+				return nil, fmt.Errorf(msg)
+			}
 		}
-		response.Details = details
+
+		vx := vexec.NewVExec(req.TabletRequest.TargetKeyspace, req.TabletRequest.Workflow, s.ts, s.tmc)
+		callback := func(ctx context.Context, tablet *topo.TabletInfo) (*querypb.QueryResult, error) {
+			res, err := s.tmc.MoveTablesCreate(ctx, tablet.Tablet, req.TabletRequest)
+			if err != nil {
+				return nil, err
+			}
+			return res.Result, err
+		}
+		res, err := vx.CallbackContext(ctx, callback)
+		if err != nil {
+			if topo.IsErrType(err, topo.NoNode) {
+				return nil, vterrors.Wrapf(err, "%s keyspace does not exist", req.TabletRequest.TargetKeyspace)
+			}
+			return nil, err
+		}
+
+		if len(res) == 0 {
+			return nil, fmt.Errorf("failed to create the %s workflow does in the %s keyspace",
+				req.TabletRequest.Workflow, req.TabletRequest.TargetKeyspace)
+		}
+
+		response := &vtctldatapb.MoveTablesCreateResponse{}
+		response.Summary = fmt.Sprintf("Successfully created the %s workflow on (%d) target primary tablets in the %s keyspace",
+			req.TabletRequest.Workflow, len(res), req.TabletRequest.TargetKeyspace)
+			details := make([]*vtctldatapb.WorkflowUpdateResponse_TabletInfo, 0, len(res))
+			for tinfo, tres := range res {
+				result := &vtctldatapb.WorkflowUpdateResponse_TabletInfo{
+					Tablet:  fmt.Sprintf("%s-%d (%s/%s)", tinfo.Alias.Cell, tinfo.Alias.Uid, tinfo.Keyspace, tinfo.Shard),
+					Changed: tres.RowsAffected > 0, // Can be more than one with shard merges
+				}
+				details = append(details, result)
+			}
+			response.Details = details
+		return response, nil
 	*/
-	return response, nil
+	return &vtctldatapb.MoveTablesCreateResponse{}, nil
 }
 
 // WorkflowUpdate is part of the vtctlservicepb.VtctldServer interface.
