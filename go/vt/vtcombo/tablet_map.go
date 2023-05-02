@@ -865,7 +865,7 @@ func (itmc *internalTabletManagerClient) WaitForPosition(context.Context, *topod
 // VReplication related methods
 //
 
-func (itmc *internalTabletManagerClient) MoveTablesCreate(context.Context, *topodatapb.Tablet, *tabletmanagerdatapb.MoveTablesCreateRequest) (*tabletmanagerdatapb.MoveTablesCreateResponse, error) {
+func (itmc *internalTabletManagerClient) CreateVRWorkflow(context.Context, *topodatapb.Tablet, *tabletmanagerdatapb.CreateVRWorkflowRequest) (*tabletmanagerdatapb.CreateVRWorkflowResponse, error) {
 	return nil, fmt.Errorf("not implemented in vtcombo")
 }
 

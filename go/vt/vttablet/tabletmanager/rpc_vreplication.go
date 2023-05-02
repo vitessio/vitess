@@ -34,18 +34,15 @@ import (
 )
 
 const (
-	workflowType    = binlogdatapb.VReplicationWorkflowType_MoveTables
-	workflowSubType = binlogdatapb.VReplicationWorkflowSubType_None
-
 	// Create a new MoveTables VReplication workflow record.
-	sqlMoveTablesCreate = "insert into %s.vreplication(workflow, source, pos, max_tps, max_replication_lag, cell, tablet_types, time_updated, transaction_timestamp, state, db_name, workflow_type, workflow_sub_type, defer_secondary_keys) values (%a, %a, '', 0, 0, %a, %a, now(), 0, %a, %a, %a, %a, %a)"
+	sqlCreateVRWorkflow = "insert into %s.vreplication(workflow, source, pos, max_tps, max_replication_lag, cell, tablet_types, time_updated, transaction_timestamp, state, db_name, workflow_type, workflow_sub_type, defer_secondary_keys) values (%a, %a, '', 0, 0, %a, %a, now(), 0, %a, %a, %a, %a, %a)"
 	// Retrieve the current configuration values for a workflow's vreplication stream.
 	sqlSelectVRWorkflowConfig = "select id, source, cell, tablet_types from %s.vreplication where workflow = %a"
 	// Update the configuration values for a workflow's vreplication stream.
 	sqlUpdateVRWorkflowConfig = "update %s.vreplication set source = %a, cell = %a, tablet_types = %a where id = %a"
 )
 
-func (tm *TabletManager) MoveTablesCreate(ctx context.Context, req *tabletmanagerdatapb.MoveTablesCreateRequest) (*tabletmanagerdatapb.MoveTablesCreateResponse, error) {
+func (tm *TabletManager) CreateVRWorkflow(ctx context.Context, req *tabletmanagerdatapb.CreateVRWorkflowRequest) (*tabletmanagerdatapb.CreateVRWorkflowResponse, error) {
 	res := &sqltypes.Result{}
 	for _, bls := range req.BinlogSource {
 		source, err := prototext.Marshal(bls)
@@ -63,16 +60,16 @@ func (tm *TabletManager) MoveTablesCreate(ctx context.Context, req *tabletmanage
 			"tt":  sqltypes.StringBindVariable(strings.Join(req.TabletTypes, ",")),
 			"st":  sqltypes.StringBindVariable(wfState),
 			"db":  sqltypes.StringBindVariable(tm.DBConfigs.DBName),
-			"wt":  sqltypes.Int64BindVariable(int64(workflowType)),
+			"wt":  sqltypes.Int64BindVariable(int64(req.WorkflowType)),
 			"wst": sqltypes.Int64BindVariable(int64(req.WorkflowSubType)),
 			"ds":  sqltypes.BoolBindVariable(req.DeferSecondaryKeys),
 		}
-		parsed := sqlparser.BuildParsedQuery(sqlMoveTablesCreate, sidecardb.GetIdentifier(), ":wf", ":sc", ":cl", ":tt", ":st", ":db", ":wt", ":wst", ":ds")
+		parsed := sqlparser.BuildParsedQuery(sqlCreateVRWorkflow, sidecardb.GetIdentifier(), ":wf", ":sc", ":cl", ":tt", ":st", ":db", ":wt", ":wst", ":ds")
 		stmt, err := parsed.GenerateQuery(bindVars, nil)
 		if err != nil {
 			return nil, err
 		}
-		log.Errorf("MoveTablesCreate SQL: %s", stmt)
+		log.Errorf("CreateVRWorkflow SQL: %s", stmt)
 		streamres, err := tm.VREngine.Exec(stmt)
 
 		if err != nil {
@@ -80,7 +77,7 @@ func (tm *TabletManager) MoveTablesCreate(ctx context.Context, req *tabletmanage
 		}
 		res.RowsAffected += streamres.RowsAffected
 	}
-	return &tabletmanagerdatapb.MoveTablesCreateResponse{Result: sqltypes.ResultToProto3(res)}, nil
+	return &tabletmanagerdatapb.CreateVRWorkflowResponse{Result: sqltypes.ResultToProto3(res)}, nil
 }
 
 // UpdateVRWorkflow updates the sidecar databases's vreplication

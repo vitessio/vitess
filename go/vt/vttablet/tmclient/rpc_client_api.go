@@ -173,7 +173,7 @@ type TabletManagerClient interface {
 	// VReplication related methods
 	//
 
-	MoveTablesCreate(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.MoveTablesCreateRequest) (*tabletmanagerdatapb.MoveTablesCreateResponse, error)
+	CreateVRWorkflow(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.CreateVRWorkflowRequest) (*tabletmanagerdatapb.CreateVRWorkflowResponse, error)
 	UpdateVRWorkflow(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.UpdateVRWorkflowRequest) (*tabletmanagerdatapb.UpdateVRWorkflowResponse, error)
 	// VReplicationExec executes a VReplication command
 	VReplicationExec(ctx context.Context, tablet *topodatapb.Tablet, query string) (*querypb.QueryResult, error)

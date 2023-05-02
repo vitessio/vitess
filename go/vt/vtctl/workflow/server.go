@@ -949,10 +949,11 @@ func (s *Server) MoveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 	if mz.isPartial {
 		workflowSubType = binlogdatapb.VReplicationWorkflowSubType_Partial
 	}
-	mtcr := &tabletmanagerdatapb.MoveTablesCreateRequest{
+	mtcr := &tabletmanagerdatapb.CreateVRWorkflowRequest{
 		Workflow:           req.Workflow,
 		Cells:              req.Cells,
 		TabletTypes:        req.TabletTypes,
+		WorkflowType:       binlogdatapb.VReplicationWorkflowType_MoveTables,
 		WorkflowSubType:    workflowSubType,
 		DeferSecondaryKeys: req.DeferSecondaryKeys,
 	}
@@ -960,7 +961,7 @@ func (s *Server) MoveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 	vx := vexec.NewVExec(req.TargetKeyspace, req.Workflow, s.ts, s.tmc)
 	callback := func(ctx context.Context, tablet *topo.TabletInfo) (*querypb.QueryResult, error) {
 		mtcr.BinlogSource = blsMap[tablet.Shard]
-		res, err := s.tmc.MoveTablesCreate(ctx, tablet.Tablet, mtcr)
+		res, err := s.tmc.CreateVRWorkflow(ctx, tablet.Tablet, mtcr)
 		if err != nil {
 			return nil, err
 		}

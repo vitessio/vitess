@@ -401,6 +401,8 @@ type VtctldClient interface {
 	ValidateVersionShard(ctx context.Context, in *vtctldata.ValidateVersionShardRequest, opts ...grpc.CallOption) (*vtctldata.ValidateVersionShardResponse, error)
 	// ValidateVSchema compares the schema of each primary tablet in "keyspace/shards..." to the vschema and errs if there are differences.
 	ValidateVSchema(ctx context.Context, in *vtctldata.ValidateVSchemaRequest, opts ...grpc.CallOption) (*vtctldata.ValidateVSchemaResponse, error)
+	// WorkflowDelete deletes a vreplication workflow.
+	WorkflowDelete(ctx context.Context, in *vtctldata.WorkflowDeleteRequest, opts ...grpc.CallOption) (*vtctldata.WorkflowDeleteResponse, error)
 	// WorkflowUpdate updates the configuration of a vreplication workflow
 	// using the provided updated parameters.
 	WorkflowUpdate(ctx context.Context, in *vtctldata.WorkflowUpdateRequest, opts ...grpc.CallOption) (*vtctldata.WorkflowUpdateResponse, error)
@@ -1248,6 +1250,15 @@ func (c *vtctldClient) ValidateVSchema(ctx context.Context, in *vtctldata.Valida
 	return out, nil
 }
 
+func (c *vtctldClient) WorkflowDelete(ctx context.Context, in *vtctldata.WorkflowDeleteRequest, opts ...grpc.CallOption) (*vtctldata.WorkflowDeleteResponse, error) {
+	out := new(vtctldata.WorkflowDeleteResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/WorkflowDelete", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *vtctldClient) WorkflowUpdate(ctx context.Context, in *vtctldata.WorkflowUpdateRequest, opts ...grpc.CallOption) (*vtctldata.WorkflowUpdateResponse, error) {
 	out := new(vtctldata.WorkflowUpdateResponse)
 	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/WorkflowUpdate", in, out, opts...)
@@ -1526,6 +1537,8 @@ type VtctldServer interface {
 	ValidateVersionShard(context.Context, *vtctldata.ValidateVersionShardRequest) (*vtctldata.ValidateVersionShardResponse, error)
 	// ValidateVSchema compares the schema of each primary tablet in "keyspace/shards..." to the vschema and errs if there are differences.
 	ValidateVSchema(context.Context, *vtctldata.ValidateVSchemaRequest) (*vtctldata.ValidateVSchemaResponse, error)
+	// WorkflowDelete deletes a vreplication workflow.
+	WorkflowDelete(context.Context, *vtctldata.WorkflowDeleteRequest) (*vtctldata.WorkflowDeleteResponse, error)
 	// WorkflowUpdate updates the configuration of a vreplication workflow
 	// using the provided updated parameters.
 	WorkflowUpdate(context.Context, *vtctldata.WorkflowUpdateRequest) (*vtctldata.WorkflowUpdateResponse, error)
@@ -1790,6 +1803,9 @@ func (UnimplementedVtctldServer) ValidateVersionShard(context.Context, *vtctldat
 }
 func (UnimplementedVtctldServer) ValidateVSchema(context.Context, *vtctldata.ValidateVSchemaRequest) (*vtctldata.ValidateVSchemaResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ValidateVSchema not implemented")
+}
+func (UnimplementedVtctldServer) WorkflowDelete(context.Context, *vtctldata.WorkflowDeleteRequest) (*vtctldata.WorkflowDeleteResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method WorkflowDelete not implemented")
 }
 func (UnimplementedVtctldServer) WorkflowUpdate(context.Context, *vtctldata.WorkflowUpdateRequest) (*vtctldata.WorkflowUpdateResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method WorkflowUpdate not implemented")
@@ -3346,6 +3362,24 @@ func _Vtctld_ValidateVSchema_Handler(srv interface{}, ctx context.Context, dec f
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Vtctld_WorkflowDelete_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.WorkflowDeleteRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).WorkflowDelete(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/WorkflowDelete",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).WorkflowDelete(ctx, req.(*vtctldata.WorkflowDeleteRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Vtctld_WorkflowUpdate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(vtctldata.WorkflowUpdateRequest)
 	if err := dec(in); err != nil {
@@ -3698,6 +3732,10 @@ var Vtctld_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ValidateVSchema",
 			Handler:    _Vtctld_ValidateVSchema_Handler,
+		},
+		{
+			MethodName: "WorkflowDelete",
+			Handler:    _Vtctld_WorkflowDelete_Handler,
 		},
 		{
 			MethodName: "WorkflowUpdate",

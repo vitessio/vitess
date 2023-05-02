@@ -156,6 +156,22 @@ func commandMoveTablesCreate(cmd *cobra.Command, args []string) error {
 func commandMoveTablesCancel(cmd *cobra.Command, args []string) error {
 	cli.FinishedParsing(cmd)
 
+	req := &vtctldatapb.WorkflowDeleteRequest{
+		Keyspace: moveTablesOptions.TargetKeyspace,
+		Workflow: moveTablesOptions.Workflow,
+	}
+	resp, err := client.WorkflowDelete(commandCtx, req)
+	if err != nil {
+		return err
+	}
+
+	data, err := cli.MarshalJSON(resp)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("%s\n", data)
+
 	return nil
 }
 

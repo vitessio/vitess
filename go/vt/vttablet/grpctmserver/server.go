@@ -347,11 +347,11 @@ func (s *server) GetReplicas(ctx context.Context, request *tabletmanagerdatapb.G
 // VReplication related methods
 //
 
-func (s *server) MoveTablesCreate(ctx context.Context, request *tabletmanagerdatapb.MoveTablesCreateRequest) (response *tabletmanagerdatapb.MoveTablesCreateResponse, err error) {
-	defer s.tm.HandleRPCPanic(ctx, "MoveTablesCreate", request, response, true /*verbose*/, &err)
+func (s *server) CreateVRWorkflow(ctx context.Context, request *tabletmanagerdatapb.CreateVRWorkflowRequest) (response *tabletmanagerdatapb.CreateVRWorkflowResponse, err error) {
+	defer s.tm.HandleRPCPanic(ctx, "CreateVRWorkflow", request, response, true /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
-	response = &tabletmanagerdatapb.MoveTablesCreateResponse{}
-	return s.tm.MoveTablesCreate(ctx, request)
+	response = &tabletmanagerdatapb.CreateVRWorkflowResponse{}
+	return s.tm.CreateVRWorkflow(ctx, request)
 }
 
 func (s *server) VReplicationExec(ctx context.Context, request *tabletmanagerdatapb.VReplicationExecRequest) (response *tabletmanagerdatapb.VReplicationExecResponse, err error) {

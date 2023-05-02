@@ -592,6 +592,11 @@ func (client *localVtctldClient) ValidateVersionShard(ctx context.Context, in *v
 	return client.s.ValidateVersionShard(ctx, in)
 }
 
+// WorkflowDelete is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) WorkflowDelete(ctx context.Context, in *vtctldatapb.WorkflowDeleteRequest, opts ...grpc.CallOption) (*vtctldatapb.WorkflowDeleteResponse, error) {
+	return client.s.WorkflowDelete(ctx, in)
+}
+
 // WorkflowUpdate is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) WorkflowUpdate(ctx context.Context, in *vtctldatapb.WorkflowUpdateRequest, opts ...grpc.CallOption) (*vtctldatapb.WorkflowUpdateResponse, error) {
 	return client.s.WorkflowUpdate(ctx, in)

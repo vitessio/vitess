@@ -97,7 +97,7 @@ type RPCTM interface {
 	WaitForPosition(ctx context.Context, pos string) error
 
 	// VReplication API
-	MoveTablesCreate(ctx context.Context, req *tabletmanagerdatapb.MoveTablesCreateRequest) (*tabletmanagerdatapb.MoveTablesCreateResponse, error)
+	CreateVRWorkflow(ctx context.Context, req *tabletmanagerdatapb.CreateVRWorkflowRequest) (*tabletmanagerdatapb.CreateVRWorkflowResponse, error)
 	VReplicationExec(ctx context.Context, query string) (*querypb.QueryResult, error)
 	VReplicationWaitForPos(ctx context.Context, id int32, pos string) error
 	UpdateVRWorkflow(ctx context.Context, req *tabletmanagerdatapb.UpdateVRWorkflowRequest) (*tabletmanagerdatapb.UpdateVRWorkflowResponse, error)

@@ -683,13 +683,13 @@ func (client *Client) GetReplicas(ctx context.Context, tablet *topodatapb.Tablet
 // VReplication related methods
 //
 
-func (client *Client) MoveTablesCreate(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.MoveTablesCreateRequest) (*tabletmanagerdatapb.MoveTablesCreateResponse, error) {
+func (client *Client) CreateVRWorkflow(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.CreateVRWorkflowRequest) (*tabletmanagerdatapb.CreateVRWorkflowResponse, error) {
 	c, closer, err := client.dialer.dial(ctx, tablet)
 	if err != nil {
 		return nil, err
 	}
 	defer closer.Close()
-	response, err := c.MoveTablesCreate(ctx, request)
+	response, err := c.CreateVRWorkflow(ctx, request)
 	if err != nil {
 		return nil, err
 	}

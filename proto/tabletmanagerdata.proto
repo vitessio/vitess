@@ -275,25 +275,6 @@ message ExecuteFetchAsAppResponse {
   query.QueryResult result = 1;
 }
 
-message MoveTablesCreateRequest {
-  string workflow = 1;
-  repeated binlogdata.BinlogSource binlog_source = 2;
-  // optional parameters.
-  repeated string cells = 3;
-  // TabletTypes is the list of tablet types to use when selecting source tablets.
-  repeated string tablet_types = 4;
-  binlogdata.VReplicationWorkflowSubType workflow_sub_type = 5;
-  // DeferSecondaryKeys specifies if secondary keys should be created in one shot after table
-  // copy finishes.
-  bool defer_secondary_keys = 6;
-  // AutoStart specifies if the workflow should be started when created.
-  bool auto_start = 7;
-}
-
-message MoveTablesCreateResponse {
-  query.QueryResult result = 1;
-}
-
 message ReplicationStatusRequest {
 }
 
@@ -515,6 +496,38 @@ message RestoreFromBackupRequest {
 
 message RestoreFromBackupResponse {
   logutil.Event event = 1;
+}
+
+//
+// VReplication related messages
+//
+
+message CreateVRWorkflowRequest {
+  string workflow = 1;
+  repeated binlogdata.BinlogSource binlog_source = 2;
+  // optional parameters.
+  repeated string cells = 3;
+  // TabletTypes is the list of tablet types to use when selecting source tablets.
+  repeated string tablet_types = 4;
+  binlogdata.VReplicationWorkflowType workflow_type = 5;
+  binlogdata.VReplicationWorkflowSubType workflow_sub_type = 6;
+  // DeferSecondaryKeys specifies if secondary keys should be created in one shot after table
+  // copy finishes.
+  bool defer_secondary_keys = 7;
+  // AutoStart specifies if the workflow should be started when created.
+  bool auto_start = 8;
+}
+
+message CreateVRWorkflowResponse {
+  query.QueryResult result = 1;
+}
+
+message DeleteVRWorkflowRequest {
+  string workflow = 1;
+}
+
+message DeleteVRWorkflowResponse {
+  query.QueryResult result = 1;
 }
 
 message VDiffRequest {
