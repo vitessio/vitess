@@ -422,9 +422,10 @@ func TestStartCheckMysql(t *testing.T) {
 	assert.Equal(t, "foo", ti.MysqlHostname)
 }
 
+// TestStartFindMysqlPort tests the functionality of findMySQLPort on tablet startup
 func TestStartFindMysqlPort(t *testing.T) {
 	defer func(saved time.Duration) { mysqlPortRetryInterval = saved }(mysqlPortRetryInterval)
-	mysqlPortRetryInterval = 1 * time.Millisecond
+	mysqlPortRetryInterval = 50 * time.Millisecond
 
 	ctx := context.Background()
 	cell := "cell1"
@@ -446,16 +447,24 @@ func TestStartFindMysqlPort(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, int32(0), ti.MysqlPort)
 
-	fmd.MysqlPort.Store(3306)
+	go func() {
+		// We want to simulate the mysql daemon returning 0 for the port
+		// for some time before returning the correct value.
+		// We expect the vttablet to ignore the 0 value and eventually find the 3306 value.
+		time.Sleep(200 * time.Millisecond)
+		fmd.MysqlPort.Store(0)
+		time.Sleep(200 * time.Millisecond)
+		fmd.MysqlPort.Store(3306)
+	}()
 	for i := 0; i < 10; i++ {
 		ti, err := ts.GetTablet(ctx, tm.tabletAlias)
 		require.NoError(t, err)
 		if ti.MysqlPort == 3306 {
 			return
 		}
-		time.Sleep(5 * time.Millisecond)
+		time.Sleep(50 * time.Millisecond)
 	}
-	assert.Fail(t, "mysql port was not updated")
+	assert.Fail(t, "mysql port was not updated.", "Final value - %v", ti.MysqlPort)
 }
 
 // Init tablet fixes replication data when safe
