@@ -2117,11 +2117,11 @@ func TestGeneratedInvisiblePrimaryKey(t *testing.T) {
 		t.Skip("skipping test as server does not support invisible primary keys")
 	}
 	execStatements(t, []string{
-		"SET sql_generate_invisible_primary_key=ON;",
+		"SET @@session.sql_generate_invisible_primary_key=ON;",
 		"create table t1(val varbinary(6))",
+		"SET @@session.sql_generate_invisible_primary_key=OFF;",
 	})
 	defer execStatements(t, []string{
-		"SET sql_generate_invisible_primary_key=OFF;",
 		"drop table t1",
 	})
 	engine.se.Reload(context.Background())

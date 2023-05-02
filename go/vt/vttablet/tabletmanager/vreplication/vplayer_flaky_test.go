@@ -49,12 +49,12 @@ func TestPlayerGeneratedInvisiblePrimaryKey(t *testing.T) {
 	defer deleteTablet(addTablet(100))
 
 	execStatements(t, []string{
-		"SET sql_generate_invisible_primary_key=ON;",
+		"SET @@session.sql_generate_invisible_primary_key=ON;",
 		"create table t1(val varbinary(128))",
+		"SET @@session.sql_generate_invisible_primary_key=OFF;",
 		fmt.Sprintf("create table %s.t1(my_row_id int, val varbinary(128), primary key(my_row_id))", vrepldb),
 	})
 	defer execStatements(t, []string{
-		"SET sql_generate_invisible_primary_key=OFF;",
 		"drop table t1",
 		fmt.Sprintf("drop table %s.t1", vrepldb),
 	})

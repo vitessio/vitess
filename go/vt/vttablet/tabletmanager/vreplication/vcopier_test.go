@@ -1412,13 +1412,13 @@ func testPlayerCopyTablesGIPK(t *testing.T) {
 	defer deleteTablet(addTablet(100))
 
 	execStatements(t, []string{
-		"SET sql_generate_invisible_primary_key=ON;",
+		"SET @@session.sql_generate_invisible_primary_key=ON;",
 		"create table src1(val varbinary(128))",
+		"SET @@session.sql_generate_invisible_primary_key=OFF;",
 		"insert into src1 values('aaa'), ('bbb')",
 		fmt.Sprintf("create table %s.dst1(my_row_id int, val varbinary(128), primary key(my_row_id))", vrepldb),
 	})
 	defer execStatements(t, []string{
-		"SET sql_generate_invisible_primary_key=OFF;",
 		"drop table src1",
 		fmt.Sprintf("drop table %s.dst1", vrepldb),
 	})
