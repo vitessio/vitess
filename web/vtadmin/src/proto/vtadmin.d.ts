@@ -50886,8 +50886,23 @@ export namespace vtctldata {
     /** Properties of a MoveTablesCreateRequest. */
     interface IMoveTablesCreateRequest {
 
-        /** MoveTablesCreateRequest tablet_request */
-        tablet_request?: (tabletmanagerdata.IMoveTablesCreateRequest|null);
+        /** MoveTablesCreateRequest workflow */
+        workflow?: (string|null);
+
+        /** MoveTablesCreateRequest source_keyspace */
+        source_keyspace?: (string|null);
+
+        /** MoveTablesCreateRequest target_keyspace */
+        target_keyspace?: (string|null);
+
+        /** MoveTablesCreateRequest cells */
+        cells?: (string[]|null);
+
+        /** MoveTablesCreateRequest tablet_types */
+        tablet_types?: (string[]|null);
+
+        /** MoveTablesCreateRequest source_shards */
+        source_shards?: (string[]|null);
 
         /** MoveTablesCreateRequest all_tables */
         all_tables?: (boolean|null);
@@ -50898,8 +50913,26 @@ export namespace vtctldata {
         /** MoveTablesCreateRequest exclude_tables */
         exclude_tables?: (string[]|null);
 
-        /** MoveTablesCreateRequest timeout */
-        timeout?: (vttime.IDuration|null);
+        /** MoveTablesCreateRequest external_cluster */
+        external_cluster?: (string|null);
+
+        /** MoveTablesCreateRequest source_time_zone */
+        source_time_zone?: (string|null);
+
+        /** MoveTablesCreateRequest on_ddl */
+        on_ddl?: (string|null);
+
+        /** MoveTablesCreateRequest stop_after_copy */
+        stop_after_copy?: (boolean|null);
+
+        /** MoveTablesCreateRequest drop_foreign_keys */
+        drop_foreign_keys?: (boolean|null);
+
+        /** MoveTablesCreateRequest defer_secondary_keys */
+        defer_secondary_keys?: (boolean|null);
+
+        /** MoveTablesCreateRequest auto_start */
+        auto_start?: (boolean|null);
     }
 
     /** Represents a MoveTablesCreateRequest. */
@@ -50911,8 +50944,23 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.IMoveTablesCreateRequest);
 
-        /** MoveTablesCreateRequest tablet_request. */
-        public tablet_request?: (tabletmanagerdata.IMoveTablesCreateRequest|null);
+        /** MoveTablesCreateRequest workflow. */
+        public workflow: string;
+
+        /** MoveTablesCreateRequest source_keyspace. */
+        public source_keyspace: string;
+
+        /** MoveTablesCreateRequest target_keyspace. */
+        public target_keyspace: string;
+
+        /** MoveTablesCreateRequest cells. */
+        public cells: string[];
+
+        /** MoveTablesCreateRequest tablet_types. */
+        public tablet_types: string[];
+
+        /** MoveTablesCreateRequest source_shards. */
+        public source_shards: string[];
 
         /** MoveTablesCreateRequest all_tables. */
         public all_tables: boolean;
@@ -50923,8 +50971,26 @@ export namespace vtctldata {
         /** MoveTablesCreateRequest exclude_tables. */
         public exclude_tables: string[];
 
-        /** MoveTablesCreateRequest timeout. */
-        public timeout?: (vttime.IDuration|null);
+        /** MoveTablesCreateRequest external_cluster. */
+        public external_cluster: string;
+
+        /** MoveTablesCreateRequest source_time_zone. */
+        public source_time_zone: string;
+
+        /** MoveTablesCreateRequest on_ddl. */
+        public on_ddl: string;
+
+        /** MoveTablesCreateRequest stop_after_copy. */
+        public stop_after_copy: boolean;
+
+        /** MoveTablesCreateRequest drop_foreign_keys. */
+        public drop_foreign_keys: boolean;
+
+        /** MoveTablesCreateRequest defer_secondary_keys. */
+        public defer_secondary_keys: boolean;
+
+        /** MoveTablesCreateRequest auto_start. */
+        public auto_start: boolean;
 
         /**
          * Creates a new MoveTablesCreateRequest instance using the specified properties.

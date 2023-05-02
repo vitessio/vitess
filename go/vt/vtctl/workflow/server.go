@@ -765,14 +765,14 @@ func (s *Server) MoveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 	span, ctx := trace.NewSpan(ctx, "workflow.Server.MoveTablesCreate")
 	defer span.Finish()
 
-	span.Annotate("keyspace", req.TabletRequest.TargetKeyspace)
-	span.Annotate("workflow", req.TabletRequest.Workflow)
-	span.Annotate("cells", req.TabletRequest.Cells)
-	span.Annotate("tablet_types", req.TabletRequest.TabletTypes)
-	span.Annotate("on_ddl", req.TabletRequest.BinlogSource.OnDdl)
+	span.Annotate("keyspace", req.TargetKeyspace)
+	span.Annotate("workflow", req.Workflow)
+	span.Annotate("cells", req.Cells)
+	span.Annotate("tablet_types", req.TabletTypes)
+	span.Annotate("on_ddl", req.OnDdl)
 
-	sourceKeyspace := req.TabletRequest.SourceKeyspace
-	targetKeyspace := req.TabletRequest.TargetKeyspace
+	sourceKeyspace := req.SourceKeyspace
+	targetKeyspace := req.TargetKeyspace
 	//FIXME validate tableSpecs, allTables, excludeTables
 	var (
 		tables       = req.IncludeTables
@@ -781,8 +781,8 @@ func (s *Server) MoveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 		err          error
 	)
 
-	if req.TabletRequest.BinlogSource.ExternalCluster != "" { // when the source is an external mysql cluster mounted using the Mount command
-		externalTopo, err = s.ts.OpenExternalVitessClusterServer(ctx, req.TabletRequest.BinlogSource.ExternalCluster)
+	if req.ExternalCluster != "" { // when the source is an external mysql cluster mounted using the Mount command
+		externalTopo, err = s.ts.OpenExternalVitessClusterServer(ctx, req.ExternalCluster)
 		if err != nil {
 			return nil, err
 		}
@@ -870,33 +870,25 @@ func (s *Server) MoveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 	if err := s.ts.RebuildSrvVSchema(ctx, nil); err != nil {
 		return nil, err
 	}
-	sourceShards, err := s.ts.GetShardNames(ctx, sourceKeyspace)
-	if err != nil {
-		return nil, err
-	}
-	tabletTypes := make([]string, len(req.TabletRequest.TabletTypes))
-	for i, tt := range req.TabletRequest.TabletTypes {
-		tabletTypes[i] = tt.String()
-	}
 	ms := &vtctldatapb.MaterializeSettings{
-		Workflow:              req.TabletRequest.Workflow,
+		Workflow:              req.Workflow,
 		MaterializationIntent: vtctldatapb.MaterializationIntent_MOVETABLES,
 		SourceKeyspace:        sourceKeyspace,
 		TargetKeyspace:        targetKeyspace,
-		Cell:                  strings.Join(req.TabletRequest.Cells, ","),
-		TabletTypes:           strings.Join(tabletTypes, ","),
-		StopAfterCopy:         req.TabletRequest.BinlogSource.StopAfterCopy,
-		ExternalCluster:       req.TabletRequest.BinlogSource.ExternalCluster,
-		SourceShards:          sourceShards,
-		OnDdl:                 binlogdatapb.OnDDLAction_name[int32(req.TabletRequest.BinlogSource.OnDdl)],
-		DeferSecondaryKeys:    req.TabletRequest.DeferSecondaryKeys,
+		Cell:                  strings.Join(req.Cells, ","),
+		TabletTypes:           strings.Join(req.TabletTypes, ","),
+		StopAfterCopy:         req.StopAfterCopy,
+		ExternalCluster:       req.ExternalCluster,
+		SourceShards:          req.SourceShards,
+		OnDdl:                 req.OnDdl,
+		DeferSecondaryKeys:    req.DeferSecondaryKeys,
 	}
-	if req.TabletRequest.BinlogSource.SourceTimeZone != "" {
-		ms.SourceTimeZone = req.TabletRequest.BinlogSource.SourceTimeZone
+	if req.SourceTimeZone != "" {
+		ms.SourceTimeZone = req.SourceTimeZone
 		ms.TargetTimeZone = "UTC"
 	}
 	createDDLMode := createDDLAsCopy
-	if req.TabletRequest.DropForeignKeys {
+	if req.DropForeignKeys {
 		createDDLMode = createDDLAsCopyDropForeignKeys
 	}
 
@@ -927,7 +919,7 @@ func (s *Server) MoveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 		}
 	}
 
-	tabletShards, err := s.ts.GetShardNames(ctx, targetKeyspace)
+	tabletShards, err := s.collectTargetStreams(ctx, mz)
 	if err != nil {
 		return nil, err
 	}
@@ -951,7 +943,7 @@ func (s *Server) MoveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 			return nil, fmt.Errorf(msg)
 		}
 	}
-	if req.TabletRequest.AutoStart {
+	if req.AutoStart {
 		err = mz.startStreams(ctx)
 	}
 
@@ -1072,6 +1064,39 @@ func (s *Server) addTablesToVSchema(ctx context.Context, sourceKeyspace string, 
 
 	}
 	return nil
+}
+
+func (s *Server) collectTargetStreams(ctx context.Context, mz *materializer) ([]string, error) {
+	var shardTablets []string
+	var mu sync.Mutex
+	err := mz.forAllTargets(func(target *topo.ShardInfo) error {
+		var qrproto *querypb.QueryResult
+		var id int64
+		var err error
+		targetPrimary, err := s.ts.GetTablet(ctx, target.PrimaryAlias)
+		if err != nil {
+			return vterrors.Wrapf(err, "GetTablet(%v) failed", target.PrimaryAlias)
+		}
+		query := fmt.Sprintf("select id from _vt.vreplication where db_name=%s and workflow=%s", encodeString(targetPrimary.DbName()), encodeString(mz.ms.Workflow))
+		if qrproto, err = s.tmc.VReplicationExec(ctx, targetPrimary.Tablet, query); err != nil {
+			return vterrors.Wrapf(err, "VReplicationExec(%v, %s)", targetPrimary.Tablet, query)
+		}
+		qr := sqltypes.Proto3ToResult(qrproto)
+		for i := 0; i < len(qr.Rows); i++ {
+			id, err = evalengine.ToInt64(qr.Rows[i][0])
+			if err != nil {
+				return err
+			}
+			mu.Lock()
+			shardTablets = append(shardTablets, fmt.Sprintf("%s:%d", target.ShardName(), id))
+			mu.Unlock()
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return shardTablets, nil
 }
 
 func (s *Server) checkIfPreviousJournalExists(ctx context.Context, mz *materializer, migrationID int64) (bool, []string, error) {

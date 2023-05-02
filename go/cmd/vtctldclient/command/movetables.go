@@ -24,22 +24,22 @@ import (
 	"github.com/spf13/cobra"
 
 	"vitess.io/vitess/go/cmd/vtctldclient/cli"
-	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 
 	"vitess.io/vitess/go/vt/proto/binlogdata"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
-	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
 var (
+	tabletTypesDefault = []string{"in_order:REPLICA", "PRIMARY"}
+
 	// MoveTables is the base command for all related actions.
 	MoveTables = &cobra.Command{
 		Use:   "MoveTables --workflow <workflow> --target-keyspace <keyspace> [command]",
 		Short: "Perform commands related to moving tables from a source keyspace to a target keyspace.",
 		Long: `MoveTables commands: Create, Show, Progress, SwitchTraffic, ReverseTraffic, Stop, Cancel, and Delete.
-		See the --help output for each command for more details.`,
+See the --help output for each command for more details.`,
 		DisableFlagsInUseLine: true,
 		Aliases:               []string{"movetables"},
 		Args:                  cobra.ExactArgs(1),
@@ -82,6 +82,17 @@ var (
 		},
 		RunE: commandMoveTablesCreate,
 	}
+
+	// MoveTablesCancel makes a MoveTablesCancel gRPC call to a vtctld.
+	MoveTablesCancel = &cobra.Command{
+		Use:                   "Cancel",
+		Short:                 "Cancel a MoveTables VReplication workflow",
+		Example:               `vtctldclient --server=localhost:15999 MoveTables --workflow "commerce2customer" --target-keyspace "customer" Cancel`,
+		DisableFlagsInUseLine: true,
+		Aliases:               []string{"cancel"},
+		Args:                  cobra.NoArgs,
+		RunE:                  commandMoveTablesCancel,
+	}
 )
 
 var (
@@ -93,12 +104,13 @@ var (
 	moveTablesCreateOptions = struct {
 		Workflow            string
 		SourceKeyspace      string
+		Cells               []string
+		TabletTypes         []string
+		SourceShards        []string
+		ExternalClusterName string
 		AllTables           bool
 		IncludeTables       []string
 		ExcludeTables       []string
-		Cells               []string
-		TabletTypes         []string
-		ExternalClusterName string
 		SourceTimeZone      string
 		OnDDL               string
 		Timeout             time.Duration
@@ -111,31 +123,19 @@ var (
 func commandMoveTablesCreate(cmd *cobra.Command, args []string) error {
 	cli.FinishedParsing(cmd)
 
-	// Now we need to do the mapping from the string representation to
-	// the enum value.
-	onddl := binlogdatapb.OnDDLAction_IGNORE // default
-	if val, ok := binlogdatapb.OnDDLAction_value[strings.ToUpper(moveTablesCreateOptions.OnDDL)]; ok {
-		onddl = binlogdatapb.OnDDLAction(val)
-	}
-
-	bls := &binlogdatapb.BinlogSource{}
-	bls.Keyspace = moveTablesCreateOptions.SourceKeyspace
-	bls.ExternalCluster = moveTablesCreateOptions.ExternalClusterName
-	bls.OnDdl = onddl
-	bls.SourceTimeZone = moveTablesCreateOptions.SourceTimeZone
-	bls.StopAfterCopy = moveTablesCreateOptions.StopAfterCopy
-
 	req := &vtctldatapb.MoveTablesCreateRequest{
-		TabletRequest: &tabletmanagerdatapb.MoveTablesCreateRequest{
-			Workflow:       moveTablesOptions.Workflow,
-			TargetKeyspace: moveTablesOptions.TargetKeyspace,
-			SourceKeyspace: moveTablesCreateOptions.SourceKeyspace,
-			BinlogSource:   bls,
-		},
-		AllTables:     moveTablesCreateOptions.AllTables,
-		IncludeTables: moveTablesCreateOptions.IncludeTables,
-		ExcludeTables: moveTablesCreateOptions.ExcludeTables,
-		Timeout:       protoutil.DurationToProto(moveTablesCreateOptions.Timeout),
+		Workflow:       moveTablesOptions.Workflow,
+		TargetKeyspace: moveTablesOptions.TargetKeyspace,
+		SourceKeyspace: moveTablesCreateOptions.SourceKeyspace,
+		Cells:          moveTablesCreateOptions.Cells,
+		TabletTypes:    moveTablesCreateOptions.TabletTypes,
+		AllTables:      moveTablesCreateOptions.AllTables,
+		IncludeTables:  moveTablesCreateOptions.IncludeTables,
+		ExcludeTables:  moveTablesCreateOptions.ExcludeTables,
+		OnDdl:          moveTablesCreateOptions.OnDDL,
+		AutoStart:      moveTablesCreateOptions.AutoStart,
+		StopAfterCopy:  moveTablesCreateOptions.StopAfterCopy,
+		//Timeout:        protoutil.DurationToProto(moveTablesCreateOptions.Timeout),
 	}
 
 	resp, err := client.MoveTablesCreate(commandCtx, req)
@@ -153,6 +153,12 @@ func commandMoveTablesCreate(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+func commandMoveTablesCancel(cmd *cobra.Command, args []string) error {
+	cli.FinishedParsing(cmd)
+
+	return nil
+}
+
 func init() {
 	MoveTables.PersistentFlags().StringVar(&moveTablesOptions.TargetKeyspace, "target-keyspace", "", "Keyspace where the tables are being moved to and where the workflow exists (required)")
 	MoveTables.MarkPersistentFlagRequired("target-keyspace")
@@ -163,11 +169,16 @@ func init() {
 	MoveTablesCreate.PersistentFlags().StringVar(&moveTablesCreateOptions.SourceKeyspace, "source-keyspace", "", "Keyspace where the tables are being moved from (required)")
 	MoveTablesCreate.MarkPersistentFlagRequired("source-keyspace")
 	MoveTablesCreate.Flags().StringSliceVarP(&moveTablesCreateOptions.Cells, "cells", "c", nil, "Cells and/or CellAliases to copy table data from")
-	MoveTablesCreate.Flags().StringSliceVar(&moveTablesCreateOptions.TabletTypes, "tablet-types", nil, "Source tablet types to replicate table data from (e.g. PRIMARY,REPLICA,RDONLY)")
+	MoveTablesCreate.Flags().StringSliceVar(&moveTablesCreateOptions.SourceShards, "source-shards", tabletTypesDefault, "Source shards to copy data from when performing a partial MoveTables (experimental)")
+	MoveTablesCreate.Flags().StringSliceVar(&moveTablesCreateOptions.TabletTypes, "tablet-types", tabletTypesDefault, "Source tablet types to replicate table data from (e.g. PRIMARY,REPLICA,RDONLY)")
 	MoveTablesCreate.Flags().BoolVar(&moveTablesCreateOptions.AllTables, "all-tables", false, "Copy all tables from the source")
 	MoveTablesCreate.Flags().StringSliceVar(&moveTablesCreateOptions.IncludeTables, "tables", nil, "Source tables to copy")
 	MoveTablesCreate.Flags().StringSliceVar(&moveTablesCreateOptions.ExcludeTables, "exclude-tables", nil, "Source tables to exclude from copying")
 	MoveTablesCreate.Flags().StringVar(&moveTablesCreateOptions.OnDDL, "on-ddl", binlogdatapb.OnDDLAction_name[int32(binlogdata.OnDDLAction_IGNORE)],
 		"What to do when DDL is encountered in the VReplication stream. Possible values are IGNORE, STOP, EXEC, and EXEC_IGNORE")
+	MoveTablesCreate.Flags().BoolVar(&moveTablesCreateOptions.AutoStart, "auto-start", true, "Start the MoveTables workflow after creating it")
+	MoveTablesCreate.Flags().BoolVar(&moveTablesCreateOptions.StopAfterCopy, "stop-after-copy", false, "Stop the MoveTables workflow after it's finished copying the existing rows and before it starts replicating changes")
 	MoveTables.AddCommand(MoveTablesCreate)
+
+	MoveTables.AddCommand(MoveTablesCancel)
 }

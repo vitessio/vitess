@@ -812,13 +812,32 @@ message InitShardPrimaryResponse {
 }
 
 message MoveTablesCreateRequest {
-  // The request gets passed on to each primary tablet involved
+  // The requests values get passed on to each primary tablet involved
   // in the workflow via the MoveTablesCreate tabletmanager RPC.
-  tabletmanagerdata.MoveTablesCreateRequest tablet_request = 1;
-  bool all_tables = 2;
-  repeated string include_tables = 3;
-  repeated string exclude_tables = 4;
-  vttime.Duration timeout = 5;
+  string workflow = 1;
+  string source_keyspace = 2;
+  string target_keyspace = 3;
+  repeated string cells = 4;
+  repeated string tablet_types = 5;
+  repeated string source_shards = 6;
+  bool all_tables = 7;
+  repeated string include_tables = 8;
+  repeated string exclude_tables = 9;
+  // ExternalCluster is the name of the mounted cluster which has the source keyspace/db for this workflow
+  // it is of the type <cluster_type.cluster_name>
+  string external_cluster = 10;
+  // SourceTimeZone is the time zone in which datetimes on the source were stored, provided as an option in MoveTable
+  string source_time_zone = 11;
+  // OnDdl specifies the action to be taken when a DDL is encountered.
+  string on_ddl = 12;
+  // StopAfterCopy specifies if vreplication should be stopped after copying.
+  bool stop_after_copy = 13;
+  // DropForeignKeys specifies if foreign key constraints should be elided on the target.
+  bool drop_foreign_keys = 14;
+  // DeferSecondaryKeys specifies if secondary keys should be created in one shot after table copy finishes.
+  bool defer_secondary_keys = 15;
+  // Start the workflow after creating it.
+  bool auto_start = 16;
 }
 
 message MoveTablesCreateResponse {
