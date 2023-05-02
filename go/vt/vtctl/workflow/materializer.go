@@ -22,8 +22,11 @@ import (
 	"strings"
 	"sync"
 	"text/template"
+	"time"
 
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
+	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
@@ -67,7 +70,7 @@ func (mz *materializer) prepareMaterializerStreams() error {
 		return err
 	}
 	if mz.isPartial {
-		if err := createDefaultShardRoutingRules(mz.ctx, mz.ms, mz.ts, mz.ts); err != nil {
+		if err := createDefaultShardRoutingRules(mz.ctx, mz.ms, mz.ts); err != nil {
 			return err
 		}
 	}
@@ -420,4 +423,50 @@ func Materialize(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManage
 		return err
 	}
 	return mz.startStreams(ctx)
+}
+
+func (mz *materializer) forAllTargets(f func(*topo.ShardInfo) error) error {
+	var wg sync.WaitGroup
+	allErrors := &concurrency.AllErrorRecorder{}
+	for _, target := range mz.targetShards {
+		wg.Add(1)
+		go func(target *topo.ShardInfo) {
+			defer wg.Done()
+
+			if err := f(target); err != nil {
+				allErrors.RecordError(err)
+			}
+		}(target)
+	}
+	wg.Wait()
+	return allErrors.AggrError(vterrors.Aggregate)
+}
+
+// checkTZConversion is a light-weight consistency check to validate that, if a source time zone is specified to MoveTables,
+// that the current primary has the time zone loaded in order to run the convert_tz() function used by VReplication to do the
+// datetime conversions. We only check the current primaries on each shard and note here that it is possible a new primary
+// gets elected: in this case user will either see errors during vreplication or vdiff will report mismatches.
+func (mz *materializer) checkTZConversion(ctx context.Context, tz string) error {
+	err := mz.forAllTargets(func(target *topo.ShardInfo) error {
+		targetPrimary, err := mz.ts.GetTablet(ctx, target.PrimaryAlias)
+		if err != nil {
+			return vterrors.Wrapf(err, "GetTablet(%v) failed", target.PrimaryAlias)
+		}
+		testDateTime := "2006-01-02 15:04:05"
+		query := fmt.Sprintf("select convert_tz(%s, %s, 'UTC')", encodeString(testDateTime), encodeString(tz))
+		qrproto, err := mz.tmc.ExecuteFetchAsApp(ctx, targetPrimary.Tablet, false, &tabletmanagerdatapb.ExecuteFetchAsAppRequest{
+			Query:   []byte(query),
+			MaxRows: 1,
+		})
+		if err != nil {
+			return vterrors.Wrapf(err, "ExecuteFetchAsApp(%v, %s)", targetPrimary.Tablet, query)
+		}
+		qr := sqltypes.Proto3ToResult(qrproto)
+		if gotDate, err := time.Parse(testDateTime, qr.Rows[0][0].ToString()); err != nil {
+			return fmt.Errorf("unable to perform time_zone conversions from %s to UTC — result of the attempt was: %s. Either the specified source time zone is invalid or the time zone tables have not been loaded on the %s tablet",
+				tz, gotDate, targetPrimary.Alias)
+		}
+		return nil
+	})
+	return err
 }

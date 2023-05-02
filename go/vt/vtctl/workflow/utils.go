@@ -33,6 +33,38 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 )
 
+func getTablesInKeyspace(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManagerClient, keyspace string) ([]string, error) {
+	shards, err := ts.GetServingShards(ctx, keyspace)
+	if err != nil {
+		return nil, err
+	}
+	if len(shards) == 0 {
+		return nil, fmt.Errorf("keyspace %s has no shards", keyspace)
+	}
+	primary := shards[0].PrimaryAlias
+	if primary == nil {
+		return nil, fmt.Errorf("shard does not have a primary: %v", shards[0].ShardName())
+	}
+	allTables := []string{"/.*/"}
+
+	ti, err := ts.GetTablet(ctx, primary)
+	if err != nil {
+		return nil, err
+	}
+	req := &tabletmanagerdatapb.GetSchemaRequest{Tables: allTables}
+	schema, err := tmc.GetSchema(ctx, ti.Tablet, req)
+	if err != nil {
+		return nil, err
+	}
+	log.Infof("got table schemas from source primary %v.", primary)
+
+	var sourceTables []string
+	for _, td := range schema.TableDefinitions {
+		sourceTables = append(sourceTables, td.Name)
+	}
+	return sourceTables, nil
+}
+
 // validateNewWorkflow ensures that the specified workflow doesn't already exist
 // in the keyspace.
 func validateNewWorkflow(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManagerClient, keyspace, workflow string) error {
@@ -87,12 +119,12 @@ func validateNewWorkflow(ctx context.Context, ts *topo.Server, tmc tmclient.Tabl
 // createDefaultShardRoutingRules creates a reverse routing rule for
 // each shard in a new partial keyspace migration workflow that does
 // not already have an existing routing rule in place.
-func createDefaultShardRoutingRules(ctx context.Context, ms *vtctldatapb.MaterializeSettings, ts, sourceTs *topo.Server) error {
+func createDefaultShardRoutingRules(ctx context.Context, ms *vtctldatapb.MaterializeSettings, ts *topo.Server) error {
 	srr, err := topotools.GetShardRoutingRules(ctx, ts)
 	if err != nil {
 		return err
 	}
-	allShards, err := sourceTs.GetServingShards(ctx, ms.SourceKeyspace)
+	allShards, err := ts.GetServingShards(ctx, ms.SourceKeyspace)
 	if err != nil {
 		return err
 	}

@@ -46,7 +46,6 @@ import (
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
@@ -774,8 +773,11 @@ func (s *Server) MoveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 
 	sourceKeyspace := req.TabletRequest.SourceKeyspace
 	targetKeyspace := req.TabletRequest.TargetKeyspace
+	//FIXME validate tableSpecs, allTables, excludeTables
 	var (
+		tables       = req.IncludeTables
 		externalTopo *topo.Server
+		sourceTopo   *topo.Server = s.ts
 		err          error
 	)
 
@@ -784,7 +786,7 @@ func (s *Server) MoveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 		if err != nil {
 			return nil, err
 		}
-		s.ts = externalTopo
+		sourceTopo = externalTopo
 		log.Infof("Successfully opened external topo: %+v", externalTopo)
 	}
 
@@ -796,48 +798,42 @@ func (s *Server) MoveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 	if vschema == nil {
 		return nil, fmt.Errorf("no vschema found for target keyspace %s", targetKeyspace)
 	}
-
-	ksTables, err := s.getTablesInKeyspace(ctx, sourceKeyspace)
-	log.Errorf("DEBUG: ksTables: %v", ksTables)
+	ksTables, err := getTablesInKeyspace(ctx, sourceTopo, s.tmc, sourceKeyspace)
 	if err != nil {
 		return nil, err
 	}
-	if len(req.IncludeTables) > 0 {
-		log.Errorf("DEBUG: InlucdeTables: %v", req.IncludeTables)
-		err = s.validateSourceTablesExist(ctx, sourceKeyspace, ksTables, req.IncludeTables)
+	if len(tables) > 0 {
+		err = s.validateSourceTablesExist(ctx, sourceKeyspace, ksTables, tables)
 		if err != nil {
 			return nil, err
 		}
 	} else {
 		if req.AllTables {
-			log.Errorf("DEBUG: AllTables: %v", req.AllTables)
-			req.IncludeTables = ksTables
+			tables = ksTables
 		} else {
 			return nil, fmt.Errorf("no tables to move")
 		}
 	}
 	if len(req.ExcludeTables) > 0 {
-		log.Errorf("DEBUG: ExludeTables: %v", req.ExcludeTables)
 		err = s.validateSourceTablesExist(ctx, sourceKeyspace, ksTables, req.ExcludeTables)
 		if err != nil {
 			return nil, err
 		}
 	}
 	var tables2 []string
-	for _, t := range req.IncludeTables {
+	for _, t := range tables {
 		if shouldInclude(t, req.ExcludeTables) {
 			tables2 = append(tables2, t)
 		}
 	}
-	req.IncludeTables = tables2
-	log.Errorf("DEBUG: IncludeTables after: %v", req.IncludeTables)
-	if len(req.IncludeTables) == 0 {
+	tables = tables2
+	if len(tables) == 0 {
 		return nil, fmt.Errorf("no tables to move")
 	}
-	log.Errorf("Found tables to move: %s", strings.Join(req.IncludeTables, ","))
+	log.Infof("Found tables to move: %s", strings.Join(tables, ","))
 
 	if !vschema.Sharded {
-		if err := s.addTablesToVSchema(ctx, sourceKeyspace, vschema, req.IncludeTables, externalTopo == nil); err != nil {
+		if err := s.addTablesToVSchema(ctx, sourceKeyspace, vschema, tables, externalTopo == nil); err != nil {
 			return nil, err
 		}
 	}
@@ -848,7 +844,7 @@ func (s *Server) MoveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 		if err != nil {
 			return nil, err
 		}
-		for _, table := range req.IncludeTables {
+		for _, table := range tables {
 			toSource := []string{sourceKeyspace + "." + table}
 			rules[table] = toSource
 			rules[table+"@replica"] = toSource
@@ -874,116 +870,92 @@ func (s *Server) MoveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 	if err := s.ts.RebuildSrvVSchema(ctx, nil); err != nil {
 		return nil, err
 	}
-
-	if req.TabletRequest.BinlogSource.SourceTimeZone != "" {
-		req.TabletRequest.BinlogSource.TargetTimeZone = "UTC"
+	sourceShards, err := s.ts.GetShardNames(ctx, sourceKeyspace)
+	if err != nil {
+		return nil, err
 	}
-
-	req.TabletRequest.BinlogSource.Filter = &binlogdatapb.Filter{}
-	req.TabletRequest.BinlogSource.Filter.Rules = make([]*binlogdatapb.Rule, 0, len(req.IncludeTables))
-	for _, table := range req.IncludeTables {
-		buf := sqlparser.NewTrackedBuffer(nil)
-		buf.Myprintf("select * from %v", sqlparser.NewIdentifierCS(table))
-		req.TabletRequest.BinlogSource.Filter.Rules = append(req.TabletRequest.BinlogSource.Filter.Rules,
-			&binlogdatapb.Rule{
-				Match:  table,
-				Filter: buf.String(),
-			},
-		)
-	}
-
-	tabletTypes := strings.Builder{}
+	tabletTypes := make([]string, len(req.TabletRequest.TabletTypes))
 	for i, tt := range req.TabletRequest.TabletTypes {
-		tabletTypes.WriteString(tt.String())
-		if i != len(req.TabletRequest.TabletTypes)-1 {
-			tabletTypes.WriteString(",")
-		}
-	}
-	tableSettings := make([]*vtctldatapb.TableMaterializeSettings, len(req.TabletRequest.BinlogSource.Tables))
-	for i, table := range req.TabletRequest.BinlogSource.Tables {
-		tableSettings[i] = &vtctldatapb.TableMaterializeSettings{
-			TargetTable: table,
-		}
+		tabletTypes[i] = tt.String()
 	}
 	ms := &vtctldatapb.MaterializeSettings{
 		Workflow:              req.TabletRequest.Workflow,
-		SourceKeyspace:        req.TabletRequest.SourceKeyspace,
-		TargetKeyspace:        req.TabletRequest.TargetKeyspace,
-		Cell:                  strings.Join(req.TabletRequest.Cells, ","),
-		TabletTypes:           tabletTypes.String(),
-		OnDdl:                 binlogdatapb.OnDDLAction_name[int32(req.TabletRequest.BinlogSource.OnDdl)],
 		MaterializationIntent: vtctldatapb.MaterializationIntent_MOVETABLES,
-		TableSettings:         tableSettings,
+		SourceKeyspace:        sourceKeyspace,
+		TargetKeyspace:        targetKeyspace,
+		Cell:                  strings.Join(req.TabletRequest.Cells, ","),
+		TabletTypes:           strings.Join(tabletTypes, ","),
+		StopAfterCopy:         req.TabletRequest.BinlogSource.StopAfterCopy,
+		ExternalCluster:       req.TabletRequest.BinlogSource.ExternalCluster,
+		SourceShards:          sourceShards,
+		OnDdl:                 binlogdatapb.OnDDLAction_name[int32(req.TabletRequest.BinlogSource.OnDdl)],
+		DeferSecondaryKeys:    req.TabletRequest.DeferSecondaryKeys,
+	}
+	if req.TabletRequest.BinlogSource.SourceTimeZone != "" {
+		ms.SourceTimeZone = req.TabletRequest.BinlogSource.SourceTimeZone
+		ms.TargetTimeZone = "UTC"
+	}
+	createDDLMode := createDDLAsCopy
+	if req.TabletRequest.DropForeignKeys {
+		createDDLMode = createDDLAsCopyDropForeignKeys
 	}
 
-	err = Materialize(ctx, s.ts, s.tmc, ms)
+	for _, table := range tables {
+		buf := sqlparser.NewTrackedBuffer(nil)
+		buf.Myprintf("select * from %v", sqlparser.NewIdentifierCS(table))
+		ms.TableSettings = append(ms.TableSettings, &vtctldatapb.TableMaterializeSettings{
+			TargetTable:      table,
+			SourceExpression: buf.String(),
+			CreateDdl:        createDDLMode,
+		})
+	}
+	mz := &materializer{
+		ctx:      ctx,
+		ts:       s.ts,
+		sourceTs: sourceTopo,
+		tmc:      s.tmc,
+		ms:       ms,
+	}
+	err = mz.prepareMaterializerStreams()
 	if err != nil {
 		return nil, err
 	}
 
-	/*
-		if req.TabletRequest.BinlogSource.SourceTimeZone != "" {
-			if err := s.checkTZConversion(ctx, req.TabletRequest.BinlogSource.SourceTimeZone); err != nil {
-				return nil, err
-			}
+	if ms.SourceTimeZone != "" {
+		if err := mz.checkTZConversion(ctx, ms.SourceTimeZone); err != nil {
+			return nil, err
 		}
+	}
 
-		migrationID, err := getMigrationID(targetKeyspace, tabletShards)
+	tabletShards, err := s.ts.GetShardNames(ctx, targetKeyspace)
+	if err != nil {
+		return nil, err
+	}
+
+	migrationID, err := getMigrationID(targetKeyspace, tabletShards)
+	if err != nil {
+		return nil, err
+	}
+
+	if mz.ms.ExternalCluster == "" {
+		exists, tablets, err := s.checkIfPreviousJournalExists(ctx, mz, migrationID)
 		if err != nil {
 			return nil, err
 		}
-
-		if req.TabletRequest.BinlogSource.ExternalCluster == "" {
-			exists, tablets, err := s.checkIfPreviousJournalExists(ctx, mz, migrationID)
-			if err != nil {
-				return err
-			}
-			if exists {
-				log.Errorf("Found a previous journal entry for %d", migrationID)
-				msg := fmt.Sprintf("found an entry from a previous run for migration id %d in _vt.resharding_journal of tablets %s,",
-					migrationID, strings.Join(tablets, ","))
-				msg += fmt.Sprintf("please review and delete it before proceeding and restart the workflow using the Workflow %s.%s start",
-					req.TabletRequest.Workflow, targetKeyspace)
-				return nil, fmt.Errorf(msg)
-			}
+		if exists {
+			log.Errorf("Found a previous journal entry for %d", migrationID)
+			msg := fmt.Sprintf("found an entry from a previous run for migration id %d in _vt.resharding_journal of tablets %s,",
+				migrationID, strings.Join(tablets, ","))
+			msg += fmt.Sprintf("please review and delete it before proceeding and restart the workflow using the Workflow %s.%s start",
+				mz.ms.Workflow, targetKeyspace)
+			return nil, fmt.Errorf(msg)
 		}
+	}
+	if req.TabletRequest.AutoStart {
+		err = mz.startStreams(ctx)
+	}
 
-		vx := vexec.NewVExec(req.TabletRequest.TargetKeyspace, req.TabletRequest.Workflow, s.ts, s.tmc)
-		callback := func(ctx context.Context, tablet *topo.TabletInfo) (*querypb.QueryResult, error) {
-			res, err := s.tmc.MoveTablesCreate(ctx, tablet.Tablet, req.TabletRequest)
-			if err != nil {
-				return nil, err
-			}
-			return res.Result, err
-		}
-		res, err := vx.CallbackContext(ctx, callback)
-		if err != nil {
-			if topo.IsErrType(err, topo.NoNode) {
-				return nil, vterrors.Wrapf(err, "%s keyspace does not exist", req.TabletRequest.TargetKeyspace)
-			}
-			return nil, err
-		}
-
-		if len(res) == 0 {
-			return nil, fmt.Errorf("failed to create the %s workflow does in the %s keyspace",
-				req.TabletRequest.Workflow, req.TabletRequest.TargetKeyspace)
-		}
-
-		response := &vtctldatapb.MoveTablesCreateResponse{}
-		response.Summary = fmt.Sprintf("Successfully created the %s workflow on (%d) target primary tablets in the %s keyspace",
-			req.TabletRequest.Workflow, len(res), req.TabletRequest.TargetKeyspace)
-			details := make([]*vtctldatapb.WorkflowUpdateResponse_TabletInfo, 0, len(res))
-			for tinfo, tres := range res {
-				result := &vtctldatapb.WorkflowUpdateResponse_TabletInfo{
-					Tablet:  fmt.Sprintf("%s-%d (%s/%s)", tinfo.Alias.Cell, tinfo.Alias.Uid, tinfo.Keyspace, tinfo.Shard),
-					Changed: tres.RowsAffected > 0, // Can be more than one with shard merges
-				}
-				details = append(details, result)
-			}
-			response.Details = details
-		return response, nil
-	*/
-	return &vtctldatapb.MoveTablesCreateResponse{}, nil
+	return nil, err
 }
 
 // WorkflowUpdate is part of the vtctlservicepb.VtctldServer interface.
@@ -1049,38 +1021,6 @@ func (s *Server) doesWorkflowExist(ctx context.Context, keyspace, workflow strin
 	return false, nil
 }
 
-func (s *Server) getTablesInKeyspace(ctx context.Context, keyspace string) ([]string, error) {
-	shards, err := s.ts.GetServingShards(ctx, keyspace)
-	if err != nil {
-		return nil, err
-	}
-	if len(shards) == 0 {
-		return nil, fmt.Errorf("keyspace %s has no shards", keyspace)
-	}
-	primary := shards[0].PrimaryAlias
-	if primary == nil {
-		return nil, fmt.Errorf("shard does not have a primary: %v", shards[0].ShardName())
-	}
-	allTables := []string{"/.*/"}
-
-	ti, err := s.ts.GetTablet(ctx, primary)
-	if err != nil {
-		return nil, err
-	}
-	req := &tabletmanagerdatapb.GetSchemaRequest{Tables: allTables}
-	schema, err := s.tmc.GetSchema(ctx, ti.Tablet, req)
-	if err != nil {
-		return nil, err
-	}
-	log.Infof("got table schemas from source primary %v.", primary)
-
-	var sourceTables []string
-	for _, td := range schema.TableDefinitions {
-		sourceTables = append(sourceTables, td.Name)
-	}
-	return sourceTables, nil
-}
-
 func (s *Server) validateSourceTablesExist(ctx context.Context, sourceKeyspace string, ksTables, tables []string) error {
 	// validate that tables provided are present in the source keyspace
 	var missingTables []string
@@ -1132,6 +1072,52 @@ func (s *Server) addTablesToVSchema(ctx context.Context, sourceKeyspace string, 
 
 	}
 	return nil
+}
+
+func (s *Server) checkIfPreviousJournalExists(ctx context.Context, mz *materializer, migrationID int64) (bool, []string, error) {
+	forAllSources := func(f func(*topo.ShardInfo) error) error {
+		var wg sync.WaitGroup
+		allErrors := &concurrency.AllErrorRecorder{}
+		for _, sourceShard := range mz.sourceShards {
+			wg.Add(1)
+			go func(sourceShard *topo.ShardInfo) {
+				defer wg.Done()
+
+				if err := f(sourceShard); err != nil {
+					allErrors.RecordError(err)
+				}
+			}(sourceShard)
+		}
+		wg.Wait()
+		return allErrors.AggrError(vterrors.Aggregate)
+	}
+
+	var (
+		mu      sync.Mutex
+		exists  bool
+		tablets []string
+	)
+
+	err := forAllSources(func(si *topo.ShardInfo) error {
+		tablet, err := s.ts.GetTablet(ctx, si.PrimaryAlias)
+		if err != nil {
+			return err
+		}
+		if tablet == nil {
+			return nil
+		}
+		_, exists, err = s.CheckReshardingJournalExistsOnTablet(ctx, tablet.Tablet, migrationID)
+		if err != nil {
+			return err
+		}
+		if exists {
+			mu.Lock()
+			defer mu.Unlock()
+			tablets = append(tablets, tablet.AliasString())
+		}
+		return nil
+	})
+	return exists, tablets, err
 }
 
 func shouldInclude(table string, excludes []string) bool {
