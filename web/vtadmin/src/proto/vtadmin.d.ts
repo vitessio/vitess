@@ -51265,7 +51265,7 @@ export namespace vtctldata {
         summary?: (string|null);
 
         /** MoveTablesCreateResponse details */
-        details?: (string|null);
+        details?: (vtctldata.MoveTablesCreateResponse.ITabletInfo[]|null);
     }
 
     /** Represents a MoveTablesCreateResponse. */
@@ -51281,7 +51281,7 @@ export namespace vtctldata {
         public summary: string;
 
         /** MoveTablesCreateResponse details. */
-        public details: string;
+        public details: vtctldata.MoveTablesCreateResponse.ITabletInfo[];
 
         /**
          * Creates a new MoveTablesCreateResponse instance using the specified properties.
@@ -51359,6 +51359,112 @@ export namespace vtctldata {
          * @returns The default type url
          */
         public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    namespace MoveTablesCreateResponse {
+
+        /** Properties of a TabletInfo. */
+        interface ITabletInfo {
+
+            /** TabletInfo tablet */
+            tablet?: (string|null);
+
+            /** TabletInfo created */
+            created?: (boolean|null);
+        }
+
+        /** Represents a TabletInfo. */
+        class TabletInfo implements ITabletInfo {
+
+            /**
+             * Constructs a new TabletInfo.
+             * @param [properties] Properties to set
+             */
+            constructor(properties?: vtctldata.MoveTablesCreateResponse.ITabletInfo);
+
+            /** TabletInfo tablet. */
+            public tablet: string;
+
+            /** TabletInfo created. */
+            public created: boolean;
+
+            /**
+             * Creates a new TabletInfo instance using the specified properties.
+             * @param [properties] Properties to set
+             * @returns TabletInfo instance
+             */
+            public static create(properties?: vtctldata.MoveTablesCreateResponse.ITabletInfo): vtctldata.MoveTablesCreateResponse.TabletInfo;
+
+            /**
+             * Encodes the specified TabletInfo message. Does not implicitly {@link vtctldata.MoveTablesCreateResponse.TabletInfo.verify|verify} messages.
+             * @param message TabletInfo message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encode(message: vtctldata.MoveTablesCreateResponse.ITabletInfo, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Encodes the specified TabletInfo message, length delimited. Does not implicitly {@link vtctldata.MoveTablesCreateResponse.TabletInfo.verify|verify} messages.
+             * @param message TabletInfo message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encodeDelimited(message: vtctldata.MoveTablesCreateResponse.ITabletInfo, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Decodes a TabletInfo message from the specified reader or buffer.
+             * @param reader Reader or buffer to decode from
+             * @param [length] Message length if known beforehand
+             * @returns TabletInfo
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.MoveTablesCreateResponse.TabletInfo;
+
+            /**
+             * Decodes a TabletInfo message from the specified reader or buffer, length delimited.
+             * @param reader Reader or buffer to decode from
+             * @returns TabletInfo
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.MoveTablesCreateResponse.TabletInfo;
+
+            /**
+             * Verifies a TabletInfo message.
+             * @param message Plain object to verify
+             * @returns `null` if valid, otherwise the reason why it is not
+             */
+            public static verify(message: { [k: string]: any }): (string|null);
+
+            /**
+             * Creates a TabletInfo message from a plain object. Also converts values to their respective internal types.
+             * @param object Plain object
+             * @returns TabletInfo
+             */
+            public static fromObject(object: { [k: string]: any }): vtctldata.MoveTablesCreateResponse.TabletInfo;
+
+            /**
+             * Creates a plain object from a TabletInfo message. Also converts values to other types if specified.
+             * @param message TabletInfo
+             * @param [options] Conversion options
+             * @returns Plain object
+             */
+            public static toObject(message: vtctldata.MoveTablesCreateResponse.TabletInfo, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+            /**
+             * Converts this TabletInfo to JSON.
+             * @returns JSON object
+             */
+            public toJSON(): { [k: string]: any };
+
+            /**
+             * Gets the default type url for TabletInfo
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
+        }
     }
 
     /** Properties of a PingTabletRequest. */

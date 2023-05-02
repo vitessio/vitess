@@ -979,11 +979,18 @@ func (s *Server) MoveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 		return nil, fmt.Errorf("the %s workflow does not exist in the %s keyspace", req.Workflow, req.TargetKeyspace)
 	}
 
-	if req.AutoStart {
-		err = mz.startStreams(ctx)
+	response := &vtctldatapb.MoveTablesCreateResponse{}
+	response.Summary = fmt.Sprintf("Successfully created the %s MoveTables workflow on (%d) target primary tablets in the %s keyspace", req.Workflow, len(res), req.TargetKeyspace)
+	details := make([]*vtctldatapb.MoveTablesCreateResponse_TabletInfo, 0, len(res))
+	for tinfo, tres := range res {
+		result := &vtctldatapb.MoveTablesCreateResponse_TabletInfo{
+			Tablet:  fmt.Sprintf("%s-%d (%s/%s)", tinfo.Alias.Cell, tinfo.Alias.Uid, tinfo.Keyspace, tinfo.Shard),
+			Created: tres.RowsAffected > 0, // Can be more than one with shard merges
+		}
+		details = append(details, result)
 	}
-
-	return nil, err
+	response.Details = details
+	return response, nil
 }
 
 // WorkflowCreate is part of the vtctlservicepb.VtctldServer interface.
@@ -996,9 +1003,12 @@ func (s *Server) WorkflowDelete(ctx context.Context, req *vtctldatapb.WorkflowDe
 	span.Annotate("keyspace", req.Keyspace)
 	span.Annotate("workflow", req.Workflow)
 
+	deleteReq := &tabletmanagerdatapb.DeleteVRWorkflowRequest{
+		Workflow: req.Workflow,
+	}
 	vx := vexec.NewVExec(req.Keyspace, req.Workflow, s.ts, s.tmc)
 	callback := func(ctx context.Context, tablet *topo.TabletInfo) (*querypb.QueryResult, error) {
-		res, err := s.tmc.DeleteVRWorkflow(ctx, tablet.Tablet, nil)
+		res, err := s.tmc.DeleteVRWorkflow(ctx, tablet.Tablet, deleteReq)
 		if err != nil {
 			return nil, err
 		}
@@ -1017,7 +1027,7 @@ func (s *Server) WorkflowDelete(ctx context.Context, req *vtctldatapb.WorkflowDe
 	}
 
 	response := &vtctldatapb.WorkflowDeleteResponse{}
-	response.Summary = fmt.Sprintf("Successfully updated the %s workflow on (%d) target primary tablets in the %s keyspace", req.Workflow, len(res), req.Keyspace)
+	response.Summary = fmt.Sprintf("Successfully deleted the %s workflow on (%d) target primary tablets in the %s keyspace", req.Workflow, len(res), req.Keyspace)
 	details := make([]*vtctldatapb.WorkflowDeleteResponse_TabletInfo, 0, len(res))
 	for tinfo, tres := range res {
 		result := &vtctldatapb.WorkflowDeleteResponse_TabletInfo{

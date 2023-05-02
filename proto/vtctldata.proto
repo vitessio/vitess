@@ -841,8 +841,14 @@ message MoveTablesCreateRequest {
 }
 
 message MoveTablesCreateResponse {
+  message TabletInfo {
+    string tablet = 1;
+    // The value is based on the query result's RowsAffected
+    // being 0 or not.
+    bool created = 2;
+  }
   string summary = 1;
-  string details = 2;
+  repeated TabletInfo details = 2;
 }
 
 message PingTabletRequest {
