@@ -131,14 +131,17 @@ func (a *Aggregator) ShortDescription() string {
 	var grouping []string
 
 	columnnStrings := slices2.Map(a.Columns, func(from AggrColumn) string {
-		gb, ok := from.(*GroupBy)
-		if ok {
-			grouping = append(grouping, sqlparser.String(gb.Inner))
-		}
 		return from.GetOriginal().ColumnName()
 	})
 
-	gb := ""
+	err := a.VisitGroupBys(func(idx int, gb *GroupBy) {
+		grouping = append(grouping, sqlparser.String(gb.Inner))
+	})
+	if err != nil {
+		return "ERROR: " + err.Error()
+	}
+
+	var gb string
 	if len(grouping) > 0 {
 		gb = " group by " + strings.Join(grouping, ",")
 	}
