@@ -1399,15 +1399,16 @@ func testPlayerCopyTablesStopAfterCopy(t *testing.T) {
 }
 
 // TestPlayerCopyTablesGIPK tests the flow when the source table has a generated invisible primary key.
-// The target table needs to explicitly define the `my_row_id` column as the primary key since we will be copying the
-// rows from the source table into the target table. The test also confirms that the copy_state has the gipk.
+// The target table needs to explicitly define the `my_row_id` column as the primary key since we will
+// be copying the rows from the source table into the target table.
+// The test also confirms that the copy_state has the gipk.
 func TestPlayerCopyTablesGIPK(t *testing.T) {
 	testVcopierTestCases(t, testPlayerCopyTablesGIPK, commonVcopierTestCases())
 }
 
 func testPlayerCopyTablesGIPK(t *testing.T) {
 	if !env.HasCapability(testenv.ServerCapabilityGeneratedInvisiblePrimaryKey) {
-		t.Skip("skipping test as server does not support invisible primary keys")
+		t.Skip("skipping test as server does not support generated invisible primary keys")
 	}
 	defer deleteTablet(addTablet(100))
 

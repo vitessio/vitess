@@ -191,6 +191,8 @@ func (te *Env) RemoveAnyDeprecatedDisplayWidths(orig string) string {
 	return adjusted
 }
 
+// ServerCapability is used to define capabilities for which we want to optionally run tests
+// if the underlying mysql server supports them.
 type ServerCapability int32
 
 const (

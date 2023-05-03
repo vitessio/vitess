@@ -42,9 +42,10 @@ import (
 	qh "vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication/queryhistory"
 )
 
+// TestPlayerGeneratedInvisiblePrimaryKey confirms that the gipk column is replicated by vplayer.
 func TestPlayerGeneratedInvisiblePrimaryKey(t *testing.T) {
 	if !env.HasCapability(testenv.ServerCapabilityGeneratedInvisiblePrimaryKey) {
-		t.Skip("skipping test as server does not support invisible primary keys")
+		t.Skip("skipping test as server does not support generated invisible primary keys")
 	}
 	defer deleteTablet(addTablet(100))
 
@@ -99,8 +100,6 @@ func TestPlayerGeneratedInvisiblePrimaryKey(t *testing.T) {
 		execStatements(t, []string{tcases.input})
 		output := qh.Expect(tcases.output)
 		expectNontxQueries(t, output)
-		time.Sleep(1 * time.Second)
-		log.Flush()
 		if tcases.table != "" {
 			expectData(t, tcases.table, tcases.data)
 		}
