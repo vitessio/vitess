@@ -41,8 +41,8 @@ import (
 var (
 	rowStreamertHeartbeatInterval = 10 * time.Second
 	// If the rowstreamer filters rowStreamerMaxFilteredRowsBeforeLastPK without sending a response, send the lastPK.
-	// Otherwise, materialize workflows which filter out a large number of rows, for example can stall because they
-	// reach the copy timeout before they receive any response.
+	// Otherwise, materialize workflows which filter out a large number of rows can stall because they
+	// reach the copy timeout before receiving any response.
 	rowStreamerMaxFilteredRowsBeforeLastPK = 10000
 )
 
@@ -343,6 +343,7 @@ func (rs *rowStreamer) streamQuery(conn *snapshotConn, send func(*binlogdatapb.V
 	var rows []*querypb.Row
 	var rowCount int
 	var mysqlrow []sqltypes.Value
+
 	filteredRows := 0
 	mustSendLastPK := false
 	filtered := make([]sqltypes.Value, len(rs.plan.ColExprs))

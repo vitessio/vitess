@@ -324,7 +324,7 @@ func (st *vrStats) register() {
 		})
 	stats.NewGaugesFuncWithMultiLabels(
 		"VReplicationFilteredRowsCopyStateSyncCount",
-		"Number of times the last pk was sent when a set of previous rows were filtered",
+		"Number of times only the last pk was sent without any rows in the copy phase per stream",
 		[]string{"source_keyspace", "source_shard", "workflow", "counts"},
 		func() map[string]int64 {
 			st.mu.Lock()
