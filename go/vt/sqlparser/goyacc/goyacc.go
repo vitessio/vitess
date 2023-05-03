@@ -3051,12 +3051,12 @@ func others() {
 
 	if allowFastAppend {
 		fastAppendHelper := strings.Replace(fastAppendHelperText, "$$", prefix, -1)
-		fmt.Fprintf(ftable, fastAppendHelper)
+		fmt.Fprint(ftable, fastAppendHelper)
 	}
 
 	// copy yaccpar
 	if !lflag {
-		fmt.Fprintf(ftable, "\n//line yaccpar:1\n")
+		fmt.Fprint(ftable, "\n//line yaccpar:1\n")
 	}
 
 	parts := strings.SplitN(yaccpar, prefix+"run()", 2)
