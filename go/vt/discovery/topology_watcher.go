@@ -134,6 +134,7 @@ func (tw *TopologyWatcher) Start() {
 			select {
 			case <-t.ctx.Done():
 				return
+			case <-tw.healthcheck.GetLoadTabletsTrigger():
 			case <-ticker.C:
 			}
 		}
