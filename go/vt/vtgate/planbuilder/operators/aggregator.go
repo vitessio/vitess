@@ -179,11 +179,17 @@ func (a *Aggregator) truncateColumnsAt(offset int) {
 	a.ResultColumns = offset
 }
 
-func (a *Aggregator) getGroupingColumns() (grpBy []*GroupBy) {
-	for _, column := range a.Columns {
-		if grp, isGrp := column.(*GroupBy); isGrp {
-			grpBy = append(grpBy, grp)
+// VisitGroupBys iterates over the GroupBy columns in the Aggregator's grouping order
+// and applies the provided visitor function to each GroupBy column. The visitor
+// function takes the index of the GroupBy column in the grouping order and the GroupBy
+// column itself as arguments.
+func (a *Aggregator) VisitGroupBys(visitor func(idx int, gb *GroupBy)) error {
+	for idx, colIdx := range a.GroupingOrder {
+		groupingExpr, ok := a.Columns[colIdx].(*GroupBy)
+		if !ok {
+			return vterrors.VT13001("expected grouping here")
 		}
+		visitor(idx, groupingExpr)
 	}
-	return
+	return nil
 }

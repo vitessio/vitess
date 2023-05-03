@@ -102,18 +102,17 @@ func transformAggregator(ctx *plancontext.PlanningContext, op *operators.Aggrega
 			})
 		}
 	}
-	for _, grpIdx := range op.GroupingOrder {
-		grpByCol, ok := op.Columns[grpIdx].(*operators.GroupBy)
-		if !ok {
-			return nil, vterrors.VT13001("group by column expected")
-		}
+	err = op.VisitGroupBys(func(grpIdx int, gb *operators.GroupBy) {
 		oa.groupByKeys = append(oa.groupByKeys, &engine.GroupByParams{
 			KeyCol:          grpIdx,
-			WeightStringCol: grpByCol.WOffset,
-			Expr:            grpByCol.Inner,
+			WeightStringCol: gb.WOffset,
+			Expr:            gb.Inner,
 			FromGroupBy:     true,
-			CollationID:     ctx.SemTable.CollationForExpr(grpByCol.WeightStrExpr),
+			CollationID:     ctx.SemTable.CollationForExpr(gb.WeightStrExpr),
 		})
+	})
+	if err != nil {
+		return nil, err
 	}
 	oa.truncateColumnCount = op.ResultColumns
 	return oa, nil

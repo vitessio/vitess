@@ -19,8 +19,6 @@ package operators
 import (
 	"fmt"
 
-	"vitess.io/vitess/go/vt/vterrors"
-
 	"golang.org/x/exp/slices"
 
 	"vitess.io/vitess/go/vt/vtgate/semantics"
@@ -80,13 +78,12 @@ func pushDownAggregationThroughRoute(aggregator *Aggregator, src *Route) (ops.Op
 
 	// Create an empty slice for ordering columns, if needed.
 	var ordering []ops.OrderBy
-	for _, grpIdx := range aggregator.GroupingOrder {
+	err := aggregator.VisitGroupBys(func(grpIdx int, grpByCol *GroupBy) {
 		// If there is a GROUP BY, add the corresponding order by column.
-		grpByCol, isGrpBy := aggregator.Columns[grpIdx].(*GroupBy)
-		if !isGrpBy {
-			return nil, false, vterrors.VT13001("group by column expected.")
-		}
 		ordering = append(ordering, grpByCol.AsOrderBy())
+	})
+	if err != nil {
+		return nil, false, err
 	}
 
 	// Set the source of the route to the new aggregator placed below the route.

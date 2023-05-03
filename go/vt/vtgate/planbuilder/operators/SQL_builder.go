@@ -351,15 +351,14 @@ func buildAggregation(op *Aggregator, qb *queryBuilder) error {
 		qb.addProjection(column)
 	}
 
-	for _, colIdx := range op.GroupingOrder {
-		groupingExpr, ok := op.Columns[colIdx].(*GroupBy)
-		if !ok {
-			return vterrors.VT13001("expected grouping here")
+	err = op.VisitGroupBys(func(_ int, gb *GroupBy) {
+		qb.addGroupBy(gb.Inner)
+		if gb.WOffset != -1 {
+			qb.addGroupBy(weightStringFor(gb.WeightStrExpr))
 		}
-		qb.addGroupBy(groupingExpr.Inner)
-		if groupingExpr.WOffset != -1 {
-			qb.addGroupBy(weightStringFor(groupingExpr.WeightStrExpr))
-		}
+	})
+	if err != nil {
+		return err
 	}
 
 	return nil
