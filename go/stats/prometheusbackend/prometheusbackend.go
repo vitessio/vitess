@@ -18,7 +18,6 @@ package prometheusbackend
 
 import (
 	"expvar"
-	"net/http"
 	"strings"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -26,6 +25,7 @@ import (
 
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/servenv"
 )
 
 // PromBackend implements PullBackend using Prometheus as the backing metrics storage.
@@ -39,7 +39,7 @@ var (
 
 // Init initializes the Prometheus be with the given namespace.
 func Init(namespace string) {
-	http.Handle("/metrics", promhttp.Handler())
+	servenv.HTTPHandle("/metrics", promhttp.Handler())
 	be.namespace = namespace
 	stats.Register(be.publishPrometheusMetric)
 }
@@ -85,6 +85,8 @@ func (be PromBackend) publishPrometheusMetric(name string, v expvar.Var) {
 		newMultiTimingsCollector(st, be.buildPromName(name))
 	case *stats.Histogram:
 		newHistogramCollector(st, be.buildPromName(name))
+	case *stats.StringMapFuncWithMultiLabels:
+		newStringMapFuncWithMultiLabelsCollector(st, be.buildPromName(name))
 	case *stats.String, stats.StringFunc, stats.StringMapFunc, *stats.Rates, *stats.RatesFunc:
 		// Silently ignore these types since they don't make sense to
 		// export to Prometheus' data model.

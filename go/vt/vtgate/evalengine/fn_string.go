@@ -22,6 +22,7 @@ import (
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/collations/charset"
 	"vitess.io/vitess/go/sqltypes"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 )
@@ -29,7 +30,8 @@ import (
 type (
 	builtinChangeCase struct {
 		CallExpr
-		upcase bool
+		upcase  bool
+		collate collations.ID
 	}
 
 	builtinCharLength struct {
@@ -79,7 +81,7 @@ func (call *builtinChangeCase) eval(env *ExpressionEnv) (eval, error) {
 		return nil, nil
 
 	case evalNumeric:
-		return evalToVarchar(e, env.DefaultCollation, false)
+		return evalToVarchar(e, call.collate, false)
 
 	case *evalBytes:
 		coll := e.col.Collation.Get()
@@ -100,9 +102,29 @@ func (call *builtinChangeCase) eval(env *ExpressionEnv) (eval, error) {
 	}
 }
 
-func (call *builtinChangeCase) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
-	_, f := call.Arguments[0].typeof(env)
+func (call *builtinChangeCase) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	_, f := call.Arguments[0].typeof(env, fields)
 	return sqltypes.VarChar, f
+}
+
+func (call *builtinChangeCase) compile(c *compiler) (ctype, error) {
+	str, err := call.Arguments[0].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip := c.compileNullCheck1(str)
+
+	switch {
+	case str.isTextual():
+	default:
+		c.asm.Convert_xc(1, sqltypes.VarChar, c.cfg.Collation, 0, false)
+	}
+
+	c.asm.Fn_LUCASE(call.upcase)
+	c.asm.jumpDestination(skip)
+
+	return ctype{Type: sqltypes.VarChar, Col: str.Col}, nil
 }
 
 func (call *builtinCharLength) eval(env *ExpressionEnv) (eval, error) {
@@ -125,9 +147,13 @@ func (call *builtinCharLength) eval(env *ExpressionEnv) (eval, error) {
 	}
 }
 
-func (call *builtinCharLength) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
-	_, f := call.Arguments[0].typeof(env)
+func (call *builtinCharLength) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	_, f := call.Arguments[0].typeof(env, fields)
 	return sqltypes.Int64, f
+}
+
+func (call *builtinCharLength) compile(c *compiler) (ctype, error) {
+	return c.compileFn_length(call.Arguments[0], c.asm.Fn_CHAR_LENGTH)
 }
 
 func (call *builtinLength) eval(env *ExpressionEnv) (eval, error) {
@@ -141,9 +167,13 @@ func (call *builtinLength) eval(env *ExpressionEnv) (eval, error) {
 	return newEvalInt64(int64(len(arg.ToRawBytes()))), nil
 }
 
-func (call *builtinLength) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
-	_, f := call.Arguments[0].typeof(env)
+func (call *builtinLength) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	_, f := call.Arguments[0].typeof(env, fields)
 	return sqltypes.Int64, f
+}
+
+func (call *builtinLength) compile(c *compiler) (ctype, error) {
+	return c.compileFn_length(call.Arguments[0], c.asm.Fn_LENGTH)
 }
 
 func (call *builtinBitLength) eval(env *ExpressionEnv) (eval, error) {
@@ -157,9 +187,13 @@ func (call *builtinBitLength) eval(env *ExpressionEnv) (eval, error) {
 	return newEvalInt64(int64(len(arg.ToRawBytes())) * 8), nil
 }
 
-func (call *builtinBitLength) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
-	_, f := call.Arguments[0].typeof(env)
+func (call *builtinBitLength) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	_, f := call.Arguments[0].typeof(env, fields)
 	return sqltypes.Int64, f
+}
+
+func (call *builtinBitLength) compile(c *compiler) (ctype, error) {
+	return c.compileFn_length(call.Arguments[0], c.asm.Fn_BIT_LENGTH)
 }
 
 func (call *builtinASCII) eval(env *ExpressionEnv) (eval, error) {
@@ -181,9 +215,29 @@ func (call *builtinASCII) eval(env *ExpressionEnv) (eval, error) {
 	return newEvalInt64(int64(b.bytes[0])), nil
 }
 
-func (call *builtinASCII) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
-	_, f := call.Arguments[0].typeof(env)
+func (call *builtinASCII) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	_, f := call.Arguments[0].typeof(env, fields)
 	return sqltypes.Int64, f
+}
+
+func (call *builtinASCII) compile(c *compiler) (ctype, error) {
+	str, err := call.Arguments[0].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip := c.compileNullCheck1(str)
+
+	switch {
+	case str.isTextual():
+	default:
+		c.asm.Convert_xc(1, sqltypes.VarChar, c.cfg.Collation, 0, false)
+	}
+
+	c.asm.Fn_ASCII()
+	c.asm.jumpDestination(skip)
+
+	return ctype{Type: sqltypes.Int64, Col: collationNumeric}, nil
 }
 
 // maxRepeatLength is the maximum number of times a string can be repeated.
@@ -202,6 +256,7 @@ const maxRepeatLength = 1073741824
 
 type builtinRepeat struct {
 	CallExpr
+	collate collations.ID
 }
 
 func (call *builtinRepeat) eval(env *ExpressionEnv) (eval, error) {
@@ -215,13 +270,13 @@ func (call *builtinRepeat) eval(env *ExpressionEnv) (eval, error) {
 
 	text, ok := arg1.(*evalBytes)
 	if !ok {
-		text, err = evalToVarchar(arg1, env.DefaultCollation, true)
+		text, err = evalToVarchar(arg1, call.collate, true)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	repeat := evalToNumeric(arg2).toInt64().i
+	repeat := evalToInt64(arg2).i
 	if repeat < 0 {
 		repeat = 0
 	}
@@ -243,11 +298,36 @@ func checkMaxLength(len, repeat int64) bool {
 	return len*repeat <= maxRepeatLength
 }
 
-func (call *builtinRepeat) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
-	_, f1 := call.Arguments[0].typeof(env)
+func (call *builtinRepeat) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	_, f1 := call.Arguments[0].typeof(env, fields)
 	// typecheck the right-hand argument but ignore its flags
-	call.Arguments[1].typeof(env)
+	call.Arguments[1].typeof(env, fields)
 	return sqltypes.VarChar, f1
+}
+
+func (expr *builtinRepeat) compile(c *compiler) (ctype, error) {
+	str, err := expr.Arguments[0].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	repeat, err := expr.Arguments[1].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip := c.compileNullCheck2(str, repeat)
+
+	switch {
+	case str.isTextual():
+	default:
+		c.asm.Convert_xc(2, sqltypes.VarChar, c.cfg.Collation, 0, false)
+	}
+	_ = c.compileToInt64(repeat, 1)
+
+	c.asm.Fn_REPEAT(1)
+	c.asm.jumpDestination(skip)
+	return ctype{Type: sqltypes.VarChar, Col: str.Col}, nil
 }
 
 func (c *builtinCollation) eval(env *ExpressionEnv) (eval, error) {
@@ -260,23 +340,33 @@ func (c *builtinCollation) eval(env *ExpressionEnv) (eval, error) {
 
 	// the collation of a `COLLATION` expr is hardcoded to `utf8_general_ci`,
 	// not to the default collation of our connection. this is probably a bug in MySQL, but we match it
-	return newEvalText([]byte(col.Name()), collations.TypedCollation{
-		Collation:    collations.CollationUtf8ID,
-		Coercibility: collations.CoerceImplicit,
-		Repertoire:   collations.RepertoireASCII,
-	}), nil
+	return newEvalText([]byte(col.Name()), collationUtf8mb3), nil
 }
 
-func (*builtinCollation) typeof(_ *ExpressionEnv) (sqltypes.Type, typeFlag) {
+func (*builtinCollation) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
 	return sqltypes.VarChar, 0
+}
+
+func (expr *builtinCollation) compile(c *compiler) (ctype, error) {
+	_, err := expr.Arguments[0].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip := c.asm.jumpFrom()
+
+	c.asm.Fn_COLLATION(collationUtf8mb3)
+	c.asm.jumpDestination(skip)
+
+	return ctype{Type: sqltypes.VarChar, Col: collationUtf8mb3}, nil
 }
 
 func (c *builtinWeightString) callable() []Expr {
 	return []Expr{c.String}
 }
 
-func (c *builtinWeightString) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
-	_, f := c.String.typeof(env)
+func (c *builtinWeightString) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	_, f := c.String.typeof(env, fields)
 	return sqltypes.VarBinary, f
 }
 
@@ -315,4 +405,31 @@ func (c *builtinWeightString) eval(env *ExpressionEnv) (eval, error) {
 	collation := tc.Collation.Get()
 	weights = collation.WeightString(weights, text, length)
 	return newEvalBinary(weights), nil
+}
+
+func (call *builtinWeightString) compile(c *compiler) (ctype, error) {
+	str, err := call.String.compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	switch str.Type {
+	case sqltypes.Int64, sqltypes.Uint64:
+		return ctype{}, c.unsupported(call)
+
+	case sqltypes.VarChar, sqltypes.VarBinary:
+		skip := c.compileNullCheck1(str)
+
+		if call.Cast == "binary" {
+			c.asm.Fn_WEIGHT_STRING_b(call.Len)
+		} else {
+			c.asm.Fn_WEIGHT_STRING_c(str.Col.Collation.Get(), call.Len)
+		}
+		c.asm.jumpDestination(skip)
+		return ctype{Type: sqltypes.VarBinary, Col: collationBinary}, nil
+
+	default:
+		c.asm.SetNull(1)
+		return ctype{Type: sqltypes.VarBinary, Flag: flagNullable | flagNull, Col: collationBinary}, nil
+	}
 }

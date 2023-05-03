@@ -18,15 +18,16 @@ package throttler
 
 import (
 	"fmt"
-	"html/template"
 	"io"
 	"net/http"
 	"strings"
 	"time"
 
+	"github.com/google/safehtml/template"
 	"golang.org/x/exp/slices"
 
 	"vitess.io/vitess/go/vt/logz"
+	"vitess.io/vitess/go/vt/servenv"
 )
 
 const logHeaderHTML = `
@@ -101,7 +102,7 @@ var (
 )
 
 func init() {
-	http.HandleFunc("/throttlerlogz/", func(w http.ResponseWriter, r *http.Request) {
+	servenv.HTTPHandleFunc("/throttlerlogz/", func(w http.ResponseWriter, r *http.Request) {
 		throttlerlogzHandler(w, r, GlobalManager)
 	})
 }

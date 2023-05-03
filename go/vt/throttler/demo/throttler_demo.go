@@ -302,7 +302,7 @@ func main() {
 	servenv.ParseFlags(flagSetName)
 
 	go servenv.RunDefault()
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+	servenv.HTTPHandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/throttlerz", http.StatusTemporaryRedirect)
 	})
 

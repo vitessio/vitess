@@ -25,6 +25,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/vt/sqlparser"
 )
 
 type testCase struct {
@@ -45,7 +46,7 @@ type testCase struct {
 }
 
 const (
-	sqlSimulateError = `update _vt.vdiff as vd, _vt.vdiff_table as vdt set vd.state = 'error', vdt.state = 'error', vd.completed_at = NULL,
+	sqlSimulateError = `update %s.vdiff as vd, %s.vdiff_table as vdt set vd.state = 'error', vdt.state = 'error', vd.completed_at = NULL,
 						vd.last_error = 'vttablet: rpc error: code = Unknown desc = (errno 1213) (sqlstate 40001): Deadlock found when trying to get lock; try restarting transaction'
 						where vd.vdiff_uuid = %s and vd.id = vdt.vdiff_id`
 	sqlAnalyzeTable = `analyze table %s`
@@ -176,7 +177,6 @@ func testWorkflow(t *testing.T, vc *VitessCluster, tc *testCase, cells []*Cell) 
 	for _, shard := range arrTargetShards {
 		tab := vc.getPrimaryTablet(t, tc.targetKs, shard)
 		catchup(t, tab, tc.workflow, tc.typ)
-		updateTableStats(t, tab, tc.tables) // need to do this in order to test progress reports
 	}
 
 	vdiff(t, tc.targetKs, tc.workflow, cells[0].Name, true, true, nil)
@@ -249,8 +249,8 @@ func testDelete(t *testing.T, ksWorkflow, cells string) {
 
 func testNoOrphanedData(t *testing.T, keyspace, workflow string, shards []string) {
 	t.Run("No orphaned data", func(t *testing.T) {
-		query := fmt.Sprintf("select vd.id as vdiff_id, vdt.vdiff_id as vdiff_table_id, vdl.vdiff_id as vdiff_log_id from _vt.vdiff as vd inner join _vt.vdiff_table as vdt on (vd.id = vdt.vdiff_id) inner join _vt.vdiff_log as vdl on (vd.id = vdl.vdiff_id) where vd.keyspace = %s and vd.workflow = %s",
-			encodeString(keyspace), encodeString(workflow))
+		query := sqlparser.BuildParsedQuery("select vd.id as vdiff_id, vdt.vdiff_id as vdiff_table_id, vdl.vdiff_id as vdiff_log_id from %s.vdiff as vd inner join %s.vdiff_table as vdt on (vd.id = vdt.vdiff_id) inner join %s.vdiff_log as vdl on (vd.id = vdl.vdiff_id) where vd.keyspace = %s and vd.workflow = %s",
+			sidecarDBIdentifier, sidecarDBIdentifier, sidecarDBIdentifier, encodeString(keyspace), encodeString(workflow)).Query
 		for _, shard := range shards {
 			res, err := vc.getPrimaryTablet(t, keyspace, shard).QueryTablet(query, keyspace, false)
 			require.NoError(t, err)
@@ -325,7 +325,7 @@ func testAutoRetryError(t *testing.T, tc *testCase, cells string) {
 		// update the VDiff to simulate an ephemeral error having occurred
 		for _, shard := range strings.Split(tc.targetShards, ",") {
 			tab := vc.getPrimaryTablet(t, tc.targetKs, shard)
-			res, err := tab.QueryTabletWithDB(fmt.Sprintf(sqlSimulateError, encodeString(uuid)), "vt_"+tc.targetKs)
+			res, err := tab.QueryTabletWithDB(sqlparser.BuildParsedQuery(sqlSimulateError, sidecarDBIdentifier, sidecarDBIdentifier, encodeString(uuid)).Query, "vt_"+tc.targetKs)
 			require.NoError(t, err)
 			// should have updated the vdiff record and at least one vdiff_table record
 			require.GreaterOrEqual(t, int(res.RowsAffected), 2)

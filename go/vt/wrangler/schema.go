@@ -20,8 +20,8 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"html/template"
 	"sync"
+	"text/template"
 	"time"
 
 	"vitess.io/vitess/go/vt/concurrency"

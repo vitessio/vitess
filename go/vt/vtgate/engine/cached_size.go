@@ -213,6 +213,27 @@ func (cached *DistinctV3) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+func (cached *ExecStmt) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field Params []*vitess.io/vitess/go/vt/sqlparser.Variable
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.Params)) * int64(8))
+		for _, elem := range cached.Params {
+			size += elem.CachedSize(true)
+		}
+	}
+	// field Input vitess.io/vitess/go/vt/vtgate/engine.Primitive
+	if cc, ok := cached.Input.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	return size
+}
 func (cached *Filter) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)

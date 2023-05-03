@@ -19,11 +19,14 @@ package evalengine
 import (
 	"math/bits"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 type builtinHex struct {
 	CallExpr
+	collate collations.ID
 }
 
 var _ Expr = (*builtinHex)(nil)
@@ -47,17 +50,45 @@ func (call *builtinHex) eval(env *ExpressionEnv) (eval, error) {
 		encoded = hexEncodeBytes(arg.ToRawBytes())
 	}
 	if arg.SQLType() == sqltypes.Blob || arg.SQLType() == sqltypes.TypeJSON {
-		return newEvalRaw(sqltypes.Text, encoded, env.collation()), nil
+		return newEvalRaw(sqltypes.Text, encoded, defaultCoercionCollation(call.collate)), nil
 	}
-	return newEvalText(encoded, env.collation()), nil
+	return newEvalText(encoded, defaultCoercionCollation(call.collate)), nil
 }
 
-func (call *builtinHex) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
-	tt, f := call.Arguments[0].typeof(env)
+func (call *builtinHex) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	tt, f := call.Arguments[0].typeof(env, fields)
 	if tt == sqltypes.Blob || tt == sqltypes.TypeJSON {
 		return sqltypes.Text, f
 	}
 	return sqltypes.VarChar, f
+}
+
+func (call *builtinHex) compile(c *compiler) (ctype, error) {
+	str, err := call.Arguments[0].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip := c.compileNullCheck1(str)
+	col := defaultCoercionCollation(c.cfg.Collation)
+	t := sqltypes.VarChar
+	if str.Type == sqltypes.Blob || str.Type == sqltypes.TypeJSON {
+		t = sqltypes.Text
+	}
+
+	switch {
+	case sqltypes.IsNumber(str.Type), sqltypes.IsDecimal(str.Type):
+		c.asm.Fn_HEX_d(col)
+	case str.isTextual():
+		c.asm.Fn_HEX_c(t, col)
+	default:
+		c.asm.Convert_xc(1, t, c.cfg.Collation, 0, false)
+		c.asm.Fn_HEX_c(t, col)
+	}
+
+	c.asm.jumpDestination(skip)
+
+	return ctype{Type: t, Col: col}, nil
 }
 
 const hextable = "0123456789ABCDEF"

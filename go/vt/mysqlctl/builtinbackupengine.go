@@ -318,7 +318,8 @@ func (be *BuiltinBackupEngine) executeFullBackup(ctx context.Context, params Bac
 	// Save initial state so we can restore.
 	replicaStartRequired := false
 	sourceIsPrimary := false
-	readOnly := true //nolint
+	superReadOnly := true //nolint
+	readOnly := true      //nolint
 	var replicationPosition mysql.Position
 	semiSyncSource, semiSyncReplica := params.Mysqld.SemiSyncEnabled()
 
@@ -338,16 +339,30 @@ func (be *BuiltinBackupEngine) executeFullBackup(ctx context.Context, params Bac
 	// get the read-only flag
 	readOnly, err = params.Mysqld.IsReadOnly()
 	if err != nil {
-		return false, vterrors.Wrap(err, "can't get read-only status")
+		return false, vterrors.Wrap(err, "failed to get read_only status")
 	}
+	superReadOnly, err = params.Mysqld.IsSuperReadOnly()
+	if err != nil {
+		return false, vterrors.Wrap(err, "can't get super_read_only status")
+	}
+	log.Infof("Flag values during full backup, read_only: %v, super_read_only:%t", readOnly, superReadOnly)
 
 	// get the replication position
 	if sourceIsPrimary {
-		if !readOnly {
-			params.Logger.Infof("turning primary read-only before backup")
-			if err = params.Mysqld.SetReadOnly(true); err != nil {
-				return false, vterrors.Wrap(err, "can't set read-only status")
+		// No need to set read_only because super_read_only will implicitly set read_only to true as well.
+		if !superReadOnly {
+			params.Logger.Infof("Enabling super_read_only on primary prior to backup")
+			if _, err = params.Mysqld.SetSuperReadOnly(true); err != nil {
+				return false, vterrors.Wrap(err, "failed to enable super_read_only")
 			}
+			defer func() {
+				// Resetting super_read_only back to its original value
+				params.Logger.Infof("resetting mysqld super_read_only to %v", superReadOnly)
+				if _, err := params.Mysqld.SetSuperReadOnly(false); err != nil {
+					log.Error("Failed to set super_read_only back to its original value")
+				}
+			}()
+
 		}
 		replicationPosition, err = params.Mysqld.PrimaryPosition()
 		if err != nil {
@@ -398,9 +413,9 @@ func (be *BuiltinBackupEngine) executeFullBackup(ctx context.Context, params Bac
 		return usable, vterrors.Wrap(err, "can't restart mysqld")
 	}
 
-	// And set read-only mode
-	params.Logger.Infof("resetting mysqld read-only to %v", readOnly)
-	if err := params.Mysqld.SetReadOnly(readOnly); err != nil {
+	// Resetting super_read_only back to its original value
+	params.Logger.Infof("resetting mysqld super_read_only to %v", superReadOnly)
+	if _, err := params.Mysqld.SetSuperReadOnly(superReadOnly); err != nil {
 		return usable, err
 	}
 
@@ -497,18 +512,35 @@ func (be *BuiltinBackupEngine) backupFiles(
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
-
-			// Wait until we are ready to go, skip if we already
-			// encountered an error.
-			sema.Acquire(ctx, 1)
+			fe := &fes[i]
+			// Wait until we are ready to go, return if we encounter an error
+			acqErr := sema.Acquire(ctx, 1)
+			if acqErr != nil {
+				log.Errorf("Unable to acquire semaphore needed to backup file: %s, err: %s", fe.Name, acqErr.Error())
+				bh.RecordError(acqErr)
+				return
+			}
 			defer sema.Release(1)
+			// Check for context cancellation explicitly because, the way semaphore code is written, theoretically we might
+			// end up not throwing an error even after cancellation. Please see https://cs.opensource.google/go/x/sync/+/refs/tags/v0.1.0:semaphore/semaphore.go;l=66,
+			// which suggests that if the context is already done, `Acquire()` may still succeed without blocking. This introduces
+			// unpredictability in my test cases, so in order to avoid that, I am adding this cancellation check.
+			select {
+			case <-ctx.Done():
+				log.Errorf("Context canceled or timed out during %q backup", fe.Name)
+				bh.RecordError(vterrors.Errorf(vtrpc.Code_CANCELED, "context canceled"))
+				return
+			default:
+			}
+
 			if bh.HasErrors() {
+				params.Logger.Infof("failed to backup files due to error.")
 				return
 			}
 
 			// Backup the individual file.
 			name := fmt.Sprintf("%v", i)
-			bh.RecordError(be.backupFile(ctx, params, bh, &fes[i], name))
+			bh.RecordError(be.backupFile(ctx, params, bh, fe, name))
 		}(i)
 	}
 
@@ -772,7 +804,7 @@ func (be *BuiltinBackupEngine) executeRestoreFullBackup(ctx context.Context, par
 
 	params.Logger.Infof("Restore: copying %v files", len(bm.FileEntries))
 
-	if _, err := be.restoreFiles(context.Background(), params, bh, bm); err != nil {
+	if _, err := be.restoreFiles(ctx, params, bh, bm); err != nil {
 		// don't delete the file here because that is how we detect an interrupted restore
 		return vterrors.Wrap(err, "failed to restore files")
 	}
@@ -785,8 +817,7 @@ func (be *BuiltinBackupEngine) executeRestoreFullBackup(ctx context.Context, par
 // The underlying mysql database is expected to be up and running.
 func (be *BuiltinBackupEngine) executeRestoreIncrementalBackup(ctx context.Context, params RestoreParams, bh backupstorage.BackupHandle, bm builtinBackupManifest) error {
 	params.Logger.Infof("Restoring incremental backup to position: %v", bm.Position)
-
-	createdDir, err := be.restoreFiles(context.Background(), params, bh, bm)
+	createdDir, err := be.restoreFiles(ctx, params, bh, bm)
 	defer os.RemoveAll(createdDir)
 	mysqld, ok := params.Mysqld.(*Mysqld)
 	if !ok {
@@ -819,7 +850,6 @@ func (be *BuiltinBackupEngine) executeRestoreIncrementalBackup(ctx context.Conte
 func (be *BuiltinBackupEngine) ExecuteRestore(ctx context.Context, params RestoreParams, bh backupstorage.BackupHandle) (*BackupManifest, error) {
 
 	var bm builtinBackupManifest
-
 	if err := getBackupManifestInto(ctx, bh, &bm); err != nil {
 		return nil, err
 	}
@@ -869,16 +899,32 @@ func (be *BuiltinBackupEngine) restoreFiles(ctx context.Context, params RestoreP
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
-
-			// Wait until we are ready to go, skip if we already
-			// encountered an error.
-			sema.Acquire(ctx, 1)
+			fe := &fes[i]
+			// Wait until we are ready to go, return if we encounter an error
+			acqErr := sema.Acquire(ctx, 1)
+			if acqErr != nil {
+				log.Errorf("Unable to acquire semaphore needed to restore file: %s, err: %s", fe.Name, acqErr.Error())
+				rec.RecordError(acqErr)
+				return
+			}
 			defer sema.Release(1)
+			// Check for context cancellation explicitly because, the way semaphore code is written, theoretically we might
+			// end up not throwing an error even after cancellation. Please see https://cs.opensource.google/go/x/sync/+/refs/tags/v0.1.0:semaphore/semaphore.go;l=66,
+			// which suggests that if the context is already done, `Acquire()` may still succeed without blocking. This introduces
+			// unpredictability in my test cases, so in order to avoid that, I am adding this cancellation check.
+			select {
+			case <-ctx.Done():
+				log.Errorf("Context canceled or timed out during %q restore", fe.Name)
+				rec.RecordError(vterrors.Errorf(vtrpc.Code_CANCELED, "context canceled"))
+				return
+			default:
+			}
+
 			if rec.HasErrors() {
+				params.Logger.Infof("Failed to restore files due to error.")
 				return
 			}
 
-			fe := &fes[i]
 			fe.ParentPath = createdDir
 			// And restore the file.
 			name := fmt.Sprintf("%v", i)

@@ -443,7 +443,7 @@ func (mysqld *Mysqld) startNoWait(ctx context.Context, cnf *Mycnf, mysqldArgs ..
 			err := cmd.Wait()
 			log.Infof("%v exit: %v", ts, err)
 
-			// The process exited. Trigger OnTerm callbacks, unless we were cancelled.
+			// The process exited. Trigger OnTerm callbacks, unless we were canceled.
 			select {
 			case <-cancel:
 			default:
@@ -667,7 +667,7 @@ func (mysqld *Mysqld) InitConfig(cnf *Mycnf) error {
 // generate / configure a my.cnf file install a skeleton database,
 // and apply the provided initial SQL file.
 func (mysqld *Mysqld) Init(ctx context.Context, cnf *Mycnf, initDBSQLFile string) error {
-	log.Infof("mysqlctl.Init")
+	log.Infof("mysqlctl.Init running with contents previously embedded from %s", initDBSQLFile)
 	err := mysqld.InitConfig(cnf)
 	if err != nil {
 		log.Errorf("%s", err.Error())
@@ -695,7 +695,6 @@ func (mysqld *Mysqld) Init(ctx context.Context, cnf *Mycnf, initDBSQLFile string
 		log.Errorf("failed starting mysqld in time: %v\n%v", err, readTailOfMysqldErrorLog(cnf.ErrorLogPath))
 		return err
 	}
-
 	if initDBSQLFile == "" { // default to built-in
 		if err := mysqld.executeMysqlScript(params, strings.NewReader(config.DefaultInitDB)); err != nil {
 			return fmt.Errorf("failed to initialize mysqld: %v", err)
@@ -1223,6 +1222,7 @@ func (mysqld *Mysqld) applyBinlogFile(binlogFile string, includeGTIDs mysql.GTID
 				gtids,
 			)
 		}
+
 		args = append(args, binlogFile)
 
 		mysqlbinlogCmd = exec.Command(name, args...)
@@ -1251,6 +1251,29 @@ func (mysqld *Mysqld) applyBinlogFile(binlogFile string, includeGTIDs mysql.GTID
 		args := []string{
 			"--defaults-extra-file=" + cnf,
 		}
+
+		// We disable super_read_only, in case it is in the default MySQL startup
+		// parameters.  We do it blindly, since this will fail on MariaDB, which doesn't
+		// have super_read_only This is safe, since we're restarting MySQL after the restore anyway
+		log.Infof("applyBinlogFile: disabling super_read_only")
+		resetFunc, err := mysqld.SetSuperReadOnly(false)
+		if err != nil {
+			if sqlErr, ok := err.(*mysql.SQLError); ok && sqlErr.Number() == mysql.ERUnknownSystemVariable {
+				log.Warningf("applyBinlogFile: server does not know about super_read_only, continuing anyway...")
+			} else {
+				log.Errorf("applyBinlogFile: unexpected error while trying to set super_read_only: %v", err)
+				return err
+			}
+		}
+		if resetFunc != nil {
+			defer func() {
+				err := resetFunc()
+				if err != nil {
+					log.Error("Not able to set super_read_only to its original value during applyBinlogFile.")
+				}
+			}()
+		}
+
 		mysqlCmd = exec.Command(name, args...)
 		mysqlCmd.Dir = dir
 		mysqlCmd.Env = env

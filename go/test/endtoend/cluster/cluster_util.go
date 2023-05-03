@@ -43,7 +43,7 @@ var (
 	dbCredentialFile         string
 	InsertTabletTemplateKsID = `insert into %s (id, msg) values (%d, '%s') /* id:%d */`
 	defaultOperationTimeout  = 60 * time.Second
-	defeaultRetryDelay       = 1 * time.Second
+	defaultRetryDelay        = 1 * time.Second
 )
 
 // Restart restarts vttablet and mysql.
@@ -54,15 +54,17 @@ func (tablet *Vttablet) Restart() error {
 
 	if tablet.MysqlctlProcess.TabletUID > 0 {
 		tablet.MysqlctlProcess.Stop()
+		tablet.MysqlctldProcess.WaitForMysqlCtldShutdown()
 		tablet.VttabletProcess.TearDown()
-		os.RemoveAll(tablet.VttabletProcess.Directory)
+		tablet.MysqlctldProcess.CleanupFiles(tablet.TabletUID)
 
 		return tablet.MysqlctlProcess.Start()
 	}
 
 	tablet.MysqlctldProcess.Stop()
+	tablet.MysqlctldProcess.WaitForMysqlCtldShutdown()
 	tablet.VttabletProcess.TearDown()
-	os.RemoveAll(tablet.VttabletProcess.Directory)
+	tablet.MysqlctldProcess.CleanupFiles(tablet.TabletUID)
 
 	return tablet.MysqlctldProcess.Start()
 }
@@ -306,6 +308,7 @@ func GetPasswordUpdateSQL(localCluster *LocalProcessCluster) string {
 					SET PASSWORD FOR 'vt_allprivs'@'localhost' = 'VtAllprivsPass';
 					SET PASSWORD FOR 'vt_repl'@'%' = 'VtReplPass';
 					SET PASSWORD FOR 'vt_filtered'@'localhost' = 'VtFilteredPass';
+					SET PASSWORD FOR 'vt_appdebug'@'localhost' = 'VtDebugPass';
 					FLUSH PRIVILEGES;
 					`
 	return pwdChangeCmd
@@ -385,6 +388,20 @@ func WaitForTabletSetup(vtctlClientProcess *VtctlClientProcess, expectedTablets 
 	return fmt.Errorf("all %d tablet are not in expected state %s", expectedTablets, expectedStatus)
 }
 
+// GetSidecarDBName returns the sidecar database name configured for
+// the keyspace in the topo server.
+func (cluster LocalProcessCluster) GetSidecarDBName(keyspace string) (string, error) {
+	res, err := cluster.VtctldClientProcess.ExecuteCommandWithOutput("GetKeyspace", keyspace)
+	if err != nil {
+		return "", err
+	}
+	sdbn, err := jsonparser.GetString([]byte(res), "sidecar_db_name")
+	if err != nil {
+		return "", err
+	}
+	return sdbn, nil
+}
+
 // WaitForHealthyShard waits for the given shard info record in the topo
 // server to list a tablet (alias and uid) as the primary serving tablet
 // for the shard. This is done using "vtctldclient GetShard" and parsing
@@ -426,6 +443,6 @@ func WaitForHealthyShard(vtctldclient *VtctldClientProcess, keyspace, shard stri
 		default:
 		}
 
-		time.Sleep(defeaultRetryDelay)
+		time.Sleep(defaultRetryDelay)
 	}
 }

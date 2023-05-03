@@ -24,6 +24,8 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/sidecardb"
+	"vitess.io/vitess/go/vt/sqlparser"
 )
 
 // DBClient is a high level interface to the database.
@@ -43,8 +45,21 @@ type dbClientImpl struct {
 	dbConn   *mysql.Conn
 }
 
+// dbClientImplWithSidecarDBReplacement is a DBClient implementation
+// that serves primarily as a pass-through to dbClientImpl, with the
+// exception of ExecuteFetch, where it first replaces any default
+// sidecar database qualifiers with the actual one in use on the tablet.
+type dbClientImplWithSidecarDBReplacement struct {
+	dbClientImpl
+}
+
 // NewDBClient creates a DBClient instance
 func NewDBClient(params dbconfigs.Connector) DBClient {
+	if sidecardb.GetName() != sidecardb.DefaultName {
+		return &dbClientImplWithSidecarDBReplacement{
+			dbClientImpl{dbConfig: params},
+		}
+	}
 	return &dbClientImpl{
 		dbConfig: params,
 	}
@@ -122,4 +137,13 @@ func (dc *dbClientImpl) ExecuteFetch(query string, maxrows int) (*sqltypes.Resul
 		return nil, err
 	}
 	return mqr, nil
+}
+
+func (dcr *dbClientImplWithSidecarDBReplacement) ExecuteFetch(query string, maxrows int) (*sqltypes.Result, error) {
+	// Replace any provided sidecar database qualifiers with the correct one.
+	uq, err := sqlparser.ReplaceTableQualifiers(query, sidecardb.DefaultName, sidecardb.GetName())
+	if err != nil {
+		return nil, err
+	}
+	return dcr.dbClientImpl.ExecuteFetch(uq, maxrows)
 }

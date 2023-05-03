@@ -17,14 +17,14 @@ limitations under the License.
 package tabletenv
 
 import (
+	"context"
 	"fmt"
-	"html/template"
 	"io"
 	"net/url"
 	"strings"
 	"time"
 
-	"context"
+	"github.com/google/safehtml"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/streamlog"
@@ -153,7 +153,7 @@ func (stats *LogStats) FmtQuerySources() string {
 // ContextHTML returns the HTML version of the context that was used, or "".
 // This is a method on LogStats instead of a field so that it doesn't need
 // to be passed by value everywhere.
-func (stats *LogStats) ContextHTML() template.HTML {
+func (stats *LogStats) ContextHTML() safehtml.HTML {
 	return callinfo.HTMLFromContext(stats.Ctx)
 }
 

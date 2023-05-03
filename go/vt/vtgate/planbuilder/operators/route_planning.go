@@ -18,7 +18,6 @@ package operators
 
 import (
 	"bytes"
-	"fmt"
 	"io"
 
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
@@ -50,7 +49,7 @@ type (
 // Here we try to merge query parts into the same route primitives. At the end of this process,
 // all the operators in the tree are guaranteed to be PhysicalOperators
 func transformToPhysical(ctx *plancontext.PlanningContext, in ops.Operator) (ops.Operator, error) {
-	op, err := rewrite.BottomUp(in, semantics.EmptyTableSet(), TableID, func(ts semantics.TableSet, operator ops.Operator) (ops.Operator, rewrite.TreeIdentity, error) {
+	op, err := rewrite.BottomUpAll(in, TableID, func(operator ops.Operator, ts semantics.TableSet, _ bool) (ops.Operator, rewrite.ApplyResult, error) {
 		switch op := operator.(type) {
 		case *QueryGraph:
 			return optimizeQueryGraph(ctx, op)
@@ -71,20 +70,10 @@ func transformToPhysical(ctx *plancontext.PlanningContext, in ops.Operator) (ops
 		return nil, err
 	}
 
-	err = rewrite.Visit(op, func(op ops.Operator) error {
-		if _, isPhys := op.(ops.PhysicalOperator); !isPhys {
-			return vterrors.VT13001(fmt.Sprintf("failed to transform %T to a physical operator", op))
-		}
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	return Compact(ctx, op)
+	return compact(ctx, op)
 }
 
-func optimizeFilter(op *Filter) (ops.Operator, rewrite.TreeIdentity, error) {
+func optimizeFilter(op *Filter) (ops.Operator, rewrite.ApplyResult, error) {
 	if route, ok := op.Source.(*Route); ok {
 		// let's push the filter into the route
 		op.Source = route.Source
@@ -95,7 +84,7 @@ func optimizeFilter(op *Filter) (ops.Operator, rewrite.TreeIdentity, error) {
 	return op, rewrite.SameTree, nil
 }
 
-func optimizeDerived(ctx *plancontext.PlanningContext, op *Derived) (ops.Operator, rewrite.TreeIdentity, error) {
+func optimizeDerived(ctx *plancontext.PlanningContext, op *Derived) (ops.Operator, rewrite.ApplyResult, error) {
 	innerRoute, ok := op.Source.(*Route)
 	if !ok {
 		return op, rewrite.SameTree, nil
@@ -112,15 +101,15 @@ func optimizeDerived(ctx *plancontext.PlanningContext, op *Derived) (ops.Operato
 	return innerRoute, rewrite.NewTree, nil
 }
 
-func optimizeJoin(ctx *plancontext.PlanningContext, op *Join) (ops.Operator, rewrite.TreeIdentity, error) {
+func optimizeJoin(ctx *plancontext.PlanningContext, op *Join) (ops.Operator, rewrite.ApplyResult, error) {
 	join, err := mergeOrJoin(ctx, op.LHS, op.RHS, sqlparser.SplitAndExpression(nil, op.Predicate), !op.LeftJoin)
 	if err != nil {
-		return nil, rewrite.SameTree, err
+		return nil, false, err
 	}
 	return join, rewrite.NewTree, nil
 }
 
-func optimizeQueryGraph(ctx *plancontext.PlanningContext, op *QueryGraph) (result ops.Operator, changed rewrite.TreeIdentity, err error) {
+func optimizeQueryGraph(ctx *plancontext.PlanningContext, op *QueryGraph) (result ops.Operator, changed rewrite.ApplyResult, err error) {
 	changed = rewrite.NewTree
 	switch {
 	case ctx.PlannerVersion == querypb.ExecuteOptions_Gen4Left2Right:
@@ -621,12 +610,12 @@ func gen4ValEqual(ctx *plancontext.PlanningContext, a, b sqlparser.Expr) bool {
 
 			return ctx.SemTable.DirectDeps(a) == ctx.SemTable.DirectDeps(b)
 		}
-	case sqlparser.Argument:
-		b, ok := b.(sqlparser.Argument)
+	case *sqlparser.Argument:
+		b, ok := b.(*sqlparser.Argument)
 		if !ok {
 			return false
 		}
-		return a == b
+		return a.Name == b.Name
 	case *sqlparser.Literal:
 		b, ok := b.(*sqlparser.Literal)
 		if !ok {
@@ -675,7 +664,7 @@ func pushJoinPredicates(ctx *plancontext.PlanningContext, exprs []sqlparser.Expr
 	}
 
 	for _, expr := range exprs {
-		_, err := AddPredicate(op, ctx, expr, true, newFilter)
+		_, err := AddPredicate(ctx, op, expr, true, newFilter)
 		if err != nil {
 			return nil, err
 		}

@@ -55,8 +55,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfAlterVschema(in)
 	case *AndExpr:
 		return CloneRefOfAndExpr(in)
-	case Argument:
-		return in
+	case *Argument:
+		return CloneRefOfArgument(in)
 	case *ArgumentLessWindowExpr:
 		return CloneRefOfArgumentLessWindowExpr(in)
 	case *AutoIncSpec:
@@ -181,6 +181,14 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfFuncExpr(in)
 	case *GTIDFuncExpr:
 		return CloneRefOfGTIDFuncExpr(in)
+	case *GeomFormatExpr:
+		return CloneRefOfGeomFormatExpr(in)
+	case *GeomFromTextExpr:
+		return CloneRefOfGeomFromTextExpr(in)
+	case *GeomFromWKBExpr:
+		return CloneRefOfGeomFromWKBExpr(in)
+	case *GeomPropertyFuncExpr:
+		return CloneRefOfGeomPropertyFuncExpr(in)
 	case GroupBy:
 		return CloneGroupBy(in)
 	case *GroupConcatExpr:
@@ -295,6 +303,12 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfMin(in)
 	case *ModifyColumn:
 		return CloneRefOfModifyColumn(in)
+	case *MultiLinestringExpr:
+		return CloneRefOfMultiLinestringExpr(in)
+	case *MultiPointExpr:
+		return CloneRefOfMultiPointExpr(in)
+	case *MultiPolygonExpr:
+		return CloneRefOfMultiPolygonExpr(in)
 	case *NTHValueExpr:
 		return CloneRefOfNTHValueExpr(in)
 	case *NamedWindow:
@@ -353,10 +367,14 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfPerformanceSchemaFuncExpr(in)
 	case *PointExpr:
 		return CloneRefOfPointExpr(in)
+	case *PointPropertyFuncExpr:
+		return CloneRefOfPointPropertyFuncExpr(in)
 	case *PolygonExpr:
 		return CloneRefOfPolygonExpr(in)
 	case *PrepareStmt:
 		return CloneRefOfPrepareStmt(in)
+	case *PurgeBinaryLogs:
+		return CloneRefOfPurgeBinaryLogs(in)
 	case ReferenceAction:
 		return in
 	case *ReferenceDefinition:
@@ -690,6 +708,15 @@ func CloneRefOfAndExpr(n *AndExpr) *AndExpr {
 	out := *n
 	out.Left = CloneExpr(n.Left)
 	out.Right = CloneExpr(n.Right)
+	return &out
+}
+
+// CloneRefOfArgument creates a deep clone of the input.
+func CloneRefOfArgument(n *Argument) *Argument {
+	if n == nil {
+		return nil
+	}
+	out := *n
 	return &out
 }
 
@@ -1057,7 +1084,6 @@ func CloneRefOfCurTimeFuncExpr(n *CurTimeFuncExpr) *CurTimeFuncExpr {
 	}
 	out := *n
 	out.Name = CloneIdentifierCI(n.Name)
-	out.Fsp = CloneExpr(n.Fsp)
 	return &out
 }
 
@@ -1355,6 +1381,51 @@ func CloneRefOfGTIDFuncExpr(n *GTIDFuncExpr) *GTIDFuncExpr {
 	out.Set2 = CloneExpr(n.Set2)
 	out.Timeout = CloneExpr(n.Timeout)
 	out.Channel = CloneExpr(n.Channel)
+	return &out
+}
+
+// CloneRefOfGeomFormatExpr creates a deep clone of the input.
+func CloneRefOfGeomFormatExpr(n *GeomFormatExpr) *GeomFormatExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Geom = CloneExpr(n.Geom)
+	out.AxisOrderOpt = CloneExpr(n.AxisOrderOpt)
+	return &out
+}
+
+// CloneRefOfGeomFromTextExpr creates a deep clone of the input.
+func CloneRefOfGeomFromTextExpr(n *GeomFromTextExpr) *GeomFromTextExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.WktText = CloneExpr(n.WktText)
+	out.Srid = CloneExpr(n.Srid)
+	out.AxisOrderOpt = CloneExpr(n.AxisOrderOpt)
+	return &out
+}
+
+// CloneRefOfGeomFromWKBExpr creates a deep clone of the input.
+func CloneRefOfGeomFromWKBExpr(n *GeomFromWKBExpr) *GeomFromWKBExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.WkbBlob = CloneExpr(n.WkbBlob)
+	out.Srid = CloneExpr(n.Srid)
+	out.AxisOrderOpt = CloneExpr(n.AxisOrderOpt)
+	return &out
+}
+
+// CloneRefOfGeomPropertyFuncExpr creates a deep clone of the input.
+func CloneRefOfGeomPropertyFuncExpr(n *GeomPropertyFuncExpr) *GeomPropertyFuncExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Geom = CloneExpr(n.Geom)
 	return &out
 }
 
@@ -1953,6 +2024,36 @@ func CloneRefOfModifyColumn(n *ModifyColumn) *ModifyColumn {
 	return &out
 }
 
+// CloneRefOfMultiLinestringExpr creates a deep clone of the input.
+func CloneRefOfMultiLinestringExpr(n *MultiLinestringExpr) *MultiLinestringExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.LinestringParams = CloneExprs(n.LinestringParams)
+	return &out
+}
+
+// CloneRefOfMultiPointExpr creates a deep clone of the input.
+func CloneRefOfMultiPointExpr(n *MultiPointExpr) *MultiPointExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.PointParams = CloneExprs(n.PointParams)
+	return &out
+}
+
+// CloneRefOfMultiPolygonExpr creates a deep clone of the input.
+func CloneRefOfMultiPolygonExpr(n *MultiPolygonExpr) *MultiPolygonExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.PolygonParams = CloneExprs(n.PolygonParams)
+	return &out
+}
+
 // CloneRefOfNTHValueExpr creates a deep clone of the input.
 func CloneRefOfNTHValueExpr(n *NTHValueExpr) *NTHValueExpr {
 	if n == nil {
@@ -2044,6 +2145,7 @@ func CloneRefOfOffset(n *Offset) *Offset {
 		return nil
 	}
 	out := *n
+	out.Original = CloneExpr(n.Original)
 	return &out
 }
 
@@ -2267,6 +2369,17 @@ func CloneRefOfPointExpr(n *PointExpr) *PointExpr {
 	return &out
 }
 
+// CloneRefOfPointPropertyFuncExpr creates a deep clone of the input.
+func CloneRefOfPointPropertyFuncExpr(n *PointPropertyFuncExpr) *PointPropertyFuncExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Point = CloneExpr(n.Point)
+	out.ValueToSet = CloneExpr(n.ValueToSet)
+	return &out
+}
+
 // CloneRefOfPolygonExpr creates a deep clone of the input.
 func CloneRefOfPolygonExpr(n *PolygonExpr) *PolygonExpr {
 	if n == nil {
@@ -2286,6 +2399,15 @@ func CloneRefOfPrepareStmt(n *PrepareStmt) *PrepareStmt {
 	out.Name = CloneIdentifierCI(n.Name)
 	out.Statement = CloneExpr(n.Statement)
 	out.Comments = CloneRefOfParsedComments(n.Comments)
+	return &out
+}
+
+// CloneRefOfPurgeBinaryLogs creates a deep clone of the input.
+func CloneRefOfPurgeBinaryLogs(n *PurgeBinaryLogs) *PurgeBinaryLogs {
+	if n == nil {
+		return nil
+	}
+	out := *n
 	return &out
 }
 
@@ -3292,6 +3414,14 @@ func CloneCallable(in Callable) Callable {
 		return CloneRefOfFuncExpr(in)
 	case *GTIDFuncExpr:
 		return CloneRefOfGTIDFuncExpr(in)
+	case *GeomFormatExpr:
+		return CloneRefOfGeomFormatExpr(in)
+	case *GeomFromTextExpr:
+		return CloneRefOfGeomFromTextExpr(in)
+	case *GeomFromWKBExpr:
+		return CloneRefOfGeomFromWKBExpr(in)
+	case *GeomPropertyFuncExpr:
+		return CloneRefOfGeomPropertyFuncExpr(in)
 	case *GroupConcatExpr:
 		return CloneRefOfGroupConcatExpr(in)
 	case *InsertExpr:
@@ -3352,6 +3482,12 @@ func CloneCallable(in Callable) Callable {
 		return CloneRefOfMemberOfExpr(in)
 	case *Min:
 		return CloneRefOfMin(in)
+	case *MultiLinestringExpr:
+		return CloneRefOfMultiLinestringExpr(in)
+	case *MultiPointExpr:
+		return CloneRefOfMultiPointExpr(in)
+	case *MultiPolygonExpr:
+		return CloneRefOfMultiPolygonExpr(in)
 	case *NTHValueExpr:
 		return CloneRefOfNTHValueExpr(in)
 	case *NamedWindow:
@@ -3362,6 +3498,8 @@ func CloneCallable(in Callable) Callable {
 		return CloneRefOfPerformanceSchemaFuncExpr(in)
 	case *PointExpr:
 		return CloneRefOfPointExpr(in)
+	case *PointPropertyFuncExpr:
+		return CloneRefOfPointPropertyFuncExpr(in)
 	case *PolygonExpr:
 		return CloneRefOfPolygonExpr(in)
 	case *RegexpInstrExpr:
@@ -3496,8 +3634,8 @@ func CloneExpr(in Expr) Expr {
 	switch in := in.(type) {
 	case *AndExpr:
 		return CloneRefOfAndExpr(in)
-	case Argument:
-		return in
+	case *Argument:
+		return CloneRefOfArgument(in)
 	case *ArgumentLessWindowExpr:
 		return CloneRefOfArgumentLessWindowExpr(in)
 	case *Avg:
@@ -3552,6 +3690,14 @@ func CloneExpr(in Expr) Expr {
 		return CloneRefOfFuncExpr(in)
 	case *GTIDFuncExpr:
 		return CloneRefOfGTIDFuncExpr(in)
+	case *GeomFormatExpr:
+		return CloneRefOfGeomFormatExpr(in)
+	case *GeomFromTextExpr:
+		return CloneRefOfGeomFromTextExpr(in)
+	case *GeomFromWKBExpr:
+		return CloneRefOfGeomFromWKBExpr(in)
+	case *GeomPropertyFuncExpr:
+		return CloneRefOfGeomPropertyFuncExpr(in)
 	case *GroupConcatExpr:
 		return CloneRefOfGroupConcatExpr(in)
 	case *InsertExpr:
@@ -3624,6 +3770,12 @@ func CloneExpr(in Expr) Expr {
 		return CloneRefOfMemberOfExpr(in)
 	case *Min:
 		return CloneRefOfMin(in)
+	case *MultiLinestringExpr:
+		return CloneRefOfMultiLinestringExpr(in)
+	case *MultiPointExpr:
+		return CloneRefOfMultiPointExpr(in)
+	case *MultiPolygonExpr:
+		return CloneRefOfMultiPolygonExpr(in)
 	case *NTHValueExpr:
 		return CloneRefOfNTHValueExpr(in)
 	case *NamedWindow:
@@ -3642,6 +3794,8 @@ func CloneExpr(in Expr) Expr {
 		return CloneRefOfPerformanceSchemaFuncExpr(in)
 	case *PointExpr:
 		return CloneRefOfPointExpr(in)
+	case *PointPropertyFuncExpr:
+		return CloneRefOfPointPropertyFuncExpr(in)
 	case *PolygonExpr:
 		return CloneRefOfPolygonExpr(in)
 	case *RegexpInstrExpr:
@@ -3842,6 +3996,8 @@ func CloneStatement(in Statement) Statement {
 		return CloneRefOfOtherRead(in)
 	case *PrepareStmt:
 		return CloneRefOfPrepareStmt(in)
+	case *PurgeBinaryLogs:
+		return CloneRefOfPurgeBinaryLogs(in)
 	case *Release:
 		return CloneRefOfRelease(in)
 	case *RenameTable:

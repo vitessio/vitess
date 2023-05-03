@@ -37,9 +37,18 @@ type TrackedBuffer struct {
 	bindLocations []bindLocation
 	nodeFormatter NodeFormatter
 	literal       func(string) (int, error)
-	escape        bool
 	fast          bool
+
+	escape escapeType
 }
+
+type escapeType int
+
+const (
+	escapeKeywords escapeType = iota
+	escapeAllIdentifiers
+	escapeNoIdentifiers
+)
 
 // NewTrackedBuffer creates a new TrackedBuffer.
 func NewTrackedBuffer(nodeFormatter NodeFormatter) *TrackedBuffer {
@@ -81,9 +90,17 @@ func (buf *TrackedBuffer) SetUpperCase(enable bool) {
 // and escaped. By default, identifiers are only escaped if they match the name of a SQL keyword or they
 // contain characters that must be escaped.
 // Enabling this option will prevent the optimized fastFormat routines from running.
-func (buf *TrackedBuffer) SetEscapeAllIdentifiers(enable bool) {
+func (buf *TrackedBuffer) SetEscapeAllIdentifiers() {
 	buf.fast = false
-	buf.escape = enable
+	buf.escape = escapeAllIdentifiers
+}
+
+// SetEscapeNoIdentifier sets whether NO identifiers in the serialized SQL query should be quoted and escaped.
+// Warning: this can lead to query output that is not valid SQL
+// Enabling this option will prevent the optimized fastFormat routines from running.
+func (buf *TrackedBuffer) SetEscapeNoIdentifier() {
+	buf.fast = false
+	buf.escape = escapeNoIdentifiers
 }
 
 // WriteNode function, initiates the writing of a single SQLNode tree by passing
@@ -304,6 +321,19 @@ func String(node SQLNode) string {
 	return buf.String()
 }
 
+// UnescapedString will return a string where no identifiers have been escaped.
+func UnescapedString(node SQLNode) string {
+	if node == nil {
+		return "" // do not return '<nil>', which is Go syntax.
+	}
+
+	buf := NewTrackedBuffer(nil)
+	buf.SetEscapeNoIdentifier()
+	node.Format(buf)
+	return buf.String()
+
+}
+
 // CanonicalString returns a canonical string representation of an SQLNode where all identifiers
 // are always escaped and all SQL syntax is in uppercase. This matches the canonical output from MySQL.
 func CanonicalString(node SQLNode) string {
@@ -313,7 +343,7 @@ func CanonicalString(node SQLNode) string {
 
 	buf := NewTrackedBuffer(nil)
 	buf.SetUpperCase(true)
-	buf.SetEscapeAllIdentifiers(true)
+	buf.SetEscapeAllIdentifiers()
 	node.Format(buf)
 	return buf.String()
 }

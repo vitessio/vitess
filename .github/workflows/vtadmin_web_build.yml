@@ -12,6 +12,8 @@ on:
       - '.github/workflows/vtadmin_web_build.yml'
       - 'web/vtadmin/**'
 
+permissions: read-all
+
 jobs:
   build:
     runs-on: ubuntu-22.04

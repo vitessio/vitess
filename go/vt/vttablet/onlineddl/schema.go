@@ -95,8 +95,14 @@ const (
 		WHERE
 			migration_uuid=%a
 	`
-	sqlUpdateMigrationReadyToComplete = `UPDATE _vt.schema_migrations
-			SET ready_to_complete=%a
+	sqlSetMigrationReadyToComplete = `UPDATE _vt.schema_migrations SET
+			ready_to_complete=1,
+			ready_to_complete_timestamp=NOW(6)
+		WHERE
+			migration_uuid=%a
+	`
+	sqlClearMigrationReadyToComplete = `UPDATE _vt.schema_migrations SET
+			ready_to_complete=0
 		WHERE
 			migration_uuid=%a
 	`
@@ -132,7 +138,7 @@ const (
 			migration_uuid=%a
 	`
 	sqlClearSingleArtifact = `UPDATE _vt.schema_migrations
-			SET artifacts=replace(artifacts, concat(%a, ','), ''), cleanup_timestamp=NULL
+			SET artifacts=replace(artifacts, concat(%a, ','), '')
 		WHERE
 			migration_uuid=%a
 	`
@@ -227,7 +233,7 @@ const (
 			migration_uuid=%a
 	`
 	sqlUpdateLastThrottled = `UPDATE _vt.schema_migrations
-			SET last_throttled_timestamp=FROM_UNIXTIME(%a), component_throttled=%a
+			SET last_throttled_timestamp=%a, component_throttled=%a
 		WHERE
 			migration_uuid=%a
 	`
@@ -353,6 +359,10 @@ const (
 			AND cleanup_timestamp IS NULL
 			AND completed_timestamp IS NULL
 	`
+	sqlShowMigrationsWhere = `SELECT *
+		FROM _vt.schema_migrations
+		%s
+	`
 	sqlSelectMigration = `SELECT
 			id,
 			migration_uuid,
@@ -381,6 +391,7 @@ const (
 			retain_artifacts_seconds,
 			is_view,
 			ready_to_complete,
+			ready_to_complete_timestamp is not null as was_ready_to_complete,
 			reverted_uuid,
 			rows_copied,
 			vitess_liveness_indicator,
@@ -451,6 +462,7 @@ const (
 		COLUMNS.CHARACTER_SET_NAME as character_set_name,
 		LOCATE('auto_increment', EXTRA) > 0 as is_auto_increment,
 		(DATA_TYPE='float' OR DATA_TYPE='double') AS is_float,
+		has_subpart,
 		has_nullable
 	FROM INFORMATION_SCHEMA.COLUMNS INNER JOIN (
 		SELECT
@@ -460,6 +472,7 @@ const (
 			COUNT(*) AS COUNT_COLUMN_IN_INDEX,
 			GROUP_CONCAT(COLUMN_NAME ORDER BY SEQ_IN_INDEX ASC) AS COLUMN_NAMES,
 			SUBSTRING_INDEX(GROUP_CONCAT(COLUMN_NAME ORDER BY SEQ_IN_INDEX ASC), ',', 1) AS FIRST_COLUMN_NAME,
+			SUM(SUB_PART IS NOT NULL) > 0 AS has_subpart,
 			SUM(NULLABLE='YES') > 0 AS has_nullable
 		FROM INFORMATION_SCHEMA.STATISTICS
 		WHERE
@@ -481,6 +494,10 @@ const (
 			ELSE 1
 		END,
 		CASE has_nullable
+			WHEN 0 THEN 0
+			ELSE 1
+		END,
+		CASE has_subpart
 			WHEN 0 THEN 0
 			ELSE 1
 		END,

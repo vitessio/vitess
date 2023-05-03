@@ -71,6 +71,7 @@ type TabletManagerClient interface {
 	// VReplication API
 	VReplicationExec(ctx context.Context, in *tabletmanagerdata.VReplicationExecRequest, opts ...grpc.CallOption) (*tabletmanagerdata.VReplicationExecResponse, error)
 	VReplicationWaitForPos(ctx context.Context, in *tabletmanagerdata.VReplicationWaitForPosRequest, opts ...grpc.CallOption) (*tabletmanagerdata.VReplicationWaitForPosResponse, error)
+	UpdateVRWorkflow(ctx context.Context, in *tabletmanagerdata.UpdateVRWorkflowRequest, opts ...grpc.CallOption) (*tabletmanagerdata.UpdateVRWorkflowResponse, error)
 	// VDiff API
 	VDiff(ctx context.Context, in *tabletmanagerdata.VDiffRequest, opts ...grpc.CallOption) (*tabletmanagerdata.VDiffResponse, error)
 	// ResetReplication makes the target not replicating
@@ -384,6 +385,15 @@ func (c *tabletManagerClient) VReplicationWaitForPos(ctx context.Context, in *ta
 	return out, nil
 }
 
+func (c *tabletManagerClient) UpdateVRWorkflow(ctx context.Context, in *tabletmanagerdata.UpdateVRWorkflowRequest, opts ...grpc.CallOption) (*tabletmanagerdata.UpdateVRWorkflowResponse, error) {
+	out := new(tabletmanagerdata.UpdateVRWorkflowResponse)
+	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/UpdateVRWorkflow", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *tabletManagerClient) VDiff(ctx context.Context, in *tabletmanagerdata.VDiffRequest, opts ...grpc.CallOption) (*tabletmanagerdata.VDiffResponse, error) {
 	out := new(tabletmanagerdata.VDiffResponse)
 	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/VDiff", in, out, opts...)
@@ -626,6 +636,7 @@ type TabletManagerServer interface {
 	// VReplication API
 	VReplicationExec(context.Context, *tabletmanagerdata.VReplicationExecRequest) (*tabletmanagerdata.VReplicationExecResponse, error)
 	VReplicationWaitForPos(context.Context, *tabletmanagerdata.VReplicationWaitForPosRequest) (*tabletmanagerdata.VReplicationWaitForPosResponse, error)
+	UpdateVRWorkflow(context.Context, *tabletmanagerdata.UpdateVRWorkflowRequest) (*tabletmanagerdata.UpdateVRWorkflowResponse, error)
 	// VDiff API
 	VDiff(context.Context, *tabletmanagerdata.VDiffRequest) (*tabletmanagerdata.VDiffResponse, error)
 	// ResetReplication makes the target not replicating
@@ -755,6 +766,9 @@ func (UnimplementedTabletManagerServer) VReplicationExec(context.Context, *table
 }
 func (UnimplementedTabletManagerServer) VReplicationWaitForPos(context.Context, *tabletmanagerdata.VReplicationWaitForPosRequest) (*tabletmanagerdata.VReplicationWaitForPosResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method VReplicationWaitForPos not implemented")
+}
+func (UnimplementedTabletManagerServer) UpdateVRWorkflow(context.Context, *tabletmanagerdata.UpdateVRWorkflowRequest) (*tabletmanagerdata.UpdateVRWorkflowResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method UpdateVRWorkflow not implemented")
 }
 func (UnimplementedTabletManagerServer) VDiff(context.Context, *tabletmanagerdata.VDiffRequest) (*tabletmanagerdata.VDiffResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method VDiff not implemented")
@@ -1357,6 +1371,24 @@ func _TabletManager_VReplicationWaitForPos_Handler(srv interface{}, ctx context.
 	return interceptor(ctx, in, info, handler)
 }
 
+func _TabletManager_UpdateVRWorkflow_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(tabletmanagerdata.UpdateVRWorkflowRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TabletManagerServer).UpdateVRWorkflow(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/tabletmanagerservice.TabletManager/UpdateVRWorkflow",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TabletManagerServer).UpdateVRWorkflow(ctx, req.(*tabletmanagerdata.UpdateVRWorkflowRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _TabletManager_VDiff_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(tabletmanagerdata.VDiffRequest)
 	if err := dec(in); err != nil {
@@ -1777,6 +1809,10 @@ var TabletManager_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "VReplicationWaitForPos",
 			Handler:    _TabletManager_VReplicationWaitForPos_Handler,
+		},
+		{
+			MethodName: "UpdateVRWorkflow",
+			Handler:    _TabletManager_UpdateVRWorkflow_Handler,
 		},
 		{
 			MethodName: "VDiff",

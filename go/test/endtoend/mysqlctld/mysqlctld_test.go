@@ -25,6 +25,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/vt/sidecardb"
 )
 
 var (
@@ -51,7 +52,7 @@ func TestMain(m *testing.M) {
 			return 1
 		}
 
-		if err := clusterInstance.VtctlProcess.CreateKeyspace(keyspaceName); err != nil {
+		if err := clusterInstance.VtctlProcess.CreateKeyspace(keyspaceName, sidecardb.DefaultName); err != nil {
 			return 1
 		}
 
@@ -96,8 +97,12 @@ func initCluster(shardNames []string, totalTabletsRequired int) error {
 				tablet.Type = "primary"
 			}
 			// Start Mysqlctld process
-			tablet.MysqlctldProcess = *cluster.MysqlCtldProcessInstance(tablet.TabletUID, tablet.MySQLPort, clusterInstance.TmpDirectory)
-			err := tablet.MysqlctldProcess.Start()
+			mysqlctldProcess, err := cluster.MysqlCtldProcessInstance(tablet.TabletUID, tablet.MySQLPort, clusterInstance.TmpDirectory)
+			if err != nil {
+				return err
+			}
+			tablet.MysqlctldProcess = *mysqlctldProcess
+			err = tablet.MysqlctldProcess.Start()
 			if err != nil {
 				return err
 			}
@@ -133,6 +138,7 @@ func TestRestart(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	err := primaryTablet.MysqlctldProcess.Stop()
 	require.Nil(t, err)
+	require.Truef(t, primaryTablet.MysqlctldProcess.WaitForMysqlCtldShutdown(), "Mysqlctld has not stopped...")
 	primaryTablet.MysqlctldProcess.CleanupFiles(primaryTablet.TabletUID)
 	err = primaryTablet.MysqlctldProcess.Start()
 	require.Nil(t, err)

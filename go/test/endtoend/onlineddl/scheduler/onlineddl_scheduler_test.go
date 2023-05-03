@@ -183,7 +183,8 @@ func TestMain(m *testing.M) {
 		clusterInstance.VtctldExtraArgs = []string{
 			"--schema_change_dir", schemaChangeDirectory,
 			"--schema_change_controller", "local",
-			"--schema_change_check_interval", "1"}
+			"--schema_change_check_interval", "1s",
+		}
 
 		clusterInstance.VtTabletExtraArgs = []string{
 			"--enable-lag-throttler",
@@ -553,6 +554,17 @@ func testScheduler(t *testing.T) {
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusRunning)
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t2uuid, schema.OnlineDDLStatusQueued, schema.OnlineDDLStatusReady)
 		})
+		t.Run("check ready to complete (before)", func(t *testing.T) {
+			for _, uuid := range []string{t1uuid, t2uuid} {
+				rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
+				require.NotNil(t, rs)
+				for _, row := range rs.Named().Rows {
+					readyToComplete := row.AsInt64("ready_to_complete", 0)
+					assert.Equal(t, int64(0), readyToComplete)
+					assert.True(t, row["ready_to_complete_timestamp"].IsNull())
+				}
+			}
+		})
 		t.Run("unthrottle, expect t2 running", func(t *testing.T) {
 			onlineddl.UnthrottleAllMigrations(t, &vtParams)
 			// t1 should now be ready_to_complete, hence t2 should start running
@@ -580,6 +592,18 @@ func testScheduler(t *testing.T) {
 			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusComplete)
 		})
+		t.Run("check ready to complete (after)", func(t *testing.T) {
+			for _, uuid := range []string{t1uuid, t2uuid} {
+				rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
+				require.NotNil(t, rs)
+				for _, row := range rs.Named().Rows {
+					readyToComplete := row.AsInt64("ready_to_complete", 0)
+					assert.Equal(t, int64(1), readyToComplete)
+					assert.False(t, row["ready_to_complete_timestamp"].IsNull())
+				}
+			}
+		})
+
 		testTableCompletionTimes(t, t2uuid, t1uuid)
 	})
 	t.Run("REVERT both tables concurrent, postponed", func(t *testing.T) {

@@ -58,9 +58,18 @@ func (s *SubQueryInner) Clone(inputs []ops.Operator) ops.Operator {
 	}
 }
 
+func (s *SubQueryInner) GetOrdering() ([]ops.OrderBy, error) {
+	return s.Inner.GetOrdering()
+}
+
 // Inputs implements the Operator interface
 func (s *SubQueryInner) Inputs() []ops.Operator {
 	return []ops.Operator{s.Inner}
+}
+
+// SetInputs implements the Operator interface
+func (s *SubQueryInner) SetInputs(ops []ops.Operator) {
+	s.Inner = ops[0]
 }
 
 // Clone implements the Operator interface
@@ -78,6 +87,10 @@ func (s *SubQuery) Clone(inputs []ops.Operator) ops.Operator {
 	return result
 }
 
+func (s *SubQuery) GetOrdering() ([]ops.OrderBy, error) {
+	return s.Outer.GetOrdering()
+}
+
 // Inputs implements the Operator interface
 func (s *SubQuery) Inputs() []ops.Operator {
 	operators := []ops.Operator{s.Outer}
@@ -85,6 +98,11 @@ func (s *SubQuery) Inputs() []ops.Operator {
 		operators = append(operators, inner)
 	}
 	return operators
+}
+
+// SetInputs implements the Operator interface
+func (s *SubQuery) SetInputs(ops []ops.Operator) {
+	s.Outer = ops[0]
 }
 
 func createSubqueryFromStatement(ctx *plancontext.PlanningContext, stmt sqlparser.Statement) (*SubQuery, error) {
@@ -107,4 +125,24 @@ func createSubqueryFromStatement(ctx *plancontext.PlanningContext, stmt sqlparse
 		})
 	}
 	return subq, nil
+}
+
+func (s *SubQuery) Description() ops.OpDescription {
+	return ops.OpDescription{
+		OperatorType: "SubQuery",
+	}
+}
+
+func (s *SubQueryInner) Description() ops.OpDescription {
+	return ops.OpDescription{
+		OperatorType: "SubQueryInner",
+	}
+}
+
+func (s *SubQuery) ShortDescription() string {
+	return ""
+}
+
+func (s *SubQueryInner) ShortDescription() string {
+	return ""
 }

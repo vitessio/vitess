@@ -54,7 +54,6 @@ type Env struct {
 	Dbcfgs       *dbconfigs.DBConfigs
 	Mysqld       *mysqlctl.Mysqld
 	SchemaEngine *schema.Engine
-	Flavor       string
 	// MySQL and Percona are considered equivalent here and both called mysql
 	DBType         string
 	DBMajorVersion int
@@ -94,8 +93,9 @@ func Init() (*Env, error) {
 				},
 			},
 		},
-		OnlyMySQL: true,
-		Charset:   "utf8mb4_general_ci",
+		OnlyMySQL:  true,
+		Charset:    "utf8mb4_general_ci",
+		ExtraMyCnf: strings.Split(os.Getenv("EXTRA_MY_CNF"), ":"),
 	}
 	te.cluster = &vttest.LocalCluster{
 		Config: cfg,
@@ -110,8 +110,7 @@ func Init() (*Env, error) {
 	te.TabletEnv = tabletenv.NewEnv(config, "VStreamerTest")
 	te.Mysqld = mysqlctl.NewMysqld(te.Dbcfgs)
 	pos, _ := te.Mysqld.PrimaryPosition()
-	te.Flavor = pos.GTIDSet.Flavor()
-	if strings.HasPrefix(strings.ToLower(te.Flavor), string(mysqlctl.FlavorMariaDB)) {
+	if strings.HasPrefix(strings.ToLower(pos.GTIDSet.Flavor()), string(mysqlctl.FlavorMariaDB)) {
 		te.DBType = string(mysqlctl.FlavorMariaDB)
 	} else {
 		// MySQL and Percona are equivalent for the tests

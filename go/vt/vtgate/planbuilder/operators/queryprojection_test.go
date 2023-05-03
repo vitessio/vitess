@@ -19,6 +19,8 @@ package operators
 import (
 	"testing"
 
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
+
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 
@@ -34,7 +36,7 @@ func TestQP(t *testing.T) {
 		sql string
 
 		expErr   string
-		expOrder []OrderBy
+		expOrder []ops.OrderBy
 	}{
 		{
 			sql: "select * from user",
@@ -47,13 +49,13 @@ func TestQP(t *testing.T) {
 		},
 		{
 			sql: "select 1, count(1) from user order by 1",
-			expOrder: []OrderBy{
+			expOrder: []ops.OrderBy{
 				{Inner: &sqlparser.Order{Expr: sqlparser.NewIntLiteral("1")}, WeightStrExpr: sqlparser.NewIntLiteral("1")},
 			},
 		},
 		{
 			sql: "select id from user order by col, id, 1",
-			expOrder: []OrderBy{
+			expOrder: []ops.OrderBy{
 				{Inner: &sqlparser.Order{Expr: sqlparser.NewColName("col")}, WeightStrExpr: sqlparser.NewColName("col")},
 				{Inner: &sqlparser.Order{Expr: sqlparser.NewColName("id")}, WeightStrExpr: sqlparser.NewColName("id")},
 				{Inner: &sqlparser.Order{Expr: sqlparser.NewColName("id")}, WeightStrExpr: sqlparser.NewColName("id")},
@@ -61,7 +63,7 @@ func TestQP(t *testing.T) {
 		},
 		{
 			sql: "SELECT CONCAT(last_name,', ',first_name) AS full_name FROM mytable ORDER BY full_name", // alias in order not supported
-			expOrder: []OrderBy{
+			expOrder: []ops.OrderBy{
 				{
 					Inner: &sqlparser.Order{Expr: sqlparser.NewColName("full_name")},
 					WeightStrExpr: &sqlparser.FuncExpr{

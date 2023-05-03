@@ -21,13 +21,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"html/template"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
 	"sort"
 	"strings"
 	"testing"
+
+	"github.com/google/safehtml/template"
 
 	"vitess.io/vitess/go/vt/vtgate/logstats"
 
@@ -398,7 +399,7 @@ func TestExecutorAutocommit(t *testing.T) {
 	wantSession = &vtgatepb.Session{Autocommit: true, TargetString: "@primary", FoundRows: 0, RowCount: 1}
 	utils.MustMatch(t, wantSession, session.Session, "session does not match for autocommit=1")
 
-	logStats = testQueryLog(t, logChan, "TestExecute", "UPDATE", "update main1 set id=1", 1)
+	logStats = testQueryLog(t, logChan, "TestExecute", "UPDATE", "update main1 set id = 1", 1)
 	assert.NotZero(t, logStats.CommitTime, "logstats: expected non-zero CommitTime")
 	assert.NotEqual(t, uint64(0), logStats.RowsAffected, "logstats: expected non-zero RowsAffected")
 
@@ -419,7 +420,7 @@ func TestExecutorAutocommit(t *testing.T) {
 		t.Errorf("Commit count: %d, want %d", got, want)
 	}
 
-	logStats = testQueryLog(t, logChan, "TestExecute", "UPDATE", "update main1 set id=1", 1)
+	logStats = testQueryLog(t, logChan, "TestExecute", "UPDATE", "update main1 set id = 1", 1)
 	if logStats.CommitTime != 0 {
 		t.Errorf("logstats: expected zero CommitTime")
 	}
@@ -1624,10 +1625,7 @@ func TestGetPlanUnnormalized(t *testing.T) {
 	if plan1 != plan2 {
 		t.Errorf("getPlan(query1): plans must be equal: %p %p", plan1, plan2)
 	}
-	want := []string{
-		"@unknown:" + query1,
-	}
-	assertCacheContains(t, r, want)
+	assertCacheContains(t, r, emptyvc, query1)
 	if logStats2.SQL != wantSQL {
 		t.Errorf("logstats sql want \"%s\" got \"%s\"", wantSQL, logStats2.SQL)
 	}
@@ -1642,11 +1640,8 @@ func TestGetPlanUnnormalized(t *testing.T) {
 	if plan3 != plan4 {
 		t.Errorf("getPlan(query1, ks): plans must be equal: %p %p", plan3, plan4)
 	}
-	want = []string{
-		KsTestUnsharded + "@unknown:" + query1,
-		"@unknown:" + query1,
-	}
-	assertCacheContains(t, r, want)
+	assertCacheContains(t, r, emptyvc, query1)
+	assertCacheContains(t, r, unshardedvc, query1)
 	if logStats4.SQL != wantSQL {
 		t.Errorf("logstats sql want \"%s\" got \"%s\"", wantSQL, logStats4.SQL)
 	}
@@ -1664,20 +1659,38 @@ func assertCacheSize(t *testing.T, c cache.Cache, expected int) {
 	}
 }
 
-func assertCacheContains(t *testing.T, e *Executor, want []string) {
+func assertCacheContains(t *testing.T, e *Executor, vc *vcursorImpl, sql string) *engine.Plan {
 	t.Helper()
-	for _, wantKey := range want {
-		if _, ok := e.debugGetPlan(wantKey); !ok {
-			t.Errorf("missing key in plan cache: %v", wantKey)
+
+	var plan *engine.Plan
+	if vc == nil {
+		e.plans.ForEach(func(x any) bool {
+			p := x.(*engine.Plan)
+			if p.Original == sql {
+				plan = p
+			}
+			return true
+		})
+	} else {
+		h := e.hashPlan(context.Background(), vc, sql)
+		if p, ok := e.plans.Get(h); ok {
+			plan = p.(*engine.Plan)
 		}
 	}
+	require.Truef(t, plan != nil, "plan not found for query: %s", sql)
+	return plan
 }
 
 func getPlanCached(t *testing.T, e *Executor, vcursor *vcursorImpl, sql string, comments sqlparser.MarginComments, bindVars map[string]*querypb.BindVariable, skipQueryPlanCache bool) (*engine.Plan, *logstats.LogStats) {
 	logStats := logstats.NewLogStats(ctx, "Test", "", "", nil)
-	plan, _, err := e.getPlan(context.Background(), vcursor, sql, comments, bindVars, &SafeSession{
-		Session: &vtgatepb.Session{Options: &querypb.ExecuteOptions{SkipQueryPlanCache: skipQueryPlanCache}},
-	}, logStats)
+	vcursor.safeSession = &SafeSession{
+		Session: &vtgatepb.Session{
+			Options: &querypb.ExecuteOptions{SkipQueryPlanCache: skipQueryPlanCache}},
+	}
+
+	stmt, reservedVars, err := parseAndValidateQuery(sql)
+	require.NoError(t, err)
+	plan, err := e.getPlan(context.Background(), vcursor, sql, stmt, comments, bindVars, reservedVars /* normalize */, e.normalize, logStats)
 	require.NoError(t, err)
 
 	// Wait for cache to settle
@@ -1737,7 +1750,7 @@ func TestGetPlanCacheNormalized(t *testing.T) {
 	query1 := "select * from music_user_map where id = 1"
 	_, logStats1 := getPlanCached(t, r, emptyvc, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, true /* skipQueryPlanCache */)
 	assertCacheSize(t, r.plans, 0)
-	wantSQL := "select * from music_user_map where id = :id /* comment */"
+	wantSQL := "select * from music_user_map where id = :id /* INT64 */ /* comment */"
 	assert.Equal(t, wantSQL, logStats1.SQL)
 
 	_, logStats2 := getPlanCached(t, r, emptyvc, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false /* skipQueryPlanCache */)
@@ -1776,16 +1789,13 @@ func TestGetPlanNormalized(t *testing.T) {
 
 	query1 := "select * from music_user_map where id = 1"
 	query2 := "select * from music_user_map where id = 2"
-	normalized := "select * from music_user_map where id = :id"
+	normalized := "select * from music_user_map where id = :id /* INT64 */"
 
 	plan1, logStats1 := getPlanCached(t, r, emptyvc, query1, makeComments(" /* comment 1 */"), map[string]*querypb.BindVariable{}, false)
 	plan2, logStats2 := getPlanCached(t, r, emptyvc, query1, makeComments(" /* comment 2 */"), map[string]*querypb.BindVariable{}, false)
 
 	assert.Equal(t, plan1, plan2)
-	want := []string{
-		"@unknown:" + normalized,
-	}
-	assertCacheContains(t, r, want)
+	assertCacheContains(t, r, emptyvc, normalized)
 
 	wantSQL := normalized + " /* comment 1 */"
 	assert.Equal(t, wantSQL, logStats1.SQL)
@@ -1797,28 +1807,16 @@ func TestGetPlanNormalized(t *testing.T) {
 	wantSQL = normalized + " /* comment 3 */"
 	assert.Equal(t, wantSQL, logStats3.SQL)
 
-	plan4, logStats4 := getPlanCached(t, r, emptyvc, normalized, makeComments(" /* comment 4 */"), map[string]*querypb.BindVariable{}, false)
-	assert.Equal(t, plan1, plan4)
-	wantSQL = normalized + " /* comment 4 */"
-	assert.Equal(t, wantSQL, logStats4.SQL)
-
 	var logStats5 *logstats.LogStats
 	plan3, logStats5 = getPlanCached(t, r, unshardedvc, query1, makeComments(" /* comment 5 */"), map[string]*querypb.BindVariable{}, false)
 	assert.Equal(t, plan1, plan3)
 	wantSQL = normalized + " /* comment 5 */"
 	assert.Equal(t, wantSQL, logStats5.SQL)
 
-	plan4, _ = getPlanCached(t, r, unshardedvc, query1, makeComments(" /* comment 6 */"), map[string]*querypb.BindVariable{}, false)
+	plan4, _ := getPlanCached(t, r, unshardedvc, query1, makeComments(" /* comment 6 */"), map[string]*querypb.BindVariable{}, false)
 	assert.Equal(t, plan1, plan4)
-	want = []string{
-		KsTestUnsharded + "@unknown:" + normalized,
-		"@unknown:" + normalized,
-	}
-	assertCacheContains(t, r, want)
-
-	_, _, err := r.getPlan(context.Background(), emptyvc, "syntax", makeComments(""), map[string]*querypb.BindVariable{}, nil, nil)
-	assert.EqualError(t, err, "syntax error at position 7 near 'syntax'")
-	assertCacheContains(t, r, want)
+	assertCacheContains(t, r, emptyvc, normalized)
+	assertCacheContains(t, r, unshardedvc, normalized)
 }
 
 func TestPassthroughDDL(t *testing.T) {
@@ -2271,11 +2269,11 @@ func TestExecutorSavepointInTx(t *testing.T) {
 	testQueryLog(t, logChan, "TestExecute", "SAVEPOINT", "savepoint a", 0)
 	testQueryLog(t, logChan, "TestExecute", "SAVEPOINT_ROLLBACK", "rollback to a", 0)
 	testQueryLog(t, logChan, "TestExecute", "RELEASE", "release savepoint a", 0)
-	testQueryLog(t, logChan, "TestExecute", "SELECT", "select id from user where id = 1", 1)
+	testQueryLog(t, logChan, "TestExecute", "SELECT", "select id from `user` where id = 1", 1)
 	testQueryLog(t, logChan, "TestExecute", "SAVEPOINT", "savepoint b", 1)
 	testQueryLog(t, logChan, "TestExecute", "SAVEPOINT_ROLLBACK", "rollback to b", 1)
 	testQueryLog(t, logChan, "TestExecute", "RELEASE", "release savepoint b", 1)
-	testQueryLog(t, logChan, "TestExecute", "SELECT", "select id from user where id = 3", 1)
+	testQueryLog(t, logChan, "TestExecute", "SELECT", "select id from `user` where id = 3", 1)
 	testQueryLog(t, logChan, "TestExecute", "ROLLBACK", "rollback", 2)
 }
 
@@ -2338,10 +2336,10 @@ func TestExecutorSavepointInTxWithReservedConn(t *testing.T) {
 	testQueryLog(t, logChan, "TestExecute", "SET", "set @@sql_mode = ''", 1)
 	testQueryLog(t, logChan, "TestExecute", "BEGIN", "begin", 0)
 	testQueryLog(t, logChan, "TestExecute", "SAVEPOINT", "savepoint a", 0)
-	testQueryLog(t, logChan, "TestExecute", "SELECT", "select id from user where id = 1", 1)
+	testQueryLog(t, logChan, "TestExecute", "SELECT", "select id from `user` where id = 1", 1)
 	testQueryLog(t, logChan, "TestExecute", "SAVEPOINT", "savepoint b", 1)
 	testQueryLog(t, logChan, "TestExecute", "RELEASE", "release savepoint a", 1)
-	testQueryLog(t, logChan, "TestExecute", "SELECT", "select id from user where id = 3", 1)
+	testQueryLog(t, logChan, "TestExecute", "SELECT", "select id from `user` where id = 3", 1)
 	testQueryLog(t, logChan, "TestExecute", "COMMIT", "commit", 2)
 }
 
@@ -2381,11 +2379,11 @@ func TestExecutorSavepointWithoutTx(t *testing.T) {
 	testQueryLog(t, logChan, "TestExecute", "SAVEPOINT", "savepoint a", 0)
 	testQueryLog(t, logChan, "TestExecute", "SAVEPOINT_ROLLBACK", "rollback to a", 0)
 	testQueryLog(t, logChan, "TestExecute", "RELEASE", "release savepoint a", 0)
-	testQueryLog(t, logChan, "TestExecute", "SELECT", "select id from user where id = 1", 1)
+	testQueryLog(t, logChan, "TestExecute", "SELECT", "select id from `user` where id = 1", 1)
 	testQueryLog(t, logChan, "TestExecute", "SAVEPOINT", "savepoint b", 0)
 	testQueryLog(t, logChan, "TestExecute", "SAVEPOINT_ROLLBACK", "rollback to b", 0)
 	testQueryLog(t, logChan, "TestExecute", "RELEASE", "release savepoint b", 0)
-	testQueryLog(t, logChan, "TestExecute", "SELECT", "select id from user where id = 3", 1)
+	testQueryLog(t, logChan, "TestExecute", "SELECT", "select id from `user` where id = 3", 1)
 }
 
 func TestExecutorCallProc(t *testing.T) {
@@ -2560,6 +2558,69 @@ func TestExecutorStartTxnStmt(t *testing.T) {
 
 		})
 	}
+}
+
+func TestExecutorPrepareExecute(t *testing.T) {
+	executor, _, _, _ := createExecutorEnv()
+	executor.normalize = true
+	session := NewAutocommitSession(&vtgatepb.Session{})
+
+	// prepare statement.
+	_, err := executor.Execute(context.Background(),
+		"TestExecutorPrepareExecute",
+		session,
+		"prepare prep_user from 'select * from user where id = ?'",
+		nil)
+	require.NoError(t, err)
+	prepData := session.PrepareStatement["prep_user"]
+	require.NotNil(t, prepData)
+	require.Equal(t, "select * from `user` where id = :v1", prepData.PrepareStatement)
+	require.EqualValues(t, 1, prepData.ParamsCount)
+
+	// prepare statement using user defined variable
+	_, err = executor.Execute(context.Background(),
+		"TestExecutorPrepareExecute",
+		session,
+		"set @udv_query = 'select * from user where id in (?,?,?)'",
+		nil)
+	require.NoError(t, err)
+
+	_, err = executor.Execute(context.Background(),
+		"TestExecutorPrepareExecute",
+		session,
+		"prepare prep_user2 from @udv_query",
+		nil)
+	require.NoError(t, err)
+	prepData = session.PrepareStatement["prep_user2"]
+	require.NotNil(t, prepData)
+	require.Equal(t, "select * from `user` where id in (:v1, :v2, :v3)", prepData.PrepareStatement)
+	require.EqualValues(t, 3, prepData.ParamsCount)
+
+	// syntax error on prepared query
+	_, err = executor.Execute(context.Background(),
+		"TestExecutorPrepareExecute",
+		session,
+		"prepare prep_user2 from 'select'",
+		nil)
+	require.Error(t, err)
+	require.Nil(t, session.PrepareStatement["prep_user2"]) // prepared statement is cleared from the session.
+
+	// user defined variable does not exists on prepared query
+	_, err = executor.Execute(context.Background(),
+		"TestExecutorPrepareExecute",
+		session,
+		"prepare prep_user from @foo",
+		nil)
+	require.Error(t, err)
+	require.Nil(t, session.PrepareStatement["prep_user"]) // prepared statement is cleared from the session.
+
+	// empty prepared query
+	_, err = executor.Execute(context.Background(),
+		"TestExecutorPrepareExecute",
+		session,
+		"prepare prep_user from ''",
+		nil)
+	require.Error(t, err)
 }
 
 func exec(executor *Executor, session *SafeSession, sql string) (*sqltypes.Result, error) {

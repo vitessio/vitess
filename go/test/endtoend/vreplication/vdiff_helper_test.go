@@ -67,11 +67,12 @@ func doVDiff1(t *testing.T, ksWorkflow, cells string) {
 	t.Run(fmt.Sprintf("vdiff1 %s", ksWorkflow), func(t *testing.T) {
 		output, err := vc.VtctlClient.ExecuteCommandWithOutput("VDiff", "--", "--v1", "--tablet_types=primary", "--source_cell="+cells, "--format", "json", ksWorkflow)
 		log.Infof("vdiff1 err: %+v, output: %+v", err, output)
-		require.Nil(t, err)
+		require.NoError(t, err)
 		require.NotNil(t, output)
 		diffReports := make(map[string]*wrangler.DiffReport)
+		t.Logf("vdiff1 output: %s", output)
 		err = json.Unmarshal([]byte(output), &diffReports)
-		require.Nil(t, err)
+		require.NoError(t, err)
 		if len(diffReports) < 1 {
 			t.Fatal("VDiff did not return a valid json response " + output + "\n")
 		}
@@ -143,7 +144,8 @@ type expectedVDiff2Result struct {
 func doVdiff2(t *testing.T, keyspace, workflow, cells string, want *expectedVDiff2Result) {
 	ksWorkflow := fmt.Sprintf("%s.%s", keyspace, workflow)
 	t.Run(fmt.Sprintf("vdiff2 %s", ksWorkflow), func(t *testing.T) {
-		uuid, _ := performVDiff2Action(t, ksWorkflow, cells, "create", "", false, "--auto-retry")
+		// update-table-stats is needed in order to test progress reports.
+		uuid, _ := performVDiff2Action(t, ksWorkflow, cells, "create", "", false, "--auto-retry", "--update-table-stats")
 		info := waitForVDiff2ToComplete(t, ksWorkflow, cells, uuid, time.Time{})
 
 		require.Equal(t, workflow, info.Workflow)

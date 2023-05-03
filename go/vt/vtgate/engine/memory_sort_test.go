@@ -77,7 +77,7 @@ func TestMemorySortExecute(t *testing.T) {
 	utils.MustMatch(t, wantResult, result)
 
 	fp.rewind()
-	ms.UpperLimit = evalengine.NewBindVar("__upper_limit", collations.TypedCollation{})
+	ms.UpperLimit = evalengine.NewBindVar("__upper_limit")
 	bv := map[string]*querypb.BindVariable{"__upper_limit": sqltypes.Int64BindVariable(3)}
 
 	result, err = ms.TryExecute(context.Background(), &noopVCursor{}, bv, false)
@@ -138,7 +138,7 @@ func TestMemorySortStreamExecuteWeightString(t *testing.T) {
 
 	t.Run("Limit test", func(t *testing.T) {
 		fp.rewind()
-		ms.UpperLimit = evalengine.NewBindVar("__upper_limit", collations.TypedCollation{})
+		ms.UpperLimit = evalengine.NewBindVar("__upper_limit")
 		bv := map[string]*querypb.BindVariable{"__upper_limit": sqltypes.Int64BindVariable(3)}
 
 		results = nil
@@ -196,7 +196,7 @@ func TestMemorySortExecuteWeightString(t *testing.T) {
 	utils.MustMatch(t, wantResult, result)
 
 	fp.rewind()
-	ms.UpperLimit = evalengine.NewBindVar("__upper_limit", collations.TypedCollation{})
+	ms.UpperLimit = evalengine.NewBindVar("__upper_limit")
 	bv := map[string]*querypb.BindVariable{"__upper_limit": sqltypes.Int64BindVariable(3)}
 
 	result, err = ms.TryExecute(context.Background(), &noopVCursor{}, bv, false)
@@ -279,7 +279,7 @@ func TestMemorySortStreamExecuteCollation(t *testing.T) {
 
 	t.Run("Limit test", func(t *testing.T) {
 		fp.rewind()
-		ms.UpperLimit = evalengine.NewBindVar("__upper_limit", collations.TypedCollation{})
+		ms.UpperLimit = evalengine.NewBindVar("__upper_limit")
 		bv := map[string]*querypb.BindVariable{"__upper_limit": sqltypes.Int64BindVariable(3)}
 
 		results = nil
@@ -338,7 +338,7 @@ func TestMemorySortExecuteCollation(t *testing.T) {
 	utils.MustMatch(t, wantResult, result)
 
 	fp.rewind()
-	ms.UpperLimit = evalengine.NewBindVar("__upper_limit", collations.TypedCollation{})
+	ms.UpperLimit = evalengine.NewBindVar("__upper_limit")
 	bv := map[string]*querypb.BindVariable{"__upper_limit": sqltypes.Int64BindVariable(3)}
 
 	result, err = ms.TryExecute(context.Background(), &noopVCursor{}, bv, false)
@@ -395,7 +395,7 @@ func TestMemorySortStreamExecute(t *testing.T) {
 	utils.MustMatch(t, wantResults, results)
 
 	fp.rewind()
-	ms.UpperLimit = evalengine.NewBindVar("__upper_limit", collations.TypedCollation{})
+	ms.UpperLimit = evalengine.NewBindVar("__upper_limit")
 	bv := map[string]*querypb.BindVariable{"__upper_limit": sqltypes.Int64BindVariable(3)}
 
 	results = nil
@@ -554,7 +554,7 @@ func TestMemorySortMultiColumn(t *testing.T) {
 	utils.MustMatch(t, wantResult, result)
 
 	fp.rewind()
-	ms.UpperLimit = evalengine.NewBindVar("__upper_limit", collations.TypedCollation{})
+	ms.UpperLimit = evalengine.NewBindVar("__upper_limit")
 	bv := map[string]*querypb.BindVariable{"__upper_limit": sqltypes.Int64BindVariable(3)}
 
 	result, err = ms.TryExecute(context.Background(), &noopVCursor{}, bv, false)

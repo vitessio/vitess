@@ -30,6 +30,7 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/onlineddl"
+	"vitess.io/vitess/go/test/endtoend/throttler"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 	throttlebase "vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
@@ -167,7 +168,7 @@ func TestMain(m *testing.M) {
 		clusterInstance.VtctldExtraArgs = []string{
 			"--schema_change_dir", schemaChangeDirectory,
 			"--schema_change_controller", "local",
-			"--schema_change_check_interval", "1",
+			"--schema_change_check_interval", "1s",
 		}
 
 		clusterInstance.VtTabletExtraArgs = []string{
@@ -259,13 +260,13 @@ func TestSchemaChange(t *testing.T) {
 	err := clusterInstance.WaitForTabletsToHealthyInVtgate()
 	require.NoError(t, err)
 
-	_, err = onlineddl.UpdateThrottlerTopoConfig(clusterInstance, true, false, 0, "", false)
+	_, err = throttler.UpdateThrottlerTopoConfig(clusterInstance, true, false, 0, "", false)
 	require.NoError(t, err)
 
 	for _, ks := range clusterInstance.Keyspaces {
 		for _, shard := range ks.Shards {
 			for _, tablet := range shard.Vttablets {
-				onlineddl.WaitForThrottlerStatusEnabled(t, tablet, extendedMigrationWait)
+				throttler.WaitForThrottlerStatusEnabled(t, tablet, true, nil, extendedMigrationWait)
 			}
 		}
 	}

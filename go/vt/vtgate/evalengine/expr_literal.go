@@ -20,6 +20,7 @@ import (
 	"math"
 
 	"vitess.io/vitess/go/sqltypes"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 type (
@@ -36,7 +37,7 @@ func (l *Literal) eval(_ *ExpressionEnv) (eval, error) {
 }
 
 // typeof implements the Expr interface
-func (l *Literal) typeof(*ExpressionEnv) (sqltypes.Type, typeFlag) {
+func (l *Literal) typeof(*ExpressionEnv, []*querypb.Field) (sqltypes.Type, typeFlag) {
 	var f typeFlag
 	switch e := l.inner.(type) {
 	case nil:
@@ -52,6 +53,9 @@ func (l *Literal) typeof(*ExpressionEnv) (sqltypes.Type, typeFlag) {
 		if e.i == math.MinInt64 {
 			f |= flagIntegerUdf
 		}
+		if e == evalBoolTrue || e == evalBoolFalse {
+			f |= flagIsBoolean
+		}
 	case *evalUint64:
 		if e.hexLiteral {
 			f |= flagHex
@@ -64,4 +68,16 @@ func (l *Literal) typeof(*ExpressionEnv) (sqltypes.Type, typeFlag) {
 		}
 	}
 	return l.inner.SQLType(), f
+}
+
+func (l *Literal) compile(c *compiler) (ctype, error) {
+	if l.inner == nil {
+		c.asm.PushNull()
+	} else if err := c.asm.PushLiteral(l.inner); err != nil {
+		return ctype{}, err
+	}
+
+	t, f := l.typeof(nil, nil)
+	return ctype{t, f, evalCollation(l.inner)}, nil
+
 }

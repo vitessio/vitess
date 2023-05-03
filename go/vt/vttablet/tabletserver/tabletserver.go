@@ -241,13 +241,14 @@ func (tsv *TabletServer) loadQueryTimeout() time.Duration {
 //  1. the creation and destruction of a QueryRuleSource. The existence of such source affects query plan rules
 //     for all new queries (see Execute() function and call to GetPlan())
 //  2. affecting already existing rules: a Rule has a concext.WithCancel, that is cancelled by onlineDDLExecutor
-func (tsv *TabletServer) onlineDDLExecutorToggleTableBuffer(bufferingCtx context.Context, tableName string, bufferQueries bool) {
+func (tsv *TabletServer) onlineDDLExecutorToggleTableBuffer(bufferingCtx context.Context, tableName string, timeout time.Duration, bufferQueries bool) {
 	queryRuleSource := fmt.Sprintf("onlineddl/%s", tableName)
 
 	if bufferQueries {
 		tsv.RegisterQueryRuleSource(queryRuleSource)
 		bufferRules := rules.New()
-		bufferRules.Add(rules.NewBufferedTableQueryRule(bufferingCtx, tableName, "buffered for cut-over"))
+
+		bufferRules.Add(rules.NewBufferedTableQueryRule(bufferingCtx, tableName, timeout, "buffered for cut-over"))
 		tsv.SetQueryRules(queryRuleSource, bufferRules)
 	} else {
 		tsv.UnRegisterQueryRuleSource(queryRuleSource) // new rules will not have buffering. Existing rules will be affected by bufferingContext.Done()
@@ -748,6 +749,7 @@ func (tsv *TabletServer) execute(ctx context.Context, target *querypb.Target, sq
 				bindVariables = make(map[string]*querypb.BindVariable)
 			}
 			query, comments := sqlparser.SplitMarginComments(sql)
+
 			plan, err := tsv.qe.GetPlan(ctx, logStats, query, skipQueryPlanCache(options))
 			if err != nil {
 				return err
@@ -1425,6 +1427,7 @@ func (tsv *TabletServer) execRequest(
 	span, ctx := trace.NewSpan(ctx, "TabletServer."+requestName)
 	if options != nil {
 		span.Annotate("isolation-level", options.TransactionIsolation)
+		span.Annotate("workload_name", options.WorkloadName)
 	}
 	trace.AnnotateSQL(span, sqlparser.Preview(sql))
 	if target != nil {
@@ -1432,6 +1435,7 @@ func (tsv *TabletServer) execRequest(
 		span.Annotate("shard", target.Shard)
 		span.Annotate("keyspace", target.Keyspace)
 	}
+
 	defer span.Finish()
 
 	logStats := tabletenv.NewLogStats(ctx, requestName)
@@ -1722,10 +1726,6 @@ func (tsv *TabletServer) registerHealthzHealthHandler() {
 }
 
 func (tsv *TabletServer) healthzHandler(w http.ResponseWriter, r *http.Request) {
-	if err := acl.CheckAccessHTTP(r, acl.MONITORING); err != nil {
-		acl.SendError(w, err)
-		return
-	}
 	if (tsv.sm.wantState == StateServing || tsv.sm.wantState == StateNotConnected) && !tsv.sm.IsServing() {
 		http.Error(w, "500 internal server error: vttablet is not serving", http.StatusInternalServerError)
 		return
