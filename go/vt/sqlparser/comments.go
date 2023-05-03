@@ -53,11 +53,11 @@ const (
 	DirectiveConsolidator = "CONSOLIDATOR"
 	// DirectiveWorkloadName specifies the name of the client application workload issuing the query.
 	DirectiveWorkloadName = "WORKLOAD_NAME"
-	// DirectivePriority specifies the priority of a workload. It should be an integer between 0 and 100, where
-	// 100 is the highest priority, and 0 is the lowest one.
+	// DirectivePriority specifies the priority of a workload. It should be an integer between 0 and MaxPriorityValue,
+	// where 0 is the highest priority, and MaxPriorityValue is the lowest one.
 	DirectivePriority = "PRIORITY"
 
-	// MaxPriorityValue specifies the maximum value allowed for priority. Valid priority values are
+	// MaxPriorityValue specifies the maximum value allowed for the priority query directive. Valid priority values are
 	// between zero and MaxPriorityValue.
 	MaxPriorityValue = 100
 )

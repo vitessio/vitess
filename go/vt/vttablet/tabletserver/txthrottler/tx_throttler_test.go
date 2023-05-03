@@ -120,7 +120,7 @@ func TestEnabledThrottler(t *testing.T) {
 	assert.Nil(t, throttler.Open())
 	assert.Equal(t, int64(1), throttler.throttlerRunning.Get())
 
-	assert.False(t, throttler.Throttle(0))
+	assert.False(t, throttler.Throttle(100))
 	assert.Equal(t, int64(1), throttler.requestsTotal.Get())
 	assert.Zero(t, throttler.requestsThrottled.Get())
 
@@ -133,12 +133,12 @@ func TestEnabledThrottler(t *testing.T) {
 	// This call should not be forwarded to the go/vt/throttler.Throttler object.
 	throttler.state.StatsUpdate(rdonlyTabletStats)
 	// The second throttle call should reject.
-	assert.True(t, throttler.Throttle(0))
+	assert.True(t, throttler.Throttle(100))
 	assert.Equal(t, int64(2), throttler.requestsTotal.Get())
 	assert.Equal(t, int64(1), throttler.requestsThrottled.Get())
 
 	// This call should not throttle due to priority. Check that's the case and counters agree.
-	assert.False(t, throttler.Throttle(100))
+	assert.False(t, throttler.Throttle(0))
 	assert.Equal(t, int64(3), throttler.requestsTotal.Get())
 	assert.Equal(t, int64(1), throttler.requestsThrottled.Get())
 	throttler.Close()

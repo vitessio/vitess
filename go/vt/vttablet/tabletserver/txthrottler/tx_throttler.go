@@ -280,9 +280,9 @@ func (t *TxThrottler) Throttle(priority int) (result bool) {
 		panic("BUG: Throttle() called on a closed TxThrottler")
 	}
 
-	// Throttle according to both what the throttle state says, and the priority. Workloads with higher priority
+	// Throttle according to both what the throttle state says, and the priority. Workloads with lower priority value
 	// are less likely to be throttled.
-	result = t.state.throttle() && rand.Intn(sqlparser.MaxPriorityValue) > priority
+	result = t.state.throttle() && rand.Intn(sqlparser.MaxPriorityValue) < priority
 	t.requestsTotal.Add(1)
 	if result {
 		t.requestsThrottled.Add(1)
