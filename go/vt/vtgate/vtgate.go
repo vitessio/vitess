@@ -306,6 +306,7 @@ func Init(
 		si,
 		noScatter,
 		pv,
+		truncateErrorLen,
 	)
 
 	// connect the schema tracker with the vschema manager

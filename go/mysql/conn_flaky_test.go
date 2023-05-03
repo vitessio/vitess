@@ -43,15 +43,13 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
-func createSocketPair(t *testing.T) (*Listener, *Conn, *Conn) {
+func createSocketPair(t *testing.T) (net.Listener, *Conn, *Conn) {
 	// Create a listener.
-	netListener, err := net.Listen("tcp", "127.0.0.1:")
+	listener, err := net.Listen("tcp", "127.0.0.1:")
 	require.NoError(t, err, "Listen failed: %v", err)
 
-	addr := netListener.Addr().String()
-	netListener.(*net.TCPListener).SetDeadline(time.Now().Add(10 * time.Second))
-	listener, err := NewFromListener(netListener, nil, nil, 0, 0, false, 0)
-	require.NoError(t, err, "NewFromListener failed: %v", err)
+	addr := listener.Addr().String()
+	listener.(*net.TCPListener).SetDeadline(time.Now().Add(10 * time.Second))
 
 	// Dial a client, Accept a server.
 	wg := sync.WaitGroup{}
@@ -69,7 +67,7 @@ func createSocketPair(t *testing.T) (*Listener, *Conn, *Conn) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		serverConn, serverErr = listener.listener.Accept()
+		serverConn, serverErr = listener.Accept()
 	}()
 
 	wg.Wait()
@@ -80,7 +78,6 @@ func createSocketPair(t *testing.T) (*Listener, *Conn, *Conn) {
 	cConn := newConn(clientConn)
 	sConn := newConn(serverConn)
 	sConn.PrepareData = map[uint32]*PrepareData{}
-	sConn.listener = listener
 
 	return listener, sConn, cConn
 }
@@ -993,31 +990,6 @@ func TestConnectionErrorWhileWritingComStmtExecute(t *testing.T) {
 	handler := &testRun{t: t, err: fmt.Errorf("not used")}
 	res := sConn.handleNextCommand(handler)
 	require.False(t, res, "we should beak the connection in case of error writing error packet")
-}
-
-func TestTruncateErrorLen(t *testing.T) {
-	require := require.New(t)
-	assert := assert.New(t)
-	listener, sConn, cConn := createSocketPair(t)
-	defer func() {
-		listener.Close()
-		sConn.Close()
-		cConn.Close()
-	}()
-
-	sConn.listener.truncateErrorLen = 32
-
-	// Write error packet, read it, compare.
-	long_msg := "Looooooooooooooooooooooooooooooooong"
-	err := sConn.writeErrorPacket(ERUnknownError, SSUnknownSQLState, "unknown error: %v", long_msg)
-	require.NoError(err)
-	data, err := cConn.ReadPacket()
-	require.NoError(err)
-	require.NotEmpty(data)
-	assert.EqualValues(data[0], ErrPacket, "ErrPacket")
-
-	err = ParseErrorPacket(data)
-	utils.MustMatch(t, err, NewSQLError(ERUnknownError, SSUnknownSQLState, "unknown error: Loooo [TRUNCATED]"), "")
 }
 
 var _ Handler = (*testRun)(nil)

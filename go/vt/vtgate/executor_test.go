@@ -2623,6 +2623,27 @@ func TestExecutorPrepareExecute(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestExecutorTruncateErrors(t *testing.T) {
+	save := truncateErrorLen
+	truncateErrorLen = 16
+	defer func() { truncateErrorLen = save }()
+
+	executor, _, _, _ := createExecutorEnv()
+	session := NewSafeSession(&vtgatepb.Session{})
+	fn := func(r *sqltypes.Result) error {
+		return nil
+	}
+
+	_, err := executor.Execute(ctx, "TestExecute", session, "invalid statement", nil)
+	assert.EqualError(t, err, "unrecognized statement: 'invalid statement'")
+
+	err = executor.StreamExecute(ctx, "TestExecute", session, "invalid statement", nil, fn)
+	assert.EqualError(t, err, "unrecognized statement: 'invalid statement'")
+
+	_, err = executor.Prepare(context.Background(), "TestExecute", session, "invalid statement", nil)
+	assert.EqualError(t, err, "unrecognized statement: 'invalid statement'")
+}
+
 func exec(executor *Executor, session *SafeSession, sql string) (*sqltypes.Result, error) {
 	return executor.Execute(context.Background(), "TestExecute", session, sql, nil)
 }

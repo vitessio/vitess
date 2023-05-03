@@ -363,16 +363,16 @@ func Print(err error) string {
 
 // TruncateError truncates error messages that are longer than the
 // specified length.
-func TruncateError(msg string, max int) string {
-	if max <= 0 || len(msg) <= max {
-		return msg
+func TruncateError(oldErr error, max int) error {
+	if oldErr == nil || max <= 0 || len(oldErr.Error()) <= max {
+		return oldErr
 	}
 
 	if max <= 12 {
-		return "[TRUNCATED]"
+		return New(Code(oldErr), "[TRUNCATED]")
 	}
 
-	return msg[:max-12] + " [TRUNCATED]"
+	return New(Code(oldErr), oldErr.Error()[:max-12]+" [TRUNCATED]")
 }
 
 func (f *fundamental) ErrorState() State       { return f.state }

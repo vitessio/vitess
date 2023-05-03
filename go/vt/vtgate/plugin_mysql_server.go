@@ -471,7 +471,6 @@ func initMySQLProtocol() {
 			mysqlConnWriteTimeout,
 			mysqlProxyProtocol,
 			mysqlConnBufferPooling,
-			truncateErrorLen,
 		)
 		if err != nil {
 			log.Exitf("mysql.NewListener failed: %v", err)
@@ -522,7 +521,6 @@ func newMysqlUnixSocket(address string, authServer mysql.AuthServer, handler mys
 		mysqlConnWriteTimeout,
 		false,
 		mysqlConnBufferPooling,
-		truncateErrorLen,
 	)
 
 	switch err := err.(type) {
@@ -554,7 +552,6 @@ func newMysqlUnixSocket(address string, authServer mysql.AuthServer, handler mys
 			mysqlConnWriteTimeout,
 			false,
 			mysqlConnBufferPooling,
-			truncateErrorLen,
 		)
 		return listener, listenerErr
 	default:

@@ -1564,12 +1564,7 @@ func (tsv *TabletServer) convertAndLogError(ctx context.Context, sql string, bin
 		logStats.Error = err
 	}
 
-	errStr := err.Error()
-	if tsv.TruncateErrorLen > 0 && len(errStr) > tsv.TruncateErrorLen {
-		err = vterrors.New(vterrors.Code(err), vterrors.TruncateError(errStr, tsv.TruncateErrorLen))
-	}
-
-	return err
+	return vterrors.TruncateError(err, tsv.TruncateErrorLen)
 }
 
 // truncateSQLAndBindVars calls TruncateForLog which:

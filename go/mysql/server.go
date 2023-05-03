@@ -208,10 +208,6 @@ type Listener struct {
 	// handled further by the MySQL handler. An non-nil error will stop
 	// processing the connection by the MySQL handler.
 	PreHandleFunc func(context.Context, net.Conn, uint32) (net.Conn, error)
-
-	// truncateErrorLen truncates errors sent to client if they are above this value
-	// (0 means do not truncate).
-	truncateErrorLen int
 }
 
 // NewFromListener creates a new mysql listener from an existing net.Listener
@@ -222,7 +218,6 @@ func NewFromListener(
 	connReadTimeout time.Duration,
 	connWriteTimeout time.Duration,
 	connBufferPooling bool,
-	truncateErrorLen int,
 ) (*Listener, error) {
 	cfg := ListenerConfig{
 		Listener:           l,
@@ -232,7 +227,6 @@ func NewFromListener(
 		ConnWriteTimeout:   connWriteTimeout,
 		ConnReadBufferSize: connBufferSize,
 		ConnBufferPooling:  connBufferPooling,
-		TruncateErrorLen:   truncateErrorLen,
 	}
 	return NewListenerWithConfig(cfg)
 }
@@ -246,7 +240,6 @@ func NewListener(
 	connWriteTimeout time.Duration,
 	proxyProtocol bool,
 	connBufferPooling bool,
-	truncateErrorLen int,
 ) (*Listener, error) {
 	listener, err := net.Listen(protocol, address)
 	if err != nil {
@@ -254,10 +247,10 @@ func NewListener(
 	}
 	if proxyProtocol {
 		proxyListener := &proxyproto.Listener{Listener: listener}
-		return NewFromListener(proxyListener, authServer, handler, connReadTimeout, connWriteTimeout, connBufferPooling, truncateErrorLen)
+		return NewFromListener(proxyListener, authServer, handler, connReadTimeout, connWriteTimeout, connBufferPooling)
 	}
 
-	return NewFromListener(listener, authServer, handler, connReadTimeout, connWriteTimeout, connBufferPooling, truncateErrorLen)
+	return NewFromListener(listener, authServer, handler, connReadTimeout, connWriteTimeout, connBufferPooling)
 }
 
 // ListenerConfig should be used with NewListenerWithConfig to specify listener parameters.
@@ -272,7 +265,6 @@ type ListenerConfig struct {
 	ConnWriteTimeout   time.Duration
 	ConnReadBufferSize int
 	ConnBufferPooling  bool
-	TruncateErrorLen   int
 }
 
 // NewListenerWithConfig creates new listener using provided config. There are
@@ -299,7 +291,6 @@ func NewListenerWithConfig(cfg ListenerConfig) (*Listener, error) {
 		connWriteTimeout:   cfg.ConnWriteTimeout,
 		connReadBufferSize: cfg.ConnReadBufferSize,
 		connBufferPooling:  cfg.ConnBufferPooling,
-		truncateErrorLen:   cfg.TruncateErrorLen,
 	}, nil
 }
 
