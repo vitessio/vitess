@@ -505,6 +505,18 @@ func expandHorizon(ctx *plancontext.PlanningContext, horizon horizonLike) (ops.O
 	return op, nil
 }
 
+func checkInvalid(aggregations []Aggr, horizon horizonLike) error {
+	for _, aggregation := range aggregations {
+		if aggregation.Distinct {
+			return errHorizonNotPlanned()
+		}
+	}
+	if _, isDerived := horizon.(*Derived); isDerived {
+		return errHorizonNotPlanned()
+	}
+	return nil
+}
+
 func createProjectionFromSelect(ctx *plancontext.PlanningContext, horizon horizonLike) (ops.Operator, error) {
 	qp, err := horizon.getQP(ctx)
 	if err != nil {
@@ -528,6 +540,10 @@ func createProjectionFromSelect(ctx *plancontext.PlanningContext, horizon horizo
 	grouping := qp.GetGrouping()
 	aggregations, err := qp.AggregationExpressions(ctx)
 	if err != nil {
+		return nil, err
+	}
+
+	if err := checkInvalid(aggregations, horizon); err != nil {
 		return nil, err
 	}
 
