@@ -663,34 +663,30 @@ func TestRefreshReplHealthLocked(t *testing.T) {
 
 	sm.target.TabletType = topodatapb.TabletType_PRIMARY
 	sm.replHealthy = false
-	lag, throttlerReplicationLag, err := sm.refreshReplHealthLocked()
+	lag, err := sm.refreshReplHealthLocked()
 	assert.Equal(t, time.Duration(0), lag)
-	assert.GreaterOrEqual(t, throttlerReplicationLag, time.Duration(0))
 	assert.NoError(t, err)
 	assert.True(t, sm.replHealthy)
 
 	sm.target.TabletType = topodatapb.TabletType_REPLICA
 	sm.replHealthy = false
-	lag, throttlerReplicationLag, err = sm.refreshReplHealthLocked()
+	lag, err = sm.refreshReplHealthLocked()
 	assert.Equal(t, 1*time.Second, lag)
-	assert.Equal(t, 1*time.Second, throttlerReplicationLag)
 	assert.NoError(t, err)
 	assert.True(t, sm.replHealthy)
 
 	rt.err = errors.New("err")
 	sm.replHealthy = true
-	lag, throttlerReplicationLag, err = sm.refreshReplHealthLocked()
+	lag, err = sm.refreshReplHealthLocked()
 	assert.Equal(t, 1*time.Second, lag)
-	assert.Equal(t, 1*time.Second, throttlerReplicationLag)
 	assert.Error(t, err)
 	assert.False(t, sm.replHealthy)
 
 	rt.err = nil
 	rt.lag = 3 * time.Hour
 	sm.replHealthy = true
-	lag, throttlerReplicationLag, err = sm.refreshReplHealthLocked()
+	lag, err = sm.refreshReplHealthLocked()
 	assert.Equal(t, 3*time.Hour, lag)
-	assert.Equal(t, 3*time.Hour, throttlerReplicationLag)
 	assert.NoError(t, err)
 	assert.False(t, sm.replHealthy)
 }
@@ -925,6 +921,10 @@ func (te *testLagThrottler) Open() error {
 func (te *testLagThrottler) Close() {
 	te.order = order.Add(1)
 	te.state = testStateClosed
+}
+
+func (te *testLagThrottler) SelfMetrics() (float64, error) {
+	return 0, nil
 }
 
 type testTableGC struct {

@@ -26,6 +26,7 @@ import (
 
 	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/timer"
+	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/log"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/servenv"
@@ -66,12 +67,13 @@ const (
 
 var (
 	// flag vars
-	throttleThreshold         = 1 * time.Second
-	throttleTabletTypes       = "replica"
-	throttleMetricQuery       string
-	throttleMetricThreshold   = math.MaxFloat64
-	throttlerCheckAsCheckSelf = false
-	throttlerConfigViaTopo    = false
+	throttleThreshold          = 1 * time.Second
+	throttleTabletTypes        = "replica"
+	throttleMetricQuery        string
+	throttleMetricThreshold    = math.MaxFloat64
+	throttlerCheckAsCheckSelf  = false
+	throttlerConfigViaTopo     = false
+	throttlerReadRealtimeStats = false
 )
 
 func init() {
@@ -87,6 +89,8 @@ func registerThrottlerFlags(fs *pflag.FlagSet) {
 	fs.Float64Var(&throttleMetricThreshold, "throttle_metrics_threshold", throttleMetricThreshold, "Override default throttle threshold, respective to --throttle_metrics_query")
 	fs.BoolVar(&throttlerCheckAsCheckSelf, "throttle_check_as_check_self", throttlerCheckAsCheckSelf, "Should throttler/check return a throttler/check-self result (changes throttler behavior for writes)")
 	fs.BoolVar(&throttlerConfigViaTopo, "throttler-config-via-topo", throttlerConfigViaTopo, "When 'true', read config from topo service and ignore throttle_threshold, throttle_metrics_threshold, throttle_metrics_query, throttle_check_as_check_self")
+
+	fs.BoolVar(&throttlerReadRealtimeStats, "feature-throttler-read-realtime-stats", throttlerReadRealtimeStats, "When 'true', read metrics from realtime-stats rather than probe tablets")
 }
 
 var (
@@ -110,9 +114,11 @@ func init() {
 // Throttler is the main entity in the throttling mechanism. This service runs, probes, collects data,
 // aggregates, reads inventory, provides information, etc.
 type Throttler struct {
-	keyspace string
-	shard    string
-	cell     string
+	keyspace   string
+	shard      string
+	cell       string
+	uid        uint32 // id of this tablet
+	knownCells []string
 
 	check     *ThrottlerCheck
 	isEnabled int64
@@ -173,12 +179,13 @@ type ThrottlerStatus struct {
 }
 
 // NewThrottler creates a Throttler
-func NewThrottler(env tabletenv.Env, srvTopoServer srvtopo.Server, ts *topo.Server, cell string, heartbeatWriter heartbeat.HeartbeatWriter, tabletTypeFunc func() topodatapb.TabletType) *Throttler {
+func NewThrottler(env tabletenv.Env, srvTopoServer srvtopo.Server, ts *topo.Server, alias *topodatapb.TabletAlias, heartbeatWriter heartbeat.HeartbeatWriter, tabletTypeFunc func() topodatapb.TabletType) *Throttler {
 	throttler := &Throttler{
 		isLeader: 0,
 		isOpen:   0,
 
-		cell:            cell,
+		cell:            alias.Cell,
+		uid:             alias.Uid,
 		env:             env,
 		tabletTypeFunc:  tabletTypeFunc,
 		srvTopoServer:   srvTopoServer,
@@ -397,7 +404,7 @@ func (throttler *Throttler) Disable(ctx context.Context) bool {
 }
 
 // Open opens database pool and initializes the schema
-func (throttler *Throttler) Open() error {
+func (throttler *Throttler) Open() (err error) {
 	throttler.initMutex.Lock()
 	defer throttler.initMutex.Unlock()
 	if atomic.LoadInt64(&throttler.isOpen) > 0 {
@@ -415,6 +422,11 @@ func (throttler *Throttler) Open() error {
 	throttler.initConfig()
 	throttler.pool.Open(throttler.env.Config().DB.AppWithDB(), throttler.env.Config().DB.DbaWithDB(), throttler.env.Config().DB.AppDebugWithDB())
 	atomic.StoreInt64(&throttler.isOpen, 1)
+
+	throttler.knownCells, err = throttler.ts.GetKnownCells(ctx)
+	if err != nil {
+		return err
+	}
 
 	throttler.ThrottleApp("always-throttled-app", time.Now().Add(time.Hour*24*365*10), defaultThrottleRatio)
 
@@ -566,6 +578,11 @@ func (throttler *Throttler) Operate(ctx context.Context) {
 	mysqlAggregateTicker := addTicker(mysqlAggregateInterval)
 	throttledAppsTicker := addTicker(throttledAppsSnapshotInterval)
 
+	var healthCheckCh chan *discovery.TabletHealth
+	if throttlerReadRealtimeStats {
+		healthCheck := discovery.NewHealthCheck(ctx, discovery.DefaultHealthCheckRetryDelay, discovery.DefaultHealthCheckTimeout, throttler.ts, throttler.cell, strings.Join(throttler.knownCells, ","))
+		healthCheckCh = healthCheck.Subscribe()
+	}
 	go func() {
 		defer log.Infof("Throttler: Operate terminated, tickers stopped")
 		for _, t := range tickers {
@@ -659,9 +676,48 @@ func (throttler *Throttler) Operate(ctx context.Context) {
 				}
 			case throttlerConfig := <-throttler.throttlerConfigChan:
 				throttler.applyThrottlerConfig(ctx, throttlerConfig)
+			case tabletHealth := <-healthCheckCh:
+				throttler.readMetricFromTabletHealth(tabletHealth)
 			}
 		}
 	}()
+}
+
+// readMetricFromTabletHealth is called when a tabletHealth info is read from realtime stats.
+// This is a push operation that replaces the need for this throttler to actively probe metrics in other tablets.
+// We treat this info as if it were the result of a probe.
+// The metric is collected to the "shard" store name. We're only interested in remote tablets.
+func (throttler *Throttler) readMetricFromTabletHealth(tabletHealth *discovery.TabletHealth) {
+	if !throttlerReadRealtimeStats {
+		return
+	}
+	if tabletHealth == nil {
+		return
+	}
+	if tabletHealth.Stats == nil {
+		return
+	}
+	if atomic.LoadInt64(&throttler.isLeader) == 0 {
+		// not the leader (primary tablet)? Then no more work for us.
+		return
+	}
+	if tabletHealth.Tablet.GetAlias().GetUid() == throttler.uid {
+		// Only interested in remote tablets, not this tablet. This tablet is already monitoring itself
+		// via a true "self" probe (the result of which, by the way, is what gets written to realtime stats in state_manager.go)
+		return
+	}
+	var metricError error
+	if tabletHealth.Stats.ThrottlerMetricError != "" {
+		metricError = errors.New(tabletHealth.Stats.ThrottlerMetricError)
+	}
+	// Construct a MySQLThrottleMetric that would look like it was returned from a probe.
+	metric := &mysql.MySQLThrottleMetric{
+		ClusterName: shardStoreName,
+		Key:         mysql.InstanceKey{Hostname: tabletHealth.Tablet.MysqlHostname, Port: int(tabletHealth.Tablet.MysqlPort)},
+		Value:       tabletHealth.Stats.ThrottlerMetric,
+		Err:         metricError,
+	}
+	throttler.mysqlInventory.InstanceKeyMetrics[metric.GetClusterInstanceKey()] = metric
 }
 
 func (throttler *Throttler) generateTabletHTTPProbeFunction(ctx context.Context, clusterName string, probe *mysql.Probe) (probeFunc func() *mysql.MySQLThrottleMetric) {
@@ -719,6 +775,10 @@ func (throttler *Throttler) collectMySQLMetrics(ctx context.Context) error {
 					if clusterName == selfStoreName {
 						throttleMetricFunc = throttler.generateSelfMySQLThrottleMetricFunc(ctx, probe)
 					} else {
+						if throttlerReadRealtimeStats {
+							// We won't probe a remote tablet, as we expect to gather the data from realtime stats
+							return
+						}
 						throttleMetricFunc = throttler.generateTabletHTTPProbeFunction(ctx, clusterName, probe)
 					}
 					throttleMetrics := mysql.ReadThrottleMetric(probe, clusterName, throttleMetricFunc)
@@ -1052,4 +1112,17 @@ func (throttler *Throttler) Status() *ThrottlerStatus {
 		AggregatedMetrics: throttler.aggregatedMetricsSnapshot(),
 		MetricsHealth:     throttler.metricsHealthSnapshot(),
 	}
+}
+
+// SelfMetrics returns the metric collected by this throttler on the "self" cluster, which means
+// the metrics collected from this very tablet (rather, from the mysqld owned by this tablet).
+func (throttler *Throttler) SelfMetrics() (val float64, err error) {
+	metricName := fmt.Sprintf("mysql/%s", selfStoreName)
+	metricResultVal, found := throttler.aggregatedMetrics.Get(metricName)
+	if !found {
+		return 0, base.ErrNoSuchMetric
+	}
+	metricResult := metricResultVal.(base.MetricResult)
+	val, err = metricResult.Get()
+	return val, err
 }

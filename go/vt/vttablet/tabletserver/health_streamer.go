@@ -225,7 +225,7 @@ func (hs *healthStreamer) unregister(ch chan *querypb.StreamHealthResponse) {
 	delete(hs.clients, ch)
 }
 
-func (hs *healthStreamer) ChangeState(tabletType topodatapb.TabletType, terTimestamp time.Time, lag time.Duration, throttlerReplicationLag time.Duration, err error, serving bool) {
+func (hs *healthStreamer) ChangeState(tabletType topodatapb.TabletType, terTimestamp time.Time, lag time.Duration, throttlerMetric float64, throttlerMetricsErr error, stateErr error, serving bool) {
 	hs.mu.Lock()
 	defer hs.mu.Unlock()
 
@@ -235,8 +235,8 @@ func (hs *healthStreamer) ChangeState(tabletType topodatapb.TabletType, terTimes
 	} else {
 		hs.state.TabletExternallyReparentedTimestamp = 0
 	}
-	if err != nil {
-		hs.state.RealtimeStats.HealthError = err.Error()
+	if stateErr != nil {
+		hs.state.RealtimeStats.HealthError = stateErr.Error()
 	} else {
 		hs.state.RealtimeStats.HealthError = ""
 	}
@@ -246,7 +246,12 @@ func (hs *healthStreamer) ChangeState(tabletType topodatapb.TabletType, terTimes
 	hs.state.RealtimeStats.FilteredReplicationLagSeconds, hs.state.RealtimeStats.BinlogPlayersCount = blpFunc()
 	hs.state.RealtimeStats.Qps = hs.stats.QPSRates.TotalRate()
 
-	hs.state.RealtimeStats.ThrottlerReplicationLagSeconds = throttlerReplicationLag.Seconds()
+	hs.state.RealtimeStats.ThrottlerMetric = throttlerMetric
+	if throttlerMetricsErr != nil {
+		hs.state.RealtimeStats.ThrottlerMetricError = throttlerMetricsErr.Error()
+	} else {
+		hs.state.RealtimeStats.ThrottlerMetricError = ""
+	}
 
 	shr := proto.Clone(hs.state).(*querypb.StreamHealthResponse)
 
@@ -256,7 +261,7 @@ func (hs *healthStreamer) ChangeState(tabletType topodatapb.TabletType, terTimes
 		serving:    shr.Serving,
 		tabletType: shr.Target.TabletType,
 		lag:        lag,
-		err:        err,
+		err:        stateErr,
 	})
 }
 

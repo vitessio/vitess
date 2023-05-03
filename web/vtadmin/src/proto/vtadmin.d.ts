@@ -37094,6 +37094,15 @@ export namespace query {
 
         /** RealtimeStats view_schema_changed */
         view_schema_changed?: (string[]|null);
+
+        /** RealtimeStats throttler_metric_error */
+        throttler_metric_error?: (string|null);
+
+        /** RealtimeStats throttler_replication_lag_seconds */
+        throttler_replication_lag_seconds?: (number|null);
+
+        /** RealtimeStats throttler_metric */
+        throttler_metric?: (number|null);
     }
 
     /** Represents a RealtimeStats. */
@@ -37128,6 +37137,15 @@ export namespace query {
 
         /** RealtimeStats view_schema_changed. */
         public view_schema_changed: string[];
+
+        /** RealtimeStats throttler_metric_error. */
+        public throttler_metric_error: string;
+
+        /** RealtimeStats throttler_replication_lag_seconds. */
+        public throttler_replication_lag_seconds: number;
+
+        /** RealtimeStats throttler_metric. */
+        public throttler_metric: number;
 
         /**
          * Creates a new RealtimeStats instance using the specified properties.

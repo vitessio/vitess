@@ -181,6 +181,7 @@ type (
 	lagThrottler interface {
 		Open() error
 		Close()
+		SelfMetrics() (float64, error)
 	}
 
 	tableGarbageCollector interface {
@@ -618,7 +619,7 @@ func (sm *stateManager) setState(tabletType topodatapb.TabletType, state serving
 	if sm.state == StateNotConnected {
 		// If we're transitioning out of StateNotConnected, we have
 		// to also ensure replication status is healthy.
-		_, _, _ = sm.refreshReplHealthLocked()
+		_, _ = sm.refreshReplHealthLocked()
 	}
 	sm.state = state
 	// Broadcast also obtains a lock. Trigger in a goroutine to avoid a deadlock.
@@ -663,16 +664,17 @@ func (sm *stateManager) Broadcast() {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 
-	lag, throttlerReplicationLag, err := sm.refreshReplHealthLocked()
-	sm.hs.ChangeState(sm.target.TabletType, sm.terTimestamp, lag, throttlerReplicationLag, err, sm.isServingLocked())
+	lag, stateErr := sm.refreshReplHealthLocked()
+	throttlerMetric, throttlerMetricsErr := sm.throttler.SelfMetrics()
+	sm.hs.ChangeState(sm.target.TabletType, sm.terTimestamp, lag, throttlerMetric, throttlerMetricsErr, stateErr, sm.isServingLocked())
 }
 
-func (sm *stateManager) refreshReplHealthLocked() (time.Duration, time.Duration, error) {
-	lag, err := sm.rt.Status()
+func (sm *stateManager) refreshReplHealthLocked() (time.Duration, error) {
 	if sm.target.TabletType == topodatapb.TabletType_PRIMARY {
 		sm.replHealthy = true
-		return 0, lag, nil
+		return 0, nil
 	}
+	lag, err := sm.rt.Status()
 	if err != nil {
 		if sm.replHealthy {
 			log.Infof("Going unhealthy due to replication error: %v", err)
@@ -691,7 +693,7 @@ func (sm *stateManager) refreshReplHealthLocked() (time.Duration, time.Duration,
 			sm.replHealthy = true
 		}
 	}
-	return lag, lag, err
+	return lag, err
 }
 
 // EnterLameduck causes tabletserver to enter the lameduck state. This

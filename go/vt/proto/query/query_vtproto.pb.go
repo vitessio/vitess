@@ -3860,17 +3860,24 @@ func (m *RealtimeStats) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
-	if m.ThrottlerCustomMetric != 0 {
+	if m.ThrottlerMetric != 0 {
 		i -= 8
-		binary.LittleEndian.PutUint64(dAtA[i:], uint64(math.Float64bits(float64(m.ThrottlerCustomMetric))))
+		binary.LittleEndian.PutUint64(dAtA[i:], uint64(math.Float64bits(float64(m.ThrottlerMetric))))
 		i--
-		dAtA[i] = 0x51
+		dAtA[i] = 0x59
 	}
 	if m.ThrottlerReplicationLagSeconds != 0 {
 		i -= 8
 		binary.LittleEndian.PutUint64(dAtA[i:], uint64(math.Float64bits(float64(m.ThrottlerReplicationLagSeconds))))
 		i--
-		dAtA[i] = 0x49
+		dAtA[i] = 0x51
+	}
+	if len(m.ThrottlerMetricError) > 0 {
+		i -= len(m.ThrottlerMetricError)
+		copy(dAtA[i:], m.ThrottlerMetricError)
+		i = encodeVarint(dAtA, i, uint64(len(m.ThrottlerMetricError)))
+		i--
+		dAtA[i] = 0x4a
 	}
 	if len(m.ViewSchemaChanged) > 0 {
 		for iNdEx := len(m.ViewSchemaChanged) - 1; iNdEx >= 0; iNdEx-- {
@@ -5754,10 +5761,14 @@ func (m *RealtimeStats) SizeVT() (n int) {
 			n += 1 + l + sov(uint64(l))
 		}
 	}
+	l = len(m.ThrottlerMetricError)
+	if l > 0 {
+		n += 1 + l + sov(uint64(l))
+	}
 	if m.ThrottlerReplicationLagSeconds != 0 {
 		n += 9
 	}
-	if m.ThrottlerCustomMetric != 0 {
+	if m.ThrottlerMetric != 0 {
 		n += 9
 	}
 	n += len(m.unknownFields)
@@ -16023,6 +16034,38 @@ func (m *RealtimeStats) UnmarshalVT(dAtA []byte) error {
 			m.ViewSchemaChanged = append(m.ViewSchemaChanged, string(dAtA[iNdEx:postIndex]))
 			iNdEx = postIndex
 		case 9:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ThrottlerMetricError", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.ThrottlerMetricError = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 10:
 			if wireType != 1 {
 				return fmt.Errorf("proto: wrong wireType = %d for field ThrottlerReplicationLagSeconds", wireType)
 			}
@@ -16033,9 +16076,9 @@ func (m *RealtimeStats) UnmarshalVT(dAtA []byte) error {
 			v = uint64(binary.LittleEndian.Uint64(dAtA[iNdEx:]))
 			iNdEx += 8
 			m.ThrottlerReplicationLagSeconds = float64(math.Float64frombits(v))
-		case 10:
+		case 11:
 			if wireType != 1 {
-				return fmt.Errorf("proto: wrong wireType = %d for field ThrottlerCustomMetric", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field ThrottlerMetric", wireType)
 			}
 			var v uint64
 			if (iNdEx + 8) > l {
@@ -16043,7 +16086,7 @@ func (m *RealtimeStats) UnmarshalVT(dAtA []byte) error {
 			}
 			v = uint64(binary.LittleEndian.Uint64(dAtA[iNdEx:]))
 			iNdEx += 8
-			m.ThrottlerCustomMetric = float64(math.Float64frombits(v))
+			m.ThrottlerMetric = float64(math.Float64frombits(v))
 		default:
 			iNdEx = preIndex
 			skippy, err := skip(dAtA[iNdEx:])
