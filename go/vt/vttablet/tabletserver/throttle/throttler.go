@@ -317,6 +317,7 @@ func (throttler *Throttler) normalizeThrottlerConfig(thottlerConfig *topodatapb.
 }
 
 func (throttler *Throttler) WatchSrvKeyspaceCallback(srvks *topodatapb.SrvKeyspace, err error) bool {
+	log.Infof("Throttler: WatchSrvKeyspaceCallback called with: %+v", srvks)
 	if err != nil {
 		log.Errorf("WatchSrvKeyspaceCallback error: %v", err)
 		return false
@@ -327,6 +328,7 @@ func (throttler *Throttler) WatchSrvKeyspaceCallback(srvks *topodatapb.SrvKeyspa
 		// Throttler is running and we should apply the config change through Operate()
 		// or else we get into race conditions.
 		go func() {
+			log.Infof("Throttler: submitting a throttler config apply message with: %+v", throttlerConfig)
 			throttler.throttlerConfigChan <- throttlerConfig
 		}()
 	} else {
@@ -343,6 +345,7 @@ func (throttler *Throttler) applyThrottlerConfig(ctx context.Context, throttlerC
 	if !throttlerConfigViaTopo {
 		return
 	}
+	log.Infof("Throttler: applying topo config: %+v", throttlerConfig)
 	if throttlerConfig.CustomQuery == "" {
 		throttler.metricsQuery.Store(sqlparser.BuildParsedQuery(defaultReplicationLagQuery, sidecardb.GetIdentifier()).Query)
 	} else {
@@ -368,8 +371,10 @@ func (throttler *Throttler) Enable(ctx context.Context) bool {
 	defer throttler.enableMutex.Unlock()
 
 	if throttler.IsEnabled() {
+		log.Infof("Throttler: already enabled")
 		return false
 	}
+	log.Infof("Throttler: enabling")
 	atomic.StoreInt64(&throttler.isEnabled, 1)
 
 	ctx, throttler.cancelEnableContext = context.WithCancel(ctx)
@@ -389,8 +394,10 @@ func (throttler *Throttler) Disable(ctx context.Context) bool {
 	defer throttler.enableMutex.Unlock()
 
 	if !throttler.IsEnabled() {
+		log.Infof("Throttler: already disabled")
 		return false
 	}
+	log.Infof("Throttler: disabling")
 	// _ = throttler.updateConfig(ctx, false, throttler.MetricsThreshold.Get()) // TODO(shlomi)
 	atomic.StoreInt64(&throttler.isEnabled, 0)
 
@@ -405,12 +412,15 @@ func (throttler *Throttler) Disable(ctx context.Context) bool {
 
 // Open opens database pool and initializes the schema
 func (throttler *Throttler) Open() (err error) {
+	log.Infof("Throttler: started execution of Open. Acquiring initMutex lock")
 	throttler.initMutex.Lock()
 	defer throttler.initMutex.Unlock()
 	if atomic.LoadInt64(&throttler.isOpen) > 0 {
 		// already open
+		log.Infof("Throttler: throttler is already open")
 		return nil
 	}
+	log.Infof("Throttler: opening")
 	ctx := context.Background()
 	// The query needs to be dynamically built because the sidecar database name
 	// is not known when the TabletServer is created, which in turn creates the
@@ -431,6 +441,7 @@ func (throttler *Throttler) Open() (err error) {
 	throttler.ThrottleApp("always-throttled-app", time.Now().Add(time.Hour*24*365*10), defaultThrottleRatio)
 
 	if throttlerConfigViaTopo {
+		log.Infof("Throttler: throttler-config-via-topo detected")
 		// We want to read throttler config from topo and apply it.
 		// But also, we're in an Open() function, which blocks state manager's operation, and affects
 		// opening of all other components. We thus read the throttler config in the background.

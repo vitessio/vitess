@@ -56,6 +56,7 @@ import (
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 )
@@ -229,6 +230,9 @@ type HealthCheck interface {
 
 	// Unsubscribe removes a listener.
 	Unsubscribe(c chan *TabletHealth)
+
+	// GetLoadTabletsTrigger returns a channel that is used to inform when to load tablets.
+	GetLoadTabletsTrigger() chan struct{}
 }
 
 var _ HealthCheck = (*HealthCheckImpl)(nil)
@@ -278,6 +282,8 @@ type HealthCheckImpl struct {
 	subMu sync.Mutex
 	// subscribers
 	subscribers map[chan *TabletHealth]struct{}
+	// loadTablets trigger is used to immediately load a new primary tablet when the current one has been demoted
+	loadTabletsTrigger chan struct{}
 }
 
 // NewHealthCheck creates a new HealthCheck object.
@@ -317,6 +323,7 @@ func NewHealthCheck(ctx context.Context, retryDelay, healthCheckTimeout time.Dur
 		healthy:            make(map[KeyspaceShardTabletType][]*TabletHealth),
 		subscribers:        make(map[chan *TabletHealth]struct{}),
 		cellAliases:        make(map[string]string),
+		loadTabletsTrigger: make(chan struct{}),
 	}
 	var topoWatchers []*TopologyWatcher
 	var filter TabletFilter
@@ -487,6 +494,18 @@ func (hc *HealthCheckImpl) updateHealth(th *TabletHealth, prevTarget *query.Targ
 		if !ok {
 			hc.healthData[targetKey] = make(map[tabletAliasString]*TabletHealth)
 		}
+
+		// If the previous tablet type was primary, we need to check if the next new primary has already been assigned.
+		// If no new primary has been assigned, we will trigger a `loadTablets` call to immediately redirect traffic to the new primary.
+		//
+		// This is to avoid a situation where a newly primary tablet for a shard has just been started and the tableRefreshInterval has not yet passed,
+		// causing an interruption where no primary is assigned to the shard.
+		if prevTarget.TabletType == topodata.TabletType_PRIMARY {
+			if primaries := hc.healthData[oldTargetKey]; len(primaries) == 0 {
+				log.Infof("We will have no health data for the next new primary tablet after demoting the tablet: %v, so start loading tablets now", topotools.TabletIdent(th.Tablet))
+				hc.loadTabletsTrigger <- struct{}{}
+			}
+		}
 	}
 	// add it to the map by target and create the map record if needed
 	if _, ok := hc.healthData[targetKey]; !ok {
@@ -585,6 +604,11 @@ func (hc *HealthCheckImpl) broadcast(th *TabletHealth) {
 		default:
 		}
 	}
+}
+
+// GetLoadTabletsTrigger returns a channel that is used to inform when to load tablets.
+func (hc *HealthCheckImpl) GetLoadTabletsTrigger() chan struct{} {
+	return hc.loadTabletsTrigger
 }
 
 // CacheStatus returns a displayable version of the cache.
