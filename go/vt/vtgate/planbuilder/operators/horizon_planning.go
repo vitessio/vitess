@@ -87,6 +87,51 @@ func tryPushingDownOrdering(ctx *plancontext.PlanningContext, in *Ordering) (ops
 		// we'll just remove the order underneath. The top order replaces whatever was incoming
 		in.Source = src.Source
 		return in, rewrite.NewTree, nil
+	case *Aggregator:
+		if !src.QP.CanPushDownSorting {
+			return in, rewrite.SameTree, nil
+		}
+
+		// Here we align the GROUP BY and ORDER BY.
+		// First step is to make sure that the GROUP BY is in the same order as the ORDER BY
+		var newGrouping []*GroupBy
+		grpByExprs := src.getGroupingColumns()
+		used := make([]bool, len(grpByExprs))
+		for _, orderExpr := range in.Order {
+			for i, groupingExpr := range grpByExprs {
+				if !used[i] && ctx.SemTable.EqualsExpr(groupingExpr.WeightStrExpr, orderExpr.WeightStrExpr) {
+					newGrouping = append(newGrouping, groupingExpr)
+					used[i] = true
+				}
+			}
+		}
+		if len(newGrouping) != len(grpByExprs) {
+			// we are missing some groupings. We need to add them both to the new groupings list, but also to the ORDER BY
+			for i, added := range used {
+				if !added {
+					groupBy := grpByExprs[i]
+					newGrouping = append(newGrouping, groupBy)
+					in.Order = append(in.Order, groupBy.AsOrderBy())
+				}
+			}
+		}
+		/*
+			Ordering(1) -> Aggregation -> Ordering(2) -> <Inputs>
+			Convert this to
+			Aggregation -> Ordering(1) -> <Inputs> and remove Ordering(2) from the plan tree.
+
+			The lower ordering is not required once a push down of higher ordering is done as
+			it will be similar or even have more columns for ordering and will be better aligned with the output ordering.
+		*/
+		aggrSource, isOrdering := src.Source.(*Ordering)
+		if isOrdering {
+			in.Source = aggrSource.Source
+			aggrSource.Source = nil // removing from plan tree
+			src.Source = in
+			return src, rewrite.NewTree, nil
+		}
+		return swap(in, src)
+
 	}
 	return in, rewrite.SameTree, nil
 }
@@ -473,6 +518,7 @@ func createProjectionFromSelect(ctx *plancontext.PlanningContext, horizon horizo
 	a := &Aggregator{
 		Source:   proj,
 		Original: true,
+		QP:       qp,
 	}
 outer:
 	for _, expr := range qp.SelectExprs {

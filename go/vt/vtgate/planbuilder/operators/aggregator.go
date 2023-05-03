@@ -39,6 +39,8 @@ type Aggregator struct {
 	// Original will only be true for the original aggregator created from the AST
 	Original      bool
 	ResultColumns int
+
+	QP *QueryProjection
 }
 
 func (a *Aggregator) Clone(inputs []ops.Operator) ops.Operator {
@@ -47,6 +49,7 @@ func (a *Aggregator) Clone(inputs []ops.Operator) ops.Operator {
 		Columns:  slices.Clone(a.Columns),
 		Pushed:   a.Pushed,
 		Original: a.Original,
+		QP:       a.QP,
 	}
 }
 
@@ -55,7 +58,7 @@ func (a *Aggregator) Inputs() []ops.Operator {
 }
 
 func (a *Aggregator) SetInputs(operators []ops.Operator) {
-	if len(operators) != 0 {
+	if len(operators) != 1 {
 		panic(fmt.Sprintf("unexpected number of operators as input in aggregator: %d", len(operators)))
 	}
 	a.Source = operators[0]
@@ -165,4 +168,13 @@ func (a *Aggregator) planOffsets(ctx *plancontext.PlanningContext) error {
 
 func (a *Aggregator) truncateColumnsAt(offset int) {
 	a.ResultColumns = offset
+}
+
+func (a *Aggregator) getGroupingColumns() (grpBy []*GroupBy) {
+	for _, column := range a.Columns {
+		if grp, isGrp := column.(*GroupBy); isGrp {
+			grpBy = append(grpBy, grp)
+		}
+	}
+	return
 }

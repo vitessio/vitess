@@ -141,16 +141,16 @@ func TopDown(
 }
 
 // Swap takes a tree like a->b->c and swaps `a` and `b`, so we end up with b->a->c
-func Swap(a, b ops.Operator) (ops.Operator, error) {
-	c := b.Inputs()
+func Swap(parent, child ops.Operator) (ops.Operator, error) {
+	c := child.Inputs()
 	if len(c) != 1 {
 		return nil, vterrors.VT13001("Swap can only be used on single input operators")
 	}
 
-	aInputs := slices.Clone(a.Inputs())
+	aInputs := slices.Clone(parent.Inputs())
 	var tmp ops.Operator
 	for i, in := range aInputs {
-		if in == b {
+		if in == child {
 			tmp = aInputs[i]
 			aInputs[i] = c[0]
 			break
@@ -160,10 +160,10 @@ func Swap(a, b ops.Operator) (ops.Operator, error) {
 		return nil, vterrors.VT13001("Swap can only be used when the second argument is an input to the first")
 	}
 
-	b.SetInputs([]ops.Operator{a})
-	a.SetInputs(aInputs)
+	child.SetInputs([]ops.Operator{parent})
+	parent.SetInputs(aInputs)
 
-	return b, nil
+	return child, nil
 }
 
 func bottomUp(
