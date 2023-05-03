@@ -159,8 +159,6 @@ func (mysqld *Mysqld) GetSchema(ctx context.Context, dbName string, request *tab
 	}
 
 	sd.TableDefinitions = tds
-
-	tmutils.GenerateSchemaVersion(sd)
 	return sd, nil
 }
 
