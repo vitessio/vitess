@@ -26,6 +26,8 @@ import (
 
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/dbconfigs"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/yaml2"
 )
 
@@ -330,18 +332,18 @@ func TestFlags(t *testing.T) {
 
 func TestVerifyTxThrottlerConfig(t *testing.T) {
 	{
-		txThrottlerTabletTypes = []string{""}
-		config := NewDefaultConfig()
-		assert.NotNil(t, config.verifyTxThrottlerConfig())
+		currentConfig.TxThrottlerTabletTypes = &topoproto.TabletTypeListFlag{}
+		assert.NotNil(t, currentConfig.verifyTxThrottlerConfig())
 	}
 	{
-		txThrottlerTabletTypes = []string{"thisshouldfail"}
-		config := NewDefaultConfig()
-		assert.NotNil(t, config.verifyTxThrottlerConfig())
+		currentConfig.TxThrottlerTabletTypes = &topoproto.TabletTypeListFlag{topodatapb.TabletType_DRAINED}
+		assert.NotNil(t, currentConfig.verifyTxThrottlerConfig())
 	}
 	{
-		txThrottlerTabletTypes = []string{"replica", "rdonly"}
-		config := NewDefaultConfig()
-		assert.Nil(t, config.verifyTxThrottlerConfig())
+		currentConfig.TxThrottlerTabletTypes = &topoproto.TabletTypeListFlag{
+			topodatapb.TabletType_REPLICA,
+			topodatapb.TabletType_RDONLY,
+		}
+		assert.Nil(t, currentConfig.verifyTxThrottlerConfig())
 	}
 }
