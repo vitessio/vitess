@@ -37,7 +37,8 @@ type Aggregator struct {
 	Pushed bool
 
 	// Original will only be true for the original aggregator created from the AST
-	Original bool
+	Original      bool
+	ResultColumns int
 }
 
 func (a *Aggregator) Clone(inputs []ops.Operator) ops.Operator {
@@ -88,18 +89,24 @@ func (a *Aggregator) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser
 	}
 
 	// if we didn't already have this column, we add it as a grouping
-	a.Columns = append(a.Columns, &GroupBy{
-		Inner:       expr.Expr,
-		aliasedExpr: expr,
-	})
+	a.Columns = append(a.Columns, NewGroupBy(expr.Expr, nil, expr))
 
 	return a, len(a.Columns) - 1, nil
 }
 
 func (a *Aggregator) GetColumns() (columns []*sqlparser.AliasedExpr, err error) {
-	return slices2.Map(a.Columns, func(from AggrColumn) *sqlparser.AliasedExpr {
+	var weightStrCols []*sqlparser.AliasedExpr
+	cols := slices2.Map(a.Columns, func(from AggrColumn) *sqlparser.AliasedExpr {
+		groupBy, isGroupBy := from.(*GroupBy)
+		if isGroupBy {
+			if groupBy.WOffset != -1 {
+				weightStrCols = append(weightStrCols, aeWrap(weightStringFor(groupBy.WeightStrExpr)))
+			}
+		}
 		return from.GetOriginal()
-	}), nil
+	})
+
+	return append(cols, weightStrCols...), nil
 }
 
 func (a *Aggregator) Description() ops.OpDescription {
@@ -134,40 +141,17 @@ func (a *Aggregator) GetOrdering() ([]ops.OrderBy, error) {
 var _ ops.Operator = (*Aggregator)(nil)
 
 func (a *Aggregator) planOffsets(ctx *plancontext.PlanningContext) error {
-	for idx, column := range a.Columns {
+	for _, column := range a.Columns {
 		switch col := column.(type) {
 		case *Aggr:
-			arg := col.Original.Expr
-			if col.Func != nil {
-				arg = col.Func.GetArg()
-				if arg == nil {
-					arg = sqlparser.NewIntLiteral("1")
-				}
-			}
-			newSrc, offset, err := a.Source.AddColumn(ctx, aeWrap(arg), false)
-			if err != nil {
-				return err
-			}
-			if offset != idx {
-				return vterrors.VT13001("the input column and output columns need to be aligned")
-			}
-			a.Source = newSrc
 		case *GroupBy:
-			newSrc, offset, err := a.Source.AddColumn(ctx, aeWrap(col.Inner), true)
-			if err != nil {
-				return err
-			}
-			a.Source = newSrc
-			if offset != idx {
-				return vterrors.VT13001("the input column and output columns need to be aligned")
-			}
 			if !ctx.SemTable.NeedsWeightString(col.WeightStrExpr) {
 				col.WOffset = -1
 				continue
 			}
 
 			wsExpr := &sqlparser.WeightStringFuncExpr{Expr: col.WeightStrExpr}
-			newSrc, offset, err = a.Source.AddColumn(ctx, aeWrap(wsExpr), true)
+			newSrc, offset, err := a.Source.AddColumn(ctx, aeWrap(wsExpr), true)
 			if err != nil {
 				return err
 			}
@@ -177,4 +161,8 @@ func (a *Aggregator) planOffsets(ctx *plancontext.PlanningContext) error {
 
 	}
 	return nil
+}
+
+func (a *Aggregator) truncateColumnsAt(offset int) {
+	a.ResultColumns = offset
 }

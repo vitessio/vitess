@@ -17,6 +17,8 @@ limitations under the License.
 package operators
 
 import (
+	"fmt"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
@@ -448,16 +450,16 @@ func createProjectionFromSelect(ctx *plancontext.PlanningContext, horizon horizo
 		return nil, err
 	}
 
+	proj, err := createProjection2(qp, horizon.src())
+	if err != nil {
+		return nil, err
+	}
+	if derived, isDerived := horizon.(*Derived); isDerived {
+		id := derived.TableId
+		proj.TableID = &id
+		proj.Alias = derived.Alias
+	}
 	if !qp.NeedsAggregation() {
-		proj, err := createProjection2(qp, horizon.src())
-		if err != nil {
-			return nil, err
-		}
-		if derived, isDerived := horizon.(*Derived); isDerived {
-			id := derived.TableId
-			proj.TableID = &id
-			proj.Alias = derived.Alias
-		}
 		return proj, nil
 	}
 
@@ -469,7 +471,7 @@ func createProjectionFromSelect(ctx *plancontext.PlanningContext, horizon horizo
 	}
 
 	a := &Aggregator{
-		Source:   horizon.src(),
+		Source:   proj,
 		Original: true,
 	}
 outer:
@@ -488,6 +490,7 @@ outer:
 				continue outer
 			}
 		}
+		return nil, vterrors.VT13001(fmt.Sprintf("Could not find the %v in aggregation in the original query", expr))
 	}
 	return a, nil
 }

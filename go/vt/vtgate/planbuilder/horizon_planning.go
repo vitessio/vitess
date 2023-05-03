@@ -535,11 +535,9 @@ func (hp *horizonPlanning) handleDistinctAggr(ctx *plancontext.PlanningContext, 
 				return nil, nil, nil, err
 			}
 		}
-		distincts = append(distincts, operators.GroupBy{
-			Inner:         inner,
-			WeightStrExpr: innerWS,
-			InnerIndex:    expr.Index,
-		})
+		groupBy := operators.NewGroupBy(inner, innerWS, nil)
+		groupBy.InnerIndex = expr.Index
+		distincts = append(distincts, groupBy)
 		offsets = append(offsets, i)
 	}
 	return
@@ -583,10 +581,7 @@ func (hp *horizonPlanning) createGroupingsForColumns(columns []*sqlparser.ColNam
 			return nil, err
 		}
 
-		lhsGrouping = append(lhsGrouping, operators.GroupBy{
-			Inner:         expr,
-			WeightStrExpr: wsExpr,
-		})
+		lhsGrouping = append(lhsGrouping, operators.NewGroupBy(expr, wsExpr, nil))
 	}
 	return lhsGrouping, nil
 }

@@ -94,6 +94,17 @@ type (
 	}
 )
 
+// NewGroupBy creates a new group by from the given fields.
+func NewGroupBy(inner sqlparser.Expr, weightStrExpr sqlparser.Expr, aliasedExpr *sqlparser.AliasedExpr) GroupBy {
+	return GroupBy{
+		Inner:         inner,
+		WeightStrExpr: weightStrExpr,
+		WOffset:       -1,
+		InnerIndex:    nil,
+		aliasedExpr:   aliasedExpr,
+	}
+}
+
 func (b GroupBy) AsOrderBy() ops.OrderBy {
 	return ops.OrderBy{
 		Inner: &sqlparser.Order{
@@ -124,11 +135,11 @@ func (b GroupBy) AsAliasedExpr() *sqlparser.AliasedExpr {
 	}
 }
 
-func (b *GroupBy) GetOriginal() *sqlparser.AliasedExpr {
+func (b GroupBy) GetOriginal() *sqlparser.AliasedExpr {
 	return b.aliasedExpr
 }
 
-func (a *Aggr) GetOriginal() *sqlparser.AliasedExpr {
+func (a Aggr) GetOriginal() *sqlparser.AliasedExpr {
 	return a.Original
 }
 
@@ -176,12 +187,8 @@ func CreateQPFromSelect(ctx *plancontext.PlanningContext, sel *sqlparser.Select)
 			return nil, err
 		}
 
-		groupBy := GroupBy{
-			Inner:         expr,
-			WeightStrExpr: weightStrExpr,
-			InnerIndex:    selectExprIdx,
-			aliasedExpr:   aliasExpr,
-		}
+		groupBy := NewGroupBy(expr, weightStrExpr, aliasExpr)
+		groupBy.InnerIndex = selectExprIdx
 
 		qp.groupByExprs = append(qp.groupByExprs, groupBy)
 	}

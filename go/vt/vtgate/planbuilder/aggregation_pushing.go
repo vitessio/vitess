@@ -287,7 +287,7 @@ func (hp *horizonPlanning) pushAggrOnJoin(
 			return nil, nil, err
 		}
 		l = sqlparser.NewIntLiteral(strconv.Itoa(offset + 1))
-		rhsGrouping = append(rhsGrouping, operators.GroupBy{Inner: l})
+		rhsGrouping = append(rhsGrouping, operators.NewGroupBy(l, nil, nil))
 	}
 
 	// Next we push the aggregations to both sides

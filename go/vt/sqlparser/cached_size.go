@@ -928,10 +928,8 @@ func (cached *CountStar) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(16)
+		size += int64(8)
 	}
-	// field inner string
-	size += hack.RuntimeAllocSize(int64(len(cached.inner)))
 	return size
 }
 func (cached *CreateDatabase) CachedSize(alloc bool) int64 {

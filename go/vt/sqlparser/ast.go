@@ -2817,7 +2817,7 @@ type (
 	}
 
 	CountStar struct {
-		inner string // TODO: not sure, but it seems like this is needed. ask @vmg why
+		_ bool // This makes sure that reference equality checks works as expected
 	}
 
 	Avg struct {

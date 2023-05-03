@@ -100,9 +100,9 @@ func (qb *queryBuilder) addPredicate(expr sqlparser.Expr) {
 	}
 }
 
-func (qb *queryBuilder) addGroupBy(original *sqlparser.AliasedExpr) {
+func (qb *queryBuilder) addGroupBy(original sqlparser.Expr) {
 	sel := qb.sel.(*sqlparser.Select)
-	sel.GroupBy = append(sel.GroupBy, original.Expr)
+	sel.GroupBy = append(sel.GroupBy, original)
 }
 
 func (qb *queryBuilder) addProjection(projection *sqlparser.AliasedExpr) {
@@ -343,12 +343,23 @@ func buildAggregation(op *Aggregator, qb *queryBuilder) error {
 
 	qb.clearProjections()
 
-	for _, column := range op.Columns {
-		if _, isGroupBy := column.(*GroupBy); isGroupBy {
-			qb.addGroupBy(column.GetOriginal())
-		}
-		qb.addProjection(column.GetOriginal())
+	cols, err := op.GetColumns()
+	if err != nil {
+		return err
 	}
+	for _, column := range cols {
+		qb.addProjection(column)
+	}
+
+	for _, column := range op.Columns {
+		if groupBy, isGroupBy := column.(*GroupBy); isGroupBy {
+			qb.addGroupBy(groupBy.Inner)
+			if groupBy.WOffset != -1 {
+				qb.addGroupBy(weightStringFor(groupBy.WeightStrExpr))
+			}
+		}
+	}
+
 	return nil
 }
 

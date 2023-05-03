@@ -88,7 +88,7 @@ func tryHorizonPlanning(ctx *plancontext.PlanningContext, root ops.Operator) (ou
 	defer func() {
 		// If we get the below error.
 		// We will be using old horizon planning.
-		if err == errHorizonNotPlanned() {
+		if err == _errHorizonNotPlanned {
 			err = planOffsetsOnJoins(ctx, backup)
 			if err == nil {
 				output = backup
@@ -138,9 +138,7 @@ func makeSureOutputIsCorrect(ctx *plancontext.PlanningContext, oldHorizon ops.Op
 		return output, nil
 	}
 
-	route := getRouteIfPassThroughColumns(output)
-	if route != nil {
-		route.ResultColumns = len(sel.SelectExprs)
+	if tryTruncateColumnsAt(output, len(sel.SelectExprs)) {
 		return output, nil
 	}
 
@@ -185,27 +183,29 @@ func (noPredicates) AddPredicate(*plancontext.PlanningContext, sqlparser.Expr) (
 	return nil, vterrors.VT13001("the noColumns operator cannot accept predicates")
 }
 
-// getRouteIfPassThroughColumns will return the route that is feeding this operator,
-// if it can be reached only through operators that pass through all columns
-// This is used to limit the number of columns passed through by asking the route
-// to truncate the results
-func getRouteIfPassThroughColumns(op ops.Operator) *Route {
-	route, isRoute := op.(*Route)
-	if isRoute {
-		return route
+// tryTruncateColumnsAt will see if we can truncate the columns by just asking the operator to do it for us
+func tryTruncateColumnsAt(op ops.Operator, truncateAt int) bool {
+	type columnTruncator interface {
+		truncateColumnsAt(offset int)
+	}
+
+	truncator, ok := op.(columnTruncator)
+	if ok {
+		truncator.truncateColumnsAt(truncateAt)
+		return true
 	}
 
 	inputs := op.Inputs()
 	if len(inputs) != 1 {
-		return nil
+		return false
 	}
 
 	switch op.(type) {
 	case *Limit:
 		// empty by design
 	default:
-		return nil
+		return false
 	}
 
-	return getRouteIfPassThroughColumns(inputs[0])
+	return tryTruncateColumnsAt(inputs[0], truncateAt)
 }

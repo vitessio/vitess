@@ -17,7 +17,11 @@ limitations under the License.
 package operators
 
 import (
+	"fmt"
+
 	"golang.org/x/exp/slices"
+
+	"vitess.io/vitess/go/vt/vtgate/semantics"
 
 	"vitess.io/vitess/go/vt/sqlparser"
 
@@ -148,10 +152,7 @@ func pushDownAggregationThroughJoin(ctx *plancontext.PlanningContext, aggregator
 	// If we don't, the LHS will not be able to return the column, and it can't be used to send down to the RHS
 	for _, pred := range join.JoinPredicates {
 		for _, expr := range pred.LHSExprs {
-			lhs = append(lhs, &GroupBy{
-				Inner:       expr,
-				aliasedExpr: aeWrap(expr),
-			})
+			lhs = append(lhs, NewGroupBy(expr, nil, aeWrap(expr)))
 		}
 	}
 
@@ -181,6 +182,56 @@ func pushDownAggregationThroughJoin(ctx *plancontext.PlanningContext, aggregator
 	return aggregator, rewrite.NewTree, nil
 }
 
+func splitCountStar(
+	ctx *plancontext.PlanningContext,
+	aggr *Aggr,
+	lhsTS, rhsTS semantics.TableSet,
+) (lhs, rhs []AggrColumn, joinColumns []JoinColumn, projections []ProjExpr) {
+	lhsAggr := aggr.Clone()
+	rhsAggr := aggr.Clone()
+	lhsExpr := sqlparser.CloneExpr(lhsAggr.Original.Expr)
+	rhsExpr := sqlparser.CloneExpr(rhsAggr.Original.Expr)
+
+	if lhsExpr == rhsExpr {
+		panic(fmt.Sprintf("Need the two produced expressions to be different. %T %T", lhsExpr, rhsExpr))
+	}
+	ctx.SemTable.Direct[lhsExpr] = lhsTS
+	ctx.SemTable.Direct[rhsExpr] = rhsTS
+	ctx.SemTable.Recursive[lhsExpr] = lhsTS
+	ctx.SemTable.Recursive[rhsExpr] = rhsTS
+	lhs = []AggrColumn{lhsAggr}
+	rhs = []AggrColumn{rhsAggr}
+
+	joinColumns = []JoinColumn{{
+		Original: lhsAggr.Original,
+		LHSExprs: []sqlparser.Expr{lhsExpr},
+	}, {
+		Original: rhsAggr.Original,
+		RHSExpr:  rhsExpr,
+	}}
+
+	projExpr := &sqlparser.BinaryExpr{
+		Operator: sqlparser.MultOp,
+		Left:     lhsExpr,
+		Right: &sqlparser.FuncExpr{
+			Name: sqlparser.NewIdentifierCI("coalesce"),
+			Exprs: sqlparser.SelectExprs{
+				&sqlparser.AliasedExpr{Expr: rhsExpr},
+				&sqlparser.AliasedExpr{Expr: sqlparser.NewIntLiteral("1")},
+			},
+		},
+	}
+	projections = []ProjExpr{Expr{
+		E: projExpr,
+	}}
+	aggr.Original = aeWrap(projExpr)
+	aggr.Func = nil
+	aggr.OriginalOpCode = opcode.AggregateCountStar
+	aggr.OpCode = opcode.AggregateSum
+
+	return
+}
+
 func splitAggrColumnsToLeftAndRight(
 	ctx *plancontext.PlanningContext,
 	aggregator *Aggregator,
@@ -190,69 +241,18 @@ func splitAggrColumnsToLeftAndRight(
 	rhsTS := TableID(join.RHS)
 
 	handleAggr := func(aggr *Aggr) {
-		if aggr.OpCode == opcode.AggregateCountStar {
-			lhsAggr := aggr.Clone()
-			rhsAggr := aggr.Clone()
-			lhsExpr := sqlparser.CloneExpr(lhsAggr.Original.Expr)
-			rhsExpr := sqlparser.CloneExpr(rhsAggr.Original.Expr)
-			if lhsExpr == rhsExpr {
-				panic(432)
-			}
-			ctx.SemTable.Direct[lhsExpr] = lhsTS
-			ctx.SemTable.Direct[rhsExpr] = rhsTS
-			ctx.SemTable.Recursive[lhsExpr] = lhsTS
-			ctx.SemTable.Recursive[rhsExpr] = rhsTS
-			lhs = append(lhs, lhsAggr)
-			rhs = append(rhs, rhsAggr)
-
-			joinColumns = append(joinColumns,
-				JoinColumn{
-					Original: lhsAggr.Original,
-					LHSExprs: []sqlparser.Expr{lhsExpr},
-				},
-				JoinColumn{
-					Original: rhsAggr.Original,
-					RHSExpr:  rhsExpr,
-				})
-			projExpr := &sqlparser.BinaryExpr{
-				Operator: sqlparser.MultOp,
-				Left:     lhsExpr,
-				Right: &sqlparser.FuncExpr{
-					Name: sqlparser.NewIdentifierCI("coalesce"),
-					Exprs: sqlparser.SelectExprs{
-						&sqlparser.AliasedExpr{Expr: rhsExpr},
-						&sqlparser.AliasedExpr{Expr: sqlparser.NewIntLiteral("1")},
-					},
-				},
-			}
-			projections = append(projections, Expr{
-				E: projExpr,
-			})
-			aggr.Original = aeWrap(projExpr)
-			aggr.Func = nil
-			aggr.OriginalOpCode = opcode.AggregateCountStar
-			aggr.OpCode = opcode.AggregateSum
-
+		switch aggr.OpCode {
+		case opcode.AggregateCountStar:
+			l, r, j, p := splitCountStar(ctx, aggr, lhsTS, rhsTS)
+			lhs = append(lhs, l...)
+			rhs = append(rhs, r...)
+			joinColumns = append(joinColumns, j...)
+			projections = append(projections, p...)
+			return
+		default:
+			err = errHorizonNotPlanned()
 			return
 		}
-		// deps := ctx.SemTable.RecursiveDeps(aggr.Original.Expr)
-		// var other *Aggr
-		// // if we are sending down min/max/random, we don't have to multiply the results with anything
-		// if !isMinOrMax(newAggr.OpCode) && !isRandom(newAggr.OpCode) {
-		// 	other = countStarAggr()
-		// }
-		// switch {
-		// case deps.IsSolvedBy(lhsTS):
-		// 	lhs = append(lhs, &newAggr)
-		// 	rhs = append(rhs, other)
-		// case deps.IsSolvedBy(rhsTS):
-		// 	rhs = append(rhs, &newAggr)
-		// 	lhs = append(lhs, other)
-		// default:
-		// 	err = vterrors.VT12001("aggregation on columns from different sources")
-		// 	return
-		// }
-
 	}
 
 	for _, col := range aggregator.Columns {
@@ -265,51 +265,7 @@ func splitAggrColumnsToLeftAndRight(
 		case *GroupBy:
 			err = errHorizonNotPlanned()
 			return
-			// deps := ctx.SemTable.RecursiveDeps(col.Inner)
-			// switch {
-			// case deps.IsSolvedBy(lhsTS):
-			//
-			// 	groupingOffsets = append(groupingOffsets, -(len(lhsGrouping) + 1))
-			// 	lhsGrouping = append(lhsGrouping, groupBy)
-			// case deps.IsSolvedBy(rhsTS):
-			// 	groupingOffsets = append(groupingOffsets, len(rhsGrouping)+1)
-			// 	rhsGrouping = append(rhsGrouping, groupBy)
-			// default:
-			// 	return nil, nil, nil, vterrors.VT12001("grouping on columns from different sources")
-			// }
 		}
 	}
 	return
-}
-
-func isMinOrMax(in opcode.AggregateOpcode) bool {
-	switch in {
-	case opcode.AggregateMin, opcode.AggregateMax:
-		return true
-	default:
-		return false
-	}
-}
-
-func isCount(in opcode.AggregateOpcode) bool {
-	switch in {
-	case opcode.AggregateCount, opcode.AggregateCountStar, opcode.AggregateCountDistinct:
-		return true
-	default:
-		return false
-	}
-}
-
-func isRandom(in opcode.AggregateOpcode) bool {
-	return in == opcode.AggregateRandom
-}
-
-func countStarAggr() *Aggr {
-	f := &sqlparser.CountStar{}
-
-	return &Aggr{
-		Original: &sqlparser.AliasedExpr{Expr: f},
-		OpCode:   opcode.AggregateCountStar,
-		Alias:    "count(*)",
-	}
 }

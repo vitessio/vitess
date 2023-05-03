@@ -110,6 +110,7 @@ func transformAggregator(ctx *plancontext.PlanningContext, op *operators.Aggrega
 			})
 		}
 	}
+	oa.truncateColumnCount = op.ResultColumns
 	return oa, nil
 }
 
