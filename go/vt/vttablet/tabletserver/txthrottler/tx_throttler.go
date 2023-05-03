@@ -33,11 +33,11 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/throttler"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	throttlerdatapb "vitess.io/vitess/go/vt/proto/throttlerdata"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 // TxThrottler throttles transactions based on replication lag.
@@ -153,7 +153,7 @@ type txThrottlerConfig struct {
 	healthCheckCells []string
 
 	// tabletTypes stores the tablet types for throttling
-	tabletTypes []topodatapb.TabletType
+	tabletTypes *topoproto.TabletTypeListFlag
 }
 
 // ThrottlerInterface defines the public interface that is implemented by go/vt/throttler.Throttler
@@ -377,9 +377,13 @@ func (ts *txThrottlerState) deallocateResources() {
 
 // StatsUpdate updates the health of a tablet with the given healthcheck.
 func (ts *txThrottlerState) StatsUpdate(tabletStats *discovery.TabletHealth) {
+	if ts.config.tabletTypes == nil {
+		return
+	}
+
 	// Monitor tablets for replication lag if they have a tablet
 	// type specified by the --tx_throttler_tablet_types flag.
-	for _, expectedTabletType := range ts.config.tabletTypes {
+	for _, expectedTabletType := range *ts.config.tabletTypes {
 		if tabletStats.Target.TabletType == expectedTabletType {
 			ts.throttler.RecordReplicationLag(time.Now(), tabletStats)
 			return
