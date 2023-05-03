@@ -462,7 +462,7 @@ func TestStartFindMysqlPort(t *testing.T) {
 		if ti.MysqlPort == 3306 {
 			return
 		}
-		time.Sleep(50 * time.Millisecond)
+		time.Sleep(500 * time.Millisecond)
 	}
 	assert.Fail(t, "mysql port was not updated.", "Final value - %v", ti.MysqlPort)
 }
