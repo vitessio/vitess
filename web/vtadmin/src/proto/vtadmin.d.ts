@@ -37103,6 +37103,9 @@ export namespace query {
 
         /** RealtimeStats throttler_metric */
         throttler_metric?: (number|null);
+
+        /** RealtimeStats throttler_metric_collected */
+        throttler_metric_collected?: (boolean|null);
     }
 
     /** Represents a RealtimeStats. */
@@ -37146,6 +37149,9 @@ export namespace query {
 
         /** RealtimeStats throttler_metric. */
         public throttler_metric: number;
+
+        /** RealtimeStats throttler_metric_collected. */
+        public throttler_metric_collected: boolean;
 
         /**
          * Creates a new RealtimeStats instance using the specified properties.
