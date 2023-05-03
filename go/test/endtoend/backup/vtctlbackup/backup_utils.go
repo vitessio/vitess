@@ -24,6 +24,7 @@ import (
 	"os/exec"
 	"path"
 	"strings"
+	"sync"
 	"syscall"
 	"testing"
 	"time"
@@ -42,6 +43,8 @@ import (
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
+
+	reparentutils "vitess.io/vitess/go/test/endtoend/reparent/utils"
 )
 
 // constants for test variants
@@ -353,6 +356,10 @@ func TestBackup(t *testing.T, setupType int, streamMode string, stripes int, cDe
 		{
 			name:   "TestTerminatedRestore",
 			method: terminatedRestore,
+		}, //
+		{
+			name:   "DoNotDemoteNewlyPromotedPrimaryIfReparentingDuringBackup",
+			method: doNotDemoteNewlyPromotedPrimaryIfReparentingDuringBackup,
 		}, //
 	}
 
@@ -813,6 +820,37 @@ func checkTabletType(t *testing.T, alias string, tabletType topodata.TabletType)
 		time.Sleep(1 * time.Second)
 	}
 	require.Failf(t, "checkTabletType failed.", "Tablet type is not correct. Expected: %v", tabletType)
+}
+
+func doNotDemoteNewlyPromotedPrimaryIfReparentingDuringBackup(t *testing.T) {
+	// insert data on primary, wait for replica to get it
+	verifyInitialReplication(t)
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	// Start the backup on a replica
+	go func() {
+		reparentutils.CheckPrimaryTablet(t, localCluster, primary)
+		err := localCluster.VtctlclientProcess.ExecuteCommand("Backup", replica1.Alias)
+		require.Nil(t, err)
+		wg.Done()
+	}()
+
+	// Perform a graceful reparent operation
+	go func() {
+		reparentutils.CheckPrimaryTablet(t, localCluster, primary)
+		_, err := reparentutils.Prs(t, localCluster, replica1)
+		require.Nil(t, err)
+		reparentutils.CheckPrimaryTablet(t, localCluster, replica1)
+		wg.Done()
+	}()
+
+	wg.Wait()
+	reparentutils.ValidateTopology(t, localCluster, false)
+	reparentutils.CheckPrimaryTablet(t, localCluster, replica1)
+
+	reparentutils.ConfirmReplication(t, replica1, []*cluster.Vttablet{primary, replica2})
 }
 
 // test_backup will:
