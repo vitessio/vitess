@@ -892,7 +892,10 @@ message RealtimeStats {
   // i.e. the metric collected from the throttler's tablet's mysqld
   double throttler_metric = 11;
 
-
+  // ThrottlerMetricCollected is a _temporary_ flag, always set to 'true', to help distinguish between `ThrottlerMetric==0` and
+  // `ThrottlerMetric` not existing. It is useful in v17 because before v17 `ThrottlerMetric` does not exist. It can be removed in v18
+  // because we can then expect it to always exist.
+  bool throttler_metric_collected = 12;
 }
 
 // AggregateStats contains information about the health of a group of
