@@ -18,30 +18,37 @@ package api
 
 import (
 	"fmt"
-	"strings"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/vtorc/utils"
-	"vitess.io/vitess/go/vt/vtorc/process"
 )
 
-// make an api call to /api/problems endpoint
-// and verify the output
-func TestProblemsAPI(t *testing.T) {
+// TestAPIEndpoints tests the various API endpoints that VTOrc offers.
+func TestAPIEndpoints(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 1, nil, cluster.VTOrcConfiguration{
 		PreventCrossDataCenterPrimaryFailover: true,
 		RecoveryPeriodBlockSeconds:            5,
+		// The default topo refresh time is 3 seconds. We are intentionally making it slower for the test, so that we have time to verify
+		// the /debug/health output before and after the first refresh runs.
+		TopoInformationRefreshSeconds: 10,
 	}, 1, "")
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 	vtorc := clusterInfo.ClusterInstance.VTOrcProcesses[0]
+	// Call API with retry to ensure VTOrc is up
+	status, resp := utils.MakeAPICallRetry(t, vtorc, "/debug/health", func(code int, response string) bool {
+		return code == 0
+	})
+	// When VTOrc is up and hasn't run the topo-refresh, is should be healthy but HasDiscovered should be false.
+	assert.Equal(t, 500, status)
+	assert.Contains(t, resp, `"Healthy": true,`)
+	assert.Contains(t, resp, `"HasDiscoveredOnce": false`)
 
 	// find primary from topo
 	primary := utils.ShardPrimaryTablet(t, clusterInfo, keyspace, shard0)
@@ -70,6 +77,7 @@ func TestProblemsAPI(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, 200, status)
 		assert.Contains(t, resp, `"Healthy": true,`)
+		assert.Contains(t, resp, `"HasDiscoveredOnce": true`)
 	})
 
 	t.Run("Liveness API", func(t *testing.T) {
@@ -190,47 +198,4 @@ func TestProblemsAPI(t *testing.T) {
 		assert.Equal(t, 400, status, resp)
 		assert.Equal(t, "Filtering by shard without keyspace isn't supported\n", resp)
 	})
-}
-
-// TestIfDiscoveringHappenedLaterInHealthCheck checks that `IsDiscovering` flag in `HealthStatus` turns `true`, sometime
-// after flag `Healthy` turns `true`.
-func TestIfDiscoveringHappenedLaterInHealthCheck(t *testing.T) {
-	defer cluster.PanicHandler(t)
-	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 1, nil, cluster.VTOrcConfiguration{
-		PreventCrossDataCenterPrimaryFailover: true,
-		RecoveryPeriodBlockSeconds:            5,
-		TopoInformationRefreshSeconds:         5,
-	}, 1, "")
-	vtorc := clusterInfo.ClusterInstance.VTOrcProcesses[0]
-	// Call API with retry to ensure health service is up
-	status, resp := utils.MakeAPICallRetry(t, vtorc, "/debug/health", func(code int, response string) bool {
-		return code == 0 && (strings.Contains(response, "connection refused") || strings.Contains(response, ""))
-	})
-	assert.Equal(t, 200, status)
-	// Since TopoInformationRefreshSeconds is default to 3s for this test. This will ensure there will ~3 seconds
-	// delay between `Healthy` and `IsDiscovering` to turn `true`
-	assert.Contains(t, resp, `"Healthy": true,`)
-	assert.Contains(t, resp, `"IsDiscovering": false`)
-	startTime := time.Now()
-	for {
-		// Check that VTOrc is healthy
-		status, resp, err := utils.MakeAPICall(t, vtorc, "/debug/health")
-		require.NoError(t, err)
-		assert.Equal(t, 200, status)
-		var healthStatus process.HealthStatus
-		err = json2.Unmarshal([]byte(resp), &healthStatus)
-		assert.Nil(t, err)
-		assert.Equal(t, healthStatus.Healthy, true)
-		if healthStatus.HasDiscoveredOnce {
-			timeForIsRecovering := time.Now()
-			require.Greater(t, timeForIsRecovering, startTime)
-			return
-		}
-		if time.Since(startTime) > 10*time.Second {
-			// time out
-			t.Fatal("timed out waiting for `timeForIsRecovering` to turned `true`")
-			return
-		}
-		time.Sleep(1 * time.Second)
-	}
 }
