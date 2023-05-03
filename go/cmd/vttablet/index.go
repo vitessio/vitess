@@ -18,6 +18,8 @@ package main
 
 import (
 	"net/http"
+
+	"vitess.io/vitess/go/vt/servenv"
 )
 
 // This is a separate file so it can be selectively included/excluded from
@@ -25,7 +27,7 @@ import (
 
 func init() {
 	// Anything unrecognized gets redirected to the status page.
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+	servenv.HTTPHandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/debug/status", http.StatusFound)
 	})
 }

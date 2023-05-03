@@ -18,11 +18,11 @@ package vreplication
 
 import (
 	"bytes"
-	"html/template"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/google/safehtml/template"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"

@@ -129,7 +129,7 @@ func (b *binder) bindCountStar(node *sqlparser.CountStar) {
 				}
 			}
 		default:
-			expr := tbl.getExpr()
+			expr := tbl.GetExpr()
 			if expr != nil {
 				setFor := b.tc.tableSetFor(expr)
 				ts = ts.Merge(setFor)
@@ -150,7 +150,7 @@ func (b *binder) rewriteJoinUsingColName(deps dependency, node *sqlparser.ColNam
 	if err != nil {
 		return dependency{}, err
 	}
-	alias := infoFor.getExpr().As
+	alias := infoFor.GetExpr().As
 	if alias.IsEmpty() {
 		name, err := infoFor.Name()
 		if err != nil {

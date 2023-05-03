@@ -36,14 +36,14 @@ select * from user where name = 'bob' or nickname = 'bob' /* vindex lookup */
 ----------------------------------------------------------------------
 select u.id, u.name, u.nickname, n.info from user u join name_info n on u.name = n.name /* join on varchar */
 
-1 ks_sharded/-40: select u.`name`, u.id, u.nickname from `user` as u limit 10001 /* join on varchar */
-1 ks_sharded/40-80: select u.`name`, u.id, u.nickname from `user` as u limit 10001 /* join on varchar */
-1 ks_sharded/80-c0: select u.`name`, u.id, u.nickname from `user` as u limit 10001 /* join on varchar */
-1 ks_sharded/c0-: select u.`name`, u.id, u.nickname from `user` as u limit 10001 /* join on varchar */
-2 ks_sharded/80-c0: select n.info from name_info as n where n.`name` = 'name_val_1' limit 10001 /* join on varchar */
-3 ks_sharded/80-c0: select n.info from name_info as n where n.`name` = 'name_val_1' limit 10001 /* join on varchar */
-4 ks_sharded/80-c0: select n.info from name_info as n where n.`name` = 'name_val_1' limit 10001 /* join on varchar */
-5 ks_sharded/80-c0: select n.info from name_info as n where n.`name` = 'name_val_1' limit 10001 /* join on varchar */
+1 ks_sharded/-40: select u.id, u.`name`, u.nickname from `user` as u limit 10001 /* join on varchar */
+1 ks_sharded/40-80: select u.id, u.`name`, u.nickname from `user` as u limit 10001 /* join on varchar */
+1 ks_sharded/80-c0: select u.id, u.`name`, u.nickname from `user` as u limit 10001 /* join on varchar */
+1 ks_sharded/c0-: select u.id, u.`name`, u.nickname from `user` as u limit 10001 /* join on varchar */
+2 ks_sharded/40-80: select n.info from name_info as n where n.`name` = 'name_val_2' limit 10001 /* join on varchar */
+3 ks_sharded/40-80: select n.info from name_info as n where n.`name` = 'name_val_2' limit 10001 /* join on varchar */
+4 ks_sharded/40-80: select n.info from name_info as n where n.`name` = 'name_val_2' limit 10001 /* join on varchar */
+5 ks_sharded/40-80: select n.info from name_info as n where n.`name` = 'name_val_2' limit 10001 /* join on varchar */
 
 ----------------------------------------------------------------------
 select m.id, m.song, e.extra from music m join music_extra e on m.id = e.id where m.user_id = 100 /* join on int */
@@ -191,14 +191,14 @@ select id from user where not id in (select col from music where music.user_id =
 ----------------------------------------------------------------------
 SELECT user.id, user.name, name_info.info FROM user INNER JOIN music ON (user.id = music.user_id) LEFT OUTER JOIN name_info ON (user.name = name_info.name)
 
-1 ks_sharded/-40: select `user`.`name`, `user`.id from `user`, music where `user`.id = music.user_id limit 10001
-1 ks_sharded/40-80: select `user`.`name`, `user`.id from `user`, music where `user`.id = music.user_id limit 10001
-1 ks_sharded/80-c0: select `user`.`name`, `user`.id from `user`, music where `user`.id = music.user_id limit 10001
-1 ks_sharded/c0-: select `user`.`name`, `user`.id from `user`, music where `user`.id = music.user_id limit 10001
-2 ks_sharded/80-c0: select name_info.info from name_info where name_info.`name` = 'name_val_1' limit 10001
-3 ks_sharded/80-c0: select name_info.info from name_info where name_info.`name` = 'name_val_1' limit 10001
-4 ks_sharded/80-c0: select name_info.info from name_info where name_info.`name` = 'name_val_1' limit 10001
-5 ks_sharded/80-c0: select name_info.info from name_info where name_info.`name` = 'name_val_1' limit 10001
+1 ks_sharded/-40: select `user`.id, `user`.`name` from `user`, music where `user`.id = music.user_id limit 10001
+1 ks_sharded/40-80: select `user`.id, `user`.`name` from `user`, music where `user`.id = music.user_id limit 10001
+1 ks_sharded/80-c0: select `user`.id, `user`.`name` from `user`, music where `user`.id = music.user_id limit 10001
+1 ks_sharded/c0-: select `user`.id, `user`.`name` from `user`, music where `user`.id = music.user_id limit 10001
+2 ks_sharded/40-80: select name_info.info from name_info where name_info.`name` = 'name_val_2' limit 10001
+3 ks_sharded/40-80: select name_info.info from name_info where name_info.`name` = 'name_val_2' limit 10001
+4 ks_sharded/40-80: select name_info.info from name_info where name_info.`name` = 'name_val_2' limit 10001
+5 ks_sharded/40-80: select name_info.info from name_info where name_info.`name` = 'name_val_2' limit 10001
 
 ----------------------------------------------------------------------
 SELECT id FROM orders WHERE id IN (1, "1", 1)

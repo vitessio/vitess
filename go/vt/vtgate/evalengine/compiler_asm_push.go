@@ -20,8 +20,8 @@ import (
 	"vitess.io/vitess/go/hack"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/decimal"
+	"vitess.io/vitess/go/mysql/fastparse"
 	"vitess.io/vitess/go/mysql/json"
-	"vitess.io/vitess/go/mysql/json/fastparse"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -319,7 +319,7 @@ func (asm *assembler) PushLiteral(lit eval) error {
 		}, "PUSH VARCHAR(%q)", lit.ToRawBytes())
 	case *evalTemporal:
 		asm.emit(func(env *ExpressionEnv) int {
-			env.vm.stack[env.vm.sp] = env.vm.arena.newTemporal(lit.t, lit.dt)
+			env.vm.stack[env.vm.sp] = env.vm.arena.newTemporal(lit.t, lit.dt, lit.prec)
 			env.vm.sp++
 			return 1
 		}, "PUSH TIME|DATETIME|DATE(%q)", lit.ToRawBytes())

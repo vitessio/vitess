@@ -127,6 +127,10 @@ jobs:
 
         set -x
 
+        cat <<-EOF>>./config/mycnf/mysql80.cnf
+        binlog-transaction-compression=ON
+        EOF
+        
         # run the tests however you normally do, then produce a JUnit XML file
         eatmydata -- go run test.go -docker=false -follow -shard schemadiff_vrepl | tee -a output.txt | go-junit-report -set-exit-code > report.xml
 

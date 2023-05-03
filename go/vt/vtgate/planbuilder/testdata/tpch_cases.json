@@ -278,9 +278,9 @@
                               {
                                 "OperatorType": "Join",
                                 "Variant": "Join",
-                                "JoinColumnIndexes": "L:1,R:0,L:1,R:0,L:4,R:2,L:2,R:1",
+                                "JoinColumnIndexes": "L:0,R:0,L:0,R:0,L:4,R:2,L:2,R:1",
                                 "JoinVars": {
-                                  "o_custkey": 0
+                                  "o_custkey": 1
                                 },
                                 "TableName": "orders_customer",
                                 "Inputs": [
@@ -291,8 +291,8 @@
                                       "Name": "main",
                                       "Sharded": true
                                     },
-                                    "FieldQuery": "select o_custkey, o_orderkey, count(*), weight_string(o_custkey), weight_string(o_orderkey) from orders where 1 != 1 group by o_custkey, weight_string(o_custkey), o_orderkey, weight_string(o_orderkey)",
-                                    "Query": "select o_custkey, o_orderkey, count(*), weight_string(o_custkey), weight_string(o_orderkey) from orders where o_orderdate >= date('1994-01-01') and o_orderdate < date('1994-01-01') + interval '1' year group by o_custkey, weight_string(o_custkey), o_orderkey, weight_string(o_orderkey)",
+                                    "FieldQuery": "select o_orderkey, o_custkey, count(*), weight_string(o_custkey), weight_string(o_orderkey) from orders where 1 != 1 group by o_custkey, weight_string(o_custkey), o_orderkey, weight_string(o_orderkey)",
+                                    "Query": "select o_orderkey, o_custkey, count(*), weight_string(o_custkey), weight_string(o_orderkey) from orders where o_orderdate >= date('1994-01-01') and o_orderdate < date('1994-01-01') + interval '1' year group by o_custkey, weight_string(o_custkey), o_orderkey, weight_string(o_orderkey)",
                                     "Table": "orders"
                                   },
                                   {
@@ -536,18 +536,18 @@
                       {
                         "OperatorType": "Join",
                         "Variant": "Join",
-                        "JoinColumnIndexes": "L:1,R:0,R:1,L:2,L:3,L:5,R:2,R:3,R:4,L:6,L:8,R:5,R:6,R:7,L:9,L:10,L:11,R:8,R:9,R:10,L:12",
+                        "JoinColumnIndexes": "L:0,R:0,R:1,L:2,L:3,L:5,R:2,R:3,R:4,L:6,L:8,R:5,R:6,R:7,L:9,L:10,L:11,R:8,R:9,R:10,L:12",
                         "JoinVars": {
-                          "l_suppkey": 0
+                          "l_suppkey": 1
                         },
                         "TableName": "lineitem_orders_supplier_nation",
                         "Inputs": [
                           {
                             "OperatorType": "Join",
                             "Variant": "Join",
-                            "JoinColumnIndexes": "L:1,R:0,L:2,L:3,L:1,R:0,L:2,L:6,R:2,L:7,L:4,R:1,L:8",
+                            "JoinColumnIndexes": "R:0,L:0,L:2,L:3,L:0,R:0,L:2,L:6,R:2,L:7,L:4,R:1,L:8",
                             "JoinVars": {
-                              "l_orderkey": 0
+                              "l_orderkey": 1
                             },
                             "TableName": "lineitem_orders",
                             "Inputs": [
@@ -558,8 +558,8 @@
                                   "Name": "main",
                                   "Sharded": true
                                 },
-                                "FieldQuery": "select l_orderkey, l_suppkey, extract(year from l_shipdate) as l_year, l_extendedprice * (1 - l_discount) as volume, sum(volume) as revenue, weight_string(l_orderkey), weight_string(l_suppkey), weight_string(extract(year from l_shipdate)), weight_string(extract(year from l_shipdate)) from lineitem where 1 != 1 group by l_orderkey, weight_string(l_orderkey), l_suppkey, weight_string(l_suppkey), l_year, weight_string(l_year)",
-                                "Query": "select l_orderkey, l_suppkey, extract(year from l_shipdate) as l_year, l_extendedprice * (1 - l_discount) as volume, sum(volume) as revenue, weight_string(l_orderkey), weight_string(l_suppkey), weight_string(extract(year from l_shipdate)), weight_string(extract(year from l_shipdate)) from lineitem where l_shipdate between date('1995-01-01') and date('1996-12-31') group by l_orderkey, weight_string(l_orderkey), l_suppkey, weight_string(l_suppkey), l_year, weight_string(l_year)",
+                                "FieldQuery": "select l_suppkey, l_orderkey, extract(year from l_shipdate) as l_year, l_extendedprice * (1 - l_discount) as volume, sum(volume) as revenue, weight_string(l_orderkey), weight_string(l_suppkey), weight_string(extract(year from l_shipdate)), weight_string(extract(year from l_shipdate)) from lineitem where 1 != 1 group by l_orderkey, weight_string(l_orderkey), l_suppkey, weight_string(l_suppkey), l_year, weight_string(l_year)",
+                                "Query": "select l_suppkey, l_orderkey, extract(year from l_shipdate) as l_year, l_extendedprice * (1 - l_discount) as volume, sum(volume) as revenue, weight_string(l_orderkey), weight_string(l_suppkey), weight_string(extract(year from l_shipdate)), weight_string(extract(year from l_shipdate)) from lineitem where l_shipdate between date('1995-01-01') and date('1996-12-31') group by l_orderkey, weight_string(l_orderkey), l_suppkey, weight_string(l_suppkey), l_year, weight_string(l_year)",
                                 "Table": "lineitem"
                               },
                               {
@@ -752,9 +752,9 @@
                               {
                                 "OperatorType": "Join",
                                 "Variant": "Join",
-                                "JoinColumnIndexes": "L:1,L:1,L:4,L:2,R:1",
+                                "JoinColumnIndexes": "L:0,L:0,L:4,L:2,R:1",
                                 "JoinVars": {
-                                  "o_orderkey": 0
+                                  "o_orderkey": 1
                                 },
                                 "TableName": "orders_lineitem",
                                 "Inputs": [
@@ -765,8 +765,8 @@
                                       "Name": "main",
                                       "Sharded": true
                                     },
-                                    "FieldQuery": "select o_orderkey, o_custkey, count(*), weight_string(o_orderkey), weight_string(o_custkey) from orders where 1 != 1 group by o_orderkey, weight_string(o_orderkey), o_custkey, weight_string(o_custkey)",
-                                    "Query": "select o_orderkey, o_custkey, count(*), weight_string(o_orderkey), weight_string(o_custkey) from orders where o_orderdate >= date('1993-10-01') and o_orderdate < date('1993-10-01') + interval '3' month group by o_orderkey, weight_string(o_orderkey), o_custkey, weight_string(o_custkey)",
+                                    "FieldQuery": "select o_custkey, o_orderkey, count(*), weight_string(o_orderkey), weight_string(o_custkey) from orders where 1 != 1 group by o_orderkey, weight_string(o_orderkey), o_custkey, weight_string(o_custkey)",
+                                    "Query": "select o_custkey, o_orderkey, count(*), weight_string(o_orderkey), weight_string(o_custkey) from orders where o_orderdate >= date('1993-10-01') and o_orderdate < date('1993-10-01') + interval '3' month group by o_orderkey, weight_string(o_orderkey), o_custkey, weight_string(o_custkey)",
                                     "Table": "orders"
                                   },
                                   {
@@ -1178,9 +1178,9 @@
                           {
                             "OperatorType": "Join",
                             "Variant": "Join",
-                            "JoinColumnIndexes": "L:1,L:1,L:5,L:7,R:1,R:3,L:1,L:4,L:6,L:8,R:2,R:4,L:4,L:2,R:0",
+                            "JoinColumnIndexes": "L:0,L:0,L:5,L:7,R:1,R:3,L:0,L:4,L:6,L:8,R:2,R:4,L:4,L:2,R:0",
                             "JoinVars": {
-                              "o_custkey": 0
+                              "o_custkey": 1
                             },
                             "TableName": "orders_customer",
                             "Inputs": [
@@ -1191,8 +1191,8 @@
                                   "Name": "main",
                                   "Sharded": true
                                 },
-                                "FieldQuery": "select o_custkey, o_orderkey, count(*), weight_string(o_custkey), weight_string(o_orderkey), o_totalprice, weight_string(o_totalprice), o_orderdate, weight_string(o_orderdate) from orders where 1 != 1 group by o_custkey, weight_string(o_custkey), o_orderkey, weight_string(o_orderkey), o_totalprice, weight_string(o_totalprice), o_orderdate, weight_string(o_orderdate)",
-                                "Query": "select o_custkey, o_orderkey, count(*), weight_string(o_custkey), weight_string(o_orderkey), o_totalprice, weight_string(o_totalprice), o_orderdate, weight_string(o_orderdate) from orders where :o_orderkey in (select l_orderkey from lineitem group by l_orderkey having sum(l_quantity) > 300) group by o_custkey, weight_string(o_custkey), o_orderkey, weight_string(o_orderkey), o_totalprice, weight_string(o_totalprice), o_orderdate, weight_string(o_orderdate)",
+                                "FieldQuery": "select o_orderkey, o_custkey, count(*), weight_string(o_custkey), weight_string(o_orderkey), o_totalprice, weight_string(o_totalprice), o_orderdate, weight_string(o_orderdate) from orders where 1 != 1 group by o_custkey, weight_string(o_custkey), o_orderkey, weight_string(o_orderkey), o_totalprice, weight_string(o_totalprice), o_orderdate, weight_string(o_orderdate)",
+                                "Query": "select o_orderkey, o_custkey, count(*), weight_string(o_custkey), weight_string(o_orderkey), o_totalprice, weight_string(o_totalprice), o_orderdate, weight_string(o_orderdate) from orders where :o_orderkey in (select l_orderkey from lineitem group by l_orderkey having sum(l_quantity) > 300) group by o_custkey, weight_string(o_custkey), o_orderkey, weight_string(o_orderkey), o_totalprice, weight_string(o_totalprice), o_orderdate, weight_string(o_orderdate)",
                                 "Table": "orders",
                                 "Values": [
                                   "::__sq1"
@@ -1391,9 +1391,9 @@
                               {
                                 "OperatorType": "Join",
                                 "Variant": "Join",
-                                "JoinColumnIndexes": "L:1,L:1,L:4,L:2,R:1",
+                                "JoinColumnIndexes": "L:0,L:0,L:4,L:2,R:1",
                                 "JoinVars": {
-                                  "l1_l_orderkey": 0
+                                  "l1_l_orderkey": 1
                                 },
                                 "TableName": "lineitem_orders",
                                 "Inputs": [
@@ -1404,8 +1404,8 @@
                                       "Name": "main",
                                       "Sharded": true
                                     },
-                                    "FieldQuery": "select l1.l_orderkey, l1.l_suppkey, count(*) as numwait, weight_string(l1.l_orderkey), weight_string(l1.l_suppkey) from lineitem as l1 where 1 != 1 group by l1.l_orderkey, weight_string(l1.l_orderkey), l1.l_suppkey, weight_string(l1.l_suppkey)",
-                                    "Query": "select l1.l_orderkey, l1.l_suppkey, count(*) as numwait, weight_string(l1.l_orderkey), weight_string(l1.l_suppkey) from lineitem as l1 where l1.l_receiptdate > l1.l_commitdate and exists (select 1 from lineitem as l2 where l2.l_orderkey = l1.l_orderkey and l2.l_suppkey != l1.l_suppkey limit 1) and not exists (select 1 from lineitem as l3 where l3.l_orderkey = l1.l_orderkey and l3.l_suppkey != l1.l_suppkey and l3.l_receiptdate > l3.l_commitdate limit 1) group by l1.l_orderkey, weight_string(l1.l_orderkey), l1.l_suppkey, weight_string(l1.l_suppkey)",
+                                    "FieldQuery": "select l1.l_suppkey, l1.l_orderkey, count(*) as numwait, weight_string(l1.l_orderkey), weight_string(l1.l_suppkey) from lineitem as l1 where 1 != 1 group by l1.l_orderkey, weight_string(l1.l_orderkey), l1.l_suppkey, weight_string(l1.l_suppkey)",
+                                    "Query": "select l1.l_suppkey, l1.l_orderkey, count(*) as numwait, weight_string(l1.l_orderkey), weight_string(l1.l_suppkey) from lineitem as l1 where l1.l_receiptdate > l1.l_commitdate and exists (select 1 from lineitem as l2 where l2.l_orderkey = l1.l_orderkey and l2.l_suppkey != l1.l_suppkey limit 1) and not exists (select 1 from lineitem as l3 where l3.l_orderkey = l1.l_orderkey and l3.l_suppkey != l1.l_suppkey and l3.l_receiptdate > l3.l_commitdate limit 1) group by l1.l_orderkey, weight_string(l1.l_orderkey), l1.l_suppkey, weight_string(l1.l_suppkey)",
                                     "Table": "lineitem"
                                   },
                                   {

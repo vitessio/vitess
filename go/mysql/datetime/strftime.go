@@ -121,7 +121,7 @@ func (f *Strftime) FormatNumeric(t DateTime) (n int64) {
 	return n
 }
 
-func (f *Strftime) parse(s string) (DateTime, string, bool) {
+func (f *Strftime) parse(s string, prec int) (DateTime, string, int, bool) {
 	var tp timeparts
 	tp.month = -1
 	tp.day = -1
@@ -131,19 +131,14 @@ func (f *Strftime) parse(s string) (DateTime, string, bool) {
 	for _, w := range f.compiled {
 		s, ok = w.parse(&tp, s)
 		if !ok {
-			return DateTime{}, "", false
+			return DateTime{}, "", 0, false
 		}
 	}
-	t, ok := tp.toDateTime()
-	return t, s, ok
+	t, l, ok := tp.toDateTime(prec)
+	return t, s, l, ok
 }
 
-func (f *Strftime) Parse(s string) (DateTime, bool) {
-	t, s, ok := f.parse(s)
-	return t, ok && len(s) == 0
-}
-
-func (f *Strftime) ParseBestEffort(s string) (DateTime, bool) {
-	t, _, ok := f.parse(s)
-	return t, ok
+func (f *Strftime) Parse(s string, prec int) (DateTime, int, bool) {
+	t, s, l, ok := f.parse(s, prec)
+	return t, l, ok && len(s) == 0
 }

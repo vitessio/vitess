@@ -19,10 +19,11 @@ package callinfo
 // This file implements the CallInfo interface for Mysql contexts.
 
 import (
-	"fmt"
-	"html/template"
-
 	"context"
+	"fmt"
+
+	"github.com/google/safehtml"
+	"github.com/google/safehtml/template"
 
 	"vitess.io/vitess/go/mysql"
 )
@@ -53,6 +54,18 @@ func (mci *mysqlCallInfoImpl) Text() string {
 	return fmt.Sprintf("%s@%s(Mysql)", mci.user, mci.remoteAddr)
 }
 
-func (mci *mysqlCallInfoImpl) HTML() template.HTML {
-	return template.HTML("<b>MySQL User:</b> " + mci.user + " <b>Remote Addr:<b> " + mci.remoteAddr)
+var mysqlTmpl = template.Must(template.New("tcs").Parse("<b>MySQL User:</b> {{.MySQLUser}} <b>Remote Addr:</b> {{.RemoteAddr}}"))
+
+func (mci *mysqlCallInfoImpl) HTML() safehtml.HTML {
+	html, err := mysqlTmpl.ExecuteToHTML(struct {
+		MySQLUser  string
+		RemoteAddr string
+	}{
+		MySQLUser:  mci.user,
+		RemoteAddr: mci.remoteAddr,
+	})
+	if err != nil {
+		panic(err)
+	}
+	return html
 }

@@ -882,6 +882,15 @@
 			"RetryMax": 1,
 			"Tags": []
 		},
+		"vtgate_grpc_server_acls": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/grpc_server_acls"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vtgate_general_heavy",
+			"RetryMax": 1,
+			"Tags": []
+		},
 		"topo_zk2": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/topotest/zk2", "--topo-flavor=zk2"],
@@ -1209,6 +1218,15 @@
 		"prscomplex": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/reparent/prscomplex"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vttablet_prscomplex",
+			"RetryMax": 1,
+			"Tags": [""]
+		},
+		"prssettingspool": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/reparent/prssettingspool"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "vttablet_prscomplex",

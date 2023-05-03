@@ -16,6 +16,7 @@ limitations under the License.
 package fastparse
 
 import (
+	"math"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -47,6 +48,33 @@ func TestParseInt64(t *testing.T) {
 			input:    "10",
 			base:     2,
 			expected: 2,
+		},
+		{
+			input:    " 10",
+			base:     10,
+			expected: 10,
+		},
+		{
+			input:    " 10 ",
+			base:     10,
+			expected: 10,
+		},
+		{
+			input:    " 10 1",
+			base:     10,
+			expected: 10,
+			err:      `unparsed tail left after parsing int64 from " 10 1": "1"`,
+		},
+		{
+			input:    " -10 ",
+			base:     10,
+			expected: -10,
+		},
+		{
+			input:    " -10 1",
+			base:     10,
+			expected: -10,
+			err:      `unparsed tail left after parsing int64 from " -10 1": "1"`,
 		},
 		{
 			input:    "9223372036854775807",
@@ -145,6 +173,17 @@ func TestParseInt64(t *testing.T) {
 			expected: -1,
 			err:      `unparsed tail left after parsing int64 from "-1.1": ".1"`,
 		},
+		{
+			input:    "\t 42 \t",
+			base:     10,
+			expected: 42,
+		},
+		{
+			input:    "\t 42 \n",
+			base:     10,
+			expected: 42,
+			err:      `unparsed tail left after parsing int64 from "\t 42 \n": "\n"`,
+		},
 	}
 	for _, tc := range testcases {
 		t.Run(tc.input, func(t *testing.T) {
@@ -186,6 +225,22 @@ func TestParseUint64(t *testing.T) {
 			input:    "10",
 			base:     2,
 			expected: 2,
+		},
+		{
+			input:    " 10",
+			base:     10,
+			expected: 10,
+		},
+		{
+			input:    " 10 ",
+			base:     10,
+			expected: 10,
+		},
+		{
+			input:    " 10 1",
+			base:     10,
+			expected: 10,
+			err:      `unparsed tail left after parsing uint64 from " 10 1": "1"`,
 		},
 		{
 			input:    "9223372036854775807",
@@ -248,6 +303,17 @@ func TestParseUint64(t *testing.T) {
 			expected: 1,
 			err:      `unparsed tail left after parsing uint64 from "1.1": ".1"`,
 		},
+		{
+			input:    "\t 42 \t",
+			base:     10,
+			expected: 42,
+		},
+		{
+			input:    "\t 42 \n",
+			base:     10,
+			expected: 42,
+			err:      `unparsed tail left after parsing uint64 from "\t 42 \n": "\n"`,
+		},
 	}
 	for _, tc := range testcases {
 		t.Run(tc.input, func(t *testing.T) {
@@ -259,6 +325,217 @@ func TestParseUint64(t *testing.T) {
 				require.Equal(t, tc.expected, val)
 				require.EqualError(t, err, tc.err)
 			}
+		})
+	}
+}
+
+func TestParseFloat64(t *testing.T) {
+	testcases := []struct {
+		input    string
+		expected float64
+		err      string
+	}{
+		{
+			input:    "0",
+			expected: 0,
+		},
+		{
+			input:    "1",
+			expected: 1,
+		},
+		{
+			input:    "1",
+			expected: 1,
+		},
+		{
+			input:    "10",
+			expected: 10,
+		},
+		{
+			input:    "-",
+			expected: 0.0,
+			err:      `strconv.ParseFloat: parsing "-": invalid syntax`,
+		},
+		{
+			input:    " 10",
+			expected: 10,
+		},
+		{
+			input:    " 10 ",
+			expected: 10,
+		},
+		{
+			input:    " 10 1",
+			expected: 10,
+			err:      `unparsed tail left after parsing float64 from " 10 1": "1"`,
+		},
+		{
+			input:    "9223372036854775807",
+			expected: 9223372036854775807,
+		},
+		{
+			input:    "80.1",
+			expected: 80.1,
+		},
+		{
+			input:    "9223372036854775807trailing",
+			expected: 9223372036854775807,
+			err:      `unparsed tail left after parsing float64 from "9223372036854775807trailing": "trailing"`,
+		},
+		{
+			input:    " 9223372036854775807trailing",
+			expected: 9223372036854775807,
+			err:      `unparsed tail left after parsing float64 from " 9223372036854775807trailing": "trailing"`,
+		},
+		{
+			input:    " 9223372036854775807",
+			expected: 9223372036854775807,
+		},
+		{
+			input:    "9223372036854775808",
+			expected: 9223372036854775808,
+		},
+		{
+			input:    "9223372036854775808trailing",
+			expected: 9223372036854775808,
+			err:      `unparsed tail left after parsing float64 from "9223372036854775808trailing": "trailing"`,
+		},
+		{
+			input:    "-9223372036854775807",
+			expected: -9223372036854775807,
+		},
+		{
+			input:    "-9223372036854775807.1",
+			expected: -9223372036854775807.1,
+		},
+		{
+			input:    "-9223372036854775808",
+			expected: -9223372036854775808,
+		},
+		{
+			input:    "-9223372036854775808.1",
+			expected: -9223372036854775808.1,
+		},
+		{
+			input:    "-9223372036854775809",
+			expected: -9223372036854775809,
+		},
+		{
+			input:    "18446744073709551615",
+			expected: 18446744073709551615,
+		},
+		{
+			input:    "18446744073709551616",
+			expected: 18446744073709551616,
+		},
+		{
+			input:    "1.1",
+			expected: 1.1,
+		},
+		{
+			input:    "-1.1",
+			expected: -1.1,
+		},
+		{
+			input:    "1e100",
+			expected: 1e+100,
+		},
+		{
+			input:    "1e+100",
+			expected: 1e+100,
+		},
+		{
+			input:    "1e22",
+			expected: 1e22,
+		},
+		{
+			input:    "1e-22",
+			expected: 1e-22,
+		},
+		{
+			input:    "1e-100",
+			expected: 1e-100,
+		},
+		{
+			input:    "1e308",
+			expected: 1e308,
+		},
+		{
+			input:    "-1e308",
+			expected: -1e308,
+		},
+		{
+			input:    "1e408",
+			expected: math.MaxFloat64,
+			err:      `strconv.ParseFloat: parsing "1e408": value out of range`,
+		},
+		{
+			input:    "-1e408",
+			expected: -math.MaxFloat64,
+			err:      `strconv.ParseFloat: parsing "-1e408": value out of range`,
+		},
+		{
+			input:    "1e-308",
+			expected: 1e-308,
+		},
+		{
+			input:    "0.1.99",
+			expected: 0.1,
+			err:      `unparsed tail left after parsing float64 from "0.1.99": ".99"`,
+		},
+		{
+			input:    "\t 42.10 \t",
+			expected: 42.10,
+		},
+		{
+			input:    "\t 42.10 \n",
+			expected: 42.10,
+			err:      `unparsed tail left after parsing float64 from "\t 42.10 \n": "\n"`,
+		},
+	}
+	for _, tc := range testcases {
+		t.Run(tc.input, func(t *testing.T) {
+			val, err := ParseFloat64(tc.input)
+			if tc.err == "" {
+				require.NoError(t, err)
+				require.Equal(t, tc.expected, val)
+			} else {
+				require.Equal(t, tc.expected, val)
+				require.EqualError(t, err, tc.err)
+			}
+		})
+	}
+}
+
+func TestParseStringToFloat(t *testing.T) {
+	tcs := []struct {
+		str string
+		val float64
+	}{
+		{str: ""},
+		{str: " "},
+		{str: "1", val: 1},
+		{str: "1.10", val: 1.10},
+		{str: "    6.87", val: 6.87},
+		{str: "93.66  ", val: 93.66},
+		{str: "\t 42.10 \n ", val: 42.10},
+		{str: "1.10aa", val: 1.10},
+		{str: ".", val: 0.00},
+		{str: ".99", val: 0.99},
+		{str: "..99", val: 0},
+		{str: "1.", val: 1},
+		{str: "0.1.99", val: 0.1},
+		{str: "0.", val: 0},
+		{str: "8794354", val: 8794354},
+		{str: "    10  ", val: 10},
+		{str: "2266951196291479516", val: 2266951196291479516},
+		{str: "abcd123", val: 0},
+	}
+
+	for _, tc := range tcs {
+		t.Run(tc.str, func(t *testing.T) {
+			got, _ := ParseFloat64(tc.str)
+			require.EqualValues(t, tc.val, got)
 		})
 	}
 }

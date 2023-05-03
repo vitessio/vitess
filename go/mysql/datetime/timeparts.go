@@ -34,10 +34,10 @@ type timeparts struct {
 	prec uint8
 }
 
-func (tp *timeparts) toDateTime() (DateTime, bool) {
+func (tp *timeparts) toDateTime(prec int) (DateTime, int, bool) {
 	if tp.isZero() {
 		// zero date
-		return DateTime{}, true
+		return DateTime{}, 0, true
 	}
 
 	if tp.pmset && tp.hour < 12 {
@@ -46,7 +46,7 @@ func (tp *timeparts) toDateTime() (DateTime, bool) {
 		tp.hour = 0
 	}
 	if tp.yday > 0 {
-		return DateTime{}, false
+		return DateTime{}, 0, false
 	} else {
 		if tp.month < 0 {
 			tp.month = int(time.January)
@@ -56,9 +56,10 @@ func (tp *timeparts) toDateTime() (DateTime, bool) {
 		}
 	}
 	if tp.day < 1 || tp.day > daysIn(time.Month(tp.month), tp.year) {
-		return DateTime{}, false
+		return DateTime{}, 0, false
 	}
-	return DateTime{
+
+	dt := DateTime{
 		Date: Date{
 			year:  uint16(tp.year),
 			month: uint8(tp.month),
@@ -70,7 +71,16 @@ func (tp *timeparts) toDateTime() (DateTime, bool) {
 			second:     uint8(tp.sec),
 			nanosecond: uint32(tp.nsec),
 		},
-	}, true
+	}
+
+	l := prec
+	if prec < 0 {
+		l = int(tp.prec)
+	} else {
+		dt = dt.Round(prec)
+	}
+
+	return dt, l, true
 }
 
 func (tp *timeparts) isZero() bool {

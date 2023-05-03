@@ -17,6 +17,8 @@ limitations under the License.
 package semantics
 
 import (
+	"sort"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -98,10 +100,10 @@ func TestExpandStar(t *testing.T) {
 	}
 	cDB := "db"
 	tcases := []struct {
-		sql               string
-		expSQL            string
-		expErr            string
-		colExpandedNumber int
+		sql      string
+		expSQL   string
+		expErr   string
+		expanded string
 	}{{
 		sql:    "select * from t1",
 		expSQL: "select a, b, c from t1",
@@ -109,22 +111,21 @@ func TestExpandStar(t *testing.T) {
 		sql:    "select t1.* from t1",
 		expSQL: "select a, b, c from t1",
 	}, {
-		sql:               "select *, 42, t1.* from t1",
-		expSQL:            "select a, b, c, 42, a, b, c from t1",
-		colExpandedNumber: 6,
+		sql:    "select *, 42, t1.* from t1",
+		expSQL: "select a, b, c, 42, a, b, c from t1",
 	}, {
 		sql:    "select 42, t1.* from t1",
 		expSQL: "select 42, a, b, c from t1",
 	}, {
-		sql:    "select * from t1, t2",
-		expSQL: "select t1.a as a, t1.b as b, t1.c as c, t2.c1 as c1, t2.c2 as c2 from t1, t2",
+		sql:      "select * from t1, t2",
+		expSQL:   "select t1.a as a, t1.b as b, t1.c as c, t2.c1 as c1, t2.c2 as c2 from t1, t2",
+		expanded: "main.t1.a, main.t1.b, main.t1.c, main.t2.c1, main.t2.c2",
 	}, {
 		sql:    "select t1.* from t1, t2",
 		expSQL: "select t1.a as a, t1.b as b, t1.c as c from t1, t2",
 	}, {
-		sql:               "select *, t1.* from t1, t2",
-		expSQL:            "select t1.a as a, t1.b as b, t1.c as c, t2.c1 as c1, t2.c2 as c2, t1.a as a, t1.b as b, t1.c as c from t1, t2",
-		colExpandedNumber: 6,
+		sql:    "select *, t1.* from t1, t2",
+		expSQL: "select t1.a as a, t1.b as b, t1.c as c, t2.c1 as c1, t2.c2 as c2, t1.a as a, t1.b as b, t1.c as c from t1, t2",
 	}, { // aliased table
 		sql:    "select * from t1 a, t2 b",
 		expSQL: "select a.a as a, a.b as b, a.c as c, b.c1 as c1, b.c2 as c2 from t1 as a, t2 as b",
@@ -144,8 +145,9 @@ func TestExpandStar(t *testing.T) {
 		sql:    "select * from t1 join t2 on t1.a = t2.c1",
 		expSQL: "select t1.a as a, t1.b as b, t1.c as c, t2.c1 as c1, t2.c2 as c2 from t1 join t2 on t1.a = t2.c1",
 	}, {
-		sql:    "select * from t2 join t4 using (c1)",
-		expSQL: "select t2.c1 as c1, t2.c2 as c2, t4.c4 as c4 from t2 join t4 where t2.c1 = t4.c1",
+		sql:      "select * from t2 join t4 using (c1)",
+		expSQL:   "select t2.c1 as c1, t2.c2 as c2, t4.c4 as c4 from t2 join t4 where t2.c1 = t4.c1",
+		expanded: "main.t2.c1, main.t2.c2, main.t4.c4",
 	}, {
 		sql:    "select * from t2 join t4 using (c1) join t2 as X using (c1)",
 		expSQL: "select t2.c1 as c1, t2.c2 as c2, t4.c4 as c4, X.c2 as c2 from t2 join t4 join t2 as X where t2.c1 = t4.c1 and t2.c1 = X.c1 and t4.c1 = X.c1",
@@ -153,8 +155,9 @@ func TestExpandStar(t *testing.T) {
 		sql:    "select * from t2 join t4 using (c1), t2 as t2b join t4 as t4b using (c1)",
 		expSQL: "select t2.c1 as c1, t2.c2 as c2, t4.c4 as c4, t2b.c1 as c1, t2b.c2 as c2, t4b.c4 as c4 from t2 join t4, t2 as t2b join t4 as t4b where t2b.c1 = t4b.c1 and t2.c1 = t4.c1",
 	}, {
-		sql:    "select * from t1 join t5 using (b)",
-		expSQL: "select t1.b as b, t1.a as a, t1.c as c, t5.a as a from t1 join t5 where t1.b = t5.b",
+		sql:      "select * from t1 join t5 using (b)",
+		expSQL:   "select t1.b as b, t1.a as a, t1.c as c, t5.a as a from t1 join t5 where t1.b = t5.b",
+		expanded: "main.t1.a, main.t1.b, main.t1.c, main.t5.a",
 	}, {
 		sql:    "select * from t1 join t5 using (b) having b = 12",
 		expSQL: "select t1.b as b, t1.a as a, t1.c as c, t5.a as a from t1 join t5 where t1.b = t5.b having b = 12",
@@ -183,36 +186,29 @@ func TestExpandStar(t *testing.T) {
 				require.NoError(t, err)
 				require.NoError(t, st.NotUnshardedErr)
 				require.NoError(t, st.NotSingleRouteErr)
-				found := 0
-			outer:
-				for _, selExpr := range selectStatement.SelectExprs {
-					aliasedExpr, isAliased := selExpr.(*sqlparser.AliasedExpr)
-					if !isAliased {
-						continue
-					}
-					for _, tbl := range st.ExpandedColumns {
-						for _, col := range tbl {
-							if sqlparser.Equals.Expr(aliasedExpr.Expr, col) {
-								found++
-								continue outer
-							}
-						}
-					}
-				}
-				if tcase.colExpandedNumber == 0 {
-					for _, tbl := range st.ExpandedColumns {
-						found -= len(tbl)
-					}
-					require.Zero(t, found)
-				} else {
-					require.Equal(t, tcase.colExpandedNumber, found)
-				}
 				assert.Equal(t, tcase.expSQL, sqlparser.String(selectStatement))
+				assertExpandedColumns(t, st, tcase.expanded)
 			} else {
 				require.EqualError(t, err, tcase.expErr)
 			}
 		})
 	}
+}
+
+func assertExpandedColumns(t *testing.T, st *SemTable, expandedColumns string) {
+	t.Helper()
+	if expandedColumns == "" {
+		return
+	}
+	var expanded []string
+	for tbl, cols := range st.ExpandedColumns {
+		for _, col := range cols {
+			col.Qualifier = tbl
+			expanded = append(expanded, sqlparser.String(col))
+		}
+	}
+	sort.Strings(expanded)
+	assert.Equal(t, expandedColumns, strings.Join(expanded, ", "))
 }
 
 func TestRewriteJoinUsingColumns(t *testing.T) {

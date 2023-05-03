@@ -720,3 +720,7 @@ func (se *Engine) SetTableForTests(table *Table) {
 	defer se.mu.Unlock()
 	se.tables[table.Name.String()] = table
 }
+
+func (se *Engine) GetDBConnector() dbconfigs.Connector {
+	return se.cp
+}

@@ -1122,74 +1122,17 @@ func TestNullsafeCompare(t *testing.T) {
 		out: 0,
 	}, {
 		// Make sure underlying error is returned for LHS.
-		v1:  TestValue(sqltypes.Int64, "1.2"),
-		v2:  NewInt64(2),
-		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "strconv.ParseInt: parsing \"1.2\": invalid syntax"),
-	}, {
-		// Make sure underlying error is returned for RHS.
-		v1:  NewInt64(2),
-		v2:  TestValue(sqltypes.Int64, "1.2"),
-		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "strconv.ParseInt: parsing \"1.2\": invalid syntax"),
-	}, {
-		// Numeric equal.
-		v1:  NewInt64(1),
-		v2:  NewUint64(1),
-		out: 0,
-	}, {
-		// Numeric unequal.
-		v1:  NewInt64(1),
-		v2:  NewUint64(2),
-		out: -1,
-	}, {
-		// Non-numeric equal
-		v1:  TestValue(sqltypes.VarBinary, "abcd"),
-		v2:  TestValue(sqltypes.Binary, "abcd"),
-		out: 0,
-	}, {
-		// Non-numeric unequal
-		v1:  TestValue(sqltypes.VarBinary, "abcd"),
-		v2:  TestValue(sqltypes.Binary, "bcde"),
-		out: -1,
-	}, {
-		// Date/Time types
-		v1:  TestValue(sqltypes.Datetime, "1000-01-01 00:00:00"),
-		v2:  TestValue(sqltypes.Binary, "1000-01-01 00:00:00"),
-		out: 0,
-	}, {
-		// Date/Time types
-		v1:  TestValue(sqltypes.Datetime, "2000-01-01 00:00:00"),
-		v2:  TestValue(sqltypes.Binary, "1000-01-01 00:00:00"),
-		out: 1,
-	}, {
-		// Date/Time types
-		v1:  TestValue(sqltypes.Datetime, "1000-01-01 00:00:00"),
-		v2:  TestValue(sqltypes.Binary, "2000-01-01 00:00:00"),
-		out: -1,
-	}, {
-		// Date/Time types
-		v1:  TestValue(sqltypes.Bit, "101"),
-		v2:  TestValue(sqltypes.Bit, "101"),
-		out: 0,
-	}, {
-		// Date/Time types
-		v1:  TestValue(sqltypes.Bit, "1"),
-		v2:  TestValue(sqltypes.Bit, "0"),
-		out: 1,
-	}, {
-		// Date/Time types
-		v1:  TestValue(sqltypes.Bit, "0"),
-		v2:  TestValue(sqltypes.Bit, "1"),
+		v1:  TestValue(sqltypes.Float64, "0.0"),
+		v2:  TestValue(sqltypes.VarChar, "  6736380880502626304.000000 aa"),
 		out: -1,
 	}}
 	for _, tcase := range tcases {
 		got, err := NullsafeCompare(tcase.v1, tcase.v2, collation)
 		if tcase.err != nil {
 			require.EqualError(t, err, tcase.err.Error())
-		}
-		if tcase.err != nil {
 			continue
 		}
-
+		require.NoError(t, err)
 		if got != tcase.out {
 			t.Errorf("NullsafeCompare(%v, %v): %v, want %v", printValue(tcase.v1), printValue(tcase.v2), got, tcase.out)
 		}
