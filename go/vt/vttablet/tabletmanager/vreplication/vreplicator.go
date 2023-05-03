@@ -158,8 +158,6 @@ func newVReplicator(id int32, source *binlogdatapb.BinlogSource, sourceVStreamer
 		stats:           stats,
 		dbClient:        newVDBClient(dbClient, stats),
 		mysqld:          mysqld,
-
-		throttleUpdatesRateLimiter: timer.NewRateLimiter(time.Second),
 	}
 }
 
@@ -185,6 +183,9 @@ func newVReplicator(id int32, source *binlogdatapb.BinlogSource, sourceVStreamer
 // However, there are some subtle differences, explained in the plan builder
 // code.
 func (vr *vreplicator) Replicate(ctx context.Context) error {
+	vr.throttleUpdatesRateLimiter = timer.NewRateLimiter(time.Second)
+	defer vr.throttleUpdatesRateLimiter.Stop()
+
 	err := vr.replicate(ctx)
 	if err != nil {
 		if err := vr.setMessage(err.Error()); err != nil {
