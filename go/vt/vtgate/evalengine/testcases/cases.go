@@ -70,6 +70,9 @@ var Cases = []TestCase{
 	{Run: FnLpad},
 	{Run: FnRight},
 	{Run: FnRpad},
+	{Run: FnLTrim},
+	{Run: FnRTrim},
+	{Run: FnTrim},
 	{Run: FnHex},
 	{Run: FnCeil},
 	{Run: FnFloor},
@@ -1257,6 +1260,40 @@ func FnRpad(yield Query) {
 		for _, cnt := range counts {
 			for _, pad := range inputStrings {
 				yield(fmt.Sprintf("RPAD(%s, %s, %s)", str, cnt, pad), nil)
+			}
+		}
+	}
+}
+
+func FnLTrim(yield Query) {
+	for _, str := range inputTrimStrings {
+		yield(fmt.Sprintf("LTRIM(%s)", str), nil)
+	}
+}
+
+func FnRTrim(yield Query) {
+	for _, str := range inputTrimStrings {
+		yield(fmt.Sprintf("RTRIM(%s)", str), nil)
+	}
+}
+
+func FnTrim(yield Query) {
+	for _, str := range inputTrimStrings {
+		yield(fmt.Sprintf("TRIM(%s)", str), nil)
+	}
+
+	modes := []string{"LEADING", "TRAILING", "BOTH"}
+	for _, str := range inputTrimStrings {
+		for _, mode := range modes {
+			yield(fmt.Sprintf("TRIM(%s FROM %s)", mode, str), nil)
+		}
+	}
+
+	for _, str := range inputTrimStrings {
+		for _, pat := range inputTrimStrings {
+			yield(fmt.Sprintf("TRIM(%s FROM %s)", pat, str), nil)
+			for _, mode := range modes {
+				yield(fmt.Sprintf("TRIM(%s %s FROM %s)", mode, pat, str), nil)
 			}
 		}
 	}

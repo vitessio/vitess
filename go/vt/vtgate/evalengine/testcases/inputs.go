@@ -155,7 +155,6 @@ var inputStrings = []string{
 	"-9223372036854775808",
 	"999999999999999999999999",
 	"-999999999999999999999999",
-	"_latin1 X'ÂÄÌå'",
 	"_binary 'Müller' ",
 	"_utf8mb4 'abcABCÅå'",
 	// TODO: support other multibyte encodings
@@ -212,4 +211,34 @@ var dateFormats = []struct {
 	{'Y', "YEAR(d)"},
 	{'y', "RIGHT(YEAR(d),2)"},
 	{'%', ""},
+}
+
+var inputTrimStrings = []string{
+	"\" Å å\" ",
+	"NULL",
+	"\"\"",
+	"\"a\"",
+	"\"abc\"",
+	"'abca'",
+	"1",
+	"-1",
+	"0123",
+	"0xAACC",
+	"3.1415926",
+	"\" 中文测试\"",
+	"\"日本語テスト \"",
+	"\"한국어 시험\"",
+	"\" 😊😂🤢\r\t \"",
+	"'123'",
+	"9223372036854775807",
+	"-9223372036854775808",
+	"999999999999999999999999",
+	"-999999999999999999999999",
+	"_binary 'Müller\r\n' ",
+	"_utf8mb4 '\nabcABCÅå '",
+	// utf8mb4 version of the non-breaking space
+	"_utf8mb4 0xC2A078C2A0",
+	// TODO: support other multibyte encodings
+	// latin1 version of the non-breaking space
+	///"_latin1 0xA078A0",
 }
