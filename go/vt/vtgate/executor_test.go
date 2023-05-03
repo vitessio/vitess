@@ -2625,7 +2625,7 @@ func TestExecutorPrepareExecute(t *testing.T) {
 
 func TestExecutorTruncateErrors(t *testing.T) {
 	save := truncateErrorLen
-	truncateErrorLen = 16
+	truncateErrorLen = 32
 	defer func() { truncateErrorLen = save }()
 
 	executor, _, _, _ := createExecutorEnv()
@@ -2635,13 +2635,13 @@ func TestExecutorTruncateErrors(t *testing.T) {
 	}
 
 	_, err := executor.Execute(ctx, "TestExecute", session, "invalid statement", nil)
-	assert.EqualError(t, err, "unrecognized statement: 'invalid statement'")
+	assert.EqualError(t, err, "syntax error at posi [TRUNCATED]")
 
 	err = executor.StreamExecute(ctx, "TestExecute", session, "invalid statement", nil, fn)
-	assert.EqualError(t, err, "unrecognized statement: 'invalid statement'")
+	assert.EqualError(t, err, "syntax error at posi [TRUNCATED]")
 
 	_, err = executor.Prepare(context.Background(), "TestExecute", session, "invalid statement", nil)
-	assert.EqualError(t, err, "unrecognized statement: 'invalid statement'")
+	assert.EqualError(t, err, "[BUG] unrecognized p [TRUNCATED]")
 }
 
 func exec(executor *Executor, session *SafeSession, sql string) (*sqltypes.Result, error) {
