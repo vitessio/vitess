@@ -252,7 +252,7 @@ func (hs *healthStreamer) ChangeState(tabletType topodatapb.TabletType, terTimes
 	} else {
 		hs.state.RealtimeStats.ThrottlerMetricError = ""
 	}
-	hs.state.RealtimeStats.ThrottlerMetricCollected = true // the field `ThrottlerMetricCollected` will be removed in v18
+	hs.state.RealtimeStats.ThrottlerMetricCollected = true // TODO (shlomi): the field `ThrottlerMetricCollected` will be removed in v18
 
 	shr := proto.Clone(hs.state).(*querypb.StreamHealthResponse)
 

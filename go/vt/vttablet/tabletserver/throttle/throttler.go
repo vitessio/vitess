@@ -67,13 +67,12 @@ const (
 
 var (
 	// flag vars
-	throttleThreshold          = 1 * time.Second
-	throttleTabletTypes        = "replica"
-	throttleMetricQuery        string
-	throttleMetricThreshold    = math.MaxFloat64
-	throttlerCheckAsCheckSelf  = false
-	throttlerConfigViaTopo     = false
-	throttlerReadRealtimeStats = false
+	throttleThreshold         = 1 * time.Second
+	throttleTabletTypes       = "replica"
+	throttleMetricQuery       string
+	throttleMetricThreshold   = math.MaxFloat64
+	throttlerCheckAsCheckSelf = false
+	throttlerConfigViaTopo    = false
 )
 
 func init() {
@@ -89,8 +88,6 @@ func registerThrottlerFlags(fs *pflag.FlagSet) {
 	fs.Float64Var(&throttleMetricThreshold, "throttle_metrics_threshold", throttleMetricThreshold, "Override default throttle threshold, respective to --throttle_metrics_query")
 	fs.BoolVar(&throttlerCheckAsCheckSelf, "throttle_check_as_check_self", throttlerCheckAsCheckSelf, "Should throttler/check return a throttler/check-self result (changes throttler behavior for writes)")
 	fs.BoolVar(&throttlerConfigViaTopo, "throttler-config-via-topo", throttlerConfigViaTopo, "When 'true', read config from topo service and ignore throttle_threshold, throttle_metrics_threshold, throttle_metrics_query, throttle_check_as_check_self")
-
-	fs.BoolVar(&throttlerReadRealtimeStats, "feature-throttler-read-realtime-stats", throttlerReadRealtimeStats, "When 'true', read metrics from realtime-stats rather than probe tablets")
 }
 
 var (
@@ -144,11 +141,12 @@ type Throttler struct {
 	metricsQuery     atomic.Value
 	MetricsThreshold atomic.Uint64
 
-	mysqlClusterThresholds *cache.Cache
-	aggregatedMetrics      *cache.Cache
-	throttledApps          *cache.Cache
-	recentApps             *cache.Cache
-	metricsHealth          *cache.Cache
+	mysqlClusterThresholds    *cache.Cache
+	aggregatedMetrics         *cache.Cache
+	throttledApps             *cache.Cache
+	recentApps                *cache.Cache
+	metricsHealth             *cache.Cache
+	realtimeStatsSeenStatuses *cache.Cache // TODO(shlomi): remove in v18
 
 	lastCheckTimeNano int64
 
@@ -209,6 +207,7 @@ func NewThrottler(env tabletenv.Env, srvTopoServer srvtopo.Server, ts *topo.Serv
 	throttler.recentApps = cache.New(recentAppsExpiration, 0)
 	throttler.metricsHealth = cache.New(cache.NoExpiration, 0)
 	throttler.nonLowPriorityAppRequestsThrottled = cache.New(nonDeprioritizedAppMapExpiration, 0)
+	throttler.realtimeStatsSeenStatuses = cache.New(time.Minute, 0) // TODO(shlomi): remove in v18
 
 	throttler.httpClient = base.SetupHTTPClient(2 * mysqlCollectInterval)
 	throttler.initThrottleTabletTypes()
@@ -589,11 +588,9 @@ func (throttler *Throttler) Operate(ctx context.Context) {
 	mysqlAggregateTicker := addTicker(mysqlAggregateInterval)
 	throttledAppsTicker := addTicker(throttledAppsSnapshotInterval)
 
-	var healthCheckCh chan *discovery.TabletHealth
-	if throttlerReadRealtimeStats {
-		healthCheck := discovery.NewHealthCheck(ctx, discovery.DefaultHealthCheckRetryDelay, discovery.DefaultHealthCheckTimeout, throttler.ts, throttler.cell, strings.Join(throttler.knownCells, ","))
-		healthCheckCh = healthCheck.Subscribe()
-	}
+	healthCheck := discovery.NewHealthCheck(ctx, discovery.DefaultHealthCheckRetryDelay, discovery.DefaultHealthCheckTimeout, throttler.ts, throttler.cell, strings.Join(throttler.knownCells, ","))
+	healthCheckCh := healthCheck.Subscribe()
+
 	go func() {
 		defer log.Infof("Throttler: Operate terminated, tickers stopped")
 		for _, t := range tickers {
@@ -699,13 +696,16 @@ func (throttler *Throttler) Operate(ctx context.Context) {
 // We treat this info as if it were the result of a probe.
 // The metric is collected to the "shard" store name. We're only interested in remote tablets.
 func (throttler *Throttler) readMetricFromTabletHealth(tabletHealth *discovery.TabletHealth) {
-	if !throttlerReadRealtimeStats {
-		return
-	}
 	if tabletHealth == nil {
 		return
 	}
 	if tabletHealth.Stats == nil {
+		return
+	}
+	if !tabletHealth.Stats.ThrottlerMetricCollected {
+		// TODO (shlomi): remove this 'if' clause in v18; remove the field `ThrottlerMetricCollected` from proto in v18.
+		// This is just backwards compatibility between v17 (where tables do produce throttle metrics in RealtimeStats) and v16
+		// (where the functionality and the relevant fields do not exist yet)
 		return
 	}
 	if atomic.LoadInt64(&throttler.isLeader) == 0 {
@@ -729,6 +729,8 @@ func (throttler *Throttler) readMetricFromTabletHealth(tabletHealth *discovery.T
 		Err:         metricError,
 	}
 	throttler.mysqlInventory.InstanceKeyMetrics[metric.GetClusterInstanceKey()] = metric
+	// TODO(shlomi): remove in v18. The below indicates that we got info from RealtimeStats. This indication self-expires.
+	go throttler.realtimeStatsSeenStatuses.Set(metric.Key.String(), true, cache.DefaultExpiration)
 }
 
 func (throttler *Throttler) generateTabletHTTPProbeFunction(ctx context.Context, clusterName string, probe *mysql.Probe) (probeFunc func() *mysql.MySQLThrottleMetric) {
@@ -786,8 +788,8 @@ func (throttler *Throttler) collectMySQLMetrics(ctx context.Context) error {
 					if clusterName == selfStoreName {
 						throttleMetricFunc = throttler.generateSelfMySQLThrottleMetricFunc(ctx, probe)
 					} else {
-						if throttlerReadRealtimeStats {
-							// We won't probe a remote tablet, as we expect to gather the data from realtime stats
+						if _, ok := throttler.realtimeStatsSeenStatuses.Get(probe.Key.String()); ok {
+							// We recently got data for this probe from RealtimeStats; there is no need to invoke the probe on the remote tablet.
 							return
 						}
 						throttleMetricFunc = throttler.generateTabletHTTPProbeFunction(ctx, clusterName, probe)
