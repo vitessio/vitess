@@ -42,7 +42,8 @@ import (
 	qh "vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication/queryhistory"
 )
 
-// TestPlayerGeneratedInvisiblePrimaryKey confirms that the gipk column is replicated by vplayer.
+// TestPlayerGeneratedInvisiblePrimaryKey confirms that the gipk column is replicated by vplayer, both for target
+// tables that have a gipk column and those that make it visible.
 func TestPlayerGeneratedInvisiblePrimaryKey(t *testing.T) {
 	if !env.HasCapability(testenv.ServerCapabilityGeneratedInvisiblePrimaryKey) {
 		t.Skip("skipping test as server does not support generated invisible primary keys")
@@ -52,12 +53,16 @@ func TestPlayerGeneratedInvisiblePrimaryKey(t *testing.T) {
 	execStatements(t, []string{
 		"SET @@session.sql_generate_invisible_primary_key=ON;",
 		"create table t1(val varbinary(128))",
+		fmt.Sprintf("create table %s.t1(val varbinary(128))", vrepldb),
+		"create table t2(val varbinary(128))",
 		"SET @@session.sql_generate_invisible_primary_key=OFF;",
-		fmt.Sprintf("create table %s.t1(my_row_id int, val varbinary(128), primary key(my_row_id))", vrepldb),
+		fmt.Sprintf("create table %s.t2(my_row_id int, val varbinary(128), primary key(my_row_id))", vrepldb),
 	})
 	defer execStatements(t, []string{
 		"drop table t1",
 		fmt.Sprintf("drop table %s.t1", vrepldb),
+		"drop table t2",
+		fmt.Sprintf("drop table %s.t2", vrepldb),
 	})
 	env.SchemaEngine.Reload(context.Background())
 
@@ -65,6 +70,9 @@ func TestPlayerGeneratedInvisiblePrimaryKey(t *testing.T) {
 		Rules: []*binlogdatapb.Rule{{
 			Match:  "t1",
 			Filter: "select * from t1",
+		}, {
+			Match:  "t2",
+			Filter: "select * from t2",
 		}},
 	}
 	bls := &binlogdatapb.BinlogSource{
@@ -88,11 +96,22 @@ func TestPlayerGeneratedInvisiblePrimaryKey(t *testing.T) {
 		output: "insert into t1(my_row_id,val) values (1,'aaa')",
 		table:  "t1",
 		data: [][]string{
-			{"1", "aaa"},
+			{"aaa"},
 		},
 		query: "select my_row_id, val from t1",
 		queryResult: [][]string{
 			{"1", "aaa"},
+		},
+	}, {
+		input:  "insert into t2(val) values ('bbb')",
+		output: "insert into t2(my_row_id,val) values (1,'bbb')",
+		table:  "t2",
+		data: [][]string{
+			{"1", "bbb"},
+		},
+		query: "select my_row_id, val from t2",
+		queryResult: [][]string{
+			{"1", "bbb"},
 		},
 	}}
 
