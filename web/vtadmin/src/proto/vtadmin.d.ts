@@ -59691,6 +59691,12 @@ export namespace vtctldata {
 
         /** WorkflowDeleteRequest workflow */
         workflow?: (string|null);
+
+        /** WorkflowDeleteRequest keep_data */
+        keep_data?: (boolean|null);
+
+        /** WorkflowDeleteRequest keep_roouting_rules */
+        keep_roouting_rules?: (boolean|null);
     }
 
     /** Represents a WorkflowDeleteRequest. */
@@ -59707,6 +59713,12 @@ export namespace vtctldata {
 
         /** WorkflowDeleteRequest workflow. */
         public workflow: string;
+
+        /** WorkflowDeleteRequest keep_data. */
+        public keep_data: boolean;
+
+        /** WorkflowDeleteRequest keep_roouting_rules. */
+        public keep_roouting_rules: boolean;
 
         /**
          * Creates a new WorkflowDeleteRequest instance using the specified properties.

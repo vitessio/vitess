@@ -19,6 +19,9 @@ package workflow
 import (
 	"context"
 	"fmt"
+	"hash/fnv"
+	"math"
+	"sort"
 	"sync"
 
 	"vitess.io/vitess/go/vt/concurrency"
@@ -26,6 +29,7 @@ import (
 	"vitess.io/vitess/go/vt/proto/binlogdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
+	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topotools"
@@ -172,7 +176,6 @@ func stripTableConstraints(ddl string) (string, error) {
 }
 
 func stripTableForeignKeys(ddl string) (string, error) {
-
 	ast, err := sqlparser.ParseStrictDDL(ddl)
 	if err != nil {
 		return "", err
@@ -270,4 +273,36 @@ func matchColInSelect(col sqlparser.IdentifierCI, sel *sqlparser.Select) (*sqlpa
 		}
 	}
 	return nil, fmt.Errorf("could not find vindex column %v", sqlparser.String(col))
+}
+
+func shouldInclude(table string, excludes []string) bool {
+	// We filter out internal tables elsewhere when processing SchemaDefinition
+	// structures built from the GetSchema database related API calls. In this
+	// case, however, the table list comes from the user via the -tables flag
+	// so we need to filter out internal table names here in case a user has
+	// explicitly specified some.
+	// This could happen if there's some automated tooling that creates the list of
+	// tables to explicitly specify.
+	// But given that this should never be done in practice, we ignore the request.
+	if schema.IsInternalOperationTableName(table) {
+		return false
+	}
+	for _, t := range excludes {
+		if t == table {
+			return false
+		}
+	}
+	return true
+}
+
+// getMigrationID produces a reproducible hash based on the input parameters.
+func getMigrationID(targetKeyspace string, shardTablets []string) (int64, error) {
+	sort.Strings(shardTablets)
+	hasher := fnv.New64()
+	hasher.Write([]byte(targetKeyspace))
+	for _, str := range shardTablets {
+		hasher.Write([]byte(str))
+	}
+	// Convert to int64 after dropping the highest bit.
+	return int64(hasher.Sum64() & math.MaxInt64), nil
 }

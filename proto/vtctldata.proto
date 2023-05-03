@@ -812,8 +812,8 @@ message InitShardPrimaryResponse {
 }
 
 message MoveTablesCreateRequest {
-  // The requests values get passed on to each primary tablet involved
-  // in the workflow via the MoveTablesCreate tabletmanager RPC.
+  // The necessary info gets passed on to each primary tablet involved
+  // in the workflow via the CreateVRWorkflow tabletmanager RPC.
   string workflow = 1;
   string source_keyspace = 2;
   string target_keyspace = 3;
@@ -1346,6 +1346,8 @@ message ValidateVSchemaResponse {
 message WorkflowDeleteRequest {
   string keyspace = 1;
   string workflow = 2;
+  bool keep_data = 3;
+  bool keep_roouting_rules = 4;
 }
 
 message WorkflowDeleteResponse {

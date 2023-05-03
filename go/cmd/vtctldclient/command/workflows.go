@@ -60,7 +60,7 @@ var (
 		DisableFlagsInUseLine: true,
 		Aliases:               []string{"Delete"},
 		Args:                  cobra.NoArgs,
-		RunE:                  commandMoveTablesCancel,
+		RunE:                  commandWorkflowDelete,
 	}
 
 	// WorkflowUpdate makes a WorkflowUpdate gRPC call to a vtctld.
@@ -139,6 +139,11 @@ var (
 	workflowOptions = struct {
 		Keyspace string
 	}{}
+	workflowDeleteOptions = struct {
+		Workflow         string
+		KeepData         bool
+		KeepRoutingRules bool
+	}{}
 	workflowUpdateOptions = struct {
 		Workflow    string
 		Cells       []string
@@ -151,8 +156,10 @@ func commandWorkflowDelete(cmd *cobra.Command, args []string) error {
 	cli.FinishedParsing(cmd)
 
 	req := &vtctldatapb.WorkflowDeleteRequest{
-		Keyspace: moveTablesOptions.TargetKeyspace,
-		Workflow: moveTablesOptions.Workflow,
+		Keyspace:          workflowOptions.Keyspace,
+		Workflow:          workflowDeleteOptions.Workflow,
+		KeepData:          workflowDeleteOptions.KeepData,
+		KeepRooutingRules: workflowDeleteOptions.KeepRoutingRules,
 	}
 	resp, err := client.WorkflowDelete(commandCtx, req)
 	if err != nil {
@@ -224,5 +231,9 @@ func init() {
 	WorkflowUpdate.Flags().StringVar(&workflowUpdateOptions.OnDDL, "on-ddl", "", "New instruction on what to do when DDL is encountered in the VReplication stream. Possible values are IGNORE, STOP, EXEC, and EXEC_IGNORE")
 	Workflow.AddCommand(WorkflowUpdate)
 
+	WorkflowDelete.Flags().StringVarP(&workflowDeleteOptions.Workflow, "workflow", "w", "", "The workflow you want to update (required)")
+	WorkflowDelete.MarkFlagRequired("workflow")
+	WorkflowDelete.Flags().BoolVar(&workflowDeleteOptions.KeepData, "keep-data", false, "Keep the partially copied table data from the workflow in the target keyspace")
+	WorkflowDelete.Flags().BoolVar(&workflowDeleteOptions.KeepRoutingRules, "keep-routing-rules", false, "Keep the routing rules created for the workflow")
 	Workflow.AddCommand(WorkflowDelete)
 }

@@ -20,15 +20,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"hash/fnv"
-	"math"
 	"sort"
 	"strings"
 	"sync"
 	"time"
 
+	"golang.org/x/sync/semaphore"
 	"google.golang.org/protobuf/encoding/prototext"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sets"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/trace"
@@ -77,6 +77,8 @@ var (
 type Server struct {
 	ts  *topo.Server
 	tmc tmclient.TabletManagerClient
+	// Limt the number of concurrent background goroutines if needed.
+	sem *semaphore.Weighted
 }
 
 // NewServer returns a new server instance with the given topo.Server and
@@ -956,6 +958,7 @@ func (s *Server) MoveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 		WorkflowType:       binlogdatapb.VReplicationWorkflowType_MoveTables,
 		WorkflowSubType:    workflowSubType,
 		DeferSecondaryKeys: req.DeferSecondaryKeys,
+		AutoStart:          req.AutoStart,
 	}
 
 	vx := vexec.NewVExec(req.TargetKeyspace, req.Workflow, s.ts, s.tmc)
@@ -1003,6 +1006,13 @@ func (s *Server) WorkflowDelete(ctx context.Context, req *vtctldatapb.WorkflowDe
 	span.Annotate("keyspace", req.Keyspace)
 	span.Annotate("workflow", req.Workflow)
 
+	// Return an error if the workflow is partially switched.
+	/*
+		if ws.WritesSwitched || len(ws.ReplicaCellsSwitched) > 0 || len(ws.RdonlyCellsSwitched) > 0 {
+			return fmt.Errorf(ErrWorkflowPartiallySwitched)
+		}
+	*/
+
 	deleteReq := &tabletmanagerdatapb.DeleteVRWorkflowRequest{
 		Workflow: req.Workflow,
 	}
@@ -1012,6 +1022,9 @@ func (s *Server) WorkflowDelete(ctx context.Context, req *vtctldatapb.WorkflowDe
 		if err != nil {
 			return nil, err
 		}
+		// Best effort cleanup and optimization of related data.
+		s.deleteWorkflowVDiffData(ctx, tablet.Tablet, req.Workflow)
+		s.optimizeCopyStateTable(tablet.Tablet)
 		return res.Result, err
 	}
 	res, err := vx.CallbackContext(ctx, callback)
@@ -1025,6 +1038,19 @@ func (s *Server) WorkflowDelete(ctx context.Context, req *vtctldatapb.WorkflowDe
 	if len(res) == 0 {
 		return nil, fmt.Errorf("the %s workflow does not exist in the %s keyspace", req.Workflow, req.Keyspace)
 	}
+
+	// Cleanup related data artifacts.
+	/*
+		if req.WorkflowType == binlogdatapb.MigrationType {
+			_, err := vrw.wr.finalizeMigrateWorkflow(vrw.ctx, ws.TargetKeyspace, ws.Workflow, "",
+				true, vrw.params.KeepData, vrw.params.KeepRoutingRules, vrw.params.DryRun)
+			return err
+		}
+
+		if _, err := wr.DropTargets(ctx, req.Keyspace, req.Workflow, vrw.params.KeepData, vrw.params.KeepRoutingRules, false); err != nil {
+			return err
+		}
+	*/
 
 	response := &vtctldatapb.WorkflowDeleteResponse{}
 	response.Summary = fmt.Sprintf("Successfully deleted the %s workflow on (%d) target primary tablets in the %s keyspace", req.Workflow, len(res), req.Keyspace)
@@ -1085,22 +1111,6 @@ func (s *Server) WorkflowUpdate(ctx context.Context, req *vtctldatapb.WorkflowUp
 	}
 	response.Details = details
 	return response, nil
-}
-
-func (s *Server) doesWorkflowExist(ctx context.Context, keyspace, workflow string) (bool, error) {
-	req := &vtctldatapb.GetWorkflowsRequest{
-		Keyspace: keyspace,
-	}
-	resp, err := s.GetWorkflows(ctx, req)
-	if err != nil {
-		return false, err
-	}
-	for _, wf := range resp.GetWorkflows() {
-		if wf.Name == workflow {
-			return true, nil
-		}
-	}
-	return false, nil
 }
 
 func (s *Server) validateSourceTablesExist(ctx context.Context, sourceKeyspace string, ksTables, tables []string) error {
@@ -1235,34 +1245,70 @@ func (s *Server) checkIfPreviousJournalExists(ctx context.Context, mz *materiali
 	return exists, tablets, err
 }
 
-func shouldInclude(table string, excludes []string) bool {
-	// We filter out internal tables elsewhere when processing SchemaDefinition
-	// structures built from the GetSchema database related API calls. In this
-	// case, however, the table list comes from the user via the -tables flag
-	// so we need to filter out internal table names here in case a user has
-	// explicitly specified some.
-	// This could happen if there's some automated tooling that creates the list of
-	// tables to explicitly specify.
-	// But given that this should never be done in practice, we ignore the request.
-	if schema.IsInternalOperationTableName(table) {
-		return false
-	}
-	for _, t := range excludes {
-		if t == table {
-			return false
+// deleteWorkflowVDiffData cleans up any potential VDiff related data associated with the workflow on the given tablet
+func (s *Server) deleteWorkflowVDiffData(ctx context.Context, tablet *topodatapb.Tablet, workflow string) {
+	sqlDeleteVDiffs := `delete from vd, vdt, vdl using _vt.vdiff as vd inner join _vt.vdiff_table as vdt on (vd.id = vdt.vdiff_id)
+						inner join _vt.vdiff_log as vdl on (vd.id = vdl.vdiff_id)
+						where vd.keyspace = %s and vd.workflow = %s`
+	query := fmt.Sprintf(sqlDeleteVDiffs, encodeString(tablet.Keyspace), encodeString(workflow))
+	rows := -1
+	if _, err := s.tmc.ExecuteFetchAsAllPrivs(ctx, tablet, &tabletmanagerdatapb.ExecuteFetchAsAllPrivsRequest{
+		Query:   []byte(query),
+		MaxRows: uint64(rows),
+	}); err != nil {
+		if sqlErr, ok := err.(*mysql.SQLError); ok && sqlErr.Num != mysql.ERNoSuchTable { // the tables may not exist if no vdiffs have been run
+			log.Errorf("Error deleting vdiff data for %s.%s workflow: %v", tablet.Keyspace, workflow, err)
 		}
 	}
-	return true
 }
 
-// getMigrationID produces a reproducible hash based on the input parameters.
-func getMigrationID(targetKeyspace string, shardTablets []string) (int64, error) {
-	sort.Strings(shardTablets)
-	hasher := fnv.New64()
-	hasher.Write([]byte(targetKeyspace))
-	for _, str := range shardTablets {
-		hasher.Write([]byte(str))
+// optimizeCopyStateTable rebuilds the copy_state table to ensure the on-disk
+// structures are minimal and optimized and resets the auto-inc value for
+// subsequent inserts.
+// This helps to ensure that the size, storage, and performance related factors
+// for the table remain optimal over time and that we don't ever exhaust the
+// available auto-inc values for the table.
+// Note: it's not critical that this executes successfully any given time, it's
+// only important that we try to do this periodically so that things stay in an
+// optimal state over long periods of time. For this reason, the work is done
+// asynchronously in the background on the given tablet and any failures are
+// logged as warnings. Because it's done in the background we use the AllPrivs
+// account to be sure that we don't execute the writes if READ_ONLY is set on
+// the MySQL instance.
+func (s *Server) optimizeCopyStateTable(tablet *topodatapb.Tablet) {
+	if s.sem != nil {
+		if !s.sem.TryAcquire(1) {
+			log.Warningf("Deferring work to optimize the copy_state table on %q due to hitting the maximum concurrent background job limit.",
+				tablet.Alias.String())
+			return
+		}
 	}
-	// Convert to int64 after dropping the highest bit.
-	return int64(hasher.Sum64() & math.MaxInt64), nil
+	go func() {
+		defer func() {
+			if s.sem != nil {
+				s.sem.Release(1)
+			}
+		}()
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
+		defer cancel()
+		sqlOptimizeTable := "optimize table _vt.copy_state"
+		if _, err := s.tmc.ExecuteFetchAsAllPrivs(ctx, tablet, &tabletmanagerdatapb.ExecuteFetchAsAllPrivsRequest{
+			Query:   []byte(sqlOptimizeTable),
+			MaxRows: uint64(100), // always produces 1+rows with notes and status
+		}); err != nil {
+			if sqlErr, ok := err.(*mysql.SQLError); ok && sqlErr.Num == mysql.ERNoSuchTable { // the table may not exist
+				return
+			}
+			log.Warningf("Failed to optimize the copy_state table on %q: %v", tablet.Alias.String(), err)
+		}
+		// This will automatically set the value to 1 or the current max value in the table, whichever is greater
+		sqlResetAutoInc := "alter table _vt.copy_state auto_increment = 1"
+		if _, err := s.tmc.ExecuteFetchAsAllPrivs(ctx, tablet, &tabletmanagerdatapb.ExecuteFetchAsAllPrivsRequest{
+			Query:   []byte(sqlResetAutoInc),
+			MaxRows: uint64(0),
+		}); err != nil {
+			log.Warningf("Failed to reset the auto_increment value for the copy_state table on %q: %v",
+				tablet.Alias.String(), err)
+		}
+	}()
 }
