@@ -17,6 +17,8 @@ limitations under the License.
 package rewrite
 
 import (
+	"fmt"
+
 	"golang.org/x/exp/slices"
 
 	"vitess.io/vitess/go/vt/vterrors"
@@ -80,6 +82,8 @@ func BottomUp(
 	return op, nil
 }
 
+var DebugOperatorTree = false
+
 // FixedPointBottomUp rewrites an operator tree much like BottomUp does,
 // but does the rewriting repeatedly, until a tree walk is done with no changes to the tree.
 func FixedPointBottomUp(
@@ -91,6 +95,9 @@ func FixedPointBottomUp(
 	id := NewTree
 	op = root
 	for id == NewTree {
+		if DebugOperatorTree {
+			fmt.Println(ops.ToTree(op))
+		}
 		// Continue the top-down rewriting process as long as changes were made during the last traversal
 		op, id, err = bottomUp(op, semantics.EmptyTableSet(), resolveID, visit, shouldVisit, true)
 		if err != nil {
