@@ -55,7 +55,7 @@ type VTOrcConfiguration struct {
 	MySQLReplicaUser                      string
 	MySQLReplicaPassword                  string
 	RecoveryPeriodBlockSeconds            int
-	TopoInformationRefreshSeconds         int
+	TopoInformationRefreshSeconds         int    `json:",omitempty"`
 	PreventCrossDataCenterPrimaryFailover bool   `json:",omitempty"`
 	LockShardTimeoutSeconds               int    `json:",omitempty"`
 	ReplicationLagQuery                   string `json:",omitempty"`
@@ -76,9 +76,6 @@ func (config *VTOrcConfiguration) AddDefaults(webPort int) {
 	config.MySQLReplicaPassword = ""
 	if config.RecoveryPeriodBlockSeconds == 0 {
 		config.RecoveryPeriodBlockSeconds = 1
-	}
-	if config.TopoInformationRefreshSeconds == 0 {
-		config.TopoInformationRefreshSeconds = 1
 	}
 	config.ListenAddress = fmt.Sprintf(":%d", webPort)
 }

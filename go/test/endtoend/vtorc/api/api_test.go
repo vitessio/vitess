@@ -69,7 +69,6 @@ func TestProblemsAPI(t *testing.T) {
 		status, resp, err := utils.MakeAPICall(t, vtorc, "/debug/health")
 		require.NoError(t, err)
 		assert.Equal(t, 200, status)
-		require.NoError(t, err)
 		assert.Contains(t, resp, `"Healthy": true,`)
 	})
 
@@ -222,7 +221,7 @@ func TestIfDiscoveringHappenedLaterInHealthCheck(t *testing.T) {
 		err = json2.Unmarshal([]byte(resp), &healthStatus)
 		assert.Nil(t, err)
 		assert.Equal(t, healthStatus.Healthy, true)
-		if healthStatus.IsDiscovering {
+		if healthStatus.HasDiscoveredOnce {
 			timeForIsRecovering := time.Now()
 			require.Greater(t, timeForIsRecovering, startTime)
 			return

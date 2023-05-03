@@ -266,9 +266,6 @@ func DiscoverInstance(instanceKey inst.InstanceKey, forceDiscovery bool) {
 		InstanceLatency: instanceLatency,
 		Err:             nil,
 	})
-	// we turn on HitAtLeastOneDiscovery first time
-	// con: this will result in extra memory hit for every recovery cycle.
-	process.HitAtLeastOneDiscovery.CompareAndSwap(false, true)
 }
 
 // onHealthTick handles the actions to take to discover/poll instances
@@ -439,8 +436,27 @@ func ContinuousDiscovery() {
 				}
 			}()
 		case <-tabletTopoTick:
-			go RefreshAllKeyspaces()
-			go refreshAllTablets()
+			// Create a wait group
+			var wg sync.WaitGroup
+
+			// Refresh all keyspace information.
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				RefreshAllKeyspaces()
+			}()
+
+			// Refresh all tablets.
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				refreshAllTablets()
+			}()
+
+			// Wait for both the refreshes to complete
+			wg.Wait()
+			// We have completed one discovery cycle in the entirety of it. We should update the process health.
+			process.FirstDiscoveryCycleComplete.Store(true)
 		}
 	}
 }
