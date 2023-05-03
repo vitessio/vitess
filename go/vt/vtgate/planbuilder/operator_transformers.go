@@ -90,25 +90,30 @@ func transformAggregator(ctx *plancontext.PlanningContext, op *operators.Aggrega
 		},
 	}
 	for idx, col := range op.Columns {
-		switch param := col.(type) {
-		case *operators.Aggr:
+		if aggrCol, isAggrCol := col.(*operators.Aggr); isAggrCol {
+
 			oa.aggregates = append(oa.aggregates, &engine.AggregateParams{
-				Opcode:     param.OpCode,
+				Opcode:     aggrCol.OpCode,
 				Col:        idx,
-				Alias:      param.Alias,
-				Expr:       param.Func,
-				Original:   param.Original,
-				OrigOpcode: param.OriginalOpCode,
-			})
-		case *operators.GroupBy:
-			oa.groupByKeys = append(oa.groupByKeys, &engine.GroupByParams{
-				KeyCol:          idx,
-				WeightStringCol: param.WOffset,
-				Expr:            param.Inner,
-				FromGroupBy:     true,
-				CollationID:     ctx.SemTable.CollationForExpr(param.WeightStrExpr),
+				Alias:      aggrCol.Alias,
+				Expr:       aggrCol.Func,
+				Original:   aggrCol.Original,
+				OrigOpcode: aggrCol.OriginalOpCode,
 			})
 		}
+	}
+	for _, grpIdx := range op.GroupingOrder {
+		grpByCol, ok := op.Columns[grpIdx].(*operators.GroupBy)
+		if !ok {
+			return nil, vterrors.VT13001("group by column expected")
+		}
+		oa.groupByKeys = append(oa.groupByKeys, &engine.GroupByParams{
+			KeyCol:          grpIdx,
+			WeightStringCol: grpByCol.WOffset,
+			Expr:            grpByCol.Inner,
+			FromGroupBy:     true,
+			CollationID:     ctx.SemTable.CollationForExpr(grpByCol.WeightStrExpr),
+		})
 	}
 	oa.truncateColumnCount = op.ResultColumns
 	return oa, nil

@@ -19,6 +19,8 @@ package operators
 import (
 	"fmt"
 
+	"vitess.io/vitess/go/vt/vterrors"
+
 	"golang.org/x/exp/slices"
 
 	"vitess.io/vitess/go/vt/vtgate/semantics"
@@ -54,30 +56,37 @@ func pushDownAggregationThroughRoute(aggregator *Aggregator, src *Route) (ops.Op
 
 	// Create a new aggregator to be placed below the route.
 	aggrBelowRoute := &Aggregator{
-		Source:  src.Source,
-		Columns: slices.Clone(aggregator.Columns),
-		Pushed:  false,
+		Source:        src.Source,
+		Columns:       slices.Clone(aggregator.Columns),
+		GroupingOrder: slices.Clone(aggregator.GroupingOrder),
+		Pushed:        false,
+	}
+
+	// Iterate through the aggregator columns, modifying them as needed.
+	for i, col := range aggregator.Columns {
+		param, isAggr := col.(*Aggr)
+		if !isAggr {
+			continue
+		}
+		// Handle different aggregation operations when pushing down through a sharded route.
+		switch param.OpCode {
+		case opcode.AggregateCount, opcode.AggregateCountStar, opcode.AggregateCountDistinct:
+			// All count variations turn into SUM above the Route.
+			// Think of it as we are SUMming together a bunch of distributed COUNTs.
+			param.OriginalOpCode, param.OpCode = param.OpCode, opcode.AggregateSum
+		}
+		aggregator.Columns[i] = param
 	}
 
 	// Create an empty slice for ordering columns, if needed.
 	var ordering []ops.OrderBy
-
-	// Iterate through the aggregator columns, modifying them as needed.
-	for i, col := range aggregator.Columns {
-		switch param := col.(type) {
-		case *Aggr:
-			// Handle different aggregation operations when pushing down through a sharded route.
-			switch param.OpCode {
-			case opcode.AggregateCount, opcode.AggregateCountStar, opcode.AggregateCountDistinct:
-				// All count variations turn into SUM above the Route.
-				// Think of it as we are SUMming together a bunch of distributed COUNTs.
-				param.OriginalOpCode, param.OpCode = param.OpCode, opcode.AggregateSum
-			}
-			aggregator.Columns[i] = param
-		case *GroupBy:
-			// If there is a GROUP BY, add the corresponding order by column.
-			ordering = append(ordering, param.AsOrderBy())
+	for _, grpIdx := range aggregator.GroupingOrder {
+		// If there is a GROUP BY, add the corresponding order by column.
+		grpByCol, isGrpBy := aggregator.Columns[grpIdx].(*GroupBy)
+		if !isGrpBy {
+			return nil, false, vterrors.VT13001("group by column expected.")
 		}
+		ordering = append(ordering, grpByCol.AsOrderBy())
 	}
 
 	// Set the source of the route to the new aggregator placed below the route.

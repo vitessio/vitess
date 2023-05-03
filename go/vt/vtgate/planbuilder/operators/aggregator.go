@@ -29,27 +29,36 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
-type Aggregator struct {
-	Source  ops.Operator
-	Columns []AggrColumn
+type (
+	Aggregator struct {
+		Source        ops.Operator
+		Columns       []AggrColumn
+		GroupingOrder []int
 
-	// Pushed will be set to true once this aggregation has been pushed deeper in the tree
-	Pushed bool
+		// Pushed will be set to true once this aggregation has been pushed deeper in the tree
+		Pushed bool
 
-	// Original will only be true for the original aggregator created from the AST
-	Original      bool
-	ResultColumns int
+		// Original will only be true for the original aggregator created from the AST
+		Original      bool
+		ResultColumns int
 
-	QP *QueryProjection
-}
+		QP *QueryProjection
+	}
+
+	// AggrColumn is either an Aggr or a GroupBy - the only types of columns allowed on an Aggregator
+	AggrColumn interface {
+		GetOriginal() *sqlparser.AliasedExpr
+	}
+)
 
 func (a *Aggregator) Clone(inputs []ops.Operator) ops.Operator {
 	return &Aggregator{
-		Source:   inputs[0],
-		Columns:  slices.Clone(a.Columns),
-		Pushed:   a.Pushed,
-		Original: a.Original,
-		QP:       a.QP,
+		Source:        inputs[0],
+		Columns:       slices.Clone(a.Columns),
+		Pushed:        a.Pushed,
+		Original:      a.Original,
+		GroupingOrder: slices.Clone(a.GroupingOrder),
+		QP:            a.QP,
 	}
 }
 

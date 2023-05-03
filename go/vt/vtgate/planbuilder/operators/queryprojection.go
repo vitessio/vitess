@@ -82,11 +82,6 @@ type (
 		Distinct bool
 	}
 
-	// AggrColumn is either an Aggr or a GroupBy - the only types of columns allowed on an Aggregator
-	AggrColumn interface {
-		GetOriginal() *sqlparser.AliasedExpr
-	}
-
 	AggrRewriter struct {
 		qp  *QueryProjection
 		st  *semantics.SemTable

@@ -351,12 +351,14 @@ func buildAggregation(op *Aggregator, qb *queryBuilder) error {
 		qb.addProjection(column)
 	}
 
-	for _, column := range op.Columns {
-		if groupBy, isGroupBy := column.(*GroupBy); isGroupBy {
-			qb.addGroupBy(groupBy.Inner)
-			if groupBy.WOffset != -1 {
-				qb.addGroupBy(weightStringFor(groupBy.WeightStrExpr))
-			}
+	for _, colIdx := range op.GroupingOrder {
+		groupingExpr, ok := op.Columns[colIdx].(*GroupBy)
+		if !ok {
+			return vterrors.VT13001("expected grouping here")
+		}
+		qb.addGroupBy(groupingExpr.Inner)
+		if groupingExpr.WOffset != -1 {
+			qb.addGroupBy(weightStringFor(groupingExpr.WeightStrExpr))
 		}
 	}
 
