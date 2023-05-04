@@ -33,7 +33,6 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	"vitess.io/vitess/go/vt/proto/vtrpc"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/throttler"
@@ -695,7 +694,7 @@ func (c *TabletConfig) verifyTxThrottlerConfig() error {
 		case topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY:
 			continue
 		default:
-			return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "unsupported tablet type %q", tabletType)
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported tablet type %q", tabletType)
 		}
 	}
 	return nil
