@@ -19,6 +19,7 @@ package txthrottler
 import (
 	"context"
 	"fmt"
+	"math/rand"
 	"strings"
 	"sync"
 	"time"
@@ -29,6 +30,7 @@ import (
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/throttler"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
@@ -264,15 +266,19 @@ func (t *TxThrottler) Close() {
 // It returns true if the transaction should not proceed (the caller
 // should back off). Throttle requires that Open() was previously called
 // successfully.
-func (t *TxThrottler) Throttle() (result bool) {
+func (t *TxThrottler) Throttle(priority int) (result bool) {
 	if !t.config.enabled {
 		return false
 	}
-	result = t.state.throttle()
+
+	// Throttle according to both what the throttle state says, and the priority. Workloads with lower priority value
+	// are less likely to be throttled.
+	result = t.state.throttle() && rand.Intn(sqlparser.MaxPriorityValue) < priority
 	t.requestsTotal.Add(1)
 	if result {
 		t.requestsThrottled.Add(1)
 	}
+
 	return result
 }
 

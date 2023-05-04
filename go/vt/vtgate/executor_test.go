@@ -1819,6 +1819,48 @@ func TestGetPlanNormalized(t *testing.T) {
 	assertCacheContains(t, r, unshardedvc, normalized)
 }
 
+func TestGetPlanPriority(t *testing.T) {
+
+	testCases := []struct {
+		name             string
+		sql              string
+		expectedPriority string
+		expectedError    error
+	}{
+		{name: "Invalid priority", sql: "select /*vt+ PRIORITY=something */ * from music_user_map", expectedPriority: "", expectedError: sqlparser.ErrInvalidPriority},
+		{name: "Valid priority", sql: "select /*vt+ PRIORITY=33 */ * from music_user_map", expectedPriority: "33", expectedError: nil},
+		{name: "empty priority", sql: "select * from music_user_map", expectedPriority: "", expectedError: nil},
+	}
+
+	session := NewSafeSession(&vtgatepb.Session{TargetString: "@unknown", Options: &querypb.ExecuteOptions{}})
+
+	for _, aTestCase := range testCases {
+		testCase := aTestCase
+
+		t.Run(testCase.name, func(t *testing.T) {
+			r, _, _, _ := createExecutorEnv()
+			r.normalize = true
+			logStats := logstats.NewLogStats(ctx, "Test", "", "", nil)
+			vCursor, err := newVCursorImpl(session, makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, false, pv)
+			assert.NoError(t, err)
+
+			stmt, err := sqlparser.Parse(testCase.sql)
+			assert.NoError(t, err)
+			crticalityFromStatement, _ := sqlparser.GetPriorityFromStatement(stmt)
+
+			_, err = r.getPlan(context.Background(), vCursor, testCase.sql, stmt, makeComments("/* some comment */"), map[string]*querypb.BindVariable{}, nil, true, logStats)
+			if testCase.expectedError != nil {
+				assert.ErrorIs(t, err, testCase.expectedError)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, testCase.expectedPriority, crticalityFromStatement)
+				assert.Equal(t, testCase.expectedPriority, vCursor.safeSession.Options.Priority)
+			}
+		})
+	}
+
+}
+
 func TestPassthroughDDL(t *testing.T) {
 	executor, sbc1, sbc2, _ := createExecutorEnv()
 	primarySession.TargetString = "TestExecutor"
