@@ -1927,17 +1927,22 @@ func (node *RegexpSubstrExpr) formatFast(buf *TrackedBuffer) {
 func (node *TrimFuncExpr) formatFast(buf *TrackedBuffer) {
 	buf.WriteString(node.TrimFuncType.ToString())
 	buf.WriteByte('(')
-	if node.Type.ToString() != "" {
-		buf.WriteString(node.Type.ToString())
-		buf.WriteByte(' ')
-	}
-	if node.TrimArg != nil {
-		buf.printExpr(node, node.TrimArg, true)
-		buf.WriteByte(' ')
-	}
+	if node.TrimFuncType == NormalTrimType {
+		var from bool
+		if node.Type != NoTrimType {
+			buf.WriteString(node.Type.ToString())
+			buf.WriteByte(' ')
+			from = true
+		}
+		if node.TrimArg != nil {
+			buf.printExpr(node, node.TrimArg, true)
+			buf.WriteByte(' ')
+			from = true
+		}
 
-	if (node.Type.ToString() != "") || (node.TrimArg != nil) {
-		buf.WriteString("from ")
+		if from {
+			buf.WriteString("from ")
+		}
 	}
 	buf.printExpr(node, node.StringArg, true)
 	buf.WriteByte(')')

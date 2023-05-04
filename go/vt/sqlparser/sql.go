@@ -18140,7 +18140,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6025
 		{
-			yyLOCAL = &TrimFuncExpr{TrimFuncType: LTrimType, StringArg: yyDollar[3].exprUnion()}
+			yyLOCAL = &TrimFuncExpr{TrimFuncType: LTrimType, Type: LeadingTrimType, StringArg: yyDollar[3].exprUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 1173:
@@ -18148,7 +18148,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6029
 		{
-			yyLOCAL = &TrimFuncExpr{TrimFuncType: RTrimType, StringArg: yyDollar[3].exprUnion()}
+			yyLOCAL = &TrimFuncExpr{TrimFuncType: RTrimType, Type: TrailingTrimType, StringArg: yyDollar[3].exprUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 1174:

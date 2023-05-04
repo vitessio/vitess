@@ -631,6 +631,28 @@ func (ast *astCompiler) translateCallable(call sqlparser.Callable) (Expr, error)
 			prec:     uint8(call.Fsp),
 		}, nil
 
+	case *sqlparser.TrimFuncExpr:
+		var args []Expr
+		str, err := ast.translateExpr(call.StringArg)
+		if err != nil {
+			return nil, err
+		}
+		args = append(args, str)
+		if call.TrimArg != nil {
+			trim, err := ast.translateExpr(call.TrimArg)
+			if err != nil {
+				return nil, err
+			}
+			args = append(args, trim)
+		}
+
+		var cexpr = CallExpr{Arguments: args, Method: call.TrimFuncType.ToString()}
+		return &builtinTrim{
+			CallExpr: cexpr,
+			collate:  ast.cfg.Collation,
+			trim:     call.Type,
+		}, nil
+
 	default:
 		return nil, translateExprNotSupported(call)
 	}

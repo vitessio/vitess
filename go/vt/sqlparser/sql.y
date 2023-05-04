@@ -6023,11 +6023,11 @@ UTC_DATE func_paren_opt
   }
 | LTRIM openb expression closeb
   {
-    $$ = &TrimFuncExpr{TrimFuncType:LTrimType, StringArg: $3}
+    $$ = &TrimFuncExpr{TrimFuncType:LTrimType, Type: LeadingTrimType, StringArg: $3}
   }
 | RTRIM openb expression closeb
   {
-    $$ = &TrimFuncExpr{TrimFuncType:RTrimType, StringArg: $3}
+    $$ = &TrimFuncExpr{TrimFuncType:RTrimType, Type: TrailingTrimType, StringArg: $3}
   }
 | TRIM openb trim_type expression_opt FROM expression closeb
   {
