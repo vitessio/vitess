@@ -232,6 +232,8 @@ var bufPool = bucketpool.New(connBufferSize, MaxPacketSize)
 // writersPool is used for pooling bufio.Writer objects.
 var writersPool = sync.Pool{New: func() any { return bufio.NewWriterSize(nil, connBufferSize) }}
 
+var readersPool = sync.Pool{New: func() interface{} { return bufio.NewReaderSize(nil, connBufferSize) }}
+
 // newConn is an internal method to create a Conn. Used by client and server
 // side for common creation code.
 func newConn(conn net.Conn) *Conn {
@@ -255,7 +257,15 @@ func newServerConn(conn net.Conn, listener *Listener) *Conn {
 		PrepareData: make(map[uint32]*PrepareData),
 	}
 	if listener.connReadBufferSize > 0 {
-		c.bufferedReader = bufio.NewReaderSize(conn, listener.connReadBufferSize)
+		var buf *bufio.Reader
+		if listener.connBufferPooling {
+			buf = readersPool.Get().(*bufio.Reader)
+			buf.Reset(conn)
+		} else {
+			buf = bufio.NewReaderSize(conn, listener.connReadBufferSize)
+		}
+
+		c.bufferedReader = buf
 	}
 	return c
 }
@@ -287,6 +297,14 @@ func (c *Conn) endWriterBuffering() error {
 
 	c.stopFlushTimer()
 	return c.bufferedWriter.Flush()
+}
+
+func (c *Conn) returnReader() {
+	if c.bufferedReader == nil {
+		return
+	}
+	c.bufferedReader.Reset(nil)
+	readersPool.Put(c.bufferedReader)
 }
 
 // getWriter returns the current writer. It may be either

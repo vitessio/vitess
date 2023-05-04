@@ -161,6 +161,8 @@ Usage of vtgate:
 	the minimum number of vttablets for each replicating tablet_type (e.g. replica, rdonly) that will be continue to be used even with replication lag above discovery_low_replication_lag, but still below discovery_high_replication_lag_minimum_serving (default 2)
   --mutex-profile-fraction int
 	deprecated: use '-pprof=mutex' instead
+  --mysql-server-pool-conn-read-buffers
+	If set, the server will pool incoming connection read buffers
   --mysql_allow_clear_text_without_tls
 	If set, the server will allow the use of a clear text password over non-SSL connections.
   --mysql_auth_server_impl string
