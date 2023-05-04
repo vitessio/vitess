@@ -33,7 +33,8 @@ type Ordering struct {
 	Offset  []int
 	WOffset []int
 
-	Order []ops.OrderBy
+	Order         []ops.OrderBy
+	ResultColumns int
 }
 
 func (o *Ordering) Clone(inputs []ops.Operator) ops.Operator {
@@ -117,4 +118,8 @@ func (o *Ordering) ShortDescription() string {
 		return sqlparser.String(o.Inner)
 	})
 	return strings.Join(ordering, ", ")
+}
+
+func (o *Ordering) setTruncateColumnCount(offset int) {
+	o.ResultColumns = offset
 }

@@ -90,21 +90,22 @@ func transformAggregator(ctx *plancontext.PlanningContext, op *operators.Aggrega
 		},
 	}
 	for idx, col := range op.Columns {
-		if aggrCol, isAggrCol := col.(*operators.Aggr); isAggrCol {
-
-			oa.aggregates = append(oa.aggregates, &engine.AggregateParams{
-				Opcode:     aggrCol.OpCode,
-				Col:        idx,
-				Alias:      aggrCol.Alias,
-				Expr:       aggrCol.Func,
-				Original:   aggrCol.Original,
-				OrigOpcode: aggrCol.OriginalOpCode,
-			})
+		aggrCol, isAggrCol := col.(*operators.Aggr)
+		if !isAggrCol {
+			continue
 		}
+		oa.aggregates = append(oa.aggregates, &engine.AggregateParams{
+			Opcode:     aggrCol.OpCode,
+			Col:        idx,
+			Alias:      aggrCol.Alias,
+			Expr:       aggrCol.Func,
+			Original:   aggrCol.Original,
+			OrigOpcode: aggrCol.OriginalOpCode,
+		})
 	}
-	err = op.VisitGroupBys(func(grpIdx int, gb *operators.GroupBy) {
+	err = op.VisitGroupBys(func(grpIdx, colIdx int, gb *operators.GroupBy) {
 		oa.groupByKeys = append(oa.groupByKeys, &engine.GroupByParams{
-			KeyCol:          grpIdx,
+			KeyCol:          colIdx,
 			WeightStringCol: gb.WOffset,
 			Expr:            gb.Inner,
 			FromGroupBy:     true,
@@ -128,7 +129,9 @@ func transformOrdering(ctx *plancontext.PlanningContext, op *operators.Ordering)
 }
 
 func createMemorySort(ctx *plancontext.PlanningContext, src logicalPlan, ordering *operators.Ordering) (logicalPlan, error) {
-	primitive := &engine.MemorySort{}
+	primitive := &engine.MemorySort{
+		TruncateColumnCount: ordering.ResultColumns,
+	}
 	ms := &memorySort{
 		resultsBuilder: resultsBuilder{
 			logicalPlanCommon: newBuilderCommon(src),

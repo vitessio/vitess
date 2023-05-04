@@ -351,7 +351,7 @@ func buildAggregation(op *Aggregator, qb *queryBuilder) error {
 		qb.addProjection(column)
 	}
 
-	err = op.VisitGroupBys(func(_ int, gb *GroupBy) {
+	err = op.VisitGroupBys(func(_, _ int, gb *GroupBy) {
 		qb.addGroupBy(gb.Inner)
 		if gb.WOffset != -1 {
 			qb.addGroupBy(weightStringFor(gb.WeightStrExpr))

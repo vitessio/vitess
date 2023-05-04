@@ -134,7 +134,7 @@ func (a *Aggregator) ShortDescription() string {
 		return from.GetOriginal().ColumnName()
 	})
 
-	err := a.VisitGroupBys(func(idx int, gb *GroupBy) {
+	err := a.VisitGroupBys(func(_, _ int, gb *GroupBy) {
 		grouping = append(grouping, sqlparser.String(gb.Inner))
 	})
 	if err != nil {
@@ -178,7 +178,7 @@ func (a *Aggregator) planOffsets(ctx *plancontext.PlanningContext) error {
 	return nil
 }
 
-func (a *Aggregator) truncateColumnsAt(offset int) {
+func (a *Aggregator) setTruncateColumnCount(offset int) {
 	a.ResultColumns = offset
 }
 
@@ -186,13 +186,13 @@ func (a *Aggregator) truncateColumnsAt(offset int) {
 // and applies the provided visitor function to each GroupBy column. The visitor
 // function takes the index of the GroupBy column in the grouping order and the GroupBy
 // column itself as arguments.
-func (a *Aggregator) VisitGroupBys(visitor func(idx int, gb *GroupBy)) error {
+func (a *Aggregator) VisitGroupBys(visitor func(grpIdx, colIdx int, gb *GroupBy)) error {
 	for idx, colIdx := range a.GroupingOrder {
 		groupingExpr, ok := a.Columns[colIdx].(*GroupBy)
 		if !ok {
 			return vterrors.VT13001("expected grouping here")
 		}
-		visitor(idx, groupingExpr)
+		visitor(idx, colIdx, groupingExpr)
 	}
 	return nil
 }

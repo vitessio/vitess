@@ -78,7 +78,7 @@ func pushDownAggregationThroughRoute(aggregator *Aggregator, src *Route) (ops.Op
 
 	// Create an empty slice for ordering columns, if needed.
 	var ordering []ops.OrderBy
-	err := aggregator.VisitGroupBys(func(grpIdx int, grpByCol *GroupBy) {
+	err := aggregator.VisitGroupBys(func(_, _ int, grpByCol *GroupBy) {
 		// If there is a GROUP BY, add the corresponding order by column.
 		ordering = append(ordering, grpByCol.AsOrderBy())
 	})

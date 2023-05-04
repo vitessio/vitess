@@ -685,6 +685,6 @@ func (r *Route) ShortDescription() string {
 	return fmt.Sprintf("%s on %s", r.Routing.OpCode().String(), ks.Name)
 }
 
-func (r *Route) truncateColumnsAt(offset int) {
+func (r *Route) setTruncateColumnCount(offset int) {
 	r.ResultColumns = offset
 }

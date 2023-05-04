@@ -186,12 +186,12 @@ func (noPredicates) AddPredicate(*plancontext.PlanningContext, sqlparser.Expr) (
 // tryTruncateColumnsAt will see if we can truncate the columns by just asking the operator to do it for us
 func tryTruncateColumnsAt(op ops.Operator, truncateAt int) bool {
 	type columnTruncator interface {
-		truncateColumnsAt(offset int)
+		setTruncateColumnCount(offset int)
 	}
 
 	truncator, ok := op.(columnTruncator)
 	if ok {
-		truncator.truncateColumnsAt(truncateAt)
+		truncator.setTruncateColumnCount(truncateAt)
 		return true
 	}
 
