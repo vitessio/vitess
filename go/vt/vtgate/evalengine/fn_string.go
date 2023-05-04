@@ -24,6 +24,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
@@ -72,6 +73,12 @@ type (
 		collate collations.ID
 		left    bool
 	}
+
+	builtinTrim struct {
+		CallExpr
+		collate collations.ID
+		trim    sqlparser.TrimType
+	}
 )
 
 var _ Expr = (*builtinChangeCase)(nil)
@@ -83,6 +90,7 @@ var _ Expr = (*builtinCollation)(nil)
 var _ Expr = (*builtinWeightString)(nil)
 var _ Expr = (*builtinLeftRight)(nil)
 var _ Expr = (*builtinPad)(nil)
+var _ Expr = (*builtinTrim)(nil)
 
 func (call *builtinChangeCase) eval(env *ExpressionEnv) (eval, error) {
 	arg, err := call.arg1(env)
@@ -294,14 +302,14 @@ func (call *builtinRepeat) eval(env *ExpressionEnv) (eval, error) {
 	if repeat < 0 {
 		repeat = 0
 	}
-	if !checkMaxLength(int64(len(text.bytes)), repeat) {
+	if !validMaxLength(int64(len(text.bytes)), repeat) {
 		return nil, nil
 	}
 
 	return newEvalText(bytes.Repeat(text.bytes, int(repeat)), text.col), nil
 }
 
-func checkMaxLength(len, repeat int64) bool {
+func validMaxLength(len, repeat int64) bool {
 	if repeat <= 0 {
 		return true
 	}
@@ -470,6 +478,7 @@ func (call builtinLeftRight) eval(env *ExpressionEnv) (eval, error) {
 		return newEvalText(nil, text.col), nil
 	}
 
+	// LEFT / RIGHT operates on characters, not bytes
 	cs := text.col.Collation.Get().Charset()
 	strLen := charset.Length(cs, text.bytes)
 
@@ -553,14 +562,17 @@ func (call builtinPad) eval(env *ExpressionEnv) (eval, error) {
 		}
 	}
 
-	if !checkMaxLength(int64(len(pad.bytes)), length) {
+	if !validMaxLength(int64(len(pad.bytes)), length) {
 		return nil, nil
 	}
 
+	// LPAD / RPAD operates on characters, not bytes
 	cs := text.col.Collation.Get().Charset()
 	strLen := charset.Length(cs, text.bytes)
 
 	if strLen >= int(length) {
+		// If the existing string is longer than the requested padding,
+		// MySQL truncates the string to the requested padding length.
 		return newEvalText(charset.Slice(cs, text.bytes, 0, int(length)), text.col), nil
 	}
 
@@ -633,5 +645,120 @@ func (call builtinPad) compile(c *compiler) (ctype, error) {
 		c.asm.Fn_RPAD(col)
 	}
 	c.asm.jumpDestination(skip)
+	return ctype{Type: sqltypes.VarChar, Col: col}, nil
+}
+
+func (call builtinTrim) eval(env *ExpressionEnv) (eval, error) {
+	str, err := call.arg1(env)
+	if err != nil {
+		return nil, err
+	}
+
+	if str == nil {
+		return nil, nil
+	}
+
+	text, ok := str.(*evalBytes)
+	if !ok {
+		text, err = evalToVarchar(str, call.collate, true)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if len(call.Arguments) == 1 {
+		switch call.trim {
+		case sqlparser.LeadingTrimType:
+			return newEvalText(bytes.TrimLeft(text.bytes, " "), text.col), nil
+		case sqlparser.TrailingTrimType:
+			return newEvalText(bytes.TrimRight(text.bytes, " "), text.col), nil
+		default:
+			return newEvalText(bytes.Trim(text.bytes, " "), text.col), nil
+		}
+	}
+
+	p, err := call.Arguments[1].eval(env)
+	if err != nil {
+		return nil, err
+	}
+	if p == nil {
+		return nil, nil
+	}
+
+	pat, ok := p.(*evalBytes)
+	if !ok {
+		pat, err = evalToVarchar(p, text.col.Collation, true)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	switch call.trim {
+	case sqlparser.LeadingTrimType:
+		return newEvalText(bytes.TrimPrefix(text.bytes, pat.bytes), text.col), nil
+	case sqlparser.TrailingTrimType:
+		return newEvalText(bytes.TrimSuffix(text.bytes, pat.bytes), text.col), nil
+	default:
+		return newEvalText(bytes.TrimPrefix(bytes.TrimSuffix(text.bytes, pat.bytes), pat.bytes), text.col), nil
+	}
+}
+
+func (call builtinTrim) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	_, f1 := call.Arguments[0].typeof(env, fields)
+	return sqltypes.VarChar, f1
+}
+
+func (call builtinTrim) compile(c *compiler) (ctype, error) {
+	str, err := call.Arguments[0].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip1 := c.compileNullCheck1(str)
+
+	col := defaultCoercionCollation(c.cfg.Collation)
+	switch {
+	case str.isTextual():
+		col = str.Col
+	default:
+		c.asm.Convert_xc(1, sqltypes.VarChar, col.Collation, 0, false)
+	}
+
+	if len(call.Arguments) == 1 {
+		switch call.trim {
+		case sqlparser.LeadingTrimType:
+			c.asm.Fn_LTRIM1(col)
+		case sqlparser.TrailingTrimType:
+			c.asm.Fn_RTRIM1(col)
+		default:
+			c.asm.Fn_TRIM1(col)
+		}
+		c.asm.jumpDestination(skip1)
+		return ctype{Type: sqltypes.VarChar, Col: col}, nil
+	}
+
+	pat, err := call.Arguments[1].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip2 := c.compileNullCheck1r(pat)
+
+	switch {
+	case pat.isTextual():
+	default:
+		c.asm.Convert_xc(1, sqltypes.VarChar, col.Collation, 0, false)
+	}
+
+	switch call.trim {
+	case sqlparser.LeadingTrimType:
+		c.asm.Fn_LTRIM2(col)
+	case sqlparser.TrailingTrimType:
+		c.asm.Fn_RTRIM2(col)
+	default:
+		c.asm.Fn_TRIM2(col)
+	}
+
+	c.asm.jumpDestination(skip1, skip2)
 	return ctype{Type: sqltypes.VarChar, Col: col}, nil
 }

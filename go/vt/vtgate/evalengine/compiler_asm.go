@@ -2377,7 +2377,7 @@ func (asm *assembler) Fn_REPEAT() {
 			repeat.i = 0
 		}
 
-		if !checkMaxLength(int64(len(str.bytes)), repeat.i) {
+		if !validMaxLength(int64(len(str.bytes)), repeat.i) {
 			env.vm.stack[env.vm.sp-2] = nil
 			env.vm.sp--
 			return 1
@@ -2467,7 +2467,7 @@ func (asm *assembler) Fn_LPAD(col collations.TypedCollation) {
 			return 1
 		}
 
-		if !checkMaxLength(int64(len(pad.bytes)), length.i) {
+		if !validMaxLength(int64(len(pad.bytes)), length.i) {
 			env.vm.stack[env.vm.sp-3] = nil
 			env.vm.sp -= 2
 			return 1
@@ -2504,7 +2504,7 @@ func (asm *assembler) Fn_LPAD(col collations.TypedCollation) {
 
 		env.vm.sp -= 2
 		return 1
-	}, "FN LPAD VARCHAR(SP-2) INT64(SP-1)")
+	}, "FN LPAD VARCHAR(SP-3) INT64(SP-2) VARCHAR(SP-1)")
 }
 
 func (asm *assembler) Fn_RPAD(col collations.TypedCollation) {
@@ -2521,7 +2521,7 @@ func (asm *assembler) Fn_RPAD(col collations.TypedCollation) {
 			return 1
 		}
 
-		if !checkMaxLength(int64(len(pad.bytes)), length.i) {
+		if !validMaxLength(int64(len(pad.bytes)), length.i) {
 			env.vm.stack[env.vm.sp-3] = nil
 			env.vm.sp -= 2
 			return 1
@@ -2557,7 +2557,76 @@ func (asm *assembler) Fn_RPAD(col collations.TypedCollation) {
 
 		env.vm.sp -= 2
 		return 1
-	}, "FN RIGHT VARCHAR(SP-2) INT64(SP-1)")
+	}, "FN RPAD VARCHAR(SP-3) INT64(SP-2) VARCHAR(SP-1)")
+}
+
+func (asm *assembler) Fn_LTRIM1(col collations.TypedCollation) {
+	asm.emit(func(env *ExpressionEnv) int {
+		str := env.vm.stack[env.vm.sp-1].(*evalBytes)
+		str.tt = int16(sqltypes.VarChar)
+		str.bytes = bytes.TrimLeft(str.bytes, " ")
+		str.col = col
+		return 1
+	}, "FN LTRIM VARCHAR(SP-1)")
+}
+
+func (asm *assembler) Fn_RTRIM1(col collations.TypedCollation) {
+	asm.emit(func(env *ExpressionEnv) int {
+		str := env.vm.stack[env.vm.sp-1].(*evalBytes)
+		str.tt = int16(sqltypes.VarChar)
+		str.bytes = bytes.TrimRight(str.bytes, " ")
+		str.col = col
+		return 1
+	}, "FN RTRIM VARCHAR(SP-1)")
+}
+
+func (asm *assembler) Fn_TRIM1(col collations.TypedCollation) {
+	asm.emit(func(env *ExpressionEnv) int {
+		str := env.vm.stack[env.vm.sp-1].(*evalBytes)
+		str.tt = int16(sqltypes.VarChar)
+		str.bytes = bytes.Trim(str.bytes, " ")
+		str.col = col
+		return 1
+	}, "FN TRIM VARCHAR(SP-1)")
+}
+
+func (asm *assembler) Fn_LTRIM2(col collations.TypedCollation) {
+	asm.adjustStack(-1)
+	asm.emit(func(env *ExpressionEnv) int {
+		str := env.vm.stack[env.vm.sp-2].(*evalBytes)
+		pat := env.vm.stack[env.vm.sp-1].(*evalBytes)
+		str.tt = int16(sqltypes.VarChar)
+		str.bytes = bytes.TrimPrefix(str.bytes, pat.bytes)
+		str.col = col
+		env.vm.sp--
+		return 1
+	}, "FN LTRIM VARCHAR(SP-2) VARCHAR(SP-1)")
+}
+
+func (asm *assembler) Fn_RTRIM2(col collations.TypedCollation) {
+	asm.adjustStack(-1)
+	asm.emit(func(env *ExpressionEnv) int {
+		str := env.vm.stack[env.vm.sp-2].(*evalBytes)
+		pat := env.vm.stack[env.vm.sp-1].(*evalBytes)
+		str.tt = int16(sqltypes.VarChar)
+		str.bytes = bytes.TrimSuffix(str.bytes, pat.bytes)
+		str.col = col
+		env.vm.sp--
+		return 1
+	}, "FN RTRIM VARCHAR(SP-2) VARCHAR(SP-1)")
+}
+
+func (asm *assembler) Fn_TRIM2(col collations.TypedCollation) {
+	asm.adjustStack(-1)
+	asm.emit(func(env *ExpressionEnv) int {
+		str := env.vm.stack[env.vm.sp-2].(*evalBytes)
+		pat := env.vm.stack[env.vm.sp-1].(*evalBytes)
+		str.tt = int16(sqltypes.VarChar)
+		str.bytes = bytes.TrimPrefix(bytes.TrimSuffix(str.bytes, pat.bytes), pat.bytes)
+		str.col = col
+		env.vm.sp--
+		return 1
+	}, "FN TRIM VARCHAR(SP-2) VARCHAR(SP-1)")
 }
 
 func (asm *assembler) Fn_TO_BASE64(t sqltypes.Type, col collations.TypedCollation) {
