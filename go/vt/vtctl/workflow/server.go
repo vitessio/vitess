@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"reflect"
 	"sort"
 	"strings"
 	"sync"
@@ -38,10 +39,12 @@ import (
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vtctl/workflow/vexec"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -1047,10 +1050,10 @@ func (s *Server) WorkflowDelete(ctx context.Context, req *vtctldatapb.WorkflowDe
 			return err
 		}
 
-		if _, err := wr.DropTargets(ctx, req.Keyspace, req.Workflow, vrw.params.KeepData, vrw.params.KeepRoutingRules, false); err != nil {
-			return err
-		}
 	*/
+	if _, err := s.DropTargets(ctx, req.Keyspace, req.Workflow, req.KeepData, req.KeepRoutingRules, false); err != nil {
+		return nil, err
+	}
 
 	response := &vtctldatapb.WorkflowDeleteResponse{}
 	response.Summary = fmt.Sprintf("Successfully deleted the %s workflow on (%d) target primary tablets in the %s keyspace", req.Workflow, len(res), req.Keyspace)
@@ -1311,4 +1314,342 @@ func (s *Server) optimizeCopyStateTable(tablet *topodatapb.Tablet) {
 				tablet.Alias.String(), err)
 		}
 	}()
+}
+
+// DropTargets cleans up target tables, shards and denied tables if a MoveTables/Reshard is cancelled
+func (s *Server) DropTargets(ctx context.Context, targetKeyspace, workflow string, keepData, keepRoutingRules, dryRun bool) (*[]string, error) {
+	ts, err := s.buildTrafficSwitcher(ctx, targetKeyspace, workflow)
+	if err != nil {
+		ts.logger.Errorf("buildTrafficSwitcher failed: %v", err)
+		return nil, err
+	}
+	ts.keepRoutingRules = keepRoutingRules
+	var sw iswitcher
+	if dryRun {
+		sw = &switcherDryRun{ts: ts, drLog: NewLogRecorder()}
+	} else {
+		sw = &switcher{s: s, ts: ts}
+	}
+	var tctx context.Context
+	tctx, sourceUnlock, lockErr := sw.lockKeyspace(ctx, ts.SourceKeyspaceName(), "DropTargets")
+	if lockErr != nil {
+		ts.Logger().Errorf("Source LockKeyspace failed: %v", lockErr)
+		return nil, lockErr
+	}
+	defer sourceUnlock(&err)
+	ctx = tctx
+	if ts.TargetKeyspaceName() != ts.SourceKeyspaceName() {
+		tctx, targetUnlock, lockErr := sw.lockKeyspace(ctx, ts.TargetKeyspaceName(), "DropTargets")
+		if lockErr != nil {
+			ts.Logger().Errorf("Target LockKeyspace failed: %v", lockErr)
+			return nil, lockErr
+		}
+		defer targetUnlock(&err)
+		ctx = tctx
+	}
+	if !keepData {
+		switch ts.MigrationType() {
+		case binlogdatapb.MigrationType_TABLES:
+			log.Infof("Deleting target tables")
+			if err := sw.removeTargetTables(ctx); err != nil {
+				return nil, err
+			}
+			if err := sw.dropSourceDeniedTables(ctx); err != nil {
+				return nil, err
+			}
+		case binlogdatapb.MigrationType_SHARDS:
+			log.Infof("Removing target shards")
+			if err := sw.dropTargetShards(ctx); err != nil {
+				return nil, err
+			}
+		}
+	}
+	if err := s.dropArtifacts(ctx, keepRoutingRules, sw); err != nil {
+		return nil, err
+	}
+	if err := ts.TopoServer().RebuildSrvVSchema(ctx, nil); err != nil {
+		return nil, err
+	}
+	return sw.logs(), nil
+}
+
+func (s *Server) buildTrafficSwitcher(ctx context.Context, targetKeyspace, workflowName string) (*trafficSwitcher, error) {
+	tgtInfo, err := BuildTargets(ctx, s.ts, s.tmc, targetKeyspace, workflowName)
+	if err != nil {
+		log.Infof("Error building targets: %s", err)
+		return nil, err
+	}
+	targets, frozen, optCells, optTabletTypes := tgtInfo.Targets, tgtInfo.Frozen, tgtInfo.OptCells, tgtInfo.OptTabletTypes
+
+	ts := &trafficSwitcher{
+		workflow:        workflowName,
+		reverseWorkflow: ReverseWorkflowName(workflowName),
+		id:              HashStreams(targetKeyspace, targets),
+		targets:         targets,
+		sources:         make(map[string]*MigrationSource),
+		targetKeyspace:  targetKeyspace,
+		frozen:          frozen,
+		optCells:        optCells,
+		optTabletTypes:  optTabletTypes,
+		workflowType:    tgtInfo.WorkflowType,
+		workflowSubType: tgtInfo.WorkflowSubType,
+	}
+	log.Infof("Migration ID for workflow %s: %d", workflowName, ts.id)
+	sourceTopo := s.ts
+
+	// Build the sources
+	for _, target := range targets {
+		for _, bls := range target.Sources {
+			if ts.sourceKeyspace == "" {
+				ts.sourceKeyspace = bls.Keyspace
+				ts.sourceTimeZone = bls.SourceTimeZone
+				ts.targetTimeZone = bls.TargetTimeZone
+				ts.externalCluster = bls.ExternalCluster
+				if ts.externalCluster != "" {
+					externalTopo, err := s.ts.OpenExternalVitessClusterServer(ctx, ts.externalCluster)
+					if err != nil {
+						return nil, err
+					}
+					sourceTopo = externalTopo
+					ts.externalTopo = externalTopo
+				}
+			} else if ts.sourceKeyspace != bls.Keyspace {
+				return nil, fmt.Errorf("source keyspaces are mismatched across streams: %v vs %v", ts.sourceKeyspace, bls.Keyspace)
+			}
+
+			if ts.tables == nil {
+				for _, rule := range bls.Filter.Rules {
+					ts.tables = append(ts.tables, rule.Match)
+				}
+				sort.Strings(ts.tables)
+			} else {
+				var tables []string
+				for _, rule := range bls.Filter.Rules {
+					tables = append(tables, rule.Match)
+				}
+				sort.Strings(tables)
+				if !reflect.DeepEqual(ts.tables, tables) {
+					return nil, fmt.Errorf("table lists are mismatched across streams: %v vs %v", ts.tables, tables)
+				}
+			}
+
+			if _, ok := ts.sources[bls.Shard]; ok {
+				continue
+			}
+			sourcesi, err := sourceTopo.GetShard(ctx, bls.Keyspace, bls.Shard)
+			if err != nil {
+				return nil, err
+			}
+			sourcePrimary, err := sourceTopo.GetTablet(ctx, sourcesi.PrimaryAlias)
+			if err != nil {
+				return nil, err
+			}
+			ts.sources[bls.Shard] = NewMigrationSource(sourcesi, sourcePrimary)
+		}
+	}
+	if ts.sourceKeyspace != ts.targetKeyspace || ts.externalCluster != "" {
+		ts.migrationType = binlogdatapb.MigrationType_TABLES
+	} else {
+		// TODO(sougou): for shard migration, validate that source and target combined
+		// keyranges match.
+		ts.migrationType = binlogdatapb.MigrationType_SHARDS
+		for sourceShard := range ts.sources {
+			if _, ok := ts.targets[sourceShard]; ok {
+				// If shards are overlapping, then this is a table migration.
+				ts.migrationType = binlogdatapb.MigrationType_TABLES
+				break
+			}
+		}
+	}
+	vs, err := sourceTopo.GetVSchema(ctx, ts.sourceKeyspace)
+	if err != nil {
+		return nil, err
+	}
+	ts.sourceKSSchema, err = vindexes.BuildKeyspaceSchema(vs, ts.sourceKeyspace)
+	if err != nil {
+		return nil, err
+	}
+
+	sourceShards, targetShards := ts.getSourceAndTargetShardsNames()
+
+	ts.isPartialMigration, err = ts.isPartialMoveTables(sourceShards, targetShards)
+	if err != nil {
+		return nil, err
+	}
+	if ts.isPartialMigration {
+		log.Infof("Migration is partial, for shards %+v", sourceShards)
+	}
+	return ts, nil
+}
+
+func (s *Server) dropArtifacts(ctx context.Context, keepRoutingRules bool, sw iswitcher) error {
+	if err := sw.dropSourceReverseVReplicationStreams(ctx); err != nil {
+		return err
+	}
+	if err := sw.dropTargetVReplicationStreams(ctx); err != nil {
+		return err
+	}
+	if !keepRoutingRules {
+		if err := sw.deleteRoutingRules(ctx); err != nil {
+			return err
+		}
+		if err := sw.deleteShardRoutingRules(ctx); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// DeleteShard will do all the necessary changes in the topology server
+// to entirely remove a shard.
+func (s *Server) DeleteShard(ctx context.Context, keyspace, shard string, recursive, evenIfServing bool) error {
+	// Read the Shard object. If it's not there, try to clean up
+	// the topology anyway.
+	shardInfo, err := s.ts.GetShard(ctx, keyspace, shard)
+	if err != nil {
+		if topo.IsErrType(err, topo.NoNode) {
+			log.Infof("Shard %v/%v doesn't seem to exist, cleaning up any potential leftover", keyspace, shard)
+			return s.ts.DeleteShard(ctx, keyspace, shard)
+		}
+		return err
+	}
+
+	servingCells, err := s.ts.GetShardServingCells(ctx, shardInfo)
+	if err != nil {
+		return err
+	}
+	// Check the Serving map for the shard, we don't want to
+	// remove a serving shard if not absolutely sure.
+	if !evenIfServing && len(servingCells) > 0 {
+		return fmt.Errorf("shard %v/%v is still serving, cannot delete it, use even_if_serving flag if needed", keyspace, shard)
+	}
+
+	cells, err := s.ts.GetCellInfoNames(ctx)
+	if err != nil {
+		return err
+	}
+
+	// Go through all the cells.
+	for _, cell := range cells {
+		var aliases []*topodatapb.TabletAlias
+
+		// Get the ShardReplication object for that cell. Try
+		// to find all tablets that may belong to our shard.
+		sri, err := s.ts.GetShardReplication(ctx, cell, keyspace, shard)
+		switch {
+		case topo.IsErrType(err, topo.NoNode):
+			// No ShardReplication object. It means the
+			// topo is inconsistent. Let's read all the
+			// tablets for that cell, and if we find any
+			// in our keyspace / shard, either abort or
+			// try to delete them.
+			aliases, err = s.ts.GetTabletAliasesByCell(ctx, cell)
+			if err != nil {
+				return fmt.Errorf("GetTabletsByCell(%v) failed: %v", cell, err)
+			}
+		case err == nil:
+			// We found a ShardReplication object. We
+			// trust it to have all tablet records.
+			aliases = make([]*topodatapb.TabletAlias, len(sri.Nodes))
+			for i, n := range sri.Nodes {
+				aliases[i] = n.TabletAlias
+			}
+		default:
+			return fmt.Errorf("GetShardReplication(%v, %v, %v) failed: %v", cell, keyspace, shard, err)
+		}
+
+		// Get the corresponding Tablet records. Note
+		// GetTabletMap ignores ErrNoNode, and it's good for
+		// our purpose, it means a tablet was deleted but is
+		// still referenced.
+		tabletMap, err := s.ts.GetTabletMap(ctx, aliases)
+		if err != nil {
+			return fmt.Errorf("GetTabletMap() failed: %v", err)
+		}
+
+		// Remove the tablets that don't belong to our
+		// keyspace/shard from the map.
+		for a, ti := range tabletMap {
+			if ti.Keyspace != keyspace || ti.Shard != shard {
+				delete(tabletMap, a)
+			}
+		}
+
+		// Now see if we need to DeleteTablet, and if we can, do it.
+		if len(tabletMap) > 0 {
+			if !recursive {
+				return fmt.Errorf("shard %v/%v still has %v tablets in cell %v; use -recursive or remove them manually", keyspace, shard, len(tabletMap), cell)
+			}
+
+			log.Infof("Deleting all tablets in shard %v/%v cell %v", keyspace, shard, cell)
+			for tabletAlias, tabletInfo := range tabletMap {
+				// We don't care about scrapping or updating the replication graph,
+				// because we're about to delete the entire replication graph.
+				log.Infof("Deleting tablet %v", tabletAlias)
+				if err := s.ts.DeleteTablet(ctx, tabletInfo.Alias); err != nil && !topo.IsErrType(err, topo.NoNode) {
+					// We don't want to continue if a DeleteTablet fails for
+					// any good reason (other than missing tablet, in which
+					// case it's just a topology server inconsistency we can
+					// ignore). If we continue and delete the replication
+					// graph, the tablet record will be orphaned, since
+					// we'll no longer know it belongs to this shard.
+					//
+					// If the problem is temporary, or resolved externally, re-running
+					// DeleteShard will skip over tablets that were already deleted.
+					return fmt.Errorf("can't delete tablet %v: %v", tabletAlias, err)
+				}
+			}
+		}
+	}
+
+	// Try to remove the replication graph and serving graph in each cell,
+	// regardless of its existence.
+	for _, cell := range cells {
+		if err := s.ts.DeleteShardReplication(ctx, cell, keyspace, shard); err != nil && !topo.IsErrType(err, topo.NoNode) {
+			log.Warningf("Cannot delete ShardReplication in cell %v for %v/%v: %v", cell, keyspace, shard, err)
+		}
+	}
+
+	return s.ts.DeleteShard(ctx, keyspace, shard)
+}
+
+// updateShardRecords updates the shard records based on 'from' or 'to' direction.
+func (s *Server) updateShardRecords(ctx context.Context, keyspace string, shards []*topo.ShardInfo, cells []string, servedType topodatapb.TabletType, isFrom bool, clearSourceShards bool) (err error) {
+	return topotools.UpdateShardRecords(ctx, s.ts, s.tmc, keyspace, shards, cells, servedType, isFrom, clearSourceShards, nil)
+}
+
+// refreshPrimaryTablets will just RPC-ping all the primary tablets with RefreshState
+func (s *Server) refreshPrimaryTablets(ctx context.Context, shards []*topo.ShardInfo) error {
+	wg := sync.WaitGroup{}
+	rec := concurrency.AllErrorRecorder{}
+	for _, si := range shards {
+		wg.Add(1)
+		go func(si *topo.ShardInfo) {
+			defer wg.Done()
+			log.Infof("RefreshState primary %v", topoproto.TabletAliasString(si.PrimaryAlias))
+			ti, err := s.ts.GetTablet(ctx, si.PrimaryAlias)
+			if err != nil {
+				rec.RecordError(err)
+				return
+			}
+
+			if err := s.tmc.RefreshState(ctx, ti.Tablet); err != nil {
+				rec.RecordError(err)
+			} else {
+				log.Infof("%v responded", topoproto.TabletAliasString(si.PrimaryAlias))
+			}
+		}(si)
+	}
+	wg.Wait()
+	return rec.Error()
+}
+
+// VReplicationExec executes a query remotely using the DBA pool
+func (s *Server) VReplicationExec(ctx context.Context, tabletAlias *topodatapb.TabletAlias, query string) (*querypb.QueryResult, error) {
+	ti, err := s.ts.GetTablet(ctx, tabletAlias)
+	if err != nil {
+		return nil, err
+	}
+	return s.tmc.VReplicationExec(ctx, ti.Tablet, query)
 }

@@ -10007,9 +10007,9 @@ func (m *WorkflowDeleteRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error)
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
-	if m.KeepRooutingRules {
+	if m.KeepRoutingRules {
 		i--
-		if m.KeepRooutingRules {
+		if m.KeepRoutingRules {
 			dAtA[i] = 1
 		} else {
 			dAtA[i] = 0
@@ -14017,7 +14017,7 @@ func (m *WorkflowDeleteRequest) SizeVT() (n int) {
 	if m.KeepData {
 		n += 2
 	}
-	if m.KeepRooutingRules {
+	if m.KeepRoutingRules {
 		n += 2
 	}
 	n += len(m.unknownFields)
@@ -37655,7 +37655,7 @@ func (m *WorkflowDeleteRequest) UnmarshalVT(dAtA []byte) error {
 			m.KeepData = bool(v != 0)
 		case 4:
 			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field KeepRooutingRules", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field KeepRoutingRules", wireType)
 			}
 			var v int
 			for shift := uint(0); ; shift += 7 {
@@ -37672,7 +37672,7 @@ func (m *WorkflowDeleteRequest) UnmarshalVT(dAtA []byte) error {
 					break
 				}
 			}
-			m.KeepRooutingRules = bool(v != 0)
+			m.KeepRoutingRules = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := skip(dAtA[iNdEx:])

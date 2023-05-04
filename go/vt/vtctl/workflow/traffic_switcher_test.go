@@ -25,7 +25,7 @@ import (
 )
 
 type testTrafficSwitcher struct {
-	ITrafficSwitcher
+	trafficSwitcher
 	sourceKeyspaceSchema *vindexes.KeyspaceSchema
 }
 

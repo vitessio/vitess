@@ -17,17 +17,26 @@ limitations under the License.
 package workflow
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"hash/fnv"
 	"math"
 	"sort"
+	"strings"
 	"sync"
 
+	"google.golang.org/protobuf/encoding/prototext"
+
+	"vitess.io/vitess/go/sets"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/concurrency"
+	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/proto/binlogdata"
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -36,6 +45,8 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 )
+
+const reverseSuffix = "_reverse"
 
 func getTablesInKeyspace(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManagerClient, keyspace string) ([]string, error) {
 	shards, err := ts.GetServingShards(ctx, keyspace)
@@ -305,4 +316,303 @@ func getMigrationID(targetKeyspace string, shardTablets []string) (int64, error)
 	}
 	// Convert to int64 after dropping the highest bit.
 	return int64(hasher.Sum64() & math.MaxInt64), nil
+}
+
+// BuildTargets collects MigrationTargets and other metadata (see TargetInfo)
+// from a workflow in the target keyspace.
+//
+// It returns ErrNoStreams if there are no targets found for the workflow.
+func BuildTargets(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManagerClient, targetKeyspace string, workflow string) (*TargetInfo, error) {
+	targetShards, err := ts.GetShardNames(ctx, targetKeyspace)
+	if err != nil {
+		return nil, err
+	}
+
+	var (
+		frozen          bool
+		optCells        string
+		optTabletTypes  string
+		targets         = make(map[string]*MigrationTarget, len(targetShards))
+		workflowType    binlogdatapb.VReplicationWorkflowType
+		workflowSubType binlogdatapb.VReplicationWorkflowSubType
+	)
+
+	// We check all shards in the target keyspace. Not all of them may have a
+	// stream. For example, if we're splitting -80 to [-40,40-80], only those
+	// two target shards will have vreplication streams, and the other shards in
+	// the target keyspace will not.
+	for _, targetShard := range targetShards {
+		si, err := ts.GetShard(ctx, targetKeyspace, targetShard)
+		if err != nil {
+			return nil, err
+		}
+
+		if si.PrimaryAlias == nil {
+			// This can happen if bad inputs are given.
+			return nil, fmt.Errorf("shard %v/%v doesn't have a primary set", targetKeyspace, targetShard)
+		}
+
+		primary, err := ts.GetTablet(ctx, si.PrimaryAlias)
+		if err != nil {
+			return nil, err
+		}
+
+		// NB: changing the whitespace of this query breaks tests for now.
+		// (TODO:@ajm188) extend FakeDBClient to be less whitespace-sensitive on
+		// expected queries.
+		query := fmt.Sprintf("select id, source, message, cell, tablet_types, workflow_type, workflow_sub_type, defer_secondary_keys from _vt.vreplication where workflow=%s and db_name=%s", encodeString(workflow), encodeString(primary.DbName()))
+		p3qr, err := tmc.VReplicationExec(ctx, primary.Tablet, query)
+		if err != nil {
+			return nil, err
+		}
+
+		if len(p3qr.Rows) < 1 {
+			continue
+		}
+
+		target := &MigrationTarget{
+			si:      si,
+			primary: primary,
+			Sources: make(map[int32]*binlogdatapb.BinlogSource),
+		}
+
+		qr := sqltypes.Proto3ToResult(p3qr)
+		for _, row := range qr.Named().Rows {
+			id, err := row["id"].ToInt32()
+			if err != nil {
+				return nil, err
+			}
+
+			var bls binlogdatapb.BinlogSource
+			rowBytes, err := row["source"].ToBytes()
+			if err != nil {
+				return nil, err
+			}
+			if err := prototext.Unmarshal(rowBytes, &bls); err != nil {
+				return nil, err
+			}
+
+			if row["message"].ToString() == Frozen {
+				frozen = true
+			}
+
+			target.Sources[id] = &bls
+			optCells = row["cell"].ToString()
+			optTabletTypes = row["tablet_types"].ToString()
+
+			workflowType = getVReplicationWorkflowType(row)
+			workflowSubType = getVReplicationWorkflowSubType(row)
+
+		}
+
+		targets[targetShard] = target
+	}
+
+	if len(targets) == 0 {
+		return nil, fmt.Errorf("%w in keyspace %s for %s", ErrNoStreams, targetKeyspace, workflow)
+	}
+
+	return &TargetInfo{
+		Targets:         targets,
+		Frozen:          frozen,
+		OptCells:        optCells,
+		OptTabletTypes:  optTabletTypes,
+		WorkflowType:    workflowType,
+		WorkflowSubType: workflowSubType,
+	}, nil
+}
+
+func getVReplicationWorkflowType(row sqltypes.RowNamedValues) binlogdatapb.VReplicationWorkflowType {
+	i, _ := row["workflow_type"].ToInt32()
+	return binlogdatapb.VReplicationWorkflowType(i)
+}
+
+func getVReplicationWorkflowSubType(row sqltypes.RowNamedValues) binlogdatapb.VReplicationWorkflowSubType {
+	i, _ := row["workflow_sub_type"].ToInt32()
+	return binlogdatapb.VReplicationWorkflowSubType(i)
+}
+
+func getSourceAndTargetKeyRanges(sourceShards, targetShards []string) (*topodatapb.KeyRange, *topodatapb.KeyRange, error) {
+	if len(sourceShards) == 0 || len(targetShards) == 0 {
+		return nil, nil, fmt.Errorf("either source or target shards are missing")
+	}
+
+	getKeyRange := func(shard string) (*topodatapb.KeyRange, error) {
+		krs, err := key.ParseShardingSpec(shard)
+		if err != nil {
+			return nil, err
+		}
+		return krs[0], nil
+	}
+
+	// happily string sorting of shards also sorts them in the ascending order of key ranges in vitess
+	sort.Strings(sourceShards)
+	sort.Strings(targetShards)
+	getFullKeyRange := func(shards []string) (*topodatapb.KeyRange, error) {
+		// expect sorted shards
+		kr1, err := getKeyRange(sourceShards[0])
+		if err != nil {
+			return nil, err
+		}
+		kr2, err := getKeyRange(sourceShards[len(sourceShards)-1])
+		if err != nil {
+			return nil, err
+		}
+		return &topodatapb.KeyRange{
+			Start: kr1.Start,
+			End:   kr2.End,
+		}, nil
+	}
+
+	skr, err := getFullKeyRange(sourceShards)
+	if err != nil {
+		return nil, nil, err
+	}
+	tkr, err := getFullKeyRange(targetShards)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return skr, tkr, nil
+}
+
+// CompareShards compares the list of shards in a workflow with the shards in
+// that keyspace according to the topo. It returns an error if they do not match.
+//
+// This function is used to validate MoveTables workflows.
+//
+// (TODO|@ajm188): This function is temporarily-exported until *wrangler.trafficSwitcher
+// has been fully moved over to this package. Once that refactor is finished,
+// this function should be unexported. Consequently, YOU SHOULD NOT DEPEND ON
+// THIS FUNCTION EXTERNALLY.
+func CompareShards(ctx context.Context, keyspace string, shards []*topo.ShardInfo, ts *topo.Server) error {
+	shardSet := sets.New[string]()
+	for _, si := range shards {
+		shardSet.Insert(si.ShardName())
+	}
+
+	topoShards, err := ts.GetShardNames(ctx, keyspace)
+	if err != nil {
+		return err
+	}
+
+	topoShardSet := sets.New[string](topoShards...)
+	if !shardSet.Equal(topoShardSet) {
+		wfExtra := shardSet.Difference(topoShardSet)
+		topoExtra := topoShardSet.Difference(shardSet)
+
+		var rec concurrency.AllErrorRecorder
+		if wfExtra.Len() > 0 {
+			wfExtraSorted := sets.List(wfExtra)
+			rec.RecordError(fmt.Errorf("switch command shards not in topo: %v", wfExtraSorted))
+		}
+
+		if topoExtra.Len() > 0 {
+			topoExtraSorted := sets.List(topoExtra)
+			rec.RecordError(fmt.Errorf("topo shards not in switch command: %v", topoExtraSorted))
+		}
+
+		return fmt.Errorf("mismatched shards for keyspace %s: %s", keyspace, strings.Join(rec.ErrorStrings(), "; "))
+	}
+
+	return nil
+}
+
+// HashStreams produces a stable hash based on the target keyspace and migration
+// targets.
+func HashStreams(targetKeyspace string, targets map[string]*MigrationTarget) int64 {
+	var expanded []string
+	for shard, target := range targets {
+		for uid := range target.Sources {
+			expanded = append(expanded, fmt.Sprintf("%s:%d", shard, uid))
+		}
+	}
+
+	sort.Strings(expanded)
+
+	hasher := fnv.New64()
+	hasher.Write([]byte(targetKeyspace))
+
+	for _, s := range expanded {
+		hasher.Write([]byte(s))
+	}
+
+	// Convert to int64 after dropping the highest bit.
+	return int64(hasher.Sum64() & math.MaxInt64)
+}
+
+func doValidateWorkflowHasCompleted(ctx context.Context, ts *trafficSwitcher) error {
+	wg := sync.WaitGroup{}
+	rec := concurrency.AllErrorRecorder{}
+	if ts.MigrationType() == binlogdatapb.MigrationType_SHARDS {
+		_ = ts.ForAllSources(func(source *MigrationSource) error {
+			wg.Add(1)
+			if source.GetShard().IsPrimaryServing {
+				rec.RecordError(fmt.Errorf(fmt.Sprintf("Shard %s is still serving", source.GetShard().ShardName())))
+			}
+			wg.Done()
+			return nil
+		})
+	} else {
+		_ = ts.ForAllTargets(func(target *MigrationTarget) error {
+			wg.Add(1)
+			query := fmt.Sprintf("select 1 from _vt.vreplication where db_name='%s' and workflow='%s' and message!='FROZEN'", target.GetPrimary().DbName(), ts.WorkflowName())
+			rs, _ := ts.VReplicationExec(ctx, target.GetPrimary().Alias, query)
+			if len(rs.Rows) > 0 {
+				rec.RecordError(fmt.Errorf("vreplication streams are not frozen on tablet %d", target.GetPrimary().Alias.Uid))
+			}
+			wg.Done()
+			return nil
+		})
+	}
+	wg.Wait()
+
+	if !ts.keepRoutingRules {
+		//check if table is routable
+		if ts.MigrationType() == binlogdatapb.MigrationType_TABLES {
+			rules, err := topotools.GetRoutingRules(ctx, ts.TopoServer())
+			if err != nil {
+				rec.RecordError(fmt.Errorf("could not get RoutingRules"))
+			}
+			for fromTable, toTables := range rules {
+				for _, toTable := range toTables {
+					for _, table := range ts.Tables() {
+						if toTable == fmt.Sprintf("%s.%s", ts.SourceKeyspaceName(), table) {
+							rec.RecordError(fmt.Errorf("routing still exists from keyspace %s table %s to %s", ts.SourceKeyspaceName(), table, fromTable))
+						}
+					}
+				}
+			}
+		}
+	}
+	if rec.HasErrors() {
+		return fmt.Errorf("%s", strings.Join(rec.ErrorStrings(), "\n"))
+	}
+	return nil
+
+}
+
+// ReverseWorkflowName returns the "reversed" name of a workflow. For a
+// "forward" workflow, this is the workflow name with "_reversed" appended, and
+// for a "reversed" workflow, this is the workflow name with the "_reversed"
+// suffix removed.
+func ReverseWorkflowName(workflow string) string {
+	if strings.HasSuffix(workflow, reverseSuffix) {
+		return workflow[:len(workflow)-len(reverseSuffix)]
+	}
+
+	return workflow + reverseSuffix
+}
+
+// Straight copy-paste of encodeString from wrangler/keyspace.go. I want to make
+// this public, but it doesn't belong in package workflow. Maybe package sqltypes,
+// or maybe package sqlescape?
+func encodeString(in string) string {
+	buf := bytes.NewBuffer(nil)
+	sqltypes.NewVarChar(in).EncodeSQL(buf)
+	return buf.String()
+}
+
+func getRenameFileName(tableName string) string {
+	return fmt.Sprintf(renameTableTemplate, tableName)
 }

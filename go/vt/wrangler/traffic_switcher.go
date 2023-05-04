@@ -111,17 +111,6 @@ type trafficSwitcher struct {
 	workflowSubType  binlogdatapb.VReplicationWorkflowSubType
 }
 
-/*
-begin: implementation of workflow.ITrafficSwitcher
-
-(NOTE:@ajm188) Please see comments on that interface type for why this exists.
-This is temporary to allow workflow.StreamMigrator to use this trafficSwitcher
-code and should be removed in the very near-term when we move trafficSwitcher to
-package workflow as well.
-*/
-
-var _ workflow.ITrafficSwitcher = (*trafficSwitcher)(nil)
-
 func (ts *trafficSwitcher) TopoServer() *topo.Server                          { return ts.wr.ts }
 func (ts *trafficSwitcher) TabletManagerClient() tmclient.TabletManagerClient { return ts.wr.tmc }
 func (ts *trafficSwitcher) Logger() logutil.Logger                            { return ts.wr.logger }

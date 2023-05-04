@@ -1347,7 +1347,7 @@ message WorkflowDeleteRequest {
   string keyspace = 1;
   string workflow = 2;
   bool keep_data = 3;
-  bool keep_roouting_rules = 4;
+  bool keep_routing_rules = 4;
 }
 
 message WorkflowDeleteResponse {

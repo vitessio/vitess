@@ -156,10 +156,10 @@ func commandWorkflowDelete(cmd *cobra.Command, args []string) error {
 	cli.FinishedParsing(cmd)
 
 	req := &vtctldatapb.WorkflowDeleteRequest{
-		Keyspace:          workflowOptions.Keyspace,
-		Workflow:          workflowDeleteOptions.Workflow,
-		KeepData:          workflowDeleteOptions.KeepData,
-		KeepRooutingRules: workflowDeleteOptions.KeepRoutingRules,
+		Keyspace:         workflowOptions.Keyspace,
+		Workflow:         workflowDeleteOptions.Workflow,
+		KeepData:         workflowDeleteOptions.KeepData,
+		KeepRoutingRules: workflowDeleteOptions.KeepRoutingRules,
 	}
 	resp, err := client.WorkflowDelete(commandCtx, req)
 	if err != nil {

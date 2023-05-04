@@ -162,10 +162,10 @@ func commandMoveTablesCancel(cmd *cobra.Command, args []string) error {
 	cli.FinishedParsing(cmd)
 
 	req := &vtctldatapb.WorkflowDeleteRequest{
-		Keyspace:          moveTablesOptions.TargetKeyspace,
-		Workflow:          moveTablesOptions.Workflow,
-		KeepData:          moveTablesCancelOptions.KeepData,
-		KeepRooutingRules: moveTablesCancelOptions.KeepRoutingRules,
+		Keyspace:         moveTablesOptions.TargetKeyspace,
+		Workflow:         moveTablesOptions.Workflow,
+		KeepData:         moveTablesCancelOptions.KeepData,
+		KeepRoutingRules: moveTablesCancelOptions.KeepRoutingRules,
 	}
 	resp, err := client.WorkflowDelete(commandCtx, req)
 	if err != nil {
