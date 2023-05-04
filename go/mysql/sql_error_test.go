@@ -26,7 +26,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestDumuxResourceExhaustedErrors(t *testing.T) {
+func TestDemuxResourceExhaustedErrors(t *testing.T) {
 	type testCase struct {
 		msg  string
 		want ErrorCode
@@ -43,6 +43,7 @@ func TestDumuxResourceExhaustedErrors(t *testing.T) {
 		// This should be explicitly handled by returning ERNetPacketTooLarge from the execturo directly
 		// and therefore shouldn't need to be teased out of another error.
 		{"in-memory row count exceeded allowed limit of 13", ERTooManyUserConnections},
+		{"rpc error: code = ResourceExhausted desc = Transaction throttled", EROutOfResources},
 	}
 
 	for _, c := range cases {
@@ -166,6 +167,11 @@ func TestNewSQLErrorFromError(t *testing.T) {
 			err: vterrors.Wrapf(fmt.Errorf("Column 'val' cannot be null (errno 1048) (sqlstate 23000) during query: insert into _edf4846d_ab65_11ed_abb1_0a43f95f28a3_20230213061619_vrepl(id,val,ts) values (1,2,'2023-02-13 04:46:16'), (2,3,'2023-02-13 04:46:16'), (3,null,'2023-02-13 04:46:16')"), "task error: %d", 17),
 			num: ERBadNullError,
 			ss:  SSConstraintViolation,
+		},
+		{
+			err: vterrors.Errorf(vtrpc.Code_RESOURCE_EXHAUSTED, "vttablet: rpc error: code = ResourceExhausted desc = Transaction throttled"),
+			num: EROutOfResources,
+			ss:  SSUnknownSQLState,
 		},
 	}
 

@@ -299,6 +299,7 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 
 	throttleEvents := func(throttledEvents chan mysql.BinlogEvent) {
 		throttledHeartbeatsRateLimiter := timer.NewRateLimiter(HeartbeatTime)
+		defer throttledHeartbeatsRateLimiter.Stop()
 		for {
 			// check throttler.
 			if !vs.vse.throttlerClient.ThrottleCheckOKOrWait(ctx) {
@@ -629,9 +630,27 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 		if err != nil {
 			return nil, err
 		}
-	case ev.IsCompressed():
-		log.Errorf("VReplication does not handle binlog compression")
-		return nil, fmt.Errorf("VReplication does not handle binlog compression")
+	case ev.IsTransactionPayload():
+		if !vs.pos.MatchesFlavor(mysql.Mysql56FlavorID) {
+			return nil, fmt.Errorf("compressed transaction payload events are not supported with database flavor %s",
+				vs.vse.env.Config().DB.Flavor)
+		}
+		tpevents, err := ev.TransactionPayload(vs.format)
+		if err != nil {
+			return nil, err
+		}
+		// Events inside the payload don't have their own checksum.
+		ogca := vs.format.ChecksumAlgorithm
+		defer func() { vs.format.ChecksumAlgorithm = ogca }()
+		vs.format.ChecksumAlgorithm = mysql.BinlogChecksumAlgOff
+		for _, tpevent := range tpevents {
+			tpvevents, err := vs.parseEvent(tpevent)
+			if err != nil {
+				return nil, vterrors.Wrap(err, "failed to parse transaction payload's internal event")
+			}
+			vevents = append(vevents, tpvevents...)
+		}
+		vs.vse.vstreamerCompressedTransactionsDecoded.Add(1)
 	}
 	for _, vevent := range vevents {
 		vevent.Timestamp = int64(ev.Timestamp())

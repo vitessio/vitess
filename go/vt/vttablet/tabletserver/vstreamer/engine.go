@@ -87,20 +87,21 @@ type Engine struct {
 	vschemaUpdates *stats.Counter
 
 	// vstreamer metrics
-	vstreamerPhaseTimings     *servenv.TimingsWrapper
-	vstreamerCount            *stats.Gauge
-	vstreamerEventsStreamed   *stats.Counter
-	vstreamerPacketSize       *stats.GaugeFunc
-	vstreamerNumPackets       *stats.Counter
-	resultStreamerNumRows     *stats.Counter
-	resultStreamerNumPackets  *stats.Counter
-	rowStreamerNumRows        *stats.Counter
-	rowStreamerNumPackets     *stats.Counter
-	rowStreamerWaits          *servenv.TimingsWrapper
-	errorCounts               *stats.CountersWithSingleLabel
-	vstreamersCreated         *stats.Counter
-	vstreamersEndedWithErrors *stats.Counter
-	vstreamerFlushedBinlogs   *stats.Counter
+	vstreamerPhaseTimings                  *servenv.TimingsWrapper
+	vstreamerCount                         *stats.Gauge
+	vstreamerEventsStreamed                *stats.Counter
+	vstreamerCompressedTransactionsDecoded *stats.Counter
+	vstreamerPacketSize                    *stats.GaugeFunc
+	vstreamerNumPackets                    *stats.Counter
+	resultStreamerNumRows                  *stats.Counter
+	resultStreamerNumPackets               *stats.Counter
+	rowStreamerNumRows                     *stats.Counter
+	rowStreamerNumPackets                  *stats.Counter
+	rowStreamerWaits                       *servenv.TimingsWrapper
+	errorCounts                            *stats.CountersWithSingleLabel
+	vstreamersCreated                      *stats.Counter
+	vstreamersEndedWithErrors              *stats.Counter
+	vstreamerFlushedBinlogs                *stats.Counter
 
 	throttlerClient *throttle.Client
 }
@@ -125,20 +126,21 @@ func NewEngine(env tabletenv.Env, ts srvtopo.Server, se *schema.Engine, lagThrot
 		vschemaErrors:  env.Exporter().NewCounter("VSchemaErrors", "Count of VSchema errors"),
 		vschemaUpdates: env.Exporter().NewCounter("VSchemaUpdates", "Count of VSchema updates. Does not include errors"),
 
-		vstreamerPhaseTimings:     env.Exporter().NewTimings("VStreamerPhaseTiming", "Time taken for different phases during vstream copy", "phase-timing"),
-		vstreamerCount:            env.Exporter().NewGauge("VStreamerCount", "Current number of vstreamers"),
-		vstreamerEventsStreamed:   env.Exporter().NewCounter("VStreamerEventsStreamed", "Count of events streamed in VStream API"),
-		vstreamerPacketSize:       env.Exporter().NewGaugeFunc("VStreamPacketSize", "Max packet size for sending vstreamer events", getPacketSize),
-		vstreamerNumPackets:       env.Exporter().NewCounter("VStreamerNumPackets", "Number of packets in vstreamer"),
-		resultStreamerNumPackets:  env.Exporter().NewCounter("ResultStreamerNumPackets", "Number of packets in result streamer"),
-		resultStreamerNumRows:     env.Exporter().NewCounter("ResultStreamerNumRows", "Number of rows sent in result streamer"),
-		rowStreamerNumPackets:     env.Exporter().NewCounter("RowStreamerNumPackets", "Number of packets in row streamer"),
-		rowStreamerNumRows:        env.Exporter().NewCounter("RowStreamerNumRows", "Number of rows sent in row streamer"),
-		rowStreamerWaits:          env.Exporter().NewTimings("RowStreamerWaits", "Total counts and time we've waited when streaming rows in the vstream copy phase", "copy-phase-waits"),
-		vstreamersCreated:         env.Exporter().NewCounter("VStreamersCreated", "Count of vstreamers created"),
-		vstreamersEndedWithErrors: env.Exporter().NewCounter("VStreamersEndedWithErrors", "Count of vstreamers that ended with errors"),
-		errorCounts:               env.Exporter().NewCountersWithSingleLabel("VStreamerErrors", "Tracks errors in vstreamer", "type", "Catchup", "Copy", "Send", "TablePlan"),
-		vstreamerFlushedBinlogs:   env.Exporter().NewCounter("VStreamerFlushedBinlogs", "Number of times we've successfully executed a FLUSH BINARY LOGS statement when starting a vstream"),
+		vstreamerPhaseTimings:                  env.Exporter().NewTimings("VStreamerPhaseTiming", "Time taken for different phases during vstream copy", "phase-timing"),
+		vstreamerCount:                         env.Exporter().NewGauge("VStreamerCount", "Current number of vstreamers"),
+		vstreamerEventsStreamed:                env.Exporter().NewCounter("VStreamerEventsStreamed", "Count of events streamed in VStream API"),
+		vstreamerCompressedTransactionsDecoded: env.Exporter().NewCounter("VStreamerCompressedTransactionsDecoded", "Count of compressed transactions (MySQL's binlog_transaction_compression=ON) decoded in the VStream API"),
+		vstreamerPacketSize:                    env.Exporter().NewGaugeFunc("VStreamPacketSize", "Max packet size for sending vstreamer events", getPacketSize),
+		vstreamerNumPackets:                    env.Exporter().NewCounter("VStreamerNumPackets", "Number of packets in vstreamer"),
+		resultStreamerNumPackets:               env.Exporter().NewCounter("ResultStreamerNumPackets", "Number of packets in result streamer"),
+		resultStreamerNumRows:                  env.Exporter().NewCounter("ResultStreamerNumRows", "Number of rows sent in result streamer"),
+		rowStreamerNumPackets:                  env.Exporter().NewCounter("RowStreamerNumPackets", "Number of packets in row streamer"),
+		rowStreamerNumRows:                     env.Exporter().NewCounter("RowStreamerNumRows", "Number of rows sent in row streamer"),
+		rowStreamerWaits:                       env.Exporter().NewTimings("RowStreamerWaits", "Total counts and time we've waited when streaming rows in the vstream copy phase", "copy-phase-waits"),
+		vstreamersCreated:                      env.Exporter().NewCounter("VStreamersCreated", "Count of vstreamers created"),
+		vstreamersEndedWithErrors:              env.Exporter().NewCounter("VStreamersEndedWithErrors", "Count of vstreamers that ended with errors"),
+		errorCounts:                            env.Exporter().NewCountersWithSingleLabel("VStreamerErrors", "Tracks errors in vstreamer", "type", "Catchup", "Copy", "Send", "TablePlan"),
+		vstreamerFlushedBinlogs:                env.Exporter().NewCounter("VStreamerFlushedBinlogs", "Number of times we've successfully executed a FLUSH BINARY LOGS statement when starting a vstream"),
 	}
 	env.Exporter().NewGaugeFunc("RowStreamerMaxInnoDBTrxHistLen", "", func() int64 { return env.Config().RowStreamer.MaxInnoDBTrxHistLen })
 	env.Exporter().NewGaugeFunc("RowStreamerMaxMySQLReplLagSecs", "", func() int64 { return env.Config().RowStreamer.MaxMySQLReplLagSecs })

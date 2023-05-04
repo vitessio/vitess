@@ -37,7 +37,7 @@ require (
 	github.com/icrowley/fake v0.0.0-20180203215853-4178557ae428
 	github.com/imdario/mergo v0.3.13 // indirect
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
-	github.com/klauspost/compress v1.15.15
+	github.com/klauspost/compress v1.16.5
 	github.com/klauspost/pgzip v1.2.5
 	github.com/krishicks/yaml-patch v0.0.10
 	github.com/magiconair/properties v1.8.7
@@ -74,7 +74,6 @@ require (
 	go.etcd.io/etcd/client/pkg/v3 v3.5.7
 	go.etcd.io/etcd/client/v3 v3.5.7
 	golang.org/x/crypto v0.5.0 // indirect
-	golang.org/x/lint v0.0.0-20210508222113-6edffad5e616
 	golang.org/x/mod v0.7.0 // indirect
 	golang.org/x/net v0.7.0
 	golang.org/x/oauth2 v0.4.0
@@ -95,7 +94,6 @@ require (
 	gopkg.in/ldap.v2 v2.5.1
 	gopkg.in/warnings.v0 v0.1.2 // indirect
 	gotest.tools v2.2.0+incompatible
-	honnef.co/go/tools v0.3.3
 	k8s.io/apiextensions-apiserver v0.18.19
 	k8s.io/apimachinery v0.26.1
 	k8s.io/client-go v0.26.1
@@ -121,7 +119,6 @@ require (
 	cloud.google.com/go/compute v1.18.0 // indirect
 	cloud.google.com/go/compute/metadata v0.2.3 // indirect
 	cloud.google.com/go/iam v0.10.0 // indirect
-	github.com/BurntSushi/toml v1.2.1 // indirect
 	github.com/DataDog/datadog-agent/pkg/obfuscate v0.42.0 // indirect
 	github.com/DataDog/datadog-agent/pkg/remoteconfig/state v0.42.0 // indirect
 	github.com/DataDog/datadog-go/v5 v5.2.0 // indirect
@@ -191,7 +188,6 @@ require (
 	go.uber.org/zap v1.23.0 // indirect
 	go4.org/intern v0.0.0-20220617035311-6925f38cc365 // indirect
 	go4.org/unsafe/assume-no-moving-gc v0.0.0-20220617031537-928513b29760 // indirect
-	golang.org/x/exp/typeparams v0.0.0-20230131160201-f062dba9d201 // indirect
 	golang.org/x/xerrors v0.0.0-20220907171357-04be3eba64a2 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect

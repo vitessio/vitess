@@ -491,7 +491,21 @@ func (tsv *TabletServer) begin(ctx context.Context, target *querypb.Target, save
 		target, options, false, /* allowOnShutdown */
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
 			startTime := time.Now()
-			if tsv.txThrottler.Throttle() {
+			priority := tsv.config.TxThrottlerDefaultPriority
+			if options != nil && options.Priority != "" {
+				optionsPriority, err := strconv.Atoi(options.Priority)
+				// This should never error out, as the value for Priority has been validated in the vtgate already.
+				// Still, handle it just to make sure.
+				if err != nil {
+					log.Errorf(
+						"The value of the %s query directive could not be converted to integer, using the "+
+							"default value. Error was: %s",
+						sqlparser.DirectivePriority, priority, err)
+				} else {
+					priority = optionsPriority
+				}
+			}
+			if tsv.txThrottler.Throttle(priority) {
 				return vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "Transaction throttled")
 			}
 			var connSetting *pools.Setting

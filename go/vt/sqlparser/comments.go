@@ -21,6 +21,9 @@ import (
 	"strings"
 	"unicode"
 
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
+
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
@@ -50,7 +53,16 @@ const (
 	DirectiveConsolidator = "CONSOLIDATOR"
 	// DirectiveWorkloadName specifies the name of the client application workload issuing the query.
 	DirectiveWorkloadName = "WORKLOAD_NAME"
+	// DirectivePriority specifies the priority of a workload. It should be an integer between 0 and MaxPriorityValue,
+	// where 0 is the highest priority, and MaxPriorityValue is the lowest one.
+	DirectivePriority = "PRIORITY"
+
+	// MaxPriorityValue specifies the maximum value allowed for the priority query directive. Valid priority values are
+	// between zero and MaxPriorityValue.
+	MaxPriorityValue = 100
 )
+
+var ErrInvalidPriority = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Invalid priority value specified in query")
 
 func isNonSpace(r rune) bool {
 	return !unicode.IsSpace(r)
@@ -374,6 +386,29 @@ func AllowScatterDirective(stmt Statement) bool {
 		comments = stmt.Comments
 	}
 	return comments != nil && comments.Directives().IsSet(DirectiveAllowScatter)
+}
+
+// GetPriorityFromStatement gets the priority from the provided Statement, using DirectivePriority
+func GetPriorityFromStatement(statement Statement) (string, error) {
+	commentedStatement, ok := statement.(Commented)
+	// This would mean that the statement lacks comments, so we can't obtain the workload from it. Hence default to
+	// empty priority
+	if !ok {
+		return "", nil
+	}
+
+	directives := commentedStatement.GetParsedComments().Directives()
+	priority, ok := directives.GetString(DirectivePriority, "")
+	if !ok || priority == "" {
+		return "", nil
+	}
+
+	intPriority, err := strconv.Atoi(priority)
+	if err != nil || intPriority < 0 || intPriority > MaxPriorityValue {
+		return "", ErrInvalidPriority
+	}
+
+	return priority, nil
 }
 
 // Consolidator returns the consolidator option.

@@ -1206,7 +1206,9 @@ func emitcode(code []rune, lineno int) {
 		if !writtenImports && isPackageClause(line) {
 			fmt.Fprintln(ftable, `import (`)
 			fmt.Fprintln(ftable, `__yyfmt__ "fmt"`)
-			fmt.Fprintln(ftable, `__yyunsafe__ "unsafe"`)
+			if allowFastAppend {
+				fmt.Fprintln(ftable, `__yyunsafe__ "unsafe"`)
+			}
 			fmt.Fprintln(ftable, `)`)
 			if !lflag {
 				fmt.Fprintf(ftable, "//line %v:%v\n\t\t", infile, lineno+i)
@@ -3047,9 +3049,14 @@ func others() {
 		ch = getrune(finput)
 	}
 
+	if allowFastAppend {
+		fastAppendHelper := strings.Replace(fastAppendHelperText, "$$", prefix, -1)
+		fmt.Fprint(ftable, fastAppendHelper)
+	}
+
 	// copy yaccpar
 	if !lflag {
-		fmt.Fprintf(ftable, "\n//line yaccpar:1\n")
+		fmt.Fprint(ftable, "\n//line yaccpar:1\n")
 	}
 
 	parts := strings.SplitN(yaccpar, prefix+"run()", 2)
@@ -3344,10 +3351,7 @@ func gofmt() {
 	os.WriteFile(oflag, src, 0666)
 }
 
-var yaccpar string // will be processed version of yaccpartext: s/$$/prefix/g
-var yaccpartext = `
-/*	parser for yacc output	*/
-
+const fastAppendHelperText = `
 func $$Iaddr(v any) __yyunsafe__.Pointer {
 	type h struct {
 		t __yyunsafe__.Pointer
@@ -3355,6 +3359,11 @@ func $$Iaddr(v any) __yyunsafe__.Pointer {
 	}
 	return (*h)(__yyunsafe__.Pointer(&v)).p
 }
+`
+
+var yaccpar string // will be processed version of yaccpartext: s/$$/prefix/g
+const yaccpartext = `
+/*	parser for yacc output	*/
 
 var (
 	$$Debug        = 0
