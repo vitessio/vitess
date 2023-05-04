@@ -158,8 +158,6 @@ func newVReplicator(id int32, source *binlogdatapb.BinlogSource, sourceVStreamer
 		stats:           stats,
 		dbClient:        newVDBClient(dbClient, stats),
 		mysqld:          mysqld,
-
-		throttleUpdatesRateLimiter: timer.NewRateLimiter(time.Second),
 	}
 }
 
@@ -249,6 +247,9 @@ func (vr *vreplicator) replicate(ctx context.Context) error {
 	}
 	//defensive guard, should be a no-op since it should happen after copy is done
 	defer vr.resetFKCheckAfterCopy(vr.dbClient)
+
+	vr.throttleUpdatesRateLimiter = timer.NewRateLimiter(time.Second)
+	defer vr.throttleUpdatesRateLimiter.Stop()
 
 	for {
 		select {
