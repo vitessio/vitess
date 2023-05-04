@@ -9169,10 +9169,6 @@ var yyErrorMessages = [...]struct {
 	msg   string
 }{}
 
-//line yaccpar:1
-
-/*	parser for yacc output	*/
-
 func yyIaddr(v any) __yyunsafe__.Pointer {
 	type h struct {
 		t __yyunsafe__.Pointer
@@ -9180,6 +9176,10 @@ func yyIaddr(v any) __yyunsafe__.Pointer {
 	}
 	return (*h)(__yyunsafe__.Pointer(&v)).p
 }
+
+//line yaccpar:1
+
+/*	parser for yacc output	*/
 
 var (
 	yyDebug        = 0
