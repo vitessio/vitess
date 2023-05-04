@@ -60,6 +60,18 @@ type (
 		Len    int
 		HasLen bool
 	}
+
+	builtinLeftRight struct {
+		CallExpr
+		collate collations.ID
+		left    bool
+	}
+
+	builtinPad struct {
+		CallExpr
+		collate collations.ID
+		left    bool
+	}
 )
 
 var _ Expr = (*builtinChangeCase)(nil)
@@ -69,6 +81,8 @@ var _ Expr = (*builtinASCII)(nil)
 var _ Expr = (*builtinBitLength)(nil)
 var _ Expr = (*builtinCollation)(nil)
 var _ Expr = (*builtinWeightString)(nil)
+var _ Expr = (*builtinLeftRight)(nil)
+var _ Expr = (*builtinPad)(nil)
 
 func (call *builtinChangeCase) eval(env *ExpressionEnv) (eval, error) {
 	arg, err := call.arg1(env)
@@ -124,7 +138,7 @@ func (call *builtinChangeCase) compile(c *compiler) (ctype, error) {
 	c.asm.Fn_LUCASE(call.upcase)
 	c.asm.jumpDestination(skip)
 
-	return ctype{Type: sqltypes.VarChar, Col: str.Col}, nil
+	return str, nil
 }
 
 func (call *builtinCharLength) eval(env *ExpressionEnv) (eval, error) {
@@ -325,9 +339,9 @@ func (expr *builtinRepeat) compile(c *compiler) (ctype, error) {
 	}
 	_ = c.compileToInt64(repeat, 1)
 
-	c.asm.Fn_REPEAT(1)
+	c.asm.Fn_REPEAT()
 	c.asm.jumpDestination(skip)
-	return ctype{Type: sqltypes.VarChar, Col: str.Col}, nil
+	return ctype{Type: sqltypes.VarChar, Col: str.Col, Flag: flagNullable}, nil
 }
 
 func (c *builtinCollation) eval(env *ExpressionEnv) (eval, error) {
@@ -432,4 +446,192 @@ func (call *builtinWeightString) compile(c *compiler) (ctype, error) {
 		c.asm.SetNull(1)
 		return ctype{Type: sqltypes.VarBinary, Flag: flagNullable | flagNull, Col: collationBinary}, nil
 	}
+}
+
+func (call builtinLeftRight) eval(env *ExpressionEnv) (eval, error) {
+	str, l, err := call.arg2(env)
+	if err != nil {
+		return nil, err
+	}
+	if str == nil || l == nil {
+		return nil, nil
+	}
+
+	text, ok := str.(*evalBytes)
+	if !ok {
+		text, err = evalToVarchar(str, call.collate, true)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	length := evalToInt64(l).i
+	if length <= 0 {
+		return newEvalText(nil, text.col), nil
+	}
+
+	cs := text.col.Collation.Get().Charset()
+	strLen := charset.Length(cs, text.bytes)
+
+	if strLen <= int(length) {
+		return newEvalText(text.bytes, text.col), nil
+	}
+
+	var res []byte
+	if call.left {
+		res = charset.Slice(cs, text.bytes, 0, int(length))
+	} else {
+		res = charset.Slice(cs, text.bytes, strLen-int(length), strLen)
+	}
+	return newEvalText(res, text.col), nil
+}
+
+func (call builtinLeftRight) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	_, f1 := call.Arguments[0].typeof(env, fields)
+	return sqltypes.VarChar, f1
+}
+
+func (call builtinLeftRight) compile(c *compiler) (ctype, error) {
+	str, err := call.Arguments[0].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	l, err := call.Arguments[1].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip := c.compileNullCheck2(str, l)
+
+	col := defaultCoercionCollation(c.cfg.Collation)
+	switch {
+	case str.isTextual():
+		col = str.Col
+	default:
+		c.asm.Convert_xc(2, sqltypes.VarChar, col.Collation, 0, false)
+	}
+	_ = c.compileToInt64(l, 1)
+
+	if call.left {
+		c.asm.Fn_LEFT(col)
+	} else {
+		c.asm.Fn_RIGHT(col)
+	}
+	c.asm.jumpDestination(skip)
+	return ctype{Type: sqltypes.VarChar, Col: col, Flag: flagNullable}, nil
+}
+
+func (call builtinPad) eval(env *ExpressionEnv) (eval, error) {
+	str, l, p, err := call.arg3(env)
+	if err != nil {
+		return nil, err
+	}
+
+	if str == nil || l == nil || p == nil {
+		return nil, nil
+	}
+
+	text, ok := str.(*evalBytes)
+	if !ok {
+		text, err = evalToVarchar(str, call.collate, true)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	length := evalToInt64(l).i
+	if length < 0 {
+		return nil, nil
+	}
+
+	pad, ok := p.(*evalBytes)
+	if !ok {
+		pad, err = evalToVarchar(p, call.collate, true)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if !checkMaxLength(int64(len(pad.bytes)), length) {
+		return nil, nil
+	}
+
+	cs := text.col.Collation.Get().Charset()
+	strLen := charset.Length(cs, text.bytes)
+
+	if strLen >= int(length) {
+		return newEvalText(charset.Slice(cs, text.bytes, 0, int(length)), text.col), nil
+	}
+
+	runeLen := charset.Length(cs, pad.bytes)
+	if runeLen == 0 {
+		return newEvalText(nil, text.col), nil
+	}
+
+	repeat := (int(length) - strLen) / runeLen
+	remainder := (int(length) - strLen) % runeLen
+
+	var res []byte
+	if !call.left {
+		res = text.bytes
+	}
+
+	res = append(res, bytes.Repeat(pad.bytes, repeat)...)
+	if remainder > 0 {
+		res = append(res, charset.Slice(cs, pad.bytes, 0, remainder)...)
+	}
+
+	if call.left {
+		res = append(res, text.bytes...)
+	}
+
+	return newEvalText(res, text.col), nil
+}
+
+func (call builtinPad) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	_, f1 := call.Arguments[0].typeof(env, fields)
+	return sqltypes.VarChar, f1
+}
+
+func (call builtinPad) compile(c *compiler) (ctype, error) {
+	str, err := call.Arguments[0].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	l, err := call.Arguments[1].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	pad, err := call.Arguments[2].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip := c.compileNullCheck3(str, l, pad)
+
+	col := defaultCoercionCollation(c.cfg.Collation)
+	switch {
+	case str.isTextual():
+		col = str.Col
+	default:
+		c.asm.Convert_xc(3, sqltypes.VarChar, col.Collation, 0, false)
+	}
+	_ = c.compileToInt64(l, 2)
+
+	switch {
+	case pad.isTextual():
+	default:
+		c.asm.Convert_xc(1, sqltypes.VarChar, col.Collation, 0, false)
+	}
+
+	if call.left {
+		c.asm.Fn_LPAD(col)
+	} else {
+		c.asm.Fn_RPAD(col)
+	}
+	c.asm.jumpDestination(skip)
+	return ctype{Type: sqltypes.VarChar, Col: col}, nil
 }

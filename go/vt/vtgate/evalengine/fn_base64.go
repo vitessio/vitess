@@ -115,12 +115,7 @@ func (call *builtinToBase64) compile(c *compiler) (ctype, error) {
 		c.asm.Convert_xb(1, t, 0, false)
 	}
 
-	col := collations.TypedCollation{
-		Collation:    c.cfg.Collation,
-		Coercibility: collations.CoerceCoercible,
-		Repertoire:   collations.RepertoireASCII,
-	}
-
+	col := defaultCoercionCollation(c.cfg.Collation)
 	c.asm.Fn_TO_BASE64(t, col)
 	c.asm.jumpDestination(skip)
 
