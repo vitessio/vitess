@@ -340,7 +340,7 @@ type TabletConfig struct {
 	EnableTxThrottler           bool                          `json:"-"`
 	TxThrottlerConfig           string                        `json:"-"`
 	TxThrottlerHealthCheckCells []string                      `json:"-"`
-  TxThrottlerDefaultPriority  int      `json:"-"`
+	TxThrottlerDefaultPriority  int                           `json:"-"`
 	TxThrottlerTabletTypes      *topoproto.TabletTypeListFlag `json:"-"`
 
 	EnableLagThrottler bool `json:"-"`
@@ -791,7 +791,7 @@ var defaultConfig = TabletConfig{
 	EnableTxThrottler:           false,
 	TxThrottlerConfig:           defaultTxThrottlerConfig(),
 	TxThrottlerHealthCheckCells: []string{},
-  TxThrottlerDefaultPriority:  sqlparser.MaxPriorityValue, // This leads to all queries being candidates to throttle
+	TxThrottlerDefaultPriority:  sqlparser.MaxPriorityValue, // This leads to all queries being candidates to throttle
 	TxThrottlerTabletTypes:      &topoproto.TabletTypeListFlag{topodatapb.TabletType_REPLICA},
 
 	EnableLagThrottler: false, // Feature flag; to switch to 'true' at some stage in the future
