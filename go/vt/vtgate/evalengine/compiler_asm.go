@@ -2366,7 +2366,7 @@ func (asm *assembler) Fn_MULTICMP_u(args int, lessThan bool) {
 	}, "FN MULTICMP UINT64(SP-%d)...UINT64(SP-1)", args)
 }
 
-func (asm *assembler) Fn_REPEAT(i int) {
+func (asm *assembler) Fn_REPEAT() {
 	asm.adjustStack(-1)
 
 	asm.emit(func(env *ExpressionEnv) int {
@@ -2388,6 +2388,176 @@ func (asm *assembler) Fn_REPEAT(i int) {
 		env.vm.sp--
 		return 1
 	}, "FN REPEAT VARCHAR(SP-2) INT64(SP-1)")
+}
+
+func (asm *assembler) Fn_LEFT(col collations.TypedCollation) {
+	asm.adjustStack(-1)
+
+	asm.emit(func(env *ExpressionEnv) int {
+		str := env.vm.stack[env.vm.sp-2].(*evalBytes)
+		length := env.vm.stack[env.vm.sp-1].(*evalInt64)
+
+		if length.i <= 0 {
+			str.tt = int16(sqltypes.VarChar)
+			str.bytes = nil
+			str.col = col
+			env.vm.sp--
+			return 1
+		}
+
+		cs := col.Collation.Get().Charset()
+		strLen := charset.Length(cs, str.bytes)
+
+		str.tt = int16(sqltypes.VarChar)
+		str.col = col
+		if strLen <= int(length.i) {
+			env.vm.sp--
+			return 1
+		}
+
+		str.bytes = charset.Slice(cs, str.bytes, 0, int(length.i))
+		env.vm.sp--
+		return 1
+	}, "FN LEFT VARCHAR(SP-2) INT64(SP-1)")
+}
+
+func (asm *assembler) Fn_RIGHT(col collations.TypedCollation) {
+	asm.adjustStack(-1)
+
+	asm.emit(func(env *ExpressionEnv) int {
+		str := env.vm.stack[env.vm.sp-2].(*evalBytes)
+		length := env.vm.stack[env.vm.sp-1].(*evalInt64)
+
+		if length.i <= 0 {
+			str.tt = int16(sqltypes.VarChar)
+			str.bytes = nil
+			str.col = col
+			env.vm.sp--
+			return 1
+		}
+
+		cs := col.Collation.Get().Charset()
+		strLen := charset.Length(cs, str.bytes)
+
+		str.tt = int16(sqltypes.VarChar)
+		str.col = col
+
+		if strLen <= int(length.i) {
+			env.vm.sp--
+			return 1
+		}
+
+		str.bytes = charset.Slice(cs, str.bytes, strLen-int(length.i), strLen)
+		env.vm.sp--
+		return 1
+	}, "FN RIGHT VARCHAR(SP-2) INT64(SP-1)")
+}
+
+func (asm *assembler) Fn_LPAD(col collations.TypedCollation) {
+	asm.adjustStack(-2)
+
+	asm.emit(func(env *ExpressionEnv) int {
+		str := env.vm.stack[env.vm.sp-3].(*evalBytes)
+		length := env.vm.stack[env.vm.sp-2].(*evalInt64)
+		pad := env.vm.stack[env.vm.sp-1].(*evalBytes)
+
+		if length.i < 0 {
+			env.vm.stack[env.vm.sp-3] = nil
+			env.vm.sp -= 2
+			return 1
+		}
+
+		if !checkMaxLength(int64(len(pad.bytes)), length.i) {
+			env.vm.stack[env.vm.sp-3] = nil
+			env.vm.sp -= 2
+			return 1
+		}
+
+		cs := col.Collation.Get().Charset()
+		strLen := charset.Length(cs, str.bytes)
+		l := int(length.i)
+
+		str.tt = int16(sqltypes.VarChar)
+		str.col = col
+
+		if strLen >= int(length.i) {
+			str.bytes = charset.Slice(cs, str.bytes, 0, l)
+			env.vm.sp -= 2
+			return 1
+		}
+
+		runeLen := charset.Length(cs, pad.bytes)
+		if runeLen == 0 {
+			str.bytes = nil
+			env.vm.sp -= 2
+			return 1
+		}
+
+		repeat := (l - strLen) / runeLen
+		remainder := (l - strLen) % runeLen
+
+		res := bytes.Repeat(pad.bytes, repeat)
+		if remainder > 0 {
+			res = append(res, charset.Slice(cs, pad.bytes, 0, remainder)...)
+		}
+		str.bytes = append(res, str.bytes...)
+
+		env.vm.sp -= 2
+		return 1
+	}, "FN LPAD VARCHAR(SP-2) INT64(SP-1)")
+}
+
+func (asm *assembler) Fn_RPAD(col collations.TypedCollation) {
+	asm.adjustStack(-2)
+
+	asm.emit(func(env *ExpressionEnv) int {
+		str := env.vm.stack[env.vm.sp-3].(*evalBytes)
+		length := env.vm.stack[env.vm.sp-2].(*evalInt64)
+		pad := env.vm.stack[env.vm.sp-1].(*evalBytes)
+
+		if length.i < 0 {
+			env.vm.stack[env.vm.sp-3] = nil
+			env.vm.sp -= 2
+			return 1
+		}
+
+		if !checkMaxLength(int64(len(pad.bytes)), length.i) {
+			env.vm.stack[env.vm.sp-3] = nil
+			env.vm.sp -= 2
+			return 1
+		}
+
+		cs := col.Collation.Get().Charset()
+		strLen := charset.Length(cs, str.bytes)
+		l := int(length.i)
+
+		str.tt = int16(sqltypes.VarChar)
+		str.col = col
+
+		if strLen >= int(length.i) {
+			str.bytes = charset.Slice(cs, str.bytes, 0, int(length.i))
+			env.vm.sp -= 2
+			return 1
+		}
+
+		runeLen := charset.Length(cs, pad.bytes)
+		if runeLen == 0 {
+			str.bytes = nil
+			env.vm.sp -= 2
+			return 1
+		}
+
+		repeat := (l - strLen) / runeLen
+		remainder := (l - strLen) % runeLen
+
+		str.bytes = append(str.bytes, bytes.Repeat(pad.bytes, repeat)...)
+		if remainder > 0 {
+			str.bytes = append(str.bytes, charset.Slice(cs, pad.bytes, 0, remainder)...)
+		}
+
+		env.vm.sp -= 2
+		return 1
+	}, "FN RIGHT VARCHAR(SP-2) INT64(SP-1)")
 }
 
 func (asm *assembler) Fn_TO_BASE64(t sqltypes.Type, col collations.TypedCollation) {

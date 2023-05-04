@@ -66,6 +66,10 @@ var Cases = []TestCase{
 	{Run: FnBitLength},
 	{Run: FnAscii},
 	{Run: FnRepeat},
+	{Run: FnLeft},
+	{Run: FnLpad},
+	{Run: FnRight},
+	{Run: FnRpad},
 	{Run: FnHex},
 	{Run: FnCeil},
 	{Run: FnFloor},
@@ -1213,7 +1217,47 @@ func FnRepeat(yield Query) {
 	counts := []string{"-1", "1.9", "3", "1073741825", "'1.9'"}
 	for _, str := range inputStrings {
 		for _, cnt := range counts {
-			yield(fmt.Sprintf("repeat(%s, %s)", str, cnt), nil)
+			yield(fmt.Sprintf("REPEAT(%s, %s)", str, cnt), nil)
+		}
+	}
+}
+
+func FnLeft(yield Query) {
+	counts := []string{"-1", "1.9", "3", "10", "'1.9'"}
+	for _, str := range inputStrings {
+		for _, cnt := range counts {
+			yield(fmt.Sprintf("LEFT(%s, %s)", str, cnt), nil)
+		}
+	}
+}
+
+func FnLpad(yield Query) {
+	counts := []string{"-1", "1.9", "3", "10", "'1.9'"}
+	for _, str := range inputStrings {
+		for _, cnt := range counts {
+			for _, pad := range inputStrings {
+				yield(fmt.Sprintf("LPAD(%s, %s, %s)", str, cnt, pad), nil)
+			}
+		}
+	}
+}
+
+func FnRight(yield Query) {
+	counts := []string{"-1", "1.9", "3", "10", "'1.9'"}
+	for _, str := range inputStrings {
+		for _, cnt := range counts {
+			yield(fmt.Sprintf("RIGHT(%s, %s)", str, cnt), nil)
+		}
+	}
+}
+
+func FnRpad(yield Query) {
+	counts := []string{"-1", "1.9", "3", "10", "'1.9'"}
+	for _, str := range inputStrings {
+		for _, cnt := range counts {
+			for _, pad := range inputStrings {
+				yield(fmt.Sprintf("RPAD(%s, %s, %s)", str, cnt, pad), nil)
+			}
 		}
 	}
 }
