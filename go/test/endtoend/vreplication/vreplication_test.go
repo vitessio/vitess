@@ -258,8 +258,8 @@ func TestVreplicationCopyThrottling(t *testing.T) {
 }
 
 func TestBasicVreplicationWorkflow(t *testing.T) {
-	sourceKsOpts["DBTypeVersion"] = "mysql-5.7"
-	targetKsOpts["DBTypeVersion"] = "mysql-5.7"
+	sourceKsOpts["DBTypeVersion"] = "mysql-8.0"
+	targetKsOpts["DBTypeVersion"] = "mysql-8.0"
 	testBasicVreplicationWorkflow(t, "noblob")
 }
 
@@ -440,11 +440,13 @@ func TestVStreamFlushBinlog(t *testing.T) {
 	require.Equal(t, flushCount, int64(0), "VStreamerFlushedBinlogs should be 0")
 
 	// Generate a lot of binlog event bytes
-	targetBinlogSize := vstreamer.GetBinlogRotationThreshold() + 16
+	targetBinlogSize := vstreamer.GetBinlogRotationThreshold() + 1024
 	vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
-	queryF := "insert into db_order_test (c_uuid, dbstuff, created_at) values ('%d', repeat('A', 65000), now())"
-	for i := 100; i < 5000; i++ {
-		res, err := vtgateConn.ExecuteFetch(fmt.Sprintf(queryF, i), -1, false)
+	queryF := "insert into db_order_test (c_uuid, dbstuff, created_at) values ('%d', '%s', now())"
+	for i := 100; i < 10000; i++ {
+		randStr, err := randHex(6500)
+		require.NoError(t, err)
+		res, err := vtgateConn.ExecuteFetch(fmt.Sprintf(queryF, i, randStr), -1, false)
 		require.NoError(t, err)
 		require.Greater(t, res.RowsAffected, uint64(0))
 
@@ -875,7 +877,7 @@ func reshardCustomer2to4Split(t *testing.T, cells []*Cell, sourceCellOrAlias str
 		ksName := "customer"
 		counts := map[string]int{"zone1-600": 4, "zone1-700": 5, "zone1-800": 6, "zone1-900": 5}
 		reshard(t, ksName, "customer", "c2c4", "-80,80-", "-40,40-80,80-c0,c0-",
-			600, counts, nil, cells, sourceCellOrAlias, 1)
+			600, counts, nil, nil, cells, sourceCellOrAlias, 1)
 		waitForRowCount(t, vtgateConn, ksName, "customer", 20)
 		query := "insert into customer (name) values('yoko')"
 		execVtgateQuery(t, vtgateConn, ksName, query)
@@ -888,7 +890,7 @@ func reshardMerchant2to3SplitMerge(t *testing.T) {
 		ksName := merchantKeyspace
 		counts := map[string]int{"zone1-1600": 0, "zone1-1700": 2, "zone1-1800": 0}
 		reshard(t, ksName, "merchant", "m2m3", "-80,80-", "-40,40-c0,c0-",
-			1600, counts, dryRunResultsSwitchWritesM2m3, nil, "", 1)
+			1600, counts, dryRunResultsSwitchReadM2m3, dryRunResultsSwitchWritesM2m3, nil, "", 1)
 		waitForRowCount(t, vtgateConn, ksName, "merchant", 2)
 		query := "insert into merchant (mname, category) values('amazon', 'electronics')"
 		execVtgateQuery(t, vtgateConn, ksName, query)
@@ -935,7 +937,7 @@ func reshardMerchant3to1Merge(t *testing.T) {
 		ksName := merchantKeyspace
 		counts := map[string]int{"zone1-2000": 3}
 		reshard(t, ksName, "merchant", "m3m1", "-40,40-c0,c0-", "0",
-			2000, counts, nil, nil, "", 1)
+			2000, counts, nil, nil, nil, "", 1)
 		waitForRowCount(t, vtgateConn, ksName, "merchant", 3)
 		query := "insert into merchant (mname, category) values('flipkart', 'electronics')"
 		execVtgateQuery(t, vtgateConn, ksName, query)
@@ -948,7 +950,7 @@ func reshardCustomer3to2SplitMerge(t *testing.T) { // -40,40-80,80-c0 => merge/s
 		ksName := "customer"
 		counts := map[string]int{"zone1-1000": 8, "zone1-1100": 8, "zone1-1200": 5}
 		reshard(t, ksName, "customer", "c4c3", "-40,40-80,80-c0", "-60,60-c0",
-			1000, counts, nil, nil, "", 1)
+			1000, counts, nil, nil, nil, "", 1)
 	})
 }
 
@@ -957,12 +959,12 @@ func reshardCustomer3to1Merge(t *testing.T) { // to unsharded
 		ksName := "customer"
 		counts := map[string]int{"zone1-1500": 21}
 		reshard(t, ksName, "customer", "c3c1", "-60,60-c0,c0-", "0",
-			1500, counts, nil, nil, "", 3)
+			1500, counts, nil, nil, nil, "", 3)
 	})
 }
 
 func reshard(t *testing.T, ksName string, tableName string, workflow string, sourceShards string, targetShards string,
-	tabletIDBase int, counts map[string]int, dryRunResultSwitchWrites []string, cells []*Cell, sourceCellOrAlias string,
+	tabletIDBase int, counts map[string]int, dryRunResultSwitchReads, dryRunResultSwitchWrites []string, cells []*Cell, sourceCellOrAlias string,
 	autoIncrementStep int) {
 	t.Run("reshard", func(t *testing.T) {
 		if cells == nil {
@@ -1004,6 +1006,9 @@ func reshard(t *testing.T, ksName string, tableName string, workflow string, sou
 			}
 		}
 		vdiff1(t, ksWorkflow, "")
+		if dryRunResultSwitchReads != nil {
+			switchReadsDryRun(t, workflowType, allCellNames, ksWorkflow, dryRunResultSwitchReads)
+		}
 		switchReads(t, workflowType, allCellNames, ksWorkflow, false)
 		if dryRunResultSwitchWrites != nil {
 			switchWritesDryRun(t, workflowType, ksWorkflow, dryRunResultSwitchWrites)
@@ -1361,7 +1366,9 @@ func switchReadsDryRun(t *testing.T, workflowType, cells, ksWorkflow string, dry
 	output, err := vc.VtctlClient.ExecuteCommandWithOutput(workflowType, "--", "--cells="+cells, "--tablet_types=rdonly,replica",
 		"--dry_run", "SwitchTraffic", ksWorkflow)
 	require.NoError(t, err, fmt.Sprintf("Switching Reads DryRun Error: %s: %s", err, output))
-	validateDryRunResults(t, output, dryRunResults)
+	if dryRunResults != nil {
+		validateDryRunResults(t, output, dryRunResults)
+	}
 }
 
 func switchReads(t *testing.T, workflowType, cells, ksWorkflow string, reverse bool) {

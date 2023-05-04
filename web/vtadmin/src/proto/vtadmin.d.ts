@@ -16290,9 +16290,6 @@ export namespace tabletmanagerdata {
 
         /** SchemaDefinition table_definitions */
         table_definitions?: (tabletmanagerdata.ITableDefinition[]|null);
-
-        /** SchemaDefinition version */
-        version?: (string|null);
     }
 
     /** Represents a SchemaDefinition. */
@@ -16309,9 +16306,6 @@ export namespace tabletmanagerdata {
 
         /** SchemaDefinition table_definitions. */
         public table_definitions: tabletmanagerdata.ITableDefinition[];
-
-        /** SchemaDefinition version. */
-        public version: string;
 
         /**
          * Creates a new SchemaDefinition instance using the specified properties.
@@ -31442,6 +31436,9 @@ export namespace query {
 
         /** ExecuteOptions WorkloadName */
         WorkloadName?: (string|null);
+
+        /** ExecuteOptions priority */
+        priority?: (string|null);
     }
 
     /** Represents an ExecuteOptions. */
@@ -31485,6 +31482,9 @@ export namespace query {
 
         /** ExecuteOptions WorkloadName. */
         public WorkloadName: string;
+
+        /** ExecuteOptions priority. */
+        public priority: string;
 
         /**
          * Creates a new ExecuteOptions instance using the specified properties.

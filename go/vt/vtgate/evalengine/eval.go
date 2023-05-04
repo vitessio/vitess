@@ -241,7 +241,7 @@ func valueToEvalCast(v sqltypes.Value, typ sqltypes.Type) (eval, error) {
 			dec = decimal.NewFromFloat(fval)
 		case v.IsText() || v.IsBinary():
 			fval, _ := fastparse.ParseFloat64(v.RawStr())
-			return newEvalFloat(fval), nil
+			dec = decimal.NewFromFloat(fval)
 		default:
 			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "coercion should not try to coerce this value to a decimal: %v", v)
 		}
