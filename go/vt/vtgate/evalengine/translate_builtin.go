@@ -97,6 +97,11 @@ func (ast *astCompiler) translateFuncExpr(fn *sqlparser.FuncExpr) (Expr, error) 
 			return nil, argError(method)
 		}
 		return &builtinHex{CallExpr: call, collate: ast.cfg.Collation}, nil
+	case "unhex":
+		if len(args) != 1 {
+			return nil, argError(method)
+		}
+		return &builtinUnhex{CallExpr: call}, nil
 	case "ceil", "ceiling":
 		if len(args) != 1 {
 			return nil, argError(method)

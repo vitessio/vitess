@@ -18,6 +18,7 @@ package testcases
 
 import (
 	"encoding/base64"
+	"encoding/hex"
 	"fmt"
 	"math"
 	"strconv"
@@ -74,6 +75,7 @@ var Cases = []TestCase{
 	{Run: FnRTrim},
 	{Run: FnTrim},
 	{Run: FnHex},
+	{Run: FnUnhex},
 	{Run: FnCeil},
 	{Run: FnFloor},
 	{Run: FnAbs},
@@ -1310,6 +1312,26 @@ func FnHex(yield Query) {
 
 	for _, str := range inputBitwise {
 		yield(fmt.Sprintf("hex(%s)", str), nil)
+	}
+}
+
+func FnUnhex(yield Query) {
+	var inputs = []string{
+		`'f'`,
+		`'fe'`,
+		`'fea'`,
+		`'666F6F626172'`,
+		// MySQL trims whitespace
+		`'  \t\r\n  4f  \n \t '`,
+	}
+
+	inputs = append(inputs, inputConversions...)
+	for _, input := range inputConversions {
+		inputs = append(inputs, "'"+hex.EncodeToString([]byte(input))+"'")
+	}
+
+	for _, lhs := range inputs {
+		yield(fmt.Sprintf("UNHEX(%s)", lhs), nil)
 	}
 }
 

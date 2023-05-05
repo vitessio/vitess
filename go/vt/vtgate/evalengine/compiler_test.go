@@ -364,6 +364,10 @@ func TestCompilerSingle(t *testing.T) {
 			expression: `timestamp '2000-01-01 10:34:58.978654' DIV '\t1 foo\t'`,
 			result:     `INT64(20000101103458)`,
 		},
+		{
+			expression: `UNHEX('f')`,
+			result:     `VARBINARY("\x0f")`,
+		},
 	}
 
 	for _, tc := range testCases {
