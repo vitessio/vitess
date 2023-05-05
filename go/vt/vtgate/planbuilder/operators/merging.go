@@ -194,7 +194,7 @@ func (jm *joinMerger) mergeTables(r1, r2 *ShardedRouting, op1, op2 *Route) (*Rou
 		VindexPreds:    append(r1.VindexPreds, r2.VindexPreds...),
 		keyspace:       r1.keyspace,
 		RouteOpCode:    r1.RouteOpCode,
-		SeenPredicates: r1.SeenPredicates,
+		SeenPredicates: append(r1.SeenPredicates, r2.SeenPredicates...),
 	}
 	if r1.SelectedVindex() == r2.SelectedVindex() {
 		tr.Selected = r1.Selected
