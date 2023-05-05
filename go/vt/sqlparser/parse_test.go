@@ -937,6 +937,12 @@ var (
 		}, {
 			input: "insert into a(a, b) values (1, ifnull(null, default(b)))",
 		}, {
+			input: "insert into a(a, b) value (1, ifnull(null, default(b)))",
+			output: "insert into a(a, b) values (1, ifnull(null, default(b)))",
+		}, {
+			input: "insert into a value (1, ifnull(null, default(b)))",
+			output: "insert into a values (1, ifnull(null, default(b)))",
+		}, {
 			input: "insert /* qualified column list */ into a(a, b) values (1, 2)",
 		}, {
 			input:  "insert /* qualified columns */ into t (t.a, t.b) values (1, 2)",
