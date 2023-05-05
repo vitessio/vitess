@@ -585,14 +585,28 @@ func createProjection2(qp *QueryProjection, src ops.Operator) (*Projection, erro
 		if _, isStar := e.Col.(*sqlparser.StarExpr); isStar {
 			return nil, errHorizonNotPlanned()
 		}
-		expr, err := e.GetAliasedExpr()
+		ae, err := e.GetAliasedExpr()
+
 		if err != nil {
 			return nil, err
 		}
-		proj.Columns = append(proj.Columns, Expr{E: expr.Expr})
+		expr := ae.Expr
+		if sqlparser.ContainsAggregation(expr) {
+			aggr, ok := expr.(sqlparser.AggrFunc)
+			if !ok {
+				// need to add logic to extract aggregations and pushed them to the top level
+				return nil, errHorizonNotPlanned()
+			}
+			expr = aggr.GetArg()
+			if expr == nil {
+				expr = sqlparser.NewIntLiteral("1")
+			}
+		}
+
+		proj.Columns = append(proj.Columns, Expr{E: expr})
 		colName := ""
-		if !expr.As.IsEmpty() {
-			colName = expr.ColumnName()
+		if !ae.As.IsEmpty() {
+			colName = ae.ColumnName()
 		}
 		proj.ColumnNames = append(proj.ColumnNames, colName)
 	}
