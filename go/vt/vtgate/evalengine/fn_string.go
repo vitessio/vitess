@@ -47,6 +47,11 @@ type (
 		CallExpr
 	}
 
+	builtinOrd struct {
+		CallExpr
+		collate collations.ID
+	}
+
 	builtinBitLength struct {
 		CallExpr
 	}
@@ -85,6 +90,7 @@ var _ Expr = (*builtinChangeCase)(nil)
 var _ Expr = (*builtinCharLength)(nil)
 var _ Expr = (*builtinLength)(nil)
 var _ Expr = (*builtinASCII)(nil)
+var _ Expr = (*builtinOrd)(nil)
 var _ Expr = (*builtinBitLength)(nil)
 var _ Expr = (*builtinCollation)(nil)
 var _ Expr = (*builtinWeightString)(nil)
@@ -253,13 +259,73 @@ func (call *builtinASCII) compile(c *compiler) (ctype, error) {
 	switch {
 	case str.isTextual():
 	default:
-		c.asm.Convert_xc(1, sqltypes.VarChar, c.cfg.Collation, 0, false)
+		c.asm.Convert_xb(1, sqltypes.VarBinary, 0, false)
 	}
 
 	c.asm.Fn_ASCII()
 	c.asm.jumpDestination(skip)
 
-	return ctype{Type: sqltypes.Int64, Col: collationNumeric}, nil
+	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: str.Flag}, nil
+}
+
+func charOrd(b []byte, coll collations.ID) int64 {
+	if len(b) == 0 {
+		return 0
+	}
+	cs := coll.Get().Charset()
+	_, l := cs.DecodeRune(b)
+	var r int64
+	for i := 0; i < l; i++ {
+		r = (r << 8) | int64(b[i])
+	}
+	return r
+}
+
+func (call *builtinOrd) eval(env *ExpressionEnv) (eval, error) {
+	arg, err := call.arg1(env)
+	if err != nil {
+		return nil, err
+	}
+	if arg == nil {
+		return nil, nil
+	}
+
+	c, ok := arg.(*evalBytes)
+	if !ok {
+		c, err = evalToVarchar(arg, call.collate, false)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return newEvalInt64(charOrd(c.bytes, c.col.Collation)), nil
+}
+
+func (call *builtinOrd) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	_, f := call.Arguments[0].typeof(env, fields)
+	return sqltypes.Int64, f
+}
+
+func (call *builtinOrd) compile(c *compiler) (ctype, error) {
+	str, err := call.Arguments[0].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip := c.compileNullCheck1(str)
+
+	col := call.collate
+	switch {
+	case str.isTextual():
+		col = str.Col.Collation
+	default:
+		c.asm.Convert_xc(1, sqltypes.VarChar, call.collate, 0, false)
+	}
+
+	c.asm.Fn_ORD(col)
+	c.asm.jumpDestination(skip)
+
+	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: str.Flag}, nil
 }
 
 // maxRepeatLength is the maximum number of times a string can be repeated.

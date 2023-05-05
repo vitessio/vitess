@@ -65,6 +65,7 @@ var Cases = []TestCase{
 	{Run: FnLength},
 	{Run: FnBitLength},
 	{Run: FnAscii},
+	{Run: FnOrd},
 	{Run: FnRepeat},
 	{Run: FnLeft},
 	{Run: FnLpad},
@@ -1213,6 +1214,12 @@ func FnBitLength(yield Query) {
 func FnAscii(yield Query) {
 	for _, str := range inputStrings {
 		yield(fmt.Sprintf("ASCII(%s)", str), nil)
+	}
+}
+
+func FnOrd(yield Query) {
+	for _, str := range inputStrings {
+		yield(fmt.Sprintf("ORD(%s)", str), nil)
 	}
 }
 
