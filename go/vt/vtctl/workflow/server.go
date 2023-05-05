@@ -36,6 +36,7 @@ import (
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
@@ -72,11 +73,6 @@ var (
 
 // Server provides an API to work with Vitess workflows, like vreplication
 // workflows (MoveTables, Reshard, etc) and schema migration workflows.
-//
-// NB: This is in alpha, and you probably don't want to depend on it (yet!).
-// Currently, it provides only a read-only API to vreplication workflows. Write
-// actions on vreplication workflows, and schema migration workflows entirely,
-// are not yet supported, but planned.
 type Server struct {
 	ts  *topo.Server
 	tmc tmclient.TabletManagerClient
@@ -732,6 +728,117 @@ ORDER BY
 	}, nil
 }
 
+func (s *Server) getWorkflowState(ctx context.Context, targetKeyspace, workflowName string) (*trafficSwitcher, *State, error) {
+	ts, err := s.buildTrafficSwitcher(ctx, targetKeyspace, workflowName)
+
+	if ts == nil || err != nil {
+		if errors.Is(err, ErrNoStreams) || err.Error() == fmt.Sprintf(ErrNoStreams.Error(), targetKeyspace, workflowName) {
+			return nil, nil, nil
+		}
+		log.Errorf("buildTrafficSwitcher failed: %v", err)
+		return nil, nil, err
+	}
+
+	state := &State{
+		Workflow:           workflowName,
+		SourceKeyspace:     ts.SourceKeyspaceName(),
+		TargetKeyspace:     targetKeyspace,
+		IsPartialMigration: ts.isPartialMigration,
+	}
+
+	var (
+		reverse  bool
+		keyspace string
+	)
+
+	// We reverse writes by using the source_keyspace.workflowname_reverse workflow
+	// spec, so we need to use the source of the reverse workflow, which is the
+	// target of the workflow initiated by the user for checking routing rules.
+	// Similarly we use a target shard of the reverse workflow as the original
+	// source to check if writes have been switched.
+	if strings.HasSuffix(workflowName, "_reverse") {
+		reverse = true
+		keyspace = state.SourceKeyspace
+		workflowName = ReverseWorkflowName(workflowName)
+	} else {
+		keyspace = targetKeyspace
+	}
+	if ts.MigrationType() == binlogdatapb.MigrationType_TABLES {
+		state.WorkflowType = TypeMoveTables
+
+		// We assume a consistent state, so only choose routing rule for one table.
+		if len(ts.Tables()) == 0 {
+			return nil, nil, fmt.Errorf("no tables in workflow %s.%s", keyspace, workflowName)
+
+		}
+		table := ts.Tables()[0]
+
+		if ts.isPartialMigration { // shard level traffic switching is all or nothing
+			shardRoutingRules, err := s.ts.GetShardRoutingRules(ctx)
+			if err != nil {
+				return nil, nil, err
+			}
+
+			rules := shardRoutingRules.Rules
+			for _, rule := range rules {
+				if rule.ToKeyspace == ts.SourceKeyspaceName() {
+					state.ShardsNotYetSwitched = append(state.ShardsNotYetSwitched, rule.Shard)
+				} else {
+					state.ShardsAlreadySwitched = append(state.ShardsAlreadySwitched, rule.Shard)
+				}
+			}
+		} else {
+			state.RdonlyCellsSwitched, state.RdonlyCellsNotSwitched, err = s.GetCellsWithTableReadsSwitched(ctx, keyspace, table, topodatapb.TabletType_RDONLY)
+			if err != nil {
+				return nil, nil, err
+			}
+
+			state.ReplicaCellsSwitched, state.ReplicaCellsNotSwitched, err = s.GetCellsWithTableReadsSwitched(ctx, keyspace, table, topodatapb.TabletType_REPLICA)
+			if err != nil {
+				return nil, nil, err
+			}
+			globalRules, err := topotools.GetRoutingRules(ctx, ts.TopoServer())
+			if err != nil {
+				return nil, nil, err
+			}
+			for _, table := range ts.Tables() {
+				rr := globalRules[table]
+				// if a rule exists for the table and points to the target keyspace, writes have been switched
+				if len(rr) > 0 && rr[0] == fmt.Sprintf("%s.%s", keyspace, table) {
+					state.WritesSwitched = true
+					break
+				}
+			}
+		}
+	} else {
+		state.WorkflowType = TypeReshard
+
+		// we assume a consistent state, so only choose one shard
+		var shard *topo.ShardInfo
+		if reverse {
+			shard = ts.TargetShards()[0]
+		} else {
+			shard = ts.SourceShards()[0]
+		}
+
+		state.RdonlyCellsSwitched, state.RdonlyCellsNotSwitched, err = s.GetCellsWithShardReadsSwitched(ctx, keyspace, shard, topodatapb.TabletType_RDONLY)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		state.ReplicaCellsSwitched, state.ReplicaCellsNotSwitched, err = s.GetCellsWithShardReadsSwitched(ctx, keyspace, shard, topodatapb.TabletType_REPLICA)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		if !shard.IsPrimaryServing {
+			state.WritesSwitched = true
+		}
+	}
+
+	return ts, state, nil
+}
+
 func (s *Server) getWorkflowCopyStates(ctx context.Context, tablet *topo.TabletInfo, id int64) ([]*vtctldatapb.Workflow_Stream_CopyState, error) {
 	span, ctx := trace.NewSpan(ctx, "workflow.Server.getWorkflowCopyStates")
 	defer span.Finish()
@@ -1016,6 +1123,11 @@ func (s *Server) WorkflowDelete(ctx context.Context, req *vtctldatapb.WorkflowDe
 		}
 	*/
 
+	// Cleanup related data and artifacts.
+	if _, err := s.DropTargets(ctx, req.Keyspace, req.Workflow, req.KeepData, req.KeepRoutingRules, false); err != nil {
+		return nil, err
+	}
+
 	deleteReq := &tabletmanagerdatapb.DeleteVRWorkflowRequest{
 		Workflow: req.Workflow,
 	}
@@ -1040,19 +1152,6 @@ func (s *Server) WorkflowDelete(ctx context.Context, req *vtctldatapb.WorkflowDe
 
 	if len(res) == 0 {
 		return nil, fmt.Errorf("the %s workflow does not exist in the %s keyspace", req.Workflow, req.Keyspace)
-	}
-
-	// Cleanup related data artifacts.
-	/*
-		if req.WorkflowType == binlogdatapb.MigrationType {
-			_, err := vrw.wr.finalizeMigrateWorkflow(vrw.ctx, ws.TargetKeyspace, ws.Workflow, "",
-				true, vrw.params.KeepData, vrw.params.KeepRoutingRules, vrw.params.DryRun)
-			return err
-		}
-
-	*/
-	if _, err := s.DropTargets(ctx, req.Keyspace, req.Workflow, req.KeepData, req.KeepRoutingRules, false); err != nil {
-		return nil, err
 	}
 
 	response := &vtctldatapb.WorkflowDeleteResponse{}
@@ -1320,7 +1419,7 @@ func (s *Server) optimizeCopyStateTable(tablet *topodatapb.Tablet) {
 func (s *Server) DropTargets(ctx context.Context, targetKeyspace, workflow string, keepData, keepRoutingRules, dryRun bool) (*[]string, error) {
 	ts, err := s.buildTrafficSwitcher(ctx, targetKeyspace, workflow)
 	if err != nil {
-		ts.logger.Errorf("buildTrafficSwitcher failed: %v", err)
+		log.Errorf("buildTrafficSwitcher failed: %v", err)
 		return nil, err
 	}
 	ts.keepRoutingRules = keepRoutingRules
@@ -1338,6 +1437,7 @@ func (s *Server) DropTargets(ctx context.Context, targetKeyspace, workflow strin
 	}
 	defer sourceUnlock(&err)
 	ctx = tctx
+
 	if ts.TargetKeyspaceName() != ts.SourceKeyspaceName() {
 		tctx, targetUnlock, lockErr := sw.lockKeyspace(ctx, ts.TargetKeyspaceName(), "DropTargets")
 		if lockErr != nil {
@@ -1350,7 +1450,6 @@ func (s *Server) DropTargets(ctx context.Context, targetKeyspace, workflow strin
 	if !keepData {
 		switch ts.MigrationType() {
 		case binlogdatapb.MigrationType_TABLES:
-			log.Infof("Deleting target tables")
 			if err := sw.removeTargetTables(ctx); err != nil {
 				return nil, err
 			}
@@ -1358,13 +1457,12 @@ func (s *Server) DropTargets(ctx context.Context, targetKeyspace, workflow strin
 				return nil, err
 			}
 		case binlogdatapb.MigrationType_SHARDS:
-			log.Infof("Removing target shards")
 			if err := sw.dropTargetShards(ctx); err != nil {
 				return nil, err
 			}
 		}
 	}
-	if err := s.dropArtifacts(ctx, keepRoutingRules, sw); err != nil {
+	if err := s.dropRelatedArtifacts(ctx, keepRoutingRules, sw); err != nil {
 		return nil, err
 	}
 	if err := ts.TopoServer().RebuildSrvVSchema(ctx, nil); err != nil {
@@ -1382,6 +1480,8 @@ func (s *Server) buildTrafficSwitcher(ctx context.Context, targetKeyspace, workf
 	targets, frozen, optCells, optTabletTypes := tgtInfo.Targets, tgtInfo.Frozen, tgtInfo.OptCells, tgtInfo.OptTabletTypes
 
 	ts := &trafficSwitcher{
+		ws:              s,
+		logger:          logutil.NewMemoryLogger(),
 		workflow:        workflowName,
 		reverseWorkflow: ReverseWorkflowName(workflowName),
 		id:              HashStreams(targetKeyspace, targets),
@@ -1482,11 +1582,8 @@ func (s *Server) buildTrafficSwitcher(ctx context.Context, targetKeyspace, workf
 	return ts, nil
 }
 
-func (s *Server) dropArtifacts(ctx context.Context, keepRoutingRules bool, sw iswitcher) error {
+func (s *Server) dropRelatedArtifacts(ctx context.Context, keepRoutingRules bool, sw iswitcher) error {
 	if err := sw.dropSourceReverseVReplicationStreams(ctx); err != nil {
-		return err
-	}
-	if err := sw.dropTargetVReplicationStreams(ctx); err != nil {
 		return err
 	}
 	if !keepRoutingRules {

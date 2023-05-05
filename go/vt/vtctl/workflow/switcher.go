@@ -107,7 +107,6 @@ func (r *switcher) stopStreams(ctx context.Context, sm *StreamMigrator) ([]strin
 }
 
 func (r *switcher) cancelMigration(ctx context.Context, sm *StreamMigrator) {
-	r.ts.Logger().Infof("Cancel was requested.")
 	r.ts.cancelMigration(ctx, sm)
 }
 
