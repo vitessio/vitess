@@ -310,7 +310,7 @@
     }
   },
   {
-    "comment": "insert into ambiguous qualified reference table routes to source",
+    "comment": "insert into ambiguous unqualified reference table routes to source",
     "query": "insert into ambiguous_ref_with_source(col) values(1)",
     "plan": {
       "QueryType": "INSERT",
@@ -617,6 +617,105 @@
       "TablesUsed": [
         "user.ref",
         "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "join with reference to unqualified source routes to optimal keyspace",
+    "query": "select user.col from user join global_ref",
+    "v3-plan": {
+      "QueryType": "SELECT",
+      "Original": "select user.col from user join global_ref",
+      "Instructions": {
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "L:0",
+        "TableName": "`user`_global_ref",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select `user`.col from `user` where 1 != 1",
+            "Query": "select `user`.col from `user`",
+            "Table": "`user`"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "FieldQuery": "select 1 from global_ref where 1 != 1",
+            "Query": "select 1 from global_ref",
+            "Table": "global_ref"
+          }
+        ]
+      }
+    },
+    "gen4-plan": {
+      "QueryType": "SELECT",
+      "Original": "select user.col from user join global_ref",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select `user`.col from `user`, global_ref where 1 != 1",
+        "Query": "select `user`.col from `user`, global_ref",
+        "Table": "`user`, global_ref"
+      },
+      "TablesUsed": [
+        "user.global_ref",
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "insert into qualified reference with unqualified source routes v3 to requested keyspace gen4 to source",
+    "query": "insert into user.global_ref(col) values(1)",
+    "v3-plan": {
+      "QueryType": "INSERT",
+      "Original": "insert into user.global_ref(col) values(1)",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Sharded",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "insert into global_ref(col) values (1)",
+        "TableName": "global_ref"
+      },
+      "TablesUsed": [
+        "user.global_ref"
+      ]
+    },
+    "gen4-plan": {
+      "QueryType": "INSERT",
+      "Original": "insert into user.global_ref(col) values(1)",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "insert into global_ref(col) values (1)",
+        "TableName": "global_ref"
+      },
+      "TablesUsed": [
+        "main.global_ref"
       ]
     }
   }
