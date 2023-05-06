@@ -530,6 +530,38 @@ message DeleteVRWorkflowResponse {
   query.QueryResult result = 1;
 }
 
+message ReadVRWorkflowRequest {
+  string workflow = 1;
+}
+
+message ReadVRWorkflowResponse {
+  int32 id = 1;
+  string workflow = 2;
+  string cell = 3;
+  string tablet_types = 4;
+  string db_name = 5;
+  string tags = 6;
+  int32 workflow_type = 7;
+  int32 workflow_sub_type = 8;
+  bool defer_secondary_keys = 9;
+  message Stream {
+    binlogdata.BinlogSource bls = 1;
+    string pos = 2;
+    string stop_pos = 3;
+    int64 max_tps = 4;
+    int64 max_replication_lag = 5;
+    vttime.Time time_updated = 6;
+    vttime.Time transaction_timestamp = 7;
+    string state = 8;
+    string message = 9;
+    int64 rows_copied = 10;
+    vttime.Time time_heartbeat = 11;
+    vttime.Time time_throttled = 12;
+    string component_throttled = 13;
+  }
+  repeated Stream streams = 10;
+}
+
 message VDiffRequest {
   string keyspace = 1;
   string workflow = 2;

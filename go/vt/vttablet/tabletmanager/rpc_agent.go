@@ -99,6 +99,7 @@ type RPCTM interface {
 	// VReplication API
 	CreateVRWorkflow(ctx context.Context, req *tabletmanagerdatapb.CreateVRWorkflowRequest) (*tabletmanagerdatapb.CreateVRWorkflowResponse, error)
 	DeleteVRWorkflow(ctx context.Context, req *tabletmanagerdatapb.DeleteVRWorkflowRequest) (*tabletmanagerdatapb.DeleteVRWorkflowResponse, error)
+	ReadVRWorkflow(ctx context.Context, req *tabletmanagerdatapb.ReadVRWorkflowRequest) (*tabletmanagerdatapb.ReadVRWorkflowResponse, error)
 	VReplicationExec(ctx context.Context, query string) (*querypb.QueryResult, error)
 	VReplicationWaitForPos(ctx context.Context, id int32, pos string) error
 	UpdateVRWorkflow(ctx context.Context, req *tabletmanagerdatapb.UpdateVRWorkflowRequest) (*tabletmanagerdatapb.UpdateVRWorkflowResponse, error)

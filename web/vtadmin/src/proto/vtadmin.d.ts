@@ -25999,6 +25999,426 @@ export namespace tabletmanagerdata {
         public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
+    /** Properties of a ReadVRWorkflowRequest. */
+    interface IReadVRWorkflowRequest {
+
+        /** ReadVRWorkflowRequest workflow */
+        workflow?: (string|null);
+    }
+
+    /** Represents a ReadVRWorkflowRequest. */
+    class ReadVRWorkflowRequest implements IReadVRWorkflowRequest {
+
+        /**
+         * Constructs a new ReadVRWorkflowRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: tabletmanagerdata.IReadVRWorkflowRequest);
+
+        /** ReadVRWorkflowRequest workflow. */
+        public workflow: string;
+
+        /**
+         * Creates a new ReadVRWorkflowRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ReadVRWorkflowRequest instance
+         */
+        public static create(properties?: tabletmanagerdata.IReadVRWorkflowRequest): tabletmanagerdata.ReadVRWorkflowRequest;
+
+        /**
+         * Encodes the specified ReadVRWorkflowRequest message. Does not implicitly {@link tabletmanagerdata.ReadVRWorkflowRequest.verify|verify} messages.
+         * @param message ReadVRWorkflowRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: tabletmanagerdata.IReadVRWorkflowRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ReadVRWorkflowRequest message, length delimited. Does not implicitly {@link tabletmanagerdata.ReadVRWorkflowRequest.verify|verify} messages.
+         * @param message ReadVRWorkflowRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: tabletmanagerdata.IReadVRWorkflowRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ReadVRWorkflowRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ReadVRWorkflowRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): tabletmanagerdata.ReadVRWorkflowRequest;
+
+        /**
+         * Decodes a ReadVRWorkflowRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ReadVRWorkflowRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): tabletmanagerdata.ReadVRWorkflowRequest;
+
+        /**
+         * Verifies a ReadVRWorkflowRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ReadVRWorkflowRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ReadVRWorkflowRequest
+         */
+        public static fromObject(object: { [k: string]: any }): tabletmanagerdata.ReadVRWorkflowRequest;
+
+        /**
+         * Creates a plain object from a ReadVRWorkflowRequest message. Also converts values to other types if specified.
+         * @param message ReadVRWorkflowRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: tabletmanagerdata.ReadVRWorkflowRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ReadVRWorkflowRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ReadVRWorkflowRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a ReadVRWorkflowResponse. */
+    interface IReadVRWorkflowResponse {
+
+        /** ReadVRWorkflowResponse id */
+        id?: (number|null);
+
+        /** ReadVRWorkflowResponse workflow */
+        workflow?: (string|null);
+
+        /** ReadVRWorkflowResponse cell */
+        cell?: (string|null);
+
+        /** ReadVRWorkflowResponse tablet_types */
+        tablet_types?: (string|null);
+
+        /** ReadVRWorkflowResponse db_name */
+        db_name?: (string|null);
+
+        /** ReadVRWorkflowResponse tags */
+        tags?: (string|null);
+
+        /** ReadVRWorkflowResponse workflow_type */
+        workflow_type?: (number|null);
+
+        /** ReadVRWorkflowResponse workflow_sub_type */
+        workflow_sub_type?: (number|null);
+
+        /** ReadVRWorkflowResponse defer_secondary_keys */
+        defer_secondary_keys?: (boolean|null);
+
+        /** ReadVRWorkflowResponse streams */
+        streams?: (tabletmanagerdata.ReadVRWorkflowResponse.IStream[]|null);
+    }
+
+    /** Represents a ReadVRWorkflowResponse. */
+    class ReadVRWorkflowResponse implements IReadVRWorkflowResponse {
+
+        /**
+         * Constructs a new ReadVRWorkflowResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: tabletmanagerdata.IReadVRWorkflowResponse);
+
+        /** ReadVRWorkflowResponse id. */
+        public id: number;
+
+        /** ReadVRWorkflowResponse workflow. */
+        public workflow: string;
+
+        /** ReadVRWorkflowResponse cell. */
+        public cell: string;
+
+        /** ReadVRWorkflowResponse tablet_types. */
+        public tablet_types: string;
+
+        /** ReadVRWorkflowResponse db_name. */
+        public db_name: string;
+
+        /** ReadVRWorkflowResponse tags. */
+        public tags: string;
+
+        /** ReadVRWorkflowResponse workflow_type. */
+        public workflow_type: number;
+
+        /** ReadVRWorkflowResponse workflow_sub_type. */
+        public workflow_sub_type: number;
+
+        /** ReadVRWorkflowResponse defer_secondary_keys. */
+        public defer_secondary_keys: boolean;
+
+        /** ReadVRWorkflowResponse streams. */
+        public streams: tabletmanagerdata.ReadVRWorkflowResponse.IStream[];
+
+        /**
+         * Creates a new ReadVRWorkflowResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ReadVRWorkflowResponse instance
+         */
+        public static create(properties?: tabletmanagerdata.IReadVRWorkflowResponse): tabletmanagerdata.ReadVRWorkflowResponse;
+
+        /**
+         * Encodes the specified ReadVRWorkflowResponse message. Does not implicitly {@link tabletmanagerdata.ReadVRWorkflowResponse.verify|verify} messages.
+         * @param message ReadVRWorkflowResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: tabletmanagerdata.IReadVRWorkflowResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ReadVRWorkflowResponse message, length delimited. Does not implicitly {@link tabletmanagerdata.ReadVRWorkflowResponse.verify|verify} messages.
+         * @param message ReadVRWorkflowResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: tabletmanagerdata.IReadVRWorkflowResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ReadVRWorkflowResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ReadVRWorkflowResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): tabletmanagerdata.ReadVRWorkflowResponse;
+
+        /**
+         * Decodes a ReadVRWorkflowResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ReadVRWorkflowResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): tabletmanagerdata.ReadVRWorkflowResponse;
+
+        /**
+         * Verifies a ReadVRWorkflowResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ReadVRWorkflowResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ReadVRWorkflowResponse
+         */
+        public static fromObject(object: { [k: string]: any }): tabletmanagerdata.ReadVRWorkflowResponse;
+
+        /**
+         * Creates a plain object from a ReadVRWorkflowResponse message. Also converts values to other types if specified.
+         * @param message ReadVRWorkflowResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: tabletmanagerdata.ReadVRWorkflowResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ReadVRWorkflowResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ReadVRWorkflowResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    namespace ReadVRWorkflowResponse {
+
+        /** Properties of a Stream. */
+        interface IStream {
+
+            /** Stream bls */
+            bls?: (binlogdata.IBinlogSource|null);
+
+            /** Stream pos */
+            pos?: (string|null);
+
+            /** Stream stop_pos */
+            stop_pos?: (string|null);
+
+            /** Stream max_tps */
+            max_tps?: (number|Long|null);
+
+            /** Stream max_replication_lag */
+            max_replication_lag?: (number|Long|null);
+
+            /** Stream time_updated */
+            time_updated?: (vttime.ITime|null);
+
+            /** Stream transaction_timestamp */
+            transaction_timestamp?: (vttime.ITime|null);
+
+            /** Stream state */
+            state?: (string|null);
+
+            /** Stream message */
+            message?: (string|null);
+
+            /** Stream rows_copied */
+            rows_copied?: (number|Long|null);
+
+            /** Stream time_heartbeat */
+            time_heartbeat?: (vttime.ITime|null);
+
+            /** Stream time_throttled */
+            time_throttled?: (vttime.ITime|null);
+
+            /** Stream component_throttled */
+            component_throttled?: (string|null);
+        }
+
+        /** Represents a Stream. */
+        class Stream implements IStream {
+
+            /**
+             * Constructs a new Stream.
+             * @param [properties] Properties to set
+             */
+            constructor(properties?: tabletmanagerdata.ReadVRWorkflowResponse.IStream);
+
+            /** Stream bls. */
+            public bls?: (binlogdata.IBinlogSource|null);
+
+            /** Stream pos. */
+            public pos: string;
+
+            /** Stream stop_pos. */
+            public stop_pos: string;
+
+            /** Stream max_tps. */
+            public max_tps: (number|Long);
+
+            /** Stream max_replication_lag. */
+            public max_replication_lag: (number|Long);
+
+            /** Stream time_updated. */
+            public time_updated?: (vttime.ITime|null);
+
+            /** Stream transaction_timestamp. */
+            public transaction_timestamp?: (vttime.ITime|null);
+
+            /** Stream state. */
+            public state: string;
+
+            /** Stream message. */
+            public message: string;
+
+            /** Stream rows_copied. */
+            public rows_copied: (number|Long);
+
+            /** Stream time_heartbeat. */
+            public time_heartbeat?: (vttime.ITime|null);
+
+            /** Stream time_throttled. */
+            public time_throttled?: (vttime.ITime|null);
+
+            /** Stream component_throttled. */
+            public component_throttled: string;
+
+            /**
+             * Creates a new Stream instance using the specified properties.
+             * @param [properties] Properties to set
+             * @returns Stream instance
+             */
+            public static create(properties?: tabletmanagerdata.ReadVRWorkflowResponse.IStream): tabletmanagerdata.ReadVRWorkflowResponse.Stream;
+
+            /**
+             * Encodes the specified Stream message. Does not implicitly {@link tabletmanagerdata.ReadVRWorkflowResponse.Stream.verify|verify} messages.
+             * @param message Stream message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encode(message: tabletmanagerdata.ReadVRWorkflowResponse.IStream, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Encodes the specified Stream message, length delimited. Does not implicitly {@link tabletmanagerdata.ReadVRWorkflowResponse.Stream.verify|verify} messages.
+             * @param message Stream message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encodeDelimited(message: tabletmanagerdata.ReadVRWorkflowResponse.IStream, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Decodes a Stream message from the specified reader or buffer.
+             * @param reader Reader or buffer to decode from
+             * @param [length] Message length if known beforehand
+             * @returns Stream
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): tabletmanagerdata.ReadVRWorkflowResponse.Stream;
+
+            /**
+             * Decodes a Stream message from the specified reader or buffer, length delimited.
+             * @param reader Reader or buffer to decode from
+             * @returns Stream
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): tabletmanagerdata.ReadVRWorkflowResponse.Stream;
+
+            /**
+             * Verifies a Stream message.
+             * @param message Plain object to verify
+             * @returns `null` if valid, otherwise the reason why it is not
+             */
+            public static verify(message: { [k: string]: any }): (string|null);
+
+            /**
+             * Creates a Stream message from a plain object. Also converts values to their respective internal types.
+             * @param object Plain object
+             * @returns Stream
+             */
+            public static fromObject(object: { [k: string]: any }): tabletmanagerdata.ReadVRWorkflowResponse.Stream;
+
+            /**
+             * Creates a plain object from a Stream message. Also converts values to other types if specified.
+             * @param message Stream
+             * @param [options] Conversion options
+             * @returns Plain object
+             */
+            public static toObject(message: tabletmanagerdata.ReadVRWorkflowResponse.Stream, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+            /**
+             * Converts this Stream to JSON.
+             * @returns JSON object
+             */
+            public toJSON(): { [k: string]: any };
+
+            /**
+             * Gets the default type url for Stream
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
+        }
+    }
+
     /** Properties of a VDiffRequest. */
     interface IVDiffRequest {
 

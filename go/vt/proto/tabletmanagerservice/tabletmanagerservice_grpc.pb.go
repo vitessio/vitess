@@ -71,6 +71,7 @@ type TabletManagerClient interface {
 	// VReplication API
 	CreateVRWorkflow(ctx context.Context, in *tabletmanagerdata.CreateVRWorkflowRequest, opts ...grpc.CallOption) (*tabletmanagerdata.CreateVRWorkflowResponse, error)
 	DeleteVRWorkflow(ctx context.Context, in *tabletmanagerdata.DeleteVRWorkflowRequest, opts ...grpc.CallOption) (*tabletmanagerdata.DeleteVRWorkflowResponse, error)
+	ReadVRWorkflow(ctx context.Context, in *tabletmanagerdata.ReadVRWorkflowRequest, opts ...grpc.CallOption) (*tabletmanagerdata.ReadVRWorkflowResponse, error)
 	VReplicationExec(ctx context.Context, in *tabletmanagerdata.VReplicationExecRequest, opts ...grpc.CallOption) (*tabletmanagerdata.VReplicationExecResponse, error)
 	VReplicationWaitForPos(ctx context.Context, in *tabletmanagerdata.VReplicationWaitForPosRequest, opts ...grpc.CallOption) (*tabletmanagerdata.VReplicationWaitForPosResponse, error)
 	UpdateVRWorkflow(ctx context.Context, in *tabletmanagerdata.UpdateVRWorkflowRequest, opts ...grpc.CallOption) (*tabletmanagerdata.UpdateVRWorkflowResponse, error)
@@ -387,6 +388,15 @@ func (c *tabletManagerClient) DeleteVRWorkflow(ctx context.Context, in *tabletma
 	return out, nil
 }
 
+func (c *tabletManagerClient) ReadVRWorkflow(ctx context.Context, in *tabletmanagerdata.ReadVRWorkflowRequest, opts ...grpc.CallOption) (*tabletmanagerdata.ReadVRWorkflowResponse, error) {
+	out := new(tabletmanagerdata.ReadVRWorkflowResponse)
+	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/ReadVRWorkflow", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *tabletManagerClient) VReplicationExec(ctx context.Context, in *tabletmanagerdata.VReplicationExecRequest, opts ...grpc.CallOption) (*tabletmanagerdata.VReplicationExecResponse, error) {
 	out := new(tabletmanagerdata.VReplicationExecResponse)
 	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/VReplicationExec", in, out, opts...)
@@ -656,6 +666,7 @@ type TabletManagerServer interface {
 	// VReplication API
 	CreateVRWorkflow(context.Context, *tabletmanagerdata.CreateVRWorkflowRequest) (*tabletmanagerdata.CreateVRWorkflowResponse, error)
 	DeleteVRWorkflow(context.Context, *tabletmanagerdata.DeleteVRWorkflowRequest) (*tabletmanagerdata.DeleteVRWorkflowResponse, error)
+	ReadVRWorkflow(context.Context, *tabletmanagerdata.ReadVRWorkflowRequest) (*tabletmanagerdata.ReadVRWorkflowResponse, error)
 	VReplicationExec(context.Context, *tabletmanagerdata.VReplicationExecRequest) (*tabletmanagerdata.VReplicationExecResponse, error)
 	VReplicationWaitForPos(context.Context, *tabletmanagerdata.VReplicationWaitForPosRequest) (*tabletmanagerdata.VReplicationWaitForPosResponse, error)
 	UpdateVRWorkflow(context.Context, *tabletmanagerdata.UpdateVRWorkflowRequest) (*tabletmanagerdata.UpdateVRWorkflowResponse, error)
@@ -788,6 +799,9 @@ func (UnimplementedTabletManagerServer) CreateVRWorkflow(context.Context, *table
 }
 func (UnimplementedTabletManagerServer) DeleteVRWorkflow(context.Context, *tabletmanagerdata.DeleteVRWorkflowRequest) (*tabletmanagerdata.DeleteVRWorkflowResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method DeleteVRWorkflow not implemented")
+}
+func (UnimplementedTabletManagerServer) ReadVRWorkflow(context.Context, *tabletmanagerdata.ReadVRWorkflowRequest) (*tabletmanagerdata.ReadVRWorkflowResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ReadVRWorkflow not implemented")
 }
 func (UnimplementedTabletManagerServer) VReplicationExec(context.Context, *tabletmanagerdata.VReplicationExecRequest) (*tabletmanagerdata.VReplicationExecResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method VReplicationExec not implemented")
@@ -1399,6 +1413,24 @@ func _TabletManager_DeleteVRWorkflow_Handler(srv interface{}, ctx context.Contex
 	return interceptor(ctx, in, info, handler)
 }
 
+func _TabletManager_ReadVRWorkflow_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(tabletmanagerdata.ReadVRWorkflowRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TabletManagerServer).ReadVRWorkflow(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/tabletmanagerservice.TabletManager/ReadVRWorkflow",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TabletManagerServer).ReadVRWorkflow(ctx, req.(*tabletmanagerdata.ReadVRWorkflowRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _TabletManager_VReplicationExec_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(tabletmanagerdata.VReplicationExecRequest)
 	if err := dec(in); err != nil {
@@ -1873,6 +1905,10 @@ var TabletManager_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "DeleteVRWorkflow",
 			Handler:    _TabletManager_DeleteVRWorkflow_Handler,
+		},
+		{
+			MethodName: "ReadVRWorkflow",
+			Handler:    _TabletManager_ReadVRWorkflow_Handler,
 		},
 		{
 			MethodName: "VReplicationExec",

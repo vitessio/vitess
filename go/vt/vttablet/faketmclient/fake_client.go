@@ -70,6 +70,10 @@ func (client *FakeTabletManagerClient) DeleteVRWorkflow(ctx context.Context, tab
 	return nil, nil
 }
 
+func (client *FakeTabletManagerClient) ReadVRWorkflow(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.ReadVRWorkflowRequest) (*tabletmanagerdatapb.ReadVRWorkflowResponse, error) {
+	return nil, nil
+}
+
 func (client *FakeTabletManagerClient) UpdateVRWorkflow(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.UpdateVRWorkflowRequest) (*tabletmanagerdatapb.UpdateVRWorkflowResponse, error) {
 	return nil, nil
 }

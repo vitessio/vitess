@@ -64,6 +64,11 @@ func (fra *fakeRPCTM) DeleteVRWorkflow(ctx context.Context, req *tabletmanagerda
 	panic("implement me")
 }
 
+func (fra *fakeRPCTM) ReadVRWorkflow(ctx context.Context, req *tabletmanagerdatapb.ReadVRWorkflowRequest) (*tabletmanagerdatapb.ReadVRWorkflowResponse, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
 func (fra *fakeRPCTM) UpdateVRWorkflow(ctx context.Context, req *tabletmanagerdatapb.UpdateVRWorkflowRequest) (*tabletmanagerdatapb.UpdateVRWorkflowResponse, error) {
 	//TODO implement me
 	panic("implement me")

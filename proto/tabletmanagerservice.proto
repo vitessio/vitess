@@ -114,6 +114,7 @@ service TabletManager {
   // VReplication API
   rpc CreateVRWorkflow(tabletmanagerdata.CreateVRWorkflowRequest) returns (tabletmanagerdata.CreateVRWorkflowResponse) {};
   rpc DeleteVRWorkflow(tabletmanagerdata.DeleteVRWorkflowRequest) returns(tabletmanagerdata.DeleteVRWorkflowResponse) {};
+  rpc ReadVRWorkflow(tabletmanagerdata.ReadVRWorkflowRequest) returns(tabletmanagerdata.ReadVRWorkflowResponse) {};
   rpc VReplicationExec(tabletmanagerdata.VReplicationExecRequest) returns(tabletmanagerdata.VReplicationExecResponse) {};
   rpc VReplicationWaitForPos(tabletmanagerdata.VReplicationWaitForPosRequest) returns(tabletmanagerdata.VReplicationWaitForPosResponse) {};
   rpc UpdateVRWorkflow(tabletmanagerdata.UpdateVRWorkflowRequest) returns(tabletmanagerdata.UpdateVRWorkflowResponse) {};
