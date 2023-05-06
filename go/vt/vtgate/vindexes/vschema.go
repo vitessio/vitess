@@ -184,16 +184,23 @@ type ksJSON struct {
 	Error    string            `json:"error,omitempty"`
 }
 
+// findTable looks for the table with the requested tablename in the keyspace.
+//
+// If no table matching the requested tablename is found, and:
+//
+//   - constructUnshardedIfNotFound is not requested, than no table is returned.
+//   - constructUnshardedIfNotFound is requested, and the keyspace is
+//     unsharded, then a *Table representing that table is returned.
 func (ks *KeyspaceSchema) findTable(
 	tablename string,
-	constructUnsharded bool,
+	constructUnshardedIfNotFound bool,
 ) (*Table, error) {
 	table := ks.Tables[tablename]
 	if table != nil {
 		return table, nil
 	}
 
-	if constructUnsharded && !ks.Keyspace.Sharded {
+	if constructUnshardedIfNotFound && !ks.Keyspace.Sharded {
 		return &Table{Name: sqlparser.NewIdentifierCS(tablename), Keyspace: ks.Keyspace}, nil
 	}
 
@@ -359,9 +366,9 @@ func buildKeyspaceGlobalTables(vschema *VSchema, ksvschema *KeyspaceSchema) {
 				vschema.globalTables[tname] = nil
 			}
 		} else {
-			// Reference tables which define a source with the same name are
-			// may be globally routable through their source, as long as the
-			// source doesn't require explicit routing.
+			// Reference tables which define a source with the same name may be
+			// globally routable through their source, as long as the source
+			// doesn't require explicit routing.
 			if t.Type == TypeReference && t.Source != nil && t.Source.Name.String() == t.Name.String() {
 				continue
 			}
@@ -403,7 +410,7 @@ func buildKeyspaceReferences(vschema *VSchema, ksvschema *KeyspaceSchema) error 
 		}
 
 		// Verify the reference source can be resolved.
-		_, sourceT, err := vschema.findTable(
+		sourceT, err := vschema.findTable(
 			sourceKsname,
 			sourceTname,
 			false, /* constructTableIfNotFound */
@@ -873,7 +880,7 @@ func buildShardRoutingRule(source *vschemapb.SrvVSchema, vschema *VSchema) {
 // valid and belonging to that keyspace.
 // FindTable bypasses routing rules and returns at most one table.
 func (vschema *VSchema) FindTable(keyspace, tablename string) (*Table, error) {
-	_, table, err := vschema.findTable(
+	table, err := vschema.findTable(
 		keyspace,
 		tablename,
 		true, /* constructUnshardedIfNotFound */
@@ -891,32 +898,43 @@ func (vschema *VSchema) FindTable(keyspace, tablename string) (*Table, error) {
 	)
 }
 
+// findGlobalTable looks for a table that is uniquely named across all
+// keyspaces.
+//
+// If multiple tables with the requested tablename are found, an error
+// indicating this ambiguity is returned.
+//
+// If no table matching requested table name is found, and:
+//
+//   - constructUnshardedIfNotFound is not requested, than no table is returned.
+//   - constructUnshardedIfNotFound is requested, and there is only one keyspace,
+//     and that keyspace is unsharded, then a *Table representing that table is
+//     returned.
 func (vschema *VSchema) findGlobalTable(
 	tablename string,
 	constructUnshardedIfNotFound bool,
-) (*Keyspace, *Table, error) {
+) (*Table, error) {
 	if len(vschema.Keyspaces) == 1 {
 		for _, ks := range vschema.Keyspaces {
-			table, err := ks.findTable(tablename, constructUnshardedIfNotFound)
-			return ks.Keyspace, table, err
+			return ks.findTable(tablename, constructUnshardedIfNotFound)
 		}
 	}
 
 	table, ok := vschema.globalTables[tablename]
 
 	if table != nil {
-		return table.Keyspace, table, nil
+		return table, nil
 	}
 
 	if ok {
-		return nil, nil, vterrors.Errorf(
+		return nil, vterrors.Errorf(
 			vtrpcpb.Code_FAILED_PRECONDITION,
 			"ambiguous table reference: %s",
 			tablename,
 		)
 	}
 
-	return nil, nil, nil
+	return nil, nil
 }
 
 // findTable looks for a keyspace matching the provided keyspace, and then
@@ -932,21 +950,21 @@ func (vschema *VSchema) findGlobalTable(
 //     matching table.
 //
 // constructUnshardedIfNotFound is passed to (*VSchema).findGlobalTable or
-// (*Keyspace).findTable.
+// (*Keyspace).findTable, and is used to construct a *Table representing a
+// table present in an unsharded keyspace but not defined in the vschema.
 func (vschema *VSchema) findTable(
 	keyspace,
 	tablename string,
 	constructUnshardedIfNotFound bool,
-) (*Keyspace, *Table, error) {
+) (*Table, error) {
 	if keyspace == "" {
 		return vschema.findGlobalTable(tablename, constructUnshardedIfNotFound)
 	}
 	ks, ok := vschema.Keyspaces[keyspace]
 	if !ok {
-		return nil, nil, vterrors.VT05003(keyspace)
+		return nil, vterrors.VT05003(keyspace)
 	}
-	table, err := ks.findTable(tablename, constructUnshardedIfNotFound)
-	return ks.Keyspace, table, err
+	return ks.findTable(tablename, constructUnshardedIfNotFound)
 }
 
 func (vschema *VSchema) FirstKeyspace() *Keyspace {
@@ -986,12 +1004,11 @@ func (vschema *VSchema) FindRoutedTable(keyspace, tablename string, tabletType t
 			return rr.Tables[0], nil
 		}
 	}
-	_, table, err := vschema.findTable(
+	return vschema.findTable(
 		keyspace,
 		tablename,
 		true, /* constructUnshardedTableIfNotFound */
 	)
-	return table, err
 }
 
 // FindTableOrVindex finds a table or a Vindex by name using Find and FindVindex.
