@@ -26,14 +26,13 @@ import (
 	"vitess.io/vitess/go/cmd/vtctldclient/cli"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 
-	"vitess.io/vitess/go/vt/proto/binlogdata"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
 var (
 	tabletTypesDefault = []string{"in_order:REPLICA", "PRIMARY"}
-	onDDLDefault       = binlogdatapb.OnDDLAction_name[int32(binlogdata.OnDDLAction_IGNORE)]
+	onDDLDefault       = binlogdatapb.OnDDLAction_name[int32(binlogdatapb.OnDDLAction_IGNORE)]
 
 	// MoveTables is the base command for all related actions.
 	MoveTables = &cobra.Command{

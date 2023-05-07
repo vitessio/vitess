@@ -54,8 +54,7 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/proto/vttime"
+	vttimepb "vitess.io/vitess/go/vt/proto/vttime"
 )
 
 var (
@@ -70,8 +69,8 @@ var (
 	// target keyspaces across different shard primaries. This should be
 	// impossible.
 	ErrMultipleTargetKeyspaces   = errors.New("multiple target keyspaces for a single workflow")
-	ErrWorkflowNotFullySwitched  = "cannot complete workflow because you have not yet switched all read and write traffic"
-	ErrWorkflowPartiallySwitched = "cannot cancel workflow because you have already switched some or all read and write traffic"
+	ErrWorkflowNotFullySwitched  = errors.New("cannot complete workflow because you have not yet switched all read and write traffic")
+	ErrWorkflowPartiallySwitched = errors.New("cannot cancel workflow because you have already switched some or all read and write traffic")
 )
 
 // Server provides an API to work with Vitess workflows, like vreplication
@@ -394,10 +393,10 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 			StopPosition: stopPos,
 			State:        state,
 			DbName:       dbName,
-			TransactionTimestamp: &vttime.Time{
+			TransactionTimestamp: &vttimepb.Time{
 				Seconds: transactionTimeSeconds,
 			},
-			TimeUpdated: &vttime.Time{
+			TimeUpdated: &vttimepb.Time{
 				Seconds: timeUpdatedSeconds,
 			},
 			Message: message,
@@ -629,10 +628,10 @@ ORDER BY
 					StreamId: streamID,
 					Type:     typ,
 					State:    state,
-					CreatedAt: &vttime.Time{
+					CreatedAt: &vttimepb.Time{
 						Seconds: createdAt.Unix(),
 					},
-					UpdatedAt: &vttime.Time{
+					UpdatedAt: &vttimepb.Time{
 						Seconds: updatedAt.Unix(),
 					},
 					Message: message,
@@ -1421,7 +1420,7 @@ func (s *Server) DropTargets(ctx context.Context, targetKeyspace, workflow strin
 
 	// Return an error if the workflow traffic is partially switched.
 	if state.WritesSwitched || len(state.ReplicaCellsSwitched) > 0 || len(state.RdonlyCellsSwitched) > 0 {
-		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, ErrWorkflowPartiallySwitched)
+		return nil, ErrWorkflowPartiallySwitched
 	}
 
 	if state.WorkflowType == TypeMigrate {

@@ -26,12 +26,11 @@ import (
 	"sync"
 	"time"
 
-	"vitess.io/vitess/go/sqlescape"
-	"vitess.io/vitess/go/vt/discovery"
-
 	"vitess.io/vitess/go/json2"
+	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/concurrency"
+	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"

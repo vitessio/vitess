@@ -24,7 +24,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/vt/proto/vschema"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 
@@ -282,20 +281,20 @@ func TestTemplatize(t *testing.T) {
 	}}
 	vs := &vschemapb.Keyspace{
 		Sharded: true,
-		Vindexes: map[string]*vschema.Vindex{
+		Vindexes: map[string]*vschemapb.Vindex{
 			"thash": {
 				Type: "hash",
 			},
 		},
-		Tables: map[string]*vschema.Table{
+		Tables: map[string]*vschemapb.Table{
 			"t1": {
-				ColumnVindexes: []*vschema.ColumnVindex{{
+				ColumnVindexes: []*vschemapb.ColumnVindex{{
 					Columns: []string{"c1"},
 					Name:    "thash",
 				}},
 			},
 			"t2": {
-				ColumnVindexes: []*vschema.ColumnVindex{{
+				ColumnVindexes: []*vschemapb.ColumnVindex{{
 					Columns: []string{"c1"},
 					Name:    "thash",
 				}},
