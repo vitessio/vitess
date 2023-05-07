@@ -278,7 +278,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %left <str> AND
 %right <str> NOT '!'
 %left <str> BETWEEN CASE WHEN THEN ELSE END
-%left <str> '=' '<' '>' LE GE NE NULL_SAFE_EQUAL IS LIKE REGEXP RLIKE IN
+%left <str> '=' '<' '>' LE GE NE NULL_SAFE_EQUAL IS LIKE REGEXP RLIKE IN ASSIGNMENT_OPT
 %left <str> '&'
 %left <str> SHIFT_LEFT SHIFT_RIGHT
 %left <str> '+' '-'
@@ -7586,6 +7586,10 @@ update_expression:
   column_name '=' expression
   {
     $$ = &UpdateExpr{Name: $1, Expr: $3}
+  }
+| column_name '=' user_defined_variable ASSIGNMENT_OPT expression
+  {
+    $$ = &UpdateExpr{Name: $1, Expr: &AssignmentExpr{Left: $3, Right: $5}}
   }
 
 charset_or_character_set:

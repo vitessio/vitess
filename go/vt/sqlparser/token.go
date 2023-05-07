@@ -437,6 +437,13 @@ func (tkn *Tokenizer) scanBindVar() (int, string) {
 		tkn.scanMantissa(10)
 		return OFFSET_ARG, tkn.buf[start+1 : tkn.Pos]
 	}
+
+	// If : is followed by a =, then it is an assignment operator
+	if tkn.cur() == '=' {
+		tkn.skip(1)
+		return ASSIGNMENT_OPT, ""
+	}
+
 	// If : is followed by another : it is a list arg. Example ::v1, ::list
 	if tkn.cur() == ':' {
 		token = LIST_ARG
