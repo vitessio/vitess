@@ -16,14 +16,39 @@ limitations under the License.
 
 package workflow
 
-// Type is the type of a workflow.
+// VReplicationWorkflowType specifies whether workflow is
+// MoveTables or Reshard and maps directly to what is stored
+// in the backend database.
+type VReplicationWorkflowType int
+
+// VReplicationWorkflowType enums.
+const (
+	MoveTablesWorkflow = VReplicationWorkflowType(iota)
+	ReshardWorkflow
+	MigrateWorkflow
+)
+
+// Type is the type of a workflow as a string and maps directly
+// to what is provided and presented to the user.
 type Type string
 
-// Workflow types.
+// Workflow string types.
 const (
-	TypeReshard    Type = "Reshard"
 	TypeMoveTables Type = "MoveTables"
+	TypeReshard    Type = "Reshard"
+	TypeMigrate    Type = "Migrate"
 )
+
+var TypeStrMap = map[VReplicationWorkflowType]Type{
+	MoveTablesWorkflow: TypeMoveTables,
+	ReshardWorkflow:    TypeReshard,
+	MigrateWorkflow:    TypeMigrate,
+}
+var TypeIntMap = map[Type]VReplicationWorkflowType{
+	TypeMoveTables: MoveTablesWorkflow,
+	TypeReshard:    ReshardWorkflow,
+	TypeMigrate:    MigrateWorkflow,
+}
 
 // State represents the state of a workflow.
 type State struct {

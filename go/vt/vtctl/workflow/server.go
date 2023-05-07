@@ -54,6 +54,7 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/proto/vttime"
 )
 
@@ -68,7 +69,9 @@ var (
 	// ErrMultipleTargetKeyspaces occurs when a workflow somehow has multiple
 	// target keyspaces across different shard primaries. This should be
 	// impossible.
-	ErrMultipleTargetKeyspaces = errors.New("multiple target keyspaces for a single workflow")
+	ErrMultipleTargetKeyspaces   = errors.New("multiple target keyspaces for a single workflow")
+	ErrWorkflowNotFullySwitched  = "cannot complete workflow because you have not yet switched all read and write traffic"
+	ErrWorkflowPartiallySwitched = "cannot cancel workflow because you have already switched some or all read and write traffic"
 )
 
 // Server provides an API to work with Vitess workflows, like vreplication
@@ -1116,13 +1119,6 @@ func (s *Server) WorkflowDelete(ctx context.Context, req *vtctldatapb.WorkflowDe
 	span.Annotate("keyspace", req.Keyspace)
 	span.Annotate("workflow", req.Workflow)
 
-	// Return an error if the workflow is partially switched.
-	/*
-		if ws.WritesSwitched || len(ws.ReplicaCellsSwitched) > 0 || len(ws.RdonlyCellsSwitched) > 0 {
-			return fmt.Errorf(ErrWorkflowPartiallySwitched)
-		}
-	*/
-
 	// Cleanup related data and artifacts.
 	if _, err := s.DropTargets(ctx, req.Keyspace, req.Workflow, req.KeepData, req.KeepRoutingRules, false); err != nil {
 		return nil, err
@@ -1417,11 +1413,22 @@ func (s *Server) optimizeCopyStateTable(tablet *topodatapb.Tablet) {
 
 // DropTargets cleans up target tables, shards and denied tables if a MoveTables/Reshard is cancelled
 func (s *Server) DropTargets(ctx context.Context, targetKeyspace, workflow string, keepData, keepRoutingRules, dryRun bool) (*[]string, error) {
-	ts, err := s.buildTrafficSwitcher(ctx, targetKeyspace, workflow)
+	ts, state, err := s.getWorkflowState(ctx, targetKeyspace, workflow)
 	if err != nil {
 		log.Errorf("buildTrafficSwitcher failed: %v", err)
 		return nil, err
 	}
+
+	// Return an error if the workflow traffic is partially switched.
+	if state.WritesSwitched || len(state.ReplicaCellsSwitched) > 0 || len(state.RdonlyCellsSwitched) > 0 {
+		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, ErrWorkflowPartiallySwitched)
+	}
+
+	if state.WorkflowType == TypeMigrate {
+		_, err := s.finalizeMigrateWorkflow(ctx, targetKeyspace, workflow, "", true, keepData, keepRoutingRules, dryRun)
+		return nil, err
+	}
+
 	ts.keepRoutingRules = keepRoutingRules
 	var sw iswitcher
 	if dryRun {
@@ -1740,6 +1747,48 @@ func (s *Server) refreshPrimaryTablets(ctx context.Context, shards []*topo.Shard
 	}
 	wg.Wait()
 	return rec.Error()
+}
+
+// finalizeMigrateWorkflow deletes the streams for the Migrate workflow.
+// We only cleanup the target for external sources.
+func (s *Server) finalizeMigrateWorkflow(ctx context.Context, targetKeyspace, workflow, tableSpecs string, cancel, keepData, keepRoutingRules, dryRun bool) (*[]string, error) {
+	ts, err := s.buildTrafficSwitcher(ctx, targetKeyspace, workflow)
+	if err != nil {
+		ts.Logger().Errorf("buildTrafficSwitcher failed: %v", err)
+		return nil, err
+	}
+	var sw iswitcher
+	if dryRun {
+		sw = &switcherDryRun{ts: ts, drLog: NewLogRecorder()}
+	} else {
+		sw = &switcher{s: s, ts: ts}
+	}
+	var tctx context.Context
+	tctx, targetUnlock, lockErr := sw.lockKeyspace(ctx, ts.TargetKeyspaceName(), "completeMigrateWorkflow")
+	if lockErr != nil {
+		ts.Logger().Errorf("Target LockKeyspace failed: %v", lockErr)
+		return nil, lockErr
+	}
+	defer targetUnlock(&err)
+	ctx = tctx
+	if err := sw.dropTargetVReplicationStreams(ctx); err != nil {
+		return nil, err
+	}
+	if !cancel {
+		if err := sw.addParticipatingTablesToKeyspace(ctx, targetKeyspace, tableSpecs); err != nil {
+			return nil, err
+		}
+		if err := ts.TopoServer().RebuildSrvVSchema(ctx, nil); err != nil {
+			return nil, err
+		}
+	}
+	log.Infof("cancel is %t, keepData %t", cancel, keepData)
+	if cancel && !keepData {
+		if err := sw.removeTargetTables(ctx); err != nil {
+			return nil, err
+		}
+	}
+	return sw.logs(), nil
 }
 
 // VReplicationExec executes a query remotely using the DBA pool
