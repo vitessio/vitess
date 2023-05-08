@@ -60539,11 +60539,11 @@ export namespace vtctldata {
     /** Properties of a WorkflowProgressResponse. */
     interface IWorkflowProgressResponse {
 
-        /** WorkflowProgressResponse copy_progress */
-        copy_progress?: (vtctldata.WorkflowProgressResponse.IProgress|null);
+        /** WorkflowProgressResponse table_copy_state */
+        table_copy_state?: ({ [k: string]: vtctldata.WorkflowProgressResponse.ITableCopyState }|null);
 
-        /** WorkflowProgressResponse stream_progress */
-        stream_progress?: (vtctldata.WorkflowProgressResponse.IProgress|null);
+        /** WorkflowProgressResponse tablet_streams */
+        tablet_streams?: ({ [k: string]: vtctldata.WorkflowProgressResponse.ITabletStreams }|null);
     }
 
     /** Represents a WorkflowProgressResponse. */
@@ -60555,11 +60555,11 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.IWorkflowProgressResponse);
 
-        /** WorkflowProgressResponse copy_progress. */
-        public copy_progress?: (vtctldata.WorkflowProgressResponse.IProgress|null);
+        /** WorkflowProgressResponse table_copy_state. */
+        public table_copy_state: { [k: string]: vtctldata.WorkflowProgressResponse.ITableCopyState };
 
-        /** WorkflowProgressResponse stream_progress. */
-        public stream_progress?: (vtctldata.WorkflowProgressResponse.IProgress|null);
+        /** WorkflowProgressResponse tablet_streams. */
+        public tablet_streams: { [k: string]: vtctldata.WorkflowProgressResponse.ITabletStreams };
 
         /**
          * Creates a new WorkflowProgressResponse instance using the specified properties.
@@ -60641,103 +60641,345 @@ export namespace vtctldata {
 
     namespace WorkflowProgressResponse {
 
-        /** Properties of a Progress. */
-        interface IProgress {
+        /** Properties of a TableCopyState. */
+        interface ITableCopyState {
 
-            /** Progress header */
-            header?: (string|null);
+            /** TableCopyState rows_copied */
+            rows_copied?: (number|Long|null);
 
-            /** Progress rows */
-            rows?: (string[]|null);
+            /** TableCopyState rows_total */
+            rows_total?: (number|Long|null);
+
+            /** TableCopyState rows_percentage */
+            rows_percentage?: (number|null);
+
+            /** TableCopyState bytes_copied */
+            bytes_copied?: (number|Long|null);
+
+            /** TableCopyState bytes_total */
+            bytes_total?: (number|Long|null);
+
+            /** TableCopyState bytes_percentage */
+            bytes_percentage?: (number|null);
         }
 
-        /** Represents a Progress. */
-        class Progress implements IProgress {
+        /** Represents a TableCopyState. */
+        class TableCopyState implements ITableCopyState {
 
             /**
-             * Constructs a new Progress.
+             * Constructs a new TableCopyState.
              * @param [properties] Properties to set
              */
-            constructor(properties?: vtctldata.WorkflowProgressResponse.IProgress);
+            constructor(properties?: vtctldata.WorkflowProgressResponse.ITableCopyState);
 
-            /** Progress header. */
-            public header: string;
+            /** TableCopyState rows_copied. */
+            public rows_copied: (number|Long);
 
-            /** Progress rows. */
-            public rows: string[];
+            /** TableCopyState rows_total. */
+            public rows_total: (number|Long);
+
+            /** TableCopyState rows_percentage. */
+            public rows_percentage: number;
+
+            /** TableCopyState bytes_copied. */
+            public bytes_copied: (number|Long);
+
+            /** TableCopyState bytes_total. */
+            public bytes_total: (number|Long);
+
+            /** TableCopyState bytes_percentage. */
+            public bytes_percentage: number;
 
             /**
-             * Creates a new Progress instance using the specified properties.
+             * Creates a new TableCopyState instance using the specified properties.
              * @param [properties] Properties to set
-             * @returns Progress instance
+             * @returns TableCopyState instance
              */
-            public static create(properties?: vtctldata.WorkflowProgressResponse.IProgress): vtctldata.WorkflowProgressResponse.Progress;
+            public static create(properties?: vtctldata.WorkflowProgressResponse.ITableCopyState): vtctldata.WorkflowProgressResponse.TableCopyState;
 
             /**
-             * Encodes the specified Progress message. Does not implicitly {@link vtctldata.WorkflowProgressResponse.Progress.verify|verify} messages.
-             * @param message Progress message or plain object to encode
+             * Encodes the specified TableCopyState message. Does not implicitly {@link vtctldata.WorkflowProgressResponse.TableCopyState.verify|verify} messages.
+             * @param message TableCopyState message or plain object to encode
              * @param [writer] Writer to encode to
              * @returns Writer
              */
-            public static encode(message: vtctldata.WorkflowProgressResponse.IProgress, writer?: $protobuf.Writer): $protobuf.Writer;
+            public static encode(message: vtctldata.WorkflowProgressResponse.ITableCopyState, writer?: $protobuf.Writer): $protobuf.Writer;
 
             /**
-             * Encodes the specified Progress message, length delimited. Does not implicitly {@link vtctldata.WorkflowProgressResponse.Progress.verify|verify} messages.
-             * @param message Progress message or plain object to encode
+             * Encodes the specified TableCopyState message, length delimited. Does not implicitly {@link vtctldata.WorkflowProgressResponse.TableCopyState.verify|verify} messages.
+             * @param message TableCopyState message or plain object to encode
              * @param [writer] Writer to encode to
              * @returns Writer
              */
-            public static encodeDelimited(message: vtctldata.WorkflowProgressResponse.IProgress, writer?: $protobuf.Writer): $protobuf.Writer;
+            public static encodeDelimited(message: vtctldata.WorkflowProgressResponse.ITableCopyState, writer?: $protobuf.Writer): $protobuf.Writer;
 
             /**
-             * Decodes a Progress message from the specified reader or buffer.
+             * Decodes a TableCopyState message from the specified reader or buffer.
              * @param reader Reader or buffer to decode from
              * @param [length] Message length if known beforehand
-             * @returns Progress
+             * @returns TableCopyState
              * @throws {Error} If the payload is not a reader or valid buffer
              * @throws {$protobuf.util.ProtocolError} If required fields are missing
              */
-            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.WorkflowProgressResponse.Progress;
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.WorkflowProgressResponse.TableCopyState;
 
             /**
-             * Decodes a Progress message from the specified reader or buffer, length delimited.
+             * Decodes a TableCopyState message from the specified reader or buffer, length delimited.
              * @param reader Reader or buffer to decode from
-             * @returns Progress
+             * @returns TableCopyState
              * @throws {Error} If the payload is not a reader or valid buffer
              * @throws {$protobuf.util.ProtocolError} If required fields are missing
              */
-            public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.WorkflowProgressResponse.Progress;
+            public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.WorkflowProgressResponse.TableCopyState;
 
             /**
-             * Verifies a Progress message.
+             * Verifies a TableCopyState message.
              * @param message Plain object to verify
              * @returns `null` if valid, otherwise the reason why it is not
              */
             public static verify(message: { [k: string]: any }): (string|null);
 
             /**
-             * Creates a Progress message from a plain object. Also converts values to their respective internal types.
+             * Creates a TableCopyState message from a plain object. Also converts values to their respective internal types.
              * @param object Plain object
-             * @returns Progress
+             * @returns TableCopyState
              */
-            public static fromObject(object: { [k: string]: any }): vtctldata.WorkflowProgressResponse.Progress;
+            public static fromObject(object: { [k: string]: any }): vtctldata.WorkflowProgressResponse.TableCopyState;
 
             /**
-             * Creates a plain object from a Progress message. Also converts values to other types if specified.
-             * @param message Progress
+             * Creates a plain object from a TableCopyState message. Also converts values to other types if specified.
+             * @param message TableCopyState
              * @param [options] Conversion options
              * @returns Plain object
              */
-            public static toObject(message: vtctldata.WorkflowProgressResponse.Progress, options?: $protobuf.IConversionOptions): { [k: string]: any };
+            public static toObject(message: vtctldata.WorkflowProgressResponse.TableCopyState, options?: $protobuf.IConversionOptions): { [k: string]: any };
 
             /**
-             * Converts this Progress to JSON.
+             * Converts this TableCopyState to JSON.
              * @returns JSON object
              */
             public toJSON(): { [k: string]: any };
 
             /**
-             * Gets the default type url for Progress
+             * Gets the default type url for TableCopyState
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
+        }
+
+        /** Properties of a TabletStreamState. */
+        interface ITabletStreamState {
+
+            /** TabletStreamState id */
+            id?: (number|null);
+
+            /** TabletStreamState source_shard */
+            source_shard?: (string|null);
+
+            /** TabletStreamState position */
+            position?: (string|null);
+
+            /** TabletStreamState status */
+            status?: (string|null);
+
+            /** TabletStreamState info */
+            info?: (string|null);
+        }
+
+        /** Represents a TabletStreamState. */
+        class TabletStreamState implements ITabletStreamState {
+
+            /**
+             * Constructs a new TabletStreamState.
+             * @param [properties] Properties to set
+             */
+            constructor(properties?: vtctldata.WorkflowProgressResponse.ITabletStreamState);
+
+            /** TabletStreamState id. */
+            public id: number;
+
+            /** TabletStreamState source_shard. */
+            public source_shard: string;
+
+            /** TabletStreamState position. */
+            public position: string;
+
+            /** TabletStreamState status. */
+            public status: string;
+
+            /** TabletStreamState info. */
+            public info: string;
+
+            /**
+             * Creates a new TabletStreamState instance using the specified properties.
+             * @param [properties] Properties to set
+             * @returns TabletStreamState instance
+             */
+            public static create(properties?: vtctldata.WorkflowProgressResponse.ITabletStreamState): vtctldata.WorkflowProgressResponse.TabletStreamState;
+
+            /**
+             * Encodes the specified TabletStreamState message. Does not implicitly {@link vtctldata.WorkflowProgressResponse.TabletStreamState.verify|verify} messages.
+             * @param message TabletStreamState message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encode(message: vtctldata.WorkflowProgressResponse.ITabletStreamState, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Encodes the specified TabletStreamState message, length delimited. Does not implicitly {@link vtctldata.WorkflowProgressResponse.TabletStreamState.verify|verify} messages.
+             * @param message TabletStreamState message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encodeDelimited(message: vtctldata.WorkflowProgressResponse.ITabletStreamState, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Decodes a TabletStreamState message from the specified reader or buffer.
+             * @param reader Reader or buffer to decode from
+             * @param [length] Message length if known beforehand
+             * @returns TabletStreamState
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.WorkflowProgressResponse.TabletStreamState;
+
+            /**
+             * Decodes a TabletStreamState message from the specified reader or buffer, length delimited.
+             * @param reader Reader or buffer to decode from
+             * @returns TabletStreamState
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.WorkflowProgressResponse.TabletStreamState;
+
+            /**
+             * Verifies a TabletStreamState message.
+             * @param message Plain object to verify
+             * @returns `null` if valid, otherwise the reason why it is not
+             */
+            public static verify(message: { [k: string]: any }): (string|null);
+
+            /**
+             * Creates a TabletStreamState message from a plain object. Also converts values to their respective internal types.
+             * @param object Plain object
+             * @returns TabletStreamState
+             */
+            public static fromObject(object: { [k: string]: any }): vtctldata.WorkflowProgressResponse.TabletStreamState;
+
+            /**
+             * Creates a plain object from a TabletStreamState message. Also converts values to other types if specified.
+             * @param message TabletStreamState
+             * @param [options] Conversion options
+             * @returns Plain object
+             */
+            public static toObject(message: vtctldata.WorkflowProgressResponse.TabletStreamState, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+            /**
+             * Converts this TabletStreamState to JSON.
+             * @returns JSON object
+             */
+            public toJSON(): { [k: string]: any };
+
+            /**
+             * Gets the default type url for TabletStreamState
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
+        }
+
+        /** Properties of a TabletStreams. */
+        interface ITabletStreams {
+
+            /** TabletStreams streams */
+            streams?: (vtctldata.WorkflowProgressResponse.ITabletStreamState[]|null);
+        }
+
+        /** Represents a TabletStreams. */
+        class TabletStreams implements ITabletStreams {
+
+            /**
+             * Constructs a new TabletStreams.
+             * @param [properties] Properties to set
+             */
+            constructor(properties?: vtctldata.WorkflowProgressResponse.ITabletStreams);
+
+            /** TabletStreams streams. */
+            public streams: vtctldata.WorkflowProgressResponse.ITabletStreamState[];
+
+            /**
+             * Creates a new TabletStreams instance using the specified properties.
+             * @param [properties] Properties to set
+             * @returns TabletStreams instance
+             */
+            public static create(properties?: vtctldata.WorkflowProgressResponse.ITabletStreams): vtctldata.WorkflowProgressResponse.TabletStreams;
+
+            /**
+             * Encodes the specified TabletStreams message. Does not implicitly {@link vtctldata.WorkflowProgressResponse.TabletStreams.verify|verify} messages.
+             * @param message TabletStreams message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encode(message: vtctldata.WorkflowProgressResponse.ITabletStreams, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Encodes the specified TabletStreams message, length delimited. Does not implicitly {@link vtctldata.WorkflowProgressResponse.TabletStreams.verify|verify} messages.
+             * @param message TabletStreams message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encodeDelimited(message: vtctldata.WorkflowProgressResponse.ITabletStreams, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Decodes a TabletStreams message from the specified reader or buffer.
+             * @param reader Reader or buffer to decode from
+             * @param [length] Message length if known beforehand
+             * @returns TabletStreams
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.WorkflowProgressResponse.TabletStreams;
+
+            /**
+             * Decodes a TabletStreams message from the specified reader or buffer, length delimited.
+             * @param reader Reader or buffer to decode from
+             * @returns TabletStreams
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.WorkflowProgressResponse.TabletStreams;
+
+            /**
+             * Verifies a TabletStreams message.
+             * @param message Plain object to verify
+             * @returns `null` if valid, otherwise the reason why it is not
+             */
+            public static verify(message: { [k: string]: any }): (string|null);
+
+            /**
+             * Creates a TabletStreams message from a plain object. Also converts values to their respective internal types.
+             * @param object Plain object
+             * @returns TabletStreams
+             */
+            public static fromObject(object: { [k: string]: any }): vtctldata.WorkflowProgressResponse.TabletStreams;
+
+            /**
+             * Creates a plain object from a TabletStreams message. Also converts values to other types if specified.
+             * @param message TabletStreams
+             * @param [options] Conversion options
+             * @returns Plain object
+             */
+            public static toObject(message: vtctldata.WorkflowProgressResponse.TabletStreams, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+            /**
+             * Converts this TabletStreams to JSON.
+             * @returns JSON object
+             */
+            public toJSON(): { [k: string]: any };
+
+            /**
+             * Gets the default type url for TabletStreams
              * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
              * @returns The default type url
              */

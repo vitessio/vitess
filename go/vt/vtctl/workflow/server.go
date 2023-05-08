@@ -1199,15 +1199,16 @@ func (s *Server) WorkflowProgress(ctx context.Context, req *vtctldatapb.Workflow
 	}
 	resp := &vtctldatapb.WorkflowProgressResponse{}
 	if copyProgress != nil {
-		resp.CopyProgress.Header = "Copy Progress (approx)"
+		resp.TableCopyState = make(map[string]*vtctldatapb.WorkflowProgressResponse_TableCopyState, len(*copyProgress))
 		var tables []string
 		for table := range *copyProgress {
 			tables = append(tables, table)
 		}
 		sort.Strings(tables)
 		var progress TableCopyProgress
-		for table := range *copyProgress {
+		for _, table := range tables {
 			var rowCountPct, tableSizePct int64
+			resp.TableCopyState[table] = &vtctldatapb.WorkflowProgressResponse_TableCopyState{}
 			progress = *(*copyProgress)[table]
 			if progress.SourceRowCount > 0 {
 				rowCountPct = 100.0 * progress.TargetRowCount / progress.SourceRowCount
@@ -1215,9 +1216,12 @@ func (s *Server) WorkflowProgress(ctx context.Context, req *vtctldatapb.Workflow
 			if progress.SourceTableSize > 0 {
 				tableSizePct = 100.0 * progress.TargetTableSize / progress.SourceTableSize
 			}
-			resp.CopyProgress.Rows = append(resp.CopyProgress.Rows, fmt.Sprintf("%s: rows copied %d/%d (%d%%), size copied %d/%d (%d%%)\r",
-				table, progress.TargetRowCount, progress.SourceRowCount, rowCountPct,
-				progress.TargetTableSize, progress.SourceTableSize, tableSizePct))
+			resp.TableCopyState[table].RowsCopied = progress.TargetRowCount
+			resp.TableCopyState[table].RowsTotal = progress.SourceRowCount
+			resp.TableCopyState[table].RowsPercentage = int32(rowCountPct)
+			resp.TableCopyState[table].BytesCopied = progress.TargetTableSize
+			resp.TableCopyState[table].BytesTotal = progress.SourceTableSize
+			resp.TableCopyState[table].BytesPercentage = int32(tableSizePct)
 		}
 	}
 
@@ -1233,36 +1237,47 @@ func (s *Server) WorkflowProgress(ctx context.Context, req *vtctldatapb.Workflow
 	}
 	workflow := res.Workflows[0]
 
-	resp.StreamProgress.Header = fmt.Sprintf("The following vreplication streams exist for workflow %s.%s:\r\r", ts.targetKeyspace, ts.workflow)
-
+	// Key is target keyspace / tablet alias, e.g. 0/test-0000000100.
 	streamKeys := make([]string, 0, len(workflow.ShardStreams))
 	for streamKey := range workflow.ShardStreams {
 		streamKeys = append(streamKeys, streamKey)
 	}
 	sort.Strings(streamKeys)
-	for _, ksShard := range streamKeys {
-		streams := workflow.ShardStreams[ksShard].GetStreams()
-		for _, st := range streams {
-			msg := ""
+	resp.TabletStreams = make(map[string]*vtctldatapb.WorkflowProgressResponse_TabletStreams, len(streamKeys))
+	for _, key := range streamKeys {
+		streams := workflow.ShardStreams[key].GetStreams()
+		resp.TabletStreams[key] = &vtctldatapb.WorkflowProgressResponse_TabletStreams{}
+		resp.TabletStreams[key].Streams = make([]*vtctldatapb.WorkflowProgressResponse_TabletStreamState, len(streams))
+		for i, st := range streams {
+			info := []string{}
+			ts := &vtctldatapb.WorkflowProgressResponse_TabletStreamState{}
 			if st.State == "Error" {
-				msg += fmt.Sprintf(": %s.", st.Message)
+				info = append(info, st.Message)
 			} else if st.Position == "" {
-				msg += ". VStream has not started."
+				info = append(info, "VStream has not started")
 			} else {
 				now := time.Now().Nanosecond()
 				updateLag := int64(now) - st.TimeUpdated.Seconds
 				if updateLag > 0*1e9 {
-					msg += ". VStream may not be running"
+					info = append(info, "VStream may not be running")
 				}
 				txLag := int64(now) - st.TransactionTimestamp.Seconds
-				msg += fmt.Sprintf(". VStream Lag: %ds.", txLag/1e9)
+				info = append(info, fmt.Sprintf("VStream Lag: %ds", txLag/1e9))
 				if st.TransactionTimestamp.Seconds > 0 { // if no events occur after copy phase, TransactionTimeStamp can be 0
-					msg += fmt.Sprintf(" Tx time: %s.", time.Unix(st.TransactionTimestamp.Seconds, 0).Format(time.ANSIC))
+					info = append(info, fmt.Sprintf("; Tx time: %s.", time.Unix(st.TransactionTimestamp.Seconds, 0).Format(time.ANSIC)))
 				}
 			}
-			resp.StreamProgress.Rows = append(resp.StreamProgress.Rows, fmt.Sprintf("id=%d on %s: Status: %s%s\n", st.Id, ksShard, st.State, msg))
+			ts.Id = int32(st.Id)
+			if st.BinlogSource.Filter != nil && st.BinlogSource.Filter.String() != "" {
+				ts.SourceShard = fmt.Sprintf("%s/%s", st.BinlogSource.Keyspace, st.BinlogSource.Shard)
+			}
+			ts.Position = st.Position
+			ts.Status = st.State
+			ts.Info = strings.Join(info, "; ")
+			resp.TabletStreams[key].Streams[i] = ts
 		}
 	}
+
 	return resp, nil
 }
 

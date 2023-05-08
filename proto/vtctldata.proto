@@ -1369,12 +1369,26 @@ message WorkflowProgressRequest {
 }
 
 message WorkflowProgressResponse {
-  message Progress {
-    string header = 1;
-    repeated string rows = 2;
+  message TableCopyState {
+    int64 rows_copied = 1;
+    int64 rows_total = 2;
+    int32 rows_percentage = 3;
+    int64 bytes_copied = 4;
+    int64 bytes_total = 5;
+    int32 bytes_percentage = 6;
   }
-  Progress copy_progress = 1;
-  Progress stream_progress = 2;
+  message TabletStreamState {
+    int32 id = 1;
+    string source_shard = 2;
+    string position = 3;
+    string status = 4;
+    string info = 5;
+  }
+  message TabletStreams {
+    repeated TabletStreamState streams = 2;
+  }
+  map<string, TableCopyState> table_copy_state = 1;
+  map<string, TabletStreams> tablet_streams = 2;
 }
 
 message WorkflowUpdateRequest {
