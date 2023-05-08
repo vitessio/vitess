@@ -21,35 +21,34 @@ import (
 	"fmt"
 	"strconv"
 
-	"vitess.io/vitess/go/vt/log"
-
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/vt/sqlparser"
-
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/sidecardb"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
 
 const (
-	vreplicationLogTableName = "_vt.vreplication_log"
+	vreplicationLogTableName = "vreplication_log"
 )
 
 const (
-	// Enum values for type column of _vt.vreplication_log
+	// Enum values for type column in the vreplication_log table.
 
-	// LogStreamCreate is used when a row in _vt.vreplication is inserted via VReplicationExec
+	// LogStreamCreate is used when a row in the vreplication table is inserted via VReplicationExec.
 	LogStreamCreate = "Stream Created"
-	// LogStreamUpdate is used when a row in _vt.vreplication is updated via VReplicationExec
+	// LogStreamUpdate is used when a row in the vreplication table is updated via VReplicationExec.
 	LogStreamUpdate = "Stream Updated"
-	// LogStreamDelete is used when a row in _vt.vreplication is deleted via VReplicationExec
+	// LogStreamDelete is used when a row in the vreplication table is deleted via VReplicationExec.
 	LogStreamDelete = "Stream Deleted"
-	// LogMessage is used for generic log messages
+	// LogMessage is used for generic log messages.
 	LogMessage = "Message"
-	// LogCopyStart is used when the copy phase is started
+	// LogCopyStart is used when the copy phase is started.
 	LogCopyStart = "Started Copy Phase"
-	// LogCopyEnd is used when the copy phase is done
+	// LogCopyEnd is used when the copy phase is done.
 	LogCopyEnd = "Ended Copy Phase"
-	// LogStateChange is used when the state of the stream changes
+	// LogStateChange is used when the state of the stream changes.
 	LogStateChange = "State Changed"
 
 	// TODO: LogError is not used atm. Currently irrecoverable errors, resumable errors and informational messages
@@ -65,7 +64,8 @@ const (
 
 func getLastLog(dbClient *vdbClient, vreplID int32) (id int64, typ, state, message string, err error) {
 	var qr *sqltypes.Result
-	query := fmt.Sprintf("select id, type, state, message from _vt.vreplication_log where vrepl_id = %d order by id desc limit 1", vreplID)
+	query := fmt.Sprintf("select id, type, state, message from %s.vreplication_log where vrepl_id = %d order by id desc limit 1",
+		sidecardb.GetIdentifier(), vreplID)
 	if qr, err = dbClient.Execute(query); err != nil {
 		return 0, "", "", "", err
 	}
@@ -93,11 +93,11 @@ func insertLog(dbClient *vdbClient, typ string, vreplID int32, state, message st
 	}
 	var query string
 	if id > 0 && message == lastLogMessage {
-		query = fmt.Sprintf("update _vt.vreplication_log set count = count + 1 where id = %d", id)
+		query = fmt.Sprintf("update %s.vreplication_log set count = count + 1 where id = %d", sidecardb.GetIdentifier(), id)
 	} else {
 		buf := sqlparser.NewTrackedBuffer(nil)
-		buf.Myprintf("insert into _vt.vreplication_log(vrepl_id, type, state, message) values(%s, %s, %s, %s)",
-			strconv.Itoa(int(vreplID)), encodeString(typ), encodeString(state), encodeString(message))
+		buf.Myprintf("insert into %s.vreplication_log(vrepl_id, type, state, message) values(%s, %s, %s, %s)",
+			sidecardb.GetIdentifier(), strconv.Itoa(int(vreplID)), encodeString(typ), encodeString(state), encodeString(message))
 		query = buf.ParsedQuery().Query
 	}
 	if _, err = dbClient.ExecuteFetch(query, 10000); err != nil {
