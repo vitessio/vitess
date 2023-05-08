@@ -373,8 +373,8 @@ func buildFlushPlan(stmt *sqlparser.Flush, vschema plancontext.VSchema) (*planRe
 }
 
 func buildFlushOptions(stmt *sqlparser.Flush, vschema plancontext.VSchema) (*planResult, error) {
-	if vschema.TabletType() != topodatapb.TabletType_PRIMARY {
-		return nil, vterrors.VT09012("FLUSH")
+	if !stmt.IsLocal && vschema.TabletType() != topodatapb.TabletType_PRIMARY {
+		return nil, vterrors.VT09012("FLUSH", vschema.TabletType().String())
 	}
 
 	keyspace, err := vschema.DefaultKeyspace()
@@ -402,8 +402,8 @@ func buildFlushOptions(stmt *sqlparser.Flush, vschema plancontext.VSchema) (*pla
 }
 
 func buildFlushTables(stmt *sqlparser.Flush, vschema plancontext.VSchema) (*planResult, error) {
-	if vschema.TabletType() != topodatapb.TabletType_PRIMARY {
-		return nil, vterrors.VT09012("FLUSH")
+	if !stmt.IsLocal && vschema.TabletType() != topodatapb.TabletType_PRIMARY {
+		return nil, vterrors.VT09012("FLUSH", vschema.TabletType().String())
 	}
 	tc := &tableCollector{}
 	type sendDest struct {

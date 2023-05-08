@@ -2672,30 +2672,50 @@ func TestExecutorFlushStmt(t *testing.T) {
 		targetStr string
 		query     string
 
-		expectedErr bool
+		expectedErr string
 	}{{
-		targetStr: "TestExecutor",
+		targetStr: KsTestUnsharded,
 		query:     "flush status",
 	}, {
-		targetStr: "TestExecutor",
+		targetStr: KsTestUnsharded,
 		query:     "flush tables user",
 	}, {
-		targetStr:   "TestExecutor@replica",
+		targetStr:   "TestUnsharded@replica",
 		query:       "flush tables user",
-		expectedErr: true,
+		expectedErr: "VT09012: FLUSH statement with REPLICA tablet not allowed",
 	}, {
-		targetStr:   "TestExecutor@replica",
+		targetStr:   "TestUnsharded@replica",
 		query:       "flush binary logs",
-		expectedErr: true,
+		expectedErr: "VT09012: FLUSH statement with REPLICA tablet not allowed",
+	}, {
+		targetStr: "TestUnsharded@replica",
+		query:     "flush NO_WRITE_TO_BINLOG binary logs",
+	}, {
+		targetStr: KsTestUnsharded,
+		query:     "flush NO_WRITE_TO_BINLOG tables user",
+	}, {
+		targetStr: "TestUnsharded@replica",
+		query:     "flush LOCAL binary logs",
+	}, {
+		targetStr: KsTestUnsharded,
+		query:     "flush LOCAL tables user",
+	}, {
+		targetStr:   "",
+		query:       "flush LOCAL binary logs",
+		expectedErr: "VT09005: no database selected", // no database selected error.
+	}, {
+		targetStr: "",
+		query:     "flush LOCAL tables user",
 	}}
 
 	for _, tc := range tcs {
 		t.Run(tc.query+tc.targetStr, func(t *testing.T) {
 			_, err := executor.Execute(context.Background(), "TestExecutorFlushStmt", NewSafeSession(&vtgatepb.Session{TargetString: tc.targetStr}), tc.query, nil)
-			if tc.expectedErr {
-				require.ErrorContains(t, err, "VT09012: FLUSH statement with non primary target not allowed")
-			} else {
+			if tc.expectedErr == "" {
 				require.NoError(t, err)
+			} else {
+				require.Error(t, err)
+				require.ErrorContains(t, err, tc.expectedErr)
 			}
 		})
 	}
