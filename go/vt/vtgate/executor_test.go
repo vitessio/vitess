@@ -2665,6 +2665,42 @@ func TestExecutorPrepareExecute(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestExecutorFlushStmt(t *testing.T) {
+	executor, _, _, _ := createExecutorEnv()
+
+	tcs := []struct {
+		targetStr string
+		query     string
+
+		expectedErr bool
+	}{{
+		targetStr: "TestExecutor",
+		query:     "flush status",
+	}, {
+		targetStr: "TestExecutor",
+		query:     "flush tables user",
+	}, {
+		targetStr:   "TestExecutor@replica",
+		query:       "flush tables user",
+		expectedErr: true,
+	}, {
+		targetStr:   "TestExecutor@replica",
+		query:       "flush binary logs",
+		expectedErr: true,
+	}}
+
+	for _, tc := range tcs {
+		t.Run(tc.query+tc.targetStr, func(t *testing.T) {
+			_, err := executor.Execute(context.Background(), "TestExecutorFlushStmt", NewSafeSession(&vtgatepb.Session{TargetString: tc.targetStr}), tc.query, nil)
+			if tc.expectedErr {
+				require.ErrorContains(t, err, "VT09012: FLUSH statement with non primary target not allowed")
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
 func exec(executor *Executor, session *SafeSession, sql string) (*sqltypes.Result, error) {
 	return executor.Execute(context.Background(), "TestExecute", session, sql, nil)
 }
