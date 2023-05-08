@@ -298,6 +298,29 @@ The default file can be found in `./config/init_db.sql`.
 #### <a id="vttablet-deprecated-flags"/> Deprecated Flags
 The flag `use_super_read_only` is deprecated and will be removed in a later release.
 
+Various flags that took float values as seconds have updated to take the standard duration syntax as well.
+Float-style parsing is now deprecated and will be removed in a later release.
+For example, instead of `--queryserver-config-query-pool-timeout 12.2`, use `--queryserver-config-query-pool-timeout 12s200ms`.
+Affected flags and YAML config keys:
+- `degraded_threshold`
+- `heartbeat_interval`
+- `heartbeat_on_demand_duration`
+- `health_check_interval`
+- `queryserver-config-idle-timeout`
+- `queryserver-config-pool-conn-max-lifetime`
+- `queryserver-config-olap-transaction-timeout`
+- `queryserver-config-query-timeout`
+- `queryserver-config-query-pool-timeout`
+- `queryserver-config-schema-reload-time`
+- `queryserver-config-schema-change-signal-interval`
+- `queryserver-config-stream-pool-timeout`
+- `queryserver-config-stream-pool-idle-timeout`
+- `queryserver-config-transaction-timeout`
+- `queryserver-config-txpool-timeout`
+- `queryserver-config-txpool-idle-timeout`
+- `shutdown_grace_period`
+- `unhealthy_threshold`
+
 ### Online DDL
 
 #### <a id="online-ddl-cut-over-threshold-flag" /> --cut-over-threshold DDL strategy flag
