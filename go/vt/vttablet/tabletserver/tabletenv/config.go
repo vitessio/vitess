@@ -635,16 +635,16 @@ func (c *TabletConfig) Verify() error {
 		return err
 	}
 	if v := c.HotRowProtection.MaxQueueSize; v <= 0 {
-		return fmt.Errorf("-hot_row_protection_max_queue_size must be > 0 (specified value: %v)", v)
+		return fmt.Errorf("--hot_row_protection_max_queue_size must be > 0 (specified value: %v)", v)
 	}
 	if v := c.HotRowProtection.MaxGlobalQueueSize; v <= 0 {
-		return fmt.Errorf("-hot_row_protection_max_global_queue_size must be > 0 (specified value: %v)", v)
+		return fmt.Errorf("--hot_row_protection_max_global_queue_size must be > 0 (specified value: %v)", v)
 	}
 	if globalSize, size := c.HotRowProtection.MaxGlobalQueueSize, c.HotRowProtection.MaxQueueSize; globalSize < size {
 		return fmt.Errorf("global queue size must be >= per row (range) queue size: -hot_row_protection_max_global_queue_size < hot_row_protection_max_queue_size (%v < %v)", globalSize, size)
 	}
 	if v := c.HotRowProtection.MaxConcurrency; v <= 0 {
-		return fmt.Errorf("-hot_row_protection_concurrent_transactions must be > 0 (specified value: %v)", v)
+		return fmt.Errorf("--hot_row_protection_concurrent_transactions must be > 0 (specified value: %v)", v)
 	}
 	if v := c.TxThrottlerDefaultPriority; v > sqlparser.MaxPriorityValue || v < 0 {
 		return fmt.Errorf("--tx-throttler-default-priority must be > 0 and < 100 (specified value: %d)", v)
@@ -656,7 +656,7 @@ func (c *TabletConfig) Verify() error {
 func (c *TabletConfig) verifyTransactionLimitConfig() error {
 	actual, dryRun := c.EnableTransactionLimit, c.EnableTransactionLimitDryRun
 	if actual && dryRun {
-		return errors.New("only one of two flags allowed: -enable_transaction_limit or -enable_transaction_limit_dry_run")
+		return errors.New("only one of two flags allowed: --enable_transaction_limit or --enable_transaction_limit_dry_run")
 	}
 
 	// Skip other checks if this is not enabled
@@ -671,13 +671,13 @@ func (c *TabletConfig) verifyTransactionLimitConfig() error {
 		bySubcomp   = c.TransactionLimitBySubcomponent
 	)
 	if byAny := byUser || byPrincipal || byComp || bySubcomp; !byAny {
-		return errors.New("no user discriminating fields selected for transaction limiter, everyone would share single chunk of transaction pool. Override with at least one of -transaction_limit_by flags set to true")
+		return errors.New("no user discriminating fields selected for transaction limiter, everyone would share single chunk of transaction pool. Override with at least one of --transaction_limit_by flags set to true")
 	}
 	if v := c.TransactionLimitPerUser; v <= 0 || v >= 1 {
-		return fmt.Errorf("-transaction_limit_per_user should be a fraction within range (0, 1) (specified value: %v)", v)
+		return fmt.Errorf("--transaction_limit_per_user should be a fraction within range (0, 1) (specified value: %v)", v)
 	}
 	if limit := int(c.TransactionLimitPerUser * float64(c.TxPool.Size)); limit == 0 {
-		return fmt.Errorf("effective transaction limit per user is 0 due to rounding, increase -transaction_limit_per_user")
+		return fmt.Errorf("effective transaction limit per user is 0 due to rounding, increase --transaction_limit_per_user")
 	}
 	return nil
 }
@@ -701,7 +701,7 @@ var defaultConfig = TabletConfig{
 		// See the comment below in GracePeriodsConfig as to why they are needed
 		// for now.
 		TimeoutSeconds:     flagutil.NewDeprecatedFloat64Seconds("queryserver-config-stream-pool-timeout", 0),
-		IdleTimeoutSeconds: flagutil.NewDeprecatedFloat64Seconds("queryserver-config-stream-pool-timeout", 30*time.Minute),
+		IdleTimeoutSeconds: flagutil.NewDeprecatedFloat64Seconds("queryserver-config-stream-pool-idle-timeout", 30*time.Minute),
 	},
 	TxPool: ConnPoolConfig{
 		Size:           20,
