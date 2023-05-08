@@ -194,17 +194,17 @@ type ksJSON struct {
 func (ks *KeyspaceSchema) findTable(
 	tablename string,
 	constructUnshardedIfNotFound bool,
-) (*Table, error) {
+) *Table {
 	table := ks.Tables[tablename]
 	if table != nil {
-		return table, nil
+		return table
 	}
 
 	if constructUnshardedIfNotFound && !ks.Keyspace.Sharded {
-		return &Table{Name: sqlparser.NewIdentifierCS(tablename), Keyspace: ks.Keyspace}, nil
+		return &Table{Name: sqlparser.NewIdentifierCS(tablename), Keyspace: ks.Keyspace}
 	}
 
-	return nil, nil
+	return nil
 }
 
 // MarshalJSON returns a JSON representation of KeyspaceSchema.
@@ -916,7 +916,8 @@ func (vschema *VSchema) findGlobalTable(
 ) (*Table, error) {
 	if len(vschema.Keyspaces) == 1 {
 		for _, ks := range vschema.Keyspaces {
-			return ks.findTable(tablename, constructUnshardedIfNotFound)
+			table := ks.findTable(tablename, constructUnshardedIfNotFound)
+			return table, nil
 		}
 	}
 
@@ -964,7 +965,8 @@ func (vschema *VSchema) findTable(
 	if !ok {
 		return nil, vterrors.VT05003(keyspace)
 	}
-	return ks.findTable(tablename, constructUnshardedIfNotFound)
+	table := ks.findTable(tablename, constructUnshardedIfNotFound)
+	return table, nil
 }
 
 func (vschema *VSchema) FirstKeyspace() *Keyspace {
