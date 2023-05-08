@@ -3748,3 +3748,15 @@ func (node *PointPropertyFuncExpr) formatFast(buf *TrackedBuffer) {
 	}
 	buf.WriteByte(')')
 }
+
+// formatFast formats the node
+func (node *LinestrPropertyFuncExpr) formatFast(buf *TrackedBuffer) {
+	buf.WriteString(node.Property.ToString())
+	buf.WriteByte('(')
+	buf.printExpr(node, node.Linestring, true)
+	if node.PropertyDefArg != nil {
+		buf.WriteString(", ")
+		buf.printExpr(node, node.PropertyDefArg, true)
+	}
+	buf.WriteByte(')')
+}
