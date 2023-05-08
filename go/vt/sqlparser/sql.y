@@ -192,6 +192,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
   eventScheduleSpec *EventScheduleSpec
   eventScheduleTimeSpec *EventScheduleTimeSpec
   eventStatus EventStatus
+  eventOnCompletion EventOnCompletion
   intervalExprs []IntervalExpr
   separator Separator
 }
@@ -413,7 +414,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <declareHandlerAction> declare_handler_action
 %type <bytes> signal_condition_value
 %type <str> trigger_time trigger_event
-%type <statement> alter_statement alter_table_statement alter_database_statement
+%type <statement> alter_statement alter_table_statement alter_database_statement alter_event_statement
 %type <ddl> create_table_prefix rename_list alter_table_statement_part
 %type <ddls> alter_table_statement_list
 %type <statement> analyze_statement show_statement use_statement prepare_statement execute_statement deallocate_statement
@@ -440,7 +441,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <tableName> table_name load_into_table_name into_table_name delete_table_name
 %type <aliasedTableName> aliased_table_name aliased_table_options
 %type <procedureName> procedure_name
-%type <eventName> event_name
+%type <eventName> event_name rename_event_name_opt
 %type <indexHints> index_hint_list
 %type <expr> where_expression_opt
 %type <expr> condition
@@ -517,7 +518,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <sqlVal> char_length_opt length_opt column_comment ignore_number_opt comment_keyword_opt
 %type <optVal> column_default on_update
 %type <str> charset_opt character_set collate_opt collate
-%type <boolean> default_keyword_opt event_on_completion_preserve_opt
+%type <boolean> default_keyword_opt
 %type <charsetCollate> charset_default_opt collate_default_opt encryption_default_opt
 %type <charsetCollates> creation_option creation_option_opt
 %type <boolVal> stored_opt
@@ -573,6 +574,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <eventScheduleSpec> event_schedule
 %type <eventScheduleTimeSpec> event_starts_opt event_ends_opt
 %type <eventStatus> event_status_opt
+%type <eventOnCompletion> event_on_completion_preserve_opt
 %type <intervalExprs> event_schedule_intervals_opt
 %type <tlsOptionItem> tls_option_item
 %type <tlsOptionItems> tls_options tls_option_item_list
@@ -2017,20 +2019,20 @@ event_ends_opt:
 
 event_on_completion_preserve_opt:
   {
-    $$ = false
+    $$ = EventOnCompletion_Undefined
   }
 | ON COMPLETION PRESERVE
   {
-    $$ = true
+    $$ = EventOnCompletion_Preserve
   }
 | ON COMPLETION NOT PRESERVE
   {
-    $$ = false
+    $$ = EventOnCompletion_NotPreserve
   }
 
 event_status_opt:
   {
-    $$ = EventStatus_Enable
+    $$ = EventStatus_Undefined
   }
 | ENABLE
   {
@@ -4230,6 +4232,7 @@ pk_name_opt:
 alter_statement:
   alter_database_statement
 | alter_table_statement
+| alter_event_statement
 
 alter_database_statement:
   ALTER DATABASE ID creation_option_opt
@@ -4483,6 +4486,38 @@ partition_definition:
 | PARTITION sql_id VALUES LESS THAN openb MAXVALUE closeb
   {
     $$ = &PartitionDefinition{Name: $2, Maxvalue: true}
+  }
+
+alter_event_statement:
+  ALTER definer_opt EVENT event_name event_on_completion_preserve_opt rename_event_name_opt event_status_opt comment_keyword_opt
+  {
+    es := &EventSpec{EventName: $4, Definer: $2, OnCompletionPreserve: $5, RenameName: $6, Status: $7, Comment: $8}
+    if err := es.ValidateAlterEvent(); err != nil {
+      yylex.Error(err.Error())
+      return 1
+    }
+    $$ = &DDL{Action: AlterStr, EventSpec: es}
+  }
+| ALTER definer_opt EVENT event_name ON SCHEDULE event_schedule event_on_completion_preserve_opt rename_event_name_opt event_status_opt comment_keyword_opt
+  {
+    $$ = &DDL{Action: AlterStr, EventSpec: &EventSpec{EventName: $4, Definer: $2, OnSchedule: $7, OnCompletionPreserve: $8, RenameName: $9, Status: $10, Comment: $11}}
+  }
+| ALTER definer_opt EVENT event_name event_on_completion_preserve_opt rename_event_name_opt event_status_opt comment_keyword_opt DO lexer_position statement_list_statement lexer_position
+  {
+    $$ = &DDL{Action: AlterStr, EventSpec: &EventSpec{EventName: $4, Definer: $2, OnCompletionPreserve: $5, RenameName: $6, Status: $7, Comment: $8, Body: $11}, SubStatementPositionStart: $10, SubStatementPositionEnd: $12 - 1}
+  }
+| ALTER definer_opt EVENT event_name ON SCHEDULE event_schedule event_on_completion_preserve_opt rename_event_name_opt event_status_opt comment_keyword_opt DO lexer_position statement_list_statement lexer_position
+  {
+    $$ = &DDL{Action: AlterStr, EventSpec: &EventSpec{EventName: $4, Definer: $2, OnSchedule: $7, OnCompletionPreserve: $8, RenameName: $9, Status: $10, Comment: $11, Body: $14}, SubStatementPositionStart: $13, SubStatementPositionEnd: $15 - 1}
+  }
+
+rename_event_name_opt:
+  {
+    $$ = EventName{}
+  }
+| RENAME TO event_name
+  {
+    $$ = $3
   }
 
 rename_statement:

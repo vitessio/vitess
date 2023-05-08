@@ -1785,15 +1785,35 @@ type EventSpec struct {
 	Definer              string
 	IfNotExists          bool
 	OnSchedule           *EventScheduleSpec
-	OnCompletionPreserve bool
+	OnCompletionPreserve EventOnCompletion
 	Status               EventStatus
 	Comment              *SQLVal
 	Body                 Statement
+
+	// used for ALTER EVENT statement
+	RenameName EventName
 }
+
+// ValidateAlterEvent checks that at least one event field is defined to alter.
+func (es *EventSpec) ValidateAlterEvent() error {
+	if es.OnSchedule == nil && es.OnCompletionPreserve == EventOnCompletion_Undefined && es.RenameName.IsEmpty() && es.Status == EventStatus_Undefined && es.Comment == nil && es.Body == nil {
+		return fmt.Errorf("You have an error in your SQL syntax; At least one event field to alter needs to be defined")
+	}
+	return nil
+}
+
+type EventOnCompletion string
+
+const (
+	EventOnCompletion_Undefined   EventOnCompletion = ""
+	EventOnCompletion_Preserve    EventOnCompletion = "on completion preserve"
+	EventOnCompletion_NotPreserve EventOnCompletion = "on completion not preserve"
+)
 
 type EventStatus string
 
 const (
+	EventStatus_Undefined      EventStatus = ""
 	EventStatus_Enable         EventStatus = "enable"
 	EventStatus_Disable        EventStatus = "disable"
 	EventStatus_DisableOnSlave EventStatus = "disable on slave"
@@ -1815,9 +1835,9 @@ type EventScheduleTimeSpec struct {
 func (est *EventScheduleTimeSpec) Format(buf *TrackedBuffer) {
 	sb := strings.Builder{}
 
-	sb.WriteString(fmt.Sprintf("%s ", String(est.EventTimestamp)))
+	sb.WriteString(fmt.Sprintf("%s", String(est.EventTimestamp)))
 	for _, interval := range est.EventIntervals {
-		sb.WriteString(fmt.Sprintf("+ interval %v %s ", interval.Expr, interval.Unit))
+		sb.WriteString(fmt.Sprintf(" + interval %v %s", interval.Expr, interval.Unit))
 	}
 
 	buf.Myprintf("%s", sb.String())
@@ -2071,19 +2091,22 @@ func (node *DDL) Format(buf *TrackedBuffer) {
 			sb.WriteString(fmt.Sprintf("event%s %s ", notExists, event.EventName))
 
 			if event.OnSchedule.At != nil {
-				sb.WriteString(fmt.Sprintf("on schedule at %s", event.OnSchedule.At.String()))
+				sb.WriteString(fmt.Sprintf("on schedule at %s ", event.OnSchedule.At.String()))
 			} else {
 				sb.WriteString(fmt.Sprintf("on schedule every %s %s ", String(event.OnSchedule.EveryInterval.Expr), event.OnSchedule.EveryInterval.Unit))
 				if event.OnSchedule.Starts != nil {
-					sb.WriteString(fmt.Sprintf("starts %s", event.OnSchedule.Starts.String()))
+					sb.WriteString(fmt.Sprintf("starts %s ", event.OnSchedule.Starts.String()))
 				}
 				if event.OnSchedule.Ends != nil {
-					sb.WriteString(fmt.Sprintf("ends %s", event.OnSchedule.Ends.String()))
+					sb.WriteString(fmt.Sprintf("ends %s ", event.OnSchedule.Ends.String()))
 				}
 			}
 
-			if event.OnCompletionPreserve {
-				sb.WriteString("on completion preserve ")
+			if event.OnCompletionPreserve == EventOnCompletion_Preserve {
+				sb.WriteString(fmt.Sprintf("%s ", event.OnCompletionPreserve))
+			}
+			if event.Status != EventStatus_Undefined {
+				sb.WriteString(fmt.Sprintf("%s ", event.Status))
 			}
 			if event.Comment != nil {
 				sb.WriteString(fmt.Sprintf("comment %s ", event.Comment))
@@ -2149,12 +2172,55 @@ func (node *DDL) Format(buf *TrackedBuffer) {
 			buf.Myprintf(", %v to %v", node.FromTables[i], node.ToTables[i])
 		}
 	case AlterStr:
-		buf.Myprintf("%s table %v", node.Action, node.Table)
-		node.alterFormat(buf)
+		if node.EventSpec != nil {
+			event := node.EventSpec
+			sb := strings.Builder{}
+			sb.WriteString("alter")
+			if event.Definer != "" {
+				sb.WriteString(fmt.Sprintf(" definer = %s", event.Definer))
+			}
+
+			sb.WriteString(fmt.Sprintf(" event %s", event.EventName))
+
+			if event.OnSchedule != nil {
+				if event.OnSchedule.At != nil {
+					sb.WriteString(fmt.Sprintf(" on schedule at %s", event.OnSchedule.At.String()))
+				} else {
+					sb.WriteString(fmt.Sprintf(" on schedule every %s %s", String(event.OnSchedule.EveryInterval.Expr), event.OnSchedule.EveryInterval.Unit))
+					if event.OnSchedule.Starts != nil {
+						sb.WriteString(fmt.Sprintf(" starts %s", event.OnSchedule.Starts.String()))
+					}
+					if event.OnSchedule.Ends != nil {
+						sb.WriteString(fmt.Sprintf(" ends %s", event.OnSchedule.Ends.String()))
+					}
+				}
+			}
+
+			if event.OnCompletionPreserve != EventOnCompletion_Undefined {
+				sb.WriteString(fmt.Sprintf(" %s", event.OnCompletionPreserve))
+			}
+			if !event.RenameName.IsEmpty() {
+				sb.WriteString(fmt.Sprintf(" rename to %s", event.RenameName))
+			}
+			if event.Status != EventStatus_Undefined {
+				sb.WriteString(fmt.Sprintf(" %s", event.Status))
+			}
+			if event.Comment != nil {
+				sb.WriteString(fmt.Sprintf(" comment %s", event.Comment))
+			}
+			if event.Body != nil {
+				buf.Myprintf("%s do %v", sb.String(), event.Body)
+			} else {
+				buf.Myprintf("%s", sb.String())
+			}
+		} else {
+			buf.Myprintf("%s table %v", node.Action, node.Table)
+			node.alterFormat(buf)
+		}
 	case FlushStr:
 		buf.Myprintf("%s", node.Action)
 	case AddAutoIncStr:
-		buf.Myprintf("alter vschema on %v add auto_increment %v", node.Table, node.AutoIncSpec)
+		buf.Myprintf("alter schema on %v add auto_increment %v", node.Table, node.AutoIncSpec)
 	default:
 		buf.Myprintf("%s table %v", node.Action, node.Table)
 	}
@@ -3177,12 +3243,12 @@ func (node *Explain) Format(buf *TrackedBuffer) {
 const (
 	CreateTriggerStr   = "create trigger"
 	CreateProcedureStr = "create procedure"
-	CreateEventStr = "create event"
-	CreateTableStr = "create table"
+	CreateEventStr     = "create event"
+	CreateTableStr     = "create table"
 
 	ProcedureStatusStr = "procedure status"
-	FunctionStatusStr = "function status"
-	TableStatusStr = "table status"
+	FunctionStatusStr  = "function status"
+	TableStatusStr     = "table status"
 )
 
 // Show represents a show statement.

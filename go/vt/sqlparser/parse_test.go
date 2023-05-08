@@ -1736,7 +1736,7 @@ var (
 		}, {
 			input: "show triggers like 'pattern'",
 		}, {
-			input: "show TRIGGERS where v = 'x'",
+			input:  "show TRIGGERS where v = 'x'",
 			output: "show triggers where v = 'x'",
 		}, {
 			input:  "show variables",
@@ -2879,32 +2879,68 @@ var (
 			input:  "CREATE DEFINER = `root`@`localhost` EVENT event1 ON SCHEDULE AT CURRENT_TIMESTAMP + INTERVAL 3 WEEK + INTERVAL 2 DAY DO INSERT INTO mytable VALUES (NOW())",
 			output: "create definer = `root`@`localhost` event event1 on schedule at CURRENT_TIMESTAMP() + interval 3 WEEK + interval 2 DAY do insert into mytable values (NOW())",
 		}, {
-			input:  "CREATE EVENT event1 ON SCHEDULE EVERY 1 MINUTE ENDS CURRENT_TIMESTAMP + INTERVAL 3 HOUR ON COMPLETION PRESERVE COMMENT 'new event' DO INSERT INTO mytable VALUES (1)",
-			output: "create event event1 on schedule every 1 MINUTE ends CURRENT_TIMESTAMP() + interval 3 HOUR on completion preserve comment 'new event' do insert into mytable values (1)",
+			input:  "CREATE EVENT event1 ON SCHEDULE EVERY 1 MINUTE ENDS CURRENT_TIMESTAMP + INTERVAL 3 HOUR ON COMPLETION PRESERVE disable COMMENT 'new event' DO INSERT INTO mytable VALUES (1)",
+			output: "create event event1 on schedule every 1 MINUTE ends CURRENT_TIMESTAMP() + interval 3 HOUR on completion preserve disable comment 'new event' do insert into mytable values (1)",
 		}, {
-			input:  "CREATE EVENT event1 ON SCHEDULE EVERY 1 MINUTE STARTS CURRENT_TIMESTAMP + INTERVAL 2 HOUR ENDS CURRENT_TIMESTAMP + INTERVAL 3 HOUR ON COMPLETION NOT PRESERVE  DO INSERT INTO mytable VALUES (1)",
-			output: "create event event1 on schedule every 1 MINUTE starts CURRENT_TIMESTAMP() + interval 2 HOUR ends CURRENT_TIMESTAMP() + interval 3 HOUR do insert into mytable values (1)",
+			input:  "CREATE EVENT event1 ON SCHEDULE EVERY 1 MINUTE STARTS CURRENT_TIMESTAMP + INTERVAL 2 HOUR ENDS CURRENT_TIMESTAMP + INTERVAL 3 HOUR ON COMPLETION NOT PRESERVE enable DO INSERT INTO mytable VALUES (1)",
+			output: "create event event1 on schedule every 1 MINUTE starts CURRENT_TIMESTAMP() + interval 2 HOUR ends CURRENT_TIMESTAMP() + interval 3 HOUR enable do insert into mytable values (1)",
 		}, {
-			input:  "CREATE EVENT e_call_myproc ON SCHEDULE AT CURRENT_TIMESTAMP + INTERVAL 1 DAY DO CALL myproc(5, 27)",
-			output: "create event e_call_myproc on schedule at CURRENT_TIMESTAMP() + interval 1 DAY do call myproc(5, 27)",
+			input:  "CREATE EVENT e_call_myproc ON SCHEDULE AT CURRENT_TIMESTAMP + INTERVAL 1 DAY disable on slave DO CALL myproc(5, 27)",
+			output: "create event e_call_myproc on schedule at CURRENT_TIMESTAMP() + interval 1 DAY disable on slave do call myproc(5, 27)",
 		}, {
-			input: "SHOW EVENTS",
+			input:  "CREATE EVENT e_call_myproc ON SCHEDULE AT CURRENT_TIMESTAMP DO CALL myproc(5, 27)",
+			output: "create event e_call_myproc on schedule at CURRENT_TIMESTAMP() do call myproc(5, 27)",
+		}, {
+			input:  "CREATE EVENT e_call_myproc ON SCHEDULE AT CURRENT_TIMESTAMP DISABLE DO CALL myproc(5, 27)",
+			output: "create event e_call_myproc on schedule at CURRENT_TIMESTAMP() disable do call myproc(5, 27)",
+		}, {
+			input:  "SHOW EVENTS",
 			output: "show events",
 		}, {
-			input: "SHOW EVENTS FROM dbName",
+			input:  "SHOW EVENTS FROM dbName",
 			output: "show events from dbName",
 		}, {
-			input: "SHOW EVENTS IN dbName",
+			input:  "SHOW EVENTS IN dbName",
 			output: "show events from dbName",
 		}, {
-			input: "SHOW EVENTS IN dbName LIKE 'pattern'",
+			input:  "SHOW EVENTS IN dbName LIKE 'pattern'",
 			output: "show events from dbName like 'pattern'",
 		}, {
-			input: "SHOW EVENTS FROM dbName WHERE status = 'enabled'",
+			input:  "SHOW EVENTS FROM dbName WHERE status = 'enabled'",
 			output: "show events from dbName where `status` = 'enabled'",
 		}, {
-			input: "SHOW CREATE EVENT myevent",
+			input:  "SHOW CREATE EVENT myevent",
 			output: "show create event myevent",
+		}, {
+			input:  "ALTER EVENT myevent ON SCHEDULE AT CURRENT_TIMESTAMP;",
+			output: "alter event myevent on schedule at CURRENT_TIMESTAMP()",
+		}, {
+			input:  "ALTER EVENT myevent ON COMPLETION NOT PRESERVE",
+			output: "alter event myevent on completion not preserve",
+		}, {
+			input:  "ALTER EVENT myevent RENAME TO event1",
+			output: "alter event myevent rename to event1",
+		}, {
+			input:  "ALTER EVENT mydb.myevent RENAME TO newdb.event1",
+			output: "alter event mydb.myevent rename to newdb.event1",
+		}, {
+			input:  "ALTER EVENT myevent ENABLE",
+			output: "alter event myevent enable",
+		}, {
+			input:  "ALTER EVENT myevent COMMENT 'add comment'",
+			output: "alter event myevent comment 'add comment'",
+		}, {
+			input:  "ALTER EVENT myevent DO INSERT INTO mytable values (1)",
+			output: "alter event myevent do insert into mytable values (1)",
+		}, {
+			input:  "ALTER EVENT myevent ON SCHEDULE EVERY 1 MINUTE STARTS CURRENT_TIMESTAMP DO INSERT INTO mytable values (1)",
+			output: "alter event myevent on schedule every 1 MINUTE starts CURRENT_TIMESTAMP() do insert into mytable values (1)",
+		}, {
+			input:  "ALTER EVENT myevent RENAME TO new_event DISABLE COMMENT 'renaming and disabling the event'",
+			output: "alter event myevent rename to new_event disable comment 'renaming and disabling the event'",
+		}, {
+			input:  "ALTER DEFINER = `newuser`@`localhost` EVENT myevent ON COMPLETION NOT PRESERVE;",
+			output: "alter definer = `newuser`@`localhost` event myevent on completion not preserve",
 		},
 	}
 	// Any tests that contain multiple statements within the body (such as BEGIN/END blocks) should go here.
@@ -6057,6 +6093,12 @@ var (
 		input:        "CREATE PROCEDURE testproc() BEGIN while1: WHILE a > 7 DO BEGIN END; END WHILE while2; END",
 		output:       "End-label while2 without match at position 85 near 'while2'",
 		excludeMulti: true,
+	}, {
+		input:  "ALTER EVENT myevent",
+		output: "You have an error in your SQL syntax; At least one event field to alter needs to be defined at position 20 near 'myevent'",
+	}, {
+		input:  "ALTER DEFINER = `newuser`@`localhost` EVENT myevent",
+		output: "You have an error in your SQL syntax; At least one event field to alter needs to be defined at position 52 near 'myevent'",
 	},
 	}
 )
