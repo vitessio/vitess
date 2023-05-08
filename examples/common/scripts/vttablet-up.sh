@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/bash -x
 
 # Copyright 2019 The Vitess Authors.
 # 
@@ -56,6 +56,7 @@ vttablet \
  --vtctld_addr http://$hostname:$vtctld_web_port/ \
  --disable_active_reparents \
  --throttler-config-via-topo --heartbeat_enable --heartbeat_interval=250ms --heartbeat_on_demand_duration=5s \
+ --enable-tx-throttler --tx-throttler-config "target_replication_lag_sec: 5 max_replication_lag_sec: 20 initial_rate: 10000 max_increase: 1 emergency_decrease: 0.5 min_duration_between_increases_sec: 2 max_duration_between_increases_sec:5 min_duration_between_decreases_sec: 1 spread_backlog_across_sec: 1 age_bad_rate_after_sec: 180 bad_rate_increase: 0.1 max_rate_approach_threshold: 0.9" --tx-throttler-healthcheck-cells zone1 \
  > $VTDATAROOT/$tablet_dir/vttablet.out 2>&1 &
 
 # Block waiting for the tablet to be listening

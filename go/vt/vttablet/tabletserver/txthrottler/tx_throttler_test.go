@@ -32,6 +32,7 @@ import (
 	"vitess.io/vitess/go/vt/throttler"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/planbuilder"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -49,7 +50,7 @@ func TestDisabledThrottler(t *testing.T) {
 		Shard:    "shard",
 	})
 	assert.Nil(t, throttler.Open())
-	assert.False(t, throttler.Throttle(0))
+	assert.False(t, throttler.Throttle(0, nil))
 	assert.Zero(t, throttler.throttlerRunning.Get())
 	throttler.Close()
 }
@@ -100,12 +101,17 @@ func TestEnabledThrottler(t *testing.T) {
 
 	call4 := mockThrottler.EXPECT().Throttle(0)
 	call4.Return(1 * time.Second)
-	call6 := mockThrottler.EXPECT().Close()
+	call5 := mockThrottler.EXPECT().Throttle(0)
+	call5.Return(1 * time.Second)
+
+	calllast := mockThrottler.EXPECT().Close()
+
 	call1.After(call0)
 	call2.After(call1)
 	call3.After(call2)
 	call4.After(call3)
-	call6.After(call4)
+	call5.After(call4)
+	calllast.After(call5)
 
 	config := tabletenv.NewDefaultConfig()
 	config.EnableTxThrottler = true
@@ -121,7 +127,7 @@ func TestEnabledThrottler(t *testing.T) {
 	assert.Nil(t, throttler.Open())
 	assert.Equal(t, int64(1), throttler.throttlerRunning.Get())
 
-	assert.False(t, throttler.Throttle(100))
+	assert.False(t, throttler.Throttle(100, nil))
 	assert.Equal(t, int64(1), throttler.requestsTotal.Get())
 	assert.Zero(t, throttler.requestsThrottled.Get())
 
@@ -134,14 +140,28 @@ func TestEnabledThrottler(t *testing.T) {
 	// This call should not be forwarded to the go/vt/throttler.Throttler object.
 	throttler.state.StatsUpdate(rdonlyTabletStats)
 	// The second throttle call should reject.
-	assert.True(t, throttler.Throttle(100))
+	assert.True(t, throttler.Throttle(100, nil))
 	assert.Equal(t, int64(2), throttler.requestsTotal.Get())
 	assert.Equal(t, int64(1), throttler.requestsThrottled.Get())
 
 	// This call should not throttle due to priority. Check that's the case and counters agree.
-	assert.False(t, throttler.Throttle(0))
+	assert.False(t, throttler.Throttle(0, nil))
 	assert.Equal(t, int64(3), throttler.requestsTotal.Get())
 	assert.Equal(t, int64(1), throttler.requestsThrottled.Get())
+
+	// This call should throttle due to the plan
+	throttler.config.autoCommit = true
+	planInsert := planbuilder.PlanInsert
+	assert.True(t, throttler.Throttle(100, &planInsert))
+	assert.Equal(t, int64(4), throttler.requestsTotal.Get())
+	assert.Equal(t, int64(2), throttler.requestsThrottled.Get())
+
+	// This call should not throttle due to the plan
+	planSet := planbuilder.PlanSet
+	assert.False(t, throttler.Throttle(100, &planSet))
+	assert.Equal(t, int64(5), throttler.requestsTotal.Get())
+	assert.Equal(t, int64(2), throttler.requestsThrottled.Get())
+
 	throttler.Close()
 	assert.Zero(t, throttler.throttlerRunning.Get())
 }
