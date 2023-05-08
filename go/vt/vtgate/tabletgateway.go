@@ -303,7 +303,7 @@ func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, 
 				}
 				primary, serving := kev.PrimaryIsNotServing(target)
 				if serving {
-					err = vterrors.Errorf(vtrpcpb.Code_CLUSTER_EVENT, "primary is not serving, there is a reparent operation in progress")
+					err = vterrors.Errorf(vtrpcpb.Code_CLUSTER_EVENT, "primary is not serving, there may be a reparent operation in progress")
 					continue
 				}
 				// if primary is serving, but we initially found no tablet, we're in an inconsistent state
