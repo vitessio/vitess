@@ -168,7 +168,7 @@ func ValidateKeyspace(ctx context.Context, r Request, api *API) *JSONResponse {
 	return NewJSONResponse(res, err)
 }
 
-// ValidateKeyspace validates that all nodes reachable from the specified keyspace are consistent.
+// ValidateSchemaKeyspace validates that all nodes reachable from the specified keyspace are consistent.
 func ValidateSchemaKeyspace(ctx context.Context, r Request, api *API) *JSONResponse {
 	vars := mux.Vars(r.Request)
 
