@@ -459,6 +459,14 @@ const (
 	YCordinateStr = "st_y"
 	LatitudeStr   = "st_latitude"
 	LongitudeStr  = "st_longitude"
+
+	// LinestringPropertyType strings
+	EndPointStr   = "st_endpoint"
+	IsClosedStr   = "st_isclosed"
+	LengthStr     = "st_length"
+	NumPointsStr  = "st_numpoints"
+	PointNStr     = "st_pointn"
+	StartPointStr = "st_startpoint"
 )
 
 // Constants for Enum Type - Insert.Action
@@ -964,4 +972,14 @@ const (
 	YCordinate
 	Latitude
 	Longitude
+)
+
+// Enum Types of linestring property functions
+const (
+	EndPoint LinestrPropType = iota
+	IsClosed
+	Length
+	NumPoints
+	PointN
+	StartPoint
 )

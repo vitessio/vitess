@@ -248,6 +248,16 @@ func (ast *astCompiler) translateFuncExpr(fn *sqlparser.FuncExpr) (Expr, error) 
 			return nil, argError(method)
 		}
 		return &builtinConv{CallExpr: call, collate: ast.cfg.Collation}, nil
+	case "left", "right":
+		if len(args) != 2 {
+			return nil, argError(method)
+		}
+		return &builtinLeftRight{CallExpr: call, collate: ast.cfg.Collation, left: method == "left"}, nil
+	case "lpad", "rpad":
+		if len(args) != 3 {
+			return nil, argError(method)
+		}
+		return &builtinPad{CallExpr: call, collate: ast.cfg.Collation, left: method == "lpad"}, nil
 	case "lower", "lcase":
 		if len(args) != 1 {
 			return nil, argError(method)
@@ -619,6 +629,28 @@ func (ast *astCompiler) translateCallable(call sqlparser.Callable) (Expr, error)
 			utc:      utc,
 			onlyTime: onlyTime,
 			prec:     uint8(call.Fsp),
+		}, nil
+
+	case *sqlparser.TrimFuncExpr:
+		var args []Expr
+		str, err := ast.translateExpr(call.StringArg)
+		if err != nil {
+			return nil, err
+		}
+		args = append(args, str)
+		if call.TrimArg != nil {
+			trim, err := ast.translateExpr(call.TrimArg)
+			if err != nil {
+				return nil, err
+			}
+			args = append(args, trim)
+		}
+
+		var cexpr = CallExpr{Arguments: args, Method: call.TrimFuncType.ToString()}
+		return &builtinTrim{
+			CallExpr: cexpr,
+			collate:  ast.cfg.Collation,
+			trim:     call.Type,
 		}, nil
 
 	default:

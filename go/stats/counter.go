@@ -177,7 +177,7 @@ type GaugeFloat64 struct {
 	help string
 }
 
-// NewCounter returns a new GaugeFloat64.
+// NewGaugeFloat64 returns a new GaugeFloat64.
 func NewGaugeFloat64(name string, help string) *GaugeFloat64 {
 	v := &GaugeFloat64{help: help}
 	if name != "" {

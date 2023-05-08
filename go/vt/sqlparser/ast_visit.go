@@ -276,6 +276,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfLimit(in, f)
 	case *LineStringExpr:
 		return VisitRefOfLineStringExpr(in, f)
+	case *LinestrPropertyFuncExpr:
+		return VisitRefOfLinestrPropertyFuncExpr(in, f)
 	case ListArg:
 		return VisitListArg(in, f)
 	case *Literal:
@@ -2400,6 +2402,21 @@ func VisitRefOfLineStringExpr(in *LineStringExpr, f Visit) error {
 	}
 	return nil
 }
+func VisitRefOfLinestrPropertyFuncExpr(in *LinestrPropertyFuncExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.Linestring, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.PropertyDefArg, f); err != nil {
+		return err
+	}
+	return nil
+}
 func VisitRefOfLiteral(in *Literal, f Visit) error {
 	if in == nil {
 		return nil
@@ -4393,6 +4410,8 @@ func VisitCallable(in Callable, f Visit) error {
 		return VisitRefOfLagLeadExpr(in, f)
 	case *LineStringExpr:
 		return VisitRefOfLineStringExpr(in, f)
+	case *LinestrPropertyFuncExpr:
+		return VisitRefOfLinestrPropertyFuncExpr(in, f)
 	case *LocateExpr:
 		return VisitRefOfLocateExpr(in, f)
 	case *MatchExpr:
@@ -4663,6 +4682,8 @@ func VisitExpr(in Expr, f Visit) error {
 		return VisitRefOfLagLeadExpr(in, f)
 	case *LineStringExpr:
 		return VisitRefOfLineStringExpr(in, f)
+	case *LinestrPropertyFuncExpr:
+		return VisitRefOfLinestrPropertyFuncExpr(in, f)
 	case ListArg:
 		return VisitListArg(in, f)
 	case *Literal:
