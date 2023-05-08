@@ -552,23 +552,6 @@ func TestFilterTables(t *testing.T) {
 			},
 		},
 		{
-			desc: "update schema version hash when list of tables has changed",
-			input: &tabletmanagerdatapb.SchemaDefinition{
-				TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
-					basicTable1,
-					basicTable2,
-				},
-				Version: "dummy-version",
-			},
-			excludeTables: []string{basicTable1.Name},
-			want: &tabletmanagerdatapb.SchemaDefinition{
-				TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
-					basicTable2,
-				},
-				Version: "6d1d294def9febdb21b35dd19a1dd4c6",
-			},
-		},
-		{
 			desc: "invalid regex for tables returns an error",
 			input: &tabletmanagerdatapb.SchemaDefinition{
 				TableDefinitions: []*tabletmanagerdatapb.TableDefinition{

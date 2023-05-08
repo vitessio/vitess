@@ -367,7 +367,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %token <str> LOCATE POSITION
 %token <str> ST_GeometryCollectionFromText ST_GeometryFromText ST_LineStringFromText ST_MultiLineStringFromText ST_MultiPointFromText ST_MultiPolygonFromText ST_PointFromText ST_PolygonFromText
 %token <str> ST_GeometryCollectionFromWKB ST_GeometryFromWKB ST_LineStringFromWKB ST_MultiLineStringFromWKB ST_MultiPointFromWKB ST_MultiPolygonFromWKB ST_PointFromWKB ST_PolygonFromWKB
-%token <str> ST_AsBinary ST_AsText ST_Dimension ST_Envelope ST_IsSimple ST_IsEmpty ST_GeometryType ST_X ST_Y ST_Latitude ST_Longitude
+%token <str> ST_AsBinary ST_AsText ST_Dimension ST_Envelope ST_IsSimple ST_IsEmpty ST_GeometryType ST_X ST_Y ST_Latitude ST_Longitude ST_EndPoint ST_IsClosed ST_Length ST_NumPoints ST_StartPoint ST_PointN
 
 // Match
 %token <str> MATCH AGAINST BOOLEAN LANGUAGE WITH QUERY EXPANSION WITHOUT VALIDATION
@@ -6023,11 +6023,11 @@ UTC_DATE func_paren_opt
   }
 | LTRIM openb expression closeb
   {
-    $$ = &TrimFuncExpr{TrimFuncType:LTrimType, StringArg: $3}
+    $$ = &TrimFuncExpr{TrimFuncType:LTrimType, Type: LeadingTrimType, StringArg: $3}
   }
 | RTRIM openb expression closeb
   {
-    $$ = &TrimFuncExpr{TrimFuncType:RTrimType, StringArg: $3}
+    $$ = &TrimFuncExpr{TrimFuncType:RTrimType, Type: TrailingTrimType, StringArg: $3}
   }
 | TRIM openb trim_type expression_opt FROM expression closeb
   {
@@ -6144,6 +6144,34 @@ UTC_DATE func_paren_opt
 | ST_Longitude openb expression ',' expression closeb
   {
     $$ = &PointPropertyFuncExpr{ Property: Longitude, Point: $3, ValueToSet: $5}
+  }
+| ST_EndPoint openb expression closeb
+  {
+    $$ = &LinestrPropertyFuncExpr{ Property: EndPoint, Linestring: $3}
+  }
+| ST_IsClosed openb expression closeb
+  {
+    $$ = &LinestrPropertyFuncExpr{ Property: IsClosed, Linestring: $3}
+  }
+| ST_Length openb expression closeb
+  {
+    $$ = &LinestrPropertyFuncExpr{ Property: Length, Linestring: $3}
+  }
+| ST_Length openb expression ',' expression closeb
+  {
+    $$ = &LinestrPropertyFuncExpr{ Property: Length, Linestring: $3, PropertyDefArg: $5}
+  }
+| ST_NumPoints openb expression closeb
+  {
+    $$ = &LinestrPropertyFuncExpr{ Property: NumPoints, Linestring: $3}
+  }
+| ST_PointN openb expression ',' expression closeb
+  {
+    $$ = &LinestrPropertyFuncExpr{ Property: PointN, Linestring: $3, PropertyDefArg: $5}
+  }
+| ST_StartPoint openb expression closeb
+  {
+    $$ = &LinestrPropertyFuncExpr{ Property: StartPoint, Linestring: $3}
   }
 | ST_X openb expression closeb
   {
@@ -8170,22 +8198,37 @@ non_reserved_keyword:
 | STREAM
 | ST_AsBinary %prec FUNCTION_CALL_NON_KEYWORD
 | ST_AsText %prec FUNCTION_CALL_NON_KEYWORD
+| ST_Dimension %prec FUNCTION_CALL_NON_KEYWORD
+| ST_EndPoint %prec FUNCTION_CALL_NON_KEYWORD
+| ST_Envelope %prec FUNCTION_CALL_NON_KEYWORD
 | ST_GeometryCollectionFromText %prec FUNCTION_CALL_NON_KEYWORD
-| ST_GeometryFromText %prec FUNCTION_CALL_NON_KEYWORD
-| ST_LineStringFromText %prec FUNCTION_CALL_NON_KEYWORD
-| ST_MultiLineStringFromText %prec FUNCTION_CALL_NON_KEYWORD
-| ST_MultiPointFromText %prec FUNCTION_CALL_NON_KEYWORD
-| ST_MultiPolygonFromText %prec FUNCTION_CALL_NON_KEYWORD
-| ST_PointFromText %prec FUNCTION_CALL_NON_KEYWORD
-| ST_GeometryFromWKB %prec FUNCTION_CALL_NON_KEYWORD
 | ST_GeometryCollectionFromWKB %prec FUNCTION_CALL_NON_KEYWORD
+| ST_GeometryFromText %prec FUNCTION_CALL_NON_KEYWORD
+| ST_GeometryFromWKB %prec FUNCTION_CALL_NON_KEYWORD
+| ST_GeometryType %prec FUNCTION_CALL_NON_KEYWORD
+| ST_IsClosed %prec FUNCTION_CALL_NON_KEYWORD
+| ST_IsEmpty %prec FUNCTION_CALL_NON_KEYWORD
+| ST_IsSimple %prec FUNCTION_CALL_NON_KEYWORD
+| ST_Latitude %prec FUNCTION_CALL_NON_KEYWORD
+| ST_Length %prec FUNCTION_CALL_NON_KEYWORD
+| ST_LineStringFromText %prec FUNCTION_CALL_NON_KEYWORD
 | ST_LineStringFromWKB %prec FUNCTION_CALL_NON_KEYWORD
+| ST_Longitude %prec FUNCTION_CALL_NON_KEYWORD
+| ST_MultiLineStringFromText %prec FUNCTION_CALL_NON_KEYWORD
 | ST_MultiLineStringFromWKB %prec FUNCTION_CALL_NON_KEYWORD
+| ST_MultiPointFromText %prec FUNCTION_CALL_NON_KEYWORD
 | ST_MultiPointFromWKB %prec FUNCTION_CALL_NON_KEYWORD
+| ST_MultiPolygonFromText %prec FUNCTION_CALL_NON_KEYWORD
 | ST_MultiPolygonFromWKB %prec FUNCTION_CALL_NON_KEYWORD
+| ST_NumPoints %prec FUNCTION_CALL_NON_KEYWORD
+| ST_PointFromText %prec FUNCTION_CALL_NON_KEYWORD
 | ST_PointFromWKB %prec FUNCTION_CALL_NON_KEYWORD
-| ST_PolygonFromWKB %prec FUNCTION_CALL_NON_KEYWORD
+| ST_PointN %prec FUNCTION_CALL_NON_KEYWORD
 | ST_PolygonFromText %prec FUNCTION_CALL_NON_KEYWORD
+| ST_PolygonFromWKB %prec FUNCTION_CALL_NON_KEYWORD
+| ST_StartPoint %prec FUNCTION_CALL_NON_KEYWORD
+| ST_X %prec FUNCTION_CALL_NON_KEYWORD
+| ST_Y %prec FUNCTION_CALL_NON_KEYWORD
 | SUBPARTITION
 | SUBPARTITIONS
 | SUM %prec FUNCTION_CALL_NON_KEYWORD

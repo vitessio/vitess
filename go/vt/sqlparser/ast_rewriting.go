@@ -567,12 +567,19 @@ var funcRewrites = map[string]string{
 }
 
 func (er *astRewriter) funcRewrite(cursor *Cursor, node *FuncExpr) {
-	bindVar, found := funcRewrites[node.Name.Lowered()]
+	lowered := node.Name.Lowered()
+	if lowered == "last_insert_id" && len(node.Exprs) > 0 {
+		// if we are dealing with is LAST_INSERT_ID() with an argument, we don't need to rewrite it.
+		// with an argument, this is an identity function that will update the session state and
+		// sets the correct fields in the OK TCP packet that we send back
+		return
+	}
+	bindVar, found := funcRewrites[lowered]
 	if !found || (bindVar == DBVarName && !er.shouldRewriteDatabaseFunc) {
 		return
 	}
 	if len(node.Exprs) > 0 {
-		er.err = vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "Argument to %s() not supported", node.Name.Lowered())
+		er.err = vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "Argument to %s() not supported", lowered)
 		return
 	}
 	cursor.Replace(bindVarExpression(bindVar))

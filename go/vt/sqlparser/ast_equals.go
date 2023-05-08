@@ -788,6 +788,12 @@ func (cmp *Comparator) SQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return cmp.RefOfLineStringExpr(a, b)
+	case *LinestrPropertyFuncExpr:
+		b, ok := inB.(*LinestrPropertyFuncExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfLinestrPropertyFuncExpr(a, b)
 	case ListArg:
 		b, ok := inB.(ListArg)
 		if !ok {
@@ -3169,6 +3175,19 @@ func (cmp *Comparator) RefOfLineStringExpr(a, b *LineStringExpr) bool {
 	return cmp.Exprs(a.PointParams, b.PointParams)
 }
 
+// RefOfLinestrPropertyFuncExpr does deep equals between the two objects.
+func (cmp *Comparator) RefOfLinestrPropertyFuncExpr(a, b *LinestrPropertyFuncExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Property == b.Property &&
+		cmp.Expr(a.Linestring, b.Linestring) &&
+		cmp.Expr(a.PropertyDefArg, b.PropertyDefArg)
+}
+
 // RefOfLiteral does deep equals between the two objects.
 func (cmp *Comparator) RefOfLiteral(a, b *Literal) bool {
 	if a == b {
@@ -5261,6 +5280,12 @@ func (cmp *Comparator) Callable(inA, inB Callable) bool {
 			return false
 		}
 		return cmp.RefOfLineStringExpr(a, b)
+	case *LinestrPropertyFuncExpr:
+		b, ok := inB.(*LinestrPropertyFuncExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfLinestrPropertyFuncExpr(a, b)
 	case *LocateExpr:
 		b, ok := inB.(*LocateExpr)
 		if !ok {
@@ -5981,6 +6006,12 @@ func (cmp *Comparator) Expr(inA, inB Expr) bool {
 			return false
 		}
 		return cmp.RefOfLineStringExpr(a, b)
+	case *LinestrPropertyFuncExpr:
+		b, ok := inB.(*LinestrPropertyFuncExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfLinestrPropertyFuncExpr(a, b)
 	case ListArg:
 		b, ok := inB.(ListArg)
 		if !ok {

@@ -27,6 +27,7 @@ import (
 func TestRateLimiterLong(t *testing.T) {
 	r := NewRateLimiter(time.Hour)
 	require.NotNil(t, r)
+	defer r.Stop()
 	val := 0
 	incr := func() error { val++; return nil }
 	for i := 0; i < 10; i++ {
@@ -39,6 +40,7 @@ func TestRateLimiterLong(t *testing.T) {
 func TestRateLimiterShort(t *testing.T) {
 	r := NewRateLimiter(time.Millisecond * 250)
 	require.NotNil(t, r)
+	defer r.Stop()
 	val := 0
 	incr := func() error { val++; return nil }
 	for i := 0; i < 10; i++ {
@@ -54,6 +56,7 @@ func TestRateLimiterShort(t *testing.T) {
 func TestRateLimiterStop(t *testing.T) {
 	r := NewRateLimiter(time.Millisecond * 10)
 	require.NotNil(t, r)
+	defer r.Stop()
 	val := 0
 	incr := func() error { val++; return nil }
 	for i := 0; i < 5; i++ {

@@ -163,7 +163,7 @@ func DiffSchemasSQL(sql1 string, sql2 string, hints *DiffHints) (*SchemaDiff, er
 	return schema1.SchemaDiff(schema2, hints)
 }
 
-// DiffSchemasSQL compares two schemas and returns the list of diffs that turn
+// DiffSchemas compares two schemas and returns the list of diffs that turn
 // 1st schema into 2nd. Any of the schemas may be nil.
 func DiffSchemas(schema1 *Schema, schema2 *Schema, hints *DiffHints) (*SchemaDiff, error) {
 	if schema1 == nil {
