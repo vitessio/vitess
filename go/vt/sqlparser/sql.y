@@ -5248,6 +5248,10 @@ expression:
   {
 	$$ = $1
   }
+| user_defined_variable ASSIGNMENT_OPT expression %prec ASSIGNMENT_OPT
+ {
+  $$ = &AssignmentExpr{Left: $1, Right: $3}
+ }
 | expression MEMBER OF openb expression closeb
   {
     $$ = &MemberOfExpr{Value: $1, JSONArr:$5 }
@@ -7586,10 +7590,6 @@ update_expression:
   column_name '=' expression
   {
     $$ = &UpdateExpr{Name: $1, Expr: $3}
-  }
-| column_name '=' user_defined_variable ASSIGNMENT_OPT expression
-  {
-    $$ = &UpdateExpr{Name: $1, Expr: &AssignmentExpr{Left: $3, Right: $5}}
   }
 
 charset_or_character_set:
