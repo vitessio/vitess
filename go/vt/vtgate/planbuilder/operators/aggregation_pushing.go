@@ -19,8 +19,7 @@ package operators
 import (
 	"fmt"
 
-	"golang.org/x/exp/slices"
-
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -31,18 +30,37 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
-func tryPushingDownAggregator(ctx *plancontext.PlanningContext, aggregator *Aggregator) (ops.Operator, rewrite.ApplyResult, error) {
+func tryPushingDownAggregator(ctx *plancontext.PlanningContext, aggregator *Aggregator) (output ops.Operator, applyResult rewrite.ApplyResult, err error) {
 	if aggregator.Pushed {
 		return aggregator, rewrite.SameTree, nil
 	}
 	aggregator.Pushed = true
 	switch src := aggregator.Source.(type) {
 	case *Route:
-		return pushDownAggregationThroughRoute(aggregator, src)
+		output, applyResult, err = pushDownAggregationThroughRoute(aggregator, src)
 	case *ApplyJoin:
-		return pushDownAggregationThroughJoin(ctx, aggregator, src)
+		output, applyResult, err = pushDownAggregationThroughJoin(ctx, aggregator, src)
 	default:
 		return aggregator, rewrite.SameTree, nil
+	}
+
+	if applyResult == rewrite.NewTree && aggregator.Original {
+		aggregator.aggregateTheAggregates()
+	}
+
+	return
+}
+
+func (a *Aggregator) aggregateTheAggregates() {
+	for i, aggr := range a.Aggregations {
+		// Handle different aggregation operations when pushing down through a sharded route.
+		switch aggr.OpCode {
+		case opcode.AggregateCount, opcode.AggregateCountStar, opcode.AggregateCountDistinct:
+			// All count variations turn into SUM above the Route.
+			// Think of it as we are SUMming together a bunch of distributed COUNTs.
+			aggr.OriginalOpCode, aggr.OpCode = aggr.OpCode, opcode.AggregateSum
+			a.Aggregations[i] = aggr
+		}
 	}
 }
 
@@ -53,38 +71,9 @@ func pushDownAggregationThroughRoute(aggregator *Aggregator, src *Route) (ops.Op
 	}
 
 	// Create a new aggregator to be placed below the route.
-	aggrBelowRoute := &Aggregator{
-		Source:        src.Source,
-		Columns:       slices.Clone(aggregator.Columns),
-		GroupingOrder: slices.Clone(aggregator.GroupingOrder),
-		Pushed:        false,
-	}
-
-	// Iterate through the aggregator columns, modifying them as needed.
-	for i, col := range aggregator.Columns {
-		param, isAggr := col.(*Aggr)
-		if !isAggr {
-			continue
-		}
-		// Handle different aggregation operations when pushing down through a sharded route.
-		switch param.OpCode {
-		case opcode.AggregateCount, opcode.AggregateCountStar, opcode.AggregateCountDistinct:
-			// All count variations turn into SUM above the Route.
-			// Think of it as we are SUMming together a bunch of distributed COUNTs.
-			param.OriginalOpCode, param.OpCode = param.OpCode, opcode.AggregateSum
-		}
-		aggregator.Columns[i] = param
-	}
-
-	// Create an empty slice for ordering columns, if needed.
-	var ordering []ops.OrderBy
-	err := aggregator.VisitGroupBys(func(_, _ int, grpByCol *GroupBy) {
-		// If there is a GROUP BY, add the corresponding order by column.
-		ordering = append(ordering, grpByCol.AsOrderBy())
-	})
-	if err != nil {
-		return nil, false, err
-	}
+	aggrBelowRoute := aggregator.Clone([]ops.Operator{src.Source}).(*Aggregator)
+	aggrBelowRoute.Pushed = false
+	aggrBelowRoute.Original = false
 
 	// Set the source of the route to the new aggregator placed below the route.
 	src.Source = aggrBelowRoute
@@ -93,14 +82,6 @@ func pushDownAggregationThroughRoute(aggregator *Aggregator, src *Route) (ops.Op
 		// we only keep the root aggregation, if this aggregator was created
 		// by splitting one and pushing under a join, we can get rid of this one
 		return aggregator.Source, rewrite.NewTree, nil
-	}
-
-	// If ordering is required (i.e., there is a GROUP BY), create an Ordering operation.
-	if len(ordering) > 0 {
-		aggregator.Source = &Ordering{
-			Source: src,
-			Order:  ordering,
-		}
 	}
 
 	return aggregator, rewrite.NewTree, nil
@@ -132,24 +113,39 @@ Original:
 
 Transformed:
 
-			 GB1    <- This grouping is now SUMing together the distributed `count(*)` we got back
+		  rootAggr  <- This grouping is now SUMing together the distributed `count(*)` we got back
 			  |
-			Proj
+			Proj    <- This projection makes sure that the columns are lined up as expected
 			  |
-			Sort
+			Sort    <- Here we are sorting the input so that the OrderedAggregate can do it's thing
 			  |
 			JOIN
 		   /    \
-		 GB2    GB3
+	   lAggr    rAggr
 		/         \
 	   R1          R2
 */
-func pushDownAggregationThroughJoin(ctx *plancontext.PlanningContext, aggregator *Aggregator, join *ApplyJoin) (ops.Operator, rewrite.ApplyResult, error) {
-	// First we separate columns according to if they need data from the LHS/RHS
-	// lhs/rhs will contain the aggregation columns we need from GB2/3 in the illustration above
-	// joinColumns are the new column passed through the join. we can safely remove the old join columns
-	// projections will contain any arithmetic operations we might need to do, such as multiplying values
-	lhs, rhs, joinColumns, projections, err := splitAggrColumnsToLeftAndRight(ctx, aggregator, join)
+func pushDownAggregationThroughJoin(ctx *plancontext.PlanningContext, rootAggr *Aggregator, join *ApplyJoin) (ops.Operator, rewrite.ApplyResult, error) {
+	lhs := joinPusher{
+		orig: rootAggr,
+		pushed: &Aggregator{
+			Source: join.LHS,
+			QP:     rootAggr.QP,
+		},
+		columns: initColReUse(len(rootAggr.Columns)),
+		tableID: TableID(join.LHS),
+	}
+	rhs := joinPusher{
+		orig: rootAggr,
+		pushed: &Aggregator{
+			Source: join.RHS,
+			QP:     rootAggr.QP,
+		},
+		columns: initColReUse(len(rootAggr.Columns)),
+		tableID: TableID(join.RHS),
+	}
+
+	joinColumns, projections, err := splitAggrColumnsToLeftAndRight(ctx, rootAggr, join, lhs, rhs)
 	if err != nil {
 		return nil, false, err
 	}
@@ -158,120 +154,181 @@ func pushDownAggregationThroughJoin(ctx *plancontext.PlanningContext, aggregator
 	// If we don't, the LHS will not be able to return the column, and it can't be used to send down to the RHS
 	for _, pred := range join.JoinPredicates {
 		for _, expr := range pred.LHSExprs {
-			lhs = append(lhs, NewGroupBy(expr, nil, aeWrap(expr)))
+			_, wexpr, err := rootAggr.QP.GetSimplifiedExpr(expr)
+			if err != nil {
+				return nil, false, err
+			}
+			lhs.pushed.Grouping = append(lhs.pushed.Grouping, GroupBy{
+				Inner:         expr,
+				WeightStrExpr: wexpr,
+				KeyCol:        len(lhs.pushed.Columns),
+			})
+			lhs.pushed.Columns = append(lhs.pushed.Columns, aeWrap(expr))
 		}
 	}
 
-	gb2 := &Aggregator{
-		Source:  join.LHS,
-		Columns: lhs,
-	}
-	gb3 := &Aggregator{
-		Source:  join.RHS,
-		Columns: rhs,
-	}
-	join.LHS, join.RHS = gb2, gb3
-	join.ColumnsAST = joinColumns
-	proj := &Projection{
-		Source:      join,
-		ColumnNames: []string{""},
-		Columns:     projections,
+	lhsTS := TableID(join.LHS)
+	rhsTS := TableID(join.RHS)
+	for _, groupBy := range rootAggr.Grouping {
+		deps := ctx.SemTable.RecursiveDeps(groupBy.Inner)
+		expr := groupBy.aliasedExpr.Expr
+		switch {
+		case deps.IsSolvedBy(lhsTS):
+			lhs.addGrouping(ctx, groupBy)
+			joinColumns = append(joinColumns, JoinColumn{
+				Original: groupBy.aliasedExpr,
+				LHSExprs: []sqlparser.Expr{expr},
+			})
+		case deps.IsSolvedBy(rhsTS):
+			rhs.addGrouping(ctx, groupBy)
+			joinColumns = append(joinColumns, JoinColumn{
+				Original: groupBy.aliasedExpr,
+				RHSExpr:  expr,
+			})
+		default:
+			return nil, false, vterrors.VT12001("grouping on columns from different sources")
+		}
 	}
 
-	if !aggregator.Original {
+	join.LHS, join.RHS = lhs.pushed, rhs.pushed
+	join.ColumnsAST = joinColumns
+
+	var output ops.Operator = join
+	if len(projections) > 0 {
+		output = &Projection{
+			Source:      join,
+			ColumnNames: []string{""},
+			Columns:     projections,
+		}
+	}
+
+	if !rootAggr.Original {
 		// we only keep the root aggregation, if this aggregator was created
 		// by splitting one and pushing under a join, we can get rid of this one
-		return proj, rewrite.NewTree, nil
+		return output, rewrite.NewTree, nil
 	}
 
-	aggregator.Source = proj
-	return aggregator, rewrite.NewTree, nil
+	rootAggr.Source = output
+	return rootAggr, rewrite.NewTree, nil
 }
 
-func splitCountStar(
-	ctx *plancontext.PlanningContext,
-	aggr *Aggr,
-	lhsTS, rhsTS semantics.TableSet,
-) (lhs, rhs []AggrColumn, joinColumns []JoinColumn, projections []ProjExpr) {
-	lhsAggr := aggr.Clone()
-	rhsAggr := aggr.Clone()
-	lhsExpr := sqlparser.CloneExpr(lhsAggr.Original.Expr)
-	rhsExpr := sqlparser.CloneExpr(rhsAggr.Original.Expr)
-
-	if lhsExpr == rhsExpr {
-		panic(fmt.Sprintf("Need the two produced expressions to be different. %T %T", lhsExpr, rhsExpr))
-	}
-	ctx.SemTable.Direct[lhsExpr] = lhsTS
-	ctx.SemTable.Direct[rhsExpr] = rhsTS
-	ctx.SemTable.Recursive[lhsExpr] = lhsTS
-	ctx.SemTable.Recursive[rhsExpr] = rhsTS
-	lhs = []AggrColumn{lhsAggr}
-	rhs = []AggrColumn{rhsAggr}
-
-	joinColumns = []JoinColumn{{
-		Original: lhsAggr.Original,
-		LHSExprs: []sqlparser.Expr{lhsExpr},
-	}, {
-		Original: rhsAggr.Original,
-		RHSExpr:  rhsExpr,
-	}}
-
-	projExpr := &sqlparser.BinaryExpr{
-		Operator: sqlparser.MultOp,
-		Left:     lhsExpr,
-		Right: &sqlparser.FuncExpr{
-			Name: sqlparser.NewIdentifierCI("coalesce"),
-			Exprs: sqlparser.SelectExprs{
-				&sqlparser.AliasedExpr{Expr: rhsExpr},
-				&sqlparser.AliasedExpr{Expr: sqlparser.NewIntLiteral("1")},
-			},
-		},
-	}
-	projections = []ProjExpr{Expr{
-		E: projExpr,
-	}}
-	aggr.Original = aeWrap(projExpr)
-	aggr.Func = nil
-	aggr.OriginalOpCode = opcode.AggregateCountStar
-	aggr.OpCode = opcode.AggregateSum
-
-	return
-}
-
+// splitAggrColumnsToLeftAndRight is responsible for pushing aggregation under a join during query planning.
+// It returns separate lists of AggrColumn for the left and right side of the join, as well as joinColumns,
+// which contains the JoinColumn information. Additionally, it calculates and returns the projections list,
+// containing the ProjExpr required to produce the total aggregation.
+//
+// The function takes the following parameters:
+// - ctx: The planning context.
+// - aggregator: The Aggregator that needs to be pushed under the join.
+// - join: The ApplyJoin that the aggregation is being pushed under.
+//
+// The function returns the following values:
+// - lhs: A slice of AggrColumn representing the aggregation columns for the left side of the join.
+// - rhs: A slice of AggrColumn representing the aggregation columns for the right side of the join.
+// - joinColumns: A slice of JoinColumn containing the join column information.
+// - projections: A slice of ProjExpr representing the expression evaluations needed to produce the total aggregation.
+// - err: An error, if any occurred during the process.
 func splitAggrColumnsToLeftAndRight(
 	ctx *plancontext.PlanningContext,
 	aggregator *Aggregator,
 	join *ApplyJoin,
-) (lhs, rhs []AggrColumn, joinColumns []JoinColumn, projections []ProjExpr, err error) {
-	lhsTS := TableID(join.LHS)
-	rhsTS := TableID(join.RHS)
+	lhs, rhs joinPusher,
+) (joinColumns []JoinColumn, projections []ProjExpr, err error) {
 
-	handleAggr := func(aggr *Aggr) {
+	handleAggr := func(aggr Aggr) (Aggr, error) {
 		switch aggr.OpCode {
 		case opcode.AggregateCountStar:
-			l, r, j, p := splitCountStar(ctx, aggr, lhsTS, rhsTS)
-			lhs = append(lhs, l...)
-			rhs = append(rhs, r...)
-			joinColumns = append(joinColumns, j...)
-			projections = append(projections, p...)
-			return
+			lhsExpr := lhs.addAggr(ctx, aggr)
+			rhsExpr := rhs.addAggr(ctx, aggr)
+
+			if lhsExpr == rhsExpr {
+				panic(fmt.Sprintf("Need the two produced expressions to be different. %T %T", lhsExpr, rhsExpr))
+			}
+
+			joinColumns = append(joinColumns, JoinColumn{
+				Original: aggr.Original,
+				LHSExprs: []sqlparser.Expr{lhsExpr},
+			}, JoinColumn{
+				Original: aggr.Original,
+				RHSExpr:  rhsExpr,
+			})
+
+			if join.LeftJoin {
+				rhsExpr = &sqlparser.FuncExpr{
+					Name: sqlparser.NewIdentifierCI("coalesce"),
+					Exprs: sqlparser.SelectExprs{
+						&sqlparser.AliasedExpr{Expr: rhsExpr},
+						&sqlparser.AliasedExpr{Expr: sqlparser.NewIntLiteral("1")},
+					},
+				}
+			}
+
+			projExpr := &sqlparser.BinaryExpr{
+				Operator: sqlparser.MultOp,
+				Left:     lhsExpr,
+				Right:    rhsExpr,
+			}
+			projections = append(projections, Expr{E: projExpr})
+			return aggr, nil
 		default:
-			err = errHorizonNotPlanned()
-			return
+			return Aggr{}, errHorizonNotPlanned()
 		}
 	}
 
-	for _, col := range aggregator.Columns {
-		switch col := col.(type) {
-		case *Aggr:
-			handleAggr(col)
-			if err != nil {
-				return
-			}
-		case *GroupBy:
-			err = errHorizonNotPlanned()
-			return
+	for i, aggr := range aggregator.Aggregations {
+		aggr, err := handleAggr(aggr)
+		if err != nil {
+			return nil, nil, err
 		}
+		aggregator.Aggregations[i] = aggr
 	}
 	return
+}
+
+type joinPusher struct {
+	orig    *Aggregator
+	pushed  *Aggregator
+	columns []int
+	tableID semantics.TableSet
+}
+
+func (p joinPusher) addAggr(ctx *plancontext.PlanningContext, aggr Aggr) sqlparser.Expr {
+	copyAggr := aggr
+	expr := sqlparser.CloneExpr(aggr.Original.Expr)
+	// copy dependencies so we can keep track of which side expressions need to be pushed to
+	ctx.SemTable.Direct[expr] = p.tableID
+	ctx.SemTable.Recursive[expr] = p.tableID
+
+	offset := p.useColumn(aggr.ColOffset)
+	copyAggr.ColOffset = offset
+	p.pushed.Aggregations = append(p.pushed.Aggregations, copyAggr)
+	return expr
+}
+
+func (p joinPusher) addGrouping(ctx *plancontext.PlanningContext, gb GroupBy) sqlparser.Expr {
+	copyGB := gb
+	expr := sqlparser.CloneExpr(gb.Inner)
+	// copy dependencies so we can keep track of which side expressions need to be pushed to
+	ctx.SemTable.CopyDependencies(gb.Inner, expr)
+	offset := p.useColumn(copyGB.KeyCol)
+	copyGB.KeyCol = offset
+	p.pushed.Grouping = append(p.pushed.Grouping, copyGB)
+	return expr
+}
+
+func (p joinPusher) useColumn(offset int) int {
+	if p.columns[offset] == -1 {
+		p.columns[offset] = len(p.pushed.Columns)
+		// still haven't used this expression on the LHS
+		p.pushed.Columns = append(p.pushed.Columns, p.orig.Columns[offset])
+	}
+	return p.columns[offset]
+}
+
+func initColReUse(size int) []int {
+	cols := make([]int, size)
+	for i := 0; i < size; i++ {
+		cols[i] = -1
+	}
+	return cols
 }

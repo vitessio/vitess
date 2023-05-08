@@ -351,14 +351,12 @@ func buildAggregation(op *Aggregator, qb *queryBuilder) error {
 		qb.addProjection(column)
 	}
 
-	err = op.VisitGroupBys(func(_, _ int, gb *GroupBy) {
-		qb.addGroupBy(gb.Inner)
-		if gb.WOffset != -1 {
-			qb.addGroupBy(weightStringFor(gb.WeightStrExpr))
+	for _, by := range op.Grouping {
+		qb.addGroupBy(by.Inner)
+		wsExpr := by.WeightStrExpr
+		if qb.ctx.SemTable.NeedsWeightString(wsExpr) {
+			qb.addGroupBy(weightStringFor(wsExpr))
 		}
-	})
-	if err != nil {
-		return err
 	}
 
 	return nil

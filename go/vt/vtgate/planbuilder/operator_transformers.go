@@ -89,29 +89,26 @@ func transformAggregator(ctx *plancontext.PlanningContext, op *operators.Aggrega
 			weightStrings:     make(map[*resultColumn]int),
 		},
 	}
-	for idx, col := range op.Columns {
-		aggrCol, isAggrCol := col.(*operators.Aggr)
-		if !isAggrCol {
-			continue
-		}
+
+	for _, aggr := range op.Aggregations {
 		oa.aggregates = append(oa.aggregates, &engine.AggregateParams{
-			Opcode:     aggrCol.OpCode,
-			Col:        idx,
-			Alias:      aggrCol.Alias,
-			Expr:       aggrCol.Func,
-			Original:   aggrCol.Original,
-			OrigOpcode: aggrCol.OriginalOpCode,
+			Opcode:     aggr.OpCode,
+			Col:        aggr.ColOffset,
+			Alias:      aggr.Alias,
+			Expr:       aggr.Func,
+			Original:   aggr.Original,
+			OrigOpcode: aggr.OriginalOpCode,
 		})
 	}
-	err = op.VisitGroupBys(func(grpIdx, colIdx int, gb *operators.GroupBy) {
+	for _, groupBy := range op.Grouping {
 		oa.groupByKeys = append(oa.groupByKeys, &engine.GroupByParams{
-			KeyCol:          colIdx,
-			WeightStringCol: gb.WOffset,
-			Expr:            gb.Inner,
-			FromGroupBy:     true,
-			CollationID:     ctx.SemTable.CollationForExpr(gb.WeightStrExpr),
+			KeyCol:          groupBy.KeyCol,
+			WeightStringCol: groupBy.WSCol,
+			Expr:            groupBy.AsAliasedExpr().Expr,
+			CollationID:     ctx.SemTable.CollationForExpr(groupBy.WeightStrExpr),
 		})
-	})
+	}
+
 	if err != nil {
 		return nil, err
 	}

@@ -99,51 +99,48 @@ func tryPushingDownOrdering(ctx *plancontext.PlanningContext, in *Ordering) (ops
 }
 
 func pushOrderingUnderAggr(ctx *plancontext.PlanningContext, order *Ordering, aggregator *Aggregator) (ops.Operator, rewrite.ApplyResult, error) {
-	// Here we align the GROUP BY and ORDER BY.
-	// First step is to make sure that the GROUP BY is in the same order as the ORDER BY
-	var newGrouping []int
-	used := make([]bool, len(aggregator.GroupingOrder))
+	// Step 1: Align the GROUP BY and ORDER BY.
+	//         Reorder the GROUP BY columns to match the ORDER BY columns.
+	//         Since the GB clause is a set, we can reorder these columns freely.
+	var newGrouping []GroupBy
+	used := make([]bool, len(aggregator.Grouping))
 	for _, orderExpr := range order.Order {
-		for grpIdx, colIdx := range aggregator.GroupingOrder {
-			groupingExpr, ok := aggregator.Columns[colIdx].(*GroupBy)
-			if !ok {
-				return nil, false, vterrors.VT13001("expected grouping here")
-			}
-			if !used[grpIdx] && ctx.SemTable.EqualsExpr(groupingExpr.WeightStrExpr, orderExpr.WeightStrExpr) {
-				newGrouping = append(newGrouping, colIdx)
+		for grpIdx, by := range aggregator.Grouping {
+			if !used[grpIdx] && ctx.SemTable.EqualsExpr(by.WeightStrExpr, orderExpr.WeightStrExpr) {
+				newGrouping = append(newGrouping, by)
 				used[grpIdx] = true
 			}
 		}
 	}
 
-	// next we add any columns missing from the order by
-	if len(newGrouping) != len(aggregator.GroupingOrder) {
+	// Step 2: Add any missing columns from the ORDER BY.
+	//         The ORDER BY column is not a set, but we can add more elements
+	//         to the end without changing the semantics of the query.
+	if len(newGrouping) != len(aggregator.Grouping) {
 		// we are missing some groupings. We need to add them both to the new groupings list, but also to the ORDER BY
 		for i, added := range used {
 			if !added {
-				colIdx := aggregator.GroupingOrder[i]
-				groupBy, ok := aggregator.Columns[colIdx].(*GroupBy)
-
-				if !ok {
-					return nil, false, vterrors.VT13001("expected grouping here")
-				}
-
-				newGrouping = append(newGrouping, colIdx)
+				groupBy := aggregator.Grouping[i]
+				newGrouping = append(newGrouping, groupBy)
 				order.Order = append(order.Order, groupBy.AsOrderBy())
 			}
 		}
 	}
-	/*
-		Ordering(1) -> Aggregation -> Ordering(2) -> <Inputs>
-		Convert this to
-		Aggregation -> Ordering(1) -> <Inputs> and remove Ordering(2) from the plan tree.
 
-		The lower ordering is not required once a push down of higher ordering is done as
-		it will be similar or even have more columns for ordering and will be better aligned with the output ordering.
-	*/
-	aggregator.GroupingOrder = newGrouping
+	aggregator.Grouping = newGrouping
 	aggrSource, isOrdering := aggregator.Source.(*Ordering)
 	if isOrdering {
+		// Transform the query plan tree:
+		// From:   Ordering(1)      To: Aggregation
+		//               |                 |
+		//         Aggregation          Ordering(1)
+		//               |                 |
+		//         Ordering(2)          <Inputs>
+		//               |
+		//           <Inputs>
+		//
+		// Remove Ordering(2) from the plan tree, as it's redundant
+		// after pushing down the higher ordering.
 		order.Source = aggrSource.Source
 		aggrSource.Source = nil // removing from plan tree
 		aggregator.Source = order
@@ -488,13 +485,6 @@ func expandHorizon(ctx *plancontext.PlanningContext, horizon horizonLike) (ops.O
 		return nil, err
 	}
 
-	if qp.OrderExprs != nil {
-		op = &Ordering{
-			Source: op,
-			Order:  qp.OrderExprs,
-		}
-	}
-
 	if sel.Limit != nil {
 		op = &Limit{
 			Source: op,
@@ -517,27 +507,40 @@ func checkInvalid(aggregations []Aggr, horizon horizonLike) error {
 	return nil
 }
 
-func createProjectionFromSelect(ctx *plancontext.PlanningContext, horizon horizonLike) (ops.Operator, error) {
+func createProjectionFromSelect(ctx *plancontext.PlanningContext, horizon horizonLike) (out ops.Operator, err error) {
 	qp, err := horizon.getQP(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	proj, err := createProjection2(qp, horizon.src())
+	if !qp.NeedsAggregation() {
+		projX, err := createProjection2(qp, horizon.src())
+		if err != nil {
+			return nil, err
+		}
+		if derived, isDerived := horizon.(*Derived); isDerived {
+			id := derived.TableId
+			projX.TableID = &id
+			projX.Alias = derived.Alias
+		}
+		out = projX
+		if qp.OrderExprs != nil {
+			out = &Ordering{
+				Source: out,
+				Order:  qp.OrderExprs,
+			}
+		}
+
+		return out, nil
+	}
+
+	err = checkAggregationSupported(horizon)
 	if err != nil {
 		return nil, err
 	}
-	if derived, isDerived := horizon.(*Derived); isDerived {
-		id := derived.TableId
-		proj.TableID = &id
-		proj.Alias = derived.Alias
-	}
-	if !qp.NeedsAggregation() {
-		return proj, nil
-	}
 
-	// TODO: move column gathering to the QP
-	grouping := qp.GetGrouping()
+	qp.AlignGroupByAndOrderBy(ctx)
+
 	aggregations, err := qp.AggregationExpressions(ctx)
 	if err != nil {
 		return nil, err
@@ -548,29 +551,42 @@ func createProjectionFromSelect(ctx *plancontext.PlanningContext, horizon horizo
 	}
 
 	a := &Aggregator{
-		Source:   proj,
-		Original: true,
-		QP:       qp,
+		Source:       horizon.src(),
+		Original:     true,
+		QP:           qp,
+		Grouping:     qp.GetGrouping(),
+		Aggregations: aggregations,
 	}
-	a.GroupingOrder = make([]int, len(grouping))
+
 outer:
 	for colIdx, expr := range qp.SelectExprs {
-		for gbIdx, groupBy := range grouping {
-			if expr.Col == groupBy.GetOriginal() {
-				gb := groupBy
-				a.Columns = append(a.Columns, &gb)
-				a.GroupingOrder[gbIdx] = colIdx
+		ae, err := expr.GetAliasedExpr()
+		if err != nil {
+			return nil, err
+		}
+		for idx, groupBy := range a.Grouping {
+			if ae == groupBy.aliasedExpr {
+				a.Columns = append(a.Columns, ae)
+				a.Grouping[idx].KeyCol = colIdx
 				continue outer
 			}
 		}
-		for _, aggr := range aggregations {
-			if expr.Col == aggr.GetOriginal() {
-				clone := aggr
-				a.Columns = append(a.Columns, &clone)
+		for idx, aggr := range a.Aggregations {
+			if ae == aggr.Original {
+				a.Columns = append(a.Columns, ae)
+				a.Aggregations[idx].ColOffset = colIdx
 				continue outer
 			}
 		}
 		return nil, vterrors.VT13001(fmt.Sprintf("Could not find the %v in aggregation in the original query", expr))
+	}
+
+	// If ordering is required (i.e., there is a GROUP BY), create an Ordering operation.
+	if len(qp.OrderExprs) > 0 {
+		a.Source = &Ordering{
+			Source: a.Source,
+			Order:  qp.OrderExprs,
+		}
 	}
 
 	return a, nil

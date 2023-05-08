@@ -25,6 +25,7 @@ import (
 	"golang.org/x/exp/slices"
 
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 
@@ -67,6 +68,10 @@ type (
 
 		// The original aliased expression that this group by is referring
 		aliasedExpr *sqlparser.AliasedExpr
+
+		// points to the column on the same aggregator
+		KeyCol int
+		WSCol  int
 	}
 
 	// Aggr encodes all information needed for aggregation functions
@@ -80,6 +85,8 @@ type (
 		// The index at which the user expects to see this aggregated function. Set to nil, if the user does not ask for it
 		Index    *int
 		Distinct bool
+
+		ColOffset int // points to the column on the same aggregator
 	}
 
 	AggrRewriter struct {
@@ -128,14 +135,6 @@ func (b GroupBy) AsAliasedExpr() *sqlparser.AliasedExpr {
 	return &sqlparser.AliasedExpr{
 		Expr: b.WeightStrExpr,
 	}
-}
-
-func (b GroupBy) GetOriginal() *sqlparser.AliasedExpr {
-	return b.aliasedExpr
-}
-
-func (a Aggr) GetOriginal() *sqlparser.AliasedExpr {
-	return a.Original
 }
 
 // GetExpr returns the underlying sqlparser.Expr of our SelectExpr
@@ -685,6 +684,19 @@ func (qp *QueryProjection) AddGroupBy(by GroupBy) {
 
 func (qp *QueryProjection) GetColumnCount() int {
 	return len(qp.SelectExprs) - qp.AddedColumn
+}
+
+// checkAggregationSupported checks if the aggregation is supported on the given operator tree or not.
+// We don't currently support planning for operators having derived tables.
+func checkAggregationSupported(op ops.Operator) error {
+	return rewrite.Visit(op, func(operator ops.Operator) error {
+		_, isDerived := operator.(*Derived)
+		projection, isProjection := operator.(*Projection)
+		if isDerived || (isProjection && projection.TableID != nil) {
+			return errHorizonNotPlanned()
+		}
+		return nil
+	})
 }
 
 func checkForInvalidGroupingExpressions(expr sqlparser.Expr) error {

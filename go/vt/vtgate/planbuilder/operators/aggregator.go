@@ -22,6 +22,8 @@ import (
 
 	"golang.org/x/exp/slices"
 
+	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
+
 	"vitess.io/vitess/go/slices2"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -31,9 +33,11 @@ import (
 
 type (
 	Aggregator struct {
-		Source        ops.Operator
-		Columns       []AggrColumn
-		GroupingOrder []int
+		Source  ops.Operator
+		Columns []*sqlparser.AliasedExpr
+
+		Grouping     []GroupBy
+		Aggregations []Aggr
 
 		// Pushed will be set to true once this aggregation has been pushed deeper in the tree
 		Pushed bool
@@ -44,20 +48,17 @@ type (
 
 		QP *QueryProjection
 	}
-
-	// AggrColumn is either an Aggr or a GroupBy - the only types of columns allowed on an Aggregator
-	AggrColumn interface {
-		GetOriginal() *sqlparser.AliasedExpr
-	}
 )
 
 func (a *Aggregator) Clone(inputs []ops.Operator) ops.Operator {
 	return &Aggregator{
 		Source:        inputs[0],
 		Columns:       slices.Clone(a.Columns),
+		Grouping:      slices.Clone(a.Grouping),
+		Aggregations:  slices.Clone(a.Aggregations),
 		Pushed:        a.Pushed,
 		Original:      a.Original,
-		GroupingOrder: slices.Clone(a.GroupingOrder),
+		ResultColumns: a.ResultColumns,
 		QP:            a.QP,
 	}
 }
@@ -86,39 +87,32 @@ func (a *Aggregator) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser
 	if !reuseExisting {
 		return nil, 0, vterrors.VT12001("reuse columns on Aggregator")
 	}
-	columns, err := a.GetColumns()
-	if err != nil {
-		return nil, 0, err
+
+	extractExpr := func(expr *sqlparser.AliasedExpr) sqlparser.Expr { return expr.Expr }
+	if offset, found := canReuseColumn(ctx, a.Columns, expr.Expr, extractExpr); found {
+		return a, offset, nil
 	}
 	colName, isColName := expr.Expr.(*sqlparser.ColName)
-	for i, col := range columns {
-		if ctx.SemTable.EqualsExpr(col.Expr, expr.Expr) {
-			return a, i, nil
-		}
+	for i, col := range a.Columns {
 		if isColName && colName.Name.EqualString(col.As.String()) {
 			return a, i, nil
 		}
 	}
 
 	// if we didn't already have this column, we add it as a grouping
-	a.Columns = append(a.Columns, NewGroupBy(expr.Expr, nil, expr))
-
+	a.Aggregations = append(a.Aggregations, Aggr{
+		Original:  expr,
+		Func:      nil,
+		OpCode:    opcode.AggregateRandom,
+		Alias:     expr.As.String(),
+		ColOffset: len(a.Columns),
+	})
+	a.Columns = append(a.Columns, expr)
 	return a, len(a.Columns) - 1, nil
 }
 
 func (a *Aggregator) GetColumns() (columns []*sqlparser.AliasedExpr, err error) {
-	var weightStrCols []*sqlparser.AliasedExpr
-	cols := slices2.Map(a.Columns, func(from AggrColumn) *sqlparser.AliasedExpr {
-		groupBy, isGroupBy := from.(*GroupBy)
-		if isGroupBy {
-			if groupBy.WOffset != -1 {
-				weightStrCols = append(weightStrCols, aeWrap(weightStringFor(groupBy.WeightStrExpr)))
-			}
-		}
-		return from.GetOriginal()
-	})
-
-	return append(cols, weightStrCols...), nil
+	return a.Columns, nil
 }
 
 func (a *Aggregator) Description() ops.OpDescription {
@@ -128,25 +122,25 @@ func (a *Aggregator) Description() ops.OpDescription {
 }
 
 func (a *Aggregator) ShortDescription() string {
+	columnns := slices2.Map(a.Columns, func(from *sqlparser.AliasedExpr) string {
+		return sqlparser.String(from)
+	})
+
+	if len(a.Grouping) == 0 {
+		return strings.Join(columnns, ", ")
+	}
+
 	var grouping []string
-
-	columnnStrings := slices2.Map(a.Columns, func(from AggrColumn) string {
-		return from.GetOriginal().ColumnName()
-	})
-
-	err := a.VisitGroupBys(func(_, _ int, gb *GroupBy) {
-		grouping = append(grouping, sqlparser.String(gb.Inner))
-	})
-	if err != nil {
-		return "ERROR: " + err.Error()
+	for _, gb := range a.Grouping {
+		grouping = append(grouping, sqlparser.String(gb.WeightStrExpr))
 	}
 
-	var gb string
-	if len(grouping) > 0 {
-		gb = " group by " + strings.Join(grouping, ",")
+	org := ""
+	if a.Original {
+		org = "ORG "
 	}
 
-	return strings.Join(columnnStrings, ", ") + gb
+	return fmt.Sprintf("%s%s group by %s", org, strings.Join(columnns, ", "), strings.Join(grouping, ","))
 }
 
 func (a *Aggregator) GetOrdering() ([]ops.OrderBy, error) {
@@ -156,43 +150,28 @@ func (a *Aggregator) GetOrdering() ([]ops.OrderBy, error) {
 var _ ops.Operator = (*Aggregator)(nil)
 
 func (a *Aggregator) planOffsets(ctx *plancontext.PlanningContext) error {
-	for _, column := range a.Columns {
-		switch col := column.(type) {
-		case *Aggr:
-		case *GroupBy:
-			if !ctx.SemTable.NeedsWeightString(col.WeightStrExpr) {
-				col.WOffset = -1
-				continue
-			}
-
-			wsExpr := &sqlparser.WeightStringFuncExpr{Expr: col.WeightStrExpr}
-			newSrc, offset, err := a.Source.AddColumn(ctx, aeWrap(wsExpr), true)
-			if err != nil {
-				return err
-			}
-			col.WOffset = offset
-			a.Source = newSrc
+	for idx, by := range a.Grouping {
+		if !ctx.SemTable.NeedsWeightString(by.WeightStrExpr) {
+			a.Grouping[idx].WSCol = -1
+			continue
 		}
 
+		wsExpr := &sqlparser.WeightStringFuncExpr{Expr: by.WeightStrExpr}
+		aliasedExpr := aeWrap(wsExpr)
+		newSrc, offset, err := a.Source.AddColumn(ctx, aliasedExpr, true)
+		if err != nil {
+			return err
+		}
+		a.Source = newSrc
+		a.Grouping[idx].WSCol = offset
+		if offset == len(a.Columns) {
+			// if we get an offset at the end of our current column list, it means we added a new column
+			a.Columns = append(a.Columns, aliasedExpr)
+		}
 	}
 	return nil
 }
 
 func (a *Aggregator) setTruncateColumnCount(offset int) {
 	a.ResultColumns = offset
-}
-
-// VisitGroupBys iterates over the GroupBy columns in the Aggregator's grouping order
-// and applies the provided visitor function to each GroupBy column. The visitor
-// function takes the index of the GroupBy column in the grouping order and the GroupBy
-// column itself as arguments.
-func (a *Aggregator) VisitGroupBys(visitor func(grpIdx, colIdx int, gb *GroupBy)) error {
-	for idx, colIdx := range a.GroupingOrder {
-		groupingExpr, ok := a.Columns[colIdx].(*GroupBy)
-		if !ok {
-			return vterrors.VT13001("expected grouping here")
-		}
-		visitor(idx, colIdx, groupingExpr)
-	}
-	return nil
 }
