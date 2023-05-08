@@ -33,6 +33,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/throttler"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/planbuilder"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -151,7 +152,7 @@ func NewTxThrottler(env tabletenv.Env, topoServer *topo.Server) *TxThrottler {
 		log.Errorf("Error creating transaction throttler. Transaction throttling will"+
 			" be disabled. Error: %v", err)
 		// newTxThrottler with disabled config never returns an error
-		txThrottler, _ = newTxThrottler(env, &txThrottlerConfig{enabled: false})
+		txThrottler, _ = newTxThrottler(env, &txThrottlerConfig{enabled: false, autoCommit: env.Config().TxThrottlerAutoCommit})
 	} else {
 		log.Infof("Initialized transaction throttler with config: %+v", txThrottler.config)
 	}
@@ -180,6 +181,7 @@ func tryCreateTxThrottler(env tabletenv.Env, topoServer *topo.Server) (*TxThrott
 
 	return newTxThrottler(env, &txThrottlerConfig{
 		enabled:          true,
+		autoCommit:       env.Config().TxThrottlerAutoCommit,
 		topoServer:       topoServer,
 		throttlerConfig:  &throttlerConfig,
 		healthCheckCells: healthCheckCells,
@@ -193,6 +195,10 @@ type txThrottlerConfig struct {
 	// of a disabled transaction throttler do nothing and Throttle() always
 	// returns false.
 	enabled bool
+
+	// if autoCommit is true, the transaction throtler may throttle statements outside of BEGIN; ... ; COMMIT; blocks,
+	// instead of only those
+	autoCommit bool
 
 	topoServer      *topo.Server
 	throttlerConfig *throttlerdatapb.Configuration
@@ -266,14 +272,34 @@ func (t *TxThrottler) Close() {
 // It returns true if the transaction should not proceed (the caller
 // should back off). Throttle requires that Open() was previously called
 // successfully.
-func (t *TxThrottler) Throttle(priority int) (result bool) {
+func (t *TxThrottler) Throttle(priority int, planType *planbuilder.PlanType) (result bool) {
 	if !t.config.enabled {
 		return false
 	}
 
-	// Throttle according to both what the throttle state says, and the priority. Workloads with lower priority value
+	// This blocks handles deciding whether to apply the throttle or not. In
+	// summary, it will apply the throttling logic in any of these cases:
+	// - The plan type is nil (as during TabletServer.begin()) AND throttling auto-commit statements is disabled;
+	// - The plan type is for a write (INSERT/UPDATE/DELETE/LOAD) AND throttling auto-commit statements is enabled;
+	applyThrottling := false
+	if planType == nil && !t.config.autoCommit {
+		applyThrottling = true
+	}
+	if planType != nil && t.config.autoCommit {
+		switch *planType {
+		case planbuilder.PlanInsert, planbuilder.PlanInsertMessage, planbuilder.PlanUpdate, planbuilder.PlanUpdateLimit, planbuilder.PlanDeleteLimit, planbuilder.PlanDelete, planbuilder.PlanLoad:
+			applyThrottling = true
+			break
+		default:
+			applyThrottling = false
+		}
+	}
+
+	// Throttle according to both what the throttler state state says, the priority. Workloads with lower priority value
 	// are less likely to be throttled.
-	result = t.state.throttle() && rand.Intn(sqlparser.MaxPriorityValue) < priority
+	if applyThrottling {
+		result = t.state.throttle() && rand.Intn(sqlparser.MaxPriorityValue) < priority
+	}
 	t.requestsTotal.Add(1)
 	if result {
 		t.requestsThrottled.Add(1)

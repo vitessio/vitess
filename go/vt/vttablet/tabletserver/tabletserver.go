@@ -491,21 +491,7 @@ func (tsv *TabletServer) begin(ctx context.Context, target *querypb.Target, save
 		target, options, false, /* allowOnShutdown */
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
 			startTime := time.Now()
-			priority := tsv.config.TxThrottlerDefaultPriority
-			if options != nil && options.Priority != "" {
-				optionsPriority, err := strconv.Atoi(options.Priority)
-				// This should never error out, as the value for Priority has been validated in the vtgate already.
-				// Still, handle it just to make sure.
-				if err != nil {
-					log.Errorf(
-						"The value of the %s query directive could not be converted to integer, using the "+
-							"default value. Error was: %s",
-						sqlparser.DirectivePriority, priority, err)
-				} else {
-					priority = optionsPriority
-				}
-			}
-			if tsv.txThrottler.Throttle(priority) {
+			if tsv.txThrottler.Throttle(tsv.getPriorityFromOptions(options), nil) {
 				return vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "Transaction throttled")
 			}
 			var connSetting *pools.Setting
@@ -535,6 +521,24 @@ func (tsv *TabletServer) begin(ctx context.Context, target *querypb.Target, save
 		},
 	)
 	return state, err
+}
+
+func (tsv *TabletServer) getPriorityFromOptions(options *querypb.ExecuteOptions) int {
+	priority := tsv.config.TxThrottlerDefaultPriority
+	if options != nil && options.Priority != "" {
+		optionsPriority, err := strconv.Atoi(options.Priority)
+		// This should never error out, as the value for Priority has been validated in the vtgate already.
+		// Still, handle it just to make sure.
+		if err != nil {
+			log.Errorf(
+				"The value of the %s query directive could not be converted to integer, using the "+
+					"default value. Error was: %s",
+				sqlparser.DirectivePriority, priority, err)
+		} else {
+			priority = optionsPriority
+		}
+	}
+	return priority
 }
 
 // Commit commits the specified transaction.
@@ -770,6 +774,9 @@ func (tsv *TabletServer) execute(ctx context.Context, target *querypb.Target, sq
 			}
 			if err = plan.IsValid(reservedID != 0, len(settings) > 0); err != nil {
 				return err
+			}
+			if tsv.txThrottler.Throttle(tsv.getPriorityFromOptions(options), &plan.PlanID) {
+				return vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "Transaction throttled")
 			}
 			// If both the values are non-zero then by design they are same value. So, it is safe to overwrite.
 			connID := reservedID
