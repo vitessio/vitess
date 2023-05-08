@@ -4605,5 +4605,24 @@
         "Table": "user"
       }
     }
+  },
+  {
+    "comment": "update using last_insert_id with an argument",
+    "query": "update main.m1 set foo = last_insert_id(foo+1) where id = 12345",
+    "plan": {
+      "QueryType": "UPDATE",
+      "Original": "update main.m1 set foo = last_insert_id(foo+1) where id = 12345",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "update m1 set foo = last_insert_id(foo + 1) where id = 12345"
+      }
+    }
   }
 ]
