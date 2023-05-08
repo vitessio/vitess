@@ -1555,18 +1555,18 @@ func (tsv *TabletServer) convertAndLogError(ctx context.Context, sql string, bin
 		if tsv.TerseErrors && errCode != vtrpcpb.Code_FAILED_PRECONDITION {
 			err = vterrors.Errorf(errCode, "(errno %d) (sqlstate %s)%s: %s", errnum, sqlState, callerID, queryAsString(sql, bindVariables, tsv.TerseErrors, false))
 			if logMethod != nil {
-				message = fmt.Sprintf("(errno %d) (sqlstate %s)%s: %s", errnum, sqlState, callerID, truncateSQLAndBindVars(sql, bindVariables, tsv.Config().SanitizeLogMessages))
+				message = fmt.Sprintf("(errno %d) (sqlstate %s)%s: %s", errnum, sqlState, callerID, queryAsString(sql, bindVariables, tsv.Config().SanitizeLogMessages, true))
 			}
 		} else {
 			err = vterrors.Errorf(errCode, "%s (errno %d) (sqlstate %s)%s: %s", sqlErr.Message, errnum, sqlState, callerID, queryAsString(sql, bindVariables, false, false))
 			if logMethod != nil {
-				message = fmt.Sprintf("%s (errno %d) (sqlstate %s)%s: %s", sqlErr.Message, errnum, sqlState, callerID, truncateSQLAndBindVars(sql, bindVariables, tsv.Config().SanitizeLogMessages))
+				message = fmt.Sprintf("%s (errno %d) (sqlstate %s)%s: %s", sqlErr.Message, errnum, sqlState, callerID, queryAsString(sql, bindVariables, tsv.Config().SanitizeLogMessages, true))
 			}
 		}
 	} else {
 		err = vterrors.Errorf(errCode, "%v%s", err.Error(), callerID)
 		if logMethod != nil {
-			message = fmt.Sprintf("%v: %v", err, truncateSQLAndBindVars(sql, bindVariables, tsv.Config().SanitizeLogMessages))
+			message = fmt.Sprintf("%v: %v", err, queryAsString(sql, bindVariables, tsv.Config().SanitizeLogMessages, true))
 		}
 	}
 
@@ -1579,38 +1579,6 @@ func (tsv *TabletServer) convertAndLogError(ctx context.Context, sql string, bin
 	}
 
 	return err
-}
-
-// truncateSQLAndBindVars calls TruncateForLog which:
-//
-//	splits off trailing comments, truncates the query, re-adds the trailing comments,
-//	if sanitize is false appends quoted bindvar:value pairs in sorted order, and
-//	lastly it truncates the resulting string
-func truncateSQLAndBindVars(sql string, bindVariables map[string]*querypb.BindVariable, sanitize bool) string {
-	truncatedQuery := sqlparser.TruncateForLog(sql)
-	buf := &bytes.Buffer{}
-	fmt.Fprintf(buf, "BindVars: {")
-	if len(bindVariables) > 0 {
-		if sanitize {
-			fmt.Fprintf(buf, "[REDACTED]")
-		} else {
-			var keys []string
-			for key := range bindVariables {
-				keys = append(keys, key)
-			}
-			sort.Strings(keys)
-			for _, key := range keys {
-				fmt.Fprintf(buf, "%s: %q", key, fmt.Sprintf("%v", bindVariables[key]))
-			}
-		}
-	}
-	fmt.Fprintf(buf, "}")
-	bv := buf.String()
-	maxLen := sqlparser.GetTruncateErrLen()
-	if maxLen != 0 && len(bv) > maxLen {
-		bv = bv[:maxLen-12] + " [TRUNCATED]"
-	}
-	return fmt.Sprintf("Sql: %q, %s", truncatedQuery, bv)
 }
 
 func convertErrorCode(err error) vtrpcpb.Code {
@@ -2035,17 +2003,17 @@ func (tsv *TabletServer) ConsolidatorMode() string {
 	return tsv.qe.consolidatorMode.Load().(string)
 }
 
-// queryAsString returns a readable normalized version of the query and if sanitize
-// is false it also includes the bind variables.
+// queryAsString returns a readable normalized version of the query.
+// If sanitize is false it also includes the bind variables.
+// If truncateForLog is true, it truncates the sql query and the
+// bind variables.
 func queryAsString(sql string, bindVariables map[string]*querypb.BindVariable, sanitize bool, truncateForLog bool) string {
-	buf := &bytes.Buffer{}
-	// sql is the normalized query without the bind vars
-	fmt.Fprintf(buf, "Sql: %q", sql)
 	// Add the bind vars unless this needs to be sanitized, e.g. for log messages
-	fmt.Fprintf(buf, ", BindVars: {")
+	bvBuf := &bytes.Buffer{}
+	fmt.Fprintf(bvBuf, "BindVars: {")
 	if len(bindVariables) > 0 {
 		if sanitize {
-			fmt.Fprintf(buf, "[REDACTED]")
+			fmt.Fprintf(bvBuf, "[REDACTED]")
 		} else {
 			var keys []string
 			for key := range bindVariables {
@@ -2055,17 +2023,30 @@ func queryAsString(sql string, bindVariables map[string]*querypb.BindVariable, s
 			var valString string
 			for _, key := range keys {
 				valString = fmt.Sprintf("%v", bindVariables[key])
-				fmt.Fprintf(buf, "%s: %q", key, valString)
+				fmt.Fprintf(bvBuf, "%s: %q", key, valString)
 			}
 		}
 	}
-	fmt.Fprintf(buf, "}")
-	query := buf.String()
-	if truncateForLog {
-		return sqlparser.TruncateForLog(query)
-	} else {
-		return query
+	fmt.Fprintf(bvBuf, "}")
+
+	// Truncate the bind vars if necessary
+	bv := bvBuf.String()
+	maxLen := sqlparser.GetTruncateErrLen()
+	if truncateForLog && maxLen > 0 && len(bv) > maxLen {
+		if maxLen <= 12 {
+			bv = "[TRUNCATED]"
+		} else {
+			bv = bv[:maxLen-12] + " [TRUNCATED]"
+		}
 	}
+
+	// Truncate the sql query if necessary
+	if truncateForLog {
+		sql = sqlparser.TruncateForLog(sql)
+	}
+
+	// sql is the normalized query without the bind vars
+	return fmt.Sprintf("Sql: %q, %s", sql, bv)
 }
 
 // withTimeout returns a context based on the specified timeout.
