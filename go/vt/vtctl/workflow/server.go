@@ -289,8 +289,15 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 	span.Annotate("active_only", req.ActiveOnly)
 
 	where := ""
+	predicates := []string{}
 	if req.ActiveOnly {
-		where = "WHERE state <> 'Stopped'"
+		predicates = append(predicates, "state <> 'Stopped'")
+	}
+	if req.Workflow != "" {
+		predicates = append(predicates, fmt.Sprintf("workflow = '%s'", req.Workflow))
+	}
+	if len(predicates) > 0 {
+		where = fmt.Sprintf("WHERE %s", strings.Join(predicates, " AND "))
 	}
 
 	query := fmt.Sprintf(`
@@ -1120,6 +1127,9 @@ func (s *Server) WorkflowDelete(ctx context.Context, req *vtctldatapb.WorkflowDe
 
 	// Cleanup related data and artifacts.
 	if _, err := s.DropTargets(ctx, req.Keyspace, req.Workflow, req.KeepData, req.KeepRoutingRules, false); err != nil {
+		if topo.IsErrType(err, topo.NoNode) {
+			return nil, vterrors.Wrapf(err, "%s keyspace does not exist", req.Keyspace)
+		}
 		return nil, err
 	}
 
@@ -1139,9 +1149,6 @@ func (s *Server) WorkflowDelete(ctx context.Context, req *vtctldatapb.WorkflowDe
 	}
 	res, err := vx.CallbackContext(ctx, callback)
 	if err != nil {
-		if topo.IsErrType(err, topo.NoNode) {
-			return nil, vterrors.Wrapf(err, "%s keyspace does not exist", req.Keyspace)
-		}
 		return nil, err
 	}
 

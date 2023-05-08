@@ -793,6 +793,8 @@ message GetWorkflowsRequest {
   string keyspace = 1;
   bool active_only = 2;
   bool name_only = 3;
+  // If you only want a specific workflow then set this field.
+  string workflow = 4;
 }
 
 message GetWorkflowsResponse {

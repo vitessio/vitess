@@ -63,6 +63,17 @@ var (
 		RunE:                  commandWorkflowDelete,
 	}
 
+	// WorkflowShow makes a WorkflowDelete gRPC call to a vtctld.
+	WorkflowShow = &cobra.Command{
+		Use:                   "show",
+		Short:                 "Show the details for a VReplication workflow",
+		Example:               `vtctldclient --server=localhost:15999 workflow --keyspace=customer show --workflow=commerce2customer"`,
+		DisableFlagsInUseLine: true,
+		Aliases:               []string{"Show"},
+		Args:                  cobra.NoArgs,
+		RunE:                  commandWorkflowShow,
+	}
+
 	// WorkflowUpdate makes a WorkflowUpdate gRPC call to a vtctld.
 	WorkflowUpdate = &cobra.Command{
 		Use:                   "update",
@@ -176,6 +187,28 @@ func commandWorkflowDelete(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+func commandWorkflowShow(cmd *cobra.Command, args []string) error {
+	cli.FinishedParsing(cmd)
+
+	req := &vtctldatapb.GetWorkflowsRequest{
+		Keyspace: workflowOptions.Keyspace,
+		Workflow: workflowDeleteOptions.Workflow,
+	}
+	resp, err := client.GetWorkflows(commandCtx, req)
+	if err != nil {
+		return err
+	}
+
+	data, err := cli.MarshalJSON(resp)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("%s\n", data)
+
+	return nil
+}
+
 func commandWorkflowUpdate(cmd *cobra.Command, args []string) error {
 	cli.FinishedParsing(cmd)
 
@@ -224,16 +257,21 @@ func init() {
 	Workflow.PersistentFlags().StringVarP(&workflowOptions.Keyspace, "keyspace", "k", "", "Keyspace context for the workflow (required)")
 	Workflow.MarkPersistentFlagRequired("keyspace")
 	Root.AddCommand(Workflow)
-	WorkflowUpdate.Flags().StringVarP(&workflowUpdateOptions.Workflow, "workflow", "w", "", "The workflow you want to update (required)")
-	WorkflowUpdate.MarkFlagRequired("workflow")
-	WorkflowUpdate.Flags().StringSliceVarP(&workflowUpdateOptions.Cells, "cells", "c", nil, "New Cell(s) or CellAlias(es) (comma-separated) to replicate from")
-	WorkflowUpdate.Flags().StringSliceVarP(&workflowUpdateOptions.TabletTypes, "tablet-types", "t", nil, "New source tablet types to replicate from (e.g. PRIMARY,REPLICA,RDONLY)")
-	WorkflowUpdate.Flags().StringVar(&workflowUpdateOptions.OnDDL, "on-ddl", "", "New instruction on what to do when DDL is encountered in the VReplication stream. Possible values are IGNORE, STOP, EXEC, and EXEC_IGNORE")
-	Workflow.AddCommand(WorkflowUpdate)
 
 	WorkflowDelete.Flags().StringVarP(&workflowDeleteOptions.Workflow, "workflow", "w", "", "The workflow you want to update (required)")
 	WorkflowDelete.MarkFlagRequired("workflow")
 	WorkflowDelete.Flags().BoolVar(&workflowDeleteOptions.KeepData, "keep-data", false, "Keep the partially copied table data from the workflow in the target keyspace")
 	WorkflowDelete.Flags().BoolVar(&workflowDeleteOptions.KeepRoutingRules, "keep-routing-rules", false, "Keep the routing rules created for the workflow")
 	Workflow.AddCommand(WorkflowDelete)
+
+	WorkflowShow.Flags().StringVarP(&workflowDeleteOptions.Workflow, "workflow", "w", "", "The workflow you want the details for (required)")
+	WorkflowShow.MarkFlagRequired("workflow")
+	Workflow.AddCommand(WorkflowShow)
+
+	WorkflowUpdate.Flags().StringVarP(&workflowUpdateOptions.Workflow, "workflow", "w", "", "The workflow you want to update (required)")
+	WorkflowUpdate.MarkFlagRequired("workflow")
+	WorkflowUpdate.Flags().StringSliceVarP(&workflowUpdateOptions.Cells, "cells", "c", nil, "New Cell(s) or CellAlias(es) (comma-separated) to replicate from")
+	WorkflowUpdate.Flags().StringSliceVarP(&workflowUpdateOptions.TabletTypes, "tablet-types", "t", nil, "New source tablet types to replicate from (e.g. PRIMARY,REPLICA,RDONLY)")
+	WorkflowUpdate.Flags().StringVar(&workflowUpdateOptions.OnDDL, "on-ddl", "", "New instruction on what to do when DDL is encountered in the VReplication stream. Possible values are IGNORE, STOP, EXEC, and EXEC_IGNORE")
+	Workflow.AddCommand(WorkflowUpdate)
 }

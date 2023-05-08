@@ -51078,6 +51078,9 @@ export namespace vtctldata {
 
         /** GetWorkflowsRequest name_only */
         name_only?: (boolean|null);
+
+        /** GetWorkflowsRequest workflow */
+        workflow?: (string|null);
     }
 
     /** Represents a GetWorkflowsRequest. */
@@ -51097,6 +51100,9 @@ export namespace vtctldata {
 
         /** GetWorkflowsRequest name_only. */
         public name_only: boolean;
+
+        /** GetWorkflowsRequest workflow. */
+        public workflow: string;
 
         /**
          * Creates a new GetWorkflowsRequest instance using the specified properties.

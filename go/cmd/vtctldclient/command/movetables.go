@@ -49,7 +49,7 @@ See the --help output for each command for more details.`,
 	MoveTablesCancel = &cobra.Command{
 		Use:                   "cancel",
 		Short:                 "Cancel a MoveTables VReplication workflow",
-		Example:               `vtctldclient --server=localhost:15999 MoveTables --workflow "commerce2customer" --target-keyspace "customer" Cancel`,
+		Example:               `vtctldclient --server=localhost:15999 MoveTables --workflow "commerce2customer" --target-keyspace "customer" cancel`,
 		DisableFlagsInUseLine: true,
 		Aliases:               []string{"Cancel"},
 		Args:                  cobra.NoArgs,
@@ -60,7 +60,7 @@ See the --help output for each command for more details.`,
 	MoveTablesCreate = &cobra.Command{
 		Use:                   "create",
 		Short:                 "Create and optionally run a MoveTables VReplication workflow",
-		Example:               `vtctldclient --server=localhost:15999 MoveTables --workflow "commerce2customer" --target-keyspace "customer" Create --source-keyspace "commerce" --cells "zone1" --cells "zone2" --tablet-types "replica"`,
+		Example:               `vtctldclient --server=localhost:15999 MoveTables --workflow "commerce2customer" --target-keyspace "customer" create --source-keyspace "commerce" --cells "zone1" --cells "zone2" --tablet-types "replica"`,
 		DisableFlagsInUseLine: true,
 		Aliases:               []string{"Create"},
 		Args:                  cobra.NoArgs,
@@ -92,6 +92,17 @@ See the --help output for each command for more details.`,
 			return nil
 		},
 		RunE: commandMoveTablesCreate,
+	}
+
+	// MoveTablesShow makes a GetWorkflows gRPC call to a vtctld.
+	MoveTablesShow = &cobra.Command{
+		Use:                   "show",
+		Short:                 "Show the details for a MoveTables VReplication workflow",
+		Example:               `vtctldclient --server=localhost:15999 MoveTables --workflow "commerce2customer" --target-keyspace "customer" show`,
+		DisableFlagsInUseLine: true,
+		Aliases:               []string{"Show"},
+		Args:                  cobra.NoArgs,
+		RunE:                  commandMoveTablesShow,
 	}
 )
 
@@ -181,12 +192,38 @@ func commandMoveTablesCancel(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+func commandMoveTablesShow(cmd *cobra.Command, args []string) error {
+	cli.FinishedParsing(cmd)
+
+	req := &vtctldatapb.GetWorkflowsRequest{
+		Keyspace: moveTablesOptions.TargetKeyspace,
+		Workflow: moveTablesOptions.Workflow,
+	}
+	resp, err := client.GetWorkflows(commandCtx, req)
+	if err != nil {
+		return err
+	}
+
+	data, err := cli.MarshalJSON(resp)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("%s\n", data)
+
+	return nil
+}
+
 func init() {
 	MoveTables.PersistentFlags().StringVar(&moveTablesOptions.TargetKeyspace, "target-keyspace", "", "Keyspace where the tables are being moved to and where the workflow exists (required)")
 	MoveTables.MarkPersistentFlagRequired("target-keyspace")
 	MoveTables.Flags().StringVarP(&moveTablesOptions.Workflow, "workflow", "w", "", "The workflow you want to perform the command on (required)")
 	MoveTables.MarkPersistentFlagRequired("workflow")
 	Root.AddCommand(MoveTables)
+
+	MoveTablesCancel.Flags().BoolVar(&moveTablesCancelOptions.KeepData, "keep-data", false, "Keep the partially copied table data from the MoveTables workflow in the target keyspace")
+	MoveTablesCancel.Flags().BoolVar(&moveTablesCancelOptions.KeepRoutingRules, "keep-routing-rules", false, "Keep the routing rules created for the MoveTables workflow")
+	MoveTables.AddCommand(MoveTablesCancel)
 
 	MoveTablesCreate.PersistentFlags().StringVar(&moveTablesCreateOptions.SourceKeyspace, "source-keyspace", "", "Keyspace where the tables are being moved from (required)")
 	MoveTablesCreate.MarkPersistentFlagRequired("source-keyspace")
@@ -201,7 +238,5 @@ func init() {
 	MoveTablesCreate.Flags().BoolVar(&moveTablesCreateOptions.StopAfterCopy, "stop-after-copy", false, "Stop the MoveTables workflow after it's finished copying the existing rows and before it starts replicating changes")
 	MoveTables.AddCommand(MoveTablesCreate)
 
-	MoveTablesCancel.Flags().BoolVar(&moveTablesCancelOptions.KeepData, "keep-data", false, "Keep the partially copied table data from the MoveTables workflow in the target keyspace")
-	MoveTablesCancel.Flags().BoolVar(&moveTablesCancelOptions.KeepRoutingRules, "keep-routing-rules", false, "Keep the routing rules created for the MoveTables workflow")
-	MoveTables.AddCommand(MoveTablesCancel)
+	MoveTables.AddCommand(MoveTablesShow)
 }
