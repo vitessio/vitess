@@ -276,6 +276,8 @@ func (c *cow) copyOnRewriteSQLNode(n SQLNode, parent SQLNode) (out SQLNode, chan
 		return c.copyOnRewriteRefOfLimit(n, parent)
 	case *LineStringExpr:
 		return c.copyOnRewriteRefOfLineStringExpr(n, parent)
+	case *LinestrPropertyFuncExpr:
+		return c.copyOnRewriteRefOfLinestrPropertyFuncExpr(n, parent)
 	case ListArg:
 		return c.copyOnRewriteListArg(n, parent)
 	case *Literal:
@@ -3501,6 +3503,30 @@ func (c *cow) copyOnRewriteRefOfLineStringExpr(n *LineStringExpr, parent SQLNode
 	}
 	return
 }
+func (c *cow) copyOnRewriteRefOfLinestrPropertyFuncExpr(n *LinestrPropertyFuncExpr, parent SQLNode) (out SQLNode, changed bool) {
+	if n == nil || c.cursor.stop {
+		return n, false
+	}
+	out = n
+	if c.pre == nil || c.pre(n, parent) {
+		_Linestring, changedLinestring := c.copyOnRewriteExpr(n.Linestring, n)
+		_PropertyDefArg, changedPropertyDefArg := c.copyOnRewriteExpr(n.PropertyDefArg, n)
+		if changedLinestring || changedPropertyDefArg {
+			res := *n
+			res.Linestring, _ = _Linestring.(Expr)
+			res.PropertyDefArg, _ = _PropertyDefArg.(Expr)
+			out = &res
+			if c.cloned != nil {
+				c.cloned(n, out)
+			}
+			changed = true
+		}
+	}
+	if c.post != nil {
+		out, changed = c.postVisit(out, parent, changed)
+	}
+	return
+}
 func (c *cow) copyOnRewriteRefOfLiteral(n *Literal, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -6545,6 +6571,8 @@ func (c *cow) copyOnRewriteCallable(n Callable, parent SQLNode) (out SQLNode, ch
 		return c.copyOnRewriteRefOfLagLeadExpr(n, parent)
 	case *LineStringExpr:
 		return c.copyOnRewriteRefOfLineStringExpr(n, parent)
+	case *LinestrPropertyFuncExpr:
+		return c.copyOnRewriteRefOfLinestrPropertyFuncExpr(n, parent)
 	case *LocateExpr:
 		return c.copyOnRewriteRefOfLocateExpr(n, parent)
 	case *MatchExpr:
@@ -6815,6 +6843,8 @@ func (c *cow) copyOnRewriteExpr(n Expr, parent SQLNode) (out SQLNode, changed bo
 		return c.copyOnRewriteRefOfLagLeadExpr(n, parent)
 	case *LineStringExpr:
 		return c.copyOnRewriteRefOfLineStringExpr(n, parent)
+	case *LinestrPropertyFuncExpr:
+		return c.copyOnRewriteRefOfLinestrPropertyFuncExpr(n, parent)
 	case ListArg:
 		return c.copyOnRewriteListArg(n, parent)
 	case *Literal:
