@@ -37,7 +37,7 @@ func tryPushingDownAggregator(ctx *plancontext.PlanningContext, aggregator *Aggr
 	aggregator.Pushed = true
 	switch src := aggregator.Source.(type) {
 	case *Route:
-		output, applyResult, err = pushDownAggregationThroughRoute(aggregator, src)
+		output, applyResult, err = pushDownAggregationThroughRoute(ctx, aggregator, src)
 	case *ApplyJoin:
 		output, applyResult, err = pushDownAggregationThroughJoin(ctx, aggregator, src)
 	default:
@@ -64,9 +64,9 @@ func (a *Aggregator) aggregateTheAggregates() {
 	}
 }
 
-func pushDownAggregationThroughRoute(aggregator *Aggregator, src *Route) (ops.Operator, rewrite.ApplyResult, error) {
+func pushDownAggregationThroughRoute(ctx *plancontext.PlanningContext, aggregator *Aggregator, src *Route) (ops.Operator, rewrite.ApplyResult, error) {
 	// If the route is single-shard, just swap the aggregator and route.
-	if src.IsSingleShard() {
+	if src.IsSingleShard() || overlappingUniqueVindex(ctx, aggregator.Grouping) {
 		return swap(aggregator, src)
 	}
 
@@ -85,6 +85,42 @@ func pushDownAggregationThroughRoute(aggregator *Aggregator, src *Route) (ops.Op
 	}
 
 	return aggregator, rewrite.NewTree, nil
+}
+
+func overlappingUniqueVindex(ctx *plancontext.PlanningContext, groupByExprs []GroupBy) bool {
+	for _, groupByExpr := range groupByExprs {
+		if exprHasUniqueVindex(ctx, groupByExpr.WeightStrExpr) {
+			return true
+		}
+	}
+	return false
+}
+
+func exprHasUniqueVindex(ctx *plancontext.PlanningContext, expr sqlparser.Expr) bool {
+	return exprHasVindex(ctx, expr, true)
+}
+
+func exprHasVindex(ctx *plancontext.PlanningContext, expr sqlparser.Expr, hasToBeUnique bool) bool {
+	col, isCol := expr.(*sqlparser.ColName)
+	if !isCol {
+		return false
+	}
+	ts := ctx.SemTable.RecursiveDeps(expr)
+	tableInfo, err := ctx.SemTable.TableInfoFor(ts)
+	if err != nil {
+		return false
+	}
+	vschemaTable := tableInfo.GetVindexTable()
+	for _, vindex := range vschemaTable.ColumnVindexes {
+		// TODO: Support composite vindexes (multicol, etc).
+		if len(vindex.Columns) > 1 || hasToBeUnique && !vindex.IsUnique() {
+			return false
+		}
+		if col.Name.Equal(vindex.Columns[0]) {
+			return true
+		}
+	}
+	return false
 }
 
 /*
