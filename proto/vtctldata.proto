@@ -1363,6 +1363,20 @@ message WorkflowDeleteResponse {
   repeated TabletInfo details = 2;
 }
 
+message WorkflowProgressRequest {
+  string keyspace = 1;
+  string workflow = 2;
+}
+
+message WorkflowProgressResponse {
+  message Progress {
+    string header = 1;
+    repeated string rows = 2;
+  }
+  Progress copy_progress = 1;
+  Progress stream_progress = 2;
+}
+
 message WorkflowUpdateRequest {
   string keyspace = 1;
   // TabletRequest gets passed on to each primary tablet involved

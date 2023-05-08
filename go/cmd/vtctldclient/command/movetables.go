@@ -38,7 +38,7 @@ var (
 	MoveTables = &cobra.Command{
 		Use:   "movetables --workflow <workflow> --target-keyspace <keyspace> [command]",
 		Short: "Perform commands related to moving tables from a source keyspace to a target keyspace.",
-		Long: `MoveTables commands: Create, Show, Progress, SwitchTraffic, ReverseTraffic, Stop, Cancel, and Delete.
+		Long: `MoveTables commands: Create, Show, Progress, SwitchTraffic, ReverseTraffic, Stop, Start, Cancel, and Delete.
 See the --help output for each command for more details.`,
 		DisableFlagsInUseLine: true,
 		Aliases:               []string{"MoveTables"},
@@ -92,6 +92,17 @@ See the --help output for each command for more details.`,
 			return nil
 		},
 		RunE: commandMoveTablesCreate,
+	}
+
+	// MoveTablesProgress makes a GetWorkflows gRPC call to a vtctld.
+	MoveTablesProgress = &cobra.Command{
+		Use:                   "progress",
+		Short:                 "Show the current progress for a MoveTables VReplication workflow",
+		Example:               `vtctldclient --server=localhost:15999 MoveTables --workflow "commerce2customer" --target-keyspace "customer" progress`,
+		DisableFlagsInUseLine: true,
+		Aliases:               []string{"Progress"},
+		Args:                  cobra.NoArgs,
+		RunE:                  commandMoveTablesProgress,
 	}
 
 	// MoveTablesShow makes a GetWorkflows gRPC call to a vtctld.
@@ -192,6 +203,28 @@ func commandMoveTablesCancel(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+func commandMoveTablesProgress(cmd *cobra.Command, args []string) error {
+	cli.FinishedParsing(cmd)
+
+	req := &vtctldatapb.WorkflowProgressRequest{
+		Keyspace: moveTablesOptions.TargetKeyspace,
+		Workflow: moveTablesOptions.Workflow,
+	}
+	resp, err := client.WorkflowProgress(commandCtx, req)
+	if err != nil {
+		return err
+	}
+
+	data, err := cli.MarshalJSON(resp)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("%s\n", data)
+
+	return nil
+}
+
 func commandMoveTablesShow(cmd *cobra.Command, args []string) error {
 	cli.FinishedParsing(cmd)
 
@@ -238,5 +271,6 @@ func init() {
 	MoveTablesCreate.Flags().BoolVar(&moveTablesCreateOptions.StopAfterCopy, "stop-after-copy", false, "Stop the MoveTables workflow after it's finished copying the existing rows and before it starts replicating changes")
 	MoveTables.AddCommand(MoveTablesCreate)
 
+	MoveTables.AddCommand(MoveTablesProgress)
 	MoveTables.AddCommand(MoveTablesShow)
 }

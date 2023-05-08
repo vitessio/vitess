@@ -60433,6 +60433,318 @@ export namespace vtctldata {
         }
     }
 
+    /** Properties of a WorkflowProgressRequest. */
+    interface IWorkflowProgressRequest {
+
+        /** WorkflowProgressRequest keyspace */
+        keyspace?: (string|null);
+
+        /** WorkflowProgressRequest workflow */
+        workflow?: (string|null);
+    }
+
+    /** Represents a WorkflowProgressRequest. */
+    class WorkflowProgressRequest implements IWorkflowProgressRequest {
+
+        /**
+         * Constructs a new WorkflowProgressRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IWorkflowProgressRequest);
+
+        /** WorkflowProgressRequest keyspace. */
+        public keyspace: string;
+
+        /** WorkflowProgressRequest workflow. */
+        public workflow: string;
+
+        /**
+         * Creates a new WorkflowProgressRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns WorkflowProgressRequest instance
+         */
+        public static create(properties?: vtctldata.IWorkflowProgressRequest): vtctldata.WorkflowProgressRequest;
+
+        /**
+         * Encodes the specified WorkflowProgressRequest message. Does not implicitly {@link vtctldata.WorkflowProgressRequest.verify|verify} messages.
+         * @param message WorkflowProgressRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IWorkflowProgressRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified WorkflowProgressRequest message, length delimited. Does not implicitly {@link vtctldata.WorkflowProgressRequest.verify|verify} messages.
+         * @param message WorkflowProgressRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IWorkflowProgressRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a WorkflowProgressRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns WorkflowProgressRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.WorkflowProgressRequest;
+
+        /**
+         * Decodes a WorkflowProgressRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns WorkflowProgressRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.WorkflowProgressRequest;
+
+        /**
+         * Verifies a WorkflowProgressRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a WorkflowProgressRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns WorkflowProgressRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.WorkflowProgressRequest;
+
+        /**
+         * Creates a plain object from a WorkflowProgressRequest message. Also converts values to other types if specified.
+         * @param message WorkflowProgressRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.WorkflowProgressRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this WorkflowProgressRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for WorkflowProgressRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a WorkflowProgressResponse. */
+    interface IWorkflowProgressResponse {
+
+        /** WorkflowProgressResponse copy_progress */
+        copy_progress?: (vtctldata.WorkflowProgressResponse.IProgress|null);
+
+        /** WorkflowProgressResponse stream_progress */
+        stream_progress?: (vtctldata.WorkflowProgressResponse.IProgress|null);
+    }
+
+    /** Represents a WorkflowProgressResponse. */
+    class WorkflowProgressResponse implements IWorkflowProgressResponse {
+
+        /**
+         * Constructs a new WorkflowProgressResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IWorkflowProgressResponse);
+
+        /** WorkflowProgressResponse copy_progress. */
+        public copy_progress?: (vtctldata.WorkflowProgressResponse.IProgress|null);
+
+        /** WorkflowProgressResponse stream_progress. */
+        public stream_progress?: (vtctldata.WorkflowProgressResponse.IProgress|null);
+
+        /**
+         * Creates a new WorkflowProgressResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns WorkflowProgressResponse instance
+         */
+        public static create(properties?: vtctldata.IWorkflowProgressResponse): vtctldata.WorkflowProgressResponse;
+
+        /**
+         * Encodes the specified WorkflowProgressResponse message. Does not implicitly {@link vtctldata.WorkflowProgressResponse.verify|verify} messages.
+         * @param message WorkflowProgressResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IWorkflowProgressResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified WorkflowProgressResponse message, length delimited. Does not implicitly {@link vtctldata.WorkflowProgressResponse.verify|verify} messages.
+         * @param message WorkflowProgressResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IWorkflowProgressResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a WorkflowProgressResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns WorkflowProgressResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.WorkflowProgressResponse;
+
+        /**
+         * Decodes a WorkflowProgressResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns WorkflowProgressResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.WorkflowProgressResponse;
+
+        /**
+         * Verifies a WorkflowProgressResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a WorkflowProgressResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns WorkflowProgressResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.WorkflowProgressResponse;
+
+        /**
+         * Creates a plain object from a WorkflowProgressResponse message. Also converts values to other types if specified.
+         * @param message WorkflowProgressResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.WorkflowProgressResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this WorkflowProgressResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for WorkflowProgressResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    namespace WorkflowProgressResponse {
+
+        /** Properties of a Progress. */
+        interface IProgress {
+
+            /** Progress header */
+            header?: (string|null);
+
+            /** Progress rows */
+            rows?: (string[]|null);
+        }
+
+        /** Represents a Progress. */
+        class Progress implements IProgress {
+
+            /**
+             * Constructs a new Progress.
+             * @param [properties] Properties to set
+             */
+            constructor(properties?: vtctldata.WorkflowProgressResponse.IProgress);
+
+            /** Progress header. */
+            public header: string;
+
+            /** Progress rows. */
+            public rows: string[];
+
+            /**
+             * Creates a new Progress instance using the specified properties.
+             * @param [properties] Properties to set
+             * @returns Progress instance
+             */
+            public static create(properties?: vtctldata.WorkflowProgressResponse.IProgress): vtctldata.WorkflowProgressResponse.Progress;
+
+            /**
+             * Encodes the specified Progress message. Does not implicitly {@link vtctldata.WorkflowProgressResponse.Progress.verify|verify} messages.
+             * @param message Progress message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encode(message: vtctldata.WorkflowProgressResponse.IProgress, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Encodes the specified Progress message, length delimited. Does not implicitly {@link vtctldata.WorkflowProgressResponse.Progress.verify|verify} messages.
+             * @param message Progress message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encodeDelimited(message: vtctldata.WorkflowProgressResponse.IProgress, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Decodes a Progress message from the specified reader or buffer.
+             * @param reader Reader or buffer to decode from
+             * @param [length] Message length if known beforehand
+             * @returns Progress
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.WorkflowProgressResponse.Progress;
+
+            /**
+             * Decodes a Progress message from the specified reader or buffer, length delimited.
+             * @param reader Reader or buffer to decode from
+             * @returns Progress
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.WorkflowProgressResponse.Progress;
+
+            /**
+             * Verifies a Progress message.
+             * @param message Plain object to verify
+             * @returns `null` if valid, otherwise the reason why it is not
+             */
+            public static verify(message: { [k: string]: any }): (string|null);
+
+            /**
+             * Creates a Progress message from a plain object. Also converts values to their respective internal types.
+             * @param object Plain object
+             * @returns Progress
+             */
+            public static fromObject(object: { [k: string]: any }): vtctldata.WorkflowProgressResponse.Progress;
+
+            /**
+             * Creates a plain object from a Progress message. Also converts values to other types if specified.
+             * @param message Progress
+             * @param [options] Conversion options
+             * @returns Plain object
+             */
+            public static toObject(message: vtctldata.WorkflowProgressResponse.Progress, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+            /**
+             * Converts this Progress to JSON.
+             * @returns JSON object
+             */
+            public toJSON(): { [k: string]: any };
+
+            /**
+             * Gets the default type url for Progress
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
+        }
+    }
+
     /** Properties of a WorkflowUpdateRequest. */
     interface IWorkflowUpdateRequest {
 

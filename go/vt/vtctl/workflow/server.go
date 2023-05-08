@@ -54,7 +54,25 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	vttimepb "vitess.io/vitess/go/vt/proto/vttime"
+)
+
+// TableCopyProgress stores the row counts and disk sizes of the source and target tables
+type TableCopyProgress struct {
+	TargetRowCount, TargetTableSize int64
+	SourceRowCount, SourceTableSize int64
+}
+
+// CopyProgress stores the TableCopyProgress for all tables still being copied
+type CopyProgress map[string]*TableCopyProgress
+
+const (
+	cannotSwitchError               = "workflow has errors"
+	cannotSwitchCopyIncomplete      = "copy is still in progress"
+	cannotSwitchHighLag             = "replication lag %ds is higher than allowed lag %ds"
+	cannotSwitchFailedTabletRefresh = "could not refresh all of the tablets involved in the operation:\n%s"
+	cannotSwitchFrozen              = "workflow is frozen"
 )
 
 var (
@@ -1168,6 +1186,214 @@ func (s *Server) WorkflowDelete(ctx context.Context, req *vtctldatapb.WorkflowDe
 	}
 	response.Details = details
 	return response, nil
+}
+
+func (s *Server) WorkflowProgress(ctx context.Context, req *vtctldatapb.WorkflowProgressRequest) (*vtctldatapb.WorkflowProgressResponse, error) {
+	ts, state, err := s.getWorkflowState(ctx, req.Keyspace, req.Workflow)
+	if err != nil {
+		return nil, err
+	}
+	copyProgress, err := s.GetCopyProgress(ctx, ts, state)
+	if err != nil {
+		return nil, err
+	}
+	resp := &vtctldatapb.WorkflowProgressResponse{}
+	if copyProgress != nil {
+		resp.CopyProgress.Header = "Copy Progress (approx)"
+		var tables []string
+		for table := range *copyProgress {
+			tables = append(tables, table)
+		}
+		sort.Strings(tables)
+		var progress TableCopyProgress
+		for table := range *copyProgress {
+			var rowCountPct, tableSizePct int64
+			progress = *(*copyProgress)[table]
+			if progress.SourceRowCount > 0 {
+				rowCountPct = 100.0 * progress.TargetRowCount / progress.SourceRowCount
+			}
+			if progress.SourceTableSize > 0 {
+				tableSizePct = 100.0 * progress.TargetTableSize / progress.SourceTableSize
+			}
+			resp.CopyProgress.Rows = append(resp.CopyProgress.Rows, fmt.Sprintf("%s: rows copied %d/%d (%d%%), size copied %d/%d (%d%%)\r",
+				table, progress.TargetRowCount, progress.SourceRowCount, rowCountPct,
+				progress.TargetTableSize, progress.SourceTableSize, tableSizePct))
+		}
+	}
+
+	res, err := s.GetWorkflows(ctx, &vtctldatapb.GetWorkflowsRequest{
+		Keyspace: req.Keyspace,
+		Workflow: req.Workflow,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if len(res.Workflows) != 1 {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected number of workflows returned; expected 1, got %d", len(res.Workflows))
+	}
+	workflow := res.Workflows[0]
+
+	resp.StreamProgress.Header = fmt.Sprintf("The following vreplication streams exist for workflow %s.%s:\r\r", ts.targetKeyspace, ts.workflow)
+
+	streamKeys := make([]string, 0, len(workflow.ShardStreams))
+	for streamKey := range workflow.ShardStreams {
+		streamKeys = append(streamKeys, streamKey)
+	}
+	sort.Strings(streamKeys)
+	for _, ksShard := range streamKeys {
+		streams := workflow.ShardStreams[ksShard].GetStreams()
+		for _, st := range streams {
+			msg := ""
+			if st.State == "Error" {
+				msg += fmt.Sprintf(": %s.", st.Message)
+			} else if st.Position == "" {
+				msg += ". VStream has not started."
+			} else {
+				now := time.Now().Nanosecond()
+				updateLag := int64(now) - st.TimeUpdated.Seconds
+				if updateLag > 0*1e9 {
+					msg += ". VStream may not be running"
+				}
+				txLag := int64(now) - st.TransactionTimestamp.Seconds
+				msg += fmt.Sprintf(". VStream Lag: %ds.", txLag/1e9)
+				if st.TransactionTimestamp.Seconds > 0 { // if no events occur after copy phase, TransactionTimeStamp can be 0
+					msg += fmt.Sprintf(" Tx time: %s.", time.Unix(st.TransactionTimestamp.Seconds, 0).Format(time.ANSIC))
+				}
+			}
+			resp.StreamProgress.Rows = append(resp.StreamProgress.Rows, fmt.Sprintf("id=%d on %s: Status: %s%s\n", st.Id, ksShard, st.State, msg))
+		}
+	}
+	return resp, nil
+}
+
+// GetCopyProgress returns the progress of all tables being copied in the workflow
+func (s *Server) GetCopyProgress(ctx context.Context, ts *trafficSwitcher, state *State) (*CopyProgress, error) {
+	getTablesQuery := "select distinct table_name from _vt.copy_state cs, _vt.vreplication vr where vr.id = cs.vrepl_id and vr.id = %d"
+	getRowCountQuery := "select table_name, table_rows, data_length from information_schema.tables where table_schema = %s and table_name in (%s)"
+	tables := make(map[string]bool)
+	const MaxRows = 1000
+	sourcePrimaries := make(map[*topodatapb.TabletAlias]bool)
+	for _, target := range ts.targets {
+		for id, bls := range target.Sources {
+			query := fmt.Sprintf(getTablesQuery, id)
+			p3qr, err := s.tmc.ExecuteFetchAsDba(ctx, target.GetPrimary().Tablet, true, &tabletmanagerdatapb.ExecuteFetchAsDbaRequest{
+				Query:   []byte(query),
+				MaxRows: MaxRows,
+			})
+			if err != nil {
+				return nil, err
+			}
+			if len(p3qr.Rows) < 1 {
+				continue
+			}
+			qr := sqltypes.Proto3ToResult(p3qr)
+			for i := 0; i < len(p3qr.Rows); i++ {
+				tables[qr.Rows[i][0].ToString()] = true
+			}
+			sourcesi, err := s.ts.GetShard(ctx, bls.Keyspace, bls.Shard)
+			if err != nil {
+				return nil, err
+			}
+			found := false
+			for existingSource := range sourcePrimaries {
+				if existingSource.Uid == sourcesi.PrimaryAlias.Uid {
+					found = true
+				}
+			}
+			if !found {
+				sourcePrimaries[sourcesi.PrimaryAlias] = true
+			}
+		}
+	}
+	if len(tables) == 0 {
+		return nil, nil
+	}
+	var tableList []string
+	targetRowCounts := make(map[string]int64)
+	sourceRowCounts := make(map[string]int64)
+	targetTableSizes := make(map[string]int64)
+	sourceTableSizes := make(map[string]int64)
+
+	for table := range tables {
+		tableList = append(tableList, encodeString(table))
+		targetRowCounts[table] = 0
+		sourceRowCounts[table] = 0
+		targetTableSizes[table] = 0
+		sourceTableSizes[table] = 0
+	}
+
+	var getTableMetrics = func(tablet *topodatapb.Tablet, query string, rowCounts *map[string]int64, tableSizes *map[string]int64) error {
+		p3qr, err := s.tmc.ExecuteFetchAsDba(ctx, tablet, true, &tabletmanagerdatapb.ExecuteFetchAsDbaRequest{
+			Query:   []byte(query),
+			MaxRows: uint64(len(tables)),
+		})
+		if err != nil {
+			return err
+		}
+		qr := sqltypes.Proto3ToResult(p3qr)
+		for i := 0; i < len(qr.Rows); i++ {
+			table := qr.Rows[i][0].ToString()
+			rowCount, err := evalengine.ToInt64(qr.Rows[i][1])
+			if err != nil {
+				return err
+			}
+			tableSize, err := evalengine.ToInt64(qr.Rows[i][2])
+			if err != nil {
+				return err
+			}
+			(*rowCounts)[table] += rowCount
+			(*tableSizes)[table] += tableSize
+		}
+		return nil
+	}
+	sourceDbName := ""
+	for _, tsSource := range ts.sources {
+		sourceDbName = tsSource.GetPrimary().DbName()
+		break
+	}
+	if sourceDbName == "" {
+		return nil, fmt.Errorf("no sources found for workflow %s.%s", state.TargetKeyspace, state.Workflow)
+	}
+	targetDbName := ""
+	for _, tsTarget := range ts.targets {
+		targetDbName = tsTarget.GetPrimary().DbName()
+		break
+	}
+	if sourceDbName == "" || targetDbName == "" {
+		return nil, fmt.Errorf("workflow %s.%s is incorrectly configured", state.TargetKeyspace, state.Workflow)
+	}
+	sort.Strings(tableList) // sort list for repeatability for mocking in tests
+	tablesStr := strings.Join(tableList, ",")
+	query := fmt.Sprintf(getRowCountQuery, encodeString(targetDbName), tablesStr)
+	for _, target := range ts.targets {
+		tablet := target.GetPrimary().Tablet
+		if err := getTableMetrics(tablet, query, &targetRowCounts, &targetTableSizes); err != nil {
+			return nil, err
+		}
+	}
+
+	query = fmt.Sprintf(getRowCountQuery, encodeString(sourceDbName), tablesStr)
+	for source := range sourcePrimaries {
+		ti, err := s.ts.GetTablet(ctx, source)
+		tablet := ti.Tablet
+		if err != nil {
+			return nil, err
+		}
+		if err := getTableMetrics(tablet, query, &sourceRowCounts, &sourceTableSizes); err != nil {
+			return nil, err
+		}
+	}
+
+	copyProgress := CopyProgress{}
+	for table, rowCount := range targetRowCounts {
+		copyProgress[table] = &TableCopyProgress{
+			TargetRowCount:  rowCount,
+			TargetTableSize: targetTableSizes[table],
+			SourceRowCount:  sourceRowCounts[table],
+			SourceTableSize: sourceTableSizes[table],
+		}
+	}
+	return &copyProgress, nil
 }
 
 // WorkflowUpdate is part of the vtctlservicepb.VtctldServer interface.

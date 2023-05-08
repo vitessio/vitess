@@ -803,6 +803,15 @@ func (client *gRPCVtctldClient) WorkflowDelete(ctx context.Context, in *vtctldat
 	return client.c.WorkflowDelete(ctx, in, opts...)
 }
 
+// WorkflowProgress is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) WorkflowProgress(ctx context.Context, in *vtctldatapb.WorkflowProgressRequest, opts ...grpc.CallOption) (*vtctldatapb.WorkflowProgressResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.WorkflowProgress(ctx, in, opts...)
+}
+
 // WorkflowUpdate is part of the vtctlservicepb.VtctldClient interface.
 func (client *gRPCVtctldClient) WorkflowUpdate(ctx context.Context, in *vtctldatapb.WorkflowUpdateRequest, opts ...grpc.CallOption) (*vtctldatapb.WorkflowUpdateResponse, error) {
 	if client.c == nil {

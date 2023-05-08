@@ -298,6 +298,7 @@ service Vtctld {
   rpc ValidateVSchema(vtctldata.ValidateVSchemaRequest) returns (vtctldata.ValidateVSchemaResponse) {};
   // WorkflowDelete deletes a vreplication workflow.
   rpc WorkflowDelete(vtctldata.WorkflowDeleteRequest) returns (vtctldata.WorkflowDeleteResponse) {};
+  rpc WorkflowProgress(vtctldata.WorkflowProgressRequest) returns (vtctldata.WorkflowProgressResponse) {};
   // WorkflowUpdate updates the configuration of a vreplication workflow
   // using the provided updated parameters.
   rpc WorkflowUpdate(vtctldata.WorkflowUpdateRequest) returns (vtctldata.WorkflowUpdateResponse) {};
