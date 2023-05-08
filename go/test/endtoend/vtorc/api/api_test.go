@@ -36,7 +36,7 @@ func TestAPIEndpoints(t *testing.T) {
 		RecoveryPeriodBlockSeconds:            5,
 		// The default topo refresh time is 3 seconds. We are intentionally making it slower for the test, so that we have time to verify
 		// the /debug/health output before and after the first refresh runs.
-		TopoInformationRefreshSeconds: 10,
+		TopologyRefreshSeconds: 10,
 	}, 1, "")
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]

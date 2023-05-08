@@ -74,7 +74,7 @@ type HealthStatus struct {
 	Hostname           string
 	Token              string
 	IsActiveNode       bool
-	HasDiscoveredOnce  bool
+	DiscoveredOnce     bool
 	ActiveNode         *NodeHealth
 	Error              error
 	AvailableNodes     [](*NodeHealth)
@@ -121,7 +121,7 @@ func HealthTest() (health *HealthStatus, err error) {
 		return health, err
 	}
 	health.Healthy = healthy
-	health.HasDiscoveredOnce = FirstDiscoveryCycleComplete.Load()
+	health.DiscoveredOnce = FirstDiscoveryCycleComplete.Load()
 
 	if health.ActiveNode, health.IsActiveNode, err = ElectedNode(); err != nil {
 		health.Error = err

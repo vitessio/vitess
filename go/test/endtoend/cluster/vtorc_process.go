@@ -55,7 +55,7 @@ type VTOrcConfiguration struct {
 	MySQLReplicaUser                      string
 	MySQLReplicaPassword                  string
 	RecoveryPeriodBlockSeconds            int
-	TopoInformationRefreshSeconds         int    `json:",omitempty"`
+	TopologyRefreshSeconds                int    `json:",omitempty"`
 	PreventCrossDataCenterPrimaryFailover bool   `json:",omitempty"`
 	LockShardTimeoutSeconds               int    `json:",omitempty"`
 	ReplicationLagQuery                   string `json:",omitempty"`

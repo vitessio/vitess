@@ -185,7 +185,7 @@ func healthAPIHandler(response http.ResponseWriter, request *http.Request) {
 	}
 	code := http.StatusOK
 	// If the process isn't healthy, or if the first discovery cycle hasn't completed, we return an internal server error.
-	if !health.Healthy || !health.HasDiscoveredOnce {
+	if !health.Healthy || !health.DiscoveredOnce {
 		code = http.StatusInternalServerError
 	}
 	returnAsJSON(response, code, health)
