@@ -10263,7 +10263,7 @@ func (m *WorkflowProgressResponse_TableCopyState) MarshalToSizedBufferVT(dAtA []
 	return len(dAtA) - i, nil
 }
 
-func (m *WorkflowProgressResponse_TabletStreamState) MarshalVT() (dAtA []byte, err error) {
+func (m *WorkflowProgressResponse_ShardStreamState) MarshalVT() (dAtA []byte, err error) {
 	if m == nil {
 		return nil, nil
 	}
@@ -10276,12 +10276,12 @@ func (m *WorkflowProgressResponse_TabletStreamState) MarshalVT() (dAtA []byte, e
 	return dAtA[:n], nil
 }
 
-func (m *WorkflowProgressResponse_TabletStreamState) MarshalToVT(dAtA []byte) (int, error) {
+func (m *WorkflowProgressResponse_ShardStreamState) MarshalToVT(dAtA []byte) (int, error) {
 	size := m.SizeVT()
 	return m.MarshalToSizedBufferVT(dAtA[:size])
 }
 
-func (m *WorkflowProgressResponse_TabletStreamState) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
+func (m *WorkflowProgressResponse_ShardStreamState) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m == nil {
 		return 0, nil
 	}
@@ -10298,26 +10298,33 @@ func (m *WorkflowProgressResponse_TabletStreamState) MarshalToSizedBufferVT(dAtA
 		copy(dAtA[i:], m.Info)
 		i = encodeVarint(dAtA, i, uint64(len(m.Info)))
 		i--
-		dAtA[i] = 0x2a
+		dAtA[i] = 0x32
 	}
 	if len(m.Status) > 0 {
 		i -= len(m.Status)
 		copy(dAtA[i:], m.Status)
 		i = encodeVarint(dAtA, i, uint64(len(m.Status)))
 		i--
-		dAtA[i] = 0x22
+		dAtA[i] = 0x2a
 	}
 	if len(m.Position) > 0 {
 		i -= len(m.Position)
 		copy(dAtA[i:], m.Position)
 		i = encodeVarint(dAtA, i, uint64(len(m.Position)))
 		i--
-		dAtA[i] = 0x1a
+		dAtA[i] = 0x22
 	}
 	if len(m.SourceShard) > 0 {
 		i -= len(m.SourceShard)
 		copy(dAtA[i:], m.SourceShard)
 		i = encodeVarint(dAtA, i, uint64(len(m.SourceShard)))
+		i--
+		dAtA[i] = 0x1a
+	}
+	if len(m.Tablet) > 0 {
+		i -= len(m.Tablet)
+		copy(dAtA[i:], m.Tablet)
+		i = encodeVarint(dAtA, i, uint64(len(m.Tablet)))
 		i--
 		dAtA[i] = 0x12
 	}
@@ -10329,7 +10336,7 @@ func (m *WorkflowProgressResponse_TabletStreamState) MarshalToSizedBufferVT(dAtA
 	return len(dAtA) - i, nil
 }
 
-func (m *WorkflowProgressResponse_TabletStreams) MarshalVT() (dAtA []byte, err error) {
+func (m *WorkflowProgressResponse_ShardStreams) MarshalVT() (dAtA []byte, err error) {
 	if m == nil {
 		return nil, nil
 	}
@@ -10342,12 +10349,12 @@ func (m *WorkflowProgressResponse_TabletStreams) MarshalVT() (dAtA []byte, err e
 	return dAtA[:n], nil
 }
 
-func (m *WorkflowProgressResponse_TabletStreams) MarshalToVT(dAtA []byte) (int, error) {
+func (m *WorkflowProgressResponse_ShardStreams) MarshalToVT(dAtA []byte) (int, error) {
 	size := m.SizeVT()
 	return m.MarshalToSizedBufferVT(dAtA[:size])
 }
 
-func (m *WorkflowProgressResponse_TabletStreams) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
+func (m *WorkflowProgressResponse_ShardStreams) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m == nil {
 		return 0, nil
 	}
@@ -10404,9 +10411,9 @@ func (m *WorkflowProgressResponse) MarshalToSizedBufferVT(dAtA []byte) (int, err
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
-	if len(m.TabletStreams) > 0 {
-		for k := range m.TabletStreams {
-			v := m.TabletStreams[k]
+	if len(m.ShardStreams) > 0 {
+		for k := range m.ShardStreams {
+			v := m.ShardStreams[k]
 			baseI := i
 			size, err := v.MarshalToSizedBufferVT(dAtA[:i])
 			if err != nil {
@@ -14416,7 +14423,7 @@ func (m *WorkflowProgressResponse_TableCopyState) SizeVT() (n int) {
 	return n
 }
 
-func (m *WorkflowProgressResponse_TabletStreamState) SizeVT() (n int) {
+func (m *WorkflowProgressResponse_ShardStreamState) SizeVT() (n int) {
 	if m == nil {
 		return 0
 	}
@@ -14424,6 +14431,10 @@ func (m *WorkflowProgressResponse_TabletStreamState) SizeVT() (n int) {
 	_ = l
 	if m.Id != 0 {
 		n += 1 + sov(uint64(m.Id))
+	}
+	l = len(m.Tablet)
+	if l > 0 {
+		n += 1 + l + sov(uint64(l))
 	}
 	l = len(m.SourceShard)
 	if l > 0 {
@@ -14445,7 +14456,7 @@ func (m *WorkflowProgressResponse_TabletStreamState) SizeVT() (n int) {
 	return n
 }
 
-func (m *WorkflowProgressResponse_TabletStreams) SizeVT() (n int) {
+func (m *WorkflowProgressResponse_ShardStreams) SizeVT() (n int) {
 	if m == nil {
 		return 0
 	}
@@ -14480,8 +14491,8 @@ func (m *WorkflowProgressResponse) SizeVT() (n int) {
 			n += mapEntrySize + 1 + sov(uint64(mapEntrySize))
 		}
 	}
-	if len(m.TabletStreams) > 0 {
-		for k, v := range m.TabletStreams {
+	if len(m.ShardStreams) > 0 {
+		for k, v := range m.ShardStreams {
 			_ = k
 			_ = v
 			l = 0
@@ -38663,7 +38674,7 @@ func (m *WorkflowProgressResponse_TableCopyState) UnmarshalVT(dAtA []byte) error
 	}
 	return nil
 }
-func (m *WorkflowProgressResponse_TabletStreamState) UnmarshalVT(dAtA []byte) error {
+func (m *WorkflowProgressResponse_ShardStreamState) UnmarshalVT(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
@@ -38686,10 +38697,10 @@ func (m *WorkflowProgressResponse_TabletStreamState) UnmarshalVT(dAtA []byte) er
 		fieldNum := int32(wire >> 3)
 		wireType := int(wire & 0x7)
 		if wireType == 4 {
-			return fmt.Errorf("proto: WorkflowProgressResponse_TabletStreamState: wiretype end group for non-group")
+			return fmt.Errorf("proto: WorkflowProgressResponse_ShardStreamState: wiretype end group for non-group")
 		}
 		if fieldNum <= 0 {
-			return fmt.Errorf("proto: WorkflowProgressResponse_TabletStreamState: illegal tag %d (wire type %d)", fieldNum, wire)
+			return fmt.Errorf("proto: WorkflowProgressResponse_ShardStreamState: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
 		case 1:
@@ -38712,6 +38723,38 @@ func (m *WorkflowProgressResponse_TabletStreamState) UnmarshalVT(dAtA []byte) er
 				}
 			}
 		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Tablet", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Tablet = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 3:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field SourceShard", wireType)
 			}
@@ -38743,7 +38786,7 @@ func (m *WorkflowProgressResponse_TabletStreamState) UnmarshalVT(dAtA []byte) er
 			}
 			m.SourceShard = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
-		case 3:
+		case 4:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field Position", wireType)
 			}
@@ -38775,7 +38818,7 @@ func (m *WorkflowProgressResponse_TabletStreamState) UnmarshalVT(dAtA []byte) er
 			}
 			m.Position = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
-		case 4:
+		case 5:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field Status", wireType)
 			}
@@ -38807,7 +38850,7 @@ func (m *WorkflowProgressResponse_TabletStreamState) UnmarshalVT(dAtA []byte) er
 			}
 			m.Status = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
-		case 5:
+		case 6:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field Info", wireType)
 			}
@@ -38861,7 +38904,7 @@ func (m *WorkflowProgressResponse_TabletStreamState) UnmarshalVT(dAtA []byte) er
 	}
 	return nil
 }
-func (m *WorkflowProgressResponse_TabletStreams) UnmarshalVT(dAtA []byte) error {
+func (m *WorkflowProgressResponse_ShardStreams) UnmarshalVT(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
@@ -38884,10 +38927,10 @@ func (m *WorkflowProgressResponse_TabletStreams) UnmarshalVT(dAtA []byte) error 
 		fieldNum := int32(wire >> 3)
 		wireType := int(wire & 0x7)
 		if wireType == 4 {
-			return fmt.Errorf("proto: WorkflowProgressResponse_TabletStreams: wiretype end group for non-group")
+			return fmt.Errorf("proto: WorkflowProgressResponse_ShardStreams: wiretype end group for non-group")
 		}
 		if fieldNum <= 0 {
-			return fmt.Errorf("proto: WorkflowProgressResponse_TabletStreams: illegal tag %d (wire type %d)", fieldNum, wire)
+			return fmt.Errorf("proto: WorkflowProgressResponse_ShardStreams: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
 		case 2:
@@ -38919,7 +38962,7 @@ func (m *WorkflowProgressResponse_TabletStreams) UnmarshalVT(dAtA []byte) error 
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.Streams = append(m.Streams, &WorkflowProgressResponse_TabletStreamState{})
+			m.Streams = append(m.Streams, &WorkflowProgressResponse_ShardStreamState{})
 			if err := m.Streams[len(m.Streams)-1].UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
@@ -39106,7 +39149,7 @@ func (m *WorkflowProgressResponse) UnmarshalVT(dAtA []byte) error {
 			iNdEx = postIndex
 		case 2:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field TabletStreams", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field ShardStreams", wireType)
 			}
 			var msglen int
 			for shift := uint(0); ; shift += 7 {
@@ -39133,11 +39176,11 @@ func (m *WorkflowProgressResponse) UnmarshalVT(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			if m.TabletStreams == nil {
-				m.TabletStreams = make(map[string]*WorkflowProgressResponse_TabletStreams)
+			if m.ShardStreams == nil {
+				m.ShardStreams = make(map[string]*WorkflowProgressResponse_ShardStreams)
 			}
 			var mapkey string
-			var mapvalue *WorkflowProgressResponse_TabletStreams
+			var mapvalue *WorkflowProgressResponse_ShardStreams
 			for iNdEx < postIndex {
 				entryPreIndex := iNdEx
 				var wire uint64
@@ -39211,7 +39254,7 @@ func (m *WorkflowProgressResponse) UnmarshalVT(dAtA []byte) error {
 					if postmsgIndex > l {
 						return io.ErrUnexpectedEOF
 					}
-					mapvalue = &WorkflowProgressResponse_TabletStreams{}
+					mapvalue = &WorkflowProgressResponse_ShardStreams{}
 					if err := mapvalue.UnmarshalVT(dAtA[iNdEx:postmsgIndex]); err != nil {
 						return err
 					}
@@ -39231,7 +39274,7 @@ func (m *WorkflowProgressResponse) UnmarshalVT(dAtA []byte) error {
 					iNdEx += skippy
 				}
 			}
-			m.TabletStreams[mapkey] = mapvalue
+			m.ShardStreams[mapkey] = mapvalue
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex

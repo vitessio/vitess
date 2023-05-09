@@ -60542,8 +60542,8 @@ export namespace vtctldata {
         /** WorkflowProgressResponse table_copy_state */
         table_copy_state?: ({ [k: string]: vtctldata.WorkflowProgressResponse.ITableCopyState }|null);
 
-        /** WorkflowProgressResponse tablet_streams */
-        tablet_streams?: ({ [k: string]: vtctldata.WorkflowProgressResponse.ITabletStreams }|null);
+        /** WorkflowProgressResponse shard_streams */
+        shard_streams?: ({ [k: string]: vtctldata.WorkflowProgressResponse.IShardStreams }|null);
     }
 
     /** Represents a WorkflowProgressResponse. */
@@ -60558,8 +60558,8 @@ export namespace vtctldata {
         /** WorkflowProgressResponse table_copy_state. */
         public table_copy_state: { [k: string]: vtctldata.WorkflowProgressResponse.ITableCopyState };
 
-        /** WorkflowProgressResponse tablet_streams. */
-        public tablet_streams: { [k: string]: vtctldata.WorkflowProgressResponse.ITabletStreams };
+        /** WorkflowProgressResponse shard_streams. */
+        public shard_streams: { [k: string]: vtctldata.WorkflowProgressResponse.IShardStreams };
 
         /**
          * Creates a new WorkflowProgressResponse instance using the specified properties.
@@ -60768,218 +60768,224 @@ export namespace vtctldata {
             public static getTypeUrl(typeUrlPrefix?: string): string;
         }
 
-        /** Properties of a TabletStreamState. */
-        interface ITabletStreamState {
+        /** Properties of a ShardStreamState. */
+        interface IShardStreamState {
 
-            /** TabletStreamState id */
+            /** ShardStreamState id */
             id?: (number|null);
 
-            /** TabletStreamState source_shard */
+            /** ShardStreamState tablet */
+            tablet?: (string|null);
+
+            /** ShardStreamState source_shard */
             source_shard?: (string|null);
 
-            /** TabletStreamState position */
+            /** ShardStreamState position */
             position?: (string|null);
 
-            /** TabletStreamState status */
+            /** ShardStreamState status */
             status?: (string|null);
 
-            /** TabletStreamState info */
+            /** ShardStreamState info */
             info?: (string|null);
         }
 
-        /** Represents a TabletStreamState. */
-        class TabletStreamState implements ITabletStreamState {
+        /** Represents a ShardStreamState. */
+        class ShardStreamState implements IShardStreamState {
 
             /**
-             * Constructs a new TabletStreamState.
+             * Constructs a new ShardStreamState.
              * @param [properties] Properties to set
              */
-            constructor(properties?: vtctldata.WorkflowProgressResponse.ITabletStreamState);
+            constructor(properties?: vtctldata.WorkflowProgressResponse.IShardStreamState);
 
-            /** TabletStreamState id. */
+            /** ShardStreamState id. */
             public id: number;
 
-            /** TabletStreamState source_shard. */
+            /** ShardStreamState tablet. */
+            public tablet: string;
+
+            /** ShardStreamState source_shard. */
             public source_shard: string;
 
-            /** TabletStreamState position. */
+            /** ShardStreamState position. */
             public position: string;
 
-            /** TabletStreamState status. */
+            /** ShardStreamState status. */
             public status: string;
 
-            /** TabletStreamState info. */
+            /** ShardStreamState info. */
             public info: string;
 
             /**
-             * Creates a new TabletStreamState instance using the specified properties.
+             * Creates a new ShardStreamState instance using the specified properties.
              * @param [properties] Properties to set
-             * @returns TabletStreamState instance
+             * @returns ShardStreamState instance
              */
-            public static create(properties?: vtctldata.WorkflowProgressResponse.ITabletStreamState): vtctldata.WorkflowProgressResponse.TabletStreamState;
+            public static create(properties?: vtctldata.WorkflowProgressResponse.IShardStreamState): vtctldata.WorkflowProgressResponse.ShardStreamState;
 
             /**
-             * Encodes the specified TabletStreamState message. Does not implicitly {@link vtctldata.WorkflowProgressResponse.TabletStreamState.verify|verify} messages.
-             * @param message TabletStreamState message or plain object to encode
+             * Encodes the specified ShardStreamState message. Does not implicitly {@link vtctldata.WorkflowProgressResponse.ShardStreamState.verify|verify} messages.
+             * @param message ShardStreamState message or plain object to encode
              * @param [writer] Writer to encode to
              * @returns Writer
              */
-            public static encode(message: vtctldata.WorkflowProgressResponse.ITabletStreamState, writer?: $protobuf.Writer): $protobuf.Writer;
+            public static encode(message: vtctldata.WorkflowProgressResponse.IShardStreamState, writer?: $protobuf.Writer): $protobuf.Writer;
 
             /**
-             * Encodes the specified TabletStreamState message, length delimited. Does not implicitly {@link vtctldata.WorkflowProgressResponse.TabletStreamState.verify|verify} messages.
-             * @param message TabletStreamState message or plain object to encode
+             * Encodes the specified ShardStreamState message, length delimited. Does not implicitly {@link vtctldata.WorkflowProgressResponse.ShardStreamState.verify|verify} messages.
+             * @param message ShardStreamState message or plain object to encode
              * @param [writer] Writer to encode to
              * @returns Writer
              */
-            public static encodeDelimited(message: vtctldata.WorkflowProgressResponse.ITabletStreamState, writer?: $protobuf.Writer): $protobuf.Writer;
+            public static encodeDelimited(message: vtctldata.WorkflowProgressResponse.IShardStreamState, writer?: $protobuf.Writer): $protobuf.Writer;
 
             /**
-             * Decodes a TabletStreamState message from the specified reader or buffer.
+             * Decodes a ShardStreamState message from the specified reader or buffer.
              * @param reader Reader or buffer to decode from
              * @param [length] Message length if known beforehand
-             * @returns TabletStreamState
+             * @returns ShardStreamState
              * @throws {Error} If the payload is not a reader or valid buffer
              * @throws {$protobuf.util.ProtocolError} If required fields are missing
              */
-            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.WorkflowProgressResponse.TabletStreamState;
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.WorkflowProgressResponse.ShardStreamState;
 
             /**
-             * Decodes a TabletStreamState message from the specified reader or buffer, length delimited.
+             * Decodes a ShardStreamState message from the specified reader or buffer, length delimited.
              * @param reader Reader or buffer to decode from
-             * @returns TabletStreamState
+             * @returns ShardStreamState
              * @throws {Error} If the payload is not a reader or valid buffer
              * @throws {$protobuf.util.ProtocolError} If required fields are missing
              */
-            public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.WorkflowProgressResponse.TabletStreamState;
+            public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.WorkflowProgressResponse.ShardStreamState;
 
             /**
-             * Verifies a TabletStreamState message.
+             * Verifies a ShardStreamState message.
              * @param message Plain object to verify
              * @returns `null` if valid, otherwise the reason why it is not
              */
             public static verify(message: { [k: string]: any }): (string|null);
 
             /**
-             * Creates a TabletStreamState message from a plain object. Also converts values to their respective internal types.
+             * Creates a ShardStreamState message from a plain object. Also converts values to their respective internal types.
              * @param object Plain object
-             * @returns TabletStreamState
+             * @returns ShardStreamState
              */
-            public static fromObject(object: { [k: string]: any }): vtctldata.WorkflowProgressResponse.TabletStreamState;
+            public static fromObject(object: { [k: string]: any }): vtctldata.WorkflowProgressResponse.ShardStreamState;
 
             /**
-             * Creates a plain object from a TabletStreamState message. Also converts values to other types if specified.
-             * @param message TabletStreamState
+             * Creates a plain object from a ShardStreamState message. Also converts values to other types if specified.
+             * @param message ShardStreamState
              * @param [options] Conversion options
              * @returns Plain object
              */
-            public static toObject(message: vtctldata.WorkflowProgressResponse.TabletStreamState, options?: $protobuf.IConversionOptions): { [k: string]: any };
+            public static toObject(message: vtctldata.WorkflowProgressResponse.ShardStreamState, options?: $protobuf.IConversionOptions): { [k: string]: any };
 
             /**
-             * Converts this TabletStreamState to JSON.
+             * Converts this ShardStreamState to JSON.
              * @returns JSON object
              */
             public toJSON(): { [k: string]: any };
 
             /**
-             * Gets the default type url for TabletStreamState
+             * Gets the default type url for ShardStreamState
              * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
              * @returns The default type url
              */
             public static getTypeUrl(typeUrlPrefix?: string): string;
         }
 
-        /** Properties of a TabletStreams. */
-        interface ITabletStreams {
+        /** Properties of a ShardStreams. */
+        interface IShardStreams {
 
-            /** TabletStreams streams */
-            streams?: (vtctldata.WorkflowProgressResponse.ITabletStreamState[]|null);
+            /** ShardStreams streams */
+            streams?: (vtctldata.WorkflowProgressResponse.IShardStreamState[]|null);
         }
 
-        /** Represents a TabletStreams. */
-        class TabletStreams implements ITabletStreams {
+        /** Represents a ShardStreams. */
+        class ShardStreams implements IShardStreams {
 
             /**
-             * Constructs a new TabletStreams.
+             * Constructs a new ShardStreams.
              * @param [properties] Properties to set
              */
-            constructor(properties?: vtctldata.WorkflowProgressResponse.ITabletStreams);
+            constructor(properties?: vtctldata.WorkflowProgressResponse.IShardStreams);
 
-            /** TabletStreams streams. */
-            public streams: vtctldata.WorkflowProgressResponse.ITabletStreamState[];
+            /** ShardStreams streams. */
+            public streams: vtctldata.WorkflowProgressResponse.IShardStreamState[];
 
             /**
-             * Creates a new TabletStreams instance using the specified properties.
+             * Creates a new ShardStreams instance using the specified properties.
              * @param [properties] Properties to set
-             * @returns TabletStreams instance
+             * @returns ShardStreams instance
              */
-            public static create(properties?: vtctldata.WorkflowProgressResponse.ITabletStreams): vtctldata.WorkflowProgressResponse.TabletStreams;
+            public static create(properties?: vtctldata.WorkflowProgressResponse.IShardStreams): vtctldata.WorkflowProgressResponse.ShardStreams;
 
             /**
-             * Encodes the specified TabletStreams message. Does not implicitly {@link vtctldata.WorkflowProgressResponse.TabletStreams.verify|verify} messages.
-             * @param message TabletStreams message or plain object to encode
+             * Encodes the specified ShardStreams message. Does not implicitly {@link vtctldata.WorkflowProgressResponse.ShardStreams.verify|verify} messages.
+             * @param message ShardStreams message or plain object to encode
              * @param [writer] Writer to encode to
              * @returns Writer
              */
-            public static encode(message: vtctldata.WorkflowProgressResponse.ITabletStreams, writer?: $protobuf.Writer): $protobuf.Writer;
+            public static encode(message: vtctldata.WorkflowProgressResponse.IShardStreams, writer?: $protobuf.Writer): $protobuf.Writer;
 
             /**
-             * Encodes the specified TabletStreams message, length delimited. Does not implicitly {@link vtctldata.WorkflowProgressResponse.TabletStreams.verify|verify} messages.
-             * @param message TabletStreams message or plain object to encode
+             * Encodes the specified ShardStreams message, length delimited. Does not implicitly {@link vtctldata.WorkflowProgressResponse.ShardStreams.verify|verify} messages.
+             * @param message ShardStreams message or plain object to encode
              * @param [writer] Writer to encode to
              * @returns Writer
              */
-            public static encodeDelimited(message: vtctldata.WorkflowProgressResponse.ITabletStreams, writer?: $protobuf.Writer): $protobuf.Writer;
+            public static encodeDelimited(message: vtctldata.WorkflowProgressResponse.IShardStreams, writer?: $protobuf.Writer): $protobuf.Writer;
 
             /**
-             * Decodes a TabletStreams message from the specified reader or buffer.
+             * Decodes a ShardStreams message from the specified reader or buffer.
              * @param reader Reader or buffer to decode from
              * @param [length] Message length if known beforehand
-             * @returns TabletStreams
+             * @returns ShardStreams
              * @throws {Error} If the payload is not a reader or valid buffer
              * @throws {$protobuf.util.ProtocolError} If required fields are missing
              */
-            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.WorkflowProgressResponse.TabletStreams;
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.WorkflowProgressResponse.ShardStreams;
 
             /**
-             * Decodes a TabletStreams message from the specified reader or buffer, length delimited.
+             * Decodes a ShardStreams message from the specified reader or buffer, length delimited.
              * @param reader Reader or buffer to decode from
-             * @returns TabletStreams
+             * @returns ShardStreams
              * @throws {Error} If the payload is not a reader or valid buffer
              * @throws {$protobuf.util.ProtocolError} If required fields are missing
              */
-            public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.WorkflowProgressResponse.TabletStreams;
+            public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.WorkflowProgressResponse.ShardStreams;
 
             /**
-             * Verifies a TabletStreams message.
+             * Verifies a ShardStreams message.
              * @param message Plain object to verify
              * @returns `null` if valid, otherwise the reason why it is not
              */
             public static verify(message: { [k: string]: any }): (string|null);
 
             /**
-             * Creates a TabletStreams message from a plain object. Also converts values to their respective internal types.
+             * Creates a ShardStreams message from a plain object. Also converts values to their respective internal types.
              * @param object Plain object
-             * @returns TabletStreams
+             * @returns ShardStreams
              */
-            public static fromObject(object: { [k: string]: any }): vtctldata.WorkflowProgressResponse.TabletStreams;
+            public static fromObject(object: { [k: string]: any }): vtctldata.WorkflowProgressResponse.ShardStreams;
 
             /**
-             * Creates a plain object from a TabletStreams message. Also converts values to other types if specified.
-             * @param message TabletStreams
+             * Creates a plain object from a ShardStreams message. Also converts values to other types if specified.
+             * @param message ShardStreams
              * @param [options] Conversion options
              * @returns Plain object
              */
-            public static toObject(message: vtctldata.WorkflowProgressResponse.TabletStreams, options?: $protobuf.IConversionOptions): { [k: string]: any };
+            public static toObject(message: vtctldata.WorkflowProgressResponse.ShardStreams, options?: $protobuf.IConversionOptions): { [k: string]: any };
 
             /**
-             * Converts this TabletStreams to JSON.
+             * Converts this ShardStreams to JSON.
              * @returns JSON object
              */
             public toJSON(): { [k: string]: any };
 
             /**
-             * Gets the default type url for TabletStreams
+             * Gets the default type url for ShardStreams
              * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
              * @returns The default type url
              */

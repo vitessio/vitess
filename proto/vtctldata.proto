@@ -1377,18 +1377,19 @@ message WorkflowProgressResponse {
     int64 bytes_total = 5;
     int32 bytes_percentage = 6;
   }
-  message TabletStreamState {
+  message ShardStreamState {
     int32 id = 1;
-    string source_shard = 2;
-    string position = 3;
-    string status = 4;
-    string info = 5;
+    string tablet = 2;
+    string source_shard = 3;
+    string position = 4;
+    string status = 5;
+    string info = 6;
   }
-  message TabletStreams {
-    repeated TabletStreamState streams = 2;
+  message ShardStreams {
+    repeated ShardStreamState streams = 2;
   }
   map<string, TableCopyState> table_copy_state = 1;
-  map<string, TabletStreams> tablet_streams = 2;
+  map<string, ShardStreams> shard_streams = 2;
 }
 
 message WorkflowUpdateRequest {

@@ -1200,6 +1200,7 @@ func (s *Server) WorkflowProgress(ctx context.Context, req *vtctldatapb.Workflow
 	resp := &vtctldatapb.WorkflowProgressResponse{}
 	if copyProgress != nil {
 		resp.TableCopyState = make(map[string]*vtctldatapb.WorkflowProgressResponse_TableCopyState, len(*copyProgress))
+		// We sort the tables for intuitive and consistent output.
 		var tables []string
 		for table := range *copyProgress {
 			tables = append(tables, table)
@@ -1237,20 +1238,29 @@ func (s *Server) WorkflowProgress(ctx context.Context, req *vtctldatapb.Workflow
 	}
 	workflow := res.Workflows[0]
 
-	// Key is target keyspace / tablet alias, e.g. 0/test-0000000100.
+	// The stream key is target keyspace/tablet alias, e.g. 0/test-0000000100.
+	// We sort the keys for intuitive and consistent output.
 	streamKeys := make([]string, 0, len(workflow.ShardStreams))
 	for streamKey := range workflow.ShardStreams {
 		streamKeys = append(streamKeys, streamKey)
 	}
 	sort.Strings(streamKeys)
-	resp.TabletStreams = make(map[string]*vtctldatapb.WorkflowProgressResponse_TabletStreams, len(streamKeys))
-	for _, key := range streamKeys {
-		streams := workflow.ShardStreams[key].GetStreams()
-		resp.TabletStreams[key] = &vtctldatapb.WorkflowProgressResponse_TabletStreams{}
-		resp.TabletStreams[key].Streams = make([]*vtctldatapb.WorkflowProgressResponse_TabletStreamState, len(streams))
+	resp.ShardStreams = make(map[string]*vtctldatapb.WorkflowProgressResponse_ShardStreams, len(streamKeys))
+	for _, streamKey := range streamKeys {
+		streams := workflow.ShardStreams[streamKey].GetStreams()
+		keyParts := strings.Split(streamKey, "/")
+		if len(keyParts) != 2 {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected stream key format in: %s ; expect <keyspace>/<tablet-alias>",
+				streamKey)
+		}
+		// We want to use target keyspace/shard as the map key for the
+		// response, e.g. customer/-80.
+		ksShard := fmt.Sprintf("%s/%s", req.Keyspace, keyParts[0])
+		resp.ShardStreams[ksShard] = &vtctldatapb.WorkflowProgressResponse_ShardStreams{}
+		resp.ShardStreams[ksShard].Streams = make([]*vtctldatapb.WorkflowProgressResponse_ShardStreamState, len(streams))
 		for i, st := range streams {
 			info := []string{}
-			ts := &vtctldatapb.WorkflowProgressResponse_TabletStreamState{}
+			ts := &vtctldatapb.WorkflowProgressResponse_ShardStreamState{}
 			if st.State == "Error" {
 				info = append(info, st.Message)
 			} else if st.Position == "" {
@@ -1268,13 +1278,12 @@ func (s *Server) WorkflowProgress(ctx context.Context, req *vtctldatapb.Workflow
 				}
 			}
 			ts.Id = int32(st.Id)
-			if st.BinlogSource.Filter != nil && st.BinlogSource.Filter.String() != "" {
-				ts.SourceShard = fmt.Sprintf("%s/%s", st.BinlogSource.Keyspace, st.BinlogSource.Shard)
-			}
+			ts.Tablet = fmt.Sprintf("%s-%010d", st.Tablet.Cell, st.Tablet.Uid)
+			ts.SourceShard = fmt.Sprintf("%s/%s", st.BinlogSource.Keyspace, st.BinlogSource.Shard)
 			ts.Position = st.Position
 			ts.Status = st.State
 			ts.Info = strings.Join(info, "; ")
-			resp.TabletStreams[key].Streams[i] = ts
+			resp.ShardStreams[ksShard].Streams[i] = ts
 		}
 	}
 
