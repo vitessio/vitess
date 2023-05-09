@@ -8068,5 +8068,42 @@
         "user.user"
       ]
     }
+  },
+  {
+    "comment": "allow last_insert_id with argument",
+    "query": "select last_insert_id(id) from user",
+    "v3-plan": {
+      "QueryType": "SELECT",
+      "Original": "select last_insert_id(id) from user",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select last_insert_id(id) from `user` where 1 != 1",
+        "Query": "select last_insert_id(id) from `user`",
+        "Table": "`user`"
+      }
+    },
+    "gen4-plan": {
+      "QueryType": "SELECT",
+      "Original": "select last_insert_id(id) from user",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select last_insert_id(id) from `user` where 1 != 1",
+        "Query": "select last_insert_id(id) from `user`",
+        "Table": "`user`"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
   }
 ]
