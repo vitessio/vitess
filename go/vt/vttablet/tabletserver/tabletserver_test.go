@@ -1439,10 +1439,10 @@ func TestHandlePanicAndSendLogStatsMessageTruncation(t *testing.T) {
 
 	defer func() {
 		err := logStats.Error
-		want := "TODO"
+		want := "Uncaught panic for Sql: \"select * from test_table_loooooooooooooooooooooooooooooooooooong\", BindVars: {bv1: \"type:INT64 value:\\\"1111111111\\\"\"bv2: \"type:INT64 value:\\\"2222222222\\\"\"bv3: \"type:INT64 value:\\\"3333333333\\\"\"bv4: \"type:INT64 value:\\\"4444444444\\\"\"}"
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), want)
-		want = "TODO"
+		want = "Uncaught panic for Sql: \"select * from test_t [TRUNCATED]\", BindVars: {bv1: \"typ [TRUNCATED]"
 		if !strings.Contains(tl.getLog(0), want) {
 			t.Errorf("error log %s, want '%s'", tl.getLog(0), want)
 		}
@@ -1465,19 +1465,19 @@ func TestQueryAsString(t *testing.T) {
 	defer sqlparser.SetTruncateErrLen(origTruncateErrLen)
 
 	query := queryAsString(longSql, longBv, true, true)
-	want := "TODO"
+	want := "Sql: \"select * from test_t [TRUNCATED]\", BindVars: {[REDACTED]}"
 	assert.Equal(t, want, query)
 
 	query = queryAsString(longSql, longBv, true, false)
-	want = "TODO"
+	want = "Sql: \"select * from test_table_loooooooooooooooooooooooooooooooooooong\", BindVars: {[REDACTED]}"
 	assert.Equal(t, want, query)
 
 	query = queryAsString(longSql, longBv, false, true)
-	want = "TODO"
+	want = "Sql: \"select * from test_t [TRUNCATED]\", BindVars: {bv1: \"typ [TRUNCATED]"
 	assert.Equal(t, want, query)
 
 	query = queryAsString(longSql, longBv, false, false)
-	want = "TODO"
+	want = "Sql: \"select * from test_table_loooooooooooooooooooooooooooooooooooong\", BindVars: {bv1: \"type:INT64 value:\\\"1111111111\\\"\"bv2: \"type:INT64 value:\\\"2222222222\\\"\"bv3: \"type:INT64 value:\\\"3333333333\\\"\"bv4: \"type:INT64 value:\\\"4444444444\\\"\"}"
 	assert.Equal(t, want, query)
 }
 
