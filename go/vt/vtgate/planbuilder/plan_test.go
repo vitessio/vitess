@@ -825,7 +825,7 @@ func (vw *vschemaWrapper) FirstSortedKeyspace() (*vindexes.Keyspace, error) {
 }
 
 func (vw *vschemaWrapper) TargetString() string {
-	return "@primary"
+	return "targetString"
 }
 
 func (vw *vschemaWrapper) WarnUnshardedOnly(_ string, _ ...any) {
