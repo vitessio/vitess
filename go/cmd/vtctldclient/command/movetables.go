@@ -65,10 +65,6 @@ See the --help output for each command for more details.`,
 		Aliases:               []string{"Create"},
 		Args:                  cobra.NoArgs,
 		PreRunE: func(cmd *cobra.Command, args []string) error {
-			// Source and Target keyspace are required.
-			if !cmd.Flags().Lookup("source-keyspace").Changed || !cmd.Flags().Lookup("target-keyspace").Changed {
-				return fmt.Errorf("source-keyspace and target-keyspace are required")
-			}
 			// Either specific tables or the all tables flags are required.
 			if !cmd.Flags().Lookup("tables").Changed && !cmd.Flags().Lookup("all-tables").Changed {
 				return fmt.Errorf("tables or all-tables are required to specify which tables to move")
@@ -115,6 +111,28 @@ See the --help output for each command for more details.`,
 		Args:                  cobra.NoArgs,
 		RunE:                  commandMoveTablesShow,
 	}
+
+	// MoveTablesSwitchTraffic makes a MoveTablesSwitchTraffic gRPC call to a vtctld.
+	MoveTablesSwitchTraffic = &cobra.Command{
+		Use:                   "switchtraffic",
+		Short:                 "Switch traffic for a MoveTables VReplication workflow",
+		Example:               `vtctldclient --server=localhost:15999 MoveTables --workflow "commerce2customer" --target-keyspace "customer" switchtraffic --tablet-types "replica,rdonly"`,
+		DisableFlagsInUseLine: true,
+		Aliases:               []string{"SwitchTraffic"},
+		Args:                  cobra.NoArgs,
+		PreRunE: func(cmd *cobra.Command, args []string) error {
+			if cmd.Flags().Lookup("tablet-types").Changed { // Validate the provided value(s)
+				for i, tabletType := range moveTablesCreateOptions.TabletTypes {
+					moveTablesCreateOptions.TabletTypes[i] = strings.ToUpper(strings.TrimSpace(tabletType))
+					if _, err := topoproto.ParseTabletType(moveTablesCreateOptions.TabletTypes[i]); err != nil {
+						return err
+					}
+				}
+			}
+			return nil
+		},
+		RunE: commandMoveTablesSwitchTraffic,
+	}
 )
 
 var (
@@ -143,6 +161,9 @@ var (
 		DeferSecondaryKeys  bool
 		AutoStart           bool
 		StopAfterCopy       bool
+	}{}
+	moveTablesSwitchTrafficOptions = struct {
+		TableTypes []string
 	}{}
 )
 
@@ -247,6 +268,31 @@ func commandMoveTablesShow(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+func commandMoveTablesSwitchTraffic(cmd *cobra.Command, args []string) error {
+	cli.FinishedParsing(cmd)
+
+	/*
+		req := &vtctldatapb.MoveTablesSwitchTrafficRequest{
+			Keyspace:    moveTablesOptions.TargetKeyspace,
+			Workflow:    moveTablesOptions.Workflow,
+			TabletTypes: moveTablesSwitchTrafficOptions.TableTypes,
+		}
+		resp, err := client.GetWorkflows(commandCtx, req)
+		if err != nil {
+			return err
+		}
+
+		data, err := cli.MarshalJSON(resp)
+		if err != nil {
+			return err
+		}
+
+		fmt.Printf("%s\n", data)
+	*/
+
+	return nil
+}
+
 func init() {
 	MoveTables.PersistentFlags().StringVar(&moveTablesOptions.TargetKeyspace, "target-keyspace", "", "Keyspace where the tables are being moved to and where the workflow exists (required)")
 	MoveTables.MarkPersistentFlagRequired("target-keyspace")
@@ -273,4 +319,7 @@ func init() {
 
 	MoveTables.AddCommand(MoveTablesProgress)
 	MoveTables.AddCommand(MoveTablesShow)
+
+	MoveTablesSwitchTraffic.Flags().StringSliceVar(&moveTablesSwitchTrafficOptions.TableTypes, "tablet-types", nil, "Tablet types to switch traffic for (default is ALL tablet types)")
+	MoveTables.AddCommand(MoveTablesSwitchTraffic)
 }

@@ -1671,7 +1671,7 @@ func (s *Server) optimizeCopyStateTable(tablet *topodatapb.Tablet) {
 func (s *Server) DropTargets(ctx context.Context, targetKeyspace, workflow string, keepData, keepRoutingRules, dryRun bool) (*[]string, error) {
 	ts, state, err := s.getWorkflowState(ctx, targetKeyspace, workflow)
 	if err != nil {
-		log.Errorf("buildTrafficSwitcher failed: %v", err)
+		log.Errorf("Failed to get VReplication workflow state for %s.%s: %v", targetKeyspace, workflow, err)
 		return nil, err
 	}
 
