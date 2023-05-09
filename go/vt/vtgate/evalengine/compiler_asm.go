@@ -2034,6 +2034,68 @@ func (asm *assembler) Fn_HEX_d(col collations.TypedCollation) {
 	}, "FN HEX NUMERIC(SP-1)")
 }
 
+func (asm *assembler) Fn_UNHEX_i(tt sqltypes.Type) {
+	asm.emit(func(env *ExpressionEnv) int {
+		arg := env.vm.stack[env.vm.sp-1].(*evalInt64)
+		if arg.toInt64().i < 0 {
+			env.vm.stack[env.vm.sp-1] = nil
+			return 1
+		}
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalRaw(hexDecodeUint(uint64(arg.toInt64().i)), tt, collationBinary)
+		return 1
+	}, "FN UNHEX INT64(SP-1)")
+}
+
+func (asm *assembler) Fn_UNHEX_u(tt sqltypes.Type) {
+	asm.emit(func(env *ExpressionEnv) int {
+		arg := env.vm.stack[env.vm.sp-1].(*evalUint64)
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalRaw(hexDecodeUint(uint64(arg.u)), tt, collationBinary)
+		return 1
+	}, "FN UNHEX UINT64(SP-1)")
+}
+
+func (asm *assembler) Fn_UNHEX_f(tt sqltypes.Type) {
+	asm.emit(func(env *ExpressionEnv) int {
+		arg := env.vm.stack[env.vm.sp-1].(*evalFloat)
+		f := arg.f
+		if f != float64(int64(f)) {
+			env.vm.stack[env.vm.sp-1] = nil
+			return 1
+		}
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalRaw(hexDecodeUint(uint64(arg.f)), tt, collationBinary)
+		return 1
+	}, "FN UNHEX FLOAT64(SP-1)")
+}
+
+func (asm *assembler) Fn_UNHEX_b(tt sqltypes.Type) {
+	asm.emit(func(env *ExpressionEnv) int {
+		arg := env.vm.stack[env.vm.sp-1].(*evalBytes)
+		decoded := make([]byte, hexDecodedLen(arg.bytes))
+
+		ok := hexDecodeBytes(decoded, arg.bytes)
+		if !ok {
+			env.vm.stack[env.vm.sp-1] = nil
+			return 1
+		}
+
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalRaw(decoded, tt, collationBinary)
+		return 1
+	}, "FN UNHEX VARBINARY(SP-1)")
+}
+
+func (asm *assembler) Fn_UNHEX_j(tt sqltypes.Type) {
+	asm.emit(func(env *ExpressionEnv) int {
+		arg := env.vm.stack[env.vm.sp-1].(*evalJSON)
+		decoded, ok := hexDecodeJSON(arg)
+		if !ok {
+			env.vm.stack[env.vm.sp-1] = nil
+			return 1
+		}
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalRaw(decoded, tt, collationBinary)
+		return 1
+	}, "FN UNHEX VARBINARY(SP-1)")
+}
+
 func (asm *assembler) Fn_JSON_ARRAY(args int) {
 	asm.adjustStack(-(args - 1))
 	asm.emit(func(env *ExpressionEnv) int {
