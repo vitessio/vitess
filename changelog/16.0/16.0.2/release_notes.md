@@ -19,6 +19,8 @@ Earlier, we used to automatically set immediateCallerID to user from static auth
 Prior to v16.0.2, it was possible to create a shard name with invalid characters, which would then be inaccessible to various cluster management operations.
 
 Shard names may no longer contain the forward slash ("/") character, and TopoServer's `CreateShard` method returns an error if given such a name.
+
+
 ------------
 The entire changelog for this release can be found [here](https://github.com/vitessio/vitess/blob/main/changelog/16.0/16.0.2/changelog.md).
 
