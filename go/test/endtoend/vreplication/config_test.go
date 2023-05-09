@@ -57,7 +57,7 @@ create table vdiff_order (order_id varchar(50) collate utf8mb4_unicode_ci not nu
 create table datze (id int, dt1 datetime not null default current_timestamp, dt2 datetime not null, ts1 timestamp default current_timestamp, primary key (id), key (dt1));
 create table json_tbl (id int, j1 json, j2 json, primary key(id));
 create table geom_tbl (id int, g geometry, p point, ls linestring, pg polygon, mp multipoint, mls multilinestring, mpg multipolygon, gc geometrycollection, primary key(id));
-create table blob_tbl (id int, val1 varchar(20), blb1 blob, val2 varbinary(20), blb2 longblob, txt1 text, blb3 tinyblob, txt2 longtext, blb4 mediumblob, primary key(id));
+create table  ` + "`blüb_tbl`" + ` (id int, val1 varchar(20), ` + "`blöb1`" + ` blob, val2 varbinary(20), ` + "`bl@b2`" + ` longblob, txt1 text, blb3 tinyblob, txt2 longtext, blb4 mediumblob, primary key(id));
 `
 	// These should always be ignored in vreplication
 	internalSchema = `
@@ -185,7 +185,7 @@ create table blob_tbl (id int, val1 varchar(20), blb1 blob, val2 varbinary(20), 
         }
       ]
     },
-    "blob_tbl": {
+    "blüb_tbl": {
       "column_vindexes": [
         {
           "column": "id",
@@ -332,7 +332,7 @@ create table blob_tbl (id int, val1 varchar(20), blb1 blob, val2 varbinary(20), 
         }
       ]
     },
-    "blob_tbl": {
+    "blüb_tbl": {
       "column_vindexes": [
         {
           "column": "id",
