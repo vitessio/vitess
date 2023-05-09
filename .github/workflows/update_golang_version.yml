@@ -1,6 +1,7 @@
 name: Update Golang Version
 
 on:
+  branch:
   schedule:
     - cron: "0 0 * * *" # Runs every day at midnight UTC
   workflow_dispatch:
@@ -24,6 +25,8 @@ jobs:
           ref: ${{ matrix.branch }}
 
       - name: Detect new version and update codebase
+        env:
+          GH_TOKEN: ${{ github.token }}
         id: detect-and-update
         run: |
           old_go_version=$(go run ./go/tools/go-upgrade/go-upgrade.go get go-version)
