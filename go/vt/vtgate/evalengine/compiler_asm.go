@@ -1405,6 +1405,14 @@ func (asm *assembler) Fn_ASCII() {
 	}, "FN ASCII VARCHAR(SP-1)")
 }
 
+func (asm *assembler) Fn_ORD(col collations.ID) {
+	asm.emit(func(env *ExpressionEnv) int {
+		arg := env.vm.stack[env.vm.sp-1].(*evalBytes)
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalInt64(charOrd(arg.bytes, col))
+		return 1
+	}, "FN ORD VARCHAR(SP-1)")
+}
+
 func (asm *assembler) Fn_CEIL_d() {
 	asm.emit(func(env *ExpressionEnv) int {
 		d := env.vm.stack[env.vm.sp-1].(*evalDecimal)

@@ -293,6 +293,11 @@ func (ast *astCompiler) translateFuncExpr(fn *sqlparser.FuncExpr) (Expr, error) 
 			return nil, argError(method)
 		}
 		return &builtinASCII{CallExpr: call}, nil
+	case "ord":
+		if len(args) != 1 {
+			return nil, argError(method)
+		}
+		return &builtinOrd{CallExpr: call, collate: ast.cfg.Collation}, nil
 	case "repeat":
 		if len(args) != 2 {
 			return nil, argError(method)
