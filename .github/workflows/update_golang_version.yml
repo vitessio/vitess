@@ -1,7 +1,6 @@
 name: Update Golang Version
 
 on:
-  push:
   schedule:
     - cron: "0 0 * * *" # Runs every day at midnight UTC
   workflow_dispatch:
