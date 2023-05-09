@@ -260,7 +260,7 @@ func (b *binder) resolveColumn(colName *sqlparser.ColName, current *scope, allow
 		}
 		current = current.parent
 	}
-	return dependency{}, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.BadFieldError, "symbol %s not found", sqlparser.String(colName))
+	return dependency{}, ShardedError{Inner: vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.BadFieldError, "symbol %s not found", sqlparser.String(colName))}
 }
 
 func (b *binder) resolveColumnInScope(current *scope, expr *sqlparser.ColName, allowMulti bool) (dependencies, error) {

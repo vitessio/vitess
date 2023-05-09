@@ -79,7 +79,6 @@ var (
 		"21",
 		"22",
 		"mysql_server_vault",
-		"26",
 		"vstream_failover",
 		"vstream_stoponreshard_true",
 		"vstream_stoponreshard_false",

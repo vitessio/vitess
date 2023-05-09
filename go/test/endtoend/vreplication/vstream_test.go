@@ -188,7 +188,7 @@ const vschemaUnsharded = `
 }
 `
 const schemaSharded = `
-create table customer(cid int, name varbinary(128), primary key(cid))  CHARSET=utf8mb4;
+create table customer(cid int, name varbinary(128), primary key(cid)) TABLESPACE innodb_system CHARSET=utf8mb4;
 `
 const vschemaSharded = `
 {

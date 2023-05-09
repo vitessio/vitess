@@ -17,13 +17,12 @@ limitations under the License.
 package testlib
 
 import (
+	"context"
 	"flag"
 	"testing"
 	"time"
 
 	"vitess.io/vitess/go/vt/discovery"
-
-	"context"
 
 	"github.com/stretchr/testify/assert"
 
@@ -263,7 +262,8 @@ func TestTabletExternallyReparentedWithDifferentMysqlPort(t *testing.T) {
 	// TabletActionReplicaWasRestarted and point to the new mysql port
 	goodReplica.FakeMysqlDaemon.SetReplicationSourceInputs = append(goodReplica.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(oldPrimary.Tablet))
 	goodReplica.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
-		// These 3 statements come from tablet startup
+		// These 4 statements come from tablet startup
+		"STOP SLAVE",
 		"RESET SLAVE ALL",
 		"FAKE SET MASTER",
 		"START SLAVE",
@@ -352,7 +352,8 @@ func TestTabletExternallyReparentedContinueOnUnexpectedPrimary(t *testing.T) {
 	// TabletActionReplicaWasRestarted and point to a bad host
 	goodReplica.FakeMysqlDaemon.SetReplicationSourceInputs = append(goodReplica.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(oldPrimary.Tablet))
 	goodReplica.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
-		// These 3 statements come from tablet startup
+		// These 4 statements come from tablet startup
+		"STOP SLAVE",
 		"RESET SLAVE ALL",
 		"FAKE SET MASTER",
 		"START SLAVE",
@@ -437,7 +438,8 @@ func TestTabletExternallyReparentedRerun(t *testing.T) {
 	// On the good replica, we will respond to
 	// TabletActionReplicaWasRestarted.
 	goodReplica.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
-		// These 3 statements come from tablet startup
+		// These 4 statements come from tablet startup
+		"STOP SLAVE",
 		"RESET SLAVE ALL",
 		"FAKE SET MASTER",
 		"START SLAVE",

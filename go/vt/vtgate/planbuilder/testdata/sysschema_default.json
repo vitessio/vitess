@@ -69,7 +69,11 @@
         "Query": "select t.table_schema, t.table_name, c.column_name, c.column_type from information_schema.`tables` as t, information_schema.`columns` as c where t.table_schema = :__vtschemaname and c.table_schema = :__vtschemaname and c.table_schema = t.table_schema and c.table_name = t.table_name order by t.table_schema asc, t.table_name asc, c.column_name asc",
         "SysTableTableSchema": "[VARCHAR(\"user\"), VARCHAR(\"user\")]",
         "Table": "information_schema.`columns`, information_schema.`tables`"
-      }
+      },
+      "TablesUsed": [
+        "information_schema.columns",
+        "information_schema.tables"
+      ]
     }
   },
   {
@@ -107,6 +111,7 @@
         "Table": "dual"
       },
       "TablesUsed": [
+        "information_schema.schemata",
         "main.dual"
       ]
     }
@@ -144,7 +149,10 @@
         "Query": "select x.`1` from (select 1 from information_schema.schemata where schema_name = :__vtschemaname limit 1) as x",
         "SysTableTableSchema": "[VARCHAR(\"MyDatabase\")]",
         "Table": "information_schema.schemata"
-      }
+      },
+      "TablesUsed": [
+        "information_schema.schemata"
+      ]
     }
   }
 ]

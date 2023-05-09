@@ -387,9 +387,11 @@ func TestERSForInitialization(t *testing.T) {
 	shard.Vttablets = tablets
 	clusterInstance.VtTabletExtraArgs = []string{
 		"--lock_tables_timeout", "5s",
-		"--enable_semi_sync",
 		"--init_populate_metadata",
 		"--track_schema_versions=true",
+	}
+	if clusterInstance.VtTabletMajorVersion <= 15 {
+		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, "--enable_semi_sync")
 	}
 
 	// Initialize Cluster

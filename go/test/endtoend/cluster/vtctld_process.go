@@ -58,8 +58,6 @@ func (vtctld *VtctldProcess) Setup(cell string, extraArgs ...string) (err error)
 		"--topo_global_server_address", vtctld.CommonArg.TopoGlobalAddress,
 		"--topo_global_root", vtctld.CommonArg.TopoGlobalRoot,
 		"--cell", cell,
-		"--workflow_manager_init",
-		"--workflow_manager_use_election",
 		"--service_map", vtctld.ServiceMap,
 		"--backup_storage_implementation", vtctld.BackupStorageImplementation,
 		"--file_backup_storage_root", vtctld.FileBackupStorageRoot,
@@ -67,6 +65,7 @@ func (vtctld *VtctldProcess) Setup(cell string, extraArgs ...string) (err error)
 		"--port", fmt.Sprintf("%d", vtctld.Port),
 		"--grpc_port", fmt.Sprintf("%d", vtctld.GrpcPort),
 	)
+
 	if *isCoverage {
 		vtctld.proc.Args = append(vtctld.proc.Args, "--test.coverprofile="+getCoveragePath("vtctld.out"))
 	}

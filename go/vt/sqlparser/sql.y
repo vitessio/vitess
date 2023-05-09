@@ -2788,7 +2788,11 @@ insert_method_options:
 | LAST
 
 table_opt_value:
-  reserved_sql_id
+  table_id '.' reserved_table_id
+  {
+    $$ = String(TableName{Qualifier: $1, Name: $3})
+  }
+| reserved_sql_id
   {
     $$ = $1.String()
   }
@@ -5336,7 +5340,7 @@ function_call_keyword
   }
 
 interval_value:
-  INTERVAL simple_expr sql_id
+  INTERVAL bit_expr sql_id
   {
      $$ = &IntervalExpr{Expr: $2, Unit: $3.String()}
   }
