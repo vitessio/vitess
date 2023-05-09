@@ -1419,25 +1419,95 @@ func TestHandleExecUnknownError(t *testing.T) {
 	panic("unknown exec error")
 }
 
+func TestHandlePanicAndSendLogStatsMessageTruncation(t *testing.T) {
+	logStats := tabletenv.NewLogStats(ctx, "TestHandlePanicAndSendLogStatsMessageTruncation")
+	config := tabletenv.NewDefaultConfig()
+	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), &topodatapb.TabletAlias{})
+	longSql := "select * from test_table_loooooooooooooooooooooooooooooooooooong"
+	longBv := map[string]*querypb.BindVariable{
+		"bv1": sqltypes.Int64BindVariable(1111111111),
+		"bv2": sqltypes.Int64BindVariable(2222222222),
+		"bv3": sqltypes.Int64BindVariable(3333333333),
+		"bv4": sqltypes.Int64BindVariable(4444444444),
+	}
+	origTruncateErrLen := sqlparser.GetTruncateErrLen()
+	sqlparser.SetTruncateErrLen(32)
+	defer sqlparser.SetTruncateErrLen(origTruncateErrLen)
+
+	tl := newTestLogger()
+	defer tl.Close()
+
+	defer func() {
+		err := logStats.Error
+		want := "TODO"
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), want)
+		want = "TODO"
+		if !strings.Contains(tl.getLog(0), want) {
+			t.Errorf("error log %s, want '%s'", tl.getLog(0), want)
+		}
+	}()
+
+	defer tsv.handlePanicAndSendLogStats(longSql, longBv, logStats)
+	panic("panic from TestHandlePanicAndSendLogStatsMessageTruncation")
+}
+
+func TestQueryAsString(t *testing.T) {
+	longSql := "select * from test_table_loooooooooooooooooooooooooooooooooooong"
+	longBv := map[string]*querypb.BindVariable{
+		"bv1": sqltypes.Int64BindVariable(1111111111),
+		"bv2": sqltypes.Int64BindVariable(2222222222),
+		"bv3": sqltypes.Int64BindVariable(3333333333),
+		"bv4": sqltypes.Int64BindVariable(4444444444),
+	}
+	origTruncateErrLen := sqlparser.GetTruncateErrLen()
+	sqlparser.SetTruncateErrLen(32)
+	defer sqlparser.SetTruncateErrLen(origTruncateErrLen)
+
+	query := queryAsString(longSql, longBv, true, true)
+	want := "TODO"
+	assert.Equal(t, want, query)
+
+	query = queryAsString(longSql, longBv, true, false)
+	want = "TODO"
+	assert.Equal(t, want, query)
+
+	query = queryAsString(longSql, longBv, false, true)
+	want = "TODO"
+	assert.Equal(t, want, query)
+
+	query = queryAsString(longSql, longBv, false, false)
+	want = "TODO"
+	assert.Equal(t, want, query)
+}
+
 type testLogger struct {
 	logs        []string
 	savedInfof  func(format string, args ...any)
+	savedInfo   func(args ...any)
 	savedErrorf func(format string, args ...any)
+	savedError  func(args ...any)
 }
 
 func newTestLogger() *testLogger {
 	tl := &testLogger{
 		savedInfof:  log.Infof,
+		savedInfo:   log.Info,
 		savedErrorf: log.Errorf,
+		savedError:  log.Error,
 	}
 	log.Infof = tl.recordInfof
+	log.Info = tl.recordInfo
 	log.Errorf = tl.recordErrorf
+	log.Error = tl.recordError
 	return tl
 }
 
 func (tl *testLogger) Close() {
 	log.Infof = tl.savedInfof
+	log.Info = tl.savedInfo
 	log.Errorf = tl.savedErrorf
+	log.Error = tl.savedError
 }
 
 func (tl *testLogger) recordInfof(format string, args ...any) {
@@ -1446,10 +1516,22 @@ func (tl *testLogger) recordInfof(format string, args ...any) {
 	tl.savedInfof(msg)
 }
 
+func (tl *testLogger) recordInfo(args ...any) {
+	msg := fmt.Sprint(args...)
+	tl.logs = append(tl.logs, msg)
+	tl.savedInfo(msg)
+}
+
 func (tl *testLogger) recordErrorf(format string, args ...any) {
 	msg := fmt.Sprintf(format, args...)
 	tl.logs = append(tl.logs, msg)
 	tl.savedErrorf(msg)
+}
+
+func (tl *testLogger) recordError(args ...any) {
+	msg := fmt.Sprint(args...)
+	tl.logs = append(tl.logs, msg)
+	tl.savedError(msg)
 }
 
 func (tl *testLogger) getLog(i int) string {
