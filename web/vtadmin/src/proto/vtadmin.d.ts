@@ -60433,213 +60433,213 @@ export namespace vtctldata {
         }
     }
 
-    /** Properties of a WorkflowProgressRequest. */
-    interface IWorkflowProgressRequest {
+    /** Properties of a WorkflowStatusRequest. */
+    interface IWorkflowStatusRequest {
 
-        /** WorkflowProgressRequest keyspace */
+        /** WorkflowStatusRequest keyspace */
         keyspace?: (string|null);
 
-        /** WorkflowProgressRequest workflow */
+        /** WorkflowStatusRequest workflow */
         workflow?: (string|null);
     }
 
-    /** Represents a WorkflowProgressRequest. */
-    class WorkflowProgressRequest implements IWorkflowProgressRequest {
+    /** Represents a WorkflowStatusRequest. */
+    class WorkflowStatusRequest implements IWorkflowStatusRequest {
 
         /**
-         * Constructs a new WorkflowProgressRequest.
+         * Constructs a new WorkflowStatusRequest.
          * @param [properties] Properties to set
          */
-        constructor(properties?: vtctldata.IWorkflowProgressRequest);
+        constructor(properties?: vtctldata.IWorkflowStatusRequest);
 
-        /** WorkflowProgressRequest keyspace. */
+        /** WorkflowStatusRequest keyspace. */
         public keyspace: string;
 
-        /** WorkflowProgressRequest workflow. */
+        /** WorkflowStatusRequest workflow. */
         public workflow: string;
 
         /**
-         * Creates a new WorkflowProgressRequest instance using the specified properties.
+         * Creates a new WorkflowStatusRequest instance using the specified properties.
          * @param [properties] Properties to set
-         * @returns WorkflowProgressRequest instance
+         * @returns WorkflowStatusRequest instance
          */
-        public static create(properties?: vtctldata.IWorkflowProgressRequest): vtctldata.WorkflowProgressRequest;
+        public static create(properties?: vtctldata.IWorkflowStatusRequest): vtctldata.WorkflowStatusRequest;
 
         /**
-         * Encodes the specified WorkflowProgressRequest message. Does not implicitly {@link vtctldata.WorkflowProgressRequest.verify|verify} messages.
-         * @param message WorkflowProgressRequest message or plain object to encode
+         * Encodes the specified WorkflowStatusRequest message. Does not implicitly {@link vtctldata.WorkflowStatusRequest.verify|verify} messages.
+         * @param message WorkflowStatusRequest message or plain object to encode
          * @param [writer] Writer to encode to
          * @returns Writer
          */
-        public static encode(message: vtctldata.IWorkflowProgressRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+        public static encode(message: vtctldata.IWorkflowStatusRequest, writer?: $protobuf.Writer): $protobuf.Writer;
 
         /**
-         * Encodes the specified WorkflowProgressRequest message, length delimited. Does not implicitly {@link vtctldata.WorkflowProgressRequest.verify|verify} messages.
-         * @param message WorkflowProgressRequest message or plain object to encode
+         * Encodes the specified WorkflowStatusRequest message, length delimited. Does not implicitly {@link vtctldata.WorkflowStatusRequest.verify|verify} messages.
+         * @param message WorkflowStatusRequest message or plain object to encode
          * @param [writer] Writer to encode to
          * @returns Writer
          */
-        public static encodeDelimited(message: vtctldata.IWorkflowProgressRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+        public static encodeDelimited(message: vtctldata.IWorkflowStatusRequest, writer?: $protobuf.Writer): $protobuf.Writer;
 
         /**
-         * Decodes a WorkflowProgressRequest message from the specified reader or buffer.
+         * Decodes a WorkflowStatusRequest message from the specified reader or buffer.
          * @param reader Reader or buffer to decode from
          * @param [length] Message length if known beforehand
-         * @returns WorkflowProgressRequest
+         * @returns WorkflowStatusRequest
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.WorkflowProgressRequest;
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.WorkflowStatusRequest;
 
         /**
-         * Decodes a WorkflowProgressRequest message from the specified reader or buffer, length delimited.
+         * Decodes a WorkflowStatusRequest message from the specified reader or buffer, length delimited.
          * @param reader Reader or buffer to decode from
-         * @returns WorkflowProgressRequest
+         * @returns WorkflowStatusRequest
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.WorkflowProgressRequest;
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.WorkflowStatusRequest;
 
         /**
-         * Verifies a WorkflowProgressRequest message.
+         * Verifies a WorkflowStatusRequest message.
          * @param message Plain object to verify
          * @returns `null` if valid, otherwise the reason why it is not
          */
         public static verify(message: { [k: string]: any }): (string|null);
 
         /**
-         * Creates a WorkflowProgressRequest message from a plain object. Also converts values to their respective internal types.
+         * Creates a WorkflowStatusRequest message from a plain object. Also converts values to their respective internal types.
          * @param object Plain object
-         * @returns WorkflowProgressRequest
+         * @returns WorkflowStatusRequest
          */
-        public static fromObject(object: { [k: string]: any }): vtctldata.WorkflowProgressRequest;
+        public static fromObject(object: { [k: string]: any }): vtctldata.WorkflowStatusRequest;
 
         /**
-         * Creates a plain object from a WorkflowProgressRequest message. Also converts values to other types if specified.
-         * @param message WorkflowProgressRequest
+         * Creates a plain object from a WorkflowStatusRequest message. Also converts values to other types if specified.
+         * @param message WorkflowStatusRequest
          * @param [options] Conversion options
          * @returns Plain object
          */
-        public static toObject(message: vtctldata.WorkflowProgressRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+        public static toObject(message: vtctldata.WorkflowStatusRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
 
         /**
-         * Converts this WorkflowProgressRequest to JSON.
+         * Converts this WorkflowStatusRequest to JSON.
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
 
         /**
-         * Gets the default type url for WorkflowProgressRequest
+         * Gets the default type url for WorkflowStatusRequest
          * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
          * @returns The default type url
          */
         public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
-    /** Properties of a WorkflowProgressResponse. */
-    interface IWorkflowProgressResponse {
+    /** Properties of a WorkflowStatusResponse. */
+    interface IWorkflowStatusResponse {
 
-        /** WorkflowProgressResponse table_copy_state */
-        table_copy_state?: ({ [k: string]: vtctldata.WorkflowProgressResponse.ITableCopyState }|null);
+        /** WorkflowStatusResponse table_copy_state */
+        table_copy_state?: ({ [k: string]: vtctldata.WorkflowStatusResponse.ITableCopyState }|null);
 
-        /** WorkflowProgressResponse shard_streams */
-        shard_streams?: ({ [k: string]: vtctldata.WorkflowProgressResponse.IShardStreams }|null);
+        /** WorkflowStatusResponse shard_streams */
+        shard_streams?: ({ [k: string]: vtctldata.WorkflowStatusResponse.IShardStreams }|null);
     }
 
-    /** Represents a WorkflowProgressResponse. */
-    class WorkflowProgressResponse implements IWorkflowProgressResponse {
+    /** Represents a WorkflowStatusResponse. */
+    class WorkflowStatusResponse implements IWorkflowStatusResponse {
 
         /**
-         * Constructs a new WorkflowProgressResponse.
+         * Constructs a new WorkflowStatusResponse.
          * @param [properties] Properties to set
          */
-        constructor(properties?: vtctldata.IWorkflowProgressResponse);
+        constructor(properties?: vtctldata.IWorkflowStatusResponse);
 
-        /** WorkflowProgressResponse table_copy_state. */
-        public table_copy_state: { [k: string]: vtctldata.WorkflowProgressResponse.ITableCopyState };
+        /** WorkflowStatusResponse table_copy_state. */
+        public table_copy_state: { [k: string]: vtctldata.WorkflowStatusResponse.ITableCopyState };
 
-        /** WorkflowProgressResponse shard_streams. */
-        public shard_streams: { [k: string]: vtctldata.WorkflowProgressResponse.IShardStreams };
+        /** WorkflowStatusResponse shard_streams. */
+        public shard_streams: { [k: string]: vtctldata.WorkflowStatusResponse.IShardStreams };
 
         /**
-         * Creates a new WorkflowProgressResponse instance using the specified properties.
+         * Creates a new WorkflowStatusResponse instance using the specified properties.
          * @param [properties] Properties to set
-         * @returns WorkflowProgressResponse instance
+         * @returns WorkflowStatusResponse instance
          */
-        public static create(properties?: vtctldata.IWorkflowProgressResponse): vtctldata.WorkflowProgressResponse;
+        public static create(properties?: vtctldata.IWorkflowStatusResponse): vtctldata.WorkflowStatusResponse;
 
         /**
-         * Encodes the specified WorkflowProgressResponse message. Does not implicitly {@link vtctldata.WorkflowProgressResponse.verify|verify} messages.
-         * @param message WorkflowProgressResponse message or plain object to encode
+         * Encodes the specified WorkflowStatusResponse message. Does not implicitly {@link vtctldata.WorkflowStatusResponse.verify|verify} messages.
+         * @param message WorkflowStatusResponse message or plain object to encode
          * @param [writer] Writer to encode to
          * @returns Writer
          */
-        public static encode(message: vtctldata.IWorkflowProgressResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+        public static encode(message: vtctldata.IWorkflowStatusResponse, writer?: $protobuf.Writer): $protobuf.Writer;
 
         /**
-         * Encodes the specified WorkflowProgressResponse message, length delimited. Does not implicitly {@link vtctldata.WorkflowProgressResponse.verify|verify} messages.
-         * @param message WorkflowProgressResponse message or plain object to encode
+         * Encodes the specified WorkflowStatusResponse message, length delimited. Does not implicitly {@link vtctldata.WorkflowStatusResponse.verify|verify} messages.
+         * @param message WorkflowStatusResponse message or plain object to encode
          * @param [writer] Writer to encode to
          * @returns Writer
          */
-        public static encodeDelimited(message: vtctldata.IWorkflowProgressResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+        public static encodeDelimited(message: vtctldata.IWorkflowStatusResponse, writer?: $protobuf.Writer): $protobuf.Writer;
 
         /**
-         * Decodes a WorkflowProgressResponse message from the specified reader or buffer.
+         * Decodes a WorkflowStatusResponse message from the specified reader or buffer.
          * @param reader Reader or buffer to decode from
          * @param [length] Message length if known beforehand
-         * @returns WorkflowProgressResponse
+         * @returns WorkflowStatusResponse
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.WorkflowProgressResponse;
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.WorkflowStatusResponse;
 
         /**
-         * Decodes a WorkflowProgressResponse message from the specified reader or buffer, length delimited.
+         * Decodes a WorkflowStatusResponse message from the specified reader or buffer, length delimited.
          * @param reader Reader or buffer to decode from
-         * @returns WorkflowProgressResponse
+         * @returns WorkflowStatusResponse
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.WorkflowProgressResponse;
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.WorkflowStatusResponse;
 
         /**
-         * Verifies a WorkflowProgressResponse message.
+         * Verifies a WorkflowStatusResponse message.
          * @param message Plain object to verify
          * @returns `null` if valid, otherwise the reason why it is not
          */
         public static verify(message: { [k: string]: any }): (string|null);
 
         /**
-         * Creates a WorkflowProgressResponse message from a plain object. Also converts values to their respective internal types.
+         * Creates a WorkflowStatusResponse message from a plain object. Also converts values to their respective internal types.
          * @param object Plain object
-         * @returns WorkflowProgressResponse
+         * @returns WorkflowStatusResponse
          */
-        public static fromObject(object: { [k: string]: any }): vtctldata.WorkflowProgressResponse;
+        public static fromObject(object: { [k: string]: any }): vtctldata.WorkflowStatusResponse;
 
         /**
-         * Creates a plain object from a WorkflowProgressResponse message. Also converts values to other types if specified.
-         * @param message WorkflowProgressResponse
+         * Creates a plain object from a WorkflowStatusResponse message. Also converts values to other types if specified.
+         * @param message WorkflowStatusResponse
          * @param [options] Conversion options
          * @returns Plain object
          */
-        public static toObject(message: vtctldata.WorkflowProgressResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+        public static toObject(message: vtctldata.WorkflowStatusResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
 
         /**
-         * Converts this WorkflowProgressResponse to JSON.
+         * Converts this WorkflowStatusResponse to JSON.
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
 
         /**
-         * Gets the default type url for WorkflowProgressResponse
+         * Gets the default type url for WorkflowStatusResponse
          * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
          * @returns The default type url
          */
         public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
-    namespace WorkflowProgressResponse {
+    namespace WorkflowStatusResponse {
 
         /** Properties of a TableCopyState. */
         interface ITableCopyState {
@@ -60670,7 +60670,7 @@ export namespace vtctldata {
              * Constructs a new TableCopyState.
              * @param [properties] Properties to set
              */
-            constructor(properties?: vtctldata.WorkflowProgressResponse.ITableCopyState);
+            constructor(properties?: vtctldata.WorkflowStatusResponse.ITableCopyState);
 
             /** TableCopyState rows_copied. */
             public rows_copied: (number|Long);
@@ -60695,23 +60695,23 @@ export namespace vtctldata {
              * @param [properties] Properties to set
              * @returns TableCopyState instance
              */
-            public static create(properties?: vtctldata.WorkflowProgressResponse.ITableCopyState): vtctldata.WorkflowProgressResponse.TableCopyState;
+            public static create(properties?: vtctldata.WorkflowStatusResponse.ITableCopyState): vtctldata.WorkflowStatusResponse.TableCopyState;
 
             /**
-             * Encodes the specified TableCopyState message. Does not implicitly {@link vtctldata.WorkflowProgressResponse.TableCopyState.verify|verify} messages.
+             * Encodes the specified TableCopyState message. Does not implicitly {@link vtctldata.WorkflowStatusResponse.TableCopyState.verify|verify} messages.
              * @param message TableCopyState message or plain object to encode
              * @param [writer] Writer to encode to
              * @returns Writer
              */
-            public static encode(message: vtctldata.WorkflowProgressResponse.ITableCopyState, writer?: $protobuf.Writer): $protobuf.Writer;
+            public static encode(message: vtctldata.WorkflowStatusResponse.ITableCopyState, writer?: $protobuf.Writer): $protobuf.Writer;
 
             /**
-             * Encodes the specified TableCopyState message, length delimited. Does not implicitly {@link vtctldata.WorkflowProgressResponse.TableCopyState.verify|verify} messages.
+             * Encodes the specified TableCopyState message, length delimited. Does not implicitly {@link vtctldata.WorkflowStatusResponse.TableCopyState.verify|verify} messages.
              * @param message TableCopyState message or plain object to encode
              * @param [writer] Writer to encode to
              * @returns Writer
              */
-            public static encodeDelimited(message: vtctldata.WorkflowProgressResponse.ITableCopyState, writer?: $protobuf.Writer): $protobuf.Writer;
+            public static encodeDelimited(message: vtctldata.WorkflowStatusResponse.ITableCopyState, writer?: $protobuf.Writer): $protobuf.Writer;
 
             /**
              * Decodes a TableCopyState message from the specified reader or buffer.
@@ -60721,7 +60721,7 @@ export namespace vtctldata {
              * @throws {Error} If the payload is not a reader or valid buffer
              * @throws {$protobuf.util.ProtocolError} If required fields are missing
              */
-            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.WorkflowProgressResponse.TableCopyState;
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.WorkflowStatusResponse.TableCopyState;
 
             /**
              * Decodes a TableCopyState message from the specified reader or buffer, length delimited.
@@ -60730,7 +60730,7 @@ export namespace vtctldata {
              * @throws {Error} If the payload is not a reader or valid buffer
              * @throws {$protobuf.util.ProtocolError} If required fields are missing
              */
-            public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.WorkflowProgressResponse.TableCopyState;
+            public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.WorkflowStatusResponse.TableCopyState;
 
             /**
              * Verifies a TableCopyState message.
@@ -60744,7 +60744,7 @@ export namespace vtctldata {
              * @param object Plain object
              * @returns TableCopyState
              */
-            public static fromObject(object: { [k: string]: any }): vtctldata.WorkflowProgressResponse.TableCopyState;
+            public static fromObject(object: { [k: string]: any }): vtctldata.WorkflowStatusResponse.TableCopyState;
 
             /**
              * Creates a plain object from a TableCopyState message. Also converts values to other types if specified.
@@ -60752,7 +60752,7 @@ export namespace vtctldata {
              * @param [options] Conversion options
              * @returns Plain object
              */
-            public static toObject(message: vtctldata.WorkflowProgressResponse.TableCopyState, options?: $protobuf.IConversionOptions): { [k: string]: any };
+            public static toObject(message: vtctldata.WorkflowStatusResponse.TableCopyState, options?: $protobuf.IConversionOptions): { [k: string]: any };
 
             /**
              * Converts this TableCopyState to JSON.
@@ -60797,7 +60797,7 @@ export namespace vtctldata {
              * Constructs a new ShardStreamState.
              * @param [properties] Properties to set
              */
-            constructor(properties?: vtctldata.WorkflowProgressResponse.IShardStreamState);
+            constructor(properties?: vtctldata.WorkflowStatusResponse.IShardStreamState);
 
             /** ShardStreamState id. */
             public id: number;
@@ -60822,23 +60822,23 @@ export namespace vtctldata {
              * @param [properties] Properties to set
              * @returns ShardStreamState instance
              */
-            public static create(properties?: vtctldata.WorkflowProgressResponse.IShardStreamState): vtctldata.WorkflowProgressResponse.ShardStreamState;
+            public static create(properties?: vtctldata.WorkflowStatusResponse.IShardStreamState): vtctldata.WorkflowStatusResponse.ShardStreamState;
 
             /**
-             * Encodes the specified ShardStreamState message. Does not implicitly {@link vtctldata.WorkflowProgressResponse.ShardStreamState.verify|verify} messages.
+             * Encodes the specified ShardStreamState message. Does not implicitly {@link vtctldata.WorkflowStatusResponse.ShardStreamState.verify|verify} messages.
              * @param message ShardStreamState message or plain object to encode
              * @param [writer] Writer to encode to
              * @returns Writer
              */
-            public static encode(message: vtctldata.WorkflowProgressResponse.IShardStreamState, writer?: $protobuf.Writer): $protobuf.Writer;
+            public static encode(message: vtctldata.WorkflowStatusResponse.IShardStreamState, writer?: $protobuf.Writer): $protobuf.Writer;
 
             /**
-             * Encodes the specified ShardStreamState message, length delimited. Does not implicitly {@link vtctldata.WorkflowProgressResponse.ShardStreamState.verify|verify} messages.
+             * Encodes the specified ShardStreamState message, length delimited. Does not implicitly {@link vtctldata.WorkflowStatusResponse.ShardStreamState.verify|verify} messages.
              * @param message ShardStreamState message or plain object to encode
              * @param [writer] Writer to encode to
              * @returns Writer
              */
-            public static encodeDelimited(message: vtctldata.WorkflowProgressResponse.IShardStreamState, writer?: $protobuf.Writer): $protobuf.Writer;
+            public static encodeDelimited(message: vtctldata.WorkflowStatusResponse.IShardStreamState, writer?: $protobuf.Writer): $protobuf.Writer;
 
             /**
              * Decodes a ShardStreamState message from the specified reader or buffer.
@@ -60848,7 +60848,7 @@ export namespace vtctldata {
              * @throws {Error} If the payload is not a reader or valid buffer
              * @throws {$protobuf.util.ProtocolError} If required fields are missing
              */
-            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.WorkflowProgressResponse.ShardStreamState;
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.WorkflowStatusResponse.ShardStreamState;
 
             /**
              * Decodes a ShardStreamState message from the specified reader or buffer, length delimited.
@@ -60857,7 +60857,7 @@ export namespace vtctldata {
              * @throws {Error} If the payload is not a reader or valid buffer
              * @throws {$protobuf.util.ProtocolError} If required fields are missing
              */
-            public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.WorkflowProgressResponse.ShardStreamState;
+            public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.WorkflowStatusResponse.ShardStreamState;
 
             /**
              * Verifies a ShardStreamState message.
@@ -60871,7 +60871,7 @@ export namespace vtctldata {
              * @param object Plain object
              * @returns ShardStreamState
              */
-            public static fromObject(object: { [k: string]: any }): vtctldata.WorkflowProgressResponse.ShardStreamState;
+            public static fromObject(object: { [k: string]: any }): vtctldata.WorkflowStatusResponse.ShardStreamState;
 
             /**
              * Creates a plain object from a ShardStreamState message. Also converts values to other types if specified.
@@ -60879,7 +60879,7 @@ export namespace vtctldata {
              * @param [options] Conversion options
              * @returns Plain object
              */
-            public static toObject(message: vtctldata.WorkflowProgressResponse.ShardStreamState, options?: $protobuf.IConversionOptions): { [k: string]: any };
+            public static toObject(message: vtctldata.WorkflowStatusResponse.ShardStreamState, options?: $protobuf.IConversionOptions): { [k: string]: any };
 
             /**
              * Converts this ShardStreamState to JSON.
@@ -60899,7 +60899,7 @@ export namespace vtctldata {
         interface IShardStreams {
 
             /** ShardStreams streams */
-            streams?: (vtctldata.WorkflowProgressResponse.IShardStreamState[]|null);
+            streams?: (vtctldata.WorkflowStatusResponse.IShardStreamState[]|null);
         }
 
         /** Represents a ShardStreams. */
@@ -60909,33 +60909,33 @@ export namespace vtctldata {
              * Constructs a new ShardStreams.
              * @param [properties] Properties to set
              */
-            constructor(properties?: vtctldata.WorkflowProgressResponse.IShardStreams);
+            constructor(properties?: vtctldata.WorkflowStatusResponse.IShardStreams);
 
             /** ShardStreams streams. */
-            public streams: vtctldata.WorkflowProgressResponse.IShardStreamState[];
+            public streams: vtctldata.WorkflowStatusResponse.IShardStreamState[];
 
             /**
              * Creates a new ShardStreams instance using the specified properties.
              * @param [properties] Properties to set
              * @returns ShardStreams instance
              */
-            public static create(properties?: vtctldata.WorkflowProgressResponse.IShardStreams): vtctldata.WorkflowProgressResponse.ShardStreams;
+            public static create(properties?: vtctldata.WorkflowStatusResponse.IShardStreams): vtctldata.WorkflowStatusResponse.ShardStreams;
 
             /**
-             * Encodes the specified ShardStreams message. Does not implicitly {@link vtctldata.WorkflowProgressResponse.ShardStreams.verify|verify} messages.
+             * Encodes the specified ShardStreams message. Does not implicitly {@link vtctldata.WorkflowStatusResponse.ShardStreams.verify|verify} messages.
              * @param message ShardStreams message or plain object to encode
              * @param [writer] Writer to encode to
              * @returns Writer
              */
-            public static encode(message: vtctldata.WorkflowProgressResponse.IShardStreams, writer?: $protobuf.Writer): $protobuf.Writer;
+            public static encode(message: vtctldata.WorkflowStatusResponse.IShardStreams, writer?: $protobuf.Writer): $protobuf.Writer;
 
             /**
-             * Encodes the specified ShardStreams message, length delimited. Does not implicitly {@link vtctldata.WorkflowProgressResponse.ShardStreams.verify|verify} messages.
+             * Encodes the specified ShardStreams message, length delimited. Does not implicitly {@link vtctldata.WorkflowStatusResponse.ShardStreams.verify|verify} messages.
              * @param message ShardStreams message or plain object to encode
              * @param [writer] Writer to encode to
              * @returns Writer
              */
-            public static encodeDelimited(message: vtctldata.WorkflowProgressResponse.IShardStreams, writer?: $protobuf.Writer): $protobuf.Writer;
+            public static encodeDelimited(message: vtctldata.WorkflowStatusResponse.IShardStreams, writer?: $protobuf.Writer): $protobuf.Writer;
 
             /**
              * Decodes a ShardStreams message from the specified reader or buffer.
@@ -60945,7 +60945,7 @@ export namespace vtctldata {
              * @throws {Error} If the payload is not a reader or valid buffer
              * @throws {$protobuf.util.ProtocolError} If required fields are missing
              */
-            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.WorkflowProgressResponse.ShardStreams;
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.WorkflowStatusResponse.ShardStreams;
 
             /**
              * Decodes a ShardStreams message from the specified reader or buffer, length delimited.
@@ -60954,7 +60954,7 @@ export namespace vtctldata {
              * @throws {Error} If the payload is not a reader or valid buffer
              * @throws {$protobuf.util.ProtocolError} If required fields are missing
              */
-            public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.WorkflowProgressResponse.ShardStreams;
+            public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.WorkflowStatusResponse.ShardStreams;
 
             /**
              * Verifies a ShardStreams message.
@@ -60968,7 +60968,7 @@ export namespace vtctldata {
              * @param object Plain object
              * @returns ShardStreams
              */
-            public static fromObject(object: { [k: string]: any }): vtctldata.WorkflowProgressResponse.ShardStreams;
+            public static fromObject(object: { [k: string]: any }): vtctldata.WorkflowStatusResponse.ShardStreams;
 
             /**
              * Creates a plain object from a ShardStreams message. Also converts values to other types if specified.
@@ -60976,7 +60976,7 @@ export namespace vtctldata {
              * @param [options] Conversion options
              * @returns Plain object
              */
-            public static toObject(message: vtctldata.WorkflowProgressResponse.ShardStreams, options?: $protobuf.IConversionOptions): { [k: string]: any };
+            public static toObject(message: vtctldata.WorkflowStatusResponse.ShardStreams, options?: $protobuf.IConversionOptions): { [k: string]: any };
 
             /**
              * Converts this ShardStreams to JSON.

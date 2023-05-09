@@ -1188,7 +1188,7 @@ func (s *Server) WorkflowDelete(ctx context.Context, req *vtctldatapb.WorkflowDe
 	return response, nil
 }
 
-func (s *Server) WorkflowProgress(ctx context.Context, req *vtctldatapb.WorkflowProgressRequest) (*vtctldatapb.WorkflowProgressResponse, error) {
+func (s *Server) WorkflowStatus(ctx context.Context, req *vtctldatapb.WorkflowStatusRequest) (*vtctldatapb.WorkflowStatusResponse, error) {
 	ts, state, err := s.getWorkflowState(ctx, req.Keyspace, req.Workflow)
 	if err != nil {
 		return nil, err
@@ -1197,9 +1197,9 @@ func (s *Server) WorkflowProgress(ctx context.Context, req *vtctldatapb.Workflow
 	if err != nil {
 		return nil, err
 	}
-	resp := &vtctldatapb.WorkflowProgressResponse{}
+	resp := &vtctldatapb.WorkflowStatusResponse{}
 	if copyProgress != nil {
-		resp.TableCopyState = make(map[string]*vtctldatapb.WorkflowProgressResponse_TableCopyState, len(*copyProgress))
+		resp.TableCopyState = make(map[string]*vtctldatapb.WorkflowStatusResponse_TableCopyState, len(*copyProgress))
 		// We sort the tables for intuitive and consistent output.
 		var tables []string
 		for table := range *copyProgress {
@@ -1209,7 +1209,7 @@ func (s *Server) WorkflowProgress(ctx context.Context, req *vtctldatapb.Workflow
 		var progress TableCopyProgress
 		for _, table := range tables {
 			var rowCountPct, tableSizePct int64
-			resp.TableCopyState[table] = &vtctldatapb.WorkflowProgressResponse_TableCopyState{}
+			resp.TableCopyState[table] = &vtctldatapb.WorkflowStatusResponse_TableCopyState{}
 			progress = *(*copyProgress)[table]
 			if progress.SourceRowCount > 0 {
 				rowCountPct = 100.0 * progress.TargetRowCount / progress.SourceRowCount
@@ -1245,7 +1245,7 @@ func (s *Server) WorkflowProgress(ctx context.Context, req *vtctldatapb.Workflow
 		streamKeys = append(streamKeys, streamKey)
 	}
 	sort.Strings(streamKeys)
-	resp.ShardStreams = make(map[string]*vtctldatapb.WorkflowProgressResponse_ShardStreams, len(streamKeys))
+	resp.ShardStreams = make(map[string]*vtctldatapb.WorkflowStatusResponse_ShardStreams, len(streamKeys))
 	for _, streamKey := range streamKeys {
 		streams := workflow.ShardStreams[streamKey].GetStreams()
 		keyParts := strings.Split(streamKey, "/")
@@ -1256,11 +1256,11 @@ func (s *Server) WorkflowProgress(ctx context.Context, req *vtctldatapb.Workflow
 		// We want to use target keyspace/shard as the map key for the
 		// response, e.g. customer/-80.
 		ksShard := fmt.Sprintf("%s/%s", req.Keyspace, keyParts[0])
-		resp.ShardStreams[ksShard] = &vtctldatapb.WorkflowProgressResponse_ShardStreams{}
-		resp.ShardStreams[ksShard].Streams = make([]*vtctldatapb.WorkflowProgressResponse_ShardStreamState, len(streams))
+		resp.ShardStreams[ksShard] = &vtctldatapb.WorkflowStatusResponse_ShardStreams{}
+		resp.ShardStreams[ksShard].Streams = make([]*vtctldatapb.WorkflowStatusResponse_ShardStreamState, len(streams))
 		for i, st := range streams {
 			info := []string{}
-			ts := &vtctldatapb.WorkflowProgressResponse_ShardStreamState{}
+			ts := &vtctldatapb.WorkflowStatusResponse_ShardStreamState{}
 			if st.State == "Error" {
 				info = append(info, st.Message)
 			} else if st.Position == "" {

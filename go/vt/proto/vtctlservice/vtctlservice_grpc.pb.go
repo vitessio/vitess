@@ -403,7 +403,7 @@ type VtctldClient interface {
 	ValidateVSchema(ctx context.Context, in *vtctldata.ValidateVSchemaRequest, opts ...grpc.CallOption) (*vtctldata.ValidateVSchemaResponse, error)
 	// WorkflowDelete deletes a vreplication workflow.
 	WorkflowDelete(ctx context.Context, in *vtctldata.WorkflowDeleteRequest, opts ...grpc.CallOption) (*vtctldata.WorkflowDeleteResponse, error)
-	WorkflowProgress(ctx context.Context, in *vtctldata.WorkflowProgressRequest, opts ...grpc.CallOption) (*vtctldata.WorkflowProgressResponse, error)
+	WorkflowStatus(ctx context.Context, in *vtctldata.WorkflowStatusRequest, opts ...grpc.CallOption) (*vtctldata.WorkflowStatusResponse, error)
 	// WorkflowUpdate updates the configuration of a vreplication workflow
 	// using the provided updated parameters.
 	WorkflowUpdate(ctx context.Context, in *vtctldata.WorkflowUpdateRequest, opts ...grpc.CallOption) (*vtctldata.WorkflowUpdateResponse, error)
@@ -1260,9 +1260,9 @@ func (c *vtctldClient) WorkflowDelete(ctx context.Context, in *vtctldata.Workflo
 	return out, nil
 }
 
-func (c *vtctldClient) WorkflowProgress(ctx context.Context, in *vtctldata.WorkflowProgressRequest, opts ...grpc.CallOption) (*vtctldata.WorkflowProgressResponse, error) {
-	out := new(vtctldata.WorkflowProgressResponse)
-	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/WorkflowProgress", in, out, opts...)
+func (c *vtctldClient) WorkflowStatus(ctx context.Context, in *vtctldata.WorkflowStatusRequest, opts ...grpc.CallOption) (*vtctldata.WorkflowStatusResponse, error) {
+	out := new(vtctldata.WorkflowStatusResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/WorkflowStatus", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1549,7 +1549,7 @@ type VtctldServer interface {
 	ValidateVSchema(context.Context, *vtctldata.ValidateVSchemaRequest) (*vtctldata.ValidateVSchemaResponse, error)
 	// WorkflowDelete deletes a vreplication workflow.
 	WorkflowDelete(context.Context, *vtctldata.WorkflowDeleteRequest) (*vtctldata.WorkflowDeleteResponse, error)
-	WorkflowProgress(context.Context, *vtctldata.WorkflowProgressRequest) (*vtctldata.WorkflowProgressResponse, error)
+	WorkflowStatus(context.Context, *vtctldata.WorkflowStatusRequest) (*vtctldata.WorkflowStatusResponse, error)
 	// WorkflowUpdate updates the configuration of a vreplication workflow
 	// using the provided updated parameters.
 	WorkflowUpdate(context.Context, *vtctldata.WorkflowUpdateRequest) (*vtctldata.WorkflowUpdateResponse, error)
@@ -1818,8 +1818,8 @@ func (UnimplementedVtctldServer) ValidateVSchema(context.Context, *vtctldata.Val
 func (UnimplementedVtctldServer) WorkflowDelete(context.Context, *vtctldata.WorkflowDeleteRequest) (*vtctldata.WorkflowDeleteResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method WorkflowDelete not implemented")
 }
-func (UnimplementedVtctldServer) WorkflowProgress(context.Context, *vtctldata.WorkflowProgressRequest) (*vtctldata.WorkflowProgressResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method WorkflowProgress not implemented")
+func (UnimplementedVtctldServer) WorkflowStatus(context.Context, *vtctldata.WorkflowStatusRequest) (*vtctldata.WorkflowStatusResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method WorkflowStatus not implemented")
 }
 func (UnimplementedVtctldServer) WorkflowUpdate(context.Context, *vtctldata.WorkflowUpdateRequest) (*vtctldata.WorkflowUpdateResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method WorkflowUpdate not implemented")
@@ -3394,20 +3394,20 @@ func _Vtctld_WorkflowDelete_Handler(srv interface{}, ctx context.Context, dec fu
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Vtctld_WorkflowProgress_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(vtctldata.WorkflowProgressRequest)
+func _Vtctld_WorkflowStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.WorkflowStatusRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(VtctldServer).WorkflowProgress(ctx, in)
+		return srv.(VtctldServer).WorkflowStatus(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/vtctlservice.Vtctld/WorkflowProgress",
+		FullMethod: "/vtctlservice.Vtctld/WorkflowStatus",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(VtctldServer).WorkflowProgress(ctx, req.(*vtctldata.WorkflowProgressRequest))
+		return srv.(VtctldServer).WorkflowStatus(ctx, req.(*vtctldata.WorkflowStatusRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -3770,8 +3770,8 @@ var Vtctld_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _Vtctld_WorkflowDelete_Handler,
 		},
 		{
-			MethodName: "WorkflowProgress",
-			Handler:    _Vtctld_WorkflowProgress_Handler,
+			MethodName: "WorkflowStatus",
+			Handler:    _Vtctld_WorkflowStatus_Handler,
 		},
 		{
 			MethodName: "WorkflowUpdate",

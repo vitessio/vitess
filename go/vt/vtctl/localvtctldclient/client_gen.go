@@ -597,9 +597,9 @@ func (client *localVtctldClient) WorkflowDelete(ctx context.Context, in *vtctlda
 	return client.s.WorkflowDelete(ctx, in)
 }
 
-// WorkflowProgress is part of the vtctlservicepb.VtctldClient interface.
-func (client *localVtctldClient) WorkflowProgress(ctx context.Context, in *vtctldatapb.WorkflowProgressRequest, opts ...grpc.CallOption) (*vtctldatapb.WorkflowProgressResponse, error) {
-	return client.s.WorkflowProgress(ctx, in)
+// WorkflowStatus is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) WorkflowStatus(ctx context.Context, in *vtctldatapb.WorkflowStatusRequest, opts ...grpc.CallOption) (*vtctldatapb.WorkflowStatusResponse, error) {
+	return client.s.WorkflowStatus(ctx, in)
 }
 
 // WorkflowUpdate is part of the vtctlservicepb.VtctldClient interface.

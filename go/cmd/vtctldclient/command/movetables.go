@@ -38,7 +38,7 @@ var (
 	MoveTables = &cobra.Command{
 		Use:   "movetables --workflow <workflow> --target-keyspace <keyspace> [command]",
 		Short: "Perform commands related to moving tables from a source keyspace to a target keyspace.",
-		Long: `MoveTables commands: Create, Show, Progress, SwitchTraffic, ReverseTraffic, Stop, Start, Cancel, and Delete.
+		Long: `MoveTables commands: Create, Show, Status, SwitchTraffic, ReverseTraffic, Stop, Start, Cancel, and Delete.
 See the --help output for each command for more details.`,
 		DisableFlagsInUseLine: true,
 		Aliases:               []string{"MoveTables"},
@@ -90,17 +90,6 @@ See the --help output for each command for more details.`,
 		RunE: commandMoveTablesCreate,
 	}
 
-	// MoveTablesProgress makes a GetWorkflows gRPC call to a vtctld.
-	MoveTablesProgress = &cobra.Command{
-		Use:                   "progress",
-		Short:                 "Show the current progress for a MoveTables VReplication workflow",
-		Example:               `vtctldclient --server=localhost:15999 MoveTables --workflow "commerce2customer" --target-keyspace "customer" progress`,
-		DisableFlagsInUseLine: true,
-		Aliases:               []string{"Progress"},
-		Args:                  cobra.NoArgs,
-		RunE:                  commandMoveTablesProgress,
-	}
-
 	// MoveTablesShow makes a GetWorkflows gRPC call to a vtctld.
 	MoveTablesShow = &cobra.Command{
 		Use:                   "show",
@@ -110,6 +99,17 @@ See the --help output for each command for more details.`,
 		Aliases:               []string{"Show"},
 		Args:                  cobra.NoArgs,
 		RunE:                  commandMoveTablesShow,
+	}
+
+	// MoveTablesStatus makes a GetWorkflows gRPC call to a vtctld.
+	MoveTablesStatus = &cobra.Command{
+		Use:                   "status",
+		Short:                 "Show the current status for a MoveTables VReplication workflow",
+		Example:               `vtctldclient --server=localhost:15999 MoveTables --workflow "commerce2customer" --target-keyspace "customer" status`,
+		DisableFlagsInUseLine: true,
+		Aliases:               []string{"Status", "progress", "Progress"},
+		Args:                  cobra.NoArgs,
+		RunE:                  commandMoveTablesStatus,
 	}
 
 	// MoveTablesSwitchTraffic makes a MoveTablesSwitchTraffic gRPC call to a vtctld.
@@ -224,14 +224,14 @@ func commandMoveTablesCancel(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func commandMoveTablesProgress(cmd *cobra.Command, args []string) error {
+func commandMoveTablesStatus(cmd *cobra.Command, args []string) error {
 	cli.FinishedParsing(cmd)
 
-	req := &vtctldatapb.WorkflowProgressRequest{
+	req := &vtctldatapb.WorkflowStatusRequest{
 		Keyspace: moveTablesOptions.TargetKeyspace,
 		Workflow: moveTablesOptions.Workflow,
 	}
-	resp, err := client.WorkflowProgress(commandCtx, req)
+	resp, err := client.WorkflowStatus(commandCtx, req)
 	if err != nil {
 		return err
 	}
@@ -317,7 +317,7 @@ func init() {
 	MoveTablesCreate.Flags().BoolVar(&moveTablesCreateOptions.StopAfterCopy, "stop-after-copy", false, "Stop the MoveTables workflow after it's finished copying the existing rows and before it starts replicating changes")
 	MoveTables.AddCommand(MoveTablesCreate)
 
-	MoveTables.AddCommand(MoveTablesProgress)
+	MoveTables.AddCommand(MoveTablesStatus)
 	MoveTables.AddCommand(MoveTablesShow)
 
 	MoveTablesSwitchTraffic.Flags().StringSliceVar(&moveTablesSwitchTrafficOptions.TableTypes, "tablet-types", nil, "Tablet types to switch traffic for (default is ALL tablet types)")

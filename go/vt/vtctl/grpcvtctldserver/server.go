@@ -4386,9 +4386,9 @@ func (s *VtctldServer) WorkflowDelete(ctx context.Context, req *vtctldatapb.Work
 	return resp, err
 }
 
-// WorkflowProgress is part of the vtctlservicepb.VtctldServer interface.
-func (s *VtctldServer) WorkflowProgress(ctx context.Context, req *vtctldatapb.WorkflowProgressRequest) (resp *vtctldatapb.WorkflowProgressResponse, err error) {
-	span, ctx := trace.NewSpan(ctx, "VtctldServer.WorkflowProgress")
+// WorkflowStatus is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) WorkflowStatus(ctx context.Context, req *vtctldatapb.WorkflowStatusRequest) (resp *vtctldatapb.WorkflowStatusResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.WorkflowStatus")
 	defer span.Finish()
 
 	defer panicHandler(&err)
@@ -4396,7 +4396,7 @@ func (s *VtctldServer) WorkflowProgress(ctx context.Context, req *vtctldatapb.Wo
 	span.Annotate("keyspace", req.Keyspace)
 	span.Annotate("workflow", req.Workflow)
 
-	resp, err = s.ws.WorkflowProgress(ctx, req)
+	resp, err = s.ws.WorkflowStatus(ctx, req)
 	return resp, err
 }
 

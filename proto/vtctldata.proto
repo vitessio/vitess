@@ -1363,12 +1363,12 @@ message WorkflowDeleteResponse {
   repeated TabletInfo details = 2;
 }
 
-message WorkflowProgressRequest {
+message WorkflowStatusRequest {
   string keyspace = 1;
   string workflow = 2;
 }
 
-message WorkflowProgressResponse {
+message WorkflowStatusResponse {
   message TableCopyState {
     int64 rows_copied = 1;
     int64 rows_total = 2;
