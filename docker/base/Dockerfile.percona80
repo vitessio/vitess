@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-ARG bootstrap_version=14.3
+ARG bootstrap_version=14.4
 ARG image="vitess/bootstrap:${bootstrap_version}-percona80"
 
 FROM "${image}"
