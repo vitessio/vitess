@@ -185,7 +185,7 @@ func TestEffectiveCallerIDWithNoAccess(t *testing.T) {
 func dialVTGate(ctx context.Context, t *testing.T, username string, password string) (*vtgateconn.VTGateConn, error) {
 	clientCreds := &grpcclient.StaticAuthClientCreds{Username: username, Password: password}
 	creds := grpc.WithPerRPCCredentials(clientCreds)
-	dialerFunc := grpcvtgateconn.Dial(creds)
+	dialerFunc := grpcvtgateconn.DialWithOpts(ctx, creds)
 	dialerName := t.Name()
 	vtgateconn.RegisterDialer(dialerName, dialerFunc)
 	return vtgateconn.DialProtocol(ctx, dialerName, vtgateGrpcAddress)
