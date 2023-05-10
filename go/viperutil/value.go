@@ -39,6 +39,13 @@ type Value[T any] interface {
 	// never change after the initial config load. For dynamic implementations,
 	// this may change throughout the lifetime of the vitess process.
 	Get() T
+	// Set sets the underlying value. For both static and dynamic
+	// implementations, this is reflected in subsequent calls to Get.
+	//
+	// If a config file was loaded, changes will be persisted back to the
+	// config file in the background, governed by the behavior of the
+	// --config-persistence-min-interval flag.
+	Set(v T)
 	// Default returns the default value configured for this Value. For both
 	// static and dynamic implementations, it should never change.
 	Default() T

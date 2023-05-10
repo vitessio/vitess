@@ -136,6 +136,10 @@ func (val *Static[T]) Registry() registry.Bindable {
 	return registry.Static
 }
 
+func (val *Static[T]) Set(v T) {
+	registry.Static.Set(val.KeyName, v)
+}
+
 // Dynamic is a dynamic value. Dynamic values register to the Dynamic registry,
 // and respond to changes to watched config files. Their Get() methods will
 // return whatever value is currently live in the config, in a threadsafe
@@ -158,4 +162,8 @@ func NewDynamic[T any](base *Base[T]) *Dynamic[T] {
 
 func (val *Dynamic[T]) Registry() registry.Bindable {
 	return registry.Dynamic
+}
+
+func (val *Dynamic[T]) Set(v T) {
+	registry.Dynamic.Set(val.KeyName, v)
 }

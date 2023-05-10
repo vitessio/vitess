@@ -53,6 +53,15 @@ func New() *Viper {
 	}
 }
 
+// Set sets the given key to the given value, in both the disk and live vipers.
+func (v *Viper) Set(key string, value any) {
+	v.m.Lock()
+	defer v.m.Unlock()
+
+	v.disk.Set(key, value)
+	v.live.Set(key, value)
+}
+
 // ErrDuplicateWatch is returned when Watch is called on a synced Viper which
 // has already started a watch.
 var ErrDuplicateWatch = errors.New("duplicate watch")
