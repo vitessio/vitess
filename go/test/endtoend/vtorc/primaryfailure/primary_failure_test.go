@@ -134,9 +134,8 @@ func TestDeadPrimaryRecoversImmediately(t *testing.T) {
 	utils.CheckReplication(t, clusterInfo, curPrimary, []*cluster.Vttablet{rdonly, replica, crossCellReplica}, 10*time.Second)
 
 	// Make the current primary vttablet unavailable.
-	err := curPrimary.VttabletProcess.TearDown()
-	require.NoError(t, err)
-	err = curPrimary.MysqlctlProcess.Stop()
+	curPrimary.VttabletProcess.Kill()
+	err := curPrimary.MysqlctlProcess.Stop()
 	require.NoError(t, err)
 	defer func() {
 		// we remove the tablet from our global list
@@ -153,7 +152,7 @@ func TestDeadPrimaryRecoversImmediately(t *testing.T) {
 	// Parse log file and find out how much time it took for DeadPrimary to recover.
 	logFile := path.Join(vtOrcProcess.LogDir, vtOrcProcess.LogFileName)
 	// log prefix printed at the end of analysis where we conclude we have DeadPrimary
-	t1 := extractTimeFromLog(t, logFile, "Analysis: DeadPrimary, deadprimary")
+	t1 := extractTimeFromLog(t, logFile, "Proceeding with DeadPrimary recovery validation after acquiring shard lock")
 	// log prefix printed at the end of recovery
 	t2 := extractTimeFromLog(t, logFile, "auditType:recover-dead-primary")
 	curr := time.Now().Format("2006-01-02")
@@ -172,7 +171,8 @@ func TestDeadPrimaryRecoversImmediately(t *testing.T) {
 	fmt.Printf("The difference between %s and %s is %v seconds.\n", t1, t2, diff.Seconds())
 	// assert that it takes less than `remote_operation_timeout` to recover from `DeadPrimary`
 	// use the value provided in `remote_operation_timeout` flag to compare with.
-	assert.Less(t, diff.Seconds(), 10.0)
+	// We are testing against 9.5 seconds to be safe and prevent flakiness.
+	assert.Less(t, diff.Seconds(), 9.5)
 }
 
 // Failover should not be cross data centers, according to the configuration file

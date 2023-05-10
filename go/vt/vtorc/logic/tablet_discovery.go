@@ -26,6 +26,8 @@ import (
 
 	"github.com/spf13/pflag"
 
+	"k8s.io/utils/strings/slices"
+
 	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/proto"
 
@@ -142,7 +144,7 @@ func refreshTabletsUsing(loader func(instanceKey *inst.InstanceKey), forceRefres
 			wg.Add(1)
 			go func(ks *topo.KeyspaceShard) {
 				defer wg.Done()
-				refreshTabletsInKeyspaceShard(refreshCtx, ks.Keyspace, ks.Shard, loader, forceRefresh, false)
+				refreshTabletsInKeyspaceShard(refreshCtx, ks.Keyspace, ks.Shard, loader, forceRefresh, nil)
 			}(ks)
 		}
 		wg.Wait()
@@ -157,18 +159,18 @@ func refreshTabletsInCell(ctx context.Context, cell string, loader func(instance
 	}
 	query := "select hostname, port, info from vitess_tablet where cell = ?"
 	args := sqlutils.Args(cell)
-	refreshTablets(tablets, query, args, loader, forceRefresh, false)
+	refreshTablets(tablets, query, args, loader, forceRefresh, nil)
 }
 
 // forceRefreshAllTabletsInShard is used to refresh all the tablet's information (both MySQL information and topo records)
 // for a given shard. This function is meant to be called before or after a cluster-wide operation that we know will
 // change the replication information for the entire cluster drastically enough to warrant a full forceful refresh
-func forceRefreshAllTabletsInShard(ctx context.Context, keyspace, shard string, dontRefreshPrimary bool) {
+func forceRefreshAllTabletsInShard(ctx context.Context, keyspace, shard string, tabletsToIgnore []string) {
 	refreshCtx, refreshCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 	defer refreshCancel()
 	refreshTabletsInKeyspaceShard(refreshCtx, keyspace, shard, func(instanceKey *inst.InstanceKey) {
 		DiscoverInstance(*instanceKey, true)
-	}, true, dontRefreshPrimary)
+	}, true, tabletsToIgnore)
 }
 
 // refreshTabletInfoOfShard only refreshes the tablet records from the topo-server for all the tablets
@@ -178,10 +180,10 @@ func refreshTabletInfoOfShard(ctx context.Context, keyspace, shard string) {
 	refreshTabletsInKeyspaceShard(ctx, keyspace, shard, func(instanceKey *inst.InstanceKey) {
 		// No-op
 		// We only want to refresh the tablet information for the given shard
-	}, false, false)
+	}, false, nil)
 }
 
-func refreshTabletsInKeyspaceShard(ctx context.Context, keyspace, shard string, loader func(instanceKey *inst.InstanceKey), forceRefresh bool, dontRefreshPrimary bool) {
+func refreshTabletsInKeyspaceShard(ctx context.Context, keyspace, shard string, loader func(instanceKey *inst.InstanceKey), forceRefresh bool, tabletsToIgnore []string) {
 	tablets, err := ts.GetTabletMapForShard(ctx, keyspace, shard)
 	if err != nil {
 		log.Errorf("Error fetching tablets for keyspace/shard %v/%v: %v", keyspace, shard, err)
@@ -189,10 +191,10 @@ func refreshTabletsInKeyspaceShard(ctx context.Context, keyspace, shard string, 
 	}
 	query := "select hostname, port, info from vitess_tablet where keyspace = ? and shard = ?"
 	args := sqlutils.Args(keyspace, shard)
-	refreshTablets(tablets, query, args, loader, forceRefresh, dontRefreshPrimary)
+	refreshTablets(tablets, query, args, loader, forceRefresh, tabletsToIgnore)
 }
 
-func refreshTablets(tablets map[string]*topo.TabletInfo, query string, args []any, loader func(instanceKey *inst.InstanceKey), forceRefresh bool, dontRefreshPrimary bool) {
+func refreshTablets(tablets map[string]*topo.TabletInfo, query string, args []any, loader func(instanceKey *inst.InstanceKey), forceRefresh bool, tabletsToIgnore []string) {
 	// Discover new tablets.
 	// TODO(sougou): enhance this to work with multi-schema,
 	// where each instanceKey can have multiple tablets.
@@ -226,7 +228,7 @@ func refreshTablets(tablets map[string]*topo.TabletInfo, query string, args []an
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			if tablet.Type == topodatapb.TabletType_PRIMARY && dontRefreshPrimary {
+			if slices.Contains(tabletsToIgnore, topoproto.TabletAliasString(tablet.Alias)) {
 				return
 			}
 			loader(&instanceKey)
