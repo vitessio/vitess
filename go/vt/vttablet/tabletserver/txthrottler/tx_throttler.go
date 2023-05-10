@@ -44,7 +44,7 @@ import (
 // topology watchers and go/vt/throttler. These are provided here so that they can be overridden
 // in tests to generate mocks.
 type healthCheckFactoryFunc func(topoServer *topo.Server, cell string, cellsToWatch []string) discovery.HealthCheck
-type topologyWatcherFactoryFunc func(topoServer *topo.Server, hc discovery.HealthCheck, cell, keyspace, shard string, refreshInterval time.Duration, topoReadConcurrency int) TopologyWatcherInterface
+type topologyWatcherFactoryFunc func(topoServer *topo.Server, hc discovery.HealthCheck, cell, keyspace, shard string, refreshInterval time.Duration, topoReadConcurrency int) (TopologyWatcherInterface, error)
 type throttlerFactoryFunc func(name, unit string, threadCount int, maxRate int64, maxReplicationLagConfig throttler.MaxReplicationLagModuleConfig) (ThrottlerInterface, error)
 
 var (
@@ -61,8 +61,9 @@ func resetTxThrottlerFactories() {
 	healthCheckFactory = func(topoServer *topo.Server, cell string, cellsToWatch []string) discovery.HealthCheck {
 		return discovery.NewHealthCheck(context.Background(), discovery.DefaultHealthCheckRetryDelay, discovery.DefaultHealthCheckTimeout, topoServer, cell, strings.Join(cellsToWatch, ","))
 	}
-	topologyWatcherFactory = func(topoServer *topo.Server, hc discovery.HealthCheck, cell, keyspace, shard string, refreshInterval time.Duration, topoReadConcurrency int) TopologyWatcherInterface {
-		return discovery.NewCellTabletsWatcher(context.Background(), topoServer, hc, discovery.NewFilterByKeyspace([]string{keyspace}), cell, refreshInterval, true, topoReadConcurrency)
+	topologyWatcherFactory = func(topoServer *topo.Server, hc discovery.HealthCheck, cell, keyspace, shard string, refreshInterval time.Duration, topoReadConcurrency int) (TopologyWatcherInterface, error) {
+		cellTabletsFilter, err := discovery.NewFilterByShard([]string{fmt.Sprintf("%s|%s", keyspace, shard)})
+		return discovery.NewCellTabletsWatcher(context.Background(), topoServer, hc, cellTabletsFilter, cell, refreshInterval, true, topoReadConcurrency), err
 	}
 	throttlerFactory = func(name, unit string, threadCount int, maxRate int64, maxReplicationLagConfig throttler.MaxReplicationLagModuleConfig) (ThrottlerInterface, error) {
 		return throttler.NewThrottlerFromConfig(name, unit, threadCount, maxRate, maxReplicationLagConfig, time.Now)
@@ -307,16 +308,18 @@ func newTxThrottlerState(config *txThrottlerConfig, keyspace, shard, cell string
 	result.topologyWatchers = make(
 		[]TopologyWatcherInterface, 0, len(config.healthCheckCells))
 	for _, cell := range config.healthCheckCells {
-		result.topologyWatchers = append(
-			result.topologyWatchers,
-			topologyWatcherFactory(
-				config.topoServer,
-				result.healthCheck,
-				cell,
-				keyspace,
-				shard,
-				discovery.DefaultTopologyWatcherRefreshInterval,
-				discovery.DefaultTopoReadConcurrency))
+		topologyWatcher, err := topologyWatcherFactory(
+			config.topoServer,
+			result.healthCheck,
+			cell,
+			keyspace,
+			shard,
+			discovery.DefaultTopologyWatcherRefreshInterval,
+			discovery.DefaultTopoReadConcurrency)
+		if err != nil {
+			return nil, err
+		}
+		result.topologyWatchers = append(result.topologyWatchers, topologyWatcher)
 	}
 	return result, nil
 }

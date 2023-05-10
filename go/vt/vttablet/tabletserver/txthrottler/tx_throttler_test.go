@@ -70,14 +70,14 @@ func TestEnabledThrottler(t *testing.T) {
 		return mockHealthCheck
 	}
 
-	topologyWatcherFactory = func(topoServer *topo.Server, hc discovery.HealthCheck, cell, keyspace, shard string, refreshInterval time.Duration, topoReadConcurrency int) TopologyWatcherInterface {
+	topologyWatcherFactory = func(topoServer *topo.Server, hc discovery.HealthCheck, cell, keyspace, shard string, refreshInterval time.Duration, topoReadConcurrency int) (TopologyWatcherInterface, error) {
 		assert.Equal(t, ts, topoServer)
 		assert.Contains(t, []string{"cell1", "cell2"}, cell)
 		assert.Equal(t, "keyspace", keyspace)
 		assert.Equal(t, "shard", shard)
 		result := NewMockTopologyWatcherInterface(mockCtrl)
 		result.EXPECT().Stop()
-		return result
+		return result, nil
 	}
 
 	mockThrottler := NewMockThrottlerInterface(mockCtrl)
