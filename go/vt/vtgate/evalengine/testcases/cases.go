@@ -36,6 +36,7 @@ var Cases = []TestCase{
 	{Run: CharsetConversionOperators},
 	{Run: CaseExprWithPredicate},
 	{Run: CaseExprWithValue},
+	{Run: If},
 	{Run: Base64},
 	{Run: Conversion},
 	{Run: LargeDecimals},
@@ -705,6 +706,20 @@ func CaseExprWithValue(yield Query) {
 				continue
 			}
 			yield(fmt.Sprintf("case %s when %s then 1 else 0 end", cmpbase, val1), nil)
+		}
+	}
+}
+
+func If(yield Query) {
+	var elements []string
+	elements = append(elements, inputBitwise...)
+	elements = append(elements, inputComparisonElement...)
+
+	for _, cmpbase := range elements {
+		for _, val1 := range elements {
+			for _, val2 := range elements {
+				yield(fmt.Sprintf("if(%s, %s, %s)", cmpbase, val1, val2), nil)
+			}
 		}
 	}
 }
