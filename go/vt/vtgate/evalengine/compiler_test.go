@@ -145,11 +145,6 @@ func TestCompilerReference(t *testing.T) {
 				}
 
 				res, vmErr := func() (res evalengine.EvalResult, err error) {
-					defer func() {
-						if r := recover(); r != nil {
-							err = fmt.Errorf("PANIC: %v", r)
-						}
-					}()
 					res, err = env.EvaluateVM(converted.(*evalengine.CompiledExpr))
 					return
 				}()
@@ -282,6 +277,97 @@ func TestCompilerSingle(t *testing.T) {
 			expression: `NULL AND 1`,
 			result:     `NULL`,
 		},
+		{
+			expression: `CONV(-1.5e0, 1.5e0, 1.5e0)`,
+			result:     `VARCHAR("1111111111111111111111111111111111111111111111111111111111111111")`,
+		},
+		{
+			expression: `CONV(9223372036854775810.4, 13, 7)`,
+			result:     `VARCHAR("45012021522523134134601")`,
+		},
+		{
+			expression: `CONV(-9223372036854775809, 13e0, 13e0)`,
+			result:     `VARCHAR("0")`,
+		},
+		{
+			expression: `0 + time '10:04:58'`,
+			result:     `INT64(100458)`,
+		},
+		{
+			expression: `0 + time '101:34:58'`,
+			result:     `INT64(1013458)`,
+		},
+		{
+			expression: `time '10:04:58' < '101:34:58'`,
+			result:     `INT64(1)`,
+		},
+		{
+			expression: `1.7 / 173458`,
+			result:     `DECIMAL(0.00001)`,
+		},
+		{
+			expression: `cast(time '5 12:34:58' as json)`,
+			result:     `JSON("\"04:34:58.000000\"")`,
+		},
+		{
+			expression: `CAST(20000229235959.999950 AS DATETIME(4))`,
+			result:     `DATETIME("2000-03-01 00:00:00.0000")`,
+		},
+		{
+			expression: `CAST(1.5678 AS TIME(2))`,
+			result:     `TIME("00:00:01.57")`,
+		},
+		{
+			expression: `CAST(235959.995 AS TIME(2))`,
+			result:     `TIME("24:00:00.00")`,
+		},
+		{
+			expression: `CAST(-235959.995 AS TIME(2))`,
+			result:     `TIME("-24:00:00.00")`,
+		},
+		{
+			expression: `WEEK('2000-01-02', 6)`,
+			result:     `INT64(1)`,
+		},
+		{
+			expression: `WEEK(date '2000-01-01', 4)`,
+			result:     `INT64(0)`,
+		},
+		{
+			// This is the day of DST change in Europe/Amsterdam when
+			// the year started on a Wednesday. Regression test for
+			// using 24 hour time diffing instead of days.
+			expression: `WEEK(date '2014-10-26', 6)`,
+			result:     `INT64(44)`,
+		},
+		{
+			expression: `MAKEDATE(cast('invalid' as json), NULL)`,
+			result:     `NULL`,
+		},
+		{
+			expression: `MAKETIME(NULL, '', cast('invalid' as json))`,
+			result:     `NULL`,
+		},
+		{
+			expression: `1 = ' 1 '`,
+			result:     `INT64(1)`,
+		},
+		{
+			expression: `CAST(' 0 ' AS TIME)`,
+			result:     `TIME("00:00:00")`,
+		},
+		{
+			expression: `CAST('0' AS TIME)`,
+			result:     `TIME("00:00:00")`,
+		},
+		{
+			expression: `timestamp '2000-01-01 10:34:58.978654' DIV '\t1 foo\t'`,
+			result:     `INT64(20000101103458)`,
+		},
+		{
+			expression: `UNHEX('f')`,
+			result:     `VARBINARY("\x0f")`,
+		},
 	}
 
 	for _, tc := range testCases {
@@ -327,7 +413,7 @@ func TestCompilerSingle(t *testing.T) {
 				}
 
 				if res.String() != tc.result {
-					t.Fatalf("bad evaluation from compiler: got %s, want %s (iteration %d)", res, tc.result, i)
+					t.Errorf("bad evaluation from compiler: got %s, want %s (iteration %d)", res, tc.result, i)
 				}
 			}
 		})

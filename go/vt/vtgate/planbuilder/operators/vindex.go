@@ -56,19 +56,14 @@ func (v *Vindex) Introduces() semantics.TableSet {
 	return v.Solved
 }
 
-// IPhysical implements the PhysicalOperator interface
-func (v *Vindex) IPhysical() {}
-
 // Clone implements the Operator interface
 func (v *Vindex) Clone([]ops.Operator) ops.Operator {
 	clone := *v
 	return &clone
 }
 
-var _ ops.PhysicalOperator = (*Vindex)(nil)
-
-func (v *Vindex) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, reuseCol bool) (ops.Operator, int, error) {
-	offset, err := addColumn(ctx, v, expr.Expr, reuseCol)
+func (v *Vindex) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr) (ops.Operator, int, error) {
+	offset, err := addColumn(ctx, v, expr.Expr)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -76,10 +71,19 @@ func (v *Vindex) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.Ali
 	return v, offset, nil
 }
 
-func colNameToExpr(c *sqlparser.ColName) sqlparser.Expr { return c }
+func colNameToExpr(c *sqlparser.ColName) *sqlparser.AliasedExpr {
+	return &sqlparser.AliasedExpr{
+		Expr: c,
+		As:   sqlparser.IdentifierCI{},
+	}
+}
 
-func (v *Vindex) GetColumns() ([]sqlparser.Expr, error) {
+func (v *Vindex) GetColumns() ([]*sqlparser.AliasedExpr, error) {
 	return slices2.Map(v.Columns, colNameToExpr), nil
+}
+
+func (v *Vindex) GetOrdering() ([]ops.OrderBy, error) {
+	return nil, nil
 }
 
 func (v *Vindex) GetColNames() []*sqlparser.ColName {
@@ -144,4 +148,12 @@ func (v *Vindex) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.E
 // It is not keyspace-qualified.
 func (v *Vindex) TablesUsed() []string {
 	return []string{v.Table.Table.Name.String()}
+}
+
+func (v *Vindex) Description() ops.OpDescription {
+	return ops.OpDescription{OperatorType: "Vindex"}
+}
+
+func (v *Vindex) ShortDescription() string {
+	return v.Vindex.String()
 }

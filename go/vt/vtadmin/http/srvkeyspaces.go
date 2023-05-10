@@ -30,7 +30,7 @@ func GetSrvKeyspaces(ctx context.Context, r Request, api *API) *JSONResponse {
 
 	sks, err := api.server.GetSrvKeyspaces(ctx, &vtadminpb.GetSrvKeyspacesRequest{
 		Cells:      query["cell"],
-		ClusterIds: query["cluster"],
+		ClusterIds: query["cluster_id"],
 	})
 
 	return NewJSONResponse(sks, err)

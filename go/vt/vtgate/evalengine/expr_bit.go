@@ -76,7 +76,7 @@ func (b *BitwiseNotExpr) eval(env *ExpressionEnv) (eval, error) {
 		return newEvalBinary(out), nil
 	}
 
-	eu := evalToNumeric(e).toInt64()
+	eu := evalToInt64(e)
 	return newEvalUint64(^uint64(eu.i)), nil
 }
 
@@ -86,6 +86,26 @@ func (b *BitwiseNotExpr) typeof(env *ExpressionEnv, fields []*querypb.Field) (sq
 		return sqltypes.VarBinary, f
 	}
 	return sqltypes.Uint64, f
+}
+
+func (expr *BitwiseNotExpr) compile(c *compiler) (ctype, error) {
+	ct, err := expr.Inner.compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip := c.compileNullCheck1(ct)
+
+	if ct.Type == sqltypes.VarBinary && !ct.isHexOrBitLiteral() {
+		c.asm.BitwiseNot_b()
+		c.asm.jumpDestination(skip)
+		return ct, nil
+	}
+
+	ct = c.compileToBitwiseUint64(ct, 1)
+	c.asm.BitwiseNot_u()
+	c.asm.jumpDestination(skip)
+	return ct, nil
 }
 
 func (o opBitShr) BitwiseOp() string                { return ">>" }
@@ -207,8 +227,8 @@ func (bit *BitwiseExpr) eval(env *ExpressionEnv) (eval, error) {
 			}
 		}
 
-		lu := evalToNumeric(l).toInt64()
-		ru := evalToNumeric(r).toInt64()
+		lu := evalToInt64(l)
+		ru := evalToInt64(r)
 		return newEvalUint64(op.numeric(uint64(lu.i), uint64(ru.i))), nil
 
 	case opBitShift:
@@ -219,11 +239,11 @@ func (bit *BitwiseExpr) eval(env *ExpressionEnv) (eval, error) {
 			unsigned 64-bit integer as necessary.
 		*/
 		if l, ok := l.(*evalBytes); ok && l.isBinary() && !l.isHexOrBitLiteral() {
-			ru := evalToNumeric(r).toInt64()
+			ru := evalToInt64(r)
 			return newEvalBinary(op.binary(l.bytes, uint64(ru.i))), nil
 		}
-		lu := evalToNumeric(l).toInt64()
-		ru := evalToNumeric(r).toInt64()
+		lu := evalToInt64(l)
+		ru := evalToInt64(r)
 		return newEvalUint64(op.numeric(uint64(lu.i), uint64(ru.i))), nil
 
 	default:
@@ -248,6 +268,93 @@ func (bit *BitwiseExpr) typeof(env *ExpressionEnv, fields []*querypb.Field) (sql
 	}
 
 	return sqltypes.Uint64, f1 | f2
+}
+
+func (expr *BitwiseExpr) compileBinary(c *compiler, asm_ins_bb, asm_ins_uu func()) (ctype, error) {
+	lt, err := expr.Left.compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip1 := c.compileNullCheck1(lt)
+
+	rt, err := expr.Right.compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip2 := c.compileNullCheck1r(rt)
+
+	if lt.Type == sqltypes.VarBinary && rt.Type == sqltypes.VarBinary {
+		if !lt.isHexOrBitLiteral() || !rt.isHexOrBitLiteral() {
+			asm_ins_bb()
+			c.asm.jumpDestination(skip1, skip2)
+			return ctype{Type: sqltypes.VarBinary, Col: collationBinary}, nil
+		}
+	}
+
+	lt = c.compileToBitwiseUint64(lt, 2)
+	rt = c.compileToBitwiseUint64(rt, 1)
+
+	asm_ins_uu()
+	c.asm.jumpDestination(skip1, skip2)
+	return ctype{Type: sqltypes.Uint64, Col: collationNumeric}, nil
+}
+
+func (expr *BitwiseExpr) compileShift(c *compiler, i int) (ctype, error) {
+	lt, err := expr.Left.compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip1 := c.compileNullCheck1(lt)
+
+	rt, err := expr.Right.compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip2 := c.compileNullCheck1r(rt)
+
+	if lt.Type == sqltypes.VarBinary && !lt.isHexOrBitLiteral() {
+		_ = c.compileToUint64(rt, 1)
+		if i < 0 {
+			c.asm.BitShiftLeft_bu()
+		} else {
+			c.asm.BitShiftRight_bu()
+		}
+		c.asm.jumpDestination(skip1, skip2)
+		return ctype{Type: sqltypes.VarBinary, Col: collationBinary}, nil
+	}
+
+	_ = c.compileToBitwiseUint64(lt, 2)
+	_ = c.compileToUint64(rt, 1)
+
+	if i < 0 {
+		c.asm.BitShiftLeft_uu()
+	} else {
+		c.asm.BitShiftRight_uu()
+	}
+
+	c.asm.jumpDestination(skip1, skip2)
+	return ctype{Type: sqltypes.Uint64, Col: collationNumeric}, nil
+}
+
+func (expr *BitwiseExpr) compile(c *compiler) (ctype, error) {
+	switch expr.Op.(type) {
+	case *opBitAnd:
+		return expr.compileBinary(c, c.asm.BitOp_and_bb, c.asm.BitOp_and_uu)
+	case *opBitOr:
+		return expr.compileBinary(c, c.asm.BitOp_or_bb, c.asm.BitOp_or_uu)
+	case *opBitXor:
+		return expr.compileBinary(c, c.asm.BitOp_xor_bb, c.asm.BitOp_xor_uu)
+	case *opBitShl:
+		return expr.compileShift(c, -1)
+	case *opBitShr:
+		return expr.compileShift(c, 1)
+	default:
+		panic("unexpected arithmetic operator")
+	}
 }
 
 var _ opBitBinary = (*opBitAnd)(nil)

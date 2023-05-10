@@ -180,8 +180,14 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfFuncExpr(in, f)
 	case *GTIDFuncExpr:
 		return VisitRefOfGTIDFuncExpr(in, f)
+	case *GeomFormatExpr:
+		return VisitRefOfGeomFormatExpr(in, f)
 	case *GeomFromTextExpr:
 		return VisitRefOfGeomFromTextExpr(in, f)
+	case *GeomFromWKBExpr:
+		return VisitRefOfGeomFromWKBExpr(in, f)
+	case *GeomPropertyFuncExpr:
+		return VisitRefOfGeomPropertyFuncExpr(in, f)
 	case GroupBy:
 		return VisitGroupBy(in, f)
 	case *GroupConcatExpr:
@@ -270,6 +276,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfLimit(in, f)
 	case *LineStringExpr:
 		return VisitRefOfLineStringExpr(in, f)
+	case *LinestrPropertyFuncExpr:
+		return VisitRefOfLinestrPropertyFuncExpr(in, f)
 	case ListArg:
 		return VisitListArg(in, f)
 	case *Literal:
@@ -360,6 +368,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfPerformanceSchemaFuncExpr(in, f)
 	case *PointExpr:
 		return VisitRefOfPointExpr(in, f)
+	case *PointPropertyFuncExpr:
+		return VisitRefOfPointPropertyFuncExpr(in, f)
 	case *PolygonExpr:
 		return VisitRefOfPolygonExpr(in, f)
 	case *PrepareStmt:
@@ -1664,6 +1674,21 @@ func VisitRefOfGTIDFuncExpr(in *GTIDFuncExpr, f Visit) error {
 	}
 	return nil
 }
+func VisitRefOfGeomFormatExpr(in *GeomFormatExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.Geom, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.AxisOrderOpt, f); err != nil {
+		return err
+	}
+	return nil
+}
 func VisitRefOfGeomFromTextExpr(in *GeomFromTextExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -1678,6 +1703,36 @@ func VisitRefOfGeomFromTextExpr(in *GeomFromTextExpr, f Visit) error {
 		return err
 	}
 	if err := VisitExpr(in.AxisOrderOpt, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfGeomFromWKBExpr(in *GeomFromWKBExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.WkbBlob, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.Srid, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.AxisOrderOpt, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfGeomPropertyFuncExpr(in *GeomPropertyFuncExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.Geom, f); err != nil {
 		return err
 	}
 	return nil
@@ -2347,6 +2402,21 @@ func VisitRefOfLineStringExpr(in *LineStringExpr, f Visit) error {
 	}
 	return nil
 }
+func VisitRefOfLinestrPropertyFuncExpr(in *LinestrPropertyFuncExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.Linestring, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.PropertyDefArg, f); err != nil {
+		return err
+	}
+	return nil
+}
 func VisitRefOfLiteral(in *Literal, f Visit) error {
 	if in == nil {
 		return nil
@@ -2921,6 +2991,21 @@ func VisitRefOfPointExpr(in *PointExpr, f Visit) error {
 		return err
 	}
 	if err := VisitExpr(in.YCordinate, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfPointPropertyFuncExpr(in *PointPropertyFuncExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.Point, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.ValueToSet, f); err != nil {
 		return err
 	}
 	return nil
@@ -4267,8 +4352,14 @@ func VisitCallable(in Callable, f Visit) error {
 		return VisitRefOfFuncExpr(in, f)
 	case *GTIDFuncExpr:
 		return VisitRefOfGTIDFuncExpr(in, f)
+	case *GeomFormatExpr:
+		return VisitRefOfGeomFormatExpr(in, f)
 	case *GeomFromTextExpr:
 		return VisitRefOfGeomFromTextExpr(in, f)
+	case *GeomFromWKBExpr:
+		return VisitRefOfGeomFromWKBExpr(in, f)
+	case *GeomPropertyFuncExpr:
+		return VisitRefOfGeomPropertyFuncExpr(in, f)
 	case *GroupConcatExpr:
 		return VisitRefOfGroupConcatExpr(in, f)
 	case *InsertExpr:
@@ -4319,6 +4410,8 @@ func VisitCallable(in Callable, f Visit) error {
 		return VisitRefOfLagLeadExpr(in, f)
 	case *LineStringExpr:
 		return VisitRefOfLineStringExpr(in, f)
+	case *LinestrPropertyFuncExpr:
+		return VisitRefOfLinestrPropertyFuncExpr(in, f)
 	case *LocateExpr:
 		return VisitRefOfLocateExpr(in, f)
 	case *MatchExpr:
@@ -4345,6 +4438,8 @@ func VisitCallable(in Callable, f Visit) error {
 		return VisitRefOfPerformanceSchemaFuncExpr(in, f)
 	case *PointExpr:
 		return VisitRefOfPointExpr(in, f)
+	case *PointPropertyFuncExpr:
+		return VisitRefOfPointPropertyFuncExpr(in, f)
 	case *PolygonExpr:
 		return VisitRefOfPolygonExpr(in, f)
 	case *RegexpInstrExpr:
@@ -4523,8 +4618,14 @@ func VisitExpr(in Expr, f Visit) error {
 		return VisitRefOfFuncExpr(in, f)
 	case *GTIDFuncExpr:
 		return VisitRefOfGTIDFuncExpr(in, f)
+	case *GeomFormatExpr:
+		return VisitRefOfGeomFormatExpr(in, f)
 	case *GeomFromTextExpr:
 		return VisitRefOfGeomFromTextExpr(in, f)
+	case *GeomFromWKBExpr:
+		return VisitRefOfGeomFromWKBExpr(in, f)
+	case *GeomPropertyFuncExpr:
+		return VisitRefOfGeomPropertyFuncExpr(in, f)
 	case *GroupConcatExpr:
 		return VisitRefOfGroupConcatExpr(in, f)
 	case *InsertExpr:
@@ -4581,6 +4682,8 @@ func VisitExpr(in Expr, f Visit) error {
 		return VisitRefOfLagLeadExpr(in, f)
 	case *LineStringExpr:
 		return VisitRefOfLineStringExpr(in, f)
+	case *LinestrPropertyFuncExpr:
+		return VisitRefOfLinestrPropertyFuncExpr(in, f)
 	case ListArg:
 		return VisitListArg(in, f)
 	case *Literal:
@@ -4621,6 +4724,8 @@ func VisitExpr(in Expr, f Visit) error {
 		return VisitRefOfPerformanceSchemaFuncExpr(in, f)
 	case *PointExpr:
 		return VisitRefOfPointExpr(in, f)
+	case *PointPropertyFuncExpr:
+		return VisitRefOfPointPropertyFuncExpr(in, f)
 	case *PolygonExpr:
 		return VisitRefOfPolygonExpr(in, f)
 	case *RegexpInstrExpr:

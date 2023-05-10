@@ -177,7 +177,6 @@ func testWorkflow(t *testing.T, vc *VitessCluster, tc *testCase, cells []*Cell) 
 	for _, shard := range arrTargetShards {
 		tab := vc.getPrimaryTablet(t, tc.targetKs, shard)
 		catchup(t, tab, tc.workflow, tc.typ)
-		updateTableStats(t, tab, tc.tables) // need to do this in order to test progress reports
 	}
 
 	vdiff(t, tc.targetKs, tc.workflow, cells[0].Name, true, true, nil)

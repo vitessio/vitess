@@ -1047,7 +1047,7 @@ func (node *ExecuteStmt) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *DeallocateStmt) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "%s %vprepare %v", node.Type.ToString(), node.Comments, node.Name)
+	buf.astPrintf(node, "deallocate %vprepare %v", node.Comments, node.Name)
 }
 
 // Format formats the node.
@@ -1461,15 +1461,20 @@ func (node *RegexpSubstrExpr) Format(buf *TrackedBuffer) {
 // Format formats the node.
 func (node *TrimFuncExpr) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "%s(", node.TrimFuncType.ToString())
-	if node.Type.ToString() != "" {
-		buf.astPrintf(node, "%s ", node.Type.ToString())
-	}
-	if node.TrimArg != nil {
-		buf.astPrintf(node, "%v ", node.TrimArg)
-	}
+	if node.TrimFuncType == NormalTrimType {
+		var from bool
+		if node.Type != NoTrimType {
+			buf.astPrintf(node, "%s ", node.Type.ToString())
+			from = true
+		}
+		if node.TrimArg != nil {
+			buf.astPrintf(node, "%v ", node.TrimArg)
+			from = true
+		}
 
-	if (node.Type.ToString() != "") || (node.TrimArg != nil) {
-		buf.literal("from ")
+		if from {
+			buf.literal("from ")
+		}
 	}
 	buf.astPrintf(node, "%v", node.StringArg)
 	buf.WriteByte(')')
@@ -2810,6 +2815,50 @@ func (node *GeomFromTextExpr) Format(buf *TrackedBuffer) {
 	}
 	if node.AxisOrderOpt != nil {
 		buf.astPrintf(node, ", %v", node.AxisOrderOpt)
+	}
+	buf.WriteByte(')')
+}
+
+// Format formats the node
+func (node *GeomFromWKBExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "%s(%v", node.Type.ToString(), node.WkbBlob)
+	if node.Srid != nil {
+		buf.astPrintf(node, ", %v", node.Srid)
+	}
+	if node.AxisOrderOpt != nil {
+		buf.astPrintf(node, ", %v", node.AxisOrderOpt)
+	}
+	buf.WriteByte(')')
+}
+
+// Format formats the node
+func (node *GeomFormatExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "%s(%v", node.FormatType.ToString(), node.Geom)
+	if node.AxisOrderOpt != nil {
+		buf.astPrintf(node, ", %v", node.AxisOrderOpt)
+	}
+	buf.WriteByte(')')
+}
+
+// Format formats the node
+func (node *GeomPropertyFuncExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "%s(%v)", node.Property.ToString(), node.Geom)
+}
+
+// Format formats the node
+func (node *PointPropertyFuncExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "%s(%v", node.Property.ToString(), node.Point)
+	if node.ValueToSet != nil {
+		buf.astPrintf(node, ", %v", node.ValueToSet)
+	}
+	buf.WriteByte(')')
+}
+
+// Format formats the node
+func (node *LinestrPropertyFuncExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "%s(%v", node.Property.ToString(), node.Linestring)
+	if node.PropertyDefArg != nil {
+		buf.astPrintf(node, ", %v", node.PropertyDefArg)
 	}
 	buf.WriteByte(')')
 }

@@ -738,7 +738,7 @@ func (c *Conn) writeOKPacketWithEOFHeader(packetOk *PacketOK) error {
 	return c.writeOKPacketWithHeader(packetOk, EOFPacket)
 }
 
-// writeOKPacketWithEOFHeader writes an OK packet with an EOF header.
+// writeOKPacketWithHeader writes an OK packet with an EOF header.
 // This is used at the end of a result set if
 // CapabilityClientDeprecateEOF is set.
 // Server -> Client.

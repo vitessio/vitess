@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -259,9 +258,9 @@ func TestVreplicationCopyThrottling(t *testing.T) {
 }
 
 func TestBasicVreplicationWorkflow(t *testing.T) {
-	sourceKsOpts["DBTypeVersion"] = "mysql-5.7"
-	targetKsOpts["DBTypeVersion"] = "mysql-5.7"
-	testBasicVreplicationWorkflow(t)
+	sourceKsOpts["DBTypeVersion"] = "mysql-8.0"
+	targetKsOpts["DBTypeVersion"] = "mysql-8.0"
+	testBasicVreplicationWorkflow(t, "noblob")
 }
 
 func TestVreplicationCopyParallel(t *testing.T) {
@@ -270,14 +269,15 @@ func TestVreplicationCopyParallel(t *testing.T) {
 	extraVTTabletArgs = []string{
 		parallelInsertWorkers,
 	}
-	testBasicVreplicationWorkflow(t)
+	testBasicVreplicationWorkflow(t, "")
 }
 
-func testBasicVreplicationWorkflow(t *testing.T) {
-	testVreplicationWorkflows(t, false)
+func testBasicVreplicationWorkflow(t *testing.T, binlogRowImage string) {
+	testVreplicationWorkflows(t, false, binlogRowImage)
 }
 
-func testVreplicationWorkflows(t *testing.T, minimal bool) {
+// If limited == true, we only run a limited set of workflows.
+func testVreplicationWorkflows(t *testing.T, limited bool, binlogRowImage string) {
 	defaultCellName := "zone1"
 	allCells := []string{"zone1"}
 	allCellNames = "zone1"
@@ -289,6 +289,10 @@ func testVreplicationWorkflows(t *testing.T, minimal bool) {
 	defaultRdonly = 0
 	defer func() { defaultReplicas = 1 }()
 
+	if binlogRowImage != "" {
+		require.NoError(t, utils.SetBinlogRowImageMode("noblob", vc.ClusterConfig.tmpDir))
+		defer utils.SetBinlogRowImageMode("", vc.ClusterConfig.tmpDir)
+	}
 	defer vc.TearDown(t)
 
 	defaultCell = vc.Cells[defaultCellName]
@@ -312,7 +316,7 @@ func testVreplicationWorkflows(t *testing.T, minimal bool) {
 	shardOrders(t)
 	shardMerchant(t)
 
-	if minimal {
+	if limited {
 		return
 	}
 
@@ -346,7 +350,7 @@ func testVreplicationWorkflows(t *testing.T, minimal bool) {
 func TestV2WorkflowsAcrossDBVersions(t *testing.T) {
 	sourceKsOpts["DBTypeVersion"] = "mysql-5.7"
 	targetKsOpts["DBTypeVersion"] = "mysql-8.0"
-	testBasicVreplicationWorkflow(t)
+	testBasicVreplicationWorkflow(t, "")
 }
 
 // TestMoveTablesMariaDBToMySQL tests that MoveTables works between a MariaDB source
@@ -355,7 +359,7 @@ func TestV2WorkflowsAcrossDBVersions(t *testing.T) {
 func TestMoveTablesMariaDBToMySQL(t *testing.T) {
 	sourceKsOpts["DBTypeVersion"] = "mariadb-10.10"
 	targetKsOpts["DBTypeVersion"] = "mysql-8.0"
-	testVreplicationWorkflows(t, true /* only do MoveTables */)
+	testVreplicationWorkflows(t, true /* only do MoveTables */, "")
 }
 
 func TestMultiCellVreplicationWorkflow(t *testing.T) {
@@ -379,14 +383,13 @@ func TestMultiCellVreplicationWorkflow(t *testing.T) {
 	require.NotNil(t, vtgate)
 	err := cluster.WaitForHealthyShard(vc.VtctldClient, keyspace, shard)
 	require.NoError(t, err)
-	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", keyspace, shard), 2)
+	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", keyspace, shard), 2, 30*time.Second)
 
 	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 	defer vtgateConn.Close()
 	verifyClusterHealth(t, vc)
 	insertInitialData(t)
 	shardCustomer(t, true, []*Cell{cell1, cell2}, cell2.Name, true)
-
 	checkIfDenyListExists(t, vc, "product:0", "customer")
 	// we tag along this test so as not to create the overhead of creating another cluster
 	testVStreamCellFlag(t)
@@ -437,11 +440,13 @@ func TestVStreamFlushBinlog(t *testing.T) {
 	require.Equal(t, flushCount, int64(0), "VStreamerFlushedBinlogs should be 0")
 
 	// Generate a lot of binlog event bytes
-	targetBinlogSize := vstreamer.GetBinlogRotationThreshold() + 16
+	targetBinlogSize := vstreamer.GetBinlogRotationThreshold() + 1024
 	vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
-	queryF := "insert into db_order_test (c_uuid, dbstuff, created_at) values ('%d', repeat('A', 65000), now())"
-	for i := 100; i < 5000; i++ {
-		res, err := vtgateConn.ExecuteFetch(fmt.Sprintf(queryF, i), -1, false)
+	queryF := "insert into db_order_test (c_uuid, dbstuff, created_at) values ('%d', '%s', now())"
+	for i := 100; i < 10000; i++ {
+		randStr, err := randHex(6500)
+		require.NoError(t, err)
+		res, err := vtgateConn.ExecuteFetch(fmt.Sprintf(queryF, i, randStr), -1, false)
 		require.NoError(t, err)
 		require.Greater(t, res.RowsAffected, uint64(0))
 
@@ -566,6 +571,8 @@ func TestCellAliasVreplicationWorkflow(t *testing.T) {
 	keyspace := "product"
 	shard := "0"
 
+	require.NoError(t, utils.SetBinlogRowImageMode("noblob", vc.ClusterConfig.tmpDir))
+	defer utils.SetBinlogRowImageMode("", vc.ClusterConfig.tmpDir)
 	defer vc.TearDown(t)
 
 	cell1 := vc.Cells["zone1"]
@@ -580,7 +587,7 @@ func TestCellAliasVreplicationWorkflow(t *testing.T) {
 	require.NotNil(t, vtgate)
 	err = cluster.WaitForHealthyShard(vc.VtctldClient, keyspace, shard)
 	require.NoError(t, err)
-	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", keyspace, shard), 2)
+	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", keyspace, shard), 2, 30*time.Second)
 
 	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 	defer vtgateConn.Close()
@@ -657,53 +664,6 @@ func testVStreamFrom(t *testing.T, table string, expectedRowCount int) {
 	}
 }
 
-func insertInitialData(t *testing.T) {
-	t.Run("insertInitialData", func(t *testing.T) {
-		log.Infof("Inserting initial data")
-		lines, _ := os.ReadFile("unsharded_init_data.sql")
-		execMultipleQueries(t, vtgateConn, "product:0", string(lines))
-		execVtgateQuery(t, vtgateConn, "product:0", "insert into customer_seq(id, next_id, cache) values(0, 100, 100);")
-		execVtgateQuery(t, vtgateConn, "product:0", "insert into order_seq(id, next_id, cache) values(0, 100, 100);")
-		execVtgateQuery(t, vtgateConn, "product:0", "insert into customer_seq2(id, next_id, cache) values(0, 100, 100);")
-		log.Infof("Done inserting initial data")
-
-		waitForRowCount(t, vtgateConn, "product:0", "product", 2)
-		waitForRowCount(t, vtgateConn, "product:0", "customer", 3)
-		waitForQueryResult(t, vtgateConn, "product:0", "select * from merchant",
-			`[[VARCHAR("Monoprice") VARCHAR("eléctronics")] [VARCHAR("newegg") VARCHAR("elec†ronics")]]`)
-	})
-}
-
-// insertMoreCustomers creates additional customers.
-// Note: this will only work when the customer sequence is in place.
-func insertMoreCustomers(t *testing.T, numCustomers int) {
-	sql := "insert into customer (name) values "
-	i := 0
-	for i < numCustomers {
-		i++
-		sql += fmt.Sprintf("('customer%d')", i)
-		if i != numCustomers {
-			sql += ","
-		}
-	}
-	execVtgateQuery(t, vtgateConn, "customer", sql)
-}
-
-func insertMoreProducts(t *testing.T) {
-	sql := "insert into product(pid, description) values(3, 'cpu'),(4, 'camera'),(5, 'mouse');"
-	execVtgateQuery(t, vtgateConn, "product", sql)
-}
-
-func insertMoreProductsForSourceThrottler(t *testing.T) {
-	sql := "insert into product(pid, description) values(103, 'new-cpu'),(104, 'new-camera'),(105, 'new-mouse');"
-	execVtgateQuery(t, vtgateConn, "product", sql)
-}
-
-func insertMoreProductsForTargetThrottler(t *testing.T) {
-	sql := "insert into product(pid, description) values(203, 'new-cpu'),(204, 'new-camera'),(205, 'new-mouse');"
-	execVtgateQuery(t, vtgateConn, "product", sql)
-}
-
 func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAlias string, withOpenTx bool) {
 	t.Run("shardCustomer", func(t *testing.T) {
 		workflow := "p2c"
@@ -722,7 +682,7 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 		defaultCell := cells[0]
 		custKs := vc.Cells[defaultCell.Name].Keyspaces["customer"]
 
-		tables := "customer,Lead,Lead-1,db_order_test"
+		tables := "customer,Lead,Lead-1,db_order_test,geom_tbl,json_tbl,blob_tbl,vdiff_order"
 		moveTablesAction(t, "Create", sourceCellOrAlias, workflow, sourceKs, targetKs, tables)
 
 		customerTab1 := custKs.Shards["-80"].Tablets["zone1-200"].Vttablet
@@ -734,9 +694,14 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 		catchup(t, customerTab1, workflow, workflowType)
 		catchup(t, customerTab2, workflow, workflowType)
 
+		// The wait in the next code block which checks that customer.dec80 is updated, also confirms that the
+		// blob-related dmls we execute here are vreplicated.
+		insertIntoBlobTable(t)
+
 		// Confirm that the 0 scale decimal field, dec80, is replicated correctly
 		dec80Replicated := false
 		execVtgateQuery(t, vtgateConn, sourceKs, "update customer set dec80 = 0")
+		execVtgateQuery(t, vtgateConn, sourceKs, "update customer set blb = \"new blob data\" where cid=3")
 		waitForNoWorkflowLag(t, vc, targetKs, workflow)
 		for _, shard := range []string{"-80", "80-"} {
 			shardTarget := fmt.Sprintf("%s:%s", targetKs, shard)
@@ -746,6 +711,31 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 			}
 		}
 		require.Equal(t, true, dec80Replicated)
+
+		// Confirm that all partial query metrics get updated when we are testing the noblob mode.
+		t.Run("validate partial query counts", func(t *testing.T) {
+			if !isBinlogRowImageNoBlob(t, productTab) {
+				return
+			}
+
+			// the two primaries of the new reshard targets
+			tablet200 := custKs.Shards["-80"].Tablets["zone1-200"].Vttablet
+			tablet300 := custKs.Shards["80-"].Tablets["zone1-300"].Vttablet
+
+			totalInserts, totalUpdates, totalInsertQueries, totalUpdateQueries := 0, 0, 0, 0
+			for _, tab := range []*cluster.VttabletProcess{tablet200, tablet300} {
+				insertCount, updateCount, insertQueries, updateQueries := getPartialMetrics(t, "product.0.p2c.1", tab)
+				totalInserts += insertCount
+				totalUpdates += updateCount
+				totalInsertQueries += insertQueries
+				totalUpdateQueries += updateQueries
+			}
+			// Counts are total queries from `blobTableQueries` across shards + customer updates from above.
+			require.NotZero(t, totalInserts)
+			require.NotZero(t, totalUpdates)
+			require.NotZero(t, totalInsertQueries)
+			require.NotZero(t, totalUpdateQueries)
+		})
 
 		query := "select cid from customer"
 		require.True(t, validateThatQueryExecutesOnTablet(t, vtgateConn, productTab, "product", query, query))
@@ -887,7 +877,7 @@ func reshardCustomer2to4Split(t *testing.T, cells []*Cell, sourceCellOrAlias str
 		ksName := "customer"
 		counts := map[string]int{"zone1-600": 4, "zone1-700": 5, "zone1-800": 6, "zone1-900": 5}
 		reshard(t, ksName, "customer", "c2c4", "-80,80-", "-40,40-80,80-c0,c0-",
-			600, counts, nil, cells, sourceCellOrAlias, 1)
+			600, counts, nil, nil, cells, sourceCellOrAlias, 1)
 		waitForRowCount(t, vtgateConn, ksName, "customer", 20)
 		query := "insert into customer (name) values('yoko')"
 		execVtgateQuery(t, vtgateConn, ksName, query)
@@ -900,7 +890,7 @@ func reshardMerchant2to3SplitMerge(t *testing.T) {
 		ksName := merchantKeyspace
 		counts := map[string]int{"zone1-1600": 0, "zone1-1700": 2, "zone1-1800": 0}
 		reshard(t, ksName, "merchant", "m2m3", "-80,80-", "-40,40-c0,c0-",
-			1600, counts, dryRunResultsSwitchWritesM2m3, nil, "", 1)
+			1600, counts, dryRunResultsSwitchReadM2m3, dryRunResultsSwitchWritesM2m3, nil, "", 1)
 		waitForRowCount(t, vtgateConn, ksName, "merchant", 2)
 		query := "insert into merchant (mname, category) values('amazon', 'electronics')"
 		execVtgateQuery(t, vtgateConn, ksName, query)
@@ -947,7 +937,7 @@ func reshardMerchant3to1Merge(t *testing.T) {
 		ksName := merchantKeyspace
 		counts := map[string]int{"zone1-2000": 3}
 		reshard(t, ksName, "merchant", "m3m1", "-40,40-c0,c0-", "0",
-			2000, counts, nil, nil, "", 1)
+			2000, counts, nil, nil, nil, "", 1)
 		waitForRowCount(t, vtgateConn, ksName, "merchant", 3)
 		query := "insert into merchant (mname, category) values('flipkart', 'electronics')"
 		execVtgateQuery(t, vtgateConn, ksName, query)
@@ -960,7 +950,7 @@ func reshardCustomer3to2SplitMerge(t *testing.T) { // -40,40-80,80-c0 => merge/s
 		ksName := "customer"
 		counts := map[string]int{"zone1-1000": 8, "zone1-1100": 8, "zone1-1200": 5}
 		reshard(t, ksName, "customer", "c4c3", "-40,40-80,80-c0", "-60,60-c0",
-			1000, counts, nil, nil, "", 1)
+			1000, counts, nil, nil, nil, "", 1)
 	})
 }
 
@@ -969,12 +959,12 @@ func reshardCustomer3to1Merge(t *testing.T) { // to unsharded
 		ksName := "customer"
 		counts := map[string]int{"zone1-1500": 21}
 		reshard(t, ksName, "customer", "c3c1", "-60,60-c0,c0-", "0",
-			1500, counts, nil, nil, "", 3)
+			1500, counts, nil, nil, nil, "", 3)
 	})
 }
 
 func reshard(t *testing.T, ksName string, tableName string, workflow string, sourceShards string, targetShards string,
-	tabletIDBase int, counts map[string]int, dryRunResultSwitchWrites []string, cells []*Cell, sourceCellOrAlias string,
+	tabletIDBase int, counts map[string]int, dryRunResultSwitchReads, dryRunResultSwitchWrites []string, cells []*Cell, sourceCellOrAlias string,
 	autoIncrementStep int) {
 	t.Run("reshard", func(t *testing.T) {
 		if cells == nil {
@@ -1016,6 +1006,9 @@ func reshard(t *testing.T, ksName string, tableName string, workflow string, sou
 			}
 		}
 		vdiff1(t, ksWorkflow, "")
+		if dryRunResultSwitchReads != nil {
+			switchReadsDryRun(t, workflowType, allCellNames, ksWorkflow, dryRunResultSwitchReads)
+		}
 		switchReads(t, workflowType, allCellNames, ksWorkflow, false)
 		if dryRunResultSwitchWrites != nil {
 			switchWritesDryRun(t, workflowType, ksWorkflow, dryRunResultSwitchWrites)
@@ -1373,7 +1366,9 @@ func switchReadsDryRun(t *testing.T, workflowType, cells, ksWorkflow string, dry
 	output, err := vc.VtctlClient.ExecuteCommandWithOutput(workflowType, "--", "--cells="+cells, "--tablet_types=rdonly,replica",
 		"--dry_run", "SwitchTraffic", ksWorkflow)
 	require.NoError(t, err, fmt.Sprintf("Switching Reads DryRun Error: %s: %s", err, output))
-	validateDryRunResults(t, output, dryRunResults)
+	if dryRunResults != nil {
+		validateDryRunResults(t, output, dryRunResults)
+	}
 }
 
 func switchReads(t *testing.T, workflowType, cells, ksWorkflow string, reverse bool) {

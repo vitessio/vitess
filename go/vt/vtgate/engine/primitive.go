@@ -127,6 +127,7 @@ type (
 		SetTarget(target string) error
 
 		SetUDV(key string, value any) error
+		GetUDV(key string) *querypb.BindVariable
 
 		SetSysVar(name string, expr string)
 
@@ -148,6 +149,7 @@ type (
 		SetPlannerVersion(querypb.ExecuteOptions_PlannerVersion)
 		SetConsolidator(querypb.ExecuteOptions_Consolidator)
 		SetWorkloadName(string)
+		SetPriority(string)
 		SetFoundRows(uint64)
 
 		SetDDLStrategy(string)

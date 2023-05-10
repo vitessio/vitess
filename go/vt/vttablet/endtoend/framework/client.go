@@ -405,6 +405,11 @@ func (client *QueryClient) StreamHealth(sendFunc func(*querypb.StreamHealthRespo
 	return client.server.StreamHealth(client.ctx, sendFunc)
 }
 
+// StreamHealthWithContext receives the health response
+func (client *QueryClient) StreamHealthWithContext(ctx context.Context, sendFunc func(*querypb.StreamHealthResponse) error) error {
+	return client.server.StreamHealth(ctx, sendFunc)
+}
+
 func (client *QueryClient) UpdateContext(ctx context.Context) {
 	client.ctx = ctx
 }

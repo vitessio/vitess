@@ -20,8 +20,8 @@ import (
 	"vitess.io/vitess/go/hack"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/decimal"
+	"vitess.io/vitess/go/mysql/fastparse"
 	"vitess.io/vitess/go/mysql/json"
-	"vitess.io/vitess/go/mysql/json/fastparse"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -29,7 +29,7 @@ import (
 
 func push_i(env *ExpressionEnv, raw []byte) int {
 	var ival int64
-	ival, env.vm.err = fastparse.ParseInt64(hack.String(raw))
+	ival, env.vm.err = fastparse.ParseInt64(hack.String(raw), 10)
 	env.vm.stack[env.vm.sp] = env.vm.arena.newEvalInt64(ival)
 	env.vm.sp++
 	return 1
@@ -254,7 +254,7 @@ func (asm *assembler) PushBVar_text(key string, col collations.TypedCollation) {
 
 func push_u(env *ExpressionEnv, raw []byte) int {
 	var uval uint64
-	uval, env.vm.err = fastparse.ParseUint64(hack.String(raw))
+	uval, env.vm.err = fastparse.ParseUint64(hack.String(raw), 10)
 	env.vm.stack[env.vm.sp] = env.vm.arena.newEvalUint64(uval)
 	env.vm.sp++
 	return 1
@@ -317,6 +317,12 @@ func (asm *assembler) PushLiteral(lit eval) error {
 			env.vm.sp++
 			return 1
 		}, "PUSH VARCHAR(%q)", lit.ToRawBytes())
+	case *evalTemporal:
+		asm.emit(func(env *ExpressionEnv) int {
+			env.vm.stack[env.vm.sp] = env.vm.arena.newTemporal(lit.t, lit.dt, lit.prec)
+			env.vm.sp++
+			return 1
+		}, "PUSH TIME|DATETIME|DATE(%q)", lit.ToRawBytes())
 	default:
 		return vterrors.Errorf(vtrpc.Code_UNIMPLEMENTED, "unsupported literal kind '%T'", lit)
 	}

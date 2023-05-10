@@ -97,6 +97,11 @@ func (ast *astCompiler) translateFuncExpr(fn *sqlparser.FuncExpr) (Expr, error) 
 			return nil, argError(method)
 		}
 		return &builtinHex{CallExpr: call, collate: ast.cfg.Collation}, nil
+	case "unhex":
+		if len(args) != 1 {
+			return nil, argError(method)
+		}
+		return &builtinUnhex{CallExpr: call}, nil
 	case "ceil", "ceiling":
 		if len(args) != 1 {
 			return nil, argError(method)
@@ -226,6 +231,38 @@ func (ast *astCompiler) translateFuncExpr(fn *sqlparser.FuncExpr) (Expr, error) 
 			return nil, argError(method)
 		}
 		return &builtinSqrt{CallExpr: call}, nil
+	case "round":
+		switch len(args) {
+		case 1, 2:
+			return &builtinRound{CallExpr: call}, nil
+		default:
+			return nil, argError(method)
+		}
+	case "truncate":
+		if len(args) != 2 {
+			return nil, argError(method)
+		}
+		return &builtinTruncate{CallExpr: call}, nil
+	case "crc32":
+		if len(args) != 1 {
+			return nil, argError(method)
+		}
+		return &builtinCrc32{CallExpr: call}, nil
+	case "conv":
+		if len(args) != 3 {
+			return nil, argError(method)
+		}
+		return &builtinConv{CallExpr: call, collate: ast.cfg.Collation}, nil
+	case "left", "right":
+		if len(args) != 2 {
+			return nil, argError(method)
+		}
+		return &builtinLeftRight{CallExpr: call, collate: ast.cfg.Collation, left: method == "left"}, nil
+	case "lpad", "rpad":
+		if len(args) != 3 {
+			return nil, argError(method)
+		}
+		return &builtinPad{CallExpr: call, collate: ast.cfg.Collation, left: method == "lpad"}, nil
 	case "lower", "lcase":
 		if len(args) != 1 {
 			return nil, argError(method)
@@ -256,6 +293,11 @@ func (ast *astCompiler) translateFuncExpr(fn *sqlparser.FuncExpr) (Expr, error) 
 			return nil, argError(method)
 		}
 		return &builtinASCII{CallExpr: call}, nil
+	case "ord":
+		if len(args) != 1 {
+			return nil, argError(method)
+		}
+		return &builtinOrd{CallExpr: call, collate: ast.cfg.Collation}, nil
 	case "repeat":
 		if len(args) != 2 {
 			return nil, argError(method)
@@ -288,6 +330,129 @@ func (ast *astCompiler) translateFuncExpr(fn *sqlparser.FuncExpr) (Expr, error) 
 			return nil, argError(method)
 		}
 		return &builtinCurdate{CallExpr: call}, nil
+	case "utc_date":
+		if len(args) != 0 {
+			return nil, argError(method)
+		}
+		return &builtinUtcDate{CallExpr: call}, nil
+	case "date_format":
+		if len(args) != 2 {
+			return nil, argError(method)
+		}
+		return &builtinDateFormat{CallExpr: call, collate: ast.cfg.Collation}, nil
+	case "date":
+		if len(args) != 1 {
+			return nil, argError(method)
+		}
+		return &builtinDate{CallExpr: call}, nil
+	case "dayofmonth", "day":
+		if len(args) != 1 {
+			return nil, argError(method)
+		}
+		return &builtinDayOfMonth{CallExpr: call}, nil
+	case "dayofweek":
+		if len(args) != 1 {
+			return nil, argError(method)
+		}
+		return &builtinDayOfWeek{CallExpr: call}, nil
+	case "dayofyear":
+		if len(args) != 1 {
+			return nil, argError(method)
+		}
+		return &builtinDayOfYear{CallExpr: call}, nil
+	case "from_unixtime":
+		switch len(args) {
+		case 1, 2:
+			return &builtinFromUnixtime{CallExpr: call, collate: ast.cfg.Collation}, nil
+		default:
+			return nil, argError(method)
+		}
+	case "hour":
+		if len(args) != 1 {
+			return nil, argError(method)
+		}
+		return &builtinHour{CallExpr: call}, nil
+	case "makedate":
+		if len(args) != 2 {
+			return nil, argError(method)
+		}
+		return &builtinMakedate{CallExpr: call}, nil
+	case "maketime":
+		if len(args) != 3 {
+			return nil, argError(method)
+		}
+		return &builtinMaketime{CallExpr: call}, nil
+	case "microsecond":
+		if len(args) != 1 {
+			return nil, argError(method)
+		}
+		return &builtinMicrosecond{CallExpr: call}, nil
+	case "minute":
+		if len(args) != 1 {
+			return nil, argError(method)
+		}
+		return &builtinMinute{CallExpr: call}, nil
+	case "month":
+		if len(args) != 1 {
+			return nil, argError(method)
+		}
+		return &builtinMonth{CallExpr: call}, nil
+	case "monthname":
+		if len(args) != 1 {
+			return nil, argError(method)
+		}
+		return &builtinMonthName{CallExpr: call, collate: ast.cfg.Collation}, nil
+	case "quarter":
+		if len(args) != 1 {
+			return nil, argError(method)
+		}
+		return &builtinQuarter{CallExpr: call}, nil
+	case "second":
+		if len(args) != 1 {
+			return nil, argError(method)
+		}
+		return &builtinSecond{CallExpr: call}, nil
+	case "time":
+		if len(args) != 1 {
+			return nil, argError(method)
+		}
+		return &builtinTime{CallExpr: call}, nil
+	case "unix_timestamp":
+		switch len(args) {
+		case 0, 1:
+			return &builtinUnixTimestamp{CallExpr: call}, nil
+		default:
+			return nil, argError(method)
+		}
+	case "week":
+		switch len(args) {
+		case 1, 2:
+			return &builtinWeek{CallExpr: call}, nil
+		default:
+			return nil, argError(method)
+		}
+	case "weekday":
+		if len(args) != 1 {
+			return nil, argError(method)
+		}
+		return &builtinWeekDay{CallExpr: call}, nil
+	case "weekofyear":
+		if len(args) != 1 {
+			return nil, argError(method)
+		}
+		return &builtinWeekOfYear{CallExpr: call}, nil
+	case "year":
+		if len(args) != 1 {
+			return nil, argError(method)
+		}
+		return &builtinYear{CallExpr: call}, nil
+	case "yearweek":
+		switch len(args) {
+		case 1, 2:
+			return &builtinYearWeek{CallExpr: call}, nil
+		default:
+			return nil, argError(method)
+		}
 	case "user", "current_user", "session_user", "system_user":
 		if len(args) != 0 {
 			return nil, argError(method)
@@ -303,6 +468,31 @@ func (ast *astCompiler) translateFuncExpr(fn *sqlparser.FuncExpr) (Expr, error) 
 			return nil, argError(method)
 		}
 		return &builtinVersion{CallExpr: call}, nil
+	case "md5":
+		if len(args) != 1 {
+			return nil, argError(method)
+		}
+		return &builtinMD5{CallExpr: call, collate: ast.cfg.Collation}, nil
+	case "random_bytes":
+		if len(args) != 1 {
+			return nil, argError(method)
+		}
+		return &builtinRandomBytes{CallExpr: call}, nil
+	case "sha1", "sha":
+		if len(args) != 1 {
+			return nil, argError(method)
+		}
+		return &builtinSHA1{CallExpr: call, collate: ast.cfg.Collation}, nil
+	case "sha2":
+		if len(args) != 2 {
+			return nil, argError(method)
+		}
+		return &builtinSHA2{CallExpr: call, collate: ast.cfg.Collation}, nil
+	case "convert_tz":
+		if len(args) != 3 {
+			return nil, argError(method)
+		}
+		return &builtinConvertTz{CallExpr: call}, nil
 	default:
 		return nil, translateExprNotSupported(fn)
 	}
@@ -449,6 +639,28 @@ func (ast *astCompiler) translateCallable(call sqlparser.Callable) (Expr, error)
 			utc:      utc,
 			onlyTime: onlyTime,
 			prec:     uint8(call.Fsp),
+		}, nil
+
+	case *sqlparser.TrimFuncExpr:
+		var args []Expr
+		str, err := ast.translateExpr(call.StringArg)
+		if err != nil {
+			return nil, err
+		}
+		args = append(args, str)
+		if call.TrimArg != nil {
+			trim, err := ast.translateExpr(call.TrimArg)
+			if err != nil {
+				return nil, err
+			}
+			args = append(args, trim)
+		}
+
+		var cexpr = CallExpr{Arguments: args, Method: call.TrimFuncType.ToString()}
+		return &builtinTrim{
+			CallExpr: cexpr,
+			collate:  ast.cfg.Collation,
+			trim:     call.Type,
 		}, nil
 
 	default:

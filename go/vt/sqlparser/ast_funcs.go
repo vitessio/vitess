@@ -920,8 +920,12 @@ func containEscapableChars(s string, at AtCount) bool {
 }
 
 func formatID(buf *TrackedBuffer, original string, at AtCount) {
+	if buf.escape == escapeNoIdentifiers {
+		buf.WriteString(original)
+		return
+	}
 	_, isKeyword := keywordLookupTable.LookupString(original)
-	if buf.escape || isKeyword || containEscapableChars(original, at) {
+	if buf.escape == escapeAllIdentifiers || isKeyword || containEscapableChars(original, at) {
 		writeEscapedString(buf, original)
 	} else {
 		buf.WriteString(original)
@@ -1008,12 +1012,12 @@ func (node *Select) GetColumns() SelectExprs {
 	return node.SelectExprs
 }
 
-// SetComments implements the SelectStatement interface
+// SetComments implements the Commented interface
 func (node *Select) SetComments(comments Comments) {
 	node.Comments = comments.Parsed()
 }
 
-// GetComments implements the SelectStatement interface
+// GetParsedComments implements the Commented interface
 func (node *Select) GetParsedComments() *ParsedComments {
 	return node.Comments
 }
@@ -1133,7 +1137,7 @@ func (node *Union) SetComments(comments Comments) {
 	node.Left.SetComments(comments)
 }
 
-// GetComments implements the SelectStatement interface
+// GetParsedComments implements the SelectStatement interface
 func (node *Union) GetParsedComments() *ParsedComments {
 	return node.Left.GetParsedComments()
 }
@@ -1436,18 +1440,6 @@ func (ty IndexHintType) ToString() string {
 		return ForceStr
 	default:
 		return "Unknown IndexHintType"
-	}
-}
-
-// ToString returns the type as a string
-func (ty DeallocateStmtType) ToString() string {
-	switch ty {
-	case DeallocateType:
-		return DeallocateStr
-	case DropType:
-		return DropStr
-	default:
-		return "Unknown Deallocate Statement Type"
 	}
 }
 
@@ -2258,6 +2250,72 @@ func AndExpressions(exprs ...Expr) Expr {
 var Equals = &Comparator{}
 
 // ToString returns the type as a string
+func (ty GeomPropertyType) ToString() string {
+	switch ty {
+	case IsEmpty:
+		return IsEmptyStr
+	case IsSimple:
+		return IsSimpleStr
+	case Envelope:
+		return EnvelopeStr
+	case GeometryType:
+		return GeometryTypeStr
+	case Dimension:
+		return DimensionStr
+	default:
+		return "Unknown GeomPropertyType"
+	}
+}
+
+// ToString returns the type as a string
+func (ty PointPropertyType) ToString() string {
+	switch ty {
+	case XCordinate:
+		return XCordinateStr
+	case YCordinate:
+		return YCordinateStr
+	case Latitude:
+		return LatitudeStr
+	case Longitude:
+		return LongitudeStr
+	default:
+		return "Unknown PointPropertyType"
+	}
+}
+
+// ToString returns the type as a string
+func (ty LinestrPropType) ToString() string {
+	switch ty {
+	case EndPoint:
+		return EndPointStr
+	case IsClosed:
+		return IsClosedStr
+	case Length:
+		return LengthStr
+	case NumPoints:
+		return NumPointsStr
+	case PointN:
+		return PointNStr
+	case StartPoint:
+		return StartPointStr
+	default:
+		return "Unknown LinestrPropType"
+	}
+}
+
+// ToString returns the type as a string
+func (ty GeomFormatType) ToString() string {
+	switch ty {
+	case BinaryFormat:
+		return BinaryFormatStr
+	case TextFormat:
+		return TextFormatStr
+	default:
+		return "Unknown GeomFormatType"
+	}
+}
+
+// ToString returns the type as a string
 func (ty GeomFromWktType) ToString() string {
 	switch ty {
 	case GeometryFromText:
@@ -2276,6 +2334,30 @@ func (ty GeomFromWktType) ToString() string {
 		return MultiLinestringFromTextStr
 	case MultiPolygonFromText:
 		return MultiPolygonFromTextStr
+	default:
+		return "Unknown GeomFromWktType"
+	}
+}
+
+// ToString returns the type as a string
+func (ty GeomFromWkbType) ToString() string {
+	switch ty {
+	case GeometryFromWKB:
+		return GeometryFromWKBStr
+	case GeometryCollectionFromWKB:
+		return GeometryCollectionFromWKBStr
+	case PointFromWKB:
+		return PointFromWKBStr
+	case PolygonFromWKB:
+		return PolygonFromWKBStr
+	case LineStringFromWKB:
+		return LineStringFromWKBStr
+	case MultiPointFromWKB:
+		return MultiPointFromWKBStr
+	case MultiLinestringFromWKB:
+		return MultiLinestringFromWKBStr
+	case MultiPolygonFromWKB:
+		return MultiPolygonFromWKBStr
 	default:
 		return "Unknown GeomFromWktType"
 	}

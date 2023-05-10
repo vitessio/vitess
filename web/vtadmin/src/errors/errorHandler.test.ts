@@ -17,49 +17,20 @@
 import { ErrorHandler, HttpResponseNotOkError } from './errorTypes';
 import * as errorHandler from './errorHandler';
 import * as errorHandlers from './errorHandlers';
-
-// Since vtadmin uses process.env variables quite a bit, we need to
-// do a bit of a dance to clear them out between test runs.
-const ORIGINAL_PROCESS_ENV = process.env;
-const TEST_PROCESS_ENV = {
-    ...process.env,
-    REACT_APP_VTADMIN_API_ADDRESS: '',
-};
-
-beforeAll(() => {
-    // TypeScript can get a little cranky with the automatic
-    // string/boolean type conversions, hence this cast.
-    process.env = { ...TEST_PROCESS_ENV } as NodeJS.ProcessEnv;
-});
-
-afterEach(() => {
-    // Reset the process.env to clear out any changes made in the tests.
-    process.env = { ...TEST_PROCESS_ENV } as NodeJS.ProcessEnv;
-
-    jest.restoreAllMocks();
-});
-
-afterAll(() => {
-    process.env = { ...ORIGINAL_PROCESS_ENV };
-});
+import { describe, it, expect, vi } from 'vitest';
+import { Response } from 'cross-fetch';
 
 describe('errorHandler', () => {
     let mockErrorHandler: ErrorHandler;
-    let mockEnv: NodeJS.ProcessEnv;
 
     beforeEach(() => {
         mockErrorHandler = {
-            initialize: jest.fn(),
+            initialize: vi.fn(),
             isEnabled: () => true,
-            notify: jest.fn(),
+            notify: vi.fn(),
         };
 
-        jest.spyOn(errorHandlers, 'getHandlers').mockReturnValue([mockErrorHandler]);
-
-        mockEnv = {
-            REACT_APP_VTADMIN_API_ADDRESS: 'http://example.com',
-        } as NodeJS.ProcessEnv;
-        process.env = mockEnv;
+        vi.spyOn(errorHandlers, 'getHandlers').mockReturnValue([mockErrorHandler]);
     });
 
     describe('initialize', () => {
@@ -75,9 +46,13 @@ describe('errorHandler', () => {
             errorHandler.notify(err);
 
             expect(mockErrorHandler.notify).toHaveBeenCalledTimes(1);
-            expect(mockErrorHandler.notify).toHaveBeenCalledWith(err, mockEnv, {
-                errorMetadata: {},
-            });
+            expect(mockErrorHandler.notify).toHaveBeenCalledWith(
+                err,
+                { VITE_VTADMIN_API_ADDRESS: 'http://test-api.com' },
+                {
+                    errorMetadata: {},
+                }
+            );
         });
 
         it("appends metadata from the Error's instance properties", () => {
@@ -86,27 +61,31 @@ describe('errorHandler', () => {
             errorHandler.notify(err, { goodbye: 'moon' });
 
             expect(mockErrorHandler.notify).toHaveBeenCalledTimes(1);
-            expect(mockErrorHandler.notify).toHaveBeenCalledWith(err, mockEnv, {
-                errorMetadata: {
-                    fetchResponse: {
-                        ok: false,
-                        status: 500,
-                        statusText: '',
-                        type: 'default',
-                        url: '',
+            expect(mockErrorHandler.notify).toHaveBeenCalledWith(
+                err,
+                { VITE_VTADMIN_API_ADDRESS: 'http://test-api.com' },
+                {
+                    errorMetadata: {
+                        fetchResponse: {
+                            ok: false,
+                            status: 500,
+                            statusText: 'Internal Server Error',
+                            type: undefined,
+                            url: '',
+                        },
+                        name: 'HttpResponseNotOkError',
+                        response: { ok: false },
                     },
-                    name: 'HttpResponseNotOkError',
-                    response: { ok: false },
-                },
-                goodbye: 'moon',
-            });
+                    goodbye: 'moon',
+                }
+            );
         });
 
         it('only includes santizied environment variables', () => {
-            process.env = {
-                REACT_APP_VTADMIN_API_ADDRESS: 'http://not-secret.example.com',
-                REACT_APP_BUGSNAG_API_KEY: 'secret',
-            } as NodeJS.ProcessEnv;
+            import.meta.env = {
+                VITE_VTADMIN_API_ADDRESS: 'http://not-secret.example.com',
+                VITE_BUGSNAG_API_KEY: 'secret',
+            } as Vite.ImportMetaEnv;
 
             const err = new Error('testing');
             errorHandler.notify(err);
@@ -115,7 +94,7 @@ describe('errorHandler', () => {
             expect(mockErrorHandler.notify).toHaveBeenCalledWith(
                 err,
                 {
-                    REACT_APP_VTADMIN_API_ADDRESS: 'http://not-secret.example.com',
+                    VITE_VTADMIN_API_ADDRESS: 'http://not-secret.example.com',
                 },
                 {
                     errorMetadata: {},

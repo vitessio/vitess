@@ -1384,8 +1384,7 @@ func (node *ExecuteStmt) formatFast(buf *TrackedBuffer) {
 
 // formatFast formats the node.
 func (node *DeallocateStmt) formatFast(buf *TrackedBuffer) {
-	buf.WriteString(node.Type.ToString())
-	buf.WriteByte(' ')
+	buf.WriteString("deallocate ")
 	node.Comments.formatFast(buf)
 	buf.WriteString("prepare ")
 	node.Name.formatFast(buf)
@@ -1928,17 +1927,22 @@ func (node *RegexpSubstrExpr) formatFast(buf *TrackedBuffer) {
 func (node *TrimFuncExpr) formatFast(buf *TrackedBuffer) {
 	buf.WriteString(node.TrimFuncType.ToString())
 	buf.WriteByte('(')
-	if node.Type.ToString() != "" {
-		buf.WriteString(node.Type.ToString())
-		buf.WriteByte(' ')
-	}
-	if node.TrimArg != nil {
-		buf.printExpr(node, node.TrimArg, true)
-		buf.WriteByte(' ')
-	}
+	if node.TrimFuncType == NormalTrimType {
+		var from bool
+		if node.Type != NoTrimType {
+			buf.WriteString(node.Type.ToString())
+			buf.WriteByte(' ')
+			from = true
+		}
+		if node.TrimArg != nil {
+			buf.printExpr(node, node.TrimArg, true)
+			buf.WriteByte(' ')
+			from = true
+		}
 
-	if (node.Type.ToString() != "") || (node.TrimArg != nil) {
-		buf.WriteString("from ")
+		if from {
+			buf.WriteString("from ")
+		}
 	}
 	buf.printExpr(node, node.StringArg, true)
 	buf.WriteByte(')')
@@ -3693,6 +3697,66 @@ func (node *GeomFromTextExpr) formatFast(buf *TrackedBuffer) {
 	if node.AxisOrderOpt != nil {
 		buf.WriteString(", ")
 		buf.printExpr(node, node.AxisOrderOpt, true)
+	}
+	buf.WriteByte(')')
+}
+
+// formatFast formats the node
+func (node *GeomFromWKBExpr) formatFast(buf *TrackedBuffer) {
+	buf.WriteString(node.Type.ToString())
+	buf.WriteByte('(')
+	buf.printExpr(node, node.WkbBlob, true)
+	if node.Srid != nil {
+		buf.WriteString(", ")
+		buf.printExpr(node, node.Srid, true)
+	}
+	if node.AxisOrderOpt != nil {
+		buf.WriteString(", ")
+		buf.printExpr(node, node.AxisOrderOpt, true)
+	}
+	buf.WriteByte(')')
+}
+
+// formatFast formats the node
+func (node *GeomFormatExpr) formatFast(buf *TrackedBuffer) {
+	buf.WriteString(node.FormatType.ToString())
+	buf.WriteByte('(')
+	buf.printExpr(node, node.Geom, true)
+	if node.AxisOrderOpt != nil {
+		buf.WriteString(", ")
+		buf.printExpr(node, node.AxisOrderOpt, true)
+	}
+	buf.WriteByte(')')
+}
+
+// formatFast formats the node
+func (node *GeomPropertyFuncExpr) formatFast(buf *TrackedBuffer) {
+	buf.WriteString(node.Property.ToString())
+	buf.WriteByte('(')
+	buf.printExpr(node, node.Geom, true)
+	buf.WriteByte(')')
+}
+
+// formatFast formats the node
+func (node *PointPropertyFuncExpr) formatFast(buf *TrackedBuffer) {
+	buf.WriteString(node.Property.ToString())
+	buf.WriteByte('(')
+	buf.printExpr(node, node.Point, true)
+	if node.ValueToSet != nil {
+		buf.WriteString(", ")
+		buf.printExpr(node, node.ValueToSet, true)
+	}
+	buf.WriteByte(')')
+}
+
+// formatFast formats the node
+func (node *LinestrPropertyFuncExpr) formatFast(buf *TrackedBuffer) {
+	buf.WriteString(node.Property.ToString())
+	buf.WriteByte('(')
+	buf.printExpr(node, node.Linestring, true)
+	if node.PropertyDefArg != nil {
+		buf.WriteString(", ")
+		buf.printExpr(node, node.PropertyDefArg, true)
 	}
 	buf.WriteByte(')')
 }

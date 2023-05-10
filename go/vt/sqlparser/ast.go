@@ -670,13 +670,9 @@ type (
 	// DeallocateStmt represents a Deallocate Statement
 	// More info available on https://dev.mysql.com/doc/refman/8.0/en/deallocate-prepare.html
 	DeallocateStmt struct {
-		Type     DeallocateStmtType
 		Comments *ParsedComments
 		Name     IdentifierCI
 	}
-
-	// DeallocateStmtType is an enum to get types of deallocate
-	DeallocateStmtType int8
 
 	// IntervalTypes is an enum to get types of intervals
 	IntervalTypes int8
@@ -2757,6 +2753,51 @@ type (
 		AxisOrderOpt Expr
 	}
 
+	// GeomFromWkbType is an enum to get the types of wkt functions with possible values: GeometryFromWKB GeometryCollectionFromWKB PointFromWKB LineStringFromWKB PolygonFromWKB MultiPointFromWKB MultiPolygonFromWKB MultiLinestringFromWKB
+	GeomFromWkbType int8
+
+	GeomFromWKBExpr struct {
+		Type         GeomFromWkbType
+		WkbBlob      Expr
+		Srid         Expr
+		AxisOrderOpt Expr
+	}
+
+	// GeomFormatType is an enum to get the types of geom format functions with possible values: BinaryFormat TextFormat
+	GeomFormatType int8
+
+	GeomFormatExpr struct {
+		FormatType   GeomFormatType
+		Geom         Expr
+		AxisOrderOpt Expr
+	}
+
+	// GeomPropertyType is an enum to get the types of geom format functions with possible values: Dimension Envelope IsSimple IsEmpty GeometryType
+	GeomPropertyType int8
+
+	GeomPropertyFuncExpr struct {
+		Property GeomPropertyType
+		Geom     Expr
+	}
+
+	// PointPropertyType is an enum to get the types of geom format functions with possible values: XCordinate YCordinate Latitude Longitude
+	PointPropertyType int8
+
+	PointPropertyFuncExpr struct {
+		Property   PointPropertyType
+		Point      Expr
+		ValueToSet Expr
+	}
+
+	// Linestring is an enum to get the types of geom format functions with possible values: EndPoint IsClosed Length NumPoints PointN StartPoint
+	LinestrPropType int8
+
+	LinestrPropertyFuncExpr struct {
+		Property       LinestrPropType
+		Linestring     Expr
+		PropertyDefArg Expr
+	}
+
 	AggrFunc interface {
 		Expr
 		AggrName() string
@@ -3090,6 +3131,11 @@ func (*MultiPolygonExpr) iExpr()                   {}
 func (*MultiPointExpr) iExpr()                     {}
 func (*MultiLinestringExpr) iExpr()                {}
 func (*GeomFromTextExpr) iExpr()                   {}
+func (*GeomFromWKBExpr) iExpr()                    {}
+func (*GeomFormatExpr) iExpr()                     {}
+func (*GeomPropertyFuncExpr) iExpr()               {}
+func (*PointPropertyFuncExpr) iExpr()              {}
+func (*LinestrPropertyFuncExpr) iExpr()            {}
 
 // iCallable marks all expressions that represent function calls
 func (*FuncExpr) iCallable()                           {}
@@ -3150,6 +3196,11 @@ func (*MultiPolygonExpr) iCallable()                   {}
 func (*MultiPointExpr) iCallable()                     {}
 func (*MultiLinestringExpr) iCallable()                {}
 func (*GeomFromTextExpr) iCallable()                   {}
+func (*GeomFromWKBExpr) iCallable()                    {}
+func (*GeomFormatExpr) iCallable()                     {}
+func (*GeomPropertyFuncExpr) iCallable()               {}
+func (*PointPropertyFuncExpr) iCallable()              {}
+func (*LinestrPropertyFuncExpr) iCallable()            {}
 
 func (*Sum) iCallable()       {}
 func (*Min) iCallable()       {}

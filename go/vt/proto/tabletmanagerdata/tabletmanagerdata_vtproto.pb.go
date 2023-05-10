@@ -149,13 +149,6 @@ func (m *SchemaDefinition) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
-	if len(m.Version) > 0 {
-		i -= len(m.Version)
-		copy(dAtA[i:], m.Version)
-		i = encodeVarint(dAtA, i, uint64(len(m.Version)))
-		i--
-		dAtA[i] = 0x1a
-	}
 	if len(m.TableDefinitions) > 0 {
 		for iNdEx := len(m.TableDefinitions) - 1; iNdEx >= 0; iNdEx-- {
 			size, err := m.TableDefinitions[iNdEx].MarshalToSizedBufferVT(dAtA[:i])
@@ -4450,6 +4443,16 @@ func (m *VDiffCoreOptions) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if m.UpdateTableStats {
+		i--
+		if m.UpdateTableStats {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x40
+	}
 	if m.MaxExtraRowsToCompare != 0 {
 		i = encodeVarint(dAtA, i, uint64(m.MaxExtraRowsToCompare))
 		i--
@@ -4741,10 +4744,6 @@ func (m *SchemaDefinition) SizeVT() (n int) {
 			l = e.SizeVT()
 			n += 1 + l + sov(uint64(l))
 		}
-	}
-	l = len(m.Version)
-	if l > 0 {
-		n += 1 + l + sov(uint64(l))
 	}
 	n += len(m.unknownFields)
 	return n
@@ -6230,6 +6229,9 @@ func (m *VDiffCoreOptions) SizeVT() (n int) {
 	if m.MaxExtraRowsToCompare != 0 {
 		n += 1 + sov(uint64(m.MaxExtraRowsToCompare))
 	}
+	if m.UpdateTableStats {
+		n += 2
+	}
 	n += len(m.unknownFields)
 	return n
 }
@@ -6682,38 +6684,6 @@ func (m *SchemaDefinition) UnmarshalVT(dAtA []byte) error {
 			if err := m.TableDefinitions[len(m.TableDefinitions)-1].UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
-			iNdEx = postIndex
-		case 3:
-			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Version", wireType)
-			}
-			var stringLen uint64
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflow
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				stringLen |= uint64(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			intStringLen := int(stringLen)
-			if intStringLen < 0 {
-				return ErrInvalidLength
-			}
-			postIndex := iNdEx + intStringLen
-			if postIndex < 0 {
-				return ErrInvalidLength
-			}
-			if postIndex > l {
-				return io.ErrUnexpectedEOF
-			}
-			m.Version = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
@@ -15714,6 +15684,26 @@ func (m *VDiffCoreOptions) UnmarshalVT(dAtA []byte) error {
 					break
 				}
 			}
+		case 8:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field UpdateTableStats", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.UpdateTableStats = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := skip(dAtA[iNdEx:])

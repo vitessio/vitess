@@ -247,3 +247,59 @@ func TestHighNumberOfParams(t *testing.T) {
 	}
 	require.Equal(t, 5, count)
 }
+
+func TestPrepareStatements(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+
+	mcmp.Exec("insert into t1(id1, id2) values (0,0), (1,0), (2,0)")
+
+	// prepare query with equal sharding key
+	mcmp.Exec(`prepare prep_pk from 'select count(*) from t1 where id1 = ?'`)
+	mcmp.AssertMatches(`execute prep_pk using @id1`, `[[INT64(0)]]`)
+	mcmp.Exec(`set @id1 = 1`)
+	mcmp.AssertMatches(`execute prep_pk using @id1`, `[[INT64(1)]]`)
+
+	// prepare query with equal non sharding key
+	mcmp.Exec(`prepare prep_non_pk from 'select id1, id2 from t1 where id2 = ?'`)
+	mcmp.Exec(`set @id2 = 0`)
+	mcmp.AssertMatches(`execute prep_non_pk using @id1`, `[]`)
+	mcmp.AssertMatchesNoOrder(`execute prep_non_pk using @id2`, `[[INT64(0) INT64(0)] [INT64(1) INT64(0)] [INT64(2) INT64(0)]]`)
+
+	// prepare query with in on sharding key
+	mcmp.Exec(`prepare prep_in_pk from 'select id1, id2 from t1 where id1 in (?, ?)'`)
+	mcmp.AssertMatches(`execute prep_in_pk using @id1, @id1`, `[[INT64(1) INT64(0)]]`)
+	mcmp.AssertMatchesNoOrder(`execute prep_in_pk using @id1, @id2`, `[[INT64(0) INT64(0)] [INT64(1) INT64(0)]]`)
+
+	// Fail by providing wrong number of arguments
+	_, err := mcmp.ExecAllowAndCompareError(`execute prep_in_pk using @id1, @id1, @id`)
+	incorrectCount := "VT03025: Incorrect arguments to EXECUTE"
+	assert.ErrorContains(t, err, incorrectCount)
+	_, err = mcmp.ExecAllowAndCompareError(`execute prep_in_pk using @id1`)
+	assert.ErrorContains(t, err, incorrectCount)
+	_, err = mcmp.ExecAllowAndCompareError(`execute prep_in_pk`)
+	assert.ErrorContains(t, err, incorrectCount)
+
+	mcmp.Exec(`prepare prep_art from 'select 1+?, 10/?'`)
+	mcmp.Exec(`set @x1 = 1, @x2 = 2.0, @x3 = "v", @x4 = 9999999999999999999999999999`)
+
+	// We are not matching types and precision with mysql at the moment, so not comparing with `mcmp`
+	// This is because of the difference in how MySQL executes a raw query with literal values and
+	// the PREPARE/EXEC way that is missing type info at the PREPARE stage
+	utils.AssertMatches(t, mcmp.VtConn, `execute prep_art using @x1, @x1`, `[[INT64(2) DECIMAL(10.0000)]]`)
+	utils.AssertMatches(t, mcmp.VtConn, `execute prep_art using @x2, @x2`, `[[DECIMAL(3.0) DECIMAL(5.0000)]]`)
+	utils.AssertMatches(t, mcmp.VtConn, `execute prep_art using @x3, @x3`, `[[FLOAT64(1) NULL]]`)
+	utils.AssertMatches(t, mcmp.VtConn, `execute prep_art using @x4, @x4`, `[[DECIMAL(10000000000000000000000000000) DECIMAL(0.0000)]]`)
+
+	mcmp.Exec(`select 1+1, 10/1 from t1 limit 1`)
+	mcmp.Exec(`select 1+2.0, 10/2.0 from t1 limit 1`)
+	mcmp.Exec(`select 1+'v', 10/'v' from t1 limit 1`)
+	mcmp.Exec(`select 1+9999999999999999999999999999, 10/9999999999999999999999999999 from t1 limit 1`)
+
+	mcmp.Exec("deallocate prepare prep_art")
+	_, err = mcmp.ExecAllowAndCompareError(`execute prep_art using @id1, @id1`)
+	assert.ErrorContains(t, err, "VT09011: Unknown prepared statement handler (prep_art) given to EXECUTE")
+
+	_, err = mcmp.ExecAllowAndCompareError("deallocate prepare prep_art")
+	assert.ErrorContains(t, err, "VT09011: Unknown prepared statement handler (prep_art) given to DEALLOCATE PREPARE")
+}

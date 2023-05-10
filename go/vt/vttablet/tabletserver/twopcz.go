@@ -19,8 +19,9 @@ package tabletserver
 import (
 	"encoding/json"
 	"fmt"
-	"html/template"
 	"net/http"
+
+	"github.com/google/safehtml/template"
 
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tx"
 

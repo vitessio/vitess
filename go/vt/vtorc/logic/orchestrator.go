@@ -155,7 +155,6 @@ func waitForLocksRelease() {
 // instance discovery per entry.
 func handleDiscoveryRequests() {
 	discoveryQueue = discovery.CreateOrReturnQueue("DEFAULT")
-
 	// create a pool of discovery workers
 	for i := uint(0); i < config.DiscoveryMaxConcurrency; i++ {
 		go func() {
@@ -277,7 +276,6 @@ func DiscoverInstance(instanceKey inst.InstanceKey, forceDiscovery bool) {
 // onHealthTick handles the actions to take to discover/poll instances
 func onHealthTick() {
 	wasAlreadyElected := IsLeader()
-
 	{
 		myIsElectedNode, err := process.AttemptElection()
 		if err != nil {
@@ -443,8 +441,27 @@ func ContinuousDiscovery() {
 				}
 			}()
 		case <-tabletTopoTick:
-			go RefreshAllKeyspaces()
-			go refreshAllTablets()
+			// Create a wait group
+			var wg sync.WaitGroup
+
+			// Refresh all keyspace information.
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				RefreshAllKeyspaces()
+			}()
+
+			// Refresh all tablets.
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				refreshAllTablets()
+			}()
+
+			// Wait for both the refreshes to complete
+			wg.Wait()
+			// We have completed one discovery cycle in the entirety of it. We should update the process health.
+			process.FirstDiscoveryCycleComplete.Store(true)
 		}
 	}
 }

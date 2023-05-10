@@ -145,12 +145,13 @@ type unitTest struct {
 }
 
 type clusterTest struct {
-	Name, Shard, Platform        string
-	FileName                     string
-	MakeTools, InstallXtraBackup bool
-	Docker                       bool
-	LimitResourceUsage           bool
-	PartialKeyspace              bool
+	Name, Shard, Platform              string
+	FileName                           string
+	MakeTools, InstallXtraBackup       bool
+	Docker                             bool
+	LimitResourceUsage                 bool
+	EnableBinlogTransactionCompression bool
+	PartialKeyspace                    bool
 }
 
 type selfHostedTest struct {
@@ -345,6 +346,9 @@ func generateClusterWorkflows(list []string, tpl string) {
 			}
 			if strings.HasPrefix(cluster, "vreplication") || strings.HasSuffix(cluster, "heavy") {
 				test.LimitResourceUsage = true
+			}
+			if strings.Contains(cluster, "vrepl") {
+				test.EnableBinlogTransactionCompression = true
 			}
 			mysqlVersionIndicator := ""
 			if mysqlVersion != defaultMySQLVersion && len(clusterMySQLVersions(cluster)) > 1 {

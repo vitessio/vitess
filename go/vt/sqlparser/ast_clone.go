@@ -181,8 +181,14 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfFuncExpr(in)
 	case *GTIDFuncExpr:
 		return CloneRefOfGTIDFuncExpr(in)
+	case *GeomFormatExpr:
+		return CloneRefOfGeomFormatExpr(in)
 	case *GeomFromTextExpr:
 		return CloneRefOfGeomFromTextExpr(in)
+	case *GeomFromWKBExpr:
+		return CloneRefOfGeomFromWKBExpr(in)
+	case *GeomPropertyFuncExpr:
+		return CloneRefOfGeomPropertyFuncExpr(in)
 	case GroupBy:
 		return CloneGroupBy(in)
 	case *GroupConcatExpr:
@@ -271,6 +277,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfLimit(in)
 	case *LineStringExpr:
 		return CloneRefOfLineStringExpr(in)
+	case *LinestrPropertyFuncExpr:
+		return CloneRefOfLinestrPropertyFuncExpr(in)
 	case ListArg:
 		return in
 	case *Literal:
@@ -361,6 +369,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfPerformanceSchemaFuncExpr(in)
 	case *PointExpr:
 		return CloneRefOfPointExpr(in)
+	case *PointPropertyFuncExpr:
+		return CloneRefOfPointPropertyFuncExpr(in)
 	case *PolygonExpr:
 		return CloneRefOfPolygonExpr(in)
 	case *PrepareStmt:
@@ -1376,6 +1386,17 @@ func CloneRefOfGTIDFuncExpr(n *GTIDFuncExpr) *GTIDFuncExpr {
 	return &out
 }
 
+// CloneRefOfGeomFormatExpr creates a deep clone of the input.
+func CloneRefOfGeomFormatExpr(n *GeomFormatExpr) *GeomFormatExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Geom = CloneExpr(n.Geom)
+	out.AxisOrderOpt = CloneExpr(n.AxisOrderOpt)
+	return &out
+}
+
 // CloneRefOfGeomFromTextExpr creates a deep clone of the input.
 func CloneRefOfGeomFromTextExpr(n *GeomFromTextExpr) *GeomFromTextExpr {
 	if n == nil {
@@ -1385,6 +1406,28 @@ func CloneRefOfGeomFromTextExpr(n *GeomFromTextExpr) *GeomFromTextExpr {
 	out.WktText = CloneExpr(n.WktText)
 	out.Srid = CloneExpr(n.Srid)
 	out.AxisOrderOpt = CloneExpr(n.AxisOrderOpt)
+	return &out
+}
+
+// CloneRefOfGeomFromWKBExpr creates a deep clone of the input.
+func CloneRefOfGeomFromWKBExpr(n *GeomFromWKBExpr) *GeomFromWKBExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.WkbBlob = CloneExpr(n.WkbBlob)
+	out.Srid = CloneExpr(n.Srid)
+	out.AxisOrderOpt = CloneExpr(n.AxisOrderOpt)
+	return &out
+}
+
+// CloneRefOfGeomPropertyFuncExpr creates a deep clone of the input.
+func CloneRefOfGeomPropertyFuncExpr(n *GeomPropertyFuncExpr) *GeomPropertyFuncExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Geom = CloneExpr(n.Geom)
 	return &out
 }
 
@@ -1870,6 +1913,17 @@ func CloneRefOfLineStringExpr(n *LineStringExpr) *LineStringExpr {
 	return &out
 }
 
+// CloneRefOfLinestrPropertyFuncExpr creates a deep clone of the input.
+func CloneRefOfLinestrPropertyFuncExpr(n *LinestrPropertyFuncExpr) *LinestrPropertyFuncExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Linestring = CloneExpr(n.Linestring)
+	out.PropertyDefArg = CloneExpr(n.PropertyDefArg)
+	return &out
+}
+
 // CloneRefOfLiteral creates a deep clone of the input.
 func CloneRefOfLiteral(n *Literal) *Literal {
 	if n == nil {
@@ -2325,6 +2379,17 @@ func CloneRefOfPointExpr(n *PointExpr) *PointExpr {
 	out := *n
 	out.XCordinate = CloneExpr(n.XCordinate)
 	out.YCordinate = CloneExpr(n.YCordinate)
+	return &out
+}
+
+// CloneRefOfPointPropertyFuncExpr creates a deep clone of the input.
+func CloneRefOfPointPropertyFuncExpr(n *PointPropertyFuncExpr) *PointPropertyFuncExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Point = CloneExpr(n.Point)
+	out.ValueToSet = CloneExpr(n.ValueToSet)
 	return &out
 }
 
@@ -3362,8 +3427,14 @@ func CloneCallable(in Callable) Callable {
 		return CloneRefOfFuncExpr(in)
 	case *GTIDFuncExpr:
 		return CloneRefOfGTIDFuncExpr(in)
+	case *GeomFormatExpr:
+		return CloneRefOfGeomFormatExpr(in)
 	case *GeomFromTextExpr:
 		return CloneRefOfGeomFromTextExpr(in)
+	case *GeomFromWKBExpr:
+		return CloneRefOfGeomFromWKBExpr(in)
+	case *GeomPropertyFuncExpr:
+		return CloneRefOfGeomPropertyFuncExpr(in)
 	case *GroupConcatExpr:
 		return CloneRefOfGroupConcatExpr(in)
 	case *InsertExpr:
@@ -3414,6 +3485,8 @@ func CloneCallable(in Callable) Callable {
 		return CloneRefOfLagLeadExpr(in)
 	case *LineStringExpr:
 		return CloneRefOfLineStringExpr(in)
+	case *LinestrPropertyFuncExpr:
+		return CloneRefOfLinestrPropertyFuncExpr(in)
 	case *LocateExpr:
 		return CloneRefOfLocateExpr(in)
 	case *MatchExpr:
@@ -3440,6 +3513,8 @@ func CloneCallable(in Callable) Callable {
 		return CloneRefOfPerformanceSchemaFuncExpr(in)
 	case *PointExpr:
 		return CloneRefOfPointExpr(in)
+	case *PointPropertyFuncExpr:
+		return CloneRefOfPointPropertyFuncExpr(in)
 	case *PolygonExpr:
 		return CloneRefOfPolygonExpr(in)
 	case *RegexpInstrExpr:
@@ -3630,8 +3705,14 @@ func CloneExpr(in Expr) Expr {
 		return CloneRefOfFuncExpr(in)
 	case *GTIDFuncExpr:
 		return CloneRefOfGTIDFuncExpr(in)
+	case *GeomFormatExpr:
+		return CloneRefOfGeomFormatExpr(in)
 	case *GeomFromTextExpr:
 		return CloneRefOfGeomFromTextExpr(in)
+	case *GeomFromWKBExpr:
+		return CloneRefOfGeomFromWKBExpr(in)
+	case *GeomPropertyFuncExpr:
+		return CloneRefOfGeomPropertyFuncExpr(in)
 	case *GroupConcatExpr:
 		return CloneRefOfGroupConcatExpr(in)
 	case *InsertExpr:
@@ -3688,6 +3769,8 @@ func CloneExpr(in Expr) Expr {
 		return CloneRefOfLagLeadExpr(in)
 	case *LineStringExpr:
 		return CloneRefOfLineStringExpr(in)
+	case *LinestrPropertyFuncExpr:
+		return CloneRefOfLinestrPropertyFuncExpr(in)
 	case ListArg:
 		return in
 	case *Literal:
@@ -3728,6 +3811,8 @@ func CloneExpr(in Expr) Expr {
 		return CloneRefOfPerformanceSchemaFuncExpr(in)
 	case *PointExpr:
 		return CloneRefOfPointExpr(in)
+	case *PointPropertyFuncExpr:
+		return CloneRefOfPointPropertyFuncExpr(in)
 	case *PolygonExpr:
 		return CloneRefOfPolygonExpr(in)
 	case *RegexpInstrExpr:

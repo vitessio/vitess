@@ -28,6 +28,7 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vtorc/collection"
 	"vitess.io/vitess/go/vt/vtorc/discovery"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vtorc/inst"
 	"vitess.io/vitess/go/vt/vtorc/logic"
 	"vitess.io/vitess/go/vt/vtorc/process"
@@ -110,7 +111,7 @@ func getACLPermissionLevelForAPI(apiEndpoint string) string {
 // RegisterVTOrcAPIEndpoints is used to register the VTOrc API endpoints
 func RegisterVTOrcAPIEndpoints() {
 	for _, apiPath := range vtorcAPIPaths {
-		http.Handle(apiPath, apiHandler)
+		servenv.HTTPHandle(apiPath, apiHandler)
 	}
 }
 
@@ -218,7 +219,8 @@ func healthAPIHandler(response http.ResponseWriter, request *http.Request) {
 		return
 	}
 	code := http.StatusOK
-	if !health.Healthy {
+	// If the process isn't healthy, or if the first discovery cycle hasn't completed, we return an internal server error.
+	if !health.Healthy || !health.DiscoveredOnce {
 		code = http.StatusInternalServerError
 	}
 	returnAsJSON(response, code, health)
