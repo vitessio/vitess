@@ -342,9 +342,11 @@ func ParseFlags(cmd string) {
 		log.Exitf("%s doesn't take any positional arguments, got '%s'", cmd, strings.Join(args, " "))
 	}
 
-	if err := viperutil.LoadConfig(); err != nil {
+	watchCancel, err := viperutil.LoadConfig()
+	if err != nil {
 		log.Exitf("%s: failed to read in config: %s", cmd, err.Error())
 	}
+	OnTerm(watchCancel)
 	HTTPHandleFunc("/debug/config", viperdebug.HandlerFunc)
 
 	logutil.PurgeLogs()
@@ -379,9 +381,11 @@ func ParseFlagsWithArgs(cmd string) []string {
 		log.Exitf("%s expected at least one positional argument", cmd)
 	}
 
-	if err := viperutil.LoadConfig(); err != nil {
+	watchCancel, err := viperutil.LoadConfig()
+	if err != nil {
 		log.Exitf("%s: failed to read in config: %s", cmd, err.Error())
 	}
+	OnTerm(watchCancel)
 	HTTPHandleFunc("/debug/config", viperdebug.HandlerFunc)
 
 	logutil.PurgeLogs()

@@ -17,11 +17,13 @@ limitations under the License.
 package viperutil
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"reflect"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/mitchellh/mapstructure"
 	"github.com/spf13/pflag"
@@ -71,6 +73,16 @@ var (
 			GetFunc: getHandlingValue,
 		},
 	)
+	configPersistenceMinInterval = Configure(
+		"config.persistence.min_interval",
+		Options[time.Duration]{
+			Default:  time.Second,
+			EnvVars:  []string{"VT_CONFIG_PERSISTENCE_MIN_INTERVAL"},
+			FlagName: "config-persistence-min-interval",
+		},
+	)
+
+	persistCh chan struct{}
 )
 
 func init() {
@@ -95,6 +107,7 @@ func RegisterFlags(fs *pflag.FlagSet) {
 	fs.String("config-type", configType.Default(), "Config file type (omit to infer config type from file extension).")
 	fs.String("config-name", configName.Default(), "Name of the config file (without extension) to search for.")
 	fs.String("config-file", configFile.Default(), "Full path of the config file (with extension) to use. If set, --config-path, --config-type, and --config-name are ignored.")
+	fs.Duration("config-persistence-min-interval", configPersistenceMinInterval.Default(), "minimum interval between persisting dynamic config changes back to disk (if no change has occurred, nothing is done).")
 
 	var h = configFileNotFoundHandling.Default()
 	fs.Var(&h, "config-file-not-found-handling", fmt.Sprintf("Behavior when a config file is not found. (Options: %s)", strings.Join(handlingNames, ", ")))
@@ -118,10 +131,16 @@ func RegisterFlags(fs *pflag.FlagSet) {
 // environment variables alone, and not use config files at all).
 //
 // If a config file is successfully loaded, then the dynamic registry will also
-// start watching that file for changes.
+// start watching that file for changes. In addition, in-memory changes to the
+// config (for example, from a vtgate or vttablet's debugenv) will be persisted
+// back to disk, with writes occuring no more frequently than the
+// --config-persistence-min-interval flag.
+//
+// A cancel function is returned to stop the re-persistence background thread,
+// if one was started.
 //
 // [1]: https://github.com/spf13/viper#reading-config-files.
-func LoadConfig() error {
+func LoadConfig() (context.CancelFunc, error) {
 	var err error
 	switch file := configFile.Get(); file {
 	case "":
@@ -143,6 +162,7 @@ func LoadConfig() error {
 		err = registry.Static.ReadInConfig()
 	}
 
+	usingConfigFile := true
 	if err != nil {
 		if nferr, ok := err.(viper.ConfigFileNotFoundError); ok {
 			msg := "Failed to read in config %s: %s"
@@ -152,6 +172,7 @@ func LoadConfig() error {
 				fallthrough // after warning, ignore the error
 			case IgnoreConfigFileNotFound:
 				err = nil
+				usingConfigFile = false
 			case ErrorOnConfigFileNotFound:
 				log.ERROR(msg, registry.Static.ConfigFileUsed(), nferr.Error())
 			case ExitOnConfigFileNotFound:
@@ -161,10 +182,93 @@ func LoadConfig() error {
 	}
 
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	return registry.Dynamic.Watch(registry.Static)
+	if err := registry.Dynamic.Watch(registry.Static); err != nil {
+		return nil, err
+	}
+
+	persistCtx, persistCancel := context.WithCancel(context.Background())
+	if usingConfigFile {
+		persistCh = make(chan struct{}, 1)
+		go persistChanges(persistCtx, persistCh)
+	}
+
+	return persistCancel, nil
+}
+
+func persistChanges(ctx context.Context, ch <-chan struct{}) {
+	// We want the timer to be nil for the first persistence, and only after
+	// start staggerring future writes by the interval.
+	var timer *time.Timer
+	persistConfig := func() {
+		if err := registry.Combined().WriteConfig(); err != nil {
+			// If we failed to persist, don't wait the entire interval before
+			// writing again, instead writing immediately on the next request.
+			if timer != nil {
+				if !timer.Stop() {
+					<-timer.C
+				}
+
+				timer = nil
+			}
+		}
+
+		interval := configPersistenceMinInterval.Get()
+		if interval == 0 {
+			return
+		}
+
+		switch timer {
+		case nil:
+			timer = time.NewTimer(configPersistenceMinInterval.Get())
+		default:
+			timer.Reset(configPersistenceMinInterval.Get())
+		}
+	}
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ch:
+			if timer == nil {
+				persistConfig()
+				continue
+			}
+			select {
+			case <-ctx.Done():
+				return
+			case <-timer.C:
+				persistConfig()
+			}
+		}
+	}
+}
+
+// Set sets the value in-memory and notifies the persistence goroutine that it
+// needs to write to disk.
+func Set[T any](v Value[T], val T) {
+	v.Set(val)
+	NotifyConfigChange()
+}
+
+// NotifyConfigChange sends a notification that something in the global config
+// was changed at runtime (i.e. **not** from a watched config change), and needs
+// to be persisted back to disk.
+//
+// If no config file was loaded initially, this is a no-op, and no persistence
+// is done.
+func NotifyConfigChange() {
+	if persistCh == nil {
+		return
+	}
+
+	select {
+	case persistCh <- struct{}{}:
+	default:
+	}
 }
 
 // NotifyConfigReload adds a subscription that the dynamic registry will attempt
