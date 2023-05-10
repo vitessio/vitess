@@ -47,3 +47,13 @@ type Bindable interface {
 	RegisterAlias(alias string, key string)
 	SetDefault(key string, value any)
 }
+
+// Combined returns a viper combining the Static and Dynamic registries.
+func Combined() *viper.Viper {
+	v := viper.New()
+	_ = v.MergeConfigMap(Static.AllSettings())
+	_ = v.MergeConfigMap(Dynamic.AllSettings())
+
+	v.SetConfigFile(Static.ConfigFileUsed())
+	return v
+}

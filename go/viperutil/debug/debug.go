@@ -17,20 +17,11 @@ limitations under the License.
 package debug
 
 import (
-	"github.com/spf13/viper"
-
 	"vitess.io/vitess/go/viperutil/internal/registry"
 )
 
 // Debug provides the Debug functionality normally accessible to a given viper
 // instance, but for a combination of the private static and dynamic registries.
 func Debug() {
-	combinedRegistry().Debug()
-}
-
-func combinedRegistry() *viper.Viper {
-	v := viper.New()
-	_ = v.MergeConfigMap(registry.Static.AllSettings())
-	_ = v.MergeConfigMap(registry.Dynamic.AllSettings())
-	return v
+	registry.Combined().Debug()
 }

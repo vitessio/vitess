@@ -27,6 +27,7 @@ import (
 
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/slices2"
+	"vitess.io/vitess/go/viperutil/internal/registry"
 )
 
 // HandlerFunc provides an http.HandlerFunc that renders the combined config
@@ -47,7 +48,7 @@ func HandlerFunc(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	v := combinedRegistry()
+	v := registry.Combined()
 	format := strings.ToLower(r.URL.Query().Get("format"))
 	switch {
 	case format == "":
