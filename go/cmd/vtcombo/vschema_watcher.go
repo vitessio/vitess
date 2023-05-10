@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"io/ioutil"
 	"os"
 	"path"
 
@@ -35,7 +34,7 @@ func loadKeyspacesFromDir(dir string, keyspaces []*vttestpb.Keyspace, ts *topo.S
 	for _, ks := range tpb.Keyspaces {
 		ksFile := path.Join(dir, ks.Name+".json")
 		if _, err := os.Stat(ksFile); err == nil {
-			jsonData, err := ioutil.ReadFile(ksFile)
+			jsonData, err := os.ReadFile(ksFile)
 			if err != nil {
 				log.Fatalf("Unable to read keyspace file %v: %v", ksFile, err)
 			}
@@ -80,7 +79,7 @@ func persistNewSrvVSchema(srvVSchema *vschemapb.SrvVSchema) {
 			continue
 		}
 
-		err = ioutil.WriteFile(path.Join(*vschemaPersistenceDir, ksName+".json"), jsonBytes, 0644)
+		err = os.WriteFile(path.Join(*vschemaPersistenceDir, ksName+".json"), jsonBytes, 0644)
 		if err != nil {
 			log.Errorf("Error writing keyspace file: %v", err)
 		}
