@@ -67,6 +67,8 @@ func (ast *astCompiler) translateFuncExpr(fn *sqlparser.FuncExpr) (Expr, error) 
 		return builtinIfNullRewrite(args)
 	case "nullif":
 		return builtinNullIfRewrite(args)
+	case "if":
+		return builtinIfRewrite(args)
 	case "coalesce":
 		if len(args) == 0 {
 			return nil, argError(method)
@@ -713,36 +715,55 @@ func builtinIfNullRewrite(args []Expr) (Expr, error) {
 	if len(args) != 2 {
 		return nil, argError("IFNULL")
 	}
-	var result CaseExpr
-	result.cases = append(result.cases, WhenThen{
-		when: &IsExpr{
-			UnaryExpr: UnaryExpr{args[0]},
-			Op:        sqlparser.IsNullOp,
-			Check: func(e eval) bool {
-				return e == nil
+	return &CaseExpr{
+		cases: []WhenThen{{
+			when: &IsExpr{
+				UnaryExpr: UnaryExpr{args[0]},
+				Op:        sqlparser.IsNullOp,
+				Check: func(e eval) bool {
+					return e == nil
+				},
 			},
-		},
-		then: args[1],
-	})
-	result.Else = args[0]
-	return &result, nil
+			then: args[1],
+		}},
+		Else: args[0],
+	}, nil
 }
 
 func builtinNullIfRewrite(args []Expr) (Expr, error) {
 	if len(args) != 2 {
 		return nil, argError("NULLIF")
 	}
-	var result CaseExpr
-	result.cases = append(result.cases, WhenThen{
-		when: &ComparisonExpr{
-			BinaryExpr: BinaryExpr{
-				Left:  args[0],
-				Right: args[1],
+	return &CaseExpr{
+		cases: []WhenThen{{
+			when: &ComparisonExpr{
+				BinaryExpr: BinaryExpr{
+					Left:  args[0],
+					Right: args[1],
+				},
+				Op: compareEQ{},
 			},
-			Op: compareEQ{},
-		},
-		then: NullExpr,
-	})
-	result.Else = args[0]
-	return &result, nil
+			then: NullExpr,
+		}},
+		Else: args[0],
+	}, nil
+}
+
+func builtinIfRewrite(args []Expr) (Expr, error) {
+	if len(args) != 3 {
+		return nil, argError("IF")
+	}
+	return &CaseExpr{
+		cases: []WhenThen{{
+			when: &IsExpr{
+				UnaryExpr: UnaryExpr{args[0]},
+				Op:        sqlparser.IsTrueOp,
+				Check: func(e eval) bool {
+					return evalIsTruthy(e) == boolTrue
+				},
+			},
+			then: args[1],
+		}},
+		Else: args[2],
+	}, nil
 }
