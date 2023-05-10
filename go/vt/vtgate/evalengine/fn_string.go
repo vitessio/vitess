@@ -79,6 +79,11 @@ type (
 		left    bool
 	}
 
+	builtinStrcmp struct {
+		CallExpr
+		collate collations.ID
+	}
+
 	builtinTrim struct {
 		CallExpr
 		collate collations.ID
@@ -712,6 +717,108 @@ func (call builtinPad) compile(c *compiler) (ctype, error) {
 	}
 	c.asm.jumpDestination(skip)
 	return ctype{Type: sqltypes.VarChar, Col: col}, nil
+}
+
+func strcmpCollate(left, right []byte, col collations.ID) int64 {
+	cmp := col.Get().Collate(left, right, false)
+	switch {
+	case cmp == 0:
+		return 0
+	case cmp > 0:
+		return 1
+	default:
+		return -1
+	}
+}
+
+func (l *builtinStrcmp) eval(env *ExpressionEnv) (eval, error) {
+	left, err := l.Arguments[0].eval(env)
+	if left == nil || err != nil {
+		return nil, err
+	}
+
+	right, err := l.Arguments[1].eval(env)
+	if right == nil || err != nil {
+		return nil, err
+	}
+
+	if _, ok := left.(evalNumeric); ok {
+		return newEvalInt64(strcmpCollate(left.ToRawBytes(), right.ToRawBytes(), collationNumeric.Collation)), nil
+	}
+	if _, ok := right.(evalNumeric); ok {
+		return newEvalInt64(strcmpCollate(left.ToRawBytes(), right.ToRawBytes(), collationNumeric.Collation)), nil
+	}
+
+	col1 := evalCollation(left)
+	col2 := evalCollation(right)
+
+	mcol, _, _, err := collations.Local().MergeCollations(col1, col2, collations.CoercionOptions{
+		ConvertToSuperset:   true,
+		ConvertWithCoercion: true,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	left, err = evalToVarchar(left, mcol.Collation, true)
+	if err != nil {
+		return nil, err
+	}
+
+	right, err = evalToVarchar(right, mcol.Collation, true)
+	if err != nil {
+		return nil, err
+	}
+
+	return newEvalInt64(strcmpCollate(left.ToRawBytes(), right.ToRawBytes(), mcol.Collation)), nil
+}
+
+// typeof implements the ComparisonOp interface
+func (l *builtinStrcmp) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	_, f1 := l.Arguments[0].typeof(env, fields)
+	_, f2 := l.Arguments[1].typeof(env, fields)
+	return sqltypes.Int64, f1 | f2
+}
+
+func (expr *builtinStrcmp) compile(c *compiler) (ctype, error) {
+	lt, err := expr.Arguments[0].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip1 := c.compileNullCheck1(lt)
+
+	rt, err := expr.Arguments[1].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip2 := c.compileNullCheck1r(rt)
+	var mcol collations.TypedCollation
+
+	if sqltypes.IsNumber(lt.Type) || sqltypes.IsNumber(rt.Type) {
+		mcol = collationNumeric
+	} else {
+		mcol, _, _, err = collations.Local().MergeCollations(lt.Col, rt.Col, collations.CoercionOptions{
+			ConvertToSuperset:   true,
+			ConvertWithCoercion: true,
+		})
+		if err != nil {
+			return ctype{}, err
+		}
+	}
+
+	if !lt.isTextual() || lt.Col.Collation != mcol.Collation {
+		c.asm.Convert_xce(2, sqltypes.VarChar, mcol.Collation)
+	}
+
+	if !rt.isTextual() || rt.Col.Collation != mcol.Collation {
+		c.asm.Convert_xce(1, sqltypes.VarChar, mcol.Collation)
+	}
+
+	c.asm.Strcmp(mcol)
+	c.asm.jumpDestination(skip1, skip2)
+	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: flagNullable}, nil
 }
 
 func (call builtinTrim) eval(env *ExpressionEnv) (eval, error) {

@@ -1053,6 +1053,20 @@ func (asm *assembler) Convert_xc(offset int, t sqltypes.Type, collation collatio
 	}
 }
 
+func (asm *assembler) Convert_xce(offset int, t sqltypes.Type, collation collations.ID) {
+	asm.emit(func(env *ExpressionEnv) int {
+		arg, err := evalToVarchar(env.vm.stack[env.vm.sp-offset], collation, true)
+		if err != nil {
+			env.vm.stack[env.vm.sp-offset] = nil
+			env.vm.err = err
+		} else {
+			arg.tt = int16(t)
+			env.vm.stack[env.vm.sp-offset] = arg
+		}
+		return 1
+	}, "CONVE (SP-%d), VARCHAR", offset)
+}
+
 func (asm *assembler) Convert_xd(offset int, m, d int32) {
 	asm.emit(func(env *ExpressionEnv) int {
 		env.vm.stack[env.vm.sp-offset] = evalToDecimal(env.vm.stack[env.vm.sp-offset], m, d)
@@ -2965,6 +2979,19 @@ func (asm *assembler) Like_collate(expr *LikeExpr, collation collations.Collatio
 		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalBool(match)
 		return 1
 	}, "LIKE VARCHAR(SP-2), VARCHAR(SP-1) COLLATE '%s'", collation.Name())
+}
+
+func (asm *assembler) Strcmp(collation collations.TypedCollation) {
+	asm.adjustStack(-1)
+
+	asm.emit(func(env *ExpressionEnv) int {
+		l := env.vm.stack[env.vm.sp-2].(*evalBytes)
+		r := env.vm.stack[env.vm.sp-1].(*evalBytes)
+		env.vm.sp--
+
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalInt64(strcmpCollate(l.bytes, r.bytes, collation.Collation))
+		return 1
+	}, "STRCMP VARCHAR(SP-2), VARCHAR(SP-1)")
 }
 
 func (asm *assembler) Mul_dd() {
