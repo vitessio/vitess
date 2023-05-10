@@ -493,6 +493,11 @@ func (ast *astCompiler) translateFuncExpr(fn *sqlparser.FuncExpr) (Expr, error) 
 			return nil, argError(method)
 		}
 		return &builtinConvertTz{CallExpr: call}, nil
+	case "strcmp":
+		if len(args) != 2 {
+			return nil, argError(method)
+		}
+		return &builtinStrcmp{CallExpr: call, collate: ast.cfg.Collation}, nil
 	default:
 		return nil, translateExprNotSupported(fn)
 	}

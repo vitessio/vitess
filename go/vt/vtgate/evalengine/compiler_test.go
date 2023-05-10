@@ -368,6 +368,10 @@ func TestCompilerSingle(t *testing.T) {
 			expression: `UNHEX('f')`,
 			result:     `VARBINARY("\x0f")`,
 		},
+		{
+			expression: `STRCMP(1234, '12_4')`,
+			result:     `INT64(-1)`,
+		},
 	}
 
 	for _, tc := range testCases {

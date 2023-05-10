@@ -53,6 +53,7 @@ var Cases = []TestCase{
 	{Run: NegateArithmetic},
 	{Run: CollationOperations},
 	{Run: LikeComparison},
+	{Run: StrcmpComparison},
 	{Run: MultiComparisons},
 	{Run: IsStatement},
 	{Run: NotStatement},
@@ -1005,6 +1006,39 @@ func LikeComparison(yield Query) {
 	for _, lhs := range left {
 		for _, rhs := range right {
 			yield(fmt.Sprintf("%s LIKE %s", lhs, rhs), nil)
+		}
+	}
+}
+
+func StrcmpComparison(yield Query) {
+	inputs := append([]string{
+		`'foobar'`, `'FOOBAR'`,
+		`'1234'`, `1234`,
+		`_utf8mb4 'foobar' COLLATE utf8mb4_0900_as_cs`,
+		`_utf8mb4 'FOOBAR' COLLATE utf8mb4_0900_as_cs`,
+		`_utf8mb4 'foobar' COLLATE utf8mb4_0900_as_ci`,
+		`_utf8mb4 'FOOBAR' COLLATE utf8mb4_0900_as_ci`,
+		`'foo%'`, `'FOO%'`, `'foo_ar'`, `'FOO_AR'`,
+		`'12%'`, `'12_4'`, `'12x4'`, `'12$4'`,
+		`_utf8mb4 '12_4' COLLATE utf8mb4_0900_as_cs`,
+		`_utf8mb4 '12_4' COLLATE utf8mb4_0900_ai_ci`,
+		`_utf8mb4 '12x4' COLLATE utf8mb4_0900_as_cs`,
+		`_utf8mb4 '12x4' COLLATE utf8mb4_0900_ai_ci`,
+		`_utf8mb4 '12$4' COLLATE utf8mb4_0900_as_cs`,
+		`_utf8mb4 '12$4' COLLATE utf8mb4_0900_ai_ci`,
+		`_utf8mb4 'foo%' COLLATE utf8mb4_0900_as_cs`,
+		`_utf8mb4 'FOO%' COLLATE utf8mb4_0900_as_cs`,
+		`_utf8mb4 'foo_ar' COLLATE utf8mb4_0900_as_cs`,
+		`_utf8mb4 'FOO_AR' COLLATE utf8mb4_0900_as_cs`,
+		`_utf8mb4 'foo%' COLLATE utf8mb4_0900_as_ci`,
+		`_utf8mb4 'FOO%' COLLATE utf8mb4_0900_as_ci`,
+		`_utf8mb4 'foo_ar' COLLATE utf8mb4_0900_as_ci`,
+		`_utf8mb4 'FOO_AR' COLLATE utf8mb4_0900_as_ci`,
+	}, inputConversions...)
+
+	for _, lhs := range inputs {
+		for _, rhs := range inputs {
+			yield(fmt.Sprintf("STRCMP(%s, %s)", lhs, rhs), nil)
 		}
 	}
 }
