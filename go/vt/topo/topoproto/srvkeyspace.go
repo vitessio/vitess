@@ -46,6 +46,9 @@ func (sra ShardReferenceArray) Sort() { sort.Sort(sra) }
 // SrvKeyspaceGetPartition returns a Partition for the given tablet type,
 // or nil if it's not there.
 func SrvKeyspaceGetPartition(sk *topodatapb.SrvKeyspace, tabletType topodatapb.TabletType) *topodatapb.SrvKeyspace_KeyspacePartition {
+	if sk == nil {
+		return nil
+	}
 	for _, p := range sk.Partitions {
 		if p.ServedType == tabletType {
 			return p
