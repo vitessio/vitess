@@ -56,7 +56,7 @@ type VtctlClient interface {
 }
 
 // Factory functions are registered by client implementations
-type Factory func(addr string) (VtctlClient, error)
+type Factory func(addr, certLocation, keyLocation, caLocation, serverName string) (VtctlClient, error)
 
 var factories = make(map[string]Factory)
 
@@ -81,9 +81,14 @@ func UnregisterFactoryForTest(name string) {
 
 // New allows a user of the client library to get its implementation.
 func New(addr string) (VtctlClient, error) {
+	return NewWithSslParams(addr, "", "", "", "")
+}
+
+// NewWithSslParams allows a user of the client library to get its implementation while specifying SSL parameters
+func NewWithSslParams(addr, certLocation, keyLocation, caLocation, serverName string) (VtctlClient, error) {
 	factory, ok := factories[vtctlClientProtocol]
 	if !ok {
 		return nil, fmt.Errorf("unknown vtctl client protocol: %v", vtctlClientProtocol)
 	}
-	return factory(addr)
+	return factory(addr, certLocation, keyLocation, caLocation, serverName)
 }

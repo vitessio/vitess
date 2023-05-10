@@ -49,3 +49,22 @@ func RegisterFlags(fs *pflag.FlagSet) {
 func SecureDialOption() (grpc.DialOption, error) {
 	return grpcclient.SecureDialOption(cert, key, ca, crl, name)
 }
+
+// SecureDialOptionWithSslParams returns a grpc.DialOption configured to use TLS (or
+// insecure if no flags were set) based on the vtctld_grpc_* flags declared by
+// this package. It defaults to the values passed in by flags if the arguments are empty strings
+func SecureDialOptionWithSslParams(certLocation, keyLocation, caLocation, serverName string) (grpc.DialOption, error) {
+	if certLocation == "" {
+		certLocation = cert
+	}
+	if keyLocation == "" {
+		keyLocation = key
+	}
+	if caLocation == "" {
+		caLocation = ca
+	}
+	if serverName == "" {
+		serverName = name
+	}
+	return grpcclient.SecureDialOption(certLocation, keyLocation, caLocation, crl, serverName)
+}

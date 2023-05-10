@@ -39,7 +39,7 @@ func NewFakeVtctlClient() *FakeVtctlClient {
 }
 
 // FakeVtctlClientFactory always returns the current instance.
-func (f *FakeVtctlClient) FakeVtctlClientFactory(addr string) (vtctlclient.VtctlClient, error) {
+func (f *FakeVtctlClient) FakeVtctlClientFactory(addr, certLocation, keyLocation, caLocation, serverName string) (vtctlclient.VtctlClient, error) {
 	return f, nil
 }
 

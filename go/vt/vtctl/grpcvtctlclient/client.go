@@ -39,8 +39,8 @@ type gRPCVtctlClient struct {
 	c  vtctlservicepb.VtctlClient
 }
 
-func gRPCVtctlClientFactory(addr string) (vtctlclient.VtctlClient, error) {
-	opt, err := grpcclientcommon.SecureDialOption()
+func gRPCVtctlClientFactory(addr, certLocation, keyLocation, caLocation, serverName string) (vtctlclient.VtctlClient, error) {
+	opt, err := grpcclientcommon.SecureDialOptionWithSslParams(certLocation, keyLocation, caLocation, serverName)
 	if err != nil {
 		return nil, err
 	}
