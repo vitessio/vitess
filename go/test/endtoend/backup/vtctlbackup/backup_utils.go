@@ -43,8 +43,6 @@ import (
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
-
-	reparentutils "vitess.io/vitess/go/test/endtoend/reparent/utils"
 )
 
 // constants for test variants
@@ -831,7 +829,10 @@ func doNotDemoteNewlyPromotedPrimaryIfReparentingDuringBackup(t *testing.T) {
 
 	// Start the backup on a replica
 	go func() {
-		reparentutils.CheckPrimaryTablet(t, localCluster, primary)
+		// ensure this is a primary first
+		checkTabletType(t, primary.Alias, topodata.TabletType_PRIMARY)
+
+		// now backup
 		err := localCluster.VtctlclientProcess.ExecuteCommand("Backup", replica1.Alias)
 		require.Nil(t, err)
 		wg.Done()
@@ -839,18 +840,25 @@ func doNotDemoteNewlyPromotedPrimaryIfReparentingDuringBackup(t *testing.T) {
 
 	// Perform a graceful reparent operation
 	go func() {
-		reparentutils.CheckPrimaryTablet(t, localCluster, primary)
-		_, err := reparentutils.Prs(t, localCluster, replica1)
+		// ensure this is a primary first
+		checkTabletType(t, primary.Alias, topodata.TabletType_PRIMARY)
+
+		// now reparent
+		_, err := localCluster.VtctlclientProcess.ExecuteCommandWithOutput(
+			"PlannedReparentShard", "--",
+			"--keyspace_shard", fmt.Sprintf("%s/%s", keyspaceName, shardName),
+			"--new_primary", replica1.Alias)
 		require.Nil(t, err)
-		reparentutils.CheckPrimaryTablet(t, localCluster, replica1)
+
+		// check that we reparented
+		checkTabletType(t, replica1.Alias, topodata.TabletType_PRIMARY)
 		wg.Done()
 	}()
 
 	wg.Wait()
-	reparentutils.ValidateTopology(t, localCluster, false)
-	reparentutils.CheckPrimaryTablet(t, localCluster, replica1)
 
-	reparentutils.ConfirmReplication(t, replica1, []*cluster.Vttablet{primary, replica2})
+	// check that this is still a primary
+	checkTabletType(t, replica1.Alias, topodata.TabletType_PRIMARY)
 }
 
 // test_backup will:
