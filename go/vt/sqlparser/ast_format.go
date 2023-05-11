@@ -2876,3 +2876,12 @@ func (node *PolygonPropertyFuncExpr) Format(buf *TrackedBuffer) {
 	}
 	buf.WriteByte(')')
 }
+
+// Format formats the node
+func (node *GeomCollPropertyFuncExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "%s(%v", node.Property.ToString(), node.GeomColl)
+	if node.PropertyDefArg != nil {
+		buf.astPrintf(node, ", %v", node.PropertyDefArg)
+	}
+	buf.WriteByte(')')
+}

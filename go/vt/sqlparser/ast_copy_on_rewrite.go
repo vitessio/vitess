@@ -182,6 +182,8 @@ func (c *cow) copyOnRewriteSQLNode(n SQLNode, parent SQLNode) (out SQLNode, chan
 		return c.copyOnRewriteRefOfFuncExpr(n, parent)
 	case *GTIDFuncExpr:
 		return c.copyOnRewriteRefOfGTIDFuncExpr(n, parent)
+	case *GeomCollPropertyFuncExpr:
+		return c.copyOnRewriteRefOfGeomCollPropertyFuncExpr(n, parent)
 	case *GeomFormatExpr:
 		return c.copyOnRewriteRefOfGeomFormatExpr(n, parent)
 	case *GeomFromTextExpr:
@@ -2343,6 +2345,30 @@ func (c *cow) copyOnRewriteRefOfGTIDFuncExpr(n *GTIDFuncExpr, parent SQLNode) (o
 			res.Set2, _ = _Set2.(Expr)
 			res.Timeout, _ = _Timeout.(Expr)
 			res.Channel, _ = _Channel.(Expr)
+			out = &res
+			if c.cloned != nil {
+				c.cloned(n, out)
+			}
+			changed = true
+		}
+	}
+	if c.post != nil {
+		out, changed = c.postVisit(out, parent, changed)
+	}
+	return
+}
+func (c *cow) copyOnRewriteRefOfGeomCollPropertyFuncExpr(n *GeomCollPropertyFuncExpr, parent SQLNode) (out SQLNode, changed bool) {
+	if n == nil || c.cursor.stop {
+		return n, false
+	}
+	out = n
+	if c.pre == nil || c.pre(n, parent) {
+		_GeomColl, changedGeomColl := c.copyOnRewriteExpr(n.GeomColl, n)
+		_PropertyDefArg, changedPropertyDefArg := c.copyOnRewriteExpr(n.PropertyDefArg, n)
+		if changedGeomColl || changedPropertyDefArg {
+			res := *n
+			res.GeomColl, _ = _GeomColl.(Expr)
+			res.PropertyDefArg, _ = _PropertyDefArg.(Expr)
 			out = &res
 			if c.cloned != nil {
 				c.cloned(n, out)
@@ -6565,6 +6591,8 @@ func (c *cow) copyOnRewriteCallable(n Callable, parent SQLNode) (out SQLNode, ch
 		return c.copyOnRewriteRefOfFuncExpr(n, parent)
 	case *GTIDFuncExpr:
 		return c.copyOnRewriteRefOfGTIDFuncExpr(n, parent)
+	case *GeomCollPropertyFuncExpr:
+		return c.copyOnRewriteRefOfGeomCollPropertyFuncExpr(n, parent)
 	case *GeomFormatExpr:
 		return c.copyOnRewriteRefOfGeomFormatExpr(n, parent)
 	case *GeomFromTextExpr:
@@ -6835,6 +6863,8 @@ func (c *cow) copyOnRewriteExpr(n Expr, parent SQLNode) (out SQLNode, changed bo
 		return c.copyOnRewriteRefOfFuncExpr(n, parent)
 	case *GTIDFuncExpr:
 		return c.copyOnRewriteRefOfGTIDFuncExpr(n, parent)
+	case *GeomCollPropertyFuncExpr:
+		return c.copyOnRewriteRefOfGeomCollPropertyFuncExpr(n, parent)
 	case *GeomFormatExpr:
 		return c.copyOnRewriteRefOfGeomFormatExpr(n, parent)
 	case *GeomFromTextExpr:

@@ -2322,6 +2322,18 @@ func (ty PolygonPropType) ToString() string {
 }
 
 // ToString returns the type as a string
+func (ty GeomCollPropType) ToString() string {
+	switch ty {
+	case GeometryN:
+		return GeometryNStr
+	case NumGeometries:
+		return NumGeometriesStr
+	default:
+		return "Unknown GeomCollPropType"
+	}
+}
+
+// ToString returns the type as a string
 func (ty GeomFormatType) ToString() string {
 	switch ty {
 	case BinaryFormat:

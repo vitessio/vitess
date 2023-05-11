@@ -3779,3 +3779,15 @@ func (node *PolygonPropertyFuncExpr) formatFast(buf *TrackedBuffer) {
 	}
 	buf.WriteByte(')')
 }
+
+// formatFast formats the node
+func (node *GeomCollPropertyFuncExpr) formatFast(buf *TrackedBuffer) {
+	buf.WriteString(node.Property.ToString())
+	buf.WriteByte('(')
+	buf.printExpr(node, node.GeomColl, true)
+	if node.PropertyDefArg != nil {
+		buf.WriteString(", ")
+		buf.printExpr(node, node.PropertyDefArg, true)
+	}
+	buf.WriteByte(')')
+}

@@ -474,6 +474,10 @@ const (
 	ExteriorRingStr     = "st_exteriorring"
 	InteriorRingNStr    = "st_interiorringN"
 	NumInteriorRingsStr = "st_numinteriorrings"
+
+	// GeomCollPropType strings
+	NumGeometriesStr = "st_numgeometries"
+	GeometryNStr     = "st_geometryn"
 )
 
 // Constants for Enum Type - Insert.Action
@@ -998,4 +1002,10 @@ const (
 	ExteriorRing
 	InteriorRingN
 	NumInteriorRings
+)
+
+// Enum Types of geom collection property functions
+const (
+	GeometryN GeomCollPropType = iota
+	NumGeometries
 )

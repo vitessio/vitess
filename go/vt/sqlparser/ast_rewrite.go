@@ -182,6 +182,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfFuncExpr(parent, node, replacer)
 	case *GTIDFuncExpr:
 		return a.rewriteRefOfGTIDFuncExpr(parent, node, replacer)
+	case *GeomCollPropertyFuncExpr:
+		return a.rewriteRefOfGeomCollPropertyFuncExpr(parent, node, replacer)
 	case *GeomFormatExpr:
 		return a.rewriteRefOfGeomFormatExpr(parent, node, replacer)
 	case *GeomFromTextExpr:
@@ -3028,6 +3030,38 @@ func (a *application) rewriteRefOfGTIDFuncExpr(parent SQLNode, node *GTIDFuncExp
 	}
 	if !a.rewriteExpr(node, node.Channel, func(newNode, parent SQLNode) {
 		parent.(*GTIDFuncExpr).Channel = newNode.(Expr)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfGeomCollPropertyFuncExpr(parent SQLNode, node *GeomCollPropertyFuncExpr, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteExpr(node, node.GeomColl, func(newNode, parent SQLNode) {
+		parent.(*GeomCollPropertyFuncExpr).GeomColl = newNode.(Expr)
+	}) {
+		return false
+	}
+	if !a.rewriteExpr(node, node.PropertyDefArg, func(newNode, parent SQLNode) {
+		parent.(*GeomCollPropertyFuncExpr).PropertyDefArg = newNode.(Expr)
 	}) {
 		return false
 	}
@@ -8861,6 +8895,8 @@ func (a *application) rewriteCallable(parent SQLNode, node Callable, replacer re
 		return a.rewriteRefOfFuncExpr(parent, node, replacer)
 	case *GTIDFuncExpr:
 		return a.rewriteRefOfGTIDFuncExpr(parent, node, replacer)
+	case *GeomCollPropertyFuncExpr:
+		return a.rewriteRefOfGeomCollPropertyFuncExpr(parent, node, replacer)
 	case *GeomFormatExpr:
 		return a.rewriteRefOfGeomFormatExpr(parent, node, replacer)
 	case *GeomFromTextExpr:
@@ -9131,6 +9167,8 @@ func (a *application) rewriteExpr(parent SQLNode, node Expr, replacer replacerFu
 		return a.rewriteRefOfFuncExpr(parent, node, replacer)
 	case *GTIDFuncExpr:
 		return a.rewriteRefOfGTIDFuncExpr(parent, node, replacer)
+	case *GeomCollPropertyFuncExpr:
+		return a.rewriteRefOfGeomCollPropertyFuncExpr(parent, node, replacer)
 	case *GeomFormatExpr:
 		return a.rewriteRefOfGeomFormatExpr(parent, node, replacer)
 	case *GeomFromTextExpr:

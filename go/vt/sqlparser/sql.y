@@ -368,7 +368,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %token <str> ST_GeometryCollectionFromText ST_GeometryFromText ST_LineStringFromText ST_MultiLineStringFromText ST_MultiPointFromText ST_MultiPolygonFromText ST_PointFromText ST_PolygonFromText
 %token <str> ST_GeometryCollectionFromWKB ST_GeometryFromWKB ST_LineStringFromWKB ST_MultiLineStringFromWKB ST_MultiPointFromWKB ST_MultiPolygonFromWKB ST_PointFromWKB ST_PolygonFromWKB
 %token <str> ST_AsBinary ST_AsText ST_Dimension ST_Envelope ST_IsSimple ST_IsEmpty ST_GeometryType ST_X ST_Y ST_Latitude ST_Longitude ST_EndPoint ST_IsClosed ST_Length ST_NumPoints ST_StartPoint ST_PointN
-%token <str> ST_Area ST_Centroid ST_ExteriorRing ST_InteriorRingN ST_NumInteriorRings
+%token <str> ST_Area ST_Centroid ST_ExteriorRing ST_InteriorRingN ST_NumInteriorRings ST_NumGeometries ST_GeometryN
 
 // Match
 %token <str> MATCH AGAINST BOOLEAN LANGUAGE WITH QUERY EXPANSION WITHOUT VALIDATION
@@ -6405,6 +6405,14 @@ UTC_DATE func_paren_opt
 | ST_NumInteriorRings openb expression closeb
  {
    $$ = &PolygonPropertyFuncExpr{ Property: NumInteriorRings, Polygon: $3 }
+ }
+| ST_GeometryN openb expression ',' expression closeb
+ {
+   $$ = &GeomCollPropertyFuncExpr{ Property: GeometryN, GeomColl: $3, PropertyDefArg: $5 }
+ }
+| ST_NumGeometries openb expression closeb
+ {
+   $$ = &GeomCollPropertyFuncExpr{ Property: NumGeometries, GeomColl: $3 }
  }
 | JSON_OBJECT openb json_object_param_opt closeb
   {

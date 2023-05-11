@@ -1461,6 +1461,24 @@ func (cached *GTIDFuncExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+func (cached *GeomCollPropertyFuncExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field GeomColl vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.GeomColl.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field PropertyDefArg vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.PropertyDefArg.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	return size
+}
 func (cached *GeomFormatExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -3134,6 +3152,24 @@ func (cached *PolygonExpr) CachedSize(alloc bool) int64 {
 				size += cc.CachedSize(true)
 			}
 		}
+	}
+	return size
+}
+func (cached *PolygonPropertyFuncExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field Polygon vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Polygon.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field PropertyDefArg vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.PropertyDefArg.(cachedObject); ok {
+		size += cc.CachedSize(true)
 	}
 	return size
 }

@@ -440,6 +440,12 @@ var (
 		input:  "SELECT ST_Area(ST_GeomFromText(@mpoly));",
 		output: "select st_area(st_geometryfromtext(@mpoly)) from dual",
 	}, {
+		input:  "SELECT ST_AsText(ST_GeometryN(ST_GeomFromText(@gc),1));",
+		output: "select st_astext(st_geometryn(st_geometryfromtext(@gc), 1)) from dual",
+	}, {
+		input:  "SELECT ST_NumGeometries(ST_GeomFromText(@gc));",
+		output: "select st_numgeometries(st_geometryfromtext(@gc)) from dual",
+	}, {
 		input:  "SELECT ST_GeometryType(@poly),ST_AsText(ST_Centroid(@poly));",
 		output: "select st_geometrytype(@poly), st_astext(st_centroid(@poly)) from dual",
 	}, {

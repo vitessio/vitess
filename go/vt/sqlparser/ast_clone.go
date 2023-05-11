@@ -183,6 +183,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfFuncExpr(in)
 	case *GTIDFuncExpr:
 		return CloneRefOfGTIDFuncExpr(in)
+	case *GeomCollPropertyFuncExpr:
+		return CloneRefOfGeomCollPropertyFuncExpr(in)
 	case *GeomFormatExpr:
 		return CloneRefOfGeomFormatExpr(in)
 	case *GeomFromTextExpr:
@@ -1398,6 +1400,17 @@ func CloneRefOfGTIDFuncExpr(n *GTIDFuncExpr) *GTIDFuncExpr {
 	out.Set2 = CloneExpr(n.Set2)
 	out.Timeout = CloneExpr(n.Timeout)
 	out.Channel = CloneExpr(n.Channel)
+	return &out
+}
+
+// CloneRefOfGeomCollPropertyFuncExpr creates a deep clone of the input.
+func CloneRefOfGeomCollPropertyFuncExpr(n *GeomCollPropertyFuncExpr) *GeomCollPropertyFuncExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.GeomColl = CloneExpr(n.GeomColl)
+	out.PropertyDefArg = CloneExpr(n.PropertyDefArg)
 	return &out
 }
 
@@ -3453,6 +3466,8 @@ func CloneCallable(in Callable) Callable {
 		return CloneRefOfFuncExpr(in)
 	case *GTIDFuncExpr:
 		return CloneRefOfGTIDFuncExpr(in)
+	case *GeomCollPropertyFuncExpr:
+		return CloneRefOfGeomCollPropertyFuncExpr(in)
 	case *GeomFormatExpr:
 		return CloneRefOfGeomFormatExpr(in)
 	case *GeomFromTextExpr:
@@ -3735,6 +3750,8 @@ func CloneExpr(in Expr) Expr {
 		return CloneRefOfFuncExpr(in)
 	case *GTIDFuncExpr:
 		return CloneRefOfGTIDFuncExpr(in)
+	case *GeomCollPropertyFuncExpr:
+		return CloneRefOfGeomCollPropertyFuncExpr(in)
 	case *GeomFormatExpr:
 		return CloneRefOfGeomFormatExpr(in)
 	case *GeomFromTextExpr:
