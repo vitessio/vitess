@@ -602,6 +602,11 @@ func (client *localVtctldClient) WorkflowStatus(ctx context.Context, in *vtctlda
 	return client.s.WorkflowStatus(ctx, in)
 }
 
+// WorkflowSwitchTraffic is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) WorkflowSwitchTraffic(ctx context.Context, in *vtctldatapb.WorkflowSwitchTrafficRequest, opts ...grpc.CallOption) (*vtctldatapb.WorkflowSwitchTrafficResponse, error) {
+	return client.s.WorkflowSwitchTraffic(ctx, in)
+}
+
 // WorkflowUpdate is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) WorkflowUpdate(ctx context.Context, in *vtctldatapb.WorkflowUpdateRequest, opts ...grpc.CallOption) (*vtctldatapb.WorkflowUpdateResponse, error) {
 	return client.s.WorkflowUpdate(ctx, in)

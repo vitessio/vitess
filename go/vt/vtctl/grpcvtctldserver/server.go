@@ -4400,6 +4400,22 @@ func (s *VtctldServer) WorkflowStatus(ctx context.Context, req *vtctldatapb.Work
 	return resp, err
 }
 
+// WorkflowSwitchTraffic is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.WorkflowSwitchTrafficRequest) (resp *vtctldatapb.WorkflowSwitchTrafficResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.WorkflowSwitchTraffic")
+	defer span.Finish()
+
+	defer panicHandler(&err)
+
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("workflow", req.Workflow)
+	span.Annotate("tablet-types", req.TabletTypes)
+	span.Annotate("reverse", req.Reverse)
+
+	resp, err = s.ws.WorkflowSwitchTraffic(ctx, req)
+	return resp, err
+}
+
 // WorkflowUpdate is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) WorkflowUpdate(ctx context.Context, req *vtctldatapb.WorkflowUpdateRequest) (resp *vtctldatapb.WorkflowUpdateResponse, err error) {
 	span, ctx := trace.NewSpan(ctx, "VtctldServer.WorkflowUpdate")

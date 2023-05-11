@@ -1392,6 +1392,20 @@ message WorkflowStatusResponse {
   map<string, ShardStreams> shard_streams = 2;
 }
 
+message WorkflowSwitchTrafficRequest {
+  string keyspace = 1;
+  string workflow = 2;
+  repeated string tablet_types = 3;
+  vttime.Duration max_replication_lag_allowed = 4;
+  bool reverse = 5;
+  vttime.Duration timeout = 6;
+  bool dry_run = 7;
+}
+
+message WorkflowSwitchTrafficResponse {
+  repeated string results = 1;
+}
+
 message WorkflowUpdateRequest {
   string keyspace = 1;
   // TabletRequest gets passed on to each primary tablet involved

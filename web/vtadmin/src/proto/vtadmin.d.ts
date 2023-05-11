@@ -60993,6 +60993,236 @@ export namespace vtctldata {
         }
     }
 
+    /** Properties of a WorkflowSwitchTrafficRequest. */
+    interface IWorkflowSwitchTrafficRequest {
+
+        /** WorkflowSwitchTrafficRequest keyspace */
+        keyspace?: (string|null);
+
+        /** WorkflowSwitchTrafficRequest workflow */
+        workflow?: (string|null);
+
+        /** WorkflowSwitchTrafficRequest tablet_types */
+        tablet_types?: (string[]|null);
+
+        /** WorkflowSwitchTrafficRequest max_replication_lag_allowed */
+        max_replication_lag_allowed?: (vttime.IDuration|null);
+
+        /** WorkflowSwitchTrafficRequest reverse */
+        reverse?: (boolean|null);
+
+        /** WorkflowSwitchTrafficRequest timeout */
+        timeout?: (vttime.IDuration|null);
+
+        /** WorkflowSwitchTrafficRequest dry_run */
+        dry_run?: (boolean|null);
+    }
+
+    /** Represents a WorkflowSwitchTrafficRequest. */
+    class WorkflowSwitchTrafficRequest implements IWorkflowSwitchTrafficRequest {
+
+        /**
+         * Constructs a new WorkflowSwitchTrafficRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IWorkflowSwitchTrafficRequest);
+
+        /** WorkflowSwitchTrafficRequest keyspace. */
+        public keyspace: string;
+
+        /** WorkflowSwitchTrafficRequest workflow. */
+        public workflow: string;
+
+        /** WorkflowSwitchTrafficRequest tablet_types. */
+        public tablet_types: string[];
+
+        /** WorkflowSwitchTrafficRequest max_replication_lag_allowed. */
+        public max_replication_lag_allowed?: (vttime.IDuration|null);
+
+        /** WorkflowSwitchTrafficRequest reverse. */
+        public reverse: boolean;
+
+        /** WorkflowSwitchTrafficRequest timeout. */
+        public timeout?: (vttime.IDuration|null);
+
+        /** WorkflowSwitchTrafficRequest dry_run. */
+        public dry_run: boolean;
+
+        /**
+         * Creates a new WorkflowSwitchTrafficRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns WorkflowSwitchTrafficRequest instance
+         */
+        public static create(properties?: vtctldata.IWorkflowSwitchTrafficRequest): vtctldata.WorkflowSwitchTrafficRequest;
+
+        /**
+         * Encodes the specified WorkflowSwitchTrafficRequest message. Does not implicitly {@link vtctldata.WorkflowSwitchTrafficRequest.verify|verify} messages.
+         * @param message WorkflowSwitchTrafficRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IWorkflowSwitchTrafficRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified WorkflowSwitchTrafficRequest message, length delimited. Does not implicitly {@link vtctldata.WorkflowSwitchTrafficRequest.verify|verify} messages.
+         * @param message WorkflowSwitchTrafficRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IWorkflowSwitchTrafficRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a WorkflowSwitchTrafficRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns WorkflowSwitchTrafficRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.WorkflowSwitchTrafficRequest;
+
+        /**
+         * Decodes a WorkflowSwitchTrafficRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns WorkflowSwitchTrafficRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.WorkflowSwitchTrafficRequest;
+
+        /**
+         * Verifies a WorkflowSwitchTrafficRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a WorkflowSwitchTrafficRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns WorkflowSwitchTrafficRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.WorkflowSwitchTrafficRequest;
+
+        /**
+         * Creates a plain object from a WorkflowSwitchTrafficRequest message. Also converts values to other types if specified.
+         * @param message WorkflowSwitchTrafficRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.WorkflowSwitchTrafficRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this WorkflowSwitchTrafficRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for WorkflowSwitchTrafficRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a WorkflowSwitchTrafficResponse. */
+    interface IWorkflowSwitchTrafficResponse {
+
+        /** WorkflowSwitchTrafficResponse results */
+        results?: (string[]|null);
+    }
+
+    /** Represents a WorkflowSwitchTrafficResponse. */
+    class WorkflowSwitchTrafficResponse implements IWorkflowSwitchTrafficResponse {
+
+        /**
+         * Constructs a new WorkflowSwitchTrafficResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IWorkflowSwitchTrafficResponse);
+
+        /** WorkflowSwitchTrafficResponse results. */
+        public results: string[];
+
+        /**
+         * Creates a new WorkflowSwitchTrafficResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns WorkflowSwitchTrafficResponse instance
+         */
+        public static create(properties?: vtctldata.IWorkflowSwitchTrafficResponse): vtctldata.WorkflowSwitchTrafficResponse;
+
+        /**
+         * Encodes the specified WorkflowSwitchTrafficResponse message. Does not implicitly {@link vtctldata.WorkflowSwitchTrafficResponse.verify|verify} messages.
+         * @param message WorkflowSwitchTrafficResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IWorkflowSwitchTrafficResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified WorkflowSwitchTrafficResponse message, length delimited. Does not implicitly {@link vtctldata.WorkflowSwitchTrafficResponse.verify|verify} messages.
+         * @param message WorkflowSwitchTrafficResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IWorkflowSwitchTrafficResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a WorkflowSwitchTrafficResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns WorkflowSwitchTrafficResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.WorkflowSwitchTrafficResponse;
+
+        /**
+         * Decodes a WorkflowSwitchTrafficResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns WorkflowSwitchTrafficResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.WorkflowSwitchTrafficResponse;
+
+        /**
+         * Verifies a WorkflowSwitchTrafficResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a WorkflowSwitchTrafficResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns WorkflowSwitchTrafficResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.WorkflowSwitchTrafficResponse;
+
+        /**
+         * Creates a plain object from a WorkflowSwitchTrafficResponse message. Also converts values to other types if specified.
+         * @param message WorkflowSwitchTrafficResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.WorkflowSwitchTrafficResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this WorkflowSwitchTrafficResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for WorkflowSwitchTrafficResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
     /** Properties of a WorkflowUpdateRequest. */
     interface IWorkflowUpdateRequest {
 

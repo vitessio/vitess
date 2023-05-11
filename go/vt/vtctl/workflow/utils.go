@@ -31,6 +31,7 @@ import (
 	"vitess.io/vitess/go/sets"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/concurrency"
+	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/schema"
@@ -615,4 +616,84 @@ func encodeString(in string) string {
 
 func getRenameFileName(tableName string) string {
 	return fmt.Sprintf(renameTableTemplate, tableName)
+}
+
+func parseTabletTypesStr(tabletTypesStr string) (hasReplica, hasRdonly, hasPrimary bool, err error) {
+	tabletTypes, _, err := discovery.ParseTabletTypesAndOrder(tabletTypesStr)
+	if err != nil {
+		return false, false, false, err
+	}
+	for _, tabletType := range tabletTypes {
+		switch tabletType {
+		case topodatapb.TabletType_REPLICA:
+			hasReplica = true
+		case topodatapb.TabletType_RDONLY:
+			hasRdonly = true
+		case topodatapb.TabletType_PRIMARY:
+			hasPrimary = true
+		default:
+			return false, false, false, fmt.Errorf("invalid tablet type passed %s", tabletType)
+		}
+	}
+	return hasReplica, hasRdonly, hasPrimary, nil
+}
+
+func parseTabletTypes(tabletTypes []string) (hasReplica, hasRdonly, hasPrimary bool, err error) {
+	for _, tabletType := range tabletTypes {
+		tabletType = strings.ToUpper(tabletType)
+		switch {
+		case tabletType == topodatapb.TabletType_name[int32(topodatapb.TabletType_REPLICA)]:
+			hasReplica = true
+		case tabletType == topodatapb.TabletType_name[int32(topodatapb.TabletType_RDONLY)]:
+			hasRdonly = true
+		case tabletType == topodatapb.TabletType_name[int32(topodatapb.TabletType_PRIMARY)]:
+			hasPrimary = true
+		default:
+			return false, false, false, fmt.Errorf("invalid tablet type passed %s", tabletType)
+		}
+	}
+	return hasReplica, hasRdonly, hasPrimary, nil
+}
+
+func areTabletsAvailableToStreamFrom(ctx context.Context, ts *trafficSwitcher, keyspace string, shards []*topo.ShardInfo) error {
+	var cells []string
+	tabletTypes := ts.optTabletTypes
+	if ts.optCells != "" {
+		cells = strings.Split(ts.optCells, ",")
+	}
+	// FIXME: currently there is a default setting in the tablet that is used if user does not specify a tablet type,
+	// we use the value specified in the tablet flag `-vreplication_tablet_type`
+	// but ideally we should populate the vreplication table with a default value when we setup the workflow
+	if tabletTypes == "" {
+		tabletTypes = "PRIMARY,REPLICA"
+	}
+
+	var wg sync.WaitGroup
+	allErrors := &concurrency.AllErrorRecorder{}
+	for _, shard := range shards {
+		wg.Add(1)
+		go func(cells []string, keyspace string, shard *topo.ShardInfo) {
+			defer wg.Done()
+			if cells == nil {
+				cells = append(cells, shard.PrimaryAlias.Cell)
+			}
+			tp, err := discovery.NewTabletPicker(ts.ws.ts, cells, keyspace, shard.ShardName(), tabletTypes)
+			if err != nil {
+				allErrors.RecordError(err)
+				return
+			}
+			tablets := tp.GetMatchingTablets(ctx)
+			if len(tablets) == 0 {
+				allErrors.RecordError(fmt.Errorf("no tablet found to source data in keyspace %s, shard %s", keyspace, shard.ShardName()))
+				return
+			}
+		}(cells, keyspace, shard)
+	}
+
+	wg.Wait()
+	if allErrors.HasErrors() {
+		log.Errorf("%s", allErrors.Error())
+		return allErrors.Error()
+	}
+	return nil
 }

@@ -404,6 +404,7 @@ type VtctldClient interface {
 	// WorkflowDelete deletes a vreplication workflow.
 	WorkflowDelete(ctx context.Context, in *vtctldata.WorkflowDeleteRequest, opts ...grpc.CallOption) (*vtctldata.WorkflowDeleteResponse, error)
 	WorkflowStatus(ctx context.Context, in *vtctldata.WorkflowStatusRequest, opts ...grpc.CallOption) (*vtctldata.WorkflowStatusResponse, error)
+	WorkflowSwitchTraffic(ctx context.Context, in *vtctldata.WorkflowSwitchTrafficRequest, opts ...grpc.CallOption) (*vtctldata.WorkflowSwitchTrafficResponse, error)
 	// WorkflowUpdate updates the configuration of a vreplication workflow
 	// using the provided updated parameters.
 	WorkflowUpdate(ctx context.Context, in *vtctldata.WorkflowUpdateRequest, opts ...grpc.CallOption) (*vtctldata.WorkflowUpdateResponse, error)
@@ -1269,6 +1270,15 @@ func (c *vtctldClient) WorkflowStatus(ctx context.Context, in *vtctldata.Workflo
 	return out, nil
 }
 
+func (c *vtctldClient) WorkflowSwitchTraffic(ctx context.Context, in *vtctldata.WorkflowSwitchTrafficRequest, opts ...grpc.CallOption) (*vtctldata.WorkflowSwitchTrafficResponse, error) {
+	out := new(vtctldata.WorkflowSwitchTrafficResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/WorkflowSwitchTraffic", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *vtctldClient) WorkflowUpdate(ctx context.Context, in *vtctldata.WorkflowUpdateRequest, opts ...grpc.CallOption) (*vtctldata.WorkflowUpdateResponse, error) {
 	out := new(vtctldata.WorkflowUpdateResponse)
 	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/WorkflowUpdate", in, out, opts...)
@@ -1550,6 +1560,7 @@ type VtctldServer interface {
 	// WorkflowDelete deletes a vreplication workflow.
 	WorkflowDelete(context.Context, *vtctldata.WorkflowDeleteRequest) (*vtctldata.WorkflowDeleteResponse, error)
 	WorkflowStatus(context.Context, *vtctldata.WorkflowStatusRequest) (*vtctldata.WorkflowStatusResponse, error)
+	WorkflowSwitchTraffic(context.Context, *vtctldata.WorkflowSwitchTrafficRequest) (*vtctldata.WorkflowSwitchTrafficResponse, error)
 	// WorkflowUpdate updates the configuration of a vreplication workflow
 	// using the provided updated parameters.
 	WorkflowUpdate(context.Context, *vtctldata.WorkflowUpdateRequest) (*vtctldata.WorkflowUpdateResponse, error)
@@ -1820,6 +1831,9 @@ func (UnimplementedVtctldServer) WorkflowDelete(context.Context, *vtctldata.Work
 }
 func (UnimplementedVtctldServer) WorkflowStatus(context.Context, *vtctldata.WorkflowStatusRequest) (*vtctldata.WorkflowStatusResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method WorkflowStatus not implemented")
+}
+func (UnimplementedVtctldServer) WorkflowSwitchTraffic(context.Context, *vtctldata.WorkflowSwitchTrafficRequest) (*vtctldata.WorkflowSwitchTrafficResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method WorkflowSwitchTraffic not implemented")
 }
 func (UnimplementedVtctldServer) WorkflowUpdate(context.Context, *vtctldata.WorkflowUpdateRequest) (*vtctldata.WorkflowUpdateResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method WorkflowUpdate not implemented")
@@ -3412,6 +3426,24 @@ func _Vtctld_WorkflowStatus_Handler(srv interface{}, ctx context.Context, dec fu
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Vtctld_WorkflowSwitchTraffic_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.WorkflowSwitchTrafficRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).WorkflowSwitchTraffic(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/WorkflowSwitchTraffic",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).WorkflowSwitchTraffic(ctx, req.(*vtctldata.WorkflowSwitchTrafficRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Vtctld_WorkflowUpdate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(vtctldata.WorkflowUpdateRequest)
 	if err := dec(in); err != nil {
@@ -3772,6 +3804,10 @@ var Vtctld_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "WorkflowStatus",
 			Handler:    _Vtctld_WorkflowStatus_Handler,
+		},
+		{
+			MethodName: "WorkflowSwitchTraffic",
+			Handler:    _Vtctld_WorkflowSwitchTraffic_Handler,
 		},
 		{
 			MethodName: "WorkflowUpdate",

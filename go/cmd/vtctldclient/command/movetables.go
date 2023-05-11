@@ -24,6 +24,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"vitess.io/vitess/go/cmd/vtctldclient/cli"
+	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -31,8 +32,10 @@ import (
 )
 
 var (
-	tabletTypesDefault = []string{"in_order:REPLICA", "PRIMARY"}
-	onDDLDefault       = binlogdatapb.OnDDLAction_name[int32(binlogdatapb.OnDDLAction_IGNORE)]
+	tabletTypesDefault       = []string{"RDONLY", "REPLICA", "PRIMARY"}
+	onDDLDefault             = binlogdatapb.OnDDLAction_name[int32(binlogdatapb.OnDDLAction_IGNORE)]
+	maxReplicationLagDefault = 30 * time.Second
+	timeoutDefault           = 30 * time.Second
 
 	// MoveTables is the base command for all related actions.
 	MoveTables = &cobra.Command{
@@ -112,6 +115,28 @@ See the --help output for each command for more details.`,
 		RunE:                  commandMoveTablesStatus,
 	}
 
+	// MoveTablesReverseTraffic makes a WorkflowSwitchTraffic gRPC call to a vtctld.
+	MoveTablesReverseTraffic = &cobra.Command{
+		Use:                   "reversetraffic",
+		Short:                 "Reverse traffic for a MoveTables VReplication workflow",
+		Example:               `vtctldclient --server=localhost:15999 MoveTables --workflow "commerce2customer" --target-keyspace "customer" reversetraffic`,
+		DisableFlagsInUseLine: true,
+		Aliases:               []string{"ReverseTraffic"},
+		Args:                  cobra.NoArgs,
+		PreRunE: func(cmd *cobra.Command, args []string) error {
+			if cmd.Flags().Lookup("tablet-types").Changed { // Validate the provided value(s)
+				for i, tabletType := range moveTablesSwitchTrafficOptions.TabletTypes {
+					moveTablesSwitchTrafficOptions.TabletTypes[i] = strings.ToUpper(strings.TrimSpace(tabletType))
+					if _, err := topoproto.ParseTabletType(moveTablesSwitchTrafficOptions.TabletTypes[i]); err != nil {
+						return err
+					}
+				}
+			}
+			return nil
+		},
+		RunE: commandMoveTablesReverseTraffic,
+	}
+
 	// MoveTablesSwitchTraffic makes a MoveTablesSwitchTraffic gRPC call to a vtctld.
 	MoveTablesSwitchTraffic = &cobra.Command{
 		Use:                   "switchtraffic",
@@ -122,9 +147,9 @@ See the --help output for each command for more details.`,
 		Args:                  cobra.NoArgs,
 		PreRunE: func(cmd *cobra.Command, args []string) error {
 			if cmd.Flags().Lookup("tablet-types").Changed { // Validate the provided value(s)
-				for i, tabletType := range moveTablesCreateOptions.TabletTypes {
-					moveTablesCreateOptions.TabletTypes[i] = strings.ToUpper(strings.TrimSpace(tabletType))
-					if _, err := topoproto.ParseTabletType(moveTablesCreateOptions.TabletTypes[i]); err != nil {
+				for i, tabletType := range moveTablesSwitchTrafficOptions.TabletTypes {
+					moveTablesSwitchTrafficOptions.TabletTypes[i] = strings.ToUpper(strings.TrimSpace(tabletType))
+					if _, err := topoproto.ParseTabletType(moveTablesSwitchTrafficOptions.TabletTypes[i]); err != nil {
 						return err
 					}
 				}
@@ -157,13 +182,15 @@ var (
 		ExcludeTables       []string
 		SourceTimeZone      string
 		OnDDL               string
-		Timeout             time.Duration
 		DeferSecondaryKeys  bool
 		AutoStart           bool
 		StopAfterCopy       bool
 	}{}
 	moveTablesSwitchTrafficOptions = struct {
-		TableTypes []string
+		TabletTypes              []string
+		MaxReplicationLagAllowed time.Duration
+		Timeout                  time.Duration
+		DryRun                   bool
 	}{}
 )
 
@@ -182,7 +209,6 @@ func commandMoveTablesCreate(cmd *cobra.Command, args []string) error {
 		OnDdl:          moveTablesCreateOptions.OnDDL,
 		AutoStart:      moveTablesCreateOptions.AutoStart,
 		StopAfterCopy:  moveTablesCreateOptions.StopAfterCopy,
-		//Timeout:        protoutil.DurationToProto(moveTablesCreateOptions.Timeout),
 	}
 
 	resp, err := client.MoveTablesCreate(commandCtx, req)
@@ -271,24 +297,52 @@ func commandMoveTablesShow(cmd *cobra.Command, args []string) error {
 func commandMoveTablesSwitchTraffic(cmd *cobra.Command, args []string) error {
 	cli.FinishedParsing(cmd)
 
-	/*
-		req := &vtctldatapb.MoveTablesSwitchTrafficRequest{
-			Keyspace:    moveTablesOptions.TargetKeyspace,
-			Workflow:    moveTablesOptions.Workflow,
-			TabletTypes: moveTablesSwitchTrafficOptions.TableTypes,
-		}
-		resp, err := client.GetWorkflows(commandCtx, req)
-		if err != nil {
-			return err
-		}
+	req := &vtctldatapb.WorkflowSwitchTrafficRequest{
+		Keyspace:                 moveTablesOptions.TargetKeyspace,
+		Workflow:                 moveTablesOptions.Workflow,
+		TabletTypes:              moveTablesSwitchTrafficOptions.TabletTypes,
+		MaxReplicationLagAllowed: protoutil.DurationToProto(moveTablesSwitchTrafficOptions.MaxReplicationLagAllowed),
+		Timeout:                  protoutil.DurationToProto(moveTablesSwitchTrafficOptions.Timeout),
+		DryRun:                   moveTablesSwitchTrafficOptions.DryRun,
+	}
+	resp, err := client.WorkflowSwitchTraffic(commandCtx, req)
+	if err != nil {
+		return err
+	}
 
-		data, err := cli.MarshalJSON(resp)
-		if err != nil {
-			return err
-		}
+	data, err := cli.MarshalJSON(resp)
+	if err != nil {
+		return err
+	}
 
-		fmt.Printf("%s\n", data)
-	*/
+	fmt.Printf("%s\n", data)
+
+	return nil
+}
+
+func commandMoveTablesReverseTraffic(cmd *cobra.Command, args []string) error {
+	cli.FinishedParsing(cmd)
+
+	req := &vtctldatapb.WorkflowSwitchTrafficRequest{
+		Keyspace:                 moveTablesOptions.TargetKeyspace,
+		Workflow:                 moveTablesOptions.Workflow,
+		TabletTypes:              moveTablesSwitchTrafficOptions.TabletTypes,
+		Timeout:                  protoutil.DurationToProto(moveTablesSwitchTrafficOptions.Timeout),
+		MaxReplicationLagAllowed: protoutil.DurationToProto(moveTablesSwitchTrafficOptions.MaxReplicationLagAllowed),
+		DryRun:                   moveTablesSwitchTrafficOptions.DryRun,
+		Reverse:                  true,
+	}
+	resp, err := client.WorkflowSwitchTraffic(commandCtx, req)
+	if err != nil {
+		return err
+	}
+
+	data, err := cli.MarshalJSON(resp)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("%s\n", data)
 
 	return nil
 }
@@ -320,6 +374,14 @@ func init() {
 	MoveTables.AddCommand(MoveTablesStatus)
 	MoveTables.AddCommand(MoveTablesShow)
 
-	MoveTablesSwitchTraffic.Flags().StringSliceVar(&moveTablesSwitchTrafficOptions.TableTypes, "tablet-types", nil, "Tablet types to switch traffic for (default is ALL tablet types)")
+	MoveTablesSwitchTraffic.Flags().StringSliceVar(&moveTablesSwitchTrafficOptions.TabletTypes, "tablet-types", tabletTypesDefault, "Tablet types to switch traffic for")
+	MoveTablesSwitchTraffic.Flags().DurationVar(&moveTablesSwitchTrafficOptions.Timeout, "timeout", timeoutDefault, "Specifies the maximum time to wait, in seconds, for VReplication to catch up on primary tablets. The traffic switch will be cancelled on timeout.")
+	MoveTablesSwitchTraffic.Flags().DurationVar(&moveTablesSwitchTrafficOptions.MaxReplicationLagAllowed, "max-replication-lag-allowed", maxReplicationLagDefault, "Allow traffic to be switched only if VReplication lag is below this")
+	MoveTablesSwitchTraffic.Flags().BoolVar(&moveTablesSwitchTrafficOptions.DryRun, "dry-run", false, "Print the actions that would be taken and report any known errors that would have occurred")
 	MoveTables.AddCommand(MoveTablesSwitchTraffic)
+	MoveTablesReverseTraffic.Flags().StringSliceVar(&moveTablesSwitchTrafficOptions.TabletTypes, "tablet-types", tabletTypesDefault, "Tablet types to switch traffic for")
+	MoveTablesReverseTraffic.Flags().DurationVar(&moveTablesSwitchTrafficOptions.Timeout, "timeout", timeoutDefault, "Specifies the maximum time to wait, in seconds, for VReplication to catch up on primary tablets. The traffic switch will be cancelled on timeout.")
+	MoveTablesReverseTraffic.Flags().DurationVar(&moveTablesSwitchTrafficOptions.MaxReplicationLagAllowed, "max-replication-lag-allowed", maxReplicationLagDefault, "Allow traffic to be switched only if VReplication lag is below this")
+	MoveTablesReverseTraffic.Flags().BoolVar(&moveTablesSwitchTrafficOptions.DryRun, "dry-run", false, "Print the actions that would be taken and report any known errors that would have occurred")
+	MoveTables.AddCommand(MoveTablesReverseTraffic)
 }

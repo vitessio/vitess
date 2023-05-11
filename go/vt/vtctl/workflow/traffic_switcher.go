@@ -45,6 +45,7 @@ import (
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 const (
@@ -1018,7 +1019,7 @@ func (ts *trafficSwitcher) removeTargetTables(ctx context.Context) error {
 				sqlescape.EscapeID(sqlescape.UnescapeID(tableName)))
 			ts.Logger().Infof("%s: Dropping table %s.%s\n",
 				target.GetPrimary().String(), target.GetPrimary().DbName(), tableName)
-			res, err := ts.ws.tmc.ExecuteFetchAsDba(ctx, target.GetPrimary().Tablet, true, &tabletmanagerdatapb.ExecuteFetchAsDbaRequest{
+			res, err := ts.ws.tmc.ExecuteFetchAsDba(ctx, target.GetPrimary().Tablet, false, &tabletmanagerdatapb.ExecuteFetchAsDbaRequest{
 				Query:        []byte(query),
 				MaxRows:      1,
 				ReloadSchema: true,
@@ -1053,5 +1054,111 @@ func (ts *trafficSwitcher) dropTargetShards(ctx context.Context) error {
 		}
 		ts.Logger().Infof("Deleted shard %s.%s\n", target.GetShard().Keyspace(), target.GetShard().ShardName())
 		return nil
+	})
+}
+
+func (ts *trafficSwitcher) validate(ctx context.Context) error {
+	if ts.MigrationType() == binlogdatapb.MigrationType_TABLES {
+		if ts.isPartialMigration {
+			return nil
+		}
+		sourceTopo := ts.ws.ts
+		if ts.externalTopo != nil {
+			sourceTopo = ts.externalTopo
+		}
+
+		// All shards must be present.
+		if err := CompareShards(ctx, ts.SourceKeyspaceName(), ts.SourceShards(), sourceTopo); err != nil {
+			return err
+		}
+		if err := CompareShards(ctx, ts.TargetKeyspaceName(), ts.TargetShards(), ts.ws.ts); err != nil {
+			return err
+		}
+		// Wildcard table names not allowed.
+		for _, table := range ts.tables {
+			if strings.HasPrefix(table, "/") {
+				return fmt.Errorf("cannot migrate streams with wild card table names: %v", table)
+			}
+		}
+	}
+	return nil
+}
+
+// checkJournals returns true if at least one journal has been created.
+// If so, it also returns the list of sourceWorkflows that need to be switched.
+func (ts *trafficSwitcher) checkJournals(ctx context.Context) (journalsExist bool, sourceWorkflows []string, err error) {
+	var mu sync.Mutex
+
+	err = ts.ForAllSources(func(source *MigrationSource) error {
+		mu.Lock()
+		defer mu.Unlock()
+		journal, exists, err := ts.ws.CheckReshardingJournalExistsOnTablet(ctx, source.GetPrimary().Tablet, ts.id)
+		if err != nil {
+			return err
+		}
+		if exists {
+			if journal.Id != 0 {
+				sourceWorkflows = journal.SourceWorkflows
+			}
+			source.Journaled = true
+			journalsExist = true
+		}
+		return nil
+	})
+	return journalsExist, sourceWorkflows, err
+}
+
+// executeLockTablesOnSource executes a LOCK TABLES tb1 READ, tbl2 READ,... statement on each
+// source shard's primary tablet using a non-pooled connection as the DBA user. The connection
+// is closed when the LOCK TABLES statement returns, so we immediately release the LOCKs.
+func (ts *trafficSwitcher) executeLockTablesOnSource(ctx context.Context) error {
+	ts.Logger().Infof("Locking (and then immediately unlocking) the following tables on source keyspace %v: %v", ts.SourceKeyspaceName(), ts.Tables())
+	if len(ts.Tables()) == 0 {
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "no tables found in the source keyspace %v associated with the %s workflow", ts.SourceKeyspaceName(), ts.WorkflowName())
+	}
+
+	sb := strings.Builder{}
+	sb.WriteString("LOCK TABLES ")
+	for _, tableName := range ts.Tables() {
+		sb.WriteString(fmt.Sprintf("%s READ,", sqlescape.EscapeID(tableName)))
+	}
+	// trim extra trailing comma
+	lockStmt := sb.String()[:sb.Len()-1]
+
+	return ts.ForAllSources(func(source *MigrationSource) error {
+		primary := source.GetPrimary()
+		if primary == nil {
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "no primary found for source shard %s", source.GetShard())
+		}
+		tablet := primary.Tablet
+		_, err := ts.ws.tmc.ExecuteFetchAsDba(ctx, tablet, true, &tabletmanagerdatapb.ExecuteFetchAsDbaRequest{
+			Query:          []byte(lockStmt),
+			MaxRows:        uint64(1),
+			DisableBinlogs: false,
+			ReloadSchema:   true,
+		})
+		if err != nil {
+			ts.Logger().Errorf("Error executing %s on source tablet %v: %v", lockStmt, tablet, err)
+			return err
+		}
+		return err
+	})
+}
+
+func (ts *trafficSwitcher) gatherPositions(ctx context.Context) error {
+	err := ts.ForAllSources(func(source *MigrationSource) error {
+		var err error
+		source.Position, err = ts.ws.tmc.PrimaryPosition(ctx, source.GetPrimary().Tablet)
+		ts.Logger().Infof("Position for source %v:%v: %v", ts.SourceKeyspaceName(), source.GetShard().ShardName(), source.Position)
+		return err
+	})
+	if err != nil {
+		return err
+	}
+	return ts.ForAllTargets(func(target *MigrationTarget) error {
+		var err error
+		target.Position, err = ts.ws.tmc.PrimaryPosition(ctx, target.GetPrimary().Tablet)
+		ts.Logger().Infof("Position for target %v:%v: %v", ts.TargetKeyspaceName(), target.GetShard().ShardName(), target.Position)
+		return err
 	})
 }

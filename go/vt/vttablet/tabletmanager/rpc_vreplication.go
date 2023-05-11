@@ -57,6 +57,10 @@ func (tm *TabletManager) CreateVRWorkflow(ctx context.Context, req *tabletmanage
 		if err != nil {
 			return nil, err
 		}
+		// Use the local cell if none are specified.
+		if len(req.Cells) == 0 || strings.TrimSpace(req.Cells[0]) == "" {
+			req.Cells = append(req.Cells, tm.Tablet().Alias.Cell)
+		}
 		wfState := "Stopped"
 		if req.AutoStart {
 			wfState = "Running"
