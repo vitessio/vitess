@@ -59,6 +59,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfArgument(in)
 	case *ArgumentLessWindowExpr:
 		return CloneRefOfArgumentLessWindowExpr(in)
+	case *AssignmentExpr:
+		return CloneRefOfAssignmentExpr(in)
 	case *AutoIncSpec:
 		return CloneRefOfAutoIncSpec(in)
 	case *Avg:
@@ -729,6 +731,17 @@ func CloneRefOfArgumentLessWindowExpr(n *ArgumentLessWindowExpr) *ArgumentLessWi
 	}
 	out := *n
 	out.OverClause = CloneRefOfOverClause(n.OverClause)
+	return &out
+}
+
+// CloneRefOfAssignmentExpr creates a deep clone of the input.
+func CloneRefOfAssignmentExpr(n *AssignmentExpr) *AssignmentExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Left = CloneExpr(n.Left)
+	out.Right = CloneExpr(n.Right)
 	return &out
 }
 
@@ -3653,6 +3666,8 @@ func CloneExpr(in Expr) Expr {
 		return CloneRefOfArgument(in)
 	case *ArgumentLessWindowExpr:
 		return CloneRefOfArgumentLessWindowExpr(in)
+	case *AssignmentExpr:
+		return CloneRefOfAssignmentExpr(in)
 	case *Avg:
 		return CloneRefOfAvg(in)
 	case *BetweenExpr:

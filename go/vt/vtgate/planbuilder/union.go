@@ -34,6 +34,10 @@ func buildUnionPlan(string) stmtPlanner {
 		if union.With != nil {
 			return nil, vterrors.VT12001("WITH expression in UNION statement")
 		}
+		err := checkUnsupportedExpressions(union)
+		if err != nil {
+			return nil, err
+		}
 		// For unions, create a pb with anonymous scope.
 		pb := newPrimitiveBuilder(vschema, newJointab(reservedVars))
 		if err := pb.processUnion(union, reservedVars, nil); err != nil {

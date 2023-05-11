@@ -134,6 +134,12 @@ func (cmp *Comparator) SQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return cmp.RefOfArgumentLessWindowExpr(a, b)
+	case *AssignmentExpr:
+		b, ok := inB.(*AssignmentExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfAssignmentExpr(a, b)
 	case *AutoIncSpec:
 		b, ok := inB.(*AutoIncSpec)
 		if !ok {
@@ -1798,6 +1804,18 @@ func (cmp *Comparator) RefOfArgumentLessWindowExpr(a, b *ArgumentLessWindowExpr)
 	}
 	return a.Type == b.Type &&
 		cmp.RefOfOverClause(a.OverClause, b.OverClause)
+}
+
+// RefOfAssignmentExpr does deep equals between the two objects.
+func (cmp *Comparator) RefOfAssignmentExpr(a, b *AssignmentExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return cmp.Expr(a.Left, b.Left) &&
+		cmp.Expr(a.Right, b.Right)
 }
 
 // RefOfAutoIncSpec does deep equals between the two objects.
@@ -5658,6 +5676,12 @@ func (cmp *Comparator) Expr(inA, inB Expr) bool {
 			return false
 		}
 		return cmp.RefOfArgumentLessWindowExpr(a, b)
+	case *AssignmentExpr:
+		b, ok := inB.(*AssignmentExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfAssignmentExpr(a, b)
 	case *Avg:
 		b, ok := inB.(*Avg)
 		if !ok {
