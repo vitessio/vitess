@@ -162,7 +162,7 @@ func buildVindexTableForDML(
 		return nil, nil, vterrors.VT09002(dmlType)
 	}
 
-	// we are dealing with an explicitly targeted UPDATE
+	// we are dealing with an explicitly targeted DML
 	routing := &TargetedRouting{
 		keyspace:          vindexTable.Keyspace,
 		TargetDestination: dest,

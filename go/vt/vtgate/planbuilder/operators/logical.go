@@ -19,6 +19,9 @@ package operators
 import (
 	"fmt"
 
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -38,6 +41,8 @@ func createLogicalOperatorFromAST(ctx *plancontext.PlanningContext, selStmt sqlp
 		op, err = createOperatorFromUpdate(ctx, node)
 	case *sqlparser.Delete:
 		op, err = createOperatorFromDelete(ctx, node)
+	case *sqlparser.Insert:
+		op, err = createOperatorFromInsert(ctx, node)
 	default:
 		err = vterrors.VT12001(fmt.Sprintf("operator: %T", selStmt))
 	}
@@ -231,6 +236,111 @@ func createOperatorFromDelete(ctx *plancontext.PlanningContext, deleteStmt *sqlp
 	}
 	subq.Outer = route
 	return subq, nil
+}
+
+func createOperatorFromInsert(ctx *plancontext.PlanningContext, ins *sqlparser.Insert) (ops.Operator, error) {
+	tableInfo, qt, err := createQueryTableForDML(ctx, ins.Table, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	vindexTable, routing, err := buildVindexTableForDML(ctx, tableInfo, qt, "insert")
+	if err != nil {
+		return nil, err
+	}
+
+	insOp := &Insert{
+		QTable: qt,
+		VTable: vindexTable,
+		AST:    ins,
+	}
+	route := &Route{
+		Source:  insOp,
+		Routing: routing,
+	}
+
+	switch routing.(type) {
+	case *AnyShardRouting:
+		// unsharded
+		return route, nil
+	case *TargetedRouting:
+		return nil, vterrors.VT12001("INSERT with a target destination")
+	case *ShardedRouting:
+		// to continue after switch
+	default:
+		return nil, vterrors.VT13001(fmt.Sprintf("INSERT with a unknown routing type: %T", routing))
+	}
+
+	colVindexes := getColVindexes(insOp.VTable.ColumnVindexes)
+	rows, isRowValues := ins.Rows.(sqlparser.Values)
+	if !isRowValues {
+		return nil, vterrors.VT13001("needs implementation")
+	}
+	routeValues := make([][][]evalengine.Expr, len(colVindexes))
+	for vIdx, colVindex := range colVindexes {
+		routeValues[vIdx] = make([][]evalengine.Expr, len(colVindex.Columns))
+		for colIdx, col := range colVindex.Columns {
+			routeValues[vIdx][colIdx] = make([]evalengine.Expr, len(rows))
+			colNum := findOrAddColumn(ins, col)
+			for rowNum, row := range rows {
+				innerpv, err := evalengine.Translate(row[colNum], nil)
+				if err != nil {
+					return nil, err
+				}
+				routeValues[vIdx][colIdx][rowNum] = innerpv
+			}
+		}
+	}
+	for _, colVindex := range colVindexes {
+		for _, col := range colVindex.Columns {
+			colNum := findOrAddColumn(ins, col)
+			for rowNum, row := range rows {
+				name := engine.InsertVarName(col, rowNum)
+				row[colNum] = sqlparser.NewArgument(name)
+			}
+		}
+	}
+	insOp.ColVindexes = colVindexes
+	insOp.VindexValues = routeValues
+	return route, nil
+}
+
+func getColVindexes(allColVindexes []*vindexes.ColumnVindex) (colVindexes []*vindexes.ColumnVindex) {
+	for _, colVindex := range allColVindexes {
+		if colVindex.IsPartialVindex() {
+			continue
+		}
+		colVindexes = append(colVindexes, colVindex)
+	}
+	return
+}
+
+// findOrAddColumn finds the position of a column in the insert. If it's
+// absent it appends it to the with NULL values and returns that position.
+func findOrAddColumn(ins *sqlparser.Insert, col sqlparser.IdentifierCI) int {
+	colNum := findColumn(ins, col)
+	if colNum >= 0 {
+		return colNum
+	}
+	colOffset := len(ins.Columns)
+	ins.Columns = append(ins.Columns, col)
+	if rows, ok := ins.Rows.(sqlparser.Values); ok {
+		for i := range rows {
+			rows[i] = append(rows[i], &sqlparser.NullVal{})
+		}
+	}
+	return colOffset
+}
+
+// findColumn returns the column index where it is placed on the insert column list.
+// Otherwise, return -1 when not found.
+func findColumn(ins *sqlparser.Insert, col sqlparser.IdentifierCI) int {
+	for i, column := range ins.Columns {
+		if col.Equal(column) {
+			return i
+		}
+	}
+	return -1
 }
 
 func getOperatorFromTableExpr(ctx *plancontext.PlanningContext, tableExpr sqlparser.TableExpr) (ops.Operator, error) {

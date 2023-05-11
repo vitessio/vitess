@@ -366,6 +366,8 @@ func newRoutingParams(ctx *plancontext.PlanningContext, opCode engine.Opcode) *e
 
 func transformRoutePlan(ctx *plancontext.PlanningContext, op *operators.Route) (logicalPlan, error) {
 	switch src := op.Source.(type) {
+	case *operators.Insert:
+		return transformInsertPlan(ctx, op, src)
 	case *operators.Update:
 		return transformUpdatePlan(ctx, op, src)
 	case *operators.Delete:
@@ -397,6 +399,50 @@ func transformRoutePlan(ctx *plancontext.PlanningContext, op *operators.Route) (
 		condition: condition,
 	}, nil
 
+}
+
+func transformInsertPlan(ctx *plancontext.PlanningContext, op *operators.Route, ins *operators.Insert) (logicalPlan, error) {
+	eins := &engine.Insert{
+		Opcode:       engine.InsertSharded,
+		Keyspace:     op.Routing.Keyspace(),
+		Query:        generateQuery(ins.AST),
+		Table:        ins.VTable,
+		VindexValues: ins.VindexValues,
+		ColVindexes:  ins.ColVindexes,
+	}
+	eins.Prefix, eins.Mid, eins.Suffix = generateInsertShardedQuery(ins.AST)
+
+	return &primitiveWrapper{prim: eins}, nil
+}
+
+func generateInsertShardedQuery(ins *sqlparser.Insert) (prefix string, mid []string, suffix string) {
+	valueTuples := ins.Rows.(sqlparser.Values)
+	prefixBuf := sqlparser.NewTrackedBuffer(dmlFormatter)
+	midBuf := sqlparser.NewTrackedBuffer(dmlFormatter)
+	suffixBuf := sqlparser.NewTrackedBuffer(dmlFormatter)
+	mid = make([]string, len(valueTuples))
+	prefixBuf.Myprintf("insert %v%sinto %v%v values ",
+		ins.Comments, ins.Ignore.ToString(),
+		ins.Table, ins.Columns)
+	prefix = prefixBuf.String()
+	for rowNum, val := range valueTuples {
+		midBuf.Myprintf("%v", val)
+		mid[rowNum] = midBuf.String()
+		midBuf.Reset()
+	}
+	suffixBuf.Myprintf("%v", ins.OnDup)
+	suffix = suffixBuf.String()
+	return
+}
+
+// dmlFormatter strips out keyspace name from dmls.
+func dmlFormatter(buf *sqlparser.TrackedBuffer, node sqlparser.SQLNode) {
+	switch node := node.(type) {
+	case sqlparser.TableName:
+		node.Name.Format(buf)
+		return
+	}
+	node.Format(buf)
 }
 
 func transformUpdatePlan(ctx *plancontext.PlanningContext, op *operators.Route, upd *operators.Update) (logicalPlan, error) {
