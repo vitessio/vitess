@@ -2821,6 +2821,26 @@ type (
 		PropertyDefArg Expr
 	}
 
+	GeoHashFromLatLongExpr struct {
+		Latitude  Expr
+		Longitude Expr
+		MaxLength Expr
+	}
+
+	GeoHashFromPointExpr struct {
+		Point     Expr
+		MaxLength Expr
+	}
+
+	// GeomFromHashType is an enum that determines what kind geom being retireived from hash : Latitude Longitude Point
+	GeomFromHashType int8
+
+	GeomFromGeoHashExpr struct {
+		GeomType GeomFromHashType
+		GeoHash  Expr
+		SridOpt  Expr
+	}
+
 	AggrFunc interface {
 		Expr
 		AggrName() string
@@ -3162,6 +3182,9 @@ func (*PointPropertyFuncExpr) iExpr()              {}
 func (*LinestrPropertyFuncExpr) iExpr()            {}
 func (*PolygonPropertyFuncExpr) iExpr()            {}
 func (*GeomCollPropertyFuncExpr) iExpr()           {}
+func (*GeoHashFromLatLongExpr) iExpr()             {}
+func (*GeoHashFromPointExpr) iExpr()               {}
+func (*GeomFromGeoHashExpr) iExpr()                {}
 
 // iCallable marks all expressions that represent function calls
 func (*FuncExpr) iCallable()                           {}
@@ -3229,6 +3252,9 @@ func (*PointPropertyFuncExpr) iCallable()              {}
 func (*LinestrPropertyFuncExpr) iCallable()            {}
 func (*PolygonPropertyFuncExpr) iCallable()            {}
 func (*GeomCollPropertyFuncExpr) iCallable()           {}
+func (*GeoHashFromLatLongExpr) iCallable()             {}
+func (*GeoHashFromPointExpr) iCallable()               {}
+func (*GeomFromGeoHashExpr) iCallable()                {}
 
 func (*Sum) iCallable()       {}
 func (*Min) iCallable()       {}

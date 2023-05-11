@@ -182,10 +182,16 @@ func (c *cow) copyOnRewriteSQLNode(n SQLNode, parent SQLNode) (out SQLNode, chan
 		return c.copyOnRewriteRefOfFuncExpr(n, parent)
 	case *GTIDFuncExpr:
 		return c.copyOnRewriteRefOfGTIDFuncExpr(n, parent)
+	case *GeoHashFromLatLongExpr:
+		return c.copyOnRewriteRefOfGeoHashFromLatLongExpr(n, parent)
+	case *GeoHashFromPointExpr:
+		return c.copyOnRewriteRefOfGeoHashFromPointExpr(n, parent)
 	case *GeomCollPropertyFuncExpr:
 		return c.copyOnRewriteRefOfGeomCollPropertyFuncExpr(n, parent)
 	case *GeomFormatExpr:
 		return c.copyOnRewriteRefOfGeomFormatExpr(n, parent)
+	case *GeomFromGeoHashExpr:
+		return c.copyOnRewriteRefOfGeomFromGeoHashExpr(n, parent)
 	case *GeomFromTextExpr:
 		return c.copyOnRewriteRefOfGeomFromTextExpr(n, parent)
 	case *GeomFromWKBExpr:
@@ -2357,6 +2363,56 @@ func (c *cow) copyOnRewriteRefOfGTIDFuncExpr(n *GTIDFuncExpr, parent SQLNode) (o
 	}
 	return
 }
+func (c *cow) copyOnRewriteRefOfGeoHashFromLatLongExpr(n *GeoHashFromLatLongExpr, parent SQLNode) (out SQLNode, changed bool) {
+	if n == nil || c.cursor.stop {
+		return n, false
+	}
+	out = n
+	if c.pre == nil || c.pre(n, parent) {
+		_Latitude, changedLatitude := c.copyOnRewriteExpr(n.Latitude, n)
+		_Longitude, changedLongitude := c.copyOnRewriteExpr(n.Longitude, n)
+		_MaxLength, changedMaxLength := c.copyOnRewriteExpr(n.MaxLength, n)
+		if changedLatitude || changedLongitude || changedMaxLength {
+			res := *n
+			res.Latitude, _ = _Latitude.(Expr)
+			res.Longitude, _ = _Longitude.(Expr)
+			res.MaxLength, _ = _MaxLength.(Expr)
+			out = &res
+			if c.cloned != nil {
+				c.cloned(n, out)
+			}
+			changed = true
+		}
+	}
+	if c.post != nil {
+		out, changed = c.postVisit(out, parent, changed)
+	}
+	return
+}
+func (c *cow) copyOnRewriteRefOfGeoHashFromPointExpr(n *GeoHashFromPointExpr, parent SQLNode) (out SQLNode, changed bool) {
+	if n == nil || c.cursor.stop {
+		return n, false
+	}
+	out = n
+	if c.pre == nil || c.pre(n, parent) {
+		_Point, changedPoint := c.copyOnRewriteExpr(n.Point, n)
+		_MaxLength, changedMaxLength := c.copyOnRewriteExpr(n.MaxLength, n)
+		if changedPoint || changedMaxLength {
+			res := *n
+			res.Point, _ = _Point.(Expr)
+			res.MaxLength, _ = _MaxLength.(Expr)
+			out = &res
+			if c.cloned != nil {
+				c.cloned(n, out)
+			}
+			changed = true
+		}
+	}
+	if c.post != nil {
+		out, changed = c.postVisit(out, parent, changed)
+	}
+	return
+}
 func (c *cow) copyOnRewriteRefOfGeomCollPropertyFuncExpr(n *GeomCollPropertyFuncExpr, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -2393,6 +2449,30 @@ func (c *cow) copyOnRewriteRefOfGeomFormatExpr(n *GeomFormatExpr, parent SQLNode
 			res := *n
 			res.Geom, _ = _Geom.(Expr)
 			res.AxisOrderOpt, _ = _AxisOrderOpt.(Expr)
+			out = &res
+			if c.cloned != nil {
+				c.cloned(n, out)
+			}
+			changed = true
+		}
+	}
+	if c.post != nil {
+		out, changed = c.postVisit(out, parent, changed)
+	}
+	return
+}
+func (c *cow) copyOnRewriteRefOfGeomFromGeoHashExpr(n *GeomFromGeoHashExpr, parent SQLNode) (out SQLNode, changed bool) {
+	if n == nil || c.cursor.stop {
+		return n, false
+	}
+	out = n
+	if c.pre == nil || c.pre(n, parent) {
+		_GeoHash, changedGeoHash := c.copyOnRewriteExpr(n.GeoHash, n)
+		_SridOpt, changedSridOpt := c.copyOnRewriteExpr(n.SridOpt, n)
+		if changedGeoHash || changedSridOpt {
+			res := *n
+			res.GeoHash, _ = _GeoHash.(Expr)
+			res.SridOpt, _ = _SridOpt.(Expr)
 			out = &res
 			if c.cloned != nil {
 				c.cloned(n, out)
@@ -6591,10 +6671,16 @@ func (c *cow) copyOnRewriteCallable(n Callable, parent SQLNode) (out SQLNode, ch
 		return c.copyOnRewriteRefOfFuncExpr(n, parent)
 	case *GTIDFuncExpr:
 		return c.copyOnRewriteRefOfGTIDFuncExpr(n, parent)
+	case *GeoHashFromLatLongExpr:
+		return c.copyOnRewriteRefOfGeoHashFromLatLongExpr(n, parent)
+	case *GeoHashFromPointExpr:
+		return c.copyOnRewriteRefOfGeoHashFromPointExpr(n, parent)
 	case *GeomCollPropertyFuncExpr:
 		return c.copyOnRewriteRefOfGeomCollPropertyFuncExpr(n, parent)
 	case *GeomFormatExpr:
 		return c.copyOnRewriteRefOfGeomFormatExpr(n, parent)
+	case *GeomFromGeoHashExpr:
+		return c.copyOnRewriteRefOfGeomFromGeoHashExpr(n, parent)
 	case *GeomFromTextExpr:
 		return c.copyOnRewriteRefOfGeomFromTextExpr(n, parent)
 	case *GeomFromWKBExpr:
@@ -6863,10 +6949,16 @@ func (c *cow) copyOnRewriteExpr(n Expr, parent SQLNode) (out SQLNode, changed bo
 		return c.copyOnRewriteRefOfFuncExpr(n, parent)
 	case *GTIDFuncExpr:
 		return c.copyOnRewriteRefOfGTIDFuncExpr(n, parent)
+	case *GeoHashFromLatLongExpr:
+		return c.copyOnRewriteRefOfGeoHashFromLatLongExpr(n, parent)
+	case *GeoHashFromPointExpr:
+		return c.copyOnRewriteRefOfGeoHashFromPointExpr(n, parent)
 	case *GeomCollPropertyFuncExpr:
 		return c.copyOnRewriteRefOfGeomCollPropertyFuncExpr(n, parent)
 	case *GeomFormatExpr:
 		return c.copyOnRewriteRefOfGeomFormatExpr(n, parent)
+	case *GeomFromGeoHashExpr:
+		return c.copyOnRewriteRefOfGeomFromGeoHashExpr(n, parent)
 	case *GeomFromTextExpr:
 		return c.copyOnRewriteRefOfGeomFromTextExpr(n, parent)
 	case *GeomFromWKBExpr:

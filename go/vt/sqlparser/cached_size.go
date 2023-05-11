@@ -1461,6 +1461,46 @@ func (cached *GTIDFuncExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+func (cached *GeoHashFromLatLongExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field Latitude vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Latitude.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field Longitude vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Longitude.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field MaxLength vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.MaxLength.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	return size
+}
+func (cached *GeoHashFromPointExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(32)
+	}
+	// field Point vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Point.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field MaxLength vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.MaxLength.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	return size
+}
 func (cached *GeomCollPropertyFuncExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -1493,6 +1533,24 @@ func (cached *GeomFormatExpr) CachedSize(alloc bool) int64 {
 	}
 	// field AxisOrderOpt vitess.io/vitess/go/vt/sqlparser.Expr
 	if cc, ok := cached.AxisOrderOpt.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	return size
+}
+func (cached *GeomFromGeoHashExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field GeoHash vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.GeoHash.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field SridOpt vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.SridOpt.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
 	return size

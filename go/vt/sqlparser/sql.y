@@ -368,7 +368,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %token <str> ST_GeometryCollectionFromText ST_GeometryFromText ST_LineStringFromText ST_MultiLineStringFromText ST_MultiPointFromText ST_MultiPolygonFromText ST_PointFromText ST_PolygonFromText
 %token <str> ST_GeometryCollectionFromWKB ST_GeometryFromWKB ST_LineStringFromWKB ST_MultiLineStringFromWKB ST_MultiPointFromWKB ST_MultiPolygonFromWKB ST_PointFromWKB ST_PolygonFromWKB
 %token <str> ST_AsBinary ST_AsText ST_Dimension ST_Envelope ST_IsSimple ST_IsEmpty ST_GeometryType ST_X ST_Y ST_Latitude ST_Longitude ST_EndPoint ST_IsClosed ST_Length ST_NumPoints ST_StartPoint ST_PointN
-%token <str> ST_Area ST_Centroid ST_ExteriorRing ST_InteriorRingN ST_NumInteriorRings ST_NumGeometries ST_GeometryN
+%token <str> ST_Area ST_Centroid ST_ExteriorRing ST_InteriorRingN ST_NumInteriorRings ST_NumGeometries ST_GeometryN ST_LongFromGeoHash ST_PointFromGeoHash ST_LatFromGeoHash ST_GeoHash
 
 // Match
 %token <str> MATCH AGAINST BOOLEAN LANGUAGE WITH QUERY EXPANSION WITHOUT VALIDATION
@@ -6414,6 +6414,26 @@ UTC_DATE func_paren_opt
  {
    $$ = &GeomCollPropertyFuncExpr{ Property: NumGeometries, GeomColl: $3 }
  }
+| ST_GeoHash openb expression ',' expression ',' expression closeb
+  {
+    $$ = &GeoHashFromLatLongExpr{ Longitude: $3, Latitude: $5, MaxLength: $7 }
+  }
+| ST_GeoHash openb expression ',' expression closeb
+  {
+    $$ = &GeoHashFromPointExpr{ Point: $3, MaxLength: $5 }
+  }
+| ST_LatFromGeoHash openb expression closeb
+  {
+    $$ = &GeomFromGeoHashExpr{ GeomType: LatitudeFromHash, GeoHash: $3 }
+  }
+| ST_LongFromGeoHash openb expression closeb
+  {
+    $$ = &GeomFromGeoHashExpr{ GeomType: LongitudeFromHash, GeoHash: $3 }
+  }
+| ST_PointFromGeoHash openb expression ',' expression closeb
+  {
+    $$ = &GeomFromGeoHashExpr{ GeomType: PointFromHash, GeoHash: $3, SridOpt: $5 }
+  }
 | JSON_OBJECT openb json_object_param_opt closeb
   {
     $$ = &JSONObjectExpr{ Params:$3 }

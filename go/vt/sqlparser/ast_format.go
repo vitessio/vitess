@@ -2885,3 +2885,22 @@ func (node *GeomCollPropertyFuncExpr) Format(buf *TrackedBuffer) {
 	}
 	buf.WriteByte(')')
 }
+
+// Format formats the node
+func (node *GeomFromGeoHashExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "%s(%v", node.GeomType.ToString(), node.GeoHash)
+	if node.SridOpt != nil {
+		buf.astPrintf(node, ", %v", node.SridOpt)
+	}
+	buf.WriteByte(')')
+}
+
+// Format formats the node
+func (node *GeoHashFromLatLongExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "st_geohash(%v, %v, %v)", node.Longitude, node.Latitude, node.MaxLength)
+}
+
+// Format formats the node
+func (node *GeoHashFromPointExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "st_geohash(%v, %v)", node.Point, node.MaxLength)
+}

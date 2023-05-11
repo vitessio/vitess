@@ -478,6 +478,11 @@ const (
 	// GeomCollPropType strings
 	NumGeometriesStr = "st_numgeometries"
 	GeometryNStr     = "st_geometryn"
+
+	// GeomFromGeoHash strings
+	LatitudeFromHashStr  = "st_latfromgeohash"
+	LongitudeFromHashStr = "st_longfromgeohash"
+	PointFromHashStr     = "st_pointfromgeohash"
 )
 
 // Constants for Enum Type - Insert.Action
@@ -1008,4 +1013,11 @@ const (
 const (
 	GeometryN GeomCollPropType = iota
 	NumGeometries
+)
+
+// Enum Types of geom from geohash functions
+const (
+	LatitudeFromHash GeomFromHashType = iota
+	LongitudeFromHash
+	PointFromHash
 )

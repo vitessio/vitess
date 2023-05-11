@@ -3791,3 +3791,35 @@ func (node *GeomCollPropertyFuncExpr) formatFast(buf *TrackedBuffer) {
 	}
 	buf.WriteByte(')')
 }
+
+// formatFast formats the node
+func (node *GeomFromGeoHashExpr) formatFast(buf *TrackedBuffer) {
+	buf.WriteString(node.GeomType.ToString())
+	buf.WriteByte('(')
+	buf.printExpr(node, node.GeoHash, true)
+	if node.SridOpt != nil {
+		buf.WriteString(", ")
+		buf.printExpr(node, node.SridOpt, true)
+	}
+	buf.WriteByte(')')
+}
+
+// formatFast formats the node
+func (node *GeoHashFromLatLongExpr) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("st_geohash(")
+	buf.printExpr(node, node.Longitude, true)
+	buf.WriteString(", ")
+	buf.printExpr(node, node.Latitude, true)
+	buf.WriteString(", ")
+	buf.printExpr(node, node.MaxLength, true)
+	buf.WriteByte(')')
+}
+
+// formatFast formats the node
+func (node *GeoHashFromPointExpr) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("st_geohash(")
+	buf.printExpr(node, node.Point, true)
+	buf.WriteString(", ")
+	buf.printExpr(node, node.MaxLength, true)
+	buf.WriteByte(')')
+}

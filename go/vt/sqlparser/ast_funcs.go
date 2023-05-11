@@ -2334,6 +2334,20 @@ func (ty GeomCollPropType) ToString() string {
 }
 
 // ToString returns the type as a string
+func (ty GeomFromHashType) ToString() string {
+	switch ty {
+	case LatitudeFromHash:
+		return LatitudeFromHashStr
+	case LongitudeFromHash:
+		return LongitudeFromHashStr
+	case PointFromHash:
+		return PointFromHashStr
+	default:
+		return "Unknown GeomFromGeoHashType"
+	}
+}
+
+// ToString returns the type as a string
 func (ty GeomFormatType) ToString() string {
 	switch ty {
 	case BinaryFormat:

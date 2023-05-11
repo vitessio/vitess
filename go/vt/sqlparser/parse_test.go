@@ -461,6 +461,21 @@ var (
 		input:  "SELECT ST_NumInteriorRing(ST_GeomFromText(@poly));",
 		output: "select st_numinteriorrings(st_geometryfromtext(@poly)) from dual",
 	}, {
+		input:  "SELECT ST_GeoHash(180,0,10), ST_GeoHash(-180,-90,15);",
+		output: "select st_geohash(180, 0, 10), st_geohash(-180, -90, 15) from dual",
+	}, {
+		input:  "SELECT ST_GeoHash(@p,10);",
+		output: "select st_geohash(@p, 10) from dual",
+	}, {
+		input:  "SELECT ST_LatFromGeoHash(ST_GeoHash(45,-20,10));",
+		output: "select st_latfromgeohash(st_geohash(45, -20, 10)) from dual",
+	}, {
+		input:  "SELECT ST_LongFromGeoHash(ST_GeoHash(45,-20,10));",
+		output: "select st_longfromgeohash(st_geohash(45, -20, 10)) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_PointFromGeoHash(@gh,0));",
+		output: "select st_astext(st_pointfromgeohash(@gh, 0)) from dual",
+	}, {
 		input:  "WITH RECURSIVE  odd_num_cte (id, n) AS (SELECT 1, 1 union all SELECT id+1, n+2 from odd_num_cte where id < 5) SELECT * FROM odd_num_cte",
 		output: "with recursive odd_num_cte(id, n) as (select 1, 1 from dual union all select id + 1, n + 2 from odd_num_cte where id < 5) select * from odd_num_cte",
 	}, {
