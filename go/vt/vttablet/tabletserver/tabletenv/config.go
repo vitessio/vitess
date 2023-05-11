@@ -170,6 +170,7 @@ func init() {
 
 	flag.Int64Var(&currentConfig.RowStreamer.MaxInnoDBTrxHistLen, "vreplication_copy_phase_max_innodb_history_list_length", 1000000, "The maximum InnoDB transaction history that can exist on a vstreamer (source) before starting another round of copying rows. This helps to limit the impact on the source tablet.")
 	flag.Int64Var(&currentConfig.RowStreamer.MaxMySQLReplLagSecs, "vreplication_copy_phase_max_mysql_replication_lag", 43200, "The maximum MySQL replication lag (in seconds) that can exist on a vstreamer (source) before starting another round of copying rows. This helps to limit the impact on the source tablet.")
+	flag.BoolVar(&currentConfig.EnablePerWorkloadTableMetrics, "enable-per-workload-table-metrics", defaultConfig.EnablePerWorkloadTableMetrics, "If true, query counts and query error metrics include a label that identifies the workload")
 }
 
 // Init must be called after flag.Parse, and before doing any other operations.
@@ -298,6 +299,8 @@ type TabletConfig struct {
 	EnableOnlineDDL          bool `json:"-"`
 
 	RowStreamer RowStreamerConfig `json:"rowStreamer,omitempty"`
+
+	EnablePerWorkloadTableMetrics bool `json:"-"`
 }
 
 // ConnPoolConfig contains the config for a conn pool.
@@ -511,6 +514,8 @@ var defaultConfig = TabletConfig{
 		MaxInnoDBTrxHistLen: 1000000,
 		MaxMySQLReplLagSecs: 43200,
 	},
+
+	EnablePerWorkloadTableMetrics: false,
 }
 
 // defaultTxThrottlerConfig formats the default throttlerdata.Configuration

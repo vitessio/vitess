@@ -377,6 +377,8 @@ Usage of vttablet:
 	Synonym to -enable_consolidator_replicas
   --enable-lag-throttler
 	Synonym to -enable_lag_throttler
+  --enable-per-workload-table-metrics
+	If true, query counts and query error metrics include a label that identifies the workload
   --enable-query-plan-field-caching
 	Synonym to -enable_query_plan_field_caching (default true)
   --enable-tx-throttler
