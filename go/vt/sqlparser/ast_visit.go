@@ -186,12 +186,16 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfGeoHashFromLatLongExpr(in, f)
 	case *GeoHashFromPointExpr:
 		return VisitRefOfGeoHashFromPointExpr(in, f)
+	case *GeoJSONFromGeomExpr:
+		return VisitRefOfGeoJSONFromGeomExpr(in, f)
 	case *GeomCollPropertyFuncExpr:
 		return VisitRefOfGeomCollPropertyFuncExpr(in, f)
 	case *GeomFormatExpr:
 		return VisitRefOfGeomFormatExpr(in, f)
 	case *GeomFromGeoHashExpr:
 		return VisitRefOfGeomFromGeoHashExpr(in, f)
+	case *GeomFromGeoJSONExpr:
+		return VisitRefOfGeomFromGeoJSONExpr(in, f)
 	case *GeomFromTextExpr:
 		return VisitRefOfGeomFromTextExpr(in, f)
 	case *GeomFromWKBExpr:
@@ -1734,6 +1738,24 @@ func VisitRefOfGeoHashFromPointExpr(in *GeoHashFromPointExpr, f Visit) error {
 	}
 	return nil
 }
+func VisitRefOfGeoJSONFromGeomExpr(in *GeoJSONFromGeomExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.Geom, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.MaxDecimalDigits, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.Bitmask, f); err != nil {
+		return err
+	}
+	return nil
+}
 func VisitRefOfGeomCollPropertyFuncExpr(in *GeomCollPropertyFuncExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -1775,6 +1797,24 @@ func VisitRefOfGeomFromGeoHashExpr(in *GeomFromGeoHashExpr, f Visit) error {
 		return err
 	}
 	if err := VisitExpr(in.SridOpt, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfGeomFromGeoJSONExpr(in *GeomFromGeoJSONExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.GeoJSON, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.HigherDimHandlerOpt, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.Srid, f); err != nil {
 		return err
 	}
 	return nil
@@ -4461,12 +4501,16 @@ func VisitCallable(in Callable, f Visit) error {
 		return VisitRefOfGeoHashFromLatLongExpr(in, f)
 	case *GeoHashFromPointExpr:
 		return VisitRefOfGeoHashFromPointExpr(in, f)
+	case *GeoJSONFromGeomExpr:
+		return VisitRefOfGeoJSONFromGeomExpr(in, f)
 	case *GeomCollPropertyFuncExpr:
 		return VisitRefOfGeomCollPropertyFuncExpr(in, f)
 	case *GeomFormatExpr:
 		return VisitRefOfGeomFormatExpr(in, f)
 	case *GeomFromGeoHashExpr:
 		return VisitRefOfGeomFromGeoHashExpr(in, f)
+	case *GeomFromGeoJSONExpr:
+		return VisitRefOfGeomFromGeoJSONExpr(in, f)
 	case *GeomFromTextExpr:
 		return VisitRefOfGeomFromTextExpr(in, f)
 	case *GeomFromWKBExpr:
@@ -4739,12 +4783,16 @@ func VisitExpr(in Expr, f Visit) error {
 		return VisitRefOfGeoHashFromLatLongExpr(in, f)
 	case *GeoHashFromPointExpr:
 		return VisitRefOfGeoHashFromPointExpr(in, f)
+	case *GeoJSONFromGeomExpr:
+		return VisitRefOfGeoJSONFromGeomExpr(in, f)
 	case *GeomCollPropertyFuncExpr:
 		return VisitRefOfGeomCollPropertyFuncExpr(in, f)
 	case *GeomFormatExpr:
 		return VisitRefOfGeomFormatExpr(in, f)
 	case *GeomFromGeoHashExpr:
 		return VisitRefOfGeomFromGeoHashExpr(in, f)
+	case *GeomFromGeoJSONExpr:
+		return VisitRefOfGeomFromGeoJSONExpr(in, f)
 	case *GeomFromTextExpr:
 		return VisitRefOfGeomFromTextExpr(in, f)
 	case *GeomFromWKBExpr:

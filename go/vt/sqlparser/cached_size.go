@@ -1501,6 +1501,28 @@ func (cached *GeoHashFromPointExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+func (cached *GeoJSONFromGeomExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field Geom vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Geom.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field MaxDecimalDigits vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.MaxDecimalDigits.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field Bitmask vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Bitmask.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	return size
+}
 func (cached *GeomCollPropertyFuncExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -1551,6 +1573,28 @@ func (cached *GeomFromGeoHashExpr) CachedSize(alloc bool) int64 {
 	}
 	// field SridOpt vitess.io/vitess/go/vt/sqlparser.Expr
 	if cc, ok := cached.SridOpt.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	return size
+}
+func (cached *GeomFromGeoJSONExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field GeoJSON vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.GeoJSON.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field HigherDimHandlerOpt vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.HigherDimHandlerOpt.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field Srid vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Srid.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
 	return size

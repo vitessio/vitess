@@ -3823,3 +3823,33 @@ func (node *GeoHashFromPointExpr) formatFast(buf *TrackedBuffer) {
 	buf.printExpr(node, node.MaxLength, true)
 	buf.WriteByte(')')
 }
+
+// formatFast formats the node
+func (node *GeoJSONFromGeomExpr) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("st_asgeojson(")
+	buf.printExpr(node, node.Geom, true)
+	if node.MaxDecimalDigits != nil {
+		buf.WriteString(", ")
+		buf.printExpr(node, node.MaxDecimalDigits, true)
+	}
+	if node.Bitmask != nil {
+		buf.WriteString(", ")
+		buf.printExpr(node, node.Bitmask, true)
+	}
+	buf.WriteByte(')')
+}
+
+// formatFast formats the node
+func (node *GeomFromGeoJSONExpr) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("st_geomfromgeojson(")
+	buf.printExpr(node, node.GeoJSON, true)
+	if node.HigherDimHandlerOpt != nil {
+		buf.WriteString(", ")
+		buf.printExpr(node, node.HigherDimHandlerOpt, true)
+	}
+	if node.Srid != nil {
+		buf.WriteString(", ")
+		buf.printExpr(node, node.Srid, true)
+	}
+	buf.WriteByte(')')
+}

@@ -187,12 +187,16 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfGeoHashFromLatLongExpr(in)
 	case *GeoHashFromPointExpr:
 		return CloneRefOfGeoHashFromPointExpr(in)
+	case *GeoJSONFromGeomExpr:
+		return CloneRefOfGeoJSONFromGeomExpr(in)
 	case *GeomCollPropertyFuncExpr:
 		return CloneRefOfGeomCollPropertyFuncExpr(in)
 	case *GeomFormatExpr:
 		return CloneRefOfGeomFormatExpr(in)
 	case *GeomFromGeoHashExpr:
 		return CloneRefOfGeomFromGeoHashExpr(in)
+	case *GeomFromGeoJSONExpr:
+		return CloneRefOfGeomFromGeoJSONExpr(in)
 	case *GeomFromTextExpr:
 		return CloneRefOfGeomFromTextExpr(in)
 	case *GeomFromWKBExpr:
@@ -1432,6 +1436,18 @@ func CloneRefOfGeoHashFromPointExpr(n *GeoHashFromPointExpr) *GeoHashFromPointEx
 	return &out
 }
 
+// CloneRefOfGeoJSONFromGeomExpr creates a deep clone of the input.
+func CloneRefOfGeoJSONFromGeomExpr(n *GeoJSONFromGeomExpr) *GeoJSONFromGeomExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Geom = CloneExpr(n.Geom)
+	out.MaxDecimalDigits = CloneExpr(n.MaxDecimalDigits)
+	out.Bitmask = CloneExpr(n.Bitmask)
+	return &out
+}
+
 // CloneRefOfGeomCollPropertyFuncExpr creates a deep clone of the input.
 func CloneRefOfGeomCollPropertyFuncExpr(n *GeomCollPropertyFuncExpr) *GeomCollPropertyFuncExpr {
 	if n == nil {
@@ -1462,6 +1478,18 @@ func CloneRefOfGeomFromGeoHashExpr(n *GeomFromGeoHashExpr) *GeomFromGeoHashExpr 
 	out := *n
 	out.GeoHash = CloneExpr(n.GeoHash)
 	out.SridOpt = CloneExpr(n.SridOpt)
+	return &out
+}
+
+// CloneRefOfGeomFromGeoJSONExpr creates a deep clone of the input.
+func CloneRefOfGeomFromGeoJSONExpr(n *GeomFromGeoJSONExpr) *GeomFromGeoJSONExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.GeoJSON = CloneExpr(n.GeoJSON)
+	out.HigherDimHandlerOpt = CloneExpr(n.HigherDimHandlerOpt)
+	out.Srid = CloneExpr(n.Srid)
 	return &out
 }
 
@@ -3510,12 +3538,16 @@ func CloneCallable(in Callable) Callable {
 		return CloneRefOfGeoHashFromLatLongExpr(in)
 	case *GeoHashFromPointExpr:
 		return CloneRefOfGeoHashFromPointExpr(in)
+	case *GeoJSONFromGeomExpr:
+		return CloneRefOfGeoJSONFromGeomExpr(in)
 	case *GeomCollPropertyFuncExpr:
 		return CloneRefOfGeomCollPropertyFuncExpr(in)
 	case *GeomFormatExpr:
 		return CloneRefOfGeomFormatExpr(in)
 	case *GeomFromGeoHashExpr:
 		return CloneRefOfGeomFromGeoHashExpr(in)
+	case *GeomFromGeoJSONExpr:
+		return CloneRefOfGeomFromGeoJSONExpr(in)
 	case *GeomFromTextExpr:
 		return CloneRefOfGeomFromTextExpr(in)
 	case *GeomFromWKBExpr:
@@ -3800,12 +3832,16 @@ func CloneExpr(in Expr) Expr {
 		return CloneRefOfGeoHashFromLatLongExpr(in)
 	case *GeoHashFromPointExpr:
 		return CloneRefOfGeoHashFromPointExpr(in)
+	case *GeoJSONFromGeomExpr:
+		return CloneRefOfGeoJSONFromGeomExpr(in)
 	case *GeomCollPropertyFuncExpr:
 		return CloneRefOfGeomCollPropertyFuncExpr(in)
 	case *GeomFormatExpr:
 		return CloneRefOfGeomFormatExpr(in)
 	case *GeomFromGeoHashExpr:
 		return CloneRefOfGeomFromGeoHashExpr(in)
+	case *GeomFromGeoJSONExpr:
+		return CloneRefOfGeomFromGeoJSONExpr(in)
 	case *GeomFromTextExpr:
 		return CloneRefOfGeomFromTextExpr(in)
 	case *GeomFromWKBExpr:

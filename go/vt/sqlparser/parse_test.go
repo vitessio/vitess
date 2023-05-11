@@ -476,6 +476,24 @@ var (
 		input:  "SELECT ST_AsText(ST_PointFromGeoHash(@gh,0));",
 		output: "select st_astext(st_pointfromgeohash(@gh, 0)) from dual",
 	}, {
+		input:  "SELECT ST_AsGeoJSON(ST_GeomFromText('POINT(11.11111 12.22222)'));",
+		output: "select st_asgeojson(st_geometryfromtext('POINT(11.11111 12.22222)')) from dual",
+	}, {
+		input:  "SELECT ST_AsGeoJSON(ST_GeomFromText('POINT(11.11111 12.22222)'),2);",
+		output: "select st_asgeojson(st_geometryfromtext('POINT(11.11111 12.22222)'), 2) from dual",
+	}, {
+		input:  "SELECT ST_AsGeoJSON(ST_GeomFromText('POINT(11.11111 12.22222)'),2,0);",
+		output: "select st_asgeojson(st_geometryfromtext('POINT(11.11111 12.22222)'), 2, 0) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_GeomFromGeoJSON(@json));",
+		output: "select st_astext(st_geomfromgeojson(@`json`)) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_SRID(ST_GeomFromGeoJSON(@json, 0),0));",
+		output: "select st_astext(ST_SRID(st_geomfromgeojson(@`json`, 0), 0)) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_SRID(ST_GeomFromGeoJSON(@json),1,4326));",
+		output: "select st_astext(ST_SRID(st_geomfromgeojson(@`json`), 1, 4326)) from dual",
+	}, {
 		input:  "WITH RECURSIVE  odd_num_cte (id, n) AS (SELECT 1, 1 union all SELECT id+1, n+2 from odd_num_cte where id < 5) SELECT * FROM odd_num_cte",
 		output: "with recursive odd_num_cte(id, n) as (select 1, 1 from dual union all select id + 1, n + 2 from odd_num_cte where id < 5) select * from odd_num_cte",
 	}, {

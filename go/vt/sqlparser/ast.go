@@ -2841,6 +2841,18 @@ type (
 		SridOpt  Expr
 	}
 
+	GeoJSONFromGeomExpr struct {
+		Geom             Expr
+		MaxDecimalDigits Expr
+		Bitmask          Expr
+	}
+
+	GeomFromGeoJSONExpr struct {
+		GeoJSON             Expr
+		HigherDimHandlerOpt Expr // This value determine how the higher dimensions are handled while converting json to geometry
+		Srid                Expr
+	}
+
 	AggrFunc interface {
 		Expr
 		AggrName() string
@@ -3185,6 +3197,8 @@ func (*GeomCollPropertyFuncExpr) iExpr()           {}
 func (*GeoHashFromLatLongExpr) iExpr()             {}
 func (*GeoHashFromPointExpr) iExpr()               {}
 func (*GeomFromGeoHashExpr) iExpr()                {}
+func (*GeoJSONFromGeomExpr) iExpr()                {}
+func (*GeomFromGeoJSONExpr) iExpr()                {}
 
 // iCallable marks all expressions that represent function calls
 func (*FuncExpr) iCallable()                           {}
@@ -3255,6 +3269,8 @@ func (*GeomCollPropertyFuncExpr) iCallable()           {}
 func (*GeoHashFromLatLongExpr) iCallable()             {}
 func (*GeoHashFromPointExpr) iCallable()               {}
 func (*GeomFromGeoHashExpr) iCallable()                {}
+func (*GeoJSONFromGeomExpr) iCallable()                {}
+func (*GeomFromGeoJSONExpr) iCallable()                {}
 
 func (*Sum) iCallable()       {}
 func (*Min) iCallable()       {}

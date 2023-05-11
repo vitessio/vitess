@@ -2904,3 +2904,27 @@ func (node *GeoHashFromLatLongExpr) Format(buf *TrackedBuffer) {
 func (node *GeoHashFromPointExpr) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "st_geohash(%v, %v)", node.Point, node.MaxLength)
 }
+
+// Format formats the node
+func (node *GeoJSONFromGeomExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "st_asgeojson(%v", node.Geom)
+	if node.MaxDecimalDigits != nil {
+		buf.astPrintf(node, ", %v", node.MaxDecimalDigits)
+	}
+	if node.Bitmask != nil {
+		buf.astPrintf(node, ", %v", node.Bitmask)
+	}
+	buf.WriteByte(')')
+}
+
+// Format formats the node
+func (node *GeomFromGeoJSONExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "st_geomfromgeojson(%v", node.GeoJSON)
+	if node.HigherDimHandlerOpt != nil {
+		buf.astPrintf(node, ", %v", node.HigherDimHandlerOpt)
+	}
+	if node.Srid != nil {
+		buf.astPrintf(node, ", %v", node.Srid)
+	}
+	buf.WriteByte(')')
+}
