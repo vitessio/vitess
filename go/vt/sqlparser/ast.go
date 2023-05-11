@@ -2803,6 +2803,15 @@ type (
 		PropertyDefArg Expr
 	}
 
+	// Linestring is an enum to get the types of geom format functions with possible values: EndPoint IsClosed Length NumPoints PointN StartPoint
+	PolygonPropType int8
+
+	PolygonPropertyFuncExpr struct {
+		Property       PolygonPropType
+		Polygon        Expr
+		PropertyDefArg Expr
+	}
+
 	AggrFunc interface {
 		Expr
 		AggrName() string
@@ -3142,6 +3151,7 @@ func (*GeomFormatExpr) iExpr()                     {}
 func (*GeomPropertyFuncExpr) iExpr()               {}
 func (*PointPropertyFuncExpr) iExpr()              {}
 func (*LinestrPropertyFuncExpr) iExpr()            {}
+func (*PolygonPropertyFuncExpr) iExpr()            {}
 
 // iCallable marks all expressions that represent function calls
 func (*FuncExpr) iCallable()                           {}
@@ -3207,6 +3217,7 @@ func (*GeomFormatExpr) iCallable()                     {}
 func (*GeomPropertyFuncExpr) iCallable()               {}
 func (*PointPropertyFuncExpr) iCallable()              {}
 func (*LinestrPropertyFuncExpr) iCallable()            {}
+func (*PolygonPropertyFuncExpr) iCallable()            {}
 
 func (*Sum) iCallable()       {}
 func (*Min) iCallable()       {}

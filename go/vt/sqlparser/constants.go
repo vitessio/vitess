@@ -467,6 +467,13 @@ const (
 	NumPointsStr  = "st_numpoints"
 	PointNStr     = "st_pointn"
 	StartPointStr = "st_startpoint"
+
+	// PolygonPropertyType strings
+	AreaStr             = "st_area"
+	CentroidStr         = "st_centroid"
+	ExteriorRingStr     = "st_exteriorring"
+	InteriorRingNStr    = "st_interiorringN"
+	NumInteriorRingsStr = "st_numinteriorrings"
 )
 
 // Constants for Enum Type - Insert.Action
@@ -982,4 +989,13 @@ const (
 	NumPoints
 	PointN
 	StartPoint
+)
+
+// Enum Types of linestring property functions
+const (
+	Area PolygonPropType = iota
+	Centroid
+	ExteriorRing
+	InteriorRingN
+	NumInteriorRings
 )

@@ -374,6 +374,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfPointPropertyFuncExpr(in, f)
 	case *PolygonExpr:
 		return VisitRefOfPolygonExpr(in, f)
+	case *PolygonPropertyFuncExpr:
+		return VisitRefOfPolygonPropertyFuncExpr(in, f)
 	case *PrepareStmt:
 		return VisitRefOfPrepareStmt(in, f)
 	case *PurgeBinaryLogs:
@@ -3039,6 +3041,21 @@ func VisitRefOfPolygonExpr(in *PolygonExpr, f Visit) error {
 	}
 	return nil
 }
+func VisitRefOfPolygonPropertyFuncExpr(in *PolygonPropertyFuncExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.Polygon, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.PropertyDefArg, f); err != nil {
+		return err
+	}
+	return nil
+}
 func VisitRefOfPrepareStmt(in *PrepareStmt, f Visit) error {
 	if in == nil {
 		return nil
@@ -4459,6 +4476,8 @@ func VisitCallable(in Callable, f Visit) error {
 		return VisitRefOfPointPropertyFuncExpr(in, f)
 	case *PolygonExpr:
 		return VisitRefOfPolygonExpr(in, f)
+	case *PolygonPropertyFuncExpr:
+		return VisitRefOfPolygonPropertyFuncExpr(in, f)
 	case *RegexpInstrExpr:
 		return VisitRefOfRegexpInstrExpr(in, f)
 	case *RegexpLikeExpr:
@@ -4747,6 +4766,8 @@ func VisitExpr(in Expr, f Visit) error {
 		return VisitRefOfPointPropertyFuncExpr(in, f)
 	case *PolygonExpr:
 		return VisitRefOfPolygonExpr(in, f)
+	case *PolygonPropertyFuncExpr:
+		return VisitRefOfPolygonPropertyFuncExpr(in, f)
 	case *RegexpInstrExpr:
 		return VisitRefOfRegexpInstrExpr(in, f)
 	case *RegexpLikeExpr:

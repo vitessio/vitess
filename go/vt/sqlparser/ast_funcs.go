@@ -2304,6 +2304,24 @@ func (ty LinestrPropType) ToString() string {
 }
 
 // ToString returns the type as a string
+func (ty PolygonPropType) ToString() string {
+	switch ty {
+	case Area:
+		return AreaStr
+	case Centroid:
+		return CentroidStr
+	case ExteriorRing:
+		return ExteriorRingStr
+	case InteriorRingN:
+		return InteriorRingNStr
+	case NumInteriorRings:
+		return NumInteriorRingsStr
+	default:
+		return "Unknown PolygonPropType"
+	}
+}
+
+// ToString returns the type as a string
 func (ty GeomFormatType) ToString() string {
 	switch ty {
 	case BinaryFormat:

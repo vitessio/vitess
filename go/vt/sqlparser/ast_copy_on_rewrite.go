@@ -374,6 +374,8 @@ func (c *cow) copyOnRewriteSQLNode(n SQLNode, parent SQLNode) (out SQLNode, chan
 		return c.copyOnRewriteRefOfPointPropertyFuncExpr(n, parent)
 	case *PolygonExpr:
 		return c.copyOnRewriteRefOfPolygonExpr(n, parent)
+	case *PolygonPropertyFuncExpr:
+		return c.copyOnRewriteRefOfPolygonPropertyFuncExpr(n, parent)
 	case *PrepareStmt:
 		return c.copyOnRewriteRefOfPrepareStmt(n, parent)
 	case *PurgeBinaryLogs:
@@ -4525,6 +4527,30 @@ func (c *cow) copyOnRewriteRefOfPolygonExpr(n *PolygonExpr, parent SQLNode) (out
 	}
 	return
 }
+func (c *cow) copyOnRewriteRefOfPolygonPropertyFuncExpr(n *PolygonPropertyFuncExpr, parent SQLNode) (out SQLNode, changed bool) {
+	if n == nil || c.cursor.stop {
+		return n, false
+	}
+	out = n
+	if c.pre == nil || c.pre(n, parent) {
+		_Polygon, changedPolygon := c.copyOnRewriteExpr(n.Polygon, n)
+		_PropertyDefArg, changedPropertyDefArg := c.copyOnRewriteExpr(n.PropertyDefArg, n)
+		if changedPolygon || changedPropertyDefArg {
+			res := *n
+			res.Polygon, _ = _Polygon.(Expr)
+			res.PropertyDefArg, _ = _PropertyDefArg.(Expr)
+			out = &res
+			if c.cloned != nil {
+				c.cloned(n, out)
+			}
+			changed = true
+		}
+	}
+	if c.post != nil {
+		out, changed = c.postVisit(out, parent, changed)
+	}
+	return
+}
 func (c *cow) copyOnRewriteRefOfPrepareStmt(n *PrepareStmt, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -6629,6 +6655,8 @@ func (c *cow) copyOnRewriteCallable(n Callable, parent SQLNode) (out SQLNode, ch
 		return c.copyOnRewriteRefOfPointPropertyFuncExpr(n, parent)
 	case *PolygonExpr:
 		return c.copyOnRewriteRefOfPolygonExpr(n, parent)
+	case *PolygonPropertyFuncExpr:
+		return c.copyOnRewriteRefOfPolygonPropertyFuncExpr(n, parent)
 	case *RegexpInstrExpr:
 		return c.copyOnRewriteRefOfRegexpInstrExpr(n, parent)
 	case *RegexpLikeExpr:
@@ -6917,6 +6945,8 @@ func (c *cow) copyOnRewriteExpr(n Expr, parent SQLNode) (out SQLNode, changed bo
 		return c.copyOnRewriteRefOfPointPropertyFuncExpr(n, parent)
 	case *PolygonExpr:
 		return c.copyOnRewriteRefOfPolygonExpr(n, parent)
+	case *PolygonPropertyFuncExpr:
+		return c.copyOnRewriteRefOfPolygonPropertyFuncExpr(n, parent)
 	case *RegexpInstrExpr:
 		return c.copyOnRewriteRefOfRegexpInstrExpr(n, parent)
 	case *RegexpLikeExpr:

@@ -2867,3 +2867,12 @@ func (node *LinestrPropertyFuncExpr) Format(buf *TrackedBuffer) {
 	}
 	buf.WriteByte(')')
 }
+
+// Format formats the node
+func (node *PolygonPropertyFuncExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "%s(%v", node.Property.ToString(), node.Polygon)
+	if node.PropertyDefArg != nil {
+		buf.astPrintf(node, ", %v", node.PropertyDefArg)
+	}
+	buf.WriteByte(')')
+}

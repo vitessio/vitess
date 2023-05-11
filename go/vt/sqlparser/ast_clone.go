@@ -375,6 +375,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfPointPropertyFuncExpr(in)
 	case *PolygonExpr:
 		return CloneRefOfPolygonExpr(in)
+	case *PolygonPropertyFuncExpr:
+		return CloneRefOfPolygonPropertyFuncExpr(in)
 	case *PrepareStmt:
 		return CloneRefOfPrepareStmt(in)
 	case *PurgeBinaryLogs:
@@ -2416,6 +2418,17 @@ func CloneRefOfPolygonExpr(n *PolygonExpr) *PolygonExpr {
 	return &out
 }
 
+// CloneRefOfPolygonPropertyFuncExpr creates a deep clone of the input.
+func CloneRefOfPolygonPropertyFuncExpr(n *PolygonPropertyFuncExpr) *PolygonPropertyFuncExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Polygon = CloneExpr(n.Polygon)
+	out.PropertyDefArg = CloneExpr(n.PropertyDefArg)
+	return &out
+}
+
 // CloneRefOfPrepareStmt creates a deep clone of the input.
 func CloneRefOfPrepareStmt(n *PrepareStmt) *PrepareStmt {
 	if n == nil {
@@ -3530,6 +3543,8 @@ func CloneCallable(in Callable) Callable {
 		return CloneRefOfPointPropertyFuncExpr(in)
 	case *PolygonExpr:
 		return CloneRefOfPolygonExpr(in)
+	case *PolygonPropertyFuncExpr:
+		return CloneRefOfPolygonPropertyFuncExpr(in)
 	case *RegexpInstrExpr:
 		return CloneRefOfRegexpInstrExpr(in)
 	case *RegexpLikeExpr:
@@ -3830,6 +3845,8 @@ func CloneExpr(in Expr) Expr {
 		return CloneRefOfPointPropertyFuncExpr(in)
 	case *PolygonExpr:
 		return CloneRefOfPolygonExpr(in)
+	case *PolygonPropertyFuncExpr:
+		return CloneRefOfPolygonPropertyFuncExpr(in)
 	case *RegexpInstrExpr:
 		return CloneRefOfRegexpInstrExpr(in)
 	case *RegexpLikeExpr:

@@ -437,6 +437,24 @@ var (
 		input:  "SELECT ST_AsText(StartPoint(ST_GeomFromText(@ls)));",
 		output: "select st_astext(st_startpoint(st_geometryfromtext(@ls))) from dual",
 	}, {
+		input:  "SELECT ST_Area(ST_GeomFromText(@mpoly));",
+		output: "select st_area(st_geometryfromtext(@mpoly)) from dual",
+	}, {
+		input:  "SELECT ST_GeometryType(@poly),ST_AsText(ST_Centroid(@poly));",
+		output: "select st_geometrytype(@poly), st_astext(st_centroid(@poly)) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_ExteriorRing(ST_GeomFromText(@poly)));",
+		output: "select st_astext(st_exteriorring(st_geometryfromtext(@poly))) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_InteriorRingN(ST_GeomFromText(@poly),1));",
+		output: "select st_astext(st_interiorringN(st_geometryfromtext(@poly), 1)) from dual",
+	}, {
+		input:  "SELECT ST_NumInteriorRings(ST_GeomFromText(@poly));",
+		output: "select st_numinteriorrings(st_geometryfromtext(@poly)) from dual",
+	}, {
+		input:  "SELECT ST_NumInteriorRing(ST_GeomFromText(@poly));",
+		output: "select st_numinteriorrings(st_geometryfromtext(@poly)) from dual",
+	}, {
 		input:  "WITH RECURSIVE  odd_num_cte (id, n) AS (SELECT 1, 1 union all SELECT id+1, n+2 from odd_num_cte where id < 5) SELECT * FROM odd_num_cte",
 		output: "with recursive odd_num_cte(id, n) as (select 1, 1 from dual union all select id + 1, n + 2 from odd_num_cte where id < 5) select * from odd_num_cte",
 	}, {
