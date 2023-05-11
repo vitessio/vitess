@@ -2758,7 +2758,7 @@ type (
 		AxisOrderOpt Expr
 	}
 
-	// GeomFromWkbType is an enum to get the types of wkt functions with possible values: GeometryFromWKB GeometryCollectionFromWKB PointFromWKB LineStringFromWKB PolygonFromWKB MultiPointFromWKB MultiPolygonFromWKB MultiLinestringFromWKB
+	// GeomFromWkbType is an enum to get the types of wkb functions with possible values: GeometryFromWKB GeometryCollectionFromWKB PointFromWKB LineStringFromWKB PolygonFromWKB MultiPointFromWKB MultiPolygonFromWKB MultiLinestringFromWKB
 	GeomFromWkbType int8
 
 	GeomFromWKBExpr struct {
@@ -2777,7 +2777,7 @@ type (
 		AxisOrderOpt Expr
 	}
 
-	// GeomPropertyType is an enum to get the types of geom format functions with possible values: Dimension Envelope IsSimple IsEmpty GeometryType
+	// GeomPropertyType is an enum to get the types of geom property functions with possible values: Dimension Envelope IsSimple IsEmpty GeometryType
 	GeomPropertyType int8
 
 	GeomPropertyFuncExpr struct {
@@ -2785,7 +2785,7 @@ type (
 		Geom     Expr
 	}
 
-	// PointPropertyType is an enum to get the types of geom format functions with possible values: XCordinate YCordinate Latitude Longitude
+	// PointPropertyType is an that enumerates the kind of point property functions: XCordinate YCordinate Latitude Longitude
 	PointPropertyType int8
 
 	PointPropertyFuncExpr struct {
@@ -2794,7 +2794,7 @@ type (
 		ValueToSet Expr
 	}
 
-	// Linestring is an enum to get the types of geom format functions with possible values: EndPoint IsClosed Length NumPoints PointN StartPoint
+	// LinestrPropType is an enum that enumerates the kind of line string property functions: EndPoint IsClosed Length NumPoints PointN StartPoint
 	LinestrPropType int8
 
 	LinestrPropertyFuncExpr struct {
@@ -2803,7 +2803,7 @@ type (
 		PropertyDefArg Expr
 	}
 
-	// PolygonPropType is an enum to get the types of geom format functions with possible values: Area Centroid ExteriorRing InteriorRingN ST_NumInteriorRing
+	// PolygonPropType is an enum that enumerates the kind of polygon property functions: Area Centroid ExteriorRing InteriorRingN NumInteriorRing
 	PolygonPropType int8
 
 	PolygonPropertyFuncExpr struct {
@@ -2812,7 +2812,7 @@ type (
 		PropertyDefArg Expr
 	}
 
-	// GeomCollPropType is an enum to get the types of geom format functions with possible values: GeometryN NumGeometries
+	// GeomCollPropType is an enumthat enumerates the kind of geom coll property functions with possible values: GeometryN NumGeometries
 	GeomCollPropType int8
 
 	GeomCollPropertyFuncExpr struct {
@@ -2832,7 +2832,7 @@ type (
 		MaxLength Expr
 	}
 
-	// GeomFromHashType is an enum that determines what kind geom being retireived from hash : Latitude Longitude Point
+	// GeomFromHashType is an enum that determines what kind geom being retireived from hash
 	GeomFromHashType int8
 
 	GeomFromGeoHashExpr struct {
