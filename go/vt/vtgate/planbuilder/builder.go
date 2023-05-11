@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"sort"
 
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 
@@ -371,13 +373,20 @@ func buildFlushPlan(stmt *sqlparser.Flush, vschema plancontext.VSchema) (*planRe
 }
 
 func buildFlushOptions(stmt *sqlparser.Flush, vschema plancontext.VSchema) (*planResult, error) {
-	dest, keyspace, _, err := vschema.TargetDestination("")
+	if !stmt.IsLocal && vschema.TabletType() != topodatapb.TabletType_PRIMARY {
+		return nil, vterrors.VT09012("FLUSH", vschema.TabletType().String())
+	}
+
+	keyspace, err := vschema.DefaultKeyspace()
 	if err != nil {
 		return nil, err
 	}
+
+	dest := vschema.Destination()
 	if dest == nil {
 		dest = key.DestinationAllShards{}
 	}
+
 	tc := &tableCollector{}
 	for _, tbl := range stmt.TableNames {
 		tc.addASTTable(keyspace.Name, tbl)
@@ -393,6 +402,9 @@ func buildFlushOptions(stmt *sqlparser.Flush, vschema plancontext.VSchema) (*pla
 }
 
 func buildFlushTables(stmt *sqlparser.Flush, vschema plancontext.VSchema) (*planResult, error) {
+	if !stmt.IsLocal && vschema.TabletType() != topodatapb.TabletType_PRIMARY {
+		return nil, vterrors.VT09012("FLUSH", vschema.TabletType().String())
+	}
 	tc := &tableCollector{}
 	type sendDest struct {
 		ks   *vindexes.Keyspace
@@ -408,20 +420,18 @@ func buildFlushTables(stmt *sqlparser.Flush, vschema plancontext.VSchema) (*plan
 	var keys []sendDest
 	for i, tab := range stmt.TableNames {
 		var ksTab *vindexes.Keyspace
-		var table *vindexes.Table
-		var err error
 
-		table, _, _, _, _, err = vschema.FindTableOrVindex(tab)
+		tbl, _, _, _, _, err := vschema.FindTableOrVindex(tab)
 		if err != nil {
 			return nil, err
 		}
-		if table == nil {
+		if tbl == nil {
 			return nil, vindexes.NotFoundError{TableName: tab.Name.String()}
 		}
-		tc.addTable(table.Keyspace.Name, table.Name.String())
-		ksTab = table.Keyspace
+		tc.addTable(tbl.Keyspace.Name, tbl.Name.String())
+		ksTab = tbl.Keyspace
 		stmt.TableNames[i] = sqlparser.TableName{
-			Name: table.Name,
+			Name: tbl.Name,
 		}
 
 		key := sendDest{ksTab, dest}
