@@ -785,6 +785,8 @@ Usage of vttablet:
 	logs at or above this threshold go to stderr (default 1)
   --stream_health_buffer_size uint
 	max streaming health entries to buffer per streaming health client (default 20)
+  --structured-logging
+	whether to use structured logging (Zap) or the original (glog) logger
   --table-acl-config string
 	path to table access checker config file; send SIGHUP to reload this file
   --table-acl-config-reload-interval duration

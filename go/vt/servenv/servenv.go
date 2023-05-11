@@ -38,6 +38,8 @@ import (
 	"syscall"
 	"time"
 
+	"vitess.io/vitess/go/vt/logutil"
+
 	// register the HTTP handlers for profiling
 	_ "net/http/pprof"
 
@@ -64,6 +66,7 @@ var (
 	_              = flag.Int("mem-profile-rate", 512*1024, "deprecated: use '-pprof=mem' instead")
 	_              = flag.Int("mutex-profile-fraction", 0, "deprecated: use '-pprof=mutex' instead")
 	catchSigpipe   = flag.Bool("catch-sigpipe", false, "catch and ignore SIGPIPE on stdout and stderr if specified")
+	useVTSLogger   = flag.Bool("structured-logging", false, "whether to use structured logging (Zap) or the original (glog) logger")
 
 	// mutex used to protect the Init function
 	mu sync.Mutex
@@ -242,6 +245,14 @@ func ParseFlags(cmd string) {
 	if *Version {
 		AppVersion.Print()
 		os.Exit(0)
+	}
+
+	if *useVTSLogger {
+		// Replace glog logger with zap logger
+		_, err := logutil.SetVTStructureLogger(nil)
+		if err != nil {
+			log.Exitf("error while setting the Zap logger: %s", err)
+		}
 	}
 
 	args := _flag.Args()
