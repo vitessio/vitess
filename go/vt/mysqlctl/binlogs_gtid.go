@@ -88,17 +88,19 @@ func ChooseBinlogsForIncrementalBackup(
 		// That means the *previous* binary log is the first binary log to introduce GTID events on top
 		// of "backupPos"
 		if backupFromGTIDSet.Contains(previousGTIDsPos.GTIDSet) {
-			// All previous binary logs are fully contained by backupPos. So definitely all binlogs _prior_ to
+			// Previous-GTIDs is contained by backupPos. So definitely all binlogs _prior_ to
 			// this binlog are not necessary. We still don't know about _this_ binlog. We can't tell yet if
 			// _this_ binlog introduces new GTID entries not covered by the last backup pos. But we will only
 			// know this when we look into the _next_ binlog file's Previous-GTIDs.
 			continue
 		}
 		if i == 0 {
-			return nil, "", "", vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "the very first binlog file %v has PreviousGTIDs %s that exceed given incremental backup pos. There are GTID entries that are missing and this backup cannot run", binlog, previousGTIDsPos)
+			return nil, "", "", vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "Required entries have been purged. Oldest binary log %v expects entries not found in back up pos. Expected pos=%v", binlog, previousGTIDsPos)
 		}
 		if !prevGTIDsUnion.Union(purgedGTIDSet).Contains(backupFromGTIDSet) {
-			return nil, "", "", vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "binary log %v with previous GTIDS %s neither contains requested GTID %s nor contains it. Backup cannot take place", binlog, previousGTIDsPos.GTIDSet, backupFromGTIDSet)
+			return nil, "", "", vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION,
+				"Mismatching GTID entries. Requested backup pos has entries not found in the binary logs, and binary logs have entries not found in the requested backup pos. Requested pos=%v, binlog pos=%v",
+				backupFromGTIDSet, previousGTIDsPos.GTIDSet)
 		}
 		// We begin with the previous binary log, and we ignore the last binary log, because it's still open and being written to.
 		binaryLogsToBackup = binaryLogs[i-1 : len(binaryLogs)-1]

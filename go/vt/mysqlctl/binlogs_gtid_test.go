@@ -92,7 +92,7 @@ func TestChooseBinlogsForIncrementalBackup(t *testing.T) {
 			name:          "missing GTID entries",
 			previousGTIDs: basePreviousGTIDs,
 			backupPos:     "16b1039f-0000-0000-0000-000000000000:1-63",
-			expectError:   "There are GTID entries that are missing",
+			expectError:   "Required entries have been purged",
 		},
 		{
 			name: "empty previous GTIDs in first binlog",
@@ -105,7 +105,7 @@ func TestChooseBinlogsForIncrementalBackup(t *testing.T) {
 				"vt-bin.000006": "16b1039f-22b6-11ed-b765-0a43f95f28a3:1-331",
 			},
 			backupPos:   "16b1039f-0000-0000-0000-000000000000:1-63",
-			expectError: "neither contains requested GTID",
+			expectError: "Mismatching GTID entries",
 		},
 		{
 			name: "match with non strictly monotonic sequence",
@@ -153,7 +153,7 @@ func TestChooseBinlogsForIncrementalBackup(t *testing.T) {
 			},
 			backupPos:   "16b1039f-22b6-11ed-b765-0a43f95f28a3:1-63",
 			gtidPurged:  "16b1039f-22b6-11ed-b765-0a43f95f28a3:1-2",
-			expectError: "There are GTID entries that are missing",
+			expectError: "Required entries have been purged",
 		},
 		{
 			name: "inexact, gitd_purged, missing 2",
@@ -168,7 +168,7 @@ func TestChooseBinlogsForIncrementalBackup(t *testing.T) {
 			backupPos:     "16b1039f-22b6-11ed-b765-0a43f95f28a3:1-80",
 			gtidPurged:    "16b1039f-22b6-11ed-b765-0a43f95f28a3:1",
 			expectBinlogs: []string{"vt-bin.000001", "vt-bin.000002", "vt-bin.000003", "vt-bin.000004", "vt-bin.000005"},
-			expectError:   "neither contains requested GTID",
+			expectError:   "Mismatching GTID entries",
 		},
 		{
 			name: "inexact, gitd_purged, found",
