@@ -354,7 +354,7 @@ func buildAggregation(op *Aggregator, qb *queryBuilder) error {
 	for _, by := range op.Grouping {
 		qb.addGroupBy(by.Inner)
 		wsExpr := by.WeightStrExpr
-		if qb.ctx.SemTable.NeedsWeightString(wsExpr) {
+		if by.WSCol != -1 {
 			qb.addGroupBy(weightStringFor(wsExpr))
 		}
 	}

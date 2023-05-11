@@ -198,6 +198,8 @@ func pushDownAggregationThroughJoin(ctx *plancontext.PlanningContext, rootAggr *
 				Inner:         expr,
 				WeightStrExpr: wexpr,
 				KeyCol:        len(lhs.pushed.Columns),
+				WSCol:         -1,
+				WOffset:       -1,
 			})
 			lhs.pushed.Columns = append(lhs.pushed.Columns, aeWrap(expr))
 		}
@@ -207,18 +209,18 @@ func pushDownAggregationThroughJoin(ctx *plancontext.PlanningContext, rootAggr *
 	rhsTS := TableID(join.RHS)
 	for _, groupBy := range rootAggr.Grouping {
 		deps := ctx.SemTable.RecursiveDeps(groupBy.Inner)
-		expr := groupBy.aliasedExpr.Expr
+		expr := groupBy.Inner
 		switch {
 		case deps.IsSolvedBy(lhsTS):
 			lhs.addGrouping(ctx, groupBy)
 			joinColumns = append(joinColumns, JoinColumn{
-				Original: groupBy.aliasedExpr,
+				Original: aeWrap(groupBy.Inner),
 				LHSExprs: []sqlparser.Expr{expr},
 			})
 		case deps.IsSolvedBy(rhsTS):
 			rhs.addGrouping(ctx, groupBy)
 			joinColumns = append(joinColumns, JoinColumn{
-				Original: groupBy.aliasedExpr,
+				Original: aeWrap(groupBy.Inner),
 				RHSExpr:  expr,
 			})
 		default:

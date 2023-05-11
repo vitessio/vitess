@@ -122,9 +122,9 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select a, b, count(*) as k, weight_string(a) from `user` where 1 != 1 group by a, weight_string(a)",
+                "FieldQuery": "select a, b, count(*) as k, weight_string(a) from `user` where 1 != 1 group by a",
                 "OrderBy": "(0|3) ASC",
-                "Query": "select a, b, count(*) as k, weight_string(a) from `user` group by a, weight_string(a) order by a asc",
+                "Query": "select a, b, count(*) as k, weight_string(a) from `user` group by a order by a asc",
                 "Table": "`user`"
               }
             ]

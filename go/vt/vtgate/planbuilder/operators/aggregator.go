@@ -150,24 +150,37 @@ func (a *Aggregator) GetOrdering() ([]ops.OrderBy, error) {
 var _ ops.Operator = (*Aggregator)(nil)
 
 func (a *Aggregator) planOffsets(ctx *plancontext.PlanningContext) error {
-	for idx, by := range a.Grouping {
-		if !ctx.SemTable.NeedsWeightString(by.WeightStrExpr) {
-			a.Grouping[idx].WSCol = -1
-			continue
-		}
-
-		wsExpr := &sqlparser.WeightStringFuncExpr{Expr: by.WeightStrExpr}
-		aliasedExpr := aeWrap(wsExpr)
+	addColumn := func(aliasedExpr *sqlparser.AliasedExpr) (int, error) {
 		newSrc, offset, err := a.Source.AddColumn(ctx, aliasedExpr, true)
 		if err != nil {
-			return err
+			return 0, err
 		}
 		a.Source = newSrc
-		a.Grouping[idx].WSCol = offset
 		if offset == len(a.Columns) {
 			// if we get an offset at the end of our current column list, it means we added a new column
 			a.Columns = append(a.Columns, aliasedExpr)
 		}
+		return offset, nil
+	}
+
+	for idx, gb := range a.Grouping {
+		if gb.KeyCol == -1 {
+			offset, err := addColumn(aeWrap(gb.Inner))
+			if err != nil {
+				return err
+			}
+			a.Grouping[idx].KeyCol = offset
+		}
+		if !ctx.SemTable.NeedsWeightString(gb.WeightStrExpr) {
+			a.Grouping[idx].WSCol = -1
+			continue
+		}
+
+		offset, err := addColumn(aeWrap(weightStringFor(gb.WeightStrExpr)))
+		if err != nil {
+			return err
+		}
+		a.Grouping[idx].WSCol = offset
 	}
 	return nil
 }

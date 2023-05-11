@@ -2695,9 +2695,9 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select count(id), num, weight_string(num) from `user` where 1 != 1 group by num, weight_string(num)",
+            "FieldQuery": "select count(id), num, weight_string(num) from `user` where 1 != 1 group by num",
             "OrderBy": "(1|2) ASC",
-            "Query": "select count(id), num, weight_string(num) from `user` group by num, weight_string(num) order by num asc",
+            "Query": "select count(id), num, weight_string(num) from `user` group by num order by num asc",
             "Table": "`user`"
           }
         ]
@@ -2764,9 +2764,9 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select count(id), num, weight_string(num) from `user` where 1 != 1 group by num, weight_string(num)",
+                "FieldQuery": "select count(id), num, weight_string(num) from `user` where 1 != 1 group by num",
                 "OrderBy": "(1|2) ASC",
-                "Query": "select count(id), num, weight_string(num) from `user` group by num, weight_string(num) order by num asc",
+                "Query": "select count(id), num, weight_string(num) from `user` group by num order by num asc",
                 "Table": "`user`"
               }
             ]

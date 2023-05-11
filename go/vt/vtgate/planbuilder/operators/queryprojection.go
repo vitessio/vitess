@@ -44,16 +44,17 @@ type (
 	// QueryProjection contains the information about the projections, group by and order by expressions used to do horizon planning.
 	QueryProjection struct {
 		// If you change the contents here, please update the toString() method
-		SelectExprs        []SelectExpr
-		HasAggr            bool
-		Distinct           bool
-		groupByExprs       []GroupBy
-		OrderExprs         []ops.OrderBy
-		CanPushDownSorting bool
-		HasStar            bool
+		SelectExprs  []SelectExpr
+		HasAggr      bool
+		Distinct     bool
+		groupByExprs []GroupBy
+		OrderExprs   []ops.OrderBy
+		HasStar      bool
 
 		// AddedColumn keeps a counter for expressions added to solve HAVING expressions the user is not selecting
 		AddedColumn int
+
+		hasCheckedAlignment bool
 	}
 
 	// GroupBy contains the expression to used in group by and also if grouping is needed at VTGate level then what the weight_string function expression to be sent down for evaluation.
@@ -104,6 +105,8 @@ func NewGroupBy(inner sqlparser.Expr, weightStrExpr sqlparser.Expr, aliasedExpr 
 		WOffset:       -1,
 		InnerIndex:    nil,
 		aliasedExpr:   aliasedExpr,
+		KeyCol:        -1,
+		WSCol:         -1,
 	}
 }
 
@@ -303,7 +306,6 @@ func CreateQPFromUnion(union *sqlparser.Union) (*QueryProjection, error) {
 }
 
 func (qp *QueryProjection) addOrderBy(orderBy sqlparser.OrderBy) error {
-	canPushDownSorting := true
 	for _, order := range orderBy {
 		expr, weightStrExpr, err := qp.GetSimplifiedExpr(order.Expr)
 		if err != nil {
@@ -320,9 +322,7 @@ func (qp *QueryProjection) addOrderBy(orderBy sqlparser.OrderBy) error {
 			},
 			WeightStrExpr: weightStrExpr,
 		})
-		canPushDownSorting = canPushDownSorting && !sqlparser.ContainsAggregation(weightStrExpr)
 	}
-	qp.CanPushDownSorting = canPushDownSorting
 	return nil
 }
 
@@ -638,43 +638,35 @@ func (qp *QueryProjection) FindSelectExprIndexForExpr(ctx *plancontext.PlanningC
 // so we can simply re-arrange the column order
 // We are also free to add more ORDER BY columns than the user asked for which we leverage,
 // so the input is already ordered according to the GROUP BY columns used
-func (qp *QueryProjection) AlignGroupByAndOrderBy(ctx *plancontext.PlanningContext) {
-	// The ORDER BY can be performed before the OA
+func (qp *QueryProjection) AlignGroupByAndOrderBy(ctx *plancontext.PlanningContext) bool {
+	if qp.hasCheckedAlignment {
+		return false
+	}
+	qp.hasCheckedAlignment = true
+	newGrouping := make([]GroupBy, 0, len(qp.groupByExprs))
+	used := make([]bool, len(qp.groupByExprs))
 
-	var newGrouping []GroupBy
-	if len(qp.OrderExprs) == 0 {
-		// The query didn't ask for any particular order, so we are free to add arbitrary ordering.
-		// We'll align the grouping and ordering by the output columns
-		newGrouping = qp.GetGrouping()
-		SortGrouping(newGrouping)
-		for _, groupBy := range newGrouping {
-			qp.OrderExprs = append(qp.OrderExprs, groupBy.AsOrderBy())
-		}
-	} else {
-		// Here we align the GROUP BY and ORDER BY.
-		// First step is to make sure that the GROUP BY is in the same order as the ORDER BY
-		used := make([]bool, len(qp.groupByExprs))
-		for _, orderExpr := range qp.OrderExprs {
-			for i, groupingExpr := range qp.groupByExprs {
-				if !used[i] && ctx.SemTable.EqualsExpr(groupingExpr.WeightStrExpr, orderExpr.WeightStrExpr) {
-					newGrouping = append(newGrouping, groupingExpr)
-					used[i] = true
-				}
+outer:
+	for _, orderBy := range qp.OrderExprs {
+		for gidx, groupBy := range qp.groupByExprs {
+			if ctx.SemTable.EqualsExpr(groupBy.WeightStrExpr, orderBy.WeightStrExpr) {
+				newGrouping = append(newGrouping, groupBy)
+				used[gidx] = true
+				continue outer
 			}
 		}
-		if len(newGrouping) != len(qp.groupByExprs) {
-			// we are missing some groupings. We need to add them both to the new groupings list, but also to the ORDER BY
-			for i, added := range used {
-				if !added {
-					groupBy := qp.groupByExprs[i]
-					newGrouping = append(newGrouping, groupBy)
-					qp.OrderExprs = append(qp.OrderExprs, groupBy.AsOrderBy())
-				}
-			}
-		}
+		return false
 	}
 
+	// if we get here, it means that all the OrderBy expressions are also in the GroupBy clause
+	for gidx, gb := range qp.groupByExprs {
+		if !used[gidx] {
+			newGrouping = append(newGrouping, gb)
+			qp.OrderExprs = append(qp.OrderExprs, gb.AsOrderBy())
+		}
+	}
 	qp.groupByExprs = newGrouping
+	return true
 }
 
 // AddGroupBy does just that

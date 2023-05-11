@@ -19,6 +19,8 @@ package operators
 import (
 	"fmt"
 
+	"vitess.io/vitess/go/slices2"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
@@ -39,6 +41,25 @@ var _errHorizonNotPlanned = vterrors.VT12001("query cannot be fully operator pla
 // If we can't, we will instead expand the Horizon into
 // smaller operators and try to push these down as far as possible
 func planHorizons(ctx *plancontext.PlanningContext, root ops.Operator) (ops.Operator, error) {
+	var err error
+	root, err = optimizeHorizonPlanning(ctx, root)
+	if err != nil {
+		return nil, err
+	}
+
+	root, err = addOrderBysForAggregations(ctx, root)
+	if err != nil {
+		return nil, err
+	}
+
+	root, err = optimizeHorizonPlanning(ctx, root)
+	if err != nil {
+		return nil, err
+	}
+	return root, nil
+}
+
+func optimizeHorizonPlanning(ctx *plancontext.PlanningContext, root ops.Operator) (ops.Operator, error) {
 	visitor := func(in ops.Operator, _ semantics.TableSet, isRoot bool) (ops.Operator, rewrite.ApplyResult, error) {
 		switch in := in.(type) {
 		case horizonLike:
@@ -72,6 +93,51 @@ func planHorizons(ctx *plancontext.PlanningContext, root ops.Operator) (ops.Oper
 	return newOp, nil
 }
 
+func addOrderBysForAggregations(ctx *plancontext.PlanningContext, root ops.Operator) (ops.Operator, error) {
+	visitor := func(in ops.Operator, _ semantics.TableSet, isRoot bool) (ops.Operator, rewrite.ApplyResult, error) {
+		switch in := in.(type) {
+		case *Aggregator:
+			requireOrdering, err := needsOrdering(in, ctx)
+			if err != nil {
+				return nil, false, err
+			}
+			if !requireOrdering {
+				return in, rewrite.SameTree, nil
+			}
+			in.Source = &Ordering{
+				Source: in.Source,
+				Order: slices2.Map(in.Grouping, func(from GroupBy) ops.OrderBy {
+					return from.AsOrderBy()
+				}),
+			}
+			return in, rewrite.NewTree, nil
+		default:
+			return in, rewrite.SameTree, nil
+		}
+	}
+
+	return rewrite.BottomUp(root, TableID, visitor, stopAtRoute)
+}
+
+func needsOrdering(in *Aggregator, ctx *plancontext.PlanningContext) (bool, error) {
+	if len(in.Grouping) == 0 {
+		return false, nil
+	}
+	srcOrdering, err := in.Source.GetOrdering()
+	if err != nil {
+		return false, err
+	}
+	if len(srcOrdering) < len(in.Grouping) {
+		return true, nil
+	}
+	for idx, gb := range in.Grouping {
+		if !ctx.SemTable.EqualsExpr(srcOrdering[idx].WeightStrExpr, gb.WeightStrExpr) {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 func tryPushingDownOrdering(ctx *plancontext.PlanningContext, in *Ordering) (ops.Operator, rewrite.ApplyResult, error) {
 	switch src := in.Source.(type) {
 	case *Route:
@@ -88,7 +154,7 @@ func tryPushingDownOrdering(ctx *plancontext.PlanningContext, in *Ordering) (ops
 		in.Source = src.Source
 		return in, rewrite.NewTree, nil
 	case *Aggregator:
-		if !src.QP.CanPushDownSorting {
+		if !src.QP.AlignGroupByAndOrderBy(ctx) {
 			return in, rewrite.SameTree, nil
 		}
 
@@ -539,8 +605,6 @@ func createProjectionFromSelect(ctx *plancontext.PlanningContext, horizon horizo
 		return nil, err
 	}
 
-	qp.AlignGroupByAndOrderBy(ctx)
-
 	aggregations, err := qp.AggregationExpressions(ctx)
 	if err != nil {
 		return nil, err
@@ -581,12 +645,12 @@ outer:
 		return nil, vterrors.VT13001(fmt.Sprintf("Could not find the %v in aggregation in the original query", expr))
 	}
 
-	// If ordering is required (i.e., there is a GROUP BY), create an Ordering operation.
+	// If ordering is required, create an Ordering operation.
 	if len(qp.OrderExprs) > 0 {
-		a.Source = &Ordering{
-			Source: a.Source,
+		return &Ordering{
+			Source: a,
 			Order:  qp.OrderExprs,
-		}
+		}, nil
 	}
 
 	return a, nil
