@@ -85,6 +85,8 @@ func New(addr string) (VtctlClient, error) {
 }
 
 // NewWithSslParams allows a user of the client library to get its implementation while specifying SSL parameters
+// certLocation is the cert used to connect, keyLocation is the key used to connect, caLocation is the server ca
+// used to validate servers when connecting, and serverName is the server name used to validated the server cert
 func NewWithSslParams(addr, certLocation, keyLocation, caLocation, serverName string) (VtctlClient, error) {
 	factory, ok := factories[vtctlClientProtocol]
 	if !ok {
