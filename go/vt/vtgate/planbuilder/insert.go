@@ -36,9 +36,10 @@ func buildInsertPlan(string) stmtPlanner {
 		pb := newStmtAwarePrimitiveBuilder(vschema, newJointab(reservedVars), stmt)
 		ins := stmt.(*sqlparser.Insert)
 		err := checkUnsupportedExpressions(ins)
-	if err != nil {
-		return nil, err
-	}exprs := sqlparser.TableExprs{ins.Table}
+		if err != nil {
+			return nil, err
+		}
+		exprs := sqlparser.TableExprs{ins.Table}
 		rb, err := pb.processDMLTable(exprs, reservedVars, nil)
 		if err != nil {
 			return nil, err
@@ -197,7 +198,7 @@ func buildInsertShardedPlan(ins *sqlparser.Insert, table *vindexes.Table, reserv
 	}
 	eins.VindexValues = routeValues
 	eins.Query = generateQuery(ins)
-	generateInsertShardedQuery(ins, eins, rows)
+	eins.Prefix, eins.Mid, eins.Suffix = generateInsertShardedQuery(ins)
 	return newPlanResult(eins, tc.getTables()...), nil
 }
 
@@ -356,24 +357,6 @@ func populateInsertColumnlist(ins *sqlparser.Insert, table *vindexes.Table) {
 		cols = append(cols, c.Name)
 	}
 	ins.Columns = cols
-}
-
-func generateInsertShardedQuery(node *sqlparser.Insert, eins *engine.Insert, valueTuples sqlparser.Values) {
-	prefixBuf := sqlparser.NewTrackedBuffer(dmlFormatter)
-	midBuf := sqlparser.NewTrackedBuffer(dmlFormatter)
-	suffixBuf := sqlparser.NewTrackedBuffer(dmlFormatter)
-	eins.Mid = make([]string, len(valueTuples))
-	prefixBuf.Myprintf("insert %v%sinto %v%v values ",
-		node.Comments, node.Ignore.ToString(),
-		node.Table, node.Columns)
-	eins.Prefix = prefixBuf.String()
-	for rowNum, val := range valueTuples {
-		midBuf.Myprintf("%v", val)
-		eins.Mid[rowNum] = midBuf.String()
-		midBuf.Reset()
-	}
-	suffixBuf.Myprintf("%v", node.OnDup)
-	eins.Suffix = suffixBuf.String()
 }
 
 func generateInsertSelectQuery(node *sqlparser.Insert, eins *engine.Insert) {
