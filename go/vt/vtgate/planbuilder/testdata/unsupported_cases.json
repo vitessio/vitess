@@ -467,5 +467,30 @@
     "comment": "mix lock with other expr",
     "query": "select get_lock('xyz', 10), 1 from dual",
     "plan": "VT12001: unsupported: LOCK function and other expression: [1] in same select query"
+  },
+  {
+    "comment": "Assignment expression in select statements",
+    "query": "select @val := 42",
+    "plan": "VT12001: unsupported: Assignment expression"
+  },
+  {
+    "comment": "Assignment expression in union statements",
+    "query": "select @val := 42 union select 1",
+    "plan": "VT12001: unsupported: Assignment expression"
+  },
+  {
+    "comment": "Assignment expression in update statements",
+    "query": "update user set name = @val := 42",
+    "plan": "VT12001: unsupported: Assignment expression"
+  },
+  {
+    "comment": "Assignment expression in insert statement",
+    "query": "insert into user (id) values (@val := 42)",
+    "plan": "VT12001: unsupported: Assignment expression"
+  },
+  {
+    "comment": "Assignment expression in delete statement",
+    "query": "delete from user where x = (@val := 42)",
+    "plan": "VT12001: unsupported: Assignment expression"
   }
 ]

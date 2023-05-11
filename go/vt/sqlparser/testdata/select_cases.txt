@@ -253,8 +253,8 @@ END
 INPUT
 select @topic3_id:= 10103;
 END
-ERROR
-syntax error at position 19 near ':'
+OUTPUT
+select @topic3_id := 10103 from dual
 END
 INPUT
 select t1.*,t2.*,t3.a from t1 left join t2 on (t3.a=t2.a) left join t1 as t3 on (t1.a=t3.a);
@@ -1135,8 +1135,8 @@ END
 INPUT
 select c, substring_index(lcase(c), @q:=',', -1) as res from t1;
 END
-ERROR
-syntax error at position 40 near ':'
+OUTPUT
+select c, substring_index(lcase(c), @q := ',', -1) as res from t1
 END
 INPUT
 select concat(a, if(b>10, _utf8mb4'æ', _utf8mb4'ß')) from t1;
@@ -1201,8 +1201,8 @@ END
 INPUT
 select @keyword3_id:= 10203;
 END
-ERROR
-syntax error at position 21 near ':'
+OUTPUT
+select @keyword3_id := 10203 from dual
 END
 INPUT
 select * from t3 where x = 1 and y < 5 order by y desc;
@@ -2011,8 +2011,8 @@ END
 INPUT
 select hex(a), hex(@a:=convert(a using utf8mb4)), hex(convert(@a using utf16)) from t1;
 END
-ERROR
-syntax error at position 23 near ':'
+OUTPUT
+select hex(a), hex(@a := convert(a using utf8mb4)), hex(convert(@a using utf16)) from t1
 END
 INPUT
 select event_name from information_schema.events where event_name = 'e1' and sql_mode = @full_mode;
@@ -2725,8 +2725,8 @@ END
 INPUT
 select @x:=group_concat(x) from t1 group by y;
 END
-ERROR
-syntax error at position 11 near ':'
+OUTPUT
+select @x := group_concat(x) from t1 group by y
 END
 INPUT
 select cast('-10a' as signed integer);
@@ -3799,8 +3799,8 @@ END
 INPUT
 select t2.isbn,city,@bar:=t1.libname,count(distinct t1.libname) as a from t3 left join t1 on t3.libname=t1.libname left join t2 on t3.isbn=t2.isbn group by city having count(distinct t1.libname) > 1;
 END
-ERROR
-syntax error at position 26 near ':'
+OUTPUT
+select t2.isbn, city, @bar := t1.libname, count(distinct t1.libname) as a from t3 left join t1 on t3.libname = t1.libname left join t2 on t3.isbn = t2.isbn group by city having count(distinct t1.libname) > 1
 END
 INPUT
 select format('f','')<=replace(1,1,mid(0xd9,2,1));
@@ -4033,8 +4033,8 @@ END
 INPUT
 select @topic1_id:= 10101;
 END
-ERROR
-syntax error at position 19 near ':'
+OUTPUT
+select @topic1_id := 10101 from dual
 END
 INPUT
 select locate(_ujis 0xa2a1,_ujis 0xa1a2a1a3 collate ujis_bin);
@@ -4243,8 +4243,8 @@ END
 INPUT
 select @topic2_id:= 10102;
 END
-ERROR
-syntax error at position 19 near ':'
+OUTPUT
+select @topic2_id := 10102 from dual
 END
 INPUT
 select group_concat(c1 order by binary c1 separator '') from t1 group by c1 collate utf32_hungarian_ci;
@@ -6937,8 +6937,8 @@ END
 INPUT
 select @category3_id:= 10003;
 END
-ERROR
-syntax error at position 22 near ':'
+OUTPUT
+select @category3_id := 10003 from dual
 END
 INPUT
 select c as c_a from t1 where c='a';
@@ -7741,8 +7741,8 @@ END
 INPUT
 select t2.isbn,city,concat(@bar:=t1.libname),count(distinct t1.libname) as a from t3 left join t1 on t3.libname=t1.libname left join t2 on t3.isbn=t2.isbn group by city having count(distinct t1.libname) > 1;
 END
-ERROR
-syntax error at position 33 near ':'
+OUTPUT
+select t2.isbn, city, concat(@bar := t1.libname), count(distinct t1.libname) as a from t3 left join t1 on t3.libname = t1.libname left join t2 on t3.isbn = t2.isbn group by city having count(distinct t1.libname) > 1
 END
 INPUT
 select ST_DISTANCE(ST_GeomFromText('polygon((0 0, 3 6, 6 3, 0 0),(2 2, 3 4, 4 3, 2 2))'), ST_GeomFromText('point(3 3)'));
@@ -7849,8 +7849,8 @@ END
 INPUT
 select @category1_id:= 10001;
 END
-ERROR
-syntax error at position 22 near ':'
+OUTPUT
+select @category1_id := 10001 from dual
 END
 INPUT
 select hex(char(0x0102 using utf32));
@@ -8281,8 +8281,8 @@ END
 INPUT
 select hex(@utf82:= CONVERT(@ujis2 USING utf8));
 END
-ERROR
-syntax error at position 19 near ':'
+OUTPUT
+select hex(@utf82 := convert(@ujis2 using utf8)) from dual
 END
 INPUT
 select * from t5 order by a,b;
@@ -9211,8 +9211,8 @@ END
 INPUT
 select @stamp1:=f2 from t1;
 END
-ERROR
-syntax error at position 16 near ':'
+OUTPUT
+select @stamp1 := f2 from t1
 END
 INPUT
 select t1.*,t2.* from mysqltest_2.t1,mysqltest_2.t2;
@@ -13783,8 +13783,8 @@ END
 INPUT
 select hex(a) a, hex(@u:=convert(a using utf8)) b, hex(convert(@u using big5)) c from t1 order by a;
 END
-ERROR
-syntax error at position 25 near ':'
+OUTPUT
+select hex(a) as a, hex(@u := convert(a using utf8)) as b, hex(convert(@u using big5)) as c from t1 order by a asc
 END
 INPUT
 select t,count(t) from t1 group by t order by t limit 10;
@@ -14743,8 +14743,8 @@ END
 INPUT
 select hex(@utf83:= CONVERT(@ujis3 USING utf8));
 END
-ERROR
-syntax error at position 19 near ':'
+OUTPUT
+select hex(@utf83 := convert(@ujis3 using utf8)) from dual
 END
 INPUT
 select * from t1 where MATCH a,b AGAINST('"space model' IN BOOLEAN MODE);
@@ -16357,8 +16357,8 @@ END
 INPUT
 select @category2_id:= 10002;
 END
-ERROR
-syntax error at position 22 near ':'
+OUTPUT
+select @category2_id := 10002 from dual
 END
 INPUT
 select CONVERT("2004-01-22 21:45:33",DATE);
@@ -16519,8 +16519,8 @@ END
 INPUT
 select @test_compress_string:='string for test compress function aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa ';
 END
-ERROR
-syntax error at position 30 near ':'
+OUTPUT
+select @test_compress_string := 'string for test compress function aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa ' from dual
 END
 INPUT
 select length(quote(concat(char(0),"test")));
@@ -16957,8 +16957,8 @@ END
 INPUT
 select hex(@utf81:= CONVERT(@ujis1 USING utf8));
 END
-ERROR
-syntax error at position 19 near ':'
+OUTPUT
+select hex(@utf81 := convert(@ujis1 using utf8)) from dual
 END
 INPUT
 select strcmp(_koi8r'a', _koi8r'A' COLLATE koi8r_bin);
@@ -17407,8 +17407,8 @@ END
 INPUT
 select @a:=FROM_UNIXTIME(1);
 END
-ERROR
-syntax error at position 11 near ':'
+OUTPUT
+select @a := FROM_UNIXTIME(1) from dual
 END
 INPUT
 select sleep(2);
@@ -17875,8 +17875,8 @@ END
 INPUT
 select @keyword1_id:= 10201;
 END
-ERROR
-syntax error at position 21 near ':'
+OUTPUT
+select @keyword1_id := 10201 from dual
 END
 INPUT
 select min(a) is null from t1;
@@ -17887,8 +17887,8 @@ END
 INPUT
 select @stamp2:=f2 from t1;
 END
-ERROR
-syntax error at position 16 near ':'
+OUTPUT
+select @stamp2 := f2 from t1
 END
 INPUT
 select last_day('2005-00-00');
@@ -18187,8 +18187,8 @@ END
 INPUT
 select @keyword2_id:= 10202;
 END
-ERROR
-syntax error at position 21 near ':'
+OUTPUT
+select @keyword2_id := 10202 from dual
 END
 INPUT
 select week(20001231), week(20001231,6);
@@ -18679,8 +18679,8 @@ END
 INPUT
 select char_length(left(@a:='тест',5)), length(@a), @a;
 END
-ERROR
-syntax error at position 28 near ':'
+OUTPUT
+select char_length(left(@a := 'тест', 5)), length(@a), @a from dual
 END
 INPUT
 select t1.*,t2.* from t1 left join t2 on (t1.b=t2.b) where coercibility(t2.a) = 5 order by t1.a,t2.a;
@@ -19159,8 +19159,8 @@ END
 INPUT
 select @topic4_id:= 10104;
 END
-ERROR
-syntax error at position 19 near ':'
+OUTPUT
+select @topic4_id := 10104 from dual
 END
 INPUT
 select 10E+0+'a';
@@ -22207,8 +22207,8 @@ END
 INPUT
 select @topic5_id:= 10105;
 END
-ERROR
-syntax error at position 19 near ':'
+OUTPUT
+select @topic5_id := 10105 from dual
 END
 INPUT
 select max(b) from t1 where a = 2;
@@ -22879,8 +22879,8 @@ END
 INPUT
 select hex(@utf84:= CONVERT(@ujis4 USING utf8));
 END
-ERROR
-syntax error at position 19 near ':'
+OUTPUT
+select hex(@utf84 := convert(@ujis4 using utf8)) from dual
 END
 INPUT
 select (select dt.a from (select 1 as a, t2.a as b from t2 having t1.a) dt where dt.b=t1.a) as subq from t1;

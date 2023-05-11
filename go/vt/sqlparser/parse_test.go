@@ -1235,6 +1235,11 @@ var (
 	}, {
 		input: "update /* a.b */ a.b set b = 3",
 	}, {
+		input: "update a.b set d = @v := d + 7 where u = 42",
+	}, {
+		input:  "select @topic3_id:= 10103;",
+		output: "select @topic3_id := 10103 from dual",
+	}, {
 		input: "update /* list */ a set b = 3, c = 4",
 	}, {
 		input: "update /* expression */ a set b = 3 + 4",
