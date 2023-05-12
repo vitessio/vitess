@@ -63,8 +63,8 @@ func (o *Ordering) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser
 	return o, nil
 }
 
-func (o *Ordering) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, reuseExisting bool) (ops.Operator, int, error) {
-	newSrc, offset, err := o.Source.AddColumn(ctx, expr, reuseExisting)
+func (o *Ordering) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, reuseExisting, addToGroupBy bool) (ops.Operator, int, error) {
+	newSrc, offset, err := o.Source.AddColumn(ctx, expr, reuseExisting, addToGroupBy)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -82,7 +82,7 @@ func (o *Ordering) GetOrdering() ([]ops.OrderBy, error) {
 
 func (o *Ordering) planOffsets(ctx *plancontext.PlanningContext) error {
 	for _, order := range o.Order {
-		newSrc, offset, err := o.Source.AddColumn(ctx, aeWrap(order.Inner.Expr), true)
+		newSrc, offset, err := o.Source.AddColumn(ctx, aeWrap(order.Inner.Expr), true, false)
 		if err != nil {
 			return err
 		}
@@ -95,7 +95,7 @@ func (o *Ordering) planOffsets(ctx *plancontext.PlanningContext) error {
 		}
 
 		wsExpr := &sqlparser.WeightStringFuncExpr{Expr: order.WeightStrExpr}
-		newSrc, offset, err = o.Source.AddColumn(ctx, aeWrap(wsExpr), true)
+		newSrc, offset, err = o.Source.AddColumn(ctx, aeWrap(wsExpr), true, false)
 		if err != nil {
 			return err
 		}

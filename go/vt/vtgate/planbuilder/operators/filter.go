@@ -82,8 +82,8 @@ func (f *Filter) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.E
 	return f, nil
 }
 
-func (f *Filter) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, reuseExisting bool) (ops.Operator, int, error) {
-	newSrc, offset, err := f.Source.AddColumn(ctx, expr, true)
+func (f *Filter) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, reuseExisting, addToGroupBy bool) (ops.Operator, int, error) {
+	newSrc, offset, err := f.Source.AddColumn(ctx, expr, reuseExisting, addToGroupBy)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -115,7 +115,7 @@ func (f *Filter) Compact(*plancontext.PlanningContext) (ops.Operator, rewrite.Ap
 
 func (f *Filter) planOffsets(ctx *plancontext.PlanningContext) error {
 	resolveColumn := func(col *sqlparser.ColName) (int, error) {
-		newSrc, offset, err := f.Source.AddColumn(ctx, aeWrap(col), true)
+		newSrc, offset, err := f.Source.AddColumn(ctx, aeWrap(col), true, false)
 		if err != nil {
 			return 0, err
 		}

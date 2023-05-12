@@ -181,7 +181,7 @@ func pushDownAggregationThroughJoin(ctx *plancontext.PlanningContext, rootAggr *
 		tableID: TableID(join.RHS),
 	}
 
-	joinColumns, projections, err := splitAggrColumnsToLeftAndRight(ctx, rootAggr, join, lhs, rhs)
+	joinColumns, output, err := splitAggrColumnsToLeftAndRight(ctx, rootAggr, join, lhs, rhs)
 	if err != nil {
 		return nil, false, err
 	}
@@ -199,7 +199,6 @@ func pushDownAggregationThroughJoin(ctx *plancontext.PlanningContext, rootAggr *
 				WeightStrExpr: wexpr,
 				KeyCol:        len(lhs.pushed.Columns),
 				WSCol:         -1,
-				WOffset:       -1,
 			})
 			lhs.pushed.Columns = append(lhs.pushed.Columns, aeWrap(expr))
 		}
@@ -230,15 +229,6 @@ func pushDownAggregationThroughJoin(ctx *plancontext.PlanningContext, rootAggr *
 
 	join.LHS, join.RHS = lhs.pushed, rhs.pushed
 	join.ColumnsAST = joinColumns
-
-	var output ops.Operator = join
-	if len(projections) > 0 {
-		output = &Projection{
-			Source:      join,
-			ColumnNames: []string{""},
-			Columns:     projections,
-		}
-	}
 
 	if !rootAggr.Original {
 		// we only keep the root aggregation, if this aggregator was created
@@ -271,11 +261,14 @@ func splitAggrColumnsToLeftAndRight(
 	aggregator *Aggregator,
 	join *ApplyJoin,
 	lhs, rhs joinPusher,
-) (joinColumns []JoinColumn, projections []ProjExpr, err error) {
-
+) (joinColumns []JoinColumn, outer ops.Operator, err error) {
+	outer = join
+	proj := &Projection{Source: join}
+	projRequired := false
 	handleAggr := func(aggr Aggr) (Aggr, error) {
 		switch aggr.OpCode {
 		case opcode.AggregateCountStar:
+			projRequired = true
 			lhsExpr := lhs.addAggr(ctx, aggr)
 			rhsExpr := rhs.addAggr(ctx, aggr)
 
@@ -284,9 +277,6 @@ func splitAggrColumnsToLeftAndRight(
 			}
 
 			joinColumns = append(joinColumns, JoinColumn{
-				Original: aggr.Original,
-				LHSExprs: []sqlparser.Expr{lhsExpr},
-			}, JoinColumn{
 				Original: aggr.Original,
 				RHSExpr:  rhsExpr,
 			})
@@ -306,19 +296,31 @@ func splitAggrColumnsToLeftAndRight(
 				Left:     lhsExpr,
 				Right:    rhsExpr,
 			}
-			projections = append(projections, Expr{E: projExpr})
+			proj.Columns = append(proj.Columns, Expr{E: projExpr})
+			proj.ColumnNames = append(proj.ColumnNames, "")
 			return aggr, nil
 		default:
 			return Aggr{}, errHorizonNotPlanned()
 		}
 	}
 
-	for i, aggr := range aggregator.Aggregations {
-		aggr, err := handleAggr(aggr)
-		if err != nil {
-			return nil, nil, err
+outer:
+	for colIdx, col := range aggregator.Columns {
+		for aggrIdx, aggr := range aggregator.Aggregations {
+			if aggr.ColOffset == colIdx {
+				aggr, err := handleAggr(aggr)
+				if err != nil {
+					return nil, nil, err
+				}
+				aggregator.Aggregations[aggrIdx] = aggr
+				continue outer
+			}
 		}
-		aggregator.Aggregations[i] = aggr
+		proj.Columns = append(proj.Columns, Expr{E: col.Expr})
+		proj.ColumnNames = append(proj.ColumnNames, col.As.String())
+	}
+	if projRequired {
+		outer = proj
 	}
 	return
 }

@@ -62,8 +62,6 @@ type (
 		Inner         sqlparser.Expr
 		WeightStrExpr sqlparser.Expr
 
-		WOffset int
-
 		// The index at which the user expects to see this column. Set to nil, if the user does not ask for it
 		InnerIndex *int
 
@@ -102,7 +100,6 @@ func NewGroupBy(inner sqlparser.Expr, weightStrExpr sqlparser.Expr, aliasedExpr 
 	return GroupBy{
 		Inner:         inner,
 		WeightStrExpr: weightStrExpr,
-		WOffset:       -1,
 		InnerIndex:    nil,
 		aliasedExpr:   aliasedExpr,
 		KeyCol:        -1,

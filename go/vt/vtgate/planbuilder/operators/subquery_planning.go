@@ -94,65 +94,6 @@ func unresolvedAndSource(ctx *plancontext.PlanningContext, op ops.Operator) ([]s
 	return preds, op
 }
 
-func mergeSubQueryOp(ctx *plancontext.PlanningContext, outer *Route, inner *Route, subq *SubQueryInner, mergedRouting Routing) (*Route, error) {
-	subq.ExtractedSubquery.Merged = true
-
-	switch outerRouting := outer.Routing.(type) {
-	case *ShardedRouting:
-		return mergeSubQueryFromTableRouting(ctx, outer, inner, outerRouting, subq)
-	default:
-		outer.Routing = mergedRouting
-	}
-
-	outer.MergedWith = append(outer.MergedWith, inner)
-
-	return outer, nil
-}
-
-func mergeSubQueryFromTableRouting(
-	ctx *plancontext.PlanningContext,
-	outer, inner *Route,
-	outerRouting *ShardedRouting,
-	subq *SubQueryInner,
-) (*Route, error) {
-	// When merging an inner query with its outer query, we can remove the
-	// inner query from the list of predicates that can influence routing of
-	// the outer query.
-	//
-	// Note that not all inner queries necessarily are part of the routing
-	// predicates list, so this might be a no-op.
-	subQueryWasPredicate := false
-	for i, predicate := range outerRouting.SeenPredicates {
-		if ctx.SemTable.EqualsExpr(predicate, subq.ExtractedSubquery) {
-			outerRouting.SeenPredicates = append(outerRouting.SeenPredicates[:i], outerRouting.SeenPredicates[i+1:]...)
-
-			subQueryWasPredicate = true
-
-			// The `ExtractedSubquery` of an inner query is unique (due to the uniqueness of bind variable names)
-			// so we can stop after the first match.
-			break
-		}
-	}
-
-	err := outerRouting.resetRoutingSelections(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	if subQueryWasPredicate {
-		if innerTR, isTR := inner.Routing.(*ShardedRouting); isTR {
-			// Copy Vindex predicates from the inner route to the upper route.
-			// If we can route based on some of these predicates, the routing can improve
-			outerRouting.VindexPreds = append(outerRouting.VindexPreds, innerTR.VindexPreds...)
-		}
-
-		if inner.Routing.OpCode() == engine.None {
-			outer.Routing = &NoneRouting{keyspace: outerRouting.keyspace}
-		}
-	}
-	return outer, nil
-}
-
 func isMergeable(ctx *plancontext.PlanningContext, query sqlparser.SelectStatement, op ops.Operator) bool {
 	validVindex := func(expr sqlparser.Expr) bool {
 		sc := findColumnVindex(ctx, op, expr)
@@ -361,7 +302,7 @@ func rewriteColumnsInSubqueryOpForJoin(
 			return true
 		}
 		// if it does not exist, then push this as an output column there and add it to the joinVars
-		newInnerOp, offset, err := resultInnerOp.AddColumn(ctx, aeWrap(node), true)
+		newInnerOp, offset, err := resultInnerOp.AddColumn(ctx, aeWrap(node), true, false)
 		if err != nil {
 			rewriteError = err
 			return false
@@ -427,7 +368,7 @@ func createCorrelatedSubqueryOp(
 			bindVars[node] = bindVar
 
 			// if it does not exist, then push this as an output column in the outerOp and add it to the joinVars
-			newOuterOp, offset, err := resultOuterOp.AddColumn(ctx, aeWrap(node), true)
+			newOuterOp, offset, err := resultOuterOp.AddColumn(ctx, aeWrap(node), true, true)
 			if err != nil {
 				rewriteError = err
 				return true

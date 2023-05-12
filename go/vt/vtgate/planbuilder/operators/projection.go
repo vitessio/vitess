@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"strings"
 
+	"vitess.io/vitess/go/vt/vterrors"
+
 	"golang.org/x/exp/slices"
 
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
@@ -66,12 +68,22 @@ type (
 	}
 )
 
-func (p *Projection) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, reuseExisting bool) (ops.Operator, int, error) {
+func (p *Projection) addNoPushCol(expr *sqlparser.AliasedExpr, _ bool) int {
+	p.Columns = append(p.Columns, Expr{E: expr.Expr})
+	p.ColumnNames = append(p.ColumnNames, expr.As.String())
+	return len(p.Columns) - 1
+}
+
+func (p *Projection) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, _, addToGroupBy bool) (ops.Operator, int, error) {
+	if addToGroupBy {
+		return nil, 0, vterrors.VT13001("tried to add group by to a projection")
+	}
+
 	colAsExpr := func(pe ProjExpr) sqlparser.Expr { return pe.GetExpr() }
 	if offset, found := canReuseColumn(ctx, p.Columns, expr.Expr, colAsExpr); found {
 		return p, offset, nil
 	}
-	sourceOp, offset, err := p.Source.AddColumn(ctx, expr, true)
+	sourceOp, offset, err := p.Source.AddColumn(ctx, expr, true, addToGroupBy)
 	if err != nil {
 		return nil, 0, err
 	}

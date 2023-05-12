@@ -170,7 +170,7 @@ func (noInputs) SetInputs(ops []ops.Operator) {
 }
 
 // AddColumn implements the Operator interface
-func (noColumns) AddColumn(*plancontext.PlanningContext, *sqlparser.AliasedExpr, bool) (ops.Operator, int, error) {
+func (noColumns) AddColumn(*plancontext.PlanningContext, *sqlparser.AliasedExpr, bool, bool) (ops.Operator, int, error) {
 	return nil, 0, vterrors.VT13001("the noColumns operator cannot accept columns")
 }
 

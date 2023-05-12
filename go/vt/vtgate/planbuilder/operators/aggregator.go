@@ -20,13 +20,14 @@ import (
 	"fmt"
 	"strings"
 
+	"vitess.io/vitess/go/vt/vterrors"
+
 	"golang.org/x/exp/slices"
 
 	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
 
 	"vitess.io/vitess/go/slices2"
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
@@ -83,11 +84,29 @@ func (a *Aggregator) AddPredicate(ctx *plancontext.PlanningContext, expr sqlpars
 	return a, nil
 }
 
-func (a *Aggregator) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, reuseExisting bool) (ops.Operator, int, error) {
-	if !reuseExisting {
-		return nil, 0, vterrors.VT12001("reuse columns on Aggregator")
+func (a *Aggregator) addNoPushCol(expr *sqlparser.AliasedExpr, addToGroupBy bool) int {
+	lastOffset := len(a.Columns)
+	if addToGroupBy {
+		groupBy := NewGroupBy(expr.Expr, expr.Expr, expr)
+		groupBy.KeyCol = lastOffset
+		a.Grouping = append(a.Grouping, groupBy)
+	} else {
+		a.Aggregations = append(a.Aggregations, Aggr{
+			Original:  expr,
+			Func:      nil,
+			OpCode:    opcode.AggregateRandom,
+			Alias:     expr.As.String(),
+			ColOffset: lastOffset,
+		})
 	}
+	a.Columns = append(a.Columns, expr)
+	return lastOffset
+}
 
+func (a *Aggregator) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, reuseExisting, addToGroupBy bool) (ops.Operator, int, error) {
+	if addToGroupBy {
+		return nil, 0, vterrors.VT13001("did not expect to add group by here")
+	}
 	extractExpr := func(expr *sqlparser.AliasedExpr) sqlparser.Expr { return expr.Expr }
 	if offset, found := canReuseColumn(ctx, a.Columns, expr.Expr, extractExpr); found {
 		return a, offset, nil
@@ -99,16 +118,30 @@ func (a *Aggregator) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser
 		}
 	}
 
-	// if we didn't already have this column, we add it as a grouping
-	a.Aggregations = append(a.Aggregations, Aggr{
-		Original:  expr,
-		Func:      nil,
-		OpCode:    opcode.AggregateRandom,
-		Alias:     expr.As.String(),
-		ColOffset: len(a.Columns),
-	})
+	if addToGroupBy {
+		groupBy := NewGroupBy(expr.Expr, expr.Expr, expr)
+		groupBy.KeyCol = len(a.Columns)
+		a.Grouping = append(a.Grouping, groupBy)
+	} else {
+		a.Aggregations = append(a.Aggregations, Aggr{
+			Original:  expr,
+			Func:      nil,
+			OpCode:    opcode.AggregateRandom,
+			Alias:     expr.As.String(),
+			ColOffset: len(a.Columns),
+		})
+	}
 	a.Columns = append(a.Columns, expr)
-	return a, len(a.Columns) - 1, nil
+	expectedOffset := len(a.Columns) - 1
+	newSrc, offset, err := a.Source.AddColumn(ctx, expr, false, false)
+	if err != nil {
+		return nil, 0, err
+	}
+	if offset != expectedOffset {
+		panic(42)
+	}
+	a.Source = newSrc
+	return a, offset, nil
 }
 
 func (a *Aggregator) GetColumns() (columns []*sqlparser.AliasedExpr, err error) {
@@ -150,8 +183,8 @@ func (a *Aggregator) GetOrdering() ([]ops.OrderBy, error) {
 var _ ops.Operator = (*Aggregator)(nil)
 
 func (a *Aggregator) planOffsets(ctx *plancontext.PlanningContext) error {
-	addColumn := func(aliasedExpr *sqlparser.AliasedExpr) (int, error) {
-		newSrc, offset, err := a.Source.AddColumn(ctx, aliasedExpr, true)
+	addColumn := func(aliasedExpr *sqlparser.AliasedExpr, addToGroupBy bool) (int, error) {
+		newSrc, offset, err := a.Source.AddColumn(ctx, aliasedExpr, true, addToGroupBy)
 		if err != nil {
 			return 0, err
 		}
@@ -165,7 +198,7 @@ func (a *Aggregator) planOffsets(ctx *plancontext.PlanningContext) error {
 
 	for idx, gb := range a.Grouping {
 		if gb.KeyCol == -1 {
-			offset, err := addColumn(aeWrap(gb.Inner))
+			offset, err := addColumn(aeWrap(gb.Inner), false)
 			if err != nil {
 				return err
 			}
@@ -176,7 +209,7 @@ func (a *Aggregator) planOffsets(ctx *plancontext.PlanningContext) error {
 			continue
 		}
 
-		offset, err := addColumn(aeWrap(weightStringFor(gb.WeightStrExpr)))
+		offset, err := addColumn(aeWrap(weightStringFor(gb.WeightStrExpr)), true)
 		if err != nil {
 			return err
 		}

@@ -257,7 +257,7 @@ func pushDownProjectionInVindex(
 ) (ops.Operator, rewrite.ApplyResult, error) {
 	for _, column := range p.Columns {
 		expr := column.GetExpr()
-		_, _, err := src.AddColumn(ctx, aeWrap(expr), true)
+		_, _, err := src.AddColumn(ctx, aeWrap(expr), true, false)
 		if err != nil {
 			return nil, false, err
 		}
@@ -334,7 +334,7 @@ func splitProjectionAcrossJoin(
 	}
 
 	// Get a JoinColumn for the current expression.
-	col, err := join.getJoinColumnFor(ctx, &sqlparser.AliasedExpr{Expr: expr, As: sqlparser.NewIdentifierCI(colName)})
+	col, err := join.getJoinColumnFor(ctx, &sqlparser.AliasedExpr{Expr: expr, As: sqlparser.NewIdentifierCI(colName)}, false)
 	if err != nil {
 		return err
 	}

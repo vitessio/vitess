@@ -73,6 +73,7 @@ type JoinColumn struct {
 	BvNames  []string               // the BvNames and LHSCols line up
 	LHSExprs []sqlparser.Expr
 	RHSExpr  sqlparser.Expr
+	GroupBy  bool // if this is true, we need to push this down to our inputs with addToGroupBy set to true
 }
 
 func NewApplyJoin(lhs, rhs ops.Operator, predicate sqlparser.Expr, leftOuterJoin bool) *ApplyJoin {
@@ -157,8 +158,8 @@ func (a *ApplyJoin) AddJoinPredicate(ctx *plancontext.PlanningContext, expr sqlp
 	return nil
 }
 
-func (a *ApplyJoin) pushColLeft(ctx *plancontext.PlanningContext, e *sqlparser.AliasedExpr) (int, error) {
-	newLHS, offset, err := a.LHS.AddColumn(ctx, e, true)
+func (a *ApplyJoin) pushColLeft(ctx *plancontext.PlanningContext, e *sqlparser.AliasedExpr, addToGroupBy bool) (int, error) {
+	newLHS, offset, err := a.LHS.AddColumn(ctx, e, true, addToGroupBy)
 	if err != nil {
 		return 0, err
 	}
@@ -166,8 +167,8 @@ func (a *ApplyJoin) pushColLeft(ctx *plancontext.PlanningContext, e *sqlparser.A
 	return offset, nil
 }
 
-func (a *ApplyJoin) pushColRight(ctx *plancontext.PlanningContext, e *sqlparser.AliasedExpr) (int, error) {
-	newRHS, offset, err := a.RHS.AddColumn(ctx, e, true)
+func (a *ApplyJoin) pushColRight(ctx *plancontext.PlanningContext, e *sqlparser.AliasedExpr, addToGroupBy bool) (int, error) {
+	newRHS, offset, err := a.RHS.AddColumn(ctx, e, true, addToGroupBy)
 	if err != nil {
 		return 0, err
 	}
@@ -191,7 +192,7 @@ func joinColumnToExpr(column JoinColumn) sqlparser.Expr {
 	return column.Original.Expr
 }
 
-func (a *ApplyJoin) getJoinColumnFor(ctx *plancontext.PlanningContext, e *sqlparser.AliasedExpr) (col JoinColumn, err error) {
+func (a *ApplyJoin) getJoinColumnFor(ctx *plancontext.PlanningContext, e *sqlparser.AliasedExpr, addToGroupBy bool) (col JoinColumn, err error) {
 	defer func() {
 		col.Original = e
 	}()
@@ -200,6 +201,7 @@ func (a *ApplyJoin) getJoinColumnFor(ctx *plancontext.PlanningContext, e *sqlpar
 	both := lhs.Merge(rhs)
 	expr := e.Expr
 	deps := ctx.SemTable.RecursiveDeps(expr)
+	col.GroupBy = addToGroupBy
 
 	switch {
 	case deps.IsSolvedBy(lhs):
@@ -218,11 +220,11 @@ func (a *ApplyJoin) getJoinColumnFor(ctx *plancontext.PlanningContext, e *sqlpar
 	return
 }
 
-func (a *ApplyJoin) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, reuseExisting bool) (ops.Operator, int, error) {
+func (a *ApplyJoin) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, reuseExisting, addToGroupBy bool) (ops.Operator, int, error) {
 	if offset, found := canReuseColumn(ctx, a.ColumnsAST, expr.Expr, joinColumnToExpr); found {
 		return a, offset, nil
 	}
-	col, err := a.getJoinColumnFor(ctx, expr)
+	col, err := a.getJoinColumnFor(ctx, expr, addToGroupBy)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -234,7 +236,7 @@ func (a *ApplyJoin) planOffsets(ctx *plancontext.PlanningContext) (err error) {
 	for _, col := range a.ColumnsAST {
 		// Read the type description for JoinColumn to understand the following code
 		for i, lhsExpr := range col.LHSExprs {
-			offset, err := a.pushColLeft(ctx, aeWrap(lhsExpr))
+			offset, err := a.pushColLeft(ctx, aeWrap(lhsExpr), col.GroupBy)
 			if err != nil {
 				return err
 			}
@@ -246,7 +248,7 @@ func (a *ApplyJoin) planOffsets(ctx *plancontext.PlanningContext) (err error) {
 			}
 		}
 		if col.RHSExpr != nil {
-			offset, err := a.pushColRight(ctx, aeWrap(col.RHSExpr))
+			offset, err := a.pushColRight(ctx, aeWrap(col.RHSExpr), col.GroupBy)
 			if err != nil {
 				return err
 			}
@@ -256,7 +258,7 @@ func (a *ApplyJoin) planOffsets(ctx *plancontext.PlanningContext) (err error) {
 
 	for _, col := range a.JoinPredicates {
 		for i, lhsExpr := range col.LHSExprs {
-			offset, err := a.pushColLeft(ctx, aeWrap(lhsExpr))
+			offset, err := a.pushColLeft(ctx, aeWrap(lhsExpr), false)
 			if err != nil {
 				return err
 			}

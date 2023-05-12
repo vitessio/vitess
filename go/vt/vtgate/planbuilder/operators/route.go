@@ -18,6 +18,7 @@ package operators
 
 import (
 	"fmt"
+	"strings"
 
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -543,7 +544,11 @@ func createProjection(src ops.Operator) (*Projection, error) {
 	return proj, nil
 }
 
-func (r *Route) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, reuseExisting bool) (ops.Operator, int, error) {
+type iofoobars interface {
+	addNoPushCol(expr *sqlparser.AliasedExpr, addToGroupBy bool) int
+}
+
+func (r *Route) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, _, addToGroupBy bool) (ops.Operator, int, error) {
 	removeKeyspaceFromSelectExpr(expr)
 
 	// check if columns is already added.
@@ -558,18 +563,38 @@ func (r *Route) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.Alia
 		return r, offset, nil
 	}
 
-	proj, exists := r.Source.(*Projection)
-	if !exists {
-		proj, err = createProjection(r.Source)
-		if err != nil {
-			return nil, 0, err
-		}
-		r.Source = proj
+	if ok, offset := addColumnToInput(r.Source, expr, addToGroupBy); ok {
+		return r, offset, nil
 	}
-	// add the new column
-	proj.Columns = append(proj.Columns, Expr{E: expr.Expr})
-	proj.ColumnNames = append(proj.ColumnNames, expr.As.String())
-	return r, len(proj.Columns) - 1, nil
+
+	src, err := createProjection(r.Source)
+	if err != nil {
+		return nil, 0, err
+	}
+	r.Source = src
+
+	newSrc, offset, err := src.AddColumn(ctx, expr, false, addToGroupBy)
+	if err != nil {
+		return nil, 0, err
+	}
+	r.Source = newSrc
+	return r, offset, nil
+}
+
+func addColumnToInput(operator ops.Operator, expr *sqlparser.AliasedExpr, addToGroupBy bool) (bool, int) {
+	switch op := operator.(type) {
+	case *CorrelatedSubQueryOp:
+		return addColumnToInput(op.Outer, expr, addToGroupBy)
+	case *Limit:
+		return addColumnToInput(op.Source, expr, addToGroupBy)
+	case *Ordering:
+		return addColumnToInput(op.Source, expr, addToGroupBy)
+	case iofoobars:
+		offset := op.addNoPushCol(expr, addToGroupBy)
+		return true, offset
+	default:
+		return false, 0
+	}
 }
 
 func (r *Route) GetColumns() ([]*sqlparser.AliasedExpr, error) {
@@ -637,7 +662,7 @@ func (r *Route) planOffsets(ctx *plancontext.PlanningContext) (err error) {
 		}
 		if ctx.SemTable.NeedsWeightString(order.WeightStrExpr) {
 			wrap := aeWrap(weightStringFor(order.WeightStrExpr))
-			_, offset, err = r.AddColumn(ctx, wrap, true)
+			_, offset, err = r.AddColumn(ctx, wrap, true, false)
 			if err != nil {
 				return err
 			}
@@ -660,7 +685,7 @@ func (r *Route) getOffsetFor(ctx *plancontext.PlanningContext, order ops.OrderBy
 		}
 	}
 
-	_, offset, err := r.AddColumn(ctx, aeWrap(order.Inner.Expr), true)
+	_, offset, err := r.AddColumn(ctx, aeWrap(order.Inner.Expr), true, false)
 	if err != nil {
 		return 0, err
 	}
@@ -678,11 +703,28 @@ func (r *Route) Description() ops.OpDescription {
 }
 
 func (r *Route) ShortDescription() string {
+	first := r.Routing.OpCode().String()
+
 	ks := r.Routing.Keyspace()
-	if ks == nil {
-		return r.Routing.OpCode().String()
+	if ks != nil {
+		first = fmt.Sprintf("%s on %s", r.Routing.OpCode().String(), ks.Name)
 	}
-	return fmt.Sprintf("%s on %s", r.Routing.OpCode().String(), ks.Name)
+
+	orderBy, err := r.Source.GetOrdering()
+	if err != nil {
+		return first
+	}
+
+	ordering := ""
+	if len(orderBy) > 0 {
+		var oo []string
+		for _, o := range orderBy {
+			oo = append(oo, sqlparser.String(o.Inner))
+		}
+		ordering = " order by " + strings.Join(oo, ",")
+	}
+
+	return first + ordering
 }
 
 func (r *Route) setTruncateColumnCount(offset int) {
