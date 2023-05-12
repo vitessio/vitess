@@ -86,7 +86,12 @@ func (q *resilientQuery) getCurrentValue(ctx context.Context, wkey fmt.Stringer,
 
 	// If it is not time to check again, then return either the cached
 	// value or the cached error but don't ask topo again.
-	if !shouldRefresh {
+	// Here we have to be careful with the part where we haven't gotten even the first result.
+	// In that case, a refresh is already in progress, but the cache is empty! So, we can't use the cache.
+	// We have to wait for the query's results.
+	// We know the query has run at least once if the insertionTime is non-zero, or if we have an error.
+	queryRanAtLeastOnce := !entry.insertionTime.IsZero() || entry.lastError != nil
+	if !shouldRefresh && queryRanAtLeastOnce {
 		if cacheValid {
 			return entry.value, nil
 		}
