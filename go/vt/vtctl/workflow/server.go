@@ -783,10 +783,7 @@ ORDER BY
 func (s *Server) getWorkflowState(ctx context.Context, targetKeyspace, workflowName string) (*trafficSwitcher, *State, error) {
 	ts, err := s.buildTrafficSwitcher(ctx, targetKeyspace, workflowName)
 
-	if ts == nil || err != nil {
-		if errors.Is(err, ErrNoStreams) || err.Error() == fmt.Sprintf(ErrNoStreams.Error(), targetKeyspace, workflowName) {
-			return nil, nil, nil
-		}
+	if err != nil {
 		log.Errorf("buildTrafficSwitcher failed: %v", err)
 		return nil, nil, err
 	}
@@ -2146,7 +2143,20 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 	if req.DryRun && len(dryRunResults) == 0 {
 		dryRunResults = append(dryRunResults, "No changes required")
 	}
-	return &vtctldatapb.WorkflowSwitchTrafficResponse{Results: dryRunResults}, nil
+	var results []string
+	if req.DryRun {
+		results = append(results, dryRunResults...)
+	} else {
+		// Reload the state after the SwitchTraffic operation
+		// and return that as a string.
+		_, state, err := s.getWorkflowState(ctx, req.Keyspace, req.Workflow)
+		if err != nil {
+			results = append(results, fmt.Sprintf("Error reloading workflow state after switching traffic: %v", err))
+		} else {
+			results = append(results, state.String())
+		}
+	}
+	return &vtctldatapb.WorkflowSwitchTrafficResponse{Results: results}, nil
 }
 
 // switchReads is a generic way of switching read traffic for a workflow.
