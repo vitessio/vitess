@@ -613,6 +613,7 @@ message UpdateVRWorkflowRequest {
   repeated string cells = 2;
   repeated string tablet_types = 3;
   binlogdata.OnDDLAction on_ddl = 4;
+  string state = 5;
 }
 
 message UpdateVRWorkflowResponse {

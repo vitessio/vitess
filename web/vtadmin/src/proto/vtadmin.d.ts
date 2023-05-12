@@ -27135,6 +27135,9 @@ export namespace tabletmanagerdata {
 
         /** UpdateVRWorkflowRequest on_ddl */
         on_ddl?: (binlogdata.OnDDLAction|null);
+
+        /** UpdateVRWorkflowRequest state */
+        state?: (string|null);
     }
 
     /** Represents an UpdateVRWorkflowRequest. */
@@ -27157,6 +27160,9 @@ export namespace tabletmanagerdata {
 
         /** UpdateVRWorkflowRequest on_ddl. */
         public on_ddl: binlogdata.OnDDLAction;
+
+        /** UpdateVRWorkflowRequest state. */
+        public state: string;
 
         /**
          * Creates a new UpdateVRWorkflowRequest instance using the specified properties.

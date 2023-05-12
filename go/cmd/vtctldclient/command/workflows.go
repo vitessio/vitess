@@ -63,7 +63,7 @@ var (
 		RunE:                  commandWorkflowDelete,
 	}
 
-	// WorkflowShow makes a WorkflowDelete gRPC call to a vtctld.
+	// WorkflowShow makes a GetWorkflows gRPC call to a vtctld.
 	WorkflowShow = &cobra.Command{
 		Use:                   "show",
 		Short:                 "Show the details for a VReplication workflow",
@@ -72,6 +72,28 @@ var (
 		Aliases:               []string{"Show"},
 		Args:                  cobra.NoArgs,
 		RunE:                  commandWorkflowShow,
+	}
+
+	// WorkflowStart makes a WorfklowUpdate gRPC call to a vtctld.
+	WorkflowStart = &cobra.Command{
+		Use:                   "start",
+		Short:                 "Start a VReplication workflow",
+		Example:               `vtctldclient --server=localhost:15999 workflow --keyspace=customer start --workflow=commerce2customer"`,
+		DisableFlagsInUseLine: true,
+		Aliases:               []string{"Start"},
+		Args:                  cobra.NoArgs,
+		RunE:                  commandWorkflowUpdateState,
+	}
+
+	// WorkflowStop makes a WorfklowUpdate gRPC call to a vtctld.
+	WorkflowStop = &cobra.Command{
+		Use:                   "stop",
+		Short:                 "Stop a VReplication workflow",
+		Example:               `vtctldclient --server=localhost:15999 workflow --keyspace=customer stop --workflow=commerce2customer"`,
+		DisableFlagsInUseLine: true,
+		Aliases:               []string{"Stop"},
+		Args:                  cobra.NoArgs,
+		RunE:                  commandWorkflowUpdateState,
 	}
 
 	// WorkflowUpdate makes a WorkflowUpdate gRPC call to a vtctld.
@@ -177,6 +199,11 @@ func commandWorkflowDelete(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	// Sort the inner TabletInfo slice for deterministic output.
+	sort.Slice(resp.Details, func(i, j int) bool {
+		return resp.Details[i].Tablet < resp.Details[j].Tablet
+	})
+
 	data, err := cli.MarshalJSON(resp)
 	if err != nil {
 		return err
@@ -250,6 +277,51 @@ func commandWorkflowUpdate(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+func commandWorkflowUpdateState(cmd *cobra.Command, args []string) error {
+	cli.FinishedParsing(cmd)
+
+	var state string
+	switch strings.ToUpper(cmd.Name()) {
+	case "START":
+		state = "Running"
+	case "STOP":
+		state = "Stopped"
+	default:
+		return fmt.Errorf("invalid workstate: %s", args[0])
+	}
+
+	// The only thing we're updating is the state.
+	req := &vtctldatapb.WorkflowUpdateRequest{
+		Keyspace: workflowOptions.Keyspace,
+		TabletRequest: &tabletmanagerdatapb.UpdateVRWorkflowRequest{
+			Workflow:    workflowUpdateOptions.Workflow,
+			Cells:       textutil.SimulatedNullStringSlice,
+			TabletTypes: textutil.SimulatedNullStringSlice,
+			OnDdl:       binlogdatapb.OnDDLAction(textutil.SimulatedNullInt),
+			State:       state,
+		},
+	}
+
+	resp, err := client.WorkflowUpdate(commandCtx, req)
+	if err != nil {
+		return err
+	}
+
+	// Sort the inner TabletInfo slice for deterministic output.
+	sort.Slice(resp.Details, func(i, j int) bool {
+		return resp.Details[i].Tablet < resp.Details[j].Tablet
+	})
+
+	data, err := cli.MarshalJSON(resp)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("%s\n", data)
+
+	return nil
+}
+
 func init() {
 	GetWorkflows.Flags().BoolVarP(&getWorkflowsOptions.ShowAll, "show-all", "a", false, "Show all workflows instead of just active workflows.")
 	Root.AddCommand(GetWorkflows)
@@ -267,6 +339,14 @@ func init() {
 	WorkflowShow.Flags().StringVarP(&workflowDeleteOptions.Workflow, "workflow", "w", "", "The workflow you want the details for (required)")
 	WorkflowShow.MarkFlagRequired("workflow")
 	Workflow.AddCommand(WorkflowShow)
+
+	WorkflowStart.Flags().StringVarP(&workflowUpdateOptions.Workflow, "workflow", "w", "", "The workflow you want to start (required)")
+	WorkflowStart.MarkFlagRequired("workflow")
+	Workflow.AddCommand(WorkflowStart)
+
+	WorkflowStop.Flags().StringVarP(&workflowUpdateOptions.Workflow, "workflow", "w", "", "The workflow you want to stop (required)")
+	WorkflowStop.MarkFlagRequired("workflow")
+	Workflow.AddCommand(WorkflowStop)
 
 	WorkflowUpdate.Flags().StringVarP(&workflowUpdateOptions.Workflow, "workflow", "w", "", "The workflow you want to update (required)")
 	WorkflowUpdate.MarkFlagRequired("workflow")

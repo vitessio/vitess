@@ -47,7 +47,7 @@ const (
 	// Retrieve the current configuration values for a workflow's vreplication stream.
 	sqlSelectVRWorkflowConfig = "select id, source, cell, tablet_types from %s.vreplication where workflow = %a"
 	// Update the configuration values for a workflow's vreplication stream.
-	sqlUpdateVRWorkflowConfig = "update %s.vreplication set source = %a, cell = %a, tablet_types = %a where id = %a"
+	sqlUpdateVRWorkflowConfig = "update %s.vreplication set state = %a, source = %a, cell = %a, tablet_types = %a where id = %a"
 )
 
 func (tm *TabletManager) CreateVRWorkflow(ctx context.Context, req *tabletmanagerdatapb.CreateVRWorkflowRequest) (*tabletmanagerdatapb.CreateVRWorkflowResponse, error) {
@@ -241,6 +241,7 @@ func (tm *TabletManager) UpdateVRWorkflow(ctx context.Context, req *tabletmanage
 	tabletTypes := strings.Split(row.AsString("tablet_types", ""), ",")
 	bls := &binlogdatapb.BinlogSource{}
 	source := row.AsBytes("source", []byte{})
+	state := row.AsString("state", "")
 	// For the string based values, we use NULL to differentiate
 	// from an empty string. The NULL value indicates that we
 	// should keep the existing value.
@@ -262,13 +263,17 @@ func (tm *TabletManager) UpdateVRWorkflow(ctx context.Context, req *tabletmanage
 	if err != nil {
 		return nil, err
 	}
+	if !textutil.ValueIsSimulatedNull(req.State) {
+		state = req.State
+	}
 	bindVars = map[string]*querypb.BindVariable{
+		"st": sqltypes.StringBindVariable(state),
 		"sc": sqltypes.StringBindVariable(string(source)),
 		"cl": sqltypes.StringBindVariable(strings.Join(cells, ",")),
 		"tt": sqltypes.StringBindVariable(strings.Join(tabletTypes, ",")),
 		"id": sqltypes.Int64BindVariable(id),
 	}
-	parsed = sqlparser.BuildParsedQuery(sqlUpdateVRWorkflowConfig, sidecardb.GetIdentifier(), ":sc", ":cl", ":tt", ":id")
+	parsed = sqlparser.BuildParsedQuery(sqlUpdateVRWorkflowConfig, sidecardb.GetIdentifier(), ":st", ":sc", ":cl", ":tt", ":id")
 	stmt, err = parsed.GenerateQuery(bindVars, nil)
 	if err != nil {
 		return nil, err

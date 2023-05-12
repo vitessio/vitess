@@ -18,6 +18,7 @@ package command
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -216,6 +217,11 @@ func commandMoveTablesCreate(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	// Sort the inner TabletInfo slice for deterministic output.
+	sort.Slice(resp.Details, func(i, j int) bool {
+		return resp.Details[i].Tablet < resp.Details[j].Tablet
+	})
+
 	data, err := cli.MarshalJSON(resp)
 	if err != nil {
 		return err
@@ -239,6 +245,11 @@ func commandMoveTablesCancel(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
+
+	// Sort the inner TabletInfo slice for deterministic output.
+	sort.Slice(resp.Details, func(i, j int) bool {
+		return resp.Details[i].Tablet < resp.Details[j].Tablet
+	})
 
 	data, err := cli.MarshalJSON(resp)
 	if err != nil {
