@@ -300,6 +300,7 @@ func TimeoutAction(t *testing.T, timeout time.Duration, errMsg string, action fu
 		select {
 		case <-deadline:
 			t.Error(errMsg)
+			return
 		case <-time.After(1 * time.Second):
 			ok = action()
 		}
