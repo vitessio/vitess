@@ -17,7 +17,6 @@ limitations under the License.
 package tabletmanager
 
 import (
-	"errors"
 	"fmt"
 	"time"
 
@@ -163,7 +162,7 @@ func (tm *TabletManager) convertBoolToSemiSyncAction(semiSync bool) (SemiSyncAct
 		}
 	} else {
 		if semiSync {
-			return SemiSyncActionNone, errors.New("semi-sync plugins are not loaded.")
+			return SemiSyncActionNone, vterrors.VT09013()
 		} else {
 			return SemiSyncActionNone, nil
 		}
