@@ -56,6 +56,7 @@ var Cases = []TestCase{
 	{Run: LikeComparison},
 	{Run: StrcmpComparison},
 	{Run: MultiComparisons},
+	{Run: IntervalStatement},
 	{Run: IsStatement},
 	{Run: NotStatement},
 	{Run: LogicalStatement},
@@ -1099,6 +1100,28 @@ func MultiComparisons(yield Query) {
 			yield(fmt.Sprintf("%s(%s, %s, %s)", method, arg[0], arg[1], arg[2]), nil)
 			yield(fmt.Sprintf("%s(%s, %s, %s)", method, arg[2], arg[1], arg[0]), nil)
 		})
+	}
+}
+
+func IntervalStatement(yield Query) {
+	inputs := []string{
+		"-1", "0", "1", "2", "3", "0xFF", "1.1", "1.9", "1.1e0", "1.9e0",
+		strconv.FormatUint(math.MaxUint64, 10),
+		strconv.FormatUint(math.MaxInt64, 10),
+		strconv.FormatUint(math.MaxInt64+1, 10),
+		strconv.FormatInt(math.MinInt64, 10),
+		"18446744073709551616",
+		"-9223372036854775809",
+		`"foobar"`, "NULL", "cast('invalid' as json)",
+	}
+	for _, base := range inputs {
+		for _, arg1 := range inputs {
+			for _, arg2 := range inputs {
+				for _, arg3 := range inputs {
+					yield(fmt.Sprintf("INTERVAL(%s, %s, %s, %s)", base, arg1, arg2, arg3), nil)
+				}
+			}
+		}
 	}
 }
 

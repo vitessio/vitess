@@ -3917,3 +3917,43 @@ func (asm *assembler) Fn_YEARWEEK() {
 		return 1
 	}, "FN YEARWEEK DATE(SP-1)")
 }
+
+func intervalStackOffset(l, i int) int {
+	return l - i + 1
+}
+
+func (asm *assembler) Interval_i(l int) {
+	asm.adjustStack(-l)
+	asm.emit(func(env *ExpressionEnv) int {
+		if env.vm.stack[env.vm.sp-l] == nil {
+			env.vm.stack[env.vm.sp-l] = env.vm.arena.newEvalInt64(-1)
+			env.vm.sp -= l
+			return 1
+		}
+
+		env.vm.sp -= l
+		return 1
+	}, "INTERVAL INT64(SP-1)...INT64(SP-%d)", l)
+}
+
+func (asm *assembler) Interval(l int) {
+	asm.adjustStack(-l)
+	asm.emit(func(env *ExpressionEnv) int {
+		if env.vm.stack[env.vm.sp-l-1] == nil {
+			env.vm.stack[env.vm.sp-l-1] = env.vm.arena.newEvalInt64(-1)
+			env.vm.sp -= l
+			return 1
+		}
+
+		args := env.vm.stack[env.vm.sp-l-1:]
+		idx, err := findInterval(args)
+		if err != nil {
+			env.vm.err = err
+		} else {
+			env.vm.stack[env.vm.sp-l-1] = env.vm.arena.newEvalInt64(idx)
+		}
+		env.vm.sp -= l
+		return 1
+
+	}, "INTERVAL NUMERIC(SP-1)...NUMERIC(SP-%d)", l)
+}
