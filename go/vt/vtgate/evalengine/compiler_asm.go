@@ -23,11 +23,13 @@ import (
 	"crypto/sha1"
 	"crypto/sha256"
 	"crypto/sha512"
+	"encoding/binary"
 	"encoding/hex"
 	"errors"
 	"hash/crc32"
 	"math"
 	"math/bits"
+	"net/netip"
 	"strconv"
 	"time"
 
@@ -3956,4 +3958,101 @@ func (asm *assembler) Interval(l int) {
 		return 1
 
 	}, "INTERVAL NUMERIC(SP-1)...NUMERIC(SP-%d)", l)
+}
+
+func (asm *assembler) Fn_INET_ATON() {
+	asm.emit(func(env *ExpressionEnv) int {
+		arg := env.vm.stack[env.vm.sp-1].(*evalBytes)
+		ip, err := netip.ParseAddr(arg.string())
+		if err != nil || !ip.Is4() {
+			env.vm.stack[env.vm.sp-1] = nil
+			return 1
+		}
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalUint64(uint64(binary.BigEndian.Uint32(ip.AsSlice())))
+		return 1
+	}, "FN INET_ATON VARBINARY(SP-1)")
+}
+
+func (asm *assembler) Fn_INET_NTOA(col collations.TypedCollation) {
+	asm.emit(func(env *ExpressionEnv) int {
+		arg := env.vm.stack[env.vm.sp-1].(*evalUint64)
+		if arg.u > math.MaxUint32 {
+			env.vm.stack[env.vm.sp-1] = nil
+			return 1
+		}
+
+		b := binary.BigEndian.AppendUint32(nil, uint32(arg.u))
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalText(hack.StringBytes(netip.AddrFrom4([4]byte(b)).String()), col)
+		return 1
+	}, "FN INET_NTOA VARBINARY(SP-1)")
+}
+
+func (asm *assembler) Fn_INET6_ATON() {
+	asm.emit(func(env *ExpressionEnv) int {
+		arg := env.vm.stack[env.vm.sp-1].(*evalBytes)
+		ip, err := netip.ParseAddr(arg.string())
+		if err != nil {
+			env.vm.stack[env.vm.sp-1] = nil
+			return 1
+		}
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalBinary(ip.AsSlice())
+		return 1
+	}, "INET6_ATON VARBINARY(SP-1)")
+}
+
+func (asm *assembler) Fn_INET6_NTOA(col collations.TypedCollation) {
+	asm.emit(func(env *ExpressionEnv) int {
+		arg := env.vm.stack[env.vm.sp-1].(*evalBytes)
+
+		ip, ok := netip.AddrFromSlice(arg.bytes)
+		if !ok {
+			env.vm.stack[env.vm.sp-1] = nil
+			return 1
+		}
+
+		if ip, ok := printIPv6AsIPv4(ip); ok {
+			env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalText(hack.StringBytes("::"+ip.String()), col)
+		} else {
+			env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalText(hack.StringBytes(ip.String()), col)
+		}
+		return 1
+	}, "FN INET6_NTOA VARBINARY(SP-1)")
+}
+
+func (asm *assembler) Fn_IS_IPV4() {
+	asm.emit(func(env *ExpressionEnv) int {
+		arg := env.vm.stack[env.vm.sp-1].(*evalBytes)
+
+		ip, err := netip.ParseAddr(arg.string())
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalBool(err == nil && ip.Is4())
+		return 1
+	}, "FN IS_IPV4 VARBINARY(SP-1)")
+}
+
+func (asm *assembler) Fn_IS_IPV4_COMPAT() {
+	asm.emit(func(env *ExpressionEnv) int {
+		arg := env.vm.stack[env.vm.sp-1].(*evalBytes)
+		ip, ok := netip.AddrFromSlice(arg.bytes)
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalBool(ok && isIPv4Compat(ip))
+		return 1
+	}, "FN IS_IPV4_COMPAT VARBINARY(SP-1)")
+}
+
+func (asm *assembler) Fn_IS_IPV4_MAPPED() {
+	asm.emit(func(env *ExpressionEnv) int {
+		arg := env.vm.stack[env.vm.sp-1].(*evalBytes)
+		ip, ok := netip.AddrFromSlice(arg.bytes)
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalBool(ok && ip.Is4In6())
+		return 1
+	}, "FN IS_IPV4_MAPPED VARBINARY(SP-1)")
+}
+
+func (asm *assembler) Fn_IS_IPV6() {
+	asm.emit(func(env *ExpressionEnv) int {
+		arg := env.vm.stack[env.vm.sp-1].(*evalBytes)
+
+		ip, err := netip.ParseAddr(arg.string())
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalBool(err == nil && ip.Is6())
+		return 1
+	}, "FN IS_IPV6 VARBINARY(SP-1)")
 }
