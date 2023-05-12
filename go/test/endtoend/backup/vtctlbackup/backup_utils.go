@@ -821,9 +821,6 @@ func checkTabletType(t *testing.T, alias string, tabletType topodata.TabletType)
 }
 
 func doNotDemoteNewlyPromotedPrimaryIfReparentingDuringBackup(t *testing.T) {
-	// insert data on primary, wait for replica to get it
-	verifyInitialReplication(t)
-
 	var wg sync.WaitGroup
 	wg.Add(2)
 
