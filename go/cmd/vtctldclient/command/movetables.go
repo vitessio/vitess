@@ -105,6 +105,18 @@ See the --help output for each command for more details.`,
 		RunE:                  commandMoveTablesShow,
 	}
 
+	// MoveTablesStart makes a WorfklowUpdate gRPC call to a vtctld.
+	MoveTablesStart = &cobra.Command{
+		Use:                   "start",
+		Short:                 "Start the MoveTables workflow",
+		Example:               `vtctldclient --server=localhost:15999 MoveTables --workflow "commerce2customer" --target-keyspace "customer" start`,
+		DisableFlagsInUseLine: true,
+		Aliases:               []string{"Start"},
+		Args:                  cobra.NoArgs,
+		PreRun:                bridgeMoveTablesToWorkflow,
+		RunE:                  commandWorkflowUpdateState,
+	}
+
 	// MoveTablesStatus makes a GetWorkflows gRPC call to a vtctld.
 	MoveTablesStatus = &cobra.Command{
 		Use:                   "status",
@@ -114,6 +126,18 @@ See the --help output for each command for more details.`,
 		Aliases:               []string{"Status", "progress", "Progress"},
 		Args:                  cobra.NoArgs,
 		RunE:                  commandMoveTablesStatus,
+	}
+
+	// MoveTablesStop makes a WorfklowUpdate gRPC call to a vtctld.
+	MoveTablesStop = &cobra.Command{
+		Use:                   "stop",
+		Short:                 "Stop a MoveTables workflow",
+		Example:               `vtctldclient --server=localhost:15999 MoveTables --workflow "commerce2customer" --target-keyspace "customer" stop`,
+		DisableFlagsInUseLine: true,
+		Aliases:               []string{"Stop"},
+		Args:                  cobra.NoArgs,
+		PreRun:                bridgeMoveTablesToWorkflow,
+		RunE:                  commandWorkflowUpdateState,
 	}
 
 	// MoveTablesReverseTraffic makes a WorkflowSwitchTraffic gRPC call to a vtctld.
@@ -194,6 +218,11 @@ var (
 		DryRun                   bool
 	}{}
 )
+
+func bridgeMoveTablesToWorkflow(cmd *cobra.Command, args []string) {
+	workflowUpdateOptions.Workflow = moveTablesOptions.Workflow
+	workflowOptions.Keyspace = moveTablesOptions.TargetKeyspace
+}
 
 func commandMoveTablesCreate(cmd *cobra.Command, args []string) error {
 	cli.FinishedParsing(cmd)
@@ -382,14 +411,20 @@ func init() {
 	MoveTablesCreate.Flags().BoolVar(&moveTablesCreateOptions.StopAfterCopy, "stop-after-copy", false, "Stop the MoveTables workflow after it's finished copying the existing rows and before it starts replicating changes")
 	MoveTables.AddCommand(MoveTablesCreate)
 
-	MoveTables.AddCommand(MoveTablesStatus)
 	MoveTables.AddCommand(MoveTablesShow)
+
+	MoveTables.AddCommand(MoveTablesStart)
+
+	MoveTables.AddCommand(MoveTablesStatus)
+
+	MoveTables.AddCommand(MoveTablesStop)
 
 	MoveTablesSwitchTraffic.Flags().StringSliceVar(&moveTablesSwitchTrafficOptions.TabletTypes, "tablet-types", tabletTypesDefault, "Tablet types to switch traffic for")
 	MoveTablesSwitchTraffic.Flags().DurationVar(&moveTablesSwitchTrafficOptions.Timeout, "timeout", timeoutDefault, "Specifies the maximum time to wait, in seconds, for VReplication to catch up on primary tablets. The traffic switch will be cancelled on timeout.")
 	MoveTablesSwitchTraffic.Flags().DurationVar(&moveTablesSwitchTrafficOptions.MaxReplicationLagAllowed, "max-replication-lag-allowed", maxReplicationLagDefault, "Allow traffic to be switched only if VReplication lag is below this")
 	MoveTablesSwitchTraffic.Flags().BoolVar(&moveTablesSwitchTrafficOptions.DryRun, "dry-run", false, "Print the actions that would be taken and report any known errors that would have occurred")
 	MoveTables.AddCommand(MoveTablesSwitchTraffic)
+
 	MoveTablesReverseTraffic.Flags().StringSliceVar(&moveTablesSwitchTrafficOptions.TabletTypes, "tablet-types", tabletTypesDefault, "Tablet types to switch traffic for")
 	MoveTablesReverseTraffic.Flags().DurationVar(&moveTablesSwitchTrafficOptions.Timeout, "timeout", timeoutDefault, "Specifies the maximum time to wait, in seconds, for VReplication to catch up on primary tablets. The traffic switch will be cancelled on timeout.")
 	MoveTablesReverseTraffic.Flags().DurationVar(&moveTablesSwitchTrafficOptions.MaxReplicationLagAllowed, "max-replication-lag-allowed", maxReplicationLagDefault, "Allow traffic to be switched only if VReplication lag is below this")

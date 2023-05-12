@@ -29,6 +29,7 @@ import (
 	"vitess.io/vitess/go/vt/proto/vttime"
 	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtctl/workflow"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -45,7 +46,7 @@ const (
 	// Delete VReplication records for the given workflow.
 	sqlDeleteVRWorkflow = "delete from %s.vreplication where workflow = %a and db_name = %a"
 	// Retrieve the current configuration values for a workflow's vreplication stream.
-	sqlSelectVRWorkflowConfig = "select id, source, cell, tablet_types from %s.vreplication where workflow = %a"
+	sqlSelectVRWorkflowConfig = "select id, source, cell, tablet_types, state, message from %s.vreplication where workflow = %a"
 	// Update the configuration values for a workflow's vreplication stream.
 	sqlUpdateVRWorkflowConfig = "update %s.vreplication set state = %a, source = %a, cell = %a, tablet_types = %a where id = %a"
 )
@@ -242,6 +243,11 @@ func (tm *TabletManager) UpdateVRWorkflow(ctx context.Context, req *tabletmanage
 	bls := &binlogdatapb.BinlogSource{}
 	source := row.AsBytes("source", []byte{})
 	state := row.AsString("state", "")
+	message := row.AsString("message", "")
+	if strings.ToUpper(req.State) == workflow.Running && strings.ToUpper(message) == workflow.Frozen {
+		return &tabletmanagerdatapb.UpdateVRWorkflowResponse{Result: nil},
+			vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "cannot start a workflow when it is frozen")
+	}
 	// For the string based values, we use NULL to differentiate
 	// from an empty string. The NULL value indicates that we
 	// should keep the existing value.

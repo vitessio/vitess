@@ -63,6 +63,17 @@ var (
 		RunE:                  commandWorkflowDelete,
 	}
 
+	// WorkflowList makes a GetWorkflows gRPC call to a vtctld.
+	WorkflowList = &cobra.Command{
+		Use:                   "list",
+		Short:                 "List the VReplication workflows in the given keyspace",
+		Example:               `vtctldclient --server=localhost:15999 workflow --keyspace=customer list"`,
+		DisableFlagsInUseLine: true,
+		Aliases:               []string{"List"},
+		Args:                  cobra.NoArgs,
+		RunE:                  commandWorkflowShow,
+	}
+
 	// WorkflowShow makes a GetWorkflows gRPC call to a vtctld.
 	WorkflowShow = &cobra.Command{
 		Use:                   "show",
@@ -221,6 +232,9 @@ func commandWorkflowShow(cmd *cobra.Command, args []string) error {
 		Keyspace: workflowOptions.Keyspace,
 		Workflow: workflowDeleteOptions.Workflow,
 	}
+	if strings.ToUpper(cmd.Name()) == "LIST" {
+		req.NameOnly = true
+	}
 	resp, err := client.GetWorkflows(commandCtx, req)
 	if err != nil {
 		return err
@@ -335,6 +349,8 @@ func init() {
 	WorkflowDelete.Flags().BoolVar(&workflowDeleteOptions.KeepData, "keep-data", false, "Keep the partially copied table data from the workflow in the target keyspace")
 	WorkflowDelete.Flags().BoolVar(&workflowDeleteOptions.KeepRoutingRules, "keep-routing-rules", false, "Keep the routing rules created for the workflow")
 	Workflow.AddCommand(WorkflowDelete)
+
+	Workflow.AddCommand(WorkflowList)
 
 	WorkflowShow.Flags().StringVarP(&workflowDeleteOptions.Workflow, "workflow", "w", "", "The workflow you want the details for (required)")
 	WorkflowShow.MarkFlagRequired("workflow")

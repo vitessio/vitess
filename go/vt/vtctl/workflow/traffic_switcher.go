@@ -51,6 +51,9 @@ import (
 const (
 	// Frozen is the message value of frozen vreplication streams.
 	Frozen = "FROZEN"
+	// Running is the state value of a vreplication stream in the
+	// replicating state.
+	Running = "RUNNING"
 
 	// How long to wait when refreshing the state of each tablet in a shard. Note that these
 	// are refreshed in parallel, non-topo errors are ignored (in the error handling) and we
