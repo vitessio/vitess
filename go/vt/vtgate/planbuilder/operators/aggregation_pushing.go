@@ -153,7 +153,7 @@ Transformed:
 			  |
 			Proj    <- This projection makes sure that the columns are lined up as expected
 			  |
-			Sort    <- Here we are sorting the input so that the OrderedAggregate can do it's thing
+			Sort    <- Here we are sorting the input so that the OrderedAggregate can do its thing
 			  |
 			JOIN
 		   /    \
@@ -188,35 +188,36 @@ func pushDownAggregationThroughJoin(ctx *plancontext.PlanningContext, rootAggr *
 
 	lhsTS := TableID(join.LHS)
 	rhsTS := TableID(join.RHS)
-	for _, groupBy := range rootAggr.Grouping {
-		deps := ctx.SemTable.RecursiveDeps(groupBy.Inner)
-		expr := groupBy.Inner
-		switch {
-		case deps.IsSolvedBy(lhsTS):
-			lhs.addGrouping(ctx, groupBy)
-			joinColumns = append(joinColumns, JoinColumn{
-				Original: aeWrap(groupBy.Inner),
-				LHSExprs: []sqlparser.Expr{expr},
-			})
-		case deps.IsSolvedBy(rhsTS):
-			rhs.addGrouping(ctx, groupBy)
-			joinColumns = append(joinColumns, JoinColumn{
-				Original: aeWrap(groupBy.Inner),
-				RHSExpr:  expr,
-			})
-		default:
-			return nil, false, vterrors.VT12001("grouping on columns from different sources")
-		}
+	groupingJCs, err := splitGroupingToLeftAndRight(ctx, rootAggr, lhsTS, rhsTS, lhs, rhs)
+	if err != nil {
+		return nil, false, err
 	}
+	joinColumns = append(joinColumns, groupingJCs...)
 
 	// We need to add any columns coming from the lhs of the join to the group by on that side
 	// If we don't, the LHS will not be able to return the column, and it can't be used to send down to the RHS
+	err = addJoinColumnsToLeft(ctx, rootAggr, join, lhs)
+	if err != nil {
+		return nil, false, err
+	}
+
+	join.LHS, join.RHS = lhs.pushed, rhs.pushed
+	join.ColumnsAST = joinColumns
+
+	if !rootAggr.Original {
+		// we only keep the root aggregation, if this aggregator was created
+		// by splitting one and pushing under a join, we can get rid of this one
+		return output, rewrite.NewTree, nil
+	}
+
+	rootAggr.Source = output
+	return rootAggr, rewrite.NewTree, nil
+}
+
+func addJoinColumnsToLeft(ctx *plancontext.PlanningContext, rootAggr *Aggregator, join *ApplyJoin, lhs joinPusher) error {
 	for _, pred := range join.JoinPredicates {
 		for _, expr := range pred.LHSExprs {
-			_, wexpr, err := rootAggr.QP.GetSimplifiedExpr(expr)
-			if err != nil {
-				return nil, false, err
-			}
+			wexpr := rootAggr.QP.GetSimplifiedExpr(expr)
 			idx, found := canReuseColumn(ctx, lhs.pushed.Columns, expr, extractExpr)
 			if !found {
 				idx = len(lhs.pushed.Columns)
@@ -238,18 +239,32 @@ func pushDownAggregationThroughJoin(ctx *plancontext.PlanningContext, rootAggr *
 			})
 		}
 	}
+	return nil
+}
 
-	join.LHS, join.RHS = lhs.pushed, rhs.pushed
-	join.ColumnsAST = joinColumns
-
-	if !rootAggr.Original {
-		// we only keep the root aggregation, if this aggregator was created
-		// by splitting one and pushing under a join, we can get rid of this one
-		return output, rewrite.NewTree, nil
+func splitGroupingToLeftAndRight(ctx *plancontext.PlanningContext, rootAggr *Aggregator, lhsTS, rhsTS semantics.TableSet, lhs, rhs joinPusher) ([]JoinColumn, error) {
+	var groupingJCs []JoinColumn
+	for _, groupBy := range rootAggr.Grouping {
+		deps := ctx.SemTable.RecursiveDeps(groupBy.Inner)
+		expr := groupBy.Inner
+		switch {
+		case deps.IsSolvedBy(lhsTS):
+			lhs.addGrouping(ctx, groupBy)
+			groupingJCs = append(groupingJCs, JoinColumn{
+				Original: aeWrap(groupBy.Inner),
+				LHSExprs: []sqlparser.Expr{expr},
+			})
+		case deps.IsSolvedBy(rhsTS):
+			rhs.addGrouping(ctx, groupBy)
+			groupingJCs = append(groupingJCs, JoinColumn{
+				Original: aeWrap(groupBy.Inner),
+				RHSExpr:  expr,
+			})
+		default:
+			return nil, vterrors.VT12001("grouping on columns from different sources")
+		}
 	}
-
-	rootAggr.Source = output
-	return rootAggr, rewrite.NewTree, nil
+	return groupingJCs, nil
 }
 
 // splitAggrColumnsToLeftAndRight pushes all aggregations on the aggregator above a join and

@@ -519,7 +519,8 @@ func (hp *horizonPlanning) handleDistinctAggr(ctx *plancontext.PlanningContext, 
 			continue
 		}
 
-		inner, innerWS, err := hp.qp.GetSimplifiedExpr(expr.Func.GetArg())
+		inner := expr.Func.GetArg()
+		innerWS := hp.qp.GetSimplifiedExpr(inner)
 		if err != nil {
 			return nil, nil, nil, err
 		}
@@ -576,12 +577,9 @@ func newOffset(col int) offsets {
 func (hp *horizonPlanning) createGroupingsForColumns(columns []*sqlparser.ColName) ([]operators.GroupBy, error) {
 	var lhsGrouping []operators.GroupBy
 	for _, lhsColumn := range columns {
-		expr, wsExpr, err := hp.qp.GetSimplifiedExpr(lhsColumn)
-		if err != nil {
-			return nil, err
-		}
+		wsExpr := hp.qp.GetSimplifiedExpr(lhsColumn)
 
-		lhsGrouping = append(lhsGrouping, operators.NewGroupBy(expr, wsExpr, nil))
+		lhsGrouping = append(lhsGrouping, operators.NewGroupBy(lhsColumn, wsExpr, nil))
 	}
 	return lhsGrouping, nil
 }
