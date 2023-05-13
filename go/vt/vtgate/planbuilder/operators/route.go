@@ -573,11 +573,10 @@ func (r *Route) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.Alia
 	}
 	r.Source = src
 
-	newSrc, offset, err := src.AddColumn(ctx, expr, false, addToGroupBy)
+	offset := src.addNoPushCol(expr, false)
 	if err != nil {
 		return nil, 0, err
 	}
-	r.Source = newSrc
 	return r, offset, nil
 }
 
