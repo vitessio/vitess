@@ -83,7 +83,7 @@
     "comment": "Aggregate detection (group_concat)",
     "query": "select group_concat(user.a) from user join user_extra",
     "v3-plan": "VT12001: unsupported: cross-shard query with aggregates",
-    "gen4-plan": "VT12001: unsupported: in scatter query: aggregation function 'group_concat'"
+    "gen4-plan": "VT12001: unsupported: in scatter query: aggregation function 'group_concat(`user`.a)'"
   },
   {
     "comment": "subqueries not supported in group by",
@@ -373,7 +373,7 @@
     "comment": "avg function on scatter query",
     "query": "select avg(id) from user",
     "v3-plan": "VT12001: unsupported: in scatter query: complex aggregate expression",
-    "gen4-plan": "VT12001: unsupported: in scatter query: aggregation function 'avg'"
+    "gen4-plan": "VT12001: unsupported: in scatter query: aggregation function 'avg(id)'"
   },
   {
     "comment": "scatter aggregate with ambiguous aliases",

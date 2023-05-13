@@ -65,7 +65,7 @@ func (a *Aggregator) aggregateTheAggregates() {
 }
 
 func pushDownAggregationThroughRoute(ctx *plancontext.PlanningContext, aggregator *Aggregator, src *Route) (ops.Operator, rewrite.ApplyResult, error) {
-	// If the route is single-shard, just swap the aggregator and route.
+	// If the route is single-shard, or we are grouping by sharding keys, we can just push down the aggregation
 	if src.IsSingleShard() || overlappingUniqueVindex(ctx, aggregator.Grouping) {
 		return swap(aggregator, src)
 	}
@@ -267,6 +267,8 @@ func splitAggrColumnsToLeftAndRight(
 	projRequired := false
 	handleAggr := func(aggr Aggr) (Aggr, error) {
 		switch aggr.OpCode {
+		case opcode.AggregateUnassigned:
+			return Aggr{}, vterrors.VT12001(fmt.Sprintf("in scatter query: aggregation function '%s'", sqlparser.String(aggr.Original)))
 		case opcode.AggregateCountStar:
 			projRequired = true
 			lhsExpr := lhs.addAggr(ctx, aggr)

@@ -573,10 +573,7 @@ orderBy:
 			return nil, vterrors.VT12001("in scatter query: complex aggregate expression")
 		}
 
-		code, found := opcode.SupportedAggregates[strings.ToLower(fnc.AggrName())]
-		if !found {
-			return nil, vterrors.VT12001(fmt.Sprintf("in scatter query: aggregation function '%s'", fnc.AggrName()))
-		}
+		code := opcode.SupportedAggregates[strings.ToLower(fnc.AggrName())]
 
 		if code == opcode.AggregateCount {
 			if _, isStar := fnc.(*sqlparser.CountStar); isStar {

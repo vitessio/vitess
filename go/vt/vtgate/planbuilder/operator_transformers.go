@@ -23,6 +23,7 @@ import (
 	"strings"
 
 	"vitess.io/vitess/go/slices2"
+	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
 
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
@@ -91,6 +92,9 @@ func transformAggregator(ctx *plancontext.PlanningContext, op *operators.Aggrega
 	}
 
 	for _, aggr := range op.Aggregations {
+		if aggr.OpCode == opcode.AggregateUnassigned {
+			return nil, vterrors.VT12001(fmt.Sprintf("in scatter query: aggregation function '%s'", sqlparser.String(aggr.Original)))
+		}
 		oa.aggregates = append(oa.aggregates, &engine.AggregateParams{
 			Opcode:     aggr.OpCode,
 			Col:        aggr.ColOffset,

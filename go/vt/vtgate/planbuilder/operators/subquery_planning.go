@@ -368,7 +368,7 @@ func createCorrelatedSubqueryOp(
 			bindVars[node] = bindVar
 
 			// if it does not exist, then push this as an output column in the outerOp and add it to the joinVars
-			newOuterOp, offset, err := resultOuterOp.AddColumn(ctx, aeWrap(node), true, true)
+			newOuterOp, offset, err := resultOuterOp.AddColumn(ctx, aeWrap(node), true, false)
 			if err != nil {
 				rewriteError = err
 				return true
