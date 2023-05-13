@@ -232,19 +232,25 @@ func commandWorkflowShow(cmd *cobra.Command, args []string) error {
 		Keyspace: workflowOptions.Keyspace,
 		Workflow: workflowDeleteOptions.Workflow,
 	}
-	if strings.ToUpper(cmd.Name()) == "LIST" {
-		req.NameOnly = true
-	}
 	resp, err := client.GetWorkflows(commandCtx, req)
 	if err != nil {
 		return err
 	}
 
-	data, err := cli.MarshalJSON(resp)
+	var data []byte
+	if strings.ToUpper(cmd.Name()) == "LIST" {
+		// We only want the names
+		Names := make([]string, len(resp.Workflows))
+		for i, wf := range resp.Workflows {
+			Names[i] = wf.Name
+		}
+		data, err = cli.MarshalJSON(Names)
+	} else {
+		data, err = cli.MarshalJSON(resp)
+	}
 	if err != nil {
 		return err
 	}
-
 	fmt.Printf("%s\n", data)
 
 	return nil
