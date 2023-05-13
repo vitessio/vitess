@@ -240,100 +240,110 @@ func pushDownAggregationThroughJoin(ctx *plancontext.PlanningContext, rootAggr *
 	return rootAggr, rewrite.NewTree, nil
 }
 
-// splitAggrColumnsToLeftAndRight is responsible for pushing aggregation under a join during query planning.
-// It returns separate lists of AggrColumn for the left and right side of the join, as well as joinColumns,
-// which contains the JoinColumn information. Additionally, it calculates and returns the projections list,
-// containing the ProjExpr required to produce the total aggregation.
-//
-// The function takes the following parameters:
-// - ctx: The planning context.
-// - aggregator: The Aggregator that needs to be pushed under the join.
-// - join: The ApplyJoin that the aggregation is being pushed under.
-//
-// The function returns the following values:
-// - lhs: A slice of AggrColumn representing the aggregation columns for the left side of the join.
-// - rhs: A slice of AggrColumn representing the aggregation columns for the right side of the join.
-// - joinColumns: A slice of JoinColumn containing the join column information.
-// - projections: A slice of ProjExpr representing the expression evaluations needed to produce the total aggregation.
-// - err: An error, if any occurred during the process.
+// splitAggrColumnsToLeftAndRight pushes all aggregations on the aggregator above a join and
+// pushed them to one or both sides of the join, and also provides the projections needed to re-assemble the
+// aggregations that have been spread across the join
 func splitAggrColumnsToLeftAndRight(
 	ctx *plancontext.PlanningContext,
 	aggregator *Aggregator,
 	join *ApplyJoin,
 	lhs, rhs joinPusher,
-) (joinColumns []JoinColumn, outer ops.Operator, err error) {
-	outer = join
-	proj := &Projection{Source: join}
-	projRequired := false
-	handleAggr := func(aggr Aggr) (Aggr, error) {
-		switch aggr.OpCode {
-		case opcode.AggregateUnassigned:
-			return Aggr{}, vterrors.VT12001(fmt.Sprintf("in scatter query: aggregation function '%s'", sqlparser.String(aggr.Original)))
-		case opcode.AggregateCountStar:
-			projRequired = true
-			lhsExpr := lhs.addAggr(ctx, aggr)
-			rhsExpr := rhs.addAggr(ctx, aggr)
-
-			if lhsExpr == rhsExpr {
-				panic(fmt.Sprintf("Need the two produced expressions to be different. %T %T", lhsExpr, rhsExpr))
-			}
-
-			joinColumns = append(joinColumns, JoinColumn{
-				Original: aggr.Original,
-				RHSExpr:  rhsExpr,
-			})
-
-			if join.LeftJoin {
-				rhsExpr = &sqlparser.FuncExpr{
-					Name: sqlparser.NewIdentifierCI("coalesce"),
-					Exprs: sqlparser.SelectExprs{
-						&sqlparser.AliasedExpr{Expr: rhsExpr},
-						&sqlparser.AliasedExpr{Expr: sqlparser.NewIntLiteral("1")},
-					},
-				}
-			}
-
-			projExpr := &sqlparser.BinaryExpr{
-				Operator: sqlparser.MultOp,
-				Left:     lhsExpr,
-				Right:    rhsExpr,
-			}
-			proj.Columns = append(proj.Columns, Expr{E: projExpr})
-			proj.ColumnNames = append(proj.ColumnNames, "")
-			return aggr, nil
-		default:
-			return Aggr{}, errHorizonNotPlanned()
-		}
+) ([]JoinColumn, ops.Operator, error) {
+	builder := &aggBuilder{
+		lhs:       lhs,
+		rhs:       rhs,
+		proj:      &Projection{Source: join},
+		outerJoin: join.LeftJoin,
 	}
 
 outer:
 	for colIdx, col := range aggregator.Columns {
 		for aggrIdx, aggr := range aggregator.Aggregations {
 			if aggr.ColOffset == colIdx {
-				aggr, err := handleAggr(aggr)
+				aggrToKeep, err := builder.handleAggr(ctx, aggr)
 				if err != nil {
 					return nil, nil, err
 				}
-				aggregator.Aggregations[aggrIdx] = aggr
+				aggregator.Aggregations[aggrIdx] = aggrToKeep
 				continue outer
 			}
 		}
-		proj.Columns = append(proj.Columns, Expr{E: col.Expr})
-		proj.ColumnNames = append(proj.ColumnNames, col.As.String())
+		builder.proj.Columns = append(builder.proj.Columns, Expr{E: col.Expr})
+		builder.proj.ColumnNames = append(builder.proj.ColumnNames, col.As.String())
 	}
-	if projRequired {
-		outer = proj
+	if builder.projectionRequired {
+		return builder.joinColumns, builder.proj, nil
 	}
-	return
+
+	return builder.joinColumns, join, nil
 }
 
+type aggBuilder struct {
+	lhs, rhs           joinPusher
+	projectionRequired bool
+	joinColumns        []JoinColumn
+	proj               *Projection
+	outerJoin          bool
+}
+
+func (ab *aggBuilder) handleAggr(ctx *plancontext.PlanningContext, aggr Aggr) (Aggr, error) {
+	switch aggr.OpCode {
+	case opcode.AggregateUnassigned:
+		return Aggr{}, vterrors.VT12001(fmt.Sprintf("in scatter query: aggregation function '%s'", sqlparser.String(aggr.Original)))
+	case opcode.AggregateCountStar:
+		return ab.handleCountStar(ctx, aggr)
+	default:
+		return Aggr{}, errHorizonNotPlanned()
+	}
+}
+
+func (ab *aggBuilder) handleCountStar(ctx *plancontext.PlanningContext, aggr Aggr) (Aggr, error) {
+	ab.projectionRequired = true
+	lhsExpr := ab.lhs.addAggr(ctx, aggr)
+	rhsExpr := ab.rhs.addAggr(ctx, aggr)
+
+	if lhsExpr == rhsExpr {
+		panic(fmt.Sprintf("Need the two produced expressions to be different. %T %T", lhsExpr, rhsExpr))
+	}
+
+	if ab.outerJoin {
+		rhsExpr = &sqlparser.FuncExpr{
+			Name: sqlparser.NewIdentifierCI("coalesce"),
+			Exprs: sqlparser.SelectExprs{
+				&sqlparser.AliasedExpr{Expr: rhsExpr},
+				&sqlparser.AliasedExpr{Expr: sqlparser.NewIntLiteral("1")},
+			},
+		}
+	}
+
+	projExpr := &sqlparser.BinaryExpr{
+		Operator: sqlparser.MultOp,
+		Left:     lhsExpr,
+		Right:    rhsExpr,
+	}
+
+	ab.proj.Columns = append(ab.proj.Columns, Expr{E: projExpr})
+	ab.proj.ColumnNames = append(ab.proj.ColumnNames, "")
+	ab.joinColumns = append(ab.joinColumns, JoinColumn{
+		Original: aggr.Original,
+		RHSExpr:  rhsExpr,
+	})
+
+	return aggr, nil
+}
+
+// joinPusher is a helper struct that aids in pushing down an Aggregator into one side of a Join.
+// It creates a new Aggregator that is pushed down and keeps track of the column dependencies that the new Aggregator has.
 type joinPusher struct {
-	orig    *Aggregator
-	pushed  *Aggregator
-	columns []int
-	tableID semantics.TableSet
+	orig    *Aggregator        // The original Aggregator before pushing.
+	pushed  *Aggregator        // The new Aggregator created for push-down.
+	columns []int              // List of column offsets used in the new Aggregator.
+	tableID semantics.TableSet // The TableSet denoting the side of the Join where the new Aggregator is pushed.
 }
 
+// addAggr creates a copy of the given aggregation, updates its column offset to point to the correct location in the new Aggregator,
+// and adds it to the list of Aggregations of the new Aggregator. It also updates the semantic analysis information to reflect the new structure.
+// It returns the expression of the aggregation as it should be used in the parent Aggregator.
 func (p joinPusher) addAggr(ctx *plancontext.PlanningContext, aggr Aggr) sqlparser.Expr {
 	copyAggr := aggr
 	expr := sqlparser.CloneExpr(aggr.Original.Expr)
@@ -347,6 +357,9 @@ func (p joinPusher) addAggr(ctx *plancontext.PlanningContext, aggr Aggr) sqlpars
 	return expr
 }
 
+// addGrouping creates a copy of the given GroupBy, updates its column offset to point to the correct location in the new Aggregator,
+// and adds it to the list of GroupBy expressions of the new Aggregator. It also updates the semantic analysis information to reflect the new structure.
+// It returns the expression of the GroupBy as it should be used in the parent Aggregator.
 func (p joinPusher) addGrouping(ctx *plancontext.PlanningContext, gb GroupBy) sqlparser.Expr {
 	copyGB := gb
 	expr := sqlparser.CloneExpr(gb.Inner)
@@ -358,10 +371,14 @@ func (p joinPusher) addGrouping(ctx *plancontext.PlanningContext, gb GroupBy) sq
 	return expr
 }
 
+// useColumn checks whether the column corresponding to the given offset has been used in the new Aggregator.
+// If it has not been used before, it adds the column to the new Aggregator
+// and updates the columns mapping to reflect the new location of the column.
+// It returns the offset of the column in the new Aggregator.
 func (p joinPusher) useColumn(offset int) int {
 	if p.columns[offset] == -1 {
 		p.columns[offset] = len(p.pushed.Columns)
-		// still haven't used this expression on the LHS
+		// still haven't used this expression on this side
 		p.pushed.Columns = append(p.pushed.Columns, p.orig.Columns[offset])
 	}
 	return p.columns[offset]
