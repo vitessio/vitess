@@ -115,7 +115,6 @@ func (a *Aggregator) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser
 	if addToGroupBy {
 		return nil, 0, vterrors.VT13001("did not expect to add group by here")
 	}
-	extractExpr := func(expr *sqlparser.AliasedExpr) sqlparser.Expr { return expr.Expr }
 	if offset, found := canReuseColumn(ctx, a.Columns, expr.Expr, extractExpr); found {
 		return a, offset, nil
 	}

@@ -186,24 +186,6 @@ func pushDownAggregationThroughJoin(ctx *plancontext.PlanningContext, rootAggr *
 		return nil, false, err
 	}
 
-	// We need to add any columns coming from the lhs of the join to the group by on that side
-	// If we don't, the LHS will not be able to return the column, and it can't be used to send down to the RHS
-	for _, pred := range join.JoinPredicates {
-		for _, expr := range pred.LHSExprs {
-			_, wexpr, err := rootAggr.QP.GetSimplifiedExpr(expr)
-			if err != nil {
-				return nil, false, err
-			}
-			lhs.pushed.Grouping = append(lhs.pushed.Grouping, GroupBy{
-				Inner:         expr,
-				WeightStrExpr: wexpr,
-				KeyCol:        len(lhs.pushed.Columns),
-				WSCol:         -1,
-			})
-			lhs.pushed.Columns = append(lhs.pushed.Columns, aeWrap(expr))
-		}
-	}
-
 	lhsTS := TableID(join.LHS)
 	rhsTS := TableID(join.RHS)
 	for _, groupBy := range rootAggr.Grouping {
@@ -224,6 +206,36 @@ func pushDownAggregationThroughJoin(ctx *plancontext.PlanningContext, rootAggr *
 			})
 		default:
 			return nil, false, vterrors.VT12001("grouping on columns from different sources")
+		}
+	}
+
+	// We need to add any columns coming from the lhs of the join to the group by on that side
+	// If we don't, the LHS will not be able to return the column, and it can't be used to send down to the RHS
+	for _, pred := range join.JoinPredicates {
+		for _, expr := range pred.LHSExprs {
+			_, wexpr, err := rootAggr.QP.GetSimplifiedExpr(expr)
+			if err != nil {
+				return nil, false, err
+			}
+			idx, found := canReuseColumn(ctx, lhs.pushed.Columns, expr, extractExpr)
+			if !found {
+				idx = len(lhs.pushed.Columns)
+				lhs.pushed.Columns = append(lhs.pushed.Columns, aeWrap(expr))
+			}
+			_, found = canReuseColumn(ctx, lhs.pushed.Grouping, wexpr, func(by GroupBy) sqlparser.Expr {
+				return by.WeightStrExpr
+			})
+
+			if found {
+				continue
+			}
+
+			lhs.pushed.Grouping = append(lhs.pushed.Grouping, GroupBy{
+				Inner:         expr,
+				WeightStrExpr: wexpr,
+				KeyCol:        idx,
+				WSCol:         -1,
+			})
 		}
 	}
 
@@ -254,6 +266,8 @@ func splitAggrColumnsToLeftAndRight(
 		rhs:       rhs,
 		proj:      &Projection{Source: join},
 		outerJoin: join.LeftJoin,
+		lhsID:     TableID(join.LHS),
+		rhsID:     TableID(join.RHS),
 	}
 
 outer:
@@ -279,6 +293,7 @@ outer:
 }
 
 type aggBuilder struct {
+	lhsID, rhsID       semantics.TableSet
 	lhs, rhs           joinPusher
 	projectionRequired bool
 	joinColumns        []JoinColumn
@@ -287,13 +302,37 @@ type aggBuilder struct {
 }
 
 func (ab *aggBuilder) handleAggr(ctx *plancontext.PlanningContext, aggr Aggr) (Aggr, error) {
-	switch aggr.OpCode {
-	case opcode.AggregateUnassigned:
+	if aggr.OpCode == opcode.AggregateUnassigned {
 		return Aggr{}, vterrors.VT12001(fmt.Sprintf("in scatter query: aggregation function '%s'", sqlparser.String(aggr.Original)))
-	case opcode.AggregateCountStar:
+	}
+
+	if aggr.OpCode == opcode.AggregateCountStar {
 		return ab.handleCountStar(ctx, aggr)
-	default:
+	}
+
+	if aggr.OpCode != opcode.AggregateMax && aggr.OpCode != opcode.AggregateMin {
 		return Aggr{}, errHorizonNotPlanned()
+	}
+
+	deps := ctx.SemTable.RecursiveDeps(aggr.Original.Expr)
+	switch {
+	case deps.IsSolvedBy(ab.lhsID):
+		ab.lhs.addAggr(ctx, aggr)
+		ab.joinColumns = append(ab.joinColumns, JoinColumn{
+			Original: aggr.Original,
+			LHSExprs: []sqlparser.Expr{aggr.Func},
+		})
+		return aggr, nil
+	case deps.IsSolvedBy(ab.rhsID):
+		ab.rhs.addAggr(ctx, aggr)
+		ab.joinColumns = append(ab.joinColumns, JoinColumn{
+			Original: aggr.Original,
+			RHSExpr:  aggr.Func,
+		})
+		return aggr, nil
+
+	default:
+		return Aggr{}, vterrors.VT12001("aggregation on columns from different sources")
 	}
 }
 
@@ -391,3 +430,5 @@ func initColReUse(size int) []int {
 	}
 	return cols
 }
+
+func extractExpr(expr *sqlparser.AliasedExpr) sqlparser.Expr { return expr.Expr }
