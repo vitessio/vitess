@@ -3203,7 +3203,7 @@
               "Sharded": false
             },
             "FieldQuery": "select 1 from unsharded where 1 != 1",
-            "Query": "select 1 from unsharded where unsharded.col1 = :t_col1 and unsharded.id = :t_id",
+            "Query": "select 1 from unsharded where unsharded.id = :t_id and unsharded.col1 = :t_col1",
             "Table": "unsharded"
           }
         ]
@@ -5485,7 +5485,7 @@
               "Sharded": false
             },
             "FieldQuery": "select 1 from unsharded where 1 != 1",
-            "Query": "select 1 from unsharded where unsharded.col1 = :t_col1 and unsharded.a = :t_col1",
+            "Query": "select 1 from unsharded where unsharded.a = :t_col1 and unsharded.col1 = :t_col1",
             "Table": "unsharded"
           }
         ]
