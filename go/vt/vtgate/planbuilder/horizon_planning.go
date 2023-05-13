@@ -90,7 +90,7 @@ func (hp *horizonPlanning) planHorizon(ctx *plancontext.PlanningContext, plan lo
 			return nil, err
 		}
 		// if we already did sorting, we don't need to do it again
-		needsOrdering = needsOrdering && !hp.qp.AlignGroupByAndOrderBy(ctx)
+		needsOrdering = needsOrdering && !hp.qp.CanPushDownSorting
 	case canShortcut:
 		err = planSingleRoutePlan(hp.sel, rb)
 		if err != nil {
@@ -268,7 +268,8 @@ func (hp *horizonPlanning) planAggrUsingOA(
 	}
 
 	var order []ops.OrderBy
-	if hp.qp.AlignGroupByAndOrderBy(ctx) {
+	if hp.qp.CanPushDownSorting {
+		hp.qp.OldAlignGroupByAndOrderBy(ctx)
 		// the grouping order might have changed, so we reload the grouping expressions
 		grouping = hp.qp.GetGrouping()
 		order = hp.qp.OrderExprs

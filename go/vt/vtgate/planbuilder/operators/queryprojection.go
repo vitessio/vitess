@@ -55,6 +55,9 @@ type (
 		AddedColumn int
 
 		hasCheckedAlignment bool
+
+		// TODO Remove once all of horizon planning is done on the operators
+		CanPushDownSorting bool
 	}
 
 	// GroupBy contains the expression to used in group by and also if grouping is needed at VTGate level then what the weight_string function expression to be sent down for evaluation.
@@ -303,6 +306,7 @@ func CreateQPFromUnion(union *sqlparser.Union) (*QueryProjection, error) {
 }
 
 func (qp *QueryProjection) addOrderBy(orderBy sqlparser.OrderBy) error {
+	canPushDownSorting := true
 	for _, order := range orderBy {
 		expr, weightStrExpr, err := qp.GetSimplifiedExpr(order.Expr)
 		if err != nil {
@@ -319,7 +323,9 @@ func (qp *QueryProjection) addOrderBy(orderBy sqlparser.OrderBy) error {
 			},
 			WeightStrExpr: weightStrExpr,
 		})
+		canPushDownSorting = canPushDownSorting && !sqlparser.ContainsAggregation(weightStrExpr)
 	}
+	qp.CanPushDownSorting = canPushDownSorting
 	return nil
 }
 
@@ -625,6 +631,46 @@ func (qp *QueryProjection) FindSelectExprIndexForExpr(ctx *plancontext.PlanningC
 		}
 	}
 	return nil, nil
+}
+
+// OldAlignGroupByAndOrderBy TODO Remove once all of horizon planning is done on the operators
+func (qp *QueryProjection) OldAlignGroupByAndOrderBy(ctx *plancontext.PlanningContext) {
+	// The ORDER BY can be performed before the OA
+
+	var newGrouping []GroupBy
+	if len(qp.OrderExprs) == 0 {
+		// The query didn't ask for any particular order, so we are free to add arbitrary ordering.
+		// We'll align the grouping and ordering by the output columns
+		newGrouping = qp.GetGrouping()
+		SortGrouping(newGrouping)
+		for _, groupBy := range newGrouping {
+			qp.OrderExprs = append(qp.OrderExprs, groupBy.AsOrderBy())
+		}
+	} else {
+		// Here we align the GROUP BY and ORDER BY.
+		// First step is to make sure that the GROUP BY is in the same order as the ORDER BY
+		used := make([]bool, len(qp.groupByExprs))
+		for _, orderExpr := range qp.OrderExprs {
+			for i, groupingExpr := range qp.groupByExprs {
+				if !used[i] && ctx.SemTable.EqualsExpr(groupingExpr.WeightStrExpr, orderExpr.WeightStrExpr) {
+					newGrouping = append(newGrouping, groupingExpr)
+					used[i] = true
+				}
+			}
+		}
+		if len(newGrouping) != len(qp.groupByExprs) {
+			// we are missing some groupings. We need to add them both to the new groupings list, but also to the ORDER BY
+			for i, added := range used {
+				if !added {
+					groupBy := qp.groupByExprs[i]
+					newGrouping = append(newGrouping, groupBy)
+					qp.OrderExprs = append(qp.OrderExprs, groupBy.AsOrderBy())
+				}
+			}
+		}
+	}
+
+	qp.groupByExprs = newGrouping
 }
 
 // AlignGroupByAndOrderBy aligns the group by and order by columns, so they are in the same order
