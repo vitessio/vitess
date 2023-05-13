@@ -82,7 +82,7 @@ func (o *Ordering) GetOrdering() ([]ops.OrderBy, error) {
 
 func (o *Ordering) planOffsets(ctx *plancontext.PlanningContext) error {
 	for _, order := range o.Order {
-		newSrc, offset, err := o.Source.AddColumn(ctx, aeWrap(order.Inner.Expr), true, false)
+		newSrc, offset, err := o.Source.AddColumn(ctx, aeWrap(order.WeightStrExpr), true, false)
 		if err != nil {
 			return err
 		}
