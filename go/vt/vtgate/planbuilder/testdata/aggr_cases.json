@@ -1339,7 +1339,7 @@
                 },
                 "FieldQuery": "select col, count(*) from `user` where 1 != 1 group by col",
                 "OrderBy": "0 ASC",
-                "Query": "select col, count(*) from `user` group by col order by col asc limit :__upper_limit",
+                "Query": "select col, count(*) from `user` group by col order by col asc",
                 "Table": "`user`"
               }
             ]

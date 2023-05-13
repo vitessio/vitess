@@ -544,10 +544,6 @@ func createProjection(src ops.Operator) (*Projection, error) {
 	return proj, nil
 }
 
-type iofoobars interface {
-	addNoPushCol(expr *sqlparser.AliasedExpr, addToGroupBy bool) int
-}
-
 func (r *Route) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, _, addToGroupBy bool) (ops.Operator, int, error) {
 	removeKeyspaceFromSelectExpr(expr)
 
@@ -581,6 +577,11 @@ func (r *Route) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.Alia
 }
 
 func addColumnToInput(operator ops.Operator, expr *sqlparser.AliasedExpr, addToGroupBy bool) (bool, int) {
+	type selectExpressions interface {
+		addNoPushCol(expr *sqlparser.AliasedExpr, addToGroupBy bool) int
+		isDerived() bool
+	}
+
 	switch op := operator.(type) {
 	case *CorrelatedSubQueryOp:
 		return addColumnToInput(op.Outer, expr, addToGroupBy)
@@ -588,7 +589,12 @@ func addColumnToInput(operator ops.Operator, expr *sqlparser.AliasedExpr, addToG
 		return addColumnToInput(op.Source, expr, addToGroupBy)
 	case *Ordering:
 		return addColumnToInput(op.Source, expr, addToGroupBy)
-	case iofoobars:
+	case selectExpressions:
+		if op.isDerived() {
+			// if the only thing we can push to is a derived table,
+			// we have to add a new projection and can't build on this one
+			return false, 0
+		}
 		offset := op.addNoPushCol(expr, addToGroupBy)
 		return true, offset
 	default:

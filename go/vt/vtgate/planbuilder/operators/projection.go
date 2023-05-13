@@ -74,6 +74,10 @@ func (p *Projection) addNoPushCol(expr *sqlparser.AliasedExpr, _ bool) int {
 	return len(p.Columns) - 1
 }
 
+func (p *Projection) isDerived() bool {
+	return p.TableID != nil
+}
+
 func (p *Projection) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, _, addToGroupBy bool) (ops.Operator, int, error) {
 	if addToGroupBy {
 		return nil, 0, vterrors.VT13001("tried to add group by to a projection")

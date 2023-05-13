@@ -448,15 +448,18 @@ func tryPushingDownLimit(in *Limit) (ops.Operator, rewrite.ApplyResult, error) {
 		return tryPushingDownLimitInRoute(in, src)
 	case *Projection:
 		return swap(in, src)
+	case *Aggregator:
+		return in, rewrite.SameTree, nil
 	default:
-		if in.Pushed {
-			return in, rewrite.SameTree, nil
-		}
 		return setUpperLimit(in)
 	}
 }
 
 func setUpperLimit(in *Limit) (ops.Operator, rewrite.ApplyResult, error) {
+	if in.Pushed {
+		return in, rewrite.SameTree, nil
+	}
+	in.Pushed = true
 	visitor := func(op ops.Operator, _ semantics.TableSet, _ bool) (ops.Operator, rewrite.ApplyResult, error) {
 		return op, rewrite.SameTree, nil
 	}
@@ -620,6 +623,12 @@ func createProjectionFromSelect(ctx *plancontext.PlanningContext, horizon horizo
 		QP:           qp,
 		Grouping:     qp.GetGrouping(),
 		Aggregations: aggregations,
+	}
+
+	if derived, isDerived := horizon.(*Derived); isDerived {
+		id := derived.TableId
+		a.TableID = &id
+		a.Alias = derived.Alias
 	}
 
 outer:

@@ -21,6 +21,7 @@ import (
 	"strings"
 
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/semantics"
 
 	"golang.org/x/exp/slices"
 
@@ -48,6 +49,9 @@ type (
 		ResultColumns int
 
 		QP *QueryProjection
+		// TableID will be non-nil for derived tables
+		TableID *semantics.TableSet
+		Alias   string
 	}
 )
 
@@ -101,6 +105,10 @@ func (a *Aggregator) addNoPushCol(expr *sqlparser.AliasedExpr, addToGroupBy bool
 	}
 	a.Columns = append(a.Columns, expr)
 	return lastOffset
+}
+
+func (a *Aggregator) isDerived() bool {
+	return a.TableID != nil
 }
 
 func (a *Aggregator) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, reuseExisting, addToGroupBy bool) (ops.Operator, int, error) {
