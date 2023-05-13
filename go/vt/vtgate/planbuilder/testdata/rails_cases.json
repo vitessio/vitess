@@ -177,7 +177,7 @@
                       "Sharded": true
                     },
                     "FieldQuery": "select 1 from book6s_order2s where 1 != 1",
-                    "Query": "select 1 from book6s_order2s where book6s_order2s.book6_id = :book6s_id and book6s_order2s.order2_id = :order2s_id",
+                    "Query": "select 1 from book6s_order2s where book6s_order2s.order2_id = :order2s_id and book6s_order2s.book6_id = :book6s_id",
                     "Table": "book6s_order2s",
                     "Values": [
                       ":book6s_id"

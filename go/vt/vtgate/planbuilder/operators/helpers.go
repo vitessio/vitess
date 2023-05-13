@@ -35,13 +35,13 @@ func compact(ctx *plancontext.PlanningContext, op ops.Operator) (ops.Operator, e
 		Compact(ctx *plancontext.PlanningContext) (ops.Operator, rewrite.ApplyResult, error)
 	}
 
-	newOp, err := rewrite.BottomUpAll(op, TableID, func(op ops.Operator, _ semantics.TableSet, _ bool) (ops.Operator, rewrite.ApplyResult, error) {
+	newOp, err := rewrite.BottomUp(op, TableID, func(op ops.Operator, _ semantics.TableSet, _ bool) (ops.Operator, rewrite.ApplyResult, error) {
 		newOp, ok := op.(compactable)
 		if !ok {
 			return op, rewrite.SameTree, nil
 		}
 		return newOp.Compact(ctx)
-	})
+	}, stopAtRoute)
 	return newOp, err
 }
 
