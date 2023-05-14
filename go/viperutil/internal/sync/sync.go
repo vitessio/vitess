@@ -172,6 +172,10 @@ func (v *Viper) loadFromDisk() {
 	v.m.Lock()
 	defer v.m.Unlock()
 
+	// Reset v.live so explicit Set calls don't win over what's just changed on
+	// disk.
+	v.live = viper.New()
+
 	// Fun fact! MergeConfigMap actually only ever returns nil. Maybe in an
 	// older version of viper it used to actually handle errors, but now it
 	// decidedly does not. See https://github.com/spf13/viper/blob/v1.8.1/viper.go#L1492-L1499.
@@ -207,12 +211,10 @@ func AdaptGetter[T any](key string, getter func(v *viper.Viper) func(key string)
 	var m sync.RWMutex
 	v.keys[key] = &m
 
-	boundGet := getter(v.live)
-
 	return func(key string) T {
 		m.RLock()
 		defer m.RUnlock()
 
-		return boundGet(key)
+		return getter(v.live)(key)
 	}
 }
