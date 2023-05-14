@@ -23,14 +23,22 @@ import (
 
 	"github.com/spf13/pflag"
 
+	"vitess.io/vitess/go/viperutil"
 	"vitess.io/vitess/go/vt/servenv"
 )
 
 var (
 	// lowReplicationLag defines the duration that replication lag is low enough that the VTTablet is considered healthy.
-	lowReplicationLag             time.Duration
-	highReplicationLagMinServing  time.Duration
-	minNumTablets                 int
+	lowReplicationLag            time.Duration
+	highReplicationLagMinServing time.Duration
+	minNumTablets                = viperutil.Configure(
+		"discovery.min_number_serving_vttablets",
+		viperutil.Options[int]{
+			FlagName: "min_number_serving_vttablets",
+			Default:  2,
+			Dynamic:  true,
+		},
+	)
 	legacyReplicationLagAlgorithm bool
 )
 
@@ -41,7 +49,7 @@ func init() {
 func registerReplicationFlags(fs *pflag.FlagSet) {
 	fs.DurationVar(&lowReplicationLag, "discovery_low_replication_lag", 30*time.Second, "Threshold below which replication lag is considered low enough to be healthy.")
 	fs.DurationVar(&highReplicationLagMinServing, "discovery_high_replication_lag_minimum_serving", 2*time.Hour, "Threshold above which replication lag is considered too high when applying the min_number_serving_vttablets flag.")
-	fs.IntVar(&minNumTablets, "min_number_serving_vttablets", 2, "The minimum number of vttablets for each replicating tablet_type (e.g. replica, rdonly) that will be continue to be used even with replication lag above discovery_low_replication_lag, but still below discovery_high_replication_lag_minimum_serving.")
+	fs.Int("min_number_serving_vttablets", minNumTablets.Default(), "The minimum number of vttablets for each replicating tablet_type (e.g. replica, rdonly) that will be continue to be used even with replication lag above discovery_low_replication_lag, but still below discovery_high_replication_lag_minimum_serving.")
 	fs.BoolVar(&legacyReplicationLagAlgorithm, "legacy_replication_lag_algorithm", true, "Use the legacy algorithm when selecting vttablets for serving.")
 }
 
@@ -67,12 +75,12 @@ func SetHighReplicationLagMinServing(lag time.Duration) {
 
 // GetMinNumTablets getter for use by debugenv
 func GetMinNumTablets() int {
-	return minNumTablets
+	return minNumTablets.Get()
 }
 
 // SetMinNumTablets setter for use by debugenv
 func SetMinNumTablets(numTablets int) {
-	minNumTablets = numTablets
+	minNumTablets.Set(numTablets)
 }
 
 // IsReplicationLagHigh verifies that the given LegacytabletHealth refers to a tablet with high
@@ -119,7 +127,7 @@ func FilterStatsByReplicationLag(tabletHealthList []*TabletHealth) []*TabletHeal
 	res := filterStatsByLagWithLegacyAlgorithm(tabletHealthList)
 	// run the filter again if exactly one tablet is removed,
 	// and we have spare tablets.
-	if len(res) > minNumTablets && len(res) == len(tabletHealthList)-1 {
+	if len(res) > minNumTablets.Get() && len(res) == len(tabletHealthList)-1 {
 		res = filterStatsByLagWithLegacyAlgorithm(res)
 	}
 	return res
@@ -145,7 +153,7 @@ func filterStatsByLag(tabletHealthList []*TabletHealth) []*TabletHealth {
 	// Pick those with low replication lag, but at least minNumTablets tablets regardless.
 	res := make([]*TabletHealth, 0, len(list))
 	for i := 0; i < len(list); i++ {
-		if !IsReplicationLagHigh(list[i].ts) || i < minNumTablets {
+		if !IsReplicationLagHigh(list[i].ts) || i < minNumTablets.Get() {
 			res = append(res, list[i].ts)
 		}
 	}
@@ -186,7 +194,7 @@ func filterStatsByLagWithLegacyAlgorithm(tabletHealthList []*TabletHealth) []*Ta
 			res = append(res, ts)
 		}
 	}
-	if len(res) >= minNumTablets {
+	if len(res) >= minNumTablets.Get() {
 		return res
 	}
 	// return at least minNumTablets tablets to avoid over loading,
@@ -219,8 +227,8 @@ func filterStatsByLagWithLegacyAlgorithm(tabletHealthList []*TabletHealth) []*Ta
 	sort.Sort(byReplag(snapshots))
 
 	// Pick the first minNumTablets tablets.
-	res = make([]*TabletHealth, 0, minNumTablets)
-	for i := 0; i < min(minNumTablets, len(snapshots)); i++ {
+	res = make([]*TabletHealth, 0, minNumTablets.Get())
+	for i := 0; i < min(minNumTablets.Get(), len(snapshots)); i++ {
 		res = append(res, snapshots[i].ts)
 	}
 	return res
