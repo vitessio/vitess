@@ -55,10 +55,19 @@ func New() *Viper {
 
 // Set sets the given key to the given value, in both the disk and live vipers.
 func (v *Viper) Set(key string, value any) {
+	m, ok := v.keys[key]
+	if !ok {
+		return
+	}
+
+	m.Lock()
+	defer m.Unlock()
+
 	v.m.Lock()
 	defer v.m.Unlock()
 
-	v.disk.Set(key, value)
+	// We must not update v.disk here; explicit calls to Set will supercede all
+	// future config reloads.
 	v.live.Set(key, value)
 }
 
@@ -116,6 +125,22 @@ func (v *Viper) Watch(static *viper.Viper) error {
 	v.disk.WatchConfig()
 
 	return nil
+}
+
+// WriteConfig writes the live viper config back to disk.
+func (v *Viper) WriteConfig() error {
+	for _, m := range v.keys {
+		m.Lock()
+		// This won't fire until after the config has been written.
+		defer m.Unlock()
+	}
+
+	v.m.Lock()
+	defer v.m.Unlock()
+
+	v.live.SetConfigFile(v.disk.ConfigFileUsed())
+
+	return v.live.WriteConfig()
 }
 
 // Notify adds a subscription that this synced viper will attempt to notify on

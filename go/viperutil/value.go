@@ -42,9 +42,9 @@ type Value[T any] interface {
 	// Set sets the underlying value. For both static and dynamic
 	// implementations, this is reflected in subsequent calls to Get.
 	//
-	// If a config file was loaded, changes will be persisted back to the
-	// config file in the background, governed by the behavior of the
-	// --config-persistence-min-interval flag.
+	// If a config file was loaded, changes to dynamic values will be persisted
+	// back to the config file in the background, governed by the behavior of
+	// the --config-persistence-min-interval flag.
 	Set(v T)
 	// Default returns the default value configured for this Value. For both
 	// static and dynamic implementations, it should never change.

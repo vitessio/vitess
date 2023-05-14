@@ -30,6 +30,7 @@ import (
 	"github.com/spf13/viper"
 
 	"vitess.io/vitess/go/viperutil/funcs"
+	"vitess.io/vitess/go/viperutil/internal/config"
 	"vitess.io/vitess/go/viperutil/internal/log"
 	"vitess.io/vitess/go/viperutil/internal/registry"
 	"vitess.io/vitess/go/viperutil/internal/value"
@@ -81,8 +82,6 @@ var (
 			FlagName: "config-persistence-min-interval",
 		},
 	)
-
-	persistCh chan struct{}
 )
 
 func init() {
@@ -189,86 +188,11 @@ func LoadConfig() (context.CancelFunc, error) {
 		return nil, err
 	}
 
-	persistCtx, persistCancel := context.WithCancel(context.Background())
 	if usingConfigFile {
-		persistCh = make(chan struct{}, 1)
-		go persistChanges(persistCtx, persistCh)
+		return config.PersistChanges(context.Background(), configPersistenceMinInterval.Get()), nil
 	}
 
-	return persistCancel, nil
-}
-
-func persistChanges(ctx context.Context, ch <-chan struct{}) {
-	// We want the timer to be nil for the first persistence, and only after
-	// start staggerring future writes by the interval.
-	var timer *time.Timer
-	persistConfig := func() {
-		if err := registry.Combined().WriteConfig(); err != nil {
-			// If we failed to persist, don't wait the entire interval before
-			// writing again, instead writing immediately on the next request.
-			if timer != nil {
-				if !timer.Stop() {
-					<-timer.C
-				}
-
-				timer = nil
-			}
-		}
-
-		interval := configPersistenceMinInterval.Get()
-		if interval == 0 {
-			return
-		}
-
-		switch timer {
-		case nil:
-			timer = time.NewTimer(configPersistenceMinInterval.Get())
-		default:
-			timer.Reset(configPersistenceMinInterval.Get())
-		}
-	}
-
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ch:
-			if timer == nil {
-				persistConfig()
-				continue
-			}
-			select {
-			case <-ctx.Done():
-				return
-			case <-timer.C:
-				persistConfig()
-			}
-		}
-	}
-}
-
-// Set sets the value in-memory and notifies the persistence goroutine that it
-// needs to write to disk.
-func Set[T any](v Value[T], val T) {
-	v.Set(val)
-	NotifyConfigChange()
-}
-
-// NotifyConfigChange sends a notification that something in the global config
-// was changed at runtime (i.e. **not** from a watched config change), and needs
-// to be persisted back to disk.
-//
-// If no config file was loaded initially, this is a no-op, and no persistence
-// is done.
-func NotifyConfigChange() {
-	if persistCh == nil {
-		return
-	}
-
-	select {
-	case persistCh <- struct{}{}:
-	default:
-	}
+	return nil, nil
 }
 
 // NotifyConfigReload adds a subscription that the dynamic registry will attempt
