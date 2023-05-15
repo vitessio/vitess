@@ -28,6 +28,23 @@ var (
 	ch chan struct{}
 )
 
+// PersistChanges starts a background goroutine to persist changes made to the
+// dynamic registry in-memory (i.e. the "live" config) back to disk (i.e. the
+// "disk" config) are persisted back to disk. It returns a cancel func to stop
+// the persist loop, which the caller is responsible for calling during
+// shutdown (see package servenv for an example).
+//
+// This does two things — one which is a nice-to-have, and another which is
+// necessary for correctness.
+//
+// 1. Writing in-memory changes (which usually occur through a request to a
+// /debug/env endpoint) ensures they are persisted across process restarts.
+// 2. Writing in-memory changes ensures that subsequent modifications to the
+// config file do not clobber those changes. Because viper loads the entire
+// config on-change, rather than an incremental (diff) load, if a user were to
+// edit an unrelated key (keyA) in the file, and we did not persist the
+// in-memory change (keyB), then future calls to keyB.Get() would return the
+// older value.
 func PersistChanges(ctx context.Context, minWaitInterval time.Duration) context.CancelFunc {
 	if ch != nil {
 		panic("PersistChanges already called")
@@ -91,6 +108,8 @@ func PersistChanges(ctx context.Context, minWaitInterval time.Duration) context.
 	return cancel
 }
 
+// NotifyChanged signals to the persist loop started by PersistChanges() that
+// something in the config has changed, and should be persisted soon.
 func NotifyChanged() {
 	if ch == nil {
 		return

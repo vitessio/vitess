@@ -31,7 +31,8 @@ var (
 //
 // N.B. the embedded value.Registerable interface is necessary only for
 // BindFlags and other mechanisms of binding Values to the internal registries
-// to work. Users of Value objects should only need to call Get() and Default().
+// to work. Users of Value objects should only need to call Get(), Set(v T), and
+// Default().
 type Value[T any] interface {
 	value.Registerable
 
