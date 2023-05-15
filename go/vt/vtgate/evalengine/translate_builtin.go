@@ -455,6 +455,46 @@ func (ast *astCompiler) translateFuncExpr(fn *sqlparser.FuncExpr) (Expr, error) 
 		default:
 			return nil, argError(method)
 		}
+	case "inet_aton":
+		if len(args) != 1 {
+			return nil, argError(method)
+		}
+		return &builtinInetAton{CallExpr: call}, nil
+	case "inet_ntoa":
+		if len(args) != 1 {
+			return nil, argError(method)
+		}
+		return &builtinInetNtoa{CallExpr: call, collate: ast.cfg.Collation}, nil
+	case "inet6_aton":
+		if len(args) != 1 {
+			return nil, argError(method)
+		}
+		return &builtinInet6Aton{CallExpr: call}, nil
+	case "inet6_ntoa":
+		if len(args) != 1 {
+			return nil, argError(method)
+		}
+		return &builtinInet6Ntoa{CallExpr: call, collate: ast.cfg.Collation}, nil
+	case "is_ipv4":
+		if len(args) != 1 {
+			return nil, argError(method)
+		}
+		return &builtinIsIPV4{CallExpr: call}, nil
+	case "is_ipv4_compat":
+		if len(args) != 1 {
+			return nil, argError(method)
+		}
+		return &builtinIsIPV4Compat{CallExpr: call}, nil
+	case "is_ipv4_mapped":
+		if len(args) != 1 {
+			return nil, argError(method)
+		}
+		return &builtinIsIPV4Mapped{CallExpr: call}, nil
+	case "is_ipv6":
+		if len(args) != 1 {
+			return nil, argError(method)
+		}
+		return &builtinIsIPV6{CallExpr: call}, nil
 	case "user", "current_user", "session_user", "system_user":
 		if len(args) != 0 {
 			return nil, argError(method)

@@ -136,6 +136,14 @@ var Cases = []TestCase{
 	{Run: FnWeekOfYear},
 	{Run: FnYear},
 	{Run: FnYearWeek},
+	{Run: FnInetAton},
+	{Run: FnInetNtoa},
+	{Run: FnInet6Aton},
+	{Run: FnInet6Ntoa},
+	{Run: FnIsIPv4},
+	{Run: FnIsIPv4Compat},
+	{Run: FnIsIPv4Mapped},
+	{Run: FnIsIPv6},
 }
 
 func JSONPathOperations(yield Query) {
@@ -1668,5 +1676,57 @@ func FnYearWeek(yield Query) {
 	}
 	for _, d := range inputConversions {
 		yield(fmt.Sprintf("YEARWEEK(%s)", d), nil)
+	}
+}
+
+func FnInetAton(yield Query) {
+	for _, d := range ipInputs {
+		yield(fmt.Sprintf("INET_ATON(%s)", d), nil)
+	}
+}
+
+func FnInetNtoa(yield Query) {
+	for _, d := range ipInputs {
+		yield(fmt.Sprintf("INET_NTOA(%s)", d), nil)
+		yield(fmt.Sprintf("INET_NTOA(INET_ATON(%s))", d), nil)
+	}
+}
+
+func FnInet6Aton(yield Query) {
+	for _, d := range ipInputs {
+		yield(fmt.Sprintf("INET6_ATON(%s)", d), nil)
+	}
+}
+
+func FnInet6Ntoa(yield Query) {
+	for _, d := range ipInputs {
+		yield(fmt.Sprintf("INET6_NTOA(%s)", d), nil)
+		yield(fmt.Sprintf("INET6_NTOA(INET6_ATON(%s))", d), nil)
+	}
+}
+
+func FnIsIPv4(yield Query) {
+	for _, d := range ipInputs {
+		yield(fmt.Sprintf("IS_IPV4(%s)", d), nil)
+	}
+}
+
+func FnIsIPv4Compat(yield Query) {
+	for _, d := range ipInputs {
+		yield(fmt.Sprintf("IS_IPV4_COMPAT(%s)", d), nil)
+		yield(fmt.Sprintf("IS_IPV4_COMPAT(INET6_ATON(%s))", d), nil)
+	}
+}
+
+func FnIsIPv4Mapped(yield Query) {
+	for _, d := range ipInputs {
+		yield(fmt.Sprintf("IS_IPV4_MAPPED(%s)", d), nil)
+		yield(fmt.Sprintf("IS_IPV4_MAPPED(INET6_ATON(%s))", d), nil)
+	}
+}
+
+func FnIsIPv6(yield Query) {
+	for _, d := range ipInputs {
+		yield(fmt.Sprintf("IS_IPV6(%s)", d), nil)
 	}
 }
