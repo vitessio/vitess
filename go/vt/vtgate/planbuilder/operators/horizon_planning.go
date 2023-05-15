@@ -36,6 +36,44 @@ func errHorizonNotPlanned() error {
 
 var _errHorizonNotPlanned = vterrors.VT12001("query cannot be fully operator planned")
 
+func tryHorizonPlanning(ctx *plancontext.PlanningContext, root ops.Operator) (output ops.Operator, err error) {
+	backup := Clone(root)
+	defer func() {
+		// If we get the below error.
+		// We will be using old horizon planning.
+		if err == _errHorizonNotPlanned {
+			err = planOffsetsOnJoins(ctx, backup)
+			if err == nil {
+				output = backup
+			}
+		}
+	}()
+
+	_, ok := root.(*Horizon)
+
+	if !ok || len(ctx.SemTable.SubqueryMap) > 0 || len(ctx.SemTable.SubqueryRef) > 0 {
+		// we are not ready to deal with subqueries yet
+		return root, errHorizonNotPlanned()
+	}
+
+	output, err = planHorizons(ctx, root)
+	if err != nil {
+		return nil, err
+	}
+
+	output, err = planOffsets(ctx, output)
+	if err != nil {
+		return nil, err
+	}
+
+	output, err = makeSureOutputIsCorrect(ctx, root, output)
+	if err != nil {
+		return nil, err
+	}
+
+	return
+}
+
 // planHorizons is the process of figuring out how to perform the operations in the Horizon
 // If we can push it under a route - done.
 // If we can't, we will instead expand the Horizon into
@@ -704,4 +742,40 @@ func createProjection2(qp *QueryProjection, src ops.Operator) (*Projection, erro
 
 func aeWrap(e sqlparser.Expr) *sqlparser.AliasedExpr {
 	return &sqlparser.AliasedExpr{Expr: e}
+}
+
+func makeSureOutputIsCorrect(ctx *plancontext.PlanningContext, oldHorizon ops.Operator, output ops.Operator) (ops.Operator, error) {
+	// next we use the original Horizon to make sure that the output columns line up with what the user asked for
+	// in the future, we'll tidy up the results. for now, we are just failing these queries and going back to the
+	// old horizon planning instead
+	cols, err := output.GetColumns()
+	if err != nil {
+		return nil, err
+	}
+
+	horizon := oldHorizon.(*Horizon)
+
+	sel := sqlparser.GetFirstSelect(horizon.Select)
+
+	if len(sel.SelectExprs) == len(cols) {
+		return output, nil
+	}
+
+	if tryTruncateColumnsAt(output, len(sel.SelectExprs)) {
+		return output, nil
+	}
+
+	qp, err := horizon.getQP(ctx)
+	if err != nil {
+		return nil, err
+	}
+	proj, err := createProjection2(qp, output)
+	if err != nil {
+		return nil, err
+	}
+	err = proj.passThroughAllColumns(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return proj, nil
 }

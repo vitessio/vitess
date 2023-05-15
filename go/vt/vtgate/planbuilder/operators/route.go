@@ -576,12 +576,12 @@ func (r *Route) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.Alia
 	return r, offset, nil
 }
 
-func addColumnToInput(operator ops.Operator, expr *sqlparser.AliasedExpr, addToGroupBy bool) (bool, int) {
-	type selectExpressions interface {
-		addNoPushCol(expr *sqlparser.AliasedExpr, addToGroupBy bool) int
-		isDerived() bool
-	}
+type selectExpressions interface {
+	addNoPushCol(expr *sqlparser.AliasedExpr, addToGroupBy bool) int
+	isDerived() bool
+}
 
+func addColumnToInput(operator ops.Operator, expr *sqlparser.AliasedExpr, addToGroupBy bool) (bool, int) {
 	switch op := operator.(type) {
 	case *CorrelatedSubQueryOp:
 		return addColumnToInput(op.Outer, expr, addToGroupBy)

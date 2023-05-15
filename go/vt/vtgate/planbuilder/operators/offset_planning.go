@@ -17,9 +17,10 @@ limitations under the License.
 package operators
 
 import (
+	"fmt"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
@@ -35,14 +36,10 @@ func planOffsets(ctx *plancontext.PlanningContext, root ops.Operator) (ops.Opera
 	visitor := func(in ops.Operator, _ semantics.TableSet, _ bool) (ops.Operator, rewrite.ApplyResult, error) {
 		var err error
 		switch op := in.(type) {
-		case *Horizon:
-			return nil, false, vterrors.VT13001("should not see Horizons here")
-		case *Derived:
-			return nil, false, vterrors.VT13001("should not see Derived here")
+		case *Derived, *Horizon:
+			return nil, false, vterrors.VT13001(fmt.Sprintf("should not see %T here", in))
 		case offsettable:
 			err = op.planOffsets(ctx)
-		case *Projection:
-			return op.planOffsetsForProjection(ctx)
 		}
 		if err != nil {
 			return nil, false, err
@@ -60,70 +57,6 @@ func planOffsets(ctx *plancontext.PlanningContext, root ops.Operator) (ops.Opera
 	}
 
 	return op, nil
-}
-
-func (p *Projection) planOffsetsForProjection(ctx *plancontext.PlanningContext) (ops.Operator, rewrite.ApplyResult, error) {
-	var err error
-	for i, col := range p.Columns {
-		rewritten := sqlparser.CopyOnRewrite(col.GetExpr(), func(node, parent sqlparser.SQLNode) bool {
-			_, aggr := node.(sqlparser.AggrFunc)
-			b := !aggr
-			return b
-		}, func(cursor *sqlparser.CopyOnWriteCursor) {
-			column := cursor.Node()
-			expr, ok := column.(sqlparser.Expr)
-			if !ok {
-				return
-			}
-			if !fetchByOffset(column) {
-				return
-			}
-
-			newSrc, offset, terr := p.Source.AddColumn(ctx, aeWrap(expr), true, false)
-			if terr != nil {
-				err = terr
-				return
-			}
-			p.Source = newSrc
-			cursor.Replace(sqlparser.NewOffset(offset, expr))
-		}, nil).(sqlparser.Expr)
-		if err != nil {
-			return nil, false, err
-		}
-
-		offset, ok := rewritten.(*sqlparser.Offset)
-		if ok {
-			// we got a pure offset back. No need to do anything else
-			p.Columns[i] = Offset{
-				Expr:   col.GetExpr(),
-				Offset: offset.V,
-			}
-			continue
-		}
-
-		eexpr, err := evalengine.Translate(rewritten, nil)
-		if err != nil {
-			return nil, false, err
-		}
-
-		p.Columns[i] = Eval{
-			Expr:  rewritten,
-			EExpr: eexpr,
-		}
-	}
-
-	return p, rewrite.SameTree, nil
-}
-
-func exprToPushDown(expr sqlparser.Expr) sqlparser.Expr {
-	switch expr := expr.(type) {
-	case *sqlparser.CountStar:
-		return expr
-	case sqlparser.AggrFunc:
-		return expr.GetArg()
-	default:
-		return expr
-	}
 }
 
 func (p *Projection) passThroughAllColumns(ctx *plancontext.PlanningContext) error {

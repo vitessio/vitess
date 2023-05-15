@@ -68,6 +68,8 @@ type (
 	}
 )
 
+var _ selectExpressions = (*Projection)(nil)
+
 func (p *Projection) addNoPushCol(expr *sqlparser.AliasedExpr, _ bool) int {
 	p.Columns = append(p.Columns, Expr{E: expr.Expr})
 	p.ColumnNames = append(p.ColumnNames, expr.As.String())
@@ -252,4 +254,57 @@ func (p *Projection) compactWithRoute(rb *Route) (ops.Operator, rewrite.ApplyRes
 	}
 	rb.ResultColumns = len(columns)
 	return rb, rewrite.SameTree, nil
+}
+
+func (p *Projection) planOffsets(ctx *plancontext.PlanningContext) error {
+	var err error
+	for i, col := range p.Columns {
+		rewritten := sqlparser.CopyOnRewrite(col.GetExpr(), func(node, parent sqlparser.SQLNode) bool {
+			_, aggr := node.(sqlparser.AggrFunc)
+			b := !aggr
+			return b
+		}, func(cursor *sqlparser.CopyOnWriteCursor) {
+			column := cursor.Node()
+			expr, ok := column.(sqlparser.Expr)
+			if !ok {
+				return
+			}
+			if !fetchByOffset(column) {
+				return
+			}
+
+			newSrc, offset, terr := p.Source.AddColumn(ctx, aeWrap(expr), true, false)
+			if terr != nil {
+				err = terr
+				return
+			}
+			p.Source = newSrc
+			cursor.Replace(sqlparser.NewOffset(offset, expr))
+		}, nil).(sqlparser.Expr)
+		if err != nil {
+			return err
+		}
+
+		offset, ok := rewritten.(*sqlparser.Offset)
+		if ok {
+			// we got a pure offset back. No need to do anything else
+			p.Columns[i] = Offset{
+				Expr:   col.GetExpr(),
+				Offset: offset.V,
+			}
+			continue
+		}
+
+		eexpr, err := evalengine.Translate(rewritten, nil)
+		if err != nil {
+			return err
+		}
+
+		p.Columns[i] = Eval{
+			Expr:  rewritten,
+			EExpr: eexpr,
+		}
+	}
+
+	return nil
 }
