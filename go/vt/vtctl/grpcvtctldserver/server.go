@@ -4410,7 +4410,8 @@ func (s *VtctldServer) WorkflowSwitchTraffic(ctx context.Context, req *vtctldata
 	span.Annotate("keyspace", req.Keyspace)
 	span.Annotate("workflow", req.Workflow)
 	span.Annotate("tablet-types", req.TabletTypes)
-	span.Annotate("reverse", req.Reverse)
+	span.Annotate("direction", req.Direction)
+	span.Annotate("reverse-replication", req.ReverseReplication)
 
 	resp, err = s.ws.WorkflowSwitchTraffic(ctx, req)
 	return resp, err

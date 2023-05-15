@@ -2075,10 +2075,6 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 		rdDryRunResults, wrDryRunResults  *[]string
 		hasReplica, hasRdonly, hasPrimary bool
 	)
-	direction := DirectionForward
-	if req.Reverse {
-		direction = DirectionBackward
-	}
 
 	timeout, set, err := protoutil.DurationFromProto(req.Timeout)
 	if err != nil {
@@ -2097,6 +2093,8 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 	if state.WorkflowType == TypeMigrate {
 		return nil, fmt.Errorf("invalid action for Migrate workflow: SwitchTraffic")
 	}
+
+	direction := TrafficSwitchDirection(req.Direction)
 
 	if direction == DirectionBackward {
 		state.Workflow = ReverseWorkflowName(state.Workflow)
@@ -2125,7 +2123,7 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 		return nil, err
 	}
 	if hasReplica || hasRdonly {
-		if rdDryRunResults, err = s.switchReads(ctx, ts, state, timeout, false, direction == DirectionBackward, req.DryRun); err != nil {
+		if rdDryRunResults, err = s.switchReads(ctx, ts, state, timeout, false, direction, req.DryRun); err != nil {
 			return nil, err
 		}
 	}
@@ -2133,7 +2131,7 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 		dryRunResults = append(dryRunResults, *rdDryRunResults...)
 	}
 	if hasPrimary {
-		if _, wrDryRunResults, err = s.switchWrites(ctx, ts, state, timeout, false, direction == DirectionBackward, req.DryRun); err != nil {
+		if _, wrDryRunResults, err = s.switchWrites(ctx, ts, timeout, false, req.ReverseReplication, req.DryRun); err != nil {
 			return nil, err
 		}
 	}
@@ -2160,7 +2158,7 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 }
 
 // switchReads is a generic way of switching read traffic for a workflow.
-func (s *Server) switchReads(ctx context.Context, ts *trafficSwitcher, state *State, timeout time.Duration, cancel, reverseReplication, dryRun bool) (*[]string, error) {
+func (s *Server) switchReads(ctx context.Context, ts *trafficSwitcher, state *State, timeout time.Duration, cancel bool, direction TrafficSwitchDirection, dryRun bool) (*[]string, error) {
 	log.Infof("Switching reads: %s.%s tablet types: %s, cells: %s, workflow state: %s", ts.targetKeyspace, ts.workflow, ts.optTabletTypes, ts.optCells, state.String())
 	hasReplica, hasRdonly, _, err := parseTabletTypesStr(ts.optTabletTypes)
 	if err != nil {
@@ -2169,10 +2167,10 @@ func (s *Server) switchReads(ctx context.Context, ts *trafficSwitcher, state *St
 	if !hasReplica && !hasRdonly {
 		return nil, fmt.Errorf("tablet types must be REPLICA or RDONLY: %v", ts.optTabletTypes)
 	}
-	if reverseReplication && hasReplica && len(state.ReplicaCellsSwitched) == 0 {
+	if direction == DirectionBackward && hasReplica && len(state.ReplicaCellsSwitched) == 0 {
 		return nil, fmt.Errorf("requesting reversal of read traffic for REPLICAs but REPLICA reads have not been switched")
 	}
-	if reverseReplication && hasRdonly && len(state.RdonlyCellsSwitched) == 0 {
+	if direction == DirectionBackward && hasRdonly && len(state.RdonlyCellsSwitched) == 0 {
 		return nil, fmt.Errorf("requesting reversal of SwitchReads for RDONLYs but RDONLY reads have not been switched")
 	}
 	ts.optCells = strings.TrimSpace(ts.optCells)
@@ -2183,10 +2181,6 @@ func (s *Server) switchReads(ctx context.Context, ts *trafficSwitcher, state *St
 	tabletTypes, _, err := discovery.ParseTabletTypesAndOrder(ts.optTabletTypes)
 	if err != nil {
 		return nil, err
-	}
-	direction := DirectionForward
-	if reverseReplication {
-		direction = DirectionBackward
 	}
 
 	// If there are no rdonly tablets in the cells ask to switch rdonly tablets as well so that routing rules
@@ -2259,7 +2253,7 @@ func (s *Server) switchReads(ctx context.Context, ts *trafficSwitcher, state *St
 }
 
 // switchWrites is a generic way of migrating write traffic for a workflow.
-func (s *Server) switchWrites(ctx context.Context, ts *trafficSwitcher, state *State, timeout time.Duration,
+func (s *Server) switchWrites(ctx context.Context, ts *trafficSwitcher, timeout time.Duration,
 	cancel, reverseReplication, dryRun bool) (journalID int64, dryRunResults *[]string, err error) {
 	var sw iswitcher
 	if dryRun {

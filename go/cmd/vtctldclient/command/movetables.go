@@ -27,6 +27,7 @@ import (
 	"vitess.io/vitess/go/cmd/vtctldclient/cli"
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vtctl/workflow"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
@@ -214,8 +215,10 @@ var (
 	moveTablesSwitchTrafficOptions = struct {
 		TabletTypes              []string
 		MaxReplicationLagAllowed time.Duration
+		ReverseReplication       bool
 		Timeout                  time.Duration
 		DryRun                   bool
+		Direction                workflow.TrafficSwitchDirection
 	}{}
 )
 
@@ -344,6 +347,8 @@ func commandMoveTablesSwitchTraffic(cmd *cobra.Command, args []string) error {
 		MaxReplicationLagAllowed: protoutil.DurationToProto(moveTablesSwitchTrafficOptions.MaxReplicationLagAllowed),
 		Timeout:                  protoutil.DurationToProto(moveTablesSwitchTrafficOptions.Timeout),
 		DryRun:                   moveTablesSwitchTrafficOptions.DryRun,
+		ReverseReplication:       moveTablesSwitchTrafficOptions.ReverseReplication,
+		Direction:                int32(workflow.DirectionForward),
 	}
 	resp, err := client.WorkflowSwitchTraffic(commandCtx, req)
 	if err != nil {
@@ -370,7 +375,7 @@ func commandMoveTablesReverseTraffic(cmd *cobra.Command, args []string) error {
 		Timeout:                  protoutil.DurationToProto(moveTablesSwitchTrafficOptions.Timeout),
 		MaxReplicationLagAllowed: protoutil.DurationToProto(moveTablesSwitchTrafficOptions.MaxReplicationLagAllowed),
 		DryRun:                   moveTablesSwitchTrafficOptions.DryRun,
-		Reverse:                  true,
+		Direction:                int32(workflow.DirectionBackward),
 	}
 	resp, err := client.WorkflowSwitchTraffic(commandCtx, req)
 	if err != nil {
@@ -425,9 +430,10 @@ func init() {
 	MoveTablesSwitchTraffic.Flags().BoolVar(&moveTablesSwitchTrafficOptions.DryRun, "dry-run", false, "Print the actions that would be taken and report any known errors that would have occurred")
 	MoveTables.AddCommand(MoveTablesSwitchTraffic)
 
+	MoveTablesReverseTraffic.Flags().BoolVar(&moveTablesSwitchTrafficOptions.DryRun, "dry-run", false, "Print the actions that would be taken and report any known errors that would have occurred")
+	MoveTablesReverseTraffic.Flags().DurationVar(&moveTablesSwitchTrafficOptions.MaxReplicationLagAllowed, "max-replication-lag-allowed", maxReplicationLagDefault, "Allow traffic to be switched only if VReplication lag is below this")
+	MoveTablesReverseTraffic.Flags().BoolVar(&moveTablesSwitchTrafficOptions.ReverseReplication, "reverse-replication", true, "Setup replication going back to the original source keyspace")
 	MoveTablesReverseTraffic.Flags().StringSliceVar(&moveTablesSwitchTrafficOptions.TabletTypes, "tablet-types", tabletTypesDefault, "Tablet types to switch traffic for")
 	MoveTablesReverseTraffic.Flags().DurationVar(&moveTablesSwitchTrafficOptions.Timeout, "timeout", timeoutDefault, "Specifies the maximum time to wait, in seconds, for VReplication to catch up on primary tablets. The traffic switch will be cancelled on timeout.")
-	MoveTablesReverseTraffic.Flags().DurationVar(&moveTablesSwitchTrafficOptions.MaxReplicationLagAllowed, "max-replication-lag-allowed", maxReplicationLagDefault, "Allow traffic to be switched only if VReplication lag is below this")
-	MoveTablesReverseTraffic.Flags().BoolVar(&moveTablesSwitchTrafficOptions.DryRun, "dry-run", false, "Print the actions that would be taken and report any known errors that would have occurred")
 	MoveTables.AddCommand(MoveTablesReverseTraffic)
 }
