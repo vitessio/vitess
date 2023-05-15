@@ -294,7 +294,9 @@ func rewriteColumnsInSubqueryOpForJoin(
 
 		// get the bindVariable for that column name and replace it in the subquery
 		typ, _, _ := ctx.SemTable.TypeForExpr(node)
-		bindVar := ctx.ReservedVars.ReserveColName(node)
+		bindVar := ctx.GetArgumentFor(node, func() string {
+			return ctx.ReservedVars.ReserveColName(node)
+		})
 		cursor.Replace(sqlparser.NewTypedArgument(bindVar, typ))
 		// check whether the bindVariable already exists in the joinVars of the other tree
 		_, alreadyExists := outerTree.Vars[bindVar]

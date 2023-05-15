@@ -65,7 +65,11 @@ func planOffsets(ctx *plancontext.PlanningContext, root ops.Operator) (ops.Opera
 func (p *Projection) planOffsetsForProjection(ctx *plancontext.PlanningContext) (ops.Operator, rewrite.ApplyResult, error) {
 	var err error
 	for i, col := range p.Columns {
-		rewritten := sqlparser.CopyOnRewrite(col.GetExpr(), nil, func(cursor *sqlparser.CopyOnWriteCursor) {
+		rewritten := sqlparser.CopyOnRewrite(col.GetExpr(), func(node, parent sqlparser.SQLNode) bool {
+			_, aggr := node.(sqlparser.AggrFunc)
+			b := !aggr
+			return b
+		}, func(cursor *sqlparser.CopyOnWriteCursor) {
 			column := cursor.Node()
 			expr, ok := column.(sqlparser.Expr)
 			if !ok {
@@ -109,6 +113,17 @@ func (p *Projection) planOffsetsForProjection(ctx *plancontext.PlanningContext) 
 	}
 
 	return p, rewrite.SameTree, nil
+}
+
+func exprToPushDown(expr sqlparser.Expr) sqlparser.Expr {
+	switch expr := expr.(type) {
+	case *sqlparser.CountStar:
+		return expr
+	case sqlparser.AggrFunc:
+		return expr.GetArg()
+	default:
+		return expr
+	}
 }
 
 func (p *Projection) passThroughAllColumns(ctx *plancontext.PlanningContext) error {

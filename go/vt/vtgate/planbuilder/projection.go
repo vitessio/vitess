@@ -42,6 +42,11 @@ var _ logicalPlan = (*projection)(nil)
 
 // WireupGen4 implements the logicalPlan interface
 func (p *projection) WireupGen4(ctx *plancontext.PlanningContext) error {
+	if p.primitive != nil {
+		// already done for this op
+		return p.source.WireupGen4(ctx)
+	}
+
 	columns := make([]evalengine.Expr, 0, len(p.columns))
 	for _, expr := range p.columns {
 		convert, err := evalengine.Translate(expr, &evalengine.Config{

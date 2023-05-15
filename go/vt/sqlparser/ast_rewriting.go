@@ -75,11 +75,15 @@ func (r *ReservedVars) ReserveAll(names ...string) bool {
 // with the same name already exists, it'll be suffixed with a numberic identifier
 // to make it unique.
 func (r *ReservedVars) ReserveColName(col *ColName) string {
-	compliantName := col.CompliantName()
-	if r.fast && strings.HasPrefix(compliantName, r.prefix) {
-		compliantName = "_" + compliantName
+	reserveName := col.CompliantName()
+	if r.fast && strings.HasPrefix(reserveName, r.prefix) {
+		reserveName = "_" + reserveName
 	}
 
+	return r.ReserveVariable(reserveName)
+}
+
+func (r *ReservedVars) ReserveVariable(compliantName string) string {
 	joinVar := []byte(compliantName)
 	baseLen := len(joinVar)
 	i := int64(1)

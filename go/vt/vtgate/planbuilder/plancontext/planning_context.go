@@ -35,21 +35,26 @@ type PlanningContext struct {
 	SkipPredicates     map[sqlparser.Expr]any
 	PlannerVersion     querypb.ExecuteOptions_PlannerVersion
 	RewriteDerivedExpr bool
+
+	// If we during planning have turned this expression into an argument name,
+	// we can continue using the same argument name
+	ReservedArguments map[sqlparser.Expr]string
 }
 
 func NewPlanningContext(reservedVars *sqlparser.ReservedVars, semTable *semantics.SemTable, vschema VSchema, version querypb.ExecuteOptions_PlannerVersion) *PlanningContext {
 	ctx := &PlanningContext{
-		ReservedVars:   reservedVars,
-		SemTable:       semTable,
-		VSchema:        vschema,
-		JoinPredicates: map[sqlparser.Expr][]sqlparser.Expr{},
-		SkipPredicates: map[sqlparser.Expr]any{},
-		PlannerVersion: version,
+		ReservedVars:      reservedVars,
+		SemTable:          semTable,
+		VSchema:           vschema,
+		JoinPredicates:    map[sqlparser.Expr][]sqlparser.Expr{},
+		SkipPredicates:    map[sqlparser.Expr]any{},
+		PlannerVersion:    version,
+		ReservedArguments: map[sqlparser.Expr]string{},
 	}
 	return ctx
 }
 
-func (c PlanningContext) IsSubQueryToReplace(e sqlparser.Expr) bool {
+func (c *PlanningContext) IsSubQueryToReplace(e sqlparser.Expr) bool {
 	ext, ok := e.(*sqlparser.Subquery)
 	if !ok {
 		return false
@@ -60,4 +65,15 @@ func (c PlanningContext) IsSubQueryToReplace(e sqlparser.Expr) bool {
 		}
 	}
 	return false
+}
+
+func (ctx *PlanningContext) GetArgumentFor(expr sqlparser.Expr, f func() string) string {
+	for key, name := range ctx.ReservedArguments {
+		if ctx.SemTable.EqualsExpr(key, expr) {
+			return name
+		}
+	}
+	bvName := f()
+	ctx.ReservedArguments[expr] = bvName
+	return bvName
 }

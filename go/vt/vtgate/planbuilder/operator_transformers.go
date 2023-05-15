@@ -172,10 +172,36 @@ func transformProjection(ctx *plancontext.PlanningContext, op *operators.Project
 		return from.GetExpr()
 	})
 
+	failed := false
+	evalengineExprs := slices2.Map(op.Columns, func(from operators.ProjExpr) evalengine.Expr {
+		switch e := from.(type) {
+		case operators.Eval:
+			return e.EExpr
+		case operators.Offset:
+			t := ctx.SemTable.ExprTypes[e.Expr]
+			return &evalengine.Column{
+				Offset:    e.Offset,
+				Type:      t.Type,
+				Collation: collations.TypedCollation{},
+			}
+		default:
+			failed = true
+			return nil
+		}
+	})
+	var primitive *engine.Projection
+	if !failed {
+		primitive = &engine.Projection{
+			Cols:  op.ColumnNames,
+			Exprs: evalengineExprs,
+		}
+	}
+
 	return &projection{
 		source:      src,
 		columnNames: op.ColumnNames,
 		columns:     expressions,
+		primitive:   primitive,
 	}, nil
 }
 

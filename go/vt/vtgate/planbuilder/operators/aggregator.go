@@ -89,10 +89,12 @@ func (a *Aggregator) AddPredicate(ctx *plancontext.PlanningContext, expr sqlpars
 }
 
 func (a *Aggregator) addNoPushCol(expr *sqlparser.AliasedExpr, addToGroupBy bool) int {
-	lastOffset := len(a.Columns)
+	offset := len(a.Columns)
+	a.Columns = append(a.Columns, expr)
+
 	if addToGroupBy {
 		groupBy := NewGroupBy(expr.Expr, expr.Expr, expr)
-		groupBy.KeyCol = lastOffset
+		groupBy.KeyCol = offset
 		a.Grouping = append(a.Grouping, groupBy)
 	} else {
 		a.Aggregations = append(a.Aggregations, Aggr{
@@ -100,11 +102,10 @@ func (a *Aggregator) addNoPushCol(expr *sqlparser.AliasedExpr, addToGroupBy bool
 			Func:      nil,
 			OpCode:    opcode.AggregateRandom,
 			Alias:     expr.As.String(),
-			ColOffset: lastOffset,
+			ColOffset: offset,
 		})
 	}
-	a.Columns = append(a.Columns, expr)
-	return lastOffset
+	return offset
 }
 
 func (a *Aggregator) isDerived() bool {
@@ -125,11 +126,20 @@ func (a *Aggregator) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser
 		}
 	}
 
-	if addToGroupBy {
-		groupBy := NewGroupBy(expr.Expr, expr.Expr, expr)
-		groupBy.KeyCol = len(a.Columns)
-		a.Grouping = append(a.Grouping, groupBy)
-	} else {
+	// If weight string function is received from above operator. Then check if we have a group on the expression used.
+	// If it is found, then continue to push it down but with addToGroupBy true so that is the added to group by sql down in the AddColumn.
+	// This also set the weight string column offset so that we would not need to add it later in aggregator operator planOffset.
+	if wsExpr, isWS := expr.Expr.(*sqlparser.WeightStringFuncExpr); isWS {
+		idx := slices.IndexFunc(a.Grouping, func(by GroupBy) bool {
+			return ctx.SemTable.EqualsExpr(wsExpr.Expr, by.WeightStrExpr)
+		})
+		if idx >= 0 {
+			a.Grouping[idx].WSCol = len(a.Columns)
+			addToGroupBy = true
+		}
+	}
+
+	if !addToGroupBy {
 		a.Aggregations = append(a.Aggregations, Aggr{
 			Original:  expr,
 			Func:      nil,
@@ -140,7 +150,7 @@ func (a *Aggregator) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser
 	}
 	a.Columns = append(a.Columns, expr)
 	expectedOffset := len(a.Columns) - 1
-	newSrc, offset, err := a.Source.AddColumn(ctx, expr, false, false)
+	newSrc, offset, err := a.Source.AddColumn(ctx, expr, false, addToGroupBy)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -211,8 +221,7 @@ func (a *Aggregator) planOffsets(ctx *plancontext.PlanningContext) error {
 			}
 			a.Grouping[idx].KeyCol = offset
 		}
-		if !ctx.SemTable.NeedsWeightString(gb.WeightStrExpr) {
-			a.Grouping[idx].WSCol = -1
+		if a.Grouping[idx].WSCol != -1 || !ctx.SemTable.NeedsWeightString(gb.WeightStrExpr) {
 			continue
 		}
 

@@ -31,25 +31,13 @@ func BreakExpressionInLHSandRHS(
 	lhs semantics.TableSet,
 ) (col JoinColumn, err error) {
 	rewrittenExpr := sqlparser.CopyOnRewrite(expr, nil, func(cursor *sqlparser.CopyOnWriteCursor) {
-		var getColName func() string
 		node := cursor.Node()
-		switch node := node.(type) {
-		case *sqlparser.ColName:
-			getColName = func() string {
-				node.Qualifier.Qualifier = sqlparser.NewIdentifierCS("")
-				return node.CompliantName()
-			}
-		case sqlparser.AggrFunc:
-			getColName = func() string {
-				return sqlparser.CompliantString(node)
-			}
-
-		default:
+		reservedName := getReservedBVName(node)
+		if reservedName == "" {
 			return
 		}
-		expr := node.(sqlparser.Expr)
-
-		deps := ctx.SemTable.RecursiveDeps(expr)
+		nodeExpr := node.(sqlparser.Expr)
+		deps := ctx.SemTable.RecursiveDeps(nodeExpr)
 		if deps.IsEmpty() {
 			err = vterrors.VT13001("unknown column. has the AST been copied?")
 			cursor.StopTreeWalk()
@@ -59,13 +47,16 @@ func BreakExpressionInLHSandRHS(
 			return
 		}
 
-		col.LHSExprs = append(col.LHSExprs, expr)
-		bvName := getColName()
+		col.LHSExprs = append(col.LHSExprs, nodeExpr)
+		bvName := ctx.GetArgumentFor(nodeExpr, func() string {
+			return ctx.ReservedVars.ReserveVariable(reservedName)
+		})
+
 		col.BvNames = append(col.BvNames, bvName)
 		arg := sqlparser.NewArgument(bvName)
 		// we are replacing one of the sides of the comparison with an argument,
 		// but we don't want to lose the type information we have, so we copy it over
-		ctx.SemTable.CopyExprInfo(expr, arg)
+		ctx.SemTable.CopyExprInfo(nodeExpr, arg)
 		cursor.Replace(arg)
 	}, nil).(sqlparser.Expr)
 
@@ -75,4 +66,15 @@ func BreakExpressionInLHSandRHS(
 	ctx.JoinPredicates[expr] = append(ctx.JoinPredicates[expr], rewrittenExpr)
 	col.RHSExpr = rewrittenExpr
 	return
+}
+
+func getReservedBVName(node sqlparser.SQLNode) string {
+	switch node := node.(type) {
+	case *sqlparser.ColName:
+		node.Qualifier.Qualifier = sqlparser.NewIdentifierCS("")
+		return node.CompliantName()
+	case sqlparser.AggrFunc:
+		return sqlparser.CompliantString(node)
+	}
+	return ""
 }
