@@ -256,31 +256,32 @@ func (p *Projection) compactWithRoute(rb *Route) (ops.Operator, rewrite.ApplyRes
 	return rb, rewrite.SameTree, nil
 }
 
+func stopAtAggregations(node, _ sqlparser.SQLNode) bool {
+	_, aggr := node.(sqlparser.AggrFunc)
+	b := !aggr
+	return b
+}
+
 func (p *Projection) planOffsets(ctx *plancontext.PlanningContext) error {
 	var err error
-	for i, col := range p.Columns {
-		rewritten := sqlparser.CopyOnRewrite(col.GetExpr(), func(node, parent sqlparser.SQLNode) bool {
-			_, aggr := node.(sqlparser.AggrFunc)
-			b := !aggr
-			return b
-		}, func(cursor *sqlparser.CopyOnWriteCursor) {
-			column := cursor.Node()
-			expr, ok := column.(sqlparser.Expr)
-			if !ok {
-				return
-			}
-			if !fetchByOffset(column) {
-				return
-			}
+	offsetter := func(cursor *sqlparser.CopyOnWriteCursor) {
+		expr, ok := cursor.Node().(sqlparser.Expr)
+		if !ok || !fetchByOffset(expr) {
+			return
+		}
 
-			newSrc, offset, terr := p.Source.AddColumn(ctx, aeWrap(expr), true, false)
-			if terr != nil {
-				err = terr
-				return
-			}
-			p.Source = newSrc
-			cursor.Replace(sqlparser.NewOffset(offset, expr))
-		}, nil).(sqlparser.Expr)
+		newSrc, offset, terr := p.Source.AddColumn(ctx, aeWrap(expr), true, false)
+		if terr != nil {
+			err = terr
+			return
+		}
+		p.Source = newSrc
+		cursor.Replace(sqlparser.NewOffset(offset, expr))
+	}
+
+	for i, col := range p.Columns {
+		// first step is to replace the expressions we expect to get from our input with the offsets for these
+		rewritten := sqlparser.CopyOnRewrite(col.GetExpr(), stopAtAggregations, offsetter, nil).(sqlparser.Expr)
 		if err != nil {
 			return err
 		}
@@ -295,6 +296,7 @@ func (p *Projection) planOffsets(ctx *plancontext.PlanningContext) error {
 			continue
 		}
 
+		// for everything else, we'll turn to the evalengine
 		eexpr, err := evalengine.Translate(rewritten, nil)
 		if err != nil {
 			return err

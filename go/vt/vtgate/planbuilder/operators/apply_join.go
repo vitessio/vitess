@@ -17,6 +17,9 @@ limitations under the License.
 package operators
 
 import (
+	"fmt"
+	"strings"
+
 	"golang.org/x/exp/maps"
 	"golang.org/x/exp/slices"
 
@@ -300,7 +303,11 @@ func (a *ApplyJoin) Description() ops.OpDescription {
 }
 
 func (a *ApplyJoin) ShortDescription() string {
-	return sqlparser.String(a.Predicate)
+	pred := sqlparser.String(a.Predicate)
+	columns := slices2.Map(a.ColumnsAST, func(from JoinColumn) string {
+		return sqlparser.String(from.Original)
+	})
+	return fmt.Sprintf("on %s columns: %s", pred, strings.Join(columns, ", "))
 }
 
 func (jc JoinColumn) IsPureLeft() bool {

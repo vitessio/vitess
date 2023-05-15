@@ -322,6 +322,10 @@ func pushDownProjectionInApplyJoin(
 	p *Projection,
 	src *ApplyJoin,
 ) (ops.Operator, rewrite.ApplyResult, error) {
+	if src.LeftJoin {
+		// we can't push down expression evaluation to the rhs if we are not sure it will even be executed
+		return p, rewrite.SameTree, nil
+	}
 	lhs, rhs := &projector{}, &projector{}
 
 	src.ColumnsAST = nil

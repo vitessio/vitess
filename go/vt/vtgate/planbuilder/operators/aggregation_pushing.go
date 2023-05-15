@@ -352,14 +352,31 @@ func (ab *aggBuilder) handleAggr(ctx *plancontext.PlanningContext, aggr Aggr) (A
 }
 
 func (ab *aggBuilder) handleCountStar(ctx *plancontext.PlanningContext, aggr Aggr) (Aggr, error) {
+	// Projection is necessary since we are pushing down the aggregation.
 	ab.projectionRequired = true
+
+	// Add the aggregate to both sides of the join.
 	lhsExpr := ab.lhs.addAggr(ctx, aggr)
 	rhsExpr := ab.rhs.addAggr(ctx, aggr)
 
+	// We expect the expressions to be different on each side of the join, otherwise it's an error.
 	if lhsExpr == rhsExpr {
 		panic(fmt.Sprintf("Need the two produced expressions to be different. %T %T", lhsExpr, rhsExpr))
 	}
 
+	// The joinColumns slice holds the column information from each side of the join.
+	// We add a column for each side to facilitate reconstituting the final aggregation later.
+	ab.joinColumns = append(ab.joinColumns,
+		JoinColumn{
+			Original: aeWrap(rhsExpr),
+			RHSExpr:  rhsExpr,
+		}, JoinColumn{
+			Original: aeWrap(lhsExpr),
+			LHSExprs: []sqlparser.Expr{lhsExpr},
+		})
+
+	// When dealing with outer joins, we may encounter null values on the RHS.
+	// We use the COALESCE function to replace nulls with 1.
 	if ab.outerJoin {
 		rhsExpr = &sqlparser.FuncExpr{
 			Name: sqlparser.NewIdentifierCI("coalesce"),
@@ -370,19 +387,18 @@ func (ab *aggBuilder) handleCountStar(ctx *plancontext.PlanningContext, aggr Agg
 		}
 	}
 
+	// The final COUNT is obtained by multiplying the counts from both sides.
+	// This is equivalent to transforming a "select count(*) from t1 join t2" into
+	// "select count_t1*count_t2 from
+	//    (select count(*) as count_t1 from t1) as x,
+	//    (select count(*) as count_t2 from t2) as y".
 	projExpr := &sqlparser.BinaryExpr{
 		Operator: sqlparser.MultOp,
 		Left:     lhsExpr,
 		Right:    rhsExpr,
 	}
-
 	ab.proj.Columns = append(ab.proj.Columns, Expr{E: projExpr})
-	ab.proj.ColumnNames = append(ab.proj.ColumnNames, "")
-	ab.joinColumns = append(ab.joinColumns, JoinColumn{
-		Original: aggr.Original,
-		RHSExpr:  rhsExpr,
-	})
-
+	ab.proj.ColumnNames = append(ab.proj.ColumnNames, aggr.Original.As.String())
 	return aggr, nil
 }
 
