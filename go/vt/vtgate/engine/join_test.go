@@ -245,7 +245,7 @@ func TestJoinExecuteNoResult(t *testing.T) {
 	})
 	rightPrim.ExpectLog(t, []string{
 		`GetFields bv: `,
-		`Execute bv:  true`,
+		`Execute bv: type:VARCHAR value:"s" true`,
 	})
 	wantResult := sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
