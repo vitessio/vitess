@@ -1397,7 +1397,7 @@ message WorkflowSwitchTrafficRequest {
   string workflow = 2;
   repeated string tablet_types = 3;
   vttime.Duration max_replication_lag_allowed = 4;
-  bool reverse_replication = 5;
+  bool enable_reverse_replication = 5;
   int32 direction = 6;
   vttime.Duration timeout = 7;
   bool dry_run = 8;

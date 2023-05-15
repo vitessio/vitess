@@ -61014,8 +61014,8 @@ export namespace vtctldata {
         /** WorkflowSwitchTrafficRequest max_replication_lag_allowed */
         max_replication_lag_allowed?: (vttime.IDuration|null);
 
-        /** WorkflowSwitchTrafficRequest reverse_replication */
-        reverse_replication?: (boolean|null);
+        /** WorkflowSwitchTrafficRequest enable_reverse_replication */
+        enable_reverse_replication?: (boolean|null);
 
         /** WorkflowSwitchTrafficRequest direction */
         direction?: (number|null);
@@ -61048,8 +61048,8 @@ export namespace vtctldata {
         /** WorkflowSwitchTrafficRequest max_replication_lag_allowed. */
         public max_replication_lag_allowed?: (vttime.IDuration|null);
 
-        /** WorkflowSwitchTrafficRequest reverse_replication. */
-        public reverse_replication: boolean;
+        /** WorkflowSwitchTrafficRequest enable_reverse_replication. */
+        public enable_reverse_replication: boolean;
 
         /** WorkflowSwitchTrafficRequest direction. */
         public direction: number;

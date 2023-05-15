@@ -10513,9 +10513,9 @@ func (m *WorkflowSwitchTrafficRequest) MarshalToSizedBufferVT(dAtA []byte) (int,
 		i--
 		dAtA[i] = 0x30
 	}
-	if m.ReverseReplication {
+	if m.EnableReverseReplication {
 		i--
-		if m.ReverseReplication {
+		if m.EnableReverseReplication {
 			dAtA[i] = 1
 		} else {
 			dAtA[i] = 0
@@ -14675,7 +14675,7 @@ func (m *WorkflowSwitchTrafficRequest) SizeVT() (n int) {
 		l = m.MaxReplicationLagAllowed.SizeVT()
 		n += 1 + l + sov(uint64(l))
 	}
-	if m.ReverseReplication {
+	if m.EnableReverseReplication {
 		n += 2
 	}
 	if m.Direction != 0 {
@@ -39661,7 +39661,7 @@ func (m *WorkflowSwitchTrafficRequest) UnmarshalVT(dAtA []byte) error {
 			iNdEx = postIndex
 		case 5:
 			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field ReverseReplication", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field EnableReverseReplication", wireType)
 			}
 			var v int
 			for shift := uint(0); ; shift += 7 {
@@ -39678,7 +39678,7 @@ func (m *WorkflowSwitchTrafficRequest) UnmarshalVT(dAtA []byte) error {
 					break
 				}
 			}
-			m.ReverseReplication = bool(v != 0)
+			m.EnableReverseReplication = bool(v != 0)
 		case 6:
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field Direction", wireType)

@@ -36,7 +36,6 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/concurrency"
-	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
@@ -2097,8 +2096,12 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 	direction := TrafficSwitchDirection(req.Direction)
 
 	if direction == DirectionBackward {
-		state.Workflow = ReverseWorkflowName(state.Workflow)
-		state.TargetKeyspace = state.SourceKeyspace
+		req.Keyspace = state.SourceKeyspace
+		req.Workflow = ts.reverseWorkflow
+		ts, state, err = s.getWorkflowState(ctx, req.Keyspace, req.Workflow)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	maxReplicationLagAllowed, set, err := protoutil.DurationFromProto(req.MaxReplicationLagAllowed)
@@ -2123,7 +2126,7 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 		return nil, err
 	}
 	if hasReplica || hasRdonly {
-		if rdDryRunResults, err = s.switchReads(ctx, ts, state, timeout, false, direction, req.DryRun); err != nil {
+		if rdDryRunResults, err = s.switchReads(ctx, req.Keyspace, req.Workflow, timeout, false, direction, req.DryRun); err != nil {
 			return nil, err
 		}
 	}
@@ -2131,7 +2134,7 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 		dryRunResults = append(dryRunResults, *rdDryRunResults...)
 	}
 	if hasPrimary {
-		if _, wrDryRunResults, err = s.switchWrites(ctx, ts, timeout, false, req.ReverseReplication, req.DryRun); err != nil {
+		if _, wrDryRunResults, err = s.switchWrites(ctx, ts, timeout, direction, false, req.EnableReverseReplication, req.DryRun); err != nil {
 			return nil, err
 		}
 	}
@@ -2158,12 +2161,23 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 }
 
 // switchReads is a generic way of switching read traffic for a workflow.
-func (s *Server) switchReads(ctx context.Context, ts *trafficSwitcher, state *State, timeout time.Duration, cancel bool, direction TrafficSwitchDirection, dryRun bool) (*[]string, error) {
-	log.Infof("Switching reads: %s.%s tablet types: %s, cells: %s, workflow state: %s", ts.targetKeyspace, ts.workflow, ts.optTabletTypes, ts.optCells, state.String())
+func (s *Server) switchReads(ctx context.Context, keyspace, workflow string, timeout time.Duration, cancel bool, direction TrafficSwitchDirection, dryRun bool) (*[]string, error) {
+	ts, state, err := s.getWorkflowState(ctx, keyspace, workflow)
+	if err != nil {
+		return nil, err
+	}
+	roTypesToSwitch := []topodatapb.TabletType{}
 	hasReplica, hasRdonly, _, err := parseTabletTypesStr(ts.optTabletTypes)
 	if err != nil {
 		return nil, err
 	}
+	if hasReplica {
+		roTypesToSwitch = append(roTypesToSwitch, topodatapb.TabletType_REPLICA)
+	}
+	if hasRdonly {
+		roTypesToSwitch = append(roTypesToSwitch, topodatapb.TabletType_RDONLY)
+	}
+	log.Infof("Switching reads: %s.%s tablet types: %s, cells: %s, workflow state: %s", ts.targetKeyspace, ts.workflow, roTypesToSwitch, ts.optCells, state.String())
 	if !hasReplica && !hasRdonly {
 		return nil, fmt.Errorf("tablet types must be REPLICA or RDONLY: %v", ts.optTabletTypes)
 	}
@@ -2177,10 +2191,6 @@ func (s *Server) switchReads(ctx context.Context, ts *trafficSwitcher, state *St
 	var cells []string
 	if ts.optCells != "" {
 		cells = strings.Split(strings.TrimSpace(ts.optCells), ",")
-	}
-	tabletTypes, _, err := discovery.ParseTabletTypesAndOrder(ts.optTabletTypes)
-	if err != nil {
-		return nil, err
 	}
 
 	// If there are no rdonly tablets in the cells ask to switch rdonly tablets as well so that routing rules
@@ -2230,19 +2240,19 @@ func (s *Server) switchReads(ctx context.Context, ts *trafficSwitcher, state *St
 	if ts.MigrationType() == binlogdatapb.MigrationType_TABLES {
 		if ts.isPartialMigration {
 			ts.Logger().Infof("Partial migration, skipping switchTableReads as traffic is all or nothing per shard and overridden for reads AND writes in the ShardRoutingRule created when switching writes.")
-		} else if err := sw.switchTableReads(ctx, cells, tabletTypes, direction); err != nil {
+		} else if err := sw.switchTableReads(ctx, cells, roTypesToSwitch, direction); err != nil {
 			ts.Logger().Errorf("switchTableReads failed: %v", err)
 			return nil, err
 		}
 		return sw.logs(), nil
 	}
-	ts.Logger().Infof("About to switchShardReads: %+v, %+v, %+v", cells, tabletTypes, direction)
-	if err := sw.switchShardReads(ctx, cells, tabletTypes, direction); err != nil {
+	ts.Logger().Infof("About to switchShardReads: %+v, %+v, %+v", cells, roTypesToSwitch, direction)
+	if err := sw.switchShardReads(ctx, cells, roTypesToSwitch, direction); err != nil {
 		ts.Logger().Errorf("switchShardReads failed: %v", err)
 		return nil, err
 	}
 
-	ts.Logger().Infof("switchShardReads Completed: %+v, %+v, %+v", cells, tabletTypes, direction)
+	ts.Logger().Infof("switchShardReads Completed: %+v, %+v, %+v", cells, roTypesToSwitch, direction)
 	if err := s.ts.ValidateSrvKeyspace(ctx, ts.targetKeyspace, strings.Join(cells, ",")); err != nil {
 		err2 := vterrors.Wrapf(err, "After switching shard reads, found SrvKeyspace for %s is corrupt in cell %s",
 			ts.targetKeyspace, strings.Join(cells, ","))
@@ -2253,8 +2263,9 @@ func (s *Server) switchReads(ctx context.Context, ts *trafficSwitcher, state *St
 }
 
 // switchWrites is a generic way of migrating write traffic for a workflow.
-func (s *Server) switchWrites(ctx context.Context, ts *trafficSwitcher, timeout time.Duration,
+func (s *Server) switchWrites(ctx context.Context, ts *trafficSwitcher, timeout time.Duration, direction TrafficSwitchDirection,
 	cancel, reverseReplication, dryRun bool) (journalID int64, dryRunResults *[]string, err error) {
+
 	var sw iswitcher
 	if dryRun {
 		sw = &switcherDryRun{ts: ts, drLog: NewLogRecorder()}
@@ -2418,26 +2429,24 @@ func (s *Server) switchWrites(ctx context.Context, ts *trafficSwitcher, timeout 
 	return ts.id, sw.logs(), nil
 }
 
-func (s *Server) canSwitch(ctx context.Context, ts *trafficSwitcher, state *State, direction TrafficSwitchDirection, maxAllowedTrxLagSecs int64) (reason string, err error) {
+func (s *Server) canSwitch(ctx context.Context, ts *trafficSwitcher, state *State, direction TrafficSwitchDirection, maxAllowedReplLagSecs int64) (reason string, err error) {
 	if direction == DirectionForward && state.WritesSwitched ||
 		direction == DirectionBackward && !state.WritesSwitched {
 		log.Infof("writes already switched no need to check lag")
 		return "", nil
 	}
-	workflow, err := s.GetWorkflow(ctx, state.TargetKeyspace, state.Workflow)
+	wf, err := s.GetWorkflow(ctx, state.TargetKeyspace, state.Workflow)
 	if err != nil {
 		return "", err
 	}
-	for _, stream := range workflow.ShardStreams {
+	for _, stream := range wf.ShardStreams {
 		for _, st := range stream.GetStreams() {
 			if st.Message == Frozen {
 				return cannotSwitchFrozen, nil
 			}
 			// If no new events have been replicated after the copy phase then it will be 0.
-			if st.TransactionTimestamp.Seconds != 0 {
-				if trxLag := time.Now().Unix() - st.TransactionTimestamp.Seconds; trxLag > maxAllowedTrxLagSecs {
-					return fmt.Sprintf(cannotSwitchHighLag, trxLag, maxAllowedTrxLagSecs), nil
-				}
+			if vreplLag := time.Now().Unix() - st.TimeUpdated.Seconds; vreplLag > maxAllowedReplLagSecs {
+				return fmt.Sprintf(cannotSwitchHighLag, vreplLag, maxAllowedReplLagSecs), nil
 			}
 			switch st.State {
 			case "Copying":
@@ -2458,7 +2467,7 @@ func (s *Server) canSwitch(ctx context.Context, ts *trafficSwitcher, state *Stat
 	refreshTablets := func(shards []*topo.ShardInfo, stype string) {
 		defer wg.Done()
 		for _, si := range shards {
-			if partial, partialDetails, err := topotools.RefreshTabletsByShard(rtbsCtx, ts.ws.ts, ts.ws.tmc, si, nil, ts.Logger()); err != nil || partial {
+			if partial, partialDetails, err := topotools.RefreshTabletsByShard(rtbsCtx, s.ts, s.tmc, si, nil, ts.Logger()); err != nil || partial {
 				m.Lock()
 				refreshErrors.WriteString(fmt.Sprintf("failed to successfully refresh all tablets in the %s/%s %s shard (%v):\n  %v\n",
 					si.Keyspace(), si.ShardName(), stype, err, partialDetails))
@@ -2475,185 +2484,6 @@ func (s *Server) canSwitch(ctx context.Context, ts *trafficSwitcher, state *Stat
 		return fmt.Sprintf(cannotSwitchFailedTabletRefresh, refreshErrors.String()), nil
 	}
 	return "", nil
-}
-
-// SwitchWrites is a generic way of migrating write traffic for a resharding workflow.
-func (s *Server) SwitchWrites(ctx context.Context, targetKeyspace, workflowName string, timeout time.Duration,
-	cancel, reverse, reverseReplication bool, dryRun bool) (journalID int64, dryRunResults *[]string, err error) {
-	ts, ws, err := s.getWorkflowState(ctx, targetKeyspace, workflowName)
-	_ = ws
-	if err != nil {
-		ts.Logger().Errorf("getWorkflowState failed: %v", err)
-		return 0, nil, err
-	}
-	if ts == nil {
-		errorMsg := fmt.Sprintf("workflow %s not found in keyspace %s", workflowName, targetKeyspace)
-		ts.Logger().Errorf(errorMsg)
-		return 0, nil, fmt.Errorf(errorMsg)
-	}
-
-	var sw iswitcher
-	if dryRun {
-		sw = &switcherDryRun{ts: ts, drLog: NewLogRecorder()}
-	} else {
-		sw = &switcher{ts: ts, s: s}
-	}
-
-	if ts.frozen {
-		ts.Logger().Warningf("Writes have already been switched for workflow %s, nothing to do here", ts.WorkflowName())
-		return 0, sw.logs(), nil
-	}
-
-	ts.Logger().Infof("Built switching metadata: %+v", ts)
-	if err := ts.validate(ctx); err != nil {
-		ts.Logger().Errorf("validate failed: %v", err)
-		return 0, nil, err
-	}
-
-	if reverseReplication {
-		err := areTabletsAvailableToStreamFrom(ctx, ts, ts.TargetKeyspaceName(), ts.TargetShards())
-		if err != nil {
-			return 0, nil, err
-		}
-	}
-
-	// Need to lock both source and target keyspaces.
-	tctx, sourceUnlock, lockErr := sw.lockKeyspace(ctx, ts.SourceKeyspaceName(), "SwitchWrites")
-	if lockErr != nil {
-		ts.Logger().Errorf("LockKeyspace failed: %v", lockErr)
-		return 0, nil, lockErr
-	}
-	ctx = tctx
-	defer sourceUnlock(&err)
-	if ts.TargetKeyspaceName() != ts.SourceKeyspaceName() {
-		tctx, targetUnlock, lockErr := sw.lockKeyspace(ctx, ts.TargetKeyspaceName(), "SwitchWrites")
-		if lockErr != nil {
-			ts.Logger().Errorf("LockKeyspace failed: %v", lockErr)
-			return 0, nil, lockErr
-		}
-		ctx = tctx
-		defer targetUnlock(&err)
-	}
-
-	// If no journals exist, sourceWorkflows will be initialized by sm.MigrateStreams.
-	journalsExist, sourceWorkflows, err := ts.checkJournals(ctx)
-	if err != nil {
-		ts.Logger().Errorf("checkJournals failed: %v", err)
-		return 0, nil, err
-	}
-	if !journalsExist {
-		ts.Logger().Infof("No previous journals were found. Proceeding normally.")
-		sm, err := BuildStreamMigrator(ctx, ts, cancel)
-		if err != nil {
-			ts.Logger().Errorf("buildStreamMigrater failed: %v", err)
-			return 0, nil, err
-		}
-		if cancel {
-			sw.cancelMigration(ctx, sm)
-			return 0, sw.logs(), nil
-		}
-
-		ts.Logger().Infof("Stopping streams")
-		sourceWorkflows, err = sw.stopStreams(ctx, sm)
-		if err != nil {
-			ts.Logger().Errorf("stopStreams failed: %v", err)
-			for key, streams := range sm.Streams() {
-				for _, stream := range streams {
-					ts.Logger().Errorf("stream in stopStreams: key %s shard %s stream %+v", key, stream.BinlogSource.Shard, stream.BinlogSource)
-				}
-			}
-			sw.cancelMigration(ctx, sm)
-			return 0, nil, err
-		}
-
-		ts.Logger().Infof("Stopping source writes")
-		if err := sw.stopSourceWrites(ctx); err != nil {
-			ts.Logger().Errorf("stopSourceWrites failed: %v", err)
-			sw.cancelMigration(ctx, sm)
-			return 0, nil, err
-		}
-
-		if ts.MigrationType() == binlogdatapb.MigrationType_TABLES {
-			ts.Logger().Infof("Executing LOCK TABLES on source tables %d times", lockTablesCycles)
-			// Doing this twice with a pause in-between to catch any writes that may have raced in between
-			// the tablet's deny list check and the first mysqld side table lock.
-			for cnt := 1; cnt <= lockTablesCycles; cnt++ {
-				if err := ts.executeLockTablesOnSource(ctx); err != nil {
-					ts.Logger().Errorf("Failed to execute LOCK TABLES (attempt %d of %d) on sources: %v", cnt, lockTablesCycles, err)
-					sw.cancelMigration(ctx, sm)
-					return 0, nil, err
-				}
-				// No need to UNLOCK the tables as the connection was closed once the locks were acquired
-				// and thus the locks released.
-				time.Sleep(lockTablesCycleDelay)
-			}
-		}
-
-		ts.Logger().Infof("Waiting for streams to catchup")
-		if err := sw.waitForCatchup(ctx, timeout); err != nil {
-			ts.Logger().Errorf("waitForCatchup failed: %v", err)
-			sw.cancelMigration(ctx, sm)
-			return 0, nil, err
-		}
-
-		ts.Logger().Infof("Migrating streams")
-		if err := sw.migrateStreams(ctx, sm); err != nil {
-			ts.Logger().Errorf("migrateStreams failed: %v", err)
-			sw.cancelMigration(ctx, sm)
-			return 0, nil, err
-		}
-
-		ts.Logger().Infof("Creating reverse streams")
-		if err := sw.createReverseVReplication(ctx); err != nil {
-			ts.Logger().Errorf("createReverseVReplication failed: %v", err)
-			sw.cancelMigration(ctx, sm)
-			return 0, nil, err
-		}
-	} else {
-		if cancel {
-			err := fmt.Errorf("traffic switching has reached the point of no return, cannot cancel")
-			ts.Logger().Errorf("%v", err)
-			return 0, nil, err
-		}
-		ts.Logger().Infof("Journals were found. Completing the left over steps.")
-		// Need to gather positions in case all journals were not created.
-		if err := ts.gatherPositions(ctx); err != nil {
-			ts.Logger().Errorf("gatherPositions failed: %v", err)
-			return 0, nil, err
-		}
-	}
-
-	// This is the point of no return. Once a journal is created,
-	// traffic can be redirected to target shards.
-	if err := sw.createJournals(ctx, sourceWorkflows); err != nil {
-		ts.Logger().Errorf("createJournals failed: %v", err)
-		return 0, nil, err
-	}
-	if err := sw.allowTargetWrites(ctx); err != nil {
-		ts.Logger().Errorf("allowTargetWrites failed: %v", err)
-		return 0, nil, err
-	}
-	if err := sw.changeRouting(ctx); err != nil {
-		ts.Logger().Errorf("changeRouting failed: %v", err)
-		return 0, nil, err
-	}
-	if err := sw.streamMigraterfinalize(ctx, ts, sourceWorkflows); err != nil {
-		ts.Logger().Errorf("finalize failed: %v", err)
-		return 0, nil, err
-	}
-	if reverseReplication {
-		if err := sw.startReverseVReplication(ctx); err != nil {
-			ts.Logger().Errorf("startReverseVReplication failed: %v", err)
-			return 0, nil, err
-		}
-	}
-
-	if err := sw.freezeTargetVReplication(ctx); err != nil {
-		ts.Logger().Errorf("deleteTargetVReplication failed: %v", err)
-		return 0, nil, err
-	}
-
-	return ts.id, sw.logs(), nil
 }
 
 // VReplicationExec executes a query remotely using the DBA pool
