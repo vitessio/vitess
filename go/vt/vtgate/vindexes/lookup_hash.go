@@ -48,7 +48,7 @@ func init() {
 // LookupHash defines a vindex that uses a lookup table.
 // The table is expected to define the id column as unique. It's
 // NonUnique and a Lookup.
-// Warning: This Vindex is being depcreated in favor of Lookup
+// Warning: This Vindex is being deprecated in favor of Lookup
 type LookupHash struct {
 	name      string
 	writeOnly bool
