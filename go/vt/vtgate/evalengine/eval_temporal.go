@@ -2,7 +2,6 @@ package evalengine
 
 import (
 	"time"
-	"unicode/utf8"
 
 	"vitess.io/vitess/go/hack"
 	"vitess.io/vitess/go/mysql/datetime"
@@ -154,35 +153,6 @@ func newEvalDate(d datetime.Date) *evalTemporal {
 
 func newEvalTime(time datetime.Time, l int) *evalTemporal {
 	return &evalTemporal{t: sqltypes.Time, dt: datetime.DateTime{Time: time.Round(l)}, prec: uint8(l)}
-}
-
-func sanitizeErrorValue(s []byte) []byte {
-	b := make([]byte, 0, len(s)+1)
-	invalid := false // previous byte was from an invalid UTF-8 sequence
-	for i := 0; i < len(s); {
-		c := s[i]
-		if c < utf8.RuneSelf {
-			i++
-			invalid = false
-			if c != 0 {
-				b = append(b, c)
-			}
-			continue
-		}
-		_, wid := utf8.DecodeRune(s[i:])
-		if wid == 1 {
-			i++
-			if !invalid {
-				invalid = true
-				b = append(b, '?')
-			}
-			continue
-		}
-		invalid = false
-		b = append(b, s[i:i+wid]...)
-		i += wid
-	}
-	return b
 }
 
 func errIncorrectTemporal(date string, in []byte) error {
