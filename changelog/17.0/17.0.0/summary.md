@@ -90,7 +90,7 @@ time for the restore process to complete. Otherwise, the restore will throw an e
 
 ### <a id="Vttablet-TxThrottler"> Vttablet's transaction throttler now also throttles DML outside of `BEGIN; ...; COMMIT;` blocks
 Prior to v17, `vttablet`'s transaction throttler (enabled with `--enable-tx-throttler`) would only throttle requests done inside an explicit transaction, i.e., a `BEGIN; ...; COMMIT;` block.
-In v17 [PR#13037](https://github.com/vitessio/vitess/issues/13037), this behavior was being changed so that it also throttles work outside of explicit transactions for `INSERT/UPDATE/DELETE/LOAD` queries.
+In v17 [PR#13040](https://github.com/vitessio/vitess/issues/13037), this behavior was being changed so that it also throttles work outside of explicit transactions for `INSERT/UPDATE/DELETE/LOAD` queries.
 
 ### <a id="new-flag"/> New command line flags and behavior
 
