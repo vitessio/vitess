@@ -322,6 +322,10 @@ func getFlagHooksFor(cmd string) (hooks []func(fs *pflag.FlagSet)) {
 	return hooks
 }
 
+// Needed because some tests require multiple parse passes, so we guard against
+// that here.
+var debugConfigRegisterOnce sync.Once
+
 // ParseFlags initializes flags and handles the common case when no positional
 // arguments are expected.
 func ParseFlags(cmd string) {
@@ -347,7 +351,9 @@ func ParseFlags(cmd string) {
 		log.Exitf("%s: failed to read in config: %s", cmd, err.Error())
 	}
 	OnTerm(watchCancel)
-	HTTPHandleFunc("/debug/config", viperdebug.HandlerFunc)
+	debugConfigRegisterOnce.Do(func() {
+		HTTPHandleFunc("/debug/config", viperdebug.HandlerFunc)
+	})
 
 	logutil.PurgeLogs()
 }
@@ -386,7 +392,9 @@ func ParseFlagsWithArgs(cmd string) []string {
 		log.Exitf("%s: failed to read in config: %s", cmd, err.Error())
 	}
 	OnTerm(watchCancel)
-	HTTPHandleFunc("/debug/config", viperdebug.HandlerFunc)
+	debugConfigRegisterOnce.Do(func() {
+		HTTPHandleFunc("/debug/config", viperdebug.HandlerFunc)
+	})
 
 	logutil.PurgeLogs()
 
