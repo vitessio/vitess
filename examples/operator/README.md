@@ -2,7 +2,7 @@
 
 ```
 # Start minikube
-minikube start --cpus=8 --memory=11000 --disk-size=50g --kubernetes-version=v1.26.3
+minikube start --cpus=8 --memory=11000 --disk-size=50g --kubernetes-version=v1.25.8
 
 # Install Operator
 kubectl apply -f operator.yaml
