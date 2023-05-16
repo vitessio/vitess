@@ -184,7 +184,7 @@ func (this *RowMap) GetTime(key string) time.Time {
 var knownDBs map[string]*sql.DB = make(map[string]*sql.DB)
 var knownDBsMutex = &sync.Mutex{}
 
-// GetDB returns a DB instance based on uri.
+// GetGenericDB returns a DB instance based on uri.
 // bool result indicates whether the DB was returned from cache; err
 func GetGenericDB(driverName, dataSourceName string) (*sql.DB, bool, error) {
 	knownDBsMutex.Lock()

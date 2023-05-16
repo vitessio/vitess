@@ -134,6 +134,12 @@ func (cmp *Comparator) SQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return cmp.RefOfArgumentLessWindowExpr(a, b)
+	case *AssignmentExpr:
+		b, ok := inB.(*AssignmentExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfAssignmentExpr(a, b)
 	case *AutoIncSpec:
 		b, ok := inB.(*AutoIncSpec)
 		if !ok {
@@ -788,6 +794,12 @@ func (cmp *Comparator) SQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return cmp.RefOfLineStringExpr(a, b)
+	case *LinestrPropertyFuncExpr:
+		b, ok := inB.(*LinestrPropertyFuncExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfLinestrPropertyFuncExpr(a, b)
 	case ListArg:
 		b, ok := inB.(ListArg)
 		if !ok {
@@ -1792,6 +1804,18 @@ func (cmp *Comparator) RefOfArgumentLessWindowExpr(a, b *ArgumentLessWindowExpr)
 	}
 	return a.Type == b.Type &&
 		cmp.RefOfOverClause(a.OverClause, b.OverClause)
+}
+
+// RefOfAssignmentExpr does deep equals between the two objects.
+func (cmp *Comparator) RefOfAssignmentExpr(a, b *AssignmentExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return cmp.Expr(a.Left, b.Left) &&
+		cmp.Expr(a.Right, b.Right)
 }
 
 // RefOfAutoIncSpec does deep equals between the two objects.
@@ -3167,6 +3191,19 @@ func (cmp *Comparator) RefOfLineStringExpr(a, b *LineStringExpr) bool {
 		return false
 	}
 	return cmp.Exprs(a.PointParams, b.PointParams)
+}
+
+// RefOfLinestrPropertyFuncExpr does deep equals between the two objects.
+func (cmp *Comparator) RefOfLinestrPropertyFuncExpr(a, b *LinestrPropertyFuncExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Property == b.Property &&
+		cmp.Expr(a.Linestring, b.Linestring) &&
+		cmp.Expr(a.PropertyDefArg, b.PropertyDefArg)
 }
 
 // RefOfLiteral does deep equals between the two objects.
@@ -5261,6 +5298,12 @@ func (cmp *Comparator) Callable(inA, inB Callable) bool {
 			return false
 		}
 		return cmp.RefOfLineStringExpr(a, b)
+	case *LinestrPropertyFuncExpr:
+		b, ok := inB.(*LinestrPropertyFuncExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfLinestrPropertyFuncExpr(a, b)
 	case *LocateExpr:
 		b, ok := inB.(*LocateExpr)
 		if !ok {
@@ -5633,6 +5676,12 @@ func (cmp *Comparator) Expr(inA, inB Expr) bool {
 			return false
 		}
 		return cmp.RefOfArgumentLessWindowExpr(a, b)
+	case *AssignmentExpr:
+		b, ok := inB.(*AssignmentExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfAssignmentExpr(a, b)
 	case *Avg:
 		b, ok := inB.(*Avg)
 		if !ok {
@@ -5981,6 +6030,12 @@ func (cmp *Comparator) Expr(inA, inB Expr) bool {
 			return false
 		}
 		return cmp.RefOfLineStringExpr(a, b)
+	case *LinestrPropertyFuncExpr:
+		b, ok := inB.(*LinestrPropertyFuncExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfLinestrPropertyFuncExpr(a, b)
 	case ListArg:
 		b, ok := inB.(ListArg)
 		if !ok {

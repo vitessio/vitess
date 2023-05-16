@@ -58,6 +58,10 @@ func (s *SubQueryInner) Clone(inputs []ops.Operator) ops.Operator {
 	}
 }
 
+func (s *SubQueryInner) GetOrdering() ([]ops.OrderBy, error) {
+	return s.Inner.GetOrdering()
+}
+
 // Inputs implements the Operator interface
 func (s *SubQueryInner) Inputs() []ops.Operator {
 	return []ops.Operator{s.Inner}
@@ -81,6 +85,10 @@ func (s *SubQuery) Clone(inputs []ops.Operator) ops.Operator {
 		result.Inner = append(result.Inner, inner)
 	}
 	return result
+}
+
+func (s *SubQuery) GetOrdering() ([]ops.OrderBy, error) {
+	return s.Outer.GetOrdering()
 }
 
 // Inputs implements the Operator interface
@@ -124,8 +132,17 @@ func (s *SubQuery) Description() ops.OpDescription {
 		OperatorType: "SubQuery",
 	}
 }
+
 func (s *SubQueryInner) Description() ops.OpDescription {
 	return ops.OpDescription{
 		OperatorType: "SubQueryInner",
 	}
+}
+
+func (s *SubQuery) ShortDescription() string {
+	return ""
+}
+
+func (s *SubQueryInner) ShortDescription() string {
+	return ""
 }

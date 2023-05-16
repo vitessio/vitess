@@ -55,6 +55,7 @@ type tablePlanBuilder struct {
 	colInfos          []*ColumnInfo
 	stats             *binlogplayer.Stats
 	source            *binlogdatapb.BinlogSource
+	pkIndices         []bool
 }
 
 // colExpr describes the processing to be performed to
@@ -358,9 +359,13 @@ func (tpb *tablePlanBuilder) generate() *TablePlan {
 		Update:                  tpb.generateUpdateStatement(),
 		Delete:                  tpb.generateDeleteStatement(),
 		PKReferences:            pkrefs,
+		PKIndices:               tpb.pkIndices,
 		Stats:                   tpb.stats,
 		FieldsToSkip:            fieldsToSkip,
-		HasExtraSourcePkColumns: (len(tpb.extraSourcePkCols) > 0),
+		HasExtraSourcePkColumns: len(tpb.extraSourcePkCols) > 0,
+		TablePlanBuilder:        tpb,
+		PartialInserts:          make(map[string]*sqlparser.ParsedQuery, 0),
+		PartialUpdates:          make(map[string]*sqlparser.ParsedQuery, 0),
 	}
 }
 
@@ -576,8 +581,8 @@ func (tpb *tablePlanBuilder) analyzePK(cols []*ColumnInfo) error {
 }
 
 // analyzeExtraSourcePkCols builds tpb.extraSourcePkCols.
-// Vreplication allows source and target tables to use different unique keys. Normally, both will
-// use same PRIMARY KEY. Other times, same other UNIQUE KEY. Byut it's possible that cource and target
+// VReplication allows source and target tables to use different unique keys. Normally, both will
+// use same PRIMARY KEY. Other times, same other UNIQUE KEY. But it's possible that source and target
 // unique keys will only have partial (or empty) shared list of columns.
 // To be able to generate UPDATE/DELETE queries correctly, we need to know the identities of the
 // source unique key columns, that are not already part of the target unique key columns. We call
@@ -766,7 +771,11 @@ func (tpb *tablePlanBuilder) generateUpdateStatement() *sqlparser.ParsedQuery {
 	buf := sqlparser.NewTrackedBuffer(bvf.formatter)
 	buf.Myprintf("update %v set ", tpb.name)
 	separator := ""
-	for _, cexpr := range tpb.colExprs {
+	tpb.pkIndices = make([]bool, len(tpb.colExprs))
+	for i, cexpr := range tpb.colExprs {
+		if cexpr.isPK {
+			tpb.pkIndices[i] = true
+		}
 		if cexpr.isGrouped || cexpr.isPK {
 			continue
 		}

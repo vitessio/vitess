@@ -37,9 +37,9 @@ var (
 	replicaLagTolerance = 1 * time.Minute
 
 	vreplicationHeartbeatUpdateInterval = 1
-	vreplicationExperimentalFlags       = int64(0x01) // enable vreplicationExperimentalFlagOptimizeInserts by default
-	vreplicationStoreCompressedGTID     = false
-	vreplicationParallelInsertWorkers   = 1
+
+	vreplicationStoreCompressedGTID   = false
+	vreplicationParallelInsertWorkers = 1
 )
 
 func registerVReplicationFlags(fs *pflag.FlagSet) {
@@ -62,7 +62,6 @@ func registerVReplicationFlags(fs *pflag.FlagSet) {
 	// 		you have too many streams the extra write qps or cpu load due to these updates are unacceptable
 	//		you have too many streams and/or a large source field (lot of participating tables) which generates unacceptable increase in your binlog size
 	fs.IntVar(&vreplicationHeartbeatUpdateInterval, "vreplication_heartbeat_update_interval", vreplicationHeartbeatUpdateInterval, "Frequency (in seconds, default 1, max 60) at which the time_updated column of a vreplication stream when idling")
-	fs.Int64Var(&vreplicationExperimentalFlags, "vreplication_experimental_flags", vreplicationExperimentalFlags, "(Bitmask) of experimental features in vreplication to enable")
 	fs.BoolVar(&vreplicationStoreCompressedGTID, "vreplication_store_compressed_gtid", vreplicationStoreCompressedGTID, "Store compressed gtids in the pos column of the sidecar database's vreplication table")
 
 	// deprecated flags (7.0), however there are several e2e tests that still depend on them

@@ -86,7 +86,7 @@ var inputComparisonElement = []string{
 }
 
 var inputConversions = []string{
-	"0", "1", "255",
+	"0", "1", "255", "' 0 '", "' 1 '", "' 255 '", `'\t1foo\t'`, "' 255 foo'",
 	"0.0e0", "1.0e0", "1.5e0", "-1.5e0", "1.1e0", "-1.1e0", "-1.7e0",
 	"0.0", "0.000", "1.5", "-1.5", "1.1", "1.7", "-1.1", "-1.7", "'1.5'", "'-1.5'",
 	`'foobar'`, `_utf8 'foobar'`, `''`, `_binary 'foobar'`,
@@ -155,7 +155,6 @@ var inputStrings = []string{
 	"-9223372036854775808",
 	"999999999999999999999999",
 	"-999999999999999999999999",
-	"_latin1 X'ÂÄÌå'",
 	"_binary 'Müller' ",
 	"_utf8mb4 'abcABCÅå'",
 	// TODO: support other multibyte encodings
@@ -212,4 +211,65 @@ var dateFormats = []struct {
 	{'Y', "YEAR(d)"},
 	{'y', "RIGHT(YEAR(d),2)"},
 	{'%', ""},
+}
+
+var inputTrimStrings = []string{
+	"\" Å å\" ",
+	"NULL",
+	"\"\"",
+	"\"a\"",
+	"\"abc\"",
+	"'abca'",
+	"1",
+	"-1",
+	"0123",
+	"0xAACC",
+	"3.1415926",
+	"\" 中文测试\"",
+	"\"日本語テスト \"",
+	"\"한국어 시험\"",
+	"\" 😊😂🤢\r\t \"",
+	"'123'",
+	"9223372036854775807",
+	"-9223372036854775808",
+	"999999999999999999999999",
+	"-999999999999999999999999",
+	"_binary 'Müller\r\n' ",
+	"_utf8mb4 '\nabcABCÅå '",
+	// utf8mb4 version of the non-breaking space
+	"_utf8mb4 0xC2A078C2A0",
+	// TODO: support other multibyte encodings
+	// latin1 version of the non-breaking space
+	///"_latin1 0xA078A0",
+}
+
+var ipInputs = []string{
+	"NULL",
+	"'10.0.5.9'",
+	"'10.0.5.256'",
+	"'fdfe::5a55:caff:fefa:9089'",
+	"'::ffff:10.0.5.9'",
+	"'::10.0.5.9'",
+	"'198.51.100.1'",
+	"'::c0a8:0001'",
+	"'::c0a8:1'",
+	"'::ffff:198.51.100.1'",
+	"'::ffff:c0a8:0001'",
+	"'::ffff:c0a8:1'",
+	"'::'",
+	"'::1'",
+	"'::ff'",
+	"'::ffff'",
+	"'::1:ffff'",
+	"'127.0.0.1'",
+	"'::ffff:'",
+	"'foobar'",
+	"167773449",
+	strconv.FormatInt(math.MinInt32, 10),
+	strconv.FormatInt(math.MinInt32-1, 10),
+	strconv.FormatUint(math.MaxInt32, 10),
+	strconv.FormatUint(math.MaxInt32+1, 10),
+	strconv.FormatUint(math.MaxUint32, 10),
+	strconv.FormatUint(math.MaxUint32+1, 10),
+	"0x0000000000000000000000000A000509",
 }

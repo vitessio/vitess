@@ -40,11 +40,6 @@ type (
 	}
 )
 
-var _ ops.PhysicalOperator = (*Table)(nil)
-
-// IPhysical implements the PhysicalOperator interface
-func (to *Table) IPhysical() {}
-
 // Clone implements the Operator interface
 func (to *Table) Clone([]ops.Operator) ops.Operator {
 	var columns []*sqlparser.ColName
@@ -77,8 +72,12 @@ func (to *Table) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.Ali
 	return to, offset, nil
 }
 
-func (to *Table) GetColumns() ([]sqlparser.Expr, error) {
+func (to *Table) GetColumns() ([]*sqlparser.AliasedExpr, error) {
 	return slices2.Map(to.Columns, colNameToExpr), nil
+}
+
+func (to *Table) GetOrdering() ([]ops.OrderBy, error) {
+	return nil, nil
 }
 
 func (to *Table) GetColNames() []*sqlparser.ColName {
@@ -120,4 +119,8 @@ func (to *Table) Description() ops.OpDescription {
 		OperatorType: "Table",
 		Other:        map[string]any{"Columns": columns},
 	}
+}
+
+func (to *Table) ShortDescription() string {
+	return to.VTable.String()
 }

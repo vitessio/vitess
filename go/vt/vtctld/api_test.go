@@ -22,12 +22,12 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
-	"net/http/httptest"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/vt/servenv/testutils"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/wrangler"
 
@@ -46,7 +46,7 @@ func TestAPI(t *testing.T) {
 	cells := []string{"cell1", "cell2"}
 	ts := memorytopo.NewServer(cells...)
 	actionRepo := NewActionRepository(ts)
-	server := httptest.NewServer(nil)
+	server := testutils.HTTPTestServer()
 	defer server.Close()
 
 	ks1 := &topodatapb.Keyspace{

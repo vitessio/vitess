@@ -183,9 +183,9 @@ func NewExecutor(
 		stats.NewCounterFunc("QueryPlanCacheMisses", "Query plan cache misses", func() int64 {
 			return e.plans.Misses()
 		})
-		http.Handle(pathQueryPlans, e)
-		http.Handle(pathScatterStats, e)
-		http.Handle(pathVSchema, e)
+		servenv.HTTPHandle(pathQueryPlans, e)
+		servenv.HTTPHandle(pathScatterStats, e)
+		servenv.HTTPHandle(pathVSchema, e)
 	})
 	return e
 }
@@ -986,6 +986,11 @@ func (e *Executor) getPlan(
 	vcursor.SetIgnoreMaxMemoryRows(sqlparser.IgnoreMaxMaxMemoryRowsDirective(stmt))
 	vcursor.SetConsolidator(sqlparser.Consolidator(stmt))
 	vcursor.SetWorkloadName(sqlparser.GetWorkloadNameFromStatement(stmt))
+	priority, err := sqlparser.GetPriorityFromStatement(stmt)
+	if err != nil {
+		return nil, err
+	}
+	vcursor.SetPriority(priority)
 
 	setVarComment, err := prepareSetVarComment(vcursor, stmt)
 	if err != nil {

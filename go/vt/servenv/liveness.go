@@ -29,7 +29,7 @@ import (
 // further behind on its backlog.
 
 func init() {
-	http.HandleFunc("/debug/liveness", func(rw http.ResponseWriter, r *http.Request) {
+	HTTPHandleFunc("/debug/liveness", func(rw http.ResponseWriter, r *http.Request) {
 		// Do nothing. Return success immediately.
 	})
 }

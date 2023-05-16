@@ -320,8 +320,22 @@ func buildQuery(op ops.Operator, qb *queryBuilder) error {
 		return buildHorizon(op, qb)
 	case *Limit:
 		return buildLimit(op, qb)
+	case *Ordering:
+		return buildOrdering(op, qb)
 	default:
 		return vterrors.VT13001(fmt.Sprintf("do not know how to turn %T into SQL", op))
+	}
+	return nil
+}
+
+func buildOrdering(op *Ordering, qb *queryBuilder) error {
+	err := buildQuery(op.Source, qb)
+	if err != nil {
+		return err
+	}
+
+	for _, order := range op.Order {
+		qb.sel.AddOrder(order.Inner)
 	}
 	return nil
 }
@@ -357,6 +371,7 @@ func buildProjection(op *Projection, qb *queryBuilder) error {
 	}
 
 	qb.clearProjections()
+
 	for i, column := range op.Columns {
 		ae := &sqlparser.AliasedExpr{Expr: column.GetExpr()}
 		if op.ColumnNames[i] != "" {
@@ -364,6 +379,17 @@ func buildProjection(op *Projection, qb *queryBuilder) error {
 		}
 		qb.addProjection(ae)
 	}
+
+	// if the projection is on derived table, we use the select we have
+	// created above and transform it into a derived table
+	if op.TableID != nil {
+		sel := qb.sel.(*sqlparser.Select)
+		qb.sel = nil
+		qb.addTableExpr(op.Alias, op.Alias, TableID(op), &sqlparser.DerivedTable{
+			Select: sel,
+		}, nil, nil)
+	}
+
 	return nil
 }
 

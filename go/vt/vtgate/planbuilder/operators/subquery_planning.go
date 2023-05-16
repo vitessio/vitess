@@ -285,7 +285,7 @@ func tryMergeSubqueryWithJoin(
 	merger merger,
 	subQueryInner *SubQueryInner,
 	lhs semantics.TableSet, // these are the tables made available because we are on the RHS of a join
-) (ops.PhysicalOperator, error) {
+) (ops.Operator, error) {
 	// Trying to merge the subquery with the left-hand or right-hand side of the join
 
 	if outerOp.LeftJoin {

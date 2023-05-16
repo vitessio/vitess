@@ -34,16 +34,11 @@ type Filter struct {
 	FinalPredicate evalengine.Expr
 }
 
-var _ ops.PhysicalOperator = (*Filter)(nil)
-
 func newFilter(op ops.Operator, expr sqlparser.Expr) ops.Operator {
 	return &Filter{
 		Source: op, Predicates: []sqlparser.Expr{expr},
 	}
 }
-
-// IPhysical implements the PhysicalOperator interface
-func (f *Filter) IPhysical() {}
 
 // Clone implements the Operator interface
 func (f *Filter) Clone(inputs []ops.Operator) ops.Operator {
@@ -96,8 +91,12 @@ func (f *Filter) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.Ali
 	return f, offset, nil
 }
 
-func (f *Filter) GetColumns() ([]sqlparser.Expr, error) {
+func (f *Filter) GetColumns() ([]*sqlparser.AliasedExpr, error) {
 	return f.Source.GetColumns()
+}
+
+func (f *Filter) GetOrdering() ([]ops.OrderBy, error) {
+	return f.Source.GetOrdering()
 }
 
 func (f *Filter) Compact(*plancontext.PlanningContext) (ops.Operator, rewrite.ApplyResult, error) {
@@ -145,4 +144,8 @@ func (f *Filter) Description() ops.OpDescription {
 			"Predicate": sqlparser.String(sqlparser.AndExpressions(f.Predicates...)),
 		},
 	}
+}
+
+func (f *Filter) ShortDescription() string {
+	return sqlparser.String(sqlparser.AndExpressions(f.Predicates...))
 }

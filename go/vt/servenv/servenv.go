@@ -29,8 +29,6 @@ limitations under the License.
 package servenv
 
 import (
-	// register the HTTP handlers for profiling
-	_ "net/http/pprof"
 	"net/url"
 	"os"
 	"os/signal"

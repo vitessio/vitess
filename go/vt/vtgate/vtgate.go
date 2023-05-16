@@ -411,13 +411,13 @@ func resolveAndLoadKeyspace(ctx context.Context, srvResolver *srvtopo.Resolver, 
 }
 
 func (vtg *VTGate) registerDebugEnvHandler() {
-	http.HandleFunc("/debug/env", func(w http.ResponseWriter, r *http.Request) {
+	servenv.HTTPHandleFunc("/debug/env", func(w http.ResponseWriter, r *http.Request) {
 		debugEnvHandler(vtg, w, r)
 	})
 }
 
 func (vtg *VTGate) registerDebugHealthHandler() {
-	http.HandleFunc("/debug/health", func(w http.ResponseWriter, r *http.Request) {
+	servenv.HTTPHandleFunc("/debug/health", func(w http.ResponseWriter, r *http.Request) {
 		if err := acl.CheckAccessHTTP(r, acl.MONITORING); err != nil {
 			acl.SendError(w, err)
 			return

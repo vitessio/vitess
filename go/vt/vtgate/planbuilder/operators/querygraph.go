@@ -17,6 +17,8 @@ limitations under the License.
 package operators
 
 import (
+	"strings"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
@@ -195,6 +197,10 @@ func (qg *QueryGraph) Clone(inputs []ops.Operator) ops.Operator {
 	return result
 }
 
+func (qg *QueryGraph) GetOrdering() ([]ops.OrderBy, error) {
+	return nil, nil
+}
+
 func (qg *QueryGraph) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (ops.Operator, error) {
 	for _, e := range sqlparser.SplitAndExpression(nil, expr) {
 		err := qg.collectPredicate(ctx, e)
@@ -217,13 +223,19 @@ func (qt *QueryTable) Clone() *QueryTable {
 }
 
 func (qg *QueryGraph) Description() ops.OpDescription {
-	var tables []string
+	return ops.OpDescription{
+		OperatorType: "QueryGraph",
+		Other:        map[string]any{"Tables": qg.tableNames()},
+	}
+}
+
+func (qg *QueryGraph) tableNames() (tables []string) {
 	for _, table := range qg.Tables {
 		tables = append(tables, sqlparser.String(table.Table))
 	}
+	return
+}
 
-	return ops.OpDescription{
-		OperatorType: "QueryGraph",
-		Other:        map[string]any{"Tables": tables},
-	}
+func (qg *QueryGraph) ShortDescription() string {
+	return strings.Join(qg.tableNames(), ", ")
 }

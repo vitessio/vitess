@@ -859,12 +859,18 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 	defer lockConn.Recycle()
 	defer lockConn.Exec(ctx, sqlUnlockTables, 1, false)
 
+	renameCompleteChan := make(chan error)
+	renameWasSuccessful := false
 	renameConn, err := e.pool.Get(ctx, nil)
 	if err != nil {
 		return err
 	}
 	defer renameConn.Recycle()
-	defer renameConn.Kill("premature exit while renaming tables", 0)
+	defer func() {
+		if !renameWasSuccessful {
+			renameConn.Kill("premature exit while renaming tables", 0)
+		}
+	}()
 	renameQuery := sqlparser.BuildParsedQuery(sqlSwapTables, onlineDDL.Table, sentryTableName, vreplTable, onlineDDL.Table, sentryTableName, vreplTable)
 
 	waitForRenameProcess := func() error {
@@ -890,8 +896,6 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 			}
 		}
 	}
-
-	renameCompleteChan := make(chan error)
 
 	bufferingCtx, bufferingContextCancel := context.WithCancel(ctx)
 	defer bufferingContextCancel()
@@ -1044,6 +1048,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 				if err := <-renameCompleteChan; err != nil {
 					return err
 				}
+				renameWasSuccessful = true
 			}
 		}
 	}

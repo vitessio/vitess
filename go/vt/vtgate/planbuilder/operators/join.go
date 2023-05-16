@@ -47,6 +47,10 @@ func (j *Join) Clone(inputs []ops.Operator) ops.Operator {
 	}
 }
 
+func (j *Join) GetOrdering() ([]ops.OrderBy, error) {
+	return nil, nil
+}
+
 // Inputs implements the Operator interface
 func (j *Join) Inputs() []ops.Operator {
 	return []ops.Operator{j.LHS, j.RHS}
@@ -162,4 +166,8 @@ func (j *Join) Description() ops.OpDescription {
 			"Predicate": sqlparser.String(j.Predicate),
 		},
 	}
+}
+
+func (j *Join) ShortDescription() string {
+	return sqlparser.String(j.Predicate)
 }

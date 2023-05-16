@@ -18,6 +18,7 @@ package testcases
 
 import (
 	"encoding/base64"
+	"encoding/hex"
 	"fmt"
 	"math"
 	"strconv"
@@ -35,6 +36,7 @@ var Cases = []TestCase{
 	{Run: CharsetConversionOperators},
 	{Run: CaseExprWithPredicate},
 	{Run: CaseExprWithValue},
+	{Run: If},
 	{Run: Base64},
 	{Run: Conversion},
 	{Run: LargeDecimals},
@@ -52,7 +54,9 @@ var Cases = []TestCase{
 	{Run: NegateArithmetic},
 	{Run: CollationOperations},
 	{Run: LikeComparison},
+	{Run: StrcmpComparison},
 	{Run: MultiComparisons},
+	{Run: IntervalStatement},
 	{Run: IsStatement},
 	{Run: NotStatement},
 	{Run: LogicalStatement},
@@ -65,8 +69,19 @@ var Cases = []TestCase{
 	{Run: FnLength},
 	{Run: FnBitLength},
 	{Run: FnAscii},
+	{Run: FnOrd},
 	{Run: FnRepeat},
+	{Run: FnLeft},
+	{Run: FnLpad},
+	{Run: FnRight},
+	{Run: FnRpad},
+	{Run: FnLTrim},
+	{Run: FnRTrim},
+	{Run: FnTrim},
+	{Run: FnConcat},
+	{Run: FnConcatWs},
 	{Run: FnHex},
+	{Run: FnUnhex},
 	{Run: FnCeil},
 	{Run: FnFloor},
 	{Run: FnAbs},
@@ -123,6 +138,14 @@ var Cases = []TestCase{
 	{Run: FnWeekOfYear},
 	{Run: FnYear},
 	{Run: FnYearWeek},
+	{Run: FnInetAton},
+	{Run: FnInetNtoa},
+	{Run: FnInet6Aton},
+	{Run: FnInet6Ntoa},
+	{Run: FnIsIPv4},
+	{Run: FnIsIPv4Compat},
+	{Run: FnIsIPv4Mapped},
+	{Run: FnIsIPv6},
 }
 
 func JSONPathOperations(yield Query) {
@@ -698,11 +721,27 @@ func CaseExprWithValue(yield Query) {
 	}
 }
 
+func If(yield Query) {
+	var elements []string
+	elements = append(elements, inputBitwise...)
+	elements = append(elements, inputComparisonElement...)
+
+	for _, cmpbase := range elements {
+		for _, val1 := range elements {
+			for _, val2 := range elements {
+				yield(fmt.Sprintf("if(%s, %s, %s)", cmpbase, val1, val2), nil)
+			}
+		}
+	}
+}
+
 func Base64(yield Query) {
 	var inputs = []string{
 		`'bGlnaHQgdw=='`,
 		`'bGlnaHQgd28='`,
 		`'bGlnaHQgd29y'`,
+		// MySQL trims whitespace
+		`'  \t\r\n  bGlnaHQgd28=  \n \t '`,
 	}
 
 	inputs = append(inputs, inputConversions...)
@@ -997,6 +1036,39 @@ func LikeComparison(yield Query) {
 	}
 }
 
+func StrcmpComparison(yield Query) {
+	inputs := append([]string{
+		`'foobar'`, `'FOOBAR'`,
+		`'1234'`, `1234`,
+		`_utf8mb4 'foobar' COLLATE utf8mb4_0900_as_cs`,
+		`_utf8mb4 'FOOBAR' COLLATE utf8mb4_0900_as_cs`,
+		`_utf8mb4 'foobar' COLLATE utf8mb4_0900_as_ci`,
+		`_utf8mb4 'FOOBAR' COLLATE utf8mb4_0900_as_ci`,
+		`'foo%'`, `'FOO%'`, `'foo_ar'`, `'FOO_AR'`,
+		`'12%'`, `'12_4'`, `'12x4'`, `'12$4'`,
+		`_utf8mb4 '12_4' COLLATE utf8mb4_0900_as_cs`,
+		`_utf8mb4 '12_4' COLLATE utf8mb4_0900_ai_ci`,
+		`_utf8mb4 '12x4' COLLATE utf8mb4_0900_as_cs`,
+		`_utf8mb4 '12x4' COLLATE utf8mb4_0900_ai_ci`,
+		`_utf8mb4 '12$4' COLLATE utf8mb4_0900_as_cs`,
+		`_utf8mb4 '12$4' COLLATE utf8mb4_0900_ai_ci`,
+		`_utf8mb4 'foo%' COLLATE utf8mb4_0900_as_cs`,
+		`_utf8mb4 'FOO%' COLLATE utf8mb4_0900_as_cs`,
+		`_utf8mb4 'foo_ar' COLLATE utf8mb4_0900_as_cs`,
+		`_utf8mb4 'FOO_AR' COLLATE utf8mb4_0900_as_cs`,
+		`_utf8mb4 'foo%' COLLATE utf8mb4_0900_as_ci`,
+		`_utf8mb4 'FOO%' COLLATE utf8mb4_0900_as_ci`,
+		`_utf8mb4 'foo_ar' COLLATE utf8mb4_0900_as_ci`,
+		`_utf8mb4 'FOO_AR' COLLATE utf8mb4_0900_as_ci`,
+	}, inputConversions...)
+
+	for _, lhs := range inputs {
+		for _, rhs := range inputs {
+			yield(fmt.Sprintf("STRCMP(%s, %s)", lhs, rhs), nil)
+		}
+	}
+}
+
 func MultiComparisons(yield Query) {
 	var numbers = []string{
 		`0`, `-1`, `1`, `0.0`, `1.0`, `-1.0`, `1.0E0`, `-1.0E0`, `0.0E0`,
@@ -1038,6 +1110,28 @@ func MultiComparisons(yield Query) {
 			yield(fmt.Sprintf("%s(%s, %s, %s)", method, arg[0], arg[1], arg[2]), nil)
 			yield(fmt.Sprintf("%s(%s, %s, %s)", method, arg[2], arg[1], arg[0]), nil)
 		})
+	}
+}
+
+func IntervalStatement(yield Query) {
+	inputs := []string{
+		"-1", "0", "1", "2", "3", "0xFF", "1.1", "1.9", "1.1e0", "1.9e0",
+		strconv.FormatUint(math.MaxUint64, 10),
+		strconv.FormatUint(math.MaxInt64, 10),
+		strconv.FormatUint(math.MaxInt64+1, 10),
+		strconv.FormatInt(math.MinInt64, 10),
+		"18446744073709551616",
+		"-9223372036854775809",
+		`"foobar"`, "NULL", "cast('invalid' as json)",
+	}
+	for _, base := range inputs {
+		for _, arg1 := range inputs {
+			for _, arg2 := range inputs {
+				for _, arg3 := range inputs {
+					yield(fmt.Sprintf("INTERVAL(%s, %s, %s, %s)", base, arg1, arg2, arg3), nil)
+				}
+			}
+		}
 	}
 }
 
@@ -1207,11 +1301,141 @@ func FnAscii(yield Query) {
 	}
 }
 
+func FnOrd(yield Query) {
+	for _, str := range inputStrings {
+		yield(fmt.Sprintf("ORD(%s)", str), nil)
+	}
+}
+
 func FnRepeat(yield Query) {
 	counts := []string{"-1", "1.9", "3", "1073741825", "'1.9'"}
 	for _, str := range inputStrings {
 		for _, cnt := range counts {
-			yield(fmt.Sprintf("repeat(%s, %s)", str, cnt), nil)
+			yield(fmt.Sprintf("REPEAT(%s, %s)", str, cnt), nil)
+		}
+	}
+}
+
+func FnLeft(yield Query) {
+	counts := []string{"-1", "1.9", "3", "10", "'1.9'"}
+	for _, str := range inputStrings {
+		for _, cnt := range counts {
+			yield(fmt.Sprintf("LEFT(%s, %s)", str, cnt), nil)
+		}
+	}
+}
+
+func FnLpad(yield Query) {
+	counts := []string{"-1", "1.9", "3", "10", "'1.9'"}
+	for _, str := range inputStrings {
+		for _, cnt := range counts {
+			for _, pad := range inputStrings {
+				yield(fmt.Sprintf("LPAD(%s, %s, %s)", str, cnt, pad), nil)
+			}
+		}
+	}
+}
+
+func FnRight(yield Query) {
+	counts := []string{"-1", "1.9", "3", "10", "'1.9'"}
+	for _, str := range inputStrings {
+		for _, cnt := range counts {
+			yield(fmt.Sprintf("RIGHT(%s, %s)", str, cnt), nil)
+		}
+	}
+}
+
+func FnRpad(yield Query) {
+	counts := []string{"-1", "1.9", "3", "10", "'1.9'"}
+	for _, str := range inputStrings {
+		for _, cnt := range counts {
+			for _, pad := range inputStrings {
+				yield(fmt.Sprintf("RPAD(%s, %s, %s)", str, cnt, pad), nil)
+			}
+		}
+	}
+}
+
+func FnLTrim(yield Query) {
+	for _, str := range inputTrimStrings {
+		yield(fmt.Sprintf("LTRIM(%s)", str), nil)
+	}
+}
+
+func FnRTrim(yield Query) {
+	for _, str := range inputTrimStrings {
+		yield(fmt.Sprintf("RTRIM(%s)", str), nil)
+	}
+}
+
+func FnTrim(yield Query) {
+	for _, str := range inputTrimStrings {
+		yield(fmt.Sprintf("TRIM(%s)", str), nil)
+	}
+
+	modes := []string{"LEADING", "TRAILING", "BOTH"}
+	for _, str := range inputTrimStrings {
+		for _, mode := range modes {
+			yield(fmt.Sprintf("TRIM(%s FROM %s)", mode, str), nil)
+		}
+	}
+
+	for _, str := range inputTrimStrings {
+		for _, pat := range inputTrimStrings {
+			yield(fmt.Sprintf("TRIM(%s FROM %s)", pat, str), nil)
+			for _, mode := range modes {
+				yield(fmt.Sprintf("TRIM(%s %s FROM %s)", mode, pat, str), nil)
+			}
+		}
+	}
+}
+
+func FnConcat(yield Query) {
+	for _, str := range inputStrings {
+		yield(fmt.Sprintf("CONCAT(%s)", str), nil)
+	}
+
+	for _, str1 := range inputConversions {
+		for _, str2 := range inputConversions {
+			yield(fmt.Sprintf("CONCAT(%s, %s)", str1, str2), nil)
+		}
+	}
+
+	for _, str1 := range inputStrings {
+		for _, str2 := range inputStrings {
+			for _, str3 := range inputStrings {
+				yield(fmt.Sprintf("CONCAT(%s, %s, %s)", str1, str2, str3), nil)
+			}
+		}
+	}
+}
+
+func FnConcatWs(yield Query) {
+	for _, str := range inputStrings {
+		yield(fmt.Sprintf("CONCAT_WS(%s, NULL)", str), nil)
+	}
+
+	for _, str1 := range inputConversions {
+		for _, str2 := range inputStrings {
+			for _, str3 := range inputStrings {
+				yield(fmt.Sprintf("CONCAT_WS(%s, %s, %s)", str1, str2, str3), nil)
+			}
+		}
+	}
+
+	for _, str1 := range inputStrings {
+		for _, str2 := range inputConversions {
+			for _, str3 := range inputStrings {
+				yield(fmt.Sprintf("CONCAT_WS(%s, %s, %s)", str1, str2, str3), nil)
+			}
+		}
+	}
+
+	for _, str1 := range inputStrings {
+		for _, str2 := range inputStrings {
+			for _, str3 := range inputConversions {
+				yield(fmt.Sprintf("CONCAT_WS(%s, %s, %s)", str1, str2, str3), nil)
+			}
 		}
 	}
 }
@@ -1227,6 +1451,26 @@ func FnHex(yield Query) {
 
 	for _, str := range inputBitwise {
 		yield(fmt.Sprintf("hex(%s)", str), nil)
+	}
+}
+
+func FnUnhex(yield Query) {
+	var inputs = []string{
+		`'f'`,
+		`'fe'`,
+		`'fea'`,
+		`'666F6F626172'`,
+		// MySQL trims whitespace
+		`'  \t\r\n  4f  \n \t '`,
+	}
+
+	inputs = append(inputs, inputConversions...)
+	for _, input := range inputConversions {
+		inputs = append(inputs, "'"+hex.EncodeToString([]byte(input))+"'")
+	}
+
+	for _, lhs := range inputs {
+		yield(fmt.Sprintf("UNHEX(%s)", lhs), nil)
 	}
 }
 
@@ -1484,5 +1728,57 @@ func FnYearWeek(yield Query) {
 	}
 	for _, d := range inputConversions {
 		yield(fmt.Sprintf("YEARWEEK(%s)", d), nil)
+	}
+}
+
+func FnInetAton(yield Query) {
+	for _, d := range ipInputs {
+		yield(fmt.Sprintf("INET_ATON(%s)", d), nil)
+	}
+}
+
+func FnInetNtoa(yield Query) {
+	for _, d := range ipInputs {
+		yield(fmt.Sprintf("INET_NTOA(%s)", d), nil)
+		yield(fmt.Sprintf("INET_NTOA(INET_ATON(%s))", d), nil)
+	}
+}
+
+func FnInet6Aton(yield Query) {
+	for _, d := range ipInputs {
+		yield(fmt.Sprintf("INET6_ATON(%s)", d), nil)
+	}
+}
+
+func FnInet6Ntoa(yield Query) {
+	for _, d := range ipInputs {
+		yield(fmt.Sprintf("INET6_NTOA(%s)", d), nil)
+		yield(fmt.Sprintf("INET6_NTOA(INET6_ATON(%s))", d), nil)
+	}
+}
+
+func FnIsIPv4(yield Query) {
+	for _, d := range ipInputs {
+		yield(fmt.Sprintf("IS_IPV4(%s)", d), nil)
+	}
+}
+
+func FnIsIPv4Compat(yield Query) {
+	for _, d := range ipInputs {
+		yield(fmt.Sprintf("IS_IPV4_COMPAT(%s)", d), nil)
+		yield(fmt.Sprintf("IS_IPV4_COMPAT(INET6_ATON(%s))", d), nil)
+	}
+}
+
+func FnIsIPv4Mapped(yield Query) {
+	for _, d := range ipInputs {
+		yield(fmt.Sprintf("IS_IPV4_MAPPED(%s)", d), nil)
+		yield(fmt.Sprintf("IS_IPV4_MAPPED(INET6_ATON(%s))", d), nil)
+	}
+}
+
+func FnIsIPv6(yield Query) {
+	for _, d := range ipInputs {
+		yield(fmt.Sprintf("IS_IPV6(%s)", d), nil)
 	}
 }

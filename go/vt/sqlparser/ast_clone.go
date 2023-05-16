@@ -59,6 +59,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfArgument(in)
 	case *ArgumentLessWindowExpr:
 		return CloneRefOfArgumentLessWindowExpr(in)
+	case *AssignmentExpr:
+		return CloneRefOfAssignmentExpr(in)
 	case *AutoIncSpec:
 		return CloneRefOfAutoIncSpec(in)
 	case *Avg:
@@ -277,6 +279,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfLimit(in)
 	case *LineStringExpr:
 		return CloneRefOfLineStringExpr(in)
+	case *LinestrPropertyFuncExpr:
+		return CloneRefOfLinestrPropertyFuncExpr(in)
 	case ListArg:
 		return in
 	case *Literal:
@@ -727,6 +731,17 @@ func CloneRefOfArgumentLessWindowExpr(n *ArgumentLessWindowExpr) *ArgumentLessWi
 	}
 	out := *n
 	out.OverClause = CloneRefOfOverClause(n.OverClause)
+	return &out
+}
+
+// CloneRefOfAssignmentExpr creates a deep clone of the input.
+func CloneRefOfAssignmentExpr(n *AssignmentExpr) *AssignmentExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Left = CloneExpr(n.Left)
+	out.Right = CloneExpr(n.Right)
 	return &out
 }
 
@@ -1908,6 +1923,17 @@ func CloneRefOfLineStringExpr(n *LineStringExpr) *LineStringExpr {
 	}
 	out := *n
 	out.PointParams = CloneExprs(n.PointParams)
+	return &out
+}
+
+// CloneRefOfLinestrPropertyFuncExpr creates a deep clone of the input.
+func CloneRefOfLinestrPropertyFuncExpr(n *LinestrPropertyFuncExpr) *LinestrPropertyFuncExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Linestring = CloneExpr(n.Linestring)
+	out.PropertyDefArg = CloneExpr(n.PropertyDefArg)
 	return &out
 }
 
@@ -3472,6 +3498,8 @@ func CloneCallable(in Callable) Callable {
 		return CloneRefOfLagLeadExpr(in)
 	case *LineStringExpr:
 		return CloneRefOfLineStringExpr(in)
+	case *LinestrPropertyFuncExpr:
+		return CloneRefOfLinestrPropertyFuncExpr(in)
 	case *LocateExpr:
 		return CloneRefOfLocateExpr(in)
 	case *MatchExpr:
@@ -3638,6 +3666,8 @@ func CloneExpr(in Expr) Expr {
 		return CloneRefOfArgument(in)
 	case *ArgumentLessWindowExpr:
 		return CloneRefOfArgumentLessWindowExpr(in)
+	case *AssignmentExpr:
+		return CloneRefOfAssignmentExpr(in)
 	case *Avg:
 		return CloneRefOfAvg(in)
 	case *BetweenExpr:
@@ -3754,6 +3784,8 @@ func CloneExpr(in Expr) Expr {
 		return CloneRefOfLagLeadExpr(in)
 	case *LineStringExpr:
 		return CloneRefOfLineStringExpr(in)
+	case *LinestrPropertyFuncExpr:
+		return CloneRefOfLinestrPropertyFuncExpr(in)
 	case ListArg:
 		return in
 	case *Literal:

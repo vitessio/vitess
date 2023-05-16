@@ -56,16 +56,11 @@ func (v *Vindex) Introduces() semantics.TableSet {
 	return v.Solved
 }
 
-// IPhysical implements the PhysicalOperator interface
-func (v *Vindex) IPhysical() {}
-
 // Clone implements the Operator interface
 func (v *Vindex) Clone([]ops.Operator) ops.Operator {
 	clone := *v
 	return &clone
 }
-
-var _ ops.PhysicalOperator = (*Vindex)(nil)
 
 func (v *Vindex) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr) (ops.Operator, int, error) {
 	offset, err := addColumn(ctx, v, expr.Expr)
@@ -76,10 +71,19 @@ func (v *Vindex) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.Ali
 	return v, offset, nil
 }
 
-func colNameToExpr(c *sqlparser.ColName) sqlparser.Expr { return c }
+func colNameToExpr(c *sqlparser.ColName) *sqlparser.AliasedExpr {
+	return &sqlparser.AliasedExpr{
+		Expr: c,
+		As:   sqlparser.IdentifierCI{},
+	}
+}
 
-func (v *Vindex) GetColumns() ([]sqlparser.Expr, error) {
+func (v *Vindex) GetColumns() ([]*sqlparser.AliasedExpr, error) {
 	return slices2.Map(v.Columns, colNameToExpr), nil
+}
+
+func (v *Vindex) GetOrdering() ([]ops.OrderBy, error) {
+	return nil, nil
 }
 
 func (v *Vindex) GetColNames() []*sqlparser.ColName {
@@ -148,4 +152,8 @@ func (v *Vindex) TablesUsed() []string {
 
 func (v *Vindex) Description() ops.OpDescription {
 	return ops.OpDescription{OperatorType: "Vindex"}
+}
+
+func (v *Vindex) ShortDescription() string {
+	return v.Vindex.String()
 }

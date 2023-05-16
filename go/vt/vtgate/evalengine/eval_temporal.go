@@ -225,11 +225,11 @@ func evalToTime(e eval, l int) *evalTemporal {
 	case *evalTemporal:
 		return e.toTime(precision(l, int(e.prec)))
 	case *evalBytes:
-		if t, l, _ := datetime.ParseTime(e.string(), l); !t.IsZero() {
-			return newEvalTime(t, l)
-		}
 		if dt, l, _ := datetime.ParseDateTime(e.string(), l); !dt.IsZero() {
 			return newEvalTime(dt.Time, l)
+		}
+		if t, l, ok := datetime.ParseTime(e.string(), l); ok || !t.IsZero() {
+			return newEvalTime(t, l)
 		}
 	case *evalInt64:
 		if t, ok := datetime.ParseTimeInt64(e.i); ok {
