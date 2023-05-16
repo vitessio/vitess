@@ -2685,7 +2685,7 @@ func TestExecutorTruncateErrors(t *testing.T) {
 	_, err = executor.Prepare(context.Background(), "TestExecute", session, "invalid statement", nil)
 	assert.EqualError(t, err, "[BUG] unrecognized p [TRUNCATED]")
 }
-  
+
 func TestExecutorFlushStmt(t *testing.T) {
 	executor, _, _, _ := createExecutorEnv()
 
