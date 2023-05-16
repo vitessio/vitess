@@ -47,7 +47,7 @@ var (
 		},
 	)
 	minNumTablets = viperutil.Configure(
-		"discovery.min_number_serving_vttablets",
+		configKey("min_number_serving_vttablets"),
 		viperutil.Options[int]{
 			FlagName: "min_number_serving_vttablets",
 			Default:  2,
