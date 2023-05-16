@@ -2665,6 +2665,27 @@ func TestExecutorPrepareExecute(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestExecutorTruncateErrors(t *testing.T) {
+	save := truncateErrorLen
+	truncateErrorLen = 32
+	defer func() { truncateErrorLen = save }()
+
+	executor, _, _, _ := createExecutorEnv()
+	session := NewSafeSession(&vtgatepb.Session{})
+	fn := func(r *sqltypes.Result) error {
+		return nil
+	}
+
+	_, err := executor.Execute(ctx, "TestExecute", session, "invalid statement", nil)
+	assert.EqualError(t, err, "syntax error at posi [TRUNCATED]")
+
+	err = executor.StreamExecute(ctx, "TestExecute", session, "invalid statement", nil, fn)
+	assert.EqualError(t, err, "syntax error at posi [TRUNCATED]")
+
+	_, err = executor.Prepare(context.Background(), "TestExecute", session, "invalid statement", nil)
+	assert.EqualError(t, err, "[BUG] unrecognized p [TRUNCATED]")
+}
+
 func TestExecutorFlushStmt(t *testing.T) {
 	executor, _, _, _ := createExecutorEnv()
 
