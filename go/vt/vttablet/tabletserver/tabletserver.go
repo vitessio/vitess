@@ -491,7 +491,7 @@ func (tsv *TabletServer) begin(ctx context.Context, target *querypb.Target, save
 		target, options, false, /* allowOnShutdown */
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
 			startTime := time.Now()
-			if tsv.txThrottler.Throttle(tsv.getPriorityFromOptions(options), nil) {
+			if tsv.txThrottler.Throttle(tsv.getPriorityFromOptions(options)) {
 				return vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "Transaction throttled")
 			}
 			var connSetting *pools.Setting
@@ -774,9 +774,6 @@ func (tsv *TabletServer) execute(ctx context.Context, target *querypb.Target, sq
 			}
 			if err = plan.IsValid(reservedID != 0, len(settings) > 0); err != nil {
 				return err
-			}
-			if tsv.txThrottler.Throttle(tsv.getPriorityFromOptions(options), &plan.PlanID) {
-				return vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "Transaction throttled")
 			}
 			// If both the values are non-zero then by design they are same value. So, it is safe to overwrite.
 			connID := reservedID

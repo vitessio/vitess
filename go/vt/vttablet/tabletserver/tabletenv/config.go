@@ -156,7 +156,6 @@ func registerTabletEnvFlags(fs *pflag.FlagSet) {
 	flagutil.DualFormatStringVar(fs, &currentConfig.TxThrottlerConfig, "tx_throttler_config", defaultConfig.TxThrottlerConfig, "The configuration of the transaction throttler as a text formatted throttlerdata.Configuration protocol buffer message")
 	flagutil.DualFormatStringListVar(fs, &currentConfig.TxThrottlerHealthCheckCells, "tx_throttler_healthcheck_cells", defaultConfig.TxThrottlerHealthCheckCells, "A comma-separated list of cells. Only tabletservers running in these cells will be monitored for replication lag by the transaction throttler.")
 	fs.IntVar(&currentConfig.TxThrottlerDefaultPriority, "tx-throttler-default-priority", defaultConfig.TxThrottlerDefaultPriority, "Default priority assigned to queries that lack priority information")
-	fs.BoolVar(&currentConfig.TxThrottlerAutoCommit, "tx-throttler-auto-commit", defaultConfig.TxThrottlerAutoCommit, "Whether the transaction throttler acts also on auto-commit statements (i.e. statements issued outside of BEGIN; ... ; COMMIT; blocks)")
 
 	fs.BoolVar(&enableHotRowProtection, "enable_hot_row_protection", false, "If true, incoming transactions for the same row (range) will be queued and cannot consume all txpool slots.")
 	fs.BoolVar(&enableHotRowProtectionDryRun, "enable_hot_row_protection_dry_run", false, "If true, hot row protection is not enforced but logs if transactions would have been queued.")
@@ -337,7 +336,6 @@ type TabletConfig struct {
 	TxThrottlerConfig           string   `json:"-"`
 	TxThrottlerHealthCheckCells []string `json:"-"`
 	TxThrottlerDefaultPriority  int      `json:"-"`
-	TxThrottlerAutoCommit       bool     `json:"-"`
 
 	EnableLagThrottler bool `json:"-"`
 	EnableTableGC      bool `json:"-"` // can be turned off programmatically by tests
@@ -769,7 +767,6 @@ var defaultConfig = TabletConfig{
 	TxThrottlerConfig:           defaultTxThrottlerConfig(),
 	TxThrottlerHealthCheckCells: []string{},
 	TxThrottlerDefaultPriority:  sqlparser.MaxPriorityValue, // This leads to all queries being candidates to throttle
-	TxThrottlerAutoCommit:       false,
 
 	EnableLagThrottler: false, // Feature flag; to switch to 'true' at some stage in the future
 
