@@ -33,10 +33,9 @@ import (
 //
 // It fails the test if a caller attempts to stub the same value multiple times
 // to a particular viper.
-func Stub[T any](t *testing.T, v *viper.Viper, val viperutil.Value[T]) (reset func()) {
+func Stub[T any](t *testing.T, v *viper.Viper, val viperutil.Value[T]) func() {
 	t.Helper()
 
-	reset = func() {}
 	if !assert.False(t, v.InConfig(val.Key()), "value for key %s already stubbed", val.Key()) {
 		return func() {}
 	}
