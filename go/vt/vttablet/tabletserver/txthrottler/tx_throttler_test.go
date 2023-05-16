@@ -50,7 +50,8 @@ func TestDisabledThrottler(t *testing.T) {
 	})
 	assert.Nil(t, throttler.Open())
 	assert.False(t, throttler.Throttle(0))
-	assert.Zero(t, throttler.throttlerRunning.Get())
+	throttlerImpl, _ := throttler.(*txThrottler)
+	assert.Zero(t, throttlerImpl.throttlerRunning.Get())
 	throttler.Close()
 }
 

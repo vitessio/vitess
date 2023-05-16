@@ -111,7 +111,7 @@ type TabletServer struct {
 	tracker      *schema.Tracker
 	watcher      *BinlogWatcher
 	qe           *QueryEngine
-	txThrottler  *txthrottler.TxThrottler
+	txThrottler  txthrottler.TxThrottler
 	te           *TxEngine
 	messager     *messager.Engine
 	hs           *healthStreamer
@@ -492,7 +492,7 @@ func (tsv *TabletServer) begin(ctx context.Context, target *querypb.Target, save
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
 			startTime := time.Now()
 			if tsv.txThrottler.Throttle(tsv.getPriorityFromOptions(options)) {
-				return vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "Transaction throttled")
+				return errTxThrottled
 			}
 			var connSetting *pools.Setting
 			if len(settings) > 0 {
