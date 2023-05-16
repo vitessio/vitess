@@ -272,7 +272,7 @@ func recoverDeadPrimary(ctx context.Context, analysisEntry inst.ReplicationAnaly
 		_ = AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("found an active or recent recovery on %+v. Will not issue another RecoverDeadPrimary.", analysisEntry.AnalyzedInstanceKey))
 		return false, nil, err
 	}
-	log.Infof("Analysis: %v, deadprimary %+v", analysisEntry.Analysis, analysisEntry.AnalyzedInstanceKey)
+	log.Infof("Analysis: %v, deadprimary %+v with candidate %s", analysisEntry.Analysis, analysisEntry.AnalyzedInstanceKey, candidateTabletAlias)
 	var promotedReplica *inst.Instance
 	// This has to be done in the end; whether successful or not, we should mark that the recovery is done.
 	// So that after the active period passes, we are able to run other recoveries.
@@ -652,6 +652,7 @@ func executeCheckAndRecoverFunction(analysisEntry inst.ReplicationAnalysis, cand
 	// changes, we should be checking that this failure is indeed needed to be fixed. We do this after locking the shard to be sure
 	// that the data that we use now is up-to-date.
 	if isActionableRecovery {
+		log.Errorf("executeCheckAndRecoverFunction: Proceeding with %v recovery validation after acquiring shard lock.", analysisEntry.Analysis)
 		// The first step we have to do is refresh the keyspace information
 		// This is required to know if the durability policies have changed or not
 		// If they have, then recoveries like ReplicaSemiSyncMustNotBeSet, etc won't be valid anymore
@@ -663,7 +664,13 @@ func executeCheckAndRecoverFunction(analysisEntry inst.ReplicationAnalysis, cand
 		// of a shard because a new tablet could have been promoted, and we need to have this visibility before we
 		// run a cluster operation of our own.
 		if isClusterWideRecovery(checkAndRecoverFunctionCode) {
-			forceRefreshAllTabletsInShard(ctx, analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard)
+			var tabletsToIgnore []string
+			if checkAndRecoverFunctionCode == recoverDeadPrimaryFunc {
+				tabletsToIgnore = append(tabletsToIgnore, topoproto.TabletAliasString(analysisEntry.AnalyzedInstanceAlias))
+			}
+			// We ignore the dead primary tablet because it is going to be unreachable. If all the other tablets aren't able to reach this tablet either,
+			// we can proceed with the dead primary recovery. We don't need to refresh the information for this dead tablet.
+			forceRefreshAllTabletsInShard(ctx, analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard, tabletsToIgnore)
 		} else {
 			// If we are not running a cluster-wide recovery, then it is only concerned with the specific tablet
 			// on which the failure occurred and the primary instance of the shard.
@@ -724,12 +731,12 @@ func executeCheckAndRecoverFunction(analysisEntry inst.ReplicationAnalysis, cand
 	} else {
 		log.Infof("Topology recovery: %+v", topologyRecovery)
 	}
-	// If we ran a cluster wide recovery and actually attemped it, then we know that the replication state for all the tablets in this cluster
+	// If we ran a cluster wide recovery and actually attempted it, then we know that the replication state for all the tablets in this cluster
 	// would have changed. So we can go ahead and pre-emptively refresh them.
 	// For this refresh we don't use the same context that we used for the recovery, since that context might have expired or could expire soon
 	// Instead we pass the background context. The call forceRefreshAllTabletsInShard handles adding a timeout to it for us.
 	if isClusterWideRecovery(checkAndRecoverFunctionCode) {
-		forceRefreshAllTabletsInShard(context.Background(), analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard)
+		forceRefreshAllTabletsInShard(context.Background(), analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard, nil)
 	} else {
 		// For all other recoveries, we would have changed the replication status of the analyzed tablet
 		// so it doesn't hurt to re-read the information of this tablet, otherwise we'll requeue the same recovery

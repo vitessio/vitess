@@ -373,6 +373,7 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 		countCoPrimaryReplicas := m.GetUint("count_co_primary_replicas")
 		a.IsCoPrimary = m.GetBool("is_co_primary") || (countCoPrimaryReplicas > 0)
 		a.AnalyzedInstanceKey = InstanceKey{Hostname: m.GetString("hostname"), Port: m.GetInt("port")}
+		a.AnalyzedInstanceAlias = tablet.Alias
 		a.AnalyzedInstancePrimaryKey = InstanceKey{Hostname: m.GetString("source_host"), Port: m.GetInt("source_port")}
 		a.AnalyzedInstanceDataCenter = m.GetString("data_center")
 		a.AnalyzedInstanceRegion = m.GetString("region")

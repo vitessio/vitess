@@ -212,6 +212,7 @@ func tryCreateTxThrottler(env tabletenv.Env, topoServer *topo.Server) (*TxThrott
 
 	return newTxThrottler(env, topoServer, &txThrottlerConfig{
 		enabled:          true,
+		topoServer:       topoServer,
 		tabletTypes:      env.Config().TxThrottlerTabletTypes,
 		throttlerConfig:  &throttlerConfig,
 		healthCheckCells: healthCheckCells,
