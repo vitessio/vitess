@@ -78,6 +78,8 @@ var Cases = []TestCase{
 	{Run: FnLTrim},
 	{Run: FnRTrim},
 	{Run: FnTrim},
+	{Run: FnConcat},
+	{Run: FnConcatWs},
 	{Run: FnHex},
 	{Run: FnUnhex},
 	{Run: FnCeil},
@@ -1383,6 +1385,56 @@ func FnTrim(yield Query) {
 			yield(fmt.Sprintf("TRIM(%s FROM %s)", pat, str), nil)
 			for _, mode := range modes {
 				yield(fmt.Sprintf("TRIM(%s %s FROM %s)", mode, pat, str), nil)
+			}
+		}
+	}
+}
+
+func FnConcat(yield Query) {
+	for _, str := range inputStrings {
+		yield(fmt.Sprintf("CONCAT(%s)", str), nil)
+	}
+
+	for _, str1 := range inputConversions {
+		for _, str2 := range inputConversions {
+			yield(fmt.Sprintf("CONCAT(%s, %s)", str1, str2), nil)
+		}
+	}
+
+	for _, str1 := range inputStrings {
+		for _, str2 := range inputStrings {
+			for _, str3 := range inputStrings {
+				yield(fmt.Sprintf("CONCAT(%s, %s, %s)", str1, str2, str3), nil)
+			}
+		}
+	}
+}
+
+func FnConcatWs(yield Query) {
+	for _, str := range inputStrings {
+		yield(fmt.Sprintf("CONCAT_WS(%s, NULL)", str), nil)
+	}
+
+	for _, str1 := range inputConversions {
+		for _, str2 := range inputStrings {
+			for _, str3 := range inputStrings {
+				yield(fmt.Sprintf("CONCAT_WS(%s, %s, %s)", str1, str2, str3), nil)
+			}
+		}
+	}
+
+	for _, str1 := range inputStrings {
+		for _, str2 := range inputConversions {
+			for _, str3 := range inputStrings {
+				yield(fmt.Sprintf("CONCAT_WS(%s, %s, %s)", str1, str2, str3), nil)
+			}
+		}
+	}
+
+	for _, str1 := range inputStrings {
+		for _, str2 := range inputStrings {
+			for _, str3 := range inputConversions {
+				yield(fmt.Sprintf("CONCAT_WS(%s, %s, %s)", str1, str2, str3), nil)
 			}
 		}
 	}

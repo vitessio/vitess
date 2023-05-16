@@ -44,7 +44,7 @@ var collationBinary = collations.TypedCollation{
 
 var collationJSON = collations.TypedCollation{
 	Collation:    46, // utf8mb4_bin
-	Coercibility: collations.CoerceCoercible,
+	Coercibility: collations.CoerceImplicit,
 	Repertoire:   collations.RepertoireUnicode,
 }
 
