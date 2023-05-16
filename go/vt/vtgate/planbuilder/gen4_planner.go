@@ -18,6 +18,7 @@ package planbuilder
 
 import (
 	"fmt"
+	"time"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -51,6 +52,7 @@ func gen4SelectStmtPlanner(
 	reservedVars *sqlparser.ReservedVars,
 	vschema plancontext.VSchema,
 ) (*planResult, error) {
+	time.Sleep(10 * time.Millisecond)
 	switch node := stmt.(type) {
 	case *sqlparser.Select:
 		if node.With != nil {
