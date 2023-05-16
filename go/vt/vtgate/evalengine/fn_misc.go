@@ -72,7 +72,7 @@ var _ Expr = (*builtinIsIPV4Compat)(nil)
 var _ Expr = (*builtinIsIPV4Mapped)(nil)
 var _ Expr = (*builtinIsIPV6)(nil)
 
-func (call builtinInetAton) eval(env *ExpressionEnv) (eval, error) {
+func (call *builtinInetAton) eval(env *ExpressionEnv) (eval, error) {
 	arg, err := call.arg1(env)
 	if arg == nil || err != nil {
 		return nil, err
@@ -85,11 +85,11 @@ func (call builtinInetAton) eval(env *ExpressionEnv) (eval, error) {
 	return newEvalUint64(uint64(binary.BigEndian.Uint32(ip.AsSlice()))), nil
 }
 
-func (call builtinInetAton) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+func (call *builtinInetAton) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
 	return sqltypes.Uint64, flagNullable
 }
 
-func (call builtinInetAton) compile(c *compiler) (ctype, error) {
+func (call *builtinInetAton) compile(c *compiler) (ctype, error) {
 	str, err := call.Arguments[0].compile(c)
 	if err != nil {
 		return ctype{}, err
@@ -109,7 +109,7 @@ func (call builtinInetAton) compile(c *compiler) (ctype, error) {
 	return ctype{Type: sqltypes.Uint64, Flag: flagNullable, Col: collationNumeric}, nil
 }
 
-func (call builtinInetNtoa) eval(env *ExpressionEnv) (eval, error) {
+func (call *builtinInetNtoa) eval(env *ExpressionEnv) (eval, error) {
 	arg, err := call.arg1(env)
 	if arg == nil || err != nil {
 		return nil, err
@@ -124,12 +124,12 @@ func (call builtinInetNtoa) eval(env *ExpressionEnv) (eval, error) {
 	return newEvalText(hack.StringBytes(netip.AddrFrom4([4]byte(b)).String()), defaultCoercionCollation(call.collate)), nil
 }
 
-func (call builtinInetNtoa) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+func (call *builtinInetNtoa) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
 	_, t := call.Arguments[0].typeof(env, fields)
 	return sqltypes.VarChar, t | flagNullable
 }
 
-func (call builtinInetNtoa) compile(c *compiler) (ctype, error) {
+func (call *builtinInetNtoa) compile(c *compiler) (ctype, error) {
 	arg, err := call.Arguments[0].compile(c)
 	if err != nil {
 		return ctype{}, err
@@ -145,7 +145,7 @@ func (call builtinInetNtoa) compile(c *compiler) (ctype, error) {
 	return ctype{Type: sqltypes.VarChar, Flag: flagNullable, Col: defaultCoercionCollation(call.collate)}, nil
 }
 
-func (call builtinInet6Aton) eval(env *ExpressionEnv) (eval, error) {
+func (call *builtinInet6Aton) eval(env *ExpressionEnv) (eval, error) {
 	arg, err := call.arg1(env)
 	if arg == nil || err != nil {
 		return nil, err
@@ -159,11 +159,11 @@ func (call builtinInet6Aton) eval(env *ExpressionEnv) (eval, error) {
 	return newEvalBinary(b), nil
 }
 
-func (call builtinInet6Aton) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+func (call *builtinInet6Aton) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
 	return sqltypes.VarBinary, flagNullable
 }
 
-func (call builtinInet6Aton) compile(c *compiler) (ctype, error) {
+func (call *builtinInet6Aton) compile(c *compiler) (ctype, error) {
 	str, err := call.Arguments[0].compile(c)
 	if err != nil {
 		return ctype{}, err
@@ -215,7 +215,7 @@ func isIPv4Compat(addr netip.Addr) bool {
 	return true
 }
 
-func (call builtinInet6Ntoa) eval(env *ExpressionEnv) (eval, error) {
+func (call *builtinInet6Ntoa) eval(env *ExpressionEnv) (eval, error) {
 	arg, err := call.arg1(env)
 	if arg == nil || err != nil {
 		return nil, err
@@ -237,11 +237,11 @@ func (call builtinInet6Ntoa) eval(env *ExpressionEnv) (eval, error) {
 	return newEvalText(hack.StringBytes(ip.String()), defaultCoercionCollation(call.collate)), nil
 }
 
-func (call builtinInet6Ntoa) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+func (call *builtinInet6Ntoa) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
 	return sqltypes.VarChar, flagNullable
 }
 
-func (call builtinInet6Ntoa) compile(c *compiler) (ctype, error) {
+func (call *builtinInet6Ntoa) compile(c *compiler) (ctype, error) {
 	arg, err := call.Arguments[0].compile(c)
 	if err != nil {
 		return ctype{}, err
@@ -260,7 +260,7 @@ func (call builtinInet6Ntoa) compile(c *compiler) (ctype, error) {
 	return ctype{Type: sqltypes.VarChar, Flag: flagNullable, Col: defaultCoercionCollation(call.collate)}, nil
 }
 
-func (call builtinIsIPV4) eval(env *ExpressionEnv) (eval, error) {
+func (call *builtinIsIPV4) eval(env *ExpressionEnv) (eval, error) {
 	arg, err := call.arg1(env)
 	if arg == nil || err != nil {
 		return nil, err
@@ -273,12 +273,12 @@ func (call builtinIsIPV4) eval(env *ExpressionEnv) (eval, error) {
 	return newEvalBool(ip.Is4()), nil
 }
 
-func (call builtinIsIPV4) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+func (call *builtinIsIPV4) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
 	_, t := call.Arguments[0].typeof(env, fields)
 	return sqltypes.Int64, t
 }
 
-func (call builtinIsIPV4) compile(c *compiler) (ctype, error) {
+func (call *builtinIsIPV4) compile(c *compiler) (ctype, error) {
 	arg, err := call.Arguments[0].compile(c)
 	if err != nil {
 		return ctype{}, err
@@ -297,7 +297,7 @@ func (call builtinIsIPV4) compile(c *compiler) (ctype, error) {
 	return ctype{Type: sqltypes.Int64, Flag: arg.Flag | flagIsBoolean, Col: collationNumeric}, nil
 }
 
-func (call builtinIsIPV4Compat) eval(env *ExpressionEnv) (eval, error) {
+func (call *builtinIsIPV4Compat) eval(env *ExpressionEnv) (eval, error) {
 	arg, err := call.arg1(env)
 	if arg == nil || err != nil {
 		return nil, err
@@ -311,11 +311,11 @@ func (call builtinIsIPV4Compat) eval(env *ExpressionEnv) (eval, error) {
 	return newEvalBool(ok && isIPv4Compat(ip)), nil
 }
 
-func (call builtinIsIPV4Compat) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+func (call *builtinIsIPV4Compat) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
 	return sqltypes.Int64, flagIsBoolean
 }
 
-func (call builtinIsIPV4Compat) compile(c *compiler) (ctype, error) {
+func (call *builtinIsIPV4Compat) compile(c *compiler) (ctype, error) {
 	arg, err := call.Arguments[0].compile(c)
 	if err != nil {
 		return ctype{}, err
@@ -332,7 +332,7 @@ func (call builtinIsIPV4Compat) compile(c *compiler) (ctype, error) {
 	return ctype{Type: sqltypes.Int64, Flag: arg.Flag | flagIsBoolean, Col: collationNumeric}, nil
 }
 
-func (call builtinIsIPV4Mapped) eval(env *ExpressionEnv) (eval, error) {
+func (call *builtinIsIPV4Mapped) eval(env *ExpressionEnv) (eval, error) {
 	arg, err := call.arg1(env)
 	if arg == nil || err != nil {
 		return nil, err
@@ -346,11 +346,11 @@ func (call builtinIsIPV4Mapped) eval(env *ExpressionEnv) (eval, error) {
 	return newEvalBool(ok && ip.Is4In6()), nil
 }
 
-func (call builtinIsIPV4Mapped) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+func (call *builtinIsIPV4Mapped) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
 	return sqltypes.Int64, flagIsBoolean
 }
 
-func (call builtinIsIPV4Mapped) compile(c *compiler) (ctype, error) {
+func (call *builtinIsIPV4Mapped) compile(c *compiler) (ctype, error) {
 	arg, err := call.Arguments[0].compile(c)
 	if err != nil {
 		return ctype{}, err
@@ -367,7 +367,7 @@ func (call builtinIsIPV4Mapped) compile(c *compiler) (ctype, error) {
 	return ctype{Type: sqltypes.Int64, Flag: arg.Flag | flagIsBoolean, Col: collationNumeric}, nil
 }
 
-func (call builtinIsIPV6) eval(env *ExpressionEnv) (eval, error) {
+func (call *builtinIsIPV6) eval(env *ExpressionEnv) (eval, error) {
 	arg, err := call.arg1(env)
 	if arg == nil || err != nil {
 		return nil, err
@@ -380,11 +380,11 @@ func (call builtinIsIPV6) eval(env *ExpressionEnv) (eval, error) {
 	return newEvalBool(ip.Is6()), nil
 }
 
-func (call builtinIsIPV6) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+func (call *builtinIsIPV6) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
 	return sqltypes.Int64, flagIsBoolean
 }
 
-func (call builtinIsIPV6) compile(c *compiler) (ctype, error) {
+func (call *builtinIsIPV6) compile(c *compiler) (ctype, error) {
 	arg, err := call.Arguments[0].compile(c)
 	if err != nil {
 		return ctype{}, err

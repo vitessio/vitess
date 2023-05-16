@@ -2376,7 +2376,7 @@ func (asm *assembler) Fn_MULTICMP_c(args int, lessThan bool, tc collations.Typed
 		env.vm.stack[env.vm.sp-args] = env.vm.arena.newEvalText(x, tc)
 		env.vm.sp -= args - 1
 		return 1
-	}, "FN MULTICMP FLOAT64(SP-%d)...FLOAT64(SP-1)", args)
+	}, "FN MULTICMP VARCHAR(SP-%d)...VARCHAR(SP-1)", args)
 }
 
 func (asm *assembler) Fn_MULTICMP_d(args int, lessThan bool) {
@@ -3156,6 +3156,26 @@ func (asm *assembler) NullCheck3(j *jump) {
 		}
 		return 1
 	}, "NULLCHECK SP-1, SP-2, SP-3")
+}
+
+func (asm *assembler) NullCheckArg(j *jump, offset int) {
+	asm.emit(func(env *ExpressionEnv) int {
+		if env.vm.stack[env.vm.sp-1] == nil {
+			env.vm.stack[env.vm.sp-offset-1] = nil
+			env.vm.sp -= offset
+			return j.offset()
+		}
+		return 1
+	}, "NULLCHECK SP-1 [argument %d]", offset)
+}
+
+func (asm *assembler) NullCheckOffset(j *jump, offset int) {
+	asm.emit(func(env *ExpressionEnv) int {
+		if env.vm.stack[env.vm.sp-offset] == nil {
+			return j.offset()
+		}
+		return 1
+	}, "NULLCHECK SP-1 [offset %d]", offset)
 }
 
 func (asm *assembler) Cmp_nullsafe(j *jump) {
@@ -4055,4 +4075,50 @@ func (asm *assembler) Fn_IS_IPV6() {
 		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalBool(err == nil && ip.Is6())
 		return 1
 	}, "FN IS_IPV6 VARBINARY(SP-1)")
+}
+
+func (asm *assembler) Fn_CONCAT(tt querypb.Type, tc collations.TypedCollation, args int) {
+	asm.adjustStack(-args + 1)
+	asm.emit(func(env *ExpressionEnv) int {
+		var buf []byte
+		for i := 0; i < args; i++ {
+			arg := env.vm.stack[env.vm.sp-args+i].(*evalBytes)
+			buf = append(buf, arg.bytes...)
+		}
+
+		ret := env.vm.stack[env.vm.sp-args].(*evalBytes)
+		ret.bytes = buf
+		ret.tt = int16(tt)
+		ret.col = tc
+		env.vm.sp -= args - 1
+		return 1
+	}, "FN CONCAT VARCHAR(SP-1)...VARCHAR(SP-N)")
+}
+
+func (asm *assembler) Fn_CONCAT_WS(tt querypb.Type, tc collations.TypedCollation, args int) {
+	asm.adjustStack(-args)
+	asm.emit(func(env *ExpressionEnv) int {
+		var buf []byte
+		sep := env.vm.stack[env.vm.sp-args-1].(*evalBytes).bytes
+
+		first := true
+		for i := 0; i < args; i++ {
+			if env.vm.stack[env.vm.sp-args+i] == nil {
+				continue
+			}
+			if !first {
+				buf = append(buf, sep...)
+			}
+			first = false
+			arg := env.vm.stack[env.vm.sp-args+i].(*evalBytes)
+			buf = append(buf, arg.bytes...)
+		}
+
+		ret := env.vm.stack[env.vm.sp-args-1].(*evalBytes)
+		ret.bytes = buf
+		ret.tt = int16(tt)
+		ret.col = tc
+		env.vm.sp -= args
+		return 1
+	}, "FN CONCAT_WS VARCHAR(SP-1) VARCHAR(SP-2)...VARCHAR(SP-N)")
 }

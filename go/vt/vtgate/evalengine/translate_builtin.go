@@ -305,6 +305,16 @@ func (ast *astCompiler) translateFuncExpr(fn *sqlparser.FuncExpr) (Expr, error) 
 			return nil, argError(method)
 		}
 		return &builtinRepeat{CallExpr: call, collate: ast.cfg.Collation}, nil
+	case "concat":
+		if len(args) < 1 {
+			return nil, argError(method)
+		}
+		return &builtinConcat{CallExpr: call, collate: ast.cfg.Collation}, nil
+	case "concat_ws":
+		if len(args) < 2 {
+			return nil, argError(method)
+		}
+		return &builtinConcatWs{CallExpr: call, collate: ast.cfg.Collation}, nil
 	case "from_base64":
 		if len(args) != 1 {
 			return nil, argError(method)
