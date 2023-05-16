@@ -192,7 +192,7 @@ func LoadConfig() (context.CancelFunc, error) {
 		return config.PersistChanges(context.Background(), configPersistenceMinInterval.Get()), nil
 	}
 
-	return nil, nil
+	return func() {}, nil
 }
 
 // NotifyConfigReload adds a subscription that the dynamic registry will attempt
