@@ -30,6 +30,8 @@ var (
 	truncateErrLen = 0
 )
 
+const TruncationText = "[TRUNCATED]"
+
 func registerQueryTruncationFlags(fs *pflag.FlagSet) {
 	fs.IntVar(&truncateUILen, "sql-max-length-ui", truncateUILen, "truncate queries in debug UIs to the given length (default 512)")
 	fs.IntVar(&truncateErrLen, "sql-max-length-errors", truncateErrLen, "truncate queries in error logs to the given length (default unlimited)")
@@ -69,7 +71,7 @@ func truncateQuery(query string, max int) string {
 		return comments.Leading + sql + comments.Trailing
 	}
 
-	return comments.Leading + sql[:max-12] + " [TRUNCATED]" + comments.Trailing
+	return comments.Leading + sql[:max-(len(TruncationText)+1)] + " " + TruncationText + comments.Trailing
 }
 
 // TruncateForUI is used when displaying queries on various Vitess status pages

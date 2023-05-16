@@ -2034,9 +2034,9 @@ func queryAsString(sql string, bindVariables map[string]*querypb.BindVariable, s
 	maxLen := sqlparser.GetTruncateErrLen()
 	if truncateForLog && maxLen > 0 && len(bv) > maxLen {
 		if maxLen <= 12 {
-			bv = "[TRUNCATED]"
+			bv = sqlparser.TruncationText
 		} else {
-			bv = bv[:maxLen-12] + " [TRUNCATED]"
+			bv = bv[:maxLen-(len(sqlparser.TruncationText)+1)] + " " + sqlparser.TruncationText
 		}
 	}
 

@@ -1419,10 +1419,15 @@ func TestHandleExecUnknownError(t *testing.T) {
 	panic("unknown exec error")
 }
 
+// TestHandlePanicAndSendLogStatsMessageTruncation tests that when an error truncation
+// length is set and a panic occurs, the code in handlePanicAndSendLogStats will
+// truncate the error text in logs, but will not truncate the error text in the
+// error value.
 func TestHandlePanicAndSendLogStatsMessageTruncation(t *testing.T) {
 	logStats := tabletenv.NewLogStats(ctx, "TestHandlePanicAndSendLogStatsMessageTruncation")
 	config := tabletenv.NewDefaultConfig()
 	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), &topodatapb.TabletAlias{})
+	defer tsv.StopService()
 	longSql := "select * from test_table_loooooooooooooooooooooooooooooooooooong"
 	longBv := map[string]*querypb.BindVariable{
 		"bv1": sqltypes.Int64BindVariable(1111111111),
@@ -1443,9 +1448,7 @@ func TestHandlePanicAndSendLogStatsMessageTruncation(t *testing.T) {
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), want)
 		want = "Uncaught panic for Sql: \"select * from test_t [TRUNCATED]\", BindVars: {bv1: \"typ [TRUNCATED]"
-		if !strings.Contains(tl.getLog(0), want) {
-			t.Errorf("error log %s, want '%s'", tl.getLog(0), want)
-		}
+		require.Contains(t, tl.getLog(0), want)
 	}()
 
 	defer tsv.handlePanicAndSendLogStats(longSql, longBv, logStats)
