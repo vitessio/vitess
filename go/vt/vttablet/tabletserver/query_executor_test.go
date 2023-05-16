@@ -1804,7 +1804,6 @@ func (m mockTxThrottler) Open() (err error) {
 }
 
 func (m mockTxThrottler) Close() {
-	return
 }
 
 func (m mockTxThrottler) Throttle(priority int) (result bool) {
