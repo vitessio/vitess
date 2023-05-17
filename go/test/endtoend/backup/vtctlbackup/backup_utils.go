@@ -826,17 +826,18 @@ func doNotDemoteNewlyPromotedPrimaryIfReparentingDuringBackup(t *testing.T) {
 
 	// Start the backup on a replica
 	go func() {
+		defer wg.Done()
 		// ensure this is a primary first
 		checkTabletType(t, primary.Alias, topodata.TabletType_PRIMARY)
 
 		// now backup
 		err := localCluster.VtctlclientProcess.ExecuteCommand("Backup", replica1.Alias)
 		require.Nil(t, err)
-		wg.Done()
 	}()
 
 	// Perform a graceful reparent operation
 	go func() {
+		defer wg.Done()
 		// ensure this is a primary first
 		checkTabletType(t, primary.Alias, topodata.TabletType_PRIMARY)
 
@@ -849,7 +850,6 @@ func doNotDemoteNewlyPromotedPrimaryIfReparentingDuringBackup(t *testing.T) {
 
 		// check that we reparented
 		checkTabletType(t, replica1.Alias, topodata.TabletType_PRIMARY)
-		wg.Done()
 	}()
 
 	wg.Wait()
