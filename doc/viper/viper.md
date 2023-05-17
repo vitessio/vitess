@@ -245,6 +245,23 @@ For more information on how viper searches for config files, see the [documentat
 If viper was able to locate and load a config file, `LoadConfig` will then configure the dynamic registry to set up a watch on that file, enabling all dynamic values to pick up changes to that file for the remainder of the program's execution.
 If no config file was used, then dynamic values behave exactly like static values (i.e. the dynamic registry copies in the settings loaded into the static registry, but does not set up a file watch).
 
+### Re-persistence for Dynamic Values
+
+Prior to the introduction of viper in Vitess, certain components (such as `vttablet` or `vtgate`) exposed `/debug/env` HTTP endpoints that permitted the user to modify certain configuration parameters at runtime.
+
+This behavior is still supported, and to maintain consistency between update mechanisms, if:
+- A config file was loaded at startup
+- A value is configured with the `Dynamic: true` option
+
+then in-memory updates to that value (via `.Set()`) will be written back to disk.
+If we skipped this step, then the next time viper reloaded the disk config, the in-memory change would be undone, since viper does a full load rather than something more differential.
+Unfortunately, this seems unavoidable.
+
+To migitate against potentially writing to disk "too often" for a given user, the `--config-persistence-min-interval` flag defines the _minimum_ time to wait between writes.
+Internally, the system is notified to write "soon" only when a dynamic value is updated.
+If the wait period has elapsed between changes, a write happens immediately; otherwise, the system waits out the remainder of the period and persists any changes that happened while it was waiting.
+Setting this interval to zero means that writes happen immediately.
+
 ## Auto-Documentation
 
 One of the benefits of all values being created through a single function is that we can pretty easily build tooling to generate documentation for the config values available to a given binary.
@@ -267,6 +284,13 @@ The exact formatting can be tweaked, obviously, but as an example, something lik
 ```
 
 If/when we migrate other binaries to cobra, we can figure out how to combine this documntation with cobra's doc-generation tooling (which we use for `vtctldclient` and `vtadmin`).
+
+## Debug Endpoint
+
+Any component that parses its flags via one of `servenv`'s parsing methods will get an HTTP endpoint registered at `/debug/config` which displays the full viper configuration for debugging purposes.
+It accepts a query parameter to control the format; anything in `viper.SupportedExts` is permitted.
+
+Components that do not use `servenv` to parse their flags may manually register the `(go/viperutil/debug).HandlerFunc` if they wish.
 
 ## Caveats and Gotchas
 
