@@ -26,26 +26,25 @@ import (
 	"sync"
 	"time"
 
-	"vitess.io/vitess/go/mysql/replication"
-	"vitess.io/vitess/go/textutil"
-	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/topo/topoproto"
-	workflow2 "vitess.io/vitess/go/vt/vtctl/workflow"
-
 	"google.golang.org/protobuf/encoding/prototext"
 
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sets"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/concurrency"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	workflow2 "vitess.io/vitess/go/vt/vtctl/workflow"
 	vtctldvexec "vitess.io/vitess/go/vt/vtctl/workflow/vexec" // renamed to avoid a collision with the vexec struct in this package
 )
 
@@ -360,6 +359,9 @@ func (wr *Wrangler) WorkflowAction(ctx context.Context, workflow, keyspace, acti
 	default:
 	}
 	results, err := wr.execWorkflowAction(ctx, workflow, keyspace, action, dryRun, rpcReq)
+	if err != nil {
+		return nil, err
+	}
 	if len(results) == 0 && !dryRun { // Dry runs produce no actual tablet results
 		return nil, fmt.Errorf("the %s workflow does not exist in the %s keyspace", workflow, keyspace)
 	}
@@ -385,13 +387,42 @@ func (wr *Wrangler) getWorkflowActionQuery(action string) (string, error) {
 	return query, nil
 }
 
+// canStartWorkflow validates that, for an atomic copy workflow, none of the streams are still in the copy phase.
+// Since we copy all tables in a single snapshot, we cannot restart a workflow which broke before all tables were copied.
+func (wr *Wrangler) canStartWorkflow(ctx context.Context, workflow, keyspace string) error {
+	res, err := wr.ShowWorkflow(ctx, workflow, keyspace)
+	if err != nil {
+		return err
+	}
+	for _, shardStatus := range res.ShardStatuses {
+		if len(shardStatus.PrimaryReplicationStatuses) == 0 {
+			return fmt.Errorf("no replication streams found for workflow %s", workflow)
+		}
+		status := shardStatus.PrimaryReplicationStatuses[0]
+
+		if status.WorkflowSubType == binlogdatapb.VReplicationWorkflowSubType_AtomicCopy.String() &&
+			status.RowsCopied > 0 && len(status.CopyState) > 0 {
+			return fmt.Errorf("cannot restart an atomic copy workflow which previously stopped in the Copying phase")
+		}
+		break // We only need to check one shard
+	}
+	return nil
+}
+
 func (wr *Wrangler) execWorkflowAction(ctx context.Context, workflow, keyspace, action string, dryRun bool, rpcReq any) (map[*topo.TabletInfo]*querypb.QueryResult, error) {
 	var callback func(context.Context, *topo.TabletInfo) (*querypb.QueryResult, error) = nil
 	query, err := wr.getWorkflowActionQuery(action)
 	if err != nil {
 		return nil, err
 	}
-	if action == "update" {
+
+	switch action {
+	case "start":
+		err = wr.canStartWorkflow(ctx, workflow, keyspace)
+		if err != nil {
+			return nil, err
+		}
+	case "update":
 		rpcReq, ok := rpcReq.(*tabletmanagerdatapb.UpdateVReplicationWorkflowRequest)
 		if !ok {
 			return nil, fmt.Errorf("invalid RPC request: %+v", rpcReq)
@@ -443,6 +474,7 @@ func (wr *Wrangler) execWorkflowAction(ctx context.Context, workflow, keyspace, 
 			}
 		}
 	}
+
 	return wr.runVexec(ctx, workflow, keyspace, query, callback, dryRun)
 }
 

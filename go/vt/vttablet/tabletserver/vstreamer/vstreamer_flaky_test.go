@@ -291,6 +291,52 @@ func TestSetStatement(t *testing.T) {
 	runCases(t, nil, testcases, "current", nil)
 }
 
+// TestSetForeignKeyCheck confirms that the binlog RowEvent flags are set correctly when foreign_key_checks are on and off.
+func TestSetForeignKeyCheck(t *testing.T) {
+	testRowEventFlags = true
+	defer func() { testRowEventFlags = false }()
+
+	execStatements(t, []string{
+		"create table t1(id int, val binary(4), primary key(id))",
+	})
+	defer execStatements(t, []string{
+		"drop table t1",
+	})
+	engine.se.Reload(context.Background())
+	queries := []string{
+		"begin",
+		"insert into t1 values (1, 'aaa')",
+		"set @@session.foreign_key_checks=1",
+		"insert into t1 values (2, 'bbb')",
+		"set @@session.foreign_key_checks=0",
+		"insert into t1 values (3, 'ccc')",
+		"commit",
+	}
+
+	fe := &TestFieldEvent{
+		table: "t1",
+		db:    "vttest",
+		cols: []*TestColumn{
+			{name: "id", dataType: "INT32", colType: "int(11)", len: 11, charset: 63},
+			{name: "val", dataType: "BINARY", colType: "binary(4)", len: 4, charset: 63},
+		},
+	}
+
+	testcases := []testcase{{
+		input: queries,
+		output: [][]string{{
+			`begin`,
+			fe.String(),
+			`type:ROW row_event:{table_name:"t1" row_changes:{after:{lengths:1 lengths:4 values:"1aaa\x00"}} flags:1}`,
+			`type:ROW row_event:{table_name:"t1" row_changes:{after:{lengths:1 lengths:4 values:"2bbb\x00"}} flags:1}`,
+			`type:ROW row_event:{table_name:"t1" row_changes:{after:{lengths:1 lengths:4 values:"3ccc\x00"}} flags:3}`,
+			`gtid`,
+			`commit`,
+		}},
+	}}
+	runCases(t, nil, testcases, "current", nil)
+}
+
 func TestStmtComment(t *testing.T) {
 
 	if testing.Short() {
@@ -2293,6 +2339,9 @@ func expectLog(ctx context.Context, t *testing.T, input any, ch <-chan []*binlog
 				if ignoreKeyspaceShardInFieldAndRowEvents && evs[i].Type == binlogdatapb.VEventType_ROW {
 					evs[i].RowEvent.Keyspace = ""
 					evs[i].RowEvent.Shard = ""
+				}
+				if !testRowEventFlags && evs[i].Type == binlogdatapb.VEventType_ROW {
+					evs[i].RowEvent.Flags = 0
 				}
 				want = env.RemoveAnyDeprecatedDisplayWidths(want)
 				if got := fmt.Sprintf("%v", evs[i]); got != want {

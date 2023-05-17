@@ -79,6 +79,24 @@ See the --help output for each command for more details.`,
 		RunE:                  commandMoveTablesComplete,
 	}
 
+	checkAtomicCopyOptions = func() error {
+		var errors []string
+		if !moveTablesCreateOptions.AtomicCopy {
+			return nil
+		}
+		if !moveTablesCreateOptions.AllTables {
+			errors = append(errors, "atomic copy requires --all-tables.")
+		}
+		if len(moveTablesCreateOptions.IncludeTables) > 0 || len(moveTablesCreateOptions.ExcludeTables) > 0 {
+			errors = append(errors, "atomic copy does not support specifying tables.")
+		}
+		if len(errors) > 0 {
+			errors = append(errors, "Found options incompatible with atomic copy:")
+			return fmt.Errorf(strings.Join(errors, " "))
+		}
+		return nil
+	}
+
 	// MoveTablesCreate makes a MoveTablesCreate gRPC call to a vtctld.
 	MoveTablesCreate = &cobra.Command{
 		Use:                   "create",
@@ -89,6 +107,7 @@ See the --help output for each command for more details.`,
 		Aliases:               []string{"Create"},
 		Args:                  cobra.NoArgs,
 		PreRunE: func(cmd *cobra.Command, args []string) error {
+
 			// Either specific tables or the all tables flags are required.
 			if !cmd.Flags().Lookup("tables").Changed && !cmd.Flags().Lookup("all-tables").Changed {
 				return fmt.Errorf("tables or all-tables are required to specify which tables to move")
@@ -103,6 +122,10 @@ See the --help output for each command for more details.`,
 			}
 			if _, ok := binlogdatapb.OnDDLAction_value[strings.ToUpper(moveTablesCreateOptions.OnDDL)]; !ok {
 				return fmt.Errorf("invalid on-ddl value: %s", moveTablesCreateOptions.OnDDL)
+			}
+
+			if err := checkAtomicCopyOptions(); err != nil {
+				return err
 			}
 			return nil
 		},
@@ -235,6 +258,7 @@ var (
 		AutoStart                    bool
 		StopAfterCopy                bool
 		NoRoutingRules               bool
+		AtomicCopy                   bool
 	}{}
 	moveTablesSwitchTrafficOptions = struct {
 		Cells                     []string
@@ -285,6 +309,7 @@ func commandMoveTablesCreate(cmd *cobra.Command, args []string) error {
 		AutoStart:                 moveTablesCreateOptions.AutoStart,
 		StopAfterCopy:             moveTablesCreateOptions.StopAfterCopy,
 		NoRoutingRules:            moveTablesCreateOptions.NoRoutingRules,
+		AtomicCopy:                moveTablesCreateOptions.AtomicCopy,
 	}
 
 	resp, err := client.MoveTablesCreate(commandCtx, req)
@@ -527,6 +552,7 @@ func init() {
 	MoveTablesCreate.Flags().BoolVar(&moveTablesCreateOptions.AutoStart, "auto-start", true, "Start the MoveTables workflow after creating it")
 	MoveTablesCreate.Flags().BoolVar(&moveTablesCreateOptions.StopAfterCopy, "stop-after-copy", false, "Stop the MoveTables workflow after it's finished copying the existing rows and before it starts replicating changes")
 	MoveTablesCreate.Flags().BoolVar(&moveTablesCreateOptions.NoRoutingRules, "no-routing-rules", false, "(Advanced) Do not create routing rules while creating the workflow. See the reference documentation for limitations if you use this flag.")
+	MoveTablesCreate.Flags().BoolVar(&moveTablesCreateOptions.AtomicCopy, "atomic-copy", false, "(EXPERIMENTAL) A single copy phase is run for all tables from the source. Use this, for example, if your source keyspace has tables which use foreign key constraints.")
 	MoveTables.AddCommand(MoveTablesCreate)
 
 	MoveTables.AddCommand(MoveTablesShow)

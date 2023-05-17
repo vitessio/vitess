@@ -89,6 +89,7 @@ type ClusterConfig struct {
 
 // VitessCluster represents all components within the test cluster
 type VitessCluster struct {
+	t             *testing.T
 	ClusterConfig *ClusterConfig
 	Name          string
 	Cells         map[string]*Cell
@@ -320,7 +321,7 @@ func init() {
 
 // NewVitessCluster starts a basic cluster with vtgate, vtctld and the topo
 func NewVitessCluster(t *testing.T, name string, cellNames []string, clusterConfig *ClusterConfig) *VitessCluster {
-	vc := &VitessCluster{Name: name, Cells: make(map[string]*Cell), ClusterConfig: clusterConfig}
+	vc := &VitessCluster{t: t, Name: name, Cells: make(map[string]*Cell), ClusterConfig: clusterConfig}
 	require.NotNil(t, vc)
 
 	vc.CleanupDataroot(t, true)

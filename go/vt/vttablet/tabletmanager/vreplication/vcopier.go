@@ -406,7 +406,7 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 	copyStateGCTicker := time.NewTicker(copyStateGCInterval)
 	defer copyStateGCTicker.Stop()
 
-	parallelism := int(math.Max(1, float64(vreplicationParallelInsertWorkers)))
+	parallelism := getInsertParallelism()
 	copyWorkerFactory := vc.newCopyWorkerFactory(parallelism)
 	copyWorkQueue := vc.newCopyWorkQueue(parallelism, copyWorkerFactory)
 	defer copyWorkQueue.close()
@@ -669,6 +669,16 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 	}
 
 	return nil
+}
+
+func (vc *vcopier) updatePos(ctx context.Context, gtid string) error {
+	pos, err := replication.DecodePosition(gtid)
+	if err != nil {
+		return err
+	}
+	update := binlogplayer.GenerateUpdatePos(vc.vr.id, pos, time.Now().Unix(), 0, vc.vr.stats.CopyRowCount.Get(), vreplicationStoreCompressedGTID)
+	_, err = vc.vr.dbClient.Execute(update)
+	return err
 }
 
 func (vc *vcopier) fastForward(ctx context.Context, copyState map[string]*sqltypes.Result, gtid string) error {
@@ -1074,6 +1084,10 @@ func (vbc *vcopierCopyWorker) execute(ctx context.Context, task *vcopierCopyTask
 			}
 		case vcopierCopyTaskInsertCopyState:
 			advanceFn = func(ctx context.Context, args *vcopierCopyTaskArgs) error {
+				if vbc.copyStateInsert == nil {
+					log.Infof("Skipping copy_state insert")
+					return nil
+				}
 				if err := vbc.insertCopyState(ctx, args.lastpk); err != nil {
 					return vterrors.Wrapf(err, "error updating _vt.copy_state")
 				}
@@ -1199,4 +1213,9 @@ func vcopierCopyTaskGetNextState(vts vcopierCopyTaskState) vcopierCopyTaskState 
 		return vcopierCopyTaskComplete
 	}
 	return vts
+}
+
+func getInsertParallelism() int {
+	parallelism := int(math.Max(1, float64(vreplicationParallelInsertWorkers)))
+	return parallelism
 }

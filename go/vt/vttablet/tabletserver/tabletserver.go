@@ -1163,6 +1163,14 @@ func (tsv *TabletServer) VStreamRows(ctx context.Context, request *binlogdatapb.
 	return tsv.vstreamer.StreamRows(ctx, request.Query, row, send)
 }
 
+// VStreamTables streams all tables.
+func (tsv *TabletServer) VStreamTables(ctx context.Context, request *binlogdatapb.VStreamTablesRequest, send func(*binlogdatapb.VStreamTablesResponse) error) error {
+	if err := tsv.sm.VerifyTarget(ctx, request.Target); err != nil {
+		return err
+	}
+	return tsv.vstreamer.StreamTables(ctx, send)
+}
+
 // VStreamResults streams rows from the specified starting point.
 func (tsv *TabletServer) VStreamResults(ctx context.Context, target *querypb.Target, query string, send func(*binlogdatapb.VStreamResultsResponse) error) error {
 	if err := tsv.sm.VerifyTarget(ctx, target); err != nil {

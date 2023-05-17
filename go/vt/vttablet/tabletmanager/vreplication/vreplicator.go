@@ -108,8 +108,9 @@ type vreplicator struct {
 	originalFKCheckSetting int64
 	originalSQLMode        string
 
-	WorkflowType int32
-	WorkflowName string
+	WorkflowType    int32
+	WorkflowSubType int32
+	WorkflowName    string
 
 	throttleUpdatesRateLimiter *timer.RateLimiter
 }
@@ -271,17 +272,25 @@ func (vr *vreplicator) replicate(ctx context.Context) error {
 				log.Warningf("Unable to clear FK check %v", err)
 				return err
 			}
-			if err := newVCopier(vr).copyNext(ctx, settings); err != nil {
-				vr.stats.ErrorCounts.Add([]string{"Copy"}, 1)
-				return err
-			}
-			settings, numTablesToCopy, err = vr.loadSettings(ctx, vr.dbClient)
-			if err != nil {
-				return err
-			}
-			if numTablesToCopy == 0 {
-				if err := vr.insertLog(LogCopyEnd, fmt.Sprintf("Copy phase completed at gtid %s", settings.StartPos)); err != nil {
+			if vr.WorkflowSubType == int32(binlogdatapb.VReplicationWorkflowSubType_AtomicCopy) {
+				if err := newVCopier(vr).copyAll(ctx, settings); err != nil {
+					log.Infof("Error copying all tables: %v", err)
+					vr.stats.ErrorCounts.Add([]string{"CopyAll"}, 1)
 					return err
+				}
+			} else {
+				if err := newVCopier(vr).copyNext(ctx, settings); err != nil {
+					vr.stats.ErrorCounts.Add([]string{"Copy"}, 1)
+					return err
+				}
+				settings, numTablesToCopy, err = vr.loadSettings(ctx, vr.dbClient)
+				if err != nil {
+					return err
+				}
+				if numTablesToCopy == 0 {
+					if err := vr.insertLog(LogCopyEnd, fmt.Sprintf("Copy phase completed at gtid %s", settings.StartPos)); err != nil {
+						return err
+					}
 				}
 			}
 		case settings.StartPos.IsZero():
@@ -406,6 +415,7 @@ func (vr *vreplicator) loadSettings(ctx context.Context, dbClient *vdbClient) (s
 	settings, numTablesToCopy, err = vr.readSettings(ctx, dbClient)
 	if err == nil {
 		vr.WorkflowType = int32(settings.WorkflowType)
+		vr.WorkflowSubType = int32(settings.WorkflowSubType)
 		vr.WorkflowName = settings.WorkflowName
 	}
 	return settings, numTablesToCopy, err
@@ -499,7 +509,7 @@ func (vr *vreplicator) getSettingFKCheck() error {
 }
 
 func (vr *vreplicator) resetFKCheckAfterCopy(dbClient *vdbClient) error {
-	_, err := dbClient.Execute(fmt.Sprintf("set foreign_key_checks=%d", vr.originalFKCheckSetting))
+	_, err := dbClient.Execute(fmt.Sprintf("set @@session.foreign_key_checks=%d", vr.originalFKCheckSetting))
 	return err
 }
 
@@ -587,7 +597,7 @@ func (vr *vreplicator) updateHeartbeatTime(tm int64) error {
 }
 
 func (vr *vreplicator) clearFKCheck(dbClient *vdbClient) error {
-	_, err := dbClient.Execute("set foreign_key_checks=0")
+	_, err := dbClient.Execute("set @@session.foreign_key_checks=0")
 	return err
 }
 

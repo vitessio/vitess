@@ -239,7 +239,7 @@ func (wf *workflow) create() {
 		currentWorkflowType = wrangler.MoveTablesWorkflow
 		sourceShards := strings.Join(wf.options.sourceShards, ",")
 		err = tstWorkflowExec(t, cell, wf.name, wf.fromKeyspace, wf.toKeyspace,
-			strings.Join(wf.options.tables, ","), workflowActionCreate, "", sourceShards, "")
+			strings.Join(wf.options.tables, ","), workflowActionCreate, "", sourceShards, "", false)
 	case "reshard":
 		currentWorkflowType = wrangler.ReshardWorkflow
 		sourceShards := strings.Join(wf.options.sourceShards, ",")
@@ -248,7 +248,7 @@ func (wf *workflow) create() {
 			targetShards = sourceShards
 		}
 		err = tstWorkflowExec(t, cell, wf.name, wf.fromKeyspace, wf.toKeyspace,
-			strings.Join(wf.options.tables, ","), workflowActionCreate, "", sourceShards, targetShards)
+			strings.Join(wf.options.tables, ","), workflowActionCreate, "", sourceShards, targetShards, false)
 	default:
 		panic(fmt.Sprintf("unknown workflow type: %s", wf.typ))
 	}
@@ -266,15 +266,15 @@ func (wf *workflow) create() {
 }
 
 func (wf *workflow) switchTraffic() {
-	require.NoError(wf.tc.t, tstWorkflowExec(wf.tc.t, wf.tc.defaultCellName, wf.name, wf.fromKeyspace, wf.toKeyspace, "", workflowActionSwitchTraffic, "", "", ""))
+	require.NoError(wf.tc.t, tstWorkflowExec(wf.tc.t, wf.tc.defaultCellName, wf.name, wf.fromKeyspace, wf.toKeyspace, "", workflowActionSwitchTraffic, "", "", "", false))
 }
 
 func (wf *workflow) reverseTraffic() {
-	require.NoError(wf.tc.t, tstWorkflowExec(wf.tc.t, wf.tc.defaultCellName, wf.name, wf.fromKeyspace, wf.toKeyspace, "", workflowActionReverseTraffic, "", "", ""))
+	require.NoError(wf.tc.t, tstWorkflowExec(wf.tc.t, wf.tc.defaultCellName, wf.name, wf.fromKeyspace, wf.toKeyspace, "", workflowActionReverseTraffic, "", "", "", false))
 }
 
 func (wf *workflow) complete() {
-	require.NoError(wf.tc.t, tstWorkflowExec(wf.tc.t, wf.tc.defaultCellName, wf.name, wf.fromKeyspace, wf.toKeyspace, "", workflowActionComplete, "", "", ""))
+	require.NoError(wf.tc.t, tstWorkflowExec(wf.tc.t, wf.tc.defaultCellName, wf.name, wf.fromKeyspace, wf.toKeyspace, "", workflowActionComplete, "", "", "", false))
 }
 
 // TestPartialMoveTablesWithSequences enhances TestPartialMoveTables by adding an unsharded keyspace which has a
@@ -505,7 +505,7 @@ func TestPartialMoveTablesWithSequences(t *testing.T) {
 			// We switched traffic, so it's the reverse workflow we want to cancel.
 			reverseWf := wf + "_reverse"
 			reverseKs := sourceKs // customer
-			err = tstWorkflowExec(t, "", reverseWf, "", reverseKs, "", workflowActionCancel, "", "", "")
+			err = tstWorkflowExec(t, "", reverseWf, "", reverseKs, "", workflowActionCancel, "", "", "", false)
 			require.NoError(t, err)
 
 			output, err := tc.vc.VtctlClient.ExecuteCommandWithOutput("Workflow", fmt.Sprintf("%s.%s", reverseKs, reverseWf), "show")
