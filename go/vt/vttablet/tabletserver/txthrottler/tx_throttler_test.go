@@ -50,7 +50,8 @@ func TestDisabledThrottler(t *testing.T) {
 	})
 	assert.Nil(t, throttler.Open())
 	assert.False(t, throttler.Throttle(0))
-	assert.Zero(t, throttler.throttlerRunning.Get())
+	throttlerImpl, _ := throttler.(*txThrottler)
+	assert.Zero(t, throttlerImpl.throttlerRunning.Get())
 	throttler.Close()
 }
 
@@ -102,12 +103,13 @@ func TestEnabledThrottler(t *testing.T) {
 
 	call4 := mockThrottler.EXPECT().Throttle(0)
 	call4.Return(1 * time.Second)
-	call6 := mockThrottler.EXPECT().Close()
+	calllast := mockThrottler.EXPECT().Close()
+
 	call1.After(call0)
 	call2.After(call1)
 	call3.After(call2)
 	call4.After(call3)
-	call6.After(call4)
+	calllast.After(call4)
 
 	config := tabletenv.NewDefaultConfig()
 	config.EnableTxThrottler = true
@@ -123,7 +125,7 @@ func TestEnabledThrottler(t *testing.T) {
 	assert.Nil(t, throttler.Open())
 	assert.Equal(t, int64(1), throttler.throttlerRunning.Get())
 
-	assert.False(t, throttler.Throttle(0))
+	assert.False(t, throttler.Throttle(100))
 	assert.Equal(t, int64(1), throttler.requestsTotal.Get())
 	assert.Zero(t, throttler.requestsThrottled.Get())
 
@@ -136,12 +138,12 @@ func TestEnabledThrottler(t *testing.T) {
 	// This call should not be forwarded to the go/vt/throttler.Throttler object.
 	hcListener.StatsUpdate(rdonlyTabletStats)
 	// The second throttle call should reject.
-	assert.True(t, throttler.Throttle(0))
+	assert.True(t, throttler.Throttle(100))
 	assert.Equal(t, int64(2), throttler.requestsTotal.Get())
 	assert.Equal(t, int64(1), throttler.requestsThrottled.Get())
 
 	// This call should not throttle due to priority. Check that's the case and counters agree.
-	assert.False(t, throttler.Throttle(100))
+	assert.False(t, throttler.Throttle(0))
 	assert.Equal(t, int64(3), throttler.requestsTotal.Get())
 	assert.Equal(t, int64(1), throttler.requestsThrottled.Get())
 	throttler.Close()
@@ -154,13 +156,13 @@ func TestNewTxThrottler(t *testing.T) {
 
 	{
 		// disabled config
-		throttler, err := newTxThrottler(env, &txThrottlerConfig{enabled: false})
+		throttler, err := newTxThrottler(env, nil, &txThrottlerConfig{enabled: false})
 		assert.Nil(t, err)
 		assert.NotNil(t, throttler)
 	}
 	{
 		// enabled with invalid throttler config
-		throttler, err := newTxThrottler(env, &txThrottlerConfig{
+		throttler, err := newTxThrottler(env, nil, &txThrottlerConfig{
 			enabled:         true,
 			throttlerConfig: &throttlerdatapb.Configuration{},
 		})
@@ -169,7 +171,7 @@ func TestNewTxThrottler(t *testing.T) {
 	}
 	{
 		// enabled
-		throttler, err := newTxThrottler(env, &txThrottlerConfig{
+		throttler, err := newTxThrottler(env, nil, &txThrottlerConfig{
 			enabled:          true,
 			healthCheckCells: []string{"cell1"},
 			throttlerConfig:  throttler.DefaultMaxReplicationLagModuleConfig().Configuration,

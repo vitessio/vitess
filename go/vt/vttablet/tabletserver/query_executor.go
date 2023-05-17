@@ -67,11 +67,14 @@ const (
 	maxQueryBufferDuration = 10 * time.Second
 )
 
-var streamResultPool = sync.Pool{New: func() any {
-	return &sqltypes.Result{
-		Rows: make([][]sqltypes.Value, 0, streamRowsSize),
-	}
-}}
+var (
+	streamResultPool = sync.Pool{New: func() any {
+		return &sqltypes.Result{
+			Rows: make([][]sqltypes.Value, 0, streamRowsSize),
+		}
+	}}
+	errTxThrottled = vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "Transaction throttled")
+)
 
 func returnStreamResult(result *sqltypes.Result) error {
 	// only return large results slices to the pool
@@ -198,8 +201,11 @@ func (qre *QueryExecutor) execAutocommit(f func(conn *StatefulConnection) (*sqlt
 	}
 	qre.options.TransactionIsolation = querypb.ExecuteOptions_AUTOCOMMIT
 
-	conn, _, err := qre.tsv.te.txPool.Begin(qre.ctx, qre.options, false, 0, nil)
+	if qre.tsv.txThrottler.Throttle(qre.tsv.getPriorityFromOptions(qre.options)) {
+		return nil, errTxThrottled
+	}
 
+	conn, _, err := qre.tsv.te.txPool.Begin(qre.ctx, qre.options, false, 0, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -209,6 +215,10 @@ func (qre *QueryExecutor) execAutocommit(f func(conn *StatefulConnection) (*sqlt
 }
 
 func (qre *QueryExecutor) execAsTransaction(f func(conn *StatefulConnection) (*sqltypes.Result, error)) (*sqltypes.Result, error) {
+	if qre.tsv.txThrottler.Throttle(qre.tsv.getPriorityFromOptions(qre.options)) {
+		return nil, errTxThrottled
+	}
+
 	conn, beginSQL, err := qre.tsv.te.txPool.Begin(qre.ctx, qre.options, false, 0, nil)
 	if err != nil {
 		return nil, err
