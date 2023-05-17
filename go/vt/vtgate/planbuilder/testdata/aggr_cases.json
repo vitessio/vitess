@@ -5499,5 +5499,563 @@
         "user.user"
       ]
     }
+  },
+  {
+    "comment": "inner join with scalar aggregation",
+    "query": "select count(*) from user join music on user.foo = music.bar",
+    "v3-plan": "VT12001: unsupported: cross-shard query with aggregates",
+    "gen4-plan": {
+      "QueryType": "SELECT",
+      "Original": "select count(*) from user join music on user.foo = music.bar",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "sum_count_star(0) AS count(*)",
+        "Inputs": [
+          {
+            "OperatorType": "Projection",
+            "Expressions": [
+              "[COLUMN 0] * COALESCE([COLUMN 1], INT64(1)) as count(*)"
+            ],
+            "Inputs": [
+              {
+                "OperatorType": "Join",
+                "Variant": "Join",
+                "JoinColumnIndexes": "L:1,R:1",
+                "JoinVars": {
+                  "user_foo": 0
+                },
+                "TableName": "`user`_music",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select `user`.foo, count(*), weight_string(`user`.foo) from `user` where 1 != 1 group by `user`.foo, weight_string(`user`.foo)",
+                    "Query": "select `user`.foo, count(*), weight_string(`user`.foo) from `user` group by `user`.foo, weight_string(`user`.foo)",
+                    "Table": "`user`"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select 1, count(*) from music where 1 != 1 group by 1",
+                    "Query": "select 1, count(*) from music where music.bar = :user_foo group by 1",
+                    "Table": "music"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "left outer join with scalar aggregation",
+    "query": "select count(*) from user left join music on user.foo = music.bar",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select count(*) from user left join music on user.foo = music.bar",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "sum_count_star(0) AS count(*)",
+        "Inputs": [
+          {
+            "OperatorType": "Projection",
+            "Expressions": [
+              "[COLUMN 0] * COALESCE([COLUMN 1], INT64(1)) as count(*)"
+            ],
+            "Inputs": [
+              {
+                "OperatorType": "Join",
+                "Variant": "LeftJoin",
+                "JoinColumnIndexes": "L:1,R:1",
+                "JoinVars": {
+                  "user_foo": 0
+                },
+                "TableName": "`user`_music",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select `user`.foo, count(*), weight_string(`user`.foo) from `user` where 1 != 1 group by `user`.foo, weight_string(`user`.foo)",
+                    "Query": "select `user`.foo, count(*), weight_string(`user`.foo) from `user` group by `user`.foo, weight_string(`user`.foo)",
+                    "Table": "`user`"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select 1, count(*) from music where 1 != 1 group by 1",
+                    "Query": "select 1, count(*) from music where music.bar = :user_foo group by 1",
+                    "Table": "music"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "inner join with left grouping",
+    "query": "select count(*) from user left join music on user.foo = music.bar group by user.col",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select count(*) from user left join music on user.foo = music.bar group by user.col",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Ordered",
+        "Aggregates": "sum_count_star(0) AS count(*)",
+        "GroupBy": "(1|0)",
+        "ResultColumns": 1,
+        "Inputs": [
+          {
+            "OperatorType": "Projection",
+            "Expressions": [
+              "[COLUMN 1] * COALESCE([COLUMN 2], INT64(1)) as count(*)",
+              "[COLUMN 0] as col"
+            ],
+            "Inputs": [
+              {
+                "OperatorType": "Join",
+                "Variant": "LeftJoin",
+                "JoinColumnIndexes": "L:3,L:1,R:1",
+                "JoinVars": {
+                  "user_foo": 0
+                },
+                "TableName": "`user`_music",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select `user`.foo, count(*), weight_string(`user`.foo), `user`.col from `user` where 1 != 1 group by `user`.foo, weight_string(`user`.foo), `user`.col",
+                    "OrderBy": "3 ASC",
+                    "Query": "select `user`.foo, count(*), weight_string(`user`.foo), `user`.col from `user` group by `user`.foo, weight_string(`user`.foo), `user`.col order by `user`.col asc",
+                    "Table": "`user`"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select 1, count(*) from music where 1 != 1 group by 1",
+                    "Query": "select 1, count(*) from music where music.bar = :user_foo group by 1",
+                    "Table": "music"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "inner join with right grouping",
+    "query": "select count(*) from user left join music on user.foo = music.bar group by music.col",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select count(*) from user left join music on user.foo = music.bar group by music.col",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Ordered",
+        "Aggregates": "sum_count_star(0) AS count(*)",
+        "GroupBy": "(2|1)",
+        "ResultColumns": 1,
+        "Inputs": [
+          {
+            "OperatorType": "Projection",
+            "Expressions": [
+              "[COLUMN 2] * COALESCE([COLUMN 3], INT64(1)) as count(*)",
+              "[COLUMN 1]",
+              "[COLUMN 0] as col"
+            ],
+            "Inputs": [
+              {
+                "OperatorType": "Sort",
+                "Variant": "Memory",
+                "OrderBy": "(0|1) ASC",
+                "Inputs": [
+                  {
+                    "OperatorType": "Join",
+                    "Variant": "LeftJoin",
+                    "JoinColumnIndexes": "R:1,R:2,L:1,R:0",
+                    "JoinVars": {
+                      "user_foo": 0
+                    },
+                    "TableName": "`user`_music",
+                    "Inputs": [
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "Scatter",
+                        "Keyspace": {
+                          "Name": "user",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select `user`.foo, count(*), weight_string(`user`.foo) from `user` where 1 != 1 group by `user`.foo, weight_string(`user`.foo)",
+                        "Query": "select `user`.foo, count(*), weight_string(`user`.foo) from `user` group by `user`.foo, weight_string(`user`.foo)",
+                        "Table": "`user`"
+                      },
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "Scatter",
+                        "Keyspace": {
+                          "Name": "user",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select count(*), music.col, weight_string(music.col) from music where 1 != 1 group by music.col, weight_string(music.col)",
+                        "Query": "select count(*), music.col, weight_string(music.col) from music where music.bar = :user_foo group by music.col, weight_string(music.col)",
+                        "Table": "music"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "left outer join with left grouping",
+    "query": "select count(*) from user left join music on user.foo = music.bar group by user.col",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select count(*) from user left join music on user.foo = music.bar group by user.col",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Ordered",
+        "Aggregates": "sum_count_star(0) AS count(*)",
+        "GroupBy": "(1|0)",
+        "ResultColumns": 1,
+        "Inputs": [
+          {
+            "OperatorType": "Projection",
+            "Expressions": [
+              "[COLUMN 1] * COALESCE([COLUMN 2], INT64(1)) as count(*)",
+              "[COLUMN 0] as col"
+            ],
+            "Inputs": [
+              {
+                "OperatorType": "Join",
+                "Variant": "LeftJoin",
+                "JoinColumnIndexes": "L:3,L:1,R:1",
+                "JoinVars": {
+                  "user_foo": 0
+                },
+                "TableName": "`user`_music",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select `user`.foo, count(*), weight_string(`user`.foo), `user`.col from `user` where 1 != 1 group by `user`.foo, weight_string(`user`.foo), `user`.col",
+                    "OrderBy": "3 ASC",
+                    "Query": "select `user`.foo, count(*), weight_string(`user`.foo), `user`.col from `user` group by `user`.foo, weight_string(`user`.foo), `user`.col order by `user`.col asc",
+                    "Table": "`user`"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select 1, count(*) from music where 1 != 1 group by 1",
+                    "Query": "select 1, count(*) from music where music.bar = :user_foo group by 1",
+                    "Table": "music"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "left outer join with right grouping",
+    "query": "select count(*) from user left join music on user.foo = music.bar group by music.col",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select count(*) from user left join music on user.foo = music.bar group by music.col",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Ordered",
+        "Aggregates": "sum_count_star(0) AS count(*)",
+        "GroupBy": "(2|1)",
+        "ResultColumns": 1,
+        "Inputs": [
+          {
+            "OperatorType": "Projection",
+            "Expressions": [
+              "[COLUMN 2] * COALESCE([COLUMN 3], INT64(1)) as count(*)",
+              "[COLUMN 1]",
+              "[COLUMN 0] as col"
+            ],
+            "Inputs": [
+              {
+                "OperatorType": "Sort",
+                "Variant": "Memory",
+                "OrderBy": "(0|1) ASC",
+                "Inputs": [
+                  {
+                    "OperatorType": "Join",
+                    "Variant": "LeftJoin",
+                    "JoinColumnIndexes": "R:1,R:2,L:1,R:0",
+                    "JoinVars": {
+                      "user_foo": 0
+                    },
+                    "TableName": "`user`_music",
+                    "Inputs": [
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "Scatter",
+                        "Keyspace": {
+                          "Name": "user",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select `user`.foo, count(*), weight_string(`user`.foo) from `user` where 1 != 1 group by `user`.foo, weight_string(`user`.foo)",
+                        "Query": "select `user`.foo, count(*), weight_string(`user`.foo) from `user` group by `user`.foo, weight_string(`user`.foo)",
+                        "Table": "`user`"
+                      },
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "Scatter",
+                        "Keyspace": {
+                          "Name": "user",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select count(*), music.col, weight_string(music.col) from music where 1 != 1 group by music.col, weight_string(music.col)",
+                        "Query": "select count(*), music.col, weight_string(music.col) from music where music.bar = :user_foo group by music.col, weight_string(music.col)",
+                        "Table": "music"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "3 table inner join with scalar aggregation",
+    "query": "select count(*) from user join music on user.foo = music.bar join user_extra on user.foo = user_extra.baz",
+    "v3-plan": "VT12001: unsupported: cross-shard query with aggregates",
+    "gen4-plan": {
+      "QueryType": "SELECT",
+      "Original": "select count(*) from user join music on user.foo = music.bar join user_extra on user.foo = user_extra.baz",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "sum_count_star(0) AS count(*)",
+        "Inputs": [
+          {
+            "OperatorType": "Projection",
+            "Expressions": [
+              "([COLUMN 0] * COALESCE([COLUMN 1], INT64(1))) * COALESCE([COLUMN 2], INT64(1)) as count(*)"
+            ],
+            "Inputs": [
+              {
+                "OperatorType": "Join",
+                "Variant": "Join",
+                "JoinColumnIndexes": "L:1,R:2,R:3",
+                "JoinVars": {
+                  "user_extra_baz": 0
+                },
+                "TableName": "user_extra_`user`_music",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select user_extra.baz, count(*), weight_string(user_extra.baz) from user_extra where 1 != 1 group by user_extra.baz, weight_string(user_extra.baz)",
+                    "Query": "select user_extra.baz, count(*), weight_string(user_extra.baz) from user_extra group by user_extra.baz, weight_string(user_extra.baz)",
+                    "Table": "user_extra"
+                  },
+                  {
+                    "OperatorType": "Join",
+                    "Variant": "Join",
+                    "JoinColumnIndexes": "L:1,L:1,L:2,R:1",
+                    "JoinVars": {
+                      "user_foo": 0
+                    },
+                    "TableName": "`user`_music",
+                    "Inputs": [
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "Scatter",
+                        "Keyspace": {
+                          "Name": "user",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select `user`.foo, 1, count(*), weight_string(`user`.foo) from `user` where 1 != 1 group by `user`.foo, weight_string(`user`.foo), 1",
+                        "Query": "select `user`.foo, 1, count(*), weight_string(`user`.foo) from `user` where `user`.foo = :user_extra_baz group by `user`.foo, weight_string(`user`.foo), 1",
+                        "Table": "`user`"
+                      },
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "Scatter",
+                        "Keyspace": {
+                          "Name": "user",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select 1, count(*) from music where 1 != 1 group by 1",
+                        "Query": "select 1, count(*) from music where music.bar = :user_foo group by 1",
+                        "Table": "music"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user",
+        "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "3 table with mixed join with scalar aggregation",
+    "query": "select count(*) from user left join music on user.foo = music.bar join user_extra on user.foo = user_extra.baz",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select count(*) from user left join music on user.foo = music.bar join user_extra on user.foo = user_extra.baz",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "sum_count_star(0) AS count(*)",
+        "Inputs": [
+          {
+            "OperatorType": "Projection",
+            "Expressions": [
+              "([COLUMN 0] * COALESCE([COLUMN 1], INT64(1))) * COALESCE([COLUMN 2], INT64(1)) as count(*)"
+            ],
+            "Inputs": [
+              {
+                "OperatorType": "Join",
+                "Variant": "Join",
+                "JoinColumnIndexes": "L:3,L:4,R:1",
+                "JoinVars": {
+                  "user_foo": 0
+                },
+                "TableName": "`user`_music_user_extra",
+                "Inputs": [
+                  {
+                    "OperatorType": "Join",
+                    "Variant": "LeftJoin",
+                    "JoinColumnIndexes": "L:0,L:0,L:2,L:1,R:1",
+                    "JoinVars": {
+                      "user_foo": 0
+                    },
+                    "TableName": "`user`_music",
+                    "Inputs": [
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "Scatter",
+                        "Keyspace": {
+                          "Name": "user",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select `user`.foo, count(*), weight_string(`user`.foo) from `user` where 1 != 1 group by `user`.foo, weight_string(`user`.foo)",
+                        "Query": "select `user`.foo, count(*), weight_string(`user`.foo) from `user` group by `user`.foo, weight_string(`user`.foo)",
+                        "Table": "`user`"
+                      },
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "Scatter",
+                        "Keyspace": {
+                          "Name": "user",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select 1, count(*) from music where 1 != 1 group by 1",
+                        "Query": "select 1, count(*) from music where music.bar = :user_foo group by 1",
+                        "Table": "music"
+                      }
+                    ]
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select 1, count(*) from user_extra where 1 != 1 group by 1",
+                    "Query": "select 1, count(*) from user_extra where user_extra.baz = :user_foo group by 1",
+                    "Table": "user_extra"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user",
+        "user.user_extra"
+      ]
+    }
   }
 ]
