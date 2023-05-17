@@ -333,7 +333,7 @@ func TestVStreamMulti(t *testing.T) {
 	}
 }
 
-func TestVStreamMetrics(t *testing.T) {
+func TestVStreamsCreatedAndLagMetrics(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	cell := "aa"
@@ -341,7 +341,7 @@ func TestVStreamMetrics(t *testing.T) {
 	_ = createSandbox(ks)
 	hc := discovery.NewFakeHealthCheck(nil)
 	st := getSandboxTopo(ctx, cell, ks, []string{"-20", "20-40"})
-	vsm := newTestVStreamManager(hc, st, "aa")
+	vsm := newTestVStreamManager(hc, st, cell)
 	sbc0 := hc.AddTestTablet(cell, "1.1.1.1", 1001, ks, "-20", topodatapb.TabletType_PRIMARY, true, 1, nil)
 	addTabletToSandboxTopo(t, st, ks, "-20", sbc0.Tablet())
 	sbc1 := hc.AddTestTablet(cell, "1.1.1.1", 1002, ks, "20-40", topodatapb.TabletType_PRIMARY, true, 1, nil)
