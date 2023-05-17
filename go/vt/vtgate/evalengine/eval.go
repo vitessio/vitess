@@ -19,6 +19,7 @@ package evalengine
 import (
 	"fmt"
 	"strconv"
+	"unicode/utf8"
 
 	"vitess.io/vitess/go/hack"
 	"vitess.io/vitess/go/mysql/collations"
@@ -360,4 +361,39 @@ func valueToEval(value sqltypes.Value, collation collations.TypedCollation) (eva
 	default:
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Type is not supported: %q %s", value, value.Type())
 	}
+}
+
+const hexchars = "0123456789ABCDEF"
+
+func sanitizeErrorValue(s []byte) []byte {
+	var buf []byte
+	for width := 0; len(s) > 0; s = s[width:] {
+		r := rune(s[0])
+		width = 1
+		if r >= utf8.RuneSelf {
+			r, width = utf8.DecodeLastRune(s)
+		}
+		if width == 1 && r == utf8.RuneError {
+			buf = append(buf, `\x`...)
+			buf = append(buf, hexchars[s[0]>>4])
+			buf = append(buf, hexchars[s[0]&0xF])
+			continue
+		}
+
+		if strconv.IsPrint(r) {
+			if r < utf8.RuneSelf {
+				buf = append(buf, byte(r))
+			} else {
+				b := [utf8.UTFMax]byte{}
+				n := utf8.EncodeRune(b[:], r)
+				buf = append(buf, b[:n]...)
+			}
+			continue
+		}
+
+		buf = append(buf, `\x`...)
+		buf = append(buf, hexchars[s[0]>>4])
+		buf = append(buf, hexchars[s[0]&0xF])
+	}
+	return buf
 }
