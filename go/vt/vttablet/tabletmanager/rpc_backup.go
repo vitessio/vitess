@@ -136,7 +136,12 @@ func (tm *TabletManager) Backup(ctx context.Context, logger logutil.Logger, req 
 			}
 
 			isSemiSync := reparentutil.IsReplicaSemiSync(durability, shardPrimary.Tablet, tabletInfo.Tablet)
-			if err := tm.setReplicationSourceLocked(bgCtx, shardPrimary.Alias, 0, "", false, convertBoolToSemiSyncAction(isSemiSync)); err != nil {
+			semiSyncAction, err := tm.convertBoolToSemiSyncAction(isSemiSync)
+			if err != nil {
+				l.Errorf("Failed to convert bool to semisync action, error: %v", err)
+				return
+			}
+			if err := tm.setReplicationSourceLocked(bgCtx, shardPrimary.Alias, 0, "", false, semiSyncAction); err != nil {
 				l.Errorf("Failed to set replication source, error: %v", err)
 			}
 		}()
