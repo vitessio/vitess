@@ -115,7 +115,7 @@ func (tm *TabletManager) Backup(ctx context.Context, logger logutil.Logger, req 
 				return
 			}
 
-			// Do not do anything for primary tablets and when active reparenting is disabled
+			// Do not do anything for primary tablets or when active reparenting is disabled
 			if mysqlctl.DisableActiveReparents || tabletInfo.Type == topodatapb.TabletType_PRIMARY {
 				return
 			}
