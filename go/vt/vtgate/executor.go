@@ -188,6 +188,7 @@ func NewExecutor(
 
 // Execute executes a non-streaming query.
 func (e *Executor) Execute(ctx context.Context, method string, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable) (result *sqltypes.Result, err error) {
+	time.Sleep(1 * time.Second)
 	span, ctx := trace.NewSpan(ctx, "executor.Execute")
 	span.Annotate("method", method)
 	trace.AnnotateSQL(span, sqlparser.Preview(sql))
