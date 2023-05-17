@@ -154,13 +154,13 @@ func TestNewTxThrottler(t *testing.T) {
 
 	{
 		// disabled config
-		throttler, err := newTxThrottler(env, &txThrottlerConfig{enabled: false})
+		throttler, err := newTxThrottler(env, nil, &txThrottlerConfig{enabled: false})
 		assert.Nil(t, err)
 		assert.NotNil(t, throttler)
 	}
 	{
 		// enabled with invalid throttler config
-		throttler, err := newTxThrottler(env, &txThrottlerConfig{
+		throttler, err := newTxThrottler(env, nil, &txThrottlerConfig{
 			enabled:         true,
 			throttlerConfig: &throttlerdatapb.Configuration{},
 		})
@@ -169,7 +169,7 @@ func TestNewTxThrottler(t *testing.T) {
 	}
 	{
 		// enabled
-		throttler, err := newTxThrottler(env, &txThrottlerConfig{
+		throttler, err := newTxThrottler(env, nil, &txThrottlerConfig{
 			enabled:          true,
 			healthCheckCells: []string{"cell1"},
 			throttlerConfig:  throttler.DefaultMaxReplicationLagModuleConfig().Configuration,
