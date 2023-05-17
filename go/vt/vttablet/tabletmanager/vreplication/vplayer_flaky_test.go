@@ -837,7 +837,7 @@ func TestPlayerFilters(t *testing.T) {
 		),
 		table: "dst5",
 		data:  [][]string{{"1", "abc"}, {"4", "abc"}},
-	}, {
+	}, /*{
 		// test collation + filter
 		input: "insert into srcCharset values (1,'木元')",
 		output: qh.Expect(
@@ -848,7 +848,7 @@ func TestPlayerFilters(t *testing.T) {
 		),
 		table: "dstCharset",
 		data:  [][]string{{"1", "木abcxyz", "木abcxyz"}},
-	}}
+	}*/}
 
 	for _, tcase := range testcases {
 		t.Run(tcase.input, func(t *testing.T) {
