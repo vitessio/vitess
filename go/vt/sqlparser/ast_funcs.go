@@ -416,16 +416,6 @@ func (node TableName) IsEmpty() bool {
 	return node.Name.IsEmpty()
 }
 
-// ToViewName returns a TableName acceptable for use as a VIEW. VIEW names are
-// always lowercase, so ToViewName lowercasese the name. Databases are case-sensitive
-// so Qualifier is left untouched.
-func (node TableName) ToViewName() TableName {
-	return TableName{
-		Qualifier: node.Qualifier,
-		Name:      NewIdentifierCS(strings.ToLower(node.Name.v)),
-	}
-}
-
 // NewWhere creates a WHERE or HAVING clause out
 // of a Expr. If the expression is nil, it returns nil.
 func NewWhere(typ WhereType, expr Expr) *Where {
