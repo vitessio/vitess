@@ -505,6 +505,30 @@ func (ast *astCompiler) translateFuncExpr(fn *sqlparser.FuncExpr) (Expr, error) 
 			return nil, argError(method)
 		}
 		return &builtinIsIPV6{CallExpr: call}, nil
+	case "bin_to_uuid":
+		switch len(args) {
+		case 1, 2:
+			return &builtinBinToUUID{CallExpr: call, collate: ast.cfg.Collation}, nil
+		default:
+			return nil, argError(method)
+		}
+	case "is_uuid":
+		if len(args) != 1 {
+			return nil, argError(method)
+		}
+		return &builtinIsUUID{CallExpr: call}, nil
+	case "uuid":
+		if len(args) != 0 {
+			return nil, argError(method)
+		}
+		return &builtinUUID{CallExpr: call}, nil
+	case "uuid_to_bin":
+		switch len(args) {
+		case 1, 2:
+			return &builtinUUIDToBin{CallExpr: call}, nil
+		default:
+			return nil, argError(method)
+		}
 	case "user", "current_user", "session_user", "system_user":
 		if len(args) != 0 {
 			return nil, argError(method)

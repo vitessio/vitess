@@ -273,3 +273,15 @@ var ipInputs = []string{
 	strconv.FormatUint(math.MaxUint32+1, 10),
 	"0x0000000000000000000000000A000509",
 }
+
+var uuidInputs = []string{
+	"NULL",
+	"'foobar'",
+	"''",
+	"'09db81f6-f266-11ed-a6f9-20fc8fd6830e'",
+	"'09db81f6f26611eda6f920fc8fd6830e'",
+	"'{09db81f6-f266-11ed-a6f9-20fc8fd6830e}'",
+	"0x0000000000000000000000000A000509",
+	"0x09DB81F6F26611EDA6F920FC8FD6830E",
+	"0x11EDF26609DB81F6A6F920FC8FD6830E",
+}
