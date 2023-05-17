@@ -31,7 +31,7 @@ var globalDropDb func(ctx context.Context, ksName string) error
 
 // DBDDL doesn't need to store any state - we use the global variables above instead
 type DBDDL struct {
-	createDbLock *sync.Mutex
+	mu sync.Mutex
 }
 
 // CreateDatabase implements the engine.DBDDLPlugin interface
@@ -42,8 +42,8 @@ func (plugin *DBDDL) CreateDatabase(ctx context.Context, name string) error {
 			Name: "0",
 		}},
 	}
-	plugin.createDbLock.Lock()
-	defer plugin.createDbLock.Unlock()
+	plugin.mu.Lock()
+	defer plugin.mu.Unlock()
 	return globalCreateDb(ctx, ks)
 }
 
@@ -54,6 +54,6 @@ func (plugin *DBDDL) DropDatabase(ctx context.Context, name string) error {
 
 func init() {
 	servenv.OnRun(func() {
-		engine.DBDDLRegister("vttest", &DBDDL{createDbLock: &sync.Mutex{}})
+		engine.DBDDLRegister("vttest", &DBDDL{})
 	})
 }
