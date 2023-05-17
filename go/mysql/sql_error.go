@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"regexp"
 	"strconv"
+	"strings"
 
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -146,7 +147,11 @@ func mapToSQLErrorFromErrorCode(err error, msg string) *SQLError {
 		ss = SSAccessDeniedError
 	case vtrpcpb.Code_RESOURCE_EXHAUSTED:
 		num = demuxResourceExhaustedErrors(err.Error())
-		ss = SSClientError
+		// 1041 ER_OUT_OF_RESOURCES has SQLSTATE HYOOO as per https://dev.mysql.com/doc/mysql-errors/8.0/en/server-error-reference.html#error_er_out_of_resources,
+		// so don't override it here in that case.
+		if num != EROutOfResources {
+			ss = SSClientError
+		}
 	case vtrpcpb.Code_UNIMPLEMENTED:
 		num = ERNotSupportedYet
 		ss = SSClientError
@@ -210,6 +215,9 @@ var stateToMysqlCode = map[vterrors.State]mysqlCode{
 	vterrors.NoSuchSession:                {num: ERUnknownComError, state: SSNetError},
 	vterrors.OperandColumns:               {num: EROperandColumns, state: SSWrongNumberOfColumns},
 	vterrors.WrongValueCountOnRow:         {num: ERWrongValueCountOnRow, state: SSWrongValueCountOnRow},
+	vterrors.WrongArguments:               {num: ERWrongArguments, state: SSUnknownSQLState},
+	vterrors.UnknownStmtHandler:           {num: ERUnknownStmtHandler, state: SSUnknownSQLState},
+	vterrors.UnknownTimeZone:              {num: ERUnknownTimeZone, state: SSUnknownSQLState},
 }
 
 func getStateToMySQLState(state vterrors.State) mysqlCode {
@@ -258,6 +266,8 @@ func demuxResourceExhaustedErrors(msg string) ErrorCode {
 	switch {
 	case isGRPCOverflowRE.Match([]byte(msg)):
 		return ERNetPacketTooLarge
+	case strings.Contains(msg, "Transaction throttled"):
+		return EROutOfResources
 	default:
 		return ERTooManyUserConnections
 	}

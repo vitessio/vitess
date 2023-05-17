@@ -168,3 +168,24 @@ func (mysqlctld *MysqlctldProcess) IsHealthy() bool {
 	_, err := mysql.Connect(context.Background(), &params)
 	return err == nil
 }
+
+// HasShutdown checks if the process has been set to nil
+func (mysqlctld *MysqlctldProcess) hasShutdown() bool {
+	return mysqlctld.process == nil
+}
+
+func (mysqlctld *MysqlctldProcess) WaitForMysqlCtldShutdown() bool {
+	tmr := time.NewTimer(defaultOperationTimeout)
+	defer tmr.Stop()
+	for {
+		if mysqlctld.hasShutdown() {
+			return true
+		}
+		select {
+		case <-tmr.C:
+			return false
+		default:
+		}
+		time.Sleep(defaultRetryDelay)
+	}
+}

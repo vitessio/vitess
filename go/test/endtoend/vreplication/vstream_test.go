@@ -58,7 +58,7 @@ func testVStreamWithFailover(t *testing.T, failover bool) {
 	vc.AddKeyspace(t, []*Cell{defaultCell}, "product", "0", initialProductVSchema, initialProductSchema, defaultReplicas, defaultRdonly, 100, nil)
 	vtgate = defaultCell.Vtgates[0]
 	require.NotNil(t, vtgate)
-	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", "product", "0"), 3)
+	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", "product", "0"), 3, 30*time.Second)
 	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 	defer vtgateConn.Close()
 
@@ -190,7 +190,7 @@ const vschemaUnsharded = `
 }
 `
 const schemaSharded = `
-create table customer(cid int, name varbinary(128), primary key(cid))  CHARSET=utf8mb4;
+create table customer(cid int, name varbinary(128), primary key(cid)) TABLESPACE innodb_system CHARSET=utf8mb4;
 `
 const vschemaSharded = `
 {
@@ -372,7 +372,7 @@ func testVStreamStopOnReshardFlag(t *testing.T, stopOnReshard bool, baseTabletID
 		switch tickCount {
 		case 1:
 			reshard(t, "sharded", "customer", "vstreamStopOnReshard", "-80,80-",
-				"-40,40-", baseTabletID+400, nil, nil, nil, defaultCellName, 1)
+				"-40,40-", baseTabletID+400, nil, nil, nil, nil, defaultCellName, 1)
 		case 60:
 			done = true
 		}
@@ -402,7 +402,7 @@ func testVStreamCopyMultiKeyspaceReshard(t *testing.T, baseTabletID int) numEven
 	vc.AddKeyspace(t, []*Cell{defaultCell}, "unsharded", "0", vschemaUnsharded, schemaUnsharded, defaultReplicas, defaultRdonly, baseTabletID+100, nil)
 	vtgate = defaultCell.Vtgates[0]
 	require.NotNil(t, vtgate)
-	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", "unsharded", "0"), 1)
+	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", "unsharded", "0"), 1, 30*time.Second)
 
 	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 	defer vtgateConn.Close()
@@ -502,7 +502,7 @@ func testVStreamCopyMultiKeyspaceReshard(t *testing.T, baseTabletID int) numEven
 		tickCount++
 		switch tickCount {
 		case 1:
-			reshard(t, "sharded", "customer", "vstreamCopyMultiKeyspaceReshard", "-80,80-", "-40,40-", baseTabletID+400, nil, nil, nil, defaultCellName, 1)
+			reshard(t, "sharded", "customer", "vstreamCopyMultiKeyspaceReshard", "-80,80-", "-40,40-", baseTabletID+400, nil, nil, nil, nil, defaultCellName, 1)
 			reshardDone = true
 		case 60:
 			done = true

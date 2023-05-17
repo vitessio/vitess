@@ -121,6 +121,10 @@ func IsShardUsingRangeBasedSharding(shard string) bool {
 // ValidateShardName takes a shard name and sanitizes it, and also returns
 // the KeyRange.
 func ValidateShardName(shard string) (string, *topodatapb.KeyRange, error) {
+	if err := validateObjectName(shard); err != nil {
+		return "", nil, err
+	}
+
 	if !IsShardUsingRangeBasedSharding(shard) {
 		return shard, nil, nil
 	}
@@ -196,6 +200,14 @@ func (si *ShardInfo) SetPrimaryTermStartTime(t time.Time) {
 // GetShard is a high level function to read shard data.
 // It generates trace spans.
 func (ts *Server) GetShard(ctx context.Context, keyspace, shard string) (*ShardInfo, error) {
+	if err := ValidateKeyspaceName(keyspace); err != nil {
+		return nil, err
+	}
+
+	if _, _, err := ValidateShardName(shard); err != nil {
+		return nil, err
+	}
+
 	span, ctx := trace.NewSpan(ctx, "TopoServer.GetShard")
 	span.Annotate("keyspace", keyspace)
 	span.Annotate("shard", shard)
@@ -280,18 +292,22 @@ func (ts *Server) UpdateShardFields(ctx context.Context, keyspace, shard string,
 // This will lock the Keyspace, as we may be looking at other shard servedTypes.
 // Using GetOrCreateShard is probably a better idea for most use cases.
 func (ts *Server) CreateShard(ctx context.Context, keyspace, shard string) (err error) {
-	// Lock the keyspace, because we'll be looking at ServedTypes.
-	ctx, unlock, lockErr := ts.LockKeyspace(ctx, keyspace, "CreateShard")
-	if lockErr != nil {
-		return lockErr
+	if err := ValidateKeyspaceName(keyspace); err != nil {
+		return err
 	}
-	defer unlock(&err)
 
 	// validate parameters
 	_, keyRange, err := ValidateShardName(shard)
 	if err != nil {
 		return err
 	}
+
+	// Lock the keyspace, because we'll be looking at ServedTypes.
+	ctx, unlock, lockErr := ts.LockKeyspace(ctx, keyspace, "CreateShard")
+	if lockErr != nil {
+		return lockErr
+	}
+	defer unlock(&err)
 
 	value := &topodatapb.Shard{
 		KeyRange: keyRange,
@@ -305,7 +321,7 @@ func (ts *Server) CreateShard(ctx context.Context, keyspace, shard string) (err 
 		return err
 	}
 	for _, si := range sis {
-		if si.KeyRange == nil || key.KeyRangesIntersect(si.KeyRange, keyRange) {
+		if si.KeyRange == nil || key.KeyRangeIntersect(si.KeyRange, keyRange) {
 			value.IsPrimaryServing = false
 			break
 		}

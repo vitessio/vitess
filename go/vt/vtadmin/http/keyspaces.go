@@ -78,10 +78,10 @@ func GetKeyspace(ctx context.Context, r Request, api *API) *JSONResponse {
 	return NewJSONResponse(keyspace, err)
 }
 
-// GetKeyspaces implements the http wrapper for /keyspaces[?cluster=[&cluster=]].
+// GetKeyspaces implements the http wrapper for /keyspaces[?cluster_id=[&cluster_id=]].
 func GetKeyspaces(ctx context.Context, r Request, api *API) *JSONResponse {
 	keyspaces, err := api.server.GetKeyspaces(ctx, &vtadminpb.GetKeyspacesRequest{
-		ClusterIds: r.URL.Query()["cluster"],
+		ClusterIds: r.URL.Query()["cluster_id"],
 	})
 
 	return NewJSONResponse(keyspaces, err)
@@ -168,7 +168,7 @@ func ValidateKeyspace(ctx context.Context, r Request, api *API) *JSONResponse {
 	return NewJSONResponse(res, err)
 }
 
-// ValidateKeyspace validates that all nodes reachable from the specified keyspace are consistent.
+// ValidateSchemaKeyspace validates that all nodes reachable from the specified keyspace are consistent.
 func ValidateSchemaKeyspace(ctx context.Context, r Request, api *API) *JSONResponse {
 	vars := mux.Vars(r.Request)
 

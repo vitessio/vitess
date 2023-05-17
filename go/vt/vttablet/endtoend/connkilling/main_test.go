@@ -80,7 +80,7 @@ func TestMain(m *testing.M) {
 		connParams = cluster.MySQLConnParams()
 		connAppDebugParams = cluster.MySQLAppDebugConnParams()
 		config := tabletenv.NewDefaultConfig()
-		config.Oltp.TxTimeoutSeconds = tabletenv.Seconds(3)
+		_ = config.Oltp.TxTimeoutSeconds.Set("3s")
 		err := framework.StartCustomServer(connParams, connAppDebugParams, cluster.DbName(), config)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "%v", err)

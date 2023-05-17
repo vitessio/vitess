@@ -325,10 +325,14 @@ func (cached *NumericStaticMap) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(24)
+		size += int64(48)
 	}
 	// field name string
 	size += hack.RuntimeAllocSize(int64(len(cached.name)))
+	// field hashVdx vitess.io/vitess/go/vt/vtgate/vindexes.Hashing
+	if cc, ok := cached.hashVdx.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
 	// field lookup vitess.io/vitess/go/vt/vtgate/vindexes.NumericLookupTable
 	if cached.lookup != nil {
 		size += int64(48)

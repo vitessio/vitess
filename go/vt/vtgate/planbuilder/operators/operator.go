@@ -51,35 +51,106 @@ type (
 	noPredicates struct{}
 )
 
+// PlanQuery creates a query plan for a given SQL statement
 func PlanQuery(ctx *plancontext.PlanningContext, selStmt sqlparser.Statement) (ops.Operator, error) {
 	op, err := createLogicalOperatorFromAST(ctx, selStmt)
 	if err != nil {
 		return nil, err
 	}
 
-	if err = CheckValid(op); err != nil {
+	if err = checkValid(op); err != nil {
 		return nil, err
 	}
 
-	op, err = transformToPhysical(ctx, op)
+	if op, err = transformToPhysical(ctx, op); err != nil {
+		return nil, err
+	}
+
+	if op, err = tryHorizonPlanning(ctx, op); err != nil {
+		return nil, err
+	}
+
+	if op, err = compact(ctx, op); err != nil {
+		return nil, err
+	}
+
+	_, isRoute := op.(*Route)
+	if !isRoute && ctx.SemTable.NotSingleRouteErr != nil {
+		// If we got here, we don't have a single shard plan
+		return nil, ctx.SemTable.NotSingleRouteErr
+	}
+
+	return op, err
+}
+
+func tryHorizonPlanning(ctx *plancontext.PlanningContext, root ops.Operator) (output ops.Operator, err error) {
+	backup := Clone(root)
+	defer func() {
+		if err == errHorizonNotPlanned() {
+			err = planOffsetsOnJoins(ctx, backup)
+			if err == nil {
+				output = backup
+			}
+		}
+	}()
+
+	_, ok := root.(*Horizon)
+
+	if !ok || len(ctx.SemTable.SubqueryMap) > 0 || len(ctx.SemTable.SubqueryRef) > 0 {
+		// we are not ready to deal with subqueries yet
+		return root, errHorizonNotPlanned()
+	}
+
+	output, err = planHorizons(ctx, root)
 	if err != nil {
 		return nil, err
 	}
 
-	backup := Clone(op)
-
-	op, err = planHorizons(op)
-	if err == errNotHorizonPlanned {
-		op = backup
-	} else if err != nil {
+	output, err = planOffsets(ctx, output)
+	if err != nil {
 		return nil, err
 	}
 
-	if op, err = Compact(ctx, op); err != nil {
+	output, err = makeSureOutputIsCorrect(ctx, root, output)
+	if err != nil {
 		return nil, err
 	}
 
-	return op, err
+	return
+}
+
+func makeSureOutputIsCorrect(ctx *plancontext.PlanningContext, oldHorizon ops.Operator, output ops.Operator) (ops.Operator, error) {
+	// next we use the original Horizon to make sure that the output columns line up with what the user asked for
+	// in the future, we'll tidy up the results. for now, we are just failing these queries and going back to the
+	// old horizon planning instead
+	cols, err := output.GetColumns()
+	if err != nil {
+		return nil, err
+	}
+
+	horizon := oldHorizon.(*Horizon)
+
+	sel := sqlparser.GetFirstSelect(horizon.Select)
+	if len(sel.SelectExprs) != len(cols) {
+		route := getRouteIfPassThroughColumns(output)
+		if route != nil {
+			route.ResultColumns = len(sel.SelectExprs)
+			return output, nil
+		}
+	}
+	qp, err := horizon.getQP(ctx)
+	if err != nil {
+		return nil, err
+	}
+	proj, err := createProjectionFromSelect(output, qp.SelectExprs)
+	if err != nil {
+		return nil, err
+	}
+	err = proj.passThroughAllColumns(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return proj, nil
 }
 
 // Inputs implements the Operator interface
@@ -87,12 +158,48 @@ func (noInputs) Inputs() []ops.Operator {
 	return nil
 }
 
+// SetInputs implements the Operator interface
+func (noInputs) SetInputs(ops []ops.Operator) {
+	if len(ops) > 0 {
+		panic("the noInputs operator does not have inputs")
+	}
+}
+
 // AddColumn implements the Operator interface
-func (noColumns) AddColumn(*plancontext.PlanningContext, sqlparser.Expr) (int, error) {
-	return 0, vterrors.VT13001("the noColumns operator cannot accept columns")
+func (noColumns) AddColumn(*plancontext.PlanningContext, *sqlparser.AliasedExpr) (ops.Operator, int, error) {
+	return nil, 0, vterrors.VT13001("the noColumns operator cannot accept columns")
+}
+
+func (noColumns) GetColumns() ([]*sqlparser.AliasedExpr, error) {
+	return nil, vterrors.VT13001("the noColumns operator cannot accept columns")
 }
 
 // AddPredicate implements the Operator interface
 func (noPredicates) AddPredicate(*plancontext.PlanningContext, sqlparser.Expr) (ops.Operator, error) {
 	return nil, vterrors.VT13001("the noColumns operator cannot accept predicates")
+}
+
+// getRouteIfPassThroughColumns will return the route that is feeding this operator,
+// if it can be reached only through operators that pass through all columns
+// This is used to limit the number of columns passed through by asking the route
+// to truncate the results
+func getRouteIfPassThroughColumns(op ops.Operator) *Route {
+	route, isRoute := op.(*Route)
+	if isRoute {
+		return route
+	}
+
+	inputs := op.Inputs()
+	if len(inputs) != 1 {
+		return nil
+	}
+
+	switch op.(type) {
+	case *Limit:
+		// empty by design
+	default:
+		return nil
+	}
+
+	return getRouteIfPassThroughColumns(inputs[0])
 }

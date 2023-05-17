@@ -711,7 +711,7 @@ func (tm *TabletManager) findMysqlPort(retryInterval time.Duration) {
 	for {
 		time.Sleep(retryInterval)
 		mport, err := tm.MysqlDaemon.GetMysqlPort()
-		if err != nil {
+		if err != nil || mport == 0 {
 			continue
 		}
 		log.Infof("Identified mysql port: %v", mport)
@@ -907,8 +907,15 @@ func (tm *TabletManager) initializeReplication(ctx context.Context, tabletType t
 	}
 	// If using semi-sync, we need to enable it before connecting to primary.
 	// We should set the correct type, since it is used in replica semi-sync
+
 	tablet.Type = tabletType
-	if err := tm.fixSemiSync(tabletType, convertBoolToSemiSyncAction(reparentutil.IsReplicaSemiSync(durability, currentPrimary.Tablet, tablet))); err != nil {
+
+	semiSyncAction, err := tm.convertBoolToSemiSyncAction(reparentutil.IsReplicaSemiSync(durability, currentPrimary.Tablet, tablet))
+	if err != nil {
+		return nil, err
+	}
+
+	if err := tm.fixSemiSync(tabletType, semiSyncAction); err != nil {
 		return nil, err
 	}
 

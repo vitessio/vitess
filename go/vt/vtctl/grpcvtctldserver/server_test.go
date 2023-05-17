@@ -2707,7 +2707,7 @@ func TestDeleteShards(t *testing.T) {
 				defer func() {
 					topofactory.SetError(nil)
 
-					actualShards := []*vtctldatapb.Shard{}
+					var actualShards []*vtctldatapb.Shard
 
 					keyspaces, err := ts.GetKeyspaces(ctx)
 					require.NoError(t, err, "cannot get keyspace names to check remaining shards")

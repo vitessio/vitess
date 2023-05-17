@@ -22,7 +22,6 @@ import (
 
 	"github.com/spf13/pflag"
 
-	"vitess.io/vitess/go/flagutil"
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
@@ -36,7 +35,7 @@ var (
 	schemaChangeDir             string
 	schemaChangeController      string
 	schemaChangeUser            string
-	schemaChangeCheckInterval   = flagutil.NewDurationOrIntVar("schema_change_check_interval", time.Minute, time.Second)
+	schemaChangeCheckInterval   = time.Minute
 	schemaChangeReplicasTimeout = wrangler.DefaultWaitReplicasTimeout
 )
 
@@ -46,7 +45,7 @@ func init() {
 		fs.StringVar(&schemaChangeController, "schema_change_controller", schemaChangeController, "Schema change controller is responsible for finding schema changes and responding to schema change events.")
 		fs.StringVar(&schemaChangeUser, "schema_change_user", schemaChangeUser, "The user who schema changes are submitted on behalf of.")
 
-		fs.Var(schemaChangeCheckInterval, "schema_change_check_interval", "How often the schema change dir is checked for schema changes (deprecated: if passed as a bare integer, the duration will be in seconds).")
+		fs.DurationVar(&schemaChangeCheckInterval, "schema_change_check_interval", schemaChangeCheckInterval, "How often the schema change dir is checked for schema changes. This value must be positive; if zero or lower, the default of 1m is used.")
 		fs.DurationVar(&schemaChangeReplicasTimeout, "schema_change_replicas_timeout", schemaChangeReplicasTimeout, "How long to wait for replicas to receive a schema change.")
 	})
 }
@@ -54,9 +53,9 @@ func init() {
 func initSchema() {
 	// Start schema manager service if needed.
 	if schemaChangeDir != "" {
-		interval := time.Minute
-		if schemaChangeCheckInterval.Value() > time.Duration(0) {
-			interval = schemaChangeCheckInterval.Value()
+		interval := schemaChangeCheckInterval
+		if interval <= 0 {
+			interval = time.Minute
 		}
 		timer := timer.NewTimer(interval)
 		controllerFactory, err :=

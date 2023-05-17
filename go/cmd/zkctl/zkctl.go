@@ -18,9 +18,6 @@ limitations under the License.
 package main
 
 import (
-	"bufio"
-	"os"
-
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/exit"
@@ -37,8 +34,6 @@ Commands:
 `
 
 var (
-	// Reason for nolint : Used in line 54 (stdin = bufio.NewReader(os.Stdin)) in the init function
-	stdin *bufio.Reader //nolint
 	zkCfg = "6@<hostname>:3801:3802:3803"
 	myID  uint
 )
@@ -52,7 +47,6 @@ func registerZkctlFlags(fs *pflag.FlagSet) {
 }
 func init() {
 	servenv.OnParse(registerZkctlFlags)
-	stdin = bufio.NewReader(os.Stdin)
 }
 
 func main() {

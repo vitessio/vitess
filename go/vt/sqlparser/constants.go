@@ -422,6 +422,51 @@ const (
 	SecondStr            = "second"
 	SecondMicrosecondStr = "second_microsecond"
 	YearMonthStr         = "year_month"
+
+	// GeomeFromWktType strings
+	GeometryFromTextStr           = "st_geometryfromtext"
+	GeometryCollectionFromTextStr = "st_geometrycollectionfromtext"
+	PointFromTextStr              = "st_pointfromtext"
+	MultiPointFromTextStr         = "st_multipointfromtext"
+	LineStringFromTextStr         = "st_linestringfromtext"
+	MultiLinestringFromTextStr    = "st_multilinestringfromtext"
+	PolygonFromTextStr            = "st_polygonfromtext"
+	MultiPolygonFromTextStr       = "st_multipolygonfromtext"
+
+	// GeomeFromWktType strings
+	GeometryFromWKBStr           = "st_geometryfromwkb"
+	GeometryCollectionFromWKBStr = "st_geometrycollectionfromwkb"
+	PointFromWKBStr              = "st_pointfromwkb"
+	MultiPointFromWKBStr         = "st_multipointfromwkb"
+	LineStringFromWKBStr         = "st_linestringfromwkb"
+	MultiLinestringFromWKBStr    = "st_multilinestringfromwkb"
+	PolygonFromWKBStr            = "st_polygonfromwkb"
+	MultiPolygonFromWKBStr       = "st_multipolygonfromwkb"
+
+	// GeomFormatExpr strings
+	TextFormatStr   = "st_astext"
+	BinaryFormatStr = "st_asbinary"
+
+	// GeomPropertyType strings
+	IsSimpleStr     = "st_issimple"
+	IsEmptyStr      = "st_isempty"
+	EnvelopeStr     = "st_envelope"
+	DimensionStr    = "st_dimension"
+	GeometryTypeStr = "st_geometrytype"
+
+	// PointPropertyType strings
+	XCordinateStr = "st_x"
+	YCordinateStr = "st_y"
+	LatitudeStr   = "st_latitude"
+	LongitudeStr  = "st_longitude"
+
+	// LinestringPropertyType strings
+	EndPointStr   = "st_endpoint"
+	IsClosedStr   = "st_isclosed"
+	LengthStr     = "st_length"
+	NumPointsStr  = "st_numpoints"
+	PointNStr     = "st_pointn"
+	StartPointStr = "st_startpoint"
 )
 
 // Constants for Enum Type - Insert.Action
@@ -738,12 +783,6 @@ const (
 	IntoDumpfile
 )
 
-// Constant for Enum Type - DeallocateStmtType
-const (
-	DeallocateType DeallocateStmtType = iota
-	DropType
-)
-
 // Constant for Enum Type - JtOnResponseType
 const (
 	ErrorJSONType JtOnResponseType = iota
@@ -886,4 +925,61 @@ const (
 	WithConsistentSnapshot TxAccessMode = iota
 	ReadWrite
 	ReadOnly
+)
+
+// Enum Types of WKT functions
+const (
+	GeometryFromText GeomFromWktType = iota
+	GeometryCollectionFromText
+	PointFromText
+	LineStringFromText
+	PolygonFromText
+	MultiPointFromText
+	MultiPolygonFromText
+	MultiLinestringFromText
+)
+
+// Enum Types of WKT functions
+const (
+	GeometryFromWKB GeomFromWkbType = iota
+	GeometryCollectionFromWKB
+	PointFromWKB
+	LineStringFromWKB
+	PolygonFromWKB
+	MultiPointFromWKB
+	MultiPolygonFromWKB
+	MultiLinestringFromWKB
+)
+
+// Enum Types of spatial format functions
+const (
+	TextFormat GeomFormatType = iota
+	BinaryFormat
+)
+
+// Enum Types of spatial property functions
+const (
+	IsSimple GeomPropertyType = iota
+	IsEmpty
+	Dimension
+	GeometryType
+	Envelope
+)
+
+// Enum Types of point property functions
+const (
+	XCordinate PointPropertyType = iota
+	YCordinate
+	Latitude
+	Longitude
+)
+
+// Enum Types of linestring property functions
+const (
+	EndPoint LinestrPropType = iota
+	IsClosed
+	Length
+	NumPoints
+	PointN
+	StartPoint
 )

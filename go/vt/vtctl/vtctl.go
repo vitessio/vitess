@@ -129,6 +129,8 @@ import (
 // ErrUnknownCommand is returned for an unknown command.
 var ErrUnknownCommand = errors.New("unknown command")
 
+const errWorkflowUpdateWithoutChanges = "no updates were provided; use --cells, --tablet-types, or --on-ddl to specify new values"
+
 type command struct {
 	name   string
 	method func(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error
@@ -388,7 +390,7 @@ var commands = []commandGroup{
 			{
 				name:   "CreateKeyspace",
 				method: commandCreateKeyspace,
-				params: "[--sharding_column_name=name] [--sharding_column_type=type] [--served_from=tablettype1:ks1,tablettype2:ks2,...] [--force] [--keyspace_type=type] [--base_keyspace=base_keyspace] [--snapshot_time=time] [--durability-policy=policy_name] [--sidecar-db-name=db_name] <keyspace name>",
+				params: "[--served_from=tablettype1:ks1,tablettype2:ks2,...] [--force] [--keyspace_type=type] [--base_keyspace=base_keyspace] [--snapshot_time=time] [--durability-policy=policy_name] [--sidecar-db-name=db_name] <keyspace name>",
 				help:   "Creates the specified keyspace. keyspace_type can be NORMAL or SNAPSHOT. For a SNAPSHOT keyspace you must specify the name of a base_keyspace, and a snapshot_time in UTC, in RFC3339 time format, e.g. 2006-01-02T15:04:05+00:00",
 			},
 			{
@@ -719,8 +721,8 @@ var commands = []commandGroup{
 			{
 				name:   "Workflow",
 				method: commandWorkflow,
-				params: "<ks.workflow> <action> --dry-run",
-				help:   "Start/Stop/Delete/Show/ListAll/Tags Workflow on all target tablets in workflow. Example: Workflow merchant.morders Start",
+				params: "[--dry-run] [--cells] [--tablet-types] <keyspace>[.<workflow>] start/stop/update/delete/show/listall/tags [<tags>]",
+				help:   "Start/Stop/Update/Delete/Show/ListAll/Tags Workflow on all target tablets in workflow. Example: Workflow merchant.morders Start",
 			},
 		},
 	},
@@ -2147,7 +2149,14 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *pfl
 			return err
 		}
 		s += fmt.Sprintf("The following vreplication streams exist for workflow %s.%s:\n\n", target, workflowName)
-		for ksShard := range res.ShardStatuses {
+
+		// Sort the results for consistent and intuitive output.
+		ksShardKeys := make([]string, 0, len(res.ShardStatuses))
+		for ksShardKey := range res.ShardStatuses {
+			ksShardKeys = append(ksShardKeys, ksShardKey)
+		}
+		sort.Strings(ksShardKeys)
+		for _, ksShard := range ksShardKeys {
 			statuses := res.ShardStatuses[ksShard].PrimaryReplicationStatuses
 			for _, st := range statuses {
 				msg := ""
@@ -3503,42 +3512,16 @@ func commandUpdateThrottlerConfig(ctx context.Context, wr *wrangler.Wrangler, su
 
 	keyspace := subFlags.Arg(0)
 
-	update := func(throttlerConfig *topodatapb.ThrottlerConfig) *topodatapb.ThrottlerConfig {
-		if throttlerConfig == nil {
-			throttlerConfig = &topodatapb.ThrottlerConfig{}
-		}
-		if customQuerySet {
-			// custom query provided
-			throttlerConfig.CustomQuery = *customQuery
-			throttlerConfig.Threshold = *threshold // allowed to be zero/negative because who knows what kind of custom query this is
-		} else {
-			// no custom query, throttler works by querying replication lag. We only allow positive values
-			if *threshold > 0 {
-				throttlerConfig.Threshold = *threshold
-			}
-		}
-		if *enable {
-			throttlerConfig.Enabled = true
-		}
-		if *disable {
-			throttlerConfig.Enabled = false
-		}
-		if *checkAsCheckSelf {
-			throttlerConfig.CheckAsCheckSelf = true
-		}
-		if *checkAsCheckShard {
-			throttlerConfig.CheckAsCheckSelf = false
-		}
-		return throttlerConfig
-	}
-
-	ctx, unlock, lockErr := wr.TopoServer().LockKeyspace(ctx, keyspace, "UpdateThrottlerConfig")
-	if lockErr != nil {
-		return lockErr
-	}
-	defer unlock(&err)
-
-	_, err = wr.TopoServer().UpdateSrvKeyspaceThrottlerConfig(ctx, keyspace, []string{}, update)
+	_, err = wr.VtctldServer().UpdateThrottlerConfig(ctx, &vtctldatapb.UpdateThrottlerConfigRequest{
+		Keyspace:          keyspace,
+		Enable:            *enable,
+		Disable:           *disable,
+		CustomQuery:       *customQuery,
+		CustomQuerySet:    customQuerySet,
+		Threshold:         *threshold,
+		CheckAsCheckSelf:  *checkAsCheckSelf,
+		CheckAsCheckShard: *checkAsCheckShard,
+	})
 	return err
 }
 
@@ -3609,19 +3592,19 @@ func commandHelp(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.Fla
 }
 
 func commandWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {
-	dryRun := subFlags.Bool("dry_run", false, "Does a dry run of Workflow and only reports the final query and list of tablets on which the operation will be applied")
+	usage := "usage: Workflow [--dry-run] [--cells] [--tablet-types] <keyspace>[.<workflow>] start/stop/update/delete/show/listall/tags [<tags>]"
+	dryRun := subFlags.Bool("dry-run", false, "Does a dry run of the Workflow action and reports the query and list of tablets on which the operation will be applied")
+	cells := subFlags.StringSlice("cells", []string{}, "New Cell(s) or CellAlias(es) (comma-separated) to replicate from. (Update only)")
+	tabletTypes := subFlags.StringSlice("tablet-types", []string{}, "New source tablet types to replicate from (e.g. PRIMARY, REPLICA, RDONLY). (Update only)")
+	onDDL := subFlags.String("on-ddl", "", "New instruction on what to do when DDL is encountered in the VReplication stream. Possible values are IGNORE, STOP, EXEC, and EXEC_IGNORE. (Update only)")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
 	if subFlags.NArg() < 2 {
-		return fmt.Errorf("usage: Workflow --dry-run keyspace[.workflow] start/stop/delete/show/listall/tags [<tags>]")
+		return fmt.Errorf(usage)
 	}
 	keyspace := subFlags.Arg(0)
 	action := strings.ToLower(subFlags.Arg(1))
-	// Note: List is deprecated and replaced by show.
-	if action == "list" {
-		action = "show"
-	}
 	var workflow string
 	var err error
 	if action != "listall" {
@@ -3650,13 +3633,57 @@ func commandWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag
 		}
 	} else {
 		if subFlags.NArg() != 2 {
-			return fmt.Errorf("usage: Workflow --dry-run keyspace[.workflow] start/stop/delete/show/listall")
+			return fmt.Errorf(usage)
 		}
-		results, err = wr.WorkflowAction(ctx, workflow, keyspace, action, *dryRun)
+		var rpcReq any = nil
+		if action == "update" {
+			changes := false
+			// We need to implicitly distinguish between an empty value (which is valid)
+			// and no value having been provided. We will use NULL for this purpose.
+			if subFlags.Lookup("cells").Changed { // Validate the provided value(s)
+				changes = true
+				for i, cell := range *cells { // Which only means trimming whitespace
+					(*cells)[i] = strings.TrimSpace(cell)
+				}
+			} else {
+				cells = &textutil.SimulatedNullStringSlice
+			}
+			if subFlags.Lookup("tablet-types").Changed { // Validate the provided value(s)
+				changes = true
+				for i, tabletType := range *tabletTypes {
+					(*tabletTypes)[i] = strings.ToUpper(strings.TrimSpace(tabletType))
+					if _, err = topoproto.ParseTabletType((*tabletTypes)[i]); err != nil {
+						return err
+					}
+				}
+			} else {
+				tabletTypes = &textutil.SimulatedNullStringSlice
+			}
+			onddl := int32(textutil.SimulatedNullInt) // To signify no value has been provided
+			if subFlags.Lookup("on-ddl").Changed {    // Validate the provided value
+				changes = true
+				ival, valid := binlogdatapb.OnDDLAction_value[strings.ToUpper(*onDDL)]
+				if !valid {
+					return fmt.Errorf("invalid on-ddl action: %s", *onDDL)
+				}
+				onddl = ival
+			}
+			if !changes {
+				return fmt.Errorf(errWorkflowUpdateWithoutChanges)
+			}
+			rpcReq = &tabletmanagerdatapb.UpdateVRWorkflowRequest{
+				Workflow:    workflow,
+				Cells:       *cells,
+				TabletTypes: *tabletTypes,
+				OnDdl:       binlogdatapb.OnDDLAction(onddl),
+			}
+		}
+		results, err = wr.WorkflowAction(ctx, workflow, keyspace, action, *dryRun, rpcReq) // Only update currently uses the new RPC path
 		if err != nil {
 			return err
 		}
-		if action == "show" || action == "listall" {
+		if action == "show" || action == "listall" || (action == "update" && *dryRun) {
+			// No final results left to print.
 			return nil
 		}
 	}

@@ -19,13 +19,17 @@ package evalengine
 import (
 	"fmt"
 	"strconv"
+	"unicode/utf8"
 
+	"vitess.io/vitess/go/hack"
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/decimal"
+	"vitess.io/vitess/go/mysql/fastparse"
+	"vitess.io/vitess/go/mysql/format"
+	"vitess.io/vitess/go/mysql/json"
 	"vitess.io/vitess/go/sqltypes"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/evalengine/internal/decimal"
-	"vitess.io/vitess/go/vt/vtgate/evalengine/internal/json"
 	"vitess.io/vitess/go/vt/vthash"
 )
 
@@ -36,6 +40,8 @@ const (
 	flagNull typeFlag = 1 << 0
 	// flagNullable marks that this value CAN be null
 	flagNullable typeFlag = 1 << 1
+	// flagIsBoolean marks that this value should be interpreted as boolean
+	flagIsBoolean typeFlag = 1 << 2
 
 	// flagIntegerUdf marks that this value is math.MinInt64, and will underflow if negated
 	flagIntegerUdf typeFlag = 1 << 5
@@ -51,6 +57,10 @@ const (
 	flagBit typeFlag = 1 << 9
 	// flagExplicitCollation marks that this value has an explicit collation
 	flagExplicitCollation typeFlag = 1 << 10
+
+	// flagAmbiguousType marks that the type of this value depends on the value at runtime
+	// and cannot be computed accurately
+	flagAmbiguousType typeFlag = 1 << 11
 
 	// flagIntegerRange are the flags that mark overflow/underflow in integers
 	flagIntegerRange = flagIntegerOvf | flagIntegerCap | flagIntegerUdf
@@ -93,14 +103,25 @@ func evalToSQLValueWithType(e eval, resultType sqltypes.Type) sqltypes.Value {
 		case *evalFloat:
 			return sqltypes.MakeTrusted(resultType, strconv.AppendUint(nil, uint64(e.f), 10))
 		}
-	case sqltypes.IsFloat(resultType) || resultType == sqltypes.Decimal:
+	case sqltypes.IsFloat(resultType):
 		switch e := e.(type) {
 		case *evalInt64:
 			return sqltypes.MakeTrusted(resultType, strconv.AppendInt(nil, e.i, 10))
 		case *evalUint64:
 			return sqltypes.MakeTrusted(resultType, strconv.AppendUint(nil, e.u, 10))
 		case *evalFloat:
-			return sqltypes.MakeTrusted(resultType, FormatFloat(resultType, e.f))
+			return sqltypes.MakeTrusted(resultType, format.FormatFloat(e.f))
+		case *evalDecimal:
+			return sqltypes.MakeTrusted(resultType, e.dec.FormatMySQL(e.length))
+		}
+	case sqltypes.IsDecimal(resultType):
+		switch e := e.(type) {
+		case *evalInt64:
+			return sqltypes.MakeTrusted(resultType, strconv.AppendInt(nil, e.i, 10))
+		case *evalUint64:
+			return sqltypes.MakeTrusted(resultType, strconv.AppendUint(nil, e.u, 10))
+		case *evalFloat:
+			return sqltypes.MakeTrusted(resultType, hack.StringBytes(strconv.FormatFloat(e.f, 'f', -1, 64)))
 		case *evalDecimal:
 			return sqltypes.MakeTrusted(resultType, e.dec.FormatMySQL(e.length))
 		}
@@ -124,7 +145,20 @@ func evalIsTruthy(e eval) boolean {
 	case *evalDecimal:
 		return makeboolean(!e.dec.IsZero())
 	case *evalBytes:
-		return makeboolean(parseStringToFloat(e.string()) != 0.0)
+		if e.isHexLiteral {
+			hex, ok := e.toNumericHex()
+			if !ok {
+				// overflow
+				return makeboolean(true)
+			}
+			return makeboolean(hex.u != 0)
+		}
+		f, _ := fastparse.ParseFloat64(e.string())
+		return makeboolean(f != 0.0)
+	case *evalJSON:
+		return makeboolean(e.ToBoolean())
+	case *evalTemporal:
+		return makeboolean(!e.isZero())
 	default:
 		panic("unhandled case: evalIsTruthy")
 	}
@@ -153,14 +187,14 @@ func evalCoerce(e eval, typ sqltypes.Type, col collations.ID) (eval, error) {
 	case sqltypes.Char, sqltypes.VarChar:
 		panic("unreacheable")
 	case sqltypes.Decimal:
-		return evalToNumeric(e).toDecimal(0, 0), nil
+		return evalToDecimal(e, 0, 0), nil
 	case sqltypes.Float32, sqltypes.Float64:
-		f, _ := evalToNumeric(e).toFloat()
+		f, _ := evalToFloat(e)
 		return f, nil
 	case sqltypes.Int8, sqltypes.Int16, sqltypes.Int32, sqltypes.Int64:
-		return evalToNumeric(e).toInt64(), nil
+		return evalToInt64(e), nil
 	case sqltypes.Uint8, sqltypes.Uint16, sqltypes.Uint32, sqltypes.Uint64:
-		return evalToNumeric(e).toUint64(), nil
+		return evalToInt64(e).toUint64(), nil
 	case sqltypes.Date, sqltypes.Datetime, sqltypes.Year, sqltypes.TypeJSON, sqltypes.Time, sqltypes.Bit:
 		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "Unsupported type conversion: %s", typ.String())
 	default:
@@ -185,7 +219,8 @@ func valueToEvalCast(v sqltypes.Value, typ sqltypes.Type) (eval, error) {
 			fval, err := v.ToFloat64()
 			return newEvalFloat(fval), err
 		case v.IsText() || v.IsBinary():
-			return newEvalFloat(parseStringToFloat(v.RawStr())), nil
+			fval, _ := fastparse.ParseFloat64(v.RawStr())
+			return newEvalFloat(fval), nil
 		default:
 			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "coercion should not try to coerce this value to a float: %v", v)
 		}
@@ -206,7 +241,7 @@ func valueToEvalCast(v sqltypes.Value, typ sqltypes.Type) (eval, error) {
 			}
 			dec = decimal.NewFromFloat(fval)
 		case v.IsText() || v.IsBinary():
-			fval := parseStringToFloat(v.RawStr())
+			fval, _ := fastparse.ParseFloat64(v.RawStr())
 			dec = decimal.NewFromFloat(fval)
 		default:
 			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "coercion should not try to coerce this value to a decimal: %v", v)
@@ -311,8 +346,12 @@ func valueToEval(value sqltypes.Value, collation collations.TypedCollation) (eva
 		}
 	case sqltypes.IsBinary(tt):
 		return newEvalBinary(value.Raw()), nil
-	case sqltypes.IsDate(tt):
-		return newEvalRaw(value.Type(), value.Raw(), collationNumeric), nil
+	case tt == sqltypes.Date:
+		return parseDate(value.Raw())
+	case tt == sqltypes.Datetime || tt == sqltypes.Timestamp:
+		return parseDateTime(value.Raw())
+	case tt == sqltypes.Time:
+		return parseTime(value.Raw())
 	case sqltypes.IsNull(tt):
 		return nil, nil
 	case tt == sqltypes.TypeJSON:
@@ -322,4 +361,39 @@ func valueToEval(value sqltypes.Value, collation collations.TypedCollation) (eva
 	default:
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Type is not supported: %q %s", value, value.Type())
 	}
+}
+
+const hexchars = "0123456789ABCDEF"
+
+func sanitizeErrorValue(s []byte) []byte {
+	var buf []byte
+	for width := 0; len(s) > 0; s = s[width:] {
+		r := rune(s[0])
+		width = 1
+		if r >= utf8.RuneSelf {
+			r, width = utf8.DecodeLastRune(s)
+		}
+		if width == 1 && r == utf8.RuneError {
+			buf = append(buf, `\x`...)
+			buf = append(buf, hexchars[s[0]>>4])
+			buf = append(buf, hexchars[s[0]&0xF])
+			continue
+		}
+
+		if strconv.IsPrint(r) {
+			if r < utf8.RuneSelf {
+				buf = append(buf, byte(r))
+			} else {
+				b := [utf8.UTFMax]byte{}
+				n := utf8.EncodeRune(b[:], r)
+				buf = append(buf, b[:n]...)
+			}
+			continue
+		}
+
+		buf = append(buf, `\x`...)
+		buf = append(buf, hexchars[s[0]>>4])
+		buf = append(buf, hexchars[s[0]&0xF])
+	}
+	return buf
 }

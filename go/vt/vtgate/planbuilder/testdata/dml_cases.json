@@ -2158,7 +2158,7 @@
   {
     "comment": "insert invalid index value",
     "query": "insert into music_extra(music_id, user_id) values(1, id)",
-    "plan": "column access not supported here"
+    "plan": "cannot lookup column (column access not supported here)"
   },
   {
     "comment": "insert invalid table",
@@ -6242,6 +6242,29 @@
       },
       "TablesUsed": [
         "user.ref"
+      ]
+    }
+  },
+  {
+    "comment": "update using last_insert_id with an argument",
+    "query": "update main.m1 set foo = last_insert_id(foo+1) where id = 12345",
+    "plan": {
+      "QueryType": "UPDATE",
+      "Original": "update main.m1 set foo = last_insert_id(foo+1) where id = 12345",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "update m1 set foo = last_insert_id(foo + 1) where id = 12345",
+        "Table": "m1"
+      },
+      "TablesUsed": [
+        "main.m1"
       ]
     }
   }

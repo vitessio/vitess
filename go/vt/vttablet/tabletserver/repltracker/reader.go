@@ -123,6 +123,9 @@ func (r *heartbeatReader) Close() {
 	}
 	r.ticks.Stop()
 	r.pool.Close()
+
+	currentLagNs.Set(0)
+
 	r.isOpen = false
 	log.Info("Heartbeat Reader: closed")
 }

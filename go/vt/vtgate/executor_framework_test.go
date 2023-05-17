@@ -166,6 +166,7 @@ func createExecutorEnv() (executor *Executor, sbc1, sbc2, sbclookup *sandboxconn
 
 	createSandbox(KsTestUnsharded)
 	sbclookup = hc.AddTestTablet(cell, "0", 1, KsTestUnsharded, "0", topodatapb.TabletType_PRIMARY, true, 1, nil)
+	_ = hc.AddTestTablet(cell, "2", 3, KsTestUnsharded, "0", topodatapb.TabletType_REPLICA, true, 1, nil)
 
 	// Ues the 'X' in the name to ensure it's not alphabetically first.
 	// Otherwise, it would become the default keyspace for the dual table.

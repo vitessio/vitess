@@ -19,13 +19,9 @@ package planbuilder
 import (
 	"strings"
 
-	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/vt/sidecardb"
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
-	"vitess.io/vitess/go/vt/vtgate/semantics"
-
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -52,7 +48,7 @@ func analyzeSelect(sel *sqlparser.Select, tables map[string]*schema.Table) (plan
 			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%s is not a sequence", sqlparser.ToString(sel.From))
 		}
 		plan.PlanID = PlanNextval
-		v, err := evalengine.Translate(nextVal.Expr, semantics.EmptySemTable())
+		v, err := evalengine.Translate(nextVal.Expr, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -135,7 +131,10 @@ func analyzeInsert(ins *sqlparser.Insert, tables map[string]*schema.Table) (plan
 func analyzeShow(show *sqlparser.Show, dbName string) (plan *Plan, err error) {
 	switch showInternal := show.Internal.(type) {
 	case *sqlparser.ShowBasic:
-		if showInternal.Command == sqlparser.Table {
+		switch showInternal.Command {
+		case sqlparser.VitessMigrations:
+			return &Plan{PlanID: PlanShowMigrations, FullStmt: show}, nil
+		case sqlparser.Table:
 			// rewrite WHERE clause if it exists
 			// `where Tables_in_Keyspace` => `where Tables_in_DbName`
 			if showInternal.Filter != nil {
@@ -206,13 +205,7 @@ func lookupSingleTable(tableExpr sqlparser.TableExpr, tables map[string]*schema.
 	return tables[tableName.String()]
 }
 
-func analyzeDDL(stmt sqlparser.DDLStatement, viewsEnabled bool) (*Plan, error) {
-	switch stmt.(type) {
-	case *sqlparser.AlterView, *sqlparser.DropView, *sqlparser.CreateView:
-		if viewsEnabled {
-			return analyzeViewsDDL(stmt)
-		}
-	}
+func analyzeDDL(stmt sqlparser.DDLStatement) (*Plan, error) {
 	// DDLs and some other statements below don't get fully parsed.
 	// We have to use the original query at the time of execution.
 	// We are in the process of changing this
@@ -222,32 +215,4 @@ func analyzeDDL(stmt sqlparser.DDLStatement, viewsEnabled bool) (*Plan, error) {
 		fullQuery = GenerateFullQuery(stmt)
 	}
 	return &Plan{PlanID: PlanDDL, FullQuery: fullQuery, FullStmt: stmt, NeedsReservedConn: stmt.IsTemporary()}, nil
-}
-
-func analyzeViewsDDL(stmt sqlparser.DDLStatement) (*Plan, error) {
-	switch viewDDL := stmt.(type) {
-	case *sqlparser.CreateView:
-		query := sqlparser.BuildParsedQuery(mysql.InsertIntoViewsTable, sidecardb.GetIdentifier()).Query
-		if viewDDL.IsReplace {
-			query = sqlparser.BuildParsedQuery(mysql.ReplaceIntoViewsTable, sidecardb.GetIdentifier()).Query
-		}
-		insert, err := sqlparser.Parse(query)
-		if err != nil {
-			return nil, err
-		}
-		return &Plan{PlanID: PlanViewDDL, FullQuery: GenerateFullQuery(insert), FullStmt: viewDDL}, nil
-	case *sqlparser.AlterView:
-		update, err := sqlparser.Parse(sqlparser.BuildParsedQuery(mysql.UpdateViewsTable, sidecardb.GetIdentifier()).Query)
-		if err != nil {
-			return nil, err
-		}
-		return &Plan{PlanID: PlanViewDDL, FullQuery: GenerateFullQuery(update), FullStmt: viewDDL}, nil
-	case *sqlparser.DropView:
-		del, err := sqlparser.Parse(sqlparser.BuildParsedQuery(mysql.DeleteFromViewsTable, sidecardb.GetIdentifier()).Query)
-		if err != nil {
-			return nil, err
-		}
-		return &Plan{PlanID: PlanViewDDL, FullQuery: GenerateFullQuery(del), FullStmt: viewDDL}, nil
-	}
-	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unknown view DDL type: %T", stmt)
 }

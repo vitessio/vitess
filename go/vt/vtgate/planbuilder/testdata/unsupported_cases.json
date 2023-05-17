@@ -31,12 +31,6 @@
     "gen4-plan": "VT12001: unsupported: '*' expression in cross-shard query"
   },
   {
-    "comment": "order by rand on a cross-shard subquery",
-    "query": "select id from (select user.id, user.col from user join user_extra) as t order by rand()",
-    "v3-plan": "VT12001: unsupported: memory sort: complex ORDER BY expression: rand()",
-    "gen4-plan": "VT13001: [BUG] in scatter query: complex ORDER BY expression: rand()"
-  },
-  {
     "comment": "natural join",
     "query": "select * from user natural join user_extra",
     "plan": "VT12001: unsupported: natural join"
@@ -114,18 +108,6 @@
     "query": "select id from user group by id, (select id from user_extra)",
     "v3-plan": "VT12001: unsupported: subqueries disallowed in sqlparser.GroupBy",
     "gen4-plan": "VT12001: unsupported: subqueries in GROUP BY"
-  },
-  {
-    "comment": "Order by uses cross-shard expression",
-    "query": "select id from user order by id+1",
-    "v3-plan": "VT12001: unsupported: in scatter query: complex ORDER BY expression: id + 1",
-    "gen4-plan": "VT13001: [BUG] in scatter query: complex ORDER BY expression: id + 1"
-  },
-  {
-    "comment": "Order by column number with collate",
-    "query": "select user.col1 as a from user order by 1 collate utf8_general_ci",
-    "v3-plan": "VT12001: unsupported: in scatter query: complex ORDER BY expression: 1 collate utf8_general_ci",
-    "gen4-plan": "VT13001: [BUG] in scatter query: complex ORDER BY expression: a collate utf8_general_ci"
   },
   {
     "comment": "subqueries in delete",
@@ -208,13 +190,13 @@
     "comment": "join in update tables",
     "query": "update user join user_extra on user.id = user_extra.id set user.name = 'foo'",
     "v3-plan": "VT12001: unsupported: multi-shard or vindex write statement",
-    "gen4-plan": "VT12001: unsupported: multiple tables in update"
+    "gen4-plan": "VT12001: unsupported: unaliased multiple tables in update"
   },
   {
     "comment": "multiple tables in update",
     "query": "update user as u, user_extra as ue set u.name = 'foo' where u.id = ue.id",
     "v3-plan": "VT12001: unsupported: multi-shard or vindex write statement",
-    "gen4-plan": "VT12001: unsupported: multiple tables in update"
+    "gen4-plan": "VT12001: unsupported: multiple (2) tables in update"
   },
   {
     "comment": "unsharded insert, unqualified names and auto-inc combined",
@@ -372,7 +354,7 @@
   {
     "comment": "create view with Cannot auto-resolve for cross-shard joins",
     "query": "create view user.view_a as select col from user join user_extra",
-    "v3-plan": "VT03019: symbol col not found",
+    "v3-plan": "VT03019: column col not found",
     "gen4-plan": "Column 'col' in field list is ambiguous"
   },
   {
@@ -414,7 +396,7 @@
   {
     "comment": "scatter aggregate with ambiguous aliases",
     "query": "select distinct a, b as a from user",
-    "v3-plan": "generating ORDER BY clause: VT03021: ambiguous symbol reference: a",
+    "v3-plan": "generating ORDER BY clause: VT03021: ambiguous column reference: a",
     "gen4-plan": "VT13001: [BUG] generating ORDER BY clause: ambiguous symbol reference: a"
   },
   {
@@ -485,5 +467,30 @@
     "comment": "mix lock with other expr",
     "query": "select get_lock('xyz', 10), 1 from dual",
     "plan": "VT12001: unsupported: LOCK function and other expression: [1] in same select query"
+  },
+  {
+    "comment": "Assignment expression in select statements",
+    "query": "select @val := 42",
+    "plan": "VT12001: unsupported: Assignment expression"
+  },
+  {
+    "comment": "Assignment expression in union statements",
+    "query": "select @val := 42 union select 1",
+    "plan": "VT12001: unsupported: Assignment expression"
+  },
+  {
+    "comment": "Assignment expression in update statements",
+    "query": "update user set name = @val := 42",
+    "plan": "VT12001: unsupported: Assignment expression"
+  },
+  {
+    "comment": "Assignment expression in insert statement",
+    "query": "insert into user (id) values (@val := 42)",
+    "plan": "VT12001: unsupported: Assignment expression"
+  },
+  {
+    "comment": "Assignment expression in delete statement",
+    "query": "delete from user where x = (@val := 42)",
+    "plan": "VT12001: unsupported: Assignment expression"
   }
 ]

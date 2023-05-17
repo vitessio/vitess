@@ -134,6 +134,7 @@ func (tw *TopologyWatcher) Start() {
 			select {
 			case <-t.ctx.Done():
 				return
+			case <-tw.healthcheck.GetLoadTabletsTrigger():
 			case <-ticker.C:
 			}
 		}
@@ -362,7 +363,7 @@ func (fbs *FilterByShard) IsIncluded(tablet *topodata.Tablet) bool {
 			// Exact match (probably a non-sharded keyspace).
 			return true
 		}
-		if kr != nil && c.keyRange != nil && key.KeyRangeIncludes(c.keyRange, kr) {
+		if kr != nil && c.keyRange != nil && key.KeyRangeContainsKeyRange(c.keyRange, kr) {
 			// Our filter's KeyRange includes the provided KeyRange
 			return true
 		}

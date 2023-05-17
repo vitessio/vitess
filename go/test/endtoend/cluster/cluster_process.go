@@ -811,14 +811,14 @@ func (cluster *LocalProcessCluster) WaitForTabletsToHealthyInVtgate() (err error
 					rdonlyTabletCount++
 				}
 			}
-			if err = cluster.VtgateProcess.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", keyspace.Name, shard.Name), 1); err != nil {
+			if err = cluster.VtgateProcess.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", keyspace.Name, shard.Name), 1, 2*time.Minute); err != nil {
 				return err
 			}
 			if replicaTabletCount > 0 {
-				err = cluster.VtgateProcess.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", keyspace.Name, shard.Name), replicaTabletCount)
+				err = cluster.VtgateProcess.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", keyspace.Name, shard.Name), replicaTabletCount, 2*time.Minute)
 			}
 			if rdonlyTabletCount > 0 {
-				err = cluster.VtgateProcess.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.rdonly", keyspace.Name, shard.Name), rdonlyTabletCount)
+				err = cluster.VtgateProcess.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.rdonly", keyspace.Name, shard.Name), rdonlyTabletCount, 2*time.Minute)
 			}
 			if err != nil {
 				return err
@@ -854,7 +854,7 @@ func (cluster *LocalProcessCluster) ExecOnTablet(ctx context.Context, vttablet *
 		return nil, err
 	}
 
-	tablet, err := cluster.vtctlclientGetTablet(vttablet)
+	tablet, err := cluster.VtctlclientGetTablet(vttablet)
 	if err != nil {
 		return nil, err
 	}
@@ -897,7 +897,7 @@ func (cluster *LocalProcessCluster) ExecOnVTGate(ctx context.Context, addr strin
 // returns the responses. It returns an error if the stream ends with fewer than
 // `count` responses.
 func (cluster *LocalProcessCluster) StreamTabletHealth(ctx context.Context, vttablet *Vttablet, count int) (responses []*querypb.StreamHealthResponse, err error) {
-	tablet, err := cluster.vtctlclientGetTablet(vttablet)
+	tablet, err := cluster.VtctlclientGetTablet(vttablet)
 	if err != nil {
 		return nil, err
 	}
@@ -929,7 +929,7 @@ func (cluster *LocalProcessCluster) StreamTabletHealth(ctx context.Context, vtta
 	return responses, nil
 }
 
-func (cluster *LocalProcessCluster) vtctlclientGetTablet(tablet *Vttablet) (*topodatapb.Tablet, error) {
+func (cluster *LocalProcessCluster) VtctlclientGetTablet(tablet *Vttablet) (*topodatapb.Tablet, error) {
 	result, err := cluster.VtctlclientProcess.ExecuteCommandWithOutput("GetTablet", "--", tablet.Alias)
 	if err != nil {
 		return nil, err

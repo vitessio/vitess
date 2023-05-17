@@ -19,14 +19,14 @@ package vreplication
 var dryRunResultsSwitchWritesCustomerShard = []string{
 	"Lock keyspace product",
 	"Lock keyspace customer",
-	"Stop writes on keyspace product, tables [Lead,Lead-1,customer,db_order_test]:",
+	"Stop writes on keyspace product, tables [Lead,Lead-1,blob_tbl,customer,db_order_test,geom_tbl,json_tbl,vdiff_order]:",
 	"/       Keyspace product, Shard 0 at Position",
 	"Wait for VReplication on stopped streams to catchup for up to 30s",
 	"Create reverse replication workflow p2c_reverse",
 	"Create journal entries on source databases",
-	"Enable writes on keyspace customer tables [Lead,Lead-1,customer,db_order_test]",
+	"Enable writes on keyspace customer tables [Lead,Lead-1,blob_tbl,customer,db_order_test,geom_tbl,json_tbl,vdiff_order]",
 	"Switch routing from keyspace product to keyspace customer",
-	"Routing rules for tables [Lead,Lead-1,customer,db_order_test] will be updated",
+	"Routing rules for tables [Lead,Lead-1,blob_tbl,customer,db_order_test,geom_tbl,json_tbl,vdiff_order] will be updated",
 	"Switch writes completed, freeze and delete vreplication streams on:",
 	"       tablet 200 ",
 	"       tablet 300 ",
@@ -41,8 +41,8 @@ var dryRunResultsSwitchWritesCustomerShard = []string{
 
 var dryRunResultsReadCustomerShard = []string{
 	"Lock keyspace product",
-	"Switch reads for tables [Lead,Lead-1,customer,db_order_test] to keyspace customer for tablet types [RDONLY,REPLICA]",
-	"Routing rules for tables [Lead,Lead-1,customer,db_order_test] will be updated",
+	"Switch reads for tables [Lead,Lead-1,blob_tbl,customer,db_order_test,geom_tbl,json_tbl,vdiff_order] to keyspace customer for tablet types [RDONLY,REPLICA]",
+	"Routing rules for tables [Lead,Lead-1,blob_tbl,customer,db_order_test,geom_tbl,json_tbl,vdiff_order] will be updated",
 	"Unlock keyspace product",
 }
 
@@ -83,5 +83,11 @@ var dryRunResultsSwitchWritesM2m3 = []string{
 	"       Keyspace merchant-type, Shard -40, Tablet 1600, Workflow m2m3, DbName vt_merchant-type",
 	"       Keyspace merchant-type, Shard 40-c0, Tablet 1700, Workflow m2m3, DbName vt_merchant-type",
 	"       Keyspace merchant-type, Shard c0-, Tablet 1800, Workflow m2m3, DbName vt_merchant-type",
+	"Unlock keyspace merchant-type",
+}
+
+var dryRunResultsSwitchReadM2m3 = []string{
+	"Lock keyspace merchant-type",
+	"Switch reads from keyspace merchant-type to keyspace merchant-type for shards -80,80- to shards -40,40-c0,c0-",
 	"Unlock keyspace merchant-type",
 }

@@ -84,7 +84,7 @@ func registerThrottlerFlags(fs *pflag.FlagSet) {
 
 	fs.DurationVar(&throttleThreshold, "throttle_threshold", throttleThreshold, "Replication lag threshold for default lag throttling")
 	fs.StringVar(&throttleMetricQuery, "throttle_metrics_query", throttleMetricQuery, "Override default heartbeat/lag metric. Use either `SELECT` (must return single row, single value) or `SHOW GLOBAL ... LIKE ...` queries. Set -throttle_metrics_threshold respectively.")
-	fs.Float64Var(&throttleMetricThreshold, "throttle_metrics_threshold", throttleMetricThreshold, "Override default throttle threshold, respective to -throttle_metrics_query")
+	fs.Float64Var(&throttleMetricThreshold, "throttle_metrics_threshold", throttleMetricThreshold, "Override default throttle threshold, respective to --throttle_metrics_query")
 	fs.BoolVar(&throttlerCheckAsCheckSelf, "throttle_check_as_check_self", throttlerCheckAsCheckSelf, "Should throttler/check return a throttler/check-self result (changes throttler behavior for writes)")
 	fs.BoolVar(&throttlerConfigViaTopo, "throttler-config-via-topo", throttlerConfigViaTopo, "When 'true', read config from topo service and ignore throttle_threshold, throttle_metrics_threshold, throttle_metrics_query, throttle_check_as_check_self")
 }
@@ -164,6 +164,9 @@ type ThrottlerStatus struct {
 	IsOpen    bool
 	IsEnabled bool
 	IsDormant bool
+
+	Query     string
+	Threshold float64
 
 	AggregatedMetrics map[string]base.MetricResult
 	MetricsHealth     base.MetricHealthMap
@@ -255,6 +258,10 @@ func (throttler *Throttler) GetMetricsQuery() string {
 	return throttler.metricsQuery.Load().(string)
 }
 
+func (throttler *Throttler) GetMetricsThreshold() float64 {
+	return math.Float64frombits(throttler.MetricsThreshold.Load())
+}
+
 // initThrottler initializes config
 func (throttler *Throttler) initConfig() {
 	log.Infof("Throttler: initializing config")
@@ -303,6 +310,7 @@ func (throttler *Throttler) normalizeThrottlerConfig(thottlerConfig *topodatapb.
 }
 
 func (throttler *Throttler) WatchSrvKeyspaceCallback(srvks *topodatapb.SrvKeyspace, err error) bool {
+	log.Infof("Throttler: WatchSrvKeyspaceCallback called with: %+v", srvks)
 	if err != nil {
 		log.Errorf("WatchSrvKeyspaceCallback error: %v", err)
 		return false
@@ -310,8 +318,10 @@ func (throttler *Throttler) WatchSrvKeyspaceCallback(srvks *topodatapb.SrvKeyspa
 	throttlerConfig := throttler.normalizeThrottlerConfig(srvks.ThrottlerConfig)
 
 	if throttler.IsEnabled() {
-		// throttler is running and we should apply the config change through Operate() or else we get into race conditions
+		// Throttler is running and we should apply the config change through Operate()
+		// or else we get into race conditions.
 		go func() {
+			log.Infof("Throttler: submitting a throttler config apply message with: %+v", throttlerConfig)
 			throttler.throttlerConfigChan <- throttlerConfig
 		}()
 	} else {
@@ -328,6 +338,7 @@ func (throttler *Throttler) applyThrottlerConfig(ctx context.Context, throttlerC
 	if !throttlerConfigViaTopo {
 		return
 	}
+	log.Infof("Throttler: applying topo config: %+v", throttlerConfig)
 	if throttlerConfig.CustomQuery == "" {
 		throttler.metricsQuery.Store(sqlparser.BuildParsedQuery(defaultReplicationLagQuery, sidecardb.GetIdentifier()).Query)
 	} else {
@@ -353,8 +364,10 @@ func (throttler *Throttler) Enable(ctx context.Context) bool {
 	defer throttler.enableMutex.Unlock()
 
 	if throttler.IsEnabled() {
+		log.Infof("Throttler: already enabled")
 		return false
 	}
+	log.Infof("Throttler: enabling")
 	atomic.StoreInt64(&throttler.isEnabled, 1)
 
 	ctx, throttler.cancelEnableContext = context.WithCancel(ctx)
@@ -374,8 +387,10 @@ func (throttler *Throttler) Disable(ctx context.Context) bool {
 	defer throttler.enableMutex.Unlock()
 
 	if !throttler.IsEnabled() {
+		log.Infof("Throttler: already disabled")
 		return false
 	}
+	log.Infof("Throttler: disabling")
 	// _ = throttler.updateConfig(ctx, false, throttler.MetricsThreshold.Get()) // TODO(shlomi)
 	atomic.StoreInt64(&throttler.isEnabled, 0)
 
@@ -390,12 +405,15 @@ func (throttler *Throttler) Disable(ctx context.Context) bool {
 
 // Open opens database pool and initializes the schema
 func (throttler *Throttler) Open() error {
+	log.Infof("Throttler: started execution of Open. Acquiring initMutex lock")
 	throttler.initMutex.Lock()
 	defer throttler.initMutex.Unlock()
 	if atomic.LoadInt64(&throttler.isOpen) > 0 {
 		// already open
+		log.Infof("Throttler: throttler is already open")
 		return nil
 	}
+	log.Infof("Throttler: opening")
 	ctx := context.Background()
 	// The query needs to be dynamically built because the sidecar database name
 	// is not known when the TabletServer is created, which in turn creates the
@@ -411,6 +429,7 @@ func (throttler *Throttler) Open() error {
 	throttler.ThrottleApp("always-throttled-app", time.Now().Add(time.Hour*24*365*10), defaultThrottleRatio)
 
 	if throttlerConfigViaTopo {
+		log.Infof("Throttler: throttler-config-via-topo detected")
 		// We want to read throttler config from topo and apply it.
 		// But also, we're in an Open() function, which blocks state manager's operation, and affects
 		// opening of all other components. We thus read the throttler config in the background.
@@ -1037,6 +1056,9 @@ func (throttler *Throttler) Status() *ThrottlerStatus {
 		IsOpen:    (atomic.LoadInt64(&throttler.isOpen) > 0),
 		IsEnabled: (atomic.LoadInt64(&throttler.isEnabled) > 0),
 		IsDormant: throttler.isDormant(),
+
+		Query:     throttler.GetMetricsQuery(),
+		Threshold: throttler.GetMetricsThreshold(),
 
 		AggregatedMetrics: throttler.aggregatedMetricsSnapshot(),
 		MetricsHealth:     throttler.metricsHealthSnapshot(),

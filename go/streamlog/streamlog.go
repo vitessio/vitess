@@ -183,7 +183,7 @@ func (logger *StreamLogger[T]) Name() string {
 // ServeLogs registers the URL on which messages will be broadcast.
 // It is safe to register multiple URLs for the same StreamLogger.
 func (logger *StreamLogger[T]) ServeLogs(url string, logf LogFormatter) {
-	http.HandleFunc(url, func(w http.ResponseWriter, r *http.Request) {
+	servenv.HTTPHandleFunc(url, func(w http.ResponseWriter, r *http.Request) {
 		if err := acl.CheckAccessHTTP(r, acl.DEBUGGING); err != nil {
 			acl.SendError(w, err)
 			return

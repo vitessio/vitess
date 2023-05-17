@@ -20,6 +20,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
+	popcode "vitess.io/vitess/go/vt/vtgate/engine/opcode"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
@@ -37,7 +38,7 @@ type pulloutSubquery struct {
 }
 
 // newPulloutSubquery builds a new pulloutSubquery.
-func newPulloutSubquery(opcode engine.PulloutOpcode, sqName, hasValues string, subquery logicalPlan) *pulloutSubquery {
+func newPulloutSubquery(opcode popcode.PulloutOpcode, sqName, hasValues string, subquery logicalPlan) *pulloutSubquery {
 	return &pulloutSubquery{
 		subquery: subquery,
 		eSubquery: &engine.PulloutSubquery{

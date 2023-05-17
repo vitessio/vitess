@@ -77,8 +77,9 @@ var (
 )
 
 const (
-	testThreshold   = 5
-	applyConfigWait = 15 * time.Second // time after which we're sure the throttler has refreshed config and tablets
+	testThreshold     = 5
+	applyConfigWait   = 15 * time.Second // time after which we're sure the throttler has refreshed config and tablets
+	statusWaitTimeout = 30 * time.Second
 )
 
 func TestMain(m *testing.M) {
@@ -151,6 +152,28 @@ func throttleCheck(tablet *cluster.Vttablet) (*http.Response, error) {
 	return resp, err
 }
 
+func waitForThrottlerStatus(tablet *cluster.Vttablet, status int) error {
+	ctx, cancel := context.WithTimeout(context.Background(), statusWaitTimeout)
+	defer cancel()
+	tkr := time.NewTicker(100 * time.Millisecond)
+	defer tkr.Stop()
+
+	for {
+		resp, _ := throttleCheck(tablet)
+		seenStatus := resp.StatusCode
+		resp.Body.Close()
+		if seenStatus == status {
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("timed out waiting for expected throttler status %d after %v; last seen value: %d",
+				status, statusWaitTimeout, seenStatus)
+		case <-tkr.C:
+		}
+	}
+}
+
 func throttleCheckSelf(tablet *cluster.Vttablet) (*http.Response, error) {
 	return httpClient.Head(fmt.Sprintf("http://localhost:%d/%s", tablet.HTTPPort, checkSelfAPIPath))
 }
@@ -159,10 +182,10 @@ func TestThrottlerThresholdOK(t *testing.T) {
 	defer cluster.PanicHandler(t)
 
 	t.Run("immediately", func(t *testing.T) {
-		resp, err := throttleCheck(primaryTablet)
+		// The tablet throttler can still be initializing so we wait for
+		// the status to be OK.
+		err := waitForThrottlerStatus(primaryTablet, http.StatusOK)
 		require.NoError(t, err)
-		defer resp.Body.Close()
-		assert.Equal(t, http.StatusOK, resp.StatusCode)
 	})
 	t.Run("after long wait", func(t *testing.T) {
 		time.Sleep(applyConfigWait)
