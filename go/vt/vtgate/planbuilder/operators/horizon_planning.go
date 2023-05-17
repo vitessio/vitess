@@ -272,6 +272,9 @@ func tryPushingDownProjection(
 	case *Route:
 		return swap(p, src)
 	case *ApplyJoin:
+		if p.FromAggr {
+			return p, rewrite.SameTree, nil
+		}
 		return pushDownProjectionInApplyJoin(ctx, p, src)
 	case *Vindex:
 		return pushDownProjectionInVindex(ctx, p, src)

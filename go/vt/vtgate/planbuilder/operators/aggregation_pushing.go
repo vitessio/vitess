@@ -19,15 +19,13 @@ package operators
 import (
 	"fmt"
 
-	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/semantics"
-
 	"vitess.io/vitess/go/vt/sqlparser"
-
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
+	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 func tryPushingDownAggregator(ctx *plancontext.PlanningContext, aggregator *Aggregator) (output ops.Operator, applyResult rewrite.ApplyResult, err error) {
@@ -279,7 +277,7 @@ func splitAggrColumnsToLeftAndRight(
 	builder := &aggBuilder{
 		lhs:       lhs,
 		rhs:       rhs,
-		proj:      &Projection{Source: join},
+		proj:      &Projection{Source: join, FromAggr: true},
 		outerJoin: join.LeftJoin,
 		lhsID:     TableID(join.LHS),
 		rhsID:     TableID(join.RHS),
@@ -368,11 +366,11 @@ func (ab *aggBuilder) handleCountStar(ctx *plancontext.PlanningContext, aggr Agg
 	// We add a column for each side to facilitate reconstituting the final aggregation later.
 	ab.joinColumns = append(ab.joinColumns,
 		JoinColumn{
-			Original: aeWrap(rhsExpr),
-			RHSExpr:  rhsExpr,
-		}, JoinColumn{
 			Original: aeWrap(lhsExpr),
 			LHSExprs: []sqlparser.Expr{lhsExpr},
+		}, JoinColumn{
+			Original: aeWrap(rhsExpr),
+			RHSExpr:  rhsExpr,
 		})
 
 	// When dealing with outer joins, we may encounter null values on the RHS.
@@ -417,12 +415,12 @@ type joinPusher struct {
 func (p joinPusher) addAggr(ctx *plancontext.PlanningContext, aggr Aggr) sqlparser.Expr {
 	copyAggr := aggr
 	expr := sqlparser.CloneExpr(aggr.Original.Expr)
+	copyAggr.Original = aeWrap(expr)
 	// copy dependencies so we can keep track of which side expressions need to be pushed to
 	ctx.SemTable.Direct[expr] = p.tableID
 	ctx.SemTable.Recursive[expr] = p.tableID
-
-	offset := p.useColumn(aggr.ColOffset)
-	copyAggr.ColOffset = offset
+	copyAggr.ColOffset = len(p.pushed.Columns)
+	p.pushed.Columns = append(p.pushed.Columns, copyAggr.Original)
 	p.pushed.Aggregations = append(p.pushed.Aggregations, copyAggr)
 	return expr
 }

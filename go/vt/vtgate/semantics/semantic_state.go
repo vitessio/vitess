@@ -443,7 +443,16 @@ func (st *SemTable) SingleUnshardedKeyspace() (*vindexes.Keyspace, []*vindexes.T
 // The expression in the select list is not equal to the one in the ORDER BY,
 // but they point to the same column and would be considered equal by this method
 func (st *SemTable) EqualsExpr(a, b sqlparser.Expr) bool {
-	return st.ASTEquals().Expr(a, b)
+	eq := st.ASTEquals().Expr(a, b)
+	if !eq {
+		return false
+	}
+	adeps := st.Direct[a]
+	bdeps := st.Direct[b]
+	if adeps.IsEmpty() || bdeps.IsEmpty() || adeps == bdeps {
+		return true
+	}
+	return false
 }
 
 func (st *SemTable) ContainsExpr(e sqlparser.Expr, expres []sqlparser.Expr) bool {

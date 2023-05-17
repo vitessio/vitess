@@ -44,6 +44,8 @@ type (
 		// TableID will be non-nil for derived tables
 		TableID *semantics.TableSet
 		Alias   string
+
+		FromAggr bool
 	}
 
 	ProjExpr interface {
@@ -110,6 +112,7 @@ func (p *Projection) Clone(inputs []ops.Operator) ops.Operator {
 		Columns:     slices.Clone(p.Columns),
 		TableID:     p.TableID,
 		Alias:       p.Alias,
+		FromAggr:    p.FromAggr,
 	}
 }
 
