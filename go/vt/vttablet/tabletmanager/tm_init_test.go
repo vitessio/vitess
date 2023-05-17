@@ -43,12 +43,6 @@ import (
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 )
 
-var (
-	dbServerVersion = "8.0.0"
-	charsetName     = "utf8mb4"
-	dbsvCollID      = collations.NewEnvironment(dbServerVersion).DefaultCollationForCharset(charsetName).ID()
-)
-
 func TestStartBuildTabletFromInput(t *testing.T) {
 	alias := &topodatapb.TabletAlias{
 		Cell: "cell",
@@ -76,17 +70,16 @@ func TestStartBuildTabletFromInput(t *testing.T) {
 		Type:                 topodatapb.TabletType_REPLICA,
 		Tags:                 map[string]string{},
 		DbNameOverride:       "aa",
-		DbServerVersion:      dbServerVersion,
-		DefaultConnCollation: uint32(dbsvCollID),
+		DefaultConnCollation: uint32(collations.Default()),
 	}
 
-	gotTablet, err := BuildTabletFromInput(alias, port, grpcport, dbServerVersion, nil)
+	gotTablet, err := BuildTabletFromInput(alias, port, grpcport, nil)
 	require.NoError(t, err)
 
 	// Hostname should be resolved.
 	assert.Equal(t, wantTablet, gotTablet)
 	tabletHostname = ""
-	gotTablet, err = BuildTabletFromInput(alias, port, grpcport, dbServerVersion, nil)
+	gotTablet, err = BuildTabletFromInput(alias, port, grpcport, nil)
 	require.NoError(t, err)
 	assert.NotEqual(t, "", gotTablet.Hostname)
 
@@ -98,7 +91,7 @@ func TestStartBuildTabletFromInput(t *testing.T) {
 		Start: []byte(""),
 		End:   []byte("\xc0"),
 	}
-	gotTablet, err = BuildTabletFromInput(alias, port, grpcport, dbServerVersion, nil)
+	gotTablet, err = BuildTabletFromInput(alias, port, grpcport, nil)
 	require.NoError(t, err)
 	// KeyRange check is explicit because the next comparison doesn't
 	// show the diff well enough.
@@ -108,25 +101,25 @@ func TestStartBuildTabletFromInput(t *testing.T) {
 	// Invalid inputs.
 	initKeyspace = ""
 	initShard = "0"
-	_, err = BuildTabletFromInput(alias, port, grpcport, dbServerVersion, nil)
+	_, err = BuildTabletFromInput(alias, port, grpcport, nil)
 	assert.Contains(t, err.Error(), "init_keyspace and init_shard must be specified")
 
 	initKeyspace = "test_keyspace"
 	initShard = ""
-	_, err = BuildTabletFromInput(alias, port, grpcport, dbServerVersion, nil)
+	_, err = BuildTabletFromInput(alias, port, grpcport, nil)
 	assert.Contains(t, err.Error(), "init_keyspace and init_shard must be specified")
 
 	initShard = "x-y"
-	_, err = BuildTabletFromInput(alias, port, grpcport, dbServerVersion, nil)
+	_, err = BuildTabletFromInput(alias, port, grpcport, nil)
 	assert.Contains(t, err.Error(), "cannot validate shard name")
 
 	initShard = "0"
 	initTabletType = "bad"
-	_, err = BuildTabletFromInput(alias, port, grpcport, dbServerVersion, nil)
+	_, err = BuildTabletFromInput(alias, port, grpcport, nil)
 	assert.Contains(t, err.Error(), "unknown TabletType bad")
 
 	initTabletType = "primary"
-	_, err = BuildTabletFromInput(alias, port, grpcport, dbServerVersion, nil)
+	_, err = BuildTabletFromInput(alias, port, grpcport, nil)
 	assert.Contains(t, err.Error(), "invalid init_tablet_type PRIMARY")
 }
 
@@ -159,11 +152,10 @@ func TestBuildTabletFromInputWithBuildTags(t *testing.T) {
 		Type:                 topodatapb.TabletType_REPLICA,
 		Tags:                 servenv.AppVersion.ToStringMap(),
 		DbNameOverride:       "aa",
-		DbServerVersion:      dbServerVersion,
-		DefaultConnCollation: uint32(dbsvCollID),
+		DefaultConnCollation: uint32(collations.Default()),
 	}
 
-	gotTablet, err := BuildTabletFromInput(alias, port, grpcport, dbServerVersion, nil)
+	gotTablet, err := BuildTabletFromInput(alias, port, grpcport, nil)
 	require.NoError(t, err)
 	assert.Equal(t, wantTablet, gotTablet)
 }

@@ -13928,9 +13928,6 @@ export namespace topodata {
         /** Tablet primary_term_start_time */
         primary_term_start_time?: (vttime.ITime|null);
 
-        /** Tablet db_server_version */
-        db_server_version?: (string|null);
-
         /** Tablet default_conn_collation */
         default_conn_collation?: (number|null);
     }
@@ -13979,9 +13976,6 @@ export namespace topodata {
 
         /** Tablet primary_term_start_time. */
         public primary_term_start_time?: (vttime.ITime|null);
-
-        /** Tablet db_server_version. */
-        public db_server_version: string;
 
         /** Tablet default_conn_collation. */
         public default_conn_collation: number;
