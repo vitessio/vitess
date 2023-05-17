@@ -58,6 +58,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfArgument(in, f)
 	case *ArgumentLessWindowExpr:
 		return VisitRefOfArgumentLessWindowExpr(in, f)
+	case *AssignmentExpr:
+		return VisitRefOfAssignmentExpr(in, f)
 	case *AutoIncSpec:
 		return VisitRefOfAutoIncSpec(in, f)
 	case *Avg:
@@ -798,6 +800,21 @@ func VisitRefOfArgumentLessWindowExpr(in *ArgumentLessWindowExpr, f Visit) error
 		return err
 	}
 	if err := VisitRefOfOverClause(in.OverClause, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfAssignmentExpr(in *AssignmentExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.Left, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.Right, f); err != nil {
 		return err
 	}
 	return nil
@@ -4566,6 +4583,8 @@ func VisitExpr(in Expr, f Visit) error {
 		return VisitRefOfArgument(in, f)
 	case *ArgumentLessWindowExpr:
 		return VisitRefOfArgumentLessWindowExpr(in, f)
+	case *AssignmentExpr:
+		return VisitRefOfAssignmentExpr(in, f)
 	case *Avg:
 		return VisitRefOfAvg(in, f)
 	case *BetweenExpr:

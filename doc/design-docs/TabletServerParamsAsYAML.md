@@ -146,6 +146,7 @@ sanitizeLogMessages: false               # sanitize_log_messages
 # enable-tx-throttler
 # tx-throttler-config
 # tx-throttler-healthcheck-cells
+# tx-throttler-tablet-types
 # enable_transaction_limit
 # enable_transaction_limit_dry_run
 # transaction_limit_per_user

@@ -40,6 +40,8 @@ func (a *analyzer) checkForInvalidConstructs(cursor *sqlparser.Cursor) error {
 		return &JSONTablesError{}
 	case *sqlparser.DerivedTable:
 		return checkDerived(node)
+	case *sqlparser.AssignmentExpr:
+		return vterrors.VT12001("Assignment expression")
 	}
 
 	return nil

@@ -36,6 +36,10 @@ type (
 
 	boolean int8
 
+	IntervalExpr struct {
+		CallExpr
+	}
+
 	// IsExpr represents the IS expression in MySQL.
 	// boolean_primary IS [NOT] {TRUE | FALSE | NULL}
 	IsExpr struct {
@@ -55,6 +59,7 @@ type (
 	}
 )
 
+var _ Expr = (*IntervalExpr)(nil)
 var _ Expr = (*IsExpr)(nil)
 var _ Expr = (*LogicalExpr)(nil)
 var _ Expr = (*NotExpr)(nil)
@@ -327,6 +332,123 @@ func (expr *LogicalExpr) compile(c *compiler) (ctype, error) {
 	c.asm.LogicalRight(expr.opname)
 	c.asm.jumpDestination(jump)
 	return ctype{Type: sqltypes.Int64, Flag: flagNullable | flagIsBoolean, Col: collationNumeric}, nil
+}
+
+func intervalCompare(n, val eval) (int, bool, error) {
+	if val == nil {
+		return 1, true, nil
+	}
+
+	val = evalToNumeric(val, false)
+	cmp, err := compareNumeric(n, val)
+	return cmp, false, err
+}
+
+func findInterval(args []eval) (int64, error) {
+	n := args[0]
+	start := int64(1)
+	end := int64(len(args) - 1)
+	for {
+		if start > end {
+			return end, nil
+		}
+
+		val := args[start]
+		cmp, _, err := intervalCompare(n, val)
+		if err != nil {
+			return 0, err
+		}
+
+		if cmp < 0 {
+			return start - 1, nil
+		}
+
+		pos := start + (end-start)/2
+
+		val = args[pos]
+		cmp, null, err := intervalCompare(n, val)
+		if err != nil {
+			return 0, err
+		}
+
+		prevPos := pos
+		for null {
+			prevPos--
+			if prevPos < start {
+				break
+			}
+			prevVal := args[prevPos]
+			cmp, null, err = intervalCompare(n, prevVal)
+			if err != nil {
+				return 0, err
+			}
+		}
+
+		if cmp < 0 {
+			end = pos - 1
+		} else {
+			start = pos + 1
+		}
+	}
+}
+
+func (i *IntervalExpr) eval(env *ExpressionEnv) (eval, error) {
+	args := make([]eval, 0, len(i.Arguments))
+	for _, arg := range i.Arguments {
+		val, err := arg.eval(env)
+		if err != nil {
+			return nil, err
+		}
+		args = append(args, val)
+	}
+
+	if args[0] == nil {
+		return newEvalInt64(-1), nil
+	}
+
+	args[0] = evalToNumeric(args[0], false)
+
+	idx, err := findInterval(args)
+	if err != nil {
+		return nil, err
+	}
+	return newEvalInt64(idx), err
+}
+
+func (i *IntervalExpr) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	return sqltypes.Int64, 0
+}
+
+func (i *IntervalExpr) compile(c *compiler) (ctype, error) {
+	n, err := i.Arguments[0].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	switch n.Type {
+	case sqltypes.Int64, sqltypes.Uint64, sqltypes.Float64, sqltypes.Decimal:
+	default:
+		s := c.compileNullCheck1(n)
+		c.asm.Convert_xf(1)
+		c.asm.jumpDestination(s)
+	}
+
+	for j := 1; j < len(i.Arguments); j++ {
+		argType, err := i.Arguments[j].compile(c)
+		if err != nil {
+			return ctype{}, err
+		}
+		switch argType.Type {
+		case sqltypes.Int64, sqltypes.Uint64, sqltypes.Float64, sqltypes.Decimal:
+		default:
+			s := c.compileNullCheck1(argType)
+			c.asm.Convert_xf(1)
+			c.asm.jumpDestination(s)
+		}
+	}
+
+	c.asm.Interval(len(i.Arguments) - 1)
+	return ctype{Type: sqltypes.Int64, Col: collationNumeric}, nil
 }
 
 func (i *IsExpr) eval(env *ExpressionEnv) (eval, error) {

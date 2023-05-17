@@ -222,6 +222,7 @@ func makeTestOutput(t *testing.T) string {
 func TestPlan(t *testing.T) {
 	vschemaWrapper := &vschemaWrapper{
 		v:             loadSchema(t, "vschemas/schema.json", true),
+		tabletType:    topodatapb.TabletType_PRIMARY,
 		sysVarEnabled: true,
 	}
 	testOutputTempDir := makeTestOutput(t)

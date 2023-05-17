@@ -7945,6 +7945,43 @@
     }
   },
   {
+    "comment": "allow last_insert_id with argument",
+    "query": "select last_insert_id(id) from user",
+    "v3-plan": {
+      "QueryType": "SELECT",
+      "Original": "select last_insert_id(id) from user",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select last_insert_id(id) from `user` where 1 != 1",
+        "Query": "select last_insert_id(id) from `user`",
+        "Table": "`user`"
+      }
+    },
+    "gen4-plan": {
+      "QueryType": "SELECT",
+      "Original": "select last_insert_id(id) from user",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select last_insert_id(id) from `user` where 1 != 1",
+        "Query": "select last_insert_id(id) from `user`",
+        "Table": "`user`"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
     "comment": "merge subquery using MAX and join into single route",
     "query": "select 1 from user join music_extra on user.id = music_extra.user_id where music_extra.music_id = (select max(music_id) from music_extra where user_id = user.id)",
     "v3-plan": {
