@@ -26,6 +26,7 @@ source ./dev.env
 BUILD_JAVA=${BUILD_JAVA:-1}
 BUILD_CONSUL=${BUILD_CONSUL:-1}
 BUILD_CHROME=${BUILD_CHROME:-1}
+BUILD_TOXIPROXY=${BUILD_TOXIPROXY:-1}
 
 VITESS_RESOURCES_DOWNLOAD_BASE_URL="https://github.com/vitessio/vitess-resources/releases/download"
 VITESS_RESOURCES_RELEASE="v4.0"
@@ -258,6 +259,31 @@ install_chromedriver() {
   fi
 }
 
+# Download and install toxiproxy, link toxiproxy binary into our root.
+install_toxiproxy() {
+  local version="$1"
+  local dist="$2"
+
+  case $(uname) in
+    Linux)  local platform=linux;;
+    Darwin) local platform=darwin;;
+    *)   echo "ERROR: unsupported platform for toxiproxy"; exit 1;;
+  esac
+
+  case $(get_arch) in
+    aarch64)  local target=arm64;;
+    x86_64)  local target=amd64;;
+    arm64)  local target=arm64;;
+    *)   echo "ERROR: unsupported architecture for toxiproxy"; exit 1;;
+  esac
+
+  # This is how we'd download directly from source:
+  file="toxiproxy-server-${platform}-${target}"
+  $VTROOT/tools/wget-retry "https://github.com/Shopify/toxiproxy/releases/download/$version/$file"
+  chmod +x "$dist/$file"
+  ln -snf "$dist/$file" "$VTROOT/bin/toxiproxy-server"
+}
+
 install_all() {
   echo "##local system details..."
   echo "##platform: $(uname) target:$(get_arch) OS: $os"
@@ -285,6 +311,11 @@ install_all() {
   # chromedriver
   if [ "$BUILD_CHROME" == 1 ] ; then
     install_dep "chromedriver" "90.0.4430.24" "$VTROOT/dist/chromedriver" install_chromedriver
+  fi
+
+  # toxiproxy
+  if [ "$BUILD_TOXIPROXY" == 1 ] ; then
+    install_dep "toxiproxy" "v2.5.0" "$VTROOT/dist/toxiproxy" install_toxiproxy
   fi
 
   echo
