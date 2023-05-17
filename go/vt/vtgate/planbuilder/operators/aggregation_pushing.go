@@ -192,14 +192,6 @@ func pushDownAggregationThroughJoin(ctx *plancontext.PlanningContext, rootAggr *
 	}
 	joinColumns = append(joinColumns, groupingJCs...)
 
-	// If the rhs has no grouping column then a count(*) will return 0 from the query and will get mapped to the record from left hand side.
-	// This is an incorrect behaviour as the join condition has not matched, so we add a string literal 3.14 to  group by on it.
-	// So that only if join condition matches the records will be mapped and returned.
-	if len(rhs.pushed.Grouping) == 0 && len(rhs.pushed.Aggregations) != 0 {
-		l := sqlparser.NewIntLiteral("3.14")
-		rhs.pushed.Grouping = append(rhs.pushed.Grouping, NewGroupBy(l, nil, nil))
-	}
-
 	// We need to add any columns coming from the lhs of the join to the group by on that side
 	// If we don't, the LHS will not be able to return the column, and it can't be used to send down to the RHS
 	err = addJoinColumnsToLeft(ctx, rootAggr, join, lhs)
@@ -381,16 +373,10 @@ func (ab *aggBuilder) handleCountStar(ctx *plancontext.PlanningContext, aggr Agg
 			RHSExpr:  rhsExpr,
 		})
 
-	// When dealing with outer joins, we may encounter null values on the RHS.
-	// We use the COALESCE function to replace nulls with 1.
+	// When dealing with outer joins, we don't want zero values from the RHS to ruin the calculations we are doing,
+	// so we use the MySQL `IF` function to remove these zeroes
 	if ab.outerJoin {
-		rhsExpr = &sqlparser.FuncExpr{
-			Name: sqlparser.NewIdentifierCI("coalesce"),
-			Exprs: sqlparser.SelectExprs{
-				&sqlparser.AliasedExpr{Expr: rhsExpr},
-				&sqlparser.AliasedExpr{Expr: sqlparser.NewIntLiteral("1")},
-			},
-		}
+		rhsExpr = ifFunc(rhsExpr)
 	}
 
 	// The final COUNT is obtained by multiplying the counts from both sides.
@@ -406,6 +392,23 @@ func (ab *aggBuilder) handleCountStar(ctx *plancontext.PlanningContext, aggr Agg
 	ab.proj.Columns = append(ab.proj.Columns, Expr{E: projExpr})
 	ab.proj.ColumnNames = append(ab.proj.ColumnNames, aggr.Original.As.String())
 	return aggr, nil
+}
+
+func ifFunc(e sqlparser.Expr) sqlparser.Expr {
+	// if(e=0,1,e)
+	cmp := &sqlparser.ComparisonExpr{
+		Operator: sqlparser.EqualOp,
+		Left:     e,
+		Right:    sqlparser.NewIntLiteral("0"),
+	}
+	return &sqlparser.FuncExpr{
+		Name: sqlparser.NewIdentifierCI("if"),
+		Exprs: sqlparser.SelectExprs{
+			aeWrap(cmp),
+			aeWrap(sqlparser.NewIntLiteral("1")),
+			aeWrap(e),
+		},
+	}
 }
 
 // joinPusher is a helper struct that aids in pushing down an Aggregator into one side of a Join.
