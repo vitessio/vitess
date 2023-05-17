@@ -1425,9 +1425,11 @@ func TestHandleExecUnknownError(t *testing.T) {
 // error value.
 func TestHandlePanicAndSendLogStatsMessageTruncation(t *testing.T) {
 	logStats := tabletenv.NewLogStats(ctx, "TestHandlePanicAndSendLogStatsMessageTruncation")
-	config := tabletenv.NewDefaultConfig()
-	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), &topodatapb.TabletAlias{})
+
+	db, tsv := setupTabletServerTest(t, "")
 	defer tsv.StopService()
+	defer db.Close()
+
 	longSql := "select * from test_table_loooooooooooooooooooooooooooooooooooong"
 	longBv := map[string]*querypb.BindVariable{
 		"bv1": sqltypes.Int64BindVariable(1111111111),
@@ -1448,7 +1450,14 @@ func TestHandlePanicAndSendLogStatsMessageTruncation(t *testing.T) {
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), want)
 		want = "Uncaught panic for Sql: \"select * from test_t [TRUNCATED]\", BindVars: {bv1: \"typ [TRUNCATED]"
-		require.Contains(t, tl.getLog(0), want)
+		gotWhatWeWant := false
+		for _, log := range tl.logs {
+			if strings.HasPrefix(log, want) {
+				gotWhatWeWant = true
+				break
+			}
+		}
+		assert.True(t, gotWhatWeWant)
 	}()
 
 	defer tsv.handlePanicAndSendLogStats(longSql, longBv, logStats)
