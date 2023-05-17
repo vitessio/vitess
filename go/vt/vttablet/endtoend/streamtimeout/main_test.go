@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"os"
 	"testing"
+	"time"
 
 	"vitess.io/vitess/go/vt/vttablet/endtoend/framework"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
@@ -83,6 +84,7 @@ func TestMain(m *testing.M) {
 		connAppDebugParams := cluster.MySQLAppDebugConnParams()
 		config = tabletenv.NewDefaultConfig()
 		_ = config.SignalSchemaChangeReloadIntervalSeconds.Set("2100ms")
+		config.SignalSchemaChangeReloadTimeout = 10 * time.Second
 		config.SignalWhenSchemaChange = true
 		err = framework.StartCustomServer(connParams, connAppDebugParams, cluster.DbName(), config)
 		if err != nil {

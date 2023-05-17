@@ -90,7 +90,8 @@ loop:
 	cluster.PauseSimulateMySQLHang()
 
 	// wait for the health_streamer to complete retrying the notification.
-	retryEstimatedTime := 10*time.Second + reloadInterval + reloadEstimatedTime
+	reloadTimeout := config.SignalSchemaChangeReloadTimeout
+	retryEstimatedTime := reloadTimeout + reloadInterval + reloadEstimatedTime
 	select {
 	case res := <-ch: // get the schema notification
 		utils.MustMatch(t, []string{tableName}, res, "")
