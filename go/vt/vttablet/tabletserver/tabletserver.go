@@ -527,20 +527,26 @@ func (tsv *TabletServer) begin(ctx context.Context, target *querypb.Target, save
 
 func (tsv *TabletServer) getPriorityFromOptions(options *querypb.ExecuteOptions) int {
 	priority := tsv.config.TxThrottlerDefaultPriority
-	if options != nil && options.Priority != "" {
-		optionsPriority, err := strconv.Atoi(options.Priority)
-		// This should never error out, as the value for Priority has been validated in the vtgate already.
-		// Still, handle it just to make sure.
-		if err != nil {
-			log.Errorf(
-				"The value of the %s query directive could not be converted to integer, using the "+
-					"default value. Error was: %s",
-				sqlparser.DirectivePriority, priority, err)
-		} else {
-			priority = optionsPriority
-		}
+	if options == nil {
+		return priority
 	}
-	return priority
+	if options.Priority == "" {
+		return priority
+	}
+
+	optionsPriority, err := strconv.Atoi(options.Priority)
+	// This should never error out, as the value for Priority has been validated in the vtgate already.
+	// Still, handle it just to make sure.
+	if err != nil {
+		log.Errorf(
+			"The value of the %s query directive could not be converted to integer, using the "+
+				"default value. Error was: %s",
+			sqlparser.DirectivePriority, priority, err)
+
+		return priority
+	}
+
+	return optionsPriority
 }
 
 // Commit commits the specified transaction.
