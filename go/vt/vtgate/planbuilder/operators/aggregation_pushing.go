@@ -433,8 +433,11 @@ func (p joinPusher) addGrouping(ctx *plancontext.PlanningContext, gb GroupBy) sq
 	expr := sqlparser.CloneExpr(gb.Inner)
 	// copy dependencies so we can keep track of which side expressions need to be pushed to
 	ctx.SemTable.CopyDependencies(gb.Inner, expr)
-	offset := p.useColumn(copyGB.KeyCol)
-	copyGB.KeyCol = offset
+	// if the column exists in the selection then copy it down to the pushed aggregator operator.
+	if copyGB.KeyCol != -1 {
+		offset := p.useColumn(copyGB.KeyCol)
+		copyGB.KeyCol = offset
+	}
 	p.pushed.Grouping = append(p.pushed.Grouping, copyGB)
 	return expr
 }

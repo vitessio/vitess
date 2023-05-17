@@ -22,10 +22,9 @@ import (
 	"vitess.io/vitess/go/vt/key"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
-
-	"vitess.io/vitess/go/vt/sqlparser"
 )
 
 type (
@@ -443,6 +442,10 @@ func (st *SemTable) SingleUnshardedKeyspace() (*vindexes.Keyspace, []*vindexes.T
 // The expression in the select list is not equal to the one in the ORDER BY,
 // but they point to the same column and would be considered equal by this method
 func (st *SemTable) EqualsExpr(a, b sqlparser.Expr) bool {
+	return st.ASTEquals().Expr(a, b)
+}
+
+func (st *SemTable) EqualsExprWithDeps(a, b sqlparser.Expr) bool {
 	eq := st.ASTEquals().Expr(a, b)
 	if !eq {
 		return false

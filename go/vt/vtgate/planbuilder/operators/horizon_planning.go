@@ -169,7 +169,7 @@ func needsOrdering(in *Aggregator, ctx *plancontext.PlanningContext) (bool, erro
 		return true, nil
 	}
 	for idx, gb := range in.Grouping {
-		if !ctx.SemTable.EqualsExpr(srcOrdering[idx].WeightStrExpr, gb.WeightStrExpr) {
+		if !ctx.SemTable.EqualsExprWithDeps(srcOrdering[idx].WeightStrExpr, gb.WeightStrExpr) {
 			return true, nil
 		}
 	}
@@ -210,7 +210,7 @@ func pushOrderingUnderAggr(ctx *plancontext.PlanningContext, order *Ordering, ag
 	used := make([]bool, len(aggregator.Grouping))
 	for _, orderExpr := range order.Order {
 		for grpIdx, by := range aggregator.Grouping {
-			if !used[grpIdx] && ctx.SemTable.EqualsExpr(by.WeightStrExpr, orderExpr.WeightStrExpr) {
+			if !used[grpIdx] && ctx.SemTable.EqualsExprWithDeps(by.WeightStrExpr, orderExpr.WeightStrExpr) {
 				newGrouping = append(newGrouping, by)
 				used[grpIdx] = true
 			}

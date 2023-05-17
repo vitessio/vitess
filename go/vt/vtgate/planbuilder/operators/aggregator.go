@@ -131,7 +131,7 @@ func (a *Aggregator) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser
 	// This also set the weight string column offset so that we would not need to add it later in aggregator operator planOffset.
 	if wsExpr, isWS := expr.Expr.(*sqlparser.WeightStringFuncExpr); isWS {
 		idx := slices.IndexFunc(a.Grouping, func(by GroupBy) bool {
-			return ctx.SemTable.EqualsExpr(wsExpr.Expr, by.WeightStrExpr)
+			return ctx.SemTable.EqualsExprWithDeps(wsExpr.Expr, by.WeightStrExpr)
 		})
 		if idx >= 0 {
 			a.Grouping[idx].WSCol = len(a.Columns)

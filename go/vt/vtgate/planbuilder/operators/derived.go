@@ -21,10 +21,9 @@ import (
 
 	"golang.org/x/exp/slices"
 
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
-
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
@@ -197,7 +196,7 @@ func canReuseColumn[T any](
 	f func(T) sqlparser.Expr,
 ) (offset int, found bool) {
 	for offset, column := range columns {
-		if ctx.SemTable.EqualsExpr(col, f(column)) {
+		if ctx.SemTable.EqualsExprWithDeps(col, f(column)) {
 			return offset, true
 		}
 	}

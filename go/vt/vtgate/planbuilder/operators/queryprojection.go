@@ -227,7 +227,7 @@ func (ar *AggrRewriter) RewriteUp() func(*sqlparser.Cursor) bool {
 				ar.Err = err
 				return false
 			}
-			if ar.st.EqualsExpr(ae.Expr, fExp) {
+			if ar.st.EqualsExprWithDeps(ae.Expr, fExp) {
 				cursor.Replace(sqlparser.NewOffset(offset, fExp))
 				return true
 			}
@@ -345,7 +345,7 @@ func (qp *QueryProjection) isExprInGroupByExprs(ctx *plancontext.PlanningContext
 		if err != nil {
 			return false
 		}
-		if ctx.SemTable.EqualsExpr(groupByExpr.WeightStrExpr, exp) {
+		if ctx.SemTable.EqualsExprWithDeps(groupByExpr.WeightStrExpr, exp) {
 			return true
 		}
 	}
@@ -527,7 +527,7 @@ orderBy:
 			if !ok {
 				continue
 			}
-			if ctx.SemTable.EqualsExpr(col.Expr, orderExpr) {
+			if ctx.SemTable.EqualsExprWithDeps(col.Expr, orderExpr) {
 				continue orderBy // we found the expression we were looking for!
 			}
 		}
@@ -612,7 +612,7 @@ func (qp *QueryProjection) FindSelectExprIndexForExpr(ctx *plancontext.PlanningC
 				return &idx, aliasedExpr
 			}
 		}
-		if ctx.SemTable.EqualsExpr(aliasedExpr.Expr, expr) {
+		if ctx.SemTable.EqualsExprWithDeps(aliasedExpr.Expr, expr) {
 			return &idx, aliasedExpr
 		}
 	}
@@ -638,7 +638,7 @@ func (qp *QueryProjection) OldAlignGroupByAndOrderBy(ctx *plancontext.PlanningCo
 		used := make([]bool, len(qp.groupByExprs))
 		for _, orderExpr := range qp.OrderExprs {
 			for i, groupingExpr := range qp.groupByExprs {
-				if !used[i] && ctx.SemTable.EqualsExpr(groupingExpr.WeightStrExpr, orderExpr.WeightStrExpr) {
+				if !used[i] && ctx.SemTable.EqualsExprWithDeps(groupingExpr.WeightStrExpr, orderExpr.WeightStrExpr) {
 					newGrouping = append(newGrouping, groupingExpr)
 					used[i] = true
 				}
@@ -675,7 +675,7 @@ func (qp *QueryProjection) AlignGroupByAndOrderBy(ctx *plancontext.PlanningConte
 outer:
 	for _, orderBy := range qp.OrderExprs {
 		for gidx, groupBy := range qp.groupByExprs {
-			if ctx.SemTable.EqualsExpr(groupBy.WeightStrExpr, orderBy.WeightStrExpr) {
+			if ctx.SemTable.EqualsExprWithDeps(groupBy.WeightStrExpr, orderBy.WeightStrExpr) {
 				newGrouping = append(newGrouping, groupBy)
 				used[gidx] = true
 				continue outer

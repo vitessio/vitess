@@ -356,7 +356,7 @@ func createCorrelatedSubqueryOp(
 			// we do so by checking that the column names are the same and their recursive dependencies are the same
 			// so the column names `user.a` and `a` would be considered equal as long as both are bound to the same table
 			for colName, bindVar := range bindVars {
-				if ctx.SemTable.EqualsExpr(node, colName) {
+				if ctx.SemTable.EqualsExprWithDeps(node, colName) {
 					cursor.Replace(sqlparser.NewArgument(bindVar))
 					return true
 				}
