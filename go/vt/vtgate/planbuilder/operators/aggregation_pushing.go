@@ -192,6 +192,14 @@ func pushDownAggregationThroughJoin(ctx *plancontext.PlanningContext, rootAggr *
 	}
 	joinColumns = append(joinColumns, groupingJCs...)
 
+	// If the rhs has no grouping column then a count(*) will return 0 from the query and will get mapped to the record from left hand side.
+	// This is an incorrect behaviour as the join condition has not matched, so we add a string literal 3.14 to  group by on it.
+	// So that only if join condition matches the records will be mapped and returned.
+	if len(rhs.pushed.Grouping) == 0 && len(rhs.pushed.Aggregations) != 0 {
+		l := sqlparser.NewIntLiteral("3.14")
+		rhs.pushed.Grouping = append(rhs.pushed.Grouping, NewGroupBy(l, nil, nil))
+	}
+
 	// We need to add any columns coming from the lhs of the join to the group by on that side
 	// If we don't, the LHS will not be able to return the column, and it can't be used to send down to the RHS
 	err = addJoinColumnsToLeft(ctx, rootAggr, join, lhs)

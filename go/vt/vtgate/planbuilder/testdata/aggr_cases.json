@@ -44,8 +44,8 @@
                       "Name": "user",
                       "Sharded": true
                     },
-                    "FieldQuery": "select count(*) from user_extra where 1 != 1",
-                    "Query": "select count(*) from user_extra where user_extra.bar = :user_foo",
+                    "FieldQuery": "select count(*) from user_extra where 1 != 1 group by 3.14",
+                    "Query": "select count(*) from user_extra where user_extra.bar = :user_foo group by 3.14",
                     "Table": "user_extra"
                   }
                 ]
@@ -274,8 +274,8 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select min(user_extra.col) from user_extra where 1 != 1",
-                "Query": "select min(user_extra.col) from user_extra where user_extra.bar = :user_foo",
+                "FieldQuery": "select min(user_extra.col) from user_extra where 1 != 1 group by 3.14",
+                "Query": "select min(user_extra.col) from user_extra where user_extra.bar = :user_foo group by 3.14",
                 "Table": "user_extra"
               }
             ]
@@ -3233,8 +3233,8 @@
                       "Name": "user",
                       "Sharded": true
                     },
-                    "FieldQuery": "select count(*) from user_extra where 1 != 1",
-                    "Query": "select count(*) from user_extra",
+                    "FieldQuery": "select count(*) from user_extra where 1 != 1 group by 3.14",
+                    "Query": "select count(*) from user_extra group by 3.14",
                     "Table": "user_extra"
                   }
                 ]
@@ -3963,8 +3963,8 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select min(user_extra.foo), max(user_extra.bar) from user_extra where 1 != 1",
-                "Query": "select min(user_extra.foo), max(user_extra.bar) from user_extra where user_extra.bar = :user_col",
+                "FieldQuery": "select min(user_extra.foo), max(user_extra.bar) from user_extra where 1 != 1 group by 3.14",
+                "Query": "select min(user_extra.foo), max(user_extra.bar) from user_extra where user_extra.bar = :user_col group by 3.14",
                 "Table": "user_extra"
               }
             ]
@@ -5515,15 +5515,15 @@
           {
             "OperatorType": "Projection",
             "Expressions": [
-              "[COLUMN 0] * COALESCE([COLUMN 1], INT64(1)) as count(*)"
+              "[COLUMN 0] * [COLUMN 1]"
             ],
             "Inputs": [
               {
                 "OperatorType": "Join",
                 "Variant": "Join",
-                "JoinColumnIndexes": "L:1,R:1",
+                "JoinColumnIndexes": "L:0,R:0",
                 "JoinVars": {
-                  "user_foo": 0
+                  "user_foo": 1
                 },
                 "TableName": "`user`_music",
                 "Inputs": [
@@ -5534,8 +5534,8 @@
                       "Name": "user",
                       "Sharded": true
                     },
-                    "FieldQuery": "select `user`.foo, count(*), weight_string(`user`.foo) from `user` where 1 != 1 group by `user`.foo, weight_string(`user`.foo)",
-                    "Query": "select `user`.foo, count(*), weight_string(`user`.foo) from `user` group by `user`.foo, weight_string(`user`.foo)",
+                    "FieldQuery": "select count(*), `user`.foo from `user` where 1 != 1 group by `user`.foo",
+                    "Query": "select count(*), `user`.foo from `user` group by `user`.foo",
                     "Table": "`user`"
                   },
                   {
@@ -5545,8 +5545,8 @@
                       "Name": "user",
                       "Sharded": true
                     },
-                    "FieldQuery": "select 1, count(*) from music where 1 != 1 group by 1",
-                    "Query": "select 1, count(*) from music where music.bar = :user_foo group by 1",
+                    "FieldQuery": "select count(*) from music where 1 != 1 group by 3.14",
+                    "Query": "select count(*) from music where music.bar = :user_foo group by 3.14",
                     "Table": "music"
                   }
                 ]
@@ -5575,15 +5575,15 @@
           {
             "OperatorType": "Projection",
             "Expressions": [
-              "[COLUMN 0] * COALESCE([COLUMN 1], INT64(1)) as count(*)"
+              "[COLUMN 0] * COALESCE([COLUMN 1], INT64(1))"
             ],
             "Inputs": [
               {
                 "OperatorType": "Join",
                 "Variant": "LeftJoin",
-                "JoinColumnIndexes": "L:1,R:1",
+                "JoinColumnIndexes": "L:0,R:0",
                 "JoinVars": {
-                  "user_foo": 0
+                  "user_foo": 1
                 },
                 "TableName": "`user`_music",
                 "Inputs": [
@@ -5594,8 +5594,8 @@
                       "Name": "user",
                       "Sharded": true
                     },
-                    "FieldQuery": "select `user`.foo, count(*), weight_string(`user`.foo) from `user` where 1 != 1 group by `user`.foo, weight_string(`user`.foo)",
-                    "Query": "select `user`.foo, count(*), weight_string(`user`.foo) from `user` group by `user`.foo, weight_string(`user`.foo)",
+                    "FieldQuery": "select count(*), `user`.foo from `user` where 1 != 1 group by `user`.foo",
+                    "Query": "select count(*), `user`.foo from `user` group by `user`.foo",
                     "Table": "`user`"
                   },
                   {
@@ -5605,8 +5605,8 @@
                       "Name": "user",
                       "Sharded": true
                     },
-                    "FieldQuery": "select 1, count(*) from music where 1 != 1 group by 1",
-                    "Query": "select 1, count(*) from music where music.bar = :user_foo group by 1",
+                    "FieldQuery": "select count(*) from music where 1 != 1 group by 3.14",
+                    "Query": "select count(*) from music where music.bar = :user_foo group by 3.14",
                     "Table": "music"
                   }
                 ]
@@ -5631,47 +5631,53 @@
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
         "Aggregates": "sum_count_star(0) AS count(*)",
-        "GroupBy": "(1|0)",
+        "GroupBy": "1",
         "ResultColumns": 1,
         "Inputs": [
           {
-            "OperatorType": "Projection",
-            "Expressions": [
-              "[COLUMN 1] * COALESCE([COLUMN 2], INT64(1)) as count(*)",
-              "[COLUMN 0] as col"
-            ],
+            "OperatorType": "Sort",
+            "Variant": "Memory",
+            "OrderBy": "1 ASC",
             "Inputs": [
               {
-                "OperatorType": "Join",
-                "Variant": "LeftJoin",
-                "JoinColumnIndexes": "L:3,L:1,R:1",
-                "JoinVars": {
-                  "user_foo": 0
-                },
-                "TableName": "`user`_music",
+                "OperatorType": "Projection",
+                "Expressions": [
+                  "[COLUMN 0] * COALESCE([COLUMN 1], INT64(1))",
+                  "[COLUMN 2]"
+                ],
                 "Inputs": [
                   {
-                    "OperatorType": "Route",
-                    "Variant": "Scatter",
-                    "Keyspace": {
-                      "Name": "user",
-                      "Sharded": true
+                    "OperatorType": "Join",
+                    "Variant": "LeftJoin",
+                    "JoinColumnIndexes": "L:0,R:0,L:2",
+                    "JoinVars": {
+                      "user_foo": 1
                     },
-                    "FieldQuery": "select `user`.foo, count(*), weight_string(`user`.foo), `user`.col from `user` where 1 != 1 group by `user`.foo, weight_string(`user`.foo), `user`.col",
-                    "OrderBy": "3 ASC",
-                    "Query": "select `user`.foo, count(*), weight_string(`user`.foo), `user`.col from `user` group by `user`.foo, weight_string(`user`.foo), `user`.col order by `user`.col asc",
-                    "Table": "`user`"
-                  },
-                  {
-                    "OperatorType": "Route",
-                    "Variant": "Scatter",
-                    "Keyspace": {
-                      "Name": "user",
-                      "Sharded": true
-                    },
-                    "FieldQuery": "select 1, count(*) from music where 1 != 1 group by 1",
-                    "Query": "select 1, count(*) from music where music.bar = :user_foo group by 1",
-                    "Table": "music"
+                    "TableName": "`user`_music",
+                    "Inputs": [
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "Scatter",
+                        "Keyspace": {
+                          "Name": "user",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select count(*), `user`.foo, `user`.col from `user` where 1 != 1 group by `user`.col, `user`.foo",
+                        "Query": "select count(*), `user`.foo, `user`.col from `user` group by `user`.col, `user`.foo",
+                        "Table": "`user`"
+                      },
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "Scatter",
+                        "Keyspace": {
+                          "Name": "user",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select count(*) from music where 1 != 1 group by 3.14",
+                        "Query": "select count(*) from music where music.bar = :user_foo group by 3.14",
+                        "Table": "music"
+                      }
+                    ]
                   }
                 ]
               }
@@ -5766,47 +5772,53 @@
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
         "Aggregates": "sum_count_star(0) AS count(*)",
-        "GroupBy": "(1|0)",
+        "GroupBy": "1",
         "ResultColumns": 1,
         "Inputs": [
           {
-            "OperatorType": "Projection",
-            "Expressions": [
-              "[COLUMN 1] * COALESCE([COLUMN 2], INT64(1)) as count(*)",
-              "[COLUMN 0] as col"
-            ],
+            "OperatorType": "Sort",
+            "Variant": "Memory",
+            "OrderBy": "1 ASC",
             "Inputs": [
               {
-                "OperatorType": "Join",
-                "Variant": "LeftJoin",
-                "JoinColumnIndexes": "L:3,L:1,R:1",
-                "JoinVars": {
-                  "user_foo": 0
-                },
-                "TableName": "`user`_music",
+                "OperatorType": "Projection",
+                "Expressions": [
+                  "[COLUMN 0] * COALESCE([COLUMN 1], INT64(1))",
+                  "[COLUMN 2]"
+                ],
                 "Inputs": [
                   {
-                    "OperatorType": "Route",
-                    "Variant": "Scatter",
-                    "Keyspace": {
-                      "Name": "user",
-                      "Sharded": true
+                    "OperatorType": "Join",
+                    "Variant": "LeftJoin",
+                    "JoinColumnIndexes": "L:0,R:0,L:2",
+                    "JoinVars": {
+                      "user_foo": 1
                     },
-                    "FieldQuery": "select `user`.foo, count(*), weight_string(`user`.foo), `user`.col from `user` where 1 != 1 group by `user`.foo, weight_string(`user`.foo), `user`.col",
-                    "OrderBy": "3 ASC",
-                    "Query": "select `user`.foo, count(*), weight_string(`user`.foo), `user`.col from `user` group by `user`.foo, weight_string(`user`.foo), `user`.col order by `user`.col asc",
-                    "Table": "`user`"
-                  },
-                  {
-                    "OperatorType": "Route",
-                    "Variant": "Scatter",
-                    "Keyspace": {
-                      "Name": "user",
-                      "Sharded": true
-                    },
-                    "FieldQuery": "select 1, count(*) from music where 1 != 1 group by 1",
-                    "Query": "select 1, count(*) from music where music.bar = :user_foo group by 1",
-                    "Table": "music"
+                    "TableName": "`user`_music",
+                    "Inputs": [
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "Scatter",
+                        "Keyspace": {
+                          "Name": "user",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select count(*), `user`.foo, `user`.col from `user` where 1 != 1 group by `user`.col, `user`.foo",
+                        "Query": "select count(*), `user`.foo, `user`.col from `user` group by `user`.col, `user`.foo",
+                        "Table": "`user`"
+                      },
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "Scatter",
+                        "Keyspace": {
+                          "Name": "user",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select count(*) from music where 1 != 1 group by 3.14",
+                        "Query": "select count(*) from music where music.bar = :user_foo group by 3.14",
+                        "Table": "music"
+                      }
+                    ]
                   }
                 ]
               }
