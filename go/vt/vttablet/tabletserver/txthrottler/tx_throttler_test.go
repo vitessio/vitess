@@ -51,7 +51,8 @@ func TestDisabledThrottler(t *testing.T) {
 	})
 	assert.Nil(t, throttler.Open())
 	assert.False(t, throttler.Throttle(0))
-	assert.Zero(t, throttler.throttlerRunning.Get())
+	throttlerImpl, _ := throttler.(*txThrottler)
+	assert.Zero(t, throttlerImpl.throttlerRunning.Get())
 	throttler.Close()
 }
 
@@ -101,12 +102,13 @@ func TestEnabledThrottler(t *testing.T) {
 
 	call4 := mockThrottler.EXPECT().Throttle(0)
 	call4.Return(1 * time.Second)
-	call6 := mockThrottler.EXPECT().Close()
+	calllast := mockThrottler.EXPECT().Close()
+
 	call1.After(call0)
 	call2.After(call1)
 	call3.After(call2)
 	call4.After(call3)
-	call6.After(call4)
+	calllast.After(call4)
 
 	config := tabletenv.NewDefaultConfig()
 	config.EnableTxThrottler = true
