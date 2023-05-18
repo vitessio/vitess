@@ -677,7 +677,7 @@ func areTabletsAvailableToStreamFrom(ctx context.Context, ts *trafficSwitcher, k
 			if cells == nil {
 				cells = append(cells, shard.PrimaryAlias.Cell)
 			}
-			tp, err := discovery.NewTabletPicker(ts.ws.ts, cells, keyspace, shard.ShardName(), tabletTypes)
+			tp, err := discovery.NewTabletPicker(ctx, ts.ws.ts, cells, shard.PrimaryAlias.Cell, keyspace, shard.ShardName(), tabletTypes, discovery.TabletPickerOptions{})
 			if err != nil {
 				allErrors.RecordError(err)
 				return
