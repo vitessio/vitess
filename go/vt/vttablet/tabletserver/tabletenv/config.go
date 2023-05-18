@@ -104,7 +104,7 @@ func (t *TxThrottlerConfigFlag) Get() *throttlerdatapb.Configuration {
 }
 
 func (t *TxThrottlerConfigFlag) Set(arg string) error {
-	return prototext.Unmarshal([]byte(arg), t)
+	return prototext.Unmarshal([]byte(arg), t.Configuration)
 }
 
 func (t *TxThrottlerConfigFlag) Type() string { return "string" }
