@@ -210,9 +210,49 @@ func TestHealthCheckSchemaChangeSignal(t *testing.T) {
 	checkTabletType(t, primaryTablet.Alias, "PRIMARY")
 
 	// Run a bunch of DDL queries and verify that the tables/views changed show up in the health stream.
-	_, err = conn.ExecuteFetch("CREATE TABLE `area` (`id` int NOT NULL, PRIMARY KEY (`id`))", 10000, false)
+	// These tests are for the part where `--queryserver-enable-views` flag is not set.
+	verifyHealthStreamSchemaChangeSignals(t, conn, &primaryTablet, false)
+
+	// We start a new vttablet, this time with `--queryserver-enable-views` flag specified.
+	tempTablet := clusterInstance.NewVttabletInstance("replica", 0, "")
+	// Start Mysql Processes and return connection
+	tempConn, err := cluster.StartMySQLAndGetConnection(ctx, tempTablet, username, clusterInstance.TmpDirectory)
 	require.NoError(t, err)
-	err = clusterInstance.StreamTabletHealthUntil(ctx, &primaryTablet, 30*time.Second, func(shr *querypb.StreamHealthResponse) bool {
+	oldArgs := clusterInstance.VtTabletExtraArgs
+	clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, "--queryserver-enable-views")
+	defer func() {
+		tempConn.Close()
+		clusterInstance.VtTabletExtraArgs = oldArgs
+	}()
+	// start vttablet process, should be in SERVING state as we already have a primary.
+	err = clusterInstance.StartVttablet(tempTablet, "SERVING", false, cell, keyspaceName, hostname, shardName)
+	require.NoError(t, err)
+
+	defer func() {
+		// Restore the primary tablet back to the original.
+		err = clusterInstance.VtctldClientProcess.PlannedReparentShard(keyspaceName, shardName, primaryTablet.Alias)
+		require.NoError(t, err)
+		// Manual cleanup of processes
+		killTablets(t, tempTablet)
+	}()
+
+	// Now we reparent the cluster to the new tablet we have.
+	err = clusterInstance.VtctldClientProcess.PlannedReparentShard(keyspaceName, shardName, tempTablet.Alias)
+	require.NoError(t, err)
+
+	checkTabletType(t, tempTablet.Alias, "PRIMARY")
+	_, err = tempConn.ExecuteFetch(fmt.Sprintf("use %v", dbName), 1000, false)
+	require.NoError(t, err)
+	// Run a bunch of DDL queries and verify that the tables/views changed show up in the health stream.
+	// These tests are for the part where `--queryserver-enable-views` flag is set.
+	verifyHealthStreamSchemaChangeSignals(t, tempConn, tempTablet, true)
+}
+
+func verifyHealthStreamSchemaChangeSignals(t *testing.T, primaryConn *mysql.Conn, primaryTablet *cluster.Vttablet, viewsEnabled bool) {
+	ctx := context.Background()
+	_, err := primaryConn.ExecuteFetch("CREATE TABLE `area` (`id` int NOT NULL, PRIMARY KEY (`id`))", 10000, false)
+	require.NoError(t, err)
+	err = clusterInstance.StreamTabletHealthUntil(ctx, primaryTablet, 30*time.Second, func(shr *querypb.StreamHealthResponse) bool {
 		if shr != nil && shr.RealtimeStats != nil && slices.Contains(shr.RealtimeStats.TableSchemaChanged, "area") {
 			return true
 		}
@@ -220,9 +260,9 @@ func TestHealthCheckSchemaChangeSignal(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	_, err = conn.ExecuteFetch("ALTER TABLE `area` ADD COLUMN name varchar(30) NOT NULL", 10000, false)
+	_, err = primaryConn.ExecuteFetch("ALTER TABLE `area` ADD COLUMN name varchar(30) NOT NULL", 10000, false)
 	require.NoError(t, err)
-	err = clusterInstance.StreamTabletHealthUntil(ctx, &primaryTablet, 30*time.Second, func(shr *querypb.StreamHealthResponse) bool {
+	err = clusterInstance.StreamTabletHealthUntil(ctx, primaryTablet, 30*time.Second, func(shr *querypb.StreamHealthResponse) bool {
 		if shr != nil && shr.RealtimeStats != nil && slices.Contains(shr.RealtimeStats.TableSchemaChanged, "area") {
 			return true
 		}
@@ -230,39 +270,51 @@ func TestHealthCheckSchemaChangeSignal(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	_, err = conn.ExecuteFetch("CREATE VIEW v2 as select * from area", 10000, false)
+	_, err = primaryConn.ExecuteFetch("CREATE VIEW v2 as select * from area", 10000, false)
 	require.NoError(t, err)
-	err = clusterInstance.StreamTabletHealthUntil(ctx, &primaryTablet, 30*time.Second, func(shr *querypb.StreamHealthResponse) bool {
-		if shr != nil && shr.RealtimeStats != nil && slices.Contains(shr.RealtimeStats.ViewSchemaChanged, "v2") {
+	err = clusterInstance.StreamTabletHealthUntil(ctx, primaryTablet, 30*time.Second, func(shr *querypb.StreamHealthResponse) bool {
+		listToUse := shr.RealtimeStats.TableSchemaChanged
+		if viewsEnabled {
+			listToUse = shr.RealtimeStats.ViewSchemaChanged
+		}
+		if shr != nil && shr.RealtimeStats != nil && slices.Contains(listToUse, "v2") {
 			return true
 		}
 		return false
 	})
 	require.NoError(t, err)
 
-	_, err = conn.ExecuteFetch("ALTER VIEW v2 as select id from area", 10000, false)
+	_, err = primaryConn.ExecuteFetch("ALTER VIEW v2 as select id from area", 10000, false)
 	require.NoError(t, err)
-	err = clusterInstance.StreamTabletHealthUntil(ctx, &primaryTablet, 30*time.Second, func(shr *querypb.StreamHealthResponse) bool {
-		if shr != nil && shr.RealtimeStats != nil && slices.Contains(shr.RealtimeStats.ViewSchemaChanged, "v2") {
+	err = clusterInstance.StreamTabletHealthUntil(ctx, primaryTablet, 30*time.Second, func(shr *querypb.StreamHealthResponse) bool {
+		listToUse := shr.RealtimeStats.TableSchemaChanged
+		if viewsEnabled {
+			listToUse = shr.RealtimeStats.ViewSchemaChanged
+		}
+		if shr != nil && shr.RealtimeStats != nil && slices.Contains(listToUse, "v2") {
 			return true
 		}
 		return false
 	})
 	require.NoError(t, err)
 
-	_, err = conn.ExecuteFetch("DROP VIEW v2", 10000, false)
+	_, err = primaryConn.ExecuteFetch("DROP VIEW v2", 10000, false)
 	require.NoError(t, err)
-	err = clusterInstance.StreamTabletHealthUntil(ctx, &primaryTablet, 30*time.Second, func(shr *querypb.StreamHealthResponse) bool {
-		if shr != nil && shr.RealtimeStats != nil && slices.Contains(shr.RealtimeStats.ViewSchemaChanged, "v2") {
+	err = clusterInstance.StreamTabletHealthUntil(ctx, primaryTablet, 30*time.Second, func(shr *querypb.StreamHealthResponse) bool {
+		listToUse := shr.RealtimeStats.TableSchemaChanged
+		if viewsEnabled {
+			listToUse = shr.RealtimeStats.ViewSchemaChanged
+		}
+		if shr != nil && shr.RealtimeStats != nil && slices.Contains(listToUse, "v2") {
 			return true
 		}
 		return false
 	})
 	require.NoError(t, err)
 
-	_, err = conn.ExecuteFetch("DROP TABLE `area`", 10000, false)
+	_, err = primaryConn.ExecuteFetch("DROP TABLE `area`", 10000, false)
 	require.NoError(t, err)
-	err = clusterInstance.StreamTabletHealthUntil(ctx, &primaryTablet, 30*time.Second, func(shr *querypb.StreamHealthResponse) bool {
+	err = clusterInstance.StreamTabletHealthUntil(ctx, primaryTablet, 30*time.Second, func(shr *querypb.StreamHealthResponse) bool {
 		if shr != nil && shr.RealtimeStats != nil && slices.Contains(shr.RealtimeStats.TableSchemaChanged, "area") {
 			return true
 		}

@@ -93,6 +93,18 @@ func VtctldClientProcessInstance(hostname string, grpcPort int, tmpDirectory str
 	return vtctldclient
 }
 
+// PlannedReparentShard executes vtctlclient command to make specified tablet the primary for the shard.
+func (vtctldclient *VtctldClientProcess) PlannedReparentShard(Keyspace string, Shard string, alias string) (err error) {
+	output, err := vtctldclient.ExecuteCommandWithOutput(
+		"PlannedReparentShard",
+		fmt.Sprintf("%s/%s", Keyspace, Shard),
+		"--new-primary", alias)
+	if err != nil {
+		log.Errorf("error in PlannedReparentShard output %s, err %s", output, err.Error())
+	}
+	return err
+}
+
 // CreateKeyspace executes the vtctl command to create a keyspace
 func (vtctldclient *VtctldClientProcess) CreateKeyspace(keyspaceName string, sidecarDBName string) (err error) {
 	var output string
