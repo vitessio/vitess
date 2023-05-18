@@ -3231,6 +3231,10 @@ column_default:
       $$ = &UnaryExpr{Operator: UMinusStr, Expr: $3}
     }
   }
+| DEFAULT underscore_charsets STRING
+  {
+    $$ = &UnaryExpr{Operator: $2, Expr: NewStrVal($3)}
+  }
 | DEFAULT boolean_value
   {
     $$ = $2
