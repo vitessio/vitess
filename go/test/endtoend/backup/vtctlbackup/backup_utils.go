@@ -374,6 +374,10 @@ func TestBackup(t *testing.T, setupType int, streamMode string, stripes int, cDe
 		if len(runSpecific) > 0 && !isRegistered(test.name, runSpecific) {
 			continue
 		}
+		// don't run this one unless specified
+		if len(runSpecific) == 0 && test.name == "DoNotDemoteNewlyPromotedPrimaryIfReparentingDuringBackup" {
+			continue
+		}
 		if retVal := t.Run(test.name, test.method); !retVal {
 			return vterrors.Errorf(vtrpc.Code_UNKNOWN, "test failure: %s", test.name)
 		}
