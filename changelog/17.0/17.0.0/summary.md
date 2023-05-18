@@ -4,6 +4,7 @@
 
 - **[Major Changes](#major-changes)**
   - **[Breaking Changes](#breaking-changes)**
+    - [Default Local Cell Preference for TabletPicker](#tablet-picker-cell-preference)
     - [Dedicated stats for VTGate Prepare operations](#dedicated-vtgate-prepare-stats)
     - [VTAdmin web migrated from create-react-app to vite](#migrated-vtadmin)
     - [Keyspace name validation in TopoServer](#keyspace-name-validation)
@@ -31,6 +32,28 @@
 ## <a id="major-changes"/> Major Changes
 
 ### <a id="breaking-changes"/>Breaking Changes
+
+#### <a id="tablet-picker-cell-preference"/>Default Local Cell Preference for TabletPicker
+
+We added options to the `TabletPicker` that allow for specifying a cell preference in addition to making the default behavior to give priority to the local cell *and any alias it belongs to*. We are also introducing a new way to select tablet type preference which should eventually replace the `in_order:` hint currently used as a prefix for tablet types. The signature for creating a new `TabletPicker` now looks like:
+
+```
+func NewTabletPicker(
+	ctx context.Context,
+	ts *topo.Server,
+	cells []string,
+	localCell, keyspace, shard, tabletTypesStr string,
+	options TabletPickerOptions,
+) (*TabletPicker, error) {...}
+```
+
+Where ctx, localCell, option are all new parameters.
+
+`option` is of type `TabletPickerOptions` and includes two fields, `CellPreference` and `TabletOrder`.
+CellPreference`: "PreferLocalWithAlias" (default) gives preference to vtgate's local cell, or "OnlySpecified" which only picks from the cells explicitly passed in by the client
+`TabletOrder`: "Any" (default) for no ordering or random, or "InOrder" to use the order specified by the client
+
+See [PR 12282 Description](https://github.com/vitessio/vitess/pull/12282) for examples on how this changes cell picking behavior.
 
 #### <a id="vtgr-default-tls-version"/>Default TLS version changed for `vtgr`
 
