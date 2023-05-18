@@ -22,9 +22,9 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"strings"
 	"time"
 
-	"vitess.io/vitess/go/test/endtoend/utils"
 	"vitess.io/vitess/go/vt/log"
 
 	toxiproxy "github.com/Shopify/toxiproxy/v2/client"
@@ -71,7 +71,7 @@ func NewToxiproxyctl(binary string, apiPort, mysqlPort int, mysqlctl *Mysqlctl, 
 		GRANT ALL ON *.* TO '%s'@'::1';
 		GRANT GRANT OPTION ON *.* TO '%s'@'::1';
 	`, dbaUser, dbaUser, dbaUser)
-	sql, err := utils.GetInitDBSQL(string(initDb), createUserCmd, "")
+	sql, err := getInitDBSQL(string(initDb), createUserCmd)
 	if err != nil {
 		return nil, vterrors.Wrap(err, "failed to get a modified init db sql")
 	}
@@ -234,4 +234,19 @@ func (ctl *Toxiproxyctl) UpdateTimeoutToxicity(toxicity float32) error {
 func (ctl *Toxiproxyctl) RemoveTimeoutToxic() error {
 	log.Info("Removing timeout toxic")
 	return ctl.proxy.RemoveToxic("my-timeout")
+}
+
+// getInitDBSQL is a helper function that retrieves the modified contents of the init_db.sql file with custom SQL statements.
+// We avoid using vitess.io/vitess/go/test/endtoend/utils.GetInitDBSQL as importing this package adds unnecessary flags to vttestserver.
+func getInitDBSQL(initDBSQL string, customSQL string) (string, error) {
+	splitString := strings.Split(initDBSQL, "# {{custom_sql}}")
+	if len(splitString) != 2 {
+		return "", fmt.Errorf("missing `# {{custom_sql}}` in init_db.sql file")
+	}
+	var builder strings.Builder
+	builder.WriteString(splitString[0])
+	builder.WriteString(customSQL)
+	builder.WriteString(splitString[1])
+
+	return builder.String(), nil
 }
