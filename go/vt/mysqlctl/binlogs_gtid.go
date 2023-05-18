@@ -95,7 +95,7 @@ func ChooseBinlogsForIncrementalBackup(
 			continue
 		}
 		if i == 0 {
-			return nil, "", "", vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "Required entries have been purged. Oldest binary log %v expects entries not found in back up pos. Expected pos=%v", binlog, previousGTIDsPos)
+			return nil, "", "", vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "Required entries have been purged. Oldest binary log %v expects entries not found in backup pos. Expected pos=%v", binlog, previousGTIDsPos)
 		}
 		if !prevGTIDsUnion.Union(purgedGTIDSet).Contains(backupFromGTIDSet) {
 			return nil, "", "", vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION,
