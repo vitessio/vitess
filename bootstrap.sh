@@ -26,7 +26,6 @@ source ./dev.env
 BUILD_JAVA=${BUILD_JAVA:-1}
 BUILD_CONSUL=${BUILD_CONSUL:-1}
 BUILD_CHROME=${BUILD_CHROME:-1}
-BUILD_TOXIPROXY=${BUILD_TOXIPROXY:-1}
 
 VITESS_RESOURCES_DOWNLOAD_BASE_URL="https://github.com/vitessio/vitess-resources/releases/download"
 VITESS_RESOURCES_RELEASE="v4.0"
@@ -314,9 +313,7 @@ install_all() {
   fi
 
   # toxiproxy
-  if [ "$BUILD_TOXIPROXY" == 1 ] ; then
-    install_dep "toxiproxy" "v2.5.0" "$VTROOT/dist/toxiproxy" install_toxiproxy
-  fi
+  install_dep "toxiproxy" "v2.5.0" "$VTROOT/dist/toxiproxy" install_toxiproxy
 
   echo
   echo "bootstrap finished - run 'make build' to compile"

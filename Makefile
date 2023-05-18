@@ -375,7 +375,7 @@ tools:
 
 minimaltools:
 	echo $$(date): Installing minimal dependencies
-	BUILD_CHROME=0 BUILD_JAVA=0 BUILD_CONSUL=0 BUILD_TOXIPROXY=0 ./bootstrap.sh
+	BUILD_CHROME=0 BUILD_JAVA=0 BUILD_CONSUL=0 ./bootstrap.sh
 
 dependency_check:
 	./tools/dependency_check.sh
