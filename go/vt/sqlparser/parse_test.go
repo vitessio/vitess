@@ -2867,8 +2867,10 @@ var (
 		}, {
 			input:  "CREATE TABLE `t4` (`pk` int NOT NULL, `_tinytext` tinytext, `_text` text, `_longtext` longtext, `_mediumtext` mediumtext, PRIMARY KEY (`pk`)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3;",
 			output: "create table t4 (\n\tpk int not null,\n\t_tinytext tinytext,\n\t_text text,\n\t_longtext longtext,\n\t_mediumtext mediumtext,\n\tPRIMARY KEY (pk)\n) ENGINE InnoDB DEFAULT CHARSET utf8mb3",
-		},
-		{
+		}, {
+			input:  "CREATE TABLE test (\n  data varchar(5) NULL DEFAULT _utf8 \"KZPVD\"\n) ENGINE = InnoDB DEFAULT CHARACTER SET = utf8mb4 DEFAULT COLLATE = UTF8MB4_BIN;",
+			output: "create table test (\n\t`data` varchar(5) default _utf8mb3 'KZPVD'\n) ENGINE InnoDB DEFAULT CHARACTER SET utf8mb4 DEFAULT COLLATE UTF8MB4_BIN",
+		}, {
 			input: "select EXTRACT(DAY from '2020-10-1')",
 		}, {
 			input:  "DROP EVENT event1",
