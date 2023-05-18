@@ -342,6 +342,8 @@ func TestVStreamsCreatedAndLagMetrics(t *testing.T) {
 	hc := discovery.NewFakeHealthCheck(nil)
 	st := getSandboxTopo(ctx, cell, ks, []string{"-20", "20-40"})
 	vsm := newTestVStreamManager(hc, st, cell)
+	vsm.vstreamsCreated.ResetAll()
+	vsm.vstreamsLag.ResetAll()
 	sbc0 := hc.AddTestTablet(cell, "1.1.1.1", 1001, ks, "-20", topodatapb.TabletType_PRIMARY, true, 1, nil)
 	addTabletToSandboxTopo(t, st, ks, "-20", sbc0.Tablet())
 	sbc1 := hc.AddTestTablet(cell, "1.1.1.1", 1002, ks, "20-40", topodatapb.TabletType_PRIMARY, true, 1, nil)
@@ -1208,7 +1210,8 @@ func startVStream(ctx context.Context, t *testing.T, vsm *vstreamManager, vgtid 
 func verifyEvents(t *testing.T, ch <-chan *binlogdatapb.VStreamResponse, wants ...*binlogdatapb.VStreamResponse) {
 	t.Helper()
 	for i, want := range wants {
-		got := <-ch
+		val := <-ch
+		got := proto.Clone(val).(*binlogdatapb.VStreamResponse)
 		require.NotNil(t, got)
 		for _, event := range got.Events {
 			event.Timestamp = 0
