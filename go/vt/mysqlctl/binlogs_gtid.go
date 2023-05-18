@@ -99,7 +99,7 @@ func ChooseBinlogsForIncrementalBackup(
 		}
 		if !prevGTIDsUnion.Union(purgedGTIDSet).Contains(backupFromGTIDSet) {
 			return nil, "", "", vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION,
-				"Mismatching GTID entries. Requested backup pos has entries not found in the binary logs, and binary logs have entries not found in the requested backup pos. Requested pos=%v, binlog pos=%v",
+				"Mismatching GTID entries. Requested backup pos has entries not found in the binary logs, and binary logs have entries not found in the requested backup pos. Neither fully contains the other. Requested pos=%v, binlog pos=%v",
 				backupFromGTIDSet, previousGTIDsPos.GTIDSet)
 		}
 		// We begin with the previous binary log, and we ignore the last binary log, because it's still open and being written to.
