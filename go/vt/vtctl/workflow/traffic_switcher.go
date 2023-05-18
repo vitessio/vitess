@@ -563,17 +563,13 @@ func (ts *trafficSwitcher) switchTableReads(ctx context.Context, cells []string,
 		for _, table := range ts.Tables() {
 			if direction == DirectionForward {
 				log.Infof("Route direction forward")
-				toTarget := []string{ts.TargetKeyspaceName() + "." + table}
-				rules[table+"@"+tt] = toTarget
-				rules[ts.TargetKeyspaceName()+"."+table+"@"+tt] = toTarget
-				rules[ts.SourceKeyspaceName()+"."+table+"@"+tt] = toTarget
 			} else {
 				log.Infof("Route direction backwards")
-				toSource := []string{ts.SourceKeyspaceName() + "." + table}
-				rules[table+"@"+tt] = toSource
-				rules[ts.TargetKeyspaceName()+"."+table+"@"+tt] = toSource
-				rules[ts.SourceKeyspaceName()+"."+table+"@"+tt] = toSource
 			}
+			toTarget := []string{ts.TargetKeyspaceName() + "." + table}
+			rules[table+"@"+tt] = toTarget
+			rules[ts.TargetKeyspaceName()+"."+table+"@"+tt] = toTarget
+			rules[ts.SourceKeyspaceName()+"."+table+"@"+tt] = toTarget
 		}
 	}
 	if err := topotools.SaveRoutingRules(ctx, ts.TopoServer(), rules); err != nil {

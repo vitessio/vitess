@@ -2093,17 +2093,6 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 		return nil, fmt.Errorf("invalid action for Migrate workflow: SwitchTraffic")
 	}
 
-	direction := TrafficSwitchDirection(req.Direction)
-
-	if direction == DirectionBackward {
-		req.Keyspace = state.SourceKeyspace
-		req.Workflow = ts.reverseWorkflow
-		ts, state, err = s.getWorkflowState(ctx, req.Keyspace, req.Workflow)
-		if err != nil {
-			return nil, err
-		}
-	}
-
 	maxReplicationLagAllowed, set, err := protoutil.DurationFromProto(req.MaxReplicationLagAllowed)
 	if err != nil {
 		err = vterrors.Wrapf(err, "unable to parse MaxReplicationLagAllowed into a valid duration")
@@ -2113,6 +2102,13 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 		maxReplicationLagAllowed = defaultDuration
 	}
 
+	direction := TrafficSwitchDirection(req.Direction)
+	if direction == DirectionBackward {
+		ts, state, err = s.getWorkflowState(ctx, state.SourceKeyspace, ts.reverseWorkflow)
+		if err != nil {
+			return nil, err
+		}
+	}
 	reason, err := s.canSwitch(ctx, ts, state, direction, int64(maxReplicationLagAllowed.Seconds()))
 	if err != nil {
 		return nil, err
@@ -2126,7 +2122,7 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 		return nil, err
 	}
 	if hasReplica || hasRdonly {
-		if rdDryRunResults, err = s.switchReads(ctx, req.Keyspace, req.Workflow, timeout, false, direction, req.DryRun); err != nil {
+		if rdDryRunResults, err = s.switchReads(ctx, ts, state, timeout, false, direction, req.DryRun); err != nil {
 			return nil, err
 		}
 	}
@@ -2134,7 +2130,7 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 		dryRunResults = append(dryRunResults, *rdDryRunResults...)
 	}
 	if hasPrimary {
-		if _, wrDryRunResults, err = s.switchWrites(ctx, ts, timeout, direction, false, req.EnableReverseReplication, req.DryRun); err != nil {
+		if _, wrDryRunResults, err = s.switchWrites(ctx, ts, timeout, false, req.EnableReverseReplication, req.DryRun); err != nil {
 			return nil, err
 		}
 	}
@@ -2150,7 +2146,13 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 	} else {
 		// Reload the state after the SwitchTraffic operation
 		// and return that as a string.
-		_, state, err := s.getWorkflowState(ctx, req.Keyspace, req.Workflow)
+		keyspace := req.Keyspace
+		workflow := req.Workflow
+		if direction == DirectionBackward {
+			keyspace = state.SourceKeyspace
+			workflow = ts.reverseWorkflow
+		}
+		_, state, err := s.getWorkflowState(ctx, keyspace, workflow)
 		if err != nil {
 			results = append(results, fmt.Sprintf("Error reloading workflow state after switching traffic: %v", err))
 		} else {
@@ -2161,11 +2163,7 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 }
 
 // switchReads is a generic way of switching read traffic for a workflow.
-func (s *Server) switchReads(ctx context.Context, keyspace, workflow string, timeout time.Duration, cancel bool, direction TrafficSwitchDirection, dryRun bool) (*[]string, error) {
-	ts, state, err := s.getWorkflowState(ctx, keyspace, workflow)
-	if err != nil {
-		return nil, err
-	}
+func (s *Server) switchReads(ctx context.Context, ts *trafficSwitcher, state *State, timeout time.Duration, cancel bool, direction TrafficSwitchDirection, dryRun bool) (*[]string, error) {
 	roTypesToSwitch := []topodatapb.TabletType{}
 	hasReplica, hasRdonly, _, err := parseTabletTypesStr(ts.optTabletTypes)
 	if err != nil {
@@ -2263,7 +2261,7 @@ func (s *Server) switchReads(ctx context.Context, keyspace, workflow string, tim
 }
 
 // switchWrites is a generic way of migrating write traffic for a workflow.
-func (s *Server) switchWrites(ctx context.Context, ts *trafficSwitcher, timeout time.Duration, direction TrafficSwitchDirection,
+func (s *Server) switchWrites(ctx context.Context, ts *trafficSwitcher, timeout time.Duration,
 	cancel, reverseReplication, dryRun bool) (journalID int64, dryRunResults *[]string, err error) {
 
 	var sw iswitcher
