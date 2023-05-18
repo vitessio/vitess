@@ -109,7 +109,7 @@ func main() {
 	if servenv.GRPCPort() != 0 {
 		gRPCPort = int32(servenv.GRPCPort())
 	}
-	tablet, err := tabletmanager.BuildTabletFromInput(tabletAlias, int32(servenv.Port()), gRPCPort, mysqld.GetVersionString(), config.DB)
+	tablet, err := tabletmanager.BuildTabletFromInput(tabletAlias, int32(servenv.Port()), gRPCPort, config.DB)
 	if err != nil {
 		log.Exitf("failed to parse --tablet-path: %v", err)
 	}

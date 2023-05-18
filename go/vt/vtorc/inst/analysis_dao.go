@@ -346,14 +346,15 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 		}
 
 		tablet := &topodatapb.Tablet{}
-		if err := prototext.Unmarshal([]byte(m.GetString("tablet_info")), tablet); err != nil {
+		opts := prototext.UnmarshalOptions{DiscardUnknown: true}
+		if err := opts.Unmarshal([]byte(m.GetString("tablet_info")), tablet); err != nil {
 			log.Errorf("could not read tablet %v: %v", m.GetString("tablet_info"), err)
 			return nil
 		}
 
 		primaryTablet := &topodatapb.Tablet{}
 		if str := m.GetString("primary_tablet_info"); str != "" {
-			if err := prototext.Unmarshal([]byte(str), primaryTablet); err != nil {
+			if err := opts.Unmarshal([]byte(str), primaryTablet); err != nil {
 				log.Errorf("could not read tablet %v: %v", str, err)
 				return nil
 			}
