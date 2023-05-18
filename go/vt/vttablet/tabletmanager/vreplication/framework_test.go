@@ -24,6 +24,7 @@ import (
 	"reflect"
 	"regexp"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -59,9 +60,12 @@ import (
 )
 
 var (
-	playerEngine          *Engine
-	streamerEngine        *vstreamer.Engine
-	env                   *testenv.Env
+	playerEngine   *Engine
+	streamerEngine *vstreamer.Engine
+
+	envMu sync.Mutex
+	env   *testenv.Env
+
 	globalFBC             = &fakeBinlogClient{}
 	vrepldb               = "vrepl"
 	globalDBQueries       = make(chan string, 1000)
@@ -118,17 +122,19 @@ func cleanup() {
 	playerEngine.Close()
 	streamerEngine.Close()
 	env.Close()
+	envMu.Unlock()
 }
 
 func setup() (func(), int) {
-	globalDBQueries = make(chan string, 1000)
-	resetBinlogClient()
 	var err error
 	env, err = testenv.Init()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%v", err)
 		return nil, 1
 	}
+	envMu.Lock()
+	globalDBQueries = make(chan string, 1000)
+	resetBinlogClient()
 
 	vttablet.VReplicationExperimentalFlags = 0
 
@@ -171,31 +177,26 @@ func TestMain(m *testing.M) {
 		}
 		defer utils.SetBinlogRowImageMode("", tempDir)
 		cancel, ret := setup()
-		defer cancel()
 		if ret > 0 {
 			return ret
 		}
 		ret = m.Run()
-		/*
-			// Temporarily disable running all tests again with `noblob` until we fix the raciness caused by global variables
-			// being reinitialized in the framework.
-			if ret > 0 {
-				return ret
-			}
-			runNoBlobTest = true
-			if err := utils.SetBinlogRowImageMode("noblob", tempDir); err != nil {
-				panic(err)
-			}
-			defer utils.SetBinlogRowImageMode("", tempDir)
-			cancel, ret = setup()
-			if ret > 0 {
-				return ret
-			}
-			defer cancel()
-			ret = m.Run()
-		*/
-		return ret
+		if ret > 0 {
+			return ret
+		}
+		cancel()
 
+		runNoBlobTest = true
+		if err := utils.SetBinlogRowImageMode("noblob", tempDir); err != nil {
+			panic(err)
+		}
+		defer utils.SetBinlogRowImageMode("", tempDir)
+		cancel, ret = setup()
+		if ret > 0 {
+			return ret
+		}
+		defer cancel()
+		return m.Run()
 	}()
 	os.Exit(exitCode)
 }
