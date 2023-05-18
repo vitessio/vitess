@@ -1424,8 +1424,9 @@ func TestHandleExecUnknownError(t *testing.T) {
 // truncate the error text in logs, but will not truncate the error text in the
 // error value.
 func TestHandlePanicAndSendLogStatsMessageTruncation(t *testing.T) {
+	tl := newTestLogger()
+	defer tl.Close()
 	logStats := tabletenv.NewLogStats(ctx, "TestHandlePanicAndSendLogStatsMessageTruncation")
-
 	db, tsv := setupTabletServerTest(t, "")
 	defer tsv.StopService()
 	defer db.Close()
@@ -1441,9 +1442,6 @@ func TestHandlePanicAndSendLogStatsMessageTruncation(t *testing.T) {
 	sqlparser.SetTruncateErrLen(32)
 	defer sqlparser.SetTruncateErrLen(origTruncateErrLen)
 
-	tl := newTestLogger()
-	defer tl.Close()
-
 	defer func() {
 		err := logStats.Error
 		want := "Uncaught panic for Sql: \"select * from test_table_loooooooooooooooooooooooooooooooooooong\", BindVars: {bv1: \"type:INT64 value:\\\"1111111111\\\"\"bv2: \"type:INT64 value:\\\"2222222222\\\"\"bv3: \"type:INT64 value:\\\"3333333333\\\"\"bv4: \"type:INT64 value:\\\"4444444444\\\"\"}"
@@ -1451,7 +1449,7 @@ func TestHandlePanicAndSendLogStatsMessageTruncation(t *testing.T) {
 		assert.Contains(t, err.Error(), want)
 		want = "Uncaught panic for Sql: \"select * from test_t [TRUNCATED]\", BindVars: {bv1: \"typ [TRUNCATED]"
 		gotWhatWeWant := false
-		for _, log := range tl.logs {
+		for _, log := range tl.getLogs() {
 			if strings.HasPrefix(log, want) {
 				gotWhatWeWant = true
 				break
@@ -1494,7 +1492,9 @@ func TestQueryAsString(t *testing.T) {
 }
 
 type testLogger struct {
-	logs        []string
+	logsMu sync.Mutex
+	logs   []string
+
 	savedInfof  func(format string, args ...any)
 	savedInfo   func(args ...any)
 	savedErrorf func(format string, args ...any)
@@ -1508,6 +1508,8 @@ func newTestLogger() *testLogger {
 		savedErrorf: log.Errorf,
 		savedError:  log.Error,
 	}
+	tl.logsMu.Lock()
+	defer tl.logsMu.Unlock()
 	log.Infof = tl.recordInfof
 	log.Info = tl.recordInfo
 	log.Errorf = tl.recordErrorf
@@ -1516,6 +1518,8 @@ func newTestLogger() *testLogger {
 }
 
 func (tl *testLogger) Close() {
+	tl.logsMu.Lock()
+	defer tl.logsMu.Unlock()
 	log.Infof = tl.savedInfof
 	log.Info = tl.savedInfo
 	log.Errorf = tl.savedErrorf
@@ -1524,33 +1528,49 @@ func (tl *testLogger) Close() {
 
 func (tl *testLogger) recordInfof(format string, args ...any) {
 	msg := fmt.Sprintf(format, args...)
+	tl.logsMu.Lock()
+	defer tl.logsMu.Unlock()
 	tl.logs = append(tl.logs, msg)
 	tl.savedInfof(msg)
 }
 
 func (tl *testLogger) recordInfo(args ...any) {
 	msg := fmt.Sprint(args...)
+	tl.logsMu.Lock()
+	defer tl.logsMu.Unlock()
 	tl.logs = append(tl.logs, msg)
 	tl.savedInfo(msg)
 }
 
 func (tl *testLogger) recordErrorf(format string, args ...any) {
 	msg := fmt.Sprintf(format, args...)
+	tl.logsMu.Lock()
+	defer tl.logsMu.Unlock()
 	tl.logs = append(tl.logs, msg)
 	tl.savedErrorf(msg)
 }
 
 func (tl *testLogger) recordError(args ...any) {
 	msg := fmt.Sprint(args...)
+	tl.logsMu.Lock()
+	defer tl.logsMu.Unlock()
 	tl.logs = append(tl.logs, msg)
 	tl.savedError(msg)
 }
 
 func (tl *testLogger) getLog(i int) string {
+	tl.logsMu.Lock()
+	defer tl.logsMu.Unlock()
 	if i < len(tl.logs) {
 		return tl.logs[i]
 	}
 	return fmt.Sprintf("ERROR: log %d/%d does not exist", i, len(tl.logs))
+}
+
+func (tl *testLogger) getLogs() []string {
+	tl.logsMu.Lock()
+	defer tl.logsMu.Unlock()
+	return tl.logs
 }
 
 func TestHandleExecTabletError(t *testing.T) {
