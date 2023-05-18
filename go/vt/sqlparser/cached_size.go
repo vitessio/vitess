@@ -343,6 +343,24 @@ func (cached *ArgumentLessWindowExpr) CachedSize(alloc bool) int64 {
 	size += cached.OverClause.CachedSize(true)
 	return size
 }
+func (cached *AssignmentExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(32)
+	}
+	// field Left vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Left.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field Right vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Right.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	return size
+}
 func (cached *AutoIncSpec) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -2444,6 +2462,24 @@ func (cached *LineStringExpr) CachedSize(alloc bool) int64 {
 				size += cc.CachedSize(true)
 			}
 		}
+	}
+	return size
+}
+func (cached *LinestrPropertyFuncExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field Linestring vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Linestring.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field PropertyDefArg vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.PropertyDefArg.(cachedObject); ok {
+		size += cc.CachedSize(true)
 	}
 	return size
 }

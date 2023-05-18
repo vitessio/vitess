@@ -4,6 +4,7 @@
 
 - **[Major Changes](#major-changes)**
   - **[Breaking Changes](#breaking-changes)**
+    - [Default Local Cell Preference for TabletPicker](#tablet-picker-cell-preference)
     - [Dedicated stats for VTGate Prepare operations](#dedicated-vtgate-prepare-stats)
     - [VTAdmin web migrated from create-react-app to vite](#migrated-vtadmin)
     - [Keyspace name validation in TopoServer](#keyspace-name-validation)
@@ -31,6 +32,28 @@
 ## <a id="major-changes"/> Major Changes
 
 ### <a id="breaking-changes"/>Breaking Changes
+
+#### <a id="tablet-picker-cell-preference"/>Default Local Cell Preference for TabletPicker
+
+We added options to the `TabletPicker` that allow for specifying a cell preference in addition to making the default behavior to give priority to the local cell *and any alias it belongs to*. We are also introducing a new way to select tablet type preference which should eventually replace the `in_order:` hint currently used as a prefix for tablet types. The signature for creating a new `TabletPicker` now looks like:
+
+```
+func NewTabletPicker(
+	ctx context.Context,
+	ts *topo.Server,
+	cells []string,
+	localCell, keyspace, shard, tabletTypesStr string,
+	options TabletPickerOptions,
+) (*TabletPicker, error) {...}
+```
+
+Where ctx, localCell, option are all new parameters.
+
+`option` is of type `TabletPickerOptions` and includes two fields, `CellPreference` and `TabletOrder`.
+CellPreference`: "PreferLocalWithAlias" (default) gives preference to vtgate's local cell, or "OnlySpecified" which only picks from the cells explicitly passed in by the client
+`TabletOrder`: "Any" (default) for no ordering or random, or "InOrder" to use the order specified by the client
+
+See [PR 12282 Description](https://github.com/vitessio/vitess/pull/12282) for examples on how this changes cell picking behavior.
 
 #### <a id="vtgr-default-tls-version"/>Default TLS version changed for `vtgr`
 
@@ -87,6 +110,10 @@ The VtctldClient command RestoreFromBackup initiates an asynchronous process on 
 Prior to v17, this asynchronous process could run indefinitely in the background since it was called using the background context. In v17 [PR#12830](https://github.com/vitessio/vitess/issues/12830),
 this behavior was changed to use a context with a timeout of `action_timeout`. If you are using VtctldClient to initiate a restore, make sure you provide an appropriate value for action_timeout to give enough
 time for the restore process to complete. Otherwise, the restore will throw an error if the context expires before it completes.
+
+### <a id="Vttablet-TxThrottler"> Vttablet's transaction throttler now also throttles DML outside of `BEGIN; ...; COMMIT;` blocks
+Prior to v17, `vttablet`'s transaction throttler (enabled with `--enable-tx-throttler`) would only throttle requests done inside an explicit transaction, i.e., a `BEGIN; ...; COMMIT;` block.
+In v17 [PR#13040](https://github.com/vitessio/vitess/issues/13037), this behavior was being changed so that it also throttles work outside of explicit transactions for `INSERT/UPDATE/DELETE/LOAD` queries.
 
 ### <a id="new-flag"/> New command line flags and behavior
 
@@ -297,6 +324,29 @@ The default file can be found in `./config/init_db.sql`.
 
 #### <a id="vttablet-deprecated-flags"/> Deprecated Flags
 The flag `use_super_read_only` is deprecated and will be removed in a later release.
+
+Various flags that took float values as seconds have updated to take the standard duration syntax as well.
+Float-style parsing is now deprecated and will be removed in a later release.
+For example, instead of `--queryserver-config-query-pool-timeout 12.2`, use `--queryserver-config-query-pool-timeout 12s200ms`.
+Affected flags and YAML config keys:
+- `degraded_threshold`
+- `heartbeat_interval`
+- `heartbeat_on_demand_duration`
+- `health_check_interval`
+- `queryserver-config-idle-timeout`
+- `queryserver-config-pool-conn-max-lifetime`
+- `queryserver-config-olap-transaction-timeout`
+- `queryserver-config-query-timeout`
+- `queryserver-config-query-pool-timeout`
+- `queryserver-config-schema-reload-time`
+- `queryserver-config-schema-change-signal-interval`
+- `queryserver-config-stream-pool-timeout`
+- `queryserver-config-stream-pool-idle-timeout`
+- `queryserver-config-transaction-timeout`
+- `queryserver-config-txpool-timeout`
+- `queryserver-config-txpool-idle-timeout`
+- `shutdown_grace_period`
+- `unhealthy_threshold`
 
 ### Online DDL
 

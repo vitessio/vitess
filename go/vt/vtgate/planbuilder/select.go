@@ -39,6 +39,10 @@ func buildSelectPlan(query string) stmtPlanner {
 		if sel.With != nil {
 			return nil, vterrors.VT12001("WITH expression in SELECT statement")
 		}
+		err := checkUnsupportedExpressions(sel)
+		if err != nil {
+			return nil, err
+		}
 
 		p, err := handleDualSelects(sel, vschema)
 		if err != nil {
@@ -84,6 +88,24 @@ func buildSelectPlan(query string) stmtPlanner {
 
 		return newPlanResult(primitive), nil
 	}
+}
+
+// checkUnsupportedExpressions checks for unsupported expressions.
+func checkUnsupportedExpressions(sel sqlparser.SQLNode) error {
+	var unsupportedErr error
+	sqlparser.Rewrite(sel, func(cursor *sqlparser.Cursor) bool {
+		switch cursor.Node().(type) {
+		case *sqlparser.AssignmentExpr:
+			unsupportedErr = vterrors.VT12001("Assignment expression")
+			return false
+		default:
+			return true
+		}
+	}, nil)
+	if unsupportedErr != nil {
+		return unsupportedErr
+	}
+	return nil
 }
 
 func rewriteToCNFAndReplan(stmt sqlparser.Statement, getPlan func(sel *sqlparser.Select) (logicalPlan, error)) engine.Primitive {

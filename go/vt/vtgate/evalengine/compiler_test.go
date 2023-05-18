@@ -364,6 +364,86 @@ func TestCompilerSingle(t *testing.T) {
 			expression: `timestamp '2000-01-01 10:34:58.978654' DIV '\t1 foo\t'`,
 			result:     `INT64(20000101103458)`,
 		},
+		{
+			expression: `UNHEX('f')`,
+			result:     `VARBINARY("\x0f")`,
+		},
+		{
+			expression: `STRCMP(1234, '12_4')`,
+			result:     `INT64(-1)`,
+		},
+		{
+			expression: `INTERVAL(0, 0, 0, 0)`,
+			result:     `INT64(3)`,
+		},
+		{
+			expression: `INTERVAL(0, 0, 1, 0)`,
+			result:     `INT64(1)`,
+		},
+		{
+			expression: `INTERVAL(0, 1, 0, 0)`,
+			result:     `INT64(0)`,
+		},
+		{
+			expression: `INTERVAL(0, -1, 0, 0)`,
+			result:     `INT64(3)`,
+		},
+		{
+			expression: `INTERVAL(0, 1, 1, 1)`,
+			result:     `INT64(0)`,
+		},
+		{
+			expression: `INTERVAL(0, -1, -1, -1)`,
+			result:     `INT64(3)`,
+		},
+		{
+			expression: `INTERVAL(0, 0, 0, 1)`,
+			result:     `INT64(2)`,
+		},
+		{
+			expression: `INTERVAL(0, 0, 0, -1)`,
+			result:     `INT64(3)`,
+		},
+		{
+			expression: `INTERVAL(0, NULL, 0, 0)`,
+			result:     `INT64(3)`,
+		},
+		{
+			expression: `INTERVAL(NULL, 0, 0, 0)`,
+			result:     `INT64(-1)`,
+		},
+		{
+			expression: `INTERVAL(0, 0, 0, NULL)`,
+			result:     `INT64(3)`,
+		},
+		{
+			expression: `INTERVAL(0, 0, 0, NULL, 1, 1)`,
+			result:     `INT64(3)`,
+		},
+		{
+			expression: `INTERVAL(0, 0, 2, NULL, 1, 1)`,
+			result:     `INT64(1)`,
+		},
+		{
+			expression: `INTERVAL(0, 2, -1, NULL, -1, 1)`,
+			result:     `INT64(0)`,
+		},
+		{
+			expression: `INTERVAL(0, 2, NULL, NULL, -1, 1)`,
+			result:     `INT64(0)`,
+		},
+		{
+			expression: `INTERVAL(0, NULL, NULL, NULL, -1, 1)`,
+			result:     `INT64(4)`,
+		},
+		{
+			expression: `INTERVAL(0, 0, 0, -1, NULL, 1)`,
+			result:     `INT64(4)`,
+		},
+		{
+			expression: `INTERVAL(0, 0, 0, -1, NULL, NULL, 1)`,
+			result:     `INT64(5)`,
+		},
 	}
 
 	for _, tc := range testCases {
@@ -386,10 +466,6 @@ func TestCompilerSingle(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			if cfg.CompilerErr != nil {
-				t.Fatalf("bad compilation: %v", cfg.CompilerErr)
-			}
-
 			env := evalengine.EmptyExpressionEnv()
 			env.Row = tc.values
 
@@ -399,6 +475,10 @@ func TestCompilerSingle(t *testing.T) {
 			}
 			if expected.String() != tc.result {
 				t.Fatalf("bad evaluation from eval engine: got %s, want %s", expected.String(), tc.result)
+			}
+
+			if cfg.CompilerErr != nil {
+				t.Fatalf("bad compilation: %v", cfg.CompilerErr)
 			}
 
 			// re-run the same evaluation multiple times to ensure results are always consistent

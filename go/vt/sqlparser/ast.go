@@ -2261,6 +2261,11 @@ type (
 		Subquery *Subquery
 	}
 
+	// AssignmentExpr represents an expression of type @value := x.
+	AssignmentExpr struct {
+		Left, Right Expr
+	}
+
 	// Literal represents a fixed value.
 	Literal struct {
 		Type ValType
@@ -2789,6 +2794,15 @@ type (
 		ValueToSet Expr
 	}
 
+	// Linestring is an enum to get the types of geom format functions with possible values: EndPoint IsClosed Length NumPoints PointN StartPoint
+	LinestrPropType int8
+
+	LinestrPropertyFuncExpr struct {
+		Property       LinestrPropType
+		Linestring     Expr
+		PropertyDefArg Expr
+	}
+
 	AggrFunc interface {
 		Expr
 		AggrName() string
@@ -3028,6 +3042,7 @@ func (*ComparisonExpr) iExpr()                     {}
 func (*BetweenExpr) iExpr()                        {}
 func (*IsExpr) iExpr()                             {}
 func (*ExistsExpr) iExpr()                         {}
+func (*AssignmentExpr) iExpr()                     {}
 func (*Literal) iExpr()                            {}
 func (*Argument) iExpr()                           {}
 func (*NullVal) iExpr()                            {}
@@ -3126,6 +3141,7 @@ func (*GeomFromWKBExpr) iExpr()                    {}
 func (*GeomFormatExpr) iExpr()                     {}
 func (*GeomPropertyFuncExpr) iExpr()               {}
 func (*PointPropertyFuncExpr) iExpr()              {}
+func (*LinestrPropertyFuncExpr) iExpr()            {}
 
 // iCallable marks all expressions that represent function calls
 func (*FuncExpr) iCallable()                           {}
@@ -3190,6 +3206,7 @@ func (*GeomFromWKBExpr) iCallable()                    {}
 func (*GeomFormatExpr) iCallable()                     {}
 func (*GeomPropertyFuncExpr) iCallable()               {}
 func (*PointPropertyFuncExpr) iCallable()              {}
+func (*LinestrPropertyFuncExpr) iCallable()            {}
 
 func (*Sum) iCallable()       {}
 func (*Min) iCallable()       {}

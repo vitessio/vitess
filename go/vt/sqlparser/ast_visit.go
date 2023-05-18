@@ -58,6 +58,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfArgument(in, f)
 	case *ArgumentLessWindowExpr:
 		return VisitRefOfArgumentLessWindowExpr(in, f)
+	case *AssignmentExpr:
+		return VisitRefOfAssignmentExpr(in, f)
 	case *AutoIncSpec:
 		return VisitRefOfAutoIncSpec(in, f)
 	case *Avg:
@@ -276,6 +278,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfLimit(in, f)
 	case *LineStringExpr:
 		return VisitRefOfLineStringExpr(in, f)
+	case *LinestrPropertyFuncExpr:
+		return VisitRefOfLinestrPropertyFuncExpr(in, f)
 	case ListArg:
 		return VisitListArg(in, f)
 	case *Literal:
@@ -796,6 +800,21 @@ func VisitRefOfArgumentLessWindowExpr(in *ArgumentLessWindowExpr, f Visit) error
 		return err
 	}
 	if err := VisitRefOfOverClause(in.OverClause, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfAssignmentExpr(in *AssignmentExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.Left, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.Right, f); err != nil {
 		return err
 	}
 	return nil
@@ -2396,6 +2415,21 @@ func VisitRefOfLineStringExpr(in *LineStringExpr, f Visit) error {
 		return err
 	}
 	if err := VisitExprs(in.PointParams, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfLinestrPropertyFuncExpr(in *LinestrPropertyFuncExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.Linestring, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.PropertyDefArg, f); err != nil {
 		return err
 	}
 	return nil
@@ -4393,6 +4427,8 @@ func VisitCallable(in Callable, f Visit) error {
 		return VisitRefOfLagLeadExpr(in, f)
 	case *LineStringExpr:
 		return VisitRefOfLineStringExpr(in, f)
+	case *LinestrPropertyFuncExpr:
+		return VisitRefOfLinestrPropertyFuncExpr(in, f)
 	case *LocateExpr:
 		return VisitRefOfLocateExpr(in, f)
 	case *MatchExpr:
@@ -4547,6 +4583,8 @@ func VisitExpr(in Expr, f Visit) error {
 		return VisitRefOfArgument(in, f)
 	case *ArgumentLessWindowExpr:
 		return VisitRefOfArgumentLessWindowExpr(in, f)
+	case *AssignmentExpr:
+		return VisitRefOfAssignmentExpr(in, f)
 	case *Avg:
 		return VisitRefOfAvg(in, f)
 	case *BetweenExpr:
@@ -4663,6 +4701,8 @@ func VisitExpr(in Expr, f Visit) error {
 		return VisitRefOfLagLeadExpr(in, f)
 	case *LineStringExpr:
 		return VisitRefOfLineStringExpr(in, f)
+	case *LinestrPropertyFuncExpr:
+		return VisitRefOfLinestrPropertyFuncExpr(in, f)
 	case ListArg:
 		return VisitListArg(in, f)
 	case *Literal:

@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/onlineddl"
 	"vitess.io/vitess/go/test/endtoend/throttler"
@@ -437,8 +438,16 @@ func TestSchemaChange(t *testing.T) {
 			// to _vt.schema_migrations
 			row, startedTimestamp, lastThrottledTimestamp := onlineddl.WaitForThrottledTimestamp(t, &vtParams, uuid, normalMigrationWait)
 			require.NotNil(t, row)
+
+			startedTime, err := time.Parse(sqltypes.TimestampFormat, startedTimestamp)
+			require.NoError(t, err)
+			lastThrottledTime, err := time.Parse(sqltypes.TimestampFormat, lastThrottledTimestamp)
+			require.NoError(t, err)
+
 			// rowstreamer throttle timestamp only updates once in 10 seconds, so greater or equals" is good enough here.
-			assert.GreaterOrEqual(t, lastThrottledTimestamp, startedTimestamp)
+			// Technically, lastThrottledTime has to be >= startedTime, but we allow a deviation of 1 sec due to
+			// clock irregularities
+			assert.GreaterOrEqual(t, lastThrottledTime.Add(time.Second), startedTime)
 			component := row.AsString("component_throttled", "")
 			assert.Contains(t, []string{string(vreplication.VStreamerComponentName), string(vreplication.RowStreamerComponentName)}, component)
 		}()

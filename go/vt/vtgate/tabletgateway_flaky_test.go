@@ -209,9 +209,20 @@ func TestGatewayBufferingWhileReparenting(t *testing.T) {
 	hc.SetTabletType(replicaTablet, topodatapb.TabletType_PRIMARY)
 	hc.SetServing(replicaTablet, true)
 	hc.Broadcast(replicaTablet)
-	newPrimary, ok := tg.kev.PrimaryIsNotServing(target)
-	require.EqualValues(t, 1, newPrimary.Uid)
-	require.False(t, ok, "PrimaryIsNotServing is not returning true")
+
+	timeout := time.After(1 * time.Minute)
+outer:
+	for {
+		select {
+		case <-timeout:
+			require.Fail(t, "timed out - could not verify the new primary")
+		case <-time.After(10 * time.Millisecond):
+			newPrimary, notServing := tg.kev.PrimaryIsNotServing(target)
+			if newPrimary != nil && newPrimary.Uid == 1 && !notServing {
+				break outer
+			}
+		}
+	}
 
 	// wait for the query to execute before checking for results
 	select {

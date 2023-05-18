@@ -1289,6 +1289,11 @@ func (node *ExistsExpr) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node.
+func (node *AssignmentExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "%l := %r", node.Left, node.Right)
+}
+
+// Format formats the node.
 func (node *Literal) Format(buf *TrackedBuffer) {
 	switch node.Type {
 	case StrVal:
@@ -2850,6 +2855,15 @@ func (node *PointPropertyFuncExpr) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "%s(%v", node.Property.ToString(), node.Point)
 	if node.ValueToSet != nil {
 		buf.astPrintf(node, ", %v", node.ValueToSet)
+	}
+	buf.WriteByte(')')
+}
+
+// Format formats the node
+func (node *LinestrPropertyFuncExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "%s(%v", node.Property.ToString(), node.Linestring)
+	if node.PropertyDefArg != nil {
+		buf.astPrintf(node, ", %v", node.PropertyDefArg)
 	}
 	buf.WriteByte(')')
 }

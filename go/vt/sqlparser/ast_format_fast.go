@@ -1687,6 +1687,13 @@ func (node *ExistsExpr) formatFast(buf *TrackedBuffer) {
 }
 
 // formatFast formats the node.
+func (node *AssignmentExpr) formatFast(buf *TrackedBuffer) {
+	buf.printExpr(node, node.Left, true)
+	buf.WriteString(" := ")
+	buf.printExpr(node, node.Right, false)
+}
+
+// formatFast formats the node.
 func (node *Literal) formatFast(buf *TrackedBuffer) {
 	switch node.Type {
 	case StrVal:
@@ -3745,6 +3752,18 @@ func (node *PointPropertyFuncExpr) formatFast(buf *TrackedBuffer) {
 	if node.ValueToSet != nil {
 		buf.WriteString(", ")
 		buf.printExpr(node, node.ValueToSet, true)
+	}
+	buf.WriteByte(')')
+}
+
+// formatFast formats the node
+func (node *LinestrPropertyFuncExpr) formatFast(buf *TrackedBuffer) {
+	buf.WriteString(node.Property.ToString())
+	buf.WriteByte('(')
+	buf.printExpr(node, node.Linestring, true)
+	if node.PropertyDefArg != nil {
+		buf.WriteString(", ")
+		buf.printExpr(node, node.PropertyDefArg, true)
 	}
 	buf.WriteByte(')')
 }

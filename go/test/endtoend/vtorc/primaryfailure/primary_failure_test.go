@@ -17,6 +17,12 @@ limitations under the License.
 package primaryfailure
 
 import (
+	"bufio"
+	"fmt"
+	"os"
+	"path"
+	"regexp"
+	"strings"
 	"testing"
 	"time"
 
@@ -63,12 +69,15 @@ func TestDownPrimary(t *testing.T) {
 
 	// check that the replication is setup correctly before we failover
 	utils.CheckReplication(t, clusterInfo, curPrimary, []*cluster.Vttablet{rdonly, replica, crossCellReplica}, 10*time.Second)
-
+	// since all tablets are up and running, InstancePollSecondsExceeded should have `0` zero value
+	utils.WaitForInstancePollSecondsExceededCount(t, vtOrcProcess, "InstancePollSecondsExceeded", 0, true)
 	// Make the rdonly vttablet unavailable
 	err := rdonly.VttabletProcess.TearDown()
 	require.NoError(t, err)
 	err = rdonly.MysqlctlProcess.Stop()
 	require.NoError(t, err)
+	// We have bunch of Vttablets down. Therefore we expect at least 1 occurrence of InstancePollSecondsExceeded
+	utils.WaitForInstancePollSecondsExceededCount(t, vtOrcProcess, "InstancePollSecondsExceeded", 1, false)
 	// Make the current primary vttablet unavailable.
 	err = curPrimary.VttabletProcess.TearDown()
 	require.NoError(t, err)
@@ -82,9 +91,88 @@ func TestDownPrimary(t *testing.T) {
 
 	// check that the replica gets promoted
 	utils.CheckPrimaryTablet(t, clusterInfo, replica, true)
+
 	// also check that the replication is working correctly after failover
 	utils.VerifyWritesSucceed(t, clusterInfo, replica, []*cluster.Vttablet{crossCellReplica}, 10*time.Second)
 	utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.RecoverDeadPrimaryRecoveryName, 1)
+}
+
+// TestDeadPrimaryRecoversImmediately test Vtorc ability to recover immediately if primary is dead.
+// Reason is, unlike other recoveries, in DeadPrimary we don't call DiscoverInstance since we know
+// that primary is unreachable. This help us save few seconds depending on value of `RemoteOperationTimeout` flag.
+func TestDeadPrimaryRecoversImmediately(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 1, []string{"--remote_operation_timeout=10s"}, cluster.VTOrcConfiguration{
+		PreventCrossDataCenterPrimaryFailover: true,
+	}, 1, "semi_sync")
+	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
+	shard0 := &keyspace.Shards[0]
+	// find primary from topo
+	curPrimary := utils.ShardPrimaryTablet(t, clusterInfo, keyspace, shard0)
+	assert.NotNil(t, curPrimary, "should have elected a primary")
+	vtOrcProcess := clusterInfo.ClusterInstance.VTOrcProcesses[0]
+	utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.ElectNewPrimaryRecoveryName, 1)
+
+	// find the replica and rdonly tablets
+	var replica, rdonly *cluster.Vttablet
+	for _, tablet := range shard0.Vttablets {
+		// we know we have only two replcia tablets, so the one not the primary must be the other replica
+		if tablet.Alias != curPrimary.Alias && tablet.Type == "replica" {
+			replica = tablet
+		}
+		if tablet.Type == "rdonly" {
+			rdonly = tablet
+		}
+	}
+	assert.NotNil(t, replica, "could not find replica tablet")
+	assert.NotNil(t, rdonly, "could not find rdonly tablet")
+
+	// Start a cross-cell replica
+	crossCellReplica := utils.StartVttablet(t, clusterInfo, utils.Cell2, false)
+
+	// check that the replication is setup correctly before we failover
+	utils.CheckReplication(t, clusterInfo, curPrimary, []*cluster.Vttablet{rdonly, replica, crossCellReplica}, 10*time.Second)
+
+	// Make the current primary vttablet unavailable.
+	curPrimary.VttabletProcess.Kill()
+	err := curPrimary.MysqlctlProcess.Stop()
+	require.NoError(t, err)
+	defer func() {
+		// we remove the tablet from our global list
+		utils.PermanentlyRemoveVttablet(clusterInfo, curPrimary)
+	}()
+
+	// check that the replica gets promoted
+	utils.CheckPrimaryTablet(t, clusterInfo, replica, true)
+	utils.WaitForInstancePollSecondsExceededCount(t, vtOrcProcess, "InstancePollSecondsExceeded", 2, false)
+	// also check that the replication is working correctly after failover
+	utils.VerifyWritesSucceed(t, clusterInfo, replica, []*cluster.Vttablet{crossCellReplica}, 10*time.Second)
+	utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.RecoverDeadPrimaryRecoveryName, 1)
+
+	// Parse log file and find out how much time it took for DeadPrimary to recover.
+	logFile := path.Join(vtOrcProcess.LogDir, vtOrcProcess.LogFileName)
+	// log prefix printed at the end of analysis where we conclude we have DeadPrimary
+	t1 := extractTimeFromLog(t, logFile, "Proceeding with DeadPrimary recovery validation after acquiring shard lock")
+	// log prefix printed at the end of recovery
+	t2 := extractTimeFromLog(t, logFile, "auditType:recover-dead-primary")
+	curr := time.Now().Format("2006-01-02")
+	timeLayout := "2006-01-02 15:04:05.000000"
+	timeStr1 := fmt.Sprintf("%s %s", curr, t1)
+	timeStr2 := fmt.Sprintf("%s %s", curr, t2)
+	time1, err := time.Parse(timeLayout, timeStr1)
+	if err != nil {
+		t.Errorf("unable to parse time %s", err.Error())
+	}
+	time2, err := time.Parse(timeLayout, timeStr2)
+	if err != nil {
+		t.Errorf("unable to parse time %s", err.Error())
+	}
+	diff := time2.Sub(time1)
+	fmt.Printf("The difference between %s and %s is %v seconds.\n", t1, t2, diff.Seconds())
+	// assert that it takes less than `remote_operation_timeout` to recover from `DeadPrimary`
+	// use the value provided in `remote_operation_timeout` flag to compare with.
+	// We are testing against 9.5 seconds to be safe and prevent flakiness.
+	assert.Less(t, diff.Seconds(), 9.5)
 }
 
 // Failover should not be cross data centers, according to the configuration file
@@ -562,4 +650,30 @@ func TestDownPrimaryPromotionRuleWithLagCrossCenter(t *testing.T) {
 
 	// check that rdonly and crossCellReplica are able to replicate from the replica
 	utils.VerifyWritesSucceed(t, clusterInfo, replica, []*cluster.Vttablet{crossCellReplica, rdonly}, 15*time.Second)
+}
+
+func extractTimeFromLog(t *testing.T, logFile string, logStatement string) string {
+	file, err := os.Open(logFile)
+	if err != nil {
+		t.Errorf("fail to extract time from log statement %s", err.Error())
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+
+	for scanner.Scan() {
+		line := scanner.Text()
+		if strings.Contains(line, logStatement) {
+			// Regular expression pattern for date format
+			pattern := `\d{2}:\d{2}:\d{2}\.\d{6}`
+			re := regexp.MustCompile(pattern)
+			match := re.FindString(line)
+			return match
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		t.Errorf("fail to extract time from log statement %s", err.Error())
+	}
+	return ""
 }
