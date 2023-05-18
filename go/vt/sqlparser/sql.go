@@ -10065,7 +10065,7 @@ yydefault:
 		var yyLOCAL TableNames
 //line sql.y:981
 		{
-			yyLOCAL = TableNames{yyDollar[1].tableName.ToViewName()}
+			yyLOCAL = TableNames{yyDollar[1].tableName}
 		}
 		yyVAL.union = yyLOCAL
 	case 96:
@@ -10073,7 +10073,7 @@ yydefault:
 //line sql.y:985
 		{
 			yySLICE := (*TableNames)(yyIaddr(yyVAL.union))
-			*yySLICE = append(*yySLICE, yyDollar[3].tableName.ToViewName())
+			*yySLICE = append(*yySLICE, yyDollar[3].tableName)
 		}
 	case 97:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -10342,7 +10342,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:1156
 		{
-			yyLOCAL = &CreateView{ViewName: yyDollar[8].tableName.ToViewName(), Comments: Comments(yyDollar[2].strs).Parsed(), IsReplace: yyDollar[3].booleanUnion(), Algorithm: yyDollar[4].str, Definer: yyDollar[5].definerUnion(), Security: yyDollar[6].str, Columns: yyDollar[9].columnsUnion(), Select: yyDollar[11].selStmtUnion(), CheckOption: yyDollar[12].str}
+			yyLOCAL = &CreateView{ViewName: yyDollar[8].tableName, Comments: Comments(yyDollar[2].strs).Parsed(), IsReplace: yyDollar[3].booleanUnion(), Algorithm: yyDollar[4].str, Definer: yyDollar[5].definerUnion(), Security: yyDollar[6].str, Columns: yyDollar[9].columnsUnion(), Select: yyDollar[11].selStmtUnion(), CheckOption: yyDollar[12].str}
 		}
 		yyVAL.union = yyLOCAL
 	case 131:
@@ -13523,7 +13523,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:3182
 		{
-			yyLOCAL = &AlterView{ViewName: yyDollar[7].tableName.ToViewName(), Comments: Comments(yyDollar[2].strs).Parsed(), Algorithm: yyDollar[3].str, Definer: yyDollar[4].definerUnion(), Security: yyDollar[5].str, Columns: yyDollar[8].columnsUnion(), Select: yyDollar[10].selStmtUnion(), CheckOption: yyDollar[11].str}
+			yyLOCAL = &AlterView{ViewName: yyDollar[7].tableName, Comments: Comments(yyDollar[2].strs).Parsed(), Algorithm: yyDollar[3].str, Definer: yyDollar[4].definerUnion(), Security: yyDollar[5].str, Columns: yyDollar[8].columnsUnion(), Select: yyDollar[10].selStmtUnion(), CheckOption: yyDollar[11].str}
 		}
 		yyVAL.union = yyLOCAL
 	case 579:
