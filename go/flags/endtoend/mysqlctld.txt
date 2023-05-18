@@ -40,7 +40,7 @@ Usage of mysqlctld:
       --grpc_auth_static_password_file string                            JSON File to read the users/passwords from.
       --grpc_ca string                                                   server CA to use for gRPC connections, requires TLS, and enforces client certificate check
       --grpc_cert string                                                 server certificate to use for gRPC connections, requires grpc_key, enables TLS
-      --grpc_compression string                                          Which protocol to use for compressing gRPC. Default: nothing. Supported: snappy
+      --grpc_compression string                                          Which protocol to use for compressing gRPC. Default: nothing. Supported: snappy, zstd
       --grpc_crl string                                                  path to a certificate revocation list in PEM format, client certificates will be further verified against this file during TLS handshake
       --grpc_enable_optional_tls                                         enable optional TLS mode when a server accepts both TLS and plain-text connections on the same port
       --grpc_initial_conn_window_size int                                gRPC initial connection window size

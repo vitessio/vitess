@@ -20,12 +20,7 @@ import (
 	"io"
 
 	"github.com/golang/snappy"
-
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/encoding"
 )
-
-var compression string
 
 // SnappyCompressor is a gRPC compressor using the Snappy algorithm.
 type SnappyCompressor struct{}
@@ -43,18 +38,4 @@ func (s SnappyCompressor) Compress(w io.Writer) (io.WriteCloser, error) {
 // Decompress wraps with a SnappyReader
 func (s SnappyCompressor) Decompress(r io.Reader) (io.Reader, error) {
 	return snappy.NewReader(r), nil
-}
-
-func appendCompression(opts []grpc.DialOption) ([]grpc.DialOption, error) {
-	if compression == "snappy" {
-		compression := grpc.WithDefaultCallOptions(grpc.UseCompressor("snappy"))
-		opts = append(opts, compression)
-	}
-
-	return opts, nil
-}
-
-func init() {
-	encoding.RegisterCompressor(SnappyCompressor{})
-	RegisterGRPCDialOptions(appendCompression)
 }

@@ -10,7 +10,7 @@ Usage of vtorc:
       --consul_auth_static_file string               JSON File to read the topos/tokens from.
       --emit_stats                                   If set, emit stats to push-based monitoring and stats backends
       --grpc_auth_static_client_creds string         When using grpc_static_auth in the server, this file provides the credentials to use to authenticate with server.
-      --grpc_compression string                      Which protocol to use for compressing gRPC. Default: nothing. Supported: snappy
+      --grpc_compression string                      Which protocol to use for compressing gRPC. Default: nothing. Supported: snappy, zstd
       --grpc_enable_tracing                          Enable gRPC tracing.
       --grpc_initial_conn_window_size int            gRPC initial connection window size
       --grpc_initial_window_size int                 gRPC initial window size
