@@ -3920,7 +3920,7 @@ table_option:
   }
 | DEFAULT CHARSET equal_opt charset
   {
-    $$ = string($1) + " " + string($2) + " " + $3
+    $$ = string($1) + " " + string($2) + " " + $4
   }
 | CHARACTER SET equal_opt charset
   {
