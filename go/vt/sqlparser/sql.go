@@ -15056,7 +15056,7 @@ yydefault:
 		yyDollar = yyS[yypt-4 : yypt+1]
 //line sql.y:3922
 		{
-			yyVAL.str = string(yyDollar[1].bytes) + " " + string(yyDollar[2].bytes) + " " + yyDollar[3].str
+			yyVAL.str = string(yyDollar[1].bytes) + " " + string(yyDollar[2].bytes) + " " + yyDollar[4].str
 		}
 	case 766:
 		yyDollar = yyS[yypt-4 : yypt+1]
