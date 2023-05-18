@@ -27,12 +27,12 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"k8s.io/utils/strings/slices"
 
 	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/utils"
-
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
@@ -193,6 +193,82 @@ func TestHealthCheck(t *testing.T) {
 
 	// Manual cleanup of processes
 	killTablets(t, rTablet)
+}
+
+// TestHealthCheckSchemaChangeSignal tests the tables and views, which report their schemas have changed in the output of a StreamHealth.
+func TestHealthCheckSchemaChangeSignal(t *testing.T) {
+	// Add one replica that starts not initialized
+	defer cluster.PanicHandler(t)
+	ctx := context.Background()
+
+	conn, err := mysql.Connect(ctx, &primaryTabletParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	// Make sure the primary is the primary when the test starts.
+	// This state should be ensured before we actually test anything.
+	checkTabletType(t, primaryTablet.Alias, "PRIMARY")
+
+	// Run a bunch of DDL queries and verify that the tables/views changed show up in the health stream.
+	_, err = conn.ExecuteFetch("CREATE TABLE `area` (`id` int NOT NULL, PRIMARY KEY (`id`))", 10000, false)
+	require.NoError(t, err)
+	err = clusterInstance.StreamTabletHealthUntil(ctx, &primaryTablet, 30*time.Second, func(shr *querypb.StreamHealthResponse) bool {
+		if shr != nil && shr.RealtimeStats != nil && slices.Contains(shr.RealtimeStats.TableSchemaChanged, "area") {
+			return true
+		}
+		return false
+	})
+	require.NoError(t, err)
+
+	_, err = conn.ExecuteFetch("ALTER TABLE `area` ADD COLUMN name varchar(30) NOT NULL", 10000, false)
+	require.NoError(t, err)
+	err = clusterInstance.StreamTabletHealthUntil(ctx, &primaryTablet, 30*time.Second, func(shr *querypb.StreamHealthResponse) bool {
+		if shr != nil && shr.RealtimeStats != nil && slices.Contains(shr.RealtimeStats.TableSchemaChanged, "area") {
+			return true
+		}
+		return false
+	})
+	require.NoError(t, err)
+
+	_, err = conn.ExecuteFetch("CREATE VIEW v2 as select * from area", 10000, false)
+	require.NoError(t, err)
+	err = clusterInstance.StreamTabletHealthUntil(ctx, &primaryTablet, 30*time.Second, func(shr *querypb.StreamHealthResponse) bool {
+		if shr != nil && shr.RealtimeStats != nil && slices.Contains(shr.RealtimeStats.ViewSchemaChanged, "v2") {
+			return true
+		}
+		return false
+	})
+	require.NoError(t, err)
+
+	_, err = conn.ExecuteFetch("ALTER VIEW v2 as select id from area", 10000, false)
+	require.NoError(t, err)
+	err = clusterInstance.StreamTabletHealthUntil(ctx, &primaryTablet, 30*time.Second, func(shr *querypb.StreamHealthResponse) bool {
+		if shr != nil && shr.RealtimeStats != nil && slices.Contains(shr.RealtimeStats.ViewSchemaChanged, "v2") {
+			return true
+		}
+		return false
+	})
+	require.NoError(t, err)
+
+	_, err = conn.ExecuteFetch("DROP VIEW v2", 10000, false)
+	require.NoError(t, err)
+	err = clusterInstance.StreamTabletHealthUntil(ctx, &primaryTablet, 30*time.Second, func(shr *querypb.StreamHealthResponse) bool {
+		if shr != nil && shr.RealtimeStats != nil && slices.Contains(shr.RealtimeStats.ViewSchemaChanged, "v2") {
+			return true
+		}
+		return false
+	})
+	require.NoError(t, err)
+
+	_, err = conn.ExecuteFetch("DROP TABLE `area`", 10000, false)
+	require.NoError(t, err)
+	err = clusterInstance.StreamTabletHealthUntil(ctx, &primaryTablet, 30*time.Second, func(shr *querypb.StreamHealthResponse) bool {
+		if shr != nil && shr.RealtimeStats != nil && slices.Contains(shr.RealtimeStats.TableSchemaChanged, "area") {
+			return true
+		}
+		return false
+	})
+	require.NoError(t, err)
 }
 
 func checkHealth(t *testing.T, port int, shouldError bool) {
