@@ -26,6 +26,10 @@ import (
 
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/dbconfigs"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/yaml2"
 )
 
@@ -326,4 +330,33 @@ func TestFlags(t *testing.T) {
 	Init()
 	want.SanitizeLogMessages = true
 	assert.Equal(t, want, currentConfig)
+}
+
+func TestVerifyTxThrottlerConfig(t *testing.T) {
+	{
+		// default config (replica)
+		assert.Nil(t, currentConfig.verifyTxThrottlerConfig())
+	}
+	{
+		// replica + rdonly (allowed)
+		currentConfig.TxThrottlerTabletTypes = &topoproto.TabletTypeListFlag{
+			topodatapb.TabletType_REPLICA,
+			topodatapb.TabletType_RDONLY,
+		}
+		assert.Nil(t, currentConfig.verifyTxThrottlerConfig())
+	}
+	{
+		// no tablet types
+		currentConfig.TxThrottlerTabletTypes = &topoproto.TabletTypeListFlag{}
+		err := currentConfig.verifyTxThrottlerConfig()
+		assert.NotNil(t, err)
+		assert.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
+	}
+	{
+		// disallowed tablet type
+		currentConfig.TxThrottlerTabletTypes = &topoproto.TabletTypeListFlag{topodatapb.TabletType_DRAINED}
+		err := currentConfig.verifyTxThrottlerConfig()
+		assert.NotNil(t, err)
+		assert.Equal(t, vtrpcpb.Code_INVALID_ARGUMENT, vterrors.Code(err))
+	}
 }

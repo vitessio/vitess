@@ -242,3 +242,46 @@ var inputTrimStrings = []string{
 	// latin1 version of the non-breaking space
 	///"_latin1 0xA078A0",
 }
+
+var ipInputs = []string{
+	"NULL",
+	"'10.0.5.9'",
+	"'10.0.5.256'",
+	"'fdfe::5a55:caff:fefa:9089'",
+	"'::ffff:10.0.5.9'",
+	"'::10.0.5.9'",
+	"'198.51.100.1'",
+	"'::c0a8:0001'",
+	"'::c0a8:1'",
+	"'::ffff:198.51.100.1'",
+	"'::ffff:c0a8:0001'",
+	"'::ffff:c0a8:1'",
+	"'::'",
+	"'::1'",
+	"'::ff'",
+	"'::ffff'",
+	"'::1:ffff'",
+	"'127.0.0.1'",
+	"'::ffff:'",
+	"'foobar'",
+	"167773449",
+	strconv.FormatInt(math.MinInt32, 10),
+	strconv.FormatInt(math.MinInt32-1, 10),
+	strconv.FormatUint(math.MaxInt32, 10),
+	strconv.FormatUint(math.MaxInt32+1, 10),
+	strconv.FormatUint(math.MaxUint32, 10),
+	strconv.FormatUint(math.MaxUint32+1, 10),
+	"0x0000000000000000000000000A000509",
+}
+
+var uuidInputs = []string{
+	"NULL",
+	"'foobar'",
+	"''",
+	"'09db81f6-f266-11ed-a6f9-20fc8fd6830e'",
+	"'09db81f6f26611eda6f920fc8fd6830e'",
+	"'{09db81f6-f266-11ed-a6f9-20fc8fd6830e}'",
+	"0x0000000000000000000000000A000509",
+	"0x09DB81F6F26611EDA6F920FC8FD6830E",
+	"0x11EDF26609DB81F6A6F920FC8FD6830E",
+}

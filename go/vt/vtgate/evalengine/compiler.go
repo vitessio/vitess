@@ -250,6 +250,24 @@ func (c *compiler) compileNullCheck3(arg1, arg2, arg3 ctype) *jump {
 	return nil
 }
 
+func (c *compiler) compileNullCheckArg(ct ctype, offset int) *jump {
+	if ct.nullable() {
+		j := c.asm.jumpFrom()
+		c.asm.NullCheckArg(j, offset)
+		return j
+	}
+	return nil
+}
+
+func (c *compiler) compileNullCheckOffset(ct ctype, offset int) *jump {
+	if ct.nullable() {
+		j := c.asm.jumpFrom()
+		c.asm.NullCheckOffset(j, offset)
+		return j
+	}
+	return nil
+}
+
 func (c *compiler) compileNumericPriority(lt, rt ctype) (ctype, ctype, bool) {
 	switch lt.Type {
 	case sqltypes.Int64:

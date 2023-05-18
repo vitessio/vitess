@@ -637,6 +637,19 @@ func TestDiffSchemas(t *testing.T) {
 			},
 			tableRename: TableRenameHeuristicStatement,
 		},
+		{
+			name: "tables with irregular names",
+			from: "create table `t.2`(id int primary key); create table t3(`i.d` int primary key)",
+			to:   "create table `t.2` (id bigint primary key); create table t3(`i.d` int unsigned primary key)",
+			diffs: []string{
+				"alter table `t.2` modify column id bigint",
+				"alter table t3 modify column `i.d` int unsigned",
+			},
+			cdiffs: []string{
+				"ALTER TABLE `t.2` MODIFY COLUMN `id` bigint",
+				"ALTER TABLE `t3` MODIFY COLUMN `i.d` int unsigned",
+			},
+		},
 		// Foreign keys
 		{
 			name: "create tables with foreign keys, expect specific order",

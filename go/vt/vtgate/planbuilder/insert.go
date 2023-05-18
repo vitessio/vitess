@@ -34,6 +34,10 @@ import (
 func buildInsertPlan(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema) (*planResult, error) {
 	pb := newStmtAwarePrimitiveBuilder(vschema, newJointab(reservedVars), stmt)
 	ins := stmt.(*sqlparser.Insert)
+	err := checkUnsupportedExpressions(ins)
+	if err != nil {
+		return nil, err
+	}
 	exprs := sqlparser.TableExprs{&sqlparser.AliasedTableExpr{Expr: ins.Table}}
 	rb, err := pb.processDMLTable(exprs, reservedVars, nil)
 	if err != nil {
