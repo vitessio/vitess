@@ -191,6 +191,13 @@ func filterResultForWarning(input string) string {
 		}
 		result = result + line + "\n"
 	}
+
+	if result == strings.Repeat("\n", len(result)) {
+		// If every line was filtered, return an empty string rather than a
+		// bunch of newline characters.
+		return ""
+	}
+
 	return result
 }
 
