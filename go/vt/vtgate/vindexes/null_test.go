@@ -32,10 +32,11 @@ import (
 var null SingleColumn
 
 func init() {
-	hv, warnings, err := CreateVindex("null", "nn", map[string]string{})
+	hv, err := CreateVindex("null", "nn", map[string]string{})
 	if err != nil {
 		panic(err)
 	}
+	warnings := hv.(ParamValidating).InvalidParamErrors()
 	if len(warnings) > 0 {
 		panic("null test init: expected 0 warnings")
 	}
@@ -46,7 +47,7 @@ func nullCreateVindexTestCase(
 	testName string,
 	vindexParams map[string]string,
 	expectErr error,
-	expectWarnings []VindexWarning,
+	expectWarnings []error,
 ) createVindexTestCase {
 	return createVindexTestCase{
 		testName: testName,
@@ -82,7 +83,7 @@ func TestNullCreateVindex(t *testing.T) {
 			"unknown params",
 			map[string]string{"hello": "world"},
 			nil,
-			[]VindexWarning{vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "unknown param 'hello'")},
+			[]error{vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "unknown param 'hello'")},
 		),
 	}
 

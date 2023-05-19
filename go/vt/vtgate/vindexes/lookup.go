@@ -28,29 +28,25 @@ import (
 )
 
 var (
-	_ SingleColumn   = (*LookupUnique)(nil)
-	_ Lookup         = (*LookupUnique)(nil)
-	_ LookupPlanable = (*LookupUnique)(nil)
-	_ SingleColumn   = (*LookupNonUnique)(nil)
-	_ Lookup         = (*LookupNonUnique)(nil)
-	_ LookupPlanable = (*LookupNonUnique)(nil)
+	_ SingleColumn    = (*LookupUnique)(nil)
+	_ Lookup          = (*LookupUnique)(nil)
+	_ LookupPlanable  = (*LookupUnique)(nil)
+	_ ParamValidating = (*LookupUnique)(nil)
+	_ SingleColumn    = (*LookupNonUnique)(nil)
+	_ Lookup          = (*LookupNonUnique)(nil)
+	_ LookupPlanable  = (*LookupNonUnique)(nil)
+	_ ParamValidating = (*LookupNonUnique)(nil)
 
 	lookupParams = append(
-		append(make([]VindexParam, 0), lookupCommonParams...),
-		&vindexParam{name: "no_verify"},
-		&vindexParam{name: "write_only"},
+		append(make([]*Param, 0), lookupCommonParams...),
+		&Param{Name: "no_verify"},
+		&Param{Name: "write_only"},
 	)
 )
 
 func init() {
-	Register("lookup", &vindexFactory{
-		create: newLookup,
-		params: lookupParams,
-	})
-	Register("lookup_unique", &vindexFactory{
-		create: NewLookupUnique,
-		params: lookupParams,
-	})
+	Register("lookup", newLookup)
+	Register("lookup_unique", newLookupUnique)
 }
 
 // LookupNonUnique defines a vindex that uses a lookup table and create a mapping between from ids and KeyspaceId.
@@ -60,6 +56,7 @@ type LookupNonUnique struct {
 	writeOnly bool
 	noVerify  bool
 	lkp       lookupInternal
+	params    map[string]string
 }
 
 func (ln *LookupNonUnique) GetCommitOrder() vtgatepb.CommitOrder {
@@ -184,6 +181,10 @@ func (ln *LookupNonUnique) Query() (selQuery string, arguments []string) {
 	return ln.lkp.query()
 }
 
+func (ln *LookupNonUnique) InvalidParamErrors() []error {
+	return ValidateParams(ln.params, &ParamValidationOpts{Params: lookupParams})
+}
+
 // newLookup creates a LookupNonUnique vindex.
 // The supplied map has the following required fields:
 //
@@ -196,29 +197,32 @@ func (ln *LookupNonUnique) Query() (selQuery string, arguments []string) {
 //	autocommit: setting this to "true" will cause inserts to upsert and deletes to be ignored.
 //	write_only: in this mode, Map functions return the full keyrange causing a full scatter.
 //	no_verify: in this mode, Verify will always succeed.
-func newLookup(name string, m map[string]string) (Vindex, []VindexWarning, error) {
-	lookup := &LookupNonUnique{name: name}
+func newLookup(name string, m map[string]string) (Vindex, error) {
+	lookup := &LookupNonUnique{
+		name:   name,
+		params: m,
+	}
 
 	cc, err := parseCommonConfig(m)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	lookup.writeOnly, err = boolFromMap(m, "write_only")
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	lookup.noVerify, err = boolFromMap(m, "no_verify")
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	// if autocommit is on for non-unique lookup, upsert should also be on.
 	upsert := cc.autocommit || cc.multiShardAutocommit
 	if err := lookup.lkp.Init(m, cc.autocommit, upsert, cc.multiShardAutocommit); err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	return lookup, nil, nil
+	return lookup, nil
 }
 
 func ksidsToValues(ksids [][]byte) []sqltypes.Value {
@@ -239,6 +243,7 @@ type LookupUnique struct {
 	writeOnly bool
 	noVerify  bool
 	lkp       lookupInternal
+	params    map[string]string
 }
 
 func (lu *LookupUnique) GetCommitOrder() vtgatepb.CommitOrder {
@@ -253,7 +258,7 @@ func (lu *LookupUnique) AutoCommitEnabled() bool {
 	return lu.lkp.Autocommit
 }
 
-// NewLookupUnique creates a LookupUnique vindex.
+// newLookupUnique creates a LookupUnique vindex.
 // The supplied map has the following required fields:
 //
 //	table: name of the backing table. It can be qualified by the keyspace.
@@ -264,28 +269,31 @@ func (lu *LookupUnique) AutoCommitEnabled() bool {
 //
 //	autocommit: setting this to "true" will cause deletes to be ignored.
 //	write_only: in this mode, Map functions return the full keyrange causing a full scatter.
-func NewLookupUnique(name string, m map[string]string) (Vindex, []VindexWarning, error) {
-	lu := &LookupUnique{name: name}
+func newLookupUnique(name string, m map[string]string) (Vindex, error) {
+	lu := &LookupUnique{
+		name:   name,
+		params: m,
+	}
 
 	cc, err := parseCommonConfig(m)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	lu.writeOnly, err = boolFromMap(m, "write_only")
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	lu.noVerify, err = boolFromMap(m, "no_verify")
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	// Don't allow upserts for unique vindexes.
 	if err := lu.lkp.Init(m, cc.autocommit, false /* upsert */, cc.multiShardAutocommit); err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	return lu, nil, nil
+	return lu, nil
 }
 
 // String returns the name of the vindex.
@@ -386,4 +394,9 @@ func (lu *LookupUnique) LookupQuery() (string, error) {
 
 func (lu *LookupUnique) Query() (string, []string) {
 	return lu.lkp.query()
+}
+
+// InvalidParamErrors implements the ParamValidating interface.
+func (ln *LookupUnique) InvalidParamErrors() []error {
+	return ValidateParams(ln.params, &ParamValidationOpts{Params: lookupParams})
 }

@@ -30,12 +30,9 @@ import (
 var charVindexMD5 SingleColumn
 
 func init() {
-	vindex, warnings, err := CreateVindex("unicode_loose_md5", "utf8ch", nil)
+	vindex, err := CreateVindex("unicode_loose_md5", "utf8ch", nil)
 	if err != nil {
 		panic(err)
-	}
-	if len(warnings) > 0 {
-		panic("unicode_loose_md5 test init: expected 0 warnings")
 	}
 	charVindexMD5 = vindex.(SingleColumn)
 }
@@ -44,7 +41,7 @@ func unicodeLooseMD5CreateVindexTestCase(
 	testName string,
 	vindexParams map[string]string,
 	expectErr error,
-	expectWarnings []VindexWarning,
+	expectWarnings []error,
 ) createVindexTestCase {
 	return createVindexTestCase{
 		testName: testName,
@@ -82,7 +79,7 @@ func TestUnicodeLooseMD5CreateVindex(t *testing.T) {
 				"hello": "world",
 			},
 			nil,
-			[]VindexWarning{vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "unknown param 'hello'")},
+			[]error{vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "unknown param 'hello'")},
 		),
 	}
 

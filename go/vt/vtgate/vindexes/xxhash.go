@@ -28,19 +28,24 @@ import (
 )
 
 var (
-	_ SingleColumn = (*XXHash)(nil)
-	_ Hashing      = (*XXHash)(nil)
+	_ SingleColumn    = (*XXHash)(nil)
+	_ Hashing         = (*XXHash)(nil)
+	_ ParamValidating = (*XXHash)(nil)
 )
 
 // XXHash defines vindex that hashes any sql types to a KeyspaceId
 // by using xxhash64. It's Unique and works on any platform giving identical result.
 type XXHash struct {
-	name string
+	name   string
+	params map[string]string
 }
 
 // newXXHash creates a new XXHash.
-func newXXHash(name string, _ map[string]string) (Vindex, []VindexWarning, error) {
-	return &XXHash{name: name}, nil, nil
+func newXXHash(name string, m map[string]string) (Vindex, error) {
+	return &XXHash{
+		name:   name,
+		params: m,
+	}, nil
 }
 
 // String returns the name of the vindex.
@@ -97,11 +102,13 @@ func (vind *XXHash) Hash(id sqltypes.Value) ([]byte, error) {
 	return vXXHash(idBytes), nil
 }
 
+// InvalidParamErrors implements the ParamValidating interface.
+func (vind *XXHash) InvalidParamErrors() []error {
+	return ValidateParams(vind.params, &ParamValidationOpts{})
+}
+
 func init() {
-	Register("xxhash", &vindexFactory{
-		create: newXXHash,
-		params: nil,
-	})
+	Register("xxhash", newXXHash)
 }
 
 func vXXHash(shardKey []byte) []byte {

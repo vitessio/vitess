@@ -32,12 +32,9 @@ import (
 var numeric SingleColumn
 
 func init() {
-	vindex, warnings, err := CreateVindex("numeric", "num", nil)
+	vindex, err := CreateVindex("numeric", "num", nil)
 	if err != nil {
 		panic(err)
-	}
-	if len(warnings) > 0 {
-		panic("numeric test init: expected 0 warnings")
 	}
 	numeric = vindex.(SingleColumn)
 }
@@ -46,7 +43,7 @@ func numericCreateVindexTestCase(
 	testName string,
 	vindexParams map[string]string,
 	expectErr error,
-	expectWarnings []VindexWarning,
+	expectWarnings []error,
 ) createVindexTestCase {
 	return createVindexTestCase{
 		testName: testName,
@@ -82,7 +79,7 @@ func TestNumericCreateVindex(t *testing.T) {
 			"unknown params",
 			map[string]string{"hello": "world"},
 			nil,
-			[]VindexWarning{vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "unknown param 'hello'")},
+			[]error{vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "unknown param 'hello'")},
 		),
 	}
 

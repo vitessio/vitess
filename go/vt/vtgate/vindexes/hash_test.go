@@ -32,7 +32,8 @@ import (
 var hash SingleColumn
 
 func init() {
-	hv, warnings, err := CreateVindex("hash", "nn", map[string]string{})
+	hv, err := CreateVindex("hash", "nn", map[string]string{})
+	warnings := hv.(ParamValidating).InvalidParamErrors()
 	if len(warnings) > 0 {
 		panic("hash test init: got warnings when expected none")
 	}
@@ -46,7 +47,7 @@ func hashCreateVindexTestCase(
 	testName string,
 	vindexParams map[string]string,
 	expectErr error,
-	expectWarnings []VindexWarning,
+	expectWarnings []error,
 ) createVindexTestCase {
 	return createVindexTestCase{
 		testName: testName,
@@ -82,7 +83,7 @@ func TestHashCreateVindex(t *testing.T) {
 			"unknown params",
 			map[string]string{"hello": "world"},
 			nil,
-			[]VindexWarning{vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "unknown param 'hello'")},
+			[]error{vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "unknown param 'hello'")},
 		),
 	}
 

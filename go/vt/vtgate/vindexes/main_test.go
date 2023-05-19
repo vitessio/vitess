@@ -19,7 +19,7 @@ type createVindexTestCase struct {
 	expectIsUnique     bool
 	expectNeedsVCursor bool
 	expectString       string
-	expectWarnings     []VindexWarning
+	expectWarnings     []error
 }
 
 func assertEqualVtError(t *testing.T, expected, actual error) {
@@ -36,10 +36,10 @@ func assertEqualVtError(t *testing.T, expected, actual error) {
 func testCreateVindex(
 	t *testing.T,
 	tc createVindexTestCase,
-	fns ...func(createVindexTestCase, Vindex, []VindexWarning, error),
+	fns ...func(createVindexTestCase, Vindex, []error, error),
 ) {
 	t.Run(tc.testName, func(t *testing.T) {
-		vdx, warnings, err := CreateVindex(
+		vdx, err := CreateVindex(
 			tc.vindexType,
 			tc.vindexName,
 			tc.vindexParams,
@@ -47,6 +47,11 @@ func testCreateVindex(
 		assertEqualVtError(t, tc.expectErr, err)
 		if err == nil {
 			assert.NotNil(t, vdx)
+		}
+		paramValidating, ok := vdx.(ParamValidating)
+		var warnings []error
+		if ok {
+			warnings = paramValidating.InvalidParamErrors()
 		}
 		require.Equal(t, len(tc.expectWarnings), len(warnings))
 		for _, expectWarning := range tc.expectWarnings {
@@ -72,7 +77,7 @@ func testCreateVindex(
 func testCreateVindexes(
 	t *testing.T,
 	tcs []createVindexTestCase,
-	fns ...func(createVindexTestCase, Vindex, []VindexWarning, error),
+	fns ...func(createVindexTestCase, Vindex, []error, error),
 ) {
 	for _, tc := range tcs {
 		testCreateVindex(t, tc, fns...)

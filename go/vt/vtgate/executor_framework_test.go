@@ -94,8 +94,8 @@ func (*keyRangeLookuper) Map(ctx context.Context, vcursor vindexes.VCursor, ids 
 	}, nil
 }
 
-func newKeyRangeLookuper(name string, params map[string]string) (vindexes.Vindex, []vindexes.VindexWarning, error) {
-	return &keyRangeLookuper{}, nil, nil
+func newKeyRangeLookuper(name string, params map[string]string) (vindexes.Vindex, error) {
+	return &keyRangeLookuper{}, nil
 }
 
 // keyRangeLookuperUnique is for testing a unique lookup that returns a keyrange.
@@ -119,29 +119,13 @@ func (*keyRangeLookuperUnique) Map(ctx context.Context, vcursor vindexes.VCursor
 	}, nil
 }
 
-func newKeyRangeLookuperUnique(name string, params map[string]string) (vindexes.Vindex, []vindexes.VindexWarning, error) {
-	return &keyRangeLookuperUnique{}, nil, nil
-}
-
-type vindexFactory struct {
-	create func(string, map[string]string) (vindexes.Vindex, []vindexes.VindexWarning, error)
-}
-
-func (f *vindexFactory) AllowUnknownParams() bool {
-	return true
-}
-
-func (f *vindexFactory) Create(name string, params map[string]string) (vindexes.Vindex, []vindexes.VindexWarning, error) {
-	return f.create(name, params)
-}
-
-func (f *vindexFactory) Params() []vindexes.VindexParam {
-	return nil
+func newKeyRangeLookuperUnique(name string, params map[string]string) (vindexes.Vindex, error) {
+	return &keyRangeLookuperUnique{}, nil
 }
 
 func init() {
-	vindexes.Register("keyrange_lookuper", &vindexFactory{create: newKeyRangeLookuper})
-	vindexes.Register("keyrange_lookuper_unique", &vindexFactory{create: newKeyRangeLookuperUnique})
+	vindexes.Register("keyrange_lookuper", newKeyRangeLookuper)
+	vindexes.Register("keyrange_lookuper_unique", newKeyRangeLookuperUnique)
 }
 
 func createExecutorEnv() (executor *Executor, sbc1, sbc2, sbclookup *sandboxconn.SandboxConn) {

@@ -44,7 +44,7 @@ func consistentLookupCreateVindexTestCase(
 	testName string,
 	vindexParams map[string]string,
 	expectErr error,
-	expectWarnings []VindexWarning,
+	expectWarnings []error,
 ) createVindexTestCase {
 	return createVindexTestCase{
 		testName: testName,
@@ -66,7 +66,7 @@ func consistentLookupUniqueCreateVindexTestCase(
 	testName string,
 	vindexParams map[string]string,
 	expectErr error,
-	expectWarnings []VindexWarning,
+	expectWarnings []error,
 ) createVindexTestCase {
 	return createVindexTestCase{
 		testName: testName,
@@ -85,7 +85,7 @@ func consistentLookupUniqueCreateVindexTestCase(
 }
 
 func TestConsistentLookupCreateVindex(t *testing.T) {
-	testCaseFs := []func(string, map[string]string, error, []VindexWarning) createVindexTestCase{
+	testCaseFs := []func(string, map[string]string, error, []error) createVindexTestCase{
 		consistentLookupCreateVindexTestCase,
 		consistentLookupUniqueCreateVindexTestCase,
 	}
@@ -487,16 +487,16 @@ func createConsistentLookup(t *testing.T, name string, writeOnly bool) SingleCol
 	if writeOnly {
 		write = "true"
 	}
-	l, warnings, err := CreateVindex(name, name, map[string]string{
+	l, err := CreateVindex(name, name, map[string]string{
 		"table":      "t",
 		"from":       "fromc1,fromc2",
 		"to":         "toc",
 		"write_only": write,
 	})
-	require.Empty(t, warnings)
 	if err != nil {
 		t.Fatal(err)
 	}
+	require.Empty(t, l.(ParamValidating).InvalidParamErrors())
 	cols := []sqlparser.IdentifierCI{
 		sqlparser.NewIdentifierCI("fc1"),
 		sqlparser.NewIdentifierCI("fc2"),

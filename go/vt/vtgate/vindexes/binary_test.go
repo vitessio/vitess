@@ -35,12 +35,9 @@ import (
 var binOnlyVindex SingleColumn
 
 func init() {
-	vindex, warnings, err := CreateVindex("binary", "binary_varchar", nil)
+	vindex, err := CreateVindex("binary", "binary_varchar", nil)
 	if err != nil {
 		panic(err)
-	}
-	if len(warnings) > 0 {
-		panic("binary test init: expected 0 warnings")
 	}
 	binOnlyVindex = vindex.(SingleColumn)
 }
@@ -49,7 +46,7 @@ func binaryCreateVindexTestCase(
 	testName string,
 	vindexParams map[string]string,
 	expectErr error,
-	expectWarnings []VindexWarning,
+	expectWarnings []error,
 ) createVindexTestCase {
 	return createVindexTestCase{
 		testName: testName,
@@ -85,7 +82,7 @@ func TestBinaryCreateVindex(t *testing.T) {
 			"unknown params",
 			map[string]string{"hello": "world"},
 			nil,
-			[]VindexWarning{vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "unknown param 'hello'")},
+			[]error{vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "unknown param 'hello'")},
 		),
 	}
 

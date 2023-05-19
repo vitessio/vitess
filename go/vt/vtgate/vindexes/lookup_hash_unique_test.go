@@ -32,7 +32,7 @@ func lookupHashUniqueCreateVindexTestCase(
 	testName string,
 	vindexParams map[string]string,
 	expectErr error,
-	expectWarnings []VindexWarning,
+	expectWarnings []error,
 ) createVindexTestCase {
 	return createVindexTestCase{
 		testName: testName,
@@ -60,12 +60,13 @@ func TestLookupHashUniqueNew(t *testing.T) {
 		t.Errorf("Create(lookup, false): %v, want %v", got, want)
 	}
 
-	vindex, warnings, err := CreateVindex("lookup_hash_unique", "lookup_hash_unique", map[string]string{
+	vindex, err := CreateVindex("lookup_hash_unique", "lookup_hash_unique", map[string]string{
 		"table":      "t",
 		"from":       "fromc",
 		"to":         "toc",
 		"write_only": "true",
 	})
+	warnings := vindex.(ParamValidating).InvalidParamErrors()
 	require.Empty(t, warnings)
 	require.NoError(t, err)
 
@@ -74,16 +75,19 @@ func TestLookupHashUniqueNew(t *testing.T) {
 		t.Errorf("Create(lookup, false): %v, want %v", got, want)
 	}
 
-	_, warnings, err = CreateVindex("lookup_hash_unique", "lookup_hash_unique", map[string]string{
+	vdx, err := CreateVindex("lookup_hash_unique", "lookup_hash_unique", map[string]string{
 		"table":      "t",
 		"from":       "fromc",
 		"to":         "toc",
 		"write_only": "invalid",
 	})
-	require.Empty(t, warnings)
 	want := "write_only value must be 'true' or 'false': 'invalid'"
 	if err == nil || err.Error() != want {
 		t.Errorf("Create(bad_scatter): %v, want %s", err, want)
+	}
+	if err == nil {
+		warnings = vdx.(ParamValidating).InvalidParamErrors()
+		require.Empty(t, warnings)
 	}
 }
 

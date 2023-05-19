@@ -32,7 +32,7 @@ func lookupHashCreateVindexTestCase(
 	testName string,
 	vindexParams map[string]string,
 	expectErr error,
-	expectWarnings []VindexWarning,
+	expectWarnings []error,
 ) createVindexTestCase {
 	return createVindexTestCase{
 		testName: testName,
@@ -65,16 +65,19 @@ func TestLookupHashNew(t *testing.T) {
 		t.Errorf("Create(lookup, false): %v, want %v", got, want)
 	}
 
-	_, warnings, err := CreateVindex("lookup_hash", "lookup_hash", map[string]string{
+	vdx, err := CreateVindex("lookup_hash", "lookup_hash", map[string]string{
 		"table":      "t",
 		"from":       "fromc",
 		"to":         "toc",
 		"write_only": "invalid",
 	})
-	require.Empty(t, warnings)
 	want := "write_only value must be 'true' or 'false': 'invalid'"
 	if err == nil || err.Error() != want {
 		t.Errorf("Create(bad_scatter): %v, want %s", err, want)
+	}
+	if err == nil {
+		warnings := vdx.(ParamValidating).InvalidParamErrors()
+		require.Empty(t, warnings)
 	}
 }
 

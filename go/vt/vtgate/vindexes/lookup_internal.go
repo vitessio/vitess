@@ -47,20 +47,20 @@ var (
 
 	// lookupCommonParams are used only by lookup_* vindexes.
 	lookupCommonParams = append(
-		append(make([]VindexParam, 0), lookupInternalParams...),
-		&vindexParam{name: "autocommit"},
-		&vindexParam{name: "multi_shard_autocommit"},
+		append(make([]*Param, 0), lookupInternalParams...),
+		&Param{Name: "autocommit"},
+		&Param{Name: "multi_shard_autocommit"},
 	)
 
 	// lookupInternalParams are used by both lookup_* vindexes and the newer
 	// consistent_lookup_* vindexes.
-	lookupInternalParams = []VindexParam{
-		&vindexParam{name: "table"},
-		&vindexParam{name: "from"},
-		&vindexParam{name: "to"},
-		&vindexParam{name: "ignore_nulls"},
-		&vindexParam{name: "batch_lookup"},
-		&vindexParam{name: "read_lock"},
+	lookupInternalParams = []*Param{
+		{Name: "table"},
+		{Name: "from"},
+		{Name: "to"},
+		{Name: "ignore_nulls"},
+		{Name: "batch_lookup"},
+		{Name: "read_lock"},
 	}
 )
 

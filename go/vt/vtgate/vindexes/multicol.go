@@ -29,7 +29,10 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
-var _ MultiColumn = (*MultiCol)(nil)
+var (
+	_ MultiColumn     = (*MultiCol)(nil)
+	_ ParamValidating = (*MultiCol)(nil)
+)
 
 type MultiCol struct {
 	name        string
@@ -37,6 +40,7 @@ type MultiCol struct {
 	noOfCols    int
 	columnVdx   map[int]Hashing
 	columnBytes map[int]int
+	params      map[string]string
 }
 
 const (
@@ -47,26 +51,26 @@ const (
 )
 
 var (
-	multiColParams = []VindexParam{
-		&vindexParam{name: paramColumnCount},
-		&vindexParam{name: paramColumnBytes},
-		&vindexParam{name: paramColumnVindex},
+	multiColParams = []*Param{
+		{Name: paramColumnCount},
+		{Name: paramColumnBytes},
+		{Name: paramColumnVindex},
 	}
 )
 
 // newMultiCol creates a new MultiCol.
-func newMultiCol(name string, m map[string]string) (Vindex, []error, error) {
+func newMultiCol(name string, m map[string]string) (Vindex, error) {
 	colCount, err := getColumnCount(m)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	columnBytes, err := getColumnBytes(m, colCount)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	columnVdx, vindexCost, warns, err := getColumnVindex(m, colCount)
+	columnVdx, vindexCost, err := getColumnVindex(m, colCount)
 	if err != nil {
-		return nil, warns, err
+		return nil, err
 	}
 
 	return &MultiCol{
@@ -75,7 +79,8 @@ func newMultiCol(name string, m map[string]string) (Vindex, []error, error) {
 		noOfCols:    colCount,
 		columnVdx:   columnVdx,
 		columnBytes: columnBytes,
-	}, warns, nil
+		params:      m,
+	}, nil
 }
 
 func (m *MultiCol) String() string {
@@ -157,22 +162,23 @@ func (m *MultiCol) mapKsid(colValues []sqltypes.Value) (bool, []byte, error) {
 	return partial, ksid, nil
 }
 
-func init() {
-	Register("multicol", &vindexFactory{
-		allowUnknownParams: true,
-		create:             newMultiCol,
-		params:             multiColParams,
-	})
+// InvalidParamErrors implements the ParamValidating interface.
+func (m *MultiCol) InvalidParamErrors() []error {
+	return ValidateParams(m.params, &ParamValidationOpts{AllowUnknown: true, Params: multiColParams})
 }
 
-func getColumnVindex(m map[string]string, colCount int) (map[int]Hashing, int, []error, error) {
+func init() {
+	Register("multicol", newMultiCol)
+}
+
+func getColumnVindex(m map[string]string, colCount int) (map[int]Hashing, int, error) {
 	var colVdxs []string
 	colVdxsStr, ok := m[paramColumnVindex]
 	if ok {
 		colVdxs = strings.Split(colVdxsStr, ",")
 	}
 	if len(colVdxs) > colCount {
-		return nil, 0, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "number of vindex function provided are more than column count in the parameter '%s'", paramColumnVindex)
+		return nil, 0, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "number of vindex function provided are more than column count in the parameter '%s'", paramColumnVindex)
 	}
 	columnVdx := make(map[int]Hashing, colCount)
 	vindexCost := 0
@@ -194,18 +200,18 @@ func getColumnVindex(m map[string]string, colCount int) (map[int]Hashing, int, [
 			}
 		}
 		// TODO: reuse vindex. avoid creating same vindex.
-		vdx, warns, err := CreateVindex(selVdx, selVdx, subParams)
+		vdx, err := CreateVindex(selVdx, selVdx, subParams)
 		if err != nil {
-			return nil, 0, warns, err
+			return nil, 0, err
 		}
 		hashVdx, isHashVdx := vdx.(Hashing)
 		if !isHashVdx || !vdx.IsUnique() || vdx.NeedsVCursor() {
-			return nil, 0, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "multicol vindex supports vindexes that exports hashing function, are unique and are non-lookup vindex, passed vindex '%s' is invalid", selVdx)
+			return nil, 0, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "multicol vindex supports vindexes that exports hashing function, are unique and are non-lookup vindex, passed vindex '%s' is invalid", selVdx)
 		}
 		vindexCost = vindexCost + vdx.Cost()
 		columnVdx[i] = hashVdx
 	}
-	return columnVdx, vindexCost, nil, nil
+	return columnVdx, vindexCost, nil
 }
 
 func getColumnBytes(m map[string]string, colCount int) (map[int]int, error) {

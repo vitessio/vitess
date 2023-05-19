@@ -36,36 +36,33 @@ import (
 )
 
 var (
-	_ SingleColumn   = (*ConsistentLookupUnique)(nil)
-	_ Lookup         = (*ConsistentLookupUnique)(nil)
-	_ WantOwnerInfo  = (*ConsistentLookupUnique)(nil)
-	_ LookupPlanable = (*ConsistentLookupUnique)(nil)
-	_ SingleColumn   = (*ConsistentLookup)(nil)
-	_ Lookup         = (*ConsistentLookup)(nil)
-	_ WantOwnerInfo  = (*ConsistentLookup)(nil)
-	_ LookupPlanable = (*ConsistentLookup)(nil)
+	_ SingleColumn    = (*ConsistentLookupUnique)(nil)
+	_ Lookup          = (*ConsistentLookupUnique)(nil)
+	_ WantOwnerInfo   = (*ConsistentLookupUnique)(nil)
+	_ LookupPlanable  = (*ConsistentLookupUnique)(nil)
+	_ ParamValidating = (*ConsistentLookupUnique)(nil)
+	_ SingleColumn    = (*ConsistentLookup)(nil)
+	_ Lookup          = (*ConsistentLookup)(nil)
+	_ WantOwnerInfo   = (*ConsistentLookup)(nil)
+	_ LookupPlanable  = (*ConsistentLookup)(nil)
+	_ ParamValidating = (*ConsistentLookup)(nil)
 
 	consistentLookupParams = append(
-		append(make([]VindexParam, 0), lookupInternalParams...),
-		&vindexParam{name: "write_only"},
+		append(make([]*Param, 0), lookupInternalParams...),
+		&Param{Name: "write_only"},
 	)
 )
 
 func init() {
-	Register("consistent_lookup", &vindexFactory{
-		create: newConsistentLookup,
-		params: consistentLookupParams,
-	})
-	Register("consistent_lookup_unique", &vindexFactory{
-		create: newConsistentLookupUnique,
-		params: consistentLookupParams,
-	})
+	Register("consistent_lookup", newConsistentLookup)
+	Register("consistent_lookup_unique", newConsistentLookupUnique)
 }
 
 // ConsistentLookup is a non-unique lookup vindex that can stay
 // consistent with respect to its owner table.
 type ConsistentLookup struct {
 	*clCommon
+	params map[string]string
 }
 
 // newConsistentLookup creates a ConsistentLookup vindex.
@@ -74,12 +71,15 @@ type ConsistentLookup struct {
 //	table: name of the backing table. It can be qualified by the keyspace.
 //	from: list of columns in the table that have the 'from' values of the lookup vindex.
 //	to: The 'to' column name of the table.
-func newConsistentLookup(name string, m map[string]string) (Vindex, []VindexWarning, error) {
+func newConsistentLookup(name string, m map[string]string) (Vindex, error) {
 	clc, err := newCLCommon(name, m)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	return &ConsistentLookup{clCommon: clc}, nil, nil
+	return &ConsistentLookup{
+		clCommon: clc,
+		params:   m,
+	}, nil
 }
 
 // Cost returns the cost of this vindex as 20.
@@ -163,6 +163,11 @@ func (lu *ConsistentLookup) AutoCommitEnabled() bool {
 	return lu.lkp.Autocommit
 }
 
+// InvalidParamErrors implements the ParamValidating interface.
+func (lu *ConsistentLookup) InvalidParamErrors() []error {
+	return ValidateParams(lu.params, &ParamValidationOpts{Params: consistentLookupParams})
+}
+
 //====================================================================
 
 // ConsistentLookupUnique defines a vindex that uses a lookup table.
@@ -170,6 +175,7 @@ func (lu *ConsistentLookup) AutoCommitEnabled() bool {
 // Unique and a Lookup.
 type ConsistentLookupUnique struct {
 	*clCommon
+	params map[string]string
 }
 
 // newConsistentLookupUnique creates a ConsistentLookupUnique vindex.
@@ -178,12 +184,15 @@ type ConsistentLookupUnique struct {
 //	table: name of the backing table. It can be qualified by the keyspace.
 //	from: list of columns in the table that have the 'from' values of the lookup vindex.
 //	to: The 'to' column name of the table.
-func newConsistentLookupUnique(name string, m map[string]string) (Vindex, []VindexWarning, error) {
+func newConsistentLookupUnique(name string, m map[string]string) (Vindex, error) {
 	clc, err := newCLCommon(name, m)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	return &ConsistentLookupUnique{clCommon: clc}, nil, nil
+	return &ConsistentLookupUnique{
+		clCommon: clc,
+		params:   m,
+	}, nil
 }
 
 // Cost returns the cost of this vindex as 10.
@@ -480,4 +489,9 @@ func (lu *clCommon) GetCommitOrder() vtgatepb.CommitOrder {
 // IsBackfilling implements the LookupBackfill interface
 func (lu *ConsistentLookupUnique) IsBackfilling() bool {
 	return lu.writeOnly
+}
+
+// InvalidParamErrors implements the ParamValidating interface.
+func (lu *ConsistentLookupUnique) InvalidParamErrors() []error {
+	return ValidateParams(lu.params, &ParamValidationOpts{Params: consistentLookupParams})
 }

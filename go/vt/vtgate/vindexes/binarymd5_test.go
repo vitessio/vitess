@@ -34,12 +34,9 @@ import (
 var binVindex SingleColumn
 
 func init() {
-	vindex, warnings, err := CreateVindex("binary_md5", "binary_md5_varchar", nil)
+	vindex, err := CreateVindex("binary_md5", "binary_md5_varchar", nil)
 	if err != nil {
 		panic(err)
-	}
-	if len(warnings) > 0 {
-		panic("binary_md5 test init: expected 0 warnings")
 	}
 	binVindex = vindex.(SingleColumn)
 }
@@ -48,7 +45,7 @@ func binaryMD5CreateVindexTestCase(
 	testName string,
 	vindexParams map[string]string,
 	expectErr error,
-	expectWarnings []VindexWarning,
+	expectWarnings []error,
 ) createVindexTestCase {
 	return createVindexTestCase{
 		testName: testName,
@@ -84,7 +81,7 @@ func TestBinaryMD5CreateVindex(t *testing.T) {
 			"unknown params",
 			map[string]string{"hello": "world"},
 			nil,
-			[]VindexWarning{vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "unknown param 'hello'")},
+			[]error{vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "unknown param 'hello'")},
 		),
 	}
 
@@ -183,13 +180,15 @@ func benchmarkMD5HashBytes(b *testing.B, input []byte) {
 }
 
 func TestCreateVindexBinaryMD5Params(t *testing.T) {
-	vindex, warnings, err := CreateVindex("binary_md5", "binary_md5", nil)
+	vindex, err := CreateVindex("binary_md5", "binary_md5", nil)
 	require.NotNil(t, vindex)
+	warnings := vindex.(ParamValidating).InvalidParamErrors()
 	require.Empty(t, warnings)
 	require.NoError(t, err)
 
-	vindex, warnings, err = CreateVindex("binary_md5", "binary_md5", map[string]string{"hello": "world"})
+	vindex, err = CreateVindex("binary_md5", "binary_md5", map[string]string{"hello": "world"})
 	require.NotNil(t, vindex)
+	warnings = vindex.(ParamValidating).InvalidParamErrors()
 	require.Len(t, warnings, 1)
 	require.NoError(t, err)
 }

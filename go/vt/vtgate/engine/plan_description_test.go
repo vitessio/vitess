@@ -50,7 +50,7 @@ func TestCreateRoutePlanDescription(t *testing.T) {
 }
 
 func createRoute() *Route {
-	hash, _, _ := vindexes.CreateVindex("hash", "vindex name", nil)
+	hash, _ := vindexes.CreateVindex("hash", "vindex name", nil)
 	return &Route{
 		RoutingParameters: &RoutingParameters{
 			Opcode:            Scatter,

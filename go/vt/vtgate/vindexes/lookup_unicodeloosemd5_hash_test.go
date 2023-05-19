@@ -41,7 +41,7 @@ func lookupUnicodeLooseMD5HashCreateVindexTestCase(
 	testName string,
 	vindexParams map[string]string,
 	expectErr error,
-	expectWarnings []VindexWarning,
+	expectWarnings []error,
 ) createVindexTestCase {
 	return createVindexTestCase{
 		testName: testName,
@@ -106,7 +106,7 @@ func TestLookupUnicodeLooseMD5HashMap(t *testing.T) {
 }
 
 func TestLookupUnicodeLooseMD5HashMapAutocommit(t *testing.T) {
-	vindex, warnings, err := CreateVindex("lookup_unicodeloosemd5_hash", "lookup", map[string]string{
+	vindex, err := CreateVindex("lookup_unicodeloosemd5_hash", "lookup", map[string]string{
 		"table":      "t",
 		"from":       "fromc",
 		"to":         "toc",
@@ -115,11 +115,12 @@ func TestLookupUnicodeLooseMD5HashMapAutocommit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	warnings := vindex.(ParamValidating).InvalidParamErrors()
 	require.Empty(t, warnings)
-	lookupNonUnique := vindex.(SingleColumn)
+	lnu := vindex.(SingleColumn)
 	vc := &vcursor{numRows: 2, keys: []sqltypes.Value{sqltypes.NewUint64(hashed10), sqltypes.NewUint64(hashed20)}}
 
-	got, err := lookupNonUnique.Map(context.Background(), vc, []sqltypes.Value{sqltypes.NewInt64(10), sqltypes.NewInt64(20)})
+	got, err := lnu.Map(context.Background(), vc, []sqltypes.Value{sqltypes.NewInt64(10), sqltypes.NewInt64(20)})
 	require.NoError(t, err)
 	want := []key.Destination{
 		key.DestinationKeyspaceIDs([][]byte{
@@ -153,10 +154,10 @@ func TestLookupUnicodeLooseMD5HashMapAutocommit(t *testing.T) {
 }
 
 func TestLookupUnicodeLooseMD5HashMapWriteOnly(t *testing.T) {
-	lookupNonUnique := createLookup(t, "lookup_unicodeloosemd5_hash", true)
+	lnu := createLookup(t, "lookup_unicodeloosemd5_hash", true)
 	vc := &vcursor{numRows: 0}
 
-	got, err := lookupNonUnique.Map(context.Background(), vc, []sqltypes.Value{sqltypes.NewInt64(10), sqltypes.NewInt64(20)})
+	got, err := lnu.Map(context.Background(), vc, []sqltypes.Value{sqltypes.NewInt64(10), sqltypes.NewInt64(20)})
 	require.NoError(t, err)
 	want := []key.Destination{
 		key.DestinationKeyRange{
@@ -172,10 +173,10 @@ func TestLookupUnicodeLooseMD5HashMapWriteOnly(t *testing.T) {
 }
 
 func TestLookupUnicodeLooseMD5HashMapAbsent(t *testing.T) {
-	lookupNonUnique := createLookup(t, "lookup_unicodeloosemd5_hash", false)
+	lnu := createLookup(t, "lookup_unicodeloosemd5_hash", false)
 	vc := &vcursor{numRows: 0}
 
-	got, err := lookupNonUnique.Map(context.Background(), vc, []sqltypes.Value{sqltypes.NewInt64(10), sqltypes.NewInt64(20)})
+	got, err := lnu.Map(context.Background(), vc, []sqltypes.Value{sqltypes.NewInt64(10), sqltypes.NewInt64(20)})
 	require.NoError(t, err)
 	want := []key.Destination{
 		key.DestinationNone{},
@@ -187,10 +188,10 @@ func TestLookupUnicodeLooseMD5HashMapAbsent(t *testing.T) {
 }
 
 func TestLookupUnicodeLooseMD5HashVerify(t *testing.T) {
-	lookupNonUnique := createLookup(t, "lookup_unicodeloosemd5_hash", false)
+	lnu := createLookup(t, "lookup_unicodeloosemd5_hash", false)
 	vc := &vcursor{numRows: 1}
 
-	got, err := lookupNonUnique.Verify(context.Background(), vc, []sqltypes.Value{sqltypes.NewInt64(10), sqltypes.NewInt64(20)}, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6"), []byte("\x06\xe7\xea\"Βp\x8f")})
+	got, err := lnu.Verify(context.Background(), vc, []sqltypes.Value{sqltypes.NewInt64(10), sqltypes.NewInt64(20)}, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6"), []byte("\x06\xe7\xea\"Βp\x8f")})
 	require.NoError(t, err)
 	wantResult := []bool{true, true}
 	if !reflect.DeepEqual(got, wantResult) {
@@ -216,7 +217,7 @@ func TestLookupUnicodeLooseMD5HashVerify(t *testing.T) {
 
 	// Test query fail.
 	vc.mustFail = true
-	_, err = lookupNonUnique.Verify(context.Background(), vc, []sqltypes.Value{sqltypes.NewInt64(1)}, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6")})
+	_, err = lnu.Verify(context.Background(), vc, []sqltypes.Value{sqltypes.NewInt64(1)}, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6")})
 	want := "lookup.Verify: execute failed"
 	if err == nil || err.Error() != want {
 		t.Errorf("lookupNonUnique(query fail) err: %v, want %s", err, want)
@@ -224,10 +225,10 @@ func TestLookupUnicodeLooseMD5HashVerify(t *testing.T) {
 	vc.mustFail = false
 
 	// writeOnly true should always yield true.
-	lookupNonUnique = createLookup(t, "lookup_unicodeloosemd5_hash", true)
+	lnu = createLookup(t, "lookup_unicodeloosemd5_hash", true)
 	vc.queries = nil
 
-	got, err = lookupNonUnique.Verify(context.Background(), vc, []sqltypes.Value{sqltypes.NewInt64(10), sqltypes.NewInt64(20)}, [][]byte{[]byte(""), []byte("")})
+	got, err = lnu.Verify(context.Background(), vc, []sqltypes.Value{sqltypes.NewInt64(10), sqltypes.NewInt64(20)}, [][]byte{[]byte(""), []byte("")})
 	require.NoError(t, err)
 	if vc.queries != nil {
 		t.Errorf("lookup.Verify(writeOnly), queries: %v, want nil", vc.queries)
@@ -239,7 +240,7 @@ func TestLookupUnicodeLooseMD5HashVerify(t *testing.T) {
 }
 
 func TestLookupUnicodeLooseMD5HashVerifyAutocommit(t *testing.T) {
-	vindex, warnings, err := CreateVindex("lookup_unicodeloosemd5_hash", "lookup", map[string]string{
+	vindex, err := CreateVindex("lookup_unicodeloosemd5_hash", "lookup", map[string]string{
 		"table":      "t",
 		"from":       "fromc",
 		"to":         "toc",
@@ -248,11 +249,12 @@ func TestLookupUnicodeLooseMD5HashVerifyAutocommit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	warnings := vindex.(ParamValidating).InvalidParamErrors()
 	require.Empty(t, warnings)
-	lookupNonUnique := vindex.(SingleColumn)
+	lnu := vindex.(SingleColumn)
 	vc := &vcursor{numRows: 1}
 
-	_, err = lookupNonUnique.Verify(context.Background(), vc, []sqltypes.Value{sqltypes.NewInt64(10), sqltypes.NewInt64(20)}, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6"), []byte("\x06\xe7\xea\"Βp\x8f")})
+	_, err = lnu.Verify(context.Background(), vc, []sqltypes.Value{sqltypes.NewInt64(10), sqltypes.NewInt64(20)}, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6"), []byte("\x06\xe7\xea\"Βp\x8f")})
 	require.NoError(t, err)
 
 	wantqueries := []*querypb.BoundQuery{{
@@ -278,10 +280,10 @@ func TestLookupUnicodeLooseMD5HashVerifyAutocommit(t *testing.T) {
 }
 
 func TestLookupUnicodeLooseMD5HashCreate(t *testing.T) {
-	lookupNonUnique := createLookup(t, "lookup_unicodeloosemd5_hash", false)
+	lnu := createLookup(t, "lookup_unicodeloosemd5_hash", false)
 	vc := &vcursor{}
 
-	err := lookupNonUnique.(Lookup).Create(context.Background(), vc, [][]sqltypes.Value{{sqltypes.NewInt64(10)}, {sqltypes.NewInt64(20)}}, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6"), []byte("\x06\xe7\xea\"Βp\x8f")}, false)
+	err := lnu.(Lookup).Create(context.Background(), vc, [][]sqltypes.Value{{sqltypes.NewInt64(10)}, {sqltypes.NewInt64(20)}}, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6"), []byte("\x06\xe7\xea\"Βp\x8f")}, false)
 	require.NoError(t, err)
 
 	wantqueries := []*querypb.BoundQuery{{
@@ -299,7 +301,7 @@ func TestLookupUnicodeLooseMD5HashCreate(t *testing.T) {
 
 	// With ignore.
 	vc.queries = nil
-	err = lookupNonUnique.(Lookup).Create(context.Background(), vc, [][]sqltypes.Value{{sqltypes.NewInt64(10)}, {sqltypes.NewInt64(20)}}, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6"), []byte("\x06\xe7\xea\"Βp\x8f")}, true)
+	err = lnu.(Lookup).Create(context.Background(), vc, [][]sqltypes.Value{{sqltypes.NewInt64(10)}, {sqltypes.NewInt64(20)}}, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6"), []byte("\x06\xe7\xea\"Βp\x8f")}, true)
 	require.NoError(t, err)
 
 	wantqueries[0].Sql = "insert ignore into t(fromc, toc) values(:fromc_0, :toc_0), (:fromc_1, :toc_1)"
@@ -309,7 +311,7 @@ func TestLookupUnicodeLooseMD5HashCreate(t *testing.T) {
 
 	// Test query fail.
 	vc.mustFail = true
-	err = lookupNonUnique.(Lookup).Create(context.Background(), vc, [][]sqltypes.Value{{sqltypes.NewInt64(10)}}, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6")}, false)
+	err = lnu.(Lookup).Create(context.Background(), vc, [][]sqltypes.Value{{sqltypes.NewInt64(10)}}, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6")}, false)
 	want := "lookup.Create: execute failed"
 	if err == nil || err.Error() != want {
 		t.Errorf("lookupNonUnique(query fail) err: %v, want %s", err, want)
@@ -317,7 +319,7 @@ func TestLookupUnicodeLooseMD5HashCreate(t *testing.T) {
 	vc.mustFail = false
 
 	// Test column mismatch.
-	err = lookupNonUnique.(Lookup).Create(context.Background(), vc, [][]sqltypes.Value{{sqltypes.NewInt64(10), sqltypes.NewInt64(20)}}, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6")}, false)
+	err = lnu.(Lookup).Create(context.Background(), vc, [][]sqltypes.Value{{sqltypes.NewInt64(10), sqltypes.NewInt64(20)}}, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6")}, false)
 	want = "lookup.Create: column vindex count does not match the columns in the lookup: 2 vs [fromc]"
 	if err == nil || err.Error() != want {
 		t.Errorf("lookupNonUnique(query fail) err: %v, want %s", err, want)
@@ -325,7 +327,7 @@ func TestLookupUnicodeLooseMD5HashCreate(t *testing.T) {
 }
 
 func TestLookupUnicodeLooseMD5HashCreateAutocommit(t *testing.T) {
-	lookupNonUnique, warnings, err := CreateVindex("lookup_unicodeloosemd5_hash", "lookup", map[string]string{
+	lnu, err := CreateVindex("lookup_unicodeloosemd5_hash", "lookup", map[string]string{
 		"table":      "t",
 		"from":       "from1,from2",
 		"to":         "toc",
@@ -334,10 +336,11 @@ func TestLookupUnicodeLooseMD5HashCreateAutocommit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	warnings := lnu.(ParamValidating).InvalidParamErrors()
 	require.Empty(t, warnings)
 	vc := &vcursor{}
 
-	err = lookupNonUnique.(Lookup).Create(context.Background(), vc, [][]sqltypes.Value{{
+	err = lnu.(Lookup).Create(context.Background(), vc, [][]sqltypes.Value{{
 		sqltypes.NewInt64(10), sqltypes.NewInt64(20),
 	}, {
 		sqltypes.NewInt64(30), sqltypes.NewInt64(40),
@@ -365,7 +368,7 @@ func TestLookupUnicodeLooseMD5HashCreateAutocommit(t *testing.T) {
 }
 
 func TestLookupUnicodeLooseMD5HashCreateMultiShardAutocommit(t *testing.T) {
-	lookupNonUnique, warnings, err := CreateVindex("lookup_unicodeloosemd5_hash", "lookup", map[string]string{
+	lnu, err := CreateVindex("lookup_unicodeloosemd5_hash", "lookup", map[string]string{
 		"table":                  "t",
 		"from":                   "from1,from2",
 		"to":                     "toc",
@@ -374,10 +377,11 @@ func TestLookupUnicodeLooseMD5HashCreateMultiShardAutocommit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	warnings := lnu.(ParamValidating).InvalidParamErrors()
 	require.Empty(t, warnings)
 	vc := &vcursor{}
 
-	err = lookupNonUnique.(Lookup).Create(context.Background(), vc, [][]sqltypes.Value{{
+	err = lnu.(Lookup).Create(context.Background(), vc, [][]sqltypes.Value{{
 		sqltypes.NewInt64(10), sqltypes.NewInt64(20),
 	}, {
 		sqltypes.NewInt64(30), sqltypes.NewInt64(40),
@@ -405,10 +409,10 @@ func TestLookupUnicodeLooseMD5HashCreateMultiShardAutocommit(t *testing.T) {
 }
 
 func TestLookupUnicodeLooseMD5HashDelete(t *testing.T) {
-	lookupNonUnique := createLookup(t, "lookup_unicodeloosemd5_hash", false)
+	lnu := createLookup(t, "lookup_unicodeloosemd5_hash", false)
 	vc := &vcursor{}
 
-	err := lookupNonUnique.(Lookup).Delete(context.Background(), vc, [][]sqltypes.Value{{sqltypes.NewInt64(10)}, {sqltypes.NewInt64(20)}}, []byte("\x16k@\xb4J\xbaK\xd6"))
+	err := lnu.(Lookup).Delete(context.Background(), vc, [][]sqltypes.Value{{sqltypes.NewInt64(10)}, {sqltypes.NewInt64(20)}}, []byte("\x16k@\xb4J\xbaK\xd6"))
 	require.NoError(t, err)
 
 	wantqueries := []*querypb.BoundQuery{{
@@ -430,7 +434,7 @@ func TestLookupUnicodeLooseMD5HashDelete(t *testing.T) {
 
 	// Test query fail.
 	vc.mustFail = true
-	err = lookupNonUnique.(Lookup).Delete(context.Background(), vc, [][]sqltypes.Value{{sqltypes.NewInt64(1)}}, []byte("\x16k@\xb4J\xbaK\xd6"))
+	err = lnu.(Lookup).Delete(context.Background(), vc, [][]sqltypes.Value{{sqltypes.NewInt64(1)}}, []byte("\x16k@\xb4J\xbaK\xd6"))
 	want := "lookup.Delete: execute failed"
 	if err == nil || err.Error() != want {
 		t.Errorf("lookupNonUnique(query fail) err: %v, want %s", err, want)
@@ -438,7 +442,7 @@ func TestLookupUnicodeLooseMD5HashDelete(t *testing.T) {
 	vc.mustFail = false
 
 	// Test column count fail.
-	err = lookupNonUnique.(Lookup).Delete(context.Background(), vc, [][]sqltypes.Value{{sqltypes.NewInt64(1), sqltypes.NewInt64(2)}}, []byte("\x16k@\xb4J\xbaK\xd6"))
+	err = lnu.(Lookup).Delete(context.Background(), vc, [][]sqltypes.Value{{sqltypes.NewInt64(1), sqltypes.NewInt64(2)}}, []byte("\x16k@\xb4J\xbaK\xd6"))
 	want = "lookup.Delete: column vindex count does not match the columns in the lookup: 2 vs [fromc]"
 	if err == nil || err.Error() != want {
 		t.Errorf("lookupNonUnique(query fail) err: %v, want %s", err, want)
@@ -446,18 +450,19 @@ func TestLookupUnicodeLooseMD5HashDelete(t *testing.T) {
 }
 
 func TestLookupUnicodeLooseMD5HashDeleteAutocommit(t *testing.T) {
-	lookupNonUnique, warnings, err := CreateVindex("lookup_unicodeloosemd5_hash", "lookup", map[string]string{
+	lnu, err := CreateVindex("lookup_unicodeloosemd5_hash", "lookup", map[string]string{
 		"table":      "t",
 		"from":       "fromc",
 		"to":         "toc",
 		"autocommit": "true",
 	})
+	warnings := lnu.(ParamValidating).InvalidParamErrors()
 	require.Empty(t, warnings)
 	require.NoError(t, err)
 
 	vc := &vcursor{}
 
-	err = lookupNonUnique.(Lookup).Delete(context.Background(), vc, [][]sqltypes.Value{{sqltypes.NewInt64(10)}, {sqltypes.NewInt64(20)}}, []byte("\x16k@\xb4J\xbaK\xd6"))
+	err = lnu.(Lookup).Delete(context.Background(), vc, [][]sqltypes.Value{{sqltypes.NewInt64(10)}, {sqltypes.NewInt64(20)}}, []byte("\x16k@\xb4J\xbaK\xd6"))
 	require.NoError(t, err)
 
 	wantqueries := []*querypb.BoundQuery(nil)
@@ -467,10 +472,10 @@ func TestLookupUnicodeLooseMD5HashDeleteAutocommit(t *testing.T) {
 }
 
 func TestLookupUnicodeLooseMD5HashUpdate(t *testing.T) {
-	lookupNonUnique := createLookup(t, "lookup_unicodeloosemd5_hash", false)
+	lnu := createLookup(t, "lookup_unicodeloosemd5_hash", false)
 	vc := &vcursor{}
 
-	err := lookupNonUnique.(Lookup).Update(context.Background(), vc, []sqltypes.Value{sqltypes.NewInt64(10)}, []byte("\x16k@\xb4J\xbaK\xd6"), []sqltypes.Value{sqltypes.NewInt64(20)})
+	err := lnu.(Lookup).Update(context.Background(), vc, []sqltypes.Value{sqltypes.NewInt64(10)}, []byte("\x16k@\xb4J\xbaK\xd6"), []sqltypes.Value{sqltypes.NewInt64(20)})
 	require.NoError(t, err)
 
 	wantqueries := []*querypb.BoundQuery{{

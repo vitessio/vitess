@@ -43,28 +43,62 @@ func (cached *AutoIncrement) CachedSize(alloc bool) int64 {
 	size += cached.Sequence.CachedSize(true)
 	return size
 }
+
+//go:nocheckptr
 func (cached *Binary) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(16)
+		size += int64(24)
 	}
 	// field name string
 	size += hack.RuntimeAllocSize(int64(len(cached.name)))
+	// field params map[string]string
+	if cached.params != nil {
+		size += int64(48)
+		hmap := reflect.ValueOf(cached.params)
+		numBuckets := int(math.Pow(2, float64((*(*uint8)(unsafe.Pointer(hmap.Pointer() + uintptr(9)))))))
+		numOldBuckets := (*(*uint16)(unsafe.Pointer(hmap.Pointer() + uintptr(10))))
+		size += hack.RuntimeAllocSize(int64(numOldBuckets * 272))
+		if len(cached.params) > 0 || numBuckets > 1 {
+			size += hack.RuntimeAllocSize(int64(numBuckets * 272))
+		}
+		for k, v := range cached.params {
+			size += hack.RuntimeAllocSize(int64(len(k)))
+			size += hack.RuntimeAllocSize(int64(len(v)))
+		}
+	}
 	return size
 }
+
+//go:nocheckptr
 func (cached *BinaryMD5) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(16)
+		size += int64(24)
 	}
 	// field name string
 	size += hack.RuntimeAllocSize(int64(len(cached.name)))
+	// field params map[string]string
+	if cached.params != nil {
+		size += int64(48)
+		hmap := reflect.ValueOf(cached.params)
+		numBuckets := int(math.Pow(2, float64((*(*uint8)(unsafe.Pointer(hmap.Pointer() + uintptr(9)))))))
+		numOldBuckets := (*(*uint16)(unsafe.Pointer(hmap.Pointer() + uintptr(10))))
+		size += hack.RuntimeAllocSize(int64(numOldBuckets * 272))
+		if len(cached.params) > 0 || numBuckets > 1 {
+			size += hack.RuntimeAllocSize(int64(numBuckets * 272))
+		}
+		for k, v := range cached.params {
+			size += hack.RuntimeAllocSize(int64(len(k)))
+			size += hack.RuntimeAllocSize(int64(len(v)))
+		}
+	}
 	return size
 }
 func (cached *CFC) CachedSize(alloc bool) int64 {
@@ -120,31 +154,9 @@ func (cached *ColumnVindex) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
+//go:nocheckptr
 func (cached *ConsistentLookup) CachedSize(alloc bool) int64 {
-	if cached == nil {
-		return int64(0)
-	}
-	size := int64(0)
-	if alloc {
-		size += int64(8)
-	}
-	// field clCommon *vitess.io/vitess/go/vt/vtgate/vindexes.clCommon
-	size += cached.clCommon.CachedSize(true)
-	return size
-}
-func (cached *ConsistentLookupUnique) CachedSize(alloc bool) int64 {
-	if cached == nil {
-		return int64(0)
-	}
-	size := int64(0)
-	if alloc {
-		size += int64(8)
-	}
-	// field clCommon *vitess.io/vitess/go/vt/vtgate/vindexes.clCommon
-	size += cached.clCommon.CachedSize(true)
-	return size
-}
-func (cached *Hash) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
 	}
@@ -152,8 +164,81 @@ func (cached *Hash) CachedSize(alloc bool) int64 {
 	if alloc {
 		size += int64(16)
 	}
+	// field clCommon *vitess.io/vitess/go/vt/vtgate/vindexes.clCommon
+	size += cached.clCommon.CachedSize(true)
+	// field params map[string]string
+	if cached.params != nil {
+		size += int64(48)
+		hmap := reflect.ValueOf(cached.params)
+		numBuckets := int(math.Pow(2, float64((*(*uint8)(unsafe.Pointer(hmap.Pointer() + uintptr(9)))))))
+		numOldBuckets := (*(*uint16)(unsafe.Pointer(hmap.Pointer() + uintptr(10))))
+		size += hack.RuntimeAllocSize(int64(numOldBuckets * 272))
+		if len(cached.params) > 0 || numBuckets > 1 {
+			size += hack.RuntimeAllocSize(int64(numBuckets * 272))
+		}
+		for k, v := range cached.params {
+			size += hack.RuntimeAllocSize(int64(len(k)))
+			size += hack.RuntimeAllocSize(int64(len(v)))
+		}
+	}
+	return size
+}
+
+//go:nocheckptr
+func (cached *ConsistentLookupUnique) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(16)
+	}
+	// field clCommon *vitess.io/vitess/go/vt/vtgate/vindexes.clCommon
+	size += cached.clCommon.CachedSize(true)
+	// field params map[string]string
+	if cached.params != nil {
+		size += int64(48)
+		hmap := reflect.ValueOf(cached.params)
+		numBuckets := int(math.Pow(2, float64((*(*uint8)(unsafe.Pointer(hmap.Pointer() + uintptr(9)))))))
+		numOldBuckets := (*(*uint16)(unsafe.Pointer(hmap.Pointer() + uintptr(10))))
+		size += hack.RuntimeAllocSize(int64(numOldBuckets * 272))
+		if len(cached.params) > 0 || numBuckets > 1 {
+			size += hack.RuntimeAllocSize(int64(numBuckets * 272))
+		}
+		for k, v := range cached.params {
+			size += hack.RuntimeAllocSize(int64(len(k)))
+			size += hack.RuntimeAllocSize(int64(len(v)))
+		}
+	}
+	return size
+}
+
+//go:nocheckptr
+func (cached *Hash) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(24)
+	}
 	// field name string
 	size += hack.RuntimeAllocSize(int64(len(cached.name)))
+	// field params map[string]string
+	if cached.params != nil {
+		size += int64(48)
+		hmap := reflect.ValueOf(cached.params)
+		numBuckets := int(math.Pow(2, float64((*(*uint8)(unsafe.Pointer(hmap.Pointer() + uintptr(9)))))))
+		numOldBuckets := (*(*uint16)(unsafe.Pointer(hmap.Pointer() + uintptr(10))))
+		size += hack.RuntimeAllocSize(int64(numOldBuckets * 272))
+		if len(cached.params) > 0 || numBuckets > 1 {
+			size += hack.RuntimeAllocSize(int64(numBuckets * 272))
+		}
+		for k, v := range cached.params {
+			size += hack.RuntimeAllocSize(int64(len(k)))
+			size += hack.RuntimeAllocSize(int64(len(v)))
+		}
+	}
 	return size
 }
 func (cached *Keyspace) CachedSize(alloc bool) int64 {
@@ -168,6 +253,8 @@ func (cached *Keyspace) CachedSize(alloc bool) int64 {
 	size += hack.RuntimeAllocSize(int64(len(cached.Name)))
 	return size
 }
+
+//go:nocheckptr
 func (cached *LookupHash) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -180,8 +267,25 @@ func (cached *LookupHash) CachedSize(alloc bool) int64 {
 	size += hack.RuntimeAllocSize(int64(len(cached.name)))
 	// field lkp vitess.io/vitess/go/vt/vtgate/vindexes.lookupInternal
 	size += cached.lkp.CachedSize(false)
+	// field params map[string]string
+	if cached.params != nil {
+		size += int64(48)
+		hmap := reflect.ValueOf(cached.params)
+		numBuckets := int(math.Pow(2, float64((*(*uint8)(unsafe.Pointer(hmap.Pointer() + uintptr(9)))))))
+		numOldBuckets := (*(*uint16)(unsafe.Pointer(hmap.Pointer() + uintptr(10))))
+		size += hack.RuntimeAllocSize(int64(numOldBuckets * 272))
+		if len(cached.params) > 0 || numBuckets > 1 {
+			size += hack.RuntimeAllocSize(int64(numBuckets * 272))
+		}
+		for k, v := range cached.params {
+			size += hack.RuntimeAllocSize(int64(len(k)))
+			size += hack.RuntimeAllocSize(int64(len(v)))
+		}
+	}
 	return size
 }
+
+//go:nocheckptr
 func (cached *LookupHashUnique) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -194,8 +298,25 @@ func (cached *LookupHashUnique) CachedSize(alloc bool) int64 {
 	size += hack.RuntimeAllocSize(int64(len(cached.name)))
 	// field lkp vitess.io/vitess/go/vt/vtgate/vindexes.lookupInternal
 	size += cached.lkp.CachedSize(false)
+	// field params map[string]string
+	if cached.params != nil {
+		size += int64(48)
+		hmap := reflect.ValueOf(cached.params)
+		numBuckets := int(math.Pow(2, float64((*(*uint8)(unsafe.Pointer(hmap.Pointer() + uintptr(9)))))))
+		numOldBuckets := (*(*uint16)(unsafe.Pointer(hmap.Pointer() + uintptr(10))))
+		size += hack.RuntimeAllocSize(int64(numOldBuckets * 272))
+		if len(cached.params) > 0 || numBuckets > 1 {
+			size += hack.RuntimeAllocSize(int64(numBuckets * 272))
+		}
+		for k, v := range cached.params {
+			size += hack.RuntimeAllocSize(int64(len(k)))
+			size += hack.RuntimeAllocSize(int64(len(v)))
+		}
+	}
 	return size
 }
+
+//go:nocheckptr
 func (cached *LookupNonUnique) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -208,8 +329,25 @@ func (cached *LookupNonUnique) CachedSize(alloc bool) int64 {
 	size += hack.RuntimeAllocSize(int64(len(cached.name)))
 	// field lkp vitess.io/vitess/go/vt/vtgate/vindexes.lookupInternal
 	size += cached.lkp.CachedSize(false)
+	// field params map[string]string
+	if cached.params != nil {
+		size += int64(48)
+		hmap := reflect.ValueOf(cached.params)
+		numBuckets := int(math.Pow(2, float64((*(*uint8)(unsafe.Pointer(hmap.Pointer() + uintptr(9)))))))
+		numOldBuckets := (*(*uint16)(unsafe.Pointer(hmap.Pointer() + uintptr(10))))
+		size += hack.RuntimeAllocSize(int64(numOldBuckets * 272))
+		if len(cached.params) > 0 || numBuckets > 1 {
+			size += hack.RuntimeAllocSize(int64(numBuckets * 272))
+		}
+		for k, v := range cached.params {
+			size += hack.RuntimeAllocSize(int64(len(k)))
+			size += hack.RuntimeAllocSize(int64(len(v)))
+		}
+	}
 	return size
 }
+
+//go:nocheckptr
 func (cached *LookupUnicodeLooseMD5Hash) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -222,8 +360,25 @@ func (cached *LookupUnicodeLooseMD5Hash) CachedSize(alloc bool) int64 {
 	size += hack.RuntimeAllocSize(int64(len(cached.name)))
 	// field lkp vitess.io/vitess/go/vt/vtgate/vindexes.lookupInternal
 	size += cached.lkp.CachedSize(false)
+	// field params map[string]string
+	if cached.params != nil {
+		size += int64(48)
+		hmap := reflect.ValueOf(cached.params)
+		numBuckets := int(math.Pow(2, float64((*(*uint8)(unsafe.Pointer(hmap.Pointer() + uintptr(9)))))))
+		numOldBuckets := (*(*uint16)(unsafe.Pointer(hmap.Pointer() + uintptr(10))))
+		size += hack.RuntimeAllocSize(int64(numOldBuckets * 272))
+		if len(cached.params) > 0 || numBuckets > 1 {
+			size += hack.RuntimeAllocSize(int64(numBuckets * 272))
+		}
+		for k, v := range cached.params {
+			size += hack.RuntimeAllocSize(int64(len(k)))
+			size += hack.RuntimeAllocSize(int64(len(v)))
+		}
+	}
 	return size
 }
+
+//go:nocheckptr
 func (cached *LookupUnicodeLooseMD5HashUnique) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -236,8 +391,25 @@ func (cached *LookupUnicodeLooseMD5HashUnique) CachedSize(alloc bool) int64 {
 	size += hack.RuntimeAllocSize(int64(len(cached.name)))
 	// field lkp vitess.io/vitess/go/vt/vtgate/vindexes.lookupInternal
 	size += cached.lkp.CachedSize(false)
+	// field params map[string]string
+	if cached.params != nil {
+		size += int64(48)
+		hmap := reflect.ValueOf(cached.params)
+		numBuckets := int(math.Pow(2, float64((*(*uint8)(unsafe.Pointer(hmap.Pointer() + uintptr(9)))))))
+		numOldBuckets := (*(*uint16)(unsafe.Pointer(hmap.Pointer() + uintptr(10))))
+		size += hack.RuntimeAllocSize(int64(numOldBuckets * 272))
+		if len(cached.params) > 0 || numBuckets > 1 {
+			size += hack.RuntimeAllocSize(int64(numBuckets * 272))
+		}
+		for k, v := range cached.params {
+			size += hack.RuntimeAllocSize(int64(len(k)))
+			size += hack.RuntimeAllocSize(int64(len(v)))
+		}
+	}
 	return size
 }
+
+//go:nocheckptr
 func (cached *LookupUnique) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -250,6 +422,21 @@ func (cached *LookupUnique) CachedSize(alloc bool) int64 {
 	size += hack.RuntimeAllocSize(int64(len(cached.name)))
 	// field lkp vitess.io/vitess/go/vt/vtgate/vindexes.lookupInternal
 	size += cached.lkp.CachedSize(false)
+	// field params map[string]string
+	if cached.params != nil {
+		size += int64(48)
+		hmap := reflect.ValueOf(cached.params)
+		numBuckets := int(math.Pow(2, float64((*(*uint8)(unsafe.Pointer(hmap.Pointer() + uintptr(9)))))))
+		numOldBuckets := (*(*uint16)(unsafe.Pointer(hmap.Pointer() + uintptr(10))))
+		size += hack.RuntimeAllocSize(int64(numOldBuckets * 272))
+		if len(cached.params) > 0 || numBuckets > 1 {
+			size += hack.RuntimeAllocSize(int64(numBuckets * 272))
+		}
+		for k, v := range cached.params {
+			size += hack.RuntimeAllocSize(int64(len(k)))
+			size += hack.RuntimeAllocSize(int64(len(v)))
+		}
+	}
 	return size
 }
 
@@ -260,7 +447,7 @@ func (cached *MultiCol) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(48)
+		size += int64(64)
 	}
 	// field name string
 	size += hack.RuntimeAllocSize(int64(len(cached.name)))
@@ -291,30 +478,79 @@ func (cached *MultiCol) CachedSize(alloc bool) int64 {
 			size += hack.RuntimeAllocSize(int64(numBuckets * 144))
 		}
 	}
+	// field params map[string]string
+	if cached.params != nil {
+		size += int64(48)
+		hmap := reflect.ValueOf(cached.params)
+		numBuckets := int(math.Pow(2, float64((*(*uint8)(unsafe.Pointer(hmap.Pointer() + uintptr(9)))))))
+		numOldBuckets := (*(*uint16)(unsafe.Pointer(hmap.Pointer() + uintptr(10))))
+		size += hack.RuntimeAllocSize(int64(numOldBuckets * 272))
+		if len(cached.params) > 0 || numBuckets > 1 {
+			size += hack.RuntimeAllocSize(int64(numBuckets * 272))
+		}
+		for k, v := range cached.params {
+			size += hack.RuntimeAllocSize(int64(len(k)))
+			size += hack.RuntimeAllocSize(int64(len(v)))
+		}
+	}
 	return size
 }
+
+//go:nocheckptr
 func (cached *Null) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(16)
+		size += int64(24)
 	}
 	// field name string
 	size += hack.RuntimeAllocSize(int64(len(cached.name)))
+	// field params map[string]string
+	if cached.params != nil {
+		size += int64(48)
+		hmap := reflect.ValueOf(cached.params)
+		numBuckets := int(math.Pow(2, float64((*(*uint8)(unsafe.Pointer(hmap.Pointer() + uintptr(9)))))))
+		numOldBuckets := (*(*uint16)(unsafe.Pointer(hmap.Pointer() + uintptr(10))))
+		size += hack.RuntimeAllocSize(int64(numOldBuckets * 272))
+		if len(cached.params) > 0 || numBuckets > 1 {
+			size += hack.RuntimeAllocSize(int64(numBuckets * 272))
+		}
+		for k, v := range cached.params {
+			size += hack.RuntimeAllocSize(int64(len(k)))
+			size += hack.RuntimeAllocSize(int64(len(v)))
+		}
+	}
 	return size
 }
+
+//go:nocheckptr
 func (cached *Numeric) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(16)
+		size += int64(24)
 	}
 	// field name string
 	size += hack.RuntimeAllocSize(int64(len(cached.name)))
+	// field params map[string]string
+	if cached.params != nil {
+		size += int64(48)
+		hmap := reflect.ValueOf(cached.params)
+		numBuckets := int(math.Pow(2, float64((*(*uint8)(unsafe.Pointer(hmap.Pointer() + uintptr(9)))))))
+		numOldBuckets := (*(*uint16)(unsafe.Pointer(hmap.Pointer() + uintptr(10))))
+		size += hack.RuntimeAllocSize(int64(numOldBuckets * 272))
+		if len(cached.params) > 0 || numBuckets > 1 {
+			size += hack.RuntimeAllocSize(int64(numBuckets * 272))
+		}
+		for k, v := range cached.params {
+			size += hack.RuntimeAllocSize(int64(len(k)))
+			size += hack.RuntimeAllocSize(int64(len(v)))
+		}
+	}
 	return size
 }
 
@@ -344,18 +580,50 @@ func (cached *NumericStaticMap) CachedSize(alloc bool) int64 {
 			size += hack.RuntimeAllocSize(int64(numBuckets * 144))
 		}
 	}
+	// field params map[string]string
+	if cached.params != nil {
+		size += int64(48)
+		hmap := reflect.ValueOf(cached.params)
+		numBuckets := int(math.Pow(2, float64((*(*uint8)(unsafe.Pointer(hmap.Pointer() + uintptr(9)))))))
+		numOldBuckets := (*(*uint16)(unsafe.Pointer(hmap.Pointer() + uintptr(10))))
+		size += hack.RuntimeAllocSize(int64(numOldBuckets * 272))
+		if len(cached.params) > 0 || numBuckets > 1 {
+			size += hack.RuntimeAllocSize(int64(numBuckets * 272))
+		}
+		for k, v := range cached.params {
+			size += hack.RuntimeAllocSize(int64(len(k)))
+			size += hack.RuntimeAllocSize(int64(len(v)))
+		}
+	}
 	return size
 }
+
+//go:nocheckptr
 func (cached *RegionExperimental) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(24)
+		size += int64(32)
 	}
 	// field name string
 	size += hack.RuntimeAllocSize(int64(len(cached.name)))
+	// field params map[string]string
+	if cached.params != nil {
+		size += int64(48)
+		hmap := reflect.ValueOf(cached.params)
+		numBuckets := int(math.Pow(2, float64((*(*uint8)(unsafe.Pointer(hmap.Pointer() + uintptr(9)))))))
+		numOldBuckets := (*(*uint16)(unsafe.Pointer(hmap.Pointer() + uintptr(10))))
+		size += hack.RuntimeAllocSize(int64(numOldBuckets * 272))
+		if len(cached.params) > 0 || numBuckets > 1 {
+			size += hack.RuntimeAllocSize(int64(numBuckets * 272))
+		}
+		for k, v := range cached.params {
+			size += hack.RuntimeAllocSize(int64(len(k)))
+			size += hack.RuntimeAllocSize(int64(len(v)))
+		}
+	}
 	return size
 }
 
@@ -366,7 +634,7 @@ func (cached *RegionJSON) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(32)
+		size += int64(48)
 	}
 	// field name string
 	size += hack.RuntimeAllocSize(int64(len(cached.name)))
@@ -384,18 +652,50 @@ func (cached *RegionJSON) CachedSize(alloc bool) int64 {
 			size += hack.RuntimeAllocSize(int64(len(k)))
 		}
 	}
+	// field params map[string]string
+	if cached.params != nil {
+		size += int64(48)
+		hmap := reflect.ValueOf(cached.params)
+		numBuckets := int(math.Pow(2, float64((*(*uint8)(unsafe.Pointer(hmap.Pointer() + uintptr(9)))))))
+		numOldBuckets := (*(*uint16)(unsafe.Pointer(hmap.Pointer() + uintptr(10))))
+		size += hack.RuntimeAllocSize(int64(numOldBuckets * 272))
+		if len(cached.params) > 0 || numBuckets > 1 {
+			size += hack.RuntimeAllocSize(int64(numBuckets * 272))
+		}
+		for k, v := range cached.params {
+			size += hack.RuntimeAllocSize(int64(len(k)))
+			size += hack.RuntimeAllocSize(int64(len(v)))
+		}
+	}
 	return size
 }
+
+//go:nocheckptr
 func (cached *ReverseBits) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(16)
+		size += int64(24)
 	}
 	// field name string
 	size += hack.RuntimeAllocSize(int64(len(cached.name)))
+	// field params map[string]string
+	if cached.params != nil {
+		size += int64(48)
+		hmap := reflect.ValueOf(cached.params)
+		numBuckets := int(math.Pow(2, float64((*(*uint8)(unsafe.Pointer(hmap.Pointer() + uintptr(9)))))))
+		numOldBuckets := (*(*uint16)(unsafe.Pointer(hmap.Pointer() + uintptr(10))))
+		size += hack.RuntimeAllocSize(int64(numOldBuckets * 272))
+		if len(cached.params) > 0 || numBuckets > 1 {
+			size += hack.RuntimeAllocSize(int64(numBuckets * 272))
+		}
+		for k, v := range cached.params {
+			size += hack.RuntimeAllocSize(int64(len(k)))
+			size += hack.RuntimeAllocSize(int64(len(v)))
+		}
+	}
 	return size
 }
 func (cached *Source) CachedSize(alloc bool) int64 {
@@ -479,55 +779,123 @@ func (cached *Table) CachedSize(alloc bool) int64 {
 	size += cached.Source.CachedSize(true)
 	return size
 }
+
+//go:nocheckptr
 func (cached *UnicodeLooseMD5) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(16)
+		size += int64(24)
 	}
 	// field name string
 	size += hack.RuntimeAllocSize(int64(len(cached.name)))
+	// field params map[string]string
+	if cached.params != nil {
+		size += int64(48)
+		hmap := reflect.ValueOf(cached.params)
+		numBuckets := int(math.Pow(2, float64((*(*uint8)(unsafe.Pointer(hmap.Pointer() + uintptr(9)))))))
+		numOldBuckets := (*(*uint16)(unsafe.Pointer(hmap.Pointer() + uintptr(10))))
+		size += hack.RuntimeAllocSize(int64(numOldBuckets * 272))
+		if len(cached.params) > 0 || numBuckets > 1 {
+			size += hack.RuntimeAllocSize(int64(numBuckets * 272))
+		}
+		for k, v := range cached.params {
+			size += hack.RuntimeAllocSize(int64(len(k)))
+			size += hack.RuntimeAllocSize(int64(len(v)))
+		}
+	}
 	return size
 }
+
+//go:nocheckptr
 func (cached *UnicodeLooseXXHash) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(16)
+		size += int64(24)
 	}
 	// field name string
 	size += hack.RuntimeAllocSize(int64(len(cached.name)))
+	// field params map[string]string
+	if cached.params != nil {
+		size += int64(48)
+		hmap := reflect.ValueOf(cached.params)
+		numBuckets := int(math.Pow(2, float64((*(*uint8)(unsafe.Pointer(hmap.Pointer() + uintptr(9)))))))
+		numOldBuckets := (*(*uint16)(unsafe.Pointer(hmap.Pointer() + uintptr(10))))
+		size += hack.RuntimeAllocSize(int64(numOldBuckets * 272))
+		if len(cached.params) > 0 || numBuckets > 1 {
+			size += hack.RuntimeAllocSize(int64(numBuckets * 272))
+		}
+		for k, v := range cached.params {
+			size += hack.RuntimeAllocSize(int64(len(k)))
+			size += hack.RuntimeAllocSize(int64(len(v)))
+		}
+	}
 	return size
 }
+
+//go:nocheckptr
 func (cached *XXHash) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(16)
+		size += int64(24)
 	}
 	// field name string
 	size += hack.RuntimeAllocSize(int64(len(cached.name)))
+	// field params map[string]string
+	if cached.params != nil {
+		size += int64(48)
+		hmap := reflect.ValueOf(cached.params)
+		numBuckets := int(math.Pow(2, float64((*(*uint8)(unsafe.Pointer(hmap.Pointer() + uintptr(9)))))))
+		numOldBuckets := (*(*uint16)(unsafe.Pointer(hmap.Pointer() + uintptr(10))))
+		size += hack.RuntimeAllocSize(int64(numOldBuckets * 272))
+		if len(cached.params) > 0 || numBuckets > 1 {
+			size += hack.RuntimeAllocSize(int64(numBuckets * 272))
+		}
+		for k, v := range cached.params {
+			size += hack.RuntimeAllocSize(int64(len(k)))
+			size += hack.RuntimeAllocSize(int64(len(v)))
+		}
+	}
 	return size
 }
+
+//go:nocheckptr
 func (cached *cfcCommon) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(48)
+		size += int64(64)
 	}
 	// field name string
 	size += hack.RuntimeAllocSize(int64(len(cached.name)))
 	// field offsets []int
 	{
 		size += hack.RuntimeAllocSize(int64(cap(cached.offsets)) * int64(8))
+	}
+	// field params map[string]string
+	if cached.params != nil {
+		size += int64(48)
+		hmap := reflect.ValueOf(cached.params)
+		numBuckets := int(math.Pow(2, float64((*(*uint8)(unsafe.Pointer(hmap.Pointer() + uintptr(9)))))))
+		numOldBuckets := (*(*uint16)(unsafe.Pointer(hmap.Pointer() + uintptr(10))))
+		size += hack.RuntimeAllocSize(int64(numOldBuckets * 272))
+		if len(cached.params) > 0 || numBuckets > 1 {
+			size += hack.RuntimeAllocSize(int64(numBuckets * 272))
+		}
+		for k, v := range cached.params {
+			size += hack.RuntimeAllocSize(int64(len(k)))
+			size += hack.RuntimeAllocSize(int64(len(v)))
+		}
 	}
 	return size
 }

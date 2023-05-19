@@ -36,7 +36,7 @@ func regionExperimentalCreateVindexTestCase(
 	testName string,
 	vindexParams map[string]string,
 	expectErr error,
-	expectWarnings []VindexWarning,
+	expectWarnings []error,
 ) createVindexTestCase {
 	return createVindexTestCase{
 		testName: testName,
@@ -107,7 +107,7 @@ func TestRegionExperimentalCreateVindex(t *testing.T) {
 				"hello":        "world",
 			},
 			nil,
-			[]VindexWarning{vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "unknown param 'hello'")},
+			[]error{vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "unknown param 'hello'")},
 		),
 	}
 
@@ -115,7 +115,7 @@ func TestRegionExperimentalCreateVindex(t *testing.T) {
 }
 
 func TestRegionExperimentalMisc(t *testing.T) {
-	ge, _, err := createRegionVindex(t, "region_experimental", "f1,f2", 1)
+	ge, err := createRegionVindex(t, "region_experimental", "f1,f2", 1)
 	require.NoError(t, err)
 	assert.Equal(t, 1, ge.Cost())
 	assert.Equal(t, "region_experimental", ge.String())
@@ -124,7 +124,7 @@ func TestRegionExperimentalMisc(t *testing.T) {
 }
 
 func TestRegionExperimentalMap(t *testing.T) {
-	vindex, _, err := createRegionVindex(t, "region_experimental", "f1,f2", 1)
+	vindex, err := createRegionVindex(t, "region_experimental", "f1,f2", 1)
 	assert.NoError(t, err)
 	ge := vindex.(MultiColumn)
 	got, err := ge.Map(context.Background(), nil, [][]sqltypes.Value{{
@@ -157,7 +157,7 @@ func TestRegionExperimentalMap(t *testing.T) {
 }
 
 func TestRegionExperimentalMapMulti2(t *testing.T) {
-	vindex, _, err := createRegionVindex(t, "region_experimental", "f1,f2", 2)
+	vindex, err := createRegionVindex(t, "region_experimental", "f1,f2", 2)
 	assert.NoError(t, err)
 	ge := vindex.(MultiColumn)
 	got, err := ge.Map(context.Background(), nil, [][]sqltypes.Value{{
@@ -181,7 +181,7 @@ func TestRegionExperimentalMapMulti2(t *testing.T) {
 }
 
 func TestRegionExperimentalVerifyMulti(t *testing.T) {
-	vindex, _, err := createRegionVindex(t, "region_experimental", "f1,f2", 1)
+	vindex, err := createRegionVindex(t, "region_experimental", "f1,f2", 1)
 	assert.NoError(t, err)
 	ge := vindex.(MultiColumn)
 	vals := [][]sqltypes.Value{{
@@ -206,7 +206,7 @@ func TestRegionExperimentalVerifyMulti(t *testing.T) {
 	assert.Equal(t, want, got)
 }
 
-func createRegionVindex(t *testing.T, name, from string, rb int) (Vindex, []VindexWarning, error) {
+func createRegionVindex(t *testing.T, name, from string, rb int) (Vindex, error) {
 	return CreateVindex(name, name, map[string]string{
 		"region_bytes": strconv.Itoa(rb),
 	})

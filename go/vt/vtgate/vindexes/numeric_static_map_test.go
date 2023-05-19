@@ -36,12 +36,9 @@ import (
 func createVindex() (SingleColumn, error) {
 	m := make(map[string]string)
 	m["json_path"] = "testdata/numeric_static_map_test.json"
-	vindex, warnings, err := CreateVindex("numeric_static_map", "numericStaticMap", m)
+	vindex, err := CreateVindex("numeric_static_map", "numericStaticMap", m)
 	if err != nil {
 		panic(err)
-	}
-	if len(warnings) > 0 {
-		panic("numeric_static_map test init: expected 0 warnings")
 	}
 	return vindex.(SingleColumn), nil
 }
@@ -50,7 +47,7 @@ func numericStaticMapCreateVindexTestCase(
 	testName string,
 	vindexParams map[string]string,
 	expectErr error,
-	expectWarnings []VindexWarning,
+	expectWarnings []error,
 ) createVindexTestCase {
 	return createVindexTestCase{
 		testName: testName,
@@ -140,7 +137,7 @@ func TestNumericStaticMapCreateVindex(t *testing.T) {
 				"hello": "world",
 			},
 			nil,
-			[]VindexWarning{vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "unknown param 'hello'")},
+			[]error{vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "unknown param 'hello'")},
 		),
 	}
 
@@ -203,7 +200,7 @@ func TestNumericStaticMapVerify(t *testing.T) {
 }
 
 func TestNumericStaticMapWithJsonVdx(t *testing.T) {
-	withFallbackVdx, warnings, err := CreateVindex(
+	withFallbackVdx, err := CreateVindex(
 		"numeric_static_map",
 		t.Name(),
 		map[string]string{
@@ -212,14 +209,14 @@ func TestNumericStaticMapWithJsonVdx(t *testing.T) {
 	)
 
 	require.NoError(t, err)
-	require.Empty(t, warnings)
+	require.Empty(t, withFallbackVdx.(ParamValidating).InvalidParamErrors())
 	assert.Equal(t, 1, withFallbackVdx.Cost())
 	assert.Equal(t, t.Name(), withFallbackVdx.String())
 	assert.True(t, withFallbackVdx.IsUnique())
 	assert.False(t, withFallbackVdx.NeedsVCursor())
 
 	// Bad format tests
-	_, warnings, err = CreateVindex(
+	_, err = CreateVindex(
 		"numeric_static_map",
 		t.Name(),
 		map[string]string{
@@ -227,28 +224,25 @@ func TestNumericStaticMapWithJsonVdx(t *testing.T) {
 		},
 	)
 	require.EqualError(t, err, "invalid character ':' after object key:value pair")
-	require.Empty(t, warnings)
 
 	// Letters in key or value not allowed
-	_, warnings, err = CreateVindex(
+	_, err = CreateVindex(
 		"numeric_static_map",
 		t.Name(),
 		map[string]string{"json": "{\"1\":a}"},
 	)
 	require.EqualError(t, err, "invalid character 'a' looking for beginning of value")
-	require.Empty(t, warnings)
-	_, warnings, err = CreateVindex(
+	_, err = CreateVindex(
 		"numeric_static_map",
 		t.Name(),
 		map[string]string{"json": "{\"a\":1}"},
 	)
 	require.EqualError(t, err, "strconv.ParseUint: parsing \"a\": invalid syntax")
-	require.Empty(t, warnings)
 }
 
 // Test mapping of vindex, both for specified map keys and underlying xxhash
 func TestNumericStaticMapWithFallback(t *testing.T) {
-	mapWithFallbackVdx, warnings, err := CreateVindex(
+	mapWithFallbackVdx, err := CreateVindex(
 		"numeric_static_map",
 		t.Name(),
 		map[string]string{
@@ -259,7 +253,7 @@ func TestNumericStaticMapWithFallback(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create vindex: %v", err)
 	}
-	require.Empty(t, warnings)
+	require.Empty(t, mapWithFallbackVdx.(ParamValidating).InvalidParamErrors())
 	singleCol := mapWithFallbackVdx.(SingleColumn)
 	got, err := singleCol.Map(context.Background(), nil, []sqltypes.Value{
 		sqltypes.NewInt64(1),
@@ -297,7 +291,7 @@ func TestNumericStaticMapWithFallback(t *testing.T) {
 }
 
 func TestNumericStaticMapWithFallbackVerify(t *testing.T) {
-	mapWithFallbackVdx, warnings, err := CreateVindex(
+	mapWithFallbackVdx, err := CreateVindex(
 		"numeric_static_map",
 		t.Name(),
 		map[string]string{
@@ -308,7 +302,7 @@ func TestNumericStaticMapWithFallbackVerify(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create vindex: %v", err)
 	}
-	require.Empty(t, warnings)
+	require.Empty(t, mapWithFallbackVdx.(ParamValidating).InvalidParamErrors())
 	singleCol := mapWithFallbackVdx.(SingleColumn)
 	got, err := singleCol.Verify(context.Background(), nil, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2), sqltypes.NewInt64(11), sqltypes.NewInt64(10)}, [][]byte{[]byte("\x00\x00\x00\x00\x00\x00\x00\x02"), []byte("\x8b\x59\x80\x16\x62\xb5\x21\x60"), []byte("\xff\xff\xff\xff\xff\xff\xff\xff"), []byte("\xff\xff\xff\xff\xff\xff\xff\xff")})
 	require.NoError(t, err)

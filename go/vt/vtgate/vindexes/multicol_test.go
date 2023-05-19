@@ -35,7 +35,7 @@ func multicolCreateVindexTestCase(
 	vindexParams map[string]string,
 	expectCost int,
 	expectErr error,
-	expectWarnings []VindexWarning,
+	expectWarnings []error,
 ) createVindexTestCase {
 	return createVindexTestCase{
 		testName: testName,
@@ -197,10 +197,11 @@ func TestMulticolCreateVindex(t *testing.T) {
 }
 
 func TestMultiColMisc(t *testing.T) {
-	vindex, warnings, err := CreateVindex("multicol", "multicol_misc", map[string]string{
+	vindex, err := CreateVindex("multicol", "multicol_misc", map[string]string{
 		"column_count": "3",
 	})
 	require.NoError(t, err)
+	warnings := vindex.(ParamValidating).InvalidParamErrors()
 	require.Empty(t, warnings)
 
 	multiColVdx, isMultiColVdx := vindex.(*MultiCol)
@@ -214,10 +215,11 @@ func TestMultiColMisc(t *testing.T) {
 }
 
 func TestMultiColMap(t *testing.T) {
-	vindex, warnings, err := CreateVindex("multicol", "multicol_map", map[string]string{
+	vindex, err := CreateVindex("multicol", "multicol_map", map[string]string{
 		"column_count": "3",
 	})
 	require.NoError(t, err)
+	warnings := vindex.(ParamValidating).InvalidParamErrors()
 	require.Empty(t, warnings)
 	mutiCol := vindex.(MultiColumn)
 

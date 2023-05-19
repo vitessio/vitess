@@ -35,17 +35,14 @@ import (
 var (
 	_ MultiColumn = (*RegionJSON)(nil)
 
-	regionJSONParams = []VindexParam{
-		&vindexParam{name: "region_map"},
-		&vindexParam{name: "region_bytes"},
+	regionJSONParams = []*Param{
+		{Name: "region_map"},
+		{Name: "region_bytes"},
 	}
 )
 
 func init() {
-	Register("region_json", &vindexFactory{
-		create: newRegionJSON,
-		params: regionJSONParams,
-	})
+	Register("region_json", newRegionJSON)
 }
 
 // RegionMap is used to store mapping of country to region
@@ -60,39 +57,41 @@ type RegionJSON struct {
 	name        string
 	regionMap   RegionMap
 	regionBytes int
+	params      map[string]string
 }
 
 // newRegionJSON creates a RegionJson vindex.
 // The supplied map requires all the fields of "RegionExperimental".
 // Additionally, it requires a region_map argument representing the path to a json file
 // containing a map of country to region.
-func newRegionJSON(name string, m map[string]string) (Vindex, []VindexWarning, error) {
+func newRegionJSON(name string, m map[string]string) (Vindex, error) {
 	rmPath := m["region_map"]
 	rmap := make(map[string]uint64)
 	data, err := os.ReadFile(rmPath)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	log.Infof("Loaded Region map from: %s", rmPath)
 	err = json.Unmarshal(data, &rmap)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	rb, err := strconv.Atoi(m["region_bytes"])
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	switch rb {
 	case 1, 2:
 	default:
-		return nil, nil, fmt.Errorf("region_bytes must be 1 or 2: %v", rb)
+		return nil, fmt.Errorf("region_bytes must be 1 or 2: %v", rb)
 	}
 
 	return &RegionJSON{
 		name:        name,
 		regionMap:   rmap,
 		regionBytes: rb,
-	}, nil, nil
+		params:      m,
+	}, nil
 }
 
 // String returns the name of the vindex.
@@ -165,4 +164,9 @@ func (rv *RegionJSON) Verify(ctx context.Context, vcursor VCursor, rowsColValues
 
 func (rv *RegionJSON) PartialVindex() bool {
 	return false
+}
+
+// InvalidParamErrors implements the ParamValidating interface.
+func (rv *RegionJSON) InvalidParamErrors() []error {
+	return ValidateParams(rv.params, &ParamValidationOpts{Params: regionJSONParams})
 }

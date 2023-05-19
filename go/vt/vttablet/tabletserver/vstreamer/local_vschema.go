@@ -62,7 +62,7 @@ func (lvs *localVSchema) FindOrCreateVindex(qualifiedName string) (vindexes.Vind
 	if keyspace != "" {
 		return nil, fmt.Errorf("vindex %v not found", qualifiedName)
 	}
-	newVindex, _, err := vindexes.CreateVindex(name, name, map[string]string{})
+	newVindex, err := vindexes.CreateVindex(name, name, map[string]string{})
 	return newVindex, err
 }
 

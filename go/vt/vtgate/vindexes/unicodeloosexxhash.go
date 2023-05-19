@@ -26,8 +26,9 @@ import (
 )
 
 var (
-	_ SingleColumn = (*UnicodeLooseXXHash)(nil)
-	_ Hashing      = (*UnicodeLooseXXHash)(nil)
+	_ SingleColumn    = (*UnicodeLooseXXHash)(nil)
+	_ Hashing         = (*UnicodeLooseXXHash)(nil)
+	_ ParamValidating = (*UnicodeLooseXXHash)(nil)
 )
 
 // UnicodeLooseXXHash is a vindex that normalizes and hashes unicode strings
@@ -36,12 +37,16 @@ var (
 // Ref: http://www.unicode.org/reports/tr10/#Multi_Level_Comparison.
 // This is compatible with MySQL's utf8_unicode_ci collation.
 type UnicodeLooseXXHash struct {
-	name string
+	name   string
+	params map[string]string
 }
 
 // newUnicodeLooseXXHash creates a new UnicodeLooseXXHash struct.
-func newUnicodeLooseXXHash(name string, _ map[string]string) (Vindex, []VindexWarning, error) {
-	return &UnicodeLooseXXHash{name: name}, nil, nil
+func newUnicodeLooseXXHash(name string, m map[string]string) (Vindex, error) {
+	return &UnicodeLooseXXHash{
+		name:   name,
+		params: m,
+	}, nil
 }
 
 // String returns the name of the vindex.
@@ -94,9 +99,11 @@ func (vind *UnicodeLooseXXHash) Hash(id sqltypes.Value) ([]byte, error) {
 	return unicodeHash(vXXHash, id)
 }
 
+// InvalidParamErrors implements the ParamValidating interface.
+func (vind *UnicodeLooseXXHash) InvalidParamErrors() []error {
+	return ValidateParams(vind.params, &ParamValidationOpts{})
+}
+
 func init() {
-	Register("unicode_loose_xxhash", &vindexFactory{
-		create: newUnicodeLooseXXHash,
-		params: nil,
-	})
+	Register("unicode_loose_xxhash", newUnicodeLooseXXHash)
 }

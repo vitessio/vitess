@@ -35,27 +35,26 @@ func TestLookupUniqueNew(t *testing.T) {
 		t.Errorf("Create(lookup, false): %v, want %v", got, want)
 	}
 
-	vindex, warnings, err := CreateVindex("lookup_unique", "lookup_unique", map[string]string{
+	vindex, err := CreateVindex("lookup_unique", "lookup_unique", map[string]string{
 		"table":      "t",
 		"from":       "fromc",
 		"to":         "toc",
 		"write_only": "true",
 	})
-	require.Empty(t, warnings)
 	require.NoError(t, err)
+	require.Empty(t, vindex.(ParamValidating).InvalidParamErrors())
 
 	l = vindex.(SingleColumn)
 	if want, got := l.(*LookupUnique).writeOnly, true; got != want {
 		t.Errorf("Create(lookup, false): %v, want %v", got, want)
 	}
 
-	_, warnings, err = CreateVindex("lookup_unique", "lookup_unique", map[string]string{
+	_, err = CreateVindex("lookup_unique", "lookup_unique", map[string]string{
 		"table":      "t",
 		"from":       "fromc",
 		"to":         "toc",
 		"write_only": "invalid",
 	})
-	require.Empty(t, warnings)
 	want := "write_only value must be 'true' or 'false': 'invalid'"
 	if err == nil || err.Error() != want {
 		t.Errorf("Create(bad_scatter): %v, want %s", err, want)
@@ -150,7 +149,7 @@ func TestLookupUniqueVerifyWriteOnly(t *testing.T) {
 }
 
 func TestLookupUniqueCreate(t *testing.T) {
-	lookupUnique, warnings, err := CreateVindex("lookup_unique", "lookup_unique", map[string]string{
+	lookupUnique, err := CreateVindex("lookup_unique", "lookup_unique", map[string]string{
 		"table":      "t",
 		"from":       "from",
 		"to":         "toc",
@@ -159,7 +158,7 @@ func TestLookupUniqueCreate(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	require.Empty(t, warnings)
+	require.Empty(t, lookupUnique.(ParamValidating).InvalidParamErrors())
 	vc := &vcursor{}
 
 	err = lookupUnique.(Lookup).Create(context.Background(), vc, [][]sqltypes.Value{{sqltypes.NewInt64(1)}}, [][]byte{[]byte("test")}, false /* ignoreMode */)

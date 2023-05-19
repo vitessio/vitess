@@ -34,7 +34,7 @@ func cfcCreateVindexTestCase(
 	testName string,
 	vindexParams map[string]string,
 	expectErr error,
-	expectWarnings []VindexWarning,
+	expectWarnings []error,
 ) createVindexTestCase {
 	return createVindexTestCase{
 		testName: testName,
@@ -118,7 +118,7 @@ func TestCFCCreateVindex(t *testing.T) {
 			"unknown params",
 			map[string]string{"hash": "md5", "offsets": "[3, 7]", "hello": "world"},
 			nil,
-			[]VindexWarning{vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "unknown param 'hello'")},
+			[]error{vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "unknown param 'hello'")},
 		),
 	}
 
@@ -126,7 +126,7 @@ func TestCFCCreateVindex(t *testing.T) {
 }
 
 func TestCFCCreateVindexOptions(t *testing.T) {
-	vdx, warnings, err := CreateVindex(
+	vdx, err := CreateVindex(
 		"cfc",
 		"normal",
 		map[string]string{
@@ -136,12 +136,13 @@ func TestCFCCreateVindexOptions(t *testing.T) {
 	)
 	require.NotNil(t, vdx)
 	require.Nil(t, err)
+	warnings := vdx.(ParamValidating).InvalidParamErrors()
 	require.Empty(t, warnings)
 	require.EqualValues(t, vdx.(*CFC).offsets, []int{3, 7})
 }
 
 func makeCFC(t *testing.T, params map[string]string) *CFC {
-	vind, _, err := newCFC("cfc", params)
+	vind, err := newCFC("cfc", params)
 	require.NoError(t, err)
 	cfc, ok := vind.(*CFC)
 	require.True(t, ok)

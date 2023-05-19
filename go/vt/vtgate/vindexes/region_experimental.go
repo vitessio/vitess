@@ -30,18 +30,16 @@ import (
 )
 
 var (
-	_ MultiColumn = (*RegionExperimental)(nil)
+	_ MultiColumn     = (*RegionExperimental)(nil)
+	_ ParamValidating = (*RegionExperimental)(nil)
 
-	regionExperimentalParams = []VindexParam{
-		&vindexParam{name: "region_bytes"},
+	regionExperimentalParams = []*Param{
+		{Name: "region_bytes"},
 	}
 )
 
 func init() {
-	Register("region_experimental", &vindexFactory{
-		create: newRegionExperimental,
-		params: regionExperimentalParams,
-	})
+	Register("region_experimental", newRegionExperimental)
 }
 
 // RegionExperimental is a multi-column unique vindex. The first column is prefixed
@@ -51,15 +49,16 @@ func init() {
 type RegionExperimental struct {
 	name        string
 	regionBytes int
+	params      map[string]string
 }
 
 // newRegionExperimental creates a RegionExperimental vindex.
 // The supplied map requires all the fields of "consistent_lookup_unique".
 // Additionally, it requires a region_bytes argument whose value can be "1", or "2".
-func newRegionExperimental(name string, m map[string]string) (Vindex, []VindexWarning, error) {
+func newRegionExperimental(name string, m map[string]string) (Vindex, error) {
 	rbs, ok := m["region_bytes"]
 	if !ok {
-		return nil, nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "region_experimental missing region_bytes param")
+		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "region_experimental missing region_bytes param")
 	}
 	var rb int
 	switch rbs {
@@ -68,12 +67,13 @@ func newRegionExperimental(name string, m map[string]string) (Vindex, []VindexWa
 	case "2":
 		rb = 2
 	default:
-		return nil, nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "region_bytes must be 1 or 2: %v", rbs)
+		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "region_bytes must be 1 or 2: %v", rbs)
 	}
 	return &RegionExperimental{
 		name:        name,
 		regionBytes: rb,
-	}, nil, nil
+		params:      m,
+	}, nil
 }
 
 // String returns the name of the vindex.
@@ -152,4 +152,9 @@ func (ge *RegionExperimental) Verify(ctx context.Context, vcursor VCursor, rowsC
 
 func (ge *RegionExperimental) PartialVindex() bool {
 	return true
+}
+
+// InvalidParamErrors implements the ParamValidating interface.
+func (ge *RegionExperimental) InvalidParamErrors() []error {
+	return ValidateParams(ge.params, &ParamValidationOpts{Params: regionExperimentalParams})
 }

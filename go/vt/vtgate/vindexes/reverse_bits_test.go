@@ -32,10 +32,11 @@ import (
 var reverseBits SingleColumn
 
 func init() {
-	hv, warnings, err := CreateVindex("reverse_bits", "rr", map[string]string{})
+	hv, err := CreateVindex("reverse_bits", "rr", map[string]string{})
 	if err != nil {
 		panic(err)
 	}
+	warnings := hv.(ParamValidating).InvalidParamErrors()
 	if len(warnings) > 0 {
 		panic("reverse_bits test init: expected 0 warnings")
 	}
@@ -46,7 +47,7 @@ func reverseBitsCreateVindexTestCase(
 	testName string,
 	vindexParams map[string]string,
 	expectErr error,
-	expectWarnings []VindexWarning,
+	expectWarnings []error,
 ) createVindexTestCase {
 	return createVindexTestCase{
 		testName: testName,
@@ -84,7 +85,7 @@ func TestReverseBitsCreateVindex(t *testing.T) {
 				"hello": "world",
 			},
 			nil,
-			[]VindexWarning{vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "unknown param 'hello'")},
+			[]error{vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "unknown param 'hello'")},
 		),
 	}
 

@@ -28,9 +28,13 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
-var cfcParams = []VindexParam{
-	&vindexParam{name: "hash"},
-	&vindexParam{name: "offsets"},
+var (
+	_ ParamValidating = (*CFC)(nil)
+)
+
+var cfcParams = []*Param{
+	{Name: "hash"},
+	{Name: "offsets"},
 }
 
 // CFC is Concatenated Fixed-width Composite Vindex.
@@ -102,12 +106,14 @@ type cfcCommon struct {
 	name    string
 	hash    func([]byte) []byte
 	offsets []int
+	params  map[string]string
 }
 
 // newCFC creates a new CFC vindex
-func newCFC(name string, params map[string]string) (Vindex, []VindexWarning, error) {
+func newCFC(name string, params map[string]string) (Vindex, error) {
 	ss := &cfcCommon{
-		name: name,
+		name:   name,
+		params: params,
 	}
 	cfc := &CFC{
 		cfcCommon: ss,
@@ -115,25 +121,25 @@ func newCFC(name string, params map[string]string) (Vindex, []VindexWarning, err
 	}
 
 	if params == nil {
-		return cfc, nil, nil
+		return cfc, nil
 	}
 
 	switch h := params["hash"]; h {
 	case "":
-		return cfc, nil, nil
+		return cfc, nil
 	case "md5":
 		ss.hash = md5hash
 	case "xxhash64":
 		ss.hash = xxhash64
 	default:
-		return nil, nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "invalid hash %s to CFC vindex %s", h, name)
+		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "invalid hash %s to CFC vindex %s", h, name)
 	}
 
 	var offsets []int
 	if p := params["offsets"]; p == "" {
-		return nil, nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "CFC vindex requires offsets when hash is defined")
+		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "CFC vindex requires offsets when hash is defined")
 	} else if err := json.Unmarshal([]byte(p), &offsets); err != nil || !validOffsets(offsets) {
-		return nil, nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "invalid offsets %s to CFC vindex %s. expected sorted positive ints in brackets", p, name)
+		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "invalid offsets %s to CFC vindex %s. expected sorted positive ints in brackets", p, name)
 	}
 	// remove duplicates
 	prev := -1
@@ -144,7 +150,7 @@ func newCFC(name string, params map[string]string) (Vindex, []VindexWarning, err
 		prev = off
 	}
 
-	return cfc, nil, nil
+	return cfc, nil
 }
 
 func validOffsets(offsets []int) bool {
@@ -234,6 +240,11 @@ func (vind *cfcCommon) verify(ids []sqltypes.Value, ksids [][]byte) ([]bool, err
 		out[i] = bytes.Equal(v, ksids[i])
 	}
 	return out, nil
+}
+
+// InvalidParamErrors implements the ParamValidating interface.
+func (vind *cfcCommon) InvalidParamErrors() []error {
+	return ValidateParams(vind.params, &ParamValidationOpts{Params: cfcParams})
 }
 
 // Verify returns true if ids maps to ksids.
@@ -411,8 +422,5 @@ func xxhash64(in []byte) []byte {
 }
 
 func init() {
-	Register("cfc", &vindexFactory{
-		create: newCFC,
-		params: cfcParams,
-	})
+	Register("cfc", newCFC)
 }

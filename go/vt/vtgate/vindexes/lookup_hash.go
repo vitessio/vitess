@@ -30,28 +30,24 @@ import (
 )
 
 var (
-	_ SingleColumn   = (*LookupHash)(nil)
-	_ Lookup         = (*LookupHash)(nil)
-	_ LookupPlanable = (*LookupHash)(nil)
-	_ SingleColumn   = (*LookupHashUnique)(nil)
-	_ Lookup         = (*LookupHashUnique)(nil)
-	_ LookupPlanable = (*LookupHashUnique)(nil)
+	_ SingleColumn    = (*LookupHash)(nil)
+	_ Lookup          = (*LookupHash)(nil)
+	_ LookupPlanable  = (*LookupHash)(nil)
+	_ ParamValidating = (*LookupHash)(nil)
+	_ SingleColumn    = (*LookupHashUnique)(nil)
+	_ Lookup          = (*LookupHashUnique)(nil)
+	_ LookupPlanable  = (*LookupHashUnique)(nil)
+	_ ParamValidating = (*LookupHashUnique)(nil)
 
 	lookupHashParams = append(
-		append(make([]VindexParam, 0), lookupCommonParams...),
-		&vindexParam{name: "write_only"},
+		append(make([]*Param, 0), lookupCommonParams...),
+		&Param{Name: "write_only"},
 	)
 )
 
 func init() {
-	Register("lookup_hash", &vindexFactory{
-		create: newLookupHash,
-		params: lookupHashParams,
-	})
-	Register("lookup_hash_unique", &vindexFactory{
-		create: newLookupHashUnique,
-		params: lookupHashParams,
-	})
+	Register("lookup_hash", newLookupHash)
+	Register("lookup_hash_unique", newLookupHashUnique)
 }
 
 //====================================================================
@@ -64,6 +60,7 @@ type LookupHash struct {
 	name      string
 	writeOnly bool
 	lkp       lookupInternal
+	params    map[string]string
 }
 
 // newLookupHash creates a LookupHash vindex.
@@ -77,24 +74,27 @@ type LookupHash struct {
 //
 //	autocommit: setting this to "true" will cause inserts to upsert and deletes to be ignored.
 //	write_only: in this mode, Map functions return the full keyrange causing a full scatter.
-func newLookupHash(name string, m map[string]string) (Vindex, []VindexWarning, error) {
-	lh := &LookupHash{name: name}
+func newLookupHash(name string, m map[string]string) (Vindex, error) {
+	lh := &LookupHash{
+		name:   name,
+		params: m,
+	}
 
 	cc, err := parseCommonConfig(m)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	lh.writeOnly, err = boolFromMap(m, "write_only")
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	// if autocommit is on for non-unique lookup, upsert should also be on.
 	upsert := cc.autocommit || cc.multiShardAutocommit
 	if err := lh.lkp.Init(m, cc.autocommit, upsert, cc.multiShardAutocommit); err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	return lh, nil, nil
+	return lh, nil
 }
 
 // String returns the name of the vindex.
@@ -240,6 +240,11 @@ func (lh *LookupHash) MarshalJSON() ([]byte, error) {
 	return json.Marshal(lh.lkp)
 }
 
+// InvalidParamErrors satisifes the ParamValidating interface.
+func (lhu *LookupHash) InvalidParamErrors() []error {
+	return ValidateParams(lhu.params, &ParamValidationOpts{Params: lookupHashParams})
+}
+
 // unhashList unhashes a list of keyspace ids into []sqltypes.Value.
 func unhashList(ksids [][]byte) ([]sqltypes.Value, error) {
 	values := make([]sqltypes.Value, 0, len(ksids))
@@ -263,6 +268,7 @@ type LookupHashUnique struct {
 	name      string
 	writeOnly bool
 	lkp       lookupInternal
+	params    map[string]string
 }
 
 var _ LookupPlanable = (*LookupHashUnique)(nil)
@@ -278,23 +284,26 @@ var _ LookupPlanable = (*LookupHashUnique)(nil)
 //
 //	autocommit: setting this to "true" will cause deletes to be ignored.
 //	write_only: in this mode, Map functions return the full keyrange causing a full scatter.
-func newLookupHashUnique(name string, m map[string]string) (Vindex, []VindexWarning, error) {
-	lhu := &LookupHashUnique{name: name}
+func newLookupHashUnique(name string, m map[string]string) (Vindex, error) {
+	lhu := &LookupHashUnique{
+		name:   name,
+		params: m,
+	}
 
 	cc, err := parseCommonConfig(m)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	lhu.writeOnly, err = boolFromMap(m, "write_only")
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	// Don't allow upserts for unique vindexes.
 	if err := lhu.lkp.Init(m, cc.autocommit, false /* upsert */, cc.multiShardAutocommit); err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	return lhu, nil, nil
+	return lhu, nil
 }
 
 // String returns the name of the vindex.
@@ -429,4 +438,9 @@ func (lhu *LookupHashUnique) Query() (selQuery string, arguments []string) {
 // GetCommitOrder implements the LookupPlanable interface
 func (lhu *LookupHashUnique) GetCommitOrder() vtgatepb.CommitOrder {
 	return vtgatepb.CommitOrder_NORMAL
+}
+
+// InvalidParamErrors implements the ParamValidating interface.
+func (lhu *LookupHashUnique) InvalidParamErrors() []error {
+	return ValidateParams(lhu.params, &ParamValidationOpts{Params: lookupHashParams})
 }

@@ -26,19 +26,24 @@ import (
 )
 
 var (
-	_ SingleColumn = (*Binary)(nil)
-	_ Reversible   = (*Binary)(nil)
-	_ Hashing      = (*Binary)(nil)
+	_ SingleColumn    = (*Binary)(nil)
+	_ Reversible      = (*Binary)(nil)
+	_ Hashing         = (*Binary)(nil)
+	_ ParamValidating = (*Binary)(nil)
 )
 
 // Binary is a vindex that converts binary bits to a keyspace id.
 type Binary struct {
-	name string
+	name   string
+	params map[string]string
 }
 
 // newBinary creates a new Binary.
-func newBinary(name string, _ map[string]string) (Vindex, []VindexWarning, error) {
-	return &Binary{name: name}, nil, nil
+func newBinary(name string, params map[string]string) (Vindex, error) {
+	return &Binary{
+		name:   name,
+		params: params,
+	}, nil
 }
 
 // String returns the name of the vindex.
@@ -103,9 +108,11 @@ func (*Binary) ReverseMap(_ VCursor, ksids [][]byte) ([]sqltypes.Value, error) {
 	return reverseIds, nil
 }
 
+// InvalidParamErrors implements the ParamValidating interface.
+func (vind *Binary) InvalidParamErrors() []error {
+	return ValidateParams(vind.params, &ParamValidationOpts{})
+}
+
 func init() {
-	Register("binary", &vindexFactory{
-		create: newBinary,
-		params: nil,
-	})
+	Register("binary", newBinary)
 }

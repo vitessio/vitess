@@ -55,8 +55,8 @@ func (*cheapVindex) Map(ctx context.Context, vcursor VCursor, ids []sqltypes.Val
 	return nil, nil
 }
 
-func newCheapVindex(name string, _ map[string]string) (Vindex, []VindexWarning, error) {
-	return &cheapVindex{name: name}, nil, nil
+func newCheapVindex(name string, _ map[string]string) (Vindex, error) {
+	return &cheapVindex{name: name}, nil
 }
 
 var _ SingleColumn = (*stFU)(nil)
@@ -77,8 +77,8 @@ func (*stFU) Map(ctx context.Context, vcursor VCursor, ids []sqltypes.Value) ([]
 	return nil, nil
 }
 
-func newSTFU(name string, _ map[string]string) (Vindex, []VindexWarning, error) {
-	return &stFU{name: name}, nil, nil
+func newSTFU(name string, _ map[string]string) (Vindex, error) {
+	return &stFU{name: name}, nil
 }
 
 var _ SingleColumn = (*stFU)(nil)
@@ -99,8 +99,8 @@ func (*stFN) Map(ctx context.Context, vcursor VCursor, ids []sqltypes.Value) ([]
 	return nil, nil
 }
 
-func newSTFN(name string, _ map[string]string) (Vindex, []VindexWarning, error) {
-	return &stFN{name: name}, nil, nil
+func newSTFN(name string, _ map[string]string) (Vindex, error) {
+	return &stFN{name: name}, nil
 }
 
 var _ SingleColumn = (*stFN)(nil)
@@ -126,8 +126,8 @@ func (*stLN) Update(context.Context, VCursor, []sqltypes.Value, []byte, []sqltyp
 	return nil
 }
 
-func newSTLN(name string, _ map[string]string) (Vindex, []VindexWarning, error) {
-	return &stLN{name: name}, nil, nil
+func newSTLN(name string, _ map[string]string) (Vindex, error) {
+	return &stLN{name: name}, nil
 }
 
 var _ SingleColumn = (*stLN)(nil)
@@ -154,8 +154,8 @@ func (*stLU) Update(context.Context, VCursor, []sqltypes.Value, []byte, []sqltyp
 	return nil
 }
 
-func newSTLU(name string, _ map[string]string) (Vindex, []VindexWarning, error) {
-	return &stLU{name: name}, nil, nil
+func newSTLU(name string, _ map[string]string) (Vindex, error) {
+	return &stLU{name: name}, nil
 }
 
 var _ SingleColumn = (*stLO)(nil)
@@ -192,8 +192,8 @@ func (v *stLO) SetOwnerInfo(keyspace, table string, cols []sqlparser.IdentifierC
 	return nil
 }
 
-func newSTLO(name string, _ map[string]string) (Vindex, []VindexWarning, error) {
-	return &stLO{name: name}, nil, nil
+func newSTLO(name string, _ map[string]string) (Vindex, error) {
+	return &stLO{name: name}, nil
 }
 
 var _ SingleColumn = (*stLO)(nil)
@@ -216,45 +216,21 @@ func (*mcFU) Map(ctx context.Context, vcursor VCursor, rowsColValues [][]sqltype
 }
 func (*mcFU) PartialVindex() bool { return false }
 
-func newMCFU(name string, _ map[string]string) (Vindex, []VindexWarning, error) {
-	return &mcFU{name: name}, nil, nil
+func newMCFU(name string, _ map[string]string) (Vindex, error) {
+	return &mcFU{name: name}, nil
 }
 
 var _ MultiColumn = (*mcFU)(nil)
 
 func init() {
-	Register("cheap", &vindexFactory{
-		create: newCheapVindex,
-		params: nil,
-	})
-	Register("stfu", &vindexFactory{
-		create: newSTFU,
-		params: nil,
-	})
-	Register("stfn", &vindexFactory{
-		create: newSTFN,
-		params: nil,
-	})
-	Register("stln", &vindexFactory{
-		create: newSTLN,
-		params: nil,
-	})
-	Register("stlu", &vindexFactory{
-		create: newSTLU,
-		params: nil,
-	})
-	Register("stlo", &vindexFactory{
-		create: newSTLO,
-		params: nil,
-	})
-	Register("region_experimental_test", &vindexFactory{
-		create: newRegionExperimental,
-		params: regionExperimentalParams,
-	})
-	Register("mcfu", &vindexFactory{
-		create: newMCFU,
-		params: nil,
-	})
+	Register("cheap", newCheapVindex)
+	Register("stfu", newSTFU)
+	Register("stfn", newSTFN)
+	Register("stln", newSTLN)
+	Register("stlu", newSTLU)
+	Register("stlo", newSTLO)
+	Register("region_experimental_test", newRegionExperimental)
+	Register("mcfu", newMCFU)
 }
 
 func TestUnshardedVSchemaValid(t *testing.T) {
@@ -2525,11 +2501,12 @@ func TestVSchemaPBJSON(t *testing.T) {
 }
 
 func TestVSchemaJSON(t *testing.T) {
-	lkp, warnings, err := newLookupHash("n2", map[string]string{
+	lkp, err := newLookupHash("n2", map[string]string{
 		"from":  "f",
 		"table": "t",
 		"to":    "2",
 	})
+	warnings := lkp.(ParamValidating).InvalidParamErrors()
 	require.Empty(t, warnings)
 	require.NoError(t, err)
 

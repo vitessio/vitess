@@ -27,7 +27,11 @@ import (
 	"vitess.io/vitess/go/vt/key"
 )
 
-type testVindex struct{}
+type testVindex struct {
+	allowUnknownParams bool
+	knownParams        []*Param
+	params             map[string]string
+}
 
 func (v *testVindex) Cost() int {
 	return 0
@@ -45,31 +49,35 @@ func (v *testVindex) NeedsVCursor() bool {
 	return false
 }
 
+func (v *testVindex) InvalidParamErrors() []error {
+	return ValidateParams(v.params, &ParamValidationOpts{AllowUnknown: v.allowUnknownParams, Params: v.knownParams})
+}
+
 func init() {
-	Register("allow_unknown_params", &vindexFactory{
-		allowUnknownParams: true,
-		create: func(_ string, _ map[string]string) (Vindex, []VindexWarning, error) {
-			return &testVindex{}, nil, nil
-		},
-		params: []VindexParam{
-			&vindexParam{name: "option1"},
-			&vindexParam{name: "option2"},
-		},
+	Register("allow_unknown_params", func(_ string, params map[string]string) (Vindex, error) {
+		return &testVindex{
+			allowUnknownParams: true,
+			knownParams: []*Param{
+				{Name: "option1"},
+				{Name: "option2"},
+			},
+			params: params,
+		}, nil
 	})
-	Register("warn_unknown_params", &vindexFactory{
-		allowUnknownParams: false,
-		create: func(_ string, _ map[string]string) (Vindex, []VindexWarning, error) {
-			return &testVindex{}, nil, nil
-		},
-		params: []VindexParam{
-			&vindexParam{name: "option1"},
-			&vindexParam{name: "option2"},
-		},
+	Register("warn_unknown_params", func(_ string, params map[string]string) (Vindex, error) {
+		return &testVindex{
+			allowUnknownParams: false,
+			knownParams: []*Param{
+				{Name: "option1"},
+				{Name: "option2"},
+			},
+			params: params,
+		}, nil
 	})
 }
 
 func TestVindexMap(t *testing.T) {
-	ge, _, err := createRegionVindex(t, "region_experimental", "f1,f2", 1)
+	ge, err := createRegionVindex(t, "region_experimental", "f1,f2", 1)
 	assert.NoError(t, err)
 
 	got, err := Map(context.Background(), ge, nil, [][]sqltypes.Value{{
@@ -82,9 +90,9 @@ func TestVindexMap(t *testing.T) {
 	}
 	assert.Equal(t, want, got)
 
-	hash, warnings, err := CreateVindex("hash", "hash", nil)
+	hash, err := CreateVindex("hash", "hash", nil)
 	assert.NoError(t, err)
-	require.Empty(t, warnings)
+	require.Empty(t, hash.(ParamValidating).InvalidParamErrors())
 	got, err = Map(context.Background(), hash, nil, [][]sqltypes.Value{{
 		sqltypes.NewInt64(1),
 	}})
@@ -96,8 +104,9 @@ func TestVindexMap(t *testing.T) {
 }
 
 func TestVindexVerify(t *testing.T) {
-	ge, _, err := createRegionVindex(t, "region_experimental", "f1,f2", 1)
+	ge, err := createRegionVindex(t, "region_experimental", "f1,f2", 1)
 	assert.NoError(t, err)
+	require.Empty(t, ge.(ParamValidating).InvalidParamErrors())
 
 	got, err := Verify(context.Background(), ge, nil, [][]sqltypes.Value{{
 		sqltypes.NewInt64(1), sqltypes.NewInt64(1),
@@ -109,9 +118,9 @@ func TestVindexVerify(t *testing.T) {
 	want := []bool{true}
 	assert.Equal(t, want, got)
 
-	hash, warnings, err := CreateVindex("hash", "hash", nil)
+	hash, err := CreateVindex("hash", "hash", nil)
+	require.Empty(t, hash.(ParamValidating).InvalidParamErrors())
 	assert.NoError(t, err)
-	require.Empty(t, warnings)
 	got, err = Verify(context.Background(), hash, nil, [][]sqltypes.Value{{
 		sqltypes.NewInt64(1),
 	}}, [][]byte{
@@ -122,7 +131,7 @@ func TestVindexVerify(t *testing.T) {
 }
 
 func TestCreateVindexAllowUnknownParams(t *testing.T) {
-	vindex, warnings, err := CreateVindex(
+	vindex, err := CreateVindex(
 		"allow_unknown_params",
 		"allow_unknown_params",
 		map[string]string{
@@ -135,11 +144,10 @@ func TestCreateVindexAllowUnknownParams(t *testing.T) {
 
 	require.NotNil(t, vindex)
 	require.NoError(t, err)
-	require.Len(t, warnings, 0)
 }
 
 func TestCreateVindexWarnUnknownParams(t *testing.T) {
-	vindex, warnings, err := CreateVindex(
+	vindex, err := CreateVindex(
 		"warn_unknown_params",
 		"warn_unknown_params",
 		map[string]string{
@@ -153,6 +161,7 @@ func TestCreateVindexWarnUnknownParams(t *testing.T) {
 	require.NotNil(t, vindex)
 	require.NoError(t, err)
 
+	warnings := vindex.(ParamValidating).InvalidParamErrors()
 	require.Len(t, warnings, 2)
 	for _, msg := range []string{"unknown param 'option3'", "unknown param 'option4'"} {
 		if msg == warnings[0].Error() || msg == warnings[1].Error() {

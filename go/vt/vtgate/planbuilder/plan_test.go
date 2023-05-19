@@ -57,22 +57,6 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
-type vindexFactory struct {
-	create func(string, map[string]string) (vindexes.Vindex, []vindexes.VindexWarning, error)
-}
-
-func (f *vindexFactory) Create(name string, params map[string]string) (vindexes.Vindex, []vindexes.VindexWarning, error) {
-	return f.create(name, params)
-}
-
-func (f *vindexFactory) AllowUnknownParams() bool {
-	return true
-}
-
-func (f *vindexFactory) Params() []vindexes.VindexParam {
-	return nil
-}
-
 // hashIndex is a functional, unique Vindex.
 type hashIndex struct{ name string }
 
@@ -87,8 +71,8 @@ func (*hashIndex) Map(ctx context.Context, vcursor vindexes.VCursor, ids []sqlty
 	return nil, nil
 }
 
-func newHashIndex(name string, _ map[string]string) (vindexes.Vindex, []vindexes.VindexWarning, error) {
-	return &hashIndex{name: name}, nil, nil
+func newHashIndex(name string, _ map[string]string) (vindexes.Vindex, error) {
+	return &hashIndex{name: name}, nil
 }
 
 // lookupIndex is a unique Vindex, and satisfies Lookup.
@@ -114,8 +98,8 @@ func (*lookupIndex) Update(context.Context, vindexes.VCursor, []sqltypes.Value, 
 	return nil
 }
 
-func newLookupIndex(name string, _ map[string]string) (vindexes.Vindex, []vindexes.VindexWarning, error) {
-	return &lookupIndex{name: name}, nil, nil
+func newLookupIndex(name string, _ map[string]string) (vindexes.Vindex, error) {
+	return &lookupIndex{name: name}, nil
 }
 
 var _ vindexes.Lookup = (*lookupIndex)(nil)
@@ -152,8 +136,8 @@ func (*nameLkpIndex) MapResult([]sqltypes.Value, []*sqltypes.Result) ([]key.Dest
 	return nil, nil
 }
 
-func newNameLkpIndex(name string, _ map[string]string) (vindexes.Vindex, []vindexes.VindexWarning, error) {
-	return &nameLkpIndex{name: name}, nil, nil
+func newNameLkpIndex(name string, _ map[string]string) (vindexes.Vindex, error) {
+	return &nameLkpIndex{name: name}, nil
 }
 
 var _ vindexes.Vindex = (*nameLkpIndex)(nil)
@@ -183,8 +167,8 @@ func (*costlyIndex) Update(context.Context, vindexes.VCursor, []sqltypes.Value, 
 	return nil
 }
 
-func newCostlyIndex(name string, _ map[string]string) (vindexes.Vindex, []vindexes.VindexWarning, error) {
-	return &costlyIndex{name: name}, nil, nil
+func newCostlyIndex(name string, _ map[string]string) (vindexes.Vindex, error) {
+	return &costlyIndex{name: name}, nil
 }
 
 var _ vindexes.Vindex = (*costlyIndex)(nil)
@@ -195,8 +179,8 @@ type multiColIndex struct {
 	name string
 }
 
-func newMultiColIndex(name string, _ map[string]string) (vindexes.Vindex, []vindexes.VindexWarning, error) {
-	return &multiColIndex{name: name}, nil, nil
+func newMultiColIndex(name string, _ map[string]string) (vindexes.Vindex, error) {
+	return &multiColIndex{name: name}, nil
 }
 
 var _ vindexes.MultiColumn = (*multiColIndex)(nil)
@@ -222,11 +206,11 @@ func (m *multiColIndex) PartialVindex() bool {
 }
 
 func init() {
-	vindexes.Register("hash_test", &vindexFactory{create: newHashIndex})
-	vindexes.Register("lookup_test", &vindexFactory{create: newLookupIndex})
-	vindexes.Register("name_lkp_test", &vindexFactory{create: newNameLkpIndex})
-	vindexes.Register("costly", &vindexFactory{create: newCostlyIndex})
-	vindexes.Register("multiCol_test", &vindexFactory{create: newMultiColIndex})
+	vindexes.Register("hash_test", newHashIndex)
+	vindexes.Register("lookup_test", newLookupIndex)
+	vindexes.Register("name_lkp_test", newNameLkpIndex)
+	vindexes.Register("costly", newCostlyIndex)
+	vindexes.Register("multiCol_test", newMultiColIndex)
 }
 
 func makeTestOutput(t *testing.T) string {

@@ -25,8 +25,10 @@ import (
 )
 
 var (
-	_        Vindex = (*Null)(nil)
-	nullksid        = []byte{0}
+	_ Vindex          = (*Null)(nil)
+	_ ParamValidating = (*Null)(nil)
+
+	nullksid = []byte{0}
 )
 
 // Null defines a vindex that always return 0. It's Unique and
@@ -36,12 +38,16 @@ var (
 // Unlike other vindexes, this one will work even for NULL input values. This
 // will allow you to keep MySQL auto-inc columns unchanged.
 type Null struct {
-	name string
+	name   string
+	params map[string]string
 }
 
 // newNull creates a new Null.
-func newNull(name string, _ map[string]string) (Vindex, []VindexWarning, error) {
-	return &Null{name: name}, nil, nil
+func newNull(name string, m map[string]string) (Vindex, error) {
+	return &Null{
+		name:   name,
+		params: m,
+	}, nil
 }
 
 // String returns the name of the vindex.
@@ -82,9 +88,11 @@ func (vind *Null) Verify(ctx context.Context, vcursor VCursor, ids []sqltypes.Va
 	return out, nil
 }
 
+// InvalidParamErrors implements the ParamValidating interface.
+func (vind *Null) InvalidParamErrors() []error {
+	return ValidateParams(vind.params, &ParamValidationOpts{})
+}
+
 func init() {
-	Register("null", &vindexFactory{
-		create: newNull,
-		params: nil,
-	})
+	Register("null", newNull)
 }
