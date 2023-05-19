@@ -842,6 +842,15 @@ message MoveTablesCreateRequest {
   bool auto_start = 16;
 }
 
+message MoveTablesCompleteRequest {
+  string workflow = 1;
+  string target_keyspace = 3;
+  bool keep_data = 4;
+  bool keep_routing_rules = 5;
+  bool rename_tables = 6;
+  bool dry_run = 7;
+}
+
 message MoveTablesCreateResponse {
   message TabletInfo {
     string tablet = 1;
@@ -851,6 +860,10 @@ message MoveTablesCreateResponse {
   }
   string summary = 1;
   repeated TabletInfo details = 2;
+}
+
+message MoveTablesCompleteResponse {
+  string summary = 1;
 }
 
 message PingTabletRequest {

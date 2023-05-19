@@ -51690,6 +51690,133 @@ export namespace vtctldata {
         public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
+    /** Properties of a MoveTablesCompleteRequest. */
+    interface IMoveTablesCompleteRequest {
+
+        /** MoveTablesCompleteRequest workflow */
+        workflow?: (string|null);
+
+        /** MoveTablesCompleteRequest target_keyspace */
+        target_keyspace?: (string|null);
+
+        /** MoveTablesCompleteRequest keep_data */
+        keep_data?: (boolean|null);
+
+        /** MoveTablesCompleteRequest keep_routing_rules */
+        keep_routing_rules?: (boolean|null);
+
+        /** MoveTablesCompleteRequest rename_tables */
+        rename_tables?: (boolean|null);
+
+        /** MoveTablesCompleteRequest dry_run */
+        dry_run?: (boolean|null);
+    }
+
+    /** Represents a MoveTablesCompleteRequest. */
+    class MoveTablesCompleteRequest implements IMoveTablesCompleteRequest {
+
+        /**
+         * Constructs a new MoveTablesCompleteRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IMoveTablesCompleteRequest);
+
+        /** MoveTablesCompleteRequest workflow. */
+        public workflow: string;
+
+        /** MoveTablesCompleteRequest target_keyspace. */
+        public target_keyspace: string;
+
+        /** MoveTablesCompleteRequest keep_data. */
+        public keep_data: boolean;
+
+        /** MoveTablesCompleteRequest keep_routing_rules. */
+        public keep_routing_rules: boolean;
+
+        /** MoveTablesCompleteRequest rename_tables. */
+        public rename_tables: boolean;
+
+        /** MoveTablesCompleteRequest dry_run. */
+        public dry_run: boolean;
+
+        /**
+         * Creates a new MoveTablesCompleteRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns MoveTablesCompleteRequest instance
+         */
+        public static create(properties?: vtctldata.IMoveTablesCompleteRequest): vtctldata.MoveTablesCompleteRequest;
+
+        /**
+         * Encodes the specified MoveTablesCompleteRequest message. Does not implicitly {@link vtctldata.MoveTablesCompleteRequest.verify|verify} messages.
+         * @param message MoveTablesCompleteRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IMoveTablesCompleteRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified MoveTablesCompleteRequest message, length delimited. Does not implicitly {@link vtctldata.MoveTablesCompleteRequest.verify|verify} messages.
+         * @param message MoveTablesCompleteRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IMoveTablesCompleteRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a MoveTablesCompleteRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns MoveTablesCompleteRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.MoveTablesCompleteRequest;
+
+        /**
+         * Decodes a MoveTablesCompleteRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns MoveTablesCompleteRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.MoveTablesCompleteRequest;
+
+        /**
+         * Verifies a MoveTablesCompleteRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a MoveTablesCompleteRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns MoveTablesCompleteRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.MoveTablesCompleteRequest;
+
+        /**
+         * Creates a plain object from a MoveTablesCompleteRequest message. Also converts values to other types if specified.
+         * @param message MoveTablesCompleteRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.MoveTablesCompleteRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this MoveTablesCompleteRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for MoveTablesCompleteRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
     /** Properties of a MoveTablesCreateResponse. */
     interface IMoveTablesCreateResponse {
 
@@ -51897,6 +52024,103 @@ export namespace vtctldata {
              */
             public static getTypeUrl(typeUrlPrefix?: string): string;
         }
+    }
+
+    /** Properties of a MoveTablesCompleteResponse. */
+    interface IMoveTablesCompleteResponse {
+
+        /** MoveTablesCompleteResponse summary */
+        summary?: (string|null);
+    }
+
+    /** Represents a MoveTablesCompleteResponse. */
+    class MoveTablesCompleteResponse implements IMoveTablesCompleteResponse {
+
+        /**
+         * Constructs a new MoveTablesCompleteResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IMoveTablesCompleteResponse);
+
+        /** MoveTablesCompleteResponse summary. */
+        public summary: string;
+
+        /**
+         * Creates a new MoveTablesCompleteResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns MoveTablesCompleteResponse instance
+         */
+        public static create(properties?: vtctldata.IMoveTablesCompleteResponse): vtctldata.MoveTablesCompleteResponse;
+
+        /**
+         * Encodes the specified MoveTablesCompleteResponse message. Does not implicitly {@link vtctldata.MoveTablesCompleteResponse.verify|verify} messages.
+         * @param message MoveTablesCompleteResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IMoveTablesCompleteResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified MoveTablesCompleteResponse message, length delimited. Does not implicitly {@link vtctldata.MoveTablesCompleteResponse.verify|verify} messages.
+         * @param message MoveTablesCompleteResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IMoveTablesCompleteResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a MoveTablesCompleteResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns MoveTablesCompleteResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.MoveTablesCompleteResponse;
+
+        /**
+         * Decodes a MoveTablesCompleteResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns MoveTablesCompleteResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.MoveTablesCompleteResponse;
+
+        /**
+         * Verifies a MoveTablesCompleteResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a MoveTablesCompleteResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns MoveTablesCompleteResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.MoveTablesCompleteResponse;
+
+        /**
+         * Creates a plain object from a MoveTablesCompleteResponse message. Also converts values to other types if specified.
+         * @param message MoveTablesCompleteResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.MoveTablesCompleteResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this MoveTablesCompleteResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for MoveTablesCompleteResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a PingTabletRequest. */

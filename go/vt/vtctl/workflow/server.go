@@ -1154,6 +1154,51 @@ func (s *Server) MoveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 	return response, nil
 }
 
+// MoveTablesComplete is part of the vtctlservicepb.VtctldServer interface.
+// It cleans up a successful MoveTables workflow and its related artifacts.
+func (s *Server) MoveTablesComplete(ctx context.Context, req *vtctldatapb.MoveTablesCompleteRequest) (*vtctldatapb.MoveTablesCompleteResponse, error) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Errorf("WorkflowSwitchTraffic failed: %v", r)
+			debug.PrintStack()
+		}
+	}()
+	span, ctx := trace.NewSpan(ctx, "workflow.Server.MoveTablesComplete")
+	defer span.Finish()
+
+	ts, state, err := s.getWorkflowState(ctx, req.TargetKeyspace, req.Workflow)
+	if err != nil {
+		return nil, err
+	}
+
+	var results *[]string
+
+	if state.WorkflowType == TypeMigrate {
+		results, err = s.finalizeMigrateWorkflow(ctx, req.TargetKeyspace, req.Workflow, strings.Join(ts.tables, ","),
+			false, req.KeepData, req.KeepRoutingRules, req.DryRun)
+		if err != nil {
+			return nil, vterrors.Wrapf(err, "failed to finalize the %s workflow in the %s keyspace",
+				req.Workflow, req.TargetKeyspace)
+		}
+		return &vtctldatapb.MoveTablesCompleteResponse{Summary: strings.Join(*results, "\r")}, nil
+	}
+
+	if !state.WritesSwitched || len(state.ReplicaCellsNotSwitched) > 0 || len(state.RdonlyCellsNotSwitched) > 0 {
+		return nil, ErrWorkflowNotFullySwitched
+	}
+	var renameTable TableRemovalType
+	if req.RenameTables {
+		renameTable = RenameTable
+	} else {
+		renameTable = DropTable
+	}
+	if results, err = s.dropSources(ctx, ts, renameTable, req.KeepData, req.KeepRoutingRules, false, req.DryRun); err != nil {
+		return nil, err
+	}
+
+	return &vtctldatapb.MoveTablesCompleteResponse{Summary: strings.Join(*results, "\r")}, nil
+}
+
 // WorkflowCreate is part of the vtctlservicepb.VtctldServer interface.
 // It passes on the request to the target primary tablets that are
 // participating in the given workflow.
@@ -1875,6 +1920,88 @@ func (s *Server) dropRelatedArtifacts(ctx context.Context, keepRoutingRules bool
 	return nil
 }
 
+// dropSources cleans up source tables, shards and denied tables after a
+// MoveTables/Reshard is completed.
+func (s *Server) dropSources(ctx context.Context, ts *trafficSwitcher, removalType TableRemovalType, keepData, keepRoutingRules, force, dryRun bool) (*[]string, error) {
+	var (
+		sw  iswitcher
+		err error
+	)
+	if dryRun {
+		sw = &switcherDryRun{ts: ts, drLog: NewLogRecorder()}
+	} else {
+		sw = &switcher{ts: ts, s: s}
+	}
+	var tctx context.Context
+	tctx, sourceUnlock, lockErr := sw.lockKeyspace(ctx, ts.SourceKeyspaceName(), "DropSources")
+	if lockErr != nil {
+		ts.Logger().Errorf("Source LockKeyspace failed: %v", lockErr)
+		return nil, lockErr
+	}
+	defer sourceUnlock(&err)
+	ctx = tctx
+	if ts.TargetKeyspaceName() != ts.SourceKeyspaceName() {
+		tctx, targetUnlock, lockErr := sw.lockKeyspace(ctx, ts.TargetKeyspaceName(), "DropSources")
+		if lockErr != nil {
+			ts.Logger().Errorf("Target LockKeyspace failed: %v", lockErr)
+			return nil, lockErr
+		}
+		defer targetUnlock(&err)
+		ctx = tctx
+	}
+	if !force {
+		if err := sw.validateWorkflowHasCompleted(ctx); err != nil {
+			ts.Logger().Errorf("Workflow has not completed, cannot DropSources: %v", err)
+			return nil, err
+		}
+	}
+	if !keepData {
+		switch ts.MigrationType() {
+		case binlogdatapb.MigrationType_TABLES:
+			log.Infof("Deleting tables")
+			if err := sw.removeSourceTables(ctx, removalType); err != nil {
+				return nil, err
+			}
+			if err := sw.dropSourceDeniedTables(ctx); err != nil {
+				return nil, err
+			}
+
+		case binlogdatapb.MigrationType_SHARDS:
+			log.Infof("Removing shards")
+			if err := sw.dropSourceShards(ctx); err != nil {
+				return nil, err
+			}
+		}
+	}
+	if err := s.dropArtifacts(ctx, keepRoutingRules, sw); err != nil {
+		return nil, err
+	}
+	if err := ts.TopoServer().RebuildSrvVSchema(ctx, nil); err != nil {
+		return nil, err
+	}
+
+	return sw.logs(), nil
+}
+
+func (s *Server) dropArtifacts(ctx context.Context, keepRoutingRules bool, sw iswitcher) error {
+	if err := sw.dropSourceReverseVReplicationStreams(ctx); err != nil {
+		return err
+	}
+	if err := sw.dropTargetVReplicationStreams(ctx); err != nil {
+		return err
+	}
+	if !keepRoutingRules {
+		if err := sw.deleteRoutingRules(ctx); err != nil {
+			return err
+		}
+		if err := sw.deleteShardRoutingRules(ctx); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 // DeleteShard will do all the necessary changes in the topology server
 // to entirely remove a shard.
 func (s *Server) DeleteShard(ctx context.Context, keyspace, shard string, recursive, evenIfServing bool) error {
@@ -2063,12 +2190,6 @@ func (s *Server) finalizeMigrateWorkflow(ctx context.Context, targetKeyspace, wo
 
 // SwitchTraffic switches traffic in the direction passed for specified tablet_types
 func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.WorkflowSwitchTrafficRequest) (*vtctldatapb.WorkflowSwitchTrafficResponse, error) {
-	defer func() {
-		if r := recover(); r != nil {
-			log.Errorf("WorkflowSwitchTraffic failed: %v", r)
-			debug.PrintStack()
-		}
-	}()
 	var (
 		dryRunResults                     []string
 		rdDryRunResults, wrDryRunResults  *[]string

@@ -264,6 +264,9 @@ type VtctldClient interface {
 	// MoveTablesCreate creates a workflow which moves one or more tables from a
 	// source keyspace to a target keyspace.
 	MoveTablesCreate(ctx context.Context, in *vtctldata.MoveTablesCreateRequest, opts ...grpc.CallOption) (*vtctldata.MoveTablesCreateResponse, error)
+	// MoveTablesComplete completes the move and cleans up the workflow and
+	// its related artifacts.
+	MoveTablesComplete(ctx context.Context, in *vtctldata.MoveTablesCompleteRequest, opts ...grpc.CallOption) (*vtctldata.MoveTablesCompleteResponse, error)
 	// PingTablet checks that the specified tablet is awake and responding to RPCs.
 	// This command can be blocked by other in-flight operations.
 	PingTablet(ctx context.Context, in *vtctldata.PingTabletRequest, opts ...grpc.CallOption) (*vtctldata.PingTabletResponse, error)
@@ -887,6 +890,15 @@ func (c *vtctldClient) MoveTablesCreate(ctx context.Context, in *vtctldata.MoveT
 	return out, nil
 }
 
+func (c *vtctldClient) MoveTablesComplete(ctx context.Context, in *vtctldata.MoveTablesCompleteRequest, opts ...grpc.CallOption) (*vtctldata.MoveTablesCompleteResponse, error) {
+	out := new(vtctldata.MoveTablesCompleteResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/MoveTablesComplete", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *vtctldClient) PingTablet(ctx context.Context, in *vtctldata.PingTabletRequest, opts ...grpc.CallOption) (*vtctldata.PingTabletResponse, error) {
 	out := new(vtctldata.PingTabletResponse)
 	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/PingTablet", in, out, opts...)
@@ -1420,6 +1432,9 @@ type VtctldServer interface {
 	// MoveTablesCreate creates a workflow which moves one or more tables from a
 	// source keyspace to a target keyspace.
 	MoveTablesCreate(context.Context, *vtctldata.MoveTablesCreateRequest) (*vtctldata.MoveTablesCreateResponse, error)
+	// MoveTablesComplete completes the move and cleans up the workflow and
+	// its related artifacts.
+	MoveTablesComplete(context.Context, *vtctldata.MoveTablesCompleteRequest) (*vtctldata.MoveTablesCompleteResponse, error)
 	// PingTablet checks that the specified tablet is awake and responding to RPCs.
 	// This command can be blocked by other in-flight operations.
 	PingTablet(context.Context, *vtctldata.PingTabletRequest) (*vtctldata.PingTabletResponse, error)
@@ -1711,6 +1726,9 @@ func (UnimplementedVtctldServer) InitShardPrimary(context.Context, *vtctldata.In
 }
 func (UnimplementedVtctldServer) MoveTablesCreate(context.Context, *vtctldata.MoveTablesCreateRequest) (*vtctldata.MoveTablesCreateResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method MoveTablesCreate not implemented")
+}
+func (UnimplementedVtctldServer) MoveTablesComplete(context.Context, *vtctldata.MoveTablesCompleteRequest) (*vtctldata.MoveTablesCompleteResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method MoveTablesComplete not implemented")
 }
 func (UnimplementedVtctldServer) PingTablet(context.Context, *vtctldata.PingTabletRequest) (*vtctldata.PingTabletResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method PingTablet not implemented")
@@ -2703,6 +2721,24 @@ func _Vtctld_MoveTablesCreate_Handler(srv interface{}, ctx context.Context, dec 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Vtctld_MoveTablesComplete_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.MoveTablesCompleteRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).MoveTablesComplete(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/MoveTablesComplete",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).MoveTablesComplete(ctx, req.(*vtctldata.MoveTablesCompleteRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Vtctld_PingTablet_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(vtctldata.PingTabletRequest)
 	if err := dec(in); err != nil {
@@ -3648,6 +3684,10 @@ var Vtctld_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "MoveTablesCreate",
 			Handler:    _Vtctld_MoveTablesCreate_Handler,
+		},
+		{
+			MethodName: "MoveTablesComplete",
+			Handler:    _Vtctld_MoveTablesComplete_Handler,
 		},
 		{
 			MethodName: "PingTablet",

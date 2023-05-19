@@ -346,6 +346,11 @@ func (client *localVtctldClient) InitShardPrimary(ctx context.Context, in *vtctl
 	return client.s.InitShardPrimary(ctx, in)
 }
 
+// MoveTablesComplete is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) MoveTablesComplete(ctx context.Context, in *vtctldatapb.MoveTablesCompleteRequest, opts ...grpc.CallOption) (*vtctldatapb.MoveTablesCompleteResponse, error) {
+	return client.s.MoveTablesComplete(ctx, in)
+}
+
 // MoveTablesCreate is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) MoveTablesCreate(ctx context.Context, in *vtctldatapb.MoveTablesCreateRequest, opts ...grpc.CallOption) (*vtctldatapb.MoveTablesCreateResponse, error) {
 	return client.s.MoveTablesCreate(ctx, in)

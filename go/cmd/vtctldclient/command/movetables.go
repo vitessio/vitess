@@ -61,6 +61,17 @@ See the --help output for each command for more details.`,
 		RunE:                  commandMoveTablesCancel,
 	}
 
+	// MoveTablesComplete makes a MoveTablesComplete gRPC call to a vtctld.
+	MoveTablesComplete = &cobra.Command{
+		Use:                   "complete",
+		Short:                 "Complete a MoveTables VReplication workflow",
+		Example:               `vtctldclient --server=localhost:15999 MoveTables --workflow "commerce2customer" --target-keyspace "customer" complete`,
+		DisableFlagsInUseLine: true,
+		Aliases:               []string{"Complete"},
+		Args:                  cobra.NoArgs,
+		RunE:                  commandMoveTablesComplete,
+	}
+
 	// MoveTablesCreate makes a MoveTablesCreate gRPC call to a vtctld.
 	MoveTablesCreate = &cobra.Command{
 		Use:                   "create",
@@ -196,6 +207,12 @@ var (
 		KeepData         bool
 		KeepRoutingRules bool
 	}{}
+	moveTablesCompleteOptions = struct {
+		KeepData         bool
+		KeepRoutingRules bool
+		RenameTables     bool
+		DryRun           bool
+	}{}
 	moveTablesCreateOptions = struct {
 		Workflow            string
 		SourceKeyspace      string
@@ -282,6 +299,31 @@ func commandMoveTablesCancel(cmd *cobra.Command, args []string) error {
 	sort.Slice(resp.Details, func(i, j int) bool {
 		return resp.Details[i].Tablet < resp.Details[j].Tablet
 	})
+
+	data, err := cli.MarshalJSON(resp)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("%s\n", data)
+
+	return nil
+}
+
+func commandMoveTablesComplete(cmd *cobra.Command, args []string) error {
+	cli.FinishedParsing(cmd)
+
+	req := &vtctldatapb.MoveTablesCompleteRequest{
+		Workflow:         moveTablesOptions.Workflow,
+		TargetKeyspace:   moveTablesOptions.TargetKeyspace,
+		KeepData:         moveTablesCompleteOptions.KeepData,
+		KeepRoutingRules: moveTablesCompleteOptions.KeepRoutingRules,
+		RenameTables:     moveTablesCompleteOptions.RenameTables,
+	}
+	resp, err := client.MoveTablesComplete(commandCtx, req)
+	if err != nil {
+		return err
+	}
 
 	data, err := cli.MarshalJSON(resp)
 	if err != nil {
@@ -403,6 +445,12 @@ func init() {
 	MoveTablesCancel.Flags().BoolVar(&moveTablesCancelOptions.KeepData, "keep-data", false, "Keep the partially copied table data from the MoveTables workflow in the target keyspace")
 	MoveTablesCancel.Flags().BoolVar(&moveTablesCancelOptions.KeepRoutingRules, "keep-routing-rules", false, "Keep the routing rules created for the MoveTables workflow")
 	MoveTables.AddCommand(MoveTablesCancel)
+
+	MoveTablesComplete.Flags().BoolVar(&moveTablesCompleteOptions.KeepData, "keep-data", false, "Keep the original source table data that was copied by the MoveTables workflow")
+	MoveTablesComplete.Flags().BoolVar(&moveTablesCompleteOptions.KeepRoutingRules, "keep-routing-rules", false, "Keep the routing rules in place that direct table traffic from the source keyspace to the target keyspace of the MoveTables workflow")
+	MoveTablesComplete.Flags().BoolVar(&moveTablesCompleteOptions.RenameTables, "rename-tables", false, "Keep the original source table data that was copied by the MoveTables workflow, but rename each table to '_<tablename>_old'")
+	MoveTablesComplete.Flags().BoolVar(&moveTablesCompleteOptions.DryRun, "dry-run", false, "Print the actions that would be taken and report any known errors that would have occurred")
+	MoveTables.AddCommand(MoveTablesComplete)
 
 	MoveTablesCreate.PersistentFlags().StringVar(&moveTablesCreateOptions.SourceKeyspace, "source-keyspace", "", "Keyspace where the tables are being moved from (required)")
 	MoveTablesCreate.MarkPersistentFlagRequired("source-keyspace")

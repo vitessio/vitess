@@ -2273,6 +2273,23 @@ func (s *VtctldServer) MoveTablesCreate(ctx context.Context, req *vtctldatapb.Mo
 	return resp, err
 }
 
+// MoveTablesComplete is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) MoveTablesComplete(ctx context.Context, req *vtctldatapb.MoveTablesCompleteRequest) (resp *vtctldatapb.MoveTablesCompleteResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.MoveTablesComplete")
+	defer span.Finish()
+
+	defer panicHandler(&err)
+
+	span.Annotate("keyspace", req.TargetKeyspace)
+	span.Annotate("workflow", req.Workflow)
+	span.Annotate("keep_data", req.KeepData)
+	span.Annotate("keep_routing_rules", req.KeepRoutingRules)
+	span.Annotate("dry_run", req.DryRun)
+
+	resp, err = s.ws.MoveTablesComplete(ctx, req)
+	return resp, err
+}
+
 // PingTablet is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) PingTablet(ctx context.Context, req *vtctldatapb.PingTabletRequest) (resp *vtctldatapb.PingTabletResponse, err error) {
 	span, ctx := trace.NewSpan(ctx, "VtctldServer.PingTablet")

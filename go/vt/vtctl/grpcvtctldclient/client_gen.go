@@ -434,6 +434,15 @@ func (client *gRPCVtctldClient) InitShardPrimary(ctx context.Context, in *vtctld
 	return client.c.InitShardPrimary(ctx, in, opts...)
 }
 
+// MoveTablesComplete is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) MoveTablesComplete(ctx context.Context, in *vtctldatapb.MoveTablesCompleteRequest, opts ...grpc.CallOption) (*vtctldatapb.MoveTablesCompleteResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.MoveTablesComplete(ctx, in, opts...)
+}
+
 // MoveTablesCreate is part of the vtctlservicepb.VtctldClient interface.
 func (client *gRPCVtctldClient) MoveTablesCreate(ctx context.Context, in *vtctldatapb.MoveTablesCreateRequest, opts ...grpc.CallOption) (*vtctldatapb.MoveTablesCreateResponse, error) {
 	if client.c == nil {
