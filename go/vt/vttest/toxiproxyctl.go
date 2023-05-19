@@ -75,7 +75,7 @@ func NewToxiproxyctl(binary string, apiPort, mysqlPort int, mysqlctl *Mysqlctl, 
 		return nil, vterrors.Wrap(err, "failed to get a modified init db sql")
 	}
 	newInitFile := path.Join(mysqlctl.Directory, "init_db_toxiproxyctl.sql")
-	err = os.WriteFile(newInitFile, []byte(sql), 0666)
+	err = os.WriteFile(newInitFile, []byte(sql), 0600)
 	if err != nil {
 		return nil, vterrors.Wrap(err, "failed to write a modified init db file")
 	}
