@@ -794,8 +794,10 @@ var defaultConfig = TabletConfig{
 	SchemaReloadIntervalSeconds:             flagutil.NewDeprecatedFloat64Seconds("queryserver-config-schema-reload-time", 30*time.Minute),
 	SignalSchemaChangeReloadIntervalSeconds: flagutil.NewDeprecatedFloat64Seconds("queryserver-config-schema-change-signal-interval", 5*time.Second),
 	// SignalSchemaChangeReloadTimeout is used for the signal reload operation where we have to query mysqld.
-	// The queries during the signal reload operation are expected to be little load, so this default value is considered generous to complete.
-	SignalSchemaChangeReloadTimeout: 10 * time.Second,
+	// The queries during the signal reload operation are typically expected to have low load,
+	// but in busy systems with many tables, some queries may take longer than anticipated.
+	// Therefore, the default value should be generous to ensure completion.
+	SignalSchemaChangeReloadTimeout: 30 * time.Second,
 	MessagePostponeParallelism:      4,
 	DeprecatedCacheResultFields:     true,
 	SignalWhenSchemaChange:          true,
