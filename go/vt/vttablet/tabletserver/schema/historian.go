@@ -34,7 +34,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
-const getInitialSchemaVersions = "select id, pos, ddl, time_updated, schemax from %s.schema_version where from_unixtime(time_updated) > %d order by id asc"
+const getInitialSchemaVersions = "select id, pos, ddl, time_updated, schemax from %s.schema_version where time_updated > %d order by id asc"
 const getNextSchemaVersions = "select id, pos, ddl, time_updated, schemax from %s.schema_version where id > %d order by id asc"
 
 // vl defines the glog verbosity level for the package

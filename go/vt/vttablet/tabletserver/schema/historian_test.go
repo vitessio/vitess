@@ -212,7 +212,7 @@ func TestHistorianPurgeOldSchemas(t *testing.T) {
 	tables := make(map[string]*binlogdatapb.MinimalTable)
 	tables["t1"] = table
 	blob1 = getDbSchemaBlob(t, tables)
-	db.AddQueryPattern("select id, pos, ddl, time_updated, schemax from _vt\\.schema_version where from_unixtime\\(time_updated\\) \\>.*", &sqltypes.Result{
+	db.AddQueryPattern("select id, pos, ddl, time_updated, schemax from _vt\\.schema_version where time_updated \\>.*", &sqltypes.Result{
 		Fields: fields,
 		Rows: [][]sqltypes.Value{
 			{sqltypes.NewInt32(1), sqltypes.NewVarBinary(gtid1), sqltypes.NewVarBinary(ddl1), sqltypes.NewInt32(int32(ts1.Unix())), sqltypes.NewVarBinary(blob1)},
