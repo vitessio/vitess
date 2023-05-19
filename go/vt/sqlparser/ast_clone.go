@@ -59,6 +59,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfArgument(in)
 	case *ArgumentLessWindowExpr:
 		return CloneRefOfArgumentLessWindowExpr(in)
+	case *AssignmentExpr:
+		return CloneRefOfAssignmentExpr(in)
 	case *AutoIncSpec:
 		return CloneRefOfAutoIncSpec(in)
 	case *Avg:
@@ -277,6 +279,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfLimit(in)
 	case *LineStringExpr:
 		return CloneRefOfLineStringExpr(in)
+	case *LinestrPropertyFuncExpr:
+		return CloneRefOfLinestrPropertyFuncExpr(in)
 	case ListArg:
 		return in
 	case *Literal:
@@ -367,6 +371,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfPerformanceSchemaFuncExpr(in)
 	case *PointExpr:
 		return CloneRefOfPointExpr(in)
+	case *PointPropertyFuncExpr:
+		return CloneRefOfPointPropertyFuncExpr(in)
 	case *PolygonExpr:
 		return CloneRefOfPolygonExpr(in)
 	case *PrepareStmt:
@@ -725,6 +731,17 @@ func CloneRefOfArgumentLessWindowExpr(n *ArgumentLessWindowExpr) *ArgumentLessWi
 	}
 	out := *n
 	out.OverClause = CloneRefOfOverClause(n.OverClause)
+	return &out
+}
+
+// CloneRefOfAssignmentExpr creates a deep clone of the input.
+func CloneRefOfAssignmentExpr(n *AssignmentExpr) *AssignmentExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Left = CloneExpr(n.Left)
+	out.Right = CloneExpr(n.Right)
 	return &out
 }
 
@@ -1909,6 +1926,17 @@ func CloneRefOfLineStringExpr(n *LineStringExpr) *LineStringExpr {
 	return &out
 }
 
+// CloneRefOfLinestrPropertyFuncExpr creates a deep clone of the input.
+func CloneRefOfLinestrPropertyFuncExpr(n *LinestrPropertyFuncExpr) *LinestrPropertyFuncExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Linestring = CloneExpr(n.Linestring)
+	out.PropertyDefArg = CloneExpr(n.PropertyDefArg)
+	return &out
+}
+
 // CloneRefOfLiteral creates a deep clone of the input.
 func CloneRefOfLiteral(n *Literal) *Literal {
 	if n == nil {
@@ -2364,6 +2392,17 @@ func CloneRefOfPointExpr(n *PointExpr) *PointExpr {
 	out := *n
 	out.XCordinate = CloneExpr(n.XCordinate)
 	out.YCordinate = CloneExpr(n.YCordinate)
+	return &out
+}
+
+// CloneRefOfPointPropertyFuncExpr creates a deep clone of the input.
+func CloneRefOfPointPropertyFuncExpr(n *PointPropertyFuncExpr) *PointPropertyFuncExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Point = CloneExpr(n.Point)
+	out.ValueToSet = CloneExpr(n.ValueToSet)
 	return &out
 }
 
@@ -3459,6 +3498,8 @@ func CloneCallable(in Callable) Callable {
 		return CloneRefOfLagLeadExpr(in)
 	case *LineStringExpr:
 		return CloneRefOfLineStringExpr(in)
+	case *LinestrPropertyFuncExpr:
+		return CloneRefOfLinestrPropertyFuncExpr(in)
 	case *LocateExpr:
 		return CloneRefOfLocateExpr(in)
 	case *MatchExpr:
@@ -3485,6 +3526,8 @@ func CloneCallable(in Callable) Callable {
 		return CloneRefOfPerformanceSchemaFuncExpr(in)
 	case *PointExpr:
 		return CloneRefOfPointExpr(in)
+	case *PointPropertyFuncExpr:
+		return CloneRefOfPointPropertyFuncExpr(in)
 	case *PolygonExpr:
 		return CloneRefOfPolygonExpr(in)
 	case *RegexpInstrExpr:
@@ -3623,6 +3666,8 @@ func CloneExpr(in Expr) Expr {
 		return CloneRefOfArgument(in)
 	case *ArgumentLessWindowExpr:
 		return CloneRefOfArgumentLessWindowExpr(in)
+	case *AssignmentExpr:
+		return CloneRefOfAssignmentExpr(in)
 	case *Avg:
 		return CloneRefOfAvg(in)
 	case *BetweenExpr:
@@ -3739,6 +3784,8 @@ func CloneExpr(in Expr) Expr {
 		return CloneRefOfLagLeadExpr(in)
 	case *LineStringExpr:
 		return CloneRefOfLineStringExpr(in)
+	case *LinestrPropertyFuncExpr:
+		return CloneRefOfLinestrPropertyFuncExpr(in)
 	case ListArg:
 		return in
 	case *Literal:
@@ -3779,6 +3826,8 @@ func CloneExpr(in Expr) Expr {
 		return CloneRefOfPerformanceSchemaFuncExpr(in)
 	case *PointExpr:
 		return CloneRefOfPointExpr(in)
+	case *PointPropertyFuncExpr:
+		return CloneRefOfPointPropertyFuncExpr(in)
 	case *PolygonExpr:
 		return CloneRefOfPolygonExpr(in)
 	case *RegexpInstrExpr:

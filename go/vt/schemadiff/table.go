@@ -352,6 +352,36 @@ func (c *CreateTableEntity) normalizeTableOptions() {
 	}
 }
 
+// GetCharset returns the explicit character set name specified
+// in the CREATE TABLE statement (if any).
+func (c *CreateTableEntity) GetCharset() string {
+	for _, opt := range c.CreateTable.TableSpec.Options {
+		if strings.ToLower(opt.Name) == "charset" {
+			opt.String = strings.ToLower(opt.String)
+			if charsetName, ok := collationEnv.CharsetAlias(opt.String); ok {
+				return charsetName
+			}
+			return opt.String
+		}
+	}
+	return ""
+}
+
+// GetCollation returns the explicit collation name specified
+// in the CREATE TABLE statement (if any).
+func (c *CreateTableEntity) GetCollation() string {
+	for _, opt := range c.CreateTable.TableSpec.Options {
+		if strings.ToLower(opt.Name) == "collate" {
+			opt.String = strings.ToLower(opt.String)
+			if collationName, ok := collationEnv.CollationAlias(opt.String); ok {
+				return collationName
+			}
+			return opt.String
+		}
+	}
+	return ""
+}
+
 func (c *CreateTableEntity) Clone() Entity {
 	return &CreateTableEntity{CreateTable: sqlparser.CloneRefOfCreateTable(c.CreateTable)}
 }

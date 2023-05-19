@@ -20,6 +20,8 @@ import (
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 type (
@@ -58,4 +60,48 @@ func (c *Column) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.T
 		return c.Type, flagNullable
 	}
 	return sqltypes.Null, flagAmbiguousType
+}
+
+func (column *Column) compile(c *compiler) (ctype, error) {
+	if !column.typed {
+		return ctype{}, c.unsupported(column)
+	}
+
+	col := column.Collation
+	if col.Collation != collations.CollationBinaryID {
+		col.Repertoire = collations.RepertoireUnicode
+	}
+
+	switch tt := column.Type; {
+	case sqltypes.IsSigned(tt):
+		c.asm.PushColumn_i(column.Offset)
+	case sqltypes.IsUnsigned(tt):
+		c.asm.PushColumn_u(column.Offset)
+	case sqltypes.IsFloat(tt):
+		c.asm.PushColumn_f(column.Offset)
+	case sqltypes.IsDecimal(tt):
+		c.asm.PushColumn_d(column.Offset)
+	case sqltypes.IsText(tt):
+		if tt == sqltypes.HexNum {
+			c.asm.PushColumn_hexnum(column.Offset)
+		} else if tt == sqltypes.HexVal {
+			c.asm.PushColumn_hexval(column.Offset)
+		} else {
+			c.asm.PushColumn_text(column.Offset, col)
+		}
+	case sqltypes.IsBinary(tt):
+		c.asm.PushColumn_bin(column.Offset)
+	case sqltypes.IsNull(tt):
+		c.asm.PushNull()
+	case tt == sqltypes.TypeJSON:
+		c.asm.PushColumn_json(column.Offset)
+	default:
+		return ctype{}, vterrors.Errorf(vtrpc.Code_UNIMPLEMENTED, "Type is not supported: %s", tt)
+	}
+
+	return ctype{
+		Type: column.Type,
+		Flag: flagNullable,
+		Col:  col,
+	}, nil
 }

@@ -848,6 +848,15 @@ func (vc *vcursorImpl) SetPlannerVersion(v plancontext.PlannerVersion) {
 	vc.safeSession.GetOrCreateOptions().PlannerVersion = v
 }
 
+func (vc *vcursorImpl) SetPriority(priority string) {
+	if priority != "" {
+		vc.safeSession.GetOrCreateOptions().Priority = priority
+	} else if vc.safeSession.Options != nil && vc.safeSession.Options.Priority != "" {
+		vc.safeSession.Options.Priority = ""
+	}
+
+}
+
 // SetConsolidator implements the SessionActions interface
 func (vc *vcursorImpl) SetConsolidator(consolidator querypb.ExecuteOptions_Consolidator) {
 	// Avoid creating session Options when they do not yet exist and the

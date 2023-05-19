@@ -397,7 +397,7 @@ func (wr *Wrangler) SwitchReads(ctx context.Context, targetKeyspace, workflowNam
 		return sw.logs(), nil
 	}
 	wr.Logger().Infof("About to switchShardReads: %+v, %+v, %+v", cells, servedTypes, direction)
-	if err := ts.switchShardReads(ctx, cells, servedTypes, direction); err != nil {
+	if err := sw.switchShardReads(ctx, cells, servedTypes, direction); err != nil {
 		ts.Logger().Errorf("switchShardReads failed: %v", err)
 		return nil, err
 	}
@@ -434,7 +434,7 @@ func (wr *Wrangler) areTabletsAvailableToStreamFrom(ctx context.Context, ts *tra
 			if cells == nil {
 				cells = append(cells, shard.PrimaryAlias.Cell)
 			}
-			tp, err := discovery.NewTabletPicker(wr.ts, cells, keyspace, shard.ShardName(), tabletTypes)
+			tp, err := discovery.NewTabletPicker(ctx, wr.ts, cells, shard.PrimaryAlias.Cell, keyspace, shard.ShardName(), tabletTypes, discovery.TabletPickerOptions{})
 			if err != nil {
 				allErrors.RecordError(err)
 				return

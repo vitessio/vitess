@@ -278,7 +278,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %left <str> AND
 %right <str> NOT '!'
 %left <str> BETWEEN CASE WHEN THEN ELSE END
-%left <str> '=' '<' '>' LE GE NE NULL_SAFE_EQUAL IS LIKE REGEXP RLIKE IN
+%left <str> '=' '<' '>' LE GE NE NULL_SAFE_EQUAL IS LIKE REGEXP RLIKE IN ASSIGNMENT_OPT
 %left <str> '&'
 %left <str> SHIFT_LEFT SHIFT_RIGHT
 %left <str> '+' '-'
@@ -367,7 +367,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %token <str> LOCATE POSITION
 %token <str> ST_GeometryCollectionFromText ST_GeometryFromText ST_LineStringFromText ST_MultiLineStringFromText ST_MultiPointFromText ST_MultiPolygonFromText ST_PointFromText ST_PolygonFromText
 %token <str> ST_GeometryCollectionFromWKB ST_GeometryFromWKB ST_LineStringFromWKB ST_MultiLineStringFromWKB ST_MultiPointFromWKB ST_MultiPolygonFromWKB ST_PointFromWKB ST_PolygonFromWKB
-%token <str> ST_AsBinary ST_AsText ST_Dimension ST_Envelope ST_IsSimple ST_IsEmpty ST_GeometryType
+%token <str> ST_AsBinary ST_AsText ST_Dimension ST_Envelope ST_IsSimple ST_IsEmpty ST_GeometryType ST_X ST_Y ST_Latitude ST_Longitude ST_EndPoint ST_IsClosed ST_Length ST_NumPoints ST_StartPoint ST_PointN
 
 // Match
 %token <str> MATCH AGAINST BOOLEAN LANGUAGE WITH QUERY EXPANSION WITHOUT VALIDATION
@@ -979,11 +979,11 @@ from_or_using:
 view_name_list:
   table_name
   {
-    $$ = TableNames{$1.ToViewName()}
+    $$ = TableNames{$1}
   }
 | view_name_list ',' table_name
   {
-    $$ = append($$, $3.ToViewName())
+    $$ = append($$, $3)
   }
 
 table_name_list:
@@ -1154,7 +1154,7 @@ create_statement:
   }
 | CREATE comment_opt replace_opt algorithm_view definer_opt security_view_opt VIEW table_name column_list_opt AS select_statement check_option_opt
   {
-    $$ = &CreateView{ViewName: $8.ToViewName(), Comments: Comments($2).Parsed(), IsReplace:$3, Algorithm:$4, Definer: $5 ,Security:$6, Columns:$9, Select: $11, CheckOption: $12 }
+    $$ = &CreateView{ViewName: $8, Comments: Comments($2).Parsed(), IsReplace:$3, Algorithm:$4, Definer: $5 ,Security:$6, Columns:$9, Select: $11, CheckOption: $12 }
   }
 | create_database_prefix create_options_opt
   {
@@ -3180,7 +3180,7 @@ alter_statement:
   }
 | ALTER comment_opt algorithm_view definer_opt security_view_opt VIEW table_name column_list_opt AS select_statement check_option_opt
   {
-    $$ = &AlterView{ViewName: $7.ToViewName(), Comments: Comments($2).Parsed(), Algorithm:$3, Definer: $4 ,Security:$5, Columns:$8, Select: $10, CheckOption: $11 }
+    $$ = &AlterView{ViewName: $7, Comments: Comments($2).Parsed(), Algorithm:$3, Definer: $4 ,Security:$5, Columns:$8, Select: $10, CheckOption: $11 }
   }
 // The syntax here causes a shift / reduce issue, because ENCRYPTION is a non reserved keyword
 // and the database identifier is optional. When no identifier is given, the current database
@@ -5248,6 +5248,10 @@ expression:
   {
 	$$ = $1
   }
+| user_defined_variable ASSIGNMENT_OPT expression %prec ASSIGNMENT_OPT
+ {
+  $$ = &AssignmentExpr{Left: $1, Right: $3}
+ }
 | expression MEMBER OF openb expression closeb
   {
     $$ = &MemberOfExpr{Value: $1, JSONArr:$5 }
@@ -6023,11 +6027,11 @@ UTC_DATE func_paren_opt
   }
 | LTRIM openb expression closeb
   {
-    $$ = &TrimFuncExpr{TrimFuncType:LTrimType, StringArg: $3}
+    $$ = &TrimFuncExpr{TrimFuncType:LTrimType, Type: LeadingTrimType, StringArg: $3}
   }
 | RTRIM openb expression closeb
   {
-    $$ = &TrimFuncExpr{TrimFuncType:RTrimType, StringArg: $3}
+    $$ = &TrimFuncExpr{TrimFuncType:RTrimType, Type: TrailingTrimType, StringArg: $3}
   }
 | TRIM openb trim_type expression_opt FROM expression closeb
   {
@@ -6128,6 +6132,66 @@ UTC_DATE func_paren_opt
 | ST_GeometryType openb expression closeb
   {
     $$ = &GeomPropertyFuncExpr{ Property: GeometryType, Geom: $3}
+  }
+| ST_Latitude openb expression closeb
+  {
+    $$ = &PointPropertyFuncExpr{ Property: Latitude, Point: $3}
+  }
+| ST_Latitude openb expression ',' expression closeb
+  {
+    $$ = &PointPropertyFuncExpr{ Property: Latitude, Point: $3, ValueToSet: $5}
+  }
+| ST_Longitude openb expression closeb
+  {
+    $$ = &PointPropertyFuncExpr{ Property: Longitude, Point: $3}
+  }
+| ST_Longitude openb expression ',' expression closeb
+  {
+    $$ = &PointPropertyFuncExpr{ Property: Longitude, Point: $3, ValueToSet: $5}
+  }
+| ST_EndPoint openb expression closeb
+  {
+    $$ = &LinestrPropertyFuncExpr{ Property: EndPoint, Linestring: $3}
+  }
+| ST_IsClosed openb expression closeb
+  {
+    $$ = &LinestrPropertyFuncExpr{ Property: IsClosed, Linestring: $3}
+  }
+| ST_Length openb expression closeb
+  {
+    $$ = &LinestrPropertyFuncExpr{ Property: Length, Linestring: $3}
+  }
+| ST_Length openb expression ',' expression closeb
+  {
+    $$ = &LinestrPropertyFuncExpr{ Property: Length, Linestring: $3, PropertyDefArg: $5}
+  }
+| ST_NumPoints openb expression closeb
+  {
+    $$ = &LinestrPropertyFuncExpr{ Property: NumPoints, Linestring: $3}
+  }
+| ST_PointN openb expression ',' expression closeb
+  {
+    $$ = &LinestrPropertyFuncExpr{ Property: PointN, Linestring: $3, PropertyDefArg: $5}
+  }
+| ST_StartPoint openb expression closeb
+  {
+    $$ = &LinestrPropertyFuncExpr{ Property: StartPoint, Linestring: $3}
+  }
+| ST_X openb expression closeb
+  {
+    $$ = &PointPropertyFuncExpr{ Property: XCordinate, Point: $3}
+  }
+| ST_X openb expression ',' expression closeb
+  {
+    $$ = &PointPropertyFuncExpr{ Property: XCordinate, Point: $3, ValueToSet: $5}
+  }
+| ST_Y openb expression closeb
+  {
+    $$ = &PointPropertyFuncExpr{ Property: YCordinate, Point: $3}
+  }
+| ST_Y openb expression ',' expression closeb
+  {
+    $$ = &PointPropertyFuncExpr{ Property: YCordinate, Point: $3, ValueToSet: $5}
   }
 | ST_GeometryFromText openb expression closeb
   {
@@ -8138,22 +8202,37 @@ non_reserved_keyword:
 | STREAM
 | ST_AsBinary %prec FUNCTION_CALL_NON_KEYWORD
 | ST_AsText %prec FUNCTION_CALL_NON_KEYWORD
+| ST_Dimension %prec FUNCTION_CALL_NON_KEYWORD
+| ST_EndPoint %prec FUNCTION_CALL_NON_KEYWORD
+| ST_Envelope %prec FUNCTION_CALL_NON_KEYWORD
 | ST_GeometryCollectionFromText %prec FUNCTION_CALL_NON_KEYWORD
-| ST_GeometryFromText %prec FUNCTION_CALL_NON_KEYWORD
-| ST_LineStringFromText %prec FUNCTION_CALL_NON_KEYWORD
-| ST_MultiLineStringFromText %prec FUNCTION_CALL_NON_KEYWORD
-| ST_MultiPointFromText %prec FUNCTION_CALL_NON_KEYWORD
-| ST_MultiPolygonFromText %prec FUNCTION_CALL_NON_KEYWORD
-| ST_PointFromText %prec FUNCTION_CALL_NON_KEYWORD
-| ST_GeometryFromWKB %prec FUNCTION_CALL_NON_KEYWORD
 | ST_GeometryCollectionFromWKB %prec FUNCTION_CALL_NON_KEYWORD
+| ST_GeometryFromText %prec FUNCTION_CALL_NON_KEYWORD
+| ST_GeometryFromWKB %prec FUNCTION_CALL_NON_KEYWORD
+| ST_GeometryType %prec FUNCTION_CALL_NON_KEYWORD
+| ST_IsClosed %prec FUNCTION_CALL_NON_KEYWORD
+| ST_IsEmpty %prec FUNCTION_CALL_NON_KEYWORD
+| ST_IsSimple %prec FUNCTION_CALL_NON_KEYWORD
+| ST_Latitude %prec FUNCTION_CALL_NON_KEYWORD
+| ST_Length %prec FUNCTION_CALL_NON_KEYWORD
+| ST_LineStringFromText %prec FUNCTION_CALL_NON_KEYWORD
 | ST_LineStringFromWKB %prec FUNCTION_CALL_NON_KEYWORD
+| ST_Longitude %prec FUNCTION_CALL_NON_KEYWORD
+| ST_MultiLineStringFromText %prec FUNCTION_CALL_NON_KEYWORD
 | ST_MultiLineStringFromWKB %prec FUNCTION_CALL_NON_KEYWORD
+| ST_MultiPointFromText %prec FUNCTION_CALL_NON_KEYWORD
 | ST_MultiPointFromWKB %prec FUNCTION_CALL_NON_KEYWORD
+| ST_MultiPolygonFromText %prec FUNCTION_CALL_NON_KEYWORD
 | ST_MultiPolygonFromWKB %prec FUNCTION_CALL_NON_KEYWORD
+| ST_NumPoints %prec FUNCTION_CALL_NON_KEYWORD
+| ST_PointFromText %prec FUNCTION_CALL_NON_KEYWORD
 | ST_PointFromWKB %prec FUNCTION_CALL_NON_KEYWORD
-| ST_PolygonFromWKB %prec FUNCTION_CALL_NON_KEYWORD
+| ST_PointN %prec FUNCTION_CALL_NON_KEYWORD
 | ST_PolygonFromText %prec FUNCTION_CALL_NON_KEYWORD
+| ST_PolygonFromWKB %prec FUNCTION_CALL_NON_KEYWORD
+| ST_StartPoint %prec FUNCTION_CALL_NON_KEYWORD
+| ST_X %prec FUNCTION_CALL_NON_KEYWORD
+| ST_Y %prec FUNCTION_CALL_NON_KEYWORD
 | SUBPARTITION
 | SUBPARTITIONS
 | SUM %prec FUNCTION_CALL_NON_KEYWORD

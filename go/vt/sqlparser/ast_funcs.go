@@ -416,16 +416,6 @@ func (node TableName) IsEmpty() bool {
 	return node.Name.IsEmpty()
 }
 
-// ToViewName returns a TableName acceptable for use as a VIEW. VIEW names are
-// always lowercase, so ToViewName lowercasese the name. Databases are case-sensitive
-// so Qualifier is left untouched.
-func (node TableName) ToViewName() TableName {
-	return TableName{
-		Qualifier: node.Qualifier,
-		Name:      NewIdentifierCS(strings.ToLower(node.Name.v)),
-	}
-}
-
 // NewWhere creates a WHERE or HAVING clause out
 // of a Expr. If the expression is nil, it returns nil.
 func NewWhere(typ WhereType, expr Expr) *Where {
@@ -920,8 +910,12 @@ func containEscapableChars(s string, at AtCount) bool {
 }
 
 func formatID(buf *TrackedBuffer, original string, at AtCount) {
+	if buf.escape == escapeNoIdentifiers {
+		buf.WriteString(original)
+		return
+	}
 	_, isKeyword := keywordLookupTable.LookupString(original)
-	if buf.escape || isKeyword || containEscapableChars(original, at) {
+	if buf.escape == escapeAllIdentifiers || isKeyword || containEscapableChars(original, at) {
 		writeEscapedString(buf, original)
 	} else {
 		buf.WriteString(original)
@@ -1008,12 +1002,12 @@ func (node *Select) GetColumns() SelectExprs {
 	return node.SelectExprs
 }
 
-// SetComments implements the SelectStatement interface
+// SetComments implements the Commented interface
 func (node *Select) SetComments(comments Comments) {
 	node.Comments = comments.Parsed()
 }
 
-// GetComments implements the SelectStatement interface
+// GetParsedComments implements the Commented interface
 func (node *Select) GetParsedComments() *ParsedComments {
 	return node.Comments
 }
@@ -1133,7 +1127,7 @@ func (node *Union) SetComments(comments Comments) {
 	node.Left.SetComments(comments)
 }
 
-// GetComments implements the SelectStatement interface
+// GetParsedComments implements the SelectStatement interface
 func (node *Union) GetParsedComments() *ParsedComments {
 	return node.Left.GetParsedComments()
 }
@@ -2260,6 +2254,42 @@ func (ty GeomPropertyType) ToString() string {
 		return DimensionStr
 	default:
 		return "Unknown GeomPropertyType"
+	}
+}
+
+// ToString returns the type as a string
+func (ty PointPropertyType) ToString() string {
+	switch ty {
+	case XCordinate:
+		return XCordinateStr
+	case YCordinate:
+		return YCordinateStr
+	case Latitude:
+		return LatitudeStr
+	case Longitude:
+		return LongitudeStr
+	default:
+		return "Unknown PointPropertyType"
+	}
+}
+
+// ToString returns the type as a string
+func (ty LinestrPropType) ToString() string {
+	switch ty {
+	case EndPoint:
+		return EndPointStr
+	case IsClosed:
+		return IsClosedStr
+	case Length:
+		return LengthStr
+	case NumPoints:
+		return NumPointsStr
+	case PointN:
+		return PointNStr
+	case StartPoint:
+		return StartPointStr
+	default:
+		return "Unknown LinestrPropType"
 	}
 }
 

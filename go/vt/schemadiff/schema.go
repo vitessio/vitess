@@ -445,7 +445,7 @@ func (s *Schema) ViewNames() []string {
 
 // Diff compares this schema with another schema, and sees what it takes to make this schema look
 // like the other. It returns a list of diffs.
-func (s *Schema) Diff(other *Schema, hints *DiffHints) (diffs []EntityDiff, err error) {
+func (s *Schema) diff(other *Schema, hints *DiffHints) (diffs []EntityDiff, err error) {
 	// dropped entities
 	var dropDiffs []EntityDiff
 	for _, e := range s.Entities() {
@@ -767,11 +767,13 @@ func (s *Schema) Apply(diffs []EntityDiff) (*Schema, error) {
 	return dup, nil
 }
 
-// SchemaDiff calulates a rich diff between this schema and the given schema. It is stronger than Diff().
-// On top of returning the list of diffs that can take this schema into the given schema, this function also
-// evaluates the dependencies between those diffs, if any.
+// SchemaDiff calulates a rich diff between this schema and the given schema. It builds on top of diff():
+// on top of the list of diffs that can take this schema into the given schema, this function also
+// evaluates the dependencies between those diffs, if any, and the resulting SchemaDiff object offers OrderedDiffs(),
+// the safe ordering of diffs that, when appleid sequentially, does not produce any conflicts and keeps schema valid
+// at each step.
 func (s *Schema) SchemaDiff(other *Schema, hints *DiffHints) (*SchemaDiff, error) {
-	diffs, err := s.Diff(other, hints)
+	diffs, err := s.diff(other, hints)
 	if err != nil {
 		return nil, err
 	}
@@ -787,13 +789,13 @@ func (s *Schema) SchemaDiff(other *Schema, hints *DiffHints) (*SchemaDiff, error
 				// 'diff' refers to an entity (call it "e") that has changed. But here we find that one of the
 				// entities that "e" depends on, has also changed.
 				relationsMade = true
-				schemaDiff.addDep(diff, dependentDiff, DiffDepOrderUnknown)
+				schemaDiff.addDep(diff, dependentDiff, DiffDependencyOrderUnknown)
 			}
 		}
 		return dependentDiffs, relationsMade
 	}
 
-	for _, diff := range schemaDiff.allDiffs() {
+	for _, diff := range schemaDiff.UnorderedDiffs() {
 		switch diff := diff.(type) {
 		case *CreateViewEntityDiff:
 			checkDependencies(diff, getViewDependentTableNames(diff.createView))
@@ -825,7 +827,7 @@ func (s *Schema) SchemaDiff(other *Schema, hints *DiffHints) (*SchemaDiff, error
 						case *CreateTableEntityDiff:
 							// We add a foreign key constraint onto a new table... That table must therefore be first created,
 							// and only then can we proceed to add the FK
-							schemaDiff.addDep(diff, parentDiff, DiffDepSequentialExecution)
+							schemaDiff.addDep(diff, parentDiff, DiffDependencySequentialExecution)
 						case *AlterTableEntityDiff:
 							// The current diff is ALTER TABLE ... ADD FOREIGN KEY
 							// and the parent table also has an ALTER TABLE.
@@ -840,17 +842,17 @@ func (s *Schema) SchemaDiff(other *Schema, hints *DiffHints) (*SchemaDiff, error
 								switch node := node.(type) {
 								case *sqlparser.ModifyColumn:
 									if referencedColumnNames[node.NewColDefinition.Name.Lowered()] {
-										schemaDiff.addDep(diff, parentDiff, DiffDepSequentialExecution)
+										schemaDiff.addDep(diff, parentDiff, DiffDependencySequentialExecution)
 									}
 								case *sqlparser.AddColumns:
 									for _, col := range node.Columns {
 										if referencedColumnNames[col.Name.Lowered()] {
-											schemaDiff.addDep(diff, parentDiff, DiffDepSequentialExecution)
+											schemaDiff.addDep(diff, parentDiff, DiffDependencySequentialExecution)
 										}
 									}
 								case *sqlparser.DropColumn:
 									if referencedColumnNames[node.Name.Name.Lowered()] {
-										schemaDiff.addDep(diff, parentDiff, DiffDepSequentialExecution)
+										schemaDiff.addDep(diff, parentDiff, DiffDependencySequentialExecution)
 									}
 								}
 								return true, nil

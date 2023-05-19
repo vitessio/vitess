@@ -44,14 +44,14 @@ var collationBinary = collations.TypedCollation{
 
 var collationJSON = collations.TypedCollation{
 	Collation:    46, // utf8mb4_bin
-	Coercibility: collations.CoerceCoercible,
+	Coercibility: collations.CoerceImplicit,
 	Repertoire:   collations.RepertoireUnicode,
 }
 
 var collationUtf8mb3 = collations.TypedCollation{
 	Collation:    collations.CollationUtf8ID,
 	Coercibility: collations.CoerceCoercible,
-	Repertoire:   collations.RepertoireASCII,
+	Repertoire:   collations.RepertoireUnicode,
 }
 
 type (
@@ -86,11 +86,38 @@ func (c *CollateExpr) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqlty
 	return t, f | flagExplicitCollation
 }
 
+func (expr *CollateExpr) compile(c *compiler) (ctype, error) {
+	ct, err := expr.Inner.compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip := c.compileNullCheck1(ct)
+
+	switch ct.Type {
+	case sqltypes.VarChar:
+		if err := collations.Local().EnsureCollate(ct.Col.Collation, expr.TypedCollation.Collation); err != nil {
+			return ctype{}, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, err.Error())
+		}
+		fallthrough
+	case sqltypes.VarBinary:
+		c.asm.Collate(expr.TypedCollation.Collation)
+	default:
+		return ctype{}, c.unsupported(expr)
+	}
+
+	c.asm.jumpDestination(skip)
+
+	ct.Col = expr.TypedCollation
+	ct.Flag |= flagExplicitCollation | flagNullable
+	return ct, nil
+}
+
 func evalCollation(e eval) collations.TypedCollation {
 	switch e := e.(type) {
 	case nil:
 		return collationNull
-	case evalNumeric:
+	case evalNumeric, *evalTemporal:
 		return collationNumeric
 	case *evalJSON:
 		return collationJSON

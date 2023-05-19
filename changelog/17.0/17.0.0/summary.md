@@ -4,26 +4,56 @@
 
 - **[Major Changes](#major-changes)**
   - **[Breaking Changes](#breaking-changes)**
+    - [Default Local Cell Preference for TabletPicker](#tablet-picker-cell-preference)
     - [Dedicated stats for VTGate Prepare operations](#dedicated-vtgate-prepare-stats)
     - [VTAdmin web migrated from create-react-app to vite](#migrated-vtadmin)
     - [Keyspace name validation in TopoServer](#keyspace-name-validation)
     - [Shard name validation in TopoServer](#shard-name-validation)
+    - [VtctldClient command RestoreFromBackup will now use the correct context](#VtctldClient-RestoreFromBackup)
   - **[New command line flags and behavior](#new-flag)**
     - [Builtin backup: read buffering flags](#builtin-backup-read-buffering-flags)
   - **[New stats](#new-stats)**
     - [Detailed backup and restore stats](#detailed-backup-and-restore-stats)
-    - [VTtablet Error count with code ](#vttablet-error-count-with-code)
+    - [VTtablet Error count with code](#vttablet-error-count-with-code)
     - [VReplication stream status for Prometheus](#vreplication-stream-status-for-prometheus)
   - **[Deprecations and Deletions](#deprecations-and-deletions)**
     - [Deprecated Flags](#deprecated-flags)
     - [Deprecated Stats](#deprecated-stats)
+  - **[Vtctld](#vtctld)**
+    - [Deprecated Flags](#vtctld-deprecated-flags)
+  - **[VReplication](#VReplication)**
+    - [Support for MySQL 8.0 `binlog_transaction_compression`](#binlog-compression)
   - **[VTTablet](#vttablet)**
     - [VTTablet: Initializing all replicas with super_read_only](#vttablet-initialization)
-    - [Deprecated Flags](#deprecated-flags)
+    - [Deprecated Flags](#vttablet-deprecated-flags)
+  - **[VReplication](#VReplication)**
+    - [Support for the `noblob` binlog row image mode](#noblob)
 
 ## <a id="major-changes"/> Major Changes
 
 ### <a id="breaking-changes"/>Breaking Changes
+
+#### <a id="tablet-picker-cell-preference"/>Default Local Cell Preference for TabletPicker
+
+We added options to the `TabletPicker` that allow for specifying a cell preference in addition to making the default behavior to give priority to the local cell *and any alias it belongs to*. We are also introducing a new way to select tablet type preference which should eventually replace the `in_order:` hint currently used as a prefix for tablet types. The signature for creating a new `TabletPicker` now looks like:
+
+```
+func NewTabletPicker(
+	ctx context.Context,
+	ts *topo.Server,
+	cells []string,
+	localCell, keyspace, shard, tabletTypesStr string,
+	options TabletPickerOptions,
+) (*TabletPicker, error) {...}
+```
+
+Where ctx, localCell, option are all new parameters.
+
+`option` is of type `TabletPickerOptions` and includes two fields, `CellPreference` and `TabletOrder`.
+CellPreference`: "PreferLocalWithAlias" (default) gives preference to vtgate's local cell, or "OnlySpecified" which only picks from the cells explicitly passed in by the client
+`TabletOrder`: "Any" (default) for no ordering or random, or "InOrder" to use the order specified by the client
+
+See [PR 12282 Description](https://github.com/vitessio/vitess/pull/12282) for examples on how this changes cell picking behavior.
 
 #### <a id="vtgr-default-tls-version"/>Default TLS version changed for `vtgr`
 
@@ -66,13 +96,24 @@ Previously, VTAdmin web used the Create React App framework to test, build, and 
 
 Prior to v17, it was possible to create a keyspace with invalid characters, which would then be inaccessible to various cluster management operations.
 
-Keyspace names may no longer contain the forward slash ("/") character, and TopoServer's `GetKeyspace` and `CreateKeyspace` methods return an error if given such a name.
+Keyspace names are restricted to using only ASCII characters, digits and `_` and `-`. TopoServer's `GetKeyspace` and `CreateKeyspace` methods return an error if given an invalid name.
 
 #### <a id="shard-name-validation"> Shard name validation in TopoServer
 
 Prior to v17, it was possible to create a shard name with invalid characters, which would then be inaccessible to various cluster management operations.
 
-Shard names may no longer contain the forward slash ("/") character, and TopoServer's `CreateShard` method returns an error if given such a name.
+Shard names are restricted to using only ASCII characters, digits and `_` and `-`. TopoServer's `GetShard` and `CreateShard` methods return an error if given an invalid name.
+
+#### <a id="VtctldClient-RestoreFromBackup"> VtctldClient command RestoreFromBackup will now use the correct context
+
+The VtctldClient command RestoreFromBackup initiates an asynchronous process on the specified tablet to restore data from either the latest backup or the closest one before the specified backup-timestamp.
+Prior to v17, this asynchronous process could run indefinitely in the background since it was called using the background context. In v17 [PR#12830](https://github.com/vitessio/vitess/issues/12830),
+this behavior was changed to use a context with a timeout of `action_timeout`. If you are using VtctldClient to initiate a restore, make sure you provide an appropriate value for action_timeout to give enough
+time for the restore process to complete. Otherwise, the restore will throw an error if the context expires before it completes.
+
+### <a id="Vttablet-TxThrottler"> Vttablet's transaction throttler now also throttles DML outside of `BEGIN; ...; COMMIT;` blocks
+Prior to v17, `vttablet`'s transaction throttler (enabled with `--enable-tx-throttler`) would only throttle requests done inside an explicit transaction, i.e., a `BEGIN; ...; COMMIT;` block.
+In v17 [PR#13040](https://github.com/vitessio/vitess/issues/13037), this behavior was being changed so that it also throttles work outside of explicit transactions for `INSERT/UPDATE/DELETE/LOAD` queries.
 
 ### <a id="new-flag"/> New command line flags and behavior
 
@@ -257,6 +298,16 @@ These stats are deprecated in v17.
 | `backup_duration_seconds` | `BackupDurationNanoseconds` |
 | `restore_duration_seconds` | `RestoreDurationNanoseconds` |
 
+### <a id="vtctld"/> Vtctld
+
+#### <a id="vtctld-deprecated-flags"/> Deprecated Flags
+
+The flag `schema_change_check_interval` used to accept either a Go duration value (e.g. `1m` or `30s`) or a bare integer, which was treated as seconds.
+This behavior was deprecated in v15.0.0 and has been removed.
+`schema_change_check_interval` now **only** accepts Go duration values.
+
+The flag `durability_policy` is no longer used by vtctld. Instead it reads the durability policies for all keyspaces from the topology server.
+
 ### <a id="vttablet"/> VTTablet
 #### <a id="vttablet-initialization"/> Initializing all replicas with super_read_only
 In order to prevent SUPER privileged users like `root` or `vt_dba` from producing errant GTIDs on replicas, all the replica MySQL servers are initialized with the MySQL
@@ -271,11 +322,33 @@ This is even more important if you are running Vitess on the vitess-operator.
 You must ensure your `init_db.sql` is up-to-date with the new default for `v17.0.0`.
 The default file can be found in `./config/init_db.sql`.
 
-#### <a id="deprecated-flags"/> Deprecated Flags
+#### <a id="vttablet-deprecated-flags"/> Deprecated Flags
 The flag `use_super_read_only` is deprecated and will be removed in a later release.
 
-### Online DDL
+Various flags that took float values as seconds have updated to take the standard duration syntax as well.
+Float-style parsing is now deprecated and will be removed in a later release.
+For example, instead of `--queryserver-config-query-pool-timeout 12.2`, use `--queryserver-config-query-pool-timeout 12s200ms`.
+Affected flags and YAML config keys:
+- `degraded_threshold`
+- `heartbeat_interval`
+- `heartbeat_on_demand_duration`
+- `health_check_interval`
+- `queryserver-config-idle-timeout`
+- `queryserver-config-pool-conn-max-lifetime`
+- `queryserver-config-olap-transaction-timeout`
+- `queryserver-config-query-timeout`
+- `queryserver-config-query-pool-timeout`
+- `queryserver-config-schema-reload-time`
+- `queryserver-config-schema-change-signal-interval`
+- `queryserver-config-stream-pool-timeout`
+- `queryserver-config-stream-pool-idle-timeout`
+- `queryserver-config-transaction-timeout`
+- `queryserver-config-txpool-timeout`
+- `queryserver-config-txpool-idle-timeout`
+- `shutdown_grace_period`
+- `unhealthy_threshold`
 
+### Online DDL
 
 #### <a id="online-ddl-cut-over-threshold-flag" /> --cut-over-threshold DDL strategy flag
 
@@ -286,3 +359,25 @@ This flag stand for the timeout in a `vitess` migration's cut-over phase, which 
 The value of the cut-over threshold should be high enough to support the async nature of vreplication catchup phase, as well as accommodate some replication lag. But it mustn't be too high. While cutting over, the migrated table is being locked, causing app connection and query pileup, consuming query buffers, and holding internal mutexes.
 
 Recommended range for this variable is `5s` - `30s`. Default: `10s`.
+
+### <a id="vreplication"/> VReplication
+
+#### <a id="noblob"/> Support for the `noblob` binlog row image mode 
+The `noblob` binlog row image is now supported by the MoveTables and Reshard VReplication workflows. If the source 
+or target database has this mode, other workflows like OnlineDDL, Materialize and CreateLookupVindex will error out.
+The row events streamed by the VStream API, where blobs and text columns have not changed, will contain null values 
+for those columns, indicated by a `length:-1`.
+
+Reference PR for this change is [PR #12905](https://github.com/vitessio/vitess/pull/12905)
+
+#### <a id="binlog-compression"/> Support for MySQL 8.0 binary log transaction compression
+MySQL 8.0 added support for [binary log compression via transaction (GTID) compression in 8.0.20](https://dev.mysql.com/blog-archive/mysql-8-0-20-replication-enhancements/).
+You can read more about this feature here: https://dev.mysql.com/doc/refman/8.0/en/binary-log-transaction-compression.html
+
+This can — at the cost of increased CPU usage — dramatically reduce the amount of data sent over the wire for MySQL replication while also dramatically reducing the overall
+storage space needed to retain binary logs (for replication, backup and recovery, CDC, etc). For larger installations this was a very desirable feature and while you could
+technically use it with Vitess (the MySQL replica-sets making up each shard could use it fine) there was one very big limitation — [VReplication workflows](https://vitess.io/docs/reference/vreplication/vreplication/)
+would not work. Given the criticality of VReplication workflows within Vitess, this meant that in practice this MySQL feature was not usable within Vitess clusters.
+
+We have addressed this issue in [PR #12950](https://github.com/vitessio/vitess/pull/12950) by adding support for processing the compressed transaction events in VReplication,
+without any (known) limitations.

@@ -78,8 +78,6 @@ type rowStreamer struct {
 	sendQuery     string
 	vse           *Engine
 	pktsize       PacketSizer
-
-	throttleResponseRateLimiter *timer.RateLimiter
 }
 
 func newRowStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine, query string, lastpk []sqltypes.Value, vschema *localVSchema, send func(*binlogdatapb.VStreamRowsResponse) error, vse *Engine) *rowStreamer {
@@ -95,8 +93,6 @@ func newRowStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engi
 		vschema: vschema,
 		vse:     vse,
 		pktsize: DefaultPacketSizer(),
-
-		throttleResponseRateLimiter: timer.NewRateLimiter(rowStreamertHeartbeatInterval),
 	}
 }
 
@@ -278,6 +274,8 @@ func (rs *rowStreamer) buildSelect() (string, error) {
 }
 
 func (rs *rowStreamer) streamQuery(conn *snapshotConn, send func(*binlogdatapb.VStreamRowsResponse) error) error {
+	throttleResponseRateLimiter := timer.NewRateLimiter(rowStreamertHeartbeatInterval)
+	defer throttleResponseRateLimiter.Stop()
 
 	var sendMu sync.Mutex
 	safeSend := func(r *binlogdatapb.VStreamRowsResponse) error {
@@ -351,7 +349,7 @@ func (rs *rowStreamer) streamQuery(conn *snapshotConn, send func(*binlogdatapb.V
 
 		// check throttler.
 		if !rs.vse.throttlerClient.ThrottleCheckOKOrWait(rs.ctx) {
-			rs.throttleResponseRateLimiter.Do(func() error {
+			throttleResponseRateLimiter.Do(func() error {
 				return safeSend(&binlogdatapb.VStreamRowsResponse{Throttled: true})
 			})
 			continue

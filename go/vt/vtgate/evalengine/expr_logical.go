@@ -36,6 +36,10 @@ type (
 
 	boolean int8
 
+	IntervalExpr struct {
+		CallExpr
+	}
+
 	// IsExpr represents the IS expression in MySQL.
 	// boolean_primary IS [NOT] {TRUE | FALSE | NULL}
 	IsExpr struct {
@@ -55,6 +59,7 @@ type (
 	}
 )
 
+var _ Expr = (*IntervalExpr)(nil)
 var _ Expr = (*IsExpr)(nil)
 var _ Expr = (*LogicalExpr)(nil)
 var _ Expr = (*NotExpr)(nil)
@@ -211,6 +216,47 @@ func (n *NotExpr) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.
 	return sqltypes.Int64, flags | flagIsBoolean
 }
 
+func (expr *NotExpr) compile(c *compiler) (ctype, error) {
+	arg, err := expr.Inner.compile(c)
+	if err != nil {
+		return ctype{}, nil
+	}
+
+	skip := c.compileNullCheck1(arg)
+
+	switch arg.Type {
+	case sqltypes.Null:
+		// No-op.
+	case sqltypes.Int64:
+		c.asm.Not_i()
+	case sqltypes.Uint64:
+		c.asm.Not_u()
+	case sqltypes.Float64:
+		c.asm.Not_f()
+	case sqltypes.Decimal:
+		c.asm.Not_d()
+	case sqltypes.VarChar, sqltypes.VarBinary:
+		if arg.isHexOrBitLiteral() {
+			c.asm.Convert_xu(1)
+			c.asm.Not_u()
+		} else {
+			c.asm.Convert_bB(1)
+			c.asm.Not_i()
+		}
+	case sqltypes.TypeJSON:
+		c.asm.Convert_jB(1)
+		c.asm.Not_i()
+	case sqltypes.Time, sqltypes.Datetime, sqltypes.Date, sqltypes.Timestamp:
+		c.asm.Convert_TB(1)
+		c.asm.Not_i()
+	default:
+		c.asm.Convert_bB(1)
+		c.asm.Not_i()
+	}
+	c.asm.jumpDestination(skip)
+	return ctype{Type: sqltypes.Int64, Flag: flagNullable | flagIsBoolean, Col: collationNumeric}, nil
+}
+
 func (l *LogicalExpr) eval(env *ExpressionEnv) (eval, error) {
 	res, err := l.op(l.Left, l.Right, env)
 	return res.eval(), err
@@ -220,6 +266,189 @@ func (l *LogicalExpr) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqlty
 	_, f1 := l.Left.typeof(env, fields)
 	_, f2 := l.Right.typeof(env, fields)
 	return sqltypes.Int64, f1 | f2 | flagIsBoolean
+}
+
+func (expr *LogicalExpr) compile(c *compiler) (ctype, error) {
+	lt, err := expr.Left.compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	switch lt.Type {
+	case sqltypes.Null, sqltypes.Int64:
+		// No-op.
+	case sqltypes.Uint64:
+		c.asm.Convert_uB(1)
+	case sqltypes.Float64:
+		c.asm.Convert_fB(1)
+	case sqltypes.Decimal:
+		c.asm.Convert_dB(1)
+	case sqltypes.VarChar, sqltypes.VarBinary:
+		if lt.isHexOrBitLiteral() {
+			c.asm.Convert_xu(1)
+			c.asm.Convert_uB(1)
+		} else {
+			c.asm.Convert_bB(1)
+		}
+	case sqltypes.TypeJSON:
+		c.asm.Convert_jB(1)
+	case sqltypes.Time, sqltypes.Datetime, sqltypes.Date, sqltypes.Timestamp:
+		c.asm.Convert_TB(1)
+	default:
+		c.asm.Convert_bB(1)
+	}
+
+	jump := c.asm.LogicalLeft(expr.opname)
+
+	rt, err := expr.Right.compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	switch rt.Type {
+	case sqltypes.Null, sqltypes.Int64:
+		// No-op.
+	case sqltypes.Uint64:
+		c.asm.Convert_uB(1)
+	case sqltypes.Float64:
+		c.asm.Convert_fB(1)
+	case sqltypes.Decimal:
+		c.asm.Convert_dB(1)
+	case sqltypes.VarChar, sqltypes.VarBinary:
+		if rt.isHexOrBitLiteral() {
+			c.asm.Convert_xu(1)
+			c.asm.Convert_uB(1)
+		} else {
+			c.asm.Convert_bB(1)
+		}
+	case sqltypes.TypeJSON:
+		c.asm.Convert_jB(1)
+	case sqltypes.Time, sqltypes.Datetime, sqltypes.Date, sqltypes.Timestamp:
+		c.asm.Convert_TB(1)
+	default:
+		c.asm.Convert_bB(1)
+	}
+
+	c.asm.LogicalRight(expr.opname)
+	c.asm.jumpDestination(jump)
+	return ctype{Type: sqltypes.Int64, Flag: flagNullable | flagIsBoolean, Col: collationNumeric}, nil
+}
+
+func intervalCompare(n, val eval) (int, bool, error) {
+	if val == nil {
+		return 1, true, nil
+	}
+
+	val = evalToNumeric(val, false)
+	cmp, err := compareNumeric(n, val)
+	return cmp, false, err
+}
+
+func findInterval(args []eval) (int64, error) {
+	n := args[0]
+	start := int64(1)
+	end := int64(len(args) - 1)
+	for {
+		if start > end {
+			return end, nil
+		}
+
+		val := args[start]
+		cmp, _, err := intervalCompare(n, val)
+		if err != nil {
+			return 0, err
+		}
+
+		if cmp < 0 {
+			return start - 1, nil
+		}
+
+		pos := start + (end-start)/2
+
+		val = args[pos]
+		cmp, null, err := intervalCompare(n, val)
+		if err != nil {
+			return 0, err
+		}
+
+		prevPos := pos
+		for null {
+			prevPos--
+			if prevPos < start {
+				break
+			}
+			prevVal := args[prevPos]
+			cmp, null, err = intervalCompare(n, prevVal)
+			if err != nil {
+				return 0, err
+			}
+		}
+
+		if cmp < 0 {
+			end = pos - 1
+		} else {
+			start = pos + 1
+		}
+	}
+}
+
+func (i *IntervalExpr) eval(env *ExpressionEnv) (eval, error) {
+	args := make([]eval, 0, len(i.Arguments))
+	for _, arg := range i.Arguments {
+		val, err := arg.eval(env)
+		if err != nil {
+			return nil, err
+		}
+		args = append(args, val)
+	}
+
+	if args[0] == nil {
+		return newEvalInt64(-1), nil
+	}
+
+	args[0] = evalToNumeric(args[0], false)
+
+	idx, err := findInterval(args)
+	if err != nil {
+		return nil, err
+	}
+	return newEvalInt64(idx), err
+}
+
+func (i *IntervalExpr) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	return sqltypes.Int64, 0
+}
+
+func (i *IntervalExpr) compile(c *compiler) (ctype, error) {
+	n, err := i.Arguments[0].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	switch n.Type {
+	case sqltypes.Int64, sqltypes.Uint64, sqltypes.Float64, sqltypes.Decimal:
+	default:
+		s := c.compileNullCheck1(n)
+		c.asm.Convert_xf(1)
+		c.asm.jumpDestination(s)
+	}
+
+	for j := 1; j < len(i.Arguments); j++ {
+		argType, err := i.Arguments[j].compile(c)
+		if err != nil {
+			return ctype{}, err
+		}
+		switch argType.Type {
+		case sqltypes.Int64, sqltypes.Uint64, sqltypes.Float64, sqltypes.Decimal:
+		default:
+			s := c.compileNullCheck1(argType)
+			c.asm.Convert_xf(1)
+			c.asm.jumpDestination(s)
+		}
+	}
+
+	c.asm.Interval(len(i.Arguments) - 1)
+	return ctype{Type: sqltypes.Int64, Col: collationNumeric}, nil
 }
 
 func (i *IsExpr) eval(env *ExpressionEnv) (eval, error) {
@@ -232,6 +461,15 @@ func (i *IsExpr) eval(env *ExpressionEnv) (eval, error) {
 
 func (i *IsExpr) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
 	return sqltypes.Int64, 0
+}
+
+func (is *IsExpr) compile(c *compiler) (ctype, error) {
+	_, err := is.Inner.compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+	c.asm.Is(is.Check)
+	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: flagIsBoolean}, nil
 }
 
 func (c *CaseExpr) eval(env *ExpressionEnv) (eval, error) {
@@ -351,6 +589,49 @@ func (c *CaseExpr) simplify(env *ExpressionEnv) error {
 		c.Else, err = simplifyExpr(env, c.Else)
 	}
 	return err
+}
+
+func (cs *CaseExpr) compile(c *compiler) (ctype, error) {
+	var ca collationAggregation
+	var ta typeAggregation
+	var local = collations.Local()
+
+	for _, wt := range cs.cases {
+		when, err := wt.when.compile(c)
+		if err != nil {
+			return ctype{}, err
+		}
+
+		if err := c.compileCheckTrue(when, 1); err != nil {
+			return ctype{}, err
+		}
+
+		then, err := wt.then.compile(c)
+		if err != nil {
+			return ctype{}, err
+		}
+
+		ta.add(then.Type, then.Flag)
+		if err := ca.add(local, then.Col); err != nil {
+			return ctype{}, err
+		}
+	}
+
+	if cs.Else != nil {
+		els, err := cs.Else.compile(c)
+		if err != nil {
+			return ctype{}, err
+		}
+
+		ta.add(els.Type, els.Flag)
+		if err := ca.add(local, els.Col); err != nil {
+			return ctype{}, err
+		}
+	}
+
+	ct := ctype{Type: ta.result(), Col: ca.result()}
+	c.asm.CmpCase(len(cs.cases), cs.Else != nil, ct.Type, ct.Col)
+	return ct, nil
 }
 
 var _ Expr = (*CaseExpr)(nil)

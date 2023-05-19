@@ -374,6 +374,69 @@ var (
 		input:  "SELECT ST_IsEmpty(ST_GeomFromText('POINT(1 1)'))",
 		output: "select st_isempty(st_geometryfromtext('POINT(1 1)')) from dual",
 	}, {
+		input:  "SELECT ST_Latitude(@pt);",
+		output: "select st_latitude(@pt) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_Latitude(@pt, 10));",
+		output: "select st_astext(st_latitude(@pt, 10)) from dual",
+	}, {
+		input:  "SELECT ST_Longitude(@pt);",
+		output: "select st_longitude(@pt) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_Longitude(@pt, 10));",
+		output: "select st_astext(st_longitude(@pt, 10)) from dual",
+	}, {
+		input:  "SELECT ST_X(@pt);",
+		output: "select st_x(@pt) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_X(@pt, 10));",
+		output: "select st_astext(st_x(@pt, 10)) from dual",
+	}, {
+		input:  "SELECT ST_Y(@pt);",
+		output: "select st_y(@pt) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_Y(@pt, 10));",
+		output: "select st_astext(st_y(@pt, 10)) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_EndPoint(ST_GeomFromText(@ls)));",
+		output: "select st_astext(st_endpoint(st_geometryfromtext(@ls))) from dual",
+	}, {
+		input:  "SELECT ST_IsClosed(ST_GeomFromText(@ls1));",
+		output: "select st_isclosed(st_geometryfromtext(@ls1)) from dual",
+	}, {
+		input:  "SELECT IsClosed(ST_GeomFromText(@ls1));",
+		output: "select st_isclosed(st_geometryfromtext(@ls1)) from dual",
+	}, {
+		input:  "SELECT ST_Length(@ls);",
+		output: "select st_length(@ls) from dual",
+	}, {
+		input:  "SELECT ST_Length(@ls, 'metre');",
+		output: "select st_length(@ls, 'metre') from dual",
+	}, {
+		input:  "SELECT GLength(@ls);",
+		output: "select st_length(@ls) from dual",
+	}, {
+		input:  "SELECT GLength(@ls, 'metre');",
+		output: "select st_length(@ls, 'metre') from dual",
+	}, {
+		input:  "SELECT ST_NumPoints(ST_GeomFromText(@ls));",
+		output: "select st_numpoints(st_geometryfromtext(@ls)) from dual",
+	}, {
+		input:  "SELECT Numpoints(ST_GeomFromText(@ls));",
+		output: "select st_numpoints(st_geometryfromtext(@ls)) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_PointN(ST_GeomFromText(@ls),2));",
+		output: "select st_astext(st_pointn(st_geometryfromtext(@ls), 2)) from dual",
+	}, {
+		input:  "SELECT ST_AsText(PointN(ST_GeomFromText(@ls),2));",
+		output: "select st_astext(st_pointn(st_geometryfromtext(@ls), 2)) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_StartPoint(ST_GeomFromText(@ls)));",
+		output: "select st_astext(st_startpoint(st_geometryfromtext(@ls))) from dual",
+	}, {
+		input:  "SELECT ST_AsText(StartPoint(ST_GeomFromText(@ls)));",
+		output: "select st_astext(st_startpoint(st_geometryfromtext(@ls))) from dual",
+	}, {
 		input:  "WITH RECURSIVE  odd_num_cte (id, n) AS (SELECT 1, 1 union all SELECT id+1, n+2 from odd_num_cte where id < 5) SELECT * FROM odd_num_cte",
 		output: "with recursive odd_num_cte(id, n) as (select 1, 1 from dual union all select id + 1, n + 2 from odd_num_cte where id < 5) select * from odd_num_cte",
 	}, {
@@ -1172,6 +1235,11 @@ var (
 	}, {
 		input: "update /* a.b */ a.b set b = 3",
 	}, {
+		input: "update a.b set d = @v := d + 7 where u = 42",
+	}, {
+		input:  "select @topic3_id:= 10103;",
+		output: "select @topic3_id := 10103 from dual",
+	}, {
 		input: "update /* list */ a set b = 3, c = 4",
 	}, {
 		input: "update /* expression */ a set b = 3 + 4",
@@ -1951,7 +2019,7 @@ var (
 		output: "rename table x.a to b, b to c",
 	}, {
 		input:  "drop view a,B,c",
-		output: "drop view a, b, c",
+		output: "drop view a, B, c",
 	}, {
 		input: "drop /*vt+ strategy=online */ view if exists v",
 	}, {
@@ -3940,9 +4008,7 @@ func TestCaseSensitivity(t *testing.T) {
 		input:  "alter table A convert unparsable",
 		output: "alter table A",
 	}, {
-		// View names get lower-cased.
-		input:  "alter view A as select * from t",
-		output: "alter view a as select * from t",
+		input: "alter view A as select * from t",
 	}, {
 		input:  "alter table A rename to B",
 		output: "alter table A rename B",
@@ -3992,14 +4058,11 @@ func TestCaseSensitivity(t *testing.T) {
 		input:  "CREATE TABLE A (\n\t`A` int\n)",
 		output: "create table A (\n\tA int\n)",
 	}, {
-		input:  "create view A as select * from b",
-		output: "create view a as select * from b",
+		input: "create view A as select * from b",
 	}, {
-		input:  "drop view A",
-		output: "drop view a",
+		input: "drop view A",
 	}, {
-		input:  "drop view if exists A",
-		output: "drop view if exists a",
+		input: "drop view if exists A",
 	}, {
 		input:  "select /* lock in SHARE MODE */ 1 from t lock in SHARE MODE",
 		output: "select /* lock in SHARE MODE */ 1 from t lock in share mode",

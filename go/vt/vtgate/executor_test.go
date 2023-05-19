@@ -21,13 +21,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"html/template"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
 	"sort"
 	"strings"
 	"testing"
+
+	"github.com/google/safehtml/template"
 
 	"vitess.io/vitess/go/vt/vtgate/logstats"
 
@@ -1818,6 +1819,48 @@ func TestGetPlanNormalized(t *testing.T) {
 	assertCacheContains(t, r, unshardedvc, normalized)
 }
 
+func TestGetPlanPriority(t *testing.T) {
+
+	testCases := []struct {
+		name             string
+		sql              string
+		expectedPriority string
+		expectedError    error
+	}{
+		{name: "Invalid priority", sql: "select /*vt+ PRIORITY=something */ * from music_user_map", expectedPriority: "", expectedError: sqlparser.ErrInvalidPriority},
+		{name: "Valid priority", sql: "select /*vt+ PRIORITY=33 */ * from music_user_map", expectedPriority: "33", expectedError: nil},
+		{name: "empty priority", sql: "select * from music_user_map", expectedPriority: "", expectedError: nil},
+	}
+
+	session := NewSafeSession(&vtgatepb.Session{TargetString: "@unknown", Options: &querypb.ExecuteOptions{}})
+
+	for _, aTestCase := range testCases {
+		testCase := aTestCase
+
+		t.Run(testCase.name, func(t *testing.T) {
+			r, _, _, _ := createExecutorEnv()
+			r.normalize = true
+			logStats := logstats.NewLogStats(ctx, "Test", "", "", nil)
+			vCursor, err := newVCursorImpl(session, makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, false, pv)
+			assert.NoError(t, err)
+
+			stmt, err := sqlparser.Parse(testCase.sql)
+			assert.NoError(t, err)
+			crticalityFromStatement, _ := sqlparser.GetPriorityFromStatement(stmt)
+
+			_, err = r.getPlan(context.Background(), vCursor, testCase.sql, stmt, makeComments("/* some comment */"), map[string]*querypb.BindVariable{}, nil, true, logStats)
+			if testCase.expectedError != nil {
+				assert.ErrorIs(t, err, testCase.expectedError)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, testCase.expectedPriority, crticalityFromStatement)
+				assert.Equal(t, testCase.expectedPriority, vCursor.safeSession.Options.Priority)
+			}
+		})
+	}
+
+}
+
 func TestPassthroughDDL(t *testing.T) {
 	executor, sbc1, sbc2, _ := createExecutorEnv()
 	primarySession.TargetString = "TestExecutor"
@@ -2620,6 +2663,83 @@ func TestExecutorPrepareExecute(t *testing.T) {
 		"prepare prep_user from ''",
 		nil)
 	require.Error(t, err)
+}
+
+func TestExecutorTruncateErrors(t *testing.T) {
+	save := truncateErrorLen
+	truncateErrorLen = 32
+	defer func() { truncateErrorLen = save }()
+
+	executor, _, _, _ := createExecutorEnv()
+	session := NewSafeSession(&vtgatepb.Session{})
+	fn := func(r *sqltypes.Result) error {
+		return nil
+	}
+
+	_, err := executor.Execute(ctx, "TestExecute", session, "invalid statement", nil)
+	assert.EqualError(t, err, "syntax error at posi [TRUNCATED]")
+
+	err = executor.StreamExecute(ctx, "TestExecute", session, "invalid statement", nil, fn)
+	assert.EqualError(t, err, "syntax error at posi [TRUNCATED]")
+
+	_, err = executor.Prepare(context.Background(), "TestExecute", session, "invalid statement", nil)
+	assert.EqualError(t, err, "[BUG] unrecognized p [TRUNCATED]")
+}
+
+func TestExecutorFlushStmt(t *testing.T) {
+	executor, _, _, _ := createExecutorEnv()
+
+	tcs := []struct {
+		targetStr string
+		query     string
+
+		expectedErr string
+	}{{
+		targetStr: KsTestUnsharded,
+		query:     "flush status",
+	}, {
+		targetStr: KsTestUnsharded,
+		query:     "flush tables user",
+	}, {
+		targetStr:   "TestUnsharded@replica",
+		query:       "flush tables user",
+		expectedErr: "VT09012: FLUSH statement with REPLICA tablet not allowed",
+	}, {
+		targetStr:   "TestUnsharded@replica",
+		query:       "flush binary logs",
+		expectedErr: "VT09012: FLUSH statement with REPLICA tablet not allowed",
+	}, {
+		targetStr: "TestUnsharded@replica",
+		query:     "flush NO_WRITE_TO_BINLOG binary logs",
+	}, {
+		targetStr: KsTestUnsharded,
+		query:     "flush NO_WRITE_TO_BINLOG tables user",
+	}, {
+		targetStr: "TestUnsharded@replica",
+		query:     "flush LOCAL binary logs",
+	}, {
+		targetStr: KsTestUnsharded,
+		query:     "flush LOCAL tables user",
+	}, {
+		targetStr:   "",
+		query:       "flush LOCAL binary logs",
+		expectedErr: "VT09005: no database selected", // no database selected error.
+	}, {
+		targetStr: "",
+		query:     "flush LOCAL tables user",
+	}}
+
+	for _, tc := range tcs {
+		t.Run(tc.query+tc.targetStr, func(t *testing.T) {
+			_, err := executor.Execute(context.Background(), "TestExecutorFlushStmt", NewSafeSession(&vtgatepb.Session{TargetString: tc.targetStr}), tc.query, nil)
+			if tc.expectedErr == "" {
+				require.NoError(t, err)
+			} else {
+				require.Error(t, err)
+				require.ErrorContains(t, err, tc.expectedErr)
+			}
+		})
+	}
 }
 
 func exec(executor *Executor, session *SafeSession, sql string) (*sqltypes.Result, error) {

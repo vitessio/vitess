@@ -127,14 +127,22 @@ func (a *Arena) newEvalText(raw []byte, tc collations.TypedCollation) *evalBytes
 	return b
 }
 
-func (a *Arena) newEvalTime(time datetime.Time) *evalTemporal {
-	// TODO: reuse evalTemporal
-	return &evalTemporal{t: sqltypes.Time, dt: datetime.DateTime{Time: time}}
+func (a *Arena) newEvalRaw(raw []byte, tt sqltypes.Type, tc collations.TypedCollation) *evalBytes {
+	b := a.newEvalBytesEmpty()
+	b.tt = int16(tt)
+	b.col = tc
+	b.bytes = raw
+	return b
 }
 
-func (a *Arena) newEvalDateTime(dt datetime.DateTime) *evalTemporal {
+func (a *Arena) newEvalTime(time datetime.Time, l int) *evalTemporal {
 	// TODO: reuse evalTemporal
-	return &evalTemporal{t: sqltypes.Datetime, dt: dt}
+	return &evalTemporal{t: sqltypes.Time, dt: datetime.DateTime{Time: time.Round(l)}, prec: uint8(l)}
+}
+
+func (a *Arena) newEvalDateTime(dt datetime.DateTime, l int) *evalTemporal {
+	// TODO: reuse evalTemporal
+	return &evalTemporal{t: sqltypes.Datetime, dt: dt.Round(l), prec: uint8(l)}
 }
 
 func (a *Arena) newEvalDate(date datetime.Date) *evalTemporal {
@@ -142,6 +150,6 @@ func (a *Arena) newEvalDate(date datetime.Date) *evalTemporal {
 	return &evalTemporal{t: sqltypes.Date, dt: datetime.DateTime{Date: date}}
 }
 
-func (a *Arena) newTemporal(t sqltypes.Type, dt datetime.DateTime) *evalTemporal {
-	return &evalTemporal{t: t, dt: dt}
+func (a *Arena) newTemporal(t sqltypes.Type, dt datetime.DateTime, prec uint8) *evalTemporal {
+	return &evalTemporal{t: t, dt: dt, prec: prec}
 }

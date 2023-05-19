@@ -28,12 +28,12 @@ import (
 
 	"golang.org/x/exp/slices"
 
-	"vitess.io/vitess/go/mysql/datetime"
-	"vitess.io/vitess/go/mysql/format"
-	"vitess.io/vitess/go/mysql/json/fastparse"
+	"vitess.io/vitess/go/mysql/fastparse"
 
 	"vitess.io/vitess/go/hack"
+	"vitess.io/vitess/go/mysql/datetime"
 	"vitess.io/vitess/go/mysql/decimal"
+	"vitess.io/vitess/go/mysql/format"
 )
 
 // Parser parses JSON.
@@ -906,7 +906,7 @@ func (v *Value) Date() (datetime.Date, bool) {
 	case TypeDate:
 		return datetime.ParseDate(v.s)
 	case TypeDateTime:
-		dt, ok := datetime.ParseDateTime(v.s)
+		dt, _, ok := datetime.ParseDateTime(v.s, datetime.DefaultPrecision)
 		return dt.Date, ok
 	}
 	return datetime.Date{}, false
@@ -918,7 +918,8 @@ func (v *Value) DateTime() (datetime.DateTime, bool) {
 		d, ok := datetime.ParseDate(v.s)
 		return datetime.DateTime{Date: d}, ok
 	case TypeDateTime:
-		return datetime.ParseDateTime(v.s)
+		dt, _, ok := datetime.ParseDateTime(v.s, datetime.DefaultPrecision)
+		return dt, ok
 	}
 	return datetime.DateTime{}, false
 }
@@ -927,7 +928,8 @@ func (v *Value) Time() (datetime.Time, bool) {
 	if v.t != TypeTime {
 		return datetime.Time{}, false
 	}
-	return datetime.ParseTime(v.s)
+	t, _, ok := datetime.ParseTime(v.s, datetime.DefaultPrecision)
+	return t, ok
 }
 
 // Object returns the underlying JSON object for the v.
@@ -1001,10 +1003,7 @@ func (v *Value) Uint64() (uint64, bool) {
 }
 
 func (v *Value) Float64() (float64, bool) {
-	// We only care to parse as many of the initial float characters of the
-	// string as possible. This functionality is implemented in the `strconv` package
-	// of the standard library, but not exposed, so we hook into it.
-	val, _, err := hack.ParseFloatPrefix(v.s, 64)
+	val, err := fastparse.ParseFloat64(v.s)
 	if err != nil {
 		return val, false
 	}

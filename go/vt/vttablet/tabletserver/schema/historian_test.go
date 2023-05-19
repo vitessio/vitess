@@ -19,6 +19,7 @@ package schema
 import (
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -70,7 +71,7 @@ func getDbSchemaBlob(t *testing.T, tables map[string]*binlogdatapb.MinimalTable)
 }
 
 func TestHistorian(t *testing.T) {
-	se, db, cancel := getTestSchemaEngine(t)
+	se, db, cancel := getTestSchemaEngine(t, 0)
 	defer cancel()
 
 	se.EnableHistorian(false)
@@ -172,4 +173,78 @@ func TestHistorian(t *testing.T) {
 	tab, err = se.GetTableForPos(sqlparser.NewIdentifierCS("t1"), gtid3)
 	require.NoError(t, err)
 	require.Equal(t, exp3, fmt.Sprintf("%v", tab))
+}
+
+func TestHistorianPurgeOldSchemas(t *testing.T) {
+	schemaVersionMaxAgeSeconds := 3600 // 1 hour
+	se, db, cancel := getTestSchemaEngine(t, int64(schemaVersionMaxAgeSeconds))
+	defer cancel()
+
+	gtidPrefix := "MySQL56/7b04699f-f5e9-11e9-bf88-9cb6d089e1c3:"
+	gtid1 := gtidPrefix + "1-10"
+	ddl1 := "create table tracker_test (id int)"
+	// create the first record 1 day ago so it gets purged from memory
+	ts1 := time.Now().Add(time.Duration(-24) * time.Hour)
+	_, _, _ = ddl1, ts1, db
+	se.EnableHistorian(true)
+	_, err := se.GetTableForPos(sqlparser.NewIdentifierCS("t1"), gtid1)
+	require.Equal(t, "table t1 not found in vttablet schema", err.Error())
+	var blob1 string
+
+	fields := []*querypb.Field{{
+		Name: "id",
+		Type: sqltypes.Int32,
+	}, {
+		Name: "pos",
+		Type: sqltypes.VarBinary,
+	}, {
+		Name: "ddl",
+		Type: sqltypes.VarBinary,
+	}, {
+		Name: "time_updated",
+		Type: sqltypes.Int32,
+	}, {
+		Name: "schemax",
+		Type: sqltypes.Blob,
+	}}
+
+	table := getTable("t1", []string{"id1", "id2"}, []querypb.Type{querypb.Type_INT32, querypb.Type_INT32}, []int64{0})
+	tables := make(map[string]*binlogdatapb.MinimalTable)
+	tables["t1"] = table
+	blob1 = getDbSchemaBlob(t, tables)
+	db.AddQueryPattern("select id, pos, ddl, time_updated, schemax from _vt\\.schema_version where time_updated \\>.*", &sqltypes.Result{
+		Fields: fields,
+		Rows: [][]sqltypes.Value{
+			{sqltypes.NewInt32(1), sqltypes.NewVarBinary(gtid1), sqltypes.NewVarBinary(ddl1), sqltypes.NewInt32(int32(ts1.Unix())), sqltypes.NewVarBinary(blob1)},
+		},
+	})
+	require.Nil(t, se.RegisterVersionEvent())
+	_, err = se.GetTableForPos(sqlparser.NewIdentifierCS("t1"), gtid1)
+	// validate the old schema has been purged
+	require.Equal(t, "table t1 not found in vttablet schema", err.Error())
+	require.Equal(t, 0, len(se.historian.schemas))
+
+	// add a second schema record row with a time_updated that won't be purged
+	gtid2 := gtidPrefix + "1-20"
+	_, err = se.GetTableForPos(sqlparser.NewIdentifierCS("t1"), gtid2)
+	require.Equal(t, "table t1 not found in vttablet schema", err.Error())
+
+	table = getTable("t1", []string{"id1", "id2"}, []querypb.Type{querypb.Type_INT32, querypb.Type_VARBINARY}, []int64{0})
+	tables["t1"] = table
+	blob2 := getDbSchemaBlob(t, tables)
+	ddl2 := "alter table t1 modify column id2 varbinary"
+	// set time_updated younger than the cutoff from historian.schemaMaxAgeSeconds
+	ts2 := time.Now().Add(time.Duration(-60) * time.Second)
+	db.AddQuery("select id, pos, ddl, time_updated, schemax from _vt.schema_version where id > 1 order by id asc", &sqltypes.Result{
+		Fields: fields,
+		Rows: [][]sqltypes.Value{
+			{sqltypes.NewInt32(2), sqltypes.NewVarBinary(gtid2), sqltypes.NewVarBinary(ddl2), sqltypes.NewInt32(int32(ts2.Unix())), sqltypes.NewVarBinary(blob2)},
+		},
+	})
+	require.Nil(t, se.RegisterVersionEvent())
+	exp2 := `name:"t1" fields:{name:"id1" type:INT32 table:"t1"} fields:{name:"id2" type:VARBINARY table:"t1"} p_k_columns:0`
+	tab, err := se.GetTableForPos(sqlparser.NewIdentifierCS("t1"), gtid2)
+	require.NoError(t, err)
+	require.Equal(t, exp2, fmt.Sprintf("%v", tab))
+	require.Equal(t, 1, len(se.historian.schemas))
 }

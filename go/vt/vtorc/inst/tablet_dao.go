@@ -159,8 +159,9 @@ func ReadTablet(instanceKey InstanceKey) (*topodatapb.Tablet, error) {
 		`
 	args := sqlutils.Args(instanceKey.Hostname, instanceKey.Port)
 	tablet := &topodatapb.Tablet{}
+	opts := prototext.UnmarshalOptions{DiscardUnknown: true}
 	err := db.QueryVTOrc(query, args, func(row sqlutils.RowMap) error {
-		return prototext.Unmarshal([]byte(row.GetString("info")), tablet)
+		return opts.Unmarshal([]byte(row.GetString("info")), tablet)
 	})
 	if err != nil {
 		return nil, err

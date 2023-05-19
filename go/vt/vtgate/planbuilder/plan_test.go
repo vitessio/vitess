@@ -222,6 +222,7 @@ func makeTestOutput(t *testing.T) string {
 func TestPlan(t *testing.T) {
 	vschemaWrapper := &vschemaWrapper{
 		v:             loadSchema(t, "vschemas/schema.json", true),
+		tabletType:    topodatapb.TabletType_PRIMARY,
 		sysVarEnabled: true,
 	}
 	testOutputTempDir := makeTestOutput(t)
@@ -290,6 +291,14 @@ func TestViews(t *testing.T) {
 func TestOne(t *testing.T) {
 	vschema := &vschemaWrapper{
 		v: loadSchema(t, "vschemas/schema.json", true),
+	}
+
+	testFile(t, "onecase.json", "", vschema, false)
+}
+
+func TestOneTPCC(t *testing.T) {
+	vschema := &vschemaWrapper{
+		v: loadSchema(t, "vschemas/tpcc_schema.json", true),
 	}
 
 	testFile(t, "onecase.json", "", vschema, false)

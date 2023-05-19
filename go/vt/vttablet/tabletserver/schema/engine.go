@@ -119,7 +119,7 @@ func NewEngine(env tabletenv.Env) *Engine {
 
 		schemazHandler(se.GetSchema(), w, r)
 	})
-	se.historian = newHistorian(env.Config().TrackSchemaVersions, se.conns)
+	se.historian = newHistorian(env.Config().TrackSchemaVersions, env.Config().SchemaVersionMaxAgeSeconds, se.conns)
 	return se
 }
 
@@ -709,7 +709,7 @@ func NewEngineForTests() *Engine {
 	se := &Engine{
 		isOpen:    true,
 		tables:    make(map[string]*Table),
-		historian: newHistorian(false, nil),
+		historian: newHistorian(false, 0, nil),
 	}
 	return se
 }
@@ -719,4 +719,8 @@ func (se *Engine) SetTableForTests(table *Table) {
 	se.mu.Lock()
 	defer se.mu.Unlock()
 	se.tables[table.Name.String()] = table
+}
+
+func (se *Engine) GetDBConnector() dbconfigs.Connector {
+	return se.cp
 }

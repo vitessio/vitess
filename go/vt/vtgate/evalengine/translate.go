@@ -121,6 +121,31 @@ func (ast *astCompiler) translateLogicalExpr(opname string, left, right sqlparse
 	}, nil
 }
 
+func (ast *astCompiler) translateIntervalExpr(needle sqlparser.Expr, haystack []sqlparser.Expr) (Expr, error) {
+	exprs := make([]Expr, 0, len(haystack)+1)
+
+	expr, err := ast.translateExpr(needle)
+	if err != nil {
+		return nil, err
+	}
+
+	exprs = append(exprs, expr)
+	for _, e := range haystack {
+		expr, err := ast.translateExpr(e)
+		if err != nil {
+			return nil, err
+		}
+		exprs = append(exprs, expr)
+	}
+
+	return &IntervalExpr{
+		CallExpr{
+			Arguments: exprs,
+			Method:    "INTERVAL",
+		},
+	}, nil
+}
+
 func (ast *astCompiler) translateIsExpr(left sqlparser.Expr, op sqlparser.IsExprOperator) (Expr, error) {
 	expr, err := ast.translateExpr(left)
 	if err != nil {
@@ -499,6 +524,8 @@ func (ast *astCompiler) translateExpr(e sqlparser.Expr) (Expr, error) {
 		return ast.translateCollateExpr(node)
 	case *sqlparser.IntroducerExpr:
 		return ast.translateIntroducerExpr(node)
+	case *sqlparser.IntervalFuncExpr:
+		return ast.translateIntervalExpr(node.Expr, node.Exprs)
 	case *sqlparser.IsExpr:
 		return ast.translateIsExpr(node.Left, node.Right)
 	case sqlparser.Callable:
@@ -574,10 +601,7 @@ func Translate(e sqlparser.Expr, cfg *Config) (Expr, error) {
 	if cfg.Optimization >= OptimizationLevelCompile && ast.untyped == 0 {
 		comp := compiler{cfg: cfg}
 		var ct ctype
-		if ct, cfg.CompilerErr = comp.compileExpr(expr); cfg.CompilerErr == nil {
-			if comp.asm.stack.cur != 1 {
-				return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "bad compilation: stack pointer at %d after compilation", comp.asm.stack.cur)
-			}
+		if ct, cfg.CompilerErr = comp.compile(expr); cfg.CompilerErr == nil {
 			expr = &CompiledExpr{code: comp.asm.ins, original: expr, stack: comp.asm.stack.max, typed: ct.Type}
 		}
 	}

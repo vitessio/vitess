@@ -282,7 +282,6 @@ var testGetSchemaReply = &tabletmanagerdatapb.SchemaDefinition{
 			RowCount:          6,
 		},
 	},
-	Version: "xxx",
 }
 
 func (fra *fakeRPCTM) GetSchema(ctx context.Context, request *tabletmanagerdatapb.GetSchemaRequest) (*tabletmanagerdatapb.SchemaDefinition, error) {

@@ -62,7 +62,8 @@ var (
 	normalizeQueries = true
 	streamBufferSize = 32 * 1024
 
-	terseErrors bool
+	terseErrors      bool
+	truncateErrorLen int
 
 	// plan cache related flag
 	queryPlanCacheSize   = cache.DefaultConfig.MaxEntries
@@ -117,6 +118,7 @@ func registerFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&transactionMode, "transaction_mode", transactionMode, "SINGLE: disallow multi-db transactions, MULTI: allow multi-db transactions with best effort commit, TWOPC: allow multi-db transactions with 2pc commit")
 	fs.BoolVar(&normalizeQueries, "normalize_queries", normalizeQueries, "Rewrite queries with bind vars. Turn this off if the app itself sends normalized queries with bind vars.")
 	fs.BoolVar(&terseErrors, "vtgate-config-terse-errors", terseErrors, "prevent bind vars from escaping in returned errors")
+	fs.IntVar(&truncateErrorLen, "truncate-error-len", truncateErrorLen, "truncate errors sent to client if they are longer than this value (0 means do not truncate)")
 	fs.IntVar(&streamBufferSize, "stream_buffer_size", streamBufferSize, "the number of bytes sent from vtgate for each stream call. It's recommended to keep this value in sync with vttablet's query-server-config-stream-buffer-size.")
 	fs.Int64Var(&queryPlanCacheSize, "gate_query_cache_size", queryPlanCacheSize, "gate server query cache size, maximum number of queries to be cached. vtgate analyzes every incoming query and generate a query plan, these plans are being cached in a cache. This config controls the expected amount of unique entries in the cache.")
 	fs.Int64Var(&queryPlanCacheMemory, "gate_query_cache_memory", queryPlanCacheMemory, "gate server query cache size in bytes, maximum amount of memory to be cached. vtgate analyzes every incoming query and generate a query plan, these plans are being cached in a lru cache. This config controls the capacity of the lru cache.")
@@ -409,13 +411,13 @@ func resolveAndLoadKeyspace(ctx context.Context, srvResolver *srvtopo.Resolver, 
 }
 
 func (vtg *VTGate) registerDebugEnvHandler() {
-	http.HandleFunc("/debug/env", func(w http.ResponseWriter, r *http.Request) {
+	servenv.HTTPHandleFunc("/debug/env", func(w http.ResponseWriter, r *http.Request) {
 		debugEnvHandler(vtg, w, r)
 	})
 }
 
 func (vtg *VTGate) registerDebugHealthHandler() {
-	http.HandleFunc("/debug/health", func(w http.ResponseWriter, r *http.Request) {
+	servenv.HTTPHandleFunc("/debug/health", func(w http.ResponseWriter, r *http.Request) {
 		if err := acl.CheckAccessHTTP(r, acl.MONITORING); err != nil {
 			acl.SendError(w, err)
 			return

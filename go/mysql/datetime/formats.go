@@ -23,7 +23,7 @@ var DefaultMySQLStrftime = map[byte]Spec{
 	'D': fmtMonthDaySuffix{},
 	'd': fmtDay{true},
 	'e': fmtDay{false},
-	'f': fmtNanoseconds{},
+	'f': fmtMicroseconds{},
 	'H': fmtHour24{true},
 	'h': fmtHour12{true},
 	'I': fmtHour12{true},

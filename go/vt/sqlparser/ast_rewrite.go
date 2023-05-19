@@ -58,6 +58,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfArgument(parent, node, replacer)
 	case *ArgumentLessWindowExpr:
 		return a.rewriteRefOfArgumentLessWindowExpr(parent, node, replacer)
+	case *AssignmentExpr:
+		return a.rewriteRefOfAssignmentExpr(parent, node, replacer)
 	case *AutoIncSpec:
 		return a.rewriteRefOfAutoIncSpec(parent, node, replacer)
 	case *Avg:
@@ -276,6 +278,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfLimit(parent, node, replacer)
 	case *LineStringExpr:
 		return a.rewriteRefOfLineStringExpr(parent, node, replacer)
+	case *LinestrPropertyFuncExpr:
+		return a.rewriteRefOfLinestrPropertyFuncExpr(parent, node, replacer)
 	case ListArg:
 		return a.rewriteListArg(parent, node, replacer)
 	case *Literal:
@@ -366,6 +370,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfPerformanceSchemaFuncExpr(parent, node, replacer)
 	case *PointExpr:
 		return a.rewriteRefOfPointExpr(parent, node, replacer)
+	case *PointPropertyFuncExpr:
+		return a.rewriteRefOfPointPropertyFuncExpr(parent, node, replacer)
 	case *PolygonExpr:
 		return a.rewriteRefOfPolygonExpr(parent, node, replacer)
 	case *PrepareStmt:
@@ -1084,6 +1090,38 @@ func (a *application) rewriteRefOfArgumentLessWindowExpr(parent SQLNode, node *A
 	}
 	if !a.rewriteRefOfOverClause(node, node.OverClause, func(newNode, parent SQLNode) {
 		parent.(*ArgumentLessWindowExpr).OverClause = newNode.(*OverClause)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfAssignmentExpr(parent SQLNode, node *AssignmentExpr, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteExpr(node, node.Left, func(newNode, parent SQLNode) {
+		parent.(*AssignmentExpr).Left = newNode.(Expr)
+	}) {
+		return false
+	}
+	if !a.rewriteExpr(node, node.Right, func(newNode, parent SQLNode) {
+		parent.(*AssignmentExpr).Right = newNode.(Expr)
 	}) {
 		return false
 	}
@@ -4581,6 +4619,38 @@ func (a *application) rewriteRefOfLineStringExpr(parent SQLNode, node *LineStrin
 	}
 	return true
 }
+func (a *application) rewriteRefOfLinestrPropertyFuncExpr(parent SQLNode, node *LinestrPropertyFuncExpr, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteExpr(node, node.Linestring, func(newNode, parent SQLNode) {
+		parent.(*LinestrPropertyFuncExpr).Linestring = newNode.(Expr)
+	}) {
+		return false
+	}
+	if !a.rewriteExpr(node, node.PropertyDefArg, func(newNode, parent SQLNode) {
+		parent.(*LinestrPropertyFuncExpr).PropertyDefArg = newNode.(Expr)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
 func (a *application) rewriteRefOfLiteral(parent SQLNode, node *Literal, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -5881,6 +5951,38 @@ func (a *application) rewriteRefOfPointExpr(parent SQLNode, node *PointExpr, rep
 	}
 	if !a.rewriteExpr(node, node.YCordinate, func(newNode, parent SQLNode) {
 		parent.(*PointExpr).YCordinate = newNode.(Expr)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfPointPropertyFuncExpr(parent SQLNode, node *PointPropertyFuncExpr, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteExpr(node, node.Point, func(newNode, parent SQLNode) {
+		parent.(*PointPropertyFuncExpr).Point = newNode.(Expr)
+	}) {
+		return false
+	}
+	if !a.rewriteExpr(node, node.ValueToSet, func(newNode, parent SQLNode) {
+		parent.(*PointPropertyFuncExpr).ValueToSet = newNode.(Expr)
 	}) {
 		return false
 	}
@@ -8783,6 +8885,8 @@ func (a *application) rewriteCallable(parent SQLNode, node Callable, replacer re
 		return a.rewriteRefOfLagLeadExpr(parent, node, replacer)
 	case *LineStringExpr:
 		return a.rewriteRefOfLineStringExpr(parent, node, replacer)
+	case *LinestrPropertyFuncExpr:
+		return a.rewriteRefOfLinestrPropertyFuncExpr(parent, node, replacer)
 	case *LocateExpr:
 		return a.rewriteRefOfLocateExpr(parent, node, replacer)
 	case *MatchExpr:
@@ -8809,6 +8913,8 @@ func (a *application) rewriteCallable(parent SQLNode, node Callable, replacer re
 		return a.rewriteRefOfPerformanceSchemaFuncExpr(parent, node, replacer)
 	case *PointExpr:
 		return a.rewriteRefOfPointExpr(parent, node, replacer)
+	case *PointPropertyFuncExpr:
+		return a.rewriteRefOfPointPropertyFuncExpr(parent, node, replacer)
 	case *PolygonExpr:
 		return a.rewriteRefOfPolygonExpr(parent, node, replacer)
 	case *RegexpInstrExpr:
@@ -8935,6 +9041,8 @@ func (a *application) rewriteExpr(parent SQLNode, node Expr, replacer replacerFu
 		return a.rewriteRefOfArgument(parent, node, replacer)
 	case *ArgumentLessWindowExpr:
 		return a.rewriteRefOfArgumentLessWindowExpr(parent, node, replacer)
+	case *AssignmentExpr:
+		return a.rewriteRefOfAssignmentExpr(parent, node, replacer)
 	case *Avg:
 		return a.rewriteRefOfAvg(parent, node, replacer)
 	case *BetweenExpr:
@@ -9051,6 +9159,8 @@ func (a *application) rewriteExpr(parent SQLNode, node Expr, replacer replacerFu
 		return a.rewriteRefOfLagLeadExpr(parent, node, replacer)
 	case *LineStringExpr:
 		return a.rewriteRefOfLineStringExpr(parent, node, replacer)
+	case *LinestrPropertyFuncExpr:
+		return a.rewriteRefOfLinestrPropertyFuncExpr(parent, node, replacer)
 	case ListArg:
 		return a.rewriteListArg(parent, node, replacer)
 	case *Literal:
@@ -9091,6 +9201,8 @@ func (a *application) rewriteExpr(parent SQLNode, node Expr, replacer replacerFu
 		return a.rewriteRefOfPerformanceSchemaFuncExpr(parent, node, replacer)
 	case *PointExpr:
 		return a.rewriteRefOfPointExpr(parent, node, replacer)
+	case *PointPropertyFuncExpr:
+		return a.rewriteRefOfPointPropertyFuncExpr(parent, node, replacer)
 	case *PolygonExpr:
 		return a.rewriteRefOfPolygonExpr(parent, node, replacer)
 	case *RegexpInstrExpr:

@@ -91,7 +91,7 @@ func (tr *ShardedRouting) isScatter() bool {
 // tryImprove rewrites the predicates for this query to see if we can produce a better plan.
 // The rewrites are two:
 //  1. first we turn the predicate a conjunctive normal form - an AND of ORs.
-//     This can sometimes push a predicate to the top so it's not hiding inside of an OR
+//     This can sometimes push a predicate to the top, so it's not hiding inside an OR
 //  2. If that is not enough, an additional rewrite pass is performed where we try to
 //     turn ORs into IN, which is easier for the planner to plan
 func (tr *ShardedRouting) tryImprove(ctx *plancontext.PlanningContext, queryTable *QueryTable) (Routing, error) {
@@ -361,74 +361,114 @@ func (tr *ShardedRouting) haveMatchingVindex(
 	vfunc func(*vindexes.ColumnVindex) vindexes.Vindex,
 ) bool {
 	newVindexFound := false
+
 	for _, v := range tr.VindexPreds {
-		// check that the
+		// Check if the dependency is solved by the table ID.
 		if !ctx.SemTable.DirectDeps(column).IsSolvedBy(v.TableID) {
 			continue
 		}
+
 		switch v.ColVindex.Vindex.(type) {
 		case vindexes.SingleColumn:
-			col := v.ColVindex.Columns[0]
-			if column.Name.Equal(col) {
-				// single column vindex - just add the option
-				routeOpcode := opcode(v.ColVindex)
-				vindex := vfunc(v.ColVindex)
-				if vindex == nil || routeOpcode == engine.Scatter {
-					continue
-				}
-				v.Options = append(v.Options, &VindexOption{
-					Values:      []evalengine.Expr{value},
-					ValueExprs:  []sqlparser.Expr{valueExpr},
-					Predicates:  []sqlparser.Expr{node},
-					OpCode:      routeOpcode,
-					FoundVindex: vindex,
-					Cost:        costFor(v.ColVindex, routeOpcode),
-					Ready:       true,
-				})
-				newVindexFound = true
-			}
+			newVindexFound = tr.processSingleColumnVindex(node, valueExpr, column, value, opcode, vfunc, v, newVindexFound)
+
 		case vindexes.MultiColumn:
-			colLoweredName := ""
-			indexOfCol := -1
-			for idx, col := range v.ColVindex.Columns {
-				if column.Name.Equal(col) {
-					colLoweredName = column.Name.Lowered()
-					indexOfCol = idx
-					break
-				}
-			}
-			if colLoweredName == "" {
-				break
-			}
-
-			var newOption []*VindexOption
-			for _, op := range v.Options {
-				if op.Ready {
-					continue
-				}
-				_, isPresent := op.ColsSeen[colLoweredName]
-				if isPresent {
-					continue
-				}
-				option := copyOption(op)
-				optionReady := option.updateWithNewColumn(colLoweredName, valueExpr, indexOfCol, value, node, v.ColVindex, opcode)
-				if optionReady {
-					newVindexFound = true
-				}
-				newOption = append(newOption, option)
-			}
-			v.Options = append(v.Options, newOption...)
-
-			// multi-column vindex - just always add as new option
-			option := createOption(v.ColVindex, vfunc)
-			optionReady := option.updateWithNewColumn(colLoweredName, valueExpr, indexOfCol, value, node, v.ColVindex, opcode)
-			if optionReady {
-				newVindexFound = true
-			}
-			v.Options = append(v.Options, option)
+			newVindexFound = tr.processMultiColumnVindex(node, valueExpr, column, value, opcode, vfunc, v, newVindexFound)
 		}
 	}
+
 	return newVindexFound
+}
+
+func (tr *ShardedRouting) processSingleColumnVindex(
+	node sqlparser.Expr,
+	valueExpr sqlparser.Expr,
+	column *sqlparser.ColName,
+	value evalengine.Expr,
+	opcode func(*vindexes.ColumnVindex) engine.Opcode,
+	vfunc func(*vindexes.ColumnVindex) vindexes.Vindex,
+	vindexPlusPredicates *VindexPlusPredicates,
+	newVindexFound bool,
+) bool {
+	col := vindexPlusPredicates.ColVindex.Columns[0]
+	if !column.Name.Equal(col) {
+		return newVindexFound
+	}
+
+	routeOpcode := opcode(vindexPlusPredicates.ColVindex)
+	vindex := vfunc(vindexPlusPredicates.ColVindex)
+	if vindex == nil || routeOpcode == engine.Scatter {
+		return newVindexFound
+	}
+
+	vindexPlusPredicates.Options = append(vindexPlusPredicates.Options, &VindexOption{
+		Values:      []evalengine.Expr{value},
+		ValueExprs:  []sqlparser.Expr{valueExpr},
+		Predicates:  []sqlparser.Expr{node},
+		OpCode:      routeOpcode,
+		FoundVindex: vindex,
+		Cost:        costFor(vindexPlusPredicates.ColVindex, routeOpcode),
+		Ready:       true,
+	})
+	return true
+}
+
+func (tr *ShardedRouting) processMultiColumnVindex(
+	node sqlparser.Expr,
+	valueExpr sqlparser.Expr,
+	column *sqlparser.ColName,
+	value evalengine.Expr,
+	opcode func(*vindexes.ColumnVindex) engine.Opcode,
+	vfunc func(*vindexes.ColumnVindex) vindexes.Vindex,
+	v *VindexPlusPredicates,
+	newVindexFound bool,
+) bool {
+	colLoweredName, indexOfCol := tr.getLoweredNameAndIndex(v.ColVindex, column)
+
+	if colLoweredName == "" {
+		return newVindexFound
+	}
+
+	var newOption []*VindexOption
+	for _, op := range v.Options {
+		if op.Ready {
+			continue
+		}
+		_, isPresent := op.ColsSeen[colLoweredName]
+		if isPresent {
+			continue
+		}
+		option := copyOption(op)
+		optionReady := option.updateWithNewColumn(colLoweredName, valueExpr, indexOfCol, value, node, v.ColVindex, opcode)
+		if optionReady {
+			newVindexFound = true
+		}
+		newOption = append(newOption, option)
+	}
+	v.Options = append(v.Options, newOption...)
+
+	// Multi-column vindex - just always add as new option
+	option := createOption(v.ColVindex, vfunc)
+	optionReady := option.updateWithNewColumn(colLoweredName, valueExpr, indexOfCol, value, node, v.ColVindex, opcode)
+	if optionReady {
+		newVindexFound = true
+	}
+	v.Options = append(v.Options, option)
+
+	return newVindexFound
+}
+
+func (tr *ShardedRouting) getLoweredNameAndIndex(colVindex *vindexes.ColumnVindex, column *sqlparser.ColName) (string, int) {
+	colLoweredName := ""
+	indexOfCol := -1
+	for idx, col := range colVindex.Columns {
+		if column.Name.Equal(col) {
+			colLoweredName = column.Name.Lowered()
+			indexOfCol = idx
+			break
+		}
+	}
+	return colLoweredName, indexOfCol
 }
 
 func (tr *ShardedRouting) planEqualOp(ctx *plancontext.PlanningContext, node *sqlparser.ComparisonExpr) bool {

@@ -19,10 +19,12 @@ package evalengine
 import (
 	"fmt"
 	"strconv"
+	"unicode/utf8"
 
 	"vitess.io/vitess/go/hack"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/decimal"
+	"vitess.io/vitess/go/mysql/fastparse"
 	"vitess.io/vitess/go/mysql/format"
 	"vitess.io/vitess/go/mysql/json"
 	"vitess.io/vitess/go/sqltypes"
@@ -151,7 +153,8 @@ func evalIsTruthy(e eval) boolean {
 			}
 			return makeboolean(hex.u != 0)
 		}
-		return makeboolean(parseStringToFloat(e.string()) != 0.0)
+		f, _ := fastparse.ParseFloat64(e.string())
+		return makeboolean(f != 0.0)
 	case *evalJSON:
 		return makeboolean(e.ToBoolean())
 	case *evalTemporal:
@@ -216,7 +219,8 @@ func valueToEvalCast(v sqltypes.Value, typ sqltypes.Type) (eval, error) {
 			fval, err := v.ToFloat64()
 			return newEvalFloat(fval), err
 		case v.IsText() || v.IsBinary():
-			return newEvalFloat(parseStringToFloat(v.RawStr())), nil
+			fval, _ := fastparse.ParseFloat64(v.RawStr())
+			return newEvalFloat(fval), nil
 		default:
 			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "coercion should not try to coerce this value to a float: %v", v)
 		}
@@ -237,7 +241,7 @@ func valueToEvalCast(v sqltypes.Value, typ sqltypes.Type) (eval, error) {
 			}
 			dec = decimal.NewFromFloat(fval)
 		case v.IsText() || v.IsBinary():
-			fval := parseStringToFloat(v.RawStr())
+			fval, _ := fastparse.ParseFloat64(v.RawStr())
 			dec = decimal.NewFromFloat(fval)
 		default:
 			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "coercion should not try to coerce this value to a decimal: %v", v)
@@ -357,4 +361,39 @@ func valueToEval(value sqltypes.Value, collation collations.TypedCollation) (eva
 	default:
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Type is not supported: %q %s", value, value.Type())
 	}
+}
+
+const hexchars = "0123456789ABCDEF"
+
+func sanitizeErrorValue(s []byte) []byte {
+	var buf []byte
+	for width := 0; len(s) > 0; s = s[width:] {
+		r := rune(s[0])
+		width = 1
+		if r >= utf8.RuneSelf {
+			r, width = utf8.DecodeLastRune(s)
+		}
+		if width == 1 && r == utf8.RuneError {
+			buf = append(buf, `\x`...)
+			buf = append(buf, hexchars[s[0]>>4])
+			buf = append(buf, hexchars[s[0]&0xF])
+			continue
+		}
+
+		if strconv.IsPrint(r) {
+			if r < utf8.RuneSelf {
+				buf = append(buf, byte(r))
+			} else {
+				b := [utf8.UTFMax]byte{}
+				n := utf8.EncodeRune(b[:], r)
+				buf = append(buf, b[:n]...)
+			}
+			continue
+		}
+
+		buf = append(buf, `\x`...)
+		buf = append(buf, hexchars[s[0]>>4])
+		buf = append(buf, hexchars[s[0]&0xF])
+	}
+	return buf
 }

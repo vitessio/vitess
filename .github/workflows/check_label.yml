@@ -44,7 +44,7 @@ jobs:
             exit 1
           fi
 
-      - name: Check NeedsWebsiteDocsUpdate and NeedsDescriptionUpdate are off
+      - name: Check all Needs labels are off
         env:
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
@@ -62,6 +62,10 @@ jobs:
           fi
           if cat ${LABELS_JSON} | jq -r '.[].name ' | grep -q 'NeedsWebsiteDocsUpdate' ; then
             echo "Expecting PR to not have the NeedsWebsiteDocsUpdate label, please update the documentation and remove the label."
+            exit 1
+          fi
+          if cat ${LABELS_JSON} | jq -r '.[].name ' | grep -q 'NeedsIssue' ; then
+            echo "Expecting PR to not have the NeedsIssue label; please create a linked issue and remove the label."
             exit 1
           fi
           

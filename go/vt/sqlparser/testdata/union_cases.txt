@@ -1411,8 +1411,8 @@ END
 INPUT
 SELECT @a:= CAST(f1 AS SIGNED) FROM t1 UNION ALL SELECT CAST(f1 AS SIGNED) FROM t1;
 END
-ERROR
-syntax error at position 11 near ':'
+OUTPUT
+select @a := cast(f1 as SIGNED) from t1 union all select cast(f1 as SIGNED) from t1
 END
 INPUT
 (SELECT a FROM t1 ORDER BY COUNT(*)) UNION (SELECT a FROM t1 ORDER BY COUNT(*));
