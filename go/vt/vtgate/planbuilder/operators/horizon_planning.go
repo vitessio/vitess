@@ -756,8 +756,7 @@ func createProjection2(qp *QueryProjection, src ops.Operator) (*Projection, erro
 			}
 		}
 
-		proj.Columns = append(proj.Columns, UnexploredExpression{E: expr})
-		proj.ColumnNames = append(proj.ColumnNames, ae)
+		proj.addUnexploredExpr(ae, expr)
 	}
 	return proj, nil
 }

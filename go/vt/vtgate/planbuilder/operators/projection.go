@@ -73,10 +73,14 @@ type (
 
 var _ selectExpressions = (*Projection)(nil)
 
-func (p *Projection) addNoPushCol(expr *sqlparser.AliasedExpr, _ bool) int {
-	p.Columns = append(p.Columns, UnexploredExpression{E: expr.Expr})
-	p.ColumnNames = append(p.ColumnNames, expr)
+func (p *Projection) addUnexploredExpr(ae *sqlparser.AliasedExpr, e sqlparser.Expr) int {
+	p.Columns = append(p.Columns, UnexploredExpression{E: e})
+	p.ColumnNames = append(p.ColumnNames, ae)
 	return len(p.Columns) - 1
+}
+
+func (p *Projection) addNoPushCol(expr *sqlparser.AliasedExpr, _ bool) int {
+	return p.addUnexploredExpr(expr, expr.Expr)
 }
 
 func (p *Projection) isDerived() bool {

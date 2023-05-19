@@ -295,8 +295,7 @@ outer:
 				continue outer
 			}
 		}
-		builder.proj.Columns = append(builder.proj.Columns, UnexploredExpression{E: col.Expr})
-		builder.proj.ColumnNames = append(builder.proj.ColumnNames, col)
+		builder.proj.addUnexploredExpr(col, col.Expr)
 	}
 	if builder.projectionRequired {
 		return builder.joinColumns, builder.proj, nil
@@ -329,8 +328,7 @@ func (ab *aggBuilder) handleAggr(ctx *plancontext.PlanningContext, aggr Aggr) (A
 }
 
 func (ab *aggBuilder) handleMinMax(ctx *plancontext.PlanningContext, aggr Aggr) (Aggr, error) {
-	ab.proj.Columns = append(ab.proj.Columns, UnexploredExpression{E: aggr.Func})
-	ab.proj.ColumnNames = append(ab.proj.ColumnNames, aggr.Original)
+	ab.proj.addUnexploredExpr(aggr.Original, aggr.Func)
 
 	deps := ctx.SemTable.RecursiveDeps(aggr.Original.Expr)
 	switch {
@@ -354,7 +352,7 @@ func (ab *aggBuilder) handleMinMax(ctx *plancontext.PlanningContext, aggr Aggr) 
 }
 
 func (ab *aggBuilder) handleCountStar(ctx *plancontext.PlanningContext, aggr Aggr) (Aggr, error) {
-	// Projection is necessary since we are pushing down the aggregation.
+	// Projection is necessary since we are going to need to do arithmetics to summarize the aggregates
 	ab.projectionRequired = true
 
 	// Add the aggregate to both sides of the join.
@@ -393,8 +391,7 @@ func (ab *aggBuilder) handleCountStar(ctx *plancontext.PlanningContext, aggr Agg
 		Left:     lhsExpr,
 		Right:    rhsExpr,
 	}
-	ab.proj.Columns = append(ab.proj.Columns, UnexploredExpression{E: projExpr})
-	ab.proj.ColumnNames = append(ab.proj.ColumnNames, aggr.Original)
+	ab.proj.addUnexploredExpr(aggr.Original, projExpr)
 	return aggr, nil
 }
 
