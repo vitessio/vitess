@@ -328,13 +328,13 @@ func newTxThrottlerState(topoServer *topo.Server, config *txThrottlerConfig, tar
 		[]TopologyWatcherInterface, 0, len(config.healthCheckCells))
 	for _, cell := range config.healthCheckCells {
 		topologyWatcher, err := topologyWatcherFactory(
-				topoServer,
-				result.healthCheck,
-				cell,
-				target.Keyspace,
-				target.Shard,
-				discovery.DefaultTopologyWatcherRefreshInterval,
-				discovery.DefaultTopoReadConcurrency)
+			topoServer,
+			result.healthCheck,
+			cell,
+			target.Keyspace,
+			target.Shard,
+			discovery.DefaultTopologyWatcherRefreshInterval,
+			discovery.DefaultTopoReadConcurrency)
 		if err != nil {
 			return nil, err
 		}
