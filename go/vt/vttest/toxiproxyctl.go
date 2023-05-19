@@ -37,7 +37,7 @@ const (
 	dbaUser = "vt_dba_tcp"
 )
 
-// Toxiproxyctl implements MySQLManager through toxiproxy-server tool
+// Toxiproxyctl implements MySQLManager through toxiproxy-server tool.
 // It is used to simulate network failures and test the behavior of vttablet.
 type Toxiproxyctl struct {
 	binary   string
@@ -52,7 +52,7 @@ type Toxiproxyctl struct {
 	proxy *toxiproxy.Proxy
 }
 
-// NewToxiproxyctl creates a new Toxiproxyctl instance
+// NewToxiproxyctl creates a new Toxiproxyctl instance.
 //
 // apiPort is the port number of a toxiproxy server. It is used to create a proxy by the toxiproxy client.
 // mysqlPort is the port number of a mysql server running behind the proxy.
@@ -178,23 +178,23 @@ func (ctl *Toxiproxyctl) TearDown() error {
 	return nil
 }
 
-// Auth returns the username/password tuple required to log in to mysqld
+// Auth returns the username/password tuple required to log in to mysqld.
 func (ctl *Toxiproxyctl) Auth() (string, string) {
 	return dbaUser, ""
 }
 
-// Address returns the hostname/tcp port pair required to connect to mysqld
+// Address returns the hostname/tcp port pair required to connect to mysqld.
 func (ctl *Toxiproxyctl) Address() (string, int) {
 	return "", ctl.port
 }
 
-// UnixSocket returns the path to the local Unix socket required to connect to mysqld
+// UnixSocket returns the path to the local Unix socket required to connect to mysqld.
 func (ctl *Toxiproxyctl) UnixSocket() string {
 	// Toxiproxy does not support Unix sockets
 	return ""
 }
 
-// TabletDir returns the path where data for this Tablet would be stored
+// TabletDir returns the path where data for this Tablet would be stored.
 func (ctl *Toxiproxyctl) TabletDir() string {
 	return ctl.mysqlctl.TabletDir()
 }
@@ -211,7 +211,7 @@ func (ctl *Toxiproxyctl) Params(dbname string) mysql.ConnParams {
 	return params
 }
 
-// AddTimeoutToxic adds a timeout toxic to the toxiproxy service
+// AddTimeoutToxic adds a timeout toxic to the toxiproxy service.
 func (ctl *Toxiproxyctl) AddTimeoutToxic() error {
 	log.Info("Adding timeout toxic")
 	_, err := ctl.proxy.AddToxic("my-timeout", "timeout", "", 1, toxiproxy.Attributes{
@@ -220,7 +220,7 @@ func (ctl *Toxiproxyctl) AddTimeoutToxic() error {
 	return err
 }
 
-// UpdateTimeoutToxicity updates the toxicity of the timeout toxic
+// UpdateTimeoutToxicity updates the toxicity of the timeout toxic.
 func (ctl *Toxiproxyctl) UpdateTimeoutToxicity(toxicity float32) error {
 	log.Infof("Updating timeout toxicity to %f", toxicity)
 	_, err := ctl.proxy.UpdateToxic("my-timeout", toxicity, toxiproxy.Attributes{
@@ -229,7 +229,7 @@ func (ctl *Toxiproxyctl) UpdateTimeoutToxicity(toxicity float32) error {
 	return err
 }
 
-// RemoveTimeoutToxic removes the timeout toxic from the toxiproxy service
+// RemoveTimeoutToxic removes the timeout toxic from the toxiproxy service.
 func (ctl *Toxiproxyctl) RemoveTimeoutToxic() error {
 	log.Info("Removing timeout toxic")
 	return ctl.proxy.RemoveToxic("my-timeout")

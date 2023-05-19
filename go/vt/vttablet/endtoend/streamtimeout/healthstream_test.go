@@ -44,7 +44,7 @@ func TestSchemaChangeTimedout(t *testing.T) {
 		})
 	}(ch)
 
-	// We will set up the MySQLHang simulation
+	// We will set up the MySQLHang simulation.
 	// To avoid flakiness, we will retry the setup if the health_streamer sends a notification before the MySQLHang is simulated.
 	attempt := 1
 	var tableName string
