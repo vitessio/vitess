@@ -27,7 +27,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 )
 
-func getTestSchemaEngine(t *testing.T) (*Engine, *fakesqldb.DB, func()) {
+func getTestSchemaEngine(t *testing.T, schemaMaxAgeSeconds int64) (*Engine, *fakesqldb.DB, func()) {
 	db := fakesqldb.New(t)
 	db.AddQuery("select unix_timestamp()", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 		"t",
@@ -37,7 +37,7 @@ func getTestSchemaEngine(t *testing.T) (*Engine, *fakesqldb.DB, func()) {
 	db.AddQueryPattern(baseShowTablesPattern, &sqltypes.Result{})
 	db.AddQuery(mysql.BaseShowPrimary, &sqltypes.Result{})
 	AddFakeInnoDBReadRowsResult(db, 1)
-	se := newEngine(10, 10*time.Second, 10*time.Second, db)
+	se := newEngine(10, 10*time.Second, 10*time.Second, schemaMaxAgeSeconds, db)
 	require.NoError(t, se.Open())
 	cancel := func() {
 		defer db.Close()

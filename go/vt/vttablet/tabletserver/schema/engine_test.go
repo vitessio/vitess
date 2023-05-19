@@ -75,7 +75,7 @@ func TestOpenAndReload(t *testing.T) {
 	))
 	firstReadRowsValue := 12
 	AddFakeInnoDBReadRowsResult(db, firstReadRowsValue)
-	se := newEngine(10, 10*time.Second, 10*time.Second, db)
+	se := newEngine(10, 10*time.Second, 10*time.Second, 0, db)
 	se.Open()
 	defer se.Close()
 
@@ -266,7 +266,7 @@ func TestReloadWithSwappedTables(t *testing.T) {
 	firstReadRowsValue := 12
 	AddFakeInnoDBReadRowsResult(db, firstReadRowsValue)
 
-	se := newEngine(10, 10*time.Second, 10*time.Second, db)
+	se := newEngine(10, 10*time.Second, 10*time.Second, 0, db)
 	se.Open()
 	defer se.Close()
 	want := initialSchema()
@@ -416,7 +416,7 @@ func TestOpenFailedDueToExecErr(t *testing.T) {
 	schematest.AddDefaultQueries(db)
 	want := "injected error"
 	db.RejectQueryPattern(baseShowTablesPattern, want)
-	se := newEngine(10, 1*time.Second, 1*time.Second, db)
+	se := newEngine(10, 1*time.Second, 1*time.Second, 0, db)
 	err := se.Open()
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("se.Open: %v, want %s", err, want)
@@ -446,7 +446,7 @@ func TestOpenFailedDueToTableErr(t *testing.T) {
 	})
 
 	AddFakeInnoDBReadRowsResult(db, 0)
-	se := newEngine(10, 1*time.Second, 1*time.Second, db)
+	se := newEngine(10, 1*time.Second, 1*time.Second, 0, db)
 	err := se.Open()
 	want := "Row count exceeded"
 	if err == nil || !strings.Contains(err.Error(), want) {
@@ -458,7 +458,7 @@ func TestExportVars(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
 	schematest.AddDefaultQueries(db)
-	se := newEngine(10, 1*time.Second, 1*time.Second, db)
+	se := newEngine(10, 1*time.Second, 1*time.Second, 0, db)
 	se.Open()
 	defer se.Close()
 	expvar.Do(func(kv expvar.KeyValue) {
@@ -470,7 +470,7 @@ func TestStatsURL(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
 	schematest.AddDefaultQueries(db)
-	se := newEngine(10, 1*time.Second, 1*time.Second, db)
+	se := newEngine(10, 1*time.Second, 1*time.Second, 0, db)
 	se.Open()
 	defer se.Close()
 
@@ -500,7 +500,7 @@ func TestSchemaEngineCloseTickRace(t *testing.T) {
 		})
 	AddFakeInnoDBReadRowsResult(db, 12)
 	// Start the engine with a small reload tick
-	se := newEngine(10, 100*time.Millisecond, 1*time.Second, db)
+	se := newEngine(10, 100*time.Millisecond, 1*time.Second, 0, db)
 	err := se.Open()
 	require.NoError(t, err)
 
@@ -527,13 +527,14 @@ func TestSchemaEngineCloseTickRace(t *testing.T) {
 	}
 }
 
-func newEngine(queryCacheSize int, reloadTime time.Duration, idleTimeout time.Duration, db *fakesqldb.DB) *Engine {
+func newEngine(queryCacheSize int, reloadTime time.Duration, idleTimeout time.Duration, schemaMaxAgeSeconds int64, db *fakesqldb.DB) *Engine {
 	config := tabletenv.NewDefaultConfig()
 	config.QueryCacheSize = queryCacheSize
 	_ = config.SchemaReloadIntervalSeconds.Set(reloadTime.String())
 	_ = config.OltpReadPool.IdleTimeoutSeconds.Set(idleTimeout.String())
 	_ = config.OlapReadPool.IdleTimeoutSeconds.Set(idleTimeout.String())
 	_ = config.TxPool.IdleTimeoutSeconds.Set(idleTimeout.String())
+	config.SchemaVersionMaxAgeSeconds = schemaMaxAgeSeconds
 	se := NewEngine(tabletenv.NewEnv(config, "SchemaTest"))
 	se.InitDBConfig(newDBConfigs(db).DbaWithDB())
 	return se
