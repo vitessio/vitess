@@ -172,7 +172,7 @@ func (tkn *Tokenizer) Scan() (int, string) {
 	case isDigit(ch):
 		return tkn.scanNumber()
 	case ch == ':':
-		return tkn.scanBindVar()
+		return tkn.scanBindVarOrAssignmentExpression()
 	case ch == ';':
 		if tkn.multi {
 			// In multi mode, ';' is treated as EOF. So, we don't advance.
@@ -426,8 +426,8 @@ func (tkn *Tokenizer) scanLiteralIdentifier() (int, string) {
 	}
 }
 
-// scanBindVar scans a bind variable; assumes a ':' has been scanned right before
-func (tkn *Tokenizer) scanBindVar() (int, string) {
+// scanBindVarOrAssignmentExpression scans a bind variable or an assignment expression; assumes a ':' has been scanned right before
+func (tkn *Tokenizer) scanBindVarOrAssignmentExpression() (int, string) {
 	start := tkn.Pos
 	token := VALUE_ARG
 
@@ -437,6 +437,13 @@ func (tkn *Tokenizer) scanBindVar() (int, string) {
 		tkn.scanMantissa(10)
 		return OFFSET_ARG, tkn.buf[start+1 : tkn.Pos]
 	}
+
+	// If : is followed by a =, then it is an assignment operator
+	if tkn.cur() == '=' {
+		tkn.skip(1)
+		return ASSIGNMENT_OPT, ""
+	}
+
 	// If : is followed by another : it is a list arg. Example ::v1, ::list
 	if tkn.cur() == ':' {
 		token = LIST_ARG
