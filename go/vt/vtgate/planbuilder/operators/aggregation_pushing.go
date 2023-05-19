@@ -232,8 +232,8 @@ func addJoinColumnsToLeft(ctx *plancontext.PlanningContext, rootAggr *Aggregator
 			lhs.pushed.Grouping = append(lhs.pushed.Grouping, GroupBy{
 				Inner:         expr,
 				WeightStrExpr: wexpr,
-				KeyCol:        idx,
-				WSCol:         -1,
+				ColOffset:     idx,
+				WSOffset:      -1,
 			})
 		}
 	}
@@ -315,37 +315,41 @@ type aggBuilder struct {
 }
 
 func (ab *aggBuilder) handleAggr(ctx *plancontext.PlanningContext, aggr Aggr) (Aggr, error) {
-	if aggr.OpCode == opcode.AggregateUnassigned {
-		return Aggr{}, vterrors.VT12001(fmt.Sprintf("in scatter query: aggregation function '%s'", sqlparser.String(aggr.Original)))
-	}
-
-	if aggr.OpCode == opcode.AggregateCountStar {
+	switch aggr.OpCode {
+	case opcode.AggregateCountStar:
 		return ab.handleCountStar(ctx, aggr)
-	}
+	case opcode.AggregateMax, opcode.AggregateMin:
+		return ab.handleMinMax(ctx, aggr)
 
-	if aggr.OpCode != opcode.AggregateMax && aggr.OpCode != opcode.AggregateMin {
+	case opcode.AggregateUnassigned:
+		return Aggr{}, vterrors.VT12001(fmt.Sprintf("in scatter query: aggregation function '%s'", sqlparser.String(aggr.Original)))
+	default:
 		return Aggr{}, errHorizonNotPlanned()
 	}
+}
+
+func (ab *aggBuilder) handleMinMax(ctx *plancontext.PlanningContext, aggr Aggr) (Aggr, error) {
+	ab.proj.Columns = append(ab.proj.Columns, Expr{E: aggr.Func})
+	ab.proj.ColumnNames = append(ab.proj.ColumnNames, aggr.Original)
 
 	deps := ctx.SemTable.RecursiveDeps(aggr.Original.Expr)
 	switch {
 	case deps.IsSolvedBy(ab.lhsID):
-		ab.lhs.addAggr(ctx, aggr)
+		ab.lhs.pushThroughAggr(aggr)
 		ab.joinColumns = append(ab.joinColumns, JoinColumn{
 			Original: aggr.Original,
 			LHSExprs: []sqlparser.Expr{aggr.Func},
 		})
 		return aggr, nil
 	case deps.IsSolvedBy(ab.rhsID):
-		ab.rhs.addAggr(ctx, aggr)
+		ab.rhs.pushThroughAggr(aggr)
 		ab.joinColumns = append(ab.joinColumns, JoinColumn{
 			Original: aggr.Original,
 			RHSExpr:  aggr.Func,
 		})
 		return aggr, nil
-
 	default:
-		return Aggr{}, vterrors.VT12001("aggregation on columns from different sources")
+		return Aggr{}, vterrors.VT12001("aggregation on columns from different sources: " + sqlparser.String(aggr.Original.Expr))
 	}
 }
 
@@ -430,6 +434,13 @@ func (p joinPusher) addAggr(ctx *plancontext.PlanningContext, aggr Aggr) sqlpars
 	return expr
 }
 
+// pushThroughAggr pushes through an aggregation without changing dependencies.
+// Can be used for aggregations we can push in one piece
+func (p joinPusher) pushThroughAggr(aggr Aggr) {
+	p.pushed.Columns = append(p.pushed.Columns, aggr.Original)
+	p.pushed.Aggregations = append(p.pushed.Aggregations, aggr)
+}
+
 // addGrouping creates a copy of the given GroupBy, updates its column offset to point to the correct location in the new Aggregator,
 // and adds it to the list of GroupBy expressions of the new Aggregator. It also updates the semantic analysis information to reflect the new structure.
 // It returns the expression of the GroupBy as it should be used in the parent Aggregator.
@@ -439,9 +450,9 @@ func (p joinPusher) addGrouping(ctx *plancontext.PlanningContext, gb GroupBy) sq
 	// copy dependencies so we can keep track of which side expressions need to be pushed to
 	ctx.SemTable.CopyDependencies(gb.Inner, expr)
 	// if the column exists in the selection then copy it down to the pushed aggregator operator.
-	if copyGB.KeyCol != -1 {
-		offset := p.useColumn(copyGB.KeyCol)
-		copyGB.KeyCol = offset
+	if copyGB.ColOffset != -1 {
+		offset := p.useColumn(copyGB.ColOffset)
+		copyGB.ColOffset = offset
 	}
 	p.pushed.Grouping = append(p.pushed.Grouping, copyGB)
 	return expr

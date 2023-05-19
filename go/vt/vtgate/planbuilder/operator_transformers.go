@@ -106,8 +106,8 @@ func transformAggregator(ctx *plancontext.PlanningContext, op *operators.Aggrega
 	}
 	for _, groupBy := range op.Grouping {
 		oa.groupByKeys = append(oa.groupByKeys, &engine.GroupByParams{
-			KeyCol:          groupBy.KeyCol,
-			WeightStringCol: groupBy.WSCol,
+			KeyCol:          groupBy.ColOffset,
+			WeightStringCol: groupBy.WSOffset,
 			Expr:            groupBy.AsAliasedExpr().Expr,
 			CollationID:     ctx.SemTable.CollationForExpr(groupBy.WeightStrExpr),
 		})

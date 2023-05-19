@@ -699,7 +699,7 @@ outer:
 		for idx, groupBy := range a.Grouping {
 			if ae == groupBy.aliasedExpr {
 				a.Columns = append(a.Columns, ae)
-				a.Grouping[idx].KeyCol = colIdx
+				a.Grouping[idx].ColOffset = colIdx
 				continue outer
 			}
 		}

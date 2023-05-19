@@ -94,7 +94,7 @@ func (a *Aggregator) addNoPushCol(expr *sqlparser.AliasedExpr, addToGroupBy bool
 
 	if addToGroupBy {
 		groupBy := NewGroupBy(expr.Expr, expr.Expr, expr)
-		groupBy.KeyCol = offset
+		groupBy.ColOffset = offset
 		a.Grouping = append(a.Grouping, groupBy)
 	} else {
 		a.Aggregations = append(a.Aggregations, Aggr{
@@ -134,7 +134,7 @@ func (a *Aggregator) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser
 			return ctx.SemTable.EqualsExprWithDeps(wsExpr.Expr, by.WeightStrExpr)
 		})
 		if idx >= 0 {
-			a.Grouping[idx].WSCol = len(a.Columns)
+			a.Grouping[idx].WSOffset = len(a.Columns)
 			addToGroupBy = true
 		}
 	}
@@ -214,14 +214,15 @@ func (a *Aggregator) planOffsets(ctx *plancontext.PlanningContext) error {
 	}
 
 	for idx, gb := range a.Grouping {
-		if gb.KeyCol == -1 {
+		if gb.ColOffset == -1 {
+			// TODO make sure we really need this.
 			offset, err := addColumn(aeWrap(gb.Inner), false)
 			if err != nil {
 				return err
 			}
-			a.Grouping[idx].KeyCol = offset
+			a.Grouping[idx].ColOffset = offset
 		}
-		if a.Grouping[idx].WSCol != -1 || !ctx.SemTable.NeedsWeightString(gb.WeightStrExpr) {
+		if a.Grouping[idx].WSOffset != -1 || !ctx.SemTable.NeedsWeightString(gb.WeightStrExpr) {
 			continue
 		}
 
@@ -229,7 +230,7 @@ func (a *Aggregator) planOffsets(ctx *plancontext.PlanningContext) error {
 		if err != nil {
 			return err
 		}
-		a.Grouping[idx].WSCol = offset
+		a.Grouping[idx].WSOffset = offset
 	}
 	return nil
 }

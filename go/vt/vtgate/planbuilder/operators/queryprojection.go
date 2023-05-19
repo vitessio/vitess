@@ -72,15 +72,17 @@ type (
 		aliasedExpr *sqlparser.AliasedExpr
 
 		// points to the column on the same aggregator
-		KeyCol int
-		WSCol  int
+		ColOffset int
+		WSOffset  int
 	}
 
 	// Aggr encodes all information needed for aggregation functions
 	Aggr struct {
-		Original       *sqlparser.AliasedExpr
-		Func           sqlparser.AggrFunc
-		OpCode         opcode.AggregateOpcode
+		Original *sqlparser.AliasedExpr
+		Func     sqlparser.AggrFunc
+		OpCode   opcode.AggregateOpcode
+
+		// OriginalOpCode will contain opcode.AggregateUnassigned unless we are changing opcode while pushing them down
 		OriginalOpCode opcode.AggregateOpcode
 
 		Alias string
@@ -105,8 +107,8 @@ func NewGroupBy(inner sqlparser.Expr, weightStrExpr sqlparser.Expr, aliasedExpr 
 		WeightStrExpr: weightStrExpr,
 		InnerIndex:    nil,
 		aliasedExpr:   aliasedExpr,
-		KeyCol:        -1,
-		WSCol:         -1,
+		ColOffset:     -1,
+		WSOffset:      -1,
 	}
 }
 
