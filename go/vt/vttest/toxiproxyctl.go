@@ -25,11 +25,10 @@ import (
 	"strings"
 	"time"
 
-	"vitess.io/vitess/go/vt/log"
-
 	toxiproxy "github.com/Shopify/toxiproxy/v2/client"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
