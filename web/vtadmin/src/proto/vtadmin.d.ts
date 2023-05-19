@@ -52031,6 +52031,9 @@ export namespace vtctldata {
 
         /** MoveTablesCompleteResponse summary */
         summary?: (string|null);
+
+        /** MoveTablesCompleteResponse details */
+        details?: (string[]|null);
     }
 
     /** Represents a MoveTablesCompleteResponse. */
@@ -52044,6 +52047,9 @@ export namespace vtctldata {
 
         /** MoveTablesCompleteResponse summary. */
         public summary: string;
+
+        /** MoveTablesCompleteResponse details. */
+        public details: string[];
 
         /**
          * Creates a new MoveTablesCompleteResponse instance using the specified properties.

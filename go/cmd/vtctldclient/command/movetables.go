@@ -319,6 +319,7 @@ func commandMoveTablesComplete(cmd *cobra.Command, args []string) error {
 		KeepData:         moveTablesCompleteOptions.KeepData,
 		KeepRoutingRules: moveTablesCompleteOptions.KeepRoutingRules,
 		RenameTables:     moveTablesCompleteOptions.RenameTables,
+		DryRun:           moveTablesCompleteOptions.DryRun,
 	}
 	resp, err := client.MoveTablesComplete(commandCtx, req)
 	if err != nil {

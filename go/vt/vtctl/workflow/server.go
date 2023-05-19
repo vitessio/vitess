@@ -21,7 +21,6 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
-	"runtime/debug"
 	"sort"
 	"strings"
 	"sync"
@@ -1157,12 +1156,6 @@ func (s *Server) MoveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 // MoveTablesComplete is part of the vtctlservicepb.VtctldServer interface.
 // It cleans up a successful MoveTables workflow and its related artifacts.
 func (s *Server) MoveTablesComplete(ctx context.Context, req *vtctldatapb.MoveTablesCompleteRequest) (*vtctldatapb.MoveTablesCompleteResponse, error) {
-	defer func() {
-		if r := recover(); r != nil {
-			log.Errorf("WorkflowSwitchTraffic failed: %v", r)
-			debug.PrintStack()
-		}
-	}()
 	span, ctx := trace.NewSpan(ctx, "workflow.Server.MoveTablesComplete")
 	defer span.Finish()
 
@@ -1171,16 +1164,23 @@ func (s *Server) MoveTablesComplete(ctx context.Context, req *vtctldatapb.MoveTa
 		return nil, err
 	}
 
-	var results *[]string
+	summary := fmt.Sprintf("Successfully completed the %s workflow in the %s keyspace", req.Workflow, req.TargetKeyspace)
+	var details *[]string
 
 	if state.WorkflowType == TypeMigrate {
-		results, err = s.finalizeMigrateWorkflow(ctx, req.TargetKeyspace, req.Workflow, strings.Join(ts.tables, ","),
+		details, err = s.finalizeMigrateWorkflow(ctx, req.TargetKeyspace, req.Workflow, strings.Join(ts.tables, ","),
 			false, req.KeepData, req.KeepRoutingRules, req.DryRun)
 		if err != nil {
 			return nil, vterrors.Wrapf(err, "failed to finalize the %s workflow in the %s keyspace",
 				req.Workflow, req.TargetKeyspace)
 		}
-		return &vtctldatapb.MoveTablesCompleteResponse{Summary: strings.Join(*results, "\r")}, nil
+		resp := &vtctldatapb.MoveTablesCompleteResponse{
+			Summary: summary,
+		}
+		if details != nil {
+			resp.Details = *details
+		}
+		return resp, nil
 	}
 
 	if !state.WritesSwitched || len(state.ReplicaCellsNotSwitched) > 0 || len(state.RdonlyCellsNotSwitched) > 0 {
@@ -1192,11 +1192,18 @@ func (s *Server) MoveTablesComplete(ctx context.Context, req *vtctldatapb.MoveTa
 	} else {
 		renameTable = DropTable
 	}
-	if results, err = s.dropSources(ctx, ts, renameTable, req.KeepData, req.KeepRoutingRules, false, req.DryRun); err != nil {
+	if details, err = s.dropSources(ctx, ts, renameTable, req.KeepData, req.KeepRoutingRules, false, req.DryRun); err != nil {
 		return nil, err
 	}
 
-	return &vtctldatapb.MoveTablesCompleteResponse{Summary: strings.Join(*results, "\r")}, nil
+	resp := &vtctldatapb.MoveTablesCompleteResponse{
+		Summary: summary,
+	}
+	if details != nil {
+		resp.Details = *details
+	}
+
+	return resp, nil
 }
 
 // WorkflowCreate is part of the vtctlservicepb.VtctldServer interface.

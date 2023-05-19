@@ -6050,6 +6050,15 @@ func (m *MoveTablesCompleteResponse) MarshalToSizedBufferVT(dAtA []byte) (int, e
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if len(m.Details) > 0 {
+		for iNdEx := len(m.Details) - 1; iNdEx >= 0; iNdEx-- {
+			i -= len(m.Details[iNdEx])
+			copy(dAtA[i:], m.Details[iNdEx])
+			i = encodeVarint(dAtA, i, uint64(len(m.Details[iNdEx])))
+			i--
+			dAtA[i] = 0x12
+		}
+	}
 	if len(m.Summary) > 0 {
 		i -= len(m.Summary)
 		copy(dAtA[i:], m.Summary)
@@ -13126,6 +13135,12 @@ func (m *MoveTablesCompleteResponse) SizeVT() (n int) {
 	l = len(m.Summary)
 	if l > 0 {
 		n += 1 + l + sov(uint64(l))
+	}
+	if len(m.Details) > 0 {
+		for _, s := range m.Details {
+			l = len(s)
+			n += 1 + l + sov(uint64(l))
+		}
 	}
 	n += len(m.unknownFields)
 	return n
@@ -29082,6 +29097,38 @@ func (m *MoveTablesCompleteResponse) UnmarshalVT(dAtA []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			m.Summary = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Details", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Details = append(m.Details, string(dAtA[iNdEx:postIndex]))
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex

@@ -864,6 +864,7 @@ message MoveTablesCreateResponse {
 
 message MoveTablesCompleteResponse {
   string summary = 1;
+  repeated string details = 2;
 }
 
 message PingTabletRequest {
