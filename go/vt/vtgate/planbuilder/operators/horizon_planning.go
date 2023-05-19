@@ -202,6 +202,14 @@ func tryPushingDownOrdering(ctx *plancontext.PlanningContext, in *Ordering) (ops
 		// we'll just remove the order underneath. The top order replaces whatever was incoming
 		in.Source = src.Source
 		return in, rewrite.NewTree, nil
+	case *Projection:
+		// we can remove a projection only if it's not introducing a column we're sorting by
+		for _, by := range in.Order {
+			if !fetchByOffset(by.WeightStrExpr) {
+				return in, rewrite.NewTree, nil
+			}
+		}
+		return swap(in, src)
 	case *Aggregator:
 		if !src.QP.AlignGroupByAndOrderBy(ctx) {
 			return in, rewrite.SameTree, nil

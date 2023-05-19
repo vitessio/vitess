@@ -3322,47 +3322,41 @@
         "ResultColumns": 2,
         "Inputs": [
           {
-            "OperatorType": "Sort",
-            "Variant": "Memory",
-            "OrderBy": "(0|2) ASC",
+            "OperatorType": "Projection",
+            "Expressions": [
+              "[COLUMN 2]",
+              "[COLUMN 0] * [COLUMN 1]",
+              "[COLUMN 3]"
+            ],
             "Inputs": [
               {
-                "OperatorType": "Projection",
-                "Expressions": [
-                  "[COLUMN 2]",
-                  "[COLUMN 0] * [COLUMN 1]",
-                  "[COLUMN 3]"
-                ],
+                "OperatorType": "Join",
+                "Variant": "Join",
+                "JoinColumnIndexes": "L:0,R:0,L:1,L:2",
+                "TableName": "`user`_user_extra",
                 "Inputs": [
                   {
-                    "OperatorType": "Join",
-                    "Variant": "Join",
-                    "JoinColumnIndexes": "L:0,R:0,L:1,L:2",
-                    "TableName": "`user`_user_extra",
-                    "Inputs": [
-                      {
-                        "OperatorType": "Route",
-                        "Variant": "Scatter",
-                        "Keyspace": {
-                          "Name": "user",
-                          "Sharded": true
-                        },
-                        "FieldQuery": "select count(*), `user`.a, weight_string(`user`.a) from `user` where 1 != 1 group by `user`.a, weight_string(`user`.a)",
-                        "Query": "select count(*), `user`.a, weight_string(`user`.a) from `user` group by `user`.a, weight_string(`user`.a)",
-                        "Table": "`user`"
-                      },
-                      {
-                        "OperatorType": "Route",
-                        "Variant": "Scatter",
-                        "Keyspace": {
-                          "Name": "user",
-                          "Sharded": true
-                        },
-                        "FieldQuery": "select count(*) from user_extra where 1 != 1 group by .0",
-                        "Query": "select count(*) from user_extra group by .0",
-                        "Table": "user_extra"
-                      }
-                    ]
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select count(*), `user`.a, weight_string(`user`.a) from `user` where 1 != 1 group by `user`.a, weight_string(`user`.a)",
+                    "OrderBy": "(1|2) ASC",
+                    "Query": "select count(*), `user`.a, weight_string(`user`.a) from `user` group by `user`.a, weight_string(`user`.a) order by `user`.a asc",
+                    "Table": "`user`"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select count(*) from user_extra where 1 != 1 group by .0",
+                    "Query": "select count(*) from user_extra group by .0",
+                    "Table": "user_extra"
                   }
                 ]
               }
@@ -5641,49 +5635,43 @@
         "ResultColumns": 1,
         "Inputs": [
           {
-            "OperatorType": "Sort",
-            "Variant": "Memory",
-            "OrderBy": "1 ASC",
+            "OperatorType": "Projection",
+            "Expressions": [
+              "[COLUMN 0] * COALESCE([COLUMN 1], INT64(1))",
+              "[COLUMN 2]"
+            ],
             "Inputs": [
               {
-                "OperatorType": "Projection",
-                "Expressions": [
-                  "[COLUMN 0] * COALESCE([COLUMN 1], INT64(1))",
-                  "[COLUMN 2]"
-                ],
+                "OperatorType": "Join",
+                "Variant": "LeftJoin",
+                "JoinColumnIndexes": "L:0,R:0,L:2",
+                "JoinVars": {
+                  "user_foo": 1
+                },
+                "TableName": "`user`_music",
                 "Inputs": [
                   {
-                    "OperatorType": "Join",
-                    "Variant": "LeftJoin",
-                    "JoinColumnIndexes": "L:0,R:0,L:2",
-                    "JoinVars": {
-                      "user_foo": 1
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
                     },
-                    "TableName": "`user`_music",
-                    "Inputs": [
-                      {
-                        "OperatorType": "Route",
-                        "Variant": "Scatter",
-                        "Keyspace": {
-                          "Name": "user",
-                          "Sharded": true
-                        },
-                        "FieldQuery": "select count(*), `user`.foo, `user`.col from `user` where 1 != 1 group by `user`.col, `user`.foo",
-                        "Query": "select count(*), `user`.foo, `user`.col from `user` group by `user`.col, `user`.foo",
-                        "Table": "`user`"
-                      },
-                      {
-                        "OperatorType": "Route",
-                        "Variant": "Scatter",
-                        "Keyspace": {
-                          "Name": "user",
-                          "Sharded": true
-                        },
-                        "FieldQuery": "select count(*) from music where 1 != 1 group by .0",
-                        "Query": "select count(*) from music where music.bar = :user_foo group by .0",
-                        "Table": "music"
-                      }
-                    ]
+                    "FieldQuery": "select count(*), `user`.foo, `user`.col from `user` where 1 != 1 group by `user`.col, `user`.foo",
+                    "OrderBy": "2 ASC",
+                    "Query": "select count(*), `user`.foo, `user`.col from `user` group by `user`.col, `user`.foo order by `user`.col asc",
+                    "Table": "`user`"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select count(*) from music where 1 != 1 group by .0",
+                    "Query": "select count(*) from music where music.bar = :user_foo group by .0",
+                    "Table": "music"
                   }
                 ]
               }
@@ -5711,17 +5699,17 @@
         "ResultColumns": 1,
         "Inputs": [
           {
-            "OperatorType": "Sort",
-            "Variant": "Memory",
-            "OrderBy": "(1|2) ASC",
+            "OperatorType": "Projection",
+            "Expressions": [
+              "[COLUMN 0] * COALESCE([COLUMN 1], INT64(1))",
+              "[COLUMN 2]",
+              "[COLUMN 3]"
+            ],
             "Inputs": [
               {
-                "OperatorType": "Projection",
-                "Expressions": [
-                  "[COLUMN 0] * COALESCE([COLUMN 1], INT64(1))",
-                  "[COLUMN 2]",
-                  "[COLUMN 3]"
-                ],
+                "OperatorType": "Sort",
+                "Variant": "Memory",
+                "OrderBy": "(2|3) ASC",
                 "Inputs": [
                   {
                     "OperatorType": "Join",
@@ -5782,49 +5770,43 @@
         "ResultColumns": 1,
         "Inputs": [
           {
-            "OperatorType": "Sort",
-            "Variant": "Memory",
-            "OrderBy": "1 ASC",
+            "OperatorType": "Projection",
+            "Expressions": [
+              "[COLUMN 0] * COALESCE([COLUMN 1], INT64(1))",
+              "[COLUMN 2]"
+            ],
             "Inputs": [
               {
-                "OperatorType": "Projection",
-                "Expressions": [
-                  "[COLUMN 0] * COALESCE([COLUMN 1], INT64(1))",
-                  "[COLUMN 2]"
-                ],
+                "OperatorType": "Join",
+                "Variant": "LeftJoin",
+                "JoinColumnIndexes": "L:0,R:0,L:2",
+                "JoinVars": {
+                  "user_foo": 1
+                },
+                "TableName": "`user`_music",
                 "Inputs": [
                   {
-                    "OperatorType": "Join",
-                    "Variant": "LeftJoin",
-                    "JoinColumnIndexes": "L:0,R:0,L:2",
-                    "JoinVars": {
-                      "user_foo": 1
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
                     },
-                    "TableName": "`user`_music",
-                    "Inputs": [
-                      {
-                        "OperatorType": "Route",
-                        "Variant": "Scatter",
-                        "Keyspace": {
-                          "Name": "user",
-                          "Sharded": true
-                        },
-                        "FieldQuery": "select count(*), `user`.foo, `user`.col from `user` where 1 != 1 group by `user`.col, `user`.foo",
-                        "Query": "select count(*), `user`.foo, `user`.col from `user` group by `user`.col, `user`.foo",
-                        "Table": "`user`"
-                      },
-                      {
-                        "OperatorType": "Route",
-                        "Variant": "Scatter",
-                        "Keyspace": {
-                          "Name": "user",
-                          "Sharded": true
-                        },
-                        "FieldQuery": "select count(*) from music where 1 != 1 group by .0",
-                        "Query": "select count(*) from music where music.bar = :user_foo group by .0",
-                        "Table": "music"
-                      }
-                    ]
+                    "FieldQuery": "select count(*), `user`.foo, `user`.col from `user` where 1 != 1 group by `user`.col, `user`.foo",
+                    "OrderBy": "2 ASC",
+                    "Query": "select count(*), `user`.foo, `user`.col from `user` group by `user`.col, `user`.foo order by `user`.col asc",
+                    "Table": "`user`"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select count(*) from music where 1 != 1 group by .0",
+                    "Query": "select count(*) from music where music.bar = :user_foo group by .0",
+                    "Table": "music"
                   }
                 ]
               }
@@ -5852,17 +5834,17 @@
         "ResultColumns": 1,
         "Inputs": [
           {
-            "OperatorType": "Sort",
-            "Variant": "Memory",
-            "OrderBy": "(1|2) ASC",
+            "OperatorType": "Projection",
+            "Expressions": [
+              "[COLUMN 0] * COALESCE([COLUMN 1], INT64(1))",
+              "[COLUMN 2]",
+              "[COLUMN 3]"
+            ],
             "Inputs": [
               {
-                "OperatorType": "Projection",
-                "Expressions": [
-                  "[COLUMN 0] * COALESCE([COLUMN 1], INT64(1))",
-                  "[COLUMN 2]",
-                  "[COLUMN 3]"
-                ],
+                "OperatorType": "Sort",
+                "Variant": "Memory",
+                "OrderBy": "(2|3) ASC",
                 "Inputs": [
                   {
                     "OperatorType": "Join",
