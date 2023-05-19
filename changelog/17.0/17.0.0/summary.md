@@ -321,6 +321,9 @@ Affected flags and YAML config keys:
 - `shutdown_grace_period`
 - `unhealthy_threshold`
 
+The flag `queryserver-config-schema-change-signal-interval` is deprecated and will be removed in a later release.
+Schema-tracking has been refactored in this release to not use polling anymore, therefore the signal interval isn't required anymore.
+
 ### Online DDL
 
 #### <a id="online-ddl-cut-over-threshold-flag" /> --cut-over-threshold DDL strategy flag

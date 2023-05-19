@@ -148,6 +148,9 @@ func (hs *healthStreamer) Open() {
 
 // startSchemaNotifications registers the healthStreamer to be notified by the schema engine when some schema change occurs.
 func (hs *healthStreamer) startSchemaNotifications() {
+	if !hs.signalWhenSchemaChange {
+		return
+	}
 	hs.se.RegisterNotifier("healthStreamer", func(full map[string]*schema.Table, created, altered, dropped []string) {
 		if err := hs.reload(); err != nil {
 			log.Errorf("periodic schema reload failed in health stream: %v", err)

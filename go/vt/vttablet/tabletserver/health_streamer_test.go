@@ -163,7 +163,6 @@ func TestReloadSchema(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
 	config := newConfig(db)
-	_ = config.SignalSchemaChangeReloadIntervalSeconds.Set("100ms")
 	config.SignalWhenSchemaChange = true
 
 	env := tabletenv.NewEnv(config, "ReplTrackerTest")
@@ -224,7 +223,6 @@ func TestDoesNotReloadSchema(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
 	config := newConfig(db)
-	_ = config.SignalSchemaChangeReloadIntervalSeconds.Set("100ms")
 	config.SignalWhenSchemaChange = false
 
 	env := tabletenv.NewEnv(config, "ReplTrackerTest")
@@ -276,7 +274,6 @@ func TestInitialReloadSchema(t *testing.T) {
 	config := newConfig(db)
 	// Setting the signal schema change reload interval to one minute
 	// that way we can test the initial reload trigger.
-	_ = config.SignalSchemaChangeReloadIntervalSeconds.Set("1m")
 	config.SignalWhenSchemaChange = true
 
 	env := tabletenv.NewEnv(config, "ReplTrackerTest")
@@ -339,7 +336,6 @@ func TestReloadView(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
 	config := newConfig(db)
-	_ = config.SignalSchemaChangeReloadIntervalSeconds.Set("100ms")
 	config.EnableViews = true
 
 	env := tabletenv.NewEnv(config, "TestReloadView")

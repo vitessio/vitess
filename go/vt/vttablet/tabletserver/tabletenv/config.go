@@ -124,8 +124,8 @@ func registerTabletEnvFlags(fs *pflag.FlagSet) {
 
 	currentConfig.SchemaReloadIntervalSeconds = defaultConfig.SchemaReloadIntervalSeconds.Clone()
 	fs.Var(&currentConfig.SchemaReloadIntervalSeconds, currentConfig.SchemaReloadIntervalSeconds.Name(), "query server schema reload time, how often vttablet reloads schemas from underlying MySQL instance in seconds. vttablet keeps table schemas in its own memory and periodically refreshes it from MySQL. This config controls the reload time.")
-	currentConfig.SignalSchemaChangeReloadIntervalSeconds = defaultConfig.SignalSchemaChangeReloadIntervalSeconds.Clone()
-	fs.Var(&currentConfig.SignalSchemaChangeReloadIntervalSeconds, currentConfig.SignalSchemaChangeReloadIntervalSeconds.Name(), "query server schema change signal interval defines at which interval the query server shall send schema updates to vtgate.")
+	fs.Var(&currentConfig.SignalSchemaChangeReloadIntervalSeconds, "queryserver-config-schema-change-signal-interval", "query server schema change signal interval defines at which interval the query server shall send schema updates to vtgate.")
+	_ = fs.MarkDeprecated("queryserver-config-schema-change-signal-interval", "We no longer poll for finding schema changes.")
 	fs.BoolVar(&currentConfig.SignalWhenSchemaChange, "queryserver-config-schema-change-signal", defaultConfig.SignalWhenSchemaChange, "query server schema signal, will signal connected vtgates that schema has changed whenever this is detected. VTGates will need to have -schema_change_signal enabled for this to work")
 	currentConfig.Olap.TxTimeoutSeconds = defaultConfig.Olap.TxTimeoutSeconds.Clone()
 	fs.Var(&currentConfig.Olap.TxTimeoutSeconds, defaultConfig.Olap.TxTimeoutSeconds.Name(), "query server transaction timeout (in seconds), after which a transaction in an OLAP session will be killed")
@@ -374,10 +374,6 @@ func (cfg *TabletConfig) MarshalJSON() ([]byte, error) {
 
 	if d := cfg.SchemaReloadIntervalSeconds.Get(); d != 0 {
 		tmp.SchemaReloadIntervalSeconds = d.String()
-	}
-
-	if d := cfg.SignalSchemaChangeReloadIntervalSeconds.Get(); d != 0 {
-		tmp.SignalSchemaChangeReloadIntervalSeconds = d.String()
 	}
 
 	return json.Marshal(&tmp)
@@ -780,15 +776,14 @@ var defaultConfig = TabletConfig{
 	// memory copies.  so with the encoding overhead, this seems to work
 	// great (the overhead makes the final packets on the wire about twice
 	// bigger than this).
-	StreamBufferSize:                        32 * 1024,
-	QueryCacheSize:                          int(cache.DefaultConfig.MaxEntries),
-	QueryCacheMemory:                        cache.DefaultConfig.MaxMemoryUsage,
-	QueryCacheLFU:                           cache.DefaultConfig.LFU,
-	SchemaReloadIntervalSeconds:             flagutil.NewDeprecatedFloat64Seconds("queryserver-config-schema-reload-time", 30*time.Minute),
-	SignalSchemaChangeReloadIntervalSeconds: flagutil.NewDeprecatedFloat64Seconds("queryserver-config-schema-change-signal-interval", 5*time.Second),
-	MessagePostponeParallelism:              4,
-	DeprecatedCacheResultFields:             true,
-	SignalWhenSchemaChange:                  true,
+	StreamBufferSize:            32 * 1024,
+	QueryCacheSize:              int(cache.DefaultConfig.MaxEntries),
+	QueryCacheMemory:            cache.DefaultConfig.MaxMemoryUsage,
+	QueryCacheLFU:               cache.DefaultConfig.LFU,
+	SchemaReloadIntervalSeconds: flagutil.NewDeprecatedFloat64Seconds("queryserver-config-schema-reload-time", 30*time.Minute),
+	MessagePostponeParallelism:  4,
+	DeprecatedCacheResultFields: true,
+	SignalWhenSchemaChange:      true,
 
 	EnableTxThrottler:           false,
 	TxThrottlerConfig:           defaultTxThrottlerConfig(),
