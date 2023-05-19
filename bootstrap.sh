@@ -266,14 +266,14 @@ install_toxiproxy() {
   case $(uname) in
     Linux)  local platform=linux;;
     Darwin) local platform=darwin;;
-    *)   echo "ERROR: unsupported platform for toxiproxy"; exit 1;;
+    *)   echo "WARNING: unsupported platform. Some tests that rely on toxiproxy will not function."; return;;
   esac
 
   case $(get_arch) in
     aarch64)  local target=arm64;;
     x86_64)  local target=amd64;;
     arm64)  local target=arm64;;
-    *)   echo "ERROR: unsupported architecture for toxiproxy"; exit 1;;
+    *)   echo "WARNING: unsupported architecture. Some tests that rely on toxiproxy will not function."; return;;
   esac
 
   # This is how we'd download directly from source:
