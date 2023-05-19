@@ -215,7 +215,7 @@ func (vtctlclient *VtctlClientProcess) ExecuteCommandWithOutput(args ...string) 
 		}
 		time.Sleep(retryDelay)
 	}
-	return filterResultWhenRunsForCoverage(resultStr), err
+	return filterResultForWarning(filterResultWhenRunsForCoverage(resultStr)), err
 }
 
 // VtctlClientProcessInstance returns a VtctlProcess handle for vtctlclient process

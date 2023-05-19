@@ -185,6 +185,10 @@ func filterResultForWarning(input string) string {
 		if strings.Contains(line, "WARNING: vtctl should only be used for VDiff v1 workflows. Please use VDiff v2 and consider using vtctldclient for all other commands.") {
 			continue
 		}
+
+		if strings.Contains(line, "Failed to read in config") && strings.Contains(line, `Config File "vtconfig" Not Found in`) {
+			continue
+		}
 		result = result + line + "\n"
 	}
 	return result
