@@ -581,3 +581,13 @@ func TestUnicodeLooseMD5CaseInsensitive(t *testing.T) {
 
 	utils.AssertMatches(t, conn, "SELECT id1, id2 from t4 where id2 = 'Test'", `[[INT64(1) VARCHAR("test")]]`)
 }
+
+func TestLooseMD5Hash(t *testing.T) {
+	conn, closer := start(t)
+	defer closer()
+
+	utils.Exec(t, conn, "insert into transfers(customer_id, external_id) values(43, 'p1')")
+	utils.Exec(t, conn, "insert into transfers(customer_id, external_id) values(44, 'p1')")
+
+	utils.AssertMatches(t, conn, "SELECT customer_id from transfers where external_id = 'p1'", `[[INT64(43)], [INT64(44)]]`)
+}

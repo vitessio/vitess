@@ -152,3 +152,17 @@ create table t10_id_to_keyspace_id_idx
     keyspace_id varbinary(10),
     primary key (id)
 ) Engine = InnoDB;
+
+CREATE TABLE `transfers`
+(
+    `id`            bigint(20) NOT NULL AUTO_INCREMENT,
+    `customer_id` bigint(20) NOT NULL,
+    `external_id`   varchar(255) CHARACTER SET utf8 COLLATE utf8_bin NOT NULL
+)
+
+create table transfers_external_id_lookup
+(
+    `external_id` bigint(20) unsigned NOT NULL,
+    `customer_id` bigint(20) NOT NULL,
+    PRIMARY KEY (`external_id`, `customer_id`)
+)

@@ -1,11 +1,10 @@
-
 {
   "sharded": true,
   "vindexes": {
-    "unicode_loose_xxhash" : {
+    "unicode_loose_xxhash": {
       "type": "unicode_loose_xxhash"
     },
-    "unicode_loose_md5" : {
+    "unicode_loose_md5": {
       "type": "unicode_loose_md5"
     },
     "hash": {
@@ -159,7 +158,10 @@
           "name": "hash"
         },
         {
-          "columns": ["id2", "id1"],
+          "columns": [
+            "id2",
+            "id1"
+          ],
           "name": "t4_id2_vdx"
         }
       ]
@@ -179,7 +181,10 @@
           "name": "hash"
         },
         {
-          "columns": ["id2", "id1"],
+          "columns": [
+            "id2",
+            "id1"
+          ],
           "name": "t6_id2_vdx"
         }
       ]
@@ -302,5 +307,27 @@
         }
       ]
     }
+  },
+  "transfers_external_id_lookup": {
+    "type": "lookup_unicodeloosemd5_hash",
+    "params": {
+      "table": "transfers_external_id_lookup",
+      "from": "external_id",
+      "to": "customer_id",
+      "ignore_nulls": "true",
+      "autocommit": "true"
+    },
+    "owner": "transfers"
+  },
+  "transfers": {
+    "columnVindexes": [
+      {
+        "column": "customer_id",
+        "name": "hash"
+      },
+      {
+        "column": "external_id",
+        "name": "transfers_external_id_lookup"
+      }
+    ]
   }
-}
