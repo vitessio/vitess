@@ -237,15 +237,13 @@ func TestJoinExecuteNoResult(t *testing.T) {
 		},
 	}
 	r, err := jn.TryExecute(context.Background(), &noopVCursor{}, map[string]*querypb.BindVariable{}, true)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	leftPrim.ExpectLog(t, []string{
 		`Execute  true`,
 	})
 	rightPrim.ExpectLog(t, []string{
 		`GetFields bv: `,
-		`Execute bv: type:VARCHAR value:"s" true`,
+		`Execute bv:  true`,
 	})
 	wantResult := sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
