@@ -59,7 +59,10 @@ func resetTxThrottlerFactories() {
 	}
 	topologyWatcherFactory = func(topoServer *topo.Server, hc discovery.HealthCheck, cell, keyspace, shard string, refreshInterval time.Duration, topoReadConcurrency int) (TopologyWatcherInterface, error) {
 		cellTabletsFilter, err := discovery.NewFilterByShard([]string{fmt.Sprintf("%s|%s", keyspace, shard)})
-		return discovery.NewCellTabletsWatcher(context.Background(), topoServer, hc, cellTabletsFilter, cell, refreshInterval, true, topoReadConcurrency), err
+		if err != nil {
+			return nil, err
+		}
+		return discovery.NewCellTabletsWatcher(context.Background(), topoServer, hc, cellTabletsFilter, cell, refreshInterval, true, topoReadConcurrency), nil
 	}
 	throttlerFactory = func(name, unit string, threadCount int, maxRate int64, maxReplicationLagConfig throttler.MaxReplicationLagModuleConfig) (ThrottlerInterface, error) {
 		return throttler.NewThrottlerFromConfig(name, unit, threadCount, maxRate, maxReplicationLagConfig, time.Now)
