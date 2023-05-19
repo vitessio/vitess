@@ -94,7 +94,7 @@ loop:
 	retryEstimatedTime := reloadTimeout + reloadInterval + reloadEstimatedTime
 	select {
 	case res := <-ch: // get the schema notification
-		utils.MustMatch(t, []string{tableName}, res, "")
+		utils.MustMatch(t, []string{tableName}, res, "unexpected result from schema reload response")
 	case <-time.After(retryEstimatedTime):
 		t.Errorf("timed out even after the mysql hang was no longer simulated")
 	}
