@@ -247,15 +247,17 @@ func TestHealthCheckSchemaChangeSignal(t *testing.T) {
 }
 
 func verifyHealthStreamSchemaChangeSignals(t *testing.T, vtgateConn *mysql.Conn, primaryTablet *cluster.Vttablet, viewsEnabled bool) {
-	verifyTableDDLSchemaChangeSignal(t, vtgateConn, primaryTablet, "CREATE TABLE `area` (`id` int NOT NULL, PRIMARY KEY (`id`))")
-	verifyTableDDLSchemaChangeSignal(t, vtgateConn, primaryTablet, "ALTER TABLE `area` ADD COLUMN name varchar(30) NOT NULL")
+	verifyTableDDLSchemaChangeSignal(t, vtgateConn, primaryTablet, "CREATE TABLE `area` (`id` int NOT NULL, PRIMARY KEY (`id`))", "area")
+	verifyTableDDLSchemaChangeSignal(t, vtgateConn, primaryTablet, "CREATE TABLE `area2` (`id` int NOT NULL, PRIMARY KEY (`id`))", "area2")
 	verifyViewDDLSchemaChangeSignal(t, vtgateConn, primaryTablet, "CREATE VIEW v2 as select * from area", viewsEnabled)
+	verifyTableDDLSchemaChangeSignal(t, vtgateConn, primaryTablet, "ALTER TABLE `area` ADD COLUMN name varchar(30) NOT NULL", "area")
+	verifyTableDDLSchemaChangeSignal(t, vtgateConn, primaryTablet, "DROP TABLE `area2`", "area2")
 	verifyViewDDLSchemaChangeSignal(t, vtgateConn, primaryTablet, "ALTER VIEW v2 as select id from area", viewsEnabled)
 	verifyViewDDLSchemaChangeSignal(t, vtgateConn, primaryTablet, "DROP VIEW v2", viewsEnabled)
-	verifyTableDDLSchemaChangeSignal(t, vtgateConn, primaryTablet, "DROP TABLE `area`")
+	verifyTableDDLSchemaChangeSignal(t, vtgateConn, primaryTablet, "DROP TABLE `area`", "area")
 }
 
-func verifyTableDDLSchemaChangeSignal(t *testing.T, vtgateConn *mysql.Conn, primaryTablet *cluster.Vttablet, query string) {
+func verifyTableDDLSchemaChangeSignal(t *testing.T, vtgateConn *mysql.Conn, primaryTablet *cluster.Vttablet, query string, table string) {
 	ctx := context.Background()
 	var streamErr error
 	wg := sync.WaitGroup{}
@@ -265,7 +267,7 @@ func verifyTableDDLSchemaChangeSignal(t *testing.T, vtgateConn *mysql.Conn, prim
 		defer wg.Done()
 		streamErr = clusterInstance.StreamTabletHealthUntil(ctx, primaryTablet, 30*time.Second, func(shr *querypb.StreamHealthResponse) bool {
 			ranOnce = true
-			if shr != nil && shr.RealtimeStats != nil && slices.Contains(shr.RealtimeStats.TableSchemaChanged, "area") {
+			if shr != nil && shr.RealtimeStats != nil && slices.Contains(shr.RealtimeStats.TableSchemaChanged, table) {
 				return true
 			}
 			return false
