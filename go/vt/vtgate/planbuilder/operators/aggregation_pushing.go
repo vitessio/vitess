@@ -296,7 +296,7 @@ outer:
 			}
 		}
 		builder.proj.Columns = append(builder.proj.Columns, Expr{E: col.Expr})
-		builder.proj.ColumnNames = append(builder.proj.ColumnNames, col.As.String())
+		builder.proj.ColumnNames = append(builder.proj.ColumnNames, col)
 	}
 	if builder.projectionRequired {
 		return builder.joinColumns, builder.proj, nil
@@ -373,10 +373,10 @@ func (ab *aggBuilder) handleCountStar(ctx *plancontext.PlanningContext, aggr Agg
 			RHSExpr:  rhsExpr,
 		})
 
-	// When dealing with outer joins, we don't want zero values from the RHS to ruin the calculations we are doing,
-	// so we use the MySQL `IF` function to remove these zeroes
+	// When dealing with outer joins, we don't want null values from the RHS to ruin the calculations we are doing,
+	// so we use the MySQL `coalesce` after the join is applied to multiply the count from LHS with 1.
 	if ab.outerJoin {
-		rhsExpr = ifFunc(rhsExpr)
+		rhsExpr = coalesceFunc(rhsExpr)
 	}
 
 	// The final COUNT is obtained by multiplying the counts from both sides.
@@ -390,23 +390,17 @@ func (ab *aggBuilder) handleCountStar(ctx *plancontext.PlanningContext, aggr Agg
 		Right:    rhsExpr,
 	}
 	ab.proj.Columns = append(ab.proj.Columns, Expr{E: projExpr})
-	ab.proj.ColumnNames = append(ab.proj.ColumnNames, aggr.Original.As.String())
+	ab.proj.ColumnNames = append(ab.proj.ColumnNames, aggr.Original)
 	return aggr, nil
 }
 
-func ifFunc(e sqlparser.Expr) sqlparser.Expr {
-	// if(e=0,1,e)
-	cmp := &sqlparser.ComparisonExpr{
-		Operator: sqlparser.EqualOp,
-		Left:     e,
-		Right:    sqlparser.NewIntLiteral("0"),
-	}
+func coalesceFunc(e sqlparser.Expr) sqlparser.Expr {
+	// coalesce(e,1)
 	return &sqlparser.FuncExpr{
-		Name: sqlparser.NewIdentifierCI("if"),
+		Name: sqlparser.NewIdentifierCI("coalesce"),
 		Exprs: sqlparser.SelectExprs{
-			aeWrap(cmp),
-			aeWrap(sqlparser.NewIntLiteral("1")),
 			aeWrap(e),
+			aeWrap(sqlparser.NewIntLiteral("1")),
 		},
 	}
 }

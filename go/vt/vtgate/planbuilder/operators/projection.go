@@ -38,7 +38,7 @@ type (
 	// It uses the evalengine to accomplish its goal
 	Projection struct {
 		Source      ops.Operator
-		ColumnNames []string
+		ColumnNames []*sqlparser.AliasedExpr
 		Columns     []ProjExpr
 
 		// TableID will be non-nil for derived tables
@@ -74,7 +74,7 @@ var _ selectExpressions = (*Projection)(nil)
 
 func (p *Projection) addNoPushCol(expr *sqlparser.AliasedExpr, _ bool) int {
 	p.Columns = append(p.Columns, Expr{E: expr.Expr})
-	p.ColumnNames = append(p.ColumnNames, expr.As.String())
+	p.ColumnNames = append(p.ColumnNames, expr)
 	return len(p.Columns) - 1
 }
 
@@ -87,8 +87,7 @@ func (p *Projection) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser
 		return nil, 0, vterrors.VT13001("tried to add group by to a projection")
 	}
 
-	colAsExpr := func(pe ProjExpr) sqlparser.Expr { return pe.GetExpr() }
-	if offset, found := canReuseColumn(ctx, p.Columns, expr.Expr, colAsExpr); found {
+	if offset, found := canReuseColumn(ctx, p.ColumnNames, expr.Expr, extractExpr); found {
 		return p, offset, nil
 	}
 	sourceOp, offset, err := p.Source.AddColumn(ctx, expr, true, addToGroupBy)
@@ -97,7 +96,7 @@ func (p *Projection) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser
 	}
 	p.Source = sourceOp
 	p.Columns = append(p.Columns, Offset{Offset: offset, Expr: expr.Expr})
-	p.ColumnNames = append(p.ColumnNames, expr.As.String())
+	p.ColumnNames = append(p.ColumnNames, expr)
 	return p, len(p.Columns) - 1, nil
 }
 
@@ -134,22 +133,11 @@ func (p *Projection) AddPredicate(ctx *plancontext.PlanningContext, expr sqlpars
 	return p, nil
 }
 
-func (p *Projection) expressions() (result []*sqlparser.AliasedExpr) {
-	for i, col := range p.Columns {
-		expr := col.GetExpr()
-		result = append(result, &sqlparser.AliasedExpr{
-			Expr: expr,
-			As:   sqlparser.NewIdentifierCI(p.ColumnNames[i]),
-		})
-	}
-	return
-}
-
 func (p *Projection) GetColumns() ([]*sqlparser.AliasedExpr, error) {
 	if p.TableID != nil {
 		return nil, nil
 	}
-	return p.expressions(), nil
+	return p.ColumnNames, nil
 }
 
 func (p *Projection) GetOrdering() ([]ops.OrderBy, error) {
@@ -173,11 +161,11 @@ func (p *Projection) AllOffsets() (cols []int) {
 func (p *Projection) Description() ops.OpDescription {
 	var columns []string
 	for i, col := range p.Columns {
-		alias := p.ColumnNames[i]
-		if alias == "" {
-			columns = append(columns, sqlparser.String(col.GetExpr()))
+		aliasExpr := p.ColumnNames[i]
+		if aliasExpr.Expr == col.GetExpr() {
+			columns = append(columns, sqlparser.String(aliasExpr))
 		} else {
-			columns = append(columns, fmt.Sprintf("%s AS %s", sqlparser.String(col.GetExpr()), alias))
+			columns = append(columns, fmt.Sprintf("%s AS %s", sqlparser.String(col.GetExpr()), aliasExpr.ColumnName()))
 		}
 	}
 
@@ -199,15 +187,13 @@ func (p *Projection) ShortDescription() string {
 	if p.Alias != "" {
 		columns = append(columns, "derived["+p.Alias+"]")
 	}
-	for i, column := range p.Columns {
-		expr := sqlparser.String(column.GetExpr())
-		alias := p.ColumnNames[i]
-		if alias == "" {
-			columns = append(columns, expr)
-			continue
+	for i, col := range p.Columns {
+		aliasExpr := p.ColumnNames[i]
+		if aliasExpr.Expr == col.GetExpr() {
+			columns = append(columns, sqlparser.String(aliasExpr))
+		} else {
+			columns = append(columns, fmt.Sprintf("%s AS %s", sqlparser.String(col.GetExpr()), aliasExpr.ColumnName()))
 		}
-		columns = append(columns, fmt.Sprintf("%s AS %s", expr, alias))
-
 	}
 	return strings.Join(columns, ", ")
 }

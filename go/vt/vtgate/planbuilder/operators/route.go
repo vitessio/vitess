@@ -26,7 +26,6 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
-
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
@@ -539,7 +538,7 @@ func createProjection(src ops.Operator) (*Projection, error) {
 	}
 	for _, col := range cols {
 		proj.Columns = append(proj.Columns, Expr{E: col.Expr})
-		proj.ColumnNames = append(proj.ColumnNames, col.As.String())
+		proj.ColumnNames = append(proj.ColumnNames, col)
 	}
 	return proj, nil
 }

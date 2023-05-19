@@ -149,12 +149,26 @@ func addOrderBysForAggregations(ctx *plancontext.PlanningContext, root ops.Opera
 				}),
 			}
 			return in, rewrite.NewTree, nil
-		default:
-			return in, rewrite.SameTree, nil
+		case *ApplyJoin:
+			if !in.LeftJoin {
+				return in, rewrite.SameTree, nil
+			}
+			_ = rewrite.Visit(in.RHS, func(op ops.Operator) error {
+				aggr, isAggr := op.(*Aggregator)
+				if !isAggr {
+					return nil
+				}
+				if len(aggr.Grouping) == 0 {
+					gb := sqlparser.NewIntLiteral("42.0")
+					aggr.Grouping = append(aggr.Grouping, NewGroupBy(gb, gb, aeWrap(gb)))
+				}
+				return nil
+			})
 		}
+		return in, rewrite.SameTree, nil
 	}
 
-	return rewrite.BottomUp(root, TableID, visitor, stopAtRoute)
+	return rewrite.TopDown(root, TableID, visitor, stopAtRoute)
 }
 
 func needsOrdering(in *Aggregator, ctx *plancontext.PlanningContext) (bool, error) {
@@ -308,10 +322,10 @@ func pushDownProjectionInVindex(
 
 type projector struct {
 	cols  []ProjExpr
-	names []string
+	names []*sqlparser.AliasedExpr
 }
 
-func (p *projector) add(e ProjExpr, alias string) {
+func (p *projector) add(e ProjExpr, alias *sqlparser.AliasedExpr) {
 	p.cols = append(p.cols, e)
 	p.names = append(p.names, alias)
 }
@@ -369,7 +383,7 @@ func splitProjectionAcrossJoin(
 	join *ApplyJoin,
 	lhs, rhs *projector,
 	in ProjExpr,
-	colName string,
+	colName *sqlparser.AliasedExpr,
 ) error {
 	expr := in.GetExpr()
 
@@ -379,7 +393,7 @@ func splitProjectionAcrossJoin(
 	}
 
 	// Get a JoinColumn for the current expression.
-	col, err := join.getJoinColumnFor(ctx, &sqlparser.AliasedExpr{Expr: expr, As: sqlparser.NewIdentifierCI(colName)}, false)
+	col, err := join.getJoinColumnFor(ctx, colName, false)
 	if err != nil {
 		return err
 	}
@@ -392,9 +406,9 @@ func splitProjectionAcrossJoin(
 		rhs.add(in, colName)
 	case col.IsMixedLeftAndRight():
 		for _, lhsExpr := range col.LHSExprs {
-			lhs.add(&Expr{E: lhsExpr}, "")
+			lhs.add(&Expr{E: lhsExpr}, aeWrap(lhsExpr))
 		}
-		rhs.add(&Expr{E: col.RHSExpr}, colName)
+		rhs.add(&Expr{E: col.RHSExpr}, &sqlparser.AliasedExpr{Expr: col.RHSExpr, As: colName.As})
 	}
 
 	// Add the new JoinColumn to the ApplyJoin's ColumnsAST.
@@ -443,7 +457,7 @@ func exposeColumnsThroughDerivedTable(ctx *plancontext.PlanningContext, p *Proje
 
 			alias := sqlparser.UnescapedString(out)
 			predicate.LHSExprs[idx] = sqlparser.NewColNameWithQualifier(alias, derivedTblName)
-			lhs.add(&Expr{E: out}, alias)
+			lhs.add(&Expr{E: out}, &sqlparser.AliasedExpr{Expr: out, As: sqlparser.NewIdentifierCI(alias)})
 		}
 	}
 	return nil
@@ -738,11 +752,7 @@ func createProjection2(qp *QueryProjection, src ops.Operator) (*Projection, erro
 		}
 
 		proj.Columns = append(proj.Columns, Expr{E: expr})
-		colName := ""
-		if !ae.As.IsEmpty() {
-			colName = ae.ColumnName()
-		}
-		proj.ColumnNames = append(proj.ColumnNames, colName)
+		proj.ColumnNames = append(proj.ColumnNames, ae)
 	}
 	return proj, nil
 }

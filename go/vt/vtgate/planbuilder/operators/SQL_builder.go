@@ -406,12 +406,8 @@ func buildProjection(op *Projection, qb *queryBuilder) error {
 
 	qb.clearProjections()
 
-	for i, column := range op.Columns {
-		ae := &sqlparser.AliasedExpr{Expr: column.GetExpr()}
-		if op.ColumnNames[i] != "" {
-			ae.As = sqlparser.NewIdentifierCI(op.ColumnNames[i])
-		}
-		qb.addProjection(ae)
+	for _, column := range op.ColumnNames {
+		qb.addProjection(column)
 	}
 
 	// if the projection is on derived table, we use the select we have
