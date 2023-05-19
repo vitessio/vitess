@@ -317,8 +317,8 @@ func (ab *aggBuilder) handleAggr(ctx *plancontext.PlanningContext, aggr Aggr) (A
 	switch aggr.OpCode {
 	case opcode.AggregateCountStar:
 		return ab.handleCountStar(ctx, aggr)
-	case opcode.AggregateMax, opcode.AggregateMin:
-		return ab.handleMinMax(ctx, aggr)
+	case opcode.AggregateMax, opcode.AggregateMin, opcode.AggregateRandom:
+		return ab.handlePushThroughAggregation(ctx, aggr)
 
 	case opcode.AggregateUnassigned:
 		return Aggr{}, vterrors.VT12001(fmt.Sprintf("in scatter query: aggregation function '%s'", sqlparser.String(aggr.Original)))
@@ -327,8 +327,8 @@ func (ab *aggBuilder) handleAggr(ctx *plancontext.PlanningContext, aggr Aggr) (A
 	}
 }
 
-func (ab *aggBuilder) handleMinMax(ctx *plancontext.PlanningContext, aggr Aggr) (Aggr, error) {
-	ab.proj.addUnexploredExpr(aggr.Original, aggr.Func)
+func (ab *aggBuilder) handlePushThroughAggregation(ctx *plancontext.PlanningContext, aggr Aggr) (Aggr, error) {
+	ab.proj.addUnexploredExpr(aggr.Original, aggr.Original.Expr)
 
 	deps := ctx.SemTable.RecursiveDeps(aggr.Original.Expr)
 	switch {
@@ -336,14 +336,14 @@ func (ab *aggBuilder) handleMinMax(ctx *plancontext.PlanningContext, aggr Aggr) 
 		ab.lhs.pushThroughAggr(aggr)
 		ab.joinColumns = append(ab.joinColumns, JoinColumn{
 			Original: aggr.Original,
-			LHSExprs: []sqlparser.Expr{aggr.Func},
+			LHSExprs: []sqlparser.Expr{aggr.Original.Expr},
 		})
 		return aggr, nil
 	case deps.IsSolvedBy(ab.rhsID):
 		ab.rhs.pushThroughAggr(aggr)
 		ab.joinColumns = append(ab.joinColumns, JoinColumn{
 			Original: aggr.Original,
-			RHSExpr:  aggr.Func,
+			RHSExpr:  aggr.Original.Expr,
 		})
 		return aggr, nil
 	default:

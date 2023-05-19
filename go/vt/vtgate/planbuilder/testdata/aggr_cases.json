@@ -4596,50 +4596,40 @@
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
         "Aggregates": "random(0) AS col",
-        "GroupBy": "(2|1)",
+        "GroupBy": "(1|2)",
         "ResultColumns": 1,
         "Inputs": [
           {
-            "OperatorType": "Projection",
-            "Expressions": [
-              "[COLUMN 2] as col",
-              "[COLUMN 1]",
-              "[COLUMN 0] as id"
-            ],
+            "OperatorType": "Join",
+            "Variant": "Join",
+            "JoinColumnIndexes": "L:0,L:1,L:2",
+            "JoinVars": {
+              "user_col": 0
+            },
+            "TableName": "`user`_user_extra",
             "Inputs": [
               {
-                "OperatorType": "Join",
-                "Variant": "Join",
-                "JoinColumnIndexes": "L:1,L:2,L:0",
-                "JoinVars": {
-                  "user_col": 0
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
                 },
-                "TableName": "`user`_user_extra",
-                "Inputs": [
-                  {
-                    "OperatorType": "Route",
-                    "Variant": "Scatter",
-                    "Keyspace": {
-                      "Name": "user",
-                      "Sharded": true
-                    },
-                    "FieldQuery": "select `user`.col, `user`.id, weight_string(`user`.id) from `user` where 1 != 1 group by `user`.col, `user`.id, weight_string(`user`.id)",
-                    "OrderBy": "(1|2) ASC",
-                    "Query": "select `user`.col, `user`.id, weight_string(`user`.id) from `user` group by `user`.col, `user`.id, weight_string(`user`.id) order by `user`.id asc",
-                    "Table": "`user`"
-                  },
-                  {
-                    "OperatorType": "Route",
-                    "Variant": "Scatter",
-                    "Keyspace": {
-                      "Name": "user",
-                      "Sharded": true
-                    },
-                    "FieldQuery": "select 1 from user_extra where 1 != 1 group by 1",
-                    "Query": "select 1 from user_extra where user_extra.col = :user_col group by 1",
-                    "Table": "user_extra"
-                  }
-                ]
+                "FieldQuery": "select `user`.col, `user`.id, weight_string(`user`.id) from `user` where 1 != 1 group by `user`.id, `user`.col, weight_string(`user`.id)",
+                "OrderBy": "(1|2) ASC",
+                "Query": "select `user`.col, `user`.id, weight_string(`user`.id) from `user` group by `user`.id, `user`.col, weight_string(`user`.id) order by `user`.id asc",
+                "Table": "`user`"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select 1 from user_extra where 1 != 1 group by .0",
+                "Query": "select 1 from user_extra where user_extra.col = :user_col group by .0",
+                "Table": "user_extra"
               }
             ]
           }
