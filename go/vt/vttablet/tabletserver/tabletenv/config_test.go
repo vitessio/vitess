@@ -358,7 +358,6 @@ func TestVerifyTxThrottlerConfig(t *testing.T) {
 	defaultMaxReplicationLagModuleConfig := throttler.DefaultMaxReplicationLagModuleConfig().Configuration
 	invalidMaxReplicationLagModuleConfig := throttler.DefaultMaxReplicationLagModuleConfig().Configuration
 	invalidMaxReplicationLagModuleConfig.TargetReplicationLagSec = -1
-	invalidPriority := 12345
 
 	type testConfig struct {
 		Name              string
@@ -368,7 +367,7 @@ func TestVerifyTxThrottlerConfig(t *testing.T) {
 		TxThrottlerConfig           *TxThrottlerConfigFlag
 		TxThrottlerHealthCheckCells []string
 		TxThrottlerTabletTypes      *topoproto.TabletTypeListFlag
-		TxThrottlerDefaultPriority  *int
+		TxThrottlerDefaultPriority  int
 	}
 
 	tests := []testConfig{
@@ -433,7 +432,7 @@ func TestVerifyTxThrottlerConfig(t *testing.T) {
 			ExpectedErrorCode:           vtrpcpb.Code_INVALID_ARGUMENT,
 			EnableTxThrottler:           true,
 			TxThrottlerConfig:           &TxThrottlerConfigFlag{defaultMaxReplicationLagModuleConfig},
-			TxThrottlerDefaultPriority:  &invalidPriority,
+			TxThrottlerDefaultPriority:  12345,
 			TxThrottlerHealthCheckCells: []string{"cell1"},
 		},
 	}
@@ -444,20 +443,12 @@ func TestVerifyTxThrottlerConfig(t *testing.T) {
 
 			config := defaultConfig
 			config.EnableTxThrottler = test.EnableTxThrottler
-
 			if test.TxThrottlerConfig == nil {
 				test.TxThrottlerConfig = NewTxThrottlerConfigFlag()
 			}
 			config.TxThrottlerConfig = test.TxThrottlerConfig
-
-			if test.TxThrottlerHealthCheckCells != nil {
-				config.TxThrottlerHealthCheckCells = test.TxThrottlerHealthCheckCells
-			}
-
-			if test.TxThrottlerDefaultPriority != nil {
-				config.TxThrottlerDefaultPriority = *test.TxThrottlerDefaultPriority
-			}
-
+			config.TxThrottlerHealthCheckCells = test.TxThrottlerHealthCheckCells
+			config.TxThrottlerDefaultPriority = test.TxThrottlerDefaultPriority
 			if test.TxThrottlerTabletTypes != nil {
 				config.TxThrottlerTabletTypes = test.TxThrottlerTabletTypes
 			}
