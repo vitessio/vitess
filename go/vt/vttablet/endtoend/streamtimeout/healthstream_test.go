@@ -87,7 +87,8 @@ loop:
 	time.Sleep(reloadInterval)
 
 	// pause simulating the mysql stall to allow the health_streamer to resume.
-	cluster.PauseSimulateMySQLHang()
+	err := cluster.PauseSimulateMySQLHang()
+	require.NoError(t, err)
 
 	// wait for the health_streamer to complete retrying the notification.
 	reloadTimeout := config.SignalSchemaChangeReloadTimeout

@@ -292,7 +292,7 @@ func (db *LocalCluster) SimulateMySQLHang() error {
 	if toxiproxy, ok := db.mysql.(*Toxiproxyctl); ok {
 		return toxiproxy.AddTimeoutToxic()
 	}
-	return nil
+	return fmt.Errorf("cannot simulate MySQL hang on non-Toxiproxyctl MySQLManager %v", db.mysql)
 }
 
 // PauseSimulateMySQLHang pauses the MySQL hang simulation to allow queries to go through.
@@ -301,7 +301,7 @@ func (db *LocalCluster) PauseSimulateMySQLHang() error {
 	if toxiproxy, ok := db.mysql.(*Toxiproxyctl); ok {
 		return toxiproxy.UpdateTimeoutToxicity(0)
 	}
-	return nil
+	return fmt.Errorf("cannot simulate MySQL hang on non-Toxiproxyctl MySQLManager %v", db.mysql)
 }
 
 // StopSimulateMySQLHang stops the MySQL hang simulation to allow queries to go through.
@@ -309,7 +309,7 @@ func (db *LocalCluster) StopSimulateMySQLHang() error {
 	if toxiproxy, ok := db.mysql.(*Toxiproxyctl); ok {
 		return toxiproxy.RemoveTimeoutToxic()
 	}
-	return nil
+	return fmt.Errorf("cannot simulate MySQL hang on non-Toxiproxyctl MySQLManager %v", db.mysql)
 }
 
 // Setup brings up the self-contained Vitess cluster by spinning up
