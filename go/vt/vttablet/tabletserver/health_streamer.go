@@ -28,6 +28,7 @@ import (
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/planbuilder"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sidecardb"
@@ -39,7 +40,6 @@ import (
 	"vitess.io/vitess/go/vt/dbconfigs"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 
 	"google.golang.org/protobuf/proto"
@@ -85,9 +85,9 @@ type healthStreamer struct {
 	clients map[chan *querypb.StreamHealthResponse]struct{}
 	state   *querypb.StreamHealthResponse
 
+	se      *schema.Engine
 	history *history.History
 
-	ticks                  *timer.Timer
 	dbConfig               dbconfigs.Connector
 	conns                  *connpool.Pool
 	signalWhenSchemaChange bool
@@ -95,12 +95,9 @@ type healthStreamer struct {
 	viewsEnabled bool
 }
 
-func newHealthStreamer(env tabletenv.Env, alias *topodatapb.TabletAlias) *healthStreamer {
-	var newTimer *timer.Timer
+func newHealthStreamer(env tabletenv.Env, alias *topodatapb.TabletAlias, engine *schema.Engine) *healthStreamer {
 	var pool *connpool.Pool
 	if env.Config().SignalWhenSchemaChange {
-		reloadTime := env.Config().SignalSchemaChangeReloadIntervalSeconds.Get()
-		newTimer = timer.NewTimer(reloadTime)
 		// We need one connection for the reloader.
 		pool = connpool.NewPool(env, "", tabletenv.ConnPoolConfig{
 			Size:               1,
@@ -121,10 +118,10 @@ func newHealthStreamer(env tabletenv.Env, alias *topodatapb.TabletAlias) *health
 		},
 
 		history:                history.New(5),
-		ticks:                  newTimer,
 		conns:                  pool,
 		signalWhenSchemaChange: env.Config().SignalWhenSchemaChange,
 		viewsEnabled:           env.Config().EnableViews,
+		se:                     engine,
 	}
 	hs.unhealthyThreshold.Store(env.Config().Healthcheck.UnhealthyThresholdSeconds.Get().Nanoseconds())
 	return hs
@@ -146,14 +143,16 @@ func (hs *healthStreamer) Open() {
 	if hs.conns != nil {
 		// if we don't have a live conns object, it means we are not configured to signal when the schema changes
 		hs.conns.Open(hs.dbConfig, hs.dbConfig, hs.dbConfig)
-		hs.ticks.Start(func() {
-			if err := hs.reload(); err != nil {
-				log.Errorf("periodic schema reload failed in health stream: %v", err)
-			}
-		})
-
 	}
+}
 
+// startSchemaNotifications registers the healthStreamer to be notified by the schema engine when some schema change occurs.
+func (hs *healthStreamer) startSchemaNotifications() {
+	hs.se.RegisterNotifier("healthStreamer", func(full map[string]*schema.Table, created, altered, dropped []string) {
+		if err := hs.reload(); err != nil {
+			log.Errorf("periodic schema reload failed in health stream: %v", err)
+		}
+	})
 }
 
 func (hs *healthStreamer) Close() {
@@ -161,10 +160,7 @@ func (hs *healthStreamer) Close() {
 	defer hs.mu.Unlock()
 
 	if hs.cancel != nil {
-		if hs.ticks != nil {
-			hs.ticks.Stop()
-			hs.conns.Close()
-		}
+		hs.se.UnregisterNotifier("healthStreamer")
 		hs.cancel()
 		hs.cancel = nil
 	}
@@ -176,11 +172,6 @@ func (hs *healthStreamer) Stream(ctx context.Context, callback func(*querypb.Str
 		return vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE, "tabletserver is shutdown")
 	}
 	defer hs.unregister(ch)
-
-	// trigger the initial schema reload
-	if hs.signalWhenSchemaChange {
-		hs.ticks.Trigger()
-	}
 
 	for {
 		select {

@@ -201,7 +201,8 @@ func TestHealthCheckSchemaChangeSignal(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 
-	conn, err := mysql.Connect(ctx, &primaryTabletParams)
+	vtParams := clusterInstance.GetVTParams(keyspaceName)
+	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
 
@@ -216,12 +217,11 @@ func TestHealthCheckSchemaChangeSignal(t *testing.T) {
 	// We start a new vttablet, this time with `--queryserver-enable-views` flag specified.
 	tempTablet := clusterInstance.NewVttabletInstance("replica", 0, "")
 	// Start Mysql Processes and return connection
-	tempConn, err := cluster.StartMySQLAndGetConnection(ctx, tempTablet, username, clusterInstance.TmpDirectory)
+	_, err = cluster.StartMySQLAndGetConnection(ctx, tempTablet, username, clusterInstance.TmpDirectory)
 	require.NoError(t, err)
 	oldArgs := clusterInstance.VtTabletExtraArgs
 	clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, "--queryserver-enable-views")
 	defer func() {
-		tempConn.Close()
 		clusterInstance.VtTabletExtraArgs = oldArgs
 	}()
 	// start vttablet process, should be in SERVING state as we already have a primary.
@@ -241,86 +241,86 @@ func TestHealthCheckSchemaChangeSignal(t *testing.T) {
 	require.NoError(t, err)
 
 	checkTabletType(t, tempTablet.Alias, "PRIMARY")
-	_, err = tempConn.ExecuteFetch(fmt.Sprintf("use %v", dbName), 1000, false)
-	require.NoError(t, err)
 	// Run a bunch of DDL queries and verify that the tables/views changed show up in the health stream.
 	// These tests are for the part where `--queryserver-enable-views` flag is set.
-	verifyHealthStreamSchemaChangeSignals(t, tempConn, tempTablet, true)
+	verifyHealthStreamSchemaChangeSignals(t, conn, tempTablet, true)
 }
 
-func verifyHealthStreamSchemaChangeSignals(t *testing.T, primaryConn *mysql.Conn, primaryTablet *cluster.Vttablet, viewsEnabled bool) {
+func verifyHealthStreamSchemaChangeSignals(t *testing.T, vtgateConn *mysql.Conn, primaryTablet *cluster.Vttablet, viewsEnabled bool) {
+	verifyTableDDLSchemaChangeSignal(t, vtgateConn, primaryTablet, "CREATE TABLE `area` (`id` int NOT NULL, PRIMARY KEY (`id`))")
+	verifyTableDDLSchemaChangeSignal(t, vtgateConn, primaryTablet, "ALTER TABLE `area` ADD COLUMN name varchar(30) NOT NULL")
+	verifyViewDDLSchemaChangeSignal(t, vtgateConn, primaryTablet, "CREATE VIEW v2 as select * from area", viewsEnabled)
+	verifyViewDDLSchemaChangeSignal(t, vtgateConn, primaryTablet, "ALTER VIEW v2 as select id from area", viewsEnabled)
+	verifyViewDDLSchemaChangeSignal(t, vtgateConn, primaryTablet, "DROP VIEW v2", viewsEnabled)
+	verifyTableDDLSchemaChangeSignal(t, vtgateConn, primaryTablet, "DROP TABLE `area`")
+}
+
+func verifyTableDDLSchemaChangeSignal(t *testing.T, vtgateConn *mysql.Conn, primaryTablet *cluster.Vttablet, query string) {
 	ctx := context.Background()
-	_, err := primaryConn.ExecuteFetch("CREATE TABLE `area` (`id` int NOT NULL, PRIMARY KEY (`id`))", 10000, false)
-	require.NoError(t, err)
-	err = clusterInstance.StreamTabletHealthUntil(ctx, primaryTablet, 30*time.Second, func(shr *querypb.StreamHealthResponse) bool {
-		if shr != nil && shr.RealtimeStats != nil && slices.Contains(shr.RealtimeStats.TableSchemaChanged, "area") {
-			return true
+	var streamErr error
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	ranOnce := false
+	go func() {
+		defer wg.Done()
+		streamErr = clusterInstance.StreamTabletHealthUntil(ctx, primaryTablet, 30*time.Second, func(shr *querypb.StreamHealthResponse) bool {
+			ranOnce = true
+			if shr != nil && shr.RealtimeStats != nil && slices.Contains(shr.RealtimeStats.TableSchemaChanged, "area") {
+				return true
+			}
+			return false
+		})
+	}()
+	// The test becomes flaky if we run the DDL immediately after starting the above go routine because the client for the Stream
+	// sometimes isn't registered by the time DDL runs, and it misses the update we get. To prevent this situation, we wait for one Stream packet
+	// to have returned. Once we know we received a Stream packet, then we know that we are registered for the health stream and can execute the DDL.
+	for i := 0; i < 30; i++ {
+		if ranOnce {
+			break
 		}
-		return false
-	})
+		time.Sleep(1 * time.Second)
+	}
+	require.True(t, ranOnce, "We should have received atleast 1 health stream")
+	_, err := vtgateConn.ExecuteFetch(query, 10000, false)
 	require.NoError(t, err)
+	wg.Wait()
+	require.NoError(t, streamErr)
+}
 
-	_, err = primaryConn.ExecuteFetch("ALTER TABLE `area` ADD COLUMN name varchar(30) NOT NULL", 10000, false)
-	require.NoError(t, err)
-	err = clusterInstance.StreamTabletHealthUntil(ctx, primaryTablet, 30*time.Second, func(shr *querypb.StreamHealthResponse) bool {
-		if shr != nil && shr.RealtimeStats != nil && slices.Contains(shr.RealtimeStats.TableSchemaChanged, "area") {
-			return true
+func verifyViewDDLSchemaChangeSignal(t *testing.T, vtgateConn *mysql.Conn, primaryTablet *cluster.Vttablet, query string, viewsEnabled bool) {
+	ctx := context.Background()
+	var streamErr error
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	ranOnce := false
+	go func() {
+		defer wg.Done()
+		streamErr = clusterInstance.StreamTabletHealthUntil(ctx, primaryTablet, 30*time.Second, func(shr *querypb.StreamHealthResponse) bool {
+			ranOnce = true
+			listToUse := shr.RealtimeStats.TableSchemaChanged
+			if viewsEnabled {
+				listToUse = shr.RealtimeStats.ViewSchemaChanged
+			}
+			if shr != nil && shr.RealtimeStats != nil && slices.Contains(listToUse, "v2") {
+				return true
+			}
+			return false
+		})
+	}()
+	// The test becomes flaky if we run the DDL immediately after starting the above go routine because the client for the Stream
+	// sometimes isn't registered by the time DDL runs, and it misses the update we get. To prevent this situation, we wait for one Stream packet
+	// to have returned. Once we know we received a Stream packet, then we know that we are registered for the health stream and can execute the DDL.
+	for i := 0; i < 30; i++ {
+		if ranOnce {
+			break
 		}
-		return false
-	})
+		time.Sleep(1 * time.Second)
+	}
+	require.True(t, ranOnce, "We should have received atleast 1 health stream")
+	_, err := vtgateConn.ExecuteFetch(query, 10000, false)
 	require.NoError(t, err)
-
-	_, err = primaryConn.ExecuteFetch("CREATE VIEW v2 as select * from area", 10000, false)
-	require.NoError(t, err)
-	err = clusterInstance.StreamTabletHealthUntil(ctx, primaryTablet, 30*time.Second, func(shr *querypb.StreamHealthResponse) bool {
-		listToUse := shr.RealtimeStats.TableSchemaChanged
-		if viewsEnabled {
-			listToUse = shr.RealtimeStats.ViewSchemaChanged
-		}
-		if shr != nil && shr.RealtimeStats != nil && slices.Contains(listToUse, "v2") {
-			return true
-		}
-		return false
-	})
-	require.NoError(t, err)
-
-	_, err = primaryConn.ExecuteFetch("ALTER VIEW v2 as select id from area", 10000, false)
-	require.NoError(t, err)
-	err = clusterInstance.StreamTabletHealthUntil(ctx, primaryTablet, 30*time.Second, func(shr *querypb.StreamHealthResponse) bool {
-		listToUse := shr.RealtimeStats.TableSchemaChanged
-		if viewsEnabled {
-			listToUse = shr.RealtimeStats.ViewSchemaChanged
-		}
-		if shr != nil && shr.RealtimeStats != nil && slices.Contains(listToUse, "v2") {
-			return true
-		}
-		return false
-	})
-	require.NoError(t, err)
-
-	_, err = primaryConn.ExecuteFetch("DROP VIEW v2", 10000, false)
-	require.NoError(t, err)
-	err = clusterInstance.StreamTabletHealthUntil(ctx, primaryTablet, 30*time.Second, func(shr *querypb.StreamHealthResponse) bool {
-		listToUse := shr.RealtimeStats.TableSchemaChanged
-		if viewsEnabled {
-			listToUse = shr.RealtimeStats.ViewSchemaChanged
-		}
-		if shr != nil && shr.RealtimeStats != nil && slices.Contains(listToUse, "v2") {
-			return true
-		}
-		return false
-	})
-	require.NoError(t, err)
-
-	_, err = primaryConn.ExecuteFetch("DROP TABLE `area`", 10000, false)
-	require.NoError(t, err)
-	err = clusterInstance.StreamTabletHealthUntil(ctx, primaryTablet, 30*time.Second, func(shr *querypb.StreamHealthResponse) bool {
-		if shr != nil && shr.RealtimeStats != nil && slices.Contains(shr.RealtimeStats.TableSchemaChanged, "area") {
-			return true
-		}
-		return false
-	})
-	require.NoError(t, err)
+	wg.Wait()
+	require.NoError(t, streamErr)
 }
 
 func checkHealth(t *testing.T, port int, shouldError bool) {

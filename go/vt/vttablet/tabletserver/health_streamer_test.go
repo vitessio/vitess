@@ -35,6 +35,7 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
@@ -48,7 +49,7 @@ func TestHealthStreamerClosed(t *testing.T) {
 		Uid:  1,
 	}
 	blpFunc = testBlpFunc
-	hs := newHealthStreamer(env, alias)
+	hs := newHealthStreamer(env, alias, &schema.Engine{})
 	err := hs.Stream(context.Background(), func(shr *querypb.StreamHealthResponse) error {
 		return nil
 	})
@@ -73,7 +74,7 @@ func TestHealthStreamerBroadcast(t *testing.T) {
 		Uid:  1,
 	}
 	blpFunc = testBlpFunc
-	hs := newHealthStreamer(env, alias)
+	hs := newHealthStreamer(env, alias, &schema.Engine{})
 	hs.InitDBConfig(&querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}, config.DB.DbaWithDB())
 	hs.Open()
 	defer hs.Close()
@@ -171,7 +172,7 @@ func TestReloadSchema(t *testing.T) {
 		Uid:  1,
 	}
 	blpFunc = testBlpFunc
-	hs := newHealthStreamer(env, alias)
+	hs := newHealthStreamer(env, alias, &schema.Engine{})
 
 	target := &querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
 	configs := config.DB
@@ -232,7 +233,7 @@ func TestDoesNotReloadSchema(t *testing.T) {
 		Uid:  1,
 	}
 	blpFunc = testBlpFunc
-	hs := newHealthStreamer(env, alias)
+	hs := newHealthStreamer(env, alias, &schema.Engine{})
 
 	target := &querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
 	configs := config.DB
@@ -284,7 +285,7 @@ func TestInitialReloadSchema(t *testing.T) {
 		Uid:  1,
 	}
 	blpFunc = testBlpFunc
-	hs := newHealthStreamer(env, alias)
+	hs := newHealthStreamer(env, alias, &schema.Engine{})
 
 	target := &querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
 	configs := config.DB
@@ -343,7 +344,7 @@ func TestReloadView(t *testing.T) {
 
 	env := tabletenv.NewEnv(config, "TestReloadView")
 	alias := &topodatapb.TabletAlias{Cell: "cell", Uid: 1}
-	hs := newHealthStreamer(env, alias)
+	hs := newHealthStreamer(env, alias, &schema.Engine{})
 
 	target := &querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
 	configs := config.DB

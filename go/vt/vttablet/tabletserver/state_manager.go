@@ -520,6 +520,7 @@ func (sm *stateManager) connect(tabletType topodatapb.TabletType) error {
 	if err := sm.se.Open(); err != nil {
 		return err
 	}
+	sm.hs.startSchemaNotifications()
 	sm.vstreamer.Open()
 	if err := sm.qe.Open(); err != nil {
 		return err

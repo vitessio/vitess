@@ -17,10 +17,9 @@ limitations under the License.
 package tabletserver
 
 import (
+	"context"
 	"sync"
 	"time"
-
-	"context"
 
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"

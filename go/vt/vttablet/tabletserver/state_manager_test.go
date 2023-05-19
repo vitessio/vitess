@@ -705,7 +705,7 @@ func newTestStateManager(t *testing.T) *stateManager {
 		statelessql: NewQueryList("stateless"),
 		statefulql:  NewQueryList("stateful"),
 		olapql:      NewQueryList("olap"),
-		hs:          newHealthStreamer(env, &topodatapb.TabletAlias{}),
+		hs:          newHealthStreamer(env, &topodatapb.TabletAlias{}, nil),
 		se:          &testSchemaEngine{},
 		rt:          &testReplTracker{lag: 1 * time.Second},
 		vstreamer:   &testSubcomponent{},
