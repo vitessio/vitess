@@ -248,8 +248,23 @@ func (h *historian) readRow(row []sqltypes.Value) (*trackedSchema, int64, error)
 }
 
 func (h *historian) purgeOldSchemas() {
-	filtered := make([]*trackedSchema, 0)
 	maxAgeDuration := time.Duration(h.schemaMaxAgeSeconds) * time.Second
+	shouldPurge := false
+
+	// check if we have any schemas we need to purge and only create the filtered
+	// slice if necessary
+	for _, s := range h.schemas {
+		if time.Since(time.Unix(s.timeUpdated, 0)) > maxAgeDuration {
+			shouldPurge = true
+			break
+		}
+	}
+
+	if !shouldPurge {
+		return
+	}
+
+	filtered := make([]*trackedSchema, 0)
 	for _, s := range h.schemas {
 		if time.Since(time.Unix(s.timeUpdated, 0)) < maxAgeDuration {
 			filtered = append(filtered, s)
