@@ -25,8 +25,10 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/discovery"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
 
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
@@ -46,6 +48,9 @@ type vstreamManager struct {
 	resolver *srvtopo.Resolver
 	toposerv srvtopo.Server
 	cell     string
+
+	vstreamsCreated *stats.CountersWithMultiLabels
+	vstreamsLag     *stats.GaugesWithMultiLabels
 }
 
 // maxSkewTimeoutSeconds is the maximum allowed skew between two streams when the MinimizeSkew flag is set
@@ -121,10 +126,19 @@ type journalEvent struct {
 }
 
 func newVStreamManager(resolver *srvtopo.Resolver, serv srvtopo.Server, cell string) *vstreamManager {
+	exporter := servenv.NewExporter(cell, "VStreamManager")
 	return &vstreamManager{
 		resolver: resolver,
 		toposerv: serv,
 		cell:     cell,
+		vstreamsCreated: exporter.NewCountersWithMultiLabels(
+			"VStreamsCreated",
+			"Number of vstreams created",
+			[]string{"Keyspace", "ShardName", "TabletType"}),
+		vstreamsLag: exporter.NewGaugesWithMultiLabels(
+			"VStreamsLag",
+			"Difference between event current time and the binlog event timestamp",
+			[]string{"Keyspace", "ShardName", "TabletType"}),
 	}
 }
 
@@ -534,9 +548,16 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 			Filter:       vs.filter,
 			TableLastPKs: sgtid.TablePKs,
 		}
+		var vstreamCreatedOnce sync.Once
 		err = tabletConn.VStream(ctx, req, func(events []*binlogdatapb.VEvent) error {
 			// We received a valid event. Reset error count.
 			errCount = 0
+
+			labels := []string{sgtid.Keyspace, sgtid.Shard, req.Target.TabletType.String()}
+
+			vstreamCreatedOnce.Do(func() {
+				vs.vsm.vstreamsCreated.Add(labels, 1)
+			})
 
 			select {
 			case <-ctx.Done():
@@ -633,6 +654,9 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 				default:
 					sendevents = append(sendevents, event)
 				}
+				lag := event.CurrentTime/1e9 - event.Timestamp
+				vs.vsm.vstreamsLag.Set(labels, lag)
+
 			}
 			if len(sendevents) != 0 {
 				eventss = append(eventss, sendevents)
