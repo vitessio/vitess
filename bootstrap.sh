@@ -114,8 +114,8 @@ install_protoc() {
   esac
 
   # This is how we'd download directly from source:
-  $VTROOT/tools/wget-retry https://github.com/protocolbuffers/protobuf/releases/download/v$version/protoc-$version-$platform-${target}.zip
-  #$VTROOT/tools/wget-retry "${VITESS_RESOURCES_DOWNLOAD_URL}/protoc-$version-$platform-${target}.zip"
+  "${VTROOT}/tools/wget-retry" https://github.com/protocolbuffers/protobuf/releases/download/v$version/protoc-$version-$platform-${target}.zip
+  #"${VTROOT}/tools/wget-retry" "${VITESS_RESOURCES_DOWNLOAD_URL}/protoc-$version-$platform-${target}.zip"
   unzip "protoc-$version-$platform-${target}.zip"
 
   ln -snf "$dist/bin/protoc" "$VTROOT/bin/protoc"
@@ -129,7 +129,7 @@ install_zookeeper() {
   zk="zookeeper-$version"
   # This is how we'd download directly from source:
   # wget "https://dlcdn.apache.org/zookeeper/$zk/apache-$zk.tar.gz"
-  $VTROOT/tools/wget-retry "${VITESS_RESOURCES_DOWNLOAD_URL}/apache-${zk}.tar.gz"
+  "${VTROOT}/tools/wget-retry" "${VITESS_RESOURCES_DOWNLOAD_URL}/apache-${zk}.tar.gz"
   tar -xzf "$dist/apache-$zk.tar.gz"
   mvn -f $dist/apache-$zk/zookeeper-contrib/zookeeper-contrib-fatjar/pom.xml clean install -P fatjar -DskipTests
   mkdir -p $dist/lib
@@ -159,8 +159,8 @@ install_etcd() {
   file="etcd-${version}-${platform}-${target}.${ext}"
 
   # This is how we'd download directly from source:
-  $VTROOT/tools/wget-retry "https://github.com/etcd-io/etcd/releases/download/$version/$file"
-  #$VTROOT/tools/wget-retry "${VITESS_RESOURCES_DOWNLOAD_URL}/${file}"
+  "${VTROOT}/tools/wget-retry" "https://github.com/etcd-io/etcd/releases/download/$version/$file"
+  #"${VTROOT}/tools/wget-retry" "${VITESS_RESOURCES_DOWNLOAD_URL}/${file}"
   if [ "$ext" = "tar.gz" ]; then
     tar xzf "$file"
   else
@@ -194,7 +194,7 @@ install_k3s() {
   # This is how we'd download directly from source:
   # download_url=https://github.com/rancher/k3s/releases/download
   # wget -O  $dest "$download_url/$version/$file"
-  $VTROOT/tools/wget-retry -O $dest "${VITESS_RESOURCES_DOWNLOAD_URL}/$file-$version"
+  "${VTROOT}/tools/wget-retry" -O $dest "${VITESS_RESOURCES_DOWNLOAD_URL}/$file-$version"
   chmod +x $dest
   ln -snf  $dest "$VTROOT/bin/k3s"
 }
@@ -221,7 +221,7 @@ install_consul() {
   # This is how we'd download directly from source:
   # download_url=https://releases.hashicorp.com/consul
   # wget "${download_url}/${version}/consul_${version}_${platform}_${target}.zip"
-  $VTROOT/tools/wget-retry "${VITESS_RESOURCES_DOWNLOAD_URL}/consul_${version}_${platform}_${target}.zip"
+  "${VTROOT}/tools/wget-retry" "${VITESS_RESOURCES_DOWNLOAD_URL}/consul_${version}_${platform}_${target}.zip"
   unzip "consul_${version}_${platform}_${target}.zip"
   ln -snf "$dist/consul" "$VTROOT/bin/consul"
 }
@@ -248,11 +248,11 @@ install_chromedriver() {
         ;;
       esac
       echo "For Arm64, using prebuilt binary from electron (https://github.com/electron/electron/) of version 76.0.3809.126"
-      $VTROOT/tools/wget-retry https://github.com/electron/electron/releases/download/v6.0.3/chromedriver-v6.0.3-linux-arm64.zip
+      "${VTROOT}/tools/wget-retry" https://github.com/electron/electron/releases/download/v6.0.3/chromedriver-v6.0.3-linux-arm64.zip
       unzip -o -q chromedriver-v6.0.3-linux-arm64.zip -d "$dist"
       rm chromedriver-v6.0.3-linux-arm64.zip
   else
-      $VTROOT/tools/wget-retry "https://chromedriver.storage.googleapis.com/$version/chromedriver_linux64.zip"
+      "${VTROOT}/tools/wget-retry" "https://chromedriver.storage.googleapis.com/$version/chromedriver_linux64.zip"
       unzip -o -q chromedriver_linux64.zip -d "$dist"
       rm chromedriver_linux64.zip
   fi
@@ -278,7 +278,7 @@ install_toxiproxy() {
 
   # This is how we'd download directly from source:
   file="toxiproxy-server-${platform}-${target}"
-  $VTROOT/tools/wget-retry "https://github.com/Shopify/toxiproxy/releases/download/$version/$file"
+  "${VTROOT}/tools/wget-retry" "https://github.com/Shopify/toxiproxy/releases/download/$version/$file"
   chmod +x "$dist/$file"
   ln -snf "$dist/$file" "$VTROOT/bin/toxiproxy-server"
 }
