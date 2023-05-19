@@ -25,17 +25,15 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
-	"vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vterrors"
 )
 
 var hash SingleColumn
 
 func init() {
 	hv, err := CreateVindex("hash", "nn", map[string]string{})
-	warnings := hv.(ParamValidating).InvalidParamErrors()
-	if len(warnings) > 0 {
-		panic("hash test init: got warnings when expected none")
+	unknownParams := hv.(ParamValidating).UnknownParams()
+	if len(unknownParams) > 0 {
+		panic("hash test init: expected 0 unknown params")
 	}
 	if err != nil {
 		panic(err)
@@ -47,7 +45,7 @@ func hashCreateVindexTestCase(
 	testName string,
 	vindexParams map[string]string,
 	expectErr error,
-	expectWarnings []error,
+	expectUnknownParams []string,
 ) createVindexTestCase {
 	return createVindexTestCase{
 		testName: testName,
@@ -56,12 +54,12 @@ func hashCreateVindexTestCase(
 		vindexName:   "hash",
 		vindexParams: vindexParams,
 
-		expectCost:         1,
-		expectErr:          expectErr,
-		expectIsUnique:     true,
-		expectNeedsVCursor: false,
-		expectString:       "hash",
-		expectWarnings:     expectWarnings,
+		expectCost:          1,
+		expectErr:           expectErr,
+		expectIsUnique:      true,
+		expectNeedsVCursor:  false,
+		expectString:        "hash",
+		expectUnknownParams: expectUnknownParams,
 	}
 }
 
@@ -83,7 +81,7 @@ func TestHashCreateVindex(t *testing.T) {
 			"unknown params",
 			map[string]string{"hello": "world"},
 			nil,
-			[]error{vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "unknown param 'hello'")},
+			[]string{"hello"},
 		),
 	}
 

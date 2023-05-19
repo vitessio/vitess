@@ -23,8 +23,6 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
-	"vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vterrors"
 )
 
 var charVindexMD5 SingleColumn
@@ -41,7 +39,7 @@ func unicodeLooseMD5CreateVindexTestCase(
 	testName string,
 	vindexParams map[string]string,
 	expectErr error,
-	expectWarnings []error,
+	expectUnknownParams []string,
 ) createVindexTestCase {
 	return createVindexTestCase{
 		testName: testName,
@@ -50,12 +48,12 @@ func unicodeLooseMD5CreateVindexTestCase(
 		vindexName:   "unicode_loose_md5",
 		vindexParams: vindexParams,
 
-		expectCost:         1,
-		expectErr:          expectErr,
-		expectIsUnique:     true,
-		expectNeedsVCursor: false,
-		expectString:       "unicode_loose_md5",
-		expectWarnings:     expectWarnings,
+		expectCost:          1,
+		expectErr:           expectErr,
+		expectIsUnique:      true,
+		expectNeedsVCursor:  false,
+		expectString:        "unicode_loose_md5",
+		expectUnknownParams: expectUnknownParams,
 	}
 }
 
@@ -79,7 +77,7 @@ func TestUnicodeLooseMD5CreateVindex(t *testing.T) {
 				"hello": "world",
 			},
 			nil,
-			[]error{vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "unknown param 'hello'")},
+			[]string{"hello"},
 		),
 	}
 

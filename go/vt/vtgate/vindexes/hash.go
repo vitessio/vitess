@@ -45,15 +45,15 @@ var (
 // Note that at once stage we used a 3DES-based hash here,
 // but for a null key as in our case, they are completely equivalent.
 type Hash struct {
-	name   string
-	params map[string]string
+	name          string
+	unknownParams []string
 }
 
 // newHash creates a new Hash.
 func newHash(name string, params map[string]string) (Vindex, error) {
 	return &Hash{
-		name:   name,
-		params: params,
+		name:          name,
+		unknownParams: FindUnknownParams(params, nil),
 	}, nil
 }
 
@@ -137,9 +137,9 @@ func (vind *Hash) Hash(id sqltypes.Value) ([]byte, error) {
 	return vhash(num), nil
 }
 
-// InvalidParamErrors implements the ParamValidating interface.
-func (vind *Hash) InvalidParamErrors() []error {
-	return ValidateParams(vind.params, &ParamValidationOpts{})
+// UnknownParams implements the ParamValidating interface.
+func (vind *Hash) UnknownParams() []string {
+	return vind.unknownParams
 }
 
 var blockDES cipher.Block

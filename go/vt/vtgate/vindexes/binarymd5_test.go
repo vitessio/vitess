@@ -27,8 +27,6 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
-	"vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vterrors"
 )
 
 var binVindex SingleColumn
@@ -45,7 +43,7 @@ func binaryMD5CreateVindexTestCase(
 	testName string,
 	vindexParams map[string]string,
 	expectErr error,
-	expectWarnings []error,
+	expectUnknownParams []string,
 ) createVindexTestCase {
 	return createVindexTestCase{
 		testName: testName,
@@ -54,12 +52,12 @@ func binaryMD5CreateVindexTestCase(
 		vindexName:   "binary_md5",
 		vindexParams: vindexParams,
 
-		expectCost:         1,
-		expectErr:          expectErr,
-		expectIsUnique:     true,
-		expectNeedsVCursor: false,
-		expectString:       "binary_md5",
-		expectWarnings:     expectWarnings,
+		expectCost:          1,
+		expectErr:           expectErr,
+		expectIsUnique:      true,
+		expectNeedsVCursor:  false,
+		expectString:        "binary_md5",
+		expectUnknownParams: expectUnknownParams,
 	}
 }
 
@@ -81,7 +79,7 @@ func TestBinaryMD5CreateVindex(t *testing.T) {
 			"unknown params",
 			map[string]string{"hello": "world"},
 			nil,
-			[]error{vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "unknown param 'hello'")},
+			[]string{"hello"},
 		),
 	}
 
@@ -182,13 +180,13 @@ func benchmarkMD5HashBytes(b *testing.B, input []byte) {
 func TestCreateVindexBinaryMD5Params(t *testing.T) {
 	vindex, err := CreateVindex("binary_md5", "binary_md5", nil)
 	require.NotNil(t, vindex)
-	warnings := vindex.(ParamValidating).InvalidParamErrors()
-	require.Empty(t, warnings)
+	unknownParams := vindex.(ParamValidating).UnknownParams()
+	require.Empty(t, unknownParams)
 	require.NoError(t, err)
 
 	vindex, err = CreateVindex("binary_md5", "binary_md5", map[string]string{"hello": "world"})
 	require.NotNil(t, vindex)
-	warnings = vindex.(ParamValidating).InvalidParamErrors()
-	require.Len(t, warnings, 1)
+	unknownParams = vindex.(ParamValidating).UnknownParams()
+	require.Len(t, unknownParams, 1)
 	require.NoError(t, err)
 }

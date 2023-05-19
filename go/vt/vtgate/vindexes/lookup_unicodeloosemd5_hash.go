@@ -41,8 +41,8 @@ var (
 	_ ParamValidating = (*LookupUnicodeLooseMD5HashUnique)(nil)
 
 	lookupUnicodeLooseMD5HashParams = append(
-		append(make([]*Param, 0), lookupCommonParams...),
-		&Param{Name: "write_only"},
+		append(make([]string, 0), lookupCommonParams...),
+		"write_only",
 	)
 )
 
@@ -58,10 +58,10 @@ func init() {
 // NonUnique and a Lookup and stores the from value in a hashed form.
 // Warning: This Vindex is being depcreated in favor of Lookup
 type LookupUnicodeLooseMD5Hash struct {
-	name      string
-	writeOnly bool
-	lkp       lookupInternal
-	params    map[string]string
+	name          string
+	writeOnly     bool
+	lkp           lookupInternal
+	unknownParams []string
 }
 
 // newLookupUnicodeLooseMD5Hash creates a LookupUnicodeLooseMD5Hash vindex.
@@ -77,8 +77,8 @@ type LookupUnicodeLooseMD5Hash struct {
 //	write_only: in this mode, Map functions return the full keyrange causing a full scatter.
 func newLookupUnicodeLooseMD5Hash(name string, m map[string]string) (Vindex, error) {
 	lh := &LookupUnicodeLooseMD5Hash{
-		name:   name,
-		params: m,
+		name:          name,
+		unknownParams: FindUnknownParams(m, lookupUnicodeLooseMD5HashParams),
 	}
 
 	cc, err := parseCommonConfig(m)
@@ -281,9 +281,9 @@ func (lh *LookupUnicodeLooseMD5Hash) MarshalJSON() ([]byte, error) {
 	return json.Marshal(lh.lkp)
 }
 
-// InvalidParamErrors implements the ParamValidating interface.
-func (lhu *LookupUnicodeLooseMD5Hash) InvalidParamErrors() []error {
-	return ValidateParams(lhu.params, &ParamValidationOpts{Params: lookupUnicodeLooseMD5HashParams})
+// UnknownParams implements the ParamValidating interface.
+func (lh *LookupUnicodeLooseMD5Hash) UnknownParams() []string {
+	return lh.unknownParams
 }
 
 //====================================================================
@@ -293,10 +293,10 @@ func (lhu *LookupUnicodeLooseMD5Hash) InvalidParamErrors() []error {
 // Unique and a Lookup and will store the from value in a hashed format.
 // Warning: This Vindex is being depcreated in favor of LookupUnique
 type LookupUnicodeLooseMD5HashUnique struct {
-	name      string
-	writeOnly bool
-	lkp       lookupInternal
-	params    map[string]string
+	name          string
+	writeOnly     bool
+	lkp           lookupInternal
+	unknownParams []string
 }
 
 // newLookupUnicodeLooseMD5HashUnique creates a LookupUnicodeLooseMD5HashUnique vindex.
@@ -311,7 +311,10 @@ type LookupUnicodeLooseMD5HashUnique struct {
 //	autocommit: setting this to "true" will cause deletes to be ignored.
 //	write_only: in this mode, Map functions return the full keyrange causing a full scatter.
 func newLookupUnicodeLooseMD5HashUnique(name string, m map[string]string) (Vindex, error) {
-	lhu := &LookupUnicodeLooseMD5HashUnique{name: name}
+	lhu := &LookupUnicodeLooseMD5HashUnique{
+		name:          name,
+		unknownParams: FindUnknownParams(m, lookupUnicodeLooseMD5HashParams),
+	}
 
 	cc, err := parseCommonConfig(m)
 	if err != nil {
@@ -506,9 +509,9 @@ func (lhu *LookupUnicodeLooseMD5HashUnique) IsBackfilling() bool {
 	return lhu.writeOnly
 }
 
-// InvalidParamErrors implements the ParamValidating interface.
-func (lhu *LookupUnicodeLooseMD5HashUnique) InvalidParamErrors() []error {
-	return ValidateParams(lhu.params, &ParamValidationOpts{Params: lookupUnicodeLooseMD5HashParams})
+// UnknownParams implements the ParamValidating interface.
+func (lhu *LookupUnicodeLooseMD5HashUnique) UnknownParams() []string {
+	return lhu.unknownParams
 }
 
 func unicodeHashValue(value sqltypes.Value) (sqltypes.Value, error) {

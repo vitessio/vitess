@@ -26,8 +26,6 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
-	"vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vterrors"
 )
 
 var xxHash SingleColumn
@@ -44,7 +42,7 @@ func xxhashCreateVindexTestCase(
 	testName string,
 	vindexParams map[string]string,
 	expectErr error,
-	expectWarnings []error,
+	expectUnknownParams []string,
 ) createVindexTestCase {
 	return createVindexTestCase{
 		testName: testName,
@@ -53,12 +51,12 @@ func xxhashCreateVindexTestCase(
 		vindexName:   "xxhash",
 		vindexParams: vindexParams,
 
-		expectCost:         1,
-		expectErr:          expectErr,
-		expectIsUnique:     true,
-		expectNeedsVCursor: false,
-		expectString:       "xxhash",
-		expectWarnings:     expectWarnings,
+		expectCost:          1,
+		expectErr:           expectErr,
+		expectIsUnique:      true,
+		expectNeedsVCursor:  false,
+		expectString:        "xxhash",
+		expectUnknownParams: expectUnknownParams,
 	}
 }
 
@@ -82,7 +80,7 @@ func TestXXHashCreateVindex(t *testing.T) {
 				"hello": "world",
 			},
 			nil,
-			[]error{vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "unknown param 'hello'")},
+			[]string{"hello"},
 		),
 	}
 

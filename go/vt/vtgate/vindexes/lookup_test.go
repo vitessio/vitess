@@ -34,7 +34,6 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
-	"vitess.io/vitess/go/vt/proto/vtrpc"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 )
@@ -119,7 +118,7 @@ func lookupCreateVindexTestCase(
 	testName string,
 	vindexParams map[string]string,
 	expectErr error,
-	expectWarnings []error,
+	expectUnknownParams []string,
 ) createVindexTestCase {
 	return createVindexTestCase{
 		testName: testName,
@@ -128,12 +127,12 @@ func lookupCreateVindexTestCase(
 		vindexName:   "lookup",
 		vindexParams: vindexParams,
 
-		expectCost:         20,
-		expectErr:          expectErr,
-		expectIsUnique:     false,
-		expectNeedsVCursor: true,
-		expectString:       "lookup",
-		expectWarnings:     expectWarnings,
+		expectCost:          20,
+		expectErr:           expectErr,
+		expectIsUnique:      false,
+		expectNeedsVCursor:  true,
+		expectString:        "lookup",
+		expectUnknownParams: expectUnknownParams,
 	}
 }
 
@@ -141,7 +140,7 @@ func lookupUniqueCreateVindexTestCase(
 	testName string,
 	vindexParams map[string]string,
 	expectErr error,
-	expectWarnings []error,
+	expectUnknownParams []string,
 ) createVindexTestCase {
 	return createVindexTestCase{
 		testName: testName,
@@ -150,16 +149,16 @@ func lookupUniqueCreateVindexTestCase(
 		vindexName:   "lookup_unique",
 		vindexParams: vindexParams,
 
-		expectCost:         10,
-		expectErr:          expectErr,
-		expectIsUnique:     true,
-		expectNeedsVCursor: true,
-		expectString:       "lookup_unique",
-		expectWarnings:     expectWarnings,
+		expectCost:          10,
+		expectErr:           expectErr,
+		expectIsUnique:      true,
+		expectNeedsVCursor:  true,
+		expectString:        "lookup_unique",
+		expectUnknownParams: expectUnknownParams,
 	}
 }
 
-func testLookupCreateVindexCommonCases(t *testing.T, testCaseF func(string, map[string]string, error, []error) createVindexTestCase) {
+func testLookupCreateVindexCommonCases(t *testing.T, testCaseF func(string, map[string]string, error, []string) createVindexTestCase) {
 	testLookupCreateVindexInternalCases(t, testCaseF)
 
 	cases := []createVindexTestCase{
@@ -204,7 +203,7 @@ func testLookupCreateVindexCommonCases(t *testing.T, testCaseF func(string, map[
 	testCreateVindexes(t, cases)
 }
 
-func testLookupCreateVindexInternalCases(t *testing.T, testCaseF func(string, map[string]string, error, []error) createVindexTestCase) {
+func testLookupCreateVindexInternalCases(t *testing.T, testCaseF func(string, map[string]string, error, []string) createVindexTestCase) {
 	cases := []createVindexTestCase{
 		// TODO(maxeng): make table, to, from required params.
 		testCaseF(
@@ -307,7 +306,7 @@ func testLookupCreateVindexInternalCases(t *testing.T, testCaseF func(string, ma
 			"unknown params",
 			map[string]string{"hello": "world"},
 			nil,
-			[]error{vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "unknown param 'hello'")},
+			[]string{"hello"},
 		),
 	}
 
@@ -315,7 +314,7 @@ func testLookupCreateVindexInternalCases(t *testing.T, testCaseF func(string, ma
 }
 
 func TestLookupCreateVindex(t *testing.T) {
-	testCaseFs := []func(string, map[string]string, error, []error) createVindexTestCase{
+	testCaseFs := []func(string, map[string]string, error, []string) createVindexTestCase{
 		lookupCreateVindexTestCase,
 		lookupUniqueCreateVindexTestCase,
 	}
@@ -411,7 +410,7 @@ func TestLookupNonUniqueMapAutocommit(t *testing.T) {
 		"autocommit": "true",
 	})
 	require.NoError(t, err)
-	require.Empty(t, vindex.(ParamValidating).InvalidParamErrors())
+	require.Empty(t, vindex.(ParamValidating).UnknownParams())
 	lnu := vindex.(SingleColumn)
 	vc := &vcursor{numRows: 2}
 
@@ -517,7 +516,7 @@ func TestLookupNonUniqueNoVerify(t *testing.T) {
 		"no_verify": "true",
 	})
 	require.NoError(t, err)
-	require.Empty(t, vindex.(ParamValidating).InvalidParamErrors())
+	require.Empty(t, vindex.(ParamValidating).UnknownParams())
 	lnu := vindex.(SingleColumn)
 	vc := &vcursor{numRows: 1}
 
@@ -541,7 +540,7 @@ func TestLookupUniqueNoVerify(t *testing.T) {
 		"no_verify": "true",
 	})
 	require.NoError(t, err)
-	require.Empty(t, vindex.(ParamValidating).InvalidParamErrors())
+	require.Empty(t, vindex.(ParamValidating).UnknownParams())
 	lookupUnique := vindex.(SingleColumn)
 	vc := &vcursor{numRows: 1}
 
@@ -565,7 +564,7 @@ func TestLookupNonUniqueVerifyAutocommit(t *testing.T) {
 		"autocommit": "true",
 	})
 	require.NoError(t, err)
-	require.Empty(t, vindex.(ParamValidating).InvalidParamErrors())
+	require.Empty(t, vindex.(ParamValidating).UnknownParams())
 	lnu := vindex.(SingleColumn)
 	vc := &vcursor{numRows: 1}
 
@@ -652,7 +651,7 @@ func TestLookupNonUniqueCreateAutocommit(t *testing.T) {
 		"autocommit": "true",
 	})
 	require.NoError(t, err)
-	require.Empty(t, lnu.(ParamValidating).InvalidParamErrors())
+	require.Empty(t, lnu.(ParamValidating).UnknownParams())
 	vc := &vcursor{}
 
 	err = lnu.(Lookup).Create(context.Background(), vc, [][]sqltypes.Value{{
@@ -718,7 +717,7 @@ func TestLookupNonUniqueDeleteAutocommit(t *testing.T) {
 		"autocommit": "true",
 	})
 	require.NoError(t, err)
-	require.Empty(t, lnu.(ParamValidating).InvalidParamErrors())
+	require.Empty(t, lnu.(ParamValidating).UnknownParams())
 	vc := &vcursor{}
 
 	err = lnu.(Lookup).Delete(context.Background(), vc, [][]sqltypes.Value{{sqltypes.NewInt64(1)}, {sqltypes.NewInt64(2)}}, []byte("test"))
@@ -808,7 +807,7 @@ func TestLookupNonUniqueCreateMultiShardAutocommit(t *testing.T) {
 		"multi_shard_autocommit": "true",
 	})
 	require.NoError(t, err)
-	require.Empty(t, lnu.(ParamValidating).InvalidParamErrors())
+	require.Empty(t, lnu.(ParamValidating).UnknownParams())
 
 	vc := &vcursor{}
 	err = lnu.(Lookup).Create(context.Background(), vc, [][]sqltypes.Value{{
@@ -846,6 +845,6 @@ func createLookup(t *testing.T, name string, writeOnly bool) SingleColumn {
 		"write_only": write,
 	})
 	require.NoError(t, err)
-	require.Empty(t, l.(ParamValidating).InvalidParamErrors())
+	require.Empty(t, l.(ParamValidating).UnknownParams())
 	return l.(SingleColumn)
 }

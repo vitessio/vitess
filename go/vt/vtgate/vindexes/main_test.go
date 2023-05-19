@@ -1,6 +1,7 @@
 package vindexes
 
 import (
+	"sort"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -14,12 +15,12 @@ type createVindexTestCase struct {
 	vindexName   string
 	vindexParams map[string]string
 
-	expectCost         int
-	expectErr          error
-	expectIsUnique     bool
-	expectNeedsVCursor bool
-	expectString       string
-	expectWarnings     []error
+	expectCost          int
+	expectErr           error
+	expectIsUnique      bool
+	expectNeedsVCursor  bool
+	expectString        string
+	expectUnknownParams []string
 }
 
 func assertEqualVtError(t *testing.T, expected, actual error) {
@@ -49,22 +50,14 @@ func testCreateVindex(
 			assert.NotNil(t, vdx)
 		}
 		paramValidating, ok := vdx.(ParamValidating)
-		var warnings []error
+		var unknownParams []string
 		if ok {
-			warnings = paramValidating.InvalidParamErrors()
+			unknownParams = paramValidating.UnknownParams()
 		}
-		require.Equal(t, len(tc.expectWarnings), len(warnings))
-		for _, expectWarning := range tc.expectWarnings {
-			found := false
-			for _, warning := range warnings {
-				if warning.Error() == expectWarning.Error() {
-					found = true
-				}
-			}
-			if !found {
-				require.Fail(t, "expected a warning with error message", expectWarning.Error())
-			}
-		}
+		require.Equal(t, len(tc.expectUnknownParams), len(unknownParams))
+		sort.Strings(tc.expectUnknownParams)
+		sort.Strings(unknownParams)
+		require.Equal(t, tc.expectUnknownParams, unknownParams)
 		if vdx != nil {
 			assert.Equal(t, tc.expectString, vdx.String())
 			assert.Equal(t, tc.expectCost, vdx.Cost())

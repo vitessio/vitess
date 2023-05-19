@@ -32,9 +32,9 @@ var (
 	_ ParamValidating = (*CFC)(nil)
 )
 
-var cfcParams = []*Param{
-	{Name: "hash"},
-	{Name: "offsets"},
+var cfcParams = []string{
+	"hash",
+	"offsets",
 }
 
 // CFC is Concatenated Fixed-width Composite Vindex.
@@ -103,17 +103,17 @@ type CFC struct {
 }
 
 type cfcCommon struct {
-	name    string
-	hash    func([]byte) []byte
-	offsets []int
-	params  map[string]string
+	name          string
+	hash          func([]byte) []byte
+	offsets       []int
+	unknownParams []string
 }
 
 // newCFC creates a new CFC vindex
 func newCFC(name string, params map[string]string) (Vindex, error) {
 	ss := &cfcCommon{
-		name:   name,
-		params: params,
+		name:          name,
+		unknownParams: FindUnknownParams(params, cfcParams),
 	}
 	cfc := &CFC{
 		cfcCommon: ss,
@@ -242,9 +242,9 @@ func (vind *cfcCommon) verify(ids []sqltypes.Value, ksids [][]byte) ([]bool, err
 	return out, nil
 }
 
-// InvalidParamErrors implements the ParamValidating interface.
-func (vind *cfcCommon) InvalidParamErrors() []error {
-	return ValidateParams(vind.params, &ParamValidationOpts{Params: cfcParams})
+// UnknownParams implements the ParamValidating interface.
+func (vind *cfcCommon) UnknownParams() []string {
+	return vind.unknownParams
 }
 
 // Verify returns true if ids maps to ksids.

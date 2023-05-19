@@ -25,8 +25,6 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
-	"vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vterrors"
 )
 
 var null SingleColumn
@@ -36,9 +34,9 @@ func init() {
 	if err != nil {
 		panic(err)
 	}
-	warnings := hv.(ParamValidating).InvalidParamErrors()
-	if len(warnings) > 0 {
-		panic("null test init: expected 0 warnings")
+	unknownParams := hv.(ParamValidating).UnknownParams()
+	if len(unknownParams) > 0 {
+		panic("null test init: expected 0 unknown params")
 	}
 	null = hv.(SingleColumn)
 }
@@ -47,7 +45,7 @@ func nullCreateVindexTestCase(
 	testName string,
 	vindexParams map[string]string,
 	expectErr error,
-	expectWarnings []error,
+	expectUnknownParams []string,
 ) createVindexTestCase {
 	return createVindexTestCase{
 		testName: testName,
@@ -56,12 +54,12 @@ func nullCreateVindexTestCase(
 		vindexName:   "null",
 		vindexParams: vindexParams,
 
-		expectCost:         100,
-		expectErr:          expectErr,
-		expectIsUnique:     true,
-		expectNeedsVCursor: false,
-		expectString:       "null",
-		expectWarnings:     expectWarnings,
+		expectCost:          100,
+		expectErr:           expectErr,
+		expectIsUnique:      true,
+		expectNeedsVCursor:  false,
+		expectString:        "null",
+		expectUnknownParams: expectUnknownParams,
 	}
 }
 
@@ -83,7 +81,7 @@ func TestNullCreateVindex(t *testing.T) {
 			"unknown params",
 			map[string]string{"hello": "world"},
 			nil,
-			[]error{vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "unknown param 'hello'")},
+			[]string{"hello"},
 		),
 	}
 

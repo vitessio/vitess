@@ -44,7 +44,7 @@ func consistentLookupCreateVindexTestCase(
 	testName string,
 	vindexParams map[string]string,
 	expectErr error,
-	expectWarnings []error,
+	expectUnknownParams []string,
 ) createVindexTestCase {
 	return createVindexTestCase{
 		testName: testName,
@@ -53,12 +53,12 @@ func consistentLookupCreateVindexTestCase(
 		vindexName:   "consistent_lookup",
 		vindexParams: vindexParams,
 
-		expectCost:         20,
-		expectErr:          expectErr,
-		expectIsUnique:     false,
-		expectNeedsVCursor: true,
-		expectString:       "consistent_lookup",
-		expectWarnings:     expectWarnings,
+		expectCost:          20,
+		expectErr:           expectErr,
+		expectIsUnique:      false,
+		expectNeedsVCursor:  true,
+		expectString:        "consistent_lookup",
+		expectUnknownParams: expectUnknownParams,
 	}
 }
 
@@ -66,7 +66,7 @@ func consistentLookupUniqueCreateVindexTestCase(
 	testName string,
 	vindexParams map[string]string,
 	expectErr error,
-	expectWarnings []error,
+	expectUnknownParams []string,
 ) createVindexTestCase {
 	return createVindexTestCase{
 		testName: testName,
@@ -75,17 +75,17 @@ func consistentLookupUniqueCreateVindexTestCase(
 		vindexName:   "consistent_lookup_unique",
 		vindexParams: vindexParams,
 
-		expectCost:         10,
-		expectErr:          expectErr,
-		expectIsUnique:     true,
-		expectNeedsVCursor: true,
-		expectString:       "consistent_lookup_unique",
-		expectWarnings:     expectWarnings,
+		expectCost:          10,
+		expectErr:           expectErr,
+		expectIsUnique:      true,
+		expectNeedsVCursor:  true,
+		expectString:        "consistent_lookup_unique",
+		expectUnknownParams: expectUnknownParams,
 	}
 }
 
 func TestConsistentLookupCreateVindex(t *testing.T) {
-	testCaseFs := []func(string, map[string]string, error, []error) createVindexTestCase{
+	testCaseFs := []func(string, map[string]string, error, []string) createVindexTestCase{
 		consistentLookupCreateVindexTestCase,
 		consistentLookupUniqueCreateVindexTestCase,
 	}
@@ -496,7 +496,7 @@ func createConsistentLookup(t *testing.T, name string, writeOnly bool) SingleCol
 	if err != nil {
 		t.Fatal(err)
 	}
-	require.Empty(t, l.(ParamValidating).InvalidParamErrors())
+	require.Empty(t, l.(ParamValidating).UnknownParams())
 	cols := []sqlparser.IdentifierCI{
 		sqlparser.NewIdentifierCI("fc1"),
 		sqlparser.NewIdentifierCI("fc2"),

@@ -37,15 +37,15 @@ var (
 // Ref: http://www.unicode.org/reports/tr10/#Multi_Level_Comparison.
 // This is compatible with MySQL's utf8_unicode_ci collation.
 type UnicodeLooseXXHash struct {
-	name   string
-	params map[string]string
+	name          string
+	unknownParams []string
 }
 
 // newUnicodeLooseXXHash creates a new UnicodeLooseXXHash struct.
 func newUnicodeLooseXXHash(name string, m map[string]string) (Vindex, error) {
 	return &UnicodeLooseXXHash{
-		name:   name,
-		params: m,
+		name:          name,
+		unknownParams: FindUnknownParams(m, nil),
 	}, nil
 }
 
@@ -99,9 +99,9 @@ func (vind *UnicodeLooseXXHash) Hash(id sqltypes.Value) ([]byte, error) {
 	return unicodeHash(vXXHash, id)
 }
 
-// InvalidParamErrors implements the ParamValidating interface.
-func (vind *UnicodeLooseXXHash) InvalidParamErrors() []error {
-	return ValidateParams(vind.params, &ParamValidationOpts{})
+// UnknownParams implements the ParamValidating interface.
+func (vind *UnicodeLooseXXHash) UnknownParams() []string {
+	return vind.unknownParams
 }
 
 func init() {

@@ -37,10 +37,10 @@ var (
 	_ Hashing         = (*NumericStaticMap)(nil)
 	_ ParamValidating = (*NumericStaticMap)(nil)
 
-	numericStaticMapParams = []*Param{
-		{Name: "json"},
-		{Name: "json_path"},
-		{Name: "fallback_type"},
+	numericStaticMapParams = []string{
+		"json",
+		"json_path",
+		"fallback_type",
 	}
 )
 
@@ -50,10 +50,10 @@ type NumericLookupTable map[uint64]uint64
 // NumericStaticMap is similar to vindex Numeric but first attempts a lookup via
 // a JSON file.
 type NumericStaticMap struct {
-	name    string
-	hashVdx Hashing
-	lookup  NumericLookupTable
-	params  map[string]string
+	name          string
+	hashVdx       Hashing
+	lookup        NumericLookupTable
+	unknownParams []string
 }
 
 func init() {
@@ -101,10 +101,10 @@ func newNumericStaticMap(name string, params map[string]string) (Vindex, error) 
 	}
 
 	return &NumericStaticMap{
-		hashVdx: hashVdx,
-		lookup:  lt,
-		name:    name,
-		params:  params,
+		hashVdx:       hashVdx,
+		lookup:        lt,
+		name:          name,
+		unknownParams: FindUnknownParams(params, numericStaticMapParams),
 	}, nil
 }
 
@@ -175,9 +175,9 @@ func (vind *NumericStaticMap) Hash(id sqltypes.Value) ([]byte, error) {
 	return keybytes[:], nil
 }
 
-// InvalidParamErrors implements the ParamValidating interface.
-func (vind *NumericStaticMap) InvalidParamErrors() []error {
-	return ValidateParams(vind.params, &ParamValidationOpts{Params: numericStaticMapParams})
+// UnknownParams implements the ParamValidating interface.
+func (vind *NumericStaticMap) UnknownParams() []string {
+	return vind.unknownParams
 }
 
 func loadNumericLookupTable(path string) (NumericLookupTable, error) {

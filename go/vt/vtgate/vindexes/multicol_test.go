@@ -35,7 +35,7 @@ func multicolCreateVindexTestCase(
 	vindexParams map[string]string,
 	expectCost int,
 	expectErr error,
-	expectWarnings []error,
+	expectUnknownParams []string,
 ) createVindexTestCase {
 	return createVindexTestCase{
 		testName: testName,
@@ -44,12 +44,12 @@ func multicolCreateVindexTestCase(
 		vindexName:   "multicol",
 		vindexParams: vindexParams,
 
-		expectCost:         expectCost,
-		expectErr:          expectErr,
-		expectIsUnique:     true,
-		expectNeedsVCursor: false,
-		expectString:       "multicol",
-		expectWarnings:     expectWarnings,
+		expectCost:          expectCost,
+		expectErr:           expectErr,
+		expectIsUnique:      true,
+		expectNeedsVCursor:  false,
+		expectString:        "multicol",
+		expectUnknownParams: expectUnknownParams,
 	}
 }
 
@@ -201,8 +201,8 @@ func TestMultiColMisc(t *testing.T) {
 		"column_count": "3",
 	})
 	require.NoError(t, err)
-	warnings := vindex.(ParamValidating).InvalidParamErrors()
-	require.Empty(t, warnings)
+	_, ok := vindex.(ParamValidating)
+	require.False(t, ok)
 
 	multiColVdx, isMultiColVdx := vindex.(*MultiCol)
 	assert.True(t, isMultiColVdx)
@@ -219,8 +219,6 @@ func TestMultiColMap(t *testing.T) {
 		"column_count": "3",
 	})
 	require.NoError(t, err)
-	warnings := vindex.(ParamValidating).InvalidParamErrors()
-	require.Empty(t, warnings)
 	mutiCol := vindex.(MultiColumn)
 
 	got, err := mutiCol.Map(context.Background(), nil, [][]sqltypes.Value{{

@@ -25,8 +25,6 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
-	"vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vterrors"
 )
 
 var reverseBits SingleColumn
@@ -36,9 +34,9 @@ func init() {
 	if err != nil {
 		panic(err)
 	}
-	warnings := hv.(ParamValidating).InvalidParamErrors()
-	if len(warnings) > 0 {
-		panic("reverse_bits test init: expected 0 warnings")
+	unknownParams := hv.(ParamValidating).UnknownParams()
+	if len(unknownParams) > 0 {
+		panic("reverse_bits test init: expected 0 unknown params")
 	}
 	reverseBits = hv.(SingleColumn)
 }
@@ -47,7 +45,7 @@ func reverseBitsCreateVindexTestCase(
 	testName string,
 	vindexParams map[string]string,
 	expectErr error,
-	expectWarnings []error,
+	expectUnknownParams []string,
 ) createVindexTestCase {
 	return createVindexTestCase{
 		testName: testName,
@@ -56,12 +54,12 @@ func reverseBitsCreateVindexTestCase(
 		vindexName:   "reverse_bits",
 		vindexParams: vindexParams,
 
-		expectCost:         1,
-		expectErr:          expectErr,
-		expectIsUnique:     true,
-		expectNeedsVCursor: false,
-		expectString:       "reverse_bits",
-		expectWarnings:     expectWarnings,
+		expectCost:          1,
+		expectErr:           expectErr,
+		expectIsUnique:      true,
+		expectNeedsVCursor:  false,
+		expectString:        "reverse_bits",
+		expectUnknownParams: expectUnknownParams,
 	}
 }
 
@@ -85,7 +83,7 @@ func TestReverseBitsCreateVindex(t *testing.T) {
 				"hello": "world",
 			},
 			nil,
-			[]error{vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "unknown param 'hello'")},
+			[]string{"hello"},
 		),
 	}
 

@@ -99,9 +99,9 @@ func (vind *BinaryMD5) Hash(id sqltypes.Value) ([]byte, error) {
 	return vMD5Hash(idBytes), nil
 }
 
-// InvalidParamErrors implements the ParamValidating interface.
-func (vind *BinaryMD5) InvalidParamErrors() []error {
-	return ValidateParams(vind.params, &ParamValidationOpts{})
+// UnknownParams implements the ParamValidating interface.
+func (vind *BinaryMD5) UnknownParams() []string {
+	return FindUnknownParams(vind.params, nil)
 }
 
 func vMD5Hash(source []byte) []byte {

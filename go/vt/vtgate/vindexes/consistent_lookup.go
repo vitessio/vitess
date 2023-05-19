@@ -48,8 +48,8 @@ var (
 	_ ParamValidating = (*ConsistentLookup)(nil)
 
 	consistentLookupParams = append(
-		append(make([]*Param, 0), lookupInternalParams...),
-		&Param{Name: "write_only"},
+		append(make([]string, 0), lookupInternalParams...),
+		"write_only",
 	)
 )
 
@@ -62,7 +62,7 @@ func init() {
 // consistent with respect to its owner table.
 type ConsistentLookup struct {
 	*clCommon
-	params map[string]string
+	unknownParams []string
 }
 
 // newConsistentLookup creates a ConsistentLookup vindex.
@@ -77,8 +77,8 @@ func newConsistentLookup(name string, m map[string]string) (Vindex, error) {
 		return nil, err
 	}
 	return &ConsistentLookup{
-		clCommon: clc,
-		params:   m,
+		clCommon:      clc,
+		unknownParams: FindUnknownParams(m, consistentLookupParams),
 	}, nil
 }
 
@@ -163,9 +163,9 @@ func (lu *ConsistentLookup) AutoCommitEnabled() bool {
 	return lu.lkp.Autocommit
 }
 
-// InvalidParamErrors implements the ParamValidating interface.
-func (lu *ConsistentLookup) InvalidParamErrors() []error {
-	return ValidateParams(lu.params, &ParamValidationOpts{Params: consistentLookupParams})
+// UnknownParams implements the ParamValidating interface.
+func (lu *ConsistentLookup) UnknownParams() []string {
+	return lu.unknownParams
 }
 
 //====================================================================
@@ -175,7 +175,7 @@ func (lu *ConsistentLookup) InvalidParamErrors() []error {
 // Unique and a Lookup.
 type ConsistentLookupUnique struct {
 	*clCommon
-	params map[string]string
+	unknownParams []string
 }
 
 // newConsistentLookupUnique creates a ConsistentLookupUnique vindex.
@@ -190,8 +190,8 @@ func newConsistentLookupUnique(name string, m map[string]string) (Vindex, error)
 		return nil, err
 	}
 	return &ConsistentLookupUnique{
-		clCommon: clc,
-		params:   m,
+		clCommon:      clc,
+		unknownParams: FindUnknownParams(m, consistentLookupParams),
 	}, nil
 }
 
@@ -491,7 +491,7 @@ func (lu *ConsistentLookupUnique) IsBackfilling() bool {
 	return lu.writeOnly
 }
 
-// InvalidParamErrors implements the ParamValidating interface.
-func (lu *ConsistentLookupUnique) InvalidParamErrors() []error {
-	return ValidateParams(lu.params, &ParamValidationOpts{Params: consistentLookupParams})
+// UnknownParams implements the ParamValidating interface.
+func (lu *ConsistentLookupUnique) UnknownParams() []string {
+	return lu.unknownParams
 }

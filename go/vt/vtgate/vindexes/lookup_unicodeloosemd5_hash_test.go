@@ -41,7 +41,7 @@ func lookupUnicodeLooseMD5HashCreateVindexTestCase(
 	testName string,
 	vindexParams map[string]string,
 	expectErr error,
-	expectWarnings []error,
+	expectUnknownParams []string,
 ) createVindexTestCase {
 	return createVindexTestCase{
 		testName: testName,
@@ -50,12 +50,12 @@ func lookupUnicodeLooseMD5HashCreateVindexTestCase(
 		vindexName:   "lookup_unicodeloosemd5_hash",
 		vindexParams: vindexParams,
 
-		expectCost:         20,
-		expectErr:          expectErr,
-		expectIsUnique:     false,
-		expectNeedsVCursor: true,
-		expectString:       "lookup_unicodeloosemd5_hash",
-		expectWarnings:     expectWarnings,
+		expectCost:          20,
+		expectErr:           expectErr,
+		expectIsUnique:      false,
+		expectNeedsVCursor:  true,
+		expectString:        "lookup_unicodeloosemd5_hash",
+		expectUnknownParams: expectUnknownParams,
 	}
 }
 
@@ -115,8 +115,8 @@ func TestLookupUnicodeLooseMD5HashMapAutocommit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	warnings := vindex.(ParamValidating).InvalidParamErrors()
-	require.Empty(t, warnings)
+	unknownParams := vindex.(ParamValidating).UnknownParams()
+	require.Empty(t, unknownParams)
 	lnu := vindex.(SingleColumn)
 	vc := &vcursor{numRows: 2, keys: []sqltypes.Value{sqltypes.NewUint64(hashed10), sqltypes.NewUint64(hashed20)}}
 
@@ -249,8 +249,8 @@ func TestLookupUnicodeLooseMD5HashVerifyAutocommit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	warnings := vindex.(ParamValidating).InvalidParamErrors()
-	require.Empty(t, warnings)
+	unknownParams := vindex.(ParamValidating).UnknownParams()
+	require.Empty(t, unknownParams)
 	lnu := vindex.(SingleColumn)
 	vc := &vcursor{numRows: 1}
 
@@ -336,8 +336,8 @@ func TestLookupUnicodeLooseMD5HashCreateAutocommit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	warnings := lnu.(ParamValidating).InvalidParamErrors()
-	require.Empty(t, warnings)
+	unknownParams := lnu.(ParamValidating).UnknownParams()
+	require.Empty(t, unknownParams)
 	vc := &vcursor{}
 
 	err = lnu.(Lookup).Create(context.Background(), vc, [][]sqltypes.Value{{
@@ -377,8 +377,8 @@ func TestLookupUnicodeLooseMD5HashCreateMultiShardAutocommit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	warnings := lnu.(ParamValidating).InvalidParamErrors()
-	require.Empty(t, warnings)
+	unknownParams := lnu.(ParamValidating).UnknownParams()
+	require.Empty(t, unknownParams)
 	vc := &vcursor{}
 
 	err = lnu.(Lookup).Create(context.Background(), vc, [][]sqltypes.Value{{
@@ -456,8 +456,8 @@ func TestLookupUnicodeLooseMD5HashDeleteAutocommit(t *testing.T) {
 		"to":         "toc",
 		"autocommit": "true",
 	})
-	warnings := lnu.(ParamValidating).InvalidParamErrors()
-	require.Empty(t, warnings)
+	unknownParams := lnu.(ParamValidating).UnknownParams()
+	require.Empty(t, unknownParams)
 	require.NoError(t, err)
 
 	vc := &vcursor{}

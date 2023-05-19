@@ -36,7 +36,7 @@ func regionExperimentalCreateVindexTestCase(
 	testName string,
 	vindexParams map[string]string,
 	expectErr error,
-	expectWarnings []error,
+	expectUnknownParams []string,
 ) createVindexTestCase {
 	return createVindexTestCase{
 		testName: testName,
@@ -45,12 +45,12 @@ func regionExperimentalCreateVindexTestCase(
 		vindexName:   "region_experimental",
 		vindexParams: vindexParams,
 
-		expectCost:         1,
-		expectErr:          expectErr,
-		expectIsUnique:     true,
-		expectNeedsVCursor: false,
-		expectString:       "region_experimental",
-		expectWarnings:     expectWarnings,
+		expectCost:          1,
+		expectErr:           expectErr,
+		expectIsUnique:      true,
+		expectNeedsVCursor:  false,
+		expectString:        "region_experimental",
+		expectUnknownParams: expectUnknownParams,
 	}
 }
 
@@ -107,7 +107,7 @@ func TestRegionExperimentalCreateVindex(t *testing.T) {
 				"hello":        "world",
 			},
 			nil,
-			[]error{vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "unknown param 'hello'")},
+			[]string{"hello"},
 		),
 	}
 

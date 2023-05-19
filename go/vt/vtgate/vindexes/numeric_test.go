@@ -25,8 +25,6 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
-	"vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vterrors"
 )
 
 var numeric SingleColumn
@@ -43,7 +41,7 @@ func numericCreateVindexTestCase(
 	testName string,
 	vindexParams map[string]string,
 	expectErr error,
-	expectWarnings []error,
+	expectUnknownParams []string,
 ) createVindexTestCase {
 	return createVindexTestCase{
 		testName: testName,
@@ -52,12 +50,12 @@ func numericCreateVindexTestCase(
 		vindexName:   "numeric",
 		vindexParams: vindexParams,
 
-		expectCost:         0,
-		expectErr:          expectErr,
-		expectIsUnique:     true,
-		expectNeedsVCursor: false,
-		expectString:       "numeric",
-		expectWarnings:     expectWarnings,
+		expectCost:          0,
+		expectErr:           expectErr,
+		expectIsUnique:      true,
+		expectNeedsVCursor:  false,
+		expectString:        "numeric",
+		expectUnknownParams: expectUnknownParams,
 	}
 }
 
@@ -79,7 +77,7 @@ func TestNumericCreateVindex(t *testing.T) {
 			"unknown params",
 			map[string]string{"hello": "world"},
 			nil,
-			[]error{vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "unknown param 'hello'")},
+			[]string{"hello"},
 		),
 	}
 

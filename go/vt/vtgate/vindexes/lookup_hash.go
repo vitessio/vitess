@@ -40,8 +40,8 @@ var (
 	_ ParamValidating = (*LookupHashUnique)(nil)
 
 	lookupHashParams = append(
-		append(make([]*Param, 0), lookupCommonParams...),
-		&Param{Name: "write_only"},
+		append(make([]string, 0), lookupCommonParams...),
+		"write_only",
 	)
 )
 
@@ -57,10 +57,10 @@ func init() {
 // NonUnique and a Lookup.
 // Warning: This Vindex is being deprecated in favor of Lookup
 type LookupHash struct {
-	name      string
-	writeOnly bool
-	lkp       lookupInternal
-	params    map[string]string
+	name          string
+	writeOnly     bool
+	lkp           lookupInternal
+	unknownParams []string
 }
 
 // newLookupHash creates a LookupHash vindex.
@@ -76,8 +76,8 @@ type LookupHash struct {
 //	write_only: in this mode, Map functions return the full keyrange causing a full scatter.
 func newLookupHash(name string, m map[string]string) (Vindex, error) {
 	lh := &LookupHash{
-		name:   name,
-		params: m,
+		name:          name,
+		unknownParams: FindUnknownParams(m, lookupHashParams),
 	}
 
 	cc, err := parseCommonConfig(m)
@@ -240,9 +240,9 @@ func (lh *LookupHash) MarshalJSON() ([]byte, error) {
 	return json.Marshal(lh.lkp)
 }
 
-// InvalidParamErrors satisifes the ParamValidating interface.
-func (lhu *LookupHash) InvalidParamErrors() []error {
-	return ValidateParams(lhu.params, &ParamValidationOpts{Params: lookupHashParams})
+// UnknownParams satisifes the ParamValidating interface.
+func (lh *LookupHash) UnknownParams() []string {
+	return lh.unknownParams
 }
 
 // unhashList unhashes a list of keyspace ids into []sqltypes.Value.
@@ -265,10 +265,10 @@ func unhashList(ksids [][]byte) ([]sqltypes.Value, error) {
 // Unique and a Lookup.
 // Warning: This Vindex is being depcreated in favor of LookupUnique
 type LookupHashUnique struct {
-	name      string
-	writeOnly bool
-	lkp       lookupInternal
-	params    map[string]string
+	name          string
+	writeOnly     bool
+	lkp           lookupInternal
+	unknownParams []string
 }
 
 var _ LookupPlanable = (*LookupHashUnique)(nil)
@@ -286,8 +286,8 @@ var _ LookupPlanable = (*LookupHashUnique)(nil)
 //	write_only: in this mode, Map functions return the full keyrange causing a full scatter.
 func newLookupHashUnique(name string, m map[string]string) (Vindex, error) {
 	lhu := &LookupHashUnique{
-		name:   name,
-		params: m,
+		name:          name,
+		unknownParams: FindUnknownParams(m, lookupHashParams),
 	}
 
 	cc, err := parseCommonConfig(m)
@@ -440,7 +440,7 @@ func (lhu *LookupHashUnique) GetCommitOrder() vtgatepb.CommitOrder {
 	return vtgatepb.CommitOrder_NORMAL
 }
 
-// InvalidParamErrors implements the ParamValidating interface.
-func (lhu *LookupHashUnique) InvalidParamErrors() []error {
-	return ValidateParams(lhu.params, &ParamValidationOpts{Params: lookupHashParams})
+// UnknownParams implements the ParamValidating interface.
+func (lhu *LookupHashUnique) UnknownParams() []string {
+	return lhu.unknownParams
 }

@@ -42,7 +42,7 @@ func TestLookupUniqueNew(t *testing.T) {
 		"write_only": "true",
 	})
 	require.NoError(t, err)
-	require.Empty(t, vindex.(ParamValidating).InvalidParamErrors())
+	require.Empty(t, vindex.(ParamValidating).UnknownParams())
 
 	l = vindex.(SingleColumn)
 	if want, got := l.(*LookupUnique).writeOnly, true; got != want {
@@ -158,7 +158,7 @@ func TestLookupUniqueCreate(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	require.Empty(t, lookupUnique.(ParamValidating).InvalidParamErrors())
+	require.Empty(t, lookupUnique.(ParamValidating).UnknownParams())
 	vc := &vcursor{}
 
 	err = lookupUnique.(Lookup).Create(context.Background(), vc, [][]sqltypes.Value{{sqltypes.NewInt64(1)}}, [][]byte{[]byte("test")}, false /* ignoreMode */)

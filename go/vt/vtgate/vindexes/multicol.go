@@ -30,8 +30,7 @@ import (
 )
 
 var (
-	_ MultiColumn     = (*MultiCol)(nil)
-	_ ParamValidating = (*MultiCol)(nil)
+	_ MultiColumn = (*MultiCol)(nil)
 )
 
 type MultiCol struct {
@@ -40,7 +39,6 @@ type MultiCol struct {
 	noOfCols    int
 	columnVdx   map[int]Hashing
 	columnBytes map[int]int
-	params      map[string]string
 }
 
 const (
@@ -48,14 +46,6 @@ const (
 	paramColumnBytes  = "column_bytes"
 	paramColumnVindex = "column_vindex"
 	defaultVindex     = "hash"
-)
-
-var (
-	multiColParams = []*Param{
-		{Name: paramColumnCount},
-		{Name: paramColumnBytes},
-		{Name: paramColumnVindex},
-	}
 )
 
 // newMultiCol creates a new MultiCol.
@@ -79,7 +69,6 @@ func newMultiCol(name string, m map[string]string) (Vindex, error) {
 		noOfCols:    colCount,
 		columnVdx:   columnVdx,
 		columnBytes: columnBytes,
-		params:      m,
 	}, nil
 }
 
@@ -160,11 +149,6 @@ func (m *MultiCol) mapKsid(colValues []sqltypes.Value) (bool, []byte, error) {
 	}
 	partial := m.noOfCols > len(colValues)
 	return partial, ksid, nil
-}
-
-// InvalidParamErrors implements the ParamValidating interface.
-func (m *MultiCol) InvalidParamErrors() []error {
-	return ValidateParams(m.params, &ParamValidationOpts{AllowUnknown: true, Params: multiColParams})
 }
 
 func init() {

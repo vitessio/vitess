@@ -19,6 +19,7 @@ package vindexes
 import (
 	"context"
 	"fmt"
+	"sort"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
@@ -71,28 +72,20 @@ type (
 		NeedsVCursor() bool
 	}
 
-	// Param describes a param which a vindex accepts as input to its
-	// registered factory.
-	Param struct {
-		// Name of the param.
-		Name string
-	}
-
 	// ParamValidating is an optional interface that Vindexes may implement to
-	// report errors about invalid or unknown params encountered during Vindex
-	// creation.
+	// report errors about unknown params encountered during Vindex creation.
 	ParamValidating interface {
-		InvalidParamErrors() []error
+		// UnknownParams returns a slice of param names that were provided
+		// during Vindex creation, but were not known and therefore ignored by
+		// the Vindex.
+		UnknownParams() []string
 	}
 
 	// ParamValidationOpts may be used by Vindexes that accept params to
 	// validate params with ValidateParams(params, opts).
 	ParamValidationOpts struct {
-		// AllowUnknown will ignore unknown params. This is useful if a
-		// vindex can pass params to a sub-vindex.
-		AllowUnknown bool
-		// Params describes params that the vindex accepts.
-		Params []*Param
+		// Params contains param names known by the vindex.
+		Params []string
 	}
 
 	// SingleColumn defines the interface for a single column vindex.
@@ -241,16 +234,18 @@ func firstColsOnly(rowsColValues [][]sqltypes.Value) []sqltypes.Value {
 	return firstCols
 }
 
-func ValidateParams(params map[string]string, opts *ParamValidationOpts) []error {
-	var errors []error
-	validParamsByName := make(map[string]*Param)
-	for _, param := range opts.Params {
-		validParamsByName[param.Name] = param
+// FindUnknownParams a sorted slice of keys in params that are not present in knownParams.
+func FindUnknownParams(params map[string]string, knownParams []string) []string {
+	var unknownParams []string
+	knownParamsByName := make(map[string]struct{})
+	for _, knownParam := range knownParams {
+		knownParamsByName[knownParam] = struct{}{}
 	}
 	for name := range params {
-		if _, ok := validParamsByName[name]; !ok && !opts.AllowUnknown {
-			errors = append(errors, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unknown param '%s'", name))
+		if _, ok := knownParamsByName[name]; !ok {
+			unknownParams = append(unknownParams, name)
 		}
 	}
-	return errors
+	sort.Strings(unknownParams)
+	return unknownParams
 }

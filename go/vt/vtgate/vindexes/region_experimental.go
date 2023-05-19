@@ -33,8 +33,8 @@ var (
 	_ MultiColumn     = (*RegionExperimental)(nil)
 	_ ParamValidating = (*RegionExperimental)(nil)
 
-	regionExperimentalParams = []*Param{
-		{Name: "region_bytes"},
+	regionExperimentalParams = []string{
+		"region_bytes",
 	}
 )
 
@@ -47,9 +47,9 @@ func init() {
 // RegionExperimental can be used for geo-partitioning because the first column can denote a region,
 // and its value will dictate the shard for that region.
 type RegionExperimental struct {
-	name        string
-	regionBytes int
-	params      map[string]string
+	name          string
+	regionBytes   int
+	unknownParams []string
 }
 
 // newRegionExperimental creates a RegionExperimental vindex.
@@ -70,9 +70,9 @@ func newRegionExperimental(name string, m map[string]string) (Vindex, error) {
 		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "region_bytes must be 1 or 2: %v", rbs)
 	}
 	return &RegionExperimental{
-		name:        name,
-		regionBytes: rb,
-		params:      m,
+		name:          name,
+		regionBytes:   rb,
+		unknownParams: FindUnknownParams(m, regionExperimentalParams),
 	}, nil
 }
 
@@ -154,7 +154,7 @@ func (ge *RegionExperimental) PartialVindex() bool {
 	return true
 }
 
-// InvalidParamErrors implements the ParamValidating interface.
-func (ge *RegionExperimental) InvalidParamErrors() []error {
-	return ValidateParams(ge.params, &ParamValidationOpts{Params: regionExperimentalParams})
+// UnknownParams implements the ParamValidating interface.
+func (ge *RegionExperimental) UnknownParams() []string {
+	return ge.unknownParams
 }

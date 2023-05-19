@@ -36,15 +36,15 @@ var (
 // XXHash defines vindex that hashes any sql types to a KeyspaceId
 // by using xxhash64. It's Unique and works on any platform giving identical result.
 type XXHash struct {
-	name   string
-	params map[string]string
+	name          string
+	unknownParams []string
 }
 
 // newXXHash creates a new XXHash.
 func newXXHash(name string, m map[string]string) (Vindex, error) {
 	return &XXHash{
-		name:   name,
-		params: m,
+		name:          name,
+		unknownParams: FindUnknownParams(m, nil),
 	}, nil
 }
 
@@ -102,9 +102,9 @@ func (vind *XXHash) Hash(id sqltypes.Value) ([]byte, error) {
 	return vXXHash(idBytes), nil
 }
 
-// InvalidParamErrors implements the ParamValidating interface.
-func (vind *XXHash) InvalidParamErrors() []error {
-	return ValidateParams(vind.params, &ParamValidationOpts{})
+// UnknownParams implements the ParamValidating interface.
+func (vind *XXHash) UnknownParams() []string {
+	return vind.unknownParams
 }
 
 func init() {

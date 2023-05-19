@@ -32,7 +32,7 @@ func lookupHashUniqueCreateVindexTestCase(
 	testName string,
 	vindexParams map[string]string,
 	expectErr error,
-	expectWarnings []error,
+	expectUnknownParams []string,
 ) createVindexTestCase {
 	return createVindexTestCase{
 		testName: testName,
@@ -41,12 +41,12 @@ func lookupHashUniqueCreateVindexTestCase(
 		vindexName:   "lookup_hash_unique",
 		vindexParams: vindexParams,
 
-		expectCost:         10,
-		expectErr:          expectErr,
-		expectIsUnique:     true,
-		expectNeedsVCursor: true,
-		expectString:       "lookup_hash_unique",
-		expectWarnings:     expectWarnings,
+		expectCost:          10,
+		expectErr:           expectErr,
+		expectIsUnique:      true,
+		expectNeedsVCursor:  true,
+		expectString:        "lookup_hash_unique",
+		expectUnknownParams: expectUnknownParams,
 	}
 }
 
@@ -66,8 +66,8 @@ func TestLookupHashUniqueNew(t *testing.T) {
 		"to":         "toc",
 		"write_only": "true",
 	})
-	warnings := vindex.(ParamValidating).InvalidParamErrors()
-	require.Empty(t, warnings)
+	unknownParams := vindex.(ParamValidating).UnknownParams()
+	require.Empty(t, unknownParams)
 	require.NoError(t, err)
 
 	l = vindex.(SingleColumn)
@@ -86,8 +86,8 @@ func TestLookupHashUniqueNew(t *testing.T) {
 		t.Errorf("Create(bad_scatter): %v, want %s", err, want)
 	}
 	if err == nil {
-		warnings = vdx.(ParamValidating).InvalidParamErrors()
-		require.Empty(t, warnings)
+		unknownParams = vdx.(ParamValidating).UnknownParams()
+		require.Empty(t, unknownParams)
 	}
 }
 

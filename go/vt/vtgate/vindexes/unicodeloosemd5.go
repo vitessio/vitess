@@ -37,15 +37,15 @@ var (
 // Ref: http://www.unicode.org/reports/tr10/#Multi_Level_Comparison.
 // This is compatible with MySQL's utf8_unicode_ci collation.
 type UnicodeLooseMD5 struct {
-	name   string
-	params map[string]string
+	name          string
+	unknownParams []string
 }
 
 // newUnicodeLooseMD5 creates a new UnicodeLooseMD5.
 func newUnicodeLooseMD5(name string, m map[string]string) (Vindex, error) {
 	return &UnicodeLooseMD5{
-		name:   name,
-		params: m,
+		name:          name,
+		unknownParams: FindUnknownParams(m, nil),
 	}, nil
 }
 
@@ -99,9 +99,9 @@ func (vind *UnicodeLooseMD5) Hash(id sqltypes.Value) ([]byte, error) {
 	return unicodeHash(vMD5Hash, id)
 }
 
-// InvalidParamErrors implements the ParamValidating interface.
-func (vind *UnicodeLooseMD5) InvalidParamErrors() []error {
-	return ValidateParams(vind.params, &ParamValidationOpts{})
+// UnknownParams implements the ParamValidating interface.
+func (vind *UnicodeLooseMD5) UnknownParams() []string {
+	return vind.unknownParams
 }
 
 func init() {

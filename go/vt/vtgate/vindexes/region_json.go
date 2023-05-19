@@ -35,9 +35,9 @@ import (
 var (
 	_ MultiColumn = (*RegionJSON)(nil)
 
-	regionJSONParams = []*Param{
-		{Name: "region_map"},
-		{Name: "region_bytes"},
+	regionJSONParams = []string{
+		"region_map",
+		"region_bytes",
 	}
 )
 
@@ -54,10 +54,10 @@ type RegionMap map[string]uint64
 // RegionJson can be used for geo-partitioning because the first column can denote a region,
 // and it will dictate the shard range for that region.
 type RegionJSON struct {
-	name        string
-	regionMap   RegionMap
-	regionBytes int
-	params      map[string]string
+	name          string
+	regionMap     RegionMap
+	regionBytes   int
+	unknownParams []string
 }
 
 // newRegionJSON creates a RegionJson vindex.
@@ -87,10 +87,10 @@ func newRegionJSON(name string, m map[string]string) (Vindex, error) {
 	}
 
 	return &RegionJSON{
-		name:        name,
-		regionMap:   rmap,
-		regionBytes: rb,
-		params:      m,
+		name:          name,
+		regionMap:     rmap,
+		regionBytes:   rb,
+		unknownParams: FindUnknownParams(m, regionJSONParams),
 	}, nil
 }
 
@@ -166,7 +166,7 @@ func (rv *RegionJSON) PartialVindex() bool {
 	return false
 }
 
-// InvalidParamErrors implements the ParamValidating interface.
-func (rv *RegionJSON) InvalidParamErrors() []error {
-	return ValidateParams(rv.params, &ParamValidationOpts{Params: regionJSONParams})
+// UnknownParams implements the ParamValidating interface.
+func (rv *RegionJSON) UnknownParams() []string {
+	return rv.unknownParams
 }

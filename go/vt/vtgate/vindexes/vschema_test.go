@@ -2506,8 +2506,8 @@ func TestVSchemaJSON(t *testing.T) {
 		"table": "t",
 		"to":    "2",
 	})
-	warnings := lkp.(ParamValidating).InvalidParamErrors()
-	require.Empty(t, warnings)
+	unknownParams := lkp.(ParamValidating).UnknownParams()
+	require.Empty(t, unknownParams)
 	require.NoError(t, err)
 
 	in := map[string]*KeyspaceSchema{

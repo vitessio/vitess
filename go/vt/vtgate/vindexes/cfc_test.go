@@ -34,7 +34,7 @@ func cfcCreateVindexTestCase(
 	testName string,
 	vindexParams map[string]string,
 	expectErr error,
-	expectWarnings []error,
+	expectUnknownParams []string,
 ) createVindexTestCase {
 	return createVindexTestCase{
 		testName: testName,
@@ -43,12 +43,12 @@ func cfcCreateVindexTestCase(
 		vindexName:   "cfc",
 		vindexParams: vindexParams,
 
-		expectCost:         1,
-		expectErr:          expectErr,
-		expectIsUnique:     true,
-		expectNeedsVCursor: false,
-		expectString:       "cfc",
-		expectWarnings:     expectWarnings,
+		expectCost:          1,
+		expectErr:           expectErr,
+		expectIsUnique:      true,
+		expectNeedsVCursor:  false,
+		expectString:        "cfc",
+		expectUnknownParams: expectUnknownParams,
 	}
 }
 
@@ -118,7 +118,7 @@ func TestCFCCreateVindex(t *testing.T) {
 			"unknown params",
 			map[string]string{"hash": "md5", "offsets": "[3, 7]", "hello": "world"},
 			nil,
-			[]error{vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "unknown param 'hello'")},
+			[]string{"hello"},
 		),
 	}
 
@@ -136,8 +136,8 @@ func TestCFCCreateVindexOptions(t *testing.T) {
 	)
 	require.NotNil(t, vdx)
 	require.Nil(t, err)
-	warnings := vdx.(ParamValidating).InvalidParamErrors()
-	require.Empty(t, warnings)
+	unknownParams := vdx.(ParamValidating).UnknownParams()
+	require.Empty(t, unknownParams)
 	require.EqualValues(t, vdx.(*CFC).offsets, []int{3, 7})
 }
 

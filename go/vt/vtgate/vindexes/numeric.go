@@ -38,15 +38,15 @@ var (
 // Numeric defines a bit-pattern mapping of a uint64 to the KeyspaceId.
 // It's Unique and Reversible.
 type Numeric struct {
-	name   string
-	params map[string]string
+	name          string
+	unknownParams []string
 }
 
 // newNumeric creates a Numeric vindex.
 func newNumeric(name string, m map[string]string) (Vindex, error) {
 	return &Numeric{
-		name:   name,
-		params: m,
+		name:          name,
+		unknownParams: FindUnknownParams(m, nil),
 	}, nil
 }
 
@@ -110,9 +110,9 @@ func (*Numeric) ReverseMap(_ VCursor, ksids [][]byte) ([]sqltypes.Value, error) 
 	return reverseIds, nil
 }
 
-// InvalidParamErrors implements the ParamValidating interface.
-func (vind *Numeric) InvalidParamErrors() []error {
-	return ValidateParams(vind.params, &ParamValidationOpts{})
+// UnknownParams implements the ParamValidating interface.
+func (vind *Numeric) UnknownParams() []string {
+	return vind.unknownParams
 }
 
 func (*Numeric) Hash(id sqltypes.Value) ([]byte, error) {

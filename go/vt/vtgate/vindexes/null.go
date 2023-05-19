@@ -38,15 +38,15 @@ var (
 // Unlike other vindexes, this one will work even for NULL input values. This
 // will allow you to keep MySQL auto-inc columns unchanged.
 type Null struct {
-	name   string
-	params map[string]string
+	name          string
+	unknownParams []string
 }
 
 // newNull creates a new Null.
 func newNull(name string, m map[string]string) (Vindex, error) {
 	return &Null{
-		name:   name,
-		params: m,
+		name:          name,
+		unknownParams: FindUnknownParams(m, nil),
 	}, nil
 }
 
@@ -88,9 +88,9 @@ func (vind *Null) Verify(ctx context.Context, vcursor VCursor, ids []sqltypes.Va
 	return out, nil
 }
 
-// InvalidParamErrors implements the ParamValidating interface.
-func (vind *Null) InvalidParamErrors() []error {
-	return ValidateParams(vind.params, &ParamValidationOpts{})
+// UnknownParams implements the ParamValidating interface.
+func (vind *Null) UnknownParams() []string {
+	return vind.unknownParams
 }
 
 func init() {

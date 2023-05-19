@@ -18,6 +18,7 @@ package vindexes
 
 import (
 	"context"
+	"sort"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -29,7 +30,7 @@ import (
 
 type testVindex struct {
 	allowUnknownParams bool
-	knownParams        []*Param
+	knownParams        []string
 	params             map[string]string
 }
 
@@ -49,17 +50,20 @@ func (v *testVindex) NeedsVCursor() bool {
 	return false
 }
 
-func (v *testVindex) InvalidParamErrors() []error {
-	return ValidateParams(v.params, &ParamValidationOpts{AllowUnknown: v.allowUnknownParams, Params: v.knownParams})
+func (v *testVindex) UnknownParams() []string {
+	if v.allowUnknownParams {
+		return nil
+	}
+	return FindUnknownParams(v.params, v.knownParams)
 }
 
 func init() {
 	Register("allow_unknown_params", func(_ string, params map[string]string) (Vindex, error) {
 		return &testVindex{
 			allowUnknownParams: true,
-			knownParams: []*Param{
-				{Name: "option1"},
-				{Name: "option2"},
+			knownParams: []string{
+				"option1",
+				"option2",
 			},
 			params: params,
 		}, nil
@@ -67,9 +71,9 @@ func init() {
 	Register("warn_unknown_params", func(_ string, params map[string]string) (Vindex, error) {
 		return &testVindex{
 			allowUnknownParams: false,
-			knownParams: []*Param{
-				{Name: "option1"},
-				{Name: "option2"},
+			knownParams: []string{
+				"option1",
+				"option2",
 			},
 			params: params,
 		}, nil
@@ -92,7 +96,7 @@ func TestVindexMap(t *testing.T) {
 
 	hash, err := CreateVindex("hash", "hash", nil)
 	assert.NoError(t, err)
-	require.Empty(t, hash.(ParamValidating).InvalidParamErrors())
+	require.Empty(t, hash.(ParamValidating).UnknownParams())
 	got, err = Map(context.Background(), hash, nil, [][]sqltypes.Value{{
 		sqltypes.NewInt64(1),
 	}})
@@ -106,7 +110,7 @@ func TestVindexMap(t *testing.T) {
 func TestVindexVerify(t *testing.T) {
 	ge, err := createRegionVindex(t, "region_experimental", "f1,f2", 1)
 	assert.NoError(t, err)
-	require.Empty(t, ge.(ParamValidating).InvalidParamErrors())
+	require.Empty(t, ge.(ParamValidating).UnknownParams())
 
 	got, err := Verify(context.Background(), ge, nil, [][]sqltypes.Value{{
 		sqltypes.NewInt64(1), sqltypes.NewInt64(1),
@@ -119,7 +123,7 @@ func TestVindexVerify(t *testing.T) {
 	assert.Equal(t, want, got)
 
 	hash, err := CreateVindex("hash", "hash", nil)
-	require.Empty(t, hash.(ParamValidating).InvalidParamErrors())
+	require.Empty(t, hash.(ParamValidating).UnknownParams())
 	assert.NoError(t, err)
 	got, err = Verify(context.Background(), hash, nil, [][]sqltypes.Value{{
 		sqltypes.NewInt64(1),
@@ -161,12 +165,8 @@ func TestCreateVindexWarnUnknownParams(t *testing.T) {
 	require.NotNil(t, vindex)
 	require.NoError(t, err)
 
-	warnings := vindex.(ParamValidating).InvalidParamErrors()
-	require.Len(t, warnings, 2)
-	for _, msg := range []string{"unknown param 'option3'", "unknown param 'option4'"} {
-		if msg == warnings[0].Error() || msg == warnings[1].Error() {
-			continue
-		}
-		require.Fail(t, "expected one warning to have error message: %s", msg)
-	}
+	unknownParams := vindex.(ParamValidating).UnknownParams()
+	sort.Strings(unknownParams)
+	require.Len(t, unknownParams, 2)
+	require.Equal(t, []string{"option3", "option4"}, unknownParams)
 }

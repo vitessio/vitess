@@ -47,7 +47,7 @@ func numericStaticMapCreateVindexTestCase(
 	testName string,
 	vindexParams map[string]string,
 	expectErr error,
-	expectWarnings []error,
+	expectUnknownParams []string,
 ) createVindexTestCase {
 	return createVindexTestCase{
 		testName: testName,
@@ -56,12 +56,12 @@ func numericStaticMapCreateVindexTestCase(
 		vindexName:   "numeric_static_map",
 		vindexParams: vindexParams,
 
-		expectCost:         1,
-		expectErr:          expectErr,
-		expectIsUnique:     true,
-		expectNeedsVCursor: false,
-		expectString:       "numeric_static_map",
-		expectWarnings:     expectWarnings,
+		expectCost:          1,
+		expectErr:           expectErr,
+		expectIsUnique:      true,
+		expectNeedsVCursor:  false,
+		expectString:        "numeric_static_map",
+		expectUnknownParams: expectUnknownParams,
 	}
 }
 
@@ -137,7 +137,7 @@ func TestNumericStaticMapCreateVindex(t *testing.T) {
 				"hello": "world",
 			},
 			nil,
-			[]error{vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "unknown param 'hello'")},
+			[]string{"hello"},
 		),
 	}
 
@@ -209,7 +209,7 @@ func TestNumericStaticMapWithJsonVdx(t *testing.T) {
 	)
 
 	require.NoError(t, err)
-	require.Empty(t, withFallbackVdx.(ParamValidating).InvalidParamErrors())
+	require.Empty(t, withFallbackVdx.(ParamValidating).UnknownParams())
 	assert.Equal(t, 1, withFallbackVdx.Cost())
 	assert.Equal(t, t.Name(), withFallbackVdx.String())
 	assert.True(t, withFallbackVdx.IsUnique())
@@ -253,7 +253,7 @@ func TestNumericStaticMapWithFallback(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create vindex: %v", err)
 	}
-	require.Empty(t, mapWithFallbackVdx.(ParamValidating).InvalidParamErrors())
+	require.Empty(t, mapWithFallbackVdx.(ParamValidating).UnknownParams())
 	singleCol := mapWithFallbackVdx.(SingleColumn)
 	got, err := singleCol.Map(context.Background(), nil, []sqltypes.Value{
 		sqltypes.NewInt64(1),
@@ -302,7 +302,7 @@ func TestNumericStaticMapWithFallbackVerify(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create vindex: %v", err)
 	}
-	require.Empty(t, mapWithFallbackVdx.(ParamValidating).InvalidParamErrors())
+	require.Empty(t, mapWithFallbackVdx.(ParamValidating).UnknownParams())
 	singleCol := mapWithFallbackVdx.(SingleColumn)
 	got, err := singleCol.Verify(context.Background(), nil, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2), sqltypes.NewInt64(11), sqltypes.NewInt64(10)}, [][]byte{[]byte("\x00\x00\x00\x00\x00\x00\x00\x02"), []byte("\x8b\x59\x80\x16\x62\xb5\x21\x60"), []byte("\xff\xff\xff\xff\xff\xff\xff\xff"), []byte("\xff\xff\xff\xff\xff\xff\xff\xff")})
 	require.NoError(t, err)

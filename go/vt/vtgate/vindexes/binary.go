@@ -34,15 +34,15 @@ var (
 
 // Binary is a vindex that converts binary bits to a keyspace id.
 type Binary struct {
-	name   string
-	params map[string]string
+	name          string
+	unknownParams []string
 }
 
 // newBinary creates a new Binary.
 func newBinary(name string, params map[string]string) (Vindex, error) {
 	return &Binary{
-		name:   name,
-		params: params,
+		name:          name,
+		unknownParams: FindUnknownParams(params, nil),
 	}, nil
 }
 
@@ -108,9 +108,9 @@ func (*Binary) ReverseMap(_ VCursor, ksids [][]byte) ([]sqltypes.Value, error) {
 	return reverseIds, nil
 }
 
-// InvalidParamErrors implements the ParamValidating interface.
-func (vind *Binary) InvalidParamErrors() []error {
-	return ValidateParams(vind.params, &ParamValidationOpts{})
+// UnknownParams implements the ParamValidating interface.
+func (vind *Binary) UnknownParams() []string {
+	return vind.unknownParams
 }
 
 func init() {

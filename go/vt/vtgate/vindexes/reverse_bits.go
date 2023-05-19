@@ -39,15 +39,15 @@ var (
 // ReverseBits defines vindex that reverses the bits of a number.
 // It's Unique, Reversible and Functional.
 type ReverseBits struct {
-	name   string
-	params map[string]string
+	name          string
+	unknownParams []string
 }
 
 // newReverseBits creates a new ReverseBits.
 func newReverseBits(name string, m map[string]string) (Vindex, error) {
 	return &ReverseBits{
-		name:   name,
-		params: m,
+		name:          name,
+		unknownParams: FindUnknownParams(m, nil),
 	}, nil
 }
 
@@ -111,9 +111,9 @@ func (vind *ReverseBits) ReverseMap(_ VCursor, ksids [][]byte) ([]sqltypes.Value
 	return reverseIds, nil
 }
 
-// InvalidParamErrors implements the ParamValidating interface.
-func (vind *ReverseBits) InvalidParamErrors() []error {
-	return ValidateParams(vind.params, &ParamValidationOpts{})
+// UnknownParams implements the ParamValidating interface.
+func (vind *ReverseBits) UnknownParams() []string {
+	return vind.unknownParams
 }
 
 func (vind *ReverseBits) Hash(id sqltypes.Value) ([]byte, error) {
