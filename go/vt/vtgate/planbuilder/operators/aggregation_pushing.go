@@ -295,7 +295,7 @@ outer:
 				continue outer
 			}
 		}
-		builder.proj.Columns = append(builder.proj.Columns, Expr{E: col.Expr})
+		builder.proj.Columns = append(builder.proj.Columns, UnexploredExpression{E: col.Expr})
 		builder.proj.ColumnNames = append(builder.proj.ColumnNames, col)
 	}
 	if builder.projectionRequired {
@@ -329,7 +329,7 @@ func (ab *aggBuilder) handleAggr(ctx *plancontext.PlanningContext, aggr Aggr) (A
 }
 
 func (ab *aggBuilder) handleMinMax(ctx *plancontext.PlanningContext, aggr Aggr) (Aggr, error) {
-	ab.proj.Columns = append(ab.proj.Columns, Expr{E: aggr.Func})
+	ab.proj.Columns = append(ab.proj.Columns, UnexploredExpression{E: aggr.Func})
 	ab.proj.ColumnNames = append(ab.proj.ColumnNames, aggr.Original)
 
 	deps := ctx.SemTable.RecursiveDeps(aggr.Original.Expr)
@@ -393,7 +393,7 @@ func (ab *aggBuilder) handleCountStar(ctx *plancontext.PlanningContext, aggr Agg
 		Left:     lhsExpr,
 		Right:    rhsExpr,
 	}
-	ab.proj.Columns = append(ab.proj.Columns, Expr{E: projExpr})
+	ab.proj.Columns = append(ab.proj.Columns, UnexploredExpression{E: projExpr})
 	ab.proj.ColumnNames = append(ab.proj.ColumnNames, aggr.Original)
 	return aggr, nil
 }

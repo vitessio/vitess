@@ -537,7 +537,7 @@ func createProjection(src ops.Operator) (*Projection, error) {
 		return nil, err
 	}
 	for _, col := range cols {
-		proj.Columns = append(proj.Columns, Expr{E: col.Expr})
+		proj.Columns = append(proj.Columns, UnexploredExpression{E: col.Expr})
 		proj.ColumnNames = append(proj.ColumnNames, col)
 	}
 	return proj, nil

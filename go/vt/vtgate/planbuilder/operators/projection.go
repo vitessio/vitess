@@ -20,8 +20,6 @@ import (
 	"fmt"
 	"strings"
 
-	"vitess.io/vitess/go/vt/vterrors"
-
 	"golang.org/x/exp/slices"
 
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
@@ -64,8 +62,11 @@ type (
 		EExpr evalengine.Expr
 	}
 
-	// Expr is used before we have planned, or if we are able to push this down to mysql
-	Expr struct {
+	// UnexploredExpression is used before we have planned - one of two end results are possible for it
+	// - we are able to push this projection under a route, and then this is not used at all
+	// - we have to evaluate this on the vtgate, and either it's just a copy from the input,
+	//   or it's an evalengine expression that we have to evaluate
+	UnexploredExpression struct {
 		E sqlparser.Expr
 	}
 )
@@ -73,7 +74,7 @@ type (
 var _ selectExpressions = (*Projection)(nil)
 
 func (p *Projection) addNoPushCol(expr *sqlparser.AliasedExpr, _ bool) int {
-	p.Columns = append(p.Columns, Expr{E: expr.Expr})
+	p.Columns = append(p.Columns, UnexploredExpression{E: expr.Expr})
 	p.ColumnNames = append(p.ColumnNames, expr)
 	return len(p.Columns) - 1
 }
@@ -83,10 +84,6 @@ func (p *Projection) isDerived() bool {
 }
 
 func (p *Projection) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, _, addToGroupBy bool) (ops.Operator, int, error) {
-	if addToGroupBy {
-		return nil, 0, vterrors.VT13001("tried to add group by to a projection")
-	}
-
 	if offset, found := canReuseColumn(ctx, p.ColumnNames, expr.Expr, extractExpr); found {
 		return p, offset, nil
 	}
@@ -100,9 +97,9 @@ func (p *Projection) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser
 	return p, len(p.Columns) - 1, nil
 }
 
-func (po Offset) GetExpr() sqlparser.Expr { return po.Expr }
-func (po Eval) GetExpr() sqlparser.Expr   { return po.Expr }
-func (po Expr) GetExpr() sqlparser.Expr   { return po.E }
+func (po Offset) GetExpr() sqlparser.Expr               { return po.Expr }
+func (po Eval) GetExpr() sqlparser.Expr                 { return po.Expr }
+func (po UnexploredExpression) GetExpr() sqlparser.Expr { return po.E }
 
 func (p *Projection) Clone(inputs []ops.Operator) ops.Operator {
 	return &Projection{
@@ -269,6 +266,11 @@ func (p *Projection) planOffsets(ctx *plancontext.PlanningContext) error {
 	}
 
 	for i, col := range p.Columns {
+		_, unexplored := col.(UnexploredExpression)
+		if !unexplored {
+			continue
+		}
+
 		// first step is to replace the expressions we expect to get from our input with the offsets for these
 		rewritten := sqlparser.CopyOnRewrite(col.GetExpr(), stopAtAggregations, offsetter, nil).(sqlparser.Expr)
 		if err != nil {

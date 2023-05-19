@@ -150,16 +150,13 @@ func addOrderBysForAggregations(ctx *plancontext.PlanningContext, root ops.Opera
 			}
 			return in, rewrite.NewTree, nil
 		case *ApplyJoin:
-			if !in.LeftJoin {
-				return in, rewrite.SameTree, nil
-			}
 			_ = rewrite.Visit(in.RHS, func(op ops.Operator) error {
 				aggr, isAggr := op.(*Aggregator)
 				if !isAggr {
 					return nil
 				}
 				if len(aggr.Grouping) == 0 {
-					gb := sqlparser.NewIntLiteral("42.0")
+					gb := sqlparser.NewIntLiteral(".0")
 					aggr.Grouping = append(aggr.Grouping, NewGroupBy(gb, gb, aeWrap(gb)))
 				}
 				return nil
@@ -406,9 +403,9 @@ func splitProjectionAcrossJoin(
 		rhs.add(in, colName)
 	case col.IsMixedLeftAndRight():
 		for _, lhsExpr := range col.LHSExprs {
-			lhs.add(&Expr{E: lhsExpr}, aeWrap(lhsExpr))
+			lhs.add(&UnexploredExpression{E: lhsExpr}, aeWrap(lhsExpr))
 		}
-		rhs.add(&Expr{E: col.RHSExpr}, &sqlparser.AliasedExpr{Expr: col.RHSExpr, As: colName.As})
+		rhs.add(&UnexploredExpression{E: col.RHSExpr}, &sqlparser.AliasedExpr{Expr: col.RHSExpr, As: colName.As})
 	}
 
 	// Add the new JoinColumn to the ApplyJoin's ColumnsAST.
@@ -457,7 +454,7 @@ func exposeColumnsThroughDerivedTable(ctx *plancontext.PlanningContext, p *Proje
 
 			alias := sqlparser.UnescapedString(out)
 			predicate.LHSExprs[idx] = sqlparser.NewColNameWithQualifier(alias, derivedTblName)
-			lhs.add(&Expr{E: out}, &sqlparser.AliasedExpr{Expr: out, As: sqlparser.NewIdentifierCI(alias)})
+			lhs.add(&UnexploredExpression{E: out}, &sqlparser.AliasedExpr{Expr: out, As: sqlparser.NewIdentifierCI(alias)})
 		}
 	}
 	return nil
@@ -751,7 +748,7 @@ func createProjection2(qp *QueryProjection, src ops.Operator) (*Projection, erro
 			}
 		}
 
-		proj.Columns = append(proj.Columns, Expr{E: expr})
+		proj.Columns = append(proj.Columns, UnexploredExpression{E: expr})
 		proj.ColumnNames = append(proj.ColumnNames, ae)
 	}
 	return proj, nil
