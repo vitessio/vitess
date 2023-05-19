@@ -139,7 +139,7 @@ The full suite of types, both supported and panic-inducing, are documented by wa
 ### Dynamic values
 
 Values can be configured to be either static or dynamic.
-Static values are loaded once at startup (more precisely, when `viperutil.LoadConfig` is called), and whatever value is loaded at the point will be the result of calling `Get` on that value for the remainder of the processes lifetime.
+Static values are loaded once at startup (more precisely, when `viperutil.LoadConfig` is called), and whatever value is loaded at the point will be the result of calling `Get` on that value for the remainder of the process's lifetime.
 Dynamic values, conversely, may respond to config changes.
 
 In order for dynamic configs to be truly dynamic, `LoadConfig` must have found a config file (as opposed to pulling values entirely from defaults, flags, and environment variables).
