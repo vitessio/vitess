@@ -62,7 +62,7 @@ loop:
 
 		select {
 		case <-ch: // get the schema notification
-			// the health_streamer can send a notification between the time the schema is changed and the mysql stall is simulated.
+			// The health_streamer can send a notification between the time the schema is changed and the mysql stall is simulated.
 			// In this rare case, we must retry the same setup again.
 			cluster.StopSimulateMySQLHang()
 			attempt++
@@ -78,7 +78,7 @@ loop:
 	}
 	defer cluster.StopSimulateMySQLHang()
 
-	// wait for the health_streamer to attempt sending a notification.
+	// We will wait for the health_streamer to attempt sending a notification.
 	// It's important to keep in mind that the total wait time after the simulation should be shorter than the reload timeout.
 	// This is because the query timeout triggers the *DBConn.Kill() method, which in turn holds the mutex lock on the health_streamer.
 	// Although not indefinitely, this can result in longer wait times.
