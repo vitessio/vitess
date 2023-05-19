@@ -137,9 +137,10 @@ func (me *Engine) Subscribe(ctx context.Context, name string, send func(*sqltype
 	return mm.Subscribe(ctx, send), nil
 }
 
-func (me *Engine) schemaChanged(tables map[string]*schema.Table, created, altered, dropped []string) {
+func (me *Engine) schemaChanged(tables map[string]*schema.Table, created, altered, droppedTables, droppedViews []string) {
 	me.mu.Lock()
 	defer me.mu.Unlock()
+	dropped := append(droppedTables, droppedViews...)
 	for _, name := range append(dropped, altered...) {
 		mm := me.managers[name]
 		if mm == nil {

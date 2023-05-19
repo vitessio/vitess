@@ -51,7 +51,7 @@ import (
 
 const maxTableCount = 10000
 
-type notifier func(full map[string]*Table, created, altered, dropped []string)
+type notifier func(full map[string]*Table, created, altered, droppedTables, droppedViews []string)
 
 // Engine stores the schema info and performs operations that
 // keep itself up-to-date.
@@ -475,10 +475,15 @@ func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 	}
 
 	// Compute and handle dropped tables.
-	var dropped []string
-	for tableName := range se.tables {
+	var droppedTables []string
+	var droppedViews []string
+	for tableName, table := range se.tables {
 		if !curTables[tableName] {
-			dropped = append(dropped, tableName)
+			if table.Type == View {
+				droppedViews = append(droppedViews, tableName)
+			} else {
+				droppedTables = append(droppedTables, tableName)
+			}
 			delete(se.tables, tableName)
 			// We can't actually delete the label from the stats, but we can set it to 0.
 			// Many monitoring tools will drop zero-valued metrics.
@@ -497,10 +502,12 @@ func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 		se.tables[k] = t
 	}
 	se.lastChange = curTime
-	if len(created) > 0 || len(altered) > 0 || len(dropped) > 0 {
-		log.Infof("schema engine created %v, altered %v, dropped %v", created, altered, dropped)
+	if len(created) > 0 || len(altered) > 0 || len(droppedTables) > 0 || len(droppedViews) > 0 {
+		log.Infof("schema engine created %v, altered %v, dropped %v", created, altered, append(droppedTables, droppedViews...))
 	}
-	se.broadcast(created, altered, dropped)
+	// We have to send dropped tables and dropped Views as separate lists because we can't figure out from a single list
+	// whether it was a table or not, unlike altered and created lists because the map has the information about them.
+	se.broadcast(created, altered, droppedTables, droppedViews)
 	return nil
 }
 
@@ -610,7 +617,7 @@ func (se *Engine) RegisterNotifier(name string, f notifier) {
 	for tableName := range se.tables {
 		created = append(created, tableName)
 	}
-	f(se.tables, created, nil, nil)
+	f(se.tables, created, nil, nil, nil)
 }
 
 // UnregisterNotifier unregisters the notifier function.
@@ -630,7 +637,7 @@ func (se *Engine) UnregisterNotifier(name string) {
 }
 
 // broadcast must be called while holding a lock on se.mu.
-func (se *Engine) broadcast(created, altered, dropped []string) {
+func (se *Engine) broadcast(created, altered, droppedTables, droppedViews []string) {
 	if !se.isOpen {
 		return
 	}
@@ -642,7 +649,7 @@ func (se *Engine) broadcast(created, altered, dropped []string) {
 		s[k] = v
 	}
 	for _, f := range se.notifiers {
-		f(s, created, altered, dropped)
+		f(s, created, altered, droppedTables, droppedViews)
 	}
 }
 

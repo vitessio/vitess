@@ -148,18 +148,20 @@ func TestOpenAndReload(t *testing.T) {
 	AddFakeInnoDBReadRowsResult(db, secondReadRowsValue)
 
 	firstTime := true
-	notifier := func(full map[string]*Table, created, altered, dropped []string) {
+	notifier := func(full map[string]*Table, created, altered, droppedTables, droppedViews []string) {
 		if firstTime {
 			firstTime = false
 			sort.Strings(created)
 			assert.Equal(t, []string{"dual", "msg", "seq", "test_table_01", "test_table_02", "test_table_03"}, created)
 			assert.Equal(t, []string(nil), altered)
-			assert.Equal(t, []string(nil), dropped)
+			assert.Equal(t, []string(nil), droppedTables)
+			assert.Equal(t, []string(nil), droppedViews)
 		} else {
 			assert.Equal(t, []string{"test_table_04"}, created)
 			assert.Equal(t, []string{"test_table_03"}, altered)
-			sort.Strings(dropped)
-			assert.Equal(t, []string{"msg"}, dropped)
+			sort.Strings(droppedTables)
+			assert.Equal(t, []string{"msg"}, droppedTables)
+			assert.Equal(t, []string(nil), droppedViews)
 		}
 	}
 	se.RegisterNotifier("test", notifier)

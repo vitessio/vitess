@@ -247,7 +247,7 @@ func TestHealthCheckSchemaChangeSignal(t *testing.T) {
 }
 
 func verifyHealthStreamSchemaChangeSignals(t *testing.T, vtgateConn *mysql.Conn, primaryTablet *cluster.Vttablet, viewsEnabled bool) {
-	verifyTableDDLSchemaChangeSignal(t, vtgateConn, primaryTablet, "CREATE TABLE `area` (`id` int NOT NULL, PRIMARY KEY (`id`))", "area")
+	verifyTableDDLSchemaChangeSignal(t, vtgateConn, primaryTablet, "CREATE TABLE `area` (`id` int NOT NULL, `country` varchar(30), PRIMARY KEY (`id`))", "area")
 	verifyTableDDLSchemaChangeSignal(t, vtgateConn, primaryTablet, "CREATE TABLE `area2` (`id` int NOT NULL, PRIMARY KEY (`id`))", "area2")
 	verifyViewDDLSchemaChangeSignal(t, vtgateConn, primaryTablet, "CREATE VIEW v2 as select * from area", viewsEnabled)
 	verifyTableDDLSchemaChangeSignal(t, vtgateConn, primaryTablet, "ALTER TABLE `area` ADD COLUMN name varchar(30) NOT NULL", "area")

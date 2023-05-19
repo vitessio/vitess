@@ -151,8 +151,8 @@ func (hs *healthStreamer) startSchemaNotifications() {
 	if !hs.signalWhenSchemaChange {
 		return
 	}
-	hs.se.RegisterNotifier("healthStreamer", func(full map[string]*schema.Table, created, altered, dropped []string) {
-		if err := hs.reload(); err != nil {
+	hs.se.RegisterNotifier("healthStreamer", func(full map[string]*schema.Table, created, altered, droppedTables, droppedViews []string) {
+		if err := hs.reload(full, created, altered, droppedTables, droppedViews); err != nil {
 			log.Errorf("periodic schema reload failed in health stream: %v", err)
 		}
 	})
@@ -320,8 +320,8 @@ func (hs *healthStreamer) SetUnhealthyThreshold(v time.Duration) {
 	}
 }
 
-// reload reloads the schema from the underlying mysql
-func (hs *healthStreamer) reload() error {
+// reload reloads the schema from the underlying mysql for the tables that we get the alert on.
+func (hs *healthStreamer) reload(full map[string]*schema.Table, created, altered, droppedTables, droppedViews []string) error {
 	hs.mu.Lock()
 	defer hs.mu.Unlock()
 	// Schema Reload to happen only on primary.
@@ -336,12 +336,38 @@ func (hs *healthStreamer) reload() error {
 	}
 	defer conn.Recycle()
 
-	tables, err := hs.getChangedTableNames(ctx, conn)
+	// We initialize the tables that have schema changes with the list of tables deleted.
+	tables := droppedTables
+	views := droppedViews
+
+	// If views are not enabled, then we put the dropped views into the list of tables.
+	if !hs.viewsEnabled {
+		tables = append(tables, droppedViews...)
+		views = nil
+	}
+
+	// Range over the tables that are created/altered and split them up based on their type.
+	for _, tableName := range append(created, altered...) {
+		table, found := full[tableName]
+		if !found {
+			log.Errorf("We didn't find the table we want to reload in the map - %v", tableName)
+			continue
+		}
+		if table.Type == schema.View && hs.viewsEnabled {
+			views = append(views, tableName)
+		} else {
+			tables = append(tables, tableName)
+		}
+	}
+
+	// Reload the tables and views.
+	// This stores the data that is used by VTGates upto v17. So, we can remove this reload of
+	// tables and views in v19.
+	err = hs.reloadTables(ctx, conn, tables)
 	if err != nil {
 		return err
 	}
-
-	views, err := hs.getChangedViewNames(ctx, conn)
+	err = hs.reloadViews(ctx, conn, views)
 	if err != nil {
 		if len(tables) == 0 {
 			return err
@@ -366,6 +392,7 @@ func (hs *healthStreamer) reload() error {
 	return nil
 }
 
+// TODO: Remove
 func (hs *healthStreamer) getChangedTableNames(ctx context.Context, conn *connpool.DBConn) ([]string, error) {
 	var tables []string
 	var tableNames []string
@@ -399,32 +426,46 @@ func (hs *healthStreamer) getChangedTableNames(ctx context.Context, conn *connpo
 		return nil, nil
 	}
 
-	tableNamePredicate := fmt.Sprintf("table_name IN (%s)", strings.Join(tableNames, ", "))
+	err = hs.reloadTables(ctx, conn, tables)
+	return tables, err
+}
+
+func (hs *healthStreamer) reloadTables(ctx context.Context, conn *connpool.DBConn, tableNames []string) error {
+	if len(tableNames) == 0 {
+		return nil
+	}
+	var escapedTableNames []string
+	for _, tableName := range tableNames {
+		escapedTblName := sqlparser.String(sqlparser.NewStrLiteral(tableName))
+		escapedTableNames = append(escapedTableNames, escapedTblName)
+	}
+
+	tableNamePredicate := fmt.Sprintf("table_name IN (%s)", strings.Join(escapedTableNames, ", "))
 	del := fmt.Sprintf("%s AND %s", sqlparser.BuildParsedQuery(mysql.ClearSchemaCopy, sidecardb.GetIdentifier()).Query, tableNamePredicate)
 	upd := fmt.Sprintf("%s AND %s", sqlparser.BuildParsedQuery(mysql.InsertIntoSchemaCopy, sidecardb.GetIdentifier()).Query, tableNamePredicate)
 
 	// Reload the schema in a transaction.
-	_, err = conn.Exec(ctx, "begin", 1, false)
+	_, err := conn.Exec(ctx, "begin", 1, false)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	defer conn.Exec(ctx, "rollback", 1, false)
 
 	_, err = conn.Exec(ctx, del, 1, false)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	_, err = conn.Exec(ctx, upd, 1, false)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	_, err = conn.Exec(ctx, "commit", 1, false)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	return tables, nil
+	return nil
 }
 
 type viewDefAndStmt struct {
@@ -432,6 +473,7 @@ type viewDefAndStmt struct {
 	stmt string
 }
 
+// TODO: Remove
 func (hs *healthStreamer) getChangedViewNames(ctx context.Context, conn *connpool.DBConn) (views []string, err error) {
 	if !hs.viewsEnabled {
 		return nil, nil
@@ -459,36 +501,46 @@ func (hs *healthStreamer) getChangedViewNames(ctx context.Context, conn *connpoo
 		return
 	}
 
+	err = hs.reloadViews(ctx, conn, views)
+	return
+}
+
+func (hs *healthStreamer) reloadViews(ctx context.Context, conn *connpool.DBConn, views []string) error {
+	if len(views) == 0 {
+		return nil
+	}
+
 	/* Retrieve changed views definition */
 	viewsDefStmt := map[string]*viewDefAndStmt{}
-	callback = func(qr *sqltypes.Result) error {
+	callback := func(qr *sqltypes.Result) error {
 		for _, row := range qr.Rows {
 			viewsDefStmt[row[0].ToString()] = &viewDefAndStmt{def: row[1].ToString()}
 		}
 		return nil
 	}
+	alloc := func() *sqltypes.Result { return &sqltypes.Result{} }
+	bufferSize := 1000
 
-	var viewsBV *querypb.BindVariable
-	viewsBV, err = sqltypes.BuildBindVariable(views)
+	viewsBV, err := sqltypes.BuildBindVariable(views)
 	if err != nil {
-		return
+		return err
 	}
 	bv := map[string]*querypb.BindVariable{"tableNames": viewsBV}
 
 	err = hs.getViewDefinition(ctx, conn, bv, callback, alloc, bufferSize)
 	if err != nil {
-		return
+		return err
 	}
 
 	/* Retrieve create statement for views */
 	viewsDefStmt, err = hs.getCreateViewStatement(ctx, conn, viewsDefStmt)
 	if err != nil {
-		return
+		return err
 	}
 
 	/* update the views copy table */
 	err = hs.updateViewsTable(ctx, conn, bv, viewsDefStmt)
-	return
+	return err
 }
 
 func (hs *healthStreamer) getViewDefinition(ctx context.Context, conn *connpool.DBConn, bv map[string]*querypb.BindVariable, callback func(qr *sqltypes.Result) error, alloc func() *sqltypes.Result, bufferSize int) error {

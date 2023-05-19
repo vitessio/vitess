@@ -45,7 +45,7 @@ func TestEngineSchemaChanged(t *testing.T) {
 			Type: schema.NoType,
 		},
 	}
-	engine.schemaChanged(tables, []string{"t1", "t2"}, nil, nil)
+	engine.schemaChanged(tables, []string{"t1", "t2"}, nil, nil, nil)
 	got := extractManagerNames(engine.managers)
 	want := map[string]bool{"t1": true}
 	if !reflect.DeepEqual(got, want) {
@@ -58,7 +58,7 @@ func TestEngineSchemaChanged(t *testing.T) {
 		},
 		"t3": meTable,
 	}
-	engine.schemaChanged(tables, []string{"t3"}, nil, nil)
+	engine.schemaChanged(tables, []string{"t3"}, nil, nil, nil)
 	got = extractManagerNames(engine.managers)
 	want = map[string]bool{"t1": true, "t3": true}
 	if !reflect.DeepEqual(got, want) {
@@ -71,7 +71,7 @@ func TestEngineSchemaChanged(t *testing.T) {
 		},
 		"t4": meTable,
 	}
-	engine.schemaChanged(tables, []string{"t4"}, nil, []string{"t3", "t5"})
+	engine.schemaChanged(tables, []string{"t4"}, nil, []string{"t3", "t5"}, nil)
 	got = extractManagerNames(engine.managers)
 	want = map[string]bool{"t1": true, "t4": true}
 	if !reflect.DeepEqual(got, want) {
@@ -85,7 +85,7 @@ func TestEngineSchemaChanged(t *testing.T) {
 			Type: schema.NoType,
 		},
 	}
-	engine.schemaChanged(tables, nil, []string{"t2", "t4"}, nil)
+	engine.schemaChanged(tables, nil, []string{"t2", "t4"}, nil, nil)
 	got = extractManagerNames(engine.managers)
 	want = map[string]bool{"t1": true, "t2": true}
 	if !reflect.DeepEqual(got, want) {
@@ -109,7 +109,7 @@ func TestSubscribe(t *testing.T) {
 		"t1": meTable,
 		"t2": meTable,
 	}
-	engine.schemaChanged(tables, []string{"t1", "t2"}, nil, nil)
+	engine.schemaChanged(tables, []string{"t1", "t2"}, nil, nil, nil)
 	f1, ch1 := newEngineReceiver()
 	f2, ch2 := newEngineReceiver()
 	// Each receiver is subscribed to different managers.
@@ -144,7 +144,7 @@ func TestEngineGenerate(t *testing.T) {
 	defer engine.Close()
 	engine.schemaChanged(map[string]*schema.Table{
 		"t1": meTable,
-	}, []string{"t1"}, nil, nil)
+	}, []string{"t1"}, nil, nil, nil)
 
 	if _, err := engine.GetGenerator("t1"); err != nil {
 		t.Error(err)

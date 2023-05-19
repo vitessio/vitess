@@ -436,11 +436,11 @@ func (qe *QueryEngine) IsMySQLReachable() error {
 	return nil
 }
 
-func (qe *QueryEngine) schemaChanged(tables map[string]*schema.Table, created, altered, dropped []string) {
+func (qe *QueryEngine) schemaChanged(tables map[string]*schema.Table, created, altered, droppedTables, droppedViews []string) {
 	qe.mu.Lock()
 	defer qe.mu.Unlock()
 	qe.tables = tables
-	if len(altered) != 0 || len(dropped) != 0 {
+	if len(altered) != 0 || len(droppedTables) != 0 || len(droppedViews) != 0 {
 		qe.plans.Clear()
 	}
 }
