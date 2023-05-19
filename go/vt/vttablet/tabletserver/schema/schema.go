@@ -30,6 +30,7 @@ const (
 	NoType = iota
 	Sequence
 	Message
+	View
 )
 
 // TypeNames allows to fetch a the type name for a table.
@@ -38,6 +39,7 @@ var TypeNames = []string{
 	"none",
 	"sequence",
 	"message",
+	"view",
 }
 
 // Table contains info about a table.

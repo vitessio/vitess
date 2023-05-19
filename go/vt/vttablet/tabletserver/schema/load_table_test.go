@@ -40,11 +40,32 @@ func TestLoadTable(t *testing.T) {
 	defer db.Close()
 	mockLoadTableQueries(db)
 	table, err := newTestLoadTable("USER_TABLE", "test table", db)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	want := &Table{
 		Name: sqlparser.NewIdentifierCS("test_table"),
+		Fields: []*querypb.Field{{
+			Name: "pk",
+			Type: sqltypes.Int32,
+		}, {
+			Name: "name",
+			Type: sqltypes.Int32,
+		}, {
+			Name: "addr",
+			Type: sqltypes.Int32,
+		}},
+	}
+	assert.Equal(t, want, table)
+}
+
+func TestLoadView(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	mockLoadTableQueries(db)
+	table, err := newTestLoadTable("VIEW", "test table", db)
+	require.NoError(t, err)
+	want := &Table{
+		Name: sqlparser.NewIdentifierCS("test_table"),
+		Type: View,
 		Fields: []*querypb.Field{{
 			Name: "pk",
 			Type: sqltypes.Int32,
@@ -64,9 +85,7 @@ func TestLoadTableSequence(t *testing.T) {
 	defer db.Close()
 	mockLoadTableQueries(db)
 	table, err := newTestLoadTable("USER_TABLE", "vitess_sequence", db)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	want := &Table{
 		Name:         sqlparser.NewIdentifierCS("test_table"),
 		Type:         Sequence,
@@ -84,9 +103,7 @@ func TestLoadTableMessage(t *testing.T) {
 	defer db.Close()
 	mockMessageTableQueries(db)
 	table, err := newTestLoadTable("USER_TABLE", "vitess_message,vt_ack_wait=30,vt_purge_after=120,vt_batch_size=1,vt_cache_size=10,vt_poller_interval=30", db)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	want := &Table{
 		Name: sqlparser.NewIdentifierCS("test_table"),
 		Type: Message,
@@ -218,7 +235,7 @@ func newTestLoadTable(tableType string, comment string, db *fakesqldb.DB) (*Tabl
 	}
 	defer conn.Recycle()
 
-	return LoadTable(conn, "fakesqldb", "test_table", comment)
+	return LoadTable(conn, "fakesqldb", "test_table", tableType, comment)
 }
 
 func mockLoadTableQueries(db *fakesqldb.DB) {
