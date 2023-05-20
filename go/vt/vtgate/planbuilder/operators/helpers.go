@@ -32,10 +32,10 @@ import (
 func compact(ctx *plancontext.PlanningContext, op ops.Operator) (ops.Operator, error) {
 	type compactable interface {
 		// Compact implement this interface for operators that have easy to see optimisations
-		Compact(ctx *plancontext.PlanningContext) (ops.Operator, rewrite.ApplyResult, error)
+		Compact(ctx *plancontext.PlanningContext) (ops.Operator, *rewrite.ApplyResult, error)
 	}
 
-	newOp, err := rewrite.BottomUp(op, TableID, func(op ops.Operator, _ semantics.TableSet, _ bool) (ops.Operator, rewrite.ApplyResult, error) {
+	newOp, err := rewrite.BottomUp(op, TableID, func(op ops.Operator, _ semantics.TableSet, _ bool) (ops.Operator, *rewrite.ApplyResult, error) {
 		newOp, ok := op.(compactable)
 		if !ok {
 			return op, rewrite.SameTree, nil

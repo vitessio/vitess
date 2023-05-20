@@ -99,9 +99,9 @@ func (f *Filter) GetOrdering() ([]ops.OrderBy, error) {
 	return f.Source.GetOrdering()
 }
 
-func (f *Filter) Compact(*plancontext.PlanningContext) (ops.Operator, rewrite.ApplyResult, error) {
+func (f *Filter) Compact(*plancontext.PlanningContext) (ops.Operator, *rewrite.ApplyResult, error) {
 	if len(f.Predicates) == 0 {
-		return f.Source, rewrite.NewTree, nil
+		return f.Source, rewrite.NewTree("filter with no predicates removed", f), nil
 	}
 
 	other, isFilter := f.Source.(*Filter)
@@ -110,7 +110,7 @@ func (f *Filter) Compact(*plancontext.PlanningContext) (ops.Operator, rewrite.Ap
 	}
 	f.Source = other.Source
 	f.Predicates = append(f.Predicates, other.Predicates...)
-	return f, rewrite.NewTree, nil
+	return f, rewrite.NewTree("two filters merged into one", f), nil
 }
 
 func (f *Filter) planOffsets(ctx *plancontext.PlanningContext) error {

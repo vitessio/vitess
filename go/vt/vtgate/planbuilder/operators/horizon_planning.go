@@ -98,14 +98,10 @@ func planHorizons(ctx *plancontext.PlanningContext, root ops.Operator) (ops.Oper
 }
 
 func optimizeHorizonPlanning(ctx *plancontext.PlanningContext, root ops.Operator) (ops.Operator, error) {
-	visitor := func(in ops.Operator, _ semantics.TableSet, isRoot bool) (ops.Operator, rewrite.ApplyResult, error) {
+	visitor := func(in ops.Operator, _ semantics.TableSet, isRoot bool) (ops.Operator, *rewrite.ApplyResult, error) {
 		switch in := in.(type) {
 		case horizonLike:
-			op, err := pushOrExpandHorizon(ctx, in)
-			if err != nil {
-				return nil, false, err
-			}
-			return op, rewrite.NewTree, nil
+			return pushOrExpandHorizon(ctx, in)
 		case *Projection:
 			return tryPushingDownProjection(ctx, in)
 		case *Limit:
@@ -132,12 +128,12 @@ func optimizeHorizonPlanning(ctx *plancontext.PlanningContext, root ops.Operator
 }
 
 func addOrderBysForAggregations(ctx *plancontext.PlanningContext, root ops.Operator) (ops.Operator, error) {
-	visitor := func(in ops.Operator, _ semantics.TableSet, isRoot bool) (ops.Operator, rewrite.ApplyResult, error) {
+	visitor := func(in ops.Operator, _ semantics.TableSet, isRoot bool) (ops.Operator, *rewrite.ApplyResult, error) {
 		switch in := in.(type) {
 		case *Aggregator:
 			requireOrdering, err := needsOrdering(in, ctx)
 			if err != nil {
-				return nil, false, err
+				return nil, nil, err
 			}
 			if !requireOrdering {
 				return in, rewrite.SameTree, nil
@@ -148,7 +144,7 @@ func addOrderBysForAggregations(ctx *plancontext.PlanningContext, root ops.Opera
 					return from.AsOrderBy()
 				}),
 			}
-			return in, rewrite.NewTree, nil
+			return in, rewrite.NewTree("added ordering before aggregation", in), nil
 		case *ApplyJoin:
 			_ = rewrite.Visit(in.RHS, func(op ops.Operator) error {
 				aggr, isAggr := op.(*Aggregator)
@@ -187,29 +183,29 @@ func needsOrdering(in *Aggregator, ctx *plancontext.PlanningContext) (bool, erro
 	return false, nil
 }
 
-func tryPushingDownOrdering(ctx *plancontext.PlanningContext, in *Ordering) (ops.Operator, rewrite.ApplyResult, error) {
+func tryPushingDownOrdering(ctx *plancontext.PlanningContext, in *Ordering) (ops.Operator, *rewrite.ApplyResult, error) {
 	switch src := in.Source.(type) {
 	case *Route:
-		return swap(in, src)
+		return rewrite.Swap(in, src, "push ordering under route")
 	case *ApplyJoin:
 		if canPushLeft(ctx, src, in.Order) {
 			// ApplyJoin is stable in regard to the columns coming from the LHS,
 			// so if all the ordering columns come from the LHS, we can push down the Ordering there
 			src.LHS, in.Source = in, src.LHS
-			return src, rewrite.NewTree, nil
+			return src, rewrite.NewTree("push down ordering on the LHS of a join", in), nil
 		}
 	case *Ordering:
 		// we'll just remove the order underneath. The top order replaces whatever was incoming
 		in.Source = src.Source
-		return in, rewrite.NewTree, nil
+		return in, rewrite.NewTree("remove double ordering", src), nil
 	case *Projection:
-		// we can remove a projection only if it's not introducing a column we're sorting by
+		// we can move ordering under a projection if it's not introducing a column we're sorting by
 		for _, by := range in.Order {
 			if !fetchByOffset(by.WeightStrExpr) {
-				return in, rewrite.NewTree, nil
+				return in, rewrite.SameTree, nil
 			}
 		}
-		return swap(in, src)
+		return rewrite.Swap(in, src, "push ordering under projection")
 	case *Aggregator:
 		if !src.QP.AlignGroupByAndOrderBy(ctx) {
 			return in, rewrite.SameTree, nil
@@ -221,7 +217,7 @@ func tryPushingDownOrdering(ctx *plancontext.PlanningContext, in *Ordering) (ops
 	return in, rewrite.SameTree, nil
 }
 
-func pushOrderingUnderAggr(ctx *plancontext.PlanningContext, order *Ordering, aggregator *Aggregator) (ops.Operator, rewrite.ApplyResult, error) {
+func pushOrderingUnderAggr(ctx *plancontext.PlanningContext, order *Ordering, aggregator *Aggregator) (ops.Operator, *rewrite.ApplyResult, error) {
 	// Step 1: Align the GROUP BY and ORDER BY.
 	//         Reorder the GROUP BY columns to match the ORDER BY columns.
 	//         Since the GB clause is a set, we can reorder these columns freely.
@@ -267,9 +263,9 @@ func pushOrderingUnderAggr(ctx *plancontext.PlanningContext, order *Ordering, ag
 		order.Source = aggrSource.Source
 		aggrSource.Source = nil // removing from plan tree
 		aggregator.Source = order
-		return aggregator, rewrite.NewTree, nil
+		return aggregator, rewrite.NewTree("push ordering under aggregation, removing extra ordering", aggregator), nil
 	}
-	return swap(order, aggregator)
+	return rewrite.Swap(order, aggregator, "push ordering under aggregation")
 }
 
 func canPushLeft(ctx *plancontext.PlanningContext, aj *ApplyJoin, order []ops.OrderBy) bool {
@@ -286,10 +282,10 @@ func canPushLeft(ctx *plancontext.PlanningContext, aj *ApplyJoin, order []ops.Or
 func tryPushingDownProjection(
 	ctx *plancontext.PlanningContext,
 	p *Projection,
-) (ops.Operator, rewrite.ApplyResult, error) {
+) (ops.Operator, *rewrite.ApplyResult, error) {
 	switch src := p.Source.(type) {
 	case *Route:
-		return swap(p, src)
+		return rewrite.Swap(p, src, "pushed projection under route")
 	case *ApplyJoin:
 		if p.FromAggr {
 			return p, rewrite.SameTree, nil
@@ -302,27 +298,19 @@ func tryPushingDownProjection(
 	}
 }
 
-func swap(a, b ops.Operator) (ops.Operator, rewrite.ApplyResult, error) {
-	op, err := rewrite.Swap(a, b)
-	if err != nil {
-		return nil, false, err
-	}
-	return op, rewrite.NewTree, nil
-}
-
 func pushDownProjectionInVindex(
 	ctx *plancontext.PlanningContext,
 	p *Projection,
 	src *Vindex,
-) (ops.Operator, rewrite.ApplyResult, error) {
+) (ops.Operator, *rewrite.ApplyResult, error) {
 	for _, column := range p.Columns {
 		expr := column.GetExpr()
 		_, _, err := src.AddColumn(ctx, aeWrap(expr), true, false)
 		if err != nil {
-			return nil, false, err
+			return nil, nil, err
 		}
 	}
-	return src, rewrite.NewTree, nil
+	return src, rewrite.NewTree("push projection into vindex", p), nil
 }
 
 type projector struct {
@@ -343,7 +331,7 @@ func pushDownProjectionInApplyJoin(
 	ctx *plancontext.PlanningContext,
 	p *Projection,
 	src *ApplyJoin,
-) (ops.Operator, rewrite.ApplyResult, error) {
+) (ops.Operator, *rewrite.ApplyResult, error) {
 	if src.LeftJoin {
 		// we can't push down expression evaluation to the rhs if we are not sure it will even be executed
 		return p, rewrite.SameTree, nil
@@ -354,14 +342,14 @@ func pushDownProjectionInApplyJoin(
 	for idx := 0; idx < len(p.Columns); idx++ {
 		err := splitProjectionAcrossJoin(ctx, src, lhs, rhs, p.Columns[idx], p.ColumnNames[idx])
 		if err != nil {
-			return nil, false, err
+			return nil, nil, err
 		}
 	}
 
 	if p.TableID != nil {
 		err := exposeColumnsThroughDerivedTable(ctx, p, src, lhs)
 		if err != nil {
-			return nil, false, err
+			return nil, nil, err
 		}
 	}
 
@@ -370,15 +358,15 @@ func pushDownProjectionInApplyJoin(
 	// Create and update the Projection operators for the left and right children, if needed.
 	src.LHS, err = createProjectionWithTheseColumns(src.LHS, lhs, p.TableID, p.Alias)
 	if err != nil {
-		return nil, false, err
+		return nil, nil, err
 	}
 
 	src.RHS, err = createProjectionWithTheseColumns(src.RHS, rhs, p.TableID, p.Alias)
 	if err != nil {
-		return nil, false, err
+		return nil, nil, err
 	}
 
-	return src, rewrite.NewTree, nil
+	return src, rewrite.NewTree("split projection to either side of join", src), nil
 }
 
 // splitProjectionAcrossJoin creates JoinColumns for all projections,
@@ -506,12 +494,12 @@ func stopAtRoute(operator ops.Operator) rewrite.VisitRule {
 	return rewrite.VisitRule(!isRoute)
 }
 
-func tryPushingDownLimit(in *Limit) (ops.Operator, rewrite.ApplyResult, error) {
+func tryPushingDownLimit(in *Limit) (ops.Operator, *rewrite.ApplyResult, error) {
 	switch src := in.Source.(type) {
 	case *Route:
 		return tryPushingDownLimitInRoute(in, src)
 	case *Projection:
-		return swap(in, src)
+		return rewrite.Swap(in, src, "push limit under projection")
 	case *Aggregator:
 		return in, rewrite.SameTree, nil
 	default:
@@ -519,12 +507,12 @@ func tryPushingDownLimit(in *Limit) (ops.Operator, rewrite.ApplyResult, error) {
 	}
 }
 
-func setUpperLimit(in *Limit) (ops.Operator, rewrite.ApplyResult, error) {
+func setUpperLimit(in *Limit) (ops.Operator, *rewrite.ApplyResult, error) {
 	if in.Pushed {
 		return in, rewrite.SameTree, nil
 	}
 	in.Pushed = true
-	visitor := func(op ops.Operator, _ semantics.TableSet, _ bool) (ops.Operator, rewrite.ApplyResult, error) {
+	visitor := func(op ops.Operator, _ semantics.TableSet, _ bool) (ops.Operator, *rewrite.ApplyResult, error) {
 		return op, rewrite.SameTree, nil
 	}
 	shouldVisit := func(op ops.Operator) rewrite.VisitRule {
@@ -547,45 +535,45 @@ func setUpperLimit(in *Limit) (ops.Operator, rewrite.ApplyResult, error) {
 
 	_, err := rewrite.TopDown(in.Source, TableID, visitor, shouldVisit)
 	if err != nil {
-		return nil, false, err
+		return nil, nil, err
 	}
 	return in, rewrite.SameTree, nil
 }
 
-func tryPushingDownLimitInRoute(in *Limit, src *Route) (ops.Operator, rewrite.ApplyResult, error) {
+func tryPushingDownLimitInRoute(in *Limit, src *Route) (ops.Operator, *rewrite.ApplyResult, error) {
 	if src.IsSingleShard() {
-		return swap(in, src)
+		return rewrite.Swap(in, src, "limit pushed into single sharded route")
 	}
 
 	return setUpperLimit(in)
 }
 
-func pushOrExpandHorizon(ctx *plancontext.PlanningContext, in horizonLike) (ops.Operator, error) {
+func pushOrExpandHorizon(ctx *plancontext.PlanningContext, in horizonLike) (ops.Operator, *rewrite.ApplyResult, error) {
 	if derived, ok := in.(*Derived); ok {
 		if len(derived.ColumnAliases) > 0 {
-			return nil, errHorizonNotPlanned()
+			return nil, nil, errHorizonNotPlanned()
 		}
 	}
 	rb, isRoute := in.src().(*Route)
 	if isRoute && rb.IsSingleShard() {
-		return rewrite.Swap(in, rb)
+		return rewrite.Swap(in, rb, "push horizon into route")
 	}
 
 	sel, isSel := in.selectStatement().(*sqlparser.Select)
 	if !isSel {
-		return nil, errHorizonNotPlanned()
+		return nil, nil, errHorizonNotPlanned()
 	}
 
 	qp, err := in.getQP(ctx)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	needsOrdering := len(qp.OrderExprs) > 0
 	canPushDown := isRoute && sel.Having == nil && !needsOrdering && !qp.NeedsAggregation() && !sel.Distinct && sel.Limit == nil
 
 	if canPushDown {
-		return rewrite.Swap(in, rb)
+		return rewrite.Swap(in, rb, "push horizon into route")
 	}
 
 	return expandHorizon(ctx, in)
@@ -599,23 +587,23 @@ type horizonLike interface {
 	getQP(ctx *plancontext.PlanningContext) (*QueryProjection, error)
 }
 
-func expandHorizon(ctx *plancontext.PlanningContext, horizon horizonLike) (ops.Operator, error) {
+func expandHorizon(ctx *plancontext.PlanningContext, horizon horizonLike) (ops.Operator, *rewrite.ApplyResult, error) {
 	sel, isSel := horizon.selectStatement().(*sqlparser.Select)
 	if !isSel {
-		return nil, errHorizonNotPlanned()
+		return nil, nil, errHorizonNotPlanned()
 	}
 	qp, err := horizon.getQP(ctx)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	if sel.Having != nil || qp.NeedsDistinct() || sel.Distinct {
-		return nil, errHorizonNotPlanned()
+		return nil, nil, errHorizonNotPlanned()
 	}
 
 	op, err := createProjectionFromSelect(ctx, horizon)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	if sel.Limit != nil {
@@ -625,7 +613,7 @@ func expandHorizon(ctx *plancontext.PlanningContext, horizon horizonLike) (ops.O
 		}
 	}
 
-	return op, nil
+	return op, rewrite.NewTree("expand horizon into smaller components", op), nil
 }
 
 func checkInvalid(aggregations []Aggr, horizon horizonLike) error {

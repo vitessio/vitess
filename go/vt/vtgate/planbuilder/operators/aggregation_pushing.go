@@ -28,7 +28,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
-func tryPushingDownAggregator(ctx *plancontext.PlanningContext, aggregator *Aggregator) (output ops.Operator, applyResult rewrite.ApplyResult, err error) {
+func tryPushingDownAggregator(ctx *plancontext.PlanningContext, aggregator *Aggregator) (output ops.Operator, applyResult *rewrite.ApplyResult, err error) {
 	if aggregator.Pushed {
 		return aggregator, rewrite.SameTree, nil
 	}
@@ -42,7 +42,7 @@ func tryPushingDownAggregator(ctx *plancontext.PlanningContext, aggregator *Aggr
 		return aggregator, rewrite.SameTree, nil
 	}
 
-	if applyResult == rewrite.NewTree && aggregator.Original {
+	if applyResult != rewrite.SameTree && aggregator.Original {
 		aggregator.aggregateTheAggregates()
 	}
 
@@ -62,10 +62,14 @@ func (a *Aggregator) aggregateTheAggregates() {
 	}
 }
 
-func pushDownAggregationThroughRoute(ctx *plancontext.PlanningContext, aggregator *Aggregator, src *Route) (ops.Operator, rewrite.ApplyResult, error) {
+func pushDownAggregationThroughRoute(
+	ctx *plancontext.PlanningContext,
+	aggregator *Aggregator,
+	src *Route,
+) (ops.Operator, *rewrite.ApplyResult, error) {
 	// If the route is single-shard, or we are grouping by sharding keys, we can just push down the aggregation
 	if src.IsSingleShard() || overlappingUniqueVindex(ctx, aggregator.Grouping) {
-		return swap(aggregator, src)
+		return rewrite.Swap(aggregator, src, "pushDownAggregationThroughRoute")
 	}
 
 	// Create a new aggregator to be placed below the route.
@@ -79,10 +83,10 @@ func pushDownAggregationThroughRoute(ctx *plancontext.PlanningContext, aggregato
 	if !aggregator.Original {
 		// we only keep the root aggregation, if this aggregator was created
 		// by splitting one and pushing under a join, we can get rid of this one
-		return aggregator.Source, rewrite.NewTree, nil
+		return aggregator.Source, rewrite.NewTree("push aggregation under route - remove original", aggregator), nil
 	}
 
-	return aggregator, rewrite.NewTree, nil
+	return aggregator, rewrite.NewTree("push aggregation under route - keep original", aggregator), nil
 }
 
 func overlappingUniqueVindex(ctx *plancontext.PlanningContext, groupByExprs []GroupBy) bool {
@@ -159,7 +163,7 @@ Transformed:
 		/         \
 	   R1          R2
 */
-func pushDownAggregationThroughJoin(ctx *plancontext.PlanningContext, rootAggr *Aggregator, join *ApplyJoin) (ops.Operator, rewrite.ApplyResult, error) {
+func pushDownAggregationThroughJoin(ctx *plancontext.PlanningContext, rootAggr *Aggregator, join *ApplyJoin) (ops.Operator, *rewrite.ApplyResult, error) {
 	lhs := joinPusher{
 		orig: rootAggr,
 		pushed: &Aggregator{
@@ -181,14 +185,14 @@ func pushDownAggregationThroughJoin(ctx *plancontext.PlanningContext, rootAggr *
 
 	joinColumns, output, err := splitAggrColumnsToLeftAndRight(ctx, rootAggr, join, lhs, rhs)
 	if err != nil {
-		return nil, false, err
+		return nil, nil, err
 	}
 
 	lhsTS := TableID(join.LHS)
 	rhsTS := TableID(join.RHS)
 	groupingJCs, err := splitGroupingToLeftAndRight(ctx, rootAggr, lhsTS, rhsTS, lhs, rhs)
 	if err != nil {
-		return nil, false, err
+		return nil, nil, err
 	}
 	joinColumns = append(joinColumns, groupingJCs...)
 
@@ -196,7 +200,7 @@ func pushDownAggregationThroughJoin(ctx *plancontext.PlanningContext, rootAggr *
 	// If we don't, the LHS will not be able to return the column, and it can't be used to send down to the RHS
 	err = addJoinColumnsToLeft(ctx, rootAggr, join, lhs)
 	if err != nil {
-		return nil, false, err
+		return nil, nil, err
 	}
 
 	join.LHS, join.RHS = lhs.pushed, rhs.pushed
@@ -205,11 +209,11 @@ func pushDownAggregationThroughJoin(ctx *plancontext.PlanningContext, rootAggr *
 	if !rootAggr.Original {
 		// we only keep the root aggregation, if this aggregator was created
 		// by splitting one and pushing under a join, we can get rid of this one
-		return output, rewrite.NewTree, nil
+		return output, rewrite.NewTree("push Aggregation under join - keep original", rootAggr), nil
 	}
 
 	rootAggr.Source = output
-	return rootAggr, rewrite.NewTree, nil
+	return rootAggr, rewrite.NewTree("push Aggregation under join", rootAggr), nil
 }
 
 func addJoinColumnsToLeft(ctx *plancontext.PlanningContext, rootAggr *Aggregator, join *ApplyJoin, lhs joinPusher) error {

@@ -199,7 +199,7 @@ func (p *Projection) ShortDescription() string {
 	return strings.Join(columns, ", ")
 }
 
-func (p *Projection) Compact(*plancontext.PlanningContext) (ops.Operator, rewrite.ApplyResult, error) {
+func (p *Projection) Compact(*plancontext.PlanningContext) (ops.Operator, *rewrite.ApplyResult, error) {
 	switch src := p.Source.(type) {
 	case *Route:
 		return p.compactWithRoute(src)
@@ -209,7 +209,7 @@ func (p *Projection) Compact(*plancontext.PlanningContext) (ops.Operator, rewrit
 	return p, rewrite.SameTree, nil
 }
 
-func (p *Projection) compactWithJoin(src *ApplyJoin) (ops.Operator, rewrite.ApplyResult, error) {
+func (p *Projection) compactWithJoin(src *ApplyJoin) (ops.Operator, *rewrite.ApplyResult, error) {
 	var newColumns []int
 	var newColumnsAST []JoinColumn
 	for _, col := range p.Columns {
@@ -224,10 +224,10 @@ func (p *Projection) compactWithJoin(src *ApplyJoin) (ops.Operator, rewrite.Appl
 
 	src.Columns = newColumns
 	src.ColumnsAST = newColumnsAST
-	return src, rewrite.NewTree, nil
+	return src, rewrite.NewTree("remove projection from before join", src), nil
 }
 
-func (p *Projection) compactWithRoute(rb *Route) (ops.Operator, rewrite.ApplyResult, error) {
+func (p *Projection) compactWithRoute(rb *Route) (ops.Operator, *rewrite.ApplyResult, error) {
 	for i, col := range p.Columns {
 		offset, ok := col.(Offset)
 		if !ok || offset.Offset != i {
@@ -236,11 +236,11 @@ func (p *Projection) compactWithRoute(rb *Route) (ops.Operator, rewrite.ApplyRes
 	}
 	columns, err := rb.GetColumns()
 	if err != nil {
-		return nil, false, err
+		return nil, nil, err
 	}
 
 	if len(columns) == len(p.Columns) {
-		return rb, rewrite.NewTree, nil
+		return rb, rewrite.NewTree("remove projection from before route", rb), nil
 	}
 	rb.ResultColumns = len(columns)
 	return rb, rewrite.SameTree, nil
