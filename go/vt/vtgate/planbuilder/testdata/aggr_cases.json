@@ -14,7 +14,7 @@
           {
             "OperatorType": "Projection",
             "Expressions": [
-              "[COLUMN 0] * [COLUMN 1]"
+              "[COLUMN 0] * [COLUMN 1] as count(*)"
             ],
             "Inputs": [
               {
@@ -136,15 +136,15 @@
           {
             "OperatorType": "Projection",
             "Expressions": [
-              "[COLUMN 0] * COALESCE([COLUMN 1], INT64(1)) as count(`user`.col)"
+              "[COLUMN 0] * [COLUMN 1] as count(`user`.col)"
             ],
             "Inputs": [
               {
                 "OperatorType": "Join",
                 "Variant": "Join",
-                "JoinColumnIndexes": "L:1,R:1",
+                "JoinColumnIndexes": "L:0,R:0",
                 "JoinVars": {
-                  "user_foo": 0
+                  "user_foo": 1
                 },
                 "TableName": "`user`_user_extra",
                 "Inputs": [
@@ -155,8 +155,8 @@
                       "Name": "user",
                       "Sharded": true
                     },
-                    "FieldQuery": "select `user`.foo, count(`user`.col), weight_string(`user`.foo) from `user` where 1 != 1 group by `user`.foo, weight_string(`user`.foo)",
-                    "Query": "select `user`.foo, count(`user`.col), weight_string(`user`.foo) from `user` group by `user`.foo, weight_string(`user`.foo)",
+                    "FieldQuery": "select count(`user`.col), `user`.foo from `user` where 1 != 1 group by `user`.foo",
+                    "Query": "select count(`user`.col), `user`.foo from `user` group by `user`.foo",
                     "Table": "`user`"
                   },
                   {
@@ -166,8 +166,8 @@
                       "Name": "user",
                       "Sharded": true
                     },
-                    "FieldQuery": "select 1, count(*) from user_extra where 1 != 1 group by 1",
-                    "Query": "select 1, count(*) from user_extra where user_extra.bar = :user_foo group by 1",
+                    "FieldQuery": "select count(*) from user_extra where 1 != 1 group by .0",
+                    "Query": "select count(*) from user_extra where user_extra.bar = :user_foo group by .0",
                     "Table": "user_extra"
                   }
                 ]
@@ -3206,7 +3206,7 @@
           {
             "OperatorType": "Projection",
             "Expressions": [
-              "[COLUMN 0] * [COLUMN 1]"
+              "[COLUMN 0] * [COLUMN 1] as count(*)"
             ],
             "Inputs": [
               {
@@ -3325,7 +3325,7 @@
             "OperatorType": "Projection",
             "Expressions": [
               "[COLUMN 2]",
-              "[COLUMN 0] * [COLUMN 1]",
+              "[COLUMN 0] * [COLUMN 1] as count(*)",
               "[COLUMN 3]"
             ],
             "Inputs": [
@@ -3387,15 +3387,15 @@
           {
             "OperatorType": "Projection",
             "Expressions": [
-              "[COLUMN 0] as a",
-              "[COLUMN 2] * COALESCE([COLUMN 3], INT64(1)) as count(user_extra.a)",
-              "[COLUMN 1]"
+              "[COLUMN 2]",
+              "[COLUMN 1] * [COLUMN 0] as count(user_extra.a)",
+              "[COLUMN 3]"
             ],
             "Inputs": [
               {
                 "OperatorType": "Join",
                 "Variant": "Join",
-                "JoinColumnIndexes": "L:1,L:2,L:0,R:1",
+                "JoinColumnIndexes": "L:0,R:0,L:1,L:2",
                 "TableName": "`user`_user_extra",
                 "Inputs": [
                   {
@@ -3417,8 +3417,8 @@
                       "Name": "user",
                       "Sharded": true
                     },
-                    "FieldQuery": "select 1, count(user_extra.a) from user_extra where 1 != 1 group by 1",
-                    "Query": "select 1, count(user_extra.a) from user_extra group by 1",
+                    "FieldQuery": "select count(user_extra.a) from user_extra where 1 != 1 group by .0",
+                    "Query": "select count(user_extra.a) from user_extra group by .0",
                     "Table": "user_extra"
                   }
                 ]
@@ -3450,23 +3450,23 @@
           {
             "OperatorType": "Projection",
             "Expressions": [
-              "([COLUMN 2] * COALESCE([COLUMN 3], INT64(1))) * COALESCE([COLUMN 4], INT64(1)) as count(u.textcol1)",
-              "([COLUMN 5] * COALESCE([COLUMN 6], INT64(1))) * COALESCE([COLUMN 7], INT64(1)) as count(ue.foo)",
-              "[COLUMN 0] as bar",
-              "[COLUMN 1]"
+              "[COLUMN 0] * [COLUMN 1] as count(u.textcol1)",
+              "[COLUMN 3] * [COLUMN 1] as count(ue.foo)",
+              "[COLUMN 4]",
+              "[COLUMN 5]"
             ],
             "Inputs": [
               {
                 "OperatorType": "Sort",
                 "Variant": "Memory",
-                "OrderBy": "(0|1) ASC",
+                "OrderBy": "(4|5) ASC",
                 "Inputs": [
                   {
                     "OperatorType": "Join",
                     "Variant": "Join",
-                    "JoinColumnIndexes": "R:0,R:1,L:1,R:2,R:3,L:2,R:4,R:5",
+                    "JoinColumnIndexes": "L:0,R:0,L:1,R:1,R:2,R:3",
                     "JoinVars": {
-                      "u_foo": 0
+                      "u_foo": 2
                     },
                     "TableName": "`user`_user_extra_unsharded",
                     "Inputs": [
@@ -3477,40 +3477,51 @@
                           "Name": "user",
                           "Sharded": true
                         },
-                        "FieldQuery": "select u.foo, count(u.textcol1), count(*), weight_string(u.foo) from `user` as u where 1 != 1 group by u.foo, weight_string(u.foo)",
-                        "Query": "select u.foo, count(u.textcol1), count(*), weight_string(u.foo) from `user` as u group by u.foo, weight_string(u.foo)",
+                        "FieldQuery": "select count(u.textcol1), count(*), u.foo from `user` as u where 1 != 1 group by u.foo",
+                        "Query": "select count(u.textcol1), count(*), u.foo from `user` as u group by u.foo",
                         "Table": "`user`"
                       },
                       {
-                        "OperatorType": "Join",
-                        "Variant": "Join",
-                        "JoinColumnIndexes": "R:1,R:2,L:1,R:0,L:2,R:0",
-                        "JoinVars": {
-                          "ue_bar": 0
-                        },
-                        "TableName": "user_extra_unsharded",
+                        "OperatorType": "Projection",
+                        "Expressions": [
+                          "[COLUMN 0] * [COLUMN 1] as count(*)",
+                          "[COLUMN 2] * [COLUMN 1] as count(ue.foo)",
+                          "[COLUMN 4]",
+                          "[COLUMN 5]"
+                        ],
                         "Inputs": [
                           {
-                            "OperatorType": "Route",
-                            "Variant": "Scatter",
-                            "Keyspace": {
-                              "Name": "user",
-                              "Sharded": true
+                            "OperatorType": "Join",
+                            "Variant": "Join",
+                            "JoinColumnIndexes": "L:0,R:0,L:1,R:0,R:2,R:3",
+                            "JoinVars": {
+                              "ue_bar": 2
                             },
-                            "FieldQuery": "select ue.bar, count(*), count(ue.foo), weight_string(ue.bar) from user_extra as ue where 1 != 1 group by ue.bar, weight_string(ue.bar)",
-                            "Query": "select ue.bar, count(*), count(ue.foo), weight_string(ue.bar) from user_extra as ue where ue.bar = :u_foo group by ue.bar, weight_string(ue.bar)",
-                            "Table": "user_extra"
-                          },
-                          {
-                            "OperatorType": "Route",
-                            "Variant": "Unsharded",
-                            "Keyspace": {
-                              "Name": "main",
-                              "Sharded": false
-                            },
-                            "FieldQuery": "select count(*), us.bar, weight_string(us.bar) from unsharded as us where 1 != 1 group by us.bar, weight_string(us.bar)",
-                            "Query": "select count(*), us.bar, weight_string(us.bar) from unsharded as us where us.baz = :ue_bar group by us.bar, weight_string(us.bar)",
-                            "Table": "unsharded"
+                            "TableName": "user_extra_unsharded",
+                            "Inputs": [
+                              {
+                                "OperatorType": "Route",
+                                "Variant": "Scatter",
+                                "Keyspace": {
+                                  "Name": "user",
+                                  "Sharded": true
+                                },
+                                "FieldQuery": "select count(*), count(ue.foo), ue.bar from user_extra as ue where 1 != 1 group by ue.bar",
+                                "Query": "select count(*), count(ue.foo), ue.bar from user_extra as ue where ue.bar = :u_foo group by ue.bar",
+                                "Table": "user_extra"
+                              },
+                              {
+                                "OperatorType": "Route",
+                                "Variant": "Unsharded",
+                                "Keyspace": {
+                                  "Name": "main",
+                                  "Sharded": false
+                                },
+                                "FieldQuery": "select count(*), count(*), us.bar, weight_string(us.bar) from unsharded as us where 1 != 1 group by us.bar, weight_string(us.bar)",
+                                "Query": "select count(*), count(*), us.bar, weight_string(us.bar) from unsharded as us where us.baz = :ue_bar group by us.bar, weight_string(us.bar)",
+                                "Table": "unsharded"
+                              }
+                            ]
                           }
                         ]
                       }
@@ -5100,23 +5111,23 @@
           {
             "OperatorType": "Projection",
             "Expressions": [
-              "[COLUMN 0] as id",
-              "[COLUMN 2] as name",
-              "[COLUMN 3] * COALESCE([COLUMN 4], INT64(1)) as count(m.predef1)",
-              "[COLUMN 1]"
+              "[COLUMN 3]",
+              "[COLUMN 0]",
+              "[COLUMN 1] * [COLUMN 2] as count(m.predef1)",
+              "[COLUMN 4]"
             ],
             "Inputs": [
               {
                 "OperatorType": "Sort",
                 "Variant": "Memory",
-                "OrderBy": "(0|1) ASC",
+                "OrderBy": "(3|4) ASC",
                 "Inputs": [
                   {
                     "OperatorType": "Join",
                     "Variant": "Join",
-                    "JoinColumnIndexes": "R:2,R:3,R:0,L:1,R:1",
+                    "JoinColumnIndexes": "R:0,L:0,R:1,R:2,R:3",
                     "JoinVars": {
-                      "m_order": 0
+                      "m_order": 1
                     },
                     "TableName": "user_extra_`user`",
                     "Inputs": [
@@ -5127,8 +5138,8 @@
                           "Name": "user",
                           "Sharded": true
                         },
-                        "FieldQuery": "select m.`order`, count(m.predef1), weight_string(m.`order`) from user_extra as m where 1 != 1 group by m.`order`, weight_string(m.`order`)",
-                        "Query": "select m.`order`, count(m.predef1), weight_string(m.`order`) from user_extra as m group by m.`order`, weight_string(m.`order`)",
+                        "FieldQuery": "select count(m.predef1), m.`order` from user_extra as m where 1 != 1 group by m.`order`",
+                        "Query": "select count(m.predef1), m.`order` from user_extra as m group by m.`order`",
                         "Table": "user_extra"
                       },
                       {
@@ -5180,9 +5191,9 @@
               {
                 "OperatorType": "Join",
                 "Variant": "LeftJoin",
-                "JoinColumnIndexes": "L:1,R:1",
+                "JoinColumnIndexes": "L:0,R:0",
                 "JoinVars": {
-                  "u_col": 0
+                  "u_col": 1
                 },
                 "TableName": "`user`_user_extra",
                 "Inputs": [
@@ -5193,8 +5204,8 @@
                       "Name": "user",
                       "Sharded": true
                     },
-                    "FieldQuery": "select u.col, count(u.id) from `user` as u where 1 != 1 group by u.col",
-                    "Query": "select u.col, count(u.id) from `user` as u group by u.col",
+                    "FieldQuery": "select count(u.id), u.col from `user` as u where 1 != 1 group by u.col",
+                    "Query": "select count(u.id), u.col from `user` as u group by u.col",
                     "Table": "`user`"
                   },
                   {
@@ -5204,8 +5215,8 @@
                       "Name": "user",
                       "Sharded": true
                     },
-                    "FieldQuery": "select 1, count(*) from user_extra as ue where 1 != 1 group by 1",
-                    "Query": "select 1, count(*) from user_extra as ue where ue.col = :u_col group by 1",
+                    "FieldQuery": "select count(*) from user_extra as ue where 1 != 1 group by .0",
+                    "Query": "select count(*) from user_extra as ue where ue.col = :u_col group by .0",
                     "Table": "user_extra"
                   }
                 ]
@@ -5505,7 +5516,7 @@
           {
             "OperatorType": "Projection",
             "Expressions": [
-              "[COLUMN 0] * [COLUMN 1]"
+              "[COLUMN 0] * [COLUMN 1] as count(*)"
             ],
             "Inputs": [
               {
@@ -5565,7 +5576,7 @@
           {
             "OperatorType": "Projection",
             "Expressions": [
-              "[COLUMN 0] * COALESCE([COLUMN 1], INT64(1))"
+              "[COLUMN 0] * COALESCE([COLUMN 1], INT64(1)) as count(*)"
             ],
             "Inputs": [
               {
@@ -5627,7 +5638,7 @@
           {
             "OperatorType": "Projection",
             "Expressions": [
-              "[COLUMN 0] * COALESCE([COLUMN 1], INT64(1))",
+              "[COLUMN 0] * COALESCE([COLUMN 1], INT64(1)) as count(*)",
               "[COLUMN 2]"
             ],
             "Inputs": [
@@ -5691,7 +5702,7 @@
           {
             "OperatorType": "Projection",
             "Expressions": [
-              "[COLUMN 0] * COALESCE([COLUMN 1], INT64(1))",
+              "[COLUMN 0] * COALESCE([COLUMN 1], INT64(1)) as count(*)",
               "[COLUMN 2]",
               "[COLUMN 3]"
             ],
@@ -5762,7 +5773,7 @@
           {
             "OperatorType": "Projection",
             "Expressions": [
-              "[COLUMN 0] * COALESCE([COLUMN 1], INT64(1))",
+              "[COLUMN 0] * COALESCE([COLUMN 1], INT64(1)) as count(*)",
               "[COLUMN 2]"
             ],
             "Inputs": [
@@ -5826,7 +5837,7 @@
           {
             "OperatorType": "Projection",
             "Expressions": [
-              "[COLUMN 0] * COALESCE([COLUMN 1], INT64(1))",
+              "[COLUMN 0] * COALESCE([COLUMN 1], INT64(1)) as count(*)",
               "[COLUMN 2]",
               "[COLUMN 3]"
             ],
@@ -5896,7 +5907,7 @@
           {
             "OperatorType": "Projection",
             "Expressions": [
-              "[COLUMN 0] * [COLUMN 1]"
+              "[COLUMN 0] * [COLUMN 1] as count(*)"
             ],
             "Inputs": [
               {
@@ -5922,7 +5933,7 @@
                   {
                     "OperatorType": "Projection",
                     "Expressions": [
-                      "[COLUMN 0] * [COLUMN 1]"
+                      "[COLUMN 0] * [COLUMN 1] as count(*)"
                     ],
                     "Inputs": [
                       {
@@ -5987,7 +5998,7 @@
           {
             "OperatorType": "Projection",
             "Expressions": [
-              "[COLUMN 0] * [COLUMN 1]"
+              "[COLUMN 0] * [COLUMN 1] as count(*)"
             ],
             "Inputs": [
               {
@@ -6002,7 +6013,7 @@
                   {
                     "OperatorType": "Projection",
                     "Expressions": [
-                      "[COLUMN 0] * COALESCE([COLUMN 1], INT64(1))",
+                      "[COLUMN 0] * COALESCE([COLUMN 1], INT64(1)) as count(*)",
                       "[COLUMN 2]"
                     ],
                     "Inputs": [

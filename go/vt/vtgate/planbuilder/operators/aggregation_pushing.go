@@ -323,6 +323,8 @@ func (ab *aggBuilder) handleAggr(ctx *plancontext.PlanningContext, aggr Aggr) (A
 		return ab.handleCountStar(ctx, aggr)
 	case opcode.AggregateMax, opcode.AggregateMin, opcode.AggregateRandom:
 		return ab.handlePushThroughAggregation(ctx, aggr)
+	case opcode.AggregateCount:
+		return ab.handleCount(ctx, aggr)
 
 	case opcode.AggregateUnassigned:
 		return Aggr{}, vterrors.VT12001(fmt.Sprintf("in scatter query: aggregation function '%s'", sqlparser.String(aggr.Original)))
@@ -395,7 +397,69 @@ func (ab *aggBuilder) handleCountStar(ctx *plancontext.PlanningContext, aggr Agg
 		Left:     lhsExpr,
 		Right:    rhsExpr,
 	}
-	ab.proj.addUnexploredExpr(aggr.Original, projExpr)
+	projAE := &sqlparser.AliasedExpr{
+		Expr: aggr.Original.Expr,
+		As:   sqlparser.NewIdentifierCI(aggr.Original.ColumnName()),
+	}
+
+	ab.proj.addUnexploredExpr(projAE, projExpr)
+	return aggr, nil
+}
+
+func (ab *aggBuilder) handleCount(ctx *plancontext.PlanningContext, aggr Aggr) (Aggr, error) {
+	ab.projectionRequired = true
+
+	expr := aggr.Original.Expr
+	deps := ctx.SemTable.RecursiveDeps(expr)
+	cs := &sqlparser.CountStar{}
+	ae := aeWrap(cs)
+	csAggr := Aggr{
+		Original: ae,
+		Func:     cs,
+		OpCode:   opcode.AggregateCountStar,
+	}
+	var otherSide sqlparser.Expr
+
+	switch {
+	case deps.IsSolvedBy(ab.lhsID):
+		ab.lhs.pushThroughAggr(aggr)
+		otherSide = ab.rhs.addAggr(ctx, csAggr)
+		ab.joinColumns = append(ab.joinColumns, JoinColumn{
+			Original: aggr.Original,
+			LHSExprs: []sqlparser.Expr{expr},
+		}, JoinColumn{
+			Original: ae,
+			RHSExpr:  otherSide,
+		})
+
+	case deps.IsSolvedBy(ab.rhsID):
+		ab.rhs.pushThroughAggr(aggr)
+		otherSide = ab.lhs.addAggr(ctx, csAggr)
+		ab.joinColumns = append(ab.joinColumns, JoinColumn{
+			Original: ae,
+			LHSExprs: []sqlparser.Expr{otherSide},
+		}, JoinColumn{
+			Original: aggr.Original,
+			RHSExpr:  expr,
+		})
+
+	default:
+		return Aggr{}, errHorizonNotPlanned()
+	}
+
+	if ab.outerJoin {
+		otherSide = coalesceFunc(otherSide)
+	}
+
+	projAE := &sqlparser.AliasedExpr{
+		Expr: aggr.Original.Expr,
+		As:   sqlparser.NewIdentifierCI(aggr.Original.ColumnName()),
+	}
+	ab.proj.addUnexploredExpr(projAE, &sqlparser.BinaryExpr{
+		Operator: sqlparser.MultOp,
+		Left:     expr,
+		Right:    otherSide,
+	})
 	return aggr, nil
 }
 
