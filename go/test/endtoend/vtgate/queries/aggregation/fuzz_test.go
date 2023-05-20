@@ -37,14 +37,15 @@ func TestFuzzAggregations(t *testing.T) {
 	for i := 0; i < noOfRows; i++ {
 		values = append(values, fmt.Sprintf("(%d, 'name%d', 'value%d', %d)", i, i, i, i))
 	}
-	t1Insert := fmt.Sprintf("insert into t1 (t1_id, name, value, shardKey) values %s", strings.Join(values, ","))
-	mcmp.Exec(t1Insert)
+	t1Insert := fmt.Sprintf("insert into t1 (t1_id, name, value, shardKey) values %s;", strings.Join(values, ","))
 	values = nil
 	noOfRows = rand.Intn(300)
 	for i := 0; i < noOfRows; i++ {
 		values = append(values, fmt.Sprintf("(%d, %d)", i, i))
 	}
-	t2Insert := fmt.Sprintf("insert into t2 (id, shardKey) values %s", strings.Join(values, ","))
+	t2Insert := fmt.Sprintf("insert into t2 (id, shardKey) values %s;", strings.Join(values, ","))
+
+	mcmp.Exec(t1Insert)
 	mcmp.Exec(t2Insert)
 
 	t.Cleanup(func() {
