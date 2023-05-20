@@ -164,7 +164,7 @@ Transformed:
 	   R1          R2
 */
 func pushDownAggregationThroughJoin(ctx *plancontext.PlanningContext, rootAggr *Aggregator, join *ApplyJoin) (ops.Operator, *rewrite.ApplyResult, error) {
-	lhs := joinPusher{
+	lhs := &joinPusher{
 		orig: rootAggr,
 		pushed: &Aggregator{
 			Source: join.LHS,
@@ -173,7 +173,7 @@ func pushDownAggregationThroughJoin(ctx *plancontext.PlanningContext, rootAggr *
 		columns: initColReUse(len(rootAggr.Columns)),
 		tableID: TableID(join.LHS),
 	}
-	rhs := joinPusher{
+	rhs := &joinPusher{
 		orig: rootAggr,
 		pushed: &Aggregator{
 			Source: join.RHS,
@@ -216,7 +216,7 @@ func pushDownAggregationThroughJoin(ctx *plancontext.PlanningContext, rootAggr *
 	return rootAggr, rewrite.NewTree("push Aggregation under join", rootAggr), nil
 }
 
-func addJoinColumnsToLeft(ctx *plancontext.PlanningContext, rootAggr *Aggregator, join *ApplyJoin, lhs joinPusher) error {
+func addJoinColumnsToLeft(ctx *plancontext.PlanningContext, rootAggr *Aggregator, join *ApplyJoin, lhs *joinPusher) error {
 	for _, pred := range join.JoinPredicates {
 		for _, expr := range pred.LHSExprs {
 			wexpr := rootAggr.QP.GetSimplifiedExpr(expr)
@@ -244,7 +244,7 @@ func addJoinColumnsToLeft(ctx *plancontext.PlanningContext, rootAggr *Aggregator
 	return nil
 }
 
-func splitGroupingToLeftAndRight(ctx *plancontext.PlanningContext, rootAggr *Aggregator, lhsTS, rhsTS semantics.TableSet, lhs, rhs joinPusher) ([]JoinColumn, error) {
+func splitGroupingToLeftAndRight(ctx *plancontext.PlanningContext, rootAggr *Aggregator, lhsTS, rhsTS semantics.TableSet, lhs, rhs *joinPusher) ([]JoinColumn, error) {
 	var groupingJCs []JoinColumn
 	for _, groupBy := range rootAggr.Grouping {
 		deps := ctx.SemTable.RecursiveDeps(groupBy.Inner)
@@ -276,15 +276,13 @@ func splitAggrColumnsToLeftAndRight(
 	ctx *plancontext.PlanningContext,
 	aggregator *Aggregator,
 	join *ApplyJoin,
-	lhs, rhs joinPusher,
+	lhs, rhs *joinPusher,
 ) ([]JoinColumn, ops.Operator, error) {
 	builder := &aggBuilder{
 		lhs:       lhs,
 		rhs:       rhs,
 		proj:      &Projection{Source: join, FromAggr: true},
 		outerJoin: join.LeftJoin,
-		lhsID:     TableID(join.LHS),
-		rhsID:     TableID(join.RHS),
 	}
 
 outer:
@@ -308,13 +306,62 @@ outer:
 	return builder.joinColumns, join, nil
 }
 
-type aggBuilder struct {
-	lhsID, rhsID       semantics.TableSet
-	lhs, rhs           joinPusher
-	projectionRequired bool
-	joinColumns        []JoinColumn
-	proj               *Projection
-	outerJoin          bool
+type (
+	aggBuilder struct {
+		lhs, rhs           *joinPusher
+		projectionRequired bool
+		joinColumns        []JoinColumn
+		proj               *Projection
+		outerJoin          bool
+	}
+	// joinPusher is a helper struct that aids in pushing down an Aggregator into one side of a Join.
+	// It creates a new Aggregator that is pushed down and keeps track of the column dependencies that the new Aggregator has.
+	joinPusher struct {
+		orig    *Aggregator        // The original Aggregator before pushing.
+		pushed  *Aggregator        // The new Aggregator created for push-down.
+		columns []int              // List of column offsets used in the new Aggregator.
+		tableID semantics.TableSet // The TableSet denoting the side of the Join where the new Aggregator is pushed.
+
+		csAE *sqlparser.AliasedExpr
+	}
+)
+
+func (ab *aggBuilder) leftCountStar(ctx *plancontext.PlanningContext) *sqlparser.AliasedExpr {
+	ae, created := ab.lhs.countStar(ctx)
+	if created {
+		ab.joinColumns = append(ab.joinColumns, JoinColumn{
+			Original: ae,
+			LHSExprs: []sqlparser.Expr{ae.Expr},
+		})
+	}
+	return ae
+}
+
+func (ab *aggBuilder) rightCountStar(ctx *plancontext.PlanningContext) *sqlparser.AliasedExpr {
+	ae, created := ab.rhs.countStar(ctx)
+	if created {
+		ab.joinColumns = append(ab.joinColumns, JoinColumn{
+			Original: ae,
+			RHSExpr:  ae.Expr,
+		})
+	}
+	return ae
+}
+
+func (p *joinPusher) countStar(ctx *plancontext.PlanningContext) (*sqlparser.AliasedExpr, bool) {
+	if p.csAE != nil {
+		return p.csAE, false
+	}
+	cs := &sqlparser.CountStar{}
+	ae := aeWrap(cs)
+	csAggr := Aggr{
+		Original: ae,
+		Func:     cs,
+		OpCode:   opcode.AggregateCountStar,
+	}
+	expr := p.addAggr(ctx, csAggr)
+	p.csAE = aeWrap(expr)
+	return p.csAE, true
 }
 
 func (ab *aggBuilder) handleAggr(ctx *plancontext.PlanningContext, aggr Aggr) (Aggr, error) {
@@ -333,24 +380,31 @@ func (ab *aggBuilder) handleAggr(ctx *plancontext.PlanningContext, aggr Aggr) (A
 	}
 }
 
+func (ab *aggBuilder) pushThroughLeft(aggr Aggr) {
+	ab.lhs.pushThroughAggr(aggr)
+	ab.joinColumns = append(ab.joinColumns, JoinColumn{
+		Original: aggr.Original,
+		LHSExprs: []sqlparser.Expr{aggr.Original.Expr},
+	})
+}
+func (ab *aggBuilder) pushThroughRight(aggr Aggr) {
+	ab.rhs.pushThroughAggr(aggr)
+	ab.joinColumns = append(ab.joinColumns, JoinColumn{
+		Original: aggr.Original,
+		RHSExpr:  aggr.Original.Expr,
+	})
+}
+
 func (ab *aggBuilder) handlePushThroughAggregation(ctx *plancontext.PlanningContext, aggr Aggr) (Aggr, error) {
 	ab.proj.addUnexploredExpr(aggr.Original, aggr.Original.Expr)
 
 	deps := ctx.SemTable.RecursiveDeps(aggr.Original.Expr)
 	switch {
-	case deps.IsSolvedBy(ab.lhsID):
-		ab.lhs.pushThroughAggr(aggr)
-		ab.joinColumns = append(ab.joinColumns, JoinColumn{
-			Original: aggr.Original,
-			LHSExprs: []sqlparser.Expr{aggr.Original.Expr},
-		})
+	case deps.IsSolvedBy(ab.lhs.tableID):
+		ab.pushThroughLeft(aggr)
 		return aggr, nil
-	case deps.IsSolvedBy(ab.rhsID):
-		ab.rhs.pushThroughAggr(aggr)
-		ab.joinColumns = append(ab.joinColumns, JoinColumn{
-			Original: aggr.Original,
-			RHSExpr:  aggr.Original.Expr,
-		})
+	case deps.IsSolvedBy(ab.rhs.tableID):
+		ab.pushThroughRight(aggr)
 		return aggr, nil
 	default:
 		return Aggr{}, vterrors.VT12001("aggregation on columns from different sources: " + sqlparser.String(aggr.Original.Expr))
@@ -362,24 +416,15 @@ func (ab *aggBuilder) handleCountStar(ctx *plancontext.PlanningContext, aggr Agg
 	ab.projectionRequired = true
 
 	// Add the aggregate to both sides of the join.
-	lhsExpr := ab.lhs.addAggr(ctx, aggr)
-	rhsExpr := ab.rhs.addAggr(ctx, aggr)
+	lhsAE := ab.leftCountStar(ctx)
+	rhsAE := ab.rightCountStar(ctx)
 
 	// We expect the expressions to be different on each side of the join, otherwise it's an error.
-	if lhsExpr == rhsExpr {
-		panic(fmt.Sprintf("Need the two produced expressions to be different. %T %T", lhsExpr, rhsExpr))
+	if lhsAE.Expr == rhsAE.Expr {
+		panic(fmt.Sprintf("Need the two produced expressions to be different. %T %T", lhsAE, rhsAE))
 	}
 
-	// The joinColumns slice holds the column information from each side of the join.
-	// We add a column for each side to facilitate reconstituting the final aggregation later.
-	ab.joinColumns = append(ab.joinColumns,
-		JoinColumn{
-			Original: aeWrap(lhsExpr),
-			LHSExprs: []sqlparser.Expr{lhsExpr},
-		}, JoinColumn{
-			Original: aeWrap(rhsExpr),
-			RHSExpr:  rhsExpr,
-		})
+	rhsExpr := rhsAE.Expr
 
 	// When dealing with outer joins, we don't want null values from the RHS to ruin the calculations we are doing,
 	// so we use the MySQL `coalesce` after the join is applied to multiply the count from LHS with 1.
@@ -394,7 +439,7 @@ func (ab *aggBuilder) handleCountStar(ctx *plancontext.PlanningContext, aggr Agg
 	//    (select count(*) as count_t2 from t2) as y".
 	projExpr := &sqlparser.BinaryExpr{
 		Operator: sqlparser.MultOp,
-		Left:     lhsExpr,
+		Left:     lhsAE.Expr,
 		Right:    rhsExpr,
 	}
 	projAE := &sqlparser.AliasedExpr{
@@ -411,37 +456,18 @@ func (ab *aggBuilder) handleCount(ctx *plancontext.PlanningContext, aggr Aggr) (
 
 	expr := aggr.Original.Expr
 	deps := ctx.SemTable.RecursiveDeps(expr)
-	cs := &sqlparser.CountStar{}
-	ae := aeWrap(cs)
-	csAggr := Aggr{
-		Original: ae,
-		Func:     cs,
-		OpCode:   opcode.AggregateCountStar,
-	}
 	var otherSide sqlparser.Expr
 
 	switch {
-	case deps.IsSolvedBy(ab.lhsID):
-		ab.lhs.pushThroughAggr(aggr)
-		otherSide = ab.rhs.addAggr(ctx, csAggr)
-		ab.joinColumns = append(ab.joinColumns, JoinColumn{
-			Original: aggr.Original,
-			LHSExprs: []sqlparser.Expr{expr},
-		}, JoinColumn{
-			Original: ae,
-			RHSExpr:  otherSide,
-		})
+	case deps.IsSolvedBy(ab.lhs.tableID):
+		ab.pushThroughLeft(aggr)
+		ae := ab.rightCountStar(ctx)
+		otherSide = ae.Expr
 
-	case deps.IsSolvedBy(ab.rhsID):
-		ab.rhs.pushThroughAggr(aggr)
-		otherSide = ab.lhs.addAggr(ctx, csAggr)
-		ab.joinColumns = append(ab.joinColumns, JoinColumn{
-			Original: ae,
-			LHSExprs: []sqlparser.Expr{otherSide},
-		}, JoinColumn{
-			Original: aggr.Original,
-			RHSExpr:  expr,
-		})
+	case deps.IsSolvedBy(ab.rhs.tableID):
+		ab.pushThroughRight(aggr)
+		ae := ab.leftCountStar(ctx)
+		otherSide = ae.Expr
 
 	default:
 		return Aggr{}, errHorizonNotPlanned()
@@ -474,19 +500,10 @@ func coalesceFunc(e sqlparser.Expr) sqlparser.Expr {
 	}
 }
 
-// joinPusher is a helper struct that aids in pushing down an Aggregator into one side of a Join.
-// It creates a new Aggregator that is pushed down and keeps track of the column dependencies that the new Aggregator has.
-type joinPusher struct {
-	orig    *Aggregator        // The original Aggregator before pushing.
-	pushed  *Aggregator        // The new Aggregator created for push-down.
-	columns []int              // List of column offsets used in the new Aggregator.
-	tableID semantics.TableSet // The TableSet denoting the side of the Join where the new Aggregator is pushed.
-}
-
 // addAggr creates a copy of the given aggregation, updates its column offset to point to the correct location in the new Aggregator,
 // and adds it to the list of Aggregations of the new Aggregator. It also updates the semantic analysis information to reflect the new structure.
 // It returns the expression of the aggregation as it should be used in the parent Aggregator.
-func (p joinPusher) addAggr(ctx *plancontext.PlanningContext, aggr Aggr) sqlparser.Expr {
+func (p *joinPusher) addAggr(ctx *plancontext.PlanningContext, aggr Aggr) sqlparser.Expr {
 	copyAggr := aggr
 	expr := sqlparser.CloneExpr(aggr.Original.Expr)
 	copyAggr.Original = aeWrap(expr)
@@ -501,7 +518,7 @@ func (p joinPusher) addAggr(ctx *plancontext.PlanningContext, aggr Aggr) sqlpars
 
 // pushThroughAggr pushes through an aggregation without changing dependencies.
 // Can be used for aggregations we can push in one piece
-func (p joinPusher) pushThroughAggr(aggr Aggr) {
+func (p *joinPusher) pushThroughAggr(aggr Aggr) {
 	p.pushed.Columns = append(p.pushed.Columns, aggr.Original)
 	p.pushed.Aggregations = append(p.pushed.Aggregations, aggr)
 }
@@ -509,7 +526,7 @@ func (p joinPusher) pushThroughAggr(aggr Aggr) {
 // addGrouping creates a copy of the given GroupBy, updates its column offset to point to the correct location in the new Aggregator,
 // and adds it to the list of GroupBy expressions of the new Aggregator. It also updates the semantic analysis information to reflect the new structure.
 // It returns the expression of the GroupBy as it should be used in the parent Aggregator.
-func (p joinPusher) addGrouping(ctx *plancontext.PlanningContext, gb GroupBy) sqlparser.Expr {
+func (p *joinPusher) addGrouping(ctx *plancontext.PlanningContext, gb GroupBy) sqlparser.Expr {
 	copyGB := gb
 	expr := sqlparser.CloneExpr(gb.Inner)
 	// copy dependencies so we can keep track of which side expressions need to be pushed to
@@ -527,7 +544,7 @@ func (p joinPusher) addGrouping(ctx *plancontext.PlanningContext, gb GroupBy) sq
 // If it has not been used before, it adds the column to the new Aggregator
 // and updates the columns mapping to reflect the new location of the column.
 // It returns the offset of the column in the new Aggregator.
-func (p joinPusher) useColumn(offset int) int {
+func (p *joinPusher) useColumn(offset int) int {
 	if p.columns[offset] == -1 {
 		p.columns[offset] = len(p.pushed.Columns)
 		// still haven't used this expression on this side

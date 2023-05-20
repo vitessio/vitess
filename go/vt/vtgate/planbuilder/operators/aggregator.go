@@ -215,7 +215,6 @@ func (a *Aggregator) planOffsets(ctx *plancontext.PlanningContext) error {
 
 	for idx, gb := range a.Grouping {
 		if gb.ColOffset == -1 {
-			// TODO make sure we really need this.
 			offset, err := addColumn(aeWrap(gb.Inner), false)
 			if err != nil {
 				return err
@@ -232,6 +231,7 @@ func (a *Aggregator) planOffsets(ctx *plancontext.PlanningContext) error {
 		}
 		a.Grouping[idx].WSOffset = offset
 	}
+
 	return nil
 }
 
