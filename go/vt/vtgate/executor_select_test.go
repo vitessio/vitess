@@ -2495,10 +2495,12 @@ func TestEmptyJoin(t *testing.T) {
 	sbc1.SetResults([]*sqltypes.Result{{
 		Fields: []*querypb.Field{
 			{Name: "id", Type: sqltypes.Int32},
+			{Name: "col", Type: sqltypes.Int32},
 		},
 	}, {
 		Fields: []*querypb.Field{
 			{Name: "id", Type: sqltypes.Int32},
+			{Name: "col", Type: sqltypes.Int32},
 		},
 	}})
 	result, err := executorExec(executor, "select u1.id, u2.id from user u1 join user u2 on u2.id = u1.col where u1.id = 1", nil)
@@ -2509,7 +2511,7 @@ func TestEmptyJoin(t *testing.T) {
 	}, {
 		Sql: "select u2.id from `user` as u2 where 1 != 1",
 		BindVariables: map[string]*querypb.BindVariable{
-			"u1_col": sqltypes.NullBindVariable,
+			"u1_col": sqltypes.Int32BindVariable(0),
 		},
 	}}
 	utils.MustMatch(t, wantQueries, sbc1.Queries)
