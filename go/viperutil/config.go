@@ -30,7 +30,6 @@ import (
 	"github.com/spf13/viper"
 
 	"vitess.io/vitess/go/viperutil/funcs"
-	"vitess.io/vitess/go/viperutil/internal/config"
 	"vitess.io/vitess/go/viperutil/internal/log"
 	"vitess.io/vitess/go/viperutil/internal/registry"
 	"vitess.io/vitess/go/viperutil/internal/value"
@@ -161,7 +160,6 @@ func LoadConfig() (context.CancelFunc, error) {
 		err = registry.Static.ReadInConfig()
 	}
 
-	usingConfigFile := true
 	if err != nil {
 		if nferr, ok := err.(viper.ConfigFileNotFoundError); ok {
 			msg := "Failed to read in config %s: %s"
@@ -171,7 +169,6 @@ func LoadConfig() (context.CancelFunc, error) {
 				fallthrough // after warning, ignore the error
 			case IgnoreConfigFileNotFound:
 				err = nil
-				usingConfigFile = false
 			case ErrorOnConfigFileNotFound:
 				log.ERROR(msg, registry.Static.ConfigFileUsed(), nferr.Error())
 			case ExitOnConfigFileNotFound:
@@ -184,15 +181,7 @@ func LoadConfig() (context.CancelFunc, error) {
 		return nil, err
 	}
 
-	if err := registry.Dynamic.Watch(registry.Static); err != nil {
-		return nil, err
-	}
-
-	if usingConfigFile {
-		return config.PersistChanges(context.Background(), configPersistenceMinInterval.Get()), nil
-	}
-
-	return func() {}, nil
+	return registry.Dynamic.Watch(context.Background(), registry.Static, configPersistenceMinInterval.Get())
 }
 
 // NotifyConfigReload adds a subscription that the dynamic registry will attempt

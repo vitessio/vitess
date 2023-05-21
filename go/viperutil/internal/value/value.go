@@ -23,7 +23,6 @@ import (
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
-	"vitess.io/vitess/go/viperutil/internal/config"
 	"vitess.io/vitess/go/viperutil/internal/registry"
 	"vitess.io/vitess/go/viperutil/internal/sync"
 )
@@ -167,5 +166,4 @@ func (val *Dynamic[T]) Registry() registry.Bindable {
 
 func (val *Dynamic[T]) Set(v T) {
 	registry.Dynamic.Set(val.KeyName, v)
-	config.NotifyChanged()
 }

@@ -17,13 +17,17 @@ limitations under the License.
 package sync
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/fsnotify/fsnotify"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
+
+	"vitess.io/vitess/go/viperutil/internal/log"
 )
 
 // Viper is a wrapper around a pair of viper.Viper instances to provide config-
@@ -42,14 +46,17 @@ type Viper struct {
 
 	subscribers    []chan<- struct{}
 	watchingConfig bool
+
+	setCh chan struct{}
 }
 
 // New returns a new synced Viper.
 func New() *Viper {
 	return &Viper{
-		disk: viper.New(),
-		live: viper.New(),
-		keys: map[string]*sync.RWMutex{},
+		disk:  viper.New(),
+		live:  viper.New(),
+		keys:  map[string]*sync.RWMutex{},
+		setCh: make(chan struct{}, 1),
 	}
 }
 
@@ -69,6 +76,7 @@ func (v *Viper) Set(key string, value any) {
 	// We must not update v.disk here; explicit calls to Set will supercede all
 	// future config reloads.
 	v.live.Set(key, value)
+	v.setCh <- struct{}{}
 }
 
 // ErrDuplicateWatch is returned when Watch is called on a synced Viper which
@@ -83,25 +91,42 @@ var ErrDuplicateWatch = errors.New("duplicate watch")
 // If the given static viper did not load a config file (and is instead relying
 // purely on defaults, flags, and environment variables), then the settings of
 // that viper are merged over, and this synced Viper may be used to set up an
-// actual watch later.
+// actual watch later. Additionally, this starts a background goroutine to
+// persist changes made in-memory back to disk. It returns a cancel func to stop
+// the persist loop, which the caller is responsible for calling during
+// shutdown (see package servenv for an example).
+//
+// This does two things — one which is a nice-to-have, and another which is
+// necessary for correctness.
+//
+// 1. Writing in-memory changes (which usually occur through a request to a
+// /debug/env endpoint) ensures they are persisted across process restarts.
+// 2. Writing in-memory changes ensures that subsequent modifications to the
+// config file do not clobber those changes. Because viper loads the entire
+// config on-change, rather than an incremental (diff) load, if a user were to
+// edit an unrelated key (keyA) in the file, and we did not persist the
+// in-memory change (keyB), then future calls to keyB.Get() would return the
+// older value.
 //
 // If this synced viper is already watching a config file, this function returns
 // an ErrDuplicateWatch. Other errors may be returned via underlying viper code
 // to ensure the config file can be read in properly.
-func (v *Viper) Watch(static *viper.Viper) error {
+func (v *Viper) Watch(ctx context.Context, static *viper.Viper, minWaitInterval time.Duration) (cancel context.CancelFunc, err error) {
 	if v.watchingConfig {
-		return fmt.Errorf("%w: viper is already watching %s", ErrDuplicateWatch, v.disk.ConfigFileUsed())
+		return nil, fmt.Errorf("%w: viper is already watching %s", ErrDuplicateWatch, v.disk.ConfigFileUsed())
 	}
+
+	ctx, cancel = context.WithCancel(ctx)
 
 	cfg := static.ConfigFileUsed()
 	if cfg == "" {
 		// No config file to watch, just merge the settings and return.
-		return v.live.MergeConfigMap(static.AllSettings())
+		return cancel, v.live.MergeConfigMap(static.AllSettings())
 	}
 
 	v.disk.SetConfigFile(cfg)
 	if err := v.disk.ReadInConfig(); err != nil {
-		return err
+		return nil, err
 	}
 
 	v.watchingConfig = true
@@ -124,7 +149,61 @@ func (v *Viper) Watch(static *viper.Viper) error {
 	})
 	v.disk.WatchConfig()
 
-	return nil
+	go v.persistChanges(ctx, minWaitInterval)
+
+	return cancel, nil
+}
+
+func (v *Viper) persistChanges(ctx context.Context, minWaitInterval time.Duration) {
+	defer close(v.setCh)
+
+	var timer *time.Timer
+	if minWaitInterval > 0 {
+		timer = time.NewTimer(minWaitInterval)
+	}
+
+	persistOnce := func() {
+		if err := v.WriteConfig(); err != nil {
+			log.ERROR("failed to persist config changes back to disk: %s", err.Error())
+			// If we failed to persist, don't wait the entire interval before
+			// writing again, instead writing immediately on the next request.
+			if timer != nil {
+				if !timer.Stop() {
+					<-timer.C
+				}
+
+				timer = nil
+			}
+		}
+
+		switch {
+		case minWaitInterval == 0:
+			return
+		case timer == nil:
+			timer = time.NewTimer(minWaitInterval)
+		default:
+			timer.Reset(minWaitInterval)
+		}
+	}
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-v.setCh:
+			if timer == nil {
+				persistOnce()
+				continue
+			}
+
+			select {
+			case <-ctx.Done():
+				return
+			case <-timer.C:
+				persistOnce()
+			}
+		}
+	}
 }
 
 // WriteConfig writes the live viper config back to disk.
