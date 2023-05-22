@@ -17,11 +17,10 @@ limitations under the License.
 package mysql
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"time"
-
-	"context"
 
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -296,16 +295,6 @@ func (mysqlFlavor) readBinlogEvent(c *Conn) (BinlogEvent, error) {
 	}
 	ev := NewMysql56BinlogEventWithSemiSyncInfo(buf, semiSyncAckRequested)
 	return ev, nil
-}
-
-// enableBinlogPlaybackCommand is part of the Flavor interface.
-func (mysqlFlavor) enableBinlogPlaybackCommand() string {
-	return ""
-}
-
-// disableBinlogPlaybackCommand is part of the Flavor interface.
-func (mysqlFlavor) disableBinlogPlaybackCommand() string {
-	return ""
 }
 
 // baseShowTables is part of the Flavor interface.
