@@ -17,12 +17,11 @@ limitations under the License.
 package tabletmanager
 
 import (
+	"context"
 	"fmt"
 	"time"
 
 	"vitess.io/vitess/go/vt/vterrors"
-
-	"context"
 
 	"vitess.io/vitess/go/vt/hook"
 	"vitess.io/vitess/go/vt/mysqlctl"
