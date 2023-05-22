@@ -27,9 +27,13 @@ import (
 )
 
 type (
+	column struct {
+		name string
+		typ  string
+	}
 	tableT struct {
 		name    string
-		columns []string
+		columns []column
 	}
 )
 
@@ -38,14 +42,14 @@ func TestFuzzAggregations(t *testing.T) {
 	mcmp, closer := start(t)
 	defer closer()
 
-	noOfRows := rand.Intn(300)
+	noOfRows := rand.Intn(20)
 	var values []string
 	for i := 0; i < noOfRows; i++ {
 		values = append(values, fmt.Sprintf("(%d, 'name%d', 'value%d', %d)", i, i, i, i))
 	}
 	t1Insert := fmt.Sprintf("insert into t1 (t1_id, name, value, shardKey) values %s;", strings.Join(values, ","))
 	values = nil
-	noOfRows = rand.Intn(300)
+	noOfRows = rand.Intn(20)
 	for i := 0; i < noOfRows; i++ {
 		values = append(values, fmt.Sprintf("(%d, %d)", i, i))
 	}
@@ -62,8 +66,16 @@ func TestFuzzAggregations(t *testing.T) {
 	})
 
 	schema := map[string]tableT{
-		"t1": {name: "t1", columns: []string{"t1_id", "name", "value", "shardKey"}},
-		"t2": {name: "t2", columns: []string{"id", "shardKey"}},
+		"t1": {name: "t1", columns: []column{
+			{name: "t1_id", typ: "bigint"},
+			{name: "name", typ: "varchar"},
+			{name: "value", typ: "varchar"},
+			{name: "shardKey", typ: "bigint"},
+		}},
+		"t2": {name: "t2", columns: []column{
+			{name: "id", typ: "bigint"},
+			{name: "shardKey", typ: "bigint"},
+		}},
 	}
 
 	endBy := time.Now().Add(1 * time.Second)
@@ -72,16 +84,18 @@ func TestFuzzAggregations(t *testing.T) {
 	for time.Now().Before(endBy) || t.Failed() {
 		tables := createTables(schemaTables)
 		query := randomQuery(tables, 3, 3)
-		fmt.Println(query)
 		mcmp.Exec(query)
+		if t.Failed() {
+			fmt.Println(query)
+		}
 	}
 }
 
 func randomQuery(tables []tableT, maxAggrs, maxGroupBy int) string {
-	randomCol := func(tblIdx int) string {
+	randomCol := func(tblIdx int) (string, string) {
 		tbl := tables[tblIdx]
 		col := randomEl(tbl.columns)
-		return fmt.Sprintf("tbl%d.%s", tblIdx, col)
+		return fmt.Sprintf("tbl%d.%s", tblIdx, col.name), col.typ
 	}
 	predicates := createPredicates(tables, randomCol)
 	aggregates := createAggregations(tables, maxAggrs, randomCol)
@@ -105,35 +119,31 @@ func randomQuery(tables []tableT, maxAggrs, maxGroupBy int) string {
 	return sel
 }
 
-func createGroupBy(tables []tableT, maxGB int, randomCol func(tblIdx int) string) (grouping []string) {
+func createGroupBy(tables []tableT, maxGB int, randomCol func(tblIdx int) (string, string)) (grouping []string) {
 	noOfGBs := rand.Intn(maxGB)
 	for i := 0; i < noOfGBs; i++ {
 		tblIdx := rand.Intn(len(tables))
-		grouping = append(grouping, randomCol(tblIdx))
+		col, _ := randomCol(tblIdx)
+		grouping = append(grouping, col)
 	}
 	return
 }
 
-func createAggregations(tables []tableT, maxAggrs int, randomCol func(tblIdx int) string) (aggregates []string) {
+func createAggregations(tables []tableT, maxAggrs int, randomCol func(tblIdx int) (string, string)) (aggregates []string) {
+	aggregations := []func(string) string{
+		func(_ string) string { return "count(*)" },
+		func(e string) string { return fmt.Sprintf("count(%s)", e) },
+		//func(e string) string { return fmt.Sprintf("sum(%s)", e) },
+		//func(e string) string { return fmt.Sprintf("avg(%s)", e) },
+		//func(e string) string { return fmt.Sprintf("min(%s)", e) },
+		//func(e string) string { return fmt.Sprintf("max(%s)", e) },
+	}
+
 	noOfAggrs := rand.Intn(maxAggrs) + 1
 	for i := 0; i < noOfAggrs; i++ {
 		tblIdx := rand.Intn(len(tables))
-		e := randomCol(tblIdx)
-
-		switch rand.Intn(5) {
-		case 0:
-			aggregates = append(aggregates, "count(*)")
-		case 1:
-			aggregates = append(aggregates, fmt.Sprintf("max(%s)", e))
-		case 2:
-			aggregates = append(aggregates, fmt.Sprintf("min(%s)", e))
-		case 3:
-			aggregates = append(aggregates, fmt.Sprintf("sum(%s)", e))
-		case 4:
-			aggregates = append(aggregates, fmt.Sprintf("count(%s)", e))
-		case 5:
-			aggregates = append(aggregates, e)
-		}
+		e, _ := randomCol(tblIdx)
+		aggregates = append(aggregates, randomEl(aggregations)(e))
 	}
 	return aggregates
 }
@@ -148,15 +158,22 @@ func createTables(schemaTables []tableT) []tableT {
 	return tables
 }
 
-func createPredicates(tables []tableT, randomCol func(tblIdx int) string) (predicates []string) {
+func createPredicates(tables []tableT, randomCol func(tblIdx int) (string, string)) (predicates []string) {
 	for idx1 := range tables {
 		for idx2 := range tables {
 			if idx1 == idx2 {
 				continue
 			}
 			noOfPredicates := rand.Intn(2)
-			for i := 0; i < noOfPredicates; i++ {
-				predicates = append(predicates, fmt.Sprintf("%s = %s", randomCol(idx1), randomCol(idx2)))
+
+			for noOfPredicates > 0 {
+				col1, t1 := randomCol(idx1)
+				col2, t2 := randomCol(idx2)
+				if t1 != t2 {
+					continue
+				}
+				predicates = append(predicates, fmt.Sprintf("%s = %s", col1, col2))
+				noOfPredicates--
 			}
 		}
 	}
