@@ -26,8 +26,14 @@ import (
 	"golang.org/x/exp/maps"
 )
 
+type (
+	tableT struct {
+		name    string
+		columns []string
+	}
+)
+
 func TestFuzzAggregations(t *testing.T) {
-	t.Skip("run manually")
 	// This test randomizes values and queries, and checks that mysql returns the same values that Vitess does
 	mcmp, closer := start(t)
 	defer closer()
@@ -55,26 +61,26 @@ func TestFuzzAggregations(t *testing.T) {
 		}
 	})
 
-	schema := map[string][]string{
-		"t1": {"t1_id", "name", "value", "shardKey"},
-		"t2": {"id", "shardKey"},
+	schema := map[string]tableT{
+		"t1": {name: "t1", columns: []string{"t1_id", "name", "value", "shardKey"}},
+		"t2": {name: "t2", columns: []string{"id", "shardKey"}},
 	}
 
 	endBy := time.Now().Add(1 * time.Second)
-	schemaTables := maps.Keys(schema)
+	schemaTables := maps.Values(schema)
 
 	for time.Now().Before(endBy) || t.Failed() {
 		tables := createTables(schemaTables)
-		query := randomQuery(tables, schema, 3, 3)
+		query := randomQuery(tables, 3, 3)
 		fmt.Println(query)
 		mcmp.Exec(query)
 	}
 }
 
-func randomQuery(tables []string, schema map[string][]string, maxAggrs, maxGroupBy int) string {
+func randomQuery(tables []tableT, maxAggrs, maxGroupBy int) string {
 	randomCol := func(tblIdx int) string {
 		tbl := tables[tblIdx]
-		col := randomEl(schema[tbl])
+		col := randomEl(tbl.columns)
 		return fmt.Sprintf("tbl%d.%s", tblIdx, col)
 	}
 	predicates := createPredicates(tables, randomCol)
@@ -84,7 +90,7 @@ func randomQuery(tables []string, schema map[string][]string, maxAggrs, maxGroup
 
 	var tbls []string
 	for i, s := range tables {
-		tbls = append(tbls, fmt.Sprintf("%s as tbl%d", s, i))
+		tbls = append(tbls, fmt.Sprintf("%s as tbl%d", s.name, i))
 	}
 	sel += strings.Join(tbls, ", ")
 
@@ -99,7 +105,7 @@ func randomQuery(tables []string, schema map[string][]string, maxAggrs, maxGroup
 	return sel
 }
 
-func createGroupBy(tables []string, maxGB int, randomCol func(tblIdx int) string) (grouping []string) {
+func createGroupBy(tables []tableT, maxGB int, randomCol func(tblIdx int) string) (grouping []string) {
 	noOfGBs := rand.Intn(maxGB)
 	for i := 0; i < noOfGBs; i++ {
 		tblIdx := rand.Intn(len(tables))
@@ -108,7 +114,7 @@ func createGroupBy(tables []string, maxGB int, randomCol func(tblIdx int) string
 	return
 }
 
-func createAggregations(tables []string, maxAggrs int, randomCol func(tblIdx int) string) (aggregates []string) {
+func createAggregations(tables []tableT, maxAggrs int, randomCol func(tblIdx int) string) (aggregates []string) {
 	noOfAggrs := rand.Intn(maxAggrs) + 1
 	for i := 0; i < noOfAggrs; i++ {
 		tblIdx := rand.Intn(len(tables))
@@ -132,18 +138,17 @@ func createAggregations(tables []string, maxAggrs int, randomCol func(tblIdx int
 	return aggregates
 }
 
-func createTables(schemaTables []string) []string {
+func createTables(schemaTables []tableT) []tableT {
 	noOfTables := rand.Intn(2) + 1
-	var tables []string
+	var tables []tableT
 
 	for i := 0; i < noOfTables; i++ {
-		tables = append(tables, schemaTables[rand.Intn(len(schemaTables))])
+		tables = append(tables, randomEl(schemaTables))
 	}
 	return tables
 }
 
-func createPredicates(tables []string, randomCol func(tblIdx int) string) []string {
-	var predicates []string
+func createPredicates(tables []tableT, randomCol func(tblIdx int) string) (predicates []string) {
 	for idx1 := range tables {
 		for idx2 := range tables {
 			if idx1 == idx2 {
@@ -158,6 +163,6 @@ func createPredicates(tables []string, randomCol func(tblIdx int) string) []stri
 	return predicates
 }
 
-func randomEl(in []string) string {
+func randomEl[K any](in []K) K {
 	return in[rand.Intn(len(in))]
 }
