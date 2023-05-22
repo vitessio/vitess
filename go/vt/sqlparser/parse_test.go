@@ -437,6 +437,63 @@ var (
 		input:  "SELECT ST_AsText(StartPoint(ST_GeomFromText(@ls)));",
 		output: "select st_astext(st_startpoint(st_geometryfromtext(@ls))) from dual",
 	}, {
+		input:  "SELECT ST_Area(ST_GeomFromText(@mpoly));",
+		output: "select st_area(st_geometryfromtext(@mpoly)) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_GeometryN(ST_GeomFromText(@gc),1));",
+		output: "select st_astext(st_geometryn(st_geometryfromtext(@gc), 1)) from dual",
+	}, {
+		input:  "SELECT ST_NumGeometries(ST_GeomFromText(@gc));",
+		output: "select st_numgeometries(st_geometryfromtext(@gc)) from dual",
+	}, {
+		input:  "SELECT ST_GeometryType(@poly),ST_AsText(ST_Centroid(@poly));",
+		output: "select st_geometrytype(@poly), st_astext(st_centroid(@poly)) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_ExteriorRing(ST_GeomFromText(@poly)));",
+		output: "select st_astext(st_exteriorring(st_geometryfromtext(@poly))) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_InteriorRingN(ST_GeomFromText(@poly),1));",
+		output: "select st_astext(st_interiorringN(st_geometryfromtext(@poly), 1)) from dual",
+	}, {
+		input:  "SELECT ST_NumInteriorRings(ST_GeomFromText(@poly));",
+		output: "select st_numinteriorrings(st_geometryfromtext(@poly)) from dual",
+	}, {
+		input:  "SELECT ST_NumInteriorRing(ST_GeomFromText(@poly));",
+		output: "select st_numinteriorrings(st_geometryfromtext(@poly)) from dual",
+	}, {
+		input:  "SELECT ST_GeoHash(180,0,10), ST_GeoHash(-180,-90,15);",
+		output: "select st_geohash(180, 0, 10), st_geohash(-180, -90, 15) from dual",
+	}, {
+		input:  "SELECT ST_GeoHash(@p,10);",
+		output: "select st_geohash(@p, 10) from dual",
+	}, {
+		input:  "SELECT ST_LatFromGeoHash(ST_GeoHash(45,-20,10));",
+		output: "select st_latfromgeohash(st_geohash(45, -20, 10)) from dual",
+	}, {
+		input:  "SELECT ST_LongFromGeoHash(ST_GeoHash(45,-20,10));",
+		output: "select st_longfromgeohash(st_geohash(45, -20, 10)) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_PointFromGeoHash(@gh,0));",
+		output: "select st_astext(st_pointfromgeohash(@gh, 0)) from dual",
+	}, {
+		input:  "SELECT ST_AsGeoJSON(ST_GeomFromText('POINT(11.11111 12.22222)'));",
+		output: "select st_asgeojson(st_geometryfromtext('POINT(11.11111 12.22222)')) from dual",
+	}, {
+		input:  "SELECT ST_AsGeoJSON(ST_GeomFromText('POINT(11.11111 12.22222)'),2);",
+		output: "select st_asgeojson(st_geometryfromtext('POINT(11.11111 12.22222)'), 2) from dual",
+	}, {
+		input:  "SELECT ST_AsGeoJSON(ST_GeomFromText('POINT(11.11111 12.22222)'),2,0);",
+		output: "select st_asgeojson(st_geometryfromtext('POINT(11.11111 12.22222)'), 2, 0) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_GeomFromGeoJSON(@json));",
+		output: "select st_astext(st_geomfromgeojson(@`json`)) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_SRID(ST_GeomFromGeoJSON(@json, 0),0));",
+		output: "select st_astext(ST_SRID(st_geomfromgeojson(@`json`, 0), 0)) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_SRID(ST_GeomFromGeoJSON(@json),1,4326));",
+		output: "select st_astext(ST_SRID(st_geomfromgeojson(@`json`), 1, 4326)) from dual",
+	}, {
 		input:  "WITH RECURSIVE  odd_num_cte (id, n) AS (SELECT 1, 1 union all SELECT id+1, n+2 from odd_num_cte where id < 5) SELECT * FROM odd_num_cte",
 		output: "with recursive odd_num_cte(id, n) as (select 1, 1 from dual union all select id + 1, n + 2 from odd_num_cte where id < 5) select * from odd_num_cte",
 	}, {
