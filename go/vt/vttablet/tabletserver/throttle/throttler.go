@@ -71,7 +71,7 @@ var (
 	throttleMetricQuery       string
 	throttleMetricThreshold   = math.MaxFloat64
 	throttlerCheckAsCheckSelf = false
-	throttlerConfigViaTopo    = false
+	throttlerConfigViaTopo    = true
 )
 
 func init() {
