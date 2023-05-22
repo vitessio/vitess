@@ -116,6 +116,24 @@ func randomQuery(tables []tableT, maxAggrs, maxGroupBy int) string {
 		sel += " group by "
 		sel += strings.Join(grouping, ", ")
 	}
+	// we do it this way so we don't have to do only `only_full_group_by` queries
+	noOfOrderBy := rand.Intn(len(grouping))
+	if noOfOrderBy > 0 {
+		noOfOrderBy = 0 // TODO turning on ORDER BY here causes lots of failures to happen
+	}
+	if noOfOrderBy > 0 {
+		var orderBy []string
+		for noOfOrderBy > 0 {
+			noOfOrderBy--
+			if rand.Intn(2) == 0 || len(grouping) == 0 {
+				orderBy = append(orderBy, randomEl(aggregates))
+			} else {
+				orderBy = append(orderBy, randomEl(grouping))
+			}
+		}
+		sel += " order by "
+		sel += strings.Join(orderBy, ", ")
+	}
 	return sel
 }
 
