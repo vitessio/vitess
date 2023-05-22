@@ -22,6 +22,7 @@
     - [Support for MySQL 8.0 `binlog_transaction_compression`](#binlog-compression)
   - **[VTTablet](#vttablet)**
     - [VTTablet: Initializing all replicas with super_read_only](#vttablet-initialization)
+    - [Settings pool enabled](#settings-pool)
   - **[VReplication](#VReplication)**
     - [Support for the `noblob` binlog row image mode](#noblob)
   - **[Deprecations and Deletions](#deprecations-and-deletions)**
@@ -314,6 +315,10 @@ An important note regarding this change is how the default `init_db.sql` file ha
 This is even more important if you are running Vitess on the vitess-operator.
 You must ensure your `init_db.sql` is up-to-date with the new default for `v17.0.0`.
 The default file can be found in `./config/init_db.sql`.
+
+#### <a id="settings-pool"/> Settings Pool
+This was introduced in v15 and it enables pooling the connection with modified connection settings.
+To know more what it does read the [v15 release notes](https://github.com/vitessio/vitess/releases/tag/v15.0.0) or the [blog](https://vitess.io/blog/2023-03-27-connection-pooling-in-vitess/) or [docs](https://vitess.io/docs/17.0/reference/query-serving/reserved-conn/)
 
 ### Online DDL
 
