@@ -790,6 +790,10 @@ func (te *testSchemaEngine) MakeNonPrimary() {
 	te.nonPrimary = true
 }
 
+func (te *testSchemaEngine) MakePrimary() {
+	te.nonPrimary = false
+}
+
 func (te *testSchemaEngine) Close() {
 	te.order = order.Add(1)
 	te.state = testStateClosed

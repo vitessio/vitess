@@ -141,6 +141,7 @@ type (
 		EnsureConnectionAndDB(topodatapb.TabletType) error
 		Open() error
 		MakeNonPrimary()
+		MakePrimary()
 		Close()
 	}
 
@@ -445,6 +446,7 @@ func (sm *stateManager) servePrimary() error {
 		return err
 	}
 
+	sm.se.MakePrimary()
 	sm.rt.MakePrimary()
 	sm.tracker.Open()
 	// We instantly kill all stateful queries to allow for
@@ -469,6 +471,7 @@ func (sm *stateManager) unservePrimary() error {
 		return err
 	}
 
+	sm.se.MakePrimary()
 	sm.rt.MakePrimary()
 	sm.setState(topodatapb.TabletType_PRIMARY, StateNotServing)
 	return nil

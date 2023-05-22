@@ -68,6 +68,11 @@ type Engine struct {
 	reloadAtPos mysql.Position
 	notifierMu  sync.Mutex
 	notifiers   map[string]notifier
+	// isPrimaryType stores if this tablet is currently the primary or not.
+	isPrimaryType bool
+	// schemaTracking stores if the user has requested signals on schema changes. If they have, then we
+	// also track the underlying schema and make a copy of it in our MySQL instance.
+	schemaTracking bool
 
 	// SkipMetaCheck skips the metadata about the database and table information
 	SkipMetaCheck bool
@@ -99,6 +104,7 @@ func NewEngine(env tabletenv.Env) *Engine {
 		}),
 		ticks: timer.NewTimer(reloadTime),
 	}
+	se.schemaTracking = env.Config().SignalWhenSchemaChange
 	_ = env.Exporter().NewGaugeDurationFunc("SchemaReloadTime", "vttablet keeps table schemas in its own memory and periodically refreshes it from MySQL. This config controls the reload time.", se.ticks.Interval)
 	se.tableFileSizeGauge = env.Exporter().NewGaugesWithSingleLabel("TableFileSize", "tracks table file size", "Table")
 	se.tableAllocatedSizeGauge = env.Exporter().NewGaugesWithSingleLabel("TableAllocatedSize", "tracks table allocated size", "Table")
@@ -316,6 +322,7 @@ func (se *Engine) MakeNonPrimary() {
 	// This function is tested through endtoend test.
 	se.mu.Lock()
 	defer se.mu.Unlock()
+	se.isPrimaryType = false
 	for _, t := range se.tables {
 		if t.SequenceInfo != nil {
 			t.SequenceInfo.Lock()
@@ -324,6 +331,14 @@ func (se *Engine) MakeNonPrimary() {
 			t.SequenceInfo.Unlock()
 		}
 	}
+}
+
+// MakePrimary tells the schema engine that the current tablet is now the primary,
+// so it can read and write to the MySQL instance for schema-tracking.
+func (se *Engine) MakePrimary() {
+	se.mu.Lock()
+	defer se.mu.Unlock()
+	se.isPrimaryType = true
 }
 
 // EnableHistorian forces tracking to be on or off.
@@ -406,6 +421,21 @@ func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 	if err != nil {
 		return vterrors.Wrapf(err, "in Engine.reload(), reading tables")
 	}
+	// On the primary tablet, we also check the data we have stored in our schema tables to see what all needs reloading.
+	shouldUseDatabase := se.isPrimaryType && se.schemaTracking
+	// changedViews are the views that have changed. We can't use the same createTime logic for views because, MySQL
+	// doesn't update the create_time field for views when they are altered. This is annoying, but something we have to work around.
+	changedViews, err := getChangedViewNames(ctx, conn, shouldUseDatabase)
+	if err != nil {
+		return err
+	}
+	// mismatchTables stores the tables whose createTime in our cache doesn't match the createTime stored in the database.
+	// This can happen if a primary crashed right after a DML succeeded, before it could reload its state. If all the replicas
+	// are able to reload their cache before one of them is promoted, then the database information would be out of sync.
+	mismatchTables, err := se.getChangedTableNames(ctx, conn, shouldUseDatabase)
+	if err != nil {
+		return err
+	}
 
 	err = se.updateInnoDBRowsRead(ctx, conn)
 	if err != nil {
@@ -419,6 +449,8 @@ func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 	changedTables := make(map[string]*Table)
 	// created and altered contain the names of created and altered tables for broadcast.
 	var created, altered []string
+	// tablesToReload and viewsToReload stores the tables and views that need reloading and storing in our MySQL database.
+	var tablesToReload, viewsToReload []*Table
 	for _, row := range tableData.Rows {
 		tableName := row[0].ToString()
 		curTables[tableName] = true
@@ -443,8 +475,18 @@ func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 		//      renamed to the table being altered. `se.lastChange` is updated every time the schema is reloaded (default: 30m).
 		//      Online DDL can take hours. So it is possible that the `create_time` of the temporary table is before se.lastChange. Hence,
 		//      #1 will not identify the renamed table as a changed one.
+		//
+		//   3. A table's create_time in our database doesn't match the create_time in the cache. This can happen if a primary crashed right after a DML succeeded,
+		//      before it could reload its state. If all the replicas are able to reload their cache before one of them is promoted,
+		//      then the database information would be out of sync. We check this by consulting the mismatchTables map.
+		//
+		//   4. A view's definition has changed. We can't use the same createTime logic for views because, MySQL
+		//	    doesn't update the create_time field for views when they are altered. This is annoying, but something we have to work around.
+		//      We check this by consulting the changedViews map.
 		tbl, isInTablesMap := se.tables[tableName]
-		if isInTablesMap && createTime == tbl.CreateTime && createTime < se.lastChange {
+		_, isInChangedViewMap := changedViews[tableName]
+		_, isInMismatchTableMap := mismatchTables[tableName]
+		if isInTablesMap && createTime == tbl.CreateTime && createTime < se.lastChange && !isInChangedViewMap && !isInMismatchTableMap {
 			if includeStats {
 				tbl.FileSize = fileSize
 				tbl.AllocatedSize = allocatedSize
@@ -469,6 +511,11 @@ func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 		} else {
 			created = append(created, tableName)
 		}
+		if table.Type == View {
+			viewsToReload = append(viewsToReload, table)
+		} else {
+			tablesToReload = append(tablesToReload, table)
+		}
 	}
 	if rec.HasErrors() {
 		return rec.Error()
@@ -489,6 +536,16 @@ func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 			// Many monitoring tools will drop zero-valued metrics.
 			se.tableFileSizeGauge.Reset(tableName)
 			se.tableAllocatedSizeGauge.Reset(tableName)
+		}
+	}
+
+	// If this tablet is the primary and schema tracking is required, we should reload the information in our database.
+	if shouldUseDatabase {
+		if err := reloadTablesDataInDB(ctx, conn, tablesToReload, droppedTables); err != nil {
+			return err
+		}
+		if err := reloadViewsDataInDB(ctx, conn, viewsToReload, droppedViews); err != nil {
+			return err
 		}
 	}
 
