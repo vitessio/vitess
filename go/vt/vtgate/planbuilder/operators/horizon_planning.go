@@ -85,7 +85,11 @@ func planHorizons(ctx *plancontext.PlanningContext, root ops.Operator) (ops.Oper
 		return nil, err
 	}
 
-	root, err = addOrderBysForAggregations(ctx, root)
+	// Adding Ordering Op - This is needed if there is no explicit ordering and aggregation is performed on top of route.
+	// Adding Group by - This is needed if the grouping is performed on a join with a join condition then
+	//                   aggregation happening at route needs a group by to ensure only matching rows returns
+	//                   the aggregations otherwise returns no result.
+	root, err = addOrderBysAndGroupBysForAggregations(ctx, root)
 	if err != nil {
 		return nil, err
 	}
@@ -127,7 +131,7 @@ func optimizeHorizonPlanning(ctx *plancontext.PlanningContext, root ops.Operator
 	return newOp, nil
 }
 
-func addOrderBysForAggregations(ctx *plancontext.PlanningContext, root ops.Operator) (ops.Operator, error) {
+func addOrderBysAndGroupBysForAggregations(ctx *plancontext.PlanningContext, root ops.Operator) (ops.Operator, error) {
 	visitor := func(in ops.Operator, _ semantics.TableSet, isRoot bool) (ops.Operator, *rewrite.ApplyResult, error) {
 		switch in := in.(type) {
 		case *Aggregator:
@@ -333,7 +337,7 @@ func pushDownProjectionInApplyJoin(
 	src *ApplyJoin,
 ) (ops.Operator, *rewrite.ApplyResult, error) {
 	if src.LeftJoin {
-		// we can't push down expression evaluation to the rhs if we are not sure it will even be executed
+		// we can't push down expression evaluation to the rhs if we are not sure if it will even be executed
 		return p, rewrite.SameTree, nil
 	}
 	lhs, rhs := &projector{}, &projector{}
@@ -635,7 +639,7 @@ func createProjectionFromSelect(ctx *plancontext.PlanningContext, horizon horizo
 	}
 
 	if !qp.NeedsAggregation() {
-		projX, err := createProjection2(qp, horizon.src())
+		projX, err := createProjectionWithoutAggr(qp, horizon.src())
 		if err != nil {
 			return nil, err
 		}
@@ -717,7 +721,7 @@ outer:
 	return a, nil
 }
 
-func createProjection2(qp *QueryProjection, src ops.Operator) (*Projection, error) {
+func createProjectionWithoutAggr(qp *QueryProjection, src ops.Operator) (*Projection, error) {
 	proj := &Projection{
 		Source: src,
 	}
@@ -778,7 +782,7 @@ func makeSureOutputIsCorrect(ctx *plancontext.PlanningContext, oldHorizon ops.Op
 	if err != nil {
 		return nil, err
 	}
-	proj, err := createProjection2(qp, output)
+	proj, err := createProjectionWithoutAggr(qp, output)
 	if err != nil {
 		return nil, err
 	}

@@ -43,7 +43,7 @@ func (u *Update) Introduces() semantics.TableSet {
 }
 
 // Clone implements the Operator interface
-func (u *Update) Clone(inputs []ops.Operator) ops.Operator {
+func (u *Update) Clone([]ops.Operator) ops.Operator {
 	return &Update{
 		QTable:              u.QTable,
 		VTable:              u.VTable,

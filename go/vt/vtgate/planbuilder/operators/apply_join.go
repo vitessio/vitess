@@ -223,7 +223,7 @@ func (a *ApplyJoin) getJoinColumnFor(ctx *plancontext.PlanningContext, e *sqlpar
 	return
 }
 
-func (a *ApplyJoin) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, reuseExisting, addToGroupBy bool) (ops.Operator, int, error) {
+func (a *ApplyJoin) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, _, addToGroupBy bool) (ops.Operator, int, error) {
 	if offset, found := canReuseColumn(ctx, a.ColumnsAST, expr.Expr, joinColumnToExpr); found {
 		return a, offset, nil
 	}
@@ -244,7 +244,7 @@ func (a *ApplyJoin) planOffsets(ctx *plancontext.PlanningContext) (err error) {
 				return err
 			}
 			if col.RHSExpr == nil {
-				// if we don't have a RHS expr, it means that this is a pure LHS expression
+				// if we don't have an RHS expr, it means that this is a pure LHS expression
 				a.addOffset(-offset - 1)
 			} else {
 				a.Vars[col.BvNames[i]] = offset
