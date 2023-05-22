@@ -392,44 +392,6 @@ func (hs *healthStreamer) reload(full map[string]*schema.Table, created, altered
 	return nil
 }
 
-// TODO: Remove
-func (hs *healthStreamer) getChangedTableNames(ctx context.Context, conn *connpool.DBConn) ([]string, error) {
-	var tables []string
-	var tableNames []string
-
-	callback := func(qr *sqltypes.Result) error {
-		for _, row := range qr.Rows {
-			table := row[0].ToString()
-			tables = append(tables, table)
-
-			escapedTblName := sqlparser.String(sqlparser.NewStrLiteral(table))
-			tableNames = append(tableNames, escapedTblName)
-		}
-
-		return nil
-	}
-	alloc := func() *sqltypes.Result { return &sqltypes.Result{} }
-	bufferSize := 1000
-
-	schemaChangeQuery := sqlparser.BuildParsedQuery(mysql.DetectSchemaChange, sidecardb.GetIdentifier()).Query
-	// If views are enabled, then views are tracked/handled separately and schema change does not need to track them.
-	if hs.viewsEnabled {
-		schemaChangeQuery = sqlparser.BuildParsedQuery(mysql.DetectSchemaChangeOnlyBaseTable, sidecardb.GetIdentifier()).Query
-	}
-	err := conn.Stream(ctx, schemaChangeQuery, callback, alloc, bufferSize, 0)
-	if err != nil {
-		return nil, err
-	}
-
-	// If no change detected, then return
-	if len(tables) == 0 {
-		return nil, nil
-	}
-
-	err = hs.reloadTables(ctx, conn, tables)
-	return tables, err
-}
-
 func (hs *healthStreamer) reloadTables(ctx context.Context, conn *connpool.DBConn, tableNames []string) error {
 	if len(tableNames) == 0 {
 		return nil
@@ -471,38 +433,6 @@ func (hs *healthStreamer) reloadTables(ctx context.Context, conn *connpool.DBCon
 type viewDefAndStmt struct {
 	def  string
 	stmt string
-}
-
-// TODO: Remove
-func (hs *healthStreamer) getChangedViewNames(ctx context.Context, conn *connpool.DBConn) (views []string, err error) {
-	if !hs.viewsEnabled {
-		return nil, nil
-	}
-
-	/* Retrieve changed views */
-	callback := func(qr *sqltypes.Result) error {
-		for _, row := range qr.Rows {
-			view := row[0].ToString()
-			views = append(views, view)
-		}
-		return nil
-	}
-	alloc := func() *sqltypes.Result { return &sqltypes.Result{} }
-	bufferSize := 1000
-
-	viewChangeQuery := sqlparser.BuildParsedQuery(mysql.DetectViewChange, sidecardb.GetIdentifier()).Query
-	err = conn.Stream(ctx, viewChangeQuery, callback, alloc, bufferSize, 0)
-	if err != nil {
-		return
-	}
-
-	// If no change detected, then return
-	if len(views) == 0 {
-		return
-	}
-
-	err = hs.reloadViews(ctx, conn, views)
-	return
 }
 
 func (hs *healthStreamer) reloadViews(ctx context.Context, conn *connpool.DBConn, views []string) error {
