@@ -76,7 +76,10 @@ func (v *Viper) Set(key string, value any) {
 	// We must not update v.disk here; explicit calls to Set will supercede all
 	// future config reloads.
 	v.live.Set(key, value)
-	v.setCh <- struct{}{}
+	select {
+	case v.setCh <- struct{}{}:
+	default:
+	}
 }
 
 // ErrDuplicateWatch is returned when Watch is called on a synced Viper which
