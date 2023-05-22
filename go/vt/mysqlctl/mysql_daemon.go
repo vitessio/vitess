@@ -113,12 +113,6 @@ type MysqlDaemon interface {
 	// FetchSuperQuery executes one query, returns the result
 	FetchSuperQuery(ctx context.Context, query string) (*sqltypes.Result, error)
 
-	// EnableBinlogPlayback enables playback of binlog events
-	EnableBinlogPlayback() error
-
-	// DisableBinlogPlayback disable playback of binlog events
-	DisableBinlogPlayback() error
-
 	// Close will close this instance of Mysqld. It will wait for all dba
 	// queries to be finished.
 	Close()

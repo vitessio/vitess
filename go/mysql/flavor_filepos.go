@@ -316,16 +316,6 @@ func (*filePosFlavor) startSQLThreadUntilAfter(pos Position) string {
 	return "unsupported"
 }
 
-// enableBinlogPlaybackCommand is part of the Flavor interface.
-func (*filePosFlavor) enableBinlogPlaybackCommand() string {
-	return ""
-}
-
-// disableBinlogPlaybackCommand is part of the Flavor interface.
-func (*filePosFlavor) disableBinlogPlaybackCommand() string {
-	return ""
-}
-
 // baseShowTables is part of the Flavor interface.
 func (*filePosFlavor) baseShowTables() string {
 	return mysqlFlavor{}.baseShowTables()
