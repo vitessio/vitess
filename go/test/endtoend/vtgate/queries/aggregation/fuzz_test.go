@@ -24,6 +24,8 @@ import (
 	"time"
 
 	"golang.org/x/exp/maps"
+
+	"vitess.io/vitess/go/vt/log"
 )
 
 type (
@@ -81,6 +83,7 @@ func TestFuzzAggregations(t *testing.T) {
 	endBy := time.Now().Add(1 * time.Second)
 	schemaTables := maps.Values(schema)
 
+	var queryCount int
 	for time.Now().Before(endBy) || t.Failed() {
 		tables := createTables(schemaTables)
 		query := randomQuery(tables, 3, 3)
@@ -88,7 +91,9 @@ func TestFuzzAggregations(t *testing.T) {
 		if t.Failed() {
 			fmt.Println(query)
 		}
+		queryCount++
 	}
+	log.Info("Queries successfully executed: %d", queryCount)
 }
 
 func randomQuery(tables []tableT, maxAggrs, maxGroupBy int) string {
@@ -117,7 +122,11 @@ func randomQuery(tables []tableT, maxAggrs, maxGroupBy int) string {
 		sel += strings.Join(grouping, ", ")
 	}
 	// we do it this way so we don't have to do only `only_full_group_by` queries
-	noOfOrderBy := rand.Intn(len(grouping))
+	var noOfOrderBy int
+	if len(grouping) > 0 {
+		// panic on rand function call if value is 0
+		noOfOrderBy = rand.Intn(len(grouping))
+	}
 	if noOfOrderBy > 0 {
 		noOfOrderBy = 0 // TODO turning on ORDER BY here causes lots of failures to happen
 	}
