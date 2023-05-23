@@ -570,7 +570,7 @@ func (vc *VitessCluster) AddShards(t *testing.T, cells []*Cell, keyspace *Keyspa
 	}
 
 	log.Infof("Applying throttler config for keyspace %s", keyspace.Name)
-	_, err := throttler.UpdateThrottlerTopoConfigRaw(vc.VtctldClient, keyspace.Name, true, false, time.Second.Seconds(), "")
+	_, err := throttler.UpdateThrottlerTopoConfigRaw(vc.VtctldClient, keyspace.Name, true, false, 30*time.Second.Seconds(), "")
 	require.NoError(t, err)
 	log.Infof("Waiting for throttler config to be applied on all shards")
 	for _, shard := range keyspace.Shards {
