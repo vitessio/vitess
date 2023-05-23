@@ -221,7 +221,12 @@ func (fmd *FakeMysqlDaemon) Shutdown(ctx context.Context, cnf *Mycnf, waitForMys
 }
 
 // RunMysqlUpgrade is part of the MysqlDaemon interface
-func (fmd *FakeMysqlDaemon) RunMysqlUpgrade() error {
+func (fmd *FakeMysqlDaemon) RunMysqlUpgrade(ctx context.Context) error {
+	return nil
+}
+
+// ApplyBinlogFile is part of the MysqlDaemon interface
+func (fmd *FakeMysqlDaemon) ApplyBinlogFile(ctx context.Context, binlogFile string, restorePos mysql.Position) error {
 	return nil
 }
 
@@ -668,12 +673,12 @@ func (fmd *FakeMysqlDaemon) SemiSyncReplicationStatus() (bool, error) {
 	return fmd.SemiSyncReplicaEnabled, nil
 }
 
-// GetVersionString is part of the MysqlDeamon interface.
-func (fmd *FakeMysqlDaemon) GetVersionString() string {
+// GetVersionString is part of the MysqlDaemon interface.
+func (fmd *FakeMysqlDaemon) GetVersionString(ctx context.Context) string {
 	return ""
 }
 
-// GetVersionComment is part of the MysqlDeamon interface.
+// GetVersionComment is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) GetVersionComment(ctx context.Context) string {
 	return ""
 }

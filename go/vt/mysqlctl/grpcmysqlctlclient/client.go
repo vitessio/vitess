@@ -19,6 +19,7 @@ limitations under the License.
 package grpcmysqlctlclient
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"time"
@@ -26,8 +27,6 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-
-	"context"
 
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/mysqlctl/mysqlctlclient"
@@ -80,6 +79,18 @@ func (c *client) Shutdown(ctx context.Context, waitForMysqld bool) error {
 func (c *client) RunMysqlUpgrade(ctx context.Context) error {
 	return c.withRetry(ctx, func() error {
 		_, err := c.c.RunMysqlUpgrade(ctx, &mysqlctlpb.RunMysqlUpgradeRequest{})
+		return err
+	})
+}
+
+// ApplyBinlogFile is part of the MysqlctlClient interface.
+func (c *client) ApplyBinlogFile(ctx context.Context, binlogFileName, binlogRestorePosition string) error {
+	req := &mysqlctlpb.ApplyBinlogFileRequest{
+		BinlogFileName:        binlogFileName,
+		BinlogRestorePosition: binlogRestorePosition,
+	}
+	return c.withRetry(ctx, func() error {
+		_, err := c.c.ApplyBinlogFile(ctx, req)
 		return err
 	})
 }
