@@ -76,6 +76,11 @@ func (v *Viper) Set(key string, value any) {
 	// We must not update v.disk here; explicit calls to Set will supercede all
 	// future config reloads.
 	v.live.Set(key, value)
+
+	// Do a non-blocking signal to persist here. Our channel has a buffer of 1,
+	// so if we've signalled for some other Set call that hasn't been persisted
+	// yet, this Set will get persisted along with that one and any other
+	// pending in-memory changes.
 	select {
 	case v.setCh <- struct{}{}:
 	default:

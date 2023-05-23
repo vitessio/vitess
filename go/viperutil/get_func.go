@@ -25,7 +25,7 @@ import (
 	"github.com/spf13/viper"
 )
 
-// GetFuncForType returns the default getter function for a given type T to. A
+// GetFuncForType returns the default getter function for a given type T. A
 // getter function is a function which takes a viper and returns a function that
 // takes a key and (finally!) returns a value of type T.
 //
