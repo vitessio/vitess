@@ -81,7 +81,7 @@ func newStringEnum(name string, initialValue string, choices []string, caseInsen
 			// This will panic if we've misconfigured something in the source code.
 			// It's not a user-error, so it had damn-well be better caught by a test
 			// somewhere.
-			panic("TODO: error message goes here")
+			panic(fmt.Errorf("%w (valid choices: %v)", ErrInvalidChoice, choiceNames))
 		}
 	}
 
