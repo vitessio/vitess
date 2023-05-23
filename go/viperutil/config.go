@@ -86,7 +86,7 @@ var (
 func init() {
 	wd, err := os.Getwd()
 	if err != nil {
-		log.WARN("failed to get working directory (err=%s), not appending to default config-paths", err)
+		log.WARN("failed to get working directory (err=%v), not appending to default config-paths", err)
 		return
 	}
 

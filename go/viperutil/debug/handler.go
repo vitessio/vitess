@@ -62,18 +62,18 @@ func HandlerFunc(w http.ResponseWriter, r *http.Request) {
 		v.SetConfigType(format)
 		tmp, err := os.CreateTemp("", "viper_debug")
 		if err != nil {
-			http.Error(w, fmt.Sprintf("failed to render config to tempfile: %s", err), http.StatusInternalServerError)
+			http.Error(w, fmt.Sprintf("failed to render config to tempfile: %v", err), http.StatusInternalServerError)
 			return
 		}
 		defer os.Remove(tmp.Name())
 
 		if err := v.WriteConfigAs(tmp.Name()); err != nil {
-			http.Error(w, fmt.Sprintf("failed to render config to tempfile: %s", err), http.StatusInternalServerError)
+			http.Error(w, fmt.Sprintf("failed to render config to tempfile: %v", err), http.StatusInternalServerError)
 			return
 		}
 
 		if _, err := io.Copy(w, tmp); err != nil {
-			http.Error(w, fmt.Sprintf("failed to write rendered config: %s", err), http.StatusInternalServerError)
+			http.Error(w, fmt.Sprintf("failed to write rendered config: %v", err), http.StatusInternalServerError)
 			return
 		}
 	default:
