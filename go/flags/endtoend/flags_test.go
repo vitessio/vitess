@@ -22,15 +22,16 @@ package flags
 
 import (
 	"bytes"
-	_ "embed"
 	"os"
 	"os/exec"
 	"testing"
 	"text/template"
 
-	"vitess.io/vitess/go/test/utils"
+	_ "embed"
 
 	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/test/utils"
 )
 
 var (
