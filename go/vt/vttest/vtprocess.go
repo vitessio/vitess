@@ -219,7 +219,6 @@ func VtcomboProcess(environment Environment, args *Config, mysql MySQLManager) (
 		"--mycnf_server_id", "1",
 		"--mycnf_socket_file", socket,
 		"--normalize_queries",
-		"--enable_query_plan_field_caching=false",
 		"--dbddl_plugin", "vttest",
 		"--foreign_key_mode", args.ForeignKeyMode,
 		"--planner-version", args.PlannerVersion,
