@@ -51,13 +51,8 @@ var DefaultConfig = &Config{
 // This retries the command until it succeeds or times out as the
 // SrvKeyspace record may not yet exist for a newly created
 // Keyspace that is still initializing before it becomes serving.
-func UpdateThrottlerTopoConfig(clusterInstance *cluster.LocalProcessCluster, enable bool, disable bool, threshold float64, metricsQuery string, viaVtctldClient bool) (result string, err error) {
+func UpdateThrottlerTopoConfigRaw(clientFunc func(args ...string) (string, error), keyspaceName string, enable bool, disable bool, threshold float64, metricsQuery string) (result string, err error) {
 	args := []string{}
-	clientfunc := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput
-	if !viaVtctldClient {
-		args = append(args, "--")
-		clientfunc = clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput
-	}
 	args = append(args, "UpdateThrottlerConfig")
 	if enable {
 		args = append(args, "--enable")
@@ -74,7 +69,7 @@ func UpdateThrottlerTopoConfig(clusterInstance *cluster.LocalProcessCluster, ena
 	} else {
 		args = append(args, "--check-as-check-shard")
 	}
-	args = append(args, clusterInstance.Keyspaces[0].Name)
+	args = append(args, keyspaceName)
 
 	ctx, cancel := context.WithTimeout(context.Background(), ConfigTimeout)
 	defer cancel()
@@ -83,7 +78,7 @@ func UpdateThrottlerTopoConfig(clusterInstance *cluster.LocalProcessCluster, ena
 	defer ticker.Stop()
 
 	for {
-		result, err = clientfunc(args...)
+		result, err = clientFunc(args...)
 		if err == nil {
 			return result, nil
 		}
@@ -93,6 +88,18 @@ func UpdateThrottlerTopoConfig(clusterInstance *cluster.LocalProcessCluster, ena
 		case <-ticker.C:
 		}
 	}
+}
+
+// UpdateThrottlerTopoConfig runs vtctlclient UpdateThrottlerConfig.
+// This retries the command until it succeeds or times out as the
+// SrvKeyspace record may not yet exist for a newly created
+// Keyspace that is still initializing before it becomes serving.
+func UpdateThrottlerTopoConfig(clusterInstance *cluster.LocalProcessCluster, enable bool, disable bool, threshold float64, metricsQuery string, viaVtctldClient bool) (result string, err error) {
+	clientfunc := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput
+	if !viaVtctldClient {
+		clientfunc = clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput
+	}
+	return UpdateThrottlerTopoConfigRaw(clientfunc, clusterInstance.Keyspaces[0].Name, enable, disable, threshold, metricsQuery)
 }
 
 // WaitForThrottlerStatusEnabled waits for a tablet to report its throttler status as
@@ -129,6 +136,22 @@ func WaitForThrottlerStatusEnabled(t *testing.T, tablet *cluster.Vttablet, enabl
 				tablet.Alias, enabled, timeout, body)
 			return
 		case <-ticker.C:
+		}
+	}
+}
+
+// EnableLagThrottlerAndWaitForStatus is a utility function to enable the throttler at the beginning of an endtoend test.
+// The throttler is configued to use the standard replication lag metric. The function waits until the throttler is confirmed
+// to be running on all tablets.
+func EnableLagThrottlerAndWaitForStatus(t *testing.T, clusterInstance *cluster.LocalProcessCluster, lag time.Duration) {
+	_, err := UpdateThrottlerTopoConfig(clusterInstance, true, false, lag.Seconds(), "", false)
+	require.NoError(t, err)
+
+	for _, ks := range clusterInstance.Keyspaces {
+		for _, shard := range ks.Shards {
+			for _, tablet := range shard.Vttablets {
+				WaitForThrottlerStatusEnabled(t, tablet, true, nil, time.Minute)
+			}
 		}
 	}
 }

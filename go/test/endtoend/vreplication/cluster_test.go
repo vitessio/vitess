@@ -37,6 +37,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/endtoend/throttler"
 	"vitess.io/vitess/go/vt/log"
 )
 
@@ -564,6 +565,19 @@ func (vc *VitessCluster) AddShards(t *testing.T, cells []*Cell, keyspace *Keyspa
 		require.NotEqual(t, 0, primaryTabletUID, "Should have created a primary tablet")
 		log.Infof("InitializeShard and make %d primary", primaryTabletUID)
 		require.NoError(t, vc.VtctlClient.InitializeShard(keyspace.Name, shardName, cells[0].Name, primaryTabletUID))
+
+		_, err := throttler.UpdateThrottlerTopoConfigRaw(vc.VtctlClient.ExecuteCommandWithOutput, keyspace.Name, true, false, time.Second.Seconds(), "")
+		require.NoError(t, err)
+		for _, shard := range keyspace.Shards {
+			for _, tablet := range shard.Tablets {
+				clusterTablet := &cluster.Vttablet{
+					Alias:    tablet.Name,
+					HTTPPort: tablet.Vttablet.Port,
+				}
+				throttler.WaitForThrottlerStatusEnabled(t, clusterTablet, true, nil, time.Minute)
+			}
+		}
+
 		log.Infof("Finished creating shard %s", shard.Name)
 	}
 
