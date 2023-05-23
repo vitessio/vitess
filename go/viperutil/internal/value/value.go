@@ -17,7 +17,6 @@ limitations under the License.
 package value
 
 import (
-	"errors"
 	"fmt"
 
 	"github.com/spf13/pflag"
@@ -25,6 +24,8 @@ import (
 
 	"vitess.io/vitess/go/viperutil/internal/registry"
 	"vitess.io/vitess/go/viperutil/internal/sync"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 // Registerable is the subset of the interface exposed by Values (which is
@@ -59,7 +60,7 @@ func (val *Base[T]) Get() T      { return val.BoundGetFunc(val.Key()) }
 
 // ErrNoFlagDefined is returned when a Value has a FlagName set, but the given
 // FlagSet does not define a flag with that name.
-var ErrNoFlagDefined = errors.New("flag not defined")
+var ErrNoFlagDefined = vterrors.New(vtrpc.Code_INVALID_ARGUMENT, "flag not defined")
 
 // Flag is part of the Registerable interface. If the given flag set has a flag
 // with the name of this value's configured flag, that flag is returned, along
@@ -75,7 +76,7 @@ func (val *Base[T]) Flag(fs *pflag.FlagSet) (*pflag.Flag, error) {
 
 	flag := fs.Lookup(val.FlagName)
 	if flag == nil {
-		return nil, fmt.Errorf("%w with name %s (for key %s)", ErrNoFlagDefined, val.FlagName, val.Key())
+		return nil, vterrors.Wrapf(ErrNoFlagDefined, "%s with name %s (for key %s)", ErrNoFlagDefined.Error(), val.FlagName, val.Key())
 	}
 
 	return flag, nil
