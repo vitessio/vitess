@@ -324,6 +324,9 @@ func (se *Engine) getChangedTableNames(ctx context.Context, conn *connpool.DBCon
 
 	// Finally, we also check for tables that exist only in the cache, because these tables would have been created.
 	for tableName := range se.tables {
+		if se.tables[tableName].Type == View {
+			continue
+		}
 		if !tablesFound[tableName] {
 			tablesChanged[tableName] = true
 		}
