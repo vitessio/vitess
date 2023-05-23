@@ -133,6 +133,12 @@ These flags are applicable to the following programs:
 - `vttablet`
 - `vttestserver`
 
+#### <a id="throttler-config-via-topo" /> vttablet --throttler-config-via-topo
+
+This flag was introduced in v16 and defaulted to `false`. In v17 it defaults to `true`, and there is no need to supply it.
+
+Note that this flag overrides `--enable-lag-throttler` and `--throttle-threshold`, which now give warnings, and will be removed in v18.
+
 ### <a id="new-stats"/> New stats
 
 #### <a id="detailed-backup-and-restore-stats"/> Detailed backup and restore stats
