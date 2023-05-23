@@ -147,10 +147,6 @@ func TestRestart(t *testing.T) {
 func TestAutoDetect(t *testing.T) {
 	defer cluster.PanicHandler(t)
 
-	// Start up tablets with an empty MYSQL_FLAVOR, which means auto-detect
-	sqlFlavor := os.Getenv("MYSQL_FLAVOR")
-	os.Setenv("MYSQL_FLAVOR", "")
-
 	err := clusterInstance.Keyspaces[0].Shards[0].Vttablets[0].VttabletProcess.Setup()
 	require.Nil(t, err, "error should be nil")
 	err = clusterInstance.Keyspaces[0].Shards[0].Vttablets[1].VttabletProcess.Setup()
@@ -159,8 +155,4 @@ func TestAutoDetect(t *testing.T) {
 	// Reparent tablets, which requires flavor detection
 	err = clusterInstance.VtctlclientProcess.InitializeShard(keyspaceName, shardName, cell, primaryTablet.TabletUID)
 	require.Nil(t, err, "error should be nil")
-
-	//Reset flavor
-	os.Setenv("MYSQL_FLAVOR", sqlFlavor)
-
 }
