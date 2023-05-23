@@ -157,6 +157,12 @@ func NewMysqld(dbcfgs *dbconfigs.DBConfigs) *Mysqld {
 		log.Info("mysqld is unmanaged or remote. Skipping flavor detection")
 		return result
 	}
+
+	if socketFile != "" {
+		log.Info("mysqld is remote. Skipping flavor detection")
+		return result
+	}
+
 	version, getErr := GetVersionString()
 	f, v, err := ParseVersionString(version)
 
@@ -228,6 +234,7 @@ func GetVersionFromEnv() (flavor MySQLFlavor, ver ServerVersion, err error) {
 
 // GetVersionString runs mysqld --version and returns its output as a string
 func GetVersionString() (string, error) {
+	noSocketFile()
 	mysqlRoot, err := vtenv.VtMysqlRoot()
 	if err != nil {
 		return "", err
@@ -277,7 +284,7 @@ func ParseVersionString(version string) (flavor MySQLFlavor, ver ServerVersion, 
 // RunMysqlUpgrade will run the mysql_upgrade program on the current
 // install.  Will be called only when mysqld is running with no
 // network and no grant tables.
-func (mysqld *Mysqld) RunMysqlUpgrade() error {
+func (mysqld *Mysqld) RunMysqlUpgrade(ctx context.Context) error {
 	// Execute as remote action on mysqlctld if requested.
 	if socketFile != "" {
 		log.Infof("executing Mysqld.RunMysqlUpgrade() remotely via mysqlctld server: %v", socketFile)
@@ -286,7 +293,7 @@ func (mysqld *Mysqld) RunMysqlUpgrade() error {
 			return fmt.Errorf("can't dial mysqlctld: %v", err)
 		}
 		defer client.Close()
-		return client.RunMysqlUpgrade(context.TODO())
+		return client.RunMysqlUpgrade(ctx)
 	}
 
 	if mysqld.capabilities.hasMySQLUpgradeInServer() {
@@ -635,6 +642,7 @@ func execCmd(name string, args, env []string, dir string, input io.Reader) (cmd 
 // binaryPath does a limited path lookup for a command,
 // searching only within sbin and bin in the given root.
 func binaryPath(root, binary string) (string, error) {
+	noSocketFile()
 	subdirs := []string{"sbin", "bin", "libexec", "scripts"}
 	for _, subdir := range subdirs {
 		binPath := path.Join(root, subdir, binary)
@@ -1176,9 +1184,20 @@ func buildLdPaths() ([]string, error) {
 	return ldPaths, nil
 }
 
-// GetVersionString is part of the MysqlDaemon interface.
-func (mysqld *Mysqld) GetVersionString() string {
-	return fmt.Sprintf("%d.%d.%d", mysqld.capabilities.version.Major, mysqld.capabilities.version.Minor, mysqld.capabilities.version.Patch)
+// GetVersionString is part of the MysqlExecutor interface.
+func (mysqld *Mysqld) GetVersionString(ctx context.Context) string {
+	qr, err := mysqld.FetchSuperQuery(ctx, "select @@global.version")
+	if err != nil {
+		log.Errorf("Error fetching MySQL version: %v", err)
+		return ""
+	}
+	if len(qr.Rows) != 1 {
+		log.Errorf("Unexpected number of rows: %v", qr.Rows)
+		return ""
+	}
+	res := qr.Named().Row()
+	version, _ := res.ToString("@@global.version")
+	return version
 }
 
 // GetVersionComment gets the version comment.
@@ -1195,9 +1214,18 @@ func (mysqld *Mysqld) GetVersionComment(ctx context.Context) string {
 	return versionComment
 }
 
-// applyBinlogFile extracts a binary log file and applies it to MySQL. It is the equivalent of:
+// ApplyBinlogFile extracts a binary log file and applies it to MySQL. It is the equivalent of:
 // $ mysqlbinlog --include-gtids binlog.file | mysql
-func (mysqld *Mysqld) applyBinlogFile(binlogFile string, includeGTIDs mysql.GTIDSet) error {
+func (mysqld *Mysqld) ApplyBinlogFile(ctx context.Context, binlogFile string, restorePos mysql.Position) error {
+	if socketFile != "" {
+		log.Infof("executing Mysqld.ApplyBinlogFile() remotely via mysqlctld server: %v", socketFile)
+		client, err := mysqlctlclient.New("unix", socketFile)
+		if err != nil {
+			return fmt.Errorf("can't dial mysqlctld: %v", err)
+		}
+		defer client.Close()
+		return client.ApplyBinlogFile(ctx, binlogFile, mysql.EncodePosition(restorePos))
+	}
 	var pipe io.ReadCloser
 	var mysqlbinlogCmd *exec.Cmd
 	var mysqlCmd *exec.Cmd
@@ -1216,7 +1244,7 @@ func (mysqld *Mysqld) applyBinlogFile(binlogFile string, includeGTIDs mysql.GTID
 			return err
 		}
 		args := []string{}
-		if gtids := includeGTIDs.String(); gtids != "" {
+		if gtids := restorePos.GTIDSet.String(); gtids != "" {
 			args = append(args,
 				"--include-gtids",
 				gtids,
@@ -1228,7 +1256,7 @@ func (mysqld *Mysqld) applyBinlogFile(binlogFile string, includeGTIDs mysql.GTID
 		mysqlbinlogCmd = exec.Command(name, args...)
 		mysqlbinlogCmd.Dir = dir
 		mysqlbinlogCmd.Env = env
-		log.Infof("applyBinlogFile: running %#v", mysqlbinlogCmd)
+		log.Infof("ApplyBinlogFile: running %#v", mysqlbinlogCmd)
 		pipe, err = mysqlbinlogCmd.StdoutPipe() // to be piped into mysql
 		if err != nil {
 			return err
@@ -1255,13 +1283,13 @@ func (mysqld *Mysqld) applyBinlogFile(binlogFile string, includeGTIDs mysql.GTID
 		// We disable super_read_only, in case it is in the default MySQL startup
 		// parameters.  We do it blindly, since this will fail on MariaDB, which doesn't
 		// have super_read_only This is safe, since we're restarting MySQL after the restore anyway
-		log.Infof("applyBinlogFile: disabling super_read_only")
+		log.Infof("ApplyBinlogFile: disabling super_read_only")
 		resetFunc, err := mysqld.SetSuperReadOnly(false)
 		if err != nil {
 			if sqlErr, ok := err.(*mysql.SQLError); ok && sqlErr.Number() == mysql.ERUnknownSystemVariable {
-				log.Warningf("applyBinlogFile: server does not know about super_read_only, continuing anyway...")
+				log.Warningf("ApplyBinlogFile: server does not know about super_read_only, continuing anyway...")
 			} else {
-				log.Errorf("applyBinlogFile: unexpected error while trying to set super_read_only: %v", err)
+				log.Errorf("ApplyBinlogFile: unexpected error while trying to set super_read_only: %v", err)
 				return err
 			}
 		}
@@ -1269,7 +1297,7 @@ func (mysqld *Mysqld) applyBinlogFile(binlogFile string, includeGTIDs mysql.GTID
 			defer func() {
 				err := resetFunc()
 				if err != nil {
-					log.Error("Not able to set super_read_only to its original value during applyBinlogFile.")
+					log.Error("Not able to set super_read_only to its original value during ApplyBinlogFile.")
 				}
 			}()
 		}
@@ -1294,4 +1322,13 @@ func (mysqld *Mysqld) applyBinlogFile(binlogFile string, includeGTIDs mysql.GTID
 		return err
 	}
 	return nil
+}
+
+// noSocketFile panics if socketFile is set. This is to prevent
+// incorrect use of settings not supported when we're running
+// remote through mysqlctl.
+func noSocketFile() {
+	if socketFile != "" {
+		panic("Running remotely through mysqlctl, socketFile must not be set")
+	}
 }

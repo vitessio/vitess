@@ -388,7 +388,7 @@ func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error)
 	}
 
 	params.Logger.Infof("Restore: running mysql_upgrade")
-	if err := params.Mysqld.RunMysqlUpgrade(); err != nil {
+	if err := params.Mysqld.RunMysqlUpgrade(ctx); err != nil {
 		return nil, vterrors.Wrap(err, "mysql_upgrade failed")
 	}
 
