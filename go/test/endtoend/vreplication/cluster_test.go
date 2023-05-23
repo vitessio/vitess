@@ -566,7 +566,7 @@ func (vc *VitessCluster) AddShards(t *testing.T, cells []*Cell, keyspace *Keyspa
 		log.Infof("InitializeShard and make %d primary", primaryTabletUID)
 		require.NoError(t, vc.VtctlClient.InitializeShard(keyspace.Name, shardName, cells[0].Name, primaryTabletUID))
 
-		_, err := throttler.UpdateThrottlerTopoConfigRaw(vc.VtctlClient.ExecuteCommandWithOutput, keyspace.Name, true, false, time.Second.Seconds(), "")
+		_, err := throttler.UpdateThrottlerTopoConfigRaw(vc.VtctldClient, keyspace.Name, true, false, time.Second.Seconds(), "")
 		require.NoError(t, err)
 		for _, shard := range keyspace.Shards {
 			for _, tablet := range shard.Tablets {
