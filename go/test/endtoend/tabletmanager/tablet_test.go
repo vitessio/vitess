@@ -61,7 +61,7 @@ func TestEnsureDB(t *testing.T) {
 	require.NoError(t, err)
 	err = tablet.VttabletProcess.WaitForTabletStatus("SERVING")
 	require.NoError(t, err)
-	killTablets(t, tablet)
+	killTablets(tablet)
 }
 
 // TestResetReplicationParameters tests that the RPC ResetReplicationParameters works as intended.

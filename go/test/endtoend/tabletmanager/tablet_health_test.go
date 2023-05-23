@@ -87,13 +87,15 @@ func TestTabletReshuffle(t *testing.T) {
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("Backup", rTablet.Alias)
 	assert.Error(t, err, "cannot perform backup without my.cnf")
 
-	killTablets(t, rTablet)
+	killTablets(rTablet)
 }
 
 func TestHealthCheck(t *testing.T) {
 	// Add one replica that starts not initialized
 	defer cluster.PanicHandler(t)
 	ctx := context.Background()
+	clusterInstance.DisableVTOrcRecoveries(t)
+	defer clusterInstance.EnableVTOrcRecoveries(t)
 
 	rTablet := clusterInstance.NewVttabletInstance("replica", 0, "")
 
@@ -192,7 +194,7 @@ func TestHealthCheck(t *testing.T) {
 	}
 
 	// Manual cleanup of processes
-	killTablets(t, rTablet)
+	killTablets(rTablet)
 }
 
 // TestHealthCheckSchemaChangeSignal tests the tables and views, which report their schemas have changed in the output of a StreamHealth.
@@ -233,7 +235,7 @@ func TestHealthCheckSchemaChangeSignal(t *testing.T) {
 		err = clusterInstance.VtctldClientProcess.PlannedReparentShard(keyspaceName, shardName, primaryTablet.Alias)
 		require.NoError(t, err)
 		// Manual cleanup of processes
-		killTablets(t, tempTablet)
+		killTablets(tempTablet)
 	}()
 
 	// Now we reparent the cluster to the new tablet we have.
@@ -377,6 +379,8 @@ func TestHealthCheckDrainedStateDoesNotShutdownQueryService(t *testing.T) {
 
 	//Wait if tablet is not in service state
 	defer cluster.PanicHandler(t)
+	clusterInstance.DisableVTOrcRecoveries(t)
+	defer clusterInstance.EnableVTOrcRecoveries(t)
 	err := rdonlyTablet.VttabletProcess.WaitForTabletStatus("SERVING")
 	require.NoError(t, err)
 
@@ -414,7 +418,7 @@ func TestHealthCheckDrainedStateDoesNotShutdownQueryService(t *testing.T) {
 	checkHealth(t, rdonlyTablet.HTTPPort, false)
 }
 
-func killTablets(t *testing.T, tablets ...*cluster.Vttablet) {
+func killTablets(tablets ...*cluster.Vttablet) {
 	var wg sync.WaitGroup
 	for _, tablet := range tablets {
 		wg.Add(1)
@@ -422,6 +426,7 @@ func killTablets(t *testing.T, tablets ...*cluster.Vttablet) {
 			defer wg.Done()
 			_ = tablet.VttabletProcess.TearDown()
 			_ = tablet.MysqlctlProcess.Stop()
+			_ = clusterInstance.VtctlclientProcess.ExecuteCommand("DeleteTablet", tablet.Alias)
 		}(tablet)
 	}
 	wg.Wait()
