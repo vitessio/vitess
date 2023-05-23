@@ -88,6 +88,17 @@
         "to": "keyspace_id"
       },
       "owner": "t10"
+    },
+    "transfers_external_id_lookup_vdx": {
+      "type": "lookup_unicodeloosemd5_hash",
+      "params": {
+        "table": "transfers_external_id_lookup",
+        "from": "external_id",
+        "to": "customer_id",
+        "ignore_nulls": "true",
+        "autocommit": "true"
+      },
+      "owner": "transfers"
     }
   },
   "tables": {
@@ -306,28 +317,26 @@
           "name": "hash"
         }
       ]
-    }
-  },
-  "transfers_external_id_lookup": {
-    "type": "lookup_unicodeloosemd5_hash",
-    "params": {
-      "table": "transfers_external_id_lookup",
-      "from": "external_id",
-      "to": "customer_id",
-      "ignore_nulls": "true",
-      "autocommit": "true"
     },
-    "owner": "transfers"
-  },
-  "transfers": {
-    "columnVindexes": [
-      {
-        "column": "customer_id",
-        "name": "hash"
-      },
-      {
-        "column": "external_id",
-        "name": "transfers_external_id_lookup"
-      }
-    ]
+    "transfers": {
+      "columnVindexes": [
+        {
+          "column": "customer_id",
+          "name": "hash"
+        },
+        {
+          "column": "external_id",
+          "name": "transfers_external_id_lookup_vdx"
+        }
+      ]
+    },
+    "transfers_external_id_lookup": {
+      "columnVindexes": [
+        {
+          "column": "external_id",
+          "name": "hash"
+        }
+      ]
+    }
   }
+}
