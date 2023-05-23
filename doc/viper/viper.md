@@ -161,7 +161,7 @@ Therefore, we introduce a separate function, namely `viperutil.BindFlags`, which
 For example:
 
 ```go
-package azblobbackupstorage
+package trace
 
 import (
 	"github.com/spf13/pflag"
@@ -171,36 +171,32 @@ import (
 )
 
 var (
-	configKey = viperutil.KeyPrefixFunc("backup.storage.azblob")
+	configKey = viperutil.KeyPrefixFunc("trace")
 
-	accountName = viperutil.Configure(
-		configKey("account.name"),
+	tracingServer = viperutil.Configure(
+		configKey("service"),
 		viperutil.Options[string]{
-			EnvVars:  []string{"VT_AZBLOB_ACCOUNT_NAME"},
-			FlagName: "azblob_backup_account_name",
+			Default:  "noop",
+			FlagName: "tracer",
 		},
 	)
-
-	accountKeyFile = viperutil.Configure(
-		configKey("account.key_file"),
-		viperutil.Options[string]{
-			FlagName: "azblob_backup_account_key_file",
+	enableLogging = viperutil.Configure(
+		configKey("enable-logging"),
+		viperutil.Options[bool]{
+			FlagName: "tracing-enable-logging",
 		},
 	)
 )
 
-func registerFlags(fs *pflag.FlagSet) {
-	fs.String("azblob_backup_account_name", accountName.Default(), "Azure Storage Account name for backups; if this flag is unset, the environment variable VT_AZBLOB_ACCOUNT_NAME will be used.")
-	fs.String("azblob_backup_account_key_file", accountKeyFile.Default(), "Path to a file containing the Azure Storage account key; if this flag is unset, the environment variable VT_AZBLOB_ACCOUNT_KEY will be used as the key itself (NOT a file path).")
+func RegisterFlags(fs *pflag.FlagSet) {
+	fs.String("tracer", tracingServer.Default(), "tracing service to use")
+	fs.Bool("tracing-enable-logging", false, "whether to enable logging in the tracing service")
 
-    viperutil.BindFlags(fs, accountName, accountKeyFile)
+	viperutil.BindFlags(fs, tracingServer, enableLogging)
 }
 
 func init() {
-	servenv.OnParseFor("vtbackup", registerFlags)
-	servenv.OnParseFor("vtctl", registerFlags)
-	servenv.OnParseFor("vtctld", registerFlags)
-	servenv.OnParseFor("vttablet", registerFlags)
+	servenv.OnParse(RegisterFlags)
 }
 ```
 
