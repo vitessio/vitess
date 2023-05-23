@@ -103,6 +103,20 @@ type builtinBackupManifest struct {
 	// false for backups that were created before the field existed, and those
 	// backups all had compression enabled.
 	SkipCompress bool
+
+	// When CompressionEngine is "external", ExternalDecompressor may be
+	// consulted for the external decompressor command.
+	//
+	// When taking a backup with --compression-engine=external,
+	// ExternalDecompressor will be set to the value of
+	// --manifest-external-decompressor, if set, or else left as an empty
+	// string.
+	//
+	// When restoring from a backup with CompressionEngine "external",
+	// --external-decompressor will be consulted first and, if that is not set,
+	// ExternalDecompressor will be used. If neither are set, the restore will
+	// abort.
+	ExternalDecompressor string
 }
 
 // FileEntry is one file to backup
@@ -605,9 +619,10 @@ func (be *BuiltinBackupEngine) backupFiles(
 		},
 
 		// Builtin-specific fields
-		FileEntries:       fes,
-		SkipCompress:      !backupStorageCompress,
-		CompressionEngine: CompressionEngineName,
+		FileEntries:          fes,
+		SkipCompress:         !backupStorageCompress,
+		CompressionEngine:    CompressionEngineName,
+		ExternalDecompressor: ManifestExternalDecompressorCmd,
 	}
 	data, err := json.MarshalIndent(bm, "", "  ")
 	if err != nil {
@@ -1015,9 +1030,13 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, params RestorePa
 			// for backward compatibility
 			deCompressionEngine = PgzipCompressor
 		}
-		if ExternalDecompressorCmd != "" {
+		externalDecompressorCmd := ExternalDecompressorCmd
+		if externalDecompressorCmd == "" && bm.ExternalDecompressor != "" {
+			externalDecompressorCmd = bm.ExternalDecompressor
+		}
+		if externalDecompressorCmd != "" {
 			if deCompressionEngine == ExternalCompressor {
-				deCompressionEngine = ExternalDecompressorCmd
+				deCompressionEngine = externalDecompressorCmd
 				decompressor, err = newExternalDecompressor(ctx, deCompressionEngine, reader, params.Logger)
 			} else {
 				decompressor, err = newBuiltinDecompressor(deCompressionEngine, reader, params.Logger)
