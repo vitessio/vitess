@@ -98,6 +98,7 @@ func TestMain(m *testing.M) {
 
 		// Set extra tablet args for lock timeout
 		clusterInstance.VtTabletExtraArgs = []string{
+			"--throttler-config-via-topo=false",
 			"--lock_tables_timeout", "5s",
 			"--watch_replication_stream",
 			"--enable_replication_reporter",
