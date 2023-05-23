@@ -145,91 +145,37 @@ func NewMysqld(dbcfgs *dbconfigs.DBConfigs) *Mysqld {
 	result.appPool.Open(dbcfgs.AppWithDB())
 
 	/*
-	 Unmanaged tablets are special because the MYSQL_FLAVOR detection
-	 will not be accurate because the mysqld might not be the same
-	 one as the server started.
-
-	 This skips the panic that checks that we can detect a server,
-	 but also relies on none of the flavor detection features being
-	 used at runtime. Currently this assumption is guaranteed true.
+	 If we have an external unmanaged tablet, we can't do the flavor
+	 detection here. We also won't need it, since mysqlctl itself is the only
+	 one that needs capabilities and the flavor.
 	*/
 	if dbconfigs.GlobalDBConfigs.HasGlobalSettings() {
 		log.Info("mysqld is unmanaged or remote. Skipping flavor detection")
 		return result
 	}
 
+	/*
+	 If we have a socketFile here, it means we're not running inside mysqlctl.
+	 This means we don't need the flavor and capability detection, since mysqlctl
+	 itself is the only one that needs this.
+	*/
 	if socketFile != "" {
 		log.Info("mysqld is remote. Skipping flavor detection")
 		return result
 	}
 
-	version, getErr := GetVersionString()
+	version, err := GetVersionString()
+	if err != nil {
+		failVersionDetection(err)
+	}
 	f, v, err := ParseVersionString(version)
-
-	/*
-	 By default Vitess searches in vtenv.VtMysqlRoot() for a mysqld binary.
-	 This is historically the VT_MYSQL_ROOT env, but if it is unset or empty,
-	 Vitess will search the PATH. See go/vt/env/env.go.
-
-	 A number of subdirs inside vtenv.VtMysqlRoot() will be searched, see
-	 func binaryPath() for context. If no mysqld binary is found (possibly
-	 because it is in a container or both VT_MYSQL_ROOT and VTROOT are set
-	 incorrectly), there will be a fallback to using the MYSQL_FLAVOR env
-	 variable.
-
-	 If MYSQL_FLAVOR is not defined, there will be a panic.
-
-	 Note: relying on MySQL_FLAVOR is not recommended, since for historical
-	 purposes "MySQL56" actually means MySQL 5.7, which is a very strange
-	 behavior.
-	*/
-
-	if getErr != nil || err != nil {
-		f, v, err = GetVersionFromEnv()
-		if err != nil {
-			vtenvMysqlRoot, _ := vtenv.VtMysqlRoot()
-			message := fmt.Sprintf(`could not auto-detect MySQL version. You may need to set your PATH so a mysqld binary can be found, or set the environment variable MYSQL_FLAVOR if mysqld is not available locally:
-	PATH: %s
-	VT_MYSQL_ROOT: %s
-	VTROOT: %s
-	vtenv.VtMysqlRoot(): %s
-	MYSQL_FLAVOR: %s
-	`,
-				os.Getenv("PATH"),
-				os.Getenv("VT_MYSQL_ROOT"),
-				os.Getenv("VTROOT"),
-				vtenvMysqlRoot,
-				os.Getenv("MYSQL_FLAVOR"))
-			panic(message)
-		}
+	if err != nil {
+		failVersionDetection(err)
 	}
 
 	log.Infof("Using flavor: %v, version: %v", f, v)
 	result.capabilities = newCapabilitySet(f, v)
 	return result
-}
-
-/*
-GetVersionFromEnv returns the flavor and an assumed version based on the legacy
-MYSQL_FLAVOR environment variable.
-
-The assumed version may not be accurate since the legacy variable only specifies
-broad families of compatible versions. However, the differences between those
-versions should only matter if Vitess is managing the lifecycle of mysqld, in which
-case we should have a local copy of the mysqld binary from which we can fetch
-the accurate version instead of falling back to this function (see GetVersionString).
-*/
-func GetVersionFromEnv() (flavor MySQLFlavor, ver ServerVersion, err error) {
-	env := os.Getenv("MYSQL_FLAVOR")
-	switch env {
-	case "MariaDB":
-		return FlavorMariaDB, ServerVersion{10, 6, 11}, nil
-	case "MySQL80":
-		return FlavorMySQL, ServerVersion{8, 0, 11}, nil
-	case "MySQL56":
-		return FlavorMySQL, ServerVersion{5, 7, 10}, nil
-	}
-	return flavor, ver, fmt.Errorf("could not determine version from MYSQL_FLAVOR: %s", env)
 }
 
 // GetVersionString runs mysqld --version and returns its output as a string
@@ -1331,4 +1277,21 @@ func noSocketFile() {
 	if socketFile != "" {
 		panic("Running remotely through mysqlctl, socketFile must not be set")
 	}
+}
+
+func failVersionDetection(err error) {
+	vtenvMysqlRoot, _ := vtenv.VtMysqlRoot()
+	message := fmt.Sprintf(`could not auto-detect MySQL version: %v
+You may need to set your PATH so a mysqld binary can be found:
+	PATH: %s
+	VT_MYSQL_ROOT: %s
+	VTROOT: %s
+	vtenv.VtMysqlRoot(): %s
+	`,
+		err,
+		os.Getenv("PATH"),
+		os.Getenv("VT_MYSQL_ROOT"),
+		os.Getenv("VTROOT"),
+		vtenvMysqlRoot)
+	panic(message)
 }

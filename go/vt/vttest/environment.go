@@ -103,21 +103,16 @@ type LocalTestEnv struct {
 	Env          []string
 }
 
-// DefaultMySQLFlavor is the MySQL flavor used by vttest when MYSQL_FLAVOR is not
-// set in the environment
+// DefaultMySQLFlavor is the MySQL flavor used by vttest when no explicit
+// flavor is given.
 const DefaultMySQLFlavor = "MySQL56"
 
 // GetMySQLOptions returns the default option set for the given MySQL
-// flavor. If flavor is not set, the value from the `MYSQL_FLAVOR` env
-// variable is used, and if this is not set, DefaultMySQLFlavor will
+// flavor. If flavor is not set, DefaultMySQLFlavor will
 // be used.
 // Returns the name of the MySQL flavor being used, the set of MySQL CNF
 // files specific to this flavor, and any errors.
 func GetMySQLOptions(flavor string) (string, []string, error) {
-	if flavor == "" {
-		flavor = os.Getenv("MYSQL_FLAVOR")
-	}
-
 	if flavor == "" {
 		flavor = DefaultMySQLFlavor
 	}
@@ -237,8 +232,7 @@ func randomPort() int {
 // up when closing the Environment.
 // - LogDirectory() is the `logs` subdir inside Directory()
 // - The MySQL flavor is set to `flavor`. If the argument is not set, it will
-// default to the value of MYSQL_FLAVOR, and if this variable is not set, to
-// DefaultMySQLFlavor
+// default DefaultMySQLFlavor
 // - PortForProtocol() will return ports based off the given basePort. If basePort
 // is zero, a random port between 10000 and 20000 will be chosen.
 // - DefaultProtocol() is always "grpc"
