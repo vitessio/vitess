@@ -10,7 +10,7 @@ It acts as a registry for configuration values coming from a variety of sources,
 - Environment variables.
 - Command-line flags, primarily from `pflag.Flag` types.
 
-It is used by a wide variety of Go projects, including [hugo][hugo] and [the kubernetes operator][kops].
+It is used by a wide variety of Go projects, including [hugo][hugo] and [kops][kops].
 
 ## "Normal" Usage
 
