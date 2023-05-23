@@ -235,6 +235,12 @@ They are:
         - `Warn` => log at the WARNING level, but return no error.
         - `Error` => log at the ERROR level and return the error back to the caller (usually `servenv`.)
         - `Exit` => log at the FATAL level, exiting immediately.
+- `--config-persistence-min-interval`
+    - Default: `1s`
+    - EnvVar: `VT_CONFIG_PERSISTENCE_MIN_INTERVAL`
+    - FlagType: `time.Duration`
+    - Behavior: If viper is watching a config file, in order to synchronize between changes to the file, and changes made in-memory to dynamic values (for example, via vtgate's `/debug/env` endpoint), it will periodically write in-memory changes back to disk, waiting _at least_ this long between writes.
+    If the value is 0, each in-memory `Set` is immediately followed by a write to disk.
 
 For more information on how viper searches for config files, see the [documentation][viper_read_in_config_docs].
 
