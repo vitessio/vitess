@@ -3,6 +3,7 @@ package trace
 import (
 	"fmt"
 	"io"
+	"net"
 
 	"github.com/opentracing/opentracing-go"
 	"github.com/spf13/pflag"
@@ -47,7 +48,7 @@ func newDatadogTracer(serviceName string) (tracingService, io.Closer, error) {
 	}
 
 	opts := []ddtracer.StartOption{
-		ddtracer.WithAgentAddr(host + ":" + port),
+		ddtracer.WithAgentAddr(net.JoinHostPort(host, port)),
 		ddtracer.WithServiceName(serviceName),
 		ddtracer.WithDebugMode(true),
 		ddtracer.WithSampler(ddtracer.NewRateSampler(samplingRate.Get())),
