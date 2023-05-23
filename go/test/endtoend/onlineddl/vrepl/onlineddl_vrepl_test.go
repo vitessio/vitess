@@ -261,7 +261,7 @@ func TestSchemaChange(t *testing.T) {
 	err := clusterInstance.WaitForTabletsToHealthyInVtgate()
 	require.NoError(t, err)
 
-	_, err = throttler.UpdateThrottlerTopoConfig(clusterInstance, true, false, 0, "", false)
+	_, err = throttler.UpdateThrottlerTopoConfig(clusterInstance, true, false, 0, "")
 	require.NoError(t, err)
 
 	for _, ks := range clusterInstance.Keyspaces {
