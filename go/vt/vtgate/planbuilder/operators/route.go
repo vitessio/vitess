@@ -557,16 +557,20 @@ func (r *Route) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.Alia
 		return r, offset, nil
 	}
 
+	// if column is not already present, we check if we can easily find a projection
+	// or aggregation in our source that we can add to
 	if ok, offset := addColumnToInput(r.Source, expr, addToGroupBy); ok {
 		return r, offset, nil
 	}
 
+	// If no-one could be found, we probably don't have one yet, so we add one here
 	src, err := createProjection(r.Source)
 	if err != nil {
 		return nil, 0, err
 	}
 	r.Source = src
 
+	// And since we are under the route, we don't need to continue pushing anything further down
 	offset := src.addNoPushCol(expr, false)
 	if err != nil {
 		return nil, 0, err
@@ -663,8 +667,8 @@ func (r *Route) planOffsets(ctx *plancontext.PlanningContext) (err error) {
 			WOffset:   -1,
 			Direction: order.Inner.Direction,
 		}
-		if ctx.SemTable.NeedsWeightString(order.WeightStrExpr) {
-			wrap := aeWrap(weightStringFor(order.WeightStrExpr))
+		if ctx.SemTable.NeedsWeightString(order.SimplifiedExpr) {
+			wrap := aeWrap(weightStringFor(order.SimplifiedExpr))
 			_, offset, err = r.AddColumn(ctx, wrap, true, false)
 			if err != nil {
 				return err
@@ -683,7 +687,7 @@ func weightStringFor(expr sqlparser.Expr) sqlparser.Expr {
 
 func (r *Route) getOffsetFor(ctx *plancontext.PlanningContext, order ops.OrderBy, columns []*sqlparser.AliasedExpr) (int, error) {
 	for idx, column := range columns {
-		if sqlparser.Equals.Expr(order.WeightStrExpr, column.Expr) {
+		if sqlparser.Equals.Expr(order.SimplifiedExpr, column.Expr) {
 			return idx, nil
 		}
 	}

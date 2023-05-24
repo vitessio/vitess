@@ -353,9 +353,9 @@ func buildAggregation(op *Aggregator, qb *queryBuilder) error {
 
 	for _, by := range op.Grouping {
 		qb.addGroupBy(by.Inner)
-		wsExpr := by.WeightStrExpr
+		simplified := by.SimplifiedExpr
 		if by.WSOffset != -1 {
-			qb.addGroupBy(weightStringFor(wsExpr))
+			qb.addGroupBy(weightStringFor(simplified))
 		}
 	}
 
@@ -406,7 +406,7 @@ func buildProjection(op *Projection, qb *queryBuilder) error {
 
 	qb.clearProjections()
 
-	for _, column := range op.ColumnNames {
+	for _, column := range op.Columns {
 		qb.addProjection(column)
 	}
 

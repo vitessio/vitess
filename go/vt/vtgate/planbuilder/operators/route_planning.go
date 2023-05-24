@@ -103,9 +103,8 @@ func optimizeQueryGraph(ctx *plancontext.PlanningContext, op *QueryGraph) (resul
 
 	switch {
 	case ctx.PlannerVersion == querypb.ExecuteOptions_Gen4Left2Right:
-		result, changed, err = leftToRightSolve(ctx, op)
+		result, err = leftToRightSolve(ctx, op)
 	default:
-		changed = rewrite.NewTree("solved query graph", result)
 		result, err = greedySolve(ctx, op)
 	}
 
@@ -116,6 +115,7 @@ func optimizeQueryGraph(ctx *plancontext.PlanningContext, op *QueryGraph) (resul
 		result = newFilter(result, ctx.SemTable.AndExpressions(unresolved...))
 	}
 
+	changed = rewrite.NewTree("solved query graph", result)
 	return
 }
 
@@ -230,11 +230,10 @@ func greedySolve(ctx *plancontext.PlanningContext, qg *QueryGraph) (ops.Operator
 	return op, nil
 }
 
-func leftToRightSolve(ctx *plancontext.PlanningContext, qg *QueryGraph) (ops.Operator, *rewrite.ApplyResult, error) {
-	var result *rewrite.ApplyResult
+func leftToRightSolve(ctx *plancontext.PlanningContext, qg *QueryGraph) (ops.Operator, error) {
 	plans, err := seedOperatorList(ctx, qg)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	var acc ops.Operator
@@ -244,15 +243,13 @@ func leftToRightSolve(ctx *plancontext.PlanningContext, qg *QueryGraph) (ops.Ope
 			continue
 		}
 		joinPredicates := qg.GetPredicates(TableID(acc), TableID(plan))
-		var r *rewrite.ApplyResult
-		acc, r, err = mergeOrJoin(ctx, acc, plan, joinPredicates, true)
-		result = result.Merge(r)
+		acc, _, err = mergeOrJoin(ctx, acc, plan, joinPredicates, true)
 		if err != nil {
-			return nil, nil, err
+			return nil, err
 		}
 	}
 
-	return acc, result, nil
+	return acc, nil
 }
 
 // seedOperatorList returns a route for each table in the qg

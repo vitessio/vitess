@@ -109,7 +109,7 @@ func transformAggregator(ctx *plancontext.PlanningContext, op *operators.Aggrega
 			KeyCol:          groupBy.ColOffset,
 			WeightStringCol: groupBy.WSOffset,
 			Expr:            groupBy.AsAliasedExpr().Expr,
-			CollationID:     ctx.SemTable.CollationForExpr(groupBy.WeightStrExpr),
+			CollationID:     ctx.SemTable.CollationForExpr(groupBy.SimplifiedExpr),
 		})
 	}
 
@@ -143,7 +143,7 @@ func createMemorySort(ctx *plancontext.PlanningContext, src logicalPlan, orderin
 	}
 
 	for idx, order := range ordering.Order {
-		collationID := ctx.SemTable.CollationForExpr(order.WeightStrExpr)
+		collationID := ctx.SemTable.CollationForExpr(order.SimplifiedExpr)
 		ms.eMemorySort.OrderBy = append(ms.eMemorySort.OrderBy, engine.OrderByParams{
 			Col:               ordering.Offset[idx],
 			WeightStringCol:   ordering.WOffset[idx],
@@ -168,12 +168,12 @@ func transformProjection(ctx *plancontext.PlanningContext, op *operators.Project
 		return useSimpleProjection(op, cols, src)
 	}
 
-	expressions := slices2.Map(op.Columns, func(from operators.ProjExpr) sqlparser.Expr {
+	expressions := slices2.Map(op.Projections, func(from operators.ProjExpr) sqlparser.Expr {
 		return from.GetExpr()
 	})
 
 	failed := false
-	evalengineExprs := slices2.Map(op.Columns, func(from operators.ProjExpr) evalengine.Expr {
+	evalengineExprs := slices2.Map(op.Projections, func(from operators.ProjExpr) evalengine.Expr {
 		switch e := from.(type) {
 		case operators.Eval:
 			return e.EExpr
@@ -190,7 +190,7 @@ func transformProjection(ctx *plancontext.PlanningContext, op *operators.Project
 		}
 	})
 	var primitive *engine.Projection
-	columnNames := slices2.Map(op.ColumnNames, func(from *sqlparser.AliasedExpr) string {
+	columnNames := slices2.Map(op.Columns, func(from *sqlparser.AliasedExpr) string {
 		return from.As.String()
 	})
 

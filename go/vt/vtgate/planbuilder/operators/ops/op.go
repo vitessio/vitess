@@ -57,8 +57,10 @@ type (
 
 	// OrderBy contains the expression to used in order by and also if ordering is needed at VTGate level then what the weight_string function expression to be sent down for evaluation.
 	OrderBy struct {
-		Inner         *sqlparser.Order
-		WeightStrExpr sqlparser.Expr
+		Inner *sqlparser.Order
+
+		// See GroupBy#SimplifiedExpr for more details about this
+		SimplifiedExpr sqlparser.Expr
 	}
 
 	OpDescription struct {

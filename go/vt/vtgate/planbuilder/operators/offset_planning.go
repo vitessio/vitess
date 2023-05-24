@@ -61,13 +61,13 @@ func planOffsets(ctx *plancontext.PlanningContext, root ops.Operator) (ops.Opera
 
 func (p *Projection) passThroughAllColumns(ctx *plancontext.PlanningContext) error {
 
-	for i, col := range p.Columns {
+	for i, col := range p.Projections {
 		newSrc, offset, err := p.Source.AddColumn(ctx, aeWrap(col.GetExpr()), true, false)
 		if err != nil {
 			return err
 		}
 		p.Source = newSrc
-		p.Columns[i] = Offset{
+		p.Projections[i] = Offset{
 			Expr:   col.GetExpr(),
 			Offset: offset,
 		}

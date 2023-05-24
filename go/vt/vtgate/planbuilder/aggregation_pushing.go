@@ -69,7 +69,7 @@ func (hp *horizonPlanning) pushAggregation(
 		pushed = false
 
 		for _, grp := range grouping {
-			offset, wOffset, err := wrapAndPushExpr(ctx, grp.Inner, grp.WeightStrExpr, plan.input)
+			offset, wOffset, err := wrapAndPushExpr(ctx, grp.Inner, grp.SimplifiedExpr, plan.input)
 			if err != nil {
 				return nil, nil, nil, false, err
 			}
@@ -166,8 +166,8 @@ func pushAggrOnRoute(
 			pos = newOffset(groupingCols[idx])
 		}
 
-		if expr.WeightStrExpr != nil && ctx.SemTable.NeedsWeightString(expr.Inner) {
-			wsExpr := weightStringFor(expr.WeightStrExpr)
+		if expr.SimplifiedExpr != nil && ctx.SemTable.NeedsWeightString(expr.Inner) {
+			wsExpr := weightStringFor(expr.SimplifiedExpr)
 			wsCol, _, err := addExpressionToRoute(ctx, plan, &sqlparser.AliasedExpr{Expr: wsExpr}, true)
 			if err != nil {
 				return nil, nil, nil, err

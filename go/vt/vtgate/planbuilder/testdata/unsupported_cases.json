@@ -492,5 +492,11 @@
     "query": "select greatest(sum(user.foo), sum(user_extra.bar)) from user join user_extra on user.col = user_extra.col",
     "v3-plan": "VT12001: unsupported: cross-shard query with aggregates",
     "gen4-plan": "VT12001: unsupported: in scatter query: complex aggregate expression"
+  },
+  {
+    "comment": "extremum on input from both sides",
+    "query": "select max(u.foo*ue.bar) from user u join user_extra ue",
+    "v3-plan": "VT12001: unsupported: cross-shard query with aggregates",
+    "gen4-plan": "VT12001: unsupported: aggregation on columns from different sources: max(u.foo * ue.bar)"
   }
 ]

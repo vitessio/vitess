@@ -34,6 +34,9 @@ import (
 )
 
 type (
+	// Aggregator represents a GroupBy γ relational operator.
+	// Both all aggregations and no grouping, and the inverse
+	// of all grouping and no aggregations are valid configurations of this operator
 	Aggregator struct {
 		Source  ops.Operator
 		Columns []*sqlparser.AliasedExpr
@@ -129,9 +132,14 @@ func (a *Aggregator) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser
 	// If weight string function is received from above operator. Then check if we have a group on the expression used.
 	// If it is found, then continue to push it down but with addToGroupBy true so that is the added to group by sql down in the AddColumn.
 	// This also set the weight string column offset so that we would not need to add it later in aggregator operator planOffset.
+
+	// If the expression is a WeightStringFuncExpr, it checks if a GroupBy
+	// already exists on the argument of the expression.
+	// If it is found, the column offset for the WeightStringFuncExpr is set,
+	// and the column is marked to be added to the GroupBy in the recursive AddColumn call.
 	if wsExpr, isWS := expr.Expr.(*sqlparser.WeightStringFuncExpr); isWS {
 		idx := slices.IndexFunc(a.Grouping, func(by GroupBy) bool {
-			return ctx.SemTable.EqualsExprWithDeps(wsExpr.Expr, by.WeightStrExpr)
+			return ctx.SemTable.EqualsExprWithDeps(wsExpr.Expr, by.SimplifiedExpr)
 		})
 		if idx >= 0 {
 			a.Grouping[idx].WSOffset = len(a.Columns)
@@ -155,7 +163,7 @@ func (a *Aggregator) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser
 		return nil, 0, err
 	}
 	if offset != expectedOffset {
-		panic(42)
+		return nil, 0, vterrors.VT13001("the offset needs to be aligned here")
 	}
 	a.Source = newSrc
 	return a, offset, nil
@@ -182,7 +190,7 @@ func (a *Aggregator) ShortDescription() string {
 
 	var grouping []string
 	for _, gb := range a.Grouping {
-		grouping = append(grouping, sqlparser.String(gb.WeightStrExpr))
+		grouping = append(grouping, sqlparser.String(gb.SimplifiedExpr))
 	}
 
 	org := ""
@@ -221,11 +229,11 @@ func (a *Aggregator) planOffsets(ctx *plancontext.PlanningContext) error {
 			}
 			a.Grouping[idx].ColOffset = offset
 		}
-		if a.Grouping[idx].WSOffset != -1 || !ctx.SemTable.NeedsWeightString(gb.WeightStrExpr) {
+		if a.Grouping[idx].WSOffset != -1 || !ctx.SemTable.NeedsWeightString(gb.SimplifiedExpr) {
 			continue
 		}
 
-		offset, err := addColumn(aeWrap(weightStringFor(gb.WeightStrExpr)), true)
+		offset, err := addColumn(aeWrap(weightStringFor(gb.SimplifiedExpr)), true)
 		if err != nil {
 			return err
 		}

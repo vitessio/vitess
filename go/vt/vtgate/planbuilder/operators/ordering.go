@@ -82,19 +82,19 @@ func (o *Ordering) GetOrdering() ([]ops.OrderBy, error) {
 
 func (o *Ordering) planOffsets(ctx *plancontext.PlanningContext) error {
 	for _, order := range o.Order {
-		newSrc, offset, err := o.Source.AddColumn(ctx, aeWrap(order.WeightStrExpr), true, false)
+		newSrc, offset, err := o.Source.AddColumn(ctx, aeWrap(order.SimplifiedExpr), true, false)
 		if err != nil {
 			return err
 		}
 		o.Source = newSrc
 		o.Offset = append(o.Offset, offset)
 
-		if !ctx.SemTable.NeedsWeightString(order.WeightStrExpr) {
+		if !ctx.SemTable.NeedsWeightString(order.SimplifiedExpr) {
 			o.WOffset = append(o.WOffset, -1)
 			continue
 		}
 
-		wsExpr := &sqlparser.WeightStringFuncExpr{Expr: order.WeightStrExpr}
+		wsExpr := &sqlparser.WeightStringFuncExpr{Expr: order.SimplifiedExpr}
 		newSrc, offset, err = o.Source.AddColumn(ctx, aeWrap(wsExpr), true, false)
 		if err != nil {
 			return err

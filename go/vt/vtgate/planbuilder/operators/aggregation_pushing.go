@@ -65,20 +65,20 @@ func (a *Aggregator) aggregateTheAggregates() {
 func pushDownAggregationThroughRoute(
 	ctx *plancontext.PlanningContext,
 	aggregator *Aggregator,
-	src *Route,
+	route *Route,
 ) (ops.Operator, *rewrite.ApplyResult, error) {
 	// If the route is single-shard, or we are grouping by sharding keys, we can just push down the aggregation
-	if src.IsSingleShard() || overlappingUniqueVindex(ctx, aggregator.Grouping) {
-		return rewrite.Swap(aggregator, src, "pushDownAggregationThroughRoute")
+	if route.IsSingleShard() || overlappingUniqueVindex(ctx, aggregator.Grouping) {
+		return rewrite.Swap(aggregator, route, "pushDownAggregationThroughRoute")
 	}
 
 	// Create a new aggregator to be placed below the route.
-	aggrBelowRoute := aggregator.Clone([]ops.Operator{src.Source}).(*Aggregator)
+	aggrBelowRoute := aggregator.Clone([]ops.Operator{route.Source}).(*Aggregator)
 	aggrBelowRoute.Pushed = false
 	aggrBelowRoute.Original = false
 
 	// Set the source of the route to the new aggregator placed below the route.
-	src.Source = aggrBelowRoute
+	route.Source = aggrBelowRoute
 
 	if !aggregator.Original {
 		// we only keep the root aggregation, if this aggregator was created
@@ -91,7 +91,7 @@ func pushDownAggregationThroughRoute(
 
 func overlappingUniqueVindex(ctx *plancontext.PlanningContext, groupByExprs []GroupBy) bool {
 	for _, groupByExpr := range groupByExprs {
-		if exprHasUniqueVindex(ctx, groupByExpr.WeightStrExpr) {
+		if exprHasUniqueVindex(ctx, groupByExpr.SimplifiedExpr) {
 			return true
 		}
 	}
@@ -188,9 +188,7 @@ func pushDownAggregationThroughJoin(ctx *plancontext.PlanningContext, rootAggr *
 		return nil, nil, err
 	}
 
-	lhsTS := TableID(join.LHS)
-	rhsTS := TableID(join.RHS)
-	groupingJCs, err := splitGroupingToLeftAndRight(ctx, rootAggr, lhsTS, rhsTS, lhs, rhs)
+	groupingJCs, err := splitGroupingToLeftAndRight(ctx, rootAggr, lhs, rhs)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -198,7 +196,7 @@ func pushDownAggregationThroughJoin(ctx *plancontext.PlanningContext, rootAggr *
 
 	// We need to add any columns coming from the lhs of the join to the group by on that side
 	// If we don't, the LHS will not be able to return the column, and it can't be used to send down to the RHS
-	err = addJoinColumnsToLeft(ctx, rootAggr, join, lhs)
+	err = addColumnsFromLHSInJoinPredicates(ctx, rootAggr, join, lhs)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -216,7 +214,7 @@ func pushDownAggregationThroughJoin(ctx *plancontext.PlanningContext, rootAggr *
 	return rootAggr, rewrite.NewTree("push Aggregation under join", rootAggr), nil
 }
 
-func addJoinColumnsToLeft(ctx *plancontext.PlanningContext, rootAggr *Aggregator, join *ApplyJoin, lhs *joinPusher) error {
+func addColumnsFromLHSInJoinPredicates(ctx *plancontext.PlanningContext, rootAggr *Aggregator, join *ApplyJoin, lhs *joinPusher) error {
 	for _, pred := range join.JoinPredicates {
 		for _, expr := range pred.LHSExprs {
 			wexpr := rootAggr.QP.GetSimplifiedExpr(expr)
@@ -226,7 +224,7 @@ func addJoinColumnsToLeft(ctx *plancontext.PlanningContext, rootAggr *Aggregator
 				lhs.pushed.Columns = append(lhs.pushed.Columns, aeWrap(expr))
 			}
 			_, found = canReuseColumn(ctx, lhs.pushed.Grouping, wexpr, func(by GroupBy) sqlparser.Expr {
-				return by.WeightStrExpr
+				return by.SimplifiedExpr
 			})
 
 			if found {
@@ -234,29 +232,30 @@ func addJoinColumnsToLeft(ctx *plancontext.PlanningContext, rootAggr *Aggregator
 			}
 
 			lhs.pushed.Grouping = append(lhs.pushed.Grouping, GroupBy{
-				Inner:         expr,
-				WeightStrExpr: wexpr,
-				ColOffset:     idx,
-				WSOffset:      -1,
+				Inner:          expr,
+				SimplifiedExpr: wexpr,
+				ColOffset:      idx,
+				WSOffset:       -1,
 			})
 		}
 	}
 	return nil
 }
 
-func splitGroupingToLeftAndRight(ctx *plancontext.PlanningContext, rootAggr *Aggregator, lhsTS, rhsTS semantics.TableSet, lhs, rhs *joinPusher) ([]JoinColumn, error) {
+func splitGroupingToLeftAndRight(ctx *plancontext.PlanningContext, rootAggr *Aggregator, lhs, rhs *joinPusher) ([]JoinColumn, error) {
 	var groupingJCs []JoinColumn
+
 	for _, groupBy := range rootAggr.Grouping {
 		deps := ctx.SemTable.RecursiveDeps(groupBy.Inner)
 		expr := groupBy.Inner
 		switch {
-		case deps.IsSolvedBy(lhsTS):
+		case deps.IsSolvedBy(lhs.tableID):
 			lhs.addGrouping(ctx, groupBy)
 			groupingJCs = append(groupingJCs, JoinColumn{
 				Original: aeWrap(groupBy.Inner),
 				LHSExprs: []sqlparser.Expr{expr},
 			})
-		case deps.IsSolvedBy(rhsTS):
+		case deps.IsSolvedBy(rhs.tableID):
 			rhs.addGrouping(ctx, groupBy)
 			groupingJCs = append(groupingJCs, JoinColumn{
 				Original: aeWrap(groupBy.Inner),
@@ -270,7 +269,7 @@ func splitGroupingToLeftAndRight(ctx *plancontext.PlanningContext, rootAggr *Agg
 }
 
 // splitAggrColumnsToLeftAndRight pushes all aggregations on the aggregator above a join and
-// pushed them to one or both sides of the join, and also provides the projections needed to re-assemble the
+// pushes them to one or both sides of the join, and also provides the projections needed to re-assemble the
 // aggregations that have been spread across the join
 func splitAggrColumnsToLeftAndRight(
 	ctx *plancontext.PlanningContext,
@@ -286,6 +285,7 @@ func splitAggrColumnsToLeftAndRight(
 	}
 
 outer:
+	// we prefer adding the aggregations in the same order as the columns are declared
 	for colIdx, col := range aggregator.Columns {
 		for aggrIdx, aggr := range aggregator.Aggregations {
 			if aggr.ColOffset == colIdx {
@@ -307,6 +307,8 @@ outer:
 }
 
 type (
+	// aggBuilder is a helper struct that aids in pushing down an Aggregator through a join
+	// it accumulates the projections (if any) that need to be evaluated on top of the join
 	aggBuilder struct {
 		lhs, rhs           *joinPusher
 		projectionRequired bool
@@ -322,6 +324,8 @@ type (
 		columns []int              // List of column offsets used in the new Aggregator.
 		tableID semantics.TableSet // The TableSet denoting the side of the Join where the new Aggregator is pushed.
 
+		// csAE keeps the copy of the countStar expression that has already been added to split an aggregation.
+		// No need to have multiple countStars, so we cache it here
 		csAE *sqlparser.AliasedExpr
 	}
 )
@@ -380,6 +384,9 @@ func (ab *aggBuilder) handleAggr(ctx *plancontext.PlanningContext, aggr Aggr) (A
 	}
 }
 
+// pushThroughLeft and Right are used for extremums and random,
+// which are not split and then arithmetics is used to aggregate the per-shard aggregations.
+// For these, we just copy the aggregation to one side of the join and then pick the max of the max:es returned
 func (ab *aggBuilder) pushThroughLeft(aggr Aggr) {
 	ab.lhs.pushThroughAggr(aggr)
 	ab.joinColumns = append(ab.joinColumns, JoinColumn{
@@ -490,7 +497,7 @@ func (ab *aggBuilder) handleCount(ctx *plancontext.PlanningContext, aggr Aggr) (
 }
 
 func coalesceFunc(e sqlparser.Expr) sqlparser.Expr {
-	// coalesce(e,1)
+	// `coalesce(e,1)` will return `e` if `e` is not `NULL`, otherwise it will return `1`
 	return &sqlparser.FuncExpr{
 		Name: sqlparser.NewIdentifierCI("coalesce"),
 		Exprs: sqlparser.SelectExprs{

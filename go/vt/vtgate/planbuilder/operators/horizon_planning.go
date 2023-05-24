@@ -183,7 +183,7 @@ func needsOrdering(in *Aggregator, ctx *plancontext.PlanningContext) (bool, erro
 		return true, nil
 	}
 	for idx, gb := range in.Grouping {
-		if !ctx.SemTable.EqualsExprWithDeps(srcOrdering[idx].WeightStrExpr, gb.WeightStrExpr) {
+		if !ctx.SemTable.EqualsExprWithDeps(srcOrdering[idx].SimplifiedExpr, gb.SimplifiedExpr) {
 			return true, nil
 		}
 	}
@@ -208,7 +208,7 @@ func tryPushingDownOrdering(ctx *plancontext.PlanningContext, in *Ordering) (ops
 	case *Projection:
 		// we can move ordering under a projection if it's not introducing a column we're sorting by
 		for _, by := range in.Order {
-			if !fetchByOffset(by.WeightStrExpr) {
+			if !fetchByOffset(by.SimplifiedExpr) {
 				return in, rewrite.SameTree, nil
 			}
 		}
@@ -232,7 +232,7 @@ func pushOrderingUnderAggr(ctx *plancontext.PlanningContext, order *Ordering, ag
 	used := make([]bool, len(aggregator.Grouping))
 	for _, orderExpr := range order.Order {
 		for grpIdx, by := range aggregator.Grouping {
-			if !used[grpIdx] && ctx.SemTable.EqualsExprWithDeps(by.WeightStrExpr, orderExpr.WeightStrExpr) {
+			if !used[grpIdx] && ctx.SemTable.EqualsExprWithDeps(by.SimplifiedExpr, orderExpr.SimplifiedExpr) {
 				newGrouping = append(newGrouping, by)
 				used[grpIdx] = true
 			}
@@ -310,7 +310,7 @@ func pushDownProjectionInVindex(
 	p *Projection,
 	src *Vindex,
 ) (ops.Operator, *rewrite.ApplyResult, error) {
-	for _, column := range p.Columns {
+	for _, column := range p.Projections {
 		expr := column.GetExpr()
 		_, _, err := src.AddColumn(ctx, aeWrap(expr), true, false)
 		if err != nil {
@@ -346,8 +346,8 @@ func pushDownProjectionInApplyJoin(
 	lhs, rhs := &projector{}, &projector{}
 
 	src.ColumnsAST = nil
-	for idx := 0; idx < len(p.Columns); idx++ {
-		err := splitProjectionAcrossJoin(ctx, src, lhs, rhs, p.Columns[idx], p.ColumnNames[idx])
+	for idx := 0; idx < len(p.Projections); idx++ {
+		err := splitProjectionAcrossJoin(ctx, src, lhs, rhs, p.Projections[idx], p.Columns[idx])
 		if err != nil {
 			return nil, nil, err
 		}
@@ -489,8 +489,8 @@ func createProjectionWithTheseColumns(
 	if err != nil {
 		return nil, err
 	}
-	proj.ColumnNames = p.names
-	proj.Columns = p.cols
+	proj.Columns = p.names
+	proj.Projections = p.cols
 	proj.TableID = tableID
 	proj.Alias = alias
 	return proj, nil

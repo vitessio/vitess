@@ -586,7 +586,7 @@ func (hp *horizonPlanning) createGroupingsForColumns(columns []*sqlparser.ColNam
 
 func hasUniqueVindex(semTable *semantics.SemTable, groupByExprs []operators.GroupBy) bool {
 	for _, groupByExpr := range groupByExprs {
-		if exprHasUniqueVindex(semTable, groupByExpr.WeightStrExpr) {
+		if exprHasUniqueVindex(semTable, groupByExpr.SimplifiedExpr) {
 			return true
 		}
 	}
@@ -613,7 +613,7 @@ func (hp *horizonPlanning) planOrderBy(ctx *plancontext.PlanningContext, orderEx
 		orderExprs = orderExprsWithoutNils
 
 		for _, order := range orderExprs {
-			if sqlparser.ContainsAggregation(order.WeightStrExpr) {
+			if sqlparser.ContainsAggregation(order.SimplifiedExpr) {
 				ms, err := createMemorySortPlanOnAggregation(ctx, plan, orderExprs)
 				if err != nil {
 					return nil, err
@@ -673,7 +673,7 @@ func planOrderByForRoute(ctx *plancontext.PlanningContext, orderExprs []ops.Orde
 		}
 		var wsExpr sqlparser.Expr
 		if ctx.SemTable.NeedsWeightString(order.Inner.Expr) {
-			wsExpr = order.WeightStrExpr
+			wsExpr = order.SimplifiedExpr
 		}
 
 		offset, weightStringOffset, err := wrapAndPushExpr(ctx, order.Inner.Expr, wsExpr, plan)
@@ -825,7 +825,7 @@ func createMemorySortPlanOnAggregation(ctx *plancontext.PlanningContext, plan *o
 			return nil, vterrors.VT13001(fmt.Sprintf("expected to find ORDER BY expression (%s) in orderedAggregate", sqlparser.String(order.Inner)))
 		}
 
-		collationID := ctx.SemTable.CollationForExpr(order.WeightStrExpr)
+		collationID := ctx.SemTable.CollationForExpr(order.SimplifiedExpr)
 		ms.eMemorySort.OrderBy = append(ms.eMemorySort.OrderBy, engine.OrderByParams{
 			Col:               offset,
 			WeightStringCol:   woffset,
@@ -839,13 +839,13 @@ func createMemorySortPlanOnAggregation(ctx *plancontext.PlanningContext, plan *o
 
 func findExprInOrderedAggr(ctx *plancontext.PlanningContext, plan *orderedAggregate, order ops.OrderBy) (keyCol int, weightStringCol int, found bool) {
 	for _, key := range plan.groupByKeys {
-		if ctx.SemTable.EqualsExpr(order.WeightStrExpr, key.Expr) ||
+		if ctx.SemTable.EqualsExpr(order.SimplifiedExpr, key.Expr) ||
 			ctx.SemTable.EqualsExpr(order.Inner.Expr, key.Expr) {
 			return key.KeyCol, key.WeightStringCol, true
 		}
 	}
 	for _, aggregate := range plan.aggregates {
-		if ctx.SemTable.EqualsExpr(order.WeightStrExpr, aggregate.Original.Expr) ||
+		if ctx.SemTable.EqualsExpr(order.SimplifiedExpr, aggregate.Original.Expr) ||
 			ctx.SemTable.EqualsExpr(order.Inner.Expr, aggregate.Original.Expr) {
 			return aggregate.Col, -1, true
 		}
@@ -865,7 +865,7 @@ func (hp *horizonPlanning) createMemorySortPlan(ctx *plancontext.PlanningContext
 	}
 
 	for _, order := range orderExprs {
-		wsExpr := order.WeightStrExpr
+		wsExpr := order.SimplifiedExpr
 		if !useWeightStr {
 			wsExpr = nil
 		}
@@ -984,8 +984,8 @@ func (hp *horizonPlanning) addDistinct(ctx *plancontext.PlanningContext, plan lo
 		groupByKeys = append(groupByKeys, grpParam)
 
 		orderExprs = append(orderExprs, ops.OrderBy{
-			Inner:         &sqlparser.Order{Expr: inner},
-			WeightStrExpr: aliasExpr.Expr},
+			Inner:          &sqlparser.Order{Expr: inner},
+			SimplifiedExpr: aliasExpr.Expr},
 		)
 	}
 	innerPlan, err := hp.planOrderBy(ctx, orderExprs, plan)
@@ -1170,7 +1170,7 @@ func planGroupByGen4(ctx *plancontext.PlanningContext, groupExpr operators.Group
 		// then we need to add that to the group by clause otherwise the query will fail on mysql with full_group_by error
 		// as the weight_string function might not be functionally dependent on the group by.
 		if wsAdded {
-			sel.AddGroupBy(weightStringFor(groupExpr.WeightStrExpr))
+			sel.AddGroupBy(weightStringFor(groupExpr.SimplifiedExpr))
 		}
 		return nil
 	case *pulloutSubquery:

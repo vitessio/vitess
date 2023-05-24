@@ -62,8 +62,13 @@ type (
 
 	// GroupBy contains the expression to used in group by and also if grouping is needed at VTGate level then what the weight_string function expression to be sent down for evaluation.
 	GroupBy struct {
-		Inner         sqlparser.Expr
-		WeightStrExpr sqlparser.Expr
+		Inner sqlparser.Expr
+
+		// The simplified expressions is the "unaliased expression".
+		// In the following query, the group by has the inner expression
+		// `x` and the `SimplifiedExpr` is `table.col + 10`:
+		// select table.col + 10 as x, count(*) from tbl group by x
+		SimplifiedExpr sqlparser.Expr
 
 		// The index at which the user expects to see this column. Set to nil, if the user does not ask for it
 		InnerIndex *int
@@ -101,14 +106,13 @@ type (
 )
 
 // NewGroupBy creates a new group by from the given fields.
-func NewGroupBy(inner sqlparser.Expr, weightStrExpr sqlparser.Expr, aliasedExpr *sqlparser.AliasedExpr) GroupBy {
+func NewGroupBy(inner, simplified sqlparser.Expr, aliasedExpr *sqlparser.AliasedExpr) GroupBy {
 	return GroupBy{
-		Inner:         inner,
-		WeightStrExpr: weightStrExpr,
-		InnerIndex:    nil,
-		aliasedExpr:   aliasedExpr,
-		ColOffset:     -1,
-		WSOffset:      -1,
+		Inner:          inner,
+		SimplifiedExpr: simplified,
+		aliasedExpr:    aliasedExpr,
+		ColOffset:      -1,
+		WSOffset:       -1,
 	}
 }
 
@@ -118,7 +122,7 @@ func (b GroupBy) AsOrderBy() ops.OrderBy {
 			Expr:      b.Inner,
 			Direction: sqlparser.AscOrder,
 		},
-		WeightStrExpr: b.WeightStrExpr,
+		SimplifiedExpr: b.SimplifiedExpr,
 	}
 }
 
@@ -127,18 +131,18 @@ func (b GroupBy) AsAliasedExpr() *sqlparser.AliasedExpr {
 		return b.aliasedExpr
 	}
 	col, isColName := b.Inner.(*sqlparser.ColName)
-	if isColName && b.WeightStrExpr != b.Inner {
+	if isColName && b.SimplifiedExpr != b.Inner {
 		return &sqlparser.AliasedExpr{
-			Expr: b.WeightStrExpr,
+			Expr: b.SimplifiedExpr,
 			As:   col.Name,
 		}
 	}
-	if !isColName && b.WeightStrExpr != b.Inner {
+	if !isColName && b.SimplifiedExpr != b.Inner {
 		panic("this should not happen - different inner and weighStringExpr and not a column alias")
 	}
 
 	return &sqlparser.AliasedExpr{
-		Expr: b.WeightStrExpr,
+		Expr: b.SimplifiedExpr,
 	}
 }
 
@@ -313,8 +317,8 @@ func (qp *QueryProjection) addOrderBy(orderBy sqlparser.OrderBy) error {
 			continue
 		}
 		qp.OrderExprs = append(qp.OrderExprs, ops.OrderBy{
-			Inner:         sqlparser.CloneRefOfOrder(order),
-			WeightStrExpr: weightStrExpr,
+			Inner:          sqlparser.CloneRefOfOrder(order),
+			SimplifiedExpr: weightStrExpr,
 		})
 		canPushDownSorting = canPushDownSorting && !sqlparser.ContainsAggregation(weightStrExpr)
 	}
@@ -347,7 +351,7 @@ func (qp *QueryProjection) isExprInGroupByExprs(ctx *plancontext.PlanningContext
 		if err != nil {
 			return false
 		}
-		if ctx.SemTable.EqualsExprWithDeps(groupByExpr.WeightStrExpr, exp) {
+		if ctx.SemTable.EqualsExprWithDeps(groupByExpr.SimplifiedExpr, exp) {
 			return true
 		}
 	}
@@ -523,7 +527,7 @@ func (qp *QueryProjection) NeedsDistinct() bool {
 func (qp *QueryProjection) AggregationExpressions(ctx *plancontext.PlanningContext) (out []Aggr, err error) {
 orderBy:
 	for _, orderExpr := range qp.OrderExprs {
-		orderExpr := orderExpr.WeightStrExpr
+		orderExpr := orderExpr.SimplifiedExpr
 		for _, expr := range qp.SelectExprs {
 			col, ok := expr.Col.(*sqlparser.AliasedExpr)
 			if !ok {
@@ -640,7 +644,7 @@ func (qp *QueryProjection) OldAlignGroupByAndOrderBy(ctx *plancontext.PlanningCo
 		used := make([]bool, len(qp.groupByExprs))
 		for _, orderExpr := range qp.OrderExprs {
 			for i, groupingExpr := range qp.groupByExprs {
-				if !used[i] && ctx.SemTable.EqualsExprWithDeps(groupingExpr.WeightStrExpr, orderExpr.WeightStrExpr) {
+				if !used[i] && ctx.SemTable.EqualsExpr(groupingExpr.SimplifiedExpr, orderExpr.SimplifiedExpr) {
 					newGrouping = append(newGrouping, groupingExpr)
 					used[i] = true
 				}
@@ -677,7 +681,7 @@ func (qp *QueryProjection) AlignGroupByAndOrderBy(ctx *plancontext.PlanningConte
 outer:
 	for _, orderBy := range qp.OrderExprs {
 		for gidx, groupBy := range qp.groupByExprs {
-			if ctx.SemTable.EqualsExprWithDeps(groupBy.WeightStrExpr, orderBy.WeightStrExpr) {
+			if ctx.SemTable.EqualsExprWithDeps(groupBy.SimplifiedExpr, orderBy.SimplifiedExpr) {
 				newGrouping = append(newGrouping, groupBy)
 				used[gidx] = true
 				continue outer
@@ -755,11 +759,4 @@ func CompareRefInt(a *int, b *int) bool {
 		return true
 	}
 	return *a < *b
-}
-
-func (a *Aggr) Clone() *Aggr {
-	clone := *a
-	clone.Original = sqlparser.CloneRefOfAliasedExpr(a.Original)
-	clone.Func = sqlparser.CloneAggrFunc(a.Func)
-	return &clone
 }
