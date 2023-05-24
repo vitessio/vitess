@@ -220,6 +220,14 @@ func makeTestOutput(t *testing.T) string {
 	return testOutputTempDir
 }
 
+func TestWeirdGo(t *testing.T) {
+	type CountStar struct{}
+
+	cs1 := &CountStar{}
+	cs2 := &CountStar{}
+	require.NotSame(t, cs1, cs2, "what the what!?")
+}
+
 func TestPlan(t *testing.T) {
 	vschemaWrapper := &vschemaWrapper{
 		v:             loadSchema(t, "vschemas/schema.json", true),

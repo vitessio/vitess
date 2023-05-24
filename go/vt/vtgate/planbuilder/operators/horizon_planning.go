@@ -39,9 +39,12 @@ var _errHorizonNotPlanned = vterrors.VT12001("query cannot be fully operator pla
 func tryHorizonPlanning(ctx *plancontext.PlanningContext, root ops.Operator) (output ops.Operator, err error) {
 	backup := Clone(root)
 	defer func() {
-		// If we get the below error.
-		// We will be using old horizon planning.
+		// If we encounter the _errHorizonNotPlanned error, we'll revert to using the old horizon planning strategy.
 		if err == _errHorizonNotPlanned {
+			// The only offset planning we did before was on joins.
+			// Therefore, we traverse the tree to find all joins and calculate the joinColumns offsets.
+			// Our fallback strategy is to clone the original operator tree, compute the join offsets,
+			// and allow the legacy horizonPlanner to handle this query using logical plans.
 			err = planOffsetsOnJoins(ctx, backup)
 			if err == nil {
 				output = backup
