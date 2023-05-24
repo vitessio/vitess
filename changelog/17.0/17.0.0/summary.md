@@ -4,13 +4,16 @@
 
 - **[Major Changes](#major-changes)**
   - **[Breaking Changes](#breaking-changes)**
+    - [Default Local Cell Preference for TabletPicker](#tablet-picker-cell-preference)
     - [Dedicated stats for VTGate Prepare operations](#dedicated-vtgate-prepare-stats)
     - [VTAdmin web migrated from create-react-app to vite](#migrated-vtadmin)
     - [Keyspace name validation in TopoServer](#keyspace-name-validation)
     - [Shard name validation in TopoServer](#shard-name-validation)
+    - [Compression CLI flags removed from vtctld and vtctldclient binaries](#remove-compression-flags-from-vtctld-binaries)
     - [VtctldClient command RestoreFromBackup will now use the correct context](#VtctldClient-RestoreFromBackup)
   - **[New command line flags and behavior](#new-flag)**
     - [Builtin backup: read buffering flags](#builtin-backup-read-buffering-flags)
+    - [Manifest backup external decompressor command](#manifest-backup-external-decompressor-command)
   - **[New stats](#new-stats)**
     - [Detailed backup and restore stats](#detailed-backup-and-restore-stats)
     - [VTtablet Error count with code](#vttablet-error-count-with-code)
@@ -31,6 +34,28 @@
 ## <a id="major-changes"/> Major Changes
 
 ### <a id="breaking-changes"/>Breaking Changes
+
+#### <a id="tablet-picker-cell-preference"/>Default Local Cell Preference for TabletPicker
+
+We added options to the `TabletPicker` that allow for specifying a cell preference in addition to making the default behavior to give priority to the local cell *and any alias it belongs to*. We are also introducing a new way to select tablet type preference which should eventually replace the `in_order:` hint currently used as a prefix for tablet types. The signature for creating a new `TabletPicker` now looks like:
+
+```
+func NewTabletPicker(
+	ctx context.Context,
+	ts *topo.Server,
+	cells []string,
+	localCell, keyspace, shard, tabletTypesStr string,
+	options TabletPickerOptions,
+) (*TabletPicker, error) {...}
+```
+
+Where ctx, localCell, option are all new parameters.
+
+`option` is of type `TabletPickerOptions` and includes two fields, `CellPreference` and `TabletOrder`.
+CellPreference`: "PreferLocalWithAlias" (default) gives preference to vtgate's local cell, or "OnlySpecified" which only picks from the cells explicitly passed in by the client
+`TabletOrder`: "Any" (default) for no ordering or random, or "InOrder" to use the order specified by the client
+
+See [PR 12282 Description](https://github.com/vitessio/vitess/pull/12282) for examples on how this changes cell picking behavior.
 
 #### <a id="vtgr-default-tls-version"/>Default TLS version changed for `vtgr`
 
@@ -81,6 +106,16 @@ Prior to v17, it was possible to create a shard name with invalid characters, wh
 
 Shard names are restricted to using only ASCII characters, digits and `_` and `-`. TopoServer's `GetShard` and `CreateShard` methods return an error if given an invalid name.
 
+#### <a id="remove-compression-flags-from-vtctld-binaries"> Compression CLI flags remove from vtctld and vtctldclient binaries
+
+The CLI flags below were mistakenly added to `vtctld` and `vtctldclient` in v15. In v17, they are no longer present in those binaries.
+
+ * `--compression-engine-name`
+ * `--compression-level`
+ * `--external-compressor`
+ * `--external-compressor-extension`
+ * `--external-decompressor`
+
 #### <a id="VtctldClient-RestoreFromBackup"> VtctldClient command RestoreFromBackup will now use the correct context
 
 The VtctldClient command RestoreFromBackup initiates an asynchronous process on the specified tablet to restore data from either the latest backup or the closest one before the specified backup-timestamp.
@@ -109,6 +144,20 @@ These flags are applicable to the following programs:
 - `vtctld`
 - `vttablet`
 - `vttestserver`
+
+#### <a id="manifest-backup-external-decompressor-command" /> Manifest backup external decompressor command
+
+Add a new builtin/xtrabackup flag `--manifest-external-decompressor`. When set the value of that flag is stored in the manifest field `ExternalDecompressor`. This manifest field may be consulted when decompressing a backup that was compressed with an external command.
+
+This feature enables the following flow:
+
+ 1. Take a backup using an external compressor
+    ```
+     Backup --compression-engine=external \
+            --external-compressor=zstd \
+            --manifest-external-decompressor="zstd -d"
+    ```
+ 2. Restore that backup with a mere `Restore` command, without having to specify `--external-decompressor`.
 
 ### <a id="new-stats"/> New stats
 
@@ -261,6 +310,7 @@ vttablet_v_replication_stream_state{counts="1",state="Running",workflow="commerc
 * Auto-population of DDL revert actions and tables at execution-time has been removed. This is now handled entirely at enqueue-time.
 * Backwards-compatibility for failed migrations without a `completed_timestamp` has been removed (see https://github.com/vitessio/vitess/issues/8499).
 * The deprecated `Key`, `Name`, `Up`, and `TabletExternallyReparentedTimestamp` fields were removed from the JSON representation of `TabletHealth` structures.
+* The `MYSQL_FLAVOR` environment variable is no longer used.
 
 ### <a id="deprecated-flags"/>Deprecated Command Line Flags
 

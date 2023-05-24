@@ -416,16 +416,6 @@ func (node TableName) IsEmpty() bool {
 	return node.Name.IsEmpty()
 }
 
-// ToViewName returns a TableName acceptable for use as a VIEW. VIEW names are
-// always lowercase, so ToViewName lowercasese the name. Databases are case-sensitive
-// so Qualifier is left untouched.
-func (node TableName) ToViewName() TableName {
-	return TableName{
-		Qualifier: node.Qualifier,
-		Name:      NewIdentifierCS(strings.ToLower(node.Name.v)),
-	}
-}
-
 // NewWhere creates a WHERE or HAVING clause out
 // of a Expr. If the expression is nil, it returns nil.
 func NewWhere(typ WhereType, expr Expr) *Where {
@@ -2300,6 +2290,50 @@ func (ty LinestrPropType) ToString() string {
 		return StartPointStr
 	default:
 		return "Unknown LinestrPropType"
+	}
+}
+
+// ToString returns the type as a string
+func (ty PolygonPropType) ToString() string {
+	switch ty {
+	case Area:
+		return AreaStr
+	case Centroid:
+		return CentroidStr
+	case ExteriorRing:
+		return ExteriorRingStr
+	case InteriorRingN:
+		return InteriorRingNStr
+	case NumInteriorRings:
+		return NumInteriorRingsStr
+	default:
+		return "Unknown PolygonPropType"
+	}
+}
+
+// ToString returns the type as a string
+func (ty GeomCollPropType) ToString() string {
+	switch ty {
+	case GeometryN:
+		return GeometryNStr
+	case NumGeometries:
+		return NumGeometriesStr
+	default:
+		return "Unknown GeomCollPropType"
+	}
+}
+
+// ToString returns the type as a string
+func (ty GeomFromHashType) ToString() string {
+	switch ty {
+	case LatitudeFromHash:
+		return LatitudeFromHashStr
+	case LongitudeFromHash:
+		return LongitudeFromHashStr
+	case PointFromHash:
+		return PointFromHashStr
+	default:
+		return "Unknown GeomFromGeoHashType"
 	}
 }
 

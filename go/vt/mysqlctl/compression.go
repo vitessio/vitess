@@ -49,9 +49,10 @@ var (
 	// CompressionEngineName specifies which compressor/decompressor to use
 	CompressionEngineName = "pargzip"
 	// ExternalCompressorCmd / ExternalDecompressorCmd specify the external commands compress/decompress the backups
-	ExternalCompressorCmd   string
-	ExternalCompressorExt   string
-	ExternalDecompressorCmd string
+	ExternalCompressorCmd           string
+	ExternalCompressorExt           string
+	ExternalDecompressorCmd         string
+	ManifestExternalDecompressorCmd string
 
 	errUnsupportedDeCompressionEngine = errors.New("unsupported engine in MANIFEST. You need to provide --external-decompressor if using 'external' compression engine")
 	errUnsupportedCompressionEngine   = errors.New("unsupported engine value for --compression-engine-name. supported values are 'external', 'pgzip', 'pargzip', 'zstd', 'lz4'")
@@ -65,7 +66,7 @@ var (
 )
 
 func init() {
-	for _, cmd := range []string{"vtbackup", "vtcombo", "vttablet", "vttestserver", "vtctld", "vtctldclient"} {
+	for _, cmd := range []string{"vtbackup", "vtcombo", "vttablet", "vttestserver"} {
 		servenv.OnParseFor(cmd, registerBackupCompressionFlags)
 	}
 }
@@ -76,6 +77,7 @@ func registerBackupCompressionFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&ExternalCompressorCmd, "external-compressor", ExternalCompressorCmd, "command with arguments to use when compressing a backup.")
 	fs.StringVar(&ExternalCompressorExt, "external-compressor-extension", ExternalCompressorExt, "extension to use when using an external compressor.")
 	fs.StringVar(&ExternalDecompressorCmd, "external-decompressor", ExternalDecompressorCmd, "command with arguments to use when decompressing a backup.")
+	fs.StringVar(&ManifestExternalDecompressorCmd, "manifest-external-decompressor", ManifestExternalDecompressorCmd, "command with arguments to store in the backup manifest when compressing a backup with an external compression engine.")
 }
 
 func getExtensionFromEngine(engine string) (string, error) {

@@ -25,8 +25,10 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/discovery"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
 
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
@@ -46,6 +48,9 @@ type vstreamManager struct {
 	resolver *srvtopo.Resolver
 	toposerv srvtopo.Server
 	cell     string
+
+	vstreamsCreated *stats.CountersWithMultiLabels
+	vstreamsLag     *stats.GaugesWithMultiLabels
 }
 
 // maxSkewTimeoutSeconds is the maximum allowed skew between two streams when the MinimizeSkew flag is set
@@ -110,6 +115,8 @@ type vstream struct {
 	eventCh           chan []*binlogdatapb.VEvent
 	heartbeatInterval uint32
 	ts                *topo.Server
+
+	tabletPickerOptions discovery.TabletPickerOptions
 }
 
 type journalEvent struct {
@@ -119,10 +126,19 @@ type journalEvent struct {
 }
 
 func newVStreamManager(resolver *srvtopo.Resolver, serv srvtopo.Server, cell string) *vstreamManager {
+	exporter := servenv.NewExporter(cell, "VStreamManager")
 	return &vstreamManager{
 		resolver: resolver,
 		toposerv: serv,
 		cell:     cell,
+		vstreamsCreated: exporter.NewCountersWithMultiLabels(
+			"VStreamsCreated",
+			"Number of vstreams created",
+			[]string{"Keyspace", "ShardName", "TabletType"}),
+		vstreamsLag: exporter.NewGaugesWithMultiLabels(
+			"VStreamsLag",
+			"Difference between event current time and the binlog event timestamp",
+			[]string{"Keyspace", "ShardName", "TabletType"}),
 	}
 }
 
@@ -157,6 +173,10 @@ func (vsm *vstreamManager) VStream(ctx context.Context, tabletType topodatapb.Ta
 		heartbeatInterval:  flags.GetHeartbeatInterval(),
 		ts:                 ts,
 		copyCompletedShard: make(map[string]struct{}),
+		tabletPickerOptions: discovery.TabletPickerOptions{
+			CellPreference: flags.GetCellPreference(),
+			TabletOrder:    flags.GetTabletOrder(),
+		},
 	}
 	return vs.stream(ctx)
 }
@@ -473,7 +493,7 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 		var eventss [][]*binlogdatapb.VEvent
 		var err error
 		cells := vs.getCells()
-		tp, err := discovery.NewTabletPicker(vs.ts, cells, sgtid.Keyspace, sgtid.Shard, vs.tabletType.String())
+		tp, err := discovery.NewTabletPicker(ctx, vs.ts, cells, vs.vsm.cell, sgtid.Keyspace, sgtid.Shard, vs.tabletType.String(), vs.tabletPickerOptions)
 		if err != nil {
 			log.Errorf(err.Error())
 			return err
@@ -528,9 +548,16 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 			Filter:       vs.filter,
 			TableLastPKs: sgtid.TablePKs,
 		}
+		var vstreamCreatedOnce sync.Once
 		err = tabletConn.VStream(ctx, req, func(events []*binlogdatapb.VEvent) error {
 			// We received a valid event. Reset error count.
 			errCount = 0
+
+			labels := []string{sgtid.Keyspace, sgtid.Shard, req.Target.TabletType.String()}
+
+			vstreamCreatedOnce.Do(func() {
+				vs.vsm.vstreamsCreated.Add(labels, 1)
+			})
 
 			select {
 			case <-ctx.Done():
@@ -627,6 +654,9 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 				default:
 					sendevents = append(sendevents, event)
 				}
+				lag := event.CurrentTime/1e9 - event.Timestamp
+				vs.vsm.vstreamsLag.Set(labels, lag)
+
 			}
 			if len(sendevents) != 0 {
 				eventss = append(eventss, sendevents)

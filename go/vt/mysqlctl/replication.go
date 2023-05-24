@@ -457,7 +457,7 @@ func (mysqld *Mysqld) SetReplicationSource(ctx context.Context, host string, por
 	}
 	defer conn.Recycle()
 
-	cmds := []string{}
+	var cmds []string
 	if stopReplicationBefore {
 		cmds = append(cmds, conn.StopReplicationCommand())
 	}
@@ -554,54 +554,6 @@ func FindReplicas(mysqld MysqlDaemon) ([]string, error) {
 	}
 
 	return addrs, nil
-}
-
-// EnableBinlogPlayback prepares the server to play back events from a binlog stream.
-// Whatever it does for a given flavor, it must be idempotent.
-func (mysqld *Mysqld) EnableBinlogPlayback() error {
-	// Get a connection.
-	conn, err := getPoolReconnect(context.TODO(), mysqld.dbaPool)
-	if err != nil {
-		return err
-	}
-	defer conn.Recycle()
-
-	// See if we have a command to run, and run it.
-	cmd := conn.EnableBinlogPlaybackCommand()
-	if cmd == "" {
-		return nil
-	}
-	if err := mysqld.ExecuteSuperQuery(context.TODO(), cmd); err != nil {
-		log.Errorf("EnableBinlogPlayback: cannot run query '%v': %v", cmd, err)
-		return fmt.Errorf("EnableBinlogPlayback: cannot run query '%v': %v", cmd, err)
-	}
-
-	log.Info("EnableBinlogPlayback: successfully ran %v", cmd)
-	return nil
-}
-
-// DisableBinlogPlayback returns the server to the normal state after streaming.
-// Whatever it does for a given flavor, it must be idempotent.
-func (mysqld *Mysqld) DisableBinlogPlayback() error {
-	// Get a connection.
-	conn, err := getPoolReconnect(context.TODO(), mysqld.dbaPool)
-	if err != nil {
-		return err
-	}
-	defer conn.Recycle()
-
-	// See if we have a command to run, and run it.
-	cmd := conn.DisableBinlogPlaybackCommand()
-	if cmd == "" {
-		return nil
-	}
-	if err := mysqld.ExecuteSuperQuery(context.TODO(), cmd); err != nil {
-		log.Errorf("DisableBinlogPlayback: cannot run query '%v': %v", cmd, err)
-		return fmt.Errorf("DisableBinlogPlayback: cannot run query '%v': %v", cmd, err)
-	}
-
-	log.Info("DisableBinlogPlayback: successfully ran '%v'", cmd)
-	return nil
 }
 
 // GetBinlogInformation gets the binlog format, whether binlog is enabled and if updates on replica logging is enabled.
@@ -712,8 +664,8 @@ func (mysqld *Mysqld) SemiSyncEnabled() (primary, replica bool) {
 	if err != nil {
 		return false, false
 	}
-	primary = (vars["rpl_semi_sync_master_enabled"] == "ON")
-	replica = (vars["rpl_semi_sync_slave_enabled"] == "ON")
+	primary = vars["rpl_semi_sync_master_enabled"] == "ON"
+	replica = vars["rpl_semi_sync_slave_enabled"] == "ON"
 	return primary, replica
 }
 

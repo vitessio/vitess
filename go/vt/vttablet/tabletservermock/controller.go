@@ -18,13 +18,11 @@ limitations under the License.
 package tabletservermock
 
 import (
+	"context"
 	"sync"
+	"time"
 
 	"google.golang.org/protobuf/proto"
-
-	"context"
-
-	"time"
 
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/mysqlctl"

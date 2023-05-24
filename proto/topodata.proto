@@ -157,16 +157,14 @@ message Tablet {
   //
   vttime.Time primary_term_start_time = 14;
 
-  // db_server_version represents the database version used by the tablet.
-  string db_server_version = 15;
-
   // default_conn_collation is the default connection collation used by this tablet.
   uint32 default_conn_collation = 16;
 
   // OBSOLETE: ip and tablet health information
   // string ip = 3;
   // map<string, string> health_map = 11;
-  reserved 3, 11;
+  // string db_server_version = 15;
+  reserved 3, 11, 15;
 }
 
 // A Shard contains data about a subset of the data whithin a keyspace.

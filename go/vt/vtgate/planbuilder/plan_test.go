@@ -408,7 +408,7 @@ func BenchmarkTPCH(b *testing.B) {
 
 func benchmarkWorkload(b *testing.B, name string) {
 	vschemaWrapper := &vschemaWrapper{
-		v:             loadSchema(b, name+"vschemas/_schema.json", true),
+		v:             loadSchema(b, "vschemas/"+name+"_schema.json", true),
 		sysVarEnabled: true,
 	}
 
