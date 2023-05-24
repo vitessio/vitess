@@ -87,7 +87,7 @@ func TestPersistConfig(t *testing.T) {
 	t.Run("basic", func(t *testing.T) {
 		v := vipersync.New()
 
-		minPersistWaitInterval := 2 * time.Second
+		minPersistWaitInterval := 10 * time.Second
 		get := vipersync.AdaptGetter("foo", viperutil.GetFuncForType[int](), v)
 		f, ch := setup(t, v, minPersistWaitInterval)
 
