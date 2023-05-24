@@ -135,16 +135,24 @@ func Backup(ctx context.Context, params BackupParams) error {
 		return vterrors.Wrap(err, "StartBackup failed")
 	}
 
-	be, err := GetBackupEngine()
-	if err != nil {
-		return vterrors.Wrap(err, "failed to find backup engine")
-	}
 	// Scope stats to selected backup engine.
 	beParams := params.Copy()
 	beParams.Stats = params.Stats.Scope(
 		stats.Component(stats.BackupEngine),
 		stats.Implementation(titleCase(backupEngineImplementation)),
 	)
+	var be BackupEngine
+	if isIncrementalBackup(beParams) {
+		// Incremental backups are always done via 'builtin' engine, which copies
+		// appropriate binlog files.
+		be = BackupRestoreEngineMap[builtinBackupEngineName]
+	} else {
+		be, err = GetBackupEngine()
+		if err != nil {
+			return vterrors.Wrap(err, "failed to find backup engine")
+		}
+	}
+
 	// Take the backup, and either AbortBackup or EndBackup.
 	usable, err := be.ExecuteBackup(ctx, beParams, bh)
 	logger := params.Logger
