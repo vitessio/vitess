@@ -22,12 +22,12 @@ import (
 	"vitess.io/vitess/go/vt/mysqlctl"
 )
 
-// TestBackupMain - main tests backup using vtctl commands
-func TestBackupMain(t *testing.T) {
-	TestBackup(t, Backup, "xbstream", 0, nil, nil)
+// TestBuiltinBackup - main tests backup using vtctl commands
+func TestBuiltinBackup(t *testing.T) {
+	TestBackup(t, BuiltinBackup, "xbstream", 0, nil, nil)
 }
 
-func TestBackupMainWithZstdCompression(t *testing.T) {
+func TestBuiltinBackupWithZstdCompression(t *testing.T) {
 	defer setDefaultCompressionFlag()
 	cDetails := &CompressionDetails{
 		CompressorEngineName:    "zstd",
@@ -36,7 +36,31 @@ func TestBackupMainWithZstdCompression(t *testing.T) {
 		ExternalDecompressorCmd: "zstd -d",
 	}
 
-	TestBackup(t, Backup, "xbstream", 0, cDetails, []string{"TestReplicaBackup", "TestPrimaryBackup"})
+	TestBackup(t, BuiltinBackup, "xbstream", 0, cDetails, []string{"TestReplicaBackup", "TestPrimaryBackup"})
+}
+
+func TestBuiltinBackupWithExternalZstdCompression(t *testing.T) {
+	defer setDefaultCompressionFlag()
+	cDetails := &CompressionDetails{
+		CompressorEngineName:    "external",
+		ExternalCompressorCmd:   "zstd",
+		ExternalCompressorExt:   ".zst",
+		ExternalDecompressorCmd: "zstd -d",
+	}
+
+	TestBackup(t, BuiltinBackup, "xbstream", 0, cDetails, []string{"TestReplicaBackup", "TestPrimaryBackup"})
+}
+
+func TestBuiltinBackupWithExternalZstdCompressionAndManifestedDecompressor(t *testing.T) {
+	defer setDefaultCompressionFlag()
+	cDetails := &CompressionDetails{
+		CompressorEngineName:            "external",
+		ExternalCompressorCmd:           "zstd",
+		ExternalCompressorExt:           ".zst",
+		ManifestExternalDecompressorCmd: "zstd -d",
+	}
+
+	TestBackup(t, BuiltinBackup, "xbstream", 0, cDetails, []string{"TestReplicaBackup", "TestPrimaryBackup"})
 }
 
 func setDefaultCompressionFlag() {
@@ -44,4 +68,5 @@ func setDefaultCompressionFlag() {
 	mysqlctl.ExternalCompressorCmd = ""
 	mysqlctl.ExternalCompressorExt = ""
 	mysqlctl.ExternalDecompressorCmd = ""
+	mysqlctl.ManifestExternalDecompressorCmd = ""
 }

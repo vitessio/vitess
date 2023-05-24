@@ -61,6 +61,8 @@ type Env struct {
 	DBPatchVersion int
 }
 
+var versionRegex = regexp.MustCompile(`([0-9]+)\.([0-9]+)\.([0-9]+)`)
+
 // Init initializes an Env.
 func Init() (*Env, error) {
 	te := &Env{
@@ -116,18 +118,22 @@ func Init() (*Env, error) {
 		// MySQL and Percona are equivalent for the tests
 		te.DBType = string(mysqlctl.FlavorMySQL)
 	}
-	dbVersionStr := te.Mysqld.GetVersionString()
-	dbVersionStrParts := strings.Split(dbVersionStr, ".")
+	dbVersionStr := te.Mysqld.GetVersionString(context.Background())
+	dbVersionStrParts := versionRegex.FindStringSubmatch(dbVersionStr)
+	if len(dbVersionStrParts) != 4 {
+		return nil, fmt.Errorf("could not parse server version from: %s", dbVersionStr)
+	}
+
 	var err error
-	te.DBMajorVersion, err = strconv.Atoi(dbVersionStrParts[0])
+	te.DBMajorVersion, err = strconv.Atoi(dbVersionStrParts[1])
 	if err != nil {
 		return nil, fmt.Errorf("could not parse database major version from '%s': %v", dbVersionStr, err)
 	}
-	te.DBMinorVersion, err = strconv.Atoi(dbVersionStrParts[1])
+	te.DBMinorVersion, err = strconv.Atoi(dbVersionStrParts[2])
 	if err != nil {
 		return nil, fmt.Errorf("could not parse database minor version from '%s': %v", dbVersionStr, err)
 	}
-	te.DBPatchVersion, err = strconv.Atoi(dbVersionStrParts[2])
+	te.DBPatchVersion, err = strconv.Atoi(dbVersionStrParts[3])
 	if err != nil {
 		return nil, fmt.Errorf("could not parse database patch version from '%s': %v", dbVersionStr, err)
 	}

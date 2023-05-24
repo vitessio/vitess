@@ -2758,7 +2758,7 @@ type (
 		AxisOrderOpt Expr
 	}
 
-	// GeomFromWkbType is an enum to get the types of wkt functions with possible values: GeometryFromWKB GeometryCollectionFromWKB PointFromWKB LineStringFromWKB PolygonFromWKB MultiPointFromWKB MultiPolygonFromWKB MultiLinestringFromWKB
+	// GeomFromWkbType is an enum to get the types of wkb functions with possible values: GeometryFromWKB GeometryCollectionFromWKB PointFromWKB LineStringFromWKB PolygonFromWKB MultiPointFromWKB MultiPolygonFromWKB MultiLinestringFromWKB
 	GeomFromWkbType int8
 
 	GeomFromWKBExpr struct {
@@ -2777,7 +2777,7 @@ type (
 		AxisOrderOpt Expr
 	}
 
-	// GeomPropertyType is an enum to get the types of geom format functions with possible values: Dimension Envelope IsSimple IsEmpty GeometryType
+	// GeomPropertyType is an enum to get the types of geom property functions with possible values: Dimension Envelope IsSimple IsEmpty GeometryType
 	GeomPropertyType int8
 
 	GeomPropertyFuncExpr struct {
@@ -2785,7 +2785,7 @@ type (
 		Geom     Expr
 	}
 
-	// PointPropertyType is an enum to get the types of geom format functions with possible values: XCordinate YCordinate Latitude Longitude
+	// PointPropertyType is an that enumerates the kind of point property functions: XCordinate YCordinate Latitude Longitude
 	PointPropertyType int8
 
 	PointPropertyFuncExpr struct {
@@ -2794,13 +2794,63 @@ type (
 		ValueToSet Expr
 	}
 
-	// Linestring is an enum to get the types of geom format functions with possible values: EndPoint IsClosed Length NumPoints PointN StartPoint
+	// LinestrPropType is an enum that enumerates the kind of line string property functions: EndPoint IsClosed Length NumPoints PointN StartPoint
 	LinestrPropType int8
 
 	LinestrPropertyFuncExpr struct {
 		Property       LinestrPropType
 		Linestring     Expr
 		PropertyDefArg Expr
+	}
+
+	// PolygonPropType is an enum that enumerates the kind of polygon property functions: Area Centroid ExteriorRing InteriorRingN NumInteriorRing
+	PolygonPropType int8
+
+	PolygonPropertyFuncExpr struct {
+		Property       PolygonPropType
+		Polygon        Expr
+		PropertyDefArg Expr
+	}
+
+	// GeomCollPropType is an enumthat enumerates the kind of geom coll property functions with possible values: GeometryN NumGeometries
+	GeomCollPropType int8
+
+	GeomCollPropertyFuncExpr struct {
+		Property       GeomCollPropType
+		GeomColl       Expr
+		PropertyDefArg Expr
+	}
+
+	GeoHashFromLatLongExpr struct {
+		Latitude  Expr
+		Longitude Expr
+		MaxLength Expr
+	}
+
+	GeoHashFromPointExpr struct {
+		Point     Expr
+		MaxLength Expr
+	}
+
+	// GeomFromHashType is an enum that determines what kind geom being retireived from hash
+	GeomFromHashType int8
+
+	GeomFromGeoHashExpr struct {
+		GeomType GeomFromHashType
+		GeoHash  Expr
+		SridOpt  Expr
+	}
+
+	GeoJSONFromGeomExpr struct {
+		Geom             Expr
+		MaxDecimalDigits Expr
+		Bitmask          Expr
+	}
+
+	GeomFromGeoJSONExpr struct {
+		GeoJSON             Expr
+		HigherDimHandlerOpt Expr // This value determine how the higher dimensions are handled while converting json to geometry
+		Srid                Expr
 	}
 
 	AggrFunc interface {
@@ -3142,6 +3192,13 @@ func (*GeomFormatExpr) iExpr()                     {}
 func (*GeomPropertyFuncExpr) iExpr()               {}
 func (*PointPropertyFuncExpr) iExpr()              {}
 func (*LinestrPropertyFuncExpr) iExpr()            {}
+func (*PolygonPropertyFuncExpr) iExpr()            {}
+func (*GeomCollPropertyFuncExpr) iExpr()           {}
+func (*GeoHashFromLatLongExpr) iExpr()             {}
+func (*GeoHashFromPointExpr) iExpr()               {}
+func (*GeomFromGeoHashExpr) iExpr()                {}
+func (*GeoJSONFromGeomExpr) iExpr()                {}
+func (*GeomFromGeoJSONExpr) iExpr()                {}
 
 // iCallable marks all expressions that represent function calls
 func (*FuncExpr) iCallable()                           {}
@@ -3207,6 +3264,13 @@ func (*GeomFormatExpr) iCallable()                     {}
 func (*GeomPropertyFuncExpr) iCallable()               {}
 func (*PointPropertyFuncExpr) iCallable()              {}
 func (*LinestrPropertyFuncExpr) iCallable()            {}
+func (*PolygonPropertyFuncExpr) iCallable()            {}
+func (*GeomCollPropertyFuncExpr) iCallable()           {}
+func (*GeoHashFromLatLongExpr) iCallable()             {}
+func (*GeoHashFromPointExpr) iCallable()               {}
+func (*GeomFromGeoHashExpr) iCallable()                {}
+func (*GeoJSONFromGeomExpr) iCallable()                {}
+func (*GeomFromGeoJSONExpr) iCallable()                {}
 
 func (*Sum) iCallable()       {}
 func (*Min) iCallable()       {}

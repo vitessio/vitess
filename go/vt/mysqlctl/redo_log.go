@@ -21,10 +21,6 @@ import (
 	"fmt"
 )
 
-func (mysqld *Mysqld) BinaryHasDisableRedoLog() bool {
-	return mysqld.capabilities.hasDisableRedoLog()
-}
-
 func (mysqld *Mysqld) DisableRedoLog(ctx context.Context) error {
 	return mysqld.ExecuteSuperQuery(ctx, "ALTER INSTANCE DISABLE INNODB REDO_LOG")
 }

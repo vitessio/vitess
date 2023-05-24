@@ -103,6 +103,20 @@ type xtraBackupManifest struct {
 	// false for backups that were created before the field existed, and those
 	// backups all had compression enabled.
 	SkipCompress bool
+
+	// When CompressionEngine is "external", ExternalDecompressor may be
+	// consulted for the external decompressor command.
+	//
+	// When taking a backup with --compression-engine=external,
+	// ExternalDecompressor will be set to the value of
+	// --manifest-external-decompressor, if set, or else left as an empty
+	// string.
+	//
+	// When restoring from a backup with CompressionEngine "external",
+	// --external-decompressor will be consulted first and, if that is not set,
+	// ExternalDecompressor will be used. If neither are set, the restore will
+	// abort.
+	ExternalDecompressor string
 }
 
 func init() {
@@ -236,7 +250,8 @@ func (be *XtrabackupEngine) ExecuteBackup(ctx context.Context, params BackupPara
 		NumStripes:      int32(numStripes),
 		StripeBlockSize: int32(xtrabackupStripeBlockSize),
 		// builtin specific field
-		CompressionEngine: CompressionEngineName,
+		CompressionEngine:    CompressionEngineName,
+		ExternalDecompressor: ManifestExternalDecompressorCmd,
 	}
 
 	data, err := json.MarshalIndent(bm, "", "  ")
@@ -604,9 +619,13 @@ func (be *XtrabackupEngine) extractFiles(ctx context.Context, logger logutil.Log
 				// then we assign the default value of compressionEngine.
 				deCompressionEngine = PgzipCompressor
 			}
-			if ExternalDecompressorCmd != "" {
+			externalDecompressorCmd := ExternalDecompressorCmd
+			if externalDecompressorCmd == "" && bm.ExternalDecompressor != "" {
+				externalDecompressorCmd = bm.ExternalDecompressor
+			}
+			if externalDecompressorCmd != "" {
 				if deCompressionEngine == ExternalCompressor {
-					deCompressionEngine = ExternalDecompressorCmd
+					deCompressionEngine = externalDecompressorCmd
 					decompressor, err = newExternalDecompressor(ctx, deCompressionEngine, reader, logger)
 				} else {
 					decompressor, err = newBuiltinDecompressor(deCompressionEngine, reader, logger)

@@ -158,9 +158,6 @@ type FakeMysqlDaemon struct {
 	// FetchSuperQueryResults is used by FetchSuperQuery
 	FetchSuperQueryMap map[string]*sqltypes.Result
 
-	// BinlogPlayerEnabled is used by {Enable,Disable}BinlogPlayer
-	BinlogPlayerEnabled atomic.Bool
-
 	// SemiSyncPrimaryEnabled represents the state of rpl_semi_sync_master_enabled.
 	SemiSyncPrimaryEnabled bool
 	// SemiSyncReplicaEnabled represents the state of rpl_semi_sync_slave_enabled.
@@ -224,7 +221,12 @@ func (fmd *FakeMysqlDaemon) Shutdown(ctx context.Context, cnf *Mycnf, waitForMys
 }
 
 // RunMysqlUpgrade is part of the MysqlDaemon interface
-func (fmd *FakeMysqlDaemon) RunMysqlUpgrade() error {
+func (fmd *FakeMysqlDaemon) RunMysqlUpgrade(ctx context.Context) error {
+	return nil
+}
+
+// ApplyBinlogFile is part of the MysqlDaemon interface
+func (fmd *FakeMysqlDaemon) ApplyBinlogFile(ctx context.Context, binlogFile string, restorePos mysql.Position) error {
 	return nil
 }
 
@@ -539,18 +541,6 @@ func (fmd *FakeMysqlDaemon) FetchSuperQuery(ctx context.Context, query string) (
 	return qr, nil
 }
 
-// EnableBinlogPlayback is part of the MysqlDaemon interface
-func (fmd *FakeMysqlDaemon) EnableBinlogPlayback() error {
-	fmd.BinlogPlayerEnabled.Store(true)
-	return nil
-}
-
-// DisableBinlogPlayback disable playback of binlog events
-func (fmd *FakeMysqlDaemon) DisableBinlogPlayback() error {
-	fmd.BinlogPlayerEnabled.Store(false)
-	return nil
-}
-
 // Close is part of the MysqlDaemon interface
 func (fmd *FakeMysqlDaemon) Close() {
 	if fmd.appPool != nil {
@@ -683,12 +673,12 @@ func (fmd *FakeMysqlDaemon) SemiSyncReplicationStatus() (bool, error) {
 	return fmd.SemiSyncReplicaEnabled, nil
 }
 
-// GetVersionString is part of the MysqlDeamon interface.
-func (fmd *FakeMysqlDaemon) GetVersionString() string {
+// GetVersionString is part of the MysqlDaemon interface.
+func (fmd *FakeMysqlDaemon) GetVersionString(ctx context.Context) string {
 	return ""
 }
 
-// GetVersionComment is part of the MysqlDeamon interface.
+// GetVersionComment is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) GetVersionComment(ctx context.Context) string {
 	return ""
 }

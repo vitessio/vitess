@@ -2270,7 +2270,7 @@ INPUT
 select object_id, ST_geometrytype(geo), ST_ISSIMPLE(GEO), ST_ASTEXT(ST_centroid(geo)) from t1 where object_id=85984;
 END
 OUTPUT
-select object_id, st_geometrytype(geo), st_issimple(GEO), st_astext(ST_centroid(geo)) from t1 where object_id = 85984
+select object_id, st_geometrytype(geo), st_issimple(GEO), st_astext(st_centroid(geo)) from t1 where object_id = 85984
 END
 INPUT
 select @@global.optimizer_switch;
@@ -2378,7 +2378,7 @@ INPUT
 select ST_astext(geom), ST_area(geom),ST_area(ST_buffer(geom,2)) from t1;
 END
 OUTPUT
-select st_astext(geom), ST_area(geom), ST_area(ST_buffer(geom, 2)) from t1
+select st_astext(geom), st_area(geom), st_area(ST_buffer(geom, 2)) from t1
 END
 INPUT
 select * from t1,t2 right join t3 on (t2.i=t3.i) order by t1.i,t2.i,t3.i;
@@ -2840,7 +2840,7 @@ INPUT
 select ST_astext(ST_centroid(ST_PolyFromWKB(ST_AsWKB(Polygon(LineString(Point(0, 0), Point(30, 0), Point(30, 30), Point(1, 0), Point(0, 0)))))));
 END
 OUTPUT
-select st_astext(ST_centroid(st_polygonfromwkb(st_asbinary(polygon(linestring(point(0, 0), point(30, 0), point(30, 30), point(1, 0), point(0, 0))))))) from dual
+select st_astext(st_centroid(st_polygonfromwkb(st_asbinary(polygon(linestring(point(0, 0), point(30, 0), point(30, 30), point(1, 0), point(0, 0))))))) from dual
 END
 INPUT
 select null sounds like 'null';
@@ -3746,7 +3746,7 @@ INPUT
 select ST_area(ST_PolygonFromText('POLYGON((10 10,20 10,20 20,10 20, 10 10))'));
 END
 OUTPUT
-select ST_area(st_polygonfromtext('POLYGON((10 10,20 10,20 20,10 20, 10 10))')) from dual
+select st_area(st_polygonfromtext('POLYGON((10 10,20 10,20 20,10 20, 10 10))')) from dual
 END
 INPUT
 select min(a3) from t1 where a2 = 2 and a3 >= 'SEA' and a3 = 'MIN';
@@ -6668,7 +6668,7 @@ INPUT
 select ST_NUMPOINTS(ST_EXTERIORRING(@buff)) from t1;
 END
 OUTPUT
-select st_numpoints(ST_EXTERIORRING(@buff)) from t1
+select st_numpoints(st_exteriorring(@buff)) from t1
 END
 INPUT
 select fld1,fld3 FROM t2 where fld1 like "25050_";
@@ -21146,7 +21146,7 @@ INPUT
 select ST_NUMPOINTS(ST_EXTERIORRING(ST_buffer(geom,2))) from t1;
 END
 OUTPUT
-select st_numpoints(ST_EXTERIORRING(ST_buffer(geom, 2))) from t1
+select st_numpoints(st_exteriorring(ST_buffer(geom, 2))) from t1
 END
 INPUT
 select 0=0,1>0,1>=1,1<0,1<=0,1!=0,strcmp("abc","abcd"),strcmp("b","a"),strcmp("a","a");
@@ -22646,7 +22646,7 @@ INPUT
 select ST_geometryfromtext(b) IS NULL, ST_geometryfromwkb(b) IS NULL, ST_astext(b) IS NULL, ST_aswkb(b) IS NULL, ST_geometrytype(b) IS NULL, ST_centroid(b) IS NULL, ST_envelope(b) IS NULL, ST_startpoint(b) IS NULL, ST_endpoint(b) IS NULL, ST_exteriorring(b) IS NULL, ST_pointn(b, 1) IS NULL, ST_geometryn(b, 1) IS NULL, ST_interiorringn(b, 1) IS NULL, multipoint(b) IS NULL, ST_isempty(b) IS NULL, ST_issimple(b) IS NULL, ST_isclosed(b) IS NULL, ST_dimension(b) IS NULL, ST_numgeometries(b) IS NULL, ST_numinteriorrings(b) IS NULL, ST_numpoints(b) IS NULL, ST_area(b) IS NULL, ST_length(b) IS NULL, ST_srid(b) IS NULL, ST_x(b) IS NULL, ST_y(b) IS NULL from t1;
 END
 OUTPUT
-select st_geometryfromtext(b) is null, st_geometryfromwkb(b) is null, st_astext(b) is null, st_asbinary(b) is null, st_geometrytype(b) is null, ST_centroid(b) is null, st_envelope(b) is null, st_startpoint(b) is null, st_endpoint(b) is null, ST_exteriorring(b) is null, st_pointn(b, 1) is null, ST_geometryn(b, 1) is null, ST_interiorringn(b, 1) is null, multipoint(b) is null, st_isempty(b) is null, st_issimple(b) is null, st_isclosed(b) is null, st_dimension(b) is null, ST_numgeometries(b) is null, ST_numinteriorrings(b) is null, st_numpoints(b) is null, ST_area(b) is null, st_length(b) is null, ST_srid(b) is null, st_x(b) is null, st_y(b) is null from t1
+select st_geometryfromtext(b) is null, st_geometryfromwkb(b) is null, st_astext(b) is null, st_asbinary(b) is null, st_geometrytype(b) is null, st_centroid(b) is null, st_envelope(b) is null, st_startpoint(b) is null, st_endpoint(b) is null, st_exteriorring(b) is null, st_pointn(b, 1) is null, st_geometryn(b, 1) is null, st_interiorringN(b, 1) is null, multipoint(b) is null, st_isempty(b) is null, st_issimple(b) is null, st_isclosed(b) is null, st_dimension(b) is null, st_numgeometries(b) is null, st_numinteriorrings(b) is null, st_numpoints(b) is null, st_area(b) is null, st_length(b) is null, ST_srid(b) is null, st_x(b) is null, st_y(b) is null from t1
 END
 INPUT
 select inet6_ntoa(null),inet6_aton(null);
@@ -22778,7 +22778,7 @@ INPUT
 select object_id, ST_geometrytype(geo), ST_ISSIMPLE(GEO), ST_ASTEXT(ST_centroid(geo)) from t1 where object_id=85998;
 END
 OUTPUT
-select object_id, st_geometrytype(geo), st_issimple(GEO), st_astext(ST_centroid(geo)) from t1 where object_id = 85998
+select object_id, st_geometrytype(geo), st_issimple(GEO), st_astext(st_centroid(geo)) from t1 where object_id = 85998
 END
 INPUT
 select hex(cast(9007199254740994 as decimal(30,0)));
