@@ -790,7 +790,7 @@ func (te *testSchemaEngine) MakeNonPrimary() {
 	te.nonPrimary = true
 }
 
-func (te *testSchemaEngine) MakePrimary() {
+func (te *testSchemaEngine) MakePrimary(serving bool) {
 	te.nonPrimary = false
 }
 

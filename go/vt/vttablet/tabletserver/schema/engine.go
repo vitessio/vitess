@@ -68,8 +68,8 @@ type Engine struct {
 	reloadAtPos mysql.Position
 	notifierMu  sync.Mutex
 	notifiers   map[string]notifier
-	// isPrimaryType stores if this tablet is currently the primary or not.
-	isPrimaryType bool
+	// isServingPrimary stores if this tablet is currently the serving primary or not.
+	isServingPrimary bool
 	// schemaTracking stores if the user has requested signals on schema changes. If they have, then we
 	// also track the underlying schema and make a copy of it in our MySQL instance.
 	schemaTracking bool
@@ -322,7 +322,7 @@ func (se *Engine) MakeNonPrimary() {
 	// This function is tested through endtoend test.
 	se.mu.Lock()
 	defer se.mu.Unlock()
-	se.isPrimaryType = false
+	se.isServingPrimary = false
 	for _, t := range se.tables {
 		if t.SequenceInfo != nil {
 			t.SequenceInfo.Lock()
@@ -335,10 +335,10 @@ func (se *Engine) MakeNonPrimary() {
 
 // MakePrimary tells the schema engine that the current tablet is now the primary,
 // so it can read and write to the MySQL instance for schema-tracking.
-func (se *Engine) MakePrimary() {
+func (se *Engine) MakePrimary(serving bool) {
 	se.mu.Lock()
 	defer se.mu.Unlock()
-	se.isPrimaryType = true
+	se.isServingPrimary = serving
 }
 
 // EnableHistorian forces tracking to be on or off.
@@ -422,7 +422,7 @@ func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 		return vterrors.Wrapf(err, "in Engine.reload(), reading tables")
 	}
 	// On the primary tablet, we also check the data we have stored in our schema tables to see what all needs reloading.
-	shouldUseDatabase := se.isPrimaryType && se.schemaTracking
+	shouldUseDatabase := se.isServingPrimary && se.schemaTracking
 	// changedViews are the views that have changed. We can't use the same createTime logic for views because, MySQL
 	// doesn't update the create_time field for views when they are altered. This is annoying, but something we have to work around.
 	changedViews, err := getChangedViewNames(ctx, conn, shouldUseDatabase)

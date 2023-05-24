@@ -84,6 +84,8 @@ type healthStreamer struct {
 	cancel  context.CancelFunc
 	clients map[chan *querypb.StreamHealthResponse]struct{}
 	state   *querypb.StreamHealthResponse
+	// isServingPrimary stores if this tablet is currently the serving primary or not.
+	isServingPrimary bool
 
 	se      *schema.Engine
 	history *history.History
@@ -144,18 +146,6 @@ func (hs *healthStreamer) Open() {
 		// if we don't have a live conns object, it means we are not configured to signal when the schema changes
 		hs.conns.Open(hs.dbConfig, hs.dbConfig, hs.dbConfig)
 	}
-}
-
-// startSchemaNotifications registers the healthStreamer to be notified by the schema engine when some schema change occurs.
-func (hs *healthStreamer) startSchemaNotifications() {
-	if !hs.signalWhenSchemaChange {
-		return
-	}
-	hs.se.RegisterNotifier("healthStreamer", func(full map[string]*schema.Table, created, altered, droppedTables, droppedViews []string) {
-		if err := hs.reload(full, created, altered, droppedTables, droppedViews); err != nil {
-			log.Errorf("periodic schema reload failed in health stream: %v", err)
-		}
-	})
 }
 
 func (hs *healthStreamer) Close() {
@@ -320,12 +310,43 @@ func (hs *healthStreamer) SetUnhealthyThreshold(v time.Duration) {
 	}
 }
 
+// MakePrimary tells the healthstreamer that the current tablet is now the primary,
+// so it can read and write to the MySQL instance for schema-tracking.
+func (hs *healthStreamer) MakePrimary(serving bool) {
+	hs.mu.Lock()
+	defer hs.mu.Unlock()
+	// We register for notifications from the schema Engine only when schema tracking is enabled,
+	// and we are going to a serving primary state (and we aren't already there).
+	if !hs.isServingPrimary && serving && hs.signalWhenSchemaChange {
+		go func() {
+			hs.se.RegisterNotifier("healthStreamer", func(full map[string]*schema.Table, created, altered, droppedTables, droppedViews []string) {
+				if err := hs.reload(full, created, altered, droppedTables, droppedViews); err != nil {
+					log.Errorf("periodic schema reload failed in health stream: %v", err)
+				}
+			})
+		}()
+	}
+	hs.isServingPrimary = serving
+}
+
+// MakeNonPrimary tells the healthstreamer that the current tablet is now not a primary.
+func (hs *healthStreamer) MakeNonPrimary() {
+	hs.mu.Lock()
+	defer hs.mu.Unlock()
+	hs.isServingPrimary = false
+}
+
 // reload reloads the schema from the underlying mysql for the tables that we get the alert on.
 func (hs *healthStreamer) reload(full map[string]*schema.Table, created, altered, droppedTables, droppedViews []string) error {
 	hs.mu.Lock()
 	defer hs.mu.Unlock()
-	// Schema Reload to happen only on primary.
-	if hs.state.Target.TabletType != topodatapb.TabletType_PRIMARY {
+	// Schema Reload to happen only on primary when it is serving.
+	// We can be in a state when the primary is not serving after we have run DemotePrimary. In that case,
+	// we don't want to run any queries in MySQL, so we shouldn't reload anything in the healthStreamer.
+	// We could have infered from the state that the health streamer has whether the tablet is a serving primary or not, but we don't do that because
+	// that state is the one that the tablet has achieved, and not the one that is trying to achieve. So when we start trying to go to an unserving primary
+	// state, we want to stop the healthStreamer and not wait until we have reached that state.
+	if !hs.isServingPrimary {
 		return nil
 	}
 

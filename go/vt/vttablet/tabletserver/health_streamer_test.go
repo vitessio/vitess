@@ -246,7 +246,7 @@ func TestReloadSchema(t *testing.T) {
 			require.NoError(t, err)
 			defer se.Close()
 			// Start schema notifications.
-			hs.startSchemaNotifications()
+			hs.MakePrimary(true)
 
 			// Update the query pattern for the query that schema.Engine uses to get the tables so that it runs a reload again.
 			// If we don't change the t.create_time to a value greater than before, then the schema engine doesn't reload the database.
@@ -354,10 +354,10 @@ func TestReloadView(t *testing.T) {
 	defer hs.Close()
 	err := se.Open()
 	require.NoError(t, err)
-	se.MakePrimary()
+	se.MakePrimary(true)
 	defer se.Close()
 	// Start schema notifications.
-	hs.startSchemaNotifications()
+	hs.MakePrimary(true)
 
 	showCreateViewFields := sqltypes.MakeTestFields(
 		"View|Create View|character_set_client|collation_connection",

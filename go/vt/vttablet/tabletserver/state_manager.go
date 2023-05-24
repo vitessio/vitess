@@ -141,7 +141,7 @@ type (
 		EnsureConnectionAndDB(topodatapb.TabletType) error
 		Open() error
 		MakeNonPrimary()
-		MakePrimary()
+		MakePrimary(bool)
 		Close()
 	}
 
@@ -446,7 +446,8 @@ func (sm *stateManager) servePrimary() error {
 		return err
 	}
 
-	sm.se.MakePrimary()
+	sm.se.MakePrimary(true)
+	sm.hs.MakePrimary(true)
 	sm.rt.MakePrimary()
 	sm.tracker.Open()
 	// We instantly kill all stateful queries to allow for
@@ -471,7 +472,8 @@ func (sm *stateManager) unservePrimary() error {
 		return err
 	}
 
-	sm.se.MakePrimary()
+	sm.se.MakePrimary(false)
+	sm.hs.MakePrimary(false)
 	sm.rt.MakePrimary()
 	sm.setState(topodatapb.TabletType_PRIMARY, StateNotServing)
 	return nil
@@ -488,6 +490,7 @@ func (sm *stateManager) serveNonPrimary(wantTabletType topodatapb.TabletType) er
 	sm.messager.Close()
 	sm.tracker.Close()
 	sm.se.MakeNonPrimary()
+	sm.hs.MakeNonPrimary()
 
 	if err := sm.connect(wantTabletType); err != nil {
 		return err
@@ -505,6 +508,7 @@ func (sm *stateManager) unserveNonPrimary(wantTabletType topodatapb.TabletType) 
 	sm.unserveCommon()
 
 	sm.se.MakeNonPrimary()
+	sm.hs.MakeNonPrimary()
 
 	if err := sm.connect(wantTabletType); err != nil {
 		return err
@@ -523,7 +527,6 @@ func (sm *stateManager) connect(tabletType topodatapb.TabletType) error {
 	if err := sm.se.Open(); err != nil {
 		return err
 	}
-	sm.hs.startSchemaNotifications()
 	sm.vstreamer.Open()
 	if err := sm.qe.Open(); err != nil {
 		return err
