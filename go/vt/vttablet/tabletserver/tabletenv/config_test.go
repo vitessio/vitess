@@ -163,7 +163,6 @@ rowStreamer:
   maxInnoDBTrxHistLen: 1000000
   maxMySQLReplLagSecs: 43200
 schemaReloadIntervalSeconds: 30m0s
-signalSchemaChangeReloadIntervalSeconds: 5s
 signalWhenSchemaChange: true
 streamBufferSize: 32768
 txPool:
