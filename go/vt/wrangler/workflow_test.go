@@ -340,18 +340,6 @@ func TestMoveTablesV2Complete(t *testing.T) {
 	require.NoError(t, testSwitchForward(t, wf))
 	require.Equal(t, WorkflowStateAllSwitched, wf.CurrentState())
 
-	// Should source vschema table entries be deleted upon Complete. For unsharded
-	// keyspaces they should be as they are empty table entries that we also
-	// create when the reverse workflow is Created.
-	sourceVSchemaEntriesRemain := false
-	if len(tme.sourceShards) > 1 {
-		// If the source keyspace is sharded -- which it is today in the test -- the
-		// vschema must be created by the user before the workflow is started. Thus
-		// we should also not delete the vschema table entries upon Complete as the
-		// management of the sharded vschema is up to the user.
-		sourceVSchemaEntriesRemain = true
-	}
-
 	//16 rules, 8 per table t1,t2 eg: t1,t1@replica,t1@rdonly,ks1.t1,ks1.t1@replica,ks1.t1@rdonly,ks2.t1@replica,ks2.t1@rdonly
 	validateRoutingRuleCount(ctx, t, wf.wr.ts, 16)
 	require.True(t, checkIfTableExistInVSchema(ctx, t, wf.wr.ts, "ks1", "t1"))
@@ -359,8 +347,8 @@ func TestMoveTablesV2Complete(t *testing.T) {
 	require.True(t, checkIfTableExistInVSchema(ctx, t, wf.wr.ts, "ks2", "t1"))
 	require.True(t, checkIfTableExistInVSchema(ctx, t, wf.wr.ts, "ks2", "t2"))
 	require.NoError(t, testComplete(t, wf))
-	require.Equal(t, sourceVSchemaEntriesRemain, checkIfTableExistInVSchema(ctx, t, wf.wr.ts, "ks1", "t1"))
-	require.Equal(t, sourceVSchemaEntriesRemain, checkIfTableExistInVSchema(ctx, t, wf.wr.ts, "ks1", "t2"))
+	require.False(t, checkIfTableExistInVSchema(ctx, t, wf.wr.ts, "ks1", "t1"))
+	require.False(t, checkIfTableExistInVSchema(ctx, t, wf.wr.ts, "ks1", "t2"))
 	require.True(t, checkIfTableExistInVSchema(ctx, t, wf.wr.ts, "ks2", "t1"))
 	require.True(t, checkIfTableExistInVSchema(ctx, t, wf.wr.ts, "ks2", "t2"))
 
