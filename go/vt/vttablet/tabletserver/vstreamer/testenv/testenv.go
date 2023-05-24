@@ -196,3 +196,27 @@ func (te *Env) RemoveAnyDeprecatedDisplayWidths(orig string) string {
 	}
 	return adjusted
 }
+
+// ServerCapability is used to define capabilities for which we want to optionally run tests
+// if the underlying mysql server supports them.
+type ServerCapability int32
+
+const (
+	ServerCapabilityInvisibleColumn              ServerCapability = 1
+	ServerCapabilityGeneratedInvisiblePrimaryKey ServerCapability = 2
+)
+
+// HasCapability returns true if the server has the given capability.
+// Used to skip tests that require a certain version of MySQL.
+func (te *Env) HasCapability(cap ServerCapability) bool {
+	if te.DBType != string(mysqlctl.FlavorMySQL) || te.DBMajorVersion < 8 {
+		return false
+	}
+	switch cap {
+	case ServerCapabilityInvisibleColumn:
+		return te.DBMinorVersion > 0 || te.DBPatchVersion >= 23
+	case ServerCapabilityGeneratedInvisiblePrimaryKey:
+		return te.DBMinorVersion > 0 || te.DBPatchVersion >= 30
+	}
+	return false
+}
