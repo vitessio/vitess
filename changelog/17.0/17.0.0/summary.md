@@ -311,6 +311,7 @@ vttablet_v_replication_stream_state{counts="1",state="Running",workflow="commerc
 * Backwards-compatibility for failed migrations without a `completed_timestamp` has been removed (see https://github.com/vitessio/vitess/issues/8499).
 * The deprecated `Key`, `Name`, `Up`, and `TabletExternallyReparentedTimestamp` fields were removed from the JSON representation of `TabletHealth` structures.
 * The `MYSQL_FLAVOR` environment variable is no longer used.
+* The `--enable-query-plan-field-caching`/`--enable_query_plan_field_caching` vttablet flag was deprecated in v15 and has now been removed.
 
 ### <a id="deprecated-flags"/>Deprecated Command Line Flags
 
