@@ -1689,6 +1689,11 @@ func (ts *trafficSwitcher) dropParticipatingTablesFromKeyspace(ctx context.Conte
 	if err != nil {
 		return err
 	}
+	// VReplication does NOT create the vschema entries for sharded keyspaces and we should not delete them
+	// either as the user must create them and they contain information about the vindex definitions, etc.
+	if vschema.Sharded {
+		return nil
+	}
 	for _, tableName := range ts.Tables() {
 		delete(vschema.Tables, tableName)
 	}
@@ -1776,7 +1781,6 @@ func (ts *trafficSwitcher) removeTargetTables(ctx context.Context) error {
 	}
 
 	return ts.dropParticipatingTablesFromKeyspace(ctx, ts.TargetKeyspaceName())
-
 }
 
 func (ts *trafficSwitcher) dropTargetShards(ctx context.Context) error {
