@@ -439,17 +439,20 @@ func (throttler *Throttler) Open() error {
 		// opening of all other components. We thus read the throttler config in the background.
 		// However, we want to handle a situation where the read errors out.
 		// So we kick a loop that keeps retrying reading the config, for as long as this throttler is open.
-		go func() {
-			retryTicker := time.NewTicker(30 * time.Second)
+		retryReadAndApplyThrottlerConfig := func() {
+			retryInterval := 10 * time.Second
+			retryTicker := time.NewTicker(retryInterval)
 			defer retryTicker.Stop()
 			for {
 				if atomic.LoadInt64(&throttler.isOpen) == 0 {
 					// closed down. No need to keep retrying
+					log.Errorf("Throttler.retryReadAndApplyThrottlerConfig(): throttler no longer seems to be open, exiting")
 					return
 				}
 
 				throttlerConfig, err := throttler.readThrottlerConfig(ctx)
 				if err == nil {
+					log.Errorf("Throttler.retryReadAndApplyThrottlerConfig(): success reading throttler config: %+v", throttlerConfig)
 					// it's possible that during a retry-sleep, the throttler is closed and opened again, leading
 					// to two (or more) instances of this goroutine. That's not a big problem; it's fine if all
 					// attempt to read the throttler config; but we just want to ensure they don't step on each other
@@ -460,10 +463,11 @@ func (throttler *Throttler) Open() error {
 					throttler.applyThrottlerConfig(ctx, throttlerConfig) // may issue an Enable
 					return
 				}
-				log.Errorf("Throttler.Open(): error reading throttler config. Will retry in 1 minute. Err=%+v", err)
+				log.Errorf("Throttler.retryReadAndApplyThrottlerConfig(): error reading throttler config. Will retry in %v. Err=%+v", retryInterval, err)
 				<-retryTicker.C
 			}
-		}()
+		}
+		go retryReadAndApplyThrottlerConfig()
 	} else {
 		// backwards-cmpatible: check for --enable-lag-throttler flag in vttablet
 		// this will be removed in a future version
