@@ -21,10 +21,14 @@ import (
 	"math"
 	"net/netip"
 
+	"github.com/google/uuid"
+
 	"vitess.io/vitess/go/hack"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 type (
@@ -61,6 +65,23 @@ type (
 	builtinIsIPV6 struct {
 		CallExpr
 	}
+
+	builtinBinToUUID struct {
+		CallExpr
+		collate collations.ID
+	}
+
+	builtinIsUUID struct {
+		CallExpr
+	}
+
+	builtinUUID struct {
+		CallExpr
+	}
+
+	builtinUUIDToBin struct {
+		CallExpr
+	}
 )
 
 var _ Expr = (*builtinInetAton)(nil)
@@ -71,6 +92,10 @@ var _ Expr = (*builtinIsIPV4)(nil)
 var _ Expr = (*builtinIsIPV4Compat)(nil)
 var _ Expr = (*builtinIsIPV4Mapped)(nil)
 var _ Expr = (*builtinIsIPV6)(nil)
+var _ Expr = (*builtinBinToUUID)(nil)
+var _ Expr = (*builtinIsUUID)(nil)
+var _ Expr = (*builtinUUID)(nil)
+var _ Expr = (*builtinUUIDToBin)(nil)
 
 func (call *builtinInetAton) eval(env *ExpressionEnv) (eval, error) {
 	arg, err := call.arg1(env)
@@ -401,4 +426,236 @@ func (call *builtinIsIPV6) compile(c *compiler) (ctype, error) {
 	c.asm.jumpDestination(skip)
 
 	return ctype{Type: sqltypes.Int64, Flag: arg.Flag | flagIsBoolean, Col: collationNumeric}, nil
+}
+
+func errIncorrectUUID(in []byte, f string) error {
+	return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongValue, "Incorrect string value: '%s' for function %s", sanitizeErrorValue(in), f)
+}
+
+func swapUUIDFrom(in []byte) []byte {
+	if len(in) != 16 {
+		return in
+	}
+	out := make([]byte, 0, 16)
+	out = append(out, in[4:8]...)
+	out = append(out, in[2:4]...)
+	out = append(out, in[0:2]...)
+	out = append(out, in[8:]...)
+	return out
+}
+
+func swapUUIDTo(in []byte) []byte {
+	if len(in) != 16 {
+		return in
+	}
+
+	out := make([]byte, 0, 16)
+	out = append(out, in[6:8]...)
+	out = append(out, in[4:6]...)
+	out = append(out, in[0:4]...)
+	out = append(out, in[8:]...)
+	return out
+}
+
+func (call *builtinBinToUUID) eval(env *ExpressionEnv) (eval, error) {
+	arg, err := call.arg1(env)
+	if arg == nil || err != nil {
+		return nil, err
+	}
+
+	raw := evalToBinary(arg).bytes
+
+	if len(call.Arguments) > 1 {
+		swap, err := call.Arguments[1].eval(env)
+		if err != nil {
+			return nil, err
+		}
+
+		if swap != nil && evalToInt64(swap).i != 0 {
+			raw = swapUUIDFrom(raw)
+		}
+	}
+
+	parsed, err := uuid.FromBytes(raw)
+	if err != nil {
+		return nil, errIncorrectUUID(raw, "bin_to_uuid")
+	}
+	return newEvalText(hack.StringBytes(parsed.String()), defaultCoercionCollation(call.collate)), nil
+}
+
+func (call *builtinBinToUUID) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	_, f := call.Arguments[0].typeof(env, fields)
+	return sqltypes.VarChar, f
+}
+
+func (call *builtinBinToUUID) compile(c *compiler) (ctype, error) {
+	arg, err := call.Arguments[0].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+	skip := c.compileNullCheck1(arg)
+
+	switch {
+	case arg.isTextual():
+	default:
+		c.asm.Convert_xb(1, sqltypes.VarBinary, 0, false)
+	}
+
+	col := defaultCoercionCollation(call.collate)
+	ct := ctype{Type: sqltypes.VarChar, Flag: arg.Flag, Col: col}
+
+	if len(call.Arguments) == 1 {
+		c.asm.Fn_BIN_TO_UUID0(col)
+		c.asm.jumpDestination(skip)
+		return ct, nil
+	}
+
+	swap, err := call.Arguments[1].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	sj := c.compileNullCheck1(swap)
+	switch swap.Type {
+	case sqltypes.Int64:
+	case sqltypes.Uint64:
+		c.asm.Convert_ui(1)
+	default:
+		c.asm.Convert_xi(1)
+	}
+	c.asm.jumpDestination(sj)
+	c.asm.Fn_BIN_TO_UUID1(col)
+
+	c.asm.jumpDestination(skip)
+	return ct, nil
+}
+
+func (call *builtinIsUUID) eval(env *ExpressionEnv) (eval, error) {
+	arg, err := call.arg1(env)
+	if arg == nil || err != nil {
+		return nil, err
+	}
+
+	raw := evalToBinary(arg).bytes
+	_, err = uuid.ParseBytes(raw)
+	return newEvalBool(err == nil), nil
+}
+
+func (call *builtinIsUUID) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	_, f := call.Arguments[0].typeof(env, fields)
+	return sqltypes.Int64, f | flagIsBoolean
+}
+
+func (call *builtinIsUUID) compile(c *compiler) (ctype, error) {
+	arg, err := call.Arguments[0].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+	skip := c.compileNullCheck1(arg)
+
+	switch {
+	case arg.isTextual():
+	default:
+		c.asm.Convert_xb(1, sqltypes.VarBinary, 0, false)
+	}
+	c.asm.Fn_IS_UUID()
+
+	c.asm.jumpDestination(skip)
+	return ctype{Type: sqltypes.Int64, Flag: arg.Flag | flagIsBoolean, Col: collationNumeric}, nil
+}
+
+func (call *builtinUUID) eval(env *ExpressionEnv) (eval, error) {
+	v, err := uuid.NewUUID()
+	if err != nil {
+		return nil, err
+	}
+	m, err := v.MarshalText()
+	if err != nil {
+		return nil, err
+	}
+
+	return newEvalText(m, collationUtf8mb3), nil
+}
+
+func (call *builtinUUID) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	return sqltypes.VarChar, 0
+}
+
+func (call *builtinUUID) compile(c *compiler) (ctype, error) {
+	c.asm.Fn_UUID()
+	return ctype{Type: sqltypes.VarChar, Flag: 0, Col: collationUtf8mb3}, nil
+}
+
+func (call *builtinUUIDToBin) eval(env *ExpressionEnv) (eval, error) {
+	arg, err := call.arg1(env)
+	if arg == nil || err != nil {
+		return nil, err
+	}
+
+	raw := evalToBinary(arg).bytes
+
+	parsed, err := uuid.ParseBytes(raw)
+	if err != nil {
+		return nil, errIncorrectUUID(raw, "uuid_to_bin")
+	}
+
+	out := parsed[:]
+	if len(call.Arguments) > 1 {
+		swap, err := call.Arguments[1].eval(env)
+		if err != nil {
+			return nil, err
+		}
+
+		if swap != nil && evalToInt64(swap).i != 0 {
+			out = swapUUIDTo(out)
+		}
+	}
+
+	return newEvalBinary(out), nil
+}
+
+func (call *builtinUUIDToBin) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	_, f := call.Arguments[0].typeof(env, fields)
+	return sqltypes.VarBinary, f
+}
+
+func (call *builtinUUIDToBin) compile(c *compiler) (ctype, error) {
+	arg, err := call.Arguments[0].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+	skip := c.compileNullCheck1(arg)
+
+	switch {
+	case arg.isTextual():
+	default:
+		c.asm.Convert_xb(1, sqltypes.VarBinary, 0, false)
+	}
+
+	ct := ctype{Type: sqltypes.VarBinary, Flag: arg.Flag, Col: collationBinary}
+
+	if len(call.Arguments) == 1 {
+		c.asm.Fn_UUID_TO_BIN0()
+		c.asm.jumpDestination(skip)
+		return ct, nil
+	}
+
+	swap, err := call.Arguments[1].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	sj := c.compileNullCheck1(swap)
+	switch swap.Type {
+	case sqltypes.Int64:
+	case sqltypes.Uint64:
+		c.asm.Convert_ui(1)
+	default:
+		c.asm.Convert_xi(1)
+	}
+	c.asm.jumpDestination(sj)
+	c.asm.Fn_UUID_TO_BIN1()
+
+	c.asm.jumpDestination(skip)
+	return ct, nil
 }

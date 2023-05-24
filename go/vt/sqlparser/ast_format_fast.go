@@ -3767,3 +3767,89 @@ func (node *LinestrPropertyFuncExpr) formatFast(buf *TrackedBuffer) {
 	}
 	buf.WriteByte(')')
 }
+
+// formatFast formats the node
+func (node *PolygonPropertyFuncExpr) formatFast(buf *TrackedBuffer) {
+	buf.WriteString(node.Property.ToString())
+	buf.WriteByte('(')
+	buf.printExpr(node, node.Polygon, true)
+	if node.PropertyDefArg != nil {
+		buf.WriteString(", ")
+		buf.printExpr(node, node.PropertyDefArg, true)
+	}
+	buf.WriteByte(')')
+}
+
+// formatFast formats the node
+func (node *GeomCollPropertyFuncExpr) formatFast(buf *TrackedBuffer) {
+	buf.WriteString(node.Property.ToString())
+	buf.WriteByte('(')
+	buf.printExpr(node, node.GeomColl, true)
+	if node.PropertyDefArg != nil {
+		buf.WriteString(", ")
+		buf.printExpr(node, node.PropertyDefArg, true)
+	}
+	buf.WriteByte(')')
+}
+
+// formatFast formats the node
+func (node *GeomFromGeoHashExpr) formatFast(buf *TrackedBuffer) {
+	buf.WriteString(node.GeomType.ToString())
+	buf.WriteByte('(')
+	buf.printExpr(node, node.GeoHash, true)
+	if node.SridOpt != nil {
+		buf.WriteString(", ")
+		buf.printExpr(node, node.SridOpt, true)
+	}
+	buf.WriteByte(')')
+}
+
+// formatFast formats the node
+func (node *GeoHashFromLatLongExpr) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("st_geohash(")
+	buf.printExpr(node, node.Longitude, true)
+	buf.WriteString(", ")
+	buf.printExpr(node, node.Latitude, true)
+	buf.WriteString(", ")
+	buf.printExpr(node, node.MaxLength, true)
+	buf.WriteByte(')')
+}
+
+// formatFast formats the node
+func (node *GeoHashFromPointExpr) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("st_geohash(")
+	buf.printExpr(node, node.Point, true)
+	buf.WriteString(", ")
+	buf.printExpr(node, node.MaxLength, true)
+	buf.WriteByte(')')
+}
+
+// formatFast formats the node
+func (node *GeoJSONFromGeomExpr) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("st_asgeojson(")
+	buf.printExpr(node, node.Geom, true)
+	if node.MaxDecimalDigits != nil {
+		buf.WriteString(", ")
+		buf.printExpr(node, node.MaxDecimalDigits, true)
+	}
+	if node.Bitmask != nil {
+		buf.WriteString(", ")
+		buf.printExpr(node, node.Bitmask, true)
+	}
+	buf.WriteByte(')')
+}
+
+// formatFast formats the node
+func (node *GeomFromGeoJSONExpr) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("st_geomfromgeojson(")
+	buf.printExpr(node, node.GeoJSON, true)
+	if node.HigherDimHandlerOpt != nil {
+		buf.WriteString(", ")
+		buf.printExpr(node, node.HigherDimHandlerOpt, true)
+	}
+	if node.Srid != nil {
+		buf.WriteString(", ")
+		buf.printExpr(node, node.Srid, true)
+	}
+	buf.WriteByte(')')
+}

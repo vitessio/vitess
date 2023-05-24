@@ -178,35 +178,8 @@ func setVtMySQLRoot(mysqlRoot string) error {
 	return nil
 }
 
-// setDBFlavor sets the MYSQL_FLAVOR OS env var.
-// You should call this after calling setVtMySQLRoot() to ensure that the
-// correct flavor is used by mysqlctl based on the current mysqld version
-// in the path. If you don't do this then mysqlctl will use the incorrect
-// config/mycnf/<flavor>.cnf file and mysqld may fail to start.
-func setDBFlavor() error {
-	versionStr, err := mysqlctl.GetVersionString()
-	if err != nil {
-		return err
-	}
-	f, v, err := mysqlctl.ParseVersionString(versionStr)
-	if err != nil {
-		return err
-	}
-	flavor := fmt.Sprintf("%s%d%d", f, v.Major, v.Minor)
-	err = os.Setenv("MYSQL_FLAVOR", string(flavor))
-	if err != nil {
-		return err
-	}
-	fmt.Printf("MYSQL_FLAVOR is %s\n", string(flavor))
-	return nil
-}
-
 func unsetVtMySQLRoot() {
 	_ = os.Unsetenv("VT_MYSQL_ROOT")
-}
-
-func unsetDBFlavor() {
-	_ = os.Unsetenv("MYSQL_FLAVOR")
 }
 
 // getDBTypeVersionInUse checks the major DB version of the mysqld binary
@@ -781,12 +754,7 @@ func setupDBTypeVersion(t *testing.T, value string) func() {
 	if err := downloadDBTypeVersion(dbType, majorVersion, path); err != nil {
 		t.Fatalf("Could not download %s, error: %v", majorVersion, err)
 	}
-	// Set the MYSQL_FLAVOR OS ENV var for mysqlctl to use the correct config file
-	if err := setDBFlavor(); err != nil {
-		t.Fatalf("Could not set MYSQL_FLAVOR: %v", err)
-	}
 	return func() {
-		unsetDBFlavor()
 		unsetVtMySQLRoot()
 	}
 }

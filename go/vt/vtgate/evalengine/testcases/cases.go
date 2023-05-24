@@ -146,6 +146,10 @@ var Cases = []TestCase{
 	{Run: FnIsIPv4Compat},
 	{Run: FnIsIPv4Mapped},
 	{Run: FnIsIPv6},
+	{Run: FnBinToUUID},
+	{Run: FnIsUUID},
+	{Run: FnUUID},
+	{Run: FnUUIDToBin},
 }
 
 func JSONPathOperations(yield Query) {
@@ -1780,5 +1784,66 @@ func FnIsIPv4Mapped(yield Query) {
 func FnIsIPv6(yield Query) {
 	for _, d := range ipInputs {
 		yield(fmt.Sprintf("IS_IPV6(%s)", d), nil)
+	}
+}
+
+func FnBinToUUID(yield Query) {
+	args := []string{
+		"NULL",
+		"-1",
+		"0",
+		"1",
+		"2",
+		"''",
+		"'-1'",
+		"'0'",
+		"'1'",
+		"'2'",
+	}
+	for _, d := range uuidInputs {
+		yield(fmt.Sprintf("BIN_TO_UUID(%s)", d), nil)
+	}
+
+	for _, d := range uuidInputs {
+		for _, a := range args {
+			yield(fmt.Sprintf("BIN_TO_UUID(%s, %s)", d, a), nil)
+		}
+	}
+}
+
+func FnIsUUID(yield Query) {
+	for _, d := range uuidInputs {
+		yield(fmt.Sprintf("IS_UUID(%s)", d), nil)
+	}
+}
+
+func FnUUID(yield Query) {
+	yield("LENGTH(UUID())", nil)
+	yield("COLLATION(UUID())", nil)
+	yield("IS_UUID(UUID())", nil)
+	yield("LENGTH(UUID_TO_BIN(UUID())", nil)
+}
+
+func FnUUIDToBin(yield Query) {
+	args := []string{
+		"NULL",
+		"-1",
+		"0",
+		"1",
+		"2",
+		"''",
+		"'-1'",
+		"'0'",
+		"'1'",
+		"'2'",
+	}
+	for _, d := range uuidInputs {
+		yield(fmt.Sprintf("UUID_TO_BIN(%s)", d), nil)
+	}
+
+	for _, d := range uuidInputs {
+		for _, a := range args {
+			yield(fmt.Sprintf("UUID_TO_BIN(%s, %s)", d, a), nil)
+		}
 	}
 }

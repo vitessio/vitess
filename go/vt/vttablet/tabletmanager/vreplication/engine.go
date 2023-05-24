@@ -319,7 +319,6 @@ func (vre *Engine) Close() {
 	// Wait for long-running functions to exit.
 	vre.wg.Wait()
 
-	vre.mysqld.DisableBinlogPlayback()
 	vre.isOpen = false
 
 	vre.updateStats()

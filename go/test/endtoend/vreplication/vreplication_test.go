@@ -513,6 +513,7 @@ func testVStreamCellFlag(t *testing.T) {
 			flags := &vtgatepb.VStreamFlags{}
 			if tc.cells != "" {
 				flags.Cells = tc.cells
+				flags.CellPreference = "onlyspecified"
 			}
 
 			ctx2, cancel := context.WithTimeout(ctx, 30*time.Second)

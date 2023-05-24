@@ -123,7 +123,7 @@ func NewEngine(env tabletenv.Env) *Engine {
 
 		schemazHandler(se.GetSchema(), w, r)
 	})
-	se.historian = newHistorian(env.Config().TrackSchemaVersions, se.conns)
+	se.historian = newHistorian(env.Config().TrackSchemaVersions, env.Config().SchemaVersionMaxAgeSeconds, se.conns)
 	return se
 }
 
@@ -773,7 +773,7 @@ func NewEngineForTests() *Engine {
 	se := &Engine{
 		isOpen:    true,
 		tables:    make(map[string]*Table),
-		historian: newHistorian(false, nil),
+		historian: newHistorian(false, 0, nil),
 	}
 	return se
 }

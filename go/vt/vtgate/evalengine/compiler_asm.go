@@ -33,6 +33,8 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/google/uuid"
+
 	"vitess.io/vitess/go/hack"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/collations/charset"
@@ -4121,4 +4123,120 @@ func (asm *assembler) Fn_CONCAT_WS(tt querypb.Type, tc collations.TypedCollation
 		env.vm.sp -= args
 		return 1
 	}, "FN CONCAT_WS VARCHAR(SP-1) VARCHAR(SP-2)...VARCHAR(SP-N)")
+}
+
+func (asm *assembler) Fn_BIN_TO_UUID0(col collations.TypedCollation) {
+	asm.emit(func(env *ExpressionEnv) int {
+		arg := env.vm.stack[env.vm.sp-1].(*evalBytes)
+
+		parsed, err := uuid.FromBytes(arg.bytes)
+		if err != nil {
+			env.vm.stack[env.vm.sp-1] = nil
+			env.vm.err = errIncorrectUUID(arg.bytes, "bin_to_uuid")
+			return 1
+		}
+		arg.bytes = hack.StringBytes(parsed.String())
+		arg.tt = int16(sqltypes.VarChar)
+		arg.col = col
+		return 1
+	}, "FN BIN_TO_UUID VARBINARY(SP-1)")
+}
+
+func (asm *assembler) Fn_BIN_TO_UUID1(col collations.TypedCollation) {
+	asm.adjustStack(-1)
+	asm.emit(func(env *ExpressionEnv) int {
+		arg := env.vm.stack[env.vm.sp-2].(*evalBytes)
+		b := arg.bytes
+
+		if env.vm.stack[env.vm.sp-1] != nil &&
+			env.vm.stack[env.vm.sp-1].(*evalInt64).i != 0 {
+			b = swapUUIDFrom(b)
+		}
+
+		parsed, err := uuid.FromBytes(b)
+		if err != nil {
+			env.vm.stack[env.vm.sp-2] = nil
+			env.vm.err = errIncorrectUUID(arg.bytes, "bin_to_uuid")
+			env.vm.sp--
+			return 1
+		}
+		arg.bytes = hack.StringBytes(parsed.String())
+		arg.tt = int16(sqltypes.VarChar)
+		arg.col = col
+		env.vm.sp--
+		return 1
+	}, "FN BIN_TO_UUID VARBINARY(SP-2) INT64(SP-1)")
+}
+
+func (asm *assembler) Fn_IS_UUID() {
+	asm.emit(func(env *ExpressionEnv) int {
+		arg := env.vm.stack[env.vm.sp-1].(*evalBytes)
+
+		_, err := uuid.ParseBytes(arg.bytes)
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalBool(err == nil)
+		return 1
+	}, "FN IS_UUID VARBINARY(SP-1)")
+}
+
+func (asm *assembler) Fn_UUID() {
+	asm.adjustStack(1)
+	asm.emit(func(env *ExpressionEnv) int {
+		v, err := uuid.NewUUID()
+		if err != nil {
+			env.vm.err = err
+			env.vm.sp++
+			return 1
+		}
+		m, err := v.MarshalText()
+		if err != nil {
+			env.vm.err = err
+			env.vm.sp++
+			return 1
+		}
+
+		env.vm.stack[env.vm.sp] = env.vm.arena.newEvalText(m, collationUtf8mb3)
+		env.vm.sp++
+		return 1
+	}, "FN UUID")
+}
+
+func (asm *assembler) Fn_UUID_TO_BIN0() {
+	asm.emit(func(env *ExpressionEnv) int {
+		arg := env.vm.stack[env.vm.sp-1].(*evalBytes)
+
+		parsed, err := uuid.ParseBytes(arg.bytes)
+		if err != nil {
+			env.vm.stack[env.vm.sp-1] = nil
+			env.vm.err = errIncorrectUUID(arg.bytes, "uuid_to_bin")
+			return 1
+		}
+		arg.bytes = parsed[:]
+		arg.tt = int16(sqltypes.VarBinary)
+		arg.col = collationBinary
+		return 1
+	}, "FN UUID_TO_BIN VARBINARY(SP-1)")
+}
+
+func (asm *assembler) Fn_UUID_TO_BIN1() {
+	asm.adjustStack(-1)
+	asm.emit(func(env *ExpressionEnv) int {
+		arg := env.vm.stack[env.vm.sp-2].(*evalBytes)
+		parsed, err := uuid.ParseBytes(arg.bytes)
+		if err != nil {
+			env.vm.stack[env.vm.sp-2] = nil
+			env.vm.err = errIncorrectUUID(arg.bytes, "uuid_to_bin")
+			env.vm.sp--
+			return 1
+		}
+		b := parsed[:]
+		if env.vm.stack[env.vm.sp-1] != nil &&
+			env.vm.stack[env.vm.sp-1].(*evalInt64).i != 0 {
+			b = swapUUIDTo(b)
+		}
+		arg.bytes = b
+		arg.tt = int16(sqltypes.VarBinary)
+		arg.col = collationBinary
+		env.vm.sp--
+		return 1
+	}, "FN UUID_TO_BIN VARBINARY(SP-2) INT64(SP-1)")
 }

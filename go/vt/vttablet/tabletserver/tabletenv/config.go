@@ -153,6 +153,7 @@ func registerTabletEnvFlags(fs *pflag.FlagSet) {
 	fs.BoolVar(&currentConfig.AnnotateQueries, "queryserver-config-annotate-queries", defaultConfig.AnnotateQueries, "prefix queries to MySQL backend with comment indicating vtgate principal (user) and target tablet type")
 	fs.BoolVar(&currentConfig.WatchReplication, "watch_replication_stream", false, "When enabled, vttablet will stream the MySQL replication stream from the local server, and use it to update schema when it sees a DDL.")
 	fs.BoolVar(&currentConfig.TrackSchemaVersions, "track_schema_versions", false, "When enabled, vttablet will store versions of schemas at each position that a DDL is applied and allow retrieval of the schema corresponding to a position")
+	fs.Int64Var(&currentConfig.SchemaVersionMaxAgeSeconds, "schema-version-max-age-seconds", 0, "max age of schema version records to kept in memory by the vreplication historian")
 	fs.BoolVar(&currentConfig.TwoPCEnable, "twopc_enable", defaultConfig.TwoPCEnable, "if the flag is on, 2pc is enabled. Other 2pc flags must be supplied.")
 	fs.StringVar(&currentConfig.TwoPCCoordinatorAddress, "twopc_coordinator_address", defaultConfig.TwoPCCoordinatorAddress, "address of the (VTGate) process(es) that will be used to notify of abandoned transactions.")
 	SecondsVar(fs, &currentConfig.TwoPCAbandonAge, "twopc_abandon_age", defaultConfig.TwoPCAbandonAge, "time in seconds. Any unresolved transaction older than this time will be sent to the coordinator to be resolved.")
@@ -187,9 +188,6 @@ func registerTabletEnvFlags(fs *pflag.FlagSet) {
 	flagutil.DualFormatBoolVar(fs, &enableConsolidatorReplicas, "enable_consolidator_replicas", false, "This option enables the query consolidator only on replicas.")
 	fs.Int64Var(&currentConfig.ConsolidatorStreamQuerySize, "consolidator-stream-query-size", defaultConfig.ConsolidatorStreamQuerySize, "Configure the stream consolidator query size in bytes. Setting to 0 disables the stream consolidator.")
 	fs.Int64Var(&currentConfig.ConsolidatorStreamTotalSize, "consolidator-stream-total-size", defaultConfig.ConsolidatorStreamTotalSize, "Configure the stream consolidator total size in bytes. Setting to 0 disables the stream consolidator.")
-	flagutil.DualFormatBoolVar(fs, &currentConfig.DeprecatedCacheResultFields, "enable_query_plan_field_caching", defaultConfig.DeprecatedCacheResultFields, "This option fetches & caches fields (columns) when storing query plans")
-	_ = fs.MarkDeprecated("enable_query_plan_field_caching", "it will be removed in a future release.")
-	_ = fs.MarkDeprecated("enable-query-plan-field-caching", "it will be removed in a future release.")
 
 	currentConfig.Healthcheck.IntervalSeconds = flagutil.NewDeprecatedFloat64Seconds(defaultConfig.Healthcheck.IntervalSeconds.Name(), defaultConfig.Healthcheck.IntervalSeconds.Get())
 	currentConfig.Healthcheck.DegradedThresholdSeconds = flagutil.NewDeprecatedFloat64Seconds(defaultConfig.Healthcheck.DegradedThresholdSeconds.Name(), defaultConfig.Healthcheck.DegradedThresholdSeconds.Get())
@@ -322,11 +320,11 @@ type TabletConfig struct {
 	SignalSchemaChangeReloadIntervalSeconds flagutil.DeprecatedFloat64Seconds `json:"signalSchemaChangeReloadIntervalSeconds,omitempty"`
 	WatchReplication                        bool                              `json:"watchReplication,omitempty"`
 	TrackSchemaVersions                     bool                              `json:"trackSchemaVersions,omitempty"`
+	SchemaVersionMaxAgeSeconds              int64                             `json:"schemaVersionMaxAgeSeconds,omitempty"`
 	TerseErrors                             bool                              `json:"terseErrors,omitempty"`
 	TruncateErrorLen                        int                               `json:"truncateErrorLen,omitempty"`
 	AnnotateQueries                         bool                              `json:"annotateQueries,omitempty"`
 	MessagePostponeParallelism              int                               `json:"messagePostponeParallelism,omitempty"`
-	DeprecatedCacheResultFields             bool                              `json:"cacheResultFields,omitempty"`
 	SignalWhenSchemaChange                  bool                              `json:"signalWhenSchemaChange,omitempty"`
 
 	ExternalConnections map[string]*dbconfigs.DBConfigs `json:"externalConnections,omitempty"`
@@ -782,7 +780,6 @@ var defaultConfig = TabletConfig{
 	QueryCacheLFU:               cache.DefaultConfig.LFU,
 	SchemaReloadIntervalSeconds: flagutil.NewDeprecatedFloat64Seconds("queryserver-config-schema-reload-time", 30*time.Minute),
 	MessagePostponeParallelism:  4,
-	DeprecatedCacheResultFields: true,
 	SignalWhenSchemaChange:      true,
 
 	EnableTxThrottler:           false,
