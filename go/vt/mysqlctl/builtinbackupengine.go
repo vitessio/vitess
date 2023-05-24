@@ -153,11 +153,6 @@ func registerBuiltinBackupEngineFlags(fs *pflag.FlagSet) {
 	fs.UintVar(&builtinBackupFileWriteBufferSize, "builtinbackup-file-write-buffer-size", builtinBackupFileWriteBufferSize, "write files using an IO buffer of this many bytes. Golang defaults are used when set to 0.")
 }
 
-// isIncrementalBackup is a convenience function to check whether the params indicate an incremental backup request
-func isIncrementalBackup(params BackupParams) bool {
-	return params.IncrementalFromPos != ""
-}
-
 // fullPath returns the full path of the entry, based on its type
 func (fe *FileEntry) fullPath(cnf *Mycnf) (string, error) {
 	// find the root to use
@@ -1126,5 +1121,5 @@ func getPrimaryPosition(ctx context.Context, tmc tmclient.TabletManagerClient, t
 }
 
 func init() {
-	BackupRestoreEngineMap["builtin"] = &BuiltinBackupEngine{}
+	BackupRestoreEngineMap[builtinBackupEngineName] = &BuiltinBackupEngine{}
 }
