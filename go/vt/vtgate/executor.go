@@ -1467,3 +1467,60 @@ func (e *Executor) planPrepareStmt(ctx context.Context, vcursor *vcursorImpl, qu
 	}
 	return plan, stmt, nil
 }
+
+// fetchSchemaFromTablet is used to get some mysql schema. IE: show tables like ...
+func (e *Executor) fetchSchemaFromTablet(ctx context.Context, filter *sqlparser.ShowFilter, sql string) (*sqltypes.Result, error) {
+	ctx, cancel := context.WithTimeout(ctx, healthCheckTimeout)
+	defer cancel()
+
+	status := e.scatterConn.GetHealthCheckCacheStatus()
+
+	var ksName string
+	var target *querypb.Target
+
+	for _, s := range status {
+		for _, ts := range s.TabletsStats {
+
+			if !ts.Serving {
+				continue
+			}
+			// We only want to exec sql by PRIMARY tablets
+			if ts.Tablet.Type == topodatapb.TabletType_REPLICA || ts.Tablet.Type == topodatapb.TabletType_RDONLY {
+				continue
+			}
+
+			// Allow people to filter by Keyspace/Shard
+			if filter != nil && filter.Like != "" {
+				if strings.Contains(filter.Like, "/") {
+					keyspaceShardStr := fmt.Sprintf("%s/%s", ts.Tablet.Keyspace, ts.Tablet.Shard)
+					if !strings.EqualFold(keyspaceShardStr, filter.Like) {
+						continue
+					}
+
+				} else if !strings.EqualFold(ts.Tablet.Keyspace, filter.Like) {
+					continue
+				}
+			}
+
+			ksName = ts.Tablet.Keyspace
+			target = ts.Target
+		}
+
+		if target != nil {
+			break
+		}
+	}
+	if target == nil {
+		return nil, vterrors.New(vtrpcpb.Code_UNAVAILABLE, "upstream shards are not available")
+	}
+	if ksName == "" {
+		return nil, errNoKeyspace
+	}
+
+	results, err := e.txConn.tabletGateway.Execute(ctx, target, sql, nil, 0, 0, nil)
+	if err != nil || results == nil {
+		log.Warningf("Could not get query result from %s: %v", ksName, err)
+		return nil, err
+	}
+	return results, nil
+}

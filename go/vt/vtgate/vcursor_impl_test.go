@@ -317,3 +317,85 @@ func TestFirstSortedKeyspace(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, ks3Schema.Keyspace, ks)
 }
+
+func Test_vcursorImpl_FindTableSchema(t *testing.T) {
+
+	type args struct {
+		ctx      context.Context
+		keyspace string
+	}
+
+	ks1Schema := &vindexes.KeyspaceSchema{Keyspace: &vindexes.Keyspace{Name: "TestExecutor"}}
+	ks2Schema := &vindexes.KeyspaceSchema{Keyspace: &vindexes.Keyspace{Name: "TestUnsharded"}}
+	ks3Schema := &vindexes.KeyspaceSchema{Keyspace: &vindexes.Keyspace{Name: "TestXBadVSchema"}}
+	vschemaWith3KS := &vindexes.VSchema{
+		Keyspaces: map[string]*vindexes.KeyspaceSchema{
+			ks1Schema.Keyspace.Name: ks1Schema,
+			ks2Schema.Keyspace.Name: ks2Schema,
+			ks3Schema.Keyspace.Name: ks3Schema,
+		}}
+	tests := []struct {
+		name          string
+		args          args
+		sandboxRes    *sqltypes.Result
+		expectedError string
+	}{
+		{
+			name: "test1",
+			args: args{ctx: ctx, keyspace: "TestExecutor"},
+			sandboxRes: sqltypes.MakeTestResult(
+				sqltypes.MakeTestFields("table_name|column_name|data_type|column_key|auto_increment|collation_name",
+					"varchar|varchar|varchar|varchar|bool|varchar"),
+				"tab1|id|bigint|PRI|NULL|NULL"),
+			expectedError: "",
+		}, {
+			name: "test2",
+			args: args{ctx: ctx, keyspace: "TestExecutor"},
+			sandboxRes: sqltypes.MakeTestResult(
+				sqltypes.MakeTestFields("table_name|column_name|data_type|column_key|auto_increment|collation_name",
+					"varchar|varchar|varchar|varchar|bool|varchar"),
+				"tab2|id|bigint|PRI|NULL|NULL"),
+			expectedError: "",
+		}, {
+			name: "test3",
+			args: args{ctx: ctx, keyspace: "TestExecutor"},
+			sandboxRes: sqltypes.MakeTestResult(
+				sqltypes.MakeTestFields("table_name|column_name|data_type|column_key|auto_increment|collation_name",
+					"varchar|varchar|varchar|varchar|bool|varchar"),
+				"tab3|id|bigint|UNI|1|NULL"),
+			expectedError: "",
+		}, {
+			name: "test4",
+			args: args{ctx: ctx, keyspace: "TestExecutor"},
+			sandboxRes: sqltypes.MakeTestResult(
+				sqltypes.MakeTestFields("table_name|column_name",
+					"varchar|varchar"),
+				"tab3|id"),
+			expectedError: "",
+		}, {
+			name:          "test5",
+			args:          args{ctx: ctx, keyspace: "TestExecutor"},
+			sandboxRes:    nil,
+			expectedError: "",
+		}, {
+			name: "test6",
+			args: args{ctx: ctx, keyspace: ""},
+			sandboxRes: sqltypes.MakeTestResult(
+				sqltypes.MakeTestFields("table_name|column_name|data_type|column_key|auto_increment|collation_name",
+					"varchar|varchar|varchar|varchar|bool|varchar"),
+				"tab3|id|bigint|UNI|1|NULL"),
+			expectedError: "",
+		},
+	}
+	for _, tt := range tests {
+		e, sbc1, _, _ := createExecutorEnv()
+		sbc1.SetResults([]*sqltypes.Result{tt.sandboxRes})
+		vc, err1 := newVCursorImpl(NewSafeSession(&vtgatepb.Session{TargetString: "@primary"}), sqlparser.MarginComments{}, e, nil, e.vm, vschemaWith3KS, e.resolver.resolver, nil, false, 0)
+		require.NoError(t, err1)
+		_, err := vc.FindTableSchema(tt.args.ctx, tt.args.keyspace)
+		if err != nil {
+			t.Errorf("%q. vcursorImpl.FindTableSchema() error = %v", tt.name, err)
+			continue
+		}
+	}
+}

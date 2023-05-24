@@ -82,6 +82,9 @@ type iExecute interface {
 	ParseDestinationTarget(targetString string) (string, topodatapb.TabletType, key.Destination, error)
 	VSchema() *vindexes.VSchema
 	planPrepareStmt(ctx context.Context, vcursor *vcursorImpl, query string) (*engine.Plan, sqlparser.Statement, error)
+
+	// fetchSchemaFromTablet is used to get some mysql schema. IE: show tables like ...
+	fetchSchemaFromTablet(ctx context.Context, filter *sqlparser.ShowFilter, sql string) (*sqltypes.Result, error)
 }
 
 // VSchemaOperator is an interface to Vschema Operations
@@ -312,6 +315,66 @@ func (vc *vcursorImpl) getActualKeyspace() string {
 		return ""
 	}
 	return ks.Name
+}
+
+// FindRealTable finds the specified table that you need not care whether tracker is reloaded.
+// If the keyspace what specified in the input, it gets used as qualifier.
+// Otherwise, the keyspace from the request is used, if one was provided.
+func (vc *vcursorImpl) FindTableSchema(ctx context.Context, keyspace string) (map[string]mysql.TableSchema, error) {
+
+	destKeyspace := keyspace
+	if keyspace == "" {
+		destKeyspace = vc.keyspace
+	}
+
+	res, err := vc.executor.fetchSchemaFromTablet(ctx, &sqlparser.ShowFilter{Like: destKeyspace}, mysql.FetchTablesSchema)
+	if err != nil || res == nil {
+		return nil, err
+	}
+
+	type tableNameStr = string
+
+	var colschema = make(map[tableNameStr][]mysql.SchemaColumn)
+	var tableschema = make(map[tableNameStr]mysql.TableSchema)
+	auto_increment := false
+	if res.Rows == nil || len(res.Rows[0]) < 6 {
+		return nil, nil
+	}
+	for _, row := range res.Rows {
+		tbl := row[0].ToString()
+		colName := row[1].ToString()
+		colType := row[2].ToString()
+		colKey := row[3].ToString()
+		auto_increment, _ = row[4].ToBool()
+		collation := row[5].ToString()
+
+		unique := false
+		if colKey == "PRI" || colKey == "UNI" {
+			unique = true
+		}
+
+		cType := sqlparser.ColumnType{Type: colType}
+		col := mysql.SchemaColumn{
+			Name:          sqlparser.NewIdentifierCI(colName),
+			Type:          cType.SQLType(),
+			Key:           colKey,
+			CollationName: collation,
+			Unique:        unique,
+		}
+
+		cols := colschema[tbl]
+		colschema[tbl] = append(cols, col)
+	}
+	for tabname, columns := range colschema {
+		tableschema[tabname] = mysql.TableSchema{
+			Type:            "physic",
+			Name:            sqlparser.NewIdentifierCS(tabname),
+			Keyspace:        destKeyspace,
+			Columns:         columns,
+			IsAutoIncrement: auto_increment,
+		}
+	}
+	return tableschema, nil
 }
 
 // DefaultKeyspace returns the default keyspace of the current request
@@ -1073,6 +1136,11 @@ func (vc *vcursorImpl) ExecuteVSchema(ctx context.Context, keyspace string, vsch
 	}
 	if ksName == "" {
 		return errNoKeyspace
+	}
+
+	errSC := SchemaCheck(vc, ctx, ksName, vschemaDDL)
+	if errSC != nil {
+		return errSC
 	}
 
 	ks := srvVschema.Keyspaces[ksName]

@@ -2749,3 +2749,88 @@ func exec(executor *Executor, session *SafeSession, sql string) (*sqltypes.Resul
 func makeComments(text string) sqlparser.MarginComments {
 	return sqlparser.MarginComments{Trailing: text}
 }
+
+func TestExecutorFetchSchemaFromTablet(t *testing.T) {
+
+	tests := []struct {
+		name          string
+		fetchSQl      string
+		sandboxRes    *sqltypes.Result
+		expectedError string
+	}{
+		{
+			name:     "fetchSchemaFromTablet_PRI",
+			fetchSQl: mysql.FetchTablesSchema,
+			sandboxRes: sqltypes.MakeTestResult(
+				sqltypes.MakeTestFields("table_name|column_name|data_type|column_key|auto_increment|collation_name",
+					"varchar|varchar|varchar|varchar|bool|varchar"),
+				"tab1|id|bigint|PRI|NULL|NULL"),
+			expectedError: vterrors.New(vtrpcpb.Code_UNAVAILABLE, "upstream shards are not available").Error(),
+		}, {
+			name:     "fetchSchemaFromTablet_NULL",
+			fetchSQl: mysql.FetchTablesSchema,
+			sandboxRes: sqltypes.MakeTestResult(
+				sqltypes.MakeTestFields("table_name|column_name|data_type|column_key|auto_increment|collation_name",
+					"varchar|varchar|varchar|varchar|bool|varchar"),
+				"tab1|sex|enum|NULL|NULL|NULL"),
+			expectedError: vterrors.New(vtrpcpb.Code_UNAVAILABLE, "upstream shards are not available").Error(),
+		}, {
+			name:     "fetchSchemaFromTablet_AUTOINCREMENT",
+			fetchSQl: mysql.FetchTablesSchema,
+			sandboxRes: sqltypes.MakeTestResult(
+				sqltypes.MakeTestFields("table_name|column_name|data_type|column_key|auto_increment|collation_name",
+					"varchar|varchar|varchar|varchar|bool|varchar"),
+				"tab2|name|varchar|NULL|1|NULL"),
+			expectedError: vterrors.New(vtrpcpb.Code_UNAVAILABLE, "upstream shards are not available").Error(),
+		}, {
+			name:     "fetchSchemaFromTablet_UNI",
+			fetchSQl: mysql.FetchTablesSchema,
+			sandboxRes: sqltypes.MakeTestResult(
+				sqltypes.MakeTestFields("table_name|column_name|data_type|column_key|auto_increment|collation_name",
+					"varchar|varchar|varchar|varchar|bool|varchar"),
+				"tab3|corder_id|int|UNI|NULL|NULL"),
+			expectedError: vterrors.New(vtrpcpb.Code_UNAVAILABLE, "upstream shards are not available").Error(),
+		}, {
+			name:          "fetchSchemaFromTablet_NULL",
+			fetchSQl:      mysql.FetchTablesSchema,
+			sandboxRes:    nil,
+			expectedError: vterrors.New(vtrpcpb.Code_UNAVAILABLE, "upstream shards are not available").Error(),
+		},
+	}
+
+	for _, tt := range tests {
+		e, sbc1, _, _ := createExecutorEnv()
+		sbc1.SetResults([]*sqltypes.Result{tt.sandboxRes})
+		_, err := e.fetchSchemaFromTablet(ctx, &sqlparser.ShowFilter{Like: "TestExecutor"}, tt.fetchSQl)
+		if err != nil {
+			t.Errorf("%q. Executor.fetchSchemaFromTablet() error = %v", tt.name, err)
+			continue
+		}
+
+		_, err = e.fetchSchemaFromTablet(ctx, &sqlparser.ShowFilter{Like: "TestExecutor/-20"}, tt.fetchSQl)
+		if err != nil {
+			t.Errorf("%q. Executor.fetchSchemaFromTablet() error = %v", tt.name, err)
+			continue
+		}
+
+		_, err = e.fetchSchemaFromTablet(ctx, &sqlparser.ShowFilter{Like: "TestExecutor_error"}, tt.fetchSQl)
+		if err == nil {
+			require.NoError(t, err)
+		} else {
+			require.EqualError(t, err, tt.expectedError)
+		}
+
+		_, err = e.fetchSchemaFromTablet(ctx, nil, tt.fetchSQl)
+		if err != nil {
+			t.Errorf("%q. Executor.fetchSchemaFromTablet() error = %v", tt.name, err)
+			continue
+		}
+
+		_, err = e.fetchSchemaFromTablet(ctx, &sqlparser.ShowFilter{Like: "TestXBadVSchema/-20"}, tt.fetchSQl)
+		if err != nil {
+			t.Errorf("%q. Executor.fetchSchemaFromTablet() error = %v", tt.name, err)
+			continue
+		}
+
+	}
+}

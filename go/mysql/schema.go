@@ -21,6 +21,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/sqlparser"
 )
 
 // This file contains the mysql queries used by different parts of the code.
@@ -94,6 +95,12 @@ order by table_name, ordinal_position`
 	FetchTables = `select ` + fetchColumns + `
 from %s.schemacopy
 where table_schema = database()
+order by table_name, ordinal_position`
+
+	// FetchTables queries fetches all information about tables
+	FetchTablesSchema = `select a.table_name, a.column_name, a.data_type, a.column_key, b.auto_increment, a.collation_name 
+from information_schema.columns a, information_schema.tables b 
+where a.table_schema = database() and a.table_schema = b.table_schema and a.table_name = b.table_name 
 order by table_name, ordinal_position`
 
 	// GetColumnNamesQueryPatternForTable is used for mocking queries in unit tests
@@ -223,3 +230,21 @@ func ShowPrimaryRow(tableName, colName string) []sqltypes.Value {
 		sqltypes.MakeTrusted(sqltypes.VarChar, []byte(colName)),
 	}
 }
+
+type (
+	SchemaColumn struct {
+		Name          sqlparser.IdentifierCI
+		Type          querypb.Type
+		Key           string
+		CollationName string
+		Unique        bool
+	}
+	// Table represents a table in VSchema.
+	TableSchema struct {
+		Type            string
+		Name            sqlparser.IdentifierCS
+		Keyspace        string
+		Columns         []SchemaColumn
+		IsAutoIncrement bool
+	}
+)
