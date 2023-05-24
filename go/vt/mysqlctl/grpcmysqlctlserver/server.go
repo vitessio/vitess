@@ -21,12 +21,12 @@ side of the remote execution of mysqlctl commands.
 package grpcmysqlctlserver
 
 import (
-	"google.golang.org/grpc"
-
 	"context"
 
-	"vitess.io/vitess/go/vt/mysqlctl"
+	"google.golang.org/grpc"
 
+	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/vt/mysqlctl"
 	mysqlctlpb "vitess.io/vitess/go/vt/proto/mysqlctl"
 )
 
@@ -48,8 +48,17 @@ func (s *server) Shutdown(ctx context.Context, request *mysqlctlpb.ShutdownReque
 }
 
 // RunMysqlUpgrade implements the server side of the MysqlctlClient interface.
-func (s *server) RunMysqlUpgrade(ctx context.Context, request *mysqlctlpb.RunMysqlUpgradeRequest) (*mysqlctlpb.RunMysqlUpgradeResponse, error) {
-	return &mysqlctlpb.RunMysqlUpgradeResponse{}, s.mysqld.RunMysqlUpgrade()
+func (s *server) RunMysqlUpgrade(ctx context.Context, _ *mysqlctlpb.RunMysqlUpgradeRequest) (*mysqlctlpb.RunMysqlUpgradeResponse, error) {
+	return &mysqlctlpb.RunMysqlUpgradeResponse{}, s.mysqld.RunMysqlUpgrade(ctx)
+}
+
+// RunMysqlUpgrade implements the server side of the MysqlctlClient interface.
+func (s *server) ApplyBinlogFile(ctx context.Context, request *mysqlctlpb.ApplyBinlogFileRequest) (*mysqlctlpb.ApplyBinlogFileResponse, error) {
+	pos, err := mysql.DecodePosition(request.BinlogRestorePosition)
+	if err != nil {
+		return nil, err
+	}
+	return &mysqlctlpb.ApplyBinlogFileResponse{}, s.mysqld.ApplyBinlogFile(ctx, request.BinlogFileName, pos)
 }
 
 // ReinitConfig implements the server side of the MysqlctlClient interface.

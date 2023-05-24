@@ -25,6 +25,7 @@ type MysqlCtlClient interface {
 	Start(ctx context.Context, in *StartRequest, opts ...grpc.CallOption) (*StartResponse, error)
 	Shutdown(ctx context.Context, in *ShutdownRequest, opts ...grpc.CallOption) (*ShutdownResponse, error)
 	RunMysqlUpgrade(ctx context.Context, in *RunMysqlUpgradeRequest, opts ...grpc.CallOption) (*RunMysqlUpgradeResponse, error)
+	ApplyBinlogFile(ctx context.Context, in *ApplyBinlogFileRequest, opts ...grpc.CallOption) (*ApplyBinlogFileResponse, error)
 	ReinitConfig(ctx context.Context, in *ReinitConfigRequest, opts ...grpc.CallOption) (*ReinitConfigResponse, error)
 	RefreshConfig(ctx context.Context, in *RefreshConfigRequest, opts ...grpc.CallOption) (*RefreshConfigResponse, error)
 }
@@ -64,6 +65,15 @@ func (c *mysqlCtlClient) RunMysqlUpgrade(ctx context.Context, in *RunMysqlUpgrad
 	return out, nil
 }
 
+func (c *mysqlCtlClient) ApplyBinlogFile(ctx context.Context, in *ApplyBinlogFileRequest, opts ...grpc.CallOption) (*ApplyBinlogFileResponse, error) {
+	out := new(ApplyBinlogFileResponse)
+	err := c.cc.Invoke(ctx, "/mysqlctl.MysqlCtl/ApplyBinlogFile", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *mysqlCtlClient) ReinitConfig(ctx context.Context, in *ReinitConfigRequest, opts ...grpc.CallOption) (*ReinitConfigResponse, error) {
 	out := new(ReinitConfigResponse)
 	err := c.cc.Invoke(ctx, "/mysqlctl.MysqlCtl/ReinitConfig", in, out, opts...)
@@ -89,6 +99,7 @@ type MysqlCtlServer interface {
 	Start(context.Context, *StartRequest) (*StartResponse, error)
 	Shutdown(context.Context, *ShutdownRequest) (*ShutdownResponse, error)
 	RunMysqlUpgrade(context.Context, *RunMysqlUpgradeRequest) (*RunMysqlUpgradeResponse, error)
+	ApplyBinlogFile(context.Context, *ApplyBinlogFileRequest) (*ApplyBinlogFileResponse, error)
 	ReinitConfig(context.Context, *ReinitConfigRequest) (*ReinitConfigResponse, error)
 	RefreshConfig(context.Context, *RefreshConfigRequest) (*RefreshConfigResponse, error)
 	mustEmbedUnimplementedMysqlCtlServer()
@@ -106,6 +117,9 @@ func (UnimplementedMysqlCtlServer) Shutdown(context.Context, *ShutdownRequest) (
 }
 func (UnimplementedMysqlCtlServer) RunMysqlUpgrade(context.Context, *RunMysqlUpgradeRequest) (*RunMysqlUpgradeResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RunMysqlUpgrade not implemented")
+}
+func (UnimplementedMysqlCtlServer) ApplyBinlogFile(context.Context, *ApplyBinlogFileRequest) (*ApplyBinlogFileResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ApplyBinlogFile not implemented")
 }
 func (UnimplementedMysqlCtlServer) ReinitConfig(context.Context, *ReinitConfigRequest) (*ReinitConfigResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ReinitConfig not implemented")
@@ -180,6 +194,24 @@ func _MysqlCtl_RunMysqlUpgrade_Handler(srv interface{}, ctx context.Context, dec
 	return interceptor(ctx, in, info, handler)
 }
 
+func _MysqlCtl_ApplyBinlogFile_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ApplyBinlogFileRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MysqlCtlServer).ApplyBinlogFile(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/mysqlctl.MysqlCtl/ApplyBinlogFile",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MysqlCtlServer).ApplyBinlogFile(ctx, req.(*ApplyBinlogFileRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _MysqlCtl_ReinitConfig_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ReinitConfigRequest)
 	if err := dec(in); err != nil {
@@ -234,6 +266,10 @@ var MysqlCtl_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RunMysqlUpgrade",
 			Handler:    _MysqlCtl_RunMysqlUpgrade_Handler,
+		},
+		{
+			MethodName: "ApplyBinlogFile",
+			Handler:    _MysqlCtl_ApplyBinlogFile_Handler,
 		},
 		{
 			MethodName: "ReinitConfig",

@@ -183,8 +183,20 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfFuncExpr(in)
 	case *GTIDFuncExpr:
 		return CloneRefOfGTIDFuncExpr(in)
+	case *GeoHashFromLatLongExpr:
+		return CloneRefOfGeoHashFromLatLongExpr(in)
+	case *GeoHashFromPointExpr:
+		return CloneRefOfGeoHashFromPointExpr(in)
+	case *GeoJSONFromGeomExpr:
+		return CloneRefOfGeoJSONFromGeomExpr(in)
+	case *GeomCollPropertyFuncExpr:
+		return CloneRefOfGeomCollPropertyFuncExpr(in)
 	case *GeomFormatExpr:
 		return CloneRefOfGeomFormatExpr(in)
+	case *GeomFromGeoHashExpr:
+		return CloneRefOfGeomFromGeoHashExpr(in)
+	case *GeomFromGeoJSONExpr:
+		return CloneRefOfGeomFromGeoJSONExpr(in)
 	case *GeomFromTextExpr:
 		return CloneRefOfGeomFromTextExpr(in)
 	case *GeomFromWKBExpr:
@@ -375,6 +387,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfPointPropertyFuncExpr(in)
 	case *PolygonExpr:
 		return CloneRefOfPolygonExpr(in)
+	case *PolygonPropertyFuncExpr:
+		return CloneRefOfPolygonPropertyFuncExpr(in)
 	case *PrepareStmt:
 		return CloneRefOfPrepareStmt(in)
 	case *PurgeBinaryLogs:
@@ -1399,6 +1413,52 @@ func CloneRefOfGTIDFuncExpr(n *GTIDFuncExpr) *GTIDFuncExpr {
 	return &out
 }
 
+// CloneRefOfGeoHashFromLatLongExpr creates a deep clone of the input.
+func CloneRefOfGeoHashFromLatLongExpr(n *GeoHashFromLatLongExpr) *GeoHashFromLatLongExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Latitude = CloneExpr(n.Latitude)
+	out.Longitude = CloneExpr(n.Longitude)
+	out.MaxLength = CloneExpr(n.MaxLength)
+	return &out
+}
+
+// CloneRefOfGeoHashFromPointExpr creates a deep clone of the input.
+func CloneRefOfGeoHashFromPointExpr(n *GeoHashFromPointExpr) *GeoHashFromPointExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Point = CloneExpr(n.Point)
+	out.MaxLength = CloneExpr(n.MaxLength)
+	return &out
+}
+
+// CloneRefOfGeoJSONFromGeomExpr creates a deep clone of the input.
+func CloneRefOfGeoJSONFromGeomExpr(n *GeoJSONFromGeomExpr) *GeoJSONFromGeomExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Geom = CloneExpr(n.Geom)
+	out.MaxDecimalDigits = CloneExpr(n.MaxDecimalDigits)
+	out.Bitmask = CloneExpr(n.Bitmask)
+	return &out
+}
+
+// CloneRefOfGeomCollPropertyFuncExpr creates a deep clone of the input.
+func CloneRefOfGeomCollPropertyFuncExpr(n *GeomCollPropertyFuncExpr) *GeomCollPropertyFuncExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.GeomColl = CloneExpr(n.GeomColl)
+	out.PropertyDefArg = CloneExpr(n.PropertyDefArg)
+	return &out
+}
+
 // CloneRefOfGeomFormatExpr creates a deep clone of the input.
 func CloneRefOfGeomFormatExpr(n *GeomFormatExpr) *GeomFormatExpr {
 	if n == nil {
@@ -1407,6 +1467,29 @@ func CloneRefOfGeomFormatExpr(n *GeomFormatExpr) *GeomFormatExpr {
 	out := *n
 	out.Geom = CloneExpr(n.Geom)
 	out.AxisOrderOpt = CloneExpr(n.AxisOrderOpt)
+	return &out
+}
+
+// CloneRefOfGeomFromGeoHashExpr creates a deep clone of the input.
+func CloneRefOfGeomFromGeoHashExpr(n *GeomFromGeoHashExpr) *GeomFromGeoHashExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.GeoHash = CloneExpr(n.GeoHash)
+	out.SridOpt = CloneExpr(n.SridOpt)
+	return &out
+}
+
+// CloneRefOfGeomFromGeoJSONExpr creates a deep clone of the input.
+func CloneRefOfGeomFromGeoJSONExpr(n *GeomFromGeoJSONExpr) *GeomFromGeoJSONExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.GeoJSON = CloneExpr(n.GeoJSON)
+	out.HigherDimHandlerOpt = CloneExpr(n.HigherDimHandlerOpt)
+	out.Srid = CloneExpr(n.Srid)
 	return &out
 }
 
@@ -2413,6 +2496,17 @@ func CloneRefOfPolygonExpr(n *PolygonExpr) *PolygonExpr {
 	}
 	out := *n
 	out.LinestringParams = CloneExprs(n.LinestringParams)
+	return &out
+}
+
+// CloneRefOfPolygonPropertyFuncExpr creates a deep clone of the input.
+func CloneRefOfPolygonPropertyFuncExpr(n *PolygonPropertyFuncExpr) *PolygonPropertyFuncExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Polygon = CloneExpr(n.Polygon)
+	out.PropertyDefArg = CloneExpr(n.PropertyDefArg)
 	return &out
 }
 
@@ -3440,8 +3534,20 @@ func CloneCallable(in Callable) Callable {
 		return CloneRefOfFuncExpr(in)
 	case *GTIDFuncExpr:
 		return CloneRefOfGTIDFuncExpr(in)
+	case *GeoHashFromLatLongExpr:
+		return CloneRefOfGeoHashFromLatLongExpr(in)
+	case *GeoHashFromPointExpr:
+		return CloneRefOfGeoHashFromPointExpr(in)
+	case *GeoJSONFromGeomExpr:
+		return CloneRefOfGeoJSONFromGeomExpr(in)
+	case *GeomCollPropertyFuncExpr:
+		return CloneRefOfGeomCollPropertyFuncExpr(in)
 	case *GeomFormatExpr:
 		return CloneRefOfGeomFormatExpr(in)
+	case *GeomFromGeoHashExpr:
+		return CloneRefOfGeomFromGeoHashExpr(in)
+	case *GeomFromGeoJSONExpr:
+		return CloneRefOfGeomFromGeoJSONExpr(in)
 	case *GeomFromTextExpr:
 		return CloneRefOfGeomFromTextExpr(in)
 	case *GeomFromWKBExpr:
@@ -3530,6 +3636,8 @@ func CloneCallable(in Callable) Callable {
 		return CloneRefOfPointPropertyFuncExpr(in)
 	case *PolygonExpr:
 		return CloneRefOfPolygonExpr(in)
+	case *PolygonPropertyFuncExpr:
+		return CloneRefOfPolygonPropertyFuncExpr(in)
 	case *RegexpInstrExpr:
 		return CloneRefOfRegexpInstrExpr(in)
 	case *RegexpLikeExpr:
@@ -3720,8 +3828,20 @@ func CloneExpr(in Expr) Expr {
 		return CloneRefOfFuncExpr(in)
 	case *GTIDFuncExpr:
 		return CloneRefOfGTIDFuncExpr(in)
+	case *GeoHashFromLatLongExpr:
+		return CloneRefOfGeoHashFromLatLongExpr(in)
+	case *GeoHashFromPointExpr:
+		return CloneRefOfGeoHashFromPointExpr(in)
+	case *GeoJSONFromGeomExpr:
+		return CloneRefOfGeoJSONFromGeomExpr(in)
+	case *GeomCollPropertyFuncExpr:
+		return CloneRefOfGeomCollPropertyFuncExpr(in)
 	case *GeomFormatExpr:
 		return CloneRefOfGeomFormatExpr(in)
+	case *GeomFromGeoHashExpr:
+		return CloneRefOfGeomFromGeoHashExpr(in)
+	case *GeomFromGeoJSONExpr:
+		return CloneRefOfGeomFromGeoJSONExpr(in)
 	case *GeomFromTextExpr:
 		return CloneRefOfGeomFromTextExpr(in)
 	case *GeomFromWKBExpr:
@@ -3830,6 +3950,8 @@ func CloneExpr(in Expr) Expr {
 		return CloneRefOfPointPropertyFuncExpr(in)
 	case *PolygonExpr:
 		return CloneRefOfPolygonExpr(in)
+	case *PolygonPropertyFuncExpr:
+		return CloneRefOfPolygonPropertyFuncExpr(in)
 	case *RegexpInstrExpr:
 		return CloneRefOfRegexpInstrExpr(in)
 	case *RegexpLikeExpr:

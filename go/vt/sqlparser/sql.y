@@ -368,6 +368,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %token <str> ST_GeometryCollectionFromText ST_GeometryFromText ST_LineStringFromText ST_MultiLineStringFromText ST_MultiPointFromText ST_MultiPolygonFromText ST_PointFromText ST_PolygonFromText
 %token <str> ST_GeometryCollectionFromWKB ST_GeometryFromWKB ST_LineStringFromWKB ST_MultiLineStringFromWKB ST_MultiPointFromWKB ST_MultiPolygonFromWKB ST_PointFromWKB ST_PolygonFromWKB
 %token <str> ST_AsBinary ST_AsText ST_Dimension ST_Envelope ST_IsSimple ST_IsEmpty ST_GeometryType ST_X ST_Y ST_Latitude ST_Longitude ST_EndPoint ST_IsClosed ST_Length ST_NumPoints ST_StartPoint ST_PointN
+%token <str> ST_Area ST_Centroid ST_ExteriorRing ST_InteriorRingN ST_NumInteriorRings ST_NumGeometries ST_GeometryN ST_LongFromGeoHash ST_PointFromGeoHash ST_LatFromGeoHash ST_GeoHash ST_AsGeoJSON ST_GeomFromGeoJSON
 
 // Match
 %token <str> MATCH AGAINST BOOLEAN LANGUAGE WITH QUERY EXPANSION WITHOUT VALIDATION
@@ -6385,6 +6386,78 @@ UTC_DATE func_paren_opt
   {
     $$ = &GeomFromWKBExpr{ Type: PolygonFromWKB, WkbBlob: $3, Srid: $5, AxisOrderOpt: $7 }
   }
+| ST_Area openb expression closeb
+ {
+   $$ = &PolygonPropertyFuncExpr{ Property: Area, Polygon: $3 }
+ }
+| ST_Centroid openb expression closeb
+ {
+   $$ = &PolygonPropertyFuncExpr{ Property: Centroid, Polygon: $3 }
+ }
+| ST_ExteriorRing openb expression closeb
+ {
+   $$ = &PolygonPropertyFuncExpr{ Property: ExteriorRing, Polygon: $3 }
+ }
+| ST_InteriorRingN openb expression ',' expression closeb
+ {
+   $$ = &PolygonPropertyFuncExpr{ Property: InteriorRingN, Polygon: $3, PropertyDefArg: $5 }
+ }
+| ST_NumInteriorRings openb expression closeb
+ {
+   $$ = &PolygonPropertyFuncExpr{ Property: NumInteriorRings, Polygon: $3 }
+ }
+| ST_GeometryN openb expression ',' expression closeb
+ {
+   $$ = &GeomCollPropertyFuncExpr{ Property: GeometryN, GeomColl: $3, PropertyDefArg: $5 }
+ }
+| ST_NumGeometries openb expression closeb
+ {
+   $$ = &GeomCollPropertyFuncExpr{ Property: NumGeometries, GeomColl: $3 }
+ }
+| ST_GeoHash openb expression ',' expression ',' expression closeb
+  {
+    $$ = &GeoHashFromLatLongExpr{ Longitude: $3, Latitude: $5, MaxLength: $7 }
+  }
+| ST_GeoHash openb expression ',' expression closeb
+  {
+    $$ = &GeoHashFromPointExpr{ Point: $3, MaxLength: $5 }
+  }
+| ST_LatFromGeoHash openb expression closeb
+  {
+    $$ = &GeomFromGeoHashExpr{ GeomType: LatitudeFromHash, GeoHash: $3 }
+  }
+| ST_LongFromGeoHash openb expression closeb
+  {
+    $$ = &GeomFromGeoHashExpr{ GeomType: LongitudeFromHash, GeoHash: $3 }
+  }
+| ST_PointFromGeoHash openb expression ',' expression closeb
+  {
+    $$ = &GeomFromGeoHashExpr{ GeomType: PointFromHash, GeoHash: $3, SridOpt: $5 }
+  }
+| ST_GeomFromGeoJSON openb expression closeb
+  {
+    $$ = &GeomFromGeoJSONExpr{ GeoJSON: $3 }
+  }
+| ST_GeomFromGeoJSON openb expression ',' expression closeb
+  {
+    $$ = &GeomFromGeoJSONExpr{ GeoJSON: $3, HigherDimHandlerOpt: $5 }
+  }
+| ST_GeomFromGeoJSON openb expression ',' expression ',' expression closeb
+  {
+    $$ = &GeomFromGeoJSONExpr{ GeoJSON: $3, HigherDimHandlerOpt: $5 , Srid: $7 }
+  }
+| ST_AsGeoJSON openb expression closeb
+  {
+    $$ = &GeoJSONFromGeomExpr{ Geom: $3 }
+  }
+| ST_AsGeoJSON openb expression ',' expression closeb
+  {
+    $$ = &GeoJSONFromGeomExpr{ Geom: $3, MaxDecimalDigits: $5 }
+  }
+| ST_AsGeoJSON openb expression ',' expression ',' expression closeb
+  {
+    $$ = &GeoJSONFromGeomExpr{ Geom: $3, MaxDecimalDigits: $5 , Bitmask: $7 }
+  }
 | JSON_OBJECT openb json_object_param_opt closeb
   {
     $$ = &JSONObjectExpr{ Params:$3 }
@@ -8200,23 +8273,33 @@ non_reserved_keyword:
 | STDDEV_POP %prec FUNCTION_CALL_NON_KEYWORD
 | STDDEV_SAMP %prec FUNCTION_CALL_NON_KEYWORD
 | STREAM
+| ST_Area %prec FUNCTION_CALL_NON_KEYWORD
 | ST_AsBinary %prec FUNCTION_CALL_NON_KEYWORD
+| ST_AsGeoJSON %prec FUNCTION_CALL_NON_KEYWORD
 | ST_AsText %prec FUNCTION_CALL_NON_KEYWORD
+| ST_Centroid %prec FUNCTION_CALL_NON_KEYWORD
 | ST_Dimension %prec FUNCTION_CALL_NON_KEYWORD
 | ST_EndPoint %prec FUNCTION_CALL_NON_KEYWORD
 | ST_Envelope %prec FUNCTION_CALL_NON_KEYWORD
+| ST_ExteriorRing %prec FUNCTION_CALL_NON_KEYWORD
+| ST_GeoHash %prec FUNCTION_CALL_NON_KEYWORD
+| ST_GeomFromGeoJSON %prec FUNCTION_CALL_NON_KEYWORD
 | ST_GeometryCollectionFromText %prec FUNCTION_CALL_NON_KEYWORD
 | ST_GeometryCollectionFromWKB %prec FUNCTION_CALL_NON_KEYWORD
 | ST_GeometryFromText %prec FUNCTION_CALL_NON_KEYWORD
 | ST_GeometryFromWKB %prec FUNCTION_CALL_NON_KEYWORD
+| ST_GeometryN %prec FUNCTION_CALL_NON_KEYWORD
 | ST_GeometryType %prec FUNCTION_CALL_NON_KEYWORD
+| ST_InteriorRingN %prec FUNCTION_CALL_NON_KEYWORD
 | ST_IsClosed %prec FUNCTION_CALL_NON_KEYWORD
 | ST_IsEmpty %prec FUNCTION_CALL_NON_KEYWORD
 | ST_IsSimple %prec FUNCTION_CALL_NON_KEYWORD
+| ST_LatFromGeoHash %prec FUNCTION_CALL_NON_KEYWORD
 | ST_Latitude %prec FUNCTION_CALL_NON_KEYWORD
 | ST_Length %prec FUNCTION_CALL_NON_KEYWORD
 | ST_LineStringFromText %prec FUNCTION_CALL_NON_KEYWORD
 | ST_LineStringFromWKB %prec FUNCTION_CALL_NON_KEYWORD
+| ST_LongFromGeoHash %prec FUNCTION_CALL_NON_KEYWORD
 | ST_Longitude %prec FUNCTION_CALL_NON_KEYWORD
 | ST_MultiLineStringFromText %prec FUNCTION_CALL_NON_KEYWORD
 | ST_MultiLineStringFromWKB %prec FUNCTION_CALL_NON_KEYWORD
@@ -8224,7 +8307,10 @@ non_reserved_keyword:
 | ST_MultiPointFromWKB %prec FUNCTION_CALL_NON_KEYWORD
 | ST_MultiPolygonFromText %prec FUNCTION_CALL_NON_KEYWORD
 | ST_MultiPolygonFromWKB %prec FUNCTION_CALL_NON_KEYWORD
+| ST_NumGeometries %prec FUNCTION_CALL_NON_KEYWORD
+| ST_NumInteriorRings %prec FUNCTION_CALL_NON_KEYWORD
 | ST_NumPoints %prec FUNCTION_CALL_NON_KEYWORD
+| ST_PointFromGeoHash %prec FUNCTION_CALL_NON_KEYWORD
 | ST_PointFromText %prec FUNCTION_CALL_NON_KEYWORD
 | ST_PointFromWKB %prec FUNCTION_CALL_NON_KEYWORD
 | ST_PointN %prec FUNCTION_CALL_NON_KEYWORD

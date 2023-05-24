@@ -506,12 +506,48 @@ func (cmp *Comparator) SQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return cmp.RefOfGTIDFuncExpr(a, b)
+	case *GeoHashFromLatLongExpr:
+		b, ok := inB.(*GeoHashFromLatLongExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfGeoHashFromLatLongExpr(a, b)
+	case *GeoHashFromPointExpr:
+		b, ok := inB.(*GeoHashFromPointExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfGeoHashFromPointExpr(a, b)
+	case *GeoJSONFromGeomExpr:
+		b, ok := inB.(*GeoJSONFromGeomExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfGeoJSONFromGeomExpr(a, b)
+	case *GeomCollPropertyFuncExpr:
+		b, ok := inB.(*GeomCollPropertyFuncExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfGeomCollPropertyFuncExpr(a, b)
 	case *GeomFormatExpr:
 		b, ok := inB.(*GeomFormatExpr)
 		if !ok {
 			return false
 		}
 		return cmp.RefOfGeomFormatExpr(a, b)
+	case *GeomFromGeoHashExpr:
+		b, ok := inB.(*GeomFromGeoHashExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfGeomFromGeoHashExpr(a, b)
+	case *GeomFromGeoJSONExpr:
+		b, ok := inB.(*GeomFromGeoJSONExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfGeomFromGeoJSONExpr(a, b)
 	case *GeomFromTextExpr:
 		b, ok := inB.(*GeomFromTextExpr)
 		if !ok {
@@ -1082,6 +1118,12 @@ func (cmp *Comparator) SQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return cmp.RefOfPolygonExpr(a, b)
+	case *PolygonPropertyFuncExpr:
+		b, ok := inB.(*PolygonPropertyFuncExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfPolygonPropertyFuncExpr(a, b)
 	case *PrepareStmt:
 		b, ok := inB.(*PrepareStmt)
 		if !ok {
@@ -2594,6 +2636,57 @@ func (cmp *Comparator) RefOfGTIDFuncExpr(a, b *GTIDFuncExpr) bool {
 		cmp.Expr(a.Channel, b.Channel)
 }
 
+// RefOfGeoHashFromLatLongExpr does deep equals between the two objects.
+func (cmp *Comparator) RefOfGeoHashFromLatLongExpr(a, b *GeoHashFromLatLongExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return cmp.Expr(a.Latitude, b.Latitude) &&
+		cmp.Expr(a.Longitude, b.Longitude) &&
+		cmp.Expr(a.MaxLength, b.MaxLength)
+}
+
+// RefOfGeoHashFromPointExpr does deep equals between the two objects.
+func (cmp *Comparator) RefOfGeoHashFromPointExpr(a, b *GeoHashFromPointExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return cmp.Expr(a.Point, b.Point) &&
+		cmp.Expr(a.MaxLength, b.MaxLength)
+}
+
+// RefOfGeoJSONFromGeomExpr does deep equals between the two objects.
+func (cmp *Comparator) RefOfGeoJSONFromGeomExpr(a, b *GeoJSONFromGeomExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return cmp.Expr(a.Geom, b.Geom) &&
+		cmp.Expr(a.MaxDecimalDigits, b.MaxDecimalDigits) &&
+		cmp.Expr(a.Bitmask, b.Bitmask)
+}
+
+// RefOfGeomCollPropertyFuncExpr does deep equals between the two objects.
+func (cmp *Comparator) RefOfGeomCollPropertyFuncExpr(a, b *GeomCollPropertyFuncExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Property == b.Property &&
+		cmp.Expr(a.GeomColl, b.GeomColl) &&
+		cmp.Expr(a.PropertyDefArg, b.PropertyDefArg)
+}
+
 // RefOfGeomFormatExpr does deep equals between the two objects.
 func (cmp *Comparator) RefOfGeomFormatExpr(a, b *GeomFormatExpr) bool {
 	if a == b {
@@ -2605,6 +2698,32 @@ func (cmp *Comparator) RefOfGeomFormatExpr(a, b *GeomFormatExpr) bool {
 	return a.FormatType == b.FormatType &&
 		cmp.Expr(a.Geom, b.Geom) &&
 		cmp.Expr(a.AxisOrderOpt, b.AxisOrderOpt)
+}
+
+// RefOfGeomFromGeoHashExpr does deep equals between the two objects.
+func (cmp *Comparator) RefOfGeomFromGeoHashExpr(a, b *GeomFromGeoHashExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.GeomType == b.GeomType &&
+		cmp.Expr(a.GeoHash, b.GeoHash) &&
+		cmp.Expr(a.SridOpt, b.SridOpt)
+}
+
+// RefOfGeomFromGeoJSONExpr does deep equals between the two objects.
+func (cmp *Comparator) RefOfGeomFromGeoJSONExpr(a, b *GeomFromGeoJSONExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return cmp.Expr(a.GeoJSON, b.GeoJSON) &&
+		cmp.Expr(a.HigherDimHandlerOpt, b.HigherDimHandlerOpt) &&
+		cmp.Expr(a.Srid, b.Srid)
 }
 
 // RefOfGeomFromTextExpr does deep equals between the two objects.
@@ -3757,6 +3876,19 @@ func (cmp *Comparator) RefOfPolygonExpr(a, b *PolygonExpr) bool {
 		return false
 	}
 	return cmp.Exprs(a.LinestringParams, b.LinestringParams)
+}
+
+// RefOfPolygonPropertyFuncExpr does deep equals between the two objects.
+func (cmp *Comparator) RefOfPolygonPropertyFuncExpr(a, b *PolygonPropertyFuncExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Property == b.Property &&
+		cmp.Expr(a.Polygon, b.Polygon) &&
+		cmp.Expr(a.PropertyDefArg, b.PropertyDefArg)
 }
 
 // RefOfPrepareStmt does deep equals between the two objects.
@@ -5124,12 +5256,48 @@ func (cmp *Comparator) Callable(inA, inB Callable) bool {
 			return false
 		}
 		return cmp.RefOfGTIDFuncExpr(a, b)
+	case *GeoHashFromLatLongExpr:
+		b, ok := inB.(*GeoHashFromLatLongExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfGeoHashFromLatLongExpr(a, b)
+	case *GeoHashFromPointExpr:
+		b, ok := inB.(*GeoHashFromPointExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfGeoHashFromPointExpr(a, b)
+	case *GeoJSONFromGeomExpr:
+		b, ok := inB.(*GeoJSONFromGeomExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfGeoJSONFromGeomExpr(a, b)
+	case *GeomCollPropertyFuncExpr:
+		b, ok := inB.(*GeomCollPropertyFuncExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfGeomCollPropertyFuncExpr(a, b)
 	case *GeomFormatExpr:
 		b, ok := inB.(*GeomFormatExpr)
 		if !ok {
 			return false
 		}
 		return cmp.RefOfGeomFormatExpr(a, b)
+	case *GeomFromGeoHashExpr:
+		b, ok := inB.(*GeomFromGeoHashExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfGeomFromGeoHashExpr(a, b)
+	case *GeomFromGeoJSONExpr:
+		b, ok := inB.(*GeomFromGeoJSONExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfGeomFromGeoJSONExpr(a, b)
 	case *GeomFromTextExpr:
 		b, ok := inB.(*GeomFromTextExpr)
 		if !ok {
@@ -5394,6 +5562,12 @@ func (cmp *Comparator) Callable(inA, inB Callable) bool {
 			return false
 		}
 		return cmp.RefOfPolygonExpr(a, b)
+	case *PolygonPropertyFuncExpr:
+		b, ok := inB.(*PolygonPropertyFuncExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfPolygonPropertyFuncExpr(a, b)
 	case *RegexpInstrExpr:
 		b, ok := inB.(*RegexpInstrExpr)
 		if !ok {
@@ -5838,12 +6012,48 @@ func (cmp *Comparator) Expr(inA, inB Expr) bool {
 			return false
 		}
 		return cmp.RefOfGTIDFuncExpr(a, b)
+	case *GeoHashFromLatLongExpr:
+		b, ok := inB.(*GeoHashFromLatLongExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfGeoHashFromLatLongExpr(a, b)
+	case *GeoHashFromPointExpr:
+		b, ok := inB.(*GeoHashFromPointExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfGeoHashFromPointExpr(a, b)
+	case *GeoJSONFromGeomExpr:
+		b, ok := inB.(*GeoJSONFromGeomExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfGeoJSONFromGeomExpr(a, b)
+	case *GeomCollPropertyFuncExpr:
+		b, ok := inB.(*GeomCollPropertyFuncExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfGeomCollPropertyFuncExpr(a, b)
 	case *GeomFormatExpr:
 		b, ok := inB.(*GeomFormatExpr)
 		if !ok {
 			return false
 		}
 		return cmp.RefOfGeomFormatExpr(a, b)
+	case *GeomFromGeoHashExpr:
+		b, ok := inB.(*GeomFromGeoHashExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfGeomFromGeoHashExpr(a, b)
+	case *GeomFromGeoJSONExpr:
+		b, ok := inB.(*GeomFromGeoJSONExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfGeomFromGeoJSONExpr(a, b)
 	case *GeomFromTextExpr:
 		b, ok := inB.(*GeomFromTextExpr)
 		if !ok {
@@ -6168,6 +6378,12 @@ func (cmp *Comparator) Expr(inA, inB Expr) bool {
 			return false
 		}
 		return cmp.RefOfPolygonExpr(a, b)
+	case *PolygonPropertyFuncExpr:
+		b, ok := inB.(*PolygonPropertyFuncExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfPolygonPropertyFuncExpr(a, b)
 	case *RegexpInstrExpr:
 		b, ok := inB.(*RegexpInstrExpr)
 		if !ok {

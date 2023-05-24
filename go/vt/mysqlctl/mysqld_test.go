@@ -17,7 +17,6 @@ limitations under the License.
 package mysqlctl
 
 import (
-	"os"
 	"testing"
 )
 
@@ -102,39 +101,6 @@ func TestParseVersionString(t *testing.T) {
 		f, v, err := ParseVersionString(testcase.versionString)
 		if v != testcase.version || f != testcase.flavor || err != nil {
 			t.Errorf("ParseVersionString failed for: %#v, Got: %#v, %#v Expected: %#v, %#v", testcase.versionString, v, f, testcase.version, testcase.flavor)
-		}
-	}
-
-}
-
-func TestAssumeVersionString(t *testing.T) {
-
-	// In these cases, the versionstring is nonsensical or unspecified.
-	// MYSQL_FLAVOR is used instead.
-
-	var testcases = []testcase{
-		{
-			versionString: "MySQL80",
-			version:       ServerVersion{8, 0, 11},
-			flavor:        FlavorMySQL,
-		},
-		{
-			versionString: "MySQL56",
-			version:       ServerVersion{5, 7, 10}, // Yes, this has to lie!
-			flavor:        FlavorMySQL,             // There was no MySQL57 option
-		},
-		{
-			versionString: "MariaDB",
-			version:       ServerVersion{10, 6, 11},
-			flavor:        FlavorMariaDB,
-		},
-	}
-
-	for _, testcase := range testcases {
-		os.Setenv("MYSQL_FLAVOR", testcase.versionString)
-		f, v, err := GetVersionFromEnv()
-		if v != testcase.version || f != testcase.flavor || err != nil {
-			t.Errorf("GetVersionFromEnv() failed for: %#v, Got: %#v, %#v Expected: %#v, %#v", testcase.versionString, v, f, testcase.version, testcase.flavor)
 		}
 	}
 
