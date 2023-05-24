@@ -83,7 +83,7 @@ func (me *Engine) Open() {
 	log.Info("Messager: opening")
 	// Unlock before invoking RegisterNotifier because it
 	// obtains the same lock.
-	me.se.RegisterNotifier("messages", me.schemaChanged)
+	me.se.RegisterNotifier("messages", me.schemaChanged, true)
 }
 
 // Close closes the Engine service.

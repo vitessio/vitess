@@ -661,7 +661,7 @@ func (se *Engine) GetTableForPos(tableName sqlparser.IdentifierCS, gtid string) 
 // It also causes an immediate notification to the caller. The notified
 // function must not change the map or its contents. The only exception
 // is the sequence table where the values can be changed using the lock.
-func (se *Engine) RegisterNotifier(name string, f notifier) {
+func (se *Engine) RegisterNotifier(name string, f notifier, runNotifier bool) {
 	if !se.isOpen {
 		return
 	}

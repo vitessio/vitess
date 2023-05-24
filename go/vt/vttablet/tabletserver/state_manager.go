@@ -446,8 +446,11 @@ func (sm *stateManager) servePrimary() error {
 		return err
 	}
 
-	sm.se.MakePrimary(true)
+	// We have to make the health streamer read to process updates from schema engine
+	// before we mark schema engine capable of running queries against the database. This is required
+	// to ensure that we don't miss any updates from the schema engine.
 	sm.hs.MakePrimary(true)
+	sm.se.MakePrimary(true)
 	sm.rt.MakePrimary()
 	sm.tracker.Open()
 	// We instantly kill all stateful queries to allow for

@@ -164,7 +164,7 @@ func TestOpenAndReload(t *testing.T) {
 			assert.Equal(t, []string(nil), droppedViews)
 		}
 	}
-	se.RegisterNotifier("test", notifier)
+	se.RegisterNotifier("test", notifier, true)
 	err := se.Reload(context.Background())
 	require.NoError(t, err)
 

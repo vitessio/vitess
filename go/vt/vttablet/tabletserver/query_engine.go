@@ -299,7 +299,7 @@ func (qe *QueryEngine) Open() error {
 	}
 
 	qe.streamConns.Open(qe.env.Config().DB.AppWithDB(), qe.env.Config().DB.DbaWithDB(), qe.env.Config().DB.AppDebugWithDB())
-	qe.se.RegisterNotifier("qe", qe.schemaChanged)
+	qe.se.RegisterNotifier("qe", qe.schemaChanged, true)
 	qe.isOpen = true
 	return nil
 }
