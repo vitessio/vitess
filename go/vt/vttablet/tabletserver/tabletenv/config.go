@@ -325,7 +325,6 @@ type TabletConfig struct {
 	TruncateErrorLen                        int                               `json:"truncateErrorLen,omitempty"`
 	AnnotateQueries                         bool                              `json:"annotateQueries,omitempty"`
 	MessagePostponeParallelism              int                               `json:"messagePostponeParallelism,omitempty"`
-	DeprecatedCacheResultFields             bool                              `json:"cacheResultFields,omitempty"`
 	SignalWhenSchemaChange                  bool                              `json:"signalWhenSchemaChange,omitempty"`
 
 	ExternalConnections map[string]*dbconfigs.DBConfigs `json:"externalConnections,omitempty"`
@@ -786,7 +785,6 @@ var defaultConfig = TabletConfig{
 	SchemaReloadIntervalSeconds:             flagutil.NewDeprecatedFloat64Seconds("queryserver-config-schema-reload-time", 30*time.Minute),
 	SignalSchemaChangeReloadIntervalSeconds: flagutil.NewDeprecatedFloat64Seconds("queryserver-config-schema-change-signal-interval", 5*time.Second),
 	MessagePostponeParallelism:              4,
-	DeprecatedCacheResultFields:             true,
 	SignalWhenSchemaChange:                  true,
 
 	EnableTxThrottler:           false,

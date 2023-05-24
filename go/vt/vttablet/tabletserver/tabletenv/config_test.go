@@ -125,8 +125,7 @@ oltpReadPool:
 func TestDefaultConfig(t *testing.T) {
 	gotBytes, err := yaml2.Marshal(NewDefaultConfig())
 	require.NoError(t, err)
-	want := `cacheResultFields: true
-consolidator: enable
+	want := `consolidator: enable
 consolidatorStreamQuerySize: 2097152
 consolidatorStreamTotalSize: 134217728
 gracePeriods: {}
