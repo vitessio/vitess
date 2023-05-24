@@ -91,7 +91,7 @@ func reloadTablesDataInDB(ctx context.Context, conn *connpool.DBConn, tables []*
 	// Get the create statements for all the tables that are modified.
 	var createStatements []string
 	for _, table := range tables {
-		cs, err := getCreateStatement(ctx, conn, table.Name.String())
+		cs, err := getCreateStatement(ctx, conn, sqlparser.String(table.Name))
 		if err != nil {
 			return err
 		}
@@ -176,7 +176,7 @@ func reloadViewsDataInDB(ctx context.Context, conn *connpool.DBConn, views []*Ta
 	// Get the create statements for all the views that are modified.
 	var createStatements []string
 	for _, view := range views {
-		cs, err := getCreateStatement(ctx, conn, view.Name.String())
+		cs, err := getCreateStatement(ctx, conn, sqlparser.String(view.Name))
 		if err != nil {
 			return err
 		}
