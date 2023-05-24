@@ -91,7 +91,7 @@ loop:
 	require.NoError(t, err)
 
 	// wait for the health_streamer to complete retrying the notification.
-	reloadTimeout := config.SignalSchemaChangeReloadTimeout
+	reloadTimeout := config.SchemaChangeReloadTimeout
 	retryEstimatedTime := reloadTimeout + reloadInterval + reloadEstimatedTime
 	select {
 	case res := <-ch: // get the schema notification

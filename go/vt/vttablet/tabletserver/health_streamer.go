@@ -125,7 +125,7 @@ func newHealthStreamer(env tabletenv.Env, alias *topodatapb.TabletAlias) *health
 		ticks:                  newTimer,
 		conns:                  pool,
 		signalWhenSchemaChange: env.Config().SignalWhenSchemaChange,
-		reloadTimeout:          env.Config().SignalSchemaChangeReloadTimeout,
+		reloadTimeout:          env.Config().SchemaChangeReloadTimeout,
 		viewsEnabled:           env.Config().EnableViews,
 	}
 	hs.unhealthyThreshold.Store(env.Config().Healthcheck.UnhealthyThresholdSeconds.Get().Nanoseconds())
