@@ -674,7 +674,9 @@ func (se *Engine) RegisterNotifier(name string, f notifier, runNotifier bool) {
 	for tableName := range se.tables {
 		created = append(created, tableName)
 	}
-	f(se.tables, created, nil, nil, nil)
+	if runNotifier {
+		f(se.tables, created, nil, nil, nil)
+	}
 }
 
 // UnregisterNotifier unregisters the notifier function.
