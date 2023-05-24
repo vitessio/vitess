@@ -456,7 +456,7 @@ func TestMoveTablesV2Cancel(t *testing.T) {
 	require.True(t, checkIfTableExistInVSchema(ctx, t, wf.wr.ts, "ks1", "t1"))
 	require.True(t, checkIfTableExistInVSchema(ctx, t, wf.wr.ts, "ks1", "t2"))
 
-	// Should target vschema entries should be deleted upon Cancel. For unsharded
+	// Should target vschema table entries be deleted upon Cancel. For unsharded
 	// keyspaces they should be as they are empty table entries that we also
 	// create when the workflow is Created.
 	targetVSchemaEntriesRemain := false
