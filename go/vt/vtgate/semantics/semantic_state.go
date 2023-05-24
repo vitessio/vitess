@@ -445,13 +445,18 @@ func (st *SemTable) EqualsExpr(a, b sqlparser.Expr) bool {
 	return st.ASTEquals().Expr(a, b)
 }
 
+// EqualsExprWithDeps compares two expressions taking into account their semantic
+// information. Dependency data typically pertains only to column expressions,
+// this method considers them for all expression types. The method checks
+// if dependency information exists for both expressions. If it does, the dependencies
+// must match. If we are missing dependency information for either
 func (st *SemTable) EqualsExprWithDeps(a, b sqlparser.Expr) bool {
 	eq := st.ASTEquals().Expr(a, b)
 	if !eq {
 		return false
 	}
-	adeps := st.Direct[a]
-	bdeps := st.Direct[b]
+	adeps := st.DirectDeps(a)
+	bdeps := st.DirectDeps(b)
 	if adeps.IsEmpty() || bdeps.IsEmpty() || adeps == bdeps {
 		return true
 	}
