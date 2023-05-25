@@ -193,12 +193,6 @@ func (ct *controller) runBlp(ctx context.Context) (err error) {
 	default:
 	}
 
-	// Call this for youtube-specific customization.
-	// This should be done every time, in case mysql was restarted.
-	if err := ct.mysqld.EnableBinlogPlayback(); err != nil {
-		return err
-	}
-
 	dbClient := ct.dbClientFactory()
 	if err := dbClient.Connect(); err != nil {
 		return vterrors.Wrap(err, "can't connect to database")
