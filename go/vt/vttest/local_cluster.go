@@ -286,6 +286,32 @@ func (db *LocalCluster) MySQLAppDebugConnParams() mysql.ConnParams {
 	return connParams
 }
 
+// SimulateMySQLHang simulates a scenario where the backend MySQL stops all data from flowing through.
+// Please ensure to `defer db.StopSimulateMySQLHang()` after calling this method.
+func (db *LocalCluster) SimulateMySQLHang() error {
+	if toxiproxy, ok := db.mysql.(*Toxiproxyctl); ok {
+		return toxiproxy.AddTimeoutToxic()
+	}
+	return fmt.Errorf("cannot simulate MySQL hang on non-Toxiproxyctl MySQLManager %v", db.mysql)
+}
+
+// PauseSimulateMySQLHang pauses the MySQL hang simulation to allow queries to go through.
+// This is useful when you want to allow new queries to go through, but keep the existing ones hanging.
+func (db *LocalCluster) PauseSimulateMySQLHang() error {
+	if toxiproxy, ok := db.mysql.(*Toxiproxyctl); ok {
+		return toxiproxy.UpdateTimeoutToxicity(0)
+	}
+	return fmt.Errorf("cannot simulate MySQL hang on non-Toxiproxyctl MySQLManager %v", db.mysql)
+}
+
+// StopSimulateMySQLHang stops the MySQL hang simulation to allow queries to go through.
+func (db *LocalCluster) StopSimulateMySQLHang() error {
+	if toxiproxy, ok := db.mysql.(*Toxiproxyctl); ok {
+		return toxiproxy.RemoveTimeoutToxic()
+	}
+	return fmt.Errorf("cannot simulate MySQL hang on non-Toxiproxyctl MySQLManager %v", db.mysql)
+}
+
 // Setup brings up the self-contained Vitess cluster by spinning up
 // MySQL and Vitess instances. The spawned processes will be running
 // until the TearDown() method is called.

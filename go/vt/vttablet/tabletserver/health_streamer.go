@@ -91,6 +91,7 @@ type healthStreamer struct {
 	dbConfig               dbconfigs.Connector
 	conns                  *connpool.Pool
 	signalWhenSchemaChange bool
+	reloadTimeout          time.Duration
 
 	viewsEnabled bool
 }
@@ -124,6 +125,7 @@ func newHealthStreamer(env tabletenv.Env, alias *topodatapb.TabletAlias) *health
 		ticks:                  newTimer,
 		conns:                  pool,
 		signalWhenSchemaChange: env.Config().SignalWhenSchemaChange,
+		reloadTimeout:          env.Config().SchemaChangeReloadTimeout,
 		viewsEnabled:           env.Config().EnableViews,
 	}
 	hs.unhealthyThreshold.Store(env.Config().Healthcheck.UnhealthyThresholdSeconds.Get().Nanoseconds())
@@ -335,7 +337,10 @@ func (hs *healthStreamer) reload() error {
 		return nil
 	}
 
-	ctx := hs.ctx
+	// add a timeout to prevent unbounded waits
+	ctx, cancel := context.WithTimeout(hs.ctx, hs.reloadTimeout)
+	defer cancel()
+
 	conn, err := hs.conns.Get(ctx, nil)
 	if err != nil {
 		return err
