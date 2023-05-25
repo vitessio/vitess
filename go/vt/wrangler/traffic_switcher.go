@@ -1311,11 +1311,18 @@ func (ts *trafficSwitcher) createReverseVReplication(ctx context.Context) error 
 					if !ok {
 						return fmt.Errorf("table %s not found in vschema1", rule.Match)
 					}
-					// We currently assume the primary vindex is the best way to filter, which may not be true.
-					// Otherwise, if there is no primary vindex, we assume that the table should be copied in
-					// full to each shard, e.g. for reference tables.
-					if len(vtable.ColumnVindexes) > 0 && len(vtable.ColumnVindexes[0].Columns) > 0 {
-						inKeyrange = fmt.Sprintf(" where in_keyrange(%s, '%s.%s', '%s')", sqlparser.String(vtable.ColumnVindexes[0].Columns[0]), ts.SourceKeyspaceName(), vtable.ColumnVindexes[0].Name, key.KeyRangeString(source.GetShard().KeyRange))
+					// We currently assume the primary vindex is the best way to filter, which
+					// may not always be true.
+					// For reference tables, there are no vindexes and thus no filter to apply.
+					// For non-reference tables we return an error as it's not clear what to do.
+					// TODO: handle more of these edge cases explicitly, e.g. sequence tables.
+					if vtable.Type != vindexes.TypeReference {
+						if len(vtable.ColumnVindexes) > 0 && len(vtable.ColumnVindexes[0].Columns) > 0 {
+							inKeyrange = fmt.Sprintf(" where in_keyrange(%s, '%s.%s', '%s')", sqlparser.String(vtable.ColumnVindexes[0].Columns[0]), ts.SourceKeyspaceName(), vtable.ColumnVindexes[0].Name, key.KeyRangeString(source.GetShard().KeyRange))
+						} else {
+							return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "no primary vindex found for the %s table in the %s keyspace",
+								vtable.Name.String(), ts.SourceKeyspaceName())
+						}
 					}
 				}
 				filter = fmt.Sprintf("select * from %s%s", sqlescape.EscapeID(rule.Match), inKeyrange)
