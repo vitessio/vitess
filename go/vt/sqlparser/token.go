@@ -490,6 +490,7 @@ var keywords = map[string]int{
 	"optionally":                    OPTIONALLY,
 	"or":                            OR,
 	"order":                         ORDER,
+	"ordinality":                    ORDINALITY,
 	"out":                           OUT,
 	"outer":                         OUTER,
 	"outfile":                       OUTFILE,

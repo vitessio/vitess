@@ -5790,7 +5790,6 @@ json_table_column_list:
   }
 
 json_table_column_definition:
-  // TODO: reserved_sql_id FOR ORDINALITY; this is supposed to work like auto_increment
   reserved_sql_id column_type json_table_column_options
   {
     if err := $2.merge($3); err != nil {
@@ -5798,6 +5797,10 @@ json_table_column_definition:
       return 1
     }
     $$ = &ColumnDefinition{Name: $1, Type: $2}
+  }
+| reserved_sql_id FOR ORDINALITY
+  {
+    $$ = &ColumnDefinition{Name: $1, Type: ColumnType{Type: "INTEGER", Unsigned: true, Autoincrement: true}}
   }
 
 // TODO: default value for non-existent member is NULL, but use "zero" when it is specified

@@ -7260,6 +7260,13 @@ FROM
 )) as t2`,
 		},
 
+		// FOR ORDINALITY TESTS
+		// TODO: not sure if it's necessary to differnentiate FOR ORDINALITY from AUTO_INCREMENT
+		{
+			input: `SELECT * FROM JSON_TABLE('{}', '$' COLUMNS( pk FOR ORDINALITY, c1 INT PATH '$.c1')) as jt;`,
+			output: "select * from JSON_TABLE('{}', \"$\" COLUMNS(\n\tpk INTEGER unsigned auto_increment,\n\tc1 INT path \"$.c1\" null on empty null on error\n)) as jt",
+		},
+
 		// EXISTS TESTS
 		{
 			input: `SELECT * FROM JSON_TABLE('{}', '$' COLUMNS( c1 INT EXISTS PATH '$.c1')) as jt;`,
