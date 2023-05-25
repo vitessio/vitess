@@ -97,13 +97,13 @@ type CompressionDetails struct {
 }
 
 // LaunchCluster : starts the cluster as per given params.
-func LaunchCluster(setupType int, streamMode string, stripes int, cDetails *CompressionDetails) (int, error) {
+func LaunchCluster(setupType int, streamMode string, stripes int, cDetails *CompressionDetails) (int, *cluster.LocalProcessCluster, error) {
 	localCluster = cluster.NewCluster(cell, hostname)
 
 	// Start topo server
 	err := localCluster.StartTopo()
 	if err != nil {
-		return 1, err
+		return 1, nil, err
 	}
 
 	// Start keyspace
@@ -128,12 +128,12 @@ func LaunchCluster(setupType int, streamMode string, stripes int, cDetails *Comp
 	// The original init_db.sql does not have any passwords. Here we update the init file with passwords
 	sql, err = utils.GetInitDBSQL(sql, cluster.GetPasswordUpdateSQL(localCluster), "")
 	if err != nil {
-		return 1, err
+		return 1, nil, err
 	}
 	newInitDBFile = path.Join(localCluster.TmpDirectory, "init_db_with_passwords.sql")
 	err = os.WriteFile(newInitDBFile, []byte(sql), 0666)
 	if err != nil {
-		return 1, err
+		return 1, nil, err
 	}
 
 	extraArgs := []string{"--db-credentials-file", dbCredentialFile}
@@ -176,14 +176,14 @@ func LaunchCluster(setupType int, streamMode string, stripes int, cDetails *Comp
 		if setupType == Mysqlctld {
 			mysqlctldProcess, err := cluster.MysqlCtldProcessInstance(tablet.TabletUID, tablet.MySQLPort, localCluster.TmpDirectory)
 			if err != nil {
-				return 1, err
+				return 1, nil, err
 			}
 			tablet.MysqlctldProcess = *mysqlctldProcess
 			tablet.MysqlctldProcess.InitDBFile = newInitDBFile
 			tablet.MysqlctldProcess.ExtraArgs = extraArgs
 			tablet.MysqlctldProcess.Password = tablet.VttabletProcess.DbPassword
 			if err := tablet.MysqlctldProcess.Start(); err != nil {
-				return 1, err
+				return 1, nil, err
 			}
 			shard.Vttablets = append(shard.Vttablets, tablet)
 			continue
@@ -191,14 +191,14 @@ func LaunchCluster(setupType int, streamMode string, stripes int, cDetails *Comp
 
 		mysqlctlProcess, err := cluster.MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, localCluster.TmpDirectory)
 		if err != nil {
-			return 1, err
+			return 1, nil, err
 		}
 		tablet.MysqlctlProcess = *mysqlctlProcess
 		tablet.MysqlctlProcess.InitDBFile = newInitDBFile
 		tablet.MysqlctlProcess.ExtraArgs = extraArgs
 		proc, err := tablet.MysqlctlProcess.StartProcess()
 		if err != nil {
-			return 1, err
+			return 1, nil, err
 		}
 		mysqlProcs = append(mysqlProcs, proc)
 
@@ -206,7 +206,7 @@ func LaunchCluster(setupType int, streamMode string, stripes int, cDetails *Comp
 	}
 	for _, proc := range mysqlProcs {
 		if err := proc.Wait(); err != nil {
-			return 1, err
+			return 1, nil, err
 		}
 	}
 	primary = shard.Vttablets[0]
@@ -214,32 +214,32 @@ func LaunchCluster(setupType int, streamMode string, stripes int, cDetails *Comp
 	replica2 = shard.Vttablets[2]
 
 	if err := localCluster.VtctlclientProcess.InitTablet(primary, cell, keyspaceName, hostname, shard.Name); err != nil {
-		return 1, err
+		return 1, nil, err
 	}
 	if err := localCluster.VtctlclientProcess.InitTablet(replica1, cell, keyspaceName, hostname, shard.Name); err != nil {
-		return 1, err
+		return 1, nil, err
 	}
 	vtctldClientProcess := cluster.VtctldClientProcessInstance("localhost", localCluster.VtctldProcess.GrpcPort, localCluster.TmpDirectory)
 	_, err = vtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", keyspaceName, "--durability-policy=semi_sync")
 	if err != nil {
-		return 1, err
+		return 1, nil, err
 	}
 
 	for _, tablet := range []cluster.Vttablet{*primary, *replica1} {
 		if err := tablet.VttabletProcess.Setup(); err != nil {
-			return 1, err
+			return 1, nil, err
 		}
 	}
 
 	if err := localCluster.VtctlclientProcess.InitShardPrimary(keyspaceName, shard.Name, cell, primary.TabletUID); err != nil {
-		return 1, err
+		return 1, nil, err
 	}
 
 	if err := localCluster.StartVTOrc(keyspaceName); err != nil {
-		return 1, err
+		return 1, nil, err
 	}
 
-	return 0, nil
+	return 0, localCluster, nil
 }
 
 func getCompressorArgs(cDetails *CompressionDetails) []string {
@@ -364,7 +364,7 @@ func TestBackup(t *testing.T, setupType int, streamMode string, stripes int, cDe
 
 	defer cluster.PanicHandler(t)
 	// setup cluster for the testing
-	code, err := LaunchCluster(setupType, streamMode, stripes, cDetails)
+	code, _, err := LaunchCluster(setupType, streamMode, stripes, cDetails)
 	require.Nilf(t, err, "setup failed with status code %d", code)
 
 	// Teardown the cluster
