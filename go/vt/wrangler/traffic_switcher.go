@@ -1309,7 +1309,7 @@ func (ts *trafficSwitcher) createReverseVReplication(ctx context.Context) error 
 				if ts.SourceKeyspaceSchema().Keyspace.Sharded {
 					vtable, ok := ts.SourceKeyspaceSchema().Tables[rule.Match]
 					if !ok {
-						return fmt.Errorf("table %s not found in vschema1", rule.Match)
+						return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "table %s not found in vschema", rule.Match)
 					}
 					// We currently assume the primary vindex is the best way to filter, which
 					// may not always be true.
