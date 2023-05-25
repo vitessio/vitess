@@ -578,10 +578,9 @@ func (c *Column) typeof(env *ExpressionEnv) (sqltypes.Type, flag) {
 	// we'll try to do the best possible with the information we have
 	if c.Offset < len(env.Row) {
 		value := env.Row[c.Offset]
-		if value.IsNull() {
-			return sqltypes.Null, flagNull | flagNullable
+		if !value.IsNull() {
+			return value.Type(), flag(0)
 		}
-		return value.Type(), flag(0)
 	}
 
 	if c.Offset < len(env.Fields) {
