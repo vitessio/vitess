@@ -367,8 +367,9 @@ func (cfg *TabletConfig) MarshalJSON() ([]byte, error) {
 
 	tmp := struct {
 		TCProxy
-		SchemaReloadIntervalSeconds string `json:"schemaReloadIntervalSeconds,omitempty"`
-		SchemaChangeReloadTimeout   string `json:"schemaChangeReloadTimeout,omitempty"`
+		SchemaReloadIntervalSeconds             string `json:"schemaReloadIntervalSeconds,omitempty"`
+		SignalSchemaChangeReloadIntervalSeconds string `json:"signalSchemaChangeReloadIntervalSeconds,omitempty"`
+		SchemaChangeReloadTimeout               string `json:"schemaChangeReloadTimeout,omitempty"`
 	}{
 		TCProxy: TCProxy(*cfg),
 	}
