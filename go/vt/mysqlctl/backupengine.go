@@ -39,8 +39,8 @@ import (
 )
 
 var (
-	// BackupEngineImplementation is the implementation to use for BackupEngine
-	backupEngineImplementation = BuiltinBackupEngineName
+	// backupEngineImplementation is the implementation to use for BackupEngine
+	backupEngineImplementation = builtinBackupEngineName
 )
 
 // BackupEngine is the interface to take a backup with a given engine.
@@ -197,7 +197,7 @@ func GetRestoreEngine(ctx context.Context, backup backupstorage.BackupHandle) (R
 	engine := manifest.BackupMethod
 	if engine == "" {
 		// The builtin engine is the only one that ever left BackupMethod unset.
-		engine = BuiltinBackupEngineName
+		engine = builtinBackupEngineName
 	}
 	re, ok := BackupRestoreEngineMap[engine]
 	if !ok {

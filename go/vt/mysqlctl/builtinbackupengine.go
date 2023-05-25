@@ -51,7 +51,7 @@ import (
 )
 
 const (
-	BuiltinBackupEngineName = "builtin"
+	builtinBackupEngineName = "builtin"
 	autoIncrementalFromPos  = "auto"
 	dataDictionaryFile      = "mysql.ibd"
 )
@@ -573,7 +573,7 @@ func (be *BuiltinBackupEngine) backupFiles(
 	bm := &builtinBackupManifest{
 		// Common base fields
 		BackupManifest: BackupManifest{
-			BackupMethod:   BuiltinBackupEngineName,
+			BackupMethod:   builtinBackupEngineName,
 			Position:       replicationPosition,
 			PurgedPosition: purgedPosition,
 			FromPosition:   fromPosition,
