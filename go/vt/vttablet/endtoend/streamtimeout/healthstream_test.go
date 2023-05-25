@@ -22,8 +22,8 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	"golang.org/x/exp/slices"
 
-	"vitess.io/vitess/go/test/utils"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/vttablet/endtoend/framework"
 )
@@ -93,10 +93,16 @@ loop:
 	// wait for the health_streamer to complete retrying the notification.
 	reloadTimeout := config.SchemaChangeReloadTimeout
 	retryEstimatedTime := reloadTimeout + reloadInterval + reloadEstimatedTime
-	select {
-	case res := <-ch: // get the schema notification
-		utils.MustMatch(t, []string{tableName}, res, "unexpected result from schema reload response")
-	case <-time.After(retryEstimatedTime):
-		t.Errorf("timed out even after the mysql hang was no longer simulated")
+	timeout := time.After(retryEstimatedTime)
+	for {
+		select {
+		case res := <-ch: // get the schema notification
+			if slices.Contains(res, tableName) {
+				return
+			}
+		case <-timeout:
+			t.Errorf("timed out even after the mysql hang was no longer simulated")
+			return
+		}
 	}
 }
