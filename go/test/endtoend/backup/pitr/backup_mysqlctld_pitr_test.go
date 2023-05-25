@@ -185,6 +185,7 @@ func TestIncrementalBackup(t *testing.T) {
 					if tc.fromFullPosition {
 						fromFullPositionBackups[backupName] = true
 					}
+					allBackups[backupName] = true
 					require.False(t, manifest.FromPosition.IsZero())
 					require.NotEqual(t, manifest.Position, manifest.FromPosition)
 					require.True(t, manifest.Position.GTIDSet.Contains(manifest.FromPosition.GTIDSet))
