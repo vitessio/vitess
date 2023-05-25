@@ -414,6 +414,9 @@ func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error)
 
 	if handles := restorePath.IncrementalBackupHandles(); len(handles) > 0 {
 		params.Logger.Infof("Restore: applying %v incremental backups", len(handles))
+		// Incremental restores are always done via 'builtin' engine, which copies
+		// appropriate binlog files.
+		re := BackupRestoreEngineMap[builtinBackupEngineName]
 		for _, bh := range handles {
 			manifest, err := re.ExecuteRestore(ctx, params, bh)
 			if err != nil {
