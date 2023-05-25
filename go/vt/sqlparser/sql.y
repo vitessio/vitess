@@ -431,7 +431,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <expr> expression naked_like group_by
 %type <tableExprs> table_references cte_list from_opt
 %type <with> with_clause with_clause_opt
-%type <tableExpr> table_reference table_function table_factor join_table json_table common_table_expression
+%type <tableExpr> table_reference table_function table_factor join_table common_table_expression
 %type <simpleTableExpr> values_statement subquery_or_values
 %type <subquery> subquery
 %type <joinCondition> join_condition join_condition_opt on_expression_opt
@@ -513,7 +513,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <str> charset underscore_charsets
 %type <str> show_session_or_global
 %type <convertType> convert_type
-%type <columnType> column_type  column_type_options json_table_column_options on_empty
+%type <columnType> column_type  column_type_options
 %type <columnType> int_type decimal_type numeric_type time_type char_type spatial_type
 %type <sqlVal> char_length_opt length_opt column_comment ignore_number_opt comment_keyword_opt
 %type <optVal> column_default on_update
@@ -527,14 +527,14 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <boolVal> auto_increment local_opt optionally_opt
 %type <colKeyOpt> column_key
 %type <strs> enum_values
-%type <columnDefinition> column_definition column_definition_for_create json_table_column_definition
+%type <columnDefinition> column_definition column_definition_for_create
 %type <indexDefinition> index_definition
 %type <constraintDefinition> constraint_definition check_constraint_definition
 %type <str> index_or_key indexes_or_keys index_or_key_opt
 %type <str> from_or_in show_database_opt
 %type <str> name_opt
 %type <str> equal_opt
-%type <TableSpec> table_spec table_column_list json_table_column_list
+%type <TableSpec> table_spec table_column_list
 %type <str> table_option_list table_option table_opt_value row_fmt_opt
 %type <str> partition_options partition_option linear_partition_opt linear_opt partition_num_opt subpartition_opt subpartition_num_opt
 %type <indexInfo> index_info
@@ -591,6 +591,11 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <grantAssumption> grant_assumption
 %type <boolean> with_grant_opt with_admin_opt
 %type <bytes> any_identifier
+%type <tableExpr> json_table
+%type <TableSpec> json_table_column_list
+%type <columnType> json_table_column_options
+%type <columnDefinition> json_table_column_definition
+%type <expr> val_on_empty val_on_error
 
 %start any_command
 
@@ -5784,7 +5789,6 @@ json_table_column_list:
     $$.AddColumn($3)
   }
 
-// TODO: implement NESTED
 json_table_column_definition:
   // TODO: reserved_sql_id FOR ORDINALITY; this is supposed to work like auto_increment
   reserved_sql_id column_type json_table_column_options
@@ -5798,51 +5802,68 @@ json_table_column_definition:
 
 // TODO: default value for non-existent member is NULL, but use "zero" when it is specified
 // TODO: exists overrides DEFAULT <json_string> ON EMPTY
+// TODO: figure out better way to condense rules
 json_table_column_options:
-  PATH STRING on_empty on_error
+  PATH STRING
+  {
+    $$ = ColumnType{Path: string($2), ValOnEmpty: &NullVal{}, ValOnError: &NullVal{}}
+  }
+| PATH STRING val_on_empty
+  {
+    $$ = ColumnType{Path: string($2), ValOnEmpty: $3, ValOnError: &NullVal{}}
+  }
+| PATH STRING val_on_error
+  {
+    $$ = ColumnType{Path: string($2), ValOnEmpty: &NullVal{}, ValOnError: $3}
+  }
+| PATH STRING val_on_empty val_on_error
+  {
+    $$ = ColumnType{Path: string($2), ValOnEmpty: $3, ValOnError: $4}
+  }
+| PATH STRING val_on_error val_on_empty
   {
     $$ = ColumnType{Path: string($2)}
   }
+| PATH STRING ERROR ON EMPTY
+  {
+    $$ = ColumnType{Path: string($2), ErrorOnEmpty: true}
+  }
+| PATH STRING ERROR ON ERROR
+  {
+    $$ = ColumnType{Path: string($2), ErrorOnError: true}
+  }
+| PATH STRING ERROR ON EMPTY ERROR ON ERROR
+  {
+    $$ = ColumnType{Path: string($2), ErrorOnEmpty: true, ErrorOnError: true}
+  }
+| PATH STRING ERROR ON ERROR ERROR ON EMPTY
+  {
+    $$ = ColumnType{Path: string($2), ErrorOnEmpty: true, ErrorOnError: true}
+  }
 | EXISTS PATH STRING
   {
-    $$ = ColumnType{Path: string($3)}
+    $$ = ColumnType{Path: string($3), ValOnEmpty: &NullVal{}, ValOnError: &NullVal{}}
   }
 
-// TODO: just parse for now
-on_empty:
+val_on_empty:
+  NULL ON EMPTY
   {
-
+    $$ = &NullVal{}
   }
-//  NULL ON EMPTY
-//  {
-//
-//  }
-//| DEFAULT value_expression ON EMPTY
-//  {
-//
-//  }
-//| ERROR ON EMPTY
-//  {
-//
-//  }
-
-// TODO: remove empty case, just there to parse
-on_error:
+| DEFAULT value ON EMPTY
   {
-
+    $$ = $2
   }
-//| NULL ON EMPTY
-//  {
-//
-//  }
-//| DEFAULT value_expression ON EMPTY
-//  {
-//
-//  }
-//| ERROR ON EMPTY
-//  {
-//
-//  }
+
+val_on_error:
+  NULL ON ERROR
+  {
+    $$ = &NullVal{}
+  }
+| DEFAULT value ON ERROR
+  {
+    $$ = $2
+  }
 
 trigger_name:
   sql_id

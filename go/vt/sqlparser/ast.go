@@ -2544,9 +2544,12 @@ type ColumnType struct {
 	SRID *SQLVal
 
 	// For json_table
-	Path    string
-	Exists  bool
-	OnEmpty Expr
+	Path         string
+	ValOnEmpty   Expr
+	ValOnError   Expr
+	ErrorOnEmpty bool
+	ErrorOnError bool
+	Exists       bool
 }
 
 func (ct *ColumnType) merge(other ColumnType) error {
@@ -2619,6 +2622,41 @@ func (ct *ColumnType) merge(other ColumnType) error {
 			return errors.New("cannot include PATH more than once")
 		}
 		ct.Path = other.Path
+	}
+
+	if other.Exists {
+		if ct.Exists {
+			return errors.New("cannot include EXISTS more than once")
+		}
+		ct.Exists = other.Exists
+	}
+
+	if other.ValOnEmpty != nil {
+		if ct.ValOnEmpty != nil {
+			return errors.New("cannot include VAL_ON_EMPTY more than once")
+		}
+		ct.ValOnEmpty = other.ValOnEmpty
+	}
+
+	if other.ValOnError != nil {
+		if ct.ValOnError != nil {
+			return errors.New("cannot include VAL_ON_ERROR more than once")
+		}
+		ct.ValOnError = other.ValOnError
+	}
+
+	if other.ErrorOnEmpty {
+		if ct.ErrorOnEmpty {
+			return errors.New("cannot include ERROR_ON_EMPTY more than once")
+		}
+		ct.ErrorOnEmpty = other.ErrorOnEmpty
+	}
+
+	if other.ErrorOnError {
+		if ct.ErrorOnError {
+			return errors.New("cannot include ERROR_ON_ERROR more than once")
+		}
+		ct.ErrorOnError = other.ErrorOnError
 	}
 
 	if other.Charset != "" {
@@ -2722,6 +2760,21 @@ func (ct *ColumnType) Format(buf *TrackedBuffer) {
 	}
 	if ct.Path != "" {
 		opts = append(opts, keywordStrings[PATH], `"`+ct.Path+`"`)
+	}
+	if ct.Exists {
+		opts = append(opts, keywordStrings[EXISTS], keywordStrings[PATH], `"`+ct.Path+`"`)
+	}
+	if ct.ValOnEmpty != nil {
+		opts = append(opts, String(ct.ValOnEmpty), keywordStrings[ON], keywordStrings[EMPTY])
+	}
+	if ct.ValOnError != nil {
+		opts = append(opts, String(ct.ValOnError), keywordStrings[ON], keywordStrings[ERROR])
+	}
+	if ct.ErrorOnEmpty {
+		opts = append(opts, keywordStrings[ERROR], keywordStrings[ON], keywordStrings[EMPTY])
+	}
+	if ct.ErrorOnError {
+		opts = append(opts, keywordStrings[ERROR], keywordStrings[ON], keywordStrings[ERROR])
 	}
 
 	if len(opts) != 0 {
