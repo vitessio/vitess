@@ -23,7 +23,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/spf13/viper"
 	"google.golang.org/grpc"
+
+	"vitess.io/vitess/go/viperutil/vipertest"
 )
 
 func TestFakeSpan(t *testing.T) {
@@ -49,13 +52,16 @@ func TestRegisterService(t *testing.T) {
 		return tracer, tracer, nil
 	}
 
-	tracingServer = fakeName
+	v := viper.New()
+	t.Cleanup(vipertest.Stub(t, v, tracingServer))
+
+	v.Set(tracingServer.Key(), fakeName)
 
 	serviceName := "vtservice"
 	closer := StartTracing(serviceName)
 	tracer, ok := closer.(*fakeTracer)
 	if !ok {
-		t.Fatalf("did not get the expected tracer")
+		t.Fatalf("did not get the expected tracer, got %+v (%T)", tracer, tracer)
 	}
 
 	if tracer.name != serviceName {
