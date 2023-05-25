@@ -1,10 +1,11 @@
 #!/bin/bash
 
+set -euo pipefail
 templatize_help_text() {
     $1 --help 2>&1 | \
-        sed 's/{{/{{ "{{/' | \
-        sed 's/}}/}}" }}/' | \
-        sed 's/Paths to search for config files in. (default .*)/Paths to search for config files in. (default [{{ .Workdir }}])/'
+        sed -e 's/{{/{{ "{{/' \
+            -e 's/}}/}}" }}/' \
+            -e  's/Paths to search for config files in. (default .*)/Paths to search for config files in. (default [{{ .Workdir }}])/'
     return 0
 }
 
