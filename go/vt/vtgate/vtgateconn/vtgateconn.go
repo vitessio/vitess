@@ -141,9 +141,7 @@ func (sn *VTGateSession) ExecuteBatch(ctx context.Context, query []string, bindV
 // error. Then you can pull values from the ResultStream until io.EOF,
 // or another error.
 func (sn *VTGateSession) StreamExecute(ctx context.Context, query string, bindVars map[string]*querypb.BindVariable) (sqltypes.ResultStream, error) {
-	// StreamExecute is only used for SELECT queries that don't change
-	// the session. So, the protocol doesn't return an updated session.
-	// This may change in the future.
+	// passing in the function that will update the session when received on the stream.
 	return sn.impl.StreamExecute(ctx, sn.session, query, bindVars, func(response *vtgatepb.StreamExecuteResponse) {
 		if response.Session != nil {
 			sn.session = response.Session

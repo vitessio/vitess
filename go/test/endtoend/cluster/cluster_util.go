@@ -26,6 +26,11 @@ import (
 	"testing"
 	"time"
 
+	"google.golang.org/grpc"
+
+	"vitess.io/vitess/go/vt/grpcclient"
+	"vitess.io/vitess/go/vt/vtgate/grpcvtgateconn"
+
 	"github.com/buger/jsonparser"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -445,4 +450,14 @@ func WaitForHealthyShard(vtctldclient *VtctldClientProcess, keyspace, shard stri
 
 		time.Sleep(defaultRetryDelay)
 	}
+}
+
+// DialVTGate returns a VTGate grpc connection.
+func DialVTGate(ctx context.Context, name, addr, username, password string) (*vtgateconn.VTGateConn, error) {
+	clientCreds := &grpcclient.StaticAuthClientCreds{Username: username, Password: password}
+	creds := grpc.WithPerRPCCredentials(clientCreds)
+	dialerFunc := grpcvtgateconn.Dial(creds)
+	dialerName := name
+	vtgateconn.RegisterDialer(dialerName, dialerFunc)
+	return vtgateconn.DialProtocol(ctx, dialerName, addr)
 }
