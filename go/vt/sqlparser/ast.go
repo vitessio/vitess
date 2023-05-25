@@ -2867,6 +2867,33 @@ type (
 	}
 
 	CountStar struct {
+		_ bool
+		// TL;DR; This makes sure that reference equality checks works as expected
+		//
+		// You're correct that this might seem a bit strange at first glance.
+		// It's a quirk of Go's handling of empty structs. In Go, two instances of an empty struct are considered
+		// identical, which can be problematic when using these as keys in maps.
+		// They would be treated as the same key and potentially lead to incorrect map behavior.
+		//
+		// Here's a brief example:
+		//
+		// ```golang
+		// func TestWeirdGo(t *testing.T) {
+		// 	type CountStar struct{}
+		//
+		// 	cs1 := &CountStar{}
+		// 	cs2 := &CountStar{}
+		//  if cs1 == cs2 {
+		// 	  panic("what the what!?")
+		//  }
+		// }
+		// ```
+		//
+		// In the above code, cs1 and cs2, despite being distinct variables, would be treated as the same object.
+		//
+		// The solution we employed was to add a dummy field `_ bool` to the otherwise empty struct `CountStar`.
+		// This ensures that each instance of `CountStar` is treated as a separate object,
+		// even in the context of out semantic state which uses these objects as map keys.
 	}
 
 	Avg struct {

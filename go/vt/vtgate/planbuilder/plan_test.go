@@ -39,6 +39,7 @@ import (
 
 	"vitess.io/vitess/go/test/utils"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
+	oprewriters "vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 
 	"vitess.io/vitess/go/mysql/collations"
@@ -289,6 +290,7 @@ func TestViews(t *testing.T) {
 }
 
 func TestOne(t *testing.T) {
+	oprewriters.DebugOperatorTree = true
 	vschema := &vschemaWrapper{
 		v: loadSchema(t, "vschemas/schema.json", true),
 	}

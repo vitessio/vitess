@@ -2626,22 +2626,28 @@
       "QueryType": "SELECT",
       "Original": "select count(id), num from user order by 2",
       "Instructions": {
-        "OperatorType": "Aggregate",
-        "Variant": "Scalar",
-        "Aggregates": "sum_count(0) AS count(id), random(1) AS num",
+        "OperatorType": "Sort",
+        "Variant": "Memory",
+        "OrderBy": "(1|2) ASC",
         "ResultColumns": 2,
         "Inputs": [
           {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select count(id), num, weight_string(num) from `user` where 1 != 1",
-            "OrderBy": "(1|2) ASC",
-            "Query": "select count(id), num, weight_string(num) from `user` order by num asc",
-            "Table": "`user`"
+            "OperatorType": "Aggregate",
+            "Variant": "Scalar",
+            "Aggregates": "sum_count(0) AS count(id), random(1) AS num, random(2)",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select count(id), num, weight_string(num) from `user` where 1 != 1",
+                "Query": "select count(id), num, weight_string(num) from `user`",
+                "Table": "`user`"
+              }
+            ]
           }
         ]
       },
@@ -2855,23 +2861,30 @@
       "QueryType": "SELECT",
       "Original": "select col, count(*) from user group by col order by c1",
       "Instructions": {
-        "OperatorType": "Aggregate",
-        "Variant": "Ordered",
-        "Aggregates": "sum_count_star(1) AS count(*), random(2) AS c1",
-        "GroupBy": "0",
+        "OperatorType": "Sort",
+        "Variant": "Memory",
+        "OrderBy": "(2|3) ASC",
         "ResultColumns": 2,
         "Inputs": [
           {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select col, count(*), c1, weight_string(c1) from `user` where 1 != 1 group by col",
-            "OrderBy": "(2|3) ASC, 0 ASC",
-            "Query": "select col, count(*), c1, weight_string(c1) from `user` group by col order by c1 asc, col asc",
-            "Table": "`user`"
+            "OperatorType": "Aggregate",
+            "Variant": "Ordered",
+            "Aggregates": "sum_count_star(1) AS count(*), random(2) AS c1, random(3)",
+            "GroupBy": "0",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select col, count(*), c1, weight_string(c1) from `user` where 1 != 1 group by col",
+                "OrderBy": "0 ASC",
+                "Query": "select col, count(*), c1, weight_string(c1) from `user` group by col order by col asc",
+                "Table": "`user`"
+              }
+            ]
           }
         ]
       },
@@ -3224,48 +3237,41 @@
       "QueryType": "SELECT",
       "Original": "select id from user, user_extra order by coalesce(user.col, user_extra.col)",
       "Instructions": {
-        "OperatorType": "SimpleProjection",
-        "Columns": [
-          0
-        ],
+        "OperatorType": "Sort",
+        "Variant": "Memory",
+        "OrderBy": "(1|2) ASC",
+        "ResultColumns": 1,
         "Inputs": [
           {
-            "OperatorType": "Sort",
-            "Variant": "Memory",
-            "OrderBy": "(1|2) ASC",
+            "OperatorType": "Join",
+            "Variant": "Join",
+            "JoinColumnIndexes": "L:0,R:0,R:1",
+            "JoinVars": {
+              "user_col": 1
+            },
+            "TableName": "`user`_user_extra",
             "Inputs": [
               {
-                "OperatorType": "Join",
-                "Variant": "Join",
-                "JoinColumnIndexes": "L:0,R:0,R:1",
-                "JoinVars": {
-                  "user_col": 1
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
                 },
-                "TableName": "`user`_user_extra",
-                "Inputs": [
-                  {
-                    "OperatorType": "Route",
-                    "Variant": "Scatter",
-                    "Keyspace": {
-                      "Name": "user",
-                      "Sharded": true
-                    },
-                    "FieldQuery": "select id, `user`.col from `user` where 1 != 1",
-                    "Query": "select id, `user`.col from `user`",
-                    "Table": "`user`"
-                  },
-                  {
-                    "OperatorType": "Route",
-                    "Variant": "Scatter",
-                    "Keyspace": {
-                      "Name": "user",
-                      "Sharded": true
-                    },
-                    "FieldQuery": "select coalesce(:user_col, user_extra.col), weight_string(coalesce(:user_col, user_extra.col)) from user_extra where 1 != 1",
-                    "Query": "select coalesce(:user_col, user_extra.col), weight_string(coalesce(:user_col, user_extra.col)) from user_extra",
-                    "Table": "user_extra"
-                  }
-                ]
+                "FieldQuery": "select id, `user`.col from `user` where 1 != 1",
+                "Query": "select id, `user`.col from `user`",
+                "Table": "`user`"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select coalesce(:user_col, user_extra.col), weight_string(coalesce(:user_col, user_extra.col)) from user_extra where 1 != 1",
+                "Query": "select coalesce(:user_col, user_extra.col), weight_string(coalesce(:user_col, user_extra.col)) from user_extra",
+                "Table": "user_extra"
               }
             ]
           }
