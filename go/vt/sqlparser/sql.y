@@ -5768,13 +5768,9 @@ natural_join:
   }
 
 json_table:
-  JSON_TABLE openb value_expression ',' STRING COLUMNS openb json_table_column_list closeb closeb AS table_alias
+  JSON_TABLE openb value_expression ',' STRING COLUMNS openb json_table_column_list closeb closeb as_opt table_alias
   {
     $$ = &JSONTableExpr{Data: $3, Path: string($5), Spec: $8, Alias: $12}
-  }
-| JSON_TABLE openb value_expression ',' STRING COLUMNS openb json_table_column_list closeb closeb table_alias
-  {
-    $$ = &JSONTableExpr{Data: $3, Path: string($5), Spec: $8, Alias: $11}
   }
 
 json_table_column_list:
@@ -5835,18 +5831,18 @@ on_error:
   {
 
   }
-| NULL ON EMPTY
-  {
-
-  }
-| DEFAULT value_expression ON EMPTY
-  {
-
-  }
-| ERROR ON EMPTY
-  {
-
-  }
+//| NULL ON EMPTY
+//  {
+//
+//  }
+//| DEFAULT value_expression ON EMPTY
+//  {
+//
+//  }
+//| ERROR ON EMPTY
+//  {
+//
+//  }
 
 trigger_name:
   sql_id
