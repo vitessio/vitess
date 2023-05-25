@@ -150,8 +150,7 @@ func TestIncrementalBackup(t *testing.T) {
 					fromFullPosition: true,
 				},
 			}
-			var allBackups = map[string]bool{}
-			var fromFullPositionBackups = map[string]bool{}
+			var fromFullPositionBackups []string
 			for _, tc := range tt {
 				t.Run(tc.name, func(t *testing.T) {
 					if tc.writeBeforeBackup {
@@ -183,9 +182,8 @@ func TestIncrementalBackup(t *testing.T) {
 						lastBackupPos = manifest.Position
 					}()
 					if tc.fromFullPosition {
-						fromFullPositionBackups[backupName] = true
+						fromFullPositionBackups = append(fromFullPositionBackups, backupName)
 					}
-					allBackups[backupName] = true
 					require.False(t, manifest.FromPosition.IsZero())
 					require.NotEqual(t, manifest.Position, manifest.FromPosition)
 					require.True(t, manifest.Position.GTIDSet.Contains(manifest.FromPosition.GTIDSet))
@@ -222,20 +220,12 @@ func TestIncrementalBackup(t *testing.T) {
 			})
 			t.Run("remove full position backups", func(t *testing.T) {
 				// Delete the fromFullPosition backup(s), which leaves us with less restore options. Try again.
-				for backupName := range fromFullPositionBackups {
+				for _, backupName := range fromFullPositionBackups {
 					backup.RemoveBackup(t, backupName)
 				}
 			})
 			t.Run("PITR-2", func(t *testing.T) {
 				testRestores(t)
-			})
-
-			t.Run("cleaning up existing backups", func(t *testing.T) {
-				for backupName := range allBackups {
-					if !fromFullPositionBackups[backupName] { // because those are already removed
-						backup.RemoveBackup(t, backupName)
-					}
-				}
 			})
 		})
 	}
