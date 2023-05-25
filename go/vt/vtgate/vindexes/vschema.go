@@ -358,7 +358,7 @@ func buildKeyspaceGlobalTables(vschema *VSchema, ksvschema *KeyspaceSchema) {
 				if t.Type == TypeReference && t.Source != nil {
 					// If the reference table points to the already stored
 					// global table, there is no ambiguity.
-					if t.Source.Qualifier.String() == "" || t.Source.Qualifier.String() == gt.Keyspace.Name {
+					if t.Source.Qualifier.IsEmpty() || t.Source.Qualifier.String() == gt.Keyspace.Name {
 						continue
 					}
 				}
@@ -417,19 +417,15 @@ func buildKeyspaceReferences(vschema *VSchema, ksvschema *KeyspaceSchema) error 
 		)
 		// Rephrase errors to be more helpful in the context of VSchema linting.
 		if err != nil {
-			switch vterrors.Code(err) {
-			case vtrpcpb.Code_NOT_FOUND:
-				switch vterrors.ErrState(err) {
-				case vterrors.BadDb:
-					return vterrors.Errorf(
-						vtrpcpb.Code_NOT_FOUND,
-						"source %q references a non-existent keyspace %q",
-						source,
-						sourceKsname,
-					)
-				}
+			if vterrors.Code(err) != vtrpcpb.Code_NOT_FOUND || vterrors.ErrState(err) != vterrors.BadDb {
+				return err
 			}
-			return err
+			return vterrors.Errorf(
+				vtrpcpb.Code_NOT_FOUND,
+				"source %q references a non-existent keyspace %q",
+				source,
+				sourceKsname,
+			)
 		}
 		if sourceT == nil {
 			return vterrors.Errorf(
@@ -466,8 +462,10 @@ func buildKeyspaceReferences(vschema *VSchema, ksvschema *KeyspaceSchema) error 
 		}
 		sourceT.addReferenceInKeyspace(keyspace.Name, t)
 
-		// Forbid reference chains.
-		for sourceT.Source != nil || (sourceT.Type == TypeReference && sourceT.Source != nil) {
+		// Forbid reference chains. This is not necessarily a technical
+		// limitation. If people want this, in theory it should be possible as
+		// long as reference chains are not circular.
+		if sourceT.Source != nil {
 			chain := fmt.Sprintf("%s => %s => %s", tname, sourceT, sourceT.Source)
 
 			return vterrors.Errorf(
