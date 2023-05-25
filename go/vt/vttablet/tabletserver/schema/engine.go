@@ -51,7 +51,7 @@ import (
 
 const maxTableCount = 10000
 
-type notifier func(full map[string]*Table, created, altered, droppedTables, droppedViews []string)
+type notifier func(full map[string]*Table, created, altered, dropped []*Table)
 
 // Engine stores the schema info and performs operations that
 // keep itself up-to-date.
@@ -453,7 +453,7 @@ func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 	// changedTables keeps track of tables that have changed so we can reload their pk info.
 	changedTables := make(map[string]*Table)
 	// created and altered contain the names of created and altered tables for broadcast.
-	var created, altered []string
+	var created, altered []*Table
 	// tablesToReload and viewsToReload stores the tables and views that need reloading and storing in our MySQL database.
 	var tablesToReload, viewsToReload []*Table
 	for _, row := range tableData.Rows {
@@ -512,9 +512,9 @@ func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 		table.CreateTime = createTime
 		changedTables[tableName] = table
 		if isInTablesMap {
-			altered = append(altered, tableName)
+			altered = append(altered, table)
 		} else {
-			created = append(created, tableName)
+			created = append(created, table)
 		}
 		if table.Type == View {
 			viewsToReload = append(viewsToReload, table)
@@ -529,6 +529,7 @@ func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 	// Compute and handle dropped tables.
 	var droppedTables []string
 	var droppedViews []string
+	var dropped []*Table
 	for tableName, table := range se.tables {
 		if !curTables[tableName] {
 			if table.Type == View {
@@ -536,6 +537,7 @@ func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 			} else {
 				droppedTables = append(droppedTables, tableName)
 			}
+			dropped = append(dropped, table)
 			delete(se.tables, tableName)
 			// We can't actually delete the label from the stats, but we can set it to 0.
 			// Many monitoring tools will drop zero-valued metrics.
@@ -564,12 +566,10 @@ func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 		se.tables[k] = t
 	}
 	se.lastChange = curTime
-	if len(created) > 0 || len(altered) > 0 || len(droppedTables) > 0 || len(droppedViews) > 0 {
-		log.Infof("schema engine created %v, altered %v, dropped %v", created, altered, append(droppedTables, droppedViews...))
+	if len(created) > 0 || len(altered) > 0 || len(dropped) > 0 {
+		log.Infof("schema engine created %v, altered %v, dropped %v", extractNamesFromTablesList(created), extractNamesFromTablesList(altered), extractNamesFromTablesList(dropped))
 	}
-	// We have to send dropped tables and dropped Views as separate lists because we can't figure out from a single list
-	// whether it was a table or not, unlike altered and created lists because the map has the information about them.
-	se.broadcast(created, altered, droppedTables, droppedViews)
+	se.broadcast(created, altered, dropped)
 	return nil
 }
 
@@ -675,12 +675,12 @@ func (se *Engine) RegisterNotifier(name string, f notifier, runNotifier bool) {
 	defer se.notifierMu.Unlock()
 
 	se.notifiers[name] = f
-	var created []string
-	for tableName := range se.tables {
-		created = append(created, tableName)
+	var created []*Table
+	for _, table := range se.tables {
+		created = append(created, table)
 	}
 	if runNotifier {
-		f(se.tables, created, nil, nil, nil)
+		f(se.tables, created, nil, nil)
 	}
 }
 
@@ -701,7 +701,7 @@ func (se *Engine) UnregisterNotifier(name string) {
 }
 
 // broadcast must be called while holding a lock on se.mu.
-func (se *Engine) broadcast(created, altered, droppedTables, droppedViews []string) {
+func (se *Engine) broadcast(created, altered, dropped []*Table) {
 	if !se.isOpen {
 		return
 	}
@@ -713,7 +713,7 @@ func (se *Engine) broadcast(created, altered, droppedTables, droppedViews []stri
 		s[k] = v
 	}
 	for _, f := range se.notifiers {
-		f(s, created, altered, droppedTables, droppedViews)
+		f(s, created, altered, dropped)
 	}
 }
 
@@ -792,4 +792,12 @@ func (se *Engine) SetTableForTests(table *Table) {
 
 func (se *Engine) GetDBConnector() dbconfigs.Connector {
 	return se.cp
+}
+
+func extractNamesFromTablesList(tables []*Table) []string {
+	var tableNames []string
+	for _, table := range tables {
+		tableNames = append(tableNames, table.Name.String())
+	}
+	return tableNames
 }

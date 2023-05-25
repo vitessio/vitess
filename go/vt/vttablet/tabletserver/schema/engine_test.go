@@ -148,20 +148,18 @@ func TestOpenAndReload(t *testing.T) {
 	AddFakeInnoDBReadRowsResult(db, secondReadRowsValue)
 
 	firstTime := true
-	notifier := func(full map[string]*Table, created, altered, droppedTables, droppedViews []string) {
+	notifier := func(full map[string]*Table, created, altered, dropped []*Table) {
 		if firstTime {
 			firstTime = false
-			sort.Strings(created)
-			assert.Equal(t, []string{"dual", "msg", "seq", "test_table_01", "test_table_02", "test_table_03"}, created)
-			assert.Equal(t, []string(nil), altered)
-			assert.Equal(t, []string(nil), droppedTables)
-			assert.Equal(t, []string(nil), droppedViews)
+			createTables := extractNamesFromTablesList(created)
+			sort.Strings(createTables)
+			assert.Equal(t, []string{"dual", "msg", "seq", "test_table_01", "test_table_02", "test_table_03"}, createTables)
+			assert.Equal(t, []*Table(nil), altered)
+			assert.Equal(t, []*Table(nil), dropped)
 		} else {
-			assert.Equal(t, []string{"test_table_04"}, created)
-			assert.Equal(t, []string{"test_table_03"}, altered)
-			sort.Strings(droppedTables)
-			assert.Equal(t, []string{"msg"}, droppedTables)
-			assert.Equal(t, []string(nil), droppedViews)
+			assert.Equal(t, []string{"test_table_04"}, extractNamesFromTablesList(created))
+			assert.Equal(t, []string{"test_table_03"}, extractNamesFromTablesList(altered))
+			assert.Equal(t, []string{"msg"}, extractNamesFromTablesList(dropped))
 		}
 	}
 	se.RegisterNotifier("test", notifier, true)

@@ -321,8 +321,8 @@ func (hs *healthStreamer) MakePrimary(serving bool) {
 	// We register for notifications from the schema Engine only when schema tracking is enabled,
 	// and we are going to a serving primary state.
 	if serving && hs.signalWhenSchemaChange {
-		hs.se.RegisterNotifier("healthStreamer", func(full map[string]*schema.Table, created, altered, droppedTables, droppedViews []string) {
-			if err := hs.reload(full, created, altered, droppedTables, droppedViews); err != nil {
+		hs.se.RegisterNotifier("healthStreamer", func(full map[string]*schema.Table, created, altered, dropped []*schema.Table) {
+			if err := hs.reload(full, created, altered, dropped); err != nil {
 				log.Errorf("periodic schema reload failed in health stream: %v", err)
 			}
 		}, false)
@@ -337,7 +337,7 @@ func (hs *healthStreamer) MakeNonPrimary() {
 }
 
 // reload reloads the schema from the underlying mysql for the tables that we get the alert on.
-func (hs *healthStreamer) reload(full map[string]*schema.Table, created, altered, droppedTables, droppedViews []string) error {
+func (hs *healthStreamer) reload(full map[string]*schema.Table, created, altered, dropped []*schema.Table) error {
 	hs.mu.Lock()
 	defer hs.mu.Unlock()
 	// Schema Reload to happen only on primary when it is serving.
@@ -357,23 +357,13 @@ func (hs *healthStreamer) reload(full map[string]*schema.Table, created, altered
 	}
 	defer conn.Recycle()
 
-	// We initialize the tables that have schema changes with the list of tables deleted.
-	tables := droppedTables
-	views := droppedViews
-
-	// If views are not enabled, then we put the dropped views into the list of tables.
-	if !hs.viewsEnabled {
-		tables = append(tables, droppedViews...)
-		views = nil
-	}
+	// We create lists to store the tables that have schema changes.
+	var tables []string
+	var views []string
 
 	// Range over the tables that are created/altered and split them up based on their type.
-	for _, tableName := range append(created, altered...) {
-		table, found := full[tableName]
-		if !found {
-			log.Errorf("We didn't find the table we want to reload in the map - %v", tableName)
-			continue
-		}
+	for _, table := range append(append(dropped, created...), altered...) {
+		tableName := table.Name.String()
 		if table.Type == schema.View && hs.viewsEnabled {
 			views = append(views, tableName)
 		} else {
