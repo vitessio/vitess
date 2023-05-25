@@ -1,6 +1,9 @@
 #!/bin/bash
 
 set -euo pipefail
+
+DIR="go/flags/endtoend"
+
 templatize_help_text() {
     $1 --help 2>&1 | \
         sed -e 's/{{/{{ "{{/' \
@@ -11,8 +14,8 @@ templatize_help_text() {
 
 export -f templatize_help_text
 
-find go/flags/endtoend -iname '*.txt' | \
-    xargs basename | \
-    cut -d. -f1 | \
-    xargs -I{} \
-        bash -c 'templatize_help_text "{}" >go/flags/endtoend/{}.txt'
+while read -r testfile; do
+    base="${testfile##*/}"
+    binary="${base%.*}"
+    templatize_help_text "${binary}" > "${testfile}"
+done < <(find "${DIR}" -iname '*.txt')
