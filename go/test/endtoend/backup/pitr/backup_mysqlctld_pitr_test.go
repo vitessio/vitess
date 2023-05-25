@@ -73,7 +73,7 @@ func TestIncrementalBackup(t *testing.T) {
 		t.Run(tcase.name, func(t *testing.T) {
 
 			// setup cluster for the testing
-			code, err := backup.LaunchCluster(tcase.setupType, "xbstream", 0, nil)
+			code, localCluster, err := backup.LaunchCluster(tcase.setupType, "xbstream", 0, nil)
 			require.NoError(t, err, "setup failed with status code %d", code)
 			defer backup.TearDownCluster()
 
@@ -226,6 +226,12 @@ func TestIncrementalBackup(t *testing.T) {
 			})
 			t.Run("PITR-2", func(t *testing.T) {
 				testRestores(t)
+			})
+
+			t.Run("cleaning up existing backups", func(t *testing.T) {
+				for _, keyspace := range localCluster.Keyspaces {
+					localCluster.RemoveAllBackups(t, keyspace.Name)
+				}
 			})
 		})
 	}
