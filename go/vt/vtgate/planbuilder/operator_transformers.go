@@ -191,7 +191,7 @@ func transformProjection(ctx *plancontext.PlanningContext, op *operators.Project
 	})
 	var primitive *engine.Projection
 	columnNames := slices2.Map(op.Columns, func(from *sqlparser.AliasedExpr) string {
-		return from.As.String()
+		return from.ColumnName()
 	})
 
 	if !failed {
