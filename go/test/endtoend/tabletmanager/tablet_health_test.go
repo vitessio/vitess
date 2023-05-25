@@ -249,29 +249,23 @@ func TestHealthCheckSchemaChangeSignal(t *testing.T) {
 }
 
 func verifyHealthStreamSchemaChangeSignals(t *testing.T, vtgateConn *mysql.Conn, primaryTablet *cluster.Vttablet, viewsEnabled bool) {
-	verifyTableDDLSchemaChangeSignal(t, vtgateConn, primaryTablet, "CREATE TABLE `area` (`id` int NOT NULL, `country` varchar(30), PRIMARY KEY (`id`))", "area")
-	verifyTableDDLSchemaChangeSignal(t, vtgateConn, primaryTablet, "CREATE TABLE `area2` (`id` int NOT NULL, PRIMARY KEY (`id`))", "area2")
-	verifyViewDDLSchemaChangeSignal(t, vtgateConn, primaryTablet, "CREATE VIEW v2 as select * from area", viewsEnabled)
-	verifyTableDDLSchemaChangeSignal(t, vtgateConn, primaryTablet, "ALTER TABLE `area` ADD COLUMN name varchar(30) NOT NULL", "area")
-	verifyTableDDLSchemaChangeSignal(t, vtgateConn, primaryTablet, "DROP TABLE `area2`", "area2")
-	verifyViewDDLSchemaChangeSignal(t, vtgateConn, primaryTablet, "ALTER VIEW v2 as select id from area", viewsEnabled)
-	verifyViewDDLSchemaChangeSignal(t, vtgateConn, primaryTablet, "DROP VIEW v2", viewsEnabled)
-	verifyTableDDLSchemaChangeSignal(t, vtgateConn, primaryTablet, "DROP TABLE `area`", "area")
-}
-
-func verifyTableDDLSchemaChangeSignal(t *testing.T, vtgateConn *mysql.Conn, primaryTablet *cluster.Vttablet, query string, table string) {
-	ctx := context.Background()
 	var streamErr error
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	ranOnce := false
+	finished := false
+	ch := make(chan *querypb.StreamHealthResponse)
 	go func() {
 		defer wg.Done()
-		streamErr = clusterInstance.StreamTabletHealthUntil(ctx, primaryTablet, 30*time.Second, func(shr *querypb.StreamHealthResponse) bool {
+		streamErr = clusterInstance.StreamTabletHealthUntil(context.Background(), primaryTablet, 30*time.Second, func(shr *querypb.StreamHealthResponse) bool {
 			ranOnce = true
-			if shr != nil && shr.RealtimeStats != nil && slices.Contains(shr.RealtimeStats.TableSchemaChanged, table) {
+			// If we are finished, then close the channel and end the stream.
+			if finished {
+				close(ch)
 				return true
 			}
+			// Put the response in the channel.
+			ch <- shr
 			return false
 		})
 	}()
@@ -284,47 +278,57 @@ func verifyTableDDLSchemaChangeSignal(t *testing.T, vtgateConn *mysql.Conn, prim
 		}
 		time.Sleep(1 * time.Second)
 	}
-	require.True(t, ranOnce, "We should have received atleast 1 health stream")
-	_, err := vtgateConn.ExecuteFetch(query, 10000, false)
-	require.NoError(t, err)
+
+	verifyTableDDLSchemaChangeSignal(t, vtgateConn, ch, "CREATE TABLE `area` (`id` int NOT NULL, `country` varchar(30), PRIMARY KEY (`id`))", "area")
+	verifyTableDDLSchemaChangeSignal(t, vtgateConn, ch, "CREATE TABLE `area2` (`id` int NOT NULL, PRIMARY KEY (`id`))", "area2")
+	verifyViewDDLSchemaChangeSignal(t, vtgateConn, ch, "CREATE VIEW v2 as select * from t1", viewsEnabled)
+	verifyTableDDLSchemaChangeSignal(t, vtgateConn, ch, "ALTER TABLE `area` ADD COLUMN name varchar(30) NOT NULL", "area")
+	verifyTableDDLSchemaChangeSignal(t, vtgateConn, ch, "DROP TABLE `area2`", "area2")
+	verifyViewDDLSchemaChangeSignal(t, vtgateConn, ch, "ALTER VIEW v2 as select id from t1", viewsEnabled)
+	verifyViewDDLSchemaChangeSignal(t, vtgateConn, ch, "DROP VIEW v2", viewsEnabled)
+	verifyTableDDLSchemaChangeSignal(t, vtgateConn, ch, "DROP TABLE `area`", "area")
+
+	finished = true
 	wg.Wait()
 	require.NoError(t, streamErr)
 }
 
-func verifyViewDDLSchemaChangeSignal(t *testing.T, vtgateConn *mysql.Conn, primaryTablet *cluster.Vttablet, query string, viewsEnabled bool) {
-	ctx := context.Background()
-	var streamErr error
-	wg := sync.WaitGroup{}
-	wg.Add(1)
-	ranOnce := false
-	go func() {
-		defer wg.Done()
-		streamErr = clusterInstance.StreamTabletHealthUntil(ctx, primaryTablet, 30*time.Second, func(shr *querypb.StreamHealthResponse) bool {
-			ranOnce = true
+func verifyTableDDLSchemaChangeSignal(t *testing.T, vtgateConn *mysql.Conn, ch chan *querypb.StreamHealthResponse, query string, table string) {
+	_, err := vtgateConn.ExecuteFetch(query, 10000, false)
+	require.NoError(t, err)
+
+	timeout := time.After(15 * time.Second)
+	for {
+		select {
+		case shr := <-ch:
+			if shr != nil && shr.RealtimeStats != nil && slices.Contains(shr.RealtimeStats.TableSchemaChanged, table) {
+				return
+			}
+		case <-timeout:
+			t.Errorf("didn't get the correct tables changed in stream response until timeout")
+		}
+	}
+}
+
+func verifyViewDDLSchemaChangeSignal(t *testing.T, vtgateConn *mysql.Conn, ch chan *querypb.StreamHealthResponse, query string, viewsEnabled bool) {
+	_, err := vtgateConn.ExecuteFetch(query, 10000, false)
+	require.NoError(t, err)
+
+	timeout := time.After(15 * time.Second)
+	for {
+		select {
+		case shr := <-ch:
 			listToUse := shr.RealtimeStats.TableSchemaChanged
 			if viewsEnabled {
 				listToUse = shr.RealtimeStats.ViewSchemaChanged
 			}
 			if shr != nil && shr.RealtimeStats != nil && slices.Contains(listToUse, "v2") {
-				return true
+				return
 			}
-			return false
-		})
-	}()
-	// The test becomes flaky if we run the DDL immediately after starting the above go routine because the client for the Stream
-	// sometimes isn't registered by the time DDL runs, and it misses the update we get. To prevent this situation, we wait for one Stream packet
-	// to have returned. Once we know we received a Stream packet, then we know that we are registered for the health stream and can execute the DDL.
-	for i := 0; i < 30; i++ {
-		if ranOnce {
-			break
+		case <-timeout:
+			t.Errorf("didn't get the correct views changed in stream response until timeout")
 		}
-		time.Sleep(1 * time.Second)
 	}
-	require.True(t, ranOnce, "We should have received atleast 1 health stream")
-	_, err := vtgateConn.ExecuteFetch(query, 10000, false)
-	require.NoError(t, err)
-	wg.Wait()
-	require.NoError(t, streamErr)
 }
 
 func checkHealth(t *testing.T, port int, shouldError bool) {
