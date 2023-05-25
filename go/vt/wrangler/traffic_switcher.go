@@ -1311,12 +1311,15 @@ func (ts *trafficSwitcher) createReverseVReplication(ctx context.Context) error 
 					if !ok {
 						return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "table %s not found in vschema", rule.Match)
 					}
-					// We currently assume the primary vindex is the best way to filter, which
-					// may not always be true.
-					// For reference tables, there are no vindexes and thus no filter to apply.
-					// For non-reference tables we return an error as it's not clear what to do.
+					// We currently assume the primary vindex is the best way to filter rows
+					// for the table, which may not always be true.
 					// TODO: handle more of these edge cases explicitly, e.g. sequence tables.
-					if vtable.Type != vindexes.TypeReference {
+					switch vtable.Type {
+					case vindexes.TypeReference:
+						// For reference tables there are no vindexes and thus no filter to apply.
+					default:
+						// For non-reference tables we return an error if there's no primary
+						// vindex as it's not clear what to do.
 						if len(vtable.ColumnVindexes) > 0 && len(vtable.ColumnVindexes[0].Columns) > 0 {
 							inKeyrange = fmt.Sprintf(" where in_keyrange(%s, '%s.%s', '%s')", sqlparser.String(vtable.ColumnVindexes[0].Columns[0]), ts.SourceKeyspaceName(), vtable.ColumnVindexes[0].Name, key.KeyRangeString(source.GetShard().KeyRange))
 						} else {
