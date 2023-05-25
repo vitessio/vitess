@@ -241,14 +241,15 @@ func (be *XtrabackupEngine) executeFullBackup(ctx context.Context, params Backup
 	bm := &xtraBackupManifest{
 		// Common base fields
 		BackupManifest: BackupManifest{
-			BackupMethod: xtrabackupEngineName,
-			Position:     replicationPosition,
-			ServerUUID:   serverUUID,
-			TabletAlias:  params.TabletAlias,
-			Keyspace:     params.Keyspace,
-			Shard:        params.Shard,
-			BackupTime:   params.BackupTime.UTC().Format(time.RFC3339),
-			FinishedTime: time.Now().UTC().Format(time.RFC3339),
+			BackupMethod:   xtrabackupEngineName,
+			Position:       replicationPosition,
+			PurgedPosition: replicationPosition,
+			ServerUUID:     serverUUID,
+			TabletAlias:    params.TabletAlias,
+			Keyspace:       params.Keyspace,
+			Shard:          params.Shard,
+			BackupTime:     params.BackupTime.UTC().Format(time.RFC3339),
+			FinishedTime:   time.Now().UTC().Format(time.RFC3339),
 		},
 
 		// XtraBackup-specific fields
