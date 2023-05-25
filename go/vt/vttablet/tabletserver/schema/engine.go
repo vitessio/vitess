@@ -79,8 +79,9 @@ type Engine struct {
 
 	historian *historian
 
-	conns *connpool.Pool
-	ticks *timer.Timer
+	conns         *connpool.Pool
+	ticks         *timer.Timer
+	reloadTimeout time.Duration
 
 	// dbCreationFailed is for preventing log spam.
 	dbCreationFailed bool
@@ -110,7 +111,7 @@ func NewEngine(env tabletenv.Env) *Engine {
 	se.tableAllocatedSizeGauge = env.Exporter().NewGaugesWithSingleLabel("TableAllocatedSize", "tracks table allocated size", "Table")
 	se.innoDbReadRowsCounter = env.Exporter().NewCounter("InnodbRowsRead", "number of rows read by mysql")
 	se.SchemaReloadTimings = env.Exporter().NewTimings("SchemaReload", "time taken to reload the schema", "type")
-
+	se.reloadTimeout = env.Config().SchemaChangeReloadTimeout
 	env.Exporter().HandleFunc("/debug/schema", se.handleDebugSchema)
 	env.Exporter().HandleFunc("/schemaz", func(w http.ResponseWriter, r *http.Request) {
 		// Ensure schema engine is Open. If vttablet came up in a non_serving role,
@@ -394,6 +395,10 @@ func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 		se.env.LogError()
 		se.SchemaReloadTimings.Record("SchemaReload", start)
 	}()
+
+	// add a timeout to prevent unbounded waits
+	ctx, cancel := context.WithTimeout(ctx, se.reloadTimeout)
+	defer cancel()
 
 	conn, err := se.conns.Get(ctx, nil)
 	if err != nil {

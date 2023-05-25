@@ -27,6 +27,7 @@
     - [Support for MySQL 8.0 `binlog_transaction_compression`](#binlog-compression)
   - **[VTTablet](#vttablet)**
     - [VTTablet: Initializing all replicas with super_read_only](#vttablet-initialization)
+    - [Vttablet Schema Reload Timeout](#vttablet-schema-reload-timeout) 
     - [Deprecated Flags](#vttablet-deprecated-flags)
   - **[VReplication](#VReplication)**
     - [Support for the `noblob` binlog row image mode](#noblob)
@@ -349,6 +350,10 @@ An important note regarding this change is how the default `init_db.sql` file ha
 This is even more important if you are running Vitess on the vitess-operator.
 You must ensure your `init_db.sql` is up-to-date with the new default for `v17.0.0`.
 The default file can be found in `./config/init_db.sql`.
+
+#### <a id="vttablet-schema-reload-timeout"/> Vttablet Schema Reload Timeout
+
+A new flag, `--schema-change-reload-timeout` has been added to timeout the reload of the schema that Vttablet does periodically. This is required because sometimes this operation can get stuck after MySQL restarts, etc.
 
 #### <a id="vttablet-deprecated-flags"/> Deprecated Flags
 The flag `use_super_read_only` is deprecated and will be removed in a later release.
