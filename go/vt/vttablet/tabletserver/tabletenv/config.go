@@ -189,9 +189,6 @@ func registerTabletEnvFlags(fs *pflag.FlagSet) {
 	flagutil.DualFormatBoolVar(fs, &enableConsolidatorReplicas, "enable_consolidator_replicas", false, "This option enables the query consolidator only on replicas.")
 	fs.Int64Var(&currentConfig.ConsolidatorStreamQuerySize, "consolidator-stream-query-size", defaultConfig.ConsolidatorStreamQuerySize, "Configure the stream consolidator query size in bytes. Setting to 0 disables the stream consolidator.")
 	fs.Int64Var(&currentConfig.ConsolidatorStreamTotalSize, "consolidator-stream-total-size", defaultConfig.ConsolidatorStreamTotalSize, "Configure the stream consolidator total size in bytes. Setting to 0 disables the stream consolidator.")
-	flagutil.DualFormatBoolVar(fs, &currentConfig.DeprecatedCacheResultFields, "enable_query_plan_field_caching", defaultConfig.DeprecatedCacheResultFields, "This option fetches & caches fields (columns) when storing query plans")
-	_ = fs.MarkDeprecated("enable_query_plan_field_caching", "it will be removed in a future release.")
-	_ = fs.MarkDeprecated("enable-query-plan-field-caching", "it will be removed in a future release.")
 
 	currentConfig.Healthcheck.IntervalSeconds = flagutil.NewDeprecatedFloat64Seconds(defaultConfig.Healthcheck.IntervalSeconds.Name(), defaultConfig.Healthcheck.IntervalSeconds.Get())
 	currentConfig.Healthcheck.DegradedThresholdSeconds = flagutil.NewDeprecatedFloat64Seconds(defaultConfig.Healthcheck.DegradedThresholdSeconds.Name(), defaultConfig.Healthcheck.DegradedThresholdSeconds.Get())
@@ -330,7 +327,6 @@ type TabletConfig struct {
 	TruncateErrorLen                        int                               `json:"truncateErrorLen,omitempty"`
 	AnnotateQueries                         bool                              `json:"annotateQueries,omitempty"`
 	MessagePostponeParallelism              int                               `json:"messagePostponeParallelism,omitempty"`
-	DeprecatedCacheResultFields             bool                              `json:"cacheResultFields,omitempty"`
 	SignalWhenSchemaChange                  bool                              `json:"signalWhenSchemaChange,omitempty"`
 
 	ExternalConnections map[string]*dbconfigs.DBConfigs `json:"externalConnections,omitempty"`
@@ -799,10 +795,9 @@ var defaultConfig = TabletConfig{
 	// The queries during the signal reload operation are typically expected to have low load,
 	// but in busy systems with many tables, some queries may take longer than anticipated.
 	// Therefore, the default value should be generous to ensure completion.
-	SchemaChangeReloadTimeout:   30 * time.Second,
-	MessagePostponeParallelism:  4,
-	DeprecatedCacheResultFields: true,
-	SignalWhenSchemaChange:      true,
+	SchemaChangeReloadTimeout:  30 * time.Second,
+	MessagePostponeParallelism: 4,
+	SignalWhenSchemaChange:     true,
 
 	EnableTxThrottler:           false,
 	TxThrottlerConfig:           defaultTxThrottlerConfig(),
