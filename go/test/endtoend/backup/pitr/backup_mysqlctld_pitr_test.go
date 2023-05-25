@@ -60,10 +60,10 @@ func TestIncrementalBackup(t *testing.T) {
 		setupType int
 	}{
 		{
-			"XtraBackup", backup.XtraBackup,
+			"BuiltinBackup", backup.BuiltinBackup,
 		},
 		{
-			"BuiltinBackup", backup.BuiltinBackup,
+			"XtraBackup", backup.XtraBackup,
 		},
 		{
 			"Mysqlctld", backup.Mysqlctld,
@@ -73,7 +73,7 @@ func TestIncrementalBackup(t *testing.T) {
 		t.Run(tcase.name, func(t *testing.T) {
 
 			// setup cluster for the testing
-			code, localCluster, err := backup.LaunchCluster(tcase.setupType, "xbstream", 0, nil)
+			code, err := backup.LaunchCluster(tcase.setupType, "xbstream", 0, nil)
 			require.NoError(t, err, "setup failed with status code %d", code)
 			defer backup.TearDownCluster()
 
@@ -150,7 +150,8 @@ func TestIncrementalBackup(t *testing.T) {
 					fromFullPosition: true,
 				},
 			}
-			var fromFullPositionBackups []string
+			var allBackups = map[string]bool{}
+			var fromFullPositionBackups = map[string]bool{}
 			for _, tc := range tt {
 				t.Run(tc.name, func(t *testing.T) {
 					if tc.writeBeforeBackup {
@@ -182,7 +183,7 @@ func TestIncrementalBackup(t *testing.T) {
 						lastBackupPos = manifest.Position
 					}()
 					if tc.fromFullPosition {
-						fromFullPositionBackups = append(fromFullPositionBackups, backupName)
+						fromFullPositionBackups[backupName] = true
 					}
 					require.False(t, manifest.FromPosition.IsZero())
 					require.NotEqual(t, manifest.Position, manifest.FromPosition)
@@ -220,7 +221,7 @@ func TestIncrementalBackup(t *testing.T) {
 			})
 			t.Run("remove full position backups", func(t *testing.T) {
 				// Delete the fromFullPosition backup(s), which leaves us with less restore options. Try again.
-				for _, backupName := range fromFullPositionBackups {
+				for backupName := range fromFullPositionBackups {
 					backup.RemoveBackup(t, backupName)
 				}
 			})
@@ -229,8 +230,10 @@ func TestIncrementalBackup(t *testing.T) {
 			})
 
 			t.Run("cleaning up existing backups", func(t *testing.T) {
-				for _, keyspace := range localCluster.Keyspaces {
-					localCluster.RemoveAllBackups(t, keyspace.Name)
+				for backupName := range allBackups {
+					if !fromFullPositionBackups[backupName] { // because those are already removed
+						backup.RemoveBackup(t, backupName)
+					}
 				}
 			})
 		})
