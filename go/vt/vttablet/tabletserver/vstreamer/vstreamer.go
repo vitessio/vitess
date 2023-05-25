@@ -23,8 +23,8 @@ import (
 	"io"
 	"time"
 
-	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/encoding/prototext"
+	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/mysql"
 	mysqlbinlog "vitess.io/vitess/go/mysql/binlog"
