@@ -93,6 +93,7 @@ type healthStreamer struct {
 	dbConfig               dbconfigs.Connector
 	conns                  *connpool.Pool
 	signalWhenSchemaChange bool
+	reloadTimeout          time.Duration
 
 	viewsEnabled bool
 }
@@ -122,6 +123,7 @@ func newHealthStreamer(env tabletenv.Env, alias *topodatapb.TabletAlias, engine 
 		history:                history.New(5),
 		conns:                  pool,
 		signalWhenSchemaChange: env.Config().SignalWhenSchemaChange,
+		reloadTimeout:          env.Config().SchemaChangeReloadTimeout,
 		viewsEnabled:           env.Config().EnableViews,
 		se:                     engine,
 	}
@@ -345,7 +347,10 @@ func (hs *healthStreamer) reload(full map[string]*schema.Table, created, altered
 		return nil
 	}
 
-	ctx := hs.ctx
+	// add a timeout to prevent unbounded waits
+	ctx, cancel := context.WithTimeout(hs.ctx, hs.reloadTimeout)
+	defer cancel()
+
 	conn, err := hs.conns.Get(ctx, nil)
 	if err != nil {
 		return err

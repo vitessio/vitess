@@ -124,8 +124,10 @@ func registerTabletEnvFlags(fs *pflag.FlagSet) {
 
 	currentConfig.SchemaReloadIntervalSeconds = defaultConfig.SchemaReloadIntervalSeconds.Clone()
 	fs.Var(&currentConfig.SchemaReloadIntervalSeconds, currentConfig.SchemaReloadIntervalSeconds.Name(), "query server schema reload time, how often vttablet reloads schemas from underlying MySQL instance in seconds. vttablet keeps table schemas in its own memory and periodically refreshes it from MySQL. This config controls the reload time.")
+	currentConfig.SignalSchemaChangeReloadIntervalSeconds = defaultConfig.SignalSchemaChangeReloadIntervalSeconds.Clone()
 	fs.Var(&currentConfig.SignalSchemaChangeReloadIntervalSeconds, "queryserver-config-schema-change-signal-interval", "query server schema change signal interval defines at which interval the query server shall send schema updates to vtgate.")
 	_ = fs.MarkDeprecated("queryserver-config-schema-change-signal-interval", "We no longer poll for finding schema changes.")
+	fs.DurationVar(&currentConfig.SchemaChangeReloadTimeout, "schema-change-reload-timeout", defaultConfig.SchemaChangeReloadTimeout, "query server schema change signal reload timeout, this is how long to wait for the signaled schema reload operation to complete before giving up")
 	fs.BoolVar(&currentConfig.SignalWhenSchemaChange, "queryserver-config-schema-change-signal", defaultConfig.SignalWhenSchemaChange, "query server schema signal, will signal connected vtgates that schema has changed whenever this is detected. VTGates will need to have -schema_change_signal enabled for this to work")
 	currentConfig.Olap.TxTimeoutSeconds = defaultConfig.Olap.TxTimeoutSeconds.Clone()
 	fs.Var(&currentConfig.Olap.TxTimeoutSeconds, defaultConfig.Olap.TxTimeoutSeconds.Name(), "query server transaction timeout (in seconds), after which a transaction in an OLAP session will be killed")
@@ -318,6 +320,7 @@ type TabletConfig struct {
 	QueryCacheLFU                           bool                              `json:"queryCacheLFU,omitempty"`
 	SchemaReloadIntervalSeconds             flagutil.DeprecatedFloat64Seconds `json:"schemaReloadIntervalSeconds,omitempty"`
 	SignalSchemaChangeReloadIntervalSeconds flagutil.DeprecatedFloat64Seconds `json:"signalSchemaChangeReloadIntervalSeconds,omitempty"`
+	SchemaChangeReloadTimeout               time.Duration                     `json:"schemaChangeReloadTimeout,omitempty"`
 	WatchReplication                        bool                              `json:"watchReplication,omitempty"`
 	TrackSchemaVersions                     bool                              `json:"trackSchemaVersions,omitempty"`
 	SchemaVersionMaxAgeSeconds              int64                             `json:"schemaVersionMaxAgeSeconds,omitempty"`
@@ -364,14 +367,18 @@ func (cfg *TabletConfig) MarshalJSON() ([]byte, error) {
 
 	tmp := struct {
 		TCProxy
-		SchemaReloadIntervalSeconds             string `json:"schemaReloadIntervalSeconds,omitempty"`
-		SignalSchemaChangeReloadIntervalSeconds string `json:"signalSchemaChangeReloadIntervalSeconds,omitempty"`
+		SchemaReloadIntervalSeconds string `json:"schemaReloadIntervalSeconds,omitempty"`
+		SchemaChangeReloadTimeout   string `json:"schemaChangeReloadTimeout,omitempty"`
 	}{
 		TCProxy: TCProxy(*cfg),
 	}
 
 	if d := cfg.SchemaReloadIntervalSeconds.Get(); d != 0 {
 		tmp.SchemaReloadIntervalSeconds = d.String()
+	}
+
+	if d := cfg.SchemaChangeReloadTimeout; d != 0 {
+		tmp.SchemaChangeReloadTimeout = d.String()
 	}
 
 	return json.Marshal(&tmp)
@@ -779,8 +786,13 @@ var defaultConfig = TabletConfig{
 	QueryCacheMemory:            cache.DefaultConfig.MaxMemoryUsage,
 	QueryCacheLFU:               cache.DefaultConfig.LFU,
 	SchemaReloadIntervalSeconds: flagutil.NewDeprecatedFloat64Seconds("queryserver-config-schema-reload-time", 30*time.Minute),
-	MessagePostponeParallelism:  4,
-	SignalWhenSchemaChange:      true,
+	// SchemaChangeReloadTimeout is used for the signal reload operation where we have to query mysqld.
+	// The queries during the signal reload operation are typically expected to have low load,
+	// but in busy systems with many tables, some queries may take longer than anticipated.
+	// Therefore, the default value should be generous to ensure completion.
+	SchemaChangeReloadTimeout:  30 * time.Second,
+	MessagePostponeParallelism: 4,
+	SignalWhenSchemaChange:     true,
 
 	EnableTxThrottler:           false,
 	TxThrottlerConfig:           defaultTxThrottlerConfig(),

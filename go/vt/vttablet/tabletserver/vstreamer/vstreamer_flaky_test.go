@@ -26,6 +26,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer/testenv"
+
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/vt/log"
@@ -2102,6 +2104,50 @@ func TestGeneratedColumns(t *testing.T) {
 			fe.String(),
 			`type:ROW row_event:{table_name:"t1" row_changes:{after:{lengths:1 lengths:3 lengths:4 lengths:4 lengths:2 values:"1aaa1aaaaaa110"}}}`,
 			`type:ROW row_event:{table_name:"t1" row_changes:{after:{lengths:1 lengths:3 lengths:4 lengths:4 lengths:2 values:"2bbb2bbbbbb220"}}}`,
+			`gtid`,
+			`commit`,
+		}},
+	}}
+	runCases(t, nil, testcases, "current", nil)
+}
+
+// TestGeneratedInvisiblePrimaryKey validates that generated invisible primary keys are sent in row events.
+func TestGeneratedInvisiblePrimaryKey(t *testing.T) {
+	if !env.HasCapability(testenv.ServerCapabilityGeneratedInvisiblePrimaryKey) {
+		t.Skip("skipping test as server does not support generated invisible primary keys")
+	}
+	execStatements(t, []string{
+		"SET @@session.sql_generate_invisible_primary_key=ON;",
+		"create table t1(val varbinary(6))",
+		"SET @@session.sql_generate_invisible_primary_key=OFF;",
+	})
+	defer execStatements(t, []string{
+		"drop table t1",
+	})
+	engine.se.Reload(context.Background())
+	queries := []string{
+		"begin",
+		"insert into t1 values ('aaa')",
+		"update t1 set val = 'bbb' where my_row_id = 1",
+		"commit",
+	}
+
+	fe := &TestFieldEvent{
+		table: "t1",
+		db:    "vttest",
+		cols: []*TestColumn{
+			{name: "my_row_id", dataType: "UINT64", colType: "bigint unsigned", len: 20, charset: 63},
+			{name: "val", dataType: "VARBINARY", colType: "varbinary(6)", len: 6, charset: 63},
+		},
+	}
+
+	testcases := []testcase{{
+		input: queries,
+		output: [][]string{{
+			`begin`,
+			fe.String(),
+			`type:ROW row_event:{table_name:"t1" row_changes:{after:{lengths:1 lengths:3 values:"1aaa"}}}`,
+			`type:ROW row_event:{table_name:"t1" row_changes:{before:{lengths:1 lengths:3 values:"1aaa"} after:{lengths:1 lengths:3 values:"1bbb"}}}`,
 			`gtid`,
 			`commit`,
 		}},

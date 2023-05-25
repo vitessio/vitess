@@ -97,10 +97,11 @@ type Environment interface {
 // LocalTestEnv is an Environment implementation for local testing
 // See: NewLocalTestEnv()
 type LocalTestEnv struct {
-	BasePort     int
-	TmpPath      string
-	DefaultMyCnf []string
-	Env          []string
+	BasePort        int
+	TmpPath         string
+	DefaultMyCnf    []string
+	Env             []string
+	EnableToxiproxy bool
 }
 
 // DefaultMySQLFlavor is the MySQL flavor used by vttest when no explicit
@@ -139,7 +140,7 @@ func (env *LocalTestEnv) BinaryPath(binary string) string {
 
 // MySQLManager implements MySQLManager for LocalTestEnv
 func (env *LocalTestEnv) MySQLManager(mycnf []string, snapshot string) (MySQLManager, error) {
-	return &Mysqlctl{
+	mysqlctl := &Mysqlctl{
 		Binary:    env.BinaryPath("mysqlctl"),
 		InitFile:  path.Join(os.Getenv("VTROOT"), "config/init_db.sql"),
 		Directory: env.TmpPath,
@@ -147,7 +148,18 @@ func (env *LocalTestEnv) MySQLManager(mycnf []string, snapshot string) (MySQLMan
 		MyCnf:     append(env.DefaultMyCnf, mycnf...),
 		Env:       env.EnvVars(),
 		UID:       1,
-	}, nil
+	}
+	if !env.EnableToxiproxy {
+		return mysqlctl, nil
+	}
+
+	return NewToxiproxyctl(
+		env.BinaryPath("toxiproxy-server"),
+		env.PortForProtocol("toxiproxy", ""),
+		env.PortForProtocol("mysql_behind_toxiproxy", ""),
+		mysqlctl,
+		path.Join(env.LogDirectory(), "toxiproxy.log"),
+	)
 }
 
 // TopoManager implements TopoManager for LocalTestEnv
@@ -180,6 +192,12 @@ func (env *LocalTestEnv) PortForProtocol(name, proto string) int {
 
 	case "vtcombo_mysql_port":
 		return env.BasePort + 3
+
+	case "toxiproxy":
+		return env.BasePort + 4
+
+	case "mysql_behind_toxiproxy":
+		return env.BasePort + 5
 
 	default:
 		panic("unknown service name: " + name)

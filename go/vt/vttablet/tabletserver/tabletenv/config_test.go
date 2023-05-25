@@ -161,6 +161,7 @@ replicationTracker:
 rowStreamer:
   maxInnoDBTrxHistLen: 1000000
   maxMySQLReplLagSecs: 43200
+schemaChangeReloadTimeout: 30s
 schemaReloadIntervalSeconds: 30m0s
 signalWhenSchemaChange: true
 streamBufferSize: 32768

@@ -262,6 +262,7 @@ Usage of vttablet:
       --s3_backup_storage_root string                                    root prefix for all backup-related object names.
       --s3_backup_tls_skip_verify_cert                                   skip the 'certificate is valid' check for SSL connections.
       --sanitize_log_messages                                            Remove potentially sensitive information in tablet INFO, WARNING, and ERROR log messages such as query parameters.
+      --schema-change-reload-timeout duration                            query server schema change signal reload timeout, this is how long to wait for the signaled schema reload operation to complete before giving up (default 30s)
       --schema-version-max-age-seconds int                               max age of schema version records to kept in memory by the vreplication historian
       --security_policy string                                           the name of a registered security policy to use for controlling access to URLs - empty means allow all for anyone (built-in policies: deny-all, read-only)
       --service_map strings                                              comma separated list of services to enable (or disable if prefixed with '-') Example: grpc-queryservice
