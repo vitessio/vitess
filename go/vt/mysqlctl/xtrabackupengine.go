@@ -275,7 +275,14 @@ func (be *XtrabackupEngine) executeFullBackup(ctx context.Context, params Backup
 	return true, nil
 }
 
-func (be *XtrabackupEngine) backupFiles(ctx context.Context, params BackupParams, bh backupstorage.BackupHandle, backupFileName string, numStripes int, flavor string) (replicationPosition mysql.Position, finalErr error) {
+func (be *XtrabackupEngine) backupFiles(
+	ctx context.Context,
+	params BackupParams,
+	bh backupstorage.BackupHandle,
+	backupFileName string,
+	numStripes int,
+	flavor string,
+) (replicationPosition mysql.Position, finalErr error) {
 
 	backupProgram := path.Join(xtrabackupEnginePath, xtrabackupBinaryName)
 	flagsToExec := []string{"--defaults-file=" + params.Cnf.Path,
