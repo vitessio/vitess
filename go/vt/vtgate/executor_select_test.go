@@ -2495,10 +2495,12 @@ func TestEmptyJoin(t *testing.T) {
 	sbc1.SetResults([]*sqltypes.Result{{
 		Fields: []*querypb.Field{
 			{Name: "id", Type: sqltypes.Int32},
+			{Name: "col", Type: sqltypes.Int32},
 		},
 	}, {
 		Fields: []*querypb.Field{
 			{Name: "id", Type: sqltypes.Int32},
+			{Name: "col", Type: sqltypes.Int32},
 		},
 	}})
 	result, err := executorExec(executor, "select u1.id, u2.id from user u1 join user u2 on u2.id = u1.col where u1.id = 1", nil)
@@ -2509,7 +2511,7 @@ func TestEmptyJoin(t *testing.T) {
 	}, {
 		Sql: "select u2.id from `user` as u2 where 1 != 1",
 		BindVariables: map[string]*querypb.BindVariable{
-			"u1_col": sqltypes.NullBindVariable,
+			"u1_col": sqltypes.Int32BindVariable(0),
 		},
 	}}
 	utils.MustMatch(t, wantQueries, sbc1.Queries)
@@ -3680,7 +3682,7 @@ func TestSelectAggregationNoData(t *testing.T) {
 		{
 			sql:         `select col, count(*) from user group by col limit 2`,
 			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("col|count(*)", "int64|int64")),
-			expSandboxQ: "select col, count(*), weight_string(col) from `user` group by col, weight_string(col) order by col asc limit :__upper_limit",
+			expSandboxQ: "select col, count(*), weight_string(col) from `user` group by col, weight_string(col) order by col asc",
 			expField:    `[name:"col" type:INT64 name:"count(*)" type:INT64]`,
 			expRow:      `[]`,
 		},
@@ -3764,7 +3766,7 @@ func TestSelectAggregationData(t *testing.T) {
 		{
 			sql:         `select col, count(*) from user group by col limit 2`,
 			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("col|count(*)|weight_string(col)", "int64|int64|varbinary"), "1|2|NULL", "2|1|NULL", "3|4|NULL"),
-			expSandboxQ: "select col, count(*), weight_string(col) from `user` group by col, weight_string(col) order by col asc limit :__upper_limit",
+			expSandboxQ: "select col, count(*), weight_string(col) from `user` group by col, weight_string(col) order by col asc",
 			expField:    `[name:"col" type:INT64 name:"count(*)" type:INT64]`,
 			expRow:      `[[INT64(1) INT64(16)] [INT64(2) INT64(8)]]`,
 		},

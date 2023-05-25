@@ -154,7 +154,7 @@ func prepareMySQLWithSchema(params mysql.ConnParams, sql string) error {
 	return nil
 }
 
-func compareVitessAndMySQLResults(t *testing.T, query string, vtQr, mysqlQr *sqltypes.Result, compareColumns bool) {
+func compareVitessAndMySQLResults(t *testing.T, query string, vtConn *mysql.Conn, vtQr, mysqlQr *sqltypes.Result, compareColumns bool) {
 	if vtQr == nil && mysqlQr == nil {
 		return
 	}
@@ -206,6 +206,10 @@ func compareVitessAndMySQLResults(t *testing.T, query string, vtQr, mysqlQr *sql
 	errStr += "MySQL Results:\n"
 	for _, row := range mysqlQr.Rows {
 		errStr += fmt.Sprintf("%s\n", row)
+	}
+	if vtConn != nil {
+		qr := Exec(t, vtConn, fmt.Sprintf("vexplain plan %s", query))
+		errStr += fmt.Sprintf("query plan: \n%s\n", qr.Rows[0][0].ToString())
 	}
 	t.Error(errStr)
 }

@@ -1794,7 +1794,7 @@
               "Sharded": true
             },
             "FieldQuery": "select user_extra.id from user_extra where 1 != 1",
-            "Query": "select user_extra.id from user_extra where user_extra.col = :user_col and user_extra.user_id = :user_col",
+            "Query": "select user_extra.id from user_extra where user_extra.user_id = :user_col and user_extra.col = :user_col",
             "Table": "user_extra",
             "Values": [
               ":user_col"
@@ -1880,7 +1880,7 @@
               "Sharded": true
             },
             "FieldQuery": "select user_extra.id from user_extra where 1 != 1",
-            "Query": "select user_extra.id from user_extra where 1 = 1 and user_extra.col = :user_col",
+            "Query": "select user_extra.id from user_extra where user_extra.col = :user_col and 1 = 1",
             "Table": "user_extra"
           }
         ]
