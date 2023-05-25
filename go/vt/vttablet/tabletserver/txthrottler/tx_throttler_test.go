@@ -124,12 +124,15 @@ func TestEnabledThrottler(t *testing.T) {
 	})
 	assert.Nil(t, throttler.Open())
 	assert.Equal(t, int64(1), throttler.throttlerRunning.Get())
+	assert.Equal(t, map[string]int64{"cell1": 1, "cell2": 1}, throttler.topoWatchers.Counts())
 
 	assert.False(t, throttler.Throttle(100))
 	assert.Equal(t, int64(1), throttler.requestsTotal.Get())
 	assert.Zero(t, throttler.requestsThrottled.Get())
 
 	throttler.state.StatsUpdate(tabletStats) // This calls replication lag thing
+	assert.Equal(t, map[string]int64{"REPLICA": 1}, throttler.healthChecksReadTotal.Counts())
+	assert.Equal(t, map[string]int64{"REPLICA": 1}, throttler.healthChecksRecordedTotal.Counts())
 	rdonlyTabletStats := &discovery.TabletHealth{
 		Target: &querypb.Target{
 			TabletType: topodatapb.TabletType_RDONLY,
@@ -137,6 +140,8 @@ func TestEnabledThrottler(t *testing.T) {
 	}
 	// This call should not be forwarded to the go/vt/throttler.Throttler object.
 	throttler.state.StatsUpdate(rdonlyTabletStats)
+	assert.Equal(t, map[string]int64{"REPLICA": 1, "RDONLY": 1}, throttler.healthChecksReadTotal.Counts())
+	assert.Equal(t, map[string]int64{"REPLICA": 1}, throttler.healthChecksRecordedTotal.Counts())
 	// The second throttle call should reject.
 	assert.True(t, throttler.Throttle(100))
 	assert.Equal(t, int64(2), throttler.requestsTotal.Get())
@@ -148,6 +153,7 @@ func TestEnabledThrottler(t *testing.T) {
 	assert.Equal(t, int64(1), throttler.requestsThrottled.Get())
 	throttler.Close()
 	assert.Zero(t, throttler.throttlerRunning.Get())
+	assert.Equal(t, map[string]int64{"cell1": 0, "cell2": 0}, throttler.topoWatchers.Counts())
 }
 
 func TestNewTxThrottler(t *testing.T) {
