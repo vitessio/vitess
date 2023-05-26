@@ -7316,6 +7316,12 @@ FROM
 			input: `SELECT * FROM JSON_TABLE('{}', '$' COLUMNS( c1 INT PATH '$.c1' ERROR ON ERROR )) as jt;`,
 			output: "select * from JSON_TABLE('{}', \"$\" COLUMNS(\n\tc1 INT path \"$.c1\" error on error\n)) as jt",
 		},
+
+		// NESTED PATH TESTS
+		{
+			input: `SELECT * FROM JSON_TABLE('{}', '$' COLUMNS(NESTED PATH '$' COLUMNS (b INT PATH '$'))) AS jt;`,
+			output: ``,
+		},
 	}
 
 	for _, tcase := range validSQL {

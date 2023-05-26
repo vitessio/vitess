@@ -5802,6 +5802,10 @@ json_table_column_definition:
   {
     $$ = &ColumnDefinition{Name: $1, Type: ColumnType{Type: "INTEGER", Unsigned: true, Autoincrement: true}}
   }
+| NESTED PATH STRING COLUMNS openb json_table_column_definition closeb
+  {
+    $$ = $6
+  }
 
 // TODO: default value for non-existent member is NULL, but use "zero" when it is specified
 // TODO: exists overrides DEFAULT <json_string> ON EMPTY

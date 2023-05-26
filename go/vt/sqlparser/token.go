@@ -462,6 +462,7 @@ var keywords = map[string]int{
 	"names":                         NAMES,
 	"national":                      NATIONAL,
 	"natural":                       NATURAL,
+	"nested":                        NESTED,
 	"nchar":                         NCHAR,
 	"ndb_stored_user":               NDB_STORED_USER,
 	"never":                         NEVER,
