@@ -248,7 +248,7 @@ func (se *Engine) Open() error {
 	}()
 
 	se.tables = map[string]*Table{
-		"dual": NewTable("dual"),
+		"dual": NewTable("dual", NoType),
 	}
 	se.notifiers = make(map[string]notifier)
 
@@ -566,7 +566,7 @@ func (se *Engine) getDroppedTables(curTables map[string]bool, changedViews map[s
 	for viewName := range changedViews {
 		_, alreadyExists := dropped[viewName]
 		if !curTables[viewName] && !alreadyExists {
-			dropped[viewName] = &Table{Name: sqlparser.NewIdentifierCS(viewName), Type: View}
+			dropped[viewName] = NewTable(viewName, View)
 		}
 	}
 
@@ -576,7 +576,7 @@ func (se *Engine) getDroppedTables(curTables map[string]bool, changedViews map[s
 	for tableName := range mismatchTables {
 		_, alreadyExists := dropped[tableName]
 		if !curTables[tableName] && !alreadyExists {
-			dropped[tableName] = &Table{Name: sqlparser.NewIdentifierCS(tableName), Type: NoType}
+			dropped[tableName] = NewTable(tableName, NoType)
 		}
 	}
 

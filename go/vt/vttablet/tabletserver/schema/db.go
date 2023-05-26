@@ -347,7 +347,7 @@ func reloadDataInDB(ctx context.Context, conn *connpool.DBConn, altered []*Table
 	var droppedTables []string
 	var droppedViews []string
 
-	for _, table := range append(altered, created...) {
+	for _, table := range append(created, altered...) {
 		if table.Type == View {
 			viewsToReload = append(viewsToReload, table)
 		} else {

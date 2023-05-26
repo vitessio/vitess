@@ -469,6 +469,7 @@ func TestReloadView(t *testing.T) {
 				tcCount.Add(1)
 				db.AddQueryPattern(".*SELECT view_name as table_name, view_definition.*schema_engine_views.*", &sqltypes.Result{})
 				ch <- struct{}{}
+				require.NoError(t, db.LastError())
 			}
 			return nil
 		})

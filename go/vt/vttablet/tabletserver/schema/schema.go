@@ -109,9 +109,10 @@ type MessageInfo struct {
 }
 
 // NewTable creates a new Table.
-func NewTable(name string) *Table {
+func NewTable(name string, tableType int) *Table {
 	return &Table{
 		Name: sqlparser.NewIdentifierCS(name),
+		Type: tableType,
 	}
 }
 

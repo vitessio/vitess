@@ -103,6 +103,7 @@ func TestGetCreateStatement(t *testing.T) {
 	got, err := getCreateStatement(context.Background(), conn, "`lead`")
 	require.NoError(t, err)
 	require.Equal(t, createStatement, got)
+	require.NoError(t, db.LastError())
 
 	// Success table
 	createStatement = "CREATE TABLE `area` (\n  `id` int NOT NULL,\n  `name` varchar(30) DEFAULT NULL,\n  `zipcode` int DEFAULT NULL,\n  `country` int DEFAULT NULL,\n  `x` varchar(30) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_as_cs DEFAULT NULL,\n  PRIMARY KEY (`id`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci"
@@ -113,6 +114,7 @@ func TestGetCreateStatement(t *testing.T) {
 	got, err = getCreateStatement(context.Background(), conn, "area")
 	require.NoError(t, err)
 	require.Equal(t, createStatement, got)
+	require.NoError(t, db.LastError())
 
 	// Failure
 	errMessage := "ERROR 1146 (42S02): Table 'ks.v1' doesn't exist"
@@ -139,11 +141,13 @@ func TestGetChangedViewNames(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, got, 3)
 	require.ElementsMatch(t, maps.Keys(got), []string{"v1", "v2", "lead"})
+	require.NoError(t, db.LastError())
 
 	// Not serving primary
 	got, err = getChangedViewNames(context.Background(), conn, false)
 	require.NoError(t, err)
 	require.Len(t, got, 0)
+	require.NoError(t, db.LastError())
 
 	// Failure
 	errMessage := "ERROR 1146 (42S02): Table '_vt.schema_engine_views' doesn't exist"
@@ -175,6 +179,7 @@ func TestGetViewDefinition(t *testing.T) {
 	require.ElementsMatch(t, maps.Keys(got), []string{"v1", "lead"})
 	require.Equal(t, "create_view_v1", got["v1"])
 	require.Equal(t, "create_view_lead", got["lead"])
+	require.NoError(t, db.LastError())
 
 	// Failure
 	errMessage := "some error in MySQL"
@@ -262,7 +267,7 @@ func TestGetMismatchedTableNames(t *testing.T) {
 		}, {
 			name: "Dual gets ignored",
 			tables: map[string]*Table{
-				"dual": NewTable("dual"),
+				"dual": NewTable("dual", NoType),
 				"t2": {
 					Name:       sqlparser.NewIdentifierCS("t2"),
 					Type:       NoType,
@@ -276,7 +281,7 @@ func TestGetMismatchedTableNames(t *testing.T) {
 		}, {
 			name: "All problems",
 			tables: map[string]*Table{
-				"dual": NewTable("dual"),
+				"dual": NewTable("dual", NoType),
 				"t2": {
 					Name:       sqlparser.NewIdentifierCS("t2"),
 					Type:       NoType,
@@ -342,6 +347,7 @@ func TestGetMismatchedTableNames(t *testing.T) {
 				require.ErrorContains(t, err, tc.expectedError)
 			} else {
 				require.ElementsMatch(t, maps.Keys(mismatchedTableNames), tc.expectedTableNames)
+				require.NoError(t, db.LastError())
 			}
 		})
 	}
@@ -462,6 +468,7 @@ func TestReloadTablesInDB(t *testing.T) {
 				return
 			}
 			require.NoError(t, err)
+			require.NoError(t, db.LastError())
 		})
 	}
 }
@@ -593,6 +600,297 @@ func TestReloadViewsInDB(t *testing.T) {
 				return
 			}
 			require.NoError(t, err)
+			require.NoError(t, db.LastError())
+		})
+	}
+}
+
+func TestReloadDataInDB(t *testing.T) {
+	showCreateViewFields := sqltypes.MakeTestFields(" View | Create View | character_set_client | collation_connection", "varchar|varchar|varchar|varchar")
+	showCreateTableFields := sqltypes.MakeTestFields("Table | Create Table", "varchar|varchar")
+	getViewDefinitionsFields := sqltypes.MakeTestFields("table_name|view_definition", "varchar|varchar")
+	errMessage := "some error in MySQL"
+	testCases := []struct {
+		name            string
+		altered         []*Table
+		created         []*Table
+		dropped         []*Table
+		expectedQueries map[string]*sqltypes.Result
+		queriesToReject map[string]error
+		expectedError   string
+	}{
+		{
+			name: "Only views to delete",
+			dropped: []*Table{
+				NewTable("v1", View),
+				NewTable("lead", View),
+			},
+			expectedQueries: map[string]*sqltypes.Result{
+				"begin":    {},
+				"commit":   {},
+				"rollback": {},
+				"delete from _vt.schema_engine_views where view_schema = database() and view_name in ('v1', 'lead')": {},
+			},
+		}, {
+			name: "Only views to reload",
+			created: []*Table{
+				{
+					Name:       sqlparser.NewIdentifierCS("v1"),
+					Type:       View,
+					CreateTime: 1234,
+				},
+			},
+			altered: []*Table{
+				{
+					Name:       sqlparser.NewIdentifierCS("lead"),
+					Type:       View,
+					CreateTime: 1234,
+				},
+			},
+			expectedQueries: map[string]*sqltypes.Result{
+				"begin":    {},
+				"commit":   {},
+				"rollback": {},
+				"delete from _vt.schema_engine_views where view_schema = database() and view_name in ('v1', 'lead')": {},
+				"select table_name, view_definition from information_schema.views where table_schema = database() and table_name in ('v1', 'lead')": sqltypes.MakeTestResult(
+					getViewDefinitionsFields,
+					"lead|select_lead",
+					"v1|select_v1"),
+				"show create table v1": sqltypes.MakeTestResult(showCreateViewFields,
+					"v1|create_view_v1|utf8mb4|utf8mb4_0900_ai_ci"),
+				"show create table `lead`": sqltypes.MakeTestResult(showCreateViewFields,
+					"lead|create_view_lead|utf8mb4|utf8mb4_0900_ai_ci"),
+				"insert into _vt.schema_engine_views(view_schema, view_name, create_statement, view_definition) values (database(), 'v1', 'create_view_v1', 'select_v1')":       {},
+				"insert into _vt.schema_engine_views(view_schema, view_name, create_statement, view_definition) values (database(), 'lead', 'create_view_lead', 'select_lead')": {},
+			},
+		}, {
+			name: "Reload and delete views",
+			created: []*Table{
+				{
+					Name:       sqlparser.NewIdentifierCS("v1"),
+					Type:       View,
+					CreateTime: 1234,
+				},
+			},
+			altered: []*Table{
+				{
+					Name:       sqlparser.NewIdentifierCS("lead"),
+					Type:       View,
+					CreateTime: 1234,
+				},
+			},
+			dropped: []*Table{
+				NewTable("v2", View),
+				NewTable("from", View),
+			},
+			expectedQueries: map[string]*sqltypes.Result{
+				"begin":    {},
+				"commit":   {},
+				"rollback": {},
+				"delete from _vt.schema_engine_views where view_schema = database() and view_name in ('v2', 'from', 'v1', 'lead')": {},
+				"select table_name, view_definition from information_schema.views where table_schema = database() and table_name in ('v2', 'from', 'v1', 'lead')": sqltypes.MakeTestResult(
+					getViewDefinitionsFields,
+					"lead|select_lead",
+					"v1|select_v1"),
+				"show create table v1": sqltypes.MakeTestResult(showCreateViewFields,
+					"v1|create_view_v1|utf8mb4|utf8mb4_0900_ai_ci"),
+				"show create table `lead`": sqltypes.MakeTestResult(showCreateViewFields,
+					"lead|create_view_lead|utf8mb4|utf8mb4_0900_ai_ci"),
+				"insert into _vt.schema_engine_views(view_schema, view_name, create_statement, view_definition) values (database(), 'v1', 'create_view_v1', 'select_v1')":       {},
+				"insert into _vt.schema_engine_views(view_schema, view_name, create_statement, view_definition) values (database(), 'lead', 'create_view_lead', 'select_lead')": {},
+			},
+		}, {
+			name: "Error In Inserting View Data",
+			created: []*Table{
+				{
+					Name:       sqlparser.NewIdentifierCS("v1"),
+					Type:       View,
+					CreateTime: 1234,
+				},
+			},
+			expectedQueries: map[string]*sqltypes.Result{
+				"begin":    {},
+				"commit":   {},
+				"rollback": {},
+				"delete from _vt.schema_engine_views where view_schema = database() and view_name in ('v1')": {},
+				"select table_name, view_definition from information_schema.views where table_schema = database() and table_name in ('v1')": sqltypes.MakeTestResult(
+					getViewDefinitionsFields,
+					"v1|select_v1"),
+				"show create table v1": sqltypes.MakeTestResult(showCreateViewFields,
+					"v1|create_view_v1|utf8mb4|utf8mb4_0900_ai_ci"),
+			},
+			queriesToReject: map[string]error{
+				"insert into _vt.schema_engine_views(view_schema, view_name, create_statement, view_definition) values (database(), 'v1', 'create_view_v1', 'select_v1')": errors.New(errMessage),
+			},
+			expectedError: errMessage,
+		}, {
+			name: "Only tables to delete",
+			dropped: []*Table{
+				NewTable("t1", NoType),
+				NewTable("lead", NoType),
+			},
+			expectedQueries: map[string]*sqltypes.Result{
+				"begin":    {},
+				"commit":   {},
+				"rollback": {},
+				"delete from _vt.schema_engine_tables where table_schema = database() and table_name in ('t1', 'lead')": {},
+			},
+		}, {
+			name: "Only tables to reload",
+			created: []*Table{
+				{
+					Name:       sqlparser.NewIdentifierCS("t1"),
+					Type:       NoType,
+					CreateTime: 1234,
+				},
+			},
+			altered: []*Table{
+				{
+					Name:       sqlparser.NewIdentifierCS("lead"),
+					Type:       NoType,
+					CreateTime: 1234,
+				},
+			},
+			expectedQueries: map[string]*sqltypes.Result{
+				"begin":    {},
+				"commit":   {},
+				"rollback": {},
+				"delete from _vt.schema_engine_tables where table_schema = database() and table_name in ('t1', 'lead')": {},
+				"show create table t1": sqltypes.MakeTestResult(showCreateTableFields,
+					"t1|create_table_t1"),
+				"show create table `lead`": sqltypes.MakeTestResult(showCreateTableFields,
+					"lead|create_table_lead"),
+				"insert into _vt.schema_engine_tables(table_schema, table_name, create_statement, create_time) values (database(), 't1', 'create_table_t1', 1234)":     {},
+				"insert into _vt.schema_engine_tables(table_schema, table_name, create_statement, create_time) values (database(), 'lead', 'create_table_lead', 1234)": {},
+			},
+		}, {
+			name: "Reload and delete tables",
+			created: []*Table{
+				{
+					Name:       sqlparser.NewIdentifierCS("t1"),
+					Type:       NoType,
+					CreateTime: 1234,
+				},
+			},
+			altered: []*Table{
+				{
+					Name:       sqlparser.NewIdentifierCS("lead"),
+					Type:       NoType,
+					CreateTime: 1234,
+				},
+			},
+			dropped: []*Table{
+				NewTable("t2", NoType),
+				NewTable("from", NoType),
+			},
+			expectedQueries: map[string]*sqltypes.Result{
+				"begin":    {},
+				"commit":   {},
+				"rollback": {},
+				"delete from _vt.schema_engine_tables where table_schema = database() and table_name in ('t2', 'from', 't1', 'lead')": {},
+				"show create table t1": sqltypes.MakeTestResult(showCreateTableFields,
+					"t1|create_table_t1"),
+				"show create table `lead`": sqltypes.MakeTestResult(showCreateTableFields,
+					"lead|create_table_lead"),
+				"insert into _vt.schema_engine_tables(table_schema, table_name, create_statement, create_time) values (database(), 't1', 'create_table_t1', 1234)":     {},
+				"insert into _vt.schema_engine_tables(table_schema, table_name, create_statement, create_time) values (database(), 'lead', 'create_table_lead', 1234)": {},
+			},
+		}, {
+			name: "Error In Inserting Table Data",
+			altered: []*Table{
+				{
+					Name:       sqlparser.NewIdentifierCS("t1"),
+					Type:       NoType,
+					CreateTime: 1234,
+				},
+			},
+			expectedQueries: map[string]*sqltypes.Result{
+				"begin":    {},
+				"commit":   {},
+				"rollback": {},
+				"delete from _vt.schema_engine_tables where table_schema = database() and table_name in ('t1')": {},
+				"show create table t1": sqltypes.MakeTestResult(showCreateTableFields,
+					"t1|create_table_t1"),
+			},
+			queriesToReject: map[string]error{
+				"insert into _vt.schema_engine_tables(table_schema, table_name, create_statement, create_time) values (database(), 't1', 'create_table_t1', 1234)": errors.New(errMessage),
+			},
+			expectedError: errMessage,
+		}, {
+			name: "Reload and delete all",
+			created: []*Table{
+				{
+					Name:       sqlparser.NewIdentifierCS("v1"),
+					Type:       View,
+					CreateTime: 1234,
+				}, {
+					Name:       sqlparser.NewIdentifierCS("t1"),
+					Type:       NoType,
+					CreateTime: 1234,
+				},
+			},
+			altered: []*Table{
+				{
+					Name:       sqlparser.NewIdentifierCS("lead"),
+					Type:       View,
+					CreateTime: 1234,
+				}, {
+					Name:       sqlparser.NewIdentifierCS("where"),
+					Type:       NoType,
+					CreateTime: 1234,
+				},
+			},
+			dropped: []*Table{
+				NewTable("v2", View),
+				NewTable("from", View),
+				NewTable("t2", NoType),
+			},
+			expectedQueries: map[string]*sqltypes.Result{
+				"begin":    {},
+				"commit":   {},
+				"rollback": {},
+				"delete from _vt.schema_engine_views where view_schema = database() and view_name in ('v2', 'from', 'v1', 'lead')": {},
+				"select table_name, view_definition from information_schema.views where table_schema = database() and table_name in ('v2', 'from', 'v1', 'lead')": sqltypes.MakeTestResult(
+					getViewDefinitionsFields,
+					"lead|select_lead",
+					"v1|select_v1"),
+				"show create table v1": sqltypes.MakeTestResult(showCreateViewFields,
+					"v1|create_view_v1|utf8mb4|utf8mb4_0900_ai_ci"),
+				"show create table `lead`": sqltypes.MakeTestResult(showCreateViewFields,
+					"lead|create_view_lead|utf8mb4|utf8mb4_0900_ai_ci"),
+				"insert into _vt.schema_engine_views(view_schema, view_name, create_statement, view_definition) values (database(), 'v1', 'create_view_v1', 'select_v1')":       {},
+				"insert into _vt.schema_engine_views(view_schema, view_name, create_statement, view_definition) values (database(), 'lead', 'create_view_lead', 'select_lead')": {},
+				"delete from _vt.schema_engine_tables where table_schema = database() and table_name in ('t2', 't1', 'where')":                                                  {},
+				"show create table t1": sqltypes.MakeTestResult(showCreateTableFields,
+					"t1|create_table_t1"),
+				"show create table `where`": sqltypes.MakeTestResult(showCreateTableFields,
+					"where|create_table_where"),
+				"insert into _vt.schema_engine_tables(table_schema, table_name, create_statement, create_time) values (database(), 't1', 'create_table_t1', 1234)":       {},
+				"insert into _vt.schema_engine_tables(table_schema, table_name, create_statement, create_time) values (database(), 'where', 'create_table_where', 1234)": {},
+			},
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			db := fakesqldb.New(t)
+			conn, err := connpool.NewDBConnNoPool(context.Background(), db.ConnParams(), nil, nil)
+			require.NoError(t, err)
+
+			// Add queries with the expected results and errors.
+			for query, result := range tc.expectedQueries {
+				db.AddQuery(query, result)
+			}
+			for query, errorToThrow := range tc.queriesToReject {
+				db.AddRejectedQuery(query, errorToThrow)
+			}
+
+			err = reloadDataInDB(context.Background(), conn, tc.altered, tc.created, tc.dropped)
+			if tc.expectedError != "" {
+				require.ErrorContains(t, err, tc.expectedError)
+				return
+			}
+			require.NoError(t, err)
+			require.NoError(t, db.LastError())
 		})
 	}
 }

@@ -124,6 +124,9 @@ type DB struct {
 	// if fakesqldb is asked to serve queries or query patterns that it has not been explicitly told about it will
 	// error out by default. However if you set this flag then any unmatched query results in an empty result
 	neverFail atomic.Bool
+
+	// lastError stores the last error in returning a query result.
+	lastError error
 }
 
 // QueryHandler is the interface used by the DB to simulate executed queries
@@ -245,6 +248,11 @@ func (db *DB) CloseAllConnections() {
 	}
 }
 
+// LastError gives the last error the DB ran into
+func (db *DB) LastError() error {
+	return db.lastError
+}
+
 // WaitForClose should be used after CloseAllConnections() is closed and
 // you want to provoke a MySQL client error with errno 2006.
 //
@@ -342,7 +350,12 @@ func (db *DB) WarningCount(c *mysql.Conn) uint16 {
 }
 
 // HandleQuery is the default implementation of the QueryHandler interface
-func (db *DB) HandleQuery(c *mysql.Conn, query string, callback func(*sqltypes.Result) error) error {
+func (db *DB) HandleQuery(c *mysql.Conn, query string, callback func(*sqltypes.Result) error) (err error) {
+	defer func() {
+		if err != nil {
+			db.lastError = err
+		}
+	}()
 	if db.allowAll.Load() {
 		return callback(&sqltypes.Result{})
 	}
@@ -413,7 +426,7 @@ func (db *DB) HandleQuery(c *mysql.Conn, query string, callback func(*sqltypes.R
 		return callback(&sqltypes.Result{})
 	}
 	// Nothing matched.
-	err := fmt.Errorf("fakesqldb:: query: '%s' is not supported on %v",
+	err = fmt.Errorf("fakesqldb:: query: '%s' is not supported on %v",
 		sqlparser.TruncateForUI(query), db.name)
 	log.Errorf("Query not found: %s", sqlparser.TruncateForUI(query))
 
