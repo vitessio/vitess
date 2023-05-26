@@ -6072,5 +6072,69 @@
         "main.m1"
       ]
     }
+  },
+  {
+    "comment": "unsharded update query with comment directive",
+    "query": "update /*vt+ QUERY_TIMEOUT_MS=1 */ unsharded set val = 1",
+    "v3-plan": {
+      "QueryType": "UPDATE",
+      "Original": "update /*vt+ QUERY_TIMEOUT_MS=1 */ unsharded set val = 1",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetTabletType": "PRIMARY",
+        "Query": "update /*vt+ QUERY_TIMEOUT_MS=1 */ unsharded set val = 1",
+        "Table": "unsharded"
+      },
+      "TablesUsed": [
+        "main.unsharded"
+      ]
+    },
+    "gen4-plan": {
+      "QueryType": "UPDATE",
+      "Original": "update /*vt+ QUERY_TIMEOUT_MS=1 */ unsharded set val = 1",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetTabletType": "PRIMARY",
+        "Query": "update /*vt+ QUERY_TIMEOUT_MS=1 */ unsharded set val = 1",
+        "QueryTimeout": 1,
+        "Table": "unsharded"
+      },
+      "TablesUsed": [
+        "main.unsharded"
+      ]
+    }
+  },
+  {
+    "comment": "unsharded insert query with comment directive",
+    "query": "insert /*vt+ QUERY_TIMEOUT_MS=1 */ into unsharded values ()",
+    "plan": {
+      "QueryType": "INSERT",
+      "Original": "insert /*vt+ QUERY_TIMEOUT_MS=1 */ into unsharded values ()",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetTabletType": "PRIMARY",
+        "Query": "insert /*vt+ QUERY_TIMEOUT_MS=1 */ into unsharded values ()",
+        "QueryTimeout": 1,
+        "TableName": "unsharded"
+      },
+      "TablesUsed": [
+        "main.unsharded"
+      ]
+    }
   }
 ]
