@@ -39,6 +39,7 @@ type Insert struct {
 	ColVindexes []*vindexes.ColumnVindex
 
 	AutoIncrement Generate
+	Ignore        bool
 
 	noInputs
 	noColumns
@@ -84,6 +85,7 @@ func (i *Insert) Clone(inputs []ops.Operator) ops.Operator {
 		VindexValues:  i.VindexValues,
 		ColVindexes:   i.ColVindexes,
 		AutoIncrement: i.AutoIncrement,
+		Ignore:        i.Ignore,
 	}
 }
 

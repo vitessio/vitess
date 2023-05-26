@@ -425,6 +425,9 @@ func gen4InsertStmtPlanner(version querypb.ExecuteOptions_PlannerVersion, insStm
 	if err != nil {
 		return nil, err
 	}
+	// remove any alias added from routing table.
+	// insert query does not support table alias.
+	insStmt.Table.As = sqlparser.NewIdentifierCS("")
 
 	if ks, tables := semTable.SingleUnshardedKeyspace(); ks != nil && tables[0].AutoIncrement == nil {
 		eIns := &engine.Insert{}
