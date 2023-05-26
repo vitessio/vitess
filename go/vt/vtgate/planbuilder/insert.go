@@ -21,6 +21,8 @@ import (
 	"strconv"
 	"strings"
 
+	"vitess.io/vitess/go/sqltypes"
+
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -377,9 +379,13 @@ func modifyForAutoinc(ins *sqlparser.Insert, eins *engine.Insert) error {
 		return nil
 	}
 	colNum := findOrAddColumn(ins, eins.Table.AutoIncrement.Column)
+	selNext := &sqlparser.Select{
+		From:        []sqlparser.TableExpr{&sqlparser.AliasedTableExpr{Expr: &sqlparser.TableName{Name: eins.Table.AutoIncrement.Sequence.Name}}},
+		SelectExprs: sqlparser.SelectExprs{&sqlparser.Nextval{Expr: &sqlparser.Argument{Name: "n", Type: sqltypes.Int64}}},
+	}
 	eins.Generate = &engine.Generate{
 		Keyspace: eins.Table.AutoIncrement.Sequence.Keyspace,
-		Query:    fmt.Sprintf("select next :n values from %s", sqlparser.String(eins.Table.AutoIncrement.Sequence.Name)),
+		Query:    sqlparser.String(selNext),
 	}
 	switch rows := ins.Rows.(type) {
 	case sqlparser.SelectStatement:
