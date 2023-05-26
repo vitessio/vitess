@@ -814,8 +814,8 @@ func checkTabletType(t *testing.T, alias string, tabletType topodata.TabletType)
 		output, err := localCluster.VtctldClientProcess.ExecuteCommandWithOutput("GetTablet", alias)
 		require.Nil(t, err)
 		var tabletPB topodata.Tablet
-		err = json.NewDecoder(strings.NewReader(output)).Decode(&tabletPB)
-		require.Nil(t, err, "output of GetTablet is %v", output)
+		err = json2.Unmarshal([]byte(output), &tabletPB)
+		require.NoError(t, err)
 		if tabletType == tabletPB.Type {
 			return
 		}
