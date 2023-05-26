@@ -2901,8 +2901,8 @@ func (cmp *Comparator) RefOfIntervalExpr(a, b *IntervalExpr) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return a.Unit == b.Unit &&
-		cmp.Expr(a.Expr, b.Expr)
+	return cmp.Expr(a.Expr, b.Expr) &&
+		a.Unit == b.Unit
 }
 
 // RefOfIntervalFuncExpr does deep equals between the two objects.

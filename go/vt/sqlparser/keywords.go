@@ -749,6 +749,7 @@ var keywords = []keyword{
 	{"warnings", WARNINGS},
 	{"wait_for_executed_gtid_set", WAIT_FOR_EXECUTED_GTID_SET},
 	{"wait_until_sql_thread_after_gtids", WAIT_UNTIL_SQL_THREAD_AFTER_GTIDS},
+	{"week", WEEK},
 	{"weight_string", WEIGHT_STRING},
 	{"when", WHEN},
 	{"where", WHERE},

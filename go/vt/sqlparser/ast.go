@@ -2343,7 +2343,7 @@ type (
 	// IntervalExpr represents a date-time INTERVAL expression.
 	IntervalExpr struct {
 		Expr Expr
-		Unit string
+		Unit IntervalTypes
 	}
 
 	// TimestampFuncExpr represents the function and arguments for TIMESTAMP{ADD,DIFF} functions.

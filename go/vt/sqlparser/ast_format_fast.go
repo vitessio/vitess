@@ -1824,7 +1824,7 @@ func (node *IntervalExpr) formatFast(buf *TrackedBuffer) {
 	buf.WriteString("interval ")
 	buf.printExpr(node, node.Expr, true)
 	buf.WriteByte(' ')
-	buf.WriteString(node.Unit)
+	buf.WriteString(node.Unit.ToString())
 }
 
 // formatFast formats the node.

@@ -1393,7 +1393,7 @@ func (node *IntroducerExpr) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *IntervalExpr) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "interval %v %#s", node.Expr, node.Unit)
+	buf.astPrintf(node, "interval %v %#s", node.Expr, node.Unit.ToString())
 }
 
 // Format formats the node.

@@ -452,7 +452,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %type <subPartitionDefinition> subpartition_definition
 %type <subPartitionDefinitions> subpartition_definition_list subpartition_definition_list_with_brackets
 %type <subPartitionDefinitionOptions> subpartition_definition_attribute_list_opt
-%type <intervalType> interval_time_stamp interval
+%type <intervalType> interval
 %type <str> cache_opt separator_opt flush_option for_channel_opt maxvalue
 %type <matchExprOption> match_option
 %type <boolean> distinct_opt union_op replace_opt local_opt
@@ -5484,9 +5484,9 @@ function_call_keyword
   }
 
 interval_value:
-  INTERVAL bit_expr sql_id
+  INTERVAL bit_expr interval
   {
-     $$ = &IntervalExpr{Expr: $2, Unit: $3.String()}
+     $$ = &IntervalExpr{Expr: $2, Unit: $3}
   }
 
 column_names_opt_paren:
@@ -6775,9 +6775,7 @@ returning_type_opt:
   }
 
 interval:
- interval_time_stamp
- {}
-| DAY_HOUR
+  DAY_HOUR
   {
 	$$=IntervalDayHour
   }
@@ -6821,9 +6819,7 @@ interval:
   {
 	$$=IntervalYearMonth
   }
-
-interval_time_stamp:
- DAY
+| DAY
   {
  	$$=IntervalDay
   }
@@ -8373,6 +8369,7 @@ non_reserved_keyword:
 | WAIT_FOR_EXECUTED_GTID_SET %prec FUNCTION_CALL_NON_KEYWORD
 | WAIT_UNTIL_SQL_THREAD_AFTER_GTIDS %prec FUNCTION_CALL_NON_KEYWORD
 | WARNINGS
+| WEEK %prec FUNCTION_CALL_NON_KEYWORD
 | WITHOUT
 | WORK
 | YEAR
