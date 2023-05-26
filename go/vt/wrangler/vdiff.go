@@ -284,7 +284,6 @@ func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflowName, sou
 	numSourceShards := len(ts.SourceShards())
 	numTargetShards := len(ts.TargetShards())
 	numShardDiff := int(math.Abs(float64(numSourceShards - numTargetShards)))
-	log.Errorf("DEBUG: srcKeyspace: %s, tgtKeyspace: %s, numSourceShards: %d, numTargetShards: %d, numShardDiff: %d", ts.SourceKeyspaceName(), ts.TargetKeyspaceName(), numSourceShards, numTargetShards, numShardDiff)
 
 	// TODO(sougou): parallelize
 	rowsToCompare := maxRows
@@ -311,11 +310,9 @@ func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflowName, sou
 		if numShardDiff > 0 && (dr.ExtraRowsSource > 0 || dr.ExtraRowsTarget > 0) && dr.MismatchedRows == 0 {
 			// Each shard should have the same number of rows for a reference table.
 			perShardRows := (dr.ProcessedRows + dr.MatchingRows) / (numSourceShards + numTargetShards)
-			log.Errorf("DEBUG: perShardRows: %d", perShardRows)
 			if perShardRows == dr.MatchingRows { // If not then there's a legitimate mismatch
 				svt, sok := srcvschema.Tables[table]
 				tvt, tok := tgtvschema.Tables[table]
-				log.Errorf("DEBUG: srcvschema table: %+v, tgtvschema table: %+v", srcvschema.Tables[table], tgtvschema.Tables[table])
 				if numSourceShards > numTargetShards && sok && svt.Type == vindexes.TypeReference &&
 					dr.ExtraRowsSource/numShardDiff == perShardRows {
 					dr.ExtraRowsSource = 0

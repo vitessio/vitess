@@ -156,7 +156,7 @@ func (wd *workflowDiffer) diffTable(ctx context.Context, dbClient binlogplayer.D
 	log.Infof("Table diff done on table %s for vdiff %s with report: %+v", td.table.Name, wd.ct.uuid, dr)
 	if dr.ExtraRowsSource > 0 || dr.ExtraRowsTarget > 0 {
 		if err := wd.reconcileExtraRows(dr, wd.opts.CoreOptions.MaxExtraRowsToCompare); err != nil {
-			log.Errorf("Encountered an error reconciling extra rows table %s for vdiff %s: %v", td.table.Name, wd.ct.uuid, err)
+			log.Errorf("Encountered an error reconciling extra rows found for table %s for vdiff %s: %v", td.table.Name, wd.ct.uuid, err)
 			return vterrors.Wrap(err, "failed to reconcile extra rows")
 		}
 	}
