@@ -2275,7 +2275,8 @@
   {
     "comment": "insert into a vindex not allowed",
     "query": "insert into user_index(id) values(1)",
-    "plan": "VT12001: unsupported: multi-shard or vindex write statement"
+    "v3-plan": "VT12001: unsupported: multi-shard or vindex write statement",
+    "gen4-plan": "VT09012: vindex cannot be modified"
   },
   {
     "comment": "simple replace unsharded",

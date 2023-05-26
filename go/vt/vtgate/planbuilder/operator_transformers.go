@@ -367,7 +367,7 @@ func newRoutingParams(ctx *plancontext.PlanningContext, opCode engine.Opcode) *e
 func transformRoutePlan(ctx *plancontext.PlanningContext, op *operators.Route) (logicalPlan, error) {
 	switch src := op.Source.(type) {
 	case *operators.Insert:
-		return transformInsertPlan(ctx, op, src)
+		return transformInsertPlan(op, src)
 	case *operators.Update:
 		return transformUpdatePlan(ctx, op, src)
 	case *operators.Delete:
@@ -401,18 +401,45 @@ func transformRoutePlan(ctx *plancontext.PlanningContext, op *operators.Route) (
 
 }
 
-func transformInsertPlan(ctx *plancontext.PlanningContext, op *operators.Route, ins *operators.Insert) (logicalPlan, error) {
+func transformInsertPlan(op *operators.Route, ins *operators.Insert) (logicalPlan, error) {
 	eins := &engine.Insert{
-		Opcode:       engine.InsertSharded,
+		Opcode:       mapToInsertOpCode(op.Routing.OpCode()),
 		Keyspace:     op.Routing.Keyspace(),
 		Query:        generateQuery(ins.AST),
 		Table:        ins.VTable,
 		VindexValues: ins.VindexValues,
 		ColVindexes:  ins.ColVindexes,
+		Generate:     autoIncGenerate(ins.AutoIncrement),
 	}
-	eins.Prefix, eins.Mid, eins.Suffix = generateInsertShardedQuery(ins.AST)
+	if eins.Opcode == engine.InsertSharded {
+		eins.Prefix, eins.Mid, eins.Suffix = generateInsertShardedQuery(ins.AST)
+	}
 
 	return &primitiveWrapper{prim: eins}, nil
+}
+
+func mapToInsertOpCode(code engine.Opcode) engine.InsertOpcode {
+	switch code {
+	case engine.Unsharded:
+		return engine.InsertUnsharded
+	}
+	return engine.InsertSharded
+}
+
+func autoIncGenerate(gen operators.Generate) *engine.Generate {
+	if gen.Keyspace == nil {
+		return nil
+	}
+	selNext := &sqlparser.Select{
+		From:        []sqlparser.TableExpr{&sqlparser.AliasedTableExpr{Expr: gen.TableName}},
+		SelectExprs: sqlparser.SelectExprs{&sqlparser.Nextval{Expr: &sqlparser.Argument{Name: "n", Type: sqltypes.Int64}}},
+	}
+	return &engine.Generate{
+		Keyspace: gen.Keyspace,
+		Query:    sqlparser.String(selNext),
+		Values:   gen.Values,
+		Offset:   gen.Offset,
+	}
 }
 
 func generateInsertShardedQuery(ins *sqlparser.Insert) (prefix string, mid []string, suffix string) {

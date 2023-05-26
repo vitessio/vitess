@@ -26,7 +26,6 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
-	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
 func gen4Planner(query string, plannerVersion querypb.ExecuteOptions_PlannerVersion) stmtPlanner {
@@ -427,7 +426,7 @@ func gen4InsertStmtPlanner(version querypb.ExecuteOptions_PlannerVersion, insStm
 		return nil, err
 	}
 
-	if ks, tables := semTable.SingleUnshardedKeyspace(); ks != nil {
+	if ks, tables := semTable.SingleUnshardedKeyspace(); ks != nil && tables[0].AutoIncrement == nil {
 		eIns := &engine.Insert{}
 		eIns.Keyspace = ks
 		eIns.Table = tables[0]
@@ -473,7 +472,7 @@ func gen4InsertStmtPlanner(version querypb.ExecuteOptions_PlannerVersion, insStm
 
 func rewriteRoutedTables(stmt sqlparser.Statement, vschema plancontext.VSchema) error {
 	// Rewrite routed tables
-	return sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+	return sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
 		aliasTbl, isAlias := node.(*sqlparser.AliasedTableExpr)
 		if !isAlias {
 			return true, nil
@@ -482,10 +481,13 @@ func rewriteRoutedTables(stmt sqlparser.Statement, vschema plancontext.VSchema) 
 		if !ok {
 			return true, nil
 		}
-		var vschemaTable *vindexes.Table
-		vschemaTable, _, _, _, _, err = vschema.FindTableOrVindex(tableName)
+		vschemaTable, vindexTbl, _, _, _, err := vschema.FindTableOrVindex(tableName)
 		if err != nil {
 			return false, err
+		}
+		if vindexTbl != nil {
+			// vindex cannot be present in a dml statement.
+			return false, vterrors.VT09014()
 		}
 
 		if vschemaTable.Name.String() != tableName.Name.String() {

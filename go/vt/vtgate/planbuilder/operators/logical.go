@@ -18,16 +18,16 @@ package operators
 
 import (
 	"fmt"
-
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
-	"vitess.io/vitess/go/vt/vtgate/vindexes"
+	"strconv"
 
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
 // createLogicalOperatorFromAST creates an operator tree that represents the input SELECT or UNION query
@@ -261,8 +261,9 @@ func createOperatorFromInsert(ctx *plancontext.PlanningContext, ins *sqlparser.I
 
 	switch routing.(type) {
 	case *AnyShardRouting:
-		// unsharded
-		return route, nil
+		if vindexTable.AutoIncrement == nil {
+			return route, nil
+		}
 	case *TargetedRouting:
 		return nil, vterrors.VT12001("INSERT with a target destination")
 	case *ShardedRouting:
@@ -271,11 +272,38 @@ func createOperatorFromInsert(ctx *plancontext.PlanningContext, ins *sqlparser.I
 		return nil, vterrors.VT13001(fmt.Sprintf("INSERT with a unknown routing type: %T", routing))
 	}
 
-	colVindexes := getColVindexes(insOp.VTable.ColumnVindexes)
+	// Table column list is nil then add all the columns
+	// If the column list is empty then add only the auto-inc column and this happens on calling modifyForAutoinc
+	if ins.Columns == nil {
+		if vindexTable.ColumnListAuthoritative {
+			ins = populateInsertColumnlist(ins, vindexTable)
+		} else {
+			return nil, vterrors.VT13001(fmt.Sprintf("column list required for inserting data into '%s' table", vindexTable.Name))
+		}
+	}
+
 	rows, isRowValues := ins.Rows.(sqlparser.Values)
 	if !isRowValues {
 		return nil, vterrors.VT13001("needs implementation")
 	}
+
+	for _, row := range rows {
+		if len(ins.Columns) != len(row) {
+			return nil, vterrors.VT13001("column list does not match values")
+		}
+	}
+
+	autoIncGen, err := modifyForAutoinc(ins, vindexTable)
+	if err != nil {
+		return nil, err
+	}
+	insOp.AutoIncrement = autoIncGen
+
+	colVindexes := getColVindexes(insOp.VTable.ColumnVindexes)
+	if len(colVindexes) == 0 {
+		return route, nil
+	}
+
 	routeValues := make([][][]evalengine.Expr, len(colVindexes))
 	for vIdx, colVindex := range colVindexes {
 		routeValues[vIdx] = make([][]evalengine.Expr, len(colVindex.Columns))
@@ -341,6 +369,48 @@ func findColumn(ins *sqlparser.Insert, col sqlparser.IdentifierCI) int {
 		}
 	}
 	return -1
+}
+
+func populateInsertColumnlist(ins *sqlparser.Insert, table *vindexes.Table) *sqlparser.Insert {
+	cols := make(sqlparser.Columns, 0, len(table.Columns))
+	for _, c := range table.Columns {
+		cols = append(cols, c.Name)
+	}
+	ins.Columns = cols
+	return ins
+}
+
+// modifyForAutoinc modifies the AST and the plan to generate necessary autoinc values.
+// For row values cases, bind variable names are generated using baseName.
+func modifyForAutoinc(ins *sqlparser.Insert, vTable *vindexes.Table) (gen Generate, err error) {
+	if vTable.AutoIncrement == nil {
+		return
+	}
+	gen.Keyspace = vTable.AutoIncrement.Sequence.Keyspace
+	gen.TableName = sqlparser.TableName{Name: vTable.AutoIncrement.Sequence.Name}
+	colNum := findOrAddColumn(ins, vTable.AutoIncrement.Column)
+	switch rows := ins.Rows.(type) {
+	case sqlparser.SelectStatement:
+		gen.Offset = colNum
+	case sqlparser.Values:
+		autoIncValues := make([]evalengine.Expr, 0, len(rows))
+		for rowNum, row := range rows {
+			// Support the DEFAULT keyword by treating it as null
+			if _, ok := row[colNum].(*sqlparser.Default); ok {
+				row[colNum] = &sqlparser.NullVal{}
+			}
+
+			var expr evalengine.Expr
+			expr, err = evalengine.Translate(row[colNum], nil)
+			if err != nil {
+				return gen, err
+			}
+			autoIncValues = append(autoIncValues, expr)
+			row[colNum] = sqlparser.NewArgument(engine.SeqVarName + strconv.Itoa(rowNum))
+		}
+		gen.Values = evalengine.NewTupleExpr(autoIncValues...)
+	}
+	return
 }
 
 func getOperatorFromTableExpr(ctx *plancontext.PlanningContext, tableExpr sqlparser.TableExpr) (ops.Operator, error) {
