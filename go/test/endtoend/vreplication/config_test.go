@@ -352,7 +352,10 @@ create table reftable (id int, val1 varchar(20), primary key(id), key(val1));
 	},
 	"vproduct": {
 		"type": "reference"
-	}
+	},
+  "reftable": {
+    "type": "reference"
+  }
   }
 }
 `
