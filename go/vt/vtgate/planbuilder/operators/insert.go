@@ -38,9 +38,25 @@ type Insert struct {
 	// ColVindexes are the vindexes that will use the VindexValues
 	ColVindexes []*vindexes.ColumnVindex
 
+	AutoIncrement Generate
+
 	noInputs
 	noColumns
 	noPredicates
+}
+
+type Generate struct {
+	Keyspace  *vindexes.Keyspace
+	TableName sqlparser.TableName
+
+	// Values are the supplied values for the column, which
+	// will be stored as a list within the expression. New
+	// values will be generated based on how many were not
+	// supplied (NULL).
+	Values evalengine.Expr
+
+	// Insert using Select, offset for auto increment column
+	Offset int
 }
 
 func (i *Insert) Description() ops.OpDescription {
@@ -62,11 +78,12 @@ var _ ops.Operator = (*Insert)(nil)
 
 func (i *Insert) Clone(inputs []ops.Operator) ops.Operator {
 	return &Insert{
-		QTable:       i.QTable,
-		VTable:       i.VTable,
-		AST:          i.AST,
-		VindexValues: i.VindexValues,
-		ColVindexes:  i.ColVindexes,
+		QTable:        i.QTable,
+		VTable:        i.VTable,
+		AST:           i.AST,
+		VindexValues:  i.VindexValues,
+		ColVindexes:   i.ColVindexes,
+		AutoIncrement: i.AutoIncrement,
 	}
 }
 
