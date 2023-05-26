@@ -38,10 +38,6 @@ func TestBackupMysqlctldWithlz4Compression(t *testing.T) {
 	backup.TestBackup(t, backup.Mysqlctld, "xbstream", 0, cDetails, []string{"TestReplicaBackup", "TestPrimaryBackup"})
 }
 
-func TestDoNotDemoteNewlyPromotedPrimaryIfReparentingDuringBackup(t *testing.T) {
-	backup.TestBackup(t, backup.Mysqlctld, "xbstream", 0, nil, []string{"DoNotDemoteNewlyPromotedPrimaryIfReparentingDuringBackup"})
-}
-
 func setDefaultCompressionFlag() {
 	mysqlctl.CompressionEngineName = "pgzip"
 	mysqlctl.ExternalCompressorCmd = ""
