@@ -2485,11 +2485,17 @@ func (ts *TableSpec) walkSubtree(visit Visit) error {
 type ColumnDefinition struct {
 	Name ColIdent
 	Type ColumnType
+	Nested bool
+	Path string
 }
 
 // Format formats the node.
 func (col *ColumnDefinition) Format(buf *TrackedBuffer) {
-	buf.Myprintf("%v %v", col.Name, &col.Type)
+	if col.Nested {
+		buf.Myprintf("%s %s %s %s ( %v %v )", keywordStrings[NESTED], keywordStrings[PATH], col.Path, keywordStrings[COLUMNS], col.Name, &col.Type)
+	} else {
+		buf.Myprintf("%v %v", col.Name, &col.Type)
+	}
 }
 
 func (col *ColumnDefinition) walkSubtree(visit Visit) error {
@@ -4424,8 +4430,7 @@ type JSONTableExpr struct {
 
 // Format formats the node.
 func (node *JSONTableExpr) Format(buf *TrackedBuffer) {
-	buf.Myprintf(`JSON_TABLE(%v, "%s" COLUMNS%v) as %v`, node.Data, node.Path, node.Spec, node.Alias)
-
+	buf.Myprintf(`%s(%v, "%s" %s%v) as %v`, keywordStrings[JSON_TABLE], node.Data, node.Path, keywordStrings[COLUMNS], node.Spec, node.Alias)
 }
 
 func (node *JSONTableExpr) walkSubtree(visit Visit) error {

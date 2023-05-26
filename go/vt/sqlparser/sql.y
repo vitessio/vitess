@@ -5802,8 +5802,16 @@ json_table_column_definition:
   {
     $$ = &ColumnDefinition{Name: $1, Type: ColumnType{Type: "INTEGER", Unsigned: true, Autoincrement: true}}
   }
+| NESTED STRING COLUMNS openb json_table_column_definition closeb
+  {
+    $5.Nested = true
+    $5.Path = string($2)
+    $$ = $5
+  }
 | NESTED PATH STRING COLUMNS openb json_table_column_definition closeb
   {
+    $6.Nested = true
+    $6.Path = string($3)
     $$ = $6
   }
 
