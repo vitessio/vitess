@@ -33,11 +33,11 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/throttler"
 	"vitess.io/vitess/go/vt/topo"
-	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	throttlerdatapb "vitess.io/vitess/go/vt/proto/throttlerdata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 // These vars store the functions used to create the topo server, healthcheck,
@@ -65,16 +65,16 @@ func resetTxThrottlerFactories() {
 	}
 }
 
+func init() {
+	resetTxThrottlerFactories()
+}
+
 // TxThrottler defines the interface for the transaction throttler.
 type TxThrottler interface {
 	InitDBConfig(target *querypb.Target)
 	Open() (err error)
 	Close()
 	Throttle(priority int) (result bool)
-}
-
-func init() {
-	resetTxThrottlerFactories()
 }
 
 // ThrottlerInterface defines the public interface that is implemented by go/vt/throttler.Throttler
@@ -146,8 +146,8 @@ type txThrottler struct {
 	// stats
 	throttlerRunning          *stats.Gauge
 	topoWatchers              *stats.GaugesWithSingleLabel
-	healthChecksReadTotal     *stats.CountersWithSingleLabel
-	healthChecksRecordedTotal *stats.CountersWithSingleLabel
+	healthChecksReadTotal     *stats.CountersWithMultiLabels
+	healthChecksRecordedTotal *stats.CountersWithMultiLabels
 	requestsTotal             *stats.Counter
 	requestsThrottled         *stats.Counter
 }
@@ -166,7 +166,7 @@ type txThrottlerConfig struct {
 	healthCheckCells []string
 
 	// tabletTypes stores the tablet types for throttling
-	tabletTypes *topoproto.TabletTypeListFlag
+	tabletTypes map[topodatapb.TabletType]bool
 }
 
 // txThrottlerState holds the state of an open TxThrottler object.
@@ -222,9 +222,14 @@ func tryCreateTxThrottler(env tabletenv.Env, topoServer *topo.Server) (*txThrott
 	healthCheckCells := make([]string, len(env.Config().TxThrottlerHealthCheckCells))
 	copy(healthCheckCells, env.Config().TxThrottlerHealthCheckCells)
 
+	tabletTypes := make(map[topodatapb.TabletType]bool, len(*env.Config().TxThrottlerTabletTypes))
+	for _, tabletType := range *env.Config().TxThrottlerTabletTypes {
+		tabletTypes[tabletType] = true
+	}
+
 	return newTxThrottler(env, topoServer, &txThrottlerConfig{
 		enabled:          true,
-		tabletTypes:      env.Config().TxThrottlerTabletTypes,
+		tabletTypes:      tabletTypes,
 		throttlerConfig:  &throttlerConfig,
 		healthCheckCells: healthCheckCells,
 	})
@@ -242,14 +247,16 @@ func newTxThrottler(env tabletenv.Env, topoServer *topo.Server, config *txThrott
 		}
 	}
 	return &txThrottler{
-		config:                    config,
-		topoServer:                topoServer,
-		throttlerRunning:          env.Exporter().NewGauge("TransactionThrottlerRunning", "transaction throttler running state"),
-		topoWatchers:              env.Exporter().NewGaugesWithSingleLabel("TransactionThrottlerTopoWatchers", "transaction throttler topology watchers", "cell"),
-		healthChecksReadTotal:     env.Exporter().NewCountersWithSingleLabel("TransactionThrottlerHealthchecksRead", "transaction throttler healthchecks read", "DbType"),
-		healthChecksRecordedTotal: env.Exporter().NewCountersWithSingleLabel("TransactionThrottlerHealthchecksRecorded", "transaction throttler healthchecks recorded", "DbType"),
-		requestsTotal:             env.Exporter().NewCounter("TransactionThrottlerRequests", "transaction throttler requests"),
-		requestsThrottled:         env.Exporter().NewCounter("TransactionThrottlerThrottled", "transaction throttler requests throttled"),
+		config:           config,
+		topoServer:       topoServer,
+		throttlerRunning: env.Exporter().NewGauge("TransactionThrottlerRunning", "transaction throttler running state"),
+		topoWatchers:     env.Exporter().NewGaugesWithSingleLabel("TransactionThrottlerTopoWatchers", "transaction throttler topology watchers", "cell"),
+		healthChecksReadTotal: env.Exporter().NewCountersWithMultiLabels("TransactionThrottlerHealthchecksRead", "transaction throttler healthchecks read",
+			[]string{"cell", "DbType"}),
+		healthChecksRecordedTotal: env.Exporter().NewCountersWithMultiLabels("TransactionThrottlerHealthchecksRecorded", "transaction throttler healthchecks recorded",
+			[]string{"cell", "DbType"}),
+		requestsTotal:     env.Exporter().NewCounter("TransactionThrottlerRequests", "transaction throttler requests"),
+		requestsThrottled: env.Exporter().NewCounter("TransactionThrottlerThrottled", "transaction throttler requests throttled"),
 	}, nil
 }
 
@@ -324,28 +331,28 @@ func newTxThrottlerState(txThrottler *txThrottler, config *txThrottlerConfig, ta
 		t.Close()
 		return nil, err
 	}
-	result := &txThrottlerState{
+	state := &txThrottlerState{
 		config:      config,
 		throttler:   t,
 		txThrottler: txThrottler,
 	}
-	createTxThrottlerHealthCheck(txThrottler.topoServer, config, result, target.Cell)
+	createTxThrottlerHealthCheck(txThrottler.topoServer, config, state, target.Cell)
 
-	result.topologyWatchers = make(
+	state.topologyWatchers = make(
 		map[string]TopologyWatcherInterface, len(config.healthCheckCells))
 	for _, cell := range config.healthCheckCells {
-		result.topologyWatchers[cell] = topologyWatcherFactory(
+		state.topologyWatchers[cell] = topologyWatcherFactory(
 			txThrottler.topoServer,
-			result.healthCheck,
+			state.healthCheck,
 			cell,
 			target.Keyspace,
 			target.Shard,
 			discovery.DefaultTopologyWatcherRefreshInterval,
 			discovery.DefaultTopoReadConcurrency,
 		)
-		result.txThrottler.topoWatchers.Add(cell, 1)
+		txThrottler.topoWatchers.Add(cell, 1)
 	}
-	return result, nil
+	return state, nil
 }
 
 func createTxThrottlerHealthCheck(topoServer *topo.Server, config *txThrottlerConfig, result *txThrottlerState, cell string) {
@@ -402,15 +409,13 @@ func (ts *txThrottlerState) StatsUpdate(tabletStats *discovery.TabletHealth) {
 	}
 
 	tabletType := tabletStats.Target.TabletType
-	ts.txThrottler.healthChecksReadTotal.Add(tabletType.String(), 1)
+	metricLabels := []string{tabletStats.Target.Cell, tabletType.String()}
+	ts.txThrottler.healthChecksReadTotal.Add(metricLabels, 1)
 
 	// Monitor tablets for replication lag if they have a tablet
 	// type specified by the --tx_throttler_tablet_types flag.
-	for _, expectedTabletType := range *ts.config.tabletTypes {
-		if tabletType == expectedTabletType {
-			ts.throttler.RecordReplicationLag(time.Now(), tabletStats)
-			ts.txThrottler.healthChecksRecordedTotal.Add(tabletType.String(), 1)
-			return
-		}
+	if ts.config.tabletTypes[tabletType] {
+		ts.throttler.RecordReplicationLag(time.Now(), tabletStats)
+		ts.txThrottler.healthChecksRecordedTotal.Add(metricLabels, 1)
 	}
 }

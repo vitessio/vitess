@@ -93,6 +93,7 @@ func TestEnabledThrottler(t *testing.T) {
 	call1.Return(0 * time.Second)
 	tabletStats := &discovery.TabletHealth{
 		Target: &querypb.Target{
+			Cell:       "cell1",
 			TabletType: topodatapb.TabletType_REPLICA,
 		},
 	}
@@ -119,6 +120,7 @@ func TestEnabledThrottler(t *testing.T) {
 	throttler, err := tryCreateTxThrottler(env, ts)
 	assert.Nil(t, err)
 	throttler.InitDBConfig(&querypb.Target{
+		Cell:     "cell1",
 		Keyspace: "keyspace",
 		Shard:    "shard",
 	})
@@ -131,17 +133,18 @@ func TestEnabledThrottler(t *testing.T) {
 	assert.Zero(t, throttler.requestsThrottled.Get())
 
 	throttler.state.StatsUpdate(tabletStats) // This calls replication lag thing
-	assert.Equal(t, map[string]int64{"REPLICA": 1}, throttler.healthChecksReadTotal.Counts())
-	assert.Equal(t, map[string]int64{"REPLICA": 1}, throttler.healthChecksRecordedTotal.Counts())
+	assert.Equal(t, map[string]int64{"cell1.REPLICA": 1}, throttler.healthChecksReadTotal.Counts())
+	assert.Equal(t, map[string]int64{"cell1.REPLICA": 1}, throttler.healthChecksRecordedTotal.Counts())
 	rdonlyTabletStats := &discovery.TabletHealth{
 		Target: &querypb.Target{
+			Cell:       "cell2",
 			TabletType: topodatapb.TabletType_RDONLY,
 		},
 	}
 	// This call should not be forwarded to the go/vt/throttler.Throttler object.
 	throttler.state.StatsUpdate(rdonlyTabletStats)
-	assert.Equal(t, map[string]int64{"REPLICA": 1, "RDONLY": 1}, throttler.healthChecksReadTotal.Counts())
-	assert.Equal(t, map[string]int64{"REPLICA": 1}, throttler.healthChecksRecordedTotal.Counts())
+	assert.Equal(t, map[string]int64{"cell1.REPLICA": 1, "cell2.RDONLY": 1}, throttler.healthChecksReadTotal.Counts())
+	assert.Equal(t, map[string]int64{"cell1.REPLICA": 1}, throttler.healthChecksRecordedTotal.Counts())
 	// The second throttle call should reject.
 	assert.True(t, throttler.Throttle(100))
 	assert.Equal(t, int64(2), throttler.requestsTotal.Get())
