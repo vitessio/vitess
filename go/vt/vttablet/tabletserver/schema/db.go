@@ -184,19 +184,22 @@ func reloadViewsDataInDB(ctx context.Context, conn *connpool.DBConn, views []*Ta
 	}
 
 	// Get the view definitions for all the views that are modified.
+	// We only need to run this if we have any views to reload.
 	viewDefinitions := make(map[string]string)
-	err = getViewDefinition(ctx, conn, bv,
-		func(qr *sqltypes.Result) error {
-			for _, row := range qr.Rows {
-				viewDefinitions[row[0].ToString()] = row[1].ToString()
-			}
-			return nil
-		},
-		func() *sqltypes.Result { return &sqltypes.Result{} },
-		1000,
-	)
-	if err != nil {
-		return err
+	if len(views) > 0 {
+		err = getViewDefinition(ctx, conn, bv,
+			func(qr *sqltypes.Result) error {
+				for _, row := range qr.Rows {
+					viewDefinitions[row[0].ToString()] = row[1].ToString()
+				}
+				return nil
+			},
+			func() *sqltypes.Result { return &sqltypes.Result{} },
+			1000,
+		)
+		if err != nil {
+			return err
+		}
 	}
 
 	// Generate the queries to delete and insert view data.
@@ -267,10 +270,10 @@ func getCreateStatement(ctx context.Context, conn *connpool.DBConn, tableName st
 }
 
 // getChangedViewNames gets the list of views that have their definitions changed.
-func getChangedViewNames(ctx context.Context, conn *connpool.DBConn, isPrimary bool) (map[string]any, error) {
+func getChangedViewNames(ctx context.Context, conn *connpool.DBConn, isServingPrimary bool) (map[string]any, error) {
 	/* Retrieve changed views */
 	views := make(map[string]any)
-	if !isPrimary {
+	if !isServingPrimary {
 		return views, nil
 	}
 	callback := func(qr *sqltypes.Result) error {
@@ -292,11 +295,11 @@ func getChangedViewNames(ctx context.Context, conn *connpool.DBConn, isPrimary b
 	return views, nil
 }
 
-// getChangedTableNames gets the tables that do not align with the tables information we have in the cache.
-func (se *Engine) getChangedTableNames(ctx context.Context, conn *connpool.DBConn, isPrimary bool) (map[string]any, error) {
-	tablesChanged := make(map[string]any)
-	if !isPrimary {
-		return tablesChanged, nil
+// getMismatchedTableNames gets the tables that do not align with the tables information we have in the cache.
+func (se *Engine) getMismatchedTableNames(ctx context.Context, conn *connpool.DBConn, isServingPrimary bool) (map[string]any, error) {
+	tablesMismatched := make(map[string]any)
+	if !isServingPrimary {
+		return tablesMismatched, nil
 	}
 	tablesFound := make(map[string]bool)
 	callback := func(qr *sqltypes.Result) error {
@@ -309,7 +312,7 @@ func (se *Engine) getChangedTableNames(ctx context.Context, conn *connpool.DBCon
 			tablesFound[tableName] = true
 			table, isFound := se.tables[tableName]
 			if !isFound || table.CreateTime != createTime {
-				tablesChanged[tableName] = true
+				tablesMismatched[tableName] = true
 			}
 		}
 		return nil
@@ -327,10 +330,11 @@ func (se *Engine) getChangedTableNames(ctx context.Context, conn *connpool.DBCon
 		if se.tables[tableName].Type == View {
 			continue
 		}
-		if !tablesFound[tableName] {
-			tablesChanged[tableName] = true
+		// Explicitly ignore dual because schema-engine stores this in its list of tables.
+		if !tablesFound[tableName] && tableName != "dual" {
+			tablesMismatched[tableName] = true
 		}
 	}
 
-	return tablesChanged, nil
+	return tablesMismatched, nil
 }

@@ -437,7 +437,7 @@ func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 	// mismatchTables stores the tables whose createTime in our cache doesn't match the createTime stored in the database.
 	// This can happen if a primary crashed right after a DML succeeded, before it could reload its state. If all the replicas
 	// are able to reload their cache before one of them is promoted, then the database information would be out of sync.
-	mismatchTables, err := se.getChangedTableNames(ctx, conn, shouldUseDatabase)
+	mismatchTables, err := se.getMismatchedTableNames(ctx, conn, shouldUseDatabase)
 	if err != nil {
 		return err
 	}
