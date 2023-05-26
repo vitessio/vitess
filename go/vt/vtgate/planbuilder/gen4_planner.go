@@ -26,6 +26,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
 func gen4Planner(query string, plannerVersion querypb.ExecuteOptions_PlannerVersion) stmtPlanner {
@@ -186,14 +187,11 @@ func newBuildSelectPlan(
 	ctx := plancontext.NewPlanningContext(reservedVars, semTable, vschema, version)
 
 	if ks, _ := semTable.SingleUnshardedKeyspace(); ks != nil {
-		plan, tablesUsed, err = unshardedShortcut(ctx, selStmt, ks)
+		plan, tablesUsed, err = selectUnshardedShortcut(ctx, selStmt, ks)
 		if err != nil {
 			return nil, nil, nil, err
 		}
-		plan, err = pushCommentDirectivesOnPlan(plan, selStmt)
-		if err != nil {
-			return nil, nil, nil, err
-		}
+		plan = pushCommentDirectivesOnPlan(plan, selStmt)
 		return plan, semTable, tablesUsed, err
 	}
 
@@ -230,10 +228,7 @@ func newBuildSelectPlan(
 		return nil, nil, nil, err
 	}
 
-	plan, err = pushCommentDirectivesOnPlan(plan, selStmt)
-	if err != nil {
-		return nil, nil, nil, err
-	}
+	plan = pushCommentDirectivesOnPlan(plan, selStmt)
 
 	return plan, semTable, operators.TablesUsed(op), nil
 }
@@ -287,13 +282,9 @@ func gen4UpdateStmtPlanner(
 	}
 
 	if ks, tables := semTable.SingleUnshardedKeyspace(); ks != nil {
-		edml := engine.NewDML()
-		edml.Keyspace = ks
-		edml.Table = tables
-		edml.Opcode = engine.Unsharded
-		edml.Query = generateQuery(updStmt)
-		upd := &engine.Update{DML: edml}
-		return newPlanResult(upd, operators.QualifiedTables(ks, tables)...), nil
+		plan := updateUnshardedShortcut(updStmt, ks, tables)
+		plan = pushCommentDirectivesOnPlan(plan, updStmt)
+		return newPlanResult(plan.Primitive(), operators.QualifiedTables(ks, tables)...), nil
 	}
 
 	if semTable.NotUnshardedErr != nil {
@@ -317,10 +308,7 @@ func gen4UpdateStmtPlanner(
 		return nil, err
 	}
 
-	plan, err = pushCommentDirectivesOnPlan(plan, updStmt)
-	if err != nil {
-		return nil, err
-	}
+	plan = pushCommentDirectivesOnPlan(plan, updStmt)
 
 	setLockOnAllSelect(plan)
 
@@ -329,6 +317,15 @@ func gen4UpdateStmtPlanner(
 	}
 
 	return newPlanResult(plan.Primitive(), operators.TablesUsed(op)...), nil
+}
+
+func updateUnshardedShortcut(stmt *sqlparser.Update, ks *vindexes.Keyspace, tables []*vindexes.Table) logicalPlan {
+	edml := engine.NewDML()
+	edml.Keyspace = ks
+	edml.Table = tables
+	edml.Opcode = engine.Unsharded
+	edml.Query = generateQuery(stmt)
+	return &primitiveWrapper{prim: &engine.Update{DML: edml}}
 }
 
 func gen4DeleteStmtPlanner(
@@ -366,13 +363,9 @@ func gen4DeleteStmtPlanner(
 	}
 
 	if ks, tables := semTable.SingleUnshardedKeyspace(); ks != nil {
-		edml := engine.NewDML()
-		edml.Keyspace = ks
-		edml.Table = tables
-		edml.Opcode = engine.Unsharded
-		edml.Query = generateQuery(deleteStmt)
-		del := &engine.Delete{DML: edml}
-		return newPlanResult(del, operators.QualifiedTables(ks, tables)...), nil
+		plan := deleteUnshardedShortcut(deleteStmt, ks, tables)
+		plan = pushCommentDirectivesOnPlan(plan, deleteStmt)
+		return newPlanResult(plan.Primitive(), operators.QualifiedTables(ks, tables)...), nil
 	}
 
 	if err := checkIfDeleteSupported(deleteStmt, semTable); err != nil {
@@ -395,10 +388,7 @@ func gen4DeleteStmtPlanner(
 		return nil, err
 	}
 
-	plan, err = pushCommentDirectivesOnPlan(plan, deleteStmt)
-	if err != nil {
-		return nil, err
-	}
+	plan = pushCommentDirectivesOnPlan(plan, deleteStmt)
 
 	setLockOnAllSelect(plan)
 
@@ -407,6 +397,15 @@ func gen4DeleteStmtPlanner(
 	}
 
 	return newPlanResult(plan.Primitive(), operators.TablesUsed(op)...), nil
+}
+
+func deleteUnshardedShortcut(stmt *sqlparser.Delete, ks *vindexes.Keyspace, tables []*vindexes.Table) logicalPlan {
+	edml := engine.NewDML()
+	edml.Keyspace = ks
+	edml.Table = tables
+	edml.Opcode = engine.Unsharded
+	edml.Query = generateQuery(stmt)
+	return &primitiveWrapper{prim: &engine.Delete{DML: edml}}
 }
 
 func gen4InsertStmtPlanner(version querypb.ExecuteOptions_PlannerVersion, insStmt *sqlparser.Insert, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema) (*planResult, error) {
@@ -430,12 +429,9 @@ func gen4InsertStmtPlanner(version querypb.ExecuteOptions_PlannerVersion, insStm
 	insStmt.Table.As = sqlparser.NewIdentifierCS("")
 
 	if ks, tables := semTable.SingleUnshardedKeyspace(); ks != nil && tables[0].AutoIncrement == nil {
-		eIns := &engine.Insert{}
-		eIns.Keyspace = ks
-		eIns.Table = tables[0]
-		eIns.Opcode = engine.InsertUnsharded
-		eIns.Query = generateQuery(insStmt)
-		return newPlanResult(eIns, operators.QualifiedTables(ks, tables)...), nil
+		plan := insertUnshardedShortcut(insStmt, ks, tables)
+		plan = pushCommentDirectivesOnPlan(plan, insStmt)
+		return newPlanResult(plan.Primitive(), operators.QualifiedTables(ks, tables)...), nil
 	}
 
 	if semTable.NotUnshardedErr != nil {
@@ -459,10 +455,7 @@ func gen4InsertStmtPlanner(version querypb.ExecuteOptions_PlannerVersion, insStm
 		return nil, err
 	}
 
-	plan, err = pushCommentDirectivesOnPlan(plan, insStmt)
-	if err != nil {
-		return nil, err
-	}
+	plan = pushCommentDirectivesOnPlan(plan, insStmt)
 
 	setLockOnAllSelect(plan)
 
@@ -471,6 +464,15 @@ func gen4InsertStmtPlanner(version querypb.ExecuteOptions_PlannerVersion, insStm
 	}
 
 	return newPlanResult(plan.Primitive(), operators.TablesUsed(op)...), nil
+}
+
+func insertUnshardedShortcut(stmt *sqlparser.Insert, ks *vindexes.Keyspace, tables []*vindexes.Table) logicalPlan {
+	eIns := &engine.Insert{}
+	eIns.Keyspace = ks
+	eIns.Table = tables[0]
+	eIns.Opcode = engine.InsertUnsharded
+	eIns.Query = generateQuery(stmt)
+	return &primitiveWrapper{prim: eIns}
 }
 
 func rewriteRoutedTables(stmt sqlparser.Statement, vschema plancontext.VSchema) error {
@@ -599,27 +601,44 @@ func planOrderByOnUnion(ctx *plancontext.PlanningContext, plan logicalPlan, unio
 	return plan, nil
 }
 
-func pushCommentDirectivesOnPlan(plan logicalPlan, stmt sqlparser.Statement) (logicalPlan, error) {
+func pushCommentDirectivesOnPlan(plan logicalPlan, stmt sqlparser.Statement) logicalPlan {
 	var directives *sqlparser.CommentDirectives
 	cmt, ok := stmt.(sqlparser.Commented)
 	if ok {
 		directives = cmt.GetParsedComments().Directives()
 		scatterAsWarns := directives.IsSet(sqlparser.DirectiveScatterErrorsAsWarnings)
 		timeout := queryTimeout(directives)
+		multiShardAutoCommit := directives.IsSet(sqlparser.DirectiveMultiShardAutocommit)
 
-		if scatterAsWarns || timeout > 0 {
+		if scatterAsWarns || timeout > 0 || multiShardAutoCommit {
 			_, _ = visit(plan, func(logicalPlan logicalPlan) (bool, logicalPlan, error) {
 				switch plan := logicalPlan.(type) {
 				case *routeGen4:
 					plan.eroute.ScatterErrorsAsWarnings = scatterAsWarns
 					plan.eroute.QueryTimeout = timeout
+				case *primitiveWrapper:
+					setDirective(plan.prim, multiShardAutoCommit, timeout)
 				}
 				return true, logicalPlan, nil
 			})
 		}
 	}
 
-	return plan, nil
+	return plan
+}
+
+func setDirective(prim engine.Primitive, msac bool, timeout int) {
+	switch edml := prim.(type) {
+	case *engine.Insert:
+		edml.MultiShardAutocommit = msac
+		edml.QueryTimeout = timeout
+	case *engine.Update:
+		edml.MultiShardAutocommit = msac
+		edml.QueryTimeout = timeout
+	case *engine.Delete:
+		edml.MultiShardAutocommit = msac
+		edml.QueryTimeout = timeout
+	}
 }
 
 // checkIfDeleteSupported checks if the delete query is supported or we must return an error.
