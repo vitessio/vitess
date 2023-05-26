@@ -1377,6 +1377,7 @@
           "Sharded": false
         },
         "TargetTabletType": "PRIMARY",
+        "AutoIncrement": "select next :n values from seq:Values::(INT64(1))",
         "MultiShardAutocommit": false,
         "Query": "insert into unsharded_authoritative(col1, col2) values (:__seq0, 1)",
         "TableName": "unsharded_authoritative"
@@ -1542,6 +1543,7 @@
           "Sharded": false
         },
         "TargetTabletType": "PRIMARY",
+        "AutoIncrement": "select next :n values from seq:Values::(DECIMAL(18446744073709551616))",
         "MultiShardAutocommit": false,
         "Query": "insert into unsharded_auto(id, val) values (:__seq0, 'aa')",
         "TableName": "unsharded_auto"
@@ -1565,6 +1567,7 @@
           "Sharded": false
         },
         "TargetTabletType": "PRIMARY",
+        "AutoIncrement": "select next :n values from seq:Values::(INT64(1))",
         "MultiShardAutocommit": false,
         "Query": "insert into unsharded_auto(id, val) values (:__seq0, 'aa')",
         "TableName": "unsharded_auto"
@@ -1588,6 +1591,7 @@
           "Sharded": false
         },
         "TargetTabletType": "PRIMARY",
+        "AutoIncrement": "select next :n values from seq:Values::(NULL)",
         "MultiShardAutocommit": false,
         "Query": "insert into unsharded_auto(val, id) values ('aa', :__seq0)",
         "TableName": "unsharded_auto"
@@ -1611,6 +1615,7 @@
           "Sharded": false
         },
         "TargetTabletType": "PRIMARY",
+        "AutoIncrement": "select next :n values from seq:Values::(NULL)",
         "MultiShardAutocommit": false,
         "Query": "insert into unsharded_auto(val, id) values (false, :__seq0)",
         "TableName": "unsharded_auto"
@@ -1634,6 +1639,7 @@
           "Sharded": false
         },
         "TargetTabletType": "PRIMARY",
+        "AutoIncrement": "select next :n values from seq:Values::(INT64(1), NULL)",
         "MultiShardAutocommit": false,
         "Query": "insert into unsharded_auto(id, val) values (:__seq0, 'aa'), (:__seq1, 'bb')",
         "TableName": "unsharded_auto"
@@ -1680,6 +1686,7 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
+        "AutoIncrement": "select next :n values from seq:Values::(INT64(1))",
         "MultiShardAutocommit": false,
         "Query": "insert into `user`(id, val, `Name`, Costly) values (:_Id_0, 1, :_Name_0, :_Costly_0)",
         "TableName": "user",
@@ -1708,6 +1715,7 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
+        "AutoIncrement": "select next :n values from seq:Values::(INT64(1))",
         "MultiShardAutocommit": false,
         "Query": "insert into `user`(id, `Name`, Costly) values (:_Id_0, :_Name_0, :_Costly_0)",
         "TableName": "user",
@@ -1767,6 +1775,7 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
+        "AutoIncrement": "select next :n values from seq:Values::(NULL)",
         "MultiShardAutocommit": false,
         "Query": "insert into `user`(id, `Name`, Costly) values (:_Id_0, :_Name_0, :_Costly_0)",
         "TableName": "user",
@@ -1795,6 +1804,7 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
+        "AutoIncrement": "select next :n values from seq:Values::(INT64(1))",
         "MultiShardAutocommit": false,
         "Query": "insert into `user`(id, `Name`, Costly) values (:_Id_0, :_Name_0, :_Costly_0)",
         "TableName": "user",
@@ -1823,6 +1833,7 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
+        "AutoIncrement": "select next :n values from seq:Values::(INT64(1))",
         "InsertIgnore": true,
         "MultiShardAutocommit": false,
         "Query": "insert ignore into `user`(id, `Name`, Costly) values (:_Id_0, :_Name_0, :_Costly_0)",
@@ -1852,6 +1863,7 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
+        "AutoIncrement": "select next :n values from seq:Values::(INT64(1))",
         "InsertIgnore": true,
         "MultiShardAutocommit": false,
         "Query": "insert into `user`(id, `Name`, Costly) values (:_Id_0, :_Name_0, :_Costly_0) on duplicate key update col = 2",
@@ -1881,6 +1893,7 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
+        "AutoIncrement": "select next :n values from seq:Values::(:aa)",
         "MultiShardAutocommit": false,
         "Query": "insert into `user`(id, `Name`, Costly) values (:_Id_0, :_Name_0, :_Costly_0)",
         "TableName": "user",
@@ -1909,6 +1922,7 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
+        "AutoIncrement": "select next :n values from seq:Values::(NULL)",
         "MultiShardAutocommit": false,
         "Query": "insert into `user`(nonid, id, `Name`, Costly) values (2, :_Id_0, :_Name_0, :_Costly_0)",
         "TableName": "user",
@@ -1937,6 +1951,7 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
+        "AutoIncrement": "select next :n values from seq:Values::(NULL)",
         "MultiShardAutocommit": false,
         "Query": "insert into `user`(id, nonid, `Name`, Costly) values (:_Id_0, 2, :_Name_0, :_Costly_0)",
         "TableName": "user",
@@ -1965,6 +1980,7 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
+        "AutoIncrement": "select next :n values from seq:Values::(NULL)",
         "MultiShardAutocommit": false,
         "Query": "insert into `user`(nonid, id, `Name`, Costly) values (true, :_Id_0, :_Name_0, :_Costly_0)",
         "TableName": "user",
@@ -1993,6 +2009,7 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
+        "AutoIncrement": "select next :n values from seq:Values::(INT64(1))",
         "MultiShardAutocommit": false,
         "Query": "insert into `user`(nonid, `name`, id, Costly) values (2, :_Name_0, :_Id_0, :_Costly_0)",
         "TableName": "user",
@@ -2021,6 +2038,7 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
+        "AutoIncrement": "select next :n values from seq:Values::(NULL)",
         "MultiShardAutocommit": false,
         "Query": "insert into user_extra(nonid, extra_id, user_id) values (2, :__seq0, :_user_id_0)",
         "TableName": "user_extra",
@@ -2116,6 +2134,7 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
+        "AutoIncrement": "select next :n values from seq:Values::(DECIMAL(18446744073709551616))",
         "MultiShardAutocommit": false,
         "Query": "insert into user_extra(nonid, extra_id, user_id) values (2, :__seq0, :_user_id_0)",
         "TableName": "user_extra",
@@ -2179,6 +2198,7 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
+        "AutoIncrement": "select next :n values from seq:Values::(INT64(1), INT64(2))",
         "MultiShardAutocommit": false,
         "Query": "insert into `user`(id, `Name`, Costly) values (:_Id_0, :_Name_0, :_Costly_0), (:_Id_1, :_Name_1, :_Costly_1)",
         "TableName": "user",
@@ -2207,6 +2227,7 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
+        "AutoIncrement": "select next :n values from seq:Values::(INT64(1), INT64(2))",
         "MultiShardAutocommit": false,
         "Query": "insert /*vt+ QUERY_TIMEOUT_MS=1 */ into `user`(id, `Name`, Costly) values (:_Id_0, :_Name_0, :_Costly_0), (:_Id_1, :_Name_1, :_Costly_1)",
         "QueryTimeout": 1,
@@ -2236,6 +2257,7 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
+        "AutoIncrement": "select next :n values from seq:Values::(INT64(1), INT64(2))",
         "MultiShardAutocommit": true,
         "Query": "insert /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ into `user`(id, `Name`, Costly) values (:_Id_0, :_Name_0, :_Costly_0), (:_Id_1, :_Name_1, :_Costly_1)",
         "TableName": "user",
@@ -2335,6 +2357,7 @@
           "Sharded": false
         },
         "TargetTabletType": "PRIMARY",
+        "AutoIncrement": "select next :n values from seq:Values::(DECIMAL(18446744073709551616))",
         "MultiShardAutocommit": false,
         "Query": "replace into unsharded_auto(id, val) values (:__seq0, 'aa')",
         "TableName": "unsharded_auto"
@@ -2358,6 +2381,7 @@
           "Sharded": false
         },
         "TargetTabletType": "PRIMARY",
+        "AutoIncrement": "select next :n values from seq:Values::(INT64(1))",
         "MultiShardAutocommit": false,
         "Query": "replace into unsharded_auto(id, val) values (:__seq0, 'aa')",
         "TableName": "unsharded_auto"
@@ -2381,6 +2405,7 @@
           "Sharded": false
         },
         "TargetTabletType": "PRIMARY",
+        "AutoIncrement": "select next :n values from seq:Values::(NULL)",
         "MultiShardAutocommit": false,
         "Query": "replace into unsharded_auto(val, id) values ('aa', :__seq0)",
         "TableName": "unsharded_auto"
@@ -2404,6 +2429,7 @@
           "Sharded": false
         },
         "TargetTabletType": "PRIMARY",
+        "AutoIncrement": "select next :n values from seq:Values::(INT64(1), NULL)",
         "MultiShardAutocommit": false,
         "Query": "replace into unsharded_auto(id, val) values (:__seq0, 'aa'), (:__seq1, 'bb')",
         "TableName": "unsharded_auto"
@@ -5040,7 +5066,7 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "AutoIncrement": "main:1",
+        "AutoIncrement": "select next :n values from seq:Offset(1)",
         "MultiShardAutocommit": false,
         "TableName": "user_extra",
         "VindexOffsetFromSelect": {
@@ -5075,7 +5101,7 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "AutoIncrement": "main:1",
+        "AutoIncrement": "select next :n values from seq:Offset(1)",
         "MultiShardAutocommit": false,
         "TableName": "user_extra",
         "VindexOffsetFromSelect": {
@@ -5115,7 +5141,7 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "AutoIncrement": "main:2",
+        "AutoIncrement": "select next :n values from seq:Offset(2)",
         "MultiShardAutocommit": false,
         "TableName": "user_extra",
         "VindexOffsetFromSelect": {
@@ -5150,7 +5176,7 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "AutoIncrement": "main:2",
+        "AutoIncrement": "select next :n values from seq:Offset(2)",
         "MultiShardAutocommit": false,
         "TableName": "user_extra",
         "VindexOffsetFromSelect": {
@@ -5190,7 +5216,7 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "AutoIncrement": "main:0",
+        "AutoIncrement": "select next :n values from seq:Offset(0)",
         "MultiShardAutocommit": false,
         "TableName": "user",
         "VindexOffsetFromSelect": {
@@ -5227,7 +5253,7 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "AutoIncrement": "main:0",
+        "AutoIncrement": "select next :n values from seq:Offset(0)",
         "MultiShardAutocommit": false,
         "TableName": "user",
         "VindexOffsetFromSelect": {
@@ -5269,7 +5295,7 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "AutoIncrement": "main:1",
+        "AutoIncrement": "select next :n values from seq:Offset(1)",
         "MultiShardAutocommit": false,
         "TableName": "user",
         "VindexOffsetFromSelect": {
@@ -5306,7 +5332,7 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "AutoIncrement": "main:1",
+        "AutoIncrement": "select next :n values from seq:Offset(1)",
         "MultiShardAutocommit": false,
         "TableName": "user",
         "VindexOffsetFromSelect": {
@@ -5353,7 +5379,7 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "AutoIncrement": "main:2",
+        "AutoIncrement": "select next :n values from seq:Offset(2)",
         "MultiShardAutocommit": false,
         "TableName": "user_extra",
         "VindexOffsetFromSelect": {
@@ -5388,7 +5414,7 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "AutoIncrement": "main:2",
+        "AutoIncrement": "select next :n values from seq:Offset(2)",
         "MultiShardAutocommit": false,
         "TableName": "user_extra",
         "VindexOffsetFromSelect": {
@@ -5471,7 +5497,7 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "AutoIncrement": "main:2",
+        "AutoIncrement": "select next :n values from seq:Offset(2)",
         "MultiShardAutocommit": false,
         "TableName": "user_extra",
         "VindexOffsetFromSelect": {
@@ -5506,7 +5532,7 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "AutoIncrement": "main:2",
+        "AutoIncrement": "select next :n values from seq:Offset(2)",
         "MultiShardAutocommit": false,
         "TableName": "user_extra",
         "VindexOffsetFromSelect": {
@@ -5546,7 +5572,7 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "AutoIncrement": "main:2",
+        "AutoIncrement": "select next :n values from seq:Offset(2)",
         "MultiShardAutocommit": false,
         "TableName": "user_extra",
         "VindexOffsetFromSelect": {
@@ -5581,7 +5607,7 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "AutoIncrement": "main:2",
+        "AutoIncrement": "select next :n values from seq:Offset(2)",
         "MultiShardAutocommit": false,
         "TableName": "user_extra",
         "VindexOffsetFromSelect": {
