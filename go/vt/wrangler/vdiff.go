@@ -269,7 +269,11 @@ func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflowName, sou
 	// results for reference tables when the shard count is
 	// different between the source and target as then there will
 	// be a extra rows reported on the side with more shards.
-	srcvschema, err := wr.ts.GetVSchema(ctx, ts.SourceKeyspaceName())
+	srcTopo := wr.ts
+	if ts.ExternalTopo() != nil {
+		srcTopo = ts.ExternalTopo()
+	}
+	srcvschema, err := srcTopo.GetVSchema(ctx, ts.SourceKeyspaceName())
 	if err != nil {
 		return nil, err
 	}
