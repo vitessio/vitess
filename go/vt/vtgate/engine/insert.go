@@ -1001,7 +1001,7 @@ func (ins *Insert) description() PrimitiveDescription {
 	if len(ins.Mid) > 0 {
 		shardQuery := fmt.Sprintf("%s%s%s", ins.Prefix, strings.Join(ins.Mid, ", "), ins.Suffix)
 		if shardQuery != ins.Query {
-			panic("oh no!!")
+			other["ShardedQuery"] = shardQuery
 		}
 	}
 	return PrimitiveDescription{

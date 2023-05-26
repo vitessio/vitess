@@ -308,6 +308,10 @@ func createOperatorFromInsert(ctx *plancontext.PlanningContext, ins *sqlparser.I
 	for vIdx, colVindex := range colVindexes {
 		routeValues[vIdx] = make([][]evalengine.Expr, len(colVindex.Columns))
 		for colIdx, col := range colVindex.Columns {
+			err = checkAndErrIfVindexChanging(sqlparser.UpdateExprs(ins.OnDup), col)
+			if err != nil {
+				return nil, err
+			}
 			routeValues[vIdx][colIdx] = make([]evalengine.Expr, len(rows))
 			colNum := findOrAddColumn(ins, col)
 			for rowNum, row := range rows {
@@ -316,13 +320,6 @@ func createOperatorFromInsert(ctx *plancontext.PlanningContext, ins *sqlparser.I
 					return nil, err
 				}
 				routeValues[vIdx][colIdx][rowNum] = innerpv
-			}
-		}
-	}
-	for _, colVindex := range colVindexes {
-		for _, col := range colVindex.Columns {
-			colNum := findOrAddColumn(ins, col)
-			for rowNum, row := range rows {
 				name := engine.InsertVarName(col, rowNum)
 				row[colNum] = sqlparser.NewArgument(name)
 			}
@@ -330,6 +327,7 @@ func createOperatorFromInsert(ctx *plancontext.PlanningContext, ins *sqlparser.I
 	}
 	insOp.ColVindexes = colVindexes
 	insOp.VindexValues = routeValues
+	insOp.Ignore = bool(ins.Ignore) || ins.OnDup != nil
 	return route, nil
 }
 
@@ -341,6 +339,20 @@ func getColVindexes(allColVindexes []*vindexes.ColumnVindex) (colVindexes []*vin
 		colVindexes = append(colVindexes, colVindex)
 	}
 	return
+}
+
+func checkAndErrIfVindexChanging(setClauses sqlparser.UpdateExprs, col sqlparser.IdentifierCI) error {
+	for _, assignment := range setClauses {
+		if col.Equal(assignment.Name.Name) {
+			valueExpr, isValuesFuncExpr := assignment.Expr.(*sqlparser.ValuesFuncExpr)
+			// update on duplicate key is changing the vindex column, not supported.
+			if !isValuesFuncExpr || !valueExpr.Name.Name.Equal(assignment.Name.Name) {
+				return vterrors.VT12001("DML cannot update vindex column")
+			}
+			return nil
+		}
+	}
+	return nil
 }
 
 // findOrAddColumn finds the position of a column in the insert. If it's

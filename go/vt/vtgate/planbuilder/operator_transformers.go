@@ -410,6 +410,7 @@ func transformInsertPlan(op *operators.Route, ins *operators.Insert) (logicalPla
 		VindexValues: ins.VindexValues,
 		ColVindexes:  ins.ColVindexes,
 		Generate:     autoIncGenerate(ins.AutoIncrement),
+		Ignore:       ins.Ignore,
 	}
 	if eins.Opcode == engine.InsertSharded {
 		eins.Prefix, eins.Mid, eins.Suffix = generateInsertShardedQuery(ins.AST)
