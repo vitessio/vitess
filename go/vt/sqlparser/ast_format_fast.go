@@ -1820,14 +1820,6 @@ func (node *IntroducerExpr) formatFast(buf *TrackedBuffer) {
 }
 
 // formatFast formats the node.
-func (node *IntervalExpr) formatFast(buf *TrackedBuffer) {
-	buf.WriteString("interval ")
-	buf.printExpr(node, node.Expr, true)
-	buf.WriteByte(' ')
-	buf.WriteString(node.Unit.ToString())
-}
-
-// formatFast formats the node.
 func (node *TimestampFuncExpr) formatFast(buf *TrackedBuffer) {
 	buf.WriteString(node.Name)
 	buf.WriteByte('(')
@@ -1931,57 +1923,76 @@ func (node *RegexpSubstrExpr) formatFast(buf *TrackedBuffer) {
 }
 
 // formatFast formats the node
-func (node *AdddateExpr) formatFast(buf *TrackedBuffer) {
-	buf.WriteString("adddate(")
-	buf.printExpr(node, node.Date, true)
-	buf.WriteString(", ")
-	if node.Unit == IntervalUnknown {
+func (node *DateAddExpr) formatFast(buf *TrackedBuffer) {
+	switch node.Type {
+	case AdddateType:
+		buf.WriteString("adddate(")
+		buf.printExpr(node, node.Date, true)
+		buf.WriteString(", ")
+		if node.Unit == IntervalUnknown {
+			buf.printExpr(node, node.Expr, true)
+		} else {
+			buf.WriteString("interval ")
+			buf.printExpr(node, node.Expr, true)
+			buf.WriteByte(' ')
+			buf.WriteString(node.Unit.ToString())
+		}
+		buf.WriteByte(')')
+	case DateAddType:
+		buf.WriteString("date_add(")
+		buf.printExpr(node, node.Date, true)
+		buf.WriteString(", interval ")
 		buf.printExpr(node, node.Expr, true)
-	} else {
+		buf.WriteByte(' ')
+		buf.WriteString(node.Unit.ToString())
+		buf.WriteByte(')')
+	case PlusIntervalLeftType:
 		buf.WriteString("interval ")
 		buf.printExpr(node, node.Expr, true)
 		buf.WriteByte(' ')
 		buf.WriteString(node.Unit.ToString())
+		buf.WriteString(" + ")
+		buf.printExpr(node, node.Date, true)
+	case PlusIntervalRightType:
+		buf.printExpr(node, node.Date, true)
+		buf.WriteString(" + interval ")
+		buf.printExpr(node, node.Expr, true)
+		buf.WriteByte(' ')
+		buf.WriteString(node.Unit.ToString())
 	}
-	buf.WriteByte(')')
-}
-
-// formatFast formats the node
-func (node *DateAddExpr) formatFast(buf *TrackedBuffer) {
-	buf.WriteString("date_add(")
-	buf.printExpr(node, node.Date, true)
-	buf.WriteString(", interval ")
-	buf.printExpr(node, node.Expr, true)
-	buf.WriteByte(' ')
-	buf.WriteString(node.Unit.ToString())
-	buf.WriteByte(')')
 }
 
 // formatFast formats the node
 func (node *DateSubExpr) formatFast(buf *TrackedBuffer) {
-	buf.WriteString("date_sub(")
-	buf.printExpr(node, node.Date, true)
-	buf.WriteString(", interval ")
-	buf.printExpr(node, node.Expr, true)
-	buf.WriteByte(' ')
-	buf.WriteString(node.Unit.ToString())
-	buf.WriteByte(')')
-}
-
-// formatFast formats the node
-func (node *SubdateExpr) formatFast(buf *TrackedBuffer) {
-	buf.WriteString("subdate(")
-	buf.printExpr(node, node.Date, true)
-	buf.WriteString(", ")
-	if node.Unit == IntervalUnknown {
+	switch node.Type {
+	case SubdateType:
+		buf.WriteString("subdate(")
+		buf.printExpr(node, node.Date, true)
+		buf.WriteString(", ")
+		if node.Unit == IntervalUnknown {
+			buf.printExpr(node, node.Expr, true)
+		} else {
+			buf.WriteString("interval ")
+			buf.printExpr(node, node.Expr, true)
+			buf.WriteByte(' ')
+			buf.WriteString(node.Unit.ToString())
+		}
+		buf.WriteByte(')')
+	case DateSubType:
+		buf.WriteString("date_sub(")
+		buf.printExpr(node, node.Date, true)
+		buf.WriteString(", interval ")
 		buf.printExpr(node, node.Expr, true)
-	} else {
-		buf.WriteString("interval ")
+		buf.WriteByte(' ')
+		buf.WriteString(node.Unit.ToString())
+		buf.WriteByte(')')
+	case MinusIntervalRightType:
+		buf.printExpr(node, node.Date, true)
+		buf.WriteString(" - interval ")
 		buf.printExpr(node, node.Expr, true)
 		buf.WriteByte(' ')
 		buf.WriteString(node.Unit.ToString())
 	}
-	buf.WriteByte(')')
 }
 
 // formatFast formats the node.
@@ -2178,8 +2189,15 @@ func (node *FromFirstLastClause) formatFast(buf *TrackedBuffer) {
 // formatFast formats the node
 func (node *FramePoint) formatFast(buf *TrackedBuffer) {
 	if node.Expr != nil {
-		buf.WriteByte(' ')
-		node.Expr.formatFast(buf)
+		if node.Unit != IntervalUnknown {
+			buf.WriteString(" interval ")
+			node.Expr.formatFast(buf)
+			buf.WriteByte(' ')
+			buf.WriteString(node.Unit.ToString())
+		} else {
+			buf.WriteByte(' ')
+			node.Expr.formatFast(buf)
+		}
 	}
 	buf.WriteByte(' ')
 	buf.WriteString(node.Type.ToString())

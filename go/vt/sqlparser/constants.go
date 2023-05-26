@@ -912,6 +912,21 @@ const (
 	DefaultFormat
 )
 
+// Constants for Enum Type - DateAddExprType
+const (
+	AdddateType DateAddExprType = iota
+	DateAddType
+	PlusIntervalLeftType
+	PlusIntervalRightType
+)
+
+// Constants for Enum Type - DateAddExprType
+const (
+	SubdateType DateSubExprType = iota
+	DateSubType
+	MinusIntervalRightType
+)
+
 // IntervalTypes constants
 const (
 	IntervalUnknown IntervalTypes = iota

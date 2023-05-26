@@ -28,8 +28,6 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfAddConstraintDefinition(parent, node, replacer)
 	case *AddIndexDefinition:
 		return a.rewriteRefOfAddIndexDefinition(parent, node, replacer)
-	case *AdddateExpr:
-		return a.rewriteRefOfAdddateExpr(parent, node, replacer)
 	case AlgorithmValue:
 		return a.rewriteAlgorithmValue(parent, node, replacer)
 	case *AliasedExpr:
@@ -228,8 +226,6 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfInsert(parent, node, replacer)
 	case *InsertExpr:
 		return a.rewriteRefOfInsertExpr(parent, node, replacer)
-	case *IntervalExpr:
-		return a.rewriteRefOfIntervalExpr(parent, node, replacer)
 	case *IntervalFuncExpr:
 		return a.rewriteRefOfIntervalFuncExpr(parent, node, replacer)
 	case *IntroducerExpr:
@@ -478,8 +474,6 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfSubPartitionDefinitionOptions(parent, node, replacer)
 	case SubPartitionDefinitions:
 		return a.rewriteSubPartitionDefinitions(parent, node, replacer)
-	case *SubdateExpr:
-		return a.rewriteRefOfSubdateExpr(parent, node, replacer)
 	case *Subquery:
 		return a.rewriteRefOfSubquery(parent, node, replacer)
 	case *SubstrExpr:
@@ -642,38 +636,6 @@ func (a *application) rewriteRefOfAddIndexDefinition(parent SQLNode, node *AddIn
 	}
 	if !a.rewriteRefOfIndexDefinition(node, node.IndexDefinition, func(newNode, parent SQLNode) {
 		parent.(*AddIndexDefinition).IndexDefinition = newNode.(*IndexDefinition)
-	}) {
-		return false
-	}
-	if a.post != nil {
-		a.cur.replacer = replacer
-		a.cur.parent = parent
-		a.cur.node = node
-		if !a.post(&a.cur) {
-			return false
-		}
-	}
-	return true
-}
-func (a *application) rewriteRefOfAdddateExpr(parent SQLNode, node *AdddateExpr, replacer replacerFunc) bool {
-	if node == nil {
-		return true
-	}
-	if a.pre != nil {
-		a.cur.replacer = replacer
-		a.cur.parent = parent
-		a.cur.node = node
-		if !a.pre(&a.cur) {
-			return true
-		}
-	}
-	if !a.rewriteExpr(node, node.Date, func(newNode, parent SQLNode) {
-		parent.(*AdddateExpr).Date = newNode.(Expr)
-	}) {
-		return false
-	}
-	if !a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
-		parent.(*AdddateExpr).Expr = newNode.(Expr)
 	}) {
 		return false
 	}
@@ -3821,33 +3783,6 @@ func (a *application) rewriteRefOfInsertExpr(parent SQLNode, node *InsertExpr, r
 	}
 	if !a.rewriteExpr(node, node.NewStr, func(newNode, parent SQLNode) {
 		parent.(*InsertExpr).NewStr = newNode.(Expr)
-	}) {
-		return false
-	}
-	if a.post != nil {
-		a.cur.replacer = replacer
-		a.cur.parent = parent
-		a.cur.node = node
-		if !a.post(&a.cur) {
-			return false
-		}
-	}
-	return true
-}
-func (a *application) rewriteRefOfIntervalExpr(parent SQLNode, node *IntervalExpr, replacer replacerFunc) bool {
-	if node == nil {
-		return true
-	}
-	if a.pre != nil {
-		a.cur.replacer = replacer
-		a.cur.parent = parent
-		a.cur.node = node
-		if !a.pre(&a.cur) {
-			return true
-		}
-	}
-	if !a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
-		parent.(*IntervalExpr).Expr = newNode.(Expr)
 	}) {
 		return false
 	}
@@ -7722,38 +7657,6 @@ func (a *application) rewriteSubPartitionDefinitions(parent SQLNode, node SubPar
 	}
 	return true
 }
-func (a *application) rewriteRefOfSubdateExpr(parent SQLNode, node *SubdateExpr, replacer replacerFunc) bool {
-	if node == nil {
-		return true
-	}
-	if a.pre != nil {
-		a.cur.replacer = replacer
-		a.cur.parent = parent
-		a.cur.node = node
-		if !a.pre(&a.cur) {
-			return true
-		}
-	}
-	if !a.rewriteExpr(node, node.Date, func(newNode, parent SQLNode) {
-		parent.(*SubdateExpr).Date = newNode.(Expr)
-	}) {
-		return false
-	}
-	if !a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
-		parent.(*SubdateExpr).Expr = newNode.(Expr)
-	}) {
-		return false
-	}
-	if a.post != nil {
-		a.cur.replacer = replacer
-		a.cur.parent = parent
-		a.cur.node = node
-		if !a.post(&a.cur) {
-			return false
-		}
-	}
-	return true
-}
 func (a *application) rewriteRefOfSubquery(parent SQLNode, node *Subquery, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -9190,8 +9093,6 @@ func (a *application) rewriteCallable(parent SQLNode, node Callable, replacer re
 		return true
 	}
 	switch node := node.(type) {
-	case *AdddateExpr:
-		return a.rewriteRefOfAdddateExpr(parent, node, replacer)
 	case *ArgumentLessWindowExpr:
 		return a.rewriteRefOfArgumentLessWindowExpr(parent, node, replacer)
 	case *Avg:
@@ -9334,8 +9235,6 @@ func (a *application) rewriteCallable(parent SQLNode, node Callable, replacer re
 		return a.rewriteRefOfRegexpReplaceExpr(parent, node, replacer)
 	case *RegexpSubstrExpr:
 		return a.rewriteRefOfRegexpSubstrExpr(parent, node, replacer)
-	case *SubdateExpr:
-		return a.rewriteRefOfSubdateExpr(parent, node, replacer)
 	case *SubstrExpr:
 		return a.rewriteRefOfSubstrExpr(parent, node, replacer)
 	case *Sum:
@@ -9446,8 +9345,6 @@ func (a *application) rewriteExpr(parent SQLNode, node Expr, replacer replacerFu
 		return true
 	}
 	switch node := node.(type) {
-	case *AdddateExpr:
-		return a.rewriteRefOfAdddateExpr(parent, node, replacer)
 	case *AndExpr:
 		return a.rewriteRefOfAndExpr(parent, node, replacer)
 	case *Argument:
@@ -9536,8 +9433,6 @@ func (a *application) rewriteExpr(parent SQLNode, node Expr, replacer replacerFu
 		return a.rewriteRefOfGroupConcatExpr(parent, node, replacer)
 	case *InsertExpr:
 		return a.rewriteRefOfInsertExpr(parent, node, replacer)
-	case *IntervalExpr:
-		return a.rewriteRefOfIntervalExpr(parent, node, replacer)
 	case *IntervalFuncExpr:
 		return a.rewriteRefOfIntervalFuncExpr(parent, node, replacer)
 	case *IntroducerExpr:
@@ -9652,8 +9547,6 @@ func (a *application) rewriteExpr(parent SQLNode, node Expr, replacer replacerFu
 		return a.rewriteRefOfStdPop(parent, node, replacer)
 	case *StdSamp:
 		return a.rewriteRefOfStdSamp(parent, node, replacer)
-	case *SubdateExpr:
-		return a.rewriteRefOfSubdateExpr(parent, node, replacer)
 	case *Subquery:
 		return a.rewriteRefOfSubquery(parent, node, replacer)
 	case *SubstrExpr:

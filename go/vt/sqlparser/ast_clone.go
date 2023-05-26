@@ -29,8 +29,6 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfAddConstraintDefinition(in)
 	case *AddIndexDefinition:
 		return CloneRefOfAddIndexDefinition(in)
-	case *AdddateExpr:
-		return CloneRefOfAdddateExpr(in)
 	case AlgorithmValue:
 		return in
 	case *AliasedExpr:
@@ -229,8 +227,6 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfInsert(in)
 	case *InsertExpr:
 		return CloneRefOfInsertExpr(in)
-	case *IntervalExpr:
-		return CloneRefOfIntervalExpr(in)
 	case *IntervalFuncExpr:
 		return CloneRefOfIntervalFuncExpr(in)
 	case *IntroducerExpr:
@@ -479,8 +475,6 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfSubPartitionDefinitionOptions(in)
 	case SubPartitionDefinitions:
 		return CloneSubPartitionDefinitions(in)
-	case *SubdateExpr:
-		return CloneRefOfSubdateExpr(in)
 	case *Subquery:
 		return CloneRefOfSubquery(in)
 	case *SubstrExpr:
@@ -595,17 +589,6 @@ func CloneRefOfAddIndexDefinition(n *AddIndexDefinition) *AddIndexDefinition {
 	}
 	out := *n
 	out.IndexDefinition = CloneRefOfIndexDefinition(n.IndexDefinition)
-	return &out
-}
-
-// CloneRefOfAdddateExpr creates a deep clone of the input.
-func CloneRefOfAdddateExpr(n *AdddateExpr) *AdddateExpr {
-	if n == nil {
-		return nil
-	}
-	out := *n
-	out.Date = CloneExpr(n.Date)
-	out.Expr = CloneExpr(n.Expr)
 	return &out
 }
 
@@ -1672,16 +1655,6 @@ func CloneRefOfInsertExpr(n *InsertExpr) *InsertExpr {
 	out.Pos = CloneExpr(n.Pos)
 	out.Len = CloneExpr(n.Len)
 	out.NewStr = CloneExpr(n.NewStr)
-	return &out
-}
-
-// CloneRefOfIntervalExpr creates a deep clone of the input.
-func CloneRefOfIntervalExpr(n *IntervalExpr) *IntervalExpr {
-	if n == nil {
-		return nil
-	}
-	out := *n
-	out.Expr = CloneExpr(n.Expr)
 	return &out
 }
 
@@ -3004,17 +2977,6 @@ func CloneSubPartitionDefinitions(n SubPartitionDefinitions) SubPartitionDefinit
 	return res
 }
 
-// CloneRefOfSubdateExpr creates a deep clone of the input.
-func CloneRefOfSubdateExpr(n *SubdateExpr) *SubdateExpr {
-	if n == nil {
-		return nil
-	}
-	out := *n
-	out.Date = CloneExpr(n.Date)
-	out.Expr = CloneExpr(n.Expr)
-	return &out
-}
-
 // CloneRefOfSubquery creates a deep clone of the input.
 func CloneRefOfSubquery(n *Subquery) *Subquery {
 	if n == nil {
@@ -3560,8 +3522,6 @@ func CloneCallable(in Callable) Callable {
 		return nil
 	}
 	switch in := in.(type) {
-	case *AdddateExpr:
-		return CloneRefOfAdddateExpr(in)
 	case *ArgumentLessWindowExpr:
 		return CloneRefOfArgumentLessWindowExpr(in)
 	case *Avg:
@@ -3704,8 +3664,6 @@ func CloneCallable(in Callable) Callable {
 		return CloneRefOfRegexpReplaceExpr(in)
 	case *RegexpSubstrExpr:
 		return CloneRefOfRegexpSubstrExpr(in)
-	case *SubdateExpr:
-		return CloneRefOfSubdateExpr(in)
 	case *SubstrExpr:
 		return CloneRefOfSubstrExpr(in)
 	case *Sum:
@@ -3828,8 +3786,6 @@ func CloneExpr(in Expr) Expr {
 		return nil
 	}
 	switch in := in.(type) {
-	case *AdddateExpr:
-		return CloneRefOfAdddateExpr(in)
 	case *AndExpr:
 		return CloneRefOfAndExpr(in)
 	case *Argument:
@@ -3918,8 +3874,6 @@ func CloneExpr(in Expr) Expr {
 		return CloneRefOfGroupConcatExpr(in)
 	case *InsertExpr:
 		return CloneRefOfInsertExpr(in)
-	case *IntervalExpr:
-		return CloneRefOfIntervalExpr(in)
 	case *IntervalFuncExpr:
 		return CloneRefOfIntervalFuncExpr(in)
 	case *IntroducerExpr:
@@ -4034,8 +3988,6 @@ func CloneExpr(in Expr) Expr {
 		return CloneRefOfStdPop(in)
 	case *StdSamp:
 		return CloneRefOfStdSamp(in)
-	case *SubdateExpr:
-		return CloneRefOfSubdateExpr(in)
 	case *Subquery:
 		return CloneRefOfSubquery(in)
 	case *SubstrExpr:
