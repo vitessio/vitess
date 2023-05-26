@@ -72,9 +72,9 @@ type Engine struct {
 	notifiers   map[string]notifier
 	// isServingPrimary stores if this tablet is currently the serving primary or not.
 	isServingPrimary bool
-	// schemaTracking stores if the user has requested signals on schema changes. If they have, then we
+	// schemaCopy stores if the user has requested signals on schema changes. If they have, then we
 	// also track the underlying schema and make a copy of it in our MySQL instance.
-	schemaTracking bool
+	schemaCopy bool
 
 	// SkipMetaCheck skips the metadata about the database and table information
 	SkipMetaCheck bool
@@ -107,7 +107,7 @@ func NewEngine(env tabletenv.Env) *Engine {
 		}),
 		ticks: timer.NewTimer(reloadTime),
 	}
-	se.schemaTracking = env.Config().SignalWhenSchemaChange
+	se.schemaCopy = env.Config().SignalWhenSchemaChange
 	_ = env.Exporter().NewGaugeDurationFunc("SchemaReloadTime", "vttablet keeps table schemas in its own memory and periodically refreshes it from MySQL. This config controls the reload time.", se.ticks.Interval)
 	se.tableFileSizeGauge = env.Exporter().NewGaugesWithSingleLabel("TableFileSize", "tracks table file size", "Table")
 	se.tableAllocatedSizeGauge = env.Exporter().NewGaugesWithSingleLabel("TableAllocatedSize", "tracks table allocated size", "Table")
@@ -424,7 +424,7 @@ func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 		return vterrors.Wrapf(err, "in Engine.reload(), reading tables")
 	}
 	// On the primary tablet, we also check the data we have stored in our schema tables to see what all needs reloading.
-	shouldUseDatabase := se.isServingPrimary && se.schemaTracking
+	shouldUseDatabase := se.isServingPrimary && se.schemaCopy
 
 	// changedViews are the views that have changed. We can't use the same createTime logic for views because, MySQL
 	// doesn't update the create_time field for views when they are altered. This is annoying, but something we have to work around.
