@@ -25,20 +25,16 @@ import (
 	"sync"
 	"time"
 
-	"vitess.io/vitess/go/vt/sqlparser"
-
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
-
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
-
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 var _ Primitive = (*Insert)(nil)
@@ -976,8 +972,12 @@ func (ins *Insert) description() PrimitiveDescription {
 		other["VindexValues"] = valuesOffsets
 	}
 
-	if ins.Generate != nil && ins.Generate.Values == nil {
-		other["AutoIncrement"] = fmt.Sprintf("%s:%d", ins.Generate.Keyspace.Name, ins.Generate.Offset)
+	if ins.Generate != nil {
+		if ins.Generate.Values == nil {
+			other["AutoIncrement"] = fmt.Sprintf("%s:Offset(%d)", ins.Generate.Query, ins.Generate.Offset)
+		} else {
+			other["AutoIncrement"] = fmt.Sprintf("%s:Values::%s", ins.Generate.Query, evalengine.FormatExpr(ins.Generate.Values))
+		}
 	}
 
 	if len(ins.VindexValueOffset) > 0 {
@@ -994,6 +994,15 @@ func (ins *Insert) description() PrimitiveDescription {
 	}
 	if ins.Ignore {
 		other["InsertIgnore"] = true
+	}
+	if ins.ForceNonStreaming {
+		other["InputAsNonStreaming"] = true
+	}
+	if len(ins.Mid) > 0 {
+		shardQuery := fmt.Sprintf("%s%s%s", ins.Prefix, strings.Join(ins.Mid, ", "), ins.Suffix)
+		if shardQuery != ins.Query {
+			panic("oh no!!")
+		}
 	}
 	return PrimitiveDescription{
 		OperatorType:     "Insert",
