@@ -25,6 +25,8 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/exp/maps"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sidecardb"
 
@@ -396,6 +398,11 @@ func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 		se.SchemaReloadTimings.Record("SchemaReload", start)
 	}()
 
+	// if this flag is set, then we don't need table meta information
+	if se.SkipMetaCheck {
+		return nil
+	}
+
 	// add a timeout to prevent unbounded waits
 	ctx, cancel := context.WithTimeout(ctx, se.reloadTimeout)
 	defer cancel()
@@ -411,23 +418,14 @@ func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 	if err != nil {
 		return err
 	}
-	// if this flag is set, then we don't need table meta information
-	if se.SkipMetaCheck {
-		return nil
-	}
 
-	var showTablesQuery string
-	if includeStats {
-		showTablesQuery = conn.BaseShowTablesWithSizes()
-	} else {
-		showTablesQuery = conn.BaseShowTables()
-	}
-	tableData, err := conn.Exec(ctx, showTablesQuery, maxTableCount, false)
+	tableData, err := getTableData(ctx, conn, includeStats)
 	if err != nil {
 		return vterrors.Wrapf(err, "in Engine.reload(), reading tables")
 	}
 	// On the primary tablet, we also check the data we have stored in our schema tables to see what all needs reloading.
 	shouldUseDatabase := se.isServingPrimary && se.schemaTracking
+
 	// changedViews are the views that have changed. We can't use the same createTime logic for views because, MySQL
 	// doesn't update the create_time field for views when they are altered. This is annoying, but something we have to work around.
 	changedViews, err := getChangedViewNames(ctx, conn, shouldUseDatabase)
@@ -454,8 +452,6 @@ func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 	changedTables := make(map[string]*Table)
 	// created and altered contain the names of created and altered tables for broadcast.
 	var created, altered []*Table
-	// tablesToReload and viewsToReload stores the tables and views that need reloading and storing in our MySQL database.
-	var tablesToReload, viewsToReload []*Table
 	for _, row := range tableData.Rows {
 		tableName := row[0].ToString()
 		curTables[tableName] = true
@@ -516,49 +512,26 @@ func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 		} else {
 			created = append(created, table)
 		}
-		if table.Type == View {
-			viewsToReload = append(viewsToReload, table)
-		} else {
-			tablesToReload = append(tablesToReload, table)
-		}
 	}
 	if rec.HasErrors() {
 		return rec.Error()
 	}
 
-	// Compute and handle dropped tables.
-	var droppedTables []string
-	var droppedViews []string
-	var dropped []*Table
-	for tableName, table := range se.tables {
-		if !curTables[tableName] {
-			if table.Type == View {
-				droppedViews = append(droppedViews, tableName)
-			} else {
-				droppedTables = append(droppedTables, tableName)
-			}
-			dropped = append(dropped, table)
-			delete(se.tables, tableName)
-			// We can't actually delete the label from the stats, but we can set it to 0.
-			// Many monitoring tools will drop zero-valued metrics.
-			se.tableFileSizeGauge.Reset(tableName)
-			se.tableAllocatedSizeGauge.Reset(tableName)
-		}
-	}
-
-	// If this tablet is the primary and schema tracking is required, we should reload the information in our database.
-	if shouldUseDatabase {
-		if err := reloadTablesDataInDB(ctx, conn, tablesToReload, droppedTables); err != nil {
-			return err
-		}
-		if err := reloadViewsDataInDB(ctx, conn, viewsToReload, droppedViews); err != nil {
-			return err
-		}
-	}
+	dropped := se.getDroppedTables(curTables, changedViews, mismatchTables)
 
 	// Populate PKColumns for changed tables.
 	if err := se.populatePrimaryKeys(ctx, conn, changedTables); err != nil {
 		return err
+	}
+
+	// If this tablet is the primary and schema tracking is required, we should reload the information in our database.
+	if shouldUseDatabase {
+		// If reloadDataInDB succeeds, then we don't want to prevent sending the broadcast notification.
+		// So, we do this step in the end when we can receive no more errors that fail the reload operation.
+		err = reloadDataInDB(ctx, conn, altered, created, dropped)
+		if err != nil {
+			log.Errorf("error in updating schema information in Engine.reload() - %v", err)
+		}
 	}
 
 	// Update se.tables
@@ -571,6 +544,53 @@ func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 	}
 	se.broadcast(created, altered, dropped)
 	return nil
+}
+
+func (se *Engine) getDroppedTables(curTables map[string]bool, changedViews map[string]any, mismatchTables map[string]any) []*Table {
+	// Compute and handle dropped tables.
+	dropped := make(map[string]*Table)
+	for tableName, table := range se.tables {
+		if !curTables[tableName] {
+			dropped[tableName] = table
+			delete(se.tables, tableName)
+			// We can't actually delete the label from the stats, but we can set it to 0.
+			// Many monitoring tools will drop zero-valued metrics.
+			se.tableFileSizeGauge.Reset(tableName)
+			se.tableAllocatedSizeGauge.Reset(tableName)
+		}
+	}
+
+	// If we have a view that has changed, but doesn't exist in the current list of tables,
+	// then it was dropped before, and we were unable to update our database. So, we need to signal its
+	// drop again.
+	for viewName := range changedViews {
+		_, alreadyExists := dropped[viewName]
+		if !curTables[viewName] && !alreadyExists {
+			dropped[viewName] = &Table{Name: sqlparser.NewIdentifierCS(viewName), Type: View}
+		}
+	}
+
+	// If we have a table that has a mismatch, but doesn't exist in the current list of tables,
+	// then it was dropped before, and we were unable to update our database. So, we need to signal its
+	// drop again.
+	for tableName := range mismatchTables {
+		_, alreadyExists := dropped[tableName]
+		if !curTables[tableName] && !alreadyExists {
+			dropped[tableName] = &Table{Name: sqlparser.NewIdentifierCS(tableName), Type: NoType}
+		}
+	}
+
+	return maps.Values(dropped)
+}
+
+func getTableData(ctx context.Context, conn *connpool.DBConn, includeStats bool) (*sqltypes.Result, error) {
+	var showTablesQuery string
+	if includeStats {
+		showTablesQuery = conn.BaseShowTablesWithSizes()
+	} else {
+		showTablesQuery = conn.BaseShowTables()
+	}
+	return conn.Exec(ctx, showTablesQuery, maxTableCount, false)
 }
 
 func (se *Engine) updateInnoDBRowsRead(ctx context.Context, conn *connpool.DBConn) error {

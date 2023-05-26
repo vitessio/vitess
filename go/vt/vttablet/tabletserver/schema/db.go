@@ -338,3 +338,37 @@ func (se *Engine) getMismatchedTableNames(ctx context.Context, conn *connpool.DB
 
 	return tablesMismatched, nil
 }
+
+// reloadDataInDB reloads the schema tracking data in the database
+func reloadDataInDB(ctx context.Context, conn *connpool.DBConn, altered []*Table, created []*Table, dropped []*Table) error {
+	// tablesToReload and viewsToReload stores the tables and views that need reloading and storing in our MySQL database.
+	var tablesToReload, viewsToReload []*Table
+	// droppedTables, droppedViews stores the list of tables and views we need to delete, respectively.
+	var droppedTables []string
+	var droppedViews []string
+
+	for _, table := range append(altered, created...) {
+		if table.Type == View {
+			viewsToReload = append(viewsToReload, table)
+		} else {
+			tablesToReload = append(tablesToReload, table)
+		}
+	}
+
+	for _, table := range dropped {
+		tableName := table.Name.String()
+		if table.Type == View {
+			droppedViews = append(droppedViews, tableName)
+		} else {
+			droppedTables = append(droppedTables, tableName)
+		}
+	}
+
+	if err := reloadTablesDataInDB(ctx, conn, tablesToReload, droppedTables); err != nil {
+		return err
+	}
+	if err := reloadViewsDataInDB(ctx, conn, viewsToReload, droppedViews); err != nil {
+		return err
+	}
+	return nil
+}
