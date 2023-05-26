@@ -49,7 +49,7 @@ func TestPersistConfig(t *testing.T) {
 		require.NoError(t, err)
 
 		var cfg config
-		require.NoError(t, json.Unmarshal(data, &cfg))
+		require.NoError(t, json.Unmarshal(data, &cfg), "unmarshalled at %s", time.Now())
 
 		return cfg
 	}

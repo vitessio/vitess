@@ -228,6 +228,7 @@ func (v *Viper) WriteConfig() error {
 
 	v.live.SetConfigFile(v.disk.ConfigFileUsed())
 
+	log.ERROR("writing config")
 	return v.live.WriteConfig()
 }
 
