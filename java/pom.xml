@@ -176,6 +176,12 @@
         <artifactId>vitess-jdbc</artifactId>
         <version>${project.version}</version>
       </dependency>
+      <dependency>
+        <groupId>io.vitess</groupId>
+        <artifactId>vitess-proto</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+
 
       <dependency>
         <groupId>joda-time</groupId>

@@ -65,6 +65,10 @@
     </dependency>
     <dependency>
       <groupId>io.vitess</groupId>
+      <artifactId>vitess-proto</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>io.vitess</groupId>
       <artifactId>vitess-client</artifactId>
       <type>test-jar</type>
       <scope>test</scope>
@@ -90,13 +94,6 @@
   </dependencies>
 
   <build>
-    <extensions>
-      <extension>
-        <groupId>kr.motd.maven</groupId>
-        <artifactId>os-maven-plugin</artifactId>
-        <version>1.2.3.Final</version>
-      </extension>
-    </extensions>
     <plugins>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
@@ -107,25 +104,6 @@
 		  <useManifestOnlyJar>false</useManifestOnlyJar>
 		  <useSystemClassLoader>true</useSystemClassLoader>
         </configuration>
-      </plugin>	  
-      <plugin>
-        <groupId>org.xolstice.maven.plugins</groupId>
-        <artifactId>protobuf-maven-plugin</artifactId>
-        <version>0.6.1</version>
-        <configuration>
-          <protocArtifact>com.google.protobuf:protoc:${protobuf.protoc.version}:exe:${os.detected.classifier}</protocArtifact>
-          <pluginId>grpc-java</pluginId>
-          <pluginArtifact>io.grpc:protoc-gen-grpc-java:${grpc.version}:exe:${os.detected.classifier}</pluginArtifact>
-          <protoSourceRoot>../../proto</protoSourceRoot>
-        </configuration>
-        <executions>
-          <execution>
-            <goals>
-              <goal>compile</goal>
-              <goal>compile-custom</goal>
-            </goals>
-          </execution>
-        </executions>
       </plugin>
       <!-- Exclusions for dependency:analyze: -->
       <plugin>
