@@ -28,6 +28,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfAddConstraintDefinition(in, f)
 	case *AddIndexDefinition:
 		return VisitRefOfAddIndexDefinition(in, f)
+	case *AdddateExpr:
+		return VisitRefOfAdddateExpr(in, f)
 	case AlgorithmValue:
 		return VisitAlgorithmValue(in, f)
 	case *AliasedExpr:
@@ -128,6 +130,10 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfCreateView(in, f)
 	case *CurTimeFuncExpr:
 		return VisitRefOfCurTimeFuncExpr(in, f)
+	case *DateAddExpr:
+		return VisitRefOfDateAddExpr(in, f)
+	case *DateSubExpr:
+		return VisitRefOfDateSubExpr(in, f)
 	case *DeallocateStmt:
 		return VisitRefOfDeallocateStmt(in, f)
 	case *Default:
@@ -472,6 +478,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfSubPartitionDefinitionOptions(in, f)
 	case SubPartitionDefinitions:
 		return VisitSubPartitionDefinitions(in, f)
+	case *SubdateExpr:
+		return VisitRefOfSubdateExpr(in, f)
 	case *Subquery:
 		return VisitRefOfSubquery(in, f)
 	case *SubstrExpr:
@@ -594,6 +602,21 @@ func VisitRefOfAddIndexDefinition(in *AddIndexDefinition, f Visit) error {
 		return err
 	}
 	if err := VisitRefOfIndexDefinition(in.IndexDefinition, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfAdddateExpr(in *AdddateExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.Date, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.Expr, f); err != nil {
 		return err
 	}
 	return nil
@@ -1301,6 +1324,36 @@ func VisitRefOfCurTimeFuncExpr(in *CurTimeFuncExpr, f Visit) error {
 		return err
 	}
 	if err := VisitIdentifierCI(in.Name, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfDateAddExpr(in *DateAddExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.Date, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.Expr, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfDateSubExpr(in *DateSubExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.Date, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.Expr, f); err != nil {
 		return err
 	}
 	return nil
@@ -3778,6 +3831,21 @@ func VisitSubPartitionDefinitions(in SubPartitionDefinitions, f Visit) error {
 	}
 	return nil
 }
+func VisitRefOfSubdateExpr(in *SubdateExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.Date, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.Expr, f); err != nil {
+		return err
+	}
+	return nil
+}
 func VisitRefOfSubquery(in *Subquery, f Visit) error {
 	if in == nil {
 		return nil
@@ -4471,6 +4539,8 @@ func VisitCallable(in Callable, f Visit) error {
 		return nil
 	}
 	switch in := in.(type) {
+	case *AdddateExpr:
+		return VisitRefOfAdddateExpr(in, f)
 	case *ArgumentLessWindowExpr:
 		return VisitRefOfArgumentLessWindowExpr(in, f)
 	case *Avg:
@@ -4487,6 +4557,10 @@ func VisitCallable(in Callable, f Visit) error {
 		return VisitRefOfCountStar(in, f)
 	case *CurTimeFuncExpr:
 		return VisitRefOfCurTimeFuncExpr(in, f)
+	case *DateAddExpr:
+		return VisitRefOfDateAddExpr(in, f)
+	case *DateSubExpr:
+		return VisitRefOfDateSubExpr(in, f)
 	case *ExtractFuncExpr:
 		return VisitRefOfExtractFuncExpr(in, f)
 	case *ExtractValueExpr:
@@ -4609,6 +4683,8 @@ func VisitCallable(in Callable, f Visit) error {
 		return VisitRefOfRegexpReplaceExpr(in, f)
 	case *RegexpSubstrExpr:
 		return VisitRefOfRegexpSubstrExpr(in, f)
+	case *SubdateExpr:
+		return VisitRefOfSubdateExpr(in, f)
 	case *SubstrExpr:
 		return VisitRefOfSubstrExpr(in, f)
 	case *Sum:
@@ -4719,6 +4795,8 @@ func VisitExpr(in Expr, f Visit) error {
 		return nil
 	}
 	switch in := in.(type) {
+	case *AdddateExpr:
+		return VisitRefOfAdddateExpr(in, f)
 	case *AndExpr:
 		return VisitRefOfAndExpr(in, f)
 	case *Argument:
@@ -4763,6 +4841,10 @@ func VisitExpr(in Expr, f Visit) error {
 		return VisitRefOfCountStar(in, f)
 	case *CurTimeFuncExpr:
 		return VisitRefOfCurTimeFuncExpr(in, f)
+	case *DateAddExpr:
+		return VisitRefOfDateAddExpr(in, f)
+	case *DateSubExpr:
+		return VisitRefOfDateSubExpr(in, f)
 	case *Default:
 		return VisitRefOfDefault(in, f)
 	case *ExistsExpr:
@@ -4919,6 +5001,8 @@ func VisitExpr(in Expr, f Visit) error {
 		return VisitRefOfStdPop(in, f)
 	case *StdSamp:
 		return VisitRefOfStdSamp(in, f)
+	case *SubdateExpr:
+		return VisitRefOfSubdateExpr(in, f)
 	case *Subquery:
 		return VisitRefOfSubquery(in, f)
 	case *SubstrExpr:

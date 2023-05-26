@@ -334,7 +334,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %token <str> NAMES GLOBAL SESSION ISOLATION LEVEL READ WRITE ONLY REPEATABLE COMMITTED UNCOMMITTED SERIALIZABLE
 
 // Functions
-%token <str> CURRENT_TIMESTAMP DATABASE CURRENT_DATE CURDATE NOW
+%token <str> ADDDATE CURRENT_TIMESTAMP DATABASE CURRENT_DATE CURDATE DATE_ADD DATE_SUB NOW SUBDATE
 %token <str> CURTIME CURRENT_TIME LOCALTIME LOCALTIMESTAMP CURRENT_USER
 %token <str> UTC_DATE UTC_TIME UTC_TIMESTAMP SYSDATE
 %token <str> DAY DAY_HOUR DAY_MICROSECOND DAY_MINUTE DAY_SECOND HOUR HOUR_MICROSECOND HOUR_MINUTE HOUR_SECOND MICROSECOND MINUTE MINUTE_MICROSECOND MINUTE_SECOND MONTH QUARTER SECOND SECOND_MICROSECOND YEAR_MONTH WEEK
@@ -6610,6 +6610,30 @@ UTC_DATE func_paren_opt
   {
     $$ =  &LagLeadExpr{ Type:$1 , Expr: $3, N: $5, Default: $6, NullTreatmentClause:$8, OverClause: $9}
   }
+| ADDDATE openb expression ',' INTERVAL bit_expr interval closeb
+  {
+    $$ = &AdddateExpr{Date:$3, Expr:$6, Unit: $7}
+  }
+| ADDDATE openb expression ',' expression closeb
+  {
+    $$ = &AdddateExpr{Date:$3, Expr:$5}
+  }
+| DATE_ADD openb expression ',' INTERVAL bit_expr interval closeb
+  {
+    $$ = &DateAddExpr{Date:$3, Expr:$6, Unit: $7}
+  }
+| DATE_SUB openb expression ',' INTERVAL bit_expr interval closeb
+  {
+    $$ = &DateSubExpr{Date:$3, Expr:$6, Unit: $7}
+  }
+| SUBDATE openb expression ',' INTERVAL bit_expr interval closeb
+  {
+    $$ = &SubdateExpr{Date:$3, Expr:$6, Unit: $7}
+  }
+| SUBDATE openb expression ',' expression closeb
+  {
+    $$ = &SubdateExpr{Date:$3, Expr:$5}
+  }
 | regular_expressions
 | xml_expressions
 | performance_schema_function_expressions
@@ -7947,6 +7971,7 @@ non_reserved_keyword:
   AGAINST
 | ACTION
 | ACTIVE
+| ADDDATE %prec FUNCTION_CALL_NON_KEYWORD
 | ADMIN
 | AFTER
 | ALGORITHM
@@ -7999,6 +8024,8 @@ non_reserved_keyword:
 | CURRENT
 | DATA
 | DATE %prec STRING_TYPE_PREFIX_NON_KEYWORD
+| DATE_ADD %prec FUNCTION_CALL_NON_KEYWORD
+| DATE_SUB %prec FUNCTION_CALL_NON_KEYWORD
 | DATETIME
 | DEALLOCATE
 | DECIMAL_TYPE
@@ -8303,6 +8330,7 @@ non_reserved_keyword:
 | ST_StartPoint %prec FUNCTION_CALL_NON_KEYWORD
 | ST_X %prec FUNCTION_CALL_NON_KEYWORD
 | ST_Y %prec FUNCTION_CALL_NON_KEYWORD
+| SUBDATE %prec FUNCTION_CALL_NON_KEYWORD
 | SUBPARTITION
 | SUBPARTITIONS
 | SUM %prec FUNCTION_CALL_NON_KEYWORD

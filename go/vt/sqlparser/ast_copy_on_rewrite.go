@@ -28,6 +28,8 @@ func (c *cow) copyOnRewriteSQLNode(n SQLNode, parent SQLNode) (out SQLNode, chan
 		return c.copyOnRewriteRefOfAddConstraintDefinition(n, parent)
 	case *AddIndexDefinition:
 		return c.copyOnRewriteRefOfAddIndexDefinition(n, parent)
+	case *AdddateExpr:
+		return c.copyOnRewriteRefOfAdddateExpr(n, parent)
 	case AlgorithmValue:
 		return c.copyOnRewriteAlgorithmValue(n, parent)
 	case *AliasedExpr:
@@ -128,6 +130,10 @@ func (c *cow) copyOnRewriteSQLNode(n SQLNode, parent SQLNode) (out SQLNode, chan
 		return c.copyOnRewriteRefOfCreateView(n, parent)
 	case *CurTimeFuncExpr:
 		return c.copyOnRewriteRefOfCurTimeFuncExpr(n, parent)
+	case *DateAddExpr:
+		return c.copyOnRewriteRefOfDateAddExpr(n, parent)
+	case *DateSubExpr:
+		return c.copyOnRewriteRefOfDateSubExpr(n, parent)
 	case *DeallocateStmt:
 		return c.copyOnRewriteRefOfDeallocateStmt(n, parent)
 	case *Default:
@@ -472,6 +478,8 @@ func (c *cow) copyOnRewriteSQLNode(n SQLNode, parent SQLNode) (out SQLNode, chan
 		return c.copyOnRewriteRefOfSubPartitionDefinitionOptions(n, parent)
 	case SubPartitionDefinitions:
 		return c.copyOnRewriteSubPartitionDefinitions(n, parent)
+	case *SubdateExpr:
+		return c.copyOnRewriteRefOfSubdateExpr(n, parent)
 	case *Subquery:
 		return c.copyOnRewriteRefOfSubquery(n, parent)
 	case *SubstrExpr:
@@ -621,6 +629,30 @@ func (c *cow) copyOnRewriteRefOfAddIndexDefinition(n *AddIndexDefinition, parent
 		if changedIndexDefinition {
 			res := *n
 			res.IndexDefinition, _ = _IndexDefinition.(*IndexDefinition)
+			out = &res
+			if c.cloned != nil {
+				c.cloned(n, out)
+			}
+			changed = true
+		}
+	}
+	if c.post != nil {
+		out, changed = c.postVisit(out, parent, changed)
+	}
+	return
+}
+func (c *cow) copyOnRewriteRefOfAdddateExpr(n *AdddateExpr, parent SQLNode) (out SQLNode, changed bool) {
+	if n == nil || c.cursor.stop {
+		return n, false
+	}
+	out = n
+	if c.pre == nil || c.pre(n, parent) {
+		_Date, changedDate := c.copyOnRewriteExpr(n.Date, n)
+		_Expr, changedExpr := c.copyOnRewriteExpr(n.Expr, n)
+		if changedDate || changedExpr {
+			res := *n
+			res.Date, _ = _Date.(Expr)
+			res.Expr, _ = _Expr.(Expr)
 			out = &res
 			if c.cloned != nil {
 				c.cloned(n, out)
@@ -1736,6 +1768,54 @@ func (c *cow) copyOnRewriteRefOfCurTimeFuncExpr(n *CurTimeFuncExpr, parent SQLNo
 		if changedName {
 			res := *n
 			res.Name, _ = _Name.(IdentifierCI)
+			out = &res
+			if c.cloned != nil {
+				c.cloned(n, out)
+			}
+			changed = true
+		}
+	}
+	if c.post != nil {
+		out, changed = c.postVisit(out, parent, changed)
+	}
+	return
+}
+func (c *cow) copyOnRewriteRefOfDateAddExpr(n *DateAddExpr, parent SQLNode) (out SQLNode, changed bool) {
+	if n == nil || c.cursor.stop {
+		return n, false
+	}
+	out = n
+	if c.pre == nil || c.pre(n, parent) {
+		_Date, changedDate := c.copyOnRewriteExpr(n.Date, n)
+		_Expr, changedExpr := c.copyOnRewriteExpr(n.Expr, n)
+		if changedDate || changedExpr {
+			res := *n
+			res.Date, _ = _Date.(Expr)
+			res.Expr, _ = _Expr.(Expr)
+			out = &res
+			if c.cloned != nil {
+				c.cloned(n, out)
+			}
+			changed = true
+		}
+	}
+	if c.post != nil {
+		out, changed = c.postVisit(out, parent, changed)
+	}
+	return
+}
+func (c *cow) copyOnRewriteRefOfDateSubExpr(n *DateSubExpr, parent SQLNode) (out SQLNode, changed bool) {
+	if n == nil || c.cursor.stop {
+		return n, false
+	}
+	out = n
+	if c.pre == nil || c.pre(n, parent) {
+		_Date, changedDate := c.copyOnRewriteExpr(n.Date, n)
+		_Expr, changedExpr := c.copyOnRewriteExpr(n.Expr, n)
+		if changedDate || changedExpr {
+			res := *n
+			res.Date, _ = _Date.(Expr)
+			res.Expr, _ = _Expr.(Expr)
 			out = &res
 			if c.cloned != nil {
 				c.cloned(n, out)
@@ -5643,6 +5723,30 @@ func (c *cow) copyOnRewriteSubPartitionDefinitions(n SubPartitionDefinitions, pa
 	}
 	return
 }
+func (c *cow) copyOnRewriteRefOfSubdateExpr(n *SubdateExpr, parent SQLNode) (out SQLNode, changed bool) {
+	if n == nil || c.cursor.stop {
+		return n, false
+	}
+	out = n
+	if c.pre == nil || c.pre(n, parent) {
+		_Date, changedDate := c.copyOnRewriteExpr(n.Date, n)
+		_Expr, changedExpr := c.copyOnRewriteExpr(n.Expr, n)
+		if changedDate || changedExpr {
+			res := *n
+			res.Date, _ = _Date.(Expr)
+			res.Expr, _ = _Expr.(Expr)
+			out = &res
+			if c.cloned != nil {
+				c.cloned(n, out)
+			}
+			changed = true
+		}
+	}
+	if c.post != nil {
+		out, changed = c.postVisit(out, parent, changed)
+	}
+	return
+}
 func (c *cow) copyOnRewriteRefOfSubquery(n *Subquery, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -6701,6 +6805,8 @@ func (c *cow) copyOnRewriteCallable(n Callable, parent SQLNode) (out SQLNode, ch
 		return n, false
 	}
 	switch n := n.(type) {
+	case *AdddateExpr:
+		return c.copyOnRewriteRefOfAdddateExpr(n, parent)
 	case *ArgumentLessWindowExpr:
 		return c.copyOnRewriteRefOfArgumentLessWindowExpr(n, parent)
 	case *Avg:
@@ -6717,6 +6823,10 @@ func (c *cow) copyOnRewriteCallable(n Callable, parent SQLNode) (out SQLNode, ch
 		return c.copyOnRewriteRefOfCountStar(n, parent)
 	case *CurTimeFuncExpr:
 		return c.copyOnRewriteRefOfCurTimeFuncExpr(n, parent)
+	case *DateAddExpr:
+		return c.copyOnRewriteRefOfDateAddExpr(n, parent)
+	case *DateSubExpr:
+		return c.copyOnRewriteRefOfDateSubExpr(n, parent)
 	case *ExtractFuncExpr:
 		return c.copyOnRewriteRefOfExtractFuncExpr(n, parent)
 	case *ExtractValueExpr:
@@ -6839,6 +6949,8 @@ func (c *cow) copyOnRewriteCallable(n Callable, parent SQLNode) (out SQLNode, ch
 		return c.copyOnRewriteRefOfRegexpReplaceExpr(n, parent)
 	case *RegexpSubstrExpr:
 		return c.copyOnRewriteRefOfRegexpSubstrExpr(n, parent)
+	case *SubdateExpr:
+		return c.copyOnRewriteRefOfSubdateExpr(n, parent)
 	case *SubstrExpr:
 		return c.copyOnRewriteRefOfSubstrExpr(n, parent)
 	case *Sum:
@@ -6949,6 +7061,8 @@ func (c *cow) copyOnRewriteExpr(n Expr, parent SQLNode) (out SQLNode, changed bo
 		return n, false
 	}
 	switch n := n.(type) {
+	case *AdddateExpr:
+		return c.copyOnRewriteRefOfAdddateExpr(n, parent)
 	case *AndExpr:
 		return c.copyOnRewriteRefOfAndExpr(n, parent)
 	case *Argument:
@@ -6993,6 +7107,10 @@ func (c *cow) copyOnRewriteExpr(n Expr, parent SQLNode) (out SQLNode, changed bo
 		return c.copyOnRewriteRefOfCountStar(n, parent)
 	case *CurTimeFuncExpr:
 		return c.copyOnRewriteRefOfCurTimeFuncExpr(n, parent)
+	case *DateAddExpr:
+		return c.copyOnRewriteRefOfDateAddExpr(n, parent)
+	case *DateSubExpr:
+		return c.copyOnRewriteRefOfDateSubExpr(n, parent)
 	case *Default:
 		return c.copyOnRewriteRefOfDefault(n, parent)
 	case *ExistsExpr:
@@ -7149,6 +7267,8 @@ func (c *cow) copyOnRewriteExpr(n Expr, parent SQLNode) (out SQLNode, changed bo
 		return c.copyOnRewriteRefOfStdPop(n, parent)
 	case *StdSamp:
 		return c.copyOnRewriteRefOfStdSamp(n, parent)
+	case *SubdateExpr:
+		return c.copyOnRewriteRefOfSubdateExpr(n, parent)
 	case *Subquery:
 		return c.copyOnRewriteRefOfSubquery(n, parent)
 	case *SubstrExpr:

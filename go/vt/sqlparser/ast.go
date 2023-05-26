@@ -2966,7 +2966,7 @@ type (
 	}
 
 	// RegexpInstrExpr represents REGEXP_INSTR()
-	// For more information, postVisit https://dev.mysql.com/doc/refman/8.0/en/regexp.html#function_regexp-instr
+	// For more information, see https://dev.mysql.com/doc/refman/8.0/en/regexp.html#function_regexp-instr
 	RegexpInstrExpr struct {
 		Expr         Expr
 		Pattern      Expr
@@ -2977,7 +2977,7 @@ type (
 	}
 
 	// RegexpLikeExpr represents REGEXP_LIKE()
-	// For more information, postVisit https://dev.mysql.com/doc/refman/8.0/en/regexp.html#function_regexp-like
+	// For more information, see https://dev.mysql.com/doc/refman/8.0/en/regexp.html#function_regexp-like
 	RegexpLikeExpr struct {
 		Expr      Expr
 		Pattern   Expr
@@ -2985,7 +2985,7 @@ type (
 	}
 
 	// RegexpReplaceExpr represents REGEXP_REPLACE()
-	// For more information, postVisit https://dev.mysql.com/doc/refman/8.0/en/regexp.html#function_regexp-replace
+	// For more information, see https://dev.mysql.com/doc/refman/8.0/en/regexp.html#function_regexp-replace
 	RegexpReplaceExpr struct {
 		Expr       Expr
 		Pattern    Expr
@@ -2996,13 +2996,45 @@ type (
 	}
 
 	// RegexpSubstrExpr represents REGEXP_SUBSTR()
-	// For more information, postVisit https://dev.mysql.com/doc/refman/8.0/en/regexp.html#function_regexp-substr
+	// For more information, see https://dev.mysql.com/doc/refman/8.0/en/regexp.html#function_regexp-substr
 	RegexpSubstrExpr struct {
 		Expr       Expr
 		Pattern    Expr
 		Occurrence Expr
 		Position   Expr
 		MatchType  Expr
+	}
+
+	// AdddateExpr represents ADDDATE()
+	// For more information, see https://dev.mysql.com/doc/refman/8.0/en/date-and-time-functions.html#function_adddate
+	AdddateExpr struct {
+		Date Expr
+		Unit IntervalTypes
+		Expr Expr
+	}
+
+	// DateAddExpr represents DATE_ADD()
+	// For more information, see https://dev.mysql.com/doc/refman/8.0/en/date-and-time-functions.html#function_date-add
+	DateAddExpr struct {
+		Date Expr
+		Unit IntervalTypes
+		Expr Expr
+	}
+
+	// DateSubExpr represents DATE_SUB()
+	// For more information, see https://dev.mysql.com/doc/refman/8.0/en/date-and-time-functions.html#function_date-sub
+	DateSubExpr struct {
+		Date Expr
+		Unit IntervalTypes
+		Expr Expr
+	}
+
+	// SubdateExpr represents SUBDATE()
+	// For more information, see https://dev.mysql.com/doc/refman/8.0/en/date-and-time-functions.html#function_date-sub
+	SubdateExpr struct {
+		Date Expr
+		Unit IntervalTypes
+		Expr Expr
 	}
 
 	// ArgumentLessWindowExpr stands for the following window_functions: CUME_DIST, DENSE_RANK, PERCENT_RANK, RANK, ROW_NUMBER
@@ -3178,6 +3210,10 @@ func (*RegexpInstrExpr) iExpr()                    {}
 func (*RegexpLikeExpr) iExpr()                     {}
 func (*RegexpReplaceExpr) iExpr()                  {}
 func (*RegexpSubstrExpr) iExpr()                   {}
+func (*AdddateExpr) iExpr()                        {}
+func (*DateAddExpr) iExpr()                        {}
+func (*DateSubExpr) iExpr()                        {}
+func (*SubdateExpr) iExpr()                        {}
 func (*ArgumentLessWindowExpr) iExpr()             {}
 func (*FirstOrLastValueExpr) iExpr()               {}
 func (*NtileExpr) iExpr()                          {}
@@ -3269,6 +3305,10 @@ func (*RegexpInstrExpr) iCallable()                    {}
 func (*RegexpLikeExpr) iCallable()                     {}
 func (*RegexpReplaceExpr) iCallable()                  {}
 func (*RegexpSubstrExpr) iCallable()                   {}
+func (*AdddateExpr) iCallable()                        {}
+func (*DateAddExpr) iCallable()                        {}
+func (*DateSubExpr) iCallable()                        {}
+func (*SubdateExpr) iCallable()                        {}
 func (*ArgumentLessWindowExpr) iCallable()             {}
 func (*FirstOrLastValueExpr) iCallable()               {}
 func (*NtileExpr) iCallable()                          {}

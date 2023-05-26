@@ -914,7 +914,8 @@ const (
 
 // IntervalTypes constants
 const (
-	IntervalYear IntervalTypes = iota
+	IntervalUnknown IntervalTypes = iota
+	IntervalYear
 	IntervalQuarter
 	IntervalMonth
 	IntervalWeek

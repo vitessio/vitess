@@ -1322,7 +1322,7 @@ INPUT
 select DATE_ADD(20071108, INTERVAL 1 DAY);
 END
 OUTPUT
-select DATE_ADD(20071108, interval 1 day) from dual
+select date_add(20071108, interval 1 day) from dual
 END
 INPUT
 select distinct concat(c1, repeat('xx', 250)) as cc from t2 order by 1;
@@ -3248,7 +3248,7 @@ INPUT
 select date_add("1997-12-31 23:59:59",INTERVAL -100000 MINUTE);
 END
 OUTPUT
-select date_add('1997-12-31 23:59:59', interval (-100000) minute) from dual
+select date_add('1997-12-31 23:59:59', interval -100000 minute) from dual
 END
 INPUT
 select insert('hello', 18446744073709551616, 1, 'hi');
@@ -6932,7 +6932,7 @@ INPUT
 select visitor_id,max(ts) as mts from t1 group by visitor_id having DATE_ADD(mts,INTERVAL 3 MONTH) < NOW();
 END
 OUTPUT
-select visitor_id, max(ts) as mts from t1 group by visitor_id having DATE_ADD(mts, interval 3 month) < now()
+select visitor_id, max(ts) as mts from t1 group by visitor_id having date_add(mts, interval 3 month) < now()
 END
 INPUT
 select @category3_id:= 10003;
@@ -9962,7 +9962,7 @@ INPUT
 select DATE_ADD('20071108181000', INTERVAL 1 DAY);
 END
 OUTPUT
-select DATE_ADD('20071108181000', interval 1 day) from dual
+select date_add('20071108181000', interval 1 day) from dual
 END
 INPUT
 select sha('abc');
@@ -12176,7 +12176,7 @@ INPUT
 select date_add("2001-01-01 23:59:59",INTERVAL -2000 YEAR);
 END
 OUTPUT
-select date_add('2001-01-01 23:59:59', interval (-2000) year) from dual
+select date_add('2001-01-01 23:59:59', interval -2000 year) from dual
 END
 INPUT
 select avg(2) from t1;
@@ -12812,7 +12812,7 @@ INPUT
 select date_add("1997-12-31 23:59:59",INTERVAL -100000 DAY);
 END
 OUTPUT
-select date_add('1997-12-31 23:59:59', interval (-100000) day) from dual
+select date_add('1997-12-31 23:59:59', interval -100000 day) from dual
 END
 INPUT
 select dummy1,count(distinct id) from t1 group by dummy1;
@@ -13832,7 +13832,7 @@ INPUT
 select date_add("1997-12-31 23:59:59",INTERVAL -100000 YEAR);
 END
 OUTPUT
-select date_add('1997-12-31 23:59:59', interval (-100000) year) from dual
+select date_add('1997-12-31 23:59:59', interval -100000 year) from dual
 END
 INPUT
 select substring_index('the king of the the hill',' ',-2);
@@ -16094,7 +16094,7 @@ INPUT
 select visitor_id,max(ts) as mts from t1 group by visitor_id having mts < DATE_SUB(NOW(),INTERVAL 3 MONTH);
 END
 OUTPUT
-select visitor_id, max(ts) as mts from t1 group by visitor_id having mts < DATE_SUB(now(), interval 3 month)
+select visitor_id, max(ts) as mts from t1 group by visitor_id having mts < date_sub(now(), interval 3 month)
 END
 INPUT
 select f1, f2, if(f1, 40.0, 5.00) from t1 group by f1 order by f2;
@@ -16934,7 +16934,7 @@ INPUT
 select DATE_ADD(20071108181000, INTERVAL 1 DAY);
 END
 OUTPUT
-select DATE_ADD(20071108181000, interval 1 day) from dual
+select date_add(20071108181000, interval 1 day) from dual
 END
 INPUT
 select a as gci2 from t1 where a like 'あいうえおかきくけこさしすせそ';
@@ -21122,7 +21122,7 @@ INPUT
 select DATE_ADD('20071108', INTERVAL 1 DAY);
 END
 OUTPUT
-select DATE_ADD('20071108', interval 1 day) from dual
+select date_add('20071108', interval 1 day) from dual
 END
 INPUT
 select locate(_ujis 0xa1a3,_ujis 0xa1a2a1a3);

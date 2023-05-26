@@ -72,6 +72,24 @@ func (cached *AddIndexDefinition) CachedSize(alloc bool) int64 {
 	size += cached.IndexDefinition.CachedSize(true)
 	return size
 }
+func (cached *AdddateExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field Date vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Date.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field Expr vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Expr.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	return size
+}
 func (cached *AliasedExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -1026,6 +1044,42 @@ func (cached *DatabaseOption) CachedSize(alloc bool) int64 {
 	}
 	// field Value string
 	size += hack.RuntimeAllocSize(int64(len(cached.Value)))
+	return size
+}
+func (cached *DateAddExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field Date vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Date.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field Expr vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Expr.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	return size
+}
+func (cached *DateSubExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field Date vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Date.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field Expr vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Expr.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
 	return size
 }
 func (cached *DeallocateStmt) CachedSize(alloc bool) int64 {
@@ -3958,6 +4012,24 @@ func (cached *SubPartitionDefinitionOptions) CachedSize(alloc bool) int64 {
 	size += hack.RuntimeAllocSize(int64(8))
 	// field TableSpace string
 	size += hack.RuntimeAllocSize(int64(len(cached.TableSpace)))
+	return size
+}
+func (cached *SubdateExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field Date vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Date.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field Expr vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Expr.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
 	return size
 }
 func (cached *Subquery) CachedSize(alloc bool) int64 {

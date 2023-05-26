@@ -1930,6 +1930,60 @@ func (node *RegexpSubstrExpr) formatFast(buf *TrackedBuffer) {
 	buf.WriteByte(')')
 }
 
+// formatFast formats the node
+func (node *AdddateExpr) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("adddate(")
+	buf.printExpr(node, node.Date, true)
+	buf.WriteString(", ")
+	if node.Unit == IntervalUnknown {
+		buf.printExpr(node, node.Expr, true)
+	} else {
+		buf.WriteString("interval ")
+		buf.printExpr(node, node.Expr, true)
+		buf.WriteByte(' ')
+		buf.WriteString(node.Unit.ToString())
+	}
+	buf.WriteByte(')')
+}
+
+// formatFast formats the node
+func (node *DateAddExpr) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("date_add(")
+	buf.printExpr(node, node.Date, true)
+	buf.WriteString(", interval ")
+	buf.printExpr(node, node.Expr, true)
+	buf.WriteByte(' ')
+	buf.WriteString(node.Unit.ToString())
+	buf.WriteByte(')')
+}
+
+// formatFast formats the node
+func (node *DateSubExpr) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("date_sub(")
+	buf.printExpr(node, node.Date, true)
+	buf.WriteString(", interval ")
+	buf.printExpr(node, node.Expr, true)
+	buf.WriteByte(' ')
+	buf.WriteString(node.Unit.ToString())
+	buf.WriteByte(')')
+}
+
+// formatFast formats the node
+func (node *SubdateExpr) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("subdate(")
+	buf.printExpr(node, node.Date, true)
+	buf.WriteString(", ")
+	if node.Unit == IntervalUnknown {
+		buf.printExpr(node, node.Expr, true)
+	} else {
+		buf.WriteString("interval ")
+		buf.printExpr(node, node.Expr, true)
+		buf.WriteByte(' ')
+		buf.WriteString(node.Unit.ToString())
+	}
+	buf.WriteByte(')')
+}
+
 // formatFast formats the node.
 func (node *TrimFuncExpr) formatFast(buf *TrackedBuffer) {
 	buf.WriteString(node.TrimFuncType.ToString())

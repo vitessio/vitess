@@ -1463,6 +1463,38 @@ func (node *RegexpSubstrExpr) Format(buf *TrackedBuffer) {
 	buf.WriteByte(')')
 }
 
+// Format formats the node
+func (node *AdddateExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "adddate(%v, ", node.Date)
+	if node.Unit == IntervalUnknown {
+		buf.astPrintf(node, "%v", node.Expr)
+	} else {
+		buf.astPrintf(node, "interval %v %#s", node.Expr, node.Unit.ToString())
+	}
+	buf.WriteByte(')')
+}
+
+// Format formats the node
+func (node *DateAddExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "date_add(%v, interval %v %#s)", node.Date, node.Expr, node.Unit.ToString())
+}
+
+// Format formats the node
+func (node *DateSubExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "date_sub(%v, interval %v %#s)", node.Date, node.Expr, node.Unit.ToString())
+}
+
+// Format formats the node
+func (node *SubdateExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "subdate(%v, ", node.Date)
+	if node.Unit == IntervalUnknown {
+		buf.astPrintf(node, "%v", node.Expr)
+	} else {
+		buf.astPrintf(node, "interval %v %#s", node.Expr, node.Unit.ToString())
+	}
+	buf.WriteByte(')')
+}
+
 // Format formats the node.
 func (node *TrimFuncExpr) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "%s(", node.TrimFuncType.ToString())

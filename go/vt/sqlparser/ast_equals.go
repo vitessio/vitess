@@ -44,6 +44,12 @@ func (cmp *Comparator) SQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return cmp.RefOfAddIndexDefinition(a, b)
+	case *AdddateExpr:
+		b, ok := inB.(*AdddateExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfAdddateExpr(a, b)
 	case AlgorithmValue:
 		b, ok := inB.(AlgorithmValue)
 		if !ok {
@@ -344,6 +350,18 @@ func (cmp *Comparator) SQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return cmp.RefOfCurTimeFuncExpr(a, b)
+	case *DateAddExpr:
+		b, ok := inB.(*DateAddExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfDateAddExpr(a, b)
+	case *DateSubExpr:
+		b, ok := inB.(*DateSubExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfDateSubExpr(a, b)
 	case *DeallocateStmt:
 		b, ok := inB.(*DeallocateStmt)
 		if !ok {
@@ -1376,6 +1394,12 @@ func (cmp *Comparator) SQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return cmp.SubPartitionDefinitions(a, b)
+	case *SubdateExpr:
+		b, ok := inB.(*SubdateExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfSubdateExpr(a, b)
 	case *Subquery:
 		b, ok := inB.(*Subquery)
 		if !ok {
@@ -1655,6 +1679,19 @@ func (cmp *Comparator) RefOfAddIndexDefinition(a, b *AddIndexDefinition) bool {
 		return false
 	}
 	return cmp.RefOfIndexDefinition(a.IndexDefinition, b.IndexDefinition)
+}
+
+// RefOfAdddateExpr does deep equals between the two objects.
+func (cmp *Comparator) RefOfAdddateExpr(a, b *AdddateExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return cmp.Expr(a.Date, b.Date) &&
+		a.Unit == b.Unit &&
+		cmp.Expr(a.Expr, b.Expr)
 }
 
 // RefOfAliasedExpr does deep equals between the two objects.
@@ -2284,6 +2321,32 @@ func (cmp *Comparator) RefOfCurTimeFuncExpr(a, b *CurTimeFuncExpr) bool {
 	}
 	return a.Fsp == b.Fsp &&
 		cmp.IdentifierCI(a.Name, b.Name)
+}
+
+// RefOfDateAddExpr does deep equals between the two objects.
+func (cmp *Comparator) RefOfDateAddExpr(a, b *DateAddExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return cmp.Expr(a.Date, b.Date) &&
+		a.Unit == b.Unit &&
+		cmp.Expr(a.Expr, b.Expr)
+}
+
+// RefOfDateSubExpr does deep equals between the two objects.
+func (cmp *Comparator) RefOfDateSubExpr(a, b *DateSubExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return cmp.Expr(a.Date, b.Date) &&
+		a.Unit == b.Unit &&
+		cmp.Expr(a.Expr, b.Expr)
 }
 
 // RefOfDeallocateStmt does deep equals between the two objects.
@@ -4412,6 +4475,19 @@ func (cmp *Comparator) SubPartitionDefinitions(a, b SubPartitionDefinitions) boo
 	return true
 }
 
+// RefOfSubdateExpr does deep equals between the two objects.
+func (cmp *Comparator) RefOfSubdateExpr(a, b *SubdateExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return cmp.Expr(a.Date, b.Date) &&
+		a.Unit == b.Unit &&
+		cmp.Expr(a.Expr, b.Expr)
+}
+
 // RefOfSubquery does deep equals between the two objects.
 func (cmp *Comparator) RefOfSubquery(a, b *Subquery) bool {
 	if a == b {
@@ -5178,6 +5254,12 @@ func (cmp *Comparator) Callable(inA, inB Callable) bool {
 		return false
 	}
 	switch a := inA.(type) {
+	case *AdddateExpr:
+		b, ok := inB.(*AdddateExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfAdddateExpr(a, b)
 	case *ArgumentLessWindowExpr:
 		b, ok := inB.(*ArgumentLessWindowExpr)
 		if !ok {
@@ -5226,6 +5308,18 @@ func (cmp *Comparator) Callable(inA, inB Callable) bool {
 			return false
 		}
 		return cmp.RefOfCurTimeFuncExpr(a, b)
+	case *DateAddExpr:
+		b, ok := inB.(*DateAddExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfDateAddExpr(a, b)
+	case *DateSubExpr:
+		b, ok := inB.(*DateSubExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfDateSubExpr(a, b)
 	case *ExtractFuncExpr:
 		b, ok := inB.(*ExtractFuncExpr)
 		if !ok {
@@ -5592,6 +5686,12 @@ func (cmp *Comparator) Callable(inA, inB Callable) bool {
 			return false
 		}
 		return cmp.RefOfRegexpSubstrExpr(a, b)
+	case *SubdateExpr:
+		b, ok := inB.(*SubdateExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfSubdateExpr(a, b)
 	case *SubstrExpr:
 		b, ok := inB.(*SubstrExpr)
 		if !ok {
@@ -5832,6 +5932,12 @@ func (cmp *Comparator) Expr(inA, inB Expr) bool {
 		return false
 	}
 	switch a := inA.(type) {
+	case *AdddateExpr:
+		b, ok := inB.(*AdddateExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfAdddateExpr(a, b)
 	case *AndExpr:
 		b, ok := inB.(*AndExpr)
 		if !ok {
@@ -5964,6 +6070,18 @@ func (cmp *Comparator) Expr(inA, inB Expr) bool {
 			return false
 		}
 		return cmp.RefOfCurTimeFuncExpr(a, b)
+	case *DateAddExpr:
+		b, ok := inB.(*DateAddExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfDateAddExpr(a, b)
+	case *DateSubExpr:
+		b, ok := inB.(*DateSubExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfDateSubExpr(a, b)
 	case *Default:
 		b, ok := inB.(*Default)
 		if !ok {
@@ -6432,6 +6550,12 @@ func (cmp *Comparator) Expr(inA, inB Expr) bool {
 			return false
 		}
 		return cmp.RefOfStdSamp(a, b)
+	case *SubdateExpr:
+		b, ok := inB.(*SubdateExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfSubdateExpr(a, b)
 	case *Subquery:
 		b, ok := inB.(*Subquery)
 		if !ok {
