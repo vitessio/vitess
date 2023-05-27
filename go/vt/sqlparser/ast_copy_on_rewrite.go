@@ -7001,8 +7001,6 @@ func (c *cow) copyOnRewriteExpr(n Expr, parent SQLNode) (out SQLNode, changed bo
 		return c.copyOnRewriteRefOfCastExpr(n, parent)
 	case *CharExpr:
 		return c.copyOnRewriteRefOfCharExpr(n, parent)
-	case *ChecksumExpr:
-		return c.copyOnRewriteRefOfChecksumExpr(n, parent)
 	case *ColName:
 		return c.copyOnRewriteRefOfColName(n, parent)
 	case *CollateExpr:

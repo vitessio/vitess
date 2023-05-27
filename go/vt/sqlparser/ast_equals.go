@@ -5933,12 +5933,6 @@ func (cmp *Comparator) Expr(inA, inB Expr) bool {
 			return false
 		}
 		return cmp.RefOfCharExpr(a, b)
-	case *ChecksumExpr:
-		b, ok := inB.(*ChecksumExpr)
-		if !ok {
-			return false
-		}
-		return cmp.RefOfChecksumExpr(a, b)
 	case *ColName:
 		b, ok := inB.(*ColName)
 		if !ok {

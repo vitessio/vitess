@@ -9359,8 +9359,6 @@ func (a *application) rewriteExpr(parent SQLNode, node Expr, replacer replacerFu
 		return a.rewriteRefOfCastExpr(parent, node, replacer)
 	case *CharExpr:
 		return a.rewriteRefOfCharExpr(parent, node, replacer)
-	case *ChecksumExpr:
-		return a.rewriteRefOfChecksumExpr(parent, node, replacer)
 	case *ColName:
 		return a.rewriteRefOfColName(parent, node, replacer)
 	case *CollateExpr:

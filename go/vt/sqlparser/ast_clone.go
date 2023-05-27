@@ -3808,8 +3808,6 @@ func CloneExpr(in Expr) Expr {
 		return CloneRefOfCastExpr(in)
 	case *CharExpr:
 		return CloneRefOfCharExpr(in)
-	case *ChecksumExpr:
-		return CloneRefOfChecksumExpr(in)
 	case *ColName:
 		return CloneRefOfColName(in)
 	case *CollateExpr:

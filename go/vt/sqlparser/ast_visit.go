@@ -4761,8 +4761,6 @@ func VisitExpr(in Expr, f Visit) error {
 		return VisitRefOfCastExpr(in, f)
 	case *CharExpr:
 		return VisitRefOfCharExpr(in, f)
-	case *ChecksumExpr:
-		return VisitRefOfChecksumExpr(in, f)
 	case *ColName:
 		return VisitRefOfColName(in, f)
 	case *CollateExpr:
