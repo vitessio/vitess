@@ -80,17 +80,17 @@ func (wd *workflowDiffer) reconcileExtraRows(dr *DiffReport, maxExtraRowsToCompa
 		}
 		svt, sok := srcvschema.Tables[dr.TableName]
 		tvt, tok := tgtvschema.Tables[dr.TableName]
-		if dr.ExtraRowsSource > 0 && sok && svt.Type == vindexes.TypeReference && dr.ExtraRowsSource == dr.MatchingRows {
+		if dr.ExtraRowsSource > 0 && sok && svt.Type == vindexes.TypeReference && dr.ExtraRowsSource%dr.MatchingRows == 0 {
 			// We have a reference table with no mismatched rows and the number of
-			// extra rows on the source equals the matching rows. This means that
-			// there's no actual diff.
+			// extra rows on the source is a multiple of the matching rows. This
+			// means that there's no actual diff.
 			dr.ExtraRowsSource = 0
 			dr.ExtraRowsSourceDiffs = nil
 		}
-		if dr.ExtraRowsTarget > 0 && tok && tvt.Type == vindexes.TypeReference && dr.ExtraRowsTarget == dr.MatchingRows {
+		if dr.ExtraRowsTarget > 0 && tok && tvt.Type == vindexes.TypeReference && dr.ExtraRowsTarget%dr.MatchingRows == 0 {
 			// We have a reference table with no mismatched rows and the number of
-			// extra rows on the target equals the matching rows. This means that
-			// there's no actual diff.
+			// extra rows on the target is a multiple of the matching rows. This
+			// means that there's no actual diff.
 			dr.ExtraRowsTarget = 0
 			dr.ExtraRowsTargetDiffs = nil
 		}
