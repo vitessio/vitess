@@ -18,6 +18,7 @@ package operators
 
 import (
 	"fmt"
+	"io"
 
 	"vitess.io/vitess/go/slices2"
 
@@ -117,6 +118,8 @@ func optimizeHorizonPlanning(ctx *plancontext.PlanningContext, root ops.Operator
 			return tryPushingDownOrdering(ctx, in)
 		case *Aggregator:
 			return tryPushingDownAggregator(ctx, in)
+		case *Filter:
+			return tryPushingDownFilter(ctx, in)
 		default:
 			return in, rewrite.SameTree, nil
 		}
@@ -132,6 +135,36 @@ func optimizeHorizonPlanning(ctx *plancontext.PlanningContext, root ops.Operator
 	}
 
 	return newOp, nil
+}
+
+func tryPushingDownFilter(ctx *plancontext.PlanningContext, in *Filter) (ops.Operator, *rewrite.ApplyResult, error) {
+	proj, ok := in.Source.(*Projection)
+	if !ok {
+		// we can only push filter under a projection
+		return in, rewrite.SameTree, nil
+	}
+
+	for _, p := range in.Predicates {
+		cantPushDown := false
+		_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+			if !fetchByOffset(node) {
+				return true, nil
+			}
+
+			if proj.needsEvaluation(ctx, node.(sqlparser.Expr)) {
+				cantPushDown = true
+				return false, io.EOF
+			}
+
+			return true, nil
+		}, p)
+
+		if cantPushDown {
+			return in, rewrite.SameTree, nil
+		}
+	}
+
+	return rewrite.Swap(in, proj, "push filter under projection")
 }
 
 // addOrderBysAndGroupBysForAggregations runs after we have run horizonPlanning until the op tree stops changing

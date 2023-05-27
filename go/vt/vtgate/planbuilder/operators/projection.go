@@ -258,6 +258,20 @@ func stopAtAggregations(node, _ sqlparser.SQLNode) bool {
 	return b
 }
 
+func (p *Projection) needsEvaluation(ctx *plancontext.PlanningContext, e sqlparser.Expr) bool {
+	offset := slices.IndexFunc(p.Columns, func(expr *sqlparser.AliasedExpr) bool {
+		return ctx.SemTable.EqualsExprWithDeps(expr.Expr, e)
+	})
+
+	if offset < 0 {
+		return false
+	}
+
+	inside := p.Projections[offset].GetExpr()
+	outside := p.Columns[offset].Expr
+	return inside != outside
+}
+
 func (p *Projection) planOffsets(ctx *plancontext.PlanningContext) error {
 	for i, col := range p.Projections {
 		_, unexplored := col.(UnexploredExpression)

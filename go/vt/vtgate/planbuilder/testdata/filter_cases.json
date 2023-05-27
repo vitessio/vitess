@@ -6774,15 +6774,15 @@
         "ResultColumns": 1,
         "Inputs": [
           {
-            "OperatorType": "Filter",
-            "Predicate": "IFNULL(user_extra.collections_status, 'NOTSET') != 'collections_lock'",
+            "OperatorType": "Projection",
+            "Expressions": [
+              "[COLUMN 0] * COALESCE([COLUMN 1], INT64(1)) as count(*)",
+              "[COLUMN 2] as collections_status"
+            ],
             "Inputs": [
               {
-                "OperatorType": "Projection",
-                "Expressions": [
-                  "[COLUMN 0] * COALESCE([COLUMN 1], INT64(1)) as count(*)",
-                  "[COLUMN 2] as collections_status"
-                ],
+                "OperatorType": "Filter",
+                "Predicate": "IFNULL(user_extra.collections_status, 'NOTSET') != 'collections_lock'",
                 "Inputs": [
                   {
                     "OperatorType": "Join",
