@@ -684,7 +684,6 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "Query": "insert into global_ref(col) values (1)",
         "TableName": "global_ref"
       },
@@ -703,7 +702,6 @@
           "Sharded": false
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "Query": "insert into global_ref(col) values (1)",
         "TableName": "global_ref"
       },
