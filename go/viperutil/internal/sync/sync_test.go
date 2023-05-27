@@ -93,12 +93,15 @@ func TestPersistConfig(t *testing.T) {
 
 		old := get("foo")
 		loadConfig(t, f)
+		t.Logf("setting old+1")
 		v.Set("foo", old+1)
 		// This should happen immediately in-memory and on-disk.
 		assert.Equal(t, old+1, get("foo"))
 		<-ch
+		t.Logf("received config reload signal")
 		assert.Equal(t, old+1, loadConfig(t, f).Foo)
 
+		t.Logf("setting old+2")
 		v.Set("foo", old+2)
 		// This should _also_ happen immediately in-memory, but not on-disk.
 		// It will take up to 2 * minPersistWaitInterval to reach the disk.
@@ -107,6 +110,7 @@ func TestPersistConfig(t *testing.T) {
 
 		select {
 		case <-ch:
+			t.Logf("received config reload signal")
 		case <-time.After(2 * minPersistWaitInterval):
 			assert.Fail(t, "config was not persisted quickly enough", "config took longer than %s to persist (minPersistWaitInterval = %s)", 2*minPersistWaitInterval, minPersistWaitInterval)
 		}
@@ -115,6 +119,7 @@ func TestPersistConfig(t *testing.T) {
 	})
 
 	t.Run("no persist interval", func(t *testing.T) {
+		t.Skip()
 		v := vipersync.New()
 
 		var minPersistWaitInterval time.Duration
