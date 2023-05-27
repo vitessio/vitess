@@ -41,6 +41,10 @@ func tryPushingDownAggregator(ctx *plancontext.PlanningContext, aggregator *Aggr
 	case *Filter:
 		output, applyResult, err = pushDownAggregationThroughFilter(ctx, aggregator, src)
 	default:
+		if aggregator.Original {
+			err = vterrors.VT12001(fmt.Sprintf("using aggregation on top of a %T plan", src))
+			return
+		}
 		return aggregator, rewrite.SameTree, nil
 	}
 
