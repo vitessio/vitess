@@ -3232,7 +3232,6 @@ func (*GeoHashFromPointExpr) iExpr()               {}
 func (*GeomFromGeoHashExpr) iExpr()                {}
 func (*GeoJSONFromGeomExpr) iExpr()                {}
 func (*GeomFromGeoJSONExpr) iExpr()                {}
-func (*ChecksumExpr) iExpr()                       {}
 
 // iCallable marks all expressions that represent function calls
 func (*FuncExpr) iCallable()                           {}
