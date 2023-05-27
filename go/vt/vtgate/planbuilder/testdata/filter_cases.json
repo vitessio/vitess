@@ -6771,6 +6771,7 @@
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
         "Aggregates": "sum_count_star(0) AS count(*)",
+        "ResultColumns": 1,
         "Inputs": [
           {
             "OperatorType": "Filter",

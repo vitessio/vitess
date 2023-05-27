@@ -134,10 +134,21 @@ func optimizeHorizonPlanning(ctx *plancontext.PlanningContext, root ops.Operator
 	return newOp, nil
 }
 
+// addOrderBysAndGroupBysForAggregations runs after we have run horizonPlanning until the op tree stops changing
+// this means that we have pushed aggregations and other ops as far down as they'll go
+// addOrderBysAndGroupBysForAggregations will find Aggregators that have not been pushed under routes and
+// add the necessary Ordering operators for them
 func addOrderBysAndGroupBysForAggregations(ctx *plancontext.PlanningContext, root ops.Operator) (ops.Operator, error) {
 	visitor := func(in ops.Operator, _ semantics.TableSet, isRoot bool) (ops.Operator, *rewrite.ApplyResult, error) {
 		switch in := in.(type) {
 		case *Aggregator:
+			// first we update the incoming columns, so we know about any new columns that have been added
+			columns, err := in.Source.GetColumns()
+			if err != nil {
+				return nil, nil, err
+			}
+			in.Columns = columns
+
 			requireOrdering, err := needsOrdering(in, ctx)
 			if err != nil {
 				return nil, nil, err
