@@ -31,17 +31,6 @@ import (
 	"github.com/nsf/jsondiff"
 	"github.com/stretchr/testify/require"
 
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	"vitess.io/vitess/go/vt/servenv"
-	"vitess.io/vitess/go/vt/sidecardb"
-
-	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
-
-	"vitess.io/vitess/go/test/utils"
-	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
-	oprewriters "vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
-
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
@@ -57,6 +46,7 @@ import (
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
+	oprewriters "vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"

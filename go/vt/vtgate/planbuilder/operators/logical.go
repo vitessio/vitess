@@ -274,7 +274,7 @@ func createOperatorFromInsert(ctx *plancontext.PlanningContext, ins *sqlparser.I
 
 	// Table column list is nil then add all the columns
 	// If the column list is empty then add only the auto-inc column and this happens on calling modifyForAutoinc
-	if ins.Columns == nil {
+	if ins.Columns == nil && valuesProvided(ins.Rows) {
 		if vindexTable.ColumnListAuthoritative {
 			ins = populateInsertColumnlist(ins, vindexTable)
 		} else {
@@ -320,15 +320,34 @@ func createOperatorFromInsert(ctx *plancontext.PlanningContext, ins *sqlparser.I
 					return nil, err
 				}
 				routeValues[vIdx][colIdx][rowNum] = innerpv
+			}
+		}
+	}
+	// here we are replacing the row value with the argument.
+	for _, colVindex := range colVindexes {
+		for _, col := range colVindex.Columns {
+			colNum := findOrAddColumn(ins, col)
+			for rowNum, row := range rows {
 				name := engine.InsertVarName(col, rowNum)
 				row[colNum] = sqlparser.NewArgument(name)
 			}
 		}
 	}
+
 	insOp.ColVindexes = colVindexes
 	insOp.VindexValues = routeValues
 	insOp.Ignore = bool(ins.Ignore) || ins.OnDup != nil
 	return route, nil
+}
+
+func valuesProvided(rows sqlparser.InsertRows) bool {
+	switch values := rows.(type) {
+	case sqlparser.Values:
+		return len(values) >= 0 && len(values[0]) > 0
+	case sqlparser.SelectStatement:
+		return true
+	}
+	return false
 }
 
 func getColVindexes(allColVindexes []*vindexes.ColumnVindex) (colVindexes []*vindexes.ColumnVindex) {
