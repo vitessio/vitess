@@ -2928,3 +2928,8 @@ func (node *GeomFromGeoJSONExpr) Format(buf *TrackedBuffer) {
 	}
 	buf.WriteByte(')')
 }
+
+// Format formats the node
+func (node *ChecksumExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "checksum table %v", node.Tables)
+}

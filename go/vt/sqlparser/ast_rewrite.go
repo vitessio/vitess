@@ -90,6 +90,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfCharExpr(parent, node, replacer)
 	case *CheckConstraintDefinition:
 		return a.rewriteRefOfCheckConstraintDefinition(parent, node, replacer)
+	case *ChecksumExpr:
+		return a.rewriteRefOfChecksumExpr(parent, node, replacer)
 	case *ColName:
 		return a.rewriteRefOfColName(parent, node, replacer)
 	case *CollateExpr:
@@ -1565,6 +1567,33 @@ func (a *application) rewriteRefOfCheckConstraintDefinition(parent SQLNode, node
 	}
 	if !a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
 		parent.(*CheckConstraintDefinition).Expr = newNode.(Expr)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfChecksumExpr(parent SQLNode, node *ChecksumExpr, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteTableNames(node, node.Tables, func(newNode, parent SQLNode) {
+		parent.(*ChecksumExpr).Tables = newNode.(TableNames)
 	}) {
 		return false
 	}
@@ -9330,6 +9359,8 @@ func (a *application) rewriteExpr(parent SQLNode, node Expr, replacer replacerFu
 		return a.rewriteRefOfCastExpr(parent, node, replacer)
 	case *CharExpr:
 		return a.rewriteRefOfCharExpr(parent, node, replacer)
+	case *ChecksumExpr:
+		return a.rewriteRefOfChecksumExpr(parent, node, replacer)
 	case *ColName:
 		return a.rewriteRefOfColName(parent, node, replacer)
 	case *CollateExpr:
@@ -9632,6 +9663,8 @@ func (a *application) rewriteStatement(parent SQLNode, node Statement, replacer 
 		return a.rewriteRefOfBegin(parent, node, replacer)
 	case *CallProc:
 		return a.rewriteRefOfCallProc(parent, node, replacer)
+	case *ChecksumExpr:
+		return a.rewriteRefOfChecksumExpr(parent, node, replacer)
 	case *CommentOnly:
 		return a.rewriteRefOfCommentOnly(parent, node, replacer)
 	case *Commit:

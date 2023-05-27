@@ -629,6 +629,23 @@ func (cached *CheckConstraintDefinition) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+func (cached *ChecksumExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(24)
+	}
+	// field Tables vitess.io/vitess/go/vt/sqlparser.TableNames
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.Tables)) * int64(32))
+		for _, elem := range cached.Tables {
+			size += elem.CachedSize(false)
+		}
+	}
+	return size
+}
 func (cached *ColName) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)

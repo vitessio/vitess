@@ -3853,3 +3853,9 @@ func (node *GeomFromGeoJSONExpr) formatFast(buf *TrackedBuffer) {
 	}
 	buf.WriteByte(')')
 }
+
+// formatFast formats the node
+func (node *ChecksumExpr) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("checksum table ")
+	node.Tables.formatFast(buf)
+}

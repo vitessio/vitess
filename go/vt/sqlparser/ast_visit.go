@@ -90,6 +90,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfCharExpr(in, f)
 	case *CheckConstraintDefinition:
 		return VisitRefOfCheckConstraintDefinition(in, f)
+	case *ChecksumExpr:
+		return VisitRefOfChecksumExpr(in, f)
 	case *ColName:
 		return VisitRefOfColName(in, f)
 	case *CollateExpr:
@@ -1026,6 +1028,18 @@ func VisitRefOfCheckConstraintDefinition(in *CheckConstraintDefinition, f Visit)
 		return err
 	}
 	if err := VisitExpr(in.Expr, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfChecksumExpr(in *ChecksumExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitTableNames(in.Tables, f); err != nil {
 		return err
 	}
 	return nil
@@ -4747,6 +4761,8 @@ func VisitExpr(in Expr, f Visit) error {
 		return VisitRefOfCastExpr(in, f)
 	case *CharExpr:
 		return VisitRefOfCharExpr(in, f)
+	case *ChecksumExpr:
+		return VisitRefOfChecksumExpr(in, f)
 	case *ColName:
 		return VisitRefOfColName(in, f)
 	case *CollateExpr:
@@ -5049,6 +5065,8 @@ func VisitStatement(in Statement, f Visit) error {
 		return VisitRefOfBegin(in, f)
 	case *CallProc:
 		return VisitRefOfCallProc(in, f)
+	case *ChecksumExpr:
+		return VisitRefOfChecksumExpr(in, f)
 	case *CommentOnly:
 		return VisitRefOfCommentOnly(in, f)
 	case *Commit:

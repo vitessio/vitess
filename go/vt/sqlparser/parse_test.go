@@ -1866,6 +1866,9 @@ var (
 		input:  "create table t (pur date) partition by range (year(pur)) subpartition by hash (to_days(pur)) subpartitions 2 (partition p0 values less than (2015), partition p2 values less than (2018))",
 		output: "create table t (\n\tpur date\n)\npartition by range (year(pur)) subpartition by hash (to_days(pur)) subpartitions 2\n(partition p0 values less than (2015),\n partition p2 values less than (2018))",
 	}, {
+		input:  "CHECKSUM TABLE mango, apple",
+		output: "checksum table mango, apple",
+	}, {
 		// Alter Vschema does not reach the vttablets, so we don't need to run the normalizer test
 		input:                "alter vschema create vindex hash_vdx using `hash`",
 		ignoreNormalizerTest: true,

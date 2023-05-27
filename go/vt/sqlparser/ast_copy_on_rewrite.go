@@ -90,6 +90,8 @@ func (c *cow) copyOnRewriteSQLNode(n SQLNode, parent SQLNode) (out SQLNode, chan
 		return c.copyOnRewriteRefOfCharExpr(n, parent)
 	case *CheckConstraintDefinition:
 		return c.copyOnRewriteRefOfCheckConstraintDefinition(n, parent)
+	case *ChecksumExpr:
+		return c.copyOnRewriteRefOfChecksumExpr(n, parent)
 	case *ColName:
 		return c.copyOnRewriteRefOfColName(n, parent)
 	case *CollateExpr:
@@ -1311,6 +1313,28 @@ func (c *cow) copyOnRewriteRefOfCheckConstraintDefinition(n *CheckConstraintDefi
 		if changedExpr {
 			res := *n
 			res.Expr, _ = _Expr.(Expr)
+			out = &res
+			if c.cloned != nil {
+				c.cloned(n, out)
+			}
+			changed = true
+		}
+	}
+	if c.post != nil {
+		out, changed = c.postVisit(out, parent, changed)
+	}
+	return
+}
+func (c *cow) copyOnRewriteRefOfChecksumExpr(n *ChecksumExpr, parent SQLNode) (out SQLNode, changed bool) {
+	if n == nil || c.cursor.stop {
+		return n, false
+	}
+	out = n
+	if c.pre == nil || c.pre(n, parent) {
+		_Tables, changedTables := c.copyOnRewriteTableNames(n.Tables, n)
+		if changedTables {
+			res := *n
+			res.Tables, _ = _Tables.(TableNames)
 			out = &res
 			if c.cloned != nil {
 				c.cloned(n, out)
@@ -6977,6 +7001,8 @@ func (c *cow) copyOnRewriteExpr(n Expr, parent SQLNode) (out SQLNode, changed bo
 		return c.copyOnRewriteRefOfCastExpr(n, parent)
 	case *CharExpr:
 		return c.copyOnRewriteRefOfCharExpr(n, parent)
+	case *ChecksumExpr:
+		return c.copyOnRewriteRefOfChecksumExpr(n, parent)
 	case *ColName:
 		return c.copyOnRewriteRefOfColName(n, parent)
 	case *CollateExpr:
@@ -7279,6 +7305,8 @@ func (c *cow) copyOnRewriteStatement(n Statement, parent SQLNode) (out SQLNode, 
 		return c.copyOnRewriteRefOfBegin(n, parent)
 	case *CallProc:
 		return c.copyOnRewriteRefOfCallProc(n, parent)
+	case *ChecksumExpr:
+		return c.copyOnRewriteRefOfChecksumExpr(n, parent)
 	case *CommentOnly:
 		return c.copyOnRewriteRefOfCommentOnly(n, parent)
 	case *Commit:

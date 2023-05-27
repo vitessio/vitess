@@ -649,6 +649,11 @@ command:
 | prepare_statement
 | execute_statement
 | deallocate_statement
+| CHECKSUM TABLE table_name_list
+  {
+    $$ = &ChecksumExpr{Tables: $3}
+  }
+
 | /*empty*/
 {
   setParseTree(yylex, nil)
@@ -6613,7 +6618,7 @@ UTC_DATE func_paren_opt
 | regular_expressions
 | xml_expressions
 | performance_schema_function_expressions
-| gtid_function_expressions
+| gtid_function_expressions 
 
 null_int_variable_arg:
   null_as_literal

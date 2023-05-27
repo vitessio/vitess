@@ -692,6 +692,11 @@ type (
 	CommentOnly struct {
 		Comments []string
 	}
+
+	//This is a checksum expression of tyoe CHECKSUM table1, table2 ...ß
+	ChecksumExpr struct {
+		Tables TableNames
+	}
 )
 
 func (*Union) iStatement()               {}
@@ -744,6 +749,7 @@ func (*PrepareStmt) iStatement()         {}
 func (*ExecuteStmt) iStatement()         {}
 func (*DeallocateStmt) iStatement()      {}
 func (*PurgeBinaryLogs) iStatement()     {}
+func (*ChecksumExpr) iStatement()        {}
 
 func (*CreateView) iDDLStatement()    {}
 func (*AlterView) iDDLStatement()     {}
@@ -3226,6 +3232,7 @@ func (*GeoHashFromPointExpr) iExpr()               {}
 func (*GeomFromGeoHashExpr) iExpr()                {}
 func (*GeoJSONFromGeomExpr) iExpr()                {}
 func (*GeomFromGeoJSONExpr) iExpr()                {}
+func (*ChecksumExpr) iExpr()                       {}
 
 // iCallable marks all expressions that represent function calls
 func (*FuncExpr) iCallable()                           {}

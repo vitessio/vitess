@@ -230,6 +230,12 @@ func (cmp *Comparator) SQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return cmp.RefOfCheckConstraintDefinition(a, b)
+	case *ChecksumExpr:
+		b, ok := inB.(*ChecksumExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfChecksumExpr(a, b)
 	case *ColName:
 		b, ok := inB.(*ColName)
 		if !ok {
@@ -2029,6 +2035,17 @@ func (cmp *Comparator) RefOfCheckConstraintDefinition(a, b *CheckConstraintDefin
 	}
 	return a.Enforced == b.Enforced &&
 		cmp.Expr(a.Expr, b.Expr)
+}
+
+// RefOfChecksumExpr does deep equals between the two objects.
+func (cmp *Comparator) RefOfChecksumExpr(a, b *ChecksumExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return cmp.TableNames(a.Tables, b.Tables)
 }
 
 // RefOfColName does deep equals between the two objects.
@@ -5916,6 +5933,12 @@ func (cmp *Comparator) Expr(inA, inB Expr) bool {
 			return false
 		}
 		return cmp.RefOfCharExpr(a, b)
+	case *ChecksumExpr:
+		b, ok := inB.(*ChecksumExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfChecksumExpr(a, b)
 	case *ColName:
 		b, ok := inB.(*ColName)
 		if !ok {
@@ -6732,6 +6755,12 @@ func (cmp *Comparator) Statement(inA, inB Statement) bool {
 			return false
 		}
 		return cmp.RefOfCallProc(a, b)
+	case *ChecksumExpr:
+		b, ok := inB.(*ChecksumExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfChecksumExpr(a, b)
 	case *CommentOnly:
 		b, ok := inB.(*CommentOnly)
 		if !ok {

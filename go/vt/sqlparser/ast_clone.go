@@ -91,6 +91,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfCharExpr(in)
 	case *CheckConstraintDefinition:
 		return CloneRefOfCheckConstraintDefinition(in)
+	case *ChecksumExpr:
+		return CloneRefOfChecksumExpr(in)
 	case *ColName:
 		return CloneRefOfColName(in)
 	case *CollateExpr:
@@ -906,6 +908,16 @@ func CloneRefOfCheckConstraintDefinition(n *CheckConstraintDefinition) *CheckCon
 	}
 	out := *n
 	out.Expr = CloneExpr(n.Expr)
+	return &out
+}
+
+// CloneRefOfChecksumExpr creates a deep clone of the input.
+func CloneRefOfChecksumExpr(n *ChecksumExpr) *ChecksumExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Tables = CloneTableNames(n.Tables)
 	return &out
 }
 
@@ -3796,6 +3808,8 @@ func CloneExpr(in Expr) Expr {
 		return CloneRefOfCastExpr(in)
 	case *CharExpr:
 		return CloneRefOfCharExpr(in)
+	case *ChecksumExpr:
+		return CloneRefOfChecksumExpr(in)
 	case *ColName:
 		return CloneRefOfColName(in)
 	case *CollateExpr:
@@ -4110,6 +4124,8 @@ func CloneStatement(in Statement) Statement {
 		return CloneRefOfBegin(in)
 	case *CallProc:
 		return CloneRefOfCallProc(in)
+	case *ChecksumExpr:
+		return CloneRefOfChecksumExpr(in)
 	case *CommentOnly:
 		return CloneRefOfCommentOnly(in)
 	case *Commit:
