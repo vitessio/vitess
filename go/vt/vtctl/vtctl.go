@@ -2899,15 +2899,14 @@ func commandApplySchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *pf
 	log.Info("Calling ApplySchema on VtctldServer")
 
 	resp, err := wr.VtctldServer().ApplySchema(ctx, &vtctldatapb.ApplySchemaRequest{
-		Keyspace:                keyspace,
-		AllowLongUnavailability: false,
-		DdlStrategy:             *ddlStrategy,
-		Sql:                     parts,
-		SkipPreflight:           true,
-		UuidList:                textutil.SplitDelimitedList(*uuidList),
-		MigrationContext:        *migrationContext,
-		WaitReplicasTimeout:     protoutil.DurationToProto(*waitReplicasTimeout),
-		CallerId:                cID,
+		Keyspace:            keyspace,
+		DdlStrategy:         *ddlStrategy,
+		Sql:                 parts,
+		SkipPreflight:       true,
+		UuidList:            textutil.SplitDelimitedList(*uuidList),
+		MigrationContext:    *migrationContext,
+		WaitReplicasTimeout: protoutil.DurationToProto(*waitReplicasTimeout),
+		CallerId:            cID,
 	})
 
 	if err != nil {

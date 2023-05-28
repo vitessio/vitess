@@ -137,15 +137,14 @@ func commandApplySchema(cmd *cobra.Command, args []string) error {
 	ks := cmd.Flags().Arg(0)
 
 	resp, err := client.ApplySchema(commandCtx, &vtctldatapb.ApplySchemaRequest{
-		Keyspace:                ks,
-		AllowLongUnavailability: false,
-		DdlStrategy:             applySchemaOptions.DDLStrategy,
-		Sql:                     parts,
-		SkipPreflight:           true,
-		UuidList:                applySchemaOptions.UUIDList,
-		MigrationContext:        applySchemaOptions.MigrationContext,
-		WaitReplicasTimeout:     protoutil.DurationToProto(applySchemaOptions.WaitReplicasTimeout),
-		CallerId:                cid,
+		Keyspace:            ks,
+		DdlStrategy:         applySchemaOptions.DDLStrategy,
+		Sql:                 parts,
+		SkipPreflight:       true,
+		UuidList:            applySchemaOptions.UUIDList,
+		MigrationContext:    applySchemaOptions.MigrationContext,
+		WaitReplicasTimeout: protoutil.DurationToProto(applySchemaOptions.WaitReplicasTimeout),
+		CallerId:            cid,
 	})
 	if err != nil {
 		return err
