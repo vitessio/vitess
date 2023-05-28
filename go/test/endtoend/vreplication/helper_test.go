@@ -18,6 +18,9 @@ package vreplication
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -491,7 +494,7 @@ func checkIfDenyListExists(t *testing.T, vc *VitessCluster, ksShard string, tabl
 }
 
 func expectNumberOfStreams(t *testing.T, vtgateConn *mysql.Conn, name string, workflow string, database string, want int) {
-	query := fmt.Sprintf("select count(*) from _vt.vreplication where workflow='%s';", workflow)
+	query := sqlparser.BuildParsedQuery("select count(*) from %s.vreplication where workflow='%s'", sidecarDBIdentifier, workflow).Query
 	waitForQueryResult(t, vtgateConn, database, query, fmt.Sprintf(`[[INT64(%d)]]`, want))
 }
 
@@ -531,6 +534,17 @@ func getDebugVar(t *testing.T, port int, varPath []string) (string, error) {
 	val, _, _, err = jsonparser.Get([]byte(body), varPath...)
 	require.NoError(t, err)
 	return string(val), nil
+}
+
+func getDebugVars(t *testing.T, port int) map[string]any {
+	out := map[string]any{}
+	response, err := http.Get(fmt.Sprintf("http://localhost:%d/debug/vars", port))
+	if err != nil {
+		return out
+	}
+	defer response.Body.Close()
+	_ = json.NewDecoder(response.Body).Decode(&out)
+	return out
 }
 
 func confirmWorkflowHasCopiedNoData(t *testing.T, targetKS, workflow string) {
@@ -608,14 +622,14 @@ func getShardRoutingRules(t *testing.T) string {
 
 func verifyCopyStateIsOptimized(t *testing.T, tablet *cluster.VttabletProcess) {
 	// Update information_schem with the latest data
-	_, err := tablet.QueryTablet("analyze table _vt.copy_state", "", false)
+	_, err := tablet.QueryTablet(sqlparser.BuildParsedQuery("analyze table %s.copy_state", sidecarDBIdentifier).Query, "", false)
 	require.NoError(t, err)
 
 	// Verify that there's no delete marked rows and we reset the auto-inc value.
 	// MySQL doesn't always immediately update information_schema so we wait.
 	tmr := time.NewTimer(defaultTimeout)
 	defer tmr.Stop()
-	query := "select data_free, auto_increment from information_schema.tables where table_schema='_vt' and table_name='copy_state'"
+	query := sqlparser.BuildParsedQuery("select data_free, auto_increment from information_schema.tables where table_schema='%s' and table_name='copy_state'", sidecarDBName).Query
 	var dataFree, autoIncrement int64
 	for {
 		res, err := tablet.QueryTablet(query, "", false)
@@ -639,4 +653,47 @@ func verifyCopyStateIsOptimized(t *testing.T, tablet *cluster.VttabletProcess) {
 			time.Sleep(defaultTick)
 		}
 	}
+}
+
+// randHex can be used to generate random strings of
+// hex characters to the given length. This can e.g.
+// be used to generate and insert test data.
+func randHex(n int) (string, error) {
+	bytes := make([]byte, n)
+	if _, err := rand.Read(bytes); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(bytes), nil
+}
+
+func getIntVal(t *testing.T, vars map[string]interface{}, key string) int {
+	i, ok := vars[key].(float64)
+	require.True(t, ok)
+	return int(i)
+}
+
+func getPartialMetrics(t *testing.T, key string, tab *cluster.VttabletProcess) (int, int, int, int) {
+	vars := tab.GetVars()
+	insertKey := fmt.Sprintf("%s.insert", key)
+	updateKey := fmt.Sprintf("%s.insert", key)
+	cacheSizes := vars["VReplicationPartialQueryCacheSize"].(map[string]interface{})
+	queryCounts := vars["VReplicationPartialQueryCount"].(map[string]interface{})
+	if cacheSizes[insertKey] == nil || cacheSizes[updateKey] == nil ||
+		queryCounts[insertKey] == nil || queryCounts[updateKey] == nil {
+		return 0, 0, 0, 0
+	}
+	inserts := getIntVal(t, cacheSizes, insertKey)
+	updates := getIntVal(t, cacheSizes, updateKey)
+	insertQueries := getIntVal(t, queryCounts, insertKey)
+	updateQueries := getIntVal(t, queryCounts, updateKey)
+	return inserts, updates, insertQueries, updateQueries
+}
+
+// check that the connection's binlog row image is set to NOBLOB
+func isBinlogRowImageNoBlob(t *testing.T, tablet *cluster.VttabletProcess) bool {
+	rs, err := tablet.QueryTablet("select @@global.binlog_row_image", "", false)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(rs.Rows))
+	mode := strings.ToLower(rs.Rows[0][0].ToString())
+	return mode == "noblob"
 }

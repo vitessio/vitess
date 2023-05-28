@@ -28,8 +28,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/spf13/pflag"
+
+	"vitess.io/vitess/go/internal/flag"
 	"vitess.io/vitess/go/mysql/collations"
-	"vitess.io/vitess/go/mysql/collations/internal/charset"
+	"vitess.io/vitess/go/mysql/collations/charset"
 	"vitess.io/vitess/go/mysql/collations/internal/testutil"
 )
 
@@ -149,7 +152,7 @@ func getAllLanguages(article string) (map[testutil.Lang]string, error) {
 }
 
 func colldump(collation string, input []byte) []byte {
-	cmd := exec.Command("colldump", "--test", collation)
+	cmd := exec.Command("colldump", "weight", collation)
 	cmd.Stdin = bytes.NewReader(input)
 	out, err := cmd.Output()
 	if err != nil {
@@ -159,6 +162,9 @@ func colldump(collation string, input []byte) []byte {
 }
 
 func main() {
+	fs := pflag.NewFlagSet("maketestdata", pflag.ExitOnError)
+	flag.Parse(fs)
+
 	var defaults = collations.Local()
 	var collationsForLanguage = make(map[testutil.Lang][]collations.Collation)
 	var allcollations = defaults.AllCollations()

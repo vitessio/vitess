@@ -24,12 +24,13 @@ import (
 	"context"
 
 	"vitess.io/vitess/go/acl"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
 )
 
 // RegisterDebugHealthHandler register a debug health http endpoint for a vtcld server
 func RegisterDebugHealthHandler(ts *topo.Server) {
-	http.HandleFunc("/debug/health", func(w http.ResponseWriter, r *http.Request) {
+	servenv.HTTPHandleFunc("/debug/health", func(w http.ResponseWriter, r *http.Request) {
 		if err := acl.CheckAccessHTTP(r, acl.MONITORING); err != nil {
 			acl.SendError(w, err)
 			return

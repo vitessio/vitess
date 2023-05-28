@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"regexp"
 	"strconv"
+	"strings"
 
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -82,6 +83,17 @@ var errExtract = regexp.MustCompile(`.*\(errno ([0-9]*)\) \(sqlstate ([0-9a-zA-Z
 
 // NewSQLErrorFromError returns a *SQLError from the provided error.
 // If it's not the right type, it still tries to get it from a regexp.
+// Notes about the `error` return type:
+// The function really returns *SQLError or `nil`. Seemingly, the function could just return
+// `*SQLError` type. However, it really must return `error`. The reason is the way `golang`
+// treats `nil` interfaces vs `nil` implementing values.
+// If this function were to return a nil `*SQLError`, the following undesired behavior would happen:
+//
+//	var err error
+//	err = NewSQLErrorFromError(nil) // returns a nil `*SQLError`
+//	if err != nil {
+//	  doSomething() // this actually runs
+//	}
 func NewSQLErrorFromError(err error) error {
 	if err == nil {
 		return nil
@@ -135,7 +147,11 @@ func mapToSQLErrorFromErrorCode(err error, msg string) *SQLError {
 		ss = SSAccessDeniedError
 	case vtrpcpb.Code_RESOURCE_EXHAUSTED:
 		num = demuxResourceExhaustedErrors(err.Error())
-		ss = SSClientError
+		// 1041 ER_OUT_OF_RESOURCES has SQLSTATE HYOOO as per https://dev.mysql.com/doc/mysql-errors/8.0/en/server-error-reference.html#error_er_out_of_resources,
+		// so don't override it here in that case.
+		if num != EROutOfResources {
+			ss = SSClientError
+		}
 	case vtrpcpb.Code_UNIMPLEMENTED:
 		num = ERNotSupportedYet
 		ss = SSClientError
@@ -199,6 +215,9 @@ var stateToMysqlCode = map[vterrors.State]mysqlCode{
 	vterrors.NoSuchSession:                {num: ERUnknownComError, state: SSNetError},
 	vterrors.OperandColumns:               {num: EROperandColumns, state: SSWrongNumberOfColumns},
 	vterrors.WrongValueCountOnRow:         {num: ERWrongValueCountOnRow, state: SSWrongValueCountOnRow},
+	vterrors.WrongArguments:               {num: ERWrongArguments, state: SSUnknownSQLState},
+	vterrors.UnknownStmtHandler:           {num: ERUnknownStmtHandler, state: SSUnknownSQLState},
+	vterrors.UnknownTimeZone:              {num: ERUnknownTimeZone, state: SSUnknownSQLState},
 }
 
 func getStateToMySQLState(state vterrors.State) mysqlCode {
@@ -247,6 +266,8 @@ func demuxResourceExhaustedErrors(msg string) ErrorCode {
 	switch {
 	case isGRPCOverflowRE.Match([]byte(msg)):
 		return ERNetPacketTooLarge
+	case strings.Contains(msg, "Transaction throttled"):
+		return EROutOfResources
 	default:
 		return ERTooManyUserConnections
 	}

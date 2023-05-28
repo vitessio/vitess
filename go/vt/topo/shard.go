@@ -31,6 +31,7 @@ import (
 
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/event"
@@ -120,6 +121,10 @@ func IsShardUsingRangeBasedSharding(shard string) bool {
 // ValidateShardName takes a shard name and sanitizes it, and also returns
 // the KeyRange.
 func ValidateShardName(shard string) (string, *topodatapb.KeyRange, error) {
+	if err := validateObjectName(shard); err != nil {
+		return "", nil, err
+	}
+
 	if !IsShardUsingRangeBasedSharding(shard) {
 		return shard, nil, nil
 	}
@@ -195,6 +200,14 @@ func (si *ShardInfo) SetPrimaryTermStartTime(t time.Time) {
 // GetShard is a high level function to read shard data.
 // It generates trace spans.
 func (ts *Server) GetShard(ctx context.Context, keyspace, shard string) (*ShardInfo, error) {
+	if err := ValidateKeyspaceName(keyspace); err != nil {
+		return nil, err
+	}
+
+	if _, _, err := ValidateShardName(shard); err != nil {
+		return nil, err
+	}
+
 	span, ctx := trace.NewSpan(ctx, "TopoServer.GetShard")
 	span.Annotate("keyspace", keyspace)
 	span.Annotate("shard", shard)
@@ -209,7 +222,7 @@ func (ts *Server) GetShard(ctx context.Context, keyspace, shard string) (*ShardI
 	}
 
 	value := &topodatapb.Shard{}
-	if err = proto.Unmarshal(data, value); err != nil {
+	if err = value.UnmarshalVT(data); err != nil {
 		return nil, vterrors.Wrapf(err, "GetShard(%v,%v): bad shard data", keyspace, shard)
 	}
 	return &ShardInfo{
@@ -228,7 +241,7 @@ func (ts *Server) updateShard(ctx context.Context, si *ShardInfo) error {
 	span.Annotate("shard", si.shardName)
 	defer span.Finish()
 
-	data, err := proto.Marshal(si.Shard)
+	data, err := si.Shard.MarshalVT()
 	if err != nil {
 		return err
 	}
@@ -279,18 +292,22 @@ func (ts *Server) UpdateShardFields(ctx context.Context, keyspace, shard string,
 // This will lock the Keyspace, as we may be looking at other shard servedTypes.
 // Using GetOrCreateShard is probably a better idea for most use cases.
 func (ts *Server) CreateShard(ctx context.Context, keyspace, shard string) (err error) {
-	// Lock the keyspace, because we'll be looking at ServedTypes.
-	ctx, unlock, lockErr := ts.LockKeyspace(ctx, keyspace, "CreateShard")
-	if lockErr != nil {
-		return lockErr
+	if err := ValidateKeyspaceName(keyspace); err != nil {
+		return err
 	}
-	defer unlock(&err)
 
 	// validate parameters
 	_, keyRange, err := ValidateShardName(shard)
 	if err != nil {
 		return err
 	}
+
+	// Lock the keyspace, because we'll be looking at ServedTypes.
+	ctx, unlock, lockErr := ts.LockKeyspace(ctx, keyspace, "CreateShard")
+	if lockErr != nil {
+		return lockErr
+	}
+	defer unlock(&err)
 
 	value := &topodatapb.Shard{
 		KeyRange: keyRange,
@@ -304,14 +321,14 @@ func (ts *Server) CreateShard(ctx context.Context, keyspace, shard string) (err 
 		return err
 	}
 	for _, si := range sis {
-		if si.KeyRange == nil || key.KeyRangesIntersect(si.KeyRange, keyRange) {
+		if si.KeyRange == nil || key.KeyRangeIntersect(si.KeyRange, keyRange) {
 			value.IsPrimaryServing = false
 			break
 		}
 	}
 
 	// Marshal and save.
-	data, err := proto.Marshal(value)
+	data, err := value.MarshalVT()
 	if err != nil {
 		return err
 	}
@@ -339,8 +356,17 @@ func (ts *Server) GetOrCreateShard(ctx context.Context, keyspace, shard string) 
 		return
 	}
 
-	// create the keyspace, maybe it already exists
-	if err = ts.CreateKeyspace(ctx, keyspace, &topodatapb.Keyspace{}); err != nil && !IsErrType(err, NodeExists) {
+	// Create the keyspace, if it does not already exist.
+	// We store the sidecar database name in the keyspace record.
+	// If not already set, then it is set to the default (_vt) by
+	// the first tablet to start in the keyspace and is from
+	// then on immutable. Any other tablets that try to come up in
+	// this keyspace will be able to serve queries but will fail to
+	// fully initialize and perform certain operations (e.g.
+	// OnlineDDL or VReplication workflows) if they are using a
+	// different sidecar database name.
+	ksi := topodatapb.Keyspace{SidecarDbName: sidecardb.GetName()}
+	if err = ts.CreateKeyspace(ctx, keyspace, &ksi); err != nil && !IsErrType(err, NodeExists) {
 		return nil, vterrors.Wrapf(err, "CreateKeyspace(%v) failed", keyspace)
 	}
 
@@ -666,7 +692,7 @@ func (ts *Server) WatchShard(ctx context.Context, keyspace, shard string) (*Watc
 		return nil, nil, err
 	}
 	value := &topodatapb.Shard{}
-	if err := proto.Unmarshal(current.Contents, value); err != nil {
+	if err := value.UnmarshalVT(current.Contents); err != nil {
 		// Cancel the watch, drain channel.
 		cancel()
 		for range wdChannel {
@@ -694,7 +720,7 @@ func (ts *Server) WatchShard(ctx context.Context, keyspace, shard string) (*Watc
 			}
 
 			value := &topodatapb.Shard{}
-			if err := proto.Unmarshal(wd.Contents, value); err != nil {
+			if err := value.UnmarshalVT(wd.Contents); err != nil {
 				cancel()
 				for range wdChannel {
 				}

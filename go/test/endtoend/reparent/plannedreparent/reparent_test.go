@@ -418,7 +418,8 @@ func TestFullStatus(t *testing.T) {
 	primaryStatusString, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("GetFullStatus", primaryTablet.Alias)
 	require.NoError(t, err)
 	primaryStatus := &replicationdatapb.FullStatus{}
-	err = protojson.Unmarshal([]byte(primaryStatusString), primaryStatus)
+	opt := protojson.UnmarshalOptions{DiscardUnknown: true}
+	err = opt.Unmarshal([]byte(primaryStatusString), primaryStatus)
 	require.NoError(t, err)
 	assert.NotEmpty(t, primaryStatus.ServerUuid)
 	assert.NotEmpty(t, primaryStatus.ServerId)
@@ -427,6 +428,14 @@ func TestFullStatus(t *testing.T) {
 	assert.Contains(t, primaryStatus.PrimaryStatus.String(), "vt-0000000101-bin")
 	assert.Equal(t, primaryStatus.GtidPurged, "MySQL56/")
 	assert.False(t, primaryStatus.ReadOnly)
+	vtTabletVersion, err := cluster.GetMajorVersion("vttablet")
+	require.NoError(t, err)
+	vtcltlVersion, err := cluster.GetMajorVersion("vtctl")
+	require.NoError(t, err)
+	// For all version at or above v17.0.0, each replica will start in super_read_only mode.
+	if vtTabletVersion >= 17 && vtcltlVersion >= 17 {
+		assert.False(t, primaryStatus.SuperReadOnly)
+	}
 	assert.True(t, primaryStatus.SemiSyncPrimaryEnabled)
 	assert.True(t, primaryStatus.SemiSyncReplicaEnabled)
 	assert.True(t, primaryStatus.SemiSyncPrimaryStatus)
@@ -450,7 +459,8 @@ func TestFullStatus(t *testing.T) {
 	replicaStatusString, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("GetFullStatus", replicaTablet.Alias)
 	require.NoError(t, err)
 	replicaStatus := &replicationdatapb.FullStatus{}
-	err = protojson.Unmarshal([]byte(replicaStatusString), replicaStatus)
+	opt = protojson.UnmarshalOptions{DiscardUnknown: true}
+	err = opt.Unmarshal([]byte(replicaStatusString), replicaStatus)
 	require.NoError(t, err)
 	assert.NotEmpty(t, replicaStatus.ServerUuid)
 	assert.NotEmpty(t, replicaStatus.ServerId)
@@ -479,6 +489,10 @@ func TestFullStatus(t *testing.T) {
 	assert.Contains(t, replicaStatus.PrimaryStatus.String(), "vt-0000000102-bin")
 	assert.Equal(t, replicaStatus.GtidPurged, "MySQL56/")
 	assert.True(t, replicaStatus.ReadOnly)
+	// For all version at or above v17.0.0, each replica will start in super_read_only mode.
+	if vtTabletVersion >= 17 && vtcltlVersion >= 17 {
+		assert.True(t, replicaStatus.SuperReadOnly)
+	}
 	assert.False(t, replicaStatus.SemiSyncPrimaryEnabled)
 	assert.True(t, replicaStatus.SemiSyncReplicaEnabled)
 	assert.False(t, replicaStatus.SemiSyncPrimaryStatus)
@@ -499,7 +513,8 @@ func getFullStatus(t *testing.T, clusterInstance *cluster.LocalProcessCluster, t
 	statusString, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("GetFullStatus", tablet.Alias)
 	require.NoError(t, err)
 	status := &replicationdatapb.FullStatus{}
-	err = protojson.Unmarshal([]byte(statusString), status)
+	opt := protojson.UnmarshalOptions{DiscardUnknown: true}
+	err = opt.Unmarshal([]byte(statusString), status)
 	require.NoError(t, err)
 	return status
 }

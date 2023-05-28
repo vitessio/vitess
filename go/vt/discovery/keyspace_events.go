@@ -26,6 +26,7 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -417,6 +418,13 @@ func (kew *KeyspaceEventWatcher) getKeyspaceStatus(keyspace string) *keyspaceSta
 	if kss.deleted {
 		kss = nil
 		delete(kew.keyspaces, keyspace)
+		// Delete from the sidecar database identifier cache as well.
+		// Ignore any errors as they should all mean that the entry
+		// does not exist in the cache (which will be common).
+		sdbidc, _ := sidecardb.GetIdentifierCache()
+		if sdbidc != nil {
+			sdbidc.Delete(keyspace)
+		}
 	}
 	return kss
 }
@@ -446,19 +454,20 @@ func (kew *KeyspaceEventWatcher) TargetIsBeingResharded(target *query.Target) bo
 // The shard state keeps track of the current primary and the last externally reparented time, which we can use
 // to determine that there was a serving primary which now became non serving. This is only possible in a DemotePrimary
 // RPC which are only called from ERS and PRS. So buffering will stop when these operations succeed.
-func (kew *KeyspaceEventWatcher) PrimaryIsNotServing(target *query.Target) bool {
+// We return the tablet alias of the primary if it is serving.
+func (kew *KeyspaceEventWatcher) PrimaryIsNotServing(target *query.Target) (*topodatapb.TabletAlias, bool) {
 	if target.TabletType != topodatapb.TabletType_PRIMARY {
-		return false
+		return nil, false
 	}
 	ks := kew.getKeyspaceStatus(target.Keyspace)
 	if ks == nil {
-		return false
+		return nil, false
 	}
 	ks.mu.Lock()
 	defer ks.mu.Unlock()
 	if state, ok := ks.shards[target.Shard]; ok {
 		// If the primary tablet was present then externallyReparented will be non-zero and currentPrimary will be not nil
-		return !state.serving && !ks.consistent && state.externallyReparented != 0 && state.currentPrimary != nil
+		return state.currentPrimary, !state.serving && !ks.consistent && state.externallyReparented != 0 && state.currentPrimary != nil
 	}
-	return false
+	return nil, false
 }

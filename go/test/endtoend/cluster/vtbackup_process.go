@@ -54,7 +54,6 @@ type VtbackupProcess struct {
 
 // Setup starts vtbackup process with required arguements
 func (vtbackup *VtbackupProcess) Setup() (err error) {
-
 	vtbackup.proc = exec.Command(
 		vtbackup.Binary,
 		"--topo_implementation", vtbackup.CommonArg.TopoImplementation,

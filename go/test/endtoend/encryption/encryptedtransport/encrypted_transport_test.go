@@ -68,6 +68,7 @@ import (
 	"vitess.io/vitess/go/test/endtoend/encryption"
 
 	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"github.com/stretchr/testify/assert"
@@ -349,7 +350,7 @@ func clusterSetUp(t *testing.T) (int, error) {
 	for _, keyspaceStr := range []string{keyspace} {
 		KeyspacePtr := &cluster.Keyspace{Name: keyspaceStr}
 		keyspace := *KeyspacePtr
-		if err := clusterInstance.VtctlProcess.CreateKeyspace(keyspace.Name); err != nil {
+		if err := clusterInstance.VtctlProcess.CreateKeyspace(keyspace.Name, sidecardb.DefaultName); err != nil {
 			return 1, err
 		}
 		shard := &cluster.Shard{
@@ -360,7 +361,11 @@ func clusterSetUp(t *testing.T) (int, error) {
 			tablet := clusterInstance.NewVttabletInstance("replica", 0, cell)
 
 			// Start Mysqlctl process
-			tablet.MysqlctlProcess = *cluster.MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, clusterInstance.TmpDirectory)
+			mysqlctlProcess, err := cluster.MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, clusterInstance.TmpDirectory)
+			if err != nil {
+				return 1, err
+			}
+			tablet.MysqlctlProcess = *mysqlctlProcess
 			proc, err := tablet.MysqlctlProcess.StartProcess()
 			if err != nil {
 				return 1, err

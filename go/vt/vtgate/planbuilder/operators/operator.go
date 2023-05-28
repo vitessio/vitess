@@ -22,7 +22,7 @@ The operators go through a few phases while planning:
    It will contain logical joins - we still haven't decided on the join algorithm to use yet.
    At the leaves, it will contain QueryGraphs - these are the tables in the FROM clause
    that we can easily do join ordering on. The logical tree will represent the full query,
-   including projections, grouping, ordering and so on.
+   including projections, Grouping, ordering and so on.
 2. Physical
    Once the logical plan has been fully built, we go bottom up and plan which routes that will be used.
    During this phase, we will also decide which join algorithms should be used on the vtgate level
@@ -51,32 +51,33 @@ type (
 	noPredicates struct{}
 )
 
+// PlanQuery creates a query plan for a given SQL statement
 func PlanQuery(ctx *plancontext.PlanningContext, selStmt sqlparser.Statement) (ops.Operator, error) {
 	op, err := createLogicalOperatorFromAST(ctx, selStmt)
 	if err != nil {
 		return nil, err
 	}
 
-	if err = CheckValid(op); err != nil {
+	if err = checkValid(op); err != nil {
 		return nil, err
 	}
 
-	op, err = transformToPhysical(ctx, op)
-	if err != nil {
+	if op, err = transformToPhysical(ctx, op); err != nil {
 		return nil, err
 	}
 
-	backup := Clone(op)
-
-	op, err = planHorizons(op)
-	if err == errNotHorizonPlanned {
-		op = backup
-	} else if err != nil {
+	if op, err = tryHorizonPlanning(ctx, op); err != nil {
 		return nil, err
 	}
 
-	if op, err = Compact(ctx, op); err != nil {
+	if op, err = compact(ctx, op); err != nil {
 		return nil, err
+	}
+
+	_, isRoute := op.(*Route)
+	if !isRoute && ctx.SemTable.NotSingleRouteErr != nil {
+		// If we got here, we don't have a single shard plan
+		return nil, ctx.SemTable.NotSingleRouteErr
 	}
 
 	return op, err
@@ -87,12 +88,50 @@ func (noInputs) Inputs() []ops.Operator {
 	return nil
 }
 
+// SetInputs implements the Operator interface
+func (noInputs) SetInputs(ops []ops.Operator) {
+	if len(ops) > 0 {
+		panic("the noInputs operator does not have inputs")
+	}
+}
+
 // AddColumn implements the Operator interface
-func (noColumns) AddColumn(*plancontext.PlanningContext, sqlparser.Expr) (int, error) {
-	return 0, vterrors.VT13001("the noColumns operator cannot accept columns")
+func (noColumns) AddColumn(*plancontext.PlanningContext, *sqlparser.AliasedExpr, bool, bool) (ops.Operator, int, error) {
+	return nil, 0, vterrors.VT13001("the noColumns operator cannot accept columns")
+}
+
+func (noColumns) GetColumns() ([]*sqlparser.AliasedExpr, error) {
+	return nil, vterrors.VT13001("the noColumns operator cannot accept columns")
 }
 
 // AddPredicate implements the Operator interface
 func (noPredicates) AddPredicate(*plancontext.PlanningContext, sqlparser.Expr) (ops.Operator, error) {
 	return nil, vterrors.VT13001("the noColumns operator cannot accept predicates")
+}
+
+// tryTruncateColumnsAt will see if we can truncate the columns by just asking the operator to do it for us
+func tryTruncateColumnsAt(op ops.Operator, truncateAt int) bool {
+	type columnTruncator interface {
+		setTruncateColumnCount(offset int)
+	}
+
+	truncator, ok := op.(columnTruncator)
+	if ok {
+		truncator.setTruncateColumnCount(truncateAt)
+		return true
+	}
+
+	inputs := op.Inputs()
+	if len(inputs) != 1 {
+		return false
+	}
+
+	switch op.(type) {
+	case *Limit:
+		// empty by design
+	default:
+		return false
+	}
+
+	return tryTruncateColumnsAt(inputs[0], truncateAt)
 }

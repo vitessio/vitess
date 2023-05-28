@@ -496,6 +496,30 @@ func (t *explainTablet) HandleQuery(c *mysql.Conn, query string, callback func(*
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
+	// If query is part of rejected list then return error right away.
+	if err := t.db.GetRejectedQueryResult(query); err != nil {
+		return err
+	}
+
+	// If query is expected to have a specific result then return the result.
+	if result := t.db.GetQueryResult(query); result != nil {
+		if f := result.BeforeFunc; f != nil {
+			f()
+		}
+		return callback(result.Result)
+	}
+
+	// return result if query is part of defined pattern.
+	if userCallback, expResult, ok, err := t.db.GetQueryPatternResult(query); ok {
+		if userCallback != nil {
+			userCallback(query)
+		}
+		if err != nil {
+			return err
+		}
+		return callback(expResult.Result)
+	}
+
 	if !strings.Contains(query, "1 != 1") {
 		t.mysqlQueries = append(t.mysqlQueries, &MysqlQuery{
 			Time: t.currentTime,
@@ -506,13 +530,11 @@ func (t *explainTablet) HandleQuery(c *mysql.Conn, query string, callback func(*
 	// return the pre-computed results for any schema introspection queries
 	tEnv := t.vte.getGlobalTabletEnv()
 	result := tEnv.getResult(query)
-	emptyResult := &sqltypes.Result{}
-	if sidecardb.MatchesInitQuery(query) {
-		return callback(emptyResult)
-	}
+
 	if result != nil {
 		return callback(result)
 	}
+
 	switch sqlparser.Preview(query) {
 	case sqlparser.StmtSelect:
 		var err error

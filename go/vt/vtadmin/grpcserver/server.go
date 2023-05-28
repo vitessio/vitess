@@ -17,6 +17,7 @@ limitations under the License.
 package grpcserver
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"net/http"
@@ -117,6 +118,23 @@ func New(name string, opts Options) *Server {
 		streamInterceptors = append(streamInterceptors, otgrpc.StreamServerInterceptor(otgrpc.WithTracer(tracer)))
 		unaryInterceptors = append(unaryInterceptors, otgrpc.UnaryServerInterceptor(otgrpc.WithTracer(tracer)))
 	}
+
+	streamInterceptors = append(streamInterceptors, func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+		err := handler(srv, ss)
+		if err != nil {
+			log.Errorf("%s error: %s", info.FullMethod, err)
+		}
+
+		return err
+	})
+	unaryInterceptors = append(unaryInterceptors, func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp interface{}, err error) {
+		resp, err = handler(ctx, req)
+		if err != nil {
+			log.Errorf("%s error: %s", info.FullMethod, err)
+		}
+
+		return resp, err
+	})
 
 	recoveryHandler := grpc_recovery.WithRecoveryHandler(func(p any) (err error) {
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "panic triggered: %v", p)

@@ -17,14 +17,13 @@ limitations under the License.
 package evalengine
 
 import (
-	"time"
+	"encoding/binary"
 
 	"vitess.io/vitess/go/hack"
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/collations/charset"
+	"vitess.io/vitess/go/mysql/datetime"
 	"vitess.io/vitess/go/sqltypes"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vthash"
 )
 
@@ -45,6 +44,13 @@ func newEvalRaw(typ sqltypes.Type, raw []byte, col collations.TypedCollation) *e
 
 func newEvalBytesHex(raw []byte) eval {
 	return &evalBytes{tt: int16(sqltypes.VarBinary), isHexLiteral: true, col: collationBinary, bytes: raw}
+}
+
+// newEvalBytesBit creates a new evalBytes for a bit literal.
+// Turns out that a bit literal is not actually typed with
+// sqltypes.Bit, but with sqltypes.VarBinary.
+func newEvalBytesBit(raw []byte) eval {
+	return &evalBytes{tt: int16(sqltypes.VarBinary), isBitLiteral: true, col: collationBinary, bytes: raw}
 }
 
 func newEvalBinary(raw []byte) *evalBytes {
@@ -76,12 +82,11 @@ func evalToVarchar(e eval, col collations.ID, convert bool) (*evalBytes, error) 
 		typedcol.Collation = col
 
 		if col != collations.CollationBinaryID {
-			environment := collations.Local()
-			fromCollation := environment.LookupByID(b.col.Collation)
-			toCollation := environment.LookupByID(col)
+			fromCollation := b.col.Collation.Get()
+			toCollation := col.Get()
 
 			var err error
-			bytes, err = collations.Convert(nil, toCollation, bytes, fromCollation)
+			bytes, err = charset.Convert(nil, toCollation.Charset(), bytes, fromCollation.Charset())
 			if err != nil {
 				return nil, err
 			}
@@ -99,19 +104,12 @@ func evalToVarchar(e eval, col collations.ID, convert bool) (*evalBytes, error) 
 
 func (e *evalBytes) Hash(h *vthash.Hasher) {
 	switch tt := e.SQLType(); {
-	case sqltypes.IsDate(tt):
-		t, err := e.parseDate()
-		if err != nil {
-			panic("parseDate() in evalBytes should never fail")
-		}
-		h.Write16(hashPrefixDate)
-		h.Write64(uint64(t.UnixNano()))
 	case tt == sqltypes.VarBinary:
 		h.Write16(hashPrefixBytes)
 		_, _ = h.Write(e.bytes)
 	default:
 		h.Write16(hashPrefixBytes)
-		col := collations.Local().LookupByID(e.col.Collation)
+		col := e.col.Collation.Get()
 		col.Hash(h, e.bytes, 0)
 	}
 }
@@ -155,23 +153,39 @@ func (e *evalBytes) truncateInPlace(size int) {
 			e.bytes = e.bytes[:size]
 		}
 	case sqltypes.IsText(tt):
-		collation := collations.Local().LookupByID(e.col.Collation)
-		e.bytes = collations.Slice(collation, e.bytes, 0, size)
+		collation := e.col.Collation.Get()
+		e.bytes = charset.Slice(collation.Charset(), e.bytes, 0, size)
 	default:
 		panic("called EvalResult.truncate on non-quoted")
 	}
 }
 
-func (e *evalBytes) parseDate() (t time.Time, err error) {
-	switch e.SQLType() {
-	case sqltypes.Date:
-		t, err = sqlparser.ParseDate(e.string())
-	case sqltypes.Timestamp, sqltypes.Datetime:
-		t, err = sqlparser.ParseDateTime(e.string())
-	case sqltypes.Time:
-		t, err = sqlparser.ParseTime(e.string())
-	default:
-		err = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "type %v is not date-like", e.SQLType())
+func (e *evalBytes) toDateBestEffort() datetime.DateTime {
+	if t, _, _ := datetime.ParseDateTime(e.string(), -1); !t.IsZero() {
+		return t
 	}
-	return
+	if t, _ := datetime.ParseDate(e.string()); !t.IsZero() {
+		return datetime.DateTime{Date: t}
+	}
+	return datetime.DateTime{}
+}
+
+func (e *evalBytes) toNumericHex() (*evalUint64, bool) {
+	raw := e.bytes
+	if l := len(raw); l > 8 {
+		for _, b := range raw[:l-8] {
+			if b != 0 {
+				return nil, false // overflow
+			}
+		}
+		raw = raw[l-8:]
+	}
+
+	var number [8]byte
+	for i, b := range raw {
+		number[8-len(raw)+i] = b
+	}
+	hex := newEvalUint64(binary.BigEndian.Uint64(number[:]))
+	hex.hexLiteral = true
+	return hex, true
 }

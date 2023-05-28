@@ -18,6 +18,7 @@ package evalengine
 
 import (
 	"vitess.io/vitess/go/sqltypes"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 )
@@ -75,16 +76,36 @@ func (b *BitwiseNotExpr) eval(env *ExpressionEnv) (eval, error) {
 		return newEvalBinary(out), nil
 	}
 
-	eu := evalToNumeric(e).toUint64()
-	return newEvalUint64(^eu.u), nil
+	eu := evalToInt64(e)
+	return newEvalUint64(^uint64(eu.i)), nil
 }
 
-func (b *BitwiseNotExpr) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
-	tt, f := b.Inner.typeof(env)
+func (b *BitwiseNotExpr) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	tt, f := b.Inner.typeof(env, fields)
 	if tt == sqltypes.VarBinary && f&(flagHex|flagBit) == 0 {
 		return sqltypes.VarBinary, f
 	}
 	return sqltypes.Uint64, f
+}
+
+func (expr *BitwiseNotExpr) compile(c *compiler) (ctype, error) {
+	ct, err := expr.Inner.compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip := c.compileNullCheck1(ct)
+
+	if ct.Type == sqltypes.VarBinary && !ct.isHexOrBitLiteral() {
+		c.asm.BitwiseNot_b()
+		c.asm.jumpDestination(skip)
+		return ct, nil
+	}
+
+	ct = c.compileToBitwiseUint64(ct, 1)
+	c.asm.BitwiseNot_u()
+	c.asm.jumpDestination(skip)
+	return ct, nil
 }
 
 func (o opBitShr) BitwiseOp() string                { return ">>" }
@@ -170,9 +191,16 @@ func (o opBitAnd) binary(left, right []byte) (out []byte) {
 
 func (o opBitAnd) BitwiseOp() string { return "&" }
 
+var errBitwiseOperandsLength = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Binary operands of bitwise operators must be of equal length")
+
 func (bit *BitwiseExpr) eval(env *ExpressionEnv) (eval, error) {
-	l, r, err := bit.arguments(env)
-	if l == nil || r == nil || err != nil {
+	l, err := bit.Left.eval(env)
+	if l == nil || err != nil {
+		return nil, err
+	}
+
+	r, err := bit.Right.eval(env)
+	if r == nil || err != nil {
 		return nil, err
 	}
 
@@ -192,16 +220,16 @@ func (bit *BitwiseExpr) eval(env *ExpressionEnv) (eval, error) {
 					b1 := l.bytes
 					b2 := r.bytes
 					if len(b1) != len(b2) {
-						return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Binary operands of bitwise operators must be of equal length")
+						return nil, errBitwiseOperandsLength
 					}
 					return newEvalBinary(op.binary(b1, b2)), nil
 				}
 			}
 		}
 
-		lu := evalToNumeric(l).toUint64()
-		ru := evalToNumeric(r).toUint64()
-		return newEvalUint64(op.numeric(lu.u, ru.u)), nil
+		lu := evalToInt64(l)
+		ru := evalToInt64(r)
+		return newEvalUint64(op.numeric(uint64(lu.i), uint64(ru.i))), nil
 
 	case opBitShift:
 		/*
@@ -211,21 +239,21 @@ func (bit *BitwiseExpr) eval(env *ExpressionEnv) (eval, error) {
 			unsigned 64-bit integer as necessary.
 		*/
 		if l, ok := l.(*evalBytes); ok && l.isBinary() && !l.isHexOrBitLiteral() {
-			ru := evalToNumeric(r).toUint64()
-			return newEvalBinary(op.binary(l.bytes, ru.u)), nil
+			ru := evalToInt64(r)
+			return newEvalBinary(op.binary(l.bytes, uint64(ru.i))), nil
 		}
-		lu := evalToNumeric(l).toUint64()
-		ru := evalToNumeric(r).toUint64()
-		return newEvalUint64(op.numeric(lu.u, ru.u)), nil
+		lu := evalToInt64(l)
+		ru := evalToInt64(r)
+		return newEvalUint64(op.numeric(uint64(lu.i), uint64(ru.i))), nil
 
 	default:
 		panic("unexpected bit operation")
 	}
 }
 
-func (bit *BitwiseExpr) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
-	t1, f1 := bit.Left.typeof(env)
-	t2, f2 := bit.Right.typeof(env)
+func (bit *BitwiseExpr) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	t1, f1 := bit.Left.typeof(env, fields)
+	t2, f2 := bit.Right.typeof(env, fields)
 
 	switch bit.Op.(type) {
 	case opBitBinary:
@@ -240,6 +268,93 @@ func (bit *BitwiseExpr) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
 	}
 
 	return sqltypes.Uint64, f1 | f2
+}
+
+func (expr *BitwiseExpr) compileBinary(c *compiler, asm_ins_bb, asm_ins_uu func()) (ctype, error) {
+	lt, err := expr.Left.compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip1 := c.compileNullCheck1(lt)
+
+	rt, err := expr.Right.compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip2 := c.compileNullCheck1r(rt)
+
+	if lt.Type == sqltypes.VarBinary && rt.Type == sqltypes.VarBinary {
+		if !lt.isHexOrBitLiteral() || !rt.isHexOrBitLiteral() {
+			asm_ins_bb()
+			c.asm.jumpDestination(skip1, skip2)
+			return ctype{Type: sqltypes.VarBinary, Col: collationBinary}, nil
+		}
+	}
+
+	lt = c.compileToBitwiseUint64(lt, 2)
+	rt = c.compileToBitwiseUint64(rt, 1)
+
+	asm_ins_uu()
+	c.asm.jumpDestination(skip1, skip2)
+	return ctype{Type: sqltypes.Uint64, Col: collationNumeric}, nil
+}
+
+func (expr *BitwiseExpr) compileShift(c *compiler, i int) (ctype, error) {
+	lt, err := expr.Left.compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip1 := c.compileNullCheck1(lt)
+
+	rt, err := expr.Right.compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip2 := c.compileNullCheck1r(rt)
+
+	if lt.Type == sqltypes.VarBinary && !lt.isHexOrBitLiteral() {
+		_ = c.compileToUint64(rt, 1)
+		if i < 0 {
+			c.asm.BitShiftLeft_bu()
+		} else {
+			c.asm.BitShiftRight_bu()
+		}
+		c.asm.jumpDestination(skip1, skip2)
+		return ctype{Type: sqltypes.VarBinary, Col: collationBinary}, nil
+	}
+
+	_ = c.compileToBitwiseUint64(lt, 2)
+	_ = c.compileToUint64(rt, 1)
+
+	if i < 0 {
+		c.asm.BitShiftLeft_uu()
+	} else {
+		c.asm.BitShiftRight_uu()
+	}
+
+	c.asm.jumpDestination(skip1, skip2)
+	return ctype{Type: sqltypes.Uint64, Col: collationNumeric}, nil
+}
+
+func (expr *BitwiseExpr) compile(c *compiler) (ctype, error) {
+	switch expr.Op.(type) {
+	case *opBitAnd:
+		return expr.compileBinary(c, c.asm.BitOp_and_bb, c.asm.BitOp_and_uu)
+	case *opBitOr:
+		return expr.compileBinary(c, c.asm.BitOp_or_bb, c.asm.BitOp_or_uu)
+	case *opBitXor:
+		return expr.compileBinary(c, c.asm.BitOp_xor_bb, c.asm.BitOp_xor_uu)
+	case *opBitShl:
+		return expr.compileShift(c, -1)
+	case *opBitShr:
+		return expr.compileShift(c, 1)
+	default:
+		panic("unexpected arithmetic operator")
+	}
 }
 
 var _ opBitBinary = (*opBitAnd)(nil)

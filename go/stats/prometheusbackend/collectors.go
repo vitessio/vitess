@@ -395,3 +395,39 @@ func (c *histogramCollector) Collect(ch chan<- prometheus.Metric) {
 		ch <- metric
 	}
 }
+
+type stringMapFuncWithMultiLabelsCollector struct {
+	smf  *stats.StringMapFuncWithMultiLabels
+	desc *prometheus.Desc
+}
+
+func newStringMapFuncWithMultiLabelsCollector(smf *stats.StringMapFuncWithMultiLabels, name string) {
+	c := &stringMapFuncWithMultiLabelsCollector{
+		smf: smf,
+		desc: prometheus.NewDesc(
+			name,
+			smf.Help(),
+			labelsToSnake(append(smf.KeyLabels(), smf.ValueLabel())),
+			nil),
+	}
+
+	prometheus.MustRegister(c)
+}
+
+// Describe implements Collector.
+func (c *stringMapFuncWithMultiLabelsCollector) Describe(ch chan<- *prometheus.Desc) {
+	ch <- c.desc
+}
+
+// Collect implements Collector.
+func (c *stringMapFuncWithMultiLabelsCollector) Collect(ch chan<- prometheus.Metric) {
+	for lvs, val := range c.smf.StringMapFunc() {
+		labelValues := append(strings.Split(lvs, "."), val)
+		metric, err := prometheus.NewConstMetric(c.desc, prometheus.GaugeValue, 1.0, labelValues...)
+		if err != nil {
+			log.Errorf("Error adding metric: %s", c.desc)
+		} else {
+			ch <- metric
+		}
+	}
+}

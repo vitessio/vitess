@@ -20,12 +20,15 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/discovery"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
 
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
@@ -45,6 +48,9 @@ type vstreamManager struct {
 	resolver *srvtopo.Resolver
 	toposerv srvtopo.Server
 	cell     string
+
+	vstreamsCreated *stats.CountersWithMultiLabels
+	vstreamsLag     *stats.GaugesWithMultiLabels
 }
 
 // maxSkewTimeoutSeconds is the maximum allowed skew between two streams when the MinimizeSkew flag is set
@@ -109,6 +115,8 @@ type vstream struct {
 	eventCh           chan []*binlogdatapb.VEvent
 	heartbeatInterval uint32
 	ts                *topo.Server
+
+	tabletPickerOptions discovery.TabletPickerOptions
 }
 
 type journalEvent struct {
@@ -118,10 +126,19 @@ type journalEvent struct {
 }
 
 func newVStreamManager(resolver *srvtopo.Resolver, serv srvtopo.Server, cell string) *vstreamManager {
+	exporter := servenv.NewExporter(cell, "VStreamManager")
 	return &vstreamManager{
 		resolver: resolver,
 		toposerv: serv,
 		cell:     cell,
+		vstreamsCreated: exporter.NewCountersWithMultiLabels(
+			"VStreamsCreated",
+			"Number of vstreams created",
+			[]string{"Keyspace", "ShardName", "TabletType"}),
+		vstreamsLag: exporter.NewGaugesWithMultiLabels(
+			"VStreamsLag",
+			"Difference between event current time and the binlog event timestamp",
+			[]string{"Keyspace", "ShardName", "TabletType"}),
 	}
 }
 
@@ -156,6 +173,10 @@ func (vsm *vstreamManager) VStream(ctx context.Context, tabletType topodatapb.Ta
 		heartbeatInterval:  flags.GetHeartbeatInterval(),
 		ts:                 ts,
 		copyCompletedShard: make(map[string]struct{}),
+		tabletPickerOptions: discovery.TabletPickerOptions{
+			CellPreference: flags.GetCellPreference(),
+			TabletOrder:    flags.GetTabletOrder(),
+		},
 	}
 	return vs.stream(ctx)
 }
@@ -179,31 +200,51 @@ func (vsm *vstreamManager) resolveParams(ctx context.Context, tabletType topodat
 		return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "vgtid must have at least one value with a starting position")
 	}
 	// To fetch from all keyspaces, the input must contain a single ShardGtid
-	// that has an empty keyspace, and the Gtid must be "current". In the
-	// future, we'll allow the Gtid to be empty which will also support
-	// copying of existing data.
-	if len(vgtid.ShardGtids) == 1 && vgtid.ShardGtids[0].Keyspace == "" {
-		if vgtid.ShardGtids[0].Gtid != "current" {
-			return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "for an empty keyspace, the Gtid value must be 'current': %v", vgtid)
+	// that has an empty keyspace, and the Gtid must be "current".
+	// Or the input must contain a single ShardGtid that has keyspace wildcards.
+	if len(vgtid.ShardGtids) == 1 {
+		inputKeyspace := vgtid.ShardGtids[0].Keyspace
+		isEmpty := inputKeyspace == ""
+		isRegexp := strings.HasPrefix(inputKeyspace, "/")
+		if isEmpty || isRegexp {
+			newvgtid := &binlogdatapb.VGtid{}
+			keyspaces, err := vsm.toposerv.GetSrvKeyspaceNames(ctx, vsm.cell, false)
+			if err != nil {
+				return nil, nil, nil, err
+			}
+
+			if isEmpty {
+				if vgtid.ShardGtids[0].Gtid != "current" {
+					return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "for an empty keyspace, the Gtid value must be 'current': %v", vgtid)
+				}
+				for _, keyspace := range keyspaces {
+					newvgtid.ShardGtids = append(newvgtid.ShardGtids, &binlogdatapb.ShardGtid{
+						Keyspace: keyspace,
+						Gtid:     "current",
+					})
+				}
+			} else {
+				re, err := regexp.Compile(strings.Trim(inputKeyspace, "/"))
+				if err != nil {
+					return nil, nil, nil, err
+				}
+				for _, keyspace := range keyspaces {
+					if re.MatchString(keyspace) {
+						newvgtid.ShardGtids = append(newvgtid.ShardGtids, &binlogdatapb.ShardGtid{
+							Keyspace: keyspace,
+							Gtid:     vgtid.ShardGtids[0].Gtid,
+						})
+					}
+				}
+			}
+			vgtid = newvgtid
 		}
-		keyspaces, err := vsm.toposerv.GetSrvKeyspaceNames(ctx, vsm.cell, false)
-		if err != nil {
-			return nil, nil, nil, err
-		}
-		newvgtid := &binlogdatapb.VGtid{}
-		for _, keyspace := range keyspaces {
-			newvgtid.ShardGtids = append(newvgtid.ShardGtids, &binlogdatapb.ShardGtid{
-				Keyspace: keyspace,
-				Gtid:     "current",
-			})
-		}
-		vgtid = newvgtid
 	}
 	newvgtid := &binlogdatapb.VGtid{}
 	for _, sgtid := range vgtid.ShardGtids {
 		if sgtid.Shard == "" {
-			if sgtid.Gtid != "current" {
-				return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "if shards are unspecified, the Gtid value must be 'current': %v", vgtid)
+			if sgtid.Gtid != "current" && sgtid.Gtid != "" {
+				return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "if shards are unspecified, the Gtid value must be 'current' or empty; got: %v", vgtid)
 			}
 			// TODO(sougou): this should work with the new Migrate workflow
 			_, _, allShards, err := vsm.resolver.GetKeyspaceShards(ctx, sgtid.Keyspace, tabletType)
@@ -452,7 +493,7 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 		var eventss [][]*binlogdatapb.VEvent
 		var err error
 		cells := vs.getCells()
-		tp, err := discovery.NewTabletPicker(vs.ts, cells, sgtid.Keyspace, sgtid.Shard, vs.tabletType.String())
+		tp, err := discovery.NewTabletPicker(ctx, vs.ts, cells, vs.vsm.cell, sgtid.Keyspace, sgtid.Shard, vs.tabletType.String(), vs.tabletPickerOptions)
 		if err != nil {
 			log.Errorf(err.Error())
 			return err
@@ -507,9 +548,16 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 			Filter:       vs.filter,
 			TableLastPKs: sgtid.TablePKs,
 		}
+		var vstreamCreatedOnce sync.Once
 		err = tabletConn.VStream(ctx, req, func(events []*binlogdatapb.VEvent) error {
 			// We received a valid event. Reset error count.
 			errCount = 0
+
+			labels := []string{sgtid.Keyspace, sgtid.Shard, req.Target.TabletType.String()}
+
+			vstreamCreatedOnce.Do(func() {
+				vs.vsm.vstreamsCreated.Add(labels, 1)
+			})
 
 			select {
 			case <-ctx.Done():
@@ -606,6 +654,9 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 				default:
 					sendevents = append(sendevents, event)
 				}
+				lag := event.CurrentTime/1e9 - event.Timestamp
+				vs.vsm.vstreamsLag.Set(labels, lag)
+
 			}
 			if len(sendevents) != 0 {
 				eventss = append(eventss, sendevents)

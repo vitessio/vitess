@@ -31,7 +31,7 @@ func GetFullStatus(ctx context.Context, r Request, api *API) *JSONResponse {
 		return NewJSONResponse(nil, err)
 	}
 	status, err := api.server.GetFullStatus(ctx, &vtadminpb.GetFullStatusRequest{
-		ClusterId: r.URL.Query()["cluster"][0],
+		ClusterId: r.URL.Query()["cluster_id"][0],
 		Alias:     alias,
 	})
 
@@ -41,7 +41,7 @@ func GetFullStatus(ctx context.Context, r Request, api *API) *JSONResponse {
 // GetTablets implements the http wrapper for /tablets[?cluster=[&cluster=]].
 func GetTablets(ctx context.Context, r Request, api *API) *JSONResponse {
 	tablets, err := api.server.GetTablets(ctx, &vtadminpb.GetTabletsRequest{
-		ClusterIds: r.URL.Query()["cluster"],
+		ClusterIds: r.URL.Query()["cluster_id"],
 	})
 
 	return NewJSONResponse(tablets, err)
@@ -58,7 +58,7 @@ func GetTablet(ctx context.Context, r Request, api *API) *JSONResponse {
 
 	tablet, err := api.server.GetTablet(ctx, &vtadminpb.GetTabletRequest{
 		Alias:      alias,
-		ClusterIds: r.URL.Query()["cluster"],
+		ClusterIds: r.URL.Query()["cluster_id"],
 	})
 
 	return NewJSONResponse(tablet, err)
@@ -80,7 +80,7 @@ func DeleteTablet(ctx context.Context, r Request, api *API) *JSONResponse {
 	deleted, err := api.server.DeleteTablet(ctx, &vtadminpb.DeleteTabletRequest{
 		Alias:        alias,
 		AllowPrimary: allowPrimary,
-		ClusterIds:   r.URL.Query()["cluster"],
+		ClusterIds:   r.URL.Query()["cluster_id"],
 	})
 
 	return NewJSONResponse(deleted, err)
@@ -97,7 +97,7 @@ func PingTablet(ctx context.Context, r Request, api *API) *JSONResponse {
 
 	ping, err := api.server.PingTablet(ctx, &vtadminpb.PingTabletRequest{
 		Alias:      alias,
-		ClusterIds: r.URL.Query()["cluster"],
+		ClusterIds: r.URL.Query()["cluster_id"],
 	})
 
 	return NewJSONResponse(ping, err)
@@ -114,7 +114,7 @@ func RefreshState(ctx context.Context, r Request, api *API) *JSONResponse {
 
 	result, err := api.server.RefreshState(ctx, &vtadminpb.RefreshStateRequest{
 		Alias:      alias,
-		ClusterIds: r.URL.Query()["cluster"],
+		ClusterIds: r.URL.Query()["cluster_id"],
 	})
 
 	return NewJSONResponse(result, err)
@@ -124,7 +124,7 @@ func RefreshState(ctx context.Context, r Request, api *API) *JSONResponse {
 // PUT /tablet/{tablet}/refresh_replication_source.
 //
 // Query params:
-//   - cluster: repeatable, list of cluster IDs to restrict to when searching fo
+//   - cluster_id: repeatable, list of cluster IDs to restrict to when searching fo
 //     a tablet with that alias.
 //
 // PUT body is unused; this endpoint takes no additional options.
@@ -138,7 +138,7 @@ func RefreshTabletReplicationSource(ctx context.Context, r Request, api *API) *J
 
 	result, err := api.server.RefreshTabletReplicationSource(ctx, &vtadminpb.RefreshTabletReplicationSourceRequest{
 		Alias:      alias,
-		ClusterIds: r.URL.Query()["cluster"],
+		ClusterIds: r.URL.Query()["cluster_id"],
 	})
 
 	return NewJSONResponse(result, err)
@@ -155,7 +155,7 @@ func RunHealthCheck(ctx context.Context, r Request, api *API) *JSONResponse {
 
 	result, err := api.server.RunHealthCheck(ctx, &vtadminpb.RunHealthCheckRequest{
 		Alias:      alias,
-		ClusterIds: r.URL.Query()["cluster"],
+		ClusterIds: r.URL.Query()["cluster_id"],
 	})
 
 	return NewJSONResponse(result, err)
@@ -172,7 +172,7 @@ func SetReadOnly(ctx context.Context, r Request, api *API) *JSONResponse {
 
 	result, err := api.server.SetReadOnly(ctx, &vtadminpb.SetReadOnlyRequest{
 		Alias:      alias,
-		ClusterIds: r.URL.Query()["cluster"],
+		ClusterIds: r.URL.Query()["cluster_id"],
 	})
 
 	return NewJSONResponse(result, err)
@@ -189,7 +189,7 @@ func SetReadWrite(ctx context.Context, r Request, api *API) *JSONResponse {
 
 	result, err := api.server.SetReadWrite(ctx, &vtadminpb.SetReadWriteRequest{
 		Alias:      alias,
-		ClusterIds: r.URL.Query()["cluster"],
+		ClusterIds: r.URL.Query()["cluster_id"],
 	})
 
 	return NewJSONResponse(result, err)
@@ -206,7 +206,7 @@ func StartReplication(ctx context.Context, r Request, api *API) *JSONResponse {
 
 	result, err := api.server.StartReplication(ctx, &vtadminpb.StartReplicationRequest{
 		Alias:      alias,
-		ClusterIds: r.URL.Query()["cluster"],
+		ClusterIds: r.URL.Query()["cluster_id"],
 	})
 
 	return NewJSONResponse(result, err)
@@ -223,7 +223,7 @@ func StopReplication(ctx context.Context, r Request, api *API) *JSONResponse {
 
 	result, err := api.server.StopReplication(ctx, &vtadminpb.StopReplicationRequest{
 		Alias:      alias,
-		ClusterIds: r.URL.Query()["cluster"],
+		ClusterIds: r.URL.Query()["cluster_id"],
 	})
 
 	return NewJSONResponse(result, err)
@@ -233,7 +233,7 @@ func StopReplication(ctx context.Context, r Request, api *API) *JSONResponse {
 // POST /tablet/{tablet}/tablet_externally_promoted.
 //
 // Query params:
-// - `cluster`: repeated list of clusterIDs to limit the request to.
+// - `cluster_id`: repeated list of clusterIDs to limit the request to.
 //
 // POST body is unused; this endpoint takes no additional options.
 func TabletExternallyPromoted(ctx context.Context, r Request, api *API) *JSONResponse {
@@ -246,7 +246,7 @@ func TabletExternallyPromoted(ctx context.Context, r Request, api *API) *JSONRes
 
 	result, err := api.server.TabletExternallyPromoted(ctx, &vtadminpb.TabletExternallyPromotedRequest{
 		Alias:      alias,
-		ClusterIds: r.URL.Query()["cluster"],
+		ClusterIds: r.URL.Query()["cluster_id"],
 	})
 	return NewJSONResponse(result, err)
 }

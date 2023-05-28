@@ -18,17 +18,17 @@ Usage of vtctld:
       --catch-sigpipe                                                    catch and ignore SIGPIPE on stdout and stderr if specified
       --cell string                                                      cell to use
       --ceph_backup_storage_config string                                Path to JSON config file for ceph backup storage. (default "ceph_backup_config.json")
-      --compression-engine-name string                                   compressor engine used for compression. (default "pargzip")
-      --compression-level int                                            what level to pass to the compressor. (default 1)
+      --config-file string                                               Full path of the config file (with extension) to use. If set, --config-path, --config-type, and --config-name are ignored.
+      --config-file-not-found-handling ConfigFileNotFoundHandling        Behavior when a config file is not found. (Options: error, exit, ignore, warn) (default warn)
+      --config-name string                                               Name of the config file (without extension) to search for. (default "vtconfig")
+      --config-path strings                                              Paths to search for config files in. (default [{{.Workdir}}])
+      --config-persistence-min-interval duration                         minimum interval between persisting dynamic config changes back to disk (if no change has occurred, nothing is done). (default 1s)
+      --config-type string                                               Config file type (omit to infer config type from file extension).
       --consul_auth_static_file string                                   JSON File to read the topos/tokens from.
       --datadog-agent-host string                                        host to send spans to. if empty, no tracing will be done
       --datadog-agent-port string                                        port to send spans to. if empty, no tracing will be done
       --disable_active_reparents                                         if set, do not allow active reparents. Use this to protect a cluster using external reparents.
-      --durability_policy string                                         type of durability to enforce. Default is none. Other values are dictated by registered plugins (default "none")
       --emit_stats                                                       If set, emit stats to push-based monitoring and stats backends
-      --external-compressor string                                       command with arguments to use when compressing a backup.
-      --external-compressor-extension string                             extension to use when using an external compressor.
-      --external-decompressor string                                     command with arguments to use when decompressing a backup.
       --file_backup_storage_root string                                  Root directory for the file backup storage.
       --gcs_backup_storage_bucket string                                 Google Cloud Storage bucket to use for backups.
       --gcs_backup_storage_root string                                   Root prefix for all backup-related object names.
@@ -87,7 +87,7 @@ Usage of vtctld:
       --s3_backup_storage_bucket string                                  S3 bucket to use for backups.
       --s3_backup_storage_root string                                    root prefix for all backup-related object names.
       --s3_backup_tls_skip_verify_cert                                   skip the 'certificate is valid' check for SSL connections.
-      --schema_change_check_interval duration                            How often the schema change dir is checked for schema changes (deprecated: if passed as a bare integer, the duration will be in seconds). (default 1m0s)
+      --schema_change_check_interval duration                            How often the schema change dir is checked for schema changes. This value must be positive; if zero or lower, the default of 1m is used. (default 1m0s)
       --schema_change_controller string                                  Schema change controller is responsible for finding schema changes and responding to schema change events.
       --schema_change_dir string                                         Directory containing schema changes for all keyspaces. Each keyspace has its own directory, and schema changes are expected to live in '$KEYSPACE/input' dir. (e.g. 'test_keyspace/input/*sql'). Each sql file represents a schema change.
       --schema_change_replicas_timeout duration                          How long to wait for replicas to receive a schema change. (default 10s)
@@ -121,7 +121,7 @@ Usage of vtctld:
       --tablet_protocol string                                           Protocol to use to make queryservice RPCs to vttablets. (default "grpc")
       --tablet_refresh_interval duration                                 Tablet refresh interval. (default 1m0s)
       --tablet_refresh_known_tablets                                     Whether to reload the tablet's address/port map from topo in case they change. (default true)
-      --tablet_url_template string                                       Format string describing debug tablet url formatting. See getTabletDebugURL() for how to customize this. (default "http://{{.GetTabletHostPort}}")
+      --tablet_url_template string                                       Format string describing debug tablet url formatting. See getTabletDebugURL() for how to customize this. (default "http://{{ "{{.GetTabletHostPort}}" }}")
       --topo_consul_lock_delay duration                                  LockDelay for consul session. (default 15s)
       --topo_consul_lock_session_checks string                           List of checks for consul session. (default "serfHealth")
       --topo_consul_lock_session_ttl string                              TTL for consul session.
@@ -150,5 +150,4 @@ Usage of vtctld:
       --v Level                                                          log level for V logs
   -v, --version                                                          print binary version
       --vmodule moduleSpec                                               comma-separated list of pattern=N settings for file-filtered logging
-      --vtctl_healthcheck_topology_refresh duration                      refresh interval for re-reading the topology (default 30s)
       --vtctld_sanitize_log_messages                                     When true, vtctld sanitizes logging.

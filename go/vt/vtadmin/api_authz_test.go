@@ -2939,15 +2939,15 @@ func TestVTExplain(t *testing.T) {
 	err := opts.RBAC.Reify()
 	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
 
-	api := vtadmin.NewAPI(testClusters(t), opts)
-	t.Cleanup(func() {
-		if err := api.Close(); err != nil {
-			t.Logf("api did not close cleanly: %s", err.Error())
-		}
-	})
-
 	t.Run("unauthorized actor", func(t *testing.T) {
 		t.Parallel()
+
+		api := vtadmin.NewAPI(testClusters(t), opts)
+		t.Cleanup(func() {
+			if err := api.Close(); err != nil {
+				t.Logf("api did not close cleanly: %s", err.Error())
+			}
+		})
 
 		actor := &rbac.Actor{Name: "other"}
 		ctx := context.Background()
@@ -2965,6 +2965,13 @@ func TestVTExplain(t *testing.T) {
 
 	t.Run("authorized actor", func(t *testing.T) {
 		t.Parallel()
+
+		api := vtadmin.NewAPI(testClusters(t), opts)
+		t.Cleanup(func() {
+			if err := api.Close(); err != nil {
+				t.Logf("api did not close cleanly: %s", err.Error())
+			}
+		})
 
 		actor := &rbac.Actor{Name: "allowed"}
 		ctx := context.Background()

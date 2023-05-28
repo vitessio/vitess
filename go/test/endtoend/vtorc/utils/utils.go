@@ -18,10 +18,12 @@ package utils
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
 	"path"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -316,7 +318,7 @@ func SetupVttabletsAndVTOrcs(t *testing.T, clusterInfo *VTOrcClusterInfo, numRep
 // cleanAndStartVttablet cleans the MySQL instance underneath for running a new test. It also starts the vttablet.
 func cleanAndStartVttablet(t *testing.T, clusterInfo *VTOrcClusterInfo, vttablet *cluster.Vttablet) {
 	t.Helper()
-	// set super-read-only to false
+	// set super_read_only to false
 	_, err := RunSQL(t, "SET GLOBAL super_read_only = OFF", vttablet, "")
 	require.NoError(t, err)
 	// remove the databases if they exist
@@ -585,6 +587,26 @@ func RunSQL(t *testing.T, sql string, tablet *cluster.Vttablet, db string) (*sql
 	return execute(t, conn, sql)
 }
 
+// RunSQLs is used to run a list of SQL statements on the given tablet
+func RunSQLs(t *testing.T, sqls []string, tablet *cluster.Vttablet, db string) error {
+	// Get Connection
+	tabletParams := getMysqlConnParam(tablet, db)
+	var timeoutDuration = time.Duration(5 * len(sqls))
+	ctx, cancel := context.WithTimeout(context.Background(), timeoutDuration*time.Second)
+	defer cancel()
+	conn, err := mysql.Connect(ctx, &tabletParams)
+	require.Nil(t, err)
+	defer conn.Close()
+
+	// Run SQLs
+	for _, sql := range sqls {
+		if _, err := execute(t, conn, sql); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func execute(t *testing.T, conn *mysql.Conn, query string) (*sqltypes.Result, error) {
 	t.Helper()
 	return conn.ExecuteFetch(query, 1000, true)
@@ -717,12 +739,10 @@ func CheckSourcePort(t *testing.T, replica *cluster.Vttablet, source *cluster.Vt
 }
 
 // MakeAPICall is used make an API call given the url. It returns the status and the body of the response received
-func MakeAPICall(t *testing.T, vtorc *cluster.VTOrcProcess, url string) (status int, response string) {
+func MakeAPICall(t *testing.T, vtorc *cluster.VTOrcProcess, url string) (status int, response string, err error) {
 	t.Helper()
-	var err error
 	status, response, err = vtorc.MakeAPICall(url)
-	require.NoError(t, err)
-	return status, response
+	return status, response, err
 }
 
 // MakeAPICallRetry is used to make an API call and retry on the given condition.
@@ -736,7 +756,7 @@ func MakeAPICallRetry(t *testing.T, vtorc *cluster.VTOrcProcess, url string, ret
 			t.Fatal("timed out waiting for api to work")
 			return
 		default:
-			status, response = MakeAPICall(t, vtorc, url)
+			status, response, _ := MakeAPICall(t, vtorc, url)
 			if retry(status, response) {
 				time.Sleep(1 * time.Second)
 				break
@@ -945,4 +965,35 @@ func WaitForSuccessfulRecoveryCount(t *testing.T, vtorcInstance *cluster.VTOrcPr
 	successfulRecoveriesMap := vars["SuccessfulRecoveries"].(map[string]interface{})
 	successCount := successfulRecoveriesMap[recoveryName]
 	assert.EqualValues(t, countExpected, successCount)
+}
+
+// WaitForInstancePollSecondsExceededCount waits for 30 seconds and then queries api/aggregated-discovery-metrics.
+// It expects to find minimum occurrence or exact count of `keyName` provided.
+func WaitForInstancePollSecondsExceededCount(t *testing.T, vtorcInstance *cluster.VTOrcProcess, keyName string, minCountExpected float64, enforceEquality bool) {
+	t.Helper()
+	var sinceInSeconds = 30
+	duration := time.Duration(sinceInSeconds)
+	time.Sleep(duration * time.Second)
+
+	statusCode, res, err := vtorcInstance.MakeAPICall("api/aggregated-discovery-metrics?seconds=" + strconv.Itoa(sinceInSeconds))
+	if err != nil {
+		assert.Fail(t, "Not able to call api/aggregated-discovery-metrics")
+	}
+	if statusCode == 200 {
+		resultMap := make(map[string]any)
+		err := json.Unmarshal([]byte(res), &resultMap)
+		if err != nil {
+			assert.Fail(t, "invalid response from api/aggregated-discovery-metrics")
+		}
+		successCount := resultMap[keyName]
+		if iSuccessCount, ok := successCount.(float64); ok {
+			if enforceEquality {
+				assert.Equal(t, iSuccessCount, minCountExpected)
+			} else {
+				assert.GreaterOrEqual(t, iSuccessCount, minCountExpected)
+			}
+			return
+		}
+	}
+	assert.Fail(t, "invalid response from api/aggregated-discovery-metrics")
 }

@@ -57,7 +57,7 @@ func waitForInitialValue(t *testing.T, conn topo.Conn, srvKeyspace *topodatapb.S
 		break
 	}
 	got := &topodatapb.SrvKeyspace{}
-	if err := proto.Unmarshal(current.Contents, got); err != nil {
+	if err := got.UnmarshalVT(current.Contents); err != nil {
 		cancel()
 		t.Fatalf("cannot proto-unmarshal data: %v", err)
 	}
@@ -100,7 +100,7 @@ func waitForInitialValueRecursive(t *testing.T, conn topo.Conn, srvKeyspace *top
 		break
 	}
 	got := &topodatapb.SrvKeyspace{}
-	if err := proto.Unmarshal(current[0].Contents, got); err != nil {
+	if err := got.UnmarshalVT(current[0].Contents); err != nil {
 		cancel()
 		t.Fatalf("cannot proto-unmarshal data: %v", err)
 	}
@@ -173,7 +173,7 @@ func checkWatch(t *testing.T, ts *topo.Server) {
 			t.Fatalf("watch interrupted: %v", wd.Err)
 		}
 		got := &topodatapb.SrvKeyspace{}
-		if err := proto.Unmarshal(wd.Contents, got); err != nil {
+		if err := got.UnmarshalVT(wd.Contents); err != nil {
 			t.Fatalf("cannot proto-unmarshal data: %v", err)
 		}
 
@@ -210,7 +210,7 @@ func checkWatch(t *testing.T, ts *topo.Server) {
 		}
 		// we got something, better be the right value
 		got := &topodatapb.SrvKeyspace{}
-		if err := proto.Unmarshal(wd.Contents, got); err != nil {
+		if err := got.UnmarshalVT(wd.Contents); err != nil {
 			t.Fatalf("cannot proto-unmarshal data: %v", err)
 		}
 		if got.Partitions[0].ShardReferences[0].Name == "new_name" {
@@ -278,7 +278,7 @@ func checkWatchInterrupt(t *testing.T, ts *topo.Server) {
 		}
 		// we got something, better be the right value
 		got := &topodatapb.SrvKeyspace{}
-		if err := proto.Unmarshal(wd.Contents, got); err != nil {
+		if err := got.UnmarshalVT(wd.Contents); err != nil {
 			t.Fatalf("cannot proto-unmarshal data: %v", err)
 		}
 		if got.Partitions[0].ShardReferences[0].Name == "name" {
@@ -356,7 +356,7 @@ func checkWatchRecursive(t *testing.T, ts *topo.Server) {
 			t.Fatalf("watch interrupted: %v", wd.Err)
 		}
 		got := &topodatapb.SrvKeyspace{}
-		if err := proto.Unmarshal(wd.Contents, got); err != nil {
+		if err := got.UnmarshalVT(wd.Contents); err != nil {
 			t.Fatalf("cannot proto-unmarshal data: %v", err)
 		}
 
@@ -394,7 +394,7 @@ func checkWatchRecursive(t *testing.T, ts *topo.Server) {
 		}
 		// we got something, better be the right value
 		got := &topodatapb.SrvKeyspace{}
-		if err := proto.Unmarshal(wd.Contents, got); err != nil {
+		if err := got.UnmarshalVT(wd.Contents); err != nil {
 			t.Fatalf("cannot proto-unmarshal data: %v", err)
 		}
 		if got.Partitions[0].ShardReferences[0].Name == "new_name" {
@@ -424,7 +424,7 @@ func checkWatchRecursive(t *testing.T, ts *topo.Server) {
 		}
 		// we got something, better be the right value
 		got := &topodatapb.SrvKeyspace{}
-		if err := proto.Unmarshal(wd.Contents, got); err != nil {
+		if err := got.UnmarshalVT(wd.Contents); err != nil {
 			t.Fatalf("cannot proto-unmarshal data: %v", err)
 		}
 		if got.Partitions[0].ShardReferences[0].Name == "name" {

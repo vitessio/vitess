@@ -59,7 +59,7 @@ func (tc *testConcat) Expression() string {
 }
 
 func (tc *testConcat) Test(t *testing.T, remote *RemoteCoercionResult, local collations.TypedCollation, coercion1, coercion2 collations.Coercion) {
-	localCollation := collations.Local().LookupByID(local.Collation)
+	localCollation := local.Collation.Get()
 	assert.Equal(t, remote.Collation.Name(), localCollation.Name(), "bad collation resolved: local is %s, remote is %s", localCollation.Name(), remote.Collation.Name())
 	assert.Equal(t, remote.Coercibility, local.Coercibility, "bad coercibility resolved: local is %d, remote is %d", local.Coercibility, remote.Coercibility)
 
@@ -99,7 +99,7 @@ func (tc *testComparison) Expression() string {
 }
 
 func (tc *testComparison) Test(t *testing.T, remote *RemoteCoercionResult, local collations.TypedCollation, coerce1, coerce2 collations.Coercion) {
-	localCollation := collations.Local().LookupByID(local.Collation)
+	localCollation := local.Collation.Get()
 	leftText, err := coerce1(nil, tc.left.Text)
 	if err != nil {
 		t.Errorf("failed to transcode left: %v", err)

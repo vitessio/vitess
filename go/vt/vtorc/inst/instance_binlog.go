@@ -17,10 +17,7 @@
 package inst
 
 import (
-	"errors"
 	"regexp"
-
-	"vitess.io/vitess/go/vt/log"
 )
 
 // Event entries may contains table IDs (can be different for same tables on different servers)
@@ -62,70 +59,4 @@ func (binlogEvent *BinlogEvent) Equals(other *BinlogEvent) bool {
 func (binlogEvent *BinlogEvent) EqualsIgnoreCoordinates(other *BinlogEvent) bool {
 	return binlogEvent.NextEventPos == other.NextEventPos &&
 		binlogEvent.EventType == other.EventType && binlogEvent.Info == other.Info
-}
-
-const maxEmptyEventsEvents int = 10
-
-type BinlogEventCursor struct {
-	cachedEvents      []BinlogEvent
-	currentEventIndex int
-	fetchNextEvents   func(BinlogCoordinates) ([]BinlogEvent, error)
-	nextCoordinates   BinlogCoordinates
-}
-
-// nextEvent will return the next event entry from binary logs; it will automatically skip to next
-// binary log if need be.
-// Internally, it uses the cachedEvents array, so that it does not go to the MySQL server upon each call.
-// Returns nil upon reaching end of binary logs.
-func (binlogEventCursor *BinlogEventCursor) nextEvent(numEmptyEventsEvents int) (*BinlogEvent, error) {
-	if numEmptyEventsEvents > maxEmptyEventsEvents {
-		log.Infof("End of logs. currentEventIndex: %d, nextCoordinates: %+v", binlogEventCursor.currentEventIndex, binlogEventCursor.nextCoordinates)
-		// End of logs
-		return nil, nil
-	}
-	if len(binlogEventCursor.cachedEvents) == 0 {
-		// Cache exhausted; get next bulk of entries and return the next entry
-		nextFileCoordinates, err := binlogEventCursor.nextCoordinates.NextFileCoordinates()
-		if err != nil {
-			return nil, err
-		}
-		log.Infof("zero cached events, next file: %+v", nextFileCoordinates)
-		binlogEventCursor.cachedEvents, err = binlogEventCursor.fetchNextEvents(nextFileCoordinates)
-		if err != nil {
-			return nil, err
-		}
-		binlogEventCursor.currentEventIndex = -1
-		// While this seems recursive do note that recursion level is at most 1, since we either have
-		// entries in the next binlog (no further recursion) or we don't (immediate termination)
-		return binlogEventCursor.nextEvent(numEmptyEventsEvents + 1)
-	}
-	if binlogEventCursor.currentEventIndex+1 < len(binlogEventCursor.cachedEvents) {
-		// We have enough cache to go by
-		binlogEventCursor.currentEventIndex++
-		event := &binlogEventCursor.cachedEvents[binlogEventCursor.currentEventIndex]
-		binlogEventCursor.nextCoordinates = event.NextBinlogCoordinates()
-		return event, nil
-	}
-	// Cache exhausted; get next bulk of entries and return the next entry
-	var err error
-	binlogEventCursor.cachedEvents, err = binlogEventCursor.fetchNextEvents(binlogEventCursor.cachedEvents[len(binlogEventCursor.cachedEvents)-1].NextBinlogCoordinates())
-	if err != nil {
-		return nil, err
-	}
-	binlogEventCursor.currentEventIndex = -1
-	// While this seems recursive do note that recursion level is at most 1, since we either have
-	// entries in the next binlog (no further recursion) or we don't (immediate termination)
-	return binlogEventCursor.nextEvent(numEmptyEventsEvents + 1)
-}
-
-// NextCoordinates return the binlog coordinates of the next entry as yet unprocessed by the cursor.
-// Moreover, when the cursor terminates (consumes last entry), these coordinates indicate what will be the futuristic
-// coordinates of the next binlog entry.
-// The value of this function is used by match-below to move a replica behind another, after exhausting the shared binlog
-// entries of both.
-func (binlogEventCursor *BinlogEventCursor) getNextCoordinates() (BinlogCoordinates, error) {
-	if binlogEventCursor.nextCoordinates.LogPos == 0 {
-		return binlogEventCursor.nextCoordinates, errors.New("Next coordinates unfound")
-	}
-	return binlogEventCursor.nextCoordinates, nil
 }

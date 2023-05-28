@@ -22,6 +22,8 @@ import (
 	"strconv"
 	"strings"
 
+	"vitess.io/vitess/go/slices2"
+	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
 
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
@@ -60,33 +62,211 @@ func transformToLogicalPlan(ctx *plancontext.PlanningContext, op ops.Operator, i
 	case *operators.Derived:
 		return transformDerivedPlan(ctx, op)
 	case *operators.Filter:
-		plan, err := transformToLogicalPlan(ctx, op.Source, false)
-		if err != nil {
-			return nil, err
-		}
-		scl := &simpleConverterLookup{
-			canPushProjection: true,
-			ctx:               ctx,
-			plan:              plan,
-		}
-		ast := ctx.SemTable.AndExpressions(op.Predicates...)
-		predicate, err := evalengine.Translate(ast, scl)
-		if err != nil {
-			return nil, err
-		}
-
-		return &filter{
-			logicalPlanCommon: newBuilderCommon(plan),
-			efilter: &engine.Filter{
-				Predicate:    predicate,
-				ASTPredicate: ast,
-			},
-		}, nil
+		return transformFilter(ctx, op)
 	case *operators.Horizon:
 		return transformHorizon(ctx, op, isRoot)
+	case *operators.Projection:
+		return transformProjection(ctx, op)
+	case *operators.Limit:
+		return transformLimit(ctx, op)
+	case *operators.Ordering:
+		return transformOrdering(ctx, op)
+	case *operators.Aggregator:
+		return transformAggregator(ctx, op)
 	}
 
 	return nil, vterrors.VT13001(fmt.Sprintf("unknown type encountered: %T (transformToLogicalPlan)", op))
+}
+
+func transformAggregator(ctx *plancontext.PlanningContext, op *operators.Aggregator) (logicalPlan, error) {
+	plan, err := transformToLogicalPlan(ctx, op.Source, false)
+	if err != nil {
+		return nil, err
+	}
+
+	oa := &orderedAggregate{
+		resultsBuilder: resultsBuilder{
+			logicalPlanCommon: newBuilderCommon(plan),
+			weightStrings:     make(map[*resultColumn]int),
+		},
+	}
+
+	for _, aggr := range op.Aggregations {
+		if aggr.OpCode == opcode.AggregateUnassigned {
+			return nil, vterrors.VT12001(fmt.Sprintf("in scatter query: aggregation function '%s'", sqlparser.String(aggr.Original)))
+		}
+		oa.aggregates = append(oa.aggregates, &engine.AggregateParams{
+			Opcode:     aggr.OpCode,
+			Col:        aggr.ColOffset,
+			Alias:      aggr.Alias,
+			Expr:       aggr.Func,
+			Original:   aggr.Original,
+			OrigOpcode: aggr.OriginalOpCode,
+		})
+	}
+	for _, groupBy := range op.Grouping {
+		oa.groupByKeys = append(oa.groupByKeys, &engine.GroupByParams{
+			KeyCol:          groupBy.ColOffset,
+			WeightStringCol: groupBy.WSOffset,
+			Expr:            groupBy.AsAliasedExpr().Expr,
+			CollationID:     ctx.SemTable.CollationForExpr(groupBy.SimplifiedExpr),
+		})
+	}
+
+	if err != nil {
+		return nil, err
+	}
+	oa.truncateColumnCount = op.ResultColumns
+	return oa, nil
+}
+
+func transformOrdering(ctx *plancontext.PlanningContext, op *operators.Ordering) (logicalPlan, error) {
+	plan, err := transformToLogicalPlan(ctx, op.Source, false)
+	if err != nil {
+		return nil, err
+	}
+
+	return createMemorySort(ctx, plan, op)
+}
+
+func createMemorySort(ctx *plancontext.PlanningContext, src logicalPlan, ordering *operators.Ordering) (logicalPlan, error) {
+	primitive := &engine.MemorySort{
+		TruncateColumnCount: ordering.ResultColumns,
+	}
+	ms := &memorySort{
+		resultsBuilder: resultsBuilder{
+			logicalPlanCommon: newBuilderCommon(src),
+			weightStrings:     make(map[*resultColumn]int),
+			truncater:         primitive,
+		},
+		eMemorySort: primitive,
+	}
+
+	for idx, order := range ordering.Order {
+		collationID := ctx.SemTable.CollationForExpr(order.SimplifiedExpr)
+		ms.eMemorySort.OrderBy = append(ms.eMemorySort.OrderBy, engine.OrderByParams{
+			Col:               ordering.Offset[idx],
+			WeightStringCol:   ordering.WOffset[idx],
+			Desc:              order.Inner.Direction == sqlparser.DescOrder,
+			StarColFixedIndex: ordering.Offset[idx],
+			CollationID:       collationID,
+		})
+	}
+
+	return ms, nil
+}
+
+func transformProjection(ctx *plancontext.PlanningContext, op *operators.Projection) (logicalPlan, error) {
+	src, err := transformToLogicalPlan(ctx, op.Source, false)
+	if err != nil {
+		return nil, err
+	}
+
+	if cols := op.AllOffsets(); cols != nil {
+		// if all this op is doing is passing through columns from the input, we
+		// can use the faster SimpleProjection
+		return useSimpleProjection(op, cols, src)
+	}
+
+	expressions := slices2.Map(op.Projections, func(from operators.ProjExpr) sqlparser.Expr {
+		return from.GetExpr()
+	})
+
+	failed := false
+	evalengineExprs := slices2.Map(op.Projections, func(from operators.ProjExpr) evalengine.Expr {
+		switch e := from.(type) {
+		case operators.Eval:
+			return e.EExpr
+		case operators.Offset:
+			t := ctx.SemTable.ExprTypes[e.Expr]
+			return &evalengine.Column{
+				Offset:    e.Offset,
+				Type:      t.Type,
+				Collation: collations.TypedCollation{},
+			}
+		default:
+			failed = true
+			return nil
+		}
+	})
+	var primitive *engine.Projection
+	columnNames := slices2.Map(op.Columns, func(from *sqlparser.AliasedExpr) string {
+		return from.ColumnName()
+	})
+
+	if !failed {
+		primitive = &engine.Projection{
+			Cols:  columnNames,
+			Exprs: evalengineExprs,
+		}
+	}
+
+	return &projection{
+		source:      src,
+		columnNames: columnNames,
+		columns:     expressions,
+		primitive:   primitive,
+	}, nil
+}
+
+// useSimpleProjection uses nothing at all if the output is already correct,
+// or SimpleProjection when we have to reorder or truncate the columns
+func useSimpleProjection(op *operators.Projection, cols []int, src logicalPlan) (logicalPlan, error) {
+	columns, err := op.Source.GetColumns()
+	if err != nil {
+		return nil, err
+	}
+	if len(columns) == len(cols) && elementsMatchIndices(cols) {
+		// the columns are already in the right order. we don't need anything at all here
+		return src, nil
+	}
+	return &simpleProjection{
+		logicalPlanCommon: newBuilderCommon(src),
+		eSimpleProj: &engine.SimpleProjection{
+			Cols: cols,
+		},
+	}, nil
+}
+
+// elementsMatchIndices checks if the elements of the input slice match
+// their corresponding index values. It returns true if all elements match
+// their indices, and false otherwise.
+func elementsMatchIndices(in []int) bool {
+	for idx, val := range in {
+		if val != idx {
+			return false
+		}
+	}
+	return true
+}
+
+func transformFilter(ctx *plancontext.PlanningContext, op *operators.Filter) (logicalPlan, error) {
+	plan, err := transformToLogicalPlan(ctx, op.Source, false)
+	if err != nil {
+		return nil, err
+	}
+
+	predicate := op.FinalPredicate
+	ast := ctx.SemTable.AndExpressions(op.Predicates...)
+
+	// this might already have been done on the operators
+	if predicate == nil {
+		predicate, err = evalengine.Translate(ast, &evalengine.Config{
+			ResolveColumn: resolveFromPlan(ctx, plan, true),
+			Collation:     ctx.SemTable.Collation,
+		})
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return &filter{
+		logicalPlanCommon: newBuilderCommon(plan),
+		efilter: &engine.Filter{
+			Predicate:    predicate,
+			ASTPredicate: ast,
+		},
+	}, nil
 }
 
 func transformHorizon(ctx *plancontext.PlanningContext, op *operators.Horizon, isRoot bool) (logicalPlan, error) {
@@ -114,7 +294,7 @@ func transformHorizon(ctx *plancontext.PlanningContext, op *operators.Horizon, i
 		}
 		var plan logicalPlan
 		if isRoute && rb.isSingleShard() {
-			err = planSingleShardRoutePlan(node, rb)
+			err = planSingleRoutePlan(node, rb)
 			plan = rb
 		} else {
 			plan, err = planOrderByOnUnion(ctx, source, node)
@@ -165,8 +345,9 @@ func routeToEngineRoute(ctx *plancontext.PlanningContext, op *operators.Route) (
 	}
 
 	return &engine.Route{
-		TableName:         strings.Join(tableNames, ", "),
-		RoutingParameters: rp,
+		TableName:           strings.Join(tableNames, ", "),
+		RoutingParameters:   rp,
+		TruncateColumnCount: op.ResultColumns,
 	}, nil
 }
 
@@ -197,6 +378,15 @@ func transformRoutePlan(ctx *plancontext.PlanningContext, op *operators.Route) (
 	}
 	replaceSubQuery(ctx, sel)
 	eroute, err := routeToEngineRoute(ctx, op)
+	for _, order := range op.Ordering {
+		collation := ctx.SemTable.CollationForExpr(order.AST)
+		eroute.OrderBy = append(eroute.OrderBy, engine.OrderByParams{
+			Col:             order.Offset,
+			WeightStringCol: order.WOffset,
+			Desc:            order.Direction == sqlparser.DescOrder,
+			CollationID:     collation,
+		})
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -456,25 +646,22 @@ func pushWeightStringForDistinct(ctx *plancontext.PlanningContext, plan logicalP
 		}
 		node.noNeedToTypeCheck = append(node.noNeedToTypeCheck, newOffset)
 	case *joinGen4:
-		lhsSolves := node.Left.ContainsTables()
-		rhsSolves := node.Right.ContainsTables()
-		expr := node.OutputColumns()[offset]
-		aliasedExpr, isAliased := expr.(*sqlparser.AliasedExpr)
-		if !isAliased {
-			return 0, vterrors.VT13001("cannot convert JOIN output columns to an aliased-expression")
-		}
-		deps := ctx.SemTable.RecursiveDeps(aliasedExpr.Expr)
+		joinOffset := node.Cols[offset]
 		switch {
-		case deps.IsSolvedBy(lhsSolves):
-			offset, err = pushWeightStringForDistinct(ctx, node.Left, offset)
-			node.Cols = append(node.Cols, -(offset + 1))
-		case deps.IsSolvedBy(rhsSolves):
-			offset, err = pushWeightStringForDistinct(ctx, node.Right, offset)
-			node.Cols = append(node.Cols, offset+1)
+		case joinOffset < 0:
+			offset, err = pushWeightStringForDistinct(ctx, node.Left, -(joinOffset + 1))
+			offset = -(offset + 1)
+		case joinOffset > 0:
+			offset, err = pushWeightStringForDistinct(ctx, node.Right, joinOffset-1)
+			offset = offset + 1
 		default:
-			return 0, vterrors.VT12001("push DISTINCT WEIGHT_STRING to both sides of the join")
+			return 0, vterrors.VT13001("wrong column offset in join plan to push DISTINCT WEIGHT_STRING")
 		}
-		newOffset = len(node.Cols) - 1
+		if err != nil {
+			return 0, err
+		}
+		newOffset = len(node.Cols)
+		node.Cols = append(node.Cols, offset)
 	default:
 		return 0, vterrors.VT13001(fmt.Sprintf("pushWeightStringForDistinct on %T", plan))
 	}
@@ -623,6 +810,15 @@ func transformDerivedPlan(ctx *plancontext.PlanningContext, op *operators.Derive
 	return plan, nil
 }
 
+func transformLimit(ctx *plancontext.PlanningContext, op *operators.Limit) (logicalPlan, error) {
+	plan, err := transformToLogicalPlan(ctx, op.Source, false)
+	if err != nil {
+		return nil, err
+	}
+
+	return createLimit(plan, op.AST)
+}
+
 type subQReplacer struct {
 	subqueryToReplace []*sqlparser.ExtractedSubquery
 	replaced          bool
@@ -756,12 +952,12 @@ func gen4ValEqual(ctx *plancontext.PlanningContext, a, b sqlparser.Expr) bool {
 
 			return ctx.SemTable.DirectDeps(a) == ctx.SemTable.DirectDeps(b)
 		}
-	case sqlparser.Argument:
-		b, ok := b.(sqlparser.Argument)
+	case *sqlparser.Argument:
+		b, ok := b.(*sqlparser.Argument)
 		if !ok {
 			return false
 		}
-		return a == b
+		return a.Name == b.Name
 	case *sqlparser.Literal:
 		b, ok := b.(*sqlparser.Literal)
 		if !ok {

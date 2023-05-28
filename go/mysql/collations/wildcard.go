@@ -43,7 +43,7 @@ package collations
 import (
 	"unicode/utf8"
 
-	"vitess.io/vitess/go/mysql/collations/internal/charset"
+	"vitess.io/vitess/go/mysql/collations/charset"
 )
 
 type match byte

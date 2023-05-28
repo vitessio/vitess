@@ -16,6 +16,7 @@
  */
 
 import { formatTimeseriesMap, RATES_INTERVAL, RATES_MAX_SPAN } from './tabletDebugVars';
+import { describe, expect, test, vi } from 'vitest';
 
 /*
  * These tests are (at the time of writing) one of the few places we
@@ -53,7 +54,7 @@ describe('formatTimeseriesMap', () => {
     ];
 
     test.each(tests.map(Object.values))('%s', (name: string, input: Parameters<typeof formatTimeseriesMap>) => {
-        Date.now = jest.fn(() => 1000000000000);
+        Date.now = vi.fn(() => 1000000000000);
 
         const result = formatTimeseriesMap(...input);
 

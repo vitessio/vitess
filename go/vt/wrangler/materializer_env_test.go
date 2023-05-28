@@ -206,7 +206,6 @@ func (tmc *testMaterializerTMClient) GetSchema(ctx context.Context, tablet *topo
 	tmc.schemaRequested(tablet.Alias.Uid)
 	schemaDefn := &tabletmanagerdatapb.SchemaDefinition{}
 	for _, table := range request.Tables {
-		// TODO: Add generalized regexps if needed for test purposes.
 		if table == "/.*/" {
 			// Special case of all tables in keyspace.
 			for key, tableDefn := range tmc.schema {

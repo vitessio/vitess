@@ -28,8 +28,10 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/onlineddl"
+	"vitess.io/vitess/go/test/endtoend/throttler"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 	throttlebase "vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
@@ -46,8 +48,8 @@ var (
 	onlineDDLThrottlerAppName = "online-ddl"
 	vstreamerThrottlerAppName = "vstreamer"
 
-	normalMigrationWait   = 20 * time.Second
-	extendedMigrationWait = 20 * time.Second
+	normalMigrationWait   = 45 * time.Second
+	extendedMigrationWait = 60 * time.Second
 
 	hostname              = "localhost"
 	keyspaceName          = "ks"
@@ -167,7 +169,7 @@ func TestMain(m *testing.M) {
 		clusterInstance.VtctldExtraArgs = []string{
 			"--schema_change_dir", schemaChangeDirectory,
 			"--schema_change_controller", "local",
-			"--schema_change_check_interval", "1",
+			"--schema_change_check_interval", "1s",
 		}
 
 		clusterInstance.VtTabletExtraArgs = []string{
@@ -253,10 +255,22 @@ func TestSchemaChange(t *testing.T) {
 	providedUUID := ""
 	providedMigrationContext := ""
 
-	t.Run("enabling throttler with default threshold", func(t *testing.T) {
-		_, err := onlineddl.UpdateThrottlerTopoConfig(clusterInstance, true, false, 0, "", false)
-		assert.NoError(t, err)
-	})
+	// We execute the throttler commands via vtgate, which in turn
+	// executes them via vttablet. So let's wait until vtgate's view
+	// is updated.
+	err := clusterInstance.WaitForTabletsToHealthyInVtgate()
+	require.NoError(t, err)
+
+	_, err = throttler.UpdateThrottlerTopoConfig(clusterInstance, true, false, 0, "", false)
+	require.NoError(t, err)
+
+	for _, ks := range clusterInstance.Keyspaces {
+		for _, shard := range ks.Shards {
+			for _, tablet := range shard.Vttablets {
+				throttler.WaitForThrottlerStatusEnabled(t, tablet, true, nil, extendedMigrationWait)
+			}
+		}
+	}
 
 	testWithInitialSchema(t)
 	t.Run("alter non_online", func(t *testing.T) {
@@ -279,6 +293,9 @@ func TestSchemaChange(t *testing.T) {
 		for _, row := range rs.Named().Rows {
 			retainArtifactSeconds := row.AsInt64("retain_artifacts_seconds", 0)
 			assert.Equal(t, int64(86400), retainArtifactSeconds)
+
+			artifacts := row.AsString("artifacts", "")
+			assert.NotContains(t, artifacts, "_vt_HOLD_") // _vt_HOLD table removed at cut-over time
 		}
 
 		onlineddl.CheckCleanupMigration(t, &vtParams, shards, uuid)
@@ -328,6 +345,7 @@ func TestSchemaChange(t *testing.T) {
 		insertRows(t, 2)
 		uuid := testOnlineDDLStatement(t, alterTableTrivialStatement, "vitess -postpone-completion", providedUUID, providedMigrationContext, "vtgate", "test_val", "", false)
 		// Should be still running!
+		_ = onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, extendedMigrationWait, schema.OnlineDDLStatusRunning)
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusRunning)
 		// Issue a complete and wait for successful completion
 		onlineddl.CheckCompleteMigration(t, &vtParams, shards, uuid, true)
@@ -420,8 +438,16 @@ func TestSchemaChange(t *testing.T) {
 			// to _vt.schema_migrations
 			row, startedTimestamp, lastThrottledTimestamp := onlineddl.WaitForThrottledTimestamp(t, &vtParams, uuid, normalMigrationWait)
 			require.NotNil(t, row)
+
+			startedTime, err := time.Parse(sqltypes.TimestampFormat, startedTimestamp)
+			require.NoError(t, err)
+			lastThrottledTime, err := time.Parse(sqltypes.TimestampFormat, lastThrottledTimestamp)
+			require.NoError(t, err)
+
 			// rowstreamer throttle timestamp only updates once in 10 seconds, so greater or equals" is good enough here.
-			assert.GreaterOrEqual(t, lastThrottledTimestamp, startedTimestamp)
+			// Technically, lastThrottledTime has to be >= startedTime, but we allow a deviation of 1 sec due to
+			// clock irregularities
+			assert.GreaterOrEqual(t, lastThrottledTime.Add(time.Second), startedTime)
 			component := row.AsString("component_throttled", "")
 			assert.Contains(t, []string{string(vreplication.VStreamerComponentName), string(vreplication.RowStreamerComponentName)}, component)
 		}()

@@ -31,13 +31,18 @@ package vreplication
 //
 // The internal table _vt_PURGE_4f9194b43b2011eb8a0104ed332e05c2_20221210194431 should be ignored by vreplication
 // The db_order_test table is used to ensure vreplication and vdiff work well with complex non-integer PKs, even across DB versions.
+// The db_order_test table needs to use a collation that exists in all versions for cross version tests as we use the collation for the PK
+// based merge sort in VDiff. The table is using a non-default collation for any version with utf8mb4 as 5.7 does NOT show the default
+// collation in the SHOW CREATE TABLE output which means in the cross version tests the source and target will be using a different collation.
+// The vdiff_order table is used to test MySQL sort->VDiff merge sort ordering and ensure it aligns across Reshards. It must not use the
+// default collation as it has to work across versions and the 8.0 default does not exist in 5.7.
 var (
 	// All standard user tables should have a primary key and at least one secondary key.
 	initialProductSchema = `
 create table product(pid int, description varbinary(128), date1 datetime not null default '0000-00-00 00:00:00', date2 datetime not null default '2021-00-01 00:00:00', primary key(pid), key(date1,date2)) CHARSET=utf8mb4;
 create table customer(cid int, name varchar(128) collate utf8mb4_bin, meta json default null, typ enum('individual','soho','enterprise'), sport set('football','cricket','baseball'),
 	ts timestamp not null default current_timestamp, bits bit(2) default b'11', date1 datetime not null default '0000-00-00 00:00:00', 
-	date2 datetime not null default '2021-00-01 00:00:00', dec80 decimal(8,0), primary key(cid,typ), key(name)) CHARSET=utf8mb4;
+	date2 datetime not null default '2021-00-01 00:00:00', dec80 decimal(8,0), blb blob, primary key(cid,typ), key(name)) CHARSET=utf8mb4;
 create table customer_seq(id int, next_id bigint, cache bigint, primary key(id)) comment 'vitess_sequence';
 create table merchant(mname varchar(128), category varchar(128), primary key(mname), key(category)) CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 create table orders(oid int, cid int, pid int, mname varchar(128), price int, qty int, total int as (qty * price), total2 int as (qty * price) stored, primary key(oid), key(pid), key(cid)) CHARSET=utf8;
@@ -47,10 +52,13 @@ create table customer_seq2(id int, next_id bigint, cache bigint, primary key(id)
 create table ` + "`Lead`(`Lead-id`" + ` binary(16), name varbinary(16), date1 datetime not null default '0000-00-00 00:00:00', date2 datetime not null default '2021-00-01 00:00:00', primary key (` + "`Lead-id`" + `), key (date1));
 create table ` + "`Lead-1`(`Lead`" + ` binary(16), name varbinary(16), date1 datetime not null default '0000-00-00 00:00:00', date2 datetime not null default '2021-00-01 00:00:00', primary key (` + "`Lead`" + `), key (date2));
 create table _vt_PURGE_4f9194b43b2011eb8a0104ed332e05c2_20221210194431(id int, val varbinary(128), primary key(id), key(val));
-create table db_order_test (c_uuid varchar(64) not null default '', created_at datetime not null, dstuff varchar(128), dtstuff text, dbstuff blob, cstuff char(32), primary key (c_uuid,created_at), key (dstuff)) CHARSET=utf8mb4;
+create table db_order_test (c_uuid varchar(64) not null default '', created_at datetime not null, dstuff varchar(128), dtstuff text, dbstuff blob, cstuff char(32), primary key (c_uuid,created_at), key (dstuff)) CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+create table vdiff_order (order_id varchar(50) collate utf8mb4_unicode_ci not null, primary key (order_id), key (order_id)) charset=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 create table datze (id int, dt1 datetime not null default current_timestamp, dt2 datetime not null, ts1 timestamp default current_timestamp, primary key (id), key (dt1));
+create table json_tbl (id int, j1 json, j2 json, primary key(id));
+create table geom_tbl (id int, g geometry, p point, ls linestring, pg polygon, mp multipoint, mls multilinestring, mpg multipolygon, gc geometrycollection, primary key(id));
+create table blob_tbl (id int, val1 varchar(20), blb1 blob, val2 varbinary(20), blb2 longblob, txt1 text, blb3 tinyblob, txt2 longtext, blb4 mediumblob, primary key(id));
 `
-
 	// These should always be ignored in vreplication
 	internalSchema = `
  create table _1e275eef_3b20_11eb_a38f_04ed332e05c2_20201210204529_gho(id int, val varbinary(128), primary key(id));
@@ -81,6 +89,7 @@ create table datze (id int, dt1 datetime not null default current_timestamp, dt2
 	"Lead": {},
 	"Lead-1": {},
 	"db_order_test": {},
+	"vdiff_order": {},
 	"datze": {}
   }
 }
@@ -95,6 +104,9 @@ create table datze (id int, dt1 datetime not null default current_timestamp, dt2
     },
     "xxhash": {
       "type": "xxhash"
+    },
+    "unicode_loose_md5": {
+      "type": "unicode_loose_md5"
     },
     "bmd5": {
       "type": "binary_md5"
@@ -146,6 +158,38 @@ create table datze (id int, dt1 datetime not null default current_timestamp, dt2
         {
           "columns": ["c_uuid", "created_at"],
           "name": "xxhash"
+        }
+      ]
+    },
+    "vdiff_order": {
+      "column_vindexes": [
+        {
+          "column": "order_id",
+          "name": "unicode_loose_md5"
+        }
+      ]
+    },
+    "geom_tbl": {
+      "column_vindexes": [
+         {
+           "column": "id",
+           "name": "reverse_bits"
+         }
+       ]
+    },
+    "json_tbl": {
+      "column_vindexes": [
+        {
+          "column": "id",
+          "name": "reverse_bits"
+        }
+      ]
+    },
+    "blob_tbl": {
+      "column_vindexes": [
+        {
+          "column": "id",
+          "name": "reverse_bits"
         }
       ]
     },
@@ -224,6 +268,9 @@ create table datze (id int, dt1 datetime not null default current_timestamp, dt2
     "reverse_bits": {
       "type": "reverse_bits"
     },
+    "unicode_loose_md5": {
+      "type": "unicode_loose_md5"
+    },
     "xxhash": {
       "type": "xxhash"
     }
@@ -261,7 +308,39 @@ create table datze (id int, dt1 datetime not null default current_timestamp, dt2
         }
       ]
     },
-	"cproduct": {
+    "vdiff_order": {
+      "column_vindexes": [
+        {
+          "column": "order_id",
+          "name": "unicode_loose_md5"
+        }
+      ]
+    },
+    "geom_tbl": {
+      "column_vindexes": [
+         {
+           "column": "id",
+           "name": "reverse_bits"
+         }
+       ]
+    },
+    "json_tbl": {
+      "column_vindexes": [
+        {
+          "column": "id",
+          "name": "reverse_bits"
+        }
+      ]
+    },
+    "blob_tbl": {
+      "column_vindexes": [
+        {
+          "column": "id",
+          "name": "reverse_bits"
+        }
+      ]
+    },
+    "cproduct": {
 		"type": "reference"
 	},
 	"vproduct": {
@@ -393,7 +472,6 @@ create table datze (id int, dt1 datetime not null default current_timestamp, dt2
 create table review(rid int, pid int, review varbinary(128), primary key(rid));
 create table rating(gid int, pid int, rating int, primary key(gid));
 `
-
 	initialExternalVSchema = `
 {
   "tables": {
@@ -402,4 +480,40 @@ create table rating(gid int, pid int, rating int, primary key(gid));
   }
 }
 `
+
+	jsonValues = []string{
+		`"abc"`,
+		`123`,
+		`{"foo": 456}`,
+		`{"bar": "foo"}`,
+		`[1, "abc", 932409834098324908234092834092834, 234234234234234234234234.2342342342349]`,
+		`{"a":2947293482093480923840923840923, "cba":334234234234234234234234234.234234239090}`,
+		`[1, "abc", -1, 0.2342342342349, {"a":"b","c":"d","ab":"abc","bc":["x","y"]}]`,
+		`{"a":2947293482093480923840923840923, "cba":{"a":2947293482093480923840923840923, "cba":334234234234234234234234234.234234239090}}`,
+		`{"asdf":{"foo":123}}`,
+		`{"a":"b","c":"d","ab":"abc","bc":["x","y"]}`,
+		`["here",["I","am"],"!!!"]`,
+		`{"scopes":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAEAAAAAAEAAAAAA8AAABgAAAAAABAAAACAAAAAAAAA"}`,
+		`"scalar string"`,
+		`"scalar stringscalar stringscalar stringscalar stringscalar stringscalar stringscalar stringscalar stringscalar stringscalar string"`,
+		`"first line\\r\\nsecond line\\rline with escapes\\\\ \\r\\n"`,
+		`true`,
+		`false`,
+		`""`,
+		`-1`,
+		`1`,
+		`32767`,
+		`32768`,
+		`-32768`,
+		`-32769`,
+		`2.147483647e+09`,
+		`1.8446744073709552e+19`,
+		`-9.223372036854776e+18`,
+		`{}`,
+		`[]`,
+		`"2015-01-15 23:24:25.000000"`,
+		`"23:24:25.000000"`,
+		`"23:24:25.120000"`,
+		`"2015-01-15"`,
+	}
 )

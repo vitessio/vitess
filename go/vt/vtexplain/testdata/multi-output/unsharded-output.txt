@@ -17,27 +17,27 @@ insert into t1 (id,intval,floatval) values (1,2,3.14)
 update t1 set intval = 10
 
 1 ks_unsharded/-: begin
-1 ks_unsharded/-: update t1 set intval = 10 limit 10001
+1 ks_unsharded/-: update t1 set intval = 10 limit 10001 /* INT64 */
 1 ks_unsharded/-: commit
 
 ----------------------------------------------------------------------
 update t1 set floatval = 9.99
 
 1 ks_unsharded/-: begin
-1 ks_unsharded/-: update t1 set floatval = 9.99 limit 10001
+1 ks_unsharded/-: update t1 set floatval = 9.99 limit 10001 /* DECIMAL */
 1 ks_unsharded/-: commit
 
 ----------------------------------------------------------------------
 delete from t1 where id = 100
 
 1 ks_unsharded/-: begin
-1 ks_unsharded/-: delete from t1 where id = 100 limit 10001
+1 ks_unsharded/-: delete from t1 where id = 100 limit 10001 /* INT64 */
 1 ks_unsharded/-: commit
 
 ----------------------------------------------------------------------
 insert into t1 (id,intval,floatval) values (1,2,3.14) on duplicate key update intval=3, floatval=3.14
 
-1 ks_unsharded/-: insert into t1(id, intval, floatval) values (1, 2, 3.14) on duplicate key update intval = 3, floatval = 3.14
+1 ks_unsharded/-: insert into t1(id, intval, floatval) values (1, 2, 3.14) on duplicate key update intval = 3, floatval = 3.14 /* DECIMAL */
 
 ----------------------------------------------------------------------
 select ID from t1

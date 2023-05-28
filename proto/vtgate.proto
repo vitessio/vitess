@@ -152,6 +152,14 @@ message Session {
 
   // query_timeout is the maximum amount of time a query is permitted to run
   int64 query_timeout = 25;
+
+  map<string, PrepareData> prepare_statement = 26;
+}
+
+// PrepareData keeps the prepared statement and other information related for execution of it.
+message PrepareData {
+  string prepare_statement = 1;
+  int32 params_count = 2;
 }
 
 // ReadAfterWrite contains information regarding gtid set and timeout
@@ -286,6 +294,8 @@ message VStreamFlags {
   // if specified, these cells (comma-separated) are used to pick source tablets from.
   // defaults to the cell of the vtgate serving the VStream API.
   string cells = 4;
+  string cell_preference = 5;
+  string tablet_order = 6;
 }
 
 // VStreamRequest is the payload for VStream.

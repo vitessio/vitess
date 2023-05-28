@@ -110,6 +110,7 @@ func newTestTableMigraterCustom(ctx context.Context, t *testing.T, sourceShards,
 	tme.sourceShards = sourceShards
 	tme.targetShards = targetShards
 	tme.tmeDB = fakesqldb.New(t)
+	expectVDiffQueries(tme.tmeDB)
 	tabletID := 10
 	for _, shard := range sourceShards {
 		tme.sourcePrimaries = append(tme.sourcePrimaries, newFakeTablet(t, tme.wr, "cell1", uint32(tabletID), topodatapb.TabletType_PRIMARY, tme.tmeDB, TabletKeyspaceShard(t, "ks1", shard)))
@@ -269,6 +270,7 @@ func newTestShardMigrater(ctx context.Context, t *testing.T, sourceShards, targe
 	tme.sourceShards = sourceShards
 	tme.targetShards = targetShards
 	tme.tmeDB = fakesqldb.New(t)
+	expectVDiffQueries(tme.tmeDB)
 	tme.wr.sem = semaphore.NewWeighted(1)
 
 	tabletID := 10
@@ -346,7 +348,7 @@ func newTestShardMigrater(ctx context.Context, t *testing.T, sourceShards, targe
 		var rows, rowsRdOnly []string
 		var streamExtInfoRows []string
 		for j, sourceShard := range sourceShards {
-			if !key.KeyRangesIntersect(tme.targetKeyRanges[i], tme.sourceKeyRanges[j]) {
+			if !key.KeyRangeIntersect(tme.targetKeyRanges[i], tme.sourceKeyRanges[j]) {
 				continue
 			}
 			bls := &binlogdatapb.BinlogSource{
@@ -440,7 +442,7 @@ func (tme *testMigraterEnv) createDBClients(ctx context.Context, t *testing.T) {
 		tme.dbSourceClients = append(tme.dbSourceClients, dbclient)
 		dbClientFactory := func() binlogplayer.DBClient { return dbclient }
 		// Replace existing engine with a new one
-		primary.TM.VREngine = vreplication.NewTestEngine(tme.ts, "", primary.FakeMysqlDaemon, dbClientFactory, dbClientFactory, dbclient.DBName(), nil)
+		primary.TM.VREngine = vreplication.NewTestEngine(tme.ts, primary.Tablet.GetAlias().GetCell(), primary.FakeMysqlDaemon, dbClientFactory, dbClientFactory, dbclient.DBName(), nil)
 		primary.TM.VREngine.Open(ctx)
 	}
 	for _, primary := range tme.targetPrimaries {
@@ -449,7 +451,7 @@ func (tme *testMigraterEnv) createDBClients(ctx context.Context, t *testing.T) {
 		tme.dbTargetClients = append(tme.dbTargetClients, dbclient)
 		dbClientFactory := func() binlogplayer.DBClient { return dbclient }
 		// Replace existing engine with a new one
-		primary.TM.VREngine = vreplication.NewTestEngine(tme.ts, "", primary.FakeMysqlDaemon, dbClientFactory, dbClientFactory, dbclient.DBName(), nil)
+		primary.TM.VREngine = vreplication.NewTestEngine(tme.ts, primary.Tablet.GetAlias().GetCell(), primary.FakeMysqlDaemon, dbClientFactory, dbClientFactory, dbclient.DBName(), nil)
 		primary.TM.VREngine.Open(ctx)
 	}
 	tme.allDBClients = append(tme.dbSourceClients, tme.dbTargetClients...)
@@ -497,7 +499,7 @@ func (tme *testMigraterEnv) expectNoPreviousReverseJournals() {
 func (tme *testShardMigraterEnv) forAllStreams(f func(i, j int)) {
 	for i := range tme.targetShards {
 		for j := range tme.sourceShards {
-			if !key.KeyRangesIntersect(tme.targetKeyRanges[i], tme.sourceKeyRanges[j]) {
+			if !key.KeyRangeIntersect(tme.targetKeyRanges[i], tme.sourceKeyRanges[j]) {
 				continue
 			}
 			f(i, j)

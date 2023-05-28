@@ -28,7 +28,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"vitess.io/vitess/go/mysql/collations/internal/charset"
+	"vitess.io/vitess/go/mysql/collations/charset"
 	"vitess.io/vitess/go/mysql/collations/internal/uca"
 )
 
@@ -49,10 +49,10 @@ func findContractedCollations(t testing.TB, unique bool) (result []CollationWith
 	for _, collation := range testall() {
 		var contract uca.Contractor
 		if uca, ok := collation.(*Collation_utf8mb4_uca_0900); ok {
-			contract = uca.contract
+			contract = uca.uca.Contractor()
 		}
 		if uca, ok := collation.(*Collation_uca_legacy); ok {
-			contract = uca.contract
+			contract = uca.uca.Contractor()
 		}
 		if contract == nil {
 			continue

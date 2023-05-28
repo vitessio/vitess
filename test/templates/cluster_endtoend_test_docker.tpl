@@ -1,6 +1,8 @@
 name: {{.Name}}
 on: [push, pull_request]
 
+permissions: read-all
+
 jobs:
   build:
     name: Run endtoend tests on {{.Name}}
@@ -50,9 +52,9 @@ jobs:
 
     - name: Set up Go
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
-      uses: actions/setup-go@v3
+      uses: actions/setup-go@v4
       with:
-        go-version: 1.19.4
+        go-version: 1.20.4
 
     - name: Tune the OS
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'

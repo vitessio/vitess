@@ -398,6 +398,9 @@ type VtctldClient interface {
 	ValidateVersionShard(ctx context.Context, in *vtctldata.ValidateVersionShardRequest, opts ...grpc.CallOption) (*vtctldata.ValidateVersionShardResponse, error)
 	// ValidateVSchema compares the schema of each primary tablet in "keyspace/shards..." to the vschema and errs if there are differences.
 	ValidateVSchema(ctx context.Context, in *vtctldata.ValidateVSchemaRequest, opts ...grpc.CallOption) (*vtctldata.ValidateVSchemaResponse, error)
+	// WorkflowUpdate updates the configuration of a vreplication workflow
+	// using the provided updated parameters.
+	WorkflowUpdate(ctx context.Context, in *vtctldata.WorkflowUpdateRequest, opts ...grpc.CallOption) (*vtctldata.WorkflowUpdateResponse, error)
 }
 
 type vtctldClient struct {
@@ -1233,6 +1236,15 @@ func (c *vtctldClient) ValidateVSchema(ctx context.Context, in *vtctldata.Valida
 	return out, nil
 }
 
+func (c *vtctldClient) WorkflowUpdate(ctx context.Context, in *vtctldata.WorkflowUpdateRequest, opts ...grpc.CallOption) (*vtctldata.WorkflowUpdateResponse, error) {
+	out := new(vtctldata.WorkflowUpdateResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/WorkflowUpdate", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // VtctldServer is the server API for Vtctld service.
 // All implementations must embed UnimplementedVtctldServer
 // for forward compatibility
@@ -1499,6 +1511,9 @@ type VtctldServer interface {
 	ValidateVersionShard(context.Context, *vtctldata.ValidateVersionShardRequest) (*vtctldata.ValidateVersionShardResponse, error)
 	// ValidateVSchema compares the schema of each primary tablet in "keyspace/shards..." to the vschema and errs if there are differences.
 	ValidateVSchema(context.Context, *vtctldata.ValidateVSchemaRequest) (*vtctldata.ValidateVSchemaResponse, error)
+	// WorkflowUpdate updates the configuration of a vreplication workflow
+	// using the provided updated parameters.
+	WorkflowUpdate(context.Context, *vtctldata.WorkflowUpdateRequest) (*vtctldata.WorkflowUpdateResponse, error)
 	mustEmbedUnimplementedVtctldServer()
 }
 
@@ -1757,6 +1772,9 @@ func (UnimplementedVtctldServer) ValidateVersionShard(context.Context, *vtctldat
 }
 func (UnimplementedVtctldServer) ValidateVSchema(context.Context, *vtctldata.ValidateVSchemaRequest) (*vtctldata.ValidateVSchemaResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ValidateVSchema not implemented")
+}
+func (UnimplementedVtctldServer) WorkflowUpdate(context.Context, *vtctldata.WorkflowUpdateRequest) (*vtctldata.WorkflowUpdateResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method WorkflowUpdate not implemented")
 }
 func (UnimplementedVtctldServer) mustEmbedUnimplementedVtctldServer() {}
 
@@ -3292,6 +3310,24 @@ func _Vtctld_ValidateVSchema_Handler(srv interface{}, ctx context.Context, dec f
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Vtctld_WorkflowUpdate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.WorkflowUpdateRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).WorkflowUpdate(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/WorkflowUpdate",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).WorkflowUpdate(ctx, req.(*vtctldata.WorkflowUpdateRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Vtctld_ServiceDesc is the grpc.ServiceDesc for Vtctld service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -3622,6 +3658,10 @@ var Vtctld_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ValidateVSchema",
 			Handler:    _Vtctld_ValidateVSchema_Handler,
+		},
+		{
+			MethodName: "WorkflowUpdate",
+			Handler:    _Vtctld_WorkflowUpdate_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

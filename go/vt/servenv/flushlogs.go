@@ -25,7 +25,7 @@ import (
 
 func init() {
 	OnInit(func() {
-		http.HandleFunc("/debug/flushlogs", func(w http.ResponseWriter, r *http.Request) {
+		HTTPHandleFunc("/debug/flushlogs", func(w http.ResponseWriter, r *http.Request) {
 			logutil.Flush()
 			fmt.Fprint(w, "flushed")
 		})

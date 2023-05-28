@@ -26,6 +26,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer/testenv"
+
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/vt/log"
@@ -77,6 +79,71 @@ func (tfe *TestFieldEvent) String() string {
 	s += fld
 	s += "}"
 	return s
+}
+
+// TestPlayerNoBlob sets up a new environment with mysql running with binlog_row_image as noblob. It confirms that
+// the VEvents created are correct: that they don't contain the missing columns and that the DataColumns bitmap is sent
+func TestNoBlob(t *testing.T) {
+	newEngine(t, "noblob")
+	defer newEngine(t, "full")
+	execStatements(t, []string{
+		"create table t1(id int, blb blob, val varchar(4), primary key(id))",
+		"create table t2(id int, txt text, val varchar(4), unique key(id, val))",
+	})
+	defer execStatements(t, []string{
+		"drop table t1",
+		"drop table t2",
+	})
+	engine.se.Reload(context.Background())
+	queries := []string{
+		"begin",
+		"insert into t1 values (1, 'blob1', 'aaa')",
+		"update t1 set val = 'bbb'",
+		"commit",
+		"begin",
+		"insert into t2 values (1, 'text1', 'aaa')",
+		"update t2 set val = 'bbb'",
+		"commit",
+	}
+
+	fe1 := &TestFieldEvent{
+		table: "t1",
+		db:    "vttest",
+		cols: []*TestColumn{
+			{name: "id", dataType: "INT32", colType: "int(11)", len: 11, charset: 63},
+			{name: "blb", dataType: "BLOB", colType: "blob", len: 65535, charset: 63},
+			{name: "val", dataType: "VARCHAR", colType: "varchar(4)", len: 16, charset: 45},
+		},
+	}
+	fe2 := &TestFieldEvent{
+		table: "t2",
+		db:    "vttest",
+		cols: []*TestColumn{
+			{name: "id", dataType: "INT32", colType: "int(11)", len: 11, charset: 63},
+			{name: "txt", dataType: "TEXT", colType: "text", len: 262140, charset: 45},
+			{name: "val", dataType: "VARCHAR", colType: "varchar(4)", len: 16, charset: 45},
+		},
+	}
+
+	testcases := []testcase{{
+		input: queries,
+		output: [][]string{{
+			"begin",
+			fe1.String(),
+			`type:ROW row_event:{table_name:"t1" row_changes:{after:{lengths:1 lengths:5 lengths:3 values:"1blob1aaa"}}}`,
+			`type:ROW row_event:{table_name:"t1" row_changes:{before:{lengths:1 lengths:-1 lengths:3 values:"1aaa"} after:{lengths:1 lengths:-1 lengths:3 values:"1bbb"} data_columns:{count:3 cols:"\x05"}}}`,
+			"gtid",
+			"commit",
+		}, {
+			"begin",
+			fe2.String(),
+			`type:ROW row_event:{table_name:"t2" row_changes:{after:{lengths:1 lengths:5 lengths:3 values:"1text1aaa"}}}`,
+			`type:ROW row_event:{table_name:"t2" row_changes:{before:{lengths:1 lengths:5 lengths:3 values:"1text1aaa"} after:{lengths:1 lengths:-1 lengths:3 values:"1bbb"} data_columns:{count:3 cols:"\x05"}}}`,
+			"gtid",
+			"commit",
+		}},
+	}}
+	runCases(t, nil, testcases, "current", nil)
 }
 
 func TestSetAndEnum(t *testing.T) {
@@ -279,7 +346,7 @@ func TestVersion(t *testing.T) {
 			Name: "t1",
 		}},
 	}
-	blob, _ := proto.Marshal(dbSchema)
+	blob, _ := dbSchema.MarshalVT()
 	engine.se.Reload(context.Background())
 	gtid := "MariaDB/0-41983-20"
 	testcases := []testcase{{
@@ -507,7 +574,7 @@ func TestVStreamCopyWithDifferentFilters(t *testing.T) {
 		"type:FIELD field_event:{table_name:\"t1\" fields:{name:\"id1\" type:INT32 table:\"t1\" org_table:\"t1\" database:\"vttest\" org_name:\"id1\" column_length:11 charset:63} fields:{name:\"id2\" type:INT32 table:\"t1\" org_table:\"t1\" database:\"vttest\" org_name:\"id2\" column_length:11 charset:63}}",
 		"type:GTID",
 		"type:ROW row_event:{table_name:\"t1\" row_changes:{after:{lengths:1 lengths:1 values:\"12\"}}}",
-		"type:LASTPK last_p_k_event:{table_last_p_k:{table_name:\"t1\" lastpk:{rows:{lengths:1 values:\"1\"}}}}",
+		"type:LASTPK last_p_k_event:{table_last_p_k:{table_name:\"t1\" lastpk:{fields:{name:\"id1\" type:INT32} rows:{lengths:1 values:\"1\"}}}}",
 		"type:COMMIT",
 		"type:BEGIN",
 		"type:LASTPK last_p_k_event:{table_last_p_k:{table_name:\"t1\"} completed:true}",
@@ -515,7 +582,7 @@ func TestVStreamCopyWithDifferentFilters(t *testing.T) {
 		"type:BEGIN",
 		"type:FIELD field_event:{table_name:\"t2a\" fields:{name:\"id1\" type:INT32 table:\"t2a\" org_table:\"t2a\" database:\"vttest\" org_name:\"id1\" column_length:11 charset:63} fields:{name:\"id2\" type:INT32 table:\"t2a\" org_table:\"t2a\" database:\"vttest\" org_name:\"id2\" column_length:11 charset:63}}",
 		"type:ROW row_event:{table_name:\"t2a\" row_changes:{after:{lengths:1 lengths:1 values:\"14\"}}}",
-		"type:LASTPK last_p_k_event:{table_last_p_k:{table_name:\"t2a\" lastpk:{rows:{lengths:1 values:\"1\"}}}}",
+		"type:LASTPK last_p_k_event:{table_last_p_k:{table_name:\"t2a\" lastpk:{fields:{name:\"id1\" type:INT32} rows:{lengths:1 values:\"1\"}}}}",
 		"type:COMMIT",
 		"type:BEGIN",
 		"type:LASTPK last_p_k_event:{table_last_p_k:{table_name:\"t2a\"} completed:true}",
@@ -524,7 +591,7 @@ func TestVStreamCopyWithDifferentFilters(t *testing.T) {
 		"type:FIELD field_event:{table_name:\"t2b\" fields:{name:\"id1\" type:VARCHAR table:\"t2b\" org_table:\"t2b\" database:\"vttest\" org_name:\"id1\" column_length:80 charset:45} fields:{name:\"id2\" type:INT32 table:\"t2b\" org_table:\"t2b\" database:\"vttest\" org_name:\"id2\" column_length:11 charset:63}}",
 		"type:ROW row_event:{table_name:\"t2b\" row_changes:{after:{lengths:1 lengths:1 values:\"a5\"}}}",
 		"type:ROW row_event:{table_name:\"t2b\" row_changes:{after:{lengths:1 lengths:1 values:\"b6\"}}}",
-		"type:LASTPK last_p_k_event:{table_last_p_k:{table_name:\"t2b\" lastpk:{rows:{lengths:1 values:\"b\"}}}}",
+		"type:LASTPK last_p_k_event:{table_last_p_k:{table_name:\"t2b\" lastpk:{fields:{name:\"id1\" type:VARCHAR} rows:{lengths:1 values:\"b\"}}}}",
 		"type:COMMIT",
 		"type:BEGIN",
 		"type:LASTPK last_p_k_event:{table_last_p_k:{table_name:\"t2b\"} completed:true}",
@@ -1740,11 +1807,6 @@ func TestTypes(t *testing.T) {
 }
 
 func TestJSON(t *testing.T) {
-	log.Errorf("TestJSON: flavor is %s", env.Flavor)
-	// JSON is supported only after mysql57.
-	if !strings.Contains(env.Flavor, "mysql57") {
-		return
-	}
 	if err := env.Mysqld.ExecuteSuperQuery(context.Background(), "create table vitess_json(id int default 1, val json, primary key(id))"); err != nil {
 		// If it's a syntax error, MySQL is an older version. Skip this test.
 		if strings.Contains(err.Error(), "syntax") {
@@ -1754,7 +1816,7 @@ func TestJSON(t *testing.T) {
 	}
 	defer execStatement(t, "drop table vitess_json")
 	engine.se.Reload(context.Background())
-	jsonValues := []string{"{}", "123456", `"vtTablet"`, `{"foo":"bar"}`, `["abc",3.14,true]`}
+	jsonValues := []string{"{}", "123456", `"vtTablet"`, `{"foo": "bar"}`, `["abc", 3.14, true]`}
 
 	var inputs, outputs []string
 	var outputsArray [][]string
@@ -1768,7 +1830,7 @@ func TestJSON(t *testing.T) {
 		outputs = []string{}
 		outputs = append(outputs, `begin`)
 		if !fieldAdded {
-			outputs = append(outputs, `type:FIELD field_event:{table_name:"vitess_json" fields:{name:"id" type:INT32 table:"vitess_json" org_table:"vitess_json" database:"vttest" org_name:"id" column_length:11 charset:63} fields:{name:"val" type:JSON table:"vitess_json" org_table:"vitess_json" database:"vttest" org_name:"val" column_length:4294967295 charset:63}}`)
+			outputs = append(outputs, `type:FIELD field_event:{table_name:"vitess_json" fields:{name:"id" type:INT32 table:"vitess_json" org_table:"vitess_json" database:"vttest" org_name:"id" column_length:11 charset:63 column_type:"int(11)"} fields:{name:"val" type:JSON table:"vitess_json" org_table:"vitess_json" database:"vttest" org_name:"val" column_length:4294967295 charset:63 column_type:"json"}}`)
 			fieldAdded = true
 		}
 		out := expect(val)
@@ -1855,43 +1917,16 @@ func TestJournal(t *testing.T) {
 	runCases(t, nil, testcases, "", nil)
 }
 
+// TestMinimalMode confirms that we don't support minimal binlog_row_image mode.
 func TestMinimalMode(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
 	}
 
-	execStatements(t, []string{
-		"create table t1(id int, val1 varbinary(128), val2 varbinary(128), primary key(id))",
-		"insert into t1 values(1, 'aaa', 'bbb')",
-	})
-	defer execStatements(t, []string{
-		"drop table t1",
-	})
-	engine.se.Reload(context.Background())
-
-	// Record position before the next few statements.
-	pos := primaryPosition(t)
-	execStatements(t, []string{
-		"set @@session.binlog_row_image='minimal'",
-		"update t1 set val1='bbb' where id=1",
-		"set @@session.binlog_row_image='full'",
-	})
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	ch := make(chan []*binlogdatapb.VEvent)
-	go func() {
-		for evs := range ch {
-			t.Errorf("received: %v", evs)
-		}
-	}()
-	defer close(ch)
-	err := vstream(ctx, t, pos, nil, nil, ch)
-	want := "partial row image encountered"
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("err: %v, must contain '%s'", err, want)
-	}
+	newEngine(t, "minimal")
+	defer newEngine(t, "full")
+	err := engine.Stream(context.Background(), "current", nil, nil, func(evs []*binlogdatapb.VEvent) error { return nil })
+	require.Error(t, err, "minimal binlog_row_image is not supported by Vitess VReplication")
 }
 
 func TestStatementMode(t *testing.T) {
@@ -2036,12 +2071,6 @@ func TestFilteredMultipleWhere(t *testing.T) {
 
 // TestGeneratedColumns just confirms that generated columns are sent in a vstream as expected
 func TestGeneratedColumns(t *testing.T) {
-	flavor := strings.ToLower(env.Flavor)
-	// Disable tests on percona (which identifies as mysql56) and mariadb platforms in CI since they
-	// generated columns support was added in 5.7 and mariadb added mysql compatible generated columns in 10.2
-	if !strings.Contains(flavor, "mysql57") && !strings.Contains(flavor, "mysql80") {
-		return
-	}
 	execStatements(t, []string{
 		"create table t1(id int, val varbinary(6), val2 varbinary(6) as (concat(id, val)), val3 varbinary(6) as (concat(val, id)), id2 int, primary key(id))",
 	})
@@ -2060,11 +2089,11 @@ func TestGeneratedColumns(t *testing.T) {
 		table: "t1",
 		db:    "vttest",
 		cols: []*TestColumn{
-			{name: "id", dataType: "INT32", colType: "", len: 11, charset: 63},
-			{name: "val", dataType: "VARBINARY", colType: "", len: 6, charset: 63},
-			{name: "val2", dataType: "VARBINARY", colType: "", len: 6, charset: 63},
-			{name: "val3", dataType: "VARBINARY", colType: "", len: 6, charset: 63},
-			{name: "id2", dataType: "INT32", colType: "", len: 11, charset: 63},
+			{name: "id", dataType: "INT32", colType: "int(11)", len: 11, charset: 63},
+			{name: "val", dataType: "VARBINARY", colType: "varbinary(6)", len: 6, charset: 63},
+			{name: "val2", dataType: "VARBINARY", colType: "varbinary(6)", len: 6, charset: 63},
+			{name: "val3", dataType: "VARBINARY", colType: "varbinary(6)", len: 6, charset: 63},
+			{name: "id2", dataType: "INT32", colType: "int(11)", len: 11, charset: 63},
 		},
 	}
 
@@ -2073,8 +2102,52 @@ func TestGeneratedColumns(t *testing.T) {
 		output: [][]string{{
 			`begin`,
 			fe.String(),
-			`type:ROW row_event:<table_name:"t1" row_changes:<after:<lengths:1 lengths:3 lengths:4 lengths:4 lengths:2 values:"1aaa1aaaaaa110" > > > `,
-			`type:ROW row_event:<table_name:"t1" row_changes:<after:<lengths:1 lengths:3 lengths:4 lengths:4 lengths:2 values:"2bbb2bbbbbb220" > > > `,
+			`type:ROW row_event:{table_name:"t1" row_changes:{after:{lengths:1 lengths:3 lengths:4 lengths:4 lengths:2 values:"1aaa1aaaaaa110"}}}`,
+			`type:ROW row_event:{table_name:"t1" row_changes:{after:{lengths:1 lengths:3 lengths:4 lengths:4 lengths:2 values:"2bbb2bbbbbb220"}}}`,
+			`gtid`,
+			`commit`,
+		}},
+	}}
+	runCases(t, nil, testcases, "current", nil)
+}
+
+// TestGeneratedInvisiblePrimaryKey validates that generated invisible primary keys are sent in row events.
+func TestGeneratedInvisiblePrimaryKey(t *testing.T) {
+	if !env.HasCapability(testenv.ServerCapabilityGeneratedInvisiblePrimaryKey) {
+		t.Skip("skipping test as server does not support generated invisible primary keys")
+	}
+	execStatements(t, []string{
+		"SET @@session.sql_generate_invisible_primary_key=ON;",
+		"create table t1(val varbinary(6))",
+		"SET @@session.sql_generate_invisible_primary_key=OFF;",
+	})
+	defer execStatements(t, []string{
+		"drop table t1",
+	})
+	engine.se.Reload(context.Background())
+	queries := []string{
+		"begin",
+		"insert into t1 values ('aaa')",
+		"update t1 set val = 'bbb' where my_row_id = 1",
+		"commit",
+	}
+
+	fe := &TestFieldEvent{
+		table: "t1",
+		db:    "vttest",
+		cols: []*TestColumn{
+			{name: "my_row_id", dataType: "UINT64", colType: "bigint unsigned", len: 20, charset: 63},
+			{name: "val", dataType: "VARBINARY", colType: "varbinary(6)", len: 6, charset: 63},
+		},
+	}
+
+	testcases := []testcase{{
+		input: queries,
+		output: [][]string{{
+			`begin`,
+			fe.String(),
+			`type:ROW row_event:{table_name:"t1" row_changes:{after:{lengths:1 lengths:3 values:"1aaa"}}}`,
+			`type:ROW row_event:{table_name:"t1" row_changes:{before:{lengths:1 lengths:3 values:"1aaa"} after:{lengths:1 lengths:3 values:"1bbb"}}}`,
 			`gtid`,
 			`commit`,
 		}},

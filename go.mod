@@ -1,6 +1,6 @@
 module vitess.io/vitess
 
-go 1.19
+go 1.20
 
 require (
 	cloud.google.com/go/storage v1.29.0
@@ -15,12 +15,10 @@ require (
 	github.com/aws/aws-sdk-go v1.44.192
 	github.com/buger/jsonparser v1.1.1
 	github.com/cespare/xxhash/v2 v2.2.0
-	github.com/codegangsta/inject v0.0.0-20150114235600-33e0aa1cb7c0 // indirect
 	github.com/corpix/uarand v0.1.1 // indirect
 	github.com/dave/jennifer v1.6.0
 	github.com/evanphx/json-patch v5.6.0+incompatible
 	github.com/fsnotify/fsnotify v1.6.0
-	github.com/go-martini/martini v0.0.0-20170121215854-22fa46961aab
 	github.com/go-sql-driver/mysql v1.7.0
 	github.com/golang/glog v1.0.0
 	github.com/golang/mock v1.6.0
@@ -36,11 +34,10 @@ require (
 	github.com/hashicorp/consul/api v1.18.0
 	github.com/hashicorp/go-immutable-radix v1.3.1 // indirect
 	github.com/hashicorp/serf v0.10.1 // indirect
-	github.com/howeyc/gopass v0.0.0-20210920133722-c8aef6fb66ef
 	github.com/icrowley/fake v0.0.0-20180203215853-4178557ae428
 	github.com/imdario/mergo v0.3.13 // indirect
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
-	github.com/klauspost/compress v1.15.15
+	github.com/klauspost/compress v1.16.5
 	github.com/klauspost/pgzip v1.2.5
 	github.com/krishicks/yaml-patch v0.0.10
 	github.com/magiconair/properties v1.8.7
@@ -65,7 +62,6 @@ require (
 	github.com/spf13/cobra v1.6.1
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.15.0
-	github.com/spyzhov/ajson v0.7.2
 	github.com/stretchr/testify v1.8.1
 	github.com/tchap/go-patricia v2.3.0+incompatible
 	github.com/tidwall/gjson v1.12.1
@@ -78,7 +74,6 @@ require (
 	go.etcd.io/etcd/client/pkg/v3 v3.5.7
 	go.etcd.io/etcd/client/v3 v3.5.7
 	golang.org/x/crypto v0.5.0 // indirect
-	golang.org/x/lint v0.0.0-20210508222113-6edffad5e616
 	golang.org/x/mod v0.7.0 // indirect
 	golang.org/x/net v0.7.0
 	golang.org/x/oauth2 v0.4.0
@@ -99,7 +94,6 @@ require (
 	gopkg.in/ldap.v2 v2.5.1
 	gopkg.in/warnings.v0 v0.1.2 // indirect
 	gotest.tools v2.2.0+incompatible
-	honnef.co/go/tools v0.3.3
 	k8s.io/apiextensions-apiserver v0.18.19
 	k8s.io/apimachinery v0.26.1
 	k8s.io/client-go v0.26.1
@@ -108,12 +102,19 @@ require (
 )
 
 require (
+	github.com/Shopify/toxiproxy/v2 v2.5.0
 	github.com/bndr/gotabulate v1.1.2
+	github.com/google/safehtml v0.1.0
+	github.com/hashicorp/go-version v1.6.0
 	github.com/kr/pretty v0.3.1
 	github.com/kr/text v0.2.0
+	github.com/mitchellh/mapstructure v1.5.0
 	github.com/nsf/jsondiff v0.0.0-20210926074059-1e845ec5d249
+	github.com/spf13/jwalterweatherman v1.1.0
+	github.com/xlab/treeprint v1.2.0
 	golang.org/x/exp v0.0.0-20230131160201-f062dba9d201
 	golang.org/x/sync v0.1.0
+	k8s.io/utils v0.0.0-20230115233650-391b47cb4029
 	modernc.org/sqlite v1.20.3
 )
 
@@ -122,7 +123,6 @@ require (
 	cloud.google.com/go/compute v1.18.0 // indirect
 	cloud.google.com/go/compute/metadata v0.2.3 // indirect
 	cloud.google.com/go/iam v0.10.0 // indirect
-	github.com/BurntSushi/toml v1.2.1 // indirect
 	github.com/DataDog/datadog-agent/pkg/obfuscate v0.42.0 // indirect
 	github.com/DataDog/datadog-agent/pkg/remoteconfig/state v0.42.0 // indirect
 	github.com/DataDog/datadog-go/v5 v5.2.0 // indirect
@@ -167,7 +167,6 @@ require (
 	github.com/mattn/go-runewidth v0.0.14 // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.4 // indirect
 	github.com/mitchellh/go-homedir v1.1.0 // indirect
-	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
@@ -182,7 +181,6 @@ require (
 	github.com/secure-systems-lab/go-securesystemslib v0.4.0 // indirect
 	github.com/spf13/afero v1.9.3 // indirect
 	github.com/spf13/cast v1.5.0 // indirect
-	github.com/spf13/jwalterweatherman v1.1.0 // indirect
 	github.com/subosito/gotenv v1.4.2 // indirect
 	github.com/tidwall/match v1.1.1 // indirect
 	github.com/tidwall/pretty v1.2.0 // indirect
@@ -192,7 +190,6 @@ require (
 	go.uber.org/zap v1.23.0 // indirect
 	go4.org/intern v0.0.0-20220617035311-6925f38cc365 // indirect
 	go4.org/unsafe/assume-no-moving-gc v0.0.0-20220617031537-928513b29760 // indirect
-	golang.org/x/exp/typeparams v0.0.0-20230131160201-f062dba9d201 // indirect
 	golang.org/x/xerrors v0.0.0-20220907171357-04be3eba64a2 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
@@ -204,7 +201,6 @@ require (
 	k8s.io/gengo v0.0.0-20221011193443-fad74ee6edd9 // indirect
 	k8s.io/klog/v2 v2.90.0 // indirect
 	k8s.io/kube-openapi v0.0.0-20230202010329-39b3636cbaa3 // indirect
-	k8s.io/utils v0.0.0-20230115233650-391b47cb4029 // indirect
 	lukechampine.com/uint128 v1.2.0 // indirect
 	modernc.org/cc/v3 v3.40.0 // indirect
 	modernc.org/ccgo/v3 v3.16.13 // indirect

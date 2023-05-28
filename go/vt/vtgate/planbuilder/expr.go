@@ -20,10 +20,9 @@ import (
 	"bytes"
 	"fmt"
 
-	"vitess.io/vitess/go/vt/vterrors"
-
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vtgate/engine"
+	"vitess.io/vitess/go/vt/vterrors"
+	popcode "vitess.io/vitess/go/vt/vtgate/engine/opcode"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
@@ -144,7 +143,7 @@ func (pb *primitiveBuilder) findOrigin(expr sqlparser.Expr, reservedVars *sqlpar
 		if !ok {
 			// (subquery) -> :_sq
 			expr = sqlparser.ReplaceExpr(expr, sqi.ast, sqlparser.NewArgument(sqName))
-			pullouts = append(pullouts, newPulloutSubquery(engine.PulloutValue, sqName, hasValues, sqi.plan))
+			pullouts = append(pullouts, newPulloutSubquery(popcode.PulloutValue, sqName, hasValues, sqi.plan))
 			continue
 		}
 		switch construct := construct.(type) {
@@ -166,7 +165,7 @@ func (pb *primitiveBuilder) findOrigin(expr sqlparser.Expr, reservedVars *sqlpar
 					Right: right,
 				}
 				expr = sqlparser.ReplaceExpr(expr, construct, newExpr)
-				pullouts = append(pullouts, newPulloutSubquery(engine.PulloutIn, sqName, hasValues, sqi.plan))
+				pullouts = append(pullouts, newPulloutSubquery(popcode.PulloutIn, sqName, hasValues, sqi.plan))
 			} else {
 				// a not in (subquery) -> (:__sq_has_values = 0 or (a not in ::__sq))
 				left := &sqlparser.ComparisonExpr{
@@ -184,12 +183,12 @@ func (pb *primitiveBuilder) findOrigin(expr sqlparser.Expr, reservedVars *sqlpar
 					Right: right,
 				}
 				expr = sqlparser.ReplaceExpr(expr, construct, newExpr)
-				pullouts = append(pullouts, newPulloutSubquery(engine.PulloutNotIn, sqName, hasValues, sqi.plan))
+				pullouts = append(pullouts, newPulloutSubquery(popcode.PulloutNotIn, sqName, hasValues, sqi.plan))
 			}
 		case *sqlparser.ExistsExpr:
 			// exists (subquery) -> :__sq_has_values
 			expr = sqlparser.ReplaceExpr(expr, construct, sqlparser.NewArgument(hasValues))
-			pullouts = append(pullouts, newPulloutSubquery(engine.PulloutExists, sqName, hasValues, sqi.plan))
+			pullouts = append(pullouts, newPulloutSubquery(popcode.PulloutExists, sqName, hasValues, sqi.plan))
 		}
 	}
 	return pullouts, highestOrigin, expr, nil
@@ -289,12 +288,12 @@ func valEqual(a, b sqlparser.Expr) bool {
 		if b, ok := b.(*sqlparser.ColName); ok {
 			return a.Metadata == b.Metadata
 		}
-	case sqlparser.Argument:
-		b, ok := b.(sqlparser.Argument)
+	case *sqlparser.Argument:
+		b, ok := b.(*sqlparser.Argument)
 		if !ok {
 			return false
 		}
-		return a == b
+		return a.Name == b.Name
 	case *sqlparser.Literal:
 		b, ok := b.(*sqlparser.Literal)
 		if !ok {

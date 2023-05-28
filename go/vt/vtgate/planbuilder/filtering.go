@@ -19,13 +19,11 @@ package planbuilder
 import (
 	"fmt"
 
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators"
-	"vitess.io/vitess/go/vt/vtgate/semantics"
-
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators"
 )
 
 // planFilter solves this particular expression, either by pushing it down to a child or changing this logicalPlan
@@ -110,7 +108,7 @@ func filterVindexFunc(node *vindexFunc, filter sqlparser.Expr) (logicalPlan, err
 		return nil, vterrors.VT12001(operators.VindexUnsupported + " (rhs is not a value)")
 	}
 	var err error
-	node.eVindexFunc.Value, err = evalengine.Translate(comparison.Right, semantics.EmptySemTable())
+	node.eVindexFunc.Value, err = evalengine.Translate(comparison.Right, nil)
 	if err != nil {
 		return nil, vterrors.VT12001(fmt.Sprintf("%s: %v", operators.VindexUnsupported, err))
 	}

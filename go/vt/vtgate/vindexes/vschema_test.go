@@ -1594,7 +1594,7 @@ func TestBuildVSchemaPrimaryCannotBeOwned(t *testing.T) {
 	}
 }
 
-func TestBuildVSchemaReferenceTableSourceMustBeQualified(t *testing.T) {
+func TestBuildVSchemaReferenceTableSourceMayBeUnqualified(t *testing.T) {
 	input := vschemapb.SrvVSchema{
 		Keyspaces: map[string]*vschemapb.Keyspace{
 			"unsharded": {
@@ -1616,9 +1616,7 @@ func TestBuildVSchemaReferenceTableSourceMustBeQualified(t *testing.T) {
 	}
 	vschema := BuildVSchema(&input)
 	require.NoError(t, vschema.Keyspaces["unsharded"].Error)
-	require.Error(t, vschema.Keyspaces["sharded"].Error)
-	require.EqualError(t, vschema.Keyspaces["sharded"].Error,
-		"invalid source \"src\" for reference table: ref; invalid table name: src, it must be of the qualified form <keyspace_name>.<table_name> (dots are not allowed in either name)")
+	require.NoError(t, vschema.Keyspaces["sharded"].Error)
 }
 
 func TestBuildVSchemaReferenceTableSourceMustBeInDifferentKeyspace(t *testing.T) {
@@ -1737,7 +1735,7 @@ func TestBuildVSchemaReferenceTableSourceMayUseShardedKeyspace(t *testing.T) {
 	require.NoError(t, vschema.Keyspaces["sharded2"].Error)
 }
 
-func TestBuildVSchemaReferenceTableSourceTableMustBeBasicOrReference(t *testing.T) {
+func TestBuildVSchemaReferenceTableSourceTableMustBeBasicOrReferenceWithoutSource(t *testing.T) {
 	input := vschemapb.SrvVSchema{
 		Keyspaces: map[string]*vschemapb.Keyspace{
 			"unsharded1": {
@@ -1764,6 +1762,11 @@ func TestBuildVSchemaReferenceTableSourceTableMustBeBasicOrReference(t *testing.
 					},
 				},
 			},
+			"unsharded4": {
+				Tables: map[string]*vschemapb.Table{
+					"src4": {},
+				},
+			},
 			"sharded1": {
 				Sharded: true,
 				Tables: map[string]*vschemapb.Table{
@@ -1782,13 +1785,26 @@ func TestBuildVSchemaReferenceTableSourceTableMustBeBasicOrReference(t *testing.
 					},
 				},
 			},
+			"sharded3": {
+				Sharded: true,
+				Tables: map[string]*vschemapb.Table{
+					"ref3": {
+						Type:   "reference",
+						Source: "unsharded4.src4",
+					},
+				},
+			},
 		},
 	}
+
 	vschema := BuildVSchema(&input)
 	require.Error(t, vschema.Keyspaces["sharded1"].Error)
 	require.EqualError(t, vschema.Keyspaces["sharded1"].Error,
 		"source \"unsharded1.src1\" may not reference a table of type \"sequence\": ref1")
+
 	require.NoError(t, vschema.Keyspaces["sharded2"].Error)
+
+	require.NoError(t, vschema.Keyspaces["sharded3"].Error)
 }
 
 func TestBuildVSchemaSourceMayBeReferencedAtMostOncePerKeyspace(t *testing.T) {
@@ -2828,20 +2844,25 @@ func TestReferenceTableAndSourceAreGloballyRoutable(t *testing.T) {
 			},
 		},
 	}
+
 	vs := BuildVSchema(&input)
 	t1, err := vs.FindTable("unsharded", "t1")
 	require.NoError(t, err)
+	// If the source of a reference table does not require explicit routing,
+	// then the source table can be globally routed.
 	globalT1, err := vs.FindTable("", "t1")
 	require.NoError(t, err)
 	require.Equal(t, t1, globalT1)
 
 	input.Keyspaces["unsharded"].RequireExplicitRouting = true
 	vs = BuildVSchema(&input)
-	t1, err = vs.FindTable("sharded", "t1")
+	_, err = vs.FindTable("sharded", "t1")
 	require.NoError(t, err)
-	globalT1, err = vs.FindTable("", "t1")
-	require.NoError(t, err)
-	require.Equal(t, t1, globalT1)
+	// If the source of a reference table requires explicit routing, then
+	// neither the reference table nor its souce can be globally routed.
+	_, err = vs.FindTable("", "t1")
+	require.Error(t, err)
+	require.EqualError(t, err, "table t1 not found")
 }
 
 func TestOtherTablesMakeReferenceTableAndSourceAmbiguous(t *testing.T) {

@@ -227,6 +227,25 @@ func MakeStringTypeList(types []topodatapb.TabletType) []string {
 	return strs
 }
 
+// MakeUniqueStringTypeList returns a unique list of strings that match
+// the input list -- with duplicate types removed.
+// This is needed as some types are aliases for others, like BATCH and
+// RDONLY, so e.g. rdonly shows up twice in the list when using
+// AllTabletTypes.
+func MakeUniqueStringTypeList(types []topodatapb.TabletType) []string {
+	strs := make([]string, 0, len(types))
+	seen := make(map[string]struct{})
+	for _, t := range types {
+		if _, exists := seen[t.String()]; exists {
+			continue
+		}
+		strs = append(strs, strings.ToLower(t.String()))
+		seen[t.String()] = struct{}{}
+	}
+	sort.Strings(strs)
+	return strs
+}
+
 // MysqlAddr returns the host:port of the mysql server.
 func MysqlAddr(tablet *topodatapb.Tablet) string {
 	return netutil.JoinHostPort(tablet.MysqlHostname, tablet.MysqlPort)

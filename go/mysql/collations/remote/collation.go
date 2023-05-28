@@ -27,7 +27,7 @@ import (
 	"vitess.io/vitess/go/bytes2"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/collations"
-	"vitess.io/vitess/go/mysql/collations/internal/charset"
+	"vitess.io/vitess/go/mysql/collations/charset"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vthash"
 )
@@ -83,8 +83,6 @@ func (c *Collation) LastError() error {
 	defer c.mu.Unlock()
 	return c.err
 }
-
-func (c *Collation) Init() {}
 
 func (c *Collation) ID() collations.ID {
 	return c.id

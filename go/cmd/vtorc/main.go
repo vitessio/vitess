@@ -17,8 +17,6 @@
 package main
 
 import (
-	"os"
-	"reflect"
 	"strings"
 
 	_ "github.com/go-sql-driver/mysql"
@@ -26,9 +24,7 @@ import (
 	_ "modernc.org/sqlite"
 
 	"vitess.io/vitess/go/acl"
-	"vitess.io/vitess/go/vt/grpccommon"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/inst"
@@ -95,42 +91,24 @@ func transformArgsForPflag(fs *pflag.FlagSet, args []string) (result []string) {
 
 // main is the application's entry point. It will spawn an HTTP interface.
 func main() {
-	// TODO(ajm188): after v15, remove this pflag hack and use servenv.ParseFlags
-	// directly.
-	fs := pflag.NewFlagSet("vtorc", pflag.ExitOnError)
-	grpccommon.RegisterFlags(fs)
-	log.RegisterFlags(fs)
-	logutil.RegisterFlags(fs)
-	logic.RegisterFlags(fs)
-	server.RegisterFlags(fs)
-	config.RegisterFlags(fs)
 	servenv.RegisterDefaultFlags()
 	servenv.RegisterFlags()
-	acl.RegisterFlags(fs)
-	servenv.OnParseFor("vtorc", func(flags *pflag.FlagSet) { flags.AddFlagSet(fs) })
 
-	args := append([]string{}, os.Args...)
-	os.Args = os.Args[0:1]
+	var configFile string
+	servenv.OnParseFor("vtorc", func(fs *pflag.FlagSet) {
+		logic.RegisterFlags(fs)
+		server.RegisterFlags(fs)
+		config.RegisterFlags(fs)
+		acl.RegisterFlags(fs)
 
-	configFile := fs.String("config", "", "config file name")
-
-	os.Args = append(os.Args, transformArgsForPflag(fs, args[1:])...)
-	if !reflect.DeepEqual(args, os.Args) {
-		// warn the user so they can adjust their CLI scripts
-		warning := `CLI args passed do not conform to pflag parsing behavior
-The arguments have been transformed for compatibility as follows:
-	%v => %v
-Please update your scripts before the next version, when this will begin to break.
-`
-		log.Warningf(warning, args, os.Args)
-	}
-
+		fs.StringVar(&configFile, "config", "", "config file name")
+	})
 	servenv.ParseFlags("vtorc")
 	config.UpdateConfigValuesFromFlags()
 
 	log.Info("starting vtorc")
-	if len(*configFile) > 0 {
-		config.ForceRead(*configFile)
+	if len(configFile) > 0 {
+		config.ForceRead(configFile)
 	} else {
 		config.Read("/etc/vtorc.conf.json", "conf/vtorc.conf.json", "vtorc.conf.json")
 	}

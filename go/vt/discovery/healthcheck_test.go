@@ -20,19 +20,18 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"html/template"
 	"io"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/google/safehtml/template"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/grpcclient"
-	"vitess.io/vitess/go/vt/status"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -196,8 +195,9 @@ func TestHealthCheck(t *testing.T) {
 	}
 	input <- shr
 	result = <-resultChan
-	// TODO: figure out how to compare objects that contain errors using utils.MustMatch
-	assert.True(t, want.DeepEqual(result), "Wrong TabletHealth data\n Expected: %v\n Actual:   %v", want, result)
+	// Ignore LastError because we're going to check it separately.
+	utils.MustMatchFn(".LastError", ".Conn")(t, want, result, "Wrong TabletHealth data")
+	assert.Error(t, result.LastError, "vttablet error: some error")
 	testChecksum(t, 1027934207, hc.stateChecksum()) // unchanged
 
 	// remove tablet
@@ -257,8 +257,9 @@ func TestHealthCheckStreamError(t *testing.T) {
 		LastError:            fmt.Errorf("some stream error"),
 	}
 	result = <-resultChan
-	// TODO: figure out how to compare objects that contain errors using utils.MustMatch
-	assert.True(t, want.DeepEqual(result), "Wrong TabletHealth data\n Expected: %v\n Actual:   %v", want, result)
+	// Ignore LastError because we're going to check it separately.
+	utils.MustMatchFn(".LastError", ".Conn")(t, want, result, "Wrong TabletHealth data")
+	assert.Error(t, result.LastError, "some stream error")
 	// tablet should be removed from healthy list
 	a := hc.GetHealthyTabletStats(&querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA})
 	assert.Empty(t, a, "wrong result, expected empty list")
@@ -317,8 +318,9 @@ func TestHealthCheckErrorOnPrimary(t *testing.T) {
 		LastError:            fmt.Errorf("some stream error"),
 	}
 	result = <-resultChan
-	// TODO: figure out how to compare objects that contain errors using utils.MustMatch
-	assert.True(t, want.DeepEqual(result), "Wrong TabletHealth data\n Expected: %v\n Actual:   %v", want, result)
+	// Ignore LastError because we're going to check it separately.
+	utils.MustMatchFn(".LastError", ".Conn")(t, want, result, "Wrong TabletHealth data")
+	assert.Error(t, result.LastError, "some stream error")
 	// tablet should be removed from healthy list
 	a := hc.GetHealthyTabletStats(&querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_PRIMARY})
 	assert.Empty(t, a, "wrong result, expected empty list")
@@ -1220,7 +1222,7 @@ func TestTemplate(t *testing.T) {
 		Target:       &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
 		TabletsStats: ts,
 	}
-	templ := template.New("").Funcs(status.StatusFuncs)
+	templ := template.New("")
 	templ, err := templ.Parse(HealthCheckTemplate)
 	require.Nil(t, err, "error parsing template: %v", err)
 	wr := &bytes.Buffer{}
@@ -1247,7 +1249,7 @@ func TestDebugURLFormatting(t *testing.T) {
 		Target:       &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
 		TabletsStats: ts,
 	}
-	templ := template.New("").Funcs(status.StatusFuncs)
+	templ := template.New("")
 	templ, err := templ.Parse(HealthCheckTemplate)
 	require.Nil(t, err, "error parsing template")
 	wr := &bytes.Buffer{}

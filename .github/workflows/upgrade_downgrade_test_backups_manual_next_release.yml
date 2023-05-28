@@ -7,6 +7,8 @@ concurrency:
   group: format('{0}-{1}', ${{ github.ref }}, 'Upgrade Downgrade Testing - Backups - Manual - Next Release')
   cancel-in-progress: true
 
+permissions: read-all
+
 jobs:
   get_next_release:
     if: always()
@@ -86,9 +88,9 @@ jobs:
 
     - name: Set up Go
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
-      uses: actions/setup-go@v3
+      uses: actions/setup-go@v4
       with:
-        go-version: 1.19.4
+        go-version: 1.20.4
 
     - name: Set up python
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
@@ -98,13 +100,6 @@ jobs:
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       run: |
         sudo sysctl -w net.ipv4.ip_local_port_range="22768 65535"
-
-    # TEMPORARY WHILE GITHUB FIXES THIS https://github.com/actions/virtual-environments/issues/3185
-    - name: Add the current IP address, long hostname and short hostname record to /etc/hosts file
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
-      run: |
-        echo -e "$(ip addr show eth0 | grep "inet\b" | awk '{print $2}' | cut -d/ -f1)\t$(hostname -f) $(hostname -s)" | sudo tee -a /etc/hosts
-    # DON'T FORGET TO REMOVE CODE ABOVE WHEN ISSUE IS ADRESSED!
 
     - name: Get base dependencies
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
@@ -237,8 +232,10 @@ jobs:
       run: |
         source build.env
 
-        rm -f $PWD/bin/vttablet
+        rm -f $PWD/bin/vttablet $PWD/bin/mysqlctl $PWD/bin/mysqlctld
         cp /tmp/vitess-build-other/bin/vttablet $PWD/bin/vttablet
+        cp /tmp/vitess-build-other/bin/mysqlctl $PWD/bin/mysqlctl
+        cp /tmp/vitess-build-other/bin/mysqlctld $PWD/bin/mysqlctld
         vttablet --version
 
     # Starting the tablets again, they will automatically start restoring the last backup.
@@ -293,8 +290,10 @@ jobs:
       run: |
         source build.env
 
-        rm -f $PWD/bin/vttablet
+        rm -f $PWD/bin/vttablet $PWD/bin/mysqlctl $PWD/bin/mysqlctld
         cp /tmp/vitess-build-current/bin/vttablet $PWD/bin/vttablet
+        cp /tmp/vitess-build-current/bin/mysqlctl $PWD/bin/mysqlctl
+        cp /tmp/vitess-build-current/bin/mysqlctld $PWD/bin/mysqlctld
         vttablet --version
 
     # Starting the tablets again and restoring the next backup.

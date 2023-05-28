@@ -20,12 +20,13 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"html/template"
 	"reflect"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/google/safehtml/template"
 
 	"vitess.io/vitess/go/vt/key"
 
@@ -33,7 +34,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
-	"vitess.io/vitess/go/vt/status"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 
@@ -106,9 +106,6 @@ func TestGetSrvKeyspace(t *testing.T) {
 
 	// make sure the HTML template works
 	funcs := map[string]any{}
-	for k, v := range status.StatusFuncs {
-		funcs[k] = v
-	}
 	for k, v := range StatusFuncs {
 		funcs[k] = v
 	}

@@ -21,82 +21,33 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/streamlog"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
-// TxCatcher allows you to capture and fetch transactions that are being
-// executed by TabletServer.
-type TxCatcher struct {
-	catcher *eventCatcher
+func NewQueryCatcher() *EventCatcher[*tabletenv.LogStats] {
+	return NewEventCatcher(tabletenv.StatsLogger)
 }
 
-// NewTxCatcher sets up the capture and returns a new TxCatcher.
-// You must call Close when done.
-func NewTxCatcher() TxCatcher {
-	return TxCatcher{catcher: newEventCatcher(tabletenv.TxLogger)}
-}
-
-// Close closes the TxCatcher.
-func (tc *TxCatcher) Close() {
-	tc.catcher.Close()
-}
-
-// Next fetches the next captured transaction.
-// If the wait is longer than one second, it returns an error.
-func (tc *TxCatcher) Next() (*tabletserver.StatefulConnection, error) {
-	event, err := tc.catcher.next()
-	if err != nil {
-		return nil, err
-	}
-	return event.(*tabletserver.StatefulConnection), nil
-}
-
-// QueryCatcher allows you to capture and fetch queries that are being
-// executed by TabletServer.
-type QueryCatcher struct {
-	catcher *eventCatcher
-}
-
-// NewQueryCatcher sets up the capture and returns a QueryCatcher.
-// You must call Close when done.
-func NewQueryCatcher() QueryCatcher {
-	return QueryCatcher{catcher: newEventCatcher(tabletenv.StatsLogger)}
-}
-
-// Close closes the QueryCatcher.
-func (qc *QueryCatcher) Close() {
-	qc.catcher.Close()
-}
-
-// Next fetches the next captured query.
-// If the wait is longer than one second, it returns an error.
-func (qc *QueryCatcher) Next() (*tabletenv.LogStats, error) {
-	event, err := qc.catcher.next()
-	if err != nil {
-		return nil, err
-	}
-	return event.(*tabletenv.LogStats), nil
-}
-
-type eventCatcher struct {
+type EventCatcher[T Event] struct {
 	start   time.Time
-	logger  *streamlog.StreamLogger
-	in, out chan any
+	logger  *streamlog.StreamLogger[T]
+	in, out chan T
 }
 
-func newEventCatcher(logger *streamlog.StreamLogger) *eventCatcher {
-	catcher := &eventCatcher{
+type Event interface {
+	EventTime() time.Time
+}
+
+func NewEventCatcher[T Event](logger *streamlog.StreamLogger[T]) *EventCatcher[T] {
+	catcher := &EventCatcher[T]{
 		start:  time.Now(),
 		logger: logger,
 		in:     logger.Subscribe("endtoend"),
-		out:    make(chan any, 20),
+		out:    make(chan T, 20),
 	}
 	go func() {
 		for event := range catcher.in {
-			endTime := event.(interface {
-				EventTime() time.Time
-			}).EventTime()
+			endTime := event.EventTime()
 			if endTime.Before(catcher.start) {
 				continue
 			}
@@ -107,13 +58,13 @@ func newEventCatcher(logger *streamlog.StreamLogger) *eventCatcher {
 	return catcher
 }
 
-// Close closes the eventCatcher.
-func (catcher *eventCatcher) Close() {
+// Close closes the EventCatcher.
+func (catcher *EventCatcher[T]) Close() {
 	catcher.logger.Unsubscribe(catcher.in)
 	close(catcher.in)
 }
 
-func (catcher *eventCatcher) next() (any, error) {
+func (catcher *EventCatcher[T]) Next() (T, error) {
 	tmr := time.NewTimer(5 * time.Second)
 	defer tmr.Stop()
 	for {
@@ -121,7 +72,8 @@ func (catcher *eventCatcher) next() (any, error) {
 		case event := <-catcher.out:
 			return event, nil
 		case <-tmr.C:
-			return nil, errors.New("error waiting for query event")
+			var zero T
+			return zero, errors.New("error waiting for query event")
 		}
 	}
 }

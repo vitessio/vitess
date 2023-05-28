@@ -17,13 +17,14 @@ limitations under the License.
 package sequence
 
 import (
-	"bytes"
 	"encoding/binary"
 	"encoding/json"
 	"flag"
 	"os"
 	"strings"
 	"testing"
+
+	"vitess.io/vitess/go/vt/key"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -392,8 +393,8 @@ func TestKeyspaceToShardName(t *testing.T) {
 				shardKIDs := shardKIdMap[shardRef.Name]
 				for _, kid := range shardKIDs {
 					id = packKeyspaceID(kid)
-					assert.True(t, bytes.Compare(shardRef.KeyRange.Start, id) <= 0 &&
-						(len(shardRef.KeyRange.End) == 0 || bytes.Compare(id, shardRef.KeyRange.End) < 0))
+					assert.True(t, key.Compare(shardRef.KeyRange.Start, id) <= 0 &&
+						(key.Empty(shardRef.KeyRange.End) || key.Compare(id, shardRef.KeyRange.End) < 0))
 				}
 			}
 		}

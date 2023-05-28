@@ -17,6 +17,7 @@ limitations under the License.
 package operators
 
 import (
+	"vitess.io/vitess/go/slices2"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -55,29 +56,47 @@ func (v *Vindex) Introduces() semantics.TableSet {
 	return v.Solved
 }
 
-// IPhysical implements the PhysicalOperator interface
-func (v *Vindex) IPhysical() {}
-
 // Clone implements the Operator interface
 func (v *Vindex) Clone([]ops.Operator) ops.Operator {
 	clone := *v
 	return &clone
 }
 
-var _ ops.PhysicalOperator = (*Vindex)(nil)
+func (v *Vindex) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, _, addToGroupBy bool) (ops.Operator, int, error) {
+	if addToGroupBy {
+		return nil, 0, vterrors.VT13001("tried to add group by to a table")
+	}
 
-func (v *Vindex) AddColumn(_ *plancontext.PlanningContext, expr sqlparser.Expr) (int, error) {
-	return addColumn(v, expr)
+	offset, err := addColumn(ctx, v, expr.Expr)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	return v, offset, nil
 }
 
-func (v *Vindex) GetColumns() []*sqlparser.ColName {
+func colNameToExpr(c *sqlparser.ColName) *sqlparser.AliasedExpr {
+	return &sqlparser.AliasedExpr{
+		Expr: c,
+		As:   sqlparser.IdentifierCI{},
+	}
+}
+
+func (v *Vindex) GetColumns() ([]*sqlparser.AliasedExpr, error) {
+	return slices2.Map(v.Columns, colNameToExpr), nil
+}
+
+func (v *Vindex) GetOrdering() ([]ops.OrderBy, error) {
+	return nil, nil
+}
+
+func (v *Vindex) GetColNames() []*sqlparser.ColName {
 	return v.Columns
 }
 func (v *Vindex) AddCol(col *sqlparser.ColName) {
 	v.Columns = append(v.Columns, col)
 }
 
-// checkValid implements the Operator interface
 func (v *Vindex) CheckValid() error {
 	if len(v.Table.Predicates) == 0 {
 		return vterrors.VT12001(VindexUnsupported + " (where clause missing)")
@@ -133,4 +152,12 @@ func (v *Vindex) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.E
 // It is not keyspace-qualified.
 func (v *Vindex) TablesUsed() []string {
 	return []string{v.Table.Table.Name.String()}
+}
+
+func (v *Vindex) Description() ops.OpDescription {
+	return ops.OpDescription{OperatorType: "Vindex"}
+}
+
+func (v *Vindex) ShortDescription() string {
+	return v.Vindex.String()
 }

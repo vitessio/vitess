@@ -73,6 +73,10 @@ type API struct {
 	authz *rbac.Authorizer
 
 	options Options
+
+	// vtexplain is now global again due to stat exporters in the tablet layer
+	// we're not super concerned because we will be deleting vtexplain Soon(TM).
+	vtexplainLock sync.Mutex
 }
 
 // Options wraps the configuration options for different components of the
@@ -176,17 +180,26 @@ func NewAPI(clusters []*cluster.Cluster, opts Options) *API {
 	}
 
 	// Middlewares are executed in order of addition. Our ordering (all
-	// middlewares being optional) is:
-	// 	1. CORS. CORS is a special case and is applied globally, the rest are applied only to the subrouter.
-	//	2. Compression
-	//	3. Tracing
-	//	4. Authentication
+	// middlewares except the panic handler being optional) is:
+	//  1. Panic recovery (applied globally)
+	// 	2. CORS. CORS is a special case and is applied globally, the rest are applied only to the subrouter.
+	//	3. Compression
+	//	4. Tracing
+	//	5. Authentication
+	globalMiddlewares := []mux.MiddlewareFunc{
+		vthandlers.PanicRecoveryHandler,
+	}
 	middlewares := []mux.MiddlewareFunc{}
 
 	if len(opts.HTTPOpts.CORSOrigins) > 0 {
-		serv.Router().Use(handlers.CORS(
-			handlers.AllowCredentials(), handlers.AllowedOrigins(opts.HTTPOpts.CORSOrigins), handlers.AllowedMethods([]string{"GET", "HEAD", "POST", "PUT", "DELETE", "OPTIONS"})))
+		corsHandler := handlers.CORS(
+			handlers.AllowCredentials(),
+			handlers.AllowedOrigins(opts.HTTPOpts.CORSOrigins),
+			handlers.AllowedMethods([]string{"GET", "HEAD", "POST", "PUT", "DELETE", "OPTIONS"}),
+		)
+		globalMiddlewares = append(globalMiddlewares, corsHandler)
 	}
+	serv.Router().Use(globalMiddlewares...)
 
 	if !opts.HTTPOpts.DisableCompression {
 		middlewares = append(middlewares, handlers.CompressHandler)
@@ -365,6 +378,8 @@ func (api *API) Handler() http.Handler {
 	router.HandleFunc("/shard_replication_positions", httpAPI.Adapt(vtadminhttp.GetShardReplicationPositions)).Name("API.GetShardReplicationPositions")
 	router.HandleFunc("/shards/{cluster_id}", httpAPI.Adapt(vtadminhttp.CreateShard)).Name("API.CreateShard").Methods("POST")
 	router.HandleFunc("/shards/{cluster_id}", httpAPI.Adapt(vtadminhttp.DeleteShards)).Name("API.DeleteShards").Methods("DELETE")
+	router.HandleFunc("/srvkeyspaces", httpAPI.Adapt(vtadminhttp.GetSrvKeyspaces)).Name("API.GetSrvKeyspaces").Methods("GET")
+	router.HandleFunc("/srvkeyspace/{cluster_id}/{name}", httpAPI.Adapt(vtadminhttp.GetSrvKeyspace)).Name("API.GetSrvKeyspace").Methods("GET")
 	router.HandleFunc("/srvvschema/{cluster_id}/{cell}", httpAPI.Adapt(vtadminhttp.GetSrvVSchema)).Name("API.GetSrvVSchema")
 	router.HandleFunc("/srvvschemas", httpAPI.Adapt(vtadminhttp.GetSrvVSchemas)).Name("API.GetSrvVSchemas")
 	router.HandleFunc("/tablets", httpAPI.Adapt(vtadminhttp.GetTablets)).Name("API.GetTablets")
@@ -1044,6 +1059,79 @@ func (api *API) GetShardReplicationPositions(ctx context.Context, req *vtadminpb
 
 	return &vtadminpb.GetShardReplicationPositionsResponse{
 		ReplicationPositions: positions,
+	}, nil
+}
+
+// GetSrvKeyspace is part of the vtadminpb.VTAdminServer interface.
+func (api *API) GetSrvKeyspace(ctx context.Context, req *vtadminpb.GetSrvKeyspaceRequest) (*vtctldatapb.GetSrvKeyspacesResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.GetSrvKeyspace")
+	defer span.Finish()
+
+	c, err := api.getClusterForRequest(req.ClusterId)
+	if err != nil {
+		return nil, err
+	}
+
+	if !api.authz.IsAuthorized(ctx, c.ID, rbac.SrvKeyspaceResource, rbac.GetAction) {
+		return nil, nil
+	}
+
+	return c.Vtctld.GetSrvKeyspaces(ctx, &vtctldatapb.GetSrvKeyspacesRequest{
+		Keyspace: req.Keyspace,
+		Cells:    req.Cells,
+	})
+}
+
+// GetSrvKeyspaces is part of the vtadminpb.VTAdminServer interface.
+func (api *API) GetSrvKeyspaces(ctx context.Context, req *vtadminpb.GetSrvKeyspacesRequest) (*vtadminpb.GetSrvKeyspacesResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.GetSrvKeyspaces")
+	defer span.Finish()
+
+	clusters, _ := api.getClustersForRequest(req.ClusterIds)
+
+	var (
+		sks = make(map[string]*vtctldatapb.GetSrvKeyspacesResponse)
+		wg  sync.WaitGroup
+		er  concurrency.AllErrorRecorder
+		m   sync.Mutex
+	)
+
+	for _, c := range clusters {
+		if !api.authz.IsAuthorized(ctx, c.ID, rbac.SrvKeyspaceResource, rbac.GetAction) {
+			continue
+		}
+
+		wg.Add(1)
+
+		go func(c *cluster.Cluster) {
+			defer wg.Done()
+
+			span, ctx := trace.NewSpan(ctx, "Cluster.GetSrvKeyspaces")
+			defer span.Finish()
+
+			sk, err := c.GetSrvKeyspaces(ctx, req.Cells)
+
+			if err != nil {
+				er.RecordError(err)
+				return
+			}
+
+			m.Lock()
+			for key, value := range sk {
+				sks[key] = value
+			}
+			m.Unlock()
+		}(c)
+	}
+
+	wg.Wait()
+
+	if er.HasErrors() {
+		return nil, er.Error()
+	}
+
+	return &vtadminpb.GetSrvKeyspacesResponse{
+		SrvKeyspaces: sks,
 	}, nil
 }
 
@@ -1942,6 +2030,16 @@ func (api *API) VTExplain(ctx context.Context, req *vtadminpb.VTExplainRequest) 
 	if !api.authz.IsAuthorized(ctx, c.ID, rbac.VTExplainResource, rbac.GetAction) {
 		return nil, nil
 	}
+
+	lockWaitStart := time.Now()
+
+	api.vtexplainLock.Lock()
+	defer api.vtexplainLock.Unlock()
+
+	lockWaitTime := time.Since(lockWaitStart)
+	log.Infof("vtexplain lock wait time: %s", lockWaitTime)
+
+	span.Annotate("vtexplain_lock_wait_time", lockWaitTime.String())
 
 	tablet, err := c.FindTablet(ctx, func(t *vtadminpb.Tablet) bool {
 		return t.Tablet.Keyspace == req.Keyspace && topo.IsInServingGraph(t.Tablet.Type) && t.Tablet.Type != topodatapb.TabletType_PRIMARY && t.State == vtadminpb.Tablet_SERVING

@@ -319,6 +319,18 @@ func (cached *AndExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+func (cached *Argument) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(24)
+	}
+	// field Name string
+	size += hack.RuntimeAllocSize(int64(len(cached.Name)))
+	return size
+}
 func (cached *ArgumentLessWindowExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -329,6 +341,24 @@ func (cached *ArgumentLessWindowExpr) CachedSize(alloc bool) int64 {
 	}
 	// field OverClause *vitess.io/vitess/go/vt/sqlparser.OverClause
 	size += cached.OverClause.CachedSize(true)
+	return size
+}
+func (cached *AssignmentExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(32)
+	}
+	// field Left vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Left.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field Right vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Right.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
 	return size
 }
 func (cached *AutoIncSpec) CachedSize(alloc bool) int64 {
@@ -892,6 +922,16 @@ func (cached *Count) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+func (cached *CountStar) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(8)
+	}
+	return size
+}
 func (cached *CreateDatabase) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -974,10 +1014,6 @@ func (cached *CurTimeFuncExpr) CachedSize(alloc bool) int64 {
 	}
 	// field Name vitess.io/vitess/go/vt/sqlparser.IdentifierCI
 	size += cached.Name.CachedSize(false)
-	// field Fsp vitess.io/vitess/go/vt/sqlparser.Expr
-	if cc, ok := cached.Fsp.(cachedObject); ok {
-		size += cc.CachedSize(true)
-	}
 	return size
 }
 func (cached *DatabaseOption) CachedSize(alloc bool) int64 {
@@ -1431,6 +1467,202 @@ func (cached *GTIDFuncExpr) CachedSize(alloc bool) int64 {
 	}
 	// field Channel vitess.io/vitess/go/vt/sqlparser.Expr
 	if cc, ok := cached.Channel.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	return size
+}
+func (cached *GeoHashFromLatLongExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field Latitude vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Latitude.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field Longitude vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Longitude.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field MaxLength vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.MaxLength.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	return size
+}
+func (cached *GeoHashFromPointExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(32)
+	}
+	// field Point vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Point.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field MaxLength vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.MaxLength.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	return size
+}
+func (cached *GeoJSONFromGeomExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field Geom vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Geom.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field MaxDecimalDigits vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.MaxDecimalDigits.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field Bitmask vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Bitmask.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	return size
+}
+func (cached *GeomCollPropertyFuncExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field GeomColl vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.GeomColl.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field PropertyDefArg vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.PropertyDefArg.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	return size
+}
+func (cached *GeomFormatExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field Geom vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Geom.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field AxisOrderOpt vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.AxisOrderOpt.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	return size
+}
+func (cached *GeomFromGeoHashExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field GeoHash vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.GeoHash.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field SridOpt vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.SridOpt.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	return size
+}
+func (cached *GeomFromGeoJSONExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field GeoJSON vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.GeoJSON.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field HigherDimHandlerOpt vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.HigherDimHandlerOpt.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field Srid vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Srid.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	return size
+}
+func (cached *GeomFromTextExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(64)
+	}
+	// field WktText vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.WktText.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field Srid vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Srid.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field AxisOrderOpt vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.AxisOrderOpt.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	return size
+}
+func (cached *GeomFromWKBExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(64)
+	}
+	// field WkbBlob vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.WkbBlob.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field Srid vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Srid.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field AxisOrderOpt vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.AxisOrderOpt.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	return size
+}
+func (cached *GeomPropertyFuncExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(24)
+	}
+	// field Geom vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Geom.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
 	return size
@@ -2363,6 +2595,24 @@ func (cached *LineStringExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+func (cached *LinestrPropertyFuncExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field Linestring vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Linestring.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field PropertyDefArg vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.PropertyDefArg.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	return size
+}
 func (cached *Literal) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -2523,6 +2773,63 @@ func (cached *ModifyColumn) CachedSize(alloc bool) int64 {
 	size += cached.After.CachedSize(true)
 	return size
 }
+func (cached *MultiLinestringExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(24)
+	}
+	// field LinestringParams vitess.io/vitess/go/vt/sqlparser.Exprs
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.LinestringParams)) * int64(16))
+		for _, elem := range cached.LinestringParams {
+			if cc, ok := elem.(cachedObject); ok {
+				size += cc.CachedSize(true)
+			}
+		}
+	}
+	return size
+}
+func (cached *MultiPointExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(24)
+	}
+	// field PointParams vitess.io/vitess/go/vt/sqlparser.Exprs
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.PointParams)) * int64(16))
+		for _, elem := range cached.PointParams {
+			if cc, ok := elem.(cachedObject); ok {
+				size += cc.CachedSize(true)
+			}
+		}
+	}
+	return size
+}
+func (cached *MultiPolygonExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(24)
+	}
+	// field PolygonParams vitess.io/vitess/go/vt/sqlparser.Exprs
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.PolygonParams)) * int64(16))
+		for _, elem := range cached.PolygonParams {
+			if cc, ok := elem.(cachedObject); ok {
+				size += cc.CachedSize(true)
+			}
+		}
+	}
+	return size
+}
 func (cached *NTHValueExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -2620,8 +2927,10 @@ func (cached *Offset) CachedSize(alloc bool) int64 {
 	if alloc {
 		size += int64(24)
 	}
-	// field Original string
-	size += hack.RuntimeAllocSize(int64(len(cached.Original)))
+	// field Original vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Original.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
 	return size
 }
 func (cached *OptLike) CachedSize(alloc bool) int64 {
@@ -2921,6 +3230,61 @@ func (cached *PointExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+func (cached *PointPropertyFuncExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field Point vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Point.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field ValueToSet vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.ValueToSet.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	return size
+}
+func (cached *PolygonExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(24)
+	}
+	// field LinestringParams vitess.io/vitess/go/vt/sqlparser.Exprs
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.LinestringParams)) * int64(16))
+		for _, elem := range cached.LinestringParams {
+			if cc, ok := elem.(cachedObject); ok {
+				size += cc.CachedSize(true)
+			}
+		}
+	}
+	return size
+}
+func (cached *PolygonPropertyFuncExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field Polygon vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Polygon.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field PropertyDefArg vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.PropertyDefArg.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	return size
+}
 func (cached *PrepareStmt) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -2937,6 +3301,20 @@ func (cached *PrepareStmt) CachedSize(alloc bool) int64 {
 	}
 	// field Comments *vitess.io/vitess/go/vt/sqlparser.ParsedComments
 	size += cached.Comments.CachedSize(true)
+	return size
+}
+func (cached *PurgeBinaryLogs) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(32)
+	}
+	// field To string
+	size += hack.RuntimeAllocSize(int64(len(cached.To)))
+	// field Before string
+	size += hack.RuntimeAllocSize(int64(len(cached.Before)))
 	return size
 }
 func (cached *ReferenceDefinition) CachedSize(alloc bool) int64 {

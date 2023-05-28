@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-CREATE TABLE IF NOT EXISTS _vt.redo_statement(
+CREATE TABLE IF NOT EXISTS redo_statement(
   dtid varbinary(512) NOT NULL,
   id bigint NOT NULL,
   statement mediumblob NOT NULL,

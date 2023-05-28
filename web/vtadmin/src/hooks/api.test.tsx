@@ -20,8 +20,9 @@ import { renderHook } from '@testing-library/react-hooks';
 import * as api from './api';
 import * as httpAPI from '../api/http';
 import { vtadmin as pb } from '../proto/vtadmin';
+import { describe, it, expect, vi } from 'vitest';
 
-jest.mock('../api/http');
+vi.mock('../api/http');
 
 describe('useWorkflows', () => {
     const tests: {
@@ -117,6 +118,7 @@ describe('useWorkflow', () => {
     // This test corresponds to a common UI flow from a component that fetches all the workflows
     // to a component that fetches a single workflow.
     it('uses cached data as initialData', async () => {
+        httpAPI.fetchWorkflow.mockReset();
         const queryClient = new QueryClient();
         const wrapper: React.FunctionComponent = ({ children }) => (
             <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>

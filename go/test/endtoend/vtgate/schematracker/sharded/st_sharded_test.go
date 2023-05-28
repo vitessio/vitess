@@ -28,6 +28,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"vitess.io/vitess/go/test/endtoend/utils"
+	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder"
 
 	"github.com/stretchr/testify/require"
@@ -40,6 +41,7 @@ var (
 	clusterInstance *cluster.LocalProcessCluster
 	vtParams        mysql.ConnParams
 	KeyspaceName    = "ks"
+	sidecarDBName   = "_vt_schema_tracker_metadata" // custom sidecar database name for testing
 	Cell            = "test"
 	//go:embed schema.sql
 	SchemaSQL string
@@ -56,17 +58,33 @@ func TestMain(m *testing.M) {
 		clusterInstance = cluster.NewCluster(Cell, "localhost")
 		defer clusterInstance.Teardown()
 
+		vtgateVer, err := cluster.GetMajorVersion("vtgate")
+		if err != nil {
+			return 1
+		}
+		vttabletVer, err := cluster.GetMajorVersion("vttablet")
+		if err != nil {
+			return 1
+		}
+
+		// For upgrade/downgrade tests.
+		if vtgateVer < 17 || vttabletVer < 17 {
+			// Then only the default sidecarDBName is supported.
+			sidecarDBName = sidecardb.DefaultName
+		}
+
 		// Start topo server
-		err := clusterInstance.StartTopo()
+		err = clusterInstance.StartTopo()
 		if err != nil {
 			return 1
 		}
 
 		// Start keyspace
 		keyspace := &cluster.Keyspace{
-			Name:      KeyspaceName,
-			SchemaSQL: SchemaSQL,
-			VSchema:   VSchema,
+			Name:          KeyspaceName,
+			SchemaSQL:     SchemaSQL,
+			VSchema:       VSchema,
+			SidecarDBName: sidecarDBName,
 		}
 		clusterInstance.VtGateExtraArgs = []string{"--schema_change_signal",
 			"--vschema_ddl_authorized_users", "%",
@@ -78,14 +96,6 @@ func TestMain(m *testing.M) {
 			"--queryserver-config-acl-exempt-acl", "userData1",
 			"--table-acl-config", "dummy.json"}
 
-		vtgateVer, err := cluster.GetMajorVersion("vtgate")
-		if err != nil {
-			return 1
-		}
-		vttabletVer, err := cluster.GetMajorVersion("vttablet")
-		if err != nil {
-			return 1
-		}
 		if vtgateVer >= 16 && vttabletVer >= 16 {
 			clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, "--enable-views")
 			clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, "--queryserver-enable-views")
@@ -99,6 +109,12 @@ func TestMain(m *testing.M) {
 		// Start vtgate
 		err = clusterInstance.StartVtgate()
 		if err != nil {
+			return 1
+		}
+
+		err = clusterInstance.WaitForVTGateAndVTTablets(5 * time.Minute)
+		if err != nil {
+			fmt.Println(err)
 			return 1
 		}
 
@@ -131,11 +147,21 @@ func TestNewTable(t *testing.T) {
 
 	_ = utils.Exec(t, conn, "create table test_table (id bigint, name varchar(100))")
 
-	time.Sleep(2 * time.Second)
-
-	utils.AssertMatches(t, conn, "select * from test_table", `[]`)
-	utils.AssertMatches(t, connShard1, "select * from test_table", `[]`)
-	utils.AssertMatches(t, connShard2, "select * from test_table", `[]`)
+	utils.AssertMatchesWithTimeout(t, conn,
+		"select * from test_table", `[]`,
+		100*time.Millisecond,
+		60*time.Second, // longer timeout as this is the first query after setup
+		"could not query test_table through vtgate")
+	utils.AssertMatchesWithTimeout(t, connShard1,
+		"select * from test_table", `[]`,
+		100*time.Millisecond,
+		30*time.Second,
+		"could not query test_table on "+shard1Params.DbName)
+	utils.AssertMatchesWithTimeout(t, connShard2,
+		"select * from test_table", `[]`,
+		100*time.Millisecond,
+		30*time.Second,
+		"could not query test_table on "+shard2Params.DbName)
 
 	utils.Exec(t, conn, "drop table test_table")
 
@@ -171,7 +197,7 @@ func TestInitAndUpdate(t *testing.T) {
 		"SHOW VSCHEMA TABLES",
 		expected,
 		100*time.Millisecond,
-		3*time.Second,
+		30*time.Second,
 		"initial table list not complete")
 
 	// Init
@@ -184,7 +210,7 @@ func TestInitAndUpdate(t *testing.T) {
 		"SHOW VSCHEMA TABLES",
 		expected,
 		100*time.Millisecond,
-		3*time.Second,
+		30*time.Second,
 		"test_sc not in vschema tables")
 
 	// Tables Update via health check.
@@ -197,7 +223,7 @@ func TestInitAndUpdate(t *testing.T) {
 		"SHOW VSCHEMA TABLES",
 		expected,
 		100*time.Millisecond,
-		3*time.Second,
+		30*time.Second,
 		"test_sc1 not in vschema tables")
 
 	_ = utils.Exec(t, conn, "drop table test_sc, test_sc1")
@@ -209,7 +235,7 @@ func TestInitAndUpdate(t *testing.T) {
 		"SHOW VSCHEMA TABLES",
 		expected,
 		100*time.Millisecond,
-		3*time.Second,
+		30*time.Second,
 		"test_sc and test_sc_1 should not be in vschema tables")
 
 }
@@ -234,11 +260,19 @@ func TestDMLOnNewTable(t *testing.T) {
 		"SHOW VSCHEMA TABLES",
 		expected,
 		100*time.Millisecond,
-		3*time.Second,
+		30*time.Second,
 		"test_sc not in vschema tables")
 
-	utils.AssertMatches(t, conn, "select id from new_table_tracked", `[]`)              // select
-	utils.AssertMatches(t, conn, "select id from new_table_tracked where id = 5", `[]`) // select
+	utils.AssertMatchesWithTimeout(t, conn,
+		"select id from new_table_tracked", `[]`,
+		100*time.Millisecond,
+		60*time.Second, // longer timeout as it's the first query after setup
+		"could not query new_table_tracked through vtgate")
+	utils.AssertMatchesWithTimeout(t, conn,
+		"select id from new_table_tracked where id = 5", `[]`,
+		100*time.Millisecond,
+		30*time.Second,
+		"could not query new_table_tracked through vtgate")
 	// DML on new table
 	// insert initial data ,update and delete will fail since we have not added a primary vindex
 	errorMessage := "table 'new_table_tracked' does not have a primary vindex (errno 1173) (sqlstate 42000)"
@@ -254,6 +288,11 @@ func TestDMLOnNewTable(t *testing.T) {
 	utils.Exec(t, conn, `insert into new_table_tracked(id) values(0),(1)`)
 	utils.Exec(t, conn, `insert into t8(id8) values(2)`)
 	defer utils.Exec(t, conn, `delete from t8`)
+	utils.AssertMatchesWithTimeout(t, conn,
+		"select count(*) from new_table_tracked join t8", `[[INT64(2)]]`,
+		100*time.Millisecond,
+		30*time.Second,
+		"did not get expected number of rows when joining new_table_tracked with t8")
 	utils.AssertMatchesNoOrder(t, conn, `select id from new_table_tracked join t8`, `[[INT64(0)] [INT64(1)]]`)
 }
 
@@ -279,7 +318,7 @@ func TestNewView(t *testing.T) {
 	// executing the query directly
 	qr := utils.Exec(t, conn, selQuery)
 	// selecting it through the view.
-	utils.AssertMatchesWithTimeout(t, conn, "select * from test_view", fmt.Sprintf("%v", qr.Rows), 100*time.Millisecond, 10*time.Second, "test_view not in vschema tables")
+	utils.AssertMatchesWithTimeout(t, conn, "select * from test_view", fmt.Sprintf("%v", qr.Rows), 100*time.Millisecond, 30*time.Second, "test_view not in vschema tables")
 }
 
 // TestViewAndTable validates that new column added in table is present in the view definition
@@ -305,7 +344,7 @@ func TestViewAndTable(t *testing.T) {
 	_ = utils.Exec(t, conn, "create view t8_view as select * from t8")
 
 	// executing the view query, with the new column in the select field.
-	utils.AssertMatchesWithTimeout(t, conn, "select new_col from t8_view", `[[VARCHAR("V")]]`, 100*time.Millisecond, 5*time.Second, "t8_view not in vschema tables")
+	utils.AssertMatchesWithTimeout(t, conn, "select new_col from t8_view", `[[VARCHAR("V")]]`, 100*time.Millisecond, 30*time.Second, "t8_view not in vschema tables")
 
 	// add another column to the table t8
 	_ = utils.Exec(t, conn, "alter table t8 add column additional_col bigint")

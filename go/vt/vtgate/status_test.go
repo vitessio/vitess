@@ -18,10 +18,11 @@ package vtgate
 
 import (
 	"bytes"
-	"html/template"
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/google/safehtml/template"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )

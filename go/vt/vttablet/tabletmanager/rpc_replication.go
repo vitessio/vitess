@@ -37,11 +37,11 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
-var setSuperReadOnly bool
 var disableReplicationManager bool
 
 func registerReplicationFlags(fs *pflag.FlagSet) {
-	fs.BoolVar(&setSuperReadOnly, "use_super_read_only", setSuperReadOnly, "Set super_read_only flag when performing planned failover.")
+	fs.Bool("use_super_read_only", true, "Set super_read_only flag when performing planned failover.")
+	fs.MarkDeprecated("use_super_read_only", "From v17 onwards MySQL server will always try to start with super_read_only=ON")
 	fs.BoolVar(&disableReplicationManager, "disable-replication-manager", disableReplicationManager, "Disable replication manager to prevent replication repairs.")
 	fs.MarkDeprecated("disable-replication-manager", "Replication manager is deleted")
 }
@@ -101,13 +101,19 @@ func (tm *TabletManager) FullStatus(ctx context.Context) (*replicationdatapb.Ful
 	}
 
 	// Version string "majorVersion.minorVersion.patchRelease"
-	version := tm.MysqlDaemon.GetVersionString()
+	version := tm.MysqlDaemon.GetVersionString(ctx)
 
 	// Version comment "select @@global.version_comment"
 	versionComment := tm.MysqlDaemon.GetVersionComment(ctx)
 
 	// Read only - "SHOW VARIABLES LIKE 'read_only'"
 	readOnly, err := tm.MysqlDaemon.IsReadOnly()
+	if err != nil {
+		return nil, err
+	}
+
+	// superReadOnly - "SELECT @@global.super_read_only"
+	superReadOnly, err := tm.MysqlDaemon.IsSuperReadOnly()
 	if err != nil {
 		return nil, err
 	}
@@ -157,6 +163,7 @@ func (tm *TabletManager) FullStatus(ctx context.Context) (*replicationdatapb.Ful
 		SemiSyncPrimaryClients:      semiSyncClients,
 		SemiSyncPrimaryTimeout:      semiSyncTimeout,
 		SemiSyncWaitForReplicaCount: semiSyncNumReplicas,
+		SuperReadOnly:               superReadOnly,
 	}, nil
 }
 
@@ -246,7 +253,12 @@ func (tm *TabletManager) StartReplication(ctx context.Context, semiSync bool) er
 	}
 	defer tm.unlock()
 
-	if err := tm.fixSemiSync(tm.Tablet().Type, convertBoolToSemiSyncAction(semiSync)); err != nil {
+	semiSyncAction, err := tm.convertBoolToSemiSyncAction(semiSync)
+	if err != nil {
+		return err
+	}
+
+	if err := tm.fixSemiSync(tm.Tablet().Type, semiSyncAction); err != nil {
 		return err
 	}
 	return tm.MysqlDaemon.StartReplication(tm.hookExtraEnv())
@@ -297,14 +309,12 @@ func (tm *TabletManager) InitPrimary(ctx context.Context, semiSync bool) (string
 	}
 	defer tm.unlock()
 
-	if setSuperReadOnly {
-		// Setting super_read_only off so that we can run the DDL commands
-		if err := tm.MysqlDaemon.SetSuperReadOnly(false); err != nil {
-			if strings.Contains(err.Error(), mysql.ERUnknownSystemVariable.ToString()) {
-				log.Warningf("server does not know about super_read_only, continuing anyway...")
-			} else {
-				return "", err
-			}
+	// Setting super_read_only `OFF` so that we can run the DDL commands
+	if _, err := tm.MysqlDaemon.SetSuperReadOnly(false); err != nil {
+		if sqlErr, ok := err.(*mysql.SQLError); ok && sqlErr.Number() == mysql.ERUnknownSystemVariable {
+			log.Warningf("server does not know about super_read_only, continuing anyway...")
+		} else {
+			return "", err
 		}
 	}
 
@@ -320,16 +330,21 @@ func (tm *TabletManager) InitPrimary(ctx context.Context, semiSync bool) (string
 		return "", err
 	}
 
+	semiSyncAction, err := tm.convertBoolToSemiSyncAction(semiSync)
+	if err != nil {
+		return "", err
+	}
+
 	// Set the server read-write, from now on we can accept real
 	// client writes. Note that if semi-sync replication is enabled,
 	// we'll still need some replicas to be able to commit transactions.
-	if err := tm.changeTypeLocked(ctx, topodatapb.TabletType_PRIMARY, DBActionSetReadWrite, convertBoolToSemiSyncAction(semiSync)); err != nil {
+	if err := tm.changeTypeLocked(ctx, topodatapb.TabletType_PRIMARY, DBActionSetReadWrite, semiSyncAction); err != nil {
 		return "", err
 	}
 
 	// Enforce semi-sync after changing the tablet type to PRIMARY. Otherwise, the
 	// primary will hang while trying to create the database.
-	if err := tm.fixSemiSync(topodatapb.TabletType_PRIMARY, convertBoolToSemiSyncAction(semiSync)); err != nil {
+	if err := tm.fixSemiSync(topodatapb.TabletType_PRIMARY, semiSyncAction); err != nil {
 		return "", err
 	}
 
@@ -359,11 +374,16 @@ func (tm *TabletManager) InitReplica(ctx context.Context, parent *topodatapb.Tab
 	}
 	defer tm.unlock()
 
+	semiSyncAction, err := tm.convertBoolToSemiSyncAction(semiSync)
+	if err != nil {
+		return err
+	}
+
 	// If we were a primary type, switch our type to replica.  This
 	// is used on the old primary when using InitShardPrimary with
 	// -force, and the new primary is different from the old primary.
 	if tm.Tablet().Type == topodatapb.TabletType_PRIMARY {
-		if err := tm.changeTypeLocked(ctx, topodatapb.TabletType_REPLICA, DBActionNone, convertBoolToSemiSyncAction(semiSync)); err != nil {
+		if err := tm.changeTypeLocked(ctx, topodatapb.TabletType_REPLICA, DBActionNone, semiSyncAction); err != nil {
 			return err
 		}
 	}
@@ -384,7 +404,7 @@ func (tm *TabletManager) InitReplica(ctx context.Context, parent *topodatapb.Tab
 	if tt == topodatapb.TabletType_PRIMARY {
 		tt = topodatapb.TabletType_REPLICA
 	}
-	if err := tm.fixSemiSync(tt, convertBoolToSemiSyncAction(semiSync)); err != nil {
+	if err := tm.fixSemiSync(tt, semiSyncAction); err != nil {
 		return err
 	}
 
@@ -463,23 +483,17 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 	}
 
 	// Now that we know no writes are in-flight and no new writes can occur,
-	// set MySQL to read-only mode. If we are already read-only because of a
+	// set MySQL to super_read_only mode. If we are already super_read_only because of a
 	// previous demotion, or because we are not primary anyway, this should be
 	// idempotent.
-	if setSuperReadOnly {
-		// Setting super_read_only also sets read_only
-		if err := tm.MysqlDaemon.SetSuperReadOnly(true); err != nil {
-			if strings.Contains(err.Error(), mysql.ERUnknownSystemVariable.ToString()) {
-				log.Warningf("server does not know about super_read_only, continuing anyway...")
-			} else {
-				return nil, err
-			}
-		}
-	} else {
-		if err := tm.MysqlDaemon.SetReadOnly(true); err != nil {
+	if _, err := tm.MysqlDaemon.SetSuperReadOnly(true); err != nil {
+		if sqlErr, ok := err.(*mysql.SQLError); ok && sqlErr.Number() == mysql.ERUnknownSystemVariable {
+			log.Warningf("server does not know about super_read_only, continuing anyway...")
+		} else {
 			return nil, err
 		}
 	}
+
 	defer func() {
 		if finalErr != nil && revertPartialFailure && !wasReadOnly {
 			// setting read_only OFF will also set super_read_only OFF if it was set
@@ -524,8 +538,13 @@ func (tm *TabletManager) UndoDemotePrimary(ctx context.Context, semiSync bool) e
 	}
 	defer tm.unlock()
 
+	semiSyncAction, err := tm.convertBoolToSemiSyncAction(semiSync)
+	if err != nil {
+		return err
+	}
+
 	// If using semi-sync, we need to enable source-side.
-	if err := tm.fixSemiSync(topodatapb.TabletType_PRIMARY, convertBoolToSemiSyncAction(semiSync)); err != nil {
+	if err := tm.fixSemiSync(topodatapb.TabletType_PRIMARY, semiSyncAction); err != nil {
 		return err
 	}
 
@@ -582,9 +601,14 @@ func (tm *TabletManager) SetReplicationSource(ctx context.Context, parentAlias *
 	}
 	defer tm.unlock()
 
+	semiSyncAction, err := tm.convertBoolToSemiSyncAction(semiSync)
+	if err != nil {
+		return err
+	}
+
 	// setReplicationSourceLocked also fixes the semi-sync. In case the tablet type is primary it assumes that it will become a replica if SetReplicationSource
 	// is called, so we always call fixSemiSync with a non-primary tablet type. This will always set the source side replication to false.
-	return tm.setReplicationSourceLocked(ctx, parentAlias, timeCreatedNS, waitPosition, forceStartReplication, convertBoolToSemiSyncAction(semiSync))
+	return tm.setReplicationSourceLocked(ctx, parentAlias, timeCreatedNS, waitPosition, forceStartReplication, semiSyncAction)
 }
 
 func (tm *TabletManager) setReplicationSourceRepairReplication(ctx context.Context, parentAlias *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplication bool) (err error) {
@@ -840,8 +864,13 @@ func (tm *TabletManager) PromoteReplica(ctx context.Context, semiSync bool) (str
 		return "", err
 	}
 
+	semiSyncAction, err := tm.convertBoolToSemiSyncAction(semiSync)
+	if err != nil {
+		return "", err
+	}
+
 	// If using semi-sync, we need to enable it before going read-write.
-	if err := tm.fixSemiSync(topodatapb.TabletType_PRIMARY, convertBoolToSemiSyncAction(semiSync)); err != nil {
+	if err := tm.fixSemiSync(topodatapb.TabletType_PRIMARY, semiSyncAction); err != nil {
 		return "", err
 	}
 

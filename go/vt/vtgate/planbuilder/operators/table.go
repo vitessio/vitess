@@ -17,6 +17,7 @@ limitations under the License.
 package operators
 
 import (
+	"vitess.io/vitess/go/slices2"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
@@ -34,15 +35,10 @@ type (
 		noInputs
 	}
 	ColNameColumns interface {
-		GetColumns() []*sqlparser.ColName
+		GetColNames() []*sqlparser.ColName
 		AddCol(*sqlparser.ColName)
 	}
 )
-
-var _ ops.PhysicalOperator = (*Table)(nil)
-
-// IPhysical implements the PhysicalOperator interface
-func (to *Table) IPhysical() {}
 
 // Clone implements the Operator interface
 func (to *Table) Clone([]ops.Operator) ops.Operator {
@@ -67,11 +63,27 @@ func (to *Table) AddPredicate(_ *plancontext.PlanningContext, expr sqlparser.Exp
 	return newFilter(to, expr), nil
 }
 
-func (to *Table) AddColumn(_ *plancontext.PlanningContext, e sqlparser.Expr) (int, error) {
-	return addColumn(to, e)
+func (to *Table) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, _, addToGroupBy bool) (ops.Operator, int, error) {
+	if addToGroupBy {
+		return nil, 0, vterrors.VT13001("tried to add group by to a table")
+	}
+	offset, err := addColumn(ctx, to, expr.Expr)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	return to, offset, nil
 }
 
-func (to *Table) GetColumns() []*sqlparser.ColName {
+func (to *Table) GetColumns() ([]*sqlparser.AliasedExpr, error) {
+	return slices2.Map(to.Columns, colNameToExpr), nil
+}
+
+func (to *Table) GetOrdering() ([]ops.OrderBy, error) {
+	return nil, nil
+}
+
+func (to *Table) GetColNames() []*sqlparser.ColName {
 	return to.Columns
 }
 func (to *Table) AddCol(col *sqlparser.ColName) {
@@ -85,18 +97,33 @@ func (to *Table) TablesUsed() []string {
 	return SingleQualifiedIdentifier(to.VTable.Keyspace, to.VTable.Name)
 }
 
-func addColumn(op ColNameColumns, e sqlparser.Expr) (int, error) {
+func addColumn(ctx *plancontext.PlanningContext, op ColNameColumns, e sqlparser.Expr) (int, error) {
 	col, ok := e.(*sqlparser.ColName)
 	if !ok {
-		return 0, vterrors.VT13001("cannot push this expression to a table/vindex")
+		return 0, vterrors.VT13001("cannot push this expression to a table/vindex: %s", sqlparser.String(e))
 	}
-	cols := op.GetColumns()
-	for idx, column := range cols {
-		if col.Name.Equal(column.Name) {
-			return idx, nil
-		}
+	sqlparser.RemoveKeyspaceFromColName(col)
+	cols := op.GetColNames()
+	colAsExpr := func(c *sqlparser.ColName) sqlparser.Expr { return c }
+	if offset, found := canReuseColumn(ctx, cols, e, colAsExpr); found {
+		return offset, nil
 	}
 	offset := len(cols)
 	op.AddCol(col)
 	return offset, nil
+}
+
+func (to *Table) Description() ops.OpDescription {
+	var columns []string
+	for _, col := range to.Columns {
+		columns = append(columns, sqlparser.String(col))
+	}
+	return ops.OpDescription{
+		OperatorType: "Table",
+		Other:        map[string]any{"Columns": columns},
+	}
+}
+
+func (to *Table) ShortDescription() string {
+	return to.VTable.String()
 }

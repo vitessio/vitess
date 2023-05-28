@@ -40,6 +40,8 @@ type Entity interface {
 type EntityDiff interface {
 	// IsEmpty returns true when the two entities are considered identical
 	IsEmpty() bool
+	// EntityName returns the name of affected entity
+	EntityName() string
 	// Entities returns the two diffed entitied, aka "from" and "to"
 	Entities() (from Entity, to Entity)
 	// Statement returns a valid SQL statement that applies the diff, e.g. an ALTER TABLE ...
@@ -119,3 +121,9 @@ type DiffHints struct {
 	TableQualifierHint          int
 	AlterTableAlgorithmStrategy int
 }
+
+const (
+	ApplyDiffsNoConstraint = "ApplyDiffsNoConstraint"
+	ApplyDiffsInOrder      = "ApplyDiffsInOrder"
+	ApplyDiffsSequential   = "ApplyDiffsSequential"
+)

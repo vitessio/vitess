@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-CREATE TABLE IF NOT EXISTS _vt.copy_state
+CREATE TABLE IF NOT EXISTS copy_state
 (
     `id` bigint unsigned NOT NULL AUTO_INCREMENT,
     `vrepl_id`   int            NOT NULL,

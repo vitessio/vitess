@@ -21,6 +21,7 @@ import (
 	"strings"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
@@ -69,7 +70,7 @@ func (l *Literal) format(w *formatter, depth int) {
 
 func (bv *BindVariable) format(w *formatter, depth int) {
 	w.WriteByte(':')
-	if bv.tuple {
+	if bv.Type == sqltypes.Tuple {
 		w.WriteByte(':')
 	}
 	w.WriteString(bv.Key)
@@ -116,7 +117,7 @@ func (t TupleExpr) format(w *formatter, depth int) {
 
 func (c *CollateExpr) format(w *formatter, depth int) {
 	c.Inner.format(w, depth)
-	coll := collations.Local().LookupByID(c.TypedCollation.Collation)
+	coll := c.TypedCollation.Collation.Get()
 	w.WriteString(" COLLATE ")
 	w.WriteString(coll.Name())
 }
@@ -198,7 +199,7 @@ func (c *ConvertExpr) format(buf *formatter, depth int) {
 	}
 	if c.Collation != collations.Unknown {
 		buf.WriteString(" CHARACTER SET ")
-		buf.WriteString(collations.Local().LookupByID(c.Collation).Name())
+		buf.WriteString(c.Collation.Get().Name())
 	}
 	buf.WriteByte(')')
 }
@@ -207,6 +208,6 @@ func (c *ConvertUsingExpr) format(buf *formatter, depth int) {
 	buf.WriteString("CONVERT(")
 	c.Inner.format(buf, depth)
 	buf.WriteString(" USING ")
-	buf.WriteString(collations.Local().LookupByID(c.Collation).Name())
+	buf.WriteString(c.Collation.Get().Name())
 	buf.WriteByte(')')
 }

@@ -27,7 +27,7 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
-type DecimalFloat float64
+type DecimalString string
 
 var (
 	// BvSchemaName is bind variable to be sent down to vttablet for schema name.
@@ -120,9 +120,8 @@ func Float64BindVariable(v float64) *querypb.BindVariable {
 	return ValueBindVariable(NewFloat64(v))
 }
 
-func DecimalBindVariable(v DecimalFloat) *querypb.BindVariable {
-	f := strconv.FormatFloat(float64(v), 'f', -1, 64)
-	return ValueBindVariable(NewDecimal(f))
+func DecimalBindVariable(v DecimalString) *querypb.BindVariable {
+	return ValueBindVariable(NewDecimal(string(v)))
 }
 
 // StringBindVariable converts a string to a bind var.
@@ -170,7 +169,7 @@ func BuildBindVariable(v any) (*querypb.BindVariable, error) {
 		return Int64BindVariable(v), nil
 	case uint64:
 		return Uint64BindVariable(v), nil
-	case DecimalFloat:
+	case DecimalString:
 		return DecimalBindVariable(v), nil
 	case float64:
 		return Float64BindVariable(v), nil

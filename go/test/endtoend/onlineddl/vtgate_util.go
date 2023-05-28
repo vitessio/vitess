@@ -19,18 +19,22 @@ package onlineddl
 import (
 	"context"
 	"fmt"
+	"io"
 	"math"
+	"net/http"
 	"os"
 	"testing"
 	"time"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
 
+	"github.com/buger/jsonparser"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -343,6 +347,49 @@ func WaitForThrottledTimestamp(t *testing.T, vtParams *mysql.ConnParams, uuid st
 	}
 	t.Error("timeout waiting for last_throttled_timestamp to have nonempty value")
 	return
+}
+
+// WaitForThrottlerStatusEnabled waits for a tablet to report its throttler status as enabled.
+func WaitForThrottlerStatusEnabled(t *testing.T, tablet *cluster.Vttablet, timeout time.Duration) {
+	jsonPath := "IsEnabled"
+	url := fmt.Sprintf("http://localhost:%d/throttler/status", tablet.HTTPPort)
+
+	ctx, cancel := context.WithTimeout(context.Background(), throttlerConfigTimeout)
+	defer cancel()
+
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+
+	for {
+		body := getHTTPBody(url)
+		val, err := jsonparser.GetBoolean([]byte(body), jsonPath)
+		require.NoError(t, err)
+		if val {
+			return
+		}
+		select {
+		case <-ctx.Done():
+			t.Error("timeout waiting for tablet's throttler status to be enabled")
+			return
+		case <-ticker.C:
+		}
+	}
+}
+
+func getHTTPBody(url string) string {
+	resp, err := http.Get(url)
+	if err != nil {
+		log.Infof("http Get returns %+v", err)
+		return ""
+	}
+	if resp.StatusCode != 200 {
+		log.Infof("http Get returns status %d", resp.StatusCode)
+		return ""
+	}
+	respByte, _ := io.ReadAll(resp.Body)
+	defer resp.Body.Close()
+	body := string(respByte)
+	return body
 }
 
 // ValidateSequentialMigrationIDs validates that schem_migrations.id column, which is an AUTO_INCREMENT, does

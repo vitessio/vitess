@@ -29,8 +29,14 @@ type (
 	// In some situation we go straight to the physical operator - when there are no options to consider,
 	// we can go straight to the end result.
 	Operator interface {
+		// Clone will return a copy of this operator, protected so changed to the original will not impact the clone
 		Clone(inputs []Operator) Operator
+
+		// Inputs returns the inputs for this operator
 		Inputs() []Operator
+
+		// SetInputs changes the inputs for this op
+		SetInputs([]Operator)
 
 		// AddPredicate is used to push predicates. It pushed it as far down as is possible in the tree.
 		// If we encounter a join and the predicate depends on both sides of the join, the predicate will be split into two parts,
@@ -39,12 +45,30 @@ type (
 
 		// AddColumn tells an operator to also output an additional column specified.
 		// The offset to the column is returned.
-		AddColumn(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (int, error)
+		AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, reuseExisting, addToGroupBy bool) (Operator, int, error)
+
+		GetColumns() ([]*sqlparser.AliasedExpr, error)
+
+		Description() OpDescription
+		ShortDescription() string
+
+		GetOrdering() ([]OrderBy, error)
 	}
 
-	// PhysicalOperator means that this operator is ready to be turned into a logical plan
-	PhysicalOperator interface {
-		Operator
-		IPhysical()
+	// OrderBy contains the expression to used in order by and also if ordering is needed at VTGate level then what the weight_string function expression to be sent down for evaluation.
+	OrderBy struct {
+		Inner *sqlparser.Order
+
+		// See GroupBy#SimplifiedExpr for more details about this
+		SimplifiedExpr sqlparser.Expr
+	}
+
+	OpDescription struct {
+		OperatorType string
+		Variant      string         `json:",omitempty"`
+		Other        map[string]any `json:",omitempty"`
+
+		// This field will be filled in by the JSON producer. No need to set it manually
+		Inputs []OpDescription `json:",omitempty"`
 	}
 )

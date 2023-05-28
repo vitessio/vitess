@@ -346,14 +346,15 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 		}
 
 		tablet := &topodatapb.Tablet{}
-		if err := prototext.Unmarshal([]byte(m.GetString("tablet_info")), tablet); err != nil {
+		opts := prototext.UnmarshalOptions{DiscardUnknown: true}
+		if err := opts.Unmarshal([]byte(m.GetString("tablet_info")), tablet); err != nil {
 			log.Errorf("could not read tablet %v: %v", m.GetString("tablet_info"), err)
 			return nil
 		}
 
 		primaryTablet := &topodatapb.Tablet{}
 		if str := m.GetString("primary_tablet_info"); str != "" {
-			if err := prototext.Unmarshal([]byte(str), primaryTablet); err != nil {
+			if err := opts.Unmarshal([]byte(str), primaryTablet); err != nil {
 				log.Errorf("could not read tablet %v: %v", str, err)
 				return nil
 			}
@@ -373,6 +374,7 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 		countCoPrimaryReplicas := m.GetUint("count_co_primary_replicas")
 		a.IsCoPrimary = m.GetBool("is_co_primary") || (countCoPrimaryReplicas > 0)
 		a.AnalyzedInstanceKey = InstanceKey{Hostname: m.GetString("hostname"), Port: m.GetInt("port")}
+		a.AnalyzedInstanceAlias = tablet.Alias
 		a.AnalyzedInstancePrimaryKey = InstanceKey{Hostname: m.GetString("source_host"), Port: m.GetInt("source_port")}
 		a.AnalyzedInstanceDataCenter = m.GetString("data_center")
 		a.AnalyzedInstanceRegion = m.GetString("region")

@@ -38,6 +38,8 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/sidecardb"
+	"vitess.io/vitess/go/vt/sqlparser"
 )
 
 // VttabletProcess is a generic handle for a running vttablet .
@@ -84,7 +86,6 @@ type VttabletProcess struct {
 
 // Setup starts vttablet process with required arguements
 func (vttablet *VttabletProcess) Setup() (err error) {
-
 	vttablet.proc = exec.Command(
 		vttablet.Binary,
 		"--topo_implementation", vttablet.CommonArg.TopoImplementation,
@@ -381,6 +382,17 @@ func (vttablet *VttabletProcess) TearDown() error {
 	return vttablet.TearDownWithTimeout(10 * time.Second)
 }
 
+// Kill shuts down the running vttablet service immediately.
+func (vttablet *VttabletProcess) Kill() error {
+	if vttablet.proc == nil || vttablet.exit == nil {
+		return nil
+	}
+	vttablet.proc.Process.Kill()
+	err := <-vttablet.exit
+	vttablet.proc = nil
+	return err
+}
+
 // TearDownWithTimeout shuts down the running vttablet service and fails once the given
 // duration has elapsed.
 func (vttablet *VttabletProcess) TearDownWithTimeout(timeout time.Duration) error {
@@ -396,10 +408,7 @@ func (vttablet *VttabletProcess) TearDownWithTimeout(timeout time.Duration) erro
 		return nil
 
 	case <-time.After(timeout):
-		vttablet.proc.Process.Kill()
-		err := <-vttablet.exit
-		vttablet.proc = nil
-		return err
+		return vttablet.Kill()
 	}
 }
 
@@ -502,11 +511,19 @@ func (vttablet *VttabletProcess) ToggleProfiling() error {
 }
 
 // WaitForVReplicationToCatchup waits for "workflow" to finish copying
-func (vttablet *VttabletProcess) WaitForVReplicationToCatchup(t testing.TB, workflow, database string, duration time.Duration) {
+func (vttablet *VttabletProcess) WaitForVReplicationToCatchup(t testing.TB, workflow, database string, sidecarDBName string, duration time.Duration) {
+	if sidecarDBName == "" {
+		sidecarDBName = sidecardb.DefaultName
+	}
+	// Escape it if/as needed
+	ics := sqlparser.NewIdentifierCS(sidecarDBName)
+	sdbi := sqlparser.String(ics)
 	queries := [3]string{
-		fmt.Sprintf(`select count(*) from _vt.vreplication where workflow = "%s" and db_name = "%s" and pos = ''`, workflow, database),
-		"select count(*) from information_schema.tables where table_schema='_vt' and table_name='copy_state' limit 1;",
-		fmt.Sprintf(`select count(*) from _vt.copy_state where vrepl_id in (select id from _vt.vreplication where workflow = "%s" and db_name = "%s" )`, workflow, database),
+		sqlparser.BuildParsedQuery(`select count(*) from %s.vreplication where workflow = "%s" and db_name = "%s" and pos = ''`,
+			sdbi, workflow, database).Query,
+		sqlparser.BuildParsedQuery("select count(*) from information_schema.tables where table_schema='%s' and table_name='copy_state' limit 1", sidecarDBName).Query,
+		sqlparser.BuildParsedQuery(`select count(*) from %s.copy_state where vrepl_id in (select id from %s.vreplication where workflow = "%s" and db_name = "%s" )`,
+			sdbi, sdbi, workflow, database).Query,
 	}
 	results := [3]string{"[INT64(0)]", "[INT64(1)]", "[INT64(0)]"}
 

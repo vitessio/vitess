@@ -21,9 +21,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
+	"time"
 
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/vtorc/collection"
+	"vitess.io/vitess/go/vt/vtorc/discovery"
 	"vitess.io/vitess/go/vt/vtorc/inst"
 	"vitess.io/vitess/go/vt/vtorc/logic"
 	"vitess.io/vitess/go/vt/vtorc/process"
@@ -36,13 +41,15 @@ import (
 type vtorcAPI struct{}
 
 const (
-	problemsAPI                = "/api/problems"
-	disableGlobalRecoveriesAPI = "/api/disable-global-recoveries"
-	enableGlobalRecoveriesAPI  = "/api/enable-global-recoveries"
-	replicationAnalysisAPI     = "/api/replication-analysis"
-	healthAPI                  = "/debug/health"
+	problemsAPI                   = "/api/problems"
+	disableGlobalRecoveriesAPI    = "/api/disable-global-recoveries"
+	enableGlobalRecoveriesAPI     = "/api/enable-global-recoveries"
+	replicationAnalysisAPI        = "/api/replication-analysis"
+	healthAPI                     = "/debug/health"
+	AggregatedDiscoveryMetricsAPI = "/api/aggregated-discovery-metrics"
 
 	shardWithoutKeyspaceFilteringErrorStr = "Filtering by shard without keyspace isn't supported"
+	notAValidValueForSeconds              = "Invalid value for seconds"
 )
 
 var (
@@ -53,6 +60,7 @@ var (
 		enableGlobalRecoveriesAPI,
 		replicationAnalysisAPI,
 		healthAPI,
+		AggregatedDiscoveryMetricsAPI,
 	}
 )
 
@@ -76,6 +84,8 @@ func (v *vtorcAPI) ServeHTTP(response http.ResponseWriter, request *http.Request
 		problemsAPIHandler(response, request)
 	case replicationAnalysisAPI:
 		replicationAnalysisAPIHandler(response, request)
+	case AggregatedDiscoveryMetricsAPI:
+		AggregatedDiscoveryMetricsAPIHandler(response, request)
 	default:
 		// This should be unreachable. Any endpoint which isn't registered is automatically redirected to /debug/status.
 		// This code will only be reachable if we register an API but don't handle it here. That will be a bug.
@@ -101,7 +111,7 @@ func getACLPermissionLevelForAPI(apiEndpoint string) string {
 // RegisterVTOrcAPIEndpoints is used to register the VTOrc API endpoints
 func RegisterVTOrcAPIEndpoints() {
 	for _, apiPath := range vtorcAPIPaths {
-		http.Handle(apiPath, apiHandler)
+		servenv.HTTPHandle(apiPath, apiHandler)
 	}
 }
 
@@ -134,6 +144,31 @@ func problemsAPIHandler(response http.ResponseWriter, request *http.Request) {
 		return
 	}
 	returnAsJSON(response, http.StatusOK, instances)
+}
+
+// AggregatedDiscoveryMetricsAPIHandler is the handler for the discovery metrics endpoint
+func AggregatedDiscoveryMetricsAPIHandler(response http.ResponseWriter, request *http.Request) {
+	// return metrics for last x seconds
+	qSeconds := request.URL.Query().Get("seconds")
+	// default to 60 seconds
+	seconds := 60
+	var err error
+	if qSeconds != "" {
+		seconds, err = strconv.Atoi(qSeconds)
+		if err != nil {
+			http.Error(response, notAValidValueForSeconds, http.StatusBadRequest)
+			return
+		}
+	}
+	c := collection.CreateOrReturnCollection(logic.DiscoveryMetricsName)
+	now := time.Now()
+	then := now.Add(time.Duration(-1*seconds) * time.Second)
+	metric, err := discovery.AggregatedSince(c, then)
+	if err != nil {
+		http.Error(response, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	returnAsJSON(response, http.StatusOK, metric)
 }
 
 // disableGlobalRecoveriesAPIHandler is the handler for the disableGlobalRecoveriesAPI endpoint
@@ -184,7 +219,8 @@ func healthAPIHandler(response http.ResponseWriter, request *http.Request) {
 		return
 	}
 	code := http.StatusOK
-	if !health.Healthy {
+	// If the process isn't healthy, or if the first discovery cycle hasn't completed, we return an internal server error.
+	if !health.Healthy || !health.DiscoveredOnce {
 		code = http.StatusInternalServerError
 	}
 	returnAsJSON(response, code, health)

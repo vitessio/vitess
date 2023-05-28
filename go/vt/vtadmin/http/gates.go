@@ -22,10 +22,10 @@ import (
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
 )
 
-// GetGates implements the http wrapper for /gates[?cluster=[&cluster=]].
+// GetGates implements the http wrapper for /gates[?cluster_id=[&cluster_id=]].
 func GetGates(ctx context.Context, r Request, api *API) *JSONResponse {
 	gates, err := api.server.GetGates(ctx, &vtadminpb.GetGatesRequest{
-		ClusterIds: r.URL.Query()["cluster"],
+		ClusterIds: r.URL.Query()["cluster_id"],
 	})
 
 	return NewJSONResponse(gates, err)

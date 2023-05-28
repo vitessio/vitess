@@ -31,26 +31,6 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
-func TestVexecUpdateTemplates(t *testing.T) {
-	{
-		match, err := sqlparser.QueryMatchesTemplates("select 1 from dual", vexecUpdateTemplates)
-		assert.NoError(t, err)
-		assert.False(t, match)
-	}
-	queries := []string{
-		`update _vt.schema_migrations set migration_status='cancel-all' where mysql_schema='vt_commerce'`,
-		`update _vt.schema_migrations set migration_status = 'cancel-all' where migration_uuid='a5a563da_dc1a_11ec_a416_0a43f95f28a3' and mysql_schema = 'vt_commerce'`,
-		`update _vt.schema_migrations set migration_status = 'cancel-all' where migration_uuid='a5a563da_dc1a_11ec_a416_0a43f95f28a3' and mysql_schema = 'vt_commerce' and shard='0'`,
-	}
-	for _, query := range queries {
-		t.Run(query, func(t *testing.T) {
-			match, err := sqlparser.QueryMatchesTemplates(query, vexecUpdateTemplates)
-			assert.NoError(t, err)
-			assert.True(t, match)
-		})
-	}
-}
-
 func TestGetConstraintType(t *testing.T) {
 	{
 		typ := GetConstraintType(&sqlparser.CheckConstraintDefinition{})
@@ -182,51 +162,51 @@ func TestValidateAndEditAlterTableStatement(t *testing.T) {
 	}{
 		{
 			alter:  "alter table t add column i int",
-			expect: []string{"alter table t add column i int"},
+			expect: []string{"alter table t add column i int, algorithm = copy"},
 		},
 		{
 			alter:  "alter table t add column i int, add fulltext key name1_ft (name1)",
-			expect: []string{"alter table t add column i int, add fulltext key name1_ft (name1)"},
+			expect: []string{"alter table t add column i int, add fulltext key name1_ft (name1), algorithm = copy"},
 		},
 		{
 			alter:  "alter table t add column i int, add fulltext key name1_ft (name1), add fulltext key name2_ft (name2)",
-			expect: []string{"alter table t add column i int, add fulltext key name1_ft (name1)", "alter table t add fulltext key name2_ft (name2)"},
+			expect: []string{"alter table t add column i int, add fulltext key name1_ft (name1), algorithm = copy", "alter table t add fulltext key name2_ft (name2), algorithm = copy"},
 		},
 		{
 			alter:  "alter table t add fulltext key name0_ft (name0), add column i int, add fulltext key name1_ft (name1), add fulltext key name2_ft (name2)",
-			expect: []string{"alter table t add fulltext key name0_ft (name0), add column i int", "alter table t add fulltext key name1_ft (name1)", "alter table t add fulltext key name2_ft (name2)"},
+			expect: []string{"alter table t add fulltext key name0_ft (name0), add column i int, algorithm = copy", "alter table t add fulltext key name1_ft (name1), algorithm = copy", "alter table t add fulltext key name2_ft (name2), algorithm = copy"},
 		},
 		{
 			alter:  "alter table t add constraint check (id != 1)",
-			expect: []string{"alter table t add constraint chk_aulpn7bjeortljhguy86phdn9 check (id != 1)"},
+			expect: []string{"alter table t add constraint chk_aulpn7bjeortljhguy86phdn9 check (id != 1), algorithm = copy"},
 		},
 		{
 			alter:  "alter table t add constraint t_chk_1 check (id != 1)",
-			expect: []string{"alter table t add constraint chk_1_aulpn7bjeortljhguy86phdn9 check (id != 1)"},
+			expect: []string{"alter table t add constraint chk_1_aulpn7bjeortljhguy86phdn9 check (id != 1), algorithm = copy"},
 		},
 		{
 			alter:  "alter table t add constraint some_check check (id != 1)",
-			expect: []string{"alter table t add constraint some_check_aulpn7bjeortljhguy86phdn9 check (id != 1)"},
+			expect: []string{"alter table t add constraint some_check_aulpn7bjeortljhguy86phdn9 check (id != 1), algorithm = copy"},
 		},
 		{
 			alter:  "alter table t add constraint some_check check (id != 1), add constraint another_check check (id != 2)",
-			expect: []string{"alter table t add constraint some_check_aulpn7bjeortljhguy86phdn9 check (id != 1), add constraint another_check_4fa197273p3w96267pzm3gfi3 check (id != 2)"},
+			expect: []string{"alter table t add constraint some_check_aulpn7bjeortljhguy86phdn9 check (id != 1), add constraint another_check_4fa197273p3w96267pzm3gfi3 check (id != 2), algorithm = copy"},
 		},
 		{
 			alter:  "alter table t add foreign key (parent_id) references onlineddl_test_parent (id) on delete no action",
-			expect: []string{"alter table t add constraint fk_6fmhzdlya89128u5j3xapq34i foreign key (parent_id) references onlineddl_test_parent (id) on delete no action"},
+			expect: []string{"alter table t add constraint fk_6fmhzdlya89128u5j3xapq34i foreign key (parent_id) references onlineddl_test_parent (id) on delete no action, algorithm = copy"},
 		},
 		{
 			alter:  "alter table t add constraint myfk foreign key (parent_id) references onlineddl_test_parent (id) on delete no action",
-			expect: []string{"alter table t add constraint myfk_6fmhzdlya89128u5j3xapq34i foreign key (parent_id) references onlineddl_test_parent (id) on delete no action"},
+			expect: []string{"alter table t add constraint myfk_6fmhzdlya89128u5j3xapq34i foreign key (parent_id) references onlineddl_test_parent (id) on delete no action, algorithm = copy"},
 		},
 		{
 			alter:  "alter table t add constraint t_fk_1 foreign key (parent_id) references onlineddl_test_parent (id) on delete no action",
-			expect: []string{"alter table t add constraint fk_1_6fmhzdlya89128u5j3xapq34i foreign key (parent_id) references onlineddl_test_parent (id) on delete no action"},
+			expect: []string{"alter table t add constraint fk_1_6fmhzdlya89128u5j3xapq34i foreign key (parent_id) references onlineddl_test_parent (id) on delete no action, algorithm = copy"},
 		},
 		{
 			alter:  "alter table t add constraint t_fk_1 foreign key (parent_id) references onlineddl_test_parent (id) on delete no action, add constraint some_check check (id != 1)",
-			expect: []string{"alter table t add constraint fk_1_6fmhzdlya89128u5j3xapq34i foreign key (parent_id) references onlineddl_test_parent (id) on delete no action, add constraint some_check_aulpn7bjeortljhguy86phdn9 check (id != 1)"},
+			expect: []string{"alter table t add constraint fk_1_6fmhzdlya89128u5j3xapq34i foreign key (parent_id) references onlineddl_test_parent (id) on delete no action, add constraint some_check_aulpn7bjeortljhguy86phdn9 check (id != 1), algorithm = copy"},
 		},
 	}
 	for _, tc := range tt {

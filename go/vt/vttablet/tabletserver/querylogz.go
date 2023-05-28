@@ -17,8 +17,6 @@ limitations under the License.
 package tabletserver
 
 import (
-	"fmt"
-	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -28,6 +26,7 @@ import (
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logz"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
@@ -88,7 +87,7 @@ var (
 )
 
 func init() {
-	http.HandleFunc("/querylogz", func(w http.ResponseWriter, r *http.Request) {
+	servenv.HTTPHandleFunc("/querylogz", func(w http.ResponseWriter, r *http.Request) {
 		ch := tabletenv.StatsLogger.Subscribe("querylogz")
 		defer tabletenv.StatsLogger.Unsubscribe(ch)
 		querylogzHandler(ch, w, r)
@@ -97,7 +96,7 @@ func init() {
 
 // querylogzHandler serves a human readable snapshot of the
 // current query log.
-func querylogzHandler(ch chan any, w http.ResponseWriter, r *http.Request) {
+func querylogzHandler(ch chan *tabletenv.LogStats, w http.ResponseWriter, r *http.Request) {
 	if err := acl.CheckAccessHTTP(r, acl.DEBUGGING); err != nil {
 		acl.SendError(w, err)
 		return
@@ -111,20 +110,11 @@ func querylogzHandler(ch chan any, w http.ResponseWriter, r *http.Request) {
 	defer tmr.Stop()
 	for i := 0; i < limit; i++ {
 		select {
-		case out := <-ch:
+		case stats := <-ch:
 			select {
 			case <-tmr.C:
 				return
 			default:
-			}
-			stats, ok := out.(*tabletenv.LogStats)
-			if !ok {
-				err := fmt.Errorf("unexpected value in %s: %#v (expecting value of type %T)", tabletenv.TxLogger.Name(), out, &tabletenv.LogStats{})
-				io.WriteString(w, `<tr class="error">`)
-				io.WriteString(w, err.Error())
-				io.WriteString(w, "</tr>")
-				log.Error(err)
-				continue
 			}
 			var level string
 			if stats.TotalTime().Seconds() < 0.01 {

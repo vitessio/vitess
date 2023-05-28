@@ -218,7 +218,7 @@ func (td *tableDiffer) selectTablets(ctx context.Context, cell, tabletTypes stri
 	go func() {
 		defer wg.Done()
 		err1 = td.forEachSource(func(source *migrationSource) error {
-			tablet, err := pickTablet(ctx, sourceTopoServer, cell, ct.sourceKeyspace, source.shard, tabletTypes)
+			tablet, err := pickTablet(ctx, sourceTopoServer, cell, ct.vde.thisTablet.Alias.Cell, ct.sourceKeyspace, source.shard, tabletTypes)
 			if err != nil {
 				return err
 			}
@@ -230,7 +230,7 @@ func (td *tableDiffer) selectTablets(ctx context.Context, cell, tabletTypes stri
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		tablet, err2 := pickTablet(ctx, ct.ts, td.wd.opts.PickerOptions.TargetCell, ct.vde.thisTablet.Keyspace,
+		tablet, err2 := pickTablet(ctx, ct.ts, td.wd.opts.PickerOptions.TargetCell, ct.vde.thisTablet.Alias.Cell, ct.vde.thisTablet.Keyspace,
 			ct.vde.thisTablet.Shard, td.wd.opts.PickerOptions.TabletTypes)
 		if err2 != nil {
 			return
@@ -248,8 +248,8 @@ func (td *tableDiffer) selectTablets(ctx context.Context, cell, tabletTypes stri
 	return err2
 }
 
-func pickTablet(ctx context.Context, ts *topo.Server, cell, keyspace, shard, tabletTypes string) (*topodata.Tablet, error) {
-	tp, err := discovery.NewTabletPicker(ts, []string{cell}, keyspace, shard, tabletTypes)
+func pickTablet(ctx context.Context, ts *topo.Server, cell, localCell, keyspace, shard, tabletTypes string) (*topodata.Tablet, error) {
+	tp, err := discovery.NewTabletPicker(ctx, ts, []string{cell}, localCell, keyspace, shard, tabletTypes, discovery.TabletPickerOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -409,14 +409,14 @@ func (td *tableDiffer) streamOneShard(ctx context.Context, participant *shardStr
 }
 
 func (td *tableDiffer) setupRowSorters() {
-	// combine all sources into a slice and create a merge sorter for it
+	// Combine all sources into a slice and create a merge sorter for it.
 	sources := make(map[string]*shardStreamer)
 	for shard, source := range td.wd.ct.sources {
 		sources[shard] = source.shardStreamer
 	}
 	td.sourcePrimitive = newMergeSorter(sources, td.tablePlan.comparePKs)
 
-	// create a merge sorter for the target
+	// Create a merge sorter for the target.
 	targets := make(map[string]*shardStreamer)
 	targets[td.wd.ct.targetShardStreamer.shard] = td.wd.ct.targetShardStreamer
 	td.targetPrimitive = newMergeSorter(targets, td.tablePlan.comparePKs)
@@ -624,10 +624,12 @@ func (td *tableDiffer) compare(sourceRow, targetRow []sqltypes.Value, cols []com
 			continue
 		}
 		compareIndex := col.colIndex
-		var c int
-		var err error
-		var collationID collations.ID
-		// if the collation is nil or unknown, use binary collation to compare as bytes
+		var (
+			c           int
+			err         error
+			collationID collations.ID
+		)
+		// If the collation is nil or unknown, use binary collation to compare as bytes.
 		if col.collation == nil {
 			collationID = collations.CollationBinaryID
 		} else {
@@ -768,6 +770,55 @@ func (td *tableDiffer) adjustForSourceTimeZone(targetSelectExprs sqlparser.Selec
 		return newSelectExprs
 	}
 	return targetSelectExprs
+}
+
+// updateTableStats runs ANALYZE TABLE on the table in order to update the
+// statistics, then it reads those updated stats (specifically the number of
+// rows in the table) and saves them in the vdiff_table record.
+func (td *tableDiffer) updateTableStats(dbClient binlogplayer.DBClient) error {
+	// First update the stats.
+	stmt := sqlparser.BuildParsedQuery(sqlAnalyzeTable, td.wd.ct.vde.dbName, td.table.Name)
+	if _, err := dbClient.ExecuteFetch(stmt.Query, -1); err != nil {
+		return err
+	}
+	// Now read the updated stats.
+	query, err := sqlparser.ParseAndBind(sqlGetTableRows,
+		sqltypes.StringBindVariable(td.wd.ct.vde.dbName),
+		sqltypes.StringBindVariable(td.table.Name),
+	)
+	if err != nil {
+		return err
+	}
+	isqr, err := dbClient.ExecuteFetch(query, 1)
+	if err != nil {
+		return err
+	}
+	if isqr == nil || len(isqr.Rows) != 1 {
+		rows := 0
+		if isqr != nil {
+			rows = len(isqr.Rows)
+		}
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected number of rows returned from %s: %d", query, rows)
+	}
+	// And finally save the updated stats.
+	row := isqr.Named().Row()
+	tableRows, err := row.ToInt64("table_rows")
+	if err != nil {
+		strVal, _ := row.ToString("table_rows")
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid value (%s) returned from %s: %v", strVal, query, err)
+	}
+	query, err = sqlparser.ParseAndBind(sqlUpdateTableRows,
+		sqltypes.Int64BindVariable(tableRows),
+		sqltypes.Int64BindVariable(td.wd.ct.id),
+		sqltypes.StringBindVariable(td.table.Name),
+	)
+	if err != nil {
+		return err
+	}
+	if _, err := dbClient.ExecuteFetch(query, 1); err != nil {
+		return err
+	}
+	return nil
 }
 
 func getColumnNameForSelectExpr(selectExpression sqlparser.SelectExpr) (string, error) {

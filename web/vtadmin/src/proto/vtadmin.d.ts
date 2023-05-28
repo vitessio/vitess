@@ -1,4 +1,5 @@
 import * as $protobuf from "protobufjs";
+import Long = require("long");
 /** Namespace vtadmin. */
 export namespace vtadmin {
 
@@ -273,6 +274,34 @@ export namespace vtadmin {
          * @returns Promise
          */
         public getShardReplicationPositions(request: vtadmin.IGetShardReplicationPositionsRequest): Promise<vtadmin.GetShardReplicationPositionsResponse>;
+
+        /**
+         * Calls GetSrvKeyspace.
+         * @param request GetSrvKeyspaceRequest message or plain object
+         * @param callback Node-style callback called with the error, if any, and GetSrvKeyspacesResponse
+         */
+        public getSrvKeyspace(request: vtadmin.IGetSrvKeyspaceRequest, callback: vtadmin.VTAdmin.GetSrvKeyspaceCallback): void;
+
+        /**
+         * Calls GetSrvKeyspace.
+         * @param request GetSrvKeyspaceRequest message or plain object
+         * @returns Promise
+         */
+        public getSrvKeyspace(request: vtadmin.IGetSrvKeyspaceRequest): Promise<vtctldata.GetSrvKeyspacesResponse>;
+
+        /**
+         * Calls GetSrvKeyspaces.
+         * @param request GetSrvKeyspacesRequest message or plain object
+         * @param callback Node-style callback called with the error, if any, and GetSrvKeyspacesResponse
+         */
+        public getSrvKeyspaces(request: vtadmin.IGetSrvKeyspacesRequest, callback: vtadmin.VTAdmin.GetSrvKeyspacesCallback): void;
+
+        /**
+         * Calls GetSrvKeyspaces.
+         * @param request GetSrvKeyspacesRequest message or plain object
+         * @returns Promise
+         */
+        public getSrvKeyspaces(request: vtadmin.IGetSrvKeyspacesRequest): Promise<vtadmin.GetSrvKeyspacesResponse>;
 
         /**
          * Calls GetSrvVSchema.
@@ -838,6 +867,20 @@ export namespace vtadmin {
         type GetShardReplicationPositionsCallback = (error: (Error|null), response?: vtadmin.GetShardReplicationPositionsResponse) => void;
 
         /**
+         * Callback as used by {@link vtadmin.VTAdmin#getSrvKeyspace}.
+         * @param error Error, if any
+         * @param [response] GetSrvKeyspacesResponse
+         */
+        type GetSrvKeyspaceCallback = (error: (Error|null), response?: vtctldata.GetSrvKeyspacesResponse) => void;
+
+        /**
+         * Callback as used by {@link vtadmin.VTAdmin#getSrvKeyspaces}.
+         * @param error Error, if any
+         * @param [response] GetSrvKeyspacesResponse
+         */
+        type GetSrvKeyspacesCallback = (error: (Error|null), response?: vtadmin.GetSrvKeyspacesResponse) => void;
+
+        /**
          * Callback as used by {@link vtadmin.VTAdmin#getSrvVSchema}.
          * @param error Error, if any
          * @param [response] SrvVSchema
@@ -1149,6 +1192,13 @@ export namespace vtadmin {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for Cluster
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a ClusterBackup. */
@@ -1245,6 +1295,13 @@ export namespace vtadmin {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ClusterBackup
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a ClusterCellsAliases. */
@@ -1341,6 +1398,13 @@ export namespace vtadmin {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ClusterCellsAliases
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a ClusterCellInfo. */
@@ -1443,6 +1507,13 @@ export namespace vtadmin {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ClusterCellInfo
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a ClusterShardReplicationPosition. */
@@ -1551,6 +1622,13 @@ export namespace vtadmin {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ClusterShardReplicationPosition
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a ClusterWorkflows. */
@@ -1647,6 +1725,13 @@ export namespace vtadmin {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ClusterWorkflows
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a Keyspace. */
@@ -1749,6 +1834,13 @@ export namespace vtadmin {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for Keyspace
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a Schema. */
@@ -1857,6 +1949,13 @@ export namespace vtadmin {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for Schema
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     namespace Schema {
@@ -1955,6 +2054,13 @@ export namespace vtadmin {
              * @returns JSON object
              */
             public toJSON(): { [k: string]: any };
+
+            /**
+             * Gets the default type url for ShardTableSize
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
         }
 
         /** Properties of a TableSize. */
@@ -2057,6 +2163,13 @@ export namespace vtadmin {
              * @returns JSON object
              */
             public toJSON(): { [k: string]: any };
+
+            /**
+             * Gets the default type url for TableSize
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
         }
     }
 
@@ -2154,6 +2267,13 @@ export namespace vtadmin {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for Shard
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a SrvVSchema. */
@@ -2256,6 +2376,13 @@ export namespace vtadmin {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for SrvVSchema
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a Tablet. */
@@ -2364,6 +2491,13 @@ export namespace vtadmin {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for Tablet
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     namespace Tablet {
@@ -2476,6 +2610,13 @@ export namespace vtadmin {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for VSchema
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a Vtctld. */
@@ -2578,6 +2719,13 @@ export namespace vtadmin {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for Vtctld
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a VTGate. */
@@ -2698,6 +2846,13 @@ export namespace vtadmin {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for VTGate
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a Workflow. */
@@ -2800,6 +2955,13 @@ export namespace vtadmin {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for Workflow
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a CreateKeyspaceRequest. */
@@ -2896,6 +3058,13 @@ export namespace vtadmin {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for CreateKeyspaceRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a CreateKeyspaceResponse. */
@@ -2986,6 +3155,13 @@ export namespace vtadmin {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for CreateKeyspaceResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a CreateShardRequest. */
@@ -3082,6 +3258,13 @@ export namespace vtadmin {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for CreateShardRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a DeleteKeyspaceRequest. */
@@ -3178,6 +3361,13 @@ export namespace vtadmin {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for DeleteKeyspaceRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a DeleteShardsRequest. */
@@ -3274,6 +3464,13 @@ export namespace vtadmin {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for DeleteShardsRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a DeleteTabletRequest. */
@@ -3376,6 +3573,13 @@ export namespace vtadmin {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for DeleteTabletRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a DeleteTabletResponse. */
@@ -3472,6 +3676,13 @@ export namespace vtadmin {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for DeleteTabletResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of an EmergencyFailoverShardRequest. */
@@ -3568,6 +3779,13 @@ export namespace vtadmin {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for EmergencyFailoverShardRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of an EmergencyFailoverShardResponse. */
@@ -3682,6 +3900,13 @@ export namespace vtadmin {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for EmergencyFailoverShardResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a FindSchemaRequest. */
@@ -3784,6 +4009,13 @@ export namespace vtadmin {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for FindSchemaRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a GetBackupsRequest. */
@@ -3892,6 +4124,13 @@ export namespace vtadmin {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetBackupsRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a GetBackupsResponse. */
@@ -3982,6 +4221,13 @@ export namespace vtadmin {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetBackupsResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a GetCellInfosRequest. */
@@ -4084,6 +4330,13 @@ export namespace vtadmin {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetCellInfosRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a GetCellInfosResponse. */
@@ -4174,6 +4427,13 @@ export namespace vtadmin {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetCellInfosResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a GetCellsAliasesRequest. */
@@ -4264,6 +4524,13 @@ export namespace vtadmin {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetCellsAliasesRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a GetCellsAliasesResponse. */
@@ -4354,6 +4621,13 @@ export namespace vtadmin {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetCellsAliasesResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a GetClustersRequest. */
@@ -4438,6 +4712,13 @@ export namespace vtadmin {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetClustersRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a GetClustersResponse. */
@@ -4528,6 +4809,13 @@ export namespace vtadmin {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetClustersResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a GetFullStatusRequest. */
@@ -4624,6 +4912,13 @@ export namespace vtadmin {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetFullStatusRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a GetGatesRequest. */
@@ -4714,6 +5009,13 @@ export namespace vtadmin {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetGatesRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a GetGatesResponse. */
@@ -4804,6 +5106,13 @@ export namespace vtadmin {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetGatesResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a GetKeyspaceRequest. */
@@ -4900,6 +5209,13 @@ export namespace vtadmin {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetKeyspaceRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a GetKeyspacesRequest. */
@@ -4990,6 +5306,13 @@ export namespace vtadmin {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetKeyspacesRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a GetKeyspacesResponse. */
@@ -5080,6 +5403,13 @@ export namespace vtadmin {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetKeyspacesResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a GetSchemaRequest. */
@@ -5188,6 +5518,13 @@ export namespace vtadmin {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetSchemaRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a GetSchemasRequest. */
@@ -5284,6 +5621,13 @@ export namespace vtadmin {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetSchemasRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a GetSchemasResponse. */
@@ -5374,6 +5718,13 @@ export namespace vtadmin {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetSchemasResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a GetShardReplicationPositionsRequest. */
@@ -5476,6 +5827,13 @@ export namespace vtadmin {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetShardReplicationPositionsRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a GetShardReplicationPositionsResponse. */
@@ -5566,6 +5924,322 @@ export namespace vtadmin {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetShardReplicationPositionsResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a GetSrvKeyspaceRequest. */
+    interface IGetSrvKeyspaceRequest {
+
+        /** GetSrvKeyspaceRequest cluster_id */
+        cluster_id?: (string|null);
+
+        /** GetSrvKeyspaceRequest keyspace */
+        keyspace?: (string|null);
+
+        /** GetSrvKeyspaceRequest cells */
+        cells?: (string[]|null);
+    }
+
+    /** Represents a GetSrvKeyspaceRequest. */
+    class GetSrvKeyspaceRequest implements IGetSrvKeyspaceRequest {
+
+        /**
+         * Constructs a new GetSrvKeyspaceRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtadmin.IGetSrvKeyspaceRequest);
+
+        /** GetSrvKeyspaceRequest cluster_id. */
+        public cluster_id: string;
+
+        /** GetSrvKeyspaceRequest keyspace. */
+        public keyspace: string;
+
+        /** GetSrvKeyspaceRequest cells. */
+        public cells: string[];
+
+        /**
+         * Creates a new GetSrvKeyspaceRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns GetSrvKeyspaceRequest instance
+         */
+        public static create(properties?: vtadmin.IGetSrvKeyspaceRequest): vtadmin.GetSrvKeyspaceRequest;
+
+        /**
+         * Encodes the specified GetSrvKeyspaceRequest message. Does not implicitly {@link vtadmin.GetSrvKeyspaceRequest.verify|verify} messages.
+         * @param message GetSrvKeyspaceRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtadmin.IGetSrvKeyspaceRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified GetSrvKeyspaceRequest message, length delimited. Does not implicitly {@link vtadmin.GetSrvKeyspaceRequest.verify|verify} messages.
+         * @param message GetSrvKeyspaceRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtadmin.IGetSrvKeyspaceRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a GetSrvKeyspaceRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns GetSrvKeyspaceRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtadmin.GetSrvKeyspaceRequest;
+
+        /**
+         * Decodes a GetSrvKeyspaceRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns GetSrvKeyspaceRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtadmin.GetSrvKeyspaceRequest;
+
+        /**
+         * Verifies a GetSrvKeyspaceRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a GetSrvKeyspaceRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns GetSrvKeyspaceRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtadmin.GetSrvKeyspaceRequest;
+
+        /**
+         * Creates a plain object from a GetSrvKeyspaceRequest message. Also converts values to other types if specified.
+         * @param message GetSrvKeyspaceRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtadmin.GetSrvKeyspaceRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this GetSrvKeyspaceRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetSrvKeyspaceRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a GetSrvKeyspacesRequest. */
+    interface IGetSrvKeyspacesRequest {
+
+        /** GetSrvKeyspacesRequest cluster_ids */
+        cluster_ids?: (string[]|null);
+
+        /** GetSrvKeyspacesRequest cells */
+        cells?: (string[]|null);
+    }
+
+    /** Represents a GetSrvKeyspacesRequest. */
+    class GetSrvKeyspacesRequest implements IGetSrvKeyspacesRequest {
+
+        /**
+         * Constructs a new GetSrvKeyspacesRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtadmin.IGetSrvKeyspacesRequest);
+
+        /** GetSrvKeyspacesRequest cluster_ids. */
+        public cluster_ids: string[];
+
+        /** GetSrvKeyspacesRequest cells. */
+        public cells: string[];
+
+        /**
+         * Creates a new GetSrvKeyspacesRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns GetSrvKeyspacesRequest instance
+         */
+        public static create(properties?: vtadmin.IGetSrvKeyspacesRequest): vtadmin.GetSrvKeyspacesRequest;
+
+        /**
+         * Encodes the specified GetSrvKeyspacesRequest message. Does not implicitly {@link vtadmin.GetSrvKeyspacesRequest.verify|verify} messages.
+         * @param message GetSrvKeyspacesRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtadmin.IGetSrvKeyspacesRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified GetSrvKeyspacesRequest message, length delimited. Does not implicitly {@link vtadmin.GetSrvKeyspacesRequest.verify|verify} messages.
+         * @param message GetSrvKeyspacesRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtadmin.IGetSrvKeyspacesRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a GetSrvKeyspacesRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns GetSrvKeyspacesRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtadmin.GetSrvKeyspacesRequest;
+
+        /**
+         * Decodes a GetSrvKeyspacesRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns GetSrvKeyspacesRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtadmin.GetSrvKeyspacesRequest;
+
+        /**
+         * Verifies a GetSrvKeyspacesRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a GetSrvKeyspacesRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns GetSrvKeyspacesRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtadmin.GetSrvKeyspacesRequest;
+
+        /**
+         * Creates a plain object from a GetSrvKeyspacesRequest message. Also converts values to other types if specified.
+         * @param message GetSrvKeyspacesRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtadmin.GetSrvKeyspacesRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this GetSrvKeyspacesRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetSrvKeyspacesRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a GetSrvKeyspacesResponse. */
+    interface IGetSrvKeyspacesResponse {
+
+        /** GetSrvKeyspacesResponse srv_keyspaces */
+        srv_keyspaces?: ({ [k: string]: vtctldata.IGetSrvKeyspacesResponse }|null);
+    }
+
+    /** Represents a GetSrvKeyspacesResponse. */
+    class GetSrvKeyspacesResponse implements IGetSrvKeyspacesResponse {
+
+        /**
+         * Constructs a new GetSrvKeyspacesResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtadmin.IGetSrvKeyspacesResponse);
+
+        /** GetSrvKeyspacesResponse srv_keyspaces. */
+        public srv_keyspaces: { [k: string]: vtctldata.IGetSrvKeyspacesResponse };
+
+        /**
+         * Creates a new GetSrvKeyspacesResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns GetSrvKeyspacesResponse instance
+         */
+        public static create(properties?: vtadmin.IGetSrvKeyspacesResponse): vtadmin.GetSrvKeyspacesResponse;
+
+        /**
+         * Encodes the specified GetSrvKeyspacesResponse message. Does not implicitly {@link vtadmin.GetSrvKeyspacesResponse.verify|verify} messages.
+         * @param message GetSrvKeyspacesResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtadmin.IGetSrvKeyspacesResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified GetSrvKeyspacesResponse message, length delimited. Does not implicitly {@link vtadmin.GetSrvKeyspacesResponse.verify|verify} messages.
+         * @param message GetSrvKeyspacesResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtadmin.IGetSrvKeyspacesResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a GetSrvKeyspacesResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns GetSrvKeyspacesResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtadmin.GetSrvKeyspacesResponse;
+
+        /**
+         * Decodes a GetSrvKeyspacesResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns GetSrvKeyspacesResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtadmin.GetSrvKeyspacesResponse;
+
+        /**
+         * Verifies a GetSrvKeyspacesResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a GetSrvKeyspacesResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns GetSrvKeyspacesResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtadmin.GetSrvKeyspacesResponse;
+
+        /**
+         * Creates a plain object from a GetSrvKeyspacesResponse message. Also converts values to other types if specified.
+         * @param message GetSrvKeyspacesResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtadmin.GetSrvKeyspacesResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this GetSrvKeyspacesResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetSrvKeyspacesResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a GetSrvVSchemaRequest. */
@@ -5662,6 +6336,13 @@ export namespace vtadmin {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetSrvVSchemaRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a GetSrvVSchemasRequest. */
@@ -5758,6 +6439,13 @@ export namespace vtadmin {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetSrvVSchemasRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a GetSrvVSchemasResponse. */
@@ -5848,6 +6536,13 @@ export namespace vtadmin {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetSrvVSchemasResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a GetSchemaTableSizeOptions. */
@@ -5944,6 +6639,13 @@ export namespace vtadmin {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetSchemaTableSizeOptions
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a GetTabletRequest. */
@@ -6040,6 +6742,13 @@ export namespace vtadmin {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetTabletRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a GetTabletsRequest. */
@@ -6130,6 +6839,13 @@ export namespace vtadmin {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetTabletsRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a GetTabletsResponse. */
@@ -6220,6 +6936,13 @@ export namespace vtadmin {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetTabletsResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a GetTopologyPathRequest. */
@@ -6316,6 +7039,13 @@ export namespace vtadmin {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetTopologyPathRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a GetVSchemaRequest. */
@@ -6412,6 +7142,13 @@ export namespace vtadmin {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetVSchemaRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a GetVSchemasRequest. */
@@ -6502,6 +7239,13 @@ export namespace vtadmin {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetVSchemasRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a GetVSchemasResponse. */
@@ -6592,6 +7336,13 @@ export namespace vtadmin {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetVSchemasResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a GetVtctldsRequest. */
@@ -6682,6 +7433,13 @@ export namespace vtadmin {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetVtctldsRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a GetVtctldsResponse. */
@@ -6772,6 +7530,13 @@ export namespace vtadmin {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetVtctldsResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a GetWorkflowRequest. */
@@ -6880,6 +7645,13 @@ export namespace vtadmin {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetWorkflowRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a GetWorkflowsRequest. */
@@ -6988,6 +7760,13 @@ export namespace vtadmin {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetWorkflowsRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a GetWorkflowsResponse. */
@@ -7078,6 +7857,13 @@ export namespace vtadmin {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetWorkflowsResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a PingTabletRequest. */
@@ -7174,6 +7960,13 @@ export namespace vtadmin {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for PingTabletRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a PingTabletResponse. */
@@ -7270,6 +8063,13 @@ export namespace vtadmin {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for PingTabletResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a PlannedFailoverShardRequest. */
@@ -7366,6 +8166,13 @@ export namespace vtadmin {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for PlannedFailoverShardRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a PlannedFailoverShardResponse. */
@@ -7480,6 +8287,13 @@ export namespace vtadmin {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for PlannedFailoverShardResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a RebuildKeyspaceGraphRequest. */
@@ -7588,6 +8402,13 @@ export namespace vtadmin {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for RebuildKeyspaceGraphRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a RebuildKeyspaceGraphResponse. */
@@ -7678,6 +8499,13 @@ export namespace vtadmin {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for RebuildKeyspaceGraphResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a RefreshStateRequest. */
@@ -7774,6 +8602,13 @@ export namespace vtadmin {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for RefreshStateRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a RefreshStateResponse. */
@@ -7870,6 +8705,13 @@ export namespace vtadmin {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for RefreshStateResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a ReloadSchemasRequest. */
@@ -7996,6 +8838,13 @@ export namespace vtadmin {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ReloadSchemasRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a ReloadSchemasResponse. */
@@ -8098,6 +8947,13 @@ export namespace vtadmin {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ReloadSchemasResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     namespace ReloadSchemasResponse {
@@ -8196,6 +9052,13 @@ export namespace vtadmin {
              * @returns JSON object
              */
             public toJSON(): { [k: string]: any };
+
+            /**
+             * Gets the default type url for KeyspaceResult
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
         }
 
         /** Properties of a ShardResult. */
@@ -8292,6 +9155,13 @@ export namespace vtadmin {
              * @returns JSON object
              */
             public toJSON(): { [k: string]: any };
+
+            /**
+             * Gets the default type url for ShardResult
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
         }
 
         /** Properties of a TabletResult. */
@@ -8388,6 +9258,13 @@ export namespace vtadmin {
              * @returns JSON object
              */
             public toJSON(): { [k: string]: any };
+
+            /**
+             * Gets the default type url for TabletResult
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
         }
     }
 
@@ -8509,6 +9386,13 @@ export namespace vtadmin {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ReloadSchemaShardRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a ReloadSchemaShardResponse. */
@@ -8599,6 +9483,13 @@ export namespace vtadmin {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ReloadSchemaShardResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a RefreshTabletReplicationSourceRequest. */
@@ -8695,6 +9586,13 @@ export namespace vtadmin {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for RefreshTabletReplicationSourceRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a RefreshTabletReplicationSourceResponse. */
@@ -8803,6 +9701,13 @@ export namespace vtadmin {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for RefreshTabletReplicationSourceResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a RemoveKeyspaceCellRequest. */
@@ -8917,6 +9822,13 @@ export namespace vtadmin {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for RemoveKeyspaceCellRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a RemoveKeyspaceCellResponse. */
@@ -9007,6 +9919,13 @@ export namespace vtadmin {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for RemoveKeyspaceCellResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a RunHealthCheckRequest. */
@@ -9103,6 +10022,13 @@ export namespace vtadmin {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for RunHealthCheckRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a RunHealthCheckResponse. */
@@ -9199,6 +10125,13 @@ export namespace vtadmin {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for RunHealthCheckResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a SetReadOnlyRequest. */
@@ -9295,6 +10228,13 @@ export namespace vtadmin {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for SetReadOnlyRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a SetReadOnlyResponse. */
@@ -9379,6 +10319,13 @@ export namespace vtadmin {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for SetReadOnlyResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a SetReadWriteRequest. */
@@ -9475,6 +10422,13 @@ export namespace vtadmin {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for SetReadWriteRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a SetReadWriteResponse. */
@@ -9559,6 +10513,13 @@ export namespace vtadmin {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for SetReadWriteResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a StartReplicationRequest. */
@@ -9655,6 +10616,13 @@ export namespace vtadmin {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for StartReplicationRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a StartReplicationResponse. */
@@ -9751,6 +10719,13 @@ export namespace vtadmin {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for StartReplicationResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a StopReplicationRequest. */
@@ -9847,6 +10822,13 @@ export namespace vtadmin {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for StopReplicationRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a StopReplicationResponse. */
@@ -9943,6 +10925,13 @@ export namespace vtadmin {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for StopReplicationResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a TabletExternallyPromotedRequest. */
@@ -10039,6 +11028,13 @@ export namespace vtadmin {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for TabletExternallyPromotedRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a TabletExternallyPromotedResponse. */
@@ -10153,6 +11149,13 @@ export namespace vtadmin {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for TabletExternallyPromotedResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a TabletExternallyReparentedRequest. */
@@ -10249,6 +11252,13 @@ export namespace vtadmin {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for TabletExternallyReparentedRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a ValidateRequest. */
@@ -10345,6 +11355,13 @@ export namespace vtadmin {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ValidateRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a ValidateKeyspaceRequest. */
@@ -10447,6 +11464,13 @@ export namespace vtadmin {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ValidateKeyspaceRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a ValidateSchemaKeyspaceRequest. */
@@ -10543,6 +11567,13 @@ export namespace vtadmin {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ValidateSchemaKeyspaceRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a ValidateShardRequest. */
@@ -10651,6 +11682,13 @@ export namespace vtadmin {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ValidateShardRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a ValidateVersionKeyspaceRequest. */
@@ -10747,6 +11785,13 @@ export namespace vtadmin {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ValidateVersionKeyspaceRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a ValidateVersionShardRequest. */
@@ -10849,6 +11894,13 @@ export namespace vtadmin {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ValidateVersionShardRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a VTExplainRequest. */
@@ -10951,6 +12003,13 @@ export namespace vtadmin {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for VTExplainRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a VTExplainResponse. */
@@ -11041,6 +12100,13 @@ export namespace vtadmin {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for VTExplainResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 }
 
@@ -11167,6 +12233,13 @@ export namespace logutil {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for Event
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 }
 
@@ -11267,6 +12340,13 @@ export namespace vttime {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for Time
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a Duration. */
@@ -11363,6 +12443,13 @@ export namespace vttime {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for Duration
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 }
 
@@ -11457,6 +12544,13 @@ export namespace mysqlctl {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for StartRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a StartResponse. */
@@ -11541,6 +12635,13 @@ export namespace mysqlctl {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for StartResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a ShutdownRequest. */
@@ -11631,6 +12732,13 @@ export namespace mysqlctl {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ShutdownRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a ShutdownResponse. */
@@ -11715,6 +12823,13 @@ export namespace mysqlctl {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ShutdownResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a RunMysqlUpgradeRequest. */
@@ -11799,6 +12914,13 @@ export namespace mysqlctl {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for RunMysqlUpgradeRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a RunMysqlUpgradeResponse. */
@@ -11883,6 +13005,207 @@ export namespace mysqlctl {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for RunMysqlUpgradeResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of an ApplyBinlogFileRequest. */
+    interface IApplyBinlogFileRequest {
+
+        /** ApplyBinlogFileRequest binlog_file_name */
+        binlog_file_name?: (string|null);
+
+        /** ApplyBinlogFileRequest binlog_restore_position */
+        binlog_restore_position?: (string|null);
+    }
+
+    /** Represents an ApplyBinlogFileRequest. */
+    class ApplyBinlogFileRequest implements IApplyBinlogFileRequest {
+
+        /**
+         * Constructs a new ApplyBinlogFileRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: mysqlctl.IApplyBinlogFileRequest);
+
+        /** ApplyBinlogFileRequest binlog_file_name. */
+        public binlog_file_name: string;
+
+        /** ApplyBinlogFileRequest binlog_restore_position. */
+        public binlog_restore_position: string;
+
+        /**
+         * Creates a new ApplyBinlogFileRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ApplyBinlogFileRequest instance
+         */
+        public static create(properties?: mysqlctl.IApplyBinlogFileRequest): mysqlctl.ApplyBinlogFileRequest;
+
+        /**
+         * Encodes the specified ApplyBinlogFileRequest message. Does not implicitly {@link mysqlctl.ApplyBinlogFileRequest.verify|verify} messages.
+         * @param message ApplyBinlogFileRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: mysqlctl.IApplyBinlogFileRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ApplyBinlogFileRequest message, length delimited. Does not implicitly {@link mysqlctl.ApplyBinlogFileRequest.verify|verify} messages.
+         * @param message ApplyBinlogFileRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: mysqlctl.IApplyBinlogFileRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes an ApplyBinlogFileRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ApplyBinlogFileRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): mysqlctl.ApplyBinlogFileRequest;
+
+        /**
+         * Decodes an ApplyBinlogFileRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ApplyBinlogFileRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): mysqlctl.ApplyBinlogFileRequest;
+
+        /**
+         * Verifies an ApplyBinlogFileRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates an ApplyBinlogFileRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ApplyBinlogFileRequest
+         */
+        public static fromObject(object: { [k: string]: any }): mysqlctl.ApplyBinlogFileRequest;
+
+        /**
+         * Creates a plain object from an ApplyBinlogFileRequest message. Also converts values to other types if specified.
+         * @param message ApplyBinlogFileRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: mysqlctl.ApplyBinlogFileRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ApplyBinlogFileRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ApplyBinlogFileRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of an ApplyBinlogFileResponse. */
+    interface IApplyBinlogFileResponse {
+    }
+
+    /** Represents an ApplyBinlogFileResponse. */
+    class ApplyBinlogFileResponse implements IApplyBinlogFileResponse {
+
+        /**
+         * Constructs a new ApplyBinlogFileResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: mysqlctl.IApplyBinlogFileResponse);
+
+        /**
+         * Creates a new ApplyBinlogFileResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ApplyBinlogFileResponse instance
+         */
+        public static create(properties?: mysqlctl.IApplyBinlogFileResponse): mysqlctl.ApplyBinlogFileResponse;
+
+        /**
+         * Encodes the specified ApplyBinlogFileResponse message. Does not implicitly {@link mysqlctl.ApplyBinlogFileResponse.verify|verify} messages.
+         * @param message ApplyBinlogFileResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: mysqlctl.IApplyBinlogFileResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ApplyBinlogFileResponse message, length delimited. Does not implicitly {@link mysqlctl.ApplyBinlogFileResponse.verify|verify} messages.
+         * @param message ApplyBinlogFileResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: mysqlctl.IApplyBinlogFileResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes an ApplyBinlogFileResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ApplyBinlogFileResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): mysqlctl.ApplyBinlogFileResponse;
+
+        /**
+         * Decodes an ApplyBinlogFileResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ApplyBinlogFileResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): mysqlctl.ApplyBinlogFileResponse;
+
+        /**
+         * Verifies an ApplyBinlogFileResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates an ApplyBinlogFileResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ApplyBinlogFileResponse
+         */
+        public static fromObject(object: { [k: string]: any }): mysqlctl.ApplyBinlogFileResponse;
+
+        /**
+         * Creates a plain object from an ApplyBinlogFileResponse message. Also converts values to other types if specified.
+         * @param message ApplyBinlogFileResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: mysqlctl.ApplyBinlogFileResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ApplyBinlogFileResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ApplyBinlogFileResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a ReinitConfigRequest. */
@@ -11967,6 +13290,13 @@ export namespace mysqlctl {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ReinitConfigRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a ReinitConfigResponse. */
@@ -12051,6 +13381,13 @@ export namespace mysqlctl {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ReinitConfigResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a RefreshConfigRequest. */
@@ -12135,6 +13472,13 @@ export namespace mysqlctl {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for RefreshConfigRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a RefreshConfigResponse. */
@@ -12219,6 +13563,13 @@ export namespace mysqlctl {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for RefreshConfigResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Represents a MysqlCtl */
@@ -12284,6 +13635,20 @@ export namespace mysqlctl {
         public runMysqlUpgrade(request: mysqlctl.IRunMysqlUpgradeRequest): Promise<mysqlctl.RunMysqlUpgradeResponse>;
 
         /**
+         * Calls ApplyBinlogFile.
+         * @param request ApplyBinlogFileRequest message or plain object
+         * @param callback Node-style callback called with the error, if any, and ApplyBinlogFileResponse
+         */
+        public applyBinlogFile(request: mysqlctl.IApplyBinlogFileRequest, callback: mysqlctl.MysqlCtl.ApplyBinlogFileCallback): void;
+
+        /**
+         * Calls ApplyBinlogFile.
+         * @param request ApplyBinlogFileRequest message or plain object
+         * @returns Promise
+         */
+        public applyBinlogFile(request: mysqlctl.IApplyBinlogFileRequest): Promise<mysqlctl.ApplyBinlogFileResponse>;
+
+        /**
          * Calls ReinitConfig.
          * @param request ReinitConfigRequest message or plain object
          * @param callback Node-style callback called with the error, if any, and ReinitConfigResponse
@@ -12334,6 +13699,13 @@ export namespace mysqlctl {
          * @param [response] RunMysqlUpgradeResponse
          */
         type RunMysqlUpgradeCallback = (error: (Error|null), response?: mysqlctl.RunMysqlUpgradeResponse) => void;
+
+        /**
+         * Callback as used by {@link mysqlctl.MysqlCtl#applyBinlogFile}.
+         * @param error Error, if any
+         * @param [response] ApplyBinlogFileResponse
+         */
+        type ApplyBinlogFileCallback = (error: (Error|null), response?: mysqlctl.ApplyBinlogFileResponse) => void;
 
         /**
          * Callback as used by {@link mysqlctl.MysqlCtl#reinitConfig}.
@@ -12480,6 +13852,13 @@ export namespace mysqlctl {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for BackupInfo
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     namespace BackupInfo {
@@ -12592,6 +13971,13 @@ export namespace topodata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for KeyRange
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** KeyspaceType enum. */
@@ -12694,6 +14080,13 @@ export namespace topodata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for TabletAlias
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** TabletType enum. */
@@ -12750,9 +14143,6 @@ export namespace topodata {
         /** Tablet primary_term_start_time */
         primary_term_start_time?: (vttime.ITime|null);
 
-        /** Tablet db_server_version */
-        db_server_version?: (string|null);
-
         /** Tablet default_conn_collation */
         default_conn_collation?: (number|null);
     }
@@ -12801,9 +14191,6 @@ export namespace topodata {
 
         /** Tablet primary_term_start_time. */
         public primary_term_start_time?: (vttime.ITime|null);
-
-        /** Tablet db_server_version. */
-        public db_server_version: string;
 
         /** Tablet default_conn_collation. */
         public default_conn_collation: number;
@@ -12877,6 +14264,13 @@ export namespace topodata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for Tablet
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a Shard. */
@@ -12997,6 +14391,13 @@ export namespace topodata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for Shard
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     namespace Shard {
@@ -13113,6 +14514,13 @@ export namespace topodata {
              * @returns JSON object
              */
             public toJSON(): { [k: string]: any };
+
+            /**
+             * Gets the default type url for SourceShard
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
         }
 
         /** Properties of a TabletControl. */
@@ -13221,6 +14629,13 @@ export namespace topodata {
              * @returns JSON object
              */
             public toJSON(): { [k: string]: any };
+
+            /**
+             * Gets the default type url for TabletControl
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
         }
     }
 
@@ -13241,6 +14656,12 @@ export namespace topodata {
 
         /** Keyspace durability_policy */
         durability_policy?: (string|null);
+
+        /** Keyspace throttler_config */
+        throttler_config?: (topodata.IThrottlerConfig|null);
+
+        /** Keyspace sidecar_db_name */
+        sidecar_db_name?: (string|null);
     }
 
     /** Represents a Keyspace. */
@@ -13266,6 +14687,12 @@ export namespace topodata {
 
         /** Keyspace durability_policy. */
         public durability_policy: string;
+
+        /** Keyspace throttler_config. */
+        public throttler_config?: (topodata.IThrottlerConfig|null);
+
+        /** Keyspace sidecar_db_name. */
+        public sidecar_db_name: string;
 
         /**
          * Creates a new Keyspace instance using the specified properties.
@@ -13336,6 +14763,13 @@ export namespace topodata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for Keyspace
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     namespace Keyspace {
@@ -13440,6 +14874,13 @@ export namespace topodata {
              * @returns JSON object
              */
             public toJSON(): { [k: string]: any };
+
+            /**
+             * Gets the default type url for ServedFrom
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
         }
     }
 
@@ -13531,6 +14972,13 @@ export namespace topodata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ShardReplication
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     namespace ShardReplication {
@@ -13623,6 +15071,13 @@ export namespace topodata {
              * @returns JSON object
              */
             public toJSON(): { [k: string]: any };
+
+            /**
+             * Gets the default type url for Node
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
         }
     }
 
@@ -13720,6 +15175,13 @@ export namespace topodata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ShardReplicationError
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     namespace ShardReplicationError {
@@ -13826,6 +15288,13 @@ export namespace topodata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ShardReference
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a ShardTabletControl. */
@@ -13928,6 +15397,128 @@ export namespace topodata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ShardTabletControl
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a ThrottlerConfig. */
+    interface IThrottlerConfig {
+
+        /** ThrottlerConfig enabled */
+        enabled?: (boolean|null);
+
+        /** ThrottlerConfig threshold */
+        threshold?: (number|null);
+
+        /** ThrottlerConfig custom_query */
+        custom_query?: (string|null);
+
+        /** ThrottlerConfig check_as_check_self */
+        check_as_check_self?: (boolean|null);
+    }
+
+    /** Represents a ThrottlerConfig. */
+    class ThrottlerConfig implements IThrottlerConfig {
+
+        /**
+         * Constructs a new ThrottlerConfig.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: topodata.IThrottlerConfig);
+
+        /** ThrottlerConfig enabled. */
+        public enabled: boolean;
+
+        /** ThrottlerConfig threshold. */
+        public threshold: number;
+
+        /** ThrottlerConfig custom_query. */
+        public custom_query: string;
+
+        /** ThrottlerConfig check_as_check_self. */
+        public check_as_check_self: boolean;
+
+        /**
+         * Creates a new ThrottlerConfig instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ThrottlerConfig instance
+         */
+        public static create(properties?: topodata.IThrottlerConfig): topodata.ThrottlerConfig;
+
+        /**
+         * Encodes the specified ThrottlerConfig message. Does not implicitly {@link topodata.ThrottlerConfig.verify|verify} messages.
+         * @param message ThrottlerConfig message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: topodata.IThrottlerConfig, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ThrottlerConfig message, length delimited. Does not implicitly {@link topodata.ThrottlerConfig.verify|verify} messages.
+         * @param message ThrottlerConfig message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: topodata.IThrottlerConfig, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ThrottlerConfig message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ThrottlerConfig
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): topodata.ThrottlerConfig;
+
+        /**
+         * Decodes a ThrottlerConfig message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ThrottlerConfig
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): topodata.ThrottlerConfig;
+
+        /**
+         * Verifies a ThrottlerConfig message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ThrottlerConfig message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ThrottlerConfig
+         */
+        public static fromObject(object: { [k: string]: any }): topodata.ThrottlerConfig;
+
+        /**
+         * Creates a plain object from a ThrottlerConfig message. Also converts values to other types if specified.
+         * @param message ThrottlerConfig
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: topodata.ThrottlerConfig, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ThrottlerConfig to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ThrottlerConfig
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a SrvKeyspace. */
@@ -13940,7 +15531,7 @@ export namespace topodata {
         served_from?: (topodata.SrvKeyspace.IServedFrom[]|null);
 
         /** SrvKeyspace throttler_config */
-        throttler_config?: (topodata.SrvKeyspace.IThrottlerConfig|null);
+        throttler_config?: (topodata.IThrottlerConfig|null);
     }
 
     /** Represents a SrvKeyspace. */
@@ -13959,7 +15550,7 @@ export namespace topodata {
         public served_from: topodata.SrvKeyspace.IServedFrom[];
 
         /** SrvKeyspace throttler_config. */
-        public throttler_config?: (topodata.SrvKeyspace.IThrottlerConfig|null);
+        public throttler_config?: (topodata.IThrottlerConfig|null);
 
         /**
          * Creates a new SrvKeyspace instance using the specified properties.
@@ -14030,6 +15621,13 @@ export namespace topodata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for SrvKeyspace
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     namespace SrvKeyspace {
@@ -14134,6 +15732,13 @@ export namespace topodata {
              * @returns JSON object
              */
             public toJSON(): { [k: string]: any };
+
+            /**
+             * Gets the default type url for KeyspacePartition
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
         }
 
         /** Properties of a ServedFrom. */
@@ -14230,114 +15835,13 @@ export namespace topodata {
              * @returns JSON object
              */
             public toJSON(): { [k: string]: any };
-        }
-
-        /** Properties of a ThrottlerConfig. */
-        interface IThrottlerConfig {
-
-            /** ThrottlerConfig enabled */
-            enabled?: (boolean|null);
-
-            /** ThrottlerConfig threshold */
-            threshold?: (number|null);
-
-            /** ThrottlerConfig custom_query */
-            custom_query?: (string|null);
-
-            /** ThrottlerConfig check_as_check_self */
-            check_as_check_self?: (boolean|null);
-        }
-
-        /** Represents a ThrottlerConfig. */
-        class ThrottlerConfig implements IThrottlerConfig {
 
             /**
-             * Constructs a new ThrottlerConfig.
-             * @param [properties] Properties to set
+             * Gets the default type url for ServedFrom
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
              */
-            constructor(properties?: topodata.SrvKeyspace.IThrottlerConfig);
-
-            /** ThrottlerConfig enabled. */
-            public enabled: boolean;
-
-            /** ThrottlerConfig threshold. */
-            public threshold: number;
-
-            /** ThrottlerConfig custom_query. */
-            public custom_query: string;
-
-            /** ThrottlerConfig check_as_check_self. */
-            public check_as_check_self: boolean;
-
-            /**
-             * Creates a new ThrottlerConfig instance using the specified properties.
-             * @param [properties] Properties to set
-             * @returns ThrottlerConfig instance
-             */
-            public static create(properties?: topodata.SrvKeyspace.IThrottlerConfig): topodata.SrvKeyspace.ThrottlerConfig;
-
-            /**
-             * Encodes the specified ThrottlerConfig message. Does not implicitly {@link topodata.SrvKeyspace.ThrottlerConfig.verify|verify} messages.
-             * @param message ThrottlerConfig message or plain object to encode
-             * @param [writer] Writer to encode to
-             * @returns Writer
-             */
-            public static encode(message: topodata.SrvKeyspace.IThrottlerConfig, writer?: $protobuf.Writer): $protobuf.Writer;
-
-            /**
-             * Encodes the specified ThrottlerConfig message, length delimited. Does not implicitly {@link topodata.SrvKeyspace.ThrottlerConfig.verify|verify} messages.
-             * @param message ThrottlerConfig message or plain object to encode
-             * @param [writer] Writer to encode to
-             * @returns Writer
-             */
-            public static encodeDelimited(message: topodata.SrvKeyspace.IThrottlerConfig, writer?: $protobuf.Writer): $protobuf.Writer;
-
-            /**
-             * Decodes a ThrottlerConfig message from the specified reader or buffer.
-             * @param reader Reader or buffer to decode from
-             * @param [length] Message length if known beforehand
-             * @returns ThrottlerConfig
-             * @throws {Error} If the payload is not a reader or valid buffer
-             * @throws {$protobuf.util.ProtocolError} If required fields are missing
-             */
-            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): topodata.SrvKeyspace.ThrottlerConfig;
-
-            /**
-             * Decodes a ThrottlerConfig message from the specified reader or buffer, length delimited.
-             * @param reader Reader or buffer to decode from
-             * @returns ThrottlerConfig
-             * @throws {Error} If the payload is not a reader or valid buffer
-             * @throws {$protobuf.util.ProtocolError} If required fields are missing
-             */
-            public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): topodata.SrvKeyspace.ThrottlerConfig;
-
-            /**
-             * Verifies a ThrottlerConfig message.
-             * @param message Plain object to verify
-             * @returns `null` if valid, otherwise the reason why it is not
-             */
-            public static verify(message: { [k: string]: any }): (string|null);
-
-            /**
-             * Creates a ThrottlerConfig message from a plain object. Also converts values to their respective internal types.
-             * @param object Plain object
-             * @returns ThrottlerConfig
-             */
-            public static fromObject(object: { [k: string]: any }): topodata.SrvKeyspace.ThrottlerConfig;
-
-            /**
-             * Creates a plain object from a ThrottlerConfig message. Also converts values to other types if specified.
-             * @param message ThrottlerConfig
-             * @param [options] Conversion options
-             * @returns Plain object
-             */
-            public static toObject(message: topodata.SrvKeyspace.ThrottlerConfig, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-            /**
-             * Converts this ThrottlerConfig to JSON.
-             * @returns JSON object
-             */
-            public toJSON(): { [k: string]: any };
+            public static getTypeUrl(typeUrlPrefix?: string): string;
         }
     }
 
@@ -14435,6 +15939,13 @@ export namespace topodata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for CellInfo
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a CellsAlias. */
@@ -14525,6 +16036,13 @@ export namespace topodata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for CellsAlias
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a TopoConfig. */
@@ -14627,6 +16145,13 @@ export namespace topodata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for TopoConfig
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of an ExternalVitessCluster. */
@@ -14717,6 +16242,13 @@ export namespace topodata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ExternalVitessCluster
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of an ExternalClusters. */
@@ -14807,6 +16339,13 @@ export namespace topodata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ExternalClusters
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 }
 
@@ -14943,6 +16482,13 @@ export namespace tabletmanagerdata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for TableDefinition
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a SchemaDefinition. */
@@ -14953,9 +16499,6 @@ export namespace tabletmanagerdata {
 
         /** SchemaDefinition table_definitions */
         table_definitions?: (tabletmanagerdata.ITableDefinition[]|null);
-
-        /** SchemaDefinition version */
-        version?: (string|null);
     }
 
     /** Represents a SchemaDefinition. */
@@ -14972,9 +16515,6 @@ export namespace tabletmanagerdata {
 
         /** SchemaDefinition table_definitions. */
         public table_definitions: tabletmanagerdata.ITableDefinition[];
-
-        /** SchemaDefinition version. */
-        public version: string;
 
         /**
          * Creates a new SchemaDefinition instance using the specified properties.
@@ -15045,6 +16585,13 @@ export namespace tabletmanagerdata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for SchemaDefinition
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a SchemaChangeResult. */
@@ -15141,6 +16688,13 @@ export namespace tabletmanagerdata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for SchemaChangeResult
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a UserPermission. */
@@ -15249,6 +16803,13 @@ export namespace tabletmanagerdata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for UserPermission
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a DbPermission. */
@@ -15357,6 +16918,13 @@ export namespace tabletmanagerdata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for DbPermission
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a Permissions. */
@@ -15453,6 +17021,13 @@ export namespace tabletmanagerdata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for Permissions
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a PingRequest. */
@@ -15543,6 +17118,13 @@ export namespace tabletmanagerdata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for PingRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a PingResponse. */
@@ -15633,6 +17215,13 @@ export namespace tabletmanagerdata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for PingResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a SleepRequest. */
@@ -15723,6 +17312,13 @@ export namespace tabletmanagerdata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for SleepRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a SleepResponse. */
@@ -15807,6 +17403,13 @@ export namespace tabletmanagerdata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for SleepResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of an ExecuteHookRequest. */
@@ -15909,6 +17512,13 @@ export namespace tabletmanagerdata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ExecuteHookRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of an ExecuteHookResponse. */
@@ -16011,6 +17621,13 @@ export namespace tabletmanagerdata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ExecuteHookResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a GetSchemaRequest. */
@@ -16119,6 +17736,13 @@ export namespace tabletmanagerdata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetSchemaRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a GetSchemaResponse. */
@@ -16209,6 +17833,13 @@ export namespace tabletmanagerdata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetSchemaResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a GetPermissionsRequest. */
@@ -16293,6 +17924,13 @@ export namespace tabletmanagerdata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetPermissionsRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a GetPermissionsResponse. */
@@ -16383,6 +18021,13 @@ export namespace tabletmanagerdata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetPermissionsResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a SetReadOnlyRequest. */
@@ -16467,6 +18112,13 @@ export namespace tabletmanagerdata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for SetReadOnlyRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a SetReadOnlyResponse. */
@@ -16551,6 +18203,13 @@ export namespace tabletmanagerdata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for SetReadOnlyResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a SetReadWriteRequest. */
@@ -16635,6 +18294,13 @@ export namespace tabletmanagerdata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for SetReadWriteRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a SetReadWriteResponse. */
@@ -16719,6 +18385,13 @@ export namespace tabletmanagerdata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for SetReadWriteResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a ChangeTypeRequest. */
@@ -16815,6 +18488,13 @@ export namespace tabletmanagerdata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ChangeTypeRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a ChangeTypeResponse. */
@@ -16899,6 +18579,13 @@ export namespace tabletmanagerdata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ChangeTypeResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a RefreshStateRequest. */
@@ -16983,6 +18670,13 @@ export namespace tabletmanagerdata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for RefreshStateRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a RefreshStateResponse. */
@@ -17067,6 +18761,13 @@ export namespace tabletmanagerdata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for RefreshStateResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a RunHealthCheckRequest. */
@@ -17151,6 +18852,13 @@ export namespace tabletmanagerdata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for RunHealthCheckRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a RunHealthCheckResponse. */
@@ -17235,6 +18943,13 @@ export namespace tabletmanagerdata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for RunHealthCheckResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a ReloadSchemaRequest. */
@@ -17325,6 +19040,13 @@ export namespace tabletmanagerdata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ReloadSchemaRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a ReloadSchemaResponse. */
@@ -17409,6 +19131,13 @@ export namespace tabletmanagerdata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ReloadSchemaResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a PreflightSchemaRequest. */
@@ -17499,6 +19228,13 @@ export namespace tabletmanagerdata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for PreflightSchemaRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a PreflightSchemaResponse. */
@@ -17589,6 +19325,13 @@ export namespace tabletmanagerdata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for PreflightSchemaResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of an ApplySchemaRequest. */
@@ -17709,6 +19452,13 @@ export namespace tabletmanagerdata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ApplySchemaRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of an ApplySchemaResponse. */
@@ -17805,6 +19555,13 @@ export namespace tabletmanagerdata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ApplySchemaResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a LockTablesRequest. */
@@ -17889,6 +19646,13 @@ export namespace tabletmanagerdata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for LockTablesRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a LockTablesResponse. */
@@ -17973,6 +19737,13 @@ export namespace tabletmanagerdata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for LockTablesResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of an UnlockTablesRequest. */
@@ -18057,6 +19828,13 @@ export namespace tabletmanagerdata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for UnlockTablesRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of an UnlockTablesResponse. */
@@ -18141,6 +19919,13 @@ export namespace tabletmanagerdata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for UnlockTablesResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of an ExecuteQueryRequest. */
@@ -18249,6 +20034,13 @@ export namespace tabletmanagerdata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ExecuteQueryRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of an ExecuteQueryResponse. */
@@ -18339,6 +20131,13 @@ export namespace tabletmanagerdata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ExecuteQueryResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of an ExecuteFetchAsDbaRequest. */
@@ -18453,6 +20252,13 @@ export namespace tabletmanagerdata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ExecuteFetchAsDbaRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of an ExecuteFetchAsDbaResponse. */
@@ -18543,6 +20349,13 @@ export namespace tabletmanagerdata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ExecuteFetchAsDbaResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of an ExecuteFetchAsAllPrivsRequest. */
@@ -18651,6 +20464,13 @@ export namespace tabletmanagerdata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ExecuteFetchAsAllPrivsRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of an ExecuteFetchAsAllPrivsResponse. */
@@ -18741,6 +20561,13 @@ export namespace tabletmanagerdata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ExecuteFetchAsAllPrivsResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of an ExecuteFetchAsAppRequest. */
@@ -18837,6 +20664,13 @@ export namespace tabletmanagerdata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ExecuteFetchAsAppRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of an ExecuteFetchAsAppResponse. */
@@ -18927,6 +20761,13 @@ export namespace tabletmanagerdata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ExecuteFetchAsAppResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a ReplicationStatusRequest. */
@@ -19011,6 +20852,13 @@ export namespace tabletmanagerdata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ReplicationStatusRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a ReplicationStatusResponse. */
@@ -19101,6 +20949,13 @@ export namespace tabletmanagerdata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ReplicationStatusResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a PrimaryStatusRequest. */
@@ -19185,6 +21040,13 @@ export namespace tabletmanagerdata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for PrimaryStatusRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a PrimaryStatusResponse. */
@@ -19275,6 +21137,13 @@ export namespace tabletmanagerdata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for PrimaryStatusResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a PrimaryPositionRequest. */
@@ -19359,6 +21228,13 @@ export namespace tabletmanagerdata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for PrimaryPositionRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a PrimaryPositionResponse. */
@@ -19449,6 +21325,13 @@ export namespace tabletmanagerdata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for PrimaryPositionResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a WaitForPositionRequest. */
@@ -19539,6 +21422,13 @@ export namespace tabletmanagerdata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for WaitForPositionRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a WaitForPositionResponse. */
@@ -19623,6 +21513,13 @@ export namespace tabletmanagerdata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for WaitForPositionResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a StopReplicationRequest. */
@@ -19707,6 +21604,13 @@ export namespace tabletmanagerdata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for StopReplicationRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a StopReplicationResponse. */
@@ -19791,6 +21695,13 @@ export namespace tabletmanagerdata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for StopReplicationResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a StopReplicationMinimumRequest. */
@@ -19887,6 +21798,13 @@ export namespace tabletmanagerdata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for StopReplicationMinimumRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a StopReplicationMinimumResponse. */
@@ -19977,6 +21895,13 @@ export namespace tabletmanagerdata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for StopReplicationMinimumResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a StartReplicationRequest. */
@@ -20067,6 +21992,13 @@ export namespace tabletmanagerdata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for StartReplicationRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a StartReplicationResponse. */
@@ -20151,6 +22083,13 @@ export namespace tabletmanagerdata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for StartReplicationResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a StartReplicationUntilAfterRequest. */
@@ -20247,6 +22186,13 @@ export namespace tabletmanagerdata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for StartReplicationUntilAfterRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a StartReplicationUntilAfterResponse. */
@@ -20331,6 +22277,13 @@ export namespace tabletmanagerdata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for StartReplicationUntilAfterResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a GetReplicasRequest. */
@@ -20415,6 +22368,13 @@ export namespace tabletmanagerdata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetReplicasRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a GetReplicasResponse. */
@@ -20505,6 +22465,13 @@ export namespace tabletmanagerdata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetReplicasResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a ResetReplicationRequest. */
@@ -20589,6 +22556,13 @@ export namespace tabletmanagerdata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ResetReplicationRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a ResetReplicationResponse. */
@@ -20673,6 +22647,13 @@ export namespace tabletmanagerdata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ResetReplicationResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a VReplicationExecRequest. */
@@ -20763,6 +22744,13 @@ export namespace tabletmanagerdata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for VReplicationExecRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a VReplicationExecResponse. */
@@ -20853,6 +22841,13 @@ export namespace tabletmanagerdata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for VReplicationExecResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a VReplicationWaitForPosRequest. */
@@ -20949,6 +22944,13 @@ export namespace tabletmanagerdata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for VReplicationWaitForPosRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a VReplicationWaitForPosResponse. */
@@ -21033,6 +23035,13 @@ export namespace tabletmanagerdata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for VReplicationWaitForPosResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of an InitPrimaryRequest. */
@@ -21123,6 +23132,13 @@ export namespace tabletmanagerdata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for InitPrimaryRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of an InitPrimaryResponse. */
@@ -21213,6 +23229,13 @@ export namespace tabletmanagerdata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for InitPrimaryResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a PopulateReparentJournalRequest. */
@@ -21321,6 +23344,13 @@ export namespace tabletmanagerdata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for PopulateReparentJournalRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a PopulateReparentJournalResponse. */
@@ -21405,6 +23435,13 @@ export namespace tabletmanagerdata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for PopulateReparentJournalResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of an InitReplicaRequest. */
@@ -21513,6 +23550,13 @@ export namespace tabletmanagerdata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for InitReplicaRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of an InitReplicaResponse. */
@@ -21597,6 +23641,13 @@ export namespace tabletmanagerdata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for InitReplicaResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a DemotePrimaryRequest. */
@@ -21681,6 +23732,13 @@ export namespace tabletmanagerdata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for DemotePrimaryRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a DemotePrimaryResponse. */
@@ -21771,6 +23829,13 @@ export namespace tabletmanagerdata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for DemotePrimaryResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of an UndoDemotePrimaryRequest. */
@@ -21861,6 +23926,13 @@ export namespace tabletmanagerdata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for UndoDemotePrimaryRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of an UndoDemotePrimaryResponse. */
@@ -21945,6 +24017,13 @@ export namespace tabletmanagerdata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for UndoDemotePrimaryResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a ReplicaWasPromotedRequest. */
@@ -22029,6 +24108,13 @@ export namespace tabletmanagerdata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ReplicaWasPromotedRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a ReplicaWasPromotedResponse. */
@@ -22113,6 +24199,13 @@ export namespace tabletmanagerdata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ReplicaWasPromotedResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a ResetReplicationParametersRequest. */
@@ -22197,6 +24290,13 @@ export namespace tabletmanagerdata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ResetReplicationParametersRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a ResetReplicationParametersResponse. */
@@ -22281,6 +24381,13 @@ export namespace tabletmanagerdata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ResetReplicationParametersResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a FullStatusRequest. */
@@ -22365,6 +24472,13 @@ export namespace tabletmanagerdata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for FullStatusRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a FullStatusResponse. */
@@ -22455,6 +24569,13 @@ export namespace tabletmanagerdata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for FullStatusResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a SetReplicationSourceRequest. */
@@ -22569,6 +24690,13 @@ export namespace tabletmanagerdata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for SetReplicationSourceRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a SetReplicationSourceResponse. */
@@ -22653,6 +24781,13 @@ export namespace tabletmanagerdata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for SetReplicationSourceResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a ReplicaWasRestartedRequest. */
@@ -22743,6 +24878,13 @@ export namespace tabletmanagerdata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ReplicaWasRestartedRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a ReplicaWasRestartedResponse. */
@@ -22827,6 +24969,13 @@ export namespace tabletmanagerdata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ReplicaWasRestartedResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a StopReplicationAndGetStatusRequest. */
@@ -22917,6 +25066,13 @@ export namespace tabletmanagerdata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for StopReplicationAndGetStatusRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a StopReplicationAndGetStatusResponse. */
@@ -23007,6 +25163,13 @@ export namespace tabletmanagerdata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for StopReplicationAndGetStatusResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a PromoteReplicaRequest. */
@@ -23097,6 +25260,13 @@ export namespace tabletmanagerdata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for PromoteReplicaRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a PromoteReplicaResponse. */
@@ -23187,6 +25357,13 @@ export namespace tabletmanagerdata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for PromoteReplicaResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a BackupRequest. */
@@ -23289,6 +25466,13 @@ export namespace tabletmanagerdata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for BackupRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a BackupResponse. */
@@ -23379,6 +25563,13 @@ export namespace tabletmanagerdata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for BackupResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a RestoreFromBackupRequest. */
@@ -23481,6 +25672,13 @@ export namespace tabletmanagerdata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for RestoreFromBackupRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a RestoreFromBackupResponse. */
@@ -23571,198 +25769,13 @@ export namespace tabletmanagerdata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
-    }
-
-    /** Properties of a VExecRequest. */
-    interface IVExecRequest {
-
-        /** VExecRequest query */
-        query?: (string|null);
-
-        /** VExecRequest workflow */
-        workflow?: (string|null);
-
-        /** VExecRequest keyspace */
-        keyspace?: (string|null);
-    }
-
-    /** Represents a VExecRequest. */
-    class VExecRequest implements IVExecRequest {
 
         /**
-         * Constructs a new VExecRequest.
-         * @param [properties] Properties to set
+         * Gets the default type url for RestoreFromBackupResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
          */
-        constructor(properties?: tabletmanagerdata.IVExecRequest);
-
-        /** VExecRequest query. */
-        public query: string;
-
-        /** VExecRequest workflow. */
-        public workflow: string;
-
-        /** VExecRequest keyspace. */
-        public keyspace: string;
-
-        /**
-         * Creates a new VExecRequest instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns VExecRequest instance
-         */
-        public static create(properties?: tabletmanagerdata.IVExecRequest): tabletmanagerdata.VExecRequest;
-
-        /**
-         * Encodes the specified VExecRequest message. Does not implicitly {@link tabletmanagerdata.VExecRequest.verify|verify} messages.
-         * @param message VExecRequest message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: tabletmanagerdata.IVExecRequest, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified VExecRequest message, length delimited. Does not implicitly {@link tabletmanagerdata.VExecRequest.verify|verify} messages.
-         * @param message VExecRequest message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: tabletmanagerdata.IVExecRequest, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a VExecRequest message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns VExecRequest
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): tabletmanagerdata.VExecRequest;
-
-        /**
-         * Decodes a VExecRequest message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns VExecRequest
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): tabletmanagerdata.VExecRequest;
-
-        /**
-         * Verifies a VExecRequest message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a VExecRequest message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns VExecRequest
-         */
-        public static fromObject(object: { [k: string]: any }): tabletmanagerdata.VExecRequest;
-
-        /**
-         * Creates a plain object from a VExecRequest message. Also converts values to other types if specified.
-         * @param message VExecRequest
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: tabletmanagerdata.VExecRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this VExecRequest to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-    }
-
-    /** Properties of a VExecResponse. */
-    interface IVExecResponse {
-
-        /** VExecResponse result */
-        result?: (query.IQueryResult|null);
-    }
-
-    /** Represents a VExecResponse. */
-    class VExecResponse implements IVExecResponse {
-
-        /**
-         * Constructs a new VExecResponse.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: tabletmanagerdata.IVExecResponse);
-
-        /** VExecResponse result. */
-        public result?: (query.IQueryResult|null);
-
-        /**
-         * Creates a new VExecResponse instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns VExecResponse instance
-         */
-        public static create(properties?: tabletmanagerdata.IVExecResponse): tabletmanagerdata.VExecResponse;
-
-        /**
-         * Encodes the specified VExecResponse message. Does not implicitly {@link tabletmanagerdata.VExecResponse.verify|verify} messages.
-         * @param message VExecResponse message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: tabletmanagerdata.IVExecResponse, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified VExecResponse message, length delimited. Does not implicitly {@link tabletmanagerdata.VExecResponse.verify|verify} messages.
-         * @param message VExecResponse message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: tabletmanagerdata.IVExecResponse, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a VExecResponse message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns VExecResponse
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): tabletmanagerdata.VExecResponse;
-
-        /**
-         * Decodes a VExecResponse message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns VExecResponse
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): tabletmanagerdata.VExecResponse;
-
-        /**
-         * Verifies a VExecResponse message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a VExecResponse message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns VExecResponse
-         */
-        public static fromObject(object: { [k: string]: any }): tabletmanagerdata.VExecResponse;
-
-        /**
-         * Creates a plain object from a VExecResponse message. Also converts values to other types if specified.
-         * @param message VExecResponse
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: tabletmanagerdata.VExecResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this VExecResponse to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a VDiffRequest. */
@@ -23883,6 +25896,13 @@ export namespace tabletmanagerdata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for VDiffRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a VDiffResponse. */
@@ -23985,6 +26005,13 @@ export namespace tabletmanagerdata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for VDiffResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a VDiffPickerOptions. */
@@ -24087,6 +26114,13 @@ export namespace tabletmanagerdata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for VDiffPickerOptions
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a VDiffReportOptions. */
@@ -24189,6 +26223,13 @@ export namespace tabletmanagerdata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for VDiffReportOptions
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a VDiffCoreOptions. */
@@ -24214,6 +26255,9 @@ export namespace tabletmanagerdata {
 
         /** VDiffCoreOptions max_extra_rows_to_compare */
         max_extra_rows_to_compare?: (number|Long|null);
+
+        /** VDiffCoreOptions update_table_stats */
+        update_table_stats?: (boolean|null);
     }
 
     /** Represents a VDiffCoreOptions. */
@@ -24245,6 +26289,9 @@ export namespace tabletmanagerdata {
 
         /** VDiffCoreOptions max_extra_rows_to_compare. */
         public max_extra_rows_to_compare: (number|Long);
+
+        /** VDiffCoreOptions update_table_stats. */
+        public update_table_stats: boolean;
 
         /**
          * Creates a new VDiffCoreOptions instance using the specified properties.
@@ -24315,6 +26362,13 @@ export namespace tabletmanagerdata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for VDiffCoreOptions
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a VDiffOptions. */
@@ -24417,6 +26471,3993 @@ export namespace tabletmanagerdata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for VDiffOptions
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of an UpdateVRWorkflowRequest. */
+    interface IUpdateVRWorkflowRequest {
+
+        /** UpdateVRWorkflowRequest workflow */
+        workflow?: (string|null);
+
+        /** UpdateVRWorkflowRequest cells */
+        cells?: (string[]|null);
+
+        /** UpdateVRWorkflowRequest tablet_types */
+        tablet_types?: (string[]|null);
+
+        /** UpdateVRWorkflowRequest on_ddl */
+        on_ddl?: (binlogdata.OnDDLAction|null);
+    }
+
+    /** Represents an UpdateVRWorkflowRequest. */
+    class UpdateVRWorkflowRequest implements IUpdateVRWorkflowRequest {
+
+        /**
+         * Constructs a new UpdateVRWorkflowRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: tabletmanagerdata.IUpdateVRWorkflowRequest);
+
+        /** UpdateVRWorkflowRequest workflow. */
+        public workflow: string;
+
+        /** UpdateVRWorkflowRequest cells. */
+        public cells: string[];
+
+        /** UpdateVRWorkflowRequest tablet_types. */
+        public tablet_types: string[];
+
+        /** UpdateVRWorkflowRequest on_ddl. */
+        public on_ddl: binlogdata.OnDDLAction;
+
+        /**
+         * Creates a new UpdateVRWorkflowRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns UpdateVRWorkflowRequest instance
+         */
+        public static create(properties?: tabletmanagerdata.IUpdateVRWorkflowRequest): tabletmanagerdata.UpdateVRWorkflowRequest;
+
+        /**
+         * Encodes the specified UpdateVRWorkflowRequest message. Does not implicitly {@link tabletmanagerdata.UpdateVRWorkflowRequest.verify|verify} messages.
+         * @param message UpdateVRWorkflowRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: tabletmanagerdata.IUpdateVRWorkflowRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified UpdateVRWorkflowRequest message, length delimited. Does not implicitly {@link tabletmanagerdata.UpdateVRWorkflowRequest.verify|verify} messages.
+         * @param message UpdateVRWorkflowRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: tabletmanagerdata.IUpdateVRWorkflowRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes an UpdateVRWorkflowRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns UpdateVRWorkflowRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): tabletmanagerdata.UpdateVRWorkflowRequest;
+
+        /**
+         * Decodes an UpdateVRWorkflowRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns UpdateVRWorkflowRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): tabletmanagerdata.UpdateVRWorkflowRequest;
+
+        /**
+         * Verifies an UpdateVRWorkflowRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates an UpdateVRWorkflowRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns UpdateVRWorkflowRequest
+         */
+        public static fromObject(object: { [k: string]: any }): tabletmanagerdata.UpdateVRWorkflowRequest;
+
+        /**
+         * Creates a plain object from an UpdateVRWorkflowRequest message. Also converts values to other types if specified.
+         * @param message UpdateVRWorkflowRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: tabletmanagerdata.UpdateVRWorkflowRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this UpdateVRWorkflowRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for UpdateVRWorkflowRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of an UpdateVRWorkflowResponse. */
+    interface IUpdateVRWorkflowResponse {
+
+        /** UpdateVRWorkflowResponse result */
+        result?: (query.IQueryResult|null);
+    }
+
+    /** Represents an UpdateVRWorkflowResponse. */
+    class UpdateVRWorkflowResponse implements IUpdateVRWorkflowResponse {
+
+        /**
+         * Constructs a new UpdateVRWorkflowResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: tabletmanagerdata.IUpdateVRWorkflowResponse);
+
+        /** UpdateVRWorkflowResponse result. */
+        public result?: (query.IQueryResult|null);
+
+        /**
+         * Creates a new UpdateVRWorkflowResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns UpdateVRWorkflowResponse instance
+         */
+        public static create(properties?: tabletmanagerdata.IUpdateVRWorkflowResponse): tabletmanagerdata.UpdateVRWorkflowResponse;
+
+        /**
+         * Encodes the specified UpdateVRWorkflowResponse message. Does not implicitly {@link tabletmanagerdata.UpdateVRWorkflowResponse.verify|verify} messages.
+         * @param message UpdateVRWorkflowResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: tabletmanagerdata.IUpdateVRWorkflowResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified UpdateVRWorkflowResponse message, length delimited. Does not implicitly {@link tabletmanagerdata.UpdateVRWorkflowResponse.verify|verify} messages.
+         * @param message UpdateVRWorkflowResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: tabletmanagerdata.IUpdateVRWorkflowResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes an UpdateVRWorkflowResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns UpdateVRWorkflowResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): tabletmanagerdata.UpdateVRWorkflowResponse;
+
+        /**
+         * Decodes an UpdateVRWorkflowResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns UpdateVRWorkflowResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): tabletmanagerdata.UpdateVRWorkflowResponse;
+
+        /**
+         * Verifies an UpdateVRWorkflowResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates an UpdateVRWorkflowResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns UpdateVRWorkflowResponse
+         */
+        public static fromObject(object: { [k: string]: any }): tabletmanagerdata.UpdateVRWorkflowResponse;
+
+        /**
+         * Creates a plain object from an UpdateVRWorkflowResponse message. Also converts values to other types if specified.
+         * @param message UpdateVRWorkflowResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: tabletmanagerdata.UpdateVRWorkflowResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this UpdateVRWorkflowResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for UpdateVRWorkflowResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+}
+
+/** Namespace binlogdata. */
+export namespace binlogdata {
+
+    /** Properties of a Charset. */
+    interface ICharset {
+
+        /** Charset client */
+        client?: (number|null);
+
+        /** Charset conn */
+        conn?: (number|null);
+
+        /** Charset server */
+        server?: (number|null);
+    }
+
+    /** Represents a Charset. */
+    class Charset implements ICharset {
+
+        /**
+         * Constructs a new Charset.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: binlogdata.ICharset);
+
+        /** Charset client. */
+        public client: number;
+
+        /** Charset conn. */
+        public conn: number;
+
+        /** Charset server. */
+        public server: number;
+
+        /**
+         * Creates a new Charset instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns Charset instance
+         */
+        public static create(properties?: binlogdata.ICharset): binlogdata.Charset;
+
+        /**
+         * Encodes the specified Charset message. Does not implicitly {@link binlogdata.Charset.verify|verify} messages.
+         * @param message Charset message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: binlogdata.ICharset, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified Charset message, length delimited. Does not implicitly {@link binlogdata.Charset.verify|verify} messages.
+         * @param message Charset message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: binlogdata.ICharset, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a Charset message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns Charset
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.Charset;
+
+        /**
+         * Decodes a Charset message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns Charset
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.Charset;
+
+        /**
+         * Verifies a Charset message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a Charset message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns Charset
+         */
+        public static fromObject(object: { [k: string]: any }): binlogdata.Charset;
+
+        /**
+         * Creates a plain object from a Charset message. Also converts values to other types if specified.
+         * @param message Charset
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: binlogdata.Charset, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this Charset to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for Charset
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a BinlogTransaction. */
+    interface IBinlogTransaction {
+
+        /** BinlogTransaction statements */
+        statements?: (binlogdata.BinlogTransaction.IStatement[]|null);
+
+        /** BinlogTransaction event_token */
+        event_token?: (query.IEventToken|null);
+    }
+
+    /** Represents a BinlogTransaction. */
+    class BinlogTransaction implements IBinlogTransaction {
+
+        /**
+         * Constructs a new BinlogTransaction.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: binlogdata.IBinlogTransaction);
+
+        /** BinlogTransaction statements. */
+        public statements: binlogdata.BinlogTransaction.IStatement[];
+
+        /** BinlogTransaction event_token. */
+        public event_token?: (query.IEventToken|null);
+
+        /**
+         * Creates a new BinlogTransaction instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns BinlogTransaction instance
+         */
+        public static create(properties?: binlogdata.IBinlogTransaction): binlogdata.BinlogTransaction;
+
+        /**
+         * Encodes the specified BinlogTransaction message. Does not implicitly {@link binlogdata.BinlogTransaction.verify|verify} messages.
+         * @param message BinlogTransaction message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: binlogdata.IBinlogTransaction, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified BinlogTransaction message, length delimited. Does not implicitly {@link binlogdata.BinlogTransaction.verify|verify} messages.
+         * @param message BinlogTransaction message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: binlogdata.IBinlogTransaction, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a BinlogTransaction message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns BinlogTransaction
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.BinlogTransaction;
+
+        /**
+         * Decodes a BinlogTransaction message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns BinlogTransaction
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.BinlogTransaction;
+
+        /**
+         * Verifies a BinlogTransaction message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a BinlogTransaction message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns BinlogTransaction
+         */
+        public static fromObject(object: { [k: string]: any }): binlogdata.BinlogTransaction;
+
+        /**
+         * Creates a plain object from a BinlogTransaction message. Also converts values to other types if specified.
+         * @param message BinlogTransaction
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: binlogdata.BinlogTransaction, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this BinlogTransaction to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for BinlogTransaction
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    namespace BinlogTransaction {
+
+        /** Properties of a Statement. */
+        interface IStatement {
+
+            /** Statement category */
+            category?: (binlogdata.BinlogTransaction.Statement.Category|null);
+
+            /** Statement charset */
+            charset?: (binlogdata.ICharset|null);
+
+            /** Statement sql */
+            sql?: (Uint8Array|null);
+        }
+
+        /** Represents a Statement. */
+        class Statement implements IStatement {
+
+            /**
+             * Constructs a new Statement.
+             * @param [properties] Properties to set
+             */
+            constructor(properties?: binlogdata.BinlogTransaction.IStatement);
+
+            /** Statement category. */
+            public category: binlogdata.BinlogTransaction.Statement.Category;
+
+            /** Statement charset. */
+            public charset?: (binlogdata.ICharset|null);
+
+            /** Statement sql. */
+            public sql: Uint8Array;
+
+            /**
+             * Creates a new Statement instance using the specified properties.
+             * @param [properties] Properties to set
+             * @returns Statement instance
+             */
+            public static create(properties?: binlogdata.BinlogTransaction.IStatement): binlogdata.BinlogTransaction.Statement;
+
+            /**
+             * Encodes the specified Statement message. Does not implicitly {@link binlogdata.BinlogTransaction.Statement.verify|verify} messages.
+             * @param message Statement message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encode(message: binlogdata.BinlogTransaction.IStatement, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Encodes the specified Statement message, length delimited. Does not implicitly {@link binlogdata.BinlogTransaction.Statement.verify|verify} messages.
+             * @param message Statement message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encodeDelimited(message: binlogdata.BinlogTransaction.IStatement, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Decodes a Statement message from the specified reader or buffer.
+             * @param reader Reader or buffer to decode from
+             * @param [length] Message length if known beforehand
+             * @returns Statement
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.BinlogTransaction.Statement;
+
+            /**
+             * Decodes a Statement message from the specified reader or buffer, length delimited.
+             * @param reader Reader or buffer to decode from
+             * @returns Statement
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.BinlogTransaction.Statement;
+
+            /**
+             * Verifies a Statement message.
+             * @param message Plain object to verify
+             * @returns `null` if valid, otherwise the reason why it is not
+             */
+            public static verify(message: { [k: string]: any }): (string|null);
+
+            /**
+             * Creates a Statement message from a plain object. Also converts values to their respective internal types.
+             * @param object Plain object
+             * @returns Statement
+             */
+            public static fromObject(object: { [k: string]: any }): binlogdata.BinlogTransaction.Statement;
+
+            /**
+             * Creates a plain object from a Statement message. Also converts values to other types if specified.
+             * @param message Statement
+             * @param [options] Conversion options
+             * @returns Plain object
+             */
+            public static toObject(message: binlogdata.BinlogTransaction.Statement, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+            /**
+             * Converts this Statement to JSON.
+             * @returns JSON object
+             */
+            public toJSON(): { [k: string]: any };
+
+            /**
+             * Gets the default type url for Statement
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
+        }
+
+        namespace Statement {
+
+            /** Category enum. */
+            enum Category {
+                BL_UNRECOGNIZED = 0,
+                BL_BEGIN = 1,
+                BL_COMMIT = 2,
+                BL_ROLLBACK = 3,
+                BL_DML_DEPRECATED = 4,
+                BL_DDL = 5,
+                BL_SET = 6,
+                BL_INSERT = 7,
+                BL_UPDATE = 8,
+                BL_DELETE = 9
+            }
+        }
+    }
+
+    /** Properties of a StreamKeyRangeRequest. */
+    interface IStreamKeyRangeRequest {
+
+        /** StreamKeyRangeRequest position */
+        position?: (string|null);
+
+        /** StreamKeyRangeRequest key_range */
+        key_range?: (topodata.IKeyRange|null);
+
+        /** StreamKeyRangeRequest charset */
+        charset?: (binlogdata.ICharset|null);
+    }
+
+    /** Represents a StreamKeyRangeRequest. */
+    class StreamKeyRangeRequest implements IStreamKeyRangeRequest {
+
+        /**
+         * Constructs a new StreamKeyRangeRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: binlogdata.IStreamKeyRangeRequest);
+
+        /** StreamKeyRangeRequest position. */
+        public position: string;
+
+        /** StreamKeyRangeRequest key_range. */
+        public key_range?: (topodata.IKeyRange|null);
+
+        /** StreamKeyRangeRequest charset. */
+        public charset?: (binlogdata.ICharset|null);
+
+        /**
+         * Creates a new StreamKeyRangeRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns StreamKeyRangeRequest instance
+         */
+        public static create(properties?: binlogdata.IStreamKeyRangeRequest): binlogdata.StreamKeyRangeRequest;
+
+        /**
+         * Encodes the specified StreamKeyRangeRequest message. Does not implicitly {@link binlogdata.StreamKeyRangeRequest.verify|verify} messages.
+         * @param message StreamKeyRangeRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: binlogdata.IStreamKeyRangeRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified StreamKeyRangeRequest message, length delimited. Does not implicitly {@link binlogdata.StreamKeyRangeRequest.verify|verify} messages.
+         * @param message StreamKeyRangeRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: binlogdata.IStreamKeyRangeRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a StreamKeyRangeRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns StreamKeyRangeRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.StreamKeyRangeRequest;
+
+        /**
+         * Decodes a StreamKeyRangeRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns StreamKeyRangeRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.StreamKeyRangeRequest;
+
+        /**
+         * Verifies a StreamKeyRangeRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a StreamKeyRangeRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns StreamKeyRangeRequest
+         */
+        public static fromObject(object: { [k: string]: any }): binlogdata.StreamKeyRangeRequest;
+
+        /**
+         * Creates a plain object from a StreamKeyRangeRequest message. Also converts values to other types if specified.
+         * @param message StreamKeyRangeRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: binlogdata.StreamKeyRangeRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this StreamKeyRangeRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for StreamKeyRangeRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a StreamKeyRangeResponse. */
+    interface IStreamKeyRangeResponse {
+
+        /** StreamKeyRangeResponse binlog_transaction */
+        binlog_transaction?: (binlogdata.IBinlogTransaction|null);
+    }
+
+    /** Represents a StreamKeyRangeResponse. */
+    class StreamKeyRangeResponse implements IStreamKeyRangeResponse {
+
+        /**
+         * Constructs a new StreamKeyRangeResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: binlogdata.IStreamKeyRangeResponse);
+
+        /** StreamKeyRangeResponse binlog_transaction. */
+        public binlog_transaction?: (binlogdata.IBinlogTransaction|null);
+
+        /**
+         * Creates a new StreamKeyRangeResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns StreamKeyRangeResponse instance
+         */
+        public static create(properties?: binlogdata.IStreamKeyRangeResponse): binlogdata.StreamKeyRangeResponse;
+
+        /**
+         * Encodes the specified StreamKeyRangeResponse message. Does not implicitly {@link binlogdata.StreamKeyRangeResponse.verify|verify} messages.
+         * @param message StreamKeyRangeResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: binlogdata.IStreamKeyRangeResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified StreamKeyRangeResponse message, length delimited. Does not implicitly {@link binlogdata.StreamKeyRangeResponse.verify|verify} messages.
+         * @param message StreamKeyRangeResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: binlogdata.IStreamKeyRangeResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a StreamKeyRangeResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns StreamKeyRangeResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.StreamKeyRangeResponse;
+
+        /**
+         * Decodes a StreamKeyRangeResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns StreamKeyRangeResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.StreamKeyRangeResponse;
+
+        /**
+         * Verifies a StreamKeyRangeResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a StreamKeyRangeResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns StreamKeyRangeResponse
+         */
+        public static fromObject(object: { [k: string]: any }): binlogdata.StreamKeyRangeResponse;
+
+        /**
+         * Creates a plain object from a StreamKeyRangeResponse message. Also converts values to other types if specified.
+         * @param message StreamKeyRangeResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: binlogdata.StreamKeyRangeResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this StreamKeyRangeResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for StreamKeyRangeResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a StreamTablesRequest. */
+    interface IStreamTablesRequest {
+
+        /** StreamTablesRequest position */
+        position?: (string|null);
+
+        /** StreamTablesRequest tables */
+        tables?: (string[]|null);
+
+        /** StreamTablesRequest charset */
+        charset?: (binlogdata.ICharset|null);
+    }
+
+    /** Represents a StreamTablesRequest. */
+    class StreamTablesRequest implements IStreamTablesRequest {
+
+        /**
+         * Constructs a new StreamTablesRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: binlogdata.IStreamTablesRequest);
+
+        /** StreamTablesRequest position. */
+        public position: string;
+
+        /** StreamTablesRequest tables. */
+        public tables: string[];
+
+        /** StreamTablesRequest charset. */
+        public charset?: (binlogdata.ICharset|null);
+
+        /**
+         * Creates a new StreamTablesRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns StreamTablesRequest instance
+         */
+        public static create(properties?: binlogdata.IStreamTablesRequest): binlogdata.StreamTablesRequest;
+
+        /**
+         * Encodes the specified StreamTablesRequest message. Does not implicitly {@link binlogdata.StreamTablesRequest.verify|verify} messages.
+         * @param message StreamTablesRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: binlogdata.IStreamTablesRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified StreamTablesRequest message, length delimited. Does not implicitly {@link binlogdata.StreamTablesRequest.verify|verify} messages.
+         * @param message StreamTablesRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: binlogdata.IStreamTablesRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a StreamTablesRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns StreamTablesRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.StreamTablesRequest;
+
+        /**
+         * Decodes a StreamTablesRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns StreamTablesRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.StreamTablesRequest;
+
+        /**
+         * Verifies a StreamTablesRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a StreamTablesRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns StreamTablesRequest
+         */
+        public static fromObject(object: { [k: string]: any }): binlogdata.StreamTablesRequest;
+
+        /**
+         * Creates a plain object from a StreamTablesRequest message. Also converts values to other types if specified.
+         * @param message StreamTablesRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: binlogdata.StreamTablesRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this StreamTablesRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for StreamTablesRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a StreamTablesResponse. */
+    interface IStreamTablesResponse {
+
+        /** StreamTablesResponse binlog_transaction */
+        binlog_transaction?: (binlogdata.IBinlogTransaction|null);
+    }
+
+    /** Represents a StreamTablesResponse. */
+    class StreamTablesResponse implements IStreamTablesResponse {
+
+        /**
+         * Constructs a new StreamTablesResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: binlogdata.IStreamTablesResponse);
+
+        /** StreamTablesResponse binlog_transaction. */
+        public binlog_transaction?: (binlogdata.IBinlogTransaction|null);
+
+        /**
+         * Creates a new StreamTablesResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns StreamTablesResponse instance
+         */
+        public static create(properties?: binlogdata.IStreamTablesResponse): binlogdata.StreamTablesResponse;
+
+        /**
+         * Encodes the specified StreamTablesResponse message. Does not implicitly {@link binlogdata.StreamTablesResponse.verify|verify} messages.
+         * @param message StreamTablesResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: binlogdata.IStreamTablesResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified StreamTablesResponse message, length delimited. Does not implicitly {@link binlogdata.StreamTablesResponse.verify|verify} messages.
+         * @param message StreamTablesResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: binlogdata.IStreamTablesResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a StreamTablesResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns StreamTablesResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.StreamTablesResponse;
+
+        /**
+         * Decodes a StreamTablesResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns StreamTablesResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.StreamTablesResponse;
+
+        /**
+         * Verifies a StreamTablesResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a StreamTablesResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns StreamTablesResponse
+         */
+        public static fromObject(object: { [k: string]: any }): binlogdata.StreamTablesResponse;
+
+        /**
+         * Creates a plain object from a StreamTablesResponse message. Also converts values to other types if specified.
+         * @param message StreamTablesResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: binlogdata.StreamTablesResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this StreamTablesResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for StreamTablesResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a CharsetConversion. */
+    interface ICharsetConversion {
+
+        /** CharsetConversion from_charset */
+        from_charset?: (string|null);
+
+        /** CharsetConversion to_charset */
+        to_charset?: (string|null);
+    }
+
+    /** Represents a CharsetConversion. */
+    class CharsetConversion implements ICharsetConversion {
+
+        /**
+         * Constructs a new CharsetConversion.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: binlogdata.ICharsetConversion);
+
+        /** CharsetConversion from_charset. */
+        public from_charset: string;
+
+        /** CharsetConversion to_charset. */
+        public to_charset: string;
+
+        /**
+         * Creates a new CharsetConversion instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns CharsetConversion instance
+         */
+        public static create(properties?: binlogdata.ICharsetConversion): binlogdata.CharsetConversion;
+
+        /**
+         * Encodes the specified CharsetConversion message. Does not implicitly {@link binlogdata.CharsetConversion.verify|verify} messages.
+         * @param message CharsetConversion message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: binlogdata.ICharsetConversion, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified CharsetConversion message, length delimited. Does not implicitly {@link binlogdata.CharsetConversion.verify|verify} messages.
+         * @param message CharsetConversion message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: binlogdata.ICharsetConversion, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a CharsetConversion message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns CharsetConversion
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.CharsetConversion;
+
+        /**
+         * Decodes a CharsetConversion message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns CharsetConversion
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.CharsetConversion;
+
+        /**
+         * Verifies a CharsetConversion message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a CharsetConversion message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns CharsetConversion
+         */
+        public static fromObject(object: { [k: string]: any }): binlogdata.CharsetConversion;
+
+        /**
+         * Creates a plain object from a CharsetConversion message. Also converts values to other types if specified.
+         * @param message CharsetConversion
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: binlogdata.CharsetConversion, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this CharsetConversion to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for CharsetConversion
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a Rule. */
+    interface IRule {
+
+        /** Rule match */
+        match?: (string|null);
+
+        /** Rule filter */
+        filter?: (string|null);
+
+        /** Rule convert_enum_to_text */
+        convert_enum_to_text?: ({ [k: string]: string }|null);
+
+        /** Rule convert_charset */
+        convert_charset?: ({ [k: string]: binlogdata.ICharsetConversion }|null);
+
+        /** Rule source_unique_key_columns */
+        source_unique_key_columns?: (string|null);
+
+        /** Rule target_unique_key_columns */
+        target_unique_key_columns?: (string|null);
+
+        /** Rule source_unique_key_target_columns */
+        source_unique_key_target_columns?: (string|null);
+
+        /** Rule convert_int_to_enum */
+        convert_int_to_enum?: ({ [k: string]: boolean }|null);
+    }
+
+    /** Represents a Rule. */
+    class Rule implements IRule {
+
+        /**
+         * Constructs a new Rule.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: binlogdata.IRule);
+
+        /** Rule match. */
+        public match: string;
+
+        /** Rule filter. */
+        public filter: string;
+
+        /** Rule convert_enum_to_text. */
+        public convert_enum_to_text: { [k: string]: string };
+
+        /** Rule convert_charset. */
+        public convert_charset: { [k: string]: binlogdata.ICharsetConversion };
+
+        /** Rule source_unique_key_columns. */
+        public source_unique_key_columns: string;
+
+        /** Rule target_unique_key_columns. */
+        public target_unique_key_columns: string;
+
+        /** Rule source_unique_key_target_columns. */
+        public source_unique_key_target_columns: string;
+
+        /** Rule convert_int_to_enum. */
+        public convert_int_to_enum: { [k: string]: boolean };
+
+        /**
+         * Creates a new Rule instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns Rule instance
+         */
+        public static create(properties?: binlogdata.IRule): binlogdata.Rule;
+
+        /**
+         * Encodes the specified Rule message. Does not implicitly {@link binlogdata.Rule.verify|verify} messages.
+         * @param message Rule message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: binlogdata.IRule, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified Rule message, length delimited. Does not implicitly {@link binlogdata.Rule.verify|verify} messages.
+         * @param message Rule message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: binlogdata.IRule, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a Rule message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns Rule
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.Rule;
+
+        /**
+         * Decodes a Rule message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns Rule
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.Rule;
+
+        /**
+         * Verifies a Rule message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a Rule message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns Rule
+         */
+        public static fromObject(object: { [k: string]: any }): binlogdata.Rule;
+
+        /**
+         * Creates a plain object from a Rule message. Also converts values to other types if specified.
+         * @param message Rule
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: binlogdata.Rule, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this Rule to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for Rule
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a Filter. */
+    interface IFilter {
+
+        /** Filter rules */
+        rules?: (binlogdata.IRule[]|null);
+
+        /** Filter field_event_mode */
+        field_event_mode?: (binlogdata.Filter.FieldEventMode|null);
+
+        /** Filter workflow_type */
+        workflow_type?: (number|Long|null);
+
+        /** Filter workflow_name */
+        workflow_name?: (string|null);
+    }
+
+    /** Represents a Filter. */
+    class Filter implements IFilter {
+
+        /**
+         * Constructs a new Filter.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: binlogdata.IFilter);
+
+        /** Filter rules. */
+        public rules: binlogdata.IRule[];
+
+        /** Filter field_event_mode. */
+        public field_event_mode: binlogdata.Filter.FieldEventMode;
+
+        /** Filter workflow_type. */
+        public workflow_type: (number|Long);
+
+        /** Filter workflow_name. */
+        public workflow_name: string;
+
+        /**
+         * Creates a new Filter instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns Filter instance
+         */
+        public static create(properties?: binlogdata.IFilter): binlogdata.Filter;
+
+        /**
+         * Encodes the specified Filter message. Does not implicitly {@link binlogdata.Filter.verify|verify} messages.
+         * @param message Filter message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: binlogdata.IFilter, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified Filter message, length delimited. Does not implicitly {@link binlogdata.Filter.verify|verify} messages.
+         * @param message Filter message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: binlogdata.IFilter, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a Filter message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns Filter
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.Filter;
+
+        /**
+         * Decodes a Filter message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns Filter
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.Filter;
+
+        /**
+         * Verifies a Filter message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a Filter message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns Filter
+         */
+        public static fromObject(object: { [k: string]: any }): binlogdata.Filter;
+
+        /**
+         * Creates a plain object from a Filter message. Also converts values to other types if specified.
+         * @param message Filter
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: binlogdata.Filter, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this Filter to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for Filter
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    namespace Filter {
+
+        /** FieldEventMode enum. */
+        enum FieldEventMode {
+            ERR_ON_MISMATCH = 0,
+            BEST_EFFORT = 1
+        }
+    }
+
+    /** OnDDLAction enum. */
+    enum OnDDLAction {
+        IGNORE = 0,
+        STOP = 1,
+        EXEC = 2,
+        EXEC_IGNORE = 3
+    }
+
+    /** VReplicationWorkflowType enum. */
+    enum VReplicationWorkflowType {
+        Materialize = 0,
+        MoveTables = 1,
+        CreateLookupIndex = 2,
+        Migrate = 3,
+        Reshard = 4,
+        OnlineDDL = 5
+    }
+
+    /** VReplicationWorkflowSubType enum. */
+    enum VReplicationWorkflowSubType {
+        None = 0,
+        Partial = 1
+    }
+
+    /** Properties of a BinlogSource. */
+    interface IBinlogSource {
+
+        /** BinlogSource keyspace */
+        keyspace?: (string|null);
+
+        /** BinlogSource shard */
+        shard?: (string|null);
+
+        /** BinlogSource tablet_type */
+        tablet_type?: (topodata.TabletType|null);
+
+        /** BinlogSource key_range */
+        key_range?: (topodata.IKeyRange|null);
+
+        /** BinlogSource tables */
+        tables?: (string[]|null);
+
+        /** BinlogSource filter */
+        filter?: (binlogdata.IFilter|null);
+
+        /** BinlogSource on_ddl */
+        on_ddl?: (binlogdata.OnDDLAction|null);
+
+        /** BinlogSource external_mysql */
+        external_mysql?: (string|null);
+
+        /** BinlogSource stop_after_copy */
+        stop_after_copy?: (boolean|null);
+
+        /** BinlogSource external_cluster */
+        external_cluster?: (string|null);
+
+        /** BinlogSource source_time_zone */
+        source_time_zone?: (string|null);
+
+        /** BinlogSource target_time_zone */
+        target_time_zone?: (string|null);
+    }
+
+    /** Represents a BinlogSource. */
+    class BinlogSource implements IBinlogSource {
+
+        /**
+         * Constructs a new BinlogSource.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: binlogdata.IBinlogSource);
+
+        /** BinlogSource keyspace. */
+        public keyspace: string;
+
+        /** BinlogSource shard. */
+        public shard: string;
+
+        /** BinlogSource tablet_type. */
+        public tablet_type: topodata.TabletType;
+
+        /** BinlogSource key_range. */
+        public key_range?: (topodata.IKeyRange|null);
+
+        /** BinlogSource tables. */
+        public tables: string[];
+
+        /** BinlogSource filter. */
+        public filter?: (binlogdata.IFilter|null);
+
+        /** BinlogSource on_ddl. */
+        public on_ddl: binlogdata.OnDDLAction;
+
+        /** BinlogSource external_mysql. */
+        public external_mysql: string;
+
+        /** BinlogSource stop_after_copy. */
+        public stop_after_copy: boolean;
+
+        /** BinlogSource external_cluster. */
+        public external_cluster: string;
+
+        /** BinlogSource source_time_zone. */
+        public source_time_zone: string;
+
+        /** BinlogSource target_time_zone. */
+        public target_time_zone: string;
+
+        /**
+         * Creates a new BinlogSource instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns BinlogSource instance
+         */
+        public static create(properties?: binlogdata.IBinlogSource): binlogdata.BinlogSource;
+
+        /**
+         * Encodes the specified BinlogSource message. Does not implicitly {@link binlogdata.BinlogSource.verify|verify} messages.
+         * @param message BinlogSource message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: binlogdata.IBinlogSource, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified BinlogSource message, length delimited. Does not implicitly {@link binlogdata.BinlogSource.verify|verify} messages.
+         * @param message BinlogSource message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: binlogdata.IBinlogSource, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a BinlogSource message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns BinlogSource
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.BinlogSource;
+
+        /**
+         * Decodes a BinlogSource message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns BinlogSource
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.BinlogSource;
+
+        /**
+         * Verifies a BinlogSource message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a BinlogSource message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns BinlogSource
+         */
+        public static fromObject(object: { [k: string]: any }): binlogdata.BinlogSource;
+
+        /**
+         * Creates a plain object from a BinlogSource message. Also converts values to other types if specified.
+         * @param message BinlogSource
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: binlogdata.BinlogSource, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this BinlogSource to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for BinlogSource
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** VEventType enum. */
+    enum VEventType {
+        UNKNOWN = 0,
+        GTID = 1,
+        BEGIN = 2,
+        COMMIT = 3,
+        ROLLBACK = 4,
+        DDL = 5,
+        INSERT = 6,
+        REPLACE = 7,
+        UPDATE = 8,
+        DELETE = 9,
+        SET = 10,
+        OTHER = 11,
+        ROW = 12,
+        FIELD = 13,
+        HEARTBEAT = 14,
+        VGTID = 15,
+        JOURNAL = 16,
+        VERSION = 17,
+        LASTPK = 18,
+        SAVEPOINT = 19,
+        COPY_COMPLETED = 20
+    }
+
+    /** Properties of a RowChange. */
+    interface IRowChange {
+
+        /** RowChange before */
+        before?: (query.IRow|null);
+
+        /** RowChange after */
+        after?: (query.IRow|null);
+
+        /** RowChange data_columns */
+        data_columns?: (binlogdata.RowChange.IBitmap|null);
+    }
+
+    /** Represents a RowChange. */
+    class RowChange implements IRowChange {
+
+        /**
+         * Constructs a new RowChange.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: binlogdata.IRowChange);
+
+        /** RowChange before. */
+        public before?: (query.IRow|null);
+
+        /** RowChange after. */
+        public after?: (query.IRow|null);
+
+        /** RowChange data_columns. */
+        public data_columns?: (binlogdata.RowChange.IBitmap|null);
+
+        /**
+         * Creates a new RowChange instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns RowChange instance
+         */
+        public static create(properties?: binlogdata.IRowChange): binlogdata.RowChange;
+
+        /**
+         * Encodes the specified RowChange message. Does not implicitly {@link binlogdata.RowChange.verify|verify} messages.
+         * @param message RowChange message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: binlogdata.IRowChange, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified RowChange message, length delimited. Does not implicitly {@link binlogdata.RowChange.verify|verify} messages.
+         * @param message RowChange message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: binlogdata.IRowChange, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a RowChange message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns RowChange
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.RowChange;
+
+        /**
+         * Decodes a RowChange message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns RowChange
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.RowChange;
+
+        /**
+         * Verifies a RowChange message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a RowChange message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns RowChange
+         */
+        public static fromObject(object: { [k: string]: any }): binlogdata.RowChange;
+
+        /**
+         * Creates a plain object from a RowChange message. Also converts values to other types if specified.
+         * @param message RowChange
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: binlogdata.RowChange, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this RowChange to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for RowChange
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    namespace RowChange {
+
+        /** Properties of a Bitmap. */
+        interface IBitmap {
+
+            /** Bitmap count */
+            count?: (number|Long|null);
+
+            /** Bitmap cols */
+            cols?: (Uint8Array|null);
+        }
+
+        /** Represents a Bitmap. */
+        class Bitmap implements IBitmap {
+
+            /**
+             * Constructs a new Bitmap.
+             * @param [properties] Properties to set
+             */
+            constructor(properties?: binlogdata.RowChange.IBitmap);
+
+            /** Bitmap count. */
+            public count: (number|Long);
+
+            /** Bitmap cols. */
+            public cols: Uint8Array;
+
+            /**
+             * Creates a new Bitmap instance using the specified properties.
+             * @param [properties] Properties to set
+             * @returns Bitmap instance
+             */
+            public static create(properties?: binlogdata.RowChange.IBitmap): binlogdata.RowChange.Bitmap;
+
+            /**
+             * Encodes the specified Bitmap message. Does not implicitly {@link binlogdata.RowChange.Bitmap.verify|verify} messages.
+             * @param message Bitmap message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encode(message: binlogdata.RowChange.IBitmap, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Encodes the specified Bitmap message, length delimited. Does not implicitly {@link binlogdata.RowChange.Bitmap.verify|verify} messages.
+             * @param message Bitmap message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encodeDelimited(message: binlogdata.RowChange.IBitmap, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Decodes a Bitmap message from the specified reader or buffer.
+             * @param reader Reader or buffer to decode from
+             * @param [length] Message length if known beforehand
+             * @returns Bitmap
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.RowChange.Bitmap;
+
+            /**
+             * Decodes a Bitmap message from the specified reader or buffer, length delimited.
+             * @param reader Reader or buffer to decode from
+             * @returns Bitmap
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.RowChange.Bitmap;
+
+            /**
+             * Verifies a Bitmap message.
+             * @param message Plain object to verify
+             * @returns `null` if valid, otherwise the reason why it is not
+             */
+            public static verify(message: { [k: string]: any }): (string|null);
+
+            /**
+             * Creates a Bitmap message from a plain object. Also converts values to their respective internal types.
+             * @param object Plain object
+             * @returns Bitmap
+             */
+            public static fromObject(object: { [k: string]: any }): binlogdata.RowChange.Bitmap;
+
+            /**
+             * Creates a plain object from a Bitmap message. Also converts values to other types if specified.
+             * @param message Bitmap
+             * @param [options] Conversion options
+             * @returns Plain object
+             */
+            public static toObject(message: binlogdata.RowChange.Bitmap, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+            /**
+             * Converts this Bitmap to JSON.
+             * @returns JSON object
+             */
+            public toJSON(): { [k: string]: any };
+
+            /**
+             * Gets the default type url for Bitmap
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
+        }
+    }
+
+    /** Properties of a RowEvent. */
+    interface IRowEvent {
+
+        /** RowEvent table_name */
+        table_name?: (string|null);
+
+        /** RowEvent row_changes */
+        row_changes?: (binlogdata.IRowChange[]|null);
+
+        /** RowEvent keyspace */
+        keyspace?: (string|null);
+
+        /** RowEvent shard */
+        shard?: (string|null);
+    }
+
+    /** Represents a RowEvent. */
+    class RowEvent implements IRowEvent {
+
+        /**
+         * Constructs a new RowEvent.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: binlogdata.IRowEvent);
+
+        /** RowEvent table_name. */
+        public table_name: string;
+
+        /** RowEvent row_changes. */
+        public row_changes: binlogdata.IRowChange[];
+
+        /** RowEvent keyspace. */
+        public keyspace: string;
+
+        /** RowEvent shard. */
+        public shard: string;
+
+        /**
+         * Creates a new RowEvent instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns RowEvent instance
+         */
+        public static create(properties?: binlogdata.IRowEvent): binlogdata.RowEvent;
+
+        /**
+         * Encodes the specified RowEvent message. Does not implicitly {@link binlogdata.RowEvent.verify|verify} messages.
+         * @param message RowEvent message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: binlogdata.IRowEvent, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified RowEvent message, length delimited. Does not implicitly {@link binlogdata.RowEvent.verify|verify} messages.
+         * @param message RowEvent message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: binlogdata.IRowEvent, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a RowEvent message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns RowEvent
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.RowEvent;
+
+        /**
+         * Decodes a RowEvent message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns RowEvent
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.RowEvent;
+
+        /**
+         * Verifies a RowEvent message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a RowEvent message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns RowEvent
+         */
+        public static fromObject(object: { [k: string]: any }): binlogdata.RowEvent;
+
+        /**
+         * Creates a plain object from a RowEvent message. Also converts values to other types if specified.
+         * @param message RowEvent
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: binlogdata.RowEvent, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this RowEvent to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for RowEvent
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a FieldEvent. */
+    interface IFieldEvent {
+
+        /** FieldEvent table_name */
+        table_name?: (string|null);
+
+        /** FieldEvent fields */
+        fields?: (query.IField[]|null);
+
+        /** FieldEvent keyspace */
+        keyspace?: (string|null);
+
+        /** FieldEvent shard */
+        shard?: (string|null);
+    }
+
+    /** Represents a FieldEvent. */
+    class FieldEvent implements IFieldEvent {
+
+        /**
+         * Constructs a new FieldEvent.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: binlogdata.IFieldEvent);
+
+        /** FieldEvent table_name. */
+        public table_name: string;
+
+        /** FieldEvent fields. */
+        public fields: query.IField[];
+
+        /** FieldEvent keyspace. */
+        public keyspace: string;
+
+        /** FieldEvent shard. */
+        public shard: string;
+
+        /**
+         * Creates a new FieldEvent instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns FieldEvent instance
+         */
+        public static create(properties?: binlogdata.IFieldEvent): binlogdata.FieldEvent;
+
+        /**
+         * Encodes the specified FieldEvent message. Does not implicitly {@link binlogdata.FieldEvent.verify|verify} messages.
+         * @param message FieldEvent message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: binlogdata.IFieldEvent, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified FieldEvent message, length delimited. Does not implicitly {@link binlogdata.FieldEvent.verify|verify} messages.
+         * @param message FieldEvent message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: binlogdata.IFieldEvent, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a FieldEvent message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns FieldEvent
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.FieldEvent;
+
+        /**
+         * Decodes a FieldEvent message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns FieldEvent
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.FieldEvent;
+
+        /**
+         * Verifies a FieldEvent message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a FieldEvent message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns FieldEvent
+         */
+        public static fromObject(object: { [k: string]: any }): binlogdata.FieldEvent;
+
+        /**
+         * Creates a plain object from a FieldEvent message. Also converts values to other types if specified.
+         * @param message FieldEvent
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: binlogdata.FieldEvent, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this FieldEvent to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for FieldEvent
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a ShardGtid. */
+    interface IShardGtid {
+
+        /** ShardGtid keyspace */
+        keyspace?: (string|null);
+
+        /** ShardGtid shard */
+        shard?: (string|null);
+
+        /** ShardGtid gtid */
+        gtid?: (string|null);
+
+        /** ShardGtid table_p_ks */
+        table_p_ks?: (binlogdata.ITableLastPK[]|null);
+    }
+
+    /** Represents a ShardGtid. */
+    class ShardGtid implements IShardGtid {
+
+        /**
+         * Constructs a new ShardGtid.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: binlogdata.IShardGtid);
+
+        /** ShardGtid keyspace. */
+        public keyspace: string;
+
+        /** ShardGtid shard. */
+        public shard: string;
+
+        /** ShardGtid gtid. */
+        public gtid: string;
+
+        /** ShardGtid table_p_ks. */
+        public table_p_ks: binlogdata.ITableLastPK[];
+
+        /**
+         * Creates a new ShardGtid instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ShardGtid instance
+         */
+        public static create(properties?: binlogdata.IShardGtid): binlogdata.ShardGtid;
+
+        /**
+         * Encodes the specified ShardGtid message. Does not implicitly {@link binlogdata.ShardGtid.verify|verify} messages.
+         * @param message ShardGtid message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: binlogdata.IShardGtid, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ShardGtid message, length delimited. Does not implicitly {@link binlogdata.ShardGtid.verify|verify} messages.
+         * @param message ShardGtid message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: binlogdata.IShardGtid, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ShardGtid message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ShardGtid
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.ShardGtid;
+
+        /**
+         * Decodes a ShardGtid message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ShardGtid
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.ShardGtid;
+
+        /**
+         * Verifies a ShardGtid message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ShardGtid message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ShardGtid
+         */
+        public static fromObject(object: { [k: string]: any }): binlogdata.ShardGtid;
+
+        /**
+         * Creates a plain object from a ShardGtid message. Also converts values to other types if specified.
+         * @param message ShardGtid
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: binlogdata.ShardGtid, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ShardGtid to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ShardGtid
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a VGtid. */
+    interface IVGtid {
+
+        /** VGtid shard_gtids */
+        shard_gtids?: (binlogdata.IShardGtid[]|null);
+    }
+
+    /** Represents a VGtid. */
+    class VGtid implements IVGtid {
+
+        /**
+         * Constructs a new VGtid.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: binlogdata.IVGtid);
+
+        /** VGtid shard_gtids. */
+        public shard_gtids: binlogdata.IShardGtid[];
+
+        /**
+         * Creates a new VGtid instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns VGtid instance
+         */
+        public static create(properties?: binlogdata.IVGtid): binlogdata.VGtid;
+
+        /**
+         * Encodes the specified VGtid message. Does not implicitly {@link binlogdata.VGtid.verify|verify} messages.
+         * @param message VGtid message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: binlogdata.IVGtid, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified VGtid message, length delimited. Does not implicitly {@link binlogdata.VGtid.verify|verify} messages.
+         * @param message VGtid message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: binlogdata.IVGtid, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a VGtid message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns VGtid
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.VGtid;
+
+        /**
+         * Decodes a VGtid message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns VGtid
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.VGtid;
+
+        /**
+         * Verifies a VGtid message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a VGtid message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns VGtid
+         */
+        public static fromObject(object: { [k: string]: any }): binlogdata.VGtid;
+
+        /**
+         * Creates a plain object from a VGtid message. Also converts values to other types if specified.
+         * @param message VGtid
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: binlogdata.VGtid, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this VGtid to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for VGtid
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a KeyspaceShard. */
+    interface IKeyspaceShard {
+
+        /** KeyspaceShard keyspace */
+        keyspace?: (string|null);
+
+        /** KeyspaceShard shard */
+        shard?: (string|null);
+    }
+
+    /** Represents a KeyspaceShard. */
+    class KeyspaceShard implements IKeyspaceShard {
+
+        /**
+         * Constructs a new KeyspaceShard.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: binlogdata.IKeyspaceShard);
+
+        /** KeyspaceShard keyspace. */
+        public keyspace: string;
+
+        /** KeyspaceShard shard. */
+        public shard: string;
+
+        /**
+         * Creates a new KeyspaceShard instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns KeyspaceShard instance
+         */
+        public static create(properties?: binlogdata.IKeyspaceShard): binlogdata.KeyspaceShard;
+
+        /**
+         * Encodes the specified KeyspaceShard message. Does not implicitly {@link binlogdata.KeyspaceShard.verify|verify} messages.
+         * @param message KeyspaceShard message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: binlogdata.IKeyspaceShard, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified KeyspaceShard message, length delimited. Does not implicitly {@link binlogdata.KeyspaceShard.verify|verify} messages.
+         * @param message KeyspaceShard message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: binlogdata.IKeyspaceShard, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a KeyspaceShard message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns KeyspaceShard
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.KeyspaceShard;
+
+        /**
+         * Decodes a KeyspaceShard message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns KeyspaceShard
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.KeyspaceShard;
+
+        /**
+         * Verifies a KeyspaceShard message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a KeyspaceShard message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns KeyspaceShard
+         */
+        public static fromObject(object: { [k: string]: any }): binlogdata.KeyspaceShard;
+
+        /**
+         * Creates a plain object from a KeyspaceShard message. Also converts values to other types if specified.
+         * @param message KeyspaceShard
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: binlogdata.KeyspaceShard, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this KeyspaceShard to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for KeyspaceShard
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** MigrationType enum. */
+    enum MigrationType {
+        TABLES = 0,
+        SHARDS = 1
+    }
+
+    /** Properties of a Journal. */
+    interface IJournal {
+
+        /** Journal id */
+        id?: (number|Long|null);
+
+        /** Journal migration_type */
+        migration_type?: (binlogdata.MigrationType|null);
+
+        /** Journal tables */
+        tables?: (string[]|null);
+
+        /** Journal local_position */
+        local_position?: (string|null);
+
+        /** Journal shard_gtids */
+        shard_gtids?: (binlogdata.IShardGtid[]|null);
+
+        /** Journal participants */
+        participants?: (binlogdata.IKeyspaceShard[]|null);
+
+        /** Journal source_workflows */
+        source_workflows?: (string[]|null);
+    }
+
+    /** Represents a Journal. */
+    class Journal implements IJournal {
+
+        /**
+         * Constructs a new Journal.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: binlogdata.IJournal);
+
+        /** Journal id. */
+        public id: (number|Long);
+
+        /** Journal migration_type. */
+        public migration_type: binlogdata.MigrationType;
+
+        /** Journal tables. */
+        public tables: string[];
+
+        /** Journal local_position. */
+        public local_position: string;
+
+        /** Journal shard_gtids. */
+        public shard_gtids: binlogdata.IShardGtid[];
+
+        /** Journal participants. */
+        public participants: binlogdata.IKeyspaceShard[];
+
+        /** Journal source_workflows. */
+        public source_workflows: string[];
+
+        /**
+         * Creates a new Journal instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns Journal instance
+         */
+        public static create(properties?: binlogdata.IJournal): binlogdata.Journal;
+
+        /**
+         * Encodes the specified Journal message. Does not implicitly {@link binlogdata.Journal.verify|verify} messages.
+         * @param message Journal message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: binlogdata.IJournal, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified Journal message, length delimited. Does not implicitly {@link binlogdata.Journal.verify|verify} messages.
+         * @param message Journal message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: binlogdata.IJournal, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a Journal message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns Journal
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.Journal;
+
+        /**
+         * Decodes a Journal message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns Journal
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.Journal;
+
+        /**
+         * Verifies a Journal message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a Journal message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns Journal
+         */
+        public static fromObject(object: { [k: string]: any }): binlogdata.Journal;
+
+        /**
+         * Creates a plain object from a Journal message. Also converts values to other types if specified.
+         * @param message Journal
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: binlogdata.Journal, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this Journal to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for Journal
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a VEvent. */
+    interface IVEvent {
+
+        /** VEvent type */
+        type?: (binlogdata.VEventType|null);
+
+        /** VEvent timestamp */
+        timestamp?: (number|Long|null);
+
+        /** VEvent gtid */
+        gtid?: (string|null);
+
+        /** VEvent statement */
+        statement?: (string|null);
+
+        /** VEvent row_event */
+        row_event?: (binlogdata.IRowEvent|null);
+
+        /** VEvent field_event */
+        field_event?: (binlogdata.IFieldEvent|null);
+
+        /** VEvent vgtid */
+        vgtid?: (binlogdata.IVGtid|null);
+
+        /** VEvent journal */
+        journal?: (binlogdata.IJournal|null);
+
+        /** VEvent dml */
+        dml?: (string|null);
+
+        /** VEvent current_time */
+        current_time?: (number|Long|null);
+
+        /** VEvent last_p_k_event */
+        last_p_k_event?: (binlogdata.ILastPKEvent|null);
+
+        /** VEvent keyspace */
+        keyspace?: (string|null);
+
+        /** VEvent shard */
+        shard?: (string|null);
+
+        /** VEvent throttled */
+        throttled?: (boolean|null);
+    }
+
+    /** Represents a VEvent. */
+    class VEvent implements IVEvent {
+
+        /**
+         * Constructs a new VEvent.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: binlogdata.IVEvent);
+
+        /** VEvent type. */
+        public type: binlogdata.VEventType;
+
+        /** VEvent timestamp. */
+        public timestamp: (number|Long);
+
+        /** VEvent gtid. */
+        public gtid: string;
+
+        /** VEvent statement. */
+        public statement: string;
+
+        /** VEvent row_event. */
+        public row_event?: (binlogdata.IRowEvent|null);
+
+        /** VEvent field_event. */
+        public field_event?: (binlogdata.IFieldEvent|null);
+
+        /** VEvent vgtid. */
+        public vgtid?: (binlogdata.IVGtid|null);
+
+        /** VEvent journal. */
+        public journal?: (binlogdata.IJournal|null);
+
+        /** VEvent dml. */
+        public dml: string;
+
+        /** VEvent current_time. */
+        public current_time: (number|Long);
+
+        /** VEvent last_p_k_event. */
+        public last_p_k_event?: (binlogdata.ILastPKEvent|null);
+
+        /** VEvent keyspace. */
+        public keyspace: string;
+
+        /** VEvent shard. */
+        public shard: string;
+
+        /** VEvent throttled. */
+        public throttled: boolean;
+
+        /**
+         * Creates a new VEvent instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns VEvent instance
+         */
+        public static create(properties?: binlogdata.IVEvent): binlogdata.VEvent;
+
+        /**
+         * Encodes the specified VEvent message. Does not implicitly {@link binlogdata.VEvent.verify|verify} messages.
+         * @param message VEvent message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: binlogdata.IVEvent, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified VEvent message, length delimited. Does not implicitly {@link binlogdata.VEvent.verify|verify} messages.
+         * @param message VEvent message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: binlogdata.IVEvent, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a VEvent message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns VEvent
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.VEvent;
+
+        /**
+         * Decodes a VEvent message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns VEvent
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.VEvent;
+
+        /**
+         * Verifies a VEvent message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a VEvent message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns VEvent
+         */
+        public static fromObject(object: { [k: string]: any }): binlogdata.VEvent;
+
+        /**
+         * Creates a plain object from a VEvent message. Also converts values to other types if specified.
+         * @param message VEvent
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: binlogdata.VEvent, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this VEvent to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for VEvent
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a MinimalTable. */
+    interface IMinimalTable {
+
+        /** MinimalTable name */
+        name?: (string|null);
+
+        /** MinimalTable fields */
+        fields?: (query.IField[]|null);
+
+        /** MinimalTable p_k_columns */
+        p_k_columns?: ((number|Long)[]|null);
+    }
+
+    /** Represents a MinimalTable. */
+    class MinimalTable implements IMinimalTable {
+
+        /**
+         * Constructs a new MinimalTable.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: binlogdata.IMinimalTable);
+
+        /** MinimalTable name. */
+        public name: string;
+
+        /** MinimalTable fields. */
+        public fields: query.IField[];
+
+        /** MinimalTable p_k_columns. */
+        public p_k_columns: (number|Long)[];
+
+        /**
+         * Creates a new MinimalTable instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns MinimalTable instance
+         */
+        public static create(properties?: binlogdata.IMinimalTable): binlogdata.MinimalTable;
+
+        /**
+         * Encodes the specified MinimalTable message. Does not implicitly {@link binlogdata.MinimalTable.verify|verify} messages.
+         * @param message MinimalTable message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: binlogdata.IMinimalTable, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified MinimalTable message, length delimited. Does not implicitly {@link binlogdata.MinimalTable.verify|verify} messages.
+         * @param message MinimalTable message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: binlogdata.IMinimalTable, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a MinimalTable message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns MinimalTable
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.MinimalTable;
+
+        /**
+         * Decodes a MinimalTable message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns MinimalTable
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.MinimalTable;
+
+        /**
+         * Verifies a MinimalTable message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a MinimalTable message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns MinimalTable
+         */
+        public static fromObject(object: { [k: string]: any }): binlogdata.MinimalTable;
+
+        /**
+         * Creates a plain object from a MinimalTable message. Also converts values to other types if specified.
+         * @param message MinimalTable
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: binlogdata.MinimalTable, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this MinimalTable to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for MinimalTable
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a MinimalSchema. */
+    interface IMinimalSchema {
+
+        /** MinimalSchema tables */
+        tables?: (binlogdata.IMinimalTable[]|null);
+    }
+
+    /** Represents a MinimalSchema. */
+    class MinimalSchema implements IMinimalSchema {
+
+        /**
+         * Constructs a new MinimalSchema.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: binlogdata.IMinimalSchema);
+
+        /** MinimalSchema tables. */
+        public tables: binlogdata.IMinimalTable[];
+
+        /**
+         * Creates a new MinimalSchema instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns MinimalSchema instance
+         */
+        public static create(properties?: binlogdata.IMinimalSchema): binlogdata.MinimalSchema;
+
+        /**
+         * Encodes the specified MinimalSchema message. Does not implicitly {@link binlogdata.MinimalSchema.verify|verify} messages.
+         * @param message MinimalSchema message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: binlogdata.IMinimalSchema, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified MinimalSchema message, length delimited. Does not implicitly {@link binlogdata.MinimalSchema.verify|verify} messages.
+         * @param message MinimalSchema message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: binlogdata.IMinimalSchema, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a MinimalSchema message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns MinimalSchema
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.MinimalSchema;
+
+        /**
+         * Decodes a MinimalSchema message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns MinimalSchema
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.MinimalSchema;
+
+        /**
+         * Verifies a MinimalSchema message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a MinimalSchema message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns MinimalSchema
+         */
+        public static fromObject(object: { [k: string]: any }): binlogdata.MinimalSchema;
+
+        /**
+         * Creates a plain object from a MinimalSchema message. Also converts values to other types if specified.
+         * @param message MinimalSchema
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: binlogdata.MinimalSchema, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this MinimalSchema to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for MinimalSchema
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a VStreamRequest. */
+    interface IVStreamRequest {
+
+        /** VStreamRequest effective_caller_id */
+        effective_caller_id?: (vtrpc.ICallerID|null);
+
+        /** VStreamRequest immediate_caller_id */
+        immediate_caller_id?: (query.IVTGateCallerID|null);
+
+        /** VStreamRequest target */
+        target?: (query.ITarget|null);
+
+        /** VStreamRequest position */
+        position?: (string|null);
+
+        /** VStreamRequest filter */
+        filter?: (binlogdata.IFilter|null);
+
+        /** VStreamRequest table_last_p_ks */
+        table_last_p_ks?: (binlogdata.ITableLastPK[]|null);
+    }
+
+    /** Represents a VStreamRequest. */
+    class VStreamRequest implements IVStreamRequest {
+
+        /**
+         * Constructs a new VStreamRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: binlogdata.IVStreamRequest);
+
+        /** VStreamRequest effective_caller_id. */
+        public effective_caller_id?: (vtrpc.ICallerID|null);
+
+        /** VStreamRequest immediate_caller_id. */
+        public immediate_caller_id?: (query.IVTGateCallerID|null);
+
+        /** VStreamRequest target. */
+        public target?: (query.ITarget|null);
+
+        /** VStreamRequest position. */
+        public position: string;
+
+        /** VStreamRequest filter. */
+        public filter?: (binlogdata.IFilter|null);
+
+        /** VStreamRequest table_last_p_ks. */
+        public table_last_p_ks: binlogdata.ITableLastPK[];
+
+        /**
+         * Creates a new VStreamRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns VStreamRequest instance
+         */
+        public static create(properties?: binlogdata.IVStreamRequest): binlogdata.VStreamRequest;
+
+        /**
+         * Encodes the specified VStreamRequest message. Does not implicitly {@link binlogdata.VStreamRequest.verify|verify} messages.
+         * @param message VStreamRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: binlogdata.IVStreamRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified VStreamRequest message, length delimited. Does not implicitly {@link binlogdata.VStreamRequest.verify|verify} messages.
+         * @param message VStreamRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: binlogdata.IVStreamRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a VStreamRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns VStreamRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.VStreamRequest;
+
+        /**
+         * Decodes a VStreamRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns VStreamRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.VStreamRequest;
+
+        /**
+         * Verifies a VStreamRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a VStreamRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns VStreamRequest
+         */
+        public static fromObject(object: { [k: string]: any }): binlogdata.VStreamRequest;
+
+        /**
+         * Creates a plain object from a VStreamRequest message. Also converts values to other types if specified.
+         * @param message VStreamRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: binlogdata.VStreamRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this VStreamRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for VStreamRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a VStreamResponse. */
+    interface IVStreamResponse {
+
+        /** VStreamResponse events */
+        events?: (binlogdata.IVEvent[]|null);
+    }
+
+    /** Represents a VStreamResponse. */
+    class VStreamResponse implements IVStreamResponse {
+
+        /**
+         * Constructs a new VStreamResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: binlogdata.IVStreamResponse);
+
+        /** VStreamResponse events. */
+        public events: binlogdata.IVEvent[];
+
+        /**
+         * Creates a new VStreamResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns VStreamResponse instance
+         */
+        public static create(properties?: binlogdata.IVStreamResponse): binlogdata.VStreamResponse;
+
+        /**
+         * Encodes the specified VStreamResponse message. Does not implicitly {@link binlogdata.VStreamResponse.verify|verify} messages.
+         * @param message VStreamResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: binlogdata.IVStreamResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified VStreamResponse message, length delimited. Does not implicitly {@link binlogdata.VStreamResponse.verify|verify} messages.
+         * @param message VStreamResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: binlogdata.IVStreamResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a VStreamResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns VStreamResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.VStreamResponse;
+
+        /**
+         * Decodes a VStreamResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns VStreamResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.VStreamResponse;
+
+        /**
+         * Verifies a VStreamResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a VStreamResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns VStreamResponse
+         */
+        public static fromObject(object: { [k: string]: any }): binlogdata.VStreamResponse;
+
+        /**
+         * Creates a plain object from a VStreamResponse message. Also converts values to other types if specified.
+         * @param message VStreamResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: binlogdata.VStreamResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this VStreamResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for VStreamResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a VStreamRowsRequest. */
+    interface IVStreamRowsRequest {
+
+        /** VStreamRowsRequest effective_caller_id */
+        effective_caller_id?: (vtrpc.ICallerID|null);
+
+        /** VStreamRowsRequest immediate_caller_id */
+        immediate_caller_id?: (query.IVTGateCallerID|null);
+
+        /** VStreamRowsRequest target */
+        target?: (query.ITarget|null);
+
+        /** VStreamRowsRequest query */
+        query?: (string|null);
+
+        /** VStreamRowsRequest lastpk */
+        lastpk?: (query.IQueryResult|null);
+    }
+
+    /** Represents a VStreamRowsRequest. */
+    class VStreamRowsRequest implements IVStreamRowsRequest {
+
+        /**
+         * Constructs a new VStreamRowsRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: binlogdata.IVStreamRowsRequest);
+
+        /** VStreamRowsRequest effective_caller_id. */
+        public effective_caller_id?: (vtrpc.ICallerID|null);
+
+        /** VStreamRowsRequest immediate_caller_id. */
+        public immediate_caller_id?: (query.IVTGateCallerID|null);
+
+        /** VStreamRowsRequest target. */
+        public target?: (query.ITarget|null);
+
+        /** VStreamRowsRequest query. */
+        public query: string;
+
+        /** VStreamRowsRequest lastpk. */
+        public lastpk?: (query.IQueryResult|null);
+
+        /**
+         * Creates a new VStreamRowsRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns VStreamRowsRequest instance
+         */
+        public static create(properties?: binlogdata.IVStreamRowsRequest): binlogdata.VStreamRowsRequest;
+
+        /**
+         * Encodes the specified VStreamRowsRequest message. Does not implicitly {@link binlogdata.VStreamRowsRequest.verify|verify} messages.
+         * @param message VStreamRowsRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: binlogdata.IVStreamRowsRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified VStreamRowsRequest message, length delimited. Does not implicitly {@link binlogdata.VStreamRowsRequest.verify|verify} messages.
+         * @param message VStreamRowsRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: binlogdata.IVStreamRowsRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a VStreamRowsRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns VStreamRowsRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.VStreamRowsRequest;
+
+        /**
+         * Decodes a VStreamRowsRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns VStreamRowsRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.VStreamRowsRequest;
+
+        /**
+         * Verifies a VStreamRowsRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a VStreamRowsRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns VStreamRowsRequest
+         */
+        public static fromObject(object: { [k: string]: any }): binlogdata.VStreamRowsRequest;
+
+        /**
+         * Creates a plain object from a VStreamRowsRequest message. Also converts values to other types if specified.
+         * @param message VStreamRowsRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: binlogdata.VStreamRowsRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this VStreamRowsRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for VStreamRowsRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a VStreamRowsResponse. */
+    interface IVStreamRowsResponse {
+
+        /** VStreamRowsResponse fields */
+        fields?: (query.IField[]|null);
+
+        /** VStreamRowsResponse pkfields */
+        pkfields?: (query.IField[]|null);
+
+        /** VStreamRowsResponse gtid */
+        gtid?: (string|null);
+
+        /** VStreamRowsResponse rows */
+        rows?: (query.IRow[]|null);
+
+        /** VStreamRowsResponse lastpk */
+        lastpk?: (query.IRow|null);
+
+        /** VStreamRowsResponse throttled */
+        throttled?: (boolean|null);
+
+        /** VStreamRowsResponse heartbeat */
+        heartbeat?: (boolean|null);
+    }
+
+    /** Represents a VStreamRowsResponse. */
+    class VStreamRowsResponse implements IVStreamRowsResponse {
+
+        /**
+         * Constructs a new VStreamRowsResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: binlogdata.IVStreamRowsResponse);
+
+        /** VStreamRowsResponse fields. */
+        public fields: query.IField[];
+
+        /** VStreamRowsResponse pkfields. */
+        public pkfields: query.IField[];
+
+        /** VStreamRowsResponse gtid. */
+        public gtid: string;
+
+        /** VStreamRowsResponse rows. */
+        public rows: query.IRow[];
+
+        /** VStreamRowsResponse lastpk. */
+        public lastpk?: (query.IRow|null);
+
+        /** VStreamRowsResponse throttled. */
+        public throttled: boolean;
+
+        /** VStreamRowsResponse heartbeat. */
+        public heartbeat: boolean;
+
+        /**
+         * Creates a new VStreamRowsResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns VStreamRowsResponse instance
+         */
+        public static create(properties?: binlogdata.IVStreamRowsResponse): binlogdata.VStreamRowsResponse;
+
+        /**
+         * Encodes the specified VStreamRowsResponse message. Does not implicitly {@link binlogdata.VStreamRowsResponse.verify|verify} messages.
+         * @param message VStreamRowsResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: binlogdata.IVStreamRowsResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified VStreamRowsResponse message, length delimited. Does not implicitly {@link binlogdata.VStreamRowsResponse.verify|verify} messages.
+         * @param message VStreamRowsResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: binlogdata.IVStreamRowsResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a VStreamRowsResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns VStreamRowsResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.VStreamRowsResponse;
+
+        /**
+         * Decodes a VStreamRowsResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns VStreamRowsResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.VStreamRowsResponse;
+
+        /**
+         * Verifies a VStreamRowsResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a VStreamRowsResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns VStreamRowsResponse
+         */
+        public static fromObject(object: { [k: string]: any }): binlogdata.VStreamRowsResponse;
+
+        /**
+         * Creates a plain object from a VStreamRowsResponse message. Also converts values to other types if specified.
+         * @param message VStreamRowsResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: binlogdata.VStreamRowsResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this VStreamRowsResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for VStreamRowsResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a LastPKEvent. */
+    interface ILastPKEvent {
+
+        /** LastPKEvent table_last_p_k */
+        table_last_p_k?: (binlogdata.ITableLastPK|null);
+
+        /** LastPKEvent completed */
+        completed?: (boolean|null);
+    }
+
+    /** Represents a LastPKEvent. */
+    class LastPKEvent implements ILastPKEvent {
+
+        /**
+         * Constructs a new LastPKEvent.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: binlogdata.ILastPKEvent);
+
+        /** LastPKEvent table_last_p_k. */
+        public table_last_p_k?: (binlogdata.ITableLastPK|null);
+
+        /** LastPKEvent completed. */
+        public completed: boolean;
+
+        /**
+         * Creates a new LastPKEvent instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns LastPKEvent instance
+         */
+        public static create(properties?: binlogdata.ILastPKEvent): binlogdata.LastPKEvent;
+
+        /**
+         * Encodes the specified LastPKEvent message. Does not implicitly {@link binlogdata.LastPKEvent.verify|verify} messages.
+         * @param message LastPKEvent message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: binlogdata.ILastPKEvent, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified LastPKEvent message, length delimited. Does not implicitly {@link binlogdata.LastPKEvent.verify|verify} messages.
+         * @param message LastPKEvent message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: binlogdata.ILastPKEvent, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a LastPKEvent message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns LastPKEvent
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.LastPKEvent;
+
+        /**
+         * Decodes a LastPKEvent message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns LastPKEvent
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.LastPKEvent;
+
+        /**
+         * Verifies a LastPKEvent message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a LastPKEvent message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns LastPKEvent
+         */
+        public static fromObject(object: { [k: string]: any }): binlogdata.LastPKEvent;
+
+        /**
+         * Creates a plain object from a LastPKEvent message. Also converts values to other types if specified.
+         * @param message LastPKEvent
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: binlogdata.LastPKEvent, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this LastPKEvent to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for LastPKEvent
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a TableLastPK. */
+    interface ITableLastPK {
+
+        /** TableLastPK table_name */
+        table_name?: (string|null);
+
+        /** TableLastPK lastpk */
+        lastpk?: (query.IQueryResult|null);
+    }
+
+    /** Represents a TableLastPK. */
+    class TableLastPK implements ITableLastPK {
+
+        /**
+         * Constructs a new TableLastPK.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: binlogdata.ITableLastPK);
+
+        /** TableLastPK table_name. */
+        public table_name: string;
+
+        /** TableLastPK lastpk. */
+        public lastpk?: (query.IQueryResult|null);
+
+        /**
+         * Creates a new TableLastPK instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns TableLastPK instance
+         */
+        public static create(properties?: binlogdata.ITableLastPK): binlogdata.TableLastPK;
+
+        /**
+         * Encodes the specified TableLastPK message. Does not implicitly {@link binlogdata.TableLastPK.verify|verify} messages.
+         * @param message TableLastPK message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: binlogdata.ITableLastPK, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified TableLastPK message, length delimited. Does not implicitly {@link binlogdata.TableLastPK.verify|verify} messages.
+         * @param message TableLastPK message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: binlogdata.ITableLastPK, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a TableLastPK message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns TableLastPK
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.TableLastPK;
+
+        /**
+         * Decodes a TableLastPK message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns TableLastPK
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.TableLastPK;
+
+        /**
+         * Verifies a TableLastPK message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a TableLastPK message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns TableLastPK
+         */
+        public static fromObject(object: { [k: string]: any }): binlogdata.TableLastPK;
+
+        /**
+         * Creates a plain object from a TableLastPK message. Also converts values to other types if specified.
+         * @param message TableLastPK
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: binlogdata.TableLastPK, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this TableLastPK to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for TableLastPK
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a VStreamResultsRequest. */
+    interface IVStreamResultsRequest {
+
+        /** VStreamResultsRequest effective_caller_id */
+        effective_caller_id?: (vtrpc.ICallerID|null);
+
+        /** VStreamResultsRequest immediate_caller_id */
+        immediate_caller_id?: (query.IVTGateCallerID|null);
+
+        /** VStreamResultsRequest target */
+        target?: (query.ITarget|null);
+
+        /** VStreamResultsRequest query */
+        query?: (string|null);
+    }
+
+    /** Represents a VStreamResultsRequest. */
+    class VStreamResultsRequest implements IVStreamResultsRequest {
+
+        /**
+         * Constructs a new VStreamResultsRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: binlogdata.IVStreamResultsRequest);
+
+        /** VStreamResultsRequest effective_caller_id. */
+        public effective_caller_id?: (vtrpc.ICallerID|null);
+
+        /** VStreamResultsRequest immediate_caller_id. */
+        public immediate_caller_id?: (query.IVTGateCallerID|null);
+
+        /** VStreamResultsRequest target. */
+        public target?: (query.ITarget|null);
+
+        /** VStreamResultsRequest query. */
+        public query: string;
+
+        /**
+         * Creates a new VStreamResultsRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns VStreamResultsRequest instance
+         */
+        public static create(properties?: binlogdata.IVStreamResultsRequest): binlogdata.VStreamResultsRequest;
+
+        /**
+         * Encodes the specified VStreamResultsRequest message. Does not implicitly {@link binlogdata.VStreamResultsRequest.verify|verify} messages.
+         * @param message VStreamResultsRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: binlogdata.IVStreamResultsRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified VStreamResultsRequest message, length delimited. Does not implicitly {@link binlogdata.VStreamResultsRequest.verify|verify} messages.
+         * @param message VStreamResultsRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: binlogdata.IVStreamResultsRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a VStreamResultsRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns VStreamResultsRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.VStreamResultsRequest;
+
+        /**
+         * Decodes a VStreamResultsRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns VStreamResultsRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.VStreamResultsRequest;
+
+        /**
+         * Verifies a VStreamResultsRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a VStreamResultsRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns VStreamResultsRequest
+         */
+        public static fromObject(object: { [k: string]: any }): binlogdata.VStreamResultsRequest;
+
+        /**
+         * Creates a plain object from a VStreamResultsRequest message. Also converts values to other types if specified.
+         * @param message VStreamResultsRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: binlogdata.VStreamResultsRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this VStreamResultsRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for VStreamResultsRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a VStreamResultsResponse. */
+    interface IVStreamResultsResponse {
+
+        /** VStreamResultsResponse fields */
+        fields?: (query.IField[]|null);
+
+        /** VStreamResultsResponse gtid */
+        gtid?: (string|null);
+
+        /** VStreamResultsResponse rows */
+        rows?: (query.IRow[]|null);
+    }
+
+    /** Represents a VStreamResultsResponse. */
+    class VStreamResultsResponse implements IVStreamResultsResponse {
+
+        /**
+         * Constructs a new VStreamResultsResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: binlogdata.IVStreamResultsResponse);
+
+        /** VStreamResultsResponse fields. */
+        public fields: query.IField[];
+
+        /** VStreamResultsResponse gtid. */
+        public gtid: string;
+
+        /** VStreamResultsResponse rows. */
+        public rows: query.IRow[];
+
+        /**
+         * Creates a new VStreamResultsResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns VStreamResultsResponse instance
+         */
+        public static create(properties?: binlogdata.IVStreamResultsResponse): binlogdata.VStreamResultsResponse;
+
+        /**
+         * Encodes the specified VStreamResultsResponse message. Does not implicitly {@link binlogdata.VStreamResultsResponse.verify|verify} messages.
+         * @param message VStreamResultsResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: binlogdata.IVStreamResultsResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified VStreamResultsResponse message, length delimited. Does not implicitly {@link binlogdata.VStreamResultsResponse.verify|verify} messages.
+         * @param message VStreamResultsResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: binlogdata.IVStreamResultsResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a VStreamResultsResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns VStreamResultsResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.VStreamResultsResponse;
+
+        /**
+         * Decodes a VStreamResultsResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns VStreamResultsResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.VStreamResultsResponse;
+
+        /**
+         * Verifies a VStreamResultsResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a VStreamResultsResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns VStreamResultsResponse
+         */
+        public static fromObject(object: { [k: string]: any }): binlogdata.VStreamResultsResponse;
+
+        /**
+         * Creates a plain object from a VStreamResultsResponse message. Also converts values to other types if specified.
+         * @param message VStreamResultsResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: binlogdata.VStreamResultsResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this VStreamResultsResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for VStreamResultsResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+}
+
+/** Namespace vtrpc. */
+export namespace vtrpc {
+
+    /** Properties of a CallerID. */
+    interface ICallerID {
+
+        /** CallerID principal */
+        principal?: (string|null);
+
+        /** CallerID component */
+        component?: (string|null);
+
+        /** CallerID subcomponent */
+        subcomponent?: (string|null);
+
+        /** CallerID groups */
+        groups?: (string[]|null);
+    }
+
+    /** Represents a CallerID. */
+    class CallerID implements ICallerID {
+
+        /**
+         * Constructs a new CallerID.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtrpc.ICallerID);
+
+        /** CallerID principal. */
+        public principal: string;
+
+        /** CallerID component. */
+        public component: string;
+
+        /** CallerID subcomponent. */
+        public subcomponent: string;
+
+        /** CallerID groups. */
+        public groups: string[];
+
+        /**
+         * Creates a new CallerID instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns CallerID instance
+         */
+        public static create(properties?: vtrpc.ICallerID): vtrpc.CallerID;
+
+        /**
+         * Encodes the specified CallerID message. Does not implicitly {@link vtrpc.CallerID.verify|verify} messages.
+         * @param message CallerID message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtrpc.ICallerID, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified CallerID message, length delimited. Does not implicitly {@link vtrpc.CallerID.verify|verify} messages.
+         * @param message CallerID message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtrpc.ICallerID, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a CallerID message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns CallerID
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtrpc.CallerID;
+
+        /**
+         * Decodes a CallerID message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns CallerID
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtrpc.CallerID;
+
+        /**
+         * Verifies a CallerID message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a CallerID message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns CallerID
+         */
+        public static fromObject(object: { [k: string]: any }): vtrpc.CallerID;
+
+        /**
+         * Creates a plain object from a CallerID message. Also converts values to other types if specified.
+         * @param message CallerID
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtrpc.CallerID, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this CallerID to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for CallerID
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Code enum. */
+    enum Code {
+        OK = 0,
+        CANCELED = 1,
+        UNKNOWN = 2,
+        INVALID_ARGUMENT = 3,
+        DEADLINE_EXCEEDED = 4,
+        NOT_FOUND = 5,
+        ALREADY_EXISTS = 6,
+        PERMISSION_DENIED = 7,
+        RESOURCE_EXHAUSTED = 8,
+        FAILED_PRECONDITION = 9,
+        ABORTED = 10,
+        OUT_OF_RANGE = 11,
+        UNIMPLEMENTED = 12,
+        INTERNAL = 13,
+        UNAVAILABLE = 14,
+        DATA_LOSS = 15,
+        UNAUTHENTICATED = 16,
+        CLUSTER_EVENT = 17,
+        READ_ONLY = 18
+    }
+
+    /** Properties of a RPCError. */
+    interface IRPCError {
+
+        /** RPCError message */
+        message?: (string|null);
+
+        /** RPCError code */
+        code?: (vtrpc.Code|null);
+    }
+
+    /** Represents a RPCError. */
+    class RPCError implements IRPCError {
+
+        /**
+         * Constructs a new RPCError.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtrpc.IRPCError);
+
+        /** RPCError message. */
+        public message: string;
+
+        /** RPCError code. */
+        public code: vtrpc.Code;
+
+        /**
+         * Creates a new RPCError instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns RPCError instance
+         */
+        public static create(properties?: vtrpc.IRPCError): vtrpc.RPCError;
+
+        /**
+         * Encodes the specified RPCError message. Does not implicitly {@link vtrpc.RPCError.verify|verify} messages.
+         * @param message RPCError message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtrpc.IRPCError, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified RPCError message, length delimited. Does not implicitly {@link vtrpc.RPCError.verify|verify} messages.
+         * @param message RPCError message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtrpc.IRPCError, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a RPCError message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns RPCError
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtrpc.RPCError;
+
+        /**
+         * Decodes a RPCError message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns RPCError
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtrpc.RPCError;
+
+        /**
+         * Verifies a RPCError message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a RPCError message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns RPCError
+         */
+        public static fromObject(object: { [k: string]: any }): vtrpc.RPCError;
+
+        /**
+         * Creates a plain object from a RPCError message. Also converts values to other types if specified.
+         * @param message RPCError
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtrpc.RPCError, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this RPCError to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for RPCError
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 }
 
@@ -24529,6 +30570,13 @@ export namespace query {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for Target
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a VTGateCallerID. */
@@ -24625,6 +30673,13 @@ export namespace query {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for VTGateCallerID
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of an EventToken. */
@@ -24727,6 +30782,13 @@ export namespace query {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for EventToken
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** MySqlFlag enum. */
@@ -24897,6 +30959,13 @@ export namespace query {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for Value
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a BindVariable. */
@@ -24999,6 +31068,13 @@ export namespace query {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for BindVariable
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a BoundQuery. */
@@ -25095,6 +31171,13 @@ export namespace query {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for BoundQuery
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of an ExecuteOptions. */
@@ -25129,6 +31212,12 @@ export namespace query {
 
         /** ExecuteOptions transaction_access_mode */
         transaction_access_mode?: (query.ExecuteOptions.TransactionAccessMode[]|null);
+
+        /** ExecuteOptions WorkloadName */
+        WorkloadName?: (string|null);
+
+        /** ExecuteOptions priority */
+        priority?: (string|null);
     }
 
     /** Represents an ExecuteOptions. */
@@ -25169,6 +31258,12 @@ export namespace query {
 
         /** ExecuteOptions transaction_access_mode. */
         public transaction_access_mode: query.ExecuteOptions.TransactionAccessMode[];
+
+        /** ExecuteOptions WorkloadName. */
+        public WorkloadName: string;
+
+        /** ExecuteOptions priority. */
+        public priority: string;
 
         /**
          * Creates a new ExecuteOptions instance using the specified properties.
@@ -25239,6 +31334,13 @@ export namespace query {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ExecuteOptions
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     namespace ExecuteOptions {
@@ -25444,6 +31546,13 @@ export namespace query {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for Field
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a Row. */
@@ -25540,6 +31649,13 @@ export namespace query {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for Row
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a QueryResult. */
@@ -25660,6 +31776,13 @@ export namespace query {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for QueryResult
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a QueryWarning. */
@@ -25756,6 +31879,13 @@ export namespace query {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for QueryWarning
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a StreamEvent. */
@@ -25852,6 +31982,13 @@ export namespace query {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for StreamEvent
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     namespace StreamEvent {
@@ -25968,6 +32105,13 @@ export namespace query {
              * @returns JSON object
              */
             public toJSON(): { [k: string]: any };
+
+            /**
+             * Gets the default type url for Statement
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
         }
 
         namespace Statement {
@@ -26105,6 +32249,13 @@ export namespace query {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ExecuteRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of an ExecuteResponse. */
@@ -26195,6 +32346,13 @@ export namespace query {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ExecuteResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a ResultWithError. */
@@ -26291,6 +32449,13 @@ export namespace query {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ResultWithError
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a StreamExecuteRequest. */
@@ -26417,6 +32582,13 @@ export namespace query {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for StreamExecuteRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a StreamExecuteResponse. */
@@ -26507,6 +32679,13 @@ export namespace query {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for StreamExecuteResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a BeginRequest. */
@@ -26615,6 +32794,13 @@ export namespace query {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for BeginRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a BeginResponse. */
@@ -26717,6 +32903,13 @@ export namespace query {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for BeginResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a CommitRequest. */
@@ -26825,6 +33018,13 @@ export namespace query {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for CommitRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a CommitResponse. */
@@ -26915,6 +33115,13 @@ export namespace query {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for CommitResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a RollbackRequest. */
@@ -27023,6 +33230,13 @@ export namespace query {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for RollbackRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a RollbackResponse. */
@@ -27113,6 +33327,13 @@ export namespace query {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for RollbackResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a PrepareRequest. */
@@ -27227,6 +33448,13 @@ export namespace query {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for PrepareRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a PrepareResponse. */
@@ -27311,6 +33539,13 @@ export namespace query {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for PrepareResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a CommitPreparedRequest. */
@@ -27419,6 +33654,13 @@ export namespace query {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for CommitPreparedRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a CommitPreparedResponse. */
@@ -27503,6 +33745,13 @@ export namespace query {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for CommitPreparedResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a RollbackPreparedRequest. */
@@ -27617,6 +33866,13 @@ export namespace query {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for RollbackPreparedRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a RollbackPreparedResponse. */
@@ -27701,6 +33957,13 @@ export namespace query {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for RollbackPreparedResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a CreateTransactionRequest. */
@@ -27815,6 +34078,13 @@ export namespace query {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for CreateTransactionRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a CreateTransactionResponse. */
@@ -27899,6 +34169,13 @@ export namespace query {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for CreateTransactionResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a StartCommitRequest. */
@@ -28013,6 +34290,13 @@ export namespace query {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for StartCommitRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a StartCommitResponse. */
@@ -28097,6 +34381,13 @@ export namespace query {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for StartCommitResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a SetRollbackRequest. */
@@ -28211,6 +34502,13 @@ export namespace query {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for SetRollbackRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a SetRollbackResponse. */
@@ -28295,6 +34593,13 @@ export namespace query {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for SetRollbackResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a ConcludeTransactionRequest. */
@@ -28403,6 +34708,13 @@ export namespace query {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ConcludeTransactionRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a ConcludeTransactionResponse. */
@@ -28487,6 +34799,13 @@ export namespace query {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ConcludeTransactionResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a ReadTransactionRequest. */
@@ -28595,6 +34914,13 @@ export namespace query {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ReadTransactionRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a ReadTransactionResponse. */
@@ -28685,6 +35011,13 @@ export namespace query {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ReadTransactionResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a BeginExecuteRequest. */
@@ -28811,6 +35144,13 @@ export namespace query {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for BeginExecuteRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a BeginExecuteResponse. */
@@ -28925,6 +35265,13 @@ export namespace query {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for BeginExecuteResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a BeginStreamExecuteRequest. */
@@ -29051,6 +35398,13 @@ export namespace query {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for BeginStreamExecuteRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a BeginStreamExecuteResponse. */
@@ -29165,6 +35519,13 @@ export namespace query {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for BeginStreamExecuteResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a MessageStreamRequest. */
@@ -29273,6 +35634,13 @@ export namespace query {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for MessageStreamRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a MessageStreamResponse. */
@@ -29363,6 +35731,13 @@ export namespace query {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for MessageStreamResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a MessageAckRequest. */
@@ -29477,6 +35852,13 @@ export namespace query {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for MessageAckRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a MessageAckResponse. */
@@ -29567,6 +35949,13 @@ export namespace query {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for MessageAckResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a ReserveExecuteRequest. */
@@ -29693,6 +36082,13 @@ export namespace query {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ReserveExecuteRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a ReserveExecuteResponse. */
@@ -29801,6 +36197,13 @@ export namespace query {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ReserveExecuteResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a ReserveStreamExecuteRequest. */
@@ -29927,6 +36330,13 @@ export namespace query {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ReserveStreamExecuteRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a ReserveStreamExecuteResponse. */
@@ -30035,6 +36445,13 @@ export namespace query {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ReserveStreamExecuteResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a ReserveBeginExecuteRequest. */
@@ -30161,6 +36578,13 @@ export namespace query {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ReserveBeginExecuteRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a ReserveBeginExecuteResponse. */
@@ -30281,6 +36705,13 @@ export namespace query {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ReserveBeginExecuteResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a ReserveBeginStreamExecuteRequest. */
@@ -30407,6 +36838,13 @@ export namespace query {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ReserveBeginStreamExecuteRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a ReserveBeginStreamExecuteResponse. */
@@ -30527,6 +36965,13 @@ export namespace query {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ReserveBeginStreamExecuteResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a ReleaseRequest. */
@@ -30641,6 +37086,13 @@ export namespace query {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ReleaseRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a ReleaseResponse. */
@@ -30725,6 +37177,13 @@ export namespace query {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ReleaseResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a StreamHealthRequest. */
@@ -30809,6 +37268,13 @@ export namespace query {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for StreamHealthRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a RealtimeStats. */
@@ -30941,6 +37407,13 @@ export namespace query {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for RealtimeStats
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of an AggregateStats. */
@@ -31049,6 +37522,13 @@ export namespace query {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for AggregateStats
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a StreamHealthResponse. */
@@ -31163,6 +37643,13 @@ export namespace query {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for StreamHealthResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** TransactionState enum. */
@@ -31279,6 +37766,13 @@ export namespace query {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for TransactionMetadata
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** SchemaTableType enum. */
@@ -31388,6 +37882,13 @@ export namespace query {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetSchemaRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a GetSchemaResponse. */
@@ -31478,237 +37979,13 @@ export namespace query {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
-    }
-}
-
-/** Namespace vtrpc. */
-export namespace vtrpc {
-
-    /** Properties of a CallerID. */
-    interface ICallerID {
-
-        /** CallerID principal */
-        principal?: (string|null);
-
-        /** CallerID component */
-        component?: (string|null);
-
-        /** CallerID subcomponent */
-        subcomponent?: (string|null);
-
-        /** CallerID groups */
-        groups?: (string[]|null);
-    }
-
-    /** Represents a CallerID. */
-    class CallerID implements ICallerID {
 
         /**
-         * Constructs a new CallerID.
-         * @param [properties] Properties to set
+         * Gets the default type url for GetSchemaResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
          */
-        constructor(properties?: vtrpc.ICallerID);
-
-        /** CallerID principal. */
-        public principal: string;
-
-        /** CallerID component. */
-        public component: string;
-
-        /** CallerID subcomponent. */
-        public subcomponent: string;
-
-        /** CallerID groups. */
-        public groups: string[];
-
-        /**
-         * Creates a new CallerID instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns CallerID instance
-         */
-        public static create(properties?: vtrpc.ICallerID): vtrpc.CallerID;
-
-        /**
-         * Encodes the specified CallerID message. Does not implicitly {@link vtrpc.CallerID.verify|verify} messages.
-         * @param message CallerID message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: vtrpc.ICallerID, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified CallerID message, length delimited. Does not implicitly {@link vtrpc.CallerID.verify|verify} messages.
-         * @param message CallerID message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: vtrpc.ICallerID, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a CallerID message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns CallerID
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtrpc.CallerID;
-
-        /**
-         * Decodes a CallerID message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns CallerID
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtrpc.CallerID;
-
-        /**
-         * Verifies a CallerID message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a CallerID message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns CallerID
-         */
-        public static fromObject(object: { [k: string]: any }): vtrpc.CallerID;
-
-        /**
-         * Creates a plain object from a CallerID message. Also converts values to other types if specified.
-         * @param message CallerID
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: vtrpc.CallerID, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this CallerID to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-    }
-
-    /** Code enum. */
-    enum Code {
-        OK = 0,
-        CANCELED = 1,
-        UNKNOWN = 2,
-        INVALID_ARGUMENT = 3,
-        DEADLINE_EXCEEDED = 4,
-        NOT_FOUND = 5,
-        ALREADY_EXISTS = 6,
-        PERMISSION_DENIED = 7,
-        RESOURCE_EXHAUSTED = 8,
-        FAILED_PRECONDITION = 9,
-        ABORTED = 10,
-        OUT_OF_RANGE = 11,
-        UNIMPLEMENTED = 12,
-        INTERNAL = 13,
-        UNAVAILABLE = 14,
-        DATA_LOSS = 15,
-        UNAUTHENTICATED = 16,
-        CLUSTER_EVENT = 17,
-        READ_ONLY = 18
-    }
-
-    /** Properties of a RPCError. */
-    interface IRPCError {
-
-        /** RPCError message */
-        message?: (string|null);
-
-        /** RPCError code */
-        code?: (vtrpc.Code|null);
-    }
-
-    /** Represents a RPCError. */
-    class RPCError implements IRPCError {
-
-        /**
-         * Constructs a new RPCError.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: vtrpc.IRPCError);
-
-        /** RPCError message. */
-        public message: string;
-
-        /** RPCError code. */
-        public code: vtrpc.Code;
-
-        /**
-         * Creates a new RPCError instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns RPCError instance
-         */
-        public static create(properties?: vtrpc.IRPCError): vtrpc.RPCError;
-
-        /**
-         * Encodes the specified RPCError message. Does not implicitly {@link vtrpc.RPCError.verify|verify} messages.
-         * @param message RPCError message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: vtrpc.IRPCError, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified RPCError message, length delimited. Does not implicitly {@link vtrpc.RPCError.verify|verify} messages.
-         * @param message RPCError message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: vtrpc.IRPCError, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a RPCError message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns RPCError
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtrpc.RPCError;
-
-        /**
-         * Decodes a RPCError message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns RPCError
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtrpc.RPCError;
-
-        /**
-         * Verifies a RPCError message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a RPCError message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns RPCError
-         */
-        public static fromObject(object: { [k: string]: any }): vtrpc.RPCError;
-
-        /**
-         * Creates a plain object from a RPCError message. Also converts values to other types if specified.
-         * @param message RPCError
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: vtrpc.RPCError, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this RPCError to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 }
 
@@ -31929,6 +38206,13 @@ export namespace replicationdata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for Status
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a StopReplicationStatus. */
@@ -32025,6 +38309,13 @@ export namespace replicationdata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for StopReplicationStatus
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** StopReplicationMode enum. */
@@ -32127,6 +38418,13 @@ export namespace replicationdata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for PrimaryStatus
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a FullStatus. */
@@ -32191,6 +38489,9 @@ export namespace replicationdata {
 
         /** FullStatus semi_sync_wait_for_replica_count */
         semi_sync_wait_for_replica_count?: (number|null);
+
+        /** FullStatus super_read_only */
+        super_read_only?: (boolean|null);
     }
 
     /** Represents a FullStatus. */
@@ -32262,6 +38563,9 @@ export namespace replicationdata {
         /** FullStatus semi_sync_wait_for_replica_count. */
         public semi_sync_wait_for_replica_count: number;
 
+        /** FullStatus super_read_only. */
+        public super_read_only: boolean;
+
         /**
          * Creates a new FullStatus instance using the specified properties.
          * @param [properties] Properties to set
@@ -32331,6 +38635,13 @@ export namespace replicationdata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for FullStatus
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 }
 
@@ -32425,6 +38736,13 @@ export namespace vschema {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for RoutingRules
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a RoutingRule. */
@@ -32521,6 +38839,13 @@ export namespace vschema {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for RoutingRule
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a Keyspace. */
@@ -32629,6 +38954,13 @@ export namespace vschema {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for Keyspace
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a Vindex. */
@@ -32731,6 +39063,13 @@ export namespace vschema {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for Vindex
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a Table. */
@@ -32857,6 +39196,13 @@ export namespace vschema {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for Table
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a ColumnVindex. */
@@ -32959,6 +39305,13 @@ export namespace vschema {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ColumnVindex
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of an AutoIncrement. */
@@ -33055,6 +39408,13 @@ export namespace vschema {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for AutoIncrement
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a Column. */
@@ -33151,6 +39511,13 @@ export namespace vschema {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for Column
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a SrvVSchema. */
@@ -33253,6 +39620,13 @@ export namespace vschema {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for SrvVSchema
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a ShardRoutingRules. */
@@ -33343,6 +39717,13 @@ export namespace vschema {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ShardRoutingRules
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a ShardRoutingRule. */
@@ -33445,6 +39826,13 @@ export namespace vschema {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ShardRoutingRule
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 }
 
@@ -33545,6 +39933,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ExecuteVtctlCommandRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of an ExecuteVtctlCommandResponse. */
@@ -33635,6 +40030,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ExecuteVtctlCommandResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** MaterializationIntent enum. */
@@ -33744,6 +40146,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for TableMaterializeSettings
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a MaterializeSettings. */
@@ -33912,6 +40321,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for MaterializeSettings
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a Keyspace. */
@@ -34008,6 +40424,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for Keyspace
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a Shard. */
@@ -34110,6 +40533,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for Shard
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a Workflow. */
@@ -34236,6 +40666,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for Workflow
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     namespace Workflow {
@@ -34334,6 +40771,13 @@ export namespace vtctldata {
              * @returns JSON object
              */
             public toJSON(): { [k: string]: any };
+
+            /**
+             * Gets the default type url for ReplicationLocation
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
         }
 
         /** Properties of a ShardStream. */
@@ -34436,6 +40880,13 @@ export namespace vtctldata {
              * @returns JSON object
              */
             public toJSON(): { [k: string]: any };
+
+            /**
+             * Gets the default type url for ShardStream
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
         }
 
         /** Properties of a Stream. */
@@ -34610,6 +41061,13 @@ export namespace vtctldata {
              * @returns JSON object
              */
             public toJSON(): { [k: string]: any };
+
+            /**
+             * Gets the default type url for Stream
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
         }
 
         namespace Stream {
@@ -34708,6 +41166,13 @@ export namespace vtctldata {
                  * @returns JSON object
                  */
                 public toJSON(): { [k: string]: any };
+
+                /**
+                 * Gets the default type url for CopyState
+                 * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+                 * @returns The default type url
+                 */
+                public static getTypeUrl(typeUrlPrefix?: string): string;
             }
 
             /** Properties of a Log. */
@@ -34840,6 +41305,13 @@ export namespace vtctldata {
                  * @returns JSON object
                  */
                 public toJSON(): { [k: string]: any };
+
+                /**
+                 * Gets the default type url for Log
+                 * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+                 * @returns The default type url
+                 */
+                public static getTypeUrl(typeUrlPrefix?: string): string;
             }
         }
     }
@@ -34938,6 +41410,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for AddCellInfoRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of an AddCellInfoResponse. */
@@ -35022,6 +41501,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for AddCellInfoResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of an AddCellsAliasRequest. */
@@ -35118,6 +41604,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for AddCellsAliasRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of an AddCellsAliasResponse. */
@@ -35202,6 +41695,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for AddCellsAliasResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of an ApplyRoutingRulesRequest. */
@@ -35304,6 +41804,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ApplyRoutingRulesRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of an ApplyRoutingRulesResponse. */
@@ -35388,6 +41895,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ApplyRoutingRulesResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of an ApplyShardRoutingRulesRequest. */
@@ -35490,6 +42004,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ApplyShardRoutingRulesRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of an ApplyShardRoutingRulesResponse. */
@@ -35574,6 +42095,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ApplyShardRoutingRulesResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of an ApplySchemaRequest. */
@@ -35712,6 +42240,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ApplySchemaRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of an ApplySchemaResponse. */
@@ -35802,6 +42337,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ApplySchemaResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of an ApplyVSchemaRequest. */
@@ -35922,6 +42464,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ApplyVSchemaRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of an ApplyVSchemaResponse. */
@@ -36012,6 +42561,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ApplyVSchemaResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a BackupRequest. */
@@ -36120,6 +42676,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for BackupRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a BackupResponse. */
@@ -36228,6 +42791,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for BackupResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a BackupShardRequest. */
@@ -36336,6 +42906,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for BackupShardRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a ChangeTabletTypeRequest. */
@@ -36438,6 +43015,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ChangeTabletTypeRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a ChangeTabletTypeResponse. */
@@ -36540,6 +43124,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ChangeTabletTypeResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a CreateKeyspaceRequest. */
@@ -36568,6 +43159,9 @@ export namespace vtctldata {
 
         /** CreateKeyspaceRequest durability_policy */
         durability_policy?: (string|null);
+
+        /** CreateKeyspaceRequest sidecar_db_name */
+        sidecar_db_name?: (string|null);
     }
 
     /** Represents a CreateKeyspaceRequest. */
@@ -36602,6 +43196,9 @@ export namespace vtctldata {
 
         /** CreateKeyspaceRequest durability_policy. */
         public durability_policy: string;
+
+        /** CreateKeyspaceRequest sidecar_db_name. */
+        public sidecar_db_name: string;
 
         /**
          * Creates a new CreateKeyspaceRequest instance using the specified properties.
@@ -36672,6 +43269,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for CreateKeyspaceRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a CreateKeyspaceResponse. */
@@ -36762,6 +43366,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for CreateKeyspaceResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a CreateShardRequest. */
@@ -36870,6 +43481,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for CreateShardRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a CreateShardResponse. */
@@ -36972,6 +43590,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for CreateShardResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a DeleteCellInfoRequest. */
@@ -37068,6 +43693,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for DeleteCellInfoRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a DeleteCellInfoResponse. */
@@ -37152,6 +43784,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for DeleteCellInfoResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a DeleteCellsAliasRequest. */
@@ -37242,6 +43881,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for DeleteCellsAliasRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a DeleteCellsAliasResponse. */
@@ -37326,6 +43972,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for DeleteCellsAliasResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a DeleteKeyspaceRequest. */
@@ -37428,6 +44081,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for DeleteKeyspaceRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a DeleteKeyspaceResponse. */
@@ -37512,6 +44172,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for DeleteKeyspaceResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a DeleteShardsRequest. */
@@ -37620,6 +44287,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for DeleteShardsRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a DeleteShardsResponse. */
@@ -37704,6 +44378,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for DeleteShardsResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a DeleteSrvVSchemaRequest. */
@@ -37794,6 +44475,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for DeleteSrvVSchemaRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a DeleteSrvVSchemaResponse. */
@@ -37878,6 +44566,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for DeleteSrvVSchemaResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a DeleteTabletsRequest. */
@@ -37974,6 +44669,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for DeleteTabletsRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a DeleteTabletsResponse. */
@@ -38058,6 +44760,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for DeleteTabletsResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of an EmergencyReparentShardRequest. */
@@ -38178,6 +44887,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for EmergencyReparentShardRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of an EmergencyReparentShardResponse. */
@@ -38286,6 +45002,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for EmergencyReparentShardResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of an ExecuteFetchAsAppRequest. */
@@ -38394,6 +45117,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ExecuteFetchAsAppRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of an ExecuteFetchAsAppResponse. */
@@ -38484,6 +45214,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ExecuteFetchAsAppResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of an ExecuteFetchAsDBARequest. */
@@ -38598,6 +45335,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ExecuteFetchAsDBARequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of an ExecuteFetchAsDBAResponse. */
@@ -38688,6 +45432,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ExecuteFetchAsDBAResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of an ExecuteHookRequest. */
@@ -38784,6 +45535,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ExecuteHookRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of an ExecuteHookResponse. */
@@ -38874,6 +45632,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ExecuteHookResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a FindAllShardsInKeyspaceRequest. */
@@ -38964,6 +45729,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for FindAllShardsInKeyspaceRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a FindAllShardsInKeyspaceResponse. */
@@ -39054,6 +45826,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for FindAllShardsInKeyspaceResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a GetBackupsRequest. */
@@ -39168,6 +45947,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetBackupsRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a GetBackupsResponse. */
@@ -39258,6 +46044,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetBackupsResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a GetCellInfoRequest. */
@@ -39348,6 +46141,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetCellInfoRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a GetCellInfoResponse. */
@@ -39438,6 +46238,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetCellInfoResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a GetCellInfoNamesRequest. */
@@ -39522,6 +46329,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetCellInfoNamesRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a GetCellInfoNamesResponse. */
@@ -39612,6 +46426,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetCellInfoNamesResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a GetCellsAliasesRequest. */
@@ -39696,6 +46517,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetCellsAliasesRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a GetCellsAliasesResponse. */
@@ -39786,6 +46614,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetCellsAliasesResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a GetFullStatusRequest. */
@@ -39876,6 +46711,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetFullStatusRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a GetFullStatusResponse. */
@@ -39966,6 +46808,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetFullStatusResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a GetKeyspacesRequest. */
@@ -40050,6 +46899,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetKeyspacesRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a GetKeyspacesResponse. */
@@ -40140,6 +46996,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetKeyspacesResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a GetKeyspaceRequest. */
@@ -40230,6 +47093,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetKeyspaceRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a GetKeyspaceResponse. */
@@ -40320,6 +47190,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetKeyspaceResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a GetPermissionsRequest. */
@@ -40410,6 +47287,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetPermissionsRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a GetPermissionsResponse. */
@@ -40500,6 +47384,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetPermissionsResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a GetRoutingRulesRequest. */
@@ -40584,6 +47475,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetRoutingRulesRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a GetRoutingRulesResponse. */
@@ -40674,6 +47572,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetRoutingRulesResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a GetSchemaRequest. */
@@ -40800,6 +47705,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetSchemaRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a GetSchemaResponse. */
@@ -40890,6 +47802,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetSchemaResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a GetShardRequest. */
@@ -40986,6 +47905,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetShardRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a GetShardResponse. */
@@ -41076,6 +48002,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetShardResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a GetShardRoutingRulesRequest. */
@@ -41160,6 +48093,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetShardRoutingRulesRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a GetShardRoutingRulesResponse. */
@@ -41250,6 +48190,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetShardRoutingRulesResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a GetSrvKeyspaceNamesRequest. */
@@ -41340,6 +48287,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetSrvKeyspaceNamesRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a GetSrvKeyspaceNamesResponse. */
@@ -41430,6 +48384,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetSrvKeyspaceNamesResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     namespace GetSrvKeyspaceNamesResponse {
@@ -41522,6 +48483,13 @@ export namespace vtctldata {
              * @returns JSON object
              */
             public toJSON(): { [k: string]: any };
+
+            /**
+             * Gets the default type url for NameList
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
         }
     }
 
@@ -41619,6 +48587,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetSrvKeyspacesRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a GetSrvKeyspacesResponse. */
@@ -41709,6 +48684,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetSrvKeyspacesResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of an UpdateThrottlerConfigRequest. */
@@ -41841,6 +48823,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for UpdateThrottlerConfigRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of an UpdateThrottlerConfigResponse. */
@@ -41925,6 +48914,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for UpdateThrottlerConfigResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a GetSrvVSchemaRequest. */
@@ -42015,6 +49011,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetSrvVSchemaRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a GetSrvVSchemaResponse. */
@@ -42105,6 +49108,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetSrvVSchemaResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a GetSrvVSchemasRequest. */
@@ -42195,6 +49205,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetSrvVSchemasRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a GetSrvVSchemasResponse. */
@@ -42285,6 +49302,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetSrvVSchemasResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a GetTabletRequest. */
@@ -42375,6 +49399,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetTabletRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a GetTabletResponse. */
@@ -42465,6 +49496,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetTabletResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a GetTabletsRequest. */
@@ -42585,6 +49623,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetTabletsRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a GetTabletsResponse. */
@@ -42675,6 +49720,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetTabletsResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a GetTopologyPathRequest. */
@@ -42765,6 +49817,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetTopologyPathRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a GetTopologyPathResponse. */
@@ -42855,6 +49914,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetTopologyPathResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a TopologyCell. */
@@ -42963,6 +50029,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for TopologyCell
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a GetVSchemaRequest. */
@@ -43053,6 +50126,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetVSchemaRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a GetVersionRequest. */
@@ -43143,6 +50223,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetVersionRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a GetVersionResponse. */
@@ -43233,6 +50320,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetVersionResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a GetVSchemaResponse. */
@@ -43323,6 +50417,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetVSchemaResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a GetWorkflowsRequest. */
@@ -43333,6 +50434,9 @@ export namespace vtctldata {
 
         /** GetWorkflowsRequest active_only */
         active_only?: (boolean|null);
+
+        /** GetWorkflowsRequest name_only */
+        name_only?: (boolean|null);
     }
 
     /** Represents a GetWorkflowsRequest. */
@@ -43349,6 +50453,9 @@ export namespace vtctldata {
 
         /** GetWorkflowsRequest active_only. */
         public active_only: boolean;
+
+        /** GetWorkflowsRequest name_only. */
+        public name_only: boolean;
 
         /**
          * Creates a new GetWorkflowsRequest instance using the specified properties.
@@ -43419,6 +50526,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetWorkflowsRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a GetWorkflowsResponse. */
@@ -43509,6 +50623,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetWorkflowsResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of an InitShardPrimaryRequest. */
@@ -43623,6 +50744,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for InitShardPrimaryRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of an InitShardPrimaryResponse. */
@@ -43713,6 +50841,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for InitShardPrimaryResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a PingTabletRequest. */
@@ -43803,6 +50938,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for PingTabletRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a PingTabletResponse. */
@@ -43887,6 +51029,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for PingTabletResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a PlannedReparentShardRequest. */
@@ -44001,6 +51150,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for PlannedReparentShardRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a PlannedReparentShardResponse. */
@@ -44109,6 +51265,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for PlannedReparentShardResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a RebuildKeyspaceGraphRequest. */
@@ -44211,6 +51374,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for RebuildKeyspaceGraphRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a RebuildKeyspaceGraphResponse. */
@@ -44295,6 +51465,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for RebuildKeyspaceGraphResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a RebuildVSchemaGraphRequest. */
@@ -44385,6 +51562,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for RebuildVSchemaGraphRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a RebuildVSchemaGraphResponse. */
@@ -44469,6 +51653,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for RebuildVSchemaGraphResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a RefreshStateRequest. */
@@ -44559,6 +51750,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for RefreshStateRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a RefreshStateResponse. */
@@ -44643,6 +51841,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for RefreshStateResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a RefreshStateByShardRequest. */
@@ -44745,6 +51950,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for RefreshStateByShardRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a RefreshStateByShardResponse. */
@@ -44841,6 +52053,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for RefreshStateByShardResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a ReloadSchemaRequest. */
@@ -44931,6 +52150,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ReloadSchemaRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a ReloadSchemaResponse. */
@@ -45015,6 +52241,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ReloadSchemaResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a ReloadSchemaKeyspaceRequest. */
@@ -45123,6 +52356,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ReloadSchemaKeyspaceRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a ReloadSchemaKeyspaceResponse. */
@@ -45213,6 +52453,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ReloadSchemaKeyspaceResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a ReloadSchemaShardRequest. */
@@ -45327,6 +52574,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ReloadSchemaShardRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a ReloadSchemaShardResponse. */
@@ -45417,6 +52671,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ReloadSchemaShardResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a RemoveBackupRequest. */
@@ -45519,6 +52780,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for RemoveBackupRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a RemoveBackupResponse. */
@@ -45603,6 +52871,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for RemoveBackupResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a RemoveKeyspaceCellRequest. */
@@ -45711,6 +52986,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for RemoveKeyspaceCellRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a RemoveKeyspaceCellResponse. */
@@ -45795,6 +53077,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for RemoveKeyspaceCellResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a RemoveShardCellRequest. */
@@ -45909,6 +53198,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for RemoveShardCellRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a RemoveShardCellResponse. */
@@ -45993,6 +53289,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for RemoveShardCellResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a ReparentTabletRequest. */
@@ -46083,6 +53386,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ReparentTabletRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a ReparentTabletResponse. */
@@ -46185,6 +53495,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ReparentTabletResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a RestoreFromBackupRequest. */
@@ -46293,6 +53610,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for RestoreFromBackupRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a RestoreFromBackupResponse. */
@@ -46401,6 +53725,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for RestoreFromBackupResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a RunHealthCheckRequest. */
@@ -46491,6 +53822,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for RunHealthCheckRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a RunHealthCheckResponse. */
@@ -46575,6 +53913,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for RunHealthCheckResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a SetKeyspaceDurabilityPolicyRequest. */
@@ -46671,6 +54016,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for SetKeyspaceDurabilityPolicyRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a SetKeyspaceDurabilityPolicyResponse. */
@@ -46761,6 +54113,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for SetKeyspaceDurabilityPolicyResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a SetKeyspaceServedFromRequest. */
@@ -46875,6 +54234,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for SetKeyspaceServedFromRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a SetKeyspaceServedFromResponse. */
@@ -46965,6 +54331,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for SetKeyspaceServedFromResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a SetKeyspaceShardingInfoRequest. */
@@ -47061,6 +54434,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for SetKeyspaceShardingInfoRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a SetKeyspaceShardingInfoResponse. */
@@ -47151,6 +54531,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for SetKeyspaceShardingInfoResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a SetShardIsPrimaryServingRequest. */
@@ -47253,6 +54640,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for SetShardIsPrimaryServingRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a SetShardIsPrimaryServingResponse. */
@@ -47343,6 +54737,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for SetShardIsPrimaryServingResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a SetShardTabletControlRequest. */
@@ -47469,6 +54870,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for SetShardTabletControlRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a SetShardTabletControlResponse. */
@@ -47559,6 +54967,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for SetShardTabletControlResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a SetWritableRequest. */
@@ -47655,6 +55070,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for SetWritableRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a SetWritableResponse. */
@@ -47739,6 +55161,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for SetWritableResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a ShardReplicationAddRequest. */
@@ -47841,6 +55270,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ShardReplicationAddRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a ShardReplicationAddResponse. */
@@ -47925,6 +55361,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ShardReplicationAddResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a ShardReplicationFixRequest. */
@@ -48027,6 +55470,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ShardReplicationFixRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a ShardReplicationFixResponse. */
@@ -48117,6 +55567,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ShardReplicationFixResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a ShardReplicationPositionsRequest. */
@@ -48213,6 +55670,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ShardReplicationPositionsRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a ShardReplicationPositionsResponse. */
@@ -48309,6 +55773,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ShardReplicationPositionsResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a ShardReplicationRemoveRequest. */
@@ -48411,6 +55882,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ShardReplicationRemoveRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a ShardReplicationRemoveResponse. */
@@ -48495,6 +55973,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ShardReplicationRemoveResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a SleepTabletRequest. */
@@ -48591,6 +56076,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for SleepTabletRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a SleepTabletResponse. */
@@ -48675,6 +56167,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for SleepTabletResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a SourceShardAddRequest. */
@@ -48801,6 +56300,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for SourceShardAddRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a SourceShardAddResponse. */
@@ -48891,6 +56397,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for SourceShardAddResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a SourceShardDeleteRequest. */
@@ -48993,6 +56506,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for SourceShardDeleteRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a SourceShardDeleteResponse. */
@@ -49083,6 +56603,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for SourceShardDeleteResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a StartReplicationRequest. */
@@ -49173,6 +56700,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for StartReplicationRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a StartReplicationResponse. */
@@ -49257,6 +56791,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for StartReplicationResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a StopReplicationRequest. */
@@ -49347,6 +56888,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for StopReplicationRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a StopReplicationResponse. */
@@ -49431,6 +56979,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for StopReplicationResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a TabletExternallyReparentedRequest. */
@@ -49521,6 +57076,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for TabletExternallyReparentedRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a TabletExternallyReparentedResponse. */
@@ -49629,6 +57191,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for TabletExternallyReparentedResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of an UpdateCellInfoRequest. */
@@ -49725,6 +57294,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for UpdateCellInfoRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of an UpdateCellInfoResponse. */
@@ -49821,6 +57397,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for UpdateCellInfoResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of an UpdateCellsAliasRequest. */
@@ -49917,6 +57500,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for UpdateCellsAliasRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of an UpdateCellsAliasResponse. */
@@ -50013,6 +57603,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for UpdateCellsAliasResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a ValidateRequest. */
@@ -50103,6 +57700,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ValidateRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a ValidateResponse. */
@@ -50199,6 +57803,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ValidateResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a ValidateKeyspaceRequest. */
@@ -50295,6 +57906,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ValidateKeyspaceRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a ValidateKeyspaceResponse. */
@@ -50391,6 +58009,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ValidateKeyspaceResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a ValidateSchemaKeyspaceRequest. */
@@ -50505,6 +58130,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ValidateSchemaKeyspaceRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a ValidateSchemaKeyspaceResponse. */
@@ -50601,6 +58233,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ValidateSchemaKeyspaceResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a ValidateShardRequest. */
@@ -50703,6 +58342,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ValidateShardRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a ValidateShardResponse. */
@@ -50793,6 +58439,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ValidateShardResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a ValidateVersionKeyspaceRequest. */
@@ -50883,6 +58536,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ValidateVersionKeyspaceRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a ValidateVersionKeyspaceResponse. */
@@ -50979,6 +58639,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ValidateVersionKeyspaceResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a ValidateVersionShardRequest. */
@@ -51075,6 +58742,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ValidateVersionShardRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a ValidateVersionShardResponse. */
@@ -51165,6 +58839,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ValidateVersionShardResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a ValidateVSchemaRequest. */
@@ -51273,6 +58954,13 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ValidateVSchemaRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a ValidateVSchemaResponse. */
@@ -51369,3213 +59057,324 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
-    }
-}
 
-/** Namespace binlogdata. */
-export namespace binlogdata {
-
-    /** Properties of a Charset. */
-    interface ICharset {
-
-        /** Charset client */
-        client?: (number|null);
-
-        /** Charset conn */
-        conn?: (number|null);
-
-        /** Charset server */
-        server?: (number|null);
+        /**
+         * Gets the default type url for ValidateVSchemaResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
-    /** Represents a Charset. */
-    class Charset implements ICharset {
+    /** Properties of a WorkflowUpdateRequest. */
+    interface IWorkflowUpdateRequest {
+
+        /** WorkflowUpdateRequest keyspace */
+        keyspace?: (string|null);
+
+        /** WorkflowUpdateRequest tablet_request */
+        tablet_request?: (tabletmanagerdata.IUpdateVRWorkflowRequest|null);
+    }
+
+    /** Represents a WorkflowUpdateRequest. */
+    class WorkflowUpdateRequest implements IWorkflowUpdateRequest {
 
         /**
-         * Constructs a new Charset.
+         * Constructs a new WorkflowUpdateRequest.
          * @param [properties] Properties to set
          */
-        constructor(properties?: binlogdata.ICharset);
+        constructor(properties?: vtctldata.IWorkflowUpdateRequest);
 
-        /** Charset client. */
-        public client: number;
+        /** WorkflowUpdateRequest keyspace. */
+        public keyspace: string;
 
-        /** Charset conn. */
-        public conn: number;
-
-        /** Charset server. */
-        public server: number;
+        /** WorkflowUpdateRequest tablet_request. */
+        public tablet_request?: (tabletmanagerdata.IUpdateVRWorkflowRequest|null);
 
         /**
-         * Creates a new Charset instance using the specified properties.
+         * Creates a new WorkflowUpdateRequest instance using the specified properties.
          * @param [properties] Properties to set
-         * @returns Charset instance
+         * @returns WorkflowUpdateRequest instance
          */
-        public static create(properties?: binlogdata.ICharset): binlogdata.Charset;
+        public static create(properties?: vtctldata.IWorkflowUpdateRequest): vtctldata.WorkflowUpdateRequest;
 
         /**
-         * Encodes the specified Charset message. Does not implicitly {@link binlogdata.Charset.verify|verify} messages.
-         * @param message Charset message or plain object to encode
+         * Encodes the specified WorkflowUpdateRequest message. Does not implicitly {@link vtctldata.WorkflowUpdateRequest.verify|verify} messages.
+         * @param message WorkflowUpdateRequest message or plain object to encode
          * @param [writer] Writer to encode to
          * @returns Writer
          */
-        public static encode(message: binlogdata.ICharset, writer?: $protobuf.Writer): $protobuf.Writer;
+        public static encode(message: vtctldata.IWorkflowUpdateRequest, writer?: $protobuf.Writer): $protobuf.Writer;
 
         /**
-         * Encodes the specified Charset message, length delimited. Does not implicitly {@link binlogdata.Charset.verify|verify} messages.
-         * @param message Charset message or plain object to encode
+         * Encodes the specified WorkflowUpdateRequest message, length delimited. Does not implicitly {@link vtctldata.WorkflowUpdateRequest.verify|verify} messages.
+         * @param message WorkflowUpdateRequest message or plain object to encode
          * @param [writer] Writer to encode to
          * @returns Writer
          */
-        public static encodeDelimited(message: binlogdata.ICharset, writer?: $protobuf.Writer): $protobuf.Writer;
+        public static encodeDelimited(message: vtctldata.IWorkflowUpdateRequest, writer?: $protobuf.Writer): $protobuf.Writer;
 
         /**
-         * Decodes a Charset message from the specified reader or buffer.
+         * Decodes a WorkflowUpdateRequest message from the specified reader or buffer.
          * @param reader Reader or buffer to decode from
          * @param [length] Message length if known beforehand
-         * @returns Charset
+         * @returns WorkflowUpdateRequest
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.Charset;
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.WorkflowUpdateRequest;
 
         /**
-         * Decodes a Charset message from the specified reader or buffer, length delimited.
+         * Decodes a WorkflowUpdateRequest message from the specified reader or buffer, length delimited.
          * @param reader Reader or buffer to decode from
-         * @returns Charset
+         * @returns WorkflowUpdateRequest
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.Charset;
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.WorkflowUpdateRequest;
 
         /**
-         * Verifies a Charset message.
+         * Verifies a WorkflowUpdateRequest message.
          * @param message Plain object to verify
          * @returns `null` if valid, otherwise the reason why it is not
          */
         public static verify(message: { [k: string]: any }): (string|null);
 
         /**
-         * Creates a Charset message from a plain object. Also converts values to their respective internal types.
+         * Creates a WorkflowUpdateRequest message from a plain object. Also converts values to their respective internal types.
          * @param object Plain object
-         * @returns Charset
+         * @returns WorkflowUpdateRequest
          */
-        public static fromObject(object: { [k: string]: any }): binlogdata.Charset;
+        public static fromObject(object: { [k: string]: any }): vtctldata.WorkflowUpdateRequest;
 
         /**
-         * Creates a plain object from a Charset message. Also converts values to other types if specified.
-         * @param message Charset
+         * Creates a plain object from a WorkflowUpdateRequest message. Also converts values to other types if specified.
+         * @param message WorkflowUpdateRequest
          * @param [options] Conversion options
          * @returns Plain object
          */
-        public static toObject(message: binlogdata.Charset, options?: $protobuf.IConversionOptions): { [k: string]: any };
+        public static toObject(message: vtctldata.WorkflowUpdateRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
 
         /**
-         * Converts this Charset to JSON.
+         * Converts this WorkflowUpdateRequest to JSON.
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for WorkflowUpdateRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
-    /** Properties of a BinlogTransaction. */
-    interface IBinlogTransaction {
+    /** Properties of a WorkflowUpdateResponse. */
+    interface IWorkflowUpdateResponse {
 
-        /** BinlogTransaction statements */
-        statements?: (binlogdata.BinlogTransaction.IStatement[]|null);
+        /** WorkflowUpdateResponse summary */
+        summary?: (string|null);
 
-        /** BinlogTransaction event_token */
-        event_token?: (query.IEventToken|null);
+        /** WorkflowUpdateResponse details */
+        details?: (vtctldata.WorkflowUpdateResponse.ITabletInfo[]|null);
     }
 
-    /** Represents a BinlogTransaction. */
-    class BinlogTransaction implements IBinlogTransaction {
+    /** Represents a WorkflowUpdateResponse. */
+    class WorkflowUpdateResponse implements IWorkflowUpdateResponse {
 
         /**
-         * Constructs a new BinlogTransaction.
+         * Constructs a new WorkflowUpdateResponse.
          * @param [properties] Properties to set
          */
-        constructor(properties?: binlogdata.IBinlogTransaction);
+        constructor(properties?: vtctldata.IWorkflowUpdateResponse);
 
-        /** BinlogTransaction statements. */
-        public statements: binlogdata.BinlogTransaction.IStatement[];
+        /** WorkflowUpdateResponse summary. */
+        public summary: string;
 
-        /** BinlogTransaction event_token. */
-        public event_token?: (query.IEventToken|null);
+        /** WorkflowUpdateResponse details. */
+        public details: vtctldata.WorkflowUpdateResponse.ITabletInfo[];
 
         /**
-         * Creates a new BinlogTransaction instance using the specified properties.
+         * Creates a new WorkflowUpdateResponse instance using the specified properties.
          * @param [properties] Properties to set
-         * @returns BinlogTransaction instance
+         * @returns WorkflowUpdateResponse instance
          */
-        public static create(properties?: binlogdata.IBinlogTransaction): binlogdata.BinlogTransaction;
+        public static create(properties?: vtctldata.IWorkflowUpdateResponse): vtctldata.WorkflowUpdateResponse;
 
         /**
-         * Encodes the specified BinlogTransaction message. Does not implicitly {@link binlogdata.BinlogTransaction.verify|verify} messages.
-         * @param message BinlogTransaction message or plain object to encode
+         * Encodes the specified WorkflowUpdateResponse message. Does not implicitly {@link vtctldata.WorkflowUpdateResponse.verify|verify} messages.
+         * @param message WorkflowUpdateResponse message or plain object to encode
          * @param [writer] Writer to encode to
          * @returns Writer
          */
-        public static encode(message: binlogdata.IBinlogTransaction, writer?: $protobuf.Writer): $protobuf.Writer;
+        public static encode(message: vtctldata.IWorkflowUpdateResponse, writer?: $protobuf.Writer): $protobuf.Writer;
 
         /**
-         * Encodes the specified BinlogTransaction message, length delimited. Does not implicitly {@link binlogdata.BinlogTransaction.verify|verify} messages.
-         * @param message BinlogTransaction message or plain object to encode
+         * Encodes the specified WorkflowUpdateResponse message, length delimited. Does not implicitly {@link vtctldata.WorkflowUpdateResponse.verify|verify} messages.
+         * @param message WorkflowUpdateResponse message or plain object to encode
          * @param [writer] Writer to encode to
          * @returns Writer
          */
-        public static encodeDelimited(message: binlogdata.IBinlogTransaction, writer?: $protobuf.Writer): $protobuf.Writer;
+        public static encodeDelimited(message: vtctldata.IWorkflowUpdateResponse, writer?: $protobuf.Writer): $protobuf.Writer;
 
         /**
-         * Decodes a BinlogTransaction message from the specified reader or buffer.
+         * Decodes a WorkflowUpdateResponse message from the specified reader or buffer.
          * @param reader Reader or buffer to decode from
          * @param [length] Message length if known beforehand
-         * @returns BinlogTransaction
+         * @returns WorkflowUpdateResponse
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.BinlogTransaction;
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.WorkflowUpdateResponse;
 
         /**
-         * Decodes a BinlogTransaction message from the specified reader or buffer, length delimited.
+         * Decodes a WorkflowUpdateResponse message from the specified reader or buffer, length delimited.
          * @param reader Reader or buffer to decode from
-         * @returns BinlogTransaction
+         * @returns WorkflowUpdateResponse
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.BinlogTransaction;
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.WorkflowUpdateResponse;
 
         /**
-         * Verifies a BinlogTransaction message.
+         * Verifies a WorkflowUpdateResponse message.
          * @param message Plain object to verify
          * @returns `null` if valid, otherwise the reason why it is not
          */
         public static verify(message: { [k: string]: any }): (string|null);
 
         /**
-         * Creates a BinlogTransaction message from a plain object. Also converts values to their respective internal types.
+         * Creates a WorkflowUpdateResponse message from a plain object. Also converts values to their respective internal types.
          * @param object Plain object
-         * @returns BinlogTransaction
+         * @returns WorkflowUpdateResponse
          */
-        public static fromObject(object: { [k: string]: any }): binlogdata.BinlogTransaction;
+        public static fromObject(object: { [k: string]: any }): vtctldata.WorkflowUpdateResponse;
 
         /**
-         * Creates a plain object from a BinlogTransaction message. Also converts values to other types if specified.
-         * @param message BinlogTransaction
+         * Creates a plain object from a WorkflowUpdateResponse message. Also converts values to other types if specified.
+         * @param message WorkflowUpdateResponse
          * @param [options] Conversion options
          * @returns Plain object
          */
-        public static toObject(message: binlogdata.BinlogTransaction, options?: $protobuf.IConversionOptions): { [k: string]: any };
+        public static toObject(message: vtctldata.WorkflowUpdateResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
 
         /**
-         * Converts this BinlogTransaction to JSON.
+         * Converts this WorkflowUpdateResponse to JSON.
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for WorkflowUpdateResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
-    namespace BinlogTransaction {
+    namespace WorkflowUpdateResponse {
 
-        /** Properties of a Statement. */
-        interface IStatement {
+        /** Properties of a TabletInfo. */
+        interface ITabletInfo {
 
-            /** Statement category */
-            category?: (binlogdata.BinlogTransaction.Statement.Category|null);
+            /** TabletInfo tablet */
+            tablet?: (string|null);
 
-            /** Statement charset */
-            charset?: (binlogdata.ICharset|null);
-
-            /** Statement sql */
-            sql?: (Uint8Array|null);
+            /** TabletInfo changed */
+            changed?: (boolean|null);
         }
 
-        /** Represents a Statement. */
-        class Statement implements IStatement {
+        /** Represents a TabletInfo. */
+        class TabletInfo implements ITabletInfo {
 
             /**
-             * Constructs a new Statement.
+             * Constructs a new TabletInfo.
              * @param [properties] Properties to set
              */
-            constructor(properties?: binlogdata.BinlogTransaction.IStatement);
+            constructor(properties?: vtctldata.WorkflowUpdateResponse.ITabletInfo);
 
-            /** Statement category. */
-            public category: binlogdata.BinlogTransaction.Statement.Category;
+            /** TabletInfo tablet. */
+            public tablet: string;
 
-            /** Statement charset. */
-            public charset?: (binlogdata.ICharset|null);
-
-            /** Statement sql. */
-            public sql: Uint8Array;
+            /** TabletInfo changed. */
+            public changed: boolean;
 
             /**
-             * Creates a new Statement instance using the specified properties.
+             * Creates a new TabletInfo instance using the specified properties.
              * @param [properties] Properties to set
-             * @returns Statement instance
+             * @returns TabletInfo instance
              */
-            public static create(properties?: binlogdata.BinlogTransaction.IStatement): binlogdata.BinlogTransaction.Statement;
+            public static create(properties?: vtctldata.WorkflowUpdateResponse.ITabletInfo): vtctldata.WorkflowUpdateResponse.TabletInfo;
 
             /**
-             * Encodes the specified Statement message. Does not implicitly {@link binlogdata.BinlogTransaction.Statement.verify|verify} messages.
-             * @param message Statement message or plain object to encode
+             * Encodes the specified TabletInfo message. Does not implicitly {@link vtctldata.WorkflowUpdateResponse.TabletInfo.verify|verify} messages.
+             * @param message TabletInfo message or plain object to encode
              * @param [writer] Writer to encode to
              * @returns Writer
              */
-            public static encode(message: binlogdata.BinlogTransaction.IStatement, writer?: $protobuf.Writer): $protobuf.Writer;
+            public static encode(message: vtctldata.WorkflowUpdateResponse.ITabletInfo, writer?: $protobuf.Writer): $protobuf.Writer;
 
             /**
-             * Encodes the specified Statement message, length delimited. Does not implicitly {@link binlogdata.BinlogTransaction.Statement.verify|verify} messages.
-             * @param message Statement message or plain object to encode
+             * Encodes the specified TabletInfo message, length delimited. Does not implicitly {@link vtctldata.WorkflowUpdateResponse.TabletInfo.verify|verify} messages.
+             * @param message TabletInfo message or plain object to encode
              * @param [writer] Writer to encode to
              * @returns Writer
              */
-            public static encodeDelimited(message: binlogdata.BinlogTransaction.IStatement, writer?: $protobuf.Writer): $protobuf.Writer;
+            public static encodeDelimited(message: vtctldata.WorkflowUpdateResponse.ITabletInfo, writer?: $protobuf.Writer): $protobuf.Writer;
 
             /**
-             * Decodes a Statement message from the specified reader or buffer.
+             * Decodes a TabletInfo message from the specified reader or buffer.
              * @param reader Reader or buffer to decode from
              * @param [length] Message length if known beforehand
-             * @returns Statement
+             * @returns TabletInfo
              * @throws {Error} If the payload is not a reader or valid buffer
              * @throws {$protobuf.util.ProtocolError} If required fields are missing
              */
-            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.BinlogTransaction.Statement;
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.WorkflowUpdateResponse.TabletInfo;
 
             /**
-             * Decodes a Statement message from the specified reader or buffer, length delimited.
+             * Decodes a TabletInfo message from the specified reader or buffer, length delimited.
              * @param reader Reader or buffer to decode from
-             * @returns Statement
+             * @returns TabletInfo
              * @throws {Error} If the payload is not a reader or valid buffer
              * @throws {$protobuf.util.ProtocolError} If required fields are missing
              */
-            public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.BinlogTransaction.Statement;
+            public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.WorkflowUpdateResponse.TabletInfo;
 
             /**
-             * Verifies a Statement message.
+             * Verifies a TabletInfo message.
              * @param message Plain object to verify
              * @returns `null` if valid, otherwise the reason why it is not
              */
             public static verify(message: { [k: string]: any }): (string|null);
 
             /**
-             * Creates a Statement message from a plain object. Also converts values to their respective internal types.
+             * Creates a TabletInfo message from a plain object. Also converts values to their respective internal types.
              * @param object Plain object
-             * @returns Statement
+             * @returns TabletInfo
              */
-            public static fromObject(object: { [k: string]: any }): binlogdata.BinlogTransaction.Statement;
+            public static fromObject(object: { [k: string]: any }): vtctldata.WorkflowUpdateResponse.TabletInfo;
 
             /**
-             * Creates a plain object from a Statement message. Also converts values to other types if specified.
-             * @param message Statement
+             * Creates a plain object from a TabletInfo message. Also converts values to other types if specified.
+             * @param message TabletInfo
              * @param [options] Conversion options
              * @returns Plain object
              */
-            public static toObject(message: binlogdata.BinlogTransaction.Statement, options?: $protobuf.IConversionOptions): { [k: string]: any };
+            public static toObject(message: vtctldata.WorkflowUpdateResponse.TabletInfo, options?: $protobuf.IConversionOptions): { [k: string]: any };
 
             /**
-             * Converts this Statement to JSON.
+             * Converts this TabletInfo to JSON.
              * @returns JSON object
              */
             public toJSON(): { [k: string]: any };
+
+            /**
+             * Gets the default type url for TabletInfo
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
         }
-
-        namespace Statement {
-
-            /** Category enum. */
-            enum Category {
-                BL_UNRECOGNIZED = 0,
-                BL_BEGIN = 1,
-                BL_COMMIT = 2,
-                BL_ROLLBACK = 3,
-                BL_DML_DEPRECATED = 4,
-                BL_DDL = 5,
-                BL_SET = 6,
-                BL_INSERT = 7,
-                BL_UPDATE = 8,
-                BL_DELETE = 9
-            }
-        }
-    }
-
-    /** Properties of a StreamKeyRangeRequest. */
-    interface IStreamKeyRangeRequest {
-
-        /** StreamKeyRangeRequest position */
-        position?: (string|null);
-
-        /** StreamKeyRangeRequest key_range */
-        key_range?: (topodata.IKeyRange|null);
-
-        /** StreamKeyRangeRequest charset */
-        charset?: (binlogdata.ICharset|null);
-    }
-
-    /** Represents a StreamKeyRangeRequest. */
-    class StreamKeyRangeRequest implements IStreamKeyRangeRequest {
-
-        /**
-         * Constructs a new StreamKeyRangeRequest.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: binlogdata.IStreamKeyRangeRequest);
-
-        /** StreamKeyRangeRequest position. */
-        public position: string;
-
-        /** StreamKeyRangeRequest key_range. */
-        public key_range?: (topodata.IKeyRange|null);
-
-        /** StreamKeyRangeRequest charset. */
-        public charset?: (binlogdata.ICharset|null);
-
-        /**
-         * Creates a new StreamKeyRangeRequest instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns StreamKeyRangeRequest instance
-         */
-        public static create(properties?: binlogdata.IStreamKeyRangeRequest): binlogdata.StreamKeyRangeRequest;
-
-        /**
-         * Encodes the specified StreamKeyRangeRequest message. Does not implicitly {@link binlogdata.StreamKeyRangeRequest.verify|verify} messages.
-         * @param message StreamKeyRangeRequest message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: binlogdata.IStreamKeyRangeRequest, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified StreamKeyRangeRequest message, length delimited. Does not implicitly {@link binlogdata.StreamKeyRangeRequest.verify|verify} messages.
-         * @param message StreamKeyRangeRequest message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: binlogdata.IStreamKeyRangeRequest, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a StreamKeyRangeRequest message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns StreamKeyRangeRequest
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.StreamKeyRangeRequest;
-
-        /**
-         * Decodes a StreamKeyRangeRequest message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns StreamKeyRangeRequest
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.StreamKeyRangeRequest;
-
-        /**
-         * Verifies a StreamKeyRangeRequest message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a StreamKeyRangeRequest message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns StreamKeyRangeRequest
-         */
-        public static fromObject(object: { [k: string]: any }): binlogdata.StreamKeyRangeRequest;
-
-        /**
-         * Creates a plain object from a StreamKeyRangeRequest message. Also converts values to other types if specified.
-         * @param message StreamKeyRangeRequest
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: binlogdata.StreamKeyRangeRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this StreamKeyRangeRequest to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-    }
-
-    /** Properties of a StreamKeyRangeResponse. */
-    interface IStreamKeyRangeResponse {
-
-        /** StreamKeyRangeResponse binlog_transaction */
-        binlog_transaction?: (binlogdata.IBinlogTransaction|null);
-    }
-
-    /** Represents a StreamKeyRangeResponse. */
-    class StreamKeyRangeResponse implements IStreamKeyRangeResponse {
-
-        /**
-         * Constructs a new StreamKeyRangeResponse.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: binlogdata.IStreamKeyRangeResponse);
-
-        /** StreamKeyRangeResponse binlog_transaction. */
-        public binlog_transaction?: (binlogdata.IBinlogTransaction|null);
-
-        /**
-         * Creates a new StreamKeyRangeResponse instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns StreamKeyRangeResponse instance
-         */
-        public static create(properties?: binlogdata.IStreamKeyRangeResponse): binlogdata.StreamKeyRangeResponse;
-
-        /**
-         * Encodes the specified StreamKeyRangeResponse message. Does not implicitly {@link binlogdata.StreamKeyRangeResponse.verify|verify} messages.
-         * @param message StreamKeyRangeResponse message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: binlogdata.IStreamKeyRangeResponse, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified StreamKeyRangeResponse message, length delimited. Does not implicitly {@link binlogdata.StreamKeyRangeResponse.verify|verify} messages.
-         * @param message StreamKeyRangeResponse message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: binlogdata.IStreamKeyRangeResponse, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a StreamKeyRangeResponse message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns StreamKeyRangeResponse
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.StreamKeyRangeResponse;
-
-        /**
-         * Decodes a StreamKeyRangeResponse message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns StreamKeyRangeResponse
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.StreamKeyRangeResponse;
-
-        /**
-         * Verifies a StreamKeyRangeResponse message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a StreamKeyRangeResponse message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns StreamKeyRangeResponse
-         */
-        public static fromObject(object: { [k: string]: any }): binlogdata.StreamKeyRangeResponse;
-
-        /**
-         * Creates a plain object from a StreamKeyRangeResponse message. Also converts values to other types if specified.
-         * @param message StreamKeyRangeResponse
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: binlogdata.StreamKeyRangeResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this StreamKeyRangeResponse to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-    }
-
-    /** Properties of a StreamTablesRequest. */
-    interface IStreamTablesRequest {
-
-        /** StreamTablesRequest position */
-        position?: (string|null);
-
-        /** StreamTablesRequest tables */
-        tables?: (string[]|null);
-
-        /** StreamTablesRequest charset */
-        charset?: (binlogdata.ICharset|null);
-    }
-
-    /** Represents a StreamTablesRequest. */
-    class StreamTablesRequest implements IStreamTablesRequest {
-
-        /**
-         * Constructs a new StreamTablesRequest.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: binlogdata.IStreamTablesRequest);
-
-        /** StreamTablesRequest position. */
-        public position: string;
-
-        /** StreamTablesRequest tables. */
-        public tables: string[];
-
-        /** StreamTablesRequest charset. */
-        public charset?: (binlogdata.ICharset|null);
-
-        /**
-         * Creates a new StreamTablesRequest instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns StreamTablesRequest instance
-         */
-        public static create(properties?: binlogdata.IStreamTablesRequest): binlogdata.StreamTablesRequest;
-
-        /**
-         * Encodes the specified StreamTablesRequest message. Does not implicitly {@link binlogdata.StreamTablesRequest.verify|verify} messages.
-         * @param message StreamTablesRequest message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: binlogdata.IStreamTablesRequest, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified StreamTablesRequest message, length delimited. Does not implicitly {@link binlogdata.StreamTablesRequest.verify|verify} messages.
-         * @param message StreamTablesRequest message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: binlogdata.IStreamTablesRequest, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a StreamTablesRequest message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns StreamTablesRequest
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.StreamTablesRequest;
-
-        /**
-         * Decodes a StreamTablesRequest message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns StreamTablesRequest
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.StreamTablesRequest;
-
-        /**
-         * Verifies a StreamTablesRequest message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a StreamTablesRequest message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns StreamTablesRequest
-         */
-        public static fromObject(object: { [k: string]: any }): binlogdata.StreamTablesRequest;
-
-        /**
-         * Creates a plain object from a StreamTablesRequest message. Also converts values to other types if specified.
-         * @param message StreamTablesRequest
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: binlogdata.StreamTablesRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this StreamTablesRequest to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-    }
-
-    /** Properties of a StreamTablesResponse. */
-    interface IStreamTablesResponse {
-
-        /** StreamTablesResponse binlog_transaction */
-        binlog_transaction?: (binlogdata.IBinlogTransaction|null);
-    }
-
-    /** Represents a StreamTablesResponse. */
-    class StreamTablesResponse implements IStreamTablesResponse {
-
-        /**
-         * Constructs a new StreamTablesResponse.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: binlogdata.IStreamTablesResponse);
-
-        /** StreamTablesResponse binlog_transaction. */
-        public binlog_transaction?: (binlogdata.IBinlogTransaction|null);
-
-        /**
-         * Creates a new StreamTablesResponse instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns StreamTablesResponse instance
-         */
-        public static create(properties?: binlogdata.IStreamTablesResponse): binlogdata.StreamTablesResponse;
-
-        /**
-         * Encodes the specified StreamTablesResponse message. Does not implicitly {@link binlogdata.StreamTablesResponse.verify|verify} messages.
-         * @param message StreamTablesResponse message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: binlogdata.IStreamTablesResponse, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified StreamTablesResponse message, length delimited. Does not implicitly {@link binlogdata.StreamTablesResponse.verify|verify} messages.
-         * @param message StreamTablesResponse message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: binlogdata.IStreamTablesResponse, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a StreamTablesResponse message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns StreamTablesResponse
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.StreamTablesResponse;
-
-        /**
-         * Decodes a StreamTablesResponse message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns StreamTablesResponse
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.StreamTablesResponse;
-
-        /**
-         * Verifies a StreamTablesResponse message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a StreamTablesResponse message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns StreamTablesResponse
-         */
-        public static fromObject(object: { [k: string]: any }): binlogdata.StreamTablesResponse;
-
-        /**
-         * Creates a plain object from a StreamTablesResponse message. Also converts values to other types if specified.
-         * @param message StreamTablesResponse
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: binlogdata.StreamTablesResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this StreamTablesResponse to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-    }
-
-    /** Properties of a CharsetConversion. */
-    interface ICharsetConversion {
-
-        /** CharsetConversion from_charset */
-        from_charset?: (string|null);
-
-        /** CharsetConversion to_charset */
-        to_charset?: (string|null);
-    }
-
-    /** Represents a CharsetConversion. */
-    class CharsetConversion implements ICharsetConversion {
-
-        /**
-         * Constructs a new CharsetConversion.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: binlogdata.ICharsetConversion);
-
-        /** CharsetConversion from_charset. */
-        public from_charset: string;
-
-        /** CharsetConversion to_charset. */
-        public to_charset: string;
-
-        /**
-         * Creates a new CharsetConversion instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns CharsetConversion instance
-         */
-        public static create(properties?: binlogdata.ICharsetConversion): binlogdata.CharsetConversion;
-
-        /**
-         * Encodes the specified CharsetConversion message. Does not implicitly {@link binlogdata.CharsetConversion.verify|verify} messages.
-         * @param message CharsetConversion message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: binlogdata.ICharsetConversion, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified CharsetConversion message, length delimited. Does not implicitly {@link binlogdata.CharsetConversion.verify|verify} messages.
-         * @param message CharsetConversion message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: binlogdata.ICharsetConversion, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a CharsetConversion message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns CharsetConversion
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.CharsetConversion;
-
-        /**
-         * Decodes a CharsetConversion message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns CharsetConversion
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.CharsetConversion;
-
-        /**
-         * Verifies a CharsetConversion message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a CharsetConversion message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns CharsetConversion
-         */
-        public static fromObject(object: { [k: string]: any }): binlogdata.CharsetConversion;
-
-        /**
-         * Creates a plain object from a CharsetConversion message. Also converts values to other types if specified.
-         * @param message CharsetConversion
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: binlogdata.CharsetConversion, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this CharsetConversion to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-    }
-
-    /** Properties of a Rule. */
-    interface IRule {
-
-        /** Rule match */
-        match?: (string|null);
-
-        /** Rule filter */
-        filter?: (string|null);
-
-        /** Rule convert_enum_to_text */
-        convert_enum_to_text?: ({ [k: string]: string }|null);
-
-        /** Rule convert_charset */
-        convert_charset?: ({ [k: string]: binlogdata.ICharsetConversion }|null);
-
-        /** Rule source_unique_key_columns */
-        source_unique_key_columns?: (string|null);
-
-        /** Rule target_unique_key_columns */
-        target_unique_key_columns?: (string|null);
-
-        /** Rule source_unique_key_target_columns */
-        source_unique_key_target_columns?: (string|null);
-
-        /** Rule convert_int_to_enum */
-        convert_int_to_enum?: ({ [k: string]: boolean }|null);
-    }
-
-    /** Represents a Rule. */
-    class Rule implements IRule {
-
-        /**
-         * Constructs a new Rule.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: binlogdata.IRule);
-
-        /** Rule match. */
-        public match: string;
-
-        /** Rule filter. */
-        public filter: string;
-
-        /** Rule convert_enum_to_text. */
-        public convert_enum_to_text: { [k: string]: string };
-
-        /** Rule convert_charset. */
-        public convert_charset: { [k: string]: binlogdata.ICharsetConversion };
-
-        /** Rule source_unique_key_columns. */
-        public source_unique_key_columns: string;
-
-        /** Rule target_unique_key_columns. */
-        public target_unique_key_columns: string;
-
-        /** Rule source_unique_key_target_columns. */
-        public source_unique_key_target_columns: string;
-
-        /** Rule convert_int_to_enum. */
-        public convert_int_to_enum: { [k: string]: boolean };
-
-        /**
-         * Creates a new Rule instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns Rule instance
-         */
-        public static create(properties?: binlogdata.IRule): binlogdata.Rule;
-
-        /**
-         * Encodes the specified Rule message. Does not implicitly {@link binlogdata.Rule.verify|verify} messages.
-         * @param message Rule message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: binlogdata.IRule, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified Rule message, length delimited. Does not implicitly {@link binlogdata.Rule.verify|verify} messages.
-         * @param message Rule message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: binlogdata.IRule, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a Rule message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns Rule
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.Rule;
-
-        /**
-         * Decodes a Rule message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns Rule
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.Rule;
-
-        /**
-         * Verifies a Rule message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a Rule message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns Rule
-         */
-        public static fromObject(object: { [k: string]: any }): binlogdata.Rule;
-
-        /**
-         * Creates a plain object from a Rule message. Also converts values to other types if specified.
-         * @param message Rule
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: binlogdata.Rule, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this Rule to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-    }
-
-    /** Properties of a Filter. */
-    interface IFilter {
-
-        /** Filter rules */
-        rules?: (binlogdata.IRule[]|null);
-
-        /** Filter field_event_mode */
-        field_event_mode?: (binlogdata.Filter.FieldEventMode|null);
-
-        /** Filter workflow_type */
-        workflow_type?: (number|Long|null);
-
-        /** Filter workflow_name */
-        workflow_name?: (string|null);
-    }
-
-    /** Represents a Filter. */
-    class Filter implements IFilter {
-
-        /**
-         * Constructs a new Filter.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: binlogdata.IFilter);
-
-        /** Filter rules. */
-        public rules: binlogdata.IRule[];
-
-        /** Filter field_event_mode. */
-        public field_event_mode: binlogdata.Filter.FieldEventMode;
-
-        /** Filter workflow_type. */
-        public workflow_type: (number|Long);
-
-        /** Filter workflow_name. */
-        public workflow_name: string;
-
-        /**
-         * Creates a new Filter instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns Filter instance
-         */
-        public static create(properties?: binlogdata.IFilter): binlogdata.Filter;
-
-        /**
-         * Encodes the specified Filter message. Does not implicitly {@link binlogdata.Filter.verify|verify} messages.
-         * @param message Filter message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: binlogdata.IFilter, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified Filter message, length delimited. Does not implicitly {@link binlogdata.Filter.verify|verify} messages.
-         * @param message Filter message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: binlogdata.IFilter, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a Filter message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns Filter
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.Filter;
-
-        /**
-         * Decodes a Filter message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns Filter
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.Filter;
-
-        /**
-         * Verifies a Filter message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a Filter message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns Filter
-         */
-        public static fromObject(object: { [k: string]: any }): binlogdata.Filter;
-
-        /**
-         * Creates a plain object from a Filter message. Also converts values to other types if specified.
-         * @param message Filter
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: binlogdata.Filter, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this Filter to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-    }
-
-    namespace Filter {
-
-        /** FieldEventMode enum. */
-        enum FieldEventMode {
-            ERR_ON_MISMATCH = 0,
-            BEST_EFFORT = 1
-        }
-    }
-
-    /** OnDDLAction enum. */
-    enum OnDDLAction {
-        IGNORE = 0,
-        STOP = 1,
-        EXEC = 2,
-        EXEC_IGNORE = 3
-    }
-
-    /** VReplicationWorkflowType enum. */
-    enum VReplicationWorkflowType {
-        Materialize = 0,
-        MoveTables = 1,
-        CreateLookupIndex = 2,
-        Migrate = 3,
-        Reshard = 4,
-        OnlineDDL = 5
-    }
-
-    /** VReplicationWorkflowSubType enum. */
-    enum VReplicationWorkflowSubType {
-        None = 0,
-        Partial = 1
-    }
-
-    /** Properties of a BinlogSource. */
-    interface IBinlogSource {
-
-        /** BinlogSource keyspace */
-        keyspace?: (string|null);
-
-        /** BinlogSource shard */
-        shard?: (string|null);
-
-        /** BinlogSource tablet_type */
-        tablet_type?: (topodata.TabletType|null);
-
-        /** BinlogSource key_range */
-        key_range?: (topodata.IKeyRange|null);
-
-        /** BinlogSource tables */
-        tables?: (string[]|null);
-
-        /** BinlogSource filter */
-        filter?: (binlogdata.IFilter|null);
-
-        /** BinlogSource on_ddl */
-        on_ddl?: (binlogdata.OnDDLAction|null);
-
-        /** BinlogSource external_mysql */
-        external_mysql?: (string|null);
-
-        /** BinlogSource stop_after_copy */
-        stop_after_copy?: (boolean|null);
-
-        /** BinlogSource external_cluster */
-        external_cluster?: (string|null);
-
-        /** BinlogSource source_time_zone */
-        source_time_zone?: (string|null);
-
-        /** BinlogSource target_time_zone */
-        target_time_zone?: (string|null);
-    }
-
-    /** Represents a BinlogSource. */
-    class BinlogSource implements IBinlogSource {
-
-        /**
-         * Constructs a new BinlogSource.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: binlogdata.IBinlogSource);
-
-        /** BinlogSource keyspace. */
-        public keyspace: string;
-
-        /** BinlogSource shard. */
-        public shard: string;
-
-        /** BinlogSource tablet_type. */
-        public tablet_type: topodata.TabletType;
-
-        /** BinlogSource key_range. */
-        public key_range?: (topodata.IKeyRange|null);
-
-        /** BinlogSource tables. */
-        public tables: string[];
-
-        /** BinlogSource filter. */
-        public filter?: (binlogdata.IFilter|null);
-
-        /** BinlogSource on_ddl. */
-        public on_ddl: binlogdata.OnDDLAction;
-
-        /** BinlogSource external_mysql. */
-        public external_mysql: string;
-
-        /** BinlogSource stop_after_copy. */
-        public stop_after_copy: boolean;
-
-        /** BinlogSource external_cluster. */
-        public external_cluster: string;
-
-        /** BinlogSource source_time_zone. */
-        public source_time_zone: string;
-
-        /** BinlogSource target_time_zone. */
-        public target_time_zone: string;
-
-        /**
-         * Creates a new BinlogSource instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns BinlogSource instance
-         */
-        public static create(properties?: binlogdata.IBinlogSource): binlogdata.BinlogSource;
-
-        /**
-         * Encodes the specified BinlogSource message. Does not implicitly {@link binlogdata.BinlogSource.verify|verify} messages.
-         * @param message BinlogSource message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: binlogdata.IBinlogSource, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified BinlogSource message, length delimited. Does not implicitly {@link binlogdata.BinlogSource.verify|verify} messages.
-         * @param message BinlogSource message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: binlogdata.IBinlogSource, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a BinlogSource message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns BinlogSource
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.BinlogSource;
-
-        /**
-         * Decodes a BinlogSource message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns BinlogSource
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.BinlogSource;
-
-        /**
-         * Verifies a BinlogSource message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a BinlogSource message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns BinlogSource
-         */
-        public static fromObject(object: { [k: string]: any }): binlogdata.BinlogSource;
-
-        /**
-         * Creates a plain object from a BinlogSource message. Also converts values to other types if specified.
-         * @param message BinlogSource
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: binlogdata.BinlogSource, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this BinlogSource to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-    }
-
-    /** VEventType enum. */
-    enum VEventType {
-        UNKNOWN = 0,
-        GTID = 1,
-        BEGIN = 2,
-        COMMIT = 3,
-        ROLLBACK = 4,
-        DDL = 5,
-        INSERT = 6,
-        REPLACE = 7,
-        UPDATE = 8,
-        DELETE = 9,
-        SET = 10,
-        OTHER = 11,
-        ROW = 12,
-        FIELD = 13,
-        HEARTBEAT = 14,
-        VGTID = 15,
-        JOURNAL = 16,
-        VERSION = 17,
-        LASTPK = 18,
-        SAVEPOINT = 19,
-        COPY_COMPLETED = 20
-    }
-
-    /** Properties of a RowChange. */
-    interface IRowChange {
-
-        /** RowChange before */
-        before?: (query.IRow|null);
-
-        /** RowChange after */
-        after?: (query.IRow|null);
-    }
-
-    /** Represents a RowChange. */
-    class RowChange implements IRowChange {
-
-        /**
-         * Constructs a new RowChange.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: binlogdata.IRowChange);
-
-        /** RowChange before. */
-        public before?: (query.IRow|null);
-
-        /** RowChange after. */
-        public after?: (query.IRow|null);
-
-        /**
-         * Creates a new RowChange instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns RowChange instance
-         */
-        public static create(properties?: binlogdata.IRowChange): binlogdata.RowChange;
-
-        /**
-         * Encodes the specified RowChange message. Does not implicitly {@link binlogdata.RowChange.verify|verify} messages.
-         * @param message RowChange message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: binlogdata.IRowChange, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified RowChange message, length delimited. Does not implicitly {@link binlogdata.RowChange.verify|verify} messages.
-         * @param message RowChange message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: binlogdata.IRowChange, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a RowChange message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns RowChange
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.RowChange;
-
-        /**
-         * Decodes a RowChange message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns RowChange
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.RowChange;
-
-        /**
-         * Verifies a RowChange message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a RowChange message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns RowChange
-         */
-        public static fromObject(object: { [k: string]: any }): binlogdata.RowChange;
-
-        /**
-         * Creates a plain object from a RowChange message. Also converts values to other types if specified.
-         * @param message RowChange
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: binlogdata.RowChange, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this RowChange to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-    }
-
-    /** Properties of a RowEvent. */
-    interface IRowEvent {
-
-        /** RowEvent table_name */
-        table_name?: (string|null);
-
-        /** RowEvent row_changes */
-        row_changes?: (binlogdata.IRowChange[]|null);
-
-        /** RowEvent keyspace */
-        keyspace?: (string|null);
-
-        /** RowEvent shard */
-        shard?: (string|null);
-    }
-
-    /** Represents a RowEvent. */
-    class RowEvent implements IRowEvent {
-
-        /**
-         * Constructs a new RowEvent.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: binlogdata.IRowEvent);
-
-        /** RowEvent table_name. */
-        public table_name: string;
-
-        /** RowEvent row_changes. */
-        public row_changes: binlogdata.IRowChange[];
-
-        /** RowEvent keyspace. */
-        public keyspace: string;
-
-        /** RowEvent shard. */
-        public shard: string;
-
-        /**
-         * Creates a new RowEvent instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns RowEvent instance
-         */
-        public static create(properties?: binlogdata.IRowEvent): binlogdata.RowEvent;
-
-        /**
-         * Encodes the specified RowEvent message. Does not implicitly {@link binlogdata.RowEvent.verify|verify} messages.
-         * @param message RowEvent message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: binlogdata.IRowEvent, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified RowEvent message, length delimited. Does not implicitly {@link binlogdata.RowEvent.verify|verify} messages.
-         * @param message RowEvent message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: binlogdata.IRowEvent, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a RowEvent message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns RowEvent
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.RowEvent;
-
-        /**
-         * Decodes a RowEvent message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns RowEvent
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.RowEvent;
-
-        /**
-         * Verifies a RowEvent message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a RowEvent message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns RowEvent
-         */
-        public static fromObject(object: { [k: string]: any }): binlogdata.RowEvent;
-
-        /**
-         * Creates a plain object from a RowEvent message. Also converts values to other types if specified.
-         * @param message RowEvent
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: binlogdata.RowEvent, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this RowEvent to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-    }
-
-    /** Properties of a FieldEvent. */
-    interface IFieldEvent {
-
-        /** FieldEvent table_name */
-        table_name?: (string|null);
-
-        /** FieldEvent fields */
-        fields?: (query.IField[]|null);
-
-        /** FieldEvent keyspace */
-        keyspace?: (string|null);
-
-        /** FieldEvent shard */
-        shard?: (string|null);
-    }
-
-    /** Represents a FieldEvent. */
-    class FieldEvent implements IFieldEvent {
-
-        /**
-         * Constructs a new FieldEvent.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: binlogdata.IFieldEvent);
-
-        /** FieldEvent table_name. */
-        public table_name: string;
-
-        /** FieldEvent fields. */
-        public fields: query.IField[];
-
-        /** FieldEvent keyspace. */
-        public keyspace: string;
-
-        /** FieldEvent shard. */
-        public shard: string;
-
-        /**
-         * Creates a new FieldEvent instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns FieldEvent instance
-         */
-        public static create(properties?: binlogdata.IFieldEvent): binlogdata.FieldEvent;
-
-        /**
-         * Encodes the specified FieldEvent message. Does not implicitly {@link binlogdata.FieldEvent.verify|verify} messages.
-         * @param message FieldEvent message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: binlogdata.IFieldEvent, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified FieldEvent message, length delimited. Does not implicitly {@link binlogdata.FieldEvent.verify|verify} messages.
-         * @param message FieldEvent message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: binlogdata.IFieldEvent, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a FieldEvent message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns FieldEvent
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.FieldEvent;
-
-        /**
-         * Decodes a FieldEvent message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns FieldEvent
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.FieldEvent;
-
-        /**
-         * Verifies a FieldEvent message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a FieldEvent message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns FieldEvent
-         */
-        public static fromObject(object: { [k: string]: any }): binlogdata.FieldEvent;
-
-        /**
-         * Creates a plain object from a FieldEvent message. Also converts values to other types if specified.
-         * @param message FieldEvent
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: binlogdata.FieldEvent, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this FieldEvent to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-    }
-
-    /** Properties of a ShardGtid. */
-    interface IShardGtid {
-
-        /** ShardGtid keyspace */
-        keyspace?: (string|null);
-
-        /** ShardGtid shard */
-        shard?: (string|null);
-
-        /** ShardGtid gtid */
-        gtid?: (string|null);
-
-        /** ShardGtid table_p_ks */
-        table_p_ks?: (binlogdata.ITableLastPK[]|null);
-    }
-
-    /** Represents a ShardGtid. */
-    class ShardGtid implements IShardGtid {
-
-        /**
-         * Constructs a new ShardGtid.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: binlogdata.IShardGtid);
-
-        /** ShardGtid keyspace. */
-        public keyspace: string;
-
-        /** ShardGtid shard. */
-        public shard: string;
-
-        /** ShardGtid gtid. */
-        public gtid: string;
-
-        /** ShardGtid table_p_ks. */
-        public table_p_ks: binlogdata.ITableLastPK[];
-
-        /**
-         * Creates a new ShardGtid instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns ShardGtid instance
-         */
-        public static create(properties?: binlogdata.IShardGtid): binlogdata.ShardGtid;
-
-        /**
-         * Encodes the specified ShardGtid message. Does not implicitly {@link binlogdata.ShardGtid.verify|verify} messages.
-         * @param message ShardGtid message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: binlogdata.IShardGtid, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified ShardGtid message, length delimited. Does not implicitly {@link binlogdata.ShardGtid.verify|verify} messages.
-         * @param message ShardGtid message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: binlogdata.IShardGtid, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a ShardGtid message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns ShardGtid
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.ShardGtid;
-
-        /**
-         * Decodes a ShardGtid message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns ShardGtid
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.ShardGtid;
-
-        /**
-         * Verifies a ShardGtid message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a ShardGtid message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns ShardGtid
-         */
-        public static fromObject(object: { [k: string]: any }): binlogdata.ShardGtid;
-
-        /**
-         * Creates a plain object from a ShardGtid message. Also converts values to other types if specified.
-         * @param message ShardGtid
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: binlogdata.ShardGtid, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this ShardGtid to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-    }
-
-    /** Properties of a VGtid. */
-    interface IVGtid {
-
-        /** VGtid shard_gtids */
-        shard_gtids?: (binlogdata.IShardGtid[]|null);
-    }
-
-    /** Represents a VGtid. */
-    class VGtid implements IVGtid {
-
-        /**
-         * Constructs a new VGtid.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: binlogdata.IVGtid);
-
-        /** VGtid shard_gtids. */
-        public shard_gtids: binlogdata.IShardGtid[];
-
-        /**
-         * Creates a new VGtid instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns VGtid instance
-         */
-        public static create(properties?: binlogdata.IVGtid): binlogdata.VGtid;
-
-        /**
-         * Encodes the specified VGtid message. Does not implicitly {@link binlogdata.VGtid.verify|verify} messages.
-         * @param message VGtid message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: binlogdata.IVGtid, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified VGtid message, length delimited. Does not implicitly {@link binlogdata.VGtid.verify|verify} messages.
-         * @param message VGtid message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: binlogdata.IVGtid, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a VGtid message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns VGtid
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.VGtid;
-
-        /**
-         * Decodes a VGtid message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns VGtid
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.VGtid;
-
-        /**
-         * Verifies a VGtid message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a VGtid message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns VGtid
-         */
-        public static fromObject(object: { [k: string]: any }): binlogdata.VGtid;
-
-        /**
-         * Creates a plain object from a VGtid message. Also converts values to other types if specified.
-         * @param message VGtid
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: binlogdata.VGtid, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this VGtid to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-    }
-
-    /** Properties of a KeyspaceShard. */
-    interface IKeyspaceShard {
-
-        /** KeyspaceShard keyspace */
-        keyspace?: (string|null);
-
-        /** KeyspaceShard shard */
-        shard?: (string|null);
-    }
-
-    /** Represents a KeyspaceShard. */
-    class KeyspaceShard implements IKeyspaceShard {
-
-        /**
-         * Constructs a new KeyspaceShard.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: binlogdata.IKeyspaceShard);
-
-        /** KeyspaceShard keyspace. */
-        public keyspace: string;
-
-        /** KeyspaceShard shard. */
-        public shard: string;
-
-        /**
-         * Creates a new KeyspaceShard instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns KeyspaceShard instance
-         */
-        public static create(properties?: binlogdata.IKeyspaceShard): binlogdata.KeyspaceShard;
-
-        /**
-         * Encodes the specified KeyspaceShard message. Does not implicitly {@link binlogdata.KeyspaceShard.verify|verify} messages.
-         * @param message KeyspaceShard message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: binlogdata.IKeyspaceShard, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified KeyspaceShard message, length delimited. Does not implicitly {@link binlogdata.KeyspaceShard.verify|verify} messages.
-         * @param message KeyspaceShard message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: binlogdata.IKeyspaceShard, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a KeyspaceShard message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns KeyspaceShard
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.KeyspaceShard;
-
-        /**
-         * Decodes a KeyspaceShard message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns KeyspaceShard
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.KeyspaceShard;
-
-        /**
-         * Verifies a KeyspaceShard message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a KeyspaceShard message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns KeyspaceShard
-         */
-        public static fromObject(object: { [k: string]: any }): binlogdata.KeyspaceShard;
-
-        /**
-         * Creates a plain object from a KeyspaceShard message. Also converts values to other types if specified.
-         * @param message KeyspaceShard
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: binlogdata.KeyspaceShard, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this KeyspaceShard to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-    }
-
-    /** MigrationType enum. */
-    enum MigrationType {
-        TABLES = 0,
-        SHARDS = 1
-    }
-
-    /** Properties of a Journal. */
-    interface IJournal {
-
-        /** Journal id */
-        id?: (number|Long|null);
-
-        /** Journal migration_type */
-        migration_type?: (binlogdata.MigrationType|null);
-
-        /** Journal tables */
-        tables?: (string[]|null);
-
-        /** Journal local_position */
-        local_position?: (string|null);
-
-        /** Journal shard_gtids */
-        shard_gtids?: (binlogdata.IShardGtid[]|null);
-
-        /** Journal participants */
-        participants?: (binlogdata.IKeyspaceShard[]|null);
-
-        /** Journal source_workflows */
-        source_workflows?: (string[]|null);
-    }
-
-    /** Represents a Journal. */
-    class Journal implements IJournal {
-
-        /**
-         * Constructs a new Journal.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: binlogdata.IJournal);
-
-        /** Journal id. */
-        public id: (number|Long);
-
-        /** Journal migration_type. */
-        public migration_type: binlogdata.MigrationType;
-
-        /** Journal tables. */
-        public tables: string[];
-
-        /** Journal local_position. */
-        public local_position: string;
-
-        /** Journal shard_gtids. */
-        public shard_gtids: binlogdata.IShardGtid[];
-
-        /** Journal participants. */
-        public participants: binlogdata.IKeyspaceShard[];
-
-        /** Journal source_workflows. */
-        public source_workflows: string[];
-
-        /**
-         * Creates a new Journal instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns Journal instance
-         */
-        public static create(properties?: binlogdata.IJournal): binlogdata.Journal;
-
-        /**
-         * Encodes the specified Journal message. Does not implicitly {@link binlogdata.Journal.verify|verify} messages.
-         * @param message Journal message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: binlogdata.IJournal, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified Journal message, length delimited. Does not implicitly {@link binlogdata.Journal.verify|verify} messages.
-         * @param message Journal message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: binlogdata.IJournal, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a Journal message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns Journal
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.Journal;
-
-        /**
-         * Decodes a Journal message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns Journal
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.Journal;
-
-        /**
-         * Verifies a Journal message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a Journal message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns Journal
-         */
-        public static fromObject(object: { [k: string]: any }): binlogdata.Journal;
-
-        /**
-         * Creates a plain object from a Journal message. Also converts values to other types if specified.
-         * @param message Journal
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: binlogdata.Journal, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this Journal to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-    }
-
-    /** Properties of a VEvent. */
-    interface IVEvent {
-
-        /** VEvent type */
-        type?: (binlogdata.VEventType|null);
-
-        /** VEvent timestamp */
-        timestamp?: (number|Long|null);
-
-        /** VEvent gtid */
-        gtid?: (string|null);
-
-        /** VEvent statement */
-        statement?: (string|null);
-
-        /** VEvent row_event */
-        row_event?: (binlogdata.IRowEvent|null);
-
-        /** VEvent field_event */
-        field_event?: (binlogdata.IFieldEvent|null);
-
-        /** VEvent vgtid */
-        vgtid?: (binlogdata.IVGtid|null);
-
-        /** VEvent journal */
-        journal?: (binlogdata.IJournal|null);
-
-        /** VEvent dml */
-        dml?: (string|null);
-
-        /** VEvent current_time */
-        current_time?: (number|Long|null);
-
-        /** VEvent last_p_k_event */
-        last_p_k_event?: (binlogdata.ILastPKEvent|null);
-
-        /** VEvent keyspace */
-        keyspace?: (string|null);
-
-        /** VEvent shard */
-        shard?: (string|null);
-
-        /** VEvent throttled */
-        throttled?: (boolean|null);
-    }
-
-    /** Represents a VEvent. */
-    class VEvent implements IVEvent {
-
-        /**
-         * Constructs a new VEvent.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: binlogdata.IVEvent);
-
-        /** VEvent type. */
-        public type: binlogdata.VEventType;
-
-        /** VEvent timestamp. */
-        public timestamp: (number|Long);
-
-        /** VEvent gtid. */
-        public gtid: string;
-
-        /** VEvent statement. */
-        public statement: string;
-
-        /** VEvent row_event. */
-        public row_event?: (binlogdata.IRowEvent|null);
-
-        /** VEvent field_event. */
-        public field_event?: (binlogdata.IFieldEvent|null);
-
-        /** VEvent vgtid. */
-        public vgtid?: (binlogdata.IVGtid|null);
-
-        /** VEvent journal. */
-        public journal?: (binlogdata.IJournal|null);
-
-        /** VEvent dml. */
-        public dml: string;
-
-        /** VEvent current_time. */
-        public current_time: (number|Long);
-
-        /** VEvent last_p_k_event. */
-        public last_p_k_event?: (binlogdata.ILastPKEvent|null);
-
-        /** VEvent keyspace. */
-        public keyspace: string;
-
-        /** VEvent shard. */
-        public shard: string;
-
-        /** VEvent throttled. */
-        public throttled: boolean;
-
-        /**
-         * Creates a new VEvent instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns VEvent instance
-         */
-        public static create(properties?: binlogdata.IVEvent): binlogdata.VEvent;
-
-        /**
-         * Encodes the specified VEvent message. Does not implicitly {@link binlogdata.VEvent.verify|verify} messages.
-         * @param message VEvent message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: binlogdata.IVEvent, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified VEvent message, length delimited. Does not implicitly {@link binlogdata.VEvent.verify|verify} messages.
-         * @param message VEvent message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: binlogdata.IVEvent, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a VEvent message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns VEvent
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.VEvent;
-
-        /**
-         * Decodes a VEvent message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns VEvent
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.VEvent;
-
-        /**
-         * Verifies a VEvent message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a VEvent message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns VEvent
-         */
-        public static fromObject(object: { [k: string]: any }): binlogdata.VEvent;
-
-        /**
-         * Creates a plain object from a VEvent message. Also converts values to other types if specified.
-         * @param message VEvent
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: binlogdata.VEvent, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this VEvent to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-    }
-
-    /** Properties of a MinimalTable. */
-    interface IMinimalTable {
-
-        /** MinimalTable name */
-        name?: (string|null);
-
-        /** MinimalTable fields */
-        fields?: (query.IField[]|null);
-
-        /** MinimalTable p_k_columns */
-        p_k_columns?: ((number|Long)[]|null);
-    }
-
-    /** Represents a MinimalTable. */
-    class MinimalTable implements IMinimalTable {
-
-        /**
-         * Constructs a new MinimalTable.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: binlogdata.IMinimalTable);
-
-        /** MinimalTable name. */
-        public name: string;
-
-        /** MinimalTable fields. */
-        public fields: query.IField[];
-
-        /** MinimalTable p_k_columns. */
-        public p_k_columns: (number|Long)[];
-
-        /**
-         * Creates a new MinimalTable instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns MinimalTable instance
-         */
-        public static create(properties?: binlogdata.IMinimalTable): binlogdata.MinimalTable;
-
-        /**
-         * Encodes the specified MinimalTable message. Does not implicitly {@link binlogdata.MinimalTable.verify|verify} messages.
-         * @param message MinimalTable message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: binlogdata.IMinimalTable, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified MinimalTable message, length delimited. Does not implicitly {@link binlogdata.MinimalTable.verify|verify} messages.
-         * @param message MinimalTable message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: binlogdata.IMinimalTable, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a MinimalTable message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns MinimalTable
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.MinimalTable;
-
-        /**
-         * Decodes a MinimalTable message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns MinimalTable
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.MinimalTable;
-
-        /**
-         * Verifies a MinimalTable message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a MinimalTable message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns MinimalTable
-         */
-        public static fromObject(object: { [k: string]: any }): binlogdata.MinimalTable;
-
-        /**
-         * Creates a plain object from a MinimalTable message. Also converts values to other types if specified.
-         * @param message MinimalTable
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: binlogdata.MinimalTable, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this MinimalTable to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-    }
-
-    /** Properties of a MinimalSchema. */
-    interface IMinimalSchema {
-
-        /** MinimalSchema tables */
-        tables?: (binlogdata.IMinimalTable[]|null);
-    }
-
-    /** Represents a MinimalSchema. */
-    class MinimalSchema implements IMinimalSchema {
-
-        /**
-         * Constructs a new MinimalSchema.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: binlogdata.IMinimalSchema);
-
-        /** MinimalSchema tables. */
-        public tables: binlogdata.IMinimalTable[];
-
-        /**
-         * Creates a new MinimalSchema instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns MinimalSchema instance
-         */
-        public static create(properties?: binlogdata.IMinimalSchema): binlogdata.MinimalSchema;
-
-        /**
-         * Encodes the specified MinimalSchema message. Does not implicitly {@link binlogdata.MinimalSchema.verify|verify} messages.
-         * @param message MinimalSchema message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: binlogdata.IMinimalSchema, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified MinimalSchema message, length delimited. Does not implicitly {@link binlogdata.MinimalSchema.verify|verify} messages.
-         * @param message MinimalSchema message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: binlogdata.IMinimalSchema, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a MinimalSchema message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns MinimalSchema
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.MinimalSchema;
-
-        /**
-         * Decodes a MinimalSchema message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns MinimalSchema
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.MinimalSchema;
-
-        /**
-         * Verifies a MinimalSchema message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a MinimalSchema message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns MinimalSchema
-         */
-        public static fromObject(object: { [k: string]: any }): binlogdata.MinimalSchema;
-
-        /**
-         * Creates a plain object from a MinimalSchema message. Also converts values to other types if specified.
-         * @param message MinimalSchema
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: binlogdata.MinimalSchema, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this MinimalSchema to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-    }
-
-    /** Properties of a VStreamRequest. */
-    interface IVStreamRequest {
-
-        /** VStreamRequest effective_caller_id */
-        effective_caller_id?: (vtrpc.ICallerID|null);
-
-        /** VStreamRequest immediate_caller_id */
-        immediate_caller_id?: (query.IVTGateCallerID|null);
-
-        /** VStreamRequest target */
-        target?: (query.ITarget|null);
-
-        /** VStreamRequest position */
-        position?: (string|null);
-
-        /** VStreamRequest filter */
-        filter?: (binlogdata.IFilter|null);
-
-        /** VStreamRequest table_last_p_ks */
-        table_last_p_ks?: (binlogdata.ITableLastPK[]|null);
-    }
-
-    /** Represents a VStreamRequest. */
-    class VStreamRequest implements IVStreamRequest {
-
-        /**
-         * Constructs a new VStreamRequest.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: binlogdata.IVStreamRequest);
-
-        /** VStreamRequest effective_caller_id. */
-        public effective_caller_id?: (vtrpc.ICallerID|null);
-
-        /** VStreamRequest immediate_caller_id. */
-        public immediate_caller_id?: (query.IVTGateCallerID|null);
-
-        /** VStreamRequest target. */
-        public target?: (query.ITarget|null);
-
-        /** VStreamRequest position. */
-        public position: string;
-
-        /** VStreamRequest filter. */
-        public filter?: (binlogdata.IFilter|null);
-
-        /** VStreamRequest table_last_p_ks. */
-        public table_last_p_ks: binlogdata.ITableLastPK[];
-
-        /**
-         * Creates a new VStreamRequest instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns VStreamRequest instance
-         */
-        public static create(properties?: binlogdata.IVStreamRequest): binlogdata.VStreamRequest;
-
-        /**
-         * Encodes the specified VStreamRequest message. Does not implicitly {@link binlogdata.VStreamRequest.verify|verify} messages.
-         * @param message VStreamRequest message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: binlogdata.IVStreamRequest, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified VStreamRequest message, length delimited. Does not implicitly {@link binlogdata.VStreamRequest.verify|verify} messages.
-         * @param message VStreamRequest message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: binlogdata.IVStreamRequest, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a VStreamRequest message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns VStreamRequest
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.VStreamRequest;
-
-        /**
-         * Decodes a VStreamRequest message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns VStreamRequest
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.VStreamRequest;
-
-        /**
-         * Verifies a VStreamRequest message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a VStreamRequest message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns VStreamRequest
-         */
-        public static fromObject(object: { [k: string]: any }): binlogdata.VStreamRequest;
-
-        /**
-         * Creates a plain object from a VStreamRequest message. Also converts values to other types if specified.
-         * @param message VStreamRequest
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: binlogdata.VStreamRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this VStreamRequest to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-    }
-
-    /** Properties of a VStreamResponse. */
-    interface IVStreamResponse {
-
-        /** VStreamResponse events */
-        events?: (binlogdata.IVEvent[]|null);
-    }
-
-    /** Represents a VStreamResponse. */
-    class VStreamResponse implements IVStreamResponse {
-
-        /**
-         * Constructs a new VStreamResponse.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: binlogdata.IVStreamResponse);
-
-        /** VStreamResponse events. */
-        public events: binlogdata.IVEvent[];
-
-        /**
-         * Creates a new VStreamResponse instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns VStreamResponse instance
-         */
-        public static create(properties?: binlogdata.IVStreamResponse): binlogdata.VStreamResponse;
-
-        /**
-         * Encodes the specified VStreamResponse message. Does not implicitly {@link binlogdata.VStreamResponse.verify|verify} messages.
-         * @param message VStreamResponse message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: binlogdata.IVStreamResponse, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified VStreamResponse message, length delimited. Does not implicitly {@link binlogdata.VStreamResponse.verify|verify} messages.
-         * @param message VStreamResponse message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: binlogdata.IVStreamResponse, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a VStreamResponse message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns VStreamResponse
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.VStreamResponse;
-
-        /**
-         * Decodes a VStreamResponse message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns VStreamResponse
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.VStreamResponse;
-
-        /**
-         * Verifies a VStreamResponse message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a VStreamResponse message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns VStreamResponse
-         */
-        public static fromObject(object: { [k: string]: any }): binlogdata.VStreamResponse;
-
-        /**
-         * Creates a plain object from a VStreamResponse message. Also converts values to other types if specified.
-         * @param message VStreamResponse
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: binlogdata.VStreamResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this VStreamResponse to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-    }
-
-    /** Properties of a VStreamRowsRequest. */
-    interface IVStreamRowsRequest {
-
-        /** VStreamRowsRequest effective_caller_id */
-        effective_caller_id?: (vtrpc.ICallerID|null);
-
-        /** VStreamRowsRequest immediate_caller_id */
-        immediate_caller_id?: (query.IVTGateCallerID|null);
-
-        /** VStreamRowsRequest target */
-        target?: (query.ITarget|null);
-
-        /** VStreamRowsRequest query */
-        query?: (string|null);
-
-        /** VStreamRowsRequest lastpk */
-        lastpk?: (query.IQueryResult|null);
-    }
-
-    /** Represents a VStreamRowsRequest. */
-    class VStreamRowsRequest implements IVStreamRowsRequest {
-
-        /**
-         * Constructs a new VStreamRowsRequest.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: binlogdata.IVStreamRowsRequest);
-
-        /** VStreamRowsRequest effective_caller_id. */
-        public effective_caller_id?: (vtrpc.ICallerID|null);
-
-        /** VStreamRowsRequest immediate_caller_id. */
-        public immediate_caller_id?: (query.IVTGateCallerID|null);
-
-        /** VStreamRowsRequest target. */
-        public target?: (query.ITarget|null);
-
-        /** VStreamRowsRequest query. */
-        public query: string;
-
-        /** VStreamRowsRequest lastpk. */
-        public lastpk?: (query.IQueryResult|null);
-
-        /**
-         * Creates a new VStreamRowsRequest instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns VStreamRowsRequest instance
-         */
-        public static create(properties?: binlogdata.IVStreamRowsRequest): binlogdata.VStreamRowsRequest;
-
-        /**
-         * Encodes the specified VStreamRowsRequest message. Does not implicitly {@link binlogdata.VStreamRowsRequest.verify|verify} messages.
-         * @param message VStreamRowsRequest message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: binlogdata.IVStreamRowsRequest, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified VStreamRowsRequest message, length delimited. Does not implicitly {@link binlogdata.VStreamRowsRequest.verify|verify} messages.
-         * @param message VStreamRowsRequest message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: binlogdata.IVStreamRowsRequest, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a VStreamRowsRequest message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns VStreamRowsRequest
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.VStreamRowsRequest;
-
-        /**
-         * Decodes a VStreamRowsRequest message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns VStreamRowsRequest
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.VStreamRowsRequest;
-
-        /**
-         * Verifies a VStreamRowsRequest message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a VStreamRowsRequest message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns VStreamRowsRequest
-         */
-        public static fromObject(object: { [k: string]: any }): binlogdata.VStreamRowsRequest;
-
-        /**
-         * Creates a plain object from a VStreamRowsRequest message. Also converts values to other types if specified.
-         * @param message VStreamRowsRequest
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: binlogdata.VStreamRowsRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this VStreamRowsRequest to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-    }
-
-    /** Properties of a VStreamRowsResponse. */
-    interface IVStreamRowsResponse {
-
-        /** VStreamRowsResponse fields */
-        fields?: (query.IField[]|null);
-
-        /** VStreamRowsResponse pkfields */
-        pkfields?: (query.IField[]|null);
-
-        /** VStreamRowsResponse gtid */
-        gtid?: (string|null);
-
-        /** VStreamRowsResponse rows */
-        rows?: (query.IRow[]|null);
-
-        /** VStreamRowsResponse lastpk */
-        lastpk?: (query.IRow|null);
-
-        /** VStreamRowsResponse throttled */
-        throttled?: (boolean|null);
-
-        /** VStreamRowsResponse heartbeat */
-        heartbeat?: (boolean|null);
-    }
-
-    /** Represents a VStreamRowsResponse. */
-    class VStreamRowsResponse implements IVStreamRowsResponse {
-
-        /**
-         * Constructs a new VStreamRowsResponse.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: binlogdata.IVStreamRowsResponse);
-
-        /** VStreamRowsResponse fields. */
-        public fields: query.IField[];
-
-        /** VStreamRowsResponse pkfields. */
-        public pkfields: query.IField[];
-
-        /** VStreamRowsResponse gtid. */
-        public gtid: string;
-
-        /** VStreamRowsResponse rows. */
-        public rows: query.IRow[];
-
-        /** VStreamRowsResponse lastpk. */
-        public lastpk?: (query.IRow|null);
-
-        /** VStreamRowsResponse throttled. */
-        public throttled: boolean;
-
-        /** VStreamRowsResponse heartbeat. */
-        public heartbeat: boolean;
-
-        /**
-         * Creates a new VStreamRowsResponse instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns VStreamRowsResponse instance
-         */
-        public static create(properties?: binlogdata.IVStreamRowsResponse): binlogdata.VStreamRowsResponse;
-
-        /**
-         * Encodes the specified VStreamRowsResponse message. Does not implicitly {@link binlogdata.VStreamRowsResponse.verify|verify} messages.
-         * @param message VStreamRowsResponse message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: binlogdata.IVStreamRowsResponse, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified VStreamRowsResponse message, length delimited. Does not implicitly {@link binlogdata.VStreamRowsResponse.verify|verify} messages.
-         * @param message VStreamRowsResponse message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: binlogdata.IVStreamRowsResponse, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a VStreamRowsResponse message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns VStreamRowsResponse
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.VStreamRowsResponse;
-
-        /**
-         * Decodes a VStreamRowsResponse message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns VStreamRowsResponse
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.VStreamRowsResponse;
-
-        /**
-         * Verifies a VStreamRowsResponse message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a VStreamRowsResponse message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns VStreamRowsResponse
-         */
-        public static fromObject(object: { [k: string]: any }): binlogdata.VStreamRowsResponse;
-
-        /**
-         * Creates a plain object from a VStreamRowsResponse message. Also converts values to other types if specified.
-         * @param message VStreamRowsResponse
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: binlogdata.VStreamRowsResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this VStreamRowsResponse to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-    }
-
-    /** Properties of a LastPKEvent. */
-    interface ILastPKEvent {
-
-        /** LastPKEvent table_last_p_k */
-        table_last_p_k?: (binlogdata.ITableLastPK|null);
-
-        /** LastPKEvent completed */
-        completed?: (boolean|null);
-    }
-
-    /** Represents a LastPKEvent. */
-    class LastPKEvent implements ILastPKEvent {
-
-        /**
-         * Constructs a new LastPKEvent.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: binlogdata.ILastPKEvent);
-
-        /** LastPKEvent table_last_p_k. */
-        public table_last_p_k?: (binlogdata.ITableLastPK|null);
-
-        /** LastPKEvent completed. */
-        public completed: boolean;
-
-        /**
-         * Creates a new LastPKEvent instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns LastPKEvent instance
-         */
-        public static create(properties?: binlogdata.ILastPKEvent): binlogdata.LastPKEvent;
-
-        /**
-         * Encodes the specified LastPKEvent message. Does not implicitly {@link binlogdata.LastPKEvent.verify|verify} messages.
-         * @param message LastPKEvent message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: binlogdata.ILastPKEvent, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified LastPKEvent message, length delimited. Does not implicitly {@link binlogdata.LastPKEvent.verify|verify} messages.
-         * @param message LastPKEvent message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: binlogdata.ILastPKEvent, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a LastPKEvent message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns LastPKEvent
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.LastPKEvent;
-
-        /**
-         * Decodes a LastPKEvent message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns LastPKEvent
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.LastPKEvent;
-
-        /**
-         * Verifies a LastPKEvent message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a LastPKEvent message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns LastPKEvent
-         */
-        public static fromObject(object: { [k: string]: any }): binlogdata.LastPKEvent;
-
-        /**
-         * Creates a plain object from a LastPKEvent message. Also converts values to other types if specified.
-         * @param message LastPKEvent
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: binlogdata.LastPKEvent, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this LastPKEvent to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-    }
-
-    /** Properties of a TableLastPK. */
-    interface ITableLastPK {
-
-        /** TableLastPK table_name */
-        table_name?: (string|null);
-
-        /** TableLastPK lastpk */
-        lastpk?: (query.IQueryResult|null);
-    }
-
-    /** Represents a TableLastPK. */
-    class TableLastPK implements ITableLastPK {
-
-        /**
-         * Constructs a new TableLastPK.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: binlogdata.ITableLastPK);
-
-        /** TableLastPK table_name. */
-        public table_name: string;
-
-        /** TableLastPK lastpk. */
-        public lastpk?: (query.IQueryResult|null);
-
-        /**
-         * Creates a new TableLastPK instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns TableLastPK instance
-         */
-        public static create(properties?: binlogdata.ITableLastPK): binlogdata.TableLastPK;
-
-        /**
-         * Encodes the specified TableLastPK message. Does not implicitly {@link binlogdata.TableLastPK.verify|verify} messages.
-         * @param message TableLastPK message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: binlogdata.ITableLastPK, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified TableLastPK message, length delimited. Does not implicitly {@link binlogdata.TableLastPK.verify|verify} messages.
-         * @param message TableLastPK message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: binlogdata.ITableLastPK, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a TableLastPK message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns TableLastPK
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.TableLastPK;
-
-        /**
-         * Decodes a TableLastPK message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns TableLastPK
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.TableLastPK;
-
-        /**
-         * Verifies a TableLastPK message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a TableLastPK message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns TableLastPK
-         */
-        public static fromObject(object: { [k: string]: any }): binlogdata.TableLastPK;
-
-        /**
-         * Creates a plain object from a TableLastPK message. Also converts values to other types if specified.
-         * @param message TableLastPK
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: binlogdata.TableLastPK, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this TableLastPK to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-    }
-
-    /** Properties of a VStreamResultsRequest. */
-    interface IVStreamResultsRequest {
-
-        /** VStreamResultsRequest effective_caller_id */
-        effective_caller_id?: (vtrpc.ICallerID|null);
-
-        /** VStreamResultsRequest immediate_caller_id */
-        immediate_caller_id?: (query.IVTGateCallerID|null);
-
-        /** VStreamResultsRequest target */
-        target?: (query.ITarget|null);
-
-        /** VStreamResultsRequest query */
-        query?: (string|null);
-    }
-
-    /** Represents a VStreamResultsRequest. */
-    class VStreamResultsRequest implements IVStreamResultsRequest {
-
-        /**
-         * Constructs a new VStreamResultsRequest.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: binlogdata.IVStreamResultsRequest);
-
-        /** VStreamResultsRequest effective_caller_id. */
-        public effective_caller_id?: (vtrpc.ICallerID|null);
-
-        /** VStreamResultsRequest immediate_caller_id. */
-        public immediate_caller_id?: (query.IVTGateCallerID|null);
-
-        /** VStreamResultsRequest target. */
-        public target?: (query.ITarget|null);
-
-        /** VStreamResultsRequest query. */
-        public query: string;
-
-        /**
-         * Creates a new VStreamResultsRequest instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns VStreamResultsRequest instance
-         */
-        public static create(properties?: binlogdata.IVStreamResultsRequest): binlogdata.VStreamResultsRequest;
-
-        /**
-         * Encodes the specified VStreamResultsRequest message. Does not implicitly {@link binlogdata.VStreamResultsRequest.verify|verify} messages.
-         * @param message VStreamResultsRequest message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: binlogdata.IVStreamResultsRequest, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified VStreamResultsRequest message, length delimited. Does not implicitly {@link binlogdata.VStreamResultsRequest.verify|verify} messages.
-         * @param message VStreamResultsRequest message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: binlogdata.IVStreamResultsRequest, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a VStreamResultsRequest message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns VStreamResultsRequest
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.VStreamResultsRequest;
-
-        /**
-         * Decodes a VStreamResultsRequest message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns VStreamResultsRequest
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.VStreamResultsRequest;
-
-        /**
-         * Verifies a VStreamResultsRequest message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a VStreamResultsRequest message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns VStreamResultsRequest
-         */
-        public static fromObject(object: { [k: string]: any }): binlogdata.VStreamResultsRequest;
-
-        /**
-         * Creates a plain object from a VStreamResultsRequest message. Also converts values to other types if specified.
-         * @param message VStreamResultsRequest
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: binlogdata.VStreamResultsRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this VStreamResultsRequest to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-    }
-
-    /** Properties of a VStreamResultsResponse. */
-    interface IVStreamResultsResponse {
-
-        /** VStreamResultsResponse fields */
-        fields?: (query.IField[]|null);
-
-        /** VStreamResultsResponse gtid */
-        gtid?: (string|null);
-
-        /** VStreamResultsResponse rows */
-        rows?: (query.IRow[]|null);
-    }
-
-    /** Represents a VStreamResultsResponse. */
-    class VStreamResultsResponse implements IVStreamResultsResponse {
-
-        /**
-         * Constructs a new VStreamResultsResponse.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: binlogdata.IVStreamResultsResponse);
-
-        /** VStreamResultsResponse fields. */
-        public fields: query.IField[];
-
-        /** VStreamResultsResponse gtid. */
-        public gtid: string;
-
-        /** VStreamResultsResponse rows. */
-        public rows: query.IRow[];
-
-        /**
-         * Creates a new VStreamResultsResponse instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns VStreamResultsResponse instance
-         */
-        public static create(properties?: binlogdata.IVStreamResultsResponse): binlogdata.VStreamResultsResponse;
-
-        /**
-         * Encodes the specified VStreamResultsResponse message. Does not implicitly {@link binlogdata.VStreamResultsResponse.verify|verify} messages.
-         * @param message VStreamResultsResponse message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: binlogdata.IVStreamResultsResponse, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified VStreamResultsResponse message, length delimited. Does not implicitly {@link binlogdata.VStreamResultsResponse.verify|verify} messages.
-         * @param message VStreamResultsResponse message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: binlogdata.IVStreamResultsResponse, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a VStreamResultsResponse message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns VStreamResultsResponse
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.VStreamResultsResponse;
-
-        /**
-         * Decodes a VStreamResultsResponse message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns VStreamResultsResponse
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.VStreamResultsResponse;
-
-        /**
-         * Verifies a VStreamResultsResponse message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a VStreamResultsResponse message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns VStreamResultsResponse
-         */
-        public static fromObject(object: { [k: string]: any }): binlogdata.VStreamResultsResponse;
-
-        /**
-         * Creates a plain object from a VStreamResultsResponse message. Also converts values to other types if specified.
-         * @param message VStreamResultsResponse
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: binlogdata.VStreamResultsResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this VStreamResultsResponse to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
     }
 }

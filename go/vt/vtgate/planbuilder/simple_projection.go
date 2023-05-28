@@ -35,7 +35,6 @@ var _ logicalPlan = (*simpleProjection)(nil)
 // a new route that keeps the subquery in the FROM
 // clause, because a route is more versatile than
 // a simpleProjection.
-// this should not be used by the gen4 planner
 type simpleProjection struct {
 	logicalPlanCommon
 	resultColumns []*resultColumn

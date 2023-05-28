@@ -29,13 +29,15 @@ func BreakExpressionInLHSandRHS(
 	ctx *plancontext.PlanningContext,
 	expr sqlparser.Expr,
 	lhs semantics.TableSet,
-) (bvNames []string, columns []*sqlparser.ColName, rewrittenExpr sqlparser.Expr, err error) {
-	rewrittenExpr = sqlparser.CopyOnRewrite(expr, nil, func(cursor *sqlparser.CopyOnWriteCursor) {
-		node, ok := cursor.Node().(*sqlparser.ColName)
-		if !ok {
+) (col JoinColumn, err error) {
+	rewrittenExpr := sqlparser.CopyOnRewrite(expr, nil, func(cursor *sqlparser.CopyOnWriteCursor) {
+		node := cursor.Node()
+		reservedName := getReservedBVName(node)
+		if reservedName == "" {
 			return
 		}
-		deps := ctx.SemTable.RecursiveDeps(node)
+		nodeExpr := node.(sqlparser.Expr)
+		deps := ctx.SemTable.RecursiveDeps(nodeExpr)
 		if deps.IsEmpty() {
 			err = vterrors.VT13001("unknown column. has the AST been copied?")
 			cursor.StopTreeWalk()
@@ -45,20 +47,34 @@ func BreakExpressionInLHSandRHS(
 			return
 		}
 
-		node.Qualifier.Qualifier = sqlparser.NewIdentifierCS("")
-		columns = append(columns, node)
-		bvName := node.CompliantName()
-		bvNames = append(bvNames, bvName)
+		col.LHSExprs = append(col.LHSExprs, nodeExpr)
+		bvName := ctx.GetArgumentFor(nodeExpr, func() string {
+			return ctx.ReservedVars.ReserveVariable(reservedName)
+		})
+
+		col.BvNames = append(col.BvNames, bvName)
 		arg := sqlparser.NewArgument(bvName)
 		// we are replacing one of the sides of the comparison with an argument,
 		// but we don't want to lose the type information we have, so we copy it over
-		ctx.SemTable.CopyExprInfo(node, arg)
+		ctx.SemTable.CopyExprInfo(nodeExpr, arg)
 		cursor.Replace(arg)
 	}, nil).(sqlparser.Expr)
 
 	if err != nil {
-		return nil, nil, nil, err
+		return JoinColumn{}, err
 	}
 	ctx.JoinPredicates[expr] = append(ctx.JoinPredicates[expr], rewrittenExpr)
+	col.RHSExpr = rewrittenExpr
 	return
+}
+
+func getReservedBVName(node sqlparser.SQLNode) string {
+	switch node := node.(type) {
+	case *sqlparser.ColName:
+		node.Qualifier.Qualifier = sqlparser.NewIdentifierCS("")
+		return node.CompliantName()
+	case sqlparser.AggrFunc:
+		return sqlparser.CompliantString(node)
+	}
+	return ""
 }

@@ -67,6 +67,7 @@ func commandVDiff2(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.F
 	verbose := subFlags.Bool("verbose", false, "Show verbose vdiff output in summaries")
 	wait := subFlags.Bool("wait", false, "When creating or resuming a vdiff, wait for it to finish before exiting")
 	waitUpdateInterval := subFlags.Duration("wait-update-interval", time.Duration(1*time.Minute), "When waiting on a vdiff to finish, check and display the current status this often")
+	updateTableStats := subFlags.Bool("update-table-stats", false, "Update the table statistics, using ANALYZE TABLE, on each table involved in the VDiff during initialization. This will ensure that progress estimates are as accurate as possible -- but it does involve locks and can potentially impact query processing on the target keyspace.")
 
 	if err := subFlags.Parse(args); err != nil {
 		return err
@@ -117,6 +118,7 @@ func commandVDiff2(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.F
 			SamplePct:             *samplePct,
 			TimeoutSeconds:        int64(timeout.Seconds()),
 			MaxExtraRowsToCompare: *maxExtraRowsToCompare,
+			UpdateTableStats:      *updateTableStats,
 		},
 		ReportOptions: &tabletmanagerdatapb.VDiffReportOptions{
 			OnlyPks:    *onlyPks,

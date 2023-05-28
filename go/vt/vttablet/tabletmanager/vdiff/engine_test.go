@@ -140,6 +140,12 @@ func TestVDiff(t *testing.T) {
 	),
 		`fields:{name:"c1" type:INT64 table:"t1" org_table:"t1" database:"vt_customer" org_name:"c1" column_length:20 charset:63 flags:53251} rows:{lengths:1 values:"1"}|0|{}`,
 	), nil)
+	vdenv.dbClient.ExpectRequest(fmt.Sprintf("select column_name as column_name, collation_name as collation_name from information_schema.columns where table_schema='%s' and table_name='t1' and column_name in ('c1')", vdiffDBName), sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+		"collation_name",
+		"varchar",
+	),
+		"NULL",
+	), nil)
 	vdenv.dbClient.ExpectRequest(fmt.Sprintf("select table_name as table_name, table_rows as table_rows from INFORMATION_SCHEMA.TABLES where table_schema = '%s' and table_name in ('t1')", vdiffDBName), sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 		"table_name|table_rows",
 		"varchar|int64",

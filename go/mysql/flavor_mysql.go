@@ -17,11 +17,10 @@ limitations under the License.
 package mysql
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"time"
-
-	"context"
 
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -298,16 +297,6 @@ func (mysqlFlavor) readBinlogEvent(c *Conn) (BinlogEvent, error) {
 	return ev, nil
 }
 
-// enableBinlogPlaybackCommand is part of the Flavor interface.
-func (mysqlFlavor) enableBinlogPlaybackCommand() string {
-	return ""
-}
-
-// disableBinlogPlaybackCommand is part of the Flavor interface.
-func (mysqlFlavor) disableBinlogPlaybackCommand() string {
-	return ""
-}
-
 // baseShowTables is part of the Flavor interface.
 func (mysqlFlavor) baseShowTables() string {
 	return "SELECT table_name, table_type, unix_timestamp(create_time), table_comment FROM information_schema.tables WHERE table_schema = database()"
@@ -363,7 +352,7 @@ const TablesWithSize80 = `SELECT t.table_name,
 	SUM(i.file_size),
 	SUM(i.allocated_size)
 FROM information_schema.tables t
-INNER JOIN information_schema.innodb_tablespaces i
+LEFT JOIN information_schema.innodb_tablespaces i
 	ON i.name LIKE CONCAT(database(), '/%') AND (i.name = CONCAT(t.table_schema, '/', t.table_name) OR i.name LIKE CONCAT(t.table_schema, '/', t.table_name, '#p#%'))
 WHERE t.table_schema = database()
 GROUP BY t.table_name, t.table_type, t.create_time, t.table_comment`

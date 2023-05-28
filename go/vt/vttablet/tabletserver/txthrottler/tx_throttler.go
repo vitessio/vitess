@@ -17,129 +17,64 @@ limitations under the License.
 package txthrottler
 
 import (
+	"context"
 	"fmt"
+	"math/rand"
 	"strings"
 	"sync"
 	"time"
 
+	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/proto"
 
-	"google.golang.org/protobuf/encoding/prototext"
-
-	"context"
-
+	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/throttler"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	throttlerdatapb "vitess.io/vitess/go/vt/proto/throttlerdata"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
-// TxThrottler throttles transactions based on replication lag.
-// It's a thin wrapper around the throttler found in vitess/go/vt/throttler.
-// It uses a discovery.HealthCheck to send replication-lag updates to the wrapped throttler.
-//
-// Intended Usage:
-//
-//	// Assuming topoServer is a topo.Server variable pointing to a Vitess topology server.
-//	t := NewTxThrottler(config, topoServer)
-//
-//	// A transaction throttler must be opened before its first use:
-//	if err := t.Open(keyspace, shard); err != nil {
-//	  return err
-//	}
-//
-//	// Checking whether to throttle can be done as follows before starting a transaction.
-//	if t.Throttle() {
-//	  return fmt.Errorf("Transaction throttled!")
-//	} else {
-//	  // execute transaction.
-//	}
-//
-//	// To release the resources used by the throttler the caller should call Close().
-//	t.Close()
-//
-// A TxThrottler object is generally not thread-safe: at any given time at most one goroutine should
-// be executing a method. The only exception is the 'Throttle' method where multiple goroutines are
-// allowed to execute it concurrently.
-type TxThrottler struct {
-	// config stores the transaction throttler's configuration.
-	// It is populated in NewTxThrottler and is not modified
-	// since.
-	config *txThrottlerConfig
+// These vars store the functions used to create the topo server, healthcheck,
+// topology watchers and go/vt/throttler. These are provided here so that they can be overridden
+// in tests to generate mocks.
+type healthCheckFactoryFunc func(topoServer *topo.Server, cell string, cellsToWatch []string) discovery.HealthCheck
+type topologyWatcherFactoryFunc func(topoServer *topo.Server, hc discovery.HealthCheck, cell, keyspace, shard string, refreshInterval time.Duration, topoReadConcurrency int) TopologyWatcherInterface
+type throttlerFactoryFunc func(name, unit string, threadCount int, maxRate int64, maxReplicationLagConfig throttler.MaxReplicationLagModuleConfig) (ThrottlerInterface, error)
 
-	// state holds an open transaction throttler state. It is nil
-	// if the TransactionThrottler is closed.
-	state *txThrottlerState
+var (
+	healthCheckFactory     healthCheckFactoryFunc
+	topologyWatcherFactory topologyWatcherFactoryFunc
+	throttlerFactory       throttlerFactoryFunc
+)
 
-	target *querypb.Target
-}
-
-// NewTxThrottler tries to construct a TxThrottler from the
-// relevant fields in the tabletenv.Config object. It returns a disabled TxThrottler if
-// any error occurs.
-// This function calls tryCreateTxThrottler that does the actual creation work
-// and returns an error if one occurred.
-func NewTxThrottler(config *tabletenv.TabletConfig, topoServer *topo.Server) *TxThrottler {
-	txThrottler, err := tryCreateTxThrottler(config, topoServer)
-	if err != nil {
-		log.Errorf("Error creating transaction throttler. Transaction throttling will"+
-			" be disabled. Error: %v", err)
-		txThrottler, err = newTxThrottler(&txThrottlerConfig{enabled: false})
-		if err != nil {
-			panic("BUG: Can't create a disabled transaction throttler")
-		}
-	} else {
-		log.Infof("Initialized transaction throttler with config: %+v", txThrottler.config)
+func resetTxThrottlerFactories() {
+	healthCheckFactory = func(topoServer *topo.Server, cell string, cellsToWatch []string) discovery.HealthCheck {
+		return discovery.NewHealthCheck(context.Background(), discovery.DefaultHealthCheckRetryDelay, discovery.DefaultHealthCheckTimeout, topoServer, cell, strings.Join(cellsToWatch, ","))
 	}
-	return txThrottler
-}
-
-// InitDBConfig initializes the target parameters for the throttler.
-func (t *TxThrottler) InitDBConfig(target *querypb.Target) {
-	t.target = proto.Clone(target).(*querypb.Target)
-}
-
-func tryCreateTxThrottler(config *tabletenv.TabletConfig, topoServer *topo.Server) (*TxThrottler, error) {
-	if !config.EnableTxThrottler {
-		return newTxThrottler(&txThrottlerConfig{enabled: false})
+	topologyWatcherFactory = func(topoServer *topo.Server, hc discovery.HealthCheck, cell, keyspace, shard string, refreshInterval time.Duration, topoReadConcurrency int) TopologyWatcherInterface {
+		return discovery.NewCellTabletsWatcher(context.Background(), topoServer, hc, discovery.NewFilterByKeyspace([]string{keyspace}), cell, refreshInterval, true, topoReadConcurrency)
 	}
-
-	var throttlerConfig throttlerdatapb.Configuration
-	if err := prototext.Unmarshal([]byte(config.TxThrottlerConfig), &throttlerConfig); err != nil {
-		return nil, err
+	throttlerFactory = func(name, unit string, threadCount int, maxRate int64, maxReplicationLagConfig throttler.MaxReplicationLagModuleConfig) (ThrottlerInterface, error) {
+		return throttler.NewThrottlerFromConfig(name, unit, threadCount, maxRate, maxReplicationLagConfig, time.Now)
 	}
-
-	// Clone tsv.TxThrottlerHealthCheckCells so that we don't assume tsv.TxThrottlerHealthCheckCells
-	// is immutable.
-	healthCheckCells := make([]string, len(config.TxThrottlerHealthCheckCells))
-	copy(healthCheckCells, config.TxThrottlerHealthCheckCells)
-
-	return newTxThrottler(&txThrottlerConfig{
-		enabled:          true,
-		topoServer:       topoServer,
-		throttlerConfig:  &throttlerConfig,
-		healthCheckCells: healthCheckCells,
-	})
 }
 
-// txThrottlerConfig holds the parameters that need to be
-// passed when constructing a TxThrottler object.
-type txThrottlerConfig struct {
-	// enabled is true if the transaction throttler is enabled. All methods
-	// of a disabled transaction throttler do nothing and Throttle() always
-	// returns false.
-	enabled bool
+// TxThrottler defines the interface for the transaction throttler.
+type TxThrottler interface {
+	InitDBConfig(target *querypb.Target)
+	Open() (err error)
+	Close()
+	Throttle(priority int) (result bool)
+}
 
-	topoServer      *topo.Server
-	throttlerConfig *throttlerdatapb.Configuration
-	// healthCheckCells stores the cell names in which running vttablets will be monitored for
-	// replication lag.
-	healthCheckCells []string
+func init() {
+	resetTxThrottlerFactories()
 }
 
 // ThrottlerInterface defines the public interface that is implemented by go/vt/throttler.Throttler
@@ -164,8 +99,77 @@ type TopologyWatcherInterface interface {
 	Stop()
 }
 
+// TxThrottlerName is the name the wrapped go/vt/throttler object will be registered with
+// go/vt/throttler.GlobalManager.
+const TxThrottlerName = "TransactionThrottler"
+
+// txThrottler implements TxThrottle for throttling transactions based on replication lag.
+// It's a thin wrapper around the throttler found in vitess/go/vt/throttler.
+// It uses a discovery.HealthCheck to send replication-lag updates to the wrapped throttler.
+//
+// Intended Usage:
+//
+//	// Assuming topoServer is a topo.Server variable pointing to a Vitess topology server.
+//	t := NewTxThrottler(config, topoServer)
+//
+//	// A transaction throttler must be opened before its first use:
+//	if err := t.Open(keyspace, shard); err != nil {
+//	  return err
+//	}
+//
+//	// Checking whether to throttle can be done as follows before starting a transaction.
+//	if t.Throttle() {
+//	  return fmt.Errorf("Transaction throttled!")
+//	} else {
+//	  // execute transaction.
+//	}
+//
+//	// To release the resources used by the throttler the caller should call Close().
+//	t.Close()
+//
+// A txThrottler object is generally not thread-safe: at any given time at most one goroutine should
+// be executing a method. The only exception is the 'Throttle' method where multiple goroutines are
+// allowed to execute it concurrently.
+type txThrottler struct {
+	// config stores the transaction throttler's configuration.
+	// It is populated in NewTxThrottler and is not modified
+	// since.
+	config *txThrottlerConfig
+
+	// state holds an open transaction throttler state. It is nil
+	// if the TransactionThrottler is closed.
+	state *txThrottlerState
+
+	target     *querypb.Target
+	topoServer *topo.Server
+
+	// stats
+	throttlerRunning  *stats.Gauge
+	requestsTotal     *stats.Counter
+	requestsThrottled *stats.Counter
+}
+
+// txThrottlerConfig holds the parameters that need to be
+// passed when constructing a TxThrottler object.
+type txThrottlerConfig struct {
+	// enabled is true if the transaction throttler is enabled. All methods
+	// of a disabled transaction throttler do nothing and Throttle() always
+	// returns false.
+	enabled bool
+
+	throttlerConfig *throttlerdatapb.Configuration
+	// healthCheckCells stores the cell names in which running vttablets will be monitored for
+	// replication lag.
+	healthCheckCells []string
+
+	// tabletTypes stores the tablet types for throttling
+	tabletTypes *topoproto.TabletTypeListFlag
+}
+
 // txThrottlerState holds the state of an open TxThrottler object.
 type txThrottlerState struct {
+	config *txThrottlerConfig
+
 	// throttleMu serializes calls to throttler.Throttler.Throttle(threadId).
 	// That method is required to be called in serial for each threadId.
 	throttleMu      sync.Mutex
@@ -176,40 +180,53 @@ type txThrottlerState struct {
 	topologyWatchers []TopologyWatcherInterface
 }
 
-// These vars store the functions used to create the topo server, healthcheck,
-// topology watchers and go/vt/throttler. These are provided here so that they can be overridden
-// in tests to generate mocks.
-type healthCheckFactoryFunc func(topoServer *topo.Server, cell string, cellsToWatch []string) discovery.HealthCheck
-type topologyWatcherFactoryFunc func(topoServer *topo.Server, hc discovery.HealthCheck, cell, keyspace, shard string, refreshInterval time.Duration, topoReadConcurrency int) TopologyWatcherInterface
-type throttlerFactoryFunc func(name, unit string, threadCount int, maxRate, maxReplicationLag int64) (ThrottlerInterface, error)
-
-var (
-	healthCheckFactory     healthCheckFactoryFunc
-	topologyWatcherFactory topologyWatcherFactoryFunc
-	throttlerFactory       throttlerFactoryFunc
-)
-
-func init() {
-	resetTxThrottlerFactories()
+// NewTxThrottler tries to construct a txThrottler from the
+// relevant fields in the tabletenv.Config object. It returns a disabled TxThrottler if
+// any error occurs.
+// This function calls tryCreateTxThrottler that does the actual creation work
+// and returns an error if one occurred.
+func NewTxThrottler(env tabletenv.Env, topoServer *topo.Server) TxThrottler {
+	txThrottler, err := tryCreateTxThrottler(env, topoServer)
+	if err != nil {
+		log.Errorf("Error creating transaction throttler. Transaction throttling will"+
+			" be disabled. Error: %v", err)
+		// newTxThrottler with disabled config never returns an error
+		txThrottler, _ = newTxThrottler(env, topoServer, &txThrottlerConfig{enabled: false})
+	} else {
+		log.Infof("Initialized transaction throttler with config: %+v", txThrottler.config)
+	}
+	return txThrottler
 }
 
-func resetTxThrottlerFactories() {
-	healthCheckFactory = func(topoServer *topo.Server, cell string, cellsToWatch []string) discovery.HealthCheck {
-		return discovery.NewHealthCheck(context.Background(), discovery.DefaultHealthCheckRetryDelay, discovery.DefaultHealthCheckTimeout, topoServer, cell, strings.Join(cellsToWatch, ","))
-	}
-	topologyWatcherFactory = func(topoServer *topo.Server, hc discovery.HealthCheck, cell, keyspace, shard string, refreshInterval time.Duration, topoReadConcurrency int) TopologyWatcherInterface {
-		return discovery.NewCellTabletsWatcher(context.Background(), topoServer, hc, discovery.NewFilterByKeyspace([]string{keyspace}), cell, refreshInterval, true, topoReadConcurrency)
-	}
-	throttlerFactory = func(name, unit string, threadCount int, maxRate, maxReplicationLag int64) (ThrottlerInterface, error) {
-		return throttler.NewThrottler(name, unit, threadCount, maxRate, maxReplicationLag)
-	}
+// InitDBConfig initializes the target parameters for the throttler.
+func (t *txThrottler) InitDBConfig(target *querypb.Target) {
+	t.target = proto.Clone(target).(*querypb.Target)
 }
 
-// TxThrottlerName is the name the wrapped go/vt/throttler object will be registered with
-// go/vt/throttler.GlobalManager.
-const TxThrottlerName = "TransactionThrottler"
+func tryCreateTxThrottler(env tabletenv.Env, topoServer *topo.Server) (*txThrottler, error) {
+	if !env.Config().EnableTxThrottler {
+		return newTxThrottler(env, topoServer, &txThrottlerConfig{enabled: false})
+	}
 
-func newTxThrottler(config *txThrottlerConfig) (*TxThrottler, error) {
+	var throttlerConfig throttlerdatapb.Configuration
+	if err := prototext.Unmarshal([]byte(env.Config().TxThrottlerConfig), &throttlerConfig); err != nil {
+		return nil, err
+	}
+
+	// Clone tsv.TxThrottlerHealthCheckCells so that we don't assume tsv.TxThrottlerHealthCheckCells
+	// is immutable.
+	healthCheckCells := make([]string, len(env.Config().TxThrottlerHealthCheckCells))
+	copy(healthCheckCells, env.Config().TxThrottlerHealthCheckCells)
+
+	return newTxThrottler(env, topoServer, &txThrottlerConfig{
+		enabled:          true,
+		tabletTypes:      env.Config().TxThrottlerTabletTypes,
+		throttlerConfig:  &throttlerConfig,
+		healthCheckCells: healthCheckCells,
+	})
+}
+
+func newTxThrottler(env tabletenv.Env, topoServer *topo.Server, config *txThrottlerConfig) (*txThrottler, error) {
 	if config.enabled {
 		// Verify config.
 		err := throttler.MaxReplicationLagModuleConfig{Configuration: config.throttlerConfig}.Verify()
@@ -220,29 +237,33 @@ func newTxThrottler(config *txThrottlerConfig) (*TxThrottler, error) {
 			return nil, fmt.Errorf("empty healthCheckCells given. %+v", config)
 		}
 	}
-	return &TxThrottler{
-		config: config,
+	return &txThrottler{
+		config:            config,
+		topoServer:        topoServer,
+		throttlerRunning:  env.Exporter().NewGauge("TransactionThrottlerRunning", "transaction throttler running state"),
+		requestsTotal:     env.Exporter().NewCounter("TransactionThrottlerRequests", "transaction throttler requests"),
+		requestsThrottled: env.Exporter().NewCounter("TransactionThrottlerThrottled", "transaction throttler requests throttled"),
 	}, nil
 }
 
 // Open opens the transaction throttler. It must be called prior to 'Throttle'.
-func (t *TxThrottler) Open() error {
+func (t *txThrottler) Open() (err error) {
 	if !t.config.enabled {
 		return nil
 	}
 	if t.state != nil {
 		return nil
 	}
-	log.Info("TxThrottler: opening")
-	var err error
-	t.state, err = newTxThrottlerState(t.config, t.target.Keyspace, t.target.Shard, t.target.Cell)
+	log.Info("txThrottler: opening")
+	t.throttlerRunning.Set(1)
+	t.state, err = newTxThrottlerState(t.topoServer, t.config, t.target)
 	return err
 }
 
-// Close closes the TxThrottler object and releases resources.
+// Close closes the txThrottler object and releases resources.
 // It should be called after the throttler is no longer needed.
 // It's ok to call this method on a closed throttler--in which case the method does nothing.
-func (t *TxThrottler) Close() {
+func (t *txThrottler) Close() {
 	if !t.config.enabled {
 		return
 	}
@@ -251,30 +272,44 @@ func (t *TxThrottler) Close() {
 	}
 	t.state.deallocateResources()
 	t.state = nil
-	log.Info("TxThrottler: closed")
+	t.throttlerRunning.Set(0)
+	log.Info("txThrottler: closed")
 }
 
 // Throttle should be called before a new transaction is started.
 // It returns true if the transaction should not proceed (the caller
 // should back off). Throttle requires that Open() was previously called
 // successfully.
-func (t *TxThrottler) Throttle() (result bool) {
+func (t *txThrottler) Throttle(priority int) (result bool) {
 	if !t.config.enabled {
 		return false
 	}
 	if t.state == nil {
-		panic("BUG: Throttle() called on a closed TxThrottler")
+		return false
 	}
-	return t.state.throttle()
+
+	// Throttle according to both what the throttler state says and the priority. Workloads with lower priority value
+	// are less likely to be throttled.
+	result = t.state.throttle() && rand.Intn(sqlparser.MaxPriorityValue) < priority
+
+	t.requestsTotal.Add(1)
+	if result {
+		t.requestsThrottled.Add(1)
+	}
+
+	return result
 }
 
-func newTxThrottlerState(config *txThrottlerConfig, keyspace, shard, cell string) (*txThrottlerState, error) {
+func newTxThrottlerState(topoServer *topo.Server, config *txThrottlerConfig, target *querypb.Target) (*txThrottlerState, error) {
+	maxReplicationLagModuleConfig := throttler.MaxReplicationLagModuleConfig{Configuration: config.throttlerConfig}
+
 	t, err := throttlerFactory(
 		TxThrottlerName,
 		"TPS",                           /* unit */
 		1,                               /* threadCount */
 		throttler.MaxRateModuleDisabled, /* maxRate */
-		config.throttlerConfig.MaxReplicationLagSec /* maxReplicationLag */)
+		maxReplicationLagModuleConfig,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -283,9 +318,10 @@ func newTxThrottlerState(config *txThrottlerConfig, keyspace, shard, cell string
 		return nil, err
 	}
 	result := &txThrottlerState{
+		config:    config,
 		throttler: t,
 	}
-	createTxThrottlerHealthCheck(config, result, cell)
+	createTxThrottlerHealthCheck(topoServer, config, result, target.Cell)
 
 	result.topologyWatchers = make(
 		[]TopologyWatcherInterface, 0, len(config.healthCheckCells))
@@ -293,21 +329,21 @@ func newTxThrottlerState(config *txThrottlerConfig, keyspace, shard, cell string
 		result.topologyWatchers = append(
 			result.topologyWatchers,
 			topologyWatcherFactory(
-				config.topoServer,
+				topoServer,
 				result.healthCheck,
 				cell,
-				keyspace,
-				shard,
+				target.Keyspace,
+				target.Shard,
 				discovery.DefaultTopologyWatcherRefreshInterval,
 				discovery.DefaultTopoReadConcurrency))
 	}
 	return result, nil
 }
 
-func createTxThrottlerHealthCheck(config *txThrottlerConfig, result *txThrottlerState, cell string) {
+func createTxThrottlerHealthCheck(topoServer *topo.Server, config *txThrottlerConfig, result *txThrottlerState, cell string) {
 	ctx, cancel := context.WithCancel(context.Background())
 	result.stopHealthCheck = cancel
-	result.healthCheck = healthCheckFactory(config.topoServer, cell, config.healthCheckCells)
+	result.healthCheck = healthCheckFactory(topoServer, cell, config.healthCheckCells)
 	ch := result.healthCheck.Subscribe()
 	go func(ctx context.Context) {
 		for {
@@ -323,7 +359,8 @@ func createTxThrottlerHealthCheck(config *txThrottlerConfig, result *txThrottler
 
 func (ts *txThrottlerState) throttle() bool {
 	if ts.throttler == nil {
-		panic("BUG: throttle called after deallocateResources was called.")
+		log.Error("throttle called after deallocateResources was called")
+		return false
 	}
 	// Serialize calls to ts.throttle.Throttle()
 	ts.throttleMu.Lock()
@@ -351,14 +388,16 @@ func (ts *txThrottlerState) deallocateResources() {
 
 // StatsUpdate updates the health of a tablet with the given healthcheck.
 func (ts *txThrottlerState) StatsUpdate(tabletStats *discovery.TabletHealth) {
-	// Ignore PRIMARY and RDONLY stats.
-	// We currently do not monitor RDONLY tablets for replication lag. RDONLY tablets are not
-	// candidates for becoming primary during failover, and it's acceptable to serve somewhat
-	// stale date from these.
-	// TODO(erez): If this becomes necessary, we can add a configuration option that would
-	// determine whether we consider RDONLY tablets here, as well.
-	if tabletStats.Target.TabletType != topodatapb.TabletType_REPLICA {
+	if ts.config.tabletTypes == nil {
 		return
 	}
-	ts.throttler.RecordReplicationLag(time.Now(), tabletStats)
+
+	// Monitor tablets for replication lag if they have a tablet
+	// type specified by the --tx_throttler_tablet_types flag.
+	for _, expectedTabletType := range *ts.config.tabletTypes {
+		if tabletStats.Target.TabletType == expectedTabletType {
+			ts.throttler.RecordReplicationLag(time.Now(), tabletStats)
+			return
+		}
+	}
 }

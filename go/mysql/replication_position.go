@@ -26,12 +26,11 @@ import (
 )
 
 const (
-	// MaximumPositionSize is the maximum size of a
-	// replication position. It is used as the maximum column size in the _vt.reparent_journal and
-	// other related tables. A row has a maximum size of 65535 bytes. So
-	// we want to stay under that. We use VARBINARY so the
-	// character set doesn't matter, we only store ascii
-	// characters anyway.
+	// MaximumPositionSize is the maximum size of a replication position.
+	// It is used as the maximum column size in the reparent_journal table
+	// and other related tables. A row has a maximum size of 65535 bytes.
+	// So we want to stay under that. We use VARBINARY so the character
+	// set doesn't matter, we only store ascii characters anyway.
 	MaximumPositionSize = 64000
 )
 

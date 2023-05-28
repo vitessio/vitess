@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 import { Token, tokenizeSearch, SearchToken, SearchTokenTypes } from './tokenize';
+import { describe, expect, test } from 'vitest';
 
 describe('tokenize', () => {
     describe('tokenizeSearch', () => {

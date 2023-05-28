@@ -659,7 +659,7 @@ func (sm *StreamMigrator) templatizeRule(ctx context.Context, rule *binlogdatapb
 	switch {
 	case rule.Filter == "":
 		return StreamTypeUnknown, fmt.Errorf("rule %v does not have a select expression in vreplication", rule)
-	case key.IsKeyRange(rule.Filter):
+	case key.IsValidKeyRange(rule.Filter):
 		rule.Filter = "{{.}}"
 		return StreamTypeSharded, nil
 	case rule.Filter == vreplication.ExcludeStr:

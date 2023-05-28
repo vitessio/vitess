@@ -41,6 +41,7 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -61,7 +62,8 @@ var (
 	normalizeQueries = true
 	streamBufferSize = 32 * 1024
 
-	terseErrors bool
+	terseErrors      bool
+	truncateErrorLen int
 
 	// plan cache related flag
 	queryPlanCacheSize   = cache.DefaultConfig.MaxEntries
@@ -75,8 +77,6 @@ var (
 
 	noScatter          bool
 	enableShardRouting bool
-
-	// TODO(deepthi): change these two vars to unexported and move to healthcheck.go when LegacyHealthcheck is removed
 
 	// healthCheckRetryDelay is the time to wait before retrying healthcheck
 	healthCheckRetryDelay = 2 * time.Millisecond
@@ -118,6 +118,7 @@ func registerFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&transactionMode, "transaction_mode", transactionMode, "SINGLE: disallow multi-db transactions, MULTI: allow multi-db transactions with best effort commit, TWOPC: allow multi-db transactions with 2pc commit")
 	fs.BoolVar(&normalizeQueries, "normalize_queries", normalizeQueries, "Rewrite queries with bind vars. Turn this off if the app itself sends normalized queries with bind vars.")
 	fs.BoolVar(&terseErrors, "vtgate-config-terse-errors", terseErrors, "prevent bind vars from escaping in returned errors")
+	fs.IntVar(&truncateErrorLen, "truncate-error-len", truncateErrorLen, "truncate errors sent to client if they are longer than this value (0 means do not truncate)")
 	fs.IntVar(&streamBufferSize, "stream_buffer_size", streamBufferSize, "the number of bytes sent from vtgate for each stream call. It's recommended to keep this value in sync with vttablet's query-server-config-stream-buffer-size.")
 	fs.Int64Var(&queryPlanCacheSize, "gate_query_cache_size", queryPlanCacheSize, "gate server query cache size, maximum number of queries to be cached. vtgate analyzes every incoming query and generate a query plan, these plans are being cached in a cache. This config controls the expected amount of unique entries in the cache.")
 	fs.Int64Var(&queryPlanCacheMemory, "gate_query_cache_memory", queryPlanCacheMemory, "gate server query cache size in bytes, maximum amount of memory to be cached. vtgate analyzes every incoming query and generate a query plan, these plans are being cached in a lru cache. This config controls the capacity of the lru cache.")
@@ -207,6 +208,7 @@ type VTGate struct {
 
 	// the throttled loggers for all errors, one per API entry
 	logExecute       *logutil.ThrottledLogger
+	logPrepare       *logutil.ThrottledLogger
 	logStreamExecute *logutil.ThrottledLogger
 }
 
@@ -260,11 +262,29 @@ func Init(
 	resolver := NewResolver(srvResolver, serv, cell, sc)
 	vsm := newVStreamManager(srvResolver, serv, cell)
 
+	ts, err := serv.GetTopoServer()
+	if err != nil {
+		log.Fatalf("Unable to get Topo server: %v", err)
+	}
+	// Create a global cache to use for lookups of the sidecar database
+	// identifier in use by each keyspace.
+	_, created := sidecardb.NewIdentifierCache(func(ctx context.Context, keyspace string) (string, error) {
+		ki, err := ts.GetKeyspace(ctx, keyspace)
+		if err != nil {
+			return "", err
+		}
+		return ki.SidecarDbName, nil
+	})
+	// This should never happen.
+	if !created {
+		log.Fatal("Failed to create a new sidecar database identifier cache during init as one already existed!")
+	}
+
 	var si SchemaInfo // default nil
 	var st *vtschema.Tracker
 	if enableSchemaChangeSignal {
 		st = vtschema.NewTracker(gw.hc.Subscribe(), schemaChangeUser, enableViews)
-		addKeyspaceToTracker(ctx, srvResolver, st, gw)
+		addKeyspacesToTracker(ctx, srvResolver, st, gw)
 		si = st
 	}
 
@@ -315,6 +335,7 @@ func Init(
 			[]string{"Operation", "Keyspace", "DbType"}),
 
 		logExecute:       logutil.NewThrottledLogger("Execute", 5*time.Second),
+		logPrepare:       logutil.NewThrottledLogger("Prepare", 5*time.Second),
 		logStreamExecute: logutil.NewThrottledLogger("StreamExecute", 5*time.Second),
 	}
 
@@ -342,7 +363,7 @@ func Init(
 	})
 	rpcVTGate.registerDebugHealthHandler()
 	rpcVTGate.registerDebugEnvHandler()
-	err := initQueryLogger(rpcVTGate)
+	err = initQueryLogger(rpcVTGate)
 	if err != nil {
 		log.Fatalf("error initializing query logger: %v", err)
 	}
@@ -351,7 +372,7 @@ func Init(
 	return rpcVTGate
 }
 
-func addKeyspaceToTracker(ctx context.Context, srvResolver *srvtopo.Resolver, st *vtschema.Tracker, gw *TabletGateway) {
+func addKeyspacesToTracker(ctx context.Context, srvResolver *srvtopo.Resolver, st *vtschema.Tracker, gw *TabletGateway) {
 	keyspaces, err := srvResolver.GetAllKeyspaces(ctx)
 	if err != nil {
 		log.Warningf("Unable to get all keyspaces: %v", err)
@@ -390,13 +411,13 @@ func resolveAndLoadKeyspace(ctx context.Context, srvResolver *srvtopo.Resolver, 
 }
 
 func (vtg *VTGate) registerDebugEnvHandler() {
-	http.HandleFunc("/debug/env", func(w http.ResponseWriter, r *http.Request) {
+	servenv.HTTPHandleFunc("/debug/env", func(w http.ResponseWriter, r *http.Request) {
 		debugEnvHandler(vtg, w, r)
 	})
 }
 
 func (vtg *VTGate) registerDebugHealthHandler() {
-	http.HandleFunc("/debug/health", func(w http.ResponseWriter, r *http.Request) {
+	servenv.HTTPHandleFunc("/debug/health", func(w http.ResponseWriter, r *http.Request) {
 		if err := acl.CheckAccessHTTP(r, acl.MONITORING); err != nil {
 			acl.SendError(w, err)
 			return
@@ -533,7 +554,7 @@ func (vtg *VTGate) ResolveTransaction(ctx context.Context, dtid string) error {
 func (vtg *VTGate) Prepare(ctx context.Context, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable) (newSession *vtgatepb.Session, fld []*querypb.Field, err error) {
 	// In this context, we don't care if we can't fully parse destination
 	destKeyspace, destTabletType, _, _ := vtg.executor.ParseDestinationTarget(session.TargetString)
-	statsKey := []string{"Execute", destKeyspace, topoproto.TabletTypeLString(destTabletType)}
+	statsKey := []string{"Prepare", destKeyspace, topoproto.TabletTypeLString(destTabletType)}
 	defer vtg.timings.Record(statsKey, time.Now())
 
 	if bvErr := sqltypes.ValidateBindVariables(bindVariables); bvErr != nil {
@@ -552,7 +573,7 @@ handleError:
 		"BindVariables": bindVariables,
 		"Session":       session,
 	}
-	err = recordAndAnnotateError(err, statsKey, query, vtg.logExecute)
+	err = recordAndAnnotateError(err, statsKey, query, vtg.logPrepare)
 	return session, nil, err
 }
 
@@ -563,7 +584,7 @@ func (vtg *VTGate) VStream(ctx context.Context, tabletType topodatapb.TabletType
 
 // GetGatewayCacheStatus returns a displayable version of the Gateway cache.
 func (vtg *VTGate) GetGatewayCacheStatus() TabletCacheStatusList {
-	return vtg.resolver.GetGatewayCacheStatus()
+	return vtg.gw.CacheStatus()
 }
 
 // VSchemaStats returns the loaded vschema stats.

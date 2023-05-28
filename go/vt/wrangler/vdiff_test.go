@@ -17,23 +17,23 @@ limitations under the License.
 package wrangler
 
 import (
+	"context"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/mysql/collations"
-	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/topo"
-	"vitess.io/vitess/go/vt/vtgate/engine"
-
-	"context"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/vtgate/engine"
+	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
 )
 
 func TestVDiffPlanSuccess(t *testing.T) {
@@ -43,31 +43,37 @@ func TestVDiffPlanSuccess(t *testing.T) {
 			Columns:           []string{"c1", "c2"},
 			PrimaryKeyColumns: []string{"c1"},
 			Fields:            sqltypes.MakeTestFields("c1|c2", "int64|int64"),
+			Schema:            "create table t1(c1 bigint, c2 bigint, primary key(c1))",
 		}, {
 			Name:              "nonpktext",
 			Columns:           []string{"c1", "textcol"},
 			PrimaryKeyColumns: []string{"c1"},
 			Fields:            sqltypes.MakeTestFields("c1|textcol", "int64|varchar"),
+			Schema:            "create table nonpktext(c1 bigint, textcol text, primary key(c1))",
 		}, {
 			Name:              "pktext",
 			Columns:           []string{"textcol", "c2"},
 			PrimaryKeyColumns: []string{"textcol"},
 			Fields:            sqltypes.MakeTestFields("textcol|c2", "varchar|int64"),
+			Schema:            "create table pktext(textcol varchar(50), c2 bigint, primary key(textcol))",
 		}, {
 			Name:              "multipk",
 			Columns:           []string{"c1", "c2"},
 			PrimaryKeyColumns: []string{"c1", "c2"},
 			Fields:            sqltypes.MakeTestFields("c1|c2", "int64|int64"),
+			Schema:            "create table multipk(c1 bigint, c2 bigint, primary key(c1, c2))",
 		}, {
 			Name:              "aggr",
 			Columns:           []string{"c1", "c2", "c3", "c4"},
 			PrimaryKeyColumns: []string{"c1"},
 			Fields:            sqltypes.MakeTestFields("c1|c2|c3|c4", "int64|int64|int64|int64"),
+			Schema:            "create table aggr(c1 bigint, c2 bigint, c3 bigint, c4 bigint, primary key(c1))",
 		}, {
 			Name:              "datze",
 			Columns:           []string{"id", "dt"},
 			PrimaryKeyColumns: []string{"id"},
 			Fields:            sqltypes.MakeTestFields("id|dt", "int64|datetime"),
+			Schema:            "create table datze(id bigint, dt datetime, primary key(id))",
 		}},
 	}
 
@@ -207,12 +213,12 @@ func TestVDiffPlanSuccess(t *testing.T) {
 			targetTable:      "pktext",
 			sourceExpression: "select textcol, c2 from pktext order by textcol asc",
 			targetExpression: "select textcol, c2 from pktext order by textcol asc",
-			compareCols:      []compareColInfo{{0, collations.Collation(nil), true}, {1, collations.Collation(nil), false}},
-			comparePKs:       []compareColInfo{{0, collations.Collation(nil), true}},
+			compareCols:      []compareColInfo{{0, collations.Default().Get(), true}, {1, collations.Collation(nil), false}},
+			comparePKs:       []compareColInfo{{0, collations.Default().Get(), true}},
 			pkCols:           []int{0},
 			selectPks:        []int{0},
-			sourcePrimitive:  newMergeSorter(nil, []compareColInfo{{0, collations.Collation(nil), false}}),
-			targetPrimitive:  newMergeSorter(nil, []compareColInfo{{0, collations.Collation(nil), false}}),
+			sourcePrimitive:  newMergeSorter(nil, []compareColInfo{{0, collations.Default().Get(), false}}),
+			targetPrimitive:  newMergeSorter(nil, []compareColInfo{{0, collations.Default().Get(), false}}),
 		},
 	}, {
 		// pk text column, different order.
@@ -225,12 +231,12 @@ func TestVDiffPlanSuccess(t *testing.T) {
 			targetTable:      "pktext",
 			sourceExpression: "select c2, textcol from pktext order by textcol asc",
 			targetExpression: "select c2, textcol from pktext order by textcol asc",
-			compareCols:      []compareColInfo{{0, collations.Collation(nil), false}, {1, collations.Collation(nil), true}},
-			comparePKs:       []compareColInfo{{1, collations.Collation(nil), true}},
+			compareCols:      []compareColInfo{{0, collations.Collation(nil), false}, {1, collations.Default().Get(), true}},
+			comparePKs:       []compareColInfo{{1, collations.Default().Get(), true}},
 			pkCols:           []int{1},
 			selectPks:        []int{1},
-			sourcePrimitive:  newMergeSorter(nil, []compareColInfo{{1, collations.Collation(nil), false}}),
-			targetPrimitive:  newMergeSorter(nil, []compareColInfo{{1, collations.Collation(nil), false}}),
+			sourcePrimitive:  newMergeSorter(nil, []compareColInfo{{1, collations.Default().Get(), false}}),
+			targetPrimitive:  newMergeSorter(nil, []compareColInfo{{1, collations.Default().Get(), false}}),
 		},
 	}, {
 		// text column as expression.
@@ -243,12 +249,12 @@ func TestVDiffPlanSuccess(t *testing.T) {
 			targetTable:      "pktext",
 			sourceExpression: "select c2, a + b as textcol from pktext order by textcol asc",
 			targetExpression: "select c2, textcol from pktext order by textcol asc",
-			compareCols:      []compareColInfo{{0, collations.Collation(nil), false}, {1, collations.Collation(nil), true}},
-			comparePKs:       []compareColInfo{{1, collations.Collation(nil), true}},
+			compareCols:      []compareColInfo{{0, collations.Collation(nil), false}, {1, collations.Default().Get(), true}},
+			comparePKs:       []compareColInfo{{1, collations.Default().Get(), true}},
 			pkCols:           []int{1},
 			selectPks:        []int{1},
-			sourcePrimitive:  newMergeSorter(nil, []compareColInfo{{1, collations.Collation(nil), false}}),
-			targetPrimitive:  newMergeSorter(nil, []compareColInfo{{1, collations.Collation(nil), false}}),
+			sourcePrimitive:  newMergeSorter(nil, []compareColInfo{{1, collations.Default().Get(), false}}),
+			targetPrimitive:  newMergeSorter(nil, []compareColInfo{{1, collations.Default().Get(), false}}),
 		},
 	}, {
 		input: &binlogdatapb.Rule{
@@ -395,10 +401,10 @@ func TestVDiffPlanSuccess(t *testing.T) {
 			selectPks:        []int{0},
 			sourcePrimitive: &engine.OrderedAggregate{
 				Aggregates: []*engine.AggregateParams{{
-					Opcode: engine.AggregateSum,
+					Opcode: opcode.AggregateSum,
 					Col:    2,
 				}, {
-					Opcode: engine.AggregateSum,
+					Opcode: opcode.AggregateSum,
 					Col:    3,
 				}},
 				GroupByKeys: []*engine.GroupByParams{{KeyCol: 0, WeightStringCol: -1}},
@@ -490,7 +496,7 @@ func TestVDiffPlanFailure(t *testing.T) {
 }
 
 func TestVDiffUnsharded(t *testing.T) {
-	env := newTestVDiffEnv([]string{"0"}, []string{"0"}, "", nil)
+	env := newTestVDiffEnv(t, []string{"0"}, []string{"0"}, "", nil)
 	defer env.close()
 
 	schm := &tabletmanagerdatapb.SchemaDefinition{
@@ -499,6 +505,7 @@ func TestVDiffUnsharded(t *testing.T) {
 			Columns:           []string{"c1", "c2"},
 			PrimaryKeyColumns: []string{"c1"},
 			Fields:            sqltypes.MakeTestFields("c1|c2", "int64|int64"),
+			Schema:            "create table t1(c1 bigint, c2 bigint, primary key(c1))",
 		}},
 	}
 	env.tmc.schema = schm
@@ -767,7 +774,7 @@ func TestVDiffUnsharded(t *testing.T) {
 func TestVDiffSharded(t *testing.T) {
 	// Also test that highest position ""MariaDB/5-456-892" will be used
 	// if lower positions are found.
-	env := newTestVDiffEnv([]string{"-40", "40-"}, []string{"-80", "80-"}, "", map[string]string{
+	env := newTestVDiffEnv(t, []string{"-40", "40-"}, []string{"-80", "80-"}, "", map[string]string{
 		"-40-80": "MariaDB/5-456-890",
 		"40-80-": "MariaDB/5-456-891",
 	})
@@ -779,12 +786,14 @@ func TestVDiffSharded(t *testing.T) {
 			Columns:           []string{"c1", "c2"},
 			PrimaryKeyColumns: []string{"c1"},
 			Fields:            sqltypes.MakeTestFields("c1|c2", "int64|int64"),
+			Schema:            "create table t1(c1 bigint, c2 bigint, primary key(c1))",
 		},
 			{
 				Name:              "_t1_gho",
 				Columns:           []string{"c1", "c2", "c3"},
 				PrimaryKeyColumns: []string{"c2"},
 				Fields:            sqltypes.MakeTestFields("c1|c2|c3", "int64|int64|int64"),
+				Schema:            "create table _t1_gho(c1 bigint, c2 bigint, c3 bigint, primary key(c2))",
 			}},
 	}
 
@@ -838,7 +847,7 @@ func TestVDiffSharded(t *testing.T) {
 }
 
 func TestVDiffAggregates(t *testing.T) {
-	env := newTestVDiffEnv([]string{"-40", "40-"}, []string{"-80", "80-"}, "select c1, count(*) c2, sum(c3) c3 from t group by c1", nil)
+	env := newTestVDiffEnv(t, []string{"-40", "40-"}, []string{"-80", "80-"}, "select c1, count(*) c2, sum(c3) c3 from t group by c1", nil)
 	defer env.close()
 
 	schm := &tabletmanagerdatapb.SchemaDefinition{
@@ -847,6 +856,7 @@ func TestVDiffAggregates(t *testing.T) {
 			Columns:           []string{"c1", "c2", "c3"},
 			PrimaryKeyColumns: []string{"c1"},
 			Fields:            sqltypes.MakeTestFields("c1|c2|c3", "int64|int64|int64"),
+			Schema:            "create table t1(c1 bigint, c2 bigint, c3 bigint, primary key(c1))",
 		}},
 	}
 	env.tmc.schema = schm
@@ -905,7 +915,7 @@ func TestVDiffAggregates(t *testing.T) {
 }
 
 func TestVDiffDefaults(t *testing.T) {
-	env := newTestVDiffEnv([]string{"0"}, []string{"0"}, "", nil)
+	env := newTestVDiffEnv(t, []string{"0"}, []string{"0"}, "", nil)
 	defer env.close()
 
 	schm := &tabletmanagerdatapb.SchemaDefinition{
@@ -914,6 +924,7 @@ func TestVDiffDefaults(t *testing.T) {
 			Columns:           []string{"c1", "c2"},
 			PrimaryKeyColumns: []string{"c1"},
 			Fields:            sqltypes.MakeTestFields("c1|c2", "int64|int64"),
+			Schema:            "create table t1(c1 bigint, c2 bigint, primary key(c1))",
 		}},
 	}
 	env.tmc.schema = schm
@@ -958,7 +969,7 @@ func TestVDiffDefaults(t *testing.T) {
 }
 
 func TestVDiffReplicationWait(t *testing.T) {
-	env := newTestVDiffEnv([]string{"0"}, []string{"0"}, "", nil)
+	env := newTestVDiffEnv(t, []string{"0"}, []string{"0"}, "", nil)
 	defer env.close()
 
 	schm := &tabletmanagerdatapb.SchemaDefinition{
@@ -967,6 +978,7 @@ func TestVDiffReplicationWait(t *testing.T) {
 			Columns:           []string{"c1", "c2"},
 			PrimaryKeyColumns: []string{"c1"},
 			Fields:            sqltypes.MakeTestFields("c1|c2", "int64|int64"),
+			Schema:            "create table t1(c1 bigint, c2 bigint, primary key(c1))",
 		}},
 	}
 	env.tmc.schema = schm
@@ -1008,6 +1020,7 @@ func TestVDiffFindPKs(t *testing.T) {
 				Columns:           []string{"c1", "c2"},
 				PrimaryKeyColumns: []string{"c1"},
 				Fields:            sqltypes.MakeTestFields("c1|c2", "int64|int64"),
+				Schema:            "create table t1(c1 bigint, c2 bigint, primary key(c1))",
 			},
 			targetSelect: &sqlparser.Select{
 				SelectExprs: sqlparser.SelectExprs{
@@ -1033,6 +1046,7 @@ func TestVDiffFindPKs(t *testing.T) {
 				Columns:           []string{"c1", "c2", "c3", "c4"},
 				PrimaryKeyColumns: []string{"c1", "c4"},
 				Fields:            sqltypes.MakeTestFields("c1|c2|c3|c4", "int64|int64|varchar|int64"),
+				Schema:            "create table t1(c1 bigint, c2 bigint, c3 varchar(50), c4 bigint, primary key(c1, c4))",
 			},
 			targetSelect: &sqlparser.Select{
 				SelectExprs: sqlparser.SelectExprs{
@@ -1073,21 +1087,25 @@ func TestVDiffPlanInclude(t *testing.T) {
 			Columns:           []string{"c1", "c2"},
 			PrimaryKeyColumns: []string{"c1"},
 			Fields:            sqltypes.MakeTestFields("c1|c2", "int64|int64"),
+			Schema:            "create table t1(c1 bigint, c2 bigint, primary key(c1))",
 		}, {
 			Name:              "t2",
 			Columns:           []string{"c1", "c2"},
 			PrimaryKeyColumns: []string{"c1"},
 			Fields:            sqltypes.MakeTestFields("c1|c2", "int64|int64"),
+			Schema:            "create table t2(c1 bigint, c2 bigint, primary key(c1))",
 		}, {
 			Name:              "t3",
 			Columns:           []string{"c1", "c2"},
 			PrimaryKeyColumns: []string{"c1"},
 			Fields:            sqltypes.MakeTestFields("c1|c2", "int64|int64"),
+			Schema:            "create table t3(c1 bigint, c2 bigint, primary key(c1))",
 		}, {
 			Name:              "t4",
 			Columns:           []string{"c1", "c2"},
 			PrimaryKeyColumns: []string{"c1"},
 			Fields:            sqltypes.MakeTestFields("c1|c2", "int64|int64"),
+			Schema:            "create table t4(c1 bigint, c2 bigint, primary key(c1))",
 		}},
 	}
 
@@ -1111,4 +1129,115 @@ func TestVDiffPlanInclude(t *testing.T) {
 	require.Equal(t, 4, len(df.differs))
 	err = df.buildVDiffPlan(context.Background(), filter, schm, []string{"t1", "t2", "t3", "t5"})
 	require.Error(t, err)
+}
+
+func TestGetColumnCollations(t *testing.T) {
+	collationEnv := collations.Local()
+	tests := []struct {
+		name    string
+		table   *tabletmanagerdatapb.TableDefinition
+		want    map[string]collations.Collation
+		wantErr bool
+	}{
+		{
+			name: "invalid schema",
+			table: &tabletmanagerdatapb.TableDefinition{
+				Schema: "wut is this",
+			},
+			wantErr: true,
+		},
+		{
+			name: "no char pk",
+			table: &tabletmanagerdatapb.TableDefinition{
+				Schema: "create table t1 (c1 int, name varchar(10), primary key(c1))",
+			},
+			want: map[string]collations.Collation{
+				"c1":   collations.Collation(nil),
+				"name": collations.Default().Get(),
+			},
+		},
+		{
+			name: "char pk with global default collation",
+			table: &tabletmanagerdatapb.TableDefinition{
+				Schema: "create table t1 (c1 varchar(10), name varchar(10), primary key(c1))",
+			},
+			want: map[string]collations.Collation{
+				"c1":   collations.Default().Get(),
+				"name": collations.Default().Get(),
+			},
+		},
+		{
+			name: "compound char int pk with global default collation",
+			table: &tabletmanagerdatapb.TableDefinition{
+				Schema: "create table t1 (c1 int, name varchar(10), primary key(c1, name))",
+			},
+			want: map[string]collations.Collation{
+				"c1":   collations.Collation(nil),
+				"name": collations.Default().Get(),
+			},
+		},
+		{
+			name: "char pk with table default charset",
+			table: &tabletmanagerdatapb.TableDefinition{
+				Schema: "create table t1 (c1 varchar(10), name varchar(10), primary key(c1)) default character set ucs2",
+			},
+			want: map[string]collations.Collation{
+				"c1":   collationEnv.DefaultCollationForCharset("ucs2"),
+				"name": collationEnv.DefaultCollationForCharset("ucs2"),
+			},
+		},
+		{
+			name: "char pk with table default collation",
+			table: &tabletmanagerdatapb.TableDefinition{
+				Schema: "create table t1 (c1 varchar(10), name varchar(10), primary key(c1)) charset=utf32 collate=utf32_icelandic_ci",
+			},
+			want: map[string]collations.Collation{
+				"c1":   collationEnv.LookupByName("utf32_icelandic_ci"),
+				"name": collationEnv.LookupByName("utf32_icelandic_ci"),
+			},
+		},
+		{
+			name: "char pk with column charset override",
+			table: &tabletmanagerdatapb.TableDefinition{
+				Schema: "create table t1 (c1 varchar(10) charset sjis, name varchar(10), primary key(c1)) character set=utf8",
+			},
+			want: map[string]collations.Collation{
+				"c1":   collationEnv.DefaultCollationForCharset("sjis"),
+				"name": collationEnv.DefaultCollationForCharset("utf8mb3"),
+			},
+		},
+		{
+			name: "char pk with column collation override",
+			table: &tabletmanagerdatapb.TableDefinition{
+				Schema: "create table t1 (c1 varchar(10) collate hebrew_bin, name varchar(10), primary key(c1)) charset=hebrew",
+			},
+			want: map[string]collations.Collation{
+				"c1":   collationEnv.LookupByName("hebrew_bin"),
+				"name": collationEnv.DefaultCollationForCharset("hebrew"),
+			},
+		},
+		{
+			name: "compound char int pk with column collation override",
+			table: &tabletmanagerdatapb.TableDefinition{
+				Schema: "create table t1 (c1 varchar(10) collate utf16_turkish_ci, c2 int, name varchar(10), primary key(c1, c2)) charset=utf16 collate=utf16_icelandic_ci",
+			},
+			want: map[string]collations.Collation{
+				"c1":   collationEnv.LookupByName("utf16_turkish_ci"),
+				"c2":   collations.Collation(nil),
+				"name": collationEnv.LookupByName("utf16_icelandic_ci"),
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := getColumnCollations(tt.table)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("getColumnCollations() error = %v, wantErr = %t", err, tt.wantErr)
+				return
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("getColumnCollations() = %+v, want %+v", got, tt.want)
+			}
+		})
+	}
 }

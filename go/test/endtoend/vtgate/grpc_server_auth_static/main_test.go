@@ -109,6 +109,7 @@ func TestMain(m *testing.M) {
 		clusterInstance.VtGateExtraArgs = []string{
 			"--grpc_auth_mode", "static",
 			"--grpc_auth_static_password_file", grpcServerAuthStaticPath,
+			"--grpc-use-static-authentication-callerid",
 		}
 
 		// Configure vttablet to use table ACL

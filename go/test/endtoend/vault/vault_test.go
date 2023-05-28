@@ -33,6 +33,7 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/endtoend/utils"
 	"vitess.io/vitess/go/vt/log"
 )
 
@@ -53,7 +54,7 @@ var (
 	shardName       = "0"
 	dbName          = "vt_ks"
 	mysqlUsers      = []string{"vt_dba", "vt_app", "vt_appdebug", "vt_repl", "vt_filtered"}
-	mysqlPassword   = "password"
+	mysqlPassword   = "VtDbaPass"
 	vtgateUser      = "vtgate_user"
 	vtgatePassword  = "password123"
 	commonTabletArg = []string{
@@ -251,10 +252,21 @@ func initializeClusterLate(t *testing.T) {
 	out, err := vtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", keyspaceName, "--durability-policy=semi_sync")
 	require.NoError(t, err, out)
 
+	initDb, _ := os.ReadFile(path.Join(os.Getenv("VTROOT"), "/config/init_db.sql"))
+	sql := string(initDb)
+	// The original init_db.sql does not have any passwords. Here we update the init file with passwords
+	sql, err = utils.GetInitDBSQL(sql, cluster.GetPasswordUpdateSQL(clusterInstance), "")
+	require.NoError(t, err, "expected to load init_db file")
+	newInitDBFile := path.Join(clusterInstance.TmpDirectory, "init_db_with_passwords.sql")
+	err = os.WriteFile(newInitDBFile, []byte(sql), 0660)
+	require.NoError(t, err, "expected to load init_db file")
+
 	// Start MySQL
 	var mysqlCtlProcessList []*exec.Cmd
 	for _, shard := range clusterInstance.Keyspaces[0].Shards {
 		for _, tablet := range shard.Vttablets {
+			tablet.MysqlctlProcess.InitDBFile = newInitDBFile
+			tablet.VttabletProcess.DbPassword = mysqlPassword
 			proc, err := tablet.MysqlctlProcess.StartProcess()
 			require.NoError(t, err)
 			mysqlCtlProcessList = append(mysqlCtlProcessList, proc)
@@ -268,21 +280,6 @@ func initializeClusterLate(t *testing.T) {
 	}
 
 	for _, tablet := range []*cluster.Vttablet{primary, replica} {
-		for _, user := range mysqlUsers {
-			query := fmt.Sprintf("ALTER USER '%s'@'%s' IDENTIFIED BY '%s';", user, hostname, mysqlPassword)
-			_, err = tablet.VttabletProcess.QueryTablet(query, keyspace.Name, false)
-			// Reset after the first ALTER, or we lock ourselves out.
-			tablet.VttabletProcess.DbPassword = mysqlPassword
-			if err != nil {
-				query = fmt.Sprintf("ALTER USER '%s'@'%%' IDENTIFIED BY '%s';", user, mysqlPassword)
-				_, err = tablet.VttabletProcess.QueryTablet(query, keyspace.Name, false)
-				require.NoError(t, err)
-			}
-		}
-		query := fmt.Sprintf("create database %s;", dbName)
-		_, err = tablet.VttabletProcess.QueryTablet(query, keyspace.Name, false)
-		require.NoError(t, err)
-
 		err = tablet.VttabletProcess.Setup()
 		require.NoError(t, err)
 

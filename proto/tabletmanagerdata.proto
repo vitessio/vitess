@@ -22,6 +22,7 @@ option go_package = "vitess.io/vitess/go/vt/proto/tabletmanagerdata";
 
 package tabletmanagerdata;
 
+import "binlogdata.proto";
 import "query.proto";
 import "topodata.proto";
 import "replicationdata.proto";
@@ -63,7 +64,7 @@ message TableDefinition {
 message SchemaDefinition {
   string database_schema = 1;
   repeated TableDefinition table_definitions = 2;
-  string version = 3;
+  reserved 3;
 }
 
 message SchemaChangeResult {
@@ -497,16 +498,6 @@ message RestoreFromBackupResponse {
   logutil.Event event = 1;
 }
 
-message VExecRequest {
-  string query = 1;
-  string workflow = 2;
-  string keyspace = 3;
-}
-
-message VExecResponse {
-  query.QueryResult result = 1;
-}
-
 message VDiffRequest {
   string keyspace = 1;
   string workflow = 2;
@@ -544,10 +535,22 @@ message VDiffCoreOptions {
   int64 sample_pct = 5;
   int64 timeout_seconds = 6;
   int64 max_extra_rows_to_compare = 7;
+  bool update_table_stats = 8;
 }
 
 message VDiffOptions {
   VDiffPickerOptions picker_options = 1;
   VDiffCoreOptions core_options = 2;
   VDiffReportOptions report_options = 3;
+}
+
+message UpdateVRWorkflowRequest {
+  string workflow = 1;
+  repeated string cells = 2;
+  repeated string tablet_types = 3;
+  binlogdata.OnDDLAction on_ddl = 4;
+}
+
+message UpdateVRWorkflowResponse {
+  query.QueryResult result = 1;
 }

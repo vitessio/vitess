@@ -20,10 +20,16 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
+
+	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/proto/binlogdata"
 )
 
 var (
-	delimitedListRegexp = regexp.MustCompile(`[ ,;]+`)
+	delimitedListRegexp      = regexp.MustCompile(`[ ,;]+`)
+	SimulatedNullString      = sqltypes.NULL.String()
+	SimulatedNullStringSlice = []string{sqltypes.NULL.String()}
+	SimulatedNullInt         = -1
 )
 
 // SplitDelimitedList splits a given string by comma, semi-colon or space, and returns non-empty strings
@@ -72,4 +78,28 @@ func SingleWordCamel(w string) string {
 		return w
 	}
 	return strings.ToUpper(w[0:1]) + strings.ToLower(w[1:])
+}
+
+// ValueIsSimulatedNull returns true if the value represents
+// a NULL or unknown/unspecified value. This is used to
+// distinguish between a zero value / default and a user
+// provided value that is equivalent (e.g. an empty string
+// or slice).
+func ValueIsSimulatedNull(val any) bool {
+	switch cval := val.(type) {
+	case string:
+		return cval == SimulatedNullString
+	case []string:
+		return len(cval) == 1 && cval[0] == sqltypes.NULL.String()
+	case binlogdata.OnDDLAction:
+		return int32(cval) == int32(SimulatedNullInt)
+	case int:
+		return cval == SimulatedNullInt
+	case int32:
+		return int32(cval) == int32(SimulatedNullInt)
+	case int64:
+		return int64(cval) == int64(SimulatedNullInt)
+	default:
+		return false
+	}
 }

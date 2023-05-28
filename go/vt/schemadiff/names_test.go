@@ -31,7 +31,7 @@ func TestConstraintOriginalName(t *testing.T) {
 		}
 		for _, name := range names {
 			t.Run(name, func(t *testing.T) {
-				originalName := ExtractConstraintOriginalName(name)
+				originalName := ExtractConstraintOriginalName("mytable", name)
 				assert.NotEmpty(t, originalName)
 				assert.Equal(t, "check1", originalName)
 			})
@@ -39,15 +39,33 @@ func TestConstraintOriginalName(t *testing.T) {
 	}
 	{
 		names := []string{
+			"chk_1",
+			"chk_1_7no794p1x6zw6je1gfqmt7bca",
+			"chk_1_etne0g9fvf3la2myjfsdgx9bx",
+			"mytable_chk_1",
+		}
+		for _, name := range names {
+			t.Run(name, func(t *testing.T) {
+				originalName := ExtractConstraintOriginalName("mytable", name)
+				assert.NotEmpty(t, originalName)
+				assert.Equal(t, "chk_1", originalName)
+			})
+		}
+	}
+
+	{
+		names := []string{
 			"check1",
 			"check_991ek3m5g69vcule23s9vnayd_check1",
 			"fk_b9d15e218979970c23bfc13a_check1",
 			"check1_bm701hx09ky10ygpj4imt6fbla",
 			"check1_dbd0nmo0n05nl5fnckbdivkj",
+			"mytable_check1_chk",
+			"mytable_check1_7no794p1x6zw6je1gfqmt7bcas",
 		}
 		for _, name := range names {
 			t.Run(name, func(t *testing.T) {
-				originalName := ExtractConstraintOriginalName(name)
+				originalName := ExtractConstraintOriginalName("mytable", name)
 				assert.NotEmpty(t, originalName)
 				assert.Equal(t, name, originalName)
 			})

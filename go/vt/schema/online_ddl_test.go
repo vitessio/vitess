@@ -192,9 +192,6 @@ func TestNewOnlineDDL(t *testing.T) {
 			sql: "alter table t engine=innodb",
 		},
 		{
-			sql: "revert 4e5dcf80_354b_11eb_82cd_f875a4d24e90", // legacy syntax; kept one release version for backwards compatibility. Can remove after v11.0 is released
-		},
-		{
 			sql: "revert vitess_migration '4e5dcf80_354b_11eb_82cd_f875a4d24e90'",
 		},
 		{

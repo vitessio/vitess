@@ -26,6 +26,7 @@ import (
 
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vtadmin"
 	"vitess.io/vitess/go/vt/vtadmin/cache"
@@ -58,6 +59,7 @@ var (
 		Use: "vtadmin",
 		PreRun: func(cmd *cobra.Command, args []string) {
 			_flag.TrickGlog()
+			logutil.PurgeLogs()
 
 			if opts.EnableTracing || httpOpts.EnableTracing {
 				startTracing(cmd)

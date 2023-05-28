@@ -22,6 +22,7 @@ import (
 	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/sqlparser"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -63,8 +64,13 @@ func (tm *TabletManager) ExecuteFetchAsDba(ctx context.Context, req *tabletmanag
 			return nil, err
 		}
 	}
-	// run the query
-	result, err := conn.ExecuteFetch(string(req.Query), int(req.MaxRows), true /*wantFields*/)
+
+	// Replace any provided sidecar database qualifiers with the correct one.
+	uq, err := sqlparser.ReplaceTableQualifiers(string(req.Query), sidecardb.DefaultName, sidecardb.GetName())
+	if err != nil {
+		return nil, err
+	}
+	result, err := conn.ExecuteFetch(uq, int(req.MaxRows), true /*wantFields*/)
 
 	// re-enable binlogs if necessary
 	if req.DisableBinlogs && !conn.IsClosed() {
@@ -100,8 +106,12 @@ func (tm *TabletManager) ExecuteFetchAsAllPrivs(ctx context.Context, req *tablet
 		_, _ = conn.ExecuteFetch("USE "+sqlescape.EscapeID(req.DbName), 1, false)
 	}
 
-	// run the query
-	result, err := conn.ExecuteFetch(string(req.Query), int(req.MaxRows), true /*wantFields*/)
+	// Replace any provided sidecar database qualifiers with the correct one.
+	uq, err := sqlparser.ReplaceTableQualifiers(string(req.Query), sidecardb.DefaultName, sidecardb.GetName())
+	if err != nil {
+		return nil, err
+	}
+	result, err := conn.ExecuteFetch(uq, int(req.MaxRows), true /*wantFields*/)
 
 	if err == nil && req.ReloadSchema {
 		reloadErr := tm.QueryServiceControl.ReloadSchema(ctx)
@@ -120,7 +130,12 @@ func (tm *TabletManager) ExecuteFetchAsApp(ctx context.Context, req *tabletmanag
 		return nil, err
 	}
 	defer conn.Recycle()
-	result, err := conn.ExecuteFetch(string(req.Query), int(req.MaxRows), true /*wantFields*/)
+	// Replace any provided sidecar database qualifiers with the correct one.
+	uq, err := sqlparser.ReplaceTableQualifiers(string(req.Query), sidecardb.DefaultName, sidecardb.GetName())
+	if err != nil {
+		return nil, err
+	}
+	result, err := conn.ExecuteFetch(uq, int(req.MaxRows), true /*wantFields*/)
 	return sqltypes.ResultToProto3(result), err
 }
 
@@ -129,6 +144,11 @@ func (tm *TabletManager) ExecuteQuery(ctx context.Context, req *tabletmanagerdat
 	// get the db name from the tablet
 	tablet := tm.Tablet()
 	target := &querypb.Target{Keyspace: tablet.Keyspace, Shard: tablet.Shard, TabletType: tablet.Type}
-	result, err := tm.QueryServiceControl.QueryService().Execute(ctx, target, string(req.Query), nil, 0, 0, nil)
+	// Replace any provided sidecar database qualifiers with the correct one.
+	uq, err := sqlparser.ReplaceTableQualifiers(string(req.Query), sidecardb.DefaultName, sidecardb.GetName())
+	if err != nil {
+		return nil, err
+	}
+	result, err := tm.QueryServiceControl.QueryService().Execute(ctx, target, uq, nil, 0, 0, nil)
 	return sqltypes.ResultToProto3(result), err
 }

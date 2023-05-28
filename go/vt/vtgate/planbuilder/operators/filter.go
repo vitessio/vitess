@@ -18,6 +18,7 @@ package operators
 
 import (
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
@@ -27,18 +28,17 @@ import (
 type Filter struct {
 	Source     ops.Operator
 	Predicates []sqlparser.Expr
-}
 
-var _ ops.PhysicalOperator = (*Filter)(nil)
+	// FinalPredicate is the evalengine expression that will finally be used.
+	// It contains the ANDed predicates in Predicates, with ColName:s replaced by Offset:s
+	FinalPredicate evalengine.Expr
+}
 
 func newFilter(op ops.Operator, expr sqlparser.Expr) ops.Operator {
 	return &Filter{
 		Source: op, Predicates: []sqlparser.Expr{expr},
 	}
 }
-
-// IPhysical implements the PhysicalOperator interface
-func (f *Filter) IPhysical() {}
 
 // Clone implements the Operator interface
 func (f *Filter) Clone(inputs []ops.Operator) ops.Operator {
@@ -53,6 +53,11 @@ func (f *Filter) Clone(inputs []ops.Operator) ops.Operator {
 // Inputs implements the Operator interface
 func (f *Filter) Inputs() []ops.Operator {
 	return []ops.Operator{f.Source}
+}
+
+// SetInputs implements the Operator interface
+func (f *Filter) SetInputs(ops []ops.Operator) {
+	f.Source = ops[0]
 }
 
 // UnsolvedPredicates implements the unresolved interface
@@ -77,13 +82,26 @@ func (f *Filter) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.E
 	return f, nil
 }
 
-func (f *Filter) AddColumn(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (int, error) {
-	return f.Source.AddColumn(ctx, expr)
+func (f *Filter) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, reuseExisting, addToGroupBy bool) (ops.Operator, int, error) {
+	newSrc, offset, err := f.Source.AddColumn(ctx, expr, reuseExisting, addToGroupBy)
+	if err != nil {
+		return nil, 0, err
+	}
+	f.Source = newSrc
+	return f, offset, nil
 }
 
-func (f *Filter) Compact(*plancontext.PlanningContext) (ops.Operator, rewrite.TreeIdentity, error) {
+func (f *Filter) GetColumns() ([]*sqlparser.AliasedExpr, error) {
+	return f.Source.GetColumns()
+}
+
+func (f *Filter) GetOrdering() ([]ops.OrderBy, error) {
+	return f.Source.GetOrdering()
+}
+
+func (f *Filter) Compact(*plancontext.PlanningContext) (ops.Operator, *rewrite.ApplyResult, error) {
 	if len(f.Predicates) == 0 {
-		return f.Source, rewrite.NewTree, nil
+		return f.Source, rewrite.NewTree("filter with no predicates removed", f), nil
 	}
 
 	other, isFilter := f.Source.(*Filter)
@@ -92,5 +110,42 @@ func (f *Filter) Compact(*plancontext.PlanningContext) (ops.Operator, rewrite.Tr
 	}
 	f.Source = other.Source
 	f.Predicates = append(f.Predicates, other.Predicates...)
-	return f, rewrite.NewTree, nil
+	return f, rewrite.NewTree("two filters merged into one", f), nil
+}
+
+func (f *Filter) planOffsets(ctx *plancontext.PlanningContext) error {
+	resolveColumn := func(col *sqlparser.ColName) (int, error) {
+		newSrc, offset, err := f.Source.AddColumn(ctx, aeWrap(col), true, false)
+		if err != nil {
+			return 0, err
+		}
+		f.Source = newSrc
+		return offset, nil
+	}
+	cfg := &evalengine.Config{
+		ResolveType:   ctx.SemTable.TypeForExpr,
+		Collation:     ctx.SemTable.Collation,
+		ResolveColumn: resolveColumn,
+	}
+
+	eexpr, err := evalengine.Translate(sqlparser.AndExpressions(f.Predicates...), cfg)
+	if err != nil {
+		return err
+	}
+
+	f.FinalPredicate = eexpr
+	return nil
+}
+
+func (f *Filter) Description() ops.OpDescription {
+	return ops.OpDescription{
+		OperatorType: "Filter",
+		Other: map[string]any{
+			"Predicate": sqlparser.String(sqlparser.AndExpressions(f.Predicates...)),
+		},
+	}
+}
+
+func (f *Filter) ShortDescription() string {
+	return sqlparser.String(sqlparser.AndExpressions(f.Predicates...))
 }

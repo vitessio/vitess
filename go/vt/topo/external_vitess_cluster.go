@@ -20,8 +20,6 @@ import (
 	"context"
 	"path"
 
-	"google.golang.org/protobuf/proto"
-
 	"vitess.io/vitess/go/event"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo/events"
@@ -49,7 +47,7 @@ func GetExternalVitessClusterPath(clusterName string) string {
 
 // CreateExternalVitessCluster creates a topo record for the passed vitess cluster
 func (ts *Server) CreateExternalVitessCluster(ctx context.Context, clusterName string, value *topodatapb.ExternalVitessCluster) error {
-	data, err := proto.Marshal(value)
+	data, err := value.MarshalVT()
 	if err != nil {
 		return err
 	}
@@ -77,7 +75,7 @@ func (ts *Server) GetExternalVitessCluster(ctx context.Context, clusterName stri
 		return nil, err
 	}
 	vc := &topodatapb.ExternalVitessCluster{}
-	if err = proto.Unmarshal(data, vc); err != nil {
+	if err = vc.UnmarshalVT(data); err != nil {
 		return nil, vterrors.Wrap(err, "bad vitess cluster data")
 	}
 
@@ -91,7 +89,7 @@ func (ts *Server) GetExternalVitessCluster(ctx context.Context, clusterName stri
 // UpdateExternalVitessCluster updates the topo record for the named vitess cluster
 func (ts *Server) UpdateExternalVitessCluster(ctx context.Context, vc *ExternalVitessClusterInfo) error {
 	//FIXME: check for cluster lock
-	data, err := proto.Marshal(vc.ExternalVitessCluster)
+	data, err := vc.ExternalVitessCluster.MarshalVT()
 	if err != nil {
 		return err
 	}

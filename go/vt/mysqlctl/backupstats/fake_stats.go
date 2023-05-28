@@ -1,6 +1,9 @@
 package backupstats
 
-import "time"
+import (
+	"sync"
+	"time"
+)
 
 type FakeStats struct {
 	ScopeV                   map[ScopeType]ScopeValue
@@ -11,6 +14,7 @@ type FakeStats struct {
 	}
 	ScopeCalls   [][]Scope
 	ScopeReturns []Stats
+	mutex        sync.Mutex
 }
 
 func NewFakeStats(scopes ...Scope) *FakeStats {
@@ -27,6 +31,8 @@ func NewFakeStats(scopes ...Scope) *FakeStats {
 // scopes and provided scopes. It also records the return value in
 // ScopeReturns, for use in unit test assertions.
 func (fs *FakeStats) Scope(scopes ...Scope) Stats {
+	fs.mutex.Lock()
+	defer fs.mutex.Unlock()
 	fs.ScopeCalls = append(fs.ScopeCalls, scopes)
 	newScopeV := map[ScopeType]ScopeValue{}
 	for t, v := range fs.ScopeV {
@@ -49,12 +55,16 @@ func (fs *FakeStats) Scope(scopes ...Scope) Stats {
 // TimedIncrement does nothing except record calls made to this function in
 // TimedIncrementCalls, for use in unit test assertions.
 func (fs *FakeStats) TimedIncrement(d time.Duration) {
+	fs.mutex.Lock()
+	defer fs.mutex.Unlock()
 	fs.TimedIncrementCalls = append(fs.TimedIncrementCalls, d)
 }
 
-// TimedIncrement does nothing except record calls made to this function in
+// TimedIncrementBytes does nothing except record calls made to this function in
 // TimedIncrementBytesCalls, for use in unit test assertions.
 func (fs *FakeStats) TimedIncrementBytes(b int, d time.Duration) {
+	fs.mutex.Lock()
+	defer fs.mutex.Unlock()
 	fs.TimedIncrementBytesCalls = append(fs.TimedIncrementBytesCalls, struct {
 		Bytes    int
 		Duration time.Duration

@@ -26,30 +26,33 @@ import (
 	"time"
 
 	"github.com/golang/mock/gomock"
+	"github.com/stretchr/testify/assert"
 
 	"vitess.io/vitess/go/vt/discovery"
+	"vitess.io/vitess/go/vt/throttler"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	throttlerdatapb "vitess.io/vitess/go/vt/proto/throttlerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 func TestDisabledThrottler(t *testing.T) {
 	config := tabletenv.NewDefaultConfig()
 	config.EnableTxThrottler = false
-	throttler := NewTxThrottler(config, nil)
+	env := tabletenv.NewEnv(config, t.Name())
+	throttler := NewTxThrottler(env, nil)
 	throttler.InitDBConfig(&querypb.Target{
 		Keyspace: "keyspace",
 		Shard:    "shard",
 	})
-	if err := throttler.Open(); err != nil {
-		t.Fatalf("want: nil, got: %v", err)
-	}
-	if result := throttler.Throttle(); result != false {
-		t.Errorf("want: false, got: %v", result)
-	}
+	assert.Nil(t, throttler.Open())
+	assert.False(t, throttler.Throttle(0))
+	throttlerImpl, _ := throttler.(*txThrottler)
+	assert.Zero(t, throttlerImpl.throttlerRunning.Get())
 	throttler.Close()
 }
 
@@ -70,28 +73,18 @@ func TestEnabledThrottler(t *testing.T) {
 	}
 
 	topologyWatcherFactory = func(topoServer *topo.Server, hc discovery.HealthCheck, cell, keyspace, shard string, refreshInterval time.Duration, topoReadConcurrency int) TopologyWatcherInterface {
-		if ts != topoServer {
-			t.Errorf("want: %v, got: %v", ts, topoServer)
-		}
-		if cell != "cell1" && cell != "cell2" {
-			t.Errorf("want: cell1 or cell2, got: %v", cell)
-		}
-		if keyspace != "keyspace" {
-			t.Errorf("want: keyspace, got: %v", keyspace)
-		}
-		if shard != "shard" {
-			t.Errorf("want: shard, got: %v", shard)
-		}
+		assert.Equal(t, ts, topoServer)
+		assert.Contains(t, []string{"cell1", "cell2"}, cell)
+		assert.Equal(t, "keyspace", keyspace)
+		assert.Equal(t, "shard", shard)
 		result := NewMockTopologyWatcherInterface(mockCtrl)
 		result.EXPECT().Stop()
 		return result
 	}
 
 	mockThrottler := NewMockThrottlerInterface(mockCtrl)
-	throttlerFactory = func(name, unit string, threadCount int, maxRate, maxReplicationLag int64) (ThrottlerInterface, error) {
-		if threadCount != 1 {
-			t.Errorf("want: 1, got: %v", threadCount)
-		}
+	throttlerFactory = func(name, unit string, threadCount int, maxRate int64, maxReplicationLagConfig throttler.MaxReplicationLagModuleConfig) (ThrottlerInterface, error) {
+		assert.Equal(t, 1, threadCount)
 		return mockThrottler, nil
 	}
 
@@ -106,31 +99,37 @@ func TestEnabledThrottler(t *testing.T) {
 	call2 := mockThrottler.EXPECT().RecordReplicationLag(gomock.Any(), tabletStats)
 	call3 := mockThrottler.EXPECT().Throttle(0)
 	call3.Return(1 * time.Second)
-	call4 := mockThrottler.EXPECT().Close()
+
+	call4 := mockThrottler.EXPECT().Throttle(0)
+	call4.Return(1 * time.Second)
+	calllast := mockThrottler.EXPECT().Close()
+
 	call1.After(call0)
 	call2.After(call1)
 	call3.After(call2)
 	call4.After(call3)
+	calllast.After(call4)
 
 	config := tabletenv.NewDefaultConfig()
 	config.EnableTxThrottler = true
 	config.TxThrottlerHealthCheckCells = []string{"cell1", "cell2"}
+	config.TxThrottlerTabletTypes = &topoproto.TabletTypeListFlag{topodatapb.TabletType_REPLICA}
 
-	throttler, err := tryCreateTxThrottler(config, ts)
-	if err != nil {
-		t.Fatalf("want: nil, got: %v", err)
-	}
+	env := tabletenv.NewEnv(config, t.Name())
+	throttler, err := tryCreateTxThrottler(env, ts)
+	assert.Nil(t, err)
 	throttler.InitDBConfig(&querypb.Target{
 		Keyspace: "keyspace",
 		Shard:    "shard",
 	})
-	if err := throttler.Open(); err != nil {
-		t.Fatalf("want: nil, got: %v", err)
-	}
-	if result := throttler.Throttle(); result != false {
-		t.Errorf("want: false, got: %v", result)
-	}
-	throttler.state.StatsUpdate(tabletStats)
+	assert.Nil(t, throttler.Open())
+	assert.Equal(t, int64(1), throttler.throttlerRunning.Get())
+
+	assert.False(t, throttler.Throttle(100))
+	assert.Equal(t, int64(1), throttler.requestsTotal.Get())
+	assert.Zero(t, throttler.requestsThrottled.Get())
+
+	throttler.state.StatsUpdate(tabletStats) // This calls replication lag thing
 	rdonlyTabletStats := &discovery.TabletHealth{
 		Target: &querypb.Target{
 			TabletType: topodatapb.TabletType_RDONLY,
@@ -139,8 +138,45 @@ func TestEnabledThrottler(t *testing.T) {
 	// This call should not be forwarded to the go/vt/throttler.Throttler object.
 	throttler.state.StatsUpdate(rdonlyTabletStats)
 	// The second throttle call should reject.
-	if result := throttler.Throttle(); result != true {
-		t.Errorf("want: true, got: %v", result)
-	}
+	assert.True(t, throttler.Throttle(100))
+	assert.Equal(t, int64(2), throttler.requestsTotal.Get())
+	assert.Equal(t, int64(1), throttler.requestsThrottled.Get())
+
+	// This call should not throttle due to priority. Check that's the case and counters agree.
+	assert.False(t, throttler.Throttle(0))
+	assert.Equal(t, int64(3), throttler.requestsTotal.Get())
+	assert.Equal(t, int64(1), throttler.requestsThrottled.Get())
 	throttler.Close()
+	assert.Zero(t, throttler.throttlerRunning.Get())
+}
+
+func TestNewTxThrottler(t *testing.T) {
+	config := tabletenv.NewDefaultConfig()
+	env := tabletenv.NewEnv(config, t.Name())
+
+	{
+		// disabled config
+		throttler, err := newTxThrottler(env, nil, &txThrottlerConfig{enabled: false})
+		assert.Nil(t, err)
+		assert.NotNil(t, throttler)
+	}
+	{
+		// enabled with invalid throttler config
+		throttler, err := newTxThrottler(env, nil, &txThrottlerConfig{
+			enabled:         true,
+			throttlerConfig: &throttlerdatapb.Configuration{},
+		})
+		assert.NotNil(t, err)
+		assert.Nil(t, throttler)
+	}
+	{
+		// enabled
+		throttler, err := newTxThrottler(env, nil, &txThrottlerConfig{
+			enabled:          true,
+			healthCheckCells: []string{"cell1"},
+			throttlerConfig:  throttler.DefaultMaxReplicationLagModuleConfig().Configuration,
+		})
+		assert.Nil(t, err)
+		assert.NotNil(t, throttler)
+	}
 }

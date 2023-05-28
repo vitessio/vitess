@@ -60,8 +60,15 @@ func (vtctl *VtctlProcess) AddCellInfo(Cell string) (err error) {
 }
 
 // CreateKeyspace executes vtctl command to create keyspace
-func (vtctl *VtctlProcess) CreateKeyspace(keyspace string) (err error) {
-	output, err := vtctl.ExecuteCommandWithOutput("CreateKeyspace", keyspace)
+func (vtctl *VtctlProcess) CreateKeyspace(keyspace, sidecarDBName string) (err error) {
+	var output string
+	// For upgrade/downgrade tests where an older version is also used.
+	if vtctl.VtctlMajorVersion < 17 {
+		log.Errorf("CreateKeyspace does not support the --sidecar-db-name flag in vtctl version %d; ignoring...", vtctl.VtctlMajorVersion)
+		output, err = vtctl.ExecuteCommandWithOutput("CreateKeyspace", keyspace)
+	} else {
+		output, err = vtctl.ExecuteCommandWithOutput("CreateKeyspace", keyspace, "--sidecar-db-name", sidecarDBName)
+	}
 	if err != nil {
 		log.Errorf("CreateKeyspace returned err: %s, output: %s", err, output)
 	}

@@ -18,16 +18,15 @@ package schema
 
 import (
 	"context"
-	"fmt"
 	"sort"
 	"sync"
-
-	"google.golang.org/protobuf/proto"
+	"time"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
@@ -35,36 +34,40 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
-const getSchemaVersions = "select id, pos, ddl, time_updated, schemax from _vt.schema_version where id > %d order by id asc"
+const getInitialSchemaVersions = "select id, pos, ddl, time_updated, schemax from %s.schema_version where time_updated > %d order by id asc"
+const getNextSchemaVersions = "select id, pos, ddl, time_updated, schemax from %s.schema_version where id > %d order by id asc"
 
 // vl defines the glog verbosity level for the package
 const vl = 10
 
 // trackedSchema has the snapshot of the table at a given pos (reached by ddl)
 type trackedSchema struct {
-	schema map[string]*binlogdatapb.MinimalTable
-	pos    mysql.Position
-	ddl    string
+	schema      map[string]*binlogdatapb.MinimalTable
+	pos         mysql.Position
+	ddl         string
+	timeUpdated int64
 }
 
 // historian implements the Historian interface by calling schema.Engine for the underlying schema
 // and supplying a schema for a specific version by loading the cached values from the schema_version table
 // The schema version table is populated by the Tracker
 type historian struct {
-	conns   *connpool.Pool
-	lastID  int64
-	schemas []*trackedSchema
-	mu      sync.Mutex
-	enabled bool
-	isOpen  bool
+	conns               *connpool.Pool
+	lastID              int64
+	schemas             []*trackedSchema
+	mu                  sync.Mutex
+	enabled             bool
+	isOpen              bool
+	schemaMaxAgeSeconds int64
 }
 
 // newHistorian creates a new historian. It expects a schema.Engine instance
-func newHistorian(enabled bool, conns *connpool.Pool) *historian {
+func newHistorian(enabled bool, schemaMaxAgeSeconds int64, conns *connpool.Pool) *historian {
 	sh := historian{
-		conns:   conns,
-		lastID:  0,
-		enabled: enabled,
+		conns:               conns,
+		lastID:              0,
+		enabled:             enabled,
+		schemaMaxAgeSeconds: schemaMaxAgeSeconds,
 	}
 	return &sh
 }
@@ -115,8 +118,9 @@ func (h *historian) Close() {
 	log.Info("Historian: closed")
 }
 
-// RegisterVersionEvent is called by the vstream when it encounters a version event (an insert into _vt.schema_tracking)
-// It triggers the historian to load the newer rows from the database to update its cache
+// RegisterVersionEvent is called by the vstream when it encounters a version event (an
+// insert into the schema_tracking table). It triggers the historian to load the newer
+// rows from the database to update its cache.
 func (h *historian) RegisterVersionEvent() error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -164,7 +168,17 @@ func (h *historian) loadFromDB(ctx context.Context) error {
 		return err
 	}
 	defer conn.Recycle()
-	tableData, err := conn.Exec(ctx, fmt.Sprintf(getSchemaVersions, h.lastID), 10000, true)
+
+	var tableData *sqltypes.Result
+	if h.lastID == 0 && h.schemaMaxAgeSeconds > 0 { // only at vttablet start
+		schemaMaxAge := time.Now().UTC().Add(time.Duration(-h.schemaMaxAgeSeconds) * time.Second)
+		tableData, err = conn.Exec(ctx, sqlparser.BuildParsedQuery(getInitialSchemaVersions, sidecardb.GetIdentifier(),
+			schemaMaxAge.Unix()).Query, 10000, true)
+	} else {
+		tableData, err = conn.Exec(ctx, sqlparser.BuildParsedQuery(getNextSchemaVersions, sidecardb.GetIdentifier(),
+			h.lastID).Query, 10000, true)
+	}
+
 	if err != nil {
 		log.Infof("Error reading schema_tracking table %v, will operate with the latest available schema", err)
 		return nil
@@ -177,6 +191,14 @@ func (h *historian) loadFromDB(ctx context.Context) error {
 		h.schemas = append(h.schemas, trackedSchema)
 		h.lastID = id
 	}
+
+	if h.lastID != 0 && h.schemaMaxAgeSeconds > 0 {
+		// To avoid keeping old schemas in memory which can lead to an eventual memory leak
+		// we purge any older than h.schemaMaxAgeSeconds. Only needs to be done when adding
+		// new schema rows.
+		h.purgeOldSchemas()
+	}
+
 	h.sortSchemas()
 	return nil
 }
@@ -206,7 +228,7 @@ func (h *historian) readRow(row []sqltypes.Value) (*trackedSchema, int64, error)
 	if err != nil {
 		return nil, 0, err
 	}
-	if err := proto.Unmarshal(rowBytes, sch); err != nil {
+	if err := sch.UnmarshalVT(rowBytes); err != nil {
 		return nil, 0, err
 	}
 	log.V(vl).Infof("Read tracked schema from db: id %d, pos %v, ddl %s, schema len %d, time_updated %d \n",
@@ -217,11 +239,38 @@ func (h *historian) readRow(row []sqltypes.Value) (*trackedSchema, int64, error)
 		tables[t.Name] = t
 	}
 	tSchema := &trackedSchema{
-		schema: tables,
-		pos:    pos,
-		ddl:    ddl,
+		schema:      tables,
+		pos:         pos,
+		ddl:         ddl,
+		timeUpdated: timeUpdated,
 	}
 	return tSchema, id, nil
+}
+
+func (h *historian) purgeOldSchemas() {
+	maxAgeDuration := time.Duration(h.schemaMaxAgeSeconds) * time.Second
+	shouldPurge := false
+
+	// check if we have any schemas we need to purge and only create the filtered
+	// slice if necessary
+	for _, s := range h.schemas {
+		if time.Since(time.Unix(s.timeUpdated, 0)) > maxAgeDuration {
+			shouldPurge = true
+			break
+		}
+	}
+
+	if !shouldPurge {
+		return
+	}
+
+	filtered := make([]*trackedSchema, 0)
+	for _, s := range h.schemas {
+		if time.Since(time.Unix(s.timeUpdated, 0)) < maxAgeDuration {
+			filtered = append(filtered, s)
+		}
+	}
+	h.schemas = filtered
 }
 
 // sortSchemas sorts entries in ascending order of gtid, ex: 40,44,48

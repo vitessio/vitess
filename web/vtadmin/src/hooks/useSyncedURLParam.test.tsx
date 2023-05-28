@@ -17,6 +17,7 @@ import { act } from '@testing-library/react';
 import { renderHook } from '@testing-library/react-hooks';
 import { createMemoryHistory } from 'history';
 import { Router } from 'react-router-dom';
+import { describe, expect, vi } from 'vitest';
 
 import { useSyncedURLParam } from './useSyncedURLParam';
 
@@ -24,8 +25,8 @@ describe('useSyncedURLParam', () => {
     it('should push to history when updating initially empty value', () => {
         const history = createMemoryHistory();
 
-        jest.spyOn(history, 'push');
-        jest.spyOn(history, 'replace');
+        vi.spyOn(history, 'push');
+        vi.spyOn(history, 'replace');
 
         const { result } = renderHook(() => useSyncedURLParam('hello'), {
             wrapper: ({ children }) => {
@@ -50,8 +51,8 @@ describe('useSyncedURLParam', () => {
     it('should replace history when a value is already defined in the URL', () => {
         const history = createMemoryHistory({ initialEntries: ['/?hello=world'] });
 
-        jest.spyOn(history, 'push');
-        jest.spyOn(history, 'replace');
+        vi.spyOn(history, 'push');
+        vi.spyOn(history, 'replace');
 
         const { result } = renderHook(() => useSyncedURLParam('hello'), {
             wrapper: ({ children }) => {
@@ -76,8 +77,8 @@ describe('useSyncedURLParam', () => {
     it('should clear the URL parameter and push to history when given an empty value', () => {
         const history = createMemoryHistory({ initialEntries: ['/?hello=world'] });
 
-        jest.spyOn(history, 'push');
-        jest.spyOn(history, 'replace');
+        vi.spyOn(history, 'push');
+        vi.spyOn(history, 'replace');
 
         const { result } = renderHook(() => useSyncedURLParam('hello'), {
             wrapper: ({ children }) => {
@@ -131,8 +132,8 @@ describe('useSyncedURLParam', () => {
     it('should properly manipulate history given a sequence of inputs', () => {
         const history = createMemoryHistory();
 
-        jest.spyOn(history, 'push');
-        jest.spyOn(history, 'replace');
+        vi.spyOn(history, 'push');
+        vi.spyOn(history, 'replace');
 
         const { result } = renderHook(() => useSyncedURLParam('sequence'), {
             wrapper: ({ children }) => {

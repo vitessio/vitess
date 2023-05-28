@@ -87,18 +87,32 @@ func (qb *queryBuilder) addPredicate(expr sqlparser.Expr) {
 	}
 
 	sel := qb.sel.(*sqlparser.Select)
-	if sel.Where == nil {
-		sel.AddWhere(expr)
-		return
+	_, isSubQuery := expr.(*sqlparser.ExtractedSubquery)
+	var addPred func(sqlparser.Expr)
+
+	if sqlparser.ContainsAggregation(expr) && !isSubQuery {
+		addPred = sel.AddHaving
+	} else {
+		addPred = sel.AddWhere
 	}
 	for _, exp := range sqlparser.SplitAndExpression(nil, expr) {
-		sel.AddWhere(exp)
+		addPred(exp)
 	}
+}
+
+func (qb *queryBuilder) addGroupBy(original sqlparser.Expr) {
+	sel := qb.sel.(*sqlparser.Select)
+	sel.GroupBy = append(sel.GroupBy, original)
 }
 
 func (qb *queryBuilder) addProjection(projection *sqlparser.AliasedExpr) {
 	sel := qb.sel.(*sqlparser.Select)
 	sel.SelectExprs = append(sel.SelectExprs, projection)
+}
+
+func (qb *queryBuilder) clearProjections() {
+	sel := qb.sel.(*sqlparser.Select)
+	sel.SelectExprs = nil
 }
 
 func (qb *queryBuilder) joinInnerWith(other *queryBuilder, onCondition sqlparser.Expr) {
@@ -269,6 +283,7 @@ func stripDownQuery(from, to sqlparser.SelectStatement) error {
 		toNode.Having = node.Having
 		toNode.OrderBy = node.OrderBy
 		toNode.Comments = node.Comments
+		toNode.Limit = node.Limit
 		toNode.SelectExprs = node.SelectExprs
 		for _, expr := range toNode.SelectExprs {
 			removeKeyspaceFromSelectExpr(expr)
@@ -293,90 +308,208 @@ func stripDownQuery(from, to sqlparser.SelectStatement) error {
 	return nil
 }
 
+// buildQuery recursively builds the query into an AST, from an operator tree
 func buildQuery(op ops.Operator, qb *queryBuilder) error {
 	switch op := op.(type) {
 	case *Table:
-		dbName := ""
-
-		if op.QTable.IsInfSchema {
-			dbName = op.QTable.Table.Qualifier.String()
-		}
-		qb.addTable(dbName, op.QTable.Table.Name.String(), op.QTable.Alias.As.String(), TableID(op), op.QTable.Alias.Hints)
-		for _, pred := range op.QTable.Predicates {
-			qb.addPredicate(pred)
-		}
-		for _, name := range op.Columns {
-			qb.addProjection(&sqlparser.AliasedExpr{Expr: name})
-		}
+		buildTable(op, qb)
+	case *Projection:
+		return buildProjection(op, qb)
 	case *ApplyJoin:
-		err := buildQuery(op.LHS, qb)
-		if err != nil {
-			return err
-		}
-		// If we are going to add the predicate used in join here
-		// We should not add the predicate's copy of when it was split into
-		// two parts. To avoid this, we use the SkipPredicates map.
-		for _, expr := range qb.ctx.JoinPredicates[op.Predicate] {
-			qb.ctx.SkipPredicates[expr] = nil
-		}
-		qbR := &queryBuilder{ctx: qb.ctx}
-		err = buildQuery(op.RHS, qbR)
-		if err != nil {
-			return err
-		}
-		if op.LeftJoin {
-			qb.joinOuterWith(qbR, op.Predicate)
-		} else {
-			qb.joinInnerWith(qbR, op.Predicate)
-		}
+		return buildApplyJoin(op, qb)
 	case *Filter:
-		err := buildQuery(op.Source, qb)
-		if err != nil {
-			return err
-		}
-		for _, pred := range op.Predicates {
-			qb.addPredicate(pred)
-		}
+		return buildFilter(op, qb)
 	case *Derived:
-		err := buildQuery(op.Source, qb)
-		if err != nil {
-			return err
-		}
-		sel := qb.sel.(*sqlparser.Select) // we can only handle SELECT in derived tables at the moment
-		qb.sel = nil
-		sqlparser.RemoveKeyspace(op.Query)
-		opQuery := op.Query.(*sqlparser.Select)
-		sel.Limit = opQuery.Limit
-		sel.OrderBy = opQuery.OrderBy
-		sel.GroupBy = opQuery.GroupBy
-		sel.Having = opQuery.Having
-		sel.SelectExprs = opQuery.SelectExprs
-		qb.addTableExpr(op.Alias, op.Alias, TableID(op), &sqlparser.DerivedTable{
-			Select: sel,
-		}, nil, op.ColumnAliases)
-		for _, col := range op.Columns {
-			qb.addProjection(&sqlparser.AliasedExpr{Expr: col})
-		}
+		return buildDerived(op, qb)
 	case *Horizon:
-		err := buildQuery(op.Source, qb)
-		if err != nil {
-			return err
-		}
-
-		err = stripDownQuery(op.Select, qb.sel)
-		if err != nil {
-			return err
-		}
-		_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
-			if aliasedExpr, ok := node.(sqlparser.SelectExpr); ok {
-				removeKeyspaceFromSelectExpr(aliasedExpr)
-			}
-			return true, nil
-		}, qb.sel)
-		return nil
-
+		return buildHorizon(op, qb)
+	case *Limit:
+		return buildLimit(op, qb)
+	case *Ordering:
+		return buildOrdering(op, qb)
+	case *Aggregator:
+		return buildAggregation(op, qb)
 	default:
 		return vterrors.VT13001(fmt.Sprintf("do not know how to turn %T into SQL", op))
 	}
 	return nil
+}
+
+func buildAggregation(op *Aggregator, qb *queryBuilder) error {
+	err := buildQuery(op.Source, qb)
+	if err != nil {
+		return err
+	}
+
+	qb.clearProjections()
+
+	cols, err := op.GetColumns()
+	if err != nil {
+		return err
+	}
+	for _, column := range cols {
+		qb.addProjection(column)
+	}
+
+	for _, by := range op.Grouping {
+		qb.addGroupBy(by.Inner)
+		simplified := by.SimplifiedExpr
+		if by.WSOffset != -1 {
+			qb.addGroupBy(weightStringFor(simplified))
+		}
+	}
+
+	return nil
+}
+
+func buildOrdering(op *Ordering, qb *queryBuilder) error {
+	err := buildQuery(op.Source, qb)
+	if err != nil {
+		return err
+	}
+
+	for _, order := range op.Order {
+		qb.sel.AddOrder(order.Inner)
+	}
+	return nil
+}
+
+func buildLimit(op *Limit, qb *queryBuilder) error {
+	err := buildQuery(op.Source, qb)
+	if err != nil {
+		return err
+	}
+	qb.sel.SetLimit(op.AST)
+	return nil
+}
+
+func buildTable(op *Table, qb *queryBuilder) {
+	dbName := ""
+
+	if op.QTable.IsInfSchema {
+		dbName = op.QTable.Table.Qualifier.String()
+	}
+	qb.addTable(dbName, op.QTable.Table.Name.String(), op.QTable.Alias.As.String(), TableID(op), op.QTable.Alias.Hints)
+	for _, pred := range op.QTable.Predicates {
+		qb.addPredicate(pred)
+	}
+	for _, name := range op.Columns {
+		qb.addProjection(&sqlparser.AliasedExpr{Expr: name})
+	}
+}
+
+func buildProjection(op *Projection, qb *queryBuilder) error {
+	err := buildQuery(op.Source, qb)
+	if err != nil {
+		return err
+	}
+
+	qb.clearProjections()
+
+	for _, column := range op.Columns {
+		qb.addProjection(column)
+	}
+
+	// if the projection is on derived table, we use the select we have
+	// created above and transform it into a derived table
+	if op.TableID != nil {
+		sel := qb.sel.(*sqlparser.Select)
+		qb.sel = nil
+		qb.addTableExpr(op.Alias, op.Alias, TableID(op), &sqlparser.DerivedTable{
+			Select: sel,
+		}, nil, nil)
+	}
+
+	return nil
+}
+
+func buildApplyJoin(op *ApplyJoin, qb *queryBuilder) error {
+	err := buildQuery(op.LHS, qb)
+	if err != nil {
+		return err
+	}
+	// If we are going to add the predicate used in join here
+	// We should not add the predicate's copy of when it was split into
+	// two parts. To avoid this, we use the SkipPredicates map.
+	for _, expr := range qb.ctx.JoinPredicates[op.Predicate] {
+		qb.ctx.SkipPredicates[expr] = nil
+	}
+	qbR := &queryBuilder{ctx: qb.ctx}
+	err = buildQuery(op.RHS, qbR)
+	if err != nil {
+		return err
+	}
+	if op.LeftJoin {
+		qb.joinOuterWith(qbR, op.Predicate)
+	} else {
+		qb.joinInnerWith(qbR, op.Predicate)
+	}
+	return nil
+}
+
+func buildFilter(op *Filter, qb *queryBuilder) error {
+	err := buildQuery(op.Source, qb)
+	if err != nil {
+		return err
+	}
+	for _, pred := range op.Predicates {
+		qb.addPredicate(pred)
+	}
+	return nil
+}
+
+func buildDerived(op *Derived, qb *queryBuilder) error {
+	err := buildQuery(op.Source, qb)
+	if err != nil {
+		return err
+	}
+	sel := qb.sel.(*sqlparser.Select) // we can only handle SELECT in derived tables at the moment
+	qb.sel = nil
+	sqlparser.RemoveKeyspace(op.Query)
+	opQuery := op.Query.(*sqlparser.Select)
+	sel.Limit = opQuery.Limit
+	sel.OrderBy = opQuery.OrderBy
+	sel.GroupBy = opQuery.GroupBy
+	sel.Having = mergeHaving(sel.Having, opQuery.Having)
+	sel.SelectExprs = opQuery.SelectExprs
+	qb.addTableExpr(op.Alias, op.Alias, TableID(op), &sqlparser.DerivedTable{
+		Select: sel,
+	}, nil, op.ColumnAliases)
+	for _, col := range op.Columns {
+		qb.addProjection(&sqlparser.AliasedExpr{Expr: col})
+	}
+	return nil
+}
+
+func buildHorizon(op *Horizon, qb *queryBuilder) error {
+	err := buildQuery(op.Source, qb)
+	if err != nil {
+		return err
+	}
+
+	err = stripDownQuery(op.Select, qb.sel)
+	if err != nil {
+		return err
+	}
+	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+		if aliasedExpr, ok := node.(sqlparser.SelectExpr); ok {
+			removeKeyspaceFromSelectExpr(aliasedExpr)
+		}
+		return true, nil
+	}, qb.sel)
+	return nil
+}
+
+func mergeHaving(h1, h2 *sqlparser.Where) *sqlparser.Where {
+	switch {
+	case h1 == nil && h2 == nil:
+		return nil
+	case h1 == nil:
+		return h2
+	case h2 == nil:
+		return h1
+	default:
+		h1.Expr = sqlparser.AndExpressions(h1.Expr, h2.Expr)
+		return h1
+	}
 }

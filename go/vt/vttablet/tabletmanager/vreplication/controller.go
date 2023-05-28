@@ -130,7 +130,7 @@ func newController(ctx context.Context, params map[string]string, dbClientFactor
 				return nil, err
 			}
 		}
-		tp, err := discovery.NewTabletPicker(sourceTopo, cells, ct.source.Keyspace, ct.source.Shard, tabletTypesStr)
+		tp, err := discovery.NewTabletPicker(ctx, sourceTopo, cells, ct.vre.cell, ct.source.Keyspace, ct.source.Shard, tabletTypesStr, discovery.TabletPickerOptions{})
 		if err != nil {
 			return nil, err
 		}
@@ -193,12 +193,6 @@ func (ct *controller) runBlp(ctx context.Context) (err error) {
 	default:
 	}
 
-	// Call this for youtube-specific customization.
-	// This should be done every time, in case mysql was restarted.
-	if err := ct.mysqld.EnableBinlogPlayback(); err != nil {
-		return err
-	}
-
 	dbClient := ct.dbClientFactory()
 	if err := dbClient.Connect(); err != nil {
 		return vterrors.Wrap(err, "can't connect to database")
@@ -246,7 +240,7 @@ func (ct *controller) runBlp(ctx context.Context) (err error) {
 		}
 		// Tables may have varying character sets. To ship the bits without interpreting them
 		// we set the character set to be binary.
-		if _, err := dbClient.ExecuteFetch("set names binary", 10000); err != nil {
+		if _, err := dbClient.ExecuteFetch("set names 'binary'", 10000); err != nil {
 			return err
 		}
 		// We must apply AUTO_INCREMENT values precisely as we got them. This include the 0 value, which is not recommended in AUTO_INCREMENT, and yet is valid.

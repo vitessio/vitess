@@ -14,11 +14,12 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-CREATE TABLE IF NOT EXISTS _vt.views
+CREATE TABLE IF NOT EXISTS views
 (
     TABLE_SCHEMA varchar(64) NOT NULL,
     TABLE_NAME varchar(64) NOT NULL,
-    CREATE_STATEMENT longtext NOT NULL,
+    CREATE_STATEMENT longtext,
+    VIEW_DEFINITION longtext NOT NULL,
     UPDATED_AT TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (TABLE_SCHEMA, TABLE_NAME)
 ) engine = InnoDB

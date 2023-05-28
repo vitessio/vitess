@@ -21,8 +21,6 @@ import (
 	"fmt"
 	"sync"
 
-	"google.golang.org/protobuf/proto"
-
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -54,7 +52,7 @@ func (ts *Server) WatchSrvVSchema(ctx context.Context, cell string) (*WatchSrvVS
 		return nil, nil, err
 	}
 	value := &vschemapb.SrvVSchema{}
-	if err := proto.Unmarshal(current.Contents, value); err != nil {
+	if err := value.UnmarshalVT(current.Contents); err != nil {
 		// Cancel the watch, drain channel.
 		cancel()
 		for range wdChannel {
@@ -83,7 +81,7 @@ func (ts *Server) WatchSrvVSchema(ctx context.Context, cell string) (*WatchSrvVS
 			}
 
 			value := &vschemapb.SrvVSchema{}
-			if err := proto.Unmarshal(wd.Contents, value); err != nil {
+			if err := value.UnmarshalVT(wd.Contents); err != nil {
 				cancel()
 				for range wdChannel {
 				}
@@ -105,7 +103,7 @@ func (ts *Server) UpdateSrvVSchema(ctx context.Context, cell string, srvVSchema 
 	}
 
 	nodePath := SrvVSchemaFile
-	data, err := proto.Marshal(srvVSchema)
+	data, err := srvVSchema.MarshalVT()
 	if err != nil {
 		return err
 	}
@@ -126,7 +124,7 @@ func (ts *Server) GetSrvVSchema(ctx context.Context, cell string) (*vschemapb.Sr
 		return nil, err
 	}
 	srvVSchema := &vschemapb.SrvVSchema{}
-	if err := proto.Unmarshal(data, srvVSchema); err != nil {
+	if err := srvVSchema.UnmarshalVT(data); err != nil {
 		return nil, vterrors.Wrapf(err, "SrvVSchema unmarshal failed: %v", data)
 	}
 	return srvVSchema, nil

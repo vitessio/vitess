@@ -21,8 +21,6 @@ import (
 
 	"context"
 
-	"google.golang.org/protobuf/proto"
-
 	workflowpb "vitess.io/vitess/go/vt/proto/workflow"
 )
 
@@ -62,7 +60,7 @@ func (ts *Server) GetWorkflowNames(ctx context.Context) ([]string, error) {
 // WorkflowInfo.
 func (ts *Server) CreateWorkflow(ctx context.Context, w *workflowpb.Workflow) (*WorkflowInfo, error) {
 	// Pack the content.
-	contents, err := proto.Marshal(w)
+	contents, err := w.MarshalVT()
 	if err != nil {
 		return nil, err
 	}
@@ -90,7 +88,7 @@ func (ts *Server) GetWorkflow(ctx context.Context, uuid string) (*WorkflowInfo, 
 
 	// Unpack the contents.
 	w := &workflowpb.Workflow{}
-	if err := proto.Unmarshal(contents, w); err != nil {
+	if err := w.UnmarshalVT(contents); err != nil {
 		return nil, err
 	}
 
@@ -104,7 +102,7 @@ func (ts *Server) GetWorkflow(ctx context.Context, uuid string) (*WorkflowInfo, 
 // good any more, ErrBadVersion is returned.
 func (ts *Server) SaveWorkflow(ctx context.Context, wi *WorkflowInfo) error {
 	// Pack the content.
-	contents, err := proto.Marshal(wi.Workflow)
+	contents, err := wi.Workflow.MarshalVT()
 	if err != nil {
 		return err
 	}

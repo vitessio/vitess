@@ -21,16 +21,14 @@ import (
 	"strconv"
 	"strings"
 
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
-
 	"vitess.io/vitess/go/mysql/collations"
-
 	"vitess.io/vitess/go/sqltypes"
 
-	"vitess.io/vitess/go/vt/vterrors"
-
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
+	popcode "vitess.io/vitess/go/vt/vtgate/engine/opcode"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
 var _ logicalPlan = (*orderedAggregate)(nil)
@@ -265,7 +263,7 @@ func (oa *orderedAggregate) Primitive() engine.Primitive {
 
 func (oa *orderedAggregate) pushAggr(pb *primitiveBuilder, expr *sqlparser.AliasedExpr, origin logicalPlan) (rc *resultColumn, colNumber int, err error) {
 	aggrFunc, _ := expr.Expr.(sqlparser.AggrFunc)
-	origOpcode := engine.SupportedAggregates[strings.ToLower(aggrFunc.AggrName())]
+	origOpcode := popcode.SupportedAggregates[strings.ToLower(aggrFunc.AggrName())]
 	opcode := origOpcode
 	if aggrFunc.GetArgs() != nil &&
 		len(aggrFunc.GetArgs()) != 1 {
@@ -294,10 +292,10 @@ func (oa *orderedAggregate) pushAggr(pb *primitiveBuilder, expr *sqlparser.Alias
 		oa.extraDistinct = col
 		oa.preProcess = true
 		switch opcode {
-		case engine.AggregateCount:
-			opcode = engine.AggregateCountDistinct
-		case engine.AggregateSum:
-			opcode = engine.AggregateSumDistinct
+		case popcode.AggregateCount:
+			opcode = popcode.AggregateCountDistinct
+		case popcode.AggregateSum:
+			opcode = popcode.AggregateSumDistinct
 		}
 		oa.aggregates = append(oa.aggregates, &engine.AggregateParams{
 			Opcode:     opcode,
@@ -328,7 +326,7 @@ func (oa *orderedAggregate) pushAggr(pb *primitiveBuilder, expr *sqlparser.Alias
 // needDistinctHandling returns true if oa needs to handle the distinct clause.
 // If true, it will also return the aliased expression that needs to be pushed
 // down into the underlying route.
-func (oa *orderedAggregate) needDistinctHandling(pb *primitiveBuilder, expr *sqlparser.AliasedExpr, opcode engine.AggregateOpcode) (bool, *sqlparser.AliasedExpr, error) {
+func (oa *orderedAggregate) needDistinctHandling(pb *primitiveBuilder, expr *sqlparser.AliasedExpr, opcode popcode.AggregateOpcode) (bool, *sqlparser.AliasedExpr, error) {
 	var innerAliased *sqlparser.AliasedExpr
 	aggr, ok := expr.Expr.(sqlparser.AggrFunc)
 
@@ -339,7 +337,7 @@ func (oa *orderedAggregate) needDistinctHandling(pb *primitiveBuilder, expr *sql
 	if !aggr.IsDistinct() {
 		return false, nil, nil
 	}
-	if opcode != engine.AggregateCount && opcode != engine.AggregateSum && opcode != engine.AggregateCountStar {
+	if opcode != popcode.AggregateCount && opcode != popcode.AggregateSum && opcode != popcode.AggregateCountStar {
 		return false, nil, nil
 	}
 
@@ -382,11 +380,11 @@ func (oa *orderedAggregate) Wireup(plan logicalPlan, jt *jointab) error {
 	}
 	for _, key := range oa.aggregates {
 		switch key.Opcode {
-		case engine.AggregateCount:
+		case popcode.AggregateCount:
 			if key.Alias == "" {
 				key.Alias = key.Opcode.String()
 			}
-			key.Opcode = engine.AggregateSum
+			key.Opcode = popcode.AggregateSum
 		}
 	}
 

@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-CREATE TABLE IF NOT EXISTS _vt.dt_state
+CREATE TABLE IF NOT EXISTS dt_state
 (
   dtid varbinary(512) NOT NULL,
   state bigint NOT NULL,

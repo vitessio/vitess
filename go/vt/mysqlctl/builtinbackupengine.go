@@ -103,6 +103,20 @@ type builtinBackupManifest struct {
 	// false for backups that were created before the field existed, and those
 	// backups all had compression enabled.
 	SkipCompress bool
+
+	// When CompressionEngine is "external", ExternalDecompressor may be
+	// consulted for the external decompressor command.
+	//
+	// When taking a backup with --compression-engine=external,
+	// ExternalDecompressor will be set to the value of
+	// --manifest-external-decompressor, if set, or else left as an empty
+	// string.
+	//
+	// When restoring from a backup with CompressionEngine "external",
+	// --external-decompressor will be consulted first and, if that is not set,
+	// ExternalDecompressor will be used. If neither are set, the restore will
+	// abort.
+	ExternalDecompressor string
 }
 
 // FileEntry is one file to backup
@@ -127,7 +141,7 @@ type FileEntry struct {
 }
 
 func init() {
-	for _, cmd := range []string{"vtcombo", "vttablet", "vttestserver", "vtctld", "vtctldclient"} {
+	for _, cmd := range []string{"vtbackup", "vtcombo", "vttablet", "vttestserver", "vtctld", "vtctldclient"} {
 		servenv.OnParseFor(cmd, registerBuiltinBackupEngineFlags)
 	}
 }
@@ -203,6 +217,29 @@ func (be *BuiltinBackupEngine) ExecuteBackup(ctx context.Context, params BackupP
 // - A valid position
 // - "auto", indicating the incremental backup should begin with last successful backup end position.
 func (be *BuiltinBackupEngine) executeIncrementalBackup(ctx context.Context, params BackupParams, bh backupstorage.BackupHandle) (bool, error) {
+	// Collect MySQL status:
+	// UUID
+	serverUUID, err := params.Mysqld.GetServerUUID(ctx)
+	if err != nil {
+		return false, vterrors.Wrap(err, "can't get server uuid")
+	}
+	// @@gtid_purged
+	getPurgedGTIDSet := func() (mysql.Mysql56GTIDSet, error) {
+		gtidPurged, err := params.Mysqld.GetGTIDPurged(ctx)
+		if err != nil {
+			return nil, vterrors.Wrap(err, "can't get @@gtid_purged")
+		}
+		purgedGTIDSet, ok := gtidPurged.GTIDSet.(mysql.Mysql56GTIDSet)
+		if !ok {
+			return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "cannot get MySQL GTID purged value: %v", gtidPurged)
+		}
+		return purgedGTIDSet, nil
+	}
+	purgedGTIDSet, err := getPurgedGTIDSet()
+	if err != nil {
+		return false, err
+	}
+
 	if params.IncrementalFromPos == autoIncrementalFromPos {
 		params.Logger.Infof("auto evaluating incremental_from_pos")
 		bs, err := backupstorage.GetBackupStorage()
@@ -226,38 +263,33 @@ func (be *BuiltinBackupEngine) executeIncrementalBackup(ctx context.Context, par
 		params.Logger.Infof("auto evaluated incremental_from_pos: %s", params.IncrementalFromPos)
 	}
 
-	rp, err := mysql.DecodePosition(params.IncrementalFromPos)
+	// params.IncrementalFromPos is a string. We want to turn that into a MySQL GTID
+	getIncrementalFromPosGTIDSet := func() (mysql.Mysql56GTIDSet, error) {
+		pos, err := mysql.DecodePosition(params.IncrementalFromPos)
+		if err != nil {
+			return nil, vterrors.Wrapf(err, "cannot decode position in incremental backup: %v", params.IncrementalFromPos)
+		}
+		if !pos.MatchesFlavor(mysql.Mysql56FlavorID) {
+			return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "incremental backup only supports MySQL GTID positions. Got: %v", params.IncrementalFromPos)
+		}
+		ifPosGTIDSet, ok := pos.GTIDSet.(mysql.Mysql56GTIDSet)
+		if !ok {
+			return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "cannot get MySQL GTID value: %v", pos)
+		}
+		return ifPosGTIDSet, nil
+	}
+	backupFromGTIDSet, err := getIncrementalFromPosGTIDSet()
 	if err != nil {
-		return false, vterrors.Wrapf(err, "cannot decode position in incremental backup: %v", params.IncrementalFromPos)
+		return false, err
 	}
-	if !rp.MatchesFlavor(mysql.Mysql56FlavorID) {
-		// incrementalFromGtidSet, ok := rp.GTIDSet.(mysql.Mysql56GTIDSet)
-		// if !ok {
-		return false, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "incremental backup only supports MySQL GTID positions. Got: %v", params.IncrementalFromPos)
-	}
-	serverUUID, err := params.Mysqld.GetServerUUID(ctx)
-	if err != nil {
-		return false, vterrors.Wrap(err, "can't get server uuid")
-	}
-	gtidPurged, err := params.Mysqld.GetGTIDPurged(ctx)
-	if err != nil {
-		return false, vterrors.Wrap(err, "can't get gtid_purged")
-	}
-	rpGTID, ok := rp.GTIDSet.(mysql.Mysql56GTIDSet)
-	if !ok {
-		return false, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "cannot get MySQL GTID value: %v", rpGTID)
-	}
-	purgedGTID, ok := gtidPurged.GTIDSet.(mysql.Mysql56GTIDSet)
-	if !ok {
-		return false, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "cannot get MySQL GTID purged value: %v", rpGTID)
-	}
+	// OK, we now have the formal MySQL GTID from which we want to take the incremental backip.
+
 	// binlogs may not contain information about purged GTIDs. e.g. some binlog.000003 may have
 	// previous GTIDs like 00021324-1111-1111-1111-111111111111:30-60, ie 1-29 range is missing. This can happen
 	// when a server is restored from backup and set with gtid_purged != "".
 	// This is fine!
 	// Shortly we will compare a binlog's "Previous GTIDs" with the backup's position. For the purpose of comparison, we
 	// ignore the purged GTIDs:
-	binlogCompareGTID := rpGTID.Difference(purgedGTID)
 
 	if err := params.Mysqld.FlushBinaryLogs(ctx); err != nil {
 		return false, vterrors.Wrapf(err, "cannot flush binary logs in incremental backup")
@@ -267,7 +299,7 @@ func (be *BuiltinBackupEngine) executeIncrementalBackup(ctx context.Context, par
 		return false, vterrors.Wrapf(err, "cannot get binary logs in incremental backup")
 	}
 	previousGTIDs := map[string]string{}
-	getPreviousGTIDs := func(ctx context.Context, binlog string) (gtids string, err error) {
+	getBinlogPreviousGTIDs := func(ctx context.Context, binlog string) (gtids string, err error) {
 		gtids, ok := previousGTIDs[binlog]
 		if ok {
 			// Found a cached entry! No need to query again
@@ -280,7 +312,7 @@ func (be *BuiltinBackupEngine) executeIncrementalBackup(ctx context.Context, par
 		previousGTIDs[binlog] = gtids
 		return gtids, nil
 	}
-	binaryLogsToBackup, incrementalBackupFromGTID, incrementalBackupToGTID, err := ChooseBinlogsForIncrementalBackup(ctx, binlogCompareGTID, binaryLogs, getPreviousGTIDs, true)
+	binaryLogsToBackup, incrementalBackupFromGTID, incrementalBackupToGTID, err := ChooseBinlogsForIncrementalBackup(ctx, backupFromGTIDSet, purgedGTIDSet, binaryLogs, getBinlogPreviousGTIDs)
 	if err != nil {
 		return false, vterrors.Wrapf(err, "cannot get binary logs to backup in incremental backup")
 	}
@@ -318,7 +350,8 @@ func (be *BuiltinBackupEngine) executeFullBackup(ctx context.Context, params Bac
 	// Save initial state so we can restore.
 	replicaStartRequired := false
 	sourceIsPrimary := false
-	readOnly := true //nolint
+	superReadOnly := true //nolint
+	readOnly := true      //nolint
 	var replicationPosition mysql.Position
 	semiSyncSource, semiSyncReplica := params.Mysqld.SemiSyncEnabled()
 
@@ -338,16 +371,30 @@ func (be *BuiltinBackupEngine) executeFullBackup(ctx context.Context, params Bac
 	// get the read-only flag
 	readOnly, err = params.Mysqld.IsReadOnly()
 	if err != nil {
-		return false, vterrors.Wrap(err, "can't get read-only status")
+		return false, vterrors.Wrap(err, "failed to get read_only status")
 	}
+	superReadOnly, err = params.Mysqld.IsSuperReadOnly()
+	if err != nil {
+		return false, vterrors.Wrap(err, "can't get super_read_only status")
+	}
+	log.Infof("Flag values during full backup, read_only: %v, super_read_only:%t", readOnly, superReadOnly)
 
 	// get the replication position
 	if sourceIsPrimary {
-		if !readOnly {
-			params.Logger.Infof("turning primary read-only before backup")
-			if err = params.Mysqld.SetReadOnly(true); err != nil {
-				return false, vterrors.Wrap(err, "can't set read-only status")
+		// No need to set read_only because super_read_only will implicitly set read_only to true as well.
+		if !superReadOnly {
+			params.Logger.Infof("Enabling super_read_only on primary prior to backup")
+			if _, err = params.Mysqld.SetSuperReadOnly(true); err != nil {
+				return false, vterrors.Wrap(err, "failed to enable super_read_only")
 			}
+			defer func() {
+				// Resetting super_read_only back to its original value
+				params.Logger.Infof("resetting mysqld super_read_only to %v", superReadOnly)
+				if _, err := params.Mysqld.SetSuperReadOnly(false); err != nil {
+					log.Error("Failed to set super_read_only back to its original value")
+				}
+			}()
+
 		}
 		replicationPosition, err = params.Mysqld.PrimaryPosition()
 		if err != nil {
@@ -398,9 +445,9 @@ func (be *BuiltinBackupEngine) executeFullBackup(ctx context.Context, params Bac
 		return usable, vterrors.Wrap(err, "can't restart mysqld")
 	}
 
-	// And set read-only mode
-	params.Logger.Infof("resetting mysqld read-only to %v", readOnly)
-	if err := params.Mysqld.SetReadOnly(readOnly); err != nil {
+	// Resetting super_read_only back to its original value
+	params.Logger.Infof("resetting mysqld super_read_only to %v", superReadOnly)
+	if _, err := params.Mysqld.SetSuperReadOnly(superReadOnly); err != nil {
 		return usable, err
 	}
 
@@ -497,18 +544,35 @@ func (be *BuiltinBackupEngine) backupFiles(
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
-
-			// Wait until we are ready to go, skip if we already
-			// encountered an error.
-			sema.Acquire(ctx, 1)
+			fe := &fes[i]
+			// Wait until we are ready to go, return if we encounter an error
+			acqErr := sema.Acquire(ctx, 1)
+			if acqErr != nil {
+				log.Errorf("Unable to acquire semaphore needed to backup file: %s, err: %s", fe.Name, acqErr.Error())
+				bh.RecordError(acqErr)
+				return
+			}
 			defer sema.Release(1)
+			// Check for context cancellation explicitly because, the way semaphore code is written, theoretically we might
+			// end up not throwing an error even after cancellation. Please see https://cs.opensource.google/go/x/sync/+/refs/tags/v0.1.0:semaphore/semaphore.go;l=66,
+			// which suggests that if the context is already done, `Acquire()` may still succeed without blocking. This introduces
+			// unpredictability in my test cases, so in order to avoid that, I am adding this cancellation check.
+			select {
+			case <-ctx.Done():
+				log.Errorf("Context canceled or timed out during %q backup", fe.Name)
+				bh.RecordError(vterrors.Errorf(vtrpc.Code_CANCELED, "context canceled"))
+				return
+			default:
+			}
+
 			if bh.HasErrors() {
+				params.Logger.Infof("failed to backup files due to error.")
 				return
 			}
 
 			// Backup the individual file.
 			name := fmt.Sprintf("%v", i)
-			bh.RecordError(be.backupFile(ctx, params, bh, &fes[i], name))
+			bh.RecordError(be.backupFile(ctx, params, bh, fe, name))
 		}(i)
 	}
 
@@ -555,9 +619,10 @@ func (be *BuiltinBackupEngine) backupFiles(
 		},
 
 		// Builtin-specific fields
-		FileEntries:       fes,
-		SkipCompress:      !backupStorageCompress,
-		CompressionEngine: CompressionEngineName,
+		FileEntries:          fes,
+		SkipCompress:         !backupStorageCompress,
+		CompressionEngine:    CompressionEngineName,
+		ExternalDecompressor: ManifestExternalDecompressorCmd,
 	}
 	data, err := json.MarshalIndent(bm, "", "  ")
 	if err != nil {
@@ -772,7 +837,7 @@ func (be *BuiltinBackupEngine) executeRestoreFullBackup(ctx context.Context, par
 
 	params.Logger.Infof("Restore: copying %v files", len(bm.FileEntries))
 
-	if _, err := be.restoreFiles(context.Background(), params, bh, bm); err != nil {
+	if _, err := be.restoreFiles(ctx, params, bh, bm); err != nil {
 		// don't delete the file here because that is how we detect an interrupted restore
 		return vterrors.Wrap(err, "failed to restore files")
 	}
@@ -785,8 +850,7 @@ func (be *BuiltinBackupEngine) executeRestoreFullBackup(ctx context.Context, par
 // The underlying mysql database is expected to be up and running.
 func (be *BuiltinBackupEngine) executeRestoreIncrementalBackup(ctx context.Context, params RestoreParams, bh backupstorage.BackupHandle, bm builtinBackupManifest) error {
 	params.Logger.Infof("Restoring incremental backup to position: %v", bm.Position)
-
-	createdDir, err := be.restoreFiles(context.Background(), params, bh, bm)
+	createdDir, err := be.restoreFiles(ctx, params, bh, bm)
 	defer os.RemoveAll(createdDir)
 	mysqld, ok := params.Mysqld.(*Mysqld)
 	if !ok {
@@ -798,7 +862,7 @@ func (be *BuiltinBackupEngine) executeRestoreIncrementalBackup(ctx context.Conte
 		if err != nil {
 			return vterrors.Wrap(err, "failed to restore file")
 		}
-		if err := mysqld.applyBinlogFile(binlogFile, params.RestoreToPos.GTIDSet); err != nil {
+		if err := mysqld.ApplyBinlogFile(ctx, binlogFile, params.RestoreToPos); err != nil {
 			return vterrors.Wrap(err, "failed to extract binlog file")
 		}
 		defer os.Remove(binlogFile)
@@ -819,7 +883,6 @@ func (be *BuiltinBackupEngine) executeRestoreIncrementalBackup(ctx context.Conte
 func (be *BuiltinBackupEngine) ExecuteRestore(ctx context.Context, params RestoreParams, bh backupstorage.BackupHandle) (*BackupManifest, error) {
 
 	var bm builtinBackupManifest
-
 	if err := getBackupManifestInto(ctx, bh, &bm); err != nil {
 		return nil, err
 	}
@@ -869,16 +932,32 @@ func (be *BuiltinBackupEngine) restoreFiles(ctx context.Context, params RestoreP
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
-
-			// Wait until we are ready to go, skip if we already
-			// encountered an error.
-			sema.Acquire(ctx, 1)
+			fe := &fes[i]
+			// Wait until we are ready to go, return if we encounter an error
+			acqErr := sema.Acquire(ctx, 1)
+			if acqErr != nil {
+				log.Errorf("Unable to acquire semaphore needed to restore file: %s, err: %s", fe.Name, acqErr.Error())
+				rec.RecordError(acqErr)
+				return
+			}
 			defer sema.Release(1)
+			// Check for context cancellation explicitly because, the way semaphore code is written, theoretically we might
+			// end up not throwing an error even after cancellation. Please see https://cs.opensource.google/go/x/sync/+/refs/tags/v0.1.0:semaphore/semaphore.go;l=66,
+			// which suggests that if the context is already done, `Acquire()` may still succeed without blocking. This introduces
+			// unpredictability in my test cases, so in order to avoid that, I am adding this cancellation check.
+			select {
+			case <-ctx.Done():
+				log.Errorf("Context canceled or timed out during %q restore", fe.Name)
+				rec.RecordError(vterrors.Errorf(vtrpc.Code_CANCELED, "context canceled"))
+				return
+			default:
+			}
+
 			if rec.HasErrors() {
+				params.Logger.Infof("Failed to restore files due to error.")
 				return
 			}
 
-			fe := &fes[i]
 			fe.ParentPath = createdDir
 			// And restore the file.
 			name := fmt.Sprintf("%v", i)
@@ -951,9 +1030,13 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, params RestorePa
 			// for backward compatibility
 			deCompressionEngine = PgzipCompressor
 		}
-		if ExternalDecompressorCmd != "" {
+		externalDecompressorCmd := ExternalDecompressorCmd
+		if externalDecompressorCmd == "" && bm.ExternalDecompressor != "" {
+			externalDecompressorCmd = bm.ExternalDecompressor
+		}
+		if externalDecompressorCmd != "" {
 			if deCompressionEngine == ExternalCompressor {
-				deCompressionEngine = ExternalDecompressorCmd
+				deCompressionEngine = externalDecompressorCmd
 				decompressor, err = newExternalDecompressor(ctx, deCompressionEngine, reader, params.Logger)
 			} else {
 				decompressor, err = newBuiltinDecompressor(deCompressionEngine, reader, params.Logger)

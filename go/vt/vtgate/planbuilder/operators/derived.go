@@ -17,18 +17,23 @@ limitations under the License.
 package operators
 
 import (
-	"golang.org/x/exp/slices"
+	"io"
 
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
+	"golang.org/x/exp/slices"
 
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 type Derived struct {
-	Source ops.Operator
+	Source  ops.Operator
+	TableId semantics.TableSet
+
+	// QP contains the QueryProjection for this op
+	QP *QueryProjection
 
 	Query         sqlparser.SelectStatement
 	Alias         string
@@ -39,11 +44,6 @@ type Derived struct {
 	ColumnsOffset []int
 }
 
-var _ ops.PhysicalOperator = (*Derived)(nil)
-
-// IPhysical implements the PhysicalOperator interface
-func (d *Derived) IPhysical() {}
-
 // Clone implements the Operator interface
 func (d *Derived) Clone(inputs []ops.Operator) ops.Operator {
 	return &Derived{
@@ -53,6 +53,7 @@ func (d *Derived) Clone(inputs []ops.Operator) ops.Operator {
 		ColumnAliases: sqlparser.CloneColumns(d.ColumnAliases),
 		Columns:       slices.Clone(d.Columns),
 		ColumnsOffset: slices.Clone(d.ColumnsOffset),
+		TableId:       d.TableId,
 	}
 }
 
@@ -106,6 +107,11 @@ func (d *Derived) Inputs() []ops.Operator {
 	return []ops.Operator{d.Source}
 }
 
+// SetInputs implements the Operator interface
+func (d *Derived) SetInputs(ops []ops.Operator) {
+	d.Source = ops[0]
+}
+
 func (d *Derived) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (ops.Operator, error) {
 	if _, isUNion := d.Source.(*Union); isUNion {
 		// If we have a derived table on top of a UNION, we can let the UNION do the expression rewriting
@@ -125,6 +131,10 @@ func (d *Derived) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.
 	}
 
 	newExpr := semantics.RewriteDerivedTableExpression(expr, tableInfo)
+	if !canBePushedDownIntoDerived(newExpr) {
+		// if we have an aggregation, we don't want to push it inside
+		return &Filter{Source: d, Predicates: []sqlparser.Expr{expr}}, nil
+	}
 	d.Source, err = d.Source.AddPredicate(ctx, newExpr)
 	if err != nil {
 		return nil, err
@@ -132,28 +142,84 @@ func (d *Derived) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.
 	return d, nil
 }
 
-func (d *Derived) AddColumn(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (int, error) {
-	col, ok := expr.(*sqlparser.ColName)
+func canBePushedDownIntoDerived(expr sqlparser.Expr) (canBePushed bool) {
+	canBePushed = true
+	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+		switch node.(type) {
+		case *sqlparser.Max, *sqlparser.Min:
+			// empty by default
+		case sqlparser.AggrFunc:
+			canBePushed = false
+			return false, io.EOF
+		}
+		return true, nil
+	}, expr)
+	return
+}
+
+func (d *Derived) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, _, addToGroupBy bool) (ops.Operator, int, error) {
+	col, ok := expr.Expr.(*sqlparser.ColName)
 	if !ok {
-		return 0, vterrors.VT13001("cannot push non-colname expression to a derived table")
+		return nil, 0, vterrors.VT13001("cannot push non-colname expression to a derived table")
+	}
+
+	identity := func(c *sqlparser.ColName) sqlparser.Expr { return c }
+	if offset, found := canReuseColumn(ctx, d.Columns, col, identity); found {
+		return d, offset, nil
 	}
 
 	i, err := d.findOutputColumn(col)
 	if err != nil {
-		return 0, err
+		return nil, 0, err
 	}
 	var pos int
 	d.ColumnsOffset, pos = addToIntSlice(d.ColumnsOffset, i)
 
+	d.Columns = append(d.Columns, col)
 	// add it to the source if we were not already passing it through
 	if i <= -1 {
-		d.Columns = append(d.Columns, col)
-		_, err := d.Source.AddColumn(ctx, sqlparser.NewColName(col.Name.String()))
+		newSrc, _, err := d.Source.AddColumn(ctx, aeWrap(sqlparser.NewColName(col.Name.String())), true, addToGroupBy)
 		if err != nil {
-			return 0, err
+			return nil, 0, err
+		}
+		d.Source = newSrc
+	}
+	return d, pos, nil
+}
+
+// canReuseColumn is generic, so it can be used with slices of different types.
+// We don't care about the actual type, as long as we know it's a sqlparser.Expr
+func canReuseColumn[T any](
+	ctx *plancontext.PlanningContext,
+	columns []T,
+	col sqlparser.Expr,
+	f func(T) sqlparser.Expr,
+) (offset int, found bool) {
+	for offset, column := range columns {
+		if ctx.SemTable.EqualsExprWithDeps(col, f(column)) {
+			return offset, true
 		}
 	}
-	return pos, nil
+
+	return
+}
+
+func (d *Derived) GetColumns() (exprs []*sqlparser.AliasedExpr, err error) {
+	for _, expr := range sqlparser.GetFirstSelect(d.Query).SelectExprs {
+		ae, ok := expr.(*sqlparser.AliasedExpr)
+		if !ok {
+			return nil, errHorizonNotPlanned()
+		}
+		exprs = append(exprs, ae)
+	}
+	return
+}
+
+func (d *Derived) GetOrdering() ([]ops.OrderBy, error) {
+	if d.QP == nil {
+		return nil, vterrors.VT13001("QP should already be here")
+	}
+	return d.QP.OrderExprs, nil
 }
 
 func addToIntSlice(columnOffset []int, valToAdd int) ([]int, int) {
@@ -164,4 +230,39 @@ func addToIntSlice(columnOffset []int, valToAdd int) ([]int, int) {
 	}
 	columnOffset = append(columnOffset, valToAdd)
 	return columnOffset, len(columnOffset) - 1
+}
+
+// TODO: REMOVE
+func (d *Derived) selectStatement() sqlparser.SelectStatement {
+	return d.Query
+}
+
+func (d *Derived) src() ops.Operator {
+	return d.Source
+}
+
+func (d *Derived) getQP(ctx *plancontext.PlanningContext) (*QueryProjection, error) {
+	if d.QP != nil {
+		return d.QP, nil
+	}
+	qp, err := CreateQPFromSelect(ctx, d.Query.(*sqlparser.Select))
+	if err != nil {
+		return nil, err
+	}
+	d.QP = qp
+	return d.QP, nil
+}
+
+func (d *Derived) setQP(qp *QueryProjection) {
+	d.QP = qp
+}
+
+func (d *Derived) Description() ops.OpDescription {
+	return ops.OpDescription{
+		OperatorType: "Derived",
+	}
+}
+
+func (d *Derived) ShortDescription() string {
+	return d.Alias
 }

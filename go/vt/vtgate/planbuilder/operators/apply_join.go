@@ -17,13 +17,16 @@ limitations under the License.
 package operators
 
 import (
+	"fmt"
+	"strings"
+
 	"golang.org/x/exp/maps"
 	"golang.org/x/exp/slices"
 
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
-
+	"vitess.io/vitess/go/slices2"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
@@ -32,16 +35,6 @@ import (
 type ApplyJoin struct {
 	LHS, RHS ops.Operator
 
-	// Columns stores the column indexes of the columns coming from the left and right side
-	// negative value comes from LHS and positive from RHS
-	Columns []int
-
-	// ColumnsAST keeps track of what AST expression is represented in the Columns array
-	ColumnsAST []sqlparser.Expr
-
-	// Vars are the arguments that need to be copied from the LHS to the RHS
-	Vars map[string]int
-
 	// LeftJoin will be true in the case of an outer join
 	LeftJoin bool
 
@@ -49,10 +42,42 @@ type ApplyJoin struct {
 	// These are the same columns pushed on the LHS that are now used in the Vars field
 	LHSColumns []*sqlparser.ColName
 
+	// Before offset planning
 	Predicate sqlparser.Expr
+
+	// ColumnsAST keeps track of what AST expression is represented in the Columns array
+	ColumnsAST []JoinColumn
+
+	// JoinPredicates are join predicates that have been broken up into left hand side and right hand side parts.
+	JoinPredicates []JoinColumn
+
+	// After offset planning
+
+	// Columns stores the column indexes of the columns coming from the left and right side
+	// negative value comes from LHS and positive from RHS
+	Columns []int
+
+	// Vars are the arguments that need to be copied from the LHS to the RHS
+	Vars map[string]int
 }
 
-var _ ops.PhysicalOperator = (*ApplyJoin)(nil)
+// JoinColumn is where we store information about columns passing through the join operator
+// It can be in one of three possible configurations:
+//   - Pure left
+//     We are projecting a column that comes from the left. The RHSExpr will be nil for these
+//   - Pure right
+//     We are projecting a column that comes from the right. The LHSExprs will be empty for these
+//   - Mix of data from left and right
+//     Here we need to transmit columns from the LHS to the RHS,
+//     so they can be used for the result of this expression that is using data from both sides.
+//     All fields will be used for these
+type JoinColumn struct {
+	Original *sqlparser.AliasedExpr // this is the original expression being passed through
+	BvNames  []string               // the BvNames and LHSCols line up
+	LHSExprs []sqlparser.Expr
+	RHSExpr  sqlparser.Expr
+	GroupBy  bool // if this is true, we need to push this down to our inputs with addToGroupBy set to true
+}
 
 func NewApplyJoin(lhs, rhs ops.Operator, predicate sqlparser.Expr, leftOuterJoin bool) *ApplyJoin {
 	return &ApplyJoin{
@@ -64,30 +89,33 @@ func NewApplyJoin(lhs, rhs ops.Operator, predicate sqlparser.Expr, leftOuterJoin
 	}
 }
 
-// IPhysical implements the PhysicalOperator interface
-func (a *ApplyJoin) IPhysical() {}
-
 // Clone implements the Operator interface
 func (a *ApplyJoin) Clone(inputs []ops.Operator) ops.Operator {
 	return &ApplyJoin{
-		LHS:        inputs[0],
-		RHS:        inputs[1],
-		Columns:    slices.Clone(a.Columns),
-		ColumnsAST: slices.Clone(a.ColumnsAST),
-		Vars:       maps.Clone(a.Vars),
-		LeftJoin:   a.LeftJoin,
-		Predicate:  sqlparser.CloneExpr(a.Predicate),
-		LHSColumns: slices.Clone(a.LHSColumns),
+		LHS:            inputs[0],
+		RHS:            inputs[1],
+		Columns:        slices.Clone(a.Columns),
+		ColumnsAST:     slices.Clone(a.ColumnsAST),
+		JoinPredicates: slices.Clone(a.JoinPredicates),
+		Vars:           maps.Clone(a.Vars),
+		LeftJoin:       a.LeftJoin,
+		Predicate:      sqlparser.CloneExpr(a.Predicate),
+		LHSColumns:     slices.Clone(a.LHSColumns),
 	}
 }
 
 func (a *ApplyJoin) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (ops.Operator, error) {
-	return AddPredicate(a, ctx, expr, false, newFilter)
+	return AddPredicate(ctx, a, expr, false, newFilter)
 }
 
 // Inputs implements the Operator interface
 func (a *ApplyJoin) Inputs() []ops.Operator {
 	return []ops.Operator{a.LHS, a.RHS}
+}
+
+// SetInputs implements the Operator interface
+func (a *ApplyJoin) SetInputs(inputs []ops.Operator) {
+	a.LHS, a.RHS = inputs[0], inputs[1]
 }
 
 var _ JoinOp = (*ApplyJoin)(nil)
@@ -117,77 +145,179 @@ func (a *ApplyJoin) IsInner() bool {
 }
 
 func (a *ApplyJoin) AddJoinPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) error {
-	bvName, cols, predicate, err := BreakExpressionInLHSandRHS(ctx, expr, TableID(a.LHS))
+	a.Predicate = ctx.SemTable.AndExpressions(expr, a.Predicate)
+
+	col, err := BreakExpressionInLHSandRHS(ctx, expr, TableID(a.LHS))
 	if err != nil {
 		return err
 	}
-	for i, col := range cols {
-		offset, err := a.LHS.AddColumn(ctx, col)
-		if err != nil {
-			return err
-		}
-		a.Vars[bvName[i]] = offset
-	}
-	a.LHSColumns = append(a.LHSColumns, cols...)
-
-	rhs, err := a.RHS.AddPredicate(ctx, predicate)
+	a.JoinPredicates = append(a.JoinPredicates, col)
+	rhs, err := a.RHS.AddPredicate(ctx, col.RHSExpr)
 	if err != nil {
 		return err
 	}
 	a.RHS = rhs
 
-	a.Predicate = ctx.SemTable.AndExpressions(expr, a.Predicate)
 	return nil
 }
 
-func (a *ApplyJoin) AddColumn(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (int, error) {
-	// first check if we already are passing through this expression
-	for i, existing := range a.ColumnsAST {
-		if ctx.SemTable.EqualsExpr(existing, expr) {
-			return i, nil
-		}
+func (a *ApplyJoin) pushColLeft(ctx *plancontext.PlanningContext, e *sqlparser.AliasedExpr, addToGroupBy bool) (int, error) {
+	newLHS, offset, err := a.LHS.AddColumn(ctx, e, true, addToGroupBy)
+	if err != nil {
+		return 0, err
 	}
+	a.LHS = newLHS
+	return offset, nil
+}
 
+func (a *ApplyJoin) pushColRight(ctx *plancontext.PlanningContext, e *sqlparser.AliasedExpr, addToGroupBy bool) (int, error) {
+	newRHS, offset, err := a.RHS.AddColumn(ctx, e, true, addToGroupBy)
+	if err != nil {
+		return 0, err
+	}
+	a.RHS = newRHS
+	return offset, nil
+}
+
+func (a *ApplyJoin) GetColumns() ([]*sqlparser.AliasedExpr, error) {
+	return slices2.Map(a.ColumnsAST, joinColumnToAliasedExpr), nil
+}
+
+func (a *ApplyJoin) GetOrdering() ([]ops.OrderBy, error) {
+	return a.LHS.GetOrdering()
+}
+
+func joinColumnToAliasedExpr(c JoinColumn) *sqlparser.AliasedExpr {
+	return c.Original
+}
+
+func joinColumnToExpr(column JoinColumn) sqlparser.Expr {
+	return column.Original.Expr
+}
+
+func (a *ApplyJoin) getJoinColumnFor(ctx *plancontext.PlanningContext, e *sqlparser.AliasedExpr, addToGroupBy bool) (col JoinColumn, err error) {
+	defer func() {
+		col.Original = e
+	}()
 	lhs := TableID(a.LHS)
 	rhs := TableID(a.RHS)
 	both := lhs.Merge(rhs)
+	expr := e.Expr
 	deps := ctx.SemTable.RecursiveDeps(expr)
+	col.GroupBy = addToGroupBy
 
-	// if we get here, it's a new expression we are dealing with.
-	// We need to decide if we can push it all on either side,
-	// or if we have to break the expression into left and right parts
 	switch {
 	case deps.IsSolvedBy(lhs):
-		offset, err := a.LHS.AddColumn(ctx, expr)
-		if err != nil {
-			return 0, err
-		}
-		a.Columns = append(a.Columns, -offset-1)
-	case deps.IsSolvedBy(both):
-		bvNames, lhsExprs, rhsExpr, err := BreakExpressionInLHSandRHS(ctx, expr, lhs)
-		if err != nil {
-			return 0, err
-		}
-		for i, lhsExpr := range lhsExprs {
-			offset, err := a.LHS.AddColumn(ctx, lhsExpr)
-			if err != nil {
-				return 0, err
-			}
-			a.Vars[bvNames[i]] = offset
-		}
-		expr = rhsExpr
-		fallthrough // now we just pass the rest to the RHS of the join
+		col.LHSExprs = []sqlparser.Expr{expr}
 	case deps.IsSolvedBy(rhs):
-		offset, err := a.RHS.AddColumn(ctx, expr)
+		col.RHSExpr = expr
+	case deps.IsSolvedBy(both):
+		col, err = BreakExpressionInLHSandRHS(ctx, expr, TableID(a.LHS))
 		if err != nil {
-			return 0, err
+			return JoinColumn{}, err
 		}
-		a.Columns = append(a.Columns, offset+1)
 	default:
-		return 0, vterrors.VT13002(sqlparser.String(expr))
+		return JoinColumn{}, vterrors.VT13002(sqlparser.String(e))
 	}
 
-	// the expression wasn't already there - let's add it
-	a.ColumnsAST = append(a.ColumnsAST, expr)
-	return len(a.Columns) - 1, nil
+	return
+}
+
+func (a *ApplyJoin) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, _, addToGroupBy bool) (ops.Operator, int, error) {
+	if offset, found := canReuseColumn(ctx, a.ColumnsAST, expr.Expr, joinColumnToExpr); found {
+		return a, offset, nil
+	}
+	col, err := a.getJoinColumnFor(ctx, expr, addToGroupBy)
+	if err != nil {
+		return nil, 0, err
+	}
+	a.ColumnsAST = append(a.ColumnsAST, col)
+	return a, len(a.ColumnsAST) - 1, nil
+}
+
+func (a *ApplyJoin) planOffsets(ctx *plancontext.PlanningContext) (err error) {
+	for _, col := range a.ColumnsAST {
+		// Read the type description for JoinColumn to understand the following code
+		for i, lhsExpr := range col.LHSExprs {
+			offset, err := a.pushColLeft(ctx, aeWrap(lhsExpr), col.GroupBy)
+			if err != nil {
+				return err
+			}
+			if col.RHSExpr == nil {
+				// if we don't have an RHS expr, it means that this is a pure LHS expression
+				a.addOffset(-offset - 1)
+			} else {
+				a.Vars[col.BvNames[i]] = offset
+			}
+		}
+		if col.RHSExpr != nil {
+			offset, err := a.pushColRight(ctx, aeWrap(col.RHSExpr), col.GroupBy)
+			if err != nil {
+				return err
+			}
+			a.addOffset(offset + 1)
+		}
+	}
+
+	for _, col := range a.JoinPredicates {
+		for i, lhsExpr := range col.LHSExprs {
+			offset, err := a.pushColLeft(ctx, aeWrap(lhsExpr), false)
+			if err != nil {
+				return err
+			}
+			a.Vars[col.BvNames[i]] = offset
+		}
+		lhsColumns := slices2.Map(col.LHSExprs, func(from sqlparser.Expr) *sqlparser.ColName {
+			col, ok := from.(*sqlparser.ColName)
+			if !ok {
+				// todo: there is no good reason to keep this limitation around
+				err = vterrors.VT13001("joins can only compare columns: %s", sqlparser.String(from))
+			}
+			return col
+		})
+		if err != nil {
+			return err
+		}
+		a.LHSColumns = append(a.LHSColumns, lhsColumns...)
+	}
+	return nil
+}
+
+func (a *ApplyJoin) addOffset(offset int) {
+	a.Columns = append(a.Columns, offset)
+}
+
+func (a *ApplyJoin) Description() ops.OpDescription {
+	other := map[string]any{}
+	if len(a.Columns) > 0 {
+		other["OutputColumns"] = a.Columns
+	}
+	if a.Predicate != nil {
+		other["Predicate"] = sqlparser.String(a.Predicate)
+	}
+	return ops.OpDescription{
+		OperatorType: "Join",
+		Variant:      "Apply",
+		Other:        other,
+	}
+}
+
+func (a *ApplyJoin) ShortDescription() string {
+	pred := sqlparser.String(a.Predicate)
+	columns := slices2.Map(a.ColumnsAST, func(from JoinColumn) string {
+		return sqlparser.String(from.Original)
+	})
+	return fmt.Sprintf("on %s columns: %s", pred, strings.Join(columns, ", "))
+}
+
+func (jc JoinColumn) IsPureLeft() bool {
+	return jc.RHSExpr == nil
+}
+
+func (jc JoinColumn) IsPureRight() bool {
+	return len(jc.LHSExprs) == 0
+}
+
+func (jc JoinColumn) IsMixedLeftAndRight() bool {
+	return len(jc.LHSExprs) > 0 && jc.RHSExpr != nil
 }

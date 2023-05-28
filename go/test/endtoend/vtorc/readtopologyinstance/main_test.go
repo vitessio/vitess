@@ -27,6 +27,7 @@ import (
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/inst"
+	"vitess.io/vitess/go/vt/vtorc/logic"
 	"vitess.io/vitess/go/vt/vtorc/server"
 
 	_ "github.com/go-sql-driver/mysql"
@@ -104,8 +105,19 @@ func TestReadTopologyInstanceBufferable(t *testing.T) {
 	assert.Equal(t, primaryInstance.ReplicationIOThreadState, inst.ReplicationThreadStateNoThread)
 	assert.Equal(t, primaryInstance.ReplicationSQLThreadState, inst.ReplicationThreadStateNoThread)
 
-	// insert an errant GTID in the replica
-	_, err = utils.RunSQL(t, "insert into vt_insert_test(id, msg) values (10173, 'test 178342')", replica, "vt_ks")
+	// Insert an errant GTID in the replica.
+	// The way to do this is to disable global recoveries, stop replication and inject an errant GTID.
+	// After this we restart the replication and enable the recoveries again.
+	err = logic.DisableRecovery()
+	require.NoError(t, err)
+	err = utils.RunSQLs(t, []string{`STOP SLAVE;`,
+		`SET GTID_NEXT="12345678-1234-1234-1234-123456789012:1";`,
+		`BEGIN;`, `COMMIT;`,
+		`SET GTID_NEXT="AUTOMATIC";`,
+		`START SLAVE;`,
+	}, replica, "")
+	require.NoError(t, err)
+	err = logic.EnableRecovery()
 	require.NoError(t, err)
 
 	replicaInstance, err := inst.ReadTopologyInstanceBufferable(&inst.InstanceKey{

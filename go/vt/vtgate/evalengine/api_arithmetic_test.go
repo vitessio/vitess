@@ -350,7 +350,7 @@ func TestArithmetics(t *testing.T) {
 			// testing for overflow of float64
 			v1:  NewFloat64(math.MaxFloat64),
 			v2:  NewFloat64(0.5),
-			err: dataOutOfRangeError(math.MaxFloat64, 0.5, "BIGINT", "/").Error(),
+			err: dataOutOfRangeError(math.MaxFloat64, 0.5, "DOUBLE", "/").Error(),
 		}},
 	}, {
 		operator: "*",
@@ -1396,38 +1396,5 @@ func BenchmarkAddGo(b *testing.B) {
 	v2 := int64(2)
 	for i := 0; i < b.N; i++ {
 		v1 += v2
-	}
-}
-
-func TestParseStringToFloat(t *testing.T) {
-	tcs := []struct {
-		str string
-		val float64
-	}{
-		{str: ""},
-		{str: " "},
-		{str: "1", val: 1},
-		{str: "1.10", val: 1.10},
-		{str: "    6.87", val: 6.87},
-		{str: "93.66  ", val: 93.66},
-		{str: "\t 42.10 \n ", val: 42.10},
-		{str: "1.10aa", val: 1.10},
-		{str: ".", val: 0.00},
-		{str: ".99", val: 0.99},
-		{str: "..99", val: 0},
-		{str: "1.", val: 1},
-		{str: "0.1.99", val: 0.1},
-		{str: "0.", val: 0},
-		{str: "8794354", val: 8794354},
-		{str: "    10  ", val: 10},
-		{str: "2266951196291479516", val: 2266951196291479516},
-		{str: "abcd123", val: 0},
-	}
-
-	for _, tc := range tcs {
-		t.Run(tc.str, func(t *testing.T) {
-			got := parseStringToFloat(tc.str)
-			require.EqualValues(t, tc.val, got)
-		})
 	}
 }

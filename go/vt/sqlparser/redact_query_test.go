@@ -29,5 +29,5 @@ func TestRedactSQLStatements(t *testing.T) {
 		t.Fatalf("redacting sql failed: %v", err)
 	}
 
-	require.Equal(t, "select a, b, c from t where x = :x and y = :x and z = :z", redactedSQL)
+	require.Equal(t, "select a, b, c from t where x = :x /* INT64 */ and y = :x /* INT64 */ and z = :z /* VARCHAR */", redactedSQL)
 }

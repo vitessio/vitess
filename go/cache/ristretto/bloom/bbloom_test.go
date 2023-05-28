@@ -2,9 +2,11 @@ package bloom
 
 import (
 	"crypto/rand"
-	"fmt"
 	"os"
 	"testing"
+
+	_flag "vitess.io/vitess/go/internal/flag"
+	"vitess.io/vitess/go/vt/log"
 
 	"vitess.io/vitess/go/hack"
 )
@@ -16,14 +18,15 @@ var (
 )
 
 func TestMain(m *testing.M) {
+	// hack to get rid of an "ERROR: logging before flag.Parse"
+	_flag.TrickGlog()
 	wordlist1 = make([][]byte, n)
 	for i := range wordlist1 {
 		b := make([]byte, 32)
 		_, _ = rand.Read(b)
 		wordlist1[i] = b
 	}
-	fmt.Println("\n###############\nbbloom_test.go")
-	fmt.Print("Benchmarks relate to 2**16 OP. --> output/65536 op/ns\n###############\n\n")
+	log.Info("Benchmarks relate to 2**16 OP. --> output/65536 op/ns")
 
 	os.Exit(m.Run())
 }
@@ -38,7 +41,7 @@ func TestM_NumberOfWrongs(t *testing.T) {
 			cnt++
 		}
 	}
-	fmt.Printf("Bloomfilter New(7* 2**16, 7) (-> size=%v bit): \n            Check for 'false positives': %v wrong positive 'Has' results on 2**16 entries => %v %%\n", len(bf.bitset)<<6, cnt, float64(cnt)/float64(n))
+	log.Infof("Bloomfilter New(7* 2**16, 7) (-> size=%v bit): \n            Check for 'false positives': %v wrong positive 'Has' results on 2**16 entries => %v %%", len(bf.bitset)<<6, cnt, float64(cnt)/float64(n))
 
 }
 

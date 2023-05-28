@@ -26,6 +26,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/buger/jsonparser"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -41,6 +42,8 @@ var (
 	tmClient                 = tmc.NewClient()
 	dbCredentialFile         string
 	InsertTabletTemplateKsID = `insert into %s (id, msg) values (%d, '%s') /* id:%d */`
+	defaultOperationTimeout  = 60 * time.Second
+	defaultRetryDelay        = 1 * time.Second
 )
 
 // Restart restarts vttablet and mysql.
@@ -51,15 +54,17 @@ func (tablet *Vttablet) Restart() error {
 
 	if tablet.MysqlctlProcess.TabletUID > 0 {
 		tablet.MysqlctlProcess.Stop()
+		tablet.MysqlctldProcess.WaitForMysqlCtldShutdown()
 		tablet.VttabletProcess.TearDown()
-		os.RemoveAll(tablet.VttabletProcess.Directory)
+		tablet.MysqlctldProcess.CleanupFiles(tablet.TabletUID)
 
 		return tablet.MysqlctlProcess.Start()
 	}
 
 	tablet.MysqlctldProcess.Stop()
+	tablet.MysqlctldProcess.WaitForMysqlCtldShutdown()
 	tablet.VttabletProcess.TearDown()
-	os.RemoveAll(tablet.VttabletProcess.Directory)
+	tablet.MysqlctldProcess.CleanupFiles(tablet.TabletUID)
 
 	return tablet.MysqlctldProcess.Start()
 }
@@ -176,12 +181,22 @@ func getTablet(tabletGrpcPort int, hostname string) *topodatapb.Tablet {
 func filterResultForWarning(input string) string {
 	lines := strings.Split(input, "\n")
 	var result string
-	for _, line := range lines {
+	for i, line := range lines {
 		if strings.Contains(line, "WARNING: vtctl should only be used for VDiff v1 workflows. Please use VDiff v2 and consider using vtctldclient for all other commands.") {
 			continue
 		}
-		result = result + line + "\n"
+
+		if strings.Contains(line, "Failed to read in config") && strings.Contains(line, `Config File "vtconfig" Not Found in`) {
+			continue
+		}
+
+		result += line
+
+		if i < len(lines)-1 {
+			result += "\n"
+		}
 	}
+
 	return result
 }
 
@@ -303,6 +318,7 @@ func GetPasswordUpdateSQL(localCluster *LocalProcessCluster) string {
 					SET PASSWORD FOR 'vt_allprivs'@'localhost' = 'VtAllprivsPass';
 					SET PASSWORD FOR 'vt_repl'@'%' = 'VtReplPass';
 					SET PASSWORD FOR 'vt_filtered'@'localhost' = 'VtFilteredPass';
+					SET PASSWORD FOR 'vt_appdebug'@'localhost' = 'VtDebugPass';
 					FLUSH PRIVILEGES;
 					`
 	return pwdChangeCmd
@@ -380,4 +396,63 @@ func WaitForTabletSetup(vtctlClientProcess *VtctlClientProcess, expectedTablets 
 	}
 
 	return fmt.Errorf("all %d tablet are not in expected state %s", expectedTablets, expectedStatus)
+}
+
+// GetSidecarDBName returns the sidecar database name configured for
+// the keyspace in the topo server.
+func (cluster LocalProcessCluster) GetSidecarDBName(keyspace string) (string, error) {
+	res, err := cluster.VtctldClientProcess.ExecuteCommandWithOutput("GetKeyspace", keyspace)
+	if err != nil {
+		return "", err
+	}
+	sdbn, err := jsonparser.GetString([]byte(res), "sidecar_db_name")
+	if err != nil {
+		return "", err
+	}
+	return sdbn, nil
+}
+
+// WaitForHealthyShard waits for the given shard info record in the topo
+// server to list a tablet (alias and uid) as the primary serving tablet
+// for the shard. This is done using "vtctldclient GetShard" and parsing
+// its JSON output. All other watchers should then also see this shard
+// info status as well.
+func WaitForHealthyShard(vtctldclient *VtctldClientProcess, keyspace, shard string) error {
+	var (
+		tmr  = time.NewTimer(defaultOperationTimeout)
+		res  string
+		err  error
+		json []byte
+		cell string
+		uid  int64
+	)
+	for {
+		res, err = vtctldclient.ExecuteCommandWithOutput("GetShard", fmt.Sprintf("%s/%s", keyspace, shard))
+		if err != nil {
+			return err
+		}
+		json = []byte(res)
+
+		cell, err = jsonparser.GetString(json, "shard", "primary_alias", "cell")
+		if err != nil && err != jsonparser.KeyPathNotFoundError {
+			return err
+		}
+		uid, err = jsonparser.GetInt(json, "shard", "primary_alias", "uid")
+		if err != nil && err != jsonparser.KeyPathNotFoundError {
+			return err
+		}
+
+		if cell != "" && uid > 0 {
+			return nil
+		}
+
+		select {
+		case <-tmr.C:
+			return fmt.Errorf("timed out waiting for the %s/%s shard to become healthy in the topo after %v; last seen status: %s; last seen error: %v",
+				keyspace, shard, defaultOperationTimeout, res, err)
+		default:
+		}
+
+		time.Sleep(defaultRetryDelay)
+	}
 }

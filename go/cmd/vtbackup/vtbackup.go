@@ -274,9 +274,9 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 	defer func() {
 		// Be careful not to use the original context, because we don't want to
 		// skip shutdown just because we timed out waiting for other things.
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
-		if err := mysqld.Shutdown(ctx, mycnf, false); err != nil {
+		mysqlShutdownCtx, mysqlShutdownCancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer mysqlShutdownCancel()
+		if err := mysqld.Shutdown(mysqlShutdownCtx, mycnf, false); err != nil {
 			log.Errorf("failed to shutdown mysqld: %v", err)
 		}
 	}()
@@ -312,6 +312,19 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 		if err := mysqld.ResetReplication(ctx); err != nil {
 			return fmt.Errorf("can't reset replication: %v", err)
 		}
+		// We need to switch off super_read_only before we create the database.
+		resetFunc, err := mysqld.SetSuperReadOnly(false)
+		if err != nil {
+			return fmt.Errorf("failed to disable super_read_only during backup: %v", err)
+		}
+		if resetFunc != nil {
+			defer func() {
+				err := resetFunc()
+				if err != nil {
+					log.Error("Failed to set super_read_only back to its original value during backup")
+				}
+			}()
+		}
 		cmd := mysqlctl.GenerateInitialBinlogEntry()
 		if err := mysqld.ExecuteSuperQueryList(ctx, []string{cmd}); err != nil {
 			return err
@@ -346,9 +359,9 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 	var restorePos mysql.Position
 	switch err {
 	case nil:
-		log.Infof("Successfully restored from backup at replication position %v", restorePos)
 		// if err is nil, we expect backupManifest to be non-nil
 		restorePos = backupManifest.Position
+		log.Infof("Successfully restored from backup at replication position %v", restorePos)
 	case mysqlctl.ErrNoBackup:
 		// There is no backup found, but we may be taking the initial backup of a shard
 		if !allowFirstBackup {
@@ -360,7 +373,10 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 	}
 	durationByPhase.Set("RestoreLastBackup", int64(time.Since(restoreAt).Seconds()))
 
-	// Disable redo logging (if we can) before we start replication.
+	// As of MySQL 8.0.21, you can disable redo logging using the ALTER INSTANCE
+	// DISABLE INNODB REDO_LOG statement. This functionality is intended for
+	// loading data into a new MySQL instance. Disabling redo logging speeds up
+	// data loading by avoiding redo log writes and doublewrite buffering.
 	disabledRedoLog := false
 	if disableRedoLog {
 		if err := mysqld.DisableRedoLog(ctx); err != nil {
@@ -378,6 +394,7 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 		return fmt.Errorf("error starting replication: %v", err)
 	}
 
+	log.Info("get the current primary replication position, and wait until we catch up")
 	// Get the current primary replication position, and wait until we catch up
 	// to that point. We do this instead of looking at ReplicationLag
 	// because that value can
@@ -391,8 +408,8 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 	var primaryPos mysql.Position
 	err = retryOnError(ctx, func() error {
 		// Add a per-operation timeout so we re-read topo if the primary is unreachable.
-		opCtx, cancel := context.WithTimeout(ctx, operationTimeout)
-		defer cancel()
+		opCtx, optCancel := context.WithTimeout(ctx, operationTimeout)
+		defer optCancel()
 		pos, err := getPrimaryPosition(opCtx, tmc, topoServer)
 		if err != nil {
 			return fmt.Errorf("can't get the primary replication position: %v", err)
@@ -401,8 +418,10 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 		return nil
 	})
 	if err != nil {
-		return err
+		return fmt.Errorf("can't get the primary replication position after all retries: %v", err)
 	}
+
+	log.Infof("takeBackup: primary position is: %s", primaryPos.String())
 
 	// Remember the time when we fetched the primary position, not when we caught
 	// up to it, so the timestamp on our backup is honest (assuming we make it
@@ -414,7 +433,7 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 	for {
 		select {
 		case <-ctx.Done():
-			return ctx.Err()
+			return fmt.Errorf("error in replication catch up: %v", ctx.Err())
 		case <-time.After(time.Second):
 		}
 

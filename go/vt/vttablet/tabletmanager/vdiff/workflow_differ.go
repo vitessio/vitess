@@ -24,6 +24,7 @@ import (
 
 	"google.golang.org/protobuf/encoding/prototext"
 
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 
 	"vitess.io/vitess/go/vt/schema"
@@ -64,16 +65,21 @@ func newWorkflowDiffer(ct *controller, opts *tabletmanagerdatapb.VDiffOptions) (
 // both sides are actually different.
 func (wd *workflowDiffer) reconcileExtraRows(dr *DiffReport, maxExtraRowsToCompare int64) {
 	if (dr.ExtraRowsSource == dr.ExtraRowsTarget) && (dr.ExtraRowsSource <= maxExtraRowsToCompare) {
-		for i := range dr.ExtraRowsSourceDiffs {
+		for i := 0; i < len(dr.ExtraRowsSourceDiffs); i++ {
 			foundMatch := false
-			for j := range dr.ExtraRowsTargetDiffs {
+			for j := 0; j < len(dr.ExtraRowsTargetDiffs); j++ {
 				if reflect.DeepEqual(dr.ExtraRowsSourceDiffs[i], dr.ExtraRowsTargetDiffs[j]) {
 					dr.ExtraRowsSourceDiffs = append(dr.ExtraRowsSourceDiffs[:i], dr.ExtraRowsSourceDiffs[i+1:]...)
-					dr.ExtraRowsSource--
 					dr.ExtraRowsTargetDiffs = append(dr.ExtraRowsTargetDiffs[:j], dr.ExtraRowsTargetDiffs[j+1:]...)
+					dr.ExtraRowsSource--
 					dr.ExtraRowsTarget--
 					dr.ProcessedRows--
 					dr.MatchingRows++
+					// We've removed an element from both slices at the current index
+					// so we need to shift the counters back as well to process the
+					// new elements at the index and avoid using an index out of range.
+					i--
+					j--
 					foundMatch = true
 					break
 				}
@@ -236,7 +242,7 @@ func (wd *workflowDiffer) buildPlan(dbClient binlogplayer.DBClient, filter *binl
 			buf := sqlparser.NewTrackedBuffer(nil)
 			buf.Myprintf("select * from %v", sqlparser.NewIdentifierCS(table.Name))
 			sourceQuery = buf.String()
-		case key.IsKeyRange(rule.Filter):
+		case key.IsValidKeyRange(rule.Filter):
 			buf := sqlparser.NewTrackedBuffer(nil)
 			buf.Myprintf("select * from %v where in_keyrange(%v)", sqlparser.NewIdentifierCS(table.Name), sqlparser.NewStrLiteral(rule.Filter))
 			sourceQuery = buf.String()
@@ -249,7 +255,7 @@ func (wd *workflowDiffer) buildPlan(dbClient binlogplayer.DBClient, filter *binl
 		}
 		td.lastPK = lastpkpb
 		wd.tableDiffers[table.Name] = td
-		if _, err := td.buildTablePlan(); err != nil {
+		if _, err := td.buildTablePlan(dbClient, wd.ct.vde.dbName); err != nil {
 			return err
 		}
 	}
@@ -287,6 +293,15 @@ func (wd *workflowDiffer) initVDiffTables(dbClient binlogplayer.DBClient) error 
 	tableIn := strings.Builder{}
 	n := 0
 	for tableName := range wd.tableDiffers {
+		// Update the table statistics for each table if requested.
+		if wd.opts.CoreOptions.UpdateTableStats {
+			stmt := sqlparser.BuildParsedQuery(sqlAnalyzeTable, wd.ct.vde.dbName, tableName)
+			log.Infof("Updating the table stats for %s.%s using: %q", wd.ct.vde.dbName, tableName, stmt.Query)
+			if _, err := dbClient.ExecuteFetch(stmt.Query, -1); err != nil {
+				return err
+			}
+			log.Infof("Finished updating the table stats for %s.%s", wd.ct.vde.dbName, tableName)
+		}
 		tableIn.WriteString(encodeString(tableName))
 		if n++; n < len(wd.tableDiffers) {
 			tableIn.WriteByte(',')
@@ -309,7 +324,14 @@ func (wd *workflowDiffer) initVDiffTables(dbClient binlogplayer.DBClient) error 
 		if len(qr.Rows) == 0 {
 			query = fmt.Sprintf(sqlNewVDiffTable, wd.ct.id, encodeString(tableName), tableRows)
 		} else if len(qr.Rows) == 1 {
-			query = fmt.Sprintf(sqlUpdateTableRows, tableRows, wd.ct.id, encodeString(tableName))
+			query, err = sqlparser.ParseAndBind(sqlUpdateTableRows,
+				sqltypes.Int64BindVariable(tableRows),
+				sqltypes.Int64BindVariable(wd.ct.id),
+				sqltypes.StringBindVariable(tableName),
+			)
+			if err != nil {
+				return err
+			}
 		} else {
 			return fmt.Errorf("invalid state found for vdiff table %s for vdiff_id %d on tablet %s",
 				tableName, wd.ct.id, wd.ct.vde.thisTablet.Alias)

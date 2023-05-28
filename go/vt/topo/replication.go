@@ -186,7 +186,7 @@ func (ts *Server) UpdateShardReplicationFields(ctx context.Context, cell, keyspa
 			// Empty node, version is nil
 		case err == nil:
 			// Use any data we got.
-			if err = proto.Unmarshal(data, sr); err != nil {
+			if err = sr.UnmarshalVT(data); err != nil {
 				return vterrors.Wrap(err, "bad ShardReplication data")
 			}
 		default:
@@ -204,7 +204,7 @@ func (ts *Server) UpdateShardReplicationFields(ctx context.Context, cell, keyspa
 		}
 
 		// marshall and save
-		data, err = proto.Marshal(sr)
+		data, err = sr.MarshalVT()
 		if err != nil {
 			return err
 		}
@@ -243,7 +243,7 @@ func (ts *Server) GetShardReplication(ctx context.Context, cell, keyspace, shard
 	}
 
 	sr := &topodatapb.ShardReplication{}
-	if err = proto.Unmarshal(data, sr); err != nil {
+	if err = sr.UnmarshalVT(data); err != nil {
 		return nil, vterrors.Wrap(err, "bad ShardReplication data")
 	}
 

@@ -24,8 +24,7 @@ import (
 	"testing"
 	"time"
 
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/sidecardb"
 
 	"vitess.io/vitess/go/test/endtoend/utils"
 
@@ -39,6 +38,7 @@ var (
 	clusterInstance *cluster.LocalProcessCluster
 	vtParams        mysql.ConnParams
 	KeyspaceName    = "ks"
+	sidecarDBName   = "_vt_schema_tracker_metadata" // custom sidecar database name for testing
 	Cell            = "test"
 	SchemaSQL       = `
 create table t2(
@@ -130,20 +130,36 @@ func TestMain(m *testing.M) {
 		clusterInstance = cluster.NewCluster(Cell, "localhost")
 		defer clusterInstance.Teardown()
 
+		vtgateVer, err := cluster.GetMajorVersion("vtgate")
+		if err != nil {
+			return 1
+		}
+		vttabletVer, err := cluster.GetMajorVersion("vttablet")
+		if err != nil {
+			return 1
+		}
+
+		// For upgrade/downgrade tests.
+		if vtgateVer < 17 || vttabletVer < 17 {
+			// Then only the default sidecarDBName is supported.
+			sidecarDBName = sidecardb.DefaultName
+		}
+
 		clusterInstance.VtGateExtraArgs = []string{"--schema_change_signal", "--schema_change_signal_user", "userData1"}
 		clusterInstance.VtTabletExtraArgs = []string{"--queryserver-config-schema-change-signal", "--queryserver-config-schema-change-signal-interval", "5", "--queryserver-config-strict-table-acl", "--queryserver-config-acl-exempt-acl", "userData1", "--table-acl-config", "dummy.json"}
 
 		// Start topo server
-		err := clusterInstance.StartTopo()
+		err = clusterInstance.StartTopo()
 		if err != nil {
 			return 1
 		}
 
 		// Start keyspace
 		keyspace := &cluster.Keyspace{
-			Name:      KeyspaceName,
-			SchemaSQL: SchemaSQL,
-			VSchema:   VSchema,
+			Name:          KeyspaceName,
+			SchemaSQL:     SchemaSQL,
+			VSchema:       VSchema,
+			SidecarDBName: sidecarDBName,
 		}
 		err = clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 2, false)
 		if err != nil {
@@ -156,7 +172,7 @@ func TestMain(m *testing.M) {
 			return 1
 		}
 
-		err = waitForVTGateAndVTTablet()
+		err = clusterInstance.WaitForVTGateAndVTTablets(5 * time.Minute)
 		if err != nil {
 			fmt.Println(err)
 			return 1
@@ -177,7 +193,7 @@ func TestMain(m *testing.M) {
 			return 1
 		}
 
-		err = waitForVTGateAndVTTablet()
+		err = clusterInstance.WaitForVTGateAndVTTablets(5 * time.Minute)
 		if err != nil {
 			fmt.Println(err)
 			return 1
@@ -192,22 +208,6 @@ func TestMain(m *testing.M) {
 	os.Exit(exitCode)
 }
 
-func waitForVTGateAndVTTablet() error {
-	timeout := time.After(5 * time.Minute)
-	for {
-		select {
-		case <-timeout:
-			return vterrors.New(vtrpcpb.Code_INTERNAL, "timeout")
-		default:
-			err := clusterInstance.WaitForTabletsToHealthyInVtgate()
-			if err != nil {
-				continue
-			}
-			return nil
-		}
-	}
-}
-
 func TestAddColumn(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	utils.SkipIfBinaryIsBelowVersion(t, 14, "vtgate")
@@ -217,6 +217,9 @@ func TestAddColumn(t *testing.T) {
 	defer conn.Close()
 
 	_ = utils.Exec(t, conn, `alter table t2 add column aaa int`)
-	time.Sleep(10 * time.Second)
-	_ = utils.Exec(t, conn, "select aaa from t2")
+	utils.AssertMatchesWithTimeout(t, conn,
+		"select aaa from t2", `[]`,
+		100*time.Millisecond,
+		30*time.Second,
+		"t2 did not have the expected aaa column")
 }

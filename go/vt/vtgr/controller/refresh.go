@@ -304,11 +304,6 @@ func (shard *GRShard) findTabletByHostAndPort(host string, port int) *grInstance
 	return nil
 }
 
-func (shard *GRShard) getToleratedNumError() int {
-	quorum := len(shard.instances)/2 + 1
-	return len(shard.instances) - quorum
-}
-
 func (shard *GRShard) populateVTGRStatusLocked() {
 	var instanceList []string
 	for _, instance := range shard.instances {

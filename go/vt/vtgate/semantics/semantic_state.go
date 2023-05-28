@@ -20,14 +20,11 @@ import (
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
-	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
-	"vitess.io/vitess/go/vt/vtgate/vindexes"
-
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
 type (
@@ -48,8 +45,8 @@ type (
 		// authoritative is true if we have exhaustive column information
 		authoritative() bool
 
-		// getExpr returns the AST struct behind this table
-		getExpr() *sqlparser.AliasedTableExpr
+		// GetExpr returns the AST struct behind this table
+		GetExpr() *sqlparser.AliasedTableExpr
 
 		// getColumns returns the known column information for this table
 		getColumns() []ColumnInfo
@@ -70,39 +67,48 @@ type (
 
 	// SemTable contains semantic analysis information about the query.
 	SemTable struct {
+		// Tables stores information about the tables in the query, including derived tables
 		Tables []TableInfo
+		// Comments stores any comments of the /* vt+ */ type in the query
+		Comments *sqlparser.ParsedComments
+		// Warning stores any warnings generated during semantic analysis.
+		Warning string
+		// Collation represents the default collation for the query, usually inherited
+		// from the connection's default collation.
+		Collation collations.ID
+		// ExprTypes maps expressions to their respective types in the query.
+		ExprTypes map[sqlparser.Expr]Type
 
-		// NotSingleRouteErr stores any errors that have to be generated if the query cannot be planned as a single route.
+		// NotSingleRouteErr stores errors related to missing schema information.
+		// This typically occurs when a column's existence is uncertain.
+		// Instead of failing early, the query is allowed to proceed, possibly
+		// succeeding once it reaches MySQL.
 		NotSingleRouteErr error
-		// NotUnshardedErr stores any errors that have to be generated if the query is not unsharded.
+
+		// NotUnshardedErr stores errors that occur if the query isn't planned as a single route
+		// targeting an unsharded keyspace. This typically arises when information is missing, but
+		// for unsharded tables, the code operates in a passthrough mode, relying on the underlying
+		// MySQL engine to handle errors appropriately.
 		NotUnshardedErr error
 
-		// Recursive contains the dependencies from the expression to the actual tables
-		// in the query (i.e. not including derived tables). If an expression is a column on a derived table,
-		// this map will contain the accumulated dependencies for the column expression inside the derived table
+		// Recursive contains dependencies from the expression to the actual tables
+		// in the query (excluding derived tables). For columns in derived tables,
+		// this map holds the accumulated dependencies for the column expression.
 		Recursive ExprDependencies
-
-		// Direct keeps information about the closest dependency for an expression.
-		// It does not recurse inside derived tables and the like to find the original dependencies
+		// Direct stores information about the closest dependency for an expression.
+		// It doesn't recurse inside derived tables to find the original dependencies.
 		Direct ExprDependencies
 
-		ExprTypes   map[sqlparser.Expr]Type
-		selectScope map[*sqlparser.Select]*scope
-		Comments    *sqlparser.ParsedComments
+		// SubqueryMap holds extracted subqueries for each statement.
 		SubqueryMap map[sqlparser.Statement][]*sqlparser.ExtractedSubquery
+		// SubqueryRef maps subquery pointers to their extracted subquery.
 		SubqueryRef map[*sqlparser.Subquery]*sqlparser.ExtractedSubquery
 
-		// ColumnEqualities is used to enable transitive closures
-		// if a == b and b == c then a == c
+		// ColumnEqualities is used for transitive closures (e.g., if a == b and b == c, then a == c).
 		ColumnEqualities map[columnName][]sqlparser.Expr
 
-		// DefaultCollation is the default collation for this query, which is usually
-		// inherited from the connection's default collation.
-		Collation collations.ID
-
-		Warning string
-
 		// ExpandedColumns is a map of all the added columns for a given table.
+		// The columns were added because of the use of `*` in the query
 		ExpandedColumns map[sqlparser.TableName][]*sqlparser.ColName
 
 		comparator *sqlparser.Comparator
@@ -131,6 +137,29 @@ func (st *SemTable) CopyDependencies(from, to sqlparser.Expr) {
 	st.Direct[to] = st.DirectDeps(from)
 }
 
+// CopyDependenciesOnSQLNodes copies the dependencies from one expression into the other
+func (st *SemTable) CopyDependenciesOnSQLNodes(from, to sqlparser.SQLNode) {
+	f, ok := from.(sqlparser.Expr)
+	if !ok {
+		return
+	}
+	t, ok := to.(sqlparser.Expr)
+	if !ok {
+		return
+	}
+	st.CopyDependencies(f, t)
+}
+
+// Cloned copies the dependencies from one expression into the other
+func (st *SemTable) Cloned(from, to sqlparser.SQLNode) {
+	f, fromOK := from.(sqlparser.Expr)
+	t, toOK := to.(sqlparser.Expr)
+	if !(fromOK && toOK) {
+		return
+	}
+	st.CopyDependencies(f, t)
+}
+
 // EmptySemTable creates a new empty SemTable
 func EmptySemTable() *SemTable {
 	return &SemTable{
@@ -143,7 +172,7 @@ func EmptySemTable() *SemTable {
 // TableSetFor returns the bitmask for this particular table
 func (st *SemTable) TableSetFor(t *sqlparser.AliasedTableExpr) TableSet {
 	for idx, t2 := range st.Tables {
-		if t == t2.getExpr() {
+		if t == t2.GetExpr() {
 			return SingleTableSet(idx)
 		}
 	}
@@ -218,12 +247,6 @@ func (st *SemTable) TableInfoForExpr(expr sqlparser.Expr) (TableInfo, error) {
 	return st.TableInfoFor(st.Direct.dependencies(expr))
 }
 
-// GetSelectTables returns the table in the select.
-func (st *SemTable) GetSelectTables(node *sqlparser.Select) []TableInfo {
-	scope := st.selectScope[node]
-	return scope.tables
-}
-
 // AddExprs adds new select exprs to the SemTable.
 func (st *SemTable) AddExprs(tbl *sqlparser.AliasedTableExpr, cols sqlparser.SelectExprs) {
 	tableSet := st.TableSetFor(tbl)
@@ -232,13 +255,12 @@ func (st *SemTable) AddExprs(tbl *sqlparser.AliasedTableExpr, cols sqlparser.Sel
 	}
 }
 
-// TypeFor returns the type of expressions in the query
-func (st *SemTable) TypeFor(e sqlparser.Expr) *querypb.Type {
-	typ, found := st.ExprTypes[e]
-	if found {
-		return &typ.Type
+// TypeForExpr returns the type of expressions in the query
+func (st *SemTable) TypeForExpr(e sqlparser.Expr) (sqltypes.Type, collations.ID, bool) {
+	if typ, found := st.ExprTypes[e]; found {
+		return typ.Type, typ.Collation, true
 	}
-	return nil
+	return -1, collations.Unknown, false
 }
 
 // CollationForExpr returns the collation name of expressions in the query
@@ -359,8 +381,6 @@ func (st *SemTable) CopyExprInfo(src, dest sqlparser.Expr) {
 	}
 }
 
-var _ evalengine.TranslationLookup = (*SemTable)(nil)
-
 var columnNotSupportedErr = vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "column access not supported here")
 
 // ColumnLookup implements the TranslationLookup interface
@@ -376,7 +396,7 @@ func (st *SemTable) SingleUnshardedKeyspace() (*vindexes.Keyspace, []*vindexes.T
 		vindexTable := table.GetVindexTable()
 
 		if vindexTable == nil {
-			_, isDT := table.getExpr().Expr.(*sqlparser.DerivedTable)
+			_, isDT := table.GetExpr().Expr.(*sqlparser.DerivedTable)
 			if isDT {
 				// derived tables are ok, as long as all real tables are from the same unsharded keyspace
 				// we check the real tables inside the derived table as well for same unsharded keyspace.
@@ -391,7 +411,7 @@ func (st *SemTable) SingleUnshardedKeyspace() (*vindexes.Keyspace, []*vindexes.T
 			}
 			return nil, nil
 		}
-		name, ok := table.getExpr().Expr.(sqlparser.TableName)
+		name, ok := table.GetExpr().Expr.(sqlparser.TableName)
 		if !ok {
 			return nil, nil
 		}
@@ -423,6 +443,24 @@ func (st *SemTable) SingleUnshardedKeyspace() (*vindexes.Keyspace, []*vindexes.T
 // but they point to the same column and would be considered equal by this method
 func (st *SemTable) EqualsExpr(a, b sqlparser.Expr) bool {
 	return st.ASTEquals().Expr(a, b)
+}
+
+// EqualsExprWithDeps compares two expressions taking into account their semantic
+// information. Dependency data typically pertains only to column expressions,
+// this method considers them for all expression types. The method checks
+// if dependency information exists for both expressions. If it does, the dependencies
+// must match. If we are missing dependency information for either
+func (st *SemTable) EqualsExprWithDeps(a, b sqlparser.Expr) bool {
+	eq := st.ASTEquals().Expr(a, b)
+	if !eq {
+		return false
+	}
+	adeps := st.DirectDeps(a)
+	bdeps := st.DirectDeps(b)
+	if adeps.IsEmpty() || bdeps.IsEmpty() || adeps == bdeps {
+		return true
+	}
+	return false
 }
 
 func (st *SemTable) ContainsExpr(e sqlparser.Expr, expres []sqlparser.Expr) bool {

@@ -18,20 +18,21 @@ package tabletserver
 
 import (
 	"fmt"
-	"html/template"
 	"io"
 	"net/http"
 	"time"
+
+	"github.com/google/safehtml/template"
 
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logz"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
-
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
 var (
@@ -72,7 +73,7 @@ var (
 )
 
 func init() {
-	http.HandleFunc("/txlogz", txlogzHandler)
+	servenv.HTTPHandleFunc("/txlogz", txlogzHandler)
 }
 
 // txlogzHandler serves a human readable snapshot of the

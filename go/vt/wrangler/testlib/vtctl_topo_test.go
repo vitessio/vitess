@@ -82,7 +82,7 @@ keyspace_type:SNAPSHOT
 	}
 	expected := &topodatapb.Keyspace{KeyspaceType: topodatapb.KeyspaceType_NORMAL}
 	got := &topodatapb.Keyspace{}
-	if err = proto.Unmarshal(contents, got); err != nil {
+	if err = got.UnmarshalVT(contents); err != nil {
 		t.Fatalf("bad keyspace data %v", err)
 	}
 	if !proto.Equal(got, expected) {

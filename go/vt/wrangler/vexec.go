@@ -21,10 +21,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"sort"
 	"strings"
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/textutil"
+	"vitess.io/vitess/go/vt/log"
 	workflow2 "vitess.io/vitess/go/vt/vtctl/workflow"
 
 	"google.golang.org/protobuf/encoding/prototext"
@@ -36,6 +39,7 @@ import (
 	"vitess.io/vitess/go/vt/concurrency"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
@@ -47,11 +51,12 @@ const (
 	vexecTableQualifier   = "_vt"
 	vreplicationTableName = "vreplication"
 	sqlVReplicationDelete = "delete from _vt.vreplication"
+	execTimeout           = 10 * time.Second
 )
 
 // vexec is the construct by which we run a query against backend shards. vexec is created by user-facing
 // interface, like vtctl or vtgate.
-// vexec parses, analyzes and plans th equery, and maintains state of each such step's result.
+// vexec parses, analyzes and plans the query, and maintains state of each such step's result.
 type vexec struct {
 	ctx      context.Context
 	workflow string
@@ -127,7 +132,6 @@ func (wr *Wrangler) QueryResultForTabletResults(results map[*topo.TabletInfo]*sq
 
 // VExecResult runs VExec and the naggregates the results into a single *sqltypes.Result
 func (wr *Wrangler) VExecResult(ctx context.Context, workflow, keyspace, query string, dryRun bool) (qr *sqltypes.Result, err error) {
-
 	results, err := wr.VExec(ctx, workflow, keyspace, query, dryRun)
 	if err != nil {
 		return nil, err
@@ -153,7 +157,7 @@ func (wr *Wrangler) VExec(ctx context.Context, workflow, keyspace, query string,
 	if wr.VExecFunc != nil {
 		return wr.VExecFunc(ctx, workflow, keyspace, query, dryRun)
 	}
-	results, err := wr.runVexec(ctx, workflow, keyspace, query, dryRun)
+	results, err := wr.runVexec(ctx, workflow, keyspace, query, nil, dryRun)
 	retResults := make(map[*topo.TabletInfo]*sqltypes.Result)
 	for tablet, result := range results {
 		retResults[tablet] = sqltypes.Proto3ToResult(result)
@@ -162,21 +166,25 @@ func (wr *Wrangler) VExec(ctx context.Context, workflow, keyspace, query string,
 }
 
 // runVexec is the main function that runs a dry or wet execution of 'query' on backend shards.
-func (wr *Wrangler) runVexec(ctx context.Context, workflow, keyspace, query string, dryRun bool) (map[*topo.TabletInfo]*querypb.QueryResult, error) {
+func (wr *Wrangler) runVexec(ctx context.Context, workflow, keyspace, query string, callback func(context.Context, *topo.TabletInfo) (*querypb.QueryResult, error), dryRun bool) (map[*topo.TabletInfo]*querypb.QueryResult, error) {
 	vx := newVExec(ctx, workflow, keyspace, query, wr)
 
 	if err := vx.getPrimaries(); err != nil {
 		return nil, err
 	}
-	plan, err := vx.parseAndPlan(ctx)
-	if err != nil {
-		return nil, err
+	if callback == nil { // Using legacy SQL query path
+		plan, err := vx.parseAndPlan(ctx)
+		if err != nil {
+			return nil, err
+		}
+		vx.plannedQuery = plan.parsedQuery.Query
+		if dryRun {
+			return nil, vx.outputDryRunInfo(ctx)
+		}
+		return vx.exec()
+	} else { // Using new (RPC) callback path
+		return vx.execCallback(callback)
 	}
-	vx.plannedQuery = plan.parsedQuery.Query
-	if dryRun {
-		return nil, vx.outputDryRunInfo(ctx)
-	}
-	return vx.exec()
 }
 
 // parseAndPlan parses and analyses the query, then generates a plan
@@ -205,7 +213,7 @@ func (vx *vexec) exec() (map[*topo.TabletInfo]*querypb.QueryResult, error) {
 	allErrors := &concurrency.AllErrorRecorder{}
 	results := make(map[*topo.TabletInfo]*querypb.QueryResult)
 	var mu sync.Mutex
-	ctx, cancel := context.WithTimeout(vx.ctx, 10*time.Second)
+	ctx, cancel := context.WithTimeout(vx.ctx, execTimeout)
 	defer cancel()
 	for _, primary := range vx.primaries {
 		wg.Add(1)
@@ -224,6 +232,39 @@ func (vx *vexec) exec() (map[*topo.TabletInfo]*querypb.QueryResult, error) {
 				mu.Lock()
 				results[primary] = qr
 				mu.Unlock()
+			}
+		}(ctx, primary)
+	}
+	wg.Wait()
+	return results, allErrors.AggrError(vterrors.Aggregate)
+}
+
+// execCallback runs the provided callback function on backend shard primaries.
+// It collects query results from all shards and returns an aggregate (UNION
+// ALL -like) result.
+// Note: any nil results from the callback are ignored.
+func (vx *vexec) execCallback(callback func(context.Context, *topo.TabletInfo) (*querypb.QueryResult, error)) (map[*topo.TabletInfo]*querypb.QueryResult, error) {
+	var wg sync.WaitGroup
+	allErrors := &concurrency.AllErrorRecorder{}
+	results := make(map[*topo.TabletInfo]*querypb.QueryResult)
+	var mu sync.Mutex
+	ctx, cancel := context.WithTimeout(vx.ctx, execTimeout)
+	defer cancel()
+	for _, primary := range vx.primaries {
+		wg.Add(1)
+		go func(ctx context.Context, primary *topo.TabletInfo) {
+			defer wg.Done()
+			qr, err := callback(ctx, primary)
+			if err != nil {
+				allErrors.RecordError(err)
+			} else {
+				if qr == nil {
+					log.Infof("Callback returned nil result for tablet %s-%s", primary.Alias.Cell, primary.Alias.Uid)
+					return // no result
+				}
+				mu.Lock()
+				defer mu.Unlock()
+				results[primary] = qr
 			}
 		}(ctx, primary)
 	}
@@ -293,25 +334,33 @@ func (wr *Wrangler) convertQueryResultToSQLTypesResult(results map[*topo.TabletI
 	return retResults
 }
 
-// WorkflowAction can start/stop/delete or list streams in _vt.vreplication on all primaries in the target keyspace of the workflow.
-func (wr *Wrangler) WorkflowAction(ctx context.Context, workflow, keyspace, action string, dryRun bool) (map[*topo.TabletInfo]*sqltypes.Result, error) {
-
-	if action == "show" {
+// WorkflowAction can start/stop/update/delete or list streams in _vt.vreplication
+// on all primaries in the target keyspace of the workflow.
+// rpcReq is an optional argument for any actions that use the new RPC path. Today
+// that is only the update action. When using the SQL interface this is ignored and
+// you can pass nil.
+func (wr *Wrangler) WorkflowAction(ctx context.Context, workflow, keyspace, action string, dryRun bool, rpcReq any) (map[*topo.TabletInfo]*sqltypes.Result, error) {
+	switch action {
+	case "show":
 		replStatus, err := wr.ShowWorkflow(ctx, workflow, keyspace)
 		if err != nil {
 			return nil, err
 		}
 		err = dumpStreamListAsJSON(replStatus, wr)
 		return nil, err
-	} else if action == "listall" {
+	case "listall":
 		workflows, err := wr.ListAllWorkflows(ctx, keyspace, false)
 		if err != nil {
 			return nil, err
 		}
 		wr.printWorkflowList(keyspace, workflows)
 		return nil, err
+	default:
 	}
-	results, err := wr.execWorkflowAction(ctx, workflow, keyspace, action, dryRun)
+	results, err := wr.execWorkflowAction(ctx, workflow, keyspace, action, dryRun, rpcReq)
+	if len(results) == 0 && !dryRun { // Dry runs produce no actual tablet results
+		return nil, fmt.Errorf("the %s workflow does not exist in the %s keyspace", workflow, keyspace)
+	}
 	return wr.convertQueryResultToSQLTypesResult(results), err
 }
 
@@ -323,6 +372,9 @@ func (wr *Wrangler) getWorkflowActionQuery(action string) (string, error) {
 		query = fmt.Sprintf(updateSQL, encodeString("Stopped"))
 	case "start":
 		query = fmt.Sprintf(updateSQL, encodeString("Running"))
+	case "update":
+		// We don't use the SQL interface, so there's no query
+		// and no error.
 	case "delete":
 		query = sqlVReplicationDelete
 	default:
@@ -331,18 +383,71 @@ func (wr *Wrangler) getWorkflowActionQuery(action string) (string, error) {
 	return query, nil
 }
 
-func (wr *Wrangler) execWorkflowAction(ctx context.Context, workflow, keyspace, action string, dryRun bool) (map[*topo.TabletInfo]*querypb.QueryResult, error) {
+func (wr *Wrangler) execWorkflowAction(ctx context.Context, workflow, keyspace, action string, dryRun bool, rpcReq any) (map[*topo.TabletInfo]*querypb.QueryResult, error) {
+	var callback func(context.Context, *topo.TabletInfo) (*querypb.QueryResult, error) = nil
 	query, err := wr.getWorkflowActionQuery(action)
 	if err != nil {
 		return nil, err
 	}
-	return wr.runVexec(ctx, workflow, keyspace, query, dryRun)
+	if action == "update" {
+		rpcReq, ok := rpcReq.(*tabletmanagerdatapb.UpdateVRWorkflowRequest)
+		if !ok {
+			return nil, fmt.Errorf("invalid RPC request: %+v", rpcReq)
+		}
+		if dryRun {
+			var dryRunChanges strings.Builder
+			changes := false
+			// We use the sqltypes.NULL string value to represent a nil
+			// value in the proto. This way we can distinguish between
+			// a default empty string value and a user provided empty value.
+			if !textutil.ValueIsSimulatedNull(rpcReq.Cells) {
+				changes = true
+				dryRunChanges.WriteString(fmt.Sprintf("  cells=%q\n", strings.Join(rpcReq.Cells, ",")))
+			}
+			if !textutil.ValueIsSimulatedNull(rpcReq.TabletTypes) {
+				changes = true
+				dryRunChanges.WriteString(fmt.Sprintf("  tablet_types=%q\n", strings.Join(rpcReq.TabletTypes, ",")))
+			}
+			if !textutil.ValueIsSimulatedNull(rpcReq.OnDdl) {
+				changes = true
+				dryRunChanges.WriteString(fmt.Sprintf("  on_ddl=%q\n", binlogdatapb.OnDDLAction_name[int32(rpcReq.OnDdl)]))
+			}
+			if !changes {
+				return nil, fmt.Errorf("no updates were provided; use --cells, --tablet-types, or --on-ddl to specify new values")
+			}
+			wr.Logger().Printf("The following workflow fields will be updated:\n%s", dryRunChanges.String())
+			wr.Logger().Printf("On the following tablets in the %s keyspace for workflow %s:\n",
+				keyspace, workflow)
+			vx := newVExec(ctx, workflow, keyspace, "", wr)
+			if err := vx.getPrimaries(); err != nil {
+				return nil, err
+			}
+			tablets := vx.primaries
+			// Sort the slice for deterministic output.
+			sort.Slice(tablets, func(i, j int) bool {
+				return tablets[i].AliasString() < tablets[j].AliasString()
+			})
+			for _, tablet := range tablets {
+				wr.Logger().Printf("  %s (%s/%s)\n", tablet.AliasString(), tablet.Keyspace, tablet.Shard)
+			}
+			return nil, nil
+		} else {
+			callback = func(ctx context.Context, tablet *topo.TabletInfo) (*querypb.QueryResult, error) {
+				res, err := wr.tmc.UpdateVRWorkflow(ctx, tablet.Tablet, rpcReq)
+				if err != nil {
+					return nil, err
+				}
+				return res.Result, err
+			}
+		}
+	}
+	return wr.runVexec(ctx, workflow, keyspace, query, callback, dryRun)
 }
 
 // WorkflowTagAction sets or clears the tags for a workflow in a keyspace
 func (wr *Wrangler) WorkflowTagAction(ctx context.Context, keyspace string, workflow string, tags string) (map[*topo.TabletInfo]*sqltypes.Result, error) {
 	query := fmt.Sprintf("update _vt.vreplication set tags = %s", encodeString(tags))
-	results, err := wr.runVexec(ctx, workflow, keyspace, query, false)
+	results, err := wr.runVexec(ctx, workflow, keyspace, query, nil, false)
 	return wr.convertQueryResultToSQLTypesResult(results), err
 }
 
@@ -582,7 +687,7 @@ func (wr *Wrangler) getStreams(ctx context.Context, workflow, keyspace string) (
 		defer_secondary_keys,
 		rows_copied
 	from _vt.vreplication`
-	results, err := wr.runVexec(ctx, workflow, keyspace, query, false)
+	results, err := wr.runVexec(ctx, workflow, keyspace, query, nil, false)
 	if err != nil {
 		return nil, err
 	}

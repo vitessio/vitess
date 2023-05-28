@@ -18,6 +18,7 @@ package evalengine
 
 type (
 	callable interface {
+		Expr
 		callable() []Expr
 	}
 
@@ -53,5 +54,18 @@ func (c *CallExpr) arg2(env *ExpressionEnv) (left eval, right eval, err error) {
 		return
 	}
 	right, err = c.Arguments[1].eval(env)
+	return
+}
+
+func (c *CallExpr) arg3(env *ExpressionEnv) (arg1 eval, arg2 eval, arg3 eval, err error) {
+	arg1, err = c.Arguments[0].eval(env)
+	if err != nil {
+		return
+	}
+	arg2, err = c.Arguments[1].eval(env)
+	if err != nil {
+		return
+	}
+	arg3, err = c.Arguments[2].eval(env)
 	return
 }

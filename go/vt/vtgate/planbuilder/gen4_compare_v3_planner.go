@@ -17,6 +17,8 @@ limitations under the License.
 package planbuilder
 
 import (
+	"context"
+
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -112,7 +114,7 @@ func preliminaryChecks(statement sqlparser.Statement) (bool, bool, error) {
 func planWithPlannerVersion(statement sqlparser.Statement, vars *sqlparser.ReservedVars, ctxVSchema plancontext.VSchema, query string, version plancontext.PlannerVersion) (*planResult, error) {
 	ctxVSchema.SetPlannerVersion(version)
 	stmt := sqlparser.CloneStatement(statement)
-	return createInstructionFor(query, stmt, vars, ctxVSchema, false, false)
+	return createInstructionFor(context.Background(), query, stmt, vars, ctxVSchema, false, false)
 }
 
 // hasLockPrimitive recursively walks through the given primitive and its children

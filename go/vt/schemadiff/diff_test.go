@@ -599,21 +599,21 @@ func TestDiffSchemas(t *testing.T) {
 			tableRename: TableRenameHeuristicStatement,
 		},
 		{
-			name: "identical tables: drop and create",
+			name: "drop and create all",
 			from: "create table t1a(id int primary key); create table t2a(id int unsigned primary key); create table t3a(id smallint primary key); ",
 			to:   "create table t1b(id bigint primary key); create table t2b(id int unsigned primary key); create table t3b(id int primary key); ",
 			diffs: []string{
-				"drop table t1a",
-				"drop table t2a",
 				"drop table t3a",
+				"drop table t2a",
+				"drop table t1a",
 				"create table t1b (\n\tid bigint,\n\tprimary key (id)\n)",
 				"create table t2b (\n\tid int unsigned,\n\tprimary key (id)\n)",
 				"create table t3b (\n\tid int,\n\tprimary key (id)\n)",
 			},
 			cdiffs: []string{
-				"DROP TABLE `t1a`",
-				"DROP TABLE `t2a`",
 				"DROP TABLE `t3a`",
+				"DROP TABLE `t2a`",
+				"DROP TABLE `t1a`",
 				"CREATE TABLE `t1b` (\n\t`id` bigint,\n\tPRIMARY KEY (`id`)\n)",
 				"CREATE TABLE `t2b` (\n\t`id` int unsigned,\n\tPRIMARY KEY (`id`)\n)",
 				"CREATE TABLE `t3b` (\n\t`id` int,\n\tPRIMARY KEY (`id`)\n)",
@@ -626,16 +626,58 @@ func TestDiffSchemas(t *testing.T) {
 			diffs: []string{
 				"drop table t3a",
 				"create table t1b (\n\tid bigint,\n\tprimary key (id)\n)",
-				"rename table t1a to t3b",
 				"rename table t2a to t2b",
+				"rename table t1a to t3b",
 			},
 			cdiffs: []string{
 				"DROP TABLE `t3a`",
 				"CREATE TABLE `t1b` (\n\t`id` bigint,\n\tPRIMARY KEY (`id`)\n)",
-				"RENAME TABLE `t1a` TO `t3b`",
 				"RENAME TABLE `t2a` TO `t2b`",
+				"RENAME TABLE `t1a` TO `t3b`",
 			},
 			tableRename: TableRenameHeuristicStatement,
+		},
+		{
+			name: "tables with irregular names",
+			from: "create table `t.2`(id int primary key); create table t3(`i.d` int primary key)",
+			to:   "create table `t.2` (id bigint primary key); create table t3(`i.d` int unsigned primary key)",
+			diffs: []string{
+				"alter table `t.2` modify column id bigint",
+				"alter table t3 modify column `i.d` int unsigned",
+			},
+			cdiffs: []string{
+				"ALTER TABLE `t.2` MODIFY COLUMN `id` bigint",
+				"ALTER TABLE `t3` MODIFY COLUMN `i.d` int unsigned",
+			},
+		},
+		// Foreign keys
+		{
+			name: "create tables with foreign keys, expect specific order",
+			to:   "create table t7(id int primary key); create table t5 (id int primary key, i int, constraint f5 foreign key (i) references t7(id)); create table t4 (id int primary key, i int, constraint f4 foreign key (i) references t7(id));",
+			diffs: []string{
+				"create table t7 (\n\tid int,\n\tprimary key (id)\n)",
+				"create table t4 (\n\tid int,\n\ti int,\n\tprimary key (id),\n\tkey f4 (i),\n\tconstraint f4 foreign key (i) references t7 (id)\n)",
+				"create table t5 (\n\tid int,\n\ti int,\n\tprimary key (id),\n\tkey f5 (i),\n\tconstraint f5 foreign key (i) references t7 (id)\n)",
+			},
+			cdiffs: []string{
+				"CREATE TABLE `t7` (\n\t`id` int,\n\tPRIMARY KEY (`id`)\n)",
+				"CREATE TABLE `t4` (\n\t`id` int,\n\t`i` int,\n\tPRIMARY KEY (`id`),\n\tKEY `f4` (`i`),\n\tCONSTRAINT `f4` FOREIGN KEY (`i`) REFERENCES `t7` (`id`)\n)",
+				"CREATE TABLE `t5` (\n\t`id` int,\n\t`i` int,\n\tPRIMARY KEY (`id`),\n\tKEY `f5` (`i`),\n\tCONSTRAINT `f5` FOREIGN KEY (`i`) REFERENCES `t7` (`id`)\n)",
+			},
+		},
+		{
+			name: "drop tables with foreign keys, expect specific order",
+			from: "create table t7(id int primary key); create table t5 (id int primary key, i int, constraint f5 foreign key (i) references t7(id)); create table t4 (id int primary key, i int, constraint f4 foreign key (i) references t7(id));",
+			diffs: []string{
+				"drop table t5",
+				"drop table t4",
+				"drop table t7",
+			},
+			cdiffs: []string{
+				"DROP TABLE `t5`",
+				"DROP TABLE `t4`",
+				"DROP TABLE `t7`",
+			},
 		},
 		// Views
 		{
@@ -719,20 +761,20 @@ func TestDiffSchemas(t *testing.T) {
 			from: "create view v1 as select * from t1; create table t1(id int primary key); create table t2(id int primary key); create view v2 as select * from t2; create table t3(id int primary key);",
 			to:   "create view v0 as select * from v2, t2; create table t4(id int primary key); create view v2 as select id from t2; create table t2(id bigint primary key); create table t3(id int primary key)",
 			diffs: []string{
-				"drop table t1",
 				"drop view v1",
+				"drop table t1",
 				"alter table t2 modify column id bigint",
 				"alter view v2 as select id from t2",
-				"create table t4 (\n\tid int,\n\tprimary key (id)\n)",
 				"create view v0 as select * from v2, t2",
+				"create table t4 (\n\tid int,\n\tprimary key (id)\n)",
 			},
 			cdiffs: []string{
-				"DROP TABLE `t1`",
 				"DROP VIEW `v1`",
+				"DROP TABLE `t1`",
 				"ALTER TABLE `t2` MODIFY COLUMN `id` bigint",
 				"ALTER VIEW `v2` AS SELECT `id` FROM `t2`",
-				"CREATE TABLE `t4` (\n\t`id` int,\n\tPRIMARY KEY (`id`)\n)",
 				"CREATE VIEW `v0` AS SELECT * FROM `v2`, `t2`",
+				"CREATE TABLE `t4` (\n\t`id` int,\n\tPRIMARY KEY (`id`)\n)",
 			},
 		},
 	}
@@ -741,13 +783,15 @@ func TestDiffSchemas(t *testing.T) {
 			hints := &DiffHints{
 				TableRenameStrategy: ts.tableRename,
 			}
-			diffs, err := DiffSchemasSQL(ts.from, ts.to, hints)
+			diff, err := DiffSchemasSQL(ts.from, ts.to, hints)
 			if ts.expectError != "" {
 				require.Error(t, err)
 				assert.Contains(t, err.Error(), ts.expectError)
 			} else {
 				assert.NoError(t, err)
 
+				diffs, err := diff.OrderedDiffs()
+				assert.NoError(t, err)
 				statements := []string{}
 				cstatements := []string{}
 				for _, d := range diffs {
@@ -776,20 +820,20 @@ func TestDiffSchemas(t *testing.T) {
 				{
 					// Validate "apply()" on "from" converges with "to"
 					schema1, err := NewSchemaFromSQL(ts.from)
-					assert.NoError(t, err)
+					require.NoError(t, err)
 					schema1SQL := schema1.ToSQL()
 
 					schema2, err := NewSchemaFromSQL(ts.to)
-					assert.NoError(t, err)
+					require.NoError(t, err)
 					applied, err := schema1.Apply(diffs)
 					require.NoError(t, err)
 
 					// validate schema1 unaffected by Apply
 					assert.Equal(t, schema1SQL, schema1.ToSQL())
 
-					appliedDiff, err := schema2.Diff(applied, hints)
+					appliedDiff, err := schema2.SchemaDiff(applied, hints)
 					require.NoError(t, err)
-					assert.Empty(t, appliedDiff)
+					assert.True(t, appliedDiff.Empty())
 					assert.Equal(t, schema2.ToQueries(), applied.ToQueries())
 				}
 			}
@@ -838,7 +882,9 @@ func TestSchemaApplyError(t *testing.T) {
 			assert.NoError(t, err)
 
 			{
-				diffs, err := schema1.Diff(schema2, hints)
+				diff, err := schema1.SchemaDiff(schema2, hints)
+				require.NoError(t, err)
+				diffs, err := diff.OrderedDiffs()
 				assert.NoError(t, err)
 				assert.NotEmpty(t, diffs)
 				_, err = schema1.Apply(diffs)
@@ -847,7 +893,9 @@ func TestSchemaApplyError(t *testing.T) {
 				require.Error(t, err, "expected error applying to schema2. diffs: %v", diffs)
 			}
 			{
-				diffs, err := schema2.Diff(schema1, hints)
+				diff, err := schema2.SchemaDiff(schema1, hints)
+				require.NoError(t, err)
+				diffs, err := diff.OrderedDiffs()
 				assert.NoError(t, err)
 				assert.NotEmpty(t, diffs, "schema1: %v, schema2: %v", schema1.ToSQL(), schema2.ToSQL())
 				_, err = schema2.Apply(diffs)

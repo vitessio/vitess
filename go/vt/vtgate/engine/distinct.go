@@ -279,7 +279,7 @@ func (cc CheckCol) SwitchToWeightString() CheckCol {
 }
 
 func (cc CheckCol) String() string {
-	coll := collations.Local().LookupByID(cc.Collation)
+	coll := cc.Collation.Get()
 	var collation string
 	if coll != nil {
 		collation = ": " + coll.Name()

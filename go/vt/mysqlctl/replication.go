@@ -37,6 +37,8 @@ import (
 	"vitess.io/vitess/go/vt/log"
 )
 
+type ResetSuperReadOnlyFunc func() error
+
 // WaitForReplicationStart waits until the deadline for replication to start.
 // This validates the current primary is correct and can be connected to.
 func WaitForReplicationStart(mysqld MysqlDaemon, replicaStartDeadline int) error {
@@ -230,6 +232,22 @@ func (mysqld *Mysqld) IsReadOnly() (bool, error) {
 	return false, nil
 }
 
+// IsSuperReadOnly return true if the instance is super read only
+func (mysqld *Mysqld) IsSuperReadOnly() (bool, error) {
+	qr, err := mysqld.FetchSuperQuery(context.TODO(), "SELECT @@global.super_read_only")
+	if err != nil {
+		return false, err
+	}
+	if err == nil && len(qr.Rows) == 1 {
+		sro := qr.Rows[0][0].ToString()
+		if sro == "1" || sro == "ON" {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
 // SetReadOnly set/unset the read_only flag
 func (mysqld *Mysqld) SetReadOnly(on bool) error {
 	// temp logging, to be removed in v17
@@ -252,15 +270,52 @@ func (mysqld *Mysqld) SetReadOnly(on bool) error {
 	return mysqld.ExecuteSuperQuery(context.TODO(), query)
 }
 
-// SetSuperReadOnly set/unset the super_read_only flag
-func (mysqld *Mysqld) SetSuperReadOnly(on bool) error {
+// SetSuperReadOnly set/unset the super_read_only flag.
+// Returns a function which is called to set super_read_only back to its original value.
+func (mysqld *Mysqld) SetSuperReadOnly(on bool) (ResetSuperReadOnlyFunc, error) {
+	//  return function for switching `OFF` super_read_only
+	var resetFunc ResetSuperReadOnlyFunc
+	var disableFunc = func() error {
+		query := "SET GLOBAL super_read_only = 'OFF'"
+		err := mysqld.ExecuteSuperQuery(context.Background(), query)
+		return err
+	}
+
+	//  return function for switching `ON` super_read_only.
+	var enableFunc = func() error {
+		query := "SET GLOBAL super_read_only = 'ON'"
+		err := mysqld.ExecuteSuperQuery(context.Background(), query)
+		return err
+	}
+
+	superReadOnlyEnabled, err := mysqld.IsSuperReadOnly()
+	if err != nil {
+		return nil, err
+	}
+
+	// If non-idempotent then set the right call-back.
+	// We are asked to turn on super_read_only but original value is false,
+	// therefore return disableFunc, that can be used as defer by caller.
+	if on && !superReadOnlyEnabled {
+		resetFunc = disableFunc
+	}
+	// We are asked to turn off super_read_only but original value is true,
+	// therefore return enableFunc, that can be used as defer by caller.
+	if !on && superReadOnlyEnabled {
+		resetFunc = enableFunc
+	}
+
 	query := "SET GLOBAL super_read_only = "
 	if on {
-		query += "ON"
+		query += "'ON'"
 	} else {
-		query += "OFF"
+		query += "'OFF'"
 	}
-	return mysqld.ExecuteSuperQuery(context.TODO(), query)
+	if err := mysqld.ExecuteSuperQuery(context.Background(), query); err != nil {
+		return nil, err
+	}
+
+	return resetFunc, nil
 }
 
 // WaitSourcePos lets replicas wait to given replication position
@@ -402,7 +457,7 @@ func (mysqld *Mysqld) SetReplicationSource(ctx context.Context, host string, por
 	}
 	defer conn.Recycle()
 
-	cmds := []string{}
+	var cmds []string
 	if stopReplicationBefore {
 		cmds = append(cmds, conn.StopReplicationCommand())
 	}
@@ -499,54 +554,6 @@ func FindReplicas(mysqld MysqlDaemon) ([]string, error) {
 	}
 
 	return addrs, nil
-}
-
-// EnableBinlogPlayback prepares the server to play back events from a binlog stream.
-// Whatever it does for a given flavor, it must be idempotent.
-func (mysqld *Mysqld) EnableBinlogPlayback() error {
-	// Get a connection.
-	conn, err := getPoolReconnect(context.TODO(), mysqld.dbaPool)
-	if err != nil {
-		return err
-	}
-	defer conn.Recycle()
-
-	// See if we have a command to run, and run it.
-	cmd := conn.EnableBinlogPlaybackCommand()
-	if cmd == "" {
-		return nil
-	}
-	if err := mysqld.ExecuteSuperQuery(context.TODO(), cmd); err != nil {
-		log.Errorf("EnableBinlogPlayback: cannot run query '%v': %v", cmd, err)
-		return fmt.Errorf("EnableBinlogPlayback: cannot run query '%v': %v", cmd, err)
-	}
-
-	log.Info("EnableBinlogPlayback: successfully ran %v", cmd)
-	return nil
-}
-
-// DisableBinlogPlayback returns the server to the normal state after streaming.
-// Whatever it does for a given flavor, it must be idempotent.
-func (mysqld *Mysqld) DisableBinlogPlayback() error {
-	// Get a connection.
-	conn, err := getPoolReconnect(context.TODO(), mysqld.dbaPool)
-	if err != nil {
-		return err
-	}
-	defer conn.Recycle()
-
-	// See if we have a command to run, and run it.
-	cmd := conn.DisableBinlogPlaybackCommand()
-	if cmd == "" {
-		return nil
-	}
-	if err := mysqld.ExecuteSuperQuery(context.TODO(), cmd); err != nil {
-		log.Errorf("DisableBinlogPlayback: cannot run query '%v': %v", cmd, err)
-		return fmt.Errorf("DisableBinlogPlayback: cannot run query '%v': %v", cmd, err)
-	}
-
-	log.Info("DisableBinlogPlayback: successfully ran '%v'", cmd)
-	return nil
 }
 
 // GetBinlogInformation gets the binlog format, whether binlog is enabled and if updates on replica logging is enabled.
@@ -657,8 +664,8 @@ func (mysqld *Mysqld) SemiSyncEnabled() (primary, replica bool) {
 	if err != nil {
 		return false, false
 	}
-	primary = (vars["rpl_semi_sync_master_enabled"] == "ON")
-	replica = (vars["rpl_semi_sync_slave_enabled"] == "ON")
+	primary = vars["rpl_semi_sync_master_enabled"] == "ON"
+	replica = vars["rpl_semi_sync_slave_enabled"] == "ON"
 	return primary, replica
 }
 
@@ -711,4 +718,17 @@ func (mysqld *Mysqld) SemiSyncReplicationStatus() (bool, error) {
 		return true, nil
 	}
 	return false, nil
+}
+
+// SemiSyncExtensionLoaded returns whether semi-sync plugins are loaded.
+func (mysqld *Mysqld) SemiSyncExtensionLoaded() (bool, error) {
+	qr, err := mysqld.FetchSuperQuery(context.Background(), "SELECT COUNT(*) > 0 AS plugin_loaded FROM information_schema.plugins WHERE plugin_name LIKE 'rpl_semi_sync%'")
+	if err != nil {
+		return false, err
+	}
+	pluginPresent, err := qr.Rows[0][0].ToBool()
+	if err != nil {
+		return false, err
+	}
+	return pluginPresent, nil
 }

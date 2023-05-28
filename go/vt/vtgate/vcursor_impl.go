@@ -19,9 +19,11 @@ package vtgate
 import (
 	"context"
 	"fmt"
+	"io"
 	"sort"
 	"strings"
 	"sync/atomic"
+	"time"
 
 	"vitess.io/vitess/go/vt/vtgate/logstats"
 
@@ -79,6 +81,7 @@ type iExecute interface {
 	// TODO: remove when resolver is gone
 	ParseDestinationTarget(targetString string) (string, topodatapb.TabletType, key.Destination, error)
 	VSchema() *vindexes.VSchema
+	planPrepareStmt(ctx context.Context, vcursor *vcursorImpl, query string) (*engine.Plan, sqlparser.Statement, error)
 }
 
 // VSchemaOperator is an interface to Vschema Operations
@@ -184,6 +187,10 @@ func (vc *vcursorImpl) GetSystemVariables(f func(k string, v string)) {
 // ConnCollation returns the collation of this session
 func (vc *vcursorImpl) ConnCollation() collations.ID {
 	return vc.collation
+}
+
+func (vc *vcursorImpl) TimeZone() *time.Location {
+	return vc.safeSession.TimeZone()
 }
 
 // MaxMemoryRows returns the maxMemoryRows flag value.
@@ -841,6 +848,15 @@ func (vc *vcursorImpl) SetPlannerVersion(v plancontext.PlannerVersion) {
 	vc.safeSession.GetOrCreateOptions().PlannerVersion = v
 }
 
+func (vc *vcursorImpl) SetPriority(priority string) {
+	if priority != "" {
+		vc.safeSession.GetOrCreateOptions().Priority = priority
+	} else if vc.safeSession.Options != nil && vc.safeSession.Options.Priority != "" {
+		vc.safeSession.Options.Priority = ""
+	}
+
+}
+
 // SetConsolidator implements the SessionActions interface
 func (vc *vcursorImpl) SetConsolidator(consolidator querypb.ExecuteOptions_Consolidator) {
 	// Avoid creating session Options when they do not yet exist and the
@@ -849,6 +865,12 @@ func (vc *vcursorImpl) SetConsolidator(consolidator querypb.ExecuteOptions_Conso
 		return
 	}
 	vc.safeSession.GetOrCreateOptions().Consolidator = consolidator
+}
+
+func (vc *vcursorImpl) SetWorkloadName(workloadName string) {
+	if workloadName != "" {
+		vc.safeSession.GetOrCreateOptions().WorkloadName = workloadName
+	}
 }
 
 // SetFoundRows implements the SessionActions interface
@@ -990,7 +1012,12 @@ func parseDestinationTarget(targetString string, vschema *vindexes.VSchema) (str
 	return destKeyspace, destTabletType, dest, err
 }
 
-func (vc *vcursorImpl) planPrefixKey(ctx context.Context) string {
+func (vc *vcursorImpl) keyForPlan(ctx context.Context, query string, buf io.StringWriter) {
+	_, _ = buf.WriteString(vc.keyspace)
+	_, _ = buf.WriteString(vindexes.TabletTypeSuffix[vc.tabletType])
+	_, _ = buf.WriteString("+Collate:")
+	_, _ = buf.WriteString(vc.collation.Get().Name())
+
 	if vc.destination != nil {
 		switch vc.destination.(type) {
 		case key.DestinationKeyspaceID, key.DestinationKeyspaceIDs:
@@ -1001,14 +1028,22 @@ func (vc *vcursorImpl) planPrefixKey(ctx context.Context) string {
 					shards[i] = resolved[i].Target.GetShard()
 				}
 				sort.Strings(shards)
-				return fmt.Sprintf("%s%sKsIDsResolved(%s)", vc.keyspace, vindexes.TabletTypeSuffix[vc.tabletType], strings.Join(shards, ","))
+
+				_, _ = buf.WriteString("+KsIDsResolved:")
+				for i, s := range shards {
+					if i > 0 {
+						_, _ = buf.WriteString(",")
+					}
+					_, _ = buf.WriteString(s)
+				}
 			}
 		default:
-			// use destination string (out of the switch)
+			_, _ = buf.WriteString("+")
+			_, _ = buf.WriteString(vc.destination.String())
 		}
-		return fmt.Sprintf("%s%s%s", vc.keyspace, vindexes.TabletTypeSuffix[vc.tabletType], vc.destination.String())
 	}
-	return fmt.Sprintf("%s%s", vc.keyspace, vindexes.TabletTypeSuffix[vc.tabletType])
+	_, _ = buf.WriteString("+Query:")
+	_, _ = buf.WriteString(query)
 }
 
 func (vc *vcursorImpl) GetKeyspace() string {
@@ -1131,4 +1166,24 @@ func (vc *vcursorImpl) FindRoutedShard(keyspace, shard string) (keyspaceName str
 
 func (vc *vcursorImpl) IsViewsEnabled() bool {
 	return enableViews
+}
+
+func (vc *vcursorImpl) GetUDV(name string) *querypb.BindVariable {
+	return vc.safeSession.GetUDV(name)
+}
+
+func (vc *vcursorImpl) PlanPrepareStatement(ctx context.Context, query string) (*engine.Plan, sqlparser.Statement, error) {
+	return vc.executor.planPrepareStmt(ctx, vc, query)
+}
+
+func (vc *vcursorImpl) ClearPrepareData(name string) {
+	delete(vc.safeSession.PrepareStatement, name)
+}
+
+func (vc *vcursorImpl) StorePrepareData(stmtName string, prepareData *vtgatepb.PrepareData) {
+	vc.safeSession.StorePrepareData(stmtName, prepareData)
+}
+
+func (vc *vcursorImpl) GetPrepareData(stmtName string) *vtgatepb.PrepareData {
+	return vc.safeSession.GetPrepareData(stmtName)
 }

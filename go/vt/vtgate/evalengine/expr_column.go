@@ -19,12 +19,17 @@ package evalengine
 import (
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 type (
 	Column struct {
-		Offset int
-		coll   collations.TypedCollation
+		Offset    int
+		Type      sqltypes.Type
+		Collation collations.TypedCollation
+		typed     bool
 	}
 )
 
@@ -32,22 +37,68 @@ var _ Expr = (*Column)(nil)
 
 // eval implements the Expr interface
 func (c *Column) eval(env *ExpressionEnv) (eval, error) {
-	return valueToEval(env.Row[c.Offset], c.coll)
+	return valueToEval(env.Row[c.Offset], c.Collation)
 }
 
-func (c *Column) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
-	// we'll try to do the best possible with the information we have
+func (c *Column) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	// if we have an active row in the expression Env, use that as an authoritative source
 	if c.Offset < len(env.Row) {
 		value := env.Row[c.Offset]
-		if value.IsNull() {
-			return sqltypes.Null, flagNull | flagNullable
+		if !value.IsNull() {
+			// if we have a NULL value, we'll instead use the field information
+			return value.Type(), 0
 		}
-		return value.Type(), typeFlag(0)
+	}
+	if c.Offset < len(fields) {
+		return fields[c.Offset].Type, flagNullable // we probably got here because the value was NULL,
+		// so let's assume we are on a nullable field
+	}
+	if c.typed {
+		return c.Type, flagNullable
+	}
+	return sqltypes.Null, flagAmbiguousType
+}
+
+func (column *Column) compile(c *compiler) (ctype, error) {
+	if !column.typed {
+		return ctype{}, c.unsupported(column)
 	}
 
-	if c.Offset < len(env.Fields) {
-		return env.Fields[c.Offset].Type, flagNullable
+	col := column.Collation
+	if col.Collation != collations.CollationBinaryID {
+		col.Repertoire = collations.RepertoireUnicode
 	}
 
-	panic("Column missing both data and field")
+	switch tt := column.Type; {
+	case sqltypes.IsSigned(tt):
+		c.asm.PushColumn_i(column.Offset)
+	case sqltypes.IsUnsigned(tt):
+		c.asm.PushColumn_u(column.Offset)
+	case sqltypes.IsFloat(tt):
+		c.asm.PushColumn_f(column.Offset)
+	case sqltypes.IsDecimal(tt):
+		c.asm.PushColumn_d(column.Offset)
+	case sqltypes.IsText(tt):
+		if tt == sqltypes.HexNum {
+			c.asm.PushColumn_hexnum(column.Offset)
+		} else if tt == sqltypes.HexVal {
+			c.asm.PushColumn_hexval(column.Offset)
+		} else {
+			c.asm.PushColumn_text(column.Offset, col)
+		}
+	case sqltypes.IsBinary(tt):
+		c.asm.PushColumn_bin(column.Offset)
+	case sqltypes.IsNull(tt):
+		c.asm.PushNull()
+	case tt == sqltypes.TypeJSON:
+		c.asm.PushColumn_json(column.Offset)
+	default:
+		return ctype{}, vterrors.Errorf(vtrpc.Code_UNIMPLEMENTED, "Type is not supported: %s", tt)
+	}
+
+	return ctype{
+		Type: column.Type,
+		Flag: flagNullable,
+		Col:  col,
+	}, nil
 }

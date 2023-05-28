@@ -67,7 +67,6 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/txserializer"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/txthrottler"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer"
-	"vitess.io/vitess/go/vt/vttablet/vexec"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -99,6 +98,7 @@ type TabletServer struct {
 	stats                  *tabletenv.Stats
 	QueryTimeout           atomic.Int64
 	TerseErrors            bool
+	TruncateErrorLen       int
 	enableHotRowProtection bool
 	topoServer             *topo.Server
 
@@ -112,7 +112,7 @@ type TabletServer struct {
 	tracker      *schema.Tracker
 	watcher      *BinlogWatcher
 	qe           *QueryEngine
-	txThrottler  *txthrottler.TxThrottler
+	txThrottler  txthrottler.TxThrottler
 	te           *TxEngine
 	messager     *messager.Engine
 	hs           *healthStreamer
@@ -156,6 +156,7 @@ func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *to
 		stats:                  tabletenv.NewStats(exporter),
 		config:                 config,
 		TerseErrors:            config.TerseErrors,
+		TruncateErrorLen:       config.TruncateErrorLen,
 		enableHotRowProtection: config.HotRowProtection.Mode != tabletenv.Disable,
 		topoServer:             topoServer,
 		alias:                  proto.Clone(alias).(*topodatapb.TabletAlias),
@@ -182,7 +183,7 @@ func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *to
 	tsv.tracker = schema.NewTracker(tsv, tsv.vstreamer, tsv.se)
 	tsv.watcher = NewBinlogWatcher(tsv, tsv.vstreamer, tsv.config)
 	tsv.qe = NewQueryEngine(tsv, tsv.se)
-	tsv.txThrottler = txthrottler.NewTxThrottler(tsv.config, topoServer)
+	tsv.txThrottler = txthrottler.NewTxThrottler(tsv, topoServer)
 	tsv.te = NewTxEngine(tsv)
 	tsv.messager = messager.NewEngine(tsv, tsv.se, tsv.vstreamer)
 
@@ -242,13 +243,14 @@ func (tsv *TabletServer) loadQueryTimeout() time.Duration {
 //  1. the creation and destruction of a QueryRuleSource. The existence of such source affects query plan rules
 //     for all new queries (see Execute() function and call to GetPlan())
 //  2. affecting already existing rules: a Rule has a concext.WithCancel, that is cancelled by onlineDDLExecutor
-func (tsv *TabletServer) onlineDDLExecutorToggleTableBuffer(bufferingCtx context.Context, tableName string, bufferQueries bool) {
+func (tsv *TabletServer) onlineDDLExecutorToggleTableBuffer(bufferingCtx context.Context, tableName string, timeout time.Duration, bufferQueries bool) {
 	queryRuleSource := fmt.Sprintf("onlineddl/%s", tableName)
 
 	if bufferQueries {
 		tsv.RegisterQueryRuleSource(queryRuleSource)
 		bufferRules := rules.New()
-		bufferRules.Add(rules.NewBufferedTableQueryRule(bufferingCtx, tableName, "buffered for cut-over"))
+
+		bufferRules.Add(rules.NewBufferedTableQueryRule(bufferingCtx, tableName, timeout, "buffered for cut-over"))
 		tsv.SetQueryRules(queryRuleSource, bufferRules)
 	} else {
 		tsv.UnRegisterQueryRuleSource(queryRuleSource) // new rules will not have buffering. Existing rules will be affected by bufferingContext.Done()
@@ -458,11 +460,6 @@ func (tsv *TabletServer) QueryService() queryservice.QueryService {
 	return tsv
 }
 
-// OnlineDDLExecutor returns the onlineddl.Executor part of TabletServer.
-func (tsv *TabletServer) OnlineDDLExecutor() vexec.Executor {
-	return tsv.onlineDDLExecutor
-}
-
 // LagThrottler returns the throttle.Throttler part of TabletServer.
 func (tsv *TabletServer) LagThrottler() *throttle.Throttler {
 	return tsv.lagThrottler
@@ -496,8 +493,8 @@ func (tsv *TabletServer) begin(ctx context.Context, target *querypb.Target, save
 		target, options, false, /* allowOnShutdown */
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
 			startTime := time.Now()
-			if tsv.txThrottler.Throttle() {
-				return vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "Transaction throttled")
+			if tsv.txThrottler.Throttle(tsv.getPriorityFromOptions(options)) {
+				return errTxThrottled
 			}
 			var connSetting *pools.Setting
 			if len(settings) > 0 {
@@ -526,6 +523,30 @@ func (tsv *TabletServer) begin(ctx context.Context, target *querypb.Target, save
 		},
 	)
 	return state, err
+}
+
+func (tsv *TabletServer) getPriorityFromOptions(options *querypb.ExecuteOptions) int {
+	priority := tsv.config.TxThrottlerDefaultPriority
+	if options == nil {
+		return priority
+	}
+	if options.Priority == "" {
+		return priority
+	}
+
+	optionsPriority, err := strconv.Atoi(options.Priority)
+	// This should never error out, as the value for Priority has been validated in the vtgate already.
+	// Still, handle it just to make sure.
+	if err != nil {
+		log.Errorf(
+			"The value of the %s query directive could not be converted to integer, using the "+
+				"default value. Error was: %s",
+			sqlparser.DirectivePriority, priority, err)
+
+		return priority
+	}
+
+	return optionsPriority
 }
 
 // Commit commits the specified transaction.
@@ -754,6 +775,7 @@ func (tsv *TabletServer) execute(ctx context.Context, target *querypb.Target, sq
 				bindVariables = make(map[string]*querypb.BindVariable)
 			}
 			query, comments := sqlparser.SplitMarginComments(sql)
+
 			plan, err := tsv.qe.GetPlan(ctx, logStats, query, skipQueryPlanCache(options))
 			if err != nil {
 				return err
@@ -1431,6 +1453,7 @@ func (tsv *TabletServer) execRequest(
 	span, ctx := trace.NewSpan(ctx, "TabletServer."+requestName)
 	if options != nil {
 		span.Annotate("isolation-level", options.TransactionIsolation)
+		span.Annotate("workload_name", options.WorkloadName)
 	}
 	trace.AnnotateSQL(span, sqlparser.Preview(sql))
 	if target != nil {
@@ -1438,6 +1461,7 @@ func (tsv *TabletServer) execRequest(
 		span.Annotate("shard", target.Shard)
 		span.Annotate("keyspace", target.Keyspace)
 	}
+
 	defer span.Finish()
 
 	logStats := tabletenv.NewLogStats(ctx, requestName)
@@ -1473,14 +1497,16 @@ func (tsv *TabletServer) handlePanicAndSendLogStats(
 		// the log message is controlled by SanitizeLogMessages.
 		// We are handling an unrecoverable panic, so the cost of the dual message handling is
 		// not a concern.
-		var messagef, errMessage, logMessage string
+		var messagef, logMessage, query, truncatedQuery string
 		messagef = fmt.Sprintf("Uncaught panic for %%v:\n%v\n%s", x, tb.Stack(4) /* Skip the last 4 boiler-plate frames. */)
-		errMessage = fmt.Sprintf(messagef, queryAsString(sql, bindVariables, tsv.TerseErrors))
-		terr := vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "%s", errMessage)
+		query = queryAsString(sql, bindVariables, tsv.TerseErrors, false)
+		terr := vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "%s", fmt.Sprintf(messagef, query))
 		if tsv.TerseErrors == tsv.Config().SanitizeLogMessages {
-			logMessage = errMessage
+			truncatedQuery = queryAsString(sql, bindVariables, tsv.TerseErrors, true)
+			logMessage = fmt.Sprintf(messagef, truncatedQuery)
 		} else {
-			logMessage = fmt.Sprintf(messagef, queryAsString(sql, bindVariables, tsv.Config().SanitizeLogMessages))
+			truncatedQuery = queryAsString(sql, bindVariables, tsv.Config().SanitizeLogMessages, true)
+			logMessage = fmt.Sprintf(messagef, truncatedQuery)
 		}
 		log.Error(logMessage)
 		tsv.stats.InternalErrors.Add("Panic", 1)
@@ -1539,20 +1565,20 @@ func (tsv *TabletServer) convertAndLogError(ctx context.Context, sql string, bin
 		sqlState := sqlErr.SQLState()
 		errnum := sqlErr.Number()
 		if tsv.TerseErrors && errCode != vtrpcpb.Code_FAILED_PRECONDITION {
-			err = vterrors.Errorf(errCode, "(errno %d) (sqlstate %s)%s: %s", errnum, sqlState, callerID, queryAsString(sql, bindVariables, tsv.TerseErrors))
+			err = vterrors.Errorf(errCode, "(errno %d) (sqlstate %s)%s: %s", errnum, sqlState, callerID, queryAsString(sql, bindVariables, tsv.TerseErrors, false))
 			if logMethod != nil {
-				message = fmt.Sprintf("(errno %d) (sqlstate %s)%s: %s", errnum, sqlState, callerID, truncateSQLAndBindVars(sql, bindVariables, tsv.Config().SanitizeLogMessages))
+				message = fmt.Sprintf("(errno %d) (sqlstate %s)%s: %s", errnum, sqlState, callerID, queryAsString(sql, bindVariables, tsv.Config().SanitizeLogMessages, true))
 			}
 		} else {
-			err = vterrors.Errorf(errCode, "%s (errno %d) (sqlstate %s)%s: %s", sqlErr.Message, errnum, sqlState, callerID, queryAsString(sql, bindVariables, false))
+			err = vterrors.Errorf(errCode, "%s (errno %d) (sqlstate %s)%s: %s", sqlErr.Message, errnum, sqlState, callerID, queryAsString(sql, bindVariables, false, false))
 			if logMethod != nil {
-				message = fmt.Sprintf("%s (errno %d) (sqlstate %s)%s: %s", sqlErr.Message, errnum, sqlState, callerID, truncateSQLAndBindVars(sql, bindVariables, tsv.Config().SanitizeLogMessages))
+				message = fmt.Sprintf("%s (errno %d) (sqlstate %s)%s: %s", sqlErr.Message, errnum, sqlState, callerID, queryAsString(sql, bindVariables, tsv.Config().SanitizeLogMessages, true))
 			}
 		}
 	} else {
 		err = vterrors.Errorf(errCode, "%v%s", err.Error(), callerID)
 		if logMethod != nil {
-			message = fmt.Sprintf("%v: %v", err, truncateSQLAndBindVars(sql, bindVariables, tsv.Config().SanitizeLogMessages))
+			message = fmt.Sprintf("%v: %v", err, queryAsString(sql, bindVariables, tsv.Config().SanitizeLogMessages, true))
 		}
 	}
 
@@ -1564,39 +1590,7 @@ func (tsv *TabletServer) convertAndLogError(ctx context.Context, sql string, bin
 		logStats.Error = err
 	}
 
-	return err
-}
-
-// truncateSQLAndBindVars calls TruncateForLog which:
-//
-//	splits off trailing comments, truncates the query, re-adds the trailing comments,
-//	if sanitize is false appends quoted bindvar:value pairs in sorted order, and
-//	lastly it truncates the resulting string
-func truncateSQLAndBindVars(sql string, bindVariables map[string]*querypb.BindVariable, sanitize bool) string {
-	truncatedQuery := sqlparser.TruncateForLog(sql)
-	buf := &bytes.Buffer{}
-	fmt.Fprintf(buf, "BindVars: {")
-	if len(bindVariables) > 0 {
-		if sanitize {
-			fmt.Fprintf(buf, "[REDACTED]")
-		} else {
-			var keys []string
-			for key := range bindVariables {
-				keys = append(keys, key)
-			}
-			sort.Strings(keys)
-			for _, key := range keys {
-				fmt.Fprintf(buf, "%s: %q", key, fmt.Sprintf("%v", bindVariables[key]))
-			}
-		}
-	}
-	fmt.Fprintf(buf, "}")
-	bv := buf.String()
-	maxLen := sqlparser.GetTruncateErrLen()
-	if maxLen != 0 && len(bv) > maxLen {
-		bv = bv[:maxLen-12] + " [TRUNCATED]"
-	}
-	return fmt.Sprintf("Sql: %q, %s", truncatedQuery, bv)
+	return vterrors.TruncateError(err, tsv.TruncateErrorLen)
 }
 
 func convertErrorCode(err error) vtrpcpb.Code {
@@ -1728,10 +1722,6 @@ func (tsv *TabletServer) registerHealthzHealthHandler() {
 }
 
 func (tsv *TabletServer) healthzHandler(w http.ResponseWriter, r *http.Request) {
-	if err := acl.CheckAccessHTTP(r, acl.MONITORING); err != nil {
-		acl.SendError(w, err)
-		return
-	}
 	if (tsv.sm.wantState == StateServing || tsv.sm.wantState == StateNotConnected) && !tsv.sm.IsServing() {
 		http.Error(w, "500 internal server error: vttablet is not serving", http.StatusInternalServerError)
 		return
@@ -2025,17 +2015,17 @@ func (tsv *TabletServer) ConsolidatorMode() string {
 	return tsv.qe.consolidatorMode.Load().(string)
 }
 
-// queryAsString returns a readable normalized version of the query and if sanitize
-// is false it also includes the bind variables.
-func queryAsString(sql string, bindVariables map[string]*querypb.BindVariable, sanitize bool) string {
-	buf := &bytes.Buffer{}
-	// sql is the normalized query without the bind vars
-	fmt.Fprintf(buf, "Sql: %q", sql)
+// queryAsString returns a readable normalized version of the query.
+// If sanitize is false it also includes the bind variables.
+// If truncateForLog is true, it truncates the sql query and the
+// bind variables.
+func queryAsString(sql string, bindVariables map[string]*querypb.BindVariable, sanitize bool, truncateForLog bool) string {
 	// Add the bind vars unless this needs to be sanitized, e.g. for log messages
-	fmt.Fprintf(buf, ", BindVars: {")
+	bvBuf := &bytes.Buffer{}
+	fmt.Fprintf(bvBuf, "BindVars: {")
 	if len(bindVariables) > 0 {
 		if sanitize {
-			fmt.Fprintf(buf, "[REDACTED]")
+			fmt.Fprintf(bvBuf, "[REDACTED]")
 		} else {
 			var keys []string
 			for key := range bindVariables {
@@ -2045,12 +2035,30 @@ func queryAsString(sql string, bindVariables map[string]*querypb.BindVariable, s
 			var valString string
 			for _, key := range keys {
 				valString = fmt.Sprintf("%v", bindVariables[key])
-				fmt.Fprintf(buf, "%s: %q", key, valString)
+				fmt.Fprintf(bvBuf, "%s: %q", key, valString)
 			}
 		}
 	}
-	fmt.Fprintf(buf, "}")
-	return buf.String()
+	fmt.Fprintf(bvBuf, "}")
+
+	// Truncate the bind vars if necessary
+	bv := bvBuf.String()
+	maxLen := sqlparser.GetTruncateErrLen()
+	if truncateForLog && maxLen > 0 && len(bv) > maxLen {
+		if maxLen <= 12 {
+			bv = sqlparser.TruncationText
+		} else {
+			bv = bv[:maxLen-(len(sqlparser.TruncationText)+1)] + " " + sqlparser.TruncationText
+		}
+	}
+
+	// Truncate the sql query if necessary
+	if truncateForLog {
+		sql = sqlparser.TruncateForLog(sql)
+	}
+
+	// sql is the normalized query without the bind vars
+	return fmt.Sprintf("Sql: %q, %s", sql, bv)
 }
 
 // withTimeout returns a context based on the specified timeout.

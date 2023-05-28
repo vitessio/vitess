@@ -23,6 +23,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/binlog"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
 
@@ -195,16 +196,16 @@ func TestTableMapEvent(t *testing.T) {
 		Database: "my_database",
 		Name:     "my_table",
 		Types: []byte{
-			TypeLongLong,
-			TypeLongLong,
-			TypeLongLong,
-			TypeLongLong,
-			TypeLongLong,
-			TypeTime,
-			TypeLongLong,
-			TypeLongLong,
-			TypeLongLong,
-			TypeVarchar,
+			binlog.TypeLongLong,
+			binlog.TypeLongLong,
+			binlog.TypeLongLong,
+			binlog.TypeLongLong,
+			binlog.TypeLongLong,
+			binlog.TypeTime,
+			binlog.TypeLongLong,
+			binlog.TypeLongLong,
+			binlog.TypeLongLong,
+			binlog.TypeVarchar,
 		},
 		CanBeNull: NewServerBitmap(10),
 		Metadata: []uint16{
@@ -250,7 +251,7 @@ func TestLargeTableMapEvent(t *testing.T) {
 	metadata := make([]uint16, 0, colLen)
 
 	for i := 0; i < colLen; i++ {
-		types = append(types, TypeLongLong)
+		types = append(types, binlog.TypeLongLong)
 		metadata = append(metadata, 0)
 	}
 
@@ -302,8 +303,8 @@ func TestRowsEvent(t *testing.T) {
 		Database: "my_database",
 		Name:     "my_table",
 		Types: []byte{
-			TypeLong,
-			TypeVarchar,
+			binlog.TypeLong,
+			binlog.TypeVarchar,
 		},
 		CanBeNull: NewServerBitmap(2),
 		Metadata: []uint16{
@@ -424,7 +425,7 @@ func TestLargeRowsEvent(t *testing.T) {
 	metadata := make([]uint16, 0, colLen)
 
 	for i := 0; i < colLen; i++ {
-		types = append(types, TypeLong)
+		types = append(types, binlog.TypeLong)
 		metadata = append(metadata, 0)
 	}
 

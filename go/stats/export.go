@@ -121,6 +121,60 @@ func Publish(name string, v expvar.Var) {
 	publish(name, v)
 }
 
+// StringMapFuncWithMultiLabels is a multidimensional string map publisher.
+//
+// Map keys are compound names made with joining multiple strings with '.',
+// and are named by corresponding key labels.
+//
+// Map values are any string, and are named by the value label.
+//
+// Since the map is returned by the function, we assume it's in the right
+// format (meaning each key is of the form 'aaa.bbb.ccc' with as many elements
+// as there are in Labels).
+//
+// Backends which need to provide a numeric value can set a constant value of 1
+// (or whatever is appropriate for the backend) for each key-value pair present
+// in the map.
+type StringMapFuncWithMultiLabels struct {
+	StringMapFunc
+	help       string
+	keyLabels  []string
+	valueLabel string
+}
+
+// Help returns the descriptive help message.
+func (s StringMapFuncWithMultiLabels) Help() string {
+	return s.help
+}
+
+// KeyLabels returns the list of key labels.
+func (s StringMapFuncWithMultiLabels) KeyLabels() []string {
+	return s.keyLabels
+}
+
+// ValueLabel returns the value label.
+func (s StringMapFuncWithMultiLabels) ValueLabel() string {
+	return s.valueLabel
+}
+
+// NewStringMapFuncWithMultiLabels creates a new StringMapFuncWithMultiLabels,
+// mapping to the provided function. The key labels correspond with components
+// of map keys. The value label names the map values.
+func NewStringMapFuncWithMultiLabels(name, help string, keyLabels []string, valueLabel string, f func() map[string]string) *StringMapFuncWithMultiLabels {
+	t := &StringMapFuncWithMultiLabels{
+		StringMapFunc: StringMapFunc(f),
+		help:          help,
+		keyLabels:     keyLabels,
+		valueLabel:    valueLabel,
+	}
+
+	if name != "" {
+		publish(name, t)
+	}
+
+	return t
+}
+
 func publish(name string, v expvar.Var) {
 	defaultVarGroup.publish(name, v)
 }

@@ -20,7 +20,9 @@ import (
 	"fmt"
 
 	"vitess.io/vitess/go/sqltypes"
+	popcode "vitess.io/vitess/go/vt/vtgate/engine/opcode"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 
 	"vitess.io/vitess/go/vt/vtgate/semantics"
@@ -44,7 +46,7 @@ func (hp *horizonPlanning) planHorizon(ctx *plancontext.PlanningContext, plan lo
 	}
 
 	if isRoute && rb.isSingleShard() {
-		err := planSingleShardRoutePlan(hp.sel, rb)
+		err := planSingleRoutePlan(hp.sel, rb)
 		if err != nil {
 			return nil, err
 		}
@@ -60,7 +62,8 @@ func (hp *horizonPlanning) planHorizon(ctx *plancontext.PlanningContext, plan lo
 	// a simpleProjection. We create a new Route that contains the derived table in the
 	// FROM clause. Meaning that, when we push expressions to the select list of this
 	// new Route, we do not want them to rewrite them.
-	if _, isSimpleProj := plan.(*simpleProjection); isSimpleProj {
+	sp, derivedTable := plan.(*simpleProjection)
+	if derivedTable {
 		oldRewriteDerivedExpr := ctx.RewriteDerivedExpr
 		defer func() {
 			ctx.RewriteDerivedExpr = oldRewriteDerivedExpr
@@ -75,10 +78,11 @@ func (hp *horizonPlanning) planHorizon(ctx *plancontext.PlanningContext, plan lo
 	}
 
 	needsOrdering := len(hp.qp.OrderExprs) > 0
-	canShortcut := isRoute && hp.sel.Having == nil && !needsOrdering
 
 	// If we still have a HAVING clause, it's because it could not be pushed to the WHERE,
 	// so it probably has aggregations
+	canShortcut := isRoute && hp.sel.Having == nil && !needsOrdering
+
 	switch {
 	case hp.qp.NeedsAggregation() || hp.sel.Having != nil:
 		plan, err = hp.planAggregations(ctx, plan)
@@ -88,9 +92,29 @@ func (hp *horizonPlanning) planHorizon(ctx *plancontext.PlanningContext, plan lo
 		// if we already did sorting, we don't need to do it again
 		needsOrdering = needsOrdering && !hp.qp.CanPushDownSorting
 	case canShortcut:
-		err = planSingleShardRoutePlan(hp.sel, rb)
+		err = planSingleRoutePlan(hp.sel, rb)
 		if err != nil {
 			return nil, err
+		}
+	case derivedTable:
+		pusher := func(ae *sqlparser.AliasedExpr) (int, error) {
+			offset, _, err := pushProjection(ctx, ae, sp.input, true, true, false)
+			return offset, err
+		}
+		needsVtGate, projections, colNames, err := hp.qp.NeedsProjecting(ctx, pusher)
+		if err != nil {
+			return nil, err
+		}
+		if !needsVtGate {
+			break
+		}
+
+		// there were some expressions we could not push down entirely,
+		// so replace the simpleProjection with a real projection
+		plan = &projection{
+			source:      sp.input,
+			columns:     projections,
+			columnNames: colNames,
 		}
 	default:
 		err = pushProjections(ctx, plan, hp.qp.SelectExprs)
@@ -243,9 +267,9 @@ func (hp *horizonPlanning) planAggrUsingOA(
 		groupByKeys: make([]*engine.GroupByParams, 0, len(grouping)),
 	}
 
-	var order []operators.OrderBy
+	var order []ops.OrderBy
 	if hp.qp.CanPushDownSorting {
-		hp.qp.AlignGroupByAndOrderBy(ctx)
+		hp.qp.OldAlignGroupByAndOrderBy(ctx)
 		// the grouping order might have changed, so we reload the grouping expressions
 		grouping = hp.qp.GetGrouping()
 		order = hp.qp.OrderExprs
@@ -374,7 +398,7 @@ func generateAggregateParams(aggrs []operators.Aggr, aggrParamOffsets [][]offset
 		if proj != nil {
 			var aggrExpr sqlparser.Expr
 			for _, ofs := range paramOffset {
-				curr := &sqlparser.Offset{V: ofs.col}
+				curr := sqlparser.NewOffset(ofs.col, aggr.Func)
 				if aggrExpr == nil {
 					aggrExpr = curr
 				} else {
@@ -401,11 +425,11 @@ func generateAggregateParams(aggrs []operators.Aggr, aggrParamOffsets [][]offset
 			offset = incomingOffset
 		}
 
-		opcode := engine.AggregateSum
+		opcode := popcode.AggregateSum
 		switch aggr.OpCode {
-		case engine.AggregateMin, engine.AggregateMax, engine.AggregateRandom:
+		case popcode.AggregateMin, popcode.AggregateMax, popcode.AggregateRandom:
 			opcode = aggr.OpCode
-		case engine.AggregateCount, engine.AggregateCountStar, engine.AggregateCountDistinct, engine.AggregateSumDistinct:
+		case popcode.AggregateCount, popcode.AggregateCountStar, popcode.AggregateCountDistinct, popcode.AggregateSumDistinct:
 			if !pushed {
 				opcode = aggr.OpCode
 			}
@@ -495,7 +519,8 @@ func (hp *horizonPlanning) handleDistinctAggr(ctx *plancontext.PlanningContext, 
 			continue
 		}
 
-		inner, innerWS, err := hp.qp.GetSimplifiedExpr(expr.Func.GetArg())
+		inner := expr.Func.GetArg()
+		innerWS := hp.qp.GetSimplifiedExpr(inner)
 		if err != nil {
 			return nil, nil, nil, err
 		}
@@ -511,11 +536,9 @@ func (hp *horizonPlanning) handleDistinctAggr(ctx *plancontext.PlanningContext, 
 				return nil, nil, nil, err
 			}
 		}
-		distincts = append(distincts, operators.GroupBy{
-			Inner:         inner,
-			WeightStrExpr: innerWS,
-			InnerIndex:    expr.Index,
-		})
+		groupBy := operators.NewGroupBy(inner, innerWS, nil)
+		groupBy.InnerIndex = expr.Index
+		distincts = append(distincts, groupBy)
 		offsets = append(offsets, i)
 	}
 	return
@@ -554,53 +577,33 @@ func newOffset(col int) offsets {
 func (hp *horizonPlanning) createGroupingsForColumns(columns []*sqlparser.ColName) ([]operators.GroupBy, error) {
 	var lhsGrouping []operators.GroupBy
 	for _, lhsColumn := range columns {
-		expr, wsExpr, err := hp.qp.GetSimplifiedExpr(lhsColumn)
-		if err != nil {
-			return nil, err
-		}
+		wsExpr := hp.qp.GetSimplifiedExpr(lhsColumn)
 
-		lhsGrouping = append(lhsGrouping, operators.GroupBy{
-			Inner:         expr,
-			WeightStrExpr: wsExpr,
-		})
+		lhsGrouping = append(lhsGrouping, operators.NewGroupBy(lhsColumn, wsExpr, nil))
 	}
 	return lhsGrouping, nil
 }
 
 func hasUniqueVindex(semTable *semantics.SemTable, groupByExprs []operators.GroupBy) bool {
 	for _, groupByExpr := range groupByExprs {
-		if exprHasUniqueVindex(semTable, groupByExpr.WeightStrExpr) {
+		if exprHasUniqueVindex(semTable, groupByExpr.SimplifiedExpr) {
 			return true
 		}
 	}
 	return false
 }
 
-func (hp *horizonPlanning) planOrderBy(ctx *plancontext.PlanningContext, orderExprs []operators.OrderBy, plan logicalPlan) (logicalPlan, error) {
+func (hp *horizonPlanning) planOrderBy(ctx *plancontext.PlanningContext, orderExprs []ops.OrderBy, plan logicalPlan) (logicalPlan, error) {
 	switch plan := plan.(type) {
 	case *routeGen4:
-		newPlan, err := planOrderByForRoute(ctx, orderExprs, plan, hp.qp.HasStar)
-		if err != nil {
-			return nil, err
-		}
-		return newPlan, nil
+		return planOrderByForRoute(ctx, orderExprs, plan, hp.qp.HasStar)
 	case *joinGen4:
-		newPlan, err := hp.planOrderByForJoin(ctx, orderExprs, plan)
-		if err != nil {
-			return nil, err
-		}
-
-		return newPlan, nil
+		return hp.planOrderByForJoin(ctx, orderExprs, plan)
 	case *hashJoin:
-		newPlan, err := hp.planOrderByForHashJoin(ctx, orderExprs, plan)
-		if err != nil {
-			return nil, err
-		}
-
-		return newPlan, nil
+		return hp.planOrderByForHashJoin(ctx, orderExprs, plan)
 	case *orderedAggregate:
 		// remove ORDER BY NULL from the list of order by expressions since we will be doing the ordering on vtgate level so NULL is not useful
-		var orderExprsWithoutNils []operators.OrderBy
+		var orderExprsWithoutNils []ops.OrderBy
 		for _, expr := range orderExprs {
 			if sqlparser.IsNull(expr.Inner.Expr) {
 				continue
@@ -610,7 +613,7 @@ func (hp *horizonPlanning) planOrderBy(ctx *plancontext.PlanningContext, orderEx
 		orderExprs = orderExprsWithoutNils
 
 		for _, order := range orderExprs {
-			if sqlparser.ContainsAggregation(order.WeightStrExpr) {
+			if sqlparser.ContainsAggregation(order.SimplifiedExpr) {
 				ms, err := createMemorySortPlanOnAggregation(ctx, plan, orderExprs)
 				if err != nil {
 					return nil, err
@@ -650,7 +653,7 @@ func (hp *horizonPlanning) planOrderBy(ctx *plancontext.PlanningContext, orderEx
 	return nil, vterrors.VT13001(fmt.Sprintf("ORDER BY in complex query %T", plan))
 }
 
-func isSpecialOrderBy(o operators.OrderBy) bool {
+func isSpecialOrderBy(o ops.OrderBy) bool {
 	if sqlparser.IsNull(o.Inner.Expr) {
 		return true
 	}
@@ -658,7 +661,7 @@ func isSpecialOrderBy(o operators.OrderBy) bool {
 	return isFunction && f.Name.Lowered() == "rand"
 }
 
-func planOrderByForRoute(ctx *plancontext.PlanningContext, orderExprs []operators.OrderBy, plan *routeGen4, hasStar bool) (logicalPlan, error) {
+func planOrderByForRoute(ctx *plancontext.PlanningContext, orderExprs []ops.OrderBy, plan *routeGen4, hasStar bool) (logicalPlan, error) {
 	for _, order := range orderExprs {
 		err := checkOrderExprCanBePlannedInScatter(ctx, plan, order, hasStar)
 		if err != nil {
@@ -670,7 +673,7 @@ func planOrderByForRoute(ctx *plancontext.PlanningContext, orderExprs []operator
 		}
 		var wsExpr sqlparser.Expr
 		if ctx.SemTable.NeedsWeightString(order.Inner.Expr) {
-			wsExpr = order.WeightStrExpr
+			wsExpr = order.SimplifiedExpr
 		}
 
 		offset, weightStringOffset, err := wrapAndPushExpr(ctx, order.Inner.Expr, wsExpr, plan)
@@ -689,7 +692,7 @@ func planOrderByForRoute(ctx *plancontext.PlanningContext, orderExprs []operator
 
 // checkOrderExprCanBePlannedInScatter verifies that the given order by expression can be planned.
 // It checks if the expression exists in the plan's select list when the query is a scatter.
-func checkOrderExprCanBePlannedInScatter(ctx *plancontext.PlanningContext, plan *routeGen4, order operators.OrderBy, hasStar bool) error {
+func checkOrderExprCanBePlannedInScatter(ctx *plancontext.PlanningContext, plan *routeGen4, order ops.OrderBy, hasStar bool) error {
 	if !hasStar {
 		return nil
 	}
@@ -729,9 +732,9 @@ func wrapAndPushExpr(ctx *plancontext.PlanningContext, expr sqlparser.Expr, weig
 			return 0, 0, vterrors.VT13001(fmt.Sprintf("in scatter query: complex ORDER BY expression: %s", sqlparser.String(expr)))
 		}
 	}
-	qt := ctx.SemTable.TypeFor(expr)
+	qt, _, found := ctx.SemTable.TypeForExpr(expr)
 	wsNeeded := true
-	if qt != nil && sqltypes.IsNumber(*qt) {
+	if found && sqltypes.IsNumber(qt) {
 		wsNeeded = false
 	}
 
@@ -750,7 +753,7 @@ func weightStringFor(expr sqlparser.Expr) sqlparser.Expr {
 	return &sqlparser.WeightStringFuncExpr{Expr: expr}
 }
 
-func (hp *horizonPlanning) planOrderByForHashJoin(ctx *plancontext.PlanningContext, orderExprs []operators.OrderBy, plan *hashJoin) (logicalPlan, error) {
+func (hp *horizonPlanning) planOrderByForHashJoin(ctx *plancontext.PlanningContext, orderExprs []ops.OrderBy, plan *hashJoin) (logicalPlan, error) {
 	if len(orderExprs) == 1 && isSpecialOrderBy(orderExprs[0]) {
 		rhs, err := hp.planOrderBy(ctx, orderExprs, plan.Right)
 		if err != nil {
@@ -774,7 +777,7 @@ func (hp *horizonPlanning) planOrderByForHashJoin(ctx *plancontext.PlanningConte
 	return sortPlan, nil
 }
 
-func (hp *horizonPlanning) planOrderByForJoin(ctx *plancontext.PlanningContext, orderExprs []operators.OrderBy, plan *joinGen4) (logicalPlan, error) {
+func (hp *horizonPlanning) planOrderByForJoin(ctx *plancontext.PlanningContext, orderExprs []ops.OrderBy, plan *joinGen4) (logicalPlan, error) {
 	if len(orderExprs) == 1 && isSpecialOrderBy(orderExprs[0]) {
 		lhs, err := hp.planOrderBy(ctx, orderExprs, plan.Left)
 		if err != nil {
@@ -805,7 +808,7 @@ func (hp *horizonPlanning) planOrderByForJoin(ctx *plancontext.PlanningContext, 
 	return sortPlan, nil
 }
 
-func createMemorySortPlanOnAggregation(ctx *plancontext.PlanningContext, plan *orderedAggregate, orderExprs []operators.OrderBy) (logicalPlan, error) {
+func createMemorySortPlanOnAggregation(ctx *plancontext.PlanningContext, plan *orderedAggregate, orderExprs []ops.OrderBy) (logicalPlan, error) {
 	primitive := &engine.MemorySort{}
 	ms := &memorySort{
 		resultsBuilder: resultsBuilder{
@@ -822,7 +825,7 @@ func createMemorySortPlanOnAggregation(ctx *plancontext.PlanningContext, plan *o
 			return nil, vterrors.VT13001(fmt.Sprintf("expected to find ORDER BY expression (%s) in orderedAggregate", sqlparser.String(order.Inner)))
 		}
 
-		collationID := ctx.SemTable.CollationForExpr(order.WeightStrExpr)
+		collationID := ctx.SemTable.CollationForExpr(order.SimplifiedExpr)
 		ms.eMemorySort.OrderBy = append(ms.eMemorySort.OrderBy, engine.OrderByParams{
 			Col:               offset,
 			WeightStringCol:   woffset,
@@ -834,15 +837,15 @@ func createMemorySortPlanOnAggregation(ctx *plancontext.PlanningContext, plan *o
 	return ms, nil
 }
 
-func findExprInOrderedAggr(ctx *plancontext.PlanningContext, plan *orderedAggregate, order operators.OrderBy) (keyCol int, weightStringCol int, found bool) {
+func findExprInOrderedAggr(ctx *plancontext.PlanningContext, plan *orderedAggregate, order ops.OrderBy) (keyCol int, weightStringCol int, found bool) {
 	for _, key := range plan.groupByKeys {
-		if ctx.SemTable.EqualsExpr(order.WeightStrExpr, key.Expr) ||
+		if ctx.SemTable.EqualsExpr(order.SimplifiedExpr, key.Expr) ||
 			ctx.SemTable.EqualsExpr(order.Inner.Expr, key.Expr) {
 			return key.KeyCol, key.WeightStringCol, true
 		}
 	}
 	for _, aggregate := range plan.aggregates {
-		if ctx.SemTable.EqualsExpr(order.WeightStrExpr, aggregate.Original.Expr) ||
+		if ctx.SemTable.EqualsExpr(order.SimplifiedExpr, aggregate.Original.Expr) ||
 			ctx.SemTable.EqualsExpr(order.Inner.Expr, aggregate.Original.Expr) {
 			return aggregate.Col, -1, true
 		}
@@ -850,7 +853,7 @@ func findExprInOrderedAggr(ctx *plancontext.PlanningContext, plan *orderedAggreg
 	return 0, 0, false
 }
 
-func (hp *horizonPlanning) createMemorySortPlan(ctx *plancontext.PlanningContext, plan logicalPlan, orderExprs []operators.OrderBy, useWeightStr bool) (logicalPlan, error) {
+func (hp *horizonPlanning) createMemorySortPlan(ctx *plancontext.PlanningContext, plan logicalPlan, orderExprs []ops.OrderBy, useWeightStr bool) (logicalPlan, error) {
 	primitive := &engine.MemorySort{}
 	ms := &memorySort{
 		resultsBuilder: resultsBuilder{
@@ -862,7 +865,7 @@ func (hp *horizonPlanning) createMemorySortPlan(ctx *plancontext.PlanningContext
 	}
 
 	for _, order := range orderExprs {
-		wsExpr := order.WeightStrExpr
+		wsExpr := order.SimplifiedExpr
 		if !useWeightStr {
 			wsExpr = nil
 		}
@@ -881,7 +884,7 @@ func (hp *horizonPlanning) createMemorySortPlan(ctx *plancontext.PlanningContext
 	return ms, nil
 }
 
-func orderExprsDependsOnTableSet(orderExprs []operators.OrderBy, semTable *semantics.SemTable, ts semantics.TableSet) bool {
+func orderExprsDependsOnTableSet(orderExprs []ops.OrderBy, semTable *semantics.SemTable, ts semantics.TableSet) bool {
 	for _, expr := range orderExprs {
 		exprDependencies := semTable.RecursiveDeps(expr.Inner.Expr)
 		if !exprDependencies.IsSolvedBy(ts) {
@@ -952,7 +955,7 @@ func (hp *horizonPlanning) planDistinctOA(semTable *semantics.SemTable, currPlan
 }
 
 func (hp *horizonPlanning) addDistinct(ctx *plancontext.PlanningContext, plan logicalPlan) (logicalPlan, error) {
-	var orderExprs []operators.OrderBy
+	var orderExprs []ops.OrderBy
 	var groupByKeys []*engine.GroupByParams
 	for index, sExpr := range hp.qp.SelectExprs {
 		aliasExpr, err := sExpr.GetAliasedExpr()
@@ -980,9 +983,9 @@ func (hp *horizonPlanning) addDistinct(ctx *plancontext.PlanningContext, plan lo
 		grpParam.WeightStringCol = wOffset
 		groupByKeys = append(groupByKeys, grpParam)
 
-		orderExprs = append(orderExprs, operators.OrderBy{
-			Inner:         &sqlparser.Order{Expr: inner},
-			WeightStrExpr: aliasExpr.Expr},
+		orderExprs = append(orderExprs, ops.OrderBy{
+			Inner:          &sqlparser.Order{Expr: inner},
+			SimplifiedExpr: aliasExpr.Expr},
 		)
 	}
 	innerPlan, err := hp.planOrderBy(ctx, orderExprs, plan)
@@ -1097,7 +1100,7 @@ func exprHasVindex(semTable *semantics.SemTable, expr sqlparser.Expr, hasToBeUni
 	return false
 }
 
-func planSingleShardRoutePlan(sel sqlparser.SelectStatement, rb *routeGen4) error {
+func planSingleRoutePlan(sel sqlparser.SelectStatement, rb *routeGen4) error {
 	err := stripDownQuery(sel, rb.Select)
 	if err != nil {
 		return err
@@ -1167,7 +1170,7 @@ func planGroupByGen4(ctx *plancontext.PlanningContext, groupExpr operators.Group
 		// then we need to add that to the group by clause otherwise the query will fail on mysql with full_group_by error
 		// as the weight_string function might not be functionally dependent on the group by.
 		if wsAdded {
-			sel.AddGroupBy(weightStringFor(groupExpr.WeightStrExpr))
+			sel.AddGroupBy(weightStringFor(groupExpr.SimplifiedExpr))
 		}
 		return nil
 	case *pulloutSubquery:

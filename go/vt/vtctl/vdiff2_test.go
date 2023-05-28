@@ -35,7 +35,7 @@ var (
 )
 
 func TestVDiff2Unsharded(t *testing.T) {
-	env := newTestVDiffEnv([]string{"0"}, []string{"0"}, "", nil)
+	env := newTestVDiffEnv(t, []string{"0"}, []string{"0"}, "", nil)
 	defer env.close()
 
 	UUID := uuid.New().String()
@@ -275,7 +275,7 @@ func TestVDiff2Unsharded(t *testing.T) {
 }
 
 func TestVDiff2Sharded(t *testing.T) {
-	env := newTestVDiffEnv([]string{"-40", "40-"}, []string{"-80", "80-"}, "", map[string]string{
+	env := newTestVDiffEnv(t, []string{"-40", "40-"}, []string{"-80", "80-"}, "", map[string]string{
 		"-80": "MySQL56/0e45e704-7cb9-11ed-a1eb-0242ac120002:1-890",
 		"80-": "MySQL56/1497ddb0-7cb9-11ed-a1eb-0242ac120002:1-891",
 	})

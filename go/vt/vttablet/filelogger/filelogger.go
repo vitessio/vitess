@@ -51,7 +51,7 @@ type FileLogger interface {
 }
 
 type fileLogger struct {
-	logChan chan any
+	logChan chan *tabletenv.LogStats
 }
 
 func (l *fileLogger) Stop() {

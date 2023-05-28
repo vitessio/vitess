@@ -17,13 +17,14 @@ limitations under the License.
 package topo
 
 import (
+	"context"
 	"reflect"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"context"
-
+	"vitess.io/vitess/go/test/utils"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
@@ -220,5 +221,60 @@ func TestUpdateSourceDeniedTables(t *testing.T) {
 		},
 	}) {
 		t.Fatalf("one cell removal from all failed: %v", si)
+	}
+}
+
+func TestValidateShardName(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name          string
+		expectedRange *topodatapb.KeyRange
+		valid         bool
+	}{
+		{
+			name:  "0",
+			valid: true,
+		},
+		{
+			name: "-80",
+			expectedRange: &topodatapb.KeyRange{
+				Start: nil,
+				End:   []byte{0x80},
+			},
+			valid: true,
+		},
+		{
+			name: "40-80",
+			expectedRange: &topodatapb.KeyRange{
+				Start: []byte{0x40},
+				End:   []byte{0x80},
+			},
+			valid: true,
+		},
+		{
+			name:  "foo-bar",
+			valid: false,
+		},
+		{
+			name:  "a/b",
+			valid: false,
+		},
+	}
+
+	for _, tcase := range cases {
+		tcase := tcase
+		t.Run(tcase.name, func(t *testing.T) {
+			t.Parallel()
+
+			_, kr, err := ValidateShardName(tcase.name)
+			if !tcase.valid {
+				assert.Error(t, err, "expected %q to be an invalid shard name", tcase.name)
+				return
+			}
+
+			require.NoError(t, err, "expected %q to be a valid shard name, got error: %v", tcase.name, err)
+			utils.MustMatch(t, tcase.expectedRange, kr)
+		})
 	}
 }

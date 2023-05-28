@@ -15,6 +15,7 @@
  */
 import { vtadmin as pb } from '../proto/vtadmin';
 import { getStream, getStreams, getStreamTablets } from './workflows';
+import { describe, expect } from 'vitest';
 
 describe('getStreams', () => {
     const tests: {

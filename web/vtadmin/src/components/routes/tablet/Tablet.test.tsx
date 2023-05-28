@@ -18,11 +18,12 @@ import { render, screen } from '@testing-library/react';
 import { createMemoryHistory, MemoryHistory } from 'history';
 import { QueryClient, QueryClientProvider } from 'react-query';
 import { Route, Router, Switch } from 'react-router-dom';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 import { Tablet } from './Tablet';
 
-// Preserve process.env to restore its original values after each test run
-const ORIGINAL_PROCESS_ENV = { ...process.env };
+// Preserve import.meta.env to restore its original values after each test run
+const ORIGINAL_PROCESS_ENV = { ...import.meta.env };
 
 const INITIAL_HISTORY = ['/tablet/someCluster/someAlias/qps'];
 
@@ -56,8 +57,8 @@ const renderHelper = (history?: MemoryHistory) => {
 
 describe('Tablet view', () => {
     afterEach(() => {
-        process.env = ORIGINAL_PROCESS_ENV;
-        jest.clearAllMocks();
+        import.meta.env = ORIGINAL_PROCESS_ENV;
+        vi.clearAllMocks();
     });
 
     it('renders', async () => {
@@ -68,7 +69,7 @@ describe('Tablet view', () => {
     });
 
     it('displays the advanced tab', async () => {
-        expect(process.env.REACT_APP_READONLY_MODE).toBeFalsy();
+        expect(import.meta.env.VITE_READONLY_MODE).toBeFalsy();
         renderHelper();
 
         const tab = screen.getByRole('tab', { name: 'Advanced' });
@@ -86,7 +87,7 @@ describe('Tablet view', () => {
 
     describe('read-only mode', () => {
         beforeEach(() => {
-            (process as any).env.REACT_APP_READONLY_MODE = 'true';
+            (process as any).env.VITE_READONLY_MODE = 'true';
         });
 
         it('hides the "Advanced" tab', () => {

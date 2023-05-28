@@ -18,11 +18,13 @@ package main
 
 import (
 	"net/http"
+
+	"vitess.io/vitess/go/vt/servenv"
 )
 
 func init() {
 	// Anything unrecognized gets redirected to the status page.
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+	servenv.HTTPHandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/debug/status", http.StatusFound)
 	})
 }

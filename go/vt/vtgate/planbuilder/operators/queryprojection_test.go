@@ -19,6 +19,8 @@ package operators
 import (
 	"testing"
 
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
+
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 
@@ -34,7 +36,7 @@ func TestQP(t *testing.T) {
 		sql string
 
 		expErr   string
-		expOrder []OrderBy
+		expOrder []ops.OrderBy
 	}{
 		{
 			sql: "select * from user",
@@ -47,24 +49,24 @@ func TestQP(t *testing.T) {
 		},
 		{
 			sql: "select 1, count(1) from user order by 1",
-			expOrder: []OrderBy{
-				{Inner: &sqlparser.Order{Expr: sqlparser.NewIntLiteral("1")}, WeightStrExpr: sqlparser.NewIntLiteral("1")},
+			expOrder: []ops.OrderBy{
+				{Inner: &sqlparser.Order{Expr: sqlparser.NewIntLiteral("1")}, SimplifiedExpr: sqlparser.NewIntLiteral("1")},
 			},
 		},
 		{
 			sql: "select id from user order by col, id, 1",
-			expOrder: []OrderBy{
-				{Inner: &sqlparser.Order{Expr: sqlparser.NewColName("col")}, WeightStrExpr: sqlparser.NewColName("col")},
-				{Inner: &sqlparser.Order{Expr: sqlparser.NewColName("id")}, WeightStrExpr: sqlparser.NewColName("id")},
-				{Inner: &sqlparser.Order{Expr: sqlparser.NewColName("id")}, WeightStrExpr: sqlparser.NewColName("id")},
+			expOrder: []ops.OrderBy{
+				{Inner: &sqlparser.Order{Expr: sqlparser.NewColName("col")}, SimplifiedExpr: sqlparser.NewColName("col")},
+				{Inner: &sqlparser.Order{Expr: sqlparser.NewColName("id")}, SimplifiedExpr: sqlparser.NewColName("id")},
+				{Inner: &sqlparser.Order{Expr: sqlparser.NewColName("id")}, SimplifiedExpr: sqlparser.NewColName("id")},
 			},
 		},
 		{
 			sql: "SELECT CONCAT(last_name,', ',first_name) AS full_name FROM mytable ORDER BY full_name", // alias in order not supported
-			expOrder: []OrderBy{
+			expOrder: []ops.OrderBy{
 				{
 					Inner: &sqlparser.Order{Expr: sqlparser.NewColName("full_name")},
-					WeightStrExpr: &sqlparser.FuncExpr{
+					SimplifiedExpr: &sqlparser.FuncExpr{
 						Name: sqlparser.NewIdentifierCI("CONCAT"),
 						Exprs: sqlparser.SelectExprs{
 							&sqlparser.AliasedExpr{Expr: sqlparser.NewColName("last_name")},
@@ -99,7 +101,7 @@ func TestQP(t *testing.T) {
 				require.Equal(t, len(tcase.expOrder), len(qp.OrderExprs), "not enough order expressions in QP")
 				for index, expOrder := range tcase.expOrder {
 					assert.True(t, sqlparser.Equals.SQLNode(expOrder.Inner, qp.OrderExprs[index].Inner), "want: %+v, got %+v", sqlparser.String(expOrder.Inner), sqlparser.String(qp.OrderExprs[index].Inner))
-					assert.True(t, sqlparser.Equals.SQLNode(expOrder.WeightStrExpr, qp.OrderExprs[index].WeightStrExpr), "want: %v, got %v", sqlparser.String(expOrder.WeightStrExpr), sqlparser.String(qp.OrderExprs[index].WeightStrExpr))
+					assert.True(t, sqlparser.Equals.SQLNode(expOrder.SimplifiedExpr, qp.OrderExprs[index].SimplifiedExpr), "want: %v, got %v", sqlparser.String(expOrder.SimplifiedExpr), sqlparser.String(qp.OrderExprs[index].SimplifiedExpr))
 				}
 			}
 		})

@@ -41,11 +41,13 @@ var (
 	VT03016 = errorWithoutState("VT03016", vtrpcpb.Code_INVALID_ARGUMENT, "unknown vindex column: '%s'", "The given column is unknown in the vindex table.")
 	VT03017 = errorWithState("VT03017", vtrpcpb.Code_INVALID_ARGUMENT, SyntaxError, "where clause can only be of the type 'pos > <value>'", "This vstream where clause can only be a greater than filter.")
 	VT03018 = errorWithoutState("VT03018", vtrpcpb.Code_INVALID_ARGUMENT, "NEXT used on a non-sequence table", "You cannot use the NEXT syntax on a table that is not a sequence table.")
-	VT03019 = errorWithoutState("VT03019", vtrpcpb.Code_INVALID_ARGUMENT, "symbol %s not found", "The given symbol was not found or is not available.")
-	VT03020 = errorWithoutState("VT03020", vtrpcpb.Code_INVALID_ARGUMENT, "symbol %s not found in subquery", "The given symbol was not found in the subquery.")
-	VT03021 = errorWithoutState("VT03021", vtrpcpb.Code_INVALID_ARGUMENT, "ambiguous symbol reference: %v", "The given symbol is ambiguous. You can use a table qualifier to make it unambiguous.")
+	VT03019 = errorWithoutState("VT03019", vtrpcpb.Code_INVALID_ARGUMENT, "column %s not found", "The given column was not found or is not available.")
+	VT03020 = errorWithoutState("VT03020", vtrpcpb.Code_INVALID_ARGUMENT, "column %s not found in subquery", "The given column was not found in the subquery.")
+	VT03021 = errorWithoutState("VT03021", vtrpcpb.Code_INVALID_ARGUMENT, "ambiguous column reference: %v", "The given column is ambiguous. You can use a table qualifier to make it unambiguous.")
 	VT03022 = errorWithoutState("VT03022", vtrpcpb.Code_INVALID_ARGUMENT, "column %v not found in %v", "The given column cannot be found.")
 	VT03023 = errorWithoutState("VT03023", vtrpcpb.Code_INVALID_ARGUMENT, "INSERT not supported when targeting a key range: %s", "When targeting a range of shards, Vitess does not know which shard to send the INSERT to.")
+	VT03024 = errorWithoutState("VT03024", vtrpcpb.Code_INVALID_ARGUMENT, "'%s' user defined variable does not exists", "The query cannot be prepared using the user defined variable as it does not exists for this session.")
+	VT03025 = errorWithState("VT03025", vtrpcpb.Code_INVALID_ARGUMENT, WrongArguments, "Incorrect arguments to %s", "The execute statement have wrong number of arguments")
 
 	VT05001 = errorWithState("VT05001", vtrpcpb.Code_NOT_FOUND, DbDropExists, "cannot drop database '%s'; database does not exists", "The given database does not exist; Vitess cannot drop it.")
 	VT05002 = errorWithState("VT05002", vtrpcpb.Code_NOT_FOUND, BadDb, "cannot alter database '%s'; unknown database", "The given database does not exist; Vitess cannot alter it.")
@@ -67,6 +69,9 @@ var (
 	VT09008 = errorWithoutState("VT09008", vtrpcpb.Code_FAILED_PRECONDITION, "vexplain queries/all will actually run queries", "vexplain queries/all will actually run queries. `/*vt+ EXECUTE_DML_QUERIES */` must be set to run DML queries in vtexplain. Example: `vexplain /*vt+ EXECUTE_DML_QUERIES */ queries delete from t1`")
 	VT09009 = errorWithoutState("VT09009", vtrpcpb.Code_FAILED_PRECONDITION, "stream is supported only for primary tablet type, current type: %v", "Stream is only supported for primary tablets, please use a stream on those tablets.")
 	VT09010 = errorWithoutState("VT09010", vtrpcpb.Code_FAILED_PRECONDITION, "SHOW VITESS_THROTTLER STATUS works only on primary tablet", "SHOW VITESS_THROTTLER STATUS works only on primary tablet.")
+	VT09011 = errorWithState("VT09011", vtrpcpb.Code_FAILED_PRECONDITION, UnknownStmtHandler, "Unknown prepared statement handler (%s) given to %s", "The prepared statement is not available")
+	VT09012 = errorWithoutState("VT09012", vtrpcpb.Code_FAILED_PRECONDITION, "%s statement with %s tablet not allowed", "This type of statement is not allowed on the given tablet.")
+	VT09013 = errorWithoutState("VT09013", vtrpcpb.Code_FAILED_PRECONDITION, "semi-sync plugins are not loaded", "Durability policy wants Vitess to use semi-sync, but the MySQL instances don't have the semi-sync plugin loaded.")
 
 	VT10001 = errorWithoutState("VT10001", vtrpcpb.Code_ABORTED, "foreign key constraints are not allowed", "Foreign key constraints are not allowed, see https://vitess.io/blog/2021-06-15-online-ddl-why-no-fk/.")
 
@@ -80,6 +85,7 @@ var (
 	VT14002 = errorWithoutState("VT14002", vtrpcpb.Code_UNAVAILABLE, "no available connection", "No available connection.")
 	VT14003 = errorWithoutState("VT14003", vtrpcpb.Code_UNAVAILABLE, "no connection for tablet %v", "No connection for the given tablet.")
 	VT14004 = errorWithoutState("VT14004", vtrpcpb.Code_UNAVAILABLE, "cannot find keyspace for: %s", "The specified keyspace could not be found.")
+	VT14005 = errorWithoutState("VT14005", vtrpcpb.Code_UNAVAILABLE, "cannot lookup sidecar database for keyspace: %s", "Failed to read sidecar database identifier.")
 
 	Errors = []func(args ...any) *VitessError{
 		VT03001,
@@ -105,6 +111,8 @@ var (
 		VT03021,
 		VT03022,
 		VT03023,
+		VT03024,
+		VT03025,
 		VT05001,
 		VT05002,
 		VT05003,
@@ -123,6 +131,9 @@ var (
 		VT09008,
 		VT09009,
 		VT09010,
+		VT09011,
+		VT09012,
+		VT09013,
 		VT10001,
 		VT12001,
 		VT13001,
@@ -131,6 +142,7 @@ var (
 		VT14002,
 		VT14003,
 		VT14004,
+		VT14005,
 	}
 )
 

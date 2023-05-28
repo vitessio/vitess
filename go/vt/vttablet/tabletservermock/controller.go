@@ -18,13 +18,11 @@ limitations under the License.
 package tabletservermock
 
 import (
+	"context"
 	"sync"
+	"time"
 
 	"google.golang.org/protobuf/proto"
-
-	"context"
-
-	"time"
 
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/mysqlctl"
@@ -34,7 +32,6 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
-	"vitess.io/vitess/go/vt/vttablet/vexec"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -173,11 +170,6 @@ func (tqsc *Controller) IsHealthy() error {
 
 // ReloadSchema is part of the tabletserver.Controller interface
 func (tqsc *Controller) ReloadSchema(ctx context.Context) error {
-	return nil
-}
-
-// OnlineDDLExecutor is part of the tabletserver.Controller interface
-func (tqsc *Controller) OnlineDDLExecutor() vexec.Executor {
 	return nil
 }
 

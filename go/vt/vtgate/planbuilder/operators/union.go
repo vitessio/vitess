@@ -29,15 +29,10 @@ type Union struct {
 	Distinct bool
 
 	// TODO this should be removed. For now it's used to fail queries
-	Ordering sqlparser.OrderBy
+	Ordering []ops.OrderBy
 
 	noColumns
 }
-
-var _ ops.PhysicalOperator = (*Union)(nil)
-
-// IPhysical implements the PhysicalOperator interface
-func (u *Union) IPhysical() {}
 
 // Clone implements the Operator interface
 func (u *Union) Clone(inputs []ops.Operator) ops.Operator {
@@ -46,9 +41,18 @@ func (u *Union) Clone(inputs []ops.Operator) ops.Operator {
 	return &newOp
 }
 
+func (u *Union) GetOrdering() ([]ops.OrderBy, error) {
+	return u.Ordering, nil
+}
+
 // Inputs implements the Operator interface
 func (u *Union) Inputs() []ops.Operator {
 	return u.Sources
+}
+
+// SetInputs implements the Operator interface
+func (u *Union) SetInputs(ops []ops.Operator) {
+	u.Sources = ops
 }
 
 // AddPredicate adds a predicate a UNION by pushing the predicate to all sources of the UNION.
@@ -149,9 +153,9 @@ func (u *Union) GetSelectFor(source int) (*sqlparser.Select, error) {
 	}
 }
 
-func (u *Union) Compact(*plancontext.PlanningContext) (ops.Operator, rewrite.TreeIdentity, error) {
+func (u *Union) Compact(*plancontext.PlanningContext) (ops.Operator, *rewrite.ApplyResult, error) {
 	var newSources []ops.Operator
-	anythingChanged := false
+	var anythingChanged *rewrite.ApplyResult
 	for _, source := range u.Sources {
 		var other *Union
 		horizon, ok := source.(*Horizon)
@@ -165,7 +169,7 @@ func (u *Union) Compact(*plancontext.PlanningContext) (ops.Operator, rewrite.Tre
 			newSources = append(newSources, source)
 			continue
 		}
-		anythingChanged = true
+		anythingChanged = anythingChanged.Merge(rewrite.NewTree("merged UNIONs", other))
 		switch {
 		case len(other.Ordering) == 0 && !other.Distinct:
 			fallthrough
@@ -177,15 +181,21 @@ func (u *Union) Compact(*plancontext.PlanningContext) (ops.Operator, rewrite.Tre
 			newSources = append(newSources, other)
 		}
 	}
-	if anythingChanged {
+	if anythingChanged != rewrite.SameTree {
 		u.Sources = newSources
 	}
-	identity := rewrite.SameTree
-	if anythingChanged {
-		identity = rewrite.NewTree
-	}
 
-	return u, identity, nil
+	return u, anythingChanged, nil
 }
 
 func (u *Union) NoLHSTableSet() {}
+
+func (u *Union) Description() ops.OpDescription {
+	return ops.OpDescription{
+		OperatorType: "Union",
+	}
+}
+
+func (u *Union) ShortDescription() string {
+	return ""
+}

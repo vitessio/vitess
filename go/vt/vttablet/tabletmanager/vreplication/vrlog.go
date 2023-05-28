@@ -28,10 +28,11 @@ import (
 
 	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/servenv"
 )
 
 var (
-	vrLogStatsLogger   = streamlog.New("VReplication", 50)
+	vrLogStatsLogger   = streamlog.New[*VrLogStats]("VReplication", 50)
 	vrLogStatsTemplate = template.Must(template.New("vrlog").
 				Parse("{{.Type}} Event	{{.Detail}}	{{.LogTime}}	{{.DurationNs}}\n"))
 )
@@ -63,29 +64,24 @@ func (stats *VrLogStats) Send(detail string) {
 }
 
 func init() {
-	http.HandleFunc("/debug/vrlog", func(w http.ResponseWriter, r *http.Request) {
+	servenv.HTTPHandleFunc("/debug/vrlog", func(w http.ResponseWriter, r *http.Request) {
 		ch := vrLogStatsLogger.Subscribe("vrlogstats")
 		defer vrLogStatsLogger.Unsubscribe(ch)
 		vrlogStatsHandler(ch, w, r)
 	})
 }
 
-func vrlogStatsHandler(ch chan any, w http.ResponseWriter, r *http.Request) {
+func vrlogStatsHandler(ch chan *VrLogStats, w http.ResponseWriter, r *http.Request) {
 	timeout, limit := parseTimeoutLimitParams(r)
 	tmr := time.NewTimer(timeout)
 	defer tmr.Stop()
 	for i := 0; i < limit; i++ {
 		select {
-		case out := <-ch:
+		case stats := <-ch:
 			select {
 			case <-tmr.C:
 				return
 			default:
-			}
-			stats, ok := out.(*VrLogStats)
-			if !ok {
-				log.Error("Log received is not of type VrLogStats")
-				continue
 			}
 			if err := vrLogStatsTemplate.Execute(w, stats); err != nil {
 				log.Errorf("vrlog: couldn't execute template: %v", err)

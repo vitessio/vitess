@@ -106,7 +106,7 @@ func TestEmptyInput(t *testing.T) {
 }
 
 func TestHexAndBinaryArgument(t *testing.T) {
-	hexExpr, err := evalengine.Translate(sqlparser.Argument("vtg1"), nil)
+	hexExpr, err := evalengine.Translate(sqlparser.NewArgument("vtg1"), nil)
 	require.NoError(t, err)
 	proj := &Projection{
 		Cols:       []string{"hex"},

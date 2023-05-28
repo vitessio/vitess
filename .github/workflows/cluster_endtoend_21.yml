@@ -6,6 +6,8 @@ concurrency:
   group: format('{0}-{1}', ${{ github.ref }}, 'Cluster (21)')
   cancel-in-progress: true
 
+permissions: read-all
+
 env:
   LAUNCHABLE_ORGANIZATION: "vitess"
   LAUNCHABLE_WORKSPACE: "vitess-app"
@@ -60,9 +62,9 @@ jobs:
 
     - name: Set up Go
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
-      uses: actions/setup-go@v3
+      uses: actions/setup-go@v4
       with:
-        go-version: 1.19.4
+        go-version: 1.20.4
 
     - name: Set up python
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
@@ -102,7 +104,7 @@ jobs:
         go install github.com/vitessio/go-junit-report@HEAD
 
     - name: Setup launchable dependencies
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
+      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true' && github.base_ref == 'main'
       run: |
         # Get Launchable CLI installed. If you can, make it a part of the builder image to speed things up
         pip3 install --user launchable~=1.0 > /dev/null

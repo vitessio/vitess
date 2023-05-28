@@ -188,6 +188,312 @@ var (
 		input:  "create table x(location GEOMETRYCOLLECTION DEFAULT (LINESTRING(POINT(7.0, 3.0))))",
 		output: "create table x (\n\tlocation GEOMETRYCOLLECTION default (linestring(point(7.0, 3.0)))\n)",
 	}, {
+		input:  "create table x(location GEOMETRYCOLLECTION DEFAULT (POLYGON(LINESTRING(POINT(4, 5), POINT(4.6, 7.9), POINT(4.6, 7.9)))))",
+		output: "create table x (\n\tlocation GEOMETRYCOLLECTION default (polygon(linestring(point(4, 5), point(4.6, 7.9), point(4.6, 7.9))))\n)",
+	}, {
+		input:  "select ST_ASTEXT(POLYGON(linestrings)) from linestringTable",
+		output: "select st_astext(polygon(linestrings)) from linestringTable",
+	}, {
+		input:  "create table x(location GEOMETRYCOLLECTION DEFAULT (MULTIPOINT(POINT(4, 5), POINT(4.6, 7.9), POINT(4.6, 7.9))))",
+		output: "create table x (\n\tlocation GEOMETRYCOLLECTION default (multipoint(point(4, 5), point(4.6, 7.9), point(4.6, 7.9)))\n)",
+	}, {
+		input:  "select ST_ASTEXT(MULTIPOINT(points)) from pointsTable",
+		output: "select st_astext(multipoint(points)) from pointsTable",
+	}, {
+		input:  "create table x(location GEOMETRYCOLLECTION DEFAULT (MULTILINESTRING(LINESTRING(POINT(8,9), POINT(8,9)))))",
+		output: "create table x (\n\tlocation GEOMETRYCOLLECTION default (multilinestring(linestring(point(8, 9), point(8, 9))))\n)",
+	}, {
+		input:  "select ST_ASTEXT(MULTILINESTRING(linestrings)) from linestringsTable",
+		output: "select st_astext(multilinestring(linestrings)) from linestringsTable",
+	}, {
+		input:  "create table x(location GEOMETRYCOLLECTION DEFAULT (MULTIPOLYGON(POINT(7.0, 3.0), POINT(7.0, 3.0))))",
+		output: "create table x (\n\tlocation GEOMETRYCOLLECTION default (multipolygon(point(7.0, 3.0), point(7.0, 3.0)))\n)",
+	}, {
+		input:  "select ST_ASTEXT(MULTIPOLYGON(polygons)) from polygonTable",
+		output: "select st_astext(multipolygon(polygons)) from polygonTable",
+	}, {
+		input:  "SELECT ST_AsText(ST_GeomCollFromText('MULTILINESTRING((10 10, 11 11), (9 9, 10 10))'))",
+		output: "select st_astext(st_geometrycollectionfromtext('MULTILINESTRING((10 10, 11 11), (9 9, 10 10))')) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_GeomCollFromText('MULTILINESTRING((10 10, 11 11), (9 9, 10 10))', 4326))",
+		output: "select st_astext(st_geometrycollectionfromtext('MULTILINESTRING((10 10, 11 11), (9 9, 10 10))', 4326)) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_GeomCollFromText('MULTILINESTRING((10 10, 11 11), (9 9, 10 10))', 4326, 'axis-order=lat-long'))",
+		output: "select st_astext(st_geometrycollectionfromtext('MULTILINESTRING((10 10, 11 11), (9 9, 10 10))', 4326, 'axis-order=lat-long')) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_GeomFromText('MULTILINESTRING((10 10, 11 11), (9 9, 10 10))'))",
+		output: "select st_astext(st_geometryfromtext('MULTILINESTRING((10 10, 11 11), (9 9, 10 10))')) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_GeomFromText('MULTILINESTRING((10 10, 11 11), (9 9, 10 10))', 4326))",
+		output: "select st_astext(st_geometryfromtext('MULTILINESTRING((10 10, 11 11), (9 9, 10 10))', 4326)) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_GeomFromText('MULTILINESTRING((10 10, 11 11), (9 9, 10 10))', 4326, 'axis-order=lat-long'))",
+		output: "select st_astext(st_geometryfromtext('MULTILINESTRING((10 10, 11 11), (9 9, 10 10))', 4326, 'axis-order=lat-long')) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_MultilinestringFromText('MULTILINESTRING((10 10, 11 11), (9 9, 10 10))'))",
+		output: "select st_astext(st_multilinestringfromtext('MULTILINESTRING((10 10, 11 11), (9 9, 10 10))')) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_MultilinestringFromText('MULTILINESTRING((10 10, 11 11), (9 9, 10 10))', 4326))",
+		output: "select st_astext(st_multilinestringfromtext('MULTILINESTRING((10 10, 11 11), (9 9, 10 10))', 4326)) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_MultilinestringFromText('MULTILINESTRING((10 10, 11 11), (9 9, 10 10))', 4326, 'axis-order=lat-long'))",
+		output: "select st_astext(st_multilinestringfromtext('MULTILINESTRING((10 10, 11 11), (9 9, 10 10))', 4326, 'axis-order=lat-long')) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_LinestringFromText('LINESTRING((10 10, 11 11))'))",
+		output: "select st_astext(st_linestringfromtext('LINESTRING((10 10, 11 11))')) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_LinestringFromText('LINESTRING((10 10, 11 11))', 4326))",
+		output: "select st_astext(st_linestringfromtext('LINESTRING((10 10, 11 11))', 4326)) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_LinestringFromText('LINESTRING((10 10, 11 11))', 4326, 'axis-order=lat-long'))",
+		output: "select st_astext(st_linestringfromtext('LINESTRING((10 10, 11 11))', 4326, 'axis-order=lat-long')) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_PointFromText('POINT(10 10)'))",
+		output: "select st_astext(st_pointfromtext('POINT(10 10)')) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_PointFromText('POINT(10 10)', 4326))",
+		output: "select st_astext(st_pointfromtext('POINT(10 10)', 4326)) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_MultiPointFromText('MULTIPOINT((10 10, 11 11))'))",
+		output: "select st_astext(st_multipointfromtext('MULTIPOINT((10 10, 11 11))')) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_MultiPointFromText('MULTIPOINT((10 10, 11 11))', 4326))",
+		output: "select st_astext(st_multipointfromtext('MULTIPOINT((10 10, 11 11))', 4326)) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_MultiPointFromText('MULTIPOINT((10 10, 11 11))', 4326, 'axis-order=lat-long'))",
+		output: "select st_astext(st_multipointfromtext('MULTIPOINT((10 10, 11 11))', 4326, 'axis-order=lat-long')) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_MultiPolygonFromText(@g))",
+		output: "select st_astext(st_multipolygonfromtext(@g)) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_MultiPolygonFromText(@g, 4326))",
+		output: "select st_astext(st_multipolygonfromtext(@g, 4326)) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_MultiPolygonFromText(@g, 4326, 'axis-order=lat-long'))",
+		output: "select st_astext(st_multipolygonfromtext(@g, 4326, 'axis-order=lat-long')) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_PolygonFromText(@g))",
+		output: "select st_astext(st_polygonfromtext(@g)) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_PolygonFromText(@g, 4326))",
+		output: "select st_astext(st_polygonfromtext(@g, 4326)) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_PolygonFromText(@g, 4326, 'axis-order=long-lat'))",
+		output: "select st_astext(st_polygonfromtext(@g, 4326, 'axis-order=long-lat')) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_GeomCollFromWKB(0x010100000000000000000022400000000000002240))",
+		output: "select st_astext(st_geometrycollectionfromwkb(0x010100000000000000000022400000000000002240)) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_GeomCollFromWKB(g, 4326))",
+		output: "select st_astext(st_geometrycollectionfromwkb(g, 4326)) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_GeomCollFromText(g, 4326, 'axis-order=lat-long'))",
+		output: "select st_astext(st_geometrycollectionfromtext(g, 4326, 'axis-order=lat-long')) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_GeomFromWKB(g))",
+		output: "select st_astext(st_geometryfromwkb(g)) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_GeomFromWKB(g, 4326))",
+		output: "select st_astext(st_geometryfromwkb(g, 4326)) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_GeomFromWKB(g, 4326, 'axis-order=lat-long'))",
+		output: "select st_astext(st_geometryfromwkb(g, 4326, 'axis-order=lat-long')) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_MultilinestringFromWKB(g))",
+		output: "select st_astext(st_multilinestringfromwkb(g)) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_MultilinestringFromWKB(g, 4326))",
+		output: "select st_astext(st_multilinestringfromwkb(g, 4326)) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_MultilinestringFromWKB(0x01050000000200000001020000000200000000000000000024400000000000002440000000000000264000000000000026400102000000020000000000000000002240000000000000224000000000000024400000000000002440, 4326, 'axis-order=lat-long'))",
+		output: "select st_astext(st_multilinestringfromwkb(0x01050000000200000001020000000200000000000000000024400000000000002440000000000000264000000000000026400102000000020000000000000000002240000000000000224000000000000024400000000000002440, 4326, 'axis-order=lat-long')) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_LinestringFromWKB(g))",
+		output: "select st_astext(st_linestringfromwkb(g)) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_LinestringFromWKB(g, 4326))",
+		output: "select st_astext(st_linestringfromwkb(g, 4326)) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_LinestringFromWKB(g, 4326, 'axis-order=lat-long'))",
+		output: "select st_astext(st_linestringfromwkb(g, 4326, 'axis-order=lat-long')) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_PointFromWKB(mp))",
+		output: "select st_astext(st_pointfromwkb(mp)) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_PointFromWKB(mp, 4326))",
+		output: "select st_astext(st_pointfromwkb(mp, 4326)) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_MultiPointFromWKB(mp))",
+		output: "select st_astext(st_multipointfromwkb(mp)) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_MultiPointFromWKB(mp, 4326))",
+		output: "select st_astext(st_multipointfromwkb(mp, 4326)) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_MultiPointFromWKB(mp, 4326, 'axis-order=lat-long'))",
+		output: "select st_astext(st_multipointfromwkb(mp, 4326, 'axis-order=lat-long')) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_MultiPolygonFromText(g))",
+		output: "select st_astext(st_multipolygonfromtext(g)) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_MultiPolygonFromText(g, 4326))",
+		output: "select st_astext(st_multipolygonfromtext(g, 4326)) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_MultiPolygonFromText(g, 4326, 'axis-order=lat-long'))",
+		output: "select st_astext(st_multipolygonfromtext(g, 4326, 'axis-order=lat-long')) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_PolygonFromText(g))",
+		output: "select st_astext(st_polygonfromtext(g)) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_PolygonFromText(g, 4326))",
+		output: "select st_astext(st_polygonfromtext(g, 4326)) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_PolygonFromText(g, 4326, 'axis-order=long-lat'), 'axis-order=long-lat')",
+		output: "select st_astext(st_polygonfromtext(g, 4326, 'axis-order=long-lat'), 'axis-order=long-lat') from dual",
+	}, {
+		input:  "SELECT ST_AsWKT(ST_GeomCollFromText(g, 4326, 'axis-order=lat-long'))",
+		output: "select st_astext(st_geometrycollectionfromtext(g, 4326, 'axis-order=lat-long')) from dual",
+	}, {
+		input:  "SELECT ST_AsBinary(ST_PolygonFromText(g, 4326, 'axis-order=long-lat'), 'axis-order=long-lat')",
+		output: "select st_asbinary(st_polygonfromtext(g, 4326, 'axis-order=long-lat'), 'axis-order=long-lat') from dual",
+	}, {
+		input:  "SELECT ST_AsWKB(ST_GeomCollFromText(g, 4326, 'axis-order=lat-long'))",
+		output: "select st_asbinary(st_geometrycollectionfromtext(g, 4326, 'axis-order=lat-long')) from dual",
+	}, {
+		input:  "SELECT ST_Dimension(ST_GeomFromText('LineString(1 1,2 2)'))",
+		output: "select st_dimension(st_geometryfromtext('LineString(1 1,2 2)')) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_Envelope(ST_GeomFromText('LineString(1 1,2 2)')))",
+		output: "select st_astext(st_envelope(st_geometryfromtext('LineString(1 1,2 2)'))) from dual",
+	}, {
+		input:  "SELECT ST_IsSimple(ST_GeomFromText('POINT(1 1)'))",
+		output: "select st_issimple(st_geometryfromtext('POINT(1 1)')) from dual",
+	}, {
+		input:  "SELECT ST_GeometryType(ST_GeomFromText('POINT(1 1)'))",
+		output: "select st_geometrytype(st_geometryfromtext('POINT(1 1)')) from dual",
+	}, {
+		input:  "SELECT ST_IsEmpty(ST_GeomFromText('POINT(1 1)'))",
+		output: "select st_isempty(st_geometryfromtext('POINT(1 1)')) from dual",
+	}, {
+		input:  "SELECT ST_Latitude(@pt);",
+		output: "select st_latitude(@pt) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_Latitude(@pt, 10));",
+		output: "select st_astext(st_latitude(@pt, 10)) from dual",
+	}, {
+		input:  "SELECT ST_Longitude(@pt);",
+		output: "select st_longitude(@pt) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_Longitude(@pt, 10));",
+		output: "select st_astext(st_longitude(@pt, 10)) from dual",
+	}, {
+		input:  "SELECT ST_X(@pt);",
+		output: "select st_x(@pt) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_X(@pt, 10));",
+		output: "select st_astext(st_x(@pt, 10)) from dual",
+	}, {
+		input:  "SELECT ST_Y(@pt);",
+		output: "select st_y(@pt) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_Y(@pt, 10));",
+		output: "select st_astext(st_y(@pt, 10)) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_EndPoint(ST_GeomFromText(@ls)));",
+		output: "select st_astext(st_endpoint(st_geometryfromtext(@ls))) from dual",
+	}, {
+		input:  "SELECT ST_IsClosed(ST_GeomFromText(@ls1));",
+		output: "select st_isclosed(st_geometryfromtext(@ls1)) from dual",
+	}, {
+		input:  "SELECT IsClosed(ST_GeomFromText(@ls1));",
+		output: "select st_isclosed(st_geometryfromtext(@ls1)) from dual",
+	}, {
+		input:  "SELECT ST_Length(@ls);",
+		output: "select st_length(@ls) from dual",
+	}, {
+		input:  "SELECT ST_Length(@ls, 'metre');",
+		output: "select st_length(@ls, 'metre') from dual",
+	}, {
+		input:  "SELECT GLength(@ls);",
+		output: "select st_length(@ls) from dual",
+	}, {
+		input:  "SELECT GLength(@ls, 'metre');",
+		output: "select st_length(@ls, 'metre') from dual",
+	}, {
+		input:  "SELECT ST_NumPoints(ST_GeomFromText(@ls));",
+		output: "select st_numpoints(st_geometryfromtext(@ls)) from dual",
+	}, {
+		input:  "SELECT Numpoints(ST_GeomFromText(@ls));",
+		output: "select st_numpoints(st_geometryfromtext(@ls)) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_PointN(ST_GeomFromText(@ls),2));",
+		output: "select st_astext(st_pointn(st_geometryfromtext(@ls), 2)) from dual",
+	}, {
+		input:  "SELECT ST_AsText(PointN(ST_GeomFromText(@ls),2));",
+		output: "select st_astext(st_pointn(st_geometryfromtext(@ls), 2)) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_StartPoint(ST_GeomFromText(@ls)));",
+		output: "select st_astext(st_startpoint(st_geometryfromtext(@ls))) from dual",
+	}, {
+		input:  "SELECT ST_AsText(StartPoint(ST_GeomFromText(@ls)));",
+		output: "select st_astext(st_startpoint(st_geometryfromtext(@ls))) from dual",
+	}, {
+		input:  "SELECT ST_Area(ST_GeomFromText(@mpoly));",
+		output: "select st_area(st_geometryfromtext(@mpoly)) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_GeometryN(ST_GeomFromText(@gc),1));",
+		output: "select st_astext(st_geometryn(st_geometryfromtext(@gc), 1)) from dual",
+	}, {
+		input:  "SELECT ST_NumGeometries(ST_GeomFromText(@gc));",
+		output: "select st_numgeometries(st_geometryfromtext(@gc)) from dual",
+	}, {
+		input:  "SELECT ST_GeometryType(@poly),ST_AsText(ST_Centroid(@poly));",
+		output: "select st_geometrytype(@poly), st_astext(st_centroid(@poly)) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_ExteriorRing(ST_GeomFromText(@poly)));",
+		output: "select st_astext(st_exteriorring(st_geometryfromtext(@poly))) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_InteriorRingN(ST_GeomFromText(@poly),1));",
+		output: "select st_astext(st_interiorringN(st_geometryfromtext(@poly), 1)) from dual",
+	}, {
+		input:  "SELECT ST_NumInteriorRings(ST_GeomFromText(@poly));",
+		output: "select st_numinteriorrings(st_geometryfromtext(@poly)) from dual",
+	}, {
+		input:  "SELECT ST_NumInteriorRing(ST_GeomFromText(@poly));",
+		output: "select st_numinteriorrings(st_geometryfromtext(@poly)) from dual",
+	}, {
+		input:  "SELECT ST_GeoHash(180,0,10), ST_GeoHash(-180,-90,15);",
+		output: "select st_geohash(180, 0, 10), st_geohash(-180, -90, 15) from dual",
+	}, {
+		input:  "SELECT ST_GeoHash(@p,10);",
+		output: "select st_geohash(@p, 10) from dual",
+	}, {
+		input:  "SELECT ST_LatFromGeoHash(ST_GeoHash(45,-20,10));",
+		output: "select st_latfromgeohash(st_geohash(45, -20, 10)) from dual",
+	}, {
+		input:  "SELECT ST_LongFromGeoHash(ST_GeoHash(45,-20,10));",
+		output: "select st_longfromgeohash(st_geohash(45, -20, 10)) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_PointFromGeoHash(@gh,0));",
+		output: "select st_astext(st_pointfromgeohash(@gh, 0)) from dual",
+	}, {
+		input:  "SELECT ST_AsGeoJSON(ST_GeomFromText('POINT(11.11111 12.22222)'));",
+		output: "select st_asgeojson(st_geometryfromtext('POINT(11.11111 12.22222)')) from dual",
+	}, {
+		input:  "SELECT ST_AsGeoJSON(ST_GeomFromText('POINT(11.11111 12.22222)'),2);",
+		output: "select st_asgeojson(st_geometryfromtext('POINT(11.11111 12.22222)'), 2) from dual",
+	}, {
+		input:  "SELECT ST_AsGeoJSON(ST_GeomFromText('POINT(11.11111 12.22222)'),2,0);",
+		output: "select st_asgeojson(st_geometryfromtext('POINT(11.11111 12.22222)'), 2, 0) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_GeomFromGeoJSON(@json));",
+		output: "select st_astext(st_geomfromgeojson(@`json`)) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_SRID(ST_GeomFromGeoJSON(@json, 0),0));",
+		output: "select st_astext(ST_SRID(st_geomfromgeojson(@`json`, 0), 0)) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_SRID(ST_GeomFromGeoJSON(@json),1,4326));",
+		output: "select st_astext(ST_SRID(st_geomfromgeojson(@`json`), 1, 4326)) from dual",
+	}, {
 		input:  "WITH RECURSIVE  odd_num_cte (id, n) AS (SELECT 1, 1 union all SELECT id+1, n+2 from odd_num_cte where id < 5) SELECT * FROM odd_num_cte",
 		output: "with recursive odd_num_cte(id, n) as (select 1, 1 from dual union all select id + 1, n + 2 from odd_num_cte where id < 5) select * from odd_num_cte",
 	}, {
@@ -717,7 +1023,7 @@ var (
 	}, {
 		input: "select /* utc_timestamp as func */ utc_timestamp() from t",
 	}, {
-		input: "select /* utc_timestamp with fsp */ utc_timestamp(0) from t",
+		input: "select /* utc_timestamp with fsp */ utc_timestamp(1) from t",
 	}, {
 		input: "select /* utc_time */ utc_time() from t",
 	}, {
@@ -986,6 +1292,11 @@ var (
 	}, {
 		input: "update /* a.b */ a.b set b = 3",
 	}, {
+		input: "update a.b set d = @v := d + 7 where u = 42",
+	}, {
+		input:  "select @topic3_id:= 10103;",
+		output: "select @topic3_id := 10103 from dual",
+	}, {
 		input: "update /* list */ a set b = 3, c = 4",
 	}, {
 		input: "update /* expression */ a set b = 3 + 4",
@@ -1246,6 +1557,12 @@ var (
 		input: "alter table a convert to character set utf32",
 	}, {
 		input: "alter table `By` add column foo int, algorithm = default",
+	}, {
+		input: "alter table `By` add column foo int, algorithm = copy",
+	}, {
+		input: "alter table `By` add column foo int, algorithm = inplace",
+	}, {
+		input: "alter table `By` add column foo int, algorithm = INPLACE",
 	}, {
 		input: "alter table `By` add column foo int, algorithm = instant",
 	}, {
@@ -1759,7 +2076,7 @@ var (
 		output: "rename table x.a to b, b to c",
 	}, {
 		input:  "drop view a,B,c",
-		output: "drop view a, b, c",
+		output: "drop view a, B, c",
 	}, {
 		input: "drop /*vt+ strategy=online */ view if exists v",
 	}, {
@@ -1804,11 +2121,14 @@ var (
 		input:  "flush no_write_to_binlog slow logs, status, user_resources, relay logs, relay logs for channel s",
 		output: "flush local slow logs, status, user_resources, relay logs, relay logs for channel s",
 	}, {
-		input:  "show binary logs",
-		output: "show binary logs",
+		input: "show binary logs",
 	}, {
 		input:  "show binlog events",
 		output: "show binlog",
+	}, {
+		input: "purge binary logs to 'x'",
+	}, {
+		input: "purge binary logs before '2020-02-02 20:20:20'",
 	}, {
 		input:  "show character set",
 		output: "show charset",
@@ -2527,10 +2847,10 @@ var (
 		output: "deallocate prepare stmt1",
 	}, {
 		input:  "DROP PREPARE stmt1",
-		output: "drop prepare stmt1",
+		output: "deallocate prepare stmt1",
 	}, {
 		input:  "DROP /* comment */ PREPARE stmt1",
-		output: "drop /* comment */ prepare stmt1",
+		output: "deallocate /* comment */ prepare stmt1",
 	}, {
 		input:  `SELECT JSON_PRETTY('{"a":"10","b":"15","x":"25"}')`,
 		output: `select json_pretty('{\"a\":\"10\",\"b\":\"15\",\"x\":\"25\"}') from dual`,
@@ -2690,7 +3010,7 @@ var (
 		output: "select json_array(BIN(11)) from dual",
 	}, {
 		input:  `SELECT JSON_ARRAY(1, "abc", NULL, TRUE, CURTIME());`,
-		output: `select json_array(1, 'abc', null, true, CURTIME()) from dual`,
+		output: `select json_array(1, 'abc', null, true, curtime()) from dual`,
 	}, {
 		input:  "SELECT JSON_OBJECT(1,2)",
 		output: "select json_object(1, 2) from dual",
@@ -3745,9 +4065,7 @@ func TestCaseSensitivity(t *testing.T) {
 		input:  "alter table A convert unparsable",
 		output: "alter table A",
 	}, {
-		// View names get lower-cased.
-		input:  "alter view A as select * from t",
-		output: "alter view a as select * from t",
+		input: "alter view A as select * from t",
 	}, {
 		input:  "alter table A rename to B",
 		output: "alter table A rename B",
@@ -3797,14 +4115,11 @@ func TestCaseSensitivity(t *testing.T) {
 		input:  "CREATE TABLE A (\n\t`A` int\n)",
 		output: "create table A (\n\tA int\n)",
 	}, {
-		input:  "create view A as select * from b",
-		output: "create view a as select * from b",
+		input: "create view A as select * from b",
 	}, {
-		input:  "drop view A",
-		output: "drop view a",
+		input: "drop view A",
 	}, {
-		input:  "drop view if exists A",
-		output: "drop view if exists a",
+		input: "drop view if exists A",
 	}, {
 		input:  "select /* lock in SHARE MODE */ 1 from t lock in SHARE MODE",
 		output: "select /* lock in SHARE MODE */ 1 from t lock in share mode",
@@ -5482,17 +5797,7 @@ var (
 			"(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(" +
 			"F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F" +
 			"(F(F(F(F(F(F(F(F(F(F(F(F(",
-		output: "max nesting level reached at position 406",
-	}, {
-		input: "select(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F" +
-			"(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(" +
-			"F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F" +
-			"(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(" +
-			"F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F" +
-			"(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(" +
-			"F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F" +
-			"(F(F(F(F(F(F(F(F(F(F(F(",
-		output: "syntax error at position 404",
+		output: "syntax error at position 406",
 	}, {
 		// This construct is considered invalid due to a grammar conflict.
 		input:  "insert into a select * from b join c on duplicate key update d=e",

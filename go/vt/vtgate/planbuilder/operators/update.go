@@ -37,18 +37,13 @@ type Update struct {
 	noPredicates
 }
 
-var _ ops.PhysicalOperator = (*Update)(nil)
-
 // Introduces implements the PhysicalOperator interface
 func (u *Update) Introduces() semantics.TableSet {
 	return u.QTable.ID
 }
 
-// IPhysical implements the PhysicalOperator interface
-func (u *Update) IPhysical() {}
-
 // Clone implements the Operator interface
-func (u *Update) Clone(inputs []ops.Operator) ops.Operator {
+func (u *Update) Clone([]ops.Operator) ops.Operator {
 	return &Update{
 		QTable:              u.QTable,
 		VTable:              u.VTable,
@@ -59,9 +54,23 @@ func (u *Update) Clone(inputs []ops.Operator) ops.Operator {
 	}
 }
 
+func (u *Update) GetOrdering() ([]ops.OrderBy, error) {
+	return nil, nil
+}
+
 func (u *Update) TablesUsed() []string {
 	if u.VTable != nil {
 		return SingleQualifiedIdentifier(u.VTable.Keyspace, u.VTable.Name)
 	}
 	return nil
+}
+
+func (u *Update) Description() ops.OpDescription {
+	return ops.OpDescription{
+		OperatorType: "Update",
+	}
+}
+
+func (u *Update) ShortDescription() string {
+	return u.VTable.String()
 }

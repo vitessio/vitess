@@ -19,7 +19,7 @@ package uca
 import (
 	"sync"
 
-	"vitess.io/vitess/go/mysql/collations/internal/charset"
+	"vitess.io/vitess/go/mysql/collations/charset"
 )
 
 type Collation interface {
@@ -37,7 +37,7 @@ type Collation900 struct {
 	contract  Contractor
 	param     *parametricT
 	maxLevel  int
-	iterpool  *sync.Pool
+	iterpool  sync.Pool
 }
 
 func (c *Collation900) Charset() charset.Charset {
@@ -52,6 +52,14 @@ func (c *Collation900) Iterator(input []byte) WeightIterator {
 	iter := c.iterpool.Get().(WeightIterator)
 	iter.reset(input)
 	return iter
+}
+
+func (c *Collation900) Contractor() Contractor {
+	return c.contract
+}
+
+func (c *Collation900) MaxLevel() int {
+	return c.maxLevel
 }
 
 func (c *Collation900) WeightForSpace() uint16 {
@@ -73,24 +81,23 @@ func NewCollation(name string, weights Weights, weightPatches []Patch, reorder [
 		contract:  contract,
 		maxLevel:  levels,
 		param:     newParametricTailoring(reorder, upperCaseFirst),
-		iterpool:  &sync.Pool{},
 	}
 
 	switch {
 	case coll.param == nil && len(weightPatches) == 0 && coll.contract == nil:
 		coll.iterpool.New = func() any {
-			return &FastIterator900{iterator900: iterator900{Collation900: *coll}}
+			return &FastIterator900{iterator900: iterator900{Collation900: coll}}
 		}
 	case name == "utf8mb4_ja_0900_as_cs_ks" || name == "utf8mb4_ja_0900_as_cs":
 		coll.iterpool.New = func() any {
-			return &jaIterator900{iterator900: iterator900{Collation900: *coll}}
+			return &jaIterator900{iterator900: iterator900{Collation900: coll}}
 		}
 	case name == "utf8mb4_zh_0900_as_cs":
 		coll.implicits = unicodeImplicitChineseWeights
 		fallthrough
 	default:
 		coll.iterpool.New = func() any {
-			return &slowIterator900{iterator900: iterator900{Collation900: *coll}}
+			return &slowIterator900{iterator900: iterator900{Collation900: coll}}
 		}
 	}
 
@@ -104,7 +111,6 @@ type CollationLegacy struct {
 	table        Weights
 	maxCodepoint rune
 	contract     Contractor
-	iterpool     *sync.Pool
 }
 
 func (c *CollationLegacy) Charset() charset.Charset {
@@ -115,10 +121,15 @@ func (c *CollationLegacy) Weights() (Weights, Layout) {
 	return c.table, Layout_uca_legacy{Max: c.maxCodepoint}
 }
 
-func (c *CollationLegacy) Iterator(input []byte) *WeightIteratorLegacy {
-	iter := c.iterpool.Get().(*WeightIteratorLegacy)
+func (c *CollationLegacy) Iterator(input []byte) WeightIteratorLegacy {
+	var iter WeightIteratorLegacy
+	iter.CollationLegacy = c
 	iter.reset(input)
 	return iter
+}
+
+func (c *CollationLegacy) Contractor() Contractor {
+	return c.contract
 }
 
 func (c *CollationLegacy) WeightForSpace() uint16 {
@@ -135,17 +146,10 @@ func (c *CollationLegacy) WeightsEqual(left, right rune) bool {
 }
 
 func NewCollationLegacy(cs charset.Charset, weights Weights, weightPatches []Patch, contract Contractor, maxCodepoint rune) *CollationLegacy {
-	coll := &CollationLegacy{
+	return &CollationLegacy{
 		charset:      cs,
 		table:        ApplyTailoring(Layout_uca_legacy{}, weights, weightPatches),
 		maxCodepoint: maxCodepoint,
 		contract:     contract,
-		iterpool:     &sync.Pool{},
 	}
-
-	coll.iterpool.New = func() any {
-		return &WeightIteratorLegacy{CollationLegacy: *coll}
-	}
-
-	return coll
 }

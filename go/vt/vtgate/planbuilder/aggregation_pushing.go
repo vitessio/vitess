@@ -22,7 +22,7 @@ import (
 
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/engine"
+	popcode "vitess.io/vitess/go/vt/vtgate/engine/opcode"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
@@ -69,7 +69,7 @@ func (hp *horizonPlanning) pushAggregation(
 		pushed = false
 
 		for _, grp := range grouping {
-			offset, wOffset, err := wrapAndPushExpr(ctx, grp.Inner, grp.WeightStrExpr, plan.input)
+			offset, wOffset, err := wrapAndPushExpr(ctx, grp.Inner, grp.SimplifiedExpr, plan.input)
 			if err != nil {
 				return nil, nil, nil, false, err
 			}
@@ -166,8 +166,8 @@ func pushAggrOnRoute(
 			pos = newOffset(groupingCols[idx])
 		}
 
-		if expr.WeightStrExpr != nil && ctx.SemTable.NeedsWeightString(expr.Inner) {
-			wsExpr := weightStringFor(expr.WeightStrExpr)
+		if expr.SimplifiedExpr != nil && ctx.SemTable.NeedsWeightString(expr.Inner) {
+			wsExpr := weightStringFor(expr.SimplifiedExpr)
 			wsCol, _, err := addExpressionToRoute(ctx, plan, &sqlparser.AliasedExpr{Expr: wsExpr}, true)
 			if err != nil {
 				return nil, nil, nil, err
@@ -231,7 +231,7 @@ func countStarAggr() *operators.Aggr {
 
 	return &operators.Aggr{
 		Original: &sqlparser.AliasedExpr{Expr: f},
-		OpCode:   engine.AggregateCountStar,
+		OpCode:   popcode.AggregateCountStar,
 		Alias:    "count(*)",
 	}
 }
@@ -287,7 +287,7 @@ func (hp *horizonPlanning) pushAggrOnJoin(
 			return nil, nil, err
 		}
 		l = sqlparser.NewIntLiteral(strconv.Itoa(offset + 1))
-		rhsGrouping = append(rhsGrouping, operators.GroupBy{Inner: l})
+		rhsGrouping = append(rhsGrouping, operators.NewGroupBy(l, nil, nil))
 	}
 
 	// Next we push the aggregations to both sides
@@ -420,17 +420,17 @@ func (hp *horizonPlanning) filteredPushAggregation(
 	return newplan, groupingOffsets, outputAggrs, pushed, nil
 }
 
-func isMinOrMax(in engine.AggregateOpcode) bool {
+func isMinOrMax(in popcode.AggregateOpcode) bool {
 	switch in {
-	case engine.AggregateMin, engine.AggregateMax:
+	case popcode.AggregateMin, popcode.AggregateMax:
 		return true
 	default:
 		return false
 	}
 }
 
-func isRandom(in engine.AggregateOpcode) bool {
-	return in == engine.AggregateRandom
+func isRandom(in popcode.AggregateOpcode) bool {
+	return in == popcode.AggregateRandom
 }
 
 func splitAggregationsToLeftAndRight(

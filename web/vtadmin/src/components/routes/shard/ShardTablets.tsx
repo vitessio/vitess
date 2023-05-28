@@ -95,7 +95,7 @@ export const ShardTablets: React.FunctionComponent<Props> = (props) => {
                     </DataCell>
 
                     <DataCell>
-                        <ExternalTabletLink fqdn={`//${t.fqdn}`}>{t.hostname}</ExternalTabletLink>
+                        <ExternalTabletLink fqdn={`${t.fqdn}`}>{t.hostname}</ExternalTabletLink>
                     </DataCell>
                 </tr>
             );

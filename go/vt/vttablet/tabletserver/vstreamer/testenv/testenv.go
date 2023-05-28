@@ -54,13 +54,14 @@ type Env struct {
 	Dbcfgs       *dbconfigs.DBConfigs
 	Mysqld       *mysqlctl.Mysqld
 	SchemaEngine *schema.Engine
-	Flavor       string
 	// MySQL and Percona are considered equivalent here and both called mysql
 	DBType         string
 	DBMajorVersion int
 	DBMinorVersion int
 	DBPatchVersion int
 }
+
+var versionRegex = regexp.MustCompile(`([0-9]+)\.([0-9]+)\.([0-9]+)`)
 
 // Init initializes an Env.
 func Init() (*Env, error) {
@@ -94,8 +95,9 @@ func Init() (*Env, error) {
 				},
 			},
 		},
-		OnlyMySQL: true,
-		Charset:   "utf8mb4_general_ci",
+		OnlyMySQL:  true,
+		Charset:    "utf8mb4_general_ci",
+		ExtraMyCnf: strings.Split(os.Getenv("EXTRA_MY_CNF"), ":"),
 	}
 	te.cluster = &vttest.LocalCluster{
 		Config: cfg,
@@ -110,25 +112,28 @@ func Init() (*Env, error) {
 	te.TabletEnv = tabletenv.NewEnv(config, "VStreamerTest")
 	te.Mysqld = mysqlctl.NewMysqld(te.Dbcfgs)
 	pos, _ := te.Mysqld.PrimaryPosition()
-	te.Flavor = pos.GTIDSet.Flavor()
-	if strings.HasPrefix(strings.ToLower(te.Flavor), string(mysqlctl.FlavorMariaDB)) {
+	if strings.HasPrefix(strings.ToLower(pos.GTIDSet.Flavor()), string(mysqlctl.FlavorMariaDB)) {
 		te.DBType = string(mysqlctl.FlavorMariaDB)
 	} else {
 		// MySQL and Percona are equivalent for the tests
 		te.DBType = string(mysqlctl.FlavorMySQL)
 	}
-	dbVersionStr := te.Mysqld.GetVersionString()
-	dbVersionStrParts := strings.Split(dbVersionStr, ".")
+	dbVersionStr := te.Mysqld.GetVersionString(context.Background())
+	dbVersionStrParts := versionRegex.FindStringSubmatch(dbVersionStr)
+	if len(dbVersionStrParts) != 4 {
+		return nil, fmt.Errorf("could not parse server version from: %s", dbVersionStr)
+	}
+
 	var err error
-	te.DBMajorVersion, err = strconv.Atoi(dbVersionStrParts[0])
+	te.DBMajorVersion, err = strconv.Atoi(dbVersionStrParts[1])
 	if err != nil {
 		return nil, fmt.Errorf("could not parse database major version from '%s': %v", dbVersionStr, err)
 	}
-	te.DBMinorVersion, err = strconv.Atoi(dbVersionStrParts[1])
+	te.DBMinorVersion, err = strconv.Atoi(dbVersionStrParts[2])
 	if err != nil {
 		return nil, fmt.Errorf("could not parse database minor version from '%s': %v", dbVersionStr, err)
 	}
-	te.DBPatchVersion, err = strconv.Atoi(dbVersionStrParts[2])
+	te.DBPatchVersion, err = strconv.Atoi(dbVersionStrParts[3])
 	if err != nil {
 		return nil, fmt.Errorf("could not parse database patch version from '%s': %v", dbVersionStr, err)
 	}
@@ -190,4 +195,28 @@ func (te *Env) RemoveAnyDeprecatedDisplayWidths(orig string) string {
 		adjusted = yearRE.ReplaceAllString(adjusted, baseYearType)
 	}
 	return adjusted
+}
+
+// ServerCapability is used to define capabilities for which we want to optionally run tests
+// if the underlying mysql server supports them.
+type ServerCapability int32
+
+const (
+	ServerCapabilityInvisibleColumn              ServerCapability = 1
+	ServerCapabilityGeneratedInvisiblePrimaryKey ServerCapability = 2
+)
+
+// HasCapability returns true if the server has the given capability.
+// Used to skip tests that require a certain version of MySQL.
+func (te *Env) HasCapability(cap ServerCapability) bool {
+	if te.DBType != string(mysqlctl.FlavorMySQL) || te.DBMajorVersion < 8 {
+		return false
+	}
+	switch cap {
+	case ServerCapabilityInvisibleColumn:
+		return te.DBMinorVersion > 0 || te.DBPatchVersion >= 23
+	case ServerCapabilityGeneratedInvisiblePrimaryKey:
+		return te.DBMinorVersion > 0 || te.DBPatchVersion >= 30
+	}
+	return false
 }

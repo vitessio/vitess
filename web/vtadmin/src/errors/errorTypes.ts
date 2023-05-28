@@ -45,7 +45,7 @@ export interface ErrorHandler {
      * Handler to manually notify the monitoring system of a problem.
      *
      * @param error - The Error that was thrown
-     * @param env - Sanitized process.env environment variables
+     * @param env - Sanitized import.meta.env environment variables
      * @param metadata - Additional, arbitrary metadata.
      */
     notify: (error: Error, env: object, metadata?: object) => void;

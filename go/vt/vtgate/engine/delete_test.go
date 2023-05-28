@@ -21,7 +21,6 @@ import (
 	"errors"
 	"testing"
 
-	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"github.com/stretchr/testify/require"
@@ -90,7 +89,7 @@ func TestDeleteEqual(t *testing.T) {
 	})
 
 	// Failure case
-	expr := evalengine.NewBindVar("aa", collations.TypedCollation{})
+	expr := evalengine.NewBindVar("aa")
 	del.Values = []evalengine.Expr{expr}
 	_, err = del.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 	require.EqualError(t, err, "query arguments missing for aa")
@@ -122,7 +121,7 @@ func TestDeleteEqualMultiCol(t *testing.T) {
 	})
 
 	// Failure case
-	expr := evalengine.NewBindVar("aa", collations.TypedCollation{})
+	expr := evalengine.NewBindVar("aa")
 	del.Values = []evalengine.Expr{expr}
 	_, err = del.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 	require.EqualError(t, err, "query arguments missing for aa")

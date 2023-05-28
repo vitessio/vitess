@@ -25,6 +25,8 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/mysql/datetime"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/sysvars"
@@ -149,11 +151,22 @@ func (session *SafeSession) ResetTx() {
 	session.mu.Lock()
 	defer session.mu.Unlock()
 	session.resetCommonLocked()
-	if !session.Session.InReservedConn {
-		session.ShardSessions = nil
-		session.PreSessions = nil
-		session.PostSessions = nil
+	// If settings pools is enabled on the vttablet.
+	// This variable will be true but there will not be a shard session with reserved connection id.
+	// So, we should check the shard session and not just this variable.
+	if session.Session.InReservedConn {
+		allSessions := append(session.ShardSessions, append(session.PreSessions, session.PostSessions...)...)
+		for _, ss := range allSessions {
+			if ss.ReservedId != 0 {
+				// found that reserved connection exists.
+				// abort here, we should keep the shard sessions.
+				return
+			}
+		}
 	}
+	session.ShardSessions = nil
+	session.PreSessions = nil
+	session.PostSessions = nil
 }
 
 // Reset clears the session
@@ -547,6 +560,18 @@ func (session *SafeSession) HasSystemVariables() (found bool) {
 	return
 }
 
+func (session *SafeSession) TimeZone() *time.Location {
+	session.mu.Lock()
+	tz, ok := session.SystemVariables["time_zone"]
+	session.mu.Unlock()
+
+	if !ok {
+		return nil
+	}
+	loc, _ := datetime.ParseTimeZone(tz)
+	return loc
+}
+
 // SetOptions sets the options
 func (session *SafeSession) SetOptions(options *querypb.ExecuteOptions) {
 	session.mu.Lock()
@@ -887,6 +912,39 @@ func (session *SafeSession) EnableLogging() {
 	defer session.mu.Unlock()
 
 	session.logging = &executeLogger{}
+}
+
+// GetUDV returns the bind variable value for the user defined variable.
+func (session *SafeSession) GetUDV(name string) *querypb.BindVariable {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+
+	if session.UserDefinedVariables == nil {
+		return nil
+	}
+	return session.UserDefinedVariables[name]
+}
+
+// StorePrepareData stores the prepared data information for the given key.
+func (session *SafeSession) StorePrepareData(key string, value *vtgatepb.PrepareData) {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+
+	if session.PrepareStatement == nil {
+		session.PrepareStatement = map[string]*vtgatepb.PrepareData{}
+	}
+	session.PrepareStatement[key] = value
+}
+
+// GetPrepareData returns the prepared data information for the given key.
+func (session *SafeSession) GetPrepareData(name string) *vtgatepb.PrepareData {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+
+	if session.PrepareStatement == nil {
+		return nil
+	}
+	return session.PrepareStatement[name]
 }
 
 func (l *executeLogger) log(primitive engine.Primitive, target *querypb.Target, gateway srvtopo.Gateway, query string, begin bool, bv map[string]*querypb.BindVariable) {

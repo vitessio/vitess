@@ -14,9 +14,6 @@ port = {{.MysqlPort}}
 secure-file-priv = {{.SecureFilePriv}}
 {{end}}
 
-# all db instances should start in read-only mode - once the db is started and
-# fully functional, we'll push it into read-write mode
-read-only
 server-id = {{.ServerID}}
 
 # all db instances should skip starting replication threads - that way we can do any

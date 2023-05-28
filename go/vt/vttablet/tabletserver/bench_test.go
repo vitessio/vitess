@@ -68,7 +68,7 @@ func BenchmarkExecuteVarBinary(b *testing.B) {
 	}
 
 	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
-	db.AllowAll = true
+	db.SetAllowAll(true)
 	for i := 0; i < b.N; i++ {
 		if _, err := tsv.Execute(context.Background(), &target, benchQuery, bv, 0, 0, nil); err != nil {
 			panic(err)
@@ -93,7 +93,7 @@ func BenchmarkExecuteExpression(b *testing.B) {
 	}
 
 	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
-	db.AllowAll = true
+	db.SetAllowAll(true)
 	for i := 0; i < b.N; i++ {
 		if _, err := tsv.Execute(context.Background(), &target, benchQuery, bv, 0, 0, nil); err != nil {
 			panic(err)

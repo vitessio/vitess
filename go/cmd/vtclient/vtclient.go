@@ -184,6 +184,8 @@ func run() (*results, error) {
 	_flag.Parse(fs)
 	args := _flag.Args()
 
+	logutil.PurgeLogs()
+
 	if len(args) == 0 {
 		pflag.Usage()
 		return nil, errors.New("no arguments provided. See usage above")

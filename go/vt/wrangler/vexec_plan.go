@@ -24,7 +24,6 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
 
 	"github.com/olekukonko/tablewriter"
@@ -109,58 +108,6 @@ func (p vreplicationPlanner) dryRun(ctx context.Context) error {
 	return nil
 }
 
-// schemaMigrationsPlanner is a vexecPlanner implementation, specific to _vt.schema_migrations table
-type schemaMigrationsPlanner struct {
-	vx *vexec
-	d  *vexecPlannerParams
-}
-
-func newSchemaMigrationsPlanner(vx *vexec) vexecPlanner {
-	return &schemaMigrationsPlanner{
-		vx: vx,
-		d: &vexecPlannerParams{
-			dbNameColumn:   "mysql_schema",
-			workflowColumn: "migration_uuid",
-			updateTemplates: []string{
-				`update _vt.schema_migrations set migration_status='val1'`,
-				`update _vt.schema_migrations set migration_status='val1' where migration_uuid='val2'`,
-				`update _vt.schema_migrations set migration_status='val1' where migration_uuid='val2' and shard='val3'`,
-			},
-			insertTemplates: []string{
-				`INSERT IGNORE INTO _vt.schema_migrations (
-					migration_uuid,
-					keyspace,
-					shard,
-					mysql_schema,
-					mysql_table,
-					migration_statement,
-					strategy,
-					options,
-					ddl_action,
-					requested_timestamp,
-					migration_context,
-					migration_status
-				) VALUES (
-					'val', 'val', 'val', 'val', 'val', 'val', 'val', 'val', 'val', FROM_UNIXTIME(0), 'val', 'val'
-				)`,
-			},
-		},
-	}
-}
-func (p schemaMigrationsPlanner) params() *vexecPlannerParams { return p.d }
-func (p schemaMigrationsPlanner) exec(ctx context.Context, primaryAlias *topodatapb.TabletAlias, query string) (*querypb.QueryResult, error) {
-	qr, err := p.vx.wr.GenericVExec(ctx, primaryAlias, query, p.vx.workflow, p.vx.keyspace)
-	if err != nil {
-		return nil, err
-	}
-	return qr, nil
-}
-func (p schemaMigrationsPlanner) dryRun(ctx context.Context) error { return nil }
-
-// make sure these planners implement vexecPlanner interface
-var _ vexecPlanner = vreplicationPlanner{}
-var _ vexecPlanner = schemaMigrationsPlanner{}
-
 const (
 	updateQuery = iota
 	deleteQuery
@@ -191,8 +138,6 @@ func qualifiedTableName(tableName string) string {
 // getPlanner returns a specific planner appropriate for the queried table
 func (vx *vexec) getPlanner(ctx context.Context) error {
 	switch vx.tableName {
-	case qualifiedTableName(schema.SchemaMigrationsTableName):
-		vx.planner = newSchemaMigrationsPlanner(vx)
 	case qualifiedTableName(vreplicationTableName):
 		vx.planner = newVReplicationPlanner(vx)
 	default:

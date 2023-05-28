@@ -156,20 +156,20 @@ type Config struct {
 // It then sets the right value for cfg.SchemaDir.
 // At the end of the test, the caller should os.RemoveAll(cfg.SchemaDir).
 func (cfg *Config) InitSchemas(keyspace, schema string, vschema *vschemapb.Keyspace) error {
-	if cfg.SchemaDir != "" {
-		return fmt.Errorf("SchemaDir is already set to %v", cfg.SchemaDir)
-	}
-
-	// Create a base temporary directory.
-	tempSchemaDir, err := os.MkdirTemp("", "vttest")
-	if err != nil {
-		return err
+	schemaDir := cfg.SchemaDir
+	if schemaDir == "" {
+		// Create a base temporary directory.
+		tempSchemaDir, err := os.MkdirTemp("", "vttest")
+		if err != nil {
+			return err
+		}
+		schemaDir = tempSchemaDir
 	}
 
 	// Write the schema if set.
 	if schema != "" {
-		ksDir := path.Join(tempSchemaDir, keyspace)
-		err = os.Mkdir(ksDir, os.ModeDir|0775)
+		ksDir := path.Join(schemaDir, keyspace)
+		err := os.Mkdir(ksDir, os.ModeDir|0775)
 		if err != nil {
 			return err
 		}
@@ -182,7 +182,7 @@ func (cfg *Config) InitSchemas(keyspace, schema string, vschema *vschemapb.Keysp
 
 	// Write in the vschema if set.
 	if vschema != nil {
-		vschemaFilePath := path.Join(tempSchemaDir, keyspace, "vschema.json")
+		vschemaFilePath := path.Join(schemaDir, keyspace, "vschema.json")
 		vschemaJSON, err := json.Marshal(vschema)
 		if err != nil {
 			return err
@@ -191,7 +191,7 @@ func (cfg *Config) InitSchemas(keyspace, schema string, vschema *vschemapb.Keysp
 			return err
 		}
 	}
-	cfg.SchemaDir = tempSchemaDir
+	cfg.SchemaDir = schemaDir
 	return nil
 }
 
@@ -284,6 +284,32 @@ func (db *LocalCluster) MySQLAppDebugConnParams() mysql.ConnParams {
 	connParams := db.MySQLConnParams()
 	connParams.Uname = "vt_appdebug"
 	return connParams
+}
+
+// SimulateMySQLHang simulates a scenario where the backend MySQL stops all data from flowing through.
+// Please ensure to `defer db.StopSimulateMySQLHang()` after calling this method.
+func (db *LocalCluster) SimulateMySQLHang() error {
+	if toxiproxy, ok := db.mysql.(*Toxiproxyctl); ok {
+		return toxiproxy.AddTimeoutToxic()
+	}
+	return fmt.Errorf("cannot simulate MySQL hang on non-Toxiproxyctl MySQLManager %v", db.mysql)
+}
+
+// PauseSimulateMySQLHang pauses the MySQL hang simulation to allow queries to go through.
+// This is useful when you want to allow new queries to go through, but keep the existing ones hanging.
+func (db *LocalCluster) PauseSimulateMySQLHang() error {
+	if toxiproxy, ok := db.mysql.(*Toxiproxyctl); ok {
+		return toxiproxy.UpdateTimeoutToxicity(0)
+	}
+	return fmt.Errorf("cannot simulate MySQL hang on non-Toxiproxyctl MySQLManager %v", db.mysql)
+}
+
+// StopSimulateMySQLHang stops the MySQL hang simulation to allow queries to go through.
+func (db *LocalCluster) StopSimulateMySQLHang() error {
+	if toxiproxy, ok := db.mysql.(*Toxiproxyctl); ok {
+		return toxiproxy.RemoveTimeoutToxic()
+	}
+	return fmt.Errorf("cannot simulate MySQL hang on non-Toxiproxyctl MySQLManager %v", db.mysql)
 }
 
 // Setup brings up the self-contained Vitess cluster by spinning up
@@ -502,7 +528,7 @@ func (db *LocalCluster) loadSchema(shouldRunDatabaseMigrations bool) error {
 func (db *LocalCluster) createVTSchema() error {
 	var sidecardbExec sidecardb.Exec = func(ctx context.Context, query string, maxRows int, useDB bool) (*sqltypes.Result, error) {
 		if useDB {
-			if err := db.Execute([]string{sidecardb.UseSidecarDatabaseQuery}, ""); err != nil {
+			if err := db.Execute([]string{fmt.Sprintf("use %s", sidecardb.GetIdentifier())}, ""); err != nil {
 				return nil, err
 			}
 		}

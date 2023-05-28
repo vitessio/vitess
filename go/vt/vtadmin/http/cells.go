@@ -23,7 +23,7 @@ import (
 )
 
 // GetCellInfos implements the http wrapper for the
-// /cells[?cluster=[&cluster=...]?cell=[&cell=...]&names_only=(true|false)] route.
+// /cells[?cluster=[&cluster_id=...]?cell=[&cell=...]&names_only=(true|false)] route.
 func GetCellInfos(ctx context.Context, r Request, api *API) *JSONResponse {
 	namesOnly, err := r.ParseQueryParamAsBool("names_only", false)
 	if err != nil {
@@ -31,7 +31,7 @@ func GetCellInfos(ctx context.Context, r Request, api *API) *JSONResponse {
 	}
 
 	cellInfos, err := api.server.GetCellInfos(ctx, &vtadminpb.GetCellInfosRequest{
-		ClusterIds: r.URL.Query()["cluster"],
+		ClusterIds: r.URL.Query()["cluster_id"],
 		Cells:      r.URL.Query()["cell"],
 		NamesOnly:  namesOnly,
 	})
@@ -39,10 +39,10 @@ func GetCellInfos(ctx context.Context, r Request, api *API) *JSONResponse {
 }
 
 // GetCellsAliases implements the http wrapper for the
-// /cells_aliases[?cluster=[&cluster=]] route.
+// /cells_aliases[?cluster_id=[&cluster_id=]] route.
 func GetCellsAliases(ctx context.Context, r Request, api *API) *JSONResponse {
 	cellsAliases, err := api.server.GetCellsAliases(ctx, &vtadminpb.GetCellsAliasesRequest{
-		ClusterIds: r.URL.Query()["cluster"],
+		ClusterIds: r.URL.Query()["cluster_id"],
 	})
 
 	return NewJSONResponse(cellsAliases, err)

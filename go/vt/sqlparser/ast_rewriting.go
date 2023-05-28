@@ -75,19 +75,24 @@ func (r *ReservedVars) ReserveAll(names ...string) bool {
 // with the same name already exists, it'll be suffixed with a numberic identifier
 // to make it unique.
 func (r *ReservedVars) ReserveColName(col *ColName) string {
-	compliantName := col.CompliantName()
-	if r.fast && strings.HasPrefix(compliantName, r.prefix) {
-		compliantName = "_" + compliantName
+	reserveName := col.CompliantName()
+	if r.fast && strings.HasPrefix(reserveName, r.prefix) {
+		reserveName = "_" + reserveName
 	}
 
+	return r.ReserveVariable(reserveName)
+}
+
+func (r *ReservedVars) ReserveVariable(compliantName string) string {
 	joinVar := []byte(compliantName)
 	baseLen := len(joinVar)
 	i := int64(1)
 
 	for {
 		if _, ok := r.reserved[string(joinVar)]; !ok {
-			r.reserved[string(joinVar)] = struct{}{}
-			return string(joinVar)
+			bvar := string(joinVar)
+			r.reserved[bvar] = struct{}{}
+			return bvar
 		}
 		joinVar = strconv.AppendInt(joinVar[:baseLen], i, 10)
 		i++
@@ -128,8 +133,9 @@ func (r *ReservedVars) ReserveHasValuesSubQuery() string {
 		r.sqNext++
 		joinVar := strconv.AppendInt(HasValueSubQueryBaseName, r.sqNext, 10)
 		if _, ok := r.reserved[string(joinVar)]; !ok {
-			r.reserved[string(joinVar)] = struct{}{}
-			return string(joinVar)
+			bvar := string(joinVar)
+			r.reserved[bvar] = struct{}{}
+			return bvar
 		}
 	}
 }
@@ -159,7 +165,6 @@ func (r *ReservedVars) nextUnusedVar() string {
 	for {
 		r.counter++
 		r.next = strconv.AppendInt(r.next[:len(r.prefix)], int64(r.counter), 10)
-
 		if _, ok := r.reserved[string(r.next)]; !ok {
 			bvar := string(r.next)
 			r.reserved[bvar] = struct{}{}
@@ -325,6 +330,8 @@ func (er *astRewriter) rewriteDown(node SQLNode, _ SQLNode) bool {
 	switch node := node.(type) {
 	case *Select:
 		er.visitSelect(node)
+	case *PrepareStmt, *ExecuteStmt:
+		return false // nothing to rewrite here.
 	}
 	return true
 }
@@ -564,12 +571,19 @@ var funcRewrites = map[string]string{
 }
 
 func (er *astRewriter) funcRewrite(cursor *Cursor, node *FuncExpr) {
-	bindVar, found := funcRewrites[node.Name.Lowered()]
+	lowered := node.Name.Lowered()
+	if lowered == "last_insert_id" && len(node.Exprs) > 0 {
+		// if we are dealing with is LAST_INSERT_ID() with an argument, we don't need to rewrite it.
+		// with an argument, this is an identity function that will update the session state and
+		// sets the correct fields in the OK TCP packet that we send back
+		return
+	}
+	bindVar, found := funcRewrites[lowered]
 	if !found || (bindVar == DBVarName && !er.shouldRewriteDatabaseFunc) {
 		return
 	}
 	if len(node.Exprs) > 0 {
-		er.err = vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "Argument to %s() not supported", node.Name.Lowered())
+		er.err = vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "Argument to %s() not supported", lowered)
 		return
 	}
 	cursor.Replace(bindVarExpression(bindVar))

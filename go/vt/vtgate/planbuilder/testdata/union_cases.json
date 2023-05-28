@@ -2276,7 +2276,7 @@
     "comment": "different number of columns",
     "query": "select id, 42 from user where id = 1 union all select id from user where id = 5",
     "v3-plan": "The used SELECT statements have a different number of columns (errno 1222) (sqlstate 21000) during query: select id, 42 from `user` where id = 1 union all select id from `user` where id = 5",
-    "gen4-plan": "The used SELECT statements have a different number of columns"
+    "gen4-plan": "The used SELECT statements have a different number of columns: 2, 1"
   },
   {
     "comment": "union with invalid order by clause with table qualifier",
@@ -2287,7 +2287,8 @@
   {
     "comment": "union with invalid order by clause with table qualifier",
     "query": "select id from user union select 3 order by id",
-    "plan": "VT12001: unsupported: ORDER BY on top of UNION"
+    "v3-plan": "VT12001: unsupported: ORDER BY on top of UNION",
+    "gen4-plan": "VT13001: [BUG] ORDER BY in complex query *planbuilder.distinct"
   },
   {
     "comment": "select 1 from (select id+42 as foo from user union select 1+id as foo from unsharded) as t",
@@ -2360,7 +2361,7 @@
           "Sharded": false
         },
         "FieldQuery": "select kcu.COLUMN_NAME from (select kcu.COLUMN_NAME from information_schema.key_column_usage as kcu where 1 != 1 union select kcu.COLUMN_NAME from information_schema.key_column_usage as kcu where 1 != 1) as kcu where 1 != 1",
-        "Query": "select kcu.COLUMN_NAME from (select kcu.COLUMN_NAME from information_schema.key_column_usage as kcu where kcu.table_schema = :__vtschemaname and kcu.table_name = :kcu_table_name and kcu.COLUMN_NAME = 'primary' union select kcu.COLUMN_NAME from information_schema.key_column_usage as kcu where kcu.table_schema = :__vtschemaname and kcu.table_name = :kcu_table_name1 and kcu.COLUMN_NAME = 'primary') as kcu",
+        "Query": "select kcu.COLUMN_NAME from (select kcu.COLUMN_NAME from information_schema.key_column_usage as kcu where kcu.table_schema = :__vtschemaname /* VARCHAR */ and kcu.table_name = :kcu_table_name /* VARCHAR */ and kcu.COLUMN_NAME = 'primary' union select kcu.COLUMN_NAME from information_schema.key_column_usage as kcu where kcu.table_schema = :__vtschemaname /* VARCHAR */ and kcu.table_name = :kcu_table_name1 /* VARCHAR */ and kcu.COLUMN_NAME = 'primary') as kcu",
         "SysTableTableName": "[kcu_table_name1:VARCHAR(\"music\"), kcu_table_name:VARCHAR(\"user_extra\")]",
         "SysTableTableSchema": "[VARCHAR(\"user\"), VARCHAR(\"user\")]",
         "Table": "information_schema.key_column_usage"
@@ -2398,7 +2399,7 @@
   {
     "comment": "systable union query in derived table with constraint on outside (star projection)",
     "query": "select * from (select * from `information_schema`.`key_column_usage` `kcu` where `kcu`.`table_schema` = 'user' and `kcu`.`table_name` = 'user_extra' union select * from `information_schema`.`key_column_usage` `kcu` where `kcu`.`table_schema` = 'user' and `kcu`.`table_name` = 'music') `kcu` where `constraint_name` = 'primary'",
-    "v3-plan": "VT03019: symbol constraint_name not found",
+    "v3-plan": "VT03019: column constraint_name not found",
     "gen4-plan": {
       "QueryType": "SELECT",
       "Original": "select * from (select * from `information_schema`.`key_column_usage` `kcu` where `kcu`.`table_schema` = 'user' and `kcu`.`table_name` = 'user_extra' union select * from `information_schema`.`key_column_usage` `kcu` where `kcu`.`table_schema` = 'user' and `kcu`.`table_name` = 'music') `kcu` where `constraint_name` = 'primary'",
@@ -2410,11 +2411,173 @@
           "Sharded": false
         },
         "FieldQuery": "select kcu.CONSTRAINT_CATALOG, kcu.CONSTRAINT_SCHEMA, kcu.CONSTRAINT_NAME, kcu.TABLE_CATALOG, kcu.TABLE_SCHEMA, kcu.TABLE_NAME, kcu.COLUMN_NAME, kcu.ORDINAL_POSITION, kcu.POSITION_IN_UNIQUE_CONSTRAINT, kcu.REFERENCED_TABLE_SCHEMA, kcu.REFERENCED_TABLE_NAME, kcu.REFERENCED_COLUMN_NAME from (select kcu.CONSTRAINT_CATALOG, kcu.CONSTRAINT_SCHEMA, kcu.CONSTRAINT_NAME, kcu.TABLE_CATALOG, kcu.TABLE_SCHEMA, kcu.TABLE_NAME, kcu.COLUMN_NAME, kcu.ORDINAL_POSITION, kcu.POSITION_IN_UNIQUE_CONSTRAINT, kcu.REFERENCED_TABLE_SCHEMA, kcu.REFERENCED_TABLE_NAME, kcu.REFERENCED_COLUMN_NAME from information_schema.key_column_usage as kcu where 1 != 1 union select kcu.CONSTRAINT_CATALOG, kcu.CONSTRAINT_SCHEMA, kcu.CONSTRAINT_NAME, kcu.TABLE_CATALOG, kcu.TABLE_SCHEMA, kcu.TABLE_NAME, kcu.COLUMN_NAME, kcu.ORDINAL_POSITION, kcu.POSITION_IN_UNIQUE_CONSTRAINT, kcu.REFERENCED_TABLE_SCHEMA, kcu.REFERENCED_TABLE_NAME, kcu.REFERENCED_COLUMN_NAME from information_schema.key_column_usage as kcu where 1 != 1) as kcu where 1 != 1",
-        "Query": "select kcu.CONSTRAINT_CATALOG, kcu.CONSTRAINT_SCHEMA, kcu.CONSTRAINT_NAME, kcu.TABLE_CATALOG, kcu.TABLE_SCHEMA, kcu.TABLE_NAME, kcu.COLUMN_NAME, kcu.ORDINAL_POSITION, kcu.POSITION_IN_UNIQUE_CONSTRAINT, kcu.REFERENCED_TABLE_SCHEMA, kcu.REFERENCED_TABLE_NAME, kcu.REFERENCED_COLUMN_NAME from (select kcu.CONSTRAINT_CATALOG, kcu.CONSTRAINT_SCHEMA, kcu.CONSTRAINT_NAME, kcu.TABLE_CATALOG, kcu.TABLE_SCHEMA, kcu.TABLE_NAME, kcu.COLUMN_NAME, kcu.ORDINAL_POSITION, kcu.POSITION_IN_UNIQUE_CONSTRAINT, kcu.REFERENCED_TABLE_SCHEMA, kcu.REFERENCED_TABLE_NAME, kcu.REFERENCED_COLUMN_NAME from information_schema.key_column_usage as kcu where kcu.table_schema = :__vtschemaname and kcu.table_name = :kcu_table_name and kcu.CONSTRAINT_NAME = 'primary' union select kcu.CONSTRAINT_CATALOG, kcu.CONSTRAINT_SCHEMA, kcu.CONSTRAINT_NAME, kcu.TABLE_CATALOG, kcu.TABLE_SCHEMA, kcu.TABLE_NAME, kcu.COLUMN_NAME, kcu.ORDINAL_POSITION, kcu.POSITION_IN_UNIQUE_CONSTRAINT, kcu.REFERENCED_TABLE_SCHEMA, kcu.REFERENCED_TABLE_NAME, kcu.REFERENCED_COLUMN_NAME from information_schema.key_column_usage as kcu where kcu.table_schema = :__vtschemaname and kcu.table_name = :kcu_table_name1 and kcu.CONSTRAINT_NAME = 'primary') as kcu",
+        "Query": "select kcu.CONSTRAINT_CATALOG, kcu.CONSTRAINT_SCHEMA, kcu.CONSTRAINT_NAME, kcu.TABLE_CATALOG, kcu.TABLE_SCHEMA, kcu.TABLE_NAME, kcu.COLUMN_NAME, kcu.ORDINAL_POSITION, kcu.POSITION_IN_UNIQUE_CONSTRAINT, kcu.REFERENCED_TABLE_SCHEMA, kcu.REFERENCED_TABLE_NAME, kcu.REFERENCED_COLUMN_NAME from (select kcu.CONSTRAINT_CATALOG, kcu.CONSTRAINT_SCHEMA, kcu.CONSTRAINT_NAME, kcu.TABLE_CATALOG, kcu.TABLE_SCHEMA, kcu.TABLE_NAME, kcu.COLUMN_NAME, kcu.ORDINAL_POSITION, kcu.POSITION_IN_UNIQUE_CONSTRAINT, kcu.REFERENCED_TABLE_SCHEMA, kcu.REFERENCED_TABLE_NAME, kcu.REFERENCED_COLUMN_NAME from information_schema.key_column_usage as kcu where kcu.table_schema = :__vtschemaname /* VARCHAR */ and kcu.table_name = :kcu_table_name /* VARCHAR */ and kcu.CONSTRAINT_NAME = 'primary' union select kcu.CONSTRAINT_CATALOG, kcu.CONSTRAINT_SCHEMA, kcu.CONSTRAINT_NAME, kcu.TABLE_CATALOG, kcu.TABLE_SCHEMA, kcu.TABLE_NAME, kcu.COLUMN_NAME, kcu.ORDINAL_POSITION, kcu.POSITION_IN_UNIQUE_CONSTRAINT, kcu.REFERENCED_TABLE_SCHEMA, kcu.REFERENCED_TABLE_NAME, kcu.REFERENCED_COLUMN_NAME from information_schema.key_column_usage as kcu where kcu.table_schema = :__vtschemaname /* VARCHAR */ and kcu.table_name = :kcu_table_name1 /* VARCHAR */ and kcu.CONSTRAINT_NAME = 'primary') as kcu",
         "SysTableTableName": "[kcu_table_name1:VARCHAR(\"music\"), kcu_table_name:VARCHAR(\"user_extra\")]",
         "SysTableTableSchema": "[VARCHAR(\"user\"), VARCHAR(\"user\")]",
         "Table": "information_schema.key_column_usage"
       }
+    }
+  },
+  {
+    "comment": "unknown columns are OK as long as the whole query is unsharded",
+    "query": "(SELECT * FROM (SELECT * FROM unsharded WHERE branchId = 203622 AND buildNumber <= 113893 AND state = 'FAILED' ORDER BY buildNumber DESC LIMIT 1) AS last_failed) UNION ALL (SELECT * FROM (SELECT * FROM unsharded WHERE branchId = 203622 AND buildNumber <= 113893 AND state = 'SUCCEEDED' ORDER BY buildNumber DESC LIMIT 1) AS last_succeeded) ORDER BY buildNumber DESC LIMIT 1",
+    "v3-plan": {
+      "QueryType": "SELECT",
+      "Original": "(SELECT * FROM (SELECT * FROM unsharded WHERE branchId = 203622 AND buildNumber <= 113893 AND state = 'FAILED' ORDER BY buildNumber DESC LIMIT 1) AS last_failed) UNION ALL (SELECT * FROM (SELECT * FROM unsharded WHERE branchId = 203622 AND buildNumber <= 113893 AND state = 'SUCCEEDED' ORDER BY buildNumber DESC LIMIT 1) AS last_succeeded) ORDER BY buildNumber DESC LIMIT 1",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select * from (select * from unsharded where 1 != 1) as last_failed where 1 != 1 union all select * from (select * from unsharded where 1 != 1) as last_succeeded where 1 != 1",
+        "Query": "select * from (select * from unsharded where branchId = 203622 and buildNumber <= 113893 and state = 'FAILED' order by buildNumber desc limit 1) as last_failed union all select * from (select * from unsharded where branchId = 203622 and buildNumber <= 113893 and state = 'SUCCEEDED' order by buildNumber desc limit 1) as last_succeeded order by buildNumber desc limit 1",
+        "Table": "unsharded"
+      }
+    },
+    "gen4-plan": {
+      "QueryType": "SELECT",
+      "Original": "(SELECT * FROM (SELECT * FROM unsharded WHERE branchId = 203622 AND buildNumber <= 113893 AND state = 'FAILED' ORDER BY buildNumber DESC LIMIT 1) AS last_failed) UNION ALL (SELECT * FROM (SELECT * FROM unsharded WHERE branchId = 203622 AND buildNumber <= 113893 AND state = 'SUCCEEDED' ORDER BY buildNumber DESC LIMIT 1) AS last_succeeded) ORDER BY buildNumber DESC LIMIT 1",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select * from (select * from unsharded where 1 != 1) as last_failed where 1 != 1 union all select * from (select * from unsharded where 1 != 1) as last_succeeded where 1 != 1",
+        "Query": "select * from (select * from unsharded where branchId = 203622 and buildNumber <= 113893 and state = 'FAILED' order by buildNumber desc limit 1) as last_failed union all select * from (select * from unsharded where branchId = 203622 and buildNumber <= 113893 and state = 'SUCCEEDED' order by buildNumber desc limit 1) as last_succeeded order by buildNumber desc limit 1",
+        "Table": "unsharded"
+      },
+      "TablesUsed": [
+        "main.unsharded"
+      ]
+    }
+  },
+  {
+    "comment": "union of unsharded route with sharded join with involvement of weight string",
+    "query": "select id, foo, bar from unsharded union select user.intcol, user.textcol2, authoritative.col2 from user join authoritative",
+    "v3-plan": {
+      "QueryType": "SELECT",
+      "Original": "select id, foo, bar from unsharded union select user.intcol, user.textcol2, authoritative.col2 from user join authoritative",
+      "Instructions": {
+        "OperatorType": "Distinct",
+        "Inputs": [
+          {
+            "OperatorType": "Concatenate",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "main",
+                  "Sharded": false
+                },
+                "FieldQuery": "select id, foo, bar from unsharded where 1 != 1",
+                "Query": "select id, foo, bar from unsharded",
+                "Table": "unsharded"
+              },
+              {
+                "OperatorType": "Join",
+                "Variant": "Join",
+                "JoinColumnIndexes": "L:0,L:1,R:0",
+                "TableName": "`user`_authoritative",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select `user`.intcol, `user`.textcol2 from `user` where 1 != 1",
+                    "Query": "select `user`.intcol, `user`.textcol2 from `user`",
+                    "Table": "`user`"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select authoritative.col2 from authoritative where 1 != 1",
+                    "Query": "select authoritative.col2 from authoritative",
+                    "Table": "authoritative"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "gen4-plan": {
+      "QueryType": "SELECT",
+      "Original": "select id, foo, bar from unsharded union select user.intcol, user.textcol2, authoritative.col2 from user join authoritative",
+      "Instructions": {
+        "OperatorType": "Distinct",
+        "Collations": [
+          "(0:3)",
+          "(1:4)",
+          "(2:5)"
+        ],
+        "ResultColumns": 3,
+        "Inputs": [
+          {
+            "OperatorType": "Concatenate",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "main",
+                  "Sharded": false
+                },
+                "FieldQuery": "select id, foo, bar, weight_string(id), weight_string(foo), weight_string(bar) from unsharded where 1 != 1",
+                "Query": "select distinct id, foo, bar, weight_string(id), weight_string(foo), weight_string(bar) from unsharded",
+                "Table": "unsharded"
+              },
+              {
+                "OperatorType": "Join",
+                "Variant": "Join",
+                "JoinColumnIndexes": "L:0,L:1,R:0,L:2,L:3,R:1",
+                "TableName": "`user`_authoritative",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select `user`.intcol, `user`.textcol2, weight_string(`user`.intcol), weight_string(`user`.textcol2) from `user` where 1 != 1",
+                    "Query": "select `user`.intcol, `user`.textcol2, weight_string(`user`.intcol), weight_string(`user`.textcol2) from `user`",
+                    "Table": "`user`"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select authoritative.col2, weight_string(authoritative.col2) from authoritative where 1 != 1",
+                    "Query": "select authoritative.col2, weight_string(authoritative.col2) from authoritative",
+                    "Table": "authoritative"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.unsharded",
+        "user.authoritative",
+        "user.user"
+      ]
     }
   }
 ]

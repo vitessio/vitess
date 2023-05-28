@@ -207,15 +207,6 @@ func (wr *Wrangler) VReplicationExec(ctx context.Context, tabletAlias *topodatap
 	return wr.tmc.VReplicationExec(ctx, ti.Tablet, query)
 }
 
-// GenericVExec executes a query remotely using the DBA pool
-func (wr *Wrangler) GenericVExec(ctx context.Context, tabletAlias *topodatapb.TabletAlias, query, workflow, keyspace string) (*querypb.QueryResult, error) {
-	ti, err := wr.ts.GetTablet(ctx, tabletAlias)
-	if err != nil {
-		return nil, err
-	}
-	return wr.tmc.VExec(ctx, ti.Tablet, query, workflow, keyspace)
-}
-
 // isPrimaryTablet is a shortcut way to determine whether the current tablet
 // is a primary before we allow its tablet record to be deleted. The canonical
 // way to determine the only true primary in a shard is to list all the tablets

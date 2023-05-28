@@ -246,7 +246,7 @@ func (hj *HashJoin) description() PrimitiveDescription {
 		"Predicate":         sqlparser.String(hj.ASTPred),
 		"ComparisonType":    hj.ComparisonType.String(),
 	}
-	coll := collations.Local().LookupByID(hj.Collation)
+	coll := hj.Collation.Get()
 	if coll != nil {
 		other["Collation"] = coll.Name()
 	}

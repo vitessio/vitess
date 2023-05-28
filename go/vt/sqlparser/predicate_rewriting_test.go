@@ -92,7 +92,7 @@ func TestSimplifyExpression(in *testing.T) {
 			require.NoError(t, err)
 
 			expr, didRewrite := simplifyExpression(expr)
-			assert.True(t, didRewrite == Changed)
+			assert.True(t, didRewrite.changed())
 			assert.Equal(t, tc.expected, String(expr))
 		})
 	}
@@ -115,11 +115,20 @@ func TestRewritePredicate(in *testing.T) {
 		in:       "(A and B) OR (A and C)",
 		expected: "A and (B or C)",
 	}, {
+		in:       "(A and B) OR (C and A)",
+		expected: "A and (B or C)",
+	}, {
+		in:       "(B and A) OR (A and C)",
+		expected: "A and (B or C)",
+	}, {
 		in:       "(A and B) or (A and C) or (A and D)",
 		expected: "A and (B or C or D)",
 	}, {
 		in:       "(a=1 or a IN (1,2)) or (a = 2 or a = 3)",
 		expected: "a in (1, 2, 3)",
+	}, {
+		in:       "A and (B or A)",
+		expected: "A",
 	}}
 
 	for _, tc := range tests {

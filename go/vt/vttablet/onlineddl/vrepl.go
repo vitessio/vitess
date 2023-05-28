@@ -217,6 +217,7 @@ func (v *VRepl) readTableUniqueKeys(ctx context.Context, conn *dbconnpool.DBConn
 			Name:            row.AsString("index_name", ""),
 			Columns:         *vrepl.ParseColumnList(row.AsString("column_names", "")),
 			HasNullable:     row.AsBool("has_nullable", false),
+			HasSubpart:      row.AsBool("has_subpart", false),
 			HasFloat:        row.AsBool("is_float", false),
 			IsAutoIncrement: row.AsBool("is_auto_increment", false),
 		}

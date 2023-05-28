@@ -20,6 +20,7 @@ import (
 	"context"
 	_ "embed"
 	"flag"
+	"fmt"
 	"os"
 	"path"
 	"strings"
@@ -78,6 +79,12 @@ func TestMain(m *testing.M) {
 			return 1
 		}
 
+		err = clusterInstance.WaitForVTGateAndVTTablets(5 * time.Minute)
+		if err != nil {
+			fmt.Println(err)
+			return 1
+		}
+
 		vtParams = mysql.ConnParams{
 			Host: clusterInstance.Hostname,
 			Port: clusterInstance.VtgateMySQLPort,
@@ -95,16 +102,18 @@ func TestSchemaTrackingError(t *testing.T) {
 
 	logDir := clusterInstance.VtgateProcess.LogDir
 
-	timeout := time.After(1 * time.Minute)
+	timeout := time.After(5 * time.Minute)
 	var present bool
 	for {
 		select {
 		case <-timeout:
 			t.Error("timeout waiting for schema tracking error")
 		case <-time.After(1 * time.Second):
-			// check info logs
+			// check info logs, continue if the file could not be read correctly.
 			all, err := os.ReadFile(path.Join(logDir, "vtgate.WARNING"))
-			require.NoError(t, err)
+			if err != nil {
+				continue
+			}
 			if strings.Contains(string(all), "Table ACL might be enabled, --schema_change_signal_user needs to be passed to VTGate for schema tracking to work. Check 'schema tracking' docs on vitess.io") {
 				present = true
 			}

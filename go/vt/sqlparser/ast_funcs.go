@@ -21,6 +21,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"regexp"
 	"strconv"
 	"strings"
@@ -415,16 +416,6 @@ func (node TableName) IsEmpty() bool {
 	return node.Name.IsEmpty()
 }
 
-// ToViewName returns a TableName acceptable for use as a VIEW. VIEW names are
-// always lowercase, so ToViewName lowercasese the name. Databases are case-sensitive
-// so Qualifier is left untouched.
-func (node TableName) ToViewName() TableName {
-	return TableName{
-		Qualifier: node.Qualifier,
-		Name:      NewIdentifierCS(strings.ToLower(node.Name.v)),
-	}
-}
-
 // NewWhere creates a WHERE or HAVING clause out
 // of a Expr. If the expression is nil, it returns nil.
 func NewWhere(typ WhereType, expr Expr) *Where {
@@ -543,8 +534,17 @@ func NewTimestampLiteral(in string) *Literal {
 }
 
 // NewArgument builds a new ValArg.
-func NewArgument(in string) Argument {
-	return Argument(in)
+func NewArgument(in string) *Argument {
+	return &Argument{Name: in, Type: -1}
+}
+
+func parseBindVariable(yylex yyLexer, bvar string) *Argument {
+	markBindVariable(yylex, bvar)
+	return NewArgument(bvar)
+}
+
+func NewTypedArgument(in string, t sqltypes.Type) *Argument {
+	return &Argument{Name: in, Type: t}
 }
 
 // NewListArg builds a new ListArg.
@@ -565,6 +565,33 @@ func (node *Literal) Bytes() []byte {
 // HexDecode decodes the hexval into bytes.
 func (node *Literal) HexDecode() ([]byte, error) {
 	return hex.DecodeString(node.Val)
+}
+
+func (node *Literal) SQLType() sqltypes.Type {
+	switch node.Type {
+	case StrVal:
+		return sqltypes.VarChar
+	case IntVal:
+		return sqltypes.Int64
+	case FloatVal:
+		return sqltypes.Float64
+	case DecimalVal:
+		return sqltypes.Decimal
+	case HexNum:
+		return sqltypes.HexNum
+	case HexVal:
+		return sqltypes.HexVal
+	case BitVal:
+		return sqltypes.HexNum
+	case DateVal:
+		return sqltypes.Date
+	case TimeVal:
+		return sqltypes.Time
+	case TimestampVal:
+		return sqltypes.Datetime
+	default:
+		return -1
+	}
 }
 
 // encodeHexOrBitValToMySQLQueryFormat encodes the hexval or bitval back into the query format
@@ -760,7 +787,7 @@ func createIdentifierCI(str string) IdentifierCI {
 
 // NewOffset creates an offset and returns it
 func NewOffset(v int, original Expr) *Offset {
-	return &Offset{V: v, Original: String(original)}
+	return &Offset{V: v, Original: original}
 }
 
 // IsEmpty returns true if the name is empty.
@@ -883,8 +910,12 @@ func containEscapableChars(s string, at AtCount) bool {
 }
 
 func formatID(buf *TrackedBuffer, original string, at AtCount) {
+	if buf.escape == escapeNoIdentifiers {
+		buf.WriteString(original)
+		return
+	}
 	_, isKeyword := keywordLookupTable.LookupString(original)
-	if buf.escape || isKeyword || containEscapableChars(original, at) {
+	if buf.escape == escapeAllIdentifiers || isKeyword || containEscapableChars(original, at) {
 		writeEscapedString(buf, original)
 	} else {
 		buf.WriteString(original)
@@ -900,6 +931,11 @@ func writeEscapedString(buf *TrackedBuffer, original string) {
 		}
 	}
 	buf.WriteByte('`')
+}
+
+func CompliantString(in SQLNode) string {
+	s := String(in)
+	return compliantName(s)
 }
 
 func compliantName(in string) string {
@@ -971,12 +1007,12 @@ func (node *Select) GetColumns() SelectExprs {
 	return node.SelectExprs
 }
 
-// SetComments implements the SelectStatement interface
+// SetComments implements the Commented interface
 func (node *Select) SetComments(comments Comments) {
 	node.Comments = comments.Parsed()
 }
 
-// GetComments implements the SelectStatement interface
+// GetParsedComments implements the Commented interface
 func (node *Select) GetParsedComments() *ParsedComments {
 	return node.Comments
 }
@@ -1005,10 +1041,8 @@ func (node *Select) AddHaving(expr Expr) {
 		}
 		return
 	}
-	node.Having.Expr = &AndExpr{
-		Left:  node.Having.Expr,
-		Right: expr,
-	}
+	exprs := SplitAndExpression(nil, node.Having.Expr)
+	node.Having.Expr = AndExpressions(append(exprs, expr)...)
 }
 
 // AddGroupBy adds a grouping expression, unless it's already present
@@ -1098,7 +1132,7 @@ func (node *Union) SetComments(comments Comments) {
 	node.Left.SetComments(comments)
 }
 
-// GetComments implements the SelectStatement interface
+// GetParsedComments implements the SelectStatement interface
 func (node *Union) GetParsedComments() *ParsedComments {
 	return node.Left.GetParsedComments()
 }
@@ -1401,18 +1435,6 @@ func (ty IndexHintType) ToString() string {
 		return ForceStr
 	default:
 		return "Unknown IndexHintType"
-	}
-}
-
-// ToString returns the type as a string
-func (ty DeallocateStmtType) ToString() string {
-	switch ty {
-	case DeallocateType:
-		return DeallocateStr
-	case DropType:
-		return DropStr
-	default:
-		return "Unknown Deallocate Statement Type"
 	}
 }
 
@@ -1998,10 +2020,16 @@ func formatAddress(address string) string {
 func ContainsAggregation(e SQLNode) bool {
 	hasAggregates := false
 	_ = Walk(func(node SQLNode) (kontinue bool, err error) {
-		if _, isAggregate := node.(AggrFunc); isAggregate {
-			hasAggregates = true
+		switch node.(type) {
+		case *Offset:
+			// offsets here indicate that a possible aggregation has already been handled by an input
+			// so we don't need to worry about aggregation in the original
 			return false, nil
+		case AggrFunc:
+			hasAggregates = true
+			return false, io.EOF
 		}
+
 		return true, nil
 	}, e)
 	return hasAggregates
@@ -2215,3 +2243,161 @@ func AndExpressions(exprs ...Expr) Expr {
 
 // Equals is the default Comparator for AST expressions.
 var Equals = &Comparator{}
+
+// ToString returns the type as a string
+func (ty GeomPropertyType) ToString() string {
+	switch ty {
+	case IsEmpty:
+		return IsEmptyStr
+	case IsSimple:
+		return IsSimpleStr
+	case Envelope:
+		return EnvelopeStr
+	case GeometryType:
+		return GeometryTypeStr
+	case Dimension:
+		return DimensionStr
+	default:
+		return "Unknown GeomPropertyType"
+	}
+}
+
+// ToString returns the type as a string
+func (ty PointPropertyType) ToString() string {
+	switch ty {
+	case XCordinate:
+		return XCordinateStr
+	case YCordinate:
+		return YCordinateStr
+	case Latitude:
+		return LatitudeStr
+	case Longitude:
+		return LongitudeStr
+	default:
+		return "Unknown PointPropertyType"
+	}
+}
+
+// ToString returns the type as a string
+func (ty LinestrPropType) ToString() string {
+	switch ty {
+	case EndPoint:
+		return EndPointStr
+	case IsClosed:
+		return IsClosedStr
+	case Length:
+		return LengthStr
+	case NumPoints:
+		return NumPointsStr
+	case PointN:
+		return PointNStr
+	case StartPoint:
+		return StartPointStr
+	default:
+		return "Unknown LinestrPropType"
+	}
+}
+
+// ToString returns the type as a string
+func (ty PolygonPropType) ToString() string {
+	switch ty {
+	case Area:
+		return AreaStr
+	case Centroid:
+		return CentroidStr
+	case ExteriorRing:
+		return ExteriorRingStr
+	case InteriorRingN:
+		return InteriorRingNStr
+	case NumInteriorRings:
+		return NumInteriorRingsStr
+	default:
+		return "Unknown PolygonPropType"
+	}
+}
+
+// ToString returns the type as a string
+func (ty GeomCollPropType) ToString() string {
+	switch ty {
+	case GeometryN:
+		return GeometryNStr
+	case NumGeometries:
+		return NumGeometriesStr
+	default:
+		return "Unknown GeomCollPropType"
+	}
+}
+
+// ToString returns the type as a string
+func (ty GeomFromHashType) ToString() string {
+	switch ty {
+	case LatitudeFromHash:
+		return LatitudeFromHashStr
+	case LongitudeFromHash:
+		return LongitudeFromHashStr
+	case PointFromHash:
+		return PointFromHashStr
+	default:
+		return "Unknown GeomFromGeoHashType"
+	}
+}
+
+// ToString returns the type as a string
+func (ty GeomFormatType) ToString() string {
+	switch ty {
+	case BinaryFormat:
+		return BinaryFormatStr
+	case TextFormat:
+		return TextFormatStr
+	default:
+		return "Unknown GeomFormatType"
+	}
+}
+
+// ToString returns the type as a string
+func (ty GeomFromWktType) ToString() string {
+	switch ty {
+	case GeometryFromText:
+		return GeometryFromTextStr
+	case GeometryCollectionFromText:
+		return GeometryCollectionFromTextStr
+	case PointFromText:
+		return PointFromTextStr
+	case PolygonFromText:
+		return PolygonFromTextStr
+	case LineStringFromText:
+		return LineStringFromTextStr
+	case MultiPointFromText:
+		return MultiPointFromTextStr
+	case MultiLinestringFromText:
+		return MultiLinestringFromTextStr
+	case MultiPolygonFromText:
+		return MultiPolygonFromTextStr
+	default:
+		return "Unknown GeomFromWktType"
+	}
+}
+
+// ToString returns the type as a string
+func (ty GeomFromWkbType) ToString() string {
+	switch ty {
+	case GeometryFromWKB:
+		return GeometryFromWKBStr
+	case GeometryCollectionFromWKB:
+		return GeometryCollectionFromWKBStr
+	case PointFromWKB:
+		return PointFromWKBStr
+	case PolygonFromWKB:
+		return PolygonFromWKBStr
+	case LineStringFromWKB:
+		return LineStringFromWKBStr
+	case MultiPointFromWKB:
+		return MultiPointFromWKBStr
+	case MultiLinestringFromWKB:
+		return MultiLinestringFromWKBStr
+	case MultiPolygonFromWKB:
+		return MultiPolygonFromWKBStr
+	default:
+		return "Unknown GeomFromWktType"
+	}
+}

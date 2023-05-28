@@ -38,7 +38,7 @@ type syslogWriter interface {
 var writer syslogWriter
 
 // ch holds the tabletserver.StatsLogger channel to which this plugin subscribes (or a mock when under test).
-var ch chan any
+var ch chan *tabletenv.LogStats
 
 var logQueries bool
 
@@ -76,12 +76,7 @@ func run() {
 	}
 
 	formatParams := map[string][]string{"full": {}}
-	for out := range ch {
-		stats, ok := out.(*tabletenv.LogStats)
-		if !ok {
-			log.Errorf("Unexpected value in query logs: %#v (expecting value of type %T)", out, &tabletenv.LogStats{})
-			continue
-		}
+	for stats := range ch {
 		var b bytes.Buffer
 		if err := stats.Logf(&b, formatParams); err != nil {
 			log.Errorf("Error formatting logStats: %v", err)

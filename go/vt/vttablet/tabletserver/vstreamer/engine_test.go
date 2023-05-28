@@ -86,14 +86,14 @@ func TestUpdateVSchema(t *testing.T) {
 
 	// We have to start at least one stream to start the vschema watcher.
 	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	defer cancel()
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
 			Match: "/.*/",
 		}},
 	}
-	// Stream should terminate immediately due to canceled context.
-	_ = engine.Stream(ctx, "current", nil, filter, func(_ []*binlogdatapb.VEvent) error {
+	// Stream should terminate immediately due to invalid pos.
+	_ = engine.Stream(ctx, "invalid", nil, filter, func(_ []*binlogdatapb.VEvent) error {
 		return nil
 	})
 

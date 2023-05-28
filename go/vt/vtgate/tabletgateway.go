@@ -301,8 +301,14 @@ func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, 
 					err = vterrors.Errorf(vtrpcpb.Code_CLUSTER_EVENT, "current keyspace is being resharded")
 					continue
 				}
-				if kev.PrimaryIsNotServing(target) {
-					err = vterrors.Errorf(vtrpcpb.Code_CLUSTER_EVENT, "primary is not serving, there is a reparent operation in progress")
+				primary, notServing := kev.PrimaryIsNotServing(target)
+				if notServing {
+					err = vterrors.Errorf(vtrpcpb.Code_CLUSTER_EVENT, "primary is not serving, there may be a reparent operation in progress")
+					continue
+				}
+				// if primary is serving, but we initially found no tablet, we're in an inconsistent state
+				// we then retry the entire loop
+				if primary != nil {
 					continue
 				}
 			}

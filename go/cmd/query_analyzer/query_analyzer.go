@@ -70,6 +70,7 @@ func main() {
 	acl.RegisterFlags(fs)
 	servenv.RegisterMySQLServerFlags(fs)
 	_flag.Parse(fs)
+	logutil.PurgeLogs()
 	for _, filename := range _flag.Args() {
 		fmt.Printf("processing: %s\n", filename)
 		if err := processFile(filename); err != nil {

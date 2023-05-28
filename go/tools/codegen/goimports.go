@@ -45,9 +45,22 @@ func FormatJenFile(file *jen.File) ([]byte, error) {
 }
 
 func GoImports(fullPath string) error {
-	cmd := exec.Command("goimports", "-local", "vitess.io/vitess", "-w", fullPath)
+	// we need to run both gofmt and goimports because goimports does not support the
+	// simplification flag (-s) that our static linter checks require.
+
+	cmd := exec.Command("gofmt", "-s", "-w", fullPath)
 	cmd.Stderr = os.Stderr
-	return cmd.Run()
+	if err := cmd.Run(); err != nil {
+		return err
+	}
+
+	cmd = exec.Command("goimports", "-local", "vitess.io/vitess", "-w", fullPath)
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func SaveJenFile(fullPath string, file *jen.File) error {

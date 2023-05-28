@@ -20,8 +20,9 @@ import { QueryClient, QueryClientProvider } from 'react-query';
 import { QueryErrorPlaceholder } from './QueryErrorPlaceholder';
 import * as httpAPI from '../../api/http';
 import { useClusters } from '../../hooks/api';
+import { describe, it, expect, vi } from 'vitest';
 
-jest.mock('../../api/http');
+vi.mock('../../api/http');
 
 const queryHelper = () => {
     const queryClient = new QueryClient({
@@ -37,7 +38,7 @@ const queryHelper = () => {
 
 describe('QueryErrorPlaceholder', () => {
     beforeEach(() => {
-        jest.clearAllMocks();
+        vi.clearAllMocks();
     });
 
     it('renders an error message', async () => {

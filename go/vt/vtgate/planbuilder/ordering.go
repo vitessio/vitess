@@ -103,17 +103,17 @@ func planOAOrdering(pb *primitiveBuilder, orderBy v3OrderBy, oa *orderedAggregat
 		case *sqlparser.CastExpr:
 			col, ok := expr.Expr.(*sqlparser.ColName)
 			if !ok {
-				return nil, vterrors.VT12001(fmt.Sprintf("in scatter query: complex ORDER BY expression: %s", sqlparser.String(expr)))
+				return nil, complexOrderBy(sqlparser.String(expr))
 			}
 			orderByCol = col.Metadata.(*column)
 		case *sqlparser.ConvertExpr:
 			col, ok := expr.Expr.(*sqlparser.ColName)
 			if !ok {
-				return nil, vterrors.VT12001(fmt.Sprintf("in scatter query: complex ORDER BY expression: %s", sqlparser.String(expr)))
+				return nil, complexOrderBy(sqlparser.String(expr))
 			}
 			orderByCol = col.Metadata.(*column)
 		default:
-			return nil, vterrors.VT12001(fmt.Sprintf("in scatter query: complex ORDER BY expression: %v", sqlparser.String(expr)))
+			return nil, complexOrderBy(sqlparser.String(expr))
 		}
 
 		// Match orderByCol against the group by columns.
@@ -294,7 +294,7 @@ func planRouteOrdering(orderBy v3OrderBy, node *route) (logicalPlan, error) {
 		case *sqlparser.UnaryExpr:
 			col, ok := expr.Expr.(*sqlparser.ColName)
 			if !ok {
-				return nil, vterrors.VT12001(fmt.Sprintf("in scatter query: complex ORDER BY expression: %s", sqlparser.String(expr)))
+				return nil, complexOrderBy(sqlparser.String(expr))
 			}
 			c := col.Metadata.(*column)
 			for i, rc := range node.resultColumns {
@@ -304,7 +304,7 @@ func planRouteOrdering(orderBy v3OrderBy, node *route) (logicalPlan, error) {
 				}
 			}
 		default:
-			return nil, vterrors.VT12001(fmt.Sprintf("in scatter query: complex ORDER BY expression: %s", sqlparser.String(expr)))
+			return nil, complexOrderBy(sqlparser.String(expr))
 		}
 		// If column is not found, then the order by is referencing
 		// a column that's not on the select list.
@@ -349,4 +349,8 @@ func planRouteOrdering(orderBy v3OrderBy, node *route) (logicalPlan, error) {
 		node.Select.AddOrder(order.Order)
 	}
 	return newMergeSort(node), nil
+}
+
+func complexOrderBy(s string) error {
+	return vterrors.VT12001(fmt.Sprintf("in scatter query: complex ORDER BY expression: %s", s))
 }

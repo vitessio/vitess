@@ -38,7 +38,7 @@ mysql --table < ../common/select_commerce_data.sql
 
 for shard in "customer/0"; do
  while true; do
-  if $(mysql "$shard" -e 'show tables' &>/dev/null); then
+  if (mysql "$shard" -e 'show tables' &>/dev/null); then
     break
   fi
   echo -e "waiting for shard: $shard ..."
@@ -62,7 +62,7 @@ mysql --table < ../common/select_customer0_data.sql
 
 ./205_clean_commerce.sh
 # We expect this to fail as the keyspace is now gone.
-$(mysql --table < ../common/select_commerce_data.sql &>/dev/null || true)
+(mysql --table < ../common/select_commerce_data.sql &>/dev/null || true)
 
 ./301_customer_sharded.sh
 ./302_new_shards.sh
@@ -71,7 +71,7 @@ $(mysql --table < ../common/select_commerce_data.sql &>/dev/null || true)
 # TODO: Eliminate this race in the examples' scripts
 for shard in "customer/-80" "customer/80-"; do
  while true; do
-  if $(mysql "$shard" -e 'show tables' &>/dev/null); then
+  if (mysql "$shard" -e 'show tables' &>/dev/null); then
     break
   fi
   echo -e "waiting for shard: $shard ..."

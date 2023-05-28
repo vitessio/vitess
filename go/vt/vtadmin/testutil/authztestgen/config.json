@@ -1736,6 +1736,7 @@
                 }
             ],
             "request": "&vtadminpb.VTExplainRequest{\nCluster: \"test\",\nKeyspace: \"test\",\nSql: \"select id from t1;\",}",
+            "serialize_cases": true,
             "cases": [
                 {
                     "name": "unauthorized actor",

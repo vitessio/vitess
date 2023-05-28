@@ -38,6 +38,7 @@ import (
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
@@ -45,10 +46,10 @@ import (
 )
 
 const (
-	reshardingJournalTableName = "_vt.resharding_journal"
-	vreplicationTableName      = "_vt.vreplication"
-	copyStateTableName         = "_vt.copy_state"
-	postCopyActionTableName    = "_vt.post_copy_action"
+	reshardingJournalTableName = "resharding_journal"
+	vreplicationTableName      = "vreplication"
+	copyStateTableName         = "copy_state"
+	postCopyActionTableName    = "post_copy_action"
 
 	maxRows                      = 10000
 	throttlerVReplicationAppName = "vreplication"
@@ -318,7 +319,6 @@ func (vre *Engine) Close() {
 	// Wait for long-running functions to exit.
 	vre.wg.Wait()
 
-	vre.mysqld.DisableBinlogPlayback()
 	vre.isOpen = false
 
 	vre.updateStats()
@@ -378,7 +378,7 @@ func (vre *Engine) exec(query string, runAsAdmin bool) (*sqltypes.Result, error)
 	// Change the database to ensure that these events don't get
 	// replicated by another vreplication. This can happen when
 	// we reverse replication.
-	if _, err := dbClient.ExecuteFetch("use _vt", 1); err != nil {
+	if _, err := dbClient.ExecuteFetch(fmt.Sprintf("use %s", sidecardb.GetIdentifier()), 1); err != nil {
 		return nil, err
 	}
 

@@ -7,6 +7,8 @@ concurrency:
   group: format('{0}-{1}', ${{ github.ref }}, 'Upgrade Downgrade Testing Query Serving (Queries)')
   cancel-in-progress: true
 
+permissions: read-all
+
 # This test ensures that our end-to-end tests work using Vitess components
 # (vtgate, vttablet, etc) built on different versions.
 
@@ -83,9 +85,9 @@ jobs:
 
     - name: Set up Go
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
-      uses: actions/setup-go@v3
+      uses: actions/setup-go@v4
       with:
-        go-version: 1.19.4
+        go-version: 1.20.4
 
     - name: Set up python
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
@@ -209,9 +211,11 @@ jobs:
       run: |
         source build.env
 
-        rm -f $PWD/bin/vtgate $PWD/bin/vttablet
+        rm -f $PWD/bin/vtgate $PWD/bin/vttablet $PWD/bin/mysqlctl $PWD/bin/mysqlctld
         cp /tmp/vitess-build-current/bin/vtgate $PWD/bin/vtgate
         cp /tmp/vitess-build-other/bin/vttablet $PWD/bin/vttablet
+        cp /tmp/vitess-build-other/bin/mysqlctl $PWD/bin/mysqlctl
+        cp /tmp/vitess-build-other/bin/mysqlctld $PWD/bin/mysqlctld
         vtgate --version
         vttablet --version
 

@@ -46,12 +46,6 @@ type (
 	}
 )
 
-var _ ops.PhysicalOperator = (*SubQueryOp)(nil)
-var _ ops.PhysicalOperator = (*CorrelatedSubQueryOp)(nil)
-
-// IPhysical implements the PhysicalOperator interface
-func (s *SubQueryOp) IPhysical() {}
-
 // Clone implements the Operator interface
 func (s *SubQueryOp) Clone(inputs []ops.Operator) ops.Operator {
 	result := &SubQueryOp{
@@ -62,13 +56,30 @@ func (s *SubQueryOp) Clone(inputs []ops.Operator) ops.Operator {
 	return result
 }
 
+func (s *SubQueryOp) GetOrdering() ([]ops.OrderBy, error) {
+	return s.Outer.GetOrdering()
+}
+
 // Inputs implements the Operator interface
 func (s *SubQueryOp) Inputs() []ops.Operator {
 	return []ops.Operator{s.Outer, s.Inner}
 }
 
-// IPhysical implements the PhysicalOperator interface
-func (c *CorrelatedSubQueryOp) IPhysical() {}
+// SetInputs implements the Operator interface
+func (s *SubQueryOp) SetInputs(ops []ops.Operator) {
+	s.Outer, s.Inner = ops[0], ops[1]
+}
+
+func (s *SubQueryOp) Description() ops.OpDescription {
+	return ops.OpDescription{
+		OperatorType: "SubQuery",
+		Variant:      "Apply",
+	}
+}
+
+func (s *SubQueryOp) ShortDescription() string {
+	return ""
+}
 
 // Clone implements the Operator interface
 func (c *CorrelatedSubQueryOp) Clone(inputs []ops.Operator) ops.Operator {
@@ -89,7 +100,27 @@ func (c *CorrelatedSubQueryOp) Clone(inputs []ops.Operator) ops.Operator {
 	return result
 }
 
+func (c *CorrelatedSubQueryOp) GetOrdering() ([]ops.OrderBy, error) {
+	return c.Outer.GetOrdering()
+}
+
 // Inputs implements the Operator interface
 func (c *CorrelatedSubQueryOp) Inputs() []ops.Operator {
 	return []ops.Operator{c.Outer, c.Inner}
+}
+
+// SetInputs implements the Operator interface
+func (c *CorrelatedSubQueryOp) SetInputs(ops []ops.Operator) {
+	c.Outer, c.Inner = ops[0], ops[1]
+}
+
+func (c *CorrelatedSubQueryOp) Description() ops.OpDescription {
+	return ops.OpDescription{
+		OperatorType: "SubQuery",
+		Variant:      "Correlated",
+	}
+}
+
+func (c *CorrelatedSubQueryOp) ShortDescription() string {
+	return ""
 }

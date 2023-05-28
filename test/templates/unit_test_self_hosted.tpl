@@ -4,6 +4,8 @@ concurrency:
   group: format('{0}-{1}', ${{"{{"}} github.ref {{"}}"}}, '{{.Name}}')
   cancel-in-progress: true
 
+permissions: read-all
+
 jobs:
   test:
     runs-on: self-hosted

@@ -41,7 +41,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 )
 
-var testMessage = "{\"message\":\"hello world\"}"
+var testMessage = "{\"message\": \"hello world\"}"
 var testShardedMessagef = "{\"message\": \"hello world\", \"id\": %d}"
 
 var createMessage = `

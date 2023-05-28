@@ -1,10 +1,13 @@
 package plancontext
 
 import (
+	"context"
 	"strings"
 
 	"vitess.io/vitess/go/vt/log"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
+	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
+	"vitess.io/vitess/go/vt/vtgate/engine"
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/key"
@@ -60,6 +63,7 @@ type VSchema interface {
 
 	// GetSrvVschema returns the latest cached vschema.SrvVSchema
 	GetSrvVschema() *vschemapb.SrvVSchema
+
 	// FindRoutedShard looks up shard routing rules for a shard
 	FindRoutedShard(keyspace, shard string) (string, error)
 
@@ -68,6 +72,21 @@ type VSchema interface {
 
 	// IsViewsEnabled returns true if Vitess manages the views.
 	IsViewsEnabled() bool
+
+	// GetUDV returns user defined value from the variable passed.
+	GetUDV(name string) *querypb.BindVariable
+
+	// PlanPrepareStatement plans the prepared statement.
+	PlanPrepareStatement(ctx context.Context, query string) (*engine.Plan, sqlparser.Statement, error)
+
+	// ClearPrepareData clears the prepared data from the session.
+	ClearPrepareData(stmtName string)
+
+	// GetPrepareData returns the prepared data for the statement from the session.
+	GetPrepareData(stmtName string) *vtgatepb.PrepareData
+
+	// StorePrepareData stores the prepared data in the session.
+	StorePrepareData(name string, v *vtgatepb.PrepareData)
 }
 
 // PlannerNameToVersion returns the numerical representation of the planner

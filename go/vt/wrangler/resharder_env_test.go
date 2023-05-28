@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 	"regexp"
-	"runtime/debug"
 	"strings"
 	"sync"
 	"testing"
@@ -50,10 +49,6 @@ type testResharderEnv struct {
 	cell     string
 	tmc      *testResharderTMClient
 }
-
-var (
-	testMode = "" // "debug"
-)
 
 //----------------------------------------------
 // testResharderEnv
@@ -217,14 +212,8 @@ func (tmc *testResharderTMClient) expectVRQuery(tabletID int, query string, resu
 func (tmc *testResharderTMClient) VReplicationExec(ctx context.Context, tablet *topodatapb.Tablet, query string) (*querypb.QueryResult, error) {
 	tmc.mu.Lock()
 	defer tmc.mu.Unlock()
-	if testMode == "debug" {
-		fmt.Printf("Got: %d:%s\n", tablet.Alias.Uid, query)
-	}
 	qrs := tmc.vrQueries[int(tablet.Alias.Uid)]
 	if len(qrs) == 0 {
-		if testMode == "debug" {
-			fmt.Printf("Want: %d:%s, Stack:\n%v\n", tablet.Alias.Uid, query, debug.Stack())
-		}
 		return nil, fmt.Errorf("tablet %v does not expect any more queries: %s", tablet, query)
 	}
 	matched := false

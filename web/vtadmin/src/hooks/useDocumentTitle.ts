@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { env } from '../util/env';
 
-const BASE_TITLE = env().REACT_APP_DOCUMENT_TITLE || 'VTAdmin';
+const BASE_TITLE = env().VITE_DOCUMENT_TITLE || 'VTAdmin';
 
 // useDocumentTitle is a simple hook to set the document.title of the page.
 //

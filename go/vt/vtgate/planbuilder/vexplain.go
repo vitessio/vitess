@@ -17,6 +17,7 @@ limitations under the License.
 package planbuilder
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 
@@ -32,7 +33,7 @@ import (
 )
 
 // Builds an explain-plan for the given Primitive
-func buildExplainPlan(stmt sqlparser.Explain, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, enableOnlineDDL, enableDirectDDL bool) (*planResult, error) {
+func buildExplainPlan(ctx context.Context, stmt sqlparser.Explain, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, enableOnlineDDL, enableDirectDDL bool) (*planResult, error) {
 	switch explain := stmt.(type) {
 	case *sqlparser.ExplainTab:
 		return explainTabPlan(explain, vschema)
@@ -40,10 +41,10 @@ func buildExplainPlan(stmt sqlparser.Explain, reservedVars *sqlparser.ReservedVa
 		switch explain.Type {
 		case sqlparser.VitessType:
 			vschema.PlannerWarning("EXPLAIN FORMAT = VITESS is deprecated, please use VEXPLAIN PLAN instead.")
-			return buildVExplainVtgatePlan(explain.Statement, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
+			return buildVExplainVtgatePlan(ctx, explain.Statement, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
 		case sqlparser.VTExplainType:
 			vschema.PlannerWarning("EXPLAIN FORMAT = VTEXPLAIN is deprecated, please use VEXPLAIN QUERIES instead.")
-			return buildVExplainLoggingPlan(&sqlparser.VExplainStmt{Type: sqlparser.QueriesVExplainType, Statement: explain.Statement, Comments: explain.Comments}, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
+			return buildVExplainLoggingPlan(ctx, &sqlparser.VExplainStmt{Type: sqlparser.QueriesVExplainType, Statement: explain.Statement, Comments: explain.Comments}, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
 		default:
 			return buildOtherReadAndAdmin(sqlparser.String(explain), vschema)
 		}
@@ -51,12 +52,12 @@ func buildExplainPlan(stmt sqlparser.Explain, reservedVars *sqlparser.ReservedVa
 	return nil, vterrors.VT13001(fmt.Sprintf("unexpected explain type: %T", stmt))
 }
 
-func buildVExplainPlan(vexplainStmt *sqlparser.VExplainStmt, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, enableOnlineDDL, enableDirectDDL bool) (*planResult, error) {
+func buildVExplainPlan(ctx context.Context, vexplainStmt *sqlparser.VExplainStmt, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, enableOnlineDDL, enableDirectDDL bool) (*planResult, error) {
 	switch vexplainStmt.Type {
 	case sqlparser.QueriesVExplainType, sqlparser.AllVExplainType:
-		return buildVExplainLoggingPlan(vexplainStmt, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
+		return buildVExplainLoggingPlan(ctx, vexplainStmt, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
 	case sqlparser.PlanVExplainType:
-		return buildVExplainVtgatePlan(vexplainStmt.Statement, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
+		return buildVExplainVtgatePlan(ctx, vexplainStmt.Statement, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
 	}
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unexpected vtexplain type: %s", vexplainStmt.Type.ToString())
 }
@@ -88,8 +89,8 @@ func explainTabPlan(explain *sqlparser.ExplainTab, vschema plancontext.VSchema) 
 	}, singleTable(keyspace.Name, explain.Table.Name.String())), nil
 }
 
-func buildVExplainVtgatePlan(explainStatement sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, enableOnlineDDL, enableDirectDDL bool) (*planResult, error) {
-	innerInstruction, err := createInstructionFor(sqlparser.String(explainStatement), explainStatement, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
+func buildVExplainVtgatePlan(ctx context.Context, explainStatement sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, enableOnlineDDL, enableDirectDDL bool) (*planResult, error) {
+	innerInstruction, err := createInstructionFor(ctx, sqlparser.String(explainStatement), explainStatement, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
 	if err != nil {
 		return nil, err
 	}
@@ -109,8 +110,8 @@ func buildVExplainVtgatePlan(explainStatement sqlparser.Statement, reservedVars 
 	return newPlanResult(engine.NewRowsPrimitive(rows, fields)), nil
 }
 
-func buildVExplainLoggingPlan(explain *sqlparser.VExplainStmt, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, enableOnlineDDL, enableDirectDDL bool) (*planResult, error) {
-	input, err := createInstructionFor(sqlparser.String(explain.Statement), explain.Statement, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
+func buildVExplainLoggingPlan(ctx context.Context, explain *sqlparser.VExplainStmt, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, enableOnlineDDL, enableDirectDDL bool) (*planResult, error) {
+	input, err := createInstructionFor(ctx, sqlparser.String(explain.Statement), explain.Statement, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
 	if err != nil {
 		return nil, err
 	}

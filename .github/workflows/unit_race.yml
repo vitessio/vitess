@@ -4,6 +4,8 @@ concurrency:
   group: format('{0}-{1}', ${{ github.ref }}, 'unit_race')
   cancel-in-progress: true
 
+permissions: read-all
+
 jobs:
 
   build:
@@ -53,9 +55,9 @@ jobs:
 
     - name: Set up Go
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.unit_tests == 'true'
-      uses: actions/setup-go@v3
+      uses: actions/setup-go@v4
       with:
-        go-version: 1.19.4
+        go-version: 1.20.4
 
     - name: Tune the OS
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.unit_tests == 'true'
@@ -91,6 +93,6 @@ jobs:
 
     - name: unit_race
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.unit_tests == 'true'
-      timeout-minutes: 30
+      timeout-minutes: 45
       run: |
         eatmydata -- make unit_test_race

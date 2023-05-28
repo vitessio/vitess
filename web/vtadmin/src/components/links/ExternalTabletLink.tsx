@@ -25,7 +25,7 @@ export const ExternalTabletLink: React.FunctionComponent<Props> = ({ children, c
     }
 
     return (
-        <a className={className} href={`//${fqdn}`} rel="noreferrer" target="_blank">
+        <a className={className} href={`${fqdn}`} rel="noreferrer" target="_blank">
             {children}
         </a>
     );

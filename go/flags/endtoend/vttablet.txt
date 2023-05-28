@@ -34,6 +34,12 @@ Usage of vttablet:
       --ceph_backup_storage_config string                                Path to JSON config file for ceph backup storage. (default "ceph_backup_config.json")
       --compression-engine-name string                                   compressor engine used for compression. (default "pargzip")
       --compression-level int                                            what level to pass to the compressor. (default 1)
+      --config-file string                                               Full path of the config file (with extension) to use. If set, --config-path, --config-type, and --config-name are ignored.
+      --config-file-not-found-handling ConfigFileNotFoundHandling        Behavior when a config file is not found. (Options: error, exit, ignore, warn) (default warn)
+      --config-name string                                               Name of the config file (without extension) to search for. (default "vtconfig")
+      --config-path strings                                              Paths to search for config files in. (default [{{.Workdir}}])
+      --config-persistence-min-interval duration                         minimum interval between persisting dynamic config changes back to disk (if no change has occurred, nothing is done). (default 1s)
+      --config-type string                                               Config file type (omit to infer config type from file extension).
       --consolidator-stream-query-size int                               Configure the stream consolidator query size in bytes. Setting to 0 disables the stream consolidator. (default 2097152)
       --consolidator-stream-total-size int                               Configure the stream consolidator total size in bytes. Setting to 0 disables the stream consolidator. (default 134217728)
       --consul_auth_static_file string                                   JSON File to read the topos/tokens from.
@@ -94,6 +100,7 @@ Usage of vttablet:
       --enable-consolidator                                              Synonym to -enable_consolidator (default true)
       --enable-consolidator-replicas                                     Synonym to -enable_consolidator_replicas
       --enable-lag-throttler                                             Synonym to -enable_lag_throttler
+      --enable-per-workload-table-metrics                                If true, query counts and query error metrics include a label that identifies the workload
       --enable-tx-throttler                                              Synonym to -enable_tx_throttler
       --enable_consolidator                                              This option enables the query consolidator. (default true)
       --enable_consolidator_replicas                                     This option enables the query consolidator only on replicas.
@@ -143,7 +150,7 @@ Usage of vttablet:
       --grpc_server_keepalive_enforcement_policy_min_time duration       gRPC server minimum keepalive time (default 10s)
       --grpc_server_keepalive_enforcement_policy_permit_without_stream   gRPC server permit client keepalive pings even when there are no active streams (RPCs)
       --health_check_interval duration                                   Interval between health checks (default 20s)
-      --heartbeat_enable                                                 If true, vttablet records (if master) or checks (if replica) the current time of a replication heartbeat in the table _vt.heartbeat. The result is used to inform the serving state of the vttablet via healthchecks.
+      --heartbeat_enable                                                 If true, vttablet records (if master) or checks (if replica) the current time of a replication heartbeat in the sidecar database's heartbeat table. The result is used to inform the serving state of the vttablet via healthchecks.
       --heartbeat_interval duration                                      How frequently to read and write replication heartbeat. (default 1s)
       --heartbeat_on_demand_duration duration                            If non-zero, heartbeats are only written upon consumer request, and only run for up to given duration following the request. Frequent requests can keep the heartbeat running consistently; when requests are infrequent heartbeat may completely stop between requests
   -h, --help                                                             display usage and exit
@@ -169,6 +176,7 @@ Usage of vttablet:
       --log_queries_to_file string                                       Enable query logging to the specified file
       --log_rotate_max_size uint                                         size in bytes at which logs are rotated (glog.MaxSize) (default 1887436800)
       --logtostderr                                                      log to standard error instead of files
+      --manifest-external-decompressor string                            command with arguments to store in the backup manifest when compressing a backup with an external compression engine.
       --max-stack-size int                                               configure the maximum stack size in bytes (default 67108864)
       --max_concurrent_online_ddl int                                    Maximum number of online DDL changes that may run concurrently (default 256)
       --migration_check_interval duration                                Interval between migration checks (default 1m0s)
@@ -211,31 +219,32 @@ Usage of vttablet:
       --queryserver-config-acl-exempt-acl string                         an acl that exempt from table acl checking (this acl is free to access any vitess tables).
       --queryserver-config-annotate-queries                              prefix queries to MySQL backend with comment indicating vtgate principal (user) and target tablet type
       --queryserver-config-enable-table-acl-dry-run                      If this flag is enabled, tabletserver will emit monitoring metrics and let the request pass regardless of table acl check results
-      --queryserver-config-idle-timeout float                            query server idle timeout (in seconds), vttablet manages various mysql connection pools. This config means if a connection has not been used in given idle timeout, this connection will be removed from pool. This effectively manages number of connection objects and optimize the pool performance. (default 1800)
+      --queryserver-config-idle-timeout duration                         query server idle timeout (in seconds), vttablet manages various mysql connection pools. This config means if a connection has not been used in given idle timeout, this connection will be removed from pool. This effectively manages number of connection objects and optimize the pool performance. (default 30m0s)
       --queryserver-config-max-result-size int                           query server max result size, maximum number of rows allowed to return from vttablet for non-streaming queries. (default 10000)
       --queryserver-config-message-postpone-cap int                      query server message postpone cap is the maximum number of messages that can be postponed at any given time. Set this number to substantially lower than transaction cap, so that the transaction pool isn't exhausted by the message subsystem. (default 4)
-      --queryserver-config-olap-transaction-timeout float                query server transaction timeout (in seconds), after which a transaction in an OLAP session will be killed (default 30)
+      --queryserver-config-olap-transaction-timeout duration             query server transaction timeout (in seconds), after which a transaction in an OLAP session will be killed (default 30s)
       --queryserver-config-passthrough-dmls                              query server pass through all dml statements without rewriting
-      --queryserver-config-pool-conn-max-lifetime float                  query server connection max lifetime (in seconds), vttablet manages various mysql connection pools. This config means if a connection has lived at least this long, it connection will be removed from pool upon the next time it is returned to the pool.
+      --queryserver-config-pool-conn-max-lifetime duration               query server connection max lifetime (in seconds), vttablet manages various mysql connection pools. This config means if a connection has lived at least this long, it connection will be removed from pool upon the next time it is returned to the pool. (default 0s)
       --queryserver-config-pool-size int                                 query server read pool size, connection pool is used by regular queries (non streaming, not in a transaction) (default 16)
       --queryserver-config-query-cache-lfu                               query server cache algorithm. when set to true, a new cache algorithm based on a TinyLFU admission policy will be used to improve cache behavior and prevent pollution from sparse queries (default true)
       --queryserver-config-query-cache-memory int                        query server query cache size in bytes, maximum amount of memory to be used for caching. vttablet analyzes every incoming query and generate a query plan, these plans are being cached in a lru cache. This config controls the capacity of the lru cache. (default 33554432)
       --queryserver-config-query-cache-size int                          query server query cache size, maximum number of queries to be cached. vttablet analyzes every incoming query and generate a query plan, these plans are being cached in a lru cache. This config controls the capacity of the lru cache. (default 5000)
-      --queryserver-config-query-pool-timeout float                      query server query pool timeout (in seconds), it is how long vttablet waits for a connection from the query pool. If set to 0 (default) then the overall query timeout is used instead.
+      --queryserver-config-query-pool-timeout duration                   query server query pool timeout (in seconds), it is how long vttablet waits for a connection from the query pool. If set to 0 (default) then the overall query timeout is used instead. (default 0s)
       --queryserver-config-query-pool-waiter-cap int                     query server query pool waiter limit, this is the maximum number of queries that can be queued waiting to get a connection (default 5000)
-      --queryserver-config-query-timeout float                           query server query timeout (in seconds), this is the query timeout in vttablet side. If a query takes more than this timeout, it will be killed. (default 30)
+      --queryserver-config-query-timeout duration                        query server query timeout (in seconds), this is the query timeout in vttablet side. If a query takes more than this timeout, it will be killed. (default 30s)
       --queryserver-config-schema-change-signal                          query server schema signal, will signal connected vtgates that schema has changed whenever this is detected. VTGates will need to have -schema_change_signal enabled for this to work (default true)
-      --queryserver-config-schema-change-signal-interval float           query server schema change signal interval defines at which interval the query server shall send schema updates to vtgate. (default 5)
-      --queryserver-config-schema-reload-time float                      query server schema reload time, how often vttablet reloads schemas from underlying MySQL instance in seconds. vttablet keeps table schemas in its own memory and periodically refreshes it from MySQL. This config controls the reload time. (default 1800)
+      --queryserver-config-schema-change-signal-interval duration        query server schema change signal interval defines at which interval the query server shall send schema updates to vtgate. (default 5s)
+      --queryserver-config-schema-reload-time duration                   query server schema reload time, how often vttablet reloads schemas from underlying MySQL instance in seconds. vttablet keeps table schemas in its own memory and periodically refreshes it from MySQL. This config controls the reload time. (default 30m0s)
       --queryserver-config-stream-buffer-size int                        query server stream buffer size, the maximum number of bytes sent from vttablet for each stream call. It's recommended to keep this value in sync with vtgate's stream_buffer_size. (default 32768)
       --queryserver-config-stream-pool-size int                          query server stream connection pool size, stream pool is used by stream queries: queries that return results to client in a streaming fashion (default 200)
-      --queryserver-config-stream-pool-timeout float                     query server stream pool timeout (in seconds), it is how long vttablet waits for a connection from the stream pool. If set to 0 (default) then there is no timeout.
+      --queryserver-config-stream-pool-timeout duration                  query server stream pool timeout (in seconds), it is how long vttablet waits for a connection from the stream pool. If set to 0 (default) then there is no timeout. (default 0s)
       --queryserver-config-stream-pool-waiter-cap int                    query server stream pool waiter limit, this is the maximum number of streaming queries that can be queued waiting to get a connection
       --queryserver-config-strict-table-acl                              only allow queries that pass table acl checks
       --queryserver-config-terse-errors                                  prevent bind vars from escaping in client error messages
       --queryserver-config-transaction-cap int                           query server transaction cap is the maximum number of transactions allowed to happen at any given point of a time for a single vttablet. E.g. by setting transaction cap to 100, there are at most 100 transactions will be processed by a vttablet and the 101th transaction will be blocked (and fail if it cannot get connection within specified timeout) (default 20)
-      --queryserver-config-transaction-timeout float                     query server transaction timeout (in seconds), a transaction will be killed if it takes longer than this value (default 30)
-      --queryserver-config-txpool-timeout float                          query server transaction pool timeout, it is how long vttablet waits if tx pool is full (default 1)
+      --queryserver-config-transaction-timeout duration                  query server transaction timeout (in seconds), a transaction will be killed if it takes longer than this value (default 30s)
+      --queryserver-config-truncate-error-len int                        truncate errors sent to client if they are longer than this value (0 means do not truncate)
+      --queryserver-config-txpool-timeout duration                       query server transaction pool timeout, it is how long vttablet waits if tx pool is full (default 1s)
       --queryserver-config-txpool-waiter-cap int                         query server transaction pool waiter limit, this is the maximum number of transactions that can be queued waiting to get a connection (default 5000)
       --queryserver-config-warn-result-size int                          query server result size warning threshold, warn if number of rows returned from vttablet for non-streaming queries exceeds this
       --queryserver-enable-settings-pool                                 Enable pooling of connections with modified system settings
@@ -260,11 +269,13 @@ Usage of vttablet:
       --s3_backup_storage_root string                                    root prefix for all backup-related object names.
       --s3_backup_tls_skip_verify_cert                                   skip the 'certificate is valid' check for SSL connections.
       --sanitize_log_messages                                            Remove potentially sensitive information in tablet INFO, WARNING, and ERROR log messages such as query parameters.
+      --schema-change-reload-timeout duration                            query server schema change signal reload timeout, this is how long to wait for the signaled schema reload operation to complete before giving up (default 30s)
+      --schema-version-max-age-seconds int                               max age of schema version records to kept in memory by the vreplication historian
       --security_policy string                                           the name of a registered security policy to use for controlling access to URLs - empty means allow all for anyone (built-in policies: deny-all, read-only)
       --service_map strings                                              comma separated list of services to enable (or disable if prefixed with '-') Example: grpc-queryservice
       --serving_state_grace_period duration                              how long to pause after broadcasting health to vtgate, before enforcing a new serving state
       --shard_sync_retry_delay duration                                  delay between retries of updates to keep the tablet and its shard record in sync (default 30s)
-      --shutdown_grace_period float                                      how long to wait (in seconds) for queries and transactions to complete during graceful shutdown.
+      --shutdown_grace_period duration                                   how long to wait (in seconds) for queries and transactions to complete during graceful shutdown. (default 0s)
       --sql-max-length-errors int                                        truncate queries in error logs to the given length (default unlimited)
       --sql-max-length-ui int                                            truncate queries in debug UIs to the given length (default 512) (default 512)
       --srv_topo_cache_refresh duration                                  how frequently to refresh the topology for cached entries (default 1s)
@@ -303,7 +314,7 @@ Usage of vttablet:
       --tablet_protocol string                                           Protocol to use to make queryservice RPCs to vttablets. (default "grpc")
       --throttle_check_as_check_self                                     Should throttler/check return a throttler/check-self result (changes throttler behavior for writes)
       --throttle_metrics_query SELECT                                    Override default heartbeat/lag metric. Use either SELECT (must return single row, single value) or `SHOW GLOBAL ... LIKE ...` queries. Set -throttle_metrics_threshold respectively.
-      --throttle_metrics_threshold float                                 Override default throttle threshold, respective to -throttle_metrics_query (default 1.7976931348623157e+308)
+      --throttle_metrics_threshold float                                 Override default throttle threshold, respective to --throttle_metrics_query (default 1.7976931348623157e+308)
       --throttle_tablet_types string                                     Comma separated VTTablet types to be considered by the throttler. default: 'replica'. example: 'replica,rdonly'. 'replica' aways implicitly included (default "replica")
       --throttle_threshold duration                                      Replication lag threshold for default lag throttling (default 1s)
       --throttler-config-via-topo                                        When 'true', read config from topo service and ignore throttle_threshold, throttle_metrics_threshold, throttle_metrics_query, throttle_check_as_check_self
@@ -344,11 +355,12 @@ Usage of vttablet:
       --twopc_coordinator_address string                                 address of the (VTGate) process(es) that will be used to notify of abandoned transactions.
       --twopc_enable                                                     if the flag is on, 2pc is enabled. Other 2pc flags must be supplied.
       --tx-throttler-config string                                       Synonym to -tx_throttler_config (default "target_replication_lag_sec: 2\nmax_replication_lag_sec: 10\ninitial_rate: 100\nmax_increase: 1\nemergency_decrease: 0.5\nmin_duration_between_increases_sec: 40\nmax_duration_between_increases_sec: 62\nmin_duration_between_decreases_sec: 20\nspread_backlog_across_sec: 20\nage_bad_rate_after_sec: 180\nbad_rate_increase: 0.1\nmax_rate_approach_threshold: 0.9\n")
+      --tx-throttler-default-priority int                                Default priority assigned to queries that lack priority information (default 100)
       --tx-throttler-healthcheck-cells strings                           Synonym to -tx_throttler_healthcheck_cells
-      --tx_throttler_config string                                       The configuration of the transaction throttler as a text formatted throttlerdata.Configuration protocol buffer message (default "target_replication_lag_sec: 2\nmax_replication_lag_sec: 10\ninitial_rate: 100\nmax_increase: 1\nemergency_decrease: 0.5\nmin_duration_between_increases_sec: 40\nmax_duration_between_increases_sec: 62\nmin_duration_between_decreases_sec: 20\nspread_backlog_across_sec: 20\nage_bad_rate_after_sec: 180\nbad_rate_increase: 0.1\nmax_rate_approach_threshold: 0.9\n")
+      --tx-throttler-tablet-types strings                                A comma-separated list of tablet types. Only tablets of this type are monitored for replication lag by the transaction throttler. Supported types are replica and/or rdonly. (default replica)
+      --tx_throttler_config string                                       The configuration of the transaction throttler as a text-formatted throttlerdata.Configuration protocol buffer message. (default "target_replication_lag_sec: 2\nmax_replication_lag_sec: 10\ninitial_rate: 100\nmax_increase: 1\nemergency_decrease: 0.5\nmin_duration_between_increases_sec: 40\nmax_duration_between_increases_sec: 62\nmin_duration_between_decreases_sec: 20\nspread_backlog_across_sec: 20\nage_bad_rate_after_sec: 180\nbad_rate_increase: 0.1\nmax_rate_approach_threshold: 0.9\n")
       --tx_throttler_healthcheck_cells strings                           A comma-separated list of cells. Only tabletservers running in these cells will be monitored for replication lag by the transaction throttler.
       --unhealthy_threshold duration                                     replication lag after which a replica is considered unhealthy (default 2h0m0s)
-      --use_super_read_only                                              Set super_read_only flag when performing planned failover.
       --v Level                                                          log level for V logs
   -v, --version                                                          print binary version
       --vmodule moduleSpec                                               comma-separated list of pattern=N settings for file-filtered logging
@@ -356,7 +368,7 @@ Usage of vttablet:
       --vreplication_copy_phase_duration duration                        Duration for each copy phase loop (before running the next catchup: default 1h) (default 1h0m0s)
       --vreplication_copy_phase_max_innodb_history_list_length int       The maximum InnoDB transaction history that can exist on a vstreamer (source) before starting another round of copying rows. This helps to limit the impact on the source tablet. (default 1000000)
       --vreplication_copy_phase_max_mysql_replication_lag int            The maximum MySQL replication lag (in seconds) that can exist on a vstreamer (source) before starting another round of copying rows. This helps to limit the impact on the source tablet. (default 43200)
-      --vreplication_experimental_flags int                              (Bitmask) of experimental features in vreplication to enable (default 1)
+      --vreplication_experimental_flags int                              (Bitmask) of experimental features in vreplication to enable (default 3)
       --vreplication_healthcheck_retry_delay duration                    healthcheck retry delay (default 5s)
       --vreplication_healthcheck_timeout duration                        healthcheck retry delay (default 1m0s)
       --vreplication_healthcheck_topology_refresh duration               refresh interval for re-reading the topology (default 30s)
@@ -364,12 +376,11 @@ Usage of vttablet:
       --vreplication_max_time_to_retry_on_error duration                 stop automatically retrying when we've had consecutive failures with the same error for this long after the first occurrence
       --vreplication_replica_lag_tolerance duration                      Replica lag threshold duration: once lag is below this we switch from copy phase to the replication (streaming) phase (default 1m0s)
       --vreplication_retry_delay duration                                delay before retrying a failed workflow event in the replication phase (default 5s)
-      --vreplication_store_compressed_gtid                               Store compressed gtids in the pos column of _vt.vreplication
+      --vreplication_store_compressed_gtid                               Store compressed gtids in the pos column of the sidecar database's vreplication table
       --vreplication_tablet_type string                                  comma separated list of tablet types used as a source (default "in_order:REPLICA,PRIMARY")
       --vstream-binlog-rotation-threshold int                            Byte size at which a VStreamer will attempt to rotate the source's open binary log before starting a GTID snapshot based stream (e.g. a ResultStreamer or RowStreamer) (default 67108864)
       --vstream_dynamic_packet_size                                      Enable dynamic packet sizing for VReplication. This will adjust the packet size during replication to improve performance. (default true)
       --vstream_packet_size int                                          Suggested packet size for VReplication streamer. This is used only as a recommendation. The actual packet size may be more or less than this amount. (default 250000)
-      --vtctld_addr string                                               address of a vtctld instance
       --vtgate_protocol string                                           how to talk to vtgate (default "grpc")
       --vttablet_skip_buildinfo_tags string                              comma-separated list of buildinfo tags to skip from merging with --init_tags. each tag is either an exact match or a regular expression of the form '/regexp/'. (default "/.*/")
       --wait_for_backup_interval duration                                (init restore parameter) if this is greater than 0, instead of starting up empty when no backups are found, keep checking at this interval for a backup to appear
