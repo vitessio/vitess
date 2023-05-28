@@ -115,6 +115,7 @@ func TestPersistConfig(t *testing.T) {
 			assert.Fail(t, "config was not persisted quickly enough", "config took longer than %s to persist (minPersistWaitInterval = %s)", 2*minPersistWaitInterval, minPersistWaitInterval)
 		}
 
+		assert.Equal(t, old+2, get("foo"))
 		assert.Equal(t, old+2, loadConfig(t, f).Foo)
 	})
 
