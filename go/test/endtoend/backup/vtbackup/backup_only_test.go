@@ -19,7 +19,9 @@ package vtbackup
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path"
 	"strings"
@@ -30,6 +32,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/stats/opentsdb"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
@@ -62,6 +65,9 @@ func TestTabletInitialBackup(t *testing.T) {
 	vtBackup(t, true, false, false)
 	verifyBackupCount(t, shardKsName, 1)
 
+	dataPointReader := openTSDBDataPointReader(t)
+	verifyBackupStats(t, dataPointReader, true /* initialBackup */)
+
 	// Initialize the tablets
 	initTablets(t, false, false)
 
@@ -88,7 +94,7 @@ func TestTabletInitialBackup(t *testing.T) {
 	restore(t, replica1, "replica", "SERVING")
 
 	// Run the entire backup test
-	firstBackupTest(t, "replica")
+	firstBackupTest(t, "replica", dataPointReader)
 
 	tearDown(t, true)
 }
@@ -110,12 +116,12 @@ func TestTabletBackupOnly(t *testing.T) {
 	replica1.VttabletProcess.ServingStatus = "NOT_SERVING"
 
 	initTablets(t, true, true)
-	firstBackupTest(t, "replica")
+	firstBackupTest(t, "replica", nil)
 
 	tearDown(t, false)
 }
 
-func firstBackupTest(t *testing.T, tabletType string) {
+func firstBackupTest(t *testing.T, tabletType string, dataPointReader *opentsdb.DataPointReader) {
 	// Test First Backup flow.
 	//
 	//    firstBackupTest will:
@@ -150,6 +156,12 @@ func firstBackupTest(t *testing.T, tabletType string) {
 	// check that the backup shows up in the listing
 	verifyBackupCount(t, shardKsName, len(backups)+1)
 
+	// check that backup stats are what we expect
+	if dataPointReader == nil {
+		dataPointReader = openTSDBDataPointReader(t)
+	}
+	verifyBackupStats(t, dataPointReader, false /* initialBackup */)
+
 	// insert more data on the primary
 	_, err = primary.VttabletProcess.QueryTablet("insert into vt_insert_test (msg) values ('test2')", keyspaceName, true)
 	require.Nil(t, err)
@@ -183,6 +195,11 @@ func vtBackup(t *testing.T, initialBackup bool, restartBeforeBackup, disableRedo
 		"--allow_first_backup",
 		"--db-credentials-file", dbCredentialFile,
 		"--mysql_socket", mysqlSocket.Name(),
+
+		// Use opentsdb for stats.
+		"--stats_backend", "opentsdb",
+		// Write stats to file for reading afterwards.
+		"--opentsdb_uri", fmt.Sprintf("file://%s", openTSDBFilePath(t)),
 	}
 	if restartBeforeBackup {
 		extraArgs = append(extraArgs, "--restart_before_backup")
@@ -412,4 +429,84 @@ func waitForReplicationToCatchup(tablets []cluster.Vttablet) bool {
 			time.Sleep(time.Second * 1)
 		}
 	}
+}
+
+func openTSDBDataPointReader(t *testing.T) *opentsdb.DataPointReader {
+	f, err := os.OpenFile(openTSDBFilePath(t), os.O_RDONLY, 0)
+	require.NoError(t, err)
+	return opentsdb.NewDataPointReader(f)
+}
+
+func openTSDBFilePath(t *testing.T) string {
+	return path.Join(localCluster.TmpDirectory, fmt.Sprintf("opentsdb.%s.txt", t.Name()))
+}
+
+func verifyBackupStats(t *testing.T, dataPointReader *opentsdb.DataPointReader, initialBackup bool) {
+	// During execution, the following phases will become active, in order.
+	var expectActivePhases []string
+	if initialBackup {
+		expectActivePhases = []string{
+			"initialbackup",
+		}
+	} else {
+		expectActivePhases = []string{
+			"restorelastbackup",
+			"catchupreplication",
+			"takenewbackup",
+		}
+	}
+
+	// Sequence of phase activity.
+	activePhases := make([]string, 0)
+
+	// Last seen phase values.
+	phaseValues := make(map[string]int64)
+
+	// Scan for phase activity until all we're out of stats to scan.
+	for dataPoint, err := dataPointReader.Read(); !errors.Is(err, io.EOF); dataPoint, err = dataPointReader.Read() {
+		// We're only interested in "vtbackup.phase" metrics in this test.
+		if dataPoint.Metric != "vtbackup.phase" {
+			continue
+		}
+
+		phase := dataPoint.Tags["phase"]
+		value := int64(dataPoint.Value)
+		lastValue, ok := phaseValues[phase]
+
+		// The value should always be 0 or 1.
+		require.True(t, int64(0) == value || int64(1) == value)
+
+		// The first time the phase is reported, it should be 0.
+		if !ok {
+			require.Equal(t, int64(0), value)
+		}
+
+		// Eventually the phase should go active. The next time it reports,
+		// it should go inactive.
+		if lastValue == 1 {
+			require.Equal(t, int64(0), value)
+		}
+
+		// Record current value.
+		phaseValues[phase] = value
+
+		// Add phase to sequence once it goes from active to inactive.
+		if lastValue == 1 && value == 0 {
+			activePhases = append(activePhases, phase)
+		}
+
+		// Verify at most one phase is active.
+		activeCount := 0
+		for _, value := range phaseValues {
+			if value == int64(0) {
+				continue
+			}
+
+			activeCount++
+			require.LessOrEqual(t, activeCount, 1)
+		}
+	}
+
+	// Verify phase sequences.
+	require.Equal(t, expectActivePhases, activePhases)
 }

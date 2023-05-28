@@ -126,7 +126,17 @@ var (
 	detachedMode     bool
 	keepAliveTimeout = 0 * time.Second
 	disableRedoLog   = false
-	phase            = stats.NewGaugesWithSingleLabel(
+	// This gauge is updated 3*N times during the course of a vtbackup run,
+	// where N is the number of different phases vtbackup transitions through.
+	// Once to initialize to 0, another time to set the phase to active (1),
+	// and another to deactivate the phase (back to 0).
+	//
+	// At most a single phase is active at a given time.
+	//
+	// The sync gauge immediately reports changes to push-backed backends.
+	// The benefit of the sync gauge is that it makes verifying stats in
+	// integration tests a lot more tractable.
+	phase = stats.NewSyncGaugesWithSingleLabel(
 		"Phase",
 		"Active phase.",
 		"phase",
