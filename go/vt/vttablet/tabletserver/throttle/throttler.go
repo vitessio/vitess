@@ -126,6 +126,12 @@ type Throttler struct {
 	srvTopoServer   srvtopo.Server
 	heartbeatWriter heartbeat.HeartbeatWriter
 
+	// recentCheckTickerValue is an ever increasing number, incrementing once per second.
+	recentCheckTickerValue int64
+	// recentCheckValue is set to match or exceed recentCheckTickerValue whenever a "check" was made (other than by the throttler itself).
+	// when recentCheckValue < recentCheckTickerValue that means there hasn't been a recent check.
+	recentCheckValue int64
+
 	throttleTabletTypesMap map[topodatapb.TabletType]bool
 
 	mysqlThrottleMetricChan chan *mysql.MySQLThrottleMetric
@@ -576,6 +582,7 @@ func (throttler *Throttler) Operate(ctx context.Context) {
 	mysqlRefreshTicker := addTicker(mysqlRefreshInterval)
 	mysqlAggregateTicker := addTicker(mysqlAggregateInterval)
 	throttledAppsTicker := addTicker(throttledAppsSnapshotInterval)
+	recentCheckTicker := addTicker(time.Second)
 
 	go func() {
 		defer log.Infof("Throttler: Operate terminated, tickers stopped")
@@ -670,6 +677,9 @@ func (throttler *Throttler) Operate(ctx context.Context) {
 				}
 			case throttlerConfig := <-throttler.throttlerConfigChan:
 				throttler.applyThrottlerConfig(ctx, throttlerConfig)
+			case <-recentCheckTicker.C:
+				// Increment recentCheckTickerValue by one.
+				atomic.AddInt64(&throttler.recentCheckTickerValue, 1)
 			}
 		}
 	}()
@@ -682,7 +692,7 @@ func (throttler *Throttler) generateTabletHTTPProbeFunction(ctx context.Context,
 		mySQLThrottleMetric.ClusterName = clusterName
 		mySQLThrottleMetric.Key = probe.Key
 
-		tabletCheckSelfURL := fmt.Sprintf("http://%s:%d/throttler/check-self?app=vitess", probe.TabletHost, probe.TabletPort)
+		tabletCheckSelfURL := fmt.Sprintf("http://%s:%d/throttler/check-self?app=%s", probe.TabletHost, probe.TabletPort, vitessAppName)
 		resp, err := throttler.httpClient.Get(tabletCheckSelfURL)
 		if err != nil {
 			mySQLThrottleMetric.Err = err
@@ -703,6 +713,11 @@ func (throttler *Throttler) generateTabletHTTPProbeFunction(ctx context.Context,
 
 		if checkResult.StatusCode == http.StatusInternalServerError {
 			mySQLThrottleMetric.Err = fmt.Errorf("Status code: %d", checkResult.StatusCode)
+		}
+		if checkResult.RecentlyChecked {
+			// We have just probed a tablet, and it reported back that someone just recently "check"ed it.
+			// We therefore renew the heartbeats lease.
+			go throttler.heartbeatWriter.RequestHeartbeats()
 		}
 		return mySQLThrottleMetric
 	}
@@ -1015,7 +1030,17 @@ func (throttler *Throttler) checkStore(ctx context.Context, appName string, stor
 	if !throttler.IsEnabled() {
 		return okMetricCheckResult
 	}
-	return throttler.check.Check(ctx, appName, "mysql", storeName, remoteAddr, flags)
+	checkResult = throttler.check.Check(ctx, appName, "mysql", storeName, remoteAddr, flags)
+
+	if atomic.LoadInt64(&throttler.recentCheckValue) >= atomic.LoadInt64(&throttler.recentCheckTickerValue) {
+		// This indicates someone, who is not "vitess" ie not internal to the throttling logic, did a _recent_ `check`.
+		// This could be online-ddl, or vreplication or whoever else.
+		// If this tablet is a REPLICA or RDONLY, we want to advertise to the PRIMARY that someone did a recent check,
+		// so that the PRIMARY knows it must renew the heartbeat lease.
+		checkResult.RecentlyChecked = true
+	}
+
+	return checkResult
 }
 
 // checkShard checks the health of the shard, and runs on the primary tablet only
@@ -1031,7 +1056,13 @@ func (throttler *Throttler) checkSelf(ctx context.Context, appName string, remot
 // CheckByType runs a check by requested check type
 func (throttler *Throttler) CheckByType(ctx context.Context, appName string, remoteAddr string, flags *CheckFlags, checkType ThrottleCheckType) (checkResult *CheckResult) {
 	if throttler.IsEnabled() && !flags.SkipRequestHeartbeats {
-		go throttler.heartbeatWriter.RequestHeartbeats()
+		if appName != vitessAppName {
+			go throttler.heartbeatWriter.RequestHeartbeats()
+			// This check was made by someone other than the throttler itself, i.e. this came from online-ddl or vreplication or other.
+			// We mark the fact that someone just made a check. If this is a REPLICA or RDONLY tables, this will be reported back
+			// to the PRIMARY so that it knows it must renew the heartbeat lease.
+			atomic.StoreInt64(&throttler.recentCheckValue, 1+atomic.LoadInt64(&throttler.recentCheckTickerValue))
+		}
 	}
 	switch checkType {
 	case ThrottleCheckSelf:
