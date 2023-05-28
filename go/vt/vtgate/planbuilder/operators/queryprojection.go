@@ -56,7 +56,7 @@ type (
 
 		hasCheckedAlignment bool
 
-		// TODO Remove once all of horizon planning is done on the operators
+		// TODO Remove once all horizon planning is done on the operators
 		CanPushDownSorting bool
 	}
 
@@ -175,30 +175,19 @@ func CreateQPFromSelect(ctx *plancontext.PlanningContext, sel *sqlparser.Select)
 		Distinct: sel.Distinct,
 	}
 
-	err := qp.addSelectExpressions(sel)
-	if err != nil {
+	if err := qp.addSelectExpressions(sel); err != nil {
 		return nil, err
 	}
-	for _, group := range sel.GroupBy {
-		selectExprIdx, aliasExpr := qp.FindSelectExprIndexForExpr(ctx, group)
-		weightStrExpr := qp.GetSimplifiedExpr(group)
-		err = checkForInvalidGroupingExpressions(weightStrExpr)
-		if err != nil {
-			return nil, err
-		}
-
-		groupBy := NewGroupBy(group, weightStrExpr, aliasExpr)
-		groupBy.InnerIndex = selectExprIdx
-
-		qp.groupByExprs = append(qp.groupByExprs, groupBy)
+	if err := qp.addGroupBy(ctx, sel.GroupBy); err != nil {
+		return nil, err
 	}
-
-	err = qp.addOrderBy(sel.OrderBy)
-	if err != nil {
+	if err := qp.addOrderBy(ctx, sel.OrderBy); err != nil {
 		return nil, err
 	}
 
 	if qp.Distinct && !qp.HasAggr {
+		// grouping and distinct both lead to unique results, so we don't need
+		// TODO: we should check that we are returning all the grouping columns, or this is not safe to do
 		qp.groupByExprs = nil
 	}
 
@@ -291,7 +280,7 @@ func (qp *QueryProjection) addSelectExpressions(sel *sqlparser.Select) error {
 }
 
 // CreateQPFromUnion creates the QueryProjection for the input *sqlparser.Union
-func CreateQPFromUnion(union *sqlparser.Union) (*QueryProjection, error) {
+func CreateQPFromUnion(ctx *plancontext.PlanningContext, union *sqlparser.Union) (*QueryProjection, error) {
 	qp := &QueryProjection{}
 
 	sel := sqlparser.GetFirstSelect(union)
@@ -300,7 +289,7 @@ func CreateQPFromUnion(union *sqlparser.Union) (*QueryProjection, error) {
 		return nil, err
 	}
 
-	err = qp.addOrderBy(union.OrderBy)
+	err = qp.addOrderBy(ctx, union.OrderBy)
 	if err != nil {
 		return nil, err
 	}
@@ -308,21 +297,64 @@ func CreateQPFromUnion(union *sqlparser.Union) (*QueryProjection, error) {
 	return qp, nil
 }
 
-func (qp *QueryProjection) addOrderBy(orderBy sqlparser.OrderBy) error {
+type expressionSet struct {
+	exprs []sqlparser.Expr
+}
+
+func (es *expressionSet) add(ctx *plancontext.PlanningContext, e sqlparser.Expr) bool {
+	idx := slices.IndexFunc(es.exprs, func(expr sqlparser.Expr) bool {
+		return ctx.SemTable.EqualsExprWithDeps(e, expr)
+	})
+
+	// if we already have this expression, there is no need to repeat it
+	if idx >= 0 {
+		return false
+	}
+	es.exprs = append(es.exprs, e)
+	return true
+}
+
+func (qp *QueryProjection) addOrderBy(ctx *plancontext.PlanningContext, orderBy sqlparser.OrderBy) error {
 	canPushDownSorting := true
+	es := &expressionSet{}
 	for _, order := range orderBy {
-		weightStrExpr := qp.GetSimplifiedExpr(order.Expr)
-		if sqlparser.IsNull(weightStrExpr) {
+		simpleExpr := qp.GetSimplifiedExpr(order.Expr)
+		if sqlparser.IsNull(simpleExpr) {
 			// ORDER BY null can safely be ignored
+			continue
+		}
+		if !es.add(ctx, simpleExpr) {
 			continue
 		}
 		qp.OrderExprs = append(qp.OrderExprs, ops.OrderBy{
 			Inner:          sqlparser.CloneRefOfOrder(order),
-			SimplifiedExpr: weightStrExpr,
+			SimplifiedExpr: simpleExpr,
 		})
-		canPushDownSorting = canPushDownSorting && !sqlparser.ContainsAggregation(weightStrExpr)
+		canPushDownSorting = canPushDownSorting && !sqlparser.ContainsAggregation(simpleExpr)
 	}
 	qp.CanPushDownSorting = canPushDownSorting
+	return nil
+}
+
+func (qp *QueryProjection) addGroupBy(ctx *plancontext.PlanningContext, groupBy sqlparser.GroupBy) error {
+	es := &expressionSet{}
+	for _, group := range groupBy {
+		selectExprIdx, aliasExpr := qp.FindSelectExprIndexForExpr(ctx, group)
+		simpleExpr := qp.GetSimplifiedExpr(group)
+		err := checkForInvalidGroupingExpressions(simpleExpr)
+		if err != nil {
+			return err
+		}
+
+		if !es.add(ctx, simpleExpr) {
+			continue
+		}
+
+		groupBy := NewGroupBy(group, simpleExpr, aliasExpr)
+		groupBy.InnerIndex = selectExprIdx
+
+		qp.groupByExprs = append(qp.groupByExprs, groupBy)
+	}
 	return nil
 }
 
@@ -333,15 +365,16 @@ func (qp *QueryProjection) GetGrouping() []GroupBy {
 
 func checkForInvalidAggregations(exp *sqlparser.AliasedExpr) error {
 	return sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
-		if aggrFunc, isAggregate := node.(sqlparser.AggrFunc); isAggregate {
-			if aggrFunc.GetArgs() != nil &&
-				len(aggrFunc.GetArgs()) != 1 {
-				return false, vterrors.VT03001(sqlparser.String(node))
-			}
+		aggrFunc, isAggregate := node.(sqlparser.AggrFunc)
+		if !isAggregate {
 			return true, nil
 		}
-
+		args := aggrFunc.GetArgs()
+		if args != nil && len(args) != 1 {
+			return false, vterrors.VT03001(sqlparser.String(node))
+		}
 		return true, nil
+
 	}, exp.Expr)
 }
 
