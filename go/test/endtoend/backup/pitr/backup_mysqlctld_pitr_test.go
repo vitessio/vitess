@@ -71,9 +71,15 @@ func TestIncrementalBackup(t *testing.T) {
 	}
 	for _, tcase := range tcases {
 		t.Run(tcase.name, func(t *testing.T) {
+			var compressionDetails *backup.CompressionDetails
+			if tcase.setupType == backup.XtraBackup {
+				compressionDetails = &backup.CompressionDetails{
+					CompressorEngineName: "pgzip",
+				}
+			}
 
 			// setup cluster for the testing
-			code, err := backup.LaunchCluster(tcase.setupType, "xbstream", 0, nil)
+			code, err := backup.LaunchCluster(tcase.setupType, "xbstream", 0, compressionDetails)
 			require.NoError(t, err, "setup failed with status code %d", code)
 			defer backup.TearDownCluster()
 
@@ -95,6 +101,7 @@ func TestIncrementalBackup(t *testing.T) {
 			t.Run("full backup", func(t *testing.T) {
 				backup.InsertRowOnPrimary(t, "before-full-backup")
 				waitForReplica(t)
+
 				manifest, _ := backup.TestReplicaFullBackup(t)
 				fullBackupPos = manifest.Position
 				require.False(t, fullBackupPos.IsZero())
