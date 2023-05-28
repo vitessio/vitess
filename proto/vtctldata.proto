@@ -225,8 +225,7 @@ message ApplyShardRoutingRulesResponse {
 
 message ApplySchemaRequest {
   string keyspace = 1;
-  // Allow large schema changes which incur a longer unavailability of the database.
-  bool allow_long_unavailability = 2;
+  reserved 2;
   // SQL commands to run.
   repeated string sql = 3;
   // Online DDL strategy, compatible with @@ddl_strategy session variable (examples: 'gh-ost', 'pt-osc', 'gh-ost --max-load=Threads_running=100'")
