@@ -126,7 +126,8 @@ type DB struct {
 	neverFail atomic.Bool
 
 	// lastError stores the last error in returning a query result.
-	lastError error
+	lastErrorMu sync.Mutex
+	lastError   error
 }
 
 // QueryHandler is the interface used by the DB to simulate executed queries
@@ -179,6 +180,7 @@ func New(t testing.TB) *DB {
 		connections:              make(map[uint32]*mysql.Conn),
 		queryPatternUserCallback: make(map[*regexp.Regexp]func(string)),
 		patternData:              make(map[string]exprResult),
+		lastErrorMu:              sync.Mutex{},
 	}
 
 	db.Handler = db
@@ -250,6 +252,8 @@ func (db *DB) CloseAllConnections() {
 
 // LastError gives the last error the DB ran into
 func (db *DB) LastError() error {
+	db.lastErrorMu.Lock()
+	defer db.lastErrorMu.Unlock()
 	return db.lastError
 }
 
@@ -353,7 +357,9 @@ func (db *DB) WarningCount(c *mysql.Conn) uint16 {
 func (db *DB) HandleQuery(c *mysql.Conn, query string, callback func(*sqltypes.Result) error) (err error) {
 	defer func() {
 		if err != nil {
+			db.lastErrorMu.Lock()
 			db.lastError = err
+			db.lastErrorMu.Unlock()
 		}
 	}()
 	if db.allowAll.Load() {
