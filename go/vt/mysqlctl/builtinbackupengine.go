@@ -219,18 +219,18 @@ func (be *BuiltinBackupEngine) executeIncrementalBackup(ctx context.Context, par
 		return false, vterrors.Wrap(err, "can't get server uuid")
 	}
 	// @@gtid_purged
-	getPurgedGTIDSet := func() (mysql.Mysql56GTIDSet, error) {
+	getPurgedGTIDSet := func() (mysql.Position, mysql.Mysql56GTIDSet, error) {
 		gtidPurged, err := params.Mysqld.GetGTIDPurged(ctx)
 		if err != nil {
-			return nil, vterrors.Wrap(err, "can't get @@gtid_purged")
+			return gtidPurged, nil, vterrors.Wrap(err, "can't get @@gtid_purged")
 		}
 		purgedGTIDSet, ok := gtidPurged.GTIDSet.(mysql.Mysql56GTIDSet)
 		if !ok {
-			return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "cannot get MySQL GTID purged value: %v", gtidPurged)
+			return gtidPurged, nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "cannot get MySQL GTID purged value: %v", gtidPurged)
 		}
-		return purgedGTIDSet, nil
+		return gtidPurged, purgedGTIDSet, nil
 	}
-	purgedGTIDSet, err := getPurgedGTIDSet()
+	gtidPurged, purgedGTIDSet, err := getPurgedGTIDSet()
 	if err != nil {
 		return false, err
 	}
@@ -328,7 +328,7 @@ func (be *BuiltinBackupEngine) executeIncrementalBackup(ctx context.Context, par
 	// incrementalBackupFromGTID is the "previous GTIDs" of the first binlog file we back up.
 	// It is a fact that incrementalBackupFromGTID is earlier or equal to params.IncrementalFromPos.
 	// In the backup manifest file, we document incrementalBackupFromGTID, not the user's requested position.
-	if err := be.backupFiles(ctx, params, bh, incrementalBackupToPosition, mysql.Position{}, incrementalBackupFromPosition, binaryLogsToBackup, serverUUID); err != nil {
+	if err := be.backupFiles(ctx, params, bh, incrementalBackupToPosition, gtidPurged, incrementalBackupFromPosition, binaryLogsToBackup, serverUUID); err != nil {
 		return false, err
 	}
 	return true, nil
@@ -411,10 +411,6 @@ func (be *BuiltinBackupEngine) executeFullBackup(ctx context.Context, params Bac
 	gtidPurgedPosition, err := params.Mysqld.GetGTIDPurged(ctx)
 	if err != nil {
 		return false, vterrors.Wrap(err, "can't get gtid_purged")
-	}
-
-	if err != nil {
-		return false, vterrors.Wrap(err, "can't get purged position")
 	}
 
 	serverUUID, err := params.Mysqld.GetServerUUID(ctx)
@@ -517,7 +513,6 @@ func (be *BuiltinBackupEngine) backupFiles(
 	binlogFiles []string,
 	serverUUID string,
 ) (finalErr error) {
-
 	// Get the files to backup.
 	// We don't care about totalSize because we add each file separately.
 	var fes []FileEntry
@@ -858,7 +853,7 @@ func (be *BuiltinBackupEngine) executeRestoreIncrementalBackup(ctx context.Conte
 			return vterrors.Wrap(err, "failed to restore file")
 		}
 		if err := mysqld.ApplyBinlogFile(ctx, binlogFile, params.RestoreToPos); err != nil {
-			return vterrors.Wrap(err, "failed to extract binlog file")
+			return vterrors.Wrapf(err, "failed to extract binlog file %v", binlogFile)
 		}
 		defer os.Remove(binlogFile)
 		params.Logger.Infof("Applied binlog file: %v", binlogFile)
