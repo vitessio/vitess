@@ -819,6 +819,7 @@ var defaultConfig = TabletConfig{
 	},
 
 	EnablePerWorkloadTableMetrics: false,
+	EnableSettingsPool:            true,
 }
 
 // defaultTxThrottlerConfig formats the default throttlerdata.Configuration

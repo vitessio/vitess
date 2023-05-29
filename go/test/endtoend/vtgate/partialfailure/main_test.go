@@ -18,16 +18,16 @@ package reservedconn
 
 import (
 	"context"
+	_ "embed"
 	"flag"
 	"os"
 	"testing"
-
-	"vitess.io/vitess/go/test/endtoend/utils"
 
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/endtoend/utils"
 )
 
 var (
@@ -36,67 +36,12 @@ var (
 	keyspaceName    = "ks"
 	cell            = "zone1"
 	hostname        = "localhost"
-	sqlSchema       = `
-	create table test(
-		id bigint,
-		val1 varchar(16),
-		val2 int,
-		val3 float,
-		primary key(id)
-	)Engine=InnoDB;
 
-CREATE TABLE test_vdx (
-    val1 varchar(16) NOT NULL,
-    keyspace_id binary(8),
-    UNIQUE KEY (val1)
-) ENGINE=Innodb;
-`
+	//go:embed schema.sql
+	SchemaSQL string
 
-	vSchema = `
-		{	
-			"sharded":true,
-			"vindexes": {
-				"hash_index": {
-					"type": "hash"
-				},
-				"lookup1": {
-					"type": "consistent_lookup",
-					"params": {
-						"table": "test_vdx",
-						"from": "val1",
-						"to": "keyspace_id",
-						"ignore_nulls": "true"
-					},
-					"owner": "test"
-				},
-				"unicode_vdx":{
-					"type": "unicode_loose_md5"
-                }
-			},	
-			"tables": {
-				"test":{
-					"column_vindexes": [
-						{
-							"column": "id",
-							"name": "hash_index"
-						},
-						{
-							"column": "val1",
-							"name": "lookup1"
-						}
-					]
-				},
-				"test_vdx":{
-					"column_vindexes": [
-						{
-							"column": "val1",
-							"name": "unicode_vdx"
-						}
-					]
-				}
-			}
-		}
-	`
+	//go:embed vschema.json
+	VSchema string
 )
 
 func TestMain(m *testing.M) {
@@ -115,8 +60,8 @@ func TestMain(m *testing.M) {
 		// Start keyspace
 		keyspace := &cluster.Keyspace{
 			Name:      keyspaceName,
-			SchemaSQL: sqlSchema,
-			VSchema:   vSchema,
+			SchemaSQL: SchemaSQL,
+			VSchema:   VSchema,
 		}
 		if err := clusterInstance.StartKeyspace(*keyspace, []string{"-40", "40-80", "80-c0", "c0-"}, 0, false); err != nil {
 
