@@ -683,7 +683,7 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 		defaultCell := cells[0]
 		custKs := vc.Cells[defaultCell.Name].Keyspaces["customer"]
 
-		tables := "customer,Lead,Lead-1,db_order_test,geom_tbl,json_tbl,blob_tbl,vdiff_order,reftable"
+		tables := "customer,Lead,Lead-1,db_order_test,geom_tbl,json_tbl,blüb_tbl,vdiff_order,reftable"
 		moveTablesAction(t, "Create", sourceCellOrAlias, workflow, sourceKs, targetKs, tables)
 
 		customerTab1 := custKs.Shards["-80"].Tablets["zone1-200"].Vttablet

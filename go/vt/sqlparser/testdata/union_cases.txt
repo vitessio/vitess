@@ -62,7 +62,7 @@ INPUT
 (select time_format(timediff(now(), DATE_SUB(now(),INTERVAL 5 HOUR)),'%H') As H) union (select time_format(timediff(now(), DATE_SUB(now(),INTERVAL 5 HOUR)),'%H') As H);
 END
 OUTPUT
-select time_format(timediff(now(), DATE_SUB(now(), interval 5 HOUR)), '%H') as H from dual union select time_format(timediff(now(), DATE_SUB(now(), interval 5 HOUR)), '%H') as H from dual
+select time_format(timediff(now(), date_sub(now(), interval 5 hour)), '%H') as H from dual union select time_format(timediff(now(), date_sub(now(), interval 5 hour)), '%H') as H from dual
 END
 INPUT
 select ST_astext(st_union(st_intersection(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')),                         st_intersection(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)'))));
@@ -98,7 +98,7 @@ INPUT
 (select time_format(timediff(now(), DATE_SUB(now(),INTERVAL 5 DAY)),'%k') As H) union (select time_format(timediff(now(), DATE_SUB(now(),INTERVAL 5 DAY)),'%k') As H);
 END
 OUTPUT
-select time_format(timediff(now(), DATE_SUB(now(), interval 5 DAY)), '%k') as H from dual union select time_format(timediff(now(), DATE_SUB(now(), interval 5 DAY)), '%k') as H from dual
+select time_format(timediff(now(), date_sub(now(), interval 5 day)), '%k') as H from dual union select time_format(timediff(now(), date_sub(now(), interval 5 day)), '%k') as H from dual
 END
 INPUT
 SELECT * FROM (SELECT t17059925_func1(1)) t WHERE 1= 0 UNION SELECT sleep(0.5);
@@ -206,7 +206,7 @@ INPUT
 (select time_format(timediff(now(), DATE_SUB(now(),INTERVAL 5 HOUR)),'%k') As H) union (select time_format(timediff(now(), DATE_SUB(now(),INTERVAL 5 HOUR)),'%k') As H);
 END
 OUTPUT
-select time_format(timediff(now(), DATE_SUB(now(), interval 5 HOUR)), '%k') as H from dual union select time_format(timediff(now(), DATE_SUB(now(), interval 5 HOUR)), '%k') as H from dual
+select time_format(timediff(now(), date_sub(now(), interval 5 hour)), '%k') as H from dual union select time_format(timediff(now(), date_sub(now(), interval 5 hour)), '%k') as H from dual
 END
 INPUT
 select concat((select x from (select 'a' as x) as t1 ),   (select y from (select 'b' as y) as t2 )) from (select 1 union select 2 )   as t3;
@@ -1154,7 +1154,7 @@ INPUT
 (select time_format(timediff(now(), DATE_SUB(now(),INTERVAL 5 DAY)),'%H') As H) union (select time_format(timediff(now(), DATE_SUB(now(),INTERVAL 5 DAY)),'%H') As H);
 END
 OUTPUT
-select time_format(timediff(now(), DATE_SUB(now(), interval 5 DAY)), '%H') as H from dual union select time_format(timediff(now(), DATE_SUB(now(), interval 5 DAY)), '%H') as H from dual
+select time_format(timediff(now(), date_sub(now(), interval 5 day)), '%H') as H from dual union select time_format(timediff(now(), date_sub(now(), interval 5 day)), '%H') as H from dual
 END
 INPUT
 select st_overlaps(st_union(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')),                     st_intersection(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)')));
