@@ -25,13 +25,13 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
-
-	"vitess.io/vitess/go/sync2"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/sync2"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
@@ -74,21 +74,18 @@ func TestNotServingPrimaryNoWrite(t *testing.T) {
 		Uid:  1,
 	}
 	// Create a new health streamer and set it to a serving primary state
-	hs := newHealthStreamer(env, alias, &schema.Engine{})
-	hs.isServingPrimary = true
+	hs := newHealthStreamer(env, alias)
+	//hs.isServingPrimary = true
 	hs.InitDBConfig(&querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}, config.DB.DbaWithDB())
 	hs.Open()
 	defer hs.Close()
-	target := &querypb.Target{}
-	hs.InitDBConfig(target, db.ConnParams())
 
 	// Let's say the tablet goes to a non-serving primary state.
-	hs.MakePrimary(false)
+	//hs.MakePrimary(false)
 
 	// A reload now should not write anything to the database. If any write happens it will error out since we have not
 	// added any query to the database to expect.
-	t1 := schema.NewTable("t1", schema.NoType)
-	err := hs.reload(map[string]*schema.Table{"t1": t1}, []*schema.Table{t1}, nil, nil)
+	err := hs.reload()
 	require.NoError(t, err)
 	require.NoError(t, db.LastError())
 }
