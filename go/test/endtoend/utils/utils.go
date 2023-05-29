@@ -185,6 +185,16 @@ func SkipIfBinaryIsBelowVersion(t *testing.T, majorVersion int, binary string) {
 	}
 }
 
+// BinaryIsAtVersion returns true if this binary is at or above the required version
+func BinaryIsAtVersion(majorVersion int, binary string) bool {
+	version, err := cluster.GetMajorVersion(binary)
+	if err != nil {
+		return false
+	}
+	return version >= majorVersion
+
+}
+
 // AssertMatchesWithTimeout asserts that the given query produces the expected result.
 // The query will be executed every 'r' duration until it matches the expected result.
 // If after 'd' duration we still did not find the expected result, the test will be marked as failed.
