@@ -226,7 +226,7 @@ func (vse *Engine) validateBinlogRowImage(ctx context.Context, db dbconfigs.Conn
 
 // Stream starts a new stream.
 // This streams events from the binary logs
-func (vse *Engine) Stream(ctx context.Context, startPos string, tablePKs []*binlogdatapb.TableLastPK, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
+func (vse *Engine) Stream(ctx context.Context, startPos string, tablePKs []*binlogdatapb.TableLastPK, filter *binlogdatapb.Filter, useThrottler bool, send func([]*binlogdatapb.VEvent) error) error {
 
 	if err := vse.validateBinlogRowImage(ctx, vse.se.GetDBConnector()); err != nil {
 		return err
@@ -244,7 +244,7 @@ func (vse *Engine) Stream(ctx context.Context, startPos string, tablePKs []*binl
 		}
 		vse.mu.Lock()
 		defer vse.mu.Unlock()
-		streamer := newUVStreamer(ctx, vse, vse.env.Config().DB.FilteredWithDB(), vse.se, startPos, tablePKs, filter, vse.lvschema, send)
+		streamer := newUVStreamer(ctx, vse, vse.env.Config().DB.FilteredWithDB(), vse.se, startPos, tablePKs, filter, vse.lvschema, useThrottler, send)
 		idx := vse.streamIdx
 		vse.streamers[idx] = streamer
 		vse.streamIdx++

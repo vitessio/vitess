@@ -235,7 +235,7 @@ func (ftc *fakeTabletConn) VStream(ctx context.Context, request *binlogdatapb.VS
 	if vstreamHook != nil {
 		vstreamHook(ctx)
 	}
-	return vdiffenv.vse.Stream(ctx, request.Position, request.TableLastPKs, request.Filter, send)
+	return vdiffenv.vse.Stream(ctx, request.Position, request.TableLastPKs, request.Filter, false, send)
 }
 
 // vstreamRowsHook allows you to do work just before calling VStreamRows.

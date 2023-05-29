@@ -93,7 +93,7 @@ func TestUpdateVSchema(t *testing.T) {
 		}},
 	}
 	// Stream should terminate immediately due to invalid pos.
-	_ = engine.Stream(ctx, "invalid", nil, filter, func(_ []*binlogdatapb.VEvent) error {
+	_ = engine.Stream(ctx, "invalid", nil, filter, false, func(_ []*binlogdatapb.VEvent) error {
 		return nil
 	})
 

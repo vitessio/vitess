@@ -140,7 +140,7 @@ func (c *Client) Throttle(ctx context.Context) {
 			return
 		}
 		if c.ThrottleCheckOKOrWait(ctx) {
-			break
+			return
 		}
 	}
 }

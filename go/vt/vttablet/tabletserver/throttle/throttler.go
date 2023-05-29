@@ -1055,14 +1055,12 @@ func (throttler *Throttler) checkSelf(ctx context.Context, appName string, remot
 
 // CheckByType runs a check by requested check type
 func (throttler *Throttler) CheckByType(ctx context.Context, appName string, remoteAddr string, flags *CheckFlags, checkType ThrottleCheckType) (checkResult *CheckResult) {
-	if throttler.IsEnabled() && !flags.SkipRequestHeartbeats {
-		if appName != vitessAppName {
-			go throttler.heartbeatWriter.RequestHeartbeats()
-			// This check was made by someone other than the throttler itself, i.e. this came from online-ddl or vreplication or other.
-			// We mark the fact that someone just made a check. If this is a REPLICA or RDONLY tables, this will be reported back
-			// to the PRIMARY so that it knows it must renew the heartbeat lease.
-			atomic.StoreInt64(&throttler.recentCheckValue, 1+atomic.LoadInt64(&throttler.recentCheckTickerValue))
-		}
+	if throttler.IsEnabled() && !flags.SkipRequestHeartbeats && appName != vitessAppName {
+		go throttler.heartbeatWriter.RequestHeartbeats()
+		// This check was made by someone other than the throttler itself, i.e. this came from online-ddl or vreplication or other.
+		// We mark the fact that someone just made a check. If this is a REPLICA or RDONLY tables, this will be reported back
+		// to the PRIMARY so that it knows it must renew the heartbeat lease.
+		atomic.StoreInt64(&throttler.recentCheckValue, 1+atomic.LoadInt64(&throttler.recentCheckTickerValue))
 	}
 	switch checkType {
 	case ThrottleCheckSelf:
