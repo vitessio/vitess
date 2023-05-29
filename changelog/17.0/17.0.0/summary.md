@@ -18,18 +18,15 @@
     - [Detailed backup and restore stats](#detailed-backup-and-restore-stats)
     - [VTtablet Error count with code](#vttablet-error-count-with-code)
     - [VReplication stream status for Prometheus](#vreplication-stream-status-for-prometheus)
-  - **[Deprecations and Deletions](#deprecations-and-deletions)**
-    - [Deprecated Flags](#deprecated-flags)
-    - [Deprecated Stats](#deprecated-stats)
-  - **[Vtctld](#vtctld)**
-    - [Deprecated Flags](#vtctld-deprecated-flags)
   - **[VReplication](#VReplication)**
     - [Support for MySQL 8.0 `binlog_transaction_compression`](#binlog-compression)
   - **[VTTablet](#vttablet)**
     - [VTTablet: Initializing all replicas with super_read_only](#vttablet-initialization)
-    - [Deprecated Flags](#vttablet-deprecated-flags)
   - **[VReplication](#VReplication)**
     - [Support for the `noblob` binlog row image mode](#noblob)
+  - **[Deprecations and Deletions](#deprecations-and-deletions)**
+    - [Deprecated Flags](#deprecated-flags)
+    - [Deprecated Stats](#deprecated-stats)
 
 ## <a id="major-changes"/> Major Changes
 
@@ -304,38 +301,6 @@ Prior to v17, this data was not available via the Prometheus backend. In v17, wo
 vttablet_v_replication_stream_state{counts="1",state="Running",workflow="commerce2customer"} 1
 ```
 
-## <a id="deprecations-and-deletions"/> Deprecations and Deletions
-
-* The deprecated `automation` and `automationservice` protobuf definitions and associated client and server packages have been removed.
-* Auto-population of DDL revert actions and tables at execution-time has been removed. This is now handled entirely at enqueue-time.
-* Backwards-compatibility for failed migrations without a `completed_timestamp` has been removed (see https://github.com/vitessio/vitess/issues/8499).
-* The deprecated `Key`, `Name`, `Up`, and `TabletExternallyReparentedTimestamp` fields were removed from the JSON representation of `TabletHealth` structures.
-* The `MYSQL_FLAVOR` environment variable is no longer used.
-* The `--enable-query-plan-field-caching`/`--enable_query_plan_field_caching` vttablet flag was deprecated in v15 and has now been removed.
-
-### <a id="deprecated-flags"/>Deprecated Command Line Flags
-
-* Flag `vtctld_addr` has been deprecated and will be deleted in a future release. This affects the `vtgate`, `vttablet` and `vtcombo` binaries.
-
-### <a id="deprecated-stats"/>Deprecated Stats
-
-These stats are deprecated in v17.
-
-| Deprecated stat | Supported alternatives |
-|-|-|
-| `backup_duration_seconds` | `BackupDurationNanoseconds` |
-| `restore_duration_seconds` | `RestoreDurationNanoseconds` |
-
-### <a id="vtctld"/> Vtctld
-
-#### <a id="vtctld-deprecated-flags"/> Deprecated Flags
-
-The flag `schema_change_check_interval` used to accept either a Go duration value (e.g. `1m` or `30s`) or a bare integer, which was treated as seconds.
-This behavior was deprecated in v15.0.0 and has been removed.
-`schema_change_check_interval` now **only** accepts Go duration values.
-
-The flag `durability_policy` is no longer used by vtctld. Instead it reads the durability policies for all keyspaces from the topology server.
-
 ### <a id="vttablet"/> VTTablet
 #### <a id="vttablet-initialization"/> Initializing all replicas with super_read_only
 In order to prevent SUPER privileged users like `root` or `vt_dba` from producing errant GTIDs on replicas, all the replica MySQL servers are initialized with the MySQL
@@ -349,32 +314,6 @@ An important note regarding this change is how the default `init_db.sql` file ha
 This is even more important if you are running Vitess on the vitess-operator.
 You must ensure your `init_db.sql` is up-to-date with the new default for `v17.0.0`.
 The default file can be found in `./config/init_db.sql`.
-
-#### <a id="vttablet-deprecated-flags"/> Deprecated Flags
-The flag `use_super_read_only` is deprecated and will be removed in a later release.
-
-Various flags that took float values as seconds have updated to take the standard duration syntax as well.
-Float-style parsing is now deprecated and will be removed in a later release.
-For example, instead of `--queryserver-config-query-pool-timeout 12.2`, use `--queryserver-config-query-pool-timeout 12s200ms`.
-Affected flags and YAML config keys:
-- `degraded_threshold`
-- `heartbeat_interval`
-- `heartbeat_on_demand_duration`
-- `health_check_interval`
-- `queryserver-config-idle-timeout`
-- `queryserver-config-pool-conn-max-lifetime`
-- `queryserver-config-olap-transaction-timeout`
-- `queryserver-config-query-timeout`
-- `queryserver-config-query-pool-timeout`
-- `queryserver-config-schema-reload-time`
-- `queryserver-config-schema-change-signal-interval`
-- `queryserver-config-stream-pool-timeout`
-- `queryserver-config-stream-pool-idle-timeout`
-- `queryserver-config-transaction-timeout`
-- `queryserver-config-txpool-timeout`
-- `queryserver-config-txpool-idle-timeout`
-- `shutdown_grace_period`
-- `unhealthy_threshold`
 
 ### Online DDL
 
@@ -409,3 +348,53 @@ would not work. Given the criticality of VReplication workflows within Vitess, t
 
 We have addressed this issue in [PR #12950](https://github.com/vitessio/vitess/pull/12950) by adding support for processing the compressed transaction events in VReplication,
 without any (known) limitations.
+
+### <a id="deprecations-and-deletions"/> Deprecations and Deletions
+
+* The deprecated `automation` and `automationservice` protobuf definitions and associated client and server packages have been removed.
+* Auto-population of DDL revert actions and tables at execution-time has been removed. This is now handled entirely at enqueue-time.
+* Backwards-compatibility for failed migrations without a `completed_timestamp` has been removed (see https://github.com/vitessio/vitess/issues/8499).
+* The deprecated `Key`, `Name`, `Up`, and `TabletExternallyReparentedTimestamp` fields were removed from the JSON representation of `TabletHealth` structures.
+* The `MYSQL_FLAVOR` environment variable is no longer used.
+* The `--enable-query-plan-field-caching`/`--enable_query_plan_field_caching` vttablet flag was deprecated in v15 and has now been removed.
+
+#### <a id="deprecated-flags"/>Deprecated Command Line Flags
+
+* Flag `vtctld_addr` has been deprecated and will be deleted in a future release. This affects `vtgate`, `vttablet` and `vtcombo`.
+* The flag `schema_change_check_interval` used to accept either a Go duration value (e.g. `1m` or `30s`) or a bare integer, which was treated as seconds.
+  This behavior was deprecated in v15.0.0 and has been removed.
+  `schema_change_check_interval` now **only** accepts Go duration values. This affects `vtctld`.
+* The flag `durability_policy` is no longer used by vtctld. Instead it reads the durability policies for all keyspaces from the topology server.
+* The flag `use_super_read_only` is deprecated and will be removed in a later release. This affects `vttablet`.
+
+In `vttablet` various flags that took float values as seconds have updated to take the standard duration syntax as well.
+Float-style parsing is now deprecated and will be removed in a later release.
+For example, instead of `--queryserver-config-query-pool-timeout 12.2`, use `--queryserver-config-query-pool-timeout 12s200ms`.
+Affected flags and YAML config keys:
+- `degraded_threshold`
+- `heartbeat_interval`
+- `heartbeat_on_demand_duration`
+- `health_check_interval`
+- `queryserver-config-idle-timeout`
+- `queryserver-config-pool-conn-max-lifetime`
+- `queryserver-config-olap-transaction-timeout`
+- `queryserver-config-query-timeout`
+- `queryserver-config-query-pool-timeout`
+- `queryserver-config-schema-reload-time`
+- `queryserver-config-schema-change-signal-interval`
+- `queryserver-config-stream-pool-timeout`
+- `queryserver-config-stream-pool-idle-timeout`
+- `queryserver-config-transaction-timeout`
+- `queryserver-config-txpool-timeout`
+- `queryserver-config-txpool-idle-timeout`
+- `shutdown_grace_period`
+- `unhealthy_threshold`
+
+#### <a id="deprecated-stats"/>Deprecated Stats
+
+These stats are deprecated in v17.
+
+| Deprecated stat | Supported alternatives |
+|-|-|
+| `backup_duration_seconds` | `BackupDurationNanoseconds` |
+| `restore_duration_seconds` | `RestoreDurationNanoseconds` |
