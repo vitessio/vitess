@@ -334,7 +334,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %token <str> NAMES GLOBAL SESSION ISOLATION LEVEL READ WRITE ONLY REPEATABLE COMMITTED UNCOMMITTED SERIALIZABLE
 
 // Functions
-%token <str> CURRENT_TIMESTAMP DATABASE CURRENT_DATE CURDATE NOW
+%token <str> ADDDATE CURRENT_TIMESTAMP DATABASE CURRENT_DATE CURDATE DATE_ADD DATE_SUB NOW SUBDATE
 %token <str> CURTIME CURRENT_TIME LOCALTIME LOCALTIMESTAMP CURRENT_USER
 %token <str> UTC_DATE UTC_TIME UTC_TIMESTAMP SYSDATE
 %token <str> DAY DAY_HOUR DAY_MICROSECOND DAY_MINUTE DAY_SECOND HOUR HOUR_MICROSECOND HOUR_MINUTE HOUR_SECOND MICROSECOND MINUTE MINUTE_MICROSECOND MINUTE_SECOND MONTH QUARTER SECOND SECOND_MICROSECOND YEAR_MONTH WEEK
@@ -452,7 +452,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %type <subPartitionDefinition> subpartition_definition
 %type <subPartitionDefinitions> subpartition_definition_list subpartition_definition_list_with_brackets
 %type <subPartitionDefinitionOptions> subpartition_definition_attribute_list_opt
-%type <intervalType> interval_time_stamp interval
+%type <intervalType> interval
 %type <str> cache_opt separator_opt flush_option for_channel_opt maxvalue
 %type <matchExprOption> match_option
 %type <boolean> distinct_opt union_op replace_opt local_opt
@@ -462,8 +462,8 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %type <str> select_option algorithm_view security_view security_view_opt
 %type <str> generated_always_opt user_username address_opt
 %type <definer> definer_opt user
-%type <expr> expression frame_expression signed_literal signed_literal_or_null null_as_literal now_or_signed_literal signed_literal bit_expr regular_expressions xml_expressions
-%type <expr> interval_value simple_expr literal NUM_literal text_literal text_literal_or_arg bool_pri literal_or_null now predicate tuple_expression null_int_variable_arg performance_schema_function_expressions gtid_function_expressions
+%type <expr> expression signed_literal signed_literal_or_null null_as_literal now_or_signed_literal signed_literal bit_expr regular_expressions xml_expressions
+%type <expr> simple_expr literal NUM_literal text_literal text_literal_or_arg bool_pri literal_or_null now predicate tuple_expression null_int_variable_arg performance_schema_function_expressions gtid_function_expressions
 %type <tableExprs> from_opt table_references from_clause
 %type <tableExpr> table_reference table_factor join_table json_table_function
 %type <jtColumnDefinition> jt_column
@@ -5344,6 +5344,14 @@ bit_expr '|' bit_expr %prec '|'
   {
 	  $$ = &BinaryExpr{Left: $1, Operator: MinusOp, Right: $3}
   }
+| bit_expr '+' INTERVAL bit_expr interval %prec '+'
+  {
+	  $$ = &DateAddExpr{Type: PlusIntervalRightType, Date: $1, Unit: $5, Expr: $4}
+  }
+| bit_expr '-' INTERVAL bit_expr interval %prec '-'
+  {
+	  $$ = &DateSubExpr{Type: MinusIntervalRightType, Date: $1, Unit: $5, Expr: $4}
+  }
 | bit_expr '*' bit_expr %prec '*'
   {
 	  $$ = &BinaryExpr{Left: $1, Operator: MultOp, Right: $3}
@@ -5462,18 +5470,14 @@ function_call_keyword
   {
 	 $$ = &Default{ColName: $2}
   }
-| interval_value
+| INTERVAL bit_expr interval '+' bit_expr %prec INTERVAL
   {
-	// INTERVAL can trigger a shift / reduce conflict. We want
-	// to shift here for the interval rule. In case we do have
-	// the additional expression_list below, we'd pick that path
-	// and thus properly parse it as a function when needed.
-	$$ = $1
+	  $$ = &DateAddExpr{Type: PlusIntervalLeftType, Date: $5, Unit: $3, Expr: $2}
   }
 | INTERVAL openb expression ',' expression_list closeb
-{
-       $$ = &IntervalFuncExpr{Expr: $3, Exprs: $5}
-}
+  {
+    $$ = &IntervalFuncExpr{Expr: $3, Exprs: $5}
+  }
 | column_name_or_offset JSON_EXTRACT_OP text_literal_or_arg
   {
 	$$ = &BinaryExpr{Left: $1, Operator: JSONExtractOp, Right: $3}
@@ -5481,12 +5485,6 @@ function_call_keyword
 | column_name_or_offset JSON_UNQUOTE_EXTRACT_OP text_literal_or_arg
   {
 	$$ = &BinaryExpr{Left: $1, Operator: JSONUnquoteExtractOp, Right: $3}
-  }
-
-interval_value:
-  INTERVAL bit_expr sql_id
-  {
-     $$ = &IntervalExpr{Expr: $2, Unit: $3.String()}
   }
 
 column_names_opt_paren:
@@ -5569,23 +5567,21 @@ frame_point:
   {
     $$ = &FramePoint{Type:UnboundedFollowingType}
   }
-| frame_expression PRECEDING
+| NUM_literal PRECEDING
   {
     $$ = &FramePoint{Type:ExprPrecedingType, Expr:$1}
   }
-| frame_expression FOLLOWING
+| INTERVAL bit_expr interval PRECEDING
+  {
+    $$ = &FramePoint{Type:ExprPrecedingType, Expr:$2, Unit: $3}
+  }
+| NUM_literal FOLLOWING
   {
     $$ = &FramePoint{Type:ExprFollowingType, Expr:$1}
   }
-
-frame_expression:
-  NUM_literal
+| INTERVAL bit_expr interval FOLLOWING
   {
-    $$ = $1
-  }
-| interval_value
-  {
-    $$ = $1
+    $$ = &FramePoint{Type:ExprFollowingType, Expr:$2, Unit:$3}
   }
 
 frame_clause_opt:
@@ -6610,6 +6606,30 @@ UTC_DATE func_paren_opt
   {
     $$ =  &LagLeadExpr{ Type:$1 , Expr: $3, N: $5, Default: $6, NullTreatmentClause:$8, OverClause: $9}
   }
+| ADDDATE openb expression ',' INTERVAL bit_expr interval closeb
+  {
+    $$ = &DateAddExpr{Type: AdddateType, Date: $3, Expr: $6, Unit: $7}
+  }
+| ADDDATE openb expression ',' expression closeb
+  {
+    $$ = &DateAddExpr{Type: AdddateType, Date: $3, Expr: $5}
+  }
+| DATE_ADD openb expression ',' INTERVAL bit_expr interval closeb
+  {
+    $$ = &DateAddExpr{Type: DateAddType, Date: $3, Expr: $6, Unit: $7}
+  }
+| DATE_SUB openb expression ',' INTERVAL bit_expr interval closeb
+  {
+    $$ = &DateSubExpr{Type: DateSubType, Date: $3, Expr: $6, Unit: $7}
+  }
+| SUBDATE openb expression ',' INTERVAL bit_expr interval closeb
+  {
+    $$ = &DateSubExpr{Type: SubdateType, Date: $3, Expr: $6, Unit: $7}
+  }
+| SUBDATE openb expression ',' expression closeb
+  {
+    $$ = &DateSubExpr{Type: SubdateType, Date: $3, Expr: $5}
+  }
 | regular_expressions
 | xml_expressions
 | performance_schema_function_expressions
@@ -6775,9 +6795,7 @@ returning_type_opt:
   }
 
 interval:
- interval_time_stamp
- {}
-| DAY_HOUR
+  DAY_HOUR
   {
 	$$=IntervalDayHour
   }
@@ -6821,9 +6839,7 @@ interval:
   {
 	$$=IntervalYearMonth
   }
-
-interval_time_stamp:
- DAY
+| DAY
   {
  	$$=IntervalDay
   }
@@ -7951,6 +7967,7 @@ non_reserved_keyword:
   AGAINST
 | ACTION
 | ACTIVE
+| ADDDATE %prec FUNCTION_CALL_NON_KEYWORD
 | ADMIN
 | AFTER
 | ALGORITHM
@@ -8003,6 +8020,8 @@ non_reserved_keyword:
 | CURRENT
 | DATA
 | DATE %prec STRING_TYPE_PREFIX_NON_KEYWORD
+| DATE_ADD %prec FUNCTION_CALL_NON_KEYWORD
+| DATE_SUB %prec FUNCTION_CALL_NON_KEYWORD
 | DATETIME
 | DEALLOCATE
 | DECIMAL_TYPE
@@ -8307,6 +8326,7 @@ non_reserved_keyword:
 | ST_StartPoint %prec FUNCTION_CALL_NON_KEYWORD
 | ST_X %prec FUNCTION_CALL_NON_KEYWORD
 | ST_Y %prec FUNCTION_CALL_NON_KEYWORD
+| SUBDATE %prec FUNCTION_CALL_NON_KEYWORD
 | SUBPARTITION
 | SUBPARTITIONS
 | SUM %prec FUNCTION_CALL_NON_KEYWORD
@@ -8373,6 +8393,7 @@ non_reserved_keyword:
 | WAIT_FOR_EXECUTED_GTID_SET %prec FUNCTION_CALL_NON_KEYWORD
 | WAIT_UNTIL_SQL_THREAD_AFTER_GTIDS %prec FUNCTION_CALL_NON_KEYWORD
 | WARNINGS
+| WEEK %prec FUNCTION_CALL_NON_KEYWORD
 | WITHOUT
 | WORK
 | YEAR
