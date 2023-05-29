@@ -31,6 +31,7 @@ type StructureAnalysisCode string
 const (
 	NoProblem                              AnalysisCode = "NoProblem"
 	ClusterHasNoPrimary                    AnalysisCode = "ClusterHasNoPrimary"
+	InvalidPrimary                         AnalysisCode = "InvalidPrimary"
 	DeadPrimaryWithoutReplicas             AnalysisCode = "DeadPrimaryWithoutReplicas"
 	DeadPrimary                            AnalysisCode = "DeadPrimary"
 	DeadPrimaryAndReplicas                 AnalysisCode = "DeadPrimaryAndReplicas"

@@ -56,6 +56,7 @@ func initializeAnalysisDaoPostConfiguration() {
 
 type clusterAnalysis struct {
 	hasClusterwideAction bool
+	totalTablets         int
 	primaryAlias         string
 	durability           reparentutil.Durabler
 }
@@ -406,6 +407,8 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 		}
 		// ca has clusterwide info
 		ca := clusters[keyspaceShard]
+		// Increment the total amount of tablets.
+		ca.totalTablets += 1
 		if ca.hasClusterwideAction {
 			// We can only take one cluster level action at a time.
 			return nil
@@ -415,10 +418,12 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 			return nil
 		}
 		isInvalid := m.GetBool("is_invalid")
-		if isInvalid {
+		if a.IsClusterPrimary && isInvalid {
+			a.Analysis = InvalidPrimary
+			a.Description = "VTOrc hasn't been able to reach the primary even once"
+		} else if isInvalid {
 			return nil
-		}
-		if a.IsClusterPrimary && !a.LastCheckValid && a.CountReplicas == 0 {
+		} else if a.IsClusterPrimary && !a.LastCheckValid && a.CountReplicas == 0 {
 			a.Analysis = DeadPrimaryWithoutReplicas
 			a.Description = "Primary cannot be reached by vtorc and has no replica"
 			ca.hasClusterwideAction = true
@@ -589,6 +594,33 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 		}
 		return nil
 	})
+
+	for idx, analysis := range result {
+		if analysis.Analysis == InvalidPrimary {
+			keyspaceName := analysis.ClusterDetails.Keyspace
+			shardName := analysis.ClusterDetails.Shard
+			keyspaceShard := getKeyspaceShardName(keyspaceName, shardName)
+			totalReplicas := clusters[keyspaceShard].totalTablets - 1
+			var notReplicatingReplicas []int
+			for i := idx + 1; i < len(result); i++ {
+				replicaAnalysis := result[i]
+				if replicaAnalysis.ClusterDetails.Keyspace == keyspaceName &&
+					replicaAnalysis.ClusterDetails.Shard == shardName &&
+					topo.IsReplicaType(replicaAnalysis.TabletType) &&
+					!replicaAnalysis.IsPrimary && replicaAnalysis.ReplicationStopped {
+					notReplicatingReplicas = append(notReplicatingReplicas, i)
+				}
+			}
+			if len(notReplicatingReplicas) == totalReplicas && totalReplicas > 0 {
+				analysis.Analysis = DeadPrimary
+				result[idx] = analysis
+				for i := len(notReplicatingReplicas) - 1; i >= 0; i-- {
+					idxToRemove := notReplicatingReplicas[i]
+					result = append(result[0:idxToRemove], result[idxToRemove+1:]...)
+				}
+			}
+		}
+	}
 
 	if err != nil {
 		log.Error(err)
