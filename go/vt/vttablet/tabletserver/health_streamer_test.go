@@ -63,6 +63,39 @@ func newConfig(db *fakesqldb.DB) *tabletenv.TabletConfig {
 	return cfg
 }
 
+// TestNotServingPrimaryNoWrite makes sure that the health-streamer doesn't write anything to the database when
+// the state is not serving primary.
+func TestNotServingPrimaryNoWrite(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	config := newConfig(db)
+	config.SignalWhenSchemaChange = true
+
+	env := tabletenv.NewEnv(config, "TestNotServingPrimary")
+	alias := &topodatapb.TabletAlias{
+		Cell: "cell",
+		Uid:  1,
+	}
+	// Create a new health streamer and set it to a serving primary state
+	hs := newHealthStreamer(env, alias, &schema.Engine{})
+	hs.isServingPrimary = true
+	hs.InitDBConfig(&querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}, config.DB.DbaWithDB())
+	hs.Open()
+	defer hs.Close()
+	target := &querypb.Target{}
+	hs.InitDBConfig(target, db.ConnParams())
+
+	// Let's say the tablet goes to a non-serving primary state.
+	hs.MakePrimary(false)
+
+	// A reload now should not write anything to the database. If any write happens it will error out since we have not
+	// added any query to the database to expect.
+	t1 := schema.NewTable("t1", schema.NoType)
+	err := hs.reload(map[string]*schema.Table{"t1": t1}, []*schema.Table{t1}, nil, nil)
+	require.NoError(t, err)
+	require.NoError(t, db.LastError())
+}
+
 func TestHealthStreamerBroadcast(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
