@@ -231,7 +231,7 @@ func (sb StatsBackend) PushAll() error {
 }
 
 // PushOne pushes the single provided metric.
-func (sb StatsBackend) PushOne(name string, v expvar.Var) error {
+func (sb StatsBackend) PushOne(name string, v stats.Variable) error {
 	sb.addExpVar(expvar.KeyValue{
 		Key:   name,
 		Value: v,

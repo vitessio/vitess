@@ -17,8 +17,9 @@ limitations under the License.
 package opentsdb
 
 import (
-	"expvar"
 	"time"
+
+	"vitess.io/vitess/go/stats"
 )
 
 // backend implements stats.PushBackend
@@ -42,7 +43,7 @@ func (b *backend) PushAll() error {
 }
 
 // PushOne pushes a single stat to OpenTSDB
-func (b *backend) PushOne(name string, v expvar.Var) error {
+func (b *backend) PushOne(name string, v stats.Variable) error {
 	collector := b.collector()
 	collector.collectOne(name, v)
 	return b.writer.Write(collector.data)

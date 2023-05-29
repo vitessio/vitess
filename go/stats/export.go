@@ -129,7 +129,7 @@ func pushAll() error {
 	return backend.PushAll()
 }
 
-func pushOne(name string, v expvar.Var) error {
+func pushOne(name string, v Variable) error {
 	backend, ok := pushBackends[statsBackend]
 	if !ok {
 		return fmt.Errorf("no PushBackend registered with name %s", statsBackend)
@@ -202,7 +202,7 @@ type PushBackend interface {
 	// PushAll pushes all stats from expvar to the backend.
 	PushAll() error
 	// PushOne pushes a single stat from expvar to the backend.
-	PushOne(name string, v expvar.Var) error
+	PushOne(name string, v Variable) error
 }
 
 var pushBackends = make(map[string]PushBackend)
