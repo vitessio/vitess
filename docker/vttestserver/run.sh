@@ -32,6 +32,7 @@ rm -vf "$VTDATAROOT"/"$tablet_dir"/{mysql.sock,mysql.sock.lock}
 # Run the vttestserver binary
 /vt/bin/vttestserver \
 	--port "$PORT" \
+	--bind_address "${MYSQL_BIND_HOST:-127.0.0.1}" \
 	--keyspaces "$KEYSPACES" \
 	--num_shards "$NUM_SHARDS" \
 	--mysql_bind_host "${MYSQL_BIND_HOST:-127.0.0.1}" \

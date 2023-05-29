@@ -299,6 +299,7 @@ func startPersistentCluster(dir string, flags ...string) (vttest.LocalCluster, e
 		"--persistent_mode",
 		// FIXME: if port is not provided, data_dir is not respected
 		fmt.Sprintf("--port=%d", randomPort()),
+		"--bind_address=127.0.0.1",
 		fmt.Sprintf("--data_dir=%s", dir),
 	}...)
 	return startCluster(flags...)

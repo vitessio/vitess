@@ -11,6 +11,7 @@ Usage of vtctld:
       --backup_storage_compress                                          if set, the backup files will be compressed. (default true)
       --backup_storage_implementation string                             Which backup storage implementation to use for creating and restoring backups.
       --backup_storage_number_blocks int                                 if backup_storage_compress is true, backup_storage_number_blocks sets the number of blocks that can be processed, in parallel, before the writer blocks, during compression (default is 2). It should be equal to the number of CPUs available for compression. (default 2)
+      --bind_address string                                              bind address for the server
       --builtinbackup-file-read-buffer-size uint                         read files using an IO buffer of this many bytes. Golang defaults are used when set to 0.
       --builtinbackup-file-write-buffer-size uint                        write files using an IO buffer of this many bytes. Golang defaults are used when set to 0. (default 2097152)
       --builtinbackup_mysqld_timeout duration                            how long to wait for mysqld to shutdown at the start of the backup. (default 10m0s)
@@ -36,6 +37,7 @@ Usage of vtctld:
       --grpc_auth_mtls_allowed_substrings string                         List of substrings of at least one of the client certificate names (separated by colon).
       --grpc_auth_static_client_creds string                             When using grpc_static_auth in the server, this file provides the credentials to use to authenticate with server.
       --grpc_auth_static_password_file string                            JSON File to read the users/passwords from.
+      --grpc_bind_address string                                         Bind address for gRPC calls. If empty, listen on all addresses.
       --grpc_ca string                                                   server CA to use for gRPC connections, requires TLS, and enforces client certificate check
       --grpc_cert string                                                 server certificate to use for gRPC connections, requires grpc_key, enables TLS
       --grpc_compression string                                          Which protocol to use for compressing gRPC. Default: nothing. Supported: snappy

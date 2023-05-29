@@ -37,14 +37,14 @@ var (
 
 // Run starts listening for RPC and HTTP requests,
 // and blocks until it the process gets a signal.
-func Run(port int) {
+func Run(bindAddress string, port int) {
 	populateListeningURL(int32(port))
 	createGRPCServer()
 	onRunHooks.Fire()
 	serveGRPC()
 	serveSocketFile()
 
-	l, err := net.Listen("tcp", fmt.Sprintf(":%v", port))
+	l, err := net.Listen("tcp", fmt.Sprintf("%s:%v", bindAddress, port))
 	if err != nil {
 		log.Exit(err)
 	}

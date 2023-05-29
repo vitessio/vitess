@@ -112,6 +112,7 @@ func (orc *VTOrcProcess) Setup() (err error) {
 		"--topo_global_root", orc.TopoGlobalRoot,
 		"--config", orc.ConfigPath,
 		"--port", fmt.Sprintf("%d", orc.Port),
+		"--bind_address", "127.0.0.1",
 		// This parameter is overriden from the config file, added here to just verify that we indeed use the config file paramter over the flag
 		"--recovery-period-block-duration", "10h",
 		"--instance-poll-time", "1s",

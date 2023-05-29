@@ -57,7 +57,8 @@ import (
 
 var (
 	// port is part of the flags used when calling RegisterDefaultFlags.
-	port int
+	port        int
+	bindAddress string
 
 	// mutex used to protect the Init function
 	mu sync.Mutex
@@ -263,6 +264,7 @@ func FireRunHooks() {
 func RegisterDefaultFlags() {
 	OnParse(func(fs *pflag.FlagSet) {
 		fs.IntVar(&port, "port", port, "port for the server")
+		fs.StringVar(&bindAddress, "bind_address", bindAddress, "bind address for the server")
 	})
 }
 
@@ -273,7 +275,7 @@ func Port() int {
 
 // RunDefault calls Run() with the parameters from the flags.
 func RunDefault() {
-	Run(port)
+	Run(bindAddress, port)
 }
 
 var (
