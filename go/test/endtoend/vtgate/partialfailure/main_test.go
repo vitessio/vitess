@@ -90,6 +90,7 @@ func testAllModes(t *testing.T, stmts func(conn *mysql.Conn)) {
 		{"oltp-reserved", []string{"set workload = oltp", "set sql_mode = ''"}},
 		{"olap", []string{"set workload = olap"}},
 		{"olap-reserved", []string{"set workload = olap", "set sql_mode = ''"}},
+		{"oltp", []string{"set workload = oltp"}}, // to make a circle on the workload change.
 	}
 
 	for _, tc := range tcases {
