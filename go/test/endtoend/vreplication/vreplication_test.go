@@ -34,6 +34,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/tidwall/gjson"
 
 	"github.com/buger/jsonparser"
 
@@ -173,7 +174,19 @@ func TestVReplicationDDLHandling(t *testing.T) {
 	waitForQueryResult(t, vtgateConn, targetKs, checkColQueryTarget, "[[INT64(0)]]")
 	// Confirm new col does exist on source
 	waitForQueryResult(t, vtgateConn, sourceKs, checkColQuerySource, "[[INT64(1)]]")
-	moveTablesAction(t, "Cancel", defaultCellName, workflow, sourceKs, targetKs, table)
+	// Also test Cancel --keep_routing_rules
+	moveTablesAction(t, "Cancel", defaultCellName, workflow, sourceKs, targetKs, table, "--keep_routing_rules")
+	// Confirm that the routing rules were NOT cleared
+	rr, err := vc.VtctldClient.ExecuteCommandWithOutput("GetRoutingRules")
+	require.NoError(t, err)
+	require.Greater(t, len(gjson.Get(rr, "rules").Array()), 0)
+	// Manually clear the routing rules
+	err = vc.VtctldClient.ExecuteCommand("ApplyRoutingRules", "--rules", "{}")
+	require.NoError(t, err)
+	// Confirm that the routing rules are gone
+	rr, err = vc.VtctldClient.ExecuteCommandWithOutput("GetRoutingRules")
+	require.NoError(t, err)
+	require.Equal(t, len(gjson.Get(rr, "rules").Array()), 0)
 	// Drop the column on source to start fresh again
 	_, err = vtgateConn.ExecuteFetch(dropColDDL, 1, false)
 	require.NoError(t, err, "error executing %q: %v", dropColDDL, err)
