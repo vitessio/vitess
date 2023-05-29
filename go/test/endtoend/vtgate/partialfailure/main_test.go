@@ -22,12 +22,11 @@ import (
 	"os"
 	"testing"
 
-	"vitess.io/vitess/go/test/endtoend/utils"
-
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/endtoend/utils"
 )
 
 var (
@@ -99,39 +98,54 @@ CREATE TABLE test_vdx (
 	`
 )
 
+var enableSettingsPool bool
+
 func TestMain(m *testing.M) {
 	defer cluster.PanicHandler(nil)
 	flag.Parse()
 
-	exitCode := func() int {
-		clusterInstance = cluster.NewCluster(cell, hostname)
-		defer clusterInstance.Teardown()
+	code := runAllTests(m)
+	if code != 0 {
+		os.Exit(code)
+	}
 
-		// Start topo server
-		if err := clusterInstance.StartTopo(); err != nil {
-			return 1
-		}
+	println("running with settings pool enabled")
+	// run again with settings pool enabled.
+	enableSettingsPool = true
+	code = runAllTests(m)
+	os.Exit(code)
+}
 
-		// Start keyspace
-		keyspace := &cluster.Keyspace{
-			Name:      keyspaceName,
-			SchemaSQL: sqlSchema,
-			VSchema:   vSchema,
-		}
-		if err := clusterInstance.StartKeyspace(*keyspace, []string{"-40", "40-80", "80-c0", "c0-"}, 0, false); err != nil {
+func runAllTests(m *testing.M) int {
+	clusterInstance = cluster.NewCluster(cell, hostname)
+	defer clusterInstance.Teardown()
 
-			return 1
-		}
+	// Start topo server
+	if err := clusterInstance.StartTopo(); err != nil {
+		return 1
+	}
 
-		// Start vtgate
-		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, "--planner-version", "Gen4Fallback")
-		if err := clusterInstance.StartVtgate(); err != nil {
-			return 1
-		}
-		vtParams = clusterInstance.GetVTParams(keyspaceName)
-		return m.Run()
-	}()
-	os.Exit(exitCode)
+	// Start keyspace
+	keyspace := &cluster.Keyspace{
+		Name:      keyspaceName,
+		SchemaSQL: sqlSchema,
+		VSchema:   vSchema,
+	}
+	if enableSettingsPool {
+		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, "--queryserver-enable-settings-pool")
+	}
+	if err := clusterInstance.StartKeyspace(*keyspace, []string{"-40", "40-80", "80-c0", "c0-"}, 0, false); err != nil {
+
+		return 1
+	}
+
+	// Start vtgate
+	clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, "--planner-version", "Gen4Fallback")
+	if err := clusterInstance.StartVtgate(); err != nil {
+		return 1
+	}
+	vtParams = clusterInstance.GetVTParams(keyspaceName)
+	return m.Run()
 }
 
 func testAllModes(t *testing.T, stmts func(conn *mysql.Conn)) {
