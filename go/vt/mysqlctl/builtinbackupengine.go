@@ -853,7 +853,7 @@ func (be *BuiltinBackupEngine) executeRestoreIncrementalBackup(ctx context.Conte
 			return vterrors.Wrap(err, "failed to restore file")
 		}
 		if err := mysqld.ApplyBinlogFile(ctx, binlogFile, params.RestoreToPos); err != nil {
-			return vterrors.Wrapf(err, "failed to extract binlog file %v", binlogFile)
+			return vterrors.Wrapf(err, "failed to apply binlog file %v", binlogFile)
 		}
 		defer os.Remove(binlogFile)
 		params.Logger.Infof("Applied binlog file: %v", binlogFile)
