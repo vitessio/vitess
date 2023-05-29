@@ -32,16 +32,16 @@ import (
 func compact(ctx *plancontext.PlanningContext, op ops.Operator) (ops.Operator, error) {
 	type compactable interface {
 		// Compact implement this interface for operators that have easy to see optimisations
-		Compact(ctx *plancontext.PlanningContext) (ops.Operator, rewrite.ApplyResult, error)
+		Compact(ctx *plancontext.PlanningContext) (ops.Operator, *rewrite.ApplyResult, error)
 	}
 
-	newOp, err := rewrite.BottomUpAll(op, TableID, func(op ops.Operator, _ semantics.TableSet, _ bool) (ops.Operator, rewrite.ApplyResult, error) {
+	newOp, err := rewrite.BottomUp(op, TableID, func(op ops.Operator, _ semantics.TableSet, _ bool) (ops.Operator, *rewrite.ApplyResult, error) {
 		newOp, ok := op.(compactable)
 		if !ok {
 			return op, rewrite.SameTree, nil
 		}
 		return newOp.Compact(ctx)
-	})
+	}, stopAtRoute)
 	return newOp, err
 }
 
@@ -103,7 +103,7 @@ func TablesUsed(op ops.Operator) []string {
 func UnresolvedPredicates(op ops.Operator, st *semantics.SemTable) (result []sqlparser.Expr) {
 	type unresolved interface {
 		// UnsolvedPredicates returns any predicates that have dependencies on the given Operator and
-		// on the outside of it (a parent Select expression, any other table not used by Operator, etc).
+		// on the outside of it (a parent Select expression, any other table not used by Operator, etc.).
 		// This is used for sub-queries. An example query could be:
 		// SELECT * FROM tbl WHERE EXISTS (SELECT 1 FROM otherTbl WHERE tbl.col = otherTbl.col)
 		// The subquery would have one unsolved predicate: `tbl.col = otherTbl.col`
@@ -148,14 +148,6 @@ func QualifiedString(ks *vindexes.Keyspace, s string) string {
 	return fmt.Sprintf("%s.%s", ks.Name, s)
 }
 
-func QualifiedStrings(ks *vindexes.Keyspace, ss []string) []string {
-	add, collect := collectSortedUniqueStrings()
-	for _, s := range ss {
-		add(QualifiedString(ks, s))
-	}
-	return collect()
-}
-
 func QualifiedTableName(ks *vindexes.Keyspace, t sqlparser.TableName) string {
 	return QualifiedIdentifier(ks, t.Name)
 }
@@ -182,10 +174,6 @@ func SingleQualifiedIdentifier(ks *vindexes.Keyspace, i sqlparser.IdentifierCS) 
 
 func SingleQualifiedString(ks *vindexes.Keyspace, s string) []string {
 	return []string{QualifiedString(ks, s)}
-}
-
-func SingleQualifiedTableName(ks *vindexes.Keyspace, t sqlparser.TableName) []string {
-	return SingleQualifiedIdentifier(ks, t.Name)
 }
 
 func collectSortedUniqueStrings() (add func(string), collect func() []string) {

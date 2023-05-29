@@ -15,6 +15,12 @@ Usage of vttestserver:
       --charset string                                                   MySQL charset (default "utf8mb4")
       --compression-engine-name string                                   compressor engine used for compression. (default "pargzip")
       --compression-level int                                            what level to pass to the compressor. (default 1)
+      --config-file string                                               Full path of the config file (with extension) to use. If set, --config-path, --config-type, and --config-name are ignored.
+      --config-file-not-found-handling ConfigFileNotFoundHandling        Behavior when a config file is not found. (Options: error, exit, ignore, warn) (default warn)
+      --config-name string                                               Name of the config file (without extension) to search for. (default "vtconfig")
+      --config-path strings                                              Paths to search for config files in. (default [{{.Workdir}}])
+      --config-persistence-min-interval duration                         minimum interval between persisting dynamic config changes back to disk (if no change has occurred, nothing is done). (default 1s)
+      --config-type string                                               Config file type (omit to infer config type from file extension).
       --consul_auth_static_file string                                   JSON File to read the topos/tokens from.
       --data_dir string                                                  Directory where the data files will be placed, defaults to a random directory under /vt/vtdataroot
       --dba_idle_timeout duration                                        Idle timeout for dba connections (default 1m0s)

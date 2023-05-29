@@ -1353,3 +1353,19 @@ func (cluster *LocalProcessCluster) EnableVTOrcRecoveries(t *testing.T) {
 		vtorc.EnableGlobalRecoveries(t)
 	}
 }
+
+// EnableGeneralLog enables generals logs on all the mysql server started by this cluster.
+// This method should be used only for local debugging purpose.
+func (cluster *LocalProcessCluster) EnableGeneralLog() error {
+	for _, ks := range cluster.Keyspaces {
+		for _, shard := range ks.Shards {
+			for _, vttablet := range shard.Vttablets {
+				_, err := vttablet.VttabletProcess.QueryTablet("set global general_log = 1", "", false)
+				if err != nil {
+					return err
+				}
+			}
+		}
+	}
+	return nil
+}

@@ -23,7 +23,7 @@ import (
 	"strings"
 
 	"vitess.io/vitess/go/slices2"
-
+	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
 
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
@@ -71,9 +71,53 @@ func transformToLogicalPlan(ctx *plancontext.PlanningContext, op ops.Operator, i
 		return transformLimit(ctx, op)
 	case *operators.Ordering:
 		return transformOrdering(ctx, op)
+	case *operators.Aggregator:
+		return transformAggregator(ctx, op)
 	}
 
 	return nil, vterrors.VT13001(fmt.Sprintf("unknown type encountered: %T (transformToLogicalPlan)", op))
+}
+
+func transformAggregator(ctx *plancontext.PlanningContext, op *operators.Aggregator) (logicalPlan, error) {
+	plan, err := transformToLogicalPlan(ctx, op.Source, false)
+	if err != nil {
+		return nil, err
+	}
+
+	oa := &orderedAggregate{
+		resultsBuilder: resultsBuilder{
+			logicalPlanCommon: newBuilderCommon(plan),
+			weightStrings:     make(map[*resultColumn]int),
+		},
+	}
+
+	for _, aggr := range op.Aggregations {
+		if aggr.OpCode == opcode.AggregateUnassigned {
+			return nil, vterrors.VT12001(fmt.Sprintf("in scatter query: aggregation function '%s'", sqlparser.String(aggr.Original)))
+		}
+		oa.aggregates = append(oa.aggregates, &engine.AggregateParams{
+			Opcode:     aggr.OpCode,
+			Col:        aggr.ColOffset,
+			Alias:      aggr.Alias,
+			Expr:       aggr.Func,
+			Original:   aggr.Original,
+			OrigOpcode: aggr.OriginalOpCode,
+		})
+	}
+	for _, groupBy := range op.Grouping {
+		oa.groupByKeys = append(oa.groupByKeys, &engine.GroupByParams{
+			KeyCol:          groupBy.ColOffset,
+			WeightStringCol: groupBy.WSOffset,
+			Expr:            groupBy.AsAliasedExpr().Expr,
+			CollationID:     ctx.SemTable.CollationForExpr(groupBy.SimplifiedExpr),
+		})
+	}
+
+	if err != nil {
+		return nil, err
+	}
+	oa.truncateColumnCount = op.ResultColumns
+	return oa, nil
 }
 
 func transformOrdering(ctx *plancontext.PlanningContext, op *operators.Ordering) (logicalPlan, error) {
@@ -86,7 +130,9 @@ func transformOrdering(ctx *plancontext.PlanningContext, op *operators.Ordering)
 }
 
 func createMemorySort(ctx *plancontext.PlanningContext, src logicalPlan, ordering *operators.Ordering) (logicalPlan, error) {
-	primitive := &engine.MemorySort{}
+	primitive := &engine.MemorySort{
+		TruncateColumnCount: ordering.ResultColumns,
+	}
 	ms := &memorySort{
 		resultsBuilder: resultsBuilder{
 			logicalPlanCommon: newBuilderCommon(src),
@@ -97,7 +143,7 @@ func createMemorySort(ctx *plancontext.PlanningContext, src logicalPlan, orderin
 	}
 
 	for idx, order := range ordering.Order {
-		collationID := ctx.SemTable.CollationForExpr(order.WeightStrExpr)
+		collationID := ctx.SemTable.CollationForExpr(order.SimplifiedExpr)
 		ms.eMemorySort.OrderBy = append(ms.eMemorySort.OrderBy, engine.OrderByParams{
 			Col:               ordering.Offset[idx],
 			WeightStringCol:   ordering.WOffset[idx],
@@ -122,14 +168,44 @@ func transformProjection(ctx *plancontext.PlanningContext, op *operators.Project
 		return useSimpleProjection(op, cols, src)
 	}
 
-	expressions := slices2.Map(op.Columns, func(from operators.ProjExpr) sqlparser.Expr {
+	expressions := slices2.Map(op.Projections, func(from operators.ProjExpr) sqlparser.Expr {
 		return from.GetExpr()
 	})
 
+	failed := false
+	evalengineExprs := slices2.Map(op.Projections, func(from operators.ProjExpr) evalengine.Expr {
+		switch e := from.(type) {
+		case operators.Eval:
+			return e.EExpr
+		case operators.Offset:
+			t := ctx.SemTable.ExprTypes[e.Expr]
+			return &evalengine.Column{
+				Offset:    e.Offset,
+				Type:      t.Type,
+				Collation: collations.TypedCollation{},
+			}
+		default:
+			failed = true
+			return nil
+		}
+	})
+	var primitive *engine.Projection
+	columnNames := slices2.Map(op.Columns, func(from *sqlparser.AliasedExpr) string {
+		return from.ColumnName()
+	})
+
+	if !failed {
+		primitive = &engine.Projection{
+			Cols:  columnNames,
+			Exprs: evalengineExprs,
+		}
+	}
+
 	return &projection{
 		source:      src,
-		columnNames: op.ColumnNames,
+		columnNames: columnNames,
 		columns:     expressions,
+		primitive:   primitive,
 	}, nil
 }
 
