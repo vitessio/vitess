@@ -33,7 +33,8 @@ type MysqlDaemon interface {
 	// methods related to mysql running or not
 	Start(ctx context.Context, cnf *Mycnf, mysqldArgs ...string) error
 	Shutdown(ctx context.Context, cnf *Mycnf, waitForMysqld bool) error
-	RunMysqlUpgrade() error
+	RunMysqlUpgrade(ctx context.Context) error
+	ApplyBinlogFile(ctx context.Context, binlogFile string, restorePos mysql.Position) error
 	ReinitConfig(ctx context.Context, cnf *Mycnf) error
 	Wait(ctx context.Context, cnf *Mycnf) error
 
@@ -102,7 +103,7 @@ type MysqlDaemon interface {
 	GetAllPrivsConnection(ctx context.Context) (*dbconnpool.DBConnection, error)
 
 	// GetVersionString returns the database version as a string
-	GetVersionString() string
+	GetVersionString(ctx context.Context) string
 
 	// GetVersionComment returns the version comment
 	GetVersionComment(ctx context.Context) string

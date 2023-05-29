@@ -3,7 +3,7 @@
     "comment": "TPC-H query 1",
     "query": "select l_returnflag, l_linestatus, sum(l_quantity) as sum_qty, sum(l_extendedprice) as sum_base_price, sum(l_extendedprice * (1 - l_discount)) as sum_disc_price, sum(l_extendedprice * (1 - l_discount) * (1 + l_tax)) as sum_charge, avg(l_quantity) as avg_qty, avg(l_extendedprice) as avg_price, avg(l_discount) as avg_disc, count(*) as count_order from lineitem where l_shipdate <= '1998-12-01' - interval '108' day group by l_returnflag, l_linestatus order by l_returnflag, l_linestatus",
     "v3-plan": "VT12001: unsupported: in scatter query: complex aggregate expression",
-    "gen4-plan": "VT12001: unsupported: in scatter query: aggregation function 'avg'"
+    "gen4-plan": "VT12001: unsupported: in scatter query: aggregation function 'avg(l_quantity) as avg_qty'"
   },
   {
     "comment": "TPC-H query 2",
@@ -369,7 +369,7 @@
                                       "Sharded": true
                                     },
                                     "FieldQuery": "select s_nationkey, count(*), weight_string(s_nationkey) from supplier where 1 != 1 group by s_nationkey, weight_string(s_nationkey)",
-                                    "Query": "select s_nationkey, count(*), weight_string(s_nationkey) from supplier where s_suppkey = :l_suppkey and s_nationkey = :c_nationkey group by s_nationkey, weight_string(s_nationkey)",
+                                    "Query": "select s_nationkey, count(*), weight_string(s_nationkey) from supplier where s_nationkey = :c_nationkey and s_suppkey = :l_suppkey group by s_nationkey, weight_string(s_nationkey)",
                                     "Table": "supplier",
                                     "Values": [
                                       ":l_suppkey"
@@ -654,7 +654,7 @@
                               "Sharded": true
                             },
                             "FieldQuery": "select n2.n_name as cust_nation, count(*), weight_string(n2.n_name), weight_string(n2.n_name) from nation as n2 where 1 != 1 group by cust_nation, weight_string(cust_nation)",
-                            "Query": "select n2.n_name as cust_nation, count(*), weight_string(n2.n_name), weight_string(n2.n_name) from nation as n2 where n2.n_nationkey = :c_nationkey and (:n1_n_name = 'FRANCE' and n2.n_name = 'GERMANY' or :n1_n_name = 'GERMANY' and n2.n_name = 'FRANCE') group by cust_nation, weight_string(cust_nation)",
+                            "Query": "select n2.n_name as cust_nation, count(*), weight_string(n2.n_name), weight_string(n2.n_name) from nation as n2 where (:n1_n_name = 'FRANCE' and n2.n_name = 'GERMANY' or :n1_n_name = 'GERMANY' and n2.n_name = 'FRANCE') and n2.n_nationkey = :c_nationkey group by cust_nation, weight_string(cust_nation)",
                             "Table": "nation",
                             "Values": [
                               ":c_nationkey"
@@ -1416,7 +1416,7 @@
                                       "Sharded": true
                                     },
                                     "FieldQuery": "select 1, count(*) as numwait from orders where 1 != 1 group by 1",
-                                    "Query": "select 1, count(*) as numwait from orders where o_orderstatus = 'F' and exists (select 1 from lineitem as l2 where l2.l_orderkey = l1.l_orderkey and l2.l_suppkey != l1.l_suppkey limit 1) and not exists (select 1 from lineitem as l3 where l3.l_orderkey = l1.l_orderkey and l3.l_suppkey != l1.l_suppkey and l3.l_receiptdate > l3.l_commitdate limit 1) and o_orderkey = :l1_l_orderkey group by 1",
+                                    "Query": "select 1, count(*) as numwait from orders where o_orderstatus = 'F' and o_orderkey = :l1_l_orderkey and exists (select 1 from lineitem as l2 where l2.l_orderkey = l1.l_orderkey and l2.l_suppkey != l1.l_suppkey limit 1) and not exists (select 1 from lineitem as l3 where l3.l_orderkey = l1.l_orderkey and l3.l_suppkey != l1.l_suppkey and l3.l_receiptdate > l3.l_commitdate limit 1) group by 1",
                                     "Table": "orders",
                                     "Values": [
                                       ":l1_l_orderkey"
@@ -1442,7 +1442,7 @@
                                       "Sharded": true
                                     },
                                     "FieldQuery": "select s_nationkey, count(*) as numwait, weight_string(s_nationkey), s_name, weight_string(s_name) from supplier where 1 != 1 group by s_nationkey, weight_string(s_nationkey), s_name, weight_string(s_name)",
-                                    "Query": "select s_nationkey, count(*) as numwait, weight_string(s_nationkey), s_name, weight_string(s_name) from supplier where exists (select 1 from lineitem as l2 where l2.l_orderkey = l1.l_orderkey and l2.l_suppkey != l1.l_suppkey limit 1) and not exists (select 1 from lineitem as l3 where l3.l_orderkey = l1.l_orderkey and l3.l_suppkey != l1.l_suppkey and l3.l_receiptdate > l3.l_commitdate limit 1) and s_suppkey = :l1_l_suppkey group by s_nationkey, weight_string(s_nationkey), s_name, weight_string(s_name)",
+                                    "Query": "select s_nationkey, count(*) as numwait, weight_string(s_nationkey), s_name, weight_string(s_name) from supplier where s_suppkey = :l1_l_suppkey and exists (select 1 from lineitem as l2 where l2.l_orderkey = l1.l_orderkey and l2.l_suppkey != l1.l_suppkey limit 1) and not exists (select 1 from lineitem as l3 where l3.l_orderkey = l1.l_orderkey and l3.l_suppkey != l1.l_suppkey and l3.l_receiptdate > l3.l_commitdate limit 1) group by s_nationkey, weight_string(s_nationkey), s_name, weight_string(s_name)",
                                     "Table": "supplier",
                                     "Values": [
                                       ":l1_l_suppkey"
@@ -1457,7 +1457,7 @@
                                       "Sharded": true
                                     },
                                     "FieldQuery": "select 1, count(*) as numwait from nation where 1 != 1 group by 1",
-                                    "Query": "select 1, count(*) as numwait from nation where n_name = 'SAUDI ARABIA' and exists (select 1 from lineitem as l2 where l2.l_orderkey = l1.l_orderkey and l2.l_suppkey != l1.l_suppkey limit 1) and not exists (select 1 from lineitem as l3 where l3.l_orderkey = l1.l_orderkey and l3.l_suppkey != l1.l_suppkey and l3.l_receiptdate > l3.l_commitdate limit 1) and n_nationkey = :s_nationkey group by 1",
+                                    "Query": "select 1, count(*) as numwait from nation where n_name = 'SAUDI ARABIA' and n_nationkey = :s_nationkey and exists (select 1 from lineitem as l2 where l2.l_orderkey = l1.l_orderkey and l2.l_suppkey != l1.l_suppkey limit 1) and not exists (select 1 from lineitem as l3 where l3.l_orderkey = l1.l_orderkey and l3.l_suppkey != l1.l_suppkey and l3.l_receiptdate > l3.l_commitdate limit 1) group by 1",
                                     "Table": "nation",
                                     "Values": [
                                       ":s_nationkey"

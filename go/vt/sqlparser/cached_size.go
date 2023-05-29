@@ -922,6 +922,16 @@ func (cached *Count) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+func (cached *CountStar) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(8)
+	}
+	return size
+}
 func (cached *CreateDatabase) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -1016,6 +1026,42 @@ func (cached *DatabaseOption) CachedSize(alloc bool) int64 {
 	}
 	// field Value string
 	size += hack.RuntimeAllocSize(int64(len(cached.Value)))
+	return size
+}
+func (cached *DateAddExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field Date vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Date.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field Expr vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Expr.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	return size
+}
+func (cached *DateSubExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field Date vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Date.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field Expr vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Expr.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
 	return size
 }
 func (cached *DeallocateStmt) CachedSize(alloc bool) int64 {
@@ -1869,22 +1915,6 @@ func (cached *InsertExpr) CachedSize(alloc bool) int64 {
 	if cc, ok := cached.NewStr.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
-	return size
-}
-func (cached *IntervalExpr) CachedSize(alloc bool) int64 {
-	if cached == nil {
-		return int64(0)
-	}
-	size := int64(0)
-	if alloc {
-		size += int64(32)
-	}
-	// field Expr vitess.io/vitess/go/vt/sqlparser.Expr
-	if cc, ok := cached.Expr.(cachedObject); ok {
-		size += cc.CachedSize(true)
-	}
-	// field Unit string
-	size += hack.RuntimeAllocSize(int64(len(cached.Unit)))
 	return size
 }
 func (cached *IntervalFuncExpr) CachedSize(alloc bool) int64 {

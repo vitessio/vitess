@@ -49,18 +49,18 @@ type (
 // Here we try to merge query parts into the same route primitives. At the end of this process,
 // all the operators in the tree are guaranteed to be PhysicalOperators
 func transformToPhysical(ctx *plancontext.PlanningContext, in ops.Operator) (ops.Operator, error) {
-	op, err := rewrite.BottomUpAll(in, TableID, func(operator ops.Operator, ts semantics.TableSet, _ bool) (ops.Operator, rewrite.ApplyResult, error) {
+	op, err := rewrite.BottomUpAll(in, TableID, func(operator ops.Operator, ts semantics.TableSet, _ bool) (ops.Operator, *rewrite.ApplyResult, error) {
 		switch op := operator.(type) {
 		case *QueryGraph:
 			return optimizeQueryGraph(ctx, op)
 		case *Join:
 			return optimizeJoin(ctx, op)
 		case *Derived:
-			return optimizeDerived(ctx, op)
+			return pushDownDerived(ctx, op)
 		case *SubQuery:
 			return optimizeSubQuery(ctx, op, ts)
 		case *Filter:
-			return optimizeFilter(op)
+			return pushDownFilter(op)
 		default:
 			return operator, rewrite.SameTree, nil
 		}
@@ -73,18 +73,15 @@ func transformToPhysical(ctx *plancontext.PlanningContext, in ops.Operator) (ops
 	return compact(ctx, op)
 }
 
-func optimizeFilter(op *Filter) (ops.Operator, rewrite.ApplyResult, error) {
-	if route, ok := op.Source.(*Route); ok {
-		// let's push the filter into the route
-		op.Source = route.Source
-		route.Source = op
-		return route, rewrite.NewTree, nil
+func pushDownFilter(op *Filter) (ops.Operator, *rewrite.ApplyResult, error) {
+	if _, ok := op.Source.(*Route); ok {
+		return rewrite.Swap(op, op.Source, "push filter into Route")
 	}
 
 	return op, rewrite.SameTree, nil
 }
 
-func optimizeDerived(ctx *plancontext.PlanningContext, op *Derived) (ops.Operator, rewrite.ApplyResult, error) {
+func pushDownDerived(ctx *plancontext.PlanningContext, op *Derived) (ops.Operator, *rewrite.ApplyResult, error) {
 	innerRoute, ok := op.Source.(*Route)
 	if !ok {
 		return op, rewrite.SameTree, nil
@@ -95,22 +92,15 @@ func optimizeDerived(ctx *plancontext.PlanningContext, op *Derived) (ops.Operato
 		return op, rewrite.SameTree, nil
 	}
 
-	op.Source = innerRoute.Source
-	innerRoute.Source = op
-
-	return innerRoute, rewrite.NewTree, nil
+	return rewrite.Swap(op, op.Source, "push derived under route")
 }
 
-func optimizeJoin(ctx *plancontext.PlanningContext, op *Join) (ops.Operator, rewrite.ApplyResult, error) {
-	join, err := mergeOrJoin(ctx, op.LHS, op.RHS, sqlparser.SplitAndExpression(nil, op.Predicate), !op.LeftJoin)
-	if err != nil {
-		return nil, false, err
-	}
-	return join, rewrite.NewTree, nil
+func optimizeJoin(ctx *plancontext.PlanningContext, op *Join) (ops.Operator, *rewrite.ApplyResult, error) {
+	return mergeOrJoin(ctx, op.LHS, op.RHS, sqlparser.SplitAndExpression(nil, op.Predicate), !op.LeftJoin)
 }
 
-func optimizeQueryGraph(ctx *plancontext.PlanningContext, op *QueryGraph) (result ops.Operator, changed rewrite.ApplyResult, err error) {
-	changed = rewrite.NewTree
+func optimizeQueryGraph(ctx *plancontext.PlanningContext, op *QueryGraph) (result ops.Operator, changed *rewrite.ApplyResult, err error) {
+
 	switch {
 	case ctx.PlannerVersion == querypb.ExecuteOptions_Gen4Left2Right:
 		result, err = leftToRightSolve(ctx, op)
@@ -125,6 +115,7 @@ func optimizeQueryGraph(ctx *plancontext.PlanningContext, op *QueryGraph) (resul
 		result = newFilter(result, ctx.SemTable.AndExpressions(unresolved...))
 	}
 
+	changed = rewrite.NewTree("solved query graph", result)
 	return
 }
 
@@ -252,7 +243,7 @@ func leftToRightSolve(ctx *plancontext.PlanningContext, qg *QueryGraph) (ops.Ope
 			continue
 		}
 		joinPredicates := qg.GetPredicates(TableID(acc), TableID(plan))
-		acc, err = mergeOrJoin(ctx, acc, plan, joinPredicates, true)
+		acc, _, err = mergeOrJoin(ctx, acc, plan, joinPredicates, true)
 		if err != nil {
 			return nil, err
 		}
@@ -386,7 +377,7 @@ func getJoinFor(ctx *plancontext.PlanningContext, cm opCacheMap, lhs, rhs ops.Op
 		return cachedPlan, nil
 	}
 
-	join, err := mergeOrJoin(ctx, lhs, rhs, joinPredicates, true)
+	join, _, err := mergeOrJoin(ctx, lhs, rhs, joinPredicates, true)
 	if err != nil {
 		return nil, err
 	}
@@ -413,30 +404,38 @@ func requiresSwitchingSides(ctx *plancontext.PlanningContext, op ops.Operator) b
 	return required
 }
 
-func mergeOrJoin(ctx *plancontext.PlanningContext, lhs, rhs ops.Operator, joinPredicates []sqlparser.Expr, inner bool) (ops.Operator, error) {
+func mergeOrJoin(ctx *plancontext.PlanningContext, lhs, rhs ops.Operator, joinPredicates []sqlparser.Expr, inner bool) (ops.Operator, *rewrite.ApplyResult, error) {
 	newPlan, err := Merge(ctx, lhs, rhs, joinPredicates, newJoinMerge(ctx, joinPredicates, inner))
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if newPlan != nil {
-		return newPlan, nil
+		return newPlan, rewrite.NewTree("merge routes into single operator", newPlan), nil
 	}
 
 	if len(joinPredicates) > 0 && requiresSwitchingSides(ctx, rhs) {
 		if !inner {
-			return nil, vterrors.VT12001("LEFT JOIN with derived tables")
+			return nil, nil, vterrors.VT12001("LEFT JOIN with derived tables")
 		}
 
 		if requiresSwitchingSides(ctx, lhs) {
-			return nil, vterrors.VT12001("JOIN between derived tables")
+			return nil, nil, vterrors.VT12001("JOIN between derived tables")
 		}
 
 		join := NewApplyJoin(Clone(rhs), Clone(lhs), nil, !inner)
-		return pushJoinPredicates(ctx, joinPredicates, join)
+		newOp, err := pushJoinPredicates(ctx, joinPredicates, join)
+		if err != nil {
+			return nil, nil, err
+		}
+		return newOp, rewrite.NewTree("merge routes, but switch sides", newOp), nil
 	}
 
 	join := NewApplyJoin(Clone(lhs), Clone(rhs), nil, !inner)
-	return pushJoinPredicates(ctx, joinPredicates, join)
+	newOp, err := pushJoinPredicates(ctx, joinPredicates, join)
+	if err != nil {
+		return nil, nil, err
+	}
+	return newOp, rewrite.NewTree("logical join to applyJoin ", newOp), nil
 }
 
 func operatorsToRoutes(a, b ops.Operator) (*Route, *Route) {
