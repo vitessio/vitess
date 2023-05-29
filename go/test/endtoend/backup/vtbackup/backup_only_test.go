@@ -62,10 +62,8 @@ func TestTabletInitialBackup(t *testing.T) {
 
 	waitForReplicationToCatchup([]cluster.Vttablet{*replica1, *replica2})
 
-	vtBackup(t, true, false, false)
+	dataPointReader := vtBackup(t, true, false, false)
 	verifyBackupCount(t, shardKsName, 1)
-
-	dataPointReader := openTSDBDataPointReader(t)
 	verifyBackupStats(t, dataPointReader, true /* initialBackup */)
 
 	// Initialize the tablets
@@ -94,7 +92,7 @@ func TestTabletInitialBackup(t *testing.T) {
 	restore(t, replica1, "replica", "SERVING")
 
 	// Run the entire backup test
-	firstBackupTest(t, "replica", dataPointReader)
+	firstBackupTest(t, "replica")
 
 	tearDown(t, true)
 }
@@ -116,12 +114,12 @@ func TestTabletBackupOnly(t *testing.T) {
 	replica1.VttabletProcess.ServingStatus = "NOT_SERVING"
 
 	initTablets(t, true, true)
-	firstBackupTest(t, "replica", nil)
+	firstBackupTest(t, "replica")
 
 	tearDown(t, false)
 }
 
-func firstBackupTest(t *testing.T, tabletType string, dataPointReader *opentsdb.DataPointReader) {
+func firstBackupTest(t *testing.T, tabletType string) {
 	// Test First Backup flow.
 	//
 	//    firstBackupTest will:
@@ -150,16 +148,12 @@ func firstBackupTest(t *testing.T, tabletType string, dataPointReader *opentsdb.
 
 	// backup the replica
 	log.Infof("taking backup %s", time.Now())
-	vtBackup(t, false, true, true)
+	dataPointReader := vtBackup(t, false, true, true)
 	log.Infof("done taking backup %s", time.Now())
 
 	// check that the backup shows up in the listing
 	verifyBackupCount(t, shardKsName, len(backups)+1)
-
 	// check that backup stats are what we expect
-	if dataPointReader == nil {
-		dataPointReader = openTSDBDataPointReader(t)
-	}
 	verifyBackupStats(t, dataPointReader, false /* initialBackup */)
 
 	// insert more data on the primary
@@ -185,10 +179,13 @@ func firstBackupTest(t *testing.T, tabletType string, dataPointReader *opentsdb.
 	verifyBackupCount(t, shardKsName, 0)
 }
 
-func vtBackup(t *testing.T, initialBackup bool, restartBeforeBackup, disableRedoLog bool) {
+func vtBackup(t *testing.T, initialBackup bool, restartBeforeBackup, disableRedoLog bool) *opentsdb.DataPointReader {
 	mysqlSocket, err := os.CreateTemp("", "vtbackup_test_mysql.sock")
 	require.Nil(t, err)
 	defer os.Remove(mysqlSocket.Name())
+
+	// Prepare opentsdb stats file path.
+	statsPath := path.Join(t.TempDir(), fmt.Sprintf("opentsdb.%s.txt", t.Name()))
 
 	// Take the back using vtbackup executable
 	extraArgs := []string{
@@ -199,7 +196,7 @@ func vtBackup(t *testing.T, initialBackup bool, restartBeforeBackup, disableRedo
 		// Use opentsdb for stats.
 		"--stats_backend", "opentsdb",
 		// Write stats to file for reading afterwards.
-		"--opentsdb_uri", fmt.Sprintf("file://%s", openTSDBFilePath(t)),
+		"--opentsdb_uri", fmt.Sprintf("file://%s", statsPath),
 	}
 	if restartBeforeBackup {
 		extraArgs = append(extraArgs, "--restart_before_backup")
@@ -218,6 +215,10 @@ func vtBackup(t *testing.T, initialBackup bool, restartBeforeBackup, disableRedo
 	log.Infof("starting backup tablet %s", time.Now())
 	err = localCluster.StartVtbackup(newInitDBFile, initialBackup, keyspaceName, shardName, cell, extraArgs...)
 	require.Nil(t, err)
+
+	f, err := os.OpenFile(statsPath, os.O_RDONLY, 0)
+	require.NoError(t, err)
+	return opentsdb.NewDataPointReader(f)
 }
 
 func verifyBackupCount(t *testing.T, shardKsName string, expected int) []string {
@@ -429,16 +430,6 @@ func waitForReplicationToCatchup(tablets []cluster.Vttablet) bool {
 			time.Sleep(time.Second * 1)
 		}
 	}
-}
-
-func openTSDBDataPointReader(t *testing.T) *opentsdb.DataPointReader {
-	f, err := os.OpenFile(openTSDBFilePath(t), os.O_RDONLY, 0)
-	require.NoError(t, err)
-	return opentsdb.NewDataPointReader(f)
-}
-
-func openTSDBFilePath(t *testing.T) string {
-	return path.Join(localCluster.TmpDirectory, fmt.Sprintf("opentsdb.%s.txt", t.Name()))
 }
 
 func verifyBackupStats(t *testing.T, dataPointReader *opentsdb.DataPointReader, initialBackup bool) {
