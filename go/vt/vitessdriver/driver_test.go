@@ -726,6 +726,7 @@ func TestSessionToken(t *testing.T) {
 	}
 }
 
+// TestStreamExec tests that different kinds of query present in `execMap` can run through streaming api
 func TestStreamExec(t *testing.T) {
 	db, err := OpenForStreaming(testAddress, "@rdonly")
 	require.NoError(t, err)
