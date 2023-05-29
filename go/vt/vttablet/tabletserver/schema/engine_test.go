@@ -1190,7 +1190,13 @@ func TestEngineReload(t *testing.T) {
 				sqltypes.MakeTestResult(sqltypes.MakeTestFields(" View | Create View | character_set_client | collation_connection", "varchar|varchar|varchar|varchar"),
 					fmt.Sprintf("%v|create_table_%v|utf8mb4|utf8mb4_0900_ai_ci", tableName, tableName)))
 		}
+		// We are adding both the variants of the select statements that we can see in the test, since the deleted views are initially stored as a map, the order is not defined.
 		db.AddQuery("select table_name, view_definition from information_schema.views where table_schema = database() and table_name in ('v4', 'v5', 'v3', 'v2')",
+			sqltypes.MakeTestResult(sqltypes.MakeTestFields("table_name|view_definition", "varchar|varchar"),
+				"v2|select_v2",
+				"v3|select_v3",
+			))
+		db.AddQuery("select table_name, view_definition from information_schema.views where table_schema = database() and table_name in ('v5', 'v4', 'v3', 'v2')",
 			sqltypes.MakeTestResult(sqltypes.MakeTestFields("table_name|view_definition", "varchar|varchar"),
 				"v2|select_v2",
 				"v3|select_v3",
