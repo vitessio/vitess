@@ -24,6 +24,7 @@ import (
 	"os/exec"
 	"path"
 	"strings"
+	"sync"
 	"syscall"
 	"testing"
 	"time"
@@ -31,6 +32,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
@@ -354,6 +356,10 @@ func TestBackup(t *testing.T, setupType int, streamMode string, stripes int, cDe
 			name:   "TestTerminatedRestore",
 			method: terminatedRestore,
 		}, //
+		{
+			name:   "DoNotDemoteNewlyPromotedPrimaryIfReparentingDuringBackup",
+			method: doNotDemoteNewlyPromotedPrimaryIfReparentingDuringBackup,
+		}, //
 	}
 
 	defer cluster.PanicHandler(t)
@@ -367,6 +373,10 @@ func TestBackup(t *testing.T, setupType int, streamMode string, stripes int, cDe
 	// Run all the backup tests
 	for _, test := range testMethods {
 		if len(runSpecific) > 0 && !isRegistered(test.name, runSpecific) {
+			continue
+		}
+		// don't run this one unless specified
+		if len(runSpecific) == 0 && test.name == "DoNotDemoteNewlyPromotedPrimaryIfReparentingDuringBackup" {
 			continue
 		}
 		if retVal := t.Run(test.name, test.method); !retVal {
@@ -802,17 +812,55 @@ func terminatedRestore(t *testing.T) {
 func checkTabletType(t *testing.T, alias string, tabletType topodata.TabletType) {
 	// for loop for 15 seconds to check if tablet type is correct
 	for i := 0; i < 15; i++ {
-		output, err := localCluster.VtctlclientProcess.ExecuteCommandWithOutput("GetTablet", alias)
+		output, err := localCluster.VtctldClientProcess.ExecuteCommandWithOutput("GetTablet", alias)
 		require.Nil(t, err)
 		var tabletPB topodata.Tablet
-		err = json.Unmarshal([]byte(output), &tabletPB)
-		require.Nil(t, err)
+		err = json2.Unmarshal([]byte(output), &tabletPB)
+		require.NoError(t, err)
 		if tabletType == tabletPB.Type {
 			return
 		}
 		time.Sleep(1 * time.Second)
 	}
 	require.Failf(t, "checkTabletType failed.", "Tablet type is not correct. Expected: %v", tabletType)
+}
+
+func doNotDemoteNewlyPromotedPrimaryIfReparentingDuringBackup(t *testing.T) {
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	// Start the backup on a replica
+	go func() {
+		defer wg.Done()
+		// ensure this is a primary first
+		checkTabletType(t, primary.Alias, topodata.TabletType_PRIMARY)
+
+		// now backup
+		err := localCluster.VtctlclientProcess.ExecuteCommand("Backup", replica1.Alias)
+		require.Nil(t, err)
+	}()
+
+	// Perform a graceful reparent operation
+	go func() {
+		defer wg.Done()
+		// ensure this is a primary first
+		checkTabletType(t, primary.Alias, topodata.TabletType_PRIMARY)
+
+		// now reparent
+		_, err := localCluster.VtctlclientProcess.ExecuteCommandWithOutput(
+			"PlannedReparentShard", "--",
+			"--keyspace_shard", fmt.Sprintf("%s/%s", keyspaceName, shardName),
+			"--new_primary", replica1.Alias)
+		require.Nil(t, err)
+
+		// check that we reparented
+		checkTabletType(t, replica1.Alias, topodata.TabletType_PRIMARY)
+	}()
+
+	wg.Wait()
+
+	// check that this is still a primary
+	checkTabletType(t, replica1.Alias, topodata.TabletType_PRIMARY)
 }
 
 // test_backup will:
