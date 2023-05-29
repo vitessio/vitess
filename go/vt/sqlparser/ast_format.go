@@ -1392,11 +1392,6 @@ func (node *IntroducerExpr) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node.
-func (node *IntervalExpr) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "interval %v %#s", node.Expr, node.Unit)
-}
-
-// Format formats the node.
 func (node *TimestampFuncExpr) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "%#s(%#s, %v, %v)", node.Name, node.Unit, node.Expr1, node.Expr2)
 }
@@ -1461,6 +1456,44 @@ func (node *RegexpSubstrExpr) Format(buf *TrackedBuffer) {
 		buf.astPrintf(node, ", %v", node.MatchType)
 	}
 	buf.WriteByte(')')
+}
+
+// Format formats the node
+func (node *DateAddExpr) Format(buf *TrackedBuffer) {
+	switch node.Type {
+	case AdddateType:
+		buf.astPrintf(node, "adddate(%v, ", node.Date)
+		if node.Unit == IntervalUnknown {
+			buf.astPrintf(node, "%v", node.Expr)
+		} else {
+			buf.astPrintf(node, "interval %v %#s", node.Expr, node.Unit.ToString())
+		}
+		buf.WriteByte(')')
+	case DateAddType:
+		buf.astPrintf(node, "date_add(%v, interval %v %#s)", node.Date, node.Expr, node.Unit.ToString())
+	case PlusIntervalLeftType:
+		buf.astPrintf(node, "interval %v %#s + %v", node.Expr, node.Unit.ToString(), node.Date)
+	case PlusIntervalRightType:
+		buf.astPrintf(node, "%v + interval %v %#s", node.Date, node.Expr, node.Unit.ToString())
+	}
+}
+
+// Format formats the node
+func (node *DateSubExpr) Format(buf *TrackedBuffer) {
+	switch node.Type {
+	case SubdateType:
+		buf.astPrintf(node, "subdate(%v, ", node.Date)
+		if node.Unit == IntervalUnknown {
+			buf.astPrintf(node, "%v", node.Expr)
+		} else {
+			buf.astPrintf(node, "interval %v %#s", node.Expr, node.Unit.ToString())
+		}
+		buf.WriteByte(')')
+	case DateSubType:
+		buf.astPrintf(node, "date_sub(%v, interval %v %#s)", node.Date, node.Expr, node.Unit.ToString())
+	case MinusIntervalRightType:
+		buf.astPrintf(node, "%v - interval %v %#s", node.Date, node.Expr, node.Unit.ToString())
+	}
 }
 
 // Format formats the node.
@@ -1611,7 +1644,11 @@ func (node *FromFirstLastClause) Format(buf *TrackedBuffer) {
 // Format formats the node
 func (node *FramePoint) Format(buf *TrackedBuffer) {
 	if node.Expr != nil {
-		buf.astPrintf(node, " %v", node.Expr)
+		if node.Unit != IntervalUnknown {
+			buf.astPrintf(node, " interval %v %#s", node.Expr, node.Unit.ToString())
+		} else {
+			buf.astPrintf(node, " %v", node.Expr)
+		}
 	}
 	buf.astPrintf(node, " %s", node.Type.ToString())
 }
