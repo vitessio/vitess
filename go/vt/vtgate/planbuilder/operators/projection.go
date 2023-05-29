@@ -258,23 +258,21 @@ func stopAtAggregations(node, _ sqlparser.SQLNode) bool {
 	return b
 }
 
-func (p *Projection) planOffsets(ctx *plancontext.PlanningContext) error {
-	var err error
-	offsetter := func(cursor *sqlparser.CopyOnWriteCursor) {
-		expr, ok := cursor.Node().(sqlparser.Expr)
-		if !ok || !fetchByOffset(expr) {
-			return
-		}
+func (p *Projection) needsEvaluation(ctx *plancontext.PlanningContext, e sqlparser.Expr) bool {
+	offset := slices.IndexFunc(p.Columns, func(expr *sqlparser.AliasedExpr) bool {
+		return ctx.SemTable.EqualsExprWithDeps(expr.Expr, e)
+	})
 
-		newSrc, offset, terr := p.Source.AddColumn(ctx, aeWrap(expr), true, false)
-		if terr != nil {
-			err = terr
-			return
-		}
-		p.Source = newSrc
-		cursor.Replace(sqlparser.NewOffset(offset, expr))
+	if offset < 0 {
+		return false
 	}
 
+	inside := p.Projections[offset].GetExpr()
+	outside := p.Columns[offset].Expr
+	return inside != outside
+}
+
+func (p *Projection) planOffsets(ctx *plancontext.PlanningContext) error {
 	for i, col := range p.Projections {
 		_, unexplored := col.(UnexploredExpression)
 		if !unexplored {
@@ -282,8 +280,12 @@ func (p *Projection) planOffsets(ctx *plancontext.PlanningContext) error {
 		}
 
 		// first step is to replace the expressions we expect to get from our input with the offsets for these
-		rewritten := sqlparser.CopyOnRewrite(col.GetExpr(), stopAtAggregations, offsetter, nil).(sqlparser.Expr)
-		if err != nil {
+		visitor, errCheck := offsetter(ctx,
+			func() ops.Operator { return p.Source },
+			func(o ops.Operator) { p.Source = o },
+		)
+		rewritten := sqlparser.CopyOnRewrite(col.GetExpr(), stopAtAggregations, visitor, nil).(sqlparser.Expr)
+		if err := errCheck(); err != nil {
 			return err
 		}
 
@@ -310,4 +312,25 @@ func (p *Projection) planOffsets(ctx *plancontext.PlanningContext) error {
 	}
 
 	return nil
+}
+
+func offsetter(ctx *plancontext.PlanningContext, src func() ops.Operator, setSource func(ops.Operator)) (func(cursor *sqlparser.CopyOnWriteCursor), func() error) {
+	var err error
+	return func(cursor *sqlparser.CopyOnWriteCursor) {
+			expr, ok := cursor.Node().(sqlparser.Expr)
+			if !ok || !fetchByOffset(expr) {
+				return
+			}
+
+			newSrc, offset, terr := src().AddColumn(ctx, aeWrap(expr), true, false)
+			if terr != nil {
+				err = terr
+				return
+			}
+			setSource(newSrc)
+			cursor.Replace(sqlparser.NewOffset(offset, expr))
+
+		}, func() error {
+			return err
+		}
 }
