@@ -75,13 +75,13 @@ func TestNotServingPrimaryNoWrite(t *testing.T) {
 	}
 	// Create a new health streamer and set it to a serving primary state
 	hs := newHealthStreamer(env, alias)
-	//hs.isServingPrimary = true
+	hs.isServingPrimary = true
 	hs.InitDBConfig(&querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}, config.DB.DbaWithDB())
 	hs.Open()
 	defer hs.Close()
 
 	// Let's say the tablet goes to a non-serving primary state.
-	//hs.MakePrimary(false)
+	hs.MakePrimary(false)
 
 	// A reload now should not write anything to the database. If any write happens it will error out since we have not
 	// added any query to the database to expect.
