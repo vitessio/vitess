@@ -566,6 +566,7 @@ func TestSmallerTimeout(t *testing.T) {
 
 func TestTabletServerReserveConnection(t *testing.T) {
 	db, tsv := setupTabletServerTest(t, "")
+	tsv.config.EnableSettingsPool = false
 	defer tsv.StopService()
 	defer db.Close()
 
@@ -629,6 +630,7 @@ func TestMakeSureToCloseDbConnWhenBeginQueryFails(t *testing.T) {
 
 func TestTabletServerReserveAndBeginCommit(t *testing.T) {
 	db, tsv := setupTabletServerTest(t, "")
+	tsv.config.EnableSettingsPool = false
 	defer tsv.StopService()
 	defer db.Close()
 
@@ -1979,6 +1981,7 @@ func TestConfigChanges(t *testing.T) {
 
 func TestReserveBeginExecute(t *testing.T) {
 	db, tsv := setupTabletServerTest(t, "")
+	tsv.config.EnableSettingsPool = false
 	defer tsv.StopService()
 	defer db.Close()
 	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
@@ -2003,6 +2006,7 @@ func TestReserveBeginExecute(t *testing.T) {
 
 func TestReserveExecute_WithoutTx(t *testing.T) {
 	db, tsv := setupTabletServerTest(t, "")
+	tsv.config.EnableSettingsPool = false
 	defer tsv.StopService()
 	defer db.Close()
 
@@ -2025,6 +2029,7 @@ func TestReserveExecute_WithoutTx(t *testing.T) {
 
 func TestReserveExecute_WithTx(t *testing.T) {
 	db, tsv := setupTabletServerTest(t, "")
+	tsv.config.EnableSettingsPool = false
 	defer tsv.StopService()
 	defer db.Close()
 	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
@@ -2084,6 +2089,7 @@ func TestRelease(t *testing.T) {
 		}
 		t.Run(name, func(t *testing.T) {
 			db, tsv := setupTabletServerTest(t, "")
+			tsv.config.EnableSettingsPool = false
 			defer tsv.StopService()
 			defer db.Close()
 			db.AddQueryPattern(".*", &sqltypes.Result{})
@@ -2126,6 +2132,7 @@ func TestRelease(t *testing.T) {
 
 func TestReserveStats(t *testing.T) {
 	db, tsv := setupTabletServerTest(t, "")
+	tsv.config.EnableSettingsPool = false
 	defer tsv.StopService()
 	defer db.Close()
 
@@ -2292,6 +2299,7 @@ func setDBName(db *fakesqldb.DB, tsv *TabletServer, s string) {
 
 func TestDatabaseNameReplaceByKeyspaceNameReserveExecuteMethod(t *testing.T) {
 	db, tsv := setupTabletServerTest(t, "keyspaceName")
+	tsv.config.EnableSettingsPool = false
 	setDBName(db, tsv, "databaseInMysql")
 	defer tsv.StopService()
 	defer db.Close()
