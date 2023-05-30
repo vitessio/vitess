@@ -16,9 +16,9 @@ limitations under the License.
 
 CREATE TABLE IF NOT EXISTS schema_engine_views
 (
-    VIEW_SCHEMA varchar(64) NOT NULL,
-    VIEW_NAME varchar(64) NOT NULL,
+    TABLE_SCHEMA varchar(64) NOT NULL,
+    TABLE_NAME varchar(64) NOT NULL,
     CREATE_STATEMENT longtext,
     VIEW_DEFINITION longtext NOT NULL,
-    PRIMARY KEY (VIEW_SCHEMA, VIEW_NAME)
+    PRIMARY KEY (TABLE_SCHEMA, TABLE_NAME)
 ) engine = InnoDB

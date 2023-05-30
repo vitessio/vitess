@@ -427,11 +427,11 @@ func TestReloadView(t *testing.T) {
 			expViewsChanged:            []string{"view_a", "view_b"},
 			expGetViewDefinitionsQuery: "select table_name, view_definition from information_schema.views where table_schema = database() and table_name in ('view_a', 'view_b')",
 			expCreateStmtQuery:         []string{"show create table view_a", "show create table view_b"},
-			expClearQuery:              "delete from _vt.schema_engine_views where VIEW_SCHEMA = database() and VIEW_NAME in ('view_a', 'view_b')",
+			expClearQuery:              "delete from _vt.schema_engine_views where TABLE_SCHEMA = database() and TABLE_NAME in ('view_a', 'view_b')",
 			expHsClearQuery:            "delete from _vt.views where table_schema = database() and table_name in ('view_a', 'view_b')",
 			expInsertQuery: []string{
-				"insert into _vt.schema_engine_views(VIEW_SCHEMA, VIEW_NAME, CREATE_STATEMENT, VIEW_DEFINITION) values (database(), 'view_a', 'create_view_a', 'def_a')",
-				"insert into _vt.schema_engine_views(VIEW_SCHEMA, VIEW_NAME, CREATE_STATEMENT, VIEW_DEFINITION) values (database(), 'view_b', 'create_view_b', 'def_b')",
+				"insert into _vt.schema_engine_views(TABLE_SCHEMA, TABLE_NAME, CREATE_STATEMENT, VIEW_DEFINITION) values (database(), 'view_a', 'create_view_a', 'def_a')",
+				"insert into _vt.schema_engine_views(TABLE_SCHEMA, TABLE_NAME, CREATE_STATEMENT, VIEW_DEFINITION) values (database(), 'view_b', 'create_view_b', 'def_b')",
 				"insert into _vt.views(table_schema, table_name, create_statement, view_definition) values (database(), 'view_a', 'create_view_a', 'def_a')",
 				"insert into _vt.views(table_schema, table_name, create_statement, view_definition) values (database(), 'view_b', 'create_view_b', 'def_b')",
 			},
@@ -448,10 +448,10 @@ func TestReloadView(t *testing.T) {
 			expGetViewDefinitionsQuery: "select table_name, view_definition from information_schema.views where table_schema = database() and table_name in ('view_b')",
 			expCreateStmtQuery:         []string{"show create table view_b"},
 			expHsClearQuery:            "delete from _vt.views where table_schema = database() and table_name in ('view_b')",
-			expClearQuery:              "delete from _vt.schema_engine_views where VIEW_SCHEMA = database() and VIEW_NAME in ('view_b')",
+			expClearQuery:              "delete from _vt.schema_engine_views where TABLE_SCHEMA = database() and TABLE_NAME in ('view_b')",
 			expInsertQuery: []string{
 				"insert into _vt.views(table_schema, table_name, create_statement, view_definition) values (database(), 'view_b', 'create_view_mod_b', 'def_mod_b')",
-				"insert into _vt.schema_engine_views(VIEW_SCHEMA, VIEW_NAME, CREATE_STATEMENT, VIEW_DEFINITION) values (database(), 'view_b', 'create_view_mod_b', 'def_mod_b')",
+				"insert into _vt.schema_engine_views(TABLE_SCHEMA, TABLE_NAME, CREATE_STATEMENT, VIEW_DEFINITION) values (database(), 'view_b', 'create_view_mod_b', 'def_mod_b')",
 			},
 		},
 		{
@@ -467,12 +467,12 @@ func TestReloadView(t *testing.T) {
 			expGetViewDefinitionsQuery: "select table_name, view_definition from information_schema.views where table_schema = database() and table_name in ('view_b', 'view_c', 'view_a')",
 			expCreateStmtQuery:         []string{"show create table view_a", "show create table view_c"},
 			expClearQuery:              "delete from _vt.views where table_schema = database() and table_name in ('view_b', 'view_c', 'view_a')",
-			expHsClearQuery:            "delete from _vt.schema_engine_views where VIEW_SCHEMA = database() and VIEW_NAME in ('view_b', 'view_c', 'view_a')",
+			expHsClearQuery:            "delete from _vt.schema_engine_views where TABLE_SCHEMA = database() and TABLE_NAME in ('view_b', 'view_c', 'view_a')",
 			expInsertQuery: []string{
 				"insert into _vt.views(table_schema, table_name, create_statement, view_definition) values (database(), 'view_a', 'create_view_mod_a', 'def_mod_a')",
 				"insert into _vt.views(table_schema, table_name, create_statement, view_definition) values (database(), 'view_c', 'create_view_c', 'def_c')",
-				"insert into _vt.schema_engine_views(VIEW_SCHEMA, VIEW_NAME, CREATE_STATEMENT, VIEW_DEFINITION) values (database(), 'view_a', 'create_view_mod_a', 'def_mod_a')",
-				"insert into _vt.schema_engine_views(VIEW_SCHEMA, VIEW_NAME, CREATE_STATEMENT, VIEW_DEFINITION) values (database(), 'view_c', 'create_view_c', 'def_c')",
+				"insert into _vt.schema_engine_views(TABLE_SCHEMA, TABLE_NAME, CREATE_STATEMENT, VIEW_DEFINITION) values (database(), 'view_a', 'create_view_mod_a', 'def_mod_a')",
+				"insert into _vt.schema_engine_views(TABLE_SCHEMA, TABLE_NAME, CREATE_STATEMENT, VIEW_DEFINITION) values (database(), 'view_c', 'create_view_c', 'def_c')",
 			},
 		},
 	}

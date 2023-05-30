@@ -56,11 +56,11 @@ HAVING COUNT(*) = 1
 `
 
 	// insertViewIntoSchemaEngineViews using information_schema.views.
-	insertViewIntoSchemaEngineViews = `INSERT INTO %s.schema_engine_views(VIEW_SCHEMA, VIEW_NAME, CREATE_STATEMENT, VIEW_DEFINITION)
+	insertViewIntoSchemaEngineViews = `INSERT INTO %s.schema_engine_views(TABLE_SCHEMA, TABLE_NAME, CREATE_STATEMENT, VIEW_DEFINITION)
 values (database(), :view_name, :create_statement, :view_definition)`
 
 	// deleteFromSchemaEngineViewsTable removes the views from the table that have been modified.
-	deleteFromSchemaEngineViewsTable = `DELETE FROM %s.schema_engine_views WHERE VIEW_SCHEMA = database() AND VIEW_NAME IN ::viewNames`
+	deleteFromSchemaEngineViewsTable = `DELETE FROM %s.schema_engine_views WHERE TABLE_SCHEMA = database() AND TABLE_NAME IN ::viewNames`
 
 	// fetchViewDefinitions retrieves view definition from information_schema.views table.
 	fetchViewDefinitions = `select table_name, view_definition from information_schema.views

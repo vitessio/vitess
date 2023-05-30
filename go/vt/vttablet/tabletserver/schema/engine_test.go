@@ -1208,10 +1208,10 @@ func TestEngineReload(t *testing.T) {
 			))
 
 		// We are adding both the variants of the delete statements that we can see in the test, since the deleted views are initially stored as a map, the order is not defined.
-		db.AddQuery("delete from _vt.schema_engine_views where VIEW_SCHEMA = database() and VIEW_NAME in ('v4', 'v5', 'v3', 'v2')", &sqltypes.Result{})
-		db.AddQuery("delete from _vt.schema_engine_views where VIEW_SCHEMA = database() and VIEW_NAME in ('v5', 'v4', 'v3', 'v2')", &sqltypes.Result{})
-		db.AddQuery("insert into _vt.schema_engine_views(VIEW_SCHEMA, VIEW_NAME, CREATE_STATEMENT, VIEW_DEFINITION) values (database(), 'v2', 'create_table_v2', 'select_v2')", &sqltypes.Result{})
-		db.AddQuery("insert into _vt.schema_engine_views(VIEW_SCHEMA, VIEW_NAME, CREATE_STATEMENT, VIEW_DEFINITION) values (database(), 'v3', 'create_table_v3', 'select_v3')", &sqltypes.Result{})
+		db.AddQuery("delete from _vt.schema_engine_views where TABLE_SCHEMA = database() and TABLE_NAME in ('v4', 'v5', 'v3', 'v2')", &sqltypes.Result{})
+		db.AddQuery("delete from _vt.schema_engine_views where TABLE_SCHEMA = database() and TABLE_NAME in ('v5', 'v4', 'v3', 'v2')", &sqltypes.Result{})
+		db.AddQuery("insert into _vt.schema_engine_views(TABLE_SCHEMA, TABLE_NAME, CREATE_STATEMENT, VIEW_DEFINITION) values (database(), 'v2', 'create_table_v2', 'select_v2')", &sqltypes.Result{})
+		db.AddQuery("insert into _vt.schema_engine_views(TABLE_SCHEMA, TABLE_NAME, CREATE_STATEMENT, VIEW_DEFINITION) values (database(), 'v3', 'create_table_v3', 'select_v3')", &sqltypes.Result{})
 	}
 
 	// Verify the list of created, altered and dropped tables seen.
