@@ -378,7 +378,7 @@ func TestReloadView(t *testing.T) {
 	db.AddQuery(mysql.BaseShowPrimary, sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields("table_name | column_name", "varchar|varchar"),
 	))
-	db.AddQueryPattern(".*SELECT view_name as table_name, view_definition.*schema_engine_views.*", &sqltypes.Result{})
+	db.AddQueryPattern(".*SELECT table_name, view_definition.*schema_engine_views.*", &sqltypes.Result{})
 	db.AddQuery("SELECT TABLE_NAME, CREATE_TIME FROM _vt.schema_engine_tables", &sqltypes.Result{})
 
 	hs.InitDBConfig(target, configs.DbaWithDB())
@@ -479,7 +479,7 @@ func TestReloadView(t *testing.T) {
 
 	// setting first test case result.
 	db.AddQueryPattern("SELECT .* information_schema.innodb_tablespaces .*", tcases[0].showTablesWithSizesOutput)
-	db.AddQueryPattern(".*SELECT view_name as table_name, view_definition.*schema_engine_views.*", tcases[0].detectViewChangeOutput)
+	db.AddQueryPattern(".*SELECT table_name, view_definition.*schema_engine_views.*", tcases[0].detectViewChangeOutput)
 
 	db.AddQuery(tcases[0].expGetViewDefinitionsQuery, tcases[0].viewDefinitionsOutput)
 	for idx := range tcases[0].expCreateStmtQuery {
@@ -500,7 +500,7 @@ func TestReloadView(t *testing.T) {
 				sort.Strings(response.RealtimeStats.ViewSchemaChanged)
 				assert.Equal(t, tcases[tcCount.Load()].expViewsChanged, response.RealtimeStats.ViewSchemaChanged)
 				tcCount.Add(1)
-				db.AddQueryPattern(".*SELECT view_name as table_name, view_definition.*schema_engine_views.*", &sqltypes.Result{})
+				db.AddQueryPattern(".*SELECT table_name, view_definition.*schema_engine_views.*", &sqltypes.Result{})
 				ch <- struct{}{}
 				require.NoError(t, db.LastError())
 			}
@@ -525,7 +525,7 @@ func TestReloadView(t *testing.T) {
 			db.AddQuery(tcases[idx].expClearQuery, &sqltypes.Result{})
 			db.AddQuery(tcases[idx].expHsClearQuery, &sqltypes.Result{})
 			db.AddQueryPattern("SELECT .* information_schema.innodb_tablespaces .*", tcases[idx].showTablesWithSizesOutput)
-			db.AddQueryPattern(".*SELECT view_name as table_name, view_definition.*schema_engine_views.*", tcases[idx].detectViewChangeOutput)
+			db.AddQueryPattern(".*SELECT table_name, view_definition.*schema_engine_views.*", tcases[idx].detectViewChangeOutput)
 		case <-time.After(10 * time.Second):
 			t.Fatalf("timed out")
 		}

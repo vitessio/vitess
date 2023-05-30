@@ -47,9 +47,9 @@ FROM (
 
 	UNION ALL
 
-	SELECT view_name as table_name, view_definition
+	SELECT table_name, view_definition
 	FROM %s.schema_engine_views
-	WHERE view_schema = database()
+	WHERE table_schema = database()
 ) _inner
 GROUP BY table_name, view_definition
 HAVING COUNT(*) = 1
