@@ -195,7 +195,8 @@
   {
     "comment": "unsharded insert, col list does not match values",
     "query": "insert into unsharded_auto(id, val) values(1)",
-    "plan": "VT13001: [BUG] column list does not match values"
+    "v3-plan": "VT13001: [BUG] column list does not match values",
+    "gen4-plan": "VT03006: column count does not match value count at row 1"
   },
   {
     "comment": "sharded upsert can't change vindex",

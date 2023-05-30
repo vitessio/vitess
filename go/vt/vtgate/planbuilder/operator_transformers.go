@@ -422,11 +422,11 @@ func transformInsertPlan(ctx *plancontext.PlanningContext, op *operators.Route, 
 }
 
 func mapToInsertOpCode(code engine.Opcode, insertSelect bool) engine.InsertOpcode {
-	if insertSelect {
-		return engine.InsertSelect
-	}
 	if code == engine.Unsharded {
 		return engine.InsertUnsharded
+	}
+	if insertSelect {
+		return engine.InsertSelect
 	}
 	return engine.InsertSharded
 }
