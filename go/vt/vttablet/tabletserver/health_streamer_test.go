@@ -201,6 +201,7 @@ func TestReloadSchema(t *testing.T) {
 	}
 	blpFunc = testBlpFunc
 	hs := newHealthStreamer(env, alias)
+	hs.MakePrimary(true)
 
 	target := &querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
 	configs := config.DB
@@ -261,6 +262,7 @@ func TestDoesNotReloadSchema(t *testing.T) {
 	}
 	blpFunc = testBlpFunc
 	hs := newHealthStreamer(env, alias)
+	hs.MakePrimary(true)
 
 	target := &querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
 	configs := config.DB
@@ -313,6 +315,7 @@ func TestInitialReloadSchema(t *testing.T) {
 	}
 	blpFunc = testBlpFunc
 	hs := newHealthStreamer(env, alias)
+	hs.MakePrimary(true)
 
 	target := &querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
 	configs := config.DB
@@ -371,6 +374,7 @@ func TestReloadView(t *testing.T) {
 	env := tabletenv.NewEnv(config, "TestReloadView")
 	alias := &topodatapb.TabletAlias{Cell: "cell", Uid: 1}
 	hs := newHealthStreamer(env, alias)
+	hs.MakePrimary(true)
 
 	target := &querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
 	configs := config.DB
