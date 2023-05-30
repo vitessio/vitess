@@ -662,6 +662,7 @@ func AddFakeInnoDBReadRowsResult(db *fakesqldb.DB, value int) *fakesqldb.Expecte
 	))
 }
 
+// TestEngineMysqlTime tests the functionality of Engine.mysqlTime function
 func TestEngineMysqlTime(t *testing.T) {
 	tests := []struct {
 		name            string
@@ -718,6 +719,7 @@ func TestEngineMysqlTime(t *testing.T) {
 	}
 }
 
+// TestEnginePopulatePrimaryKeys tests the functionality of Engine.populatePrimaryKeys function
 func TestEnginePopulatePrimaryKeys(t *testing.T) {
 	tests := []struct {
 		name            string
@@ -828,6 +830,7 @@ func TestEnginePopulatePrimaryKeys(t *testing.T) {
 	}
 }
 
+// TestEngineUpdateInnoDBRowsRead tests the functionality of Engine.updateInnoDBRowsRead function
 func TestEngineUpdateInnoDBRowsRead(t *testing.T) {
 	showRowsReadFields := sqltypes.MakeTestFields("Variable_name|Value", "varchar|int64")
 	tests := []struct {
@@ -887,6 +890,7 @@ func TestEngineUpdateInnoDBRowsRead(t *testing.T) {
 	}
 }
 
+// TestEngineGetTableData tests the functionality of getTableData function
 func TestEngineGetTableData(t *testing.T) {
 	db := fakesqldb.New(t)
 	conn, err := connpool.NewDBConnNoPool(context.Background(), db.ConnParams(), nil, nil)
@@ -943,6 +947,7 @@ func TestEngineGetTableData(t *testing.T) {
 	}
 }
 
+// TestEngineGetDroppedTables tests the functionality of Engine.getDroppedTables function
 func TestEngineGetDroppedTables(t *testing.T) {
 	tests := []struct {
 		name              string
