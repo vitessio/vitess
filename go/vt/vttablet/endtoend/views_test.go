@@ -294,6 +294,10 @@ func TestGetSchemaRPC(t *testing.T) {
 	viewSchemaDef, err = client.GetSchema(querypb.SchemaTableType_VIEWS)
 	require.NoError(t, err)
 	require.Equal(t, "CREATE ALGORITHM=UNDEFINED DEFINER=`vt_dba`@`localhost` SQL SECURITY DEFINER VIEW `vitess_view` AS select 1 AS `1` from `vitess_a`", viewSchemaDef["vitess_view"])
+
+	viewSchemaDef, err = client.GetSchema(querypb.SchemaTableType_VIEWS, "vitess_view")
+	require.NoError(t, err)
+	require.Equal(t, "CREATE ALGORITHM=UNDEFINED DEFINER=`vt_dba`@`localhost` SQL SECURITY DEFINER VIEW `vitess_view` AS select 1 AS `1` from `vitess_a`", viewSchemaDef["vitess_view"])
 }
 
 func waitForResult(t *testing.T, client *framework.QueryClient, rowCount int, timeout time.Duration) {

@@ -48,7 +48,7 @@ FROM (
 	UNION ALL
 
 	SELECT table_name, view_definition
-	FROM %s.schema_engine_views
+	FROM %s.views
 	WHERE table_schema = database()
 ) _inner
 GROUP BY table_name, view_definition
@@ -56,11 +56,11 @@ HAVING COUNT(*) = 1
 `
 
 	// insertViewIntoSchemaEngineViews using information_schema.views.
-	insertViewIntoSchemaEngineViews = `INSERT INTO %s.schema_engine_views(TABLE_SCHEMA, TABLE_NAME, CREATE_STATEMENT, VIEW_DEFINITION)
+	insertViewIntoSchemaEngineViews = `INSERT INTO %s.views(TABLE_SCHEMA, TABLE_NAME, CREATE_STATEMENT, VIEW_DEFINITION)
 values (database(), :view_name, :create_statement, :view_definition)`
 
 	// deleteFromSchemaEngineViewsTable removes the views from the table that have been modified.
-	deleteFromSchemaEngineViewsTable = `DELETE FROM %s.schema_engine_views WHERE TABLE_SCHEMA = database() AND TABLE_NAME IN ::viewNames`
+	deleteFromSchemaEngineViewsTable = `DELETE FROM %s.views WHERE TABLE_SCHEMA = database() AND TABLE_NAME IN ::viewNames`
 
 	// fetchViewDefinitions retrieves view definition from information_schema.views table.
 	fetchViewDefinitions = `select table_name, view_definition from information_schema.views
@@ -68,6 +68,12 @@ where table_schema = database() and table_name in ::viewNames`
 
 	// fetchCreateStatement retrieves create statement.
 	fetchCreateStatement = `show create table %s`
+
+	// fetchUpdatedViews queries fetches information about updated views
+	fetchUpdatedViews = `select table_name, create_statement from %s.views where table_schema = database() and table_name in ::viewNames`
+
+	// fetchViews queries fetches all views
+	fetchViews = `select table_name, create_statement from %s.views where table_schema = database()`
 )
 
 // reloadTablesDataInDB reloads teh tables information we have stored in our database we use for schema-tracking.
@@ -371,4 +377,27 @@ func reloadDataInDB(ctx context.Context, conn *connpool.DBConn, altered []*Table
 		return err
 	}
 	return nil
+}
+
+// GetFetchViewQuery gets the fetch query to run for getting the listed views. If no views are provided, then all the views are fetched.
+func GetFetchViewQuery(viewNames []string) (string, error) {
+	if len(viewNames) == 0 {
+		parsedQuery, err := generateFullQuery(fetchViews)
+		if err != nil {
+			return "", err
+		}
+		return parsedQuery.Query, nil
+	}
+
+	viewsBV, err := sqltypes.BuildBindVariable(viewNames)
+	if err != nil {
+		return "", err
+	}
+	bv := map[string]*querypb.BindVariable{"viewNames": viewsBV}
+
+	parsedQuery, err := generateFullQuery(fetchUpdatedViews)
+	if err != nil {
+		return "", err
+	}
+	return parsedQuery.GenerateQuery(bv, nil)
 }
