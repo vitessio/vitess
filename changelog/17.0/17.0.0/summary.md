@@ -319,7 +319,7 @@ The default file can be found in `./config/init_db.sql`.
 
 #### <a id="vttablet-schema-reload-timeout"/> Vttablet Schema Reload Timeout
 
-A new flag, `--schema-change-reload-timeout` has been added to timeout the reload of the schema that Vttablet does periodically. This is required because sometimes this operation can get stuck after MySQL restarts, etc.
+A new flag, `--schema-change-reload-timeout` has been added to timeout the reload of the schema that Vttablet does periodically. This is required because sometimes this operation can get stuck after MySQL restarts, etc. More details available in the issue https://github.com/vitessio/vitess/issues/13001.
 
 #### <a id="settings-pool"/> Settings Pool
 This was introduced in v15 and it enables pooling the connection with modified connection settings.
@@ -376,6 +376,8 @@ without any (known) limitations.
   `schema_change_check_interval` now **only** accepts Go duration values. This affects `vtctld`.
 * The flag `durability_policy` is no longer used by vtctld. Instead it reads the durability policies for all keyspaces from the topology server.
 * The flag `use_super_read_only` is deprecated and will be removed in a later release. This affects `vttablet`.
+* The flag `queryserver-config-schema-change-signal-interval` is deprecated and will be removed in a later release. This affects `vttablet`.
+  Schema-tracking has been refactored in this release to not use polling anymore, therefore the signal interval isn't required anymore.
 
 In `vttablet` various flags that took float values as seconds have updated to take the standard duration syntax as well.
 Float-style parsing is now deprecated and will be removed in a later release.
@@ -399,10 +401,6 @@ Affected flags and YAML config keys:
 - `queryserver-config-txpool-idle-timeout`
 - `shutdown_grace_period`
 - `unhealthy_threshold`
-
-The flag `queryserver-config-schema-change-signal-interval` is deprecated and will be removed in a later release.
-Schema-tracking has been refactored in this release to not use polling anymore, therefore the signal interval isn't required anymore.
-
 
 #### <a id="deprecated-stats"/>Deprecated Stats
 
