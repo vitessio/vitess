@@ -66,7 +66,7 @@ type vstreamer struct {
 	startPos     string
 	filter       *binlogdatapb.Filter
 	send         func([]*binlogdatapb.VEvent) error
-	useThrottler bool
+	throttlerApp string
 
 	vevents        chan *localVSchema
 	vschema        *localVSchema
@@ -113,7 +113,7 @@ type streamerPlan struct {
 //
 // vschema: the current vschema. This value can later be changed through the SetVSchema method.
 // send: callback function to send events.
-func newVStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine, startPos string, stopPos string, filter *binlogdatapb.Filter, vschema *localVSchema, useThrottler bool, send func([]*binlogdatapb.VEvent) error, phase string, vse *Engine) *vstreamer {
+func newVStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine, startPos string, stopPos string, filter *binlogdatapb.Filter, vschema *localVSchema, throttlerApp string, send func([]*binlogdatapb.VEvent) error, phase string, vse *Engine) *vstreamer {
 	ctx, cancel := context.WithCancel(ctx)
 	return &vstreamer{
 		ctx:          ctx,
@@ -122,7 +122,7 @@ func newVStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine
 		se:           se,
 		startPos:     startPos,
 		stopPos:      stopPos,
-		useThrottler: useThrottler,
+		throttlerApp: throttlerApp,
 		filter:       filter,
 		send:         send,
 		vevents:      make(chan *localVSchema, 1),
@@ -303,22 +303,20 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 		throttledHeartbeatsRateLimiter := timer.NewRateLimiter(HeartbeatTime)
 		defer throttledHeartbeatsRateLimiter.Stop()
 		for {
-			if vs.useThrottler {
-				// check throttler.
-				if !vs.vse.throttlerClient.ThrottleCheckOKOrWait(ctx) {
-					// make sure to leave if context is cancelled
-					select {
-					case <-ctx.Done():
-						return
-					default:
-						// do nothing special
-					}
-					throttledHeartbeatsRateLimiter.Do(func() error {
-						return injectHeartbeat(true)
-					})
-					// we won't process events, until we're no longer throttling
-					continue
+			// check throttler.
+			if !vs.vse.throttlerClient.ThrottleCheckOKOrWaitAppName(ctx, vs.throttlerApp) {
+				// make sure to leave if context is cancelled
+				select {
+				case <-ctx.Done():
+					return
+				default:
+					// do nothing special
 				}
+				throttledHeartbeatsRateLimiter.Do(func() error {
+					return injectHeartbeat(true)
+				})
+				// we won't process events, until we're no longer throttling
+				continue
 			}
 			select {
 			case ev, ok := <-events:

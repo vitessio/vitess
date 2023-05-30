@@ -39,6 +39,7 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 )
 
 type vcopier struct {
@@ -457,7 +458,7 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 			default:
 			}
 			if rows.Throttled {
-				_ = vc.vr.updateTimeThrottled(RowStreamerComponentName)
+				_ = vc.vr.updateTimeThrottled(throttlerapp.RowStreamerName)
 				return nil
 			}
 			if rows.Heartbeat {
@@ -468,7 +469,7 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 			if vc.vr.vre.throttlerClient.ThrottleCheckOKOrWaitAppName(ctx, vc.throttlerAppName) {
 				break // out of 'for' loop
 			} else { // we're throttled
-				_ = vc.vr.updateTimeThrottled(VCopierComponentName)
+				_ = vc.vr.updateTimeThrottled(throttlerapp.VCopierName)
 			}
 		}
 		if !copyWorkQueue.isOpen {

@@ -58,7 +58,7 @@ type uvstreamer struct {
 	startPos     string
 	filter       *binlogdatapb.Filter
 	inTablePKs   []*binlogdatapb.TableLastPK
-	useThrottler bool
+	throttlerApp string
 
 	vschema *localVSchema
 
@@ -91,7 +91,7 @@ type uvstreamerConfig struct {
 	CatchupRetryTime  time.Duration
 }
 
-func newUVStreamer(ctx context.Context, vse *Engine, cp dbconfigs.Connector, se *schema.Engine, startPos string, tablePKs []*binlogdatapb.TableLastPK, filter *binlogdatapb.Filter, vschema *localVSchema, useThrottler bool, send func([]*binlogdatapb.VEvent) error) *uvstreamer {
+func newUVStreamer(ctx context.Context, vse *Engine, cp dbconfigs.Connector, se *schema.Engine, startPos string, tablePKs []*binlogdatapb.TableLastPK, filter *binlogdatapb.Filter, vschema *localVSchema, throttlerApp string, send func([]*binlogdatapb.VEvent) error) *uvstreamer {
 	ctx, cancel := context.WithCancel(ctx)
 	config := &uvstreamerConfig{
 		MaxReplicationLag: 1 * time.Nanosecond,
@@ -117,7 +117,7 @@ func newUVStreamer(ctx context.Context, vse *Engine, cp dbconfigs.Connector, se 
 		vschema:      vschema,
 		config:       config,
 		inTablePKs:   tablePKs,
-		useThrottler: useThrottler,
+		throttlerApp: throttlerApp,
 	}
 
 	return uvs
@@ -420,7 +420,7 @@ func (uvs *uvstreamer) Stream() error {
 		}
 	}
 	vs := newVStreamer(uvs.ctx, uvs.cp, uvs.se, mysql.EncodePosition(uvs.pos), mysql.EncodePosition(uvs.stopPos),
-		uvs.filter, uvs.getVSchema(), uvs.useThrottler, uvs.send, "replicate", uvs.vse)
+		uvs.filter, uvs.getVSchema(), uvs.throttlerApp, uvs.send, "replicate", uvs.vse)
 
 	uvs.setVs(vs)
 	return vs.Stream()

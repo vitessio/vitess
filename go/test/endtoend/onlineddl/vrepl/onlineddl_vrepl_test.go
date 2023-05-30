@@ -33,20 +33,18 @@ import (
 	"vitess.io/vitess/go/test/endtoend/onlineddl"
 	"vitess.io/vitess/go/test/endtoend/throttler"
 	"vitess.io/vitess/go/vt/schema"
-	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 	throttlebase "vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 var (
-	clusterInstance           *cluster.LocalProcessCluster
-	shards                    []cluster.Shard
-	vtParams                  mysql.ConnParams
-	httpClient                = throttlebase.SetupHTTPClient(time.Second)
-	onlineDDLThrottlerAppName = "online-ddl"
-	vstreamerThrottlerAppName = "vstreamer"
+	clusterInstance *cluster.LocalProcessCluster
+	shards          []cluster.Shard
+	vtParams        mysql.ConnParams
+	httpClient      = throttlebase.SetupHTTPClient(time.Second)
 
 	normalMigrationWait   = 45 * time.Second
 	extendedMigrationWait = 60 * time.Second
@@ -385,7 +383,7 @@ func TestSchemaChange(t *testing.T) {
 		// begin throttling:
 		onlineddl.ThrottleAllMigrations(t, &vtParams)
 		defer onlineddl.UnthrottleAllMigrations(t, &vtParams)
-		onlineddl.CheckThrottledApps(t, &vtParams, onlineDDLThrottlerAppName, true)
+		onlineddl.CheckThrottledApps(t, &vtParams, throttlerapp.OnlineDDLName, true)
 
 		uuid := testOnlineDDLStatement(t, alterTableTrivialStatement, "vitess", providedUUID, providedMigrationContext, "vtgate", "test_val", "", true)
 		_ = onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, normalMigrationWait, schema.OnlineDDLStatusRunning)
@@ -400,11 +398,11 @@ func TestSchemaChange(t *testing.T) {
 		// to be strictly higher than started_timestamp
 		assert.GreaterOrEqual(t, lastThrottledTimestamp, startedTimestamp)
 		component := row.AsString("component_throttled", "")
-		assert.Contains(t, []string{string(vreplication.VCopierComponentName), string(vreplication.VPlayerComponentName)}, component)
+		assert.Contains(t, []string{throttlerapp.VCopierName, throttlerapp.VPlayerName}, component)
 
 		// unthrottle
 		onlineddl.UnthrottleAllMigrations(t, &vtParams)
-		onlineddl.CheckThrottledApps(t, &vtParams, onlineDDLThrottlerAppName, false)
+		onlineddl.CheckThrottledApps(t, &vtParams, throttlerapp.OnlineDDLName, false)
 
 		status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, normalMigrationWait, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
 		fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
@@ -421,11 +419,11 @@ func TestSchemaChange(t *testing.T) {
 				// vstreamer source; but it's OK to be on the safe side and throttle on all tablets. Doesn't
 				// change the essence of this test.
 				for _, tablet := range shard.Vttablets {
-					body, err := throttleApp(tablet, vstreamerThrottlerAppName)
-					defer unthrottleApp(tablet, vstreamerThrottlerAppName)
+					body, err := throttleApp(tablet, throttlerapp.VStreamerName)
+					defer unthrottleApp(tablet, throttlerapp.VStreamerName)
 
 					assert.NoError(t, err)
-					assert.Contains(t, body, vstreamerThrottlerAppName)
+					assert.Contains(t, body, throttlerapp.VStreamerName)
 				}
 			}
 
@@ -449,7 +447,7 @@ func TestSchemaChange(t *testing.T) {
 			// clock irregularities
 			assert.GreaterOrEqual(t, lastThrottledTime.Add(time.Second), startedTime)
 			component := row.AsString("component_throttled", "")
-			assert.Contains(t, []string{string(vreplication.VStreamerComponentName), string(vreplication.RowStreamerComponentName)}, component)
+			assert.Contains(t, []string{throttlerapp.VStreamerName, throttlerapp.RowStreamerName}, component)
 		}()
 		// now unthrottled
 		status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, normalMigrationWait, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
@@ -478,7 +476,7 @@ func TestSchemaChange(t *testing.T) {
 		// Use VTGate for throttling, issue a `ALTER VITESS_MIGRATION THROTTLE ALL ...`
 		onlineddl.ThrottleAllMigrations(t, &vtParams)
 		defer onlineddl.UnthrottleAllMigrations(t, &vtParams)
-		onlineddl.CheckThrottledApps(t, &vtParams, onlineDDLThrottlerAppName, true)
+		onlineddl.CheckThrottledApps(t, &vtParams, throttlerapp.OnlineDDLName, true)
 
 		// spawn n migrations; cancel them via cancel-all
 		var wg sync.WaitGroup
@@ -497,7 +495,7 @@ func TestSchemaChange(t *testing.T) {
 		// Use VTGate for throttling, issue a `ALTER VITESS_MIGRATION THROTTLE ALL ...`
 		onlineddl.ThrottleAllMigrations(t, &vtParams)
 		defer onlineddl.UnthrottleAllMigrations(t, &vtParams)
-		onlineddl.CheckThrottledApps(t, &vtParams, onlineDDLThrottlerAppName, true)
+		onlineddl.CheckThrottledApps(t, &vtParams, throttlerapp.OnlineDDLName, true)
 
 		// spawn n migrations; cancel them via cancel-all
 		var wg sync.WaitGroup
@@ -531,16 +529,16 @@ func TestSchemaChange(t *testing.T) {
 				case 0:
 					// this is the shard where we run PRS
 					// Use per-tablet throttling API
-					body, err = throttleApp(currentPrimaryTablet, onlineDDLThrottlerAppName)
-					defer unthrottleApp(currentPrimaryTablet, onlineDDLThrottlerAppName)
+					body, err = throttleApp(currentPrimaryTablet, throttlerapp.OnlineDDLName)
+					defer unthrottleApp(currentPrimaryTablet, throttlerapp.OnlineDDLName)
 				case 1:
 					// no PRS on this shard
 					// Use per-tablet throttling API
-					body, err = throttleApp(shards[i].Vttablets[0], onlineDDLThrottlerAppName)
-					defer unthrottleApp(shards[i].Vttablets[0], onlineDDLThrottlerAppName)
+					body, err = throttleApp(shards[i].Vttablets[0], throttlerapp.OnlineDDLName)
+					defer unthrottleApp(shards[i].Vttablets[0], throttlerapp.OnlineDDLName)
 				}
 				assert.NoError(t, err)
-				assert.Contains(t, body, onlineDDLThrottlerAppName)
+				assert.Contains(t, body, throttlerapp.OnlineDDLName)
 			}
 			uuid := testOnlineDDLStatement(t, alterTableTrivialStatement, "vitess", providedUUID, providedMigrationContext, "vtgate", "test_val", "", true)
 
@@ -596,14 +594,14 @@ func TestSchemaChange(t *testing.T) {
 					case 0:
 						// this is the shard where we run PRS
 						// Use per-tablet throttling API
-						body, err = unthrottleApp(currentPrimaryTablet, onlineDDLThrottlerAppName)
+						body, err = unthrottleApp(currentPrimaryTablet, throttlerapp.OnlineDDLName)
 					case 1:
 						// no PRS on this shard
 						// Use per-tablet throttling API
-						body, err = unthrottleApp(shards[i].Vttablets[0], onlineDDLThrottlerAppName)
+						body, err = unthrottleApp(shards[i].Vttablets[0], throttlerapp.OnlineDDLName)
 					}
 					assert.NoError(t, err)
-					assert.Contains(t, body, onlineDDLThrottlerAppName)
+					assert.Contains(t, body, throttlerapp.OnlineDDLName)
 				}
 			})
 			t.Run("expect completion", func(t *testing.T) {
@@ -823,11 +821,11 @@ func TestSchemaChange(t *testing.T) {
 	// - tablet throttling
 	t.Run("Revert a migration completed on one shard and cancelled on another", func(t *testing.T) {
 		// shard 0 will run normally, shard 1 will be throttled
-		defer unthrottleApp(shards[1].Vttablets[0], onlineDDLThrottlerAppName)
+		defer unthrottleApp(shards[1].Vttablets[0], throttlerapp.OnlineDDLName)
 		t.Run("throttle shard 1", func(t *testing.T) {
-			body, err := throttleApp(shards[1].Vttablets[0], onlineDDLThrottlerAppName)
+			body, err := throttleApp(shards[1].Vttablets[0], throttlerapp.OnlineDDLName)
 			assert.NoError(t, err)
-			assert.Contains(t, body, onlineDDLThrottlerAppName)
+			assert.Contains(t, body, throttlerapp.OnlineDDLName)
 		})
 
 		var uuid string
@@ -849,9 +847,9 @@ func TestSchemaChange(t *testing.T) {
 			onlineddl.CheckCancelAllMigrations(t, &vtParams, 1)
 		})
 		t.Run("unthrottle shard 1", func(t *testing.T) {
-			body, err := unthrottleApp(shards[1].Vttablets[0], onlineDDLThrottlerAppName)
+			body, err := unthrottleApp(shards[1].Vttablets[0], throttlerapp.OnlineDDLName)
 			assert.NoError(t, err)
-			assert.Contains(t, body, onlineDDLThrottlerAppName)
+			assert.Contains(t, body, throttlerapp.OnlineDDLName)
 		})
 		var revertUUID string
 		t.Run("issue revert migration", func(t *testing.T) {

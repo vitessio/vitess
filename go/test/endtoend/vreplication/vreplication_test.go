@@ -44,6 +44,7 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	throttlebase "vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer"
 )
 
@@ -58,8 +59,8 @@ var (
 	sourceKsOpts           = make(map[string]string)
 	targetKsOpts           = make(map[string]string)
 	httpClient             = throttlebase.SetupHTTPClient(time.Second)
-	sourceThrottlerAppName = "vstreamer"
-	targetThrottlerAppName = "vreplication"
+	sourceThrottlerAppName = throttlerapp.VStreamerName
+	targetThrottlerAppName = throttlerapp.VReplicationName
 )
 
 const (

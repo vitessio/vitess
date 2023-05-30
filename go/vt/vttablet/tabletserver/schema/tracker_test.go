@@ -137,7 +137,7 @@ type fakeVstreamer struct {
 	events [][]*binlogdatapb.VEvent
 }
 
-func (f *fakeVstreamer) Stream(ctx context.Context, startPos string, tablePKs []*binlogdatapb.TableLastPK, filter *binlogdatapb.Filter, useThrottler bool, send func([]*binlogdatapb.VEvent) error) error {
+func (f *fakeVstreamer) Stream(ctx context.Context, startPos string, tablePKs []*binlogdatapb.TableLastPK, filter *binlogdatapb.Filter, throttlerApp string, send func([]*binlogdatapb.VEvent) error) error {
 	for _, events := range f.events {
 		err := send(events)
 		if err != nil {
