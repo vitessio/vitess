@@ -23,6 +23,7 @@
   - **[VTTablet](#vttablet)**
     - [VTTablet: Initializing all replicas with super_read_only](#vttablet-initialization)
     - [Vttablet Schema Reload Timeout](#vttablet-schema-reload-timeout) 
+    - [Settings pool enabled](#settings-pool)
   - **[VReplication](#VReplication)**
     - [Support for the `noblob` binlog row image mode](#noblob)
   - **[Deprecations and Deletions](#deprecations-and-deletions)**
@@ -319,6 +320,10 @@ The default file can be found in `./config/init_db.sql`.
 #### <a id="vttablet-schema-reload-timeout"/> Vttablet Schema Reload Timeout
 
 A new flag, `--schema-change-reload-timeout` has been added to timeout the reload of the schema that Vttablet does periodically. This is required because sometimes this operation can get stuck after MySQL restarts, etc.
+
+#### <a id="settings-pool"/> Settings Pool
+This was introduced in v15 and it enables pooling the connection with modified connection settings.
+To know more what it does read the [v15 release notes](https://github.com/vitessio/vitess/releases/tag/v15.0.0) or the [blog](https://vitess.io/blog/2023-03-27-connection-pooling-in-vitess/) or [docs](https://vitess.io/docs/17.0/reference/query-serving/reserved-conn/)
 
 ### Online DDL
 
