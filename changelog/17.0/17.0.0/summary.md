@@ -25,9 +25,12 @@
     - [Settings pool enabled](#settings-pool)
   - **[VReplication](#VReplication)**
     - [Support for the `noblob` binlog row image mode](#noblob)
+  - **[VTGate](#vtgate)
+    - [StreamExecute GRPC API](#stream-execute)
   - **[Deprecations and Deletions](#deprecations-and-deletions)**
     - [Deprecated Flags](#deprecated-flags)
     - [Deprecated Stats](#deprecated-stats)
+
 
 ## <a id="major-changes"/> Major Changes
 
@@ -353,6 +356,17 @@ would not work. Given the criticality of VReplication workflows within Vitess, t
 
 We have addressed this issue in [PR #12950](https://github.com/vitessio/vitess/pull/12950) by adding support for processing the compressed transaction events in VReplication,
 without any (known) limitations.
+
+### <a id="vtgate"/> VTGate
+
+#### <a id="stream-execute"/> Modified StreamExecute GRPC API
+Earlier VTGate grpc api for `StreamExecute` did not return the session in the response.
+Even though the underlying implementation supported transactions and other features that requires session persistence.
+With [PR #13131](https://github.com/vitessio/vitess/pull/13131) VTGate will return the session to the client
+so that it can be persisted with the client and sent back to VTGate on the next api call.
+
+This does not impact anyone using the mysql client library to connect to VTGate.
+This could be a breaking change for grpc api users based on how they have implemented their grpc clients.
 
 ### <a id="deprecations-and-deletions"/> Deprecations and Deletions
 

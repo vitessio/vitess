@@ -48,7 +48,7 @@ func (c fallbackClient) ExecuteBatch(ctx context.Context, session *vtgatepb.Sess
 	return c.fallback.ExecuteBatch(ctx, session, sqlList, bindVariablesList)
 }
 
-func (c fallbackClient) StreamExecute(ctx context.Context, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable, callback func(*sqltypes.Result) error) error {
+func (c fallbackClient) StreamExecute(ctx context.Context, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable, callback func(*sqltypes.Result) error) (*vtgatepb.Session, error) {
 	return c.fallback.StreamExecute(ctx, session, sql, bindVariables, callback)
 }
 
