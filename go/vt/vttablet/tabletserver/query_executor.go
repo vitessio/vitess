@@ -34,7 +34,6 @@ import (
 	"vitess.io/vitess/go/vt/callinfo"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/schema"
-	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/tableacl"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -42,6 +41,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	p "vitess.io/vitess/go/vt/vttablet/tabletserver/planbuilder"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
+	eschema "vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -1129,41 +1129,21 @@ func (qre *QueryExecutor) GetSchemaDefinitions(tableType querypb.SchemaTableType
 }
 
 func (qre *QueryExecutor) getViewDefinitions(viewNames []string, callback func(schemaRes *querypb.GetSchemaResponse) error) error {
-	query := sqlparser.BuildParsedQuery(mysql.FetchViews, sidecardb.GetIdentifier()).Query
-	var bindVars map[string]*querypb.BindVariable
-	if len(viewNames) > 0 {
-		query = sqlparser.BuildParsedQuery(mysql.FetchUpdatedViews, sidecardb.GetIdentifier()).Query
-		bindVars = map[string]*querypb.BindVariable{
-			"viewnames": sqltypes.StringBindVariable(strings.Join(viewNames, ",")),
-		}
+	query, err := eschema.GetFetchViewQuery(viewNames)
+	if err != nil {
+		return err
 	}
-	return qre.generateFinalQueryAndStreamExecute(query, bindVars, func(result *sqltypes.Result) error {
-		schemaDef := make(map[string]string)
-		for _, row := range result.Rows {
-			schemaDef[row[0].ToString()] = row[1].ToString()
-		}
-		return callback(&querypb.GetSchemaResponse{TableDefinition: schemaDef})
-	})
-}
-
-func (qre *QueryExecutor) generateFinalQueryAndStreamExecute(query string, bindVars map[string]*querypb.BindVariable, callback func(result *sqltypes.Result) error) error {
-	sql := query
-	if len(bindVars) > 0 {
-		stmt, err := sqlparser.Parse(query)
-		if err != nil {
-			return err
-		}
-		sql, _, err = qre.generateFinalSQL(sqlparser.NewParsedQuery(stmt), bindVars)
-		if err != nil {
-			return err
-		}
-	}
-
 	conn, err := qre.getStreamConn()
 	if err != nil {
 		return err
 	}
 	defer conn.Recycle()
 
-	return qre.execStreamSQL(conn, false /* isTransaction */, sql, callback)
+	return qre.execStreamSQL(conn, false /* isTransaction */, query, func(result *sqltypes.Result) error {
+		schemaDef := make(map[string]string)
+		for _, row := range result.Rows {
+			schemaDef[row[0].ToString()] = row[1].ToString()
+		}
+		return callback(&querypb.GetSchemaResponse{TableDefinition: schemaDef})
+	})
 }
