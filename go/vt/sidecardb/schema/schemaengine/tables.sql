@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-CREATE TABLE IF NOT EXISTS schema_engine_tables
+CREATE TABLE IF NOT EXISTS tables
 (
     TABLE_SCHEMA varchar(64) NOT NULL,
     TABLE_NAME varchar(64) NOT NULL,
