@@ -1276,7 +1276,10 @@ func (mysqld *Mysqld) ApplyBinlogFile(ctx context.Context, binlogFile string, re
 // remote through mysqlctl.
 func noSocketFile() {
 	if socketFile != "" {
-		panic("Running remotely through mysqlctl, socketFile must not be set")
+		// We log an error for now until we fix the issue with ApplySchema,
+		// see https://github.com/vitessio/vitess/pull/13178
+		//panic("Running remotely through mysqlctl, socketFile must not be set")
+		log.Error("Running remotely through mysqlctl, socketFile must not be set")
 	}
 }
 
