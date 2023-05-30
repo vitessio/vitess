@@ -921,3 +921,30 @@ func TestGetFetchViewQuery(t *testing.T) {
 		})
 	}
 }
+
+// TestGetFetchTableQuery tests the functionality for getting the fetch query to retrieve tables.
+func TestGetFetchTableQuery(t *testing.T) {
+	testcases := []struct {
+		name          string
+		tableNames    []string
+		expectedQuery string
+	}{
+		{
+			name:          "No tables provided",
+			tableNames:    []string{},
+			expectedQuery: "select table_name, create_statement from _vt.`tables` where table_schema = database()",
+		}, {
+			name:          "Few tables provided",
+			tableNames:    []string{"v1", "v2", "lead"},
+			expectedQuery: "select table_name, create_statement from _vt.`tables` where table_schema = database() and table_name in ('v1', 'v2', 'lead')",
+		},
+	}
+
+	for _, testcase := range testcases {
+		t.Run(testcase.name, func(t *testing.T) {
+			query, err := GetFetchTableQuery(testcase.tableNames)
+			require.NoError(t, err)
+			require.Equal(t, testcase.expectedQuery, query)
+		})
+	}
+}
