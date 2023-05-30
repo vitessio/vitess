@@ -183,12 +183,14 @@
   {
     "comment": "unsharded insert, unqualified names and auto-inc combined",
     "query": "insert into unsharded_auto select col from unsharded",
-    "plan": "VT12001: unsupported: auto-increment and SELECT in INSERT"
+    "v3-plan": "VT12001: unsupported: auto-increment and SELECT in INSERT",
+    "gen4-plan": "VT09004: INSERT should contain column list or the table should have authoritative columns in vschema"
   },
   {
     "comment": "unsharded insert, no col list with auto-inc",
     "query": "insert into unsharded_auto values(1,1)",
-    "plan": "VT13001: [BUG] column list required for tables with auto-inc columns"
+    "v3-plan": "VT13001: [BUG] column list required for tables with auto-inc columns",
+    "gen4-plan": "VT09004: INSERT should contain column list or the table should have authoritative columns in vschema"
   },
   {
     "comment": "unsharded insert, col list does not match values",
