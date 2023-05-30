@@ -37,6 +37,12 @@ values (database(), :table_name, :create_statement, :create_time)`
 	// readTableCreateTimes reads the tables create times
 	readTableCreateTimes = "SELECT TABLE_NAME, CREATE_TIME FROM %s.`tables`"
 
+	// fetchUpdatedTables queries fetches information about updated tables
+	fetchUpdatedTables = `select table_name, create_statement from %s.tables where table_schema = database() and table_name in ::tableNames`
+
+	// fetchTables queries fetches all information about tables
+	fetchTables = `select table_name, create_statement from %s.tables where table_schema = database()`
+
 	// detectViewChange query detects if there is any view change from previous copy.
 	detectViewChange = `
 SELECT distinct table_name
@@ -396,6 +402,29 @@ func GetFetchViewQuery(viewNames []string) (string, error) {
 	bv := map[string]*querypb.BindVariable{"viewNames": viewsBV}
 
 	parsedQuery, err := generateFullQuery(fetchUpdatedViews)
+	if err != nil {
+		return "", err
+	}
+	return parsedQuery.GenerateQuery(bv, nil)
+}
+
+// GetFetchTableQuery gets the fetch query to run for getting the listed tables. If no tables are provided, then all the tables are fetched.
+func GetFetchTableQuery(tableNames []string) (string, error) {
+	if len(tableNames) == 0 {
+		parsedQuery, err := generateFullQuery(fetchTables)
+		if err != nil {
+			return "", err
+		}
+		return parsedQuery.Query, nil
+	}
+
+	tablesBV, err := sqltypes.BuildBindVariable(tableNames)
+	if err != nil {
+		return "", err
+	}
+	bv := map[string]*querypb.BindVariable{"tableNames": tablesBV}
+
+	parsedQuery, err := generateFullQuery(fetchUpdatedTables)
 	if err != nil {
 		return "", err
 	}

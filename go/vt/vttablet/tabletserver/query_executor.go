@@ -1124,6 +1124,13 @@ func (qre *QueryExecutor) GetSchemaDefinitions(tableType querypb.SchemaTableType
 	switch tableType {
 	case querypb.SchemaTableType_VIEWS:
 		return qre.getViewDefinitions(tableNames, callback)
+	case querypb.SchemaTableType_TABLES:
+		return qre.getTableDefinitions(tableNames, callback)
+	case querypb.SchemaTableType_ALL:
+		if err := qre.getViewDefinitions(tableNames, callback); err != nil {
+			return err
+		}
+		return qre.getTableDefinitions(tableNames, callback)
 	}
 	return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid table type %v", tableType)
 }
@@ -1133,6 +1140,18 @@ func (qre *QueryExecutor) getViewDefinitions(viewNames []string, callback func(s
 	if err != nil {
 		return err
 	}
+	return qre.executeGetSchemaQuery(query, callback)
+}
+
+func (qre *QueryExecutor) getTableDefinitions(tableNames []string, callback func(schemaRes *querypb.GetSchemaResponse) error) error {
+	query, err := eschema.GetFetchTableQuery(tableNames)
+	if err != nil {
+		return err
+	}
+	return qre.executeGetSchemaQuery(query, callback)
+}
+
+func (qre *QueryExecutor) executeGetSchemaQuery(query string, callback func(schemaRes *querypb.GetSchemaResponse) error) error {
 	conn, err := qre.getStreamConn()
 	if err != nil {
 		return err
