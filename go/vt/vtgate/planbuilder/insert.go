@@ -22,13 +22,12 @@ import (
 	"strings"
 
 	"vitess.io/vitess/go/sqltypes"
-
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
-
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
+	"vitess.io/vitess/go/vt/vtgate/semantics"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
@@ -98,7 +97,7 @@ func buildInsertUnshardedPlan(ins *sqlparser.Insert, table *vindexes.Table, rese
 			eins.Query = generateQuery(ins)
 		} else {
 			eins.Input = plan.primitive
-			generateInsertSelectQuery(ins, eins)
+			eins.Prefix, _, eins.Suffix = generateInsertShardedQuery(ins)
 		}
 		return newPlanResult(eins, tc.getTables()...), nil
 	case sqlparser.Values:
@@ -244,7 +243,7 @@ func buildInsertSelectPlan(ins *sqlparser.Insert, table *vindexes.Table, reserve
 		return nil, err
 	}
 
-	generateInsertSelectQuery(ins, eins)
+	eins.Prefix, _, eins.Suffix = generateInsertShardedQuery(ins)
 	return newPlanResult(eins, tc.getTables()...), nil
 }
 
@@ -361,17 +360,6 @@ func populateInsertColumnlist(ins *sqlparser.Insert, table *vindexes.Table) {
 	ins.Columns = cols
 }
 
-func generateInsertSelectQuery(node *sqlparser.Insert, eins *engine.Insert) {
-	prefixBuf := sqlparser.NewTrackedBuffer(dmlFormatter)
-	suffixBuf := sqlparser.NewTrackedBuffer(dmlFormatter)
-	prefixBuf.Myprintf("insert %v%sinto %v%v ",
-		node.Comments, node.Ignore.ToString(),
-		node.Table, node.Columns)
-	eins.Prefix = prefixBuf.String()
-	suffixBuf.Myprintf("%v", node.OnDup)
-	eins.Suffix = suffixBuf.String()
-}
-
 // modifyForAutoinc modifies the AST and the plan to generate necessary autoinc values.
 // For row values cases, bind variable names are generated using baseName.
 func modifyForAutoinc(ins *sqlparser.Insert, eins *engine.Insert) error {
@@ -449,4 +437,47 @@ func isVindexChanging(setClauses sqlparser.UpdateExprs, colVindexes []*vindexes.
 		}
 	}
 	return false
+}
+
+type insert struct {
+	eInsert *engine.Insert
+	source  logicalPlan
+	gen4Plan
+}
+
+var _ logicalPlan = (*insert)(nil)
+
+func (i *insert) WireupGen4(ctx *plancontext.PlanningContext) error {
+	if i.source == nil {
+		return nil
+	}
+	return i.source.WireupGen4(ctx)
+}
+
+func (i *insert) Primitive() engine.Primitive {
+	if i.source != nil {
+		i.eInsert.Input = i.source.Primitive()
+	}
+	return i.eInsert
+}
+
+func (i *insert) Inputs() []logicalPlan {
+	if i.source == nil {
+		return nil
+	}
+	return []logicalPlan{i.source}
+}
+
+func (i *insert) Rewrite(inputs ...logicalPlan) error {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (i *insert) ContainsTables() semantics.TableSet {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (i *insert) OutputColumns() []sqlparser.SelectExpr {
+	return nil
 }

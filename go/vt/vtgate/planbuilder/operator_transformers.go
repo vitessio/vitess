@@ -22,27 +22,19 @@ import (
 	"strconv"
 	"strings"
 
-	"vitess.io/vitess/go/slices2"
-	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
-
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
-
-	"vitess.io/vitess/go/sqltypes"
-
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
-
 	"vitess.io/vitess/go/mysql/collations"
-
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
-
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators"
-
+	"vitess.io/vitess/go/slices2"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vtgate/engine"
-	"vitess.io/vitess/go/vt/vtgate/vindexes"
-
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/engine"
+	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
 func transformToLogicalPlan(ctx *plancontext.PlanningContext, op ops.Operator, isRoot bool) (logicalPlan, error) {
@@ -367,7 +359,7 @@ func newRoutingParams(ctx *plancontext.PlanningContext, opCode engine.Opcode) *e
 func transformRoutePlan(ctx *plancontext.PlanningContext, op *operators.Route) (logicalPlan, error) {
 	switch src := op.Source.(type) {
 	case *operators.Insert:
-		return transformInsertPlan(op, src)
+		return transformInsertPlan(ctx, op, src)
 	case *operators.Update:
 		return transformUpdatePlan(ctx, op, src)
 	case *operators.Delete:
@@ -401,34 +393,46 @@ func transformRoutePlan(ctx *plancontext.PlanningContext, op *operators.Route) (
 
 }
 
-func transformInsertPlan(op *operators.Route, ins *operators.Insert) (logicalPlan, error) {
+func transformInsertPlan(ctx *plancontext.PlanningContext, op *operators.Route, ins *operators.Insert) (i *insert, err error) {
 	eins := &engine.Insert{
-		Opcode:       mapToInsertOpCode(op.Routing.OpCode()),
-		Keyspace:     op.Routing.Keyspace(),
-		Query:        generateQuery(ins.AST),
-		Table:        ins.VTable,
-		VindexValues: ins.VindexValues,
-		ColVindexes:  ins.ColVindexes,
-		Generate:     autoIncGenerate(ins.AutoIncrement),
-		Ignore:       ins.Ignore,
+		Opcode:            mapToInsertOpCode(op.Routing.OpCode(), ins.Input != nil),
+		Keyspace:          op.Routing.Keyspace(),
+		Table:             ins.VTable,
+		ColVindexes:       ins.ColVindexes,
+		Generate:          autoIncGenerate(ins.AutoIncrement),
+		Ignore:            ins.Ignore,
+		VindexValues:      ins.VindexValues,
+		VindexValueOffset: ins.VindexValueOffset,
 	}
+	i = &insert{eInsert: eins}
+
 	if eins.Opcode == engine.InsertSharded {
 		eins.Prefix, eins.Mid, eins.Suffix = generateInsertShardedQuery(ins.AST)
 	}
 
-	return &primitiveWrapper{prim: eins}, nil
+	if ins.Input == nil {
+		eins.Query = generateQuery(ins.AST)
+	} else {
+		i.source, err = transformToLogicalPlan(ctx, ins.Input, true)
+		if err != nil {
+			return
+		}
+	}
+	return
 }
 
-func mapToInsertOpCode(code engine.Opcode) engine.InsertOpcode {
-	switch code {
-	case engine.Unsharded:
+func mapToInsertOpCode(code engine.Opcode, insertSelect bool) engine.InsertOpcode {
+	if insertSelect {
+		return engine.InsertSelect
+	}
+	if code == engine.Unsharded {
 		return engine.InsertUnsharded
 	}
 	return engine.InsertSharded
 }
 
-func autoIncGenerate(gen operators.Generate) *engine.Generate {
-	if gen.Keyspace == nil {
+func autoIncGenerate(gen *operators.Generate) *engine.Generate {
+	if gen == nil {
 		return nil
 	}
 	selNext := &sqlparser.Select{
@@ -444,22 +448,29 @@ func autoIncGenerate(gen operators.Generate) *engine.Generate {
 }
 
 func generateInsertShardedQuery(ins *sqlparser.Insert) (prefix string, mid []string, suffix string) {
-	valueTuples := ins.Rows.(sqlparser.Values)
 	prefixBuf := sqlparser.NewTrackedBuffer(dmlFormatter)
-	midBuf := sqlparser.NewTrackedBuffer(dmlFormatter)
-	suffixBuf := sqlparser.NewTrackedBuffer(dmlFormatter)
-	mid = make([]string, len(valueTuples))
 	prefixBuf.Myprintf("insert %v%sinto %v%v values ",
 		ins.Comments, ins.Ignore.ToString(),
 		ins.Table, ins.Columns)
 	prefix = prefixBuf.String()
+
+	suffixBuf := sqlparser.NewTrackedBuffer(dmlFormatter)
+	suffixBuf.Myprintf("%v", ins.OnDup)
+	suffix = suffixBuf.String()
+
+	valueTuples, isValues := ins.Rows.(sqlparser.Values)
+	if !isValues {
+		// this is a insert query using select to insert the rows.
+		return
+	}
+
+	midBuf := sqlparser.NewTrackedBuffer(dmlFormatter)
+	mid = make([]string, len(valueTuples))
 	for rowNum, val := range valueTuples {
 		midBuf.Myprintf("%v", val)
 		mid[rowNum] = midBuf.String()
 		midBuf.Reset()
 	}
-	suffixBuf.Myprintf("%v", ins.OnDup)
-	suffix = suffixBuf.String()
 	return
 }
 

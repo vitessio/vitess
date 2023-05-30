@@ -4842,7 +4842,7 @@
               "Sharded": true
             },
             "FieldQuery": "select * from `user` where 1 != 1",
-            "Query": "select * from `user` for update",
+            "Query": "select * from `user` lock in share mode",
             "Table": "`user`"
           }
         ]
@@ -4930,7 +4930,7 @@
               "Sharded": true
             },
             "FieldQuery": "select id from `user` where 1 != 1",
-            "Query": "select id from `user` for update",
+            "Query": "select id from `user` lock in share mode",
             "Table": "`user`"
           }
         ]
@@ -5003,7 +5003,7 @@
               "Sharded": true
             },
             "FieldQuery": "select null, id from `user` where 1 != 1",
-            "Query": "select null, id from `user` for update",
+            "Query": "select null, id from `user` lock in share mode",
             "Table": "`user`"
           }
         ]
@@ -5235,7 +5235,7 @@
               "Sharded": true
             },
             "FieldQuery": "select col1, col2 from `user` where 1 != 1",
-            "Query": "select col1, col2 from `user` for update",
+            "Query": "select col1, col2 from `user` lock in share mode",
             "Table": "`user`"
           }
         ]
@@ -5349,7 +5349,7 @@
               "Sharded": true
             },
             "FieldQuery": "select col1, col2 from t1 where 1 != 1",
-            "Query": "select col1, col2 from t1 for update",
+            "Query": "select col1, col2 from t1 lock in share mode",
             "Table": "t1"
           }
         ]
@@ -5422,7 +5422,7 @@
               "Sharded": false
             },
             "FieldQuery": "select col1, col2 from unsharded_tab where 1 != 1",
-            "Query": "select col1, col2 from unsharded_tab for update",
+            "Query": "select col1, col2 from unsharded_tab lock in share mode",
             "Table": "unsharded_tab"
           }
         ]

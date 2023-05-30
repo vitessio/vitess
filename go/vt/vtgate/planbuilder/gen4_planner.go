@@ -618,6 +618,8 @@ func pushCommentDirectivesOnPlan(plan logicalPlan, stmt sqlparser.Statement) log
 					plan.eroute.QueryTimeout = timeout
 				case *primitiveWrapper:
 					setDirective(plan.prim, multiShardAutoCommit, timeout)
+				case *insert:
+					setDirective(plan.eInsert, multiShardAutoCommit, timeout)
 				}
 				return true, logicalPlan, nil
 			})

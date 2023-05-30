@@ -28,6 +28,12 @@ type Insert struct {
 	VTable *vindexes.Table
 	AST    *sqlparser.Insert
 
+	AutoIncrement *Generate
+	Ignore        bool
+
+	// ColVindexes are the vindexes that will use the VindexValues
+	ColVindexes []*vindexes.ColumnVindex
+
 	// VindexValues specifies values for all the vindex columns.
 	// This is a three-dimensional data structure:
 	// Insert.Values[i] represents the values to be inserted for the i'th colvindex (i < len(Insert.Table.ColumnVindexes))
@@ -35,15 +41,28 @@ type Insert struct {
 	// Insert.Values[i].Values[j].Values[k] represents the value pulled from row k for that column: (k < len(ins.rows))
 	VindexValues [][][]evalengine.Expr
 
-	// ColVindexes are the vindexes that will use the VindexValues
-	ColVindexes []*vindexes.ColumnVindex
+	// VindexValueOffset stores the offset for each column in the ColumnVindex
+	// that will appear in the result set of the select query.
+	VindexValueOffset [][]int
 
-	AutoIncrement Generate
-	Ignore        bool
+	// Insert using select query will have select plan as input
+	Input ops.Operator
 
-	noInputs
 	noColumns
 	noPredicates
+}
+
+func (i *Insert) Inputs() []ops.Operator {
+	if i.Input == nil {
+		return nil
+	}
+	return []ops.Operator{i.Input}
+}
+
+func (i *Insert) SetInputs(inputs []ops.Operator) {
+	if len(inputs) > 0 {
+		i.Input = inputs[0]
+	}
 }
 
 type Generate struct {
@@ -58,6 +77,9 @@ type Generate struct {
 
 	// Insert using Select, offset for auto increment column
 	Offset int
+
+	// The auto incremeent column was already present in the insert column list or was added.
+	added bool
 }
 
 func (i *Insert) Description() ops.OpDescription {
@@ -78,14 +100,20 @@ func (i *Insert) GetOrdering() ([]ops.OrderBy, error) {
 var _ ops.Operator = (*Insert)(nil)
 
 func (i *Insert) Clone(inputs []ops.Operator) ops.Operator {
+	var input ops.Operator
+	if len(inputs) > 0 {
+		input = inputs[0]
+	}
 	return &Insert{
-		QTable:        i.QTable,
-		VTable:        i.VTable,
-		AST:           i.AST,
-		VindexValues:  i.VindexValues,
-		ColVindexes:   i.ColVindexes,
-		AutoIncrement: i.AutoIncrement,
-		Ignore:        i.Ignore,
+		Input:             input,
+		QTable:            i.QTable,
+		VTable:            i.VTable,
+		AST:               i.AST,
+		AutoIncrement:     i.AutoIncrement,
+		Ignore:            i.Ignore,
+		ColVindexes:       i.ColVindexes,
+		VindexValues:      i.VindexValues,
+		VindexValueOffset: i.VindexValueOffset,
 	}
 }
 

@@ -949,6 +949,8 @@ func (ins *Insert) description() PrimitiveDescription {
 		"TableName":            ins.GetTableName(),
 		"MultiShardAutocommit": ins.MultiShardAutocommit,
 		"QueryTimeout":         ins.QueryTimeout,
+		"InsertIgnore":         ins.Ignore,
+		"InputAsNonStreaming":  ins.ForceNonStreaming,
 	}
 
 	if len(ins.VindexValues) > 0 {
@@ -991,12 +993,6 @@ func (ins *Insert) description() PrimitiveDescription {
 			valuesOffsets[vindex.Name] = string(marshal)
 		}
 		other["VindexOffsetFromSelect"] = valuesOffsets
-	}
-	if ins.Ignore {
-		other["InsertIgnore"] = true
-	}
-	if ins.ForceNonStreaming {
-		other["InputAsNonStreaming"] = true
 	}
 	if len(ins.Mid) > 0 {
 		shardQuery := fmt.Sprintf("%s%s%s", ins.Prefix, strings.Join(ins.Mid, ", "), ins.Suffix)

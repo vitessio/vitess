@@ -273,47 +273,118 @@ func createOperatorFromInsert(ctx *plancontext.PlanningContext, ins *sqlparser.I
 	}
 
 	// Table column list is nil then add all the columns
-	// If the column list is empty then add only the auto-inc column and this happens on calling modifyForAutoinc
+	// If the column list is empty then add only the auto-inc column and
+	// this happens on calling modifyForAutoinc
 	if ins.Columns == nil && valuesProvided(ins.Rows) {
 		if vindexTable.ColumnListAuthoritative {
 			ins = populateInsertColumnlist(ins, vindexTable)
 		} else {
-			return nil, vterrors.VT13001(fmt.Sprintf("column list required for inserting data into '%s' table", vindexTable.Name))
+			return nil, vterrors.VT09004()
 		}
 	}
 
-	rows, isRowValues := ins.Rows.(sqlparser.Values)
-	if !isRowValues {
-		return nil, vterrors.VT13001("needs implementation")
-	}
-
-	for _, row := range rows {
-		if len(ins.Columns) != len(row) {
-			return nil, vterrors.VT13001("column list does not match values")
-		}
-	}
-
+	// modify column list or values for autoincrement column.
 	autoIncGen, err := modifyForAutoinc(ins, vindexTable)
 	if err != nil {
 		return nil, err
 	}
 	insOp.AutoIncrement = autoIncGen
 
-	colVindexes := getColVindexes(insOp.VTable.ColumnVindexes)
-	if len(colVindexes) == 0 {
+	insOp.ColVindexes = getColVindexes(insOp.VTable.ColumnVindexes)
+	if len(insOp.ColVindexes) == 0 {
 		return route, nil
 	}
 
+	// set insert ignore.
+	insOp.Ignore = bool(ins.Ignore) || ins.OnDup != nil
+
+	switch rows := ins.Rows.(type) {
+	case sqlparser.Values:
+		route.Source, err = insertRowsPlan(insOp, ins, rows)
+		if err != nil {
+			return nil, err
+		}
+	case sqlparser.SelectStatement:
+		route.Source, err = insertSelectPlan(ctx, insOp, ins, rows)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return route, nil
+}
+
+func insertSelectPlan(ctx *plancontext.PlanningContext, insOp *Insert, ins *sqlparser.Insert, sel sqlparser.SelectStatement) (*Insert, error) {
+	if columnMismatch(insOp.AutoIncrement, ins, sel) {
+		return nil, vterrors.VT03006()
+	}
+
+	selOp, err := PlanQuery(ctx, sel)
+	if err != nil {
+		return nil, err
+	}
+
+	// select plan will be taken as input to insert rows into the table.
+	insOp.Input = selOp
+
+	colVindexes := insOp.ColVindexes
+	vv := make([][]int, len(colVindexes))
+	for idx, colVindex := range colVindexes {
+		for _, col := range colVindex.Columns {
+			colNum := findColumn(ins, col)
+			// sharding column values should be provided in the insert.
+			if colNum == -1 && idx == 0 {
+				return nil, vterrors.VT09003(col)
+			}
+			vv[idx] = append(vv[idx], colNum)
+		}
+	}
+	insOp.VindexValueOffset = vv
+	return insOp, nil
+}
+
+func columnMismatch(gen *Generate, ins *sqlparser.Insert, sel sqlparser.SelectStatement) bool {
+	origColCount := len(ins.Columns)
+	if gen != nil && gen.added {
+		// One column got added to the insert query ast for auto increment column.
+		// adjusting it here for comparison.
+		origColCount--
+	}
+	if origColCount < sel.GetColumnCount() {
+		return true
+	}
+	if origColCount > sel.GetColumnCount() {
+		sel := sqlparser.GetFirstSelect(sel)
+		var hasStarExpr bool
+		for _, sExpr := range sel.SelectExprs {
+			if _, hasStarExpr = sExpr.(*sqlparser.StarExpr); hasStarExpr {
+				break
+			}
+		}
+		if !hasStarExpr {
+			return true
+		}
+	}
+	return false
+}
+
+func insertRowsPlan(insOp *Insert, ins *sqlparser.Insert, rows sqlparser.Values) (*Insert, error) {
+	for _, row := range rows {
+		if len(ins.Columns) != len(row) {
+			return nil, vterrors.VT13001("column list does not match values")
+		}
+	}
+
+	colVindexes := insOp.ColVindexes
 	routeValues := make([][][]evalengine.Expr, len(colVindexes))
 	for vIdx, colVindex := range colVindexes {
 		routeValues[vIdx] = make([][]evalengine.Expr, len(colVindex.Columns))
 		for colIdx, col := range colVindex.Columns {
-			err = checkAndErrIfVindexChanging(sqlparser.UpdateExprs(ins.OnDup), col)
+			err := checkAndErrIfVindexChanging(sqlparser.UpdateExprs(ins.OnDup), col)
 			if err != nil {
 				return nil, err
 			}
 			routeValues[vIdx][colIdx] = make([]evalengine.Expr, len(rows))
-			colNum := findOrAddColumn(ins, col)
+			colNum, _ := findOrAddColumn(ins, col)
 			for rowNum, row := range rows {
 				innerpv, err := evalengine.Translate(row[colNum], nil)
 				if err != nil {
@@ -326,18 +397,15 @@ func createOperatorFromInsert(ctx *plancontext.PlanningContext, ins *sqlparser.I
 	// here we are replacing the row value with the argument.
 	for _, colVindex := range colVindexes {
 		for _, col := range colVindex.Columns {
-			colNum := findOrAddColumn(ins, col)
+			colNum, _ := findOrAddColumn(ins, col)
 			for rowNum, row := range rows {
 				name := engine.InsertVarName(col, rowNum)
 				row[colNum] = sqlparser.NewArgument(name)
 			}
 		}
 	}
-
-	insOp.ColVindexes = colVindexes
 	insOp.VindexValues = routeValues
-	insOp.Ignore = bool(ins.Ignore) || ins.OnDup != nil
-	return route, nil
+	return insOp, nil
 }
 
 func valuesProvided(rows sqlparser.InsertRows) bool {
@@ -375,11 +443,12 @@ func checkAndErrIfVindexChanging(setClauses sqlparser.UpdateExprs, col sqlparser
 }
 
 // findOrAddColumn finds the position of a column in the insert. If it's
-// absent it appends it to the with NULL values and returns that position.
-func findOrAddColumn(ins *sqlparser.Insert, col sqlparser.IdentifierCI) int {
+// absent it appends it to the with NULL values.
+// It returns the position of the column and also boolean representing whether it was added or already present.
+func findOrAddColumn(ins *sqlparser.Insert, col sqlparser.IdentifierCI) (int, bool) {
 	colNum := findColumn(ins, col)
 	if colNum >= 0 {
-		return colNum
+		return colNum, false
 	}
 	colOffset := len(ins.Columns)
 	ins.Columns = append(ins.Columns, col)
@@ -388,7 +457,7 @@ func findOrAddColumn(ins *sqlparser.Insert, col sqlparser.IdentifierCI) int {
 			rows[i] = append(rows[i], &sqlparser.NullVal{})
 		}
 	}
-	return colOffset
+	return colOffset, true
 }
 
 // findColumn returns the column index where it is placed on the insert column list.
@@ -413,16 +482,19 @@ func populateInsertColumnlist(ins *sqlparser.Insert, table *vindexes.Table) *sql
 
 // modifyForAutoinc modifies the AST and the plan to generate necessary autoinc values.
 // For row values cases, bind variable names are generated using baseName.
-func modifyForAutoinc(ins *sqlparser.Insert, vTable *vindexes.Table) (gen Generate, err error) {
+func modifyForAutoinc(ins *sqlparser.Insert, vTable *vindexes.Table) (*Generate, error) {
 	if vTable.AutoIncrement == nil {
-		return
+		return nil, nil
 	}
-	gen.Keyspace = vTable.AutoIncrement.Sequence.Keyspace
-	gen.TableName = sqlparser.TableName{Name: vTable.AutoIncrement.Sequence.Name}
-	colNum := findOrAddColumn(ins, vTable.AutoIncrement.Column)
+	gen := &Generate{
+		Keyspace:  vTable.AutoIncrement.Sequence.Keyspace,
+		TableName: sqlparser.TableName{Name: vTable.AutoIncrement.Sequence.Name},
+	}
+	colNum, newColAdded := findOrAddColumn(ins, vTable.AutoIncrement.Column)
 	switch rows := ins.Rows.(type) {
 	case sqlparser.SelectStatement:
 		gen.Offset = colNum
+		gen.added = newColAdded
 	case sqlparser.Values:
 		autoIncValues := make([]evalengine.Expr, 0, len(rows))
 		for rowNum, row := range rows {
@@ -430,18 +502,16 @@ func modifyForAutoinc(ins *sqlparser.Insert, vTable *vindexes.Table) (gen Genera
 			if _, ok := row[colNum].(*sqlparser.Default); ok {
 				row[colNum] = &sqlparser.NullVal{}
 			}
-
-			var expr evalengine.Expr
-			expr, err = evalengine.Translate(row[colNum], nil)
+			expr, err := evalengine.Translate(row[colNum], nil)
 			if err != nil {
-				return gen, err
+				return nil, err
 			}
 			autoIncValues = append(autoIncValues, expr)
 			row[colNum] = sqlparser.NewArgument(engine.SeqVarName + strconv.Itoa(rowNum))
 		}
 		gen.Values = evalengine.NewTupleExpr(autoIncValues...)
 	}
-	return
+	return gen, nil
 }
 
 func getOperatorFromTableExpr(ctx *plancontext.PlanningContext, tableExpr sqlparser.TableExpr) (ops.Operator, error) {
