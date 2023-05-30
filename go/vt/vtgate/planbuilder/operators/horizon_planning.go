@@ -18,6 +18,7 @@ package operators
 
 import (
 	"fmt"
+	"io"
 
 	"vitess.io/vitess/go/slices2"
 
@@ -117,6 +118,8 @@ func optimizeHorizonPlanning(ctx *plancontext.PlanningContext, root ops.Operator
 			return tryPushingDownOrdering(ctx, in)
 		case *Aggregator:
 			return tryPushingDownAggregator(ctx, in)
+		case *Filter:
+			return tryPushingDownFilter(ctx, in)
 		default:
 			return in, rewrite.SameTree, nil
 		}
@@ -134,10 +137,51 @@ func optimizeHorizonPlanning(ctx *plancontext.PlanningContext, root ops.Operator
 	return newOp, nil
 }
 
+func tryPushingDownFilter(ctx *plancontext.PlanningContext, in *Filter) (ops.Operator, *rewrite.ApplyResult, error) {
+	proj, ok := in.Source.(*Projection)
+	if !ok {
+		// we can only push filter under a projection
+		return in, rewrite.SameTree, nil
+	}
+
+	for _, p := range in.Predicates {
+		cantPushDown := false
+		_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+			if !fetchByOffset(node) {
+				return true, nil
+			}
+
+			if proj.needsEvaluation(ctx, node.(sqlparser.Expr)) {
+				cantPushDown = true
+				return false, io.EOF
+			}
+
+			return true, nil
+		}, p)
+
+		if cantPushDown {
+			return in, rewrite.SameTree, nil
+		}
+	}
+
+	return rewrite.Swap(in, proj, "push filter under projection")
+}
+
+// addOrderBysAndGroupBysForAggregations runs after we have run horizonPlanning until the op tree stops changing
+// this means that we have pushed aggregations and other ops as far down as they'll go
+// addOrderBysAndGroupBysForAggregations will find Aggregators that have not been pushed under routes and
+// add the necessary Ordering operators for them
 func addOrderBysAndGroupBysForAggregations(ctx *plancontext.PlanningContext, root ops.Operator) (ops.Operator, error) {
 	visitor := func(in ops.Operator, _ semantics.TableSet, isRoot bool) (ops.Operator, *rewrite.ApplyResult, error) {
 		switch in := in.(type) {
 		case *Aggregator:
+			// first we update the incoming columns, so we know about any new columns that have been added
+			columns, err := in.Source.GetColumns()
+			if err != nil {
+				return nil, nil, err
+			}
+			in.Columns = columns
+
 			requireOrdering, err := needsOrdering(in, ctx)
 			if err != nil {
 				return nil, nil, err

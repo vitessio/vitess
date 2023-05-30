@@ -38,7 +38,13 @@ func tryPushingDownAggregator(ctx *plancontext.PlanningContext, aggregator *Aggr
 		output, applyResult, err = pushDownAggregationThroughRoute(ctx, aggregator, src)
 	case *ApplyJoin:
 		output, applyResult, err = pushDownAggregationThroughJoin(ctx, aggregator, src)
+	case *Filter:
+		output, applyResult, err = pushDownAggregationThroughFilter(ctx, aggregator, src)
 	default:
+		if aggregator.Original {
+			err = vterrors.VT12001(fmt.Sprintf("using aggregation on top of a %T plan", src))
+			return
+		}
 		return aggregator, rewrite.SameTree, nil
 	}
 
@@ -87,6 +93,66 @@ func pushDownAggregationThroughRoute(
 	}
 
 	return aggregator, rewrite.NewTree("push aggregation under route - keep original", aggregator), nil
+}
+
+func pushDownAggregationThroughFilter(
+	ctx *plancontext.PlanningContext,
+	aggregator *Aggregator,
+	filter *Filter,
+) (ops.Operator, *rewrite.ApplyResult, error) {
+
+	for _, predicate := range filter.Predicates {
+		if sqlparser.ContainsAggregation(predicate) {
+			return nil, nil, errHorizonNotPlanned()
+		}
+	}
+
+	columnsNeeded := collectColNamesNeeded(ctx, filter)
+
+	// Create a new aggregator to be placed below the route.
+	pushedAggr := aggregator.Clone([]ops.Operator{filter.Source}).(*Aggregator)
+	pushedAggr.Pushed = false
+	pushedAggr.Original = false
+
+withNextColumn:
+	for _, col := range columnsNeeded {
+		for _, gb := range pushedAggr.Grouping {
+			if ctx.SemTable.EqualsExpr(col, gb.SimplifiedExpr) {
+				continue withNextColumn
+			}
+		}
+		pushedAggr.addNoPushCol(aeWrap(col), true)
+	}
+
+	// Set the source of the filter to the new aggregator placed below the route.
+	filter.Source = pushedAggr
+
+	if !aggregator.Original {
+		// we only keep the root aggregation, if this aggregator was created
+		// by splitting one and pushing under a join, we can get rid of this one
+		return aggregator.Source, rewrite.NewTree("push aggregation under filter - remove original", aggregator), nil
+	}
+
+	return aggregator, rewrite.NewTree("push aggregation under filter - keep original", aggregator), nil
+}
+
+func collectColNamesNeeded(ctx *plancontext.PlanningContext, f *Filter) (columnsNeeded []*sqlparser.ColName) {
+	for _, p := range f.Predicates {
+		_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+			col, ok := node.(*sqlparser.ColName)
+			if !ok {
+				return true, nil
+			}
+			for _, existing := range columnsNeeded {
+				if ctx.SemTable.EqualsExpr(col, existing) {
+					return true, nil
+				}
+			}
+			columnsNeeded = append(columnsNeeded, col)
+			return true, nil
+		}, p)
+	}
+	return
 }
 
 func overlappingUniqueVindex(ctx *plancontext.PlanningContext, groupByExprs []GroupBy) bool {
