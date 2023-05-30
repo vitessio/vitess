@@ -860,6 +860,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 	defer lockConn.Exec(ctx, sqlUnlockTables, 1, false)
 
 	renameCompleteChan := make(chan error)
+	defer close(renameCompleteChan)
 	renameWasSuccessful := false
 	renameConn, err := e.pool.Get(ctx, nil)
 	if err != nil {
@@ -891,6 +892,10 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 			select {
 			case <-renameWaitCtx.Done():
 				return vterrors.Errorf(vtrpcpb.Code_ABORTED, "timeout for rename query: %s", renameQuery.Query)
+			case err := <-renameCompleteChan:
+				// We expect the RENAME to run and block, not yet complete. The caller of this function
+				// will only unblock the RENAME after the function is complete
+				return vterrors.Errorf(vtrpcpb.Code_ABORTED, "rename returned unexpectedly: err=%v", err)
 			case <-time.After(time.Second):
 				// sleep
 			}
