@@ -58,7 +58,6 @@ func TestQP(t *testing.T) {
 			expOrder: []ops.OrderBy{
 				{Inner: &sqlparser.Order{Expr: sqlparser.NewColName("col")}, SimplifiedExpr: sqlparser.NewColName("col")},
 				{Inner: &sqlparser.Order{Expr: sqlparser.NewColName("id")}, SimplifiedExpr: sqlparser.NewColName("id")},
-				{Inner: &sqlparser.Order{Expr: sqlparser.NewColName("id")}, SimplifiedExpr: sqlparser.NewColName("id")},
 			},
 		},
 		{

@@ -75,7 +75,7 @@ func pushDownAggregationThroughRoute(
 ) (ops.Operator, *rewrite.ApplyResult, error) {
 	// If the route is single-shard, or we are grouping by sharding keys, we can just push down the aggregation
 	if route.IsSingleShard() || overlappingUniqueVindex(ctx, aggregator.Grouping) {
-		return rewrite.Swap(aggregator, route, "pushDownAggregationThroughRoute")
+		return rewrite.Swap(aggregator, route, "push down aggregation under route - remove original")
 	}
 
 	// Create a new aggregator to be placed below the route.

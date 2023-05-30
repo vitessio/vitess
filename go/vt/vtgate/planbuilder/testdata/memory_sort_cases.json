@@ -373,7 +373,7 @@
     }
   },
   {
-    "comment": "scatter aggregate with memory sort and order by number, reuse weight_string\n# we have to use a meaningless construct to test this. TODO: improve to do ordering once for textcol1",
+    "comment": "scatter aggregate with memory sort and order by number, reuse weight_string\n# we have to use a meaningless construct to test this",
     "query": "select textcol1 as t, count(*) k from user group by textcol1 order by textcol1, k, textcol1",
     "v3-plan": {
       "QueryType": "SELECT",
@@ -415,7 +415,7 @@
       "Instructions": {
         "OperatorType": "Sort",
         "Variant": "Memory",
-        "OrderBy": "0 ASC COLLATE latin1_swedish_ci, 1 ASC, 0 ASC COLLATE latin1_swedish_ci",
+        "OrderBy": "0 ASC COLLATE latin1_swedish_ci, 1 ASC",
         "Inputs": [
           {
             "OperatorType": "Aggregate",
