@@ -1665,7 +1665,8 @@
   {
     "comment": "insert with mimatched column list",
     "query": "insert into user(id) values (1, 2)",
-    "plan": "VT13001: [BUG] column list does not match values"
+    "v3-plan": "VT13001: [BUG] column list does not match values",
+    "gen4-plan": "VT03006: column count does not match value count at row 1"
   },
   {
     "comment": "insert no column list for sharded authoritative table",
@@ -5073,15 +5074,15 @@
         },
         "Inputs": [
           {
-            "OperatorType": "Projection",
-            "Expressions": [
-              "INT64(1) as 1"
-            ],
-            "Inputs": [
-              {
-                "OperatorType": "SingleRow"
-              }
-            ]
+            "OperatorType": "Route",
+            "Variant": "Reference",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "FieldQuery": "select 1 from dual where 1 != 1",
+            "Query": "select 1 from dual lock in share mode",
+            "Table": "dual"
           }
         ]
       },
@@ -5150,15 +5151,15 @@
         },
         "Inputs": [
           {
-            "OperatorType": "Projection",
-            "Expressions": [
-              "INT64(1) as 1"
-            ],
-            "Inputs": [
-              {
-                "OperatorType": "SingleRow"
-              }
-            ]
+            "OperatorType": "Route",
+            "Variant": "Reference",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "FieldQuery": "select 1 from dual where 1 != 1",
+            "Query": "select 1 from dual lock in share mode",
+            "Table": "dual"
           }
         ]
       },
@@ -5487,7 +5488,7 @@
               "Sharded": false
             },
             "FieldQuery": "select col from unsharded_tab where 1 != 1",
-            "Query": "select col from unsharded_tab for update",
+            "Query": "select col from unsharded_tab lock in share mode",
             "Table": "unsharded_tab"
           }
         ]
@@ -5552,7 +5553,7 @@
               "Sharded": true
             },
             "FieldQuery": "select col from t1 where 1 != 1",
-            "Query": "select col from t1 for update",
+            "Query": "select col from t1 lock in share mode",
             "Table": "t1"
           }
         ]

@@ -249,27 +249,17 @@ func createOperatorFromInsert(ctx *plancontext.PlanningContext, ins *sqlparser.I
 		return nil, err
 	}
 
+	if _, target := routing.(*TargetedRouting); target {
+		return nil, vterrors.VT12001("INSERT with a target destination")
+	}
+
 	insOp := &Insert{
-		QTable: qt,
 		VTable: vindexTable,
 		AST:    ins,
 	}
 	route := &Route{
 		Source:  insOp,
 		Routing: routing,
-	}
-
-	switch routing.(type) {
-	case *AnyShardRouting:
-		if vindexTable.AutoIncrement == nil {
-			return route, nil
-		}
-	case *TargetedRouting:
-		return nil, vterrors.VT12001("INSERT with a target destination")
-	case *ShardedRouting:
-		// to continue after switch
-	default:
-		return nil, vterrors.VT13001(fmt.Sprintf("INSERT with a unknown routing type: %T", routing))
 	}
 
 	// Table column list is nil then add all the columns
@@ -290,14 +280,10 @@ func createOperatorFromInsert(ctx *plancontext.PlanningContext, ins *sqlparser.I
 	}
 	insOp.AutoIncrement = autoIncGen
 
-	insOp.ColVindexes = getColVindexes(insOp.VTable.ColumnVindexes)
-	if len(insOp.ColVindexes) == 0 {
-		return route, nil
-	}
-
 	// set insert ignore.
 	insOp.Ignore = bool(ins.Ignore) || ins.OnDup != nil
 
+	insOp.ColVindexes = getColVindexes(insOp.VTable.ColumnVindexes)
 	switch rows := ins.Rows.(type) {
 	case sqlparser.Values:
 		route.Source, err = insertRowsPlan(insOp, ins, rows)
@@ -325,6 +311,10 @@ func insertSelectPlan(ctx *plancontext.PlanningContext, insOp *Insert, ins *sqlp
 
 	// select plan will be taken as input to insert rows into the table.
 	insOp.Input = selOp
+
+	if len(insOp.ColVindexes) == 0 {
+		return insOp, nil
+	}
 
 	colVindexes := insOp.ColVindexes
 	vv := make([][]int, len(colVindexes))
@@ -370,8 +360,12 @@ func columnMismatch(gen *Generate, ins *sqlparser.Insert, sel sqlparser.SelectSt
 func insertRowsPlan(insOp *Insert, ins *sqlparser.Insert, rows sqlparser.Values) (*Insert, error) {
 	for _, row := range rows {
 		if len(ins.Columns) != len(row) {
-			return nil, vterrors.VT13001("column list does not match values")
+			return nil, vterrors.VT03006()
 		}
+	}
+
+	if len(insOp.ColVindexes) == 0 {
+		return insOp, nil
 	}
 
 	colVindexes := insOp.ColVindexes
@@ -636,11 +630,10 @@ func createQueryTableForDML(ctx *plancontext.PlanningContext, tableExpr sqlparse
 		predicates = sqlparser.SplitAndExpression(nil, whereClause.Expr)
 	}
 	qt := &QueryTable{
-		ID:          tableID,
-		Alias:       alTbl,
-		Table:       tblName,
-		Predicates:  predicates,
-		IsInfSchema: false,
+		ID:         tableID,
+		Alias:      alTbl,
+		Table:      tblName,
+		Predicates: predicates,
 	}
 	return tableInfo, qt, nil
 }

@@ -24,7 +24,6 @@ import (
 )
 
 type Insert struct {
-	QTable *QueryTable
 	VTable *vindexes.Table
 	AST    *sqlparser.Insert
 
@@ -106,7 +105,6 @@ func (i *Insert) Clone(inputs []ops.Operator) ops.Operator {
 	}
 	return &Insert{
 		Input:             input,
-		QTable:            i.QTable,
 		VTable:            i.VTable,
 		AST:               i.AST,
 		AutoIncrement:     i.AutoIncrement,

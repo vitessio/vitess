@@ -428,13 +428,20 @@ func gen4InsertStmtPlanner(version querypb.ExecuteOptions_PlannerVersion, insStm
 	// insert query does not support table alias.
 	insStmt.Table.As = sqlparser.NewIdentifierCS("")
 
-	if ks, tables := semTable.SingleUnshardedKeyspace(); ks != nil && tables[0].AutoIncrement == nil {
+	// Check single unsharded. Even if the table is for single unsharded but sequence table is used.
+	// We cannot shortcut here as sequence column needs additional planning.
+	ks, tables := semTable.SingleUnshardedKeyspace()
+	if ks != nil && tables[0].AutoIncrement == nil {
 		plan := insertUnshardedShortcut(insStmt, ks, tables)
 		plan = pushCommentDirectivesOnPlan(plan, insStmt)
 		return newPlanResult(plan.Primitive(), operators.QualifiedTables(ks, tables)...), nil
 	}
 
-	if semTable.NotUnshardedErr != nil {
+	tblInfo, err := semTable.TableInfoFor(semTable.TableSetFor(insStmt.Table))
+	if err != nil {
+		return nil, err
+	}
+	if tblInfo.GetVindexTable().Keyspace.Sharded && semTable.NotUnshardedErr != nil {
 		return nil, semTable.NotUnshardedErr
 	}
 
