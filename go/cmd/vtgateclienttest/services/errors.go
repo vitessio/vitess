@@ -133,9 +133,9 @@ func (c *errorClient) ExecuteBatch(ctx context.Context, session *vtgatepb.Sessio
 	return c.fallbackClient.ExecuteBatch(ctx, session, sqlList, bindVariablesList)
 }
 
-func (c *errorClient) StreamExecute(ctx context.Context, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable, callback func(*sqltypes.Result) error) error {
+func (c *errorClient) StreamExecute(ctx context.Context, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable, callback func(*sqltypes.Result) error) (*vtgatepb.Session, error) {
 	if err := requestToError(sql); err != nil {
-		return err
+		return session, err
 	}
 	return c.fallbackClient.StreamExecute(ctx, session, sql, bindVariables, callback)
 }

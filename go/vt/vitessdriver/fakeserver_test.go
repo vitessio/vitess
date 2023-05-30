@@ -100,10 +100,10 @@ func (f *fakeVTGateService) ExecuteBatch(ctx context.Context, session *vtgatepb.
 }
 
 // StreamExecute is part of the VTGateService interface
-func (f *fakeVTGateService) StreamExecute(ctx context.Context, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable, callback func(*sqltypes.Result) error) error {
+func (f *fakeVTGateService) StreamExecute(ctx context.Context, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable, callback func(*sqltypes.Result) error) (*vtgatepb.Session, error) {
 	execCase, ok := execMap[sql]
 	if !ok {
-		return fmt.Errorf("no match for: %s", sql)
+		return session, fmt.Errorf("no match for: %s", sql)
 	}
 	query := &queryExecute{
 		SQL:           sql,
@@ -111,25 +111,25 @@ func (f *fakeVTGateService) StreamExecute(ctx context.Context, session *vtgatepb
 		Session:       session,
 	}
 	if !query.Equal(execCase.execQuery) {
-		return fmt.Errorf("request mismatch: got %+v, want %+v", query, execCase.execQuery)
+		return session, fmt.Errorf("request mismatch: got %+v, want %+v", query, execCase.execQuery)
 	}
 	if execCase.result != nil {
 		result := &sqltypes.Result{
 			Fields: execCase.result.Fields,
 		}
 		if err := callback(result); err != nil {
-			return err
+			return execCase.session, err
 		}
 		for _, row := range execCase.result.Rows {
 			result := &sqltypes.Result{
 				Rows: [][]sqltypes.Value{row},
 			}
 			if err := callback(result); err != nil {
-				return err
+				return execCase.session, err
 			}
 		}
 	}
-	return nil
+	return execCase.session, nil
 }
 
 // Prepare is part of the VTGateService interface
