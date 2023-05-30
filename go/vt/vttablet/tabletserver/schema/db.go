@@ -28,14 +28,14 @@ import (
 
 const (
 	// insertTableIntoSchemaEngineTables inserts a record in the datastore for the schema-engine tables.
-	insertTableIntoSchemaEngineTables = `INSERT INTO %s.schema_engine_tables(TABLE_SCHEMA, TABLE_NAME, CREATE_STATEMENT, CREATE_TIME)
+	insertTableIntoSchemaEngineTables = `INSERT INTO %s.tables(TABLE_SCHEMA, TABLE_NAME, CREATE_STATEMENT, CREATE_TIME)
 values (database(), :table_name, :create_statement, :create_time)`
 
 	// deleteFromSchemaEngineTablesTable removes the tables from the table that have been modified.
-	deleteFromSchemaEngineTablesTable = `DELETE FROM %s.schema_engine_tables WHERE TABLE_SCHEMA = database() AND TABLE_NAME IN ::tableNames`
+	deleteFromSchemaEngineTablesTable = `DELETE FROM %s.tables WHERE TABLE_SCHEMA = database() AND TABLE_NAME IN ::tableNames`
 
 	// readTableCreateTimes reads the tables create times
-	readTableCreateTimes = `SELECT TABLE_NAME, CREATE_TIME FROM %s.schema_engine_tables`
+	readTableCreateTimes = "SELECT TABLE_NAME, CREATE_TIME FROM %s.`tables`"
 
 	// detectViewChange query detects if there is any view change from previous copy.
 	detectViewChange = `

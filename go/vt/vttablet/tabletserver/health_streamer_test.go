@@ -379,7 +379,7 @@ func TestReloadView(t *testing.T) {
 		sqltypes.MakeTestFields("table_name | column_name", "varchar|varchar"),
 	))
 	db.AddQueryPattern(".*SELECT table_name, view_definition.*views.*", &sqltypes.Result{})
-	db.AddQuery("SELECT TABLE_NAME, CREATE_TIME FROM _vt.schema_engine_tables", &sqltypes.Result{})
+	db.AddQuery("SELECT TABLE_NAME, CREATE_TIME FROM _vt.`tables`", &sqltypes.Result{})
 
 	hs.InitDBConfig(target, configs.DbaWithDB())
 	se.InitDBConfig(configs.DbaWithDB())
