@@ -58,28 +58,24 @@ func TestIncrementalBackup(t *testing.T) {
 	tcases := []struct {
 		name      string
 		setupType int
+		comprss   *backup.CompressionDetails
 	}{
 		{
-			"BuiltinBackup", backup.BuiltinBackup,
+			"BuiltinBackup", backup.BuiltinBackup, nil,
 		},
 		{
-			"XtraBackup", backup.XtraBackup,
+			"XtraBackup", backup.XtraBackup, &backup.CompressionDetails{
+				CompressorEngineName: "pgzip",
+			},
 		},
 		{
-			"Mysqlctld", backup.Mysqlctld,
+			"Mysqlctld", backup.Mysqlctld, nil,
 		},
 	}
 	for _, tcase := range tcases {
 		t.Run(tcase.name, func(t *testing.T) {
-			var compressionDetails *backup.CompressionDetails
-			if tcase.setupType == backup.XtraBackup {
-				compressionDetails = &backup.CompressionDetails{
-					CompressorEngineName: "pgzip",
-				}
-			}
-
 			// setup cluster for the testing
-			code, err := backup.LaunchCluster(tcase.setupType, "xbstream", 0, compressionDetails)
+			code, err := backup.LaunchCluster(tcase.setupType, "xbstream", 0, tcase.comprss)
 			require.NoError(t, err, "setup failed with status code %d", code)
 			defer backup.TearDownCluster()
 
@@ -193,7 +189,7 @@ func TestIncrementalBackup(t *testing.T) {
 					}
 					require.False(t, manifest.FromPosition.IsZero())
 					require.NotEqual(t, manifest.Position, manifest.FromPosition)
-					require.True(t, manifest.Position.GTIDSet.Contains(manifest.FromPosition.GTIDSet))
+					require.True(t, manifest.Position.GTIDSet.Union(manifest.PurgedPosition.GTIDSet).Contains(manifest.FromPosition.GTIDSet))
 
 					gtidPurgedPos, err := mysql.ParsePosition(mysql.Mysql56FlavorID, backup.GetReplicaGtidPurged(t))
 					require.NoError(t, err)
