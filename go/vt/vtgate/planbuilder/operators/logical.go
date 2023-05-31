@@ -312,6 +312,18 @@ func insertSelectPlan(ctx *plancontext.PlanningContext, insOp *Insert, ins *sqlp
 	// select plan will be taken as input to insert rows into the table.
 	insOp.Input = selOp
 
+	// When the table you are steaming data from and table you are inserting from are same.
+	// Then due to locking of the index range on the table we might not be able to insert into the table.
+	// Therefore, instead of streaming, this flag will ensure the records are first read and then inserted.
+	insertTbl := insOp.TablesUsed()[0]
+	selTables := TablesUsed(selOp)
+	for _, tbl := range selTables {
+		if insertTbl == tbl {
+			insOp.ForceNonStreaming = true
+			break
+		}
+	}
+
 	if len(insOp.ColVindexes) == 0 {
 		return insOp, nil
 	}

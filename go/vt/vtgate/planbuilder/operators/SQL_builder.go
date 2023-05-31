@@ -21,10 +21,9 @@ import (
 	"sort"
 	"strings"
 
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
-
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
