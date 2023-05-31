@@ -22,6 +22,7 @@
     - [Support for MySQL 8.0 `binlog_transaction_compression`](#binlog-compression)
   - **[VTTablet](#vttablet)**
     - [VTTablet: Initializing all replicas with super_read_only](#vttablet-initialization)
+    - [Vttablet Schema Reload Timeout](#vttablet-schema-reload-timeout) 
     - [Settings pool enabled](#settings-pool)
   - **[VReplication](#VReplication)**
     - [Support for the `noblob` binlog row image mode](#noblob)
@@ -319,6 +320,10 @@ This is even more important if you are running Vitess on the vitess-operator.
 You must ensure your `init_db.sql` is up-to-date with the new default for `v17.0.0`.
 The default file can be found in `./config/init_db.sql`.
 
+#### <a id="vttablet-schema-reload-timeout"/> Vttablet Schema Reload Timeout
+
+A new flag, `--schema-change-reload-timeout` has been added to timeout the reload of the schema that Vttablet does periodically. This is required because sometimes this operation can get stuck after MySQL restarts, etc. More details available in the issue https://github.com/vitessio/vitess/issues/13001.
+
 #### <a id="settings-pool"/> Settings Pool
 This was introduced in v15 and it enables pooling the connection with modified connection settings.
 To know more what it does read the [v15 release notes](https://github.com/vitessio/vitess/releases/tag/v15.0.0) or the [blog](https://vitess.io/blog/2023-03-27-connection-pooling-in-vitess/) or [docs](https://vitess.io/docs/17.0/reference/query-serving/reserved-conn/)
@@ -385,6 +390,8 @@ This could be a breaking change for grpc api users based on how they have implem
   `schema_change_check_interval` now **only** accepts Go duration values. This affects `vtctld`.
 * The flag `durability_policy` is no longer used by vtctld. Instead it reads the durability policies for all keyspaces from the topology server.
 * The flag `use_super_read_only` is deprecated and will be removed in a later release. This affects `vttablet`.
+* The flag `queryserver-config-schema-change-signal-interval` is deprecated and will be removed in a later release. This affects `vttablet`.
+  Schema-tracking has been refactored in this release to not use polling anymore, therefore the signal interval isn't required anymore.
 
 In `vttablet` various flags that took float values as seconds have updated to take the standard duration syntax as well.
 Float-style parsing is now deprecated and will be removed in a later release.
