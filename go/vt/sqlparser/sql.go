@@ -17438,31 +17438,31 @@ yydefault:
 		yyDollar = yyS[yypt-5 : yypt+1]
 //line sql.y:5843
 		{
-			yyVAL.columnType = ColumnType{Path: string(yyDollar[2].bytes), ErrorOnEmpty: true}
+			yyVAL.columnType = ColumnType{Path: string(yyDollar[2].bytes), ErrorOnEmpty: true, ValOnEmpty: &NullVal{}, ValOnError: &NullVal{}}
 		}
 	case 1185:
 		yyDollar = yyS[yypt-5 : yypt+1]
 //line sql.y:5847
 		{
-			yyVAL.columnType = ColumnType{Path: string(yyDollar[2].bytes), ErrorOnError: true}
+			yyVAL.columnType = ColumnType{Path: string(yyDollar[2].bytes), ErrorOnError: true, ValOnEmpty: &NullVal{}, ValOnError: &NullVal{}}
 		}
 	case 1186:
 		yyDollar = yyS[yypt-8 : yypt+1]
 //line sql.y:5851
 		{
-			yyVAL.columnType = ColumnType{Path: string(yyDollar[2].bytes), ErrorOnEmpty: true, ErrorOnError: true}
+			yyVAL.columnType = ColumnType{Path: string(yyDollar[2].bytes), ErrorOnEmpty: true, ErrorOnError: true, ValOnEmpty: &NullVal{}, ValOnError: &NullVal{}}
 		}
 	case 1187:
 		yyDollar = yyS[yypt-8 : yypt+1]
 //line sql.y:5855
 		{
-			yyVAL.columnType = ColumnType{Path: string(yyDollar[2].bytes), ErrorOnEmpty: true, ErrorOnError: true}
+			yyVAL.columnType = ColumnType{Path: string(yyDollar[2].bytes), ErrorOnEmpty: true, ErrorOnError: true, ValOnEmpty: &NullVal{}, ValOnError: &NullVal{}}
 		}
 	case 1188:
 		yyDollar = yyS[yypt-3 : yypt+1]
 //line sql.y:5859
 		{
-			yyVAL.columnType = ColumnType{Path: string(yyDollar[3].bytes), ValOnEmpty: &NullVal{}, ValOnError: &NullVal{}}
+			yyVAL.columnType = ColumnType{Path: string(yyDollar[3].bytes), ValOnEmpty: &NullVal{}, ValOnError: &NullVal{}, Exists: true}
 		}
 	case 1189:
 		yyDollar = yyS[yypt-3 : yypt+1]

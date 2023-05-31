@@ -5841,23 +5841,23 @@ json_table_column_options:
   }
 | PATH STRING ERROR ON EMPTY
   {
-    $$ = ColumnType{Path: string($2), ErrorOnEmpty: true}
+    $$ = ColumnType{Path: string($2), ErrorOnEmpty: true, ValOnEmpty: &NullVal{}, ValOnError: &NullVal{}}
   }
 | PATH STRING ERROR ON ERROR
   {
-    $$ = ColumnType{Path: string($2), ErrorOnError: true}
+    $$ = ColumnType{Path: string($2), ErrorOnError: true, ValOnEmpty: &NullVal{}, ValOnError: &NullVal{}}
   }
 | PATH STRING ERROR ON EMPTY ERROR ON ERROR
   {
-    $$ = ColumnType{Path: string($2), ErrorOnEmpty: true, ErrorOnError: true}
+    $$ = ColumnType{Path: string($2), ErrorOnEmpty: true, ErrorOnError: true, ValOnEmpty: &NullVal{}, ValOnError: &NullVal{}}
   }
 | PATH STRING ERROR ON ERROR ERROR ON EMPTY
   {
-    $$ = ColumnType{Path: string($2), ErrorOnEmpty: true, ErrorOnError: true}
+    $$ = ColumnType{Path: string($2), ErrorOnEmpty: true, ErrorOnError: true, ValOnEmpty: &NullVal{}, ValOnError: &NullVal{}}
   }
 | EXISTS PATH STRING
   {
-    $$ = ColumnType{Path: string($3), ValOnEmpty: &NullVal{}, ValOnError: &NullVal{}}
+    $$ = ColumnType{Path: string($3), ValOnEmpty: &NullVal{}, ValOnError: &NullVal{}, Exists: true}
   }
 
 val_on_empty:
