@@ -31,6 +31,21 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 )
 
+type (
+	projector struct {
+		cols  []ProjExpr
+		names []*sqlparser.AliasedExpr
+	}
+
+	// horizonLike should be removed. we should use Horizon for both these cases
+	horizonLike interface {
+		ops.Operator
+		selectStatement() sqlparser.SelectStatement
+		src() ops.Operator
+		getQP(ctx *plancontext.PlanningContext) (*QueryProjection, error)
+	}
+)
+
 func errHorizonNotPlanned() error {
 	return _errHorizonNotPlanned
 }
@@ -120,6 +135,8 @@ func optimizeHorizonPlanning(ctx *plancontext.PlanningContext, root ops.Operator
 			return tryPushingDownAggregator(ctx, in)
 		case *Filter:
 			return tryPushingDownFilter(ctx, in)
+		case *Distinct:
+			return tryPushingDownDistinct(in)
 		default:
 			return in, rewrite.SameTree, nil
 		}
@@ -165,6 +182,39 @@ func tryPushingDownFilter(ctx *plancontext.PlanningContext, in *Filter) (ops.Ope
 	}
 
 	return rewrite.Swap(in, proj, "push filter under projection")
+}
+
+func tryPushingDownDistinct(in *Distinct) (ops.Operator, *rewrite.ApplyResult, error) {
+	if in.Pushed {
+		return in, rewrite.SameTree, nil
+	}
+	switch src := in.Source.(type) {
+	case *Route:
+		if src.IsSingleShard() {
+			return rewrite.Swap(in, src, "push distinct under route")
+		}
+	case *Distinct:
+		return src, rewrite.NewTree("removed double distinct", src), nil
+	case *Aggregator:
+		return nil, nil, errHorizonNotPlanned()
+	}
+
+	cols, err := in.Source.GetColumns()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	aggr := &Aggregator{
+		Source:   in.Source,
+		QP:       in.QP,
+		Original: true,
+	}
+
+	for _, col := range cols {
+		aggr.addColumnWithoutPushing(col, true)
+	}
+
+	return aggr, rewrite.NewTree("replace distinct with aggregator", in), nil
 }
 
 // addOrderBysAndGroupBysForAggregations runs after we have run horizonPlanning until the op tree stops changing
@@ -258,7 +308,7 @@ func tryPushingDownOrdering(ctx *plancontext.PlanningContext, in *Ordering) (ops
 		}
 		return rewrite.Swap(in, src, "push ordering under projection")
 	case *Aggregator:
-		if !src.QP.AlignGroupByAndOrderBy(ctx) {
+		if !(src.QP.AlignGroupByAndOrderBy(ctx) || overlaps(ctx, in.Order, src.Grouping)) {
 			return in, rewrite.SameTree, nil
 		}
 
@@ -266,6 +316,20 @@ func tryPushingDownOrdering(ctx *plancontext.PlanningContext, in *Ordering) (ops
 
 	}
 	return in, rewrite.SameTree, nil
+}
+
+func overlaps(ctx *plancontext.PlanningContext, order []ops.OrderBy, grouping []GroupBy) bool {
+ordering:
+	for _, orderBy := range order {
+		for _, groupBy := range grouping {
+			if ctx.SemTable.EqualsExprWithDeps(orderBy.SimplifiedExpr, groupBy.SimplifiedExpr) {
+				continue ordering
+			}
+		}
+		return false
+	}
+
+	return true
 }
 
 func pushOrderingUnderAggr(ctx *plancontext.PlanningContext, order *Ordering, aggregator *Aggregator) (ops.Operator, *rewrite.ApplyResult, error) {
@@ -362,11 +426,6 @@ func pushDownProjectionInVindex(
 		}
 	}
 	return src, rewrite.NewTree("push projection into vindex", p), nil
-}
-
-type projector struct {
-	cols  []ProjExpr
-	names []*sqlparser.AliasedExpr
 }
 
 func (p *projector) add(e ProjExpr, alias *sqlparser.AliasedExpr) {
@@ -630,25 +689,13 @@ func pushOrExpandHorizon(ctx *plancontext.PlanningContext, in horizonLike) (ops.
 	return expandHorizon(ctx, in)
 }
 
-// horizonLike should be removed. we should use Horizon for both these cases
-type horizonLike interface {
-	ops.Operator
-	selectStatement() sqlparser.SelectStatement
-	src() ops.Operator
-	getQP(ctx *plancontext.PlanningContext) (*QueryProjection, error)
-}
-
 func expandHorizon(ctx *plancontext.PlanningContext, horizon horizonLike) (ops.Operator, *rewrite.ApplyResult, error) {
 	sel, isSel := horizon.selectStatement().(*sqlparser.Select)
 	if !isSel {
 		return nil, nil, errHorizonNotPlanned()
 	}
-	qp, err := horizon.getQP(ctx)
-	if err != nil {
-		return nil, nil, err
-	}
 
-	if sel.Having != nil || qp.NeedsDistinct() || sel.Distinct {
+	if sel.Having != nil {
 		return nil, nil, errHorizonNotPlanned()
 	}
 
@@ -657,7 +704,29 @@ func expandHorizon(ctx *plancontext.PlanningContext, horizon horizonLike) (ops.O
 		return nil, nil, err
 	}
 
+	qp, err := horizon.getQP(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	if qp.NeedsDistinct() {
+		op = &Distinct{
+			Source: op,
+			QP:     qp,
+		}
+	}
+
+	if len(qp.OrderExprs) > 0 {
+		op = &Ordering{
+			Source: op,
+			Order:  qp.OrderExprs,
+		}
+	}
+
 	if sel.Limit != nil {
+		if sel.Limit.Offset != nil {
+			return nil, nil, errHorizonNotPlanned()
+		}
 		op = &Limit{
 			Source: op,
 			AST:    sel.Limit,
@@ -696,12 +765,6 @@ func createProjectionFromSelect(ctx *plancontext.PlanningContext, horizon horizo
 			projX.Alias = derived.Alias
 		}
 		out = projX
-		if qp.OrderExprs != nil {
-			out = &Ordering{
-				Source: out,
-				Order:  qp.OrderExprs,
-			}
-		}
 
 		return out, nil
 	}
@@ -755,14 +818,6 @@ outer:
 			}
 		}
 		return nil, vterrors.VT13001(fmt.Sprintf("Could not find the %v in aggregation in the original query", expr))
-	}
-
-	// If ordering is required, create an Ordering operation.
-	if len(qp.OrderExprs) > 0 {
-		return &Ordering{
-			Source: a,
-			Order:  qp.OrderExprs,
-		}, nil
 	}
 
 	return a, nil

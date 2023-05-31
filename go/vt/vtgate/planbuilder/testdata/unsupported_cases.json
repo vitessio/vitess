@@ -376,12 +376,6 @@
     "gen4-plan": "VT12001: unsupported: in scatter query: aggregation function 'avg(id)'"
   },
   {
-    "comment": "scatter aggregate with ambiguous aliases",
-    "query": "select distinct a, b as a from user",
-    "v3-plan": "generating ORDER BY clause: VT03021: ambiguous column reference: a",
-    "gen4-plan": "VT13001: [BUG] generating ORDER BY clause: ambiguous symbol reference: a"
-  },
-  {
     "comment": "outer and inner subquery route reference the same \"uu.id\" name\n# but they refer to different things. The first reference is to the outermost query,\n# and the second reference is to the innermost 'from' subquery.\n# This query will never work as the inner derived table is only selecting one of the column",
     "query": "select id2 from user uu where id in (select id from user where id = uu.id and user.col in (select col from (select id from user_extra where user_id = 5) uu where uu.user_id = uu.id))",
     "plan": "VT12001: unsupported: cross-shard correlated subquery"
@@ -416,12 +410,6 @@
     "comment": "unsupported with clause in union statement",
     "query": "with x as (select * from user) select * from x union select * from x",
     "plan": "VT12001: unsupported: WITH expression in UNION statement"
-  },
-  {
-    "comment": "scatter aggregate with complex select list (can't build order by)",
-    "query": "select distinct a+1 from user",
-    "v3-plan": "generating ORDER BY clause: VT12001: unsupported: reference a complex expression",
-    "gen4-plan": "VT13001: [BUG] in scatter query: complex ORDER BY expression: a + 1"
   },
   {
     "comment": "aggregation on union",

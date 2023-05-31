@@ -187,8 +187,12 @@ func CreateQPFromSelect(ctx *plancontext.PlanningContext, sel *sqlparser.Select)
 
 	if qp.Distinct && !qp.HasAggr {
 		// grouping and distinct both lead to unique results, so we don't need
-		// TODO: we should check that we are returning all the grouping columns, or this is not safe to do
 		qp.groupByExprs = nil
+	}
+
+	if qp.HasAggr && len(qp.groupByExprs) == 0 {
+		// this is a scalar aggregation and is inherently distinct
+		qp.Distinct = false
 	}
 
 	return qp, nil

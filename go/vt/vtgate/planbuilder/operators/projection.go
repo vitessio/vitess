@@ -85,7 +85,7 @@ func (p *Projection) addUnexploredExpr(ae *sqlparser.AliasedExpr, e sqlparser.Ex
 	return len(p.Projections) - 1
 }
 
-func (p *Projection) addNoPushCol(expr *sqlparser.AliasedExpr, _ bool) int {
+func (p *Projection) addColumnWithoutPushing(expr *sqlparser.AliasedExpr, _ bool) int {
 	return p.addUnexploredExpr(expr, expr.Expr)
 }
 

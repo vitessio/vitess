@@ -91,7 +91,7 @@ func (a *Aggregator) AddPredicate(ctx *plancontext.PlanningContext, expr sqlpars
 	return a, nil
 }
 
-func (a *Aggregator) addNoPushCol(expr *sqlparser.AliasedExpr, addToGroupBy bool) int {
+func (a *Aggregator) addColumnWithoutPushing(expr *sqlparser.AliasedExpr, addToGroupBy bool) int {
 	offset := len(a.Columns)
 	a.Columns = append(a.Columns, expr)
 

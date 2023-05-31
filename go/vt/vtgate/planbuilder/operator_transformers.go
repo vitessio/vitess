@@ -73,6 +73,8 @@ func transformToLogicalPlan(ctx *plancontext.PlanningContext, op ops.Operator, i
 		return transformOrdering(ctx, op)
 	case *operators.Aggregator:
 		return transformAggregator(ctx, op)
+	case *operators.Distinct:
+		return transformDistinct(ctx, op)
 	}
 
 	return nil, vterrors.VT13001(fmt.Sprintf("unknown type encountered: %T (transformToLogicalPlan)", op))
@@ -118,6 +120,14 @@ func transformAggregator(ctx *plancontext.PlanningContext, op *operators.Aggrega
 	}
 	oa.truncateColumnCount = op.ResultColumns
 	return oa, nil
+}
+
+func transformDistinct(ctx *plancontext.PlanningContext, op *operators.Distinct) (logicalPlan, error) {
+	src, err := transformToLogicalPlan(ctx, op.Source, false)
+	if err != nil {
+		return nil, err
+	}
+	return newDistinct(src, op.Columns /*needToTruncate*/, false), nil
 }
 
 func transformOrdering(ctx *plancontext.PlanningContext, op *operators.Ordering) (logicalPlan, error) {
