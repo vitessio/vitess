@@ -3259,7 +3259,7 @@ type Show struct {
 	IfNotExists            bool
 	ShowTablesOpt          *ShowTablesOpt
 	Scope                  string
-	ShowCollationFilterOpt *Expr
+	ShowCollationFilterOpt Expr
 	ShowIndexFilterOpt     Expr
 	Filter                 *ShowFilter
 	Limit                  *Limit
@@ -3368,7 +3368,7 @@ func (node *Show) Format(buf *TrackedBuffer) {
 	}
 
 	if node.Type == "collation" && node.ShowCollationFilterOpt != nil {
-		buf.Myprintf(" where %v", *node.ShowCollationFilterOpt)
+		buf.Myprintf(" where %v", node.ShowCollationFilterOpt)
 	}
 	if node.HasTable() {
 		buf.Myprintf(" %v", node.Table)
@@ -3389,7 +3389,7 @@ func (node *Show) walkSubtree(visit Visit) error {
 		visit,
 		node.Table,
 		node.ShowTablesOpt,
-		*node.ShowCollationFilterOpt,
+		node.ShowCollationFilterOpt,
 		node.ShowIndexFilterOpt,
 		node.Filter,
 		node.Limit,
@@ -3420,6 +3420,9 @@ func (node *ShowTablesOpt)Format(buf *TrackedBuffer) {
 }
 
 func (node *ShowTablesOpt) walkSubtree(visit Visit) error {
+	if node == nil {
+		return nil
+	}
 	return Walk(visit, node.Filter, node.AsOf)
 }
 
