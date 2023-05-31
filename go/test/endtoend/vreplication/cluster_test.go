@@ -412,7 +412,13 @@ func (vc *VitessCluster) AddTablet(t testing.TB, cell *Cell, keyspace *Keyspace,
 
 	options := []string{
 		"--queryserver-config-schema-reload-time", "5",
-		"--heartbeat_on_demand_duration", "5s",
+		// Replace constant heartbeats (--heartbeat_enable) with the
+		// on-demand ones (--heartbeat_on_demand_duration=5s) once
+		// https://github.com/vitessio/vitess/issues/13175 is fixed.
+		// This is because rdonly or replica tablets will almost always
+		// be chosen as the vstreamers.
+		// "--heartbeat_on_demand_duration", "5s",
+		"--heartbeat_enable",
 		"--heartbeat_interval", "250ms",
 	} // FIXME: for multi-cell initial schema doesn't seem to load without "--queryserver-config-schema-reload-time"
 	options = append(options, extraVTTabletArgs...)
