@@ -1800,7 +1800,7 @@ func (tsv *TabletServer) registerThrottlerCheckHandlers() {
 			}
 			appName := r.URL.Query().Get("app")
 			if appName == "" {
-				appName = throttlerapp.DefaultName
+				appName = throttlerapp.DefaultName.String()
 			}
 			flags := &throttle.CheckFlags{
 				LowPriority:           (r.URL.Query().Get("p") == "low"),

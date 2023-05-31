@@ -336,7 +336,7 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 			return ctx.Err()
 		}
 		// check throttler.
-		if !vp.vr.vre.throttlerClient.ThrottleCheckOKOrWaitAppName(ctx, vp.throttlerAppName) {
+		if !vp.vr.vre.throttlerClient.ThrottleCheckOKOrWaitAppName(ctx, throttlerapp.Name(vp.throttlerAppName)) {
 			_ = vp.vr.updateTimeThrottled(throttlerapp.VPlayerName)
 			continue
 		}

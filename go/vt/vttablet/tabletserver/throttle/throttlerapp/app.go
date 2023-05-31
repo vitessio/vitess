@@ -16,35 +16,45 @@ limitations under the License.
 
 package throttlerapp
 
+type Name string
+
+func (n Name) String() string {
+	return string(n)
+}
+
+func (n Name) Equals(s string) bool {
+	return string(n) == s
+}
+
 const (
 	// DefaultName is the app name used by vitess when app doesn't indicate its name
-	DefaultName = "default"
-	VitessName  = "vitess"
+	DefaultName Name = "default"
+	VitessName  Name = "vitess"
 
-	TableGCName   = "tablegc"
-	OnlineDDLName = "online-ddl"
-	GhostName     = "gh-ost"
-	PTOSCName     = "pt-osc"
+	TableGCName   Name = "tablegc"
+	OnlineDDLName Name = "online-ddl"
+	GhostName     Name = "gh-ost"
+	PTOSCName     Name = "pt-osc"
 
-	VStreamerName         = "vstreamer"
-	VReplicationName      = "vreplication"
-	VPlayerName           = "vplayer"
-	VCopierName           = "vcopier"
-	ResultStreamerName    = "resultstreamer"
-	RowStreamerName       = "rowstreamer"
-	ExternalConnectorName = "external-connector"
-	ReplicaConnectorName  = "replica-connector"
+	VStreamerName         Name = "vstreamer"
+	VReplicationName      Name = "vreplication"
+	VPlayerName           Name = "vplayer"
+	VCopierName           Name = "vcopier"
+	ResultStreamerName    Name = "resultstreamer"
+	RowStreamerName       Name = "rowstreamer"
+	ExternalConnectorName Name = "external-connector"
+	ReplicaConnectorName  Name = "replica-connector"
 
-	BinlogWatcherName = "binlog-watcher"
-	MessagerName      = "messager"
-	SchemaTrackerName = "schema-tracker"
+	BinlogWatcherName Name = "binlog-watcher"
+	MessagerName      Name = "messager"
+	SchemaTrackerName Name = "schema-tracker"
 )
 
 var (
 	exemptFromChecks = map[string]bool{
-		BinlogWatcherName: true,
-		MessagerName:      true,
-		SchemaTrackerName: true,
+		BinlogWatcherName.String(): true,
+		MessagerName.String():      true,
+		SchemaTrackerName.String(): true,
 	}
 )
 

@@ -43,6 +43,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 )
 
 const (
@@ -66,7 +67,7 @@ type vstreamer struct {
 	startPos     string
 	filter       *binlogdatapb.Filter
 	send         func([]*binlogdatapb.VEvent) error
-	throttlerApp string
+	throttlerApp throttlerapp.Name
 
 	vevents        chan *localVSchema
 	vschema        *localVSchema
@@ -113,7 +114,7 @@ type streamerPlan struct {
 //
 // vschema: the current vschema. This value can later be changed through the SetVSchema method.
 // send: callback function to send events.
-func newVStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine, startPos string, stopPos string, filter *binlogdatapb.Filter, vschema *localVSchema, throttlerApp string, send func([]*binlogdatapb.VEvent) error, phase string, vse *Engine) *vstreamer {
+func newVStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine, startPos string, stopPos string, filter *binlogdatapb.Filter, vschema *localVSchema, throttlerApp throttlerapp.Name, send func([]*binlogdatapb.VEvent) error, phase string, vse *Engine) *vstreamer {
 	ctx, cancel := context.WithCancel(ctx)
 	return &vstreamer{
 		ctx:          ctx,

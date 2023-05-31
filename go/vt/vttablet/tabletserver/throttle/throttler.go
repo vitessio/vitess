@@ -1036,7 +1036,7 @@ func (throttler *Throttler) checkStore(ctx context.Context, appName string, stor
 		// continuous and do not generate a substantial load.
 		return okMetricCheckResult
 	}
-	if !flags.SkipRequestHeartbeats && appName != throttlerapp.VitessName {
+	if !flags.SkipRequestHeartbeats && !throttlerapp.VitessName.Equals(appName) {
 		go throttler.heartbeatWriter.RequestHeartbeats()
 		// This check was made by someone other than the throttler itself, i.e. this came from online-ddl or vreplication or other.
 		// We mark the fact that someone just made a check. If this is a REPLICA or RDONLY tables, this will be reported back

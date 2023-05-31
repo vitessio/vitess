@@ -554,17 +554,17 @@ func (vr *vreplicator) setSQLMode(ctx context.Context, dbClient *vdbClient) (fun
 //     This is useful when we want to throttle all migrations. We throttle "online-ddl" and that applies to both vreplication
 //     migrations as well as gh-ost migrations.
 func (vr *vreplicator) throttlerAppName() string {
-	names := []string{vr.WorkflowName, throttlerapp.VReplicationName}
+	names := []string{vr.WorkflowName, throttlerapp.VReplicationName.String()}
 	if vr.WorkflowType == int32(binlogdatapb.VReplicationWorkflowType_OnlineDDL) {
-		names = append(names, throttlerapp.OnlineDDLName)
+		names = append(names, throttlerapp.OnlineDDLName.String())
 	}
 	return strings.Join(names, ":")
 }
 
-func (vr *vreplicator) updateTimeThrottled(appThrottled string) error {
+func (vr *vreplicator) updateTimeThrottled(appThrottled throttlerapp.Name) error {
 	err := vr.throttleUpdatesRateLimiter.Do(func() error {
 		tm := time.Now().Unix()
-		update, err := binlogplayer.GenerateUpdateTimeThrottled(vr.id, tm, appThrottled)
+		update, err := binlogplayer.GenerateUpdateTimeThrottled(vr.id, tm, appThrottled.String())
 		if err != nil {
 			return err
 		}

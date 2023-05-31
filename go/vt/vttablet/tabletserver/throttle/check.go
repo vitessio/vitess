@@ -87,7 +87,7 @@ func (check *ThrottlerCheck) checkAppMetricResult(ctx context.Context, appName s
 		statusCode = http.StatusTooManyRequests // 429
 		err = base.ErrThresholdExceeded
 
-		if !flags.LowPriority && !flags.ReadCheck && appName != throttlerapp.VitessName {
+		if !flags.LowPriority && !flags.ReadCheck && throttlerapp.VitessName.Equals(appName) {
 			// low priority requests will henceforth be denied
 			go check.throttler.nonLowPriorityAppRequestsThrottled.SetDefault(metricName, true)
 		}
@@ -148,7 +148,7 @@ func (check *ThrottlerCheck) localCheck(ctx context.Context, metricName string) 
 	if err != nil {
 		return NoSuchMetricCheckResult
 	}
-	checkResult = check.Check(ctx, throttlerapp.VitessName, storeType, storeName, "local", StandardCheckFlags)
+	checkResult = check.Check(ctx, throttlerapp.VitessName.String(), storeType, storeName, "local", StandardCheckFlags)
 
 	if checkResult.StatusCode == http.StatusOK {
 		check.throttler.markMetricHealthy(metricName)

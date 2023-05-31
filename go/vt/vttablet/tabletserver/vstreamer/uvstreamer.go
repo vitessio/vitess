@@ -37,6 +37,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 )
 
 var uvstreamerTestMode = false // Only used for testing
@@ -58,7 +59,7 @@ type uvstreamer struct {
 	startPos     string
 	filter       *binlogdatapb.Filter
 	inTablePKs   []*binlogdatapb.TableLastPK
-	throttlerApp string
+	throttlerApp throttlerapp.Name
 
 	vschema *localVSchema
 
@@ -91,7 +92,7 @@ type uvstreamerConfig struct {
 	CatchupRetryTime  time.Duration
 }
 
-func newUVStreamer(ctx context.Context, vse *Engine, cp dbconfigs.Connector, se *schema.Engine, startPos string, tablePKs []*binlogdatapb.TableLastPK, filter *binlogdatapb.Filter, vschema *localVSchema, throttlerApp string, send func([]*binlogdatapb.VEvent) error) *uvstreamer {
+func newUVStreamer(ctx context.Context, vse *Engine, cp dbconfigs.Connector, se *schema.Engine, startPos string, tablePKs []*binlogdatapb.TableLastPK, filter *binlogdatapb.Filter, vschema *localVSchema, throttlerApp throttlerapp.Name, send func([]*binlogdatapb.VEvent) error) *uvstreamer {
 	ctx, cancel := context.WithCancel(ctx)
 	config := &uvstreamerConfig{
 		MaxReplicationLag: 1 * time.Nanosecond,
