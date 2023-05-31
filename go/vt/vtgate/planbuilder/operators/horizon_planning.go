@@ -724,9 +724,6 @@ func expandHorizon(ctx *plancontext.PlanningContext, horizon horizonLike) (ops.O
 	}
 
 	if sel.Limit != nil {
-		if sel.Limit.Offset != nil {
-			return nil, nil, errHorizonNotPlanned()
-		}
 		op = &Limit{
 			Source: op,
 			AST:    sel.Limit,
