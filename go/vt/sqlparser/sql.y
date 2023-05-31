@@ -4860,17 +4860,13 @@ show_statement:
   }
 | SHOW COLLATION WHERE expression
   {
-    // Cannot dereference $4 directly, or else the parser stackcannot be pooled. See yyParsePooled
-    showCollationFilterOpt := $4
-    $$ = &Show{Type: string($2), ShowCollationFilterOpt: &showCollationFilterOpt}
+    $$ = &Show{Type: string($2), ShowCollationFilterOpt: $4}
   }
 | SHOW COLLATION naked_like
   {
-    // Cannot dereference $3 directly, or else the parser stackcannot be pooled. See yyParsePooled
     cmp := $3.(*ComparisonExpr)
     cmp.Left = &ColName{Name: NewColIdent("collation")}
-    var ex Expr = cmp
-    $$ = &Show{Type: string($2), ShowCollationFilterOpt: &ex}
+    $$ = &Show{Type: string($2), ShowCollationFilterOpt: cmp}
   }
 | SHOW GRANTS
   {
