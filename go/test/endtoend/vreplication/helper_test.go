@@ -127,8 +127,10 @@ func waitForQueryResult(t *testing.T, conn *mysql.Conn, database string, query s
 // the provided app name in its self check.
 func waitForTabletThrottlingStatus(t *testing.T, tablet *cluster.VttabletProcess, appName string, wantCode int64) {
 	var gotCode int64
-	timer := time.NewTimer(defaultTimeout)
-	defer timer.Stop()
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
+	defer cancel()
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
 	for {
 		output, err := throttlerCheckSelf(tablet, appName)
 		require.NoError(t, err)
@@ -142,11 +144,10 @@ func waitForTabletThrottlingStatus(t *testing.T, tablet *cluster.VttabletProcess
 			return
 		}
 		select {
-		case <-timer.C:
+		case <-ctx.Done():
 			require.FailNow(t, fmt.Sprintf("tablet %q did not return expected status of %d for application %q before the timeout of %s; last seen status: %d",
 				tablet.Name, wantCode, appName, defaultTimeout, gotCode))
-		default:
-			time.Sleep(defaultTick)
+		case <-ticker.C:
 		}
 	}
 }
