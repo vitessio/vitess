@@ -59,7 +59,7 @@ var (
 
 	parallelInsertWorkers = "--vreplication-parallel-insert-workers=4"
 
-	throttlerConfig = throttler.Config{Threshold: 2}
+	throttlerConfig = throttler.Config{Threshold: 15}
 )
 
 // ClusterConfig defines the parameters like ports, tmpDir, tablet types which uniquely define a vitess cluster
