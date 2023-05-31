@@ -306,6 +306,9 @@ func ensureRestoredGTIDPurgedMatchesManifest(ctx context.Context, manifest *Back
 	if manifest == nil {
 		return nil
 	}
+	if manifest.Position.GTIDSet == nil {
+		return nil
+	}
 	gtid := manifest.Position.GTIDSet.String()
 	if gtid == "" {
 		return nil
