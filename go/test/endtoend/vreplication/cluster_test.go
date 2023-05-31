@@ -412,7 +412,7 @@ func (vc *VitessCluster) AddTablet(t testing.TB, cell *Cell, keyspace *Keyspace,
 
 	options := []string{
 		"--queryserver-config-schema-reload-time", "5",
-		"--heartbeat_on_demand_duration", "1m",
+		"--heartbeat_on_demand_duration", "5s",
 		"--heartbeat_interval", "250ms",
 	} // FIXME: for multi-cell initial schema doesn't seem to load without "--queryserver-config-schema-reload-time"
 	options = append(options, extraVTTabletArgs...)
