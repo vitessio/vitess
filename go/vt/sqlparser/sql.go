@@ -17382,7 +17382,7 @@ yydefault:
 		yyDollar = yyS[yypt-3 : yypt+1]
 //line sql.y:5798
 		{
-			yyVAL.columnDefinition = &ColumnDefinition{Name: yyDollar[1].colIdent, Type: ColumnType{Type: "INTEGER", Unsigned: true, Autoincrement: true}}
+			yyVAL.columnDefinition = &ColumnDefinition{Name: yyDollar[1].colIdent, Type: ColumnType{Type: "INTEGER", Unsigned: true, Autoincrement: true, ValOnEmpty: &NullVal{}, ValOnError: &NullVal{}}}
 		}
 	case 1177:
 		yyDollar = yyS[yypt-6 : yypt+1]

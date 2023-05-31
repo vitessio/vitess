@@ -5796,7 +5796,7 @@ json_table_column_definition:
   }
 | reserved_sql_id FOR ORDINALITY
   {
-    $$ = &ColumnDefinition{Name: $1, Type: ColumnType{Type: "INTEGER", Unsigned: true, Autoincrement: true}}
+    $$ = &ColumnDefinition{Name: $1, Type: ColumnType{Type: "INTEGER", Unsigned: true, Autoincrement: true, ValOnEmpty: &NullVal{}, ValOnError: &NullVal{}}}
   }
 | NESTED STRING COLUMNS openb json_table_column_definition closeb
   {

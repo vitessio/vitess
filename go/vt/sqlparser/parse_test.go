@@ -7264,7 +7264,7 @@ FROM
 		// TODO: not sure if it's necessary to differnentiate FOR ORDINALITY from AUTO_INCREMENT
 		{
 			input: `SELECT * FROM JSON_TABLE('{}', '$' COLUMNS( pk FOR ORDINALITY, c1 INT PATH '$.c1')) as jt;`,
-			output: "select * from json_table('{}', \"$\" columns(\n\tpk INTEGER unsigned auto_increment,\n\tc1 INT path \"$.c1\" null on empty null on error\n)) as jt",
+			output: "select * from json_table('{}', \"$\" columns(\n\tpk INTEGER unsigned auto_increment null on empty null on error,\n\tc1 INT path \"$.c1\" null on empty null on error\n)) as jt",
 		},
 
 		// EXISTS TESTS
