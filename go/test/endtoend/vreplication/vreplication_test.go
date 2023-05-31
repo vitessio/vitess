@@ -696,7 +696,7 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 		defaultCell := cells[0]
 		custKs := vc.Cells[defaultCell.Name].Keyspaces["customer"]
 
-		tables := "customer,Lead,Lead-1,db_order_test,geom_tbl,json_tbl,blüb_tbl,vdiff_order"
+		tables := "customer,Lead,Lead-1,db_order_test,geom_tbl,json_tbl,blüb_tbl,vdiff_order,reftable"
 		moveTablesAction(t, "Create", sourceCellOrAlias, workflow, sourceKs, targetKs, tables)
 
 		customerTab1 := custKs.Shards["-80"].Tablets["zone1-200"].Vttablet
@@ -761,7 +761,7 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 		tbls := []string{"Lead", "Lead-1"}
 		for _, tbl := range tbls {
 			output, err := osExec(t, "mysql", []string{"-u", "vtdba", "-P", fmt.Sprintf("%d", vc.ClusterConfig.vtgateMySQLPort),
-				"--host=127.0.0.1", "-e", fmt.Sprintf("select * from `%s`", tbl)})
+				"--host=127.0.0.1", "--default-character-set=utf8mb4", "-e", fmt.Sprintf("select * from `%s`", tbl)})
 			if err != nil {
 				require.FailNow(t, output)
 			}
@@ -1113,7 +1113,7 @@ func shardMerchant(t *testing.T) {
 
 		// confirm that the backticking of keyspaces in the routing rules works
 		output, err := osExec(t, "mysql", []string{"-u", "vtdba", "-P", fmt.Sprintf("%d", vc.ClusterConfig.vtgateMySQLPort),
-			fmt.Sprintf("--host=%s", vc.ClusterConfig.hostname), "-e", "select * from merchant"})
+			fmt.Sprintf("--host=%s", vc.ClusterConfig.hostname), "--default-character-set=utf8mb4", "-e", "select * from merchant"})
 		if err != nil {
 			require.FailNow(t, output)
 		}
