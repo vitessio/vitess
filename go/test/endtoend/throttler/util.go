@@ -24,10 +24,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/buger/jsonparser"
 	"github.com/stretchr/testify/require"
+	"github.com/tidwall/gjson"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/log"
 )
 
@@ -95,7 +96,13 @@ func UpdateThrottlerTopoConfigRaw(vtctldProcess *cluster.VtctldClientProcess, ke
 // SrvKeyspace record may not yet exist for a newly created
 // Keyspace that is still initializing before it becomes serving.
 func UpdateThrottlerTopoConfig(clusterInstance *cluster.LocalProcessCluster, enable bool, disable bool, threshold float64, metricsQuery string) (result string, err error) {
-	return UpdateThrottlerTopoConfigRaw(&clusterInstance.VtctldClientProcess, clusterInstance.Keyspaces[0].Name, enable, disable, threshold, metricsQuery)
+	rec := concurrency.AllErrorRecorder{}
+	for _, ks := range clusterInstance.Keyspaces {
+		if _, err := UpdateThrottlerTopoConfigRaw(&clusterInstance.VtctldClientProcess, ks.Name, enable, disable, threshold, metricsQuery); err != nil {
+			rec.RecordError(err)
+		}
+	}
+	return "", rec.Error()
 }
 
 // WaitForThrottlerStatusEnabled waits for a tablet to report its throttler status as
@@ -112,16 +119,13 @@ func WaitForThrottlerStatusEnabled(t *testing.T, tablet *cluster.Vttablet, enabl
 
 	for {
 		body := getHTTPBody(url)
-		isEnabled, err := jsonparser.GetBoolean([]byte(body), enabledJSONPath)
-		require.NoError(t, err)
+		isEnabled := gjson.Get(body, enabledJSONPath).Bool()
 		if isEnabled == enabled {
 			if config == nil {
 				return
 			}
-			query, err := jsonparser.GetString([]byte(body), queryJSONPath)
-			require.NoError(t, err)
-			threshold, err := jsonparser.GetFloat([]byte(body), thresholdJSONPath)
-			require.NoError(t, err)
+			query := gjson.Get(body, queryJSONPath).String()
+			threshold := gjson.Get(body, thresholdJSONPath).Float()
 			if query == config.Query && threshold == config.Threshold {
 				return
 			}
