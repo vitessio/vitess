@@ -320,6 +320,11 @@ func insertSelectPlan(ctx *plancontext.PlanningContext, insOp *Insert, ins *sqlp
 	vv := make([][]int, len(colVindexes))
 	for idx, colVindex := range colVindexes {
 		for _, col := range colVindex.Columns {
+			err := checkAndErrIfVindexChanging(sqlparser.UpdateExprs(ins.OnDup), col)
+			if err != nil {
+				return nil, err
+			}
+
 			colNum := findColumn(ins, col)
 			// sharding column values should be provided in the insert.
 			if colNum == -1 && idx == 0 {
