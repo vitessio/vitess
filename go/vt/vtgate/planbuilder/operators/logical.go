@@ -283,7 +283,7 @@ func createOperatorFromInsert(ctx *plancontext.PlanningContext, ins *sqlparser.I
 	// set insert ignore.
 	insOp.Ignore = bool(ins.Ignore) || ins.OnDup != nil
 
-	insOp.ColVindexes = getColVindexes(insOp.VTable.ColumnVindexes)
+	insOp.ColVindexes = getColVindexes(insOp)
 	switch rows := ins.Rows.(type) {
 	case sqlparser.Values:
 		route.Source, err = insertRowsPlan(insOp, ins, rows)
@@ -412,8 +412,13 @@ func valuesProvided(rows sqlparser.InsertRows) bool {
 	return false
 }
 
-func getColVindexes(allColVindexes []*vindexes.ColumnVindex) (colVindexes []*vindexes.ColumnVindex) {
-	for _, colVindex := range allColVindexes {
+func getColVindexes(insOp *Insert) (colVindexes []*vindexes.ColumnVindex) {
+	// For unsharded table the Column Vindex does not mean anything.
+	// And therefore should be ignored.
+	if !insOp.VTable.Keyspace.Sharded {
+		return
+	}
+	for _, colVindex := range insOp.VTable.ColumnVindexes {
 		if colVindex.IsPartialVindex() {
 			continue
 		}
