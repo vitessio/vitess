@@ -119,6 +119,12 @@ type (
 
 		// ReleaseLock releases all the held advisory locks.
 		ReleaseLock(ctx context.Context) error
+
+		// GetWarmingReadsPercent gets the percentage of queries to clone to replicas for bufferpool warming
+		GetWarmingReadsPercent() int
+
+		// CloneForReplicaWarming clones the VCursor for re-use in warming queries to replicas
+		CloneForReplicaWarming(ctx context.Context) interface{}
 	}
 
 	// SessionActions gives primitives ability to interact with the session state

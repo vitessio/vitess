@@ -19,6 +19,7 @@ package engine
 import (
 	"context"
 	"fmt"
+	"math/rand"
 	"sort"
 	"strconv"
 	"strings"
@@ -239,6 +240,8 @@ func (route *Route) executeShards(
 
 	queries := getQueries(route.Query, bvs)
 	result, errs := vcursor.ExecuteMultiShard(ctx, route, rss, queries, false /* rollbackOnError */, false /* canAutocommit */)
+
+	route.executeWarmingReplicaRead(ctx, vcursor, bindVars, queries)
 
 	if errs != nil {
 		errs = filterOutNilErrors(errs)
@@ -580,4 +583,32 @@ func getQueries(query string, bvs []map[string]*querypb.BindVariable) []*querypb
 
 func orderByToString(in any) string {
 	return in.(OrderByParams).String()
+}
+
+func (route *Route) executeWarmingReplicaRead(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, queries []*querypb.BoundQuery) {
+	switch route.Opcode {
+	case Unsharded, Scatter, Equal, EqualUnique, IN:
+		// no-op
+	default:
+		return
+	}
+
+	if vcursor.GetWarmingReadsPercent() == 0 || rand.Intn(100) > vcursor.GetWarmingReadsPercent() {
+		return
+	}
+
+	replicaVCursor, ok := vcursor.CloneForReplicaWarming(ctx).(VCursor)
+
+	if !ok {
+		return
+	}
+
+	go func(replicaVCursor VCursor) {
+		rss, _, err := route.findRoute(ctx, replicaVCursor, bindVars)
+		if err != nil {
+			return
+		}
+
+		_, _ = replicaVCursor.ExecuteMultiShard(ctx, route, rss, queries, false /* rollbackOnError */, false /* autocommit */)
+	}(replicaVCursor)
 }

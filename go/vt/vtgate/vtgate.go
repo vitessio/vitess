@@ -111,6 +111,8 @@ var (
 
 	// allowKillStmt to allow execution of kill statement.
 	allowKillStmt bool
+
+	warmingReadsPercent = 0
 )
 
 func registerFlags(fs *pflag.FlagSet) {
@@ -153,6 +155,7 @@ func registerFlags(fs *pflag.FlagSet) {
 
 	fs.Bool("gate_query_cache_lfu", false, "gate server cache algorithm. when set to true, a new cache algorithm based on a TinyLFU admission policy will be used to improve cache behavior and prevent pollution from sparse queries")
 	_ = fs.MarkDeprecated("gate_query_cache_lfu", "`--gate_query_cache_lfu` is deprecated and will be removed in `v19.0`. The query cache always uses a LFU implementation now.")
+	fs.IntVar(&warmingReadsPercent, "warming_reads_percent", 0, "Percentage of reads on the primary to forward to replicas. Useful for keeping buffer pools warm.")
 }
 func init() {
 	servenv.OnParseFor("vtgate", registerFlags)
@@ -319,6 +322,7 @@ func Init(
 		si,
 		noScatter,
 		pv,
+		warmingReadsPercent,
 	)
 
 	if err := executor.defaultQueryLogger(); err != nil {

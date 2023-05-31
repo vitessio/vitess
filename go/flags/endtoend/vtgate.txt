@@ -229,6 +229,7 @@ Flags:
       --vmodule moduleSpec                                               comma-separated list of pattern=N settings for file-filtered logging
       --vschema_ddl_authorized_users string                              List of users authorized to execute vschema ddl operations, or '%' to allow all users.
       --vtgate-config-terse-errors                                       prevent bind vars from escaping in returned errors
+      --warming_reads_percent int                                        Percentage of reads on the primary to forward to replicas. Useful for keeping buffer pools warm. (default 0)
       --warn_memory_rows int                                             Warning threshold for in-memory results. A row count higher than this amount will cause the VtGateWarnings.ResultsExceeded counter to be incremented. (default 30000)
       --warn_payload_size int                                            The warning threshold for query payloads in bytes. A payload greater than this threshold will cause the VtGateWarnings.WarnPayloadSizeExceeded counter to be incremented.
       --warn_sharded_only                                                If any features that are only available in unsharded mode are used, query execution warnings will be added to the session

@@ -89,6 +89,14 @@ func (t *noopVCursor) ReleaseLock(context.Context) error {
 	panic("implement me")
 }
 
+func (t *noopVCursor) GetWarmingReadsPercent() int {
+	panic("implement me")
+}
+
+func (t *noopVCursor) CloneForReplicaWarming(ctx context.Context) interface{} {
+	panic("implement me")
+}
+
 func (t *noopVCursor) SetExec(ctx context.Context, name string, value string) error {
 	panic("implement me")
 }
@@ -479,6 +487,14 @@ func (f *loggingVCursor) GetKeyspace() string {
 
 func (f *loggingVCursor) RecordWarning(warning *querypb.QueryWarning) {
 	f.warnings = append(f.warnings, warning)
+}
+
+func (f *loggingVCursor) GetWarmingReadsPercent() int {
+	return 0
+}
+
+func (f *loggingVCursor) CloneForReplicaWarming(ctx context.Context) interface{} {
+	return f
 }
 
 func (f *loggingVCursor) Execute(ctx context.Context, method string, query string, bindvars map[string]*querypb.BindVariable, rollbackOnError bool, co vtgatepb.CommitOrder) (*sqltypes.Result, error) {
