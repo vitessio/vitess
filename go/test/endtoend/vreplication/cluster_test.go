@@ -365,6 +365,11 @@ func (vc *VitessCluster) AddKeyspace(t *testing.T, cells []*Cell, ksName string,
 	if err := vc.VtctldClient.CreateKeyspace(keyspace.Name, keyspace.SidecarDBName); err != nil {
 		t.Fatalf(err.Error())
 	}
+
+	log.Infof("Applying throttler config for keyspace %s", keyspace.Name)
+	res, err := throttler.UpdateThrottlerTopoConfigRaw(vc.VtctldClient, keyspace.Name, true, false, 30*time.Second.Seconds(), "")
+	require.NoError(t, err, res)
+
 	cellsToWatch := ""
 	for i, cell := range cells {
 		if i > 0 {
@@ -393,7 +398,8 @@ func (vc *VitessCluster) AddKeyspace(t *testing.T, cells []*Cell, ksName string,
 			vc.StartVtgate(t, cell, cellsToWatch)
 		}
 	}
-	err := vc.VtctlClient.ExecuteCommand("RebuildKeyspaceGraph", ksName)
+
+	err = vc.VtctlClient.ExecuteCommand("RebuildKeyspaceGraph", ksName)
 	require.NoError(t, err)
 	return keyspace, nil
 }
@@ -542,9 +548,6 @@ func (vc *VitessCluster) AddShards(t *testing.T, cells []*Cell, keyspace *Keyspa
 		log.Infof("Finished creating shard %s", shard.Name)
 	}
 
-	log.Infof("Applying throttler config for keyspace %s", keyspace.Name)
-	_, err := throttler.UpdateThrottlerTopoConfigRaw(vc.VtctldClient, keyspace.Name, true, false, 30*time.Second.Seconds(), "")
-	require.NoError(t, err)
 	log.Infof("Waiting for throttler config to be applied on all shards")
 	for _, shard := range keyspace.Shards {
 		for _, tablet := range shard.Tablets {

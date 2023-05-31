@@ -338,6 +338,8 @@ func (throttler *Throttler) applyThrottlerConfig(ctx context.Context, throttlerC
 	if !throttlerConfigViaTopo {
 		return
 	}
+	throttler.initMutex.Lock()
+	defer throttler.initMutex.Unlock()
 	log.Infof("Throttler: applying topo config: %+v", throttlerConfig)
 	if throttlerConfig.CustomQuery == "" {
 		throttler.metricsQuery.Store(sqlparser.BuildParsedQuery(defaultReplicationLagQuery, sidecardb.GetIdentifier()).Query)
@@ -457,9 +459,6 @@ func (throttler *Throttler) Open() error {
 					// to two (or more) instances of this goroutine. That's not a big problem; it's fine if all
 					// attempt to read the throttler config; but we just want to ensure they don't step on each other
 					// while applying the changes.
-					throttler.initMutex.Lock()
-					defer throttler.initMutex.Unlock()
-
 					throttler.applyThrottlerConfig(ctx, throttlerConfig) // may issue an Enable
 					return
 				}
