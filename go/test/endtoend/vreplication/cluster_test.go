@@ -411,7 +411,7 @@ func (vc *VitessCluster) AddTablet(t testing.TB, cell *Cell, keyspace *Keyspace,
 	tablet := &Tablet{}
 
 	options := []string{
-		"--queryserver-config-schema-reload-time", "5s",
+		"--queryserver-config-schema-reload-time", "5",
 		"--heartbeat_enable",
 		"--heartbeat_on_demand_duration", "10s",
 		"--heartbeat_interval", "1s",
