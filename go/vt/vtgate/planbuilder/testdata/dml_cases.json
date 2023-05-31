@@ -6219,5 +6219,225 @@
         "user.music"
       ]
     }
+  },
+  {
+    "comment": "insert + lookup vindex + auto increment on lookup column - not provided",
+    "query": "insert into mixed_tbl(shard_key) values (1),(4),(9)",
+    "plan": {
+      "QueryType": "INSERT",
+      "Original": "insert into mixed_tbl(shard_key) values (1),(4),(9)",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Sharded",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "AutoIncrement": "select next :n /* INT64 */ values from seq:Values::(NULL, NULL, NULL)",
+        "Query": "insert into mixed_tbl(shard_key, lkp_key) values (:_shard_key_0, :_lkp_key_0), (:_shard_key_1, :_lkp_key_1), (:_shard_key_2, :_lkp_key_2)",
+        "TableName": "mixed_tbl",
+        "VindexValues": {
+          "lkp_shard_map": ":__seq0, :__seq1, :__seq2",
+          "shard_index": "INT64(1), INT64(4), INT64(9)"
+        }
+      },
+      "TablesUsed": [
+        "user.mixed_tbl"
+      ]
+    }
+  },
+  {
+    "comment": "insert + lookup vindex + auto increment on lookup column - partially provided",
+    "query": "insert into mixed_tbl(shard_key, lkp_key) values (1, 1),(4, null),(9, 27)",
+    "plan": {
+      "QueryType": "INSERT",
+      "Original": "insert into mixed_tbl(shard_key, lkp_key) values (1, 1),(4, null),(9, 27)",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Sharded",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "AutoIncrement": "select next :n /* INT64 */ values from seq:Values::(INT64(1), NULL, INT64(27))",
+        "Query": "insert into mixed_tbl(shard_key, lkp_key) values (:_shard_key_0, :_lkp_key_0), (:_shard_key_1, :_lkp_key_1), (:_shard_key_2, :_lkp_key_2)",
+        "TableName": "mixed_tbl",
+        "VindexValues": {
+          "lkp_shard_map": ":__seq0, :__seq1, :__seq2",
+          "shard_index": "INT64(1), INT64(4), INT64(9)"
+        }
+      },
+      "TablesUsed": [
+        "user.mixed_tbl"
+      ]
+    }
+  },
+  {
+    "comment": "insert + lookup vindex + auto increment on lookup column + select - not provided",
+    "query": "insert into mixed_tbl(shard_key) select foo from user where id = 1",
+    "v3-plan": {
+      "QueryType": "INSERT",
+      "Original": "insert into mixed_tbl(shard_key) select foo from user where id = 1",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Select",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "AutoIncrement": "select next :n /* INT64 */ values from seq:Offset(1)",
+        "TableName": "mixed_tbl",
+        "VindexOffsetFromSelect": {
+          "lkp_shard_map": "[1]",
+          "shard_index": "[0]"
+        },
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select foo from `user` where 1 != 1",
+            "Query": "select foo from `user` where id = 1 for update",
+            "Table": "`user`",
+            "Values": [
+              "INT64(1)"
+            ],
+            "Vindex": "user_index"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.mixed_tbl"
+      ]
+    },
+    "gen4-plan": {
+      "QueryType": "INSERT",
+      "Original": "insert into mixed_tbl(shard_key) select foo from user where id = 1",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Select",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "AutoIncrement": "select next :n /* INT64 */ values from seq:Offset(1)",
+        "TableName": "mixed_tbl",
+        "VindexOffsetFromSelect": {
+          "lkp_shard_map": "[1]",
+          "shard_index": "[0]"
+        },
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select foo from `user` where 1 != 1",
+            "Query": "select foo from `user` where id = 1 lock in share mode",
+            "Table": "`user`",
+            "Values": [
+              "INT64(1)"
+            ],
+            "Vindex": "user_index"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.mixed_tbl",
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "insert + lookup vindex + auto increment on lookup column + select - provided",
+    "query": "insert into mixed_tbl(shard_key, lkp_key) select foo, bar from user where id = 1",
+    "v3-plan": {
+      "QueryType": "INSERT",
+      "Original": "insert into mixed_tbl(shard_key, lkp_key) select foo, bar from user where id = 1",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Select",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "AutoIncrement": "select next :n /* INT64 */ values from seq:Offset(1)",
+        "TableName": "mixed_tbl",
+        "VindexOffsetFromSelect": {
+          "lkp_shard_map": "[1]",
+          "shard_index": "[0]"
+        },
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select foo, bar from `user` where 1 != 1",
+            "Query": "select foo, bar from `user` where id = 1 for update",
+            "Table": "`user`",
+            "Values": [
+              "INT64(1)"
+            ],
+            "Vindex": "user_index"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.mixed_tbl"
+      ]
+    },
+    "gen4-plan": {
+      "QueryType": "INSERT",
+      "Original": "insert into mixed_tbl(shard_key, lkp_key) select foo, bar from user where id = 1",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Select",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "AutoIncrement": "select next :n /* INT64 */ values from seq:Offset(1)",
+        "TableName": "mixed_tbl",
+        "VindexOffsetFromSelect": {
+          "lkp_shard_map": "[1]",
+          "shard_index": "[0]"
+        },
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select foo, bar from `user` where 1 != 1",
+            "Query": "select foo, bar from `user` where id = 1 lock in share mode",
+            "Table": "`user`",
+            "Values": [
+              "INT64(1)"
+            ],
+            "Vindex": "user_index"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.mixed_tbl",
+        "user.user"
+      ]
+    }
   }
 ]
