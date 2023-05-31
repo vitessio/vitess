@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -95,14 +96,23 @@ func UpdateThrottlerTopoConfigRaw(vtctldProcess *cluster.VtctldClientProcess, ke
 // This retries the command until it succeeds or times out as the
 // SrvKeyspace record may not yet exist for a newly created
 // Keyspace that is still initializing before it becomes serving.
-func UpdateThrottlerTopoConfig(clusterInstance *cluster.LocalProcessCluster, enable bool, disable bool, threshold float64, metricsQuery string) (result string, err error) {
+func UpdateThrottlerTopoConfig(clusterInstance *cluster.LocalProcessCluster, enable bool, disable bool, threshold float64, metricsQuery string) (string, error) {
 	rec := concurrency.AllErrorRecorder{}
+	var (
+		err error
+		res strings.Builder
+	)
 	for _, ks := range clusterInstance.Keyspaces {
-		if _, err := UpdateThrottlerTopoConfigRaw(&clusterInstance.VtctldClientProcess, ks.Name, enable, disable, threshold, metricsQuery); err != nil {
+		ires, err := UpdateThrottlerTopoConfigRaw(&clusterInstance.VtctldClientProcess, ks.Name, enable, disable, threshold, metricsQuery)
+		if err != nil {
 			rec.RecordError(err)
 		}
+		res.WriteString(ires)
 	}
-	return "", rec.Error()
+	if rec.HasErrors() {
+		err = rec.Error()
+	}
+	return res.String(), err
 }
 
 // WaitForThrottlerStatusEnabled waits for a tablet to report its throttler status as
