@@ -2764,11 +2764,11 @@ func (ct *ColumnType) Format(buf *TrackedBuffer) {
 			opts = append(opts, keywordStrings[VIRTUAL])
 		}
 	}
+	if ct.Exists {
+		opts = append(opts, keywordStrings[EXISTS])
+	}
 	if ct.Path != "" {
 		opts = append(opts, keywordStrings[PATH], `"`+ct.Path+`"`)
-	}
-	if ct.Exists {
-		opts = append(opts, keywordStrings[EXISTS], keywordStrings[PATH], `"`+ct.Path+`"`)
 	}
 	if ct.ValOnEmpty != nil {
 		opts = append(opts, String(ct.ValOnEmpty), keywordStrings[ON], keywordStrings[EMPTY])

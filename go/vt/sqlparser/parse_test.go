@@ -7270,7 +7270,7 @@ FROM
 		// EXISTS TESTS
 		{
 			input: `SELECT * FROM JSON_TABLE('{}', '$' COLUMNS( c1 INT EXISTS PATH '$.c1')) as jt;`,
-			output: "select * from json_table('{}', \"$\" columns(\n\tc1 INT path \"$.c1\" null on empty null on error\n)) as jt",
+			output: "select * from json_table('{}', \"$\" columns(\n\tc1 INT exists path \"$.c1\" null on empty null on error\n)) as jt",
 		},
 
 		// ON EMPTY TESTS
@@ -7292,7 +7292,7 @@ FROM
 		},
 		{
 			input: `SELECT * FROM JSON_TABLE('{}', '$' COLUMNS( c1 INT PATH '$.c1' ERROR ON EMPTY )) as jt;`,
-			output: "select * from json_table('{}', \"$\" columns(\n\tc1 INT path \"$.c1\" error on empty\n)) as jt",
+			output: "select * from json_table('{}', \"$\" columns(\n\tc1 INT path \"$.c1\" null on empty null on error error on empty\n)) as jt",
 		},
 
 		// ON ERROR TESTS
@@ -7314,7 +7314,7 @@ FROM
 		},
 		{
 			input: `SELECT * FROM JSON_TABLE('{}', '$' COLUMNS( c1 INT PATH '$.c1' ERROR ON ERROR )) as jt;`,
-			output: "select * from json_table('{}', \"$\" columns(\n\tc1 INT path \"$.c1\" error on error\n)) as jt",
+			output: "select * from json_table('{}', \"$\" columns(\n\tc1 INT path \"$.c1\" null on empty null on error error on error\n)) as jt",
 		},
 
 		// NESTED PATH TESTS
