@@ -94,8 +94,14 @@ func UpdateThrottlerTopoConfigRaw(vtctldProcess *cluster.VtctldClientProcess, ke
 // This retries the command until it succeeds or times out as the
 // SrvKeyspace record may not yet exist for a newly created
 // Keyspace that is still initializing before it becomes serving.
-func UpdateThrottlerTopoConfig(clusterInstance *cluster.LocalProcessCluster, enable bool, disable bool, threshold float64, metricsQuery string) (result string, err error) {
-	return UpdateThrottlerTopoConfigRaw(&clusterInstance.VtctldClientProcess, clusterInstance.Keyspaces[0].Name, enable, disable, threshold, metricsQuery)
+func UpdateThrottlerTopoConfig(clusterInstance *cluster.LocalProcessCluster, enable bool, disable bool, threshold float64, metricsQuery string) error {
+	for _, keyspace := range clusterInstance.Keyspaces {
+		_, err := UpdateThrottlerTopoConfigRaw(&clusterInstance.VtctldClientProcess, keyspace.Name, enable, disable, threshold, metricsQuery)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // WaitForThrottlerStatusEnabled waits for a tablet to report its throttler status as
@@ -140,7 +146,7 @@ func WaitForThrottlerStatusEnabled(t *testing.T, tablet *cluster.Vttablet, enabl
 // The throttler is configued to use the standard replication lag metric. The function waits until the throttler is confirmed
 // to be running on all tablets.
 func EnableLagThrottlerAndWaitForStatus(t *testing.T, clusterInstance *cluster.LocalProcessCluster, lag time.Duration) {
-	_, err := UpdateThrottlerTopoConfig(clusterInstance, true, false, lag.Seconds(), "")
+	err := UpdateThrottlerTopoConfig(clusterInstance, true, false, lag.Seconds(), "")
 	require.NoError(t, err)
 
 	for _, ks := range clusterInstance.Keyspaces {
