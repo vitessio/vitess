@@ -112,7 +112,6 @@ func TestMain(m *testing.M) {
 			"--lock_tables_timeout", "5s",
 			"--watch_replication_stream",
 			"--enable_replication_reporter",
-			"--heartbeat_enable",
 			"--heartbeat_interval", "250ms",
 			"--heartbeat_on_demand_duration", onDemandHeartbeatDuration.String(),
 			"--disable_active_reparents",
