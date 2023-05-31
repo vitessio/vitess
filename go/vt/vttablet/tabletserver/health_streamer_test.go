@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/fakesqldb"
@@ -54,6 +55,36 @@ func newConfig(db *fakesqldb.DB) *tabletenv.TabletConfig {
 	cfg := tabletenv.NewDefaultConfig()
 	cfg.DB = newDBConfigs(db)
 	return cfg
+}
+
+// TestNotServingPrimaryNoWrite makes sure that the health-streamer doesn't write anything to the database when
+// the state is not serving primary.
+func TestNotServingPrimaryNoWrite(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	config := newConfig(db)
+	config.SignalWhenSchemaChange = true
+
+	env := tabletenv.NewEnv(config, "TestNotServingPrimary")
+	alias := &topodatapb.TabletAlias{
+		Cell: "cell",
+		Uid:  1,
+	}
+	// Create a new health streamer and set it to a serving primary state
+	hs := newHealthStreamer(env, alias)
+	hs.isServingPrimary = true
+	hs.InitDBConfig(&querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}, config.DB.DbaWithDB())
+	hs.Open()
+	defer hs.Close()
+
+	// Let's say the tablet goes to a non-serving primary state.
+	hs.MakePrimary(false)
+
+	// A reload now should not write anything to the database. If any write happens it will error out since we have not
+	// added any query to the database to expect.
+	err := hs.reload()
+	require.NoError(t, err)
+	require.NoError(t, db.LastError())
 }
 
 func TestHealthStreamerBroadcast(t *testing.T) {
@@ -166,6 +197,7 @@ func TestReloadSchema(t *testing.T) {
 	}
 	blpFunc = testBlpFunc
 	hs := newHealthStreamer(env, alias)
+	hs.MakePrimary(true)
 
 	target := &querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
 	configs := config.DB
@@ -227,6 +259,7 @@ func TestDoesNotReloadSchema(t *testing.T) {
 	}
 	blpFunc = testBlpFunc
 	hs := newHealthStreamer(env, alias)
+	hs.MakePrimary(true)
 
 	target := &querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
 	configs := config.DB
@@ -279,6 +312,7 @@ func TestInitialReloadSchema(t *testing.T) {
 	}
 	blpFunc = testBlpFunc
 	hs := newHealthStreamer(env, alias)
+	hs.MakePrimary(true)
 
 	target := &querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
 	configs := config.DB

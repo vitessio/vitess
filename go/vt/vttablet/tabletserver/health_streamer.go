@@ -17,6 +17,7 @@ limitations under the License.
 package tabletserver
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"io"
@@ -25,7 +26,6 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/sqltypes"
-
 	"vitess.io/vitess/go/vt/sqlparser"
 
 	"vitess.io/vitess/go/vt/dbconfigs"
@@ -33,8 +33,6 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
-
-	"context"
 
 	"google.golang.org/protobuf/proto"
 
@@ -70,6 +68,8 @@ type healthStreamer struct {
 	cancel  context.CancelFunc
 	clients map[chan *querypb.StreamHealthResponse]struct{}
 	state   *querypb.StreamHealthResponse
+	// isServingPrimary stores if this tablet is currently the serving primary or not.
+	isServingPrimary bool
 
 	history *history.History
 
@@ -295,6 +295,21 @@ func (hs *healthStreamer) AppendDetails(details []*kv) []*kv {
 	return details
 }
 
+// MakePrimary tells the healthstreamer that the current tablet is now the primary,
+// so it can read and write to the MySQL instance for schema-tracking.
+func (hs *healthStreamer) MakePrimary(serving bool) {
+	hs.mu.Lock()
+	defer hs.mu.Unlock()
+	hs.isServingPrimary = serving
+}
+
+// MakeNonPrimary tells the healthstreamer that the current tablet is now not a primary.
+func (hs *healthStreamer) MakeNonPrimary() {
+	hs.mu.Lock()
+	defer hs.mu.Unlock()
+	hs.isServingPrimary = false
+}
+
 func (hs *healthStreamer) SetUnhealthyThreshold(v time.Duration) {
 	hs.unhealthyThreshold.Set(v)
 	shr := proto.Clone(hs.state).(*querypb.StreamHealthResponse)
@@ -313,8 +328,10 @@ func (hs *healthStreamer) SetUnhealthyThreshold(v time.Duration) {
 func (hs *healthStreamer) reload() error {
 	hs.mu.Lock()
 	defer hs.mu.Unlock()
-	// Schema Reload to happen only on primary.
-	if hs.state.Target.TabletType != topodatapb.TabletType_PRIMARY {
+	// Schema Reload to happen only on primary when it is serving.
+	// We can be in a state when the primary is not serving after we have run DemotePrimary. In that case,
+	// we don't want to run any queries in MySQL, so we shouldn't reload anything in the healthStreamer.
+	if !hs.isServingPrimary {
 		return nil
 	}
 

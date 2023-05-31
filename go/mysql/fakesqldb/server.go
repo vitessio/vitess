@@ -124,6 +124,10 @@ type DB struct {
 	// if fakesqldb is asked to serve queries or query patterns that it has not been explicitly told about it will
 	// error out by default. However if you set this flag then any unmatched query results in an empty result
 	neverFail bool
+
+	// lastError stores the last error in returning a query result.
+	lastErrorMu sync.Mutex
+	lastError   error
 }
 
 // QueryHandler is the interface used by the DB to simulate executed queries
@@ -175,6 +179,7 @@ func New(t testing.TB) *DB {
 		connections:              make(map[uint32]*mysql.Conn),
 		queryPatternUserCallback: make(map[*regexp.Regexp]func(string)),
 		patternData:              make(map[string]exprResult),
+		lastErrorMu:              sync.Mutex{},
 	}
 
 	db.Handler = db
@@ -238,6 +243,13 @@ func (db *DB) CloseAllConnections() {
 	for _, c := range db.connections {
 		c.Close()
 	}
+}
+
+// LastError gives the last error the DB ran into
+func (db *DB) LastError() error {
+	db.lastErrorMu.Lock()
+	defer db.lastErrorMu.Unlock()
+	return db.lastError
 }
 
 // WaitForClose should be used after CloseAllConnections() is closed and
@@ -337,7 +349,14 @@ func (db *DB) WarningCount(c *mysql.Conn) uint16 {
 }
 
 // HandleQuery is the default implementation of the QueryHandler interface
-func (db *DB) HandleQuery(c *mysql.Conn, query string, callback func(*sqltypes.Result) error) error {
+func (db *DB) HandleQuery(c *mysql.Conn, query string, callback func(*sqltypes.Result) error) (err error) {
+	defer func() {
+		if err != nil {
+			db.lastErrorMu.Lock()
+			db.lastError = err
+			db.lastErrorMu.Unlock()
+		}
+	}()
 	if db.AllowAll {
 		return callback(&sqltypes.Result{})
 	}
@@ -408,7 +427,7 @@ func (db *DB) HandleQuery(c *mysql.Conn, query string, callback func(*sqltypes.R
 		return callback(&sqltypes.Result{})
 	}
 	// Nothing matched.
-	err := fmt.Errorf("fakesqldb:: query: '%s' is not supported on %v", query, db.name)
+	err = fmt.Errorf("fakesqldb:: query: '%s' is not supported on %v", query, db.name)
 	log.Errorf("Query not found: %s", query)
 	return err
 }
@@ -582,12 +601,12 @@ func (db *DB) GetQueryCalledNum(query string) int {
 	return num
 }
 
-//QueryLog returns the query log in a semicomma separated string
+// QueryLog returns the query log in a semicomma separated string
 func (db *DB) QueryLog() string {
 	return strings.Join(db.querylog, ";")
 }
 
-//ResetQueryLog resets the query log
+// ResetQueryLog resets the query log
 func (db *DB) ResetQueryLog() {
 	db.querylog = nil
 }
