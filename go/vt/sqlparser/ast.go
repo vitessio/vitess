@@ -3273,7 +3273,6 @@ func (node *Show) Format(buf *TrackedBuffer) {
 	switch loweredType {
 	case "tables", "columns", "fields":
 		if node.ShowTablesOpt != nil {
-			opt := node.ShowTablesOpt
 			buf.Myprintf("show ")
 			if node.Full {
 				buf.Myprintf("full ")
@@ -3282,24 +3281,14 @@ func (node *Show) Format(buf *TrackedBuffer) {
 			if (loweredType == "columns" || loweredType == "fields") && node.HasTable() {
 				buf.Myprintf(" from %v", node.Table)
 			}
-			if opt.DbName != "" {
-				buf.Myprintf(" from %s", opt.DbName)
-			}
-			if opt.AsOf != nil {
-				buf.Myprintf(" as of %v", opt.AsOf)
-			}
-			buf.Myprintf("%v", opt.Filter)
+			node.ShowTablesOpt.Format(buf)
 			return
 		}
 	case "triggers", "events":
 		if node.ShowTablesOpt != nil {
-			opt := node.ShowTablesOpt
 			buf.Myprintf("show ")
 			buf.Myprintf("%s", loweredType)
-			if opt.DbName != "" {
-				buf.Myprintf(" from %s", opt.DbName)
-			}
-			buf.Myprintf("%v", opt.Filter)
+			node.ShowTablesOpt.Format(buf)
 			return
 		}
 	case "index":
@@ -3319,9 +3308,7 @@ func (node *Show) Format(buf *TrackedBuffer) {
 			buf.Myprintf("show %s %v", loweredType, node.Table)
 
 			if node.ShowTablesOpt != nil {
-				if node.ShowTablesOpt.AsOf != nil {
-					buf.Myprintf(" as of %v", node.ShowTablesOpt.AsOf)
-				}
+				node.ShowTablesOpt.Format(buf)
 			}
 			return
 		}
@@ -3411,11 +3398,12 @@ func (node *ShowTablesOpt)Format(buf *TrackedBuffer) {
 	if node.DbName != "" {
 		buf.Myprintf(" from %s", node.DbName)
 	}
+	if node.AsOf != nil {
+		buf.Myprintf(" as of ")
+		node.AsOf.Format(buf)
+	}
 	if node.Filter != nil {
 		node.Filter.Format(buf)
-	}
-	if node.AsOf != nil {
-		node.AsOf.Format(buf)
 	}
 }
 
