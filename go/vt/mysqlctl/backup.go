@@ -412,23 +412,25 @@ func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error)
 		return nil, err
 	}
 
-	if gtid := manifest.Position.GTIDSet.String(); gtid != "" {
-		// Xtrabackup 2.4's restore seems to set @@gtid_purged to be the @@gtid_purged at the time of backup. But this is not
-		// the desired value. We want to set @@gtid_purged to be the @@gtid_executed of the backup.
-		// As reminder, when restoring from a full backup, setting @@gtid_purged also sets @@gtid_executed.
-		restoredGTIDPurgedPos, err := params.Mysqld.GetGTIDPurged(ctx)
-		if err != nil {
-			return nil, vterrors.Wrapf(err, "Reading gtid_purged after restore")
-		}
-		if !restoredGTIDPurgedPos.Equal(manifest.Position) {
-			// This is not good. We want to apply a new @@gtid_purged value.
-			query := "RESET MASTER" // required dialect in 5.7
-			if _, err := params.Mysqld.FetchSuperQuery(ctx, query); err != nil {
-				return nil, vterrors.Wrapf(err, "Issuing %v", query)
+	if manifest != nil {
+		if gtid := manifest.Position.GTIDSet.String(); gtid != "" {
+			// Xtrabackup 2.4's restore seems to set @@gtid_purged to be the @@gtid_purged at the time of backup. But this is not
+			// the desired value. We want to set @@gtid_purged to be the @@gtid_executed of the backup.
+			// As reminder, when restoring from a full backup, setting @@gtid_purged also sets @@gtid_executed.
+			restoredGTIDPurgedPos, err := params.Mysqld.GetGTIDPurged(ctx)
+			if err != nil {
+				return nil, vterrors.Wrapf(err, "Reading gtid_purged after restore")
 			}
-			query = fmt.Sprintf("SET GLOBAL gtid_purged='%s'", gtid)
-			if _, err := params.Mysqld.FetchSuperQuery(ctx, query); err != nil {
-				return nil, vterrors.Wrapf(err, "Applying`%s` after restore", query)
+			if !restoredGTIDPurgedPos.Equal(manifest.Position) {
+				// This is not good. We want to apply a new @@gtid_purged value.
+				query := "RESET MASTER" // required dialect in 5.7
+				if _, err := params.Mysqld.FetchSuperQuery(ctx, query); err != nil {
+					return nil, vterrors.Wrapf(err, "Issuing %v", query)
+				}
+				query = fmt.Sprintf("SET GLOBAL gtid_purged='%s'", gtid)
+				if _, err := params.Mysqld.FetchSuperQuery(ctx, query); err != nil {
+					return nil, vterrors.Wrapf(err, "Applying`%s` after restore", query)
+				}
 			}
 		}
 	}
