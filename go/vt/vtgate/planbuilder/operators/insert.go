@@ -34,6 +34,8 @@ type Insert struct {
 	AutoIncrement *Generate
 	// Ignore specifies whether to ignore duplicate key errors during insertion.
 	Ignore bool
+	// ForceNonStreaming when true, select first then insert, this is to avoid locking rows by select for insert.
+	ForceNonStreaming bool
 
 	// ColVindexes are the vindexes that will use the VindexValues or VindexValueOffset
 	ColVindexes []*vindexes.ColumnVindex
@@ -111,6 +113,7 @@ func (i *Insert) Clone(inputs []ops.Operator) ops.Operator {
 		AST:               i.AST,
 		AutoIncrement:     i.AutoIncrement,
 		Ignore:            i.Ignore,
+		ForceNonStreaming: i.ForceNonStreaming,
 		ColVindexes:       i.ColVindexes,
 		VindexValues:      i.VindexValues,
 		VindexValueOffset: i.VindexValueOffset,

@@ -6137,5 +6137,87 @@
         "main.unsharded"
       ]
     }
+  },
+  {
+    "comment": "insert with select using same tables, cannot stream parallel",
+    "query": "insert into music(id, user_id) select id, user_id from music where user_id = 1",
+    "v3-plan": {
+      "QueryType": "INSERT",
+      "Original": "insert into music(id, user_id) select id, user_id from music where user_id = 1",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Select",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "InputAsNonStreaming": true,
+        "TableName": "music",
+        "VindexOffsetFromSelect": {
+          "music_user_map": "[0]",
+          "user_index": "[1]"
+        },
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id, user_id from music where 1 != 1",
+            "Query": "select id, user_id from music where user_id = 1 for update",
+            "Table": "music",
+            "Values": [
+              "INT64(1)"
+            ],
+            "Vindex": "user_index"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music"
+      ]
+    },
+    "gen4-plan": {
+      "QueryType": "INSERT",
+      "Original": "insert into music(id, user_id) select id, user_id from music where user_id = 1",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Select",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "InputAsNonStreaming": true,
+        "TableName": "music",
+        "VindexOffsetFromSelect": {
+          "music_user_map": "[0]",
+          "user_index": "[1]"
+        },
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id, user_id from music where 1 != 1",
+            "Query": "select id, user_id from music where user_id = 1 lock in share mode",
+            "Table": "music",
+            "Values": [
+              "INT64(1)"
+            ],
+            "Vindex": "user_index"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music"
+      ]
+    }
   }
 ]

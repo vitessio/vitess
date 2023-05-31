@@ -501,5 +501,10 @@
     "query": "select max(u.foo*ue.bar) from user u join user_extra ue",
     "v3-plan": "VT12001: unsupported: cross-shard query with aggregates",
     "gen4-plan": "VT12001: unsupported: aggregation on columns from different sources: max(u.foo * ue.bar)"
+  },
+  {
+    "comment": "extremum on input from both sides",
+    "query": "insert into music(user_id, id) select foo, bar from music on duplicate key update id = id+1",
+    "plan": "VT12001: unsupported: DML cannot update vindex column"
   }
 ]
