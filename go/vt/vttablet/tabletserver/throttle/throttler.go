@@ -339,6 +339,10 @@ func (throttler *Throttler) applyThrottlerConfig(ctx context.Context, throttlerC
 		return
 	}
 	log.Infof("Throttler: applying topo config: %+v", throttlerConfig)
+
+	throttler.initMutex.Lock()
+	defer throttler.initMutex.Unlock()
+
 	if throttlerConfig.CustomQuery == "" {
 		throttler.metricsQuery.Store(sqlparser.BuildParsedQuery(defaultReplicationLagQuery, sidecardb.GetIdentifier()).Query)
 	} else {
@@ -455,11 +459,7 @@ func (throttler *Throttler) Open() error {
 					log.Errorf("Throttler.retryReadAndApplyThrottlerConfig(): success reading throttler config: %+v", throttlerConfig)
 					// it's possible that during a retry-sleep, the throttler is closed and opened again, leading
 					// to two (or more) instances of this goroutine. That's not a big problem; it's fine if all
-					// attempt to read the throttler config; but we just want to ensure they don't step on each other
-					// while applying the changes.
-					throttler.initMutex.Lock()
-					defer throttler.initMutex.Unlock()
-
+					// attempt to read the throttler config. The function below is mutex protected.
 					throttler.applyThrottlerConfig(ctx, throttlerConfig) // may issue an Enable
 					return
 				}
