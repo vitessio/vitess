@@ -412,9 +412,8 @@ func (vc *VitessCluster) AddTablet(t testing.TB, cell *Cell, keyspace *Keyspace,
 
 	options := []string{
 		"--queryserver-config-schema-reload-time", "5",
-		"--heartbeat_enable",
-		"--heartbeat_on_demand_duration", "10s",
-		"--heartbeat_interval", "1s",
+		"--heartbeat_on_demand_duration", "1m",
+		"--heartbeat_interval", "250ms",
 	} // FIXME: for multi-cell initial schema doesn't seem to load without "--queryserver-config-schema-reload-time"
 	options = append(options, extraVTTabletArgs...)
 
@@ -550,6 +549,9 @@ func (vc *VitessCluster) AddShards(t *testing.T, cells []*Cell, keyspace *Keyspa
 
 		log.Infof("Finished creating shard %s", shard.Name)
 	}
+
+	err := vc.VtctlClient.ExecuteCommand("RebuildKeyspaceGraph", keyspace.Name)
+	require.NoError(t, err)
 
 	log.Infof("Waiting for throttler config to be applied on all shards")
 	for _, shard := range keyspace.Shards {
