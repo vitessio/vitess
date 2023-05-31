@@ -58,6 +58,8 @@ var (
 	extraVTTabletArgs = []string{}
 
 	parallelInsertWorkers = "--vreplication-parallel-insert-workers=4"
+
+	throttlerConfig = throttler.Config{Threshold: 30}
 )
 
 // ClusterConfig defines the parameters like ports, tmpDir, tablet types which uniquely define a vitess cluster
@@ -367,7 +369,7 @@ func (vc *VitessCluster) AddKeyspace(t *testing.T, cells []*Cell, ksName string,
 	}
 
 	log.Infof("Applying throttler config for keyspace %s", keyspace.Name)
-	res, err := throttler.UpdateThrottlerTopoConfigRaw(vc.VtctldClient, keyspace.Name, true, false, 30*time.Second.Seconds(), "")
+	res, err := throttler.UpdateThrottlerTopoConfigRaw(vc.VtctldClient, keyspace.Name, true, false, throttlerConfig.Threshold, throttlerConfig.Query)
 	require.NoError(t, err, res)
 
 	cellsToWatch := ""
@@ -410,8 +412,8 @@ func (vc *VitessCluster) AddTablet(t testing.TB, cell *Cell, keyspace *Keyspace,
 
 	options := []string{
 		"--queryserver-config-schema-reload-time", "5s",
-		"--heartbeat_enable",
-		"--heartbeat_interval", "250ms",
+		"--heartbeat_on_demand_duration", "10s",
+		"--heartbeat_interval", "1s",
 	} // FIXME: for multi-cell initial schema doesn't seem to load without "--queryserver-config-schema-reload-time"
 	options = append(options, extraVTTabletArgs...)
 
@@ -557,7 +559,6 @@ func (vc *VitessCluster) AddShards(t *testing.T, cells []*Cell, keyspace *Keyspa
 			}
 			log.Infof("+ Waiting for throttler config to be applied on %s, type=%v", tablet.Name, tablet.Vttablet.TabletType)
 			throttler.WaitForThrottlerStatusEnabled(t, clusterTablet, true, nil, time.Minute)
-
 		}
 	}
 	log.Infof("Throttler config applied on all shards")
