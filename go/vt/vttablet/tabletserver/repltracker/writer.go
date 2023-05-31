@@ -55,6 +55,7 @@ type heartbeatWriter struct {
 	keyspaceShard string
 	now           func() time.Time
 	errorLog      *logutil.ThrottledLogger
+	errorChan     chan error
 
 	mu           sync.Mutex
 	isOpen       bool
@@ -81,6 +82,7 @@ func newHeartbeatWriter(env tabletenv.Env, alias *topodatapb.TabletAlias) *heart
 	w := &heartbeatWriter{
 		env:              env,
 		enabled:          true,
+		errorChan:        make(chan error, 2),
 		tabletAlias:      proto.Clone(alias).(*topodatapb.TabletAlias),
 		now:              time.Now,
 		interval:         heartbeatInterval,
@@ -218,6 +220,7 @@ func (w *heartbeatWriter) write() error {
 
 func (w *heartbeatWriter) recordError(err error) {
 	w.errorLog.Errorf("%v", err)
+	w.errorChan <- err
 	writeErrors.Add(1)
 }
 
@@ -297,4 +300,14 @@ func (w *heartbeatWriter) RequestHeartbeats() {
 		}
 		w.allowNextHeartbeatRequest()
 	})
+}
+
+// LastError returns the last error encountered by the heartbeat writer.
+func (w *heartbeatWriter) LastError() error {
+	select {
+	case err := <-w.errorChan:
+		return err
+	default:
+		return nil
+	}
 }

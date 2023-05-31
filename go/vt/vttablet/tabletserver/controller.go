@@ -23,6 +23,7 @@ import (
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/heartbeat"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
@@ -89,6 +90,9 @@ type Controller interface {
 
 	// TopoServer returns the topo server.
 	TopoServer() *topo.Server
+
+	// HeartbeatWriter returns the heartbeat writer.
+	HeartbeatWriter() heartbeat.HeartbeatWriter
 }
 
 // Ensure TabletServer satisfies Controller interface.

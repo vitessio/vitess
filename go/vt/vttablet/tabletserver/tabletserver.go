@@ -57,6 +57,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/onlineddl"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/gc"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/heartbeat"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/messager"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/planbuilder"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/repltracker"
@@ -453,6 +454,11 @@ func (tsv *TabletServer) ClearQueryPlanCache() {
 	// but query plan cache clearing is safe to call even if the
 	// tabletserver is down.
 	tsv.qe.ClearQueryPlanCache()
+}
+
+// HeartbeatWriter returns the heartbeat writer part of TabletServer.
+func (tsv *TabletServer) HeartbeatWriter() heartbeat.HeartbeatWriter {
+	return tsv.rt.HeartbeatWriter()
 }
 
 // QueryService returns the QueryService part of TabletServer.
