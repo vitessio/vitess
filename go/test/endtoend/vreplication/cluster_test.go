@@ -59,7 +59,7 @@ var (
 
 	parallelInsertWorkers = "--vreplication-parallel-insert-workers=4"
 
-	throttlerConfig = throttler.Config{Threshold: 30}
+	throttlerConfig = throttler.Config{Threshold: 2}
 )
 
 // ClusterConfig defines the parameters like ports, tmpDir, tablet types which uniquely define a vitess cluster
@@ -412,6 +412,7 @@ func (vc *VitessCluster) AddTablet(t testing.TB, cell *Cell, keyspace *Keyspace,
 
 	options := []string{
 		"--queryserver-config-schema-reload-time", "5s",
+		"--heartbeat_enable",
 		"--heartbeat_on_demand_duration", "10s",
 		"--heartbeat_interval", "1s",
 	} // FIXME: for multi-cell initial schema doesn't seem to load without "--queryserver-config-schema-reload-time"
