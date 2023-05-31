@@ -3388,8 +3388,11 @@ func (node *Show) walkSubtree(visit Visit) error {
 	return Walk(
 		visit,
 		node.Table,
+		node.ShowTablesOpt,
+		*node.ShowCollationFilterOpt,
 		node.ShowIndexFilterOpt,
 		node.Filter,
+		node.Limit,
 	)
 }
 
@@ -3398,6 +3401,26 @@ type ShowTablesOpt struct {
 	DbName string
 	Filter *ShowFilter
 	AsOf   Expr
+}
+
+// Format formats the node.
+func (node *ShowTablesOpt)Format(buf *TrackedBuffer) {
+	if node == nil {
+		return
+	}
+	if node.DbName != "" {
+		buf.Myprintf(" from %s", node.DbName)
+	}
+	if node.Filter != nil {
+		node.Filter.Format(buf)
+	}
+	if node.AsOf != nil {
+		node.AsOf.Format(buf)
+	}
+}
+
+func (node *ShowTablesOpt) walkSubtree(visit Visit) error {
+	return Walk(visit, node.Filter, node.AsOf)
 }
 
 // ShowFilter is show tables filter
@@ -3416,6 +3439,13 @@ func (node *ShowFilter) Format(buf *TrackedBuffer) {
 	} else {
 		buf.Myprintf(" where %v", node.Filter)
 	}
+}
+
+func (node *ShowFilter) walkSubtree(visit Visit) error {
+	if node == nil {
+		return nil
+	}
+	return Walk(visit, node.Filter)
 }
 
 // Use represents a use statement.
