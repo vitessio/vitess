@@ -366,7 +366,8 @@ func (vttablet *VttabletProcess) WaitForBinlogServerState(expectedStatus string)
 		case err := <-vttablet.exit:
 			return fmt.Errorf("process '%s' exited prematurely (err: %s)", vttablet.Name, err)
 		case <-ctx.Done():
-			return fmt.Errorf("vttablet %s, expected status not reached", vttablet.TabletPath)
+			return fmt.Errorf("vttablet %s, expected status of %s not reached before timeout of %v",
+				vttablet.TabletPath, expectedStatus, vttabletStateTimeout)
 		case <-t.C:
 		}
 	}
