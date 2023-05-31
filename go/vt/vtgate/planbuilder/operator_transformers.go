@@ -406,7 +406,9 @@ func transformInsertPlan(ctx *plancontext.PlanningContext, op *operators.Route, 
 	}
 	i = &insert{eInsert: eins}
 
-	if eins.Opcode == engine.InsertSharded || eins.Opcode == engine.InsertSelect {
+	// we would need to generate the query on the fly. The only exception here is
+	// when unsharded query with autoincrement for that there is no input operator.
+	if eins.Opcode != engine.InsertUnsharded || ins.Input != nil {
 		eins.Prefix, eins.Mid, eins.Suffix = generateInsertShardedQuery(ins.AST)
 	}
 
