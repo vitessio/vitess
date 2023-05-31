@@ -83,7 +83,7 @@ func TestMain(m *testing.M) {
 		connParams := cluster.MySQLConnParams()
 		connAppDebugParams := cluster.MySQLAppDebugConnParams()
 		config = tabletenv.NewDefaultConfig()
-		_ = config.SignalSchemaChangeReloadIntervalSeconds.Set("2100ms")
+		_ = config.SchemaReloadIntervalSeconds.Set("2100ms")
 		config.SchemaChangeReloadTimeout = 10 * time.Second
 		config.SignalWhenSchemaChange = true
 		err = framework.StartCustomServer(connParams, connAppDebugParams, cluster.DbName(), config)

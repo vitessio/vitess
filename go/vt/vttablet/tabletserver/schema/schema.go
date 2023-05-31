@@ -30,6 +30,7 @@ const (
 	NoType = iota
 	Sequence
 	Message
+	View
 )
 
 // TypeNames allows to fetch a the type name for a table.
@@ -38,6 +39,7 @@ var TypeNames = []string{
 	"none",
 	"sequence",
 	"message",
+	"view",
 }
 
 // Table contains info about a table.
@@ -107,9 +109,10 @@ type MessageInfo struct {
 }
 
 // NewTable creates a new Table.
-func NewTable(name string) *Table {
+func NewTable(name string, tableType int) *Table {
 	return &Table{
 		Name: sqlparser.NewIdentifierCS(name),
+		Type: tableType,
 	}
 }
 

@@ -929,6 +929,46 @@ func (cluster *LocalProcessCluster) StreamTabletHealth(ctx context.Context, vtta
 	return responses, nil
 }
 
+// StreamTabletHealthUntil invokes a HealthStream on a local cluster Vttablet and
+// returns the responses. It waits until a certain condition is met. The amount of time to wait is an input that it takes.
+func (cluster *LocalProcessCluster) StreamTabletHealthUntil(ctx context.Context, vttablet *Vttablet, timeout time.Duration, condition func(shr *querypb.StreamHealthResponse) bool) error {
+	tablet, err := cluster.VtctlclientGetTablet(vttablet)
+	if err != nil {
+		return err
+	}
+
+	conn, err := tabletconn.GetDialer()(tablet, grpcclient.FailFast(false))
+	if err != nil {
+		return err
+	}
+
+	conditionSuccess := false
+	timeoutExceeded := false
+	go func() {
+		time.Sleep(timeout)
+		timeoutExceeded = true
+	}()
+
+	err = conn.StreamHealth(ctx, func(shr *querypb.StreamHealthResponse) error {
+		if condition(shr) {
+			conditionSuccess = true
+		}
+		if timeoutExceeded || conditionSuccess {
+			return io.EOF
+		}
+		return nil
+	})
+
+	if conditionSuccess {
+		return nil
+	}
+
+	if timeoutExceeded {
+		return errors.New("timeout exceed while waiting for the condition in StreamHealth")
+	}
+	return err
+}
+
 func (cluster *LocalProcessCluster) VtctlclientGetTablet(tablet *Vttablet) (*topodatapb.Tablet, error) {
 	result, err := cluster.VtctlclientProcess.ExecuteCommandWithOutput("GetTablet", "--", tablet.Alias)
 	if err != nil {

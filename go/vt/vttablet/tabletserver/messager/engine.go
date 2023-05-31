@@ -83,7 +83,7 @@ func (me *Engine) Open() {
 	log.Info("Messager: opening")
 	// Unlock before invoking RegisterNotifier because it
 	// obtains the same lock.
-	me.se.RegisterNotifier("messages", me.schemaChanged)
+	me.se.RegisterNotifier("messages", me.schemaChanged, true)
 }
 
 // Close closes the Engine service.
@@ -137,10 +137,11 @@ func (me *Engine) Subscribe(ctx context.Context, name string, send func(*sqltype
 	return mm.Subscribe(ctx, send), nil
 }
 
-func (me *Engine) schemaChanged(tables map[string]*schema.Table, created, altered, dropped []string) {
+func (me *Engine) schemaChanged(tables map[string]*schema.Table, created, altered, dropped []*schema.Table) {
 	me.mu.Lock()
 	defer me.mu.Unlock()
-	for _, name := range append(dropped, altered...) {
+	for _, table := range append(dropped, altered...) {
+		name := table.Name.String()
 		mm := me.managers[name]
 		if mm == nil {
 			continue
@@ -150,8 +151,8 @@ func (me *Engine) schemaChanged(tables map[string]*schema.Table, created, altere
 		delete(me.managers, name)
 	}
 
-	for _, name := range append(created, altered...) {
-		t := tables[name]
+	for _, t := range append(created, altered...) {
+		name := t.Name.String()
 		if t.Type != schema.Message {
 			continue
 		}
