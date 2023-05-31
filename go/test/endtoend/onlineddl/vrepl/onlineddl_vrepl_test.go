@@ -232,13 +232,13 @@ func throttleResponse(tablet *cluster.Vttablet, path string) (respBody string, e
 }
 
 // direct per-tablet throttler API instruction
-func throttleApp(tablet *cluster.Vttablet, app string) (string, error) {
-	return throttleResponse(tablet, fmt.Sprintf("throttler/throttle-app?app=%s&duration=1h", app))
+func throttleApp(tablet *cluster.Vttablet, throttlerApp throttlerapp.Name) (string, error) {
+	return throttleResponse(tablet, fmt.Sprintf("throttler/throttle-app?app=%s&duration=1h", throttlerApp))
 }
 
 // direct per-tablet throttler API instruction
-func unthrottleApp(tablet *cluster.Vttablet, app string) (string, error) {
-	return throttleResponse(tablet, fmt.Sprintf("throttler/unthrottle-app?app=%s", app))
+func unthrottleApp(tablet *cluster.Vttablet, throttlerApp throttlerapp.Name) (string, error) {
+	return throttleResponse(tablet, fmt.Sprintf("throttler/unthrottle-app?app=%s", throttlerApp))
 }
 
 func TestSchemaChange(t *testing.T) {
@@ -398,7 +398,7 @@ func TestSchemaChange(t *testing.T) {
 		// to be strictly higher than started_timestamp
 		assert.GreaterOrEqual(t, lastThrottledTimestamp, startedTimestamp)
 		component := row.AsString("component_throttled", "")
-		assert.Contains(t, []string{throttlerapp.VCopierName, throttlerapp.VPlayerName}, component)
+		assert.Contains(t, []string{throttlerapp.VCopierName.String(), throttlerapp.VPlayerName.String()}, component)
 
 		// unthrottle
 		onlineddl.UnthrottleAllMigrations(t, &vtParams)
@@ -447,7 +447,7 @@ func TestSchemaChange(t *testing.T) {
 			// clock irregularities
 			assert.GreaterOrEqual(t, lastThrottledTime.Add(time.Second), startedTime)
 			component := row.AsString("component_throttled", "")
-			assert.Contains(t, []string{throttlerapp.VStreamerName, throttlerapp.RowStreamerName}, component)
+			assert.Contains(t, []string{throttlerapp.VStreamerName.String(), throttlerapp.RowStreamerName.String()}, component)
 		}()
 		// now unthrottled
 		status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, normalMigrationWait, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)

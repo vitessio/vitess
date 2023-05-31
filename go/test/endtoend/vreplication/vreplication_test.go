@@ -95,16 +95,16 @@ func throttleResponse(tablet *cluster.VttabletProcess, path string) (respBody st
 	return respBody, err
 }
 
-func throttleApp(tablet *cluster.VttabletProcess, app string) (string, error) {
-	return throttleResponse(tablet, fmt.Sprintf("throttler/throttle-app?app=%s&duration=1h", app))
+func throttleApp(tablet *cluster.VttabletProcess, throttlerApp throttlerapp.Name) (string, error) {
+	return throttleResponse(tablet, fmt.Sprintf("throttler/throttle-app?app=%s&duration=1h", throttlerApp.String()))
 }
 
-func unthrottleApp(tablet *cluster.VttabletProcess, app string) (string, error) {
-	return throttleResponse(tablet, fmt.Sprintf("throttler/unthrottle-app?app=%s", app))
+func unthrottleApp(tablet *cluster.VttabletProcess, throttlerApp throttlerapp.Name) (string, error) {
+	return throttleResponse(tablet, fmt.Sprintf("throttler/unthrottle-app?app=%s", throttlerApp.String()))
 }
 
-func throttlerCheckSelf(tablet *cluster.VttabletProcess, app string) (respBody string, err error) {
-	apiURL := fmt.Sprintf("http://%s:%d/throttler/check-self?app=%s", tablet.TabletHostname, tablet.Port, app)
+func throttlerCheckSelf(tablet *cluster.VttabletProcess, throttlerApp throttlerapp.Name) (respBody string, err error) {
+	apiURL := fmt.Sprintf("http://%s:%d/throttler/check-self?app=%s", tablet.TabletHostname, tablet.Port, throttlerApp.String())
 	resp, err := httpClient.Get(apiURL)
 	if err != nil {
 		return "", err
