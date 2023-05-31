@@ -358,7 +358,7 @@ func TestAutocommitInsertAutoinc(t *testing.T) {
 	require.NoError(t, err)
 
 	assertQueries(t, sbclookup, []*querypb.BoundQuery{{
-		Sql:           "select next :n values from user_seq",
+		Sql:           "select next :n /* INT64 */ values from user_seq",
 		BindVariables: map[string]*querypb.BindVariable{"n": sqltypes.Int64BindVariable(1)},
 	}, {
 		Sql: "insert into main1(id, `name`) values (:__seq0, 'myname')",

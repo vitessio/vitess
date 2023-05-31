@@ -448,8 +448,16 @@ func autoIncGenerate(gen *operators.Generate) *engine.Generate {
 }
 
 func generateInsertShardedQuery(ins *sqlparser.Insert) (prefix string, mid []string, suffix string) {
+	valueTuples, isValues := ins.Rows.(sqlparser.Values)
+	prefixFormat := "insert %v%sinto %v%v "
+	if isValues {
+		// the mid values are filled differently
+		// with select uses sqlparser.String for sqlparser.Values
+		// with rows uses string.
+		prefixFormat += "values "
+	}
 	prefixBuf := sqlparser.NewTrackedBuffer(dmlFormatter)
-	prefixBuf.Myprintf("insert %v%sinto %v%v values ",
+	prefixBuf.Myprintf(prefixFormat,
 		ins.Comments, ins.Ignore.ToString(),
 		ins.Table, ins.Columns)
 	prefix = prefixBuf.String()
@@ -458,7 +466,6 @@ func generateInsertShardedQuery(ins *sqlparser.Insert) (prefix string, mid []str
 	suffixBuf.Myprintf("%v", ins.OnDup)
 	suffix = suffixBuf.String()
 
-	valueTuples, isValues := ins.Rows.(sqlparser.Values)
 	if !isValues {
 		// this is a insert query using select to insert the rows.
 		return
