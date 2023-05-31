@@ -121,29 +121,40 @@ func WaitForThrottlerStatusEnabled(t *testing.T, tablet *cluster.Vttablet, enabl
 	enabledJSONPath := "IsEnabled"
 	queryJSONPath := "Query"
 	thresholdJSONPath := "Threshold"
-	url := fmt.Sprintf("http://localhost:%d/throttler/status", tablet.HTTPPort)
+	throttlerURL := fmt.Sprintf("http://localhost:%d/throttler/status", tablet.HTTPPort)
+	tabletURL := fmt.Sprintf("http://localhost:%d/debug/status_details", tablet.HTTPPort)
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 
 	for {
-		body := getHTTPBody(url)
-		isEnabled := gjson.Get(body, enabledJSONPath).Bool()
+		throttlerBody := getHTTPBody(throttlerURL)
+		isEnabled := gjson.Get(throttlerBody, enabledJSONPath).Bool()
 		if isEnabled == enabled {
 			if config == nil {
 				return
 			}
-			query := gjson.Get(body, queryJSONPath).String()
-			threshold := gjson.Get(body, thresholdJSONPath).Float()
+			query := gjson.Get(throttlerBody, queryJSONPath).String()
+			threshold := gjson.Get(throttlerBody, thresholdJSONPath).Float()
 			if query == config.Query && threshold == config.Threshold {
 				return
 			}
 		}
+		// If the tablet is PRIMARY Not Serving due to e.g. being involved
+		// in a Reshard where its QueryService is explicitly disabled, then
+		// we should not fail the test as the throttler will not be Open.
+		tabletBody := getHTTPBody(tabletURL)
+		class := strings.ToLower(gjson.Get(tabletBody, "0.Class").String())
+		value := strings.ToLower(gjson.Get(tabletBody, "0.Value").String())
+		if class == "unhappy" && strings.Contains(value, "primary: not serving") {
+			log.Infof("tablet %s is PRIMARY Not Serving, so ignoring throttler status as the throttler will not be Opened", tablet.Alias)
+			return
+		}
 		select {
 		case <-ctx.Done():
 			t.Errorf("timed out waiting for the %s tablet's throttler status enabled to be %t with the correct config after %v; last seen value: %s",
-				tablet.Alias, enabled, timeout, body)
+				tablet.Alias, enabled, timeout, throttlerBody)
 			return
 		case <-ticker.C:
 		}
