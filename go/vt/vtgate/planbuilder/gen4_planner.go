@@ -479,7 +479,7 @@ func insertUnshardedShortcut(stmt *sqlparser.Insert, ks *vindexes.Keyspace, tabl
 	eIns.Table = tables[0]
 	eIns.Opcode = engine.InsertUnsharded
 	eIns.Query = generateQuery(stmt)
-	return &primitiveWrapper{prim: eIns}
+	return &insert{eInsert: eIns}
 }
 
 func rewriteRoutedTables(stmt sqlparser.Statement, vschema plancontext.VSchema) error {

@@ -406,7 +406,7 @@ func transformInsertPlan(ctx *plancontext.PlanningContext, op *operators.Route, 
 	}
 	i = &insert{eInsert: eins}
 
-	if eins.Opcode == engine.InsertSharded {
+	if eins.Opcode == engine.InsertSharded || eins.Opcode == engine.InsertSelect {
 		eins.Prefix, eins.Mid, eins.Suffix = generateInsertShardedQuery(ins.AST)
 	}
 

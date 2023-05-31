@@ -469,15 +469,13 @@ func (i *insert) Inputs() []logicalPlan {
 }
 
 func (i *insert) Rewrite(inputs ...logicalPlan) error {
-	//TODO implement me
-	panic("implement me")
+	panic("does not expect insert to get rewrite call")
 }
 
 func (i *insert) ContainsTables() semantics.TableSet {
-	//TODO implement me
-	panic("implement me")
+	panic("does not expect insert to get contains tables call")
 }
 
 func (i *insert) OutputColumns() []sqlparser.SelectExpr {
-	return nil
+	panic("does not expect insert to get output columns call")
 }
