@@ -1276,7 +1276,10 @@ func (mysqld *Mysqld) ApplyBinlogFile(ctx context.Context, binlogFile string, re
 // remote through mysqlctl.
 func noSocketFile() {
 	if socketFile != "" {
-		panic("Running remotely through mysqlctl, socketFile must not be set")
+		// We log an error for now until we fix the issue with ApplySchema surfacing in MoveTables.
+		// See https://github.com/vitessio/vitess/issues/13203 and https://github.com/vitessio/vitess/pull/13178
+		//panic("Running remotely through mysqlctl, socketFile must not be set")
+		log.Warning("Running remotely through mysqlctl and thus socketFile should not be set")
 	}
 }
 
