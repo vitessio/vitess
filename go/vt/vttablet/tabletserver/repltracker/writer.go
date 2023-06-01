@@ -145,6 +145,7 @@ func (w *heartbeatWriter) Open() {
 		go w.RequestHeartbeats()
 	}
 
+	w.errorChan = make(chan error, 2)
 	w.isOpen = true
 }
 
@@ -163,6 +164,7 @@ func (w *heartbeatWriter) Close() {
 	w.appPool.Close()
 	w.allPrivsPool.Close()
 	w.isOpen = false
+	close(w.errorChan)
 	log.Info("Hearbeat Writer: closed")
 }
 
