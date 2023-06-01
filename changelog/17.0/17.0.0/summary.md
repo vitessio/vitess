@@ -29,7 +29,7 @@
     - [Settings pool enabled](#settings-pool)
   - **[VTGate](#vtgate)**
     - [StreamExecute GRPC API](#stream-execute)
-    - [Insert Planner Gen4] (#insert-planner)
+    - [Insert Planner Gen4](#insert-planner)
   - **[Deprecations and Deletions](#deprecations-and-deletions)**
     - [Deprecated Flags](#deprecated-flags)
     - [Deprecated Stats](#deprecated-stats)
@@ -385,8 +385,8 @@ This could be a breaking change for grpc api users based on how they have implem
 
 #### <a id="insert-planner"/> Insert Planning with Gen4
 
-Gen4 planner was made default in v14 for select queries. In v15 update and delete queries were moved to Gen4 framework.
-With this release Insert planning is moved to Gen4. 
+Gen4 planner was made default in v14 for `SELECT` queries. In v15 `UPDATE` and `DELETE` queries were moved to Gen4 framework.
+With this release `INSERT` queries are moved to Gen4.
 
 Clients can move to old v3 planner for inserts by using `V3Insert` planner version with `--planner-version` vtgate flag or with comment directive /*vt+ planner=<planner_version>` for individual query.
 
