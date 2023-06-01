@@ -38,6 +38,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 )
 
 var (
@@ -684,7 +685,7 @@ func (mm *messageManager) runOneVStream(ctx context.Context) error {
 	var curPos string
 	var fields []*querypb.Field
 
-	err := mm.vs.Stream(ctx, "current", nil, mm.vsFilter, func(events []*binlogdatapb.VEvent) error {
+	err := mm.vs.Stream(ctx, "current", nil, mm.vsFilter, throttlerapp.MessagerName, func(events []*binlogdatapb.VEvent) error {
 		// We need to get the flow control lock
 		mm.cacheManagementMu.Lock()
 		defer mm.cacheManagementMu.Unlock()

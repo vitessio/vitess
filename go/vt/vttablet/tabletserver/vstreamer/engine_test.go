@@ -29,6 +29,7 @@ import (
 	"vitess.io/vitess/go/vt/dbconfigs"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 )
 
 var (
@@ -93,7 +94,7 @@ func TestUpdateVSchema(t *testing.T) {
 		}},
 	}
 	// Stream should terminate immediately due to invalid pos.
-	_ = engine.Stream(ctx, "invalid", nil, filter, func(_ []*binlogdatapb.VEvent) error {
+	_ = engine.Stream(ctx, "invalid", nil, filter, throttlerapp.VStreamerName, func(_ []*binlogdatapb.VEvent) error {
 		return nil
 	})
 
