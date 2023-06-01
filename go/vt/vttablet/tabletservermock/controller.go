@@ -93,7 +93,7 @@ type Controller struct {
 	isInLameduck bool
 
 	// queryRulesMap has the latest query rules.
-	queryRulesMap map[string]*rules.Rule
+	queryRulesMap map[string]*rules.Rules
 
 	// replTracker has the replication tracker.
 	replTracker *repltracker.ReplTracker
@@ -108,7 +108,7 @@ func NewController() *Controller {
 		StateChanges:        make(chan *StateChange, 10),
 		queryRulesMap:       make(map[string]*rules.Rules),
 		replTracker: repltracker.NewReplTracker(
-			tabletenv.New("tabletservermock", tabletenv.NewDefaultConfig()),
+			tabletenv.NewEnv("tabletservermock", tabletenv.NewDefaultConfig()),
 			nil,
 		),
 	}
