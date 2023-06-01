@@ -165,7 +165,7 @@ func LoadConfig() (context.CancelFunc, error) {
 			msg := "Failed to read in config %s: %s"
 			switch configFileNotFoundHandling.Get() {
 			case WarnOnConfigFileNotFound:
-				msg += ". This is optional, and can be ignored if you are not using config files. For further reading, see https://github.com/vitessio/vitess/blob/main/doc/viper/viper.md#config-files."
+				msg += ". This is optional, and can be ignored if you are not using config files. For a detailed explanation, see https://github.com/vitessio/vitess/blob/main/doc/viper/viper.md#config-files."
 				log.WARN(msg, registry.Static.ConfigFileUsed(), nferr.Error())
 				fallthrough // after warning, ignore the error
 			case IgnoreConfigFileNotFound:
