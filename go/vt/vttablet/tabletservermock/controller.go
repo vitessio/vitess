@@ -108,7 +108,7 @@ func NewController() *Controller {
 		StateChanges:        make(chan *StateChange, 10),
 		queryRulesMap:       make(map[string]*rules.Rules),
 		replTracker: repltracker.NewReplTracker(
-			tabletenv.NewEnv("tabletservermock", tabletenv.NewDefaultConfig()),
+			tabletenv.NewEnv(tabletenv.NewDefaultConfig(), "tabletservermock"),
 			nil,
 		),
 	}
