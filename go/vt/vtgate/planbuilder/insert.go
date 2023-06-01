@@ -21,50 +21,55 @@ import (
 	"strconv"
 	"strings"
 
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
-
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
+	"vitess.io/vitess/go/vt/vtgate/semantics"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
 // buildInsertPlan builds the route for an INSERT statement.
-func buildInsertPlan(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema) (*planResult, error) {
-	pb := newStmtAwarePrimitiveBuilder(vschema, newJointab(reservedVars), stmt)
-	ins := stmt.(*sqlparser.Insert)
-	err := checkUnsupportedExpressions(ins)
-	if err != nil {
-		return nil, err
-	}
-	exprs := sqlparser.TableExprs{&sqlparser.AliasedTableExpr{Expr: ins.Table}}
-	rb, err := pb.processDMLTable(exprs, reservedVars, nil)
-	if err != nil {
-		return nil, err
-	}
-	// The table might have been routed to a different one.
-	ins.Table = exprs[0].(*sqlparser.AliasedTableExpr).Expr.(sqlparser.TableName)
-	if rb.eroute.TargetDestination != nil {
-		return nil, vterrors.VT12001("INSERT with a target destination")
-	}
+func buildInsertPlan(string) stmtPlanner {
+	return func(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema) (*planResult, error) {
+		pb := newStmtAwarePrimitiveBuilder(vschema, newJointab(reservedVars), stmt)
+		ins := stmt.(*sqlparser.Insert)
+		err := checkUnsupportedExpressions(ins)
+		if err != nil {
+			return nil, err
+		}
+		exprs := sqlparser.TableExprs{ins.Table}
+		rb, err := pb.processDMLTable(exprs, reservedVars, nil)
+		if err != nil {
+			return nil, err
+		}
+		// The table might have been routed to a different one.
+		ins.Table = exprs[0].(*sqlparser.AliasedTableExpr)
+		// remove any alias added from routing table. insert query does not support table alias.
+		ins.Table.As = sqlparser.NewIdentifierCS("")
+		if rb.eroute.TargetDestination != nil {
+			return nil, vterrors.VT12001("INSERT with a target destination")
+		}
 
-	if len(pb.st.tables) != 1 {
-		// Unreachable.
-		return nil, vterrors.VT12001("multi-table INSERT statement in a sharded keyspace")
+		if len(pb.st.tables) != 1 {
+			// Unreachable.
+			return nil, vterrors.VT12001("multi-table INSERT statement in a sharded keyspace")
+		}
+		var vschemaTable *vindexes.Table
+		for _, tval := range pb.st.tables {
+			// There is only one table.
+			vschemaTable = tval.vschemaTable
+		}
+		if !rb.eroute.Keyspace.Sharded {
+			return buildInsertUnshardedPlan(ins, vschemaTable, reservedVars, vschema)
+		}
+		if ins.Action == sqlparser.ReplaceAct {
+			return nil, vterrors.VT12001("REPLACE INTO with sharded keyspace")
+		}
+		return buildInsertShardedPlan(ins, vschemaTable, reservedVars, vschema)
 	}
-	var vschemaTable *vindexes.Table
-	for _, tval := range pb.st.tables {
-		// There is only one table.
-		vschemaTable = tval.vschemaTable
-	}
-	if !rb.eroute.Keyspace.Sharded {
-		return buildInsertUnshardedPlan(ins, vschemaTable, reservedVars, vschema)
-	}
-	if ins.Action == sqlparser.ReplaceAct {
-		return nil, vterrors.VT12001("REPLACE INTO with sharded keyspace")
-	}
-	return buildInsertShardedPlan(ins, vschemaTable, reservedVars, vschema)
 }
 
 func buildInsertUnshardedPlan(ins *sqlparser.Insert, table *vindexes.Table, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema) (*planResult, error) {
@@ -92,7 +97,7 @@ func buildInsertUnshardedPlan(ins *sqlparser.Insert, table *vindexes.Table, rese
 			eins.Query = generateQuery(ins)
 		} else {
 			eins.Input = plan.primitive
-			generateInsertSelectQuery(ins, eins)
+			eins.Prefix, _, eins.Suffix = generateInsertShardedQuery(ins)
 		}
 		return newPlanResult(eins, tc.getTables()...), nil
 	case sqlparser.Values:
@@ -194,7 +199,7 @@ func buildInsertShardedPlan(ins *sqlparser.Insert, table *vindexes.Table, reserv
 	}
 	eins.VindexValues = routeValues
 	eins.Query = generateQuery(ins)
-	generateInsertShardedQuery(ins, eins, rows)
+	eins.Prefix, eins.Mid, eins.Suffix = generateInsertShardedQuery(ins)
 	return newPlanResult(eins, tc.getTables()...), nil
 }
 
@@ -238,7 +243,7 @@ func buildInsertSelectPlan(ins *sqlparser.Insert, table *vindexes.Table, reserve
 		return nil, err
 	}
 
-	generateInsertSelectQuery(ins, eins)
+	eins.Prefix, _, eins.Suffix = generateInsertShardedQuery(ins)
 	return newPlanResult(eins, tc.getTables()...), nil
 }
 
@@ -355,35 +360,6 @@ func populateInsertColumnlist(ins *sqlparser.Insert, table *vindexes.Table) {
 	ins.Columns = cols
 }
 
-func generateInsertShardedQuery(node *sqlparser.Insert, eins *engine.Insert, valueTuples sqlparser.Values) {
-	prefixBuf := sqlparser.NewTrackedBuffer(dmlFormatter)
-	midBuf := sqlparser.NewTrackedBuffer(dmlFormatter)
-	suffixBuf := sqlparser.NewTrackedBuffer(dmlFormatter)
-	eins.Mid = make([]string, len(valueTuples))
-	prefixBuf.Myprintf("insert %v%sinto %v%v values ",
-		node.Comments, node.Ignore.ToString(),
-		node.Table, node.Columns)
-	eins.Prefix = prefixBuf.String()
-	for rowNum, val := range valueTuples {
-		midBuf.Myprintf("%v", val)
-		eins.Mid[rowNum] = midBuf.String()
-		midBuf.Reset()
-	}
-	suffixBuf.Myprintf("%v", node.OnDup)
-	eins.Suffix = suffixBuf.String()
-}
-
-func generateInsertSelectQuery(node *sqlparser.Insert, eins *engine.Insert) {
-	prefixBuf := sqlparser.NewTrackedBuffer(dmlFormatter)
-	suffixBuf := sqlparser.NewTrackedBuffer(dmlFormatter)
-	prefixBuf.Myprintf("insert %v%sinto %v%v ",
-		node.Comments, node.Ignore.ToString(),
-		node.Table, node.Columns)
-	eins.Prefix = prefixBuf.String()
-	suffixBuf.Myprintf("%v", node.OnDup)
-	eins.Suffix = suffixBuf.String()
-}
-
 // modifyForAutoinc modifies the AST and the plan to generate necessary autoinc values.
 // For row values cases, bind variable names are generated using baseName.
 func modifyForAutoinc(ins *sqlparser.Insert, eins *engine.Insert) error {
@@ -391,9 +367,13 @@ func modifyForAutoinc(ins *sqlparser.Insert, eins *engine.Insert) error {
 		return nil
 	}
 	colNum := findOrAddColumn(ins, eins.Table.AutoIncrement.Column)
+	selNext := &sqlparser.Select{
+		From:        []sqlparser.TableExpr{&sqlparser.AliasedTableExpr{Expr: &sqlparser.TableName{Name: eins.Table.AutoIncrement.Sequence.Name}}},
+		SelectExprs: sqlparser.SelectExprs{&sqlparser.Nextval{Expr: &sqlparser.Argument{Name: "n", Type: sqltypes.Int64}}},
+	}
 	eins.Generate = &engine.Generate{
 		Keyspace: eins.Table.AutoIncrement.Sequence.Keyspace,
-		Query:    fmt.Sprintf("select next :n values from %s", sqlparser.String(eins.Table.AutoIncrement.Sequence.Name)),
+		Query:    sqlparser.String(selNext),
 	}
 	switch rows := ins.Rows.(type) {
 	case sqlparser.SelectStatement:
@@ -457,4 +437,45 @@ func isVindexChanging(setClauses sqlparser.UpdateExprs, colVindexes []*vindexes.
 		}
 	}
 	return false
+}
+
+type insert struct {
+	eInsert *engine.Insert
+	source  logicalPlan
+	gen4Plan
+}
+
+var _ logicalPlan = (*insert)(nil)
+
+func (i *insert) WireupGen4(ctx *plancontext.PlanningContext) error {
+	if i.source == nil {
+		return nil
+	}
+	return i.source.WireupGen4(ctx)
+}
+
+func (i *insert) Primitive() engine.Primitive {
+	if i.source != nil {
+		i.eInsert.Input = i.source.Primitive()
+	}
+	return i.eInsert
+}
+
+func (i *insert) Inputs() []logicalPlan {
+	if i.source == nil {
+		return nil
+	}
+	return []logicalPlan{i.source}
+}
+
+func (i *insert) Rewrite(inputs ...logicalPlan) error {
+	panic("does not expect insert to get rewrite call")
+}
+
+func (i *insert) ContainsTables() semantics.TableSet {
+	panic("does not expect insert to get contains tables call")
+}
+
+func (i *insert) OutputColumns() []sqlparser.SelectExpr {
+	panic("does not expect insert to get output columns call")
 }

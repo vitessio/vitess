@@ -21,9 +21,8 @@ import (
 	"reflect"
 
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
-
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
 // Merge checks whether two operators can be merged into a single one.

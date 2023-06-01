@@ -31,43 +31,42 @@ import (
 	"github.com/nsf/jsondiff"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/test/utils"
+	"vitess.io/vitess/go/vt/key"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
+	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sidecardb"
-
-	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
-
-	"vitess.io/vitess/go/test/utils"
-	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
-	oprewriters "vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
-
-	"vitess.io/vitess/go/mysql/collations"
-	"vitess.io/vitess/go/vt/vtgate/semantics"
-
-	"vitess.io/vitess/go/vt/vterrors"
-
-	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
+	oprewriters "vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
+	"vitess.io/vitess/go/vt/vtgate/semantics"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
-
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 // hashIndex is a functional, unique Vindex.
 type hashIndex struct{ name string }
 
-func (v *hashIndex) String() string   { return v.name }
-func (*hashIndex) Cost() int          { return 1 }
-func (*hashIndex) IsUnique() bool     { return true }
+func (v *hashIndex) String() string { return v.name }
+
+func (*hashIndex) Cost() int { return 1 }
+
+func (*hashIndex) IsUnique() bool { return true }
+
 func (*hashIndex) NeedsVCursor() bool { return false }
+
 func (*hashIndex) Verify(context.Context, vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
 	return []bool{}, nil
 }
+
 func (*hashIndex) Map(ctx context.Context, vcursor vindexes.VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
 	return nil, nil
 }
@@ -79,22 +78,30 @@ func newHashIndex(name string, _ map[string]string) (vindexes.Vindex, error) {
 // lookupIndex is a unique Vindex, and satisfies Lookup.
 type lookupIndex struct{ name string }
 
-func (v *lookupIndex) String() string   { return v.name }
-func (*lookupIndex) Cost() int          { return 2 }
-func (*lookupIndex) IsUnique() bool     { return true }
+func (v *lookupIndex) String() string { return v.name }
+
+func (*lookupIndex) Cost() int { return 2 }
+
+func (*lookupIndex) IsUnique() bool { return true }
+
 func (*lookupIndex) NeedsVCursor() bool { return false }
+
 func (*lookupIndex) Verify(context.Context, vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
 	return []bool{}, nil
 }
+
 func (*lookupIndex) Map(ctx context.Context, vcursor vindexes.VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
 	return nil, nil
 }
+
 func (*lookupIndex) Create(context.Context, vindexes.VCursor, [][]sqltypes.Value, [][]byte, bool) error {
 	return nil
 }
+
 func (*lookupIndex) Delete(context.Context, vindexes.VCursor, [][]sqltypes.Value, []byte) error {
 	return nil
 }
+
 func (*lookupIndex) Update(context.Context, vindexes.VCursor, []sqltypes.Value, []byte, []sqltypes.Value) error {
 	return nil
 }
@@ -108,31 +115,44 @@ var _ vindexes.Lookup = (*lookupIndex)(nil)
 // nameLkpIndex satisfies Lookup, NonUnique.
 type nameLkpIndex struct{ name string }
 
-func (v *nameLkpIndex) String() string                     { return v.name }
-func (*nameLkpIndex) Cost() int                            { return 3 }
-func (*nameLkpIndex) IsUnique() bool                       { return false }
-func (*nameLkpIndex) NeedsVCursor() bool                   { return false }
-func (*nameLkpIndex) AllowBatch() bool                     { return true }
-func (*nameLkpIndex) AutoCommitEnabled() bool              { return false }
+func (v *nameLkpIndex) String() string { return v.name }
+
+func (*nameLkpIndex) Cost() int { return 3 }
+
+func (*nameLkpIndex) IsUnique() bool { return false }
+
+func (*nameLkpIndex) NeedsVCursor() bool { return false }
+
+func (*nameLkpIndex) AllowBatch() bool { return true }
+
+func (*nameLkpIndex) AutoCommitEnabled() bool { return false }
+
 func (*nameLkpIndex) GetCommitOrder() vtgatepb.CommitOrder { return vtgatepb.CommitOrder_NORMAL }
+
 func (*nameLkpIndex) Verify(context.Context, vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
 	return []bool{}, nil
 }
+
 func (*nameLkpIndex) Map(ctx context.Context, vcursor vindexes.VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
 	return nil, nil
 }
+
 func (*nameLkpIndex) Create(context.Context, vindexes.VCursor, [][]sqltypes.Value, [][]byte, bool) error {
 	return nil
 }
+
 func (*nameLkpIndex) Delete(context.Context, vindexes.VCursor, [][]sqltypes.Value, []byte) error {
 	return nil
 }
+
 func (*nameLkpIndex) Update(context.Context, vindexes.VCursor, []sqltypes.Value, []byte, []sqltypes.Value) error {
 	return nil
 }
+
 func (v *nameLkpIndex) Query() (string, []string) {
 	return "select name, keyspace_id from name_user_vdx where name in ::name", []string{"name"}
 }
+
 func (*nameLkpIndex) MapResult([]sqltypes.Value, []*sqltypes.Result) ([]key.Destination, error) {
 	return nil, nil
 }
@@ -142,28 +162,38 @@ func newNameLkpIndex(name string, _ map[string]string) (vindexes.Vindex, error) 
 }
 
 var _ vindexes.Vindex = (*nameLkpIndex)(nil)
+
 var _ vindexes.Lookup = (*nameLkpIndex)(nil)
+
 var _ vindexes.LookupPlanable = (*nameLkpIndex)(nil)
 
 // costlyIndex satisfies Lookup, NonUnique.
 type costlyIndex struct{ name string }
 
-func (v *costlyIndex) String() string   { return v.name }
-func (*costlyIndex) Cost() int          { return 10 }
-func (*costlyIndex) IsUnique() bool     { return false }
+func (v *costlyIndex) String() string { return v.name }
+
+func (*costlyIndex) Cost() int { return 10 }
+
+func (*costlyIndex) IsUnique() bool { return false }
+
 func (*costlyIndex) NeedsVCursor() bool { return false }
+
 func (*costlyIndex) Verify(context.Context, vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
 	return []bool{}, nil
 }
+
 func (*costlyIndex) Map(ctx context.Context, vcursor vindexes.VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
 	return nil, nil
 }
+
 func (*costlyIndex) Create(context.Context, vindexes.VCursor, [][]sqltypes.Value, [][]byte, bool) error {
 	return nil
 }
+
 func (*costlyIndex) Delete(context.Context, vindexes.VCursor, [][]sqltypes.Value, []byte) error {
 	return nil
 }
+
 func (*costlyIndex) Update(context.Context, vindexes.VCursor, []sqltypes.Value, []byte, []sqltypes.Value) error {
 	return nil
 }
@@ -173,6 +203,7 @@ func newCostlyIndex(name string, _ map[string]string) (vindexes.Vindex, error) {
 }
 
 var _ vindexes.Vindex = (*costlyIndex)(nil)
+
 var _ vindexes.Lookup = (*costlyIndex)(nil)
 
 // multiColIndex satisfies multi column vindex.
@@ -435,6 +466,7 @@ func TestBypassPlanningShardTargetFromFile(t *testing.T) {
 
 	testFile(t, "bypass_shard_cases.json", makeTestOutput(t), vschema, false)
 }
+
 func TestBypassPlanningKeyrangeTargetFromFile(t *testing.T) {
 	keyRange, _ := key.ParseShardingSpec("-")
 
@@ -800,6 +832,7 @@ func (vw *vschemaWrapper) getfirstKeyspace() (ks *vindexes.Keyspace) {
 	}
 	return
 }
+
 func (vw *vschemaWrapper) getActualKeyspace() string {
 	if vw.keyspace == nil {
 		return ""

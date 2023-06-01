@@ -2008,7 +2008,7 @@ func VisitRefOfInsert(in *Insert, f Visit) error {
 	if err := VisitRefOfParsedComments(in.Comments, f); err != nil {
 		return err
 	}
-	if err := VisitTableName(in.Table, f); err != nil {
+	if err := VisitRefOfAliasedTableExpr(in.Table, f); err != nil {
 		return err
 	}
 	if err := VisitPartitions(in.Partitions, f); err != nil {

@@ -133,6 +133,18 @@
             "to": "keyspace_id"
           },
           "owner": "user_metadata"
+        },
+        "lkp_shard_map": {
+          "type": "name_lkp_test",
+          "owner": "mixed_tbl",
+          "params": {
+            "table": "lkp_shard_vdx",
+            "from": "lkp_key",
+            "to": "keyspace_id"
+          }
+        },
+        "shard_index": {
+          "type": "xxhash"
         }
       },
       "tables": {
@@ -399,6 +411,30 @@
             {
               "column": "non_planable",
               "name": "user_index"
+            }
+          ]
+        },
+        "mixed_tbl": {
+          "column_vindexes": [
+            {
+              "column": "shard_key",
+              "name": "shard_index"
+            },
+            {
+              "column": "lkp_key",
+              "name": "lkp_shard_map"
+            }
+          ],
+          "auto_increment": {
+            "column": "lkp_key",
+            "sequence": "seq"
+          }
+        },
+        "lkp_shard_vdx": {
+          "column_vindexes": [
+            {
+              "column": "lkp_key",
+              "name": "shard_index"
             }
           ]
         }

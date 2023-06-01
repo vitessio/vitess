@@ -20,20 +20,17 @@ import (
 	"bytes"
 	"io"
 
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
-
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
-
 	"vitess.io/vitess/go/vt/key"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
-
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 type (
@@ -162,7 +159,7 @@ func buildVindexTableForDML(
 		return nil, nil, vterrors.VT09002(dmlType)
 	}
 
-	// we are dealing with an explicitly targeted UPDATE
+	// we are dealing with an explicitly targeted DML
 	routing := &TargetedRouting{
 		keyspace:          vindexTable.Keyspace,
 		TargetDestination: dest,

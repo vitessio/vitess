@@ -322,10 +322,12 @@ type (
 	// of the implications the deletion part may have on vindexes.
 	// If you add fields here, consider adding them to calls to validateUnshardedRoute.
 	Insert struct {
-		Action     InsertAction
-		Comments   *ParsedComments
-		Ignore     Ignore
-		Table      TableName
+		Action   InsertAction
+		Comments *ParsedComments
+		Ignore   Ignore
+		// The Insert as syntax still take TableName.
+		// The change is made for semantic analyzer as it takes AliasedTableExpr to provide TableInfo
+		Table      *AliasedTableExpr
 		Partitions Partitions
 		Columns    Columns
 		Rows       InsertRows
