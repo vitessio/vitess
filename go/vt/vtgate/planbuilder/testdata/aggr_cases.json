@@ -484,9 +484,9 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select col from `user` where 1 != 1",
+            "FieldQuery": "select col from `user` where 1 != 1 group by col",
             "OrderBy": "0 ASC",
-            "Query": "select distinct col from `user` order by col asc",
+            "Query": "select col from `user` group by col order by col asc",
             "Table": "`user`"
           }
         ]
@@ -1797,26 +1797,19 @@
       "Original": "select distinct a, count(*) from user",
       "Instructions": {
         "OperatorType": "Aggregate",
-        "Variant": "Ordered",
-        "GroupBy": "0, 1",
+        "Variant": "Scalar",
+        "Aggregates": "random(0) AS a, sum_count_star(1) AS count(*)",
         "Inputs": [
           {
-            "OperatorType": "Aggregate",
-            "Variant": "Scalar",
-            "Aggregates": "random(0) AS a, sum_count_star(1) AS count(*)",
-            "Inputs": [
-              {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select a, count(*) from `user` where 1 != 1",
-                "Query": "select a, count(*) from `user`",
-                "Table": "`user`"
-              }
-            ]
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select a, count(*) from `user` where 1 != 1",
+            "Query": "select a, count(*) from `user`",
+            "Table": "`user`"
           }
         ]
       },
@@ -1864,28 +1857,21 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "GroupBy": "(0|2), 1",
+        "Aggregates": "sum_count_star(1) AS count(*)",
+        "GroupBy": "(0|2)",
         "ResultColumns": 2,
         "Inputs": [
           {
-            "OperatorType": "Aggregate",
-            "Variant": "Ordered",
-            "Aggregates": "sum_count_star(1) AS count(*)",
-            "GroupBy": "(0|2)",
-            "Inputs": [
-              {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select a, count(*), weight_string(a) from `user` where 1 != 1 group by a, weight_string(a)",
-                "OrderBy": "(0|2) ASC",
-                "Query": "select a, count(*), weight_string(a) from `user` group by a, weight_string(a) order by a asc",
-                "Table": "`user`"
-              }
-            ]
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select a, count(*), weight_string(a) from `user` where 1 != 1 group by a, weight_string(a)",
+            "OrderBy": "(0|2) ASC",
+            "Query": "select a, count(*), weight_string(a) from `user` group by a, weight_string(a) order by a asc",
+            "Table": "`user`"
           }
         ]
       },
@@ -2088,9 +2074,9 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select col1, col2, weight_string(col1), weight_string(col2) from `user` where 1 != 1 group by col1, col2",
+            "FieldQuery": "select col1, col2, weight_string(col1), weight_string(col2) from `user` where 1 != 1 group by col1, col2, weight_string(col1), weight_string(col2)",
             "OrderBy": "(0|2) ASC, (1|3) ASC",
-            "Query": "select distinct col1, col2, weight_string(col1), weight_string(col2) from `user` group by col1, col2 order by col1 asc, col2 asc",
+            "Query": "select col1, col2, weight_string(col1), weight_string(col2) from `user` group by col1, col2, weight_string(col1), weight_string(col2) order by col1 asc, col2 asc",
             "Table": "`user`"
           }
         ]
@@ -6174,5 +6160,67 @@
         "user.user"
       ]
     }
+  },  {
+  "comment": "scatter aggregate with ambiguous aliases",
+  "query": "select distinct a, b as a from user",
+  "v3-plan": "generating ORDER BY clause: VT03021: ambiguous column reference: a",
+  "gen4-plan": {
+    "QueryType": "SELECT",
+    "Original": "select distinct a, b as a from user",
+    "Instructions": {
+      "OperatorType": "Aggregate",
+      "Variant": "Ordered",
+      "GroupBy": "(0|2), (1|3)",
+      "ResultColumns": 2,
+      "Inputs": [
+        {
+          "OperatorType": "Route",
+          "Variant": "Scatter",
+          "Keyspace": {
+            "Name": "user",
+            "Sharded": true
+          },
+          "FieldQuery": "select a, b as a, weight_string(a), weight_string(b) from `user` where 1 != 1 group by a, b, weight_string(a), weight_string(b)",
+          "OrderBy": "(0|2) ASC, (1|3) ASC",
+          "Query": "select a, b as a, weight_string(a), weight_string(b) from `user` group by a, b, weight_string(a), weight_string(b) order by a asc, b asc",
+          "Table": "`user`"
+        }
+      ]
+    },
+    "TablesUsed": [
+      "user.user"
+    ]
   }
+},  {
+  "comment": "scatter aggregate with complex select list (can't build order by)",
+  "query": "select distinct a+1 from user",
+  "v3-plan": "generating ORDER BY clause: VT12001: unsupported: reference a complex expression",
+  "gen4-plan": {
+    "QueryType": "SELECT",
+    "Original": "select distinct a+1 from user",
+    "Instructions": {
+      "OperatorType": "Aggregate",
+      "Variant": "Ordered",
+      "GroupBy": "(0|1)",
+      "ResultColumns": 1,
+      "Inputs": [
+        {
+          "OperatorType": "Route",
+          "Variant": "Scatter",
+          "Keyspace": {
+            "Name": "user",
+            "Sharded": true
+          },
+          "FieldQuery": "select a + 1, weight_string(a + 1) from `user` where 1 != 1 group by a + 1, weight_string(a + 1)",
+          "OrderBy": "(0|1) ASC",
+          "Query": "select a + 1, weight_string(a + 1) from `user` group by a + 1, weight_string(a + 1) order by a + 1 asc",
+          "Table": "`user`"
+        }
+      ]
+    },
+    "TablesUsed": [
+      "user.user"
+    ]
+  }
+}
 ]

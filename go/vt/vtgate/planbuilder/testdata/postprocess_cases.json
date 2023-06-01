@@ -2957,9 +2957,9 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select `user`.a, weight_string(`user`.a) from `user` where 1 != 1",
+                "FieldQuery": "select `user`.a, weight_string(`user`.a) from `user` where 1 != 1 group by `user`.a, weight_string(`user`.a)",
                 "OrderBy": "(0|1) ASC",
-                "Query": "select `user`.a, weight_string(`user`.a) from `user` order by `user`.a asc",
+                "Query": "select `user`.a, weight_string(`user`.a) from `user` group by `user`.a, weight_string(`user`.a) order by `user`.a asc",
                 "Table": "`user`"
               },
               {
@@ -2969,8 +2969,8 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select 1 from user_extra where 1 != 1",
-                "Query": "select 1 from user_extra",
+                "FieldQuery": "select 1 from user_extra where 1 != 1 group by .0",
+                "Query": "select 1 from user_extra group by .0",
                 "Table": "user_extra"
               }
             ]
@@ -3026,9 +3026,9 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select a as c, a, weight_string(a) from `user` where 1 != 1",
+            "FieldQuery": "select a as c, a, weight_string(a) from `user` where 1 != 1 group by a, a, weight_string(a)",
             "OrderBy": "(0|2) ASC, (0|2) ASC",
-            "Query": "select distinct a as c, a, weight_string(a) from `user` order by c asc, a asc",
+            "Query": "select a as c, a, weight_string(a) from `user` group by a, a, weight_string(a) order by a asc, a asc",
             "Table": "`user`"
           }
         ]
@@ -3058,9 +3058,9 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select a, a, weight_string(a) from `user` where 1 != 1",
+            "FieldQuery": "select a, a, weight_string(a) from `user` where 1 != 1 group by a, a, weight_string(a)",
             "OrderBy": "(0|2) ASC, (0|2) ASC",
-            "Query": "select distinct a, a, weight_string(a) from `user` order by a asc, a asc",
+            "Query": "select a, a, weight_string(a) from `user` group by a, a, weight_string(a) order by a asc, a asc",
             "Table": "`user`"
           }
         ]
