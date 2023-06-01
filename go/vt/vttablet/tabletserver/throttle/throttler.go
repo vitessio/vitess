@@ -1046,7 +1046,7 @@ func (throttler *Throttler) AppRequestMetricResult(ctx context.Context, appName 
 
 // checkStore checks the aggregated value of given MySQL store
 func (throttler *Throttler) checkStore(ctx context.Context, appName string, storeName string, remoteAddr string, flags *CheckFlags) (checkResult *CheckResult) {
-	if !throttler.IsOpen() || !throttler.IsEnabled() {
+	if !throttler.IsRunning() {
 		return okMetricCheckResult
 	}
 	if throttlerapp.ExemptFromChecks(appName) {
