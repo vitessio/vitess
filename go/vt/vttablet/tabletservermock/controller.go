@@ -29,6 +29,7 @@ import (
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/heartbeat"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
@@ -216,6 +217,11 @@ func (tqsc *Controller) BroadcastHealth() {
 // TopoServer is part of the tabletserver.Controller interface.
 func (tqsc *Controller) TopoServer() *topo.Server {
 	return tqsc.TS
+}
+
+// HeartbeatWriter returns the heartbeat writer.
+func (tqsc *Controller) HeartbeatWriter() heartbeat.HeartbeatWriter {
+	return tqsc.TS.HeartbeatWriter()
 }
 
 // EnterLameduck implements tabletserver.Controller.
