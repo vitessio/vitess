@@ -225,7 +225,7 @@ func NewThrottler(env tabletenv.Env, srvTopoServer srvtopo.Server, ts *topo.Serv
 // CheckIsReady checks if this throttler is ready to serve. If not, it
 // returns an error.
 func (throttler *Throttler) CheckIsReady() error {
-	if throttler.IsOpen() && throttler.IsEnabled() {
+	if throttler.IsRunning() {
 		// all good
 		return nil
 	}
@@ -318,8 +318,6 @@ func (throttler *Throttler) normalizeThrottlerConfig(thottlerConfig *topodatapb.
 }
 
 func (throttler *Throttler) WatchSrvKeyspaceCallback(srvks *topodatapb.SrvKeyspace, err error) bool {
-	throttler.initMutex.Lock()
-	defer throttler.initMutex.Unlock()
 	log.Infof("Throttler: WatchSrvKeyspaceCallback called with: %+v", srvks)
 	if err != nil {
 		log.Errorf("WatchSrvKeyspaceCallback error: %v", err)
@@ -327,15 +325,17 @@ func (throttler *Throttler) WatchSrvKeyspaceCallback(srvks *topodatapb.SrvKeyspa
 	}
 	throttlerConfig := throttler.normalizeThrottlerConfig(srvks.ThrottlerConfig)
 
-	if throttler.IsOpen() {
-		// Throttler is open/running and we should apply the config change
+	if throttler.IsEnabled() {
+		// Throttler is enabled and we should apply the config change
 		// through Operate() or else we get into race conditions.
 		go func() {
 			log.Infof("Throttler: submitting a throttler config apply message with: %+v", throttlerConfig)
 			throttler.throttlerConfigChan <- throttlerConfig
 		}()
 	} else {
-		// Throttler is not open/running, we should apply directly.
+		throttler.initMutex.Lock()
+		defer throttler.initMutex.Unlock()
+		// Throttler is not enabled, we should apply directly.
 		throttler.applyThrottlerConfig(context.Background(), throttlerConfig)
 	}
 
@@ -460,7 +460,7 @@ func (throttler *Throttler) Open() error {
 			defer retryTicker.Stop()
 			for {
 				if !throttler.IsOpen() {
-					// Throttler is not open/running so no need to keep retrying.
+					// Throttler is not open so no need to keep retrying.
 					log.Errorf("Throttler.retryReadAndApplyThrottlerConfig(): throttler no longer seems to be open, exiting")
 					return
 				}
@@ -580,6 +580,10 @@ func (throttler *Throttler) ThrottledApps() (result []base.AppThrottle) {
 func (throttler *Throttler) isDormant() bool {
 	lastCheckTime := time.Unix(0, atomic.LoadInt64(&throttler.lastCheckTimeNano))
 	return time.Since(lastCheckTime) > dormantPeriod
+}
+
+func (throttler *Throttler) IsRunning() bool {
+	return throttler.IsOpen() && throttler.IsEnabled()
 }
 
 // Operate is the main entry point for the throttler operation and logic. It will

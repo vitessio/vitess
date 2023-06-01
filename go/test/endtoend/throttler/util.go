@@ -147,7 +147,7 @@ func WaitForThrottlerStatusEnabled(t *testing.T, tablet *cluster.Vttablet, enabl
 		tabletBody := getHTTPBody(tabletURL)
 		class := strings.ToLower(gjson.Get(tabletBody, "0.Class").String())
 		value := strings.ToLower(gjson.Get(tabletBody, "0.Value").String())
-		if class == "unhappy" && strings.Contains(value, "primary: not serving") {
+		if class == "unhappy" && strings.Contains(value, "not serving") {
 			log.Infof("tablet %s is Not Serving, so ignoring throttler status as the throttler will not be Opened", tablet.Alias)
 			return
 		}
