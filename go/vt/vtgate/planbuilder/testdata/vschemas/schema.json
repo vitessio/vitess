@@ -124,6 +124,15 @@
         "name_muticoltbl_map": {
           "type": "name_lkp_test",
           "owner": "multicol_tbl"
+        },
+        "non_planable_user_map": {
+          "type": "lookup_unicodeloosemd5_hash",
+          "params": {
+            "table": "non_planable_user_vdx",
+            "from": "non_planable",
+            "to": "keyspace_id"
+          },
+          "owner": "user_metadata"
         }
       },
       "tables": {
@@ -188,6 +197,10 @@
             {
               "column": "md5",
               "name": "user_md5_index"
+            },
+            {
+              "column": "non_planable",
+              "name": "non_planable_user_map"
             }
           ]
         },
@@ -377,6 +390,14 @@
           "column_vindexes": [
             {
               "column": "name",
+              "name": "user_index"
+            }
+          ]
+        },
+        "non_planable_user_vdx": {
+          "column_vindexes": [
+            {
+              "column": "non_planable",
               "name": "user_index"
             }
           ]

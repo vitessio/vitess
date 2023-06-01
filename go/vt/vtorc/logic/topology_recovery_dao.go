@@ -193,9 +193,9 @@ func AttemptRecoveryRegistration(analysisEntry *inst.ReplicationAnalysis, failIf
 		}
 	}
 	if failIfClusterInActiveRecovery {
-		// Let's check if this cluster has just experienced a failover and is still in active period.
+		// Let's check if this cluster has just experienced a failover of the same analysis and is still in active period.
 		// If so, we reject recovery registration to avoid flapping.
-		recoveries, err := ReadInActivePeriodClusterRecovery(analysisEntry.ClusterDetails.Keyspace, analysisEntry.ClusterDetails.Shard)
+		recoveries, err := ReadInActivePeriodClusterRecovery(analysisEntry.ClusterDetails.Keyspace, analysisEntry.ClusterDetails.Shard, string(analysisEntry.Analysis))
 		if err != nil {
 			log.Error(err)
 			return nil, err
@@ -519,15 +519,16 @@ func readRecoveries(whereCondition string, limit string, args []any) ([]*Topolog
 	return res, err
 }
 
-// ReadInActivePeriodClusterRecovery reads recoveries (possibly complete!) that are in active period.
-// (may be used to block further recoveries on this cluster)
-func ReadInActivePeriodClusterRecovery(keyspace string, shard string) ([]*TopologyRecovery, error) {
+// ReadInActivePeriodClusterRecovery reads recoveries (possibly complete!) that are in active period for the analysis.
+// (may be used to block further recoveries of the same analysis on this cluster)
+func ReadInActivePeriodClusterRecovery(keyspace string, shard, analysis string) ([]*TopologyRecovery, error) {
 	whereClause := `
 		where
 			in_active_period=1
 			and keyspace=?
-			and shard=?`
-	return readRecoveries(whereClause, ``, sqlutils.Args(keyspace, shard))
+			and shard=?
+			and analysis=?`
+	return readRecoveries(whereClause, ``, sqlutils.Args(keyspace, shard, analysis))
 }
 
 // ReadInActivePeriodSuccessorInstanceRecovery reads completed recoveries for a given instance, where said instance

@@ -128,3 +128,65 @@ func TestElectNewPrimaryPanic(t *testing.T) {
 	require.True(t, recoveryAttempted)
 	require.Error(t, err)
 }
+
+func TestDifferentAnalysescHaveDifferentCooldowns(t *testing.T) {
+	orcDb, err := db.OpenVTOrc()
+	require.NoError(t, err)
+	oldTs := ts
+	defer func() {
+		ts = oldTs
+		_, err = orcDb.Exec("delete from vitess_tablet")
+		require.NoError(t, err)
+	}()
+
+	primary := &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Cell: "zone1",
+			Uid:  1,
+		},
+		Hostname:      "localhost1",
+		MysqlHostname: "localhost1",
+		MysqlPort:     1200,
+		Keyspace:      "ks",
+		Shard:         "0",
+		Type:          topodatapb.TabletType_PRIMARY,
+	}
+	replica := &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Cell: "zone1",
+			Uid:  2,
+		},
+		Hostname:      "localhost2",
+		MysqlHostname: "localhost2",
+		MysqlPort:     1200,
+		Keyspace:      "ks",
+		Shard:         "0",
+		Type:          topodatapb.TabletType_REPLICA,
+	}
+	err = inst.SaveTablet(primary)
+	require.NoError(t, err)
+	err = inst.SaveTablet(replica)
+	require.NoError(t, err)
+	primaryAnalysisEntry := inst.ReplicationAnalysis{
+		AnalyzedInstanceKey: inst.InstanceKey{
+			Hostname: primary.MysqlHostname,
+			Port:     int(primary.MysqlPort),
+		},
+		Analysis: inst.ReplicationStopped,
+	}
+	replicaAnalysisEntry := inst.ReplicationAnalysis{
+		AnalyzedInstanceKey: inst.InstanceKey{
+			Hostname: replica.MysqlHostname,
+			Port:     int(replica.MysqlPort),
+		},
+		Analysis: inst.DeadPrimary,
+	}
+	ts = memorytopo.NewServer("zone1")
+	_, err = AttemptRecoveryRegistration(&replicaAnalysisEntry, false, true)
+	require.Nil(t, err)
+
+	// even though this is another recovery on the same cluster, allow it to go through
+	// because the analysis is different (ReplicationStopped vs DeadPrimary)
+	_, err = AttemptRecoveryRegistration(&primaryAnalysisEntry, true, true)
+	require.Nil(t, err)
+}
