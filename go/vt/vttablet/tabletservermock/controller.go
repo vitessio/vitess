@@ -30,6 +30,7 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/heartbeat"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/repltracker"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
@@ -92,7 +93,10 @@ type Controller struct {
 	isInLameduck bool
 
 	// queryRulesMap has the latest query rules.
-	queryRulesMap map[string]*rules.Rules
+	queryRulesMap map[string]*rules.Rule
+
+	// replTracker has the replication tracker.
+	replTracker *repltracker.ReplTracker
 }
 
 // NewController returns a mock of tabletserver.Controller
@@ -103,6 +107,10 @@ func NewController() *Controller {
 		BroadcastData:       make(chan *BroadcastData, 10),
 		StateChanges:        make(chan *StateChange, 10),
 		queryRulesMap:       make(map[string]*rules.Rules),
+		replTracker: repltracker.NewReplTracker(
+			tabletenv.New("tabletservermock", tabletenv.NewDefaultConfig()),
+			nil,
+		),
 	}
 }
 
@@ -221,7 +229,7 @@ func (tqsc *Controller) TopoServer() *topo.Server {
 
 // HeartbeatWriter returns the heartbeat writer.
 func (tqsc *Controller) HeartbeatWriter() heartbeat.HeartbeatWriter {
-	return tqsc.TS.HeartbeatWriter()
+	return tqsc.replTracker.HeartbeatWriter()
 }
 
 // EnterLameduck implements tabletserver.Controller.

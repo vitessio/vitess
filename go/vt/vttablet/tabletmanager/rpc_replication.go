@@ -62,8 +62,9 @@ func (tm *TabletManager) ReplicationStatus(ctx context.Context) (*replicationdat
 
 // FullStatus returns the full status of MySQL including the replication information, semi-sync information, GTID information among others
 func (tm *TabletManager) FullStatus(ctx context.Context) (*replicationdatapb.FullStatus, error) {
-	// Return error if heartbeat writer has an error. This indicates a
-	// problem with INSERT'ing to the PRIMARY.
+	// Raise errors from the heartbeat writer. This indicates a problem
+	// with INSERT'ing to the PRIMARY. Non-PRIMARY tablets return nil
+	// because they don't write heartbeats
 	heartbeatWriter := tm.QueryServiceControl.HeartbeatWriter()
 	if err := heartbeatWriter.LastError(); err != nil {
 		return nil, err
