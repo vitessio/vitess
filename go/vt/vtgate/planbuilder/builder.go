@@ -55,7 +55,7 @@ const (
 )
 
 var (
-	plannerVersions = []plancontext.PlannerVersion{V3, Gen4, Gen4GreedyOnly, Gen4Left2Right, Gen4WithFallback, Gen4CompareV3}
+	plannerVersions = []plancontext.PlannerVersion{V3, V3Insert, Gen4, Gen4GreedyOnly, Gen4Left2Right, Gen4WithFallback, Gen4CompareV3}
 )
 
 type (
