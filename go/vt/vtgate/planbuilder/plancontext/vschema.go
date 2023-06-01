@@ -91,7 +91,7 @@ type VSchema interface {
 
 // PlannerNameToVersion returns the numerical representation of the planner
 func PlannerNameToVersion(s string) (PlannerVersion, bool) {
-	deprecationMessage := "The V3 planner is deprecated and will be removed in V17 of Vitess"
+	deprecationMessage := "The V3 planner is deprecated and will be removed in future release of Vitess"
 	switch strings.ToLower(s) {
 	case "v3":
 		log.Warning(deprecationMessage)
@@ -107,6 +107,9 @@ func PlannerNameToVersion(s string) (PlannerVersion, bool) {
 	case "gen4comparev3":
 		log.Warning(deprecationMessage)
 		return querypb.ExecuteOptions_Gen4CompareV3, true
+	case "v3insert":
+		log.Warning(deprecationMessage)
+		return querypb.ExecuteOptions_V3Insert, true
 	}
 	return 0, false
 }

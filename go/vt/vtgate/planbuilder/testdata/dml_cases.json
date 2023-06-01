@@ -6439,5 +6439,51 @@
         "user.user"
       ]
     }
+  },
+  {
+    "comment": "insert into a vindex not allowed - gen4 produces different error - forcing a v3 plan here will have same output",
+    "query": "insert /*vt+ planner=v3insert */ into user_index(id) values(1)",
+    "plan": "VT12001: unsupported: multi-shard or vindex write statement"
+  },
+  {
+    "comment": "insert with select takes shared lock in gen4 and for update in v3, as forcing v3 plan the output will remain same",
+    "query": "insert /*vt+ planner=v3insert */ into user(id) select id from user",
+    "plan": {
+      "QueryType": "INSERT",
+      "Original": "insert /*vt+ planner=v3insert */ into user(id) select id from user",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Select",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "AutoIncrement": "select next :n /* INT64 */ values from seq:Offset(0)",
+        "InputAsNonStreaming": true,
+        "TableName": "user",
+        "VindexOffsetFromSelect": {
+          "costly_map": "[-1]",
+          "name_user_map": "[-1]",
+          "user_index": "[0]"
+        },
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id from `user` where 1 != 1",
+            "Query": "select id from `user` for update",
+            "Table": "`user`"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
   }
 ]
