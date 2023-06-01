@@ -68,6 +68,10 @@ func TestGenerateFullQuery(t *testing.T) {
 			name:    "parser error",
 			query:   "insert syntax error",
 			wantErr: "syntax error at position 20 near 'error'",
+		}, {
+			name:      "Multiple %v replacements",
+			query:     fetchTablesAndViews,
+			wantQuery: "select table_name, create_statement from _vt.`tables` where table_schema = database() union select table_name, create_statement from _vt.views where table_schema = database()",
 		},
 	}
 	for _, tt := range tests {
@@ -943,6 +947,33 @@ func TestGetFetchTableQuery(t *testing.T) {
 	for _, testcase := range testcases {
 		t.Run(testcase.name, func(t *testing.T) {
 			query, err := GetFetchTableQuery(testcase.tableNames)
+			require.NoError(t, err)
+			require.Equal(t, testcase.expectedQuery, query)
+		})
+	}
+}
+
+// TestGetFetchTableAndViewsQuery tests the functionality for getting the fetch query to retrieve tables and views.
+func TestGetFetchTableAndViewsQuery(t *testing.T) {
+	testcases := []struct {
+		name          string
+		tableNames    []string
+		expectedQuery string
+	}{
+		{
+			name:          "No tables provided",
+			tableNames:    []string{},
+			expectedQuery: "select table_name, create_statement from _vt.`tables` where table_schema = database() union select table_name, create_statement from _vt.views where table_schema = database()",
+		}, {
+			name:          "Few tables provided",
+			tableNames:    []string{"t1", "t2", "v1", "v2", "lead"},
+			expectedQuery: "select table_name, create_statement from _vt.`tables` where table_schema = database() and table_name in ('t1', 't2', 'v1', 'v2', 'lead') union select table_name, create_statement from _vt.views where table_schema = database() and table_name in ('t1', 't2', 'v1', 'v2', 'lead')",
+		},
+	}
+
+	for _, testcase := range testcases {
+		t.Run(testcase.name, func(t *testing.T) {
+			query, err := GetFetchTableAndViewsQuery(testcase.tableNames)
 			require.NoError(t, err)
 			require.Equal(t, testcase.expectedQuery, query)
 		})
