@@ -50,6 +50,8 @@ const (
 	Gen4WithFallback = querypb.ExecuteOptions_Gen4WithFallback
 	// Gen4CompareV3 executes queries on both Gen4 and V3 to compare their results.
 	Gen4CompareV3 = querypb.ExecuteOptions_Gen4CompareV3
+	// V3Insert executes insert query on V3 and others on Gen4.
+	V3Insert = querypb.ExecuteOptions_V3Insert
 )
 
 var (
@@ -147,10 +149,15 @@ func getConfiguredPlanner(vschema plancontext.VSchema, v3planner func(string) st
 		return gen4Planner(query, planner), nil
 	case Gen4WithFallback:
 		fp := &fallbackPlanner{
-			primary:  gen4Planner(query, querypb.ExecuteOptions_Gen4),
+			primary:  gen4Planner(query, Gen4),
 			fallback: v3planner(query),
 		}
 		return fp.plan, nil
+	case V3Insert:
+		if _, isInsert := stmt.(*sqlparser.Insert); isInsert {
+			return v3planner(query), nil
+		}
+		return gen4Planner(query, Gen4), nil
 	case V3:
 		return v3planner(query), nil
 	default:
