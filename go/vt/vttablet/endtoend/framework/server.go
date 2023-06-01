@@ -119,7 +119,6 @@ func StartServer(connParams, connAppDebugParams mysql.ConnParams, dbName string)
 	config.HotRowProtection.Mode = tabletenv.Enable
 	config.TrackSchemaVersions = true
 	_ = config.GracePeriods.ShutdownSeconds.Set("2s")
-	_ = config.SignalSchemaChangeReloadIntervalSeconds.Set("2100ms")
 	config.SignalWhenSchemaChange = true
 	_ = config.Healthcheck.IntervalSeconds.Set("100ms")
 	_ = config.Oltp.TxTimeoutSeconds.Set("5s")

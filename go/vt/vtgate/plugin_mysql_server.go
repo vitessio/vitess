@@ -29,10 +29,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/spf13/pflag"
-
-	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
@@ -40,13 +38,12 @@ import (
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/callinfo"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/servenv"
-	"vitess.io/vitess/go/vt/vttls"
-
-	"github.com/google/uuid"
-
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
+	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vttls"
 )
 
 var (
@@ -237,8 +234,12 @@ func (vh *vtgateHandler) ComQuery(c *mysql.Conn, query string, callback func(*sq
 	}()
 
 	if session.Options.Workload == querypb.ExecuteOptions_OLAP {
-		err := vh.vtg.StreamExecute(ctx, session, query, make(map[string]*querypb.BindVariable), callback)
-		return mysql.NewSQLErrorFromError(err)
+		session, err := vh.vtg.StreamExecute(ctx, session, query, make(map[string]*querypb.BindVariable), callback)
+		if err != nil {
+			return mysql.NewSQLErrorFromError(err)
+		}
+		fillInTxStatusFlags(c, session)
+		return nil
 	}
 	session, result, err := vh.vtg.Execute(ctx, session, query, make(map[string]*querypb.BindVariable))
 
@@ -340,13 +341,16 @@ func (vh *vtgateHandler) ComStmtExecute(c *mysql.Conn, prepare *mysql.PrepareDat
 	}()
 
 	if session.Options.Workload == querypb.ExecuteOptions_OLAP {
-		err := vh.vtg.StreamExecute(ctx, session, prepare.PrepareStmt, prepare.BindVars, callback)
-		return mysql.NewSQLErrorFromError(err)
+		_, err := vh.vtg.StreamExecute(ctx, session, prepare.PrepareStmt, prepare.BindVars, callback)
+		if err != nil {
+			return mysql.NewSQLErrorFromError(err)
+		}
+		fillInTxStatusFlags(c, session)
+		return nil
 	}
 	_, qr, err := vh.vtg.Execute(ctx, session, prepare.PrepareStmt, prepare.BindVars)
 	if err != nil {
-		err = mysql.NewSQLErrorFromError(err)
-		return err
+		return mysql.NewSQLErrorFromError(err)
 	}
 	fillInTxStatusFlags(c, session)
 

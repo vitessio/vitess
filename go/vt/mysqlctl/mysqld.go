@@ -1024,6 +1024,7 @@ func (mysqld *Mysqld) executeMysqlScript(connParams *mysql.ConnParams, sql io.Re
 	args := []string{
 		"--defaults-extra-file=" + cnf,
 		"--batch",
+		"--default-character-set=utf8mb4",
 	}
 	env, err := buildLdPaths()
 	if err != nil {

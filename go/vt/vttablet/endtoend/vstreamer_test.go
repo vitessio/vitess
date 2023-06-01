@@ -202,6 +202,13 @@ func TestSchemaVersioning(t *testing.T) {
 			log.Infof("Received event %v", event)
 			evs = append(evs, event)
 		}
+		// Ignore unrelated events.
+		if len(evs) == 3 &&
+			evs[0].Type == binlogdatapb.VEventType_BEGIN &&
+			evs[1].Type == binlogdatapb.VEventType_GTID &&
+			evs[2].Type == binlogdatapb.VEventType_COMMIT {
+			return nil
+		}
 		select {
 		case eventCh <- evs:
 		case <-ctx.Done():
@@ -266,6 +273,13 @@ func TestSchemaVersioning(t *testing.T) {
 			}
 			log.Infof("Received event %v", event)
 			evs = append(evs, event)
+		}
+		// Ignore unrelated events.
+		if len(evs) == 3 &&
+			evs[0].Type == binlogdatapb.VEventType_BEGIN &&
+			evs[1].Type == binlogdatapb.VEventType_GTID &&
+			evs[2].Type == binlogdatapb.VEventType_COMMIT {
+			return nil
 		}
 		select {
 		case eventCh <- evs:

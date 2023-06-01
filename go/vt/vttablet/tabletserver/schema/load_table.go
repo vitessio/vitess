@@ -33,8 +33,8 @@ import (
 )
 
 // LoadTable creates a Table from the schema info in the database.
-func LoadTable(conn *connpool.DBConn, databaseName, tableName string, comment string) (*Table, error) {
-	ta := NewTable(tableName)
+func LoadTable(conn *connpool.DBConn, databaseName, tableName, tableType string, comment string) (*Table, error) {
+	ta := NewTable(tableName, NoType)
 	sqlTableName := sqlparser.String(ta.Name)
 	if err := fetchColumns(ta, conn, databaseName, sqlTableName); err != nil {
 		return nil, err
@@ -48,6 +48,8 @@ func LoadTable(conn *connpool.DBConn, databaseName, tableName string, comment st
 			return nil, err
 		}
 		ta.Type = Message
+	case strings.Contains(tableType, "VIEW"):
+		ta.Type = View
 	}
 	return ta, nil
 }

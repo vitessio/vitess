@@ -163,7 +163,6 @@ rowStreamer:
   maxMySQLReplLagSecs: 43200
 schemaChangeReloadTimeout: 30s
 schemaReloadIntervalSeconds: 30m0s
-signalSchemaChangeReloadIntervalSeconds: 5s
 signalWhenSchemaChange: true
 streamBufferSize: 32768
 txPool:

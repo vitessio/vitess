@@ -1309,11 +1309,25 @@ func (ts *trafficSwitcher) createReverseVReplication(ctx context.Context) error 
 				if ts.SourceKeyspaceSchema().Keyspace.Sharded {
 					vtable, ok := ts.SourceKeyspaceSchema().Tables[rule.Match]
 					if !ok {
-						return fmt.Errorf("table %s not found in vschema1", rule.Match)
+						return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "table %s not found in vschema", rule.Match)
 					}
-					// TODO(sougou): handle degenerate cases like sequence, etc.
-					// We currently assume the primary vindex is the best way to filter, which may not be true.
-					inKeyrange = fmt.Sprintf(" where in_keyrange(%s, '%s.%s', '%s')", sqlparser.String(vtable.ColumnVindexes[0].Columns[0]), ts.SourceKeyspaceName(), vtable.ColumnVindexes[0].Name, key.KeyRangeString(source.GetShard().KeyRange))
+					// We currently assume the primary vindex is the best way to filter rows
+					// for the table, which may not always be true.
+					// TODO: handle more of these edge cases explicitly, e.g. sequence tables.
+					switch vtable.Type {
+					case vindexes.TypeReference:
+						// For reference tables there are no vindexes and thus no filter to apply.
+					default:
+						// For non-reference tables we return an error if there's no primary
+						// vindex as it's not clear what to do.
+						if len(vtable.ColumnVindexes) > 0 && len(vtable.ColumnVindexes[0].Columns) > 0 {
+							inKeyrange = fmt.Sprintf(" where in_keyrange(%s, '%s.%s', '%s')", sqlparser.String(vtable.ColumnVindexes[0].Columns[0]),
+								ts.SourceKeyspaceName(), vtable.ColumnVindexes[0].Name, key.KeyRangeString(source.GetShard().KeyRange))
+						} else {
+							return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "no primary vindex found for the %s table in the %s keyspace",
+								vtable.Name.String(), ts.SourceKeyspaceName())
+						}
+					}
 				}
 				filter = fmt.Sprintf("select * from %s%s", sqlescape.EscapeID(rule.Match), inKeyrange)
 			}

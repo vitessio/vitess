@@ -6137,5 +6137,42 @@
         "user.user"
       ]
     }
+  },
+  {
+    "comment": "redundant group by columns are not added",
+    "query": "select col, val, id from user group by col, val, id, id, val, col",
+    "v3-plan": {
+      "QueryType": "SELECT",
+      "Original": "select col, val, id from user group by col, val, id, id, val, col",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select col, val, id from `user` where 1 != 1 group by col, val, id, id, val, col",
+        "Query": "select col, val, id from `user` group by col, val, id, id, val, col",
+        "Table": "`user`"
+      }
+    },
+    "gen4-plan": {
+      "QueryType": "SELECT",
+      "Original": "select col, val, id from user group by col, val, id, id, val, col",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select col, val, id from `user` where 1 != 1 group by col, val, id",
+        "Query": "select col, val, id from `user` group by col, val, id",
+        "Table": "`user`"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
   }
 ]
