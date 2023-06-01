@@ -2401,3 +2401,9 @@ func (ty GeomFromWkbType) ToString() string {
 		return "Unknown GeomFromWktType"
 	}
 }
+
+func getAliasedTableExprFromTableName(tblName TableName) *AliasedTableExpr {
+	return &AliasedTableExpr{
+		Expr: tblName,
+	}
+}

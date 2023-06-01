@@ -116,17 +116,17 @@ func (node *Insert) Format(buf *TrackedBuffer) {
 		buf.astPrintf(node, "%s %v%sinto %v%v%v %v%v",
 			InsertStr,
 			node.Comments, node.Ignore.ToString(),
-			node.Table, node.Partitions, node.Columns, node.Rows, node.OnDup)
+			node.Table.Expr, node.Partitions, node.Columns, node.Rows, node.OnDup)
 	case ReplaceAct:
 		buf.astPrintf(node, "%s %v%sinto %v%v%v %v%v",
 			ReplaceStr,
 			node.Comments, node.Ignore.ToString(),
-			node.Table, node.Partitions, node.Columns, node.Rows, node.OnDup)
+			node.Table.Expr, node.Partitions, node.Columns, node.Rows, node.OnDup)
 	default:
 		buf.astPrintf(node, "%s %v%sinto %v%v%v %v%v",
 			"Unkown Insert Action",
 			node.Comments, node.Ignore.ToString(),
-			node.Table, node.Partitions, node.Columns, node.Rows, node.OnDup)
+			node.Table.Expr, node.Partitions, node.Columns, node.Rows, node.OnDup)
 	}
 
 }
