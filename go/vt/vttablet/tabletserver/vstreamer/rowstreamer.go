@@ -36,6 +36,7 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 )
 
 var (
@@ -348,7 +349,7 @@ func (rs *rowStreamer) streamQuery(conn *snapshotConn, send func(*binlogdatapb.V
 		}
 
 		// check throttler.
-		if !rs.vse.throttlerClient.ThrottleCheckOKOrWait(rs.ctx) {
+		if !rs.vse.throttlerClient.ThrottleCheckOKOrWaitAppName(rs.ctx, throttlerapp.RowStreamerName) {
 			throttleResponseRateLimiter.Do(func() error {
 				return safeSend(&binlogdatapb.VStreamRowsResponse{Throttled: true})
 			})

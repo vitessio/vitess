@@ -64,6 +64,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/txserializer"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/txthrottler"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer"
@@ -1144,7 +1145,7 @@ func (tsv *TabletServer) VStream(ctx context.Context, request *binlogdatapb.VStr
 	if err := tsv.sm.VerifyTarget(ctx, request.Target); err != nil {
 		return err
 	}
-	return tsv.vstreamer.Stream(ctx, request.Position, request.TableLastPKs, request.Filter, send)
+	return tsv.vstreamer.Stream(ctx, request.Position, request.TableLastPKs, request.Filter, throttlerapp.VStreamerName, send)
 }
 
 // VStreamRows streams rows from the specified starting point.
@@ -1799,7 +1800,7 @@ func (tsv *TabletServer) registerThrottlerCheckHandlers() {
 			}
 			appName := r.URL.Query().Get("app")
 			if appName == "" {
-				appName = throttle.DefaultAppName
+				appName = throttlerapp.DefaultName.String()
 			}
 			flags := &throttle.CheckFlags{
 				LowPriority:           (r.URL.Query().Get("p") == "low"),
