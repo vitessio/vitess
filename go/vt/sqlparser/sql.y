@@ -5811,9 +5811,6 @@ json_table_column_definition:
     $$ = $6
   }
 
-// TODO: default value for non-existent member is NULL, but use "zero" when it is specified
-// TODO: exists overrides DEFAULT <json_string> ON EMPTY
-// TODO: figure out better way to condense rules
 json_table_column_options:
   PATH STRING
   {
@@ -5833,7 +5830,7 @@ json_table_column_options:
   }
 | PATH STRING val_on_error val_on_empty
   {
-    $$ = ColumnType{Path: string($2)}
+    $$ = ColumnType{Path: string($2), ValOnEmpty: $4, ValOnError: $3}
   }
 | PATH STRING ERROR ON EMPTY
   {
