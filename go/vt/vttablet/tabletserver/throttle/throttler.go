@@ -222,10 +222,10 @@ func NewThrottler(env tabletenv.Env, srvTopoServer srvtopo.Server, ts *topo.Serv
 	return throttler
 }
 
-// CheckIsReady checks if this throttler is ready to serve. If not, it returns
-// an error.
+// CheckIsReady checks if this throttler is ready to serve. If not, it
+// returns an error.
 func (throttler *Throttler) CheckIsReady() error {
-	if throttler.IsOpen() {
+	if throttler.IsOpen() && throttler.IsEnabled() {
 		// all good
 		return nil
 	}
