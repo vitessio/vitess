@@ -14,6 +14,7 @@
   - **[New command line flags and behavior](#new-flag)**
     - [Builtin backup: read buffering flags](#builtin-backup-read-buffering-flags)
     - [Manifest backup external decompressor command](#manifest-backup-external-decompressor-command)
+    - [Throttler congi via topo enabled by default](#throttler-config-via-topo)
   - **[New stats](#new-stats)**
     - [Detailed backup and restore stats](#detailed-backup-and-restore-stats)
     - [VTtablet Error count with code](#vttablet-error-count-with-code)
