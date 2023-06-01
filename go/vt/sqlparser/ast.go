@@ -2418,6 +2418,8 @@ type TableSpec struct {
 	Indexes     []*IndexDefinition
 	Constraints []*ConstraintDefinition
 	Options     string
+	Nested      bool
+	Path        string
 }
 
 // Format formats the node.
@@ -2485,8 +2487,6 @@ func (ts *TableSpec) walkSubtree(visit Visit) error {
 type ColumnDefinition struct {
 	Name ColIdent
 	Type ColumnType
-	Nested bool
-	Path string
 }
 
 // Format formats the node.
@@ -2917,6 +2917,92 @@ func (ct *ColumnType) SQLType() querypb.Type {
 		return sqltypes.Geometry
 	}
 	panic("unimplemented type " + ct.Type)
+}
+
+// JSONTableSpec describes the structure of a table from a CREATE TABLE statement
+type JSONTableSpec struct {
+	Columns     []*ColumnDefinition
+	Nested      bool
+	Path        string
+}
+
+// Format formats the node.
+func (ts *JSONTableSpec) Format(buf *TrackedBuffer) {
+	buf.Myprintf("(\n")
+	for i, col := range ts.Columns {
+		if i == 0 {
+			buf.Myprintf("\t%v", col)
+		} else {
+			buf.Myprintf(",\n\t%v", col)
+		}
+	}
+	for _, idx := range ts.Indexes {
+		buf.Myprintf(",\n\t%v", idx)
+	}
+	for _, c := range ts.Constraints {
+		buf.Myprintf(",\n\t%v", c)
+	}
+
+	buf.Myprintf("\n)%s", strings.Replace(ts.Options, ", ", ",\n  ", -1))
+}
+
+// AddColumn appends the given column to the list in the spec
+func (ts *JSONTableSpec) AddColumn(cd *ColumnDefinition) {
+	ts.Columns = append(ts.Columns, cd)
+}
+
+func (ts *JSONTableSpec) walkSubtree(visit Visit) error {
+	if ts == nil {
+		return nil
+	}
+
+	for _, n := range ts.Columns {
+		if err := Walk(visit, n); err != nil {
+			return err
+		}
+	}
+
+	for _, n := range ts.Indexes {
+		if err := Walk(visit, n); err != nil {
+			return err
+		}
+	}
+
+	for _, n := range ts.Constraints {
+		if err := Walk(visit, n); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// JSONColumnDefinition describes a column in a JSON_TABLE statement
+type JSONColumnDefinition struct {
+	Name ColIdent
+	Type ColumnType
+	Path string
+	NestedCols []JSONColumnDefinition
+}
+
+// Format formats the node.
+func (col *JSONColumnDefinition) Format(buf *TrackedBuffer) {
+	if col.Nested {
+		buf.Myprintf("%s %s %s %s ( %v %v )", keywordStrings[NESTED], keywordStrings[PATH], col.Path, keywordStrings[COLUMNS], col.Name, &col.Type)
+	} else {
+		buf.Myprintf("%v %v", col.Name, &col.Type)
+	}
+}
+
+func (col *JSONColumnDefinition) walkSubtree(visit Visit) error {
+	if col == nil {
+		return nil
+	}
+	return Walk(
+		visit,
+		col.Name,
+		&col.Type,
+	)
 }
 
 // IndexSpec describes an index operation in an ALTER statement

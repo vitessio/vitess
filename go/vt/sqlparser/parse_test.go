@@ -7328,6 +7328,10 @@ FROM
 			input: `SELECT * FROM JSON_TABLE('{}', '$' columns(NESTED '$' columns (b INT PATH '$'))) AS jt;`,
 			output: "select * from json_table('{}', \"$\" columns(\n\tnested path $ columns ( b INT path \"$\" null on empty null on error )\n)) as jt",
 		},
+		{
+			input: `SELECT * FROM JSON_TABLE('{}', '$' columns(NESTED PATH '$' columns (a INT PATH '$', b INT PATH '$'))) AS jt;`,
+			output: "select * from json_table('{}', \"$\" columns(\n\tnested path $ columns ( b INT path \"$\" null on empty null on error )\n)) as jt",
+		},
 	}
 
 	for _, tcase := range validSQL {
