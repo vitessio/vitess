@@ -462,10 +462,10 @@ func (throttler *Throttler) Open() error {
 				throttlerConfig, err := throttler.readThrottlerConfig(ctx)
 				if err == nil {
 					log.Errorf("Throttler.retryReadAndApplyThrottlerConfig(): success reading throttler config: %+v", throttlerConfig)
-					// it's possible that during a retry-sleep, the throttler is closed and opened again, leading
+					// It's possible that during a retry-sleep, the throttler is closed and opened again, leading
 					// to two (or more) instances of this goroutine. That's not a big problem; it's fine if all
 					// attempt to read the throttler config; but we just want to ensure they don't step on each other
-					// while applying the changes.
+					// while applying the changes -- which is handled by the init mutex used in the apply function.
 					throttler.applyThrottlerConfig(ctx, throttlerConfig) // may issue an Enable
 					return
 				}
