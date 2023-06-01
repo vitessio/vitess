@@ -222,9 +222,10 @@ func NewThrottler(env tabletenv.Env, srvTopoServer srvtopo.Server, ts *topo.Serv
 	return throttler
 }
 
-// CheckIsReady checks if this throttler is ready to serve. If not, it returns an error
+// CheckIsReady checks if this throttler is ready to serve. If not, it returns
+// an error.
 func (throttler *Throttler) CheckIsReady() error {
-	if throttler.IsEnabled() {
+	if throttler.IsOpen() {
 		// all good
 		return nil
 	}
@@ -317,6 +318,8 @@ func (throttler *Throttler) normalizeThrottlerConfig(thottlerConfig *topodatapb.
 }
 
 func (throttler *Throttler) WatchSrvKeyspaceCallback(srvks *topodatapb.SrvKeyspace, err error) bool {
+	throttler.initMutex.Lock()
+	defer throttler.initMutex.Unlock()
 	log.Infof("Throttler: WatchSrvKeyspaceCallback called with: %+v", srvks)
 	if err != nil {
 		log.Errorf("WatchSrvKeyspaceCallback error: %v", err)
@@ -324,29 +327,28 @@ func (throttler *Throttler) WatchSrvKeyspaceCallback(srvks *topodatapb.SrvKeyspa
 	}
 	throttlerConfig := throttler.normalizeThrottlerConfig(srvks.ThrottlerConfig)
 
-	if throttler.IsEnabled() {
-		// Throttler is running and we should apply the config change through Operate()
-		// or else we get into race conditions.
+	if throttler.IsOpen() {
+		// Throttler is open/running and we should apply the config change
+		// through Operate() or else we get into race conditions.
 		go func() {
 			log.Infof("Throttler: submitting a throttler config apply message with: %+v", throttlerConfig)
 			throttler.throttlerConfigChan <- throttlerConfig
 		}()
 	} else {
-		// throttler is not running, we should apply directly
+		// Throttler is not open/running, we should apply directly.
 		throttler.applyThrottlerConfig(context.Background(), throttlerConfig)
 	}
 
 	return true
 }
 
-// applyThrottlerConfig receives a Throttlerconfig as read from SrvKeyspace, and applies the configuration. This may cause
-// the throttler to be enabled/disabled, and of course it affects the throttling query/threshold.
+// applyThrottlerConfig receives a Throttlerconfig as read from SrvKeyspace, and applies the configuration.
+// This may cause the throttler to be enabled/disabled, and of course it affects the throttling query/threshold.
+// Note: you should be holding the initMutex when calling this function.
 func (throttler *Throttler) applyThrottlerConfig(ctx context.Context, throttlerConfig *topodatapb.ThrottlerConfig) {
 	if !throttlerConfigViaTopo {
 		return
 	}
-	throttler.initMutex.Lock()
-	defer throttler.initMutex.Unlock()
 	log.Infof("Throttler: applying topo config: %+v", throttlerConfig)
 	if throttlerConfig.CustomQuery == "" {
 		throttler.metricsQuery.Store(sqlparser.BuildParsedQuery(defaultReplicationLagQuery, sidecardb.GetIdentifier()).Query)
@@ -364,6 +366,10 @@ func (throttler *Throttler) applyThrottlerConfig(ctx context.Context, throttlerC
 
 func (throttler *Throttler) IsEnabled() bool {
 	return atomic.LoadInt64(&throttler.isEnabled) > 0
+}
+
+func (throttler *Throttler) IsOpen() bool {
+	return atomic.LoadInt64(&throttler.isOpen) > 0
 }
 
 // Enable activates the throttler probes; when enabled, the throttler responds to check queries based on
@@ -421,7 +427,7 @@ func (throttler *Throttler) Open() error {
 	log.Infof("Throttler: started execution of Open. Acquiring initMutex lock")
 	throttler.initMutex.Lock()
 	defer throttler.initMutex.Unlock()
-	if atomic.LoadInt64(&throttler.isOpen) > 0 {
+	if throttler.IsOpen() {
 		// already open
 		log.Infof("Throttler: throttler is already open")
 		return nil
@@ -453,8 +459,8 @@ func (throttler *Throttler) Open() error {
 			retryTicker := time.NewTicker(retryInterval)
 			defer retryTicker.Stop()
 			for {
-				if atomic.LoadInt64(&throttler.isOpen) == 0 {
-					// closed down. No need to keep retrying
+				if !throttler.IsOpen() {
+					// Throttler is not open/running so no need to keep retrying.
 					log.Errorf("Throttler.retryReadAndApplyThrottlerConfig(): throttler no longer seems to be open, exiting")
 					return
 				}
@@ -462,6 +468,8 @@ func (throttler *Throttler) Open() error {
 				throttlerConfig, err := throttler.readThrottlerConfig(ctx)
 				if err == nil {
 					log.Errorf("Throttler.retryReadAndApplyThrottlerConfig(): success reading throttler config: %+v", throttlerConfig)
+					throttler.initMutex.Lock()
+					defer throttler.initMutex.Unlock()
 					// It's possible that during a retry-sleep, the throttler is closed and opened again, leading
 					// to two (or more) instances of this goroutine. That's not a big problem; it's fine if all
 					// attempt to read the throttler config; but we just want to ensure they don't step on each other
@@ -490,7 +498,7 @@ func (throttler *Throttler) Close() {
 	throttler.initMutex.Lock()
 	log.Infof("Throttler: acquired initMutex lock")
 	defer throttler.initMutex.Unlock()
-	if atomic.LoadInt64(&throttler.isOpen) == 0 {
+	if !throttler.IsOpen() {
 		log.Infof("Throttler: throttler is not open")
 		return
 	}
@@ -577,7 +585,6 @@ func (throttler *Throttler) isDormant() bool {
 // Operate is the main entry point for the throttler operation and logic. It will
 // run the probes, collect metrics, refresh inventory, etc.
 func (throttler *Throttler) Operate(ctx context.Context) {
-
 	tickers := [](*timer.SuspendableTicker){}
 	addTicker := func(d time.Duration) *timer.SuspendableTicker {
 		t := timer.NewSuspendableTicker(d, false)
@@ -612,7 +619,7 @@ func (throttler *Throttler) Operate(ctx context.Context) {
 
 						// sparse
 						shouldBeLeader := int64(0)
-						if atomic.LoadInt64(&throttler.isOpen) > 0 {
+						if throttler.IsOpen() {
 							if throttler.tabletTypeFunc() == topodatapb.TabletType_PRIMARY {
 								shouldBeLeader = 1
 							}
@@ -638,7 +645,7 @@ func (throttler *Throttler) Operate(ctx context.Context) {
 				}
 			case <-mysqlCollectTicker.C:
 				{
-					if atomic.LoadInt64(&throttler.isOpen) > 0 {
+					if throttler.IsOpen() {
 						// frequent
 						if !throttler.isDormant() {
 							throttler.collectMySQLMetrics(ctx)
@@ -647,7 +654,7 @@ func (throttler *Throttler) Operate(ctx context.Context) {
 				}
 			case <-mysqlDormantCollectTicker.C:
 				{
-					if atomic.LoadInt64(&throttler.isOpen) > 0 {
+					if throttler.IsOpen() {
 						// infrequent
 						if throttler.isDormant() {
 							throttler.collectMySQLMetrics(ctx)
@@ -662,7 +669,7 @@ func (throttler *Throttler) Operate(ctx context.Context) {
 			case <-mysqlRefreshTicker.C:
 				{
 					// sparse
-					if atomic.LoadInt64(&throttler.isOpen) > 0 {
+					if throttler.IsOpen() {
 						go throttler.refreshMySQLInventory(ctx)
 					}
 				}
@@ -673,13 +680,13 @@ func (throttler *Throttler) Operate(ctx context.Context) {
 				}
 			case <-mysqlAggregateTicker.C:
 				{
-					if atomic.LoadInt64(&throttler.isOpen) > 0 {
+					if throttler.IsOpen() {
 						throttler.aggregateMySQLMetrics(ctx)
 					}
 				}
 			case <-throttledAppsTicker.C:
 				{
-					if atomic.LoadInt64(&throttler.isOpen) > 0 {
+					if throttler.IsOpen() {
 						go throttler.expireThrottledApps()
 					}
 				}
@@ -1035,7 +1042,7 @@ func (throttler *Throttler) AppRequestMetricResult(ctx context.Context, appName 
 
 // checkStore checks the aggregated value of given MySQL store
 func (throttler *Throttler) checkStore(ctx context.Context, appName string, storeName string, remoteAddr string, flags *CheckFlags) (checkResult *CheckResult) {
-	if !throttler.IsEnabled() {
+	if !throttler.IsOpen() || !throttler.IsEnabled() {
 		return okMetricCheckResult
 	}
 	if throttlerapp.ExemptFromChecks(appName) {

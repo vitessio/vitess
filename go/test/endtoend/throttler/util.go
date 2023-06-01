@@ -141,14 +141,14 @@ func WaitForThrottlerStatusEnabled(t *testing.T, tablet *cluster.Vttablet, enabl
 				return
 			}
 		}
-		// If the tablet is PRIMARY Not Serving due to e.g. being involved
-		// in a Reshard where its QueryService is explicitly disabled, then
+		// If the tablet is Not Serving due to e.g. being involved in a
+		// Reshard where its QueryService is explicitly disabled, then
 		// we should not fail the test as the throttler will not be Open.
 		tabletBody := getHTTPBody(tabletURL)
 		class := strings.ToLower(gjson.Get(tabletBody, "0.Class").String())
 		value := strings.ToLower(gjson.Get(tabletBody, "0.Value").String())
 		if class == "unhappy" && strings.Contains(value, "primary: not serving") {
-			log.Infof("tablet %s is PRIMARY Not Serving, so ignoring throttler status as the throttler will not be Opened", tablet.Alias)
+			log.Infof("tablet %s is Not Serving, so ignoring throttler status as the throttler will not be Opened", tablet.Alias)
 			return
 		}
 		select {
