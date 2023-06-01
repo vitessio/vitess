@@ -31,6 +31,7 @@ import (
 
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
@@ -335,8 +336,8 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 			return ctx.Err()
 		}
 		// check throttler.
-		if !vp.vr.vre.throttlerClient.ThrottleCheckOKOrWaitAppName(ctx, vp.throttlerAppName) {
-			_ = vp.vr.updateTimeThrottled(VPlayerComponentName)
+		if !vp.vr.vre.throttlerClient.ThrottleCheckOKOrWaitAppName(ctx, throttlerapp.Name(vp.throttlerAppName)) {
+			_ = vp.vr.updateTimeThrottled(throttlerapp.VPlayerName)
 			continue
 		}
 
@@ -628,7 +629,7 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 		return io.EOF
 	case binlogdatapb.VEventType_HEARTBEAT:
 		if event.Throttled {
-			if err := vp.vr.updateTimeThrottled(VStreamerComponentName); err != nil {
+			if err := vp.vr.updateTimeThrottled(throttlerapp.VStreamerName); err != nil {
 				return err
 			}
 		}

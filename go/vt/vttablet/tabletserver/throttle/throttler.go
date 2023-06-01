@@ -39,6 +39,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/config"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/mysql"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 )
 
 const (
@@ -692,7 +693,11 @@ func (throttler *Throttler) generateTabletHTTPProbeFunction(ctx context.Context,
 		mySQLThrottleMetric.ClusterName = clusterName
 		mySQLThrottleMetric.Key = probe.Key
 
+<<<<<<< HEAD
 		tabletCheckSelfURL := fmt.Sprintf("http://%s:%d/throttler/check-self?app=%s", probe.TabletHost, probe.TabletPort, vitessAppName)
+=======
+		tabletCheckSelfURL := fmt.Sprintf("http://%s:%d/throttler/check-self?app=%s", probe.TabletHost, probe.TabletPort, throttlerapp.VitessName)
+>>>>>>> upstream/main
 		resp, err := throttler.httpClient.Get(tabletCheckSelfURL)
 		if err != nil {
 			mySQLThrottleMetric.Err = err
@@ -1030,6 +1035,18 @@ func (throttler *Throttler) checkStore(ctx context.Context, appName string, stor
 	if !throttler.IsEnabled() {
 		return okMetricCheckResult
 	}
+	if throttlerapp.ExemptFromChecks(appName) {
+		// Some apps are exempt from checks. They are always responded with OK. This is because those apps are
+		// continuous and do not generate a substantial load.
+		return okMetricCheckResult
+	}
+	if !flags.SkipRequestHeartbeats && !throttlerapp.VitessName.Equals(appName) {
+		go throttler.heartbeatWriter.RequestHeartbeats()
+		// This check was made by someone other than the throttler itself, i.e. this came from online-ddl or vreplication or other.
+		// We mark the fact that someone just made a check. If this is a REPLICA or RDONLY tables, this will be reported back
+		// to the PRIMARY so that it knows it must renew the heartbeat lease.
+		atomic.StoreInt64(&throttler.recentCheckValue, 1+atomic.LoadInt64(&throttler.recentCheckTickerValue))
+	}
 	checkResult = throttler.check.Check(ctx, appName, "mysql", storeName, remoteAddr, flags)
 
 	if atomic.LoadInt64(&throttler.recentCheckValue) >= atomic.LoadInt64(&throttler.recentCheckTickerValue) {
@@ -1055,15 +1072,6 @@ func (throttler *Throttler) checkSelf(ctx context.Context, appName string, remot
 
 // CheckByType runs a check by requested check type
 func (throttler *Throttler) CheckByType(ctx context.Context, appName string, remoteAddr string, flags *CheckFlags, checkType ThrottleCheckType) (checkResult *CheckResult) {
-	if throttler.IsEnabled() && !flags.SkipRequestHeartbeats {
-		if appName != vitessAppName {
-			go throttler.heartbeatWriter.RequestHeartbeats()
-			// This check was made by someone other than the throttler itself, i.e. this came from online-ddl or vreplication or other.
-			// We mark the fact that someone just made a check. If this is a REPLICA or RDONLY tables, this will be reported back
-			// to the PRIMARY so that it knows it must renew the heartbeat lease.
-			atomic.StoreInt64(&throttler.recentCheckValue, 1+atomic.LoadInt64(&throttler.recentCheckTickerValue))
-		}
-	}
 	switch checkType {
 	case ThrottleCheckSelf:
 		return throttler.checkSelf(ctx, appName, remoteAddr, flags)
