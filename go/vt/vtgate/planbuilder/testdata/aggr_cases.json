@@ -1857,28 +1857,21 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "GroupBy": "(0|2), 1",
+        "Aggregates": "sum_count_star(1) AS count(*)",
+        "GroupBy": "(0|2)",
         "ResultColumns": 2,
         "Inputs": [
           {
-            "OperatorType": "Aggregate",
-            "Variant": "Ordered",
-            "Aggregates": "sum_count_star(1) AS count(*)",
-            "GroupBy": "(0|2)",
-            "Inputs": [
-              {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select a, count(*), weight_string(a) from `user` where 1 != 1 group by a, weight_string(a)",
-                "OrderBy": "(0|2) ASC",
-                "Query": "select a, count(*), weight_string(a) from `user` group by a, weight_string(a) order by a asc",
-                "Table": "`user`"
-              }
-            ]
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select a, count(*), weight_string(a) from `user` where 1 != 1 group by a, weight_string(a)",
+            "OrderBy": "(0|2) ASC",
+            "Query": "select a, count(*), weight_string(a) from `user` group by a, weight_string(a) order by a asc",
+            "Table": "`user`"
           }
         ]
       },

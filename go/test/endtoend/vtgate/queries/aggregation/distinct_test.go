@@ -34,6 +34,7 @@ func TestDistinct(t *testing.T) {
 }
 
 func TestDistinctIt(t *testing.T) {
+	// tests more variations of DISTINCT
 	mcmp, closer := start(t)
 	defer closer()
 

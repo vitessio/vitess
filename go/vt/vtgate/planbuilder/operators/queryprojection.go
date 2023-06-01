@@ -185,15 +185,7 @@ func CreateQPFromSelect(ctx *plancontext.PlanningContext, sel *sqlparser.Select)
 		return nil, err
 	}
 
-	if qp.Distinct && !qp.HasAggr {
-		// grouping and distinct both lead to unique results, so we don't need
-		qp.groupByExprs = nil
-	}
-
-	if qp.HasAggr && len(qp.groupByExprs) == 0 {
-		// this is a scalar aggregation and is inherently distinct
-		qp.Distinct = false
-	}
+	qp.calculateDistinct(ctx)
 
 	return qp, nil
 }
@@ -338,6 +330,38 @@ func (qp *QueryProjection) addOrderBy(ctx *plancontext.PlanningContext, orderBy 
 	}
 	qp.CanPushDownSorting = canPushDownSorting
 	return nil
+}
+
+func (qp *QueryProjection) calculateDistinct(ctx *plancontext.PlanningContext) {
+	if qp.Distinct && !qp.HasAggr {
+		// grouping and distinct both lead to unique results, so we don't need
+		qp.groupByExprs = nil
+	}
+
+	if qp.HasAggr && len(qp.groupByExprs) == 0 {
+		// this is a scalar aggregation and is inherently distinct
+		qp.Distinct = false
+	}
+
+	if !qp.Distinct || len(qp.groupByExprs) == 0 {
+		return
+	}
+
+	for _, gb := range qp.groupByExprs {
+		_, found := canReuseColumn(ctx, qp.SelectExprs, gb.SimplifiedExpr, func(expr SelectExpr) sqlparser.Expr {
+			getExpr, err := expr.GetExpr()
+			if err != nil {
+				panic(err)
+			}
+			return getExpr
+		})
+		if !found {
+			return
+		}
+	}
+
+	// since we are returning all grouping expressions, we know the results are guaranteed to be unique
+	qp.Distinct = false
 }
 
 func (qp *QueryProjection) addGroupBy(ctx *plancontext.PlanningContext, groupBy sqlparser.GroupBy) error {
