@@ -524,12 +524,12 @@
         },
         "TargetTabletType": "PRIMARY",
         "ChangedVindexValues": [
-          "email_user_map:3"
+          "email_user_map:4"
         ],
         "KsidLength": 1,
         "KsidVindex": "user_index",
         "MultiShardAutocommit": false,
-        "OwnedVindexQuery": "select user_id, email, address, email = 'juan@vitess.io' from user_metadata where user_id = 1 for update",
+        "OwnedVindexQuery": "select user_id, email, address, non_planable, email = 'juan@vitess.io' from user_metadata where user_id = 1 for update",
         "Query": "update user_metadata set email = 'juan@vitess.io' where user_id = 1",
         "Table": "user_metadata",
         "Values": [
@@ -553,12 +553,12 @@
         },
         "TargetTabletType": "PRIMARY",
         "ChangedVindexValues": [
-          "email_user_map:3"
+          "email_user_map:4"
         ],
         "KsidLength": 1,
         "KsidVindex": "user_index",
         "MultiShardAutocommit": false,
-        "OwnedVindexQuery": "select user_id, email, address, email = 'juan@vitess.io' from user_metadata where user_id = 1 for update",
+        "OwnedVindexQuery": "select user_id, email, address, non_planable, email = 'juan@vitess.io' from user_metadata where user_id = 1 for update",
         "Query": "update user_metadata set email = 'juan@vitess.io' where user_id = 1",
         "Table": "user_metadata",
         "Values": [
@@ -591,13 +591,13 @@
         },
         "TargetTabletType": "PRIMARY",
         "ChangedVindexValues": [
-          "address_user_map:4",
-          "email_user_map:3"
+          "address_user_map:5",
+          "email_user_map:4"
         ],
         "KsidLength": 1,
         "KsidVindex": "user_index",
         "MultiShardAutocommit": false,
-        "OwnedVindexQuery": "select user_id, email, address, email = 'juan@vitess.io', address = '155 5th street' from user_metadata where user_id = 1 for update",
+        "OwnedVindexQuery": "select user_id, email, address, non_planable, email = 'juan@vitess.io', address = '155 5th street' from user_metadata where user_id = 1 for update",
         "Query": "update user_metadata set email = 'juan@vitess.io', address = '155 5th street' where user_id = 1",
         "Table": "user_metadata",
         "Values": [
@@ -621,13 +621,13 @@
         },
         "TargetTabletType": "PRIMARY",
         "ChangedVindexValues": [
-          "address_user_map:4",
-          "email_user_map:3"
+          "address_user_map:5",
+          "email_user_map:4"
         ],
         "KsidLength": 1,
         "KsidVindex": "user_index",
         "MultiShardAutocommit": false,
-        "OwnedVindexQuery": "select user_id, email, address, email = 'juan@vitess.io', address = '155 5th street' from user_metadata where user_id = 1 for update",
+        "OwnedVindexQuery": "select user_id, email, address, non_planable, email = 'juan@vitess.io', address = '155 5th street' from user_metadata where user_id = 1 for update",
         "Query": "update user_metadata set email = 'juan@vitess.io', address = '155 5th street' where user_id = 1",
         "Table": "user_metadata",
         "Values": [
@@ -655,12 +655,12 @@
         },
         "TargetTabletType": "PRIMARY",
         "ChangedVindexValues": [
-          "email_user_map:3"
+          "email_user_map:4"
         ],
         "KsidLength": 1,
         "KsidVindex": "user_index",
         "MultiShardAutocommit": false,
-        "OwnedVindexQuery": "select user_id, email, address, email = 'juan@vitess.io' from user_metadata where user_id = 1 order by user_id asc limit 10 for update",
+        "OwnedVindexQuery": "select user_id, email, address, non_planable, email = 'juan@vitess.io' from user_metadata where user_id = 1 order by user_id asc limit 10 for update",
         "Query": "update user_metadata set email = 'juan@vitess.io' where user_id = 1 order by user_id asc limit 10",
         "Table": "user_metadata",
         "Values": [
@@ -684,12 +684,12 @@
         },
         "TargetTabletType": "PRIMARY",
         "ChangedVindexValues": [
-          "email_user_map:3"
+          "email_user_map:4"
         ],
         "KsidLength": 1,
         "KsidVindex": "user_index",
         "MultiShardAutocommit": false,
-        "OwnedVindexQuery": "select user_id, email, address, email = 'juan@vitess.io' from user_metadata where user_id = 1 order by user_id asc limit 10 for update",
+        "OwnedVindexQuery": "select user_id, email, address, non_planable, email = 'juan@vitess.io' from user_metadata where user_id = 1 order by user_id asc limit 10 for update",
         "Query": "update user_metadata set email = 'juan@vitess.io' where user_id = 1 order by user_id asc limit 10",
         "Table": "user_metadata",
         "Values": [
