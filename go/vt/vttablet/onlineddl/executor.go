@@ -63,6 +63,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 )
 
@@ -124,7 +125,6 @@ var (
 	migrationFailureFileName = "migration-failure.log"
 	onlineDDLUser            = "vt-online-ddl-internal"
 	onlineDDLGrant           = fmt.Sprintf("'%s'@'%s'", onlineDDLUser, "%")
-	throttlerOnlineDDLApp    = "online-ddl"
 	throttleCheckFlags       = &throttle.CheckFlags{}
 )
 
@@ -1626,7 +1626,7 @@ exit $exit_code
 			fmt.Sprintf("--serve-socket-file=%s", serveSocketFile),
 			fmt.Sprintf("--hooks-path=%s", tempDir),
 			fmt.Sprintf(`--hooks-hint-token=%s`, onlineDDL.UUID),
-			fmt.Sprintf(`--throttle-http=http://localhost:%d/throttler/check?app=%s:gh-ost:%s&p=low`, servenv.Port(), throttlerOnlineDDLApp, onlineDDL.UUID),
+			fmt.Sprintf(`--throttle-http=http://localhost:%d/throttler/check?app=%s:%s:%s&p=low`, servenv.Port(), throttlerapp.OnlineDDLName, throttlerapp.GhostName, onlineDDL.UUID),
 			fmt.Sprintf(`--database=%s`, e.dbName),
 			fmt.Sprintf(`--table=%s`, onlineDDL.Table),
 			fmt.Sprintf(`--alter=%s`, alterOptions),
@@ -1773,7 +1773,7 @@ export MYSQL_PWD
 		my ($self, %args) = @_;
 
 		return sub {
-			if (head("http://localhost:{{VTTABLET_PORT}}/throttler/check?app={{THROTTLER_ONLINE_DDL_APP}}:pt-osc:{{MIGRATION_UUID}}&p=low")) {
+			if (head("http://localhost:{{VTTABLET_PORT}}/throttler/check?app={{THROTTLER_ONLINE_DDL_APP}}:{{THROTTLER_PT_OSC_APP}}:{{MIGRATION_UUID}}&p=low")) {
 				# Got HTTP 200 OK, means throttler is happy
 				return 0;
 			}	else {
@@ -1787,7 +1787,8 @@ export MYSQL_PWD
 	`
 	pluginCode = strings.ReplaceAll(pluginCode, "{{VTTABLET_PORT}}", fmt.Sprintf("%d", servenv.Port()))
 	pluginCode = strings.ReplaceAll(pluginCode, "{{MIGRATION_UUID}}", onlineDDL.UUID)
-	pluginCode = strings.ReplaceAll(pluginCode, "{{THROTTLER_ONLINE_DDL_APP}}", throttlerOnlineDDLApp)
+	pluginCode = strings.ReplaceAll(pluginCode, "{{THROTTLER_ONLINE_DDL_APP}}", throttlerapp.OnlineDDLName.String())
+	pluginCode = strings.ReplaceAll(pluginCode, "{{THROTTLER_PT_OSC_APP}}", throttlerapp.PTOSCName.String())
 
 	pluginCode = strings.ReplaceAll(pluginCode, "{{OnlineDDLStatusRunning}}", string(schema.OnlineDDLStatusRunning))
 	pluginCode = strings.ReplaceAll(pluginCode, "{{OnlineDDLStatusComplete}}", string(schema.OnlineDDLStatusComplete))
@@ -2146,7 +2147,7 @@ func (e *Executor) ThrottleAllMigrations(ctx context.Context, expireString strin
 	if err := e.lagThrottler.CheckIsReady(); err != nil {
 		return nil, err
 	}
-	_ = e.lagThrottler.ThrottleApp(throttlerOnlineDDLApp, time.Now().Add(duration), ratio)
+	_ = e.lagThrottler.ThrottleApp(throttlerapp.OnlineDDLName.String(), time.Now().Add(duration), ratio)
 	return emptyResult, nil
 }
 
@@ -2166,7 +2167,7 @@ func (e *Executor) UnthrottleAllMigrations(ctx context.Context) (result *sqltype
 		return nil, err
 	}
 	defer e.triggerNextCheckInterval()
-	_ = e.lagThrottler.UnthrottleApp(throttlerOnlineDDLApp)
+	_ = e.lagThrottler.UnthrottleApp(throttlerapp.OnlineDDLName.String())
 	return emptyResult, nil
 }
 
@@ -3474,7 +3475,7 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 	if err := e.lagThrottler.CheckIsReady(); err == nil {
 		// No point in reviewing throttler info if it's not enabled&open
 		for _, app := range e.lagThrottler.ThrottledApps() {
-			if app.AppName == throttlerOnlineDDLApp {
+			if throttlerapp.OnlineDDLName.Equals(app.AppName) {
 				currentUserThrottleRatio = app.Ratio
 				break
 			}
@@ -3608,7 +3609,7 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 						// - it's a deadlock.
 						// And so, once per reviewRunningMigrations(), and assuming there _are_ running migrations, we ensure to hit a throttler check. This will kick
 						// on-demand heartbeats, unlocking the deadlock.
-						e.lagThrottler.CheckByType(ctx, throttlerOnlineDDLApp, "", throttleCheckFlags, throttle.ThrottleCheckPrimaryWrite)
+						e.lagThrottler.CheckByType(ctx, throttlerapp.OnlineDDLName.String(), "", throttleCheckFlags, throttle.ThrottleCheckPrimaryWrite)
 					})
 				}
 			}

@@ -26,6 +26,7 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer/testenv"
 
 	"google.golang.org/protobuf/proto"
@@ -607,7 +608,7 @@ func TestVStreamCopyWithDifferentFilters(t *testing.T) {
 	var errGoroutine error
 	go func() {
 		defer wg.Done()
-		engine.Stream(ctx2, "", nil, filter, func(evs []*binlogdatapb.VEvent) error {
+		engine.Stream(ctx2, "", nil, filter, throttlerapp.VStreamerName, func(evs []*binlogdatapb.VEvent) error {
 			for _, ev := range evs {
 				if ev.Type == binlogdatapb.VEventType_HEARTBEAT {
 					continue
@@ -1925,7 +1926,7 @@ func TestMinimalMode(t *testing.T) {
 
 	newEngine(t, "minimal")
 	defer newEngine(t, "full")
-	err := engine.Stream(context.Background(), "current", nil, nil, func(evs []*binlogdatapb.VEvent) error { return nil })
+	err := engine.Stream(context.Background(), "current", nil, nil, throttlerapp.VStreamerName, func(evs []*binlogdatapb.VEvent) error { return nil })
 	require.Error(t, err, "minimal binlog_row_image is not supported by Vitess VReplication")
 }
 
@@ -2309,7 +2310,7 @@ func vstream(ctx context.Context, t *testing.T, pos string, tablePKs []*binlogda
 			}},
 		}
 	}
-	return engine.Stream(ctx, pos, tablePKs, filter, func(evs []*binlogdatapb.VEvent) error {
+	return engine.Stream(ctx, pos, tablePKs, filter, throttlerapp.VStreamerName, func(evs []*binlogdatapb.VEvent) error {
 		timer := time.NewTimer(2 * time.Second)
 		defer timer.Stop()
 

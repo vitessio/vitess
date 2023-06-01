@@ -30,6 +30,7 @@ import (
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -89,15 +90,6 @@ const (
 	json_unquote(json_extract(action, '$.type'))=%a and vrepl_id=%a and table_name=%a`
 	sqlDeletePostCopyAction = `delete from _vt.post_copy_action where vrepl_id=%a and
 	table_name=%a and id=%a`
-)
-
-type ComponentName string
-
-const (
-	VPlayerComponentName     ComponentName = "vplayer"
-	VCopierComponentName     ComponentName = "vcopier"
-	VStreamerComponentName   ComponentName = "vstreamer"
-	RowStreamerComponentName ComponentName = "rowstreamer"
 )
 
 // vreplicator provides the core logic to start vreplication streams
@@ -562,17 +554,17 @@ func (vr *vreplicator) setSQLMode(ctx context.Context, dbClient *vdbClient) (fun
 //     This is useful when we want to throttle all migrations. We throttle "online-ddl" and that applies to both vreplication
 //     migrations as well as gh-ost migrations.
 func (vr *vreplicator) throttlerAppName() string {
-	names := []string{vr.WorkflowName, throttlerVReplicationAppName}
+	names := []string{vr.WorkflowName, throttlerapp.VReplicationName.String()}
 	if vr.WorkflowType == int32(binlogdatapb.VReplicationWorkflowType_OnlineDDL) {
-		names = append(names, throttlerOnlineDDLAppName)
+		names = append(names, throttlerapp.OnlineDDLName.String())
 	}
 	return strings.Join(names, ":")
 }
 
-func (vr *vreplicator) updateTimeThrottled(componentThrottled ComponentName) error {
+func (vr *vreplicator) updateTimeThrottled(appThrottled throttlerapp.Name) error {
 	err := vr.throttleUpdatesRateLimiter.Do(func() error {
 		tm := time.Now().Unix()
-		update, err := binlogplayer.GenerateUpdateTimeThrottled(vr.id, tm, string(componentThrottled))
+		update, err := binlogplayer.GenerateUpdateTimeThrottled(vr.id, tm, appThrottled.String())
 		if err != nil {
 			return err
 		}
