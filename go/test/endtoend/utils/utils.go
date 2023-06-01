@@ -163,7 +163,7 @@ func ExecCompareMySQL(t *testing.T, vtConn, mysqlConn *mysql.Conn, query string)
 
 	mysqlQr, err := mysqlConn.ExecuteFetch(query, 1000, true)
 	require.NoError(t, err, "[MySQL Error] for query: "+query)
-	compareVitessAndMySQLResults(t, query, vtQr, mysqlQr, false)
+	compareVitessAndMySQLResults(t, query, vtConn, vtQr, mysqlQr, false)
 	return vtQr
 }
 
@@ -183,6 +183,16 @@ func SkipIfBinaryIsBelowVersion(t *testing.T, majorVersion int, binary string) {
 	if version < majorVersion {
 		t.Skip("Current version of ", binary, ": v", version, ", expected version >= v", majorVersion)
 	}
+}
+
+// BinaryIsAtVersion returns true if this binary is at or above the required version
+func BinaryIsAtVersion(majorVersion int, binary string) bool {
+	version, err := cluster.GetMajorVersion(binary)
+	if err != nil {
+		return false
+	}
+	return version >= majorVersion
+
 }
 
 // AssertMatchesWithTimeout asserts that the given query produces the expected result.

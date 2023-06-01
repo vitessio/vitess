@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/mysql"
@@ -35,6 +36,7 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
@@ -48,7 +50,7 @@ func TestHealthStreamerClosed(t *testing.T) {
 		Uid:  1,
 	}
 	blpFunc = testBlpFunc
-	hs := newHealthStreamer(env, alias)
+	hs := newHealthStreamer(env, alias, &schema.Engine{})
 	err := hs.Stream(context.Background(), func(shr *querypb.StreamHealthResponse) error {
 		return nil
 	})
@@ -59,6 +61,39 @@ func newConfig(db *fakesqldb.DB) *tabletenv.TabletConfig {
 	cfg := tabletenv.NewDefaultConfig()
 	cfg.DB = newDBConfigs(db)
 	return cfg
+}
+
+// TestNotServingPrimaryNoWrite makes sure that the health-streamer doesn't write anything to the database when
+// the state is not serving primary.
+func TestNotServingPrimaryNoWrite(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	config := newConfig(db)
+	config.SignalWhenSchemaChange = true
+
+	env := tabletenv.NewEnv(config, "TestNotServingPrimary")
+	alias := &topodatapb.TabletAlias{
+		Cell: "cell",
+		Uid:  1,
+	}
+	// Create a new health streamer and set it to a serving primary state
+	hs := newHealthStreamer(env, alias, &schema.Engine{})
+	hs.isServingPrimary = true
+	hs.InitDBConfig(&querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}, config.DB.DbaWithDB())
+	hs.Open()
+	defer hs.Close()
+	target := &querypb.Target{}
+	hs.InitDBConfig(target, db.ConnParams())
+
+	// Let's say the tablet goes to a non-serving primary state.
+	hs.MakePrimary(false)
+
+	// A reload now should not write anything to the database. If any write happens it will error out since we have not
+	// added any query to the database to expect.
+	t1 := schema.NewTable("t1", schema.NoType)
+	err := hs.reload(map[string]*schema.Table{"t1": t1}, []*schema.Table{t1}, nil, nil)
+	require.NoError(t, err)
+	require.NoError(t, db.LastError())
 }
 
 func TestHealthStreamerBroadcast(t *testing.T) {
@@ -73,7 +108,7 @@ func TestHealthStreamerBroadcast(t *testing.T) {
 		Uid:  1,
 	}
 	blpFunc = testBlpFunc
-	hs := newHealthStreamer(env, alias)
+	hs := newHealthStreamer(env, alias, &schema.Engine{})
 	hs.InitDBConfig(&querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}, config.DB.DbaWithDB())
 	hs.Open()
 	defer hs.Close()
@@ -159,177 +194,131 @@ func TestHealthStreamerBroadcast(t *testing.T) {
 }
 
 func TestReloadSchema(t *testing.T) {
-	db := fakesqldb.New(t)
-	defer db.Close()
-	config := newConfig(db)
-	_ = config.SignalSchemaChangeReloadIntervalSeconds.Set("100ms")
-	config.SignalWhenSchemaChange = true
-
-	env := tabletenv.NewEnv(config, "ReplTrackerTest")
-	alias := &topodatapb.TabletAlias{
-		Cell: "cell",
-		Uid:  1,
+	testcases := []struct {
+		name               string
+		enableSchemaChange bool
+	}{
+		{
+			name:               "Schema Change Enabled",
+			enableSchemaChange: true,
+		}, {
+			name:               "Schema Change Disabled",
+			enableSchemaChange: false,
+		},
 	}
-	blpFunc = testBlpFunc
-	hs := newHealthStreamer(env, alias)
 
-	target := &querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
-	configs := config.DB
+	for _, testcase := range testcases {
+		t.Run(testcase.name, func(t *testing.T) {
+			db := fakesqldb.New(t)
+			defer db.Close()
+			config := newConfig(db)
+			config.SignalWhenSchemaChange = testcase.enableSchemaChange
+			_ = config.SchemaReloadIntervalSeconds.Set("100ms")
 
-	db.AddQueryPattern(sqlparser.BuildParsedQuery(mysql.ClearSchemaCopy, sidecardb.GetIdentifier()).Query+".*", &sqltypes.Result{})
-	db.AddQueryPattern(sqlparser.BuildParsedQuery(mysql.InsertIntoSchemaCopy, sidecardb.GetIdentifier()).Query+".*", &sqltypes.Result{})
-	db.AddQuery("begin", &sqltypes.Result{})
-	db.AddQuery("commit", &sqltypes.Result{})
-	db.AddQuery("rollback", &sqltypes.Result{})
-	db.AddQuery(sqlparser.BuildParsedQuery(mysql.DetectSchemaChange, sidecardb.GetIdentifier()).Query,
-		sqltypes.MakeTestResult(
-			sqltypes.MakeTestFields(
-				"table_name",
-				"varchar",
-			),
-			"product",
-			"users",
-		))
-	db.AddQuery(sqlparser.BuildParsedQuery(mysql.DetectViewChange, sidecardb.GetIdentifier()).Query, &sqltypes.Result{})
-
-	hs.InitDBConfig(target, configs.DbaWithDB())
-	hs.Open()
-	defer hs.Close()
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		hs.Stream(ctx, func(response *querypb.StreamHealthResponse) error {
-			if response.RealtimeStats.TableSchemaChanged != nil {
-				assert.Equal(t, []string{"product", "users"}, response.RealtimeStats.TableSchemaChanged)
-				wg.Done()
+			env := tabletenv.NewEnv(config, "ReplTrackerTest")
+			alias := &topodatapb.TabletAlias{
+				Cell: "cell",
+				Uid:  1,
 			}
-			return nil
-		})
-	}()
+			blpFunc = testBlpFunc
+			se := schema.NewEngine(env)
+			hs := newHealthStreamer(env, alias, se)
 
-	c := make(chan struct{})
-	go func() {
-		defer close(c)
-		wg.Wait()
-	}()
-	select {
-	case <-c:
-	case <-time.After(1 * time.Second):
-		t.Errorf("timed out")
-	}
-}
+			target := &querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
+			configs := config.DB
 
-func TestDoesNotReloadSchema(t *testing.T) {
-	db := fakesqldb.New(t)
-	defer db.Close()
-	config := newConfig(db)
-	_ = config.SignalSchemaChangeReloadIntervalSeconds.Set("100ms")
-	config.SignalWhenSchemaChange = false
+			db.AddQueryPattern(sqlparser.BuildParsedQuery(mysql.ClearSchemaCopy, sidecardb.GetIdentifier()).Query+".*", &sqltypes.Result{})
+			db.AddQueryPattern(sqlparser.BuildParsedQuery(mysql.InsertIntoSchemaCopy, sidecardb.GetIdentifier()).Query+".*", &sqltypes.Result{})
+			db.AddQueryPattern("SELECT UNIX_TIMESTAMP()"+".*", sqltypes.MakeTestResult(
+				sqltypes.MakeTestFields(
+					"UNIX_TIMESTAMP(now())",
+					"varchar",
+				),
+				"1684759138",
+			))
+			db.AddQuery("begin", &sqltypes.Result{})
+			db.AddQuery("commit", &sqltypes.Result{})
+			db.AddQuery("rollback", &sqltypes.Result{})
+			// Add the query pattern for the query that schema.Engine uses to get the tables.
+			db.AddQueryPattern("SELECT .* information_schema.innodb_tablespaces .*",
+				sqltypes.MakeTestResult(
+					sqltypes.MakeTestFields(
+						"TABLE_NAME | TABLE_TYPE | UNIX_TIMESTAMP(t.create_time) | TABLE_COMMENT | SUM(i.file_size) | SUM(i.allocated_size)",
+						"varchar|varchar|int64|varchar|int64|int64",
+					),
+					"product|BASE TABLE|1684735966||114688|114688",
+					"users|BASE TABLE|1684735966||114688|114688",
+				))
+			db.AddQueryPattern("SELECT COLUMN_NAME as column_name.*", sqltypes.MakeTestResult(
+				sqltypes.MakeTestFields(
+					"column_name",
+					"varchar",
+				),
+				"id",
+			))
+			db.AddQueryPattern("SELECT `id` FROM `fakesqldb`.*", sqltypes.MakeTestResult(
+				sqltypes.MakeTestFields(
+					"id",
+					"int64",
+				),
+			))
+			db.AddQuery(mysql.ShowRowsRead, sqltypes.MakeTestResult(
+				sqltypes.MakeTestFields("Variable_name|Value", "varchar|int32"),
+				"Innodb_rows_read|50"))
+			db.AddQuery(mysql.BaseShowPrimary, sqltypes.MakeTestResult(
+				sqltypes.MakeTestFields("table_name | column_name", "varchar|varchar"),
+				"product|id",
+				"users|id",
+			))
 
-	env := tabletenv.NewEnv(config, "ReplTrackerTest")
-	alias := &topodatapb.TabletAlias{
-		Cell: "cell",
-		Uid:  1,
-	}
-	blpFunc = testBlpFunc
-	hs := newHealthStreamer(env, alias)
+			hs.InitDBConfig(target, configs.DbaWithDB())
+			se.InitDBConfig(configs.DbaWithDB())
+			hs.Open()
+			defer hs.Close()
+			err := se.Open()
+			require.NoError(t, err)
+			defer se.Close()
+			// Start schema notifications.
+			hs.MakePrimary(true)
 
-	target := &querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
-	configs := config.DB
+			// Update the query pattern for the query that schema.Engine uses to get the tables so that it runs a reload again.
+			// If we don't change the t.create_time to a value greater than before, then the schema engine doesn't reload the database.
+			db.AddQueryPattern("SELECT .* information_schema.innodb_tablespaces .*",
+				sqltypes.MakeTestResult(
+					sqltypes.MakeTestFields(
+						"TABLE_NAME | TABLE_TYPE | UNIX_TIMESTAMP(t.create_time) | TABLE_COMMENT | SUM(i.file_size) | SUM(i.allocated_size)",
+						"varchar|varchar|int64|varchar|int64|int64",
+					),
+					"product|BASE TABLE|1684735967||114688|114688",
+					"users|BASE TABLE|1684735967||114688|114688",
+				))
 
-	hs.InitDBConfig(target, configs.DbaWithDB())
-	hs.Open()
-	defer hs.Close()
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		hs.Stream(ctx, func(response *querypb.StreamHealthResponse) error {
-			if response.RealtimeStats.TableSchemaChanged != nil {
-				wg.Done()
+			var wg sync.WaitGroup
+			wg.Add(1)
+			go func() {
+				hs.Stream(ctx, func(response *querypb.StreamHealthResponse) error {
+					if response.RealtimeStats.TableSchemaChanged != nil {
+						assert.Equal(t, []string{"product", "users"}, response.RealtimeStats.TableSchemaChanged)
+						wg.Done()
+					}
+					return nil
+				})
+			}()
+
+			c := make(chan struct{})
+			go func() {
+				defer close(c)
+				wg.Wait()
+			}()
+			timeout := false
+			select {
+			case <-c:
+			case <-time.After(1 * time.Second):
+				timeout = true
 			}
-			return nil
+
+			require.Equal(t, testcase.enableSchemaChange, !timeout, "If schema change tracking is enabled, then we shouldn't time out, otherwise we should")
 		})
-	}()
-
-	c := make(chan struct{})
-	go func() {
-		defer close(c)
-		wg.Wait()
-	}()
-
-	timeout := false
-
-	// here we will wait for a second, to make sure that we are not signaling a changed schema.
-	select {
-	case <-c:
-	case <-time.After(1 * time.Second):
-		timeout = true
-	}
-
-	assert.True(t, timeout, "should have timed out")
-}
-
-func TestInitialReloadSchema(t *testing.T) {
-	db := fakesqldb.New(t)
-	defer db.Close()
-	config := newConfig(db)
-	// Setting the signal schema change reload interval to one minute
-	// that way we can test the initial reload trigger.
-	_ = config.SignalSchemaChangeReloadIntervalSeconds.Set("1m")
-	config.SignalWhenSchemaChange = true
-
-	env := tabletenv.NewEnv(config, "ReplTrackerTest")
-	alias := &topodatapb.TabletAlias{
-		Cell: "cell",
-		Uid:  1,
-	}
-	blpFunc = testBlpFunc
-	hs := newHealthStreamer(env, alias)
-
-	target := &querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
-	configs := config.DB
-
-	db.AddQueryPattern(sqlparser.BuildParsedQuery(mysql.ClearSchemaCopy, sidecardb.GetIdentifier()).Query+".*", &sqltypes.Result{})
-	db.AddQueryPattern(sqlparser.BuildParsedQuery(mysql.InsertIntoSchemaCopy, sidecardb.GetIdentifier()).Query+".*", &sqltypes.Result{})
-	db.AddQuery("begin", &sqltypes.Result{})
-	db.AddQuery("commit", &sqltypes.Result{})
-	db.AddQuery("rollback", &sqltypes.Result{})
-	db.AddQuery(sqlparser.BuildParsedQuery(mysql.DetectSchemaChange, sidecardb.GetIdentifier()).Query,
-		sqltypes.MakeTestResult(
-			sqltypes.MakeTestFields(
-				"table_name",
-				"varchar",
-			),
-			"product",
-			"users",
-		))
-	db.AddQuery(sqlparser.BuildParsedQuery(mysql.DetectViewChange, sidecardb.GetIdentifier()).Query, &sqltypes.Result{})
-
-	hs.InitDBConfig(target, configs.DbaWithDB())
-	hs.Open()
-	defer hs.Close()
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		hs.Stream(ctx, func(response *querypb.StreamHealthResponse) error {
-			if response.RealtimeStats.TableSchemaChanged != nil {
-				assert.Equal(t, []string{"product", "users"}, response.RealtimeStats.TableSchemaChanged)
-				wg.Done()
-			}
-			return nil
-		})
-	}()
-
-	c := make(chan struct{})
-	go func() {
-		defer close(c)
-		wg.Wait()
-	}()
-	select {
-	case <-c:
-	case <-time.After(1 * time.Second):
-		// should not timeout despite SignalSchemaChangeReloadIntervalSeconds being set to 1 minute
-		t.Errorf("timed out")
 	}
 }
 
@@ -338,94 +327,169 @@ func TestReloadView(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
 	config := newConfig(db)
-	_ = config.SignalSchemaChangeReloadIntervalSeconds.Set("100ms")
+	config.SignalWhenSchemaChange = true
+	_ = config.SchemaReloadIntervalSeconds.Set("100ms")
 	config.EnableViews = true
 
 	env := tabletenv.NewEnv(config, "TestReloadView")
 	alias := &topodatapb.TabletAlias{Cell: "cell", Uid: 1}
-	hs := newHealthStreamer(env, alias)
+	se := schema.NewEngine(env)
+	hs := newHealthStreamer(env, alias, se)
 
 	target := &querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
 	configs := config.DB
 
+	db.AddQueryPattern(sqlparser.BuildParsedQuery(mysql.ClearSchemaCopy, sidecardb.GetIdentifier()).Query+".*", &sqltypes.Result{})
+	db.AddQueryPattern(sqlparser.BuildParsedQuery(mysql.InsertIntoSchemaCopy, sidecardb.GetIdentifier()).Query+".*", &sqltypes.Result{})
+	db.AddQueryPattern("SELECT UNIX_TIMESTAMP()"+".*", sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields(
+			"UNIX_TIMESTAMP(now())",
+			"varchar",
+		),
+		"1684759138",
+	))
 	db.AddQuery("begin", &sqltypes.Result{})
 	db.AddQuery("commit", &sqltypes.Result{})
 	db.AddQuery("rollback", &sqltypes.Result{})
-	db.AddQuery(sqlparser.BuildParsedQuery(mysql.DetectSchemaChangeOnlyBaseTable, sidecardb.GetIdentifier()).Query, &sqltypes.Result{})
-	db.AddQuery(sqlparser.BuildParsedQuery(mysql.DetectViewChange, sidecardb.GetIdentifier()).Query, &sqltypes.Result{})
+	// Add the query pattern for the query that schema.Engine uses to get the tables.
+	db.AddQueryPattern("SELECT .* information_schema.innodb_tablespaces .*",
+		sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields(
+				"TABLE_NAME | TABLE_TYPE | UNIX_TIMESTAMP(t.create_time) | TABLE_COMMENT | SUM(i.file_size) | SUM(i.allocated_size)",
+				"varchar|varchar|int64|varchar|int64|int64",
+			),
+		))
+	db.AddQueryPattern("SELECT COLUMN_NAME as column_name.*", sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields(
+			"column_name",
+			"varchar",
+		),
+		"id",
+	))
+	db.AddQueryPattern("SELECT `id` FROM `fakesqldb`.*", sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields(
+			"id",
+			"int64",
+		),
+	))
+	db.AddQuery(mysql.ShowRowsRead, sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("Variable_name|Value", "varchar|int32"),
+		"Innodb_rows_read|50"))
+	db.AddQuery(mysql.BaseShowPrimary, sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("table_name | column_name", "varchar|varchar"),
+	))
+	db.AddQueryPattern(".*SELECT table_name, view_definition.*schema_engine_views.*", &sqltypes.Result{})
+	db.AddQuery("SELECT TABLE_NAME, CREATE_TIME FROM _vt.schema_engine_tables", &sqltypes.Result{})
 
 	hs.InitDBConfig(target, configs.DbaWithDB())
+	se.InitDBConfig(configs.DbaWithDB())
 	hs.Open()
 	defer hs.Close()
+	err := se.Open()
+	require.NoError(t, err)
+	se.MakePrimary(true)
+	defer se.Close()
+	// Start schema notifications.
+	hs.MakePrimary(true)
 
 	showCreateViewFields := sqltypes.MakeTestFields(
 		"View|Create View|character_set_client|collation_connection",
 		"varchar|text|varchar|varchar")
+	showTableSizesFields := sqltypes.MakeTestFields(
+		"TABLE_NAME | TABLE_TYPE | UNIX_TIMESTAMP(t.create_time) | TABLE_COMMENT | SUM(i.file_size) | SUM(i.allocated_size)",
+		"varchar|varchar|int64|varchar|int64|int64",
+	)
+
 	tcases := []struct {
-		tbl            *sqltypes.Result
-		def            *sqltypes.Result
-		stmt           []*sqltypes.Result
-		expTbl         []string
-		expDefQuery    string
-		expStmtQuery   []string
-		expClearQuery  string
-		expInsertQuery []string
-	}{{
-		// view_a and view_b added.
-		tbl: sqltypes.MakeTestResult(sqltypes.MakeTestFields("table_name", "varchar"),
-			"view_a", "view_b"),
-		def: sqltypes.MakeTestResult(sqltypes.MakeTestFields("table_name|view_definition", "varchar|text"),
-			"view_a|def_a", "view_b|def_b"),
-		stmt: []*sqltypes.Result{sqltypes.MakeTestResult(showCreateViewFields, "view_a|create_view_a|utf8|utf8_general_ci"),
-			sqltypes.MakeTestResult(showCreateViewFields, "view_b|create_view_b|utf8|utf8_general_ci")},
-		expTbl:        []string{"view_a", "view_b"},
-		expDefQuery:   "select table_name, view_definition from information_schema.views where table_schema = database() and table_name in ('view_a', 'view_b')",
-		expStmtQuery:  []string{"show create table view_a", "show create table view_b"},
-		expClearQuery: "delete from _vt.views where table_schema = database() and table_name in ('view_a', 'view_b')",
-		expInsertQuery: []string{
-			"insert into _vt.views(table_schema, table_name, create_statement, view_definition) values (database(), 'view_a', 'create_view_a', 'def_a')",
-			"insert into _vt.views(table_schema, table_name, create_statement, view_definition) values (database(), 'view_b', 'create_view_b', 'def_b')",
+		detectViewChangeOutput    *sqltypes.Result
+		showTablesWithSizesOutput *sqltypes.Result
+
+		expCreateStmtQuery []string
+		createStmtOutput   []*sqltypes.Result
+
+		expGetViewDefinitionsQuery string
+		viewDefinitionsOutput      *sqltypes.Result
+
+		expClearQuery   string
+		expHsClearQuery string
+		expInsertQuery  []string
+		expViewsChanged []string
+	}{
+		{
+			// view_a and view_b added.
+			detectViewChangeOutput: sqltypes.MakeTestResult(sqltypes.MakeTestFields("table_name", "varchar"),
+				"view_a", "view_b"),
+			showTablesWithSizesOutput: sqltypes.MakeTestResult(showTableSizesFields, "view_a|VIEW|12345678||123|123", "view_b|VIEW|12345678||123|123"),
+			viewDefinitionsOutput: sqltypes.MakeTestResult(sqltypes.MakeTestFields("table_name|view_definition", "varchar|text"),
+				"view_a|def_a", "view_b|def_b"),
+			createStmtOutput: []*sqltypes.Result{sqltypes.MakeTestResult(showCreateViewFields, "view_a|create_view_a|utf8|utf8_general_ci"),
+				sqltypes.MakeTestResult(showCreateViewFields, "view_b|create_view_b|utf8|utf8_general_ci")},
+			expViewsChanged:            []string{"view_a", "view_b"},
+			expGetViewDefinitionsQuery: "select table_name, view_definition from information_schema.views where table_schema = database() and table_name in ('view_a', 'view_b')",
+			expCreateStmtQuery:         []string{"show create table view_a", "show create table view_b"},
+			expClearQuery:              "delete from _vt.schema_engine_views where TABLE_SCHEMA = database() and TABLE_NAME in ('view_a', 'view_b')",
+			expHsClearQuery:            "delete from _vt.views where table_schema = database() and table_name in ('view_a', 'view_b')",
+			expInsertQuery: []string{
+				"insert into _vt.schema_engine_views(TABLE_SCHEMA, TABLE_NAME, CREATE_STATEMENT, VIEW_DEFINITION) values (database(), 'view_a', 'create_view_a', 'def_a')",
+				"insert into _vt.schema_engine_views(TABLE_SCHEMA, TABLE_NAME, CREATE_STATEMENT, VIEW_DEFINITION) values (database(), 'view_b', 'create_view_b', 'def_b')",
+				"insert into _vt.views(table_schema, table_name, create_statement, view_definition) values (database(), 'view_a', 'create_view_a', 'def_a')",
+				"insert into _vt.views(table_schema, table_name, create_statement, view_definition) values (database(), 'view_b', 'create_view_b', 'def_b')",
+			},
 		},
-	}, {
-		// view_b modified
-		tbl: sqltypes.MakeTestResult(sqltypes.MakeTestFields("table_name", "varchar"),
-			"view_b"),
-		def: sqltypes.MakeTestResult(sqltypes.MakeTestFields("table_name|view_definition", "varchar|text"),
-			"view_b|def_mod_b"),
-		stmt:          []*sqltypes.Result{sqltypes.MakeTestResult(showCreateViewFields, "view_b|create_view_mod_b|utf8|utf8_general_ci")},
-		expTbl:        []string{"view_b"},
-		expDefQuery:   "select table_name, view_definition from information_schema.views where table_schema = database() and table_name in ('view_b')",
-		expStmtQuery:  []string{"show create table view_b"},
-		expClearQuery: "delete from _vt.views where table_schema = database() and table_name in ('view_b')",
-		expInsertQuery: []string{
-			"insert into _vt.views(table_schema, table_name, create_statement, view_definition) values (database(), 'view_b', 'create_view_mod_b', 'def_mod_b')",
+		{
+			// view_b modified
+			showTablesWithSizesOutput: sqltypes.MakeTestResult(showTableSizesFields, "view_a|VIEW|12345678||123|123", "view_b|VIEW|12345678||123|123"),
+			detectViewChangeOutput: sqltypes.MakeTestResult(sqltypes.MakeTestFields("table_name", "varchar"),
+				"view_b"),
+			viewDefinitionsOutput: sqltypes.MakeTestResult(sqltypes.MakeTestFields("table_name|view_definition", "varchar|text"),
+				"view_b|def_mod_b"),
+			createStmtOutput:           []*sqltypes.Result{sqltypes.MakeTestResult(showCreateViewFields, "view_b|create_view_mod_b|utf8|utf8_general_ci")},
+			expViewsChanged:            []string{"view_b"},
+			expGetViewDefinitionsQuery: "select table_name, view_definition from information_schema.views where table_schema = database() and table_name in ('view_b')",
+			expCreateStmtQuery:         []string{"show create table view_b"},
+			expHsClearQuery:            "delete from _vt.views where table_schema = database() and table_name in ('view_b')",
+			expClearQuery:              "delete from _vt.schema_engine_views where TABLE_SCHEMA = database() and TABLE_NAME in ('view_b')",
+			expInsertQuery: []string{
+				"insert into _vt.views(table_schema, table_name, create_statement, view_definition) values (database(), 'view_b', 'create_view_mod_b', 'def_mod_b')",
+				"insert into _vt.schema_engine_views(TABLE_SCHEMA, TABLE_NAME, CREATE_STATEMENT, VIEW_DEFINITION) values (database(), 'view_b', 'create_view_mod_b', 'def_mod_b')",
+			},
 		},
-	}, {
-		// view_a modified, view_b deleted and view_c added.
-		tbl: sqltypes.MakeTestResult(sqltypes.MakeTestFields("table_name", "varchar"),
-			"view_a", "view_b", "view_c"),
-		def: sqltypes.MakeTestResult(sqltypes.MakeTestFields("table_name|view_definition", "varchar|text"),
-			"view_a|def_mod_a", "view_c|def_c"),
-		stmt: []*sqltypes.Result{sqltypes.MakeTestResult(showCreateViewFields, "view_a|create_view_mod_a|utf8|utf8_general_ci"),
-			sqltypes.MakeTestResult(showCreateViewFields, "view_c|create_view_c|utf8|utf8_general_ci")},
-		expTbl:        []string{"view_a", "view_b", "view_c"},
-		expDefQuery:   "select table_name, view_definition from information_schema.views where table_schema = database() and table_name in ('view_a', 'view_b', 'view_c')",
-		expStmtQuery:  []string{"show create table view_a", "show create table view_c"},
-		expClearQuery: "delete from _vt.views where table_schema = database() and table_name in ('view_a', 'view_b', 'view_c')",
-		expInsertQuery: []string{
-			"insert into _vt.views(table_schema, table_name, create_statement, view_definition) values (database(), 'view_a', 'create_view_mod_a', 'def_mod_a')",
-			"insert into _vt.views(table_schema, table_name, create_statement, view_definition) values (database(), 'view_c', 'create_view_c', 'def_c')",
+		{
+			// view_a modified, view_b deleted and view_c added.
+			showTablesWithSizesOutput: sqltypes.MakeTestResult(showTableSizesFields, "view_c|VIEW|98732432||123|123", "view_a|VIEW|12345678||123|123"),
+			detectViewChangeOutput: sqltypes.MakeTestResult(sqltypes.MakeTestFields("table_name", "varchar"),
+				"view_a", "view_b", "view_c"),
+			viewDefinitionsOutput: sqltypes.MakeTestResult(sqltypes.MakeTestFields("table_name|view_definition", "varchar|text"),
+				"view_a|def_mod_a", "view_c|def_c"),
+			createStmtOutput: []*sqltypes.Result{sqltypes.MakeTestResult(showCreateViewFields, "view_a|create_view_mod_a|utf8|utf8_general_ci"),
+				sqltypes.MakeTestResult(showCreateViewFields, "view_c|create_view_c|utf8|utf8_general_ci")},
+			expViewsChanged:            []string{"view_a", "view_b", "view_c"},
+			expGetViewDefinitionsQuery: "select table_name, view_definition from information_schema.views where table_schema = database() and table_name in ('view_b', 'view_c', 'view_a')",
+			expCreateStmtQuery:         []string{"show create table view_a", "show create table view_c"},
+			expClearQuery:              "delete from _vt.views where table_schema = database() and table_name in ('view_b', 'view_c', 'view_a')",
+			expHsClearQuery:            "delete from _vt.schema_engine_views where TABLE_SCHEMA = database() and TABLE_NAME in ('view_b', 'view_c', 'view_a')",
+			expInsertQuery: []string{
+				"insert into _vt.views(table_schema, table_name, create_statement, view_definition) values (database(), 'view_a', 'create_view_mod_a', 'def_mod_a')",
+				"insert into _vt.views(table_schema, table_name, create_statement, view_definition) values (database(), 'view_c', 'create_view_c', 'def_c')",
+				"insert into _vt.schema_engine_views(TABLE_SCHEMA, TABLE_NAME, CREATE_STATEMENT, VIEW_DEFINITION) values (database(), 'view_a', 'create_view_mod_a', 'def_mod_a')",
+				"insert into _vt.schema_engine_views(TABLE_SCHEMA, TABLE_NAME, CREATE_STATEMENT, VIEW_DEFINITION) values (database(), 'view_c', 'create_view_c', 'def_c')",
+			},
 		},
-	}}
+	}
 
 	// setting first test case result.
-	db.AddQuery(sqlparser.BuildParsedQuery(mysql.DetectViewChange, sidecardb.GetIdentifier()).Query, tcases[0].tbl)
-	db.AddQuery(tcases[0].expDefQuery, tcases[0].def)
-	for idx, stmt := range tcases[0].stmt {
-		db.AddQuery(tcases[0].expStmtQuery[idx], stmt)
+	db.AddQueryPattern("SELECT .* information_schema.innodb_tablespaces .*", tcases[0].showTablesWithSizesOutput)
+	db.AddQueryPattern(".*SELECT table_name, view_definition.*schema_engine_views.*", tcases[0].detectViewChangeOutput)
+
+	db.AddQuery(tcases[0].expGetViewDefinitionsQuery, tcases[0].viewDefinitionsOutput)
+	for idx := range tcases[0].expCreateStmtQuery {
+		db.AddQuery(tcases[0].expCreateStmtQuery[idx], tcases[0].createStmtOutput[idx])
+	}
+	for idx := range tcases[0].expInsertQuery {
 		db.AddQuery(tcases[0].expInsertQuery[idx], &sqltypes.Result{})
 	}
 	db.AddQuery(tcases[0].expClearQuery, &sqltypes.Result{})
+	db.AddQuery(tcases[0].expHsClearQuery, &sqltypes.Result{})
 
 	var tcCount atomic.Int32
 	ch := make(chan struct{})
@@ -434,10 +498,11 @@ func TestReloadView(t *testing.T) {
 		hs.Stream(ctx, func(response *querypb.StreamHealthResponse) error {
 			if response.RealtimeStats.ViewSchemaChanged != nil {
 				sort.Strings(response.RealtimeStats.ViewSchemaChanged)
-				assert.Equal(t, tcases[tcCount.Load()].expTbl, response.RealtimeStats.ViewSchemaChanged)
+				assert.Equal(t, tcases[tcCount.Load()].expViewsChanged, response.RealtimeStats.ViewSchemaChanged)
 				tcCount.Add(1)
-				db.AddQuery(sqlparser.BuildParsedQuery(mysql.DetectViewChange, sidecardb.GetIdentifier()).Query, &sqltypes.Result{})
+				db.AddQueryPattern(".*SELECT table_name, view_definition.*schema_engine_views.*", &sqltypes.Result{})
 				ch <- struct{}{}
+				require.NoError(t, db.LastError())
 			}
 			return nil
 		})
@@ -450,18 +515,21 @@ func TestReloadView(t *testing.T) {
 				return
 			}
 			idx := tcCount.Load()
-			db.AddQuery(tcases[idx].expDefQuery, tcases[idx].def)
-			for i, stmt := range tcases[idx].stmt {
-				db.AddQuery(tcases[idx].expStmtQuery[i], stmt)
+			db.AddQuery(tcases[idx].expGetViewDefinitionsQuery, tcases[idx].viewDefinitionsOutput)
+			for i := range tcases[idx].expCreateStmtQuery {
+				db.AddQuery(tcases[idx].expCreateStmtQuery[i], tcases[idx].createStmtOutput[i])
+			}
+			for i := range tcases[idx].expInsertQuery {
 				db.AddQuery(tcases[idx].expInsertQuery[i], &sqltypes.Result{})
 			}
 			db.AddQuery(tcases[idx].expClearQuery, &sqltypes.Result{})
-			db.AddQuery(sqlparser.BuildParsedQuery(mysql.DetectViewChange, sidecardb.GetIdentifier()).Query, tcases[idx].tbl)
+			db.AddQuery(tcases[idx].expHsClearQuery, &sqltypes.Result{})
+			db.AddQueryPattern("SELECT .* information_schema.innodb_tablespaces .*", tcases[idx].showTablesWithSizesOutput)
+			db.AddQueryPattern(".*SELECT table_name, view_definition.*schema_engine_views.*", tcases[idx].detectViewChangeOutput)
 		case <-time.After(10 * time.Second):
 			t.Fatalf("timed out")
 		}
 	}
-
 }
 
 func testStream(hs *healthStreamer) (<-chan *querypb.StreamHealthResponse, context.CancelFunc) {

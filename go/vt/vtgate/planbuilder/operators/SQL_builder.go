@@ -100,6 +100,11 @@ func (qb *queryBuilder) addPredicate(expr sqlparser.Expr) {
 	}
 }
 
+func (qb *queryBuilder) addGroupBy(original sqlparser.Expr) {
+	sel := qb.sel.(*sqlparser.Select)
+	sel.GroupBy = append(sel.GroupBy, original)
+}
+
 func (qb *queryBuilder) addProjection(projection *sqlparser.AliasedExpr) {
 	sel := qb.sel.(*sqlparser.Select)
 	sel.SelectExprs = append(sel.SelectExprs, projection)
@@ -322,9 +327,38 @@ func buildQuery(op ops.Operator, qb *queryBuilder) error {
 		return buildLimit(op, qb)
 	case *Ordering:
 		return buildOrdering(op, qb)
+	case *Aggregator:
+		return buildAggregation(op, qb)
 	default:
 		return vterrors.VT13001(fmt.Sprintf("do not know how to turn %T into SQL", op))
 	}
+	return nil
+}
+
+func buildAggregation(op *Aggregator, qb *queryBuilder) error {
+	err := buildQuery(op.Source, qb)
+	if err != nil {
+		return err
+	}
+
+	qb.clearProjections()
+
+	cols, err := op.GetColumns()
+	if err != nil {
+		return err
+	}
+	for _, column := range cols {
+		qb.addProjection(column)
+	}
+
+	for _, by := range op.Grouping {
+		qb.addGroupBy(by.Inner)
+		simplified := by.SimplifiedExpr
+		if by.WSOffset != -1 {
+			qb.addGroupBy(weightStringFor(simplified))
+		}
+	}
+
 	return nil
 }
 
@@ -372,12 +406,8 @@ func buildProjection(op *Projection, qb *queryBuilder) error {
 
 	qb.clearProjections()
 
-	for i, column := range op.Columns {
-		ae := &sqlparser.AliasedExpr{Expr: column.GetExpr()}
-		if op.ColumnNames[i] != "" {
-			ae.As = sqlparser.NewIdentifierCI(op.ColumnNames[i])
-		}
-		qb.addProjection(ae)
+	for _, column := range op.Columns {
+		qb.addProjection(column)
 	}
 
 	// if the projection is on derived table, we use the select we have

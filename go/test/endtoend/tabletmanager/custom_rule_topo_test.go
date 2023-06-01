@@ -119,5 +119,5 @@ func TestTopoCustomRule(t *testing.T) {
 	// Reset the VtTabletExtraArgs
 	clusterInstance.VtTabletExtraArgs = []string{}
 	// Tear down custom processes
-	killTablets(t, rTablet)
+	killTablets(rTablet)
 }

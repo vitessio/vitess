@@ -155,8 +155,8 @@ func doVdiff2(t *testing.T, keyspace, workflow, cells string, want *expectedVDif
 			require.Equal(t, strings.Join(want.shards, ","), info.Shards)
 			require.Equal(t, want.hasMismatch, info.HasMismatch)
 		} else {
-			require.Equal(t, "completed", info.State)
-			require.False(t, info.HasMismatch)
+			require.Equal(t, "completed", info.State, "vdiff results: %+v", info)
+			require.False(t, info.HasMismatch, "vdiff results: %+v", info)
 		}
 		if strings.Contains(t.Name(), "AcrossDBVersions") {
 			log.Errorf("VDiff resume cannot be guaranteed between major MySQL versions due to implied collation differences, skipping resume test...")

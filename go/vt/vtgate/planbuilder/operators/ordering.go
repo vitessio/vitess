@@ -33,7 +33,8 @@ type Ordering struct {
 	Offset  []int
 	WOffset []int
 
-	Order []ops.OrderBy
+	Order         []ops.OrderBy
+	ResultColumns int
 }
 
 func (o *Ordering) Clone(inputs []ops.Operator) ops.Operator {
@@ -62,8 +63,8 @@ func (o *Ordering) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser
 	return o, nil
 }
 
-func (o *Ordering) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr) (ops.Operator, int, error) {
-	newSrc, offset, err := o.Source.AddColumn(ctx, expr)
+func (o *Ordering) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, reuseExisting, addToGroupBy bool) (ops.Operator, int, error) {
+	newSrc, offset, err := o.Source.AddColumn(ctx, expr, reuseExisting, addToGroupBy)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -81,20 +82,20 @@ func (o *Ordering) GetOrdering() ([]ops.OrderBy, error) {
 
 func (o *Ordering) planOffsets(ctx *plancontext.PlanningContext) error {
 	for _, order := range o.Order {
-		newSrc, offset, err := o.Source.AddColumn(ctx, aeWrap(order.Inner.Expr))
+		newSrc, offset, err := o.Source.AddColumn(ctx, aeWrap(order.SimplifiedExpr), true, false)
 		if err != nil {
 			return err
 		}
 		o.Source = newSrc
 		o.Offset = append(o.Offset, offset)
 
-		if !ctx.SemTable.NeedsWeightString(order.WeightStrExpr) {
+		if !ctx.SemTable.NeedsWeightString(order.SimplifiedExpr) {
 			o.WOffset = append(o.WOffset, -1)
 			continue
 		}
 
-		wsExpr := &sqlparser.WeightStringFuncExpr{Expr: order.WeightStrExpr}
-		newSrc, offset, err = o.Source.AddColumn(ctx, aeWrap(wsExpr))
+		wsExpr := &sqlparser.WeightStringFuncExpr{Expr: order.SimplifiedExpr}
+		newSrc, offset, err = o.Source.AddColumn(ctx, aeWrap(wsExpr), true, false)
 		if err != nil {
 			return err
 		}
@@ -117,4 +118,8 @@ func (o *Ordering) ShortDescription() string {
 		return sqlparser.String(o.Inner)
 	})
 	return strings.Join(ordering, ", ")
+}
+
+func (o *Ordering) setTruncateColumnCount(offset int) {
+	o.ResultColumns = offset
 }

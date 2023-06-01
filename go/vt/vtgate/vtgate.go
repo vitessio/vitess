@@ -502,18 +502,18 @@ func (vtg *VTGate) ExecuteBatch(ctx context.Context, session *vtgatepb.Session, 
 // StreamExecute executes a streaming query. This is a V3 function.
 // Note we guarantee the callback will not be called concurrently
 // by multiple go routines.
-func (vtg *VTGate) StreamExecute(ctx context.Context, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable, callback func(*sqltypes.Result) error) error {
+func (vtg *VTGate) StreamExecute(ctx context.Context, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable, callback func(*sqltypes.Result) error) (*vtgatepb.Session, error) {
 	// In this context, we don't care if we can't fully parse destination
 	destKeyspace, destTabletType, _, _ := vtg.executor.ParseDestinationTarget(session.TargetString)
 	statsKey := []string{"StreamExecute", destKeyspace, topoproto.TabletTypeLString(destTabletType)}
 
 	defer vtg.timings.Record(statsKey, time.Now())
 
+	safeSession := NewSafeSession(session)
 	var err error
 	if bvErr := sqltypes.ValidateBindVariables(bindVariables); bvErr != nil {
 		err = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", bvErr)
 	} else {
-		safeSession := NewSafeSession(session)
 		err = vtg.executor.StreamExecute(
 			ctx,
 			"StreamExecute",
@@ -533,9 +533,9 @@ func (vtg *VTGate) StreamExecute(ctx context.Context, session *vtgatepb.Session,
 			"BindVariables": bindVariables,
 			"Session":       session,
 		}
-		return recordAndAnnotateError(err, statsKey, query, vtg.logStreamExecute)
+		return safeSession.Session, recordAndAnnotateError(err, statsKey, query, vtg.logStreamExecute)
 	}
-	return nil
+	return safeSession.Session, nil
 }
 
 // CloseSession closes the session, rolling back any implicit transactions. This has the

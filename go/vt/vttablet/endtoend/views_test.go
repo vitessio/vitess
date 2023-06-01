@@ -171,16 +171,22 @@ func TestDropViewDDL(t *testing.T) {
 	_, err = client.Execute("create view vitess_view2 as select * from vitess_a", nil)
 	require.NoError(t, err)
 
+	// validate both the views are stored in _vt.views.
+	waitForResult(t, client, 2, 1*time.Minute)
+
 	// drop vitess_view1, should PASS
 	_, err = client.Execute("drop view vitess_view1", nil)
 	require.NoError(t, err)
 
-	// drop three views, only vitess_view2 exists. This should FAIL but drops the existing view.
+	// drop three views, only vitess_view2 exists.
+	// In MySQL 5.7, this would drop vitess_view2, but that behaviour has changed
+	// in MySQL 8.0, and not the view isn't dropped. CI is running 8.0, so the remaining test is
+	// written with those expectations.
 	_, err = client.Execute("drop view vitess_view1, vitess_view2, vitess_view3", nil)
 	require.ErrorContains(t, err, "Unknown table 'vttest.vitess_view1,vttest.vitess_view3'")
 
 	// validate ZERO rows in _vt.views.
-	waitForResult(t, client, 0, 1*time.Minute)
+	waitForResult(t, client, 1, 1*time.Minute)
 
 	// create a view.
 	_, err = client.Execute("create view vitess_view1 as select * from vitess_a", nil)
@@ -298,6 +304,7 @@ func waitForResult(t *testing.T, client *framework.QueryClient, rowCount int, ti
 		select {
 		case <-wait:
 			t.Errorf("all views are not dropped within the time")
+			return
 		case <-time.After(1 * time.Second):
 			qr, err := client.Execute(qSelAllRows, nil)
 			require.NoError(t, err)

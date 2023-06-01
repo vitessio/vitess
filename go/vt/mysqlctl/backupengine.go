@@ -39,7 +39,7 @@ import (
 )
 
 var (
-	// BackupEngineImplementation is the implementation to use for BackupEngine
+	// backupEngineImplementation is the implementation to use for BackupEngine
 	backupEngineImplementation = builtinBackupEngineName
 )
 
