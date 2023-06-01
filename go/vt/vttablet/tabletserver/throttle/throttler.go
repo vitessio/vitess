@@ -693,11 +693,7 @@ func (throttler *Throttler) generateTabletHTTPProbeFunction(ctx context.Context,
 		mySQLThrottleMetric.ClusterName = clusterName
 		mySQLThrottleMetric.Key = probe.Key
 
-<<<<<<< HEAD
-		tabletCheckSelfURL := fmt.Sprintf("http://%s:%d/throttler/check-self?app=%s", probe.TabletHost, probe.TabletPort, vitessAppName)
-=======
 		tabletCheckSelfURL := fmt.Sprintf("http://%s:%d/throttler/check-self?app=%s", probe.TabletHost, probe.TabletPort, throttlerapp.VitessName)
->>>>>>> upstream/main
 		resp, err := throttler.httpClient.Get(tabletCheckSelfURL)
 		if err != nil {
 			mySQLThrottleMetric.Err = err
