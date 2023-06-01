@@ -121,7 +121,7 @@ withNextColumn:
 				continue withNextColumn
 			}
 		}
-		pushedAggr.addNoPushCol(aeWrap(col), true)
+		pushedAggr.addColumnWithoutPushing(aeWrap(col), true)
 	}
 
 	// Set the source of the filter to the new aggregator placed below the route.
