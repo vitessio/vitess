@@ -5801,14 +5801,12 @@ json_table_column_definition:
 | NESTED STRING COLUMNS openb json_table_column_list closeb
   {
     $5.Nested = true
-    $5.Path = string($2)
-    $$ = $5
+    $$ = &ColumnDefinition{Path: string($2), NestedSpec: $5}
   }
 | NESTED PATH STRING COLUMNS openb json_table_column_list closeb
   {
     $6.Nested = true
-    $6.Path = string($3)
-    $$ = $6
+    $$ = &ColumnDefinition{Path: string($2), NestedSpec: $6}
   }
 
 json_table_column_options:

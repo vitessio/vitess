@@ -2919,11 +2919,11 @@ func (ct *ColumnType) SQLType() querypb.Type {
 	panic("unimplemented type " + ct.Type)
 }
 
-// JSONTableSpec describes the structure of a table from a CREATE TABLE statement
+// JSONTableSpec describes the structure of a table from a JSON_TABLE() statement
 type JSONTableSpec struct {
-	Columns     []*ColumnDefinition
-	Nested      bool
-	Path        string
+	Columns []*JSONTableColDef
+	Nested  bool
+	Path    string
 }
 
 // Format formats the node.
@@ -2936,14 +2936,6 @@ func (ts *JSONTableSpec) Format(buf *TrackedBuffer) {
 			buf.Myprintf(",\n\t%v", col)
 		}
 	}
-	for _, idx := range ts.Indexes {
-		buf.Myprintf(",\n\t%v", idx)
-	}
-	for _, c := range ts.Constraints {
-		buf.Myprintf(",\n\t%v", c)
-	}
-
-	buf.Myprintf("\n)%s", strings.Replace(ts.Options, ", ", ",\n  ", -1))
 }
 
 // AddColumn appends the given column to the list in the spec
@@ -2962,31 +2954,20 @@ func (ts *JSONTableSpec) walkSubtree(visit Visit) error {
 		}
 	}
 
-	for _, n := range ts.Indexes {
-		if err := Walk(visit, n); err != nil {
-			return err
-		}
-	}
-
-	for _, n := range ts.Constraints {
-		if err := Walk(visit, n); err != nil {
-			return err
-		}
-	}
-
 	return nil
 }
 
-// JSONColumnDefinition describes a column in a JSON_TABLE statement
-type JSONColumnDefinition struct {
+// JSONTableColDef describes a column in a JSON_TABLE statement
+type JSONTableColDef struct {
 	Name ColIdent
 	Type ColumnType
 	Path string
-	NestedCols []JSONColumnDefinition
+
+	NestedSpec *JSONTableSpec
 }
 
 // Format formats the node.
-func (col *JSONColumnDefinition) Format(buf *TrackedBuffer) {
+func (col *JSONTableColDef) Format(buf *TrackedBuffer) {
 	if col.Nested {
 		buf.Myprintf("%s %s %s %s ( %v %v )", keywordStrings[NESTED], keywordStrings[PATH], col.Path, keywordStrings[COLUMNS], col.Name, &col.Type)
 	} else {
@@ -2994,7 +2975,7 @@ func (col *JSONColumnDefinition) Format(buf *TrackedBuffer) {
 	}
 }
 
-func (col *JSONColumnDefinition) walkSubtree(visit Visit) error {
+func (col *JSONTableColDef) walkSubtree(visit Visit) error {
 	if col == nil {
 		return nil
 	}
