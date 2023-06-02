@@ -13,6 +13,29 @@
         "autocommit": "true"
       },
       "owner": "txn_unique_constraints"
+    },
+    "hash_vdx": {
+      "type": "hash"
+    },
+    "t1_id_vdx": {
+      "type": "consistent_lookup_unique",
+      "params": {
+        "autocommit": "true",
+        "from": "id",
+        "table": "t1_id_vdx",
+        "to": "keyspace_id"
+      },
+      "owner": "t1"
+    },
+    "t2_id_vdx": {
+      "type": "consistent_lookup_unique",
+      "params": {
+        "autocommit": "true",
+        "from": "id",
+        "table": "t2_id_vdx",
+        "to": "keyspace_id"
+      },
+      "owner": "t2"
     }
   },
   "tables": {
@@ -33,6 +56,46 @@
         {
           "column": "unique_constraint",
           "name": "unicode_loose_md5_vdx"
+        }
+      ]
+    },
+    "t1": {
+      "columnVindexes": [
+        {
+          "column": "txn_id",
+          "name": "unicode_loose_md5_vdx"
+        },
+        {
+          "column": "id",
+          "name": "t1_id_vdx"
+        }
+      ]
+    },
+    "t2": {
+      "columnVindexes": [
+        {
+          "column": "txn_id",
+          "name": "unicode_loose_md5_vdx"
+        },
+        {
+          "column": "id",
+          "name": "t2_id_vdx"
+        }
+      ]
+    },
+    "t1_id_vdx": {
+      "columnVindexes": [
+        {
+          "column": "id",
+          "name": "hash_vdx"
+        }
+      ]
+    },
+    "t2_id_vdx": {
+      "columnVindexes": [
+        {
+          "column": "id",
+          "name": "hash_vdx"
         }
       ]
     }
