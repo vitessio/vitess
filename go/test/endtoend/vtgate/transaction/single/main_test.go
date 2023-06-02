@@ -215,16 +215,23 @@ func TestMultiDbSecondRecordLookupDangle(t *testing.T) {
 	utils.AssertMatches(t, conn, `select txn_id from txn_unique_constraints`, `[]`)
 }
 
-func TestLookupSelectNotFail(t *testing.T) {
+// TestNoRecordInTableNotFail test that vindex lookup query creates a transaction on one shard say x.
+// To fetch the fields for the actual table, the Select Impossible query should also be reouted to x.
+// If it routes to other shard then the test will fail with multi-shard transaction attempted error.
+// The fix ensures it does not happen.
+func TestNoRecordInTableNotFail(t *testing.T) {
 	conn, cleanup := setup(t)
 	defer cleanup()
 
 	utils.AssertMatches(t, conn, `select @@transaction_mode`, `[[VARCHAR("SINGLE")]]`)
-	utils.Exec(t, conn, `begin`)
-	utils.Exec(t, conn, `INSERT INTO t1(id, txn_id) VALUES (1, "t1")`)
-	utils.Exec(t, conn, `SELECT * FROM t2 WHERE id = 1`)
-	utils.Exec(t, conn, `commit`)
-
+	// Need to run this test multiple times as shards are picked randomly for Impossible query.
+	// After the fix it is not random if a shard session already exists then it reuses that same shard session.
+	for i := 0; i < 100; i++ {
+		utils.Exec(t, conn, `begin`)
+		utils.Exec(t, conn, `INSERT INTO t1(id, txn_id) VALUES (1, "t1")`)
+		utils.Exec(t, conn, `SELECT * FROM t2 WHERE id = 1`)
+		utils.Exec(t, conn, `rollback`)
+	}
 }
 
 func setup(t *testing.T) (*mysql.Conn, func()) {
