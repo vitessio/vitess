@@ -119,6 +119,8 @@ func yySpecialCommentMode(yylex interface{}) bool {
   aliasedTableName *AliasedTableExpr
   TableSpec  *TableSpec
   columnType    ColumnType
+  JSONTableSpec *JSONTableSpec
+  JSONTableColDef *JSONTableColDef
   columnOrder   *ColumnOrder
   triggerOrder  *TriggerOrder
   colKeyOpt     ColumnKeyOption
@@ -591,10 +593,11 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <grantAssumption> grant_assumption
 %type <boolean> with_grant_opt with_admin_opt
 %type <bytes> any_identifier
+
 %type <tableExpr> json_table
-%type <TableSpec> json_table_column_list
+%type <JSONTableSpec> json_table_column_list
+%type <JSONTableColDef> json_table_column_definition
 %type <columnType> json_table_column_options
-%type <columnDefinition> json_table_column_definition
 %type <expr> val_on_empty val_on_error
 
 %start any_command
@@ -5771,13 +5774,14 @@ natural_join:
 json_table:
   JSON_TABLE openb value_expression ',' STRING COLUMNS openb json_table_column_list closeb closeb as_opt table_alias
   {
-    $$ = &JSONTableExpr{Data: $3, Path: string($5), Spec: $8, Alias: $12}
+    $8.Path = string($5)
+    $$ = &JSONTableExpr{Data: $3, Spec: $8, Alias: $12}
   }
 
 json_table_column_list:
   json_table_column_definition
   {
-    $$ = &TableSpec{}
+    $$ = &JSONTableColSpec{}
     $$.AddColumn($1)
   }
 | json_table_column_list ',' json_table_column_definition
@@ -5788,67 +5792,63 @@ json_table_column_list:
 json_table_column_definition:
   reserved_sql_id column_type json_table_column_options
   {
-    if err := $2.merge($3); err != nil {
-      yylex.Error(err.Error())
-      return 1
-    }
-    $$ = &ColumnDefinition{Name: $1, Type: $2}
+    $$ = &JSONTableColDef{Name: $1, Type: $2, Opts: $3}
   }
 | reserved_sql_id FOR ORDINALITY
   {
-    $$ = &ColumnDefinition{Name: $1, Type: ColumnType{Type: "INTEGER", Unsigned: true, Autoincrement: true, ValOnEmpty: &NullVal{}, ValOnError: &NullVal{}}}
+    $$ = &JSONTableColDef{Name: $1, Type: ColumnType{Type: "INTEGER", Unsigned: true, Autoincrement: true}, Opts: &JSONTableColOpts{ValOnEmpty: &NullVal{}, ValOnError: &NullVal{}}}
   }
 | NESTED STRING COLUMNS openb json_table_column_list closeb
   {
     $5.Nested = true
-    $$ = &ColumnDefinition{Path: string($2), NestedSpec: $5}
+    $$ = &JSONTableColDef{Path: string($2), Spec: $5}
   }
 | NESTED PATH STRING COLUMNS openb json_table_column_list closeb
   {
     $6.Nested = true
-    $$ = &ColumnDefinition{Path: string($2), NestedSpec: $6}
+    $$ = &JSONTableColDef{Path: string($2), Spec: $6}
   }
 
 json_table_column_options:
   PATH STRING
   {
-    $$ = ColumnType{Path: string($2), ValOnEmpty: &NullVal{}, ValOnError: &NullVal{}}
+    $$ = JSONTableColOpts{Path: string($2), ValOnEmpty: &NullVal{}, ValOnError: &NullVal{}}
   }
 | PATH STRING val_on_empty
   {
-    $$ = ColumnType{Path: string($2), ValOnEmpty: $3, ValOnError: &NullVal{}}
+    $$ = JSONTableColOpts{Path: string($2), ValOnEmpty: $3, ValOnError: &NullVal{}}
   }
 | PATH STRING val_on_error
   {
-    $$ = ColumnType{Path: string($2), ValOnEmpty: &NullVal{}, ValOnError: $3}
+    $$ = JSONTableColOpts{Path: string($2), ValOnEmpty: &NullVal{}, ValOnError: $3}
   }
 | PATH STRING val_on_empty val_on_error
   {
-    $$ = ColumnType{Path: string($2), ValOnEmpty: $3, ValOnError: $4}
+    $$ = JSONTableColOpts{Path: string($2), ValOnEmpty: $3, ValOnError: $4}
   }
 | PATH STRING val_on_error val_on_empty
   {
-    $$ = ColumnType{Path: string($2), ValOnEmpty: $4, ValOnError: $3}
+    $$ = JSONTableColOpts{Path: string($2), ValOnEmpty: $4, ValOnError: $3}
   }
 | PATH STRING ERROR ON EMPTY
   {
-    $$ = ColumnType{Path: string($2), ErrorOnEmpty: true, ValOnEmpty: &NullVal{}, ValOnError: &NullVal{}}
+    $$ = JSONTableColOpts{Path: string($2), ErrorOnEmpty: true, ValOnEmpty: &NullVal{}, ValOnError: &NullVal{}}
   }
 | PATH STRING ERROR ON ERROR
   {
-    $$ = ColumnType{Path: string($2), ErrorOnError: true, ValOnEmpty: &NullVal{}, ValOnError: &NullVal{}}
+    $$ = JSONTableColOpts{Path: string($2), ErrorOnError: true, ValOnEmpty: &NullVal{}, ValOnError: &NullVal{}}
   }
 | PATH STRING ERROR ON EMPTY ERROR ON ERROR
   {
-    $$ = ColumnType{Path: string($2), ErrorOnEmpty: true, ErrorOnError: true, ValOnEmpty: &NullVal{}, ValOnError: &NullVal{}}
+    $$ = JSONTableColOpts{Path: string($2), ErrorOnEmpty: true, ErrorOnError: true, ValOnEmpty: &NullVal{}, ValOnError: &NullVal{}}
   }
 | PATH STRING ERROR ON ERROR ERROR ON EMPTY
   {
-    $$ = ColumnType{Path: string($2), ErrorOnEmpty: true, ErrorOnError: true, ValOnEmpty: &NullVal{}, ValOnError: &NullVal{}}
+    $$ = JSONTableColOpts{Path: string($2), ErrorOnEmpty: true, ErrorOnError: true, ValOnEmpty: &NullVal{}, ValOnError: &NullVal{}}
   }
 | EXISTS PATH STRING
   {
-    $$ = ColumnType{Path: string($3), ValOnEmpty: &NullVal{}, ValOnError: &NullVal{}, Exists: true}
+    $$ = JSONTableColOpts{Path: string($3), ValOnEmpty: &NullVal{}, ValOnError: &NullVal{}, Exists: true}
   }
 
 val_on_empty:

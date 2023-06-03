@@ -2491,11 +2491,7 @@ type ColumnDefinition struct {
 
 // Format formats the node.
 func (col *ColumnDefinition) Format(buf *TrackedBuffer) {
-	if col.Nested {
-		buf.Myprintf("%s %s %s %s ( %v %v )", keywordStrings[NESTED], keywordStrings[PATH], col.Path, keywordStrings[COLUMNS], col.Name, &col.Type)
-	} else {
-		buf.Myprintf("%v %v", col.Name, &col.Type)
-	}
+	buf.Myprintf("%v %v", col.Name, &col.Type)
 }
 
 func (col *ColumnDefinition) walkSubtree(visit Visit) error {
@@ -2548,14 +2544,6 @@ type ColumnType struct {
 
 	// For spatial types
 	SRID *SQLVal
-
-	// For json_table
-	Path         string
-	ValOnEmpty   Expr
-	ValOnError   Expr
-	ErrorOnEmpty bool
-	ErrorOnError bool
-	Exists       bool
 }
 
 func (ct *ColumnType) merge(other ColumnType) error {
@@ -2621,48 +2609,6 @@ func (ct *ColumnType) merge(other ColumnType) error {
 			return errors.New("cannot define SRID for non spatial types")
 		}
 		ct.SRID = other.SRID
-	}
-
-	if other.Path != "" {
-		if ct.Path != "" {
-			return errors.New("cannot include PATH more than once")
-		}
-		ct.Path = other.Path
-	}
-
-	if other.Exists {
-		if ct.Exists {
-			return errors.New("cannot include EXISTS more than once")
-		}
-		ct.Exists = other.Exists
-	}
-
-	if other.ValOnEmpty != nil {
-		if ct.ValOnEmpty != nil {
-			return errors.New("cannot include VAL_ON_EMPTY more than once")
-		}
-		ct.ValOnEmpty = other.ValOnEmpty
-	}
-
-	if other.ValOnError != nil {
-		if ct.ValOnError != nil {
-			return errors.New("cannot include VAL_ON_ERROR more than once")
-		}
-		ct.ValOnError = other.ValOnError
-	}
-
-	if other.ErrorOnEmpty {
-		if ct.ErrorOnEmpty {
-			return errors.New("cannot include ERROR_ON_EMPTY more than once")
-		}
-		ct.ErrorOnEmpty = other.ErrorOnEmpty
-	}
-
-	if other.ErrorOnError {
-		if ct.ErrorOnError {
-			return errors.New("cannot include ERROR_ON_ERROR more than once")
-		}
-		ct.ErrorOnError = other.ErrorOnError
 	}
 
 	if other.Charset != "" {
@@ -2763,24 +2709,6 @@ func (ct *ColumnType) Format(buf *TrackedBuffer) {
 		} else {
 			opts = append(opts, keywordStrings[VIRTUAL])
 		}
-	}
-	if ct.Exists {
-		opts = append(opts, keywordStrings[EXISTS])
-	}
-	if ct.Path != "" {
-		opts = append(opts, keywordStrings[PATH], `"`+ct.Path+`"`)
-	}
-	if ct.ValOnEmpty != nil {
-		opts = append(opts, String(ct.ValOnEmpty), keywordStrings[ON], keywordStrings[EMPTY])
-	}
-	if ct.ValOnError != nil {
-		opts = append(opts, String(ct.ValOnError), keywordStrings[ON], keywordStrings[ERROR])
-	}
-	if ct.ErrorOnEmpty {
-		opts = append(opts, keywordStrings[ERROR], keywordStrings[ON], keywordStrings[EMPTY])
-	}
-	if ct.ErrorOnError {
-		opts = append(opts, keywordStrings[ERROR], keywordStrings[ON], keywordStrings[ERROR])
 	}
 
 	if len(opts) != 0 {
@@ -2919,6 +2847,25 @@ func (ct *ColumnType) SQLType() querypb.Type {
 	panic("unimplemented type " + ct.Type)
 }
 
+// JSONTableExpr represents a TableExpr that's a json_table operation.
+type JSONTableExpr struct {
+	Data  Expr
+	Spec  *JSONTableSpec
+	Alias TableIdent
+}
+
+// Format formats the node.
+func (jte *JSONTableExpr) Format(buf *TrackedBuffer) {
+	buf.Myprintf(`%s(%v, %v) as %v`, keywordStrings[JSON_TABLE], jte.Data, jte.Spec, jte.Alias)
+}
+
+func (jte *JSONTableExpr) walkSubtree(visit Visit) error {
+	if jte == nil {
+		return nil
+	}
+	return Walk(visit)
+}
+
 // JSONTableSpec describes the structure of a table from a JSON_TABLE() statement
 type JSONTableSpec struct {
 	Columns []*JSONTableColDef
@@ -2926,21 +2873,22 @@ type JSONTableSpec struct {
 	Path    string
 }
 
+// AddColumn appends the given column to the list in the spec
+func (ts *JSONTableSpec) AddColumn(cd *JSONTableColDef) {
+	ts.Columns = append(ts.Columns, cd)
+}
+
 // Format formats the node.
 func (ts *JSONTableSpec) Format(buf *TrackedBuffer) {
-	buf.Myprintf("(\n")
+	buf.Myprintf("'%s' %s(", ts.Path, keywordStrings[COLUMNS])
 	for i, col := range ts.Columns {
 		if i == 0 {
-			buf.Myprintf("\t%v", col)
+			buf.Myprintf("\n\t%v", col)
 		} else {
 			buf.Myprintf(",\n\t%v", col)
 		}
 	}
-}
-
-// AddColumn appends the given column to the list in the spec
-func (ts *JSONTableSpec) AddColumn(cd *ColumnDefinition) {
-	ts.Columns = append(ts.Columns, cd)
+	buf.Myprintf("\n)")
 }
 
 func (ts *JSONTableSpec) walkSubtree(visit Visit) error {
@@ -2961,17 +2909,18 @@ func (ts *JSONTableSpec) walkSubtree(visit Visit) error {
 type JSONTableColDef struct {
 	Name ColIdent
 	Type ColumnType
-	Path string
-
-	NestedSpec *JSONTableSpec
+	Opts JSONTableColOpts
+	Spec *JSONTableSpec
 }
 
 // Format formats the node.
 func (col *JSONTableColDef) Format(buf *TrackedBuffer) {
-	if col.Nested {
-		buf.Myprintf("%s %s %s %s ( %v %v )", keywordStrings[NESTED], keywordStrings[PATH], col.Path, keywordStrings[COLUMNS], col.Name, &col.Type)
+	// TODO: NESTED
+	if col.Spec != nil {
+		buf.Myprintf("%s %v", keywordStrings[NESTED], col.Spec)
+		return
 	} else {
-		buf.Myprintf("%v %v", col.Name, &col.Type)
+		buf.Myprintf("%v %v %s %v", col.Name, &col.Type, keywordStrings[PATH], col.Opts)
 	}
 }
 
@@ -2984,6 +2933,21 @@ func (col *JSONTableColDef) walkSubtree(visit Visit) error {
 		col.Name,
 		&col.Type,
 	)
+}
+
+// JSONTableColOpts describes the column options in a JSON_TABLE statement
+type JSONTableColOpts struct {
+	Path         string
+	ValOnEmpty   Expr
+	ValOnError   Expr
+	ErrorOnEmpty bool // TODO: not necessary, can be inferred from ValOnEmpty == nil
+	ErrorOnError bool // TODO: not necessary, can be inferred from ValOnError == nil
+	Exists       bool
+}
+
+// Format formats the node.
+func (opt *JSONTableColOpts) Format(buf *TrackedBuffer) {
+	buf.Myprintf("'%v'", opt.Path)
 }
 
 // IndexSpec describes an index operation in an ALTER statement
@@ -4506,26 +4470,6 @@ func (node *JoinTableExpr) walkSubtree(visit Visit) error {
 		node.RightExpr,
 		node.Condition,
 	)
-}
-
-// JSONTableExpr represents a TableExpr that's a json_table operation.
-type JSONTableExpr struct {
-	Data  Expr
-	Path  string
-	Spec  *TableSpec
-	Alias TableIdent
-}
-
-// Format formats the node.
-func (node *JSONTableExpr) Format(buf *TrackedBuffer) {
-	buf.Myprintf(`%s(%v, "%s" %s%v) as %v`, keywordStrings[JSON_TABLE], node.Data, node.Path, keywordStrings[COLUMNS], node.Spec, node.Alias)
-}
-
-func (node *JSONTableExpr) walkSubtree(visit Visit) error {
-	if node == nil {
-		return nil
-	}
-	return Walk(visit)
 }
 
 // IndexHints represents a list of index hints.
