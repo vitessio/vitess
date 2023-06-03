@@ -184,7 +184,8 @@ func newBuildSelectPlan(
 	// record any warning as planner warning.
 	vschema.PlannerWarning(semTable.Warning)
 
-	ctx := plancontext.NewPlanningContext(reservedVars, semTable, vschema, version)
+	minimalPlanning := sqlparser.UseMinimalPlanning(selStmt)
+	ctx := plancontext.NewPlanningContext(reservedVars, semTable, vschema, version, minimalPlanning)
 
 	if ks, _ := semTable.SingleUnshardedKeyspace(); ks != nil {
 		plan, tablesUsed, err = selectUnshardedShortcut(ctx, selStmt, ks)
@@ -296,7 +297,7 @@ func gen4UpdateStmtPlanner(
 		return nil, err
 	}
 
-	ctx := plancontext.NewPlanningContext(reservedVars, semTable, vschema, version)
+	ctx := plancontext.NewPlanningContext(reservedVars, semTable, vschema, version, false)
 
 	op, err := operators.PlanQuery(ctx, updStmt)
 	if err != nil {
@@ -377,7 +378,7 @@ func gen4DeleteStmtPlanner(
 		return nil, err
 	}
 
-	ctx := plancontext.NewPlanningContext(reservedVars, semTable, vschema, version)
+	ctx := plancontext.NewPlanningContext(reservedVars, semTable, vschema, version, false)
 	op, err := operators.PlanQuery(ctx, deleteStmt)
 	if err != nil {
 		return nil, err
@@ -450,7 +451,7 @@ func gen4InsertStmtPlanner(version querypb.ExecuteOptions_PlannerVersion, insStm
 		return nil, err
 	}
 
-	ctx := plancontext.NewPlanningContext(reservedVars, semTable, vschema, version)
+	ctx := plancontext.NewPlanningContext(reservedVars, semTable, vschema, version, false)
 
 	op, err := operators.PlanQuery(ctx, insStmt)
 	if err != nil {

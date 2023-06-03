@@ -561,3 +561,13 @@ func TestGetPriorityFromStatement(t *testing.T) {
 		})
 	}
 }
+
+func TestMultipleDirectives(t *testing.T) {
+	stmt, _ := Parse("select /*vt+ PLANNER=gen4 MINIMAL_PLANNING */ count(*) from aggr_test a join t3 t on a.val2 = t.id7")
+	directives := stmt.(Commented).GetParsedComments().Directives()
+
+	assert.True(t, directives.IsSet(DirectiveMinimalPlanning), DirectiveMinimalPlanning)
+	planner, found := directives.GetString(DirectiveQueryPlanner, "")
+	assert.True(t, found, "planner directive not found")
+	assert.Equal(t, planner, "gen4")
+}

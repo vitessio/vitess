@@ -126,7 +126,7 @@ func optimizeHorizonPlanning(ctx *plancontext.PlanningContext, root ops.Operator
 		case *Projection:
 			return tryPushingDownProjection(ctx, in)
 		case *Limit:
-			return tryPushingDownLimit(in)
+			return tryPushingDownLimit(ctx, in)
 		case *Ordering:
 			return tryPushingDownOrdering(ctx, in)
 		case *Aggregator:
@@ -134,7 +134,7 @@ func optimizeHorizonPlanning(ctx *plancontext.PlanningContext, root ops.Operator
 		case *Filter:
 			return tryPushingDownFilter(ctx, in)
 		case *Distinct:
-			return tryPushingDownDistinct(in)
+			return tryPushingDownDistinct(ctx, in)
 		default:
 			return in, rewrite.SameTree, nil
 		}
@@ -153,12 +153,20 @@ func optimizeHorizonPlanning(ctx *plancontext.PlanningContext, root ops.Operator
 }
 
 func tryPushingDownFilter(ctx *plancontext.PlanningContext, in *Filter) (ops.Operator, *rewrite.ApplyResult, error) {
-	proj, ok := in.Source.(*Projection)
-	if !ok {
-		// we can only push filter under a projection
+	if ctx.MinimalPlanning {
 		return in, rewrite.SameTree, nil
 	}
 
+	switch src := in.Source.(type) {
+	case *Projection:
+		return pushFilterUnderProjection(ctx, in, src)
+	case *Route:
+		return rewrite.Swap(in, src, "push filter into Route")
+	default:
+		return in, rewrite.SameTree, nil
+	}
+}
+func pushFilterUnderProjection(ctx *plancontext.PlanningContext, in *Filter, proj *Projection) (ops.Operator, *rewrite.ApplyResult, error) {
 	for _, p := range in.Predicates {
 		cantPushDown := false
 		_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
@@ -182,7 +190,11 @@ func tryPushingDownFilter(ctx *plancontext.PlanningContext, in *Filter) (ops.Ope
 	return rewrite.Swap(in, proj, "push filter under projection")
 }
 
-func tryPushingDownDistinct(in *Distinct) (ops.Operator, *rewrite.ApplyResult, error) {
+func tryPushingDownDistinct(ctx *plancontext.PlanningContext, in *Distinct) (ops.Operator, *rewrite.ApplyResult, error) {
+	if ctx.MinimalPlanning {
+		return in, rewrite.SameTree, nil
+	}
+
 	if in.Pushed {
 		return in, rewrite.SameTree, nil
 	}
@@ -283,6 +295,9 @@ func needsOrdering(in *Aggregator, ctx *plancontext.PlanningContext) (bool, erro
 }
 
 func tryPushingDownOrdering(ctx *plancontext.PlanningContext, in *Ordering) (ops.Operator, *rewrite.ApplyResult, error) {
+	if ctx.MinimalPlanning {
+		return in, rewrite.SameTree, nil
+	}
 	switch src := in.Source.(type) {
 	case *Route:
 		return rewrite.Swap(in, src, "push ordering under route")
@@ -396,6 +411,10 @@ func tryPushingDownProjection(
 	ctx *plancontext.PlanningContext,
 	p *Projection,
 ) (ops.Operator, *rewrite.ApplyResult, error) {
+	if ctx.MinimalPlanning {
+		return p, rewrite.SameTree, nil
+	}
+
 	switch src := p.Source.(type) {
 	case *Route:
 		return rewrite.Swap(p, src, "pushed projection under route")
@@ -602,7 +621,10 @@ func stopAtRoute(operator ops.Operator) rewrite.VisitRule {
 	return rewrite.VisitRule(!isRoute)
 }
 
-func tryPushingDownLimit(in *Limit) (ops.Operator, *rewrite.ApplyResult, error) {
+func tryPushingDownLimit(ctx *plancontext.PlanningContext, in *Limit) (ops.Operator, *rewrite.ApplyResult, error) {
+	if ctx.MinimalPlanning {
+		return in, rewrite.SameTree, nil
+	}
 	switch src := in.Source.(type) {
 	case *Route:
 		return tryPushingDownLimitInRoute(in, src)
@@ -657,6 +679,9 @@ func tryPushingDownLimitInRoute(in *Limit, src *Route) (ops.Operator, *rewrite.A
 }
 
 func pushOrExpandHorizon(ctx *plancontext.PlanningContext, in horizonLike) (ops.Operator, *rewrite.ApplyResult, error) {
+	if ctx.MinimalPlanning {
+		return expandHorizon(ctx, in)
+	}
 	if derived, ok := in.(*Derived); ok {
 		if len(derived.ColumnAliases) > 0 {
 			return nil, nil, errHorizonNotPlanned()

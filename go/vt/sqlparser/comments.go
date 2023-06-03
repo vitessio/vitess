@@ -57,6 +57,9 @@ const (
 	// where 0 is the highest priority, and MaxPriorityValue is the lowest one.
 	DirectivePriority = "PRIORITY"
 
+	// MinimalPlanning turns off most optimizations of the planner. Use only for testing
+	DirectiveMinimalPlanning = "MINIMAL_PLANNING"
+
 	// MaxPriorityValue specifies the maximum value allowed for the priority query directive. Valid priority values are
 	// between zero and MaxPriorityValue.
 	MaxPriorityValue = 100
@@ -448,4 +451,13 @@ func GetWorkloadNameFromStatement(statement Statement) string {
 	workloadName, _ := directives.GetString(DirectiveWorkloadName, "")
 
 	return workloadName
+}
+
+func UseMinimalPlanning(statement Statement) bool {
+	sel, ok := statement.(SelectStatement)
+	if !ok {
+		return false
+	}
+
+	return sel.GetParsedComments().Directives().IsSet(DirectiveMinimalPlanning)
 }

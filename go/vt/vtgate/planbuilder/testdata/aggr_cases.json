@@ -6224,5 +6224,95 @@
         "user.user"
       ]
     }
+  },
+  {
+    "comment": "planned using minimal_planning",
+    "query": "select /*vt+ MINIMAL_PLANNING */ u.bar, count(*) from user u join user_extra ue on u.id = ue.user_id group by u.bar",
+    "v3-plan": {
+      "QueryType": "SELECT",
+      "Original": "select /*vt+ MINIMAL_PLANNING */ u.bar, count(*) from user u join user_extra ue on u.id = ue.user_id group by u.bar",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Ordered",
+        "Aggregates": "sum_count(1) AS count",
+        "GroupBy": "0",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select u.bar, count(*), weight_string(u.bar) from `user` as u join user_extra as ue on u.id = ue.user_id where 1 != 1 group by u.bar, weight_string(u.bar)",
+            "OrderBy": "(0|2) ASC",
+            "Query": "select /*vt+ MINIMAL_PLANNING */ u.bar, count(*), weight_string(u.bar) from `user` as u join user_extra as ue on u.id = ue.user_id group by u.bar, weight_string(u.bar) order by bar asc",
+            "ResultColumns": 2,
+            "Table": "`user`, user_extra"
+          }
+        ]
+      }
+    },
+    "gen4-plan": {
+      "QueryType": "SELECT",
+      "Original": "select /*vt+ MINIMAL_PLANNING */ u.bar, count(*) from user u join user_extra ue on u.id = ue.user_id group by u.bar",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Ordered",
+        "Aggregates": "count_star(1) AS count(*)",
+        "GroupBy": "(0|2)",
+        "ResultColumns": 2,
+        "Inputs": [
+          {
+            "OperatorType": "Sort",
+            "Variant": "Memory",
+            "OrderBy": "(0|2) ASC",
+            "Inputs": [
+              {
+                "OperatorType": "Join",
+                "Variant": "Join",
+                "JoinColumnIndexes": "L:0,L:1,L:2",
+                "JoinVars": {
+                  "u_id": 3
+                },
+                "TableName": "`user`_user_extra",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select u.bar, 1, weight_string(u.bar), u.id from `user` as u where 1 != 1",
+                    "Query": "select /*vt+ MINIMAL_PLANNING */ u.bar, 1, weight_string(u.bar), u.id from `user` as u",
+                    "Table": "`user`"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "EqualUnique",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select 1 from user_extra as ue where 1 != 1",
+                    "Query": "select /*vt+ MINIMAL_PLANNING */ 1 from user_extra as ue where ue.user_id = :u_id",
+                    "Table": "user_extra",
+                    "Values": [
+                      ":u_id"
+                    ],
+                    "Vindex": "user_index"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user",
+        "user.user_extra"
+      ]
+    }
   }
 ]

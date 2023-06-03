@@ -29,7 +29,7 @@ import (
 )
 
 func tryPushingDownAggregator(ctx *plancontext.PlanningContext, aggregator *Aggregator) (output ops.Operator, applyResult *rewrite.ApplyResult, err error) {
-	if aggregator.Pushed {
+	if aggregator.Pushed || ctx.MinimalPlanning {
 		return aggregator, rewrite.SameTree, nil
 	}
 	aggregator.Pushed = true

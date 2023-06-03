@@ -42,9 +42,13 @@ func optimizeSubQuery(ctx *plancontext.PlanningContext, op *SubQuery, ts semanti
 			Inner:             inner.Inner,
 			ExtractedSubquery: inner.ExtractedSubquery,
 		}
-		merged, err := tryMergeSubQueryOp(ctx, outer, innerOp, newInner, preds, newSubQueryMerge(ctx, newInner), ts)
-		if err != nil {
-			return nil, nil, err
+		var merged ops.Operator
+		if !ctx.MinimalPlanning {
+			var err error
+			merged, err = tryMergeSubQueryOp(ctx, outer, innerOp, newInner, preds, newSubQueryMerge(ctx, newInner), ts)
+			if err != nil {
+				return nil, nil, err
+			}
 		}
 
 		if merged != nil {
