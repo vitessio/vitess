@@ -205,6 +205,8 @@ func (a *Aggregator) GetOrdering() ([]ops.OrderBy, error) {
 
 var _ ops.Operator = (*Aggregator)(nil)
 
+type addColF func(aliasedExpr *sqlparser.AliasedExpr, addToGroupBy bool) (int, error)
+
 func (a *Aggregator) planOffsets(ctx *plancontext.PlanningContext) error {
 	addColumn := func(aliasedExpr *sqlparser.AliasedExpr, addToGroupBy bool) (int, error) {
 		newSrc, offset, err := a.Source.AddColumn(ctx, aliasedExpr, true, addToGroupBy)
@@ -217,6 +219,13 @@ func (a *Aggregator) planOffsets(ctx *plancontext.PlanningContext) error {
 			a.Columns = append(a.Columns, aliasedExpr)
 		}
 		return offset, nil
+	}
+
+	if !a.Pushed {
+		err := a.planOffsetsNotPushed(ctx, addColumn)
+		if err != nil {
+			return err
+		}
 	}
 
 	for idx, gb := range a.Grouping {
@@ -238,6 +247,84 @@ func (a *Aggregator) planOffsets(ctx *plancontext.PlanningContext) error {
 		a.Grouping[idx].WSOffset = offset
 	}
 
+	return nil
+}
+
+func (aggr Aggr) GetArgument() sqlparser.Expr {
+	switch aggr.OpCode {
+	case opcode.AggregateRandom:
+		return aggr.Original.Expr
+	case opcode.AggregateCountStar:
+		return sqlparser.NewIntLiteral("1")
+	default:
+		return aggr.Func.GetArg()
+	}
+}
+
+func (a *Aggregator) planOffsetsNotPushed(ctx *plancontext.PlanningContext, addColumn addColF) (err error) {
+	// we need to keep things in the column order, so we can't iterate over the aggregations or groupings
+	isGroupingCol := func(col *sqlparser.AliasedExpr) (int, error) {
+		for gbIdx, gb := range a.Grouping {
+			if !ctx.SemTable.EqualsExprWithDeps(col.Expr, gb.SimplifiedExpr) {
+				continue
+			}
+
+			newSrc, offset, err := a.Source.AddColumn(ctx, col, false, false)
+			if err != nil {
+				return 0, err
+			}
+
+			a.Grouping[gbIdx].ColOffset = offset
+			a.Source = newSrc
+
+			if !ctx.SemTable.NeedsWeightString(gb.SimplifiedExpr) {
+				return offset, nil
+			}
+
+			// TODO: we need to do stuff
+			return offset, nil
+		}
+		return -1, nil
+	}
+
+	isAggrCol := func(col *sqlparser.AliasedExpr) (int, error) {
+		for aggIdx, aggr := range a.Aggregations {
+			if !ctx.SemTable.EqualsExprWithDeps(col.Expr, aggr.Original.Expr) {
+				continue
+			}
+
+			newSrc, offset, err := a.Source.AddColumn(ctx, aeWrap(aggr.GetArgument()), false, false)
+			if err != nil {
+				return 0, err
+			}
+			a.Aggregations[aggIdx].ColOffset = offset
+			a.Source = newSrc
+			return offset, nil
+		}
+		return -1, nil
+	}
+
+	for colIdx, col := range a.Columns {
+		idx, err := isGroupingCol(col)
+		if err != nil {
+			return err
+		}
+		if idx >= 0 {
+			if idx != colIdx {
+				panic("oops")
+			}
+			continue
+		}
+
+		idx, err = isAggrCol(col)
+		if err != nil {
+			return err
+		}
+
+		if idx < 0 {
+			return vterrors.VT13001("failed to find the corresponding column")
+		}
+	}
 	return nil
 }
 

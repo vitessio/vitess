@@ -221,12 +221,14 @@ func addOrderBysAndGroupBysForAggregations(ctx *plancontext.PlanningContext, roo
 	visitor := func(in ops.Operator, _ semantics.TableSet, isRoot bool) (ops.Operator, *rewrite.ApplyResult, error) {
 		switch in := in.(type) {
 		case *Aggregator:
-			// first we update the incoming columns, so we know about any new columns that have been added
-			columns, err := in.Source.GetColumns()
-			if err != nil {
-				return nil, nil, err
+			if in.Pushed {
+				// first we update the incoming columns, so we know about any new columns that have been added
+				columns, err := in.Source.GetColumns()
+				if err != nil {
+					return nil, nil, err
+				}
+				in.Columns = columns
 			}
-			in.Columns = columns
 
 			requireOrdering, err := needsOrdering(in, ctx)
 			if err != nil {
