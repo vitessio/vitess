@@ -51,6 +51,11 @@ func errHorizonNotPlanned() error {
 var _errHorizonNotPlanned = vterrors.VT12001("query cannot be fully operator planned")
 
 func tryHorizonPlanning(ctx *plancontext.PlanningContext, root ops.Operator) (output ops.Operator, err error) {
+	if ctx.UseOldHorizonPlanner {
+		err := planOffsetsOnJoins(ctx, root)
+		return root, err
+	}
+
 	backup := Clone(root)
 	defer func() {
 		// If we encounter the _errHorizonNotPlanned error, we'll revert to using the old horizon planning strategy.

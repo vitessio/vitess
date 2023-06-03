@@ -33,7 +33,6 @@ import (
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
-	"vitess.io/vitess/go/vt/vtgate/semantics"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
@@ -79,24 +78,6 @@ func singleTable(ks, tbl string) string {
 	return fmt.Sprintf("%s.%s", ks, tbl)
 }
 
-func tablesFromSemantics(semTable *semantics.SemTable) []string {
-	tables := make(map[string]any, len(semTable.Tables))
-	for _, info := range semTable.Tables {
-		vindexTable := info.GetVindexTable()
-		if vindexTable == nil {
-			continue
-		}
-		tables[vindexTable.String()] = nil
-	}
-
-	names := make([]string, 0, len(tables))
-	for tbl := range tables {
-		names = append(names, tbl)
-	}
-	sort.Strings(names)
-	return names
-}
-
 // TestBuilder builds a plan for a query based on the specified vschema.
 // This method is only used from tests
 func TestBuilder(query string, vschema plancontext.VSchema, keyspace string) (*engine.Plan, error) {
@@ -110,12 +91,12 @@ func TestBuilder(query string, vschema plancontext.VSchema, keyspace string) (*e
 	}
 
 	reservedVars := sqlparser.NewReservedVars("vtg", reserved)
-	return BuildFromStmt(context.Background(), query, result.AST, reservedVars, vschema, result.BindVarNeeds, true, true)
+	return BuildFromStmt(context.Background(), query, result.AST, reservedVars, vschema, result.BindVarNeeds, true, true, false)
 }
 
 // BuildFromStmt builds a plan based on the AST provided.
-func BuildFromStmt(ctx context.Context, query string, stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, bindVarNeeds *sqlparser.BindVarNeeds, enableOnlineDDL, enableDirectDDL bool) (*engine.Plan, error) {
-	planResult, err := createInstructionFor(ctx, query, stmt, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
+func BuildFromStmt(ctx context.Context, query string, stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, bindVarNeeds *sqlparser.BindVarNeeds, enableOnlineDDL, enableDirectDDL, oldHorizonPlanner bool) (*engine.Plan, error) {
+	planResult, err := createInstructionFor(ctx, query, stmt, reservedVars, vschema, enableOnlineDDL, enableDirectDDL, oldHorizonPlanner)
 	if err != nil {
 		return nil, err
 	}
@@ -136,7 +117,7 @@ func BuildFromStmt(ctx context.Context, query string, stmt sqlparser.Statement, 
 	return plan, nil
 }
 
-func getConfiguredPlanner(vschema plancontext.VSchema, v3planner func(string) stmtPlanner, stmt sqlparser.Statement, query string) (stmtPlanner, error) {
+func getConfiguredPlanner(vschema plancontext.VSchema, v3planner func(string) stmtPlanner, stmt sqlparser.Statement, query string, oldHorizonPlanner bool) (stmtPlanner, error) {
 	planner, ok := getPlannerFromQuery(stmt)
 	if !ok {
 		// if the query doesn't specify the planner, we check what the configuration is
@@ -146,10 +127,10 @@ func getConfiguredPlanner(vschema plancontext.VSchema, v3planner func(string) st
 	case Gen4CompareV3:
 		return gen4CompareV3Planner(query), nil
 	case Gen4Left2Right, Gen4GreedyOnly:
-		return gen4Planner(query, planner), nil
+		return gen4Planner(query, planner, oldHorizonPlanner), nil
 	case Gen4WithFallback:
 		fp := &fallbackPlanner{
-			primary:  gen4Planner(query, Gen4),
+			primary:  gen4Planner(query, Gen4, oldHorizonPlanner),
 			fallback: v3planner(query),
 		}
 		return fp.plan, nil
@@ -157,12 +138,12 @@ func getConfiguredPlanner(vschema plancontext.VSchema, v3planner func(string) st
 		if _, isInsert := stmt.(*sqlparser.Insert); isInsert {
 			return v3planner(query), nil
 		}
-		return gen4Planner(query, Gen4), nil
+		return gen4Planner(query, Gen4, oldHorizonPlanner), nil
 	case V3:
 		return v3planner(query), nil
 	default:
 		// default is gen4 plan
-		return gen4Planner(query, Gen4), nil
+		return gen4Planner(query, Gen4, oldHorizonPlanner), nil
 	}
 }
 
@@ -212,34 +193,34 @@ func buildRoutePlan(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVa
 	return f(stmt, reservedVars, vschema)
 }
 
-func createInstructionFor(ctx context.Context, query string, stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, enableOnlineDDL, enableDirectDDL bool) (*planResult, error) {
+func createInstructionFor(ctx context.Context, query string, stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, enableOnlineDDL, enableDirectDDL, oldHorizonPlanner bool) (*planResult, error) {
 	switch stmt := stmt.(type) {
 	case *sqlparser.Select:
-		configuredPlanner, err := getConfiguredPlanner(vschema, buildSelectPlan, stmt, query)
+		configuredPlanner, err := getConfiguredPlanner(vschema, buildSelectPlan, stmt, query, oldHorizonPlanner)
 		if err != nil {
 			return nil, err
 		}
 		return buildRoutePlan(stmt, reservedVars, vschema, configuredPlanner)
 	case *sqlparser.Insert:
-		configuredPlanner, err := getConfiguredPlanner(vschema, buildInsertPlan, stmt, query)
+		configuredPlanner, err := getConfiguredPlanner(vschema, buildInsertPlan, stmt, query, oldHorizonPlanner)
 		if err != nil {
 			return nil, err
 		}
 		return buildRoutePlan(stmt, reservedVars, vschema, configuredPlanner)
 	case *sqlparser.Update:
-		configuredPlanner, err := getConfiguredPlanner(vschema, buildUpdatePlan, stmt, query)
+		configuredPlanner, err := getConfiguredPlanner(vschema, buildUpdatePlan, stmt, query, oldHorizonPlanner)
 		if err != nil {
 			return nil, err
 		}
 		return buildRoutePlan(stmt, reservedVars, vschema, configuredPlanner)
 	case *sqlparser.Delete:
-		configuredPlanner, err := getConfiguredPlanner(vschema, buildDeletePlan, stmt, query)
+		configuredPlanner, err := getConfiguredPlanner(vschema, buildDeletePlan, stmt, query, oldHorizonPlanner)
 		if err != nil {
 			return nil, err
 		}
 		return buildRoutePlan(stmt, reservedVars, vschema, configuredPlanner)
 	case *sqlparser.Union:
-		configuredPlanner, err := getConfiguredPlanner(vschema, buildUnionPlan, stmt, query)
+		configuredPlanner, err := getConfiguredPlanner(vschema, buildUnionPlan, stmt, query, oldHorizonPlanner)
 		if err != nil {
 			return nil, err
 		}

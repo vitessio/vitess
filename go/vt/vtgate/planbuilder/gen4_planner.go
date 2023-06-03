@@ -29,11 +29,11 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
-func gen4Planner(query string, plannerVersion querypb.ExecuteOptions_PlannerVersion) stmtPlanner {
+func gen4Planner(query string, plannerVersion querypb.ExecuteOptions_PlannerVersion, useOldHorizonPlanner bool) stmtPlanner {
 	return func(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema) (*planResult, error) {
 		switch stmt := stmt.(type) {
 		case sqlparser.SelectStatement:
-			return gen4SelectStmtPlanner(query, plannerVersion, stmt, reservedVars, vschema)
+			return gen4SelectStmtPlanner(query, plannerVersion, stmt, reservedVars, vschema, useOldHorizonPlanner)
 		case *sqlparser.Update:
 			return gen4UpdateStmtPlanner(plannerVersion, stmt, reservedVars, vschema)
 		case *sqlparser.Delete:
@@ -52,6 +52,7 @@ func gen4SelectStmtPlanner(
 	stmt sqlparser.SelectStatement,
 	reservedVars *sqlparser.ReservedVars,
 	vschema plancontext.VSchema,
+	oldHorizonPlanner bool,
 ) (*planResult, error) {
 	switch node := stmt.(type) {
 	case *sqlparser.Select:
@@ -90,7 +91,7 @@ func gen4SelectStmtPlanner(
 	}
 
 	getPlan := func(selStatement sqlparser.SelectStatement) (logicalPlan, *semantics.SemTable, []string, error) {
-		return newBuildSelectPlan(selStatement, reservedVars, vschema, plannerVersion)
+		return newBuildSelectPlan(selStatement, reservedVars, vschema, plannerVersion, oldHorizonPlanner)
 	}
 
 	plan, _, tablesUsed, err := getPlan(stmt)
@@ -146,7 +147,7 @@ func gen4planSQLCalcFoundRows(vschema plancontext.VSchema, sel *sqlparser.Select
 }
 
 func planSelectGen4(reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, sel *sqlparser.Select) (*jointab, logicalPlan, []string, error) {
-	plan, _, tablesUsed, err := newBuildSelectPlan(sel, reservedVars, vschema, 0)
+	plan, _, tablesUsed, err := newBuildSelectPlan(sel, reservedVars, vschema, 0, false)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -172,6 +173,7 @@ func newBuildSelectPlan(
 	reservedVars *sqlparser.ReservedVars,
 	vschema plancontext.VSchema,
 	version querypb.ExecuteOptions_PlannerVersion,
+	oldHorizonPlanner bool,
 ) (plan logicalPlan, semTable *semantics.SemTable, tablesUsed []string, err error) {
 	ksName := ""
 	if ks, _ := vschema.DefaultKeyspace(); ks != nil {
@@ -184,7 +186,7 @@ func newBuildSelectPlan(
 	// record any warning as planner warning.
 	vschema.PlannerWarning(semTable.Warning)
 
-	ctx := plancontext.NewPlanningContext(reservedVars, semTable, vschema, version)
+	ctx := plancontext.NewPlanningContext(reservedVars, semTable, vschema, version, oldHorizonPlanner)
 
 	if ks, _ := semTable.SingleUnshardedKeyspace(); ks != nil {
 		plan, tablesUsed, err = selectUnshardedShortcut(ctx, selStmt, ks)
@@ -296,7 +298,7 @@ func gen4UpdateStmtPlanner(
 		return nil, err
 	}
 
-	ctx := plancontext.NewPlanningContext(reservedVars, semTable, vschema, version)
+	ctx := plancontext.NewPlanningContext(reservedVars, semTable, vschema, version, false)
 
 	op, err := operators.PlanQuery(ctx, updStmt)
 	if err != nil {
@@ -377,7 +379,7 @@ func gen4DeleteStmtPlanner(
 		return nil, err
 	}
 
-	ctx := plancontext.NewPlanningContext(reservedVars, semTable, vschema, version)
+	ctx := plancontext.NewPlanningContext(reservedVars, semTable, vschema, version, false)
 	op, err := operators.PlanQuery(ctx, deleteStmt)
 	if err != nil {
 		return nil, err
@@ -450,7 +452,7 @@ func gen4InsertStmtPlanner(version querypb.ExecuteOptions_PlannerVersion, insStm
 		return nil, err
 	}
 
-	ctx := plancontext.NewPlanningContext(reservedVars, semTable, vschema, version)
+	ctx := plancontext.NewPlanningContext(reservedVars, semTable, vschema, version, false)
 
 	op, err := operators.PlanQuery(ctx, insStmt)
 	if err != nil {

@@ -90,7 +90,7 @@ func (rb *routeGen4) WireupGen4(ctx *plancontext.PlanningContext) error {
 	}
 	reservedVars := sqlparser.NewReservedVars("vtg", reserved)
 
-	lookupPrimitive, err := gen4SelectStmtPlanner(query, querypb.ExecuteOptions_Gen4, stmt.(sqlparser.SelectStatement), reservedVars, ctx.VSchema)
+	lookupPrimitive, err := gen4SelectStmtPlanner(query, querypb.ExecuteOptions_Gen4, stmt.(sqlparser.SelectStatement), reservedVars, ctx.VSchema, false)
 	if err != nil {
 		return vterrors.Wrapf(err, "failed to plan the lookup query: [%s]", query)
 	}

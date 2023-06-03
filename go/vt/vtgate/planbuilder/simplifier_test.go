@@ -132,12 +132,12 @@ func keepSameError(query string, reservedVars *sqlparser.ReservedVars, vschema *
 	}
 	rewritten, _ := sqlparser.RewriteAST(stmt, vschema.currentDb(), sqlparser.SQLSelectLimitUnset, "", nil, nil)
 	ast := rewritten.AST
-	_, expected := BuildFromStmt(context.Background(), query, ast, reservedVars, vschema, rewritten.BindVarNeeds, true, true)
+	_, expected := BuildFromStmt(context.Background(), query, ast, reservedVars, vschema, rewritten.BindVarNeeds, true, true, false)
 	if expected == nil {
 		panic("query does not fail to plan")
 	}
 	return func(statement sqlparser.SelectStatement) bool {
-		_, myErr := BuildFromStmt(context.Background(), query, statement, reservedVars, vschema, needs, true, true)
+		_, myErr := BuildFromStmt(context.Background(), query, statement, reservedVars, vschema, needs, true, true, false)
 		if myErr == nil {
 			return false
 		}
@@ -159,7 +159,7 @@ func keepPanicking(query string, reservedVars *sqlparser.ReservedVars, vschema *
 			}
 		}()
 		log.Errorf("trying %s", sqlparser.String(statement))
-		_, _ = BuildFromStmt(context.Background(), query, statement, reservedVars, vschema, needs, true, true)
+		_, _ = BuildFromStmt(context.Background(), query, statement, reservedVars, vschema, needs, true, true, false)
 		log.Errorf("did not panic")
 
 		return false

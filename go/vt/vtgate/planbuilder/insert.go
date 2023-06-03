@@ -273,10 +273,10 @@ func getStatementAndPlanner(
 ) (selectStmt sqlparser.SelectStatement, configuredPlanner stmtPlanner, err error) {
 	switch stmt := ins.Rows.(type) {
 	case *sqlparser.Select:
-		configuredPlanner, err = getConfiguredPlanner(vschema, buildSelectPlan, stmt, "")
+		configuredPlanner, err = getConfiguredPlanner(vschema, buildSelectPlan, stmt, "", false)
 		selectStmt = stmt
 	case *sqlparser.Union:
-		configuredPlanner, err = getConfiguredPlanner(vschema, buildUnionPlan, stmt, "")
+		configuredPlanner, err = getConfiguredPlanner(vschema, buildUnionPlan, stmt, "", false)
 		selectStmt = stmt
 	default:
 		err = vterrors.VT12001(fmt.Sprintf("INSERT plan with %T", ins.Rows))

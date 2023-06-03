@@ -205,7 +205,7 @@ func buildAlterView(ctx context.Context, vschema plancontext.VSchema, ddl *sqlpa
 		return nil, nil, err
 	}
 
-	selectPlan, err := createInstructionFor(ctx, sqlparser.String(ddl.Select), ddl.Select, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
+	selectPlan, err := createInstructionFor(ctx, sqlparser.String(ddl.Select), ddl.Select, reservedVars, vschema, enableOnlineDDL, enableDirectDDL, false)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -247,7 +247,7 @@ func buildCreateView(ctx context.Context, vschema plancontext.VSchema, ddl *sqlp
 	}
 	ddl.ViewName.Qualifier = sqlparser.NewIdentifierCS("")
 
-	selectPlan, err := createInstructionFor(ctx, sqlparser.String(ddl.Select), ddl.Select, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
+	selectPlan, err := createInstructionFor(ctx, sqlparser.String(ddl.Select), ddl.Select, reservedVars, vschema, enableOnlineDDL, enableDirectDDL, false)
 	if err != nil {
 		return nil, nil, err
 	}

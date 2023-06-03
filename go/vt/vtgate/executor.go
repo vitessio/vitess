@@ -118,6 +118,9 @@ type Executor struct {
 	// truncateErrorLen truncates errors sent to client if they are above this value
 	// (0 means do not truncate).
 	truncateErrorLen int
+
+	// oldHorizonPlanner uses the v16 horizon planner
+	oldHorizonPlanner bool
 }
 
 var executorOnce sync.Once
@@ -138,20 +141,22 @@ func NewExecutor(
 	schemaTracker SchemaInfo,
 	noScatter bool,
 	pv plancontext.PlannerVersion,
+	oldHorizonPlanner bool,
 ) *Executor {
 	e := &Executor{
-		serv:            serv,
-		cell:            cell,
-		resolver:        resolver,
-		scatterConn:     resolver.scatterConn,
-		txConn:          resolver.scatterConn.txConn,
-		plans:           cache.NewDefaultCacheImpl(cacheCfg),
-		normalize:       normalize,
-		warnShardedOnly: warnOnShardedOnly,
-		streamSize:      streamSize,
-		schemaTracker:   schemaTracker,
-		allowScatter:    !noScatter,
-		pv:              pv,
+		serv:              serv,
+		cell:              cell,
+		resolver:          resolver,
+		scatterConn:       resolver.scatterConn,
+		txConn:            resolver.scatterConn.txConn,
+		plans:             cache.NewDefaultCacheImpl(cacheCfg),
+		normalize:         normalize,
+		warnShardedOnly:   warnOnShardedOnly,
+		streamSize:        streamSize,
+		schemaTracker:     schemaTracker,
+		allowScatter:      !noScatter,
+		pv:                pv,
+		oldHorizonPlanner: oldHorizonPlanner,
 	}
 
 	vschemaacl.Init()
@@ -1058,7 +1063,7 @@ func (e *Executor) cacheAndBuildStatement(
 		}
 	}
 
-	plan, err := planbuilder.BuildFromStmt(ctx, query, stmt, reservedVars, vcursor, bindVarNeeds, enableOnlineDDL, enableDirectDDL)
+	plan, err := planbuilder.BuildFromStmt(ctx, query, stmt, reservedVars, vcursor, bindVarNeeds, enableOnlineDDL, enableDirectDDL, e.oldHorizonPlanner)
 	if err != nil {
 		return nil, err
 	}

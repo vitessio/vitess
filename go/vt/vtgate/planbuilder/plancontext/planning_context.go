@@ -39,17 +39,26 @@ type PlanningContext struct {
 	// If we during planning have turned this expression into an argument name,
 	// we can continue using the same argument name
 	ReservedArguments map[sqlparser.Expr]string
+
+	UseOldHorizonPlanner bool
 }
 
-func NewPlanningContext(reservedVars *sqlparser.ReservedVars, semTable *semantics.SemTable, vschema VSchema, version querypb.ExecuteOptions_PlannerVersion) *PlanningContext {
+func NewPlanningContext(
+	reservedVars *sqlparser.ReservedVars,
+	semTable *semantics.SemTable,
+	vschema VSchema,
+	version querypb.ExecuteOptions_PlannerVersion,
+	useOldHorizonPlanner bool,
+) *PlanningContext {
 	ctx := &PlanningContext{
-		ReservedVars:      reservedVars,
-		SemTable:          semTable,
-		VSchema:           vschema,
-		JoinPredicates:    map[sqlparser.Expr][]sqlparser.Expr{},
-		SkipPredicates:    map[sqlparser.Expr]any{},
-		PlannerVersion:    version,
-		ReservedArguments: map[sqlparser.Expr]string{},
+		ReservedVars:         reservedVars,
+		SemTable:             semTable,
+		VSchema:              vschema,
+		JoinPredicates:       map[sqlparser.Expr][]sqlparser.Expr{},
+		SkipPredicates:       map[sqlparser.Expr]any{},
+		PlannerVersion:       version,
+		ReservedArguments:    map[sqlparser.Expr]string{},
+		UseOldHorizonPlanner: useOldHorizonPlanner,
 	}
 	return ctx
 }

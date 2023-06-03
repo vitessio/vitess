@@ -44,6 +44,7 @@ var (
 	normalize          bool
 	dbName             string
 	plannerVersionStr  string
+	oldHorizonPlanner  bool
 
 	numShards       = 2
 	replicationMode = "ROW"
@@ -62,6 +63,7 @@ func registerFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&ksShardMapFileFlag, "ks-shard-map-file", ksShardMapFileFlag, "File containing json blob of keyspace name -> shard name -> ShardReference object")
 	fs.StringVar(&replicationMode, "replication-mode", replicationMode, "The replication mode to simulate -- must be set to either ROW or STATEMENT")
 	fs.BoolVar(&normalize, "normalize", normalize, "Whether to enable vtgate normalization")
+	fs.BoolVar(&oldHorizonPlanner, "old-horizon-planner", false, "Falls back to using the V16 horizon planner")
 	fs.StringVar(&dbName, "dbname", dbName, "Optional database target to override normal routing")
 	fs.StringVar(&plannerVersionStr, "planner-version", plannerVersionStr, "Sets the query planner version to use when generating the explain output. Valid values are V3 and Gen4. An empty value will use VTGate's default planner")
 	fs.IntVar(&numShards, "shards", numShards, "Number of shards per keyspace. Passing --ks-shard-map/--ks-shard-map-file causes this flag to be ignored.")
@@ -138,12 +140,13 @@ func parseAndRun() error {
 	}
 
 	opts := &vtexplain.Options{
-		ExecutionMode:   executionMode,
-		PlannerVersion:  plannerVersion,
-		ReplicationMode: replicationMode,
-		NumShards:       numShards,
-		Normalize:       normalize,
-		Target:          dbName,
+		ExecutionMode:     executionMode,
+		PlannerVersion:    plannerVersion,
+		ReplicationMode:   replicationMode,
+		NumShards:         numShards,
+		Normalize:         normalize,
+		Target:            dbName,
+		OldHorizonPlanner: oldHorizonPlanner,
 	}
 
 	vte, err := vtexplain.Init(vschema, schema, ksShardMap, opts)
