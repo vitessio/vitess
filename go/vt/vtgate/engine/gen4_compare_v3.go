@@ -28,17 +28,11 @@ import (
 
 // Gen4CompareV3 is a Primitive used to compare V3 and Gen4's plans.
 type Gen4CompareV3 struct {
-	V3, Gen4   Primitive
-	HasOrderBy bool
+	V3, Gen4, Gen4MP Primitive
+	HasOrderBy       bool
 }
 
 var _ Primitive = (*Gen4CompareV3)(nil)
-var _ Gen4Comparer = (*Gen4CompareV3)(nil)
-
-// GetGen4Primitive implements the Gen4Comparer interface
-func (gc *Gen4CompareV3) GetGen4Primitive() Primitive {
-	return gc.Gen4
-}
 
 // RouteType implements the Primitive interface
 func (gc *Gen4CompareV3) RouteType() string {
@@ -68,9 +62,12 @@ func (gc *Gen4CompareV3) NeedsTransaction() bool {
 // TryExecute implements the Primitive interface
 func (gc *Gen4CompareV3) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	var v3Err, gen4Err error
-	v3Result, gen4Result := &sqltypes.Result{}, &sqltypes.Result{}
+	v3Result, gen4Result, gen4MPResult := &sqltypes.Result{}, &sqltypes.Result{}, &sqltypes.Result{}
 	if gc.Gen4 != nil {
 		gen4Result, gen4Err = gc.Gen4.TryExecute(ctx, vcursor, bindVars, wantfields)
+	}
+	if gc.Gen4MP != nil {
+		gen4MPResult, _ = gc.Gen4.TryExecute(ctx, vcursor, bindVars, wantfields)
 	}
 	if gc.V3 != nil {
 		v3Result, v3Err = gc.V3.TryExecute(ctx, vcursor, bindVars, wantfields)
@@ -80,7 +77,10 @@ func (gc *Gen4CompareV3) TryExecute(ctx context.Context, vcursor VCursor, bindVa
 		return nil, err
 	}
 
-	if err := gc.compareResults(v3Result, gen4Result); err != nil {
+	if err := gc.compareResults(v3Result, gen4Result, "v3", "Gen4"); err != nil {
+		return nil, err
+	}
+	if err := gc.compareResults(gen4Result, gen4MPResult, "Gen4", "Gen4 Minimal Planning"); err != nil {
 		return nil, err
 	}
 	return gen4Result, nil
@@ -113,13 +113,13 @@ func (gc *Gen4CompareV3) TryStreamExecute(ctx context.Context, vcursor VCursor, 
 		return err
 	}
 
-	if err := gc.compareResults(v3Result, gen4Result); err != nil {
+	if err := gc.compareResults(v3Result, gen4Result, "v3", "Gen4"); err != nil {
 		return err
 	}
 	return callback(gen4Result)
 }
 
-func (gc *Gen4CompareV3) compareResults(v3Result *sqltypes.Result, gen4Result *sqltypes.Result) error {
+func (gc *Gen4CompareV3) compareResults(v3Result, gen4Result *sqltypes.Result, lhs, rhs string) error {
 	var match bool
 	if gc.HasOrderBy {
 		match = sqltypes.ResultsEqual([]sqltypes.Result{*v3Result}, []sqltypes.Result{*gen4Result})
@@ -127,7 +127,7 @@ func (gc *Gen4CompareV3) compareResults(v3Result *sqltypes.Result, gen4Result *s
 		match = sqltypes.ResultsEqualUnordered([]sqltypes.Result{*v3Result}, []sqltypes.Result{*gen4Result})
 	}
 	if !match {
-		printMismatch(v3Result, gen4Result, gc.V3, gc.Gen4, "V3", "Gen4")
+		printMismatch(v3Result, gen4Result, gc.V3, gc.Gen4, lhs, rhs)
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "results did not match, see VTGate's logs for more information")
 	}
 	return nil

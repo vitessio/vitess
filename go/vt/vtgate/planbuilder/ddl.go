@@ -410,8 +410,8 @@ func tryToGetRoutePlan(selectPlan engine.Primitive) (valid bool, opCode engine.O
 	switch plan := selectPlan.(type) {
 	case *engine.Route:
 		return true, plan.Opcode
-	case engine.Gen4Comparer:
-		return tryToGetRoutePlan(plan.GetGen4Primitive())
+	case *engine.Gen4CompareV3:
+		return tryToGetRoutePlan(plan.Gen4)
 	default:
 		return false, engine.Opcode(0)
 	}

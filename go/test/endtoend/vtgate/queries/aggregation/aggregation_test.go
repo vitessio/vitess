@@ -126,10 +126,6 @@ func TestAggrOnJoin(t *testing.T) {
 		+----------+
 		1 row in set (0.00 sec)
 	*/
-
-	// same query but with minimal planning
-	mcmp.AssertMatches("select /*vt+ PLANNER=gen4 MINIMAL_PLANNING */ count(*) from aggr_test a join t3 t on a.val2 = t.id7",
-		"[[INT64(8)]]")
 	mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ a.val1, count(*) from aggr_test a join t3 t on a.val2 = t.id7 group by a.val1",
 		`[[VARCHAR("a") INT64(4)] [VARCHAR("b") INT64(2)] [VARCHAR("c") INT64(2)]]`)
 	/*

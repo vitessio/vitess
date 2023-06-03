@@ -31,10 +31,10 @@ func gen4CompareV3Planner(query string) func(sqlparser.Statement, *sqlparser.Res
 		// create instructions using them, thus we make sure to switch back to
 		// the Gen4CompareV3 planner before exiting this method.
 		defer ctxVSchema.SetPlannerVersion(Gen4CompareV3)
-		switch statement.(type) {
-		case *sqlparser.Select, *sqlparser.Union:
+
 		// These we can compare. Everything else we'll just use the Gen4 planner
-		default:
+		selStmt, ok := statement.(sqlparser.SelectStatement)
+		if !ok {
 			return planWithPlannerVersion(statement, vars, ctxVSchema, query, Gen4)
 		}
 
@@ -65,9 +65,18 @@ func gen4CompareV3Planner(query string) func(sqlparser.Statement, *sqlparser.Res
 			return nil, err
 		}
 
+		comments := selStmt.GetParsedComments().Prepend(sqlparser.DirectiveMinimalPlanning)
+		selStmt.SetComments(comments)
+
+		gen4MPPrimitive, err := planWithPlannerVersion(selStmt, vars, ctxVSchema, query, Gen4)
+		if err != nil {
+			return nil, err
+		}
+
 		primitive := &engine.Gen4CompareV3{
 			V3:         v3Primitive.primitive,
 			Gen4:       gen4Primitive.primitive,
+			Gen4MP:     gen4MPPrimitive.primitive,
 			HasOrderBy: hasOrderBy,
 		}
 
