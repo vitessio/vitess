@@ -186,6 +186,10 @@ func newBuildSelectPlan(
 	// record any warning as planner warning.
 	vschema.PlannerWarning(semTable.Warning)
 
+	if sqlparser.UseOldHorizonPlanner(selStmt) {
+		oldHorizonPlanner = true
+	}
+
 	ctx := plancontext.NewPlanningContext(reservedVars, semTable, vschema, version, oldHorizonPlanner)
 
 	if ks, _ := semTable.SingleUnshardedKeyspace(); ks != nil {
