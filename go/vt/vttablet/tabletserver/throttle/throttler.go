@@ -568,9 +568,6 @@ func (throttler *Throttler) readSelfMySQLThrottleMetric(ctx context.Context, pro
 
 // throttledAppsSnapshot returns a snapshot (a copy) of current throttled apps
 func (throttler *Throttler) throttledAppsSnapshot() map[string]cache.Item {
-	if throttler.throttledApps == nil {
-		return nil
-	}
 	return throttler.throttledApps.Items()
 }
 
