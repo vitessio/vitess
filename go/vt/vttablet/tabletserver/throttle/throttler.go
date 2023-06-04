@@ -91,7 +91,7 @@ func registerThrottlerFlags(fs *pflag.FlagSet) {
 }
 
 var (
-	ErrThrottlerNotReady = errors.New("throttler not enabled/ready")
+	ErrThrottlerNotOpen = errors.New("throttler not open")
 )
 
 // ThrottleCheckType allows a client to indicate what type of check it wants to issue. See available types below.
@@ -220,16 +220,6 @@ func NewThrottler(env tabletenv.Env, srvTopoServer srvtopo.Server, ts *topo.Serv
 	}
 
 	return throttler
-}
-
-// CheckIsReady checks if this throttler is ready to serve. If not, it
-// returns an error.
-func (throttler *Throttler) CheckIsReady() error {
-	if throttler.IsRunning() {
-		// all good
-		return nil
-	}
-	return ErrThrottlerNotReady
 }
 
 func (throttler *Throttler) StoreMetricsThreshold(threshold float64) {
@@ -370,6 +360,20 @@ func (throttler *Throttler) IsEnabled() bool {
 
 func (throttler *Throttler) IsOpen() bool {
 	return atomic.LoadInt64(&throttler.isOpen) > 0
+}
+
+// CheckIsOpen checks if this throttler is ready to serve. If not, it
+// returns an error.
+func (throttler *Throttler) CheckIsOpen() error {
+	if throttler.IsOpen() {
+		// all good
+		return nil
+	}
+	return ErrThrottlerNotOpen
+}
+
+func (throttler *Throttler) IsRunning() bool {
+	return throttler.IsOpen() && throttler.IsEnabled()
 }
 
 // Enable activates the throttler probes; when enabled, the throttler responds to check queries based on
@@ -564,6 +568,9 @@ func (throttler *Throttler) readSelfMySQLThrottleMetric(ctx context.Context, pro
 
 // throttledAppsSnapshot returns a snapshot (a copy) of current throttled apps
 func (throttler *Throttler) throttledAppsSnapshot() map[string]cache.Item {
+	if throttler.throttledApps == nil {
+		return nil
+	}
 	return throttler.throttledApps.Items()
 }
 
@@ -580,10 +587,6 @@ func (throttler *Throttler) ThrottledApps() (result []base.AppThrottle) {
 func (throttler *Throttler) isDormant() bool {
 	lastCheckTime := time.Unix(0, atomic.LoadInt64(&throttler.lastCheckTimeNano))
 	return time.Since(lastCheckTime) > dormantPeriod
-}
-
-func (throttler *Throttler) IsRunning() bool {
-	return throttler.IsOpen() && throttler.IsEnabled()
 }
 
 // Operate is the main entry point for the throttler operation and logic. It will
@@ -1046,7 +1049,7 @@ func (throttler *Throttler) AppRequestMetricResult(ctx context.Context, appName 
 
 // checkStore checks the aggregated value of given MySQL store
 func (throttler *Throttler) checkStore(ctx context.Context, appName string, storeName string, remoteAddr string, flags *CheckFlags) (checkResult *CheckResult) {
-	if !throttler.IsOpen() || !throttler.IsEnabled() {
+	if !throttler.IsRunning() {
 		return okMetricCheckResult
 	}
 	if throttlerapp.ExemptFromChecks(appName) {
