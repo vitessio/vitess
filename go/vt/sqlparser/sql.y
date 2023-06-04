@@ -121,6 +121,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
   columnType    ColumnType
   JSONTableSpec *JSONTableSpec
   JSONTableColDef *JSONTableColDef
+  JSONTableColOpts JSONTableColOpts
   columnOrder   *ColumnOrder
   triggerOrder  *TriggerOrder
   colKeyOpt     ColumnKeyOption
@@ -597,7 +598,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <tableExpr> json_table
 %type <JSONTableSpec> json_table_column_list
 %type <JSONTableColDef> json_table_column_definition
-%type <columnType> json_table_column_options
+%type <JSONTableColOpts> json_table_column_options
 %type <expr> val_on_empty val_on_error
 
 %start any_command
@@ -5781,7 +5782,7 @@ json_table:
 json_table_column_list:
   json_table_column_definition
   {
-    $$ = &JSONTableColSpec{}
+    $$ = &JSONTableSpec{}
     $$.AddColumn($1)
   }
 | json_table_column_list ',' json_table_column_definition
@@ -5796,17 +5797,17 @@ json_table_column_definition:
   }
 | reserved_sql_id FOR ORDINALITY
   {
-    $$ = &JSONTableColDef{Name: $1, Type: ColumnType{Type: "INTEGER", Unsigned: true, Autoincrement: true}, Opts: &JSONTableColOpts{ValOnEmpty: &NullVal{}, ValOnError: &NullVal{}}}
+    $$ = &JSONTableColDef{Name: $1, Type: ColumnType{Type: "INTEGER", Unsigned: true, Autoincrement: true}, Opts: JSONTableColOpts{ValOnEmpty: &NullVal{}, ValOnError: &NullVal{}}}
   }
 | NESTED STRING COLUMNS openb json_table_column_list closeb
   {
     $5.Nested = true
-    $$ = &JSONTableColDef{Path: string($2), Spec: $5}
+    $$ = &JSONTableColDef{Spec: $5}
   }
 | NESTED PATH STRING COLUMNS openb json_table_column_list closeb
   {
     $6.Nested = true
-    $$ = &JSONTableColDef{Path: string($2), Spec: $6}
+    $$ = &JSONTableColDef{Spec: $6}
   }
 
 json_table_column_options:
