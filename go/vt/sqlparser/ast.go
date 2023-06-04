@@ -2880,7 +2880,7 @@ func (ts *JSONTableSpec) AddColumn(cd *JSONTableColDef) {
 
 // Format formats the node.
 func (ts *JSONTableSpec) Format(buf *TrackedBuffer) {
-	buf.Myprintf("'%s' %s(", ts.Path, keywordStrings[COLUMNS])
+	buf.Myprintf("\"%s\" %s(", ts.Path, keywordStrings[COLUMNS])
 	for i, col := range ts.Columns {
 		if i == 0 {
 			buf.Myprintf("\n\t%v", col)
@@ -2917,7 +2917,7 @@ type JSONTableColDef struct {
 func (col *JSONTableColDef) Format(buf *TrackedBuffer) {
 	// TODO: NESTED
 	if col.Spec != nil {
-		buf.Myprintf("%s %v", keywordStrings[NESTED], col.Spec)
+		buf.Myprintf("%s %s %v", keywordStrings[NESTED], keywordStrings[PATH], col.Spec)
 		return
 	} else {
 		buf.Myprintf("%v %v %s %v", col.Name, &col.Type, keywordStrings[PATH], col.Opts)
@@ -2946,8 +2946,27 @@ type JSONTableColOpts struct {
 }
 
 // Format formats the node.
-func (opt *JSONTableColOpts) Format(buf *TrackedBuffer) {
-	buf.Myprintf("'%v'", opt.Path)
+func (opt JSONTableColOpts) Format(buf *TrackedBuffer) {
+	buf.Myprintf("\"%s\"", opt.Path)
+	if opt.ValOnEmpty != nil {
+        buf.Myprintf(" %v %s %s", opt.ValOnEmpty, keywordStrings[ON], keywordStrings[EMPTY])
+	}
+	if opt.ValOnError != nil {
+		buf.Myprintf(" %v %s %s ", opt.ValOnError, keywordStrings[ON], keywordStrings[ERROR])
+	}
+	if opt.ErrorOnEmpty {
+		buf.Myprintf(" %s %s %s", keywordStrings[ERROR], keywordStrings[ON], keywordStrings[EMPTY])
+	}
+	if opt.ErrorOnError {
+		buf.Myprintf(" %s %s %s", keywordStrings[ERROR], keywordStrings[ON], keywordStrings[ERROR])
+	}
+	if opt.Exists {
+		buf.Myprintf(" %s", keywordStrings[EXISTS])
+	}
+}
+
+func (opt JSONTableColOpts) walkSubtree(visit Visit) error {
+	return Walk(visit)
 }
 
 // IndexSpec describes an index operation in an ALTER statement

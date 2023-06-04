@@ -5797,31 +5797,33 @@ json_table_column_definition:
   }
 | reserved_sql_id FOR ORDINALITY
   {
-    $$ = &JSONTableColDef{Name: $1, Type: ColumnType{Type: "INTEGER", Unsigned: true, Autoincrement: true}, Opts: JSONTableColOpts{ValOnEmpty: &NullVal{}, ValOnError: &NullVal{}}}
+    $$ = &JSONTableColDef{Name: $1, Type: ColumnType{Type: "INTEGER", Unsigned: true, Autoincrement: true}}
   }
 | NESTED STRING COLUMNS openb json_table_column_list closeb
   {
     $5.Nested = true
+    $5.Path = string($2)
     $$ = &JSONTableColDef{Spec: $5}
   }
 | NESTED PATH STRING COLUMNS openb json_table_column_list closeb
   {
     $6.Nested = true
+    $6.Path = string($3)
     $$ = &JSONTableColDef{Spec: $6}
   }
 
 json_table_column_options:
   PATH STRING
   {
-    $$ = JSONTableColOpts{Path: string($2), ValOnEmpty: &NullVal{}, ValOnError: &NullVal{}}
+    $$ = JSONTableColOpts{Path: string($2)}
   }
 | PATH STRING val_on_empty
   {
-    $$ = JSONTableColOpts{Path: string($2), ValOnEmpty: $3, ValOnError: &NullVal{}}
+    $$ = JSONTableColOpts{Path: string($2), ValOnEmpty: $3}
   }
 | PATH STRING val_on_error
   {
-    $$ = JSONTableColOpts{Path: string($2), ValOnEmpty: &NullVal{}, ValOnError: $3}
+    $$ = JSONTableColOpts{Path: string($2), ValOnError: $3}
   }
 | PATH STRING val_on_empty val_on_error
   {
@@ -5833,23 +5835,23 @@ json_table_column_options:
   }
 | PATH STRING ERROR ON EMPTY
   {
-    $$ = JSONTableColOpts{Path: string($2), ErrorOnEmpty: true, ValOnEmpty: &NullVal{}, ValOnError: &NullVal{}}
+    $$ = JSONTableColOpts{Path: string($2), ErrorOnEmpty: true}
   }
 | PATH STRING ERROR ON ERROR
   {
-    $$ = JSONTableColOpts{Path: string($2), ErrorOnError: true, ValOnEmpty: &NullVal{}, ValOnError: &NullVal{}}
+    $$ = JSONTableColOpts{Path: string($2), ErrorOnError: true}
   }
 | PATH STRING ERROR ON EMPTY ERROR ON ERROR
   {
-    $$ = JSONTableColOpts{Path: string($2), ErrorOnEmpty: true, ErrorOnError: true, ValOnEmpty: &NullVal{}, ValOnError: &NullVal{}}
+    $$ = JSONTableColOpts{Path: string($2), ErrorOnEmpty: true, ErrorOnError: true}
   }
 | PATH STRING ERROR ON ERROR ERROR ON EMPTY
   {
-    $$ = JSONTableColOpts{Path: string($2), ErrorOnEmpty: true, ErrorOnError: true, ValOnEmpty: &NullVal{}, ValOnError: &NullVal{}}
+    $$ = JSONTableColOpts{Path: string($2), ErrorOnEmpty: true, ErrorOnError: true}
   }
 | EXISTS PATH STRING
   {
-    $$ = JSONTableColOpts{Path: string($3), ValOnEmpty: &NullVal{}, ValOnError: &NullVal{}, Exists: true}
+    $$ = JSONTableColOpts{Path: string($3), Exists: true}
   }
 
 val_on_empty:
