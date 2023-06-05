@@ -67,12 +67,14 @@ const (
 
 var (
 	// flag vars
-	throttleThreshold         = 1 * time.Second
-	throttleTabletTypes       = "replica"
-	throttleMetricQuery       string
-	throttleMetricThreshold   = math.MaxFloat64
-	throttlerCheckAsCheckSelf = false
-	throttlerConfigViaTopo    = false // unused. Remove in v19
+	defaultThrottleLagThreshold = 5 * time.Second
+	throttleTabletTypes         = "replica"
+
+	deprecatedThrottlerConfigViaTopo    = false // unused. Remove in v19
+	deprecatedThrottleThreshold         time.Duration
+	deprecatedThrottleMetricQuery       string
+	deprecatedThrottleMetricThreshold   float64
+	deprecatedThrottlerCheckAsCheckSelf bool
 )
 
 func init() {
@@ -83,11 +85,11 @@ func init() {
 func registerThrottlerFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&throttleTabletTypes, "throttle_tablet_types", throttleTabletTypes, "Comma separated VTTablet types to be considered by the throttler. default: 'replica'. example: 'replica,rdonly'. 'replica' aways implicitly included")
 
-	fs.DurationVar(&throttleThreshold, "throttle_threshold", throttleThreshold, "Replication lag threshold for default lag throttling")
-	fs.StringVar(&throttleMetricQuery, "throttle_metrics_query", throttleMetricQuery, "Override default heartbeat/lag metric. Use either `SELECT` (must return single row, single value) or `SHOW GLOBAL ... LIKE ...` queries. Set -throttle_metrics_threshold respectively.")
-	fs.Float64Var(&throttleMetricThreshold, "throttle_metrics_threshold", throttleMetricThreshold, "Override default throttle threshold, respective to --throttle_metrics_query")
-	fs.BoolVar(&throttlerCheckAsCheckSelf, "throttle_check_as_check_self", throttlerCheckAsCheckSelf, "Should throttler/check return a throttler/check-self result (changes throttler behavior for writes)")
-	fs.BoolVar(&throttlerConfigViaTopo, "throttler-config-via-topo", throttlerConfigViaTopo, "Deprecated, will be removed in v19. Assumed to be 'true'")
+	fs.DurationVar(&deprecatedThrottleThreshold, "throttle_threshold", deprecatedThrottleThreshold, "Replication lag threshold for default lag throttling")
+	fs.StringVar(&deprecatedThrottleMetricQuery, "throttle_metrics_query", deprecatedThrottleMetricQuery, "Override default heartbeat/lag metric. Use either `SELECT` (must return single row, single value) or `SHOW GLOBAL ... LIKE ...` queries. Set -throttle_metrics_threshold respectively.")
+	fs.Float64Var(&deprecatedThrottleMetricThreshold, "throttle_metrics_threshold", deprecatedThrottleMetricThreshold, "Override default throttle threshold, respective to --throttle_metrics_query")
+	fs.BoolVar(&deprecatedThrottlerCheckAsCheckSelf, "throttle_check_as_check_self", deprecatedThrottlerCheckAsCheckSelf, "Should throttler/check return a throttler/check-self result (changes throttler behavior for writes)")
+	fs.BoolVar(&deprecatedThrottlerConfigViaTopo, "throttler-config-via-topo", deprecatedThrottlerConfigViaTopo, "Deprecated, will be removed in v19. Assumed to be 'true'")
 }
 
 var (
@@ -144,6 +146,7 @@ type Throttler struct {
 
 	metricsQuery     atomic.Value
 	MetricsThreshold atomic.Uint64
+	checkAsCheckSelf int64
 
 	mysqlClusterThresholds *cache.Cache
 	aggregatedMetrics      *cache.Cache
@@ -214,10 +217,7 @@ func NewThrottler(env tabletenv.Env, srvTopoServer srvtopo.Server, ts *topo.Serv
 	throttler.initThrottleTabletTypes()
 	throttler.check = NewThrottlerCheck(throttler)
 
-	throttler.StoreMetricsThreshold(throttleThreshold.Seconds()) //default
-	if throttleMetricThreshold != math.MaxFloat64 {
-		throttler.StoreMetricsThreshold(throttleMetricThreshold) // override
-	}
+	throttler.StoreMetricsThreshold(defaultThrottleLagThreshold.Seconds()) //default
 
 	return throttler
 }
@@ -299,7 +299,7 @@ func (throttler *Throttler) normalizeThrottlerConfig(thottlerConfig *topodatapb.
 	if thottlerConfig.CustomQuery == "" {
 		// no custom query; we check replication lag
 		if thottlerConfig.Threshold == 0 {
-			thottlerConfig.Threshold = throttleThreshold.Seconds()
+			thottlerConfig.Threshold = defaultThrottleLagThreshold.Seconds()
 		}
 	}
 	return thottlerConfig
@@ -341,7 +341,12 @@ func (throttler *Throttler) applyThrottlerConfig(ctx context.Context, throttlerC
 		throttler.metricsQuery.Store(throttlerConfig.CustomQuery)
 	}
 	throttler.StoreMetricsThreshold(throttlerConfig.Threshold)
-	throttlerCheckAsCheckSelf = throttlerConfig.CheckAsCheckSelf
+	if throttlerConfig.CheckAsCheckSelf {
+		atomic.StoreInt64(&throttler.checkAsCheckSelf, 1)
+	} else {
+		atomic.StoreInt64(&throttler.checkAsCheckSelf, 0)
+	}
+
 	if throttlerConfig.Enabled {
 		go throttler.Enable(ctx)
 	} else {
@@ -420,8 +425,20 @@ func (throttler *Throttler) Disable(ctx context.Context) bool {
 // Open opens database pool and initializes the schema
 func (throttler *Throttler) Open() error {
 	// TODO: remove flag in v19
-	if throttlerConfigViaTopo {
+	if deprecatedThrottlerConfigViaTopo {
 		log.Warningf("The flag `--throttler_config_via_topo` is deprecated and will be removed in v19. Throttler config is always read from topo.")
+	}
+	if deprecatedThrottleThreshold != 0 {
+		log.Warningf("The flag `--throttle_threshold` is deprecated and will be removed in v19. Throttler config is always read from topo.")
+	}
+	if deprecatedThrottleMetricQuery != "" {
+		log.Warningf("The flag `--throttle_metrics_query` is deprecated and will be removed in v19. Throttler config is always read from topo.")
+	}
+	if deprecatedThrottleMetricThreshold != 0 {
+		log.Warningf("The flag `--throttle_metrics_threshold` is deprecated and will be removed in v19. Throttler config is always read from topo.")
+	}
+	if deprecatedThrottlerCheckAsCheckSelf {
+		log.Warningf("The flag `--throttle_check_as_check_self` is deprecated and will be removed in v19. Throttler config is always read from topo.")
 	}
 
 	log.Infof("Throttler: started execution of Open. Acquiring initMutex lock")
@@ -438,9 +455,6 @@ func (throttler *Throttler) Open() error {
 	// is not known when the TabletServer is created, which in turn creates the
 	// Throttler.
 	throttler.metricsQuery.Store(sqlparser.BuildParsedQuery(defaultReplicationLagQuery, sidecardb.GetIdentifier()).Query) // default
-	if throttleMetricQuery != "" {
-		throttler.metricsQuery.Store(throttleMetricQuery) // override
-	}
 	throttler.initConfig()
 	throttler.pool.Open(throttler.env.Config().DB.AppWithDB(), throttler.env.Config().DB.DbaWithDB(), throttler.env.Config().DB.AppDebugWithDB())
 	atomic.StoreInt64(&throttler.isOpen, 1)
@@ -1079,7 +1093,7 @@ func (throttler *Throttler) CheckByType(ctx context.Context, appName string, rem
 	case ThrottleCheckSelf:
 		return throttler.checkSelf(ctx, appName, remoteAddr, flags)
 	case ThrottleCheckPrimaryWrite:
-		if throttlerCheckAsCheckSelf {
+		if atomic.LoadInt64(&throttler.checkAsCheckSelf) != 0 {
 			return throttler.checkSelf(ctx, appName, remoteAddr, flags)
 		}
 		return throttler.checkShard(ctx, appName, remoteAddr, flags)
