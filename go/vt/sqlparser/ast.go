@@ -2915,7 +2915,6 @@ type JSONTableColDef struct {
 
 // Format formats the node.
 func (col *JSONTableColDef) Format(buf *TrackedBuffer) {
-	// TODO: NESTED
 	if col.Spec != nil {
 		buf.Myprintf("%s %s %v", keywordStrings[NESTED], keywordStrings[PATH], col.Spec)
 		return
