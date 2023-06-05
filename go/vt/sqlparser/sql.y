@@ -551,7 +551,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <partDef> partition_definition
 %type <partSpec> partition_operation
 %type <ReferenceAction> fk_reference_action fk_on_delete fk_on_update drop_statement_action
-%type <str> pk_name_opt constraint_symbol_opt infile_opt
+%type <str> pk_name_opt constraint_symbol_opt infile_opt ignore_or_replace_opt
 %type <exprs> call_param_list_opt
 %type <procedureParams> proc_param_list_opt proc_param_list
 %type <procedureParam> proc_param
@@ -653,9 +653,9 @@ command:
 }
 
 load_statement:
-  LOAD DATA local_opt infile_opt load_into_table_name opt_partition_clause charset_opt fields_opt lines_opt ignore_number_opt column_list_opt
+  LOAD DATA local_opt infile_opt ignore_or_replace_opt load_into_table_name opt_partition_clause charset_opt fields_opt lines_opt ignore_number_opt column_list_opt
   {
-    $$ = &Load{Local: $3, Infile: $4, Table: $5, Partition: $6, Charset: $7, Fields: $8, Lines: $9, IgnoreNum: $10, Columns: $11}
+    $$ = &Load{Local: $3, Infile: $4, IgnoreOrReplace: $5, Table: $6, Partition: $7, Charset: $8, Fields: $9, Lines: $10, IgnoreNum: $11, Columns: $12}
   }
 
 select_statement:
@@ -7591,6 +7591,13 @@ infile_opt:
   { $$ = string("") }
 | INFILE STRING
   { $$ = string($2)}
+
+ignore_or_replace_opt:
+  { $$ = string("") }
+| IGNORE
+  { $$ = IgnoreStr }
+| REPLACE
+  { $$ = ReplaceStr }
 
 local_opt:
   { $$ = BoolVal(false) }

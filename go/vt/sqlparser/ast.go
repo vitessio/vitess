@@ -766,6 +766,7 @@ type Load struct {
 	*Lines
 	IgnoreNum *SQLVal
 	Columns
+	IgnoreOrReplace string
 }
 
 func (*Load) iLoadStatement() {}
@@ -780,19 +781,24 @@ func (node *Load) Format(buf *TrackedBuffer) {
 		charset = " character set " + node.Charset
 	}
 
-	ignore := ""
+	ignoreNum := ""
 	if node.IgnoreNum != nil {
-		ignore = fmt.Sprintf(" ignore %v lines", node.IgnoreNum)
+		ignoreNum = fmt.Sprintf(" ignore %v lines", node.IgnoreNum)
 	}
 
 	if node.IgnoreNum == nil && node.Columns != nil {
-		ignore = " "
+		ignoreNum = " "
 	} else if node.IgnoreNum != nil && node.Columns != nil {
-		ignore += " "
+		ignoreNum += " "
 	}
 
-	buf.Myprintf("load data %sinfile '%s' into table %s%v%s%v%v%s%v", local, node.Infile, node.Table.String(),
-		node.Partition, charset, node.Fields, node.Lines, ignore, node.Columns)
+	ignoreOrReplace := node.IgnoreOrReplace
+	if ignoreOrReplace == ReplaceStr {
+		ignoreOrReplace += " "
+	}
+
+	buf.Myprintf("load data %sinfile '%s' %sinto table %s%v%s%v%v%s%v", local, node.Infile, ignoreOrReplace, node.Table.String(),
+		node.Partition, charset, node.Fields, node.Lines, ignoreNum, node.Columns)
 }
 
 func (node *Load) walkSubtree(visit Visit) error {
@@ -3391,7 +3397,7 @@ type ShowTablesOpt struct {
 }
 
 // Format formats the node.
-func (node *ShowTablesOpt)Format(buf *TrackedBuffer) {
+func (node *ShowTablesOpt) Format(buf *TrackedBuffer) {
 	if node == nil {
 		return
 	}
