@@ -331,7 +331,7 @@ func ensureRestoredGTIDPurgedMatchesManifest(ctx context.Context, manifest *Back
 	}
 	query = fmt.Sprintf("SET GLOBAL gtid_purged='%s'", gtid)
 	if _, err := params.Mysqld.FetchSuperQuery(ctx, query); err != nil {
-		return vterrors.Wrapf(err, "Applying`%s` after restore", query)
+		return vterrors.Wrapf(err, "failed to apply `%s` after restore", query)
 	}
 	return nil
 }
