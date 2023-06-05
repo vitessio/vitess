@@ -440,8 +440,8 @@ func (ab *aggBuilder) handleAggr(ctx *plancontext.PlanningContext, aggr Aggr) (A
 		return ab.handleCountStar(ctx, aggr)
 	case opcode.AggregateMax, opcode.AggregateMin, opcode.AggregateRandom:
 		return ab.handlePushThroughAggregation(ctx, aggr)
-	case opcode.AggregateCount:
-		return ab.handleCount(ctx, aggr)
+	case opcode.AggregateCount, opcode.AggregateSum:
+		return ab.handleAggrWithCountStarMultiplier(ctx, aggr)
 
 	case opcode.AggregateUnassigned:
 		return Aggr{}, vterrors.VT12001(fmt.Sprintf("in scatter query: aggregation function '%s'", sqlparser.String(aggr.Original)))
@@ -524,7 +524,7 @@ func (ab *aggBuilder) handleCountStar(ctx *plancontext.PlanningContext, aggr Agg
 	return aggr, nil
 }
 
-func (ab *aggBuilder) handleCount(ctx *plancontext.PlanningContext, aggr Aggr) (Aggr, error) {
+func (ab *aggBuilder) handleAggrWithCountStarMultiplier(ctx *plancontext.PlanningContext, aggr Aggr) (Aggr, error) {
 	ab.projectionRequired = true
 
 	expr := aggr.Original.Expr
