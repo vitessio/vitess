@@ -39,7 +39,7 @@ import (
 
 const (
 	customQuery               = "show global status like 'threads_running'"
-	customThreshold           = 5 * time.Second
+	customThreshold           = 5.0
 	unreasonablyLowThreshold  = 1 * time.Millisecond
 	extremelyHighThreshold    = 1 * time.Hour
 	onDemandHeartbeatDuration = 5 * time.Second
@@ -436,12 +436,17 @@ func TestCustomQuery(t *testing.T) {
 	defer cluster.PanicHandler(t)
 
 	t.Run("enabling throttler with custom query and threshold", func(t *testing.T) {
-		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, true, false, customThreshold.Seconds(), customQuery)
+		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, true, false, customThreshold, customQuery)
 		assert.NoError(t, err)
 
 		// Wait for the throttler to be enabled everywhere with new custom config.
-		for _, tablet := range clusterInstance.Keyspaces[0].Shards[0].Vttablets {
-			throttler.WaitForThrottlerStatusEnabled(t, tablet, true, &throttler.Config{Query: customQuery, Threshold: customThreshold.Seconds()}, throttlerEnabledTimeout)
+		expectConfig := &throttler.Config{Query: customQuery, Threshold: customThreshold}
+		for _, ks := range clusterInstance.Keyspaces {
+			for _, shard := range ks.Shards {
+				for _, tablet := range shard.Vttablets {
+					throttler.WaitForThrottlerStatusEnabled(t, tablet, true, expectConfig, throttlerEnabledTimeout)
+				}
+			}
 		}
 	})
 	t.Run("validating OK response from throttler with custom query", func(t *testing.T) {
@@ -453,13 +458,13 @@ func TestCustomQuery(t *testing.T) {
 	t.Run("test threads running", func(t *testing.T) {
 		sleepDuration := 20 * time.Second
 		var wg sync.WaitGroup
-		for i := 0; i < int(customThreshold.Seconds()); i++ {
+		for i := 0; i < int(customThreshold); i++ {
 			// Generate different Sleep() calls, all at minimum sleepDuration.
 			wg.Add(1)
-			go func(i int) {
+			go func() {
 				defer wg.Done()
-				vtgateExec(t, fmt.Sprintf("select sleep(%d)", int(sleepDuration.Seconds())+i), "")
-			}(i)
+				vtgateExec(t, fmt.Sprintf("select sleep(%d)", int(sleepDuration.Seconds())), "")
+			}()
 		}
 		t.Run("exceeds threshold", func(t *testing.T) {
 			throttler.WaitForQueryResult(t, primaryTablet,
