@@ -1274,7 +1274,7 @@ func (mysqld *Mysqld) ApplyBinlogFile(ctx context.Context, binlogFile string, re
 	}
 	// Wait for both to complete:
 	if err := mysqlbinlogCmd.Wait(); err != nil {
-		return vterrors.Wrapf(err, "waiting on mysqlbinlog command")
+		return vterrors.Wrapf(err, "mysqlbinlog command failed")
 	}
 	if err := mysqlCmd.Wait(); err != nil {
 		if mysqlErrFile != nil {
