@@ -1269,7 +1269,7 @@ func (mysqld *Mysqld) ApplyBinlogFile(ctx context.Context, binlogFile string, re
 		return err
 	}
 	if err := mysqlCmd.Start(); err != nil {
-		return vterrors.Wrapf(err, "starting mysql command")
+		return vterrors.Wrapf(err, "failed to start mysql")
 	}
 	// Wait for both to complete:
 	if err := mysqlbinlogCmd.Wait(); err != nil {
