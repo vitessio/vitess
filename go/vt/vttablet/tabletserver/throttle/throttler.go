@@ -72,7 +72,7 @@ var (
 	throttleMetricQuery       string
 	throttleMetricThreshold   = math.MaxFloat64
 	throttlerCheckAsCheckSelf = false
-	throttlerConfigViaTopo    = true
+	throttlerConfigViaTopo    = false // unused. Remove in v19
 )
 
 func init() {
@@ -87,7 +87,7 @@ func registerThrottlerFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&throttleMetricQuery, "throttle_metrics_query", throttleMetricQuery, "Override default heartbeat/lag metric. Use either `SELECT` (must return single row, single value) or `SHOW GLOBAL ... LIKE ...` queries. Set -throttle_metrics_threshold respectively.")
 	fs.Float64Var(&throttleMetricThreshold, "throttle_metrics_threshold", throttleMetricThreshold, "Override default throttle threshold, respective to --throttle_metrics_query")
 	fs.BoolVar(&throttlerCheckAsCheckSelf, "throttle_check_as_check_self", throttlerCheckAsCheckSelf, "Should throttler/check return a throttler/check-self result (changes throttler behavior for writes)")
-	fs.BoolVar(&throttlerConfigViaTopo, "throttler-config-via-topo", throttlerConfigViaTopo, "When 'true', read config from topo service and ignore throttle_threshold, throttle_metrics_threshold, throttle_metrics_query, throttle_check_as_check_self")
+	fs.BoolVar(&throttlerConfigViaTopo, "throttler-config-via-topo", throttlerConfigViaTopo, "Deprecated, will be removed in v19. Assumed to be 'true'")
 }
 
 var (
@@ -247,9 +247,7 @@ func (throttler *Throttler) InitDBConfig(keyspace, shard string) {
 	throttler.keyspace = keyspace
 	throttler.shard = shard
 
-	if throttlerConfigViaTopo {
-		throttler.srvTopoServer.WatchSrvKeyspace(context.Background(), throttler.cell, throttler.keyspace, throttler.WatchSrvKeyspaceCallback)
-	}
+	throttler.srvTopoServer.WatchSrvKeyspace(context.Background(), throttler.cell, throttler.keyspace, throttler.WatchSrvKeyspaceCallback)
 }
 
 func (throttler *Throttler) GetMetricsQuery() string {
@@ -336,9 +334,6 @@ func (throttler *Throttler) WatchSrvKeyspaceCallback(srvks *topodatapb.SrvKeyspa
 // This may cause the throttler to be enabled/disabled, and of course it affects the throttling query/threshold.
 // Note: you should be holding the initMutex when calling this function.
 func (throttler *Throttler) applyThrottlerConfig(ctx context.Context, throttlerConfig *topodatapb.ThrottlerConfig) {
-	if !throttlerConfigViaTopo {
-		return
-	}
 	log.Infof("Throttler: applying topo config: %+v", throttlerConfig)
 	if throttlerConfig.CustomQuery == "" {
 		throttler.metricsQuery.Store(sqlparser.BuildParsedQuery(defaultReplicationLagQuery, sidecardb.GetIdentifier()).Query)
@@ -424,6 +419,11 @@ func (throttler *Throttler) Disable(ctx context.Context) bool {
 
 // Open opens database pool and initializes the schema
 func (throttler *Throttler) Open() error {
+	// TODO: remove flag in v19
+	if throttlerConfigViaTopo {
+		log.Warningf("The flag `--throttler_config_via_topo` is deprecated and will be removed in v19. Throttler config is always read from topo.")
+	}
+
 	log.Infof("Throttler: started execution of Open. Acquiring initMutex lock")
 	throttler.initMutex.Lock()
 	defer throttler.initMutex.Unlock()
@@ -447,42 +447,41 @@ func (throttler *Throttler) Open() error {
 
 	throttler.ThrottleApp("always-throttled-app", time.Now().Add(time.Hour*24*365*10), defaultThrottleRatio)
 
-	if throttlerConfigViaTopo {
-		log.Infof("Throttler: throttler-config-via-topo detected")
-		// We want to read throttler config from topo and apply it.
-		// But also, we're in an Open() function, which blocks state manager's operation, and affects
-		// opening of all other components. We thus read the throttler config in the background.
-		// However, we want to handle a situation where the read errors out.
-		// So we kick a loop that keeps retrying reading the config, for as long as this throttler is open.
-		retryReadAndApplyThrottlerConfig := func() {
-			retryInterval := 10 * time.Second
-			retryTicker := time.NewTicker(retryInterval)
-			defer retryTicker.Stop()
-			for {
-				if !throttler.IsOpen() {
-					// Throttler is not open so no need to keep retrying.
-					log.Errorf("Throttler.retryReadAndApplyThrottlerConfig(): throttler no longer seems to be open, exiting")
-					return
-				}
-
-				throttlerConfig, err := throttler.readThrottlerConfig(ctx)
-				if err == nil {
-					log.Errorf("Throttler.retryReadAndApplyThrottlerConfig(): success reading throttler config: %+v", throttlerConfig)
-					// It's possible that during a retry-sleep, the throttler is closed and opened again, leading
-					// to two (or more) instances of this goroutine. That's not a big problem; it's fine if all
-					// attempt to read the throttler config; but we just want to ensure they don't step on each other
-					// while applying the changes.
-					throttler.initMutex.Lock()
-					defer throttler.initMutex.Unlock()
-					throttler.applyThrottlerConfig(ctx, throttlerConfig) // may issue an Enable
-					return
-				}
-				log.Errorf("Throttler.retryReadAndApplyThrottlerConfig(): error reading throttler config. Will retry in %v. Err=%+v", retryInterval, err)
-				<-retryTicker.C
+	log.Infof("Throttler: throttler-config-via-topo detected")
+	// We want to read throttler config from topo and apply it.
+	// But also, we're in an Open() function, which blocks state manager's operation, and affects
+	// opening of all other components. We thus read the throttler config in the background.
+	// However, we want to handle a situation where the read errors out.
+	// So we kick a loop that keeps retrying reading the config, for as long as this throttler is open.
+	retryReadAndApplyThrottlerConfig := func() {
+		retryInterval := 10 * time.Second
+		retryTicker := time.NewTicker(retryInterval)
+		defer retryTicker.Stop()
+		for {
+			if !throttler.IsOpen() {
+				// Throttler is not open so no need to keep retrying.
+				log.Errorf("Throttler.retryReadAndApplyThrottlerConfig(): throttler no longer seems to be open, exiting")
+				return
 			}
+
+			throttlerConfig, err := throttler.readThrottlerConfig(ctx)
+			if err == nil {
+				log.Errorf("Throttler.retryReadAndApplyThrottlerConfig(): success reading throttler config: %+v", throttlerConfig)
+				// It's possible that during a retry-sleep, the throttler is closed and opened again, leading
+				// to two (or more) instances of this goroutine. That's not a big problem; it's fine if all
+				// attempt to read the throttler config; but we just want to ensure they don't step on each other
+				// while applying the changes.
+				throttler.initMutex.Lock()
+				defer throttler.initMutex.Unlock()
+				throttler.applyThrottlerConfig(ctx, throttlerConfig) // may issue an Enable
+				return
+			}
+			log.Errorf("Throttler.retryReadAndApplyThrottlerConfig(): error reading throttler config. Will retry in %v. Err=%+v", retryInterval, err)
+			<-retryTicker.C
 		}
-		go retryReadAndApplyThrottlerConfig()
 	}
+	go retryReadAndApplyThrottlerConfig()
+
 	return nil
 }
 
