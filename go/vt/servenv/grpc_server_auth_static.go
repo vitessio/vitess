@@ -54,7 +54,7 @@ type StaticAuthPlugin struct {
 
 // Authenticate implements AuthPlugin interface. This method will be used inside a middleware in grpc_server to authenticate
 // incoming requests.
-func (sa *StaticAuthPlugin) Authenticate(ctx context.Context, fullMethod string) (context.Context, error) {
+func (sa *StaticAuthPlugin) Authenticate(ctx context.Context, fullMethod string) (context.Context, error) { // nolint:revive
 	if md, ok := metadata.FromIncomingContext(ctx); ok {
 		if len(md["username"]) == 0 || len(md["password"]) == 0 {
 			return nil, status.Errorf(codes.Unauthenticated, "username and password must be provided")

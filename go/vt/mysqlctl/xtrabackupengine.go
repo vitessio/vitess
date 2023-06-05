@@ -32,7 +32,6 @@ import (
 	"time"
 
 	"github.com/klauspost/pgzip"
-	"github.com/planetscale/pargzip"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/logutil"
@@ -271,7 +270,7 @@ func (be *XtrabackupEngine) backupFiles(ctx context.Context, params BackupParams
 
 	destWriters := []io.Writer{}
 	destBuffers := []*bufio.Writer{}
-	destCompressors := []io.WriteCloser{}
+	destCompressors := []*pgzip.Writer{}
 	for _, file := range destFiles {
 		buffer := bufio.NewWriterSize(file, writerBufferSize)
 		destBuffers = append(destBuffers, buffer)
@@ -279,10 +278,11 @@ func (be *XtrabackupEngine) backupFiles(ctx context.Context, params BackupParams
 
 		// Create the gzip compression pipe, if necessary.
 		if *backupStorageCompress {
-			compressor := pargzip.NewWriter(writer)
-			compressor.ChunkSize = *backupCompressBlockSize
-			compressor.Parallel = *backupCompressBlocks
-			compressor.CompressionLevel = pargzip.BestSpeed
+			compressor, err := pgzip.NewWriterLevel(writer, pgzip.BestSpeed)
+			if err != nil {
+				return replicationPosition, vterrors.Wrap(err, "cannot create gzip compressor")
+			}
+			compressor.SetConcurrency(*backupCompressBlockSize, *backupCompressBlocks)
 			writer = compressor
 			destCompressors = append(destCompressors, compressor)
 		}
@@ -308,6 +308,7 @@ func (be *XtrabackupEngine) backupFiles(ctx context.Context, params BackupParams
 		capture := false
 		for scanner.Scan() {
 			line := scanner.Text()
+			fmt.Fprintln(stderrBuilder, line)
 			params.Logger.Infof("xtrabackup stderr: %s", line)
 
 			// Wait until we see the first line of the binlog position.
@@ -522,7 +523,7 @@ func (be *XtrabackupEngine) extractFiles(ctx context.Context, logger logutil.Log
 	}()
 
 	srcReaders := []io.Reader{}
-	srcDecompressors := []io.ReadCloser{}
+	srcDecompressors := []*pgzip.Reader{}
 	for _, file := range srcFiles {
 		reader := io.Reader(file)
 
@@ -736,7 +737,7 @@ func copyToStripes(writers []io.Writer, reader io.Reader, blockSize int64) (writ
 	}
 
 	// Read blocks from source and round-robin them to destination writers.
-	// Since we put a buffer in front of the destination file, and pargzip has its
+	// Since we put a buffer in front of the destination file, and pgzip has its
 	// own buffer as well, we are writing into a buffer either way (whether a
 	// compressor is in the chain or not). That means these writes should not
 	// block often, so we shouldn't need separate goroutines here.

@@ -23656,9 +23656,12 @@ export namespace query {
 
         /** ExecuteOptions WorkloadName */
         WorkloadName?: (string|null);
+<<<<<<< HEAD
 
         /** ExecuteOptions priority */
         priority?: (string|null);
+=======
+>>>>>>> slack-vitess-r14.0.5
     }
 
     /** Represents an ExecuteOptions. */
@@ -23697,9 +23700,12 @@ export namespace query {
         /** ExecuteOptions WorkloadName. */
         public WorkloadName: string;
 
+<<<<<<< HEAD
         /** ExecuteOptions priority. */
         public priority: string;
 
+=======
+>>>>>>> slack-vitess-r14.0.5
         /**
          * Creates a new ExecuteOptions instance using the specified properties.
          * @param [properties] Properties to set

@@ -594,6 +594,7 @@ func TestAddQueryStats(t *testing.T) {
 		expectedQueryTimes            string
 		expectedQueryRowsAffected     string
 		expectedQueryRowsReturned     string
+		expectedQueryRowCounts        string
 		expectedQueryErrorCounts      string
 	}{
 		{
@@ -608,10 +609,11 @@ func TestAddQueryStats(t *testing.T) {
 			errorCode:                     "OK",
 			enablePerWorkloadTableMetrics: false,
 			workload:                      "some-workload",
-			expectedQueryCounts:           `{"A.Select": 1}`,
 			expectedQueryTimes:            `{"A.Select": 10}`,
 			expectedQueryRowsAffected:     `{}`,
 			expectedQueryRowsReturned:     `{"A.Select": 15}`,
+			expectedQueryRowCounts:        `{"A.Select": 0}`,
+			expectedQueryCounts:           `{"A.Select": 1}`,
 			expectedQueryErrorCounts:      `{"A.Select": 0}`,
 		}, {
 			name:                          "select into query",
@@ -629,6 +631,7 @@ func TestAddQueryStats(t *testing.T) {
 			expectedQueryTimes:            `{"A.Select": 10}`,
 			expectedQueryRowsAffected:     `{"A.Select": 15}`,
 			expectedQueryRowsReturned:     `{"A.Select": 0}`,
+			expectedQueryRowCounts:        `{"A.Select": 15}`,
 			expectedQueryErrorCounts:      `{"A.Select": 0}`,
 		}, {
 			name:                          "error",
@@ -646,6 +649,7 @@ func TestAddQueryStats(t *testing.T) {
 			expectedQueryTimes:            `{"A.Select": 10}`,
 			expectedQueryRowsAffected:     `{}`,
 			expectedQueryRowsReturned:     `{"A.Select": 0}`,
+			expectedQueryRowCounts:        `{"A.Select": 0}`,
 			expectedQueryErrorCounts:      `{"A.Select": 1}`,
 		}, {
 			name:                          "insert query",
@@ -663,6 +667,7 @@ func TestAddQueryStats(t *testing.T) {
 			expectedQueryTimes:            `{"A.Insert": 10}`,
 			expectedQueryRowsAffected:     `{"A.Insert": 15}`,
 			expectedQueryRowsReturned:     `{}`,
+			expectedQueryRowCounts:        `{"A.Insert": 15}`,
 			expectedQueryErrorCounts:      `{"A.Insert": 0}`,
 		}, {
 			name:                          "select query with per workload metrics",
@@ -680,6 +685,7 @@ func TestAddQueryStats(t *testing.T) {
 			expectedQueryTimes:            `{"A.Select.some-workload": 10}`,
 			expectedQueryRowsAffected:     `{}`,
 			expectedQueryRowsReturned:     `{"A.Select.some-workload": 15}`,
+			expectedQueryRowCounts:        `{"A.Select.some-workload": 0}`,
 			expectedQueryErrorCounts:      `{"A.Select.some-workload": 0}`,
 		}, {
 			name:                          "select into query with per workload metrics",
@@ -697,6 +703,7 @@ func TestAddQueryStats(t *testing.T) {
 			expectedQueryTimes:            `{"A.Select.some-workload": 10}`,
 			expectedQueryRowsAffected:     `{"A.Select.some-workload": 15}`,
 			expectedQueryRowsReturned:     `{"A.Select.some-workload": 0}`,
+			expectedQueryRowCounts:        `{"A.Select.some-workload": 15}`,
 			expectedQueryErrorCounts:      `{"A.Select.some-workload": 0}`,
 		}, {
 			name:                          "error with per workload metrics",
@@ -714,6 +721,7 @@ func TestAddQueryStats(t *testing.T) {
 			expectedQueryTimes:            `{"A.Select.some-workload": 10}`,
 			expectedQueryRowsAffected:     `{}`,
 			expectedQueryRowsReturned:     `{"A.Select.some-workload": 0}`,
+			expectedQueryRowCounts:        `{"A.Select.some-workload": 0}`,
 			expectedQueryErrorCounts:      `{"A.Select.some-workload": 1}`,
 		}, {
 			name:                          "insert query with per workload metrics",
@@ -731,6 +739,7 @@ func TestAddQueryStats(t *testing.T) {
 			expectedQueryTimes:            `{"A.Insert.some-workload": 10}`,
 			expectedQueryRowsAffected:     `{"A.Insert.some-workload": 15}`,
 			expectedQueryRowsReturned:     `{}`,
+			expectedQueryRowCounts:        `{"A.Insert.some-workload": 15}`,
 			expectedQueryErrorCounts:      `{"A.Insert.some-workload": 0}`,
 		},
 	}
@@ -749,6 +758,7 @@ func TestAddQueryStats(t *testing.T) {
 			assert.Equal(t, testcase.expectedQueryTimes, qe.queryTimes.String())
 			assert.Equal(t, testcase.expectedQueryRowsAffected, qe.queryRowsAffected.String())
 			assert.Equal(t, testcase.expectedQueryRowsReturned, qe.queryRowsReturned.String())
+			assert.Equal(t, testcase.expectedQueryRowCounts, qe.queryRowCounts.String())
 			assert.Equal(t, testcase.expectedQueryErrorCounts, qe.queryErrorCounts.String())
 		})
 	}

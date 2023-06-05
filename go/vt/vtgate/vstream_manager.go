@@ -24,8 +24,10 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/discovery"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
 
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
@@ -45,6 +47,9 @@ type vstreamManager struct {
 	resolver *srvtopo.Resolver
 	toposerv srvtopo.Server
 	cell     string
+
+	vstreamsCreated *stats.CountersWithMultiLabels
+	vstreamsLag     *stats.GaugesWithMultiLabels
 }
 
 // maxSkewTimeoutSeconds is the maximum allowed skew between two streams when the MinimizeSkew flag is set
@@ -115,10 +120,19 @@ type journalEvent struct {
 }
 
 func newVStreamManager(resolver *srvtopo.Resolver, serv srvtopo.Server, cell string) *vstreamManager {
+	exporter := servenv.NewExporter(cell, "VStreamManager")
 	return &vstreamManager{
 		resolver: resolver,
 		toposerv: serv,
 		cell:     cell,
+		vstreamsCreated: exporter.NewCountersWithMultiLabels(
+			"VStreamsCreated",
+			"Number of vstreams created",
+			[]string{"Keyspace", "ShardName", "TabletType"}),
+		vstreamsLag: exporter.NewGaugesWithMultiLabels(
+			"VStreamsLag",
+			"Difference between event current time and the binlog event timestamp",
+			[]string{"Keyspace", "ShardName", "TabletType"}),
 	}
 }
 
@@ -411,18 +425,46 @@ func (vs *vstream) alignStreams(ctx context.Context, event *binlogdatapb.VEvent,
 	}
 }
 
-func (vs *vstream) getCells() []string {
+// getCells determines the availability zones to select tablets from
+// 2 scenarios:
+//
+// 1. No cells specified by the client via the gRPC request:
+// Tablets from the local cell AND the cell alias that the VTGate's local cell belongs to will be selected.
+// The local cell of the VTGate will take precendence over any other cell in the alias.
+//
+// 2. Cells are specified by the client via the gRPC request
+// These cells will take precendence over the default cell and its alias and only tablets belonging to
+// the specified cells will be selected.
+// If the "local" tag is passed in as an option in the list of optCells,
+// the local cell of the VTGate will take precedence over any other cell specified.
+func (vs *vstream) getCells(ctx context.Context) []string {
 	var cells []string
 	if vs.optCells != "" {
-		for _, cell := range strings.Split(strings.TrimSpace(vs.optCells), ",") {
+		for i, cell := range strings.Split(strings.TrimSpace(vs.optCells), ",") {
+			// if the local tag is passed in, we must give local cell priority
+			// during tablet selection. Append the VTGate's local cell to the list of cells
+			if i == 0 && cell == "local" {
+				cells = append(cells, fmt.Sprintf("local:%s", vs.vsm.cell))
+				continue
+			}
 			cells = append(cells, strings.TrimSpace(cell))
 		}
 	}
 
+	// if no cell override provided in gRPC request, perform cell alias fallback
 	if len(cells) == 0 {
-		// use the vtgate's cell by default
-		cells = append(cells, vs.vsm.cell)
+		log.Info("[VSTREAM MANAGER] no cells specified by client, falling back to alias...")
+		// append the alias this cell belongs to, otherwise appends the vtgate's cell
+		alias := topo.GetAliasByCell(ctx, vs.ts, vs.vsm.cell)
+		// an alias was actually found
+		if alias != vs.vsm.cell {
+			// send in the vtgate's cell for local cell preference
+			cells = append(cells, fmt.Sprintf("local:%s", vs.vsm.cell))
+		}
+		cells = append(cells, alias)
 	}
+
+	log.Infof("[VSTREAM MANAGER] cells to pick from %v", cells)
 	return cells
 }
 
@@ -447,7 +489,7 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 
 		var eventss [][]*binlogdatapb.VEvent
 		var err error
-		cells := vs.getCells()
+		cells := vs.getCells(ctx)
 		tp, err := discovery.NewTabletPicker(vs.ts, cells, sgtid.Keyspace, sgtid.Shard, vs.tabletType.String())
 		if err != nil {
 			log.Errorf(err.Error())
@@ -497,9 +539,16 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 
 		log.Infof("Starting to vstream from %s", tablet.Alias.String())
 		// Safe to access sgtid.Gtid here (because it can't change until streaming begins).
+		var vstreamCreatedOnce sync.Once
 		err = tabletConn.VStream(ctx, target, sgtid.Gtid, sgtid.TablePKs, vs.filter, func(events []*binlogdatapb.VEvent) error {
 			// We received a valid event. Reset error count.
 			errCount = 0
+
+			labels := []string{sgtid.Keyspace, sgtid.Shard, target.TabletType.String()}
+
+			vstreamCreatedOnce.Do(func() {
+				vs.vsm.vstreamsCreated.Add(labels, 1)
+			})
 
 			select {
 			case <-ctx.Done():
@@ -580,6 +629,9 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 				default:
 					sendevents = append(sendevents, event)
 				}
+				lag := event.CurrentTime/1e9 - event.Timestamp
+				vs.vsm.vstreamsLag.Set(labels, lag)
+
 			}
 			if len(sendevents) != 0 {
 				eventss = append(eventss, sendevents)

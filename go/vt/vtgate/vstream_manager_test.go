@@ -275,6 +275,76 @@ func TestVStreamChunks(t *testing.T) {
 	assert.Equal(t, int32(100), ddlCount.Get())
 }
 
+func TestVStreamManagerGetCells(t *testing.T) {
+	type testArgs struct {
+		name        string
+		optCells    string
+		cellAlias   bool
+		resultCells []string
+	}
+
+	tcases := []*testArgs{
+		{"default-local", "", false, []string{"aa"}},
+		{"default-local-cell-alias", "", true, []string{"local:aa", "region1"}},
+		{"with-opt-cells", "local,bb,cc", true, []string{"local:aa", "bb", "cc"}},
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	cell := "aa"
+
+	ks := "TestVStream"
+	_ = createSandbox(ks)
+	hc := discovery.NewFakeHealthCheck(nil)
+	st := getSandboxTopo(ctx, cell, ks, []string{"-20", "20-40"})
+	vsm := newTestVStreamManager(hc, st, "aa")
+	ts, _ := st.GetTopoServer()
+
+	for _, tcase := range tcases {
+		t.Run(tcase.name, func(t *testing.T) {
+			vs := &vstream{
+				vgtid:              nil,
+				tabletType:         topodatapb.TabletType_PRIMARY,
+				optCells:           tcase.optCells,
+				filter:             nil,
+				send:               nil,
+				resolver:           nil,
+				journaler:          nil,
+				minimizeSkew:       false,
+				stopOnReshard:      true,
+				skewTimeoutSeconds: 0,
+				timestamps:         nil,
+				vsm:                vsm,
+				eventCh:            nil,
+				heartbeatInterval:  0,
+				ts:                 ts,
+			}
+
+			if tcase.cellAlias {
+				cellsAlias := &topodatapb.CellsAlias{
+					Cells: []string{"aa", "bb"},
+				}
+
+				assert.Nil(t, ts.CreateCellsAlias(context.Background(), "region1", cellsAlias), "failed to create cell alias")
+				defer cleanupGetCellTests(t, ts, "region1")
+			}
+
+			got := vs.getCells(ctx)
+			assert.Equal(t, len(got), len(tcase.resultCells))
+			assert.Equal(t, got, tcase.resultCells)
+		})
+	}
+}
+
+func cleanupGetCellTests(t *testing.T, ts *topo.Server, region string) {
+	if region != "" {
+		if err := ts.DeleteCellsAlias(context.Background(), region); err != nil {
+			t.Logf("DeleteCellsAlias(%s) failed: %v", region, err)
+		}
+	}
+}
+
 func TestVStreamMulti(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -335,6 +405,59 @@ func TestVStreamMulti(t *testing.T) {
 	if !proto.Equal(got, want) {
 		t.Errorf("VGtid:\n%v, want\n%v", got, want)
 	}
+}
+
+func TestVStreamsCreatedAndLagMetrics(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	cell := "aa"
+	ks := "TestVStream"
+	_ = createSandbox(ks)
+	hc := discovery.NewFakeHealthCheck(nil)
+	st := getSandboxTopo(ctx, cell, ks, []string{"-20", "20-40"})
+	vsm := newTestVStreamManager(hc, st, cell)
+	vsm.vstreamsCreated.ResetAll()
+	vsm.vstreamsLag.ResetAll()
+	sbc0 := hc.AddTestTablet(cell, "1.1.1.1", 1001, ks, "-20", topodatapb.TabletType_PRIMARY, true, 1, nil)
+	addTabletToSandboxTopo(t, st, ks, "-20", sbc0.Tablet())
+	sbc1 := hc.AddTestTablet(cell, "1.1.1.1", 1002, ks, "20-40", topodatapb.TabletType_PRIMARY, true, 1, nil)
+	addTabletToSandboxTopo(t, st, ks, "20-40", sbc1.Tablet())
+
+	send0 := []*binlogdatapb.VEvent{
+		{Type: binlogdatapb.VEventType_GTID, Gtid: "gtid01"},
+		{Type: binlogdatapb.VEventType_COMMIT, Timestamp: 10, CurrentTime: 15 * 1e9},
+	}
+	sbc0.AddVStreamEvents(send0, nil)
+
+	send1 := []*binlogdatapb.VEvent{
+		{Type: binlogdatapb.VEventType_GTID, Gtid: "gtid02"},
+		{Type: binlogdatapb.VEventType_COMMIT, Timestamp: 10, CurrentTime: 17 * 1e9},
+	}
+	sbc1.AddVStreamEvents(send1, nil)
+
+	vgtid := &binlogdatapb.VGtid{
+		ShardGtids: []*binlogdatapb.ShardGtid{{
+			Keyspace: ks,
+			Shard:    "-20",
+			Gtid:     "pos",
+		}, {
+			Keyspace: ks,
+			Shard:    "20-40",
+			Gtid:     "pos",
+		}},
+	}
+	ch := startVStream(ctx, t, vsm, vgtid, nil)
+	<-ch
+	<-ch
+	wantVStreamsCreated := make(map[string]int64)
+	wantVStreamsCreated["TestVStream.-20.PRIMARY"] = 1
+	wantVStreamsCreated["TestVStream.20-40.PRIMARY"] = 1
+	assert.Equal(t, wantVStreamsCreated, vsm.vstreamsCreated.Counts(), "vstreamsCreated matches")
+
+	wantVStreamsLag := make(map[string]int64)
+	wantVStreamsLag["TestVStream.-20.PRIMARY"] = 5
+	wantVStreamsLag["TestVStream.20-40.PRIMARY"] = 7
+	assert.Equal(t, wantVStreamsLag, vsm.vstreamsLag.Counts(), "vstreamsLag matches")
 }
 
 func TestVStreamRetry(t *testing.T) {
@@ -1095,7 +1218,8 @@ func startVStream(ctx context.Context, t *testing.T, vsm *vstreamManager, vgtid 
 func verifyEvents(t *testing.T, ch <-chan *binlogdatapb.VStreamResponse, wants ...*binlogdatapb.VStreamResponse) {
 	t.Helper()
 	for i, want := range wants {
-		got := <-ch
+		val := <-ch
+		got := proto.Clone(val).(*binlogdatapb.VStreamResponse)
 		require.NotNil(t, got)
 		for _, event := range got.Events {
 			event.Timestamp = 0

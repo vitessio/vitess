@@ -46,7 +46,7 @@ type MtlsAuthPlugin struct {
 
 // Authenticate implements Authenticator interface. This method will be used inside a middleware in grpc_server to authenticate
 // incoming requests.
-func (ma *MtlsAuthPlugin) Authenticate(ctx context.Context, fullMethod string) (context.Context, error) {
+func (ma *MtlsAuthPlugin) Authenticate(ctx context.Context, fullMethod string) (context.Context, error) { // nolint:revive
 	p, ok := peer.FromContext(ctx)
 	if !ok {
 		return nil, status.Errorf(codes.Unauthenticated, "no peer connection info")

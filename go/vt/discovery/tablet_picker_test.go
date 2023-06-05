@@ -364,6 +364,156 @@ func TestPickUsingCellAlias(t *testing.T) {
 	assert.True(t, picked2)
 }
 
+func TestPickLocalPreferences(t *testing.T) {
+	type tablet struct {
+		id   uint32
+		typ  topodatapb.TabletType
+		cell string
+	}
+
+	type testCase struct {
+		name string
+
+		//inputs
+		tablets       []tablet
+		inCells       []string
+		inTabletTypes string
+
+		//expected
+		tpLocalPreference string
+		tpCells           []string
+		wantTablets       []uint32
+	}
+
+	tcases := []testCase{
+		{
+			name: "local preference",
+			tablets: []tablet{
+				{101, topodatapb.TabletType_REPLICA, "cell1"},
+				{102, topodatapb.TabletType_REPLICA, "cell2"},
+				{103, topodatapb.TabletType_REPLICA, "cell2"},
+			},
+			inCells:           []string{"local:cell2", "cell1"},
+			inTabletTypes:     "replica",
+			tpLocalPreference: "cell2",
+			tpCells:           []string{"cell1", "cell2"},
+			wantTablets:       []uint32{102, 103},
+		},
+		{
+			name: "local preference with cell alias",
+			tablets: []tablet{
+				{101, topodatapb.TabletType_REPLICA, "cell1"},
+				{102, topodatapb.TabletType_REPLICA, "cell2"},
+			},
+			inCells:           []string{"local:cell2", "cella"},
+			inTabletTypes:     "replica",
+			tpLocalPreference: "cell2",
+			tpCells:           []string{"cella", "cell2"},
+			wantTablets:       []uint32{102},
+		},
+		{
+			name: "local preference with tablet type ordering, replica",
+			tablets: []tablet{
+				{101, topodatapb.TabletType_REPLICA, "cell1"},
+				{102, topodatapb.TabletType_REPLICA, "cell1"},
+				{103, topodatapb.TabletType_PRIMARY, "cell2"},
+				{104, topodatapb.TabletType_REPLICA, "cell2"},
+			},
+			inCells:           []string{"local:cell2", "cella"},
+			inTabletTypes:     "in_order:replica,primary",
+			tpLocalPreference: "cell2",
+			tpCells:           []string{"cella", "cell2"},
+			wantTablets:       []uint32{104},
+		},
+		{
+			name: "no local preference with tablet type ordering, primary",
+			tablets: []tablet{
+				{101, topodatapb.TabletType_REPLICA, "cell1"},
+				{102, topodatapb.TabletType_PRIMARY, "cell1"},
+				{103, topodatapb.TabletType_REPLICA, "cell2"},
+				{104, topodatapb.TabletType_REPLICA, "cell2"},
+			},
+			inCells:           []string{"cell2", "cella"},
+			inTabletTypes:     "in_order:primary,replica",
+			tpLocalPreference: "",
+			tpCells:           []string{"cella", "cell2"},
+			wantTablets:       []uint32{102},
+		},
+		{
+			name: "local preference with tablet type ordering, primary in local",
+			tablets: []tablet{
+				{101, topodatapb.TabletType_REPLICA, "cell1"},
+				{102, topodatapb.TabletType_REPLICA, "cell1"},
+				{103, topodatapb.TabletType_PRIMARY, "cell2"},
+				{104, topodatapb.TabletType_REPLICA, "cell2"},
+			},
+			inCells:           []string{"local:cell2", "cella"},
+			inTabletTypes:     "in_order:primary,replica",
+			tpLocalPreference: "cell2",
+			tpCells:           []string{"cella", "cell2"},
+			wantTablets:       []uint32{103},
+		},
+		{
+			name: "local preference with tablet type ordering, primary not local",
+			tablets: []tablet{
+				{101, topodatapb.TabletType_PRIMARY, "cell1"},
+				{102, topodatapb.TabletType_REPLICA, "cell1"},
+				{103, topodatapb.TabletType_REPLICA, "cell2"},
+				{104, topodatapb.TabletType_REPLICA, "cell2"},
+			},
+			inCells:           []string{"local:cell2", "cella"},
+			inTabletTypes:     "in_order:primary,replica",
+			tpLocalPreference: "cell2",
+			tpCells:           []string{"cella", "cell2"},
+			wantTablets:       []uint32{103, 104}, // replicas are picked because primary is not in the local cell/cell alias
+		},
+		{
+			name: "local preference with tablet type ordering, primary in local's alias",
+			tablets: []tablet{
+				{101, topodatapb.TabletType_PRIMARY, "cell1"},
+				{102, topodatapb.TabletType_REPLICA, "cell1"},
+			},
+			inCells:           []string{"local:cell2", "cella"},
+			inTabletTypes:     "in_order:primary,replica",
+			tpLocalPreference: "cell2",
+			tpCells:           []string{"cella", "cell2"},
+			wantTablets:       []uint32{101}, // primary found since there are no tablets in cell/cell alias
+		},
+	}
+
+	ctx := context.Background()
+	for _, tcase := range tcases {
+		t.Run(tcase.name, func(t *testing.T) {
+			cells := []string{"cell1", "cell2"}
+			te := newPickerTestEnv(t, cells)
+			var testTablets []*topodatapb.Tablet
+			for _, tab := range tcase.tablets {
+				testTablets = append(testTablets, addTablet(te, int(tab.id), tab.typ, tab.cell, true, true))
+			}
+			defer func() {
+				for _, tab := range testTablets {
+					deleteTablet(t, te, tab)
+				}
+			}()
+			tp, err := NewTabletPicker(te.topoServ, tcase.inCells, te.keyspace, te.shard, tcase.inTabletTypes)
+			require.NoError(t, err)
+			require.Equal(t, tp.localPreference, tcase.tpLocalPreference)
+			require.ElementsMatch(t, tp.cells, tcase.tpCells)
+			var selectedTablets []uint32
+			selectedTabletMap := make(map[uint32]bool)
+			for i := 0; i < 20; i++ {
+				tab, err := tp.PickForStreaming(ctx)
+				require.NoError(t, err)
+				selectedTabletMap[tab.Alias.Uid] = true
+			}
+			for uid := range selectedTabletMap {
+				selectedTablets = append(selectedTablets, uid)
+			}
+			require.ElementsMatch(t, selectedTablets, tcase.wantTablets)
+		})
+	}
+}
+
 func TestTabletAppearsDuringSleep(t *testing.T) {
 	te := newPickerTestEnv(t, []string{"cell"})
 	tp, err := NewTabletPicker(te.topoServ, te.cells, te.keyspace, te.shard, "replica")
