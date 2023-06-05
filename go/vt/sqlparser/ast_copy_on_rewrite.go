@@ -2838,7 +2838,7 @@ func (c *cow) copyOnRewriteRefOfInsert(n *Insert, parent SQLNode) (out SQLNode, 
 	out = n
 	if c.pre == nil || c.pre(n, parent) {
 		_Comments, changedComments := c.copyOnRewriteRefOfParsedComments(n.Comments, n)
-		_Table, changedTable := c.copyOnRewriteTableName(n.Table, n)
+		_Table, changedTable := c.copyOnRewriteRefOfAliasedTableExpr(n.Table, n)
 		_Partitions, changedPartitions := c.copyOnRewritePartitions(n.Partitions, n)
 		_Columns, changedColumns := c.copyOnRewriteColumns(n.Columns, n)
 		_Rows, changedRows := c.copyOnRewriteInsertRows(n.Rows, n)
@@ -2846,7 +2846,7 @@ func (c *cow) copyOnRewriteRefOfInsert(n *Insert, parent SQLNode) (out SQLNode, 
 		if changedComments || changedTable || changedPartitions || changedColumns || changedRows || changedOnDup {
 			res := *n
 			res.Comments, _ = _Comments.(*ParsedComments)
-			res.Table, _ = _Table.(TableName)
+			res.Table, _ = _Table.(*AliasedTableExpr)
 			res.Partitions, _ = _Partitions.(Partitions)
 			res.Columns, _ = _Columns.(Columns)
 			res.Rows, _ = _Rows.(InsertRows)

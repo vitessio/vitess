@@ -2907,7 +2907,7 @@ func (cmp *Comparator) RefOfInsert(a, b *Insert) bool {
 	return a.Action == b.Action &&
 		cmp.RefOfParsedComments(a.Comments, b.Comments) &&
 		a.Ignore == b.Ignore &&
-		cmp.TableName(a.Table, b.Table) &&
+		cmp.RefOfAliasedTableExpr(a.Table, b.Table) &&
 		cmp.Partitions(a.Partitions, b.Partitions) &&
 		cmp.Columns(a.Columns, b.Columns) &&
 		cmp.InsertRows(a.Rows, b.Rows) &&

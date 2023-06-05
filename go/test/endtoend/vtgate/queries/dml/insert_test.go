@@ -394,3 +394,60 @@ func TestRedactDupError(t *testing.T) {
 	// inserting same rows, throws error.
 	mcmp.AssertContainsError("insert into order_tbl(region_id, oid, cust_no) select region_id, oid, cust_no from order_tbl", `BindVars: {REDACTED}`)
 }
+
+// TestMixedCases test all the cases for insert when lookup column is also the auto increment column.
+func TestMixedCases(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+
+	tcases := []struct {
+		insQuery string
+		selQuery string
+		exp      string
+	}{{
+		// values are provided for all columns
+		insQuery: "insert into mixed_tbl(shard_key, lkp_key) values (1, 1000)",
+		selQuery: "select * from mixed_tbl where lkp_key = 1000",
+		exp:      "[[INT64(1000) INT64(1)]]",
+	}, {
+		// lookup column value not provided - auto increment value should be used.
+		insQuery: "insert into mixed_tbl(shard_key) values (2)",
+		selQuery: "select * from mixed_tbl where lkp_key = 1",
+		exp:      "[[INT64(1) INT64(2)]]",
+	}, {
+		// lookup column value not provided in the select - auto increment value should be used.
+		insQuery: "insert into mixed_tbl(shard_key) select 3",
+		selQuery: "select * from mixed_tbl where lkp_key = 2",
+		exp:      "[[INT64(2) INT64(3)]]",
+	}, {
+		// lookup column value provided as NULL in the select - auto increment value should be used.
+		insQuery: "insert into mixed_tbl(shard_key, lkp_key) select 4, null",
+		selQuery: "select * from mixed_tbl where lkp_key = 3",
+		exp:      "[[INT64(3) INT64(4)]]",
+	}, {
+		// values are provided for all column in the select
+		insQuery: "insert into mixed_tbl(shard_key, lkp_key) select 5, 2000",
+		selQuery: "select * from mixed_tbl where lkp_key = 2000",
+		exp:      "[[INT64(2000) INT64(5)]]",
+	}, {
+		// multiple values are inserted - lookup column value not provided - use auto increment value
+		insQuery: "insert into mixed_tbl(shard_key) select shard_key from mixed_tbl order by shard_key desc",
+		selQuery: "select * from mixed_tbl where lkp_key between 4 and 8 order by lkp_key",
+		exp:      "[[INT64(4) INT64(5)] [INT64(5) INT64(4)] [INT64(6) INT64(3)] [INT64(7) INT64(2)] [INT64(8) INT64(1)]]",
+	}, {
+		// partial values are provided from lookup column - use auto increment value where missing.
+		insQuery: "insert into mixed_tbl(shard_key, lkp_key) (select 2, 3000 union select 5, null)",
+		selQuery: "select * from mixed_tbl where lkp_key in (9, 3000) order by lkp_key",
+		exp:      "[[INT64(9) INT64(5)] [INT64(3000) INT64(2)]]",
+	}}
+
+	for _, tc := range tcases {
+		t.Run(tc.insQuery, func(t *testing.T) {
+			utils.Exec(t, mcmp.VtConn, tc.insQuery)
+			utils.AssertMatches(t, mcmp.VtConn, tc.selQuery, tc.exp)
+		})
+	}
+
+	// final check count on the lookup vindex table.
+	utils.AssertMatches(t, mcmp.VtConn, "select count(*) from lkp_mixed_idx", "[[INT64(12)]]")
+}

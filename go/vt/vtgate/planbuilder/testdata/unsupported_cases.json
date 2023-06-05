@@ -183,17 +183,20 @@
   {
     "comment": "unsharded insert, unqualified names and auto-inc combined",
     "query": "insert into unsharded_auto select col from unsharded",
-    "plan": "VT12001: unsupported: auto-increment and SELECT in INSERT"
+    "v3-plan": "VT12001: unsupported: auto-increment and SELECT in INSERT",
+    "gen4-plan": "VT09004: INSERT should contain column list or the table should have authoritative columns in vschema"
   },
   {
     "comment": "unsharded insert, no col list with auto-inc",
     "query": "insert into unsharded_auto values(1,1)",
-    "plan": "VT13001: [BUG] column list required for tables with auto-inc columns"
+    "v3-plan": "VT13001: [BUG] column list required for tables with auto-inc columns",
+    "gen4-plan": "VT09004: INSERT should contain column list or the table should have authoritative columns in vschema"
   },
   {
     "comment": "unsharded insert, col list does not match values",
     "query": "insert into unsharded_auto(id, val) values(1)",
-    "plan": "VT13001: [BUG] column list does not match values"
+    "v3-plan": "VT13001: [BUG] column list does not match values",
+    "gen4-plan": "VT03006: column count does not match value count at row 1"
   },
   {
     "comment": "sharded upsert can't change vindex",
@@ -498,5 +501,10 @@
     "query": "select max(u.foo*ue.bar) from user u join user_extra ue",
     "v3-plan": "VT12001: unsupported: cross-shard query with aggregates",
     "gen4-plan": "VT12001: unsupported: aggregation on columns from different sources: max(u.foo * ue.bar)"
+  },
+  {
+    "comment": "extremum on input from both sides",
+    "query": "insert into music(user_id, id) select foo, bar from music on duplicate key update id = id+1",
+    "plan": "VT12001: unsupported: DML cannot update vindex column"
   }
 ]

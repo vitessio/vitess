@@ -269,3 +269,17 @@ func (e *AmbiguousColumnError) ErrorState() vterrors.State {
 func (e *AmbiguousColumnError) ErrorCode() vtrpcpb.Code {
 	return vtrpcpb.Code_INVALID_ARGUMENT
 }
+
+type UnsupportedConstruct struct {
+	errString string
+}
+
+func (e *UnsupportedConstruct) unsupported() {}
+
+func (e *UnsupportedConstruct) ErrorCode() vtrpcpb.Code {
+	return vtrpcpb.Code_UNIMPLEMENTED
+}
+
+func (e *UnsupportedConstruct) Error() string {
+	return eprintf(e, e.errString)
+}
