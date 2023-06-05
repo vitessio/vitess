@@ -424,10 +424,6 @@ func (throttler *Throttler) Disable(ctx context.Context) bool {
 
 // Open opens database pool and initializes the schema
 func (throttler *Throttler) Open() error {
-	// TODO: remove `EnableLagThrottler` in v18
-	if throttler.env.Config().EnableLagThrottler {
-		log.Warningf("The flags `--enable_lag_throttler` and `--throttle_threshold` will be removed in v18. Use 'vtctl UpdateThrottlerConfig', see https://vitess.io/docs/17.0/reference/programs/vtctldclient/vtctldclient_updatethrottlerconfig/")
-	}
 	log.Infof("Throttler: started execution of Open. Acquiring initMutex lock")
 	throttler.initMutex.Lock()
 	defer throttler.initMutex.Unlock()
@@ -486,12 +482,6 @@ func (throttler *Throttler) Open() error {
 			}
 		}
 		go retryReadAndApplyThrottlerConfig()
-	} else {
-		// backwards-cmpatible: check for --enable-lag-throttler flag in vttablet
-		// this will be removed in a future version
-		if throttler.env.Config().EnableLagThrottler {
-			go throttler.Enable(ctx)
-		}
 	}
 	return nil
 }
