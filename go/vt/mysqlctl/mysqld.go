@@ -1222,7 +1222,7 @@ func (mysqld *Mysqld) ApplyBinlogFile(ctx context.Context, binlogFile string, re
 		}
 		cnf, err := mysqld.defaultsExtraFile(params)
 		if err != nil {
-			return vterrors.Wrapf(err, "creating default extra file")
+			return vterrors.Wrapf(err, "failed to create defaults extra file")
 		}
 		defer os.Remove(cnf)
 		args := []string{
