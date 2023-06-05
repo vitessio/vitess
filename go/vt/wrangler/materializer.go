@@ -72,7 +72,7 @@ const (
 )
 
 // addTablesToVSchema adds tables to an (unsharded) vschema if they are not already defined.
-// If copyVschema is true then we copy over the vschema table definitions from the source,
+// If copyVSchema is true then we copy over the vschema table definitions from the source,
 // otherwise we create empty ones.
 // For a migrate workflow we do not copy the vschema since the source keyspace is just a
 // proxy to import data into Vitess.
@@ -80,10 +80,10 @@ func (wr *Wrangler) addTablesToVSchema(ctx context.Context, sourceKeyspace strin
 	if targetVSchema.Tables == nil {
 		targetVSchema.Tables = make(map[string]*vschemapb.Table)
 	}
-	if copyVSchema { // If source keyspace is provided, copy over the vschema table definitions.
+	if copyVSchema {
 		srcVSchema, err := wr.ts.GetVSchema(ctx, sourceKeyspace)
 		if err != nil {
-			return err
+			return vterrors.Wrapf(err, "failed to get vschema for source keyspace %s", sourceKeyspace)
 		}
 		for _, table := range tables {
 			srcTable, sok := srcVSchema.Tables[table]
@@ -96,11 +96,11 @@ func (wr *Wrangler) addTablesToVSchema(ctx context.Context, sourceKeyspace strin
 				}
 			}
 		}
-	} else { // Create empty table definitions.
-		for _, table := range tables {
-			if _, tok := targetVSchema.Tables[table]; !tok {
-				targetVSchema.Tables[table] = &vschemapb.Table{}
-			}
+	}
+	// Ensure that each table at least has an empty definition on the target.
+	for _, table := range tables {
+		if _, tok := targetVSchema.Tables[table]; !tok {
+			targetVSchema.Tables[table] = &vschemapb.Table{}
 		}
 	}
 	return nil
