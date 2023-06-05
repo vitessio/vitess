@@ -14,6 +14,7 @@
   - **[New command line flags and behavior](#new-flag)**
     - [Builtin backup: read buffering flags](#builtin-backup-read-buffering-flags)
     - [Manifest backup external decompressor command](#manifest-backup-external-decompressor-command)
+    - [Throttler config via topo enabled by default](#throttler-config-via-topo)
   - **[New stats](#new-stats)**
     - [Detailed backup and restore stats](#detailed-backup-and-restore-stats)
     - [VTtablet Error count with code](#vttablet-error-count-with-code)
@@ -164,6 +165,12 @@ This feature enables the following flow:
             --manifest-external-decompressor="zstd -d"
     ```
  2. Restore that backup with a mere `Restore` command, without having to specify `--external-decompressor`.
+
+#### <a id="throttler-config-via-topo" />vttablet --throttler-config-via-topo
+
+This flag was introduced in v16 and defaulted to `false`. In v17 it defaults to `true`, and there is no need to supply it.
+
+Note that this flag overrides `--enable-lag-throttler` and `--throttle-threshold`, which now give warnings, and will be removed in v18.
 
 ### <a id="new-stats"/>New stats
 

@@ -171,8 +171,6 @@ func TestMain(m *testing.M) {
 		}
 
 		clusterInstance.VtTabletExtraArgs = []string{
-			"--throttler-config-via-topo",
-			"--heartbeat_enable",
 			"--heartbeat_interval", "250ms",
 			"--heartbeat_on_demand_duration", "5s",
 			"--migration_check_interval", "5s",
@@ -259,7 +257,7 @@ func TestSchemaChange(t *testing.T) {
 	err := clusterInstance.WaitForTabletsToHealthyInVtgate()
 	require.NoError(t, err)
 
-	_, err = throttler.UpdateThrottlerTopoConfig(clusterInstance, true, false, 0, "", false)
+	_, err = throttler.UpdateThrottlerTopoConfig(clusterInstance, true, false, 0, "")
 	require.NoError(t, err)
 
 	for _, ks := range clusterInstance.Keyspaces {
