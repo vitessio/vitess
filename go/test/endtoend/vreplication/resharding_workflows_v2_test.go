@@ -125,6 +125,7 @@ func tstWorkflowExec(t *testing.T, cells, workflow, sourceKs, targetKs, tables, 
 	if tabletTypes != "" {
 		args = append(args, "--tablet_types", tabletTypes)
 	}
+	args = append(args, "--timeout", time.Minute.String())
 	ksWorkflow := fmt.Sprintf("%s.%s", targetKs, workflow)
 	args = append(args, action, ksWorkflow)
 	output, err := vc.VtctlClient.ExecuteCommandWithOutput(args...)
