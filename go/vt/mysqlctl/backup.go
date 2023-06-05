@@ -327,7 +327,7 @@ func ensureRestoredGTIDPurgedMatchesManifest(ctx context.Context, manifest *Back
 	// This is not good. We want to apply a new @@gtid_purged value.
 	query := "RESET MASTER" // required dialect in 5.7
 	if _, err := params.Mysqld.FetchSuperQuery(ctx, query); err != nil {
-		return vterrors.Wrapf(err, "Issuing %v", query)
+		return vterrors.Wrapf(err, "error issuing %v", query)
 	}
 	query = fmt.Sprintf("SET GLOBAL gtid_purged='%s'", gtid)
 	if _, err := params.Mysqld.FetchSuperQuery(ctx, query); err != nil {
