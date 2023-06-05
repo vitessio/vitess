@@ -22,6 +22,7 @@ Usage of vtexplain:
       --logtostderr                                                 log to standard error instead of files
       --mysql_server_version string                                 MySQL server version to advertise. (default "8.0.30-Vitess")
       --normalize                                                   Whether to enable vtgate normalization
+      --old-horizon-planner                                         Falls back to using the V16 horizon planner
       --output-mode string                                          Output in human-friendly text or json (default "text")
       --planner-version string                                      Sets the query planner version to use when generating the explain output. Valid values are V3 and Gen4. An empty value will use VTGate's default planner
       --pprof strings                                               enable profiling
