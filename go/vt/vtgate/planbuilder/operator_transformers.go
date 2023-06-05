@@ -119,7 +119,7 @@ func transformDistinct(ctx *plancontext.PlanningContext, op *operators.Distinct)
 	if err != nil {
 		return nil, err
 	}
-	return newDistinct(src, op.Columns /*needToTruncate*/, false), nil
+	return newDistinct(src, op.Columns, op.Truncate), nil
 }
 
 func transformOrdering(ctx *plancontext.PlanningContext, op *operators.Ordering) (logicalPlan, error) {
@@ -683,7 +683,7 @@ func transformUnionPlan(ctx *plancontext.PlanningContext, op *operators.Union, i
 		if err != nil {
 			return nil, err
 		}
-		return newDistinct(result, checkCols, isRoot), nil
+		return newDistinctGen4Legacy(result, checkCols, isRoot), nil
 	}
 	return result, nil
 

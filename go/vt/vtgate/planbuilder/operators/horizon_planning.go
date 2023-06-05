@@ -193,6 +193,8 @@ func tryPushingDownDistinct(in *Distinct) (ops.Operator, *rewrite.ApplyResult, e
 		}
 	case *Distinct:
 		return src, rewrite.NewTree("removed double distinct", src), nil
+	case *Aggregator:
+		return in, rewrite.SameTree, nil
 	}
 
 	cols, err := in.Source.GetColumns()

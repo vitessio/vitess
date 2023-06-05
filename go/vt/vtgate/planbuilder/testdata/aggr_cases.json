@@ -6224,5 +6224,41 @@
         "user.user"
       ]
     }
+  },
+  {
+    "QueryType": "SELECT",
+    "Original": "select distinct count(*) from user group by col",
+    "Instructions": {
+      "OperatorType": "Distinct",
+      "Collations": [
+        "0"
+      ],
+      "ResultColumns": 1,
+      "Inputs": [
+        {
+          "OperatorType": "Aggregate",
+          "Variant": "Ordered",
+          "Aggregates": "sum_count_star(0) AS count(*)",
+          "GroupBy": "1",
+          "Inputs": [
+            {
+              "OperatorType": "Route",
+              "Variant": "Scatter",
+              "Keyspace": {
+                "Name": "user",
+                "Sharded": true
+              },
+              "FieldQuery": "select count(*), col from `user` where 1 != 1 group by col",
+              "OrderBy": "1 ASC",
+              "Query": "select count(*), col from `user` group by col order by col asc",
+              "Table": "`user`"
+            }
+          ]
+        }
+      ]
+    },
+    "TablesUsed": [
+      "user.user"
+    ]
   }
 ]
