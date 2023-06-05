@@ -318,7 +318,7 @@ func ensureRestoredGTIDPurgedMatchesManifest(ctx context.Context, manifest *Back
 	// As reminder, when restoring from a full backup, setting @@gtid_purged also sets @@gtid_executed.
 	restoredGTIDPurgedPos, err := params.Mysqld.GetGTIDPurged(ctx)
 	if err != nil {
-		return vterrors.Wrapf(err, "Reading gtid_purged after restore")
+		return vterrors.Wrapf(err, "failed to read gtid_purged after restore")
 	}
 	if restoredGTIDPurgedPos.Equal(manifest.Position) {
 		return nil
