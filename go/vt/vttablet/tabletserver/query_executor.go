@@ -968,7 +968,7 @@ func (qre *QueryExecutor) execShowMigrationLogs() (*sqltypes.Result, error) {
 }
 
 func (qre *QueryExecutor) execShowThrottledApps() (*sqltypes.Result, error) {
-	if err := qre.tsv.lagThrottler.CheckIsReady(); err != nil {
+	if err := qre.tsv.lagThrottler.CheckIsOpen(); err != nil {
 		return nil, err
 	}
 	if _, ok := qre.plan.FullStmt.(*sqlparser.ShowThrottledApps); !ok {
@@ -1007,7 +1007,7 @@ func (qre *QueryExecutor) execShowThrottlerStatus() (*sqltypes.Result, error) {
 		return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "Expecting SHOW VITESS_THROTTLER STATUS plan")
 	}
 	var enabled int32
-	if err := qre.tsv.lagThrottler.CheckIsReady(); err == nil {
+	if qre.tsv.lagThrottler.IsEnabled() {
 		enabled = 1
 	}
 	result := &sqltypes.Result{
