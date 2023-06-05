@@ -937,10 +937,10 @@ var (
 		}, {
 			input: "insert into a(a, b) values (1, ifnull(null, default(b)))",
 		}, {
-			input: "insert into a(a, b) value (1, ifnull(null, default(b)))",
+			input:  "insert into a(a, b) value (1, ifnull(null, default(b)))",
 			output: "insert into a(a, b) values (1, ifnull(null, default(b)))",
 		}, {
-			input: "insert into a value (1, ifnull(null, default(b)))",
+			input:  "insert into a value (1, ifnull(null, default(b)))",
 			output: "insert into a values (1, ifnull(null, default(b)))",
 		}, {
 			input: "insert /* qualified column list */ into a(a, b) values (1, 2)",
@@ -5517,11 +5517,23 @@ func TestLoadData(t *testing.T) {
 		input:  "LOAD DATA INFILE 'x.txt' INTO TABLE c",
 		output: "load data infile 'x.txt' into table c",
 	}, {
+		input:  "LOAD DATA INFILE 'x.txt' IGNORE INTO TABLE c",
+		output: "load data infile 'x.txt' ignore into table c",
+	}, {
+		input:  "LOAD DATA INFILE 'x.txt' REPLACE INTO TABLE c",
+		output: "load data infile 'x.txt' replace into table c",
+	}, {
 		input:  "LOAD DATA INFILE '~/Desktop/x.txt' INTO TABLE c",
 		output: "load data infile '~/Desktop/x.txt' into table c",
 	}, {
 		input:  "LOAD DATA LOCAL INFILE ':SOURCE:9fa1415b62a44b53b86cffbccb210b51' INTO TABLE test",
 		output: "load data local infile ':SOURCE:9fa1415b62a44b53b86cffbccb210b51' into table test",
+	}, {
+		input:  "LOAD DATA LOCAL INFILE ':SOURCE:9fa1415b62a44b53b86cffbccb210b51' IGNORE INTO TABLE test",
+		output: "load data local infile ':SOURCE:9fa1415b62a44b53b86cffbccb210b51' ignore into table test",
+	}, {
+		input:  "LOAD DATA LOCAL INFILE ':SOURCE:9fa1415b62a44b53b86cffbccb210b51' REPLACE INTO TABLE test",
+		output: "load data local infile ':SOURCE:9fa1415b62a44b53b86cffbccb210b51' replace into table test",
 	}, {
 		input:  "LOAD DATA LOCAL INFILE ':SOURCE:9fa1415b62a44b53b86cffbccb210b51' INTO TABLE test PARTITION (id)",
 		output: "load data local infile ':SOURCE:9fa1415b62a44b53b86cffbccb210b51' into table test partition (id)",
