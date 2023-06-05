@@ -110,7 +110,7 @@ func ChooseBinlogsForIncrementalBackup(
 		if incrementalBackupFromGTID == "" {
 			// This can happen on the very first binary log file. It happens in two scenarios:
 			// 1. This is the first binlog ever in the history of the mysql server; the GTID is truly empty
-			// 2. A full backup was taken and restored, with all binlog scraped.
+			// 2. A full backup was taken and restored, with all binlog scrapped.
 			// We take for granted that the first binary log file covers the
 			// requested "from GTID"
 			incrementalBackupFromGTID = backupFromGTIDSet.String()
