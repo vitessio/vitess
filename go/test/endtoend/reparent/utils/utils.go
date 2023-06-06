@@ -240,6 +240,10 @@ func setupClusterLegacy(ctx context.Context, t *testing.T, shardName string, cel
 	shard := &cluster.Shard{Name: shardName}
 	shard.Vttablets = tablets
 
+	disableReplicationFlag := "--disable_active_reparents"
+	if clusterInstance.VtTabletMajorVersion >= 15 {
+		disableReplicationFlag = "--disable-replication-manager"
+	}
 	clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs,
 		"--lock_tables_timeout", "5s",
 		"--init_populate_metadata",
@@ -256,7 +260,7 @@ func setupClusterLegacy(ctx context.Context, t *testing.T, shardName string, cel
 		// the replication manager to silently fix the replication in case ERS or PRS mess up. All the
 		// tests in this test suite should work irrespective of this flag. Each run of ERS, PRS should be
 		// setting up the replication correctly.
-		"--disable_active_reparents")
+		disableReplicationFlag)
 
 	// Initialize Cluster
 	err = clusterInstance.SetupCluster(keyspace, []cluster.Shard{*shard})
@@ -296,6 +300,7 @@ func setupShardLegacy(ctx context.Context, t *testing.T, clusterInstance *cluste
 		// create database
 		err := tablet.VttabletProcess.CreateDB(KeyspaceName)
 		require.NoError(t, err)
+		tablet.VttabletProcess.SupportsBackup = false
 		// Start the tablet
 		err = tablet.VttabletProcess.Setup()
 		require.NoError(t, err)
@@ -327,7 +332,7 @@ func setupShardLegacy(ctx context.Context, t *testing.T, clusterInstance *cluste
 
 //endregion
 
-//region database queries
+// region database queries
 func getMysqlConnParam(tablet *cluster.Vttablet) mysql.ConnParams {
 	connParams := mysql.ConnParams{
 		Uname:      username,
