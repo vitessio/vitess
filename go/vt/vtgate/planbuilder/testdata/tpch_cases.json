@@ -273,22 +273,21 @@
                         "Variant": "Join",
                         "JoinColumnIndexes": "L:0,R:0,R:1,R:2",
                         "JoinVars": {
-                          "s_nationkey": 2
+                          "s_nationkey": 1
                         },
                         "TableName": "orders_customer_lineitem_supplier_nation_region",
                         "Inputs": [
                           {
                             "OperatorType": "Projection",
                             "Expressions": [
-                              "[COLUMN 0] as revenue",
-                              "[COLUMN 0] * [COLUMN 1] as revenue",
+                              "[COLUMN 1] * [COLUMN 0] as revenue",
                               "[COLUMN 2] as s_nationkey"
                             ],
                             "Inputs": [
                               {
                                 "OperatorType": "Join",
                                 "Variant": "Join",
-                                "JoinColumnIndexes": "R:0,L:0,R:2",
+                                "JoinColumnIndexes": "R:0,L:0,R:1",
                                 "JoinVars": {
                                   "c_nationkey": 2,
                                   "o_orderkey": 1
@@ -345,7 +344,6 @@
                                   {
                                     "OperatorType": "Projection",
                                     "Expressions": [
-                                      "[COLUMN 0] as revenue",
                                       "[COLUMN 0] * [COLUMN 1] as revenue",
                                       "[COLUMN 2] as s_nationkey"
                                     ],
@@ -795,69 +793,78 @@
                           {
                             "OperatorType": "Join",
                             "Variant": "Join",
-                            "JoinColumnIndexes": "L:1,R:0,R:1,R:2,R:3,R:4,R:5,R:6,R:7,R:8,R:9,R:10,R:11,R:12,R:13,R:14",
+                            "JoinColumnIndexes": "L:0,R:0,R:1,R:2,R:3,R:4,R:5,R:6,R:7,R:8,R:9,R:10,R:11,R:12,R:13,R:14",
                             "JoinVars": {
-                              "o_custkey": 0
+                              "o_custkey": 1
                             },
                             "TableName": "orders_lineitem_customer_nation",
                             "Inputs": [
                               {
-                                "OperatorType": "Join",
-                                "Variant": "Join",
-                                "JoinColumnIndexes": "L:0,R:0",
-                                "JoinVars": {
-                                  "o_orderkey": 1
-                                },
-                                "TableName": "orders_lineitem",
+                                "OperatorType": "Projection",
+                                "Expressions": [
+                                  "[COLUMN 1] * [COLUMN 0] as revenue",
+                                  "[COLUMN 2] as o_custkey"
+                                ],
                                 "Inputs": [
                                   {
-                                    "OperatorType": "Route",
-                                    "Variant": "Scatter",
-                                    "Keyspace": {
-                                      "Name": "main",
-                                      "Sharded": true
+                                    "OperatorType": "Join",
+                                    "Variant": "Join",
+                                    "JoinColumnIndexes": "R:0,L:0,L:1",
+                                    "JoinVars": {
+                                      "o_orderkey": 2
                                     },
-                                    "FieldQuery": "select o_custkey, o_orderkey from orders where 1 != 1 group by o_custkey, o_orderkey",
-                                    "Query": "select o_custkey, o_orderkey from orders where o_orderdate >= date('1993-10-01') and o_orderdate < date('1993-10-01') + interval '3' month group by o_custkey, o_orderkey",
-                                    "Table": "orders"
-                                  },
-                                  {
-                                    "OperatorType": "VindexLookup",
-                                    "Variant": "EqualUnique",
-                                    "Keyspace": {
-                                      "Name": "main",
-                                      "Sharded": true
-                                    },
-                                    "Values": [
-                                      ":o_orderkey"
-                                    ],
-                                    "Vindex": "lineitem_map",
+                                    "TableName": "orders_lineitem",
                                     "Inputs": [
                                       {
                                         "OperatorType": "Route",
-                                        "Variant": "IN",
+                                        "Variant": "Scatter",
                                         "Keyspace": {
                                           "Name": "main",
                                           "Sharded": true
                                         },
-                                        "FieldQuery": "select l_orderkey, l_linenumber from lineitem_map where 1 != 1",
-                                        "Query": "select l_orderkey, l_linenumber from lineitem_map where l_orderkey in ::__vals",
-                                        "Table": "lineitem_map",
-                                        "Values": [
-                                          "::l_orderkey"
-                                        ],
-                                        "Vindex": "md5"
+                                        "FieldQuery": "select count(*), o_custkey, o_orderkey from orders where 1 != 1 group by o_custkey, o_orderkey",
+                                        "Query": "select count(*), o_custkey, o_orderkey from orders where o_orderdate >= date('1993-10-01') and o_orderdate < date('1993-10-01') + interval '3' month group by o_custkey, o_orderkey",
+                                        "Table": "orders"
                                       },
                                       {
-                                        "OperatorType": "Route",
-                                        "Variant": "ByDestination",
+                                        "OperatorType": "VindexLookup",
+                                        "Variant": "EqualUnique",
                                         "Keyspace": {
                                           "Name": "main",
                                           "Sharded": true
                                         },
-                                        "FieldQuery": "select sum(l_extendedprice * (1 - l_discount)) from lineitem where 1 != 1 group by .0",
-                                        "Query": "select sum(l_extendedprice * (1 - l_discount)) from lineitem where l_returnflag = 'R' and l_orderkey = :o_orderkey group by .0",
-                                        "Table": "lineitem"
+                                        "Values": [
+                                          ":o_orderkey"
+                                        ],
+                                        "Vindex": "lineitem_map",
+                                        "Inputs": [
+                                          {
+                                            "OperatorType": "Route",
+                                            "Variant": "IN",
+                                            "Keyspace": {
+                                              "Name": "main",
+                                              "Sharded": true
+                                            },
+                                            "FieldQuery": "select l_orderkey, l_linenumber from lineitem_map where 1 != 1",
+                                            "Query": "select l_orderkey, l_linenumber from lineitem_map where l_orderkey in ::__vals",
+                                            "Table": "lineitem_map",
+                                            "Values": [
+                                              "::l_orderkey"
+                                            ],
+                                            "Vindex": "md5"
+                                          },
+                                          {
+                                            "OperatorType": "Route",
+                                            "Variant": "ByDestination",
+                                            "Keyspace": {
+                                              "Name": "main",
+                                              "Sharded": true
+                                            },
+                                            "FieldQuery": "select sum(l_extendedprice * (1 - l_discount)) as revenue from lineitem where 1 != 1 group by .0",
+                                            "Query": "select sum(l_extendedprice * (1 - l_discount)) as revenue from lineitem where l_returnflag = 'R' and l_orderkey = :o_orderkey group by .0",
+                                            "Table": "lineitem"
+                                          }
+                                        ]
                                       }
                                     ]
                                   }

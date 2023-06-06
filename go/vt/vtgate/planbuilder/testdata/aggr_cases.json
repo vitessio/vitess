@@ -3374,7 +3374,7 @@
             "OperatorType": "Projection",
             "Expressions": [
               "[COLUMN 2] as a",
-              "[COLUMN 0] * [COLUMN 1] as count(user_extra.a)",
+              "[COLUMN 1] * [COLUMN 0] as count(user_extra.a)",
               "[COLUMN 3] as weight_string(`user`.a)"
             ],
             "Inputs": [
@@ -3437,7 +3437,7 @@
             "OperatorType": "Projection",
             "Expressions": [
               "[COLUMN 0] * [COLUMN 1] as count(u.textcol1)",
-              "[COLUMN 2] * [COLUMN 3] as count(ue.foo)",
+              "[COLUMN 3] * [COLUMN 2] as count(ue.foo)",
               "[COLUMN 4] as bar",
               "[COLUMN 5] as weight_string(us.bar)"
             ],
@@ -6297,6 +6297,94 @@
       },
       "TablesUsed": [
         "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "multiple count star and a count with 3 table join",
+    "query": "select count(*), count(*), count(u.col) from user u, user u2, user_extra ue",
+    "v3-plan": "VT12001: unsupported: cross-shard query with aggregates",
+    "gen4-plan": {
+      "QueryType": "SELECT",
+      "Original": "select count(*), count(*), count(u.col) from user u, user u2, user_extra ue",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "sum_count_star(0) AS count(*), sum_count_star(1) AS count(*), sum_count(2) AS count(u.col)",
+        "Inputs": [
+          {
+            "OperatorType": "Projection",
+            "Expressions": [
+              "[COLUMN 0] * [COLUMN 1] as count(*)",
+              "[COLUMN 0] * [COLUMN 1] as count(*)",
+              "[COLUMN 0] * [COLUMN 2] as count(u.col)"
+            ],
+            "Inputs": [
+              {
+                "OperatorType": "Join",
+                "Variant": "Join",
+                "JoinColumnIndexes": "L:0,R:0,R:1",
+                "TableName": "user_extra_`user`_`user`",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select count(*) from user_extra as ue where 1 != 1",
+                    "Query": "select count(*) from user_extra as ue",
+                    "Table": "user_extra"
+                  },
+                  {
+                    "OperatorType": "Projection",
+                    "Expressions": [
+                      "[COLUMN 0] * [COLUMN 1] as count(*)",
+                      "[COLUMN 2] * [COLUMN 1] as count(u.col)"
+                    ],
+                    "Inputs": [
+                      {
+                        "OperatorType": "Join",
+                        "Variant": "Join",
+                        "JoinColumnIndexes": "L:0,R:0,L:1",
+                        "TableName": "`user`_`user`",
+                        "Inputs": [
+                          {
+                            "OperatorType": "Route",
+                            "Variant": "Scatter",
+                            "Keyspace": {
+                              "Name": "user",
+                              "Sharded": true
+                            },
+                            "FieldQuery": "select count(*), count(u.col) from `user` as u where 1 != 1 group by .0",
+                            "Query": "select count(*), count(u.col) from `user` as u group by .0",
+                            "Table": "`user`"
+                          },
+                          {
+                            "OperatorType": "Route",
+                            "Variant": "Scatter",
+                            "Keyspace": {
+                              "Name": "user",
+                              "Sharded": true
+                            },
+                            "FieldQuery": "select count(*) from `user` as u2 where 1 != 1 group by .0",
+                            "Query": "select count(*) from `user` as u2 group by .0",
+                            "Table": "`user`"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user",
+        "user.user_extra"
       ]
     }
   }
