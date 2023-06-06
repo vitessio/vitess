@@ -271,31 +271,6 @@ func TestViewAndTableUnique(t *testing.T) {
 	require.ErrorContains(t, err, "Table 'vitess_view' already exists")
 }
 
-// TestGetSchemaRPC will validate GetSchema rpc..
-func TestGetSchemaRPC(t *testing.T) {
-	client := framework.NewClient()
-
-	client.Execute("delete from _vt.views", nil)
-	viewSchemaDef, err := client.GetSchema(querypb.SchemaTableType_VIEWS)
-	require.NoError(t, err)
-	require.Zero(t, len(viewSchemaDef))
-
-	client.UpdateContext(callerid.NewContext(
-		context.Background(),
-		&vtrpcpb.CallerID{},
-		&querypb.VTGateCallerID{Username: "dev"}))
-
-	defer client.Execute("drop view vitess_view", nil)
-
-	_, err = client.Execute("create view vitess_view as select 1 from vitess_a", nil)
-	require.NoError(t, err)
-	waitForResult(t, client, 1, 1*time.Minute)
-
-	viewSchemaDef, err = client.GetSchema(querypb.SchemaTableType_VIEWS)
-	require.NoError(t, err)
-	require.Equal(t, "CREATE ALGORITHM=UNDEFINED DEFINER=`vt_dba`@`localhost` SQL SECURITY DEFINER VIEW `vitess_view` AS select 1 AS `1` from `vitess_a`", viewSchemaDef["vitess_view"])
-}
-
 func waitForResult(t *testing.T, client *framework.QueryClient, rowCount int, timeout time.Duration) {
 	t.Helper()
 	wait := time.After(timeout)
