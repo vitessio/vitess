@@ -335,22 +335,7 @@ func TestQueryExecutorPlans(t *testing.T) {
 
 			// Test inside a transaction.
 			target := tsv.sm.Target()
-			//<<<<<<< HEAD
-			//			txid, alias, err := tsv.Begin(ctx, target, nil)
-			//			require.NoError(t, err)
-			//			require.NotNil(t, alias, "alias should not be nil")
-			//			assert.Equal(t, tsv.alias, alias, "Wrong alias returned by Begin")
-			//			defer tsv.Commit(ctx, target, txid)
-			//
-			//			qre = newTestQueryExecutor(ctx, tsv, tcase.input, txid)
-			//			got, err = qre.Execute()
-			//			require.NoError(t, err, tcase.input)
-			//			assert.Equal(t, tcase.resultWant, got, "in tx: %v", tcase.input)
-			//			assert.Equal(t, tcase.planWant, qre.logStats.PlanType, "in tx: %v", tcase.input)
-			//			want := tcase.logWant
-			//			if tcase.inTxWant != "" {
-			//				want = tcase.inTxWant
-			//=======
+
 			txid, alias, err := tsv.Begin(ctx, target, nil)
 			if tcase.errorWant == nil {
 				require.NoError(t, err)
