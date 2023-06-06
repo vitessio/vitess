@@ -98,14 +98,9 @@ type Instance struct {
 	// and probably need to be merged. IsCandidate's value may
 	// be picked up from daabase_candidate_instance's value when
 	// reading an instance from the db.
-	IsCandidate          bool
-	PromotionRule        promotionrule.CandidatePromotionRule
-	IsDowntimed          bool
-	DowntimeReason       string
-	DowntimeOwner        string
-	DowntimeEndTimestamp string
-	ElapsedDowntime      time.Duration
-	AllowTLS             bool
+	IsCandidate   bool
+	PromotionRule promotionrule.CandidatePromotionRule
+	AllowTLS      bool
 
 	Problems []string
 

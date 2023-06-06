@@ -607,11 +607,6 @@ func readInstanceRow(m sqlutils.RowMap) *Instance {
 	instance.SecondsSinceLastSeen = m.GetNullInt64("seconds_since_last_seen")
 	instance.IsCandidate = m.GetBool("is_candidate")
 	instance.PromotionRule = promotionrule.CandidatePromotionRule(m.GetString("promotion_rule"))
-	instance.IsDowntimed = m.GetBool("is_downtimed")
-	instance.DowntimeReason = m.GetString("downtime_reason")
-	instance.DowntimeOwner = m.GetString("downtime_owner")
-	instance.DowntimeEndTimestamp = m.GetString("downtime_end_timestamp")
-	instance.ElapsedDowntime = time.Second * time.Duration(m.GetInt("elapsed_downtime_seconds"))
 	instance.AllowTLS = m.GetBool("allow_tls")
 	instance.InstanceAlias = m.GetString("instance_alias")
 	instance.LastDiscoveryLatency = time.Duration(m.GetInt64("last_discovery_latency")) * time.Nanosecond
@@ -664,16 +659,11 @@ func readInstancesByCondition(condition string, args []any, sort string) ([](*In
 			candidate_database_instance.last_suggested is not null
 				 and candidate_database_instance.promotion_rule in ('must', 'prefer') as is_candidate,
 			ifnull(nullif(candidate_database_instance.promotion_rule, ''), 'neutral') as promotion_rule,
-			(database_instance_downtime.downtime_active is not null and ifnull(database_instance_downtime.end_timestamp, now()) > now()) as is_downtimed,
-    	ifnull(database_instance_downtime.reason, '') as downtime_reason,
-			ifnull(database_instance_downtime.owner, '') as downtime_owner,
-			ifnull(unix_timestamp() - unix_timestamp(begin_timestamp), 0) as elapsed_downtime_seconds,
-    	ifnull(database_instance_downtime.end_timestamp, '') as downtime_end_timestamp
+			ifnull(unix_timestamp() - unix_timestamp(begin_timestamp), 0) as elapsed_downtime_seconds
 		from
 			database_instance
 			left join vitess_tablet using (hostname, port)
 			left join candidate_database_instance using (hostname, port)
-			left join database_instance_downtime using (hostname, port)
 		where
 			%s
 		order by
@@ -767,35 +757,7 @@ func ReadProblemInstances(keyspace string, shard string) ([](*Instance), error) 
 		`
 
 	args := sqlutils.Args(keyspace, keyspace, shard, shard, config.Config.InstancePollSeconds*5, config.Config.ReasonableReplicationLagSeconds, config.Config.ReasonableReplicationLagSeconds)
-	instances, err := readInstancesByCondition(condition, args, "")
-	if err != nil {
-		return instances, err
-	}
-	var reportedInstances [](*Instance)
-	for _, instance := range instances {
-		skip := false
-		if instance.IsDowntimed {
-			skip = true
-		}
-		if !skip {
-			reportedInstances = append(reportedInstances, instance)
-		}
-	}
-	return reportedInstances, nil
-}
-
-// ReadLostInRecoveryInstances returns all instances (potentially filtered by cluster)
-// which are currently indicated as downtimed due to being lost during a topology recovery.
-func ReadLostInRecoveryInstances(keyspace string, shard string) ([](*Instance), error) {
-	condition := `
-		ifnull(
-			database_instance_downtime.downtime_active = 1
-			and database_instance_downtime.end_timestamp > now()
-			and database_instance_downtime.reason = ?, 0)
-		and ? IN ('', keyspace)
-		and ? IN ('', shard)
-	`
-	return readInstancesByCondition(condition, sqlutils.Args(DowntimeLostInRecoveryMessage, keyspace, shard), "keyspace asc, shard asc, replication_depth asc")
+	return readInstancesByCondition(condition, args, "")
 }
 
 // GetKeyspaceShardName gets the keyspace shard name for the given instance key

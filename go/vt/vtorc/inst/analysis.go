@@ -135,17 +135,13 @@ type ReplicationAnalysis struct {
 	CountValidReplicas                        uint
 	CountValidReplicatingReplicas             uint
 	CountReplicasFailingToConnectToPrimary    uint
-	CountDowntimedReplicas                    uint
 	ReplicationDepth                          uint
 	IsFailingToConnectToPrimary               bool
 	ReplicationStopped                        bool
 	Analysis                                  AnalysisCode
 	Description                               string
 	StructureAnalysis                         []StructureAnalysisCode
-	IsDowntimed                               bool
 	IsReplicasDowntimed                       bool // as good as downtimed because all replicas are downtimed AND analysis is all about the replicas (e.e. AllPrimaryReplicasNotReplicating)
-	DowntimeEndTimestamp                      string
-	DowntimeRemainingSeconds                  int
 	IsBinlogServer                            bool
 	OracleGTIDImmediateTopology               bool
 	MariaDBGTIDImmediateTopology              bool

@@ -151,19 +151,6 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 			OR primary_instance.replica_io_running = 0
 		) AS replication_stopped,
 		MIN(
-			primary_downtime.downtime_active is not null
-			and ifnull(primary_downtime.end_timestamp, now()) > now()
-		) AS is_downtimed,
-		MIN(
-			IFNULL(primary_downtime.end_timestamp, '')
-		) AS downtime_end_timestamp,
-		MIN(
-			IFNULL(
-				unix_timestamp() - unix_timestamp(primary_downtime.end_timestamp),
-				0
-			)
-		) AS downtime_remaining_seconds,
-		MIN(
 			primary_instance.binlog_server
 		) AS is_binlog_server,
 		MIN(
@@ -267,18 +254,10 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 		IFNULL(MAX(replica_instance.gtid_mode), '') AS max_replica_gtid_mode,
 		IFNULL(
 			MAX(
-				case when replica_downtime.downtime_active is not null
-				and ifnull(replica_downtime.end_timestamp, now()) > now() then '' else replica_instance.gtid_errant end
+				replica_instance.gtid_errant
 			),
 			''
 		) AS max_replica_gtid_errant,
-		IFNULL(
-			SUM(
-				replica_downtime.downtime_active is not null
-				and ifnull(replica_downtime.end_timestamp, now()) > now()
-			),
-			0
-		) AS count_downtimed_replicas,
 		COUNT(
 			DISTINCT case when replica_instance.log_bin
 			AND replica_instance.log_replica_updates then replica_instance.major_version else NULL end
@@ -303,16 +282,6 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 		LEFT JOIN database_instance_stale_binlog_coordinates ON (
 			primary_instance.hostname = database_instance_stale_binlog_coordinates.hostname
 			AND primary_instance.port = database_instance_stale_binlog_coordinates.port
-		)
-		LEFT JOIN database_instance_downtime as primary_downtime ON (
-			primary_instance.hostname = primary_downtime.hostname
-			AND primary_instance.port = primary_downtime.port
-			AND primary_downtime.downtime_active = 1
-		)
-		LEFT JOIN database_instance_downtime as replica_downtime ON (
-			replica_instance.hostname = replica_downtime.hostname
-			AND replica_instance.port = replica_downtime.port
-			AND replica_downtime.downtime_active = 1
 		)
 	WHERE
 		? IN ('', vitess_keyspace.keyspace)
@@ -382,13 +351,9 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 		a.CountValidReplicas = m.GetUint("count_valid_replicas")
 		a.CountValidReplicatingReplicas = m.GetUint("count_valid_replicating_replicas")
 		a.CountReplicasFailingToConnectToPrimary = m.GetUint("count_replicas_failing_to_connect_to_primary")
-		a.CountDowntimedReplicas = m.GetUint("count_downtimed_replicas")
 		a.ReplicationDepth = m.GetUint("replication_depth")
 		a.IsFailingToConnectToPrimary = m.GetBool("is_failing_to_connect_to_primary")
 		a.ReplicationStopped = m.GetBool("replication_stopped")
-		a.IsDowntimed = m.GetBool("is_downtimed")
-		a.DowntimeEndTimestamp = m.GetString("downtime_end_timestamp")
-		a.DowntimeRemainingSeconds = m.GetInt("downtime_remaining_seconds")
 		a.IsBinlogServer = m.GetBool("is_binlog_server")
 		a.ClusterDetails.ReadRecoveryInfo()
 
@@ -579,18 +544,6 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 		appendAnalysis := func(analysis *ReplicationAnalysis) {
 			if a.Analysis == NoProblem && len(a.StructureAnalysis) == 0 && !hints.IncludeNoProblem {
 				return
-			}
-			if a.IsDowntimed {
-				a.SkippableDueToDowntime = true
-			}
-			if a.CountReplicas == a.CountDowntimedReplicas {
-				switch a.Analysis {
-				case AllPrimaryReplicasNotReplicating,
-					AllPrimaryReplicasNotReplicatingOrDead,
-					PrimarySingleReplicaDead:
-					a.IsReplicasDowntimed = true
-					a.SkippableDueToDowntime = true
-				}
 			}
 			if a.SkippableDueToDowntime && !hints.IncludeDowntimed {
 				return

@@ -224,20 +224,6 @@ CREATE TABLE candidate_database_instance (
 CREATE INDEX last_suggested_idx_candidate_database_instance ON candidate_database_instance (last_suggested)
 	`,
 	`
-DROP TABLE IF EXISTS database_instance_downtime
-`,
-	`
-CREATE TABLE database_instance_downtime (
-	hostname varchar(128) NOT NULL,
-	port smallint NOT NULL,
-	downtime_active tinyint(4) DEFAULT NULL,
-	begin_timestamp timestamp default (''),
-	end_timestamp timestamp NULL DEFAULT NULL,
-	owner varchar(128) NOT NULL,
-	reason text NOT NULL,
-	PRIMARY KEY (hostname, port)
-)`,
-	`
 DROP TABLE IF EXISTS topology_failure_detection
 `,
 	`
@@ -434,9 +420,6 @@ CREATE INDEX uid_idx_topology_recovery ON topology_recovery(uid)
 	`,
 	`
 CREATE INDEX recovery_uid_idx_topology_recovery_steps ON topology_recovery_steps(recovery_uid)
-	`,
-	`
-CREATE INDEX end_timestamp_idx_database_instance_downtime ON database_instance_downtime(end_timestamp)
 	`,
 	`
 CREATE UNIQUE INDEX host_port_active_recoverable_uidx_topology_failure_detection ON topology_failure_detection (hostname, port, in_active_period, end_active_period_unixtime, is_actionable)

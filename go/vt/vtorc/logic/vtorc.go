@@ -342,7 +342,6 @@ func ContinuousDiscovery() {
 	go handleDiscoveryRequests()
 
 	healthTick := time.Tick(config.HealthPollSeconds * time.Second)
-	instancePollTick := time.Tick(instancePollSecondsDuration())
 	caretakingTick := time.Tick(time.Minute)
 	recoveryTick := time.Tick(time.Duration(config.Config.RecoveryPollSeconds) * time.Second)
 	tabletTopoTick := OpenTabletDiscovery()
@@ -369,15 +368,6 @@ func ContinuousDiscovery() {
 		case <-healthTick:
 			go func() {
 				onHealthTick()
-			}()
-		case <-instancePollTick:
-			go func() {
-				// This tick does NOT do instance poll (these are handled by the oversampling discoveryTick)
-				// But rather should invoke such routinely operations that need to be as (or roughly as) frequent
-				// as instance poll
-				if IsLeaderOrActive() {
-					go inst.ExpireDowntime()
-				}
 			}()
 		case <-caretakingTick:
 			// Various periodic internal maintenance tasks
