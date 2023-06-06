@@ -420,11 +420,7 @@ func (p *joinPusher) countStar(ctx *plancontext.PlanningContext) (*sqlparser.Ali
 	}
 	cs := &sqlparser.CountStar{}
 	ae := aeWrap(cs)
-	csAggr := Aggr{
-		Original: ae,
-		Func:     cs,
-		OpCode:   opcode.AggregateCountStar,
-	}
+	csAggr := NewAggr(opcode.AggregateCountStar, cs, ae, "")
 	expr := p.addAggr(ctx, csAggr)
 	p.csAE = aeWrap(expr)
 	return p.csAE, true

@@ -494,5 +494,11 @@
     "comment": "extremum on input from both sides",
     "query": "insert into music(user_id, id) select foo, bar from music on duplicate key update id = id+1",
     "plan": "VT12001: unsupported: DML cannot update vindex column"
+  },
+  {
+    "comment": "interleaving grouping, aggregation and join with min, max columns",
+    "query": "select user.col, min(user_extra.foo), user.bar, max(user_extra.bar) from user join user_extra on user.col = user_extra.bar group by user.col, user.bar",
+    "v3-plan": "VT12001: unsupported: cross-shard query with aggregates",
+    "gen4-plan": "VT12001: unsupported: column collation not known for the function: min(user_extra.foo)"
   }
 ]

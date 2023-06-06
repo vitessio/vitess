@@ -90,12 +90,14 @@ func transformAggregator(ctx *plancontext.PlanningContext, op *operators.Aggrega
 			return nil, vterrors.VT12001(fmt.Sprintf("in scatter query: aggregation function '%s'", sqlparser.String(aggr.Original)))
 		}
 		oa.aggregates = append(oa.aggregates, &engine.AggregateParams{
-			Opcode:     aggr.OpCode,
-			Col:        aggr.ColOffset,
-			Alias:      aggr.Alias,
-			Expr:       aggr.Func,
-			Original:   aggr.Original,
-			OrigOpcode: aggr.OriginalOpCode,
+			Opcode:      aggr.OpCode,
+			Col:         aggr.ColOffset,
+			Alias:       aggr.Alias,
+			Expr:        aggr.Func,
+			Original:    aggr.Original,
+			OrigOpcode:  aggr.OriginalOpCode,
+			WCol:        aggr.WSOffset,
+			CollationID: aggr.GetCollation(ctx),
 		})
 	}
 	for _, groupBy := range op.Grouping {

@@ -98,13 +98,9 @@ func (a *Aggregator) addColumnWithoutPushing(expr *sqlparser.AliasedExpr, addToG
 		groupBy.ColOffset = offset
 		a.Grouping = append(a.Grouping, groupBy)
 	} else {
-		a.Aggregations = append(a.Aggregations, Aggr{
-			Original:  expr,
-			Func:      nil,
-			OpCode:    opcode.AggregateRandom,
-			Alias:     expr.As.String(),
-			ColOffset: offset,
-		})
+		aggr := NewAggr(opcode.AggregateRandom, nil, expr, expr.As.String())
+		aggr.ColOffset = offset
+		a.Aggregations = append(a.Aggregations, aggr)
 	}
 	return offset
 }
@@ -146,13 +142,9 @@ func (a *Aggregator) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser
 	}
 
 	if !addToGroupBy {
-		a.Aggregations = append(a.Aggregations, Aggr{
-			Original:  expr,
-			Func:      nil,
-			OpCode:    opcode.AggregateRandom,
-			Alias:     expr.As.String(),
-			ColOffset: len(a.Columns),
-		})
+		aggr := NewAggr(opcode.AggregateRandom, nil, expr, expr.As.String())
+		aggr.ColOffset = len(a.Columns)
+		a.Aggregations = append(a.Aggregations, aggr)
 	}
 	a.Columns = append(a.Columns, expr)
 	expectedOffset := len(a.Columns) - 1
@@ -203,10 +195,6 @@ func (a *Aggregator) GetOrdering() ([]ops.OrderBy, error) {
 	return a.Source.GetOrdering()
 }
 
-var _ ops.Operator = (*Aggregator)(nil)
-
-type addColF func(aliasedExpr *sqlparser.AliasedExpr, addToGroupBy bool) (int, error)
-
 func (a *Aggregator) planOffsets(ctx *plancontext.PlanningContext) error {
 	addColumn := func(aliasedExpr *sqlparser.AliasedExpr, addToGroupBy bool) (int, error) {
 		newSrc, offset, err := a.Source.AddColumn(ctx, aliasedExpr, true, addToGroupBy)
@@ -222,7 +210,7 @@ func (a *Aggregator) planOffsets(ctx *plancontext.PlanningContext) error {
 	}
 
 	if !a.Pushed {
-		err := a.planOffsetsNotPushed(ctx, addColumn)
+		err := a.planOffsetsNotPushed(ctx)
 		if err != nil {
 			return err
 		}
@@ -236,7 +224,7 @@ func (a *Aggregator) planOffsets(ctx *plancontext.PlanningContext) error {
 			}
 			a.Grouping[idx].ColOffset = offset
 		}
-		if a.Grouping[idx].WSOffset != -1 || !ctx.SemTable.NeedsWeightString(gb.SimplifiedExpr) {
+		if gb.WSOffset != -1 || !ctx.SemTable.NeedsWeightString(gb.SimplifiedExpr) {
 			continue
 		}
 
@@ -247,10 +235,25 @@ func (a *Aggregator) planOffsets(ctx *plancontext.PlanningContext) error {
 		a.Grouping[idx].WSOffset = offset
 	}
 
+	for idx, aggr := range a.Aggregations {
+		needsWS, err := aggr.NeedWeightString(ctx)
+		if err != nil {
+			return err
+		}
+		if !needsWS {
+			continue
+		}
+		offset, err := addColumn(aeWrap(weightStringFor(aggr.Func.GetArg())), true)
+		if err != nil {
+			return err
+		}
+		a.Aggregations[idx].WSOffset = offset
+	}
+
 	return nil
 }
 
-func (aggr Aggr) GetArgument() sqlparser.Expr {
+func (aggr Aggr) getPushDownColumn() sqlparser.Expr {
 	switch aggr.OpCode {
 	case opcode.AggregateRandom:
 		return aggr.Original.Expr
@@ -261,62 +264,21 @@ func (aggr Aggr) GetArgument() sqlparser.Expr {
 	}
 }
 
-func (a *Aggregator) planOffsetsNotPushed(ctx *plancontext.PlanningContext, addColumn addColF) (err error) {
+func (a *Aggregator) planOffsetsNotPushed(ctx *plancontext.PlanningContext) error {
 	// we need to keep things in the column order, so we can't iterate over the aggregations or groupings
-	isGroupingCol := func(col *sqlparser.AliasedExpr) (int, error) {
-		for gbIdx, gb := range a.Grouping {
-			if !ctx.SemTable.EqualsExprWithDeps(col.Expr, gb.SimplifiedExpr) {
-				continue
-			}
-
-			newSrc, offset, err := a.Source.AddColumn(ctx, col, false, false)
-			if err != nil {
-				return 0, err
-			}
-
-			a.Grouping[gbIdx].ColOffset = offset
-			a.Source = newSrc
-
-			if !ctx.SemTable.NeedsWeightString(gb.SimplifiedExpr) {
-				return offset, nil
-			}
-
-			// TODO: we need to do stuff
-			return offset, nil
-		}
-		return -1, nil
-	}
-
-	isAggrCol := func(col *sqlparser.AliasedExpr) (int, error) {
-		for aggIdx, aggr := range a.Aggregations {
-			if !ctx.SemTable.EqualsExprWithDeps(col.Expr, aggr.Original.Expr) {
-				continue
-			}
-
-			newSrc, offset, err := a.Source.AddColumn(ctx, aeWrap(aggr.GetArgument()), false, false)
-			if err != nil {
-				return 0, err
-			}
-			a.Aggregations[aggIdx].ColOffset = offset
-			a.Source = newSrc
-			return offset, nil
-		}
-		return -1, nil
-	}
-
 	for colIdx, col := range a.Columns {
-		idx, err := isGroupingCol(col)
+		idx, err := a.addIfGroupingColumn(ctx, col)
 		if err != nil {
 			return err
 		}
 		if idx >= 0 {
 			if idx != colIdx {
-				panic("oops")
+				return vterrors.VT13001(fmt.Sprintf("grouping column on wrong index: want: %d, got: %d", colIdx, idx))
 			}
 			continue
 		}
 
-		idx, err = isAggrCol(col)
+		idx, err = a.addIfAggregationColumn(ctx, col)
 		if err != nil {
 			return err
 		}
@@ -328,6 +290,49 @@ func (a *Aggregator) planOffsetsNotPushed(ctx *plancontext.PlanningContext, addC
 	return nil
 }
 
+func (a *Aggregator) addIfAggregationColumn(ctx *plancontext.PlanningContext, col *sqlparser.AliasedExpr) (int, error) {
+	for aggIdx, aggr := range a.Aggregations {
+		if !ctx.SemTable.EqualsExprWithDeps(col.Expr, aggr.Original.Expr) {
+			continue
+		}
+
+		newSrc, offset, err := a.Source.AddColumn(ctx, aeWrap(aggr.getPushDownColumn()), false, false)
+		if err != nil {
+			return 0, err
+		}
+		a.Aggregations[aggIdx].ColOffset = offset
+		a.Source = newSrc
+		return offset, nil
+	}
+	return -1, nil
+}
+
+func (a *Aggregator) addIfGroupingColumn(ctx *plancontext.PlanningContext, col *sqlparser.AliasedExpr) (int, error) {
+	for gbIdx, gb := range a.Grouping {
+		if !ctx.SemTable.EqualsExprWithDeps(col.Expr, gb.SimplifiedExpr) {
+			continue
+		}
+
+		newSrc, offset, err := a.Source.AddColumn(ctx, col, false, false)
+		if err != nil {
+			return 0, err
+		}
+
+		a.Grouping[gbIdx].ColOffset = offset
+		a.Source = newSrc
+
+		if !ctx.SemTable.NeedsWeightString(gb.SimplifiedExpr) {
+			return offset, nil
+		}
+
+		// TODO: we need to do stuff
+		return offset, nil
+	}
+	return -1, nil
+}
+
 func (a *Aggregator) setTruncateColumnCount(offset int) {
 	a.ResultColumns = offset
 }
+
+var _ ops.Operator = (*Aggregator)(nil)
