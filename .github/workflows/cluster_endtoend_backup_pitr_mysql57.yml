@@ -13,6 +13,10 @@ env:
   LAUNCHABLE_WORKSPACE: "vitess-app"
   GITHUB_PR_HEAD_SHA: "${{ github.event.pull_request.head.sha }}"
 
+  # This is used if we need to pin the xtrabackup version used in tests.
+  # If this is NOT set then the latest version available will be used.
+  #XTRABACKUP_VERSION: "2.4.24-1"
+
 jobs:
   build:
     name: Run endtoend tests on Cluster (backup_pitr) mysql57
@@ -113,6 +117,18 @@ jobs:
 
         # install JUnit report formatter
         go install github.com/vitessio/go-junit-report@HEAD
+
+        wget "https://repo.percona.com/apt/percona-release_latest.$(lsb_release -sc)_all.deb"
+        sudo apt-get install -y gnupg2
+        sudo dpkg -i "percona-release_latest.$(lsb_release -sc)_all.deb"
+        sudo apt-get update
+        if [[ -n $XTRABACKUP_VERSION ]]; then
+          debfile="percona-xtrabackup-24_$XTRABACKUP_VERSION.$(lsb_release -sc)_amd64.deb"
+          wget "https://repo.percona.com/pxb-24/apt/pool/main/p/percona-xtrabackup-24/$debfile"
+          sudo apt install -y "./$debfile"
+        else
+          sudo apt-get install -y percona-xtrabackup-24
+        fi
 
     - name: Setup launchable dependencies
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true' && github.base_ref == 'main'
