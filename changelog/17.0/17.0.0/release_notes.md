@@ -396,7 +396,7 @@ This could be a breaking change for grpc api users based on how they have implem
 Gen4 planner was made default in v14 for `SELECT` queries. In v15 `UPDATE` and `DELETE` queries were moved to Gen4 framework.
 With this release `INSERT` queries are moved to Gen4.
 
-Clients can move to old v3 planner for inserts by using `V3Insert` planner version with `--planner-version` vtgate flag or with comment directive /*vt+ planner=<planner_version>` for individual query.
+Clients can move to old v3 planner for inserts by using `V3Insert` planner version with `--planner-version` vtgate flag or with comment directive `/*vt+ planner=<planner_version>` for individual query.
 
 ### <a id="deprecations-and-deletions"/>Deprecations and Deletions
 
