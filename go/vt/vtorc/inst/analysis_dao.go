@@ -300,11 +300,6 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 			primary_instance.hostname = replica_instance.source_host
 			AND primary_instance.port = replica_instance.source_port
 		)
-		LEFT JOIN database_instance_maintenance ON (
-			primary_instance.hostname = database_instance_maintenance.hostname
-			AND primary_instance.port = database_instance_maintenance.port
-			AND database_instance_maintenance.maintenance_active = 1
-		)
 		LEFT JOIN database_instance_stale_binlog_coordinates ON (
 			primary_instance.hostname = database_instance_stale_binlog_coordinates.hostname
 			AND primary_instance.port = database_instance_stale_binlog_coordinates.port
@@ -320,8 +315,7 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 			AND replica_downtime.downtime_active = 1
 		)
 	WHERE
-		database_instance_maintenance.database_instance_maintenance_id IS NULL
-		AND ? IN ('', vitess_keyspace.keyspace)
+		? IN ('', vitess_keyspace.keyspace)
 		AND ? IN ('', vitess_tablet.shard)
 	GROUP BY
 		vitess_tablet.hostname,

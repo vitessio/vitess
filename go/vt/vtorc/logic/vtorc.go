@@ -306,9 +306,6 @@ func onHealthTick() {
 		go func() {
 			_, _ = process.RegisterNode(process.ThisNodeHealth)
 		}()
-		go func() {
-			_ = inst.ExpireMaintenance()
-		}()
 	}
 
 	func() {
@@ -388,7 +385,6 @@ func ContinuousDiscovery() {
 				if IsLeaderOrActive() {
 
 					go inst.ForgetLongUnseenInstances()
-					go inst.ExpireMaintenance()
 					go inst.ExpireCandidateInstances()
 					go inst.ExpireAudit()
 					go inst.ExpireStaleInstanceBinlogCoordinates()

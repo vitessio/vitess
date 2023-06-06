@@ -26,69 +26,6 @@ import (
 	"vitess.io/vitess/go/vt/vtorc/db"
 )
 
-// BeginDowntime will make mark an instance as downtimed (or override existing downtime period)
-func BeginDowntime(downtime *Downtime) (err error) {
-	if downtime.Duration == 0 {
-		downtime.Duration = config.MaintenanceExpireMinutes * time.Minute
-	}
-	if downtime.EndsAtString != "" {
-		_, err = db.ExecVTOrc(`
-				insert
-					into database_instance_downtime (
-						hostname, port, downtime_active, begin_timestamp, end_timestamp, owner, reason
-					) VALUES (
-						?, ?, 1, ?, ?, ?, ?
-					)
-					on duplicate key update
-						downtime_active=values(downtime_active),
-						begin_timestamp=values(begin_timestamp),
-						end_timestamp=values(end_timestamp),
-						owner=values(owner),
-						reason=values(reason)
-				`,
-			downtime.Key.Hostname,
-			downtime.Key.Port,
-			downtime.BeginsAtString,
-			downtime.EndsAtString,
-			downtime.Owner,
-			downtime.Reason,
-		)
-	} else {
-		if downtime.Ended() {
-			// No point in writing it down; it's expired
-			return nil
-		}
-
-		_, err = db.ExecVTOrc(`
-			insert
-				into database_instance_downtime (
-					hostname, port, downtime_active, begin_timestamp, end_timestamp, owner, reason
-				) VALUES (
-					?, ?, 1, NOW(), NOW() + INTERVAL ? SECOND, ?, ?
-				)
-				on duplicate key update
-					downtime_active=values(downtime_active),
-					begin_timestamp=values(begin_timestamp),
-					end_timestamp=values(end_timestamp),
-					owner=values(owner),
-					reason=values(reason)
-			`,
-			downtime.Key.Hostname,
-			downtime.Key.Port,
-			int(downtime.EndsIn().Seconds()),
-			downtime.Owner,
-			downtime.Reason,
-		)
-	}
-	if err != nil {
-		log.Error(err)
-		return err
-	}
-	_ = AuditOperation("begin-downtime", downtime.Key, fmt.Sprintf("owner: %s, reason: %s", downtime.Owner, downtime.Reason))
-
-	return nil
-}
-
 // EndDowntime will remove downtime flag from an instance
 func EndDowntime(instanceKey *InstanceKey) (wasDowntimed bool, err error) {
 	res, err := db.ExecVTOrc(`

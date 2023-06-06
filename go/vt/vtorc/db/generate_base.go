@@ -102,48 +102,6 @@ CREATE INDEX last_checked_idx_database_instance ON database_instance(last_checke
 CREATE INDEX last_seen_idx_database_instance ON database_instance(last_seen)
 	`,
 	`
-DROP TABLE IF EXISTS database_instance_maintenance
-`,
-	`
-CREATE TABLE database_instance_maintenance (
-	database_instance_maintenance_id integer,
-	hostname varchar(128) NOT NULL,
-	port smallint NOT NULL,
-	maintenance_active tinyint(4) DEFAULT NULL,
-	begin_timestamp timestamp NULL DEFAULT NULL,
-	end_timestamp timestamp NULL DEFAULT NULL,
-	owner varchar(128) NOT NULL,
-	reason text NOT NULL,
-	processing_node_hostname varchar(128) not null default '',
-	processing_node_token varchar(128) not null default '',
-	explicitly_bounded TINYint not null default 0,
-	PRIMARY KEY (database_instance_maintenance_id)
-)`,
-	`
-CREATE UNIQUE INDEX maintenance_uidx_database_instance_maintenance ON database_instance_maintenance (maintenance_active, hostname, port)
-	`,
-	`
-DROP TABLE IF EXISTS database_instance_long_running_queries
-`,
-	`
-CREATE TABLE database_instance_long_running_queries (
-	hostname varchar(128) NOT NULL,
-	port smallint NOT NULL,
-	process_id bigint(20) NOT NULL,
-	process_started_at timestamp not null default (''),
-	process_user varchar(16) NOT NULL,
-	process_host varchar(128) NOT NULL,
-	process_db varchar(128) NOT NULL,
-	process_command varchar(16) NOT NULL,
-	process_time_seconds int(11) NOT NULL,
-	process_state varchar(128) NOT NULL,
-	process_info varchar(1024) NOT NULL,
-	PRIMARY KEY (hostname,port,process_id)
-)`,
-	`
-CREATE INDEX process_started_at_idx_database_instance_long_running_queries ON database_instance_long_running_queries (process_started_at)
-	`,
-	`
 DROP TABLE IF EXISTS audit
 `,
 	`
@@ -163,77 +121,6 @@ CREATE INDEX audit_timestamp_idx_audit ON audit (audit_timestamp)
 	`,
 	`
 CREATE INDEX host_port_idx_audit ON audit (hostname, port, audit_timestamp)
-	`,
-	`
-DROP TABLE IF EXISTS host_agent
-`,
-	`
-CREATE TABLE host_agent (
-	hostname varchar(128) NOT NULL,
-	port smallint NOT NULL,
-	token varchar(128) NOT NULL,
-	last_submitted timestamp not null default (''),
-	last_checked timestamp NULL DEFAULT NULL,
-	last_seen timestamp NULL DEFAULT NULL,
-	mysql_port smallint DEFAULT NULL,
-	count_mysql_snapshots smallint NOT NULL,
-	PRIMARY KEY (hostname)
-)`,
-	`
-CREATE INDEX token_idx_host_agent ON host_agent (token)
-	`,
-	`
-CREATE INDEX last_submitted_idx_host_agent ON host_agent (last_submitted)
-	`,
-	`
-CREATE INDEX last_checked_idx_host_agent ON host_agent (last_checked)
-	`,
-	`
-CREATE INDEX last_seen_idx_host_agent ON host_agent (last_seen)
-	`,
-	`
-DROP TABLE IF EXISTS agent_seed
-`,
-	`
-CREATE TABLE agent_seed (
-	agent_seed_id integer,
-	target_hostname varchar(128) NOT NULL,
-	source_hostname varchar(128) NOT NULL,
-	start_timestamp timestamp not null default (''),
-	end_timestamp timestamp NOT NULL DEFAULT '1971-01-01 00:00:00',
-	is_complete tinyint NOT NULL DEFAULT '0',
-	is_successful tinyint NOT NULL DEFAULT '0',
-	PRIMARY KEY (agent_seed_id)
-)`,
-	`
-CREATE INDEX target_hostname_idx_agent_seed ON agent_seed (target_hostname,is_complete)
-	`,
-	`
-CREATE INDEX source_hostname_idx_agent_seed ON agent_seed (source_hostname,is_complete)
-	`,
-	`
-CREATE INDEX start_timestamp_idx_agent_seed ON agent_seed (start_timestamp)
-	`,
-	`
-CREATE INDEX is_complete_idx_agent_seed ON agent_seed (is_complete,start_timestamp)
-	`,
-	`
-CREATE INDEX is_successful_idx_agent_seed ON agent_seed (is_successful, start_timestamp)
-	`,
-	`
-DROP TABLE IF EXISTS agent_seed_state
-`,
-	`
-CREATE TABLE agent_seed_state (
-	agent_seed_state_id integer,
-	agent_seed_id int NOT NULL,
-	state_timestamp timestamp not null default (''),
-	state_action varchar(127) NOT NULL,
-	error_message varchar(255) NOT NULL,
-	PRIMARY KEY (agent_seed_state_id)
-)`,
-	`
-CREATE INDEX agent_seed_idx_agent_seed_state ON agent_seed_state (agent_seed_id, state_timestamp)
 	`,
 	`
 DROP TABLE IF EXISTS active_node
@@ -374,56 +261,6 @@ CREATE TABLE topology_failure_detection (
 CREATE INDEX in_active_start_period_idx_topology_failure_detection ON topology_failure_detection (in_active_period, start_active_period)
 	`,
 	`
-DROP TABLE IF EXISTS primary_position_equivalence
-`,
-	`
-CREATE TABLE primary_position_equivalence (
-	equivalence_id integer,
-	primary1_hostname varchar(128) NOT NULL,
-	primary1_port smallint NOT NULL,
-	primary1_binary_log_file varchar(128) NOT NULL,
-	primary1_binary_log_pos bigint NOT NULL,
-	primary2_hostname varchar(128) NOT NULL,
-	primary2_port smallint NOT NULL,
-	primary2_binary_log_file varchar(128) NOT NULL,
-	primary2_binary_log_pos bigint NOT NULL,
-	last_suggested timestamp not null default (''),
-	PRIMARY KEY (equivalence_id)
-)`,
-	`
-CREATE UNIQUE INDEX equivalence_uidx_primary_position_equivalence ON primary_position_equivalence (primary1_hostname, primary1_port, primary1_binary_log_file, primary1_binary_log_pos, primary2_hostname, primary2_port)
-	`,
-	`
-CREATE INDEX primary2_idx_primary_position_equivalence ON primary_position_equivalence (primary2_hostname, primary2_port, primary2_binary_log_file, primary2_binary_log_pos)
-	`,
-	`
-CREATE INDEX last_suggested_idx_primary_position_equivalence ON primary_position_equivalence (last_suggested)
-	`,
-	`
-DROP TABLE IF EXISTS async_request
-`,
-	`
-CREATE TABLE async_request (
-	request_id integer,
-	command varchar(128) not null,
-	hostname varchar(128) NOT NULL,
-	port smallint NOT NULL,
-	destination_hostname varchar(128) NOT NULL,
-	destination_port smallint NOT NULL,
-	pattern text NOT NULL,
-	gtid_hint varchar(32) not null,
-	begin_timestamp timestamp NULL DEFAULT NULL,
-	end_timestamp timestamp NULL DEFAULT NULL,
-	story text NOT NULL,
-	PRIMARY KEY (request_id)
-)`,
-	`
-CREATE INDEX begin_timestamp_idx_async_request ON async_request (begin_timestamp)
-	`,
-	`
-CREATE INDEX end_timestamp_idx_async_request ON async_request (end_timestamp)
-	`,
-	`
 DROP TABLE IF EXISTS blocked_topology_recovery
 `,
 	`
@@ -493,73 +330,6 @@ CREATE UNIQUE INDEX hostname_token_idx_node_health_history ON node_health_histor
 DROP TABLE IF EXISTS database_instance_coordinates_history
 `,
 	`
-CREATE TABLE database_instance_coordinates_history (
-	history_id integer,
-	hostname varchar(128) NOT NULL,
-	port smallint NOT NULL,
-	recorded_timestamp timestamp not null default (''),
-	binary_log_file varchar(128) NOT NULL,
-	binary_log_pos bigint NOT NULL,
-	relay_log_file varchar(128) NOT NULL,
-	relay_log_pos bigint NOT NULL,
-	last_seen timestamp NOT NULL DEFAULT '1971-01-01 00:00:00',
-	PRIMARY KEY (history_id)
-)`,
-	`
-CREATE INDEX hostname_port_recorded_idx_database_instance_coordinates_history ON database_instance_coordinates_history (hostname, port, recorded_timestamp)
-	`,
-	`
-CREATE INDEX recorded_timestmp_idx_database_instance_coordinates_history ON database_instance_coordinates_history (recorded_timestamp)
-	`,
-	`
-DROP TABLE IF EXISTS database_instance_binlog_files_history
-`,
-	`
-CREATE TABLE database_instance_binlog_files_history (
-	history_id integer,
-	hostname varchar(128) NOT NULL,
-	port smallint NOT NULL,
-	binary_log_file varchar(128) NOT NULL,
-	binary_log_pos bigint NOT NULL,
-	first_seen timestamp not null default (''),
-	last_seen timestamp NOT NULL DEFAULT '1971-01-01 00:00:00',
-	PRIMARY KEY (history_id)
-)`,
-	`
-CREATE UNIQUE INDEX hostname_port_file_idx_database_instance_binlog_files_history ON database_instance_binlog_files_history (hostname, port, binary_log_file)
-	`,
-	`
-CREATE INDEX last_seen_idx_database_instance_binlog_files_history ON database_instance_binlog_files_history (last_seen)
-	`,
-	`
-DROP TABLE IF EXISTS database_instance_recent_relaylog_history
-`,
-	`
-CREATE TABLE database_instance_recent_relaylog_history (
-	hostname varchar(128) NOT NULL,
-	port smallint NOT NULL,
-	current_relay_log_file varchar(128) NOT NULL,
-	current_relay_log_pos bigint NOT NULL,
-	current_seen timestamp NOT NULL DEFAULT '1971-01-01 00:00:00',
-	prev_relay_log_file varchar(128) NOT NULL,
-	prev_relay_log_pos bigint NOT NULL,
-	prev_seen timestamp NOT NULL DEFAULT '1971-01-01 00:00:00',
-	PRIMARY KEY (hostname, port)
-)`,
-	`
-CREATE INDEX current_seen_idx_database_instance_recent_relaylog_history ON database_instance_recent_relaylog_history (current_seen)
-	`,
-	`
-DROP TABLE IF EXISTS vtorc_metadata
-`,
-	`
-CREATE TABLE vtorc_metadata (
-	anchor tinyint NOT NULL,
-	last_deployed_version varchar(128) NOT NULL,
-	last_deployed_timestamp timestamp NOT NULL,
-	PRIMARY KEY (anchor)
-)`,
-	`
 DROP TABLE IF EXISTS vtorc_db_deployments
 `,
 	`
@@ -586,66 +356,6 @@ CREATE TABLE topology_recovery_steps (
 	audit_at timestamp not null default (''),
 	message text NOT NULL,
 	PRIMARY KEY (recovery_step_id)
-)`,
-	`
-DROP TABLE IF EXISTS raft_store
-`,
-	`
-CREATE TABLE raft_store (
-	store_id integer,
-	store_key varbinary(512) not null,
-	store_value blob not null,
-	PRIMARY KEY (store_id)
-)`,
-	`
-CREATE INDEX store_key_idx_raft_store ON raft_store (store_key)
-	`,
-	`
-DROP TABLE IF EXISTS raft_log
-`,
-	`
-CREATE TABLE raft_log (
-	log_index integer,
-	term bigint not null,
-	log_type int not null,
-	data blob not null,
-	PRIMARY KEY (log_index)
-)`,
-	`
-DROP TABLE IF EXISTS raft_snapshot
-`,
-	`
-CREATE TABLE raft_snapshot (
-	snapshot_id integer,
-	snapshot_name varchar(128) NOT NULL,
-	snapshot_meta varchar(4096) NOT NULL,
-	created_at timestamp not null default (''),
-	PRIMARY KEY (snapshot_id)
-)`,
-	`
-CREATE UNIQUE INDEX snapshot_name_uidx_raft_snapshot ON raft_snapshot (snapshot_name)
-	`,
-	`
-DROP TABLE IF EXISTS database_instance_peer_analysis
-`,
-	`
-CREATE TABLE database_instance_peer_analysis (
-	peer varchar(128) NOT NULL,
-	hostname varchar(128) NOT NULL,
-	port smallint NOT NULL,
-	analysis_timestamp timestamp not null default (''),
-	analysis varchar(128) NOT NULL,
-	PRIMARY KEY (peer, hostname, port)
-)`,
-	`
-DROP TABLE IF EXISTS database_instance_tls
-`,
-	`
-CREATE TABLE database_instance_tls (
-	hostname varchar(128) NOT NULL,
-	port smallint NOT NULL,
-	required tinyint NOT NULL DEFAULT 0,
-	PRIMARY KEY (hostname,port)
 )`,
 	`
 DROP TABLE IF EXISTS database_instance_stale_binlog_coordinates
@@ -697,12 +407,6 @@ CREATE TABLE vitess_keyspace (
 )`,
 	`
 CREATE INDEX source_host_port_idx_database_instance_database_instance on database_instance (source_host, source_port)
-	`,
-	`
-CREATE INDEX active_timestamp_idx_database_instance_maintenance on database_instance_maintenance (maintenance_active, begin_timestamp)
-	`,
-	`
-CREATE INDEX active_end_timestamp_idx_database_instance_maintenance on database_instance_maintenance (maintenance_active, end_timestamp)
 	`,
 	`
 CREATE INDEX keyspace_shard_in_active_idx_topology_recovery on topology_recovery (keyspace, shard, in_active_period)

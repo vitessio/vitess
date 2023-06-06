@@ -72,7 +72,7 @@ func translateStatement(statement string) string {
 	return sqlutils.ToSqlite3Dialect(statement)
 }
 
-// registerVTOrcDeployment updates the vtorc_metadata table upon successful deployment
+// registerVTOrcDeployment updates the vtorc_db_deployments table upon successful deployment
 func registerVTOrcDeployment(db *sql.DB) error {
 	query := `
     	replace into vtorc_db_deployments (
@@ -82,7 +82,7 @@ func registerVTOrcDeployment(db *sql.DB) error {
 			)
 				`
 	if _, err := execInternal(db, query, ""); err != nil {
-		log.Fatalf("Unable to write to vtorc_metadata: %+v", err)
+		log.Fatalf("Unable to write to vtorc_db_deployments: %+v", err)
 	}
 	return nil
 }
