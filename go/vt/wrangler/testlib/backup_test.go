@@ -192,6 +192,11 @@ func testBackupRestore(t *testing.T, cDetails *compressionDetails) error {
 		"FAKE SET MASTER",
 		"START SLAVE",
 	}
+	sourceTablet.FakeMysqlDaemon.FetchSuperQueryMap = map[string]*sqltypes.Result{
+		"SHOW DATABASES":         {},
+		"RESET MASTER":           {},
+		"SET GLOBAL gtid_purged": {},
+	}
 	sourceTablet.StartActionLoop(t, wr)
 	defer sourceTablet.StopActionLoop(t)
 
@@ -239,7 +244,9 @@ func testBackupRestore(t *testing.T, cDetails *compressionDetails) error {
 		"START SLAVE",
 	}
 	destTablet.FakeMysqlDaemon.FetchSuperQueryMap = map[string]*sqltypes.Result{
-		"SHOW DATABASES": {},
+		"SHOW DATABASES":         {},
+		"RESET MASTER":           {},
+		"SET GLOBAL gtid_purged": {},
 	}
 	destTablet.FakeMysqlDaemon.SetReplicationPositionPos = sourceTablet.FakeMysqlDaemon.CurrentPrimaryPosition
 	destTablet.FakeMysqlDaemon.SetReplicationSourceInputs = append(destTablet.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(primary.Tablet))
@@ -281,7 +288,9 @@ func testBackupRestore(t *testing.T, cDetails *compressionDetails) error {
 	}
 
 	primary.FakeMysqlDaemon.FetchSuperQueryMap = map[string]*sqltypes.Result{
-		"SHOW DATABASES": {},
+		"SHOW DATABASES":         {},
+		"RESET MASTER":           {},
+		"SET GLOBAL gtid_purged": {},
 	}
 	primary.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		"STOP SLAVE",
@@ -493,7 +502,9 @@ func TestBackupRestoreLagged(t *testing.T) {
 		"START SLAVE",
 	}
 	destTablet.FakeMysqlDaemon.FetchSuperQueryMap = map[string]*sqltypes.Result{
-		"SHOW DATABASES": {},
+		"SHOW DATABASES":         {},
+		"RESET MASTER":           {},
+		"SET GLOBAL gtid_purged": {},
 	}
 	destTablet.FakeMysqlDaemon.SetReplicationPositionPos = destTablet.FakeMysqlDaemon.CurrentPrimaryPosition
 	destTablet.FakeMysqlDaemon.SetReplicationSourceInputs = append(destTablet.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(primary.Tablet))
@@ -684,7 +695,9 @@ func TestRestoreUnreachablePrimary(t *testing.T) {
 		"START SLAVE",
 	}
 	destTablet.FakeMysqlDaemon.FetchSuperQueryMap = map[string]*sqltypes.Result{
-		"SHOW DATABASES": {},
+		"SHOW DATABASES":         {},
+		"RESET MASTER":           {},
+		"SET GLOBAL gtid_purged": {},
 	}
 	destTablet.FakeMysqlDaemon.SetReplicationPositionPos = sourceTablet.FakeMysqlDaemon.CurrentPrimaryPosition
 	destTablet.FakeMysqlDaemon.SetReplicationSourceInputs = append(destTablet.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(primary.Tablet))
@@ -841,7 +854,9 @@ func TestDisableActiveReparents(t *testing.T) {
 		"FAKE SET SLAVE POSITION",
 	}
 	destTablet.FakeMysqlDaemon.FetchSuperQueryMap = map[string]*sqltypes.Result{
-		"SHOW DATABASES": {},
+		"SHOW DATABASES":         {},
+		"RESET MASTER":           {},
+		"SET GLOBAL gtid_purged": {},
 	}
 	destTablet.FakeMysqlDaemon.SetReplicationPositionPos = sourceTablet.FakeMysqlDaemon.CurrentPrimaryPosition
 	destTablet.FakeMysqlDaemon.SetReplicationSourceInputs = append(destTablet.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(primary.Tablet))
