@@ -6279,7 +6279,7 @@
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
         "Aggregates": "sum_count_star(2) AS count(*)",
-        "GroupBy": "1",
+        "GroupBy": "0",
         "Inputs": [
           {
             "OperatorType": "Route",

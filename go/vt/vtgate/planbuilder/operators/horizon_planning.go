@@ -800,15 +800,23 @@ outer:
 		if err != nil {
 			return nil, err
 		}
+		addedToCol := false
 		for idx, groupBy := range a.Grouping {
 			if ctx.SemTable.EqualsExprWithDeps(groupBy.SimplifiedExpr, ae.Expr) {
-				a.Columns = append(a.Columns, ae)
-				a.Grouping[idx].ColOffset = colIdx
-				continue outer
+				if !addedToCol {
+					a.Columns = append(a.Columns, ae)
+					addedToCol = true
+				}
+				if groupBy.ColOffset < 0 {
+					a.Grouping[idx].ColOffset = colIdx
+				}
 			}
 		}
+		if addedToCol {
+			continue
+		}
 		for idx, aggr := range a.Aggregations {
-			if ctx.SemTable.EqualsExprWithDeps(aggr.Original.Expr, ae.Expr) {
+			if ctx.SemTable.EqualsExprWithDeps(aggr.Original.Expr, ae.Expr) && aggr.ColOffset < 0 {
 				a.Columns = append(a.Columns, ae)
 				a.Aggregations[idx].ColOffset = colIdx
 				continue outer
