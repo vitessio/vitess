@@ -6267,5 +6267,37 @@
         "user.user"
       ]
     }
+  },
+  {
+    "comment": "using a grouping column multiple times should be OK",
+    "query": "select col, col, count(*) from user group by col",
+    "v3-plan": "generating ORDER BY clause: VT03021: ambiguous column reference: col",
+    "gen4-plan": {
+      "QueryType": "SELECT",
+      "Original": "select col, col, count(*) from user group by col",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Ordered",
+        "Aggregates": "sum_count_star(2) AS count(*)",
+        "GroupBy": "1",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select col, col, count(*) from `user` where 1 != 1 group by col",
+            "OrderBy": "0 ASC",
+            "Query": "select col, col, count(*) from `user` group by col order by col asc",
+            "Table": "`user`"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
   }
 ]

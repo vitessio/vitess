@@ -801,20 +801,20 @@ outer:
 			return nil, err
 		}
 		for idx, groupBy := range a.Grouping {
-			if ae == groupBy.aliasedExpr {
+			if ctx.SemTable.EqualsExprWithDeps(groupBy.SimplifiedExpr, ae.Expr) {
 				a.Columns = append(a.Columns, ae)
 				a.Grouping[idx].ColOffset = colIdx
 				continue outer
 			}
 		}
 		for idx, aggr := range a.Aggregations {
-			if ae == aggr.Original {
+			if ctx.SemTable.EqualsExprWithDeps(aggr.Original.Expr, ae.Expr) {
 				a.Columns = append(a.Columns, ae)
 				a.Aggregations[idx].ColOffset = colIdx
 				continue outer
 			}
 		}
-		return nil, vterrors.VT13001(fmt.Sprintf("Could not find the %v in aggregation in the original query", expr))
+		return nil, vterrors.VT13001(fmt.Sprintf("Could not find the %s in aggregation in the original query", sqlparser.String(ae)))
 	}
 
 	return a, nil
