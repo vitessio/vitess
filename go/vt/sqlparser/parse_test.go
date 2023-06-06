@@ -2947,6 +2947,9 @@ var (
 		}, {
 			input:  "ALTER DEFINER = `newuser`@`localhost` EVENT myevent ON COMPLETION NOT PRESERVE;",
 			output: "alter definer = `newuser`@`localhost` event myevent on completion not preserve",
+		}, {
+			input:  "SELECT * FROM information_schema.events;",
+			output: "select * from information_schema.`events`",
 		},
 	}
 	// Any tests that contain multiple statements within the body (such as BEGIN/END blocks) should go here.

@@ -4316,22 +4316,7 @@ alter_table_statement_part:
     $$ = &DDL{Action: AlterStr, ConstraintAction: DropStr, TableSpec: &TableSpec{Constraints:
         []*ConstraintDefinition{&ConstraintDefinition{Name: string($3)}}}}
   }
-| DROP CONSTRAINT column_name_safe_keyword
-  {
-    $$ = &DDL{Action: AlterStr, ConstraintAction: DropStr, TableSpec: &TableSpec{Constraints:
-        []*ConstraintDefinition{&ConstraintDefinition{Name: string($3)}}}}
-  }
-| DROP CONSTRAINT non_reserved_keyword
-  {
-    $$ = &DDL{Action: AlterStr, ConstraintAction: DropStr, TableSpec: &TableSpec{Constraints:
-        []*ConstraintDefinition{&ConstraintDefinition{Name: string($3)}}}}
-  }
-| DROP CONSTRAINT non_reserved_keyword2
-  {
-    $$ = &DDL{Action: AlterStr, ConstraintAction: DropStr, TableSpec: &TableSpec{Constraints:
-        []*ConstraintDefinition{&ConstraintDefinition{Name: string($3)}}}}
-  }
-| DROP CONSTRAINT non_reserved_keyword3
+| DROP CONSTRAINT all_non_reserved
   {
     $$ = &DDL{Action: AlterStr, ConstraintAction: DropStr, TableSpec: &TableSpec{Constraints:
         []*ConstraintDefinition{&ConstraintDefinition{Name: string($3)}}}}
@@ -5476,23 +5461,11 @@ col_alias:
   {
     $$ = NewColIdent(string($1))
   }
-| non_reserved_keyword
-  {
-    $$ = NewColIdent(string($1))
-  }
-| column_name_safe_keyword
-  {
-    $$ = NewColIdent(string($1))
-  }
 | STRING
   {
     $$ = NewColIdent(string($1))
   }
-| non_reserved_keyword2
-  {
-    $$ = NewColIdent(string($1))
-  }
-| non_reserved_keyword3
+| all_non_reserved
   {
     $$ = NewColIdent(string($1))
   }
@@ -8374,6 +8347,7 @@ non_reserved_keyword:
 | ENUM
 | ERROR
 | ERRORS
+| EVENTS
 | EVERY
 | EXCLUDE
 | EXPANSION
@@ -8575,7 +8549,6 @@ non_reserved_keyword2:
   ATTRIBUTE
 | COMMENT_KEYWORD
 | EVENT
-| EVENTS
 | EXECUTE
 | EXTRACT
 | FAILED_LOGIN_ATTEMPTS
