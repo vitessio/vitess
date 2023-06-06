@@ -226,9 +226,10 @@ func addAggregationToSelect(ctx *plancontext.PlanningContext, sel *sqlparser.Sel
 	return newOffset(len(sel.SelectExprs) - 1)
 }
 
-func countStarAggr() operators.Aggr {
+func countStarAggr() *operators.Aggr {
 	f := &sqlparser.CountStar{}
-	return operators.NewAggr(popcode.AggregateCountStar, f, &sqlparser.AliasedExpr{Expr: f}, "count(*)")
+	aggr := operators.NewAggr(popcode.AggregateCountStar, f, &sqlparser.AliasedExpr{Expr: f}, "count(*)")
+	return &aggr
 }
 
 /*
@@ -441,7 +442,7 @@ func splitAggregationsToLeftAndRight(
 			rhsAggrs = append(rhsAggrs, &newAggr)
 		} else {
 			deps := ctx.SemTable.RecursiveDeps(aggr.Original.Expr)
-			var other operators.Aggr
+			var other *operators.Aggr
 			// if we are sending down min/max/random, we don't have to multiply the results with anything
 			if !isMinOrMax(aggr.OpCode) && !isRandom(aggr.OpCode) {
 				other = countStarAggr()
@@ -449,10 +450,10 @@ func splitAggregationsToLeftAndRight(
 			switch {
 			case deps.IsSolvedBy(join.Left.ContainsTables()):
 				lhsAggrs = append(lhsAggrs, &newAggr)
-				rhsAggrs = append(rhsAggrs, &other)
+				rhsAggrs = append(rhsAggrs, other)
 			case deps.IsSolvedBy(join.Right.ContainsTables()):
 				rhsAggrs = append(rhsAggrs, &newAggr)
-				lhsAggrs = append(lhsAggrs, &other)
+				lhsAggrs = append(lhsAggrs, other)
 			default:
 				return nil, nil, vterrors.VT12001("aggregation on columns from different sources")
 			}
