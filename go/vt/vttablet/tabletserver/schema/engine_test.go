@@ -1142,7 +1142,7 @@ func TestEngineReload(t *testing.T) {
 
 	// Finding mismatches in the tables.
 	// t5 exists in the database.
-	db.AddQuery("SELECT TABLE_NAME, CREATE_TIME FROM _vt.schema_engine_tables", sqltypes.MakeTestResult(sqltypes.MakeTestFields("table_name|create_time", "varchar|int64"),
+	db.AddQuery("SELECT TABLE_NAME, CREATE_TIME FROM _vt.`tables`", sqltypes.MakeTestResult(sqltypes.MakeTestFields("table_name|create_time", "varchar|int64"),
 		"t1|123456789",
 		"t2|123456789",
 		"t4|123456789",
@@ -1182,10 +1182,10 @@ func TestEngineReload(t *testing.T) {
 		db.AddQuery("commit", &sqltypes.Result{})
 		db.AddQuery("rollback", &sqltypes.Result{})
 		// We are adding both the variants of the delete statements that we can see in the test, since the deleted tables are initially stored as a map, the order is not defined.
-		db.AddQuery("delete from _vt.schema_engine_tables where TABLE_SCHEMA = database() and TABLE_NAME in ('t5', 't4', 't3', 't2')", &sqltypes.Result{})
-		db.AddQuery("delete from _vt.schema_engine_tables where TABLE_SCHEMA = database() and TABLE_NAME in ('t4', 't5', 't3', 't2')", &sqltypes.Result{})
-		db.AddQuery("insert into _vt.schema_engine_tables(TABLE_SCHEMA, TABLE_NAME, CREATE_STATEMENT, CREATE_TIME) values (database(), 't2', 'create_table_t2', 123456790)", &sqltypes.Result{})
-		db.AddQuery("insert into _vt.schema_engine_tables(TABLE_SCHEMA, TABLE_NAME, CREATE_STATEMENT, CREATE_TIME) values (database(), 't3', 'create_table_t3', 123456789)", &sqltypes.Result{})
+		db.AddQuery("delete from _vt.`tables` where TABLE_SCHEMA = database() and TABLE_NAME in ('t5', 't4', 't3', 't2')", &sqltypes.Result{})
+		db.AddQuery("delete from _vt.`tables` where TABLE_SCHEMA = database() and TABLE_NAME in ('t4', 't5', 't3', 't2')", &sqltypes.Result{})
+		db.AddQuery("insert into _vt.`tables`(TABLE_SCHEMA, TABLE_NAME, CREATE_STATEMENT, CREATE_TIME) values (database(), 't2', 'create_table_t2', 123456790)", &sqltypes.Result{})
+		db.AddQuery("insert into _vt.`tables`(TABLE_SCHEMA, TABLE_NAME, CREATE_STATEMENT, CREATE_TIME) values (database(), 't3', 'create_table_t3', 123456789)", &sqltypes.Result{})
 	}
 
 	// Queries for reloading the views' information.
@@ -1208,10 +1208,10 @@ func TestEngineReload(t *testing.T) {
 			))
 
 		// We are adding both the variants of the delete statements that we can see in the test, since the deleted views are initially stored as a map, the order is not defined.
-		db.AddQuery("delete from _vt.schema_engine_views where TABLE_SCHEMA = database() and TABLE_NAME in ('v4', 'v5', 'v3', 'v2')", &sqltypes.Result{})
-		db.AddQuery("delete from _vt.schema_engine_views where TABLE_SCHEMA = database() and TABLE_NAME in ('v5', 'v4', 'v3', 'v2')", &sqltypes.Result{})
-		db.AddQuery("insert into _vt.schema_engine_views(TABLE_SCHEMA, TABLE_NAME, CREATE_STATEMENT, VIEW_DEFINITION) values (database(), 'v2', 'create_table_v2', 'select_v2')", &sqltypes.Result{})
-		db.AddQuery("insert into _vt.schema_engine_views(TABLE_SCHEMA, TABLE_NAME, CREATE_STATEMENT, VIEW_DEFINITION) values (database(), 'v3', 'create_table_v3', 'select_v3')", &sqltypes.Result{})
+		db.AddQuery("delete from _vt.views where TABLE_SCHEMA = database() and TABLE_NAME in ('v4', 'v5', 'v3', 'v2')", &sqltypes.Result{})
+		db.AddQuery("delete from _vt.views where TABLE_SCHEMA = database() and TABLE_NAME in ('v5', 'v4', 'v3', 'v2')", &sqltypes.Result{})
+		db.AddQuery("insert into _vt.views(TABLE_SCHEMA, TABLE_NAME, CREATE_STATEMENT, VIEW_DEFINITION) values (database(), 'v2', 'create_table_v2', 'select_v2')", &sqltypes.Result{})
+		db.AddQuery("insert into _vt.views(TABLE_SCHEMA, TABLE_NAME, CREATE_STATEMENT, VIEW_DEFINITION) values (database(), 'v3', 'create_table_v3', 'select_v3')", &sqltypes.Result{})
 	}
 
 	// Verify the list of created, altered and dropped tables seen.

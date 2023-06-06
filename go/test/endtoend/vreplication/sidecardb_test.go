@@ -38,7 +38,7 @@ var ddls1, ddls2 []string
 
 func init() {
 	sidecarDBTables = []string{"copy_state", "dt_participant", "dt_state", "heartbeat", "post_copy_action", "redo_state",
-		"redo_statement", "reparent_journal", "resharding_journal", "schema_engine_tables", "schema_engine_views", "schema_migrations", "schema_version", "schemacopy",
+		"redo_statement", "reparent_journal", "resharding_journal", "schema_migrations", "schema_version", "schemacopy", "tables",
 		"vdiff", "vdiff_log", "vdiff_table", "views", "vreplication", "vreplication_log"}
 	numSidecarDBTables = len(sidecarDBTables)
 	ddls1 = []string{
