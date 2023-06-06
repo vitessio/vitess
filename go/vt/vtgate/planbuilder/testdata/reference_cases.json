@@ -323,7 +323,6 @@
           "Sharded": false
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "Query": "insert into ambiguous_ref_with_source(col) values (1)",
         "TableName": "ambiguous_ref_with_source"
       },
@@ -346,7 +345,6 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "Query": "insert into ambiguous_ref_with_source(col) values (1)",
         "TableName": "ambiguous_ref_with_source"
       },
@@ -365,7 +363,6 @@
           "Sharded": false
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "Query": "insert into ambiguous_ref_with_source(col) values (1)",
         "TableName": "ambiguous_ref_with_source"
       },
@@ -388,7 +385,6 @@
           "Sharded": false
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "Query": "update ambiguous_ref_with_source set col = 1",
         "Table": "ambiguous_ref_with_source"
       },
@@ -412,7 +408,6 @@
           "Sharded": false
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "Query": "update ambiguous_ref_with_source set col = 1",
         "Table": "ambiguous_ref_with_source"
       },
@@ -435,7 +430,6 @@
           "Sharded": false
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "Query": "delete from ambiguous_ref_with_source where col = 1",
         "Table": "ambiguous_ref_with_source"
       },
@@ -459,7 +453,6 @@
           "Sharded": false
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "Query": "delete from ambiguous_ref_with_source where col = 1",
         "Table": "ambiguous_ref_with_source"
       },
@@ -691,7 +684,6 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "Query": "insert into global_ref(col) values (1)",
         "TableName": "global_ref"
       },
@@ -710,7 +702,6 @@
           "Sharded": false
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "Query": "insert into global_ref(col) values (1)",
         "TableName": "global_ref"
       },

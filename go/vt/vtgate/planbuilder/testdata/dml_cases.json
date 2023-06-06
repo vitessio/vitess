@@ -23,7 +23,6 @@
           "Sharded": false
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "Query": "update m1 set val = 1",
         "Table": "m1"
       },
@@ -46,7 +45,6 @@
           "Sharded": false
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "Query": "update unsharded set val = 1",
         "Table": "unsharded"
       },
@@ -69,7 +67,6 @@
           "Sharded": false
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "Query": "update unsharded set col = (select col from unsharded limit 1)",
         "Table": "unsharded"
       },
@@ -92,7 +89,6 @@
           "Sharded": false
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "Query": "update unsharded set col = (select id from unsharded union select id from unsharded)",
         "Table": "unsharded"
       },
@@ -115,7 +111,6 @@
           "Sharded": false
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "Query": "update unsharded set col = (select id from unsharded as a join unsharded as b on a.id = b.id)",
         "Table": "unsharded"
       },
@@ -138,7 +133,6 @@
           "Sharded": false
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "Query": "update unsharded as foo left join (select id from unsharded where col is not null order by col desc limit 10) as keepers on foo.id = keepers.id set col1 = 'asdf' where keepers.id is null and foo.col is not null and foo.col < 1000",
         "Table": "unsharded"
       },
@@ -161,7 +155,6 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "Query": "update `user` as route1 set a = 1 where id = 1",
         "Table": "user",
         "Values": [
@@ -184,7 +177,6 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "Query": "update `user` as route1 set a = 1 where id = 1",
         "Table": "user",
         "Values": [
@@ -211,7 +203,6 @@
           "Sharded": false
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "Query": "update unsharded_a set a = (select a from unsharded as route2)",
         "Table": "unsharded, unsharded_a"
       },
@@ -230,7 +221,6 @@
           "Sharded": false
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "Query": "update unsharded_a set a = (select a from unsharded as route2)",
         "Table": "unsharded, unsharded_a"
       },
@@ -254,7 +244,6 @@
           "Sharded": false
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "Query": "delete from unsharded",
         "Table": "unsharded"
       },
@@ -277,7 +266,6 @@
           "Sharded": false
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "Query": "delete from seq",
         "Table": "seq"
       },
@@ -300,7 +288,6 @@
           "Sharded": false
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "Query": "delete from unsharded_ref",
         "Table": "unsharded_ref"
       },
@@ -323,7 +310,6 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "Query": "update `user` set val = 1 where id = 1",
         "Table": "user",
         "Values": [
@@ -346,7 +332,6 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "Query": "update `user` set val = 1 where id = 1",
         "Table": "user",
         "Values": [
@@ -373,7 +358,6 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "Query": "update `user` as user_alias set val = 1 where user_alias.id = 1",
         "Table": "user",
         "Values": [
@@ -396,7 +380,6 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "Query": "update `user` as user_alias set val = 1 where user_alias.id = 1",
         "Table": "user",
         "Values": [
@@ -423,7 +406,6 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "Query": "update `user` set val = 1 where id = 1",
         "Table": "user",
         "Values": [
@@ -446,7 +428,6 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "Query": "update `user` set val = 1 where id = 1",
         "Table": "user",
         "Values": [
@@ -473,7 +454,6 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "Query": "update `user` set val = 1 where `name` = 'foo' and id = 1",
         "Table": "user",
         "Values": [
@@ -496,7 +476,6 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "Query": "update `user` set val = 1 where `name` = 'foo' and id = 1",
         "Table": "user",
         "Values": [
@@ -528,7 +507,6 @@
         ],
         "KsidLength": 1,
         "KsidVindex": "user_index",
-        "MultiShardAutocommit": false,
         "OwnedVindexQuery": "select user_id, email, address, non_planable, email = 'juan@vitess.io' from user_metadata where user_id = 1 for update",
         "Query": "update user_metadata set email = 'juan@vitess.io' where user_id = 1",
         "Table": "user_metadata",
@@ -557,7 +535,6 @@
         ],
         "KsidLength": 1,
         "KsidVindex": "user_index",
-        "MultiShardAutocommit": false,
         "OwnedVindexQuery": "select user_id, email, address, non_planable, email = 'juan@vitess.io' from user_metadata where user_id = 1 for update",
         "Query": "update user_metadata set email = 'juan@vitess.io' where user_id = 1",
         "Table": "user_metadata",
@@ -596,7 +573,6 @@
         ],
         "KsidLength": 1,
         "KsidVindex": "user_index",
-        "MultiShardAutocommit": false,
         "OwnedVindexQuery": "select user_id, email, address, non_planable, email = 'juan@vitess.io', address = '155 5th street' from user_metadata where user_id = 1 for update",
         "Query": "update user_metadata set email = 'juan@vitess.io', address = '155 5th street' where user_id = 1",
         "Table": "user_metadata",
@@ -626,7 +602,6 @@
         ],
         "KsidLength": 1,
         "KsidVindex": "user_index",
-        "MultiShardAutocommit": false,
         "OwnedVindexQuery": "select user_id, email, address, non_planable, email = 'juan@vitess.io', address = '155 5th street' from user_metadata where user_id = 1 for update",
         "Query": "update user_metadata set email = 'juan@vitess.io', address = '155 5th street' where user_id = 1",
         "Table": "user_metadata",
@@ -659,7 +634,6 @@
         ],
         "KsidLength": 1,
         "KsidVindex": "user_index",
-        "MultiShardAutocommit": false,
         "OwnedVindexQuery": "select user_id, email, address, non_planable, email = 'juan@vitess.io' from user_metadata where user_id = 1 order by user_id asc limit 10 for update",
         "Query": "update user_metadata set email = 'juan@vitess.io' where user_id = 1 order by user_id asc limit 10",
         "Table": "user_metadata",
@@ -688,7 +662,6 @@
         ],
         "KsidLength": 1,
         "KsidVindex": "user_index",
-        "MultiShardAutocommit": false,
         "OwnedVindexQuery": "select user_id, email, address, non_planable, email = 'juan@vitess.io' from user_metadata where user_id = 1 order by user_id asc limit 10 for update",
         "Query": "update user_metadata set email = 'juan@vitess.io' where user_id = 1 order by user_id asc limit 10",
         "Table": "user_metadata",
@@ -721,7 +694,6 @@
         ],
         "KsidLength": 1,
         "KsidVindex": "user_index",
-        "MultiShardAutocommit": false,
         "OwnedVindexQuery": "select user_id, music_id = 1 from music_extra where user_id = 1 for update",
         "Query": "update music_extra set music_id = 1 where user_id = 1",
         "Table": "music_extra",
@@ -750,7 +722,6 @@
         ],
         "KsidLength": 1,
         "KsidVindex": "user_index",
-        "MultiShardAutocommit": false,
         "OwnedVindexQuery": "select user_id, music_id = 1 from music_extra where user_id = 1 for update",
         "Query": "update music_extra set music_id = 1 where user_id = 1",
         "Table": "music_extra",
@@ -778,7 +749,6 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "Query": "update `user` set val = 1 where id = id2 and id = 1",
         "Table": "user",
         "Values": [
@@ -801,7 +771,6 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "Query": "update `user` set val = 1 where id = id2 and id = 1",
         "Table": "user",
         "Values": [
@@ -828,7 +797,6 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "Query": "update `user` set val = 1 where id = 18446744073709551616 and id = 1",
         "Table": "user",
         "Values": [
@@ -851,7 +819,6 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "Query": "update `user` set val = 1 where id = 18446744073709551616 and id = 1",
         "Table": "user",
         "Values": [
@@ -880,7 +847,6 @@
         "TargetTabletType": "PRIMARY",
         "KsidLength": 1,
         "KsidVindex": "user_index",
-        "MultiShardAutocommit": false,
         "OwnedVindexQuery": "select Id, `Name`, Costly from `user` where id = 1 for update",
         "Query": "delete from `user` where id = 1",
         "Table": "user",
@@ -906,7 +872,6 @@
         "TargetTabletType": "PRIMARY",
         "KsidLength": 1,
         "KsidVindex": "user_index",
-        "MultiShardAutocommit": false,
         "OwnedVindexQuery": "select Id, `Name`, Costly from `user` where id = 1 for update",
         "Query": "delete from `user` where id = 1",
         "Table": "user",
@@ -934,7 +899,6 @@
           "Sharded": false
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "Query": "delete a from unsharded_a as a, unsharded_b as b where a.id = b.id and b.val = 1",
         "Table": "unsharded_a, unsharded_b"
       },
@@ -958,7 +922,6 @@
           "Sharded": false
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "Query": "delete a from unsharded_a as a join unsharded_b as b on a.id = b.id where b.val = 1",
         "Table": "unsharded_a, unsharded_b"
       },
@@ -982,7 +945,6 @@
           "Sharded": false
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "Query": "delete foo from unsharded as foo left join (select id from unsharded where col is not null order by col desc limit 10) as keepers on foo.id = keepers.id where keepers.id is null and foo.col is not null and foo.col < 1000",
         "Table": "unsharded"
       },
@@ -1007,7 +969,6 @@
         "TargetTabletType": "PRIMARY",
         "KsidLength": 1,
         "KsidVindex": "user_index",
-        "MultiShardAutocommit": false,
         "OwnedVindexQuery": "select Id, `Name`, Costly from `user` as route1 where id = 1 for update",
         "Query": "delete from `user` as route1 where id = 1",
         "Table": "user",
@@ -1033,7 +994,6 @@
         "TargetTabletType": "PRIMARY",
         "KsidLength": 1,
         "KsidVindex": "user_index",
-        "MultiShardAutocommit": false,
         "OwnedVindexQuery": "select Id, `Name`, Costly from `user` as route1 where id = 1 for update",
         "Query": "delete from `user` as route1 where id = 1",
         "Table": "user",
@@ -1061,7 +1021,6 @@
           "Sharded": false
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "Query": "delete from unsharded_a where a = (select a from unsharded as route2)",
         "Table": "unsharded, unsharded_a"
       },
@@ -1080,7 +1039,6 @@
           "Sharded": false
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "Query": "delete from unsharded_a where a = (select a from unsharded as route2)",
         "Table": "unsharded, unsharded_a"
       },
@@ -1104,7 +1062,6 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "Query": "update music set val = 1 where id = 1",
         "Table": "music",
         "Values": [
@@ -1127,7 +1084,6 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "Query": "update music set val = 1 where id = 1",
         "Table": "music",
         "Values": [
@@ -1154,7 +1110,6 @@
           "Sharded": false
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "Query": "update unsharded_a as a join unsharded_b as b on a.id = b.id set a.val = 'foo' where b.val = 1",
         "Table": "unsharded_a, unsharded_b"
       },
@@ -1178,7 +1133,6 @@
           "Sharded": false
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "Query": "update unsharded_a as a, unsharded_b as b set a.val = 'foo' where a.id = b.id and b.val = 1",
         "Table": "unsharded_a, unsharded_b"
       },
@@ -1204,7 +1158,6 @@
         "TargetTabletType": "PRIMARY",
         "KsidLength": 1,
         "KsidVindex": "user_index",
-        "MultiShardAutocommit": false,
         "OwnedVindexQuery": "select user_id, id from music where id = 1 for update",
         "Query": "delete from music where id = 1",
         "Table": "music",
@@ -1230,7 +1183,6 @@
         "TargetTabletType": "PRIMARY",
         "KsidLength": 1,
         "KsidVindex": "user_index",
-        "MultiShardAutocommit": false,
         "OwnedVindexQuery": "select user_id, id from music where id = 1 for update",
         "Query": "delete from music where id = 1",
         "Table": "music",
@@ -1258,7 +1210,6 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "Query": "delete from music_extra where user_id = 1",
         "Table": "music_extra",
         "Values": [
@@ -1281,7 +1232,6 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "Query": "delete from music_extra where user_id = 1",
         "Table": "music_extra",
         "Values": [
@@ -1308,7 +1258,6 @@
           "Sharded": false
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "Query": "insert into unsharded values ()",
         "TableName": "unsharded"
       },
@@ -1331,7 +1280,6 @@
           "Sharded": false
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "Query": "insert into unsharded values (1, 2)",
         "TableName": "unsharded"
       },
@@ -1354,7 +1302,6 @@
           "Sharded": false
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "Query": "insert into unsharded values (1, 2) on duplicate key update x = 3",
         "TableName": "unsharded"
       },
@@ -1377,7 +1324,7 @@
           "Sharded": false
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
+        "AutoIncrement": "select next :n /* INT64 */ values from seq:Values::(INT64(1))",
         "Query": "insert into unsharded_authoritative(col1, col2) values (:__seq0, 1)",
         "TableName": "unsharded_authoritative"
       },
@@ -1401,7 +1348,6 @@
         },
         "TargetTabletType": "PRIMARY",
         "InsertIgnore": true,
-        "MultiShardAutocommit": false,
         "Query": "insert into music(user_id, id) values (:_user_id_0, :_id_0) on duplicate key update user_id = values(user_id)",
         "TableName": "music",
         "VindexValues": {
@@ -1429,7 +1375,6 @@
         },
         "TargetTabletType": "PRIMARY",
         "InsertIgnore": true,
-        "MultiShardAutocommit": false,
         "Query": "insert into music(user_id, id) values (:_user_id_0, :_id_0), (:_user_id_1, :_id_1) on duplicate key update user_id = values(user_id)",
         "TableName": "music",
         "VindexValues": {
@@ -1456,7 +1401,6 @@
           "Sharded": false
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "Query": "insert into unsharded select id from unsharded_auto for update",
         "TableName": "unsharded"
       },
@@ -1475,8 +1419,7 @@
           "Sharded": false
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
-        "Query": "insert into unsharded select id from unsharded_auto for update",
+        "Query": "insert into unsharded select id from unsharded_auto",
         "TableName": "unsharded"
       },
       "TablesUsed": [
@@ -1499,7 +1442,6 @@
           "Sharded": false
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "Query": "insert into unsharded select id from unsharded join unsharded_auto for update",
         "TableName": "unsharded"
       },
@@ -1518,8 +1460,7 @@
           "Sharded": false
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
-        "Query": "insert into unsharded select id from unsharded join unsharded_auto for update",
+        "Query": "insert into unsharded select id from unsharded join unsharded_auto",
         "TableName": "unsharded"
       },
       "TablesUsed": [
@@ -1542,7 +1483,7 @@
           "Sharded": false
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
+        "AutoIncrement": "select next :n /* INT64 */ values from seq:Values::(DECIMAL(18446744073709551616))",
         "Query": "insert into unsharded_auto(id, val) values (:__seq0, 'aa')",
         "TableName": "unsharded_auto"
       },
@@ -1565,7 +1506,7 @@
           "Sharded": false
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
+        "AutoIncrement": "select next :n /* INT64 */ values from seq:Values::(INT64(1))",
         "Query": "insert into unsharded_auto(id, val) values (:__seq0, 'aa')",
         "TableName": "unsharded_auto"
       },
@@ -1588,7 +1529,7 @@
           "Sharded": false
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
+        "AutoIncrement": "select next :n /* INT64 */ values from seq:Values::(NULL)",
         "Query": "insert into unsharded_auto(val, id) values ('aa', :__seq0)",
         "TableName": "unsharded_auto"
       },
@@ -1611,7 +1552,7 @@
           "Sharded": false
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
+        "AutoIncrement": "select next :n /* INT64 */ values from seq:Values::(NULL)",
         "Query": "insert into unsharded_auto(val, id) values (false, :__seq0)",
         "TableName": "unsharded_auto"
       },
@@ -1634,7 +1575,7 @@
           "Sharded": false
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
+        "AutoIncrement": "select next :n /* INT64 */ values from seq:Values::(INT64(1), NULL)",
         "Query": "insert into unsharded_auto(id, val) values (:__seq0, 'aa'), (:__seq1, 'bb')",
         "TableName": "unsharded_auto"
       },
@@ -1657,7 +1598,6 @@
           "Sharded": false
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "Query": "insert into unsharded values (1, 1)",
         "TableName": "unsharded"
       },
@@ -1680,7 +1620,7 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
+        "AutoIncrement": "select next :n /* INT64 */ values from seq:Values::(INT64(1))",
         "Query": "insert into `user`(id, val, `Name`, Costly) values (:_Id_0, 1, :_Name_0, :_Costly_0)",
         "TableName": "user",
         "VindexValues": {
@@ -1708,7 +1648,7 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
+        "AutoIncrement": "select next :n /* INT64 */ values from seq:Values::(INT64(1))",
         "Query": "insert into `user`(id, `Name`, Costly) values (:_Id_0, :_Name_0, :_Costly_0)",
         "TableName": "user",
         "VindexValues": {
@@ -1725,7 +1665,8 @@
   {
     "comment": "insert with mimatched column list",
     "query": "insert into user(id) values (1, 2)",
-    "plan": "VT13001: [BUG] column list does not match values"
+    "v3-plan": "VT13001: [BUG] column list does not match values",
+    "gen4-plan": "VT03006: column count does not match value count at row 1"
   },
   {
     "comment": "insert no column list for sharded authoritative table",
@@ -1741,7 +1682,6 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "Query": "insert into authoritative(user_id, col1, col2) values (:_user_id_0, 2, 3)",
         "TableName": "authoritative",
         "VindexValues": {
@@ -1767,7 +1707,7 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
+        "AutoIncrement": "select next :n /* INT64 */ values from seq:Values::(NULL)",
         "Query": "insert into `user`(id, `Name`, Costly) values (:_Id_0, :_Name_0, :_Costly_0)",
         "TableName": "user",
         "VindexValues": {
@@ -1795,7 +1735,7 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
+        "AutoIncrement": "select next :n /* INT64 */ values from seq:Values::(INT64(1))",
         "Query": "insert into `user`(id, `Name`, Costly) values (:_Id_0, :_Name_0, :_Costly_0)",
         "TableName": "user",
         "VindexValues": {
@@ -1823,8 +1763,8 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
+        "AutoIncrement": "select next :n /* INT64 */ values from seq:Values::(INT64(1))",
         "InsertIgnore": true,
-        "MultiShardAutocommit": false,
         "Query": "insert ignore into `user`(id, `Name`, Costly) values (:_Id_0, :_Name_0, :_Costly_0)",
         "TableName": "user",
         "VindexValues": {
@@ -1852,8 +1792,8 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
+        "AutoIncrement": "select next :n /* INT64 */ values from seq:Values::(INT64(1))",
         "InsertIgnore": true,
-        "MultiShardAutocommit": false,
         "Query": "insert into `user`(id, `Name`, Costly) values (:_Id_0, :_Name_0, :_Costly_0) on duplicate key update col = 2",
         "TableName": "user",
         "VindexValues": {
@@ -1881,7 +1821,7 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
+        "AutoIncrement": "select next :n /* INT64 */ values from seq:Values::(:aa)",
         "Query": "insert into `user`(id, `Name`, Costly) values (:_Id_0, :_Name_0, :_Costly_0)",
         "TableName": "user",
         "VindexValues": {
@@ -1909,7 +1849,7 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
+        "AutoIncrement": "select next :n /* INT64 */ values from seq:Values::(NULL)",
         "Query": "insert into `user`(nonid, id, `Name`, Costly) values (2, :_Id_0, :_Name_0, :_Costly_0)",
         "TableName": "user",
         "VindexValues": {
@@ -1937,7 +1877,7 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
+        "AutoIncrement": "select next :n /* INT64 */ values from seq:Values::(NULL)",
         "Query": "insert into `user`(id, nonid, `Name`, Costly) values (:_Id_0, 2, :_Name_0, :_Costly_0)",
         "TableName": "user",
         "VindexValues": {
@@ -1965,7 +1905,7 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
+        "AutoIncrement": "select next :n /* INT64 */ values from seq:Values::(NULL)",
         "Query": "insert into `user`(nonid, id, `Name`, Costly) values (true, :_Id_0, :_Name_0, :_Costly_0)",
         "TableName": "user",
         "VindexValues": {
@@ -1993,7 +1933,7 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
+        "AutoIncrement": "select next :n /* INT64 */ values from seq:Values::(INT64(1))",
         "Query": "insert into `user`(nonid, `name`, id, Costly) values (2, :_Name_0, :_Id_0, :_Costly_0)",
         "TableName": "user",
         "VindexValues": {
@@ -2021,7 +1961,7 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
+        "AutoIncrement": "select next :n /* INT64 */ values from seq:Values::(NULL)",
         "Query": "insert into user_extra(nonid, extra_id, user_id) values (2, :__seq0, :_user_id_0)",
         "TableName": "user_extra",
         "VindexValues": {
@@ -2047,7 +1987,6 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "Query": "insert into `weird``name`(`a``b*c`, `b*c`) values (:_a_b_c_0, 2)",
         "TableName": "weird`name",
         "VindexValues": {
@@ -2073,7 +2012,6 @@
           "Sharded": false
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "Query": "insert into unsharded select 1 from dual union select 1 from dual for update",
         "TableName": "unsharded"
       },
@@ -2092,8 +2030,7 @@
           "Sharded": false
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
-        "Query": "insert into unsharded select 1 from dual union select 1 from dual for update",
+        "Query": "insert into unsharded select 1 from dual union select 1 from dual",
         "TableName": "unsharded"
       },
       "TablesUsed": [
@@ -2116,7 +2053,7 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
+        "AutoIncrement": "select next :n /* INT64 */ values from seq:Values::(DECIMAL(18446744073709551616))",
         "Query": "insert into user_extra(nonid, extra_id, user_id) values (2, :__seq0, :_user_id_0)",
         "TableName": "user_extra",
         "VindexValues": {
@@ -2142,7 +2079,6 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "Query": "insert into music_extra(music_id, user_id) values (:_music_id_0, :_user_id_0)",
         "TableName": "music_extra",
         "VindexValues": {
@@ -2179,7 +2115,7 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
+        "AutoIncrement": "select next :n /* INT64 */ values from seq:Values::(INT64(1), INT64(2))",
         "Query": "insert into `user`(id, `Name`, Costly) values (:_Id_0, :_Name_0, :_Costly_0), (:_Id_1, :_Name_1, :_Costly_1)",
         "TableName": "user",
         "VindexValues": {
@@ -2207,7 +2143,7 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
+        "AutoIncrement": "select next :n /* INT64 */ values from seq:Values::(INT64(1), INT64(2))",
         "Query": "insert /*vt+ QUERY_TIMEOUT_MS=1 */ into `user`(id, `Name`, Costly) values (:_Id_0, :_Name_0, :_Costly_0), (:_Id_1, :_Name_1, :_Costly_1)",
         "QueryTimeout": 1,
         "TableName": "user",
@@ -2236,6 +2172,7 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
+        "AutoIncrement": "select next :n /* INT64 */ values from seq:Values::(INT64(1), INT64(2))",
         "MultiShardAutocommit": true,
         "Query": "insert /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ into `user`(id, `Name`, Costly) values (:_Id_0, :_Name_0, :_Costly_0), (:_Id_1, :_Name_1, :_Costly_1)",
         "TableName": "user",
@@ -2253,7 +2190,8 @@
   {
     "comment": "insert into a vindex not allowed",
     "query": "insert into user_index(id) values(1)",
-    "plan": "VT12001: unsupported: multi-shard or vindex write statement"
+    "v3-plan": "VT12001: unsupported: multi-shard or vindex write statement",
+    "gen4-plan": "VT09014: vindex cannot be modified"
   },
   {
     "comment": "simple replace unsharded",
@@ -2269,7 +2207,6 @@
           "Sharded": false
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "Query": "replace into unsharded values (1, 2)",
         "TableName": "unsharded"
       },
@@ -2292,7 +2229,6 @@
           "Sharded": false
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "Query": "replace into unsharded select id from unsharded_auto for update",
         "TableName": "unsharded"
       },
@@ -2311,8 +2247,7 @@
           "Sharded": false
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
-        "Query": "replace into unsharded select id from unsharded_auto for update",
+        "Query": "replace into unsharded select id from unsharded_auto",
         "TableName": "unsharded"
       },
       "TablesUsed": [
@@ -2335,7 +2270,7 @@
           "Sharded": false
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
+        "AutoIncrement": "select next :n /* INT64 */ values from seq:Values::(DECIMAL(18446744073709551616))",
         "Query": "replace into unsharded_auto(id, val) values (:__seq0, 'aa')",
         "TableName": "unsharded_auto"
       },
@@ -2358,7 +2293,7 @@
           "Sharded": false
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
+        "AutoIncrement": "select next :n /* INT64 */ values from seq:Values::(INT64(1))",
         "Query": "replace into unsharded_auto(id, val) values (:__seq0, 'aa')",
         "TableName": "unsharded_auto"
       },
@@ -2381,7 +2316,7 @@
           "Sharded": false
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
+        "AutoIncrement": "select next :n /* INT64 */ values from seq:Values::(NULL)",
         "Query": "replace into unsharded_auto(val, id) values ('aa', :__seq0)",
         "TableName": "unsharded_auto"
       },
@@ -2404,7 +2339,7 @@
           "Sharded": false
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
+        "AutoIncrement": "select next :n /* INT64 */ values from seq:Values::(INT64(1), NULL)",
         "Query": "replace into unsharded_auto(id, val) values (:__seq0, 'aa'), (:__seq1, 'bb')",
         "TableName": "unsharded_auto"
       },
@@ -2432,7 +2367,6 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "Query": "insert into multicolvin(column_a, column_b, column_c, kid) values (:_column_a_0, :_column_b_0, :_column_c_0, :_kid_0)",
         "TableName": "multicolvin",
         "VindexValues": {
@@ -2460,7 +2394,6 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "Query": "insert into overlap_vindex(kid, column_a, column_b) values (:_kid_0, :_column_a_0, 3)",
         "TableName": "overlap_vindex",
         "VindexValues": {
@@ -2487,7 +2420,6 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "Query": "insert into multicolvin(column_a, column_b, column_c, kid) values (:_column_a_0, :_column_b_0, :_column_c_0, :_kid_0), (:_column_a_1, :_column_b_1, :_column_c_1, :_kid_1)",
         "TableName": "multicolvin",
         "VindexValues": {
@@ -2517,7 +2449,6 @@
         "TargetTabletType": "PRIMARY",
         "KsidLength": 1,
         "KsidVindex": "kid_index",
-        "MultiShardAutocommit": false,
         "OwnedVindexQuery": "select kid, column_a, column_b, column_c from multicolvin where kid = 1 for update",
         "Query": "delete from multicolvin where kid = 1",
         "Table": "multicolvin",
@@ -2543,7 +2474,6 @@
         "TargetTabletType": "PRIMARY",
         "KsidLength": 1,
         "KsidVindex": "kid_index",
-        "MultiShardAutocommit": false,
         "OwnedVindexQuery": "select kid, column_a, column_b, column_c from multicolvin where kid = 1 for update",
         "Query": "delete from multicolvin where kid = 1",
         "Table": "multicolvin",
@@ -2576,7 +2506,6 @@
         ],
         "KsidLength": 1,
         "KsidVindex": "kid_index",
-        "MultiShardAutocommit": false,
         "OwnedVindexQuery": "select kid, column_a, column_b, column_c, column_b = 1 and column_c = 2 from multicolvin where kid = 1 for update",
         "Query": "update multicolvin set column_b = 1, column_c = 2 where kid = 1",
         "Table": "multicolvin",
@@ -2605,7 +2534,6 @@
         ],
         "KsidLength": 1,
         "KsidVindex": "kid_index",
-        "MultiShardAutocommit": false,
         "OwnedVindexQuery": "select kid, column_a, column_b, column_c, column_b = 1 and column_c = 2 from multicolvin where kid = 1 for update",
         "Query": "update multicolvin set column_b = 1, column_c = 2 where kid = 1",
         "Table": "multicolvin",
@@ -2639,7 +2567,6 @@
         ],
         "KsidLength": 1,
         "KsidVindex": "kid_index",
-        "MultiShardAutocommit": false,
         "OwnedVindexQuery": "select kid, column_a, column_b, column_c, column_a = 0, column_b = 1 and column_c = 2 from multicolvin where kid = 1 for update",
         "Query": "update multicolvin set column_a = 0, column_b = 1, column_c = 2 where kid = 1",
         "Table": "multicolvin",
@@ -2669,7 +2596,6 @@
         ],
         "KsidLength": 1,
         "KsidVindex": "kid_index",
-        "MultiShardAutocommit": false,
         "OwnedVindexQuery": "select kid, column_a, column_b, column_c, column_a = 0, column_b = 1 and column_c = 2 from multicolvin where kid = 1 for update",
         "Query": "update multicolvin set column_a = 0, column_b = 1, column_c = 2 where kid = 1",
         "Table": "multicolvin",
@@ -2697,7 +2623,6 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "Query": "update user_extra set val = 1",
         "Table": "user_extra"
       },
@@ -2720,7 +2645,6 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "Query": "update user_extra set val = 1",
         "Table": "user_extra"
       },
@@ -2766,7 +2690,6 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "Query": "update /*vt+ QUERY_TIMEOUT_MS=1 */ user_extra set val = 1",
         "QueryTimeout": 1,
         "Table": "user_extra"
@@ -2790,7 +2713,6 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "Query": "update user_extra set val = 1 where id between 1 and 2",
         "Table": "user_extra"
       },
@@ -2813,7 +2735,6 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "Query": "update user_extra set val = 1 where user_id in (1, 2)",
         "Table": "user_extra",
         "Values": [
@@ -2840,7 +2761,6 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "Query": "update user_extra set val = 1 where `name` = 'foo'",
         "Table": "user_extra"
       },
@@ -2863,7 +2783,6 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "Query": "update user_extra set val = 1 where id in (1, 2)",
         "Table": "user_extra"
       },
@@ -2886,7 +2805,6 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "Query": "update user_extra set val = 1 where `name` = 'foo' or id = 1",
         "Table": "user_extra"
       },
@@ -2909,7 +2827,6 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "Query": "delete from user_extra",
         "Table": "user_extra"
       },
@@ -2932,7 +2849,6 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "Query": "delete from user_extra",
         "Table": "user_extra"
       },
@@ -2955,7 +2871,6 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "Query": "delete from user_extra where user_id between 1 and 2",
         "Table": "user_extra"
       },
@@ -2978,7 +2893,6 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "Query": "delete from user_extra where `name` = 'jose'",
         "Table": "user_extra"
       },
@@ -3024,7 +2938,6 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "Query": "delete /*vt+ QUERY_TIMEOUT_MS=1 */ from user_extra where `name` = 'jose'",
         "QueryTimeout": 1,
         "Table": "user_extra"
@@ -3048,7 +2961,6 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "Query": "delete from user_extra where user_id in (1, 2)",
         "Table": "user_extra",
         "Values": [
@@ -3075,7 +2987,6 @@
           "Sharded": false
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "Query": "update unsharded set col = (select id from unsharded_a where id = unsharded.col) where col = (select id from unsharded_b)",
         "Table": "unsharded, unsharded_a, unsharded_b"
       },
@@ -3094,7 +3005,6 @@
           "Sharded": false
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "Query": "update unsharded set col = (select id from unsharded_a where id = unsharded.col) where col = (select id from unsharded_b)",
         "Table": "unsharded, unsharded_a, unsharded_b"
       },
@@ -3119,7 +3029,6 @@
           "Sharded": false
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "Query": "delete from unsharded where col = (select id from unsharded_a where id = unsharded.col)",
         "Table": "unsharded, unsharded_a"
       },
@@ -3138,7 +3047,6 @@
           "Sharded": false
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "Query": "delete from unsharded where col = (select id from unsharded_a where id = unsharded.col)",
         "Table": "unsharded, unsharded_a"
       },
@@ -3167,7 +3075,6 @@
         ],
         "KsidLength": 1,
         "KsidVindex": "user_index",
-        "MultiShardAutocommit": false,
         "OwnedVindexQuery": "select Id, `Name`, Costly, `name` = null from `user` where id = 1 for update",
         "Query": "update `user` set `name` = null where id = 1",
         "Table": "user",
@@ -3196,7 +3103,6 @@
         ],
         "KsidLength": 1,
         "KsidVindex": "user_index",
-        "MultiShardAutocommit": false,
         "OwnedVindexQuery": "select Id, `Name`, Costly, `name` = null from `user` where id = 1 for update",
         "Query": "update `user` set `name` = null where id = 1",
         "Table": "user",
@@ -3224,7 +3130,6 @@
           "Sharded": false
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "Query": "insert into unsharded values (:__lastInsertId, 2)",
         "TableName": "unsharded"
       },
@@ -3252,7 +3157,6 @@
         ],
         "KsidLength": 1,
         "KsidVindex": "user_index",
-        "MultiShardAutocommit": false,
         "OwnedVindexQuery": "select Id, `Name`, Costly, `name` = null from `user` where id in (1, 2, 3) for update",
         "Query": "update `user` set `name` = null where id in (1, 2, 3)",
         "Table": "user",
@@ -3285,7 +3189,6 @@
         ],
         "KsidLength": 1,
         "KsidVindex": "user_index",
-        "MultiShardAutocommit": false,
         "OwnedVindexQuery": "select Id, `Name`, Costly, `name` = null from `user` for update",
         "Query": "update `user` set `name` = null",
         "Table": "user"
@@ -3314,7 +3217,6 @@
         ],
         "KsidLength": 1,
         "KsidVindex": "user_index",
-        "MultiShardAutocommit": false,
         "OwnedVindexQuery": "select Id, `Name`, Costly, `name` = null from `user` where id + 1 = 2 for update",
         "Query": "update `user` set `name` = null where id + 1 = 2",
         "Table": "user"
@@ -3340,7 +3242,6 @@
         "TargetTabletType": "PRIMARY",
         "KsidLength": 1,
         "KsidVindex": "user_index",
-        "MultiShardAutocommit": false,
         "OwnedVindexQuery": "select Id, `Name`, Costly from `user` where id in (1, 2, 3) for update",
         "Query": "delete from `user` where id in (1, 2, 3)",
         "Table": "user",
@@ -3370,7 +3271,6 @@
         "TargetTabletType": "PRIMARY",
         "KsidLength": 1,
         "KsidVindex": "user_index",
-        "MultiShardAutocommit": false,
         "OwnedVindexQuery": "select Id, `Name`, Costly from `user` where id + 1 = 2 for update",
         "Query": "delete from `user` where id + 1 = 2",
         "Table": "user"
@@ -3396,7 +3296,6 @@
         "TargetTabletType": "PRIMARY",
         "KsidLength": 1,
         "KsidVindex": "user_index",
-        "MultiShardAutocommit": false,
         "OwnedVindexQuery": "select Id, `Name`, Costly from `user` for update",
         "Query": "delete from `user`",
         "Table": "user"
@@ -3422,7 +3321,6 @@
         "TargetTabletType": "PRIMARY",
         "KsidLength": 1,
         "KsidVindex": "user_index",
-        "MultiShardAutocommit": false,
         "OwnedVindexQuery": "select user_id, id from music where id = 1 for update",
         "Query": "delete from music where id = 1",
         "Table": "music",
@@ -3448,7 +3346,6 @@
         "TargetTabletType": "PRIMARY",
         "KsidLength": 1,
         "KsidVindex": "user_index",
-        "MultiShardAutocommit": false,
         "OwnedVindexQuery": "select user_id, id from music where id = 1 for update",
         "Query": "delete from music where id = 1",
         "Table": "music",
@@ -3476,7 +3373,6 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "Query": "update `user` set val = 1",
         "Table": "user"
       },
@@ -3501,7 +3397,6 @@
         "TargetTabletType": "PRIMARY",
         "KsidLength": 1,
         "KsidVindex": "user_index",
-        "MultiShardAutocommit": false,
         "OwnedVindexQuery": "select Id, `Name`, Costly from `user` for update",
         "Query": "delete from `user`",
         "Table": "user"
@@ -3530,7 +3425,6 @@
         ],
         "KsidLength": 1,
         "KsidVindex": "kid_index",
-        "MultiShardAutocommit": false,
         "OwnedVindexQuery": "select kid, column_a, column_b, column_c, column_c = 2 from multicolvin where kid = 1 for update",
         "Query": "update multicolvin set column_c = 2 where kid = 1",
         "Table": "multicolvin",
@@ -3559,7 +3453,6 @@
         ],
         "KsidLength": 1,
         "KsidVindex": "kid_index",
-        "MultiShardAutocommit": false,
         "OwnedVindexQuery": "select kid, column_a, column_b, column_c, column_c = 2 from multicolvin where kid = 1 for update",
         "Query": "update multicolvin set column_c = 2 where kid = 1",
         "Table": "multicolvin",
@@ -3592,7 +3485,6 @@
         ],
         "KsidLength": 1,
         "KsidVindex": "user_index",
-        "MultiShardAutocommit": false,
         "OwnedVindexQuery": "select Id, `Name`, Costly, `name` = _binary 'abc' from `user` where id = 1 for update",
         "Query": "update `user` set `name` = _binary 'abc' where id = 1",
         "Table": "user",
@@ -3621,7 +3513,6 @@
         ],
         "KsidLength": 1,
         "KsidVindex": "user_index",
-        "MultiShardAutocommit": false,
         "OwnedVindexQuery": "select Id, `Name`, Costly, `name` = _binary 'abc' from `user` where id = 1 for update",
         "Query": "update `user` set `name` = _binary 'abc' where id = 1",
         "Table": "user",
@@ -3651,7 +3542,6 @@
         "TargetTabletType": "PRIMARY",
         "KsidLength": 1,
         "KsidVindex": "user_index",
-        "MultiShardAutocommit": false,
         "OwnedVindexQuery": "select Id, `Name`, Costly from `user` where `name` = _binary 'abc' for update",
         "Query": "delete from `user` where `name` = _binary 'abc'",
         "Table": "user"
@@ -3673,7 +3563,6 @@
         "TargetTabletType": "PRIMARY",
         "KsidLength": 1,
         "KsidVindex": "user_index",
-        "MultiShardAutocommit": false,
         "OwnedVindexQuery": "select Id, `Name`, Costly from `user` where `name` = _binary 'abc' for update",
         "Query": "delete from `user` where `name` = _binary 'abc'",
         "Table": "user",
@@ -3703,7 +3592,6 @@
         "TargetTabletType": "PRIMARY",
         "KsidLength": 1,
         "KsidVindex": "user_index",
-        "MultiShardAutocommit": false,
         "OwnedVindexQuery": "select Id, `Name`, Costly from `user` for update",
         "Query": "delete from `user`",
         "Table": "user"
@@ -3732,7 +3620,6 @@
         ],
         "KsidLength": 1,
         "KsidVindex": "user_index",
-        "MultiShardAutocommit": false,
         "OwnedVindexQuery": "select Id, `Name`, Costly, `name` = 'myname' from `user` for update",
         "Query": "update `user` set `name` = 'myname'",
         "Table": "user"
@@ -3756,7 +3643,6 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "Query": "update user_extra set val = 1",
         "Table": "user_extra"
       },
@@ -3781,7 +3667,6 @@
         "TargetTabletType": "PRIMARY",
         "KsidLength": 1,
         "KsidVindex": "user_index",
-        "MultiShardAutocommit": false,
         "OwnedVindexQuery": "select Id, `Name`, Costly from `user` where `user`.id * `user`.col = `user`.foo for update",
         "Query": "delete from `user` where `user`.id * `user`.col = `user`.foo",
         "Table": "user"
@@ -3820,7 +3705,6 @@
           "Sharded": false
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "Query": "insert into user_privacy_consents(user_id, accepted_at) select user_id, accepted_at from (select 1 as user_id, 1629194864 as accepted_at from dual) as tmp where not exists (select 1 from user_privacy_consents where user_id = 1 limit 1) for update",
         "TableName": "user_privacy_consents"
       },
@@ -3839,8 +3723,7 @@
           "Sharded": false
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
-        "Query": "insert into user_privacy_consents(user_id, accepted_at) select user_id, accepted_at from (select 1 as user_id, 1629194864 as accepted_at from dual) as tmp where not exists (select 1 from user_privacy_consents where user_id = 1 limit 1) for update",
+        "Query": "insert into user_privacy_consents(user_id, accepted_at) select user_id, accepted_at from (select 1 as user_id, 1629194864 as accepted_at from dual) as tmp where not exists (select 1 from user_privacy_consents where user_id = 1 limit 1)",
         "TableName": "user_privacy_consents"
       },
       "TablesUsed": [
@@ -3865,7 +3748,6 @@
         "TargetTabletType": "PRIMARY",
         "KsidLength": 1,
         "KsidVindex": "xxhash",
-        "MultiShardAutocommit": false,
         "OwnedVindexQuery": "select c1, c2, c3 from t1 where c2 = 20 for update",
         "Query": "delete from t1 where c2 = 20",
         "Table": "t1"
@@ -3894,7 +3776,6 @@
         ],
         "KsidLength": 1,
         "KsidVindex": "xxhash",
-        "MultiShardAutocommit": false,
         "OwnedVindexQuery": "select c1, c2, c3, c2 = 1 from t1 where c2 = 20 for update",
         "Query": "update t1 set c2 = 1 where c2 = 20",
         "Table": "t1"
@@ -3920,7 +3801,6 @@
         "TargetTabletType": "PRIMARY",
         "KsidLength": 1,
         "KsidVindex": "xxhash",
-        "MultiShardAutocommit": false,
         "OwnedVindexQuery": "select c1, c2, c3 from t1 where c2 = 10 and c3 = 20 for update",
         "Query": "delete from t1 where c2 = 10 and c3 = 20",
         "Table": "t1",
@@ -3946,7 +3826,6 @@
         "TargetTabletType": "PRIMARY",
         "KsidLength": 1,
         "KsidVindex": "xxhash",
-        "MultiShardAutocommit": false,
         "OwnedVindexQuery": "select c1, c2, c3 from t1 where c2 = 10 and c3 = 20 for update",
         "Query": "delete from t1 where c2 = 10 and c3 = 20",
         "Table": "t1",
@@ -3979,7 +3858,6 @@
         ],
         "KsidLength": 1,
         "KsidVindex": "xxhash",
-        "MultiShardAutocommit": false,
         "OwnedVindexQuery": "select c1, c2, c3, c2 = 1 from t1 where c2 = 10 and c3 = 20 for update",
         "Query": "update t1 set c2 = 1 where c2 = 10 and c3 = 20",
         "Table": "t1",
@@ -4008,7 +3886,6 @@
         ],
         "KsidLength": 1,
         "KsidVindex": "xxhash",
-        "MultiShardAutocommit": false,
         "OwnedVindexQuery": "select c1, c2, c3, c2 = 1 from t1 where c2 = 10 and c3 = 20 for update",
         "Query": "update t1 set c2 = 1 where c2 = 10 and c3 = 20",
         "Table": "t1",
@@ -4038,7 +3915,6 @@
         "TargetTabletType": "PRIMARY",
         "KsidLength": 1,
         "KsidVindex": "xxhash",
-        "MultiShardAutocommit": false,
         "OwnedVindexQuery": "select c1, c2, c3 from t1 where c2 = 10 and c3 in (20, 21) for update",
         "Query": "delete from t1 where c2 = 10 and c3 in (20, 21)",
         "Table": "t1",
@@ -4071,7 +3947,6 @@
         ],
         "KsidLength": 1,
         "KsidVindex": "xxhash",
-        "MultiShardAutocommit": false,
         "OwnedVindexQuery": "select c1, c2, c3, c2 = 1 from t1 where c2 = 10 and c3 in (20, 21) for update",
         "Query": "update t1 set c2 = 1 where c2 = 10 and c3 in (20, 21)",
         "Table": "t1",
@@ -4104,7 +3979,6 @@
         ],
         "KsidLength": 1,
         "KsidVindex": "user_index",
-        "MultiShardAutocommit": false,
         "OwnedVindexQuery": "select Id, `Name`, Costly, u.`name` = 'john' from `user` as u where u.col > 20 for update",
         "Query": "update `user` as u set u.`name` = 'john' where u.col > 20",
         "Table": "user"
@@ -4130,7 +4004,6 @@
         "TargetTabletType": "PRIMARY",
         "KsidLength": 1,
         "KsidVindex": "user_index",
-        "MultiShardAutocommit": false,
         "OwnedVindexQuery": "select Id, `Name`, Costly from `user` as u where u.col > 20 for update",
         "Query": "delete from `user` as u where u.col > 20",
         "Table": "user"
@@ -4154,7 +4027,6 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "Query": "update multicol_tbl set x = 1 where cola = 1 and colb = 2",
         "Table": "multicol_tbl",
         "Values": [
@@ -4178,7 +4050,6 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "Query": "update multicol_tbl set x = 1 where cola = 1 and colb = 2",
         "Table": "multicol_tbl",
         "Values": [
@@ -4206,7 +4077,6 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "Query": "update multicol_tbl set x = 1 where colb = 2 and cola = 1",
         "Table": "multicol_tbl",
         "Values": [
@@ -4230,7 +4100,6 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "Query": "update multicol_tbl set x = 1 where colb = 2 and cola = 1",
         "Table": "multicol_tbl",
         "Values": [
@@ -4258,7 +4127,6 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "Query": "update multicol_tbl set x = 1 where colb in (1, 2) and cola = 1",
         "Table": "multicol_tbl",
         "Values": [
@@ -4286,7 +4154,6 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "Query": "update multicol_tbl set x = 1 where colb in (1, 2) and cola in (3, 4)",
         "Table": "multicol_tbl",
         "Values": [
@@ -4316,7 +4183,6 @@
         "TargetTabletType": "PRIMARY",
         "KsidLength": 2,
         "KsidVindex": "multicolIdx",
-        "MultiShardAutocommit": false,
         "OwnedVindexQuery": "select cola, colb, colc, `name` from multicol_tbl where cola = 1 and colb = 2 for update",
         "Query": "delete from multicol_tbl where cola = 1 and colb = 2",
         "Table": "multicol_tbl",
@@ -4343,7 +4209,6 @@
         "TargetTabletType": "PRIMARY",
         "KsidLength": 2,
         "KsidVindex": "multicolIdx",
-        "MultiShardAutocommit": false,
         "OwnedVindexQuery": "select cola, colb, colc, `name` from multicol_tbl where cola = 1 and colb = 2 for update",
         "Query": "delete from multicol_tbl where cola = 1 and colb = 2",
         "Table": "multicol_tbl",
@@ -4374,7 +4239,6 @@
         "TargetTabletType": "PRIMARY",
         "KsidLength": 2,
         "KsidVindex": "multicolIdx",
-        "MultiShardAutocommit": false,
         "OwnedVindexQuery": "select cola, colb, colc, `name` from multicol_tbl where colb = 2 and cola = 1 for update",
         "Query": "delete from multicol_tbl where colb = 2 and cola = 1",
         "Table": "multicol_tbl",
@@ -4401,7 +4265,6 @@
         "TargetTabletType": "PRIMARY",
         "KsidLength": 2,
         "KsidVindex": "multicolIdx",
-        "MultiShardAutocommit": false,
         "OwnedVindexQuery": "select cola, colb, colc, `name` from multicol_tbl where colb = 2 and cola = 1 for update",
         "Query": "delete from multicol_tbl where colb = 2 and cola = 1",
         "Table": "multicol_tbl",
@@ -4432,7 +4295,6 @@
         "TargetTabletType": "PRIMARY",
         "KsidLength": 2,
         "KsidVindex": "multicolIdx",
-        "MultiShardAutocommit": false,
         "OwnedVindexQuery": "select cola, colb, colc, `name` from multicol_tbl where colb in (1, 2) and cola = 1 for update",
         "Query": "delete from multicol_tbl where colb in (1, 2) and cola = 1",
         "Table": "multicol_tbl",
@@ -4463,7 +4325,6 @@
         "TargetTabletType": "PRIMARY",
         "KsidLength": 2,
         "KsidVindex": "multicolIdx",
-        "MultiShardAutocommit": false,
         "OwnedVindexQuery": "select cola, colb, colc, `name` from multicol_tbl where colb in (1, 2) and cola in (3, 4) for update",
         "Query": "delete from multicol_tbl where colb in (1, 2) and cola in (3, 4)",
         "Table": "multicol_tbl",
@@ -4497,7 +4358,6 @@
         ],
         "KsidLength": 2,
         "KsidVindex": "multicolIdx",
-        "MultiShardAutocommit": false,
         "OwnedVindexQuery": "select cola, colb, colc, `name`, colc = 1 from multicol_tbl where cola = 1 and colb = 2 for update",
         "Query": "update multicol_tbl set colc = 1 where cola = 1 and colb = 2",
         "Table": "multicol_tbl",
@@ -4527,7 +4387,6 @@
         ],
         "KsidLength": 2,
         "KsidVindex": "multicolIdx",
-        "MultiShardAutocommit": false,
         "OwnedVindexQuery": "select cola, colb, colc, `name`, colc = 1 from multicol_tbl where cola = 1 and colb = 2 for update",
         "Query": "update multicol_tbl set colc = 1 where cola = 1 and colb = 2",
         "Table": "multicol_tbl",
@@ -4556,7 +4415,6 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "Query": "update multicol_tbl set x = 42 where `name` = 'foo'",
         "Table": "multicol_tbl",
         "Values": [
@@ -4583,7 +4441,6 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "Query": "update multicol_tbl set x = 42 where cola = 1",
         "Table": "multicol_tbl",
         "Values": [
@@ -4606,7 +4463,6 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "Query": "update multicol_tbl set x = 42 where cola = 1",
         "Table": "multicol_tbl",
         "Values": [
@@ -4638,7 +4494,6 @@
         ],
         "KsidLength": 2,
         "KsidVindex": "multicolIdx",
-        "MultiShardAutocommit": false,
         "OwnedVindexQuery": "select cola, colb, colc, `name`, `name` = 'bar' from multicol_tbl where cola = 1 for update",
         "Query": "update multicol_tbl set `name` = 'bar' where cola = 1",
         "Table": "multicol_tbl",
@@ -4667,7 +4522,6 @@
         ],
         "KsidLength": 2,
         "KsidVindex": "multicolIdx",
-        "MultiShardAutocommit": false,
         "OwnedVindexQuery": "select cola, colb, colc, `name`, `name` = 'bar' from multicol_tbl where cola = 1 for update",
         "Query": "update multicol_tbl set `name` = 'bar' where cola = 1",
         "Table": "multicol_tbl",
@@ -4700,7 +4554,6 @@
         ],
         "KsidLength": 2,
         "KsidVindex": "multicolIdx",
-        "MultiShardAutocommit": false,
         "OwnedVindexQuery": "select cola, colb, colc, `name`, `name` = 'bar' from multicol_tbl where cola in (1, 2) for update",
         "Query": "update multicol_tbl set `name` = 'bar' where cola in (1, 2)",
         "Table": "multicol_tbl",
@@ -4728,7 +4581,6 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "Query": "update multicol_tbl set x = 1 where `name` = 'foo' and cola = 2",
         "Table": "multicol_tbl",
         "Values": [
@@ -4751,7 +4603,6 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "Query": "update multicol_tbl set x = 1 where `name` = 'foo' and cola = 2",
         "Table": "multicol_tbl",
         "Values": [
@@ -4780,7 +4631,6 @@
         "TargetTabletType": "PRIMARY",
         "KsidLength": 2,
         "KsidVindex": "multicolIdx",
-        "MultiShardAutocommit": false,
         "OwnedVindexQuery": "select cola, colb, colc, `name` from multicol_tbl where `name` = 'foo' for update",
         "Query": "delete from multicol_tbl where `name` = 'foo'",
         "Table": "multicol_tbl",
@@ -4810,7 +4660,6 @@
         "TargetTabletType": "PRIMARY",
         "KsidLength": 2,
         "KsidVindex": "multicolIdx",
-        "MultiShardAutocommit": false,
         "OwnedVindexQuery": "select cola, colb, colc, `name` from multicol_tbl where cola = 1 for update",
         "Query": "delete from multicol_tbl where cola = 1",
         "Table": "multicol_tbl",
@@ -4836,7 +4685,6 @@
         "TargetTabletType": "PRIMARY",
         "KsidLength": 2,
         "KsidVindex": "multicolIdx",
-        "MultiShardAutocommit": false,
         "OwnedVindexQuery": "select cola, colb, colc, `name` from multicol_tbl where cola = 1 for update",
         "Query": "delete from multicol_tbl where cola = 1",
         "Table": "multicol_tbl",
@@ -4866,7 +4714,6 @@
         "TargetTabletType": "PRIMARY",
         "KsidLength": 2,
         "KsidVindex": "multicolIdx",
-        "MultiShardAutocommit": false,
         "OwnedVindexQuery": "select cola, colb, colc, `name` from multicol_tbl where cola in (1, 2) for update",
         "Query": "delete from multicol_tbl where cola in (1, 2)",
         "Table": "multicol_tbl",
@@ -4896,7 +4743,6 @@
         "TargetTabletType": "PRIMARY",
         "KsidLength": 2,
         "KsidVindex": "multicolIdx",
-        "MultiShardAutocommit": false,
         "OwnedVindexQuery": "select cola, colb, colc, `name` from multicol_tbl where `name` = 'foo' and cola = 2 for update",
         "Query": "delete from multicol_tbl where `name` = 'foo' and cola = 2",
         "Table": "multicol_tbl",
@@ -4922,7 +4768,6 @@
         "TargetTabletType": "PRIMARY",
         "KsidLength": 2,
         "KsidVindex": "multicolIdx",
-        "MultiShardAutocommit": false,
         "OwnedVindexQuery": "select cola, colb, colc, `name` from multicol_tbl where `name` = 'foo' and cola = 2 for update",
         "Query": "delete from multicol_tbl where `name` = 'foo' and cola = 2",
         "Table": "multicol_tbl",
@@ -4950,7 +4795,6 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "TableName": "music",
         "VindexOffsetFromSelect": {
           "music_user_map": "[0]",
@@ -4985,7 +4829,6 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "TableName": "music",
         "VindexOffsetFromSelect": {
           "music_user_map": "[0]",
@@ -5000,7 +4843,7 @@
               "Sharded": true
             },
             "FieldQuery": "select * from `user` where 1 != 1",
-            "Query": "select * from `user` for update",
+            "Query": "select * from `user` lock in share mode",
             "Table": "`user`"
           }
         ]
@@ -5040,8 +4883,7 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "AutoIncrement": "main:1",
-        "MultiShardAutocommit": false,
+        "AutoIncrement": "select next :n /* INT64 */ values from seq:Offset(1)",
         "TableName": "user_extra",
         "VindexOffsetFromSelect": {
           "user_index": "[0]"
@@ -5075,8 +4917,7 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "AutoIncrement": "main:1",
-        "MultiShardAutocommit": false,
+        "AutoIncrement": "select next :n /* INT64 */ values from seq:Offset(1)",
         "TableName": "user_extra",
         "VindexOffsetFromSelect": {
           "user_index": "[0]"
@@ -5090,7 +4931,7 @@
               "Sharded": true
             },
             "FieldQuery": "select id from `user` where 1 != 1",
-            "Query": "select id from `user` for update",
+            "Query": "select id from `user` lock in share mode",
             "Table": "`user`"
           }
         ]
@@ -5115,8 +4956,7 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "AutoIncrement": "main:2",
-        "MultiShardAutocommit": false,
+        "AutoIncrement": "select next :n /* INT64 */ values from seq:Offset(2)",
         "TableName": "user_extra",
         "VindexOffsetFromSelect": {
           "user_index": "[1]"
@@ -5150,8 +4990,7 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "AutoIncrement": "main:2",
-        "MultiShardAutocommit": false,
+        "AutoIncrement": "select next :n /* INT64 */ values from seq:Offset(2)",
         "TableName": "user_extra",
         "VindexOffsetFromSelect": {
           "user_index": "[1]"
@@ -5165,7 +5004,7 @@
               "Sharded": true
             },
             "FieldQuery": "select null, id from `user` where 1 != 1",
-            "Query": "select null, id from `user` for update",
+            "Query": "select null, id from `user` lock in share mode",
             "Table": "`user`"
           }
         ]
@@ -5190,8 +5029,7 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "AutoIncrement": "main:0",
-        "MultiShardAutocommit": false,
+        "AutoIncrement": "select next :n /* INT64 */ values from seq:Offset(0)",
         "TableName": "user",
         "VindexOffsetFromSelect": {
           "costly_map": "[-1]",
@@ -5227,8 +5065,7 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "AutoIncrement": "main:0",
-        "MultiShardAutocommit": false,
+        "AutoIncrement": "select next :n /* INT64 */ values from seq:Offset(0)",
         "TableName": "user",
         "VindexOffsetFromSelect": {
           "costly_map": "[-1]",
@@ -5237,15 +5074,15 @@
         },
         "Inputs": [
           {
-            "OperatorType": "Projection",
-            "Expressions": [
-              "INT64(1) as 1"
-            ],
-            "Inputs": [
-              {
-                "OperatorType": "SingleRow"
-              }
-            ]
+            "OperatorType": "Route",
+            "Variant": "Reference",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "FieldQuery": "select 1 from dual where 1 != 1",
+            "Query": "select 1 from dual lock in share mode",
+            "Table": "dual"
           }
         ]
       },
@@ -5269,8 +5106,7 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "AutoIncrement": "main:1",
-        "MultiShardAutocommit": false,
+        "AutoIncrement": "select next :n /* INT64 */ values from seq:Offset(1)",
         "TableName": "user",
         "VindexOffsetFromSelect": {
           "costly_map": "[-1]",
@@ -5306,8 +5142,7 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "AutoIncrement": "main:1",
-        "MultiShardAutocommit": false,
+        "AutoIncrement": "select next :n /* INT64 */ values from seq:Offset(1)",
         "TableName": "user",
         "VindexOffsetFromSelect": {
           "costly_map": "[-1]",
@@ -5316,15 +5151,15 @@
         },
         "Inputs": [
           {
-            "OperatorType": "Projection",
-            "Expressions": [
-              "INT64(1) as 1"
-            ],
-            "Inputs": [
-              {
-                "OperatorType": "SingleRow"
-              }
-            ]
+            "OperatorType": "Route",
+            "Variant": "Reference",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "FieldQuery": "select 1 from dual where 1 != 1",
+            "Query": "select 1 from dual lock in share mode",
+            "Table": "dual"
           }
         ]
       },
@@ -5353,8 +5188,7 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "AutoIncrement": "main:2",
-        "MultiShardAutocommit": false,
+        "AutoIncrement": "select next :n /* INT64 */ values from seq:Offset(2)",
         "TableName": "user_extra",
         "VindexOffsetFromSelect": {
           "user_index": "[0]"
@@ -5388,8 +5222,7 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "AutoIncrement": "main:2",
-        "MultiShardAutocommit": false,
+        "AutoIncrement": "select next :n /* INT64 */ values from seq:Offset(2)",
         "TableName": "user_extra",
         "VindexOffsetFromSelect": {
           "user_index": "[0]"
@@ -5403,7 +5236,7 @@
               "Sharded": true
             },
             "FieldQuery": "select col1, col2 from `user` where 1 != 1",
-            "Query": "select col1, col2 from `user` for update",
+            "Query": "select col1, col2 from `user` lock in share mode",
             "Table": "`user`"
           }
         ]
@@ -5428,7 +5261,6 @@
           "Sharded": false
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "Query": "insert into unsharded(col) select col from unsharded_auto for update",
         "TableName": "unsharded"
       },
@@ -5447,8 +5279,7 @@
           "Sharded": false
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
-        "Query": "insert into unsharded(col) select col from unsharded_auto for update",
+        "Query": "insert into unsharded(col) select col from unsharded_auto",
         "TableName": "unsharded"
       },
       "TablesUsed": [
@@ -5471,8 +5302,7 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "AutoIncrement": "main:2",
-        "MultiShardAutocommit": false,
+        "AutoIncrement": "select next :n /* INT64 */ values from seq:Offset(2)",
         "TableName": "user_extra",
         "VindexOffsetFromSelect": {
           "user_index": "[0]"
@@ -5506,8 +5336,7 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "AutoIncrement": "main:2",
-        "MultiShardAutocommit": false,
+        "AutoIncrement": "select next :n /* INT64 */ values from seq:Offset(2)",
         "TableName": "user_extra",
         "VindexOffsetFromSelect": {
           "user_index": "[0]"
@@ -5521,7 +5350,7 @@
               "Sharded": true
             },
             "FieldQuery": "select col1, col2 from t1 where 1 != 1",
-            "Query": "select col1, col2 from t1 for update",
+            "Query": "select col1, col2 from t1 lock in share mode",
             "Table": "t1"
           }
         ]
@@ -5546,8 +5375,7 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "AutoIncrement": "main:2",
-        "MultiShardAutocommit": false,
+        "AutoIncrement": "select next :n /* INT64 */ values from seq:Offset(2)",
         "TableName": "user_extra",
         "VindexOffsetFromSelect": {
           "user_index": "[0]"
@@ -5581,8 +5409,7 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "AutoIncrement": "main:2",
-        "MultiShardAutocommit": false,
+        "AutoIncrement": "select next :n /* INT64 */ values from seq:Offset(2)",
         "TableName": "user_extra",
         "VindexOffsetFromSelect": {
           "user_index": "[0]"
@@ -5596,7 +5423,7 @@
               "Sharded": false
             },
             "FieldQuery": "select col1, col2 from unsharded_tab where 1 != 1",
-            "Query": "select col1, col2 from unsharded_tab for update",
+            "Query": "select col1, col2 from unsharded_tab lock in share mode",
             "Table": "unsharded_tab"
           }
         ]
@@ -5621,7 +5448,6 @@
           "Sharded": false
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "TableName": "unsharded",
         "Inputs": [
           {
@@ -5652,7 +5478,6 @@
           "Sharded": false
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "TableName": "unsharded",
         "Inputs": [
           {
@@ -5663,7 +5488,7 @@
               "Sharded": false
             },
             "FieldQuery": "select col from unsharded_tab where 1 != 1",
-            "Query": "select col from unsharded_tab for update",
+            "Query": "select col from unsharded_tab lock in share mode",
             "Table": "unsharded_tab"
           }
         ]
@@ -5688,7 +5513,6 @@
           "Sharded": false
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "TableName": "unsharded",
         "Inputs": [
           {
@@ -5719,7 +5543,6 @@
           "Sharded": false
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "TableName": "unsharded",
         "Inputs": [
           {
@@ -5730,7 +5553,7 @@
               "Sharded": true
             },
             "FieldQuery": "select col from t1 where 1 != 1",
-            "Query": "select col from t1 for update",
+            "Query": "select col from t1 lock in share mode",
             "Table": "t1"
           }
         ]
@@ -5774,7 +5597,6 @@
               "Sharded": true
             },
             "TargetTabletType": "PRIMARY",
-            "MultiShardAutocommit": false,
             "Query": "update `user` set col = :__sq1",
             "Table": "user"
           }
@@ -5819,7 +5641,6 @@
               "Sharded": false
             },
             "TargetTabletType": "PRIMARY",
-            "MultiShardAutocommit": false,
             "Query": "update unsharded set col = :__sq1",
             "Table": "unsharded"
           }
@@ -5890,7 +5711,6 @@
               "Sharded": false
             },
             "TargetTabletType": "PRIMARY",
-            "MultiShardAutocommit": false,
             "Query": "update unsharded set col = :__sq1",
             "Table": "unsharded"
           }
@@ -5917,7 +5737,6 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "Query": "update `user` set col = (select count(*) from user_extra where user_extra.user_id = 5) where id = 5",
         "Table": "user",
         "Values": [
@@ -5946,7 +5765,6 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "Query": "update `user` set col = (select count(*) from user_extra where user_extra.user_id = `user`.id) where id = 5",
         "Table": "user",
         "Values": [
@@ -5975,7 +5793,6 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "Query": "update `user` set col = (select count(*) from user_extra where user_extra.user_id = `user`.id) where id > 5",
         "Table": "user"
       },
@@ -5999,7 +5816,6 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "Query": "insert into authoritative(user_id) values (:_user_id_0)",
         "TableName": "authoritative",
         "VindexValues": {
@@ -6036,7 +5852,6 @@
             "TargetTabletType": "PRIMARY",
             "KsidLength": 1,
             "KsidVindex": "user_index",
-            "MultiShardAutocommit": false,
             "OwnedVindexQuery": "select Id, `Name`, Costly from `user` for update",
             "Query": "delete from `user`",
             "Table": "user"
@@ -6068,7 +5883,6 @@
             "TargetTabletType": "PRIMARY",
             "KsidLength": 1,
             "KsidVindex": "user_index",
-            "MultiShardAutocommit": false,
             "OwnedVindexQuery": "select Id, `Name`, Costly from `user` for update",
             "Query": "delete from `user`",
             "Table": "user"
@@ -6094,7 +5908,6 @@
           "Sharded": false
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "Query": "delete foo from unsharded as foo join (select id from unsharded as a join unsharded_b as b on a.user_id = b.user_id) as keepers on foo.id = keepers.id where keepers.id is null and foo.col is not null and foo.col < 1000",
         "Table": "unsharded, unsharded, unsharded_b"
       },
@@ -6114,7 +5927,6 @@
           "Sharded": false
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "Query": "delete foo from unsharded as foo join (select id from unsharded as a join unsharded_b as b on a.user_id = b.user_id) as keepers on foo.id = keepers.id where keepers.id is null and foo.col is not null and foo.col < 1000",
         "Table": "unsharded, unsharded_b"
       },
@@ -6138,7 +5950,6 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "Query": "update `user` set col = 1 where (`name`, col) in (('aa', 'bb'), ('cc', 'dd'))",
         "Table": "user"
       },
@@ -6157,7 +5968,6 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "Query": "update `user` set col = 1 where (`name`, col) in (('aa', 'bb'), ('cc', 'dd'))",
         "Table": "user",
         "Values": [
@@ -6186,7 +5996,6 @@
         "TargetTabletType": "PRIMARY",
         "KsidLength": 1,
         "KsidVindex": "user_index",
-        "MultiShardAutocommit": false,
         "OwnedVindexQuery": "select Id, `Name`, Costly from `user` where (`name`, col) in (('aa', 'bb'), ('cc', 'dd')) for update",
         "Query": "delete from `user` where (`name`, col) in (('aa', 'bb'), ('cc', 'dd'))",
         "Table": "user"
@@ -6208,7 +6017,6 @@
         "TargetTabletType": "PRIMARY",
         "KsidLength": 1,
         "KsidVindex": "user_index",
-        "MultiShardAutocommit": false,
         "OwnedVindexQuery": "select Id, `Name`, Costly from `user` where (`name`, col) in (('aa', 'bb'), ('cc', 'dd')) for update",
         "Query": "delete from `user` where (`name`, col) in (('aa', 'bb'), ('cc', 'dd'))",
         "Table": "user",
@@ -6236,7 +6044,6 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "Query": "insert into ref(col) values (1)",
         "TableName": "ref"
       },
@@ -6259,12 +6066,423 @@
           "Sharded": false
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "Query": "update m1 set foo = last_insert_id(foo + 1) where id = 12345",
         "Table": "m1"
       },
       "TablesUsed": [
         "main.m1"
+      ]
+    }
+  },
+  {
+    "comment": "unsharded update query with comment directive",
+    "query": "update /*vt+ QUERY_TIMEOUT_MS=1 */ unsharded set val = 1",
+    "v3-plan": {
+      "QueryType": "UPDATE",
+      "Original": "update /*vt+ QUERY_TIMEOUT_MS=1 */ unsharded set val = 1",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetTabletType": "PRIMARY",
+        "Query": "update /*vt+ QUERY_TIMEOUT_MS=1 */ unsharded set val = 1",
+        "Table": "unsharded"
+      },
+      "TablesUsed": [
+        "main.unsharded"
+      ]
+    },
+    "gen4-plan": {
+      "QueryType": "UPDATE",
+      "Original": "update /*vt+ QUERY_TIMEOUT_MS=1 */ unsharded set val = 1",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetTabletType": "PRIMARY",
+        "Query": "update /*vt+ QUERY_TIMEOUT_MS=1 */ unsharded set val = 1",
+        "QueryTimeout": 1,
+        "Table": "unsharded"
+      },
+      "TablesUsed": [
+        "main.unsharded"
+      ]
+    }
+  },
+  {
+    "comment": "unsharded insert query with comment directive",
+    "query": "insert /*vt+ QUERY_TIMEOUT_MS=1 */ into unsharded values ()",
+    "plan": {
+      "QueryType": "INSERT",
+      "Original": "insert /*vt+ QUERY_TIMEOUT_MS=1 */ into unsharded values ()",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetTabletType": "PRIMARY",
+        "Query": "insert /*vt+ QUERY_TIMEOUT_MS=1 */ into unsharded values ()",
+        "QueryTimeout": 1,
+        "TableName": "unsharded"
+      },
+      "TablesUsed": [
+        "main.unsharded"
+      ]
+    }
+  },
+  {
+    "comment": "insert with select using same tables, cannot stream parallel",
+    "query": "insert into music(id, user_id) select id, user_id from music where user_id = 1",
+    "v3-plan": {
+      "QueryType": "INSERT",
+      "Original": "insert into music(id, user_id) select id, user_id from music where user_id = 1",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Select",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "InputAsNonStreaming": true,
+        "TableName": "music",
+        "VindexOffsetFromSelect": {
+          "music_user_map": "[0]",
+          "user_index": "[1]"
+        },
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id, user_id from music where 1 != 1",
+            "Query": "select id, user_id from music where user_id = 1 for update",
+            "Table": "music",
+            "Values": [
+              "INT64(1)"
+            ],
+            "Vindex": "user_index"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music"
+      ]
+    },
+    "gen4-plan": {
+      "QueryType": "INSERT",
+      "Original": "insert into music(id, user_id) select id, user_id from music where user_id = 1",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Select",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "InputAsNonStreaming": true,
+        "TableName": "music",
+        "VindexOffsetFromSelect": {
+          "music_user_map": "[0]",
+          "user_index": "[1]"
+        },
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id, user_id from music where 1 != 1",
+            "Query": "select id, user_id from music where user_id = 1 lock in share mode",
+            "Table": "music",
+            "Values": [
+              "INT64(1)"
+            ],
+            "Vindex": "user_index"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music"
+      ]
+    }
+  },
+  {
+    "comment": "insert + lookup vindex + auto increment on lookup column - not provided",
+    "query": "insert into mixed_tbl(shard_key) values (1),(4),(9)",
+    "plan": {
+      "QueryType": "INSERT",
+      "Original": "insert into mixed_tbl(shard_key) values (1),(4),(9)",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Sharded",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "AutoIncrement": "select next :n /* INT64 */ values from seq:Values::(NULL, NULL, NULL)",
+        "Query": "insert into mixed_tbl(shard_key, lkp_key) values (:_shard_key_0, :_lkp_key_0), (:_shard_key_1, :_lkp_key_1), (:_shard_key_2, :_lkp_key_2)",
+        "TableName": "mixed_tbl",
+        "VindexValues": {
+          "lkp_shard_map": ":__seq0, :__seq1, :__seq2",
+          "shard_index": "INT64(1), INT64(4), INT64(9)"
+        }
+      },
+      "TablesUsed": [
+        "user.mixed_tbl"
+      ]
+    }
+  },
+  {
+    "comment": "insert + lookup vindex + auto increment on lookup column - partially provided",
+    "query": "insert into mixed_tbl(shard_key, lkp_key) values (1, 1),(4, null),(9, 27)",
+    "plan": {
+      "QueryType": "INSERT",
+      "Original": "insert into mixed_tbl(shard_key, lkp_key) values (1, 1),(4, null),(9, 27)",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Sharded",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "AutoIncrement": "select next :n /* INT64 */ values from seq:Values::(INT64(1), NULL, INT64(27))",
+        "Query": "insert into mixed_tbl(shard_key, lkp_key) values (:_shard_key_0, :_lkp_key_0), (:_shard_key_1, :_lkp_key_1), (:_shard_key_2, :_lkp_key_2)",
+        "TableName": "mixed_tbl",
+        "VindexValues": {
+          "lkp_shard_map": ":__seq0, :__seq1, :__seq2",
+          "shard_index": "INT64(1), INT64(4), INT64(9)"
+        }
+      },
+      "TablesUsed": [
+        "user.mixed_tbl"
+      ]
+    }
+  },
+  {
+    "comment": "insert + lookup vindex + auto increment on lookup column + select - not provided",
+    "query": "insert into mixed_tbl(shard_key) select foo from user where id = 1",
+    "v3-plan": {
+      "QueryType": "INSERT",
+      "Original": "insert into mixed_tbl(shard_key) select foo from user where id = 1",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Select",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "AutoIncrement": "select next :n /* INT64 */ values from seq:Offset(1)",
+        "TableName": "mixed_tbl",
+        "VindexOffsetFromSelect": {
+          "lkp_shard_map": "[1]",
+          "shard_index": "[0]"
+        },
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select foo from `user` where 1 != 1",
+            "Query": "select foo from `user` where id = 1 for update",
+            "Table": "`user`",
+            "Values": [
+              "INT64(1)"
+            ],
+            "Vindex": "user_index"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.mixed_tbl"
+      ]
+    },
+    "gen4-plan": {
+      "QueryType": "INSERT",
+      "Original": "insert into mixed_tbl(shard_key) select foo from user where id = 1",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Select",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "AutoIncrement": "select next :n /* INT64 */ values from seq:Offset(1)",
+        "TableName": "mixed_tbl",
+        "VindexOffsetFromSelect": {
+          "lkp_shard_map": "[1]",
+          "shard_index": "[0]"
+        },
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select foo from `user` where 1 != 1",
+            "Query": "select foo from `user` where id = 1 lock in share mode",
+            "Table": "`user`",
+            "Values": [
+              "INT64(1)"
+            ],
+            "Vindex": "user_index"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.mixed_tbl",
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "insert + lookup vindex + auto increment on lookup column + select - provided",
+    "query": "insert into mixed_tbl(shard_key, lkp_key) select foo, bar from user where id = 1",
+    "v3-plan": {
+      "QueryType": "INSERT",
+      "Original": "insert into mixed_tbl(shard_key, lkp_key) select foo, bar from user where id = 1",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Select",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "AutoIncrement": "select next :n /* INT64 */ values from seq:Offset(1)",
+        "TableName": "mixed_tbl",
+        "VindexOffsetFromSelect": {
+          "lkp_shard_map": "[1]",
+          "shard_index": "[0]"
+        },
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select foo, bar from `user` where 1 != 1",
+            "Query": "select foo, bar from `user` where id = 1 for update",
+            "Table": "`user`",
+            "Values": [
+              "INT64(1)"
+            ],
+            "Vindex": "user_index"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.mixed_tbl"
+      ]
+    },
+    "gen4-plan": {
+      "QueryType": "INSERT",
+      "Original": "insert into mixed_tbl(shard_key, lkp_key) select foo, bar from user where id = 1",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Select",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "AutoIncrement": "select next :n /* INT64 */ values from seq:Offset(1)",
+        "TableName": "mixed_tbl",
+        "VindexOffsetFromSelect": {
+          "lkp_shard_map": "[1]",
+          "shard_index": "[0]"
+        },
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select foo, bar from `user` where 1 != 1",
+            "Query": "select foo, bar from `user` where id = 1 lock in share mode",
+            "Table": "`user`",
+            "Values": [
+              "INT64(1)"
+            ],
+            "Vindex": "user_index"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.mixed_tbl",
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "insert into a vindex not allowed - gen4 produces different error - forcing a v3 plan here will have same output",
+    "query": "insert /*vt+ planner=v3insert */ into user_index(id) values(1)",
+    "plan": "VT12001: unsupported: multi-shard or vindex write statement"
+  },
+  {
+    "comment": "insert with select takes shared lock in gen4 and for update in v3, as forcing v3 plan the output will remain same",
+    "query": "insert /*vt+ planner=v3insert */ into user(id) select id from user",
+    "plan": {
+      "QueryType": "INSERT",
+      "Original": "insert /*vt+ planner=v3insert */ into user(id) select id from user",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Select",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "AutoIncrement": "select next :n /* INT64 */ values from seq:Offset(0)",
+        "InputAsNonStreaming": true,
+        "TableName": "user",
+        "VindexOffsetFromSelect": {
+          "costly_map": "[-1]",
+          "name_user_map": "[-1]",
+          "user_index": "[0]"
+        },
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id from `user` where 1 != 1",
+            "Query": "select id from `user` for update",
+            "Table": "`user`"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
       ]
     }
   }

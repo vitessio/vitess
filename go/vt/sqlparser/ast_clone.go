@@ -1637,7 +1637,7 @@ func CloneRefOfInsert(n *Insert) *Insert {
 	}
 	out := *n
 	out.Comments = CloneRefOfParsedComments(n.Comments)
-	out.Table = CloneTableName(n.Table)
+	out.Table = CloneRefOfAliasedTableExpr(n.Table)
 	out.Partitions = ClonePartitions(n.Partitions)
 	out.Columns = CloneColumns(n.Columns)
 	out.Rows = CloneInsertRows(n.Rows)

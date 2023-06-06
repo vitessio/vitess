@@ -64,7 +64,6 @@ func ChooseBinlogsForIncrementalBackup(
 	incrementalBackupToGTID string,
 	err error,
 ) {
-
 	var prevGTIDsUnion mysql.GTIDSet
 	for i, binlog := range binaryLogs {
 		previousGtids, err := pgtids(ctx, binlog)
@@ -108,6 +107,15 @@ func ChooseBinlogsForIncrementalBackup(
 		if err != nil {
 			return nil, "", "", vterrors.Wrapf(err, "cannot evaluate incremental backup from pos")
 		}
+		if incrementalBackupFromGTID == "" {
+			// This can happen on the very first binary log file. It happens in two scenarios:
+			// 1. This is the first binlog ever in the history of the mysql server; the GTID is truly empty
+			// 2. A full backup was taken and restored, with all binlog scrapped.
+			// We take for granted that the first binary log file covers the
+			// requested "from GTID"
+			incrementalBackupFromGTID = backupFromGTIDSet.String()
+		}
+
 		// The Previous-GTIDs of the binary logs that _follows_ our binary-logs-to-backup indicates
 		// the backup's position.
 		incrementalBackupToGTID, err := pgtids(ctx, binaryLogs[len(binaryLogs)-1])

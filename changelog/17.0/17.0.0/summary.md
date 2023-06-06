@@ -14,6 +14,7 @@
   - **[New command line flags and behavior](#new-flag)**
     - [Builtin backup: read buffering flags](#builtin-backup-read-buffering-flags)
     - [Manifest backup external decompressor command](#manifest-backup-external-decompressor-command)
+    - [Throttler config via topo enabled by default](#throttler-config-via-topo)
   - **[New stats](#new-stats)**
     - [Detailed backup and restore stats](#detailed-backup-and-restore-stats)
     - [VTtablet Error count with code](#vttablet-error-count-with-code)
@@ -29,6 +30,7 @@
     - [Settings pool enabled](#settings-pool)
   - **[VTGate](#vtgate)**
     - [StreamExecute GRPC API](#stream-execute)
+    - [Insert Planner Gen4](#insert-planner)
   - **[Deprecations and Deletions](#deprecations-and-deletions)**
     - [Deprecated Flags](#deprecated-flags)
     - [Deprecated Stats](#deprecated-stats)
@@ -163,6 +165,12 @@ This feature enables the following flow:
             --manifest-external-decompressor="zstd -d"
     ```
  2. Restore that backup with a mere `Restore` command, without having to specify `--external-decompressor`.
+
+#### <a id="throttler-config-via-topo" />vttablet --throttler-config-via-topo
+
+This flag was introduced in v16 and defaulted to `false`. In v17 it defaults to `true`, and there is no need to supply it.
+
+Note that this flag overrides `--enable-lag-throttler` and `--throttle-threshold`, which now give warnings, and will be removed in v18.
 
 ### <a id="new-stats"/>New stats
 
@@ -381,6 +389,13 @@ so that it can be persisted with the client and sent back to VTGate on the next 
 
 This does not impact anyone using the mysql client library to connect to VTGate.
 This could be a breaking change for grpc api users based on how they have implemented their grpc clients.
+
+#### <a id="insert-planner"/> Insert Planning with Gen4
+
+Gen4 planner was made default in v14 for `SELECT` queries. In v15 `UPDATE` and `DELETE` queries were moved to Gen4 framework.
+With this release `INSERT` queries are moved to Gen4.
+
+Clients can move to old v3 planner for inserts by using `V3Insert` planner version with `--planner-version` vtgate flag or with comment directive /*vt+ planner=<planner_version>` for individual query.
 
 ### <a id="deprecations-and-deletions"/>Deprecations and Deletions
 
