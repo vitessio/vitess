@@ -33,13 +33,17 @@ import (
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 )
 
 type fakeTMC struct {
@@ -849,4 +853,196 @@ func expectMoveTablesQueries(t *testing.T, tme *testMigraterEnv, params *VReplic
 	tme.tmeDB.AddQuery(vdiffDeleteReverseQuery, noResult)
 	tme.tmeDB.AddQuery("alter table _vt.copy_state auto_increment = 1", noResult)
 	tme.tmeDB.AddQuery("optimize table _vt.copy_state", noResult)
+}
+
+func TestAddTablesToVSchema(t *testing.T) {
+	ctx := context.Background()
+	ts := memorytopo.NewServer("zone1")
+	srcks := "source"
+	wr := &Wrangler{
+		logger:   logutil.NewMemoryLogger(),
+		ts:       ts,
+		sourceTs: ts,
+	}
+	tests := []struct {
+		name              string
+		sourceVSchema     *vschemapb.Keyspace
+		inTargetVSchema   *vschemapb.Keyspace
+		tables            []string
+		copyVSchema       bool
+		wantTargetVSchema *vschemapb.Keyspace
+	}{
+		{
+			name: "no target vschema; copy source vschema",
+			sourceVSchema: &vschemapb.Keyspace{
+				Tables: map[string]*vschemapb.Table{
+					"t1": {
+						Type: vindexes.TypeReference,
+					},
+					"t2": {
+						Type: vindexes.TypeSequence,
+					},
+					"t3": {
+						AutoIncrement: &vschemapb.AutoIncrement{
+							Column:   "c1",
+							Sequence: "t2",
+						},
+					},
+				},
+			},
+			inTargetVSchema: &vschemapb.Keyspace{},
+			tables:          []string{"t1", "t2", "t3", "t4"},
+			copyVSchema:     true,
+			wantTargetVSchema: &vschemapb.Keyspace{
+				Tables: map[string]*vschemapb.Table{
+					"t1": {
+						Type: vindexes.TypeReference,
+					},
+					"t2": {
+						Type: vindexes.TypeSequence,
+					},
+					"t3": {
+						AutoIncrement: &vschemapb.AutoIncrement{
+							Column:   "c1",
+							Sequence: "t2",
+						},
+					},
+					"t4": {},
+				},
+			},
+		},
+		{
+			name: "no target vschema; copy source vschema; sharded source",
+			sourceVSchema: &vschemapb.Keyspace{
+				Sharded: true,
+				Tables: map[string]*vschemapb.Table{
+					"t1": {
+						Type: vindexes.TypeReference,
+					},
+					"t2": {
+						Type: vindexes.TypeSequence,
+					},
+					"t3": {
+						AutoIncrement: &vschemapb.AutoIncrement{
+							Column:   "c1",
+							Sequence: "t2",
+						},
+					},
+					"t4": {
+						ColumnVindexes: []*vschemapb.ColumnVindex{ // Should be stripped on target
+							{
+								Column: "c1",
+								Name:   "hash",
+							},
+						},
+					},
+				},
+			},
+			inTargetVSchema: &vschemapb.Keyspace{},
+			tables:          []string{"t1", "t2", "t3", "t4"},
+			copyVSchema:     true,
+			wantTargetVSchema: &vschemapb.Keyspace{
+				Tables: map[string]*vschemapb.Table{
+					"t1": {
+						Type: vindexes.TypeReference,
+					},
+					"t2": {
+						Type: vindexes.TypeSequence,
+					},
+					"t3": {
+						AutoIncrement: &vschemapb.AutoIncrement{
+							Column:   "c1",
+							Sequence: "t2",
+						},
+					},
+					"t4": {},
+				},
+			},
+		},
+		{
+			name: "target vschema; copy source vschema",
+			sourceVSchema: &vschemapb.Keyspace{
+				Tables: map[string]*vschemapb.Table{
+					"t1": {
+						Type: vindexes.TypeReference,
+					},
+					"t2": {
+						Type: vindexes.TypeSequence,
+					},
+					"t3": {
+						AutoIncrement: &vschemapb.AutoIncrement{
+							Column:   "c1",
+							Sequence: "t2",
+						},
+					},
+					"t4": {
+						ColumnVindexes: []*vschemapb.ColumnVindex{ // Should be stripped on target
+							{
+								Column: "c1",
+								Name:   "hash",
+							},
+						},
+					},
+				},
+			},
+			inTargetVSchema: &vschemapb.Keyspace{
+				Tables: map[string]*vschemapb.Table{
+					"t1": {
+						Type: vindexes.TypeReference,
+					},
+					"t2": {},
+					"t3": {},
+					"t4": {},
+				},
+			},
+			tables:      []string{"t1", "t2", "t3", "t4"},
+			copyVSchema: true,
+			wantTargetVSchema: &vschemapb.Keyspace{
+				Tables: map[string]*vschemapb.Table{
+					"t1": {
+						Type: vindexes.TypeReference,
+					},
+					"t2": {},
+					"t3": {},
+					"t4": {},
+				},
+			},
+		},
+		{
+			name: "no target vschema; do not copy source vschema",
+			sourceVSchema: &vschemapb.Keyspace{
+				Tables: map[string]*vschemapb.Table{
+					"t1": {
+						Type: vindexes.TypeReference,
+					},
+					"t2": {
+						Type: vindexes.TypeSequence,
+					},
+					"t3": {
+						AutoIncrement: &vschemapb.AutoIncrement{
+							Column:   "c1",
+							Sequence: "t2",
+						},
+					},
+				},
+			},
+			inTargetVSchema: &vschemapb.Keyspace{},
+			tables:          []string{"t1", "t2"},
+			copyVSchema:     false,
+			wantTargetVSchema: &vschemapb.Keyspace{
+				Tables: map[string]*vschemapb.Table{
+					"t1": {},
+					"t2": {},
+				},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ts.SaveVSchema(ctx, srcks, tt.sourceVSchema)
+			err := wr.addTablesToVSchema(ctx, srcks, tt.inTargetVSchema, tt.tables, tt.copyVSchema)
+			require.NoError(t, err)
+			require.Equal(t, tt.wantTargetVSchema, tt.inTargetVSchema)
+		})
+	}
 }
