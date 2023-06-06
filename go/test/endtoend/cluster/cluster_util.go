@@ -179,12 +179,22 @@ func getTablet(tabletGrpcPort int, hostname string) *topodatapb.Tablet {
 func filterResultForWarning(input string) string {
 	lines := strings.Split(input, "\n")
 	var result string
-	for _, line := range lines {
+	for i, line := range lines {
 		if strings.Contains(line, "WARNING: vtctl should only be used for VDiff v1 workflows. Please use VDiff v2 and consider using vtctldclient for all other commands.") {
 			continue
 		}
-		result = result + line + "\n"
+
+		if strings.Contains(line, "Failed to read in config") && strings.Contains(line, `Config File "vtconfig" Not Found in`) {
+			continue
+		}
+
+		result += line
+
+		if i < len(lines)-1 {
+			result += "\n"
+		}
 	}
+
 	return result
 }
 
