@@ -350,13 +350,8 @@ func ValidateTopology(t *testing.T, clusterInstance *cluster.LocalProcessCluster
 		args = append(args, "--", "--ping-tablets=true")
 	}
 	out, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput(args...)
+	require.Empty(t, out)
 	require.NoError(t, err)
-
-	ver, err := cluster.GetMajorVersion("vtctlclient")
-	require.NoError(t, err)
-	if ver <= 16 {
-		require.Empty(t, out)
-	}
 }
 
 // ConfirmReplication confirms that the replication is working properly
