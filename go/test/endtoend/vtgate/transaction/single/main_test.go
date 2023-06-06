@@ -20,15 +20,16 @@ import (
 	"context"
 	_ "embed"
 	"flag"
+	"fmt"
 	"os"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/test/endtoend/utils"
-
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/endtoend/utils"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder"
 )
 
 var (
@@ -70,6 +71,7 @@ func TestMain(m *testing.M) {
 		}
 
 		// Start vtgate
+		clusterInstance.VtGatePlannerVersion = planbuilder.Gen4
 		clusterInstance.VtGateExtraArgs = []string{"--transaction_mode", "SINGLE"}
 		err = clusterInstance.StartVtgate()
 		if err != nil {
@@ -168,12 +170,8 @@ func TestLookupDangleRowLaterMultiDB(t *testing.T) {
 }
 
 func TestLookupDangleRowRecordInSameShard(t *testing.T) {
-	conn, err := mysql.Connect(context.Background(), &vtParams)
-	require.NoError(t, err)
-	defer conn.Close()
-	defer func() {
-		utils.Exec(t, conn, `delete from txn_unique_constraints where txn_id = 'txn1'`)
-	}()
+	conn, cleanup := setup(t)
+	defer cleanup()
 
 	// insert a dangling row in lookup table
 	utils.Exec(t, conn, `INSERT INTO uniqueConstraint_vdx(unique_constraint, keyspace_id) VALUES ('foo', 'J\xda\xf0p\x0e\xcc(\x8fਁ\xa7P\x86\xa5=')`)
@@ -190,12 +188,8 @@ func TestLookupDangleRowRecordInSameShard(t *testing.T) {
 }
 
 func TestMultiDbSecondRecordLookupDangle(t *testing.T) {
-	conn, err := mysql.Connect(context.Background(), &vtParams)
-	require.NoError(t, err)
-	defer conn.Close()
-	defer func() {
-		utils.Exec(t, conn, `delete from uniqueConstraint_vdx where unique_constraint = 'bar'`)
-	}()
+	conn, cleanup := setup(t)
+	defer cleanup()
 
 	// insert a dangling row in lookup table
 	utils.Exec(t, conn, `INSERT INTO uniqueConstraint_vdx(unique_constraint, keyspace_id) VALUES ('bar', '\x86\xc8\xc5\x1ac\xfb\x8c+6\xe4\x1f\x03\xd8ϝB')`)
@@ -219,4 +213,43 @@ func TestMultiDbSecondRecordLookupDangle(t *testing.T) {
 
 	// no row should exist.
 	utils.AssertMatches(t, conn, `select txn_id from txn_unique_constraints`, `[]`)
+}
+
+// TestNoRecordInTableNotFail test that vindex lookup query creates a transaction on one shard say x.
+// To fetch the fields for the actual table, the Select Impossible query should also be reouted to x.
+// If it routes to other shard then the test will fail with multi-shard transaction attempted error.
+// The fix ensures it does not happen.
+func TestNoRecordInTableNotFail(t *testing.T) {
+	conn, cleanup := setup(t)
+	defer cleanup()
+
+	utils.AssertMatches(t, conn, `select @@transaction_mode`, `[[VARCHAR("SINGLE")]]`)
+	// Need to run this test multiple times as shards are picked randomly for Impossible query.
+	// After the fix it is not random if a shard session already exists then it reuses that same shard session.
+	for i := 0; i < 100; i++ {
+		utils.Exec(t, conn, `begin`)
+		utils.Exec(t, conn, `INSERT INTO t1(id, txn_id) VALUES (1, "t1")`)
+		utils.Exec(t, conn, `SELECT * FROM t2 WHERE id = 1`)
+		utils.Exec(t, conn, `rollback`)
+	}
+}
+
+func setup(t *testing.T) (*mysql.Conn, func()) {
+	t.Helper()
+	conn, err := mysql.Connect(context.Background(), &vtParams)
+	require.NoError(t, err)
+
+	tables := []string{
+		"txn_unique_constraints", "uniqueConstraint_vdx",
+		"t1", "t1_id_vdx", "t2", "t2_id_vdx",
+	}
+	cleanup := func() {
+		utils.Exec(t, conn, "set transaction_mode=multi")
+		for _, table := range tables {
+			utils.Exec(t, conn, fmt.Sprintf("delete from %s /* cleanup */", table))
+		}
+		utils.Exec(t, conn, "set transaction_mode=single")
+	}
+	cleanup()
+	return conn, cleanup
 }
