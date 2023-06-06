@@ -102,7 +102,10 @@ func TestDownPrimary(t *testing.T) {
 // that primary is unreachable. This help us save few seconds depending on value of `RemoteOperationTimeout` flag.
 func TestDeadPrimaryRecoversImmediately(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 1, []string{"--remote_operation_timeout=10s"}, cluster.VTOrcConfiguration{
+	// We specify the --wait-replicas-timeout to a small value because we spawn a cross-cell replica later in the test.
+	// If that replica is more advanced than the same-cell-replica, then we try to promote the cross-cell replica as an intermediate source.
+	// If we don't specify a small value of --wait-replicas-timeout, then we would end up waiting for 30 seconds for the dead-primary to respond, failing this test.
+	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 1, []string{"--remote_operation_timeout=10s", "--wait-replicas-timeout=5s"}, cluster.VTOrcConfiguration{
 		PreventCrossDataCenterPrimaryFailover: true,
 	}, 1, "semi_sync")
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
