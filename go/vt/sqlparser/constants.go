@@ -467,6 +467,22 @@ const (
 	NumPointsStr  = "st_numpoints"
 	PointNStr     = "st_pointn"
 	StartPointStr = "st_startpoint"
+
+	// PolygonPropertyType strings
+	AreaStr             = "st_area"
+	CentroidStr         = "st_centroid"
+	ExteriorRingStr     = "st_exteriorring"
+	InteriorRingNStr    = "st_interiorringN"
+	NumInteriorRingsStr = "st_numinteriorrings"
+
+	// GeomCollPropType strings
+	NumGeometriesStr = "st_numgeometries"
+	GeometryNStr     = "st_geometryn"
+
+	// GeomFromGeoHash strings
+	LatitudeFromHashStr  = "st_latfromgeohash"
+	LongitudeFromHashStr = "st_longfromgeohash"
+	PointFromHashStr     = "st_pointfromgeohash"
 )
 
 // Constants for Enum Type - Insert.Action
@@ -896,9 +912,25 @@ const (
 	DefaultFormat
 )
 
+// Constants for Enum Type - DateAddExprType
+const (
+	AdddateType DateAddExprType = iota
+	DateAddType
+	PlusIntervalLeftType
+	PlusIntervalRightType
+)
+
+// Constants for Enum Type - DateAddExprType
+const (
+	SubdateType DateSubExprType = iota
+	DateSubType
+	MinusIntervalRightType
+)
+
 // IntervalTypes constants
 const (
-	IntervalYear IntervalTypes = iota
+	IntervalUnknown IntervalTypes = iota
+	IntervalYear
 	IntervalQuarter
 	IntervalMonth
 	IntervalWeek
@@ -982,4 +1014,26 @@ const (
 	NumPoints
 	PointN
 	StartPoint
+)
+
+// Enum Types of linestring property functions
+const (
+	Area PolygonPropType = iota
+	Centroid
+	ExteriorRing
+	InteriorRingN
+	NumInteriorRings
+)
+
+// Enum Types of geom collection property functions
+const (
+	GeometryN GeomCollPropType = iota
+	NumGeometries
+)
+
+// Enum Types of geom from geohash functions
+const (
+	LatitudeFromHash GeomFromHashType = iota
+	LongitudeFromHash
+	PointFromHash
 )

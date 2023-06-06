@@ -333,6 +333,59 @@ func TestVStreamMulti(t *testing.T) {
 	}
 }
 
+func TestVStreamsCreatedAndLagMetrics(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	cell := "aa"
+	ks := "TestVStream"
+	_ = createSandbox(ks)
+	hc := discovery.NewFakeHealthCheck(nil)
+	st := getSandboxTopo(ctx, cell, ks, []string{"-20", "20-40"})
+	vsm := newTestVStreamManager(hc, st, cell)
+	vsm.vstreamsCreated.ResetAll()
+	vsm.vstreamsLag.ResetAll()
+	sbc0 := hc.AddTestTablet(cell, "1.1.1.1", 1001, ks, "-20", topodatapb.TabletType_PRIMARY, true, 1, nil)
+	addTabletToSandboxTopo(t, st, ks, "-20", sbc0.Tablet())
+	sbc1 := hc.AddTestTablet(cell, "1.1.1.1", 1002, ks, "20-40", topodatapb.TabletType_PRIMARY, true, 1, nil)
+	addTabletToSandboxTopo(t, st, ks, "20-40", sbc1.Tablet())
+
+	send0 := []*binlogdatapb.VEvent{
+		{Type: binlogdatapb.VEventType_GTID, Gtid: "gtid01"},
+		{Type: binlogdatapb.VEventType_COMMIT, Timestamp: 10, CurrentTime: 15 * 1e9},
+	}
+	sbc0.AddVStreamEvents(send0, nil)
+
+	send1 := []*binlogdatapb.VEvent{
+		{Type: binlogdatapb.VEventType_GTID, Gtid: "gtid02"},
+		{Type: binlogdatapb.VEventType_COMMIT, Timestamp: 10, CurrentTime: 17 * 1e9},
+	}
+	sbc1.AddVStreamEvents(send1, nil)
+
+	vgtid := &binlogdatapb.VGtid{
+		ShardGtids: []*binlogdatapb.ShardGtid{{
+			Keyspace: ks,
+			Shard:    "-20",
+			Gtid:     "pos",
+		}, {
+			Keyspace: ks,
+			Shard:    "20-40",
+			Gtid:     "pos",
+		}},
+	}
+	ch := startVStream(ctx, t, vsm, vgtid, nil)
+	<-ch
+	<-ch
+	wantVStreamsCreated := make(map[string]int64)
+	wantVStreamsCreated["TestVStream.-20.PRIMARY"] = 1
+	wantVStreamsCreated["TestVStream.20-40.PRIMARY"] = 1
+	assert.Equal(t, wantVStreamsCreated, vsm.vstreamsCreated.Counts(), "vstreamsCreated matches")
+
+	wantVStreamsLag := make(map[string]int64)
+	wantVStreamsLag["TestVStream.-20.PRIMARY"] = 5
+	wantVStreamsLag["TestVStream.20-40.PRIMARY"] = 7
+	assert.Equal(t, wantVStreamsLag, vsm.vstreamsLag.Counts(), "vstreamsLag matches")
+}
+
 func TestVStreamRetry(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -1157,7 +1210,8 @@ func startVStream(ctx context.Context, t *testing.T, vsm *vstreamManager, vgtid 
 func verifyEvents(t *testing.T, ch <-chan *binlogdatapb.VStreamResponse, wants ...*binlogdatapb.VStreamResponse) {
 	t.Helper()
 	for i, want := range wants {
-		got := <-ch
+		val := <-ch
+		got := proto.Clone(val).(*binlogdatapb.VStreamResponse)
 		require.NotNil(t, got)
 		for _, event := range got.Events {
 			event.Timestamp = 0

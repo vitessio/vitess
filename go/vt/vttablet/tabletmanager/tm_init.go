@@ -201,7 +201,7 @@ type TabletManager struct {
 }
 
 // BuildTabletFromInput builds a tablet record from input parameters.
-func BuildTabletFromInput(alias *topodatapb.TabletAlias, port, grpcPort int32, dbServerVersion string, db *dbconfigs.DBConfigs) (*topodatapb.Tablet, error) {
+func BuildTabletFromInput(alias *topodatapb.TabletAlias, port, grpcPort int32, db *dbconfigs.DBConfigs) (*topodatapb.Tablet, error) {
 	hostname := tabletHostname
 	if hostname == "" {
 		var err error
@@ -262,7 +262,6 @@ func BuildTabletFromInput(alias *topodatapb.TabletAlias, port, grpcPort int32, d
 		Type:                 tabletType,
 		DbNameOverride:       initDbNameOverride,
 		Tags:                 mergeTags(buildTags, initTags),
-		DbServerVersion:      dbServerVersion,
 		DefaultConnCollation: uint32(charset),
 	}, nil
 }

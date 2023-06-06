@@ -206,8 +206,7 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "GroupBy": "(0|1) COLLATE latin1_swedish_ci",
-        "ResultColumns": 1,
+        "GroupBy": "0 COLLATE latin1_swedish_ci",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -216,9 +215,9 @@
               "Name": "main",
               "Sharded": true
             },
-            "FieldQuery": "select c, weight_string(c) from sbtest30 where 1 != 1",
-            "OrderBy": "0 ASC COLLATE latin1_swedish_ci, 0 ASC COLLATE latin1_swedish_ci",
-            "Query": "select distinct c, weight_string(c) from sbtest30 where id between 1 and 10 order by c asc, c asc",
+            "FieldQuery": "select c from sbtest30 where 1 != 1 group by c",
+            "OrderBy": "0 ASC COLLATE latin1_swedish_ci",
+            "Query": "select c from sbtest30 where id between 1 and 10 group by c order by c asc",
             "Table": "sbtest30"
           }
         ]
@@ -242,7 +241,6 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "Query": "update sbtest6 set k = k + 1 where id = 5",
         "Table": "sbtest6",
         "Values": [
@@ -265,7 +263,6 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "Query": "update sbtest6 set k = k + 1 where id = 5",
         "Table": "sbtest6",
         "Values": [
@@ -292,7 +289,6 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "Query": "update sbtest9 set c = 7 where id = 8",
         "Table": "sbtest9",
         "Values": [
@@ -315,7 +311,6 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "Query": "update sbtest9 set c = 7 where id = 8",
         "Table": "sbtest9",
         "Values": [
@@ -342,7 +337,6 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "Query": "delete from sbtest15 where id = 7525",
         "Table": "sbtest15",
         "Values": [
@@ -365,7 +359,6 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "Query": "delete from sbtest15 where id = 7525",
         "Table": "sbtest15",
         "Values": [
@@ -392,7 +385,6 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "MultiShardAutocommit": false,
         "Query": "insert into sbtest16(id, k, c, pad) values (:_id_0, 1, 2, 50)",
         "TableName": "sbtest16",
         "VindexValues": {

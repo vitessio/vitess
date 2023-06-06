@@ -28,20 +28,20 @@ import (
 )
 
 func init() {
-	lowReplicationLag = 30 * time.Second
-	highReplicationLagMinServing = 2 * time.Hour
-	minNumTablets = 2
-	legacyReplicationLagAlgorithm = true
+	lowReplicationLag.Set(30 * time.Second)
+	highReplicationLagMinServing.Set(2 * time.Hour)
+	minNumTablets.Set(2)
+	legacyReplicationLagAlgorithm.Set(true)
 }
 
 // testSetLegacyReplicationLagAlgorithm is a test helper function, if this is used by a production code path, something is wrong.
 func testSetLegacyReplicationLagAlgorithm(newLegacy bool) {
-	legacyReplicationLagAlgorithm = newLegacy
+	legacyReplicationLagAlgorithm.Set(newLegacy)
 }
 
 // testSetMinNumTablets is a test helper function, if this is used by a production code path, something is wrong.
 func testSetMinNumTablets(newMin int) {
-	minNumTablets = newMin
+	minNumTablets.Set(newMin)
 }
 
 func TestFilterByReplicationLagUnhealthy(t *testing.T) {

@@ -156,13 +156,13 @@ func (f *fakeVTGateService) ExecuteBatch(ctx context.Context, session *vtgatepb.
 }
 
 // StreamExecute is part of the VTGateService interface
-func (f *fakeVTGateService) StreamExecute(ctx context.Context, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable, callback func(*sqltypes.Result) error) error {
+func (f *fakeVTGateService) StreamExecute(ctx context.Context, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable, callback func(*sqltypes.Result) error) (*vtgatepb.Session, error) {
 	if f.panics {
 		panic(fmt.Errorf("test forced panic"))
 	}
 	execCase, ok := execMap[sql]
 	if !ok {
-		return fmt.Errorf("no match for: %s", sql)
+		return session, fmt.Errorf("no match for: %s", sql)
 	}
 	f.checkCallerID(ctx, "StreamExecute")
 	query := &queryExecute{
@@ -172,32 +172,32 @@ func (f *fakeVTGateService) StreamExecute(ctx context.Context, session *vtgatepb
 	}
 	if !query.equal(execCase.execQuery) {
 		f.t.Errorf("StreamExecute:\n%+v, want\n%+v", query, execCase.execQuery)
-		return nil
+		return session, nil
 	}
 	if execCase.result != nil {
 		result := &sqltypes.Result{
 			Fields: execCase.result.Fields,
 		}
 		if err := callback(result); err != nil {
-			return err
+			return execCase.outSession, err
 		}
 		if f.hasError {
 			// wait until the client has the response, since all streaming implementation may not
 			// send previous messages if an error has been triggered.
 			<-f.errorWait
 			f.errorWait = make(chan struct{}) // for next test
-			return errTestVtGateError
+			return execCase.outSession, errTestVtGateError
 		}
 		for _, row := range execCase.result.Rows {
 			result := &sqltypes.Result{
 				Rows: [][]sqltypes.Value{row},
 			}
 			if err := callback(result); err != nil {
-				return err
+				return execCase.outSession, err
 			}
 		}
 	}
-	return nil
+	return execCase.outSession, nil
 }
 
 // Prepare is part of the VTGateService interface

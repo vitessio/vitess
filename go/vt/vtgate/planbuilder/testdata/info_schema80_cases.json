@@ -628,7 +628,7 @@
               "Sharded": false
             },
             "FieldQuery": "select 1 from information_schema.table_constraints as tc where 1 != 1",
-            "Query": "select 1 from information_schema.table_constraints as tc where tc.table_schema = :__vtschemaname /* VARCHAR */ and tc.table_name = :tc_table_name /* VARCHAR */ and tc.constraint_schema = :__vtschemaname /* VARCHAR */ and tc.constraint_name = :cc_constraint_name",
+            "Query": "select 1 from information_schema.table_constraints as tc where tc.table_schema = :__vtschemaname /* VARCHAR */ and tc.table_name = :tc_table_name /* VARCHAR */ and tc.constraint_name = :cc_constraint_name and tc.constraint_schema = :__vtschemaname /* VARCHAR */",
             "SysTableTableName": "[tc_table_name:VARCHAR(\"table_name\")]",
             "SysTableTableSchema": "[VARCHAR(\"table_schema\"), :cc_constraint_schema]",
             "Table": "information_schema.table_constraints"

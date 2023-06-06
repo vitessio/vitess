@@ -69,12 +69,6 @@
     "gen4-plan": "cannot use column offsets in group statement when using `*`"
   },
   {
-    "comment": "complex group by expression",
-    "query": "select a from user group by a+1",
-    "v3-plan": "VT12001: unsupported: in scatter query: only simple references are allowed",
-    "gen4-plan": "VT13001: [BUG] in scatter query: complex ORDER BY expression: a + 1"
-  },
-  {
     "comment": "Complex aggregate expression on scatter",
     "query": "select 1+count(*) from user",
     "plan": "VT12001: unsupported: in scatter query: complex aggregate expression"
@@ -86,22 +80,10 @@
     "gen4-plan": "VT03001: aggregate functions take a single argument 'count(a, b)'"
   },
   {
-    "comment": "scatter aggregate complex order by",
-    "query": "select id from user group by id order by id+1",
-    "v3-plan": "VT12001: unsupported: in scatter query: complex ORDER BY expression: id + 1",
-    "gen4-plan": "VT13001: [BUG] in scatter query: complex ORDER BY expression: id + 1"
-  },
-  {
-    "comment": "Scatter order by is complex with aggregates in select",
-    "query": "select col, count(*) from user group by col order by col+1",
-    "v3-plan": "VT12001: unsupported: in scatter query: complex ORDER BY expression: col + 1",
-    "gen4-plan": "VT13001: [BUG] in scatter query: complex ORDER BY expression: col + 1"
-  },
-  {
     "comment": "Aggregate detection (group_concat)",
     "query": "select group_concat(user.a) from user join user_extra",
     "v3-plan": "VT12001: unsupported: cross-shard query with aggregates",
-    "gen4-plan": "VT12001: unsupported: in scatter query: aggregation function 'group_concat'"
+    "gen4-plan": "VT12001: unsupported: in scatter query: aggregation function 'group_concat(`user`.a)'"
   },
   {
     "comment": "subqueries not supported in group by",
@@ -201,17 +183,20 @@
   {
     "comment": "unsharded insert, unqualified names and auto-inc combined",
     "query": "insert into unsharded_auto select col from unsharded",
-    "plan": "VT12001: unsupported: auto-increment and SELECT in INSERT"
+    "v3-plan": "VT12001: unsupported: auto-increment and SELECT in INSERT",
+    "gen4-plan": "VT09004: INSERT should contain column list or the table should have authoritative columns in vschema"
   },
   {
     "comment": "unsharded insert, no col list with auto-inc",
     "query": "insert into unsharded_auto values(1,1)",
-    "plan": "VT13001: [BUG] column list required for tables with auto-inc columns"
+    "v3-plan": "VT13001: [BUG] column list required for tables with auto-inc columns",
+    "gen4-plan": "VT09004: INSERT should contain column list or the table should have authoritative columns in vschema"
   },
   {
     "comment": "unsharded insert, col list does not match values",
     "query": "insert into unsharded_auto(id, val) values(1)",
-    "plan": "VT13001: [BUG] column list does not match values"
+    "v3-plan": "VT13001: [BUG] column list does not match values",
+    "gen4-plan": "VT03006: column count does not match value count at row 1"
   },
   {
     "comment": "sharded upsert can't change vindex",
@@ -391,13 +376,7 @@
     "comment": "avg function on scatter query",
     "query": "select avg(id) from user",
     "v3-plan": "VT12001: unsupported: in scatter query: complex aggregate expression",
-    "gen4-plan": "VT12001: unsupported: in scatter query: aggregation function 'avg'"
-  },
-  {
-    "comment": "scatter aggregate with ambiguous aliases",
-    "query": "select distinct a, b as a from user",
-    "v3-plan": "generating ORDER BY clause: VT03021: ambiguous column reference: a",
-    "gen4-plan": "VT13001: [BUG] generating ORDER BY clause: ambiguous symbol reference: a"
+    "gen4-plan": "VT12001: unsupported: in scatter query: aggregation function 'avg(id)'"
   },
   {
     "comment": "outer and inner subquery route reference the same \"uu.id\" name\n# but they refer to different things. The first reference is to the outermost query,\n# and the second reference is to the innermost 'from' subquery.\n# This query will never work as the inner derived table is only selecting one of the column",
@@ -434,12 +413,6 @@
     "comment": "unsupported with clause in union statement",
     "query": "with x as (select * from user) select * from x union select * from x",
     "plan": "VT12001: unsupported: WITH expression in UNION statement"
-  },
-  {
-    "comment": "scatter aggregate with complex select list (can't build order by)",
-    "query": "select distinct a+1 from user",
-    "v3-plan": "generating ORDER BY clause: VT12001: unsupported: reference a complex expression",
-    "gen4-plan": "VT13001: [BUG] in scatter query: complex ORDER BY expression: a + 1"
   },
   {
     "comment": "aggregation on union",
@@ -492,5 +465,34 @@
     "comment": "Assignment expression in delete statement",
     "query": "delete from user where x = (@val := 42)",
     "plan": "VT12001: unsupported: Assignment expression"
+  },
+  {
+    "comment": "grouping column could be coming from multiple sides",
+    "query": "select count(*) from user, user_extra group by user.id+user_extra.id",
+    "v3-plan": "VT12001: unsupported: cross-shard query with aggregates",
+    "gen4-plan": "VT12001: unsupported: grouping on columns from different sources"
+  },
+  {
+    "comment": "aggregate on input from both sides",
+    "query": "select sum(user.foo+user_extra.bar) from user, user_extra",
+    "v3-plan": "VT12001: unsupported: cross-shard query with aggregates",
+    "gen4-plan": "VT12001: unsupported: aggregation on columns from different sources"
+  },
+  {
+    "comment": "combine the output of two aggregations in the final result",
+    "query": "select greatest(sum(user.foo), sum(user_extra.bar)) from user join user_extra on user.col = user_extra.col",
+    "v3-plan": "VT12001: unsupported: cross-shard query with aggregates",
+    "gen4-plan": "VT12001: unsupported: in scatter query: complex aggregate expression"
+  },
+  {
+    "comment": "extremum on input from both sides",
+    "query": "select max(u.foo*ue.bar) from user u join user_extra ue",
+    "v3-plan": "VT12001: unsupported: cross-shard query with aggregates",
+    "gen4-plan": "VT12001: unsupported: aggregation on columns from different sources: max(u.foo * ue.bar)"
+  },
+  {
+    "comment": "extremum on input from both sides",
+    "query": "insert into music(user_id, id) select foo, bar from music on duplicate key update id = id+1",
+    "plan": "VT12001: unsupported: DML cannot update vindex column"
   }
 ]

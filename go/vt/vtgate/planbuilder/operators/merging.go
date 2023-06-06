@@ -21,9 +21,8 @@ import (
 	"reflect"
 
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
-
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
 // Merge checks whether two operators can be merged into a single one.
@@ -237,7 +236,7 @@ func (s *subQueryMerger) markPredicateInOuterRouting(outer *ShardedRouting, inne
 	// predicates list, so this might be a no-op.
 	subQueryWasPredicate := false
 	for i, predicate := range outer.SeenPredicates {
-		if s.ctx.SemTable.EqualsExpr(predicate, s.subq.ExtractedSubquery) {
+		if s.ctx.SemTable.EqualsExprWithDeps(predicate, s.subq.ExtractedSubquery) {
 			outer.SeenPredicates = append(outer.SeenPredicates[:i], outer.SeenPredicates[i+1:]...)
 
 			subQueryWasPredicate = true

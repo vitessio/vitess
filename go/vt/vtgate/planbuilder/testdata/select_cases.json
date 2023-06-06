@@ -8018,5 +8018,50 @@
         "user.user"
       ]
     }
+  },
+  {
+    "comment": "Query with non-plannable lookup vindex",
+    "query": "SELECT * FROM user_metadata WHERE user_metadata.non_planable = 'foo'",
+    "v3-plan": {
+      "QueryType": "SELECT",
+      "Original": "SELECT * FROM user_metadata WHERE user_metadata.non_planable = 'foo'",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Equal",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select * from user_metadata where 1 != 1",
+        "Query": "select * from user_metadata where user_metadata.non_planable = 'foo'",
+        "Table": "user_metadata",
+        "Values": [
+          "VARCHAR(\"foo\")"
+        ],
+        "Vindex": "non_planable_user_map"
+      }
+    },
+    "gen4-plan": {
+      "QueryType": "SELECT",
+      "Original": "SELECT * FROM user_metadata WHERE user_metadata.non_planable = 'foo'",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Equal",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select * from user_metadata where 1 != 1",
+        "Query": "select * from user_metadata where user_metadata.non_planable = 'foo'",
+        "Table": "user_metadata",
+        "Values": [
+          "VARCHAR(\"foo\")"
+        ],
+        "Vindex": "non_planable_user_map"
+      },
+      "TablesUsed": [
+        "user.user_metadata"
+      ]
+    }
   }
 ]

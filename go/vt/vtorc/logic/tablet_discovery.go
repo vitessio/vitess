@@ -245,7 +245,8 @@ func refreshTablets(tablets map[string]*topo.TabletInfo, query string, args []an
 			Port:     row.GetInt("port"),
 		}
 		tablet := &topodatapb.Tablet{}
-		if err := prototext.Unmarshal([]byte(row.GetString("info")), tablet); err != nil {
+		opts := prototext.UnmarshalOptions{DiscardUnknown: true}
+		if err := opts.Unmarshal([]byte(row.GetString("info")), tablet); err != nil {
 			log.Error(err)
 			return nil
 		}
@@ -338,7 +339,8 @@ func shardPrimary(keyspace string, shard string) (primary *topodatapb.Tablet, er
 	err = db.Db.QueryVTOrc(query, sqlutils.Args(keyspace, shard, topodatapb.TabletType_PRIMARY), func(m sqlutils.RowMap) error {
 		if primary == nil {
 			primary = &topodatapb.Tablet{}
-			return prototext.Unmarshal([]byte(m.GetString("info")), primary)
+			opts := prototext.UnmarshalOptions{DiscardUnknown: true}
+			return opts.Unmarshal([]byte(m.GetString("info")), primary)
 		}
 		return nil
 	})

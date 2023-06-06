@@ -141,10 +141,12 @@ func (sn *VTGateSession) ExecuteBatch(ctx context.Context, query []string, bindV
 // error. Then you can pull values from the ResultStream until io.EOF,
 // or another error.
 func (sn *VTGateSession) StreamExecute(ctx context.Context, query string, bindVars map[string]*querypb.BindVariable) (sqltypes.ResultStream, error) {
-	// StreamExecute is only used for SELECT queries that don't change
-	// the session. So, the protocol doesn't return an updated session.
-	// This may change in the future.
-	return sn.impl.StreamExecute(ctx, sn.session, query, bindVars)
+	// passing in the function that will update the session when received on the stream.
+	return sn.impl.StreamExecute(ctx, sn.session, query, bindVars, func(response *vtgatepb.StreamExecuteResponse) {
+		if response.Session != nil {
+			sn.session = response.Session
+		}
+	})
 }
 
 // Prepare performs a VTGate Prepare.
@@ -168,7 +170,7 @@ type Impl interface {
 	ExecuteBatch(ctx context.Context, session *vtgatepb.Session, queryList []string, bindVarsList []map[string]*querypb.BindVariable) (*vtgatepb.Session, []sqltypes.QueryResponse, error)
 
 	// StreamExecute executes a streaming query on vtgate. This is a V3 function.
-	StreamExecute(ctx context.Context, session *vtgatepb.Session, query string, bindVars map[string]*querypb.BindVariable) (sqltypes.ResultStream, error)
+	StreamExecute(ctx context.Context, session *vtgatepb.Session, query string, bindVars map[string]*querypb.BindVariable, processResponse func(*vtgatepb.StreamExecuteResponse)) (sqltypes.ResultStream, error)
 
 	// Prepare returns the fields information for the query as part of supporting prepare statements.
 	Prepare(ctx context.Context, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable) (*vtgatepb.Session, []*querypb.Field, error)

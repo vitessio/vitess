@@ -59,7 +59,7 @@ func RemovePredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op o
 
 		var keep []sqlparser.Expr
 		for _, e := range sqlparser.SplitAndExpression(nil, op.Predicate) {
-			if ctx.SemTable.EqualsExpr(expr, e) {
+			if ctx.SemTable.EqualsExprWithDeps(expr, e) {
 				isRemoved = true
 			} else {
 				keep = append(keep, e)
@@ -75,7 +75,7 @@ func RemovePredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op o
 	case *Filter:
 		idx := -1
 		for i, predicate := range op.Predicates {
-			if ctx.SemTable.EqualsExpr(predicate, expr) {
+			if ctx.SemTable.EqualsExprWithDeps(predicate, expr) {
 				idx = i
 			}
 		}

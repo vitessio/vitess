@@ -396,13 +396,3 @@ func generateQuery(statement sqlparser.Statement) string {
 	statement.Format(buf)
 	return buf.String()
 }
-
-// dmlFormatter strips out keyspace name from dmls.
-func dmlFormatter(buf *sqlparser.TrackedBuffer, node sqlparser.SQLNode) {
-	switch node := node.(type) {
-	case sqlparser.TableName:
-		node.Name.Format(buf)
-		return
-	}
-	node.Format(buf)
-}

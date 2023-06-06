@@ -125,7 +125,9 @@ func registerTabletEnvFlags(fs *pflag.FlagSet) {
 	currentConfig.SchemaReloadIntervalSeconds = defaultConfig.SchemaReloadIntervalSeconds.Clone()
 	fs.Var(&currentConfig.SchemaReloadIntervalSeconds, currentConfig.SchemaReloadIntervalSeconds.Name(), "query server schema reload time, how often vttablet reloads schemas from underlying MySQL instance in seconds. vttablet keeps table schemas in its own memory and periodically refreshes it from MySQL. This config controls the reload time.")
 	currentConfig.SignalSchemaChangeReloadIntervalSeconds = defaultConfig.SignalSchemaChangeReloadIntervalSeconds.Clone()
-	fs.Var(&currentConfig.SignalSchemaChangeReloadIntervalSeconds, currentConfig.SignalSchemaChangeReloadIntervalSeconds.Name(), "query server schema change signal interval defines at which interval the query server shall send schema updates to vtgate.")
+	fs.Var(&currentConfig.SignalSchemaChangeReloadIntervalSeconds, "queryserver-config-schema-change-signal-interval", "query server schema change signal interval defines at which interval the query server shall send schema updates to vtgate.")
+	_ = fs.MarkDeprecated("queryserver-config-schema-change-signal-interval", "We no longer poll for finding schema changes.")
+	fs.DurationVar(&currentConfig.SchemaChangeReloadTimeout, "schema-change-reload-timeout", defaultConfig.SchemaChangeReloadTimeout, "query server schema change reload timeout, this is how long to wait for the signaled schema reload operation to complete before giving up")
 	fs.BoolVar(&currentConfig.SignalWhenSchemaChange, "queryserver-config-schema-change-signal", defaultConfig.SignalWhenSchemaChange, "query server schema signal, will signal connected vtgates that schema has changed whenever this is detected. VTGates will need to have -schema_change_signal enabled for this to work")
 	currentConfig.Olap.TxTimeoutSeconds = defaultConfig.Olap.TxTimeoutSeconds.Clone()
 	fs.Var(&currentConfig.Olap.TxTimeoutSeconds, defaultConfig.Olap.TxTimeoutSeconds.Name(), "query server transaction timeout (in seconds), after which a transaction in an OLAP session will be killed")
@@ -153,6 +155,7 @@ func registerTabletEnvFlags(fs *pflag.FlagSet) {
 	fs.BoolVar(&currentConfig.AnnotateQueries, "queryserver-config-annotate-queries", defaultConfig.AnnotateQueries, "prefix queries to MySQL backend with comment indicating vtgate principal (user) and target tablet type")
 	fs.BoolVar(&currentConfig.WatchReplication, "watch_replication_stream", false, "When enabled, vttablet will stream the MySQL replication stream from the local server, and use it to update schema when it sees a DDL.")
 	fs.BoolVar(&currentConfig.TrackSchemaVersions, "track_schema_versions", false, "When enabled, vttablet will store versions of schemas at each position that a DDL is applied and allow retrieval of the schema corresponding to a position")
+	fs.Int64Var(&currentConfig.SchemaVersionMaxAgeSeconds, "schema-version-max-age-seconds", 0, "max age of schema version records to kept in memory by the vreplication historian")
 	fs.BoolVar(&currentConfig.TwoPCEnable, "twopc_enable", defaultConfig.TwoPCEnable, "if the flag is on, 2pc is enabled. Other 2pc flags must be supplied.")
 	fs.StringVar(&currentConfig.TwoPCCoordinatorAddress, "twopc_coordinator_address", defaultConfig.TwoPCCoordinatorAddress, "address of the (VTGate) process(es) that will be used to notify of abandoned transactions.")
 	SecondsVar(fs, &currentConfig.TwoPCAbandonAge, "twopc_abandon_age", defaultConfig.TwoPCAbandonAge, "time in seconds. Any unresolved transaction older than this time will be sent to the coordinator to be resolved.")
@@ -187,9 +190,6 @@ func registerTabletEnvFlags(fs *pflag.FlagSet) {
 	flagutil.DualFormatBoolVar(fs, &enableConsolidatorReplicas, "enable_consolidator_replicas", false, "This option enables the query consolidator only on replicas.")
 	fs.Int64Var(&currentConfig.ConsolidatorStreamQuerySize, "consolidator-stream-query-size", defaultConfig.ConsolidatorStreamQuerySize, "Configure the stream consolidator query size in bytes. Setting to 0 disables the stream consolidator.")
 	fs.Int64Var(&currentConfig.ConsolidatorStreamTotalSize, "consolidator-stream-total-size", defaultConfig.ConsolidatorStreamTotalSize, "Configure the stream consolidator total size in bytes. Setting to 0 disables the stream consolidator.")
-	flagutil.DualFormatBoolVar(fs, &currentConfig.DeprecatedCacheResultFields, "enable_query_plan_field_caching", defaultConfig.DeprecatedCacheResultFields, "This option fetches & caches fields (columns) when storing query plans")
-	_ = fs.MarkDeprecated("enable_query_plan_field_caching", "it will be removed in a future release.")
-	_ = fs.MarkDeprecated("enable-query-plan-field-caching", "it will be removed in a future release.")
 
 	currentConfig.Healthcheck.IntervalSeconds = flagutil.NewDeprecatedFloat64Seconds(defaultConfig.Healthcheck.IntervalSeconds.Name(), defaultConfig.Healthcheck.IntervalSeconds.Get())
 	currentConfig.Healthcheck.DegradedThresholdSeconds = flagutil.NewDeprecatedFloat64Seconds(defaultConfig.Healthcheck.DegradedThresholdSeconds.Name(), defaultConfig.Healthcheck.DegradedThresholdSeconds.Get())
@@ -203,7 +203,7 @@ func registerTabletEnvFlags(fs *pflag.FlagSet) {
 	fs.BoolVar(&enableReplicationReporter, "enable_replication_reporter", false, "Use polling to track replication lag.")
 	fs.BoolVar(&currentConfig.EnableOnlineDDL, "queryserver_enable_online_ddl", true, "Enable online DDL.")
 	fs.BoolVar(&currentConfig.SanitizeLogMessages, "sanitize_log_messages", false, "Remove potentially sensitive information in tablet INFO, WARNING, and ERROR log messages such as query parameters.")
-	fs.BoolVar(&currentConfig.EnableSettingsPool, "queryserver-enable-settings-pool", false, "Enable pooling of connections with modified system settings")
+	fs.BoolVar(&currentConfig.EnableSettingsPool, "queryserver-enable-settings-pool", true, "Enable pooling of connections with modified system settings")
 
 	fs.Int64Var(&currentConfig.RowStreamer.MaxInnoDBTrxHistLen, "vreplication_copy_phase_max_innodb_history_list_length", 1000000, "The maximum InnoDB transaction history that can exist on a vstreamer (source) before starting another round of copying rows. This helps to limit the impact on the source tablet.")
 	fs.Int64Var(&currentConfig.RowStreamer.MaxMySQLReplLagSecs, "vreplication_copy_phase_max_mysql_replication_lag", 43200, "The maximum MySQL replication lag (in seconds) that can exist on a vstreamer (source) before starting another round of copying rows. This helps to limit the impact on the source tablet.")
@@ -320,13 +320,14 @@ type TabletConfig struct {
 	QueryCacheLFU                           bool                              `json:"queryCacheLFU,omitempty"`
 	SchemaReloadIntervalSeconds             flagutil.DeprecatedFloat64Seconds `json:"schemaReloadIntervalSeconds,omitempty"`
 	SignalSchemaChangeReloadIntervalSeconds flagutil.DeprecatedFloat64Seconds `json:"signalSchemaChangeReloadIntervalSeconds,omitempty"`
+	SchemaChangeReloadTimeout               time.Duration                     `json:"schemaChangeReloadTimeout,omitempty"`
 	WatchReplication                        bool                              `json:"watchReplication,omitempty"`
 	TrackSchemaVersions                     bool                              `json:"trackSchemaVersions,omitempty"`
+	SchemaVersionMaxAgeSeconds              int64                             `json:"schemaVersionMaxAgeSeconds,omitempty"`
 	TerseErrors                             bool                              `json:"terseErrors,omitempty"`
 	TruncateErrorLen                        int                               `json:"truncateErrorLen,omitempty"`
 	AnnotateQueries                         bool                              `json:"annotateQueries,omitempty"`
 	MessagePostponeParallelism              int                               `json:"messagePostponeParallelism,omitempty"`
-	DeprecatedCacheResultFields             bool                              `json:"cacheResultFields,omitempty"`
 	SignalWhenSchemaChange                  bool                              `json:"signalWhenSchemaChange,omitempty"`
 
 	ExternalConnections map[string]*dbconfigs.DBConfigs `json:"externalConnections,omitempty"`
@@ -368,6 +369,7 @@ func (cfg *TabletConfig) MarshalJSON() ([]byte, error) {
 		TCProxy
 		SchemaReloadIntervalSeconds             string `json:"schemaReloadIntervalSeconds,omitempty"`
 		SignalSchemaChangeReloadIntervalSeconds string `json:"signalSchemaChangeReloadIntervalSeconds,omitempty"`
+		SchemaChangeReloadTimeout               string `json:"schemaChangeReloadTimeout,omitempty"`
 	}{
 		TCProxy: TCProxy(*cfg),
 	}
@@ -376,8 +378,8 @@ func (cfg *TabletConfig) MarshalJSON() ([]byte, error) {
 		tmp.SchemaReloadIntervalSeconds = d.String()
 	}
 
-	if d := cfg.SignalSchemaChangeReloadIntervalSeconds.Get(); d != 0 {
-		tmp.SignalSchemaChangeReloadIntervalSeconds = d.String()
+	if d := cfg.SchemaChangeReloadTimeout; d != 0 {
+		tmp.SchemaChangeReloadTimeout = d.String()
 	}
 
 	return json.Marshal(&tmp)
@@ -780,15 +782,18 @@ var defaultConfig = TabletConfig{
 	// memory copies.  so with the encoding overhead, this seems to work
 	// great (the overhead makes the final packets on the wire about twice
 	// bigger than this).
-	StreamBufferSize:                        32 * 1024,
-	QueryCacheSize:                          int(cache.DefaultConfig.MaxEntries),
-	QueryCacheMemory:                        cache.DefaultConfig.MaxMemoryUsage,
-	QueryCacheLFU:                           cache.DefaultConfig.LFU,
-	SchemaReloadIntervalSeconds:             flagutil.NewDeprecatedFloat64Seconds("queryserver-config-schema-reload-time", 30*time.Minute),
-	SignalSchemaChangeReloadIntervalSeconds: flagutil.NewDeprecatedFloat64Seconds("queryserver-config-schema-change-signal-interval", 5*time.Second),
-	MessagePostponeParallelism:              4,
-	DeprecatedCacheResultFields:             true,
-	SignalWhenSchemaChange:                  true,
+	StreamBufferSize:            32 * 1024,
+	QueryCacheSize:              int(cache.DefaultConfig.MaxEntries),
+	QueryCacheMemory:            cache.DefaultConfig.MaxMemoryUsage,
+	QueryCacheLFU:               cache.DefaultConfig.LFU,
+	SchemaReloadIntervalSeconds: flagutil.NewDeprecatedFloat64Seconds("queryserver-config-schema-reload-time", 30*time.Minute),
+	// SchemaChangeReloadTimeout is used for the signal reload operation where we have to query mysqld.
+	// The queries during the signal reload operation are typically expected to have low load,
+	// but in busy systems with many tables, some queries may take longer than anticipated.
+	// Therefore, the default value should be generous to ensure completion.
+	SchemaChangeReloadTimeout:  30 * time.Second,
+	MessagePostponeParallelism: 4,
+	SignalWhenSchemaChange:     true,
 
 	EnableTxThrottler:           false,
 	TxThrottlerConfig:           defaultTxThrottlerConfig(),
@@ -810,6 +815,7 @@ var defaultConfig = TabletConfig{
 	},
 
 	EnablePerWorkloadTableMetrics: false,
+	EnableSettingsPool:            true,
 }
 
 // defaultTxThrottlerConfig formats the default throttlerdata.Configuration
