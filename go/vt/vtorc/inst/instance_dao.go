@@ -184,9 +184,7 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, latency *stopwatch
 	instance := NewInstance()
 	instanceFound := false
 	partialSuccess := false
-	resolvedHostname := ""
 	errorChan := make(chan error, 32)
-	var resolveErr error
 
 	if !instanceKey.IsValid() {
 		latency.Start("backend")
@@ -237,7 +235,6 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, latency *stopwatch
 		instance.BinlogFormat = fullStatus.BinlogFormat
 		instance.LogReplicationUpdatesEnabled = fullStatus.LogReplicaUpdates
 		instance.VersionComment = fullStatus.VersionComment
-		resolvedHostname = instance.Key.Hostname
 
 		if instance.LogBinEnabled && fullStatus.PrimaryStatus != nil {
 			binlogPos, err := getBinlogCoordinatesFromPositionString(fullStatus.PrimaryStatus.FilePosition)
@@ -279,19 +276,10 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, latency *stopwatch
 			}
 		}
 	}
-	if resolvedHostname != instance.Key.Hostname {
-		latency.Start("backend")
-		UpdateResolvedHostname(instance.Key.Hostname, resolvedHostname)
-		latency.Stop("backend")
-		instance.Key.Hostname = resolvedHostname
-	}
 	if instance.Key.Hostname == "" {
 		err = fmt.Errorf("ReadTopologyInstance: empty hostname (%+v). Bailing out", *instanceKey)
 		goto Cleanup
 	}
-	go func() {
-		_ = ResolveHostnameIPs(instance.Key.Hostname)
-	}()
 
 	instance.ReplicationIOThreadState = ReplicationThreadStateNoThread
 	instance.ReplicationSQLThreadState = ReplicationThreadStateNoThread
@@ -327,16 +315,11 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, latency *stopwatch
 		instance.HasReplicationFilters = fullStatus.ReplicationStatus.HasReplicationFilters
 
 		primaryHostname := fullStatus.ReplicationStatus.SourceHost
-		primaryKey, err := NewResolveInstanceKey(primaryHostname, int(fullStatus.ReplicationStatus.SourcePort))
+		primaryKey, err := newInstanceKey(primaryHostname, int(fullStatus.ReplicationStatus.SourcePort))
 		if err != nil {
-			_ = logReadTopologyInstanceError(instanceKey, "NewResolveInstanceKey", err)
-		}
-		primaryKey.Hostname, resolveErr = ResolveHostname(primaryKey.Hostname)
-		if resolveErr != nil {
-			_ = logReadTopologyInstanceError(instanceKey, fmt.Sprintf("ResolveHostname(%q)", primaryKey.Hostname), resolveErr)
+			_ = logReadTopologyInstanceError(instanceKey, "newInstanceKey()", err)
 		}
 		instance.SourceKey = *primaryKey
-		instance.IsDetachedPrimary = instance.SourceKey.IsDetached()
 
 		if fullStatus.ReplicationStatus.ReplicationLagUnknown {
 			instance.SecondsBehindPrimary.Valid = false
@@ -487,11 +470,11 @@ func ReadReplicationGroupPrimary(instance *Instance) (err error) {
 	err = db.QueryVTOrc(query, queryArgs, func(row sqlutils.RowMap) error {
 		groupPrimaryHost := row.GetString("replication_group_primary_host")
 		groupPrimaryPort := row.GetInt("replication_group_primary_port")
-		resolvedGroupPrimary, err := NewResolveInstanceKey(groupPrimaryHost, groupPrimaryPort)
+		groupPrimary, err := newInstanceKey(groupPrimaryHost, groupPrimaryPort)
 		if err != nil {
 			return err
 		}
-		instance.ReplicationGroupPrimaryInstanceKey = *resolvedGroupPrimary
+		instance.ReplicationGroupPrimaryInstanceKey = *groupPrimary
 		return nil
 	})
 	return err
@@ -574,7 +557,6 @@ func readInstanceRow(m sqlutils.RowMap) *Instance {
 	instance.LogReplicationUpdatesEnabled = m.GetBool("log_replica_updates")
 	instance.SourceKey.Hostname = m.GetString("source_host")
 	instance.SourceKey.Port = m.GetInt("source_port")
-	instance.IsDetachedPrimary = instance.SourceKey.IsDetached()
 	instance.ReplicationSQLThreadRuning = m.GetBool("replica_sql_running")
 	instance.ReplicationIOThreadRuning = m.GetBool("replica_io_running")
 	instance.ReplicationSQLThreadState = ReplicationThreadState(m.GetInt("replication_sql_thread_state"))
@@ -630,7 +612,6 @@ func readInstanceRow(m sqlutils.RowMap) *Instance {
 	instance.DowntimeOwner = m.GetString("downtime_owner")
 	instance.DowntimeEndTimestamp = m.GetString("downtime_end_timestamp")
 	instance.ElapsedDowntime = time.Second * time.Duration(m.GetInt("elapsed_downtime_seconds"))
-	instance.UnresolvedHostname = m.GetString("unresolved_hostname")
 	instance.AllowTLS = m.GetBool("allow_tls")
 	instance.InstanceAlias = m.GetString("instance_alias")
 	instance.LastDiscoveryLatency = time.Duration(m.GetInt64("last_discovery_latency")) * time.Nanosecond
@@ -644,8 +625,6 @@ func readInstanceRow(m sqlutils.RowMap) *Instance {
 	instance.ReplicationGroupMemberRole = m.GetString("replication_group_member_role")
 	instance.ReplicationGroupPrimaryInstanceKey = InstanceKey{Hostname: m.GetString("replication_group_primary_host"),
 		Port: m.GetInt("replication_group_primary_port")}
-	_ = instance.ReplicationGroupMembers.ReadJSON(m.GetString("replication_group_members"))
-	//instance.ReplicationGroup = m.GetString("replication_group_")
 
 	// problems
 	if !instance.IsLastCheckValid {
@@ -685,7 +664,6 @@ func readInstancesByCondition(condition string, args []any, sort string) ([](*In
 			candidate_database_instance.last_suggested is not null
 				 and candidate_database_instance.promotion_rule in ('must', 'prefer') as is_candidate,
 			ifnull(nullif(candidate_database_instance.promotion_rule, ''), 'neutral') as promotion_rule,
-			ifnull(unresolved_hostname, '') as unresolved_hostname,
 			(database_instance_downtime.downtime_active is not null and ifnull(database_instance_downtime.end_timestamp, now()) > now()) as is_downtimed,
     	ifnull(database_instance_downtime.reason, '') as downtime_reason,
 			ifnull(database_instance_downtime.owner, '') as downtime_owner,
@@ -695,7 +673,6 @@ func readInstancesByCondition(condition string, args []any, sort string) ([](*In
 			database_instance
 			left join vitess_tablet using (hostname, port)
 			left join candidate_database_instance using (hostname, port)
-			left join hostname_unresolve using (hostname)
 			left join database_instance_downtime using (hostname, port)
 		where
 			%s
@@ -821,102 +798,6 @@ func ReadLostInRecoveryInstances(keyspace string, shard string) ([](*Instance), 
 	return readInstancesByCondition(condition, sqlutils.Args(DowntimeLostInRecoveryMessage, keyspace, shard), "keyspace asc, shard asc, replication_depth asc")
 }
 
-// ForgetUnseenInstancesDifferentlyResolved will purge instances which are invalid, and whose hostname
-// appears on the hostname_resolved table; this means some time in the past their hostname was unresovled, and now
-// resovled to a different value; the old hostname is never accessed anymore and the old entry should be removed.
-func ForgetUnseenInstancesDifferentlyResolved() error {
-	query := `
-			select
-				database_instance.hostname, database_instance.port
-			from
-					hostname_resolve
-					JOIN database_instance ON (hostname_resolve.hostname = database_instance.hostname)
-			where
-					hostname_resolve.hostname != hostname_resolve.resolved_hostname
-					AND ifnull(last_checked <= last_seen, 0) = 0
-	`
-	keys := NewInstanceKeyMap()
-	err := db.QueryVTOrc(query, nil, func(m sqlutils.RowMap) error {
-		key := InstanceKey{
-			Hostname: m.GetString("hostname"),
-			Port:     m.GetInt("port"),
-		}
-		keys.AddKey(key)
-		return nil
-	})
-	var rowsAffected int64
-	for _, key := range keys.GetInstanceKeys() {
-		sqlResult, err := db.ExecVTOrc(`
-			delete from
-				database_instance
-			where
-		    hostname = ? and port = ?
-			`, key.Hostname, key.Port,
-		)
-		if err != nil {
-			log.Error(err)
-			return err
-		}
-		rows, err := sqlResult.RowsAffected()
-		if err != nil {
-			log.Error(err)
-			return err
-		}
-		rowsAffected = rowsAffected + rows
-	}
-	_ = AuditOperation("forget-unseen-differently-resolved", nil, fmt.Sprintf("Forgotten instances: %d", rowsAffected))
-	return err
-}
-
-// readUnknownPrimaryHostnameResolves will figure out the resolved hostnames of primary-hosts which cannot be found.
-// It uses the hostname_resolve_history table to heuristically guess the correct hostname (based on "this was the
-// last time we saw this hostname and it resolves into THAT")
-func readUnknownPrimaryHostnameResolves() (map[string]string, error) {
-	res := make(map[string]string)
-	err := db.QueryVTOrcRowsMap(`
-			SELECT DISTINCT
-			    replica_instance.source_host, hostname_resolve_history.resolved_hostname
-			FROM
-			    database_instance replica_instance
-			LEFT JOIN hostname_resolve ON (replica_instance.source_host = hostname_resolve.hostname)
-			LEFT JOIN database_instance primary_instance ON (
-			    COALESCE(hostname_resolve.resolved_hostname, replica_instance.source_host) = primary_instance.hostname
-			    and replica_instance.source_port = primary_instance.port
-			) LEFT JOIN hostname_resolve_history ON (replica_instance.source_host = hostname_resolve_history.hostname)
-			WHERE
-			    primary_instance.last_checked IS NULL
-			    and replica_instance.source_host != ''
-			    and replica_instance.source_host != '_'
-			    and replica_instance.source_port > 0
-			`, func(m sqlutils.RowMap) error {
-		res[m.GetString("source_host")] = m.GetString("resolved_hostname")
-		return nil
-	})
-	if err != nil {
-		log.Error(err)
-		return res, err
-	}
-
-	return res, nil
-}
-
-// ResolveUnknownPrimaryHostnameResolves fixes missing hostname resolves based on hostname_resolve_history
-// The use case is replicas replicating from some unknown-hostname which cannot be otherwise found. This could
-// happen due to an expire unresolve together with clearing up of hostname cache.
-func ResolveUnknownPrimaryHostnameResolves() error {
-
-	hostnameResolves, err := readUnknownPrimaryHostnameResolves()
-	if err != nil {
-		return err
-	}
-	for hostname, resolvedHostname := range hostnameResolves {
-		UpdateResolvedHostname(hostname, resolvedHostname)
-	}
-
-	_ = AuditOperation("resolve-unknown-primaries", nil, fmt.Sprintf("Num resolved hostnames: %d", len(hostnameResolves)))
-	return err
-}
-
 // GetKeyspaceShardName gets the keyspace shard name for the given instance key
 func GetKeyspaceShardName(instanceKey *InstanceKey) (keyspace string, shard string, err error) {
 	query := `
@@ -976,7 +857,7 @@ func ReadOutdatedInstanceKeys() ([]InstanceKey, error) {
 	args := sqlutils.Args(config.Config.InstancePollSeconds, 2*config.Config.InstancePollSeconds)
 
 	err := db.QueryVTOrc(query, args, func(m sqlutils.RowMap) error {
-		instanceKey, merr := NewResolveInstanceKey(m.GetString("hostname"), m.GetInt("port"))
+		instanceKey, merr := newInstanceKey(m.GetString("hostname"), m.GetInt("port"))
 		if merr != nil {
 			log.Error(merr)
 		} else if !InstanceIsForgotten(instanceKey) {
@@ -1115,7 +996,6 @@ func mkInsertOdkuForInstances(instances []*Instance, instanceWasActuallyFound bo
 		"replication_group_is_single_primary_mode",
 		"replication_group_member_state",
 		"replication_group_member_role",
-		"replication_group_members",
 		"replication_group_primary_host",
 		"replication_group_primary_port",
 	}
@@ -1201,7 +1081,6 @@ func mkInsertOdkuForInstances(instances []*Instance, instanceWasActuallyFound bo
 		args = append(args, instance.ReplicationGroupIsSinglePrimary)
 		args = append(args, instance.ReplicationGroupMemberState)
 		args = append(args, instance.ReplicationGroupMemberRole)
-		args = append(args, instance.ReplicationGroupMembers.ToJSONString())
 		args = append(args, instance.ReplicationGroupPrimaryInstanceKey.Hostname)
 		args = append(args, instance.ReplicationGroupPrimaryInstanceKey.Port)
 	}

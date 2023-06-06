@@ -46,7 +46,6 @@ type Instance struct {
 	SourceKey                    InstanceKey
 	SourceUUID                   string
 	AncestryUUID                 string
-	IsDetachedPrimary            bool
 
 	ReplicationSQLThreadRuning bool
 	ReplicationIOThreadRuning  bool
@@ -106,7 +105,6 @@ type Instance struct {
 	DowntimeOwner        string
 	DowntimeEndTimestamp string
 	ElapsedDowntime      time.Duration
-	UnresolvedHostname   string
 	AllowTLS             bool
 
 	Problems []string
@@ -126,9 +124,6 @@ type Instance struct {
 	ReplicationGroupMemberState string
 	ReplicationGroupMemberRole  string
 
-	// List of all known members of the same group
-	ReplicationGroupMembers InstanceKeyMap
-
 	// Primary of the replication group
 	ReplicationGroupPrimaryInstanceKey InstanceKey
 }
@@ -137,8 +132,7 @@ type Instance struct {
 
 func NewInstance() *Instance {
 	return &Instance{
-		ReplicationGroupMembers: make(map[InstanceKey]bool),
-		Problems:                []string{},
+		Problems: []string{},
 	}
 }
 
@@ -334,9 +328,4 @@ func (instance *Instance) SQLThreadUpToDate() bool {
 // UsingGTID returns true when this replica is currently replicating via GTID (either Oracle or MariaDB)
 func (instance *Instance) UsingGTID() bool {
 	return instance.UsingOracleGTID || instance.UsingMariaDBGTID
-}
-
-// AddGroupMemberKey adds a group member to the list of this instance's group members.
-func (instance *Instance) AddGroupMemberKey(groupMemberKey *InstanceKey) {
-	instance.ReplicationGroupMembers.AddKey(*groupMemberKey)
 }

@@ -116,28 +116,26 @@ type BlockedTopologyRecovery struct {
 type TopologyRecovery struct {
 	inst.PostponedFunctionsContainer
 
-	ID                        int64
-	UID                       string
-	AnalysisEntry             inst.ReplicationAnalysis
-	SuccessorKey              *inst.InstanceKey
-	SuccessorAlias            string
-	IsActive                  bool
-	IsSuccessful              bool
-	LostReplicas              inst.InstanceKeyMap
-	ParticipatingInstanceKeys inst.InstanceKeyMap
-	AllErrors                 []string
-	RecoveryStartTimestamp    string
-	RecoveryEndTimestamp      string
-	ProcessingNodeHostname    string
-	ProcessingNodeToken       string
-	Acknowledged              bool
-	AcknowledgedAt            string
-	AcknowledgedBy            string
-	AcknowledgedComment       string
-	LastDetectionID           int64
-	RelatedRecoveryID         int64
-	Type                      RecoveryType
-	RecoveryType              PrimaryRecoveryType
+	ID                     int64
+	UID                    string
+	AnalysisEntry          inst.ReplicationAnalysis
+	SuccessorKey           *inst.InstanceKey
+	SuccessorAlias         string
+	IsActive               bool
+	IsSuccessful           bool
+	AllErrors              []string
+	RecoveryStartTimestamp string
+	RecoveryEndTimestamp   string
+	ProcessingNodeHostname string
+	ProcessingNodeToken    string
+	Acknowledged           bool
+	AcknowledgedAt         string
+	AcknowledgedBy         string
+	AcknowledgedComment    string
+	LastDetectionID        int64
+	RelatedRecoveryID      int64
+	Type                   RecoveryType
+	RecoveryType           PrimaryRecoveryType
 }
 
 func NewTopologyRecovery(replicationAnalysis inst.ReplicationAnalysis) *TopologyRecovery {
@@ -145,8 +143,6 @@ func NewTopologyRecovery(replicationAnalysis inst.ReplicationAnalysis) *Topology
 	topologyRecovery.UID = util.PrettyUniqueToken()
 	topologyRecovery.AnalysisEntry = replicationAnalysis
 	topologyRecovery.SuccessorKey = nil
-	topologyRecovery.LostReplicas = *inst.NewInstanceKeyMap()
-	topologyRecovery.ParticipatingInstanceKeys = *inst.NewInstanceKeyMap()
 	topologyRecovery.AllErrors = []string{}
 	topologyRecovery.RecoveryType = NotPrimaryRecovery
 	return topologyRecovery

@@ -205,7 +205,6 @@ func DiscoverInstance(instanceKey inst.InstanceKey, forceDiscovery bool) {
 		}
 	}()
 
-	_, _ = instanceKey.ResolveHostname()
 	if !instanceKey.IsValid() {
 		return
 	}
@@ -343,7 +342,6 @@ func ContinuousDiscovery() {
 	checkAndRecoverWaitPeriod := 3 * instancePollSecondsDuration()
 	recentDiscoveryOperationKeys = cache.New(instancePollSecondsDuration(), time.Second)
 
-	_ = inst.LoadHostnameResolveCache()
 	go handleDiscoveryRequests()
 
 	healthTick := time.Tick(config.HealthPollSeconds * time.Second)
@@ -390,24 +388,15 @@ func ContinuousDiscovery() {
 				if IsLeaderOrActive() {
 
 					go inst.ForgetLongUnseenInstances()
-					go inst.ForgetUnseenInstancesDifferentlyResolved()
-					go inst.ForgetExpiredHostnameResolves()
-					go inst.DeleteInvalidHostnameResolves()
-					go inst.ResolveUnknownPrimaryHostnameResolves()
 					go inst.ExpireMaintenance()
 					go inst.ExpireCandidateInstances()
-					go inst.ExpireHostnameUnresolve()
 					go inst.ExpireAudit()
-					go inst.FlushNontrivialResolveCacheToDatabase()
 					go inst.ExpireStaleInstanceBinlogCoordinates()
 					go process.ExpireNodesHistory()
 					go process.ExpireAvailableNodes()
 					go ExpireFailureDetectionHistory()
 					go ExpireTopologyRecoveryHistory()
 					go ExpireTopologyRecoveryStepsHistory()
-				} else {
-					// Take this opportunity to refresh yourself
-					go inst.LoadHostnameResolveCache()
 				}
 			}()
 		case <-recoveryTick:

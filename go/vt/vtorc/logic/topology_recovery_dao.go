@@ -302,14 +302,14 @@ func ExpireBlockedRecoveries() error {
 			where
 				acknowledged is null
 		`
-	expiredKeys := inst.NewInstanceKeyMap()
+	var expiredKeys []inst.InstanceKey
 	err := db.QueryVTOrc(query, sqlutils.Args(), func(m sqlutils.RowMap) error {
 		key := inst.InstanceKey{Hostname: m.GetString("hostname"), Port: m.GetInt("port")}
-		expiredKeys.AddKey(key)
+		expiredKeys = append(expiredKeys, key)
 		return nil
 	})
 
-	for _, expiredKey := range expiredKeys.GetInstanceKeys() {
+	for _, expiredKey := range expiredKeys {
 		_, err := db.ExecVTOrc(`
 				delete
 					from blocked_topology_recovery
@@ -416,15 +416,12 @@ func writeResolveRecovery(topologyRecovery *TopologyRecovery) error {
 				successor_hostname = ?,
 				successor_port = ?,
 				successor_alias = ?,
-				lost_replicas = ?,
-				participating_instances = ?,
 				all_errors = ?,
 				end_recovery = NOW()
 			where
 				uid = ?
 			`, topologyRecovery.IsSuccessful, successorKeyToWrite.Hostname, successorKeyToWrite.Port,
-		topologyRecovery.SuccessorAlias, topologyRecovery.LostReplicas.ToCommaDelimitedList(),
-		topologyRecovery.ParticipatingInstanceKeys.ToCommaDelimitedList(),
+		topologyRecovery.SuccessorAlias,
 		strings.Join(topologyRecovery.AllErrors, "\n"),
 		topologyRecovery.UID,
 	)
@@ -457,8 +454,6 @@ func readRecoveries(whereCondition string, limit string, args []any) ([]*Topolog
       keyspace,
 	  shard,
       count_affected_replicas,
-      participating_instances,
-      lost_replicas,
       all_errors,
       acknowledged,
       acknowledged_at,
@@ -499,8 +494,6 @@ func readRecoveries(whereCondition string, limit string, args []any) ([]*Topolog
 		topologyRecovery.AnalysisEntry.ClusterDetails.ReadRecoveryInfo()
 
 		topologyRecovery.AllErrors = strings.Split(m.GetString("all_errors"), "\n")
-		_ = topologyRecovery.LostReplicas.ReadCommaDelimitedList(m.GetString("lost_replicas"))
-		_ = topologyRecovery.ParticipatingInstanceKeys.ReadCommaDelimitedList(m.GetString("participating_instances"))
 
 		topologyRecovery.Acknowledged = m.GetBool("acknowledged")
 		topologyRecovery.AcknowledgedAt = m.GetString("acknowledged_at")

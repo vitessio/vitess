@@ -46,9 +46,7 @@ const (
 	DiscoveryQueueCapacity                = 100000
 	DiscoveryQueueMaxStatisticsSize       = 120
 	DiscoveryCollectionRetentionSeconds   = 120
-	HostnameResolveMethod                 = "default"
 	UnseenInstanceForgetHours             = 240 // Number of hours after which an unseen instance is forgotten
-	ExpiryHostnameResolvesMinutes         = 60  // Number of minutes after which to expire hostname-resolves
 	CandidateInstanceExpireMinutes        = 60  // Minutes after which a suggestion to use an instance as a candidate replica (to be preferably promoted on primary failover) is expired.
 	FailureDetectionPeriodBlockMinutes    = 60  // The time for which an instance's failure discovery is kept "active", so as to avoid concurrent "discoveries" of the instance's failure; this preceeds any recovery process, if any.
 )

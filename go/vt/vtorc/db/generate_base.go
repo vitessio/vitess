@@ -91,7 +91,6 @@ CREATE TABLE database_instance (
 	replication_group_is_single_primary_mode TINYint NOT NULL DEFAULT 1,
 	replication_group_member_state VARCHAR(16) NOT NULL DEFAULT '',
 	replication_group_member_role VARCHAR(16) NOT NULL DEFAULT '',
-	replication_group_members text not null default '',
 	replication_group_primary_host varchar(128) NOT NULL DEFAULT '',
 	replication_group_primary_port smallint NOT NULL DEFAULT 0,
 	PRIMARY KEY (hostname,port)
@@ -237,19 +236,6 @@ CREATE TABLE agent_seed_state (
 CREATE INDEX agent_seed_idx_agent_seed_state ON agent_seed_state (agent_seed_id, state_timestamp)
 	`,
 	`
-DROP TABLE IF EXISTS hostname_resolve
-`,
-	`
-CREATE TABLE hostname_resolve (
-	hostname varchar(128) NOT NULL,
-	resolved_hostname varchar(128) NOT NULL,
-	resolved_timestamp timestamp not null default (''),
-	PRIMARY KEY (hostname)
-)`,
-	`
-CREATE INDEX resolved_timestamp_idx_hostname_resolve ON hostname_resolve (resolved_timestamp)
-	`,
-	`
 DROP TABLE IF EXISTS active_node
 `,
 	`
@@ -301,8 +287,6 @@ CREATE TABLE topology_recovery (
 	acknowledged TINYint NOT NULL DEFAULT 0,
 	acknowledged_by varchar(128) not null default '',
 	acknowledge_comment text not null default '',
-	participating_instances text not null default '',
-	lost_replicas text not null default '',
 	all_errors text not null default '',
 	acknowledged_at TIMESTAMP NULL,
 	last_detection_id bigint not null default 0,
@@ -318,19 +302,6 @@ CREATE INDEX start_active_period_idx_topology_recovery ON topology_recovery (sta
 	`,
 	`
 CREATE UNIQUE INDEX hostname_port_active_period_uidx_topology_recovery ON topology_recovery (hostname, port, in_active_period, end_active_period_unixtime)
-	`,
-	`
-DROP TABLE IF EXISTS hostname_unresolve
-`,
-	`
-CREATE TABLE hostname_unresolve (
-	hostname varchar(128) NOT NULL,
-	unresolved_hostname varchar(128) NOT NULL,
-	last_registered timestamp not null default (''),
-	PRIMARY KEY (hostname)
-)`,
-	`
-CREATE INDEX unresolved_hostname_idx_hostname_unresolve ON hostname_unresolve (unresolved_hostname)
 	`,
 	`
 DROP TABLE IF EXISTS database_instance_topology_history
@@ -401,38 +372,6 @@ CREATE TABLE topology_failure_detection (
 )`,
 	`
 CREATE INDEX in_active_start_period_idx_topology_failure_detection ON topology_failure_detection (in_active_period, start_active_period)
-	`,
-	`
-DROP TABLE IF EXISTS hostname_resolve_history
-`,
-	`
-CREATE TABLE hostname_resolve_history (
-	resolved_hostname varchar(128) NOT NULL,
-	hostname varchar(128) NOT NULL,
-	resolved_timestamp timestamp not null default (''),
-	PRIMARY KEY (resolved_hostname)
-)`,
-	`
-CREATE INDEX hostname_idx_hostname_resolve_history ON hostname_resolve_history (hostname)
-	`,
-	`
-CREATE INDEX resolved_timestamp_idx_hostname_resolve_history ON hostname_resolve_history (resolved_timestamp)
-	`,
-	`
-DROP TABLE IF EXISTS hostname_unresolve_history
-`,
-	`
-CREATE TABLE hostname_unresolve_history (
-	unresolved_hostname varchar(128) NOT NULL,
-	hostname varchar(128) NOT NULL,
-	last_registered timestamp not null default (''),
-	PRIMARY KEY (unresolved_hostname)
-)`,
-	`
-CREATE INDEX hostname_idx_hostname_unresolve_history ON hostname_unresolve_history (hostname)
-	`,
-	`
-CREATE INDEX last_registered_idx_hostname_unresolve_history ON hostname_unresolve_history (last_registered)
 	`,
 	`
 DROP TABLE IF EXISTS primary_position_equivalence
@@ -709,17 +648,6 @@ CREATE TABLE database_instance_tls (
 	PRIMARY KEY (hostname,port)
 )`,
 	`
-DROP TABLE IF EXISTS hostname_ips
-`,
-	`
-CREATE TABLE hostname_ips (
-	hostname varchar(128) NOT NULL,
-	ipv4 varchar(128) NOT NULL,
-	ipv6 varchar(128) NOT NULL,
-	last_updated timestamp not null default (''),
-	PRIMARY KEY (hostname)
-)`,
-	`
 DROP TABLE IF EXISTS database_instance_stale_binlog_coordinates
 `,
 	`
@@ -775,9 +703,6 @@ CREATE INDEX active_timestamp_idx_database_instance_maintenance on database_inst
 	`,
 	`
 CREATE INDEX active_end_timestamp_idx_database_instance_maintenance on database_instance_maintenance (maintenance_active, end_timestamp)
-	`,
-	`
-CREATE INDEX last_registered_idx_hostname_unresolve on hostname_unresolve (last_registered)
 	`,
 	`
 CREATE INDEX keyspace_shard_in_active_idx_topology_recovery on topology_recovery (keyspace, shard, in_active_period)

@@ -296,14 +296,8 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 			primary_tablet.hostname = primary_instance.source_host
 			AND primary_tablet.port = primary_instance.source_port
 		)
-		LEFT JOIN hostname_resolve ON (
-			primary_instance.hostname = hostname_resolve.hostname
-		)
 		LEFT JOIN database_instance replica_instance ON (
-			COALESCE(
-				hostname_resolve.resolved_hostname,
-				primary_instance.hostname
-			) = replica_instance.source_host
+			primary_instance.hostname = replica_instance.source_host
 			AND primary_instance.port = replica_instance.source_port
 		)
 		LEFT JOIN database_instance_maintenance ON (
