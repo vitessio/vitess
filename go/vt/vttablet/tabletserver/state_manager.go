@@ -428,6 +428,7 @@ func (sm *stateManager) servePrimary() error {
 		return err
 	}
 
+	sm.hs.MakePrimary(true)
 	sm.rt.MakePrimary()
 	sm.tracker.Open()
 	// We instantly kill all stateful queries to allow for
@@ -452,6 +453,7 @@ func (sm *stateManager) unservePrimary() error {
 		return err
 	}
 
+	sm.hs.MakePrimary(false)
 	sm.rt.MakePrimary()
 	sm.setState(topodatapb.TabletType_PRIMARY, StateNotServing)
 	return nil
@@ -468,6 +470,7 @@ func (sm *stateManager) serveNonPrimary(wantTabletType topodatapb.TabletType) er
 	sm.messager.Close()
 	sm.tracker.Close()
 	sm.se.MakeNonPrimary()
+	sm.hs.MakeNonPrimary()
 
 	if err := sm.connect(wantTabletType); err != nil {
 		return err
@@ -485,6 +488,7 @@ func (sm *stateManager) unserveNonPrimary(wantTabletType topodatapb.TabletType) 
 	sm.unserveCommon()
 
 	sm.se.MakeNonPrimary()
+	sm.hs.MakeNonPrimary()
 
 	if err := sm.connect(wantTabletType); err != nil {
 		return err
