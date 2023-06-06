@@ -3719,8 +3719,8 @@ func (a *application) rewriteRefOfInsert(parent SQLNode, node *Insert, replacer 
 	}) {
 		return false
 	}
-	if !a.rewriteTableName(node, node.Table, func(newNode, parent SQLNode) {
-		parent.(*Insert).Table = newNode.(TableName)
+	if !a.rewriteRefOfAliasedTableExpr(node, node.Table, func(newNode, parent SQLNode) {
+		parent.(*Insert).Table = newNode.(*AliasedTableExpr)
 	}) {
 		return false
 	}

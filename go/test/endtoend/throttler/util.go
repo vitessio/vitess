@@ -193,32 +193,6 @@ func getHTTPBody(url string) string {
 	return body
 }
 
-// WaitForQueryResult waits for a tablet to return the given result for the given
-// query until the specified timeout.
-// This is for simple queries that return 1 column in 1 row. It compares the result
-// for that column as a string with the provided result.
-func WaitForQueryResult(t *testing.T, tablet *cluster.Vttablet, query, result string, timeout time.Duration) {
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-	ticker := time.NewTicker(time.Second)
-	defer ticker.Stop()
-
-	for {
-		res, err := tablet.VttabletProcess.QueryTablet(query, "", false)
-		require.NoError(t, err)
-		if res != nil && len(res.Rows) == 1 && res.Rows[0][0].ToString() == result {
-			return
-		}
-		select {
-		case <-ctx.Done():
-			t.Errorf("timed out waiting for the %q query to produce a result of %q on tablet %s after %v; last seen value: %s",
-				query, result, tablet.Alias, timeout, res.Rows[0][0].ToString())
-			return
-		case <-ticker.C:
-		}
-	}
-}
-
 // WaitForValidData waits for a tablet's checks to return a non 500 http response
 // which indicates that it's not able to provide valid results. This is most
 // commonly caused by the throttler still gathering the initial results for

@@ -129,6 +129,7 @@ var (
 	clustersRequiringXtraBackup = []string{
 		"xb_backup",
 		"xb_recovery",
+		"backup_pitr",
 	}
 	clustersRequiringMakeTools = []string{
 		"18",

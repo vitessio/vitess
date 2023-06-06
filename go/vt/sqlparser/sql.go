@@ -10513,7 +10513,7 @@ yydefault:
 			ins.Action = yyDollar[1].insertActionUnion()
 			ins.Comments = Comments(yyDollar[2].strs).Parsed()
 			ins.Ignore = yyDollar[3].ignoreUnion()
-			ins.Table = yyDollar[4].tableName
+			ins.Table = getAliasedTableExprFromTableName(yyDollar[4].tableName)
 			ins.Partitions = yyDollar[5].partitionsUnion()
 			ins.OnDup = OnDup(yyDollar[7].updateExprsUnion())
 			yyLOCAL = ins
@@ -10530,7 +10530,7 @@ yydefault:
 				cols = append(cols, updateList.Name.Name)
 				vals = append(vals, updateList.Expr)
 			}
-			yyLOCAL = &Insert{Action: yyDollar[1].insertActionUnion(), Comments: Comments(yyDollar[2].strs).Parsed(), Ignore: yyDollar[3].ignoreUnion(), Table: yyDollar[4].tableName, Partitions: yyDollar[5].partitionsUnion(), Columns: cols, Rows: Values{vals}, OnDup: OnDup(yyDollar[8].updateExprsUnion())}
+			yyLOCAL = &Insert{Action: yyDollar[1].insertActionUnion(), Comments: Comments(yyDollar[2].strs).Parsed(), Ignore: yyDollar[3].ignoreUnion(), Table: getAliasedTableExprFromTableName(yyDollar[4].tableName), Partitions: yyDollar[5].partitionsUnion(), Columns: cols, Rows: Values{vals}, OnDup: OnDup(yyDollar[8].updateExprsUnion())}
 		}
 		yyVAL.union = yyLOCAL
 	case 86:

@@ -167,6 +167,11 @@ func init() {
 	}
 }
 
+// isIncrementalBackup is a convenience function to check whether the params indicate an incremental backup request
+func isIncrementalBackup(params BackupParams) bool {
+	return params.IncrementalFromPos != ""
+}
+
 func registerBackupEngineFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&backupEngineImplementation, "backup_engine_implementation", backupEngineImplementation, "Specifies which implementation to use for creating new backups (builtin or xtrabackup). Restores will always be done with whichever engine created a given backup.")
 }
