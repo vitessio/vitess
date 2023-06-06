@@ -317,10 +317,10 @@ func getTableName(sqlFile string) string {
 		log.Fatalf("reading sqlFile file %s: %s", sqlFile, err)
 	}
 
-	r, _ := regexp.Compile("CREATE TABLE ([a-z_-]*) \\(")
+	r, _ := regexp.Compile("CREATE TABLE (IF NOT EXISTS)? ?([a-z_-]*) \\(")
 	rs := r.FindStringSubmatch(string(sqlFileData))
 	// replace all ` from table name if exists
-	return strings.ReplaceAll(rs[1], "`", "")
+	return strings.ReplaceAll(rs[len(rs)-1], "`", "")
 }
 
 func getPrimaryKey(sqlFile string) string {
