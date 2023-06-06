@@ -72,7 +72,7 @@ func getTablesInKeyspace(ctx context.Context, ts *topo.Server, tmc tmclient.Tabl
 	if err != nil {
 		return nil, err
 	}
-	log.Infof("got table schemas from source primary %v.", primary)
+	log.Infof("got table schemas: %+v from source primary %v.", schema, primary)
 
 	var sourceTables []string
 	for _, td := range schema.TableDefinitions {

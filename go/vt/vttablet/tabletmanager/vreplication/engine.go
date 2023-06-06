@@ -221,7 +221,6 @@ func (vre *Engine) Open(ctx context.Context) {
 }
 
 func (vre *Engine) openLocked(ctx context.Context) error {
-
 	rows, err := vre.readAllRows(ctx)
 	if err != nil {
 		return err

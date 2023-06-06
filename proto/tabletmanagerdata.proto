@@ -516,6 +516,8 @@ message CreateVRWorkflowRequest {
   bool defer_secondary_keys = 7;
   // AutoStart specifies if the workflow should be started when created.
   bool auto_start = 8;
+  // Should the workflow stop after the copy phase.
+  bool stop_after_copy = 9;
 }
 
 message CreateVRWorkflowResponse {

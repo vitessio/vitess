@@ -1116,6 +1116,7 @@ func (s *Server) MoveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 		WorkflowSubType:    workflowSubType,
 		DeferSecondaryKeys: req.DeferSecondaryKeys,
 		AutoStart:          req.AutoStart,
+		StopAfterCopy:      req.StopAfterCopy,
 	}
 
 	vx := vexec.NewVExec(req.TargetKeyspace, req.Workflow, s.ts, s.tmc)

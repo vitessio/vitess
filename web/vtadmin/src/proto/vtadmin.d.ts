@@ -25804,6 +25804,9 @@ export namespace tabletmanagerdata {
 
         /** CreateVRWorkflowRequest auto_start */
         auto_start?: (boolean|null);
+
+        /** CreateVRWorkflowRequest stop_after_copy */
+        stop_after_copy?: (boolean|null);
     }
 
     /** Represents a CreateVRWorkflowRequest. */
@@ -25838,6 +25841,9 @@ export namespace tabletmanagerdata {
 
         /** CreateVRWorkflowRequest auto_start. */
         public auto_start: boolean;
+
+        /** CreateVRWorkflowRequest stop_after_copy. */
+        public stop_after_copy: boolean;
 
         /**
          * Creates a new CreateVRWorkflowRequest instance using the specified properties.
