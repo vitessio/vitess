@@ -720,21 +720,6 @@ CREATE TABLE hostname_ips (
 	PRIMARY KEY (hostname)
 )`,
 	`
-DROP TABLE IF EXISTS database_instance_tags
-`,
-	`
-CREATE TABLE database_instance_tags (
-	hostname varchar(128) NOT NULL,
-	port smallint NOT NULL,
-	tag_name varchar(128) NOT NULL,
-	tag_value varchar(128) NOT NULL,
-	last_updated timestamp not null default (''),
-	PRIMARY KEY (hostname, port, tag_name)
-)`,
-	`
-CREATE INDEX tag_name_idx_database_instance_tags ON database_instance_tags (tag_name)
-	`,
-	`
 DROP TABLE IF EXISTS database_instance_stale_binlog_coordinates
 `,
 	`
