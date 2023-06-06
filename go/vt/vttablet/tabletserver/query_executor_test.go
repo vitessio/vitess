@@ -355,7 +355,6 @@ func TestQueryExecutorPlans(t *testing.T) {
 				assert.Equal(t, want, qre.logStats.RewrittenSQL(), "in tx: %v", tcase.input)
 			} else {
 				assert.True(t, vterrors.Equals(err, tcase.errorWant))
-				//>>>>>>> 3faefa20fa (TxThrottler support for transactions outside BEGIN/COMMIT (#13040))
 			}
 		})
 	}
