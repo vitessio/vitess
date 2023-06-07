@@ -63,7 +63,7 @@ var (
 	replicationWaitTimeout = time.Duration(15 * time.Second)
 )
 
-//region cluster setup/teardown
+// region cluster setup/teardown
 
 // SetupReparentCluster is used to setup the reparent cluster
 func SetupReparentCluster(t *testing.T, durability string) *cluster.LocalProcessCluster {
@@ -133,7 +133,7 @@ func setupCluster(ctx context.Context, t *testing.T, shardName string, cells []s
 	err = clusterInstance.SetupCluster(keyspace, []cluster.Shard{*shard})
 	require.NoError(t, err, "Cannot launch cluster")
 
-	//Start MySql
+	// Start MySql
 	var mysqlCtlProcessList []*exec.Cmd
 	for _, shard := range clusterInstance.Keyspaces[0].Shards {
 		for _, tablet := range shard.Vttablets {
@@ -234,7 +234,7 @@ func StartNewVTTablet(t *testing.T, clusterInstance *cluster.LocalProcessCluster
 	return tablet
 }
 
-//endregion
+// endregion
 
 // region database queries
 func getMysqlConnParam(tablet *cluster.Vttablet) mysql.ConnParams {
@@ -262,7 +262,7 @@ func execute(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
 	return qr
 }
 
-//endregion
+// endregion
 
 // region ers, prs
 
