@@ -67,6 +67,7 @@ var (
 	waitReplicasTimeout            = 30 * time.Second
 	topoInformationRefreshDuration = 15 * time.Second
 	recoveryPollDuration           = 1 * time.Second
+	ersEnabled                     = true
 )
 
 // RegisterFlags registers the flags required by VTOrc
@@ -86,6 +87,7 @@ func RegisterFlags(fs *pflag.FlagSet) {
 	fs.DurationVar(&waitReplicasTimeout, "wait-replicas-timeout", waitReplicasTimeout, "Duration for which to wait for replica's to respond when issuing RPCs")
 	fs.DurationVar(&topoInformationRefreshDuration, "topo-information-refresh-duration", topoInformationRefreshDuration, "Timer duration on which VTOrc refreshes the keyspace and vttablet records from the topology server")
 	fs.DurationVar(&recoveryPollDuration, "recovery-poll-duration", recoveryPollDuration, "Timer duration on which VTOrc polls its database to run a recovery")
+	fs.BoolVar(&ersEnabled, "allow-emergency-reparent", ersEnabled, "Whether VTOrc should be allowed to run emergency reparent operation when it detects a dead primary")
 }
 
 // Configuration makes for vtorc configuration input, which can be provided by user via JSON formatted file.
@@ -135,6 +137,16 @@ func UpdateConfigValuesFromFlags() {
 	Config.WaitReplicasTimeoutSeconds = int(waitReplicasTimeout / time.Second)
 	Config.TopoInformationRefreshSeconds = int(topoInformationRefreshDuration / time.Second)
 	Config.RecoveryPollSeconds = int(recoveryPollDuration / time.Second)
+}
+
+// ERSEnabled reports whether VTOrc is allowed to run ERS or not.
+func ERSEnabled() bool {
+	return ersEnabled
+}
+
+// SetERSEnabled sets the value for the ersEnabled variable. This should only be used from tests.
+func SetERSEnabled(val bool) {
+	ersEnabled = val
 }
 
 // LogConfigValues is used to log the config values.
