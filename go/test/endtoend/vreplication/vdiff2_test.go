@@ -268,10 +268,10 @@ func testDelete(t *testing.T, ksWorkflow, cells string) {
 		// The TableSummary is only present with --verbose.
 		require.Contains(t, output, `"TableSummary":`)
 
-		// Now let's delete one of the VDiffs, the last one.
+		// Now let's delete one of the VDiffs.
 		_, output = performVDiff2Action(t, ksWorkflow, cells, "delete", uuid, false)
 		require.Equal(t, gjson.Get(output, "Status").String(), "completed")
-		// And confirm that our unique vdiff count has only decreased by one.
+		// And confirm that our unique VDiff count has only decreased by one.
 		_, output = performVDiff2Action(t, ksWorkflow, cells, "show", "all", false)
 		require.Equal(t, initialVDiffCount-1, uuidCount(gjson.Get(output, "#.UUID").Array()))
 
