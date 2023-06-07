@@ -1008,12 +1008,12 @@
 			"RetryMax": 0,
 			"Tags": []
 		},
-		"vreplication_partialmovetables": {
+		"vreplication_partial_movetables_simple": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "PartialMoveTables"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "PartialMoveTablesBasic"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "vreplication_cellalias",
+			"Shard": "vreplication_partial_movetables_simple",
 			"RetryMax": 0,
 			"Tags": []
 		},
@@ -1053,12 +1053,12 @@
 			"RetryMax": 1,
 			"Tags": []
 		},
-		"partial_movetables_seq": {
+		"vreplication_partial_movetables_sequences": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestPartialMoveTablesWithSequences"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "vreplication_basic",
+			"Shard": "vreplication_partial_movetables_sequences",
 			"RetryMax": 1,
 			"Tags": []
 		},
