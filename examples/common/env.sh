@@ -30,7 +30,8 @@ for binary in mysqld etcd etcdctl curl vtctlclient vttablet vtgate vtctld mysqlc
   command -v "$binary" > /dev/null || fail "${binary} is not installed in PATH. See https://vitess.io/docs/get-started/local/ for install instructions."
 done;
 
-for binary in vttablet vtgate vtctld mysqlctl vtorc vtctld vtctl; do
+# vtctlclient has a separate alias setup below
+for binary in vttablet vtgate vtctld mysqlctl vtorc vtctl; do
   alias $binary="$binary --config-file-not-found-handling=ignore"
 done;
 
