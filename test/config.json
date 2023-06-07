@@ -109,7 +109,7 @@
 			"RetryMax": 1,
 			"Tags": []
 		},
-		"backup_mysqlctld": { 
+		"backup_mysqlctld": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/backup/mysqlctld", "-timeout", "30m"],
 			"Command": [],
@@ -1047,6 +1047,15 @@
 		"vreplication_copy_parallel": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestVreplicationCopyParallel"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vreplication_basic",
+			"RetryMax": 1,
+			"Tags": []
+		},
+		"partial_movetables_seq": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestPartialMoveTablesWithSequences"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_basic",

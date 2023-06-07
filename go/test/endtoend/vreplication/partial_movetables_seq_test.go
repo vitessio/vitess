@@ -1,3 +1,19 @@
+/*
+Copyright 2023 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package vreplication
 
 import (
@@ -14,6 +30,14 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/wrangler"
 )
+
+/*
+	This file introduces a new helper framework for vreplication tests. The current one uses a lot of global keyspaces
+	and make assumptions which make adding new tests difficult.
+
+	As part of a separate cleanup we will build on this framework to replace the existing one.
+
+*/
 
 type keyspace struct {
 	name    string
@@ -213,7 +237,7 @@ func (wf *workflow) create() {
 	cell := wf.tc.defaultCellName
 	switch typ {
 	case "movetables":
-		currentWorkflowType = wrangler.MoveTablesWorkflow // FIXME please!. Need to reimplement tstWorkflowExec and its siblings
+		currentWorkflowType = wrangler.MoveTablesWorkflow
 		sourceShards := strings.Join(wf.options.sourceShards, ",")
 		err = tstWorkflowExec(t, cell, wf.name, wf.fromKeyspace, wf.toKeyspace,
 			strings.Join(wf.options.tables, ","), workflowActionCreate, "", sourceShards, "")
@@ -254,9 +278,9 @@ func (wf *workflow) complete() {
 	require.NoError(wf.tc.t, tstWorkflowExec(wf.tc.t, wf.tc.defaultCellName, wf.name, wf.fromKeyspace, wf.toKeyspace, "", workflowActionComplete, "", "", ""))
 }
 
-// TestPartialMoveTablesComplex enhances TestPartialMoveTables by adding an unsharded keyspace which has a
+// TestPartialMoveTablesWithSequences enhances TestPartialMoveTables by adding an unsharded keyspace which has a
 // sequence. This tests that the sequence is migrated correctly and that we can reverse traffic back to the source
-func TestPartialMoveTablesComplex(t *testing.T) {
+func TestPartialMoveTablesWithSequences(t *testing.T) {
 
 	origExtraVTGateArgs := extraVTGateArgs
 
@@ -314,8 +338,7 @@ func TestPartialMoveTablesComplex(t *testing.T) {
 	var wf80Dash, wfDash80 *workflow
 	currentCustomerCount = getCustomerCount(t, "before customer2.80-")
 	t.Run("Start MoveTables on customer2.80-", func(t *testing.T) {
-		// Now setup the customer2 keyspace so we can do a partial
-		// move tables for one of the two shards: 80-.
+		// Now setup the customer2 keyspace so we can do a partial move tables for one of the two shards: 80-.
 		defaultRdonly = 0
 		tc.setupKeyspaces([]string{"customer2"})
 		wf80Dash = tc.newWorkflow("MoveTables", wfName, "customer", "customer2", &workflowOptions{
@@ -338,13 +361,12 @@ func TestPartialMoveTablesComplex(t *testing.T) {
 	// This query uses an ID that should always get routed to shard -80
 	shardMinus80RoutedQuery := "select name from customer where cid = 2 and noexistcol = 'foo'"
 
-	// reset any existing vtgate connection state
+	// Reset any existing vtgate connection state.
 	vtgateConn.Close()
 	vtgateConn = getConnection(t, tc.vc.ClusterConfig.hostname, tc.vc.ClusterConfig.vtgateMySQLPort)
 	t.Run("Confirm routing rules", func(t *testing.T) {
 
-		// Global routing rules should be in place with everything going to
-		// the source keyspace (customer).
+		// Global routing rules should be in place with everything going to the source keyspace (customer).
 		confirmGlobalRoutingToSource(t)
 
 		// Shard routing rules should now also be in place with everything
@@ -419,27 +441,6 @@ func TestPartialMoveTablesComplex(t *testing.T) {
 
 		_, err = vtgateConn.ExecuteFetch("use `customer`", 0, false) // switch vtgate default db back to customer
 		require.NoError(t, err)
-
-		/* currently only primaries are being run in the test
-		// Tablet type targeting
-		_, err = vtgateConn.ExecuteFetch("use `customer2@replica`", 0, false)
-		require.NoError(t, err)
-		_, err = vtgateConn.ExecuteFetch(shard80MinusRoutedQuery, 0, false)
-		require.Error(t, err)
-		require.Contains(t, err.Error(), "target: customer2.80-.replica", "Query was routed to the source after partial SwitchTraffic")
-		_, err = vtgateConn.ExecuteFetch(shardMinus80RoutedQuery, 0, false)
-		require.Error(t, err)
-		require.Contains(t, err.Error(), "target: customer.-80.replica", "Query was routed to the target before partial SwitchTraffic")
-		_, err = vtgateConn.ExecuteFetch("use `customer@replica`", 0, false)
-		require.NoError(t, err)
-		_, err = vtgateConn.ExecuteFetch(shard80MinusRoutedQuery, 0, false)
-		require.Error(t, err)
-		require.Contains(t, err.Error(), "target: customer2.80-.replica", "Query was routed to the source after partial SwitchTraffic")
-		_, err = vtgateConn.ExecuteFetch(shardMinus80RoutedQuery, 0, false)
-		require.Error(t, err)
-		require.Contains(t, err.Error(), "target: customer.-80.replica", "Query was routed to the target before partial SwitchTraffic")
-
-		*/
 	})
 	currentCustomerCount = getCustomerCount(t, "")
 
@@ -535,18 +536,11 @@ var customerCount int64
 var currentCustomerCount int64
 var newCustomerCount = int64(201)
 
-//	getCustomerSequence := func(t *testing.T) {
-//		qr := execVtgateQuery(t, vtgateConn, "customer2", "select * from customer_seq")
-//		require.NotNil(t, qr)
-//		log.Infof("Sequence state %+v", qr.Rows)
-//	}
 func getCustomerCount(t *testing.T, msg string) int64 {
-	//getCustomerSequence(t)
 	qr := execVtgateQuery(t, vtgateConn, "", "select count(*) from customer")
 	require.NotNil(t, qr)
 	count, err := qr.Rows[0][0].ToInt64()
 	require.NoError(t, err)
-	log.Infof("%s: returning customer count %d", msg, count)
 	return count
 }
 
