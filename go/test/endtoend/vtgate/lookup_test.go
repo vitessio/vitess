@@ -26,7 +26,6 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/utils"
-	"vitess.io/vitess/go/vt/log"
 )
 
 func TestUnownedLookupInsertNull(t *testing.T) {
@@ -584,9 +583,6 @@ func TestUnicodeLooseMD5CaseInsensitive(t *testing.T) {
 func TestJoinWithPredicateAndJoinOnDifferentVindex(t *testing.T) {
 	conn, closer := start(t)
 	defer closer()
-
-	qr := utils.Exec(t, conn, "vexplain select /*vt+ planner=gen4 */ t4.id1 from t4, t3 where t4.id2 = 'foo' and t4.id1 = t3.id6")
-	log.Errorf("plan: \n%s\n", qr.Rows[0][0].ToString())
 
 	utils.Exec(t, conn, "select t4.id1 from t4, t3 where t4.id2 = 'foo' and t4.id1 = t3.id6")
 }
