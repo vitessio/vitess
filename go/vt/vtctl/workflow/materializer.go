@@ -83,6 +83,24 @@ func (mz *materializer) prepareMaterializerStreams() (map[string][]*binlogdatapb
 		if err != nil {
 			return nil, err
 		}
+		targetPrimary, err := mz.ts.GetTablet(mz.ctx, targetShard.PrimaryAlias)
+		if err != nil {
+			return nil, vterrors.Wrapf(err, "GetTablet(%v) failed", targetShard.PrimaryAlias)
+		}
+		for _, bls := range blses {
+			for _, filter := range bls.Filter.Rules {
+				buf := &strings.Builder{}
+				t := template.Must(template.New("").Parse(filter.Filter))
+				input := map[string]string{
+					"keyrange": key.KeyRangeString(targetShard.KeyRange),
+					"dbname":   targetPrimary.DbName(),
+				}
+				if err := t.Execute(buf, input); err != nil {
+					return nil, err
+				}
+				filter.Filter = buf.String()
+			}
+		}
 		blsMap[targetShard.ShardName()] = blses
 	}
 	return blsMap, nil
