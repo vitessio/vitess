@@ -256,9 +256,10 @@ func BuildVSchema(source *vschemapb.SrvVSchema) (vschema *VSchema) {
 	// resolve sources which reference global tables.
 	buildGlobalTables(source, vschema)
 	buildReferences(source, vschema)
-	resolveAutoIncrement(source, vschema)
 	buildRoutingRule(source, vschema)
 	buildShardRoutingRule(source, vschema)
+	// Resolve auto-increments after routing rules are built since sequence tables also obey routing rules.
+	resolveAutoIncrement(source, vschema)
 	return vschema
 }
 
@@ -715,7 +716,11 @@ func resolveAutoIncrement(source *vschemapb.SrvVSchema, vschema *VSchema) {
 			seqks, seqtab, err := sqlparser.ParseTable(table.AutoIncrement.Sequence)
 			var seq *Table
 			if err == nil {
-				seq, err = vschema.FindTable(seqks, seqtab)
+				// Ensure that sequence tables also obey routing rules.
+				seq, err = vschema.FindRoutedTable(seqks, seqtab, topodatapb.TabletType_PRIMARY)
+				if seq == nil && err == nil {
+					err = vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "table %s not found", seqtab)
+				}
 			}
 			if err != nil {
 				// Better to remove the table than to leave it partially initialized.
