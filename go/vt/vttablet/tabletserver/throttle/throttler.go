@@ -73,8 +73,8 @@ var (
 	deprecatedThrottlerConfigViaTopo    = false // unused. Remove in v19
 	deprecatedThrottleThreshold         time.Duration
 	deprecatedThrottleMetricQuery       string
-	deprecatedThrottleMetricThreshold   float64
-	deprecatedThrottlerCheckAsCheckSelf bool
+	deprecatedThrottleMetricThreshold   = math.MaxFloat64
+	deprecatedThrottlerCheckAsCheckSelf = false
 )
 
 func init() {
