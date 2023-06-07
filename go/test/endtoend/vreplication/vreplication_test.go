@@ -1347,20 +1347,20 @@ func catchup(t *testing.T, vttablet *cluster.VttabletProcess, workflow, info str
 func moveTablesAction(t *testing.T, action, cell, workflow, sourceKs, targetKs, tables string, extraFlags ...string) {
 	var err error
 	if len(extraFlags) > 0 {
-		err = vc.VtctlClient.ExecuteCommand("MoveTables", "--", "--source="+sourceKs, "--tables="+tables,
-			"--cells="+cell, "--tablet_types=primary,replica,rdonly", strings.Join(extraFlags, " "),
-			action, fmt.Sprintf("%s.%s", targetKs, workflow))
+		err = vc.VtctldClient.ExecuteCommand("MoveTables", "--workflow="+workflow, "--target-keyspace="+targetKs, action,
+			"--source-keyspace="+sourceKs, "--tables="+tables, "--cells="+cell,
+			"--tablet-types=primary,replica,rdonly", strings.Join(extraFlags, " "))
 	} else {
-		err = vc.VtctlClient.ExecuteCommand("MoveTables", "--", "--source="+sourceKs, "--tables="+tables, "--cells="+cell,
-			"--tablet_types=primary,replica,rdonly", action, fmt.Sprintf("%s.%s", targetKs, workflow))
+		err = vc.VtctldClient.ExecuteCommand("MoveTables", "--workflow="+workflow, "--target-keyspace="+targetKs, action,
+			"--source-keyspace="+sourceKs, "--tables="+tables, "--cells="+cell, "--tablet-types=primary,replica,rdonly")
 	}
 	if err != nil {
 		t.Fatalf("MoveTables %s command failed with %+v\n", action, err)
 	}
 }
 func moveTablesActionWithTabletTypes(t *testing.T, action, cell, workflow, sourceKs, targetKs, tables string, tabletTypes string, timeout time.Duration, ignoreErrors bool) {
-	if err := vc.VtctlClient.ExecuteCommand("MoveTables", "--", "--source="+sourceKs, "--tables="+tables, "--cells="+cell,
-		"--tablet_types="+tabletTypes, "--timeout="+timeout.String(), action, fmt.Sprintf("%s.%s", targetKs, workflow)); err != nil {
+	if err := vc.VtctldClient.ExecuteCommand("MoveTables", "--workflow="+workflow, "--target-keyspace="+targetKs, action,
+		"--source-keyspace="+sourceKs, "--tables="+tables, "--cells="+cell, "--tablet-types="+tabletTypes, "--timeout="+timeout.String()); err != nil {
 		if !ignoreErrors {
 			t.Fatalf("MoveTables %s command failed with %+v\n", action, err)
 		}

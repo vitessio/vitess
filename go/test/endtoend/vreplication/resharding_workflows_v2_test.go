@@ -242,7 +242,7 @@ func revert(t *testing.T, workflowType string) {
 	validateReadsRouteToSource(t, "replica")
 
 	// cancel the workflow to cleanup
-	_, err := vc.VtctlClient.ExecuteCommandWithOutput(workflowType, "--", "Cancel", ksWorkflow)
+	_, err := vc.VtctldClient.ExecuteCommandWithOutput(workflowType, "--target-keyspace", targetKs, "--workflow", workflowName, "cancel")
 	require.NoError(t, err, fmt.Sprintf("%s Cancel error: %v", workflowType, err))
 }
 
