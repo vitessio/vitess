@@ -1346,14 +1346,14 @@ func catchup(t *testing.T, vttablet *cluster.VttabletProcess, workflow, info str
 
 func moveTablesAction(t *testing.T, action, cell, workflow, sourceKs, targetKs, tables string, extraFlags ...string) {
 	var err error
-	if len(extraFlags) > 0 {
-		err = vc.VtctldClient.ExecuteCommand("MoveTables", "--workflow="+workflow, "--target-keyspace="+targetKs, action,
-			"--source-keyspace="+sourceKs, "--tables="+tables, "--cells="+cell,
-			"--tablet-types=primary,replica,rdonly", strings.Join(extraFlags, " "))
-	} else {
-		err = vc.VtctldClient.ExecuteCommand("MoveTables", "--workflow="+workflow, "--target-keyspace="+targetKs, action,
-			"--source-keyspace="+sourceKs, "--tables="+tables, "--cells="+cell, "--tablet-types=primary,replica,rdonly")
+	args := []string{"MoveTables", "--workflow=" + workflow, "--target-keyspace=" + targetKs, action}
+	if strings.EqualFold(action, strings.ToLower(workflowActionCreate)) {
+		extraFlags = append(extraFlags, "--source-keyspace="+sourceKs, "--tables="+tables, "--cells="+cell, "--tablet-types=primary,replica,rdonly")
 	}
+	args = append(args, extraFlags...)
+	cmd := strings.Join(args, " ")
+	log.Errorf("Command: %s", cmd)
+	err = vc.VtctldClient.ExecuteCommand(args...)
 	if err != nil {
 		t.Fatalf("MoveTables %s command failed with %+v\n", action, err)
 	}
