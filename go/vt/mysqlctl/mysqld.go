@@ -86,6 +86,7 @@ var (
 	versionRegex = regexp.MustCompile(`Ver ([0-9]+)\.([0-9]+)\.([0-9]+)`)
 
 	binlogEntryCommittedTimestampRegex = regexp.MustCompile("original_committed_timestamp=([0-9]+)")
+	binlogEntryTimestampGTIDRegexp     = regexp.MustCompile(`^#(.+) server id.*\bGTID\b`)
 )
 
 // How many bytes from MySQL error log to sample for error messages
@@ -1346,17 +1347,26 @@ func (mysqld *Mysqld) ReadBinlogFilesTimestamps(ctx context.Context, req *mysqlc
 					continue
 				}
 				if submatch := binlogEntryCommittedTimestampRegex.FindStringSubmatch(logEntry); submatch != nil {
+					// MySQL 8.0
 					binlogEntryCommittedTimestamp := submatch[1]
 					unixMicros, err := strconv.ParseInt(binlogEntryCommittedTimestamp, 10, 64)
 					if err != nil {
 						scanComplete <- err
-					} else {
-						t = time.UnixMicro(unixMicros)
-						found = true
-					}
-					if stopAtFirst {
 						return
 					}
+					t = time.UnixMicro(unixMicros)
+					found = true
+				} else if submatch := binlogEntryTimestampGTIDRegexp.FindStringSubmatch(logEntry); submatch != nil {
+					// MySQL 5.7
+					t, err = ParseBinlogTimestamp(submatch[1])
+					if err != nil {
+						scanComplete <- err
+						return
+					}
+					found = true
+				}
+				if found && stopAtFirst {
+					return
 				}
 			}
 		}

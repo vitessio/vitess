@@ -18,6 +18,9 @@ package mysqlctl
 
 import (
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 type testcase struct {
@@ -104,4 +107,18 @@ func TestParseVersionString(t *testing.T) {
 		}
 	}
 
+}
+
+func TestRegexps(t *testing.T) {
+	{
+		submatch := binlogEntryTimestampGTIDRegexp.FindStringSubmatch(`#230608 13:14:31 server id 484362839  end_log_pos 259 CRC32 0xc07510d0 	GTID	last_committed=0	sequence_number=1	rbr_only=yes`)
+		require.NotEmpty(t, submatch)
+		assert.Equal(t, "230608 13:14:31", submatch[1])
+		_, err := ParseBinlogTimestamp(submatch[1])
+		assert.NoError(t, err)
+	}
+	{
+		submatch := binlogEntryTimestampGTIDRegexp.FindStringSubmatch(`#230608 13:14:31 server id 484362839  end_log_pos 322 CRC32 0x651af842 	Query	thread_id=62	exec_time=0	error_code=0`)
+		assert.Empty(t, submatch)
+	}
 }
