@@ -344,18 +344,6 @@ func (cmp *Comparator) SQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return cmp.RefOfCurTimeFuncExpr(a, b)
-	case *DateAddExpr:
-		b, ok := inB.(*DateAddExpr)
-		if !ok {
-			return false
-		}
-		return cmp.RefOfDateAddExpr(a, b)
-	case *DateSubExpr:
-		b, ok := inB.(*DateSubExpr)
-		if !ok {
-			return false
-		}
-		return cmp.RefOfDateSubExpr(a, b)
 	case *DeallocateStmt:
 		b, ok := inB.(*DeallocateStmt)
 		if !ok {
@@ -638,6 +626,12 @@ func (cmp *Comparator) SQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return cmp.RefOfInsertExpr(a, b)
+	case *IntervalDateExpr:
+		b, ok := inB.(*IntervalDateExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfIntervalDateExpr(a, b)
 	case *IntervalFuncExpr:
 		b, ok := inB.(*IntervalFuncExpr)
 		if !ok {
@@ -2292,34 +2286,6 @@ func (cmp *Comparator) RefOfCurTimeFuncExpr(a, b *CurTimeFuncExpr) bool {
 		cmp.IdentifierCI(a.Name, b.Name)
 }
 
-// RefOfDateAddExpr does deep equals between the two objects.
-func (cmp *Comparator) RefOfDateAddExpr(a, b *DateAddExpr) bool {
-	if a == b {
-		return true
-	}
-	if a == nil || b == nil {
-		return false
-	}
-	return a.Type == b.Type &&
-		cmp.Expr(a.Date, b.Date) &&
-		a.Unit == b.Unit &&
-		cmp.Expr(a.Expr, b.Expr)
-}
-
-// RefOfDateSubExpr does deep equals between the two objects.
-func (cmp *Comparator) RefOfDateSubExpr(a, b *DateSubExpr) bool {
-	if a == b {
-		return true
-	}
-	if a == nil || b == nil {
-		return false
-	}
-	return a.Type == b.Type &&
-		cmp.Expr(a.Date, b.Date) &&
-		a.Unit == b.Unit &&
-		cmp.Expr(a.Expr, b.Expr)
-}
-
 // RefOfDeallocateStmt does deep equals between the two objects.
 func (cmp *Comparator) RefOfDeallocateStmt(a, b *DeallocateStmt) bool {
 	if a == b {
@@ -2519,7 +2485,7 @@ func (cmp *Comparator) RefOfExtractFuncExpr(a, b *ExtractFuncExpr) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return a.IntervalTypes == b.IntervalTypes &&
+	return a.IntervalType == b.IntervalType &&
 		cmp.Expr(a.Expr, b.Expr)
 }
 
@@ -2926,6 +2892,20 @@ func (cmp *Comparator) RefOfInsertExpr(a, b *InsertExpr) bool {
 		cmp.Expr(a.Pos, b.Pos) &&
 		cmp.Expr(a.Len, b.Len) &&
 		cmp.Expr(a.NewStr, b.NewStr)
+}
+
+// RefOfIntervalDateExpr does deep equals between the two objects.
+func (cmp *Comparator) RefOfIntervalDateExpr(a, b *IntervalDateExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Syntax == b.Syntax &&
+		cmp.Expr(a.Date, b.Date) &&
+		cmp.Expr(a.Interval, b.Interval) &&
+		a.Unit == b.Unit
 }
 
 // RefOfIntervalFuncExpr does deep equals between the two objects.
@@ -5249,18 +5229,6 @@ func (cmp *Comparator) Callable(inA, inB Callable) bool {
 			return false
 		}
 		return cmp.RefOfCurTimeFuncExpr(a, b)
-	case *DateAddExpr:
-		b, ok := inB.(*DateAddExpr)
-		if !ok {
-			return false
-		}
-		return cmp.RefOfDateAddExpr(a, b)
-	case *DateSubExpr:
-		b, ok := inB.(*DateSubExpr)
-		if !ok {
-			return false
-		}
-		return cmp.RefOfDateSubExpr(a, b)
 	case *ExtractFuncExpr:
 		b, ok := inB.(*ExtractFuncExpr)
 		if !ok {
@@ -5363,6 +5331,12 @@ func (cmp *Comparator) Callable(inA, inB Callable) bool {
 			return false
 		}
 		return cmp.RefOfInsertExpr(a, b)
+	case *IntervalDateExpr:
+		b, ok := inB.(*IntervalDateExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfIntervalDateExpr(a, b)
 	case *IntervalFuncExpr:
 		b, ok := inB.(*IntervalFuncExpr)
 		if !ok {
@@ -5999,18 +5973,6 @@ func (cmp *Comparator) Expr(inA, inB Expr) bool {
 			return false
 		}
 		return cmp.RefOfCurTimeFuncExpr(a, b)
-	case *DateAddExpr:
-		b, ok := inB.(*DateAddExpr)
-		if !ok {
-			return false
-		}
-		return cmp.RefOfDateAddExpr(a, b)
-	case *DateSubExpr:
-		b, ok := inB.(*DateSubExpr)
-		if !ok {
-			return false
-		}
-		return cmp.RefOfDateSubExpr(a, b)
 	case *Default:
 		b, ok := inB.(*Default)
 		if !ok {
@@ -6131,6 +6093,12 @@ func (cmp *Comparator) Expr(inA, inB Expr) bool {
 			return false
 		}
 		return cmp.RefOfInsertExpr(a, b)
+	case *IntervalDateExpr:
+		b, ok := inB.(*IntervalDateExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfIntervalDateExpr(a, b)
 	case *IntervalFuncExpr:
 		b, ok := inB.(*IntervalFuncExpr)
 		if !ok {
