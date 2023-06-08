@@ -378,8 +378,8 @@ func TestReloadView(t *testing.T) {
 	db.AddQuery(mysql.BaseShowPrimary, sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields("table_name | column_name", "varchar|varchar"),
 	))
-	db.AddQueryPattern(".*SELECT table_name, view_definition.*schema_engine_views.*", &sqltypes.Result{})
-	db.AddQuery("SELECT TABLE_NAME, CREATE_TIME FROM _vt.schema_engine_tables", &sqltypes.Result{})
+	db.AddQueryPattern(".*SELECT table_name, view_definition.*views.*", &sqltypes.Result{})
+	db.AddQuery("SELECT TABLE_NAME, CREATE_TIME FROM _vt.`tables`", &sqltypes.Result{})
 
 	hs.InitDBConfig(target, configs.DbaWithDB())
 	se.InitDBConfig(configs.DbaWithDB())
@@ -411,7 +411,6 @@ func TestReloadView(t *testing.T) {
 		viewDefinitionsOutput      *sqltypes.Result
 
 		expClearQuery   string
-		expHsClearQuery string
 		expInsertQuery  []string
 		expViewsChanged []string
 	}{
@@ -427,13 +426,10 @@ func TestReloadView(t *testing.T) {
 			expViewsChanged:            []string{"view_a", "view_b"},
 			expGetViewDefinitionsQuery: "select table_name, view_definition from information_schema.views where table_schema = database() and table_name in ('view_a', 'view_b')",
 			expCreateStmtQuery:         []string{"show create table view_a", "show create table view_b"},
-			expClearQuery:              "delete from _vt.schema_engine_views where TABLE_SCHEMA = database() and TABLE_NAME in ('view_a', 'view_b')",
-			expHsClearQuery:            "delete from _vt.views where table_schema = database() and table_name in ('view_a', 'view_b')",
+			expClearQuery:              "delete from _vt.views where TABLE_SCHEMA = database() and TABLE_NAME in ('view_a', 'view_b')",
 			expInsertQuery: []string{
-				"insert into _vt.schema_engine_views(TABLE_SCHEMA, TABLE_NAME, CREATE_STATEMENT, VIEW_DEFINITION) values (database(), 'view_a', 'create_view_a', 'def_a')",
-				"insert into _vt.schema_engine_views(TABLE_SCHEMA, TABLE_NAME, CREATE_STATEMENT, VIEW_DEFINITION) values (database(), 'view_b', 'create_view_b', 'def_b')",
-				"insert into _vt.views(table_schema, table_name, create_statement, view_definition) values (database(), 'view_a', 'create_view_a', 'def_a')",
-				"insert into _vt.views(table_schema, table_name, create_statement, view_definition) values (database(), 'view_b', 'create_view_b', 'def_b')",
+				"insert into _vt.views(TABLE_SCHEMA, TABLE_NAME, CREATE_STATEMENT, VIEW_DEFINITION) values (database(), 'view_a', 'create_view_a', 'def_a')",
+				"insert into _vt.views(TABLE_SCHEMA, TABLE_NAME, CREATE_STATEMENT, VIEW_DEFINITION) values (database(), 'view_b', 'create_view_b', 'def_b')",
 			},
 		},
 		{
@@ -447,11 +443,9 @@ func TestReloadView(t *testing.T) {
 			expViewsChanged:            []string{"view_b"},
 			expGetViewDefinitionsQuery: "select table_name, view_definition from information_schema.views where table_schema = database() and table_name in ('view_b')",
 			expCreateStmtQuery:         []string{"show create table view_b"},
-			expHsClearQuery:            "delete from _vt.views where table_schema = database() and table_name in ('view_b')",
-			expClearQuery:              "delete from _vt.schema_engine_views where TABLE_SCHEMA = database() and TABLE_NAME in ('view_b')",
+			expClearQuery:              "delete from _vt.views where TABLE_SCHEMA = database() and TABLE_NAME in ('view_b')",
 			expInsertQuery: []string{
-				"insert into _vt.views(table_schema, table_name, create_statement, view_definition) values (database(), 'view_b', 'create_view_mod_b', 'def_mod_b')",
-				"insert into _vt.schema_engine_views(TABLE_SCHEMA, TABLE_NAME, CREATE_STATEMENT, VIEW_DEFINITION) values (database(), 'view_b', 'create_view_mod_b', 'def_mod_b')",
+				"insert into _vt.views(TABLE_SCHEMA, TABLE_NAME, CREATE_STATEMENT, VIEW_DEFINITION) values (database(), 'view_b', 'create_view_mod_b', 'def_mod_b')",
 			},
 		},
 		{
@@ -467,19 +461,16 @@ func TestReloadView(t *testing.T) {
 			expGetViewDefinitionsQuery: "select table_name, view_definition from information_schema.views where table_schema = database() and table_name in ('view_b', 'view_c', 'view_a')",
 			expCreateStmtQuery:         []string{"show create table view_a", "show create table view_c"},
 			expClearQuery:              "delete from _vt.views where table_schema = database() and table_name in ('view_b', 'view_c', 'view_a')",
-			expHsClearQuery:            "delete from _vt.schema_engine_views where TABLE_SCHEMA = database() and TABLE_NAME in ('view_b', 'view_c', 'view_a')",
 			expInsertQuery: []string{
-				"insert into _vt.views(table_schema, table_name, create_statement, view_definition) values (database(), 'view_a', 'create_view_mod_a', 'def_mod_a')",
-				"insert into _vt.views(table_schema, table_name, create_statement, view_definition) values (database(), 'view_c', 'create_view_c', 'def_c')",
-				"insert into _vt.schema_engine_views(TABLE_SCHEMA, TABLE_NAME, CREATE_STATEMENT, VIEW_DEFINITION) values (database(), 'view_a', 'create_view_mod_a', 'def_mod_a')",
-				"insert into _vt.schema_engine_views(TABLE_SCHEMA, TABLE_NAME, CREATE_STATEMENT, VIEW_DEFINITION) values (database(), 'view_c', 'create_view_c', 'def_c')",
+				"insert into _vt.views(TABLE_SCHEMA, TABLE_NAME, CREATE_STATEMENT, VIEW_DEFINITION) values (database(), 'view_a', 'create_view_mod_a', 'def_mod_a')",
+				"insert into _vt.views(TABLE_SCHEMA, TABLE_NAME, CREATE_STATEMENT, VIEW_DEFINITION) values (database(), 'view_c', 'create_view_c', 'def_c')",
 			},
 		},
 	}
 
 	// setting first test case result.
 	db.AddQueryPattern("SELECT .* information_schema.innodb_tablespaces .*", tcases[0].showTablesWithSizesOutput)
-	db.AddQueryPattern(".*SELECT table_name, view_definition.*schema_engine_views.*", tcases[0].detectViewChangeOutput)
+	db.AddQueryPattern(".*SELECT table_name, view_definition.*views.*", tcases[0].detectViewChangeOutput)
 
 	db.AddQuery(tcases[0].expGetViewDefinitionsQuery, tcases[0].viewDefinitionsOutput)
 	for idx := range tcases[0].expCreateStmtQuery {
@@ -489,7 +480,6 @@ func TestReloadView(t *testing.T) {
 		db.AddQuery(tcases[0].expInsertQuery[idx], &sqltypes.Result{})
 	}
 	db.AddQuery(tcases[0].expClearQuery, &sqltypes.Result{})
-	db.AddQuery(tcases[0].expHsClearQuery, &sqltypes.Result{})
 
 	var tcCount atomic.Int32
 	ch := make(chan struct{})
@@ -500,7 +490,7 @@ func TestReloadView(t *testing.T) {
 				sort.Strings(response.RealtimeStats.ViewSchemaChanged)
 				assert.Equal(t, tcases[tcCount.Load()].expViewsChanged, response.RealtimeStats.ViewSchemaChanged)
 				tcCount.Add(1)
-				db.AddQueryPattern(".*SELECT table_name, view_definition.*schema_engine_views.*", &sqltypes.Result{})
+				db.AddQueryPattern(".*SELECT table_name, view_definition.*views.*", &sqltypes.Result{})
 				ch <- struct{}{}
 				require.NoError(t, db.LastError())
 			}
@@ -523,9 +513,8 @@ func TestReloadView(t *testing.T) {
 				db.AddQuery(tcases[idx].expInsertQuery[i], &sqltypes.Result{})
 			}
 			db.AddQuery(tcases[idx].expClearQuery, &sqltypes.Result{})
-			db.AddQuery(tcases[idx].expHsClearQuery, &sqltypes.Result{})
 			db.AddQueryPattern("SELECT .* information_schema.innodb_tablespaces .*", tcases[idx].showTablesWithSizesOutput)
-			db.AddQueryPattern(".*SELECT table_name, view_definition.*schema_engine_views.*", tcases[idx].detectViewChangeOutput)
+			db.AddQueryPattern(".*SELECT table_name, view_definition.*views.*", tcases[idx].detectViewChangeOutput)
 		case <-time.After(10 * time.Second):
 			t.Fatalf("timed out")
 		}
