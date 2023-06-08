@@ -360,22 +360,17 @@ outer:
 		}
 		builder.proj.addUnexploredExpr(col, col.Expr)
 	}
-	if builder.projectionRequired {
-		return builder.joinColumns, builder.proj, nil
-	}
-
-	return builder.joinColumns, join, nil
+	return builder.joinColumns, builder.proj, nil
 }
 
 type (
 	// aggBuilder is a helper struct that aids in pushing down an Aggregator through a join
 	// it accumulates the projections (if any) that need to be evaluated on top of the join
 	aggBuilder struct {
-		lhs, rhs           *joinPusher
-		projectionRequired bool
-		joinColumns        []JoinColumn
-		proj               *Projection
-		outerJoin          bool
+		lhs, rhs    *joinPusher
+		joinColumns []JoinColumn
+		proj        *Projection
+		outerJoin   bool
 	}
 	// joinPusher is a helper struct that aids in pushing down an Aggregator into one side of a Join.
 	// It creates a new Aggregator that is pushed down and keeps track of the column dependencies that the new Aggregator has.
@@ -475,9 +470,6 @@ func (ab *aggBuilder) handlePushThroughAggregation(ctx *plancontext.PlanningCont
 }
 
 func (ab *aggBuilder) handleCountStar(ctx *plancontext.PlanningContext, aggr Aggr) {
-	// Projection is necessary since we are going to need to do arithmetics to summarize the aggregates
-	ab.projectionRequired = true
-
 	// Add the aggregate to both sides of the join.
 	lhsAE := ab.leftCountStar(ctx)
 	rhsAE := ab.rightCountStar(ctx)
@@ -486,11 +478,9 @@ func (ab *aggBuilder) handleCountStar(ctx *plancontext.PlanningContext, aggr Agg
 }
 
 func (ab *aggBuilder) handleAggrWithCountStarMultiplier(ctx *plancontext.PlanningContext, aggr Aggr) error {
-	ab.projectionRequired = true
+	var lhsAE, rhsAE *sqlparser.AliasedExpr
 
 	deps := ctx.SemTable.RecursiveDeps(aggr.Original.Expr)
-
-	var lhsAE, rhsAE *sqlparser.AliasedExpr
 	switch {
 	case deps.IsSolvedBy(ab.lhs.tableID):
 		ab.pushThroughLeft(aggr)

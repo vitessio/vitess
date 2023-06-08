@@ -236,11 +236,7 @@ func (a *Aggregator) planOffsets(ctx *plancontext.PlanningContext) error {
 	}
 
 	for idx, aggr := range a.Aggregations {
-		needsWS, err := aggr.NeedWeightString(ctx)
-		if err != nil {
-			return err
-		}
-		if !needsWS {
+		if !aggr.NeedWeightString(ctx) {
 			continue
 		}
 		offset, err := addColumn(aeWrap(weightStringFor(aggr.Func.GetArg())), true)

@@ -96,8 +96,7 @@ func tryHorizonPlanning(ctx *plancontext.PlanningContext, root ops.Operator) (ou
 // If we can't, we will instead expand the Horizon into
 // smaller operators and try to push these down as far as possible
 func planHorizons(ctx *plancontext.PlanningContext, root ops.Operator) (ops.Operator, error) {
-	var err error
-	root, err = optimizeHorizonPlanning(ctx, root)
+	root, err := optimizeHorizonPlanning(ctx, root)
 	if err != nil {
 		return nil, err
 	}

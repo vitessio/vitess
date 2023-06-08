@@ -204,29 +204,43 @@ func (p *Projection) ShortDescription() string {
 	return strings.Join(columns, ", ")
 }
 
-func (p *Projection) Compact(*plancontext.PlanningContext) (ops.Operator, *rewrite.ApplyResult, error) {
+func (p *Projection) Compact(ctx *plancontext.PlanningContext) (ops.Operator, *rewrite.ApplyResult, error) {
 	switch src := p.Source.(type) {
 	case *Route:
 		return p.compactWithRoute(src)
 	case *ApplyJoin:
-		return p.compactWithJoin(src)
+		return p.compactWithJoin(ctx, src)
 	}
 	return p, rewrite.SameTree, nil
 }
 
-func (p *Projection) compactWithJoin(src *ApplyJoin) (ops.Operator, *rewrite.ApplyResult, error) {
+func (p *Projection) compactWithJoin(ctx *plancontext.PlanningContext, src *ApplyJoin) (ops.Operator, *rewrite.ApplyResult, error) {
 	var newColumns []int
 	var newColumnsAST []JoinColumn
-	for _, col := range p.Projections {
-		offset, ok := col.(Offset)
-		if !ok {
+	for idx, col := range p.Projections {
+		switch col := col.(type) {
+		case Offset:
+			newColumns = append(newColumns, src.Columns[col.Offset])
+			newColumnsAST = append(newColumnsAST, src.ColumnsAST[col.Offset])
+		case UnexploredExpression:
+			if !ctx.SemTable.EqualsExprWithDeps(col.E, p.Columns[idx].Expr) {
+				// the inner expression is different from what we are presenting to the outside - this means we need to evaluate
+				return p, rewrite.SameTree, nil
+			}
+			offset := slices.IndexFunc(src.ColumnsAST, func(jc JoinColumn) bool {
+				return ctx.SemTable.EqualsExprWithDeps(jc.Original.Expr, col.E)
+			})
+			if offset < 0 {
+				return p, rewrite.SameTree, nil
+			}
+			if len(src.Columns) > 0 {
+				newColumns = append(newColumns, src.Columns[offset])
+			}
+			newColumnsAST = append(newColumnsAST, src.ColumnsAST[offset])
+		default:
 			return p, rewrite.SameTree, nil
 		}
-
-		newColumns = append(newColumns, src.Columns[offset.Offset])
-		newColumnsAST = append(newColumnsAST, src.ColumnsAST[offset.Offset])
 	}
-
 	src.Columns = newColumns
 	src.ColumnsAST = newColumnsAST
 	return src, rewrite.NewTree("remove projection from before join", src), nil

@@ -107,16 +107,16 @@ type (
 	}
 )
 
-func (aggr Aggr) NeedWeightString(ctx *plancontext.PlanningContext) (bool, error) {
+func (aggr Aggr) NeedWeightString(ctx *plancontext.PlanningContext) bool {
 	switch aggr.OpCode {
 	case opcode.AggregateCountDistinct, opcode.AggregateSumDistinct:
-		return ctx.SemTable.NeedsWeightString(aggr.Func.GetArg()), nil
+		return ctx.SemTable.NeedsWeightString(aggr.Func.GetArg())
 	case opcode.AggregateMin, opcode.AggregateMax:
-		if ctx.SemTable.NeedsWeightString(aggr.Func.GetArg()) {
-			return true, vterrors.VT12001(fmt.Sprintf("column collation not known for the function: %s", sqlparser.String(aggr.Func)))
-		}
+		// currently this returns false, as aggregation engine primitive does not support the usage of weight_string
+		// for comparison. If Min/Max column is non-comparable then it will fail at runtime.
+		return false
 	}
-	return false, nil
+	return false
 }
 
 func (aggr Aggr) GetCollation(ctx *plancontext.PlanningContext) collations.ID {
