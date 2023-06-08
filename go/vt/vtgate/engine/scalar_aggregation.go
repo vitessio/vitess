@@ -20,7 +20,6 @@ import (
 	"context"
 	"sync"
 
-	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
@@ -45,10 +44,6 @@ type ScalarAggregate struct {
 	// in the final result. Rest of the columns are truncated
 	// from the result received. If 0, no truncation happens.
 	TruncateColumnCount int `json:",omitempty"`
-
-	// Collations stores the collation ID per column offset.
-	// It is used for grouping keys and distinct aggregate functions
-	Collations map[int]collations.ID
 
 	// Input is the primitive that will feed into this Primitive.
 	Input Primitive
@@ -102,7 +97,7 @@ func (sa *ScalarAggregate) TryExecute(ctx context.Context, vcursor VCursor, bind
 			resultRow, curDistincts = convertRow(row, sa.PreProcess, sa.Aggregates, sa.AggrOnEngine)
 			continue
 		}
-		resultRow, curDistincts, err = merge(result.Fields, resultRow, row, curDistincts, sa.Collations, sa.Aggregates)
+		resultRow, curDistincts, err = merge(result.Fields, resultRow, row, curDistincts, sa.Aggregates)
 		if err != nil {
 			return nil, err
 		}
@@ -158,7 +153,7 @@ func (sa *ScalarAggregate) TryStreamExecute(ctx context.Context, vcursor VCursor
 				continue
 			}
 			var err error
-			current, curDistincts, err = merge(fields, current, row, curDistincts, sa.Collations, sa.Aggregates)
+			current, curDistincts, err = merge(fields, current, row, curDistincts, sa.Aggregates)
 			if err != nil {
 				return err
 			}

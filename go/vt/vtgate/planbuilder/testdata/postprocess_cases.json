@@ -3282,5 +3282,84 @@
         "user.user_extra"
       ]
     }
+  },
+  {
+    "comment": "having filter with %",
+    "query": "select a.tcol1 from user a join music b where a.tcol1 = b.tcol2 group by a.tcol1 having repeat(a.tcol1,min(a.id)) like \"A\\%B\" order by a.tcol1",
+    "v3-plan": "VT12001: unsupported: cross-shard query with aggregates",
+    "gen4-plan": {
+      "QueryType": "SELECT",
+      "Original": "select a.tcol1 from user a join music b where a.tcol1 = b.tcol2 group by a.tcol1 having repeat(a.tcol1,min(a.id)) like \"A\\%B\" order by a.tcol1",
+      "Instructions": {
+        "OperatorType": "SimpleProjection",
+        "Columns": [
+          0
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Filter",
+            "Predicate": "repeat(a.tcol1, :1) like 'A\\%B'",
+            "Inputs": [
+              {
+                "OperatorType": "Aggregate",
+                "Variant": "Ordered",
+                "Aggregates": "min(1) AS min(a.id)",
+                "GroupBy": "(0|2)",
+                "Inputs": [
+                  {
+                    "OperatorType": "Projection",
+                    "Expressions": [
+                      "[COLUMN 0] as tcol1",
+                      "[COLUMN 2] as min(a.id)",
+                      "[COLUMN 1]"
+                    ],
+                    "Inputs": [
+                      {
+                        "OperatorType": "Join",
+                        "Variant": "Join",
+                        "JoinColumnIndexes": "L:0,L:2,L:1",
+                        "JoinVars": {
+                          "a_tcol1": 0
+                        },
+                        "TableName": "`user`_music",
+                        "Inputs": [
+                          {
+                            "OperatorType": "Route",
+                            "Variant": "Scatter",
+                            "Keyspace": {
+                              "Name": "user",
+                              "Sharded": true
+                            },
+                            "FieldQuery": "select a.tcol1, min(a.id), weight_string(a.tcol1) from `user` as a where 1 != 1 group by a.tcol1, weight_string(a.tcol1)",
+                            "OrderBy": "(0|2) ASC",
+                            "Query": "select a.tcol1, min(a.id), weight_string(a.tcol1) from `user` as a group by a.tcol1, weight_string(a.tcol1) order by a.tcol1 asc",
+                            "Table": "`user`"
+                          },
+                          {
+                            "OperatorType": "Route",
+                            "Variant": "Scatter",
+                            "Keyspace": {
+                              "Name": "user",
+                              "Sharded": true
+                            },
+                            "FieldQuery": "select 1 from music as b where 1 != 1 group by 1",
+                            "Query": "select 1 from music as b where b.tcol2 = :a_tcol1 group by 1",
+                            "Table": "music"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user"
+      ]
+    }
   }
 ]

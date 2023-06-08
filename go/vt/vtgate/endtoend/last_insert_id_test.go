@@ -21,15 +21,18 @@ import (
 	"fmt"
 	"testing"
 
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
-
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/test/endtoend/utils"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
 
 func TestLastInsertId(t *testing.T) {
+	require.NoError(t,
+		utils.WaitForAuthoritative(t, "ks", "t1_last_insert_id", cluster.VTProcess().ReadVSchema))
+
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
@@ -53,6 +56,9 @@ func TestLastInsertId(t *testing.T) {
 }
 
 func TestLastInsertIdWithRollback(t *testing.T) {
+	require.NoError(t,
+		utils.WaitForAuthoritative(t, "ks", "t1_last_insert_id", cluster.VTProcess().ReadVSchema))
+
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
