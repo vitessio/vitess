@@ -40,6 +40,11 @@ type parseTest struct {
 var (
 	validSQL = []parseTest{
 		{
+			input:  "create table t (pk int primary key, fk int REFERENCES parent(id))",
+			output: "create table t (\n\tpk int primary key,\n\tfk int references parent [id]\n)",
+		},
+
+		{
 			input:  "SET @foo = 'o' 'ne';",
 			output: "set @foo = 'one'",
 		},
