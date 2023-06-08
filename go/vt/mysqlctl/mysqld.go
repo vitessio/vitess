@@ -1318,16 +1318,16 @@ func (mysqld *Mysqld) ReadBinlogFilesTimestamps(ctx context.Context, req *mysqlc
 		return nil, err
 	}
 
-	scanTimestamp := func(binlogFile string, stopAtFirst bool) (time.Time, error) {
+	scanTimestamp := func(binlogFile string, stopAtFirst bool) (*time.Time, error) {
 		args := []string{binlogFile}
 		mysqlbinlogCmd = exec.Command(mysqlbinlogName, args...)
 		mysqlbinlogCmd.Dir = dir
 		mysqlbinlogCmd.Env = env
 		log.Infof("ApplyBinlogFile: running mysqlbinlog command: %#v", mysqlbinlogCmd)
-		var t time.Time
+		var t *time.Time
 		pipe, err := mysqlbinlogCmd.StdoutPipe() // to be piped into mysql
 		if err != nil {
-			return t, err
+			return nil, err
 		}
 		scanner := bufio.NewScanner(pipe)
 		scanComplete := make(chan error)
@@ -1348,7 +1348,8 @@ func (mysqld *Mysqld) ReadBinlogFilesTimestamps(ctx context.Context, req *mysqlc
 					if err != nil {
 						scanComplete <- err
 					} else {
-						t = time.UnixMicro(unixMicros)
+						unixMicro := time.UnixMicro(unixMicros)
+						t = &unixMicro
 					}
 					if stopAtFirst {
 						return
@@ -1357,14 +1358,14 @@ func (mysqld *Mysqld) ReadBinlogFilesTimestamps(ctx context.Context, req *mysqlc
 			}
 		}
 		if err := mysqlbinlogCmd.Start(); err != nil {
-			return t, err
+			return nil, err
 		}
 		go scan()
 		if err := mysqlbinlogCmd.Wait(); err != nil {
-			return t, vterrors.Wrapf(err, "waiting on mysqlbinlog command in ReadBinlogFilesTimestamps")
+			return nil, vterrors.Wrapf(err, "waiting on mysqlbinlog command in ReadBinlogFilesTimestamps")
 		}
 		if err := <-scanComplete; err != nil {
-			return t, vterrors.Wrapf(err, "scanning mysqlbinlog output in ReadBinlogFilesTimestamps	")
+			return nil, vterrors.Wrapf(err, "scanning mysqlbinlog output in ReadBinlogFilesTimestamps	")
 		}
 		return t, nil
 	}
@@ -1375,8 +1376,8 @@ func (mysqld *Mysqld) ReadBinlogFilesTimestamps(ctx context.Context, req *mysqlc
 		if err != nil {
 			return nil, err
 		}
-		if !t.IsZero() {
-			resp.FirstTimestamp = logutil.TimeToProto(t)
+		if t != nil {
+			resp.FirstTimestamp = logutil.TimeToProto(*t)
 			resp.FirstTimestampBinlog = binlogFile
 			break
 		}
@@ -1388,8 +1389,8 @@ func (mysqld *Mysqld) ReadBinlogFilesTimestamps(ctx context.Context, req *mysqlc
 		if err != nil {
 			return nil, err
 		}
-		if !t.IsZero() {
-			resp.LastTimestamp = logutil.TimeToProto(t)
+		if t != nil {
+			resp.LastTimestamp = logutil.TimeToProto(*t)
 			resp.LastTimestampBinlog = binlogFile
 			break
 		}
