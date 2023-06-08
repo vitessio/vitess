@@ -55,6 +55,7 @@ import (
 
 	vtenv "vitess.io/vitess/go/vt/env"
 	mysqlctlpb "vitess.io/vitess/go/vt/proto/mysqlctl"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 var (
@@ -1294,6 +1295,9 @@ func (mysqld *Mysqld) ApplyBinlogFile(ctx context.Context, binlogFile string, re
 
 // ReadBinlogFilesTimestamps reads all given binlog files via `mysqlbinlog` command and returns the first and last  found transaction timestamps
 func (mysqld *Mysqld) ReadBinlogFilesTimestamps(ctx context.Context, req *mysqlctlpb.ReadBinlogFilesTimestampsRequest) (*mysqlctlpb.ReadBinlogFilesTimestampsResponse, error) {
+	if len(req.BinlogFileNames) == 0 {
+		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "empty binlog list in ReadBinlogFilesTimestampsRequest")
+	}
 	if socketFile != "" {
 		log.Infof("executing Mysqld.ReadBinlogFilesTimestamps() remotely via mysqlctld server: %v", socketFile)
 		client, err := mysqlctlclient.New("unix", socketFile)
