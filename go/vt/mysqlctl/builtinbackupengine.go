@@ -333,11 +333,8 @@ func (be *BuiltinBackupEngine) executeIncrementalBackup(ctx context.Context, par
 	if err != nil {
 		return false, vterrors.Wrapf(err, "reading timestamps from binlog files %v", binaryLogsToBackup)
 	}
-	if resp.FirstTimestampBinlog == "" {
-		return false, vterrors.Wrapf(err, "empty FirstTimestampBinlog. Response=%v", resp)
-	}
-	if resp.LastTimestampBinlog == "" {
-		return false, vterrors.Wrapf(err, "empty LastTimestampBinlog. Response=%v", resp)
+	if resp.FirstTimestampBinlog == "" || resp.LastTimestampBinlog == "" {
+		return false, vterrors.Wrapf(err, "empty binlog name in response. Request=%v, Response=%v", req, resp)
 	}
 	incrDetails := &IncrementalBackupDetails{
 		FirstTimestamp:       FormatRFC3339(logutil.ProtoToTime(resp.FirstTimestamp)),
