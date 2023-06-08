@@ -228,12 +228,8 @@ func addAggregationToSelect(ctx *plancontext.PlanningContext, sel *sqlparser.Sel
 
 func countStarAggr() *operators.Aggr {
 	f := &sqlparser.CountStar{}
-
-	return &operators.Aggr{
-		Original: &sqlparser.AliasedExpr{Expr: f},
-		OpCode:   popcode.AggregateCountStar,
-		Alias:    "count(*)",
-	}
+	aggr := operators.NewAggr(popcode.AggregateCountStar, f, &sqlparser.AliasedExpr{Expr: f}, "count(*)")
+	return &aggr
 }
 
 /*
