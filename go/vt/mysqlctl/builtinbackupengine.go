@@ -333,11 +333,17 @@ func (be *BuiltinBackupEngine) executeIncrementalBackup(ctx context.Context, par
 	if err != nil {
 		return false, vterrors.Wrapf(err, "reading timestamps from binlog files %v", binaryLogsToBackup)
 	}
+	if resp.FirstTimestampBinlog == "" {
+		return false, vterrors.Wrapf(err, "empty FirstTimestampBinlog. Response=%v", resp)
+	}
+	if resp.LastTimestampBinlog == "" {
+		return false, vterrors.Wrapf(err, "empty LastTimestampBinlog. Response=%v", resp)
+	}
 	incrDetails := &IncrementalBackupDetails{
 		FirstTimestamp:       FormatRFC3339(logutil.ProtoToTime(resp.FirstTimestamp)),
-		FirstTimestampBinlog: (resp.FirstTimestampBinlog),
+		FirstTimestampBinlog: filepath.Base(resp.FirstTimestampBinlog),
 		LastTimestamp:        FormatRFC3339(logutil.ProtoToTime(resp.LastTimestamp)),
-		LastTimestampBinlog:  (resp.LastTimestampBinlog),
+		LastTimestampBinlog:  filepath.Base(resp.LastTimestampBinlog),
 	}
 	// It's worthwhile we explain the difference between params.IncrementalFromPos and incrementalBackupFromPosition.
 	// params.IncrementalFromPos is supplied by the user. They want an incremental backup that covers that position.
