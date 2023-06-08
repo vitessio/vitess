@@ -48,11 +48,13 @@ import (
 	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/hook"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/mysqlctlclient"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	vtenv "vitess.io/vitess/go/vt/env"
+	mysqlctlpb "vitess.io/vitess/go/vt/proto/mysqlctl"
 )
 
 var (
@@ -81,6 +83,8 @@ var (
 	replicationConnectRetry = 10 * time.Second
 
 	versionRegex = regexp.MustCompile(`Ver ([0-9]+)\.([0-9]+)\.([0-9]+)`)
+
+	binlogEntryCommittedTimestampRegex = regexp.MustCompile("original_committed_timestamp=([0-9]+)")
 )
 
 // How many bytes from MySQL error log to sample for error messages
@@ -1286,6 +1290,111 @@ func (mysqld *Mysqld) ApplyBinlogFile(ctx context.Context, binlogFile string, re
 		return vterrors.Wrapf(err, "waiting on mysql command")
 	}
 	return nil
+}
+
+// ReadBinlogFilesTimestamps reads all given binlog files via `mysqlbinlog` command and returns the first and last  found transaction timestamps
+func (mysqld *Mysqld) ReadBinlogFilesTimestamps(ctx context.Context, req *mysqlctlpb.ReadBinlogFilesTimestampsRequest) (*mysqlctlpb.ReadBinlogFilesTimestampsResponse, error) {
+	if socketFile != "" {
+		log.Infof("executing Mysqld.ReadBinlogFilesTimestamps() remotely via mysqlctld server: %v", socketFile)
+		client, err := mysqlctlclient.New("unix", socketFile)
+		if err != nil {
+			return nil, fmt.Errorf("can't dial mysqlctld: %v", err)
+		}
+		defer client.Close()
+		return client.ReadBinlogFilesTimestamps(ctx, req)
+	}
+	var mysqlbinlogCmd *exec.Cmd
+
+	dir, err := vtenv.VtMysqlRoot()
+	if err != nil {
+		return nil, err
+	}
+	env, err := buildLdPaths()
+	if err != nil {
+		return nil, err
+	}
+	mysqlbinlogName, err := binaryPath(dir, "mysqlbinlog")
+	if err != nil {
+		return nil, err
+	}
+
+	scanTimestamp := func(binlogFile string, stopAtFirst bool) (time.Time, error) {
+		args := []string{binlogFile}
+		mysqlbinlogCmd = exec.Command(mysqlbinlogName, args...)
+		mysqlbinlogCmd.Dir = dir
+		mysqlbinlogCmd.Env = env
+		log.Infof("ApplyBinlogFile: running mysqlbinlog command: %#v", mysqlbinlogCmd)
+		var t time.Time
+		pipe, err := mysqlbinlogCmd.StdoutPipe() // to be piped into mysql
+		if err != nil {
+			return t, err
+		}
+		scanner := bufio.NewScanner(pipe)
+		scanComplete := make(chan error)
+		scan := func() {
+			defer close(scanComplete)
+			// Read line by line and process it
+			for scanner.Scan() {
+				logEntry := scanner.Text()
+				if len(logEntry) == 0 {
+					continue
+				}
+				if logEntry[0] != '#' {
+					continue
+				}
+				if submatch := binlogEntryCommittedTimestampRegex.FindStringSubmatch(logEntry); submatch != nil {
+					binlogEntryCommittedTimestamp := submatch[1]
+					unixMicros, err := strconv.ParseInt(binlogEntryCommittedTimestamp, 10, 64)
+					if err != nil {
+						scanComplete <- err
+					} else {
+						t = time.UnixMicro(unixMicros)
+					}
+					if stopAtFirst {
+						return
+					}
+				}
+			}
+		}
+		if err := mysqlbinlogCmd.Start(); err != nil {
+			return t, err
+		}
+		go scan()
+		if err := mysqlbinlogCmd.Wait(); err != nil {
+			return t, vterrors.Wrapf(err, "waiting on mysqlbinlog command in ReadBinlogFilesTimestamps")
+		}
+		if err := <-scanComplete; err != nil {
+			return t, vterrors.Wrapf(err, "scanning mysqlbinlog output in ReadBinlogFilesTimestamps	")
+		}
+		return t, nil
+	}
+	resp := &mysqlctlpb.ReadBinlogFilesTimestampsResponse{}
+	// Find first timestamp
+	for _, binlogFile := range req.BinlogFileNames {
+		t, err := scanTimestamp(binlogFile, true)
+		if err != nil {
+			return nil, err
+		}
+		if !t.IsZero() {
+			resp.FirstTimestamp = logutil.TimeToProto(t)
+			resp.FirstTimestampBinlog = binlogFile
+			break
+		}
+	}
+	// Find last timestamp
+	for i := len(req.BinlogFileNames) - 1; i >= 0; i-- {
+		binlogFile := req.BinlogFileNames[i]
+		t, err := scanTimestamp(binlogFile, false)
+		if err != nil {
+			return nil, err
+		}
+		if !t.IsZero() {
+			resp.LastTimestamp = logutil.TimeToProto(t)
+			resp.LastTimestampBinlog = binlogFile
+			break
+		}
+	}
+	return resp, nil
 }
 
 // noSocketFile panics if socketFile is set. This is to prevent

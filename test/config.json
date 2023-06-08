@@ -100,6 +100,15 @@
 			"RetryMax": 1,
 			"Tags": []
 		},
+		"backup_restore_to_time": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/backup/restore_to_time", "-timeout", "30m"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "backup_restore_to_time",
+			"RetryMax": 1,
+			"Tags": []
+		},
 		"backup": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/backup/vtctlbackup", "-timeout", "30m"],

@@ -42,6 +42,7 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	stats "vitess.io/vitess/go/vt/mysqlctl/backupstats"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
+	"vitess.io/vitess/go/vt/proto/mysqlctl"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
@@ -319,6 +320,25 @@ func (be *BuiltinBackupEngine) executeIncrementalBackup(ctx context.Context, par
 	if err != nil {
 		return false, vterrors.Wrapf(err, "cannot parse position %v", incrementalBackupToGTID)
 	}
+	req := &mysqlctl.ReadBinlogFilesTimestampsRequest{}
+	for _, binlogFile := range binaryLogsToBackup {
+		fe := FileEntry{Base: backupBinlogDir, Name: binlogFile}
+		fullPath, err := fe.fullPath(params.Cnf)
+		if err != nil {
+			return false, err
+		}
+		req.BinlogFileNames = append(req.BinlogFileNames, fullPath)
+	}
+	resp, err := params.Mysqld.ReadBinlogFilesTimestamps(ctx, req)
+	if err != nil {
+		return false, vterrors.Wrapf(err, "reading timestamps from binlog files %v", binaryLogsToBackup)
+	}
+	incrDetails := &IncrementalBackupDetails{
+		FirstTimestamp:       FormatRFC3339(logutil.ProtoToTime(resp.FirstTimestamp)),
+		FirstTimestampBinlog: filepath.Base(resp.FirstTimestampBinlog),
+		LastTimestamp:        FormatRFC3339(logutil.ProtoToTime(resp.LastTimestamp)),
+		LastTimestampBinlog:  filepath.Base(resp.LastTimestampBinlog),
+	}
 	// It's worthwhile we explain the difference between params.IncrementalFromPos and incrementalBackupFromPosition.
 	// params.IncrementalFromPos is supplied by the user. They want an incremental backup that covers that position.
 	// However, we implement incremental backups by copying complete binlog files. That position could potentially
@@ -328,7 +348,7 @@ func (be *BuiltinBackupEngine) executeIncrementalBackup(ctx context.Context, par
 	// incrementalBackupFromGTID is the "previous GTIDs" of the first binlog file we back up.
 	// It is a fact that incrementalBackupFromGTID is earlier or equal to params.IncrementalFromPos.
 	// In the backup manifest file, we document incrementalBackupFromGTID, not the user's requested position.
-	if err := be.backupFiles(ctx, params, bh, incrementalBackupToPosition, gtidPurged, incrementalBackupFromPosition, binaryLogsToBackup, serverUUID); err != nil {
+	if err := be.backupFiles(ctx, params, bh, incrementalBackupToPosition, gtidPurged, incrementalBackupFromPosition, binaryLogsToBackup, serverUUID, incrDetails); err != nil {
 		return false, err
 	}
 	return true, nil
@@ -427,7 +447,7 @@ func (be *BuiltinBackupEngine) executeFullBackup(ctx context.Context, params Bac
 	}
 
 	// Backup everything, capture the error.
-	backupErr := be.backupFiles(ctx, params, bh, replicationPosition, gtidPurgedPosition, mysql.Position{}, nil, serverUUID)
+	backupErr := be.backupFiles(ctx, params, bh, replicationPosition, gtidPurgedPosition, mysql.Position{}, nil, serverUUID, nil)
 	usable := backupErr == nil
 
 	// Try to restart mysqld, use background context in case we timed out the original context
@@ -512,6 +532,7 @@ func (be *BuiltinBackupEngine) backupFiles(
 	fromPosition mysql.Position,
 	binlogFiles []string,
 	serverUUID string,
+	incrDetails *IncrementalBackupDetails,
 ) (finalErr error) {
 	// Get the files to backup.
 	// We don't care about totalSize because we add each file separately.
@@ -595,17 +616,18 @@ func (be *BuiltinBackupEngine) backupFiles(
 	bm := &builtinBackupManifest{
 		// Common base fields
 		BackupManifest: BackupManifest{
-			BackupMethod:   builtinBackupEngineName,
-			Position:       replicationPosition,
-			PurgedPosition: purgedPosition,
-			FromPosition:   fromPosition,
-			Incremental:    !fromPosition.IsZero(),
-			ServerUUID:     serverUUID,
-			TabletAlias:    params.TabletAlias,
-			Keyspace:       params.Keyspace,
-			Shard:          params.Shard,
-			BackupTime:     params.BackupTime.UTC().Format(time.RFC3339),
-			FinishedTime:   time.Now().UTC().Format(time.RFC3339),
+			BackupMethod:       builtinBackupEngineName,
+			Position:           replicationPosition,
+			PurgedPosition:     purgedPosition,
+			FromPosition:       fromPosition,
+			Incremental:        !fromPosition.IsZero(),
+			ServerUUID:         serverUUID,
+			TabletAlias:        params.TabletAlias,
+			Keyspace:           params.Keyspace,
+			Shard:              params.Shard,
+			BackupTime:         FormatRFC3339(params.BackupTime.UTC()),
+			FinishedTime:       FormatRFC3339(time.Now().UTC()),
+			IncrementalDetails: incrDetails,
 		},
 
 		// Builtin-specific fields

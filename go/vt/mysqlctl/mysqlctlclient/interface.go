@@ -25,6 +25,7 @@ import (
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/vt/log"
+	mysqlctlpb "vitess.io/vitess/go/vt/proto/mysqlctl"
 	"vitess.io/vitess/go/vt/servenv"
 )
 
@@ -51,6 +52,9 @@ type MysqlctlClient interface {
 
 	// ApplyBinlogFile calls Mysqld.ApplyBinlogFile remotely.
 	ApplyBinlogFile(ctx context.Context, binlogFileName, binlogRestorePosition string) error
+
+	// ReadBinlogFilesTimestamps calls Mysqld.ReadBinlogFilesTimestamps remotely.
+	ReadBinlogFilesTimestamps(ctx context.Context, req *mysqlctlpb.ReadBinlogFilesTimestampsRequest) (*mysqlctlpb.ReadBinlogFilesTimestampsResponse, error)
 
 	// ReinitConfig calls Mysqld.ReinitConfig remotely.
 	ReinitConfig(ctx context.Context) error

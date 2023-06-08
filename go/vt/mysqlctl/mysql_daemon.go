@@ -24,6 +24,7 @@ import (
 	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 
+	mysqlctlpb "vitess.io/vitess/go/vt/proto/mysqlctl"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 )
@@ -35,6 +36,7 @@ type MysqlDaemon interface {
 	Shutdown(ctx context.Context, cnf *Mycnf, waitForMysqld bool) error
 	RunMysqlUpgrade(ctx context.Context) error
 	ApplyBinlogFile(ctx context.Context, binlogFile string, restorePos mysql.Position) error
+	ReadBinlogFilesTimestamps(ctx context.Context, req *mysqlctlpb.ReadBinlogFilesTimestampsRequest) (*mysqlctlpb.ReadBinlogFilesTimestampsResponse, error)
 	ReinitConfig(ctx context.Context, cnf *Mycnf) error
 	Wait(ctx context.Context, cnf *Mycnf) error
 

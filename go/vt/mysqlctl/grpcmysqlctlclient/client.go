@@ -95,6 +95,15 @@ func (c *client) ApplyBinlogFile(ctx context.Context, binlogFileName, binlogRest
 	})
 }
 
+// ReadBinlogFilesTimestamps is part of the MysqlctlClient interface.
+func (c *client) ReadBinlogFilesTimestamps(ctx context.Context, req *mysqlctlpb.ReadBinlogFilesTimestampsRequest) (resp *mysqlctlpb.ReadBinlogFilesTimestampsResponse, err error) {
+	err = c.withRetry(ctx, func() error {
+		resp, err = c.c.ReadBinlogFilesTimestamps(ctx, req)
+		return err
+	})
+	return resp, err
+}
+
 // ReinitConfig is part of the MysqlctlClient interface.
 func (c *client) ReinitConfig(ctx context.Context) error {
 	return c.withRetry(ctx, func() error {

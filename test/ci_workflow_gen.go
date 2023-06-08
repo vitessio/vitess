@@ -76,6 +76,7 @@ var (
 		"18",
 		"xb_backup",
 		"backup_pitr",
+		"backup_restore_to_time",
 		"21",
 		"22",
 		"mysql_server_vault",
@@ -132,6 +133,7 @@ var (
 		"xb_backup",
 		"xb_recovery",
 		"backup_pitr",
+		"backup_restore_to_time",
 	}
 	clustersRequiringMakeTools = []string{
 		"18",
@@ -169,6 +171,8 @@ func clusterMySQLVersions(clusterName string) mysqlVersions {
 	case clusterName == "schemadiff_vrepl":
 		return allMySQLVersions
 	case clusterName == "backup_pitr":
+		return allMySQLVersions
+	case clusterName == "backup_restore_to_time":
 		return allMySQLVersions
 	case clusterName == "tabletmanager_tablegc":
 		return allMySQLVersions

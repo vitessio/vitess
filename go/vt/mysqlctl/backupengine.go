@@ -234,6 +234,14 @@ func getBackupManifestInto(ctx context.Context, backup backupstorage.BackupHandl
 	return nil
 }
 
+// IncrementalBackupDetails lists some incremental backup specific information
+type IncrementalBackupDetails struct {
+	FirstTimestamp       string
+	FirstTimestampBinlog string
+	LastTimestamp        string
+	LastTimestampBinlog  string
+}
+
 // BackupManifest defines the common fields in the MANIFEST file.
 // All backup engines must include at least these fields. They are free to add
 // their own custom fields by embedding this struct anonymously into their own
@@ -273,6 +281,9 @@ type BackupManifest struct {
 	Keyspace string
 
 	Shard string
+
+	// IncrementalDetails is nil for non-incremental backups
+	IncrementalDetails *IncrementalBackupDetails
 }
 
 func (m *BackupManifest) HashKey() string {
@@ -411,7 +422,7 @@ func FindBackupToRestore(ctx context.Context, params RestoreParams, bhs []backup
 
 			var backupTime time.Time
 			if checkBackupTime {
-				backupTime, err = time.Parse(time.RFC3339, bm.BackupTime)
+				backupTime, err = ParseRFC3339(bm.BackupTime)
 				if err != nil {
 					params.Logger.Warningf("Restore: skipping backup %v/%v with invalid time %v: %v", backupDir, bh.Name(), bm.BackupTime, err)
 					continue

@@ -248,8 +248,8 @@ func (be *XtrabackupEngine) executeFullBackup(ctx context.Context, params Backup
 			TabletAlias:    params.TabletAlias,
 			Keyspace:       params.Keyspace,
 			Shard:          params.Shard,
-			BackupTime:     params.BackupTime.UTC().Format(time.RFC3339),
-			FinishedTime:   time.Now().UTC().Format(time.RFC3339),
+			BackupTime:     FormatRFC3339(params.BackupTime.UTC()),
+			FinishedTime:   FormatRFC3339(time.Now().UTC()),
 		},
 
 		// XtraBackup-specific fields
