@@ -30,6 +30,10 @@ import (
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 )
 
+const (
+	lookupUnicodeLooseMD5HashParamWriteOnly = "write_only"
+)
+
 var (
 	_ SingleColumn    = (*LookupUnicodeLooseMD5Hash)(nil)
 	_ Lookup          = (*LookupUnicodeLooseMD5Hash)(nil)
@@ -42,7 +46,7 @@ var (
 
 	lookupUnicodeLooseMD5HashParams = append(
 		append(make([]string, 0), lookupCommonParams...),
-		"write_only",
+		lookupUnicodeLooseMD5HashParamWriteOnly,
 	)
 )
 
@@ -85,7 +89,7 @@ func newLookupUnicodeLooseMD5Hash(name string, m map[string]string) (Vindex, err
 	if err != nil {
 		return nil, err
 	}
-	lh.writeOnly, err = boolFromMap(m, "write_only")
+	lh.writeOnly, err = boolFromMap(m, lookupUnicodeLooseMD5HashParamWriteOnly)
 	if err != nil {
 		return nil, err
 	}
@@ -320,7 +324,7 @@ func newLookupUnicodeLooseMD5HashUnique(name string, m map[string]string) (Vinde
 	if err != nil {
 		return nil, err
 	}
-	lhu.writeOnly, err = boolFromMap(m, "write_only")
+	lhu.writeOnly, err = boolFromMap(m, lookupUnicodeLooseMD5HashParamWriteOnly)
 	if err != nil {
 		return nil, err
 	}

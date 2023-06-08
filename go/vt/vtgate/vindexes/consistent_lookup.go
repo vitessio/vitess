@@ -35,6 +35,10 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
+const (
+	consistentLookupParamWriteOnly = "write_only"
+)
+
 var (
 	_ SingleColumn    = (*ConsistentLookupUnique)(nil)
 	_ Lookup          = (*ConsistentLookupUnique)(nil)
@@ -49,7 +53,7 @@ var (
 
 	consistentLookupParams = append(
 		append(make([]string, 0), lookupInternalParams...),
-		"write_only",
+		consistentLookupParamWriteOnly,
 	)
 )
 
@@ -291,7 +295,7 @@ type clCommon struct {
 func newCLCommon(name string, m map[string]string) (*clCommon, error) {
 	lu := &clCommon{name: name}
 	var err error
-	lu.writeOnly, err = boolFromMap(m, "write_only")
+	lu.writeOnly, err = boolFromMap(m, consistentLookupParamWriteOnly)
 	if err != nil {
 		return nil, err
 	}

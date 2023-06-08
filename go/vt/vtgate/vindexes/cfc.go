@@ -28,14 +28,19 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
-var (
-	_ ParamValidating = (*CFC)(nil)
+const (
+	cfcParamHash    = "hash"
+	cfcParamOffsets = "offsets"
 )
 
-var cfcParams = []string{
-	"hash",
-	"offsets",
-}
+var (
+	_ ParamValidating = (*CFC)(nil)
+
+	cfcParams = []string{
+		cfcParamHash,
+		cfcParamOffsets,
+	}
+)
 
 // CFC is Concatenated Fixed-width Composite Vindex.
 //
@@ -124,7 +129,7 @@ func newCFC(name string, params map[string]string) (Vindex, error) {
 		return cfc, nil
 	}
 
-	switch h := params["hash"]; h {
+	switch h := params[cfcParamHash]; h {
 	case "":
 		return cfc, nil
 	case "md5":
@@ -136,7 +141,7 @@ func newCFC(name string, params map[string]string) (Vindex, error) {
 	}
 
 	var offsets []int
-	if p := params["offsets"]; p == "" {
+	if p := params[cfcParamOffsets]; p == "" {
 		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "CFC vindex requires offsets when hash is defined")
 	} else if err := json.Unmarshal([]byte(p), &offsets); err != nil || !validOffsets(offsets) {
 		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "invalid offsets %s to CFC vindex %s. expected sorted positive ints in brackets", p, name)

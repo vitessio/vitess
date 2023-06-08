@@ -32,12 +32,17 @@ import (
 	"vitess.io/vitess/go/vt/log"
 )
 
+const (
+	regionJSONParamRegionBytes = "region_bytes"
+	regionJSONParamRegionMap   = "region_map"
+)
+
 var (
 	_ MultiColumn = (*RegionJSON)(nil)
 
 	regionJSONParams = []string{
-		"region_map",
-		"region_bytes",
+		regionJSONParamRegionBytes,
+		regionJSONParamRegionMap,
 	}
 )
 

@@ -29,6 +29,10 @@ import (
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 )
 
+const (
+	lookupHashParamWriteOnly = "write_only"
+)
+
 var (
 	_ SingleColumn    = (*LookupHash)(nil)
 	_ Lookup          = (*LookupHash)(nil)
@@ -41,7 +45,7 @@ var (
 
 	lookupHashParams = append(
 		append(make([]string, 0), lookupCommonParams...),
-		"write_only",
+		lookupHashParamWriteOnly,
 	)
 )
 
@@ -84,7 +88,7 @@ func newLookupHash(name string, m map[string]string) (Vindex, error) {
 	if err != nil {
 		return nil, err
 	}
-	lh.writeOnly, err = boolFromMap(m, "write_only")
+	lh.writeOnly, err = boolFromMap(m, lookupHashParamWriteOnly)
 	if err != nil {
 		return nil, err
 	}
@@ -294,7 +298,7 @@ func newLookupHashUnique(name string, m map[string]string) (Vindex, error) {
 	if err != nil {
 		return nil, err
 	}
-	lhu.writeOnly, err = boolFromMap(m, "write_only")
+	lhu.writeOnly, err = boolFromMap(m, lookupHashParamWriteOnly)
 	if err != nil {
 		return nil, err
 	}

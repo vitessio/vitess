@@ -27,6 +27,11 @@ import (
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 )
 
+const (
+	lookupParamNoVerify  = "no_verify"
+	lookupParamWriteOnly = "write_only"
+)
+
 var (
 	_ SingleColumn    = (*LookupUnique)(nil)
 	_ Lookup          = (*LookupUnique)(nil)
@@ -39,8 +44,8 @@ var (
 
 	lookupParams = append(
 		append(make([]string, 0), lookupCommonParams...),
-		"no_verify",
-		"write_only",
+		lookupParamNoVerify,
+		lookupParamWriteOnly,
 	)
 )
 
@@ -208,12 +213,12 @@ func newLookup(name string, m map[string]string) (Vindex, error) {
 	if err != nil {
 		return nil, err
 	}
-	lookup.writeOnly, err = boolFromMap(m, "write_only")
+	lookup.writeOnly, err = boolFromMap(m, lookupParamWriteOnly)
 	if err != nil {
 		return nil, err
 	}
 
-	lookup.noVerify, err = boolFromMap(m, "no_verify")
+	lookup.noVerify, err = boolFromMap(m, lookupParamNoVerify)
 	if err != nil {
 		return nil, err
 	}
@@ -280,12 +285,12 @@ func newLookupUnique(name string, m map[string]string) (Vindex, error) {
 	if err != nil {
 		return nil, err
 	}
-	lu.writeOnly, err = boolFromMap(m, "write_only")
+	lu.writeOnly, err = boolFromMap(m, lookupParamWriteOnly)
 	if err != nil {
 		return nil, err
 	}
 
-	lu.noVerify, err = boolFromMap(m, "no_verify")
+	lu.noVerify, err = boolFromMap(m, lookupParamNoVerify)
 	if err != nil {
 		return nil, err
 	}

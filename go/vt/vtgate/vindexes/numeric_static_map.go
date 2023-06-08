@@ -32,15 +32,21 @@ import (
 	"vitess.io/vitess/go/vt/key"
 )
 
+const (
+	numericStaticMapParamJSON         = "json"
+	numericStaticMapParamJSONPath     = "json_path"
+	numericStaticMapParamFallbackType = "fallback_type"
+)
+
 var (
 	_ SingleColumn    = (*NumericStaticMap)(nil)
 	_ Hashing         = (*NumericStaticMap)(nil)
 	_ ParamValidating = (*NumericStaticMap)(nil)
 
 	numericStaticMapParams = []string{
-		"json",
-		"json_path",
-		"fallback_type",
+		numericStaticMapParamJSON,
+		numericStaticMapParamJSONPath,
+		numericStaticMapParamFallbackType,
 	}
 )
 
@@ -62,8 +68,8 @@ func init() {
 
 // newNumericStaticMap creates a NumericStaticMap vindex.
 func newNumericStaticMap(name string, params map[string]string) (Vindex, error) {
-	jsonStr, jsok := params["json"]
-	jsonPath, jpok := params["json_path"]
+	jsonStr, jsok := params[numericStaticMapParamJSON]
+	jsonPath, jpok := params[numericStaticMapParamJSONPath]
 
 	if !jsok && !jpok {
 		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "NumericStaticMap: Could not find either `json_path` or `json` params in vschema")
@@ -92,7 +98,7 @@ func newNumericStaticMap(name string, params map[string]string) (Vindex, error) 
 
 	var hashVdx Hashing
 
-	if s, ok := params["fallback_type"]; ok {
+	if s, ok := params[numericStaticMapParamFallbackType]; ok {
 		vindex, err := CreateVindex(s, name+"_hash", map[string]string{})
 		if err != nil {
 			return nil, err

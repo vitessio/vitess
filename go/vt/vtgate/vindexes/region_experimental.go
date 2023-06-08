@@ -29,12 +29,16 @@ import (
 	"vitess.io/vitess/go/vt/key"
 )
 
+const (
+	regionExperimentalParamRegionBytes = "region_bytes"
+)
+
 var (
 	_ MultiColumn     = (*RegionExperimental)(nil)
 	_ ParamValidating = (*RegionExperimental)(nil)
 
 	regionExperimentalParams = []string{
-		"region_bytes",
+		regionExperimentalParamRegionBytes,
 	}
 )
 
