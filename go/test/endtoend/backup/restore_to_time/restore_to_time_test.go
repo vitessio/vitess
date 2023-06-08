@@ -18,6 +18,7 @@ package mysqlctld
 
 import (
 	"context"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -192,6 +193,7 @@ func TestIncrementalBackup(t *testing.T) {
 						incrDetails := manifest.IncrementalDetails
 						require.NotNil(t, incrDetails)
 						t.Logf("====== incrDetails: %+v", *incrDetails)
+						t.Logf("=== incrDetails.FirstTimestampBinlog: [%v], filepath.Base: [%v]", incrDetails.FirstTimestampBinlog, filepath.Base(incrDetails.FirstTimestampBinlog))
 						require.NotEmpty(t, incrDetails.FirstTimestamp)
 						require.NotEmpty(t, incrDetails.FirstTimestampBinlog)
 						require.NotEmpty(t, incrDetails.LastTimestamp)
