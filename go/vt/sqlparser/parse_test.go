@@ -122,6 +122,27 @@ var (
 			output: "select * from my_table_function('foo', 'bar')",
 		},
 		{
+			input:  "select * from my_table_function() my_table_func_alias",
+			output: "select * from my_table_function() as my_table_func_alias",
+		},
+		{
+			input:  "select * from my_table_function() as my_table_func_alias",
+			output: "select * from my_table_function() as my_table_func_alias",
+		},
+		{
+			input:  "select * from my_table_function() my_table_func_alias1, my_table_function() my_table_func_alias2",
+			output: "select * from my_table_function() as my_table_func_alias1, my_table_function() as my_table_func_alias2",
+		},
+		{
+			input:  "select * from my_table_function() my_table_func_alias1 join my_table_function() my_table_func_alias2",
+			output: "select * from my_table_function() as my_table_func_alias1 join my_table_function() as my_table_func_alias2",
+		},
+		{
+			input:  "select * from (select * from my_table_function() as tbl_alias) sq",
+			output: "select * from (select * from my_table_function() as tbl_alias) as sq",
+		},
+
+		{
 			input: "select 1",
 		}, {
 			input: "select 1 from t",

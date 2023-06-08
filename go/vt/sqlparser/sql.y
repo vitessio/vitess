@@ -5615,6 +5615,10 @@ table_function:
   {
     $$ = &TableFuncExpr{Name: string($1), Exprs: $3}
   }
+| ID openb argument_expression_list_opt closeb as_opt table_alias
+  {
+    $$ = &TableFuncExpr{Name: string($1), Exprs: $3, Alias: $6}
+  }
 
 
 // There is a grammar conflict here:
