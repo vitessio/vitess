@@ -3343,7 +3343,7 @@ func (asm *assembler) Fn_Sysdate(prec uint8) {
 		if tz := env.currentTimezone(); tz != nil {
 			now = now.In(tz)
 		}
-		val.bytes = datetime.FromStdTime(now).Format(prec)
+		val.bytes = datetime.NewDateTimeFromStd(now).Format(prec)
 		env.vm.stack[env.vm.sp] = val
 		env.vm.sp++
 		return 1
@@ -3591,7 +3591,7 @@ func (asm *assembler) Fn_FROM_UNIXTIME_i() {
 		if tz := env.currentTimezone(); tz != nil {
 			t = t.In(tz)
 		}
-		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalDateTime(datetime.FromStdTime(t), 0)
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalDateTime(datetime.NewDateTimeFromStd(t), 0)
 		return 1
 	}, "FN FROM_UNIXTIME INT64(SP-1)")
 }
@@ -3607,7 +3607,7 @@ func (asm *assembler) Fn_FROM_UNIXTIME_u() {
 		if tz := env.currentTimezone(); tz != nil {
 			t = t.In(tz)
 		}
-		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalDateTime(datetime.FromStdTime(t), 0)
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalDateTime(datetime.NewDateTimeFromStd(t), 0)
 		return 1
 	}, "FN FROM_UNIXTIME UINT64(SP-1)")
 }
@@ -3631,7 +3631,7 @@ func (asm *assembler) Fn_FROM_UNIXTIME_d() {
 		if tz := env.currentTimezone(); tz != nil {
 			t = t.In(tz)
 		}
-		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalDateTime(datetime.FromStdTime(t), int(arg.length))
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalDateTime(datetime.NewDateTimeFromStd(t), int(arg.length))
 		return 1
 	}, "FN FROM_UNIXTIME DECIMAL(SP-1)")
 }
@@ -3648,7 +3648,7 @@ func (asm *assembler) Fn_FROM_UNIXTIME_f() {
 		if tz := env.currentTimezone(); tz != nil {
 			t = t.In(tz)
 		}
-		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalDateTime(datetime.FromStdTime(t), 6)
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalDateTime(datetime.NewDateTimeFromStd(t), 6)
 		return 1
 	}, "FN FROM_UNIXTIME FLOAT(SP-1)")
 }
@@ -3674,7 +3674,7 @@ func (asm *assembler) Fn_MAKEDATE() {
 		if t.IsZero() {
 			env.vm.stack[env.vm.sp-2] = nil
 		} else {
-			env.vm.stack[env.vm.sp-2] = env.vm.arena.newEvalDate(datetime.FromStdTime(t).Date)
+			env.vm.stack[env.vm.sp-2] = env.vm.arena.newEvalDate(datetime.NewDateTimeFromStd(t).Date)
 		}
 		env.vm.sp--
 		return 1
@@ -4239,4 +4239,49 @@ func (asm *assembler) Fn_UUID_TO_BIN1() {
 		env.vm.sp--
 		return 1
 	}, "FN UUID_TO_BIN VARBINARY(SP-2) INT64(SP-1)")
+}
+
+func (asm *assembler) Fn_DATEADD_D(unit datetime.IntervalType, sub bool) {
+	asm.adjustStack(-1)
+	asm.emit(func(env *ExpressionEnv) int {
+		interval := evalToInterval(env.vm.stack[env.vm.sp-1], unit, sub)
+		if interval == nil {
+			env.vm.stack[env.vm.sp-2] = nil
+			env.vm.sp--
+			return 1
+		}
+
+		tmp := env.vm.stack[env.vm.sp-2].(*evalTemporal)
+		env.vm.stack[env.vm.sp-2] = tmp.addInterval(interval, collations.TypedCollation{})
+		env.vm.sp--
+		return 1
+	}, "FN DATEADD TEMPORAL(SP-2), INTERVAL(SP-1)")
+}
+
+func (asm *assembler) Fn_DATEADD_s(unit datetime.IntervalType, sub bool, col collations.TypedCollation) {
+	asm.adjustStack(-1)
+	asm.emit(func(env *ExpressionEnv) int {
+		var interval *datetime.Interval
+		var tmp *evalTemporal
+
+		interval = evalToInterval(env.vm.stack[env.vm.sp-1], unit, sub)
+		if interval == nil {
+			goto baddate
+		}
+
+		tmp = evalToTemporal(env.vm.stack[env.vm.sp-2])
+		if tmp == nil {
+			goto baddate
+		}
+
+		env.vm.stack[env.vm.sp-2] = tmp.addInterval(interval, col)
+		env.vm.sp--
+		return 1
+
+	baddate:
+		env.vm.stack[env.vm.sp-2] = nil
+		env.vm.sp--
+		return 1
+	}, "FN DATEADD TEMPORAL(SP-2), INTERVAL(SP-1)")
+
 }

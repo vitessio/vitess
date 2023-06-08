@@ -141,6 +141,13 @@ type (
 	builtinYearWeek struct {
 		CallExpr
 	}
+
+	builtinDateMath struct {
+		CallExpr
+		sub     bool
+		unit    datetime.IntervalType
+		collate collations.ID
+	}
 )
 
 var _ Expr = (*builtinNow)(nil)
@@ -212,7 +219,7 @@ func (call *builtinSysdate) eval(env *ExpressionEnv) (eval, error) {
 	if tz := env.currentTimezone(); tz != nil {
 		now = now.In(tz)
 	}
-	return newEvalRaw(sqltypes.Datetime, datetime.FromStdTime(now).Format(call.prec), collationBinary), nil
+	return newEvalRaw(sqltypes.Datetime, datetime.NewDateTimeFromStd(now).Format(call.prec), collationBinary), nil
 }
 
 func (call *builtinSysdate) typeof(_ *ExpressionEnv, _ []*querypb.Field) (sqltypes.Type, typeFlag) {
@@ -340,7 +347,7 @@ func convertTz(dt datetime.DateTime, from, to *time.Location) (datetime.DateTime
 	if err != nil {
 		return datetime.DateTime{}, false
 	}
-	return datetime.FromStdTime(ts.In(to)), true
+	return datetime.NewDateTimeFromStd(ts.In(to)), true
 }
 
 func (call *builtinConvertTz) eval(env *ExpressionEnv) (eval, error) {
@@ -646,7 +653,7 @@ func (b *builtinFromUnixtime) eval(env *ExpressionEnv) (eval, error) {
 		t = t.In(tz)
 	}
 
-	dt := newEvalDateTime(datetime.FromStdTime(t), prec)
+	dt := newEvalDateTime(datetime.NewDateTimeFromStd(t), prec)
 
 	if len(b.Arguments) == 1 {
 		return dt, nil
@@ -809,7 +816,7 @@ func (b *builtinMakedate) eval(env *ExpressionEnv) (eval, error) {
 	if t.IsZero() {
 		return nil, nil
 	}
-	return newEvalDate(datetime.FromStdTime(t).Date), nil
+	return newEvalDate(datetime.NewDateTimeFromStd(t).Date), nil
 }
 
 func (b *builtinMakedate) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
@@ -1687,4 +1694,93 @@ func (call *builtinYearWeek) compile(c *compiler) (ctype, error) {
 
 	c.asm.jumpDestination(skip1, skip2)
 	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: arg.Flag | flagNullable}, nil
+}
+
+func evalToInterval(itv eval, unit datetime.IntervalType, negate bool) *datetime.Interval {
+	switch itv := itv.(type) {
+	case *evalBytes:
+		return datetime.ParseInterval(itv.string(), unit, negate)
+	case *evalFloat:
+		return datetime.ParseIntervalFloat(itv.f, unit, negate)
+	case *evalDecimal:
+		return datetime.ParseIntervalDecimal(itv.dec, itv.length, unit, negate)
+	default:
+		return datetime.ParseIntervalInt64(evalToNumeric(itv, false).toInt64().i, unit, negate)
+	}
+}
+
+func (call *builtinDateMath) eval(env *ExpressionEnv) (eval, error) {
+	date, err := call.Arguments[0].eval(env)
+	if err != nil || date == nil {
+		return date, err
+	}
+
+	itv, err := call.Arguments[1].eval(env)
+	if err != nil || itv == nil {
+		return itv, err
+	}
+
+	interval := evalToInterval(itv, call.unit, call.sub)
+	if interval == nil {
+		return nil, nil
+	}
+
+	if tmp, ok := date.(*evalTemporal); ok {
+		return tmp.addInterval(interval, collations.TypedCollation{}), nil
+	}
+
+	if tmp := evalToTemporal(date); tmp != nil {
+		return tmp.addInterval(interval, defaultCoercionCollation(call.collate)), nil
+	}
+
+	return nil, nil
+}
+
+func (call *builtinDateMath) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	tt, f := call.Arguments[0].typeof(env, fields)
+
+	switch {
+	case tt == sqltypes.Date && !call.unit.HasTimeParts():
+		return sqltypes.Date, f | flagNullable
+	case tt == sqltypes.Time && !call.unit.HasDateParts():
+		return sqltypes.Time, f | flagNullable
+	case tt == sqltypes.Datetime || tt == sqltypes.Timestamp || (tt == sqltypes.Date && call.unit.HasTimeParts()) || (tt == sqltypes.Time && call.unit.HasDateParts()):
+		return sqltypes.Datetime, f | flagNullable
+	default:
+		return sqltypes.Char, f | flagNullable
+	}
+}
+
+func (call *builtinDateMath) compile(c *compiler) (ctype, error) {
+	date, err := call.Arguments[0].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	// TODO: constant propagation
+	_, err = call.Arguments[1].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	var ret ctype
+	ret.Flag = date.Flag | flagNullable
+	ret.Col = collationBinary
+
+	switch {
+	case date.Type == sqltypes.Date && !call.unit.HasTimeParts():
+		ret.Type = sqltypes.Date
+		c.asm.Fn_DATEADD_D(call.unit, call.sub)
+	case date.Type == sqltypes.Time && !call.unit.HasDateParts():
+		ret.Type = sqltypes.Time
+		c.asm.Fn_DATEADD_D(call.unit, call.sub)
+	case date.Type == sqltypes.Datetime || date.Type == sqltypes.Timestamp || (date.Type == sqltypes.Date && call.unit.HasTimeParts()) || (date.Type == sqltypes.Time && call.unit.HasDateParts()):
+		ret.Type = sqltypes.Datetime
+		c.asm.Fn_DATEADD_D(call.unit, call.sub)
+	default:
+		ret.Type = sqltypes.VarChar
+		ret.Col = defaultCoercionCollation(c.cfg.Collation)
+		c.asm.Fn_DATEADD_s(call.unit, call.sub, ret.Col)
+	}
+	return ret, nil
 }
