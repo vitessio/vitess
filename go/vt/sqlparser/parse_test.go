@@ -114,6 +114,10 @@ var (
 			output: "select * from my_table_function()",
 		},
 		{
+			input:  "select * from my_table_function() as my_table_func_alias",
+			output: "select * from my_table_function() as my_table_func_alias",
+		},
+		{
 			input:  "select * from my_table_function('foo')",
 			output: "select * from my_table_function('foo')",
 		},
