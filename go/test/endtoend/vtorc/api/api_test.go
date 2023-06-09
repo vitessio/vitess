@@ -17,7 +17,9 @@ limitations under the License.
 package api
 
 import (
+	"encoding/json"
 	"fmt"
+	"reflect"
 	"testing"
 	"time"
 
@@ -197,5 +199,15 @@ func TestAPIEndpoints(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, 400, status, resp)
 		assert.Equal(t, "Filtering by shard without keyspace isn't supported\n", resp)
+
+		// Also verify that the metric for errant GTIDs is reporting the correct information.
+		_, resp, err = utils.MakeAPICall(t, vtorc, "/debug/vars")
+		require.NoError(t, err)
+		resultMap := make(map[string]any)
+		err = json.Unmarshal([]byte(resp), &resultMap)
+		require.NoError(t, err)
+		errantGtidTablets := reflect.ValueOf(resultMap["ErrantGtidMap"]).MapKeys()
+		require.Len(t, errantGtidTablets, 1)
+		require.EqualValues(t, replica.Alias, errantGtidTablets[0].String())
 	})
 }

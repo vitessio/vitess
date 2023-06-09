@@ -31,6 +31,7 @@ import (
 	"github.com/rcrowley/go-metrics"
 	"github.com/sjmudd/stopwatch"
 
+	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/external/golib/sqlutils"
 
 	vitessmysql "vitess.io/vitess/go/mysql"
@@ -55,6 +56,10 @@ const (
 
 var instanceReadChan = make(chan bool, backendDBConcurrency)
 var instanceWriteChan = make(chan bool, backendDBConcurrency)
+
+var (
+	errantGtidMap = make(map[string]string)
+)
 
 // Constant strings for Group Replication information
 // See https://dev.mysql.com/doc/refman/8.0/en/replication-group-members-table.html for additional information.
@@ -88,6 +93,9 @@ func init() {
 	_ = metrics.Register("instance.write", writeInstanceCounter)
 	_ = writeBufferLatency.AddMany([]string{"wait", "write"})
 	writeBufferLatency.Start("wait")
+	stats.NewStringMapFuncWithMultiLabels("ErrantGtidMap", "Metric to track the errant GTIDs detected by VTOrc", []string{"TabletAlias"}, "ErrantGtid", func() map[string]string {
+		return errantGtidMap
+	})
 
 	go initializeInstanceDao()
 }
@@ -427,6 +435,10 @@ Cleanup:
 				redactedPrimaryExecutedGtidSet.RemoveUUID(instance.SourceUUID)
 
 				instance.GtidErrant, err = vitessmysql.Subtract(redactedExecutedGtidSet.String(), redactedPrimaryExecutedGtidSet.String())
+				// update the errant gtid map
+				if err == nil {
+					errantGtidMap[topoproto.TabletAliasString(tablet.Alias)] = instance.GtidErrant
+				}
 			}
 		}
 	}
