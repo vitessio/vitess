@@ -121,7 +121,7 @@ function wait_for_workflow_running() {
 
 	local keyspace=${1}
 	local workflow=${2}
-	local wait_secs=180
+	local wait_secs=90
 
     for _ in $(seq 1 ${wait_secs}); do
         if [[ $(vtctldclient Workflow --keyspace="${keyspace}" show --workflow="${workflow}" 2>/dev/null | grep -A1 "State Changed" | grep Running) != "" ]] ; then
