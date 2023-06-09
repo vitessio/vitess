@@ -45,6 +45,7 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 )
 
 const (
@@ -125,12 +126,12 @@ func waitForQueryResult(t *testing.T, conn *mysql.Conn, database string, query s
 
 // waitForTabletThrottlingStatus waits for the tablet to return the provided HTTP code for
 // the provided app name in its self check.
-func waitForTabletThrottlingStatus(t *testing.T, tablet *cluster.VttabletProcess, appName string, wantCode int64) {
+func waitForTabletThrottlingStatus(t *testing.T, tablet *cluster.VttabletProcess, throttlerApp throttlerapp.Name, wantCode int64) {
 	var gotCode int64
 	timer := time.NewTimer(defaultTimeout)
 	defer timer.Stop()
 	for {
-		output, err := throttlerCheckSelf(tablet, appName)
+		output, err := throttlerCheckSelf(tablet, throttlerApp)
 		require.NoError(t, err)
 
 		gotCode, err = jsonparser.GetInt([]byte(output), "StatusCode")
@@ -144,7 +145,7 @@ func waitForTabletThrottlingStatus(t *testing.T, tablet *cluster.VttabletProcess
 		select {
 		case <-timer.C:
 			require.FailNow(t, fmt.Sprintf("tablet %q did not return expected status of %d for application %q before the timeout of %s; last seen status: %d",
-				tablet.Name, wantCode, appName, defaultTimeout, gotCode))
+				tablet.Name, wantCode, throttlerApp, defaultTimeout, gotCode))
 		default:
 			time.Sleep(defaultTick)
 		}

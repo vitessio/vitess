@@ -422,8 +422,8 @@ func (q *query) ReserveBeginExecute(ctx context.Context, request *querypb.Reserv
 	)
 	state, result, err := q.server.ReserveBeginExecute(ctx, request.Target, request.PreQueries, request.PostBeginQueries, request.Query.Sql, request.Query.BindVariables, request.Options)
 	if err != nil {
-		// if we have a valid reservedID, return the error in-band
-		if state.ReservedID != 0 {
+		// if we have a valid reservedID or transactionID, return the error in-band
+		if state.TransactionID != 0 || state.ReservedID != 0 {
 			return &querypb.ReserveBeginExecuteResponse{
 				Error:               vterrors.ToVTRPC(err),
 				TransactionId:       state.TransactionID,

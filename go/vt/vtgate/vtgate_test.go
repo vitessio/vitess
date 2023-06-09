@@ -286,7 +286,7 @@ func TestVTGateStreamExecute(t *testing.T) {
 	hcVTGateTest.Reset()
 	sbc := hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1001, ks, shard, topodatapb.TabletType_PRIMARY, true, 1, nil)
 	var qrs []*sqltypes.Result
-	err := rpcVTGate.StreamExecute(
+	_, err := rpcVTGate.StreamExecute(
 		context.Background(),
 		&vtgatepb.Session{
 			TargetString: "@primary",
@@ -343,7 +343,8 @@ func TestVTGateBindVarError(t *testing.T) {
 	}, {
 		name: "StreamExecute",
 		f: func() error {
-			return rpcVTGate.StreamExecute(ctx, session, "", bindVars, func(_ *sqltypes.Result) error { return nil })
+			_, err := rpcVTGate.StreamExecute(ctx, session, "", bindVars, func(_ *sqltypes.Result) error { return nil })
+			return err
 		},
 	}}
 	for _, tcase := range tcases {
@@ -381,7 +382,7 @@ func testErrorPropagation(t *testing.T, sbcs []*sandboxconn.SandboxConn, before 
 	for _, sbc := range sbcs {
 		before(sbc)
 	}
-	err = rpcVTGate.StreamExecute(
+	_, err = rpcVTGate.StreamExecute(
 		context.Background(),
 		primarySession,
 		"select id from t1",

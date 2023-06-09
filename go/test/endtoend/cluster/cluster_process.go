@@ -705,7 +705,7 @@ func (cluster *LocalProcessCluster) NewVtgateInstance() *VtgateProcess {
 		cluster.Cell,
 		cluster.Cell,
 		cluster.Hostname,
-		"PRIMARY,REPLICA",
+		"PRIMARY",
 		cluster.TopoProcess.Port,
 		cluster.TmpDirectory,
 		cluster.VtGateExtraArgs,
@@ -927,6 +927,46 @@ func (cluster *LocalProcessCluster) StreamTabletHealth(ctx context.Context, vtta
 	}
 
 	return responses, nil
+}
+
+// StreamTabletHealthUntil invokes a HealthStream on a local cluster Vttablet and
+// returns the responses. It waits until a certain condition is met. The amount of time to wait is an input that it takes.
+func (cluster *LocalProcessCluster) StreamTabletHealthUntil(ctx context.Context, vttablet *Vttablet, timeout time.Duration, condition func(shr *querypb.StreamHealthResponse) bool) error {
+	tablet, err := cluster.VtctlclientGetTablet(vttablet)
+	if err != nil {
+		return err
+	}
+
+	conn, err := tabletconn.GetDialer()(tablet, grpcclient.FailFast(false))
+	if err != nil {
+		return err
+	}
+
+	conditionSuccess := false
+	timeoutExceeded := false
+	go func() {
+		time.Sleep(timeout)
+		timeoutExceeded = true
+	}()
+
+	err = conn.StreamHealth(ctx, func(shr *querypb.StreamHealthResponse) error {
+		if condition(shr) {
+			conditionSuccess = true
+		}
+		if timeoutExceeded || conditionSuccess {
+			return io.EOF
+		}
+		return nil
+	})
+
+	if conditionSuccess {
+		return nil
+	}
+
+	if timeoutExceeded {
+		return errors.New("timeout exceed while waiting for the condition in StreamHealth")
+	}
+	return err
 }
 
 func (cluster *LocalProcessCluster) VtctlclientGetTablet(tablet *Vttablet) (*topodatapb.Tablet, error) {
@@ -1312,4 +1352,20 @@ func (cluster *LocalProcessCluster) EnableVTOrcRecoveries(t *testing.T) {
 	for _, vtorc := range cluster.VTOrcProcesses {
 		vtorc.EnableGlobalRecoveries(t)
 	}
+}
+
+// EnableGeneralLog enables generals logs on all the mysql server started by this cluster.
+// This method should be used only for local debugging purpose.
+func (cluster *LocalProcessCluster) EnableGeneralLog() error {
+	for _, ks := range cluster.Keyspaces {
+		for _, shard := range ks.Shards {
+			for _, vttablet := range shard.Vttablets {
+				_, err := vttablet.VttabletProcess.QueryTablet("set global general_log = 1", "", false)
+				if err != nil {
+					return err
+				}
+			}
+		}
+	}
+	return nil
 }

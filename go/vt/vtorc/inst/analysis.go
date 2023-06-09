@@ -115,6 +115,7 @@ const (
 // ReplicationAnalysis notes analysis on replication chain status, per instance
 type ReplicationAnalysis struct {
 	AnalyzedInstanceKey                       InstanceKey
+	AnalyzedInstanceAlias                     *topodatapb.TabletAlias
 	AnalyzedInstancePrimaryKey                InstanceKey
 	TabletType                                topodatapb.TabletType
 	PrimaryTimeStamp                          time.Time

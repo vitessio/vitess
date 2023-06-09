@@ -134,7 +134,6 @@ schemaReloadIntervalSeconds: 1800        # queryserver-config-schema-reload-time
 watchReplication: false                  # watch_replication_stream
 terseErrors: false                       # queryserver-config-terse-errors
 messagePostponeParallelism: 4            # queryserver-config-message-postpone-cap
-cacheResultFields: true                  # enable-query-plan-field-caching
 sanitizeLogMessages: false               # sanitize_log_messages
 
 
@@ -146,6 +145,7 @@ sanitizeLogMessages: false               # sanitize_log_messages
 # enable-tx-throttler
 # tx-throttler-config
 # tx-throttler-healthcheck-cells
+# tx-throttler-tablet-types
 # enable_transaction_limit
 # enable_transaction_limit_dry_run
 # transaction_limit_per_user

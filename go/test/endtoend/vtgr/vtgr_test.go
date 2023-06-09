@@ -305,10 +305,10 @@ func TestVTGRFailover(t *testing.T) {
 func getTablet(t *testing.T, cluster *cluster.LocalProcessCluster, alias string) *topodatapb.Tablet {
 	result, err := cluster.VtctlclientProcess.ExecuteCommandWithOutput("GetTablet", alias)
 	require.NoError(t, err)
-	var tabletInfo *topodatapb.Tablet
+	var tabletInfo topodatapb.Tablet
 	err = json2.Unmarshal([]byte(result), &tabletInfo)
 	require.NoError(t, err)
-	return tabletInfo
+	return &tabletInfo
 }
 
 func findTabletByAlias(tablets []*cluster.Vttablet, alias *topodatapb.TabletAlias) *cluster.Vttablet {

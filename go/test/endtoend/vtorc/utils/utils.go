@@ -18,10 +18,12 @@ package utils
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
 	"path"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -737,12 +739,10 @@ func CheckSourcePort(t *testing.T, replica *cluster.Vttablet, source *cluster.Vt
 }
 
 // MakeAPICall is used make an API call given the url. It returns the status and the body of the response received
-func MakeAPICall(t *testing.T, vtorc *cluster.VTOrcProcess, url string) (status int, response string) {
+func MakeAPICall(t *testing.T, vtorc *cluster.VTOrcProcess, url string) (status int, response string, err error) {
 	t.Helper()
-	var err error
 	status, response, err = vtorc.MakeAPICall(url)
-	require.NoError(t, err)
-	return status, response
+	return status, response, err
 }
 
 // MakeAPICallRetry is used to make an API call and retry on the given condition.
@@ -756,7 +756,7 @@ func MakeAPICallRetry(t *testing.T, vtorc *cluster.VTOrcProcess, url string, ret
 			t.Fatal("timed out waiting for api to work")
 			return
 		default:
-			status, response = MakeAPICall(t, vtorc, url)
+			status, response, _ := MakeAPICall(t, vtorc, url)
 			if retry(status, response) {
 				time.Sleep(1 * time.Second)
 				break
@@ -965,4 +965,35 @@ func WaitForSuccessfulRecoveryCount(t *testing.T, vtorcInstance *cluster.VTOrcPr
 	successfulRecoveriesMap := vars["SuccessfulRecoveries"].(map[string]interface{})
 	successCount := successfulRecoveriesMap[recoveryName]
 	assert.EqualValues(t, countExpected, successCount)
+}
+
+// WaitForInstancePollSecondsExceededCount waits for 30 seconds and then queries api/aggregated-discovery-metrics.
+// It expects to find minimum occurrence or exact count of `keyName` provided.
+func WaitForInstancePollSecondsExceededCount(t *testing.T, vtorcInstance *cluster.VTOrcProcess, keyName string, minCountExpected float64, enforceEquality bool) {
+	t.Helper()
+	var sinceInSeconds = 30
+	duration := time.Duration(sinceInSeconds)
+	time.Sleep(duration * time.Second)
+
+	statusCode, res, err := vtorcInstance.MakeAPICall("api/aggregated-discovery-metrics?seconds=" + strconv.Itoa(sinceInSeconds))
+	if err != nil {
+		assert.Fail(t, "Not able to call api/aggregated-discovery-metrics")
+	}
+	if statusCode == 200 {
+		resultMap := make(map[string]any)
+		err := json.Unmarshal([]byte(res), &resultMap)
+		if err != nil {
+			assert.Fail(t, "invalid response from api/aggregated-discovery-metrics")
+		}
+		successCount := resultMap[keyName]
+		if iSuccessCount, ok := successCount.(float64); ok {
+			if enforceEquality {
+				assert.Equal(t, iSuccessCount, minCountExpected)
+			} else {
+				assert.GreaterOrEqual(t, iSuccessCount, minCountExpected)
+			}
+			return
+		}
+	}
+	assert.Fail(t, "invalid response from api/aggregated-discovery-metrics")
 }

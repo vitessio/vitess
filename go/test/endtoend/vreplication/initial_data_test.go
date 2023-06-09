@@ -95,15 +95,15 @@ func insertMoreProductsForTargetThrottler(t *testing.T) {
 }
 
 var blobTableQueries = []string{
-	"insert into blob_tbl(id, val1, txt1) values (1, 'Jøhn \"❤️\" Paül','Jøhn \"❤️\" Paül keyböard ⌨️ jo˙n')",
-	"insert into blob_tbl(id, val1, blb1, blb2) values (2, 'val1_aaa', 'blb1_aaa', 'blb2_AAAA')",
-	"update blob_tbl set val1 = 'val1_bbb', blb2 = 'blb2_bbb' where id = 1",
-	"insert into blob_tbl(id, val2, txt1, txt2, blb4) values (3, 'val2_ccc', 'txt1_ccc', 'txt2_ccc', 'blb4_CCC')",
-	"update blob_tbl set txt1 = 'txt1_ddd'",
-	"update blob_tbl set blb3 = 'blb3_eee'",
-	"delete from blob_tbl where id = 2",
-	"insert into blob_tbl(id, val2, txt1, txt2, blb4) values (4, 'val2_fff', 'txt1_fff', 'txt2_fff', 'blb4_FFF')",
-	"update blob_tbl set txt1 = 'txt1_eee', blb3 = 'blb3_eee' where id = 4",
+	"insert into `blüb_tbl`(id, val1, txt1) values (1, 'Jøhn \"❤️\" Paül','Jøhn \"❤️\" Paül keyböard ⌨️ jo˙n')",
+	"insert into `blüb_tbl`(id, val1, `blöb1`, `bl@b2`) values (2, 'val1_aaa', 'blb1_aaa', 'blb2_AAAA')",
+	"update `blüb_tbl` set val1 = 'val1_bbb', `bl@b2` = 'blb2_bbb' where id = 1",
+	"insert into `blüb_tbl`(id, val2, txt1, txt2, blb4) values (3, 'val2_ccc', 'txt1_ccc', 'txt2_ccc', 'blb4_CCC')",
+	"update `blüb_tbl` set txt1 = 'txt1_ddd'",
+	"update `blüb_tbl` set blb3 = 'blb3_eee'",
+	"delete from `blüb_tbl` where id = 2",
+	"insert into `blüb_tbl`(id, val2, txt1, txt2, blb4) values (4, 'val2_fff', 'txt1_fff', 'txt2_fff', 'blb4_FFF')",
+	"update `blüb_tbl` set txt1 = 'txt1_eee', blb3 = 'blb3_eee' where id = 4",
 }
 
 func insertIntoBlobTable(t *testing.T) {

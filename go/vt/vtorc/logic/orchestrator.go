@@ -40,7 +40,7 @@ import (
 )
 
 const (
-	discoveryMetricsName = "DISCOVERY_METRICS"
+	DiscoveryMetricsName = "DISCOVERY_METRICS"
 )
 
 // discoveryQueue is a channel of deduplicated instanceKey-s
@@ -58,7 +58,7 @@ var discoveryQueueLengthGauge = metrics.NewGauge()
 var discoveryRecentCountGauge = metrics.NewGauge()
 var isElectedGauge = metrics.NewGauge()
 var isHealthyGauge = metrics.NewGauge()
-var discoveryMetrics = collection.CreateOrReturnCollection(discoveryMetricsName)
+var discoveryMetrics = collection.CreateOrReturnCollection(DiscoveryMetricsName)
 
 var isElectedNode int64
 
@@ -155,7 +155,6 @@ func waitForLocksRelease() {
 // instance discovery per entry.
 func handleDiscoveryRequests() {
 	discoveryQueue = discovery.CreateOrReturnQueue("DEFAULT")
-
 	// create a pool of discovery workers
 	for i := uint(0); i < config.DiscoveryMaxConcurrency; i++ {
 		go func() {
@@ -178,7 +177,7 @@ func handleDiscoveryRequests() {
 }
 
 // DiscoverInstance will attempt to discover (poll) an instance (unless
-// it is already up to date) and will also ensure that its primary and
+// it is already up-to-date) and will also ensure that its primary and
 // replicas (if any) are also checked.
 func DiscoverInstance(instanceKey inst.InstanceKey, forceDiscovery bool) {
 	if inst.InstanceIsForgotten(&instanceKey) {
@@ -193,13 +192,16 @@ func DiscoverInstance(instanceKey inst.InstanceKey, forceDiscovery bool) {
 		"instance",
 		"total"})
 	latency.Start("total") // start the total stopwatch (not changed anywhere else)
-
+	var metric *discovery.Metric
 	defer func() {
 		latency.Stop("total")
 		discoveryTime := latency.Elapsed("total")
 		if discoveryTime > instancePollSecondsDuration() {
 			instancePollSecondsExceededCounter.Inc(1)
 			log.Warningf("discoverInstance exceeded InstancePollSeconds for %+v, took %.4fs", instanceKey, discoveryTime.Seconds())
+			if metric != nil {
+				metric.InstancePollSecondsDurationCount = 1
+			}
 		}
 	}()
 
@@ -240,14 +242,15 @@ func DiscoverInstance(instanceKey inst.InstanceKey, forceDiscovery bool) {
 
 	if instance == nil {
 		failedDiscoveriesCounter.Inc(1)
-		_ = discoveryMetrics.Append(&discovery.Metric{
+		metric = &discovery.Metric{
 			Timestamp:       time.Now(),
 			InstanceKey:     instanceKey,
 			TotalLatency:    totalLatency,
 			BackendLatency:  backendLatency,
 			InstanceLatency: instanceLatency,
 			Err:             err,
-		})
+		}
+		_ = discoveryMetrics.Append(metric)
 		if util.ClearToLog("discoverInstance", instanceKey.StringCode()) {
 			log.Warningf(" DiscoverInstance(%+v) instance is nil in %.3fs (Backend: %.3fs, Instance: %.3fs), error=%+v",
 				instanceKey,
@@ -259,20 +262,20 @@ func DiscoverInstance(instanceKey inst.InstanceKey, forceDiscovery bool) {
 		return
 	}
 
-	_ = discoveryMetrics.Append(&discovery.Metric{
+	metric = &discovery.Metric{
 		Timestamp:       time.Now(),
 		InstanceKey:     instanceKey,
 		TotalLatency:    totalLatency,
 		BackendLatency:  backendLatency,
 		InstanceLatency: instanceLatency,
 		Err:             nil,
-	})
+	}
+	_ = discoveryMetrics.Append(metric)
 }
 
 // onHealthTick handles the actions to take to discover/poll instances
 func onHealthTick() {
 	wasAlreadyElected := IsLeader()
-
 	{
 		myIsElectedNode, err := process.AttemptElection()
 		if err != nil {
@@ -438,8 +441,27 @@ func ContinuousDiscovery() {
 				}
 			}()
 		case <-tabletTopoTick:
-			go RefreshAllKeyspaces()
-			go refreshAllTablets()
+			// Create a wait group
+			var wg sync.WaitGroup
+
+			// Refresh all keyspace information.
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				RefreshAllKeyspaces()
+			}()
+
+			// Refresh all tablets.
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				refreshAllTablets()
+			}()
+
+			// Wait for both the refreshes to complete
+			wg.Wait()
+			// We have completed one discovery cycle in the entirety of it. We should update the process health.
+			process.FirstDiscoveryCycleComplete.Store(true)
 		}
 	}
 }

@@ -163,7 +163,7 @@ func ExecCompareMySQL(t *testing.T, vtConn, mysqlConn *mysql.Conn, query string)
 
 	mysqlQr, err := mysqlConn.ExecuteFetch(query, 1000, true)
 	require.NoError(t, err, "[MySQL Error] for query: "+query)
-	compareVitessAndMySQLResults(t, query, vtQr, mysqlQr, false)
+	compareVitessAndMySQLResults(t, query, vtConn, vtQr, mysqlQr, false)
 	return vtQr
 }
 
@@ -183,6 +183,16 @@ func SkipIfBinaryIsBelowVersion(t *testing.T, majorVersion int, binary string) {
 	if version < majorVersion {
 		t.Skip("Current version of ", binary, ": v", version, ", expected version >= v", majorVersion)
 	}
+}
+
+// BinaryIsAtVersion returns true if this binary is at or above the required version
+func BinaryIsAtVersion(majorVersion int, binary string) bool {
+	version, err := cluster.GetMajorVersion(binary)
+	if err != nil {
+		return false
+	}
+	return version >= majorVersion
+
 }
 
 // AssertMatchesWithTimeout asserts that the given query produces the expected result.
@@ -210,7 +220,7 @@ func AssertMatchesWithTimeout(t *testing.T, conn *mysql.Conn, query, expected st
 }
 
 // WaitForAuthoritative waits for a table to become authoritative
-func WaitForAuthoritative(t *testing.T, vtgateProcess cluster.VtgateProcess, ks, tbl string) error {
+func WaitForAuthoritative(t *testing.T, ks, tbl string, readVSchema func() (*interface{}, error)) error {
 	timeout := time.After(10 * time.Second)
 	for {
 		select {
@@ -218,7 +228,7 @@ func WaitForAuthoritative(t *testing.T, vtgateProcess cluster.VtgateProcess, ks,
 			return fmt.Errorf("schema tracking didn't mark table t2 as authoritative until timeout")
 		default:
 			time.Sleep(1 * time.Second)
-			res, err := vtgateProcess.ReadVSchema()
+			res, err := readVSchema()
 			require.NoError(t, err, res)
 			t2Map := getTableT2Map(res, ks, tbl)
 			authoritative, fieldPresent := t2Map["column_list_authoritative"]
@@ -318,6 +328,7 @@ func TimeoutAction(t *testing.T, timeout time.Duration, errMsg string, action fu
 		select {
 		case <-deadline:
 			t.Error(errMsg)
+			return
 		case <-time.After(1 * time.Second):
 			ok = action()
 		}

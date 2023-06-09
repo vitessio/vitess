@@ -19,9 +19,8 @@ package semantics
 import (
 	"strings"
 
-	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
-
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
 )
 
 // binder is responsible for finding all the column references in
@@ -62,6 +61,10 @@ func (b *binder) up(cursor *sqlparser.Cursor) error {
 	switch node := cursor.Node().(type) {
 	case *sqlparser.Subquery:
 		currScope := b.scoper.currentScope()
+		// do not extract subquery in insert statement.
+		if _, isInsert := currScope.stmt.(*sqlparser.Insert); isInsert {
+			return nil
+		}
 		sq, err := b.createExtractedSubquery(cursor, currScope, node)
 		if err != nil {
 			return err

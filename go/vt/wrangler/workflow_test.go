@@ -455,8 +455,20 @@ func TestMoveTablesV2Cancel(t *testing.T) {
 
 	require.True(t, checkIfTableExistInVSchema(ctx, t, wf.wr.ts, "ks1", "t1"))
 	require.True(t, checkIfTableExistInVSchema(ctx, t, wf.wr.ts, "ks1", "t2"))
-	require.False(t, checkIfTableExistInVSchema(ctx, t, wf.wr.ts, "ks2", "t1"))
-	require.False(t, checkIfTableExistInVSchema(ctx, t, wf.wr.ts, "ks2", "t2"))
+
+	// Should target vschema table entries be deleted upon Cancel. For unsharded
+	// keyspaces they should be as they are empty table entries that we also
+	// create when the workflow is Created.
+	targetVSchemaEntriesRemain := false
+	if len(tme.targetShards) > 1 {
+		// If the target keyspace is sharded -- which it is today in the test -- the
+		// vschema must be created by the user before the workflow is started. Thus
+		// we should also not delete the vschema table entries upon Cancel as the
+		// management of the sharded vschema is up to the user.
+		targetVSchemaEntriesRemain = true
+	}
+	require.Equal(t, targetVSchemaEntriesRemain, checkIfTableExistInVSchema(ctx, t, wf.wr.ts, "ks2", "t1"))
+	require.Equal(t, targetVSchemaEntriesRemain, checkIfTableExistInVSchema(ctx, t, wf.wr.ts, "ks2", "t2"))
 }
 
 func TestReshardV2(t *testing.T) {

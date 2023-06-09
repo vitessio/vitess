@@ -32,6 +32,7 @@ import (
 	"vitess.io/vitess/go/vt/throttler"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -50,7 +51,8 @@ func TestDisabledThrottler(t *testing.T) {
 	})
 	assert.Nil(t, throttler.Open())
 	assert.False(t, throttler.Throttle(0))
-	assert.Zero(t, throttler.throttlerRunning.Get())
+	throttlerImpl, _ := throttler.(*txThrottler)
+	assert.Zero(t, throttlerImpl.throttlerRunning.Get())
 	throttler.Close()
 }
 
@@ -100,18 +102,20 @@ func TestEnabledThrottler(t *testing.T) {
 
 	call4 := mockThrottler.EXPECT().Throttle(0)
 	call4.Return(1 * time.Second)
-	call6 := mockThrottler.EXPECT().Close()
+	calllast := mockThrottler.EXPECT().Close()
+
 	call1.After(call0)
 	call2.After(call1)
 	call3.After(call2)
 	call4.After(call3)
-	call6.After(call4)
+	calllast.After(call4)
 
 	config := tabletenv.NewDefaultConfig()
 	config.EnableTxThrottler = true
 	config.TxThrottlerHealthCheckCells = []string{"cell1", "cell2"}
-	env := tabletenv.NewEnv(config, t.Name())
+	config.TxThrottlerTabletTypes = &topoproto.TabletTypeListFlag{topodatapb.TabletType_REPLICA}
 
+	env := tabletenv.NewEnv(config, t.Name())
 	throttler, err := tryCreateTxThrottler(env, ts)
 	assert.Nil(t, err)
 	throttler.InitDBConfig(&querypb.Target{
@@ -152,13 +156,13 @@ func TestNewTxThrottler(t *testing.T) {
 
 	{
 		// disabled config
-		throttler, err := newTxThrottler(env, &txThrottlerConfig{enabled: false})
+		throttler, err := newTxThrottler(env, nil, &txThrottlerConfig{enabled: false})
 		assert.Nil(t, err)
 		assert.NotNil(t, throttler)
 	}
 	{
 		// enabled with invalid throttler config
-		throttler, err := newTxThrottler(env, &txThrottlerConfig{
+		throttler, err := newTxThrottler(env, nil, &txThrottlerConfig{
 			enabled:         true,
 			throttlerConfig: &throttlerdatapb.Configuration{},
 		})
@@ -167,7 +171,7 @@ func TestNewTxThrottler(t *testing.T) {
 	}
 	{
 		// enabled
-		throttler, err := newTxThrottler(env, &txThrottlerConfig{
+		throttler, err := newTxThrottler(env, nil, &txThrottlerConfig{
 			enabled:          true,
 			healthCheckCells: []string{"cell1"},
 			throttlerConfig:  throttler.DefaultMaxReplicationLagModuleConfig().Configuration,

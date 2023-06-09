@@ -62,7 +62,8 @@ var (
 	normalizeQueries = true
 	streamBufferSize = 32 * 1024
 
-	terseErrors bool
+	terseErrors      bool
+	truncateErrorLen int
 
 	// plan cache related flag
 	queryPlanCacheSize   = cache.DefaultConfig.MaxEntries
@@ -117,6 +118,7 @@ func registerFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&transactionMode, "transaction_mode", transactionMode, "SINGLE: disallow multi-db transactions, MULTI: allow multi-db transactions with best effort commit, TWOPC: allow multi-db transactions with 2pc commit")
 	fs.BoolVar(&normalizeQueries, "normalize_queries", normalizeQueries, "Rewrite queries with bind vars. Turn this off if the app itself sends normalized queries with bind vars.")
 	fs.BoolVar(&terseErrors, "vtgate-config-terse-errors", terseErrors, "prevent bind vars from escaping in returned errors")
+	fs.IntVar(&truncateErrorLen, "truncate-error-len", truncateErrorLen, "truncate errors sent to client if they are longer than this value (0 means do not truncate)")
 	fs.IntVar(&streamBufferSize, "stream_buffer_size", streamBufferSize, "the number of bytes sent from vtgate for each stream call. It's recommended to keep this value in sync with vttablet's query-server-config-stream-buffer-size.")
 	fs.Int64Var(&queryPlanCacheSize, "gate_query_cache_size", queryPlanCacheSize, "gate server query cache size, maximum number of queries to be cached. vtgate analyzes every incoming query and generate a query plan, these plans are being cached in a cache. This config controls the expected amount of unique entries in the cache.")
 	fs.Int64Var(&queryPlanCacheMemory, "gate_query_cache_memory", queryPlanCacheMemory, "gate server query cache size in bytes, maximum amount of memory to be cached. vtgate analyzes every incoming query and generate a query plan, these plans are being cached in a lru cache. This config controls the capacity of the lru cache.")
@@ -500,18 +502,18 @@ func (vtg *VTGate) ExecuteBatch(ctx context.Context, session *vtgatepb.Session, 
 // StreamExecute executes a streaming query. This is a V3 function.
 // Note we guarantee the callback will not be called concurrently
 // by multiple go routines.
-func (vtg *VTGate) StreamExecute(ctx context.Context, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable, callback func(*sqltypes.Result) error) error {
+func (vtg *VTGate) StreamExecute(ctx context.Context, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable, callback func(*sqltypes.Result) error) (*vtgatepb.Session, error) {
 	// In this context, we don't care if we can't fully parse destination
 	destKeyspace, destTabletType, _, _ := vtg.executor.ParseDestinationTarget(session.TargetString)
 	statsKey := []string{"StreamExecute", destKeyspace, topoproto.TabletTypeLString(destTabletType)}
 
 	defer vtg.timings.Record(statsKey, time.Now())
 
+	safeSession := NewSafeSession(session)
 	var err error
 	if bvErr := sqltypes.ValidateBindVariables(bindVariables); bvErr != nil {
 		err = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", bvErr)
 	} else {
-		safeSession := NewSafeSession(session)
 		err = vtg.executor.StreamExecute(
 			ctx,
 			"StreamExecute",
@@ -531,9 +533,9 @@ func (vtg *VTGate) StreamExecute(ctx context.Context, session *vtgatepb.Session,
 			"BindVariables": bindVariables,
 			"Session":       session,
 		}
-		return recordAndAnnotateError(err, statsKey, query, vtg.logStreamExecute)
+		return safeSession.Session, recordAndAnnotateError(err, statsKey, query, vtg.logStreamExecute)
 	}
-	return nil
+	return safeSession.Session, nil
 }
 
 // CloseSession closes the session, rolling back any implicit transactions. This has the

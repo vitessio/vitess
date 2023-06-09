@@ -127,6 +127,14 @@ func (a *Arena) newEvalText(raw []byte, tc collations.TypedCollation) *evalBytes
 	return b
 }
 
+func (a *Arena) newEvalRaw(raw []byte, tt sqltypes.Type, tc collations.TypedCollation) *evalBytes {
+	b := a.newEvalBytesEmpty()
+	b.tt = int16(tt)
+	b.col = tc
+	b.bytes = raw
+	return b
+}
+
 func (a *Arena) newEvalTime(time datetime.Time, l int) *evalTemporal {
 	// TODO: reuse evalTemporal
 	return &evalTemporal{t: sqltypes.Time, dt: datetime.DateTime{Time: time.Round(l)}, prec: uint8(l)}

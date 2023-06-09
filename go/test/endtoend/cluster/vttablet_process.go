@@ -382,6 +382,17 @@ func (vttablet *VttabletProcess) TearDown() error {
 	return vttablet.TearDownWithTimeout(10 * time.Second)
 }
 
+// Kill shuts down the running vttablet service immediately.
+func (vttablet *VttabletProcess) Kill() error {
+	if vttablet.proc == nil || vttablet.exit == nil {
+		return nil
+	}
+	vttablet.proc.Process.Kill()
+	err := <-vttablet.exit
+	vttablet.proc = nil
+	return err
+}
+
 // TearDownWithTimeout shuts down the running vttablet service and fails once the given
 // duration has elapsed.
 func (vttablet *VttabletProcess) TearDownWithTimeout(timeout time.Duration) error {
@@ -397,10 +408,7 @@ func (vttablet *VttabletProcess) TearDownWithTimeout(timeout time.Duration) erro
 		return nil
 
 	case <-time.After(timeout):
-		vttablet.proc.Process.Kill()
-		err := <-vttablet.exit
-		vttablet.proc = nil
-		return err
+		return vttablet.Kill()
 	}
 }
 

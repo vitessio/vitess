@@ -82,8 +82,8 @@ func (f *Filter) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.E
 	return f, nil
 }
 
-func (f *Filter) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr) (ops.Operator, int, error) {
-	newSrc, offset, err := f.Source.AddColumn(ctx, expr)
+func (f *Filter) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, reuseExisting, addToGroupBy bool) (ops.Operator, int, error) {
+	newSrc, offset, err := f.Source.AddColumn(ctx, expr, reuseExisting, addToGroupBy)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -99,9 +99,9 @@ func (f *Filter) GetOrdering() ([]ops.OrderBy, error) {
 	return f.Source.GetOrdering()
 }
 
-func (f *Filter) Compact(*plancontext.PlanningContext) (ops.Operator, rewrite.ApplyResult, error) {
+func (f *Filter) Compact(*plancontext.PlanningContext) (ops.Operator, *rewrite.ApplyResult, error) {
 	if len(f.Predicates) == 0 {
-		return f.Source, rewrite.NewTree, nil
+		return f.Source, rewrite.NewTree("filter with no predicates removed", f), nil
 	}
 
 	other, isFilter := f.Source.(*Filter)
@@ -110,12 +110,12 @@ func (f *Filter) Compact(*plancontext.PlanningContext) (ops.Operator, rewrite.Ap
 	}
 	f.Source = other.Source
 	f.Predicates = append(f.Predicates, other.Predicates...)
-	return f, rewrite.NewTree, nil
+	return f, rewrite.NewTree("two filters merged into one", f), nil
 }
 
 func (f *Filter) planOffsets(ctx *plancontext.PlanningContext) error {
 	resolveColumn := func(col *sqlparser.ColName) (int, error) {
-		newSrc, offset, err := f.Source.AddColumn(ctx, aeWrap(col))
+		newSrc, offset, err := f.Source.AddColumn(ctx, aeWrap(col), true, false)
 		if err != nil {
 			return 0, err
 		}

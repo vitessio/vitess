@@ -650,5 +650,5 @@ func (expr *LikeExpr) compile(c *compiler) (ctype, error) {
 	}
 
 	c.asm.jumpDestination(skip)
-	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: flagIsBoolean}, nil
+	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: flagIsBoolean | flagNullable}, nil
 }

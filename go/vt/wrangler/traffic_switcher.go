@@ -434,7 +434,7 @@ func (wr *Wrangler) areTabletsAvailableToStreamFrom(ctx context.Context, ts *tra
 			if cells == nil {
 				cells = append(cells, shard.PrimaryAlias.Cell)
 			}
-			tp, err := discovery.NewTabletPicker(wr.ts, cells, keyspace, shard.ShardName(), tabletTypes)
+			tp, err := discovery.NewTabletPicker(ctx, wr.ts, cells, shard.PrimaryAlias.Cell, keyspace, shard.ShardName(), tabletTypes, discovery.TabletPickerOptions{})
 			if err != nil {
 				allErrors.RecordError(err)
 				return
@@ -1309,11 +1309,25 @@ func (ts *trafficSwitcher) createReverseVReplication(ctx context.Context) error 
 				if ts.SourceKeyspaceSchema().Keyspace.Sharded {
 					vtable, ok := ts.SourceKeyspaceSchema().Tables[rule.Match]
 					if !ok {
-						return fmt.Errorf("table %s not found in vschema1", rule.Match)
+						return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "table %s not found in vschema", rule.Match)
 					}
-					// TODO(sougou): handle degenerate cases like sequence, etc.
-					// We currently assume the primary vindex is the best way to filter, which may not be true.
-					inKeyrange = fmt.Sprintf(" where in_keyrange(%s, '%s.%s', '%s')", sqlparser.String(vtable.ColumnVindexes[0].Columns[0]), ts.SourceKeyspaceName(), vtable.ColumnVindexes[0].Name, key.KeyRangeString(source.GetShard().KeyRange))
+					// We currently assume the primary vindex is the best way to filter rows
+					// for the table, which may not always be true.
+					// TODO: handle more of these edge cases explicitly, e.g. sequence tables.
+					switch vtable.Type {
+					case vindexes.TypeReference:
+						// For reference tables there are no vindexes and thus no filter to apply.
+					default:
+						// For non-reference tables we return an error if there's no primary
+						// vindex as it's not clear what to do.
+						if len(vtable.ColumnVindexes) > 0 && len(vtable.ColumnVindexes[0].Columns) > 0 {
+							inKeyrange = fmt.Sprintf(" where in_keyrange(%s, '%s.%s', '%s')", sqlparser.String(vtable.ColumnVindexes[0].Columns[0]),
+								ts.SourceKeyspaceName(), vtable.ColumnVindexes[0].Name, key.KeyRangeString(source.GetShard().KeyRange))
+						} else {
+							return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "no primary vindex found for the %s table in the %s keyspace",
+								vtable.Name.String(), ts.SourceKeyspaceName())
+						}
+					}
 				}
 				filter = fmt.Sprintf("select * from %s%s", sqlescape.EscapeID(rule.Match), inKeyrange)
 			}
@@ -1687,6 +1701,14 @@ func (ts *trafficSwitcher) dropParticipatingTablesFromKeyspace(ctx context.Conte
 	if err != nil {
 		return err
 	}
+	// VReplication does NOT create the vschema entries in SHARDED
+	// TARGET keyspaces -- as we cannot know the proper vindex
+	// definitions to use -- and we should not delete them either
+	// (on workflow Cancel) as the user must create them separately
+	// and they contain information about the vindex definitions, etc.
+	if vschema.Sharded && keyspace == ts.TargetKeyspaceName() {
+		return nil
+	}
 	for _, tableName := range ts.Tables() {
 		delete(vschema.Tables, tableName)
 	}
@@ -1774,7 +1796,6 @@ func (ts *trafficSwitcher) removeTargetTables(ctx context.Context) error {
 	}
 
 	return ts.dropParticipatingTablesFromKeyspace(ctx, ts.TargetKeyspaceName())
-
 }
 
 func (ts *trafficSwitcher) dropTargetShards(ctx context.Context) error {

@@ -46,7 +46,7 @@ export REWRITER=go/vt/sqlparser/rewriter.go
 # Since we are not using this Makefile for compilation, limiting parallelism will not increase build time.
 .NOTPARALLEL:
 
-.PHONY: all build install test clean unit_test unit_test_cover unit_test_race integration_test proto proto_banner site_test site_integration_test docker_bootstrap docker_test docker_unit_test java_test reshard_tests e2e_test e2e_test_race minimaltools tools generate_ci_workflows
+.PHONY: all build install test clean unit_test unit_test_cover unit_test_race integration_test proto proto_banner site_test site_integration_test docker_bootstrap docker_test docker_unit_test java_test reshard_tests e2e_test e2e_test_race minimaltools tools generate_ci_workflows generate-flag-testdata
 
 all: build
 
@@ -269,7 +269,7 @@ $(PROTO_GO_OUTS): minimaltools install_protoc-gen-go proto/*.proto
 # This rule builds the bootstrap images for all flavors.
 DOCKER_IMAGES_FOR_TEST = mysql57 mysql80 percona57 percona80
 DOCKER_IMAGES = common $(DOCKER_IMAGES_FOR_TEST)
-BOOTSTRAP_VERSION=17
+BOOTSTRAP_VERSION=18
 ensure_bootstrap_version:
 	find docker/ -type f -exec sed -i "s/^\(ARG bootstrap_version\)=.*/\1=${BOOTSTRAP_VERSION}/" {} \;
 	sed -i 's/\(^.*flag.String(\"bootstrap-version\",\) *\"[^\"]\+\"/\1 \"${BOOTSTRAP_VERSION}\"/' test.go
@@ -457,8 +457,8 @@ vtadmin_authz_testgen:
 generate_ci_workflows:
 	cd test && go run ci_workflow_gen.go && cd ..
 
-release-notes:
-	go run ./go/tools/release-notes --from "$(FROM)" --to "$(TO)" --version "$(VERSION)" --summary "$(SUMMARY)"
+generate-flag-testdata:
+	./tools/generate_flag_testdata.sh
 
 install_kubectl_kind:
 	./tools/get_kubectl_kind.sh
