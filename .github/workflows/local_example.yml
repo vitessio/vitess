@@ -107,10 +107,3 @@ jobs:
           export PATH="/usr/local/opt/mysql@5.7/bin:$PATH"
         fi
         eatmydata -- go run test.go -print-log -follow -retry=1 local_example
-
-    - name: Setup tmate session on failure
-      if: ${{ failure() }}
-      uses: mxschmitt/action-tmate@v3
-      timeout-minutes: 60
-      with:
-        limit-access-to-actor: true

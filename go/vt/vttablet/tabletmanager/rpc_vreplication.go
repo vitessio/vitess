@@ -52,6 +52,9 @@ const (
 )
 
 func (tm *TabletManager) CreateVRWorkflow(ctx context.Context, req *tabletmanagerdatapb.CreateVRWorkflowRequest) (*tabletmanagerdatapb.CreateVRWorkflowResponse, error) {
+	if req == nil || len(req.BinlogSource) == 0 {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid request, no binlog source specified")
+	}
 	res := &sqltypes.Result{}
 	for _, bls := range req.BinlogSource {
 		source, err := prototext.Marshal(bls)
