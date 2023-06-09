@@ -206,8 +206,16 @@ func TestAPIEndpoints(t *testing.T) {
 		resultMap := make(map[string]any)
 		err = json.Unmarshal([]byte(resp), &resultMap)
 		require.NoError(t, err)
-		errantGtidTablets := reflect.ValueOf(resultMap["ErrantGtidMap"]).MapKeys()
-		require.Len(t, errantGtidTablets, 1)
-		require.EqualValues(t, replica.Alias, errantGtidTablets[0].String())
+		errantGTIDMap := reflect.ValueOf(resultMap["ErrantGtidMap"])
+		errantGtidTablets := errantGTIDMap.MapKeys()
+		require.Len(t, errantGtidTablets, 3)
+
+		errantGTIDinReplica := ""
+		for _, tabletKey := range errantGtidTablets {
+			if tabletKey.String() == replica.Alias {
+				errantGTIDinReplica = errantGTIDMap.MapIndex(tabletKey).Interface().(string)
+			}
+		}
+		require.NotEmpty(t, errantGTIDinReplica)
 	})
 }
