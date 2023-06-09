@@ -96,8 +96,8 @@ func helperTest(t *testing.T, query string) {
 }
 
 func TestKnownFailures(t *testing.T) {
-	require.NoError(t, utils.WaitForAuthoritative(t, clusterInstance.VtgateProcess, keyspaceName, "emp"))
-	require.NoError(t, utils.WaitForAuthoritative(t, clusterInstance.VtgateProcess, keyspaceName, "dept"))
+	require.NoError(t, utils.WaitForAuthoritative(t, keyspaceName, "emp", clusterInstance.VtgateProcess.ReadVSchema))
+	require.NoError(t, utils.WaitForAuthoritative(t, keyspaceName, "dept", clusterInstance.VtgateProcess.ReadVSchema))
 
 	// logs more stuff
 	//clusterInstance.EnableGeneralLog()
@@ -190,8 +190,8 @@ func TestRandom(t *testing.T) {
 	mcmp, closer := start(t)
 	defer closer()
 
-	require.NoError(t, utils.WaitForAuthoritative(t, clusterInstance.VtgateProcess, keyspaceName, "emp"))
-	require.NoError(t, utils.WaitForAuthoritative(t, clusterInstance.VtgateProcess, keyspaceName, "dept"))
+	require.NoError(t, utils.WaitForAuthoritative(t, keyspaceName, "emp", clusterInstance.VtgateProcess.ReadVSchema))
+	require.NoError(t, utils.WaitForAuthoritative(t, keyspaceName, "dept", clusterInstance.VtgateProcess.ReadVSchema))
 
 	schema := map[string]tableT{
 		"emp": {name: "emp", columns: []column{
