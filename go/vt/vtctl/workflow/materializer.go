@@ -83,25 +83,7 @@ func (mz *materializer) prepareMaterializerStreams() (map[string][]*binlogdatapb
 		if err != nil {
 			return nil, err
 		}
-		targetPrimary, err := mz.ts.GetTablet(mz.ctx, targetShard.PrimaryAlias)
-		if err != nil {
-			return nil, vterrors.Wrapf(err, "GetTablet(%v) failed", targetShard.PrimaryAlias)
-		}
-		for _, bls := range blses {
-			for _, filter := range bls.Filter.Rules {
-				buf := &strings.Builder{}
-				t := template.Must(template.New("").Parse(filter.Filter))
-				input := map[string]string{
-					"keyrange": key.KeyRangeString(targetShard.KeyRange),
-					"dbname":   targetPrimary.DbName(),
-				}
-				if err := t.Execute(buf, input); err != nil {
-					return nil, err
-				}
-				filter.Filter = buf.String()
-			}
-		}
-		blsMap[targetShard.ShardName()] = blses
+		blsMap[key.KeyRangeString(targetShard.KeyRange)] = blses
 	}
 	return blsMap, nil
 }
@@ -128,7 +110,7 @@ func (mz *materializer) createMaterializerStreams() error {
 		if err != nil {
 			return err
 		}
-		insertMap[targetShard.ShardName()] = inserts
+		insertMap[key.KeyRangeString(targetShard.KeyRange)] = inserts
 	}
 	if err := mz.createStreams(mz.ctx, insertMap); err != nil {
 		return err
@@ -302,7 +284,7 @@ func (mz *materializer) generateBinlogSources(ctx context.Context, targetShard *
 				}
 				vindexName := fmt.Sprintf("%s.%s", mz.ms.TargetKeyspace, cv.Name)
 				subExprs = append(subExprs, &sqlparser.AliasedExpr{Expr: sqlparser.NewStrLiteral(vindexName)})
-				subExprs = append(subExprs, &sqlparser.AliasedExpr{Expr: sqlparser.NewStrLiteral("{{.keyrange}}")})
+				subExprs = append(subExprs, &sqlparser.AliasedExpr{Expr: sqlparser.NewStrLiteral(key.KeyRangeString(targetShard.KeyRange))})
 				inKeyRange := &sqlparser.FuncExpr{
 					Name:  sqlparser.NewIdentifierCI("in_keyrange"),
 					Exprs: subExprs,
@@ -326,7 +308,6 @@ func (mz *materializer) generateBinlogSources(ctx context.Context, targetShard *
 			}
 
 			rule.Filter = filter
-
 			bls.Filter.Rules = append(bls.Filter.Rules, rule)
 		}
 		blses = append(blses, bls)
@@ -509,7 +490,8 @@ func (mz *materializer) buildMaterializer() error {
 
 func (mz *materializer) createStreams(ctx context.Context, insertsMap map[string]string) error {
 	return forAllShards(mz.targetShards, func(target *topo.ShardInfo) error {
-		inserts := insertsMap[target.ShardName()]
+		keyRange := key.KeyRangeString(target.KeyRange)
+		inserts := insertsMap[keyRange]
 		targetPrimary, err := mz.ts.GetTablet(ctx, target.PrimaryAlias)
 		if err != nil {
 			return vterrors.Wrapf(err, "GetTablet(%v) failed", target.PrimaryAlias)
@@ -517,7 +499,7 @@ func (mz *materializer) createStreams(ctx context.Context, insertsMap map[string
 		buf := &strings.Builder{}
 		t := template.Must(template.New("").Parse(inserts))
 		input := map[string]string{
-			"keyrange": key.KeyRangeString(target.KeyRange),
+			"keyrange": keyRange,
 			"dbname":   targetPrimary.DbName(),
 		}
 		if err := t.Execute(buf, input); err != nil {
