@@ -103,8 +103,23 @@ func TestKnownFailures(t *testing.T) {
 	// logs more stuff
 	//clusterInstance.EnableGeneralLog()
 
+	// mismatched results (group by + right join)
+	// left instead of right works
+	helperTest(t, "select /*vt+ PLANNER=Gen4 */ max(tbl0.deptno) from dept as tbl0 right join emp as tbl1 on tbl0.deptno = tbl1.empno and tbl0.deptno = tbl1.deptno group by tbl0.deptno")
+
+	// mismatched results (count + right join)
+	// left instead of right works
+	helperTest(t, "select /*vt+ PLANNER=Gen4 */ count(tbl1.comm) from emp as tbl1 right join emp as tbl2 on tbl1.mgr = tbl2.sal")
+
+	// mismatched results (sum + right join)
+	// left instead of right works
+	helperTest(t, "select /*vt+ PLANNER=Gen4 */ sum(tbl0.mgr) from emp as tbl0 right join emp as tbl1 on tbl0.mgr = tbl1.empno")
+
 	// mismatched results (group by + limit)
 	helperTest(t, "select /*vt+ PLANNER=Gen4 */ count(*) from emp as tbl0 group by tbl0.sal limit 7")
+
+	// mismatched results (group by + select grouping + limit)
+	helperTest(t, "select /*vt+ PLANNER=Gen4 */ tbl0.sal, count(*) from emp as tbl0 group by tbl0.sal limit 7")
 
 	// vttablet: rpc error: code = InvalidArgument desc = Can't group on 'count(*)' (errno 1056) (sqlstate 42000) (CallerID: userData1)
 	helperTest(t, "select /*vt+ PLANNER=Gen4 */ distinct count(*) from dept as tbl0 group by tbl0.deptno")
@@ -202,14 +217,15 @@ func randomQuery(schemaTables []tableT, maxAggrs, maxGroupBy int) string {
 	}
 
 	// select the grouping columns
-	if len(grouping) > 0 && rand.Intn(2) < 1 && (!isDistinct || TestFailingQueries) {
+	isRightJoin := rand.Intn(2) < 1
+	if len(grouping) > 0 && rand.Intn(2) < 1 && (!isDistinct || TestFailingQueries) && (!isRightJoin || TestFailingQueries) {
 		sel += strings.Join(grouping, ", ") + ", "
 	}
 
 	// select the ordering columns
 	// we do it this way, so we don't have to do only `only_full_group_by` queries
 	var noOfOrderBy int
-	if len(grouping) > 0 && (!isDistinct || TestFailingQueries) {
+	if len(grouping) > 0 && (!isDistinct || TestFailingQueries) && (!isRightJoin || TestFailingQueries) {
 		// panic on rand function call if value is 0
 		noOfOrderBy = rand.Intn(len(grouping))
 	}
@@ -246,11 +262,11 @@ func randomQuery(schemaTables []tableT, maxAggrs, maxGroupBy int) string {
 	sel += strings.Join(tbls, ", ")
 
 	// join
-	if rand.Intn(2) < 1 {
+	if isRightJoin {
 		tables = append(tables, randomEl(schemaTables))
 		join := createPredicates(tables, randomCol, true)
 
-		sel += " join " + fmt.Sprintf("%s as tbl%d", tables[len(tables)-1].name, len(tables)-1)
+		sel += " left join " + fmt.Sprintf("%s as tbl%d", tables[len(tables)-1].name, len(tables)-1)
 		if len(join) > 0 {
 			sel += " on " + strings.Join(join, " and ")
 		}
@@ -261,7 +277,8 @@ func randomQuery(schemaTables []tableT, maxAggrs, maxGroupBy int) string {
 		sel += strings.Join(predicates, " and ")
 	}
 
-	if len(grouping) > 0 && (!isDistinct || TestFailingQueries) {
+	isGrouping := false
+	if len(grouping) > 0 && (!isDistinct || TestFailingQueries) && (!isRightJoin || TestFailingQueries) {
 		// populate columns of this query to add to schemaTables
 		for i := range grouping {
 			newColumns = append(newColumns, column{
@@ -271,6 +288,8 @@ func randomQuery(schemaTables []tableT, maxAggrs, maxGroupBy int) string {
 		}
 		sel += " group by "
 		sel += strings.Join(grouping, ", ")
+
+		isGrouping = true
 	}
 
 	if noOfOrderBy > 0 {
@@ -279,7 +298,7 @@ func randomQuery(schemaTables []tableT, maxAggrs, maxGroupBy int) string {
 	}
 
 	// limit (fails with select grouping columns)
-	if rand.Intn(2) < 1 && TestFailingQueries {
+	if rand.Intn(2) < 1 && (!isGrouping || noOfOrderBy != 0 || TestFailingQueries) {
 		limitNum := rand.Intn(20)
 		sel += fmt.Sprintf(" limit %d", limitNum)
 	}
@@ -291,7 +310,7 @@ func randomQuery(schemaTables []tableT, maxAggrs, maxGroupBy int) string {
 		columns: newColumns,
 	})
 
-	// derived tables (unsupported)
+	// derived tables (partially unsupported)
 	if isDerived {
 		sel = randomQuery(schemaTables, 3, 3)
 	}
@@ -380,11 +399,11 @@ func createPredicates(tables []tableT, randomCol func(tblIdx int) (string, strin
 	incr := 0
 	if isJoin && len(tables) > 2 {
 		incr += len(tables) - 2
-		tables = tables[len(tables)-3 : len(tables)-1]
 	}
 	for idx1 := range tables {
 		for idx2 := range tables {
-			if idx1 == idx2 || idx1 < incr || idx2 < incr || tables[idx1].columns == nil || tables[idx2].columns == nil {
+			// fmt.Printf("predicate tables:\n%v\n idx1: %d idx2: %d, incr: %d", tables, idx1, idx2, incr)
+			if idx1 >= idx2 || idx1 < incr || idx2 < incr || tables[idx1].columns == nil || tables[idx2].columns == nil {
 				continue
 			}
 			noOfPredicates := rand.Intn(2)
