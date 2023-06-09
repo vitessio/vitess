@@ -262,7 +262,7 @@ func TestVreplicationCopyThrottling(t *testing.T) {
 	// We need to force primary tablet types as the history list has been increased on the source primary
 	// We use a small timeout and ignore errors as we don't expect the MoveTables to start here
 	// because of the InnoDB History List length.
-	moveTablesActionWithTabletTypes(t, "Create", defaultCell.Name, workflow, sourceKs, targetKs, table, "primary", 5*time.Second, true)
+	moveTablesActionWithTabletTypes(t, "Create", defaultCell.Name, workflow, sourceKs, targetKs, table, "primary", true)
 	// Wait for the copy phase to start
 	waitForWorkflowState(t, vc, fmt.Sprintf("%s.%s", targetKs, workflow), workflowStateCopying)
 	// The initial copy phase should be blocking on the history list
@@ -1356,9 +1356,9 @@ func moveTablesAction(t *testing.T, action, cell, workflow, sourceKs, targetKs, 
 		t.Fatalf("MoveTables %s command failed with %+v\n", action, err)
 	}
 }
-func moveTablesActionWithTabletTypes(t *testing.T, action, cell, workflow, sourceKs, targetKs, tables string, tabletTypes string, timeout time.Duration, ignoreErrors bool) {
+func moveTablesActionWithTabletTypes(t *testing.T, action, cell, workflow, sourceKs, targetKs, tables string, tabletTypes string, ignoreErrors bool) {
 	if err := vc.VtctldClient.ExecuteCommand("MoveTables", "--workflow="+workflow, "--target-keyspace="+targetKs, action,
-		"--source-keyspace="+sourceKs, "--tables="+tables, "--cells="+cell, "--tablet-types="+tabletTypes, "--timeout="+timeout.String()); err != nil {
+		"--source-keyspace="+sourceKs, "--tables="+tables, "--cells="+cell, "--tablet-types="+tabletTypes); err != nil {
 		if !ignoreErrors {
 			t.Fatalf("MoveTables %s command failed with %+v\n", action, err)
 		}
