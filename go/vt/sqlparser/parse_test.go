@@ -7306,7 +7306,6 @@ FROM
 		},
 
 		// FOR ORDINALITY TESTS
-		// TODO: not sure if it's necessary to differnentiate FOR ORDINALITY from AUTO_INCREMENT
 		{
 			input: `SELECT * FROM JSON_TABLE('{}', '$' COLUMNS( pk FOR ORDINALITY, c1 INT PATH '$.c1')) as jt;`,
 			output: "select * from json_table('{}', \"$\" columns(\n" +
