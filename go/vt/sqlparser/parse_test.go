@@ -2971,6 +2971,12 @@ var (
 		}, {
 			input:  "SELECT * FROM information_schema.events;",
 			output: "select * from information_schema.`events`",
+		}, {
+			input:  "SELECT Event.name AS event FROM Event ORDER BY Event.name",
+			output: "select `Event`.name as `event` from `Event` order by `Event`.name asc",
+		}, {
+			input:  "ALTER TABLE webhook_events ADD COLUMN event varchar(255) DEFAULT NULL;",
+			output: "alter table webhook_events add column (\n\t`event` varchar(255) default null\n)",
 		},
 	}
 	// Any tests that contain multiple statements within the body (such as BEGIN/END blocks) should go here.
