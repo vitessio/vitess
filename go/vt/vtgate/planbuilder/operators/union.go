@@ -190,12 +190,6 @@ func (u *Union) Compact(*plancontext.PlanningContext) (ops.Operator, *rewrite.Ap
 
 func (u *Union) NoLHSTableSet() {}
 
-func (u *Union) Description() ops.OpDescription {
-	return ops.OpDescription{
-		OperatorType: "Union",
-	}
-}
-
 func (u *Union) ShortDescription() string {
 	return ""
 }

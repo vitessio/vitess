@@ -699,16 +699,6 @@ func (r *Route) getOffsetFor(ctx *plancontext.PlanningContext, order ops.OrderBy
 	return offset, nil
 }
 
-func (r *Route) Description() ops.OpDescription {
-	return ops.OpDescription{
-		OperatorType: "Route",
-		Other: map[string]any{
-			"OpCode":   r.Routing.OpCode(),
-			"Keyspace": r.Routing.Keyspace(),
-		},
-	}
-}
-
 func (r *Route) ShortDescription() string {
 	first := r.Routing.OpCode().String()
 

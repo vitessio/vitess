@@ -164,30 +164,6 @@ func (p *Projection) AllOffsets() (cols []int) {
 	return
 }
 
-func (p *Projection) Description() ops.OpDescription {
-	var columns []string
-	for i, col := range p.Projections {
-		aliasExpr := p.Columns[i]
-		if aliasExpr.Expr == col.GetExpr() {
-			columns = append(columns, sqlparser.String(aliasExpr))
-		} else {
-			columns = append(columns, fmt.Sprintf("%s AS %s", sqlparser.String(col.GetExpr()), aliasExpr.ColumnName()))
-		}
-	}
-
-	other := map[string]any{
-		"OutputColumns": strings.Join(columns, ", "),
-	}
-	if p.TableID != nil {
-		other["Derived"] = true
-		other["Alias"] = p.Alias
-	}
-	return ops.OpDescription{
-		OperatorType: "Projection",
-		Other:        other,
-	}
-}
-
 func (p *Projection) ShortDescription() string {
 	var columns []string
 	if p.Alias != "" {

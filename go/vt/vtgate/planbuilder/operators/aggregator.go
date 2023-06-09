@@ -163,12 +163,6 @@ func (a *Aggregator) GetColumns() (columns []*sqlparser.AliasedExpr, err error) 
 	return a.Columns, nil
 }
 
-func (a *Aggregator) Description() ops.OpDescription {
-	return ops.OpDescription{
-		OperatorType: "Aggregator",
-	}
-}
-
 func (a *Aggregator) ShortDescription() string {
 	columnns := slices2.Map(a.Columns, func(from *sqlparser.AliasedExpr) string {
 		return sqlparser.String(from)

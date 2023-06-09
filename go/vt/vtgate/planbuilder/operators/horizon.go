@@ -109,12 +109,6 @@ func (h *Horizon) setQP(qp *QueryProjection) {
 	h.QP = qp
 }
 
-func (h *Horizon) Description() ops.OpDescription {
-	return ops.OpDescription{
-		OperatorType: "Horizon",
-	}
-}
-
 func (h *Horizon) ShortDescription() string {
 	return ""
 }

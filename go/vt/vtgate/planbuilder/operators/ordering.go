@@ -105,13 +105,6 @@ func (o *Ordering) planOffsets(ctx *plancontext.PlanningContext) error {
 	return nil
 }
 
-func (o *Ordering) Description() ops.OpDescription {
-	return ops.OpDescription{
-		OperatorType: "Ordering",
-		Other:        map[string]any{},
-	}
-}
-
 func (o *Ordering) ShortDescription() string {
 	ordering := slices2.Map(o.Order, func(o ops.OrderBy) string {
 		return sqlparser.String(o.Inner)
