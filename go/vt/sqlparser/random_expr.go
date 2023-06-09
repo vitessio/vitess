@@ -58,7 +58,7 @@ func (g *generator) atMaxDepth() bool {
 	 Creates a random expression. It builds an expression tree using the following constructs:
 	    - true/false
 	    - AND/OR/NOT
-	    - string literalrs, numeric literals (-/+ 1000)
+	    - string literals, numeric literals (-/+ 1000)
 	    - =, >, <, >=, <=, <=>, !=
 		- &, |, ^, +, -, *, /, div, %, <<, >>
 	    - IN, BETWEEN and CASE
