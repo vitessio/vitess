@@ -530,7 +530,6 @@ func (t *explainTablet) HandleQuery(c *mysql.Conn, query string, callback func(*
 	// return the pre-computed results for any schema introspection queries
 	tEnv := t.vte.getGlobalTabletEnv()
 	result := tEnv.getResult(query)
-
 	if result != nil {
 		return callback(result)
 	}
