@@ -373,7 +373,10 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 	}
 	durationByPhase.Set("RestoreLastBackup", int64(time.Since(restoreAt).Seconds()))
 
-	// Disable redo logging (if we can) before we start replication.
+	// As of MySQL 8.0.21, you can disable redo logging using the ALTER INSTANCE
+	// DISABLE INNODB REDO_LOG statement. This functionality is intended for
+	// loading data into a new MySQL instance. Disabling redo logging speeds up
+	// data loading by avoiding redo log writes and doublewrite buffering.
 	disabledRedoLog := false
 	if disableRedoLog {
 		if err := mysqld.DisableRedoLog(ctx); err != nil {

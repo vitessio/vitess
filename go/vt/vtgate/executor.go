@@ -114,6 +114,10 @@ type Executor struct {
 
 	// allowScatter will fail planning if set to false and a plan contains any scatter queries
 	allowScatter bool
+
+	// truncateErrorLen truncates errors sent to client if they are above this value
+	// (0 means do not truncate).
+	truncateErrorLen int
 }
 
 var executorOnce sync.Once
@@ -212,6 +216,7 @@ func (e *Executor) Execute(ctx context.Context, method string, safeSession *Safe
 
 	logStats.SaveEndTime()
 	QueryLogger.Send(logStats)
+	err = vterrors.TruncateError(err, truncateErrorLen)
 	return result, err
 }
 
@@ -344,7 +349,7 @@ func (e *Executor) StreamExecute(
 
 	logStats.SaveEndTime()
 	QueryLogger.Send(logStats)
-	return err
+	return vterrors.TruncateError(err, truncateErrorLen)
 
 }
 
@@ -1224,7 +1229,7 @@ func (e *Executor) Prepare(ctx context.Context, method string, safeSession *Safe
 		logStats.SaveEndTime()
 		QueryLogger.Send(logStats)
 	}
-	return fld, err
+	return fld, vterrors.TruncateError(err, truncateErrorLen)
 }
 
 func (e *Executor) prepare(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, logStats *logstats.LogStats) ([]*querypb.Field, error) {

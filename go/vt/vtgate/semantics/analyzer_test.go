@@ -1427,6 +1427,13 @@ func TestSingleUnshardedKeyspace(t *testing.T) {
 				{Keyspace: ks1, Name: sqlparser.NewIdentifierCS("t")},
 				{Keyspace: ks1, Name: sqlparser.NewIdentifierCS("t")},
 			},
+		}, {
+			query:     "insert into t select * from t",
+			unsharded: ks1,
+			tables: []*vindexes.Table{
+				{Keyspace: ks1, Name: sqlparser.NewIdentifierCS("t")},
+				{Keyspace: ks1, Name: sqlparser.NewIdentifierCS("t")},
+			},
 		},
 	}
 

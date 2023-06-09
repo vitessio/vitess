@@ -44,14 +44,14 @@ var collationBinary = collations.TypedCollation{
 
 var collationJSON = collations.TypedCollation{
 	Collation:    46, // utf8mb4_bin
-	Coercibility: collations.CoerceCoercible,
+	Coercibility: collations.CoerceImplicit,
 	Repertoire:   collations.RepertoireUnicode,
 }
 
 var collationUtf8mb3 = collations.TypedCollation{
 	Collation:    collations.CollationUtf8ID,
 	Coercibility: collations.CoerceCoercible,
-	Repertoire:   collations.RepertoireASCII,
+	Repertoire:   collations.RepertoireUnicode,
 }
 
 type (
@@ -117,7 +117,7 @@ func evalCollation(e eval) collations.TypedCollation {
 	switch e := e.(type) {
 	case nil:
 		return collationNull
-	case evalNumeric:
+	case evalNumeric, *evalTemporal:
 		return collationNumeric
 	case *evalJSON:
 		return collationJSON

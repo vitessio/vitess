@@ -268,6 +268,9 @@ message StreamExecuteResponse {
   // The first value contains only Fields information.
   // The next values contain the actual rows, a few values per result.
   query.QueryResult result = 1;
+
+  // session is the updated session information.
+  Session session = 2;
 }
 
 // ResolveTransactionRequest is the payload to ResolveTransaction.
@@ -294,6 +297,8 @@ message VStreamFlags {
   // if specified, these cells (comma-separated) are used to pick source tablets from.
   // defaults to the cell of the vtgate serving the VStream API.
   string cells = 4;
+  string cell_preference = 5;
+  string tablet_order = 6;
 }
 
 // VStreamRequest is the payload for VStream.

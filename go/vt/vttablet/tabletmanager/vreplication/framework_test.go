@@ -24,6 +24,7 @@ import (
 	"reflect"
 	"regexp"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -50,6 +51,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
 	"vitess.io/vitess/go/vt/vttablet/tabletconntest"
 	qh "vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication/queryhistory"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer/testenv"
 
@@ -59,9 +61,12 @@ import (
 )
 
 var (
-	playerEngine          *Engine
-	streamerEngine        *vstreamer.Engine
-	env                   *testenv.Env
+	playerEngine   *Engine
+	streamerEngine *vstreamer.Engine
+
+	envMu sync.Mutex
+	env   *testenv.Env
+
 	globalFBC             = &fakeBinlogClient{}
 	vrepldb               = "vrepl"
 	globalDBQueries       = make(chan string, 1000)
@@ -118,17 +123,19 @@ func cleanup() {
 	playerEngine.Close()
 	streamerEngine.Close()
 	env.Close()
+	envMu.Unlock()
 }
 
 func setup() (func(), int) {
-	globalDBQueries = make(chan string, 1000)
-	resetBinlogClient()
 	var err error
 	env, err = testenv.Init()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%v", err)
 		return nil, 1
 	}
+	envMu.Lock()
+	globalDBQueries = make(chan string, 1000)
+	resetBinlogClient()
 
 	vttablet.VReplicationExperimentalFlags = 0
 
@@ -178,8 +185,8 @@ func TestMain(m *testing.M) {
 		if ret > 0 {
 			return ret
 		}
-
 		cancel()
+
 		runNoBlobTest = true
 		if err := utils.SetBinlogRowImageMode("noblob", tempDir); err != nil {
 			panic(err)
@@ -190,9 +197,7 @@ func TestMain(m *testing.M) {
 			return ret
 		}
 		defer cancel()
-		ret = m.Run()
-		return ret
-
+		return m.Run()
 	}()
 	os.Exit(exitCode)
 }
@@ -303,7 +308,7 @@ func (ftc *fakeTabletConn) VStream(ctx context.Context, request *binlogdatapb.VS
 	if vstreamHook != nil {
 		vstreamHook(ctx)
 	}
-	return streamerEngine.Stream(ctx, request.Position, request.TableLastPKs, request.Filter, send)
+	return streamerEngine.Stream(ctx, request.Position, request.TableLastPKs, request.Filter, throttlerapp.VStreamerName, send)
 }
 
 // vstreamRowsHook allows you to do work just before calling VStreamRows.

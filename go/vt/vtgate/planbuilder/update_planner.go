@@ -35,6 +35,10 @@ func buildUpdatePlan(string) stmtPlanner {
 		if upd.With != nil {
 			return nil, vterrors.VT12001("WITH expression in UPDATE statement")
 		}
+		err := checkUnsupportedExpressions(upd)
+		if err != nil {
+			return nil, err
+		}
 		dml, tables, ksidVindex, err := buildDMLPlan(vschema, "update", stmt, reservedVars, upd.TableExprs, upd.Where, upd.OrderBy, upd.Limit, upd.Comments, upd.Exprs)
 		if err != nil {
 			return nil, err

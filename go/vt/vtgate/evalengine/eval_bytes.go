@@ -172,8 +172,13 @@ func (e *evalBytes) toDateBestEffort() datetime.DateTime {
 
 func (e *evalBytes) toNumericHex() (*evalUint64, bool) {
 	raw := e.bytes
-	if len(raw) > 8 {
-		return nil, false // overflow
+	if l := len(raw); l > 8 {
+		for _, b := range raw[:l-8] {
+			if b != 0 {
+				return nil, false // overflow
+			}
+		}
+		raw = raw[l-8:]
 	}
 
 	var number [8]byte

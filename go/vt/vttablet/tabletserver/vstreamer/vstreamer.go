@@ -43,6 +43,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 )
 
 const (
@@ -61,11 +62,12 @@ type vstreamer struct {
 	ctx    context.Context
 	cancel func()
 
-	cp       dbconfigs.Connector
-	se       *schema.Engine
-	startPos string
-	filter   *binlogdatapb.Filter
-	send     func([]*binlogdatapb.VEvent) error
+	cp           dbconfigs.Connector
+	se           *schema.Engine
+	startPos     string
+	filter       *binlogdatapb.Filter
+	send         func([]*binlogdatapb.VEvent) error
+	throttlerApp throttlerapp.Name
 
 	vevents        chan *localVSchema
 	vschema        *localVSchema
@@ -112,22 +114,23 @@ type streamerPlan struct {
 //
 // vschema: the current vschema. This value can later be changed through the SetVSchema method.
 // send: callback function to send events.
-func newVStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine, startPos string, stopPos string, filter *binlogdatapb.Filter, vschema *localVSchema, send func([]*binlogdatapb.VEvent) error, phase string, vse *Engine) *vstreamer {
+func newVStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine, startPos string, stopPos string, filter *binlogdatapb.Filter, vschema *localVSchema, throttlerApp throttlerapp.Name, send func([]*binlogdatapb.VEvent) error, phase string, vse *Engine) *vstreamer {
 	ctx, cancel := context.WithCancel(ctx)
 	return &vstreamer{
-		ctx:      ctx,
-		cancel:   cancel,
-		cp:       cp,
-		se:       se,
-		startPos: startPos,
-		stopPos:  stopPos,
-		filter:   filter,
-		send:     send,
-		vevents:  make(chan *localVSchema, 1),
-		vschema:  vschema,
-		plans:    make(map[uint64]*streamerPlan),
-		phase:    phase,
-		vse:      vse,
+		ctx:          ctx,
+		cancel:       cancel,
+		cp:           cp,
+		se:           se,
+		startPos:     startPos,
+		stopPos:      stopPos,
+		throttlerApp: throttlerApp,
+		filter:       filter,
+		send:         send,
+		vevents:      make(chan *localVSchema, 1),
+		vschema:      vschema,
+		plans:        make(map[uint64]*streamerPlan),
+		phase:        phase,
+		vse:          vse,
 	}
 }
 
@@ -302,7 +305,7 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 		defer throttledHeartbeatsRateLimiter.Stop()
 		for {
 			// check throttler.
-			if !vs.vse.throttlerClient.ThrottleCheckOKOrWait(ctx) {
+			if !vs.vse.throttlerClient.ThrottleCheckOKOrWaitAppName(ctx, vs.throttlerApp) {
 				// make sure to leave if context is cancelled
 				select {
 				case <-ctx.Done():

@@ -62,7 +62,11 @@ func (v *Vindex) Clone([]ops.Operator) ops.Operator {
 	return &clone
 }
 
-func (v *Vindex) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr) (ops.Operator, int, error) {
+func (v *Vindex) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, _, addToGroupBy bool) (ops.Operator, int, error) {
+	if addToGroupBy {
+		return nil, 0, vterrors.VT13001("tried to add group by to a table")
+	}
+
 	offset, err := addColumn(ctx, v, expr.Expr)
 	if err != nil {
 		return nil, 0, err

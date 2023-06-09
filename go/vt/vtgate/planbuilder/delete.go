@@ -30,7 +30,10 @@ func buildDeletePlan(string) stmtPlanner {
 		if del.With != nil {
 			return nil, vterrors.VT12001("WITH expression in DELETE statement")
 		}
-		var err error
+		err := checkUnsupportedExpressions(del)
+		if err != nil {
+			return nil, err
+		}
 		if len(del.TableExprs) == 1 && len(del.Targets) == 1 {
 			del, err = rewriteSingleTbl(del)
 			if err != nil {

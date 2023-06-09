@@ -17,9 +17,11 @@ limitations under the License.
 package evalengine
 
 import (
+	"encoding/hex"
 	"math/bits"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/json"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
@@ -77,7 +79,7 @@ func (call *builtinHex) compile(c *compiler) (ctype, error) {
 	}
 
 	switch {
-	case sqltypes.IsNumber(str.Type), sqltypes.IsDecimal(str.Type):
+	case sqltypes.IsNumber(str.Type):
 		c.asm.Fn_HEX_d(col)
 	case str.isTextual():
 		c.asm.Fn_HEX_c(t, col)
@@ -121,4 +123,156 @@ func hexEncodeUint(u uint64) []byte {
 	i--
 	a[i] = hextable[uint(u)]
 	return a[i:]
+}
+
+func hexDecodeUint(u uint64) []byte {
+	if u == 0 {
+		return []byte{0}
+	}
+	var decoded []byte
+	for u > 0 {
+		c1 := u % 10
+		c2 := u % 100 / 10
+		decoded = append([]byte{byte(c1 + c2<<4)}, decoded...)
+		u /= 100
+	}
+	return decoded
+}
+
+func hexDecodedLen(src []byte) int {
+	return (len(src) + 1) / 2
+}
+
+func hexDecodeBytes(dst, src []byte) bool {
+	if len(src)&1 == 1 {
+		src = append([]byte{'0'}, src...)
+	}
+	_, err := hex.Decode(dst, src)
+	return err == nil
+}
+
+type builtinUnhex struct {
+	CallExpr
+}
+
+var _ Expr = (*builtinUnhex)(nil)
+
+func hexDecodeJSON(j *evalJSON) ([]byte, bool) {
+	switch j.Type() {
+	case json.TypeNumber:
+		u, ok := j.Uint64()
+		if ok {
+			return hexDecodeUint(u), true
+		} else {
+			return nil, false
+		}
+	default:
+		b := j.ToRawBytes()
+		decoded := make([]byte, hexDecodedLen(b))
+		ok := hexDecodeBytes(decoded, b)
+		if !ok {
+			return nil, false
+		}
+		return decoded, true
+	}
+}
+
+func (call *builtinUnhex) eval(env *ExpressionEnv) (eval, error) {
+	arg, err := call.arg1(env)
+	if err != nil {
+		return nil, err
+	}
+	if arg == nil {
+		return nil, nil
+	}
+
+	var decoded []byte
+	switch arg := arg.(type) {
+	case *evalBytes:
+		decoded = make([]byte, hexDecodedLen(arg.bytes))
+		ok := hexDecodeBytes(decoded, arg.bytes)
+		if !ok {
+			return nil, nil
+		}
+	case *evalInt64:
+		if arg.i < 0 {
+			return nil, nil
+		}
+		decoded = hexDecodeUint(uint64(arg.i))
+	case *evalUint64:
+		decoded = hexDecodeUint(arg.u)
+	case *evalDecimal:
+		b := arg.ToRawBytes()
+		decoded = make([]byte, hexDecodedLen(b))
+		ok := hexDecodeBytes(decoded, b)
+		if !ok {
+			return nil, nil
+		}
+	case *evalFloat:
+		f := arg.f
+		if f != float64(int64(f)) {
+			return nil, nil
+		}
+		decoded = hexDecodeUint(uint64(arg.f))
+	case *evalJSON:
+		var ok bool
+		decoded, ok = hexDecodeJSON(arg)
+		if !ok {
+			return nil, nil
+		}
+	default:
+		b := evalToBinary(arg)
+		decoded = make([]byte, hexDecodedLen(b.bytes))
+		ok := hexDecodeBytes(decoded, b.bytes)
+		if !ok {
+			return nil, nil
+		}
+	}
+
+	switch arg.SQLType() {
+	case sqltypes.Text, sqltypes.Blob, sqltypes.TypeJSON:
+		return newEvalRaw(sqltypes.Blob, decoded, collationBinary), nil
+	}
+	return newEvalBinary(decoded), nil
+}
+
+func (call *builtinUnhex) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	tt, f := call.Arguments[0].typeof(env, fields)
+	if tt == sqltypes.Text || tt == sqltypes.Blob || tt == sqltypes.TypeJSON {
+		return sqltypes.Blob, f
+	}
+	return sqltypes.VarBinary, f | flagNullable
+}
+
+func (call *builtinUnhex) compile(c *compiler) (ctype, error) {
+	str, err := call.Arguments[0].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip := c.compileNullCheck1(str)
+	t := sqltypes.VarBinary
+	if str.Type == sqltypes.Text || str.Type == sqltypes.TypeJSON {
+		t = sqltypes.Blob
+	}
+
+	switch {
+	case sqltypes.IsSigned(str.Type):
+		c.asm.Fn_UNHEX_i(t)
+	case sqltypes.IsUnsigned(str.Type):
+		c.asm.Fn_UNHEX_u(t)
+	case sqltypes.IsFloat(str.Type):
+		c.asm.Fn_UNHEX_f(t)
+	case str.isTextual():
+		c.asm.Fn_UNHEX_b(t)
+	case str.Type == sqltypes.TypeJSON:
+		c.asm.Fn_UNHEX_j(t)
+	default:
+		c.asm.Convert_xb(1, t, 0, false)
+		c.asm.Fn_UNHEX_b(t)
+	}
+
+	c.asm.jumpDestination(skip)
+
+	return ctype{Type: t, Col: collationBinary, Flag: flagNullable}, nil
 }

@@ -637,6 +637,19 @@ func TestDiffSchemas(t *testing.T) {
 			},
 			tableRename: TableRenameHeuristicStatement,
 		},
+		{
+			name: "tables with irregular names",
+			from: "create table `t.2`(id int primary key); create table t3(`i.d` int primary key)",
+			to:   "create table `t.2` (id bigint primary key); create table t3(`i.d` int unsigned primary key)",
+			diffs: []string{
+				"alter table `t.2` modify column id bigint",
+				"alter table t3 modify column `i.d` int unsigned",
+			},
+			cdiffs: []string{
+				"ALTER TABLE `t.2` MODIFY COLUMN `id` bigint",
+				"ALTER TABLE `t3` MODIFY COLUMN `i.d` int unsigned",
+			},
+		},
 		// Foreign keys
 		{
 			name: "create tables with foreign keys, expect specific order",
@@ -762,6 +775,22 @@ func TestDiffSchemas(t *testing.T) {
 				"ALTER VIEW `v2` AS SELECT `id` FROM `t2`",
 				"CREATE VIEW `v0` AS SELECT * FROM `v2`, `t2`",
 				"CREATE TABLE `t4` (\n\t`id` int,\n\tPRIMARY KEY (`id`)\n)",
+			},
+		},
+		{
+			// Making sure schemadiff distinguishes between VIEWs with different casing
+			name: "case insensitive views",
+			from: "create view v1 as select * from t; create table t(id int primary key); create view V1 as select * from t",
+			to:   "",
+			diffs: []string{
+				"drop view v1",
+				"drop view V1",
+				"drop table t",
+			},
+			cdiffs: []string{
+				"DROP VIEW `v1`",
+				"DROP VIEW `V1`",
+				"DROP TABLE `t`",
 			},
 		},
 	}

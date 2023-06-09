@@ -34,6 +34,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/tidwall/gjson"
 
 	"github.com/buger/jsonparser"
 
@@ -44,6 +45,7 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	throttlebase "vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer"
 )
 
@@ -58,8 +60,8 @@ var (
 	sourceKsOpts           = make(map[string]string)
 	targetKsOpts           = make(map[string]string)
 	httpClient             = throttlebase.SetupHTTPClient(time.Second)
-	sourceThrottlerAppName = "vstreamer"
-	targetThrottlerAppName = "vreplication"
+	sourceThrottlerAppName = throttlerapp.VStreamerName
+	targetThrottlerAppName = throttlerapp.VReplicationName
 )
 
 const (
@@ -94,16 +96,16 @@ func throttleResponse(tablet *cluster.VttabletProcess, path string) (respBody st
 	return respBody, err
 }
 
-func throttleApp(tablet *cluster.VttabletProcess, app string) (string, error) {
-	return throttleResponse(tablet, fmt.Sprintf("throttler/throttle-app?app=%s&duration=1h", app))
+func throttleApp(tablet *cluster.VttabletProcess, throttlerApp throttlerapp.Name) (string, error) {
+	return throttleResponse(tablet, fmt.Sprintf("throttler/throttle-app?app=%s&duration=1h", throttlerApp.String()))
 }
 
-func unthrottleApp(tablet *cluster.VttabletProcess, app string) (string, error) {
-	return throttleResponse(tablet, fmt.Sprintf("throttler/unthrottle-app?app=%s", app))
+func unthrottleApp(tablet *cluster.VttabletProcess, throttlerApp throttlerapp.Name) (string, error) {
+	return throttleResponse(tablet, fmt.Sprintf("throttler/unthrottle-app?app=%s", throttlerApp.String()))
 }
 
-func throttlerCheckSelf(tablet *cluster.VttabletProcess, app string) (respBody string, err error) {
-	apiURL := fmt.Sprintf("http://%s:%d/throttler/check-self?app=%s", tablet.TabletHostname, tablet.Port, app)
+func throttlerCheckSelf(tablet *cluster.VttabletProcess, throttlerApp throttlerapp.Name) (respBody string, err error) {
+	apiURL := fmt.Sprintf("http://%s:%d/throttler/check-self?app=%s", tablet.TabletHostname, tablet.Port, throttlerApp.String())
 	resp, err := httpClient.Get(apiURL)
 	if err != nil {
 		return "", err
@@ -173,7 +175,19 @@ func TestVReplicationDDLHandling(t *testing.T) {
 	waitForQueryResult(t, vtgateConn, targetKs, checkColQueryTarget, "[[INT64(0)]]")
 	// Confirm new col does exist on source
 	waitForQueryResult(t, vtgateConn, sourceKs, checkColQuerySource, "[[INT64(1)]]")
-	moveTablesAction(t, "Cancel", defaultCellName, workflow, sourceKs, targetKs, table)
+	// Also test Cancel --keep_routing_rules
+	moveTablesAction(t, "Cancel", defaultCellName, workflow, sourceKs, targetKs, table, "--keep_routing_rules")
+	// Confirm that the routing rules were NOT cleared
+	rr, err := vc.VtctldClient.ExecuteCommandWithOutput("GetRoutingRules")
+	require.NoError(t, err)
+	require.Greater(t, len(gjson.Get(rr, "rules").Array()), 0)
+	// Manually clear the routing rules
+	err = vc.VtctldClient.ExecuteCommand("ApplyRoutingRules", "--rules", "{}")
+	require.NoError(t, err)
+	// Confirm that the routing rules are gone
+	rr, err = vc.VtctldClient.ExecuteCommandWithOutput("GetRoutingRules")
+	require.NoError(t, err)
+	require.Equal(t, len(gjson.Get(rr, "rules").Array()), 0)
 	// Drop the column on source to start fresh again
 	_, err = vtgateConn.ExecuteFetch(dropColDDL, 1, false)
 	require.NoError(t, err, "error executing %q: %v", dropColDDL, err)
@@ -513,6 +527,7 @@ func testVStreamCellFlag(t *testing.T) {
 			flags := &vtgatepb.VStreamFlags{}
 			if tc.cells != "" {
 				flags.Cells = tc.cells
+				flags.CellPreference = "onlyspecified"
 			}
 
 			ctx2, cancel := context.WithTimeout(ctx, 30*time.Second)
@@ -682,7 +697,7 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 		defaultCell := cells[0]
 		custKs := vc.Cells[defaultCell.Name].Keyspaces["customer"]
 
-		tables := "customer,Lead,Lead-1,db_order_test,geom_tbl,json_tbl,blob_tbl,vdiff_order"
+		tables := "customer,Lead,Lead-1,db_order_test,geom_tbl,json_tbl,blüb_tbl,vdiff_order,reftable"
 		moveTablesAction(t, "Create", sourceCellOrAlias, workflow, sourceKs, targetKs, tables)
 
 		customerTab1 := custKs.Shards["-80"].Tablets["zone1-200"].Vttablet
@@ -747,7 +762,7 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 		tbls := []string{"Lead", "Lead-1"}
 		for _, tbl := range tbls {
 			output, err := osExec(t, "mysql", []string{"-u", "vtdba", "-P", fmt.Sprintf("%d", vc.ClusterConfig.vtgateMySQLPort),
-				"--host=127.0.0.1", "-e", fmt.Sprintf("select * from `%s`", tbl)})
+				"--host=127.0.0.1", "--default-character-set=utf8mb4", "-e", fmt.Sprintf("select * from `%s`", tbl)})
 			if err != nil {
 				require.FailNow(t, output)
 			}
@@ -1099,7 +1114,7 @@ func shardMerchant(t *testing.T) {
 
 		// confirm that the backticking of keyspaces in the routing rules works
 		output, err := osExec(t, "mysql", []string{"-u", "vtdba", "-P", fmt.Sprintf("%d", vc.ClusterConfig.vtgateMySQLPort),
-			fmt.Sprintf("--host=%s", vc.ClusterConfig.hostname), "-e", "select * from merchant"})
+			fmt.Sprintf("--host=%s", vc.ClusterConfig.hostname), "--default-character-set=utf8mb4", "-e", "select * from merchant"})
 		if err != nil {
 			require.FailNow(t, output)
 		}

@@ -27,6 +27,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/vt/external/golib/sqlutils"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/proto/vttime"
@@ -127,17 +128,22 @@ func TestRefreshTabletsInKeyspaceShard(t *testing.T) {
 
 	t.Run("initial call to refreshTabletsInKeyspaceShard", func(t *testing.T) {
 		// We expect all 3 tablets to be refreshed since they are being discovered for the first time
-		verifyRefreshTabletsInKeyspaceShard(t, false, 3, tablets)
+		verifyRefreshTabletsInKeyspaceShard(t, false, 3, tablets, nil)
 	})
 
 	t.Run("call refreshTabletsInKeyspaceShard again - no force refresh", func(t *testing.T) {
 		// We expect no tablets to be refreshed since they are all already upto date
-		verifyRefreshTabletsInKeyspaceShard(t, false, 0, tablets)
+		verifyRefreshTabletsInKeyspaceShard(t, false, 0, tablets, nil)
 	})
 
 	t.Run("call refreshTabletsInKeyspaceShard again - force refresh", func(t *testing.T) {
 		// We expect all 3 tablets to be refreshed since we requested force refresh
-		verifyRefreshTabletsInKeyspaceShard(t, true, 3, tablets)
+		verifyRefreshTabletsInKeyspaceShard(t, true, 3, tablets, nil)
+	})
+
+	t.Run("call refreshTabletsInKeyspaceShard again - force refresh with ignore", func(t *testing.T) {
+		// We expect 2 tablets to be refreshed since we requested force refresh, but we are ignoring one of them.
+		verifyRefreshTabletsInKeyspaceShard(t, true, 2, tablets, []string{topoproto.TabletAliasString(tab100.Alias)})
 	})
 
 	t.Run("tablet shutdown removes mysql hostname and port. We shouldn't forget the tablet", func(t *testing.T) {
@@ -156,7 +162,7 @@ func TestRefreshTabletsInKeyspaceShard(t *testing.T) {
 		})
 		require.NoError(t, err)
 		// We expect no tablets to be refreshed. Also, tab100 shouldn't be forgotten
-		verifyRefreshTabletsInKeyspaceShard(t, false, 0, tablets)
+		verifyRefreshTabletsInKeyspaceShard(t, false, 0, tablets, nil)
 	})
 
 	t.Run("change a tablet and call refreshTabletsInKeyspaceShard again", func(t *testing.T) {
@@ -175,7 +181,7 @@ func TestRefreshTabletsInKeyspaceShard(t *testing.T) {
 		})
 		require.NoError(t, err)
 		// We expect 1 tablet to be refreshed since that is the only one that has changed
-		verifyRefreshTabletsInKeyspaceShard(t, false, 1, tablets)
+		verifyRefreshTabletsInKeyspaceShard(t, false, 1, tablets, nil)
 	})
 
 	t.Run("change the port and call refreshTabletsInKeyspaceShard again", func(t *testing.T) {
@@ -195,7 +201,7 @@ func TestRefreshTabletsInKeyspaceShard(t *testing.T) {
 		tab100.MysqlPort = 39293
 		// We expect 1 tablet to be refreshed since that is the only one that has changed
 		// Also the old tablet should be forgotten
-		verifyRefreshTabletsInKeyspaceShard(t, false, 1, tablets)
+		verifyRefreshTabletsInKeyspaceShard(t, false, 1, tablets, nil)
 	})
 }
 
@@ -252,7 +258,7 @@ func TestShardPrimary(t *testing.T) {
 			}
 
 			// refresh the tablet info so that they are stored in the orch backend
-			verifyRefreshTabletsInKeyspaceShard(t, false, len(testcase.tablets), testcase.tablets)
+			verifyRefreshTabletsInKeyspaceShard(t, false, len(testcase.tablets), testcase.tablets, nil)
 
 			primary, err := shardPrimary(keyspace, shard)
 			if testcase.expectedErr != "" {
@@ -269,13 +275,13 @@ func TestShardPrimary(t *testing.T) {
 
 // verifyRefreshTabletsInKeyspaceShard calls refreshTabletsInKeyspaceShard with the forceRefresh parameter provided and verifies that
 // the number of instances refreshed matches the parameter and all the tablets match the ones provided
-func verifyRefreshTabletsInKeyspaceShard(t *testing.T, forceRefresh bool, instanceRefreshRequired int, tablets []*topodatapb.Tablet) {
+func verifyRefreshTabletsInKeyspaceShard(t *testing.T, forceRefresh bool, instanceRefreshRequired int, tablets []*topodatapb.Tablet, tabletsToIgnore []string) {
 	var instancesRefreshed atomic.Int32
 	instancesRefreshed.Store(0)
 	// call refreshTabletsInKeyspaceShard while counting all the instances that are refreshed
 	refreshTabletsInKeyspaceShard(context.Background(), keyspace, shard, func(instanceKey *inst.InstanceKey) {
 		instancesRefreshed.Add(1)
-	}, forceRefresh)
+	}, forceRefresh, tabletsToIgnore)
 	// Verify that all the tablets are present in the database
 	for _, tablet := range tablets {
 		verifyTabletInfo(t, tablet, "")

@@ -57,7 +57,7 @@ func TestFallbackSecurityPolicy(t *testing.T) {
 	// Reset the VtTabletExtraArgs
 	clusterInstance.VtTabletExtraArgs = []string{}
 	// Tear down custom processes
-	killTablets(t, mTablet)
+	killTablets(mTablet)
 }
 
 func assertNotAllowedURLTest(t *testing.T, url string) {
@@ -112,7 +112,7 @@ func TestDenyAllSecurityPolicy(t *testing.T) {
 	// Reset the VtTabletExtraArgs
 	clusterInstance.VtTabletExtraArgs = []string{}
 	// Tear down custom processes
-	killTablets(t, mTablet)
+	killTablets(mTablet)
 }
 
 func TestReadOnlySecurityPolicy(t *testing.T) {
@@ -144,5 +144,5 @@ func TestReadOnlySecurityPolicy(t *testing.T) {
 	// Reset the VtTabletExtraArgs
 	clusterInstance.VtTabletExtraArgs = []string{}
 	// Tear down custom processes
-	killTablets(t, mTablet)
+	killTablets(mTablet)
 }

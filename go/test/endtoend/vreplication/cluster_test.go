@@ -37,6 +37,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/endtoend/throttler"
 	"vitess.io/vitess/go/vt/log"
 )
 
@@ -57,6 +58,8 @@ var (
 	extraVTTabletArgs = []string{}
 
 	parallelInsertWorkers = "--vreplication-parallel-insert-workers=4"
+
+	throttlerConfig = throttler.Config{Threshold: 15}
 )
 
 // ClusterConfig defines the parameters like ports, tmpDir, tablet types which uniquely define a vitess cluster
@@ -178,35 +181,8 @@ func setVtMySQLRoot(mysqlRoot string) error {
 	return nil
 }
 
-// setDBFlavor sets the MYSQL_FLAVOR OS env var.
-// You should call this after calling setVtMySQLRoot() to ensure that the
-// correct flavor is used by mysqlctl based on the current mysqld version
-// in the path. If you don't do this then mysqlctl will use the incorrect
-// config/mycnf/<flavor>.cnf file and mysqld may fail to start.
-func setDBFlavor() error {
-	versionStr, err := mysqlctl.GetVersionString()
-	if err != nil {
-		return err
-	}
-	f, v, err := mysqlctl.ParseVersionString(versionStr)
-	if err != nil {
-		return err
-	}
-	flavor := fmt.Sprintf("%s%d%d", f, v.Major, v.Minor)
-	err = os.Setenv("MYSQL_FLAVOR", string(flavor))
-	if err != nil {
-		return err
-	}
-	fmt.Printf("MYSQL_FLAVOR is %s\n", string(flavor))
-	return nil
-}
-
 func unsetVtMySQLRoot() {
 	_ = os.Unsetenv("VT_MYSQL_ROOT")
-}
-
-func unsetDBFlavor() {
-	_ = os.Unsetenv("MYSQL_FLAVOR")
 }
 
 // getDBTypeVersionInUse checks the major DB version of the mysqld binary
@@ -391,6 +367,11 @@ func (vc *VitessCluster) AddKeyspace(t *testing.T, cells []*Cell, ksName string,
 	if err := vc.VtctldClient.CreateKeyspace(keyspace.Name, keyspace.SidecarDBName); err != nil {
 		t.Fatalf(err.Error())
 	}
+
+	log.Infof("Applying throttler config for keyspace %s", keyspace.Name)
+	res, err := throttler.UpdateThrottlerTopoConfigRaw(vc.VtctldClient, keyspace.Name, true, false, throttlerConfig.Threshold, throttlerConfig.Query)
+	require.NoError(t, err, res)
+
 	cellsToWatch := ""
 	for i, cell := range cells {
 		if i > 0 {
@@ -419,7 +400,9 @@ func (vc *VitessCluster) AddKeyspace(t *testing.T, cells []*Cell, ksName string,
 			vc.StartVtgate(t, cell, cellsToWatch)
 		}
 	}
-	_ = vc.VtctlClient.ExecuteCommand("RebuildKeyspaceGraph", ksName)
+
+	err = vc.VtctlClient.ExecuteCommand("RebuildKeyspaceGraph", ksName)
+	require.NoError(t, err)
 	return keyspace, nil
 }
 
@@ -429,8 +412,7 @@ func (vc *VitessCluster) AddTablet(t testing.TB, cell *Cell, keyspace *Keyspace,
 
 	options := []string{
 		"--queryserver-config-schema-reload-time", "5",
-		"--enable-lag-throttler",
-		"--heartbeat_enable",
+		"--heartbeat_on_demand_duration", "5s",
 		"--heartbeat_interval", "250ms",
 	} // FIXME: for multi-cell initial schema doesn't seem to load without "--queryserver-config-schema-reload-time"
 	options = append(options, extraVTTabletArgs...)
@@ -564,8 +546,25 @@ func (vc *VitessCluster) AddShards(t *testing.T, cells []*Cell, keyspace *Keyspa
 		require.NotEqual(t, 0, primaryTabletUID, "Should have created a primary tablet")
 		log.Infof("InitializeShard and make %d primary", primaryTabletUID)
 		require.NoError(t, vc.VtctlClient.InitializeShard(keyspace.Name, shardName, cells[0].Name, primaryTabletUID))
+
 		log.Infof("Finished creating shard %s", shard.Name)
 	}
+
+	err := vc.VtctlClient.ExecuteCommand("RebuildKeyspaceGraph", keyspace.Name)
+	require.NoError(t, err)
+
+	log.Infof("Waiting for throttler config to be applied on all shards")
+	for _, shard := range keyspace.Shards {
+		for _, tablet := range shard.Tablets {
+			clusterTablet := &cluster.Vttablet{
+				Alias:    tablet.Name,
+				HTTPPort: tablet.Vttablet.Port,
+			}
+			log.Infof("+ Waiting for throttler config to be applied on %s, type=%v", tablet.Name, tablet.Vttablet.TabletType)
+			throttler.WaitForThrottlerStatusEnabled(t, clusterTablet, true, nil, time.Minute)
+		}
+	}
+	log.Infof("Throttler config applied on all shards")
 
 	return nil
 }
@@ -781,12 +780,7 @@ func setupDBTypeVersion(t *testing.T, value string) func() {
 	if err := downloadDBTypeVersion(dbType, majorVersion, path); err != nil {
 		t.Fatalf("Could not download %s, error: %v", majorVersion, err)
 	}
-	// Set the MYSQL_FLAVOR OS ENV var for mysqlctl to use the correct config file
-	if err := setDBFlavor(); err != nil {
-		t.Fatalf("Could not set MYSQL_FLAVOR: %v", err)
-	}
 	return func() {
-		unsetDBFlavor()
 		unsetVtMySQLRoot()
 	}
 }

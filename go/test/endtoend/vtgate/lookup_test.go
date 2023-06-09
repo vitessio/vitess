@@ -21,13 +21,11 @@ import (
 	"fmt"
 	"testing"
 
-	"vitess.io/vitess/go/test/endtoend/utils"
-
 	"github.com/stretchr/testify/assert"
-
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/test/endtoend/utils"
 )
 
 func TestUnownedLookupInsertNull(t *testing.T) {
@@ -580,4 +578,11 @@ func TestUnicodeLooseMD5CaseInsensitive(t *testing.T) {
 	utils.Exec(t, conn, "insert into t4(id1, id2) values(1, 'test')")
 
 	utils.AssertMatches(t, conn, "SELECT id1, id2 from t4 where id2 = 'Test'", `[[INT64(1) VARCHAR("test")]]`)
+}
+
+func TestJoinWithPredicateAndJoinOnDifferentVindex(t *testing.T) {
+	conn, closer := start(t)
+	defer closer()
+
+	utils.Exec(t, conn, "select t4.id1 from t4, t3 where t4.id2 = 'foo' and t4.id1 = t3.id6")
 }

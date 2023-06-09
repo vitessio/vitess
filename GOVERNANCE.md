@@ -72,7 +72,7 @@ Anyone can contribute to the project, regardless of their skills, as there are m
 
 The Slack workspace is the most appropriate place for a contributor to ask for help when making their first contribution.
 
-# Decision Making Process
+# Decision-Making Process
 
 Decisions about the future of the project are made by the Steering Committee. New proposals and ideas can be brought to the Committee’s attention through the Slack workspace or by filing an issue. If necessary, the Committee will seek input from others to come to the final decision.
 

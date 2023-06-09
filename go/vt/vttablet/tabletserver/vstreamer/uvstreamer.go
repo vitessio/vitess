@@ -37,6 +37,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 )
 
 var uvstreamerTestMode = false // Only used for testing
@@ -51,13 +52,14 @@ type uvstreamer struct {
 	cancel func()
 
 	// input parameters
-	vse        *Engine
-	send       func([]*binlogdatapb.VEvent) error
-	cp         dbconfigs.Connector
-	se         *schema.Engine
-	startPos   string
-	filter     *binlogdatapb.Filter
-	inTablePKs []*binlogdatapb.TableLastPK
+	vse          *Engine
+	send         func([]*binlogdatapb.VEvent) error
+	cp           dbconfigs.Connector
+	se           *schema.Engine
+	startPos     string
+	filter       *binlogdatapb.Filter
+	inTablePKs   []*binlogdatapb.TableLastPK
+	throttlerApp throttlerapp.Name
 
 	vschema *localVSchema
 
@@ -90,7 +92,7 @@ type uvstreamerConfig struct {
 	CatchupRetryTime  time.Duration
 }
 
-func newUVStreamer(ctx context.Context, vse *Engine, cp dbconfigs.Connector, se *schema.Engine, startPos string, tablePKs []*binlogdatapb.TableLastPK, filter *binlogdatapb.Filter, vschema *localVSchema, send func([]*binlogdatapb.VEvent) error) *uvstreamer {
+func newUVStreamer(ctx context.Context, vse *Engine, cp dbconfigs.Connector, se *schema.Engine, startPos string, tablePKs []*binlogdatapb.TableLastPK, filter *binlogdatapb.Filter, vschema *localVSchema, throttlerApp throttlerapp.Name, send func([]*binlogdatapb.VEvent) error) *uvstreamer {
 	ctx, cancel := context.WithCancel(ctx)
 	config := &uvstreamerConfig{
 		MaxReplicationLag: 1 * time.Nanosecond,
@@ -105,17 +107,18 @@ func newUVStreamer(ctx context.Context, vse *Engine, cp dbconfigs.Connector, se 
 		return send(evs)
 	}
 	uvs := &uvstreamer{
-		ctx:        ctx,
-		cancel:     cancel,
-		vse:        vse,
-		send:       send2,
-		cp:         cp,
-		se:         se,
-		startPos:   startPos,
-		filter:     filter,
-		vschema:    vschema,
-		config:     config,
-		inTablePKs: tablePKs,
+		ctx:          ctx,
+		cancel:       cancel,
+		vse:          vse,
+		send:         send2,
+		cp:           cp,
+		se:           se,
+		startPos:     startPos,
+		filter:       filter,
+		vschema:      vschema,
+		config:       config,
+		inTablePKs:   tablePKs,
+		throttlerApp: throttlerApp,
 	}
 
 	return uvs
@@ -418,7 +421,7 @@ func (uvs *uvstreamer) Stream() error {
 		}
 	}
 	vs := newVStreamer(uvs.ctx, uvs.cp, uvs.se, mysql.EncodePosition(uvs.pos), mysql.EncodePosition(uvs.stopPos),
-		uvs.filter, uvs.getVSchema(), uvs.send, "replicate", uvs.vse)
+		uvs.filter, uvs.getVSchema(), uvs.throttlerApp, uvs.send, "replicate", uvs.vse)
 
 	uvs.setVs(vs)
 	return vs.Stream()

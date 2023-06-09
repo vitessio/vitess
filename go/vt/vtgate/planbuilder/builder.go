@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"sort"
 
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 
@@ -48,10 +50,12 @@ const (
 	Gen4WithFallback = querypb.ExecuteOptions_Gen4WithFallback
 	// Gen4CompareV3 executes queries on both Gen4 and V3 to compare their results.
 	Gen4CompareV3 = querypb.ExecuteOptions_Gen4CompareV3
+	// V3Insert executes insert query on V3 and others on Gen4.
+	V3Insert = querypb.ExecuteOptions_V3Insert
 )
 
 var (
-	plannerVersions = []plancontext.PlannerVersion{V3, Gen4, Gen4GreedyOnly, Gen4Left2Right, Gen4WithFallback, Gen4CompareV3}
+	plannerVersions = []plancontext.PlannerVersion{V3, V3Insert, Gen4, Gen4GreedyOnly, Gen4Left2Right, Gen4WithFallback, Gen4CompareV3}
 )
 
 type (
@@ -145,10 +149,15 @@ func getConfiguredPlanner(vschema plancontext.VSchema, v3planner func(string) st
 		return gen4Planner(query, planner), nil
 	case Gen4WithFallback:
 		fp := &fallbackPlanner{
-			primary:  gen4Planner(query, querypb.ExecuteOptions_Gen4),
+			primary:  gen4Planner(query, Gen4),
 			fallback: v3planner(query),
 		}
 		return fp.plan, nil
+	case V3Insert:
+		if _, isInsert := stmt.(*sqlparser.Insert); isInsert {
+			return v3planner(query), nil
+		}
+		return gen4Planner(query, Gen4), nil
 	case V3:
 		return v3planner(query), nil
 	default:
@@ -212,7 +221,11 @@ func createInstructionFor(ctx context.Context, query string, stmt sqlparser.Stat
 		}
 		return buildRoutePlan(stmt, reservedVars, vschema, configuredPlanner)
 	case *sqlparser.Insert:
-		return buildRoutePlan(stmt, reservedVars, vschema, buildInsertPlan)
+		configuredPlanner, err := getConfiguredPlanner(vschema, buildInsertPlan, stmt, query)
+		if err != nil {
+			return nil, err
+		}
+		return buildRoutePlan(stmt, reservedVars, vschema, configuredPlanner)
 	case *sqlparser.Update:
 		configuredPlanner, err := getConfiguredPlanner(vschema, buildUpdatePlan, stmt, query)
 		if err != nil {
@@ -371,13 +384,20 @@ func buildFlushPlan(stmt *sqlparser.Flush, vschema plancontext.VSchema) (*planRe
 }
 
 func buildFlushOptions(stmt *sqlparser.Flush, vschema plancontext.VSchema) (*planResult, error) {
-	dest, keyspace, _, err := vschema.TargetDestination("")
+	if !stmt.IsLocal && vschema.TabletType() != topodatapb.TabletType_PRIMARY {
+		return nil, vterrors.VT09012("FLUSH", vschema.TabletType().String())
+	}
+
+	keyspace, err := vschema.DefaultKeyspace()
 	if err != nil {
 		return nil, err
 	}
+
+	dest := vschema.Destination()
 	if dest == nil {
 		dest = key.DestinationAllShards{}
 	}
+
 	tc := &tableCollector{}
 	for _, tbl := range stmt.TableNames {
 		tc.addASTTable(keyspace.Name, tbl)
@@ -393,6 +413,9 @@ func buildFlushOptions(stmt *sqlparser.Flush, vschema plancontext.VSchema) (*pla
 }
 
 func buildFlushTables(stmt *sqlparser.Flush, vschema plancontext.VSchema) (*planResult, error) {
+	if !stmt.IsLocal && vschema.TabletType() != topodatapb.TabletType_PRIMARY {
+		return nil, vterrors.VT09012("FLUSH", vschema.TabletType().String())
+	}
 	tc := &tableCollector{}
 	type sendDest struct {
 		ks   *vindexes.Keyspace
@@ -408,20 +431,18 @@ func buildFlushTables(stmt *sqlparser.Flush, vschema plancontext.VSchema) (*plan
 	var keys []sendDest
 	for i, tab := range stmt.TableNames {
 		var ksTab *vindexes.Keyspace
-		var table *vindexes.Table
-		var err error
 
-		table, _, _, _, _, err = vschema.FindTableOrVindex(tab)
+		tbl, _, _, _, _, err := vschema.FindTableOrVindex(tab)
 		if err != nil {
 			return nil, err
 		}
-		if table == nil {
+		if tbl == nil {
 			return nil, vindexes.NotFoundError{TableName: tab.Name.String()}
 		}
-		tc.addTable(table.Keyspace.Name, table.Name.String())
-		ksTab = table.Keyspace
+		tc.addTable(tbl.Keyspace.Name, tbl.Name.String())
+		ksTab = tbl.Keyspace
 		stmt.TableNames[i] = sqlparser.TableName{
-			Name: table.Name,
+			Name: tbl.Name,
 		}
 
 		key := sendDest{ksTab, dest}

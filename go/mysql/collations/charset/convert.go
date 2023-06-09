@@ -108,6 +108,9 @@ type Convertible interface {
 // a new byte slice will be allocated to store the result.
 func Convert(dst []byte, dstCharset Charset, src []byte, srcCharset Charset) ([]byte, error) {
 	if dstCharset.IsSuperset(srcCharset) {
+		if dst != nil {
+			return append(dst, src...), nil
+		}
 		return src, nil
 	}
 	if trans, ok := dstCharset.(Convertible); ok {

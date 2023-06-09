@@ -110,7 +110,7 @@ func (c *echoClient) Execute(ctx context.Context, session *vtgatepb.Session, sql
 	return c.fallbackClient.Execute(ctx, session, sql, bindVariables)
 }
 
-func (c *echoClient) StreamExecute(ctx context.Context, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable, callback func(*sqltypes.Result) error) error {
+func (c *echoClient) StreamExecute(ctx context.Context, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable, callback func(*sqltypes.Result) error) (*vtgatepb.Session, error) {
 	if strings.HasPrefix(sql, EchoPrefix) {
 		callback(echoQueryResult(map[string]any{
 			"callerId": callerid.EffectiveCallerIDFromContext(ctx),
@@ -118,7 +118,7 @@ func (c *echoClient) StreamExecute(ctx context.Context, session *vtgatepb.Sessio
 			"bindVars": bindVariables,
 			"session":  session,
 		}))
-		return nil
+		return session, nil
 	}
 	return c.fallbackClient.StreamExecute(ctx, session, sql, bindVariables, callback)
 }

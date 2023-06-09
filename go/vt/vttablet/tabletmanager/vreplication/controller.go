@@ -130,7 +130,7 @@ func newController(ctx context.Context, params map[string]string, dbClientFactor
 				return nil, err
 			}
 		}
-		tp, err := discovery.NewTabletPicker(sourceTopo, cells, ct.source.Keyspace, ct.source.Shard, tabletTypesStr)
+		tp, err := discovery.NewTabletPicker(ctx, sourceTopo, cells, ct.vre.cell, ct.source.Keyspace, ct.source.Shard, tabletTypesStr, discovery.TabletPickerOptions{})
 		if err != nil {
 			return nil, err
 		}
@@ -191,12 +191,6 @@ func (ct *controller) runBlp(ctx context.Context) (err error) {
 	case <-ctx.Done():
 		return nil
 	default:
-	}
-
-	// Call this for youtube-specific customization.
-	// This should be done every time, in case mysql was restarted.
-	if err := ct.mysqld.EnableBinlogPlayback(); err != nil {
-		return err
 	}
 
 	dbClient := ct.dbClientFactory()

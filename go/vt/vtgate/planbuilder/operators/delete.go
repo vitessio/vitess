@@ -42,7 +42,7 @@ func (d *Delete) Introduces() semantics.TableSet {
 }
 
 // Clone implements the Operator interface
-func (d *Delete) Clone(inputs []ops.Operator) ops.Operator {
+func (d *Delete) Clone([]ops.Operator) ops.Operator {
 	return &Delete{
 		QTable:           d.QTable,
 		VTable:           d.VTable,
