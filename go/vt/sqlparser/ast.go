@@ -6659,11 +6659,17 @@ func (node *ColIdent) UnmarshalJSON(b []byte) error {
 type TableFuncExpr struct {
 	Name  string
 	Exprs SelectExprs
+	Alias TableIdent
 }
 
 // Format formats the node.
 func (node TableFuncExpr) Format(buf *TrackedBuffer) {
-	buf.Myprintf("%s(%v)", node.Name, node.Exprs)
+	if node.Alias.IsEmpty() {
+		buf.Myprintf("%s(%v)", node.Name, node.Exprs)
+	} else {
+		buf.Myprintf("%s(%v) %s %v", node.Name, node.Exprs, keywordStrings[AS], node.Alias)
+	}
+
 }
 
 // IsEmpty returns true if TableFuncExpr's name is empty.

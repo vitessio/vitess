@@ -263,7 +263,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %token <bytes> SEQUENCE ENABLE DISABLE
 %token <bytes> EACH ROW BEFORE FOLLOWS PRECEDES DEFINER INVOKER
 %token <bytes> INOUT OUT DETERMINISTIC CONTAINS READS MODIFIES SQL SECURITY TEMPORARY ALGORITHM MERGE TEMPTABLE UNDEFINED
-%token <bytes> EVENT SCHEDULE EVERY STARTS ENDS COMPLETION PRESERVE
+%token <bytes> EVENT EVENTS SCHEDULE EVERY STARTS ENDS COMPLETION PRESERVE
 
 // SIGNAL Tokens
 %token <bytes> CLASS_ORIGIN SUBCLASS_ORIGIN MESSAGE_TEXT MYSQL_ERRNO CONSTRAINT_CATALOG CONSTRAINT_SCHEMA
@@ -386,7 +386,6 @@ func yySpecialCommentMode(yylex interface{}) bool {
 
 // MySQL unreserved keywords that are currently unused
 %token <bytes> ACTIVE AGGREGATE ANY ARRAY ASCII AT AUTOEXTEND_SIZE
-%token <bytes> EVENTS
 
 // Generated Columns
 %token <bytes> GENERATED ALWAYS STORED VIRTUAL
@@ -2677,7 +2676,7 @@ column_definition:
     }
     $$ = &ColumnDefinition{Name: NewColIdent(string($1)), Type: $2}
   }
-| non_reserved_keyword column_type column_type_options
+| all_non_reserved column_type column_type_options
   {
     if err := $2.merge($3); err != nil {
       yylex.Error(err.Error())
@@ -5623,6 +5622,10 @@ table_function:
   ID openb argument_expression_list_opt closeb
   {
     $$ = &TableFuncExpr{Name: string($1), Exprs: $3}
+  }
+| ID openb argument_expression_list_opt closeb as_opt table_alias
+  {
+    $$ = &TableFuncExpr{Name: string($1), Exprs: $3, Alias: $6}
   }
 
 
@@ -8578,7 +8581,6 @@ non_reserved_keyword:
 non_reserved_keyword2:
   ATTRIBUTE
 | COMMENT_KEYWORD
-| EVENT
 | EXECUTE
 | EXTRACT
 | FAILED_LOGIN_ATTEMPTS
@@ -8610,6 +8612,7 @@ non_reserved_keyword3:
 column_name_safe_keyword:
   AVG
 | COUNT
+| EVENT
 | MAX
 | MIN
 | SUM
