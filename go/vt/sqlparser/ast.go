@@ -2424,8 +2424,6 @@ type TableSpec struct {
 	Indexes     []*IndexDefinition
 	Constraints []*ConstraintDefinition
 	Options     string
-	Nested      bool
-	Path        string
 }
 
 // Format formats the node.
@@ -2875,7 +2873,6 @@ func (jte *JSONTableExpr) walkSubtree(visit Visit) error {
 // JSONTableSpec describes the structure of a table from a JSON_TABLE() statement
 type JSONTableSpec struct {
 	Columns []*JSONTableColDef
-	Nested  bool
 	Path    string
 }
 
