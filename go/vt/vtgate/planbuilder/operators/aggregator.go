@@ -174,18 +174,18 @@ func (a *Aggregator) ShortDescription() string {
 		return sqlparser.String(from)
 	})
 
+	org := ""
+	if a.Original {
+		org = "ORG "
+	}
+
 	if len(a.Grouping) == 0 {
-		return strings.Join(columnns, ", ")
+		return fmt.Sprintf("%s%s", org, strings.Join(columnns, ", "))
 	}
 
 	var grouping []string
 	for _, gb := range a.Grouping {
 		grouping = append(grouping, sqlparser.String(gb.SimplifiedExpr))
-	}
-
-	org := ""
-	if a.Original {
-		org = "ORG "
 	}
 
 	return fmt.Sprintf("%s%s group by %s", org, strings.Join(columnns, ", "), strings.Join(grouping, ","))

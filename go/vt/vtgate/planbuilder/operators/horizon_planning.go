@@ -223,7 +223,7 @@ func addOrderBysAndGroupBysForAggregations(ctx *plancontext.PlanningContext, roo
 		switch in := in.(type) {
 		case *Aggregator:
 			if in.Pushed {
-				// first we update the incoming columns, so we know about any new columns that have been added
+				// we update the incoming columns, so we know about any new columns that have been added
 				columns, err := in.Source.GetColumns()
 				if err != nil {
 					return nil, nil, err
