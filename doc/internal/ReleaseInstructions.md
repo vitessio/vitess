@@ -263,12 +263,16 @@ We need to verify that _arewefastyet_ has finished the benchmark too.
     2. Run the following command to generate the release notes:
         1. Release Candidate:
             ```shell
-            make VERSION="v15.0.0-rc1" FROM="v14.0.3" TO="HEAD" SUMMARY="./changelog/15.0/15.0.0/summary.md" release-notes  
+            go run ./go/tools/release-notes --from "v14.0.3" --to "HEAD" --version "v15.0.0-rc1" --summary "./changelog/15.0/15.0.0/summary.md" [--threads=[0-9.]]
             ```
         2. General Availability:
             ```shell
-            make VERSION="v15.0.0-rc1" FROM="v14.0.3" TO="HEAD" SUMMARY="./changelog/15.0/15.0.0/summary.md" release-notes  
+            go run ./go/tools/release-notes --from "v14.0.3" --to "HEAD" --version "v15.0.0" --summary "./changelog/15.0/15.0.0/summary.md" [--threads=[0-9.]]
             ```
+    
+        > Important note: The release note generation fetches a lot of data from the GitHub API. You might reach the API request limit.
+        In which case you should use the `--threads=` flag and set an integer value lower than 10 (the default).
+
        This command will generate the release notes by looking at all the commits between the tag `v14.0.3` and the reference `HEAD`.
        It will also use the file located in `./changelog/15.0/15.0.0/summary.md` to prefix the release notes with a text that the maintainers wrote before the release.
        Please verify the generated release notes to make sure it is well-formatted and all the bookmarks are generated properly.
