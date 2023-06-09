@@ -2869,7 +2869,7 @@ func (jte *JSONTableExpr) walkSubtree(visit Visit) error {
 	if jte == nil {
 		return nil
 	}
-	return Walk(visit)
+	return Walk(visit, jte.Data, jte.Spec)
 }
 
 // JSONTableSpec describes the structure of a table from a JSON_TABLE() statement
