@@ -53,7 +53,7 @@ if [[ -z ${NVM_DIR} ]]; then
 fi
 
 if [[ -z ${NODE_VERSION} ]]; then
-    export NODE_VERSION="16"
+    export NODE_VERSION="18"
 fi
 
 output "\nInstalling nvm...\n"
