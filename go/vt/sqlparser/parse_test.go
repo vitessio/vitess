@@ -7414,6 +7414,17 @@ FROM
 				")\n" +
 				")) as jt",
 		},
+		{
+			input: `SELECT * FROM  JSON_TABLE('{}', 'root_path' COLUMNS( a INT PATH 'a_path', NESTED PATH 'b_path' COLUMNS (NESTED PATH '$' COLUMNS (b1 INT PATH 'b1_path')))) AS jt;`,
+			output: "select * from json_table('{}', \"root_path\" columns(\n" +
+				"\ta INT path \"a_path\",\n" +
+				"\tnested path \"b_path\" columns(\n" +
+				"\tnested path \"$\" columns(\n" +
+				"\tb1 INT path \"b1_path\"\n" +
+				")\n" +
+				")\n" +
+				")) as jt",
+		},
 	}
 
 	for _, tcase := range validSQL {
