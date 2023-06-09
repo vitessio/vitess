@@ -240,16 +240,11 @@ func testDelete(t *testing.T, ksWorkflow, cells string) {
 		// shard. So we want to get a count of the unique VDiffs
 		// by UUID.
 		uuidCount := func(uuids []gjson.Result) int64 {
-			cnt := int64(0)
 			seen := make(map[string]struct{})
 			for _, uuid := range uuids {
-				uuidStr := uuid.String()
-				if _, ok := seen[uuidStr]; !ok {
-					seen[uuidStr] = struct{}{}
-					cnt++
-				}
+				seen[uuid.String()] = struct{}{}
 			}
-			return cnt
+			return int64(len(seen))
 		}
 		_, output := performVDiff2Action(t, ksWorkflow, cells, "show", "all", false)
 		initialVDiffCount := uuidCount(gjson.Get(output, "#.UUID").Array())
@@ -261,7 +256,7 @@ func testDelete(t *testing.T, ksWorkflow, cells string) {
 		_, output = performVDiff2Action(t, ksWorkflow, cells, "show", "all", false)
 		require.GreaterOrEqual(t, uuidCount(gjson.Get(output, "#.UUID").Array()), int64(3))
 		// And that our initial count is what we expect.
-		require.Equal(t, uuidCount(gjson.Get(output, "#.UUID").Array()), initialVDiffCount)
+		require.Equal(t, initialVDiffCount, uuidCount(gjson.Get(output, "#.UUID").Array()))
 
 		// Test show last with verbose too as a side effect.
 		uuid, output := performVDiff2Action(t, ksWorkflow, cells, "show", "last", false, "--verbose")
@@ -270,17 +265,17 @@ func testDelete(t *testing.T, ksWorkflow, cells string) {
 
 		// Now let's delete one of the VDiffs.
 		_, output = performVDiff2Action(t, ksWorkflow, cells, "delete", uuid, false)
-		require.Equal(t, gjson.Get(output, "Status").String(), "completed")
+		require.Equal(t, "completed", gjson.Get(output, "Status").String())
 		// And confirm that our unique VDiff count has only decreased by one.
 		_, output = performVDiff2Action(t, ksWorkflow, cells, "show", "all", false)
 		require.Equal(t, initialVDiffCount-1, uuidCount(gjson.Get(output, "#.UUID").Array()))
 
 		// Now let's delete all of them.
 		_, output = performVDiff2Action(t, ksWorkflow, cells, "delete", "all", false)
-		require.Equal(t, gjson.Get(output, "Status").String(), "completed")
+		require.Equal(t, "completed", gjson.Get(output, "Status").String())
 		// And finally confirm that we have no more VDiffs.
 		_, output = performVDiff2Action(t, ksWorkflow, cells, "show", "all", false)
-		require.Equal(t, gjson.Get(output, "#").Int(), int64(0))
+		require.Equal(t, int64(0), gjson.Get(output, "#").Int())
 	})
 }
 
