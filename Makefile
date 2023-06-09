@@ -460,8 +460,8 @@ vtadmin_authz_testgen:
 generate_ci_workflows:
 	cd test && go run ci_workflow_gen.go && cd ..
 
-release-notes:
-	go run ./go/tools/release-notes --from "$(FROM)" --to "$(TO)" --version "$(VERSION)" --summary "$(SUMMARY)"
+generate-flag-testdata:
+	./tools/generate_flag_testdata.sh
 
 install_kubectl_kind:
 	./tools/get_kubectl_kind.sh
