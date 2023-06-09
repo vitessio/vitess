@@ -435,12 +435,10 @@ Cleanup:
 				redactedPrimaryExecutedGtidSet.RemoveUUID(instance.SourceUUID)
 
 				instance.GtidErrant, err = vitessmysql.Subtract(redactedExecutedGtidSet.String(), redactedPrimaryExecutedGtidSet.String())
-				// update the errant gtid map
-				if err == nil {
-					errantGtidMap[topoproto.TabletAliasString(tablet.Alias)] = instance.GtidErrant
-				}
 			}
 		}
+		// update the errant gtid map
+		errantGtidMap[topoproto.TabletAliasString(tablet.Alias)] = instance.GtidErrant
 	}
 
 	latency.Stop("instance")
