@@ -112,6 +112,29 @@ function wait_for_healthy_shard() {
 	wait_for_shard_vreplication_engine "${keyspace}" "${shard}"
 }
 
+# Wait for a workflow to reach the running state. Example:
+# wait_for_workflow_running customer customer2customer
+function wait_for_workflow_running() {
+	if [[ -z ${1} || -z ${2} ]]; then
+		fail "A keyspace and workflow must be specified when waiting for a workflow to reach the running state"
+	fi
+
+	local keyspace=${1}
+	local workflow=${2}
+	local wait_secs=180
+
+    for _ in $(seq 1 ${wait_secs}); do
+        if [[ $(vtctldclient Workflow --keyspace="${keyspace}" show --workflow="${workflow}" 2>/dev/null | grep -A1 "State Changed" | grep Running) != "" ]] ; then
+            break
+        fi
+        sleep 1
+    done;
+
+    if [[ $(vtctldclient Workflow --keyspace="${keyspace}" show --workflow="${workflow}" 2>/dev/null | grep -A1 "State Changed" | grep Running) == "" ]]; then
+        fail "Timed out after ${wait_secs} seconds waiting for the ${workflow} in the ${keyspace} to reach the running state"
+    fi
+}
+
 # Print error message and exit with error code.
 function fail() {
 	echo "ERROR: ${1}"

@@ -1351,8 +1351,6 @@ func moveTablesAction(t *testing.T, action, cell, workflow, sourceKs, targetKs, 
 		extraFlags = append(extraFlags, "--source-keyspace="+sourceKs, "--tables="+tables, "--cells="+cell, "--tablet-types=primary,replica,rdonly")
 	}
 	args = append(args, extraFlags...)
-	cmd := strings.Join(args, " ")
-	log.Errorf("Command: %s", cmd)
 	err = vc.VtctldClient.ExecuteCommand(args...)
 	if err != nil {
 		t.Fatalf("MoveTables %s command failed with %+v\n", action, err)
