@@ -151,20 +151,25 @@ func optimizeHorizonPlanning(ctx *plancontext.PlanningContext, root ops.Operator
 }
 
 func tryPushingDownFilter(ctx *plancontext.PlanningContext, in *Filter) (ops.Operator, *rewrite.ApplyResult, error) {
-	proj, ok := in.Source.(*Projection)
-	if !ok {
-		// we can only push filter under a projection
-		return in, rewrite.SameTree, nil
+	switch src := in.Source.(type) {
+	case *Projection:
+		return pushFilterUnderProjection(ctx, in, src)
+	case *Route:
+		return rewrite.Swap(in, src, "push filter into Route")
 	}
 
-	for _, p := range in.Predicates {
+	return in, rewrite.SameTree, nil
+}
+
+func pushFilterUnderProjection(ctx *plancontext.PlanningContext, filter *Filter, projection *Projection) (ops.Operator, *rewrite.ApplyResult, error) {
+	for _, p := range filter.Predicates {
 		cantPushDown := false
 		_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 			if !fetchByOffset(node) {
 				return true, nil
 			}
 
-			if proj.needsEvaluation(ctx, node.(sqlparser.Expr)) {
+			if projection.needsEvaluation(ctx, node.(sqlparser.Expr)) {
 				cantPushDown = true
 				return false, io.EOF
 			}
@@ -173,13 +178,12 @@ func tryPushingDownFilter(ctx *plancontext.PlanningContext, in *Filter) (ops.Ope
 		}, p)
 
 		if cantPushDown {
-			return in, rewrite.SameTree, nil
+			return filter, rewrite.SameTree, nil
 		}
 	}
+	return rewrite.Swap(filter, projection, "push filter under projection")
 
-	return rewrite.Swap(in, proj, "push filter under projection")
 }
-
 func tryPushingDownDistinct(in *Distinct) (ops.Operator, *rewrite.ApplyResult, error) {
 	if in.Pushed {
 		return in, rewrite.SameTree, nil
