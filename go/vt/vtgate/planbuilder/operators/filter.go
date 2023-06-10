@@ -17,7 +17,11 @@ limitations under the License.
 package operators
 
 import (
+	"strings"
+
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
@@ -114,22 +118,25 @@ func (f *Filter) Compact(*plancontext.PlanningContext) (ops.Operator, *rewrite.A
 }
 
 func (f *Filter) planOffsets(ctx *plancontext.PlanningContext) error {
-	resolveColumn := func(col *sqlparser.ColName) (int, error) {
-		newSrc, offset, err := f.Source.AddColumn(ctx, aeWrap(col), true, false)
-		if err != nil {
-			return 0, err
-		}
-		f.Source = newSrc
-		return offset, nil
-	}
 	cfg := &evalengine.Config{
-		ResolveType:   ctx.SemTable.TypeForExpr,
-		Collation:     ctx.SemTable.Collation,
-		ResolveColumn: resolveColumn,
+		ResolveType: ctx.SemTable.TypeForExpr,
+		Collation:   ctx.SemTable.Collation,
 	}
 
-	eexpr, err := evalengine.Translate(sqlparser.AndExpressions(f.Predicates...), cfg)
+	predicate := sqlparser.AndExpressions(f.Predicates...)
+	rewritten, err := useOffsets(ctx, predicate, func() ops.Operator {
+		return f.Source
+	}, func(operator ops.Operator) {
+		f.Source = operator
+	})
 	if err != nil {
+		return err
+	}
+	eexpr, err := evalengine.Translate(rewritten, cfg)
+	if err != nil {
+		if strings.HasPrefix(err.Error(), evalengine.ErrTranslateExprNotSupported) {
+			return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%s: %s", evalengine.ErrTranslateExprNotSupported, sqlparser.String(predicate))
+		}
 		return err
 	}
 

@@ -296,12 +296,9 @@ func (p *Projection) planOffsets(ctx *plancontext.PlanningContext) error {
 		}
 
 		// first step is to replace the expressions we expect to get from our input with the offsets for these
-		visitor, errCheck := offsetter(ctx,
-			func() ops.Operator { return p.Source },
-			func(o ops.Operator) { p.Source = o },
-		)
-		rewritten := sqlparser.CopyOnRewrite(col.GetExpr(), stopAtAggregations, visitor, nil).(sqlparser.Expr)
-		if err := errCheck(); err != nil {
+		rewritten, err := useOffsets(ctx, col.GetExpr(), func() ops.Operator { return p.Source },
+			func(o ops.Operator) { p.Source = o })
+		if err != nil {
 			return err
 		}
 
@@ -330,23 +327,59 @@ func (p *Projection) planOffsets(ctx *plancontext.PlanningContext) error {
 	return nil
 }
 
-func offsetter(ctx *plancontext.PlanningContext, src func() ops.Operator, setSource func(ops.Operator)) (func(cursor *sqlparser.CopyOnWriteCursor), func() error) {
-	var err error
-	return func(cursor *sqlparser.CopyOnWriteCursor) {
-			expr, ok := cursor.Node().(sqlparser.Expr)
-			if !ok || !fetchByOffset(expr) {
-				return
-			}
+func useOffsets(ctx *plancontext.PlanningContext, in sqlparser.Expr, src func() ops.Operator, setSource func(ops.Operator)) (sqlparser.Expr, error) {
+	columns, err := src().GetColumns()
+	if err != nil {
+		return nil, err
+	}
 
-			newSrc, offset, terr := src().AddColumn(ctx, aeWrap(expr), true, false)
-			if terr != nil {
-				err = terr
-				return
+	var doit func(cursor *sqlparser.CopyOnWriteCursor)
+
+	down := func(node, parent sqlparser.SQLNode) bool {
+		e, ok := node.(sqlparser.Expr)
+		if !ok {
+			return true
+		}
+		offset := slices.IndexFunc(columns, func(expr *sqlparser.AliasedExpr) bool {
+			return ctx.SemTable.EqualsExprWithDeps(expr.Expr, e)
+		})
+		if offset >= 0 {
+			// this expression can be fetched from the input - we can stop here
+			doit = func(cursor *sqlparser.CopyOnWriteCursor) {
+				cursor.Replace(sqlparser.NewOffset(offset, e))
+			}
+			return false
+		}
+
+		if fetchByOffset(e) {
+			// this expression has to be fetched from the input, but we didn't find it in the input. let's add it
+			_, addToGroupBy := e.(*sqlparser.ColName)
+			newSrc, offset, err := src().AddColumn(ctx, aeWrap(e), true, addToGroupBy)
+			if err != nil {
+				panic(err.Error())
 			}
 			setSource(newSrc)
-			cursor.Replace(sqlparser.NewOffset(offset, expr))
-
-		}, func() error {
-			return err
+			columns, err = src().GetColumns()
+			if err != nil {
+				panic("this should not happen")
+			}
+			doit = func(cursor *sqlparser.CopyOnWriteCursor) {
+				cursor.Replace(sqlparser.NewOffset(offset, e))
+			}
+			return false
 		}
+
+		return true
+	}
+
+	up := func(cursor *sqlparser.CopyOnWriteCursor) {
+		if doit != nil {
+			doit(cursor)
+			doit = nil
+		}
+	}
+
+	rewritten := sqlparser.CopyOnRewrite(in, down, up, ctx.SemTable.CopyDependenciesOnSQLNodes)
+
+	return rewritten.(sqlparser.Expr), nil
 }
