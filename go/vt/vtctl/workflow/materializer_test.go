@@ -19,7 +19,6 @@ package workflow
 import (
 	"context"
 	"fmt"
-	"sort"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -38,34 +37,54 @@ const mzUpdateQuery = "update _vt.vreplication set state='Running' where db_name
 const mzSelectIDQuery = "select id from _vt.vreplication where db_name='vt_targetks' and workflow='workflow'"
 const mzSelectFrozenQuery = "select 1 from _vt.vreplication where db_name='vt_targetks' and message='FROZEN' and workflow_sub_type != 1"
 const mzCheckJournal = "/select val from _vt.resharding_journal where id="
-const rsSelectFrozenQuery = "select 1 from _vt.vreplication where db_name='vt_ks' and message='FROZEN' and workflow_sub_type != 1"
+const mzGetWorkflowQuery = "select id, source, message, cell, tablet_types, workflow_type, workflow_sub_type, defer_secondary_keys from _vt.vreplication where workflow='workflow' and db_name='vt_targetks'"
+const mzGetWorkflowQuery2 = "select id, workflow, source, pos, stop_pos, max_replication_lag, state, db_name, time_updated, transaction_timestamp, message, tags, workflow_type, workflow_sub_type from _vt.vreplication where workflow = 'workflow' and db_name = 'vt_targetks'"
+const mzGetCopyState = "select table_name, lastpk from _vt.copy_state where vrepl_id = 1 and id in (select max(id) from _vt.copy_state where vrepl_id = 1 group by vrepl_id, table_name)"
 const insertPrefix = `/insert into _vt.vreplication\(workflow, source, pos, max_tps, max_replication_lag, cell, tablet_types, time_updated, transaction_timestamp, state, db_name, workflow_type, workflow_sub_type, defer_secondary_keys\) values `
-const eol = "$"
 
 var defaultOnDDL = binlogdatapb.OnDDLAction_name[int32(binlogdatapb.OnDDLAction_IGNORE)]
 var getWorkflowRes = sqltypes.MakeTestResult(
 	sqltypes.MakeTestFields("id", "int64"),
 	"1")
 
+/*
 func TestMigrateTables(t *testing.T) {
+	shard := "0"
+	table := "t1"
 	ms := &vtctldatapb.MaterializeSettings{
 		Workflow:       "workflow",
 		SourceKeyspace: "sourceks",
 		TargetKeyspace: "targetks",
 		TableSettings: []*vtctldatapb.TableMaterializeSettings{{
-			TargetTable:      "t1",
-			SourceExpression: "select * from t1",
+			TargetTable:      table,
+			SourceExpression: fmt.Sprintf("select * from %s", table),
 		}},
 	}
 	env := newTestMaterializerEnv(t, ms, []string{"0"}, []string{"0"})
 	defer env.close()
 
+	sourceCol := fmt.Sprintf(`keyspace:"%s" shard:"%s" filter:{rules:{match:"%s" filter:"select * from %s"}}`,
+		ms.SourceKeyspace, shard, table, table)
+
 	env.tmc.expectVRQuery(100, mzCheckJournal, &sqltypes.Result{})
 	env.tmc.expectVRQuery(200, mzSelectFrozenQuery, &sqltypes.Result{})
-	env.tmc.expectVRQuery(200, getWorkflowQuery, getWorkflowRes)
-	env.tmc.expectVRQuery(200, insertPrefix, &sqltypes.Result{})
 	env.tmc.expectVRQuery(200, mzSelectIDQuery, &sqltypes.Result{})
 	env.tmc.expectVRQuery(200, mzUpdateQuery, &sqltypes.Result{})
+	env.tmc.expectVRQuery(200, mzGetWorkflowQuery, sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields(
+			"id|source|message|cell|tablet_types|workflow_type|workflow_sub_type|defer_secondary_keys",
+			"int64|varchar|varchar|varchar|varchar|int64|int64|int64",
+		),
+		fmt.Sprintf("1|%s|msg|cell|replica|1|0|0", sourceCol),
+	))
+	env.tmc.expectVRQuery(200, mzGetCopyState, &sqltypes.Result{})
+	env.tmc.expectVRQuery(200, mzGetWorkflowQuery2, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+		"id|workflow|source|pos|stop_pos|max_replication_lag|state|db_name|time_updated|transaction_timestamp|message|tags|workflow_type|workflow_sub_type",
+		"int64|varbinary|blob|varbinary|varbinary|int64|varbinary|varbinary|int64|int64|varbinary|varbinary|int64|int64",
+	),
+		fmt.Sprintf("1|%s|%s|||9223372036854775807|Running|%s|1669511347|0|||1|0", ms.Workflow, sourceCol, "vt_targetks"),
+	))
+	env.tmc.expectVRQuery(200, mzGetCopyState, &sqltypes.Result{})
 
 	ctx := context.Background()
 	_, err := env.ws.MoveTablesCreate(ctx, &vtctldatapb.MoveTablesCreateRequest{

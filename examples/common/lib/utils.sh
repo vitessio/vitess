@@ -124,13 +124,13 @@ function wait_for_workflow_running() {
 	local wait_secs=90
 
     for _ in $(seq 1 ${wait_secs}); do
-        if [[ $(vtctldclient Workflow --keyspace="${keyspace}" show --workflow="${workflow}" 2>/dev/null | grep -A1 "State Changed" | grep Running) != "" ]] ; then
+        if vtctldclient Workflow --keyspace="${keyspace}" show --workflow="${workflow}" 2>/dev/null | grep -q "Copy phase completed" ; then
             break
         fi
         sleep 1
     done;
 
-    if [[ $(vtctldclient Workflow --keyspace="${keyspace}" show --workflow="${workflow}" 2>/dev/null | grep -A1 "State Changed" | grep Running) == "" ]]; then
+    if ! vtctldclient Workflow --keyspace="${keyspace}" show --workflow="${workflow}" 2>/dev/null | grep -q "Copy phase completed" ; then
         fail "Timed out after ${wait_secs} seconds waiting for the ${workflow} in the ${keyspace} to reach the running state"
     fi
 }

@@ -81,13 +81,12 @@ func (mz *materializer) prepareMaterializerStreams(req *vtctldatapb.MoveTablesCr
 	if mz.isPartial {
 		workflowSubType = binlogdatapb.VReplicationWorkflowSubType_Partial
 	}
-
-	for _, targetShard := range mz.targetShards {
-		targetPrimary, err := mz.ts.GetTablet(mz.ctx, targetShard.PrimaryAlias)
+	return mz.forAllTargets(func(target *topo.ShardInfo) error {
+		targetPrimary, err := mz.ts.GetTablet(mz.ctx, target.PrimaryAlias)
 		if err != nil {
-			return vterrors.Wrapf(err, "GetTablet(%v) failed", targetShard.PrimaryAlias)
+			return vterrors.Wrapf(err, "GetTablet(%v) failed", target.PrimaryAlias)
 		}
-		blses, err := mz.generateBinlogSources(mz.ctx, targetShard)
+		blses, err := mz.generateBinlogSources(mz.ctx, target)
 		if err != nil {
 			return err
 		}
@@ -102,11 +101,8 @@ func (mz *materializer) prepareMaterializerStreams(req *vtctldatapb.MoveTablesCr
 			AutoStart:          req.AutoStart,
 			StopAfterCopy:      req.StopAfterCopy,
 		})
-		if err != nil {
-			return err
-		}
-	}
-	return nil
+		return err
+	})
 }
 
 func (mz *materializer) createMaterializerStreams() error {
