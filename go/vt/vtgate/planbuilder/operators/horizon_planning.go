@@ -720,11 +720,7 @@ func makeSureOutputIsCorrect(ctx *plancontext.PlanningContext, oldHorizon ops.Op
 	if err != nil {
 		return nil, err
 	}
-	proj, err := createProjectionWithoutAggr(qp, output)
-	if err != nil {
-		return nil, err
-	}
-	err = proj.passThroughAllColumns(ctx)
+	proj, err := createSimpleProjection(ctx, qp, output)
 	if err != nil {
 		return nil, err
 	}

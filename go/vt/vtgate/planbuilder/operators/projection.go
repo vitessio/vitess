@@ -78,6 +78,33 @@ type (
 
 var _ selectExpressions = (*Projection)(nil)
 
+// createSimpleProjection returns a projection where all columns are offsets.
+// used to change the name and order of the columns in the final output
+func createSimpleProjection(ctx *plancontext.PlanningContext, qp *QueryProjection, src ops.Operator) (*Projection, error) {
+	p := &Projection{
+		Source: src,
+	}
+
+	for _, e := range qp.SelectExprs {
+		if _, isStar := e.Col.(*sqlparser.StarExpr); isStar {
+			return nil, errHorizonNotPlanned()
+		}
+		ae, err := e.GetAliasedExpr()
+		if err != nil {
+			return nil, err
+		}
+		newSrc, offset, err := p.Source.AddColumn(ctx, ae, true, false)
+		if err != nil {
+			return nil, err
+		}
+
+		p.Source = newSrc
+		p.Projections = append(p.Projections, Offset{Expr: ae.Expr, Offset: offset})
+		p.Columns = append(p.Columns, ae)
+	}
+	return p, nil
+}
+
 func (p *Projection) addUnexploredExpr(ae *sqlparser.AliasedExpr, e sqlparser.Expr) int {
 	p.Projections = append(p.Projections, UnexploredExpression{E: e})
 	p.Columns = append(p.Columns, ae)
