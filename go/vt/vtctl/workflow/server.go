@@ -1096,10 +1096,10 @@ func (s *Server) MoveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 		}
 		if exists {
 			log.Errorf("Found a previous journal entry for %d", migrationID)
-			msg := fmt.Sprintf("found an entry from a previous run for migration id %d in _vt.resharding_journal of tablets %s,",
+			msg := fmt.Sprintf("found an entry from a previous run for migration id %d in _vt.resharding_journal on tablets %s, ",
 				migrationID, strings.Join(tablets, ","))
-			msg += fmt.Sprintf("please review and delete it before proceeding and restart the workflow using the Workflow %s.%s start",
-				mz.ms.Workflow, targetKeyspace)
+			msg += fmt.Sprintf("please review and delete it before proceeding and then start the workflow using: MoveTables --workflow %s --target-keyspace %s start",
+				req.Workflow, req.TargetKeyspace)
 			return nil, fmt.Errorf(msg)
 		}
 	}
