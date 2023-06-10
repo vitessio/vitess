@@ -61,31 +61,52 @@ type materializer struct {
 	isPartial     bool
 }
 
-func (mz *materializer) prepareMaterializerStreams() (map[string][]*binlogdatapb.BinlogSource, error) {
+func (mz *materializer) prepareMaterializerStreams(req *vtctldatapb.MoveTablesCreateRequest) error {
 	if err := validateNewWorkflow(mz.ctx, mz.ts, mz.tmc, mz.ms.TargetKeyspace, mz.ms.Workflow); err != nil {
-		return nil, err
+		return err
 	}
 	err := mz.buildMaterializer()
 	if err != nil {
-		return nil, err
+		return err
 	}
 	if mz.isPartial {
 		if err := createDefaultShardRoutingRules(mz.ctx, mz.ms, mz.ts); err != nil {
-			return nil, err
+			return err
 		}
 	}
 	if err := mz.deploySchema(); err != nil {
-		return nil, err
+		return err
 	}
-	blsMap := make(map[string][]*binlogdatapb.BinlogSource, len(mz.targetShards))
+	workflowSubType := binlogdatapb.VReplicationWorkflowSubType_None
+	if mz.isPartial {
+		workflowSubType = binlogdatapb.VReplicationWorkflowSubType_Partial
+	}
+
 	for _, targetShard := range mz.targetShards {
+		targetPrimary, err := mz.ts.GetTablet(mz.ctx, targetShard.PrimaryAlias)
+		if err != nil {
+			return vterrors.Wrapf(err, "GetTablet(%v) failed", targetShard.PrimaryAlias)
+		}
 		blses, err := mz.generateBinlogSources(mz.ctx, targetShard)
 		if err != nil {
-			return nil, err
+			return err
 		}
-		blsMap[key.KeyRangeString(targetShard.KeyRange)] = blses
+		_, err = mz.tmc.CreateVRWorkflow(mz.ctx, targetPrimary.Tablet, &tabletmanagerdatapb.CreateVRWorkflowRequest{
+			Workflow:           req.Workflow,
+			BinlogSource:       blses,
+			Cells:              req.Cells,
+			TabletTypes:        req.TabletTypes,
+			WorkflowType:       binlogdatapb.VReplicationWorkflowType_MoveTables,
+			WorkflowSubType:    workflowSubType,
+			DeferSecondaryKeys: req.DeferSecondaryKeys,
+			AutoStart:          req.AutoStart,
+			StopAfterCopy:      req.StopAfterCopy,
+		})
+		if err != nil {
+			return err
+		}
 	}
-	return blsMap, nil
+	return nil
 }
 
 func (mz *materializer) createMaterializerStreams() error {

@@ -444,7 +444,7 @@ func (client *gRPCVtctldClient) MoveTablesComplete(ctx context.Context, in *vtct
 }
 
 // MoveTablesCreate is part of the vtctlservicepb.VtctldClient interface.
-func (client *gRPCVtctldClient) MoveTablesCreate(ctx context.Context, in *vtctldatapb.MoveTablesCreateRequest, opts ...grpc.CallOption) (*vtctldatapb.MoveTablesCreateResponse, error) {
+func (client *gRPCVtctldClient) MoveTablesCreate(ctx context.Context, in *vtctldatapb.MoveTablesCreateRequest, opts ...grpc.CallOption) (*vtctldatapb.WorkflowStatusResponse, error) {
 	if client.c == nil {
 		return nil, status.Error(codes.Unavailable, connClosedMsg)
 	}

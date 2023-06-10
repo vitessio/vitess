@@ -2244,7 +2244,7 @@ func (s *VtctldServer) InitShardPrimaryLocked(
 }
 
 // MoveTablesCreate is part of the vtctlservicepb.VtctldServer interface.
-func (s *VtctldServer) MoveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTablesCreateRequest) (resp *vtctldatapb.MoveTablesCreateResponse, err error) {
+func (s *VtctldServer) MoveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTablesCreateRequest) (resp *vtctldatapb.WorkflowStatusResponse, err error) {
 	span, ctx := trace.NewSpan(ctx, "VtctldServer.MoveTablesCreate")
 	defer span.Finish()
 

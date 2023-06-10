@@ -352,7 +352,7 @@ func (client *localVtctldClient) MoveTablesComplete(ctx context.Context, in *vtc
 }
 
 // MoveTablesCreate is part of the vtctlservicepb.VtctldClient interface.
-func (client *localVtctldClient) MoveTablesCreate(ctx context.Context, in *vtctldatapb.MoveTablesCreateRequest, opts ...grpc.CallOption) (*vtctldatapb.MoveTablesCreateResponse, error) {
+func (client *localVtctldClient) MoveTablesCreate(ctx context.Context, in *vtctldatapb.MoveTablesCreateRequest, opts ...grpc.CallOption) (*vtctldatapb.WorkflowStatusResponse, error) {
 	return client.s.MoveTablesCreate(ctx, in)
 }
 

@@ -66,9 +66,6 @@ func (tm *TabletManager) CreateVRWorkflow(ctx context.Context, req *tabletmanage
 			req.Cells = append(req.Cells, tm.Tablet().Alias.Cell)
 		}
 		wfState := "Stopped"
-		if req.AutoStart {
-			wfState = "Running"
-		}
 		bindVars := map[string]*querypb.BindVariable{
 			"wf":  sqltypes.StringBindVariable(req.Workflow),
 			"sc":  sqltypes.StringBindVariable(string(source)),

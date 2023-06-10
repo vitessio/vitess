@@ -77,6 +77,7 @@ See the --help output for each command for more details.`,
 		Use:                   "create",
 		Short:                 "Create and optionally run a MoveTables VReplication workflow",
 		Example:               `vtctldclient --server=localhost:15999 MoveTables --workflow "commerce2customer" --target-keyspace "customer" create --source-keyspace "commerce" --cells "zone1" --cells "zone2" --tablet-types "replica"`,
+		SilenceUsage:          true,
 		DisableFlagsInUseLine: true,
 		Aliases:               []string{"Create"},
 		Args:                  cobra.NoArgs,
@@ -265,11 +266,6 @@ func commandMoveTablesCreate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-
-	// Sort the inner TabletInfo slice for deterministic output.
-	sort.Slice(resp.Details, func(i, j int) bool {
-		return resp.Details[i].Tablet < resp.Details[j].Tablet
-	})
 
 	data, err := cli.MarshalJSON(resp)
 	if err != nil {

@@ -158,7 +158,7 @@ service Vtctld {
   rpc InitShardPrimary(vtctldata.InitShardPrimaryRequest) returns (vtctldata.InitShardPrimaryResponse) {};
   // MoveTablesCreate creates a workflow which moves one or more tables from a
   // source keyspace to a target keyspace.
-  rpc MoveTablesCreate(vtctldata.MoveTablesCreateRequest) returns (vtctldata.MoveTablesCreateResponse) {};
+  rpc MoveTablesCreate(vtctldata.MoveTablesCreateRequest) returns (vtctldata.WorkflowStatusResponse) {};
   // MoveTablesComplete completes the move and cleans up the workflow and
   // its related artifacts.
   rpc MoveTablesComplete(vtctldata.MoveTablesCompleteRequest) returns (vtctldata.MoveTablesCompleteResponse) {};

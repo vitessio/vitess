@@ -921,7 +921,7 @@ func (s *Server) getWorkflowCopyStates(ctx context.Context, tablet *topo.TabletI
 // MoveTablesCreate is part of the vtctlservicepb.VtctldServer interface.
 // It passes the embedded TabletRequest object to the given keyspace's
 // target primary tablets that will be executing the workflow.
-func (s *Server) MoveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTablesCreateRequest) (*vtctldatapb.MoveTablesCreateResponse, error) {
+func (s *Server) MoveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTablesCreateRequest) (*vtctldatapb.WorkflowStatusResponse, error) {
 	span, ctx := trace.NewSpan(ctx, "workflow.Server.MoveTablesCreate")
 	defer span.Finish()
 
@@ -1068,7 +1068,7 @@ func (s *Server) MoveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 		tmc:      s.tmc,
 		ms:       ms,
 	}
-	blsMap, err := mz.prepareMaterializerStreams()
+	err = mz.prepareMaterializerStreams(req)
 	if err != nil {
 		return nil, err
 	}
@@ -1104,53 +1104,16 @@ func (s *Server) MoveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 		}
 	}
 
-	workflowSubType := binlogdatapb.VReplicationWorkflowSubType_None
-	if mz.isPartial {
-		workflowSubType = binlogdatapb.VReplicationWorkflowSubType_Partial
-	}
-
-	vx := vexec.NewVExec(req.TargetKeyspace, req.Workflow, s.ts, s.tmc)
-	callback := func(ctx context.Context, tablet *topo.TabletInfo) (*querypb.QueryResult, error) {
-		res, err := s.tmc.CreateVRWorkflow(ctx, tablet.Tablet, &tabletmanagerdatapb.CreateVRWorkflowRequest{
-			Workflow:           req.Workflow,
-			BinlogSource:       blsMap[tablet.Shard],
-			Cells:              req.Cells,
-			TabletTypes:        req.TabletTypes,
-			WorkflowType:       binlogdatapb.VReplicationWorkflowType_MoveTables,
-			WorkflowSubType:    workflowSubType,
-			DeferSecondaryKeys: req.DeferSecondaryKeys,
-			AutoStart:          req.AutoStart,
-			StopAfterCopy:      req.StopAfterCopy,
-		})
-		if err != nil {
+	if req.AutoStart {
+		if err := mz.startStreams(ctx); err != nil {
 			return nil, err
 		}
-		return res.Result, err
-	}
-	res, err := vx.CallbackContext(ctx, callback)
-	if err != nil {
-		if topo.IsErrType(err, topo.NoNode) {
-			return nil, vterrors.Wrapf(err, "%s keyspace does not exist", req.TargetKeyspace)
-		}
-		return nil, err
 	}
 
-	if len(res) == 0 {
-		return nil, fmt.Errorf("the %s workflow does not exist in the %s keyspace", req.Workflow, req.TargetKeyspace)
-	}
-
-	response := &vtctldatapb.MoveTablesCreateResponse{}
-	response.Summary = fmt.Sprintf("Successfully created the %s MoveTables workflow on (%d) target primary tablets in the %s keyspace", req.Workflow, len(res), req.TargetKeyspace)
-	details := make([]*vtctldatapb.MoveTablesCreateResponse_TabletInfo, 0, len(res))
-	for tinfo, tres := range res {
-		result := &vtctldatapb.MoveTablesCreateResponse_TabletInfo{
-			Tablet:  fmt.Sprintf("%s-%d (%s/%s)", tinfo.Alias.Cell, tinfo.Alias.Uid, tinfo.Keyspace, tinfo.Shard),
-			Created: tres.RowsAffected > 0, // Can be more than one with shard merges
-		}
-		details = append(details, result)
-	}
-	response.Details = details
-	return response, nil
+	return s.WorkflowStatus(ctx, &vtctldatapb.WorkflowStatusRequest{
+		Keyspace: targetKeyspace,
+		Workflow: req.Workflow,
+	})
 }
 
 // MoveTablesComplete is part of the vtctlservicepb.VtctldServer interface.

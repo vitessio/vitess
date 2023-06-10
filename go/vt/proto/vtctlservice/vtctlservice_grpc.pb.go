@@ -263,7 +263,7 @@ type VtctldClient interface {
 	InitShardPrimary(ctx context.Context, in *vtctldata.InitShardPrimaryRequest, opts ...grpc.CallOption) (*vtctldata.InitShardPrimaryResponse, error)
 	// MoveTablesCreate creates a workflow which moves one or more tables from a
 	// source keyspace to a target keyspace.
-	MoveTablesCreate(ctx context.Context, in *vtctldata.MoveTablesCreateRequest, opts ...grpc.CallOption) (*vtctldata.MoveTablesCreateResponse, error)
+	MoveTablesCreate(ctx context.Context, in *vtctldata.MoveTablesCreateRequest, opts ...grpc.CallOption) (*vtctldata.WorkflowStatusResponse, error)
 	// MoveTablesComplete completes the move and cleans up the workflow and
 	// its related artifacts.
 	MoveTablesComplete(ctx context.Context, in *vtctldata.MoveTablesCompleteRequest, opts ...grpc.CallOption) (*vtctldata.MoveTablesCompleteResponse, error)
@@ -881,8 +881,8 @@ func (c *vtctldClient) InitShardPrimary(ctx context.Context, in *vtctldata.InitS
 	return out, nil
 }
 
-func (c *vtctldClient) MoveTablesCreate(ctx context.Context, in *vtctldata.MoveTablesCreateRequest, opts ...grpc.CallOption) (*vtctldata.MoveTablesCreateResponse, error) {
-	out := new(vtctldata.MoveTablesCreateResponse)
+func (c *vtctldClient) MoveTablesCreate(ctx context.Context, in *vtctldata.MoveTablesCreateRequest, opts ...grpc.CallOption) (*vtctldata.WorkflowStatusResponse, error) {
+	out := new(vtctldata.WorkflowStatusResponse)
 	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/MoveTablesCreate", in, out, opts...)
 	if err != nil {
 		return nil, err
@@ -1431,7 +1431,7 @@ type VtctldServer interface {
 	InitShardPrimary(context.Context, *vtctldata.InitShardPrimaryRequest) (*vtctldata.InitShardPrimaryResponse, error)
 	// MoveTablesCreate creates a workflow which moves one or more tables from a
 	// source keyspace to a target keyspace.
-	MoveTablesCreate(context.Context, *vtctldata.MoveTablesCreateRequest) (*vtctldata.MoveTablesCreateResponse, error)
+	MoveTablesCreate(context.Context, *vtctldata.MoveTablesCreateRequest) (*vtctldata.WorkflowStatusResponse, error)
 	// MoveTablesComplete completes the move and cleans up the workflow and
 	// its related artifacts.
 	MoveTablesComplete(context.Context, *vtctldata.MoveTablesCompleteRequest) (*vtctldata.MoveTablesCompleteResponse, error)
@@ -1724,7 +1724,7 @@ func (UnimplementedVtctldServer) GetWorkflows(context.Context, *vtctldata.GetWor
 func (UnimplementedVtctldServer) InitShardPrimary(context.Context, *vtctldata.InitShardPrimaryRequest) (*vtctldata.InitShardPrimaryResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method InitShardPrimary not implemented")
 }
-func (UnimplementedVtctldServer) MoveTablesCreate(context.Context, *vtctldata.MoveTablesCreateRequest) (*vtctldata.MoveTablesCreateResponse, error) {
+func (UnimplementedVtctldServer) MoveTablesCreate(context.Context, *vtctldata.MoveTablesCreateRequest) (*vtctldata.WorkflowStatusResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method MoveTablesCreate not implemented")
 }
 func (UnimplementedVtctldServer) MoveTablesComplete(context.Context, *vtctldata.MoveTablesCompleteRequest) (*vtctldata.MoveTablesCompleteResponse, error) {
