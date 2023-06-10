@@ -56,6 +56,8 @@ func transformToPhysical(ctx *plancontext.PlanningContext, in ops.Operator) (ops
 			return pushDownDerived(ctx, op)
 		case *SubQuery:
 			return optimizeSubQuery(ctx, op, ts)
+		case *Filter:
+			return pushDownFilter(op)
 		default:
 			return operator, rewrite.SameTree, nil
 		}
@@ -66,6 +68,15 @@ func transformToPhysical(ctx *plancontext.PlanningContext, in ops.Operator) (ops
 	}
 
 	return compact(ctx, op)
+}
+
+func pushDownFilter(op *Filter) (ops.Operator, *rewrite.ApplyResult, error) {
+	// TODO: once all horizon planning has been moved to the operators, we can remove this method
+	if _, ok := op.Source.(*Route); ok {
+		return rewrite.Swap(op, op.Source, "push filter into Route")
+	}
+
+	return op, rewrite.SameTree, nil
 }
 
 func pushDownDerived(ctx *plancontext.PlanningContext, op *Derived) (ops.Operator, *rewrite.ApplyResult, error) {
