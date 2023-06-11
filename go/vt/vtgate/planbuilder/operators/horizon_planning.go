@@ -225,46 +225,55 @@ func addOrderBysAndGroupBysForAggregations(ctx *plancontext.PlanningContext, roo
 	visitor := func(in ops.Operator, _ semantics.TableSet, isRoot bool) (ops.Operator, *rewrite.ApplyResult, error) {
 		switch in := in.(type) {
 		case *Aggregator:
-			if in.Pushed {
-				// we update the incoming columns, so we know about any new columns that have been added
-				columns, err := in.Source.GetColumns()
-				if err != nil {
-					return nil, nil, err
-				}
-				in.Columns = columns
-			}
-
-			requireOrdering, err := needsOrdering(in, ctx)
-			if err != nil {
-				return nil, nil, err
-			}
-			if !requireOrdering {
-				return in, rewrite.SameTree, nil
-			}
-			in.Source = &Ordering{
-				Source: in.Source,
-				Order: slices2.Map(in.Grouping, func(from GroupBy) ops.OrderBy {
-					return from.AsOrderBy()
-				}),
-			}
-			return in, rewrite.NewTree("added ordering before aggregation", in), nil
+			return addOrderingForAggregation(ctx, in)
 		case *ApplyJoin:
-			_ = rewrite.Visit(in.RHS, func(op ops.Operator) error {
-				aggr, isAggr := op.(*Aggregator)
-				if !isAggr {
-					return nil
-				}
-				if len(aggr.Grouping) == 0 {
-					gb := sqlparser.NewIntLiteral(".0")
-					aggr.Grouping = append(aggr.Grouping, NewGroupBy(gb, gb, aeWrap(gb)))
-				}
-				return nil
-			})
+			return addLiteralGroupingToRHS(in)
 		}
 		return in, rewrite.SameTree, nil
 	}
 
 	return rewrite.TopDown(root, TableID, visitor, stopAtRoute)
+}
+
+func addLiteralGroupingToRHS(in *ApplyJoin) (ops.Operator, *rewrite.ApplyResult, error) {
+	_ = rewrite.Visit(in.RHS, func(op ops.Operator) error {
+		aggr, isAggr := op.(*Aggregator)
+		if !isAggr {
+			return nil
+		}
+		if len(aggr.Grouping) == 0 {
+			gb := sqlparser.NewIntLiteral(".0")
+			aggr.Grouping = append(aggr.Grouping, NewGroupBy(gb, gb, aeWrap(gb)))
+		}
+		return nil
+	})
+	return in, rewrite.NewTree("added grouping to the RHS", in), nil
+}
+
+func addOrderingForAggregation(ctx *plancontext.PlanningContext, in *Aggregator) (ops.Operator, *rewrite.ApplyResult, error) {
+	if in.Pushed {
+		// we update the incoming columns, so we know about any new columns that have been added
+		columns, err := in.Source.GetColumns()
+		if err != nil {
+			return nil, nil, err
+		}
+		in.Columns = columns
+	}
+
+	requireOrdering, err := needsOrdering(in, ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	if !requireOrdering {
+		return in, rewrite.SameTree, nil
+	}
+	in.Source = &Ordering{
+		Source: in.Source,
+		Order: slices2.Map(in.Grouping, func(from GroupBy) ops.OrderBy {
+			return from.AsOrderBy()
+		}),
+	}
+	return in, rewrite.NewTree("added ordering before aggregation", in), nil
 }
 
 func needsOrdering(in *Aggregator, ctx *plancontext.PlanningContext) (bool, error) {
