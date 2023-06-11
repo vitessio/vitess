@@ -19,6 +19,8 @@ package operators
 import (
 	"io"
 
+	"golang.org/x/exp/slices"
+
 	"vitess.io/vitess/go/slices2"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -102,7 +104,11 @@ type Phase struct {
 func getPhases() []Phase {
 	return []Phase{{
 		// Initial optimization
-		Name: "initial horizon planning optimization phase",
+		Name:              "initial horizon planning optimization phase",
+		preOptimizeAction: addColumnsToFilter,
+	}, {
+		// Initial optimization
+		Name: "add columns if needed by filter",
 	}, {
 		// Adding Ordering Op - Any aggregation that is performed in the VTGate needs the input to be ordered
 		// Adding Group by - This is needed if the grouping is performed on a join with a join condition then
@@ -133,6 +139,7 @@ func planHorizons(ctx *plancontext.PlanningContext, root ops.Operator) (op ops.O
 			return nil, err
 		}
 	}
+
 	return op, nil
 }
 
@@ -235,6 +242,62 @@ func tryPushingDownDistinct(in *Distinct) (ops.Operator, *rewrite.ApplyResult, e
 	}
 
 	return aggr, rewrite.NewTree("replace distinct with aggregator", in), nil
+}
+
+func addColumnsToFilter(ctx *plancontext.PlanningContext, root ops.Operator) (ops.Operator, error) {
+	visitor := func(in ops.Operator, _ semantics.TableSet, isRoot bool) (ops.Operator, *rewrite.ApplyResult, error) {
+		filter, ok := in.(*Filter)
+		if !ok {
+			return in, rewrite.SameTree, nil
+		}
+
+		columns, err := filter.GetColumns()
+		if err != nil {
+			return nil, nil, vterrors.Wrap(err, "while planning filter")
+		}
+		proj, areOnTopOfProj := filter.Source.(selectExpressions)
+		if !areOnTopOfProj {
+			// not much we can do here
+			return in, rewrite.SameTree, nil
+		}
+		addedColumns := false
+		for _, expr := range filter.Predicates {
+			sqlparser.Rewrite(expr, func(cursor *sqlparser.Cursor) bool {
+				e, ok := cursor.Node().(sqlparser.Expr)
+				if !ok {
+					return true
+				}
+				offset := slices.IndexFunc(columns, func(expr *sqlparser.AliasedExpr) bool {
+					return ctx.SemTable.EqualsExprWithDeps(expr.Expr, e)
+				})
+
+				if offset >= 0 {
+					// this expression can be fetched from the input - we can stop here
+					return false
+				}
+
+				if fetchByOffset(e) {
+					// this expression has to be fetched from the input, but we didn't find it in the input. let's add it
+					_, addToGroupBy := e.(*sqlparser.ColName)
+					proj.addColumnWithoutPushing(aeWrap(e), addToGroupBy)
+					addedColumns = true
+					columns, err = proj.GetColumns()
+					if err != nil {
+						panic("this should not happen")
+					}
+					return false
+				}
+				return true
+			}, nil)
+		}
+		if addedColumns {
+			return in, rewrite.NewTree("added columns because filter needs it", in), nil
+		}
+
+		return in, rewrite.SameTree, nil
+	}
+
+	return rewrite.TopDown(root, TableID, visitor, stopAtRoute)
 }
 
 // addOrderBysForAggregations runs after we have run horizonPlanning until the op tree stops changing

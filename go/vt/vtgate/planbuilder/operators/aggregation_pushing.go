@@ -32,18 +32,27 @@ func tryPushingDownAggregator(ctx *plancontext.PlanningContext, aggregator *Aggr
 	if aggregator.Pushed {
 		return aggregator, rewrite.SameTree, nil
 	}
-	aggregator.Pushed = true
 	switch src := aggregator.Source.(type) {
 	case *Route:
 		output, applyResult, err = pushDownAggregationThroughRoute(ctx, aggregator, src)
 	case *ApplyJoin:
-		output, applyResult, err = pushDownAggregationThroughJoin(ctx, aggregator, src)
+		if ctx.Phases.PushAggregation {
+			output, applyResult, err = pushDownAggregationThroughJoin(ctx, aggregator, src)
+		}
 	case *Filter:
-		output, applyResult, err = pushDownAggregationThroughFilter(ctx, aggregator, src)
+		if ctx.Phases.PushAggregation {
+			output, applyResult, err = pushDownAggregationThroughFilter(ctx, aggregator, src)
+		}
 	default:
+		aggregator.Pushed = true
 		return aggregator, rewrite.SameTree, nil
 	}
 
+	if output == nil {
+		return aggregator, rewrite.SameTree, nil
+	}
+
+	aggregator.Pushed = true
 	if applyResult != rewrite.SameTree && aggregator.Original {
 		aggregator.aggregateTheAggregates()
 	}
@@ -72,6 +81,10 @@ func pushDownAggregationThroughRoute(
 	// If the route is single-shard, or we are grouping by sharding keys, we can just push down the aggregation
 	if route.IsSingleShard() || overlappingUniqueVindex(ctx, aggregator.Grouping) {
 		return rewrite.Swap(aggregator, route, "push down aggregation under route - remove original")
+	}
+
+	if !ctx.Phases.PushAggregation {
+		return nil, nil, nil
 	}
 
 	// Create a new aggregator to be placed below the route.

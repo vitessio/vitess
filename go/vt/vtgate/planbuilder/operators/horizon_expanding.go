@@ -29,10 +29,6 @@ func expandHorizon(ctx *plancontext.PlanningContext, horizon horizonLike) (ops.O
 		return nil, nil, errHorizonNotPlanned()
 	}
 
-	if sel.Having != nil {
-		return nil, nil, errHorizonNotPlanned()
-	}
-
 	op, err := createProjectionFromSelect(ctx, horizon)
 	if err != nil {
 		return nil, nil, err
@@ -47,6 +43,15 @@ func expandHorizon(ctx *plancontext.PlanningContext, horizon horizonLike) (ops.O
 		op = &Distinct{
 			Source: op,
 			QP:     qp,
+		}
+	}
+
+	if sel.Having != nil {
+		expr := sel.Having.Expr
+		op = &Filter{
+			Source:         op,
+			Predicates:     sqlparser.SplitAndExpression(nil, expr),
+			FinalPredicate: nil,
 		}
 	}
 

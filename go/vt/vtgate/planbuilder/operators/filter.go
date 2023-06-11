@@ -49,8 +49,9 @@ func (f *Filter) Clone(inputs []ops.Operator) ops.Operator {
 	predicatesClone := make([]sqlparser.Expr, len(f.Predicates))
 	copy(predicatesClone, f.Predicates)
 	return &Filter{
-		Source:     inputs[0],
-		Predicates: predicatesClone,
+		Source:         inputs[0],
+		Predicates:     predicatesClone,
+		FinalPredicate: f.FinalPredicate,
 	}
 }
 
