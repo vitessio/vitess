@@ -1,4 +1,5 @@
 Usage of vtorc:
+      --allow-emergency-reparent                                    Whether VTOrc should be allowed to run emergency reparent operation when it detects a dead primary (default true)
       --alsologtostderr                                             log to standard error as well as files
       --audit-file-location string                                  File location where the audit logs are to be stored
       --audit-purge-duration duration                               Duration for which audit logs are held before being purged. Should be in multiples of days (default 168h0m0s)
@@ -10,7 +11,7 @@ Usage of vtorc:
       --config-file string                                          Full path of the config file (with extension) to use. If set, --config-path, --config-type, and --config-name are ignored.
       --config-file-not-found-handling ConfigFileNotFoundHandling   Behavior when a config file is not found. (Options: error, exit, ignore, warn) (default warn)
       --config-name string                                          Name of the config file (without extension) to search for. (default "vtconfig")
-      --config-path strings                                         Paths to search for config files in. (default [{{.Workdir}}])
+      --config-path strings                                         Paths to search for config files in. (default [{{ .Workdir }}])
       --config-persistence-min-interval duration                    minimum interval between persisting dynamic config changes back to disk (if no change has occurred, nothing is done). (default 1s)
       --config-type string                                          Config file type (omit to infer config type from file extension).
       --consul_auth_static_file string                              JSON File to read the topos/tokens from.

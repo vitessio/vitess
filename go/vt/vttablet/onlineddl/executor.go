@@ -2131,7 +2131,7 @@ func (e *Executor) ThrottleMigration(ctx context.Context, uuid string, expireStr
 	if err != nil {
 		return nil, err
 	}
-	if err := e.lagThrottler.CheckIsReady(); err != nil {
+	if err := e.lagThrottler.CheckIsOpen(); err != nil {
 		return nil, err
 	}
 	_ = e.lagThrottler.ThrottleApp(uuid, time.Now().Add(duration), ratio)
@@ -2144,7 +2144,7 @@ func (e *Executor) ThrottleAllMigrations(ctx context.Context, expireString strin
 	if err != nil {
 		return nil, err
 	}
-	if err := e.lagThrottler.CheckIsReady(); err != nil {
+	if err := e.lagThrottler.CheckIsOpen(); err != nil {
 		return nil, err
 	}
 	_ = e.lagThrottler.ThrottleApp(throttlerapp.OnlineDDLName.String(), time.Now().Add(duration), ratio)
@@ -2153,7 +2153,7 @@ func (e *Executor) ThrottleAllMigrations(ctx context.Context, expireString strin
 
 // UnthrottleMigration
 func (e *Executor) UnthrottleMigration(ctx context.Context, uuid string) (result *sqltypes.Result, err error) {
-	if err := e.lagThrottler.CheckIsReady(); err != nil {
+	if err := e.lagThrottler.CheckIsOpen(); err != nil {
 		return nil, err
 	}
 	defer e.triggerNextCheckInterval()
@@ -2163,7 +2163,7 @@ func (e *Executor) UnthrottleMigration(ctx context.Context, uuid string) (result
 
 // UnthrottleAllMigrations
 func (e *Executor) UnthrottleAllMigrations(ctx context.Context) (result *sqltypes.Result, err error) {
-	if err := e.lagThrottler.CheckIsReady(); err != nil {
+	if err := e.lagThrottler.CheckIsOpen(); err != nil {
 		return nil, err
 	}
 	defer e.triggerNextCheckInterval()
@@ -3472,13 +3472,12 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 	}
 
 	var currentUserThrottleRatio float64
-	if err := e.lagThrottler.CheckIsReady(); err == nil {
-		// No point in reviewing throttler info if it's not enabled&open
-		for _, app := range e.lagThrottler.ThrottledApps() {
-			if throttlerapp.OnlineDDLName.Equals(app.AppName) {
-				currentUserThrottleRatio = app.Ratio
-				break
-			}
+
+	// No point in reviewing throttler info if it's not enabled&open
+	for _, app := range e.lagThrottler.ThrottledApps() {
+		if throttlerapp.OnlineDDLName.Equals(app.AppName) {
+			currentUserThrottleRatio = app.Ratio
+			break
 		}
 	}
 
@@ -3593,7 +3592,7 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 						}
 					}
 					go throttlerOnce.Do(func() {
-						if e.lagThrottler.CheckIsReady() != nil {
+						if !e.lagThrottler.IsRunning() {
 							return
 						}
 						// Self healing: in the following scenario:
@@ -3611,6 +3610,7 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 						// on-demand heartbeats, unlocking the deadlock.
 						e.lagThrottler.CheckByType(ctx, throttlerapp.OnlineDDLName.String(), "", throttleCheckFlags, throttle.ThrottleCheckPrimaryWrite)
 					})
+
 				}
 			}
 		case schema.DDLStrategyPTOSC:

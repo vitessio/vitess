@@ -96,8 +96,7 @@ func tryHorizonPlanning(ctx *plancontext.PlanningContext, root ops.Operator) (ou
 // If we can't, we will instead expand the Horizon into
 // smaller operators and try to push these down as far as possible
 func planHorizons(ctx *plancontext.PlanningContext, root ops.Operator) (ops.Operator, error) {
-	var err error
-	root, err = optimizeHorizonPlanning(ctx, root)
+	root, err := optimizeHorizonPlanning(ctx, root)
 	if err != nil {
 		return nil, err
 	}
@@ -205,6 +204,8 @@ func tryPushingDownDistinct(ctx *plancontext.PlanningContext, in *Distinct) (ops
 		}
 	case *Distinct:
 		return src, rewrite.NewTree("removed double distinct", src), nil
+	case *Aggregator:
+		return in, rewrite.SameTree, nil
 	}
 
 	cols, err := in.Source.GetColumns()
@@ -823,21 +824,29 @@ outer:
 		if err != nil {
 			return nil, err
 		}
+		addedToCol := false
 		for idx, groupBy := range a.Grouping {
-			if ae == groupBy.aliasedExpr {
-				a.Columns = append(a.Columns, ae)
-				a.Grouping[idx].ColOffset = colIdx
-				continue outer
+			if ctx.SemTable.EqualsExprWithDeps(groupBy.SimplifiedExpr, ae.Expr) {
+				if !addedToCol {
+					a.Columns = append(a.Columns, ae)
+					addedToCol = true
+				}
+				if groupBy.ColOffset < 0 {
+					a.Grouping[idx].ColOffset = colIdx
+				}
 			}
 		}
+		if addedToCol {
+			continue
+		}
 		for idx, aggr := range a.Aggregations {
-			if ae == aggr.Original {
+			if ctx.SemTable.EqualsExprWithDeps(aggr.Original.Expr, ae.Expr) && aggr.ColOffset < 0 {
 				a.Columns = append(a.Columns, ae)
 				a.Aggregations[idx].ColOffset = colIdx
 				continue outer
 			}
 		}
-		return nil, vterrors.VT13001(fmt.Sprintf("Could not find the %v in aggregation in the original query", expr))
+		return nil, vterrors.VT13001(fmt.Sprintf("Could not find the %s in aggregation in the original query", sqlparser.String(ae)))
 	}
 
 	return a, nil

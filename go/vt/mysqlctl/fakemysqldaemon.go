@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"regexp"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -534,11 +535,15 @@ func (fmd *FakeMysqlDaemon) FetchSuperQuery(ctx context.Context, query string) (
 		return nil, fmt.Errorf("unexpected query: %v", query)
 	}
 
-	qr, ok := fmd.FetchSuperQueryMap[query]
-	if !ok {
-		return nil, fmt.Errorf("unexpected query: %v", query)
+	if qr, ok := fmd.FetchSuperQueryMap[query]; ok {
+		return qr, nil
 	}
-	return qr, nil
+	for k, qr := range fmd.FetchSuperQueryMap {
+		if ok, _ := regexp.MatchString(k, query); ok {
+			return qr, nil
+		}
+	}
+	return nil, fmt.Errorf("unexpected query: %v", query)
 }
 
 // Close is part of the MysqlDaemon interface

@@ -39,7 +39,7 @@ import (
 
 const (
 	customQuery               = "show global status like 'threads_running'"
-	customThreshold           = 5 * time.Second
+	customThreshold           = 5
 	unreasonablyLowThreshold  = 1 * time.Millisecond
 	extremelyHighThreshold    = 1 * time.Hour
 	onDemandHeartbeatDuration = 5 * time.Second
@@ -112,8 +112,6 @@ func TestMain(m *testing.M) {
 			"--lock_tables_timeout", "5s",
 			"--watch_replication_stream",
 			"--enable_replication_reporter",
-			"--throttler-config-via-topo",
-			"--heartbeat_enable",
 			"--heartbeat_interval", "250ms",
 			"--heartbeat_on_demand_duration", onDemandHeartbeatDuration.String(),
 			"--disable_active_reparents",
@@ -247,7 +245,7 @@ func TestInitialThrottler(t *testing.T) {
 		waitForThrottleCheckStatus(t, primaryTablet, http.StatusOK)
 	})
 	t.Run("enabling throttler with very low threshold", func(t *testing.T) {
-		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, true, false, unreasonablyLowThreshold.Seconds(), useDefaultQuery, false)
+		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, true, false, unreasonablyLowThreshold.Seconds(), useDefaultQuery)
 		assert.NoError(t, err)
 
 		// Wait for the throttler to be enabled everywhere with the new config.
@@ -259,7 +257,7 @@ func TestInitialThrottler(t *testing.T) {
 		waitForThrottleCheckStatus(t, primaryTablet, http.StatusTooManyRequests)
 	})
 	t.Run("disabling throttler", func(t *testing.T) {
-		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, false, true, unreasonablyLowThreshold.Seconds(), useDefaultQuery, false)
+		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, false, true, unreasonablyLowThreshold.Seconds(), useDefaultQuery)
 		assert.NoError(t, err)
 
 		// Wait for the throttler to be disabled everywhere.
@@ -273,7 +271,7 @@ func TestInitialThrottler(t *testing.T) {
 	t.Run("enabling throttler, again", func(t *testing.T) {
 		// Enable the throttler again with the default query which also moves us back
 		// to the default threshold.
-		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, true, false, 0, useDefaultQuery, true)
+		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, true, false, 0, useDefaultQuery)
 		assert.NoError(t, err)
 
 		// Wait for the throttler to be enabled everywhere again with the default config.
@@ -285,7 +283,7 @@ func TestInitialThrottler(t *testing.T) {
 		waitForThrottleCheckStatus(t, primaryTablet, http.StatusTooManyRequests)
 	})
 	t.Run("setting high threshold", func(t *testing.T) {
-		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, false, false, extremelyHighThreshold.Seconds(), useDefaultQuery, true)
+		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, false, false, extremelyHighThreshold.Seconds(), useDefaultQuery)
 		assert.NoError(t, err)
 
 		// Wait for the throttler to be enabled everywhere with new config.
@@ -297,7 +295,7 @@ func TestInitialThrottler(t *testing.T) {
 		waitForThrottleCheckStatus(t, primaryTablet, http.StatusOK)
 	})
 	t.Run("setting low threshold", func(t *testing.T) {
-		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, false, false, throttler.DefaultThreshold.Seconds(), useDefaultQuery, true)
+		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, false, false, throttler.DefaultThreshold.Seconds(), useDefaultQuery)
 		assert.NoError(t, err)
 
 		// Wait for the throttler to be enabled everywhere with new config.
@@ -438,15 +436,21 @@ func TestCustomQuery(t *testing.T) {
 	defer cluster.PanicHandler(t)
 
 	t.Run("enabling throttler with custom query and threshold", func(t *testing.T) {
-		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, true, false, customThreshold.Seconds(), customQuery, false)
+		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, true, false, customThreshold, customQuery)
 		assert.NoError(t, err)
 
 		// Wait for the throttler to be enabled everywhere with new custom config.
-		for _, tablet := range clusterInstance.Keyspaces[0].Shards[0].Vttablets {
-			throttler.WaitForThrottlerStatusEnabled(t, tablet, true, &throttler.Config{Query: customQuery, Threshold: customThreshold.Seconds()}, throttlerEnabledTimeout)
+		expectConfig := &throttler.Config{Query: customQuery, Threshold: customThreshold}
+		for _, ks := range clusterInstance.Keyspaces {
+			for _, shard := range ks.Shards {
+				for _, tablet := range shard.Vttablets {
+					throttler.WaitForThrottlerStatusEnabled(t, tablet, true, expectConfig, throttlerEnabledTimeout)
+				}
+			}
 		}
 	})
 	t.Run("validating OK response from throttler with custom query", func(t *testing.T) {
+		throttler.WaitForValidData(t, primaryTablet, throttlerEnabledTimeout)
 		resp, err := throttleCheck(primaryTablet, false)
 		require.NoError(t, err)
 		defer resp.Body.Close()
@@ -455,28 +459,24 @@ func TestCustomQuery(t *testing.T) {
 	t.Run("test threads running", func(t *testing.T) {
 		sleepDuration := 20 * time.Second
 		var wg sync.WaitGroup
-		for i := 0; i < int(customThreshold.Seconds()); i++ {
-			// Generate different Sleep() calls, all at minimum sleepDuration.
-			wg.Add(1)
-			go func(i int) {
-				defer wg.Done()
-				vtgateExec(t, fmt.Sprintf("select sleep(%d)", int(sleepDuration.Seconds())+i), "")
-			}(i)
-		}
+		t.Run("generate running queries", func(t *testing.T) {
+			for i := 0; i < customThreshold+1; i++ {
+				// Generate different Sleep() calls, all at minimum sleepDuration.
+				wg.Add(1)
+				go func(i int) {
+					defer wg.Done()
+					// Make sure to generate a different query in each goroutine, so that vtgate does not oversmart us
+					// and optimizes connections/caching.
+					query := fmt.Sprintf("select sleep(%d) + %d", int(sleepDuration.Seconds()), i)
+					vtgateExec(t, query, "")
+				}(i)
+			}
+		})
 		t.Run("exceeds threshold", func(t *testing.T) {
-			throttler.WaitForQueryResult(t, primaryTablet,
-				"select if(variable_value > 5, 'true', 'false') as result from performance_schema.global_status where variable_name='threads_running'",
-				"true", sleepDuration/3)
-			throttler.WaitForValidData(t, primaryTablet, sleepDuration-(5*time.Second))
-			// Now we should be reporting ~ customThreshold*2 threads_running, and we should
+			// Now we should be reporting ~ customThreshold+1 threads_running, and we should
 			// hit the threshold. For example:
 			// {"StatusCode":429,"Value":6,"Threshold":5,"Message":"Threshold exceeded"}
-			{
-				resp, err := throttleCheck(primaryTablet, false)
-				require.NoError(t, err)
-				defer resp.Body.Close()
-				assert.Equalf(t, http.StatusTooManyRequests, resp.StatusCode, "Unexpected response from throttler: %s", getResponseBody(resp))
-			}
+			waitForThrottleCheckStatus(t, primaryTablet, http.StatusTooManyRequests)
 			{
 				resp, err := throttleCheckSelf(primaryTablet)
 				require.NoError(t, err)
@@ -486,15 +486,9 @@ func TestCustomQuery(t *testing.T) {
 		})
 		t.Run("wait for queries to terminate", func(t *testing.T) {
 			wg.Wait()
-			time.Sleep(1 * time.Second) // graceful time to let throttler read metrics
 		})
 		t.Run("restored below threshold", func(t *testing.T) {
-			{
-				resp, err := throttleCheck(primaryTablet, false)
-				require.NoError(t, err)
-				defer resp.Body.Close()
-				assert.Equalf(t, http.StatusOK, resp.StatusCode, "Unexpected response from throttler: %s", getResponseBody(resp))
-			}
+			waitForThrottleCheckStatus(t, primaryTablet, http.StatusOK)
 			{
 				resp, err := throttleCheckSelf(primaryTablet)
 				require.NoError(t, err)
@@ -510,7 +504,7 @@ func TestRestoreDefaultQuery(t *testing.T) {
 
 	// Validate going back from custom-query to default-query (replication lag) still works.
 	t.Run("enabling throttler with default query and threshold", func(t *testing.T) {
-		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, true, false, throttler.DefaultThreshold.Seconds(), useDefaultQuery, false)
+		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, true, false, throttler.DefaultThreshold.Seconds(), useDefaultQuery)
 		assert.NoError(t, err)
 
 		// Wait for the throttler to be up and running everywhere again with the default config.

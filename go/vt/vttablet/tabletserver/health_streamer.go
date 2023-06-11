@@ -27,13 +27,10 @@ import (
 
 	"github.com/spf13/pflag"
 
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/planbuilder"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sidecardb"
-
-	"vitess.io/vitess/go/sqltypes"
 
 	"vitess.io/vitess/go/vt/sqlparser"
 
@@ -378,15 +375,6 @@ func (hs *healthStreamer) reload(full map[string]*schema.Table, created, altered
 	if err != nil {
 		return err
 	}
-	err = hs.reloadViews(ctx, conn, views)
-	if err != nil {
-		if len(tables) == 0 {
-			return err
-		}
-		// there are some tables, we need to send that in the health stream.
-		// making views to nil will prevent any views notification.
-		views = nil
-	}
 
 	// no change detected
 	if len(tables) == 0 && len(views) == 0 {
@@ -439,123 +427,4 @@ func (hs *healthStreamer) reloadTables(ctx context.Context, conn *connpool.DBCon
 		return err
 	}
 	return nil
-}
-
-type viewDefAndStmt struct {
-	def  string
-	stmt string
-}
-
-func (hs *healthStreamer) reloadViews(ctx context.Context, conn *connpool.DBConn, views []string) error {
-	if len(views) == 0 {
-		return nil
-	}
-
-	/* Retrieve changed views definition */
-	viewsDefStmt := map[string]*viewDefAndStmt{}
-	callback := func(qr *sqltypes.Result) error {
-		for _, row := range qr.Rows {
-			viewsDefStmt[row[0].ToString()] = &viewDefAndStmt{def: row[1].ToString()}
-		}
-		return nil
-	}
-	alloc := func() *sqltypes.Result { return &sqltypes.Result{} }
-	bufferSize := 1000
-
-	viewsBV, err := sqltypes.BuildBindVariable(views)
-	if err != nil {
-		return err
-	}
-	bv := map[string]*querypb.BindVariable{"tableNames": viewsBV}
-
-	err = hs.getViewDefinition(ctx, conn, bv, callback, alloc, bufferSize)
-	if err != nil {
-		return err
-	}
-
-	/* Retrieve create statement for views */
-	viewsDefStmt, err = hs.getCreateViewStatement(ctx, conn, viewsDefStmt)
-	if err != nil {
-		return err
-	}
-
-	/* update the views copy table */
-	err = hs.updateViewsTable(ctx, conn, bv, viewsDefStmt)
-	return err
-}
-
-func (hs *healthStreamer) getViewDefinition(ctx context.Context, conn *connpool.DBConn, bv map[string]*querypb.BindVariable, callback func(qr *sqltypes.Result) error, alloc func() *sqltypes.Result, bufferSize int) error {
-	var viewsDefQuery string
-	viewsDefQuery = sqlparser.BuildParsedQuery(mysql.FetchViewDefinition).Query
-
-	stmt, err := sqlparser.Parse(viewsDefQuery)
-	if err != nil {
-		return err
-	}
-	viewsDefQuery, err = planbuilder.GenerateFullQuery(stmt).GenerateQuery(bv, nil)
-	if err != nil {
-		return err
-	}
-	return conn.Stream(ctx, viewsDefQuery, callback, alloc, bufferSize, 0)
-}
-
-func (hs *healthStreamer) getCreateViewStatement(ctx context.Context, conn *connpool.DBConn, viewsDefStmt map[string]*viewDefAndStmt) (map[string]*viewDefAndStmt, error) {
-	for k, v := range viewsDefStmt {
-		res, err := conn.Exec(ctx, sqlparser.BuildParsedQuery(mysql.FetchCreateStatement, k).Query, 1, false)
-		if err != nil {
-			return nil, err
-		}
-		for _, row := range res.Rows {
-			v.stmt = row[1].ToString()
-		}
-	}
-	return viewsDefStmt, nil
-}
-
-func (hs *healthStreamer) updateViewsTable(ctx context.Context, conn *connpool.DBConn, bv map[string]*querypb.BindVariable, viewsDefStmt map[string]*viewDefAndStmt) error {
-	stmt, err := sqlparser.Parse(
-		sqlparser.BuildParsedQuery(mysql.DeleteFromViewsTable, sidecardb.GetIdentifier()).Query)
-	if err != nil {
-		return err
-	}
-	clearViewQuery, err := planbuilder.GenerateFullQuery(stmt).GenerateQuery(bv, nil)
-	if err != nil {
-		return err
-	}
-
-	stmt, err = sqlparser.Parse(
-		sqlparser.BuildParsedQuery(mysql.InsertIntoViewsTable, sidecardb.GetIdentifier()).Query)
-	if err != nil {
-		return err
-	}
-	insertViewsParsedQuery := planbuilder.GenerateFullQuery(stmt)
-
-	// Reload the views in a transaction.
-	_, err = conn.Exec(ctx, "begin", 1, false)
-	if err != nil {
-		return err
-	}
-	defer conn.Exec(ctx, "rollback", 1, false)
-
-	_, err = conn.Exec(ctx, clearViewQuery, 1, false)
-	if err != nil {
-		return err
-	}
-
-	for k, v := range viewsDefStmt {
-		bv["table_name"] = sqltypes.StringBindVariable(k)
-		bv["create_statement"] = sqltypes.StringBindVariable(v.stmt)
-		bv["view_definition"] = sqltypes.StringBindVariable(v.def)
-		insertViewQuery, err := insertViewsParsedQuery.GenerateQuery(bv, nil)
-		if err != nil {
-			return err
-		}
-		_, err = conn.Exec(ctx, insertViewQuery, 1, false)
-		if err != nil {
-			return err
-		}
-	}
-
-	_, err = conn.Exec(ctx, "commit", 1, false)
-	return err
 }
