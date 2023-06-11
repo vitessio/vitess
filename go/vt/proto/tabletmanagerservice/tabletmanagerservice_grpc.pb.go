@@ -40,6 +40,7 @@ type TabletManagerClient interface {
 	RefreshState(ctx context.Context, in *tabletmanagerdata.RefreshStateRequest, opts ...grpc.CallOption) (*tabletmanagerdata.RefreshStateResponse, error)
 	RunHealthCheck(ctx context.Context, in *tabletmanagerdata.RunHealthCheckRequest, opts ...grpc.CallOption) (*tabletmanagerdata.RunHealthCheckResponse, error)
 	ReloadSchema(ctx context.Context, in *tabletmanagerdata.ReloadSchemaRequest, opts ...grpc.CallOption) (*tabletmanagerdata.ReloadSchemaResponse, error)
+	GetTablesInSchema(ctx context.Context, in *tabletmanagerdata.GetTablesInSchemaRequest, opts ...grpc.CallOption) (*tabletmanagerdata.GetTablesInSchemaResponse, error)
 	PreflightSchema(ctx context.Context, in *tabletmanagerdata.PreflightSchemaRequest, opts ...grpc.CallOption) (*tabletmanagerdata.PreflightSchemaResponse, error)
 	ApplySchema(ctx context.Context, in *tabletmanagerdata.ApplySchemaRequest, opts ...grpc.CallOption) (*tabletmanagerdata.ApplySchemaResponse, error)
 	LockTables(ctx context.Context, in *tabletmanagerdata.LockTablesRequest, opts ...grpc.CallOption) (*tabletmanagerdata.LockTablesResponse, error)
@@ -208,6 +209,15 @@ func (c *tabletManagerClient) RunHealthCheck(ctx context.Context, in *tabletmana
 func (c *tabletManagerClient) ReloadSchema(ctx context.Context, in *tabletmanagerdata.ReloadSchemaRequest, opts ...grpc.CallOption) (*tabletmanagerdata.ReloadSchemaResponse, error) {
 	out := new(tabletmanagerdata.ReloadSchemaResponse)
 	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/ReloadSchema", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tabletManagerClient) GetTablesInSchema(ctx context.Context, in *tabletmanagerdata.GetTablesInSchemaRequest, opts ...grpc.CallOption) (*tabletmanagerdata.GetTablesInSchemaResponse, error) {
+	out := new(tabletmanagerdata.GetTablesInSchemaResponse)
+	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/GetTablesInSchema", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -605,6 +615,7 @@ type TabletManagerServer interface {
 	RefreshState(context.Context, *tabletmanagerdata.RefreshStateRequest) (*tabletmanagerdata.RefreshStateResponse, error)
 	RunHealthCheck(context.Context, *tabletmanagerdata.RunHealthCheckRequest) (*tabletmanagerdata.RunHealthCheckResponse, error)
 	ReloadSchema(context.Context, *tabletmanagerdata.ReloadSchemaRequest) (*tabletmanagerdata.ReloadSchemaResponse, error)
+	GetTablesInSchema(context.Context, *tabletmanagerdata.GetTablesInSchemaRequest) (*tabletmanagerdata.GetTablesInSchemaResponse, error)
 	PreflightSchema(context.Context, *tabletmanagerdata.PreflightSchemaRequest) (*tabletmanagerdata.PreflightSchemaResponse, error)
 	ApplySchema(context.Context, *tabletmanagerdata.ApplySchemaRequest) (*tabletmanagerdata.ApplySchemaResponse, error)
 	LockTables(context.Context, *tabletmanagerdata.LockTablesRequest) (*tabletmanagerdata.LockTablesResponse, error)
@@ -709,6 +720,9 @@ func (UnimplementedTabletManagerServer) RunHealthCheck(context.Context, *tabletm
 }
 func (UnimplementedTabletManagerServer) ReloadSchema(context.Context, *tabletmanagerdata.ReloadSchemaRequest) (*tabletmanagerdata.ReloadSchemaResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ReloadSchema not implemented")
+}
+func (UnimplementedTabletManagerServer) GetTablesInSchema(context.Context, *tabletmanagerdata.GetTablesInSchemaRequest) (*tabletmanagerdata.GetTablesInSchemaResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetTablesInSchema not implemented")
 }
 func (UnimplementedTabletManagerServer) PreflightSchema(context.Context, *tabletmanagerdata.PreflightSchemaRequest) (*tabletmanagerdata.PreflightSchemaResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method PreflightSchema not implemented")
@@ -1025,6 +1039,24 @@ func _TabletManager_ReloadSchema_Handler(srv interface{}, ctx context.Context, d
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(TabletManagerServer).ReloadSchema(ctx, req.(*tabletmanagerdata.ReloadSchemaRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TabletManager_GetTablesInSchema_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(tabletmanagerdata.GetTablesInSchemaRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TabletManagerServer).GetTablesInSchema(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/tabletmanagerservice.TabletManager/GetTablesInSchema",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TabletManagerServer).GetTablesInSchema(ctx, req.(*tabletmanagerdata.GetTablesInSchemaRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1733,6 +1765,10 @@ var TabletManager_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ReloadSchema",
 			Handler:    _TabletManager_ReloadSchema_Handler,
+		},
+		{
+			MethodName: "GetTablesInSchema",
+			Handler:    _TabletManager_GetTablesInSchema_Handler,
 		},
 		{
 			MethodName: "PreflightSchema",

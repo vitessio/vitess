@@ -26691,6 +26691,194 @@ export namespace tabletmanagerdata {
          */
         public static getTypeUrl(typeUrlPrefix?: string): string;
     }
+
+    /** Properties of a GetTablesInSchemaRequest. */
+    interface IGetTablesInSchemaRequest {
+    }
+
+    /** Represents a GetTablesInSchemaRequest. */
+    class GetTablesInSchemaRequest implements IGetTablesInSchemaRequest {
+
+        /**
+         * Constructs a new GetTablesInSchemaRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: tabletmanagerdata.IGetTablesInSchemaRequest);
+
+        /**
+         * Creates a new GetTablesInSchemaRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns GetTablesInSchemaRequest instance
+         */
+        public static create(properties?: tabletmanagerdata.IGetTablesInSchemaRequest): tabletmanagerdata.GetTablesInSchemaRequest;
+
+        /**
+         * Encodes the specified GetTablesInSchemaRequest message. Does not implicitly {@link tabletmanagerdata.GetTablesInSchemaRequest.verify|verify} messages.
+         * @param message GetTablesInSchemaRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: tabletmanagerdata.IGetTablesInSchemaRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified GetTablesInSchemaRequest message, length delimited. Does not implicitly {@link tabletmanagerdata.GetTablesInSchemaRequest.verify|verify} messages.
+         * @param message GetTablesInSchemaRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: tabletmanagerdata.IGetTablesInSchemaRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a GetTablesInSchemaRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns GetTablesInSchemaRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): tabletmanagerdata.GetTablesInSchemaRequest;
+
+        /**
+         * Decodes a GetTablesInSchemaRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns GetTablesInSchemaRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): tabletmanagerdata.GetTablesInSchemaRequest;
+
+        /**
+         * Verifies a GetTablesInSchemaRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a GetTablesInSchemaRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns GetTablesInSchemaRequest
+         */
+        public static fromObject(object: { [k: string]: any }): tabletmanagerdata.GetTablesInSchemaRequest;
+
+        /**
+         * Creates a plain object from a GetTablesInSchemaRequest message. Also converts values to other types if specified.
+         * @param message GetTablesInSchemaRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: tabletmanagerdata.GetTablesInSchemaRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this GetTablesInSchemaRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetTablesInSchemaRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a GetTablesInSchemaResponse. */
+    interface IGetTablesInSchemaResponse {
+
+        /** GetTablesInSchemaResponse tables */
+        tables?: (string[]|null);
+    }
+
+    /** Represents a GetTablesInSchemaResponse. */
+    class GetTablesInSchemaResponse implements IGetTablesInSchemaResponse {
+
+        /**
+         * Constructs a new GetTablesInSchemaResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: tabletmanagerdata.IGetTablesInSchemaResponse);
+
+        /** GetTablesInSchemaResponse tables. */
+        public tables: string[];
+
+        /**
+         * Creates a new GetTablesInSchemaResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns GetTablesInSchemaResponse instance
+         */
+        public static create(properties?: tabletmanagerdata.IGetTablesInSchemaResponse): tabletmanagerdata.GetTablesInSchemaResponse;
+
+        /**
+         * Encodes the specified GetTablesInSchemaResponse message. Does not implicitly {@link tabletmanagerdata.GetTablesInSchemaResponse.verify|verify} messages.
+         * @param message GetTablesInSchemaResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: tabletmanagerdata.IGetTablesInSchemaResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified GetTablesInSchemaResponse message, length delimited. Does not implicitly {@link tabletmanagerdata.GetTablesInSchemaResponse.verify|verify} messages.
+         * @param message GetTablesInSchemaResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: tabletmanagerdata.IGetTablesInSchemaResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a GetTablesInSchemaResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns GetTablesInSchemaResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): tabletmanagerdata.GetTablesInSchemaResponse;
+
+        /**
+         * Decodes a GetTablesInSchemaResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns GetTablesInSchemaResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): tabletmanagerdata.GetTablesInSchemaResponse;
+
+        /**
+         * Verifies a GetTablesInSchemaResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a GetTablesInSchemaResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns GetTablesInSchemaResponse
+         */
+        public static fromObject(object: { [k: string]: any }): tabletmanagerdata.GetTablesInSchemaResponse;
+
+        /**
+         * Creates a plain object from a GetTablesInSchemaResponse message. Also converts values to other types if specified.
+         * @param message GetTablesInSchemaResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: tabletmanagerdata.GetTablesInSchemaResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this GetTablesInSchemaResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetTablesInSchemaResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
 }
 
 /** Namespace binlogdata. */

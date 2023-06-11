@@ -34,6 +34,16 @@ func (tm *TabletManager) GetSchema(ctx context.Context, request *tabletmanagerda
 	return tm.MysqlDaemon.GetSchema(ctx, topoproto.TabletDbName(tm.Tablet()), request)
 }
 
+// GetTablesInSchema returns the tables currently in the schema engine cache.
+func (tm *TabletManager) GetTablesInSchema(ctx context.Context, request *tabletmanagerdatapb.GetTablesInSchemaRequest) (*tabletmanagerdatapb.GetTablesInSchemaResponse, error) {
+	tables := tm.QueryServiceControl.SchemaEngine().GetSchema()
+	var tableNames []string
+	for _, table := range tables {
+		tableNames = append(tableNames, table.Name.String())
+	}
+	return &tabletmanagerdatapb.GetTablesInSchemaResponse{Tables: tableNames}, nil
+}
+
 // ReloadSchema will reload the schema
 // This doesn't need the action mutex because periodic schema reloads happen
 // in the background anyway.

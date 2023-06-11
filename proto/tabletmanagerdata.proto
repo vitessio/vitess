@@ -554,3 +554,10 @@ message UpdateVRWorkflowRequest {
 message UpdateVRWorkflowResponse {
   query.QueryResult result = 1;
 }
+
+message GetTablesInSchemaRequest {
+}
+
+message GetTablesInSchemaResponse {
+  repeated string tables = 1;
+}

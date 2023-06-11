@@ -1083,6 +1083,7 @@ func (mz *materializer) deploySchema(ctx context.Context) error {
 		}
 
 		var applyDDLs []string
+		var tablesToCreate []string
 		for _, ts := range mz.ms.TableSettings {
 			if hasTargetTable[ts.TargetTable] {
 				// Table already exists.
@@ -1144,7 +1145,7 @@ func (mz *materializer) deploySchema(ctx context.Context) error {
 				}
 				createDDL = ddl
 			}
-
+			tablesToCreate = append(tablesToCreate, ts.TargetTable)
 			applyDDLs = append(applyDDLs, createDDL)
 		}
 
@@ -1162,8 +1163,45 @@ func (mz *materializer) deploySchema(ctx context.Context) error {
 			}
 		}
 
+		mz.waitForTablesToBeLoaded(ctx, targetTablet, tablesToCreate)
 		return nil
 	})
+}
+
+func (mz *materializer) waitForTablesToBeLoaded(ctx context.Context, tablet *topo.TabletInfo, tables []string) (bool, error) {
+	timer := time.NewTimer(1 * time.Second)
+	defer timer.Stop()
+	select {
+	case <-timer.C:
+		loaded, err := mz.areTablesLoaded(ctx, tablet, tables)
+		if err != nil {
+			return false, err
+		}
+		if loaded {
+			return true, nil
+		}
+	case <-time.After(30 * time.Second):
+		return false, fmt.Errorf("timed out waiting for tables %v to be loaded on tablet %v", tables, tablet.Alias)
+	default:
+	}
+	return false, nil
+}
+
+func (mz *materializer) areTablesLoaded(ctx context.Context, tablet *topo.TabletInfo, tableNames []string) (bool, error) {
+	schemaTableNamessMap := make(map[string]bool)
+	schemaTableNames, err := mz.wr.TabletManagerClient().GetTablesInSchema(ctx, tablet.Tablet)
+	if err != nil {
+		return false, err
+	}
+	for _, tableName := range schemaTableNames {
+		schemaTableNamessMap[tableName] = true
+	}
+	for _, tableName := range tableNames {
+		if _, ok := schemaTableNamessMap[tableName]; !ok {
+			return false, nil
+		}
+	}
+	return true, nil
 }
 
 func stripTableForeignKeys(ddl string) (string, error) {

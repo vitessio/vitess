@@ -274,6 +274,20 @@ func (client *Client) GetSchema(ctx context.Context, tablet *topodatapb.Tablet, 
 	return response.SchemaDefinition, nil
 }
 
+// GetTablesInSchema is part of the tmclient.TabletManagerClient interface.
+func (client *Client) GetTablesInSchema(ctx context.Context, tablet *topodatapb.Tablet) ([]string, error) {
+	c, closer, err := client.dialer.dial(ctx, tablet)
+	if err != nil {
+		return nil, err
+	}
+	defer closer.Close()
+	response, err := c.GetTablesInSchema(ctx, &tabletmanagerdatapb.GetTablesInSchemaRequest{})
+	if err != nil {
+		return nil, err
+	}
+	return response.Tables, nil
+}
+
 // GetPermissions is part of the tmclient.TabletManagerClient interface.
 func (client *Client) GetPermissions(ctx context.Context, tablet *topodatapb.Tablet) (*tabletmanagerdatapb.Permissions, error) {
 	c, closer, err := client.dialer.dial(ctx, tablet)
