@@ -98,7 +98,13 @@ func (a *Aggregator) addColumnWithoutPushing(expr *sqlparser.AliasedExpr, addToG
 		groupBy.ColOffset = offset
 		a.Grouping = append(a.Grouping, groupBy)
 	} else {
-		aggr := NewAggr(opcode.AggregateRandom, nil, expr, expr.As.String())
+		var aggr Aggr
+		switch e := expr.Expr.(type) {
+		case sqlparser.AggrFunc:
+			aggr = createAggrFromAggrFunc(e, expr)
+		default:
+			aggr = NewAggr(opcode.AggregateRandom, nil, expr, expr.As.String())
+		}
 		aggr.ColOffset = offset
 		a.Aggregations = append(a.Aggregations, aggr)
 	}

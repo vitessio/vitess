@@ -300,7 +300,10 @@ func addOrderingForAggregation(ctx *plancontext.PlanningContext, in *Aggregator)
 		if err != nil {
 			return nil, nil, err
 		}
-		in.Columns = columns
+		// if this operator is producing more columns than expected, we want to know about it
+		if len(columns) > len(in.Columns) {
+			in.Columns = append(in.Columns, columns[len(in.Columns):]...)
+		}
 	}
 
 	requireOrdering, err := needsOrdering(in, ctx)

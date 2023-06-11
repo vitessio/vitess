@@ -220,7 +220,9 @@ func CreateQPFromSelect(ctx *plancontext.PlanningContext, sel *sqlparser.Select)
 	if err := qp.addOrderBy(ctx, sel.OrderBy); err != nil {
 		return nil, err
 	}
-
+	if !qp.HasAggr && sel.Having != nil {
+		qp.HasAggr = sqlparser.ContainsAggregation(sel.Having.Expr)
+	}
 	qp.calculateDistinct(ctx)
 
 	return qp, nil
