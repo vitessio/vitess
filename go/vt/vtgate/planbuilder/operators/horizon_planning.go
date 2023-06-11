@@ -95,15 +95,22 @@ type Phase struct {
 	act  func(ctx *plancontext.PlanningContext, op ops.Operator) (ops.Operator, error)
 }
 
+// getPhases returns the phases the planner will go through.
+// It's used to control so rewriters collaborate correctly
 func getPhases() []Phase {
 	return []Phase{{
-		// Adding Ordering Op - This is needed if there is no explicit ordering and aggregation is performed on top of route.
+		// Adding Ordering Op - Any aggregation that is performed in the VTGate needs the input to be ordered
+		Name: "add ORDER BY to aggregations above the route",
+		act: func(ctx *plancontext.PlanningContext, op ops.Operator) (ops.Operator, error) {
+			return addOrderBysForAggregations(ctx, op)
+		},
+	}, {
 		// Adding Group by - This is needed if the grouping is performed on a join with a join condition then
 		//                   aggregation happening at route needs a group by to ensure only matching rows returns
 		//                   the aggregations otherwise returns no result.
-		Name: "P1 - add ORDER BY to aggregations above the route",
+		Name: "add GROUP BY to aggregations on the RHS of join",
 		act: func(ctx *plancontext.PlanningContext, op ops.Operator) (ops.Operator, error) {
-			return addOrderBysAndGroupBysForAggregations(ctx, op)
+			return addGroupByOnRHSOfJoin(op)
 		},
 	}}
 }
@@ -241,19 +248,31 @@ func tryPushingDownDistinct(in *Distinct) (ops.Operator, *rewrite.ApplyResult, e
 	return aggr, rewrite.NewTree("replace distinct with aggregator", in), nil
 }
 
-// addOrderBysAndGroupBysForAggregations runs after we have run horizonPlanning until the op tree stops changing
+// addOrderBysForAggregations runs after we have run horizonPlanning until the op tree stops changing
 // this means that we have pushed aggregations and other ops as far down as they'll go
-// addOrderBysAndGroupBysForAggregations will find Aggregators that have not been pushed under routes and
+// addOrderBysForAggregations will find Aggregators that have not been pushed under routes and
 // add the necessary Ordering operators for them
-func addOrderBysAndGroupBysForAggregations(ctx *plancontext.PlanningContext, root ops.Operator) (ops.Operator, error) {
+func addOrderBysForAggregations(ctx *plancontext.PlanningContext, root ops.Operator) (ops.Operator, error) {
 	visitor := func(in ops.Operator, _ semantics.TableSet, isRoot bool) (ops.Operator, *rewrite.ApplyResult, error) {
-		switch in := in.(type) {
-		case *Aggregator:
-			return addOrderingForAggregation(ctx, in)
-		case *ApplyJoin:
-			return addLiteralGroupingToRHS(in)
+		aggr, ok := in.(*Aggregator)
+		if !ok {
+			return in, rewrite.SameTree, nil
 		}
-		return in, rewrite.SameTree, nil
+
+		return addOrderingForAggregation(ctx, aggr)
+	}
+
+	return rewrite.TopDown(root, TableID, visitor, stopAtRoute)
+}
+
+func addGroupByOnRHSOfJoin(root ops.Operator) (ops.Operator, error) {
+	visitor := func(in ops.Operator, _ semantics.TableSet, isRoot bool) (ops.Operator, *rewrite.ApplyResult, error) {
+		join, ok := in.(*ApplyJoin)
+		if !ok {
+			return in, rewrite.SameTree, nil
+		}
+
+		return addLiteralGroupingToRHS(join)
 	}
 
 	return rewrite.TopDown(root, TableID, visitor, stopAtRoute)
