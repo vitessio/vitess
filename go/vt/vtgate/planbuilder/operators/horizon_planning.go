@@ -90,30 +90,54 @@ func tryHorizonPlanning(ctx *plancontext.PlanningContext, root ops.Operator) (ou
 	return
 }
 
+type Phase struct {
+	Name string
+	act  func(ctx *plancontext.PlanningContext, op ops.Operator) (ops.Operator, error)
+}
+
+func getPhases() []Phase {
+	return []Phase{{
+		// Adding Ordering Op - This is needed if there is no explicit ordering and aggregation is performed on top of route.
+		// Adding Group by - This is needed if the grouping is performed on a join with a join condition then
+		//                   aggregation happening at route needs a group by to ensure only matching rows returns
+		//                   the aggregations otherwise returns no result.
+		Name: "P1 - add ORDER BY to aggregations above the route",
+		act: func(ctx *plancontext.PlanningContext, op ops.Operator) (ops.Operator, error) {
+			return addOrderBysAndGroupBysForAggregations(ctx, op)
+		},
+	}}
+}
+
 // planHorizons is the process of figuring out how to perform the operations in the Horizon
 // If we can push it under a route - done.
 // If we can't, we will instead expand the Horizon into
 // smaller operators and try to push these down as far as possible
-func planHorizons(ctx *plancontext.PlanningContext, root ops.Operator) (ops.Operator, error) {
-	root, err := optimizeHorizonPlanning(ctx, root)
+func planHorizons(ctx *plancontext.PlanningContext, root ops.Operator) (op ops.Operator, err error) {
+	phases := getPhases()
+	op = root
+
+	for {
+		op, err = optimizeHorizonPlanning(ctx, op)
+		if err != nil {
+			return nil, err
+		}
+		if len(phases) == 0 {
+			break
+		}
+		p := phases[0]
+		phases = phases[1:]
+		op, err = p.act(ctx, op)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	op, err = optimizeHorizonPlanning(ctx, op)
 	if err != nil {
 		return nil, err
 	}
 
-	// Adding Ordering Op - This is needed if there is no explicit ordering and aggregation is performed on top of route.
-	// Adding Group by - This is needed if the grouping is performed on a join with a join condition then
-	//                   aggregation happening at route needs a group by to ensure only matching rows returns
-	//                   the aggregations otherwise returns no result.
-	root, err = addOrderBysAndGroupBysForAggregations(ctx, root)
-	if err != nil {
-		return nil, err
-	}
-
-	root, err = optimizeHorizonPlanning(ctx, root)
-	if err != nil {
-		return nil, err
-	}
-	return root, nil
+	return op, nil
 }
 
 func optimizeHorizonPlanning(ctx *plancontext.PlanningContext, root ops.Operator) (ops.Operator, error) {
