@@ -294,18 +294,6 @@ func addLiteralGroupingToRHS(in *ApplyJoin) (ops.Operator, *rewrite.ApplyResult,
 }
 
 func addOrderingForAggregation(ctx *plancontext.PlanningContext, in *Aggregator) (ops.Operator, *rewrite.ApplyResult, error) {
-	if in.Pushed {
-		// we update the incoming columns, so we know about any new columns that have been added
-		columns, err := in.Source.GetColumns()
-		if err != nil {
-			return nil, nil, err
-		}
-		// if this operator is producing more columns than expected, we want to know about it
-		if len(columns) > len(in.Columns) {
-			in.Columns = append(in.Columns, columns[len(in.Columns):]...)
-		}
-	}
-
 	requireOrdering, err := needsOrdering(in, ctx)
 	if err != nil {
 		return nil, nil, err

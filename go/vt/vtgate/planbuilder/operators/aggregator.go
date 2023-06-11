@@ -165,7 +165,18 @@ func (a *Aggregator) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser
 	return a, offset, nil
 }
 
-func (a *Aggregator) GetColumns() (columns []*sqlparser.AliasedExpr, err error) {
+func (a *Aggregator) GetColumns() ([]*sqlparser.AliasedExpr, error) {
+	// we update the incoming columns, so we know about any new columns that have been added
+	columns, err := a.Source.GetColumns()
+	if err != nil {
+		return nil, err
+	}
+
+	// if this operator is producing more columns than expected, we want to know about it
+	if len(columns) > len(a.Columns) {
+		a.Columns = append(a.Columns, columns[len(a.Columns):]...)
+	}
+
 	return a.Columns, nil
 }
 
