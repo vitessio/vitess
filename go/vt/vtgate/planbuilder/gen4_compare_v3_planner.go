@@ -65,7 +65,12 @@ func gen4CompareV3Planner(query string) func(sqlparser.Statement, *sqlparser.Res
 			return nil, err
 		}
 
-		comments := selStmt.GetParsedComments().Prepend(sqlparser.DirectiveMinimalPlanning)
+		comments, err := selStmt.
+			GetParsedComments().
+			AddQueryDirective(sqlparser.DirectiveMinimalPlanning)
+		if err != nil {
+			return nil, err
+		}
 		selStmt.SetComments(comments)
 
 		gen4MPPrimitive, err := planWithPlannerVersion(selStmt, vars, ctxVSchema, query, Gen4)

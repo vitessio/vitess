@@ -169,6 +169,7 @@ const (
 
 // queryOptimizerPrefix is the prefix of an optimizer hint comment.
 const queryOptimizerPrefix = "/*+"
+const queryVitessPrefix = "/*vt+"
 
 // AddColumn appends the given column to the list in the spec
 func (ts *TableSpec) AddColumn(cd *ColumnDefinition) {
@@ -316,6 +317,14 @@ func SQLTypeToQueryType(typeName string, unsigned bool) querypb.Type {
 // If the list already contains a query hint, the given string will be merged with the existing one.
 // This is done because only one query hint is allowed per query.
 func (node *ParsedComments) AddQueryHint(queryHint string) (Comments, error) {
+	return node.addComment(queryHint, queryOptimizerPrefix)
+}
+
+func (node *ParsedComments) AddQueryDirective(queryHint string) (Comments, error) {
+	return node.addComment(queryHint, queryVitessPrefix)
+}
+
+func (node *ParsedComments) addComment(queryHint string, prefix string) (Comments, error) {
 	if queryHint == "" {
 		if node == nil {
 			return nil, nil
@@ -328,7 +337,7 @@ func (node *ParsedComments) AddQueryHint(queryHint string) (Comments, error) {
 
 	if node != nil {
 		for _, comment := range node.comments {
-			if strings.HasPrefix(comment, queryOptimizerPrefix) {
+			if strings.HasPrefix(comment, prefix) {
 				if hasQueryHint {
 					return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "Must have only one query hint")
 				}
@@ -349,7 +358,7 @@ func (node *ParsedComments) AddQueryHint(queryHint string) (Comments, error) {
 		}
 	}
 	if !hasQueryHint {
-		queryHintCommentStr := fmt.Sprintf("%s %s */", queryOptimizerPrefix, queryHint)
+		queryHintCommentStr := fmt.Sprintf("%s %s */", prefix, queryHint)
 		newComments = append(Comments{queryHintCommentStr}, newComments...)
 	}
 	return newComments, nil
