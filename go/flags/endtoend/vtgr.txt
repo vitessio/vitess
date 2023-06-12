@@ -1,3 +1,4 @@
+vtgr is deprecated and will be removed in Vitess 18. We recommend using VTOrc with semi-sync replication instead.
 Usage of vtgr:
       --abort_rebootstrap                                           Don't allow vtgr to rebootstrap an existing group.
       --alsologtostderr                                             log to standard error as well as files
