@@ -41,7 +41,6 @@ type Tokenizer struct {
 	lastToken      string
 	posVarIndex    int
 	partialDDL     Statement
-	nesting        int
 	multi          bool
 	specialComment *Tokenizer
 
@@ -699,7 +698,6 @@ func (tkn *Tokenizer) reset() {
 	tkn.partialDDL = nil
 	tkn.specialComment = nil
 	tkn.posVarIndex = 0
-	tkn.nesting = 0
 	tkn.SkipToEnd = false
 }
 
