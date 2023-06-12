@@ -72,6 +72,9 @@ type TabletManagerClient interface {
 	// GetSchema asks the remote tablet for its database schema
 	GetSchema(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.GetSchemaRequest) (*tabletmanagerdatapb.SchemaDefinition, error)
 
+	// GetTablesInSchema asks the remote tablet for the list of tables in the schema engine cache.
+	GetTablesInSchema(ctx context.Context, tablet *topodatapb.Tablet) ([]string, error)
+
 	// GetPermissions asks the remote tablet for its permissions list
 	GetPermissions(ctx context.Context, tablet *topodatapb.Tablet) (*tabletmanagerdatapb.Permissions, error)
 
@@ -102,9 +105,6 @@ type TabletManagerClient interface {
 
 	// ReloadSchema asks the remote tablet to reload its schema
 	ReloadSchema(ctx context.Context, tablet *topodatapb.Tablet, waitPosition string) error
-
-	// GetTablesInSchema asks the remote tablet to send a list of all tables in the schema engine cache
-	GetTablesInSchema(ctx context.Context, tablet *topodatapb.Tablet) ([]string, error)
 
 	// PreflightSchema will test a list of schema changes.
 	PreflightSchema(ctx context.Context, tablet *topodatapb.Tablet, changes []string) ([]*tabletmanagerdatapb.SchemaChangeResult, error)

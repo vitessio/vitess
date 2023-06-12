@@ -721,10 +721,6 @@ func (itc *internalTabletConn) VStreamResults(
 // internalTabletManagerClient implements tmclient.TabletManagerClient
 type internalTabletManagerClient struct{}
 
-func (itmc *internalTabletManagerClient) GetTablesInSchema(ctx context.Context, tablet *topodatapb.Tablet) ([]string, error) {
-	return nil, fmt.Errorf("GetTablesInSchema not implemented in vtcombo")
-}
-
 func (itmc *internalTabletManagerClient) VDiff(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.VDiffRequest) (*tabletmanagerdatapb.VDiffResponse, error) {
 	return nil, fmt.Errorf("VDiff not implemented in vtcombo")
 }
@@ -756,6 +752,10 @@ func (itmc *internalTabletManagerClient) GetSchema(
 		return nil, fmt.Errorf("tmclient: cannot find tablet %v", tablet.Alias.Uid)
 	}
 	return t.tm.GetSchema(ctx, request)
+}
+
+func (itmc *internalTabletManagerClient) GetTablesInSchema(ctx context.Context, tablet *topodatapb.Tablet) ([]string, error) {
+	return nil, fmt.Errorf("GetTablesInSchema not implemented in vtcombo")
 }
 
 func (itmc *internalTabletManagerClient) GetPermissions(ctx context.Context, tablet *topodatapb.Tablet) (*tabletmanagerdatapb.Permissions, error) {

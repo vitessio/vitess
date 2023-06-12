@@ -34,7 +34,7 @@ func (tm *TabletManager) GetSchema(ctx context.Context, request *tabletmanagerda
 	return tm.MysqlDaemon.GetSchema(ctx, topoproto.TabletDbName(tm.Tablet()), request)
 }
 
-// GetTablesInSchema returns the tables currently in the schema engine cache.
+// GetTablesInSchema returns a list of the tables currently in the schema engine cache.
 func (tm *TabletManager) GetTablesInSchema(ctx context.Context, request *tabletmanagerdatapb.GetTablesInSchemaRequest) (*tabletmanagerdatapb.GetTablesInSchemaResponse, error) {
 	tables := tm.QueryServiceControl.SchemaEngine().GetSchema()
 	var tableNames []string

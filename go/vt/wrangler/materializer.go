@@ -69,6 +69,8 @@ const (
 	createDDLAsCopy                = "copy"
 	createDDLAsCopyDropConstraint  = "copy:drop_constraint"
 	createDDLAsCopyDropForeignKeys = "copy:drop_foreign_keys"
+
+	waitForTablesToBeCreatedTimeout = 30 * time.Second
 )
 
 // addTablesToVSchema adds tables to an (unsharded) vschema. Depending on copyAttributes It will also add any sequence info
@@ -1083,7 +1085,7 @@ func (mz *materializer) deploySchema(ctx context.Context) error {
 		}
 
 		var applyDDLs []string
-		var tablesToCreate []string
+		var newTables []string
 		for _, ts := range mz.ms.TableSettings {
 			if hasTargetTable[ts.TargetTable] {
 				// Table already exists.
@@ -1145,7 +1147,7 @@ func (mz *materializer) deploySchema(ctx context.Context) error {
 				}
 				createDDL = ddl
 			}
-			tablesToCreate = append(tablesToCreate, ts.TargetTable)
+			newTables = append(newTables, ts.TargetTable)
 			applyDDLs = append(applyDDLs, createDDL)
 		}
 
@@ -1163,41 +1165,62 @@ func (mz *materializer) deploySchema(ctx context.Context) error {
 			}
 		}
 
-		mz.waitForTablesToBeLoaded(ctx, targetTablet, tablesToCreate)
+		if err := mz.waitForTablesToBeLoaded(ctx, targetTablet, newTables); err != nil {
+			return err
+		}
 		return nil
 	})
 }
 
-func (mz *materializer) waitForTablesToBeLoaded(ctx context.Context, tablet *topo.TabletInfo, tables []string) (bool, error) {
-	timer := time.NewTimer(1 * time.Second)
-	defer timer.Stop()
-	select {
-	case <-timer.C:
-		loaded, err := mz.areTablesLoaded(ctx, tablet, tables)
-		if err != nil {
-			return false, err
+// waitForTablesToBeLoaded waits for the tables to be loaded into the schema engine of the tablet in which we
+// created the tables using ApplySchema. There appears to be a delay between the time ApplySchema runs and when
+// the tables are visible to information_schema. So we  wait for the tables to be available in the tablet's cache
+// before we start the workflow by periodically reloading the schema in the tablet's cache if not found.
+// The root cause for this delay is not clear.
+func (mz *materializer) waitForTablesToBeLoaded(ctx context.Context, tablet *topo.TabletInfo, tables []string) error {
+	ticker := time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
+	timeoutTimer := time.NewTimer(waitForTablesToBeCreatedTimeout)
+	defer timeoutTimer.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			loaded, err := mz.areTablesLoaded(ctx, tablet, tables)
+			if err != nil {
+				return err
+			}
+			if loaded {
+				// we are done
+				return nil
+			} else {
+				// reload schema before we check again
+				if err := mz.wr.TabletManagerClient().ReloadSchema(ctx, tablet.Tablet, ""); err != nil {
+					return err
+				}
+			}
+		case <-timeoutTimer.C:
+			err := fmt.Errorf("timed out waiting for tables %v to be loaded into tablet %v's schema engine", tables, tablet.Alias)
+			log.Errorf("%v", err)
+			return err
 		}
-		if loaded {
-			return true, nil
-		}
-	case <-time.After(30 * time.Second):
-		return false, fmt.Errorf("timed out waiting for tables %v to be loaded on tablet %v", tables, tablet.Alias)
-	default:
 	}
-	return false, nil
 }
 
 func (mz *materializer) areTablesLoaded(ctx context.Context, tablet *topo.TabletInfo, tableNames []string) (bool, error) {
-	schemaTableNamessMap := make(map[string]bool)
+	schemaTableNamesMap := make(map[string]bool)
 	schemaTableNames, err := mz.wr.TabletManagerClient().GetTablesInSchema(ctx, tablet.Tablet)
 	if err != nil {
 		return false, err
 	}
+	if schemaTableNames == nil {
+		return false, nil
+	}
 	for _, tableName := range schemaTableNames {
-		schemaTableNamessMap[tableName] = true
+		schemaTableNamesMap[tableName] = true
 	}
 	for _, tableName := range tableNames {
-		if _, ok := schemaTableNamessMap[tableName]; !ok {
+		if _, ok := schemaTableNamesMap[tableName]; !ok {
+			log.Infof("Table %v not yet loaded in tablet %v's schema engine", tableName, tablet.Alias)
 			return false, nil
 		}
 	}
