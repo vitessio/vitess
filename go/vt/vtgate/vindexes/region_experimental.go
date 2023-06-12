@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
+	"fmt"
 
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -60,9 +61,9 @@ type RegionExperimental struct {
 // The supplied map requires all the fields of "consistent_lookup_unique".
 // Additionally, it requires a region_bytes argument whose value can be "1", or "2".
 func newRegionExperimental(name string, m map[string]string) (Vindex, error) {
-	rbs, ok := m["region_bytes"]
+	rbs, ok := m[regionExperimentalParamRegionBytes]
 	if !ok {
-		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "region_experimental missing region_bytes param")
+		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, fmt.Sprintf("region_experimental missing %s param", regionExperimentalParamRegionBytes))
 	}
 	var rb int
 	switch rbs {

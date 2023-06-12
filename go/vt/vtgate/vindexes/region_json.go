@@ -70,7 +70,7 @@ type RegionJSON struct {
 // Additionally, it requires a region_map argument representing the path to a json file
 // containing a map of country to region.
 func newRegionJSON(name string, m map[string]string) (Vindex, error) {
-	rmPath := m["region_map"]
+	rmPath := m[regionJSONParamRegionMap]
 	rmap := make(map[string]uint64)
 	data, err := os.ReadFile(rmPath)
 	if err != nil {
@@ -81,7 +81,7 @@ func newRegionJSON(name string, m map[string]string) (Vindex, error) {
 	if err != nil {
 		return nil, err
 	}
-	rb, err := strconv.Atoi(m["region_bytes"])
+	rb, err := strconv.Atoi(m[regionJSONParamRegionBytes])
 	if err != nil {
 		return nil, err
 	}
