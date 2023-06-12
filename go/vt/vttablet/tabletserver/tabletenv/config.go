@@ -211,6 +211,8 @@ func registerTabletEnvFlags(fs *pflag.FlagSet) {
 	fs.BoolVar(&currentConfig.EnableViews, "queryserver-enable-views", false, "Enable views support in vttablet.")
 
 	fs.BoolVar(&currentConfig.EnablePerWorkloadTableMetrics, "enable-per-workload-table-metrics", defaultConfig.EnablePerWorkloadTableMetrics, "If true, query counts and query error metrics include a label that identifies the workload")
+
+	fs.BoolVar(&currentConfig.EnableAggregateQueryTimings, "enable-aggregate-query-timings", defaultConfig.EnableAggregateQueryTimings, "This enables median and 99th timings for all queries.")
 }
 
 var (
@@ -360,6 +362,7 @@ type TabletConfig struct {
 	EnableViews bool `json:"-"`
 
 	EnablePerWorkloadTableMetrics bool `json:"-"`
+	EnableAggregateQueryTimings   bool
 }
 
 func (cfg *TabletConfig) MarshalJSON() ([]byte, error) {

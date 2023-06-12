@@ -216,6 +216,7 @@ func (e *Executor) Execute(ctx context.Context, method string, safeSession *Safe
 
 	logStats.SaveEndTime()
 	QueryLogger.Send(logStats)
+	TimingStatistics.RecordStats(logStats)
 	err = vterrors.TruncateError(err, truncateErrorLen)
 	return result, err
 }
