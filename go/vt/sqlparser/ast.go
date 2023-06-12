@@ -6888,3 +6888,50 @@ func (node *Deallocate) walkSubtree(visit Visit) error {
 func (node *Deallocate) Format(buf *TrackedBuffer) {
 	buf.Myprintf("deallocate prepare %s", node.Name)
 }
+
+type CreateSpatialRefSys struct {
+	SRID 	    *SQLVal
+	OrReplace	bool
+	IfNotExists bool
+	SrsAttr     *SrsAttribute
+}
+
+func (*CreateSpatialRefSys) iStatement() {}
+
+func (node *CreateSpatialRefSys) walkSubtree(visit Visit) error {
+	return nil
+}
+
+func (node *CreateSpatialRefSys) Format(buf *TrackedBuffer) {
+	buf.Myprintf("create ")
+	if node.OrReplace {
+		buf.WriteString("or replace ")
+	}
+	buf.Myprintf("spatial reference system ")
+	if node.IfNotExists {
+		buf.WriteString("if not exists ")
+	}
+	buf.Myprintf("%v\n", node.SRID)
+	buf.Myprintf("%v", node.SrsAttr)
+}
+
+type SrsAttribute struct {
+	Name         string
+	Definition   string
+	Organization string
+	OrgID	     *SQLVal
+	Description  string
+}
+
+func (*SrsAttribute) iStatement() {}
+
+func (node *SrsAttribute) walkSubtree(visit Visit) error {
+	return nil
+}
+
+func (node *SrsAttribute) Format(buf *TrackedBuffer) {
+	//buf.Myprintf("name '%s'\n", node.Name)
+	//buf.Myprintf("definition '%s'\n", node.Definition)
+	//buf.Myprintf("organization '%s' identified by %v\n", node.Organization, node.OrgID)
+	//buf.Myprintf("description '%s'", node.Description)
+}
