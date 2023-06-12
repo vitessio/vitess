@@ -124,11 +124,7 @@ func (f *Filter) planOffsets(ctx *plancontext.PlanningContext) error {
 	}
 
 	predicate := sqlparser.AndExpressions(f.Predicates...)
-	rewritten, err := useOffsets(ctx, predicate, func() ops.Operator {
-		return f.Source
-	}, func(operator ops.Operator) {
-		f.Source = operator
-	})
+	rewritten, err := useOffsets(ctx, predicate, f)
 	if err != nil {
 		return err
 	}

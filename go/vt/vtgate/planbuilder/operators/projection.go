@@ -296,8 +296,7 @@ func (p *Projection) planOffsets(ctx *plancontext.PlanningContext) error {
 		}
 
 		// first step is to replace the expressions we expect to get from our input with the offsets for these
-		rewritten, err := useOffsets(ctx, col.GetExpr(), func() ops.Operator { return p.Source },
-			func(o ops.Operator) { p.Source = o })
+		rewritten, err := useOffsets(ctx, col.GetExpr(), p)
 		if err != nil {
 			return err
 		}
@@ -327,15 +326,18 @@ func (p *Projection) planOffsets(ctx *plancontext.PlanningContext) error {
 	return nil
 }
 
-func useOffsets(ctx *plancontext.PlanningContext, in sqlparser.Expr, src func() ops.Operator, setSource func(ops.Operator)) (sqlparser.Expr, error) {
-	columns, err := src().GetColumns()
+func useOffsets(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op ops.Operator) (sqlparser.Expr, error) {
+	in := op.Inputs()[0]
+	columns, err := in.GetColumns()
 	if err != nil {
 		return nil, err
 	}
 
-	var doit func(cursor *sqlparser.CopyOnWriteCursor)
-
+	var exprOffset *sqlparser.Offset
 	down := func(node, parent sqlparser.SQLNode) bool {
+		if err != nil {
+			return false
+		}
 		e, ok := node.(sqlparser.Expr)
 		if !ok {
 			return true
@@ -345,41 +347,41 @@ func useOffsets(ctx *plancontext.PlanningContext, in sqlparser.Expr, src func() 
 		})
 		if offset >= 0 {
 			// this expression can be fetched from the input - we can stop here
-			doit = func(cursor *sqlparser.CopyOnWriteCursor) {
-				cursor.Replace(sqlparser.NewOffset(offset, e))
-			}
+			exprOffset = sqlparser.NewOffset(offset, e)
 			return false
 		}
 
 		if fetchByOffset(e) {
 			// this expression has to be fetched from the input, but we didn't find it in the input. let's add it
 			_, addToGroupBy := e.(*sqlparser.ColName)
-			newSrc, offset, err := src().AddColumn(ctx, aeWrap(e), true, addToGroupBy)
+			in, offset, err = in.AddColumn(ctx, aeWrap(e), true, addToGroupBy)
 			if err != nil {
-				panic(err.Error())
+				return false
 			}
-			setSource(newSrc)
-			columns, err = src().GetColumns()
+			op.SetInputs([]ops.Operator{in})
+			columns, err = in.GetColumns()
 			if err != nil {
-				panic("this should not happen")
+				return false
 			}
-			doit = func(cursor *sqlparser.CopyOnWriteCursor) {
-				cursor.Replace(sqlparser.NewOffset(offset, e))
-			}
+			exprOffset = sqlparser.NewOffset(offset, e)
 			return false
 		}
 
 		return true
 	}
 
+	// The cursor replace is not available while walking `down`, so `up` is used to do the replacement.
 	up := func(cursor *sqlparser.CopyOnWriteCursor) {
-		if doit != nil {
-			doit(cursor)
-			doit = nil
+		if exprOffset != nil {
+			cursor.Replace(exprOffset)
+			exprOffset = nil
 		}
 	}
 
-	rewritten := sqlparser.CopyOnRewrite(in, down, up, ctx.SemTable.CopyDependenciesOnSQLNodes)
+	rewritten := sqlparser.CopyOnRewrite(expr, down, up, ctx.SemTable.CopyDependenciesOnSQLNodes)
+	if err != nil {
+		return nil, err
+	}
 
 	return rewritten.(sqlparser.Expr), nil
 }
