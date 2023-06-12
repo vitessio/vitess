@@ -25,7 +25,6 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/textutil"
-	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/proto/vttime"
 	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -82,7 +81,6 @@ func (tm *TabletManager) CreateVRWorkflow(ctx context.Context, req *tabletmanage
 		if err != nil {
 			return nil, err
 		}
-		log.Errorf("CreateVRWorkflow SQL: %s", stmt)
 		streamres, err := tm.VREngine.Exec(stmt)
 
 		if err != nil {
@@ -104,7 +102,6 @@ func (tm *TabletManager) DeleteVRWorkflow(ctx context.Context, req *tabletmanage
 	if err != nil {
 		return nil, err
 	}
-	log.Errorf("DeleteVRWorkflow SQL: %s", stmt)
 	streamres, err := tm.VREngine.Exec(stmt)
 
 	if err != nil {
@@ -125,7 +122,6 @@ func (tm *TabletManager) ReadVRWorkflow(ctx context.Context, req *tabletmanagerd
 	if err != nil {
 		return nil, err
 	}
-	log.Errorf("ReadVRWorkflow SQL: %s", stmt)
 	res, err := tm.VREngine.Exec(stmt)
 	if err != nil {
 		return nil, err

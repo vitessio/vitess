@@ -31,6 +31,8 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
+	"vitess.io/vitess/go/vt/vttablet/tabletmanager"
+	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
 	_flag "vitess.io/vitess/go/internal/flag"
@@ -51,6 +53,7 @@ type testMaterializerEnv struct {
 	sources  []string
 	targets  []string
 	tablets  map[int]*topodatapb.Tablet
+	tms      map[int]*tabletmanager.TabletManager
 	topoServ *topo.Server
 	cell     string
 	tmc      *testMaterializerTMClient
@@ -71,6 +74,7 @@ func newTestMaterializerEnv(t *testing.T, ms *vtctldatapb.MaterializeSettings, s
 		sources:  sources,
 		targets:  targets,
 		tablets:  make(map[int]*topodatapb.Tablet),
+		tms:      make(map[int]*tabletmanager.TabletManager),
 		topoServ: memorytopo.NewServer("cell"),
 		cell:     "cell",
 		tmc:      newTestMaterializerTMClient(),
@@ -146,6 +150,10 @@ func (env *testMaterializerEnv) addTablet(id int, keyspace, shard string, tablet
 		},
 	}
 	env.tablets[id] = tablet
+	env.tms[id] = &tabletmanager.TabletManager{
+		TopoServer: env.topoServ,
+		VREngine: &vreplication.NewSimpleTestEngine(env.topoServ, env.cell, nil, func() binlogplayer.DBClient, dbClientFactoryDba func() binlogplayer.DBClient, dbname string, externalConfig map[string]*dbconfigs.DBConfigs),
+	}
 	if err := env.ws.ts.InitTablet(context.Background(), tablet, false /* allowPrimaryOverride */, true /* createShardAndKeyspace */, false /* allowUpdate */); err != nil {
 		panic(err)
 	}

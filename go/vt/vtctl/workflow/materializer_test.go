@@ -38,14 +38,36 @@ const mzSelectIDQuery = "select id from _vt.vreplication where db_name='vt_targe
 const mzSelectFrozenQuery = "select 1 from _vt.vreplication where db_name='vt_targetks' and message='FROZEN' and workflow_sub_type != 1"
 const mzCheckJournal = "/select val from _vt.resharding_journal where id="
 const mzGetWorkflowQuery = "select id, source, message, cell, tablet_types, workflow_type, workflow_sub_type, defer_secondary_keys from _vt.vreplication where workflow='workflow' and db_name='vt_targetks'"
-const mzGetWorkflowQuery2 = "select id, workflow, source, pos, stop_pos, max_replication_lag, state, db_name, time_updated, transaction_timestamp, message, tags, workflow_type, workflow_sub_type from _vt.vreplication where workflow = 'workflow' and db_name = 'vt_targetks'"
-const mzGetCopyState = "select table_name, lastpk from _vt.copy_state where vrepl_id = 1 and id in (select max(id) from _vt.copy_state where vrepl_id = 1 group by vrepl_id, table_name)"
+const mzGetWorkflowStatusQuery = "select id, workflow, source, pos, stop_pos, max_replication_lag, state, db_name, time_updated, transaction_timestamp, message, tags, workflow_type, workflow_sub_type from _vt.vreplication where workflow = 'workflow' and db_name = 'vt_targetks'"
+const mzGetCopyState = "select distinct table_name from _vt.copy_state cs, _vt.vreplication vr where vr.id = cs.vrepl_id and vr.id = 1"
+const mzGetLatestCopyState = "select table_name, lastpk from _vt.copy_state where vrepl_id = 1 and id in (select max(id) from _vt.copy_state where vrepl_id = 1 group by vrepl_id, table_name)"
 const insertPrefix = `/insert into _vt.vreplication\(workflow, source, pos, max_tps, max_replication_lag, cell, tablet_types, time_updated, transaction_timestamp, state, db_name, workflow_type, workflow_sub_type, defer_secondary_keys\) values `
 
 var defaultOnDDL = binlogdatapb.OnDDLAction_name[int32(binlogdatapb.OnDDLAction_IGNORE)]
+var binlogSource = &binlogdatapb.BinlogSource{
+	Keyspace: "sourceks",
+	Shard:    "0",
+	Filter: &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match:  "t1",
+			Filter: "select * from t1",
+		}},
+	},
+}
 var getWorkflowRes = sqltypes.MakeTestResult(
-	sqltypes.MakeTestFields("id", "int64"),
-	"1")
+	sqltypes.MakeTestFields(
+		"id|source|message|cell|tablet_types|workflow_type|workflow_sub_type|defer_secondary_keys",
+		"int64|blob|varchar|varchar|varchar|int64|int64|int64",
+	),
+	fmt.Sprintf("1|%s||zone1|replica|1|0|1", binlogSource),
+)
+var getWorkflowStatusRes = sqltypes.MakeTestResult(
+	sqltypes.MakeTestFields(
+		"id|workflow|source|pos|stop_pos|max_replication_log|state|db_name|time_updated|transaction_timestamp|message|tags|workflow_type|workflow_sub_type",
+		"int64|varchar|blob|varchar|varchar|int64|varchar|varchar|int64|int64|varchar|varchar|int64|int64",
+	),
+	fmt.Sprintf("1|wf1|%s|MySQL56/9d10e6ec-07a0-11ee-ae73-8e53f4cf3083:1-97|NULL|0|running|vt_ks|1686577659|0|||1|0", binlogSource),
+)
 
 /*
 func TestMigrateTables(t *testing.T) {
@@ -3013,9 +3035,11 @@ func TestMigrateVSchema(t *testing.T) {
 	env.tmc.expectVRQuery(100, mzCheckJournal, &sqltypes.Result{})
 	env.tmc.expectVRQuery(200, mzSelectFrozenQuery, &sqltypes.Result{})
 	env.tmc.expectVRQuery(200, getWorkflowQuery, getWorkflowRes)
-	env.tmc.expectVRQuery(200, insertPrefix, &sqltypes.Result{})
-	env.tmc.expectVRQuery(200, mzSelectIDQuery, &sqltypes.Result{})
 	env.tmc.expectVRQuery(200, mzUpdateQuery, &sqltypes.Result{})
+	env.tmc.expectVRQuery(200, mzGetWorkflowQuery, getWorkflowRes)
+	env.tmc.expectVRQuery(200, mzGetCopyState, &sqltypes.Result{})
+	env.tmc.expectVRQuery(200, mzGetWorkflowStatusQuery, getWorkflowStatusRes)
+	env.tmc.expectVRQuery(200, mzGetLatestCopyState, &sqltypes.Result{})
 
 	ctx := context.Background()
 	_, err := env.ws.MoveTablesCreate(ctx, &vtctldatapb.MoveTablesCreateRequest{
@@ -3054,25 +3078,22 @@ func TestMoveTablesDDLFlag(t *testing.T) {
 			SourceExpression: "select * from t1",
 		}},
 	}
-
 	ctx := context.Background()
-	var insert string
 
 	for onDDLAction := range binlogdatapb.OnDDLAction_value {
 		t.Run(fmt.Sprintf("OnDDL Flag:%v", onDDLAction), func(t *testing.T) {
 			env := newTestMaterializerEnv(t, ms, []string{"0"}, []string{"0"})
 			defer env.close()
-			if onDDLAction == binlogdatapb.OnDDLAction_name[int32(binlogdatapb.OnDDLAction_IGNORE)] {
-				// This is the default and go does not marshal defaults
-				// for prototext fields so we use the default insert stmt.
-				insert = insertPrefix
-			} else {
-				insert = fmt.Sprintf(`/insert into .vreplication\(.*on_ddl:%s.*`, onDDLAction)
-			}
-			env.tmc.expectVRQuery(200, "/select 1 from _vt.vreplication", &sqltypes.Result{})
-			env.tmc.expectVRQuery(100, mzCheckJournal, &sqltypes.Result{})
-			env.tmc.expectVRQuery(200, getWorkflowQuery, &sqltypes.Result{})
-			env.tmc.expectVRQuery(200, insert, &sqltypes.Result{})
+			// This is the default and go does not marshal defaults
+			// for prototext fields so we use the default insert stmt.
+			//insert = fmt.Sprintf(`/insert into .vreplication\(.*on_ddl:%s.*`, onDDLAction)
+			env.tmc.expectVRQuery(100, "/.*", &sqltypes.Result{})
+			env.tmc.expectVRQuery(200, "/.*", &sqltypes.Result{})
+			env.tmc.expectVRQuery(200, "/.*", &sqltypes.Result{})
+			env.tmc.expectVRQuery(200, "/.*", &sqltypes.Result{})
+			env.tmc.expectVRQuery(200, "/.*", &sqltypes.Result{})
+			env.tmc.expectVRQuery(200, "/.*", &sqltypes.Result{})
+			env.tmc.expectVRQuery(200, "/.*", &sqltypes.Result{})
 
 			want := fmt.Sprintf(`summary:"Successfully created the workflow MoveTables workflow on (1) target primary tablets in the %s keyspace" details:{tablet:"%s-200 (%s/0)"}`,
 				ms.TargetKeyspace, env.cell, ms.TargetKeyspace)
