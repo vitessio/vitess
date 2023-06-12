@@ -6930,8 +6930,8 @@ func (node *SrsAttribute) walkSubtree(visit Visit) error {
 }
 
 func (node *SrsAttribute) Format(buf *TrackedBuffer) {
-	//buf.Myprintf("name '%s'\n", node.Name)
-	//buf.Myprintf("definition '%s'\n", node.Definition)
-	//buf.Myprintf("organization '%s' identified by %v\n", node.Organization, node.OrgID)
-	//buf.Myprintf("description '%s'", node.Description)
+	buf.Myprintf("name '%s'\n", node.Name)
+	buf.Myprintf("definition '%s'\n", node.Definition)
+	buf.Myprintf("organization '%s' identified by %v\n", node.Organization, node.OrgID)
+	buf.Myprintf("description '%s'", node.Description)
 }

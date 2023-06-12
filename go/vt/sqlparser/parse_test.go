@@ -2982,7 +2982,37 @@ var (
 		},
 		// Create Spatial Reference System Statements
 		{
-			input: "create spatial reference system 10\n",
+			input: "create spatial reference system 1234\n" +
+				"name 'name'\n" +
+				"definition 'definition'\n" +
+				"organization 'organization' identified by 4321\n" +
+				"description 'description'",
+		},
+		{
+			input: "create spatial reference system if not exists 1234\n" +
+				"name 'name'\n" +
+				"definition 'definition'\n" +
+				"organization 'organization' identified by 4321\n" +
+				"description 'description'",
+		},
+		{
+			input: "create or replace spatial reference system 1234\n" +
+				"name 'name'\n" +
+				"definition 'definition'\n" +
+				"organization 'organization' identified by 4321\n" +
+				"description 'description'",
+		},
+		{
+			input: "create spatial reference system 1234\n" +
+				"organization 'organization' identified by 4321\n" +
+				"definition 'definition'\n" +
+				"name 'name'\n" +
+				"description 'description'",
+			output: "create spatial reference system 1234\n" +
+				"name 'name'\n" +
+				"definition 'definition'\n" +
+				"organization 'organization' identified by 4321\n" +
+				"description 'description'",
 		},
 	}
 	// Any tests that contain multiple statements within the body (such as BEGIN/END blocks) should go here.
@@ -3939,7 +3969,44 @@ func TestInvalid(t *testing.T) {
 	}, {
 		input: "select * from test order by a union select * from test",
 		err:   "syntax error",
-	}}
+	},
+	{
+		input: "create spatial reference system 1234\n" +
+			"name 'name'\n" +
+			"name 'name'",
+		err: "multiple definitions of attribute name",
+	},
+	{
+		input: "create spatial reference system 1234\n" +
+			"definition 'definition'\n" +
+			"definition 'definition'\n",
+		err: "multiple definitions of attribute definition",
+	},
+	{
+		input: "create spatial reference system 1234\n" +
+			"organization 'organization' identified by 4321\n" +
+			"organization 'organization' identified by 4321",
+		err: "multiple definitions of attribute organization",
+	},
+	{
+		input: "create spatial reference system 1234\n" +
+			"description 'description'\n" +
+			"description 'description'",
+		err: "multiple definitions of attribute description",
+	},
+	{
+		input: "create or replace spatial reference system 1234\n" +
+			"name 'name'\n" +
+			"name 'name'",
+		err: "multiple definitions of attribute name",
+	},
+	{
+		input: "create spatial reference system if not exists 1234\n" +
+			"name 'name'\n" +
+			"name 'name'",
+		err: "multiple definitions of attribute name",
+	},
+	}
 
 	for _, tcase := range invalidSQL {
 		_, err := Parse(tcase.input)

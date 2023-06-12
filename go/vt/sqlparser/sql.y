@@ -1117,9 +1117,9 @@ create_spatial_ref_sys:
   {
     $$ = &CreateSpatialRefSys{SRID: NewIntVal($5), SrsAttr: $6}
   }
-| CREATE SPATIAL REFERENCE SYSTEM INTEGRAL IF NOT EXISTS srs_attribute
+| CREATE SPATIAL REFERENCE SYSTEM IF NOT EXISTS INTEGRAL srs_attribute
   {
-    $$ = &CreateSpatialRefSys{SRID: NewIntVal($5), IfNotExists: true, SrsAttr: $9}
+    $$ = &CreateSpatialRefSys{SRID: NewIntVal($8), IfNotExists: true, SrsAttr: $9}
   }
 | CREATE OR REPLACE SPATIAL REFERENCE SYSTEM INTEGRAL srs_attribute
   {
