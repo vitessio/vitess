@@ -30,6 +30,11 @@ for binary in mysqld etcd etcdctl curl vtctlclient vttablet vtgate vtctld mysqlc
   command -v "$binary" > /dev/null || fail "${binary} is not installed in PATH. See https://vitess.io/docs/get-started/local/ for install instructions."
 done;
 
+# vtctlclient has a separate alias setup below
+for binary in vttablet vtgate vtctld mysqlctl vtorc vtctl; do
+  alias $binary="$binary --config-file-not-found-handling=ignore"
+done;
+
 if [ "${TOPO}" = "zk2" ]; then
     # Each ZooKeeper server needs a list of all servers in the quorum.
     # Since we're running them all locally, we need to give them unique ports.
@@ -79,7 +84,7 @@ mkdir -p "${VTDATAROOT}/tmp"
 # such as ~/.my.cnf
 
 alias mysql="command mysql --no-defaults -h 127.0.0.1 -P 15306"
-alias vtctlclient="command vtctlclient --server localhost:15999 --log_dir ${VTDATAROOT}/tmp --alsologtostderr"
+alias vtctlclient="command vtctlclient --server localhost:15999 --log_dir ${VTDATAROOT}/tmp --alsologtostderr --config-file-not-found-handling=ignore"
 alias vtctldclient="command vtctldclient --server localhost:15999"
 
 # Make sure aliases are expanded in non-interactive shell

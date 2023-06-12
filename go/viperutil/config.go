@@ -69,8 +69,9 @@ var (
 	configFileNotFoundHandling = Configure(
 		"config.notfound.handling",
 		Options[ConfigFileNotFoundHandling]{
-			Default: WarnOnConfigFileNotFound,
-			GetFunc: getHandlingValue,
+			Default:  WarnOnConfigFileNotFound,
+			GetFunc:  getHandlingValue,
+			FlagName: "config-file-not-found-handling",
 		},
 	)
 	configPersistenceMinInterval = Configure(
@@ -110,7 +111,7 @@ func RegisterFlags(fs *pflag.FlagSet) {
 	var h = configFileNotFoundHandling.Default()
 	fs.Var(&h, "config-file-not-found-handling", fmt.Sprintf("Behavior when a config file is not found. (Options: %s)", strings.Join(handlingNames, ", ")))
 
-	BindFlags(fs, configPaths, configType, configName, configFile)
+	BindFlags(fs, configPaths, configType, configName, configFile, configFileNotFoundHandling, configPersistenceMinInterval)
 }
 
 // LoadConfig attempts to find, and then load, a config file for viper-backed
