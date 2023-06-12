@@ -103,6 +103,9 @@ func TestKnownFailures(t *testing.T) {
 	// mysql error: In aggregated query without GROUP BY, expression #1 of SELECT list contains nonaggregated column 'ks_random.tbl0.ENAME'
 	helperTest(t, "select /*vt+ PLANNER=Gen4 */ (tbl0.ename), min(tbl0.comm) from emp as tbl0 left join emp as tbl1 on tbl0.empno = tbl1.comm and tbl0.empno = tbl1.empno")
 
+	// the type of this expression cannot be statically computed
+	helperTest(t, "select /*vt+ PLANNER=Gen4 */ sum(tbl1.ename), min(tbl0.empno) from emp as tbl0, emp as tbl1 left join dept as tbl2 on tbl1.job = tbl2.loc and tbl1.comm = tbl2.deptno where ('trout') and tbl0.deptno = tbl1.comm")
+
 	// Cannot convert value to desired type
 	helperTest(t, "select /*vt+ PLANNER=Gen4 */ distinct max(tbl0.deptno), count(tbl0.job) from emp as tbl0, dept as tbl1 left join dept as tbl2 on tbl1.dname = tbl2.loc and tbl1.dname = tbl2.loc where (tbl2.loc) and tbl0.deptno = tbl1.deptno")
 
@@ -232,14 +235,14 @@ func randomQuery(schemaTables []tableT, maxAggrs, maxGroupBy int) string {
 
 	// select the grouping columns
 	isJoin := rand.Intn(2) < 1
-	if len(grouping) > 0 && rand.Intn(2) < 1 && (!isDistinct || TestFailingQueries) {
+	if len(grouping) > 0 && rand.Intn(2) < 1 && (!isDistinct || TestFailingQueries) && (!isJoin || TestFailingQueries) {
 		sel += strings.Join(grouping, ", ") + ", "
 	}
 
 	// select the ordering columns
 	// we do it this way, so we don't have to do only `only_full_group_by` queries
 	noOfOrderBy := 0
-	if len(grouping) > 0 && (!isDistinct || TestFailingQueries) {
+	if len(grouping) > 0 && (!isDistinct || TestFailingQueries) && (!isJoin || TestFailingQueries) {
 		// panic on rand function call if value is 0
 		noOfOrderBy = rand.Intn(len(grouping))
 	}
@@ -262,7 +265,7 @@ func randomQuery(schemaTables []tableT, maxAggrs, maxGroupBy int) string {
 	// add random expression to select
 	isRandomExpr := rand.Intn(2) < 1
 	randomExpr := getRandomExpr(tables)
-	if isRandomExpr {
+	if isRandomExpr && (!isDistinct || TestFailingQueries) && (!isJoin || TestFailingQueries) {
 		sel += "(" + randomExpr + "), "
 	}
 
@@ -301,7 +304,7 @@ func randomQuery(schemaTables []tableT, maxAggrs, maxGroupBy int) string {
 		sel += strings.Join(predicates, " and ")
 	}
 
-	if len(grouping) > 0 && (!isDistinct || TestFailingQueries) {
+	if len(grouping) > 0 && (!isDistinct || TestFailingQueries) && (!isJoin || TestFailingQueries) {
 		// populate columns of this query to add to schemaTables
 		//for i := range grouping {
 		//	newColumns = append(newColumns, column{
@@ -315,7 +318,10 @@ func randomQuery(schemaTables []tableT, maxAggrs, maxGroupBy int) string {
 			sel += ", "
 		}
 	}
-	if isRandomExpr && (!isDistinct || TestFailingQueries) {
+	if isRandomExpr && (!isDistinct || TestFailingQueries) && (!isJoin || TestFailingQueries) {
+		if len(grouping) <= 0 {
+			sel += " group by "
+		}
 		sel += "(" + randomExpr + ")"
 	}
 
