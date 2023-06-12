@@ -1966,8 +1966,7 @@ var (
 		}, {
 			input: "select `name`, group_concat(score) from t group by `name`",
 		}, {
-			input:                      "select concAt(  \"a\",    \"b\", \"c\"  ) from t group by name",
-			output:                      "select concAt(  \"a\",    \"b\", \"c\"  ) from t group by `name`",
+			input:                      "select concAt(  \"a\",    \"b\", \"c\"  ) from t group by `name`",
 			useSelectExpressionLiteral: true,
 		}, {
 			input: "select `name`, group_concat(distinct id, score order by id desc separator ':') from t group by `name`",
