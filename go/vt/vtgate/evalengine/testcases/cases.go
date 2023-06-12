@@ -150,6 +150,7 @@ var Cases = []TestCase{
 	{Run: FnIsUUID},
 	{Run: FnUUID},
 	{Run: FnUUIDToBin},
+	{Run: DateMath},
 }
 
 func JSONPathOperations(yield Query) {
@@ -1844,6 +1845,51 @@ func FnUUIDToBin(yield Query) {
 	for _, d := range uuidInputs {
 		for _, a := range args {
 			yield(fmt.Sprintf("UUID_TO_BIN(%s, %s)", d, a), nil)
+		}
+	}
+}
+
+func DateMath(yield Query) {
+	dates := []string{
+		`DATE'2018-05-01'`,
+		`TIMESTAMP'2020-12-31 23:59:59'`,
+		`TIMESTAMP'2025-01-01 00:00:00'`,
+		`'2018-05-01'`,
+		`'2020-12-31 23:59:59'`,
+		`'2025-01-01 00:00:00'`,
+		`20250101`,
+		`'pokemon trainers'`,
+		`'20250101'`,
+	}
+	intervalValues := []string{
+		`1`, `'1:1'`, `'1 1:1:1'`, `'-1 10'`, `'1 10'`, `31`, `30`, `'1.999999'`, `1.999`, `'1.999'`,
+		`'1:1:1:1'`, `'1:1 1:1'`, `'-1:10'`, `'1:10'`, `1.5`, `1.5000`, `6/4`, `'6/4'`, `1.5e0`, `1.5000e0`,
+		`CAST(6/4 AS DECIMAL(3,1))`, `CAST(6/4 AS DECIMAL(3,0))`, `1e0`, `'1.0'`, `'1.0foobar'`,
+	}
+	mysqlDocSamples := []string{
+		`DATE_ADD(DATE'2018-05-01',INTERVAL 1 DAY)`,
+		`DATE_SUB(DATE'2018-05-01',INTERVAL 1 YEAR)`,
+		`DATE_ADD(TIMESTAMP'2020-12-31 23:59:59', INTERVAL 1 SECOND)`,
+		`DATE_ADD(TIMESTAMP'2018-12-31 23:59:59', INTERVAL 1 DAY)`,
+		`DATE_ADD(TIMESTAMP'2100-12-31 23:59:59', INTERVAL '1:1' MINUTE_SECOND)`,
+		`DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL '1 1:1:1' DAY_SECOND)`,
+		`DATE_ADD(TIMESTAMP'1900-01-01 00:00:00', INTERVAL '-1 10' DAY_HOUR)`,
+		`DATE_SUB(DATE'1998-01-02', INTERVAL 31 DAY)`,
+		`DATE_ADD(TIMESTAMP'1992-12-31 23:59:59.000002', INTERVAL '1.999999' SECOND_MICROSECOND)`,
+		`DATE_ADD(DATE'2024-03-30', INTERVAL 1 MONTH)`,
+		`DATE_ADD(DATE'2024-03-31', INTERVAL 1 MONTH)`,
+	}
+
+	for _, q := range mysqlDocSamples {
+		yield(q, nil)
+	}
+
+	for _, d := range dates {
+		for _, i := range inputIntervals {
+			for _, v := range intervalValues {
+				yield(fmt.Sprintf("DATE_ADD(%s, INTERVAL %s %s)", d, v, i), nil)
+				yield(fmt.Sprintf("DATE_SUB(%s, INTERVAL %s %s)", d, v, i), nil)
+			}
 		}
 	}
 }

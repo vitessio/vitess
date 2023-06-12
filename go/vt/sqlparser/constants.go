@@ -16,6 +16,8 @@ limitations under the License.
 
 package sqlparser
 
+import "vitess.io/vitess/go/mysql/datetime"
+
 // String constants to be used in ast.
 const (
 	// Select.Distinct
@@ -400,28 +402,6 @@ const (
 	SharedTypeStr    = "shared"
 	DefaultTypeStr   = "default"
 	ExclusiveTypeStr = "exclusive"
-
-	// IntervalTypes strings
-	DayStr               = "day"
-	WeekStr              = "week"
-	MonthStr             = "month"
-	YearStr              = "year"
-	DayHourStr           = "day_hour"
-	DayMicrosecondStr    = "day_microsecond"
-	DayMinuteStr         = "day_minute"
-	DaySecondStr         = "day_second"
-	HourStr              = "hour"
-	HourMicrosecondStr   = "hour_microsecond"
-	HourMinuteStr        = "hour_minute"
-	HourSecondStr        = "hour_second"
-	MicrosecondStr       = "microsecond"
-	MinuteStr            = "minute"
-	MinuteMicrosecondStr = "minute_microsecond"
-	MinuteSecondStr      = "minute_second"
-	QuarterStr           = "quarter"
-	SecondStr            = "second"
-	SecondMicrosecondStr = "second_microsecond"
-	YearMonthStr         = "year_month"
 
 	// GeomeFromWktType strings
 	GeometryFromTextStr           = "st_geometryfromtext"
@@ -912,46 +892,6 @@ const (
 	DefaultFormat
 )
 
-// Constants for Enum Type - DateAddExprType
-const (
-	AdddateType DateAddExprType = iota
-	DateAddType
-	PlusIntervalLeftType
-	PlusIntervalRightType
-)
-
-// Constants for Enum Type - DateAddExprType
-const (
-	SubdateType DateSubExprType = iota
-	DateSubType
-	MinusIntervalRightType
-)
-
-// IntervalTypes constants
-const (
-	IntervalUnknown IntervalTypes = iota
-	IntervalYear
-	IntervalQuarter
-	IntervalMonth
-	IntervalWeek
-	IntervalDay
-	IntervalHour
-	IntervalMinute
-	IntervalSecond
-	IntervalMicrosecond
-	IntervalYearMonth
-	IntervalDayHour
-	IntervalDayMinute
-	IntervalDaySecond
-	IntervalHourMinute
-	IntervalHourSecond
-	IntervalMinuteSecond
-	IntervalDayMicrosecond
-	IntervalHourMicrosecond
-	IntervalMinuteMicrosecond
-	IntervalSecondMicrosecond
-)
-
 // Transaction access mode
 const (
 	WithConsistentSnapshot TxAccessMode = iota
@@ -1036,4 +976,42 @@ const (
 	LatitudeFromHash GeomFromHashType = iota
 	LongitudeFromHash
 	PointFromHash
+)
+
+// IntervalType constants
+const (
+	IntervalNone        = datetime.IntervalNone
+	IntervalMicrosecond = datetime.IntervalMicrosecond
+	IntervalSecond      = datetime.IntervalSecond
+	IntervalMinute      = datetime.IntervalMinute
+	IntervalHour        = datetime.IntervalHour
+	IntervalDay         = datetime.IntervalDay
+	IntervalWeek        = datetime.IntervalWeek
+	IntervalMonth       = datetime.IntervalMonth
+	IntervalQuarter     = datetime.IntervalQuarter
+	IntervalYear        = datetime.IntervalYear
+
+	IntervalSecondMicrosecond = datetime.IntervalSecondMicrosecond
+	IntervalMinuteMicrosecond = datetime.IntervalMinuteMicrosecond
+	IntervalMinuteSecond      = datetime.IntervalMinuteSecond
+	IntervalHourMicrosecond   = datetime.IntervalHourMicrosecond
+	IntervalHourSecond        = datetime.IntervalHourSecond
+	IntervalHourMinute        = datetime.IntervalHourMinute
+	IntervalDayMicrosecond    = datetime.IntervalDayMicrosecond
+	IntervalDaySecond         = datetime.IntervalDaySecond
+	IntervalDayMinute         = datetime.IntervalDayMinute
+	IntervalDayHour           = datetime.IntervalDayHour
+	IntervalYearMonth         = datetime.IntervalYearMonth
+)
+
+type IntervalExprSyntax int8
+
+const (
+	IntervalDateExprDateAdd IntervalExprSyntax = iota
+	IntervalDateExprDateSub
+	IntervalDateExprAdddate
+	IntervalDateExprSubdate
+	IntervalDateExprBinaryAdd
+	IntervalDateExprBinaryAddLeft
+	IntervalDateExprBinarySub
 )
