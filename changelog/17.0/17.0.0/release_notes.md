@@ -35,6 +35,7 @@
   - **[Deprecations and Deletions](#deprecations-and-deletions)**
     - [Deprecated Flags](#deprecated-flags)
     - [Deprecated Stats](#deprecated-stats)
+    - [`vtgr` Deprecated](#deprecated-vtgr)
 
 
 ## <a id="major-changes"/>Major Changes
@@ -450,6 +451,10 @@ These stats are deprecated in v17.
 |-|-|
 | `backup_duration_seconds` | `BackupDurationNanoseconds` |
 | `restore_duration_seconds` | `RestoreDurationNanoseconds` |
+
+### <a id="deprecated-vtgr"/>Deprecated `vtgr`
+
+The `vtgr` component has been deprecated, also see https://github.com/vitessio/vitess/issues/13300. In Vitess 18 `vtgr` will be removed.
 
 ------------
 The entire changelog for this release can be found [here](https://github.com/vitessio/vitess/blob/main/changelog/17.0/17.0.0/changelog.md).
