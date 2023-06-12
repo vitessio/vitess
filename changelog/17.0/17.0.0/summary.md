@@ -34,6 +34,7 @@
   - **[Deprecations and Deletions](#deprecations-and-deletions)**
     - [Deprecated Flags](#deprecated-flags)
     - [Deprecated Stats](#deprecated-stats)
+    - [Deprecated `k8stopo`](#deprecated-k8stopo)
 
 
 ## <a id="major-changes"/>Major Changes
@@ -449,3 +450,7 @@ These stats are deprecated in v17.
 |-|-|
 | `backup_duration_seconds` | `BackupDurationNanoseconds` |
 | `restore_duration_seconds` | `RestoreDurationNanoseconds` |
+
+#### <a id="deprecated-k8stopo"/>Deprecated `k8stopo`
+
+The `k8stopo` has been deprecated, also see https://github.com/vitessio/vitess/issues/13298. With Vitess 18 the `k8stopo` will be removed.
