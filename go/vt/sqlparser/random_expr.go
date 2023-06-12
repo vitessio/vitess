@@ -26,15 +26,15 @@ type (
 		Name string
 		Typ  string
 	}
-	TabletT struct {
-		Name    string
-		Columns []Col
+	TableT struct {
+		Name string
+		Cols []Col
 	}
 )
 
 // This file is used to generate random expressions to be used for testing
 
-func NewGenerator(seed int64, maxDepth int, tables ...TabletT) *Generator {
+func NewGenerator(seed int64, maxDepth int, tables ...TableT) *Generator {
 	g := Generator{
 		seed:     seed,
 		r:        rand.New(rand.NewSource(seed)),
@@ -49,7 +49,7 @@ type Generator struct {
 	r        *rand.Rand
 	depth    int
 	maxDepth int
-	tables   []TabletT
+	tables   []TableT
 }
 
 // enter should be called whenever we are producing an intermediate node. it should be followed by a `defer g.exit()`
@@ -123,8 +123,11 @@ func (g *Generator) intExpr() Expr {
 	options := []exprF{
 		func() Expr { return g.arithmetic() },
 		func() Expr { return g.intLiteral() },
-		func() Expr { return g.intColumn() },
 		func() Expr { return g.caseExpr(g.intExpr) },
+	}
+
+	if g.tables != nil {
+		options = append(options, func() Expr { return g.intColumn() })
 	}
 
 	return g.randomOf(options)
@@ -157,8 +160,11 @@ func (g *Generator) stringExpr() Expr {
 
 	options := []exprF{
 		func() Expr { return g.stringLiteral() },
-		func() Expr { return g.stringColumn() },
 		func() Expr { return g.caseExpr(g.stringExpr) },
+	}
+
+	if g.tables != nil {
+		options = append(options, func() Expr { return g.intColumn() })
 	}
 
 	return g.randomOf(options)
@@ -240,20 +246,21 @@ func (g *Generator) arithmetic() Expr {
 }
 
 func (g *Generator) typeColumn(typ string, typeLiteral func() Expr) Expr {
-	table := g.tables[rand.Intn(len(g.tables))]
-	for len(table.Columns) > 0 {
-		idx := rand.Intn(len(table.Columns))
-		randCol := table.Columns[idx]
+	tblIdx := rand.Intn(len(g.tables))
+	table := g.tables[tblIdx]
+	for len(table.Cols) > 0 {
+		idx := rand.Intn(len(table.Cols))
+		randCol := table.Cols[idx]
 		if randCol.Typ == typ /* better way to check if int type? */ {
 			return &ColName{
 				Metadata:  nil,
 				Name:      NewIdentifierCI(randCol.Name),
-				Qualifier: TableName{Name: NewIdentifierCS(table.Name)},
+				Qualifier: TableName{Name: NewIdentifierCS(fmt.Sprintf("tbl%d", tblIdx))},
 			}
 		} else {
 			// delete randCol from table.columns
-			table.Columns[idx] = table.Columns[len(table.Columns)-1]
-			table.Columns = table.Columns[:len(table.Columns)-1]
+			table.Cols[idx] = table.Cols[len(table.Cols)-1]
+			table.Cols = table.Cols[:len(table.Cols)-1]
 		}
 	}
 
