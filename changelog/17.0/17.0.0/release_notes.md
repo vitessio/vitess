@@ -35,8 +35,8 @@
   - **[Deprecations and Deletions](#deprecations-and-deletions)**
     - [Deprecated Flags](#deprecated-flags)
     - [Deprecated Stats](#deprecated-stats)
-    - [`vtgr` Deprecated](#deprecated-vtgr)
-    - [`k8stopo` Deprecated](#deprecated-k8stopo)
+    - [Deprecated `vtgr`](#deprecated-vtgr)
+    - [Deprecated `k8stopo`](#deprecated-k8stopo)
 
 
 ## <a id="major-changes"/>Major Changes
