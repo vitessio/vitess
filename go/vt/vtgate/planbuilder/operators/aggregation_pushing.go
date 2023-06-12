@@ -44,7 +44,6 @@ func tryPushingDownAggregator(ctx *plancontext.PlanningContext, aggregator *Aggr
 			output, applyResult, err = pushDownAggregationThroughFilter(ctx, aggregator, src)
 		}
 	default:
-		aggregator.Pushed = true
 		return aggregator, rewrite.SameTree, nil
 	}
 

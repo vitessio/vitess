@@ -207,6 +207,13 @@ func (a *Aggregator) GetOrdering() ([]ops.OrderBy, error) {
 }
 
 func (a *Aggregator) planOffsets(ctx *plancontext.PlanningContext) error {
+	if !a.Pushed {
+		err := a.planOffsetsNotPushed(ctx)
+		if err != nil {
+			return err
+		}
+	}
+
 	addColumn := func(aliasedExpr *sqlparser.AliasedExpr, addToGroupBy bool) (int, error) {
 		newSrc, offset, err := a.Source.AddColumn(ctx, aliasedExpr, true, addToGroupBy)
 		if err != nil {
@@ -218,13 +225,6 @@ func (a *Aggregator) planOffsets(ctx *plancontext.PlanningContext) error {
 			a.Columns = append(a.Columns, aliasedExpr)
 		}
 		return offset, nil
-	}
-
-	if !a.Pushed {
-		err := a.planOffsetsNotPushed(ctx)
-		if err != nil {
-			return err
-		}
 	}
 
 	for idx, gb := range a.Grouping {

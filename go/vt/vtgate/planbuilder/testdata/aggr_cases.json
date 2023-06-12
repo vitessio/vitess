@@ -3430,19 +3430,20 @@
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
         "Aggregates": "count(0) AS count(u.textcol1), count(1) AS count(ue.foo)",
-        "GroupBy": "(2|0)",
+        "GroupBy": "(2|3)",
+        "ResultColumns": 3,
         "Inputs": [
           {
             "OperatorType": "Sort",
             "Variant": "Memory",
-            "OrderBy": "(1|0) ASC",
+            "OrderBy": "(2|3) ASC",
             "Inputs": [
               {
                 "OperatorType": "Join",
                 "Variant": "Join",
-                "JoinColumnIndexes": "R:0,R:1",
+                "JoinColumnIndexes": "L:0,R:0,R:1,R:2",
                 "JoinVars": {
-                  "u_foo": 0
+                  "u_foo": 1
                 },
                 "TableName": "`user`_user_extra_unsharded",
                 "Inputs": [
@@ -3453,16 +3454,16 @@
                       "Name": "user",
                       "Sharded": true
                     },
-                    "FieldQuery": "select u.foo from `user` as u where 1 != 1",
-                    "Query": "select u.foo from `user` as u",
+                    "FieldQuery": "select u.textcol1, u.foo from `user` as u where 1 != 1",
+                    "Query": "select u.textcol1, u.foo from `user` as u",
                     "Table": "`user`"
                   },
                   {
                     "OperatorType": "Join",
                     "Variant": "Join",
-                    "JoinColumnIndexes": "R:0,R:1",
+                    "JoinColumnIndexes": "L:0,R:0,R:1",
                     "JoinVars": {
-                      "ue_bar": 0
+                      "ue_bar": 1
                     },
                     "TableName": "user_extra_unsharded",
                     "Inputs": [
@@ -3473,8 +3474,8 @@
                           "Name": "user",
                           "Sharded": true
                         },
-                        "FieldQuery": "select ue.bar from user_extra as ue where 1 != 1",
-                        "Query": "select ue.bar from user_extra as ue where ue.bar = :u_foo",
+                        "FieldQuery": "select ue.foo, ue.bar from user_extra as ue where 1 != 1",
+                        "Query": "select ue.foo, ue.bar from user_extra as ue where ue.bar = :u_foo",
                         "Table": "user_extra"
                       },
                       {
@@ -3484,8 +3485,8 @@
                           "Name": "main",
                           "Sharded": false
                         },
-                        "FieldQuery": "select weight_string(us.bar), us.bar from unsharded as us where 1 != 1",
-                        "Query": "select weight_string(us.bar), us.bar from unsharded as us where us.baz = :ue_bar",
+                        "FieldQuery": "select us.bar, weight_string(us.bar) from unsharded as us where 1 != 1",
+                        "Query": "select us.bar, weight_string(us.bar) from unsharded as us where us.baz = :ue_bar",
                         "Table": "unsharded"
                       }
                     ]
@@ -4243,17 +4244,17 @@
                 "OperatorType": "Aggregate",
                 "Variant": "Ordered",
                 "Aggregates": "count(1) AS count(u.`name`)",
-                "GroupBy": "0",
+                "GroupBy": "(0|2)",
                 "Inputs": [
                   {
                     "OperatorType": "Sort",
                     "Variant": "Memory",
-                    "OrderBy": "(1|0) ASC",
+                    "OrderBy": "(0|2) ASC",
                     "Inputs": [
                       {
                         "OperatorType": "Join",
                         "Variant": "Join",
-                        "JoinColumnIndexes": "R:0,R:1",
+                        "JoinColumnIndexes": "R:0,R:1,R:2",
                         "JoinVars": {
                           "ue_id": 0
                         },
@@ -4277,8 +4278,8 @@
                               "Name": "user",
                               "Sharded": true
                             },
-                            "FieldQuery": "select weight_string(u.id), u.id from `user` as u where 1 != 1",
-                            "Query": "select weight_string(u.id), u.id from `user` as u where u.id = :ue_id",
+                            "FieldQuery": "select u.id, u.`name`, weight_string(u.id) from `user` as u where 1 != 1",
+                            "Query": "select u.id, u.`name`, weight_string(u.id) from `user` as u where u.id = :ue_id",
                             "Table": "`user`",
                             "Values": [
                               ":ue_id"
@@ -4360,19 +4361,19 @@
                 "OperatorType": "Aggregate",
                 "Variant": "Ordered",
                 "Aggregates": "count_star(1) AS count(*)",
-                "GroupBy": "0",
+                "GroupBy": "(0|2)",
                 "Inputs": [
                   {
                     "OperatorType": "Sort",
                     "Variant": "Memory",
-                    "OrderBy": "(1|0) ASC",
+                    "OrderBy": "(0|2) ASC",
                     "Inputs": [
                       {
                         "OperatorType": "Join",
                         "Variant": "Join",
-                        "JoinColumnIndexes": "R:0,R:1",
+                        "JoinColumnIndexes": "R:0,L:0,R:1",
                         "JoinVars": {
-                          "ue_id": 0
+                          "ue_id": 1
                         },
                         "TableName": "user_extra_`user`",
                         "Inputs": [
@@ -4383,8 +4384,8 @@
                               "Name": "user",
                               "Sharded": true
                             },
-                            "FieldQuery": "select ue.id from user_extra as ue where 1 != 1",
-                            "Query": "select ue.id from user_extra as ue",
+                            "FieldQuery": "select 1, ue.id from user_extra as ue where 1 != 1",
+                            "Query": "select 1, ue.id from user_extra as ue",
                             "Table": "user_extra"
                           },
                           {
@@ -4394,8 +4395,8 @@
                               "Name": "user",
                               "Sharded": true
                             },
-                            "FieldQuery": "select weight_string(u.id), u.id from `user` as u where 1 != 1",
-                            "Query": "select weight_string(u.id), u.id from `user` as u where u.id = :ue_id",
+                            "FieldQuery": "select u.id, weight_string(u.id) from `user` as u where 1 != 1",
+                            "Query": "select u.id, weight_string(u.id) from `user` as u where u.id = :ue_id",
                             "Table": "`user`",
                             "Values": [
                               ":ue_id"
@@ -4992,19 +4993,20 @@
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
         "Aggregates": "random(1) AS name, count(2) AS count(m.predef1)",
-        "GroupBy": "0",
+        "GroupBy": "(0|3)",
+        "ResultColumns": 3,
         "Inputs": [
           {
             "OperatorType": "Sort",
             "Variant": "Memory",
-            "OrderBy": "(1|0) ASC",
+            "OrderBy": "(0|3) ASC",
             "Inputs": [
               {
                 "OperatorType": "Join",
                 "Variant": "Join",
-                "JoinColumnIndexes": "R:0,R:1",
+                "JoinColumnIndexes": "R:0,R:1,L:0,R:2",
                 "JoinVars": {
-                  "m_order": 0
+                  "m_order": 1
                 },
                 "TableName": "user_extra_`user`",
                 "Inputs": [
@@ -5015,8 +5017,8 @@
                       "Name": "user",
                       "Sharded": true
                     },
-                    "FieldQuery": "select m.`order` from user_extra as m where 1 != 1",
-                    "Query": "select m.`order` from user_extra as m",
+                    "FieldQuery": "select m.predef1, m.`order` from user_extra as m where 1 != 1",
+                    "Query": "select m.predef1, m.`order` from user_extra as m",
                     "Table": "user_extra"
                   },
                   {
@@ -5026,8 +5028,8 @@
                       "Name": "user",
                       "Sharded": true
                     },
-                    "FieldQuery": "select weight_string(u.id), u.id from `user` as u where 1 != 1",
-                    "Query": "select weight_string(u.id), u.id from `user` as u where u.id = :m_order",
+                    "FieldQuery": "select u.id, u.`name`, weight_string(u.id) from `user` as u where 1 != 1",
+                    "Query": "select u.id, u.`name`, weight_string(u.id) from `user` as u where u.id = :m_order",
                     "Table": "`user`",
                     "Values": [
                       ":m_order"
@@ -5571,20 +5573,20 @@
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
         "Aggregates": "count_star(0) AS count(*)",
-        "GroupBy": "(0|1)",
+        "GroupBy": "(1|2)",
         "ResultColumns": 1,
         "Inputs": [
           {
             "OperatorType": "Sort",
             "Variant": "Memory",
-            "OrderBy": "(0|1) ASC",
+            "OrderBy": "(1|2) ASC",
             "Inputs": [
               {
                 "OperatorType": "Join",
                 "Variant": "LeftJoin",
-                "JoinColumnIndexes": "R:0,R:1",
+                "JoinColumnIndexes": "L:0,R:0,R:1",
                 "JoinVars": {
-                  "user_foo": 0
+                  "user_foo": 1
                 },
                 "TableName": "`user`_music",
                 "Inputs": [
@@ -5595,8 +5597,8 @@
                       "Name": "user",
                       "Sharded": true
                     },
-                    "FieldQuery": "select `user`.foo from `user` where 1 != 1",
-                    "Query": "select `user`.foo from `user`",
+                    "FieldQuery": "select 1, `user`.foo from `user` where 1 != 1",
+                    "Query": "select 1, `user`.foo from `user`",
                     "Table": "`user`"
                   },
                   {
@@ -5696,20 +5698,20 @@
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
         "Aggregates": "count_star(0) AS count(*)",
-        "GroupBy": "(0|1)",
+        "GroupBy": "(1|2)",
         "ResultColumns": 1,
         "Inputs": [
           {
             "OperatorType": "Sort",
             "Variant": "Memory",
-            "OrderBy": "(0|1) ASC",
+            "OrderBy": "(1|2) ASC",
             "Inputs": [
               {
                 "OperatorType": "Join",
                 "Variant": "LeftJoin",
-                "JoinColumnIndexes": "R:0,R:1",
+                "JoinColumnIndexes": "L:0,R:0,R:1",
                 "JoinVars": {
-                  "user_foo": 0
+                  "user_foo": 1
                 },
                 "TableName": "`user`_music",
                 "Inputs": [
@@ -5720,8 +5722,8 @@
                       "Name": "user",
                       "Sharded": true
                     },
-                    "FieldQuery": "select `user`.foo from `user` where 1 != 1",
-                    "Query": "select `user`.foo from `user`",
+                    "FieldQuery": "select 1, `user`.foo from `user` where 1 != 1",
+                    "Query": "select 1, `user`.foo from `user`",
                     "Table": "`user`"
                   },
                   {
@@ -6450,20 +6452,20 @@
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
         "Aggregates": "count_star(0) AS count(*)",
-        "GroupBy": "(0|1)",
+        "GroupBy": "(1|2)",
         "ResultColumns": 1,
         "Inputs": [
           {
             "OperatorType": "Sort",
             "Variant": "Memory",
-            "OrderBy": "(0|1) ASC",
+            "OrderBy": "(1|2) ASC",
             "Inputs": [
               {
                 "OperatorType": "Join",
                 "Variant": "Join",
-                "JoinColumnIndexes": "R:0,R:1",
+                "JoinColumnIndexes": "L:0,R:0,R:1",
                 "JoinVars": {
-                  "user_id": 0
+                  "user_id": 1
                 },
                 "TableName": "`user`_user_extra",
                 "Inputs": [
@@ -6474,8 +6476,8 @@
                       "Name": "user",
                       "Sharded": true
                     },
-                    "FieldQuery": "select `user`.id from `user` where 1 != 1",
-                    "Query": "select `user`.id from `user`",
+                    "FieldQuery": "select 1, `user`.id from `user` where 1 != 1",
+                    "Query": "select 1, `user`.id from `user`",
                     "Table": "`user`"
                   },
                   {
