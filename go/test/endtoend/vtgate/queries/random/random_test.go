@@ -205,9 +205,9 @@ func randomQuery(schemaTables []tableT, maxAggrs, maxGroupBy int) string {
 	}
 
 	isDerived := rand.Intn(10) < 1 && TestFailingQueries
-	aggregates, aggrTypes := createAggregations(tables, maxAggrs, randomCol, isDerived)
+	aggregates, _ := createAggregations(tables, maxAggrs, randomCol, isDerived)
 	predicates := createPredicates(tables, randomCol, false)
-	grouping, groupTypes := createGroupBy(tables, maxGroupBy, randomCol)
+	grouping, _ := createGroupBy(tables, maxGroupBy, randomCol)
 	sel := "select /*vt+ PLANNER=Gen4 */ "
 
 	// select distinct (fails with group by bigint)
@@ -217,15 +217,15 @@ func randomQuery(schemaTables []tableT, maxAggrs, maxGroupBy int) string {
 	}
 
 	// select the grouping columns
-	isRightJoin := rand.Intn(2) < 1
-	if len(grouping) > 0 && rand.Intn(2) < 1 && (!isDistinct || TestFailingQueries) && (!isRightJoin || TestFailingQueries) {
+	isLeftJoin := rand.Intn(2) < 1
+	if len(grouping) > 0 && rand.Intn(2) < 1 && (!isDistinct || TestFailingQueries) && (!isLeftJoin || TestFailingQueries) {
 		sel += strings.Join(grouping, ", ") + ", "
 	}
 
 	// select the ordering columns
 	// we do it this way, so we don't have to do only `only_full_group_by` queries
 	var noOfOrderBy int
-	if len(grouping) > 0 && (!isDistinct || TestFailingQueries) && (!isRightJoin || TestFailingQueries) {
+	if len(grouping) > 0 && (!isDistinct || TestFailingQueries) && (!isLeftJoin || TestFailingQueries) {
 		// panic on rand function call if value is 0
 		noOfOrderBy = rand.Intn(len(grouping))
 	}
@@ -245,14 +245,14 @@ func randomQuery(schemaTables []tableT, maxAggrs, maxGroupBy int) string {
 		}
 	}
 
-	var newColumns []column
+	//var newColumns []column
 	// populate columns of this query to add to schemaTables
-	for i := range aggregates {
-		newColumns = append(newColumns, column{
-			name: aggregates[i],
-			typ:  aggrTypes[i],
-		})
-	}
+	//for i := range aggregates {
+	//	newColumns = append(newColumns, column{
+	//		name: aggregates[i],
+	//		typ:  aggrTypes[i],
+	//	})
+	//}
 	sel += strings.Join(aggregates, ", ") + " from "
 
 	var tbls []string
@@ -262,7 +262,7 @@ func randomQuery(schemaTables []tableT, maxAggrs, maxGroupBy int) string {
 	sel += strings.Join(tbls, ", ")
 
 	// join
-	if isRightJoin {
+	if isLeftJoin {
 		tables = append(tables, randomEl(schemaTables))
 		join := createPredicates(tables, randomCol, true)
 
@@ -278,14 +278,14 @@ func randomQuery(schemaTables []tableT, maxAggrs, maxGroupBy int) string {
 	}
 
 	isGrouping := false
-	if len(grouping) > 0 && (!isDistinct || TestFailingQueries) && (!isRightJoin || TestFailingQueries) {
+	if len(grouping) > 0 && (!isDistinct || TestFailingQueries) && (!isLeftJoin || TestFailingQueries) {
 		// populate columns of this query to add to schemaTables
-		for i := range grouping {
-			newColumns = append(newColumns, column{
-				name: grouping[i],
-				typ:  groupTypes[i],
-			})
-		}
+		//for i := range grouping {
+		//	newColumns = append(newColumns, column{
+		//		name: grouping[i],
+		//		typ:  groupTypes[i],
+		//	})
+		//}
 		sel += " group by "
 		sel += strings.Join(grouping, ", ")
 
@@ -307,7 +307,7 @@ func randomQuery(schemaTables []tableT, maxAggrs, maxGroupBy int) string {
 	// TODO: make columns not nil but prevent aggregation on said columns
 	schemaTables = append(schemaTables, tableT{
 		name:    "(" + sel + ")",
-		columns: newColumns,
+		columns: nil,
 	})
 
 	// derived tables (partially unsupported)

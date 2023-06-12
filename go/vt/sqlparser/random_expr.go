@@ -21,36 +21,49 @@ import (
 	"math/rand"
 )
 
+type (
+	Col struct {
+		Name string
+		Typ  string
+	}
+	TabletT struct {
+		Name    string
+		Columns []Col
+	}
+)
+
 // This file is used to generate random expressions to be used for testing
 
-func newGenerator(seed int64, maxDepth int) *generator {
-	g := generator{
+func NewGenerator(seed int64, maxDepth int, tables ...TabletT) *Generator {
+	g := Generator{
 		seed:     seed,
 		r:        rand.New(rand.NewSource(seed)),
 		maxDepth: maxDepth,
+		tables:   tables,
 	}
 	return &g
 }
 
-type generator struct {
+type Generator struct {
 	seed     int64
 	r        *rand.Rand
 	depth    int
 	maxDepth int
+	tables   []TabletT
 }
 
 // enter should be called whenever we are producing an intermediate node. it should be followed by a `defer g.exit()`
-func (g *generator) enter() {
+func (g *Generator) enter() {
 	g.depth++
 }
 
 // exit should be called when exiting an intermediate node
-func (g *generator) exit() {
+func (g *Generator) exit() {
 	g.depth--
 }
 
 // atMaxDepth returns true if we have reached the maximum allowed depth or the expression tree
-func (g *generator) atMaxDepth() bool {
+func (g *Generator) atMaxDepth() bool {
 	return g.depth >= g.maxDepth
 }
 
@@ -67,7 +80,7 @@ func (g *generator) atMaxDepth() bool {
 Note: It's important to update this method so that it produces all expressions that need precedence checking.
 It's currently missing function calls and string operators
 */
-func (g *generator) expression() Expr {
+func (g *Generator) Expression() Expr {
 	if g.randomBool() {
 		return g.booleanExpr()
 	}
@@ -80,7 +93,7 @@ func (g *generator) expression() Expr {
 	return g.randomOf(options)
 }
 
-func (g *generator) booleanExpr() Expr {
+func (g *Generator) booleanExpr() Expr {
 	if g.atMaxDepth() {
 		return g.booleanLiteral()
 	}
@@ -102,7 +115,7 @@ func (g *generator) booleanExpr() Expr {
 	return g.randomOf(options)
 }
 
-func (g *generator) intExpr() Expr {
+func (g *Generator) intExpr() Expr {
 	if g.atMaxDepth() {
 		return g.intLiteral()
 	}
@@ -110,21 +123,22 @@ func (g *generator) intExpr() Expr {
 	options := []exprF{
 		func() Expr { return g.arithmetic() },
 		func() Expr { return g.intLiteral() },
+		func() Expr { return g.intColumn() },
 		func() Expr { return g.caseExpr(g.intExpr) },
 	}
 
 	return g.randomOf(options)
 }
 
-func (g *generator) booleanLiteral() Expr {
+func (g *Generator) booleanLiteral() Expr {
 	return BoolVal(g.randomBool())
 }
 
-func (g *generator) randomBool() bool {
+func (g *Generator) randomBool() bool {
 	return g.r.Float32() < 0.5
 }
 
-func (g *generator) intLiteral() Expr {
+func (g *Generator) intLiteral() Expr {
 	t := fmt.Sprintf("%d", g.r.Intn(1000)-g.r.Intn((1000)))
 
 	return NewIntLiteral(t)
@@ -132,24 +146,25 @@ func (g *generator) intLiteral() Expr {
 
 var words = []string{"ox", "ant", "ape", "asp", "bat", "bee", "boa", "bug", "cat", "cod", "cow", "cub", "doe", "dog", "eel", "eft", "elf", "elk", "emu", "ewe", "fly", "fox", "gar", "gnu", "hen", "hog", "imp", "jay", "kid", "kit", "koi", "lab", "man", "owl", "pig", "pug", "pup", "ram", "rat", "ray", "yak", "bass", "bear", "bird", "boar", "buck", "bull", "calf", "chow", "clam", "colt", "crab", "crow", "dane", "deer", "dodo", "dory", "dove", "drum", "duck", "fawn", "fish", "flea", "foal", "fowl", "frog", "gnat", "goat", "grub", "gull", "hare", "hawk", "ibex", "joey", "kite", "kiwi", "lamb", "lark", "lion", "loon", "lynx", "mako", "mink", "mite", "mole", "moth", "mule", "mutt", "newt", "orca", "oryx", "pika", "pony", "puma", "seal", "shad", "slug", "sole", "stag", "stud", "swan", "tahr", "teal", "tick", "toad", "tuna", "wasp", "wolf", "worm", "wren", "yeti", "adder", "akita", "alien", "aphid", "bison", "boxer", "bream", "bunny", "burro", "camel", "chimp", "civet", "cobra", "coral", "corgi", "crane", "dingo", "drake", "eagle", "egret", "filly", "finch", "gator", "gecko", "ghost", "ghoul", "goose", "guppy", "heron", "hippo", "horse", "hound", "husky", "hyena", "koala", "krill", "leech", "lemur", "liger", "llama", "louse", "macaw", "midge", "molly", "moose", "moray", "mouse", "panda", "perch", "prawn", "quail", "racer", "raven", "rhino", "robin", "satyr", "shark", "sheep", "shrew", "skink", "skunk", "sloth", "snail", "snake", "snipe", "squid", "stork", "swift", "swine", "tapir", "tetra", "tiger", "troll", "trout", "viper", "wahoo", "whale", "zebra", "alpaca", "amoeba", "baboon", "badger", "beagle", "bedbug", "beetle", "bengal", "bobcat", "caiman", "cattle", "cicada", "collie", "condor", "cougar", "coyote", "dassie", "donkey", "dragon", "earwig", "falcon", "feline", "ferret", "gannet", "gibbon", "glider", "goblin", "gopher", "grouse", "guinea", "hermit", "hornet", "iguana", "impala", "insect", "jackal", "jaguar", "jennet", "kitten", "kodiak", "lizard", "locust", "maggot", "magpie", "mammal", "mantis", "marlin", "marmot", "marten", "martin", "mayfly", "minnow", "monkey", "mullet", "muskox", "ocelot", "oriole", "osprey", "oyster", "parrot", "pigeon", "piglet", "poodle", "possum", "python", "quagga", "rabbit", "raptor", "rodent", "roughy", "salmon", "sawfly", "serval", "shiner", "shrimp", "spider", "sponge", "tarpon", "thrush", "tomcat", "toucan", "turkey", "turtle", "urchin", "vervet", "walrus", "weasel", "weevil", "wombat", "anchovy", "anemone", "bluejay", "buffalo", "bulldog", "buzzard", "caribou", "catfish", "chamois", "cheetah", "chicken", "chigger", "cowbird", "crappie", "crawdad", "cricket", "dogfish", "dolphin", "firefly", "garfish", "gazelle", "gelding", "giraffe", "gobbler", "gorilla", "goshawk", "grackle", "griffon", "grizzly", "grouper", "haddock", "hagfish", "halibut", "hamster", "herring", "jackass", "javelin", "jawfish", "jaybird", "katydid", "ladybug", "lamprey", "lemming", "leopard", "lioness", "lobster", "macaque", "mallard", "mammoth", "manatee", "mastiff", "meerkat", "mollusk", "monarch", "mongrel", "monitor", "monster", "mudfish", "muskrat", "mustang", "narwhal", "oarfish", "octopus", "opossum", "ostrich", "panther", "peacock", "pegasus", "pelican", "penguin", "phoenix", "piranha", "polecat", "primate", "quetzal", "raccoon", "rattler", "redbird", "redfish", "reptile", "rooster", "sawfish", "sculpin", "seagull", "skylark", "snapper", "spaniel", "sparrow", "sunbeam", "sunbird", "sunfish", "tadpole", "termite", "terrier", "unicorn", "vulture", "wallaby", "walleye", "warthog", "whippet", "wildcat", "aardvark", "airedale", "albacore", "anteater", "antelope", "arachnid", "barnacle", "basilisk", "blowfish", "bluebird", "bluegill", "bonefish", "bullfrog", "cardinal", "chipmunk", "cockatoo", "crayfish", "dinosaur", "doberman", "duckling", "elephant", "escargot", "flamingo", "flounder", "foxhound", "glowworm", "goldfish", "grubworm", "hedgehog", "honeybee", "hookworm", "humpback", "kangaroo", "killdeer", "kingfish", "labrador", "lacewing", "ladybird", "lionfish", "longhorn", "mackerel", "malamute", "marmoset", "mastodon", "moccasin", "mongoose", "monkfish", "mosquito", "pangolin", "parakeet", "pheasant", "pipefish", "platypus", "polliwog", "porpoise", "reindeer", "ringtail", "sailfish", "scorpion", "seahorse", "seasnail", "sheepdog", "shepherd", "silkworm", "squirrel", "stallion", "starfish", "starling", "stingray", "stinkbug", "sturgeon", "terrapin", "titmouse", "tortoise", "treefrog", "werewolf", "woodcock"}
 
-func (g *generator) stringLiteral() Expr {
+func (g *Generator) stringLiteral() Expr {
 	return NewStrLiteral(g.randomOfS(words))
 }
 
-func (g *generator) stringExpr() Expr {
+func (g *Generator) stringExpr() Expr {
 	if g.atMaxDepth() {
 		return g.stringLiteral()
 	}
 
 	options := []exprF{
 		func() Expr { return g.stringLiteral() },
+		func() Expr { return g.stringColumn() },
 		func() Expr { return g.caseExpr(g.stringExpr) },
 	}
 
 	return g.randomOf(options)
 }
 
-func (g *generator) likeExpr() Expr {
+func (g *Generator) likeExpr() Expr {
 	g.enter()
 	defer g.exit()
 	return &ComparisonExpr{
@@ -161,7 +176,7 @@ func (g *generator) likeExpr() Expr {
 
 var comparisonOps = []ComparisonExprOperator{EqualOp, LessThanOp, GreaterThanOp, LessEqualOp, GreaterEqualOp, NotEqualOp, NullSafeEqualOp}
 
-func (g *generator) comparison(f func() Expr) Expr {
+func (g *Generator) comparison(f func() Expr) Expr {
 	g.enter()
 	defer g.exit()
 
@@ -173,7 +188,7 @@ func (g *generator) comparison(f func() Expr) Expr {
 	return cmp
 }
 
-func (g *generator) caseExpr(valueF func() Expr) Expr {
+func (g *Generator) caseExpr(valueF func() Expr) Expr {
 	g.enter()
 	defer g.exit()
 
@@ -193,12 +208,12 @@ func (g *generator) caseExpr(valueF func() Expr) Expr {
 		if exp == nil {
 			cond = g.booleanExpr()
 		} else {
-			cond = g.expression()
+			cond = g.Expression()
 		}
 
 		whens = append(whens, &When{
 			Cond: cond,
-			Val:  g.expression(),
+			Val:  g.Expression(),
 		})
 	}
 
@@ -211,7 +226,7 @@ func (g *generator) caseExpr(valueF func() Expr) Expr {
 
 var arithmeticOps = []BinaryExprOperator{BitAndOp, BitOrOp, BitXorOp, PlusOp, MinusOp, MultOp, DivOp, IntDivOp, ModOp, ShiftRightOp, ShiftLeftOp}
 
-func (g *generator) arithmetic() Expr {
+func (g *Generator) arithmetic() Expr {
 	g.enter()
 	defer g.exit()
 
@@ -224,17 +239,46 @@ func (g *generator) arithmetic() Expr {
 	}
 }
 
+func (g *Generator) typeColumn(typ string, typeLiteral func() Expr) Expr {
+	table := g.tables[rand.Intn(len(g.tables))]
+	for len(table.Columns) > 0 {
+		idx := rand.Intn(len(table.Columns))
+		randCol := table.Columns[idx]
+		if randCol.Typ == typ /* better way to check if int type? */ {
+			return &ColName{
+				Metadata:  nil,
+				Name:      NewIdentifierCI(randCol.Name),
+				Qualifier: TableName{Name: NewIdentifierCS(table.Name)},
+			}
+		} else {
+			// delete randCol from table.columns
+			table.Columns[idx] = table.Columns[len(table.Columns)-1]
+			table.Columns = table.Columns[:len(table.Columns)-1]
+		}
+	}
+
+	return typeLiteral()
+}
+
+func (g *Generator) intColumn() Expr {
+	return g.typeColumn("bigint", g.intLiteral)
+}
+
+func (g *Generator) stringColumn() Expr {
+	return g.typeColumn("varchar", g.stringLiteral)
+}
+
 type exprF func() Expr
 
-func (g *generator) randomOf(options []exprF) Expr {
+func (g *Generator) randomOf(options []exprF) Expr {
 	return options[g.r.Intn(len(options))]()
 }
 
-func (g *generator) randomOfS(options []string) string {
+func (g *Generator) randomOfS(options []string) string {
 	return options[g.r.Intn(len(options))]
 }
 
-func (g *generator) andExpr() Expr {
+func (g *Generator) andExpr() Expr {
 	g.enter()
 	defer g.exit()
 	return &AndExpr{
@@ -243,7 +287,7 @@ func (g *generator) andExpr() Expr {
 	}
 }
 
-func (g *generator) orExpr() Expr {
+func (g *Generator) orExpr() Expr {
 	g.enter()
 	defer g.exit()
 	return &OrExpr{
@@ -252,7 +296,7 @@ func (g *generator) orExpr() Expr {
 	}
 }
 
-func (g *generator) xorExpr() Expr {
+func (g *Generator) xorExpr() Expr {
 	g.enter()
 	defer g.exit()
 	return &XorExpr{
@@ -261,13 +305,13 @@ func (g *generator) xorExpr() Expr {
 	}
 }
 
-func (g *generator) notExpr() Expr {
+func (g *Generator) notExpr() Expr {
 	g.enter()
 	defer g.exit()
 	return &NotExpr{g.booleanExpr()}
 }
 
-func (g *generator) inExpr() Expr {
+func (g *Generator) inExpr() Expr {
 	g.enter()
 	defer g.exit()
 
@@ -289,7 +333,7 @@ func (g *generator) inExpr() Expr {
 	}
 }
 
-func (g *generator) between() Expr {
+func (g *Generator) between() Expr {
 	g.enter()
 	defer g.exit()
 
@@ -308,7 +352,7 @@ func (g *generator) between() Expr {
 	}
 }
 
-func (g *generator) isExpr() Expr {
+func (g *Generator) isExpr() Expr {
 	g.enter()
 	defer g.exit()
 
