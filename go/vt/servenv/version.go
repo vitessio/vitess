@@ -19,4 +19,4 @@ package servenv
 // THIS FILE IS AUTO-GENERATED DURING NEW RELEASES BY ./tools/do_releases.sh
 // DO NOT EDIT
 
-const versionName = "17.0.0-SNAPSHOT"
+const versionName = "17.0.0-rc2"
