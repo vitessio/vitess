@@ -28,18 +28,6 @@ func setDDL(yylex yyLexer, node Statement) {
   yylex.(*Tokenizer).partialDDL = node
 }
 
-func incNesting(yylex yyLexer) bool {
-  yylex.(*Tokenizer).nesting++
-  if yylex.(*Tokenizer).nesting == 200 {
-    return true
-  }
-  return false
-}
-
-func decNesting(yylex yyLexer) {
-  yylex.(*Tokenizer).nesting--
-}
-
 // skipToEnd forces the lexer to end prematurely. Not all SQL statements
 // are supported by the Parser, thus calling skipToEnd will make the lexer
 // return EOF early.
@@ -7954,16 +7942,11 @@ non_reserved_keyword:
 openb:
   '('
   {
-    if incNesting(yylex) {
-      yylex.Error("max nesting level reached")
-      return 1
-    }
   }
 
 closeb:
   ')'
   {
-    decNesting(yylex)
   }
 
 skip_to_end:
