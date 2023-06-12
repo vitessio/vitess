@@ -84,6 +84,9 @@ var (
 	// once before the writer blocks
 	backupCompressBlocks = 2
 
+	// restoreEarlierRetries is the max number of attempts to restore during a backup
+	restoreEarlierRetries = 1
+
 	titleCase = cases.Title(language.English).String
 )
 
@@ -97,6 +100,7 @@ func registerBackupFlags(fs *pflag.FlagSet) {
 	fs.BoolVar(&backupStorageCompress, "backup_storage_compress", backupStorageCompress, "if set, the backup files will be compressed.")
 	fs.IntVar(&backupCompressBlockSize, "backup_storage_block_size", backupCompressBlockSize, "if backup_storage_compress is true, backup_storage_block_size sets the byte size for each block while compressing (default is 250000).")
 	fs.IntVar(&backupCompressBlocks, "backup_storage_number_blocks", backupCompressBlocks, "if backup_storage_compress is true, backup_storage_number_blocks sets the number of blocks that can be processed, in parallel, before the writer blocks, during compression (default is 2). It should be equal to the number of CPUs available for compression.")
+	fs.IntVar(&restoreEarlierRetries, "backup_restore_earlier_retries", restoreEarlierRetries, "On a failed restore, if set to > 1, an earlier backup will be attempted instead, up to backup_restore_earlier_retries times")
 }
 
 // Backup is the main entry point for a backup:
@@ -390,32 +394,59 @@ func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error)
 		return nil, ErrNoBackup
 	}
 
-	restorePath, err := FindBackupToRestore(ctx, params, bhs)
-	if err != nil {
-		return nil, err
+	var manifest *BackupManifest
+	var restorePath *RestorePath
+	var restoreError error
+	var backupTime = time.Time{}
+	for attempt := 0; attempt < restoreEarlierRetries; attempt++ {
+		if !backupTime.IsZero() {
+			params.StartTime = backupTime.Add(-1 * time.Minute)
+		}
+		restorePath, err = FindBackupToRestore(ctx, params, bhs)
+		if err != nil {
+			return nil, err
+		}
+		if restorePath.IsEmpty() {
+			// This condition should not happen; but we validate for sanity
+			return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "empty restore path")
+		}
+
+		bh := restorePath.FullBackupHandle()
+		re, err := GetRestoreEngine(ctx, bh)
+		if err != nil {
+			return nil, vterrors.Wrap(err, "Failed to find restore engine")
+		}
+
+		bm, err := GetBackupManifest(ctx, bh)
+		if err != nil {
+			return nil, vterrors.Wrap(err, "Could not find manifest file")
+		}
+		backupTime, _ = time.Parse(time.RFC3339, bm.BackupTime)
+
+		params.Logger.Infof("Restore: %v", restorePath.String())
+		if params.DryRun {
+			return nil, nil
+		}
+
+		// Scope stats to selected backup engine.
+		reParams := params.Copy()
+		reParams.Stats = params.Stats.Scope(
+			stats.Component(backupstats.BackupEngine),
+			stats.Implementation(titleCase(backupEngineImplementation)),
+		)
+
+		manifest, restoreError = re.ExecuteRestore(ctx, reParams, bh)
+		if restoreError != nil {
+			params.Logger.Warningf("error executing restore, trying earlier backup: %v", err)
+		} else {
+			break
+		}
+
 	}
-	if restorePath.IsEmpty() {
-		// This condition should not happen; but we validate for sanity
-		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "empty restore path")
-	}
-	bh := restorePath.FullBackupHandle()
-	re, err := GetRestoreEngine(ctx, bh)
-	if err != nil {
-		return nil, vterrors.Wrap(err, "Failed to find restore engine")
-	}
-	params.Logger.Infof("Restore: %v", restorePath.String())
-	if params.DryRun {
-		return nil, nil
-	}
-	// Scope stats to selected backup engine.
-	reParams := params.Copy()
-	reParams.Stats = params.Stats.Scope(
-		stats.Component(backupstats.BackupEngine),
-		stats.Implementation(titleCase(backupEngineImplementation)),
-	)
-	manifest, err := re.ExecuteRestore(ctx, reParams, bh)
-	if err != nil {
-		return nil, err
+
+	// After all attempts, if we've still failed, exit out
+	if restoreError != nil {
+		return nil, vterrors.Wrapf(restoreError, "Failed to restore backup (attempt %d)", restoreEarlierRetries)
 	}
 
 	// mysqld needs to be running in order for mysql_upgrade to work.

@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"os"
 	"path"
@@ -417,6 +418,86 @@ func TestRestoreTriesToParameterizeBackupStorage(t *testing.T) {
 		scopedStats = sr
 	}
 	require.NotNil(t, scopedStats)
+}
+
+func TestRestoreTriesMultipleAttempts(t *testing.T) {
+
+	// Override restoreEarlierRetries for this test only
+	restoreEarlierRetriesPrevious := restoreEarlierRetries
+	defer func() {
+		restoreEarlierRetries = restoreEarlierRetriesPrevious
+	}()
+	restoreEarlierRetries = 3
+
+	env, closer := createFakeBackupRestoreEnv(t)
+	defer closer()
+
+	// Prepare a broken set of backups
+	oldestManifest := BackupManifest{
+		BackupTime:   time.Now().Add(-4 * time.Hour).Format(time.RFC3339),
+		BackupMethod: "fake",
+		Keyspace:     "test",
+		Shard:        "-",
+	}
+	oldestManifestBytes, _ := json.Marshal(oldestManifest)
+
+	olderManifest := BackupManifest{
+		BackupTime:   time.Now().Add(-2 * time.Hour).Format(time.RFC3339),
+		BackupMethod: "fake",
+		Keyspace:     "test",
+		Shard:        "-",
+	}
+	olderManifestBytes, _ := json.Marshal(olderManifest)
+
+	manifest := BackupManifest{
+		BackupTime:   time.Now().Add(-1 * time.Hour).Format(time.RFC3339),
+		BackupMethod: "fake",
+		Keyspace:     "test",
+		Shard:        "-",
+	}
+	manifestBytes, _ := json.Marshal(manifest)
+
+	testBackupStorage := FakeBackupStorage{}
+	testBackupStorage.ListBackupsReturn = FakeBackupStorageListBackupsReturn{
+		BackupHandles: []backupstorage.BackupHandle{
+			&FakeBackupHandle{
+				ReadFileReturnF: func(context.Context, string) (io.ReadCloser, error) {
+					return io.NopCloser(bytes.NewBuffer(oldestManifestBytes)), nil
+				},
+			},
+			&FakeBackupHandle{
+				ReadFileReturnF: func(context.Context, string) (io.ReadCloser, error) {
+					return io.NopCloser(bytes.NewBuffer(olderManifestBytes)), nil
+				},
+			},
+			&FakeBackupHandle{
+				ReadFileReturnF: func(context.Context, string) (io.ReadCloser, error) {
+					return io.NopCloser(bytes.NewBuffer(manifestBytes)), nil
+				},
+			},
+		},
+	}
+	testBackupStorage.StartBackupReturn = FakeBackupStorageStartBackupReturn{&FakeBackupHandle{}, nil}
+	testBackupStorage.WithParamsReturn = &testBackupStorage
+	backupstorage.BackupStorageMap["fake"] = &testBackupStorage
+	env.backupStorage = &testBackupStorage
+
+	testBackupEngine := FakeBackupEngine{}
+	testBackupEngine.ExecuteRestoreReturn = FakeBackupEngineExecuteRestoreReturn{&manifest, errors.New("Testing: restore failure")}
+
+	BackupRestoreEngineMap["fake"] = &testBackupEngine
+	env.backupEngine = &testBackupEngine
+
+	// Should try the backup a bunch of times and fail
+	_, err := Restore(env.ctx, env.restoreParams)
+	require.NotNil(t, err)
+	require.Contains(t, err.Error(), "attempt")
+
+	// If we have less backups than the number of retries, this should fail during FindBackups
+	testBackupStorage.ListBackupsReturn.BackupHandles = testBackupStorage.ListBackupsReturn.BackupHandles[:1]
+	_, err = Restore(env.ctx, env.restoreParams)
+	require.NotNil(t, err)
+	require.Contains(t, err.Error(), "found but none are complete")
 }
 
 type forTest []FileEntry
