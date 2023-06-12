@@ -65,6 +65,8 @@ func transformToLogicalPlan(ctx *plancontext.PlanningContext, op ops.Operator, i
 		return transformOrdering(ctx, op)
 	case *operators.Aggregator:
 		return transformAggregator(ctx, op)
+	case *operators.Distinct:
+		return transformDistinct(ctx, op)
 	}
 
 	return nil, vterrors.VT13001(fmt.Sprintf("unknown type encountered: %T (transformToLogicalPlan)", op))
@@ -88,12 +90,14 @@ func transformAggregator(ctx *plancontext.PlanningContext, op *operators.Aggrega
 			return nil, vterrors.VT12001(fmt.Sprintf("in scatter query: aggregation function '%s'", sqlparser.String(aggr.Original)))
 		}
 		oa.aggregates = append(oa.aggregates, &engine.AggregateParams{
-			Opcode:     aggr.OpCode,
-			Col:        aggr.ColOffset,
-			Alias:      aggr.Alias,
-			Expr:       aggr.Func,
-			Original:   aggr.Original,
-			OrigOpcode: aggr.OriginalOpCode,
+			Opcode:      aggr.OpCode,
+			Col:         aggr.ColOffset,
+			Alias:       aggr.Alias,
+			Expr:        aggr.Func,
+			Original:    aggr.Original,
+			OrigOpcode:  aggr.OriginalOpCode,
+			WCol:        aggr.WSOffset,
+			CollationID: aggr.GetCollation(ctx),
 		})
 	}
 	for _, groupBy := range op.Grouping {
@@ -110,6 +114,14 @@ func transformAggregator(ctx *plancontext.PlanningContext, op *operators.Aggrega
 	}
 	oa.truncateColumnCount = op.ResultColumns
 	return oa, nil
+}
+
+func transformDistinct(ctx *plancontext.PlanningContext, op *operators.Distinct) (logicalPlan, error) {
+	src, err := transformToLogicalPlan(ctx, op.Source, false)
+	if err != nil {
+		return nil, err
+	}
+	return newDistinct(src, op.Columns, op.Truncate), nil
 }
 
 func transformOrdering(ctx *plancontext.PlanningContext, op *operators.Ordering) (logicalPlan, error) {
@@ -673,7 +685,7 @@ func transformUnionPlan(ctx *plancontext.PlanningContext, op *operators.Union, i
 		if err != nil {
 			return nil, err
 		}
-		return newDistinct(result, checkCols, isRoot), nil
+		return newDistinctGen4Legacy(result, checkCols, isRoot), nil
 	}
 	return result, nil
 

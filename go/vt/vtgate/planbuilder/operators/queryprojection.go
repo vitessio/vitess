@@ -24,6 +24,7 @@ import (
 
 	"golang.org/x/exp/slices"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
@@ -94,7 +95,9 @@ type (
 		Index    *int
 		Distinct bool
 
-		ColOffset int // points to the column on the same aggregator
+		// the offsets point to columns on the same aggregator
+		ColOffset int
+		WSOffset  int
 	}
 
 	AggrRewriter struct {
@@ -104,6 +107,29 @@ type (
 	}
 )
 
+func (aggr Aggr) NeedWeightString(ctx *plancontext.PlanningContext) bool {
+	switch aggr.OpCode {
+	case opcode.AggregateCountDistinct, opcode.AggregateSumDistinct:
+		return ctx.SemTable.NeedsWeightString(aggr.Func.GetArg())
+	case opcode.AggregateMin, opcode.AggregateMax:
+		// currently this returns false, as aggregation engine primitive does not support the usage of weight_string
+		// for comparison. If Min/Max column is non-comparable then it will fail at runtime.
+		return false
+	}
+	return false
+}
+
+func (aggr Aggr) GetCollation(ctx *plancontext.PlanningContext) collations.ID {
+	if aggr.Func == nil {
+		return collations.Unknown
+	}
+	switch aggr.OpCode {
+	case opcode.AggregateMin, opcode.AggregateMax, opcode.AggregateSumDistinct, opcode.AggregateCountDistinct:
+		return ctx.SemTable.CollationForExpr(aggr.Func.GetArg())
+	}
+	return collations.Unknown
+}
+
 // NewGroupBy creates a new group by from the given fields.
 func NewGroupBy(inner, simplified sqlparser.Expr, aliasedExpr *sqlparser.AliasedExpr) GroupBy {
 	return GroupBy{
@@ -112,6 +138,17 @@ func NewGroupBy(inner, simplified sqlparser.Expr, aliasedExpr *sqlparser.Aliased
 		aliasedExpr:    aliasedExpr,
 		ColOffset:      -1,
 		WSOffset:       -1,
+	}
+}
+
+func NewAggr(opCode opcode.AggregateOpcode, f sqlparser.AggrFunc, original *sqlparser.AliasedExpr, alias string) Aggr {
+	return Aggr{
+		Original:  original,
+		Func:      f,
+		OpCode:    opCode,
+		Alias:     alias,
+		ColOffset: -1,
+		WSOffset:  -1,
 	}
 }
 
@@ -184,11 +221,7 @@ func CreateQPFromSelect(ctx *plancontext.PlanningContext, sel *sqlparser.Select)
 		return nil, err
 	}
 
-	if qp.Distinct && !qp.HasAggr {
-		// grouping and distinct both lead to unique results, so we don't need
-		// TODO: we should check that we are returning all the grouping columns, or this is not safe to do
-		qp.groupByExprs = nil
-	}
+	qp.calculateDistinct(ctx)
 
 	return qp, nil
 }
@@ -333,6 +366,38 @@ func (qp *QueryProjection) addOrderBy(ctx *plancontext.PlanningContext, orderBy 
 	}
 	qp.CanPushDownSorting = canPushDownSorting
 	return nil
+}
+
+func (qp *QueryProjection) calculateDistinct(ctx *plancontext.PlanningContext) {
+	if qp.Distinct && !qp.HasAggr {
+		// grouping and distinct both lead to unique results, so we don't need
+		qp.groupByExprs = nil
+	}
+
+	if qp.HasAggr && len(qp.groupByExprs) == 0 {
+		// this is a scalar aggregation and is inherently distinct
+		qp.Distinct = false
+	}
+
+	if !qp.Distinct || len(qp.groupByExprs) == 0 {
+		return
+	}
+
+	for _, gb := range qp.groupByExprs {
+		_, found := canReuseColumn(ctx, qp.SelectExprs, gb.SimplifiedExpr, func(expr SelectExpr) sqlparser.Expr {
+			getExpr, err := expr.GetExpr()
+			if err != nil {
+				panic(err)
+			}
+			return getExpr
+		})
+		if !found {
+			return
+		}
+	}
+
+	// since we are returning all grouping expressions, we know the results are guaranteed to be unique
+	qp.Distinct = false
 }
 
 func (qp *QueryProjection) addGroupBy(ctx *plancontext.PlanningContext, groupBy sqlparser.GroupBy) error {
@@ -589,12 +654,9 @@ orderBy:
 
 		if !sqlparser.ContainsAggregation(expr.Col) {
 			if !qp.isExprInGroupByExprs(ctx, expr) {
-				out = append(out, Aggr{
-					Original: aliasedExpr,
-					OpCode:   opcode.AggregateRandom,
-					Alias:    aliasedExpr.ColumnName(),
-					Index:    &idxCopy,
-				})
+				aggr := NewAggr(opcode.AggregateRandom, nil, aliasedExpr, aliasedExpr.ColumnName())
+				aggr.Index = &idxCopy
+				out = append(out, aggr)
 			}
 			continue
 		}
@@ -611,9 +673,9 @@ orderBy:
 			}
 		}
 
-		aggr, _ := aliasedExpr.Expr.(sqlparser.AggrFunc)
+		aggrF, _ := aliasedExpr.Expr.(sqlparser.AggrFunc)
 
-		if aggr.IsDistinct() {
+		if aggrF.IsDistinct() {
 			switch code {
 			case opcode.AggregateCount:
 				code = opcode.AggregateCountDistinct
@@ -622,14 +684,10 @@ orderBy:
 			}
 		}
 
-		out = append(out, Aggr{
-			Original: aliasedExpr,
-			Func:     aggr,
-			OpCode:   code,
-			Alias:    aliasedExpr.ColumnName(),
-			Index:    &idxCopy,
-			Distinct: aggr.IsDistinct(),
-		})
+		aggr := NewAggr(code, aggrF, aliasedExpr, aliasedExpr.ColumnName())
+		aggr.Index = &idxCopy
+		aggr.Distinct = aggrF.IsDistinct()
+		out = append(out, aggr)
 	}
 	return
 }
