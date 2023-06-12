@@ -744,6 +744,27 @@ func (ast *astCompiler) translateCallable(call sqlparser.Callable) (Expr, error)
 			trim:     call.Type,
 		}, nil
 
+	case *sqlparser.IntervalDateExpr:
+		var err error
+		args := make([]Expr, 2)
+
+		args[0], err = ast.translateExpr(call.Date)
+		if err != nil {
+			return nil, err
+		}
+		args[1], err = ast.translateExpr(call.Interval)
+		if err != nil {
+			return nil, err
+		}
+
+		cexpr := CallExpr{Arguments: args, Method: call.FnName()}
+		return &builtinDateMath{
+			CallExpr: cexpr,
+			sub:      call.IsSubtraction(),
+			unit:     call.NormalizedUnit(),
+			collate:  ast.cfg.Collation,
+		}, nil
+
 	default:
 		return nil, translateExprNotSupported(call)
 	}
