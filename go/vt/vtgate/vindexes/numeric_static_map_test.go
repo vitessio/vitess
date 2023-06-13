@@ -18,6 +18,7 @@ package vindexes
 
 import (
 	"context"
+	"errors"
 	"reflect"
 	"testing"
 
@@ -26,6 +27,8 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 // createVindex creates the "numeric_static_map" vindex object which is used by
@@ -40,23 +43,105 @@ func createVindex() (SingleColumn, error) {
 	return vindex.(SingleColumn), nil
 }
 
-// createVindexWithParams creates the "numeric_static_map" vindex object with the
-// provided params.
-func createVindexWithParams(params map[string]string) (SingleColumn, error) {
-	vindex, err := CreateVindex("numeric_static_map", "numericStaticMapWithParams", params)
-	if err != nil {
-		return nil, err
+func numericStaticMapCreateVindexTestCase(
+	testName string,
+	vindexParams map[string]string,
+	expectErr error,
+	expectUnknownParams []string,
+) createVindexTestCase {
+	return createVindexTestCase{
+		testName: testName,
+
+		vindexType:   "numeric_static_map",
+		vindexName:   "numeric_static_map",
+		vindexParams: vindexParams,
+
+		expectCost:          1,
+		expectErr:           expectErr,
+		expectIsUnique:      true,
+		expectNeedsVCursor:  false,
+		expectString:        "numeric_static_map",
+		expectUnknownParams: expectUnknownParams,
 	}
-	return vindex.(SingleColumn), nil
 }
 
-func TestNumericStaticMapInfo(t *testing.T) {
-	numericStaticMap, err := createVindex()
-	require.NoError(t, err)
-	assert.Equal(t, 1, numericStaticMap.Cost())
-	assert.Equal(t, "numericStaticMap", numericStaticMap.String())
-	assert.True(t, numericStaticMap.IsUnique())
-	assert.False(t, numericStaticMap.NeedsVCursor())
+func TestNumericStaticMapCreateVindex(t *testing.T) {
+	cases := []createVindexTestCase{
+		numericStaticMapCreateVindexTestCase(
+			"no params invalid, require either json_path or json",
+			nil,
+			vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "NumericStaticMap: Could not find either `json_path` or `json` params in vschema"),
+			nil,
+		),
+		numericStaticMapCreateVindexTestCase(
+			"empty params invalid, require either json_path or json",
+			map[string]string{},
+			vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "NumericStaticMap: Could not find either `json_path` or `json` params in vschema"),
+			nil,
+		),
+		numericStaticMapCreateVindexTestCase(
+			"json_path and json mutually exclusive",
+			map[string]string{
+				"json":      "{}",
+				"json_path": "/path/to/map.json",
+			},
+			vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "NumericStaticMap: Found both `json` and `json_path` params in vschema"),
+			nil,
+		),
+		numericStaticMapCreateVindexTestCase(
+			"json_path must exist",
+			map[string]string{
+				"json_path": "/path/to/map.json",
+			},
+			errors.New("open /path/to/map.json: no such file or directory"),
+			nil,
+		),
+		numericStaticMapCreateVindexTestCase(
+			"json ok",
+			map[string]string{
+				"json": "{}",
+			},
+			nil,
+			nil,
+		),
+		numericStaticMapCreateVindexTestCase(
+			"json must be valid syntax",
+			map[string]string{
+				"json": "{]",
+			},
+			errors.New("invalid character ']' looking for beginning of object key string"),
+			nil,
+		),
+		numericStaticMapCreateVindexTestCase(
+			"fallback_type ok",
+			map[string]string{
+				"json":          "{}",
+				"fallback_type": "binary",
+			},
+			nil,
+			nil,
+		),
+		numericStaticMapCreateVindexTestCase(
+			"fallback_type must be valid vindex type",
+			map[string]string{
+				"json":          "{}",
+				"fallback_type": "not_found",
+			},
+			vterrors.Errorf(vtrpc.Code_NOT_FOUND, "vindexType %q not found", "not_found"),
+			nil,
+		),
+		numericStaticMapCreateVindexTestCase(
+			"unknown params",
+			map[string]string{
+				"json":  "{}",
+				"hello": "world",
+			},
+			nil,
+			[]string{"hello"},
+		),
+	}
+
+	testCreateVindexes(t, cases)
 }
 
 func TestNumericStaticMapMap(t *testing.T) {
@@ -115,39 +200,62 @@ func TestNumericStaticMapVerify(t *testing.T) {
 }
 
 func TestNumericStaticMapWithJsonVdx(t *testing.T) {
-	withFallbackVdx, err := createVindexWithParams(map[string]string{
-		"json": "{\"1\":2,\"3\":4,\"5\":6}",
-	})
+	withFallbackVdx, err := CreateVindex(
+		"numeric_static_map",
+		t.Name(),
+		map[string]string{
+			"json": "{\"1\":2,\"3\":4,\"5\":6}",
+		},
+	)
 
 	require.NoError(t, err)
+	require.Empty(t, withFallbackVdx.(ParamValidating).UnknownParams())
 	assert.Equal(t, 1, withFallbackVdx.Cost())
-	assert.Equal(t, "numericStaticMapWithParams", withFallbackVdx.String())
+	assert.Equal(t, t.Name(), withFallbackVdx.String())
 	assert.True(t, withFallbackVdx.IsUnique())
 	assert.False(t, withFallbackVdx.NeedsVCursor())
 
 	// Bad format tests
-	_, err = createVindexWithParams(map[string]string{
-		"json": "{\"1\":2,\"3\":4,\"5\":6:8,\"10\":11}",
-	})
+	_, err = CreateVindex(
+		"numeric_static_map",
+		t.Name(),
+		map[string]string{
+			"json": "{\"1\":2,\"3\":4,\"5\":6:8,\"10\":11}",
+		},
+	)
 	require.EqualError(t, err, "invalid character ':' after object key:value pair")
 
 	// Letters in key or value not allowed
-	_, err = createVindexWithParams(map[string]string{"json": "{\"1\":a}"})
+	_, err = CreateVindex(
+		"numeric_static_map",
+		t.Name(),
+		map[string]string{"json": "{\"1\":a}"},
+	)
 	require.EqualError(t, err, "invalid character 'a' looking for beginning of value")
-	_, err = createVindexWithParams(map[string]string{"json": "{\"a\":1}"})
+	_, err = CreateVindex(
+		"numeric_static_map",
+		t.Name(),
+		map[string]string{"json": "{\"a\":1}"},
+	)
 	require.EqualError(t, err, "strconv.ParseUint: parsing \"a\": invalid syntax")
 }
 
 // Test mapping of vindex, both for specified map keys and underlying xxhash
 func TestNumericStaticMapWithFallback(t *testing.T) {
-	mapWithFallbackVdx, err := createVindexWithParams(map[string]string{
-		"json":          "{\"1\":2,\"3\":4,\"4\":5,\"5\":6,\"6\":7,\"7\":8,\"8\":9,\"10\":18446744073709551615}",
-		"fallback_type": "xxhash",
-	})
+	mapWithFallbackVdx, err := CreateVindex(
+		"numeric_static_map",
+		t.Name(),
+		map[string]string{
+			"json":          "{\"1\":2,\"3\":4,\"4\":5,\"5\":6,\"6\":7,\"7\":8,\"8\":9,\"10\":18446744073709551615}",
+			"fallback_type": "xxhash",
+		},
+	)
 	if err != nil {
 		t.Fatalf("failed to create vindex: %v", err)
 	}
-	got, err := mapWithFallbackVdx.Map(context.Background(), nil, []sqltypes.Value{
+	require.Empty(t, mapWithFallbackVdx.(ParamValidating).UnknownParams())
+	singleCol := mapWithFallbackVdx.(SingleColumn)
+	got, err := singleCol.Map(context.Background(), nil, []sqltypes.Value{
 		sqltypes.NewInt64(1),
 		sqltypes.NewInt64(2),
 		sqltypes.NewInt64(3),
@@ -183,14 +291,20 @@ func TestNumericStaticMapWithFallback(t *testing.T) {
 }
 
 func TestNumericStaticMapWithFallbackVerify(t *testing.T) {
-	mapWithFallbackVdx, err := createVindexWithParams(map[string]string{
-		"json":          "{\"1\":2,\"3\":4,\"4\":5,\"5\":6,\"6\":7,\"7\":8,\"8\":9,\"10\":18446744073709551615}",
-		"fallback_type": "xxhash",
-	})
+	mapWithFallbackVdx, err := CreateVindex(
+		"numeric_static_map",
+		t.Name(),
+		map[string]string{
+			"json":          "{\"1\":2,\"3\":4,\"4\":5,\"5\":6,\"6\":7,\"7\":8,\"8\":9,\"10\":18446744073709551615}",
+			"fallback_type": "xxhash",
+		},
+	)
 	if err != nil {
 		t.Fatalf("failed to create vindex: %v", err)
 	}
-	got, err := mapWithFallbackVdx.Verify(context.Background(), nil, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2), sqltypes.NewInt64(11), sqltypes.NewInt64(10)}, [][]byte{[]byte("\x00\x00\x00\x00\x00\x00\x00\x02"), []byte("\x8b\x59\x80\x16\x62\xb5\x21\x60"), []byte("\xff\xff\xff\xff\xff\xff\xff\xff"), []byte("\xff\xff\xff\xff\xff\xff\xff\xff")})
+	require.Empty(t, mapWithFallbackVdx.(ParamValidating).UnknownParams())
+	singleCol := mapWithFallbackVdx.(SingleColumn)
+	got, err := singleCol.Verify(context.Background(), nil, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2), sqltypes.NewInt64(11), sqltypes.NewInt64(10)}, [][]byte{[]byte("\x00\x00\x00\x00\x00\x00\x00\x02"), []byte("\x8b\x59\x80\x16\x62\xb5\x21\x60"), []byte("\xff\xff\xff\xff\xff\xff\xff\xff"), []byte("\xff\xff\xff\xff\xff\xff\xff\xff")})
 	require.NoError(t, err)
 	want := []bool{true, true, false, true}
 	if !reflect.DeepEqual(got, want) {
@@ -198,6 +312,6 @@ func TestNumericStaticMapWithFallbackVerify(t *testing.T) {
 	}
 
 	// Failure test
-	_, err = mapWithFallbackVdx.Verify(context.Background(), nil, []sqltypes.Value{sqltypes.NewVarBinary("aa")}, [][]byte{nil})
+	_, err = singleCol.Verify(context.Background(), nil, []sqltypes.Value{sqltypes.NewVarBinary("aa")}, [][]byte{nil})
 	require.EqualError(t, err, "could not parse value: 'aa'")
 }

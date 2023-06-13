@@ -21,7 +21,6 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -31,18 +30,62 @@ import (
 var null SingleColumn
 
 func init() {
-	hv, err := CreateVindex("null", "nn", map[string]string{"Table": "t", "Column": "c"})
+	hv, err := CreateVindex("null", "nn", map[string]string{})
 	if err != nil {
 		panic(err)
+	}
+	unknownParams := hv.(ParamValidating).UnknownParams()
+	if len(unknownParams) > 0 {
+		panic("null test init: expected 0 unknown params")
 	}
 	null = hv.(SingleColumn)
 }
 
-func TestNullInfo(t *testing.T) {
-	assert.Equal(t, 100, null.Cost())
-	assert.Equal(t, "nn", null.String())
-	assert.True(t, null.IsUnique())
-	assert.False(t, null.NeedsVCursor())
+func nullCreateVindexTestCase(
+	testName string,
+	vindexParams map[string]string,
+	expectErr error,
+	expectUnknownParams []string,
+) createVindexTestCase {
+	return createVindexTestCase{
+		testName: testName,
+
+		vindexType:   "null",
+		vindexName:   "null",
+		vindexParams: vindexParams,
+
+		expectCost:          100,
+		expectErr:           expectErr,
+		expectIsUnique:      true,
+		expectNeedsVCursor:  false,
+		expectString:        "null",
+		expectUnknownParams: expectUnknownParams,
+	}
+}
+
+func TestNullCreateVindex(t *testing.T) {
+	cases := []createVindexTestCase{
+		nullCreateVindexTestCase(
+			"no params",
+			nil,
+			nil,
+			nil,
+		),
+		nullCreateVindexTestCase(
+			"empty params",
+			map[string]string{},
+			nil,
+			nil,
+		),
+		nullCreateVindexTestCase(
+			"unknown params",
+			map[string]string{"hello": "world"},
+			nil,
+			[]string{"hello"},
+		),
+	}
+
+	testCreateVindexes(t, cases)
 }
 
 func TestNullMap(t *testing.T) {

@@ -285,7 +285,7 @@ func (pb *primitiveBuilder) buildTablePrimitive(tableExpr *sqlparser.AliasedTabl
 		// Use the Binary vindex, which is the identity function
 		// for keyspace id.
 		eroute = engine.NewSimpleRoute(engine.EqualUnique, vschemaTable.Keyspace)
-		vindex, _ = vindexes.NewBinary("binary", nil)
+		vindex, _ = vindexes.CreateVindex("binary", "binary", nil)
 		eroute.Vindex = vindex
 		lit := evalengine.NewLiteralString(vschemaTable.Pinned, collations.TypedCollation{})
 		eroute.Values = []evalengine.Expr{lit}
