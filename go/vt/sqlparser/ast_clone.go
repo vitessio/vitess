@@ -129,10 +129,6 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfCreateView(in)
 	case *CurTimeFuncExpr:
 		return CloneRefOfCurTimeFuncExpr(in)
-	case *DateAddExpr:
-		return CloneRefOfDateAddExpr(in)
-	case *DateSubExpr:
-		return CloneRefOfDateSubExpr(in)
 	case *DeallocateStmt:
 		return CloneRefOfDeallocateStmt(in)
 	case *Default:
@@ -227,6 +223,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfInsert(in)
 	case *InsertExpr:
 		return CloneRefOfInsertExpr(in)
+	case *IntervalDateExpr:
+		return CloneRefOfIntervalDateExpr(in)
 	case *IntervalFuncExpr:
 		return CloneRefOfIntervalFuncExpr(in)
 	case *IntroducerExpr:
@@ -1118,28 +1116,6 @@ func CloneRefOfCurTimeFuncExpr(n *CurTimeFuncExpr) *CurTimeFuncExpr {
 	return &out
 }
 
-// CloneRefOfDateAddExpr creates a deep clone of the input.
-func CloneRefOfDateAddExpr(n *DateAddExpr) *DateAddExpr {
-	if n == nil {
-		return nil
-	}
-	out := *n
-	out.Date = CloneExpr(n.Date)
-	out.Expr = CloneExpr(n.Expr)
-	return &out
-}
-
-// CloneRefOfDateSubExpr creates a deep clone of the input.
-func CloneRefOfDateSubExpr(n *DateSubExpr) *DateSubExpr {
-	if n == nil {
-		return nil
-	}
-	out := *n
-	out.Date = CloneExpr(n.Date)
-	out.Expr = CloneExpr(n.Expr)
-	return &out
-}
-
 // CloneRefOfDeallocateStmt creates a deep clone of the input.
 func CloneRefOfDeallocateStmt(n *DeallocateStmt) *DeallocateStmt {
 	if n == nil {
@@ -1655,6 +1631,17 @@ func CloneRefOfInsertExpr(n *InsertExpr) *InsertExpr {
 	out.Pos = CloneExpr(n.Pos)
 	out.Len = CloneExpr(n.Len)
 	out.NewStr = CloneExpr(n.NewStr)
+	return &out
+}
+
+// CloneRefOfIntervalDateExpr creates a deep clone of the input.
+func CloneRefOfIntervalDateExpr(n *IntervalDateExpr) *IntervalDateExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Date = CloneExpr(n.Date)
+	out.Interval = CloneExpr(n.Interval)
 	return &out
 }
 
@@ -3538,10 +3525,6 @@ func CloneCallable(in Callable) Callable {
 		return CloneRefOfCountStar(in)
 	case *CurTimeFuncExpr:
 		return CloneRefOfCurTimeFuncExpr(in)
-	case *DateAddExpr:
-		return CloneRefOfDateAddExpr(in)
-	case *DateSubExpr:
-		return CloneRefOfDateSubExpr(in)
 	case *ExtractFuncExpr:
 		return CloneRefOfExtractFuncExpr(in)
 	case *ExtractValueExpr:
@@ -3576,6 +3559,8 @@ func CloneCallable(in Callable) Callable {
 		return CloneRefOfGroupConcatExpr(in)
 	case *InsertExpr:
 		return CloneRefOfInsertExpr(in)
+	case *IntervalDateExpr:
+		return CloneRefOfIntervalDateExpr(in)
 	case *IntervalFuncExpr:
 		return CloneRefOfIntervalFuncExpr(in)
 	case *JSONArrayExpr:
@@ -3830,10 +3815,6 @@ func CloneExpr(in Expr) Expr {
 		return CloneRefOfCountStar(in)
 	case *CurTimeFuncExpr:
 		return CloneRefOfCurTimeFuncExpr(in)
-	case *DateAddExpr:
-		return CloneRefOfDateAddExpr(in)
-	case *DateSubExpr:
-		return CloneRefOfDateSubExpr(in)
 	case *Default:
 		return CloneRefOfDefault(in)
 	case *ExistsExpr:
@@ -3874,6 +3855,8 @@ func CloneExpr(in Expr) Expr {
 		return CloneRefOfGroupConcatExpr(in)
 	case *InsertExpr:
 		return CloneRefOfInsertExpr(in)
+	case *IntervalDateExpr:
+		return CloneRefOfIntervalDateExpr(in)
 	case *IntervalFuncExpr:
 		return CloneRefOfIntervalFuncExpr(in)
 	case *IntroducerExpr:

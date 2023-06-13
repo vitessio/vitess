@@ -20,11 +20,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"golang.org/x/exp/slices"
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -81,7 +82,13 @@ func testSingle(t *testing.T, query string) (EvalResult, error) {
 }
 
 func TestMySQLGolden(t *testing.T) {
+	const Target = 0
+
+	var testcount int
+
 	golden, _ := filepath.Glob("integration/testdata/*.json")
+	slices.Sort(golden)
+
 	for _, gld := range golden {
 		t.Run(filepath.Base(gld), func(t *testing.T) {
 			var testcases []struct {
@@ -102,7 +109,11 @@ func TestMySQLGolden(t *testing.T) {
 			var ok int
 
 			for _, tc := range testcases {
-				debug := fmt.Sprintf("\n// Debug\neval, err := testSingle(t, `%s`)\nt.Logf(\"eval=%%s err=%%v\", eval.Value(), err) // want value=%q\n", tc.Query, tc.Value)
+				testcount++
+				if Target != 0 && Target != testcount {
+					continue
+				}
+
 				eval, err := testSingle(t, tc.Query)
 				if err == errKnownBadQuery {
 					ok++
@@ -110,20 +121,20 @@ func TestMySQLGolden(t *testing.T) {
 				}
 				if err != nil {
 					if tc.Error == "" {
-						t.Errorf("query: %s\nmysql val: %s\nvitess err: %s\n%s", tc.Query, tc.Value, err.Error(), debug)
+						t.Errorf("query %d: %s\nmysql val:  %s\nvitess err: %s", testcount, tc.Query, tc.Value, err.Error())
 					} else if !strings.HasPrefix(tc.Error, err.Error()) {
-						t.Errorf("query: %s\nmysql err: %s\nvitess err: %s\n%s", tc.Query, tc.Error, err.Error(), debug)
+						t.Errorf("query %d: %s\nmysql err:  %s\nvitess err: %s", testcount, tc.Query, tc.Error, err.Error())
 					} else {
 						ok++
 					}
 					continue
 				}
 				if tc.Error != "" {
-					t.Errorf("query: %s\nmysql err: %s\nvitess val: %s\n%s", tc.Query, tc.Error, eval.Value(), debug)
+					t.Errorf("query %d: %s\nmysql err:  %s\nvitess val: %s", testcount, tc.Query, tc.Error, eval.Value())
 					continue
 				}
 				if eval.Value().String() != tc.Value {
-					t.Errorf("query: %s\nmysql val: %s\nvitess val: %s\n%s", tc.Query, tc.Value, eval.Value(), debug)
+					t.Errorf("query %d: %s\nmysql val:  %s\nvitess val: %s", testcount, tc.Query, tc.Value, eval.Value())
 					continue
 				}
 				ok++
@@ -136,6 +147,6 @@ func TestMySQLGolden(t *testing.T) {
 
 func TestDebug1(t *testing.T) {
 	// Debug
-	eval, err := testSingle(t, `SELECT DATE_FORMAT(TIMESTAMP '1999-12-31 23:59:58.999', "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %%")`)
+	eval, err := testSingle(t, `SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL '1.999999' year_month)`)
 	t.Logf("eval=%s err=%v coll=%s", eval.String(), err, eval.Collation().Get().Name())
 }

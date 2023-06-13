@@ -64,7 +64,7 @@ func newShardedRouting(vtable *vindexes.Table, id semantics.TableSet) Routing {
 		// Use the Binary vindex, which is the identity function
 		// for keyspace id.
 		routing.RouteOpCode = engine.EqualUnique
-		vindex, _ := vindexes.NewBinary("binary", nil)
+		vindex, _ := vindexes.CreateVindex("binary", "binary", nil)
 		routing.Selected = &VindexOption{
 			Ready:       true,
 			Values:      []evalengine.Expr{evalengine.NewLiteralString(vtable.Pinned, collations.TypedCollation{})},

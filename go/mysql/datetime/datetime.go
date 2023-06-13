@@ -94,7 +94,7 @@ func (t Time) FormatDecimal() decimal.Decimal {
 }
 
 func (t Time) ToDateTime() (out DateTime) {
-	return FromStdTime(t.ToStdTime(time.Local))
+	return NewDateTimeFromStd(t.ToStdTime(time.Local))
 }
 
 func (t Time) IsZero() bool {
@@ -413,6 +413,20 @@ func (t Time) ToStdTime(loc *time.Location) (out time.Time) {
 	return t.toStdTime(year, month, day, loc)
 }
 
+func (t Time) AddInterval(itv *Interval, stradd bool) (Time, uint8, bool) {
+	dt := DateTime{Time: t}
+	ok := dt.addInterval(itv)
+	return dt.Time, itv.precision(stradd), ok
+}
+
+func (t Time) toSeconds() int {
+	tsecs := t.Hour()*secondsPerHour + t.Minute()*secondsPerMinute + t.Second()
+	if t.Neg() {
+		return -tsecs
+	}
+	return tsecs
+}
+
 func (d Date) ToStdTime(loc *time.Location) (out time.Time) {
 	return time.Date(d.Year(), time.Month(d.Month()), d.Day(), 0, 0, 0, 0, loc)
 }
@@ -471,6 +485,12 @@ func (d Date) Compare(d2 Date) int {
 	return 0
 }
 
+func (d Date) AddInterval(itv *Interval) (Date, bool) {
+	dt := DateTime{Date: d}
+	ok := dt.addInterval(itv)
+	return dt.Date, ok
+}
+
 func (dt DateTime) FormatInt64() int64 {
 	d := dt.Round(0)
 	return d.Date.FormatInt64()*1000000 + d.Time.FormatInt64()
@@ -493,13 +513,18 @@ func (dt DateTime) Compare(dt2 DateTime) int {
 	case zerodate1 || zerodate2:
 		// if we're comparing a time to a datetime, we need to normalize them
 		// both into datetimes; this normalization is not trivial because negative
-		// times result in a date change, to let the standard library handle this
+		// times result in a date change, so let the standard library handle this
 		return dt.ToStdTime(time.Local).Compare(dt2.ToStdTime(time.Local))
 	}
 	if cmp := dt.Date.Compare(dt2.Date); cmp != 0 {
 		return cmp
 	}
 	return dt.Time.Compare(dt2.Time)
+}
+
+func (dt DateTime) AddInterval(itv *Interval, stradd bool) (DateTime, uint8, bool) {
+	ok := dt.addInterval(itv)
+	return dt, itv.precision(stradd), ok
 }
 
 func (dt DateTime) Round(p int) (r DateTime) {
@@ -521,28 +546,124 @@ func (dt DateTime) Round(p int) (r DateTime) {
 	r = dt
 	if n == 1e9 {
 		r.Time.nanosecond = 0
-		return FromStdTime(r.ToStdTime(time.Local).Add(time.Second))
+		return NewDateTimeFromStd(r.ToStdTime(time.Local).Add(time.Second))
 	}
 	r.Time.nanosecond = uint32(n)
 	return r
 }
 
-func FromStdTime(t time.Time) DateTime {
+func (dt DateTime) toSeconds() int {
+	return (dt.Date.Day()-1)*secondsPerDay + dt.Time.toSeconds()
+}
+
+func (dt *DateTime) addInterval(itv *Interval) bool {
+	switch {
+	case itv.unit.HasTimeParts():
+		if !itv.inRange() {
+			return false
+		}
+
+		nsec := dt.Time.Nanosecond() + itv.nsec
+		sec := dt.toSeconds() + itv.toSeconds() + (nsec / int(time.Second))
+		nsec = nsec % int(time.Second)
+
+		if nsec < 0 {
+			nsec += int(time.Second)
+			sec--
+		}
+
+		days := sec / secondsPerDay
+		sec -= days * secondsPerDay
+
+		if sec < 0 {
+			sec += secondsPerDay
+			days--
+		}
+
+		dt.Time.nanosecond = uint32(nsec)
+		dt.Time.second = uint8(sec % secondsPerMinute)
+		dt.Time.minute = uint8((sec / secondsPerMinute) % secondsPerMinute)
+		dt.Time.hour = uint16(sec / secondsPerHour)
+
+		daynum := mysqlDayNumber(dt.Date.Year(), dt.Date.Month(), 1) + days
+		if daynum < 0 || daynum > maxDay {
+			return false
+		}
+
+		dt.Date.year, dt.Date.month, dt.Date.day = mysqlDateFromDayNumber(daynum)
+		return true
+
+	case itv.unit.HasDayParts():
+		daynum := mysqlDayNumber(dt.Date.Year(), dt.Date.Month(), dt.Date.Day())
+		daynum += itv.day
+		dt.Date.year, dt.Date.month, dt.Date.day = mysqlDateFromDayNumber(daynum)
+		return true
+
+	case itv.unit.HasMonthParts():
+		months := dt.Date.Year()*12 + itv.year*12 + (dt.Date.Month() - 1) + itv.month
+		if months < 0 || months >= 120000 {
+			return false
+		}
+
+		year := months / 12
+		month := (months % 12) + 1
+
+		dt.Date.year = uint16(year)
+		dt.Date.month = uint8(month)
+
+		// MySQL quirk: if the original date was in a day that the new month
+		// doesn't have, the date is offset backwards to the last day of
+		// the new month. This is the opposite to normal date handling where
+		// we'd offset days into the next month.
+		if dim := daysIn(time.Month(month), year); dt.Date.Day() > dim {
+			dt.Date.day = uint8(dim)
+		}
+		return true
+
+	case itv.unit == IntervalYear:
+		if itv.year > 10000 {
+			return false
+		}
+
+		year := dt.Date.Year() + itv.year
+		dt.Date.year = uint16(year)
+
+		// MySQL quirk: if the original date was Feb 29th on a leap year, and
+		// the resulting year is not a leap year, the date is offset backwards.
+		// This is the opposite to what normal date handling does.
+		if dt.Date.Month() == 2 && dt.Date.Day() == 29 && !isLeap(year) {
+			dt.Date.day = 28
+		}
+		return true
+
+	default:
+		panic("unexpected IntervalType")
+	}
+}
+
+func NewDateFromStd(t time.Time) Date {
 	year, month, day := t.Date()
+	return Date{
+		year:  uint16(year),
+		month: uint8(month),
+		day:   uint8(day),
+	}
+}
+
+func NewTimeFromStd(t time.Time) Time {
 	hour, min, sec := t.Clock()
 	nsec := t.Nanosecond()
+	return Time{
+		hour:       uint16(hour),
+		minute:     uint8(min),
+		second:     uint8(sec),
+		nanosecond: uint32(nsec),
+	}
+}
 
+func NewDateTimeFromStd(t time.Time) DateTime {
 	return DateTime{
-		Date: Date{
-			year:  uint16(year),
-			month: uint8(month),
-			day:   uint8(day),
-		},
-		Time: Time{
-			hour:       uint16(hour),
-			minute:     uint8(min),
-			second:     uint8(sec),
-			nanosecond: uint32(nsec),
-		},
+		Date: NewDateFromStd(t),
+		Time: NewTimeFromStd(t),
 	}
 }

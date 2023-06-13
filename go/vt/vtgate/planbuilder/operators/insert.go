@@ -86,12 +86,6 @@ type Generate struct {
 	added bool
 }
 
-func (i *Insert) Description() ops.OpDescription {
-	return ops.OpDescription{
-		OperatorType: "Insert",
-	}
-}
-
 func (i *Insert) ShortDescription() string {
 	return i.VTable.String()
 }

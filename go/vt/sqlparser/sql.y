@@ -173,7 +173,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
   orderDirection  OrderDirection
   explainType 	  ExplainType
   vexplainType 	  VExplainType
-  intervalType	  IntervalTypes
+  intervalType	  IntervalType
   lockType LockType
   referenceDefinition *ReferenceDefinition
   txAccessModes []TxAccessMode
@@ -5346,11 +5346,11 @@ bit_expr '|' bit_expr %prec '|'
   }
 | bit_expr '+' INTERVAL bit_expr interval %prec '+'
   {
-	  $$ = &DateAddExpr{Type: PlusIntervalRightType, Date: $1, Unit: $5, Expr: $4}
+	  $$ = &IntervalDateExpr{Syntax: IntervalDateExprBinaryAdd, Date: $1, Unit: $5, Interval: $4}
   }
 | bit_expr '-' INTERVAL bit_expr interval %prec '-'
   {
-	  $$ = &DateSubExpr{Type: MinusIntervalRightType, Date: $1, Unit: $5, Expr: $4}
+	  $$ = &IntervalDateExpr{Syntax: IntervalDateExprBinarySub, Date: $1, Unit: $5, Interval: $4}
   }
 | bit_expr '*' bit_expr %prec '*'
   {
@@ -5472,7 +5472,7 @@ function_call_keyword
   }
 | INTERVAL bit_expr interval '+' bit_expr %prec INTERVAL
   {
-	  $$ = &DateAddExpr{Type: PlusIntervalLeftType, Date: $5, Unit: $3, Expr: $2}
+	  $$ = &IntervalDateExpr{Syntax: IntervalDateExprBinaryAddLeft, Date: $5, Unit: $3, Interval: $2}
   }
 | INTERVAL openb expression ',' expression_list closeb
   {
@@ -5992,7 +5992,7 @@ UTC_DATE func_paren_opt
   }
 | EXTRACT openb interval FROM expression closeb
   {
-	$$ = &ExtractFuncExpr{IntervalTypes: $3, Expr: $5}
+	$$ = &ExtractFuncExpr{IntervalType: $3, Expr: $5}
   }
 | WEIGHT_STRING openb expression convert_type_weight_string closeb
   {
@@ -6608,27 +6608,27 @@ UTC_DATE func_paren_opt
   }
 | ADDDATE openb expression ',' INTERVAL bit_expr interval closeb
   {
-    $$ = &DateAddExpr{Type: AdddateType, Date: $3, Expr: $6, Unit: $7}
+    $$ = &IntervalDateExpr{Syntax: IntervalDateExprAdddate, Date: $3, Interval: $6, Unit: $7}
   }
 | ADDDATE openb expression ',' expression closeb
   {
-    $$ = &DateAddExpr{Type: AdddateType, Date: $3, Expr: $5}
+    $$ = &IntervalDateExpr{Syntax: IntervalDateExprAdddate, Date: $3, Interval: $5, Unit: IntervalNone}
   }
 | DATE_ADD openb expression ',' INTERVAL bit_expr interval closeb
   {
-    $$ = &DateAddExpr{Type: DateAddType, Date: $3, Expr: $6, Unit: $7}
+    $$ = &IntervalDateExpr{Syntax: IntervalDateExprDateAdd, Date: $3, Interval: $6, Unit: $7}
   }
 | DATE_SUB openb expression ',' INTERVAL bit_expr interval closeb
   {
-    $$ = &DateSubExpr{Type: DateSubType, Date: $3, Expr: $6, Unit: $7}
+    $$ = &IntervalDateExpr{Syntax: IntervalDateExprDateSub, Date: $3, Interval: $6, Unit: $7}
   }
 | SUBDATE openb expression ',' INTERVAL bit_expr interval closeb
   {
-    $$ = &DateSubExpr{Type: SubdateType, Date: $3, Expr: $6, Unit: $7}
+    $$ = &IntervalDateExpr{Syntax: IntervalDateExprSubdate, Date: $3, Interval: $6, Unit: $7}
   }
 | SUBDATE openb expression ',' expression closeb
   {
-    $$ = &DateSubExpr{Type: SubdateType, Date: $3, Expr: $5}
+    $$ = &IntervalDateExpr{Syntax: IntervalDateExprSubdate, Date: $3, Interval: $5, Unit: IntervalNone}
   }
 | regular_expressions
 | xml_expressions

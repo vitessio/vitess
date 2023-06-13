@@ -73,20 +73,6 @@ func (l *Limit) GetOrdering() ([]ops.OrderBy, error) {
 	return l.Source.GetOrdering()
 }
 
-func (l *Limit) Description() ops.OpDescription {
-	other := map[string]any{}
-	if l.AST.Offset != nil {
-		other["Offset"] = sqlparser.String(l.AST.Offset)
-	}
-	if l.AST.Rowcount != nil {
-		other["RowCount"] = sqlparser.String(l.AST.Rowcount)
-	}
-	return ops.OpDescription{
-		OperatorType: "Limit",
-		Other:        other,
-	}
-}
-
 func (l *Limit) ShortDescription() string {
 	return sqlparser.String(l.AST)
 }

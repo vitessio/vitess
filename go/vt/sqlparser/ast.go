@@ -16,7 +16,10 @@ limitations under the License.
 
 package sqlparser
 
-import "vitess.io/vitess/go/sqltypes"
+import (
+	"vitess.io/vitess/go/mysql/datetime"
+	"vitess.io/vitess/go/sqltypes"
+)
 
 /*
 This is the Vitess AST. This file should only contain pure struct declarations,
@@ -675,9 +678,6 @@ type (
 		Comments *ParsedComments
 		Name     IdentifierCI
 	}
-
-	// IntervalTypes is an enum to get types of intervals
-	IntervalTypes int8
 
 	// OtherRead represents a DESCRIBE, or EXPLAIN statement.
 	// It should be used only as an indicator. It does not contain
@@ -2156,7 +2156,7 @@ type (
 	// More information available here: https://dev.mysql.com/doc/refman/8.0/en/window-functions-frames.html
 	FramePoint struct {
 		Type FramePointType
-		Unit IntervalTypes
+		Unit IntervalType
 		Expr Expr
 	}
 
@@ -2196,16 +2196,6 @@ type (
 	// FromFirstLastType is an enum to get types for FromFirstLastClause
 	FromFirstLastType int8
 )
-
-// DateAddExprType is an enum to get types of DateAddExpr.
-// This can be one of ADDDATE, DATE_ADD or a '+' operator
-// with an interval left or right.
-type DateAddExprType int8
-
-// DateSubExprType is an enum to get types of DateAddExpr.
-// This can be one of SUBDATE, DATE_SUB or a '-' operator
-// with an interval right.
-type DateSubExprType int8
 
 // *********** Expressions
 type (
@@ -2363,8 +2353,8 @@ type (
 
 	// ExtractFuncExpr represents the function and arguments for EXTRACT(YEAR FROM '2019-07-02') type functions.
 	ExtractFuncExpr struct {
-		IntervalTypes IntervalTypes
-		Expr          Expr
+		IntervalType IntervalType
+		Expr         Expr
 	}
 
 	// CollateExpr represents dynamic collate operator.
@@ -3012,24 +3002,14 @@ type (
 		MatchType  Expr
 	}
 
-	// DateAddExpr represents ADDDATE(), DATE_ADD()
-	// and additions with an interval on the left and right.
-	// For more information, see https://dev.mysql.com/doc/refman/8.0/en/date-and-time-functions.html#function_date-add
-	DateAddExpr struct {
-		Type DateAddExprType
-		Date Expr
-		Unit IntervalTypes
-		Expr Expr
-	}
+	IntervalType = datetime.IntervalType
 
-	// DateSubExpr represents SUBDATE(), DATE_SUB()
-	// and subtractions with an interval on the right.
-	// For more information, see https://dev.mysql.com/doc/refman/8.0/en/date-and-time-functions.html#function_date-sub
-	DateSubExpr struct {
-		Type DateSubExprType
-		Date Expr
-		Unit IntervalTypes
-		Expr Expr
+	// IntervalDateExpr represents ADDDATE(), DATE_ADD()
+	IntervalDateExpr struct {
+		Syntax   IntervalExprSyntax
+		Date     Expr
+		Interval Expr
+		Unit     IntervalType
 	}
 
 	// ArgumentLessWindowExpr stands for the following window_functions: CUME_DIST, DENSE_RANK, PERCENT_RANK, RANK, ROW_NUMBER
@@ -3204,8 +3184,7 @@ func (*RegexpInstrExpr) iExpr()                    {}
 func (*RegexpLikeExpr) iExpr()                     {}
 func (*RegexpReplaceExpr) iExpr()                  {}
 func (*RegexpSubstrExpr) iExpr()                   {}
-func (*DateAddExpr) iExpr()                        {}
-func (*DateSubExpr) iExpr()                        {}
+func (*IntervalDateExpr) iExpr()                   {}
 func (*ArgumentLessWindowExpr) iExpr()             {}
 func (*FirstOrLastValueExpr) iExpr()               {}
 func (*NtileExpr) iExpr()                          {}
@@ -3297,8 +3276,7 @@ func (*RegexpInstrExpr) iCallable()                    {}
 func (*RegexpLikeExpr) iCallable()                     {}
 func (*RegexpReplaceExpr) iCallable()                  {}
 func (*RegexpSubstrExpr) iCallable()                   {}
-func (*DateAddExpr) iCallable()                        {}
-func (*DateSubExpr) iCallable()                        {}
+func (*IntervalDateExpr) iCallable()                   {}
 func (*ArgumentLessWindowExpr) iCallable()             {}
 func (*FirstOrLastValueExpr) iCallable()               {}
 func (*NtileExpr) iCallable()                          {}

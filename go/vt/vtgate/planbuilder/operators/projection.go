@@ -78,6 +78,33 @@ type (
 
 var _ selectExpressions = (*Projection)(nil)
 
+// createSimpleProjection returns a projection where all columns are offsets.
+// used to change the name and order of the columns in the final output
+func createSimpleProjection(ctx *plancontext.PlanningContext, qp *QueryProjection, src ops.Operator) (*Projection, error) {
+	p := &Projection{
+		Source: src,
+	}
+
+	for _, e := range qp.SelectExprs {
+		if _, isStar := e.Col.(*sqlparser.StarExpr); isStar {
+			return nil, errHorizonNotPlanned()
+		}
+		ae, err := e.GetAliasedExpr()
+		if err != nil {
+			return nil, err
+		}
+		newSrc, offset, err := p.Source.AddColumn(ctx, ae, true, false)
+		if err != nil {
+			return nil, err
+		}
+
+		p.Source = newSrc
+		p.Projections = append(p.Projections, Offset{Expr: ae.Expr, Offset: offset})
+		p.Columns = append(p.Columns, ae)
+	}
+	return p, nil
+}
+
 func (p *Projection) addUnexploredExpr(ae *sqlparser.AliasedExpr, e sqlparser.Expr) int {
 	p.Projections = append(p.Projections, UnexploredExpression{E: e})
 	p.Columns = append(p.Columns, ae)
@@ -162,30 +189,6 @@ func (p *Projection) AllOffsets() (cols []int) {
 		cols = append(cols, offset.Offset)
 	}
 	return
-}
-
-func (p *Projection) Description() ops.OpDescription {
-	var columns []string
-	for i, col := range p.Projections {
-		aliasExpr := p.Columns[i]
-		if aliasExpr.Expr == col.GetExpr() {
-			columns = append(columns, sqlparser.String(aliasExpr))
-		} else {
-			columns = append(columns, fmt.Sprintf("%s AS %s", sqlparser.String(col.GetExpr()), aliasExpr.ColumnName()))
-		}
-	}
-
-	other := map[string]any{
-		"OutputColumns": strings.Join(columns, ", "),
-	}
-	if p.TableID != nil {
-		other["Derived"] = true
-		other["Alias"] = p.Alias
-	}
-	return ops.OpDescription{
-		OperatorType: "Projection",
-		Other:        other,
-	}
 }
 
 func (p *Projection) ShortDescription() string {
@@ -293,12 +296,8 @@ func (p *Projection) planOffsets(ctx *plancontext.PlanningContext) error {
 		}
 
 		// first step is to replace the expressions we expect to get from our input with the offsets for these
-		visitor, errCheck := offsetter(ctx,
-			func() ops.Operator { return p.Source },
-			func(o ops.Operator) { p.Source = o },
-		)
-		rewritten := sqlparser.CopyOnRewrite(col.GetExpr(), stopAtAggregations, visitor, nil).(sqlparser.Expr)
-		if err := errCheck(); err != nil {
+		rewritten, err := useOffsets(ctx, col.GetExpr(), p)
+		if err != nil {
 			return err
 		}
 
@@ -327,23 +326,62 @@ func (p *Projection) planOffsets(ctx *plancontext.PlanningContext) error {
 	return nil
 }
 
-func offsetter(ctx *plancontext.PlanningContext, src func() ops.Operator, setSource func(ops.Operator)) (func(cursor *sqlparser.CopyOnWriteCursor), func() error) {
-	var err error
-	return func(cursor *sqlparser.CopyOnWriteCursor) {
-			expr, ok := cursor.Node().(sqlparser.Expr)
-			if !ok || !fetchByOffset(expr) {
-				return
-			}
+func useOffsets(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op ops.Operator) (sqlparser.Expr, error) {
+	in := op.Inputs()[0]
+	columns, err := in.GetColumns()
+	if err != nil {
+		return nil, err
+	}
 
-			newSrc, offset, terr := src().AddColumn(ctx, aeWrap(expr), true, false)
-			if terr != nil {
-				err = terr
-				return
-			}
-			setSource(newSrc)
-			cursor.Replace(sqlparser.NewOffset(offset, expr))
-
-		}, func() error {
-			return err
+	var exprOffset *sqlparser.Offset
+	down := func(node, parent sqlparser.SQLNode) bool {
+		if err != nil {
+			return false
 		}
+		e, ok := node.(sqlparser.Expr)
+		if !ok {
+			return true
+		}
+		offset := slices.IndexFunc(columns, func(expr *sqlparser.AliasedExpr) bool {
+			return ctx.SemTable.EqualsExprWithDeps(expr.Expr, e)
+		})
+		if offset >= 0 {
+			// this expression can be fetched from the input - we can stop here
+			exprOffset = sqlparser.NewOffset(offset, e)
+			return false
+		}
+
+		if fetchByOffset(e) {
+			// this expression has to be fetched from the input, but we didn't find it in the input. let's add it
+			_, addToGroupBy := e.(*sqlparser.ColName)
+			in, offset, err = in.AddColumn(ctx, aeWrap(e), true, addToGroupBy)
+			if err != nil {
+				return false
+			}
+			op.SetInputs([]ops.Operator{in})
+			columns, err = in.GetColumns()
+			if err != nil {
+				return false
+			}
+			exprOffset = sqlparser.NewOffset(offset, e)
+			return false
+		}
+
+		return true
+	}
+
+	// The cursor replace is not available while walking `down`, so `up` is used to do the replacement.
+	up := func(cursor *sqlparser.CopyOnWriteCursor) {
+		if exprOffset != nil {
+			cursor.Replace(exprOffset)
+			exprOffset = nil
+		}
+	}
+
+	rewritten := sqlparser.CopyOnRewrite(expr, down, up, ctx.SemTable.CopyDependenciesOnSQLNodes)
+	if err != nil {
+		return nil, err
+	}
+
+	return rewritten.(sqlparser.Expr), nil
 }

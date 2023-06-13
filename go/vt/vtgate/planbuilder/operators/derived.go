@@ -257,12 +257,6 @@ func (d *Derived) setQP(qp *QueryProjection) {
 	d.QP = qp
 }
 
-func (d *Derived) Description() ops.OpDescription {
-	return ops.OpDescription{
-		OperatorType: "Derived",
-	}
-}
-
 func (d *Derived) ShortDescription() string {
 	return d.Alias
 }
