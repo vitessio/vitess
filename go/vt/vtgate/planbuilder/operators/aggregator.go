@@ -167,6 +167,8 @@ func (a *Aggregator) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser
 
 func (a *Aggregator) GetColumns() ([]*sqlparser.AliasedExpr, error) {
 	// we update the incoming columns, so we know about any new columns that have been added
+	// in the optimization phase, other operators could be pushed down resulting in additional columns for aggregator.
+	// Aggregator should be made aware of these to truncate them in final result.
 	columns, err := a.Source.GetColumns()
 	if err != nil {
 		return nil, err
