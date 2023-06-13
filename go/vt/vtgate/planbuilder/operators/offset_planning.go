@@ -59,23 +59,6 @@ func planOffsets(ctx *plancontext.PlanningContext, root ops.Operator) (ops.Opera
 	return op, nil
 }
 
-func (p *Projection) passThroughAllColumns(ctx *plancontext.PlanningContext) error {
-
-	for i, col := range p.Projections {
-		newSrc, offset, err := p.Source.AddColumn(ctx, aeWrap(col.GetExpr()), true, false)
-		if err != nil {
-			return err
-		}
-		p.Source = newSrc
-		p.Projections[i] = Offset{
-			Expr:   col.GetExpr(),
-			Offset: offset,
-		}
-	}
-
-	return nil
-}
-
 func fetchByOffset(e sqlparser.SQLNode) bool {
 	switch e.(type) {
 	case *sqlparser.ColName, sqlparser.AggrFunc:

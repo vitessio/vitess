@@ -220,7 +220,9 @@ func CreateQPFromSelect(ctx *plancontext.PlanningContext, sel *sqlparser.Select)
 	if err := qp.addOrderBy(ctx, sel.OrderBy); err != nil {
 		return nil, err
 	}
-
+	if !qp.HasAggr && sel.Having != nil {
+		qp.HasAggr = sqlparser.ContainsAggregation(sel.Having.Expr)
+	}
 	qp.calculateDistinct(ctx)
 
 	return qp, nil
@@ -665,31 +667,36 @@ orderBy:
 			return nil, vterrors.VT12001("in scatter query: complex aggregate expression")
 		}
 
-		code := opcode.SupportedAggregates[strings.ToLower(fnc.AggrName())]
-
-		if code == opcode.AggregateCount {
-			if _, isStar := fnc.(*sqlparser.CountStar); isStar {
-				code = opcode.AggregateCountStar
-			}
-		}
-
-		aggrF, _ := aliasedExpr.Expr.(sqlparser.AggrFunc)
-
-		if aggrF.IsDistinct() {
-			switch code {
-			case opcode.AggregateCount:
-				code = opcode.AggregateCountDistinct
-			case opcode.AggregateSum:
-				code = opcode.AggregateSumDistinct
-			}
-		}
-
-		aggr := NewAggr(code, aggrF, aliasedExpr, aliasedExpr.ColumnName())
+		aggr := createAggrFromAggrFunc(fnc, aliasedExpr)
 		aggr.Index = &idxCopy
-		aggr.Distinct = aggrF.IsDistinct()
 		out = append(out, aggr)
 	}
 	return
+}
+
+func createAggrFromAggrFunc(fnc sqlparser.AggrFunc, aliasedExpr *sqlparser.AliasedExpr) Aggr {
+	code := opcode.SupportedAggregates[strings.ToLower(fnc.AggrName())]
+
+	if code == opcode.AggregateCount {
+		if _, isStar := fnc.(*sqlparser.CountStar); isStar {
+			code = opcode.AggregateCountStar
+		}
+	}
+
+	aggrF, _ := aliasedExpr.Expr.(sqlparser.AggrFunc)
+
+	if aggrF.IsDistinct() {
+		switch code {
+		case opcode.AggregateCount:
+			code = opcode.AggregateCountDistinct
+		case opcode.AggregateSum:
+			code = opcode.AggregateSumDistinct
+		}
+	}
+
+	aggr := NewAggr(code, aggrF, aliasedExpr, aliasedExpr.ColumnName())
+	aggr.Distinct = aggrF.IsDistinct()
+	return aggr
 }
 
 // FindSelectExprIndexForExpr returns the index of the given expression in the select expressions, if it is part of it

@@ -113,17 +113,6 @@ func addColumn(ctx *plancontext.PlanningContext, op ColNameColumns, e sqlparser.
 	return offset, nil
 }
 
-func (to *Table) Description() ops.OpDescription {
-	var columns []string
-	for _, col := range to.Columns {
-		columns = append(columns, sqlparser.String(col))
-	}
-	return ops.OpDescription{
-		OperatorType: "Table",
-		Other:        map[string]any{"Columns": columns},
-	}
-}
-
 func (to *Table) ShortDescription() string {
 	return to.VTable.String()
 }

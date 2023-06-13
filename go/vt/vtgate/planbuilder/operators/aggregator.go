@@ -98,7 +98,13 @@ func (a *Aggregator) addColumnWithoutPushing(expr *sqlparser.AliasedExpr, addToG
 		groupBy.ColOffset = offset
 		a.Grouping = append(a.Grouping, groupBy)
 	} else {
-		aggr := NewAggr(opcode.AggregateRandom, nil, expr, expr.As.String())
+		var aggr Aggr
+		switch e := expr.Expr.(type) {
+		case sqlparser.AggrFunc:
+			aggr = createAggrFromAggrFunc(e, expr)
+		default:
+			aggr = NewAggr(opcode.AggregateRandom, nil, expr, expr.As.String())
+		}
 		aggr.ColOffset = offset
 		a.Aggregations = append(a.Aggregations, aggr)
 	}
@@ -159,14 +165,19 @@ func (a *Aggregator) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser
 	return a, offset, nil
 }
 
-func (a *Aggregator) GetColumns() (columns []*sqlparser.AliasedExpr, err error) {
-	return a.Columns, nil
-}
-
-func (a *Aggregator) Description() ops.OpDescription {
-	return ops.OpDescription{
-		OperatorType: "Aggregator",
+func (a *Aggregator) GetColumns() ([]*sqlparser.AliasedExpr, error) {
+	// we update the incoming columns, so we know about any new columns that have been added
+	columns, err := a.Source.GetColumns()
+	if err != nil {
+		return nil, err
 	}
+
+	// if this operator is producing more columns than expected, we want to know about it
+	if len(columns) > len(a.Columns) {
+		a.Columns = append(a.Columns, columns[len(a.Columns):]...)
+	}
+
+	return a.Columns, nil
 }
 
 func (a *Aggregator) ShortDescription() string {
@@ -174,18 +185,18 @@ func (a *Aggregator) ShortDescription() string {
 		return sqlparser.String(from)
 	})
 
+	org := ""
+	if a.Original {
+		org = "ORG "
+	}
+
 	if len(a.Grouping) == 0 {
-		return strings.Join(columnns, ", ")
+		return fmt.Sprintf("%s%s", org, strings.Join(columnns, ", "))
 	}
 
 	var grouping []string
 	for _, gb := range a.Grouping {
 		grouping = append(grouping, sqlparser.String(gb.SimplifiedExpr))
-	}
-
-	org := ""
-	if a.Original {
-		org = "ORG "
 	}
 
 	return fmt.Sprintf("%s%s group by %s", org, strings.Join(columnns, ", "), strings.Join(grouping, ","))
