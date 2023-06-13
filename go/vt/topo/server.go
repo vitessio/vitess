@@ -240,10 +240,7 @@ func OpenServer(implementation, serverAddress, root string) (*Server, error) {
 // Open returns a Server using the command line parameter flags
 // for implementation, address and root. It log.Exits out if an error occurs.
 func Open() *Server {
-	if topoImplementation == "k8s" {
-		log.Warningf("The `k8stopo` is deprecated. We recommend using the `etcd2topo` instead. The `k8stopo` will be removed in Vitess 18.")
-	}
-	if topoGlobalServerAddress == "" && topoImplementation != "k8s" {
+	if topoGlobalServerAddress == "" {
 		log.Exitf("topo_global_server_address must be configured")
 	}
 	if topoGlobalRoot == "" {
