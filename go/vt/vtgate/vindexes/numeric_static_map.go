@@ -21,19 +21,33 @@ import (
 	"context"
 	"encoding/binary"
 	"encoding/json"
-	"errors"
 	"os"
 	"strconv"
 
+	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 )
 
+const (
+	numericStaticMapParamJSON         = "json"
+	numericStaticMapParamJSONPath     = "json_path"
+	numericStaticMapParamFallbackType = "fallback_type"
+)
+
 var (
-	_ SingleColumn = (*NumericStaticMap)(nil)
-	_ Hashing      = (*NumericStaticMap)(nil)
+	_ SingleColumn    = (*NumericStaticMap)(nil)
+	_ Hashing         = (*NumericStaticMap)(nil)
+	_ ParamValidating = (*NumericStaticMap)(nil)
+
+	numericStaticMapParams = []string{
+		numericStaticMapParamJSON,
+		numericStaticMapParamJSONPath,
+		numericStaticMapParamFallbackType,
+	}
 )
 
 // NumericLookupTable stores the mapping of keys.
@@ -42,26 +56,27 @@ type NumericLookupTable map[uint64]uint64
 // NumericStaticMap is similar to vindex Numeric but first attempts a lookup via
 // a JSON file.
 type NumericStaticMap struct {
-	name    string
-	hashVdx Hashing
-	lookup  NumericLookupTable
+	name          string
+	hashVdx       Hashing
+	lookup        NumericLookupTable
+	unknownParams []string
 }
 
 func init() {
-	Register("numeric_static_map", NewNumericStaticMap)
+	Register("numeric_static_map", newNumericStaticMap)
 }
 
-// NewNumericStaticMap creates a NumericStaticMap vindex.
-func NewNumericStaticMap(name string, params map[string]string) (Vindex, error) {
-	jsonStr, jsok := params["json"]
-	jsonPath, jpok := params["json_path"]
+// newNumericStaticMap creates a NumericStaticMap vindex.
+func newNumericStaticMap(name string, params map[string]string) (Vindex, error) {
+	jsonStr, jsok := params[numericStaticMapParamJSON]
+	jsonPath, jpok := params[numericStaticMapParamJSONPath]
 
 	if !jsok && !jpok {
-		return nil, errors.New("NumericStaticMap: Could not find either `json_path` params in vschema")
+		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "NumericStaticMap: Could not find either `json_path` or `json` params in vschema")
 	}
 
 	if jsok && jpok {
-		return nil, errors.New("NumericStaticMap: Found both `json` and `json_path` params in vschema")
+		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "NumericStaticMap: Found both `json` and `json_path` params in vschema")
 	}
 
 	var err error
@@ -83,19 +98,19 @@ func NewNumericStaticMap(name string, params map[string]string) (Vindex, error) 
 
 	var hashVdx Hashing
 
-	if s, ok := params["fallback_type"]; ok {
+	if s, ok := params[numericStaticMapParamFallbackType]; ok {
 		vindex, err := CreateVindex(s, name+"_hash", map[string]string{})
 		if err != nil {
 			return nil, err
 		}
 		hashVdx, _ = vindex.(Hashing) // We know this will not fail
-
 	}
 
 	return &NumericStaticMap{
-		hashVdx: hashVdx,
-		lookup:  lt,
-		name:    name,
+		hashVdx:       hashVdx,
+		lookup:        lt,
+		name:          name,
+		unknownParams: FindUnknownParams(params, numericStaticMapParams),
 	}, nil
 }
 
@@ -164,6 +179,11 @@ func (vind *NumericStaticMap) Hash(id sqltypes.Value) ([]byte, error) {
 	var keybytes [8]byte
 	binary.BigEndian.PutUint64(keybytes[:], num)
 	return keybytes[:], nil
+}
+
+// UnknownParams implements the ParamValidating interface.
+func (vind *NumericStaticMap) UnknownParams() []string {
+	return vind.unknownParams
 }
 
 func loadNumericLookupTable(path string) (NumericLookupTable, error) {

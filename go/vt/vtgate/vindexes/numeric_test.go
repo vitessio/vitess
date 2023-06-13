@@ -21,7 +21,6 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -31,15 +30,58 @@ import (
 var numeric SingleColumn
 
 func init() {
-	vindex, _ := CreateVindex("numeric", "num", nil)
+	vindex, err := CreateVindex("numeric", "num", nil)
+	if err != nil {
+		panic(err)
+	}
 	numeric = vindex.(SingleColumn)
 }
 
-func TestNumericInfo(t *testing.T) {
-	assert.Equal(t, 0, numeric.Cost())
-	assert.Equal(t, "num", numeric.String())
-	assert.True(t, numeric.IsUnique())
-	assert.False(t, numeric.NeedsVCursor())
+func numericCreateVindexTestCase(
+	testName string,
+	vindexParams map[string]string,
+	expectErr error,
+	expectUnknownParams []string,
+) createVindexTestCase {
+	return createVindexTestCase{
+		testName: testName,
+
+		vindexType:   "numeric",
+		vindexName:   "numeric",
+		vindexParams: vindexParams,
+
+		expectCost:          0,
+		expectErr:           expectErr,
+		expectIsUnique:      true,
+		expectNeedsVCursor:  false,
+		expectString:        "numeric",
+		expectUnknownParams: expectUnknownParams,
+	}
+}
+
+func TestNumericCreateVindex(t *testing.T) {
+	cases := []createVindexTestCase{
+		numericCreateVindexTestCase(
+			"no params",
+			nil,
+			nil,
+			nil,
+		),
+		numericCreateVindexTestCase(
+			"empty params",
+			map[string]string{},
+			nil,
+			nil,
+		),
+		numericCreateVindexTestCase(
+			"unknown params",
+			map[string]string{"hello": "world"},
+			nil,
+			[]string{"hello"},
+		),
+	}
+
+	testCreateVindexes(t, cases)
 }
 
 func TestNumericMap(t *testing.T) {
