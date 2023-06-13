@@ -56,20 +56,6 @@ const (
 var instanceReadChan = make(chan bool, backendDBConcurrency)
 var instanceWriteChan = make(chan bool, backendDBConcurrency)
 
-// Constant strings for Group Replication information
-// See https://dev.mysql.com/doc/refman/8.0/en/replication-group-members-table.html for additional information.
-const (
-	// Group member roles
-	GroupReplicationMemberRolePrimary   = "PRIMARY"
-	GroupReplicationMemberRoleSecondary = "SECONDARY"
-	// Group member states
-	GroupReplicationMemberStateOnline      = "ONLINE"
-	GroupReplicationMemberStateRecovering  = "RECOVERING"
-	GroupReplicationMemberStateUnreachable = "UNREACHABLE"
-	GroupReplicationMemberStateOffline     = "OFFLINE"
-	GroupReplicationMemberStateError       = "ERROR"
-)
-
 var forgetInstanceKeys *cache.Cache
 
 var accessDeniedCounter = metrics.NewCounter()
@@ -386,7 +372,6 @@ Cleanup:
 		}
 		// Add replication group ancestry UUID as well. Otherwise, VTOrc thinks there are errant GTIDs in group
 		// members and its replicas, even though they are not.
-		instance.AncestryUUID = fmt.Sprintf("%s,%s", instance.AncestryUUID, instance.ReplicationGroupName)
 		instance.AncestryUUID = strings.Trim(instance.AncestryUUID, ",")
 		if instance.ExecutedGtidSet != "" && instance.primaryExecutedGtidSet != "" {
 			// Compare primary & replica GTID sets, but ignore the sets that present the primary's UUID.
@@ -455,31 +440,6 @@ func getBinlogCoordinatesFromPositionString(position string) (BinlogCoordinates,
 	return *binLogCoordinates, nil
 }
 
-func ReadReplicationGroupPrimary(instance *Instance) (err error) {
-	query := `
-	SELECT
-		replication_group_primary_host,
-		replication_group_primary_port
-	FROM
-		database_instance
-	WHERE
-		replication_group_name = ?
-		AND replication_group_member_role = 'PRIMARY'
-`
-	queryArgs := sqlutils.Args(instance.ReplicationGroupName)
-	err = db.QueryVTOrc(query, queryArgs, func(row sqlutils.RowMap) error {
-		groupPrimaryHost := row.GetString("replication_group_primary_host")
-		groupPrimaryPort := row.GetInt("replication_group_primary_port")
-		groupPrimary, err := newInstanceKey(groupPrimaryHost, groupPrimaryPort)
-		if err != nil {
-			return err
-		}
-		instance.ReplicationGroupPrimaryInstanceKey = *groupPrimary
-		return nil
-	})
-	return err
-}
-
 // ReadInstanceClusterAttributes will return the cluster name for a given instance by looking at its primary
 // and getting it from there.
 // It is a non-recursive function and so-called-recursion is performed upon periodic reading of
@@ -501,14 +461,7 @@ func ReadInstanceClusterAttributes(instance *Instance) (err error) {
 				from database_instance
 				where hostname=? and port=?
 	`
-	// For instances that are part of a replication group, if the host is not the group's primary, we use the
-	// information from the group primary. If it is the group primary, we use the information of its primary
-	// (if it has any). If it is not a group member, we use the information from the host's primary.
-	if instance.IsReplicationGroupSecondary() {
-		primaryOrGroupPrimaryInstanceKey = instance.ReplicationGroupPrimaryInstanceKey
-	} else {
-		primaryOrGroupPrimaryInstanceKey = instance.SourceKey
-	}
+	primaryOrGroupPrimaryInstanceKey = instance.SourceKey
 	args := sqlutils.Args(primaryOrGroupPrimaryInstanceKey.Hostname, primaryOrGroupPrimaryInstanceKey.Port)
 	err = db.QueryVTOrc(query, args, func(m sqlutils.RowMap) error {
 		primaryOrGroupPrimaryReplicationDepth = m.GetUint("replication_depth")
@@ -613,14 +566,6 @@ func readInstanceRow(m sqlutils.RowMap) *Instance {
 
 	instance.applyFlavorName()
 
-	/* Read Group Replication variables below */
-	instance.ReplicationGroupName = m.GetString("replication_group_name")
-	instance.ReplicationGroupIsSinglePrimary = m.GetBool("replication_group_is_single_primary_mode")
-	instance.ReplicationGroupMemberState = m.GetString("replication_group_member_state")
-	instance.ReplicationGroupMemberRole = m.GetString("replication_group_member_role")
-	instance.ReplicationGroupPrimaryInstanceKey = InstanceKey{Hostname: m.GetString("replication_group_primary_host"),
-		Port: m.GetInt("replication_group_primary_port")}
-
 	// problems
 	if !instance.IsLastCheckValid {
 		instance.Problems = append(instance.Problems, "last_check_invalid")
@@ -633,10 +578,6 @@ func readInstanceRow(m sqlutils.RowMap) *Instance {
 	}
 	if instance.GtidErrant != "" {
 		instance.Problems = append(instance.Problems, "errant_gtid")
-	}
-	// Group replication problems
-	if instance.ReplicationGroupName != "" && instance.ReplicationGroupMemberState != GroupReplicationMemberStateOnline {
-		instance.Problems = append(instance.Problems, "group_replication_member_not_online")
 	}
 
 	return instance
@@ -752,7 +693,6 @@ func ReadProblemInstances(keyspace string, shard string) ([](*Instance), error) 
 				or (abs(cast(replication_lag_seconds as signed) - cast(sql_delay as signed)) > ?)
 				or (abs(cast(replica_lag_seconds as signed) - cast(sql_delay as signed)) > ?)
 				or (gtid_errant != '')
-				or (replication_group_name != '' and replication_group_member_state != 'ONLINE')
 			)
 		`
 
@@ -954,12 +894,6 @@ func mkInsertOdkuForInstances(instances []*Instance, instanceWasActuallyFound bo
 		"semi_sync_replica_status",
 		"instance_alias",
 		"last_discovery_latency",
-		"replication_group_name",
-		"replication_group_is_single_primary_mode",
-		"replication_group_member_state",
-		"replication_group_member_role",
-		"replication_group_primary_host",
-		"replication_group_primary_port",
 	}
 
 	var values = make([]string, len(columns))
@@ -1039,12 +973,6 @@ func mkInsertOdkuForInstances(instances []*Instance, instanceWasActuallyFound bo
 		args = append(args, instance.SemiSyncReplicaStatus)
 		args = append(args, instance.InstanceAlias)
 		args = append(args, instance.LastDiscoveryLatency.Nanoseconds())
-		args = append(args, instance.ReplicationGroupName)
-		args = append(args, instance.ReplicationGroupIsSinglePrimary)
-		args = append(args, instance.ReplicationGroupMemberState)
-		args = append(args, instance.ReplicationGroupMemberRole)
-		args = append(args, instance.ReplicationGroupPrimaryInstanceKey.Hostname)
-		args = append(args, instance.ReplicationGroupPrimaryInstanceKey.Port)
 	}
 
 	sql, err := mkInsertOdku("database_instance", columns, values, len(instances), insertIgnore)

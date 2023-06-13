@@ -107,20 +107,6 @@ type Instance struct {
 	LastDiscoveryLatency time.Duration
 
 	seed bool // Means we force this instance to be written to backend, even if it's invalid, empty or forgotten
-
-	/* All things Group Replication below */
-
-	// Group replication global variables
-	ReplicationGroupName            string
-	ReplicationGroupIsSinglePrimary bool
-
-	// Replication group members information. See
-	// https://dev.mysql.com/doc/refman/8.0/en/replication-group-members-table.html for details.
-	ReplicationGroupMemberState string
-	ReplicationGroupMemberRole  string
-
-	// Primary of the replication group
-	ReplicationGroupPrimaryInstanceKey InstanceKey
 }
 
 // NewInstance creates a new, empty instance
@@ -208,21 +194,6 @@ func (instance *Instance) IsNDB() bool {
 	return strings.Contains(instance.Version, "-ndb-")
 }
 
-// IsReplicationGroup checks whether the host thinks it is part of a known replication group. Notice that this might
-// return True even if the group has decided to expel the member represented by this instance, as the instance might not
-// know that under certain circumstances
-func (instance *Instance) IsReplicationGroupMember() bool {
-	return instance.ReplicationGroupName != ""
-}
-
-func (instance *Instance) IsReplicationGroupPrimary() bool {
-	return instance.IsReplicationGroupMember() && instance.ReplicationGroupPrimaryInstanceKey.Equals(&instance.Key)
-}
-
-func (instance *Instance) IsReplicationGroupSecondary() bool {
-	return instance.IsReplicationGroupMember() && !instance.ReplicationGroupPrimaryInstanceKey.Equals(&instance.Key)
-}
-
 // IsBinlogServer checks whether this is any type of a binlog server
 func (instance *Instance) IsBinlogServer() bool {
 	return false
@@ -283,21 +254,7 @@ func (instance *Instance) IsReplica() bool {
 // IsPrimary makes simple heuristics to decide whether this instance is a primary (not replicating from any other server),
 // either via traditional async/semisync replication or group replication
 func (instance *Instance) IsPrimary() bool {
-	// If traditional replication is configured, it is for sure not a primary
-	if instance.IsReplica() {
-		return false
-	}
-	// If traditional replication is not configured, and it is also not part of a replication group, this host is
-	// a primary
-	if !instance.IsReplicationGroupMember() {
-		return true
-	}
-	// If traditional replication is not configured, and this host is part of a group, it is only considered a
-	// primary if it has the role of group Primary. Otherwise it is not a primary.
-	if instance.ReplicationGroupMemberRole == GroupReplicationMemberRolePrimary {
-		return true
-	}
-	return false
+	return !instance.IsReplica()
 }
 
 // ReplicaRunning returns true when this instance's status is of a replicating replica.

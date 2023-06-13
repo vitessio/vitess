@@ -87,12 +87,6 @@ CREATE TABLE database_instance (
 	semi_sync_primary_status TINYint NOT NULL DEFAULT 0,
 	semi_sync_replica_status TINYint NOT NULL DEFAULT 0,
 	semi_sync_primary_clients int NOT NULL DEFAULT 0,
-	replication_group_name VARCHAR(64) NOT NULL DEFAULT '',
-	replication_group_is_single_primary_mode TINYint NOT NULL DEFAULT 1,
-	replication_group_member_state VARCHAR(16) NOT NULL DEFAULT '',
-	replication_group_member_role VARCHAR(16) NOT NULL DEFAULT '',
-	replication_group_primary_host varchar(128) NOT NULL DEFAULT '',
-	replication_group_primary_port smallint NOT NULL DEFAULT 0,
 	PRIMARY KEY (hostname,port)
 )`,
 	`
