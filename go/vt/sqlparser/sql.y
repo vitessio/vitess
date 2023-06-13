@@ -119,6 +119,9 @@ func yySpecialCommentMode(yylex interface{}) bool {
   aliasedTableName *AliasedTableExpr
   TableSpec  *TableSpec
   columnType    ColumnType
+  JSONTableSpec *JSONTableSpec
+  JSONTableColDef *JSONTableColDef
+  JSONTableColOpts JSONTableColOpts
   columnOrder   *ColumnOrder
   triggerOrder  *TriggerOrder
   colKeyOpt     ColumnKeyOption
@@ -434,7 +437,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <expr> expression naked_like group_by
 %type <tableExprs> table_references cte_list from_opt
 %type <with> with_clause with_clause_opt
-%type <tableExpr> table_reference table_function table_factor join_table json_table common_table_expression
+%type <tableExpr> table_reference table_function table_factor join_table common_table_expression
 %type <simpleTableExpr> values_statement subquery_or_values
 %type <subquery> subquery
 %type <joinCondition> join_condition join_condition_opt on_expression_opt
@@ -516,7 +519,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <str> charset underscore_charsets
 %type <str> show_session_or_global
 %type <convertType> convert_type
-%type <columnType> column_type  column_type_options json_table_column_options on_empty
+%type <columnType> column_type  column_type_options
 %type <columnType> int_type decimal_type numeric_type time_type char_type spatial_type
 %type <sqlVal> char_length_opt length_opt column_comment ignore_number_opt comment_keyword_opt
 %type <optVal> column_default on_update
@@ -530,14 +533,14 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <boolVal> auto_increment local_opt optionally_opt
 %type <colKeyOpt> column_key
 %type <strs> enum_values
-%type <columnDefinition> column_definition column_definition_for_create json_table_column_definition
+%type <columnDefinition> column_definition column_definition_for_create
 %type <indexDefinition> index_definition
 %type <constraintDefinition> constraint_definition check_constraint_definition
 %type <str> index_or_key indexes_or_keys index_or_key_opt
 %type <str> from_or_in show_database_opt
 %type <str> name_opt
 %type <str> equal_opt
-%type <TableSpec> table_spec table_column_list json_table_column_list
+%type <TableSpec> table_spec table_column_list
 %type <str> table_option_list table_option table_opt_value row_fmt_opt
 %type <str> partition_options partition_option linear_partition_opt linear_opt partition_num_opt subpartition_opt subpartition_num_opt
 %type <indexInfo> index_info
@@ -596,6 +599,12 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <bytes> any_identifier
 %type <statement> create_spatial_ref_sys
 %type <srsAttr> srs_attribute
+
+%type <tableExpr> json_table
+%type <JSONTableSpec> json_table_column_list
+%type <JSONTableColDef> json_table_column_definition
+%type <JSONTableColOpts> json_table_column_options
+%type <expr> val_on_empty val_on_error
 
 %start any_command
 
@@ -5806,19 +5815,16 @@ natural_join:
   }
 
 json_table:
-  JSON_TABLE openb value_expression ',' STRING COLUMNS openb json_table_column_list closeb closeb AS table_alias
+  JSON_TABLE openb value_expression ',' STRING COLUMNS openb json_table_column_list closeb closeb as_opt table_alias
   {
-    $$ = &JSONTableExpr{Data: $3, Path: string($5), Spec: $8, Alias: $12}
-  }
-| JSON_TABLE openb value_expression ',' STRING COLUMNS openb json_table_column_list closeb closeb table_alias
-  {
-    $$ = &JSONTableExpr{Data: $3, Path: string($5), Spec: $8, Alias: $11}
+    $8.Path = string($5)
+    $$ = &JSONTableExpr{Data: $3, Spec: $8, Alias: $12}
   }
 
 json_table_column_list:
   json_table_column_definition
   {
-    $$ = &TableSpec{}
+    $$ = &JSONTableSpec{}
     $$.AddColumn($1)
   }
 | json_table_column_list ',' json_table_column_definition
@@ -5826,64 +5832,86 @@ json_table_column_list:
     $$.AddColumn($3)
   }
 
-// TODO: implement NESTED
 json_table_column_definition:
-  // TODO: reserved_sql_id FOR ORDINALITY; this is supposed to work like auto_increment
   reserved_sql_id column_type json_table_column_options
   {
-    if err := $2.merge($3); err != nil {
-      yylex.Error(err.Error())
-      return 1
-    }
-    $$ = &ColumnDefinition{Name: $1, Type: $2}
+    $$ = &JSONTableColDef{Name: $1, Type: $2, Opts: $3}
+  }
+| reserved_sql_id FOR ORDINALITY
+  {
+    $$ = &JSONTableColDef{Name: $1, Type: ColumnType{Type: "INTEGER", Unsigned: true, Autoincrement: true}}
+  }
+| NESTED STRING COLUMNS openb json_table_column_list closeb
+  {
+    $5.Path = string($2)
+    $$ = &JSONTableColDef{Spec: $5}
+  }
+| NESTED PATH STRING COLUMNS openb json_table_column_list closeb
+  {
+    $6.Path = string($3)
+    $$ = &JSONTableColDef{Spec: $6}
   }
 
-// TODO: default value for non-existent member is NULL, but use "zero" when it is specified
-// TODO: exists overrides DEFAULT <json_string> ON EMPTY
 json_table_column_options:
-  PATH STRING on_empty on_error
+  PATH STRING
   {
-    $$ = ColumnType{Path: string($2)}
+    $$ = JSONTableColOpts{Path: string($2)}
+  }
+| PATH STRING val_on_empty
+  {
+    $$ = JSONTableColOpts{Path: string($2), ValOnEmpty: $3}
+  }
+| PATH STRING val_on_error
+  {
+    $$ = JSONTableColOpts{Path: string($2), ValOnError: $3}
+  }
+| PATH STRING val_on_empty val_on_error
+  {
+    $$ = JSONTableColOpts{Path: string($2), ValOnEmpty: $3, ValOnError: $4}
+  }
+| PATH STRING val_on_error val_on_empty
+  {
+    $$ = JSONTableColOpts{Path: string($2), ValOnEmpty: $4, ValOnError: $3}
+  }
+| PATH STRING ERROR ON EMPTY
+  {
+    $$ = JSONTableColOpts{Path: string($2), ErrorOnEmpty: true}
+  }
+| PATH STRING ERROR ON ERROR
+  {
+    $$ = JSONTableColOpts{Path: string($2), ErrorOnError: true}
+  }
+| PATH STRING ERROR ON EMPTY ERROR ON ERROR
+  {
+    $$ = JSONTableColOpts{Path: string($2), ErrorOnEmpty: true, ErrorOnError: true}
+  }
+| PATH STRING ERROR ON ERROR ERROR ON EMPTY
+  {
+    $$ = JSONTableColOpts{Path: string($2), ErrorOnEmpty: true, ErrorOnError: true}
   }
 | EXISTS PATH STRING
   {
-    $$ = ColumnType{Path: string($3)}
+    $$ = JSONTableColOpts{Path: string($3), Exists: true}
   }
 
-// TODO: just parse for now
-on_empty:
+val_on_empty:
+  NULL ON EMPTY
   {
-
+    $$ = &NullVal{}
   }
-//  NULL ON EMPTY
-//  {
-//
-//  }
-//| DEFAULT value_expression ON EMPTY
-//  {
-//
-//  }
-//| ERROR ON EMPTY
-//  {
-//
-//  }
-
-// TODO: remove empty case, just there to parse
-on_error:
+| DEFAULT value ON EMPTY
   {
-
+    $$ = $2
   }
-| NULL ON EMPTY
-  {
 
+val_on_error:
+  NULL ON ERROR
+  {
+    $$ = &NullVal{}
   }
-| DEFAULT value_expression ON EMPTY
+| DEFAULT value ON ERROR
   {
-
-  }
-| ERROR ON EMPTY
-  {
-
+    $$ = $2
   }
 
 trigger_name:

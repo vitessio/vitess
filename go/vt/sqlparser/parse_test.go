@@ -7220,9 +7220,8 @@ FROM
 			x varchar(100) path "$.a"
 		)
 	) as tt;`,
-			output: `select * from JSON_TABLE('[{\"a\":1},{\"a\":2}]', "$[*]" COLUMNS(
-	x varchar(100) path "$.a"
-)) as tt`},
+			output: "select * from json_table('[{\\\"a\\\":1},{\\\"a\\\":2}]', \"$[*]\" columns(\n\tx varchar(100) path \"$.a\"\n)) as tt",
+		},
 		{
 			input: `
 SELECT *
@@ -7234,10 +7233,8 @@ FROM
 			y varchar(100) path "$.b"
 		)
 	) as tt;`,
-			output: `select * from JSON_TABLE('[{\"a\":1, \"b\":2},{\"a\":3, \"b\":4}]', "$[*]" COLUMNS(
-	x varchar(100) path "$.a",
-	y varchar(100) path "$.b"
-)) as tt`},
+			output: "select * from json_table('[{\\\"a\\\":1, \\\"b\\\":2},{\\\"a\\\":3, \\\"b\\\":4}]', \"$[*]\" columns(\n\tx varchar(100) path \"$.a\",\n\ty varchar(100) path \"$.b\"\n)) as tt",
+		},
 		{
 			input: `
 SELECT *
@@ -7250,10 +7247,11 @@ FROM
 		)
 	) as t;
 	`,
-			output: `select * from JSON_TABLE(concat('[{},', '{}]'), "$[*]" COLUMNS(
-	x varchar(100) path "$.a",
-	y varchar(100) path "$.b"
-)) as t`},
+			output: "select * from json_table(concat('[{},', '{}]'), \"$[*]\" columns(\n" +
+				"\tx varchar(100) path \"$.a\",\n" +
+				"\ty varchar(100) path \"$.b\"\n" +
+				")) as t",
+		},
 		{
 			input: `
 SELECT *
@@ -7266,10 +7264,11 @@ FROM
 		)
 	) as t;
 	`,
-			output: `select * from JSON_TABLE(123, "$[*]" COLUMNS(
-	x varchar(100) path "$.a",
-	y varchar(100) path "$.b"
-)) as t`},
+			output: "select * from json_table(123, \"$[*]\" columns(\n" +
+				"\tx varchar(100) path \"$.a\",\n" +
+				"\ty varchar(100) path \"$.b\"\n" +
+				")) as t",
+		},
 		{
 			input: `
 SELECT *
@@ -7281,17 +7280,18 @@ FROM
 		)
 	) t1
 JOIN
-	JSON_TABLE(
+	json_table(
 		'[{"a":1},{"a":2}]',
 		"$[*]" COLUMNS(
 			x varchar(100) path "$.a"
 		)
 	) t2;`,
-			output: `select * from JSON_TABLE('[{\"a\":1},{\"a\":2}]', "$[*]" COLUMNS(
-	x varchar(100) path "$.a"
-)) as t1 join JSON_TABLE('[{\"a\":1},{\"a\":2}]', "$[*]" COLUMNS(
-	x varchar(100) path "$.a"
-)) as t2`},
+			output: "select * from json_table('[{\\\"a\\\":1},{\\\"a\\\":2}]', \"$[*]\" columns(\n" +
+				"\tx varchar(100) path \"$.a\"\n" +
+				")) as t1 join json_table('[{\\\"a\\\":1},{\\\"a\\\":2}]', \"$[*]\" columns(\n" +
+				"\tx varchar(100) path \"$.a\"\n" +
+				")) as t2",
+		},
 		{
 			input: `
 SELECT *
@@ -7304,9 +7304,10 @@ FROM
 	) t
 JOIN
 	tt;`,
-			output: `select * from JSON_TABLE('[{\"a\":1},{\"a\":2}]', "$[*]" COLUMNS(
-	x varchar(100) path "$.a"
-)) as t join tt`},
+			output: "select * from json_table('[{\\\"a\\\":1},{\\\"a\\\":2}]', \"$[*]\" columns(\n" +
+				"\tx varchar(100) path \"$.a\"\n" +
+				")) as t join tt",
+		},
 		{
 			input: `
 SELECT *
@@ -7319,9 +7320,10 @@ JOIN
 			x varchar(100) path "$.a"
 		)
 	) tt;`,
-			output: `select * from t join JSON_TABLE('[{\"a\":1},{\"a\":2}]', "$[*]" COLUMNS(
-	x varchar(100) path "$.a"
-)) as tt`},
+			output: "select * from t join json_table('[{\\\"a\\\":1},{\\\"a\\\":2}]', \"$[*]\" columns(\n" +
+				"\tx varchar(100) path \"$.a\"\n" +
+				")) as tt",
+		},
 		{
 			input: `
 SELECT *
@@ -7335,22 +7337,23 @@ FROM
 UNION
 SELECT *
 FROM
-	JSON_TABLE(
+	json_table(
 		'[{"b":1},{"b":2}]',
-		"$[*]" COLUMNS(
+		"$[*]" columns(
 			y varchar(100) path "$.b"
 		)
 	) t2;`,
-			output: `select * from JSON_TABLE('[{\"a\":1},{\"a\":2}]', "$[*]" COLUMNS(
-	x varchar(100) path "$.a"
-)) as t1 union select * from JSON_TABLE('[{\"b\":1},{\"b\":2}]', "$[*]" COLUMNS(
-	y varchar(100) path "$.b"
-)) as t2`},
+			output: "select * from json_table('[{\\\"a\\\":1},{\\\"a\\\":2}]', \"$[*]\" columns(\n" +
+				"\tx varchar(100) path \"$.a\"\n" +
+				")) as t1 union select * from json_table('[{\\\"b\\\":1},{\\\"b\\\":2}]', \"$[*]\" columns(\n" +
+				"\ty varchar(100) path \"$.b\"\n" +
+				")) as t2",
+		},
 		{
 			input: `SELECT * FROM t WHERE i in (SELECT x FROM JSON_TABLE('[{"a":1},{"a":2}]', "$[*]" COLUMNS(x VARCHAR(100) PATH "$.a")) AS tt);`,
-			output: `select * from t where i in (select x from JSON_TABLE('[{\"a\":1},{\"a\":2}]', "$[*]" COLUMNS(
-	x VARCHAR(100) path "$.a"
-)) as tt)`,
+			output: "select * from t where i in (select x from json_table('[{\\\"a\\\":1},{\\\"a\\\":2}]', \"$[*]\" columns(\n" +
+				"\tx VARCHAR(100) path \"$.a\"\n" +
+				")) as tt)",
 		},
 		{
 			input: `
@@ -7368,11 +7371,132 @@ FROM
 			y varchar(100) path "$.b"
 		)
 	) t2;`,
-			output: `select x, y from JSON_TABLE('[{\"a\":1},{\"a\":2}]', "$[*]" COLUMNS(
-	x varchar(100) path "$.a"
-)) as t1, JSON_TABLE('[{\"b\":3},{\"b\":4}]', "$[*]" COLUMNS(
-	y varchar(100) path "$.b"
-)) as t2`,
+			output: "select x, y from json_table('[{\\\"a\\\":1},{\\\"a\\\":2}]', \"$[*]\" columns(\n" +
+				"\tx varchar(100) path \"$.a\"\n" +
+				")) as t1, json_table('[{\\\"b\\\":3},{\\\"b\\\":4}]', \"$[*]\" columns(\n" +
+				"\ty varchar(100) path \"$.b\"\n" +
+				")) as t2",
+		},
+
+		// FOR ORDINALITY TESTS
+		{
+			input: `SELECT * FROM JSON_TABLE('{}', '$' COLUMNS( pk FOR ORDINALITY, c1 INT PATH '$.c1')) as jt;`,
+			output: "select * from json_table('{}', \"$\" columns(\n" +
+				"\tpk INTEGER unsigned auto_increment path \"\",\n" +
+				"\tc1 INT path \"$.c1\"\n" +
+				")) as jt",
+		},
+
+		// EXISTS TESTS
+		{
+			input: `SELECT * FROM JSON_TABLE('{}', '$' COLUMNS( c1 INT EXISTS PATH '$.c1')) as jt;`,
+			output: "select * from json_table('{}', \"$\" columns(\n" +
+				"\tc1 INT path \"$.c1\" exists\n" +
+				")) as jt",
+		},
+
+		// ON EMPTY TESTS
+		{
+			input: `SELECT * FROM JSON_TABLE('{}', '$' COLUMNS( c1 INT PATH '$.c1' NULL ON EMPTY )) as jt;`,
+			output: "select * from json_table('{}', \"$\" columns(\n" +
+				"\tc1 INT path \"$.c1\" null on empty\n" +
+				")) as jt",
+		},
+		{
+			input: `SELECT * FROM JSON_TABLE('{}', '$' COLUMNS( c1 INT PATH '$.c1' DEFAULT 1 ON EMPTY )) as jt;`,
+			output: "select * from json_table('{}', \"$\" columns(\n" +
+				"\tc1 INT path \"$.c1\" 1 on empty\n" +
+				")) as jt",
+		},
+		{
+			input: `SELECT * FROM JSON_TABLE('{}', '$' COLUMNS( c1 INT PATH '$.c1' DEFAULT '1' ON EMPTY )) as jt;`,
+			output: "select * from json_table('{}', \"$\" columns(\n" +
+				"\tc1 INT path \"$.c1\" '1' on empty\n" +
+				")) as jt",
+		},
+		{
+			input: `SELECT * FROM JSON_TABLE('{}', '$' COLUMNS( c1 INT PATH '$.c1' DEFAULT '{"abc": 123}' ON EMPTY )) as jt;`,
+			output: "select * from json_table('{}', \"$\" columns(\n" +
+				"\tc1 INT path \"$.c1\" '{\\\"abc\\\": 123}' on empty\n" +
+				")) as jt",
+		},
+		{
+			input: `SELECT * FROM JSON_TABLE('{}', '$' COLUMNS( c1 INT PATH '$.c1' ERROR ON EMPTY )) as jt;`,
+			output: "select * from json_table('{}', \"$\" columns(\n" +
+				"\tc1 INT path \"$.c1\" error on empty\n" +
+				")) as jt",
+
+		},
+
+		// ON ERROR TESTS
+		{
+			input: `SELECT * FROM JSON_TABLE('{}', '$' COLUMNS( c1 INT PATH '$.c1' NULL ON ERROR )) as jt;`,
+			output: "select * from json_table('{}', \"$\" columns(\n" +
+				"\tc1 INT path \"$.c1\" null on error \n" +
+				")) as jt",
+		},
+		{
+			input: `SELECT * FROM JSON_TABLE('{}', '$' COLUMNS( c1 INT PATH '$.c1' DEFAULT 1 ON ERROR )) as jt;`,
+			output: "select * from json_table('{}', \"$\" columns(\n" +
+				"\tc1 INT path \"$.c1\" 1 on error \n" +
+				")) as jt",
+		},
+		{
+			input: `SELECT * FROM JSON_TABLE('{}', '$' COLUMNS( c1 INT PATH '$.c1' DEFAULT '1' ON ERROR )) as jt;`,
+			output: "select * from json_table('{}', \"$\" columns(\n" +
+				"\tc1 INT path \"$.c1\" '1' on error \n" +
+				")) as jt",
+		},
+		{
+			input: `SELECT * FROM JSON_TABLE('{}', '$' COLUMNS( c1 INT PATH '$.c1' DEFAULT '{"abc": 123}' ON ERROR )) as jt;`,
+			output: "select * from json_table('{}', \"$\" columns(\n" +
+				"\tc1 INT path \"$.c1\" '{\\\"abc\\\": 123}' on error \n" +
+				")) as jt",
+		},
+		{
+			input: `SELECT * FROM JSON_TABLE('{}', '$' COLUMNS( c1 INT PATH '$.c1' ERROR ON ERROR )) as jt;`,
+			output: "select * from json_table('{}', \"$\" columns(\n" +
+				"\tc1 INT path \"$.c1\" error on error\n" +
+				")) as jt",
+		},
+
+		// NESTED PATH TESTS
+		{
+			input: `SELECT * FROM JSON_TABLE('{}', '$' columns(NESTED PATH '$' columns (b INT PATH '$'))) AS jt;`,
+			output: "select * from json_table('{}', \"$\" columns(\n" +
+				"\tnested path \"$\" columns(\n" +
+				"\tb INT path \"$\"\n" +
+				")\n" +
+				")) as jt",
+		},
+		// TODO: MySQL doesn't parse this, but their docs say they do.
+		// https://dev.mysql.com/doc/refman/8.0/en/json-table-functions.html#:~:text=NESTED%20PATH%20(or%20simply%20NESTED%3B%20PATH%20is%20optional)
+		{
+			input: `SELECT * FROM JSON_TABLE('{}', '$' columns(NESTED '$' columns (b INT PATH '$'))) AS jt;`,
+			output: "select * from json_table('{}', \"$\" columns(\n" +
+				"\tnested path \"$\" columns(\n" +
+				"\tb INT path \"$\"\n" +
+				")\n" +
+				")) as jt",
+		},
+		{
+			input: `SELECT * FROM JSON_TABLE('{}', '$' columns(NESTED PATH '$' columns (a INT PATH '$', b INT PATH '$'))) AS jt;`,
+			output: "select * from json_table('{}', \"$\" columns(\n\tnested path \"$\" columns(\n" +
+				"\ta INT path \"$\",\n" +
+				"\tb INT path \"$\"\n" +
+				")\n" +
+				")) as jt",
+		},
+		{
+			input: `SELECT * FROM  JSON_TABLE('{}', 'root_path' COLUMNS( a INT PATH 'a_path', NESTED PATH 'b_path' COLUMNS (NESTED PATH '$' COLUMNS (b1 INT PATH 'b1_path')))) AS jt;`,
+			output: "select * from json_table('{}', \"root_path\" columns(\n" +
+				"\ta INT path \"a_path\",\n" +
+				"\tnested path \"b_path\" columns(\n" +
+				"\tnested path \"$\" columns(\n" +
+				"\tb1 INT path \"b1_path\"\n" +
+				")\n" +
+				")\n" +
+				")) as jt",
 		},
 	}
 
