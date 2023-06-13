@@ -100,17 +100,12 @@ type Phase struct {
 func getPhases() []Phase {
 	return []Phase{{
 		// Adding Ordering Op - Any aggregation that is performed in the VTGate needs the input to be ordered
-		Name: "add ORDER BY to aggregations above the route",
-		act: func(ctx *plancontext.PlanningContext, op ops.Operator) (ops.Operator, error) {
-			return addOrderBysForAggregations(ctx, op)
-		},
-	}, {
 		// Adding Group by - This is needed if the grouping is performed on a join with a join condition then
 		//                   aggregation happening at route needs a group by to ensure only matching rows returns
 		//                   the aggregations otherwise returns no result.
-		Name: "add GROUP BY to aggregations on the RHS of join",
+		Name: "add ORDER BY to aggregations above the route and add GROUP BY to aggregations on the RHS of join",
 		act: func(ctx *plancontext.PlanningContext, op ops.Operator) (ops.Operator, error) {
-			return addGroupByOnRHSOfJoin(op)
+			return addOrderBysAndGroupBysForAggregations(ctx, op)
 		},
 	}}
 }
@@ -252,27 +247,16 @@ func tryPushingDownDistinct(in *Distinct) (ops.Operator, *rewrite.ApplyResult, e
 // this means that we have pushed aggregations and other ops as far down as they'll go
 // addOrderBysForAggregations will find Aggregators that have not been pushed under routes and
 // add the necessary Ordering operators for them
-func addOrderBysForAggregations(ctx *plancontext.PlanningContext, root ops.Operator) (ops.Operator, error) {
+func addOrderBysAndGroupBysForAggregations(ctx *plancontext.PlanningContext, root ops.Operator) (ops.Operator, error) {
 	visitor := func(in ops.Operator, _ semantics.TableSet, isRoot bool) (ops.Operator, *rewrite.ApplyResult, error) {
-		aggr, ok := in.(*Aggregator)
-		if !ok {
+		switch op := in.(type) {
+		case *ApplyJoin:
+			return addLiteralGroupingToRHS(op)
+		case *Aggregator:
+			return addOrderingForAggregation(ctx, op)
+		default:
 			return in, rewrite.SameTree, nil
 		}
-
-		return addOrderingForAggregation(ctx, aggr)
-	}
-
-	return rewrite.TopDown(root, TableID, visitor, stopAtRoute)
-}
-
-func addGroupByOnRHSOfJoin(root ops.Operator) (ops.Operator, error) {
-	visitor := func(in ops.Operator, _ semantics.TableSet, isRoot bool) (ops.Operator, *rewrite.ApplyResult, error) {
-		join, ok := in.(*ApplyJoin)
-		if !ok {
-			return in, rewrite.SameTree, nil
-		}
-
-		return addLiteralGroupingToRHS(join)
 	}
 
 	return rewrite.TopDown(root, TableID, visitor, stopAtRoute)
@@ -738,10 +722,8 @@ func aeWrap(e sqlparser.Expr) *sqlparser.AliasedExpr {
 	return &sqlparser.AliasedExpr{Expr: e}
 }
 
+// makeSureOutputIsCorrect uses the original Horizon to make sure that the output columns line up with what the user asked for
 func makeSureOutputIsCorrect(ctx *plancontext.PlanningContext, oldHorizon ops.Operator, output ops.Operator) (ops.Operator, error) {
-	// next we use the original Horizon to make sure that the output columns line up with what the user asked for
-	// in the future, we'll tidy up the results. for now, we are just failing these queries and going back to the
-	// old horizon planning instead
 	cols, err := output.GetColumns()
 	if err != nil {
 		return nil, err
