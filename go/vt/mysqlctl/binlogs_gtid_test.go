@@ -14,6 +14,10 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+// Package mysqlctl_test is the blackbox tests for package mysqlctl.
+// Tests that need to use fakemysqldaemon must be written as blackbox tests;
+// since fakemysqldaemon imports mysqlctl, importing fakemysqldaemon in
+// a `package mysqlctl` test would cause a circular import.
 package mysqlctl
 
 import (
