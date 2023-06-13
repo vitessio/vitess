@@ -112,12 +112,6 @@ func (d *Distinct) GetColumns() ([]*sqlparser.AliasedExpr, error) {
 	return d.Source.GetColumns()
 }
 
-func (d *Distinct) Description() ops.OpDescription {
-	return ops.OpDescription{
-		OperatorType: "Distinct",
-	}
-}
-
 func (d *Distinct) ShortDescription() string {
 	return ""
 }

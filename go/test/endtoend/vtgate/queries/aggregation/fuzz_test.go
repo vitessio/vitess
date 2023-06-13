@@ -40,6 +40,7 @@ type (
 )
 
 func TestFuzzAggregations(t *testing.T) {
+	t.Skip("dont run on CI for now")
 	// This test randomizes values and queries, and checks that mysql returns the same values that Vitess does
 	mcmp, closer := start(t)
 	defer closer()

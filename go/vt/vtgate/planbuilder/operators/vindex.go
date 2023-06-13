@@ -154,10 +154,6 @@ func (v *Vindex) TablesUsed() []string {
 	return []string{v.Table.Table.Name.String()}
 }
 
-func (v *Vindex) Description() ops.OpDescription {
-	return ops.OpDescription{OperatorType: "Vindex"}
-}
-
 func (v *Vindex) ShortDescription() string {
 	return v.Vindex.String()
 }
