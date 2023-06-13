@@ -22,6 +22,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 
 	"github.com/stretchr/testify/require"
@@ -229,9 +230,9 @@ func randomQuery(schemaTables []tableT, maxAggrs, maxGroupBy int) string {
 	}
 
 	isDerived := rand.Intn(10) < 1 && TestFailingQueries
-	aggregates, _ := createAggregations(tables, maxAggrs, randomCol, isDerived)
+	aggregates, aggrTypes := createAggregations(tables, maxAggrs, randomCol, isDerived)
 	predicates := createPredicates(tables, randomCol, false)
-	grouping, _ := createGroupBy(tables, maxGroupBy, randomCol)
+	grouping, groupTypes := createGroupBy(tables, maxGroupBy, randomCol)
 	sel := "select /*vt+ PLANNER=Gen4 */ "
 
 	// select distinct (fails with group by bigint)
@@ -272,14 +273,16 @@ func randomQuery(schemaTables []tableT, maxAggrs, maxGroupBy int) string {
 		sel += "(" + randomExpr + ") as crandom0, "
 	}
 
-	//var newColumns []column
 	// populate columns of this query to add to schemaTables
-	//for i := range aggregates {
-	//	newColumns = append(newColumns, column{
-	//		name: aggregates[i],
-	//		typ:  aggrTypes[i],
-	//	})
-	//}
+	var newColumns []column
+	for i := range aggregates {
+		newName, newAlias, _ := strings.Cut(aggregates[i], " as ")
+		newColumns = append(newColumns, column{
+			Name:  newName,
+			Alias: newAlias,
+			Typ:   aggrTypes[i],
+		})
+	}
 	sel += strings.Join(aggregates, ", ") + " from "
 
 	var tbls []string
@@ -310,12 +313,14 @@ func randomQuery(schemaTables []tableT, maxAggrs, maxGroupBy int) string {
 
 	if len(grouping) > 0 && (!isDistinct || TestFailingQueries) && (!isJoin || TestFailingQueries) {
 		// populate columns of this query to add to schemaTables
-		//for i := range grouping {
-		//	newColumns = append(newColumns, column{
-		//		name: grouping[i],
-		//		typ:  groupTypes[i],
-		//	})
-		//}
+		for i := range grouping {
+			newName, newAlias, _ := strings.Cut(grouping[i], " as ")
+			newColumns = append(newColumns, column{
+				Name:  newName,
+				Alias: newAlias,
+				Typ:   groupTypes[i],
+			})
+		}
 		sel += " group by cgroup0"
 		for i := 1; i < len(grouping); i++ {
 			sel += fmt.Sprintf(", cgroup%d", i)
@@ -343,10 +348,9 @@ func randomQuery(schemaTables []tableT, maxAggrs, maxGroupBy int) string {
 	}
 
 	// add generated query to schemaTables
-	// TODO: make columns not nil but prevent aggregation on said columns
 	schemaTables = append(schemaTables, tableT{
 		Name: "(" + sel + ")",
-		Cols: nil,
+		Cols: newColumns,
 	})
 
 	// derived tables (partially unsupported)
