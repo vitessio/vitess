@@ -1,4 +1,4 @@
-# Changelog of Vitess v17.0.0-rc1
+# Changelog of Vitess v17.0.0-rc2
 
 ### Announcement 
 #### Governance
@@ -110,6 +110,8 @@
  * VTGate StreamExecute rpc to return session as response [#13131](https://github.com/vitessio/vitess/pull/13131)
  * Remove the `200` indentation limit in the SQL parser [#13158](https://github.com/vitessio/vitess/pull/13158)
  * vindexes: make lookup_unicodeloosemd5_hash non-planable [#13200](https://github.com/vitessio/vitess/pull/13200)
+ * fix: GetField to use existing session for query [#13219](https://github.com/vitessio/vitess/pull/13219)
+ * Fix and Make aggregation planner handle aggregation functions better and handle Distinct in operator [#13277](https://github.com/vitessio/vitess/pull/13277)
 #### TabletManager
  * TableFilter: fix excluded RE listing [#12318](https://github.com/vitessio/vitess/pull/12318)
  * TableGC: fix PURGE race condition [#12505](https://github.com/vitessio/vitess/pull/12505)
@@ -128,10 +130,11 @@
  * Flaky vplayer tests: temporarily disable noblob variant [#13100](https://github.com/vitessio/vitess/pull/13100)
  * VReplication: Do not delete sharded target vschema table entries on Cancel [#13146](https://github.com/vitessio/vitess/pull/13146)
  * VReplication: Handle reference tables in sharded->sharded MoveTables [#13161](https://github.com/vitessio/vitess/pull/13161)
+ * VReplication: Fix VDiff2 DeleteByUUID Query [#13255](https://github.com/vitessio/vitess/pull/13255)
 #### VTAdmin
  * [vtadmin] racy vtexplain [#12635](https://github.com/vitessio/vitess/pull/12635)
  * fix: vtadmin vttablet url protocol [#12836](https://github.com/vitessio/vitess/pull/12836)
- * update vite base to respect absolute path [#13110](https://github.com/vitessio/vitess/pull/13110) 
+ * update vite base to respect absolute path [#13110](https://github.com/vitessio/vitess/pull/13110)
 #### VTorc
  * Fix Vtorc recovery time during `DeadPrimary` [#12870](https://github.com/vitessio/vitess/pull/12870)
  * Add new field to health status [#12942](https://github.com/vitessio/vitess/pull/12942)
@@ -158,7 +161,8 @@
  * Upgrade the Golang version to `go1.20.3` [#12833](https://github.com/vitessio/vitess/pull/12833)
  * Remove misleading message in `build.env` [#12841](https://github.com/vitessio/vitess/pull/12841)
  * Upgrade the Golang version to `go1.20.4` [#13052](https://github.com/vitessio/vitess/pull/13052)
- * Code owners update [#13070](https://github.com/vitessio/vitess/pull/13070) 
+ * Code owners update [#13070](https://github.com/vitessio/vitess/pull/13070)
+ * Upgrade the Golang version to `go1.20.5` [#13266](https://github.com/vitessio/vitess/pull/13266)
 #### Online DDL
  * Fixing `onlineddl_vrepl` flakiness, and adding more tests [#12325](https://github.com/vitessio/vitess/pull/12325)
  * CI: extend timeouts in onlineddl_vrepl due to slow CI runners [#12583](https://github.com/vitessio/vitess/pull/12583)
@@ -168,7 +172,7 @@
  * go/vt/vttablet/tabletserver: temporarily skip flaky consolidation test [#12604](https://github.com/vitessio/vitess/pull/12604)
 #### VTAdmin
  * Remove `nvm use` from vtadmin-up.sh script [#12788](https://github.com/vitessio/vitess/pull/12788)
-### Dependabot 
+### Dependabot
 #### Build/CI
  * Bump golang.org/x/net from 0.5.0 to 0.7.0 [#12390](https://github.com/vitessio/vitess/pull/12390)
  * Update additional Go dependencies [#12401](https://github.com/vitessio/vitess/pull/12401)
@@ -179,7 +183,7 @@
 #### VTAdmin
  * Bump dns-packet from 5.3.1 to 5.4.0 in /web/vtadmin [#12545](https://github.com/vitessio/vitess/pull/12545)
  * Bump webpack from 5.65.0 to 5.76.1 in /web/vtadmin [#12632](https://github.com/vitessio/vitess/pull/12632)
-### Documentation 
+### Documentation
 #### Cluster management
  * fix help text for backup_storage_number_blocks [#12258](https://github.com/vitessio/vitess/pull/12258)
 #### Documentation
@@ -190,7 +194,7 @@
  * Add release notes summary for views [#12422](https://github.com/vitessio/vitess/pull/12422)
  * SQLError: adding some code comments [#12613](https://github.com/vitessio/vitess/pull/12613)
  * update v16 release notes about VTGate Advertised MySQL Version [#12957](https://github.com/vitessio/vitess/pull/12957)
-### Enhancement 
+### Enhancement
 #### ACL
  * remove tablet server's ACL check on the /healthz HTTP api route [#12897](https://github.com/vitessio/vitess/pull/12897)
 #### Backup and Restore
@@ -216,6 +220,7 @@
  * Add tablet type filtering to vtctldclient GetTablets [#12915](https://github.com/vitessio/vitess/pull/12915)
  * topo: Move to allow list for invalid names [#12917](https://github.com/vitessio/vitess/pull/12917)
  * Add vstream metrics to vtgate [#13098](https://github.com/vitessio/vitess/pull/13098)
+ * increase length of reparent_journal columns (#13287) [#13291](https://github.com/vitessio/vitess/pull/13291)
 #### Evalengine
  * evalengine: virtual machine [#12369](https://github.com/vitessio/vitess/pull/12369)
  * Add 128 bit hashing for the evalengine [#12428](https://github.com/vitessio/vitess/pull/12428)
@@ -247,17 +252,18 @@
  * evalengine: `INTERVAL` support [#13073](https://github.com/vitessio/vitess/pull/13073)
  * evalengine: Implement IP related functions [#13082](https://github.com/vitessio/vitess/pull/13082)
  * evalengine: Implement `CONCAT` and `CONCAT_WS` [#13091](https://github.com/vitessio/vitess/pull/13091)
- * evalengine: Add UUID functions [#13097](https://github.com/vitessio/vitess/pull/13097) 
+ * evalengine: Add UUID functions [#13097](https://github.com/vitessio/vitess/pull/13097)
 #### Examples
  * examples schema: demi-idempotency via CREATE TABLE IF NOT EXISTS [#12453](https://github.com/vitessio/vitess/pull/12453)
 #### General
  * Upgrade to `go1.20.1` [#12399](https://github.com/vitessio/vitess/pull/12399)
  * adding log statment to vtbackup [#12569](https://github.com/vitessio/vitess/pull/12569)
  * Automatically add milestone to new Pull Request [#12759](https://github.com/vitessio/vitess/pull/12759)
+ * Remove viper warnings from local examples [#13234](https://github.com/vitessio/vitess/pull/13234)
 #### Observability
  * Add `Uptime` metric [#12712](https://github.com/vitessio/vitess/pull/12712)
  * go/{stats,vt}: publish VReplicationStreamState to prometheus backend [#12772](https://github.com/vitessio/vitess/pull/12772)
- * [vtadmin] log response errors [#12844](https://github.com/vitessio/vitess/pull/12844) 
+ * [vtadmin] log response errors [#12844](https://github.com/vitessio/vitess/pull/12844)
 #### Online DDL
  * schemadiff/OnlineDDL: ExtractConstraintOriginalName understands auto-generated names [#12275](https://github.com/vitessio/vitess/pull/12275)
  * schemadiff: diffing two schemas generates a rich SchemaDiff object [#12551](https://github.com/vitessio/vitess/pull/12551)
@@ -265,7 +271,7 @@
  * Online DDL: configurable cut-over threshold [#12594](https://github.com/vitessio/vitess/pull/12594)
  * gh-ost migrations: improved error log message [#12882](https://github.com/vitessio/vitess/pull/12882)
  * OnlineDDL/vitess: only KILL 'RENAME' statement if not known to be successful [#12989](https://github.com/vitessio/vitess/pull/12989)
- * Online DDL: better reporting of error message when RENAME fails [#13143](https://github.com/vitessio/vitess/pull/13143) 
+ * Online DDL: better reporting of error message when RENAME fails [#13143](https://github.com/vitessio/vitess/pull/13143)
 #### Query Serving
  * VSCopy: Enable to copy from all shards in either a specified keyspace or all keyspaces [#11909](https://github.com/vitessio/vitess/pull/11909)
  * vtgate: metrics for prepared stmts [#12141](https://github.com/vitessio/vitess/pull/12141)
@@ -341,30 +347,30 @@
 #### Cluster management
  * Initialize Tablet with super_read_only mode [#12206](https://github.com/vitessio/vitess/pull/12206) 
 #### Online DDL
- * SchemaDiff: normalize boolean columns to tinyint(1), and, add TableQualifier hint to force adding a db qualifier to the alter diff. [#12133](https://github.com/vitessio/vitess/pull/12133) 
+ * SchemaDiff: normalize boolean columns to tinyint(1), and, add TableQualifier hint to force adding a db qualifier to the alter diff. [#12133](https://github.com/vitessio/vitess/pull/12133)
 #### Query Serving
  * Support Custom SidecarDB Names on VTTablets [#12240](https://github.com/vitessio/vitess/pull/12240)
  * Create Views allowed for same keyspace [#12409](https://github.com/vitessio/vitess/pull/12409)
  * Add Prepare, Execute and Deallocate Statement Support related to prepared statement [#12752](https://github.com/vitessio/vitess/pull/12752)
  * feat: keep track of the full table name of expanded columns [#12976](https://github.com/vitessio/vitess/pull/12976)
- * gen4 planner: push aggregation under filtering [#13169](https://github.com/vitessio/vitess/pull/13169) 
+ * gen4 planner: push aggregation under filtering [#13169](https://github.com/vitessio/vitess/pull/13169)
 #### VReplication
  * Workflow Show: display rows copied  [#12231](https://github.com/vitessio/vitess/pull/12231)
- * VReplication Workflows: support noblob binlog_row_image format for MoveTables and Reshard [#12905](https://github.com/vitessio/vitess/pull/12905) 
+ * VReplication Workflows: support noblob binlog_row_image format for MoveTables and Reshard [#12905](https://github.com/vitessio/vitess/pull/12905)
 #### VTAdmin
  * [VTAdmin] Add GetSrvKeyspaces and GetSrvKeyspace [#12702](https://github.com/vitessio/vitess/pull/12702)
  * Add panic recovery handler to vtadmin http middleware [#12864](https://github.com/vitessio/vitess/pull/12864)
 ### Internal Cleanup 
 #### Build/CI
  * Stop launchable integration for unit tests [#12386](https://github.com/vitessio/vitess/pull/12386)
- * Run launchable only on PRs against `main`  [#12694](https://github.com/vitessio/vitess/pull/12694) 
+ * Run launchable only on PRs against `main`  [#12694](https://github.com/vitessio/vitess/pull/12694)
 #### CLI
  * Cleanup TODOs in vtorc flag parsing code from v15 [#12787](https://github.com/vitessio/vitess/pull/12787)
- * [vtctld] Delete legacy dual purpose duration/int flag parsing [#12860](https://github.com/vitessio/vitess/pull/12860) 
+ * [vtctld] Delete legacy dual purpose duration/int flag parsing [#12860](https://github.com/vitessio/vitess/pull/12860)
 #### Cluster management
  * delete deprecated vtctld healthcheck flags and associated realtime stats code [#12373](https://github.com/vitessio/vitess/pull/12373)
  * [misc] Delete `automation*` protos [#12449](https://github.com/vitessio/vitess/pull/12449)
- * Deprecate `durability_policy` flag in vtctld [#12930](https://github.com/vitessio/vitess/pull/12930) 
+ * Deprecate `durability_policy` flag in vtctld [#12930](https://github.com/vitessio/vitess/pull/12930)
 #### Evalengine
  * evalengine: use 128 bit hashing internally [#12452](https://github.com/vitessio/vitess/pull/12452)
  * evalengine: Refactorings & fixes [#12554](https://github.com/vitessio/vitess/pull/12554)
@@ -372,9 +378,9 @@
  * Move the JSON parser from evalengine [#12757](https://github.com/vitessio/vitess/pull/12757)
  * datetime: Unify parse and print APIs [#12815](https://github.com/vitessio/vitess/pull/12815)
  * evalengine/compiler: Unify compilation [#12913](https://github.com/vitessio/vitess/pull/12913)
- * mysql/evalengine: Unify float parsing [#12979](https://github.com/vitessio/vitess/pull/12979) 
+ * mysql/evalengine: Unify float parsing [#12979](https://github.com/vitessio/vitess/pull/12979)
 #### Examples
- * Remove `are-you-alive` example [#12432](https://github.com/vitessio/vitess/pull/12432) 
+ * Remove `are-you-alive` example [#12432](https://github.com/vitessio/vitess/pull/12432)
 #### General
  * Fix CodeQL identified issues [#12199](https://github.com/vitessio/vitess/pull/12199)
  * Fix typecasting issue for workflow types [#12217](https://github.com/vitessio/vitess/pull/12217)
@@ -400,16 +406,17 @@
  * servenv: Move away from using default HTTP muxer [#12987](https://github.com/vitessio/vitess/pull/12987)
  * tools: Cleanup more unused code [#12991](https://github.com/vitessio/vitess/pull/12991)
  * coverage: Remove sonar coverage setup [#13000](https://github.com/vitessio/vitess/pull/13000)
- * Update GOVERNANCE.md [#13047](https://github.com/vitessio/vitess/pull/13047) 
+ * Update GOVERNANCE.md [#13047](https://github.com/vitessio/vitess/pull/13047)
+ * Deprecate VTGR [#13301](https://github.com/vitessio/vitess/pull/13301)
 #### Governance
- * Added [Twitter] & [Etsy] to ADOPTERS.md [#12508](https://github.com/vitessio/vitess/pull/12508) 
+ * Added [Twitter] & [Etsy] to ADOPTERS.md [#12508](https://github.com/vitessio/vitess/pull/12508)
 #### Observability
- * flags: deprecate vtctld_addr and delete related code [#12580](https://github.com/vitessio/vitess/pull/12580) 
+ * flags: deprecate vtctld_addr and delete related code [#12580](https://github.com/vitessio/vitess/pull/12580)
 #### Online DDL
  * Deprecating VExec, part 2 - *post v16* [#12074](https://github.com/vitessio/vitess/pull/12074)
  * Online DDL: remove legacy "stowaway table" logic [#12288](https://github.com/vitessio/vitess/pull/12288)
  * [onlineddl] Remove some old backwards-compatibilities in online ddl code [#12427](https://github.com/vitessio/vitess/pull/12427)
- * Query executor: preparing for `SHOW VITESS_MIGRATIONS` via `ShowBasic` [#12688](https://github.com/vitessio/vitess/pull/12688) 
+ * Query executor: preparing for `SHOW VITESS_MIGRATIONS` via `ShowBasic` [#12688](https://github.com/vitessio/vitess/pull/12688)
 #### Query Serving
  * [vtgate planner] Routing & Merging refactor [#12197](https://github.com/vitessio/vitess/pull/12197)
  * Use the correct uint32 type for the GTID file position [#12229](https://github.com/vitessio/vitess/pull/12229)
@@ -433,26 +440,27 @@
  * fix misleading primary not serving message [#13022](https://github.com/vitessio/vitess/pull/13022)
  * Remove enable-query-plan-field-caching flag that was deprecated in v15 [#13141](https://github.com/vitessio/vitess/pull/13141)
  * sqlparser: Improve interval parsing [#13165](https://github.com/vitessio/vitess/pull/13165)
- * refactor QueryProjection [#13174](https://github.com/vitessio/vitess/pull/13174) 
+ * refactor QueryProjection [#13174](https://github.com/vitessio/vitess/pull/13174)
 #### TabletManager
  * Table GC: remove spammy log entry [#12625](https://github.com/vitessio/vitess/pull/12625)
  * mysqlctl: Remove unused schema version [#12999](https://github.com/vitessio/vitess/pull/12999)
  * vttablet: Cleanup unused db version string [#13102](https://github.com/vitessio/vitess/pull/13102)
  * mysqlctl: Remove custom callbacks [#13119](https://github.com/vitessio/vitess/pull/13119)
- * mysqlctl: Remove usage of MYSQL_FLAVOR [#13135](https://github.com/vitessio/vitess/pull/13135) 
+ * mysqlctl: Remove usage of MYSQL_FLAVOR [#13135](https://github.com/vitessio/vitess/pull/13135)
+ * k8stopo: Include deprecation warning (#13299) [#13302](https://github.com/vitessio/vitess/pull/13302)
 #### VReplication
  * Use consistent type for vreplication id [#12218](https://github.com/vitessio/vitess/pull/12218)
- * Use consistent type port and replication state [#12248](https://github.com/vitessio/vitess/pull/12248) 
+ * Use consistent type port and replication state [#12248](https://github.com/vitessio/vitess/pull/12248)
 #### VTAdmin
- * [vtadmin-api] standardize cluster ids [#12803](https://github.com/vitessio/vitess/pull/12803) 
+ * [vtadmin-api] standardize cluster ids [#12803](https://github.com/vitessio/vitess/pull/12803)
 #### VTorc
  * Cleanup vtorc ssl package [#12423](https://github.com/vitessio/vitess/pull/12423)
- * vtgr: Remove unused code [#12975](https://github.com/vitessio/vitess/pull/12975) 
+ * vtgr: Remove unused code [#12975](https://github.com/vitessio/vitess/pull/12975)
 #### web UI
  * Add nvm and node to vtadmin-up.sh [#12439](https://github.com/vitessio/vitess/pull/12439)
 ### Performance 
 #### General
- * Use `MarshalVT`/`UnmarshalVT` instead of `proto.Marshal`/`proto.Unmarshal`. [#12525](https://github.com/vitessio/vitess/pull/12525) 
+ * Use `MarshalVT`/`UnmarshalVT` instead of `proto.Marshal`/`proto.Unmarshal`. [#12525](https://github.com/vitessio/vitess/pull/12525)
 #### Online DDL
  * OnlineDDL: optimizing --singleton-context conflict check [#12539](https://github.com/vitessio/vitess/pull/12539)
 ### RFC 
@@ -464,6 +472,7 @@
 #### Query Serving
  * gen4 planner bugfix: issue when merging subqueries [#13025](https://github.com/vitessio/vitess/pull/13025)
  * gen4 planner: allow last_insert_id with arguments [#13026](https://github.com/vitessio/vitess/pull/13026)
+ * fix: ShardedRouting clone to clone slice of reference correctly [#13265](https://github.com/vitessio/vitess/pull/13265)
 ### Release 
 #### Documentation
  * Update the release instructions after v16 code freeze [#12245](https://github.com/vitessio/vitess/pull/12245)
@@ -480,7 +489,10 @@
  * Copy release notes for v16.0.1, v15.0.3, and v14.0.5 [#12768](https://github.com/vitessio/vitess/pull/12768)
  * Copy release notes of v16.0.2 [#13051](https://github.com/vitessio/vitess/pull/13051)
  * Review and cleanup of v17 RC release notes summary [#13209](https://github.com/vitessio/vitess/pull/13209)
- * Code freeze of release-17.0 [#13210](https://github.com/vitessio/vitess/pull/13210) 
+ * Code freeze of release-17.0 [#13210](https://github.com/vitessio/vitess/pull/13210)
+ * Release of v17.0.0-rc1 [#13211](https://github.com/vitessio/vitess/pull/13211)
+ * Back to dev mode [#13249](https://github.com/vitessio/vitess/pull/13249)
+ * Code freeze of release-17.0 for rc2 [#13296](https://github.com/vitessio/vitess/pull/13296)
 #### VTAdmin
  * Add the vtadmin `web` directory to the release packages [#12639](https://github.com/vitessio/vitess/pull/12639)
 ### Testing 
@@ -496,14 +508,14 @@
  * [ci] add generator for templated flag testdata [#13150](https://github.com/vitessio/vitess/pull/13150)
 #### Evalengine
  * evalengine: Try to reduce test flakyness around time [#12819](https://github.com/vitessio/vitess/pull/12819)
- * evalengine: Skip integration tests under race detector [#12948](https://github.com/vitessio/vitess/pull/12948) 
+ * evalengine: Skip integration tests under race detector [#12948](https://github.com/vitessio/vitess/pull/12948)
 #### Examples
- * Examples: Add ENV Var to Local Examples to Skip VTAdmin [#12547](https://github.com/vitessio/vitess/pull/12547) 
+ * Examples: Add ENV Var to Local Examples to Skip VTAdmin [#12547](https://github.com/vitessio/vitess/pull/12547)
 #### General
  * Fix fullstatus test for backward compat [#12685](https://github.com/vitessio/vitess/pull/12685)
- * VDiff: cleanup test log output [#12840](https://github.com/vitessio/vitess/pull/12840) 
+ * VDiff: cleanup test log output [#12840](https://github.com/vitessio/vitess/pull/12840)
 #### Online DDL
- * OnlineDDL endtoend/CI: timestamp deviation toleration [#13046](https://github.com/vitessio/vitess/pull/13046) 
+ * OnlineDDL endtoend/CI: timestamp deviation toleration [#13046](https://github.com/vitessio/vitess/pull/13046)
 #### Query Serving
  * Use atomic.Bool for fakesqldb behavior flags [#12603](https://github.com/vitessio/vitess/pull/12603)
  * go/{mysql,sync2,vt}: rework tabletserver consolidator test, modify consolidator result type [#12609](https://github.com/vitessio/vitess/pull/12609)
@@ -511,14 +523,14 @@
  * fix: deflake TestGetSchemaRPC test [#12977](https://github.com/vitessio/vitess/pull/12977)
  * Fix `TestStartFindMysqlPort` test flakiness [#13019](https://github.com/vitessio/vitess/pull/13019)
  * Fix benchmarks in `plan_test.go` [#13096](https://github.com/vitessio/vitess/pull/13096)
- * tests: stop tests not supported by older versions from running [#13183](https://github.com/vitessio/vitess/pull/13183) 
+ * tests: stop tests not supported by older versions from running [#13183](https://github.com/vitessio/vitess/pull/13183)
 #### VReplication
  * Flakes: Use new healthy shard check in vreplication e2e tests [#12502](https://github.com/vitessio/vitess/pull/12502)
  * Flakes: Handle Non-Determinstic Shard Ordering in VGTID [#12637](https://github.com/vitessio/vitess/pull/12637)
  * Flakes: Handle Non-Deterministic VStream Event Ordering [#12642](https://github.com/vitessio/vitess/pull/12642)
  * vreplication: Run all appropriate tests [#12862](https://github.com/vitessio/vitess/pull/12862)
  * Generated Invisible Primary Keys: add vreplication test cases  [#13004](https://github.com/vitessio/vitess/pull/13004)
- * Flakes: enforce no concurrency/parallelism in vreplication unit test framework [#13104](https://github.com/vitessio/vitess/pull/13104) 
+ * Flakes: enforce no concurrency/parallelism in vreplication unit test framework [#13104](https://github.com/vitessio/vitess/pull/13104)
 #### VTAdmin
  * [vtctldserver] Remove parallelization from tests that mutate shared state [#12257](https://github.com/vitessio/vitess/pull/12257)
 #### VTorc
