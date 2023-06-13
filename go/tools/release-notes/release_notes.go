@@ -502,8 +502,6 @@ func main() {
 	pflag.IntVar(&numberOfThreads, "threads", numberOfThreads, "Define the number of threads used to fetch data from GitHub's API. Lower this number if you hit request limit errors.")
 	pflag.Parse()
 
-	log.Println(numberOfThreads)
-	os.Exit(1)
 	// The -version flag must be of a valid format.
 	rx := regexp.MustCompile(`v([0-9]+)\.([0-9]+)\.([0-9]+)`)
 	// There should be 4 sub-matches, input: "v14.0.0", output: ["v14.0.0", "14", "0", "0"].
