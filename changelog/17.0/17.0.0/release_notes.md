@@ -1,4 +1,4 @@
-# Release of Vitess v17.0.0-rc1
+# Release of Vitess v17.0.0-rc2
 ## Summary
 
 ### Table of Contents
@@ -464,6 +464,7 @@ The `k8stopo` has been deprecated, also see https://github.com/vitessio/vitess/i
 ------------
 The entire changelog for this release can be found [here](https://github.com/vitessio/vitess/blob/main/changelog/17.0/17.0.0/changelog.md).
 
-The release includes 432 commits (excluding merges)
+The release includes 442 commits (excluding merges)
 
 Thanks to all our contributors: @Ayman161803, @GuptaManan100, @L3o-pold, @Phanatic, @WilliamLu99, @adsr, @ajm188, @andylim-duo, @arthurschreiber, @austenLacy, @cuishuang, @dasl-, @dbussink, @deepthi, @dependabot[bot], @ejortegau, @fatih, @frouioui, @github-actions[bot], @harshit-gangal, @hkdsun, @jeremycole, @jhump, @johanstenberg92, @jwangace, @kevinpurwito, @kovyrin, @lixin963, @mattlord, @maxbrunet, @maxenglander, @mdlayher, @moberghammer, @notfelineit, @olyazavr, @pbibra, @pnacht, @rohit-nayak-ps, @rsajwani, @shlomi-noach, @systay, @timvaillancourt, @twthorn, @vbalys, @vinimdocarmo, @vitess-bot[bot], @vmg, @yoheimuta
+
