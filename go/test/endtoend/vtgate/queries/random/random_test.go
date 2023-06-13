@@ -131,6 +131,9 @@ func TestKnownFailures(t *testing.T) {
 	// mismatched results (group by + select grouping + limit)
 	helperTest(t, "select /*vt+ PLANNER=Gen4 */ tbl0.sal, count(*) from emp as tbl0 group by tbl0.sal limit 7")
 
+	// vttablet: rpc error: code = NotFound desc = Unknown column 'cgroup0' in 'field list' (errno 1054) (sqlstate 42S22) (CallerID: userData1)
+	helperTest(t, "select /*vt+ PLANNER=Gen4 */ tbl1.ename as cgroup0, max(tbl0.comm) as caggr0 from emp as tbl0, emp as tbl1 group by cgroup0")
+
 	// vttablet: rpc error: code = InvalidArgument desc = Can't group on 'count(*)' (errno 1056) (sqlstate 42000) (CallerID: userData1)
 	helperTest(t, "select /*vt+ PLANNER=Gen4 */ distinct count(*) from dept as tbl0 group by tbl0.deptno")
 
@@ -218,7 +221,11 @@ func randomQuery(schemaTables []tableT, maxAggrs, maxGroupBy int) string {
 	randomCol := func(tblIdx int) (string, string) {
 		tbl := tables[tblIdx]
 		col := randomEl(tbl.Cols)
-		return fmt.Sprintf("tbl%d.%s", tblIdx, col.Name), col.Typ
+		colAlias := fmt.Sprintf("%s.%s", tbl.Alias, col.Name)
+		if col.Alias != "" {
+			colAlias = col.Alias
+		}
+		return colAlias, col.Typ
 	}
 
 	isDerived := rand.Intn(10) < 1 && TestFailingQueries
@@ -239,7 +246,7 @@ func randomQuery(schemaTables []tableT, maxAggrs, maxGroupBy int) string {
 		sel += strings.Join(grouping, ", ") + ", "
 	}
 
-	// select the ordering columns
+	// generate the order by columns
 	// we do it this way, so we don't have to do only `only_full_group_by` queries
 	noOfOrderBy := 0
 	if len(grouping) > 0 && (!isDistinct || TestFailingQueries) && (!isJoin || TestFailingQueries) {
@@ -250,15 +257,11 @@ func randomQuery(schemaTables []tableT, maxAggrs, maxGroupBy int) string {
 	if noOfOrderBy > 0 {
 		for noOfOrderBy > 0 {
 			noOfOrderBy--
-			if rand.Intn(2) == 0 || len(grouping) == 0 {
-				orderBy = append(orderBy, randomEl(aggregates))
+			if rand.Intn(2) < 1 || len(grouping) == 0 {
+				orderBy = append(orderBy, fmt.Sprintf("caggr%d", rand.Intn(len(aggregates))))
 			} else {
-				orderBy = append(orderBy, randomEl(grouping))
+				orderBy = append(orderBy, fmt.Sprintf("cgroup%d", rand.Intn(len(grouping))))
 			}
-		}
-
-		if rand.Intn(2) < 1 {
-			sel += strings.Join(orderBy, ", ") + ", "
 		}
 	}
 
@@ -266,7 +269,7 @@ func randomQuery(schemaTables []tableT, maxAggrs, maxGroupBy int) string {
 	isRandomExpr := rand.Intn(2) < 1
 	randomExpr := getRandomExpr(tables)
 	if isRandomExpr && (!isDistinct || TestFailingQueries) && (!isJoin || TestFailingQueries) {
-		sel += "(" + randomExpr + "), "
+		sel += "(" + randomExpr + ") as crandom0, "
 	}
 
 	//var newColumns []column
@@ -280,17 +283,18 @@ func randomQuery(schemaTables []tableT, maxAggrs, maxGroupBy int) string {
 	sel += strings.Join(aggregates, ", ") + " from "
 
 	var tbls []string
-	for i, s := range tables {
-		tbls = append(tbls, fmt.Sprintf("%s as tbl%d", s.Name, i))
+	for _, s := range tables {
+		tbls = append(tbls, fmt.Sprintf("%s as %s", s.Name, s.Alias))
 	}
 	sel += strings.Join(tbls, ", ")
 
 	// join
 	if isJoin {
 		tables = append(tables, randomEl(schemaTables))
+		tables[len(tables)-1].Alias = fmt.Sprintf("tbl%d", len(tables)-1)
 		join := createPredicates(tables, randomCol, true)
 
-		sel += " left join " + fmt.Sprintf("%s as tbl%d", tables[len(tables)-1].Name, len(tables)-1)
+		sel += " left join " + fmt.Sprintf("%s as %s", tables[len(tables)-1].Name, tables[len(tables)-1].Alias)
 		if len(join) > 0 {
 			sel += " on " + strings.Join(join, " and ")
 		}
@@ -312,8 +316,10 @@ func randomQuery(schemaTables []tableT, maxAggrs, maxGroupBy int) string {
 		//		typ:  groupTypes[i],
 		//	})
 		//}
-		sel += " group by "
-		sel += strings.Join(grouping, ", ")
+		sel += " group by cgroup0"
+		for i := 1; i < len(grouping); i++ {
+			sel += fmt.Sprintf(", cgroup%d", i)
+		}
 		if isRandomExpr {
 			sel += ", "
 		}
@@ -322,7 +328,7 @@ func randomQuery(schemaTables []tableT, maxAggrs, maxGroupBy int) string {
 		if len(grouping) <= 0 {
 			sel += " group by "
 		}
-		sel += "(" + randomExpr + ")"
+		sel += "crandom0"
 	}
 
 	if noOfOrderBy > 0 {
@@ -363,7 +369,7 @@ func createGroupBy(tables []tableT, maxGB int, randomCol func(tblIdx int) (strin
 			// fmt.Printf("group by tables:\n%v\n tblIdx: %d\n", tables, tblIdx)
 		}
 		col, typ := randomCol(tblIdx)
-		grouping = append(grouping, col)
+		grouping = append(grouping, col+fmt.Sprintf(" as cgroup%d", i))
 		groupTypes = append(groupTypes, typ)
 	}
 	return grouping, groupTypes
@@ -403,7 +409,7 @@ func createAggregations(tables []tableT, maxAggrs int, randomCol func(tblIdx int
 			}
 		}
 		if addAggr {
-			aggregates = append(aggregates, newAggregate)
+			aggregates = append(aggregates, newAggregate+fmt.Sprintf(" as caggr%d", i))
 			if newAggregate == fmt.Sprintf("avg(%s)", e) && typ == "bigint" {
 				aggrTypes = append(aggrTypes, "decimal")
 			} else {
@@ -418,10 +424,12 @@ func createTables(schemaTables []tableT) []tableT {
 	var tables []tableT
 	// add at least one of original emp/dept tables for now because derived tables have nil columns
 	tables = append(tables, schemaTables[rand.Intn(2)])
+	tables[0].Alias = "tbl0"
 
 	noOfTables := rand.Intn(len(schemaTables))
 	for i := 0; i < noOfTables; i++ {
 		tables = append(tables, randomEl(schemaTables))
+		tables[i+1].Alias = fmt.Sprintf("tbl%d", i+1)
 	}
 	return tables
 }

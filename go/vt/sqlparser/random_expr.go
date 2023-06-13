@@ -23,12 +23,14 @@ import (
 
 type (
 	Col struct {
-		Name string
-		Typ  string
+		Name  string
+		Alias string
+		Typ   string
 	}
 	TableT struct {
-		Name string
-		Cols []Col
+		Name  string
+		Alias string
+		Cols  []Col
 	}
 )
 
@@ -252,10 +254,18 @@ func (g *Generator) typeColumn(typ string, typeLiteral func() Expr) Expr {
 		idx := rand.Intn(len(table.Cols))
 		randCol := table.Cols[idx]
 		if randCol.Typ == typ /* better way to check if int type? */ {
+			newName := randCol.Name
+			if randCol.Alias != "" {
+				newName = randCol.Alias
+			}
+			newTableName := table.Name
+			if table.Alias != "" {
+				newTableName = table.Alias
+			}
 			return &ColName{
 				Metadata:  nil,
-				Name:      NewIdentifierCI(randCol.Name),
-				Qualifier: TableName{Name: NewIdentifierCS(fmt.Sprintf("tbl%d", tblIdx))},
+				Name:      NewIdentifierCI(newName),
+				Qualifier: TableName{Name: NewIdentifierCS(newTableName)},
 			}
 		} else {
 			// delete randCol from table.columns
