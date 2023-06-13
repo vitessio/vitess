@@ -179,6 +179,8 @@ var (
 	// catch the initial load stats.
 	vschemaCounters = stats.NewCountersWithSingleLabel("VtgateVSchemaCounts", "Vtgate vschema counts", "changes")
 
+	vschemaVindexUnknownParams = stats.NewGauge("VSchemaVindexUnknownParams", "Number of params unrecognized by VSchema Vindexes")
+
 	// Error counters should be global so they can be set from anywhere
 	errorCounts = stats.NewCountersWithMultiLabels("VtgateApiErrorCounts", "Vtgate API error counts per error type", []string{"Operation", "Keyspace", "DbType", "Code"})
 
