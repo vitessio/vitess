@@ -2,9 +2,10 @@ package sqlparser
 
 import (
 	"fmt"
-	"golang.org/x/exp/maps"
 	"testing"
 	"time"
+
+	"golang.org/x/exp/maps"
 )
 
 func TestRandomExprWithTables(t *testing.T) {
