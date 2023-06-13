@@ -21,7 +21,6 @@ import (
 
 	"vitess.io/vitess/go/slices2"
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
@@ -33,7 +32,7 @@ type Phase struct {
 	Name string
 	// preOptimizeAction is the action to be taken before calling plan optimization operation.
 	preOptimizeAction func(ctx *plancontext.PlanningContext, op ops.Operator) (ops.Operator, error)
-	// preOptimizeAction is the action to be taken before calling plan optimization operation.
+	// postOptimizeAction is the action to be taken after calling plan optimization operation.
 	postOptimizeAction func(op ops.Operator) (ops.Operator, error)
 }
 
@@ -44,7 +43,7 @@ func getPhases() []Phase {
 		// Initial optimization
 		Name: "initial horizon planning optimization phase",
 	}, {
-		Name: "add columns if needed by filter",
+		Name: "add filter columns to projection or aggregation",
 		preOptimizeAction: func(ctx *plancontext.PlanningContext, op ops.Operator) (ops.Operator, error) {
 			return addColumnsToFilter(ctx, op)
 		},
@@ -62,6 +61,8 @@ func getPhases() []Phase {
 	}}
 }
 
+// addColumnsToFilter adds columns from the filter to projection or aggregation operator if the returned columns does not contain it.
+// This happens only when the filter expression can be retrieved as an offset from the underlying mysql.
 func addColumnsToFilter(ctx *plancontext.PlanningContext, root ops.Operator) (ops.Operator, error) {
 	visitor := func(in ops.Operator, _ semantics.TableSet, isRoot bool) (ops.Operator, *rewrite.ApplyResult, error) {
 		filter, ok := in.(*Filter)
@@ -71,7 +72,7 @@ func addColumnsToFilter(ctx *plancontext.PlanningContext, root ops.Operator) (op
 
 		columns, err := filter.GetColumns()
 		if err != nil {
-			return nil, nil, vterrors.Wrap(err, "while planning filter")
+			return nil, nil, err
 		}
 		proj, areOnTopOfProj := filter.Source.(selectExpressions)
 		if !areOnTopOfProj {
@@ -90,23 +91,29 @@ func addColumnsToFilter(ctx *plancontext.PlanningContext, root ops.Operator) (op
 				})
 
 				if offset >= 0 {
-					// this expression can be fetched from the input - we can stop here
+					// This is already part of the input. No additional column pushing needed here.
 					return false
 				}
 
+				// Only if the expression can be retrieved from mysql without any evaluation at vtgate.
+				// This will be added to filter's input operator.
 				if fetchByOffset(e) {
-					// this expression has to be fetched from the input, but we didn't find it in the input. let's add it
+					// fetchByOffset return true only if expression is `Column Name` or `Aggregation Function`
+					// if column name then it will be added as a grouping column otherwise as an aggregation
+					// This matters only when the filter's input operator is aggregator.
 					_, addToGroupBy := e.(*sqlparser.ColName)
 					proj.addColumnWithoutPushing(aeWrap(e), addToGroupBy)
 					addedColumns = true
 					columns, err = proj.GetColumns()
-					if err != nil {
-						panic("this should not happen")
-					}
 					return false
 				}
 				return true
 			}, nil)
+		}
+		// If error happens inside the rewritter.
+		// return from here.
+		if err != nil {
+			return nil, nil, err
 		}
 		if addedColumns {
 			return in, rewrite.NewTree("added columns because filter needs it", in), nil
