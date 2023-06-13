@@ -153,7 +153,7 @@ func (rs *rowStreamer) buildPlan() error {
 		Name: st.Name,
 	}
 
-	ti.Fields, err = getFields(rs.ctx, rs.cp, st.Name, rs.vschema.keyspace, st.Fields)
+	ti.Fields, err = getFields(rs.ctx, rs.cp, st.Name, rs.cp.DBName(), st.Fields)
 	if err != nil {
 		return err
 	}
