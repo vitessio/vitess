@@ -90,23 +90,26 @@ func tryHorizonPlanning(ctx *plancontext.PlanningContext, root ops.Operator) (ou
 	return
 }
 
+// Phase defines the different planning phases to go through to produce an optimized plan for the input query.
 type Phase struct {
 	Name string
-	act  func(ctx *plancontext.PlanningContext, op ops.Operator) (ops.Operator, error)
+	// preOptimizeAction is the action to be taken before calling plan optimization operation.
+	preOptimizeAction func(ctx *plancontext.PlanningContext, op ops.Operator) (ops.Operator, error)
 }
 
 // getPhases returns the phases the planner will go through.
 // It's used to control so rewriters collaborate correctly
 func getPhases() []Phase {
 	return []Phase{{
+		// Initial optimization
+		Name: "initial horizon planning optimization phase",
+	}, {
 		// Adding Ordering Op - Any aggregation that is performed in the VTGate needs the input to be ordered
 		// Adding Group by - This is needed if the grouping is performed on a join with a join condition then
 		//                   aggregation happening at route needs a group by to ensure only matching rows returns
 		//                   the aggregations otherwise returns no result.
-		Name: "add ORDER BY to aggregations above the route and add GROUP BY to aggregations on the RHS of join",
-		act: func(ctx *plancontext.PlanningContext, op ops.Operator) (ops.Operator, error) {
-			return addOrderBysAndGroupBysForAggregations(ctx, op)
-		},
+		Name:              "add ORDER BY to aggregations above the route and add GROUP BY to aggregations on the RHS of join",
+		preOptimizeAction: addOrderBysAndGroupBysForAggregations,
 	}}
 }
 
@@ -118,27 +121,18 @@ func planHorizons(ctx *plancontext.PlanningContext, root ops.Operator) (op ops.O
 	phases := getPhases()
 	op = root
 
-	for {
+	for _, phase := range phases {
+		if phase.preOptimizeAction != nil {
+			op, err = phase.preOptimizeAction(ctx, op)
+			if err != nil {
+				return nil, err
+			}
+		}
 		op, err = optimizeHorizonPlanning(ctx, op)
 		if err != nil {
 			return nil, err
 		}
-		if len(phases) == 0 {
-			break
-		}
-		p := phases[0]
-		phases = phases[1:]
-		op, err = p.act(ctx, op)
-		if err != nil {
-			return nil, err
-		}
 	}
-
-	op, err = optimizeHorizonPlanning(ctx, op)
-	if err != nil {
-		return nil, err
-	}
-
 	return op, nil
 }
 
