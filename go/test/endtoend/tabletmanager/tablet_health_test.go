@@ -27,7 +27,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"k8s.io/utils/strings/slices"
+
+	"golang.org/x/exp/slices"
 
 	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/mysql"

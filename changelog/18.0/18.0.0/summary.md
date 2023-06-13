@@ -7,6 +7,7 @@
   - **[New command line flags and behavior](#new-flag)**
     - [VTOrc flag `--allow-emergency-reparent`](#new-flag-toggle-ers)
   - **[Deprecations and Deletions](#deprecations-and-deletions)**
+    - [Deleted `k8stopo`](#deleted-k8stopo)
 
 
 ## <a id="major-changes"/>Major Changes
@@ -22,3 +23,7 @@ The users that want VTOrc to fix the replication issues, but don't want it to ru
 By default, VTOrc will be able to run `EmergencyReparentShard`. The users must specify the flag to `false` to change the behaviour.
 
 ### <a id="deprecations-and-deletions"/>Deprecations and Deletions
+
+#### <a id="deleted-k8stopo"/>Deleted `k8stopo`
+
+The `k8stopo` has been deprecated in Vitess 17, also see https://github.com/vitessio/vitess/issues/13298. With Vitess 18 the `k8stopo` has been removed.
