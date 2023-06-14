@@ -228,7 +228,7 @@ func (fmd *FakeMysqlDaemon) RunMysqlUpgrade(ctx context.Context) error {
 }
 
 // ApplyBinlogFile is part of the MysqlDaemon interface
-func (fmd *FakeMysqlDaemon) ApplyBinlogFile(ctx context.Context, binlogFile string, restorePos mysql.Position) error {
+func (fmd *FakeMysqlDaemon) ApplyBinlogFile(ctx context.Context, binlogFile string, restorePos mysql.Position, restoreToDateTime time.Time) error {
 	return nil
 }
 

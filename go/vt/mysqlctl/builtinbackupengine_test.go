@@ -401,6 +401,7 @@ func TestExecuteRestoreWithTimedOutContext(t *testing.T) {
 		Shard:               "-",
 		StartTime:           time.Now(),
 		RestoreToPos:        mysql.Position{},
+		RestoreToTimestamp:  time.Time{},
 		DryRun:              false,
 		Stats:               fakeStats,
 	}

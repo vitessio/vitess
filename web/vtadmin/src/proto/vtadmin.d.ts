@@ -13022,6 +13022,9 @@ export namespace mysqlctl {
 
         /** ApplyBinlogFileRequest binlog_restore_position */
         binlog_restore_position?: (string|null);
+
+        /** ApplyBinlogFileRequest binlog_restore_datetime */
+        binlog_restore_datetime?: (vttime.ITime|null);
     }
 
     /** Represents an ApplyBinlogFileRequest. */
@@ -13038,6 +13041,9 @@ export namespace mysqlctl {
 
         /** ApplyBinlogFileRequest binlog_restore_position. */
         public binlog_restore_position: string;
+
+        /** ApplyBinlogFileRequest binlog_restore_datetime. */
+        public binlog_restore_datetime?: (vttime.ITime|null);
 
         /**
          * Creates a new ApplyBinlogFileRequest instance using the specified properties.
@@ -25816,6 +25822,9 @@ export namespace tabletmanagerdata {
 
         /** RestoreFromBackupRequest dry_run */
         dry_run?: (boolean|null);
+
+        /** RestoreFromBackupRequest restore_to_timestamp */
+        restore_to_timestamp?: (vttime.ITime|null);
     }
 
     /** Represents a RestoreFromBackupRequest. */
@@ -25835,6 +25844,9 @@ export namespace tabletmanagerdata {
 
         /** RestoreFromBackupRequest dry_run. */
         public dry_run: boolean;
+
+        /** RestoreFromBackupRequest restore_to_timestamp. */
+        public restore_to_timestamp?: (vttime.ITime|null);
 
         /**
          * Creates a new RestoreFromBackupRequest instance using the specified properties.
@@ -53752,6 +53764,9 @@ export namespace vtctldata {
 
         /** RestoreFromBackupRequest dry_run */
         dry_run?: (boolean|null);
+
+        /** RestoreFromBackupRequest restore_to_timestamp */
+        restore_to_timestamp?: (vttime.ITime|null);
     }
 
     /** Represents a RestoreFromBackupRequest. */
@@ -53774,6 +53789,9 @@ export namespace vtctldata {
 
         /** RestoreFromBackupRequest dry_run. */
         public dry_run: boolean;
+
+        /** RestoreFromBackupRequest restore_to_timestamp. */
+        public restore_to_timestamp?: (vttime.ITime|null);
 
         /**
          * Creates a new RestoreFromBackupRequest instance using the specified properties.

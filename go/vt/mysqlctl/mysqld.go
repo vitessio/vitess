@@ -44,6 +44,7 @@ import (
 
 	"vitess.io/vitess/config"
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/hook"
@@ -1170,7 +1171,7 @@ func (mysqld *Mysqld) GetVersionComment(ctx context.Context) string {
 
 // ApplyBinlogFile extracts a binary log file and applies it to MySQL. It is the equivalent of:
 // $ mysqlbinlog --include-gtids binlog.file | mysql
-func (mysqld *Mysqld) ApplyBinlogFile(ctx context.Context, binlogFile string, restorePos mysql.Position) error {
+func (mysqld *Mysqld) ApplyBinlogFile(ctx context.Context, binlogFile string, restorePos mysql.Position, restoreToTimestamp time.Time) error {
 	if socketFile != "" {
 		log.Infof("executing Mysqld.ApplyBinlogFile() remotely via mysqlctld server: %v", socketFile)
 		client, err := mysqlctlclient.New("unix", socketFile)
@@ -1178,7 +1179,7 @@ func (mysqld *Mysqld) ApplyBinlogFile(ctx context.Context, binlogFile string, re
 			return fmt.Errorf("can't dial mysqlctld: %v", err)
 		}
 		defer client.Close()
-		return client.ApplyBinlogFile(ctx, binlogFile, mysql.EncodePosition(restorePos))
+		return client.ApplyBinlogFile(ctx, binlogFile, mysql.EncodePosition(restorePos), restoreToTimestamp)
 	}
 	var pipe io.ReadCloser
 	var mysqlbinlogCmd *exec.Cmd
@@ -1202,6 +1203,12 @@ func (mysqld *Mysqld) ApplyBinlogFile(ctx context.Context, binlogFile string, re
 			args = append(args,
 				"--include-gtids",
 				gtids,
+			)
+		}
+		if !restoreToTimestamp.IsZero() {
+			args = append(args,
+				"--stop-datetime",
+				restoreToTimestamp.Format(sqltypes.TimestampFormat),
 			)
 		}
 

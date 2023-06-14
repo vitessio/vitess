@@ -267,6 +267,16 @@ func (m *ApplyBinlogFileRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if m.BinlogRestoreDatetime != nil {
+		size, err := m.BinlogRestoreDatetime.MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
+		}
+		i -= size
+		i = encodeVarint(dAtA, i, uint64(size))
+		i--
+		dAtA[i] = 0x1a
+	}
 	if len(m.BinlogRestorePosition) > 0 {
 		i -= len(m.BinlogRestorePosition)
 		copy(dAtA[i:], m.BinlogRestorePosition)
@@ -743,6 +753,10 @@ func (m *ApplyBinlogFileRequest) SizeVT() (n int) {
 	}
 	l = len(m.BinlogRestorePosition)
 	if l > 0 {
+		n += 1 + l + sov(uint64(l))
+	}
+	if m.BinlogRestoreDatetime != nil {
+		l = m.BinlogRestoreDatetime.SizeVT()
 		n += 1 + l + sov(uint64(l))
 	}
 	n += len(m.unknownFields)
@@ -1338,6 +1352,42 @@ func (m *ApplyBinlogFileRequest) UnmarshalVT(dAtA []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			m.BinlogRestorePosition = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 3:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field BinlogRestoreDatetime", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLength
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.BinlogRestoreDatetime == nil {
+				m.BinlogRestoreDatetime = &vttime.Time{}
+			}
+			if err := m.BinlogRestoreDatetime.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex

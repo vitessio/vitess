@@ -26,6 +26,7 @@ import (
 	"google.golang.org/grpc"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	mysqlctlpb "vitess.io/vitess/go/vt/proto/mysqlctl"
 )
@@ -58,7 +59,7 @@ func (s *server) ApplyBinlogFile(ctx context.Context, request *mysqlctlpb.ApplyB
 	if err != nil {
 		return nil, err
 	}
-	return &mysqlctlpb.ApplyBinlogFileResponse{}, s.mysqld.ApplyBinlogFile(ctx, request.BinlogFileName, pos)
+	return &mysqlctlpb.ApplyBinlogFileResponse{}, s.mysqld.ApplyBinlogFile(ctx, request.BinlogFileName, pos, logutil.ProtoToTime(request.BinlogRestoreDatetime))
 }
 
 // ReinitConfig implements the server side of the MysqlctlClient interface.
