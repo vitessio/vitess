@@ -3810,6 +3810,10 @@ name_opt:
   {
     $$ = string($1)
   }
+| non_reserved_keyword
+  {
+    $$ = string($1)
+  }
 
 index_column_list:
   index_column
@@ -4365,6 +4369,10 @@ alter_table_statement_part:
     $$ = &DDL{Action: AlterStr, ColumnAction: DropStr, Column: NewColIdent(string($3))}
   }
 | RENAME COLUMN ID to_or_as ID
+  {
+    $$ = &DDL{Action: AlterStr, ColumnAction: RenameStr, Column: NewColIdent(string($3)), ToColumn: NewColIdent(string($5))}
+  }
+| RENAME COLUMN non_reserved_keyword to_or_as ID
   {
     $$ = &DDL{Action: AlterStr, ColumnAction: RenameStr, Column: NewColIdent(string($3)), ToColumn: NewColIdent(string($5))}
   }
