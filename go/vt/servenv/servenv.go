@@ -425,7 +425,6 @@ func init() {
 		"vtctld",
 		"vtgate",
 		"vtgateclienttest",
-		"vtgr",
 		"vtorc",
 		"vttablet",
 		"vttestserver",
@@ -439,7 +438,6 @@ func init() {
 		"vtcombo",
 		"vtctld",
 		"vtgate",
-		"vtgr",
 		"vttablet",
 		"vtorc",
 	} {
@@ -461,7 +459,6 @@ func RegisterFlagsForTopoBinaries(registerFlags func(fs *pflag.FlagSet)) {
 		"vtctl",
 		"vtctld",
 		"vtgate",
-		"vtgr",
 		"vttablet",
 		"vttestserver",
 		"zk",
