@@ -167,6 +167,8 @@ func (a *Aggregator) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser
 
 func (a *Aggregator) GetColumns() ([]*sqlparser.AliasedExpr, error) {
 	// we update the incoming columns, so we know about any new columns that have been added
+	// in the optimization phase, other operators could be pushed down resulting in additional columns for aggregator.
+	// Aggregator should be made aware of these to truncate them in final result.
 	columns, err := a.Source.GetColumns()
 	if err != nil {
 		return nil, err
@@ -207,6 +209,10 @@ func (a *Aggregator) GetOrdering() ([]ops.OrderBy, error) {
 }
 
 func (a *Aggregator) planOffsets(ctx *plancontext.PlanningContext) error {
+	if !a.Pushed {
+		return a.planOffsetsNotPushed(ctx)
+	}
+
 	addColumn := func(aliasedExpr *sqlparser.AliasedExpr, addToGroupBy bool) (int, error) {
 		newSrc, offset, err := a.Source.AddColumn(ctx, aliasedExpr, true, addToGroupBy)
 		if err != nil {
@@ -218,13 +224,6 @@ func (a *Aggregator) planOffsets(ctx *plancontext.PlanningContext) error {
 			a.Columns = append(a.Columns, aliasedExpr)
 		}
 		return offset, nil
-	}
-
-	if !a.Pushed {
-		err := a.planOffsetsNotPushed(ctx)
-		if err != nil {
-			return err
-		}
 	}
 
 	for idx, gb := range a.Grouping {

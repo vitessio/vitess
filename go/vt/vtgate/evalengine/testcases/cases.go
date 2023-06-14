@@ -1878,6 +1878,10 @@ func DateMath(yield Query) {
 		`DATE_ADD(TIMESTAMP'1992-12-31 23:59:59.000002', INTERVAL '1.999999' SECOND_MICROSECOND)`,
 		`DATE_ADD(DATE'2024-03-30', INTERVAL 1 MONTH)`,
 		`DATE_ADD(DATE'2024-03-31', INTERVAL 1 MONTH)`,
+		`TIMESTAMPADD(MINUTE, 1, '2003-01-02')`,
+		`TIMESTAMPADD(WEEK,1,'2003-01-02')`,
+		`TIMESTAMPADD(MONTH, 1, DATE '2024-03-30')`,
+		`TIMESTAMPADD(MONTH, 1, DATE '2024-03-31')`,
 	}
 
 	for _, q := range mysqlDocSamples {
@@ -1889,6 +1893,7 @@ func DateMath(yield Query) {
 			for _, v := range intervalValues {
 				yield(fmt.Sprintf("DATE_ADD(%s, INTERVAL %s %s)", d, v, i), nil)
 				yield(fmt.Sprintf("DATE_SUB(%s, INTERVAL %s %s)", d, v, i), nil)
+				yield(fmt.Sprintf("TIMESTAMPADD(%v, %s, %s)", i, v, d), nil)
 			}
 		}
 	}

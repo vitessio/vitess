@@ -491,8 +491,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfTableSpec(in)
 	case *TablespaceOperation:
 		return CloneRefOfTablespaceOperation(in)
-	case *TimestampFuncExpr:
-		return CloneRefOfTimestampFuncExpr(in)
+	case *TimestampDiffExpr:
+		return CloneRefOfTimestampDiffExpr(in)
 	case *TrimFuncExpr:
 		return CloneRefOfTrimFuncExpr(in)
 	case *TruncateTable:
@@ -3060,8 +3060,8 @@ func CloneRefOfTablespaceOperation(n *TablespaceOperation) *TablespaceOperation 
 	return &out
 }
 
-// CloneRefOfTimestampFuncExpr creates a deep clone of the input.
-func CloneRefOfTimestampFuncExpr(n *TimestampFuncExpr) *TimestampFuncExpr {
+// CloneRefOfTimestampDiffExpr creates a deep clone of the input.
+func CloneRefOfTimestampDiffExpr(n *TimestampDiffExpr) *TimestampDiffExpr {
 	if n == nil {
 		return nil
 	}
@@ -3653,8 +3653,8 @@ func CloneCallable(in Callable) Callable {
 		return CloneRefOfSubstrExpr(in)
 	case *Sum:
 		return CloneRefOfSum(in)
-	case *TimestampFuncExpr:
-		return CloneRefOfTimestampFuncExpr(in)
+	case *TimestampDiffExpr:
+		return CloneRefOfTimestampDiffExpr(in)
 	case *TrimFuncExpr:
 		return CloneRefOfTrimFuncExpr(in)
 	case *UpdateXMLExpr:
@@ -3977,8 +3977,8 @@ func CloneExpr(in Expr) Expr {
 		return CloneRefOfSubstrExpr(in)
 	case *Sum:
 		return CloneRefOfSum(in)
-	case *TimestampFuncExpr:
-		return CloneRefOfTimestampFuncExpr(in)
+	case *TimestampDiffExpr:
+		return CloneRefOfTimestampDiffExpr(in)
 	case *TrimFuncExpr:
 		return CloneRefOfTrimFuncExpr(in)
 	case *UnaryExpr:

@@ -8,6 +8,7 @@
     - [VTOrc flag `--allow-emergency-reparent`](#new-flag-toggle-ers)
   - **[Deprecations and Deletions](#deprecations-and-deletions)**
     - [Deleted `k8stopo`](#deleted-k8stopo)
+    - [Deleted `vtgr`](#deleted-vtgr)
   - **[New stats](#new-stats)**
     - [VTGate VSchema Vindex unknown params](#vtgate-vschema-vindex-unknown-params)
 
@@ -28,6 +29,10 @@ By default, VTOrc will be able to run `EmergencyReparentShard`. The users must s
 #### <a id="deleted-k8stopo"/>Deleted `k8stopo`
 
 The `k8stopo` has been deprecated in Vitess 17, also see https://github.com/vitessio/vitess/issues/13298. With Vitess 18 the `k8stopo` has been removed.
+
+#### <a id="deleted-vtgr"/>Deleted `vtgr`
+
+The `vtgr` has been deprecated in Vitess 17, also see https://github.com/vitessio/vitess/issues/13300. With Vitess 18 `vtgr` has been removed.
 
 ### <a id="new-stats"/>New stats
 

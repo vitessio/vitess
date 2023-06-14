@@ -368,7 +368,11 @@ func (si *schemaInit) setCurrentDatabase(dbName string) error {
 func (si *schemaInit) getCurrentSchema(tableName string) (string, error) {
 	var currentTableSchema string
 
-	rs, err := si.exec(si.ctx, sqlparser.BuildParsedQuery(showCreateTableQuery, GetIdentifier(), sqlparser.String(sqlparser.NewIdentifierCS(tableName))).Query, 1, false)
+	// We escape the tableName because it can be a keyword.
+	// Converting the tableName to a case-sensitive identifier and converting back to a string using the
+	// sqlparser package, ensures that the table name is escaped with backticks if required.
+	escapedTableName := sqlparser.String(sqlparser.NewIdentifierCS(tableName))
+	rs, err := si.exec(si.ctx, sqlparser.BuildParsedQuery(showCreateTableQuery, GetIdentifier(), escapedTableName).Query, 1, false)
 	if err != nil {
 		if sqlErr, ok := err.(*mysql.SQLError); ok && sqlErr.Number() == mysql.ERNoSuchTable {
 			// table does not exist in the sidecar database
