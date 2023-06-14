@@ -465,7 +465,7 @@ func tryPushingDownOrdering(ctx *plancontext.PlanningContext, in *Ordering) (ops
 		}
 		return rewrite.Swap(in, src, "push ordering under projection")
 	case *Aggregator:
-		if !(src.QP.AlignGroupByAndOrderBy(ctx) || overlaps(ctx, in.Order, src.Grouping)) {
+		if !src.QP.AlignGroupByAndOrderBy(ctx) && !overlaps(ctx, in.Order, src.Grouping) {
 			return in, rewrite.SameTree, nil
 		}
 

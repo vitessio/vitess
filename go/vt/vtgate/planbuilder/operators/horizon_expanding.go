@@ -50,10 +50,9 @@ func expandHorizon(ctx *plancontext.PlanningContext, horizon horizonLike) (ops.O
 	}
 
 	if sel.Having != nil {
-		expr := sel.Having.Expr
 		op = &Filter{
 			Source:         op,
-			Predicates:     sqlparser.SplitAndExpression(nil, expr),
+			Predicates:     sqlparser.SplitAndExpression(nil, sel.Having.Expr),
 			FinalPredicate: nil,
 		}
 	}

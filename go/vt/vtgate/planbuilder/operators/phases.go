@@ -39,21 +39,23 @@ func getPhases() []Phase {
 		// Initial optimization
 		Name: "initial horizon planning optimization phase",
 	}, {
+		// after the initial pushing down of aggregations and filtering, we add columns for the filter ops that
+		// need it their inputs, and then we start splitting the aggregation
+		// so parts run on MySQL and parts run on VTGate
 		Name: "add filter columns to projection or aggregation",
 		action: func(ctx *plancontext.PlanningContext, op ops.Operator) (ops.Operator, error) {
 			ctx.DelegateAggregation = true
 			return addColumnsToInput(ctx, op)
 		},
 	}, {
+		// addOrderBysForAggregations runs after we have pushed aggregations as far down as they'll go
+		// addOrderBysForAggregations will find Aggregators that have not been pushed under routes and
+		// add the necessary Ordering operators for them
 		Name:   "add ORDER BY to aggregations above the route and add GROUP BY to aggregations on the RHS of join",
 		action: addOrderBysForAggregations,
 	}}
 }
 
-// addOrderBysForAggregations runs after we have run horizonPlanning until the op tree stops changing
-// this means that we have pushed aggregations and other ops as far down as they'll go
-// addOrderBysForAggregations will find Aggregators that have not been pushed under routes and
-// add the necessary Ordering operators for them
 func addOrderBysForAggregations(ctx *plancontext.PlanningContext, root ops.Operator) (ops.Operator, error) {
 	visitor := func(in ops.Operator, _ semantics.TableSet, isRoot bool) (ops.Operator, *rewrite.ApplyResult, error) {
 		aggrOp, ok := in.(*Aggregator)

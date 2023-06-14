@@ -210,10 +210,7 @@ func (a *Aggregator) GetOrdering() ([]ops.OrderBy, error) {
 
 func (a *Aggregator) planOffsets(ctx *plancontext.PlanningContext) error {
 	if !a.Pushed {
-		err := a.planOffsetsNotPushed(ctx)
-		if err != nil {
-			return err
-		}
+		return a.planOffsetsNotPushed(ctx)
 	}
 
 	addColumn := func(aliasedExpr *sqlparser.AliasedExpr, addToGroupBy bool) (int, error) {

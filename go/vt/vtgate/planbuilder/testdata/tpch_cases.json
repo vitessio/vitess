@@ -970,7 +970,7 @@
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
         "Aggregates": "sum(1) AS high_line_count, sum(2) AS low_line_count",
-        "GroupBy": "(0|3)",
+        "GroupBy": "0",
         "ResultColumns": 3,
         "Inputs": [
           {
