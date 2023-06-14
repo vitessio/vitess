@@ -237,7 +237,7 @@ func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, ta
 
 		if vschema != nil {
 			// We added to the vschema.
-			if err := wr.ts.SaveVSchema(ctx, targetKeyspace, vschema); err != nil {
+			if err := wr.ts.ValidateAndSaveVSchema(ctx, targetKeyspace, vschema); err != nil {
 				return err
 			}
 		}
@@ -429,7 +429,7 @@ func (wr *Wrangler) CreateLookupVindex(ctx context.Context, keyspace string, spe
 	if err != nil {
 		return err
 	}
-	if err := wr.ts.SaveVSchema(ctx, ms.TargetKeyspace, targetVSchema); err != nil {
+	if err := wr.ts.ValidateAndSaveVSchema(ctx, ms.TargetKeyspace, targetVSchema); err != nil {
 		return err
 	}
 	ms.Cell = cell
@@ -437,7 +437,7 @@ func (wr *Wrangler) CreateLookupVindex(ctx context.Context, keyspace string, spe
 	if err := wr.Materialize(ctx, ms); err != nil {
 		return err
 	}
-	if err := wr.ts.SaveVSchema(ctx, keyspace, sourceVSchema); err != nil {
+	if err := wr.ts.ValidateAndSaveVSchema(ctx, keyspace, sourceVSchema); err != nil {
 		return err
 	}
 
@@ -850,7 +850,7 @@ func (wr *Wrangler) ExternalizeVindex(ctx context.Context, qualifiedVindexName s
 
 	// Remove the write_only param and save the source vschema.
 	delete(sourceVindex.Params, "write_only")
-	if err := wr.ts.SaveVSchema(ctx, sourceKeyspace, sourceVSchema); err != nil {
+	if err := wr.ts.ValidateAndSaveVSchema(ctx, sourceKeyspace, sourceVSchema); err != nil {
 		return err
 	}
 	return wr.ts.RebuildSrvVSchema(ctx, nil)

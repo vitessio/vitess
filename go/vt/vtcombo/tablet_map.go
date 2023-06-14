@@ -394,7 +394,7 @@ func CreateKs(
 				return 0, fmt.Errorf("cannot load vschema file %v for keyspace %v: %v", f, keyspace, err)
 			}
 
-			if err := ts.SaveVSchema(ctx, keyspace, formal); err != nil {
+			if err := ts.ValidateAndSaveVSchema(ctx, keyspace, formal); err != nil {
 				return 0, fmt.Errorf("SaveVSchema(%v) failed: %v", keyspace, err)
 			}
 		} else {

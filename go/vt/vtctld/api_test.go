@@ -78,7 +78,7 @@ func TestAPI(t *testing.T) {
 			},
 		},
 	}
-	ts.SaveVSchema(ctx, "ks1", vs)
+	ts.ValidateAndSaveVSchema(ctx, "ks1", vs)
 
 	tablet1 := topodatapb.Tablet{
 		Alias:         &topodatapb.TabletAlias{Cell: "cell1", Uid: 100},

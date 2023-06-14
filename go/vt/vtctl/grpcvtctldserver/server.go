@@ -359,7 +359,7 @@ func (s *VtctldServer) ApplyVSchema(ctx context.Context, req *vtctldatapb.ApplyV
 		return &vtctldatapb.ApplyVSchemaResponse{VSchema: vs}, nil
 	}
 
-	if err = s.ts.SaveVSchema(ctx, req.Keyspace, vs); err != nil {
+	if err = s.ts.ValidateAndSaveVSchema(ctx, req.Keyspace, vs); err != nil {
 		err = vterrors.Wrapf(err, "SaveVSchema(%s, %v)", req.Keyspace, req.VSchema)
 		return nil, err
 	}
@@ -678,7 +678,7 @@ func (s *VtctldServer) CreateKeyspace(ctx context.Context, req *vtctldatapb.Crea
 		// SNAPSHOT keyspaces are excluded from global routing.
 		vs.RequireExplicitRouting = true
 
-		if err = s.ts.SaveVSchema(ctx, req.Name, vs); err != nil {
+		if err = s.ts.ValidateAndSaveVSchema(ctx, req.Name, vs); err != nil {
 			err = fmt.Errorf("SaveVSchema(%v) = %w", vs, err)
 			return nil, err
 		}

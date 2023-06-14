@@ -55,7 +55,7 @@ func CopyKeyspaces(ctx context.Context, fromTS, toTS *topo.Server) {
 		vs, err := fromTS.GetVSchema(ctx, keyspace)
 		switch {
 		case err == nil:
-			if err := toTS.SaveVSchema(ctx, keyspace, vs); err != nil {
+			if err := toTS.ValidateAndSaveVSchema(ctx, keyspace, vs); err != nil {
 				log.Errorf("SaveVSchema(%v): %v", keyspace, err)
 			}
 		case topo.IsErrType(err, topo.NoNode):

@@ -19,6 +19,7 @@ package vtctl
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -31,6 +32,54 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/wrangler"
 )
+
+// TestApplyVSchema tests the the MoveTables client command
+// via the commandVRApplyVSchema() cmd handler.
+func TestApplyVSchema(t *testing.T) {
+	shard := "0"
+	ks := "ks"
+	ctx := context.Background()
+	env := newTestVTCtlEnv()
+	defer env.close()
+	_ = env.addTablet(100, ks, shard, &topodatapb.KeyRange{}, topodatapb.TabletType_PRIMARY)
+
+	tests := []struct {
+		name          string
+		args          []string
+		expectResults func()
+		want          string
+	}{
+		{
+			name: "EmptyVSchema",
+			args: []string{"--vschema", "{}", ks},
+			want: "New VSchema object:\n{}\nIf this is not what you expected, check the input data (as JSON parsing will skip unexpected fields).\n\n",
+		},
+		{
+			name: "UnknownParamsLogged",
+			args: []string{"--vschema", "{\"sharded\":true,\"vindexes\":{\"hash_vdx\":{\"type\":\"hash\",\"params\":{\"foo\":\"bar\",\"hello\":\"world\"}},\"binary_vdx\":{\"type\":\"binary\",\"params\":{\"hello\":\"world\"}}}}", ks},
+			want: "/New VSchema object:\n{\n  \"sharded\": true,\n  \"vindexes\": {\n    \"binary_vdx\": {\n      \"type\": \"binary\",\n      \"params\": {\n        \"hello\": \"world\"\n      }\n    },\n    \"hash_vdx\": {\n      \"type\": \"hash\",\n      \"params\": {\n        \"foo\": \"bar\",\n        \"hello\": \"world\"\n      }\n    }\n  }\n}\nIf this is not what you expected, check the input data \\(as JSON parsing will skip unexpected fields\\)\\.\n\n.*W0614 .* vtctl.go:.* Unknown param in vindex hash_vdx: foo\nW0614 .* vtctl.go:.* Unknown param in vindex hash_vdx: hello\nW0614 .* vtctl.go:.* Unknown param in vindex binary_vdx: hello",
+		},
+		{
+			name: "UnknownParamsLoggedWithDryRun",
+			args: []string{"--vschema", "{\"sharded\":true,\"vindexes\":{\"hash_vdx\":{\"type\":\"hash\",\"params\":{\"foo\":\"bar\",\"hello\":\"world\"}},\"binary_vdx\":{\"type\":\"binary\",\"params\":{\"hello\":\"world\"}}}}", "--dry-run", ks},
+			want: "/New VSchema object:\n{\n  \"sharded\": true,\n  \"vindexes\": {\n    \"binary_vdx\": {\n      \"type\": \"binary\",\n      \"params\": {\n        \"hello\": \"world\"\n      }\n    },\n    \"hash_vdx\": {\n      \"type\": \"hash\",\n      \"params\": {\n        \"foo\": \"bar\",\n        \"hello\": \"world\"\n      }\n    }\n  }\n}\nIf this is not what you expected, check the input data \\(as JSON parsing will skip unexpected fields\\)\\.\n\n.*W0614 .* vtctl.go:.* Unknown param in vindex hash_vdx: foo\nW0614 .* vtctl.go:.* Unknown param in vindex hash_vdx: hello\nW0614 .* vtctl.go:.* Unknown param in vindex binary_vdx: hello\nDry run: Skipping update of VSchema",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			subFlags := pflag.NewFlagSet("test", pflag.ContinueOnError)
+			err := commandApplyVSchema(ctx, env.wr, subFlags, tt.args)
+			require.NoError(t, err)
+			if strings.HasPrefix(tt.want, "/") {
+				require.Regexp(t, regexp.MustCompile(tt.want[1:]), env.cmdlog.String())
+			} else {
+				require.Equal(t, tt.want, env.cmdlog.String())
+			}
+			env.cmdlog.Clear()
+			env.tmc.clearResults()
+		})
+	}
+}
 
 // TestMoveTables tests the the MoveTables client command
 // via the commandVRWorkflow() cmd handler.

@@ -169,7 +169,7 @@ func (te *Env) SetVSchema(vs string) error {
 	if err := json2.Unmarshal([]byte(vs), &kspb); err != nil {
 		return err
 	}
-	if err := te.TopoServ.SaveVSchema(ctx, te.KeyspaceName, &kspb); err != nil {
+	if err := te.TopoServ.ValidateAndSaveVSchema(ctx, te.KeyspaceName, &kspb); err != nil {
 		return err
 	}
 	te.SchemaEngine.Reload(ctx)
