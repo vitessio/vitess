@@ -50,9 +50,6 @@ var (
 	//go:embed vtgate.txt
 	vtgateTxt string
 
-	//go:embed vtgr.txt
-	vtgrTxt string
-
 	//go:embed vttablet.txt
 	vttabletTxt string
 
@@ -92,7 +89,6 @@ var (
 		"vtaclcheck":   vtaclcheckTxt,
 		"vtexplain":    vtexplainTxt,
 		"vtgate":       vtgateTxt,
-		"vtgr":         vtgrTxt,
 		"vttablet":     vttabletTxt,
 		"vttlstest":    vttlstestTxt,
 		"vtctld":       vtctldTxt,
