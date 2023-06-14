@@ -585,8 +585,8 @@ func readInstanceRow(m sqlutils.RowMap) *Instance {
 
 // readInstancesByCondition is a generic function to read instances from the backend database
 func readInstancesByCondition(condition string, args []any, sort string) ([](*Instance), error) {
-	readFunc := func() ([](*Instance), error) {
-		instances := [](*Instance){}
+	readFunc := func() ([]*Instance, error) {
+		var instances []*Instance
 
 		if sort == "" {
 			sort = `hostname, port`
@@ -599,8 +599,7 @@ func readInstancesByCondition(condition string, args []any, sort string) ([](*In
 			unix_timestamp() - unix_timestamp(last_seen) as seconds_since_last_seen,
 			candidate_database_instance.last_suggested is not null
 				 and candidate_database_instance.promotion_rule in ('must', 'prefer') as is_candidate,
-			ifnull(nullif(candidate_database_instance.promotion_rule, ''), 'neutral') as promotion_rule,
-			ifnull(unix_timestamp() - unix_timestamp(begin_timestamp), 0) as elapsed_downtime_seconds
+			ifnull(nullif(candidate_database_instance.promotion_rule, ''), 'neutral') as promotion_rule
 		from
 			database_instance
 			left join vitess_tablet using (hostname, port)

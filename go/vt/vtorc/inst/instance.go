@@ -25,8 +25,6 @@ import (
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/promotionrule"
 )
 
-const ReasonableDiscoveryLatency = 500 * time.Millisecond
-
 // Instance represents a database instance, including its current configuration & status.
 // It presents important replication configuration and detailed replication status.
 type Instance struct {

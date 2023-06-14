@@ -109,10 +109,6 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 				OR primary_instance.source_port = 0
 				OR substr(primary_instance.source_host, 1, 2) = '//'
 			)
-			AND (
-				primary_instance.replication_group_name = ''
-				OR primary_instance.replication_group_member_role = 'PRIMARY'
-			)
 		) AS is_primary,
 		MIN(primary_instance.is_co_primary) AS is_co_primary,
 		MIN(primary_instance.gtid_mode) AS gtid_mode,
