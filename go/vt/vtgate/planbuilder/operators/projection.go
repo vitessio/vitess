@@ -268,12 +268,6 @@ func (p *Projection) compactWithRoute(rb *Route) (ops.Operator, *rewrite.ApplyRe
 	return rb, rewrite.SameTree, nil
 }
 
-func stopAtAggregations(node, _ sqlparser.SQLNode) bool {
-	_, aggr := node.(sqlparser.AggrFunc)
-	b := !aggr
-	return b
-}
-
 func (p *Projection) needsEvaluation(ctx *plancontext.PlanningContext, e sqlparser.Expr) bool {
 	offset := slices.IndexFunc(p.Columns, func(expr *sqlparser.AliasedExpr) bool {
 		return ctx.SemTable.EqualsExprWithDeps(expr.Expr, e)
@@ -324,64 +318,4 @@ func (p *Projection) planOffsets(ctx *plancontext.PlanningContext) error {
 	}
 
 	return nil
-}
-
-func useOffsets(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op ops.Operator) (sqlparser.Expr, error) {
-	in := op.Inputs()[0]
-	columns, err := in.GetColumns()
-	if err != nil {
-		return nil, err
-	}
-
-	var exprOffset *sqlparser.Offset
-	down := func(node, parent sqlparser.SQLNode) bool {
-		if err != nil {
-			return false
-		}
-		e, ok := node.(sqlparser.Expr)
-		if !ok {
-			return true
-		}
-		offset := slices.IndexFunc(columns, func(expr *sqlparser.AliasedExpr) bool {
-			return ctx.SemTable.EqualsExprWithDeps(expr.Expr, e)
-		})
-		if offset >= 0 {
-			// this expression can be fetched from the input - we can stop here
-			exprOffset = sqlparser.NewOffset(offset, e)
-			return false
-		}
-
-		if fetchByOffset(e) {
-			// this expression has to be fetched from the input, but we didn't find it in the input. let's add it
-			_, addToGroupBy := e.(*sqlparser.ColName)
-			in, offset, err = in.AddColumn(ctx, aeWrap(e), true, addToGroupBy)
-			if err != nil {
-				return false
-			}
-			op.SetInputs([]ops.Operator{in})
-			columns, err = in.GetColumns()
-			if err != nil {
-				return false
-			}
-			exprOffset = sqlparser.NewOffset(offset, e)
-			return false
-		}
-
-		return true
-	}
-
-	// The cursor replace is not available while walking `down`, so `up` is used to do the replacement.
-	up := func(cursor *sqlparser.CopyOnWriteCursor) {
-		if exprOffset != nil {
-			cursor.Replace(exprOffset)
-			exprOffset = nil
-		}
-	}
-
-	rewritten := sqlparser.CopyOnRewrite(expr, down, up, ctx.SemTable.CopyDependenciesOnSQLNodes)
-	if err != nil {
-		return nil, err
-	}
-
-	return rewritten.(sqlparser.Expr), nil
 }

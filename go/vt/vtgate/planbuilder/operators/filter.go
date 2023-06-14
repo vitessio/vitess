@@ -19,6 +19,8 @@ package operators
 import (
 	"strings"
 
+	"golang.org/x/exp/slices"
+
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -46,11 +48,10 @@ func newFilter(op ops.Operator, expr sqlparser.Expr) ops.Operator {
 
 // Clone implements the Operator interface
 func (f *Filter) Clone(inputs []ops.Operator) ops.Operator {
-	predicatesClone := make([]sqlparser.Expr, len(f.Predicates))
-	copy(predicatesClone, f.Predicates)
 	return &Filter{
-		Source:     inputs[0],
-		Predicates: predicatesClone,
+		Source:         inputs[0],
+		Predicates:     slices.Clone(f.Predicates),
+		FinalPredicate: f.FinalPredicate,
 	}
 }
 
