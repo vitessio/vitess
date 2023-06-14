@@ -21,6 +21,9 @@ import (
 	"fmt"
 	"time"
 
+	"vitess.io/vitess/go/vt/topotools"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil"
+
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstats"
@@ -100,6 +103,46 @@ func (tm *TabletManager) Backup(ctx context.Context, logger logutil.Logger, req 
 			// Original type could be primary so pass in a real value for PrimaryTermStartTime
 			if err := tm.changeTypeLocked(bgCtx, originalType, DBActionNone, SemiSyncActionNone); err != nil {
 				l.Errorf("Failed to change tablet type from %v to %v, error: %v", topodatapb.TabletType_BACKUP, originalType, err)
+				return
+			}
+
+			// Find the correct primary tablet and set the replication source,
+			// since the primary could have changed while we executed the backup which can
+			// also affect whether we want to send semi sync acks or not.
+			tabletInfo, err := tm.TopoServer.GetTablet(bgCtx, tablet.Alias)
+			if err != nil {
+				l.Errorf("Failed to fetch updated tablet info, error: %v", err)
+				return
+			}
+
+			// Do not do anything for primary tablets or when active reparenting is disabled
+			if mysqlctl.DisableActiveReparents || tabletInfo.Type == topodatapb.TabletType_PRIMARY {
+				return
+			}
+
+			shardPrimary, err := topotools.GetShardPrimaryForTablet(bgCtx, tm.TopoServer, tablet.Tablet)
+			if err != nil {
+				return
+			}
+
+			durabilityName, err := tm.TopoServer.GetKeyspaceDurability(bgCtx, tablet.Keyspace)
+			if err != nil {
+				l.Errorf("Failed to get durability policy, error: %v", err)
+				return
+			}
+			durability, err := reparentutil.GetDurabilityPolicy(durabilityName)
+			if err != nil {
+				l.Errorf("Failed to get durability with name %v, error: %v", durabilityName, err)
+			}
+
+			isSemiSync := reparentutil.IsReplicaSemiSync(durability, shardPrimary.Tablet, tabletInfo.Tablet)
+			semiSyncAction, err := tm.convertBoolToSemiSyncAction(isSemiSync)
+			if err != nil {
+				l.Errorf("Failed to convert bool to semisync action, error: %v", err)
+				return
+			}
+			if err := tm.setReplicationSourceLocked(bgCtx, shardPrimary.Alias, 0, "", false, semiSyncAction); err != nil {
+				l.Errorf("Failed to set replication source, error: %v", err)
 			}
 		}()
 	}

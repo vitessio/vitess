@@ -39,12 +39,12 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 )
 
 const (
 	// evacHours is a hard coded, reasonable time for a table to spend in EVAC state
-	evacHours        = 72
-	throttlerAppName = "tablegc"
+	evacHours = 72
 )
 
 var (
@@ -131,7 +131,7 @@ type Status struct {
 // NewTableGC creates a table collector
 func NewTableGC(env tabletenv.Env, ts *topo.Server, lagThrottler *throttle.Throttler) *TableGC {
 	collector := &TableGC{
-		throttlerClient: throttle.NewBackgroundClient(lagThrottler, throttlerAppName, throttle.ThrottleCheckPrimaryWrite),
+		throttlerClient: throttle.NewBackgroundClient(lagThrottler, throttlerapp.TableGCName, throttle.ThrottleCheckPrimaryWrite),
 		isOpen:          0,
 
 		env: env,

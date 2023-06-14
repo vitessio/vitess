@@ -222,8 +222,8 @@ func (c *cow) copyOnRewriteSQLNode(n SQLNode, parent SQLNode) (out SQLNode, chan
 		return c.copyOnRewriteRefOfInsert(n, parent)
 	case *InsertExpr:
 		return c.copyOnRewriteRefOfInsertExpr(n, parent)
-	case *IntervalExpr:
-		return c.copyOnRewriteRefOfIntervalExpr(n, parent)
+	case *IntervalDateExpr:
+		return c.copyOnRewriteRefOfIntervalDateExpr(n, parent)
 	case *IntervalFuncExpr:
 		return c.copyOnRewriteRefOfIntervalFuncExpr(n, parent)
 	case *IntroducerExpr:
@@ -2788,7 +2788,7 @@ func (c *cow) copyOnRewriteRefOfInsert(n *Insert, parent SQLNode) (out SQLNode, 
 	out = n
 	if c.pre == nil || c.pre(n, parent) {
 		_Comments, changedComments := c.copyOnRewriteRefOfParsedComments(n.Comments, n)
-		_Table, changedTable := c.copyOnRewriteTableName(n.Table, n)
+		_Table, changedTable := c.copyOnRewriteRefOfAliasedTableExpr(n.Table, n)
 		_Partitions, changedPartitions := c.copyOnRewritePartitions(n.Partitions, n)
 		_Columns, changedColumns := c.copyOnRewriteColumns(n.Columns, n)
 		_Rows, changedRows := c.copyOnRewriteInsertRows(n.Rows, n)
@@ -2796,7 +2796,7 @@ func (c *cow) copyOnRewriteRefOfInsert(n *Insert, parent SQLNode) (out SQLNode, 
 		if changedComments || changedTable || changedPartitions || changedColumns || changedRows || changedOnDup {
 			res := *n
 			res.Comments, _ = _Comments.(*ParsedComments)
-			res.Table, _ = _Table.(TableName)
+			res.Table, _ = _Table.(*AliasedTableExpr)
 			res.Partitions, _ = _Partitions.(Partitions)
 			res.Columns, _ = _Columns.(Columns)
 			res.Rows, _ = _Rows.(InsertRows)
@@ -2841,16 +2841,18 @@ func (c *cow) copyOnRewriteRefOfInsertExpr(n *InsertExpr, parent SQLNode) (out S
 	}
 	return
 }
-func (c *cow) copyOnRewriteRefOfIntervalExpr(n *IntervalExpr, parent SQLNode) (out SQLNode, changed bool) {
+func (c *cow) copyOnRewriteRefOfIntervalDateExpr(n *IntervalDateExpr, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
 	}
 	out = n
 	if c.pre == nil || c.pre(n, parent) {
-		_Expr, changedExpr := c.copyOnRewriteExpr(n.Expr, n)
-		if changedExpr {
+		_Date, changedDate := c.copyOnRewriteExpr(n.Date, n)
+		_Interval, changedInterval := c.copyOnRewriteExpr(n.Interval, n)
+		if changedDate || changedInterval {
 			res := *n
-			res.Expr, _ = _Expr.(Expr)
+			res.Date, _ = _Date.(Expr)
+			res.Interval, _ = _Interval.(Expr)
 			out = &res
 			if c.cloned != nil {
 				c.cloned(n, out)
@@ -6751,6 +6753,8 @@ func (c *cow) copyOnRewriteCallable(n Callable, parent SQLNode) (out SQLNode, ch
 		return c.copyOnRewriteRefOfGroupConcatExpr(n, parent)
 	case *InsertExpr:
 		return c.copyOnRewriteRefOfInsertExpr(n, parent)
+	case *IntervalDateExpr:
+		return c.copyOnRewriteRefOfIntervalDateExpr(n, parent)
 	case *IntervalFuncExpr:
 		return c.copyOnRewriteRefOfIntervalFuncExpr(n, parent)
 	case *JSONArrayExpr:
@@ -7033,8 +7037,8 @@ func (c *cow) copyOnRewriteExpr(n Expr, parent SQLNode) (out SQLNode, changed bo
 		return c.copyOnRewriteRefOfGroupConcatExpr(n, parent)
 	case *InsertExpr:
 		return c.copyOnRewriteRefOfInsertExpr(n, parent)
-	case *IntervalExpr:
-		return c.copyOnRewriteRefOfIntervalExpr(n, parent)
+	case *IntervalDateExpr:
+		return c.copyOnRewriteRefOfIntervalDateExpr(n, parent)
 	case *IntervalFuncExpr:
 		return c.copyOnRewriteRefOfIntervalFuncExpr(n, parent)
 	case *IntroducerExpr:

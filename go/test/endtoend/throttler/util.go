@@ -21,13 +21,15 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
-	"github.com/buger/jsonparser"
 	"github.com/stretchr/testify/require"
+	"github.com/tidwall/gjson"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/log"
 )
 
@@ -51,13 +53,8 @@ var DefaultConfig = &Config{
 // This retries the command until it succeeds or times out as the
 // SrvKeyspace record may not yet exist for a newly created
 // Keyspace that is still initializing before it becomes serving.
-func UpdateThrottlerTopoConfig(clusterInstance *cluster.LocalProcessCluster, enable bool, disable bool, threshold float64, metricsQuery string, viaVtctldClient bool) (result string, err error) {
+func UpdateThrottlerTopoConfigRaw(vtctldProcess *cluster.VtctldClientProcess, keyspaceName string, enable bool, disable bool, threshold float64, metricsQuery string) (result string, err error) {
 	args := []string{}
-	clientfunc := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput
-	if !viaVtctldClient {
-		args = append(args, "--")
-		clientfunc = clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput
-	}
 	args = append(args, "UpdateThrottlerConfig")
 	if enable {
 		args = append(args, "--enable")
@@ -74,7 +71,7 @@ func UpdateThrottlerTopoConfig(clusterInstance *cluster.LocalProcessCluster, ena
 	} else {
 		args = append(args, "--check-as-check-shard")
 	}
-	args = append(args, clusterInstance.Keyspaces[0].Name)
+	args = append(args, keyspaceName)
 
 	ctx, cancel := context.WithTimeout(context.Background(), ConfigTimeout)
 	defer cancel()
@@ -83,7 +80,7 @@ func UpdateThrottlerTopoConfig(clusterInstance *cluster.LocalProcessCluster, ena
 	defer ticker.Stop()
 
 	for {
-		result, err = clientfunc(args...)
+		result, err = vtctldProcess.ExecuteCommandWithOutput(args...)
 		if err == nil {
 			return result, nil
 		}
@@ -95,40 +92,87 @@ func UpdateThrottlerTopoConfig(clusterInstance *cluster.LocalProcessCluster, ena
 	}
 }
 
+// UpdateThrottlerTopoConfig runs vtctlclient UpdateThrottlerConfig.
+// This retries the command until it succeeds or times out as the
+// SrvKeyspace record may not yet exist for a newly created
+// Keyspace that is still initializing before it becomes serving.
+func UpdateThrottlerTopoConfig(clusterInstance *cluster.LocalProcessCluster, enable bool, disable bool, threshold float64, metricsQuery string) (string, error) {
+	rec := concurrency.AllErrorRecorder{}
+	var (
+		err error
+		res strings.Builder
+	)
+	for _, ks := range clusterInstance.Keyspaces {
+		ires, err := UpdateThrottlerTopoConfigRaw(&clusterInstance.VtctldClientProcess, ks.Name, enable, disable, threshold, metricsQuery)
+		if err != nil {
+			rec.RecordError(err)
+		}
+		res.WriteString(ires)
+	}
+	if rec.HasErrors() {
+		err = rec.Error()
+	}
+	return res.String(), err
+}
+
 // WaitForThrottlerStatusEnabled waits for a tablet to report its throttler status as
 // enabled/disabled and have the provided config (if any) until the specified timeout.
 func WaitForThrottlerStatusEnabled(t *testing.T, tablet *cluster.Vttablet, enabled bool, config *Config, timeout time.Duration) {
 	enabledJSONPath := "IsEnabled"
 	queryJSONPath := "Query"
 	thresholdJSONPath := "Threshold"
-	url := fmt.Sprintf("http://localhost:%d/throttler/status", tablet.HTTPPort)
+	throttlerURL := fmt.Sprintf("http://localhost:%d/throttler/status", tablet.HTTPPort)
+	tabletURL := fmt.Sprintf("http://localhost:%d/debug/status_details", tablet.HTTPPort)
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 
 	for {
-		body := getHTTPBody(url)
-		isEnabled, err := jsonparser.GetBoolean([]byte(body), enabledJSONPath)
-		require.NoError(t, err)
+		throttlerBody := getHTTPBody(throttlerURL)
+		isEnabled := gjson.Get(throttlerBody, enabledJSONPath).Bool()
 		if isEnabled == enabled {
 			if config == nil {
 				return
 			}
-			query, err := jsonparser.GetString([]byte(body), queryJSONPath)
-			require.NoError(t, err)
-			threshold, err := jsonparser.GetFloat([]byte(body), thresholdJSONPath)
-			require.NoError(t, err)
+			query := gjson.Get(throttlerBody, queryJSONPath).String()
+			threshold := gjson.Get(throttlerBody, thresholdJSONPath).Float()
 			if query == config.Query && threshold == config.Threshold {
 				return
 			}
 		}
+		// If the tablet is Not Serving due to e.g. being involved in a
+		// Reshard where its QueryService is explicitly disabled, then
+		// we should not fail the test as the throttler will not be Open.
+		tabletBody := getHTTPBody(tabletURL)
+		class := strings.ToLower(gjson.Get(tabletBody, "0.Class").String())
+		value := strings.ToLower(gjson.Get(tabletBody, "0.Value").String())
+		if class == "unhappy" && strings.Contains(value, "not serving") {
+			log.Infof("tablet %s is Not Serving, so ignoring throttler status as the throttler will not be Opened", tablet.Alias)
+			return
+		}
 		select {
 		case <-ctx.Done():
 			t.Errorf("timed out waiting for the %s tablet's throttler status enabled to be %t with the correct config after %v; last seen value: %s",
-				tablet.Alias, enabled, timeout, body)
+				tablet.Alias, enabled, timeout, throttlerBody)
 			return
 		case <-ticker.C:
+		}
+	}
+}
+
+// EnableLagThrottlerAndWaitForStatus is a utility function to enable the throttler at the beginning of an endtoend test.
+// The throttler is configued to use the standard replication lag metric. The function waits until the throttler is confirmed
+// to be running on all tablets.
+func EnableLagThrottlerAndWaitForStatus(t *testing.T, clusterInstance *cluster.LocalProcessCluster, lag time.Duration) {
+	_, err := UpdateThrottlerTopoConfig(clusterInstance, true, false, lag.Seconds(), "")
+	require.NoError(t, err)
+
+	for _, ks := range clusterInstance.Keyspaces {
+		for _, shard := range ks.Shards {
+			for _, tablet := range shard.Vttablets {
+				WaitForThrottlerStatusEnabled(t, tablet, true, nil, time.Minute)
+			}
 		}
 	}
 }
@@ -147,32 +191,6 @@ func getHTTPBody(url string) string {
 	respByte, _ := io.ReadAll(resp.Body)
 	body := string(respByte)
 	return body
-}
-
-// WaitForQueryResult waits for a tablet to return the given result for the given
-// query until the specified timeout.
-// This is for simple queries that return 1 column in 1 row. It compares the result
-// for that column as a string with the provided result.
-func WaitForQueryResult(t *testing.T, tablet *cluster.Vttablet, query, result string, timeout time.Duration) {
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-	ticker := time.NewTicker(time.Second)
-	defer ticker.Stop()
-
-	for {
-		res, err := tablet.VttabletProcess.QueryTablet(query, "", false)
-		require.NoError(t, err)
-		if res != nil && len(res.Rows) == 1 && res.Rows[0][0].ToString() == result {
-			return
-		}
-		select {
-		case <-ctx.Done():
-			t.Errorf("timed out waiting for the %q query to produce a result of %q on tablet %s after %v; last seen value: %s",
-				query, result, tablet.Alias, timeout, res.Rows[0][0].ToString())
-			return
-		case <-ticker.C:
-		}
-	}
 }
 
 // WaitForValidData waits for a tablet's checks to return a non 500 http response

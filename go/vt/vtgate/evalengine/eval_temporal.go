@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/hack"
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/datetime"
 	"vitess.io/vitess/go/mysql/decimal"
 	"vitess.io/vitess/go/mysql/json"
@@ -143,6 +144,30 @@ func (e *evalTemporal) toStdTime(loc *time.Location) time.Time {
 	return e.dt.ToStdTime(loc)
 }
 
+func (e *evalTemporal) addInterval(interval *datetime.Interval, strcoll collations.TypedCollation) eval {
+	var tmp *evalTemporal
+	var ok bool
+
+	switch tt := e.SQLType(); {
+	case tt == sqltypes.Date && !interval.Unit().HasTimeParts():
+		tmp = &evalTemporal{t: e.t}
+		tmp.dt.Date, ok = e.dt.Date.AddInterval(interval)
+	case tt == sqltypes.Time && !interval.Unit().HasDateParts():
+		tmp = &evalTemporal{t: e.t}
+		tmp.dt.Time, tmp.prec, ok = e.dt.Time.AddInterval(interval, strcoll.Valid())
+	case tt == sqltypes.Datetime || tt == sqltypes.Timestamp || (tt == sqltypes.Date && interval.Unit().HasTimeParts()) || (tt == sqltypes.Time && interval.Unit().HasDateParts()):
+		tmp = e.toDateTime(int(e.prec))
+		tmp.dt, tmp.prec, ok = e.dt.AddInterval(interval, strcoll.Valid())
+	}
+	if !ok {
+		return nil
+	}
+	if strcoll.Valid() {
+		return newEvalRaw(sqltypes.Char, tmp.ToRawBytes(), strcoll)
+	}
+	return tmp
+}
+
 func newEvalDateTime(dt datetime.DateTime, l int) *evalTemporal {
 	return &evalTemporal{t: sqltypes.Datetime, dt: dt.Round(l), prec: uint8(l)}
 }
@@ -188,6 +213,74 @@ func precision(req, got int) int {
 		return got
 	}
 	return req
+}
+
+func evalToTemporal(e eval) *evalTemporal {
+	switch e := e.(type) {
+	case *evalTemporal:
+		return e
+	case *evalBytes:
+		if t, l, ok := datetime.ParseDateTime(e.string(), -1); ok {
+			return newEvalDateTime(t, l)
+		}
+		if d, ok := datetime.ParseDate(e.string()); ok {
+			return newEvalDate(d)
+		}
+		if t, l, ok := datetime.ParseTime(e.string(), -1); ok {
+			return newEvalTime(t, l)
+		}
+	case *evalInt64:
+		if t, ok := datetime.ParseDateTimeInt64(e.i); ok {
+			return newEvalDateTime(t, 0)
+		}
+		if d, ok := datetime.ParseDateInt64(e.i); ok {
+			return newEvalDate(d)
+		}
+		if t, ok := datetime.ParseTimeInt64(e.i); ok {
+			return newEvalTime(t, 0)
+		}
+	case *evalUint64:
+		if t, ok := datetime.ParseDateTimeInt64(int64(e.u)); ok {
+			return newEvalDateTime(t, 0)
+		}
+		if d, ok := datetime.ParseDateInt64(int64(e.u)); ok {
+			return newEvalDate(d)
+		}
+		if t, ok := datetime.ParseTimeInt64(int64(e.u)); ok {
+			return newEvalTime(t, 0)
+		}
+	case *evalFloat:
+		if t, l, ok := datetime.ParseDateTimeFloat(e.f, -1); ok {
+			return newEvalDateTime(t, l)
+		}
+		if d, ok := datetime.ParseDateFloat(e.f); ok {
+			return newEvalDate(d)
+		}
+		if t, l, ok := datetime.ParseTimeFloat(e.f, -1); ok {
+			return newEvalTime(t, l)
+		}
+	case *evalDecimal:
+		if t, l, ok := datetime.ParseDateTimeDecimal(e.dec, e.length, -1); ok {
+			return newEvalDateTime(t, l)
+		}
+		if d, ok := datetime.ParseDateDecimal(e.dec); ok {
+			return newEvalDate(d)
+		}
+		if d, l, ok := datetime.ParseTimeDecimal(e.dec, e.length, -1); ok {
+			return newEvalTime(d, l)
+		}
+	case *evalJSON:
+		if dt, ok := e.DateTime(); ok {
+			if dt.Date.IsZero() {
+				return newEvalTime(dt.Time, datetime.DefaultPrecision)
+			}
+			if dt.Time.IsZero() {
+				return newEvalDate(dt.Date)
+			}
+			return newEvalDateTime(dt, datetime.DefaultPrecision)
+		}
+	}
+	return nil
 }
 
 func evalToTime(e eval, l int) *evalTemporal {

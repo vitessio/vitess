@@ -22,19 +22,18 @@ import (
 	"strings"
 	"testing"
 
-	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/test/utils"
-	"vitess.io/vitess/go/vt/sqlparser"
-	_ "vitess.io/vitess/go/vt/vtgate/vindexes"
-	"vitess.io/vitess/go/vt/vttablet/sandboxconn"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/test/utils"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/sqlparser"
+	_ "vitess.io/vitess/go/vt/vtgate/vindexes"
+	"vitess.io/vitess/go/vt/vttablet/sandboxconn"
 )
 
 func TestUpdateEqual(t *testing.T) {
@@ -1672,7 +1671,7 @@ func TestInsertGeneratorSharded(t *testing.T) {
 	}}
 	assertQueries(t, sbc, wantQueries)
 	wantQueries = []*querypb.BoundQuery{{
-		Sql:           "select next :n values from user_seq",
+		Sql:           "select next :n /* INT64 */ values from user_seq",
 		BindVariables: map[string]*querypb.BindVariable{"n": sqltypes.Int64BindVariable(1)},
 	}, {
 		Sql: "insert into name_user_map(`name`, user_id) values (:name_0, :user_id_0)",
@@ -1721,7 +1720,7 @@ func TestInsertGeneratorUnsharded(t *testing.T) {
 	result, err := executorExec(executor, "insert into main1(id, name) values (null, 'myname')", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "select next :n values from user_seq",
+		Sql:           "select next :n /* INT64 */ values from user_seq",
 		BindVariables: map[string]*querypb.BindVariable{"n": sqltypes.Int64BindVariable(1)},
 	}, {
 		Sql: "insert into main1(id, `name`) values (:__seq0, 'myname')",
@@ -1812,7 +1811,7 @@ func TestInsertLookupOwnedGenerator(t *testing.T) {
 	}}
 	assertQueries(t, sbc, wantQueries)
 	wantQueries = []*querypb.BoundQuery{{
-		Sql:           "select next :n values from user_seq",
+		Sql:           "select next :n /* INT64 */ values from user_seq",
 		BindVariables: map[string]*querypb.BindVariable{"n": sqltypes.Int64BindVariable(1)},
 	}, {
 		Sql: "insert into music_user_map(music_id, user_id) values (:music_id_0, :user_id_0)",
@@ -2069,7 +2068,7 @@ func TestMultiInsertGenerator(t *testing.T) {
 	}}
 	assertQueries(t, sbc, wantQueries)
 	wantQueries = []*querypb.BoundQuery{{
-		Sql:           "select next :n values from user_seq",
+		Sql:           "select next :n /* INT64 */ values from user_seq",
 		BindVariables: map[string]*querypb.BindVariable{"n": sqltypes.Int64BindVariable(2)},
 	}, {
 		Sql: "insert into music_user_map(music_id, user_id) values (:music_id_0, :user_id_0), (:music_id_1, :user_id_1)",
@@ -2117,7 +2116,7 @@ func TestMultiInsertGeneratorSparse(t *testing.T) {
 	}}
 	assertQueries(t, sbc, wantQueries)
 	wantQueries = []*querypb.BoundQuery{{
-		Sql:           "select next :n values from user_seq",
+		Sql:           "select next :n /* INT64 */ values from user_seq",
 		BindVariables: map[string]*querypb.BindVariable{"n": sqltypes.Int64BindVariable(2)},
 	}, {
 		Sql: "insert into music_user_map(music_id, user_id) values (:music_id_0, :user_id_0), (:music_id_1, :user_id_1), (:music_id_2, :user_id_2)",

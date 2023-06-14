@@ -222,8 +222,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfInsert(in, f)
 	case *InsertExpr:
 		return VisitRefOfInsertExpr(in, f)
-	case *IntervalExpr:
-		return VisitRefOfIntervalExpr(in, f)
+	case *IntervalDateExpr:
+		return VisitRefOfIntervalDateExpr(in, f)
 	case *IntervalFuncExpr:
 		return VisitRefOfIntervalFuncExpr(in, f)
 	case *IntroducerExpr:
@@ -1976,7 +1976,7 @@ func VisitRefOfInsert(in *Insert, f Visit) error {
 	if err := VisitRefOfParsedComments(in.Comments, f); err != nil {
 		return err
 	}
-	if err := VisitTableName(in.Table, f); err != nil {
+	if err := VisitRefOfAliasedTableExpr(in.Table, f); err != nil {
 		return err
 	}
 	if err := VisitPartitions(in.Partitions, f); err != nil {
@@ -2014,14 +2014,17 @@ func VisitRefOfInsertExpr(in *InsertExpr, f Visit) error {
 	}
 	return nil
 }
-func VisitRefOfIntervalExpr(in *IntervalExpr, f Visit) error {
+func VisitRefOfIntervalDateExpr(in *IntervalDateExpr, f Visit) error {
 	if in == nil {
 		return nil
 	}
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
-	if err := VisitExpr(in.Expr, f); err != nil {
+	if err := VisitExpr(in.Date, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.Interval, f); err != nil {
 		return err
 	}
 	return nil
@@ -4521,6 +4524,8 @@ func VisitCallable(in Callable, f Visit) error {
 		return VisitRefOfGroupConcatExpr(in, f)
 	case *InsertExpr:
 		return VisitRefOfInsertExpr(in, f)
+	case *IntervalDateExpr:
+		return VisitRefOfIntervalDateExpr(in, f)
 	case *IntervalFuncExpr:
 		return VisitRefOfIntervalFuncExpr(in, f)
 	case *JSONArrayExpr:
@@ -4803,8 +4808,8 @@ func VisitExpr(in Expr, f Visit) error {
 		return VisitRefOfGroupConcatExpr(in, f)
 	case *InsertExpr:
 		return VisitRefOfInsertExpr(in, f)
-	case *IntervalExpr:
-		return VisitRefOfIntervalExpr(in, f)
+	case *IntervalDateExpr:
+		return VisitRefOfIntervalDateExpr(in, f)
 	case *IntervalFuncExpr:
 		return VisitRefOfIntervalFuncExpr(in, f)
 	case *IntroducerExpr:

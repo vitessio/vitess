@@ -222,8 +222,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfInsert(parent, node, replacer)
 	case *InsertExpr:
 		return a.rewriteRefOfInsertExpr(parent, node, replacer)
-	case *IntervalExpr:
-		return a.rewriteRefOfIntervalExpr(parent, node, replacer)
+	case *IntervalDateExpr:
+		return a.rewriteRefOfIntervalDateExpr(parent, node, replacer)
 	case *IntervalFuncExpr:
 		return a.rewriteRefOfIntervalFuncExpr(parent, node, replacer)
 	case *IntroducerExpr:
@@ -3653,8 +3653,8 @@ func (a *application) rewriteRefOfInsert(parent SQLNode, node *Insert, replacer 
 	}) {
 		return false
 	}
-	if !a.rewriteTableName(node, node.Table, func(newNode, parent SQLNode) {
-		parent.(*Insert).Table = newNode.(TableName)
+	if !a.rewriteRefOfAliasedTableExpr(node, node.Table, func(newNode, parent SQLNode) {
+		parent.(*Insert).Table = newNode.(*AliasedTableExpr)
 	}) {
 		return false
 	}
@@ -3730,7 +3730,7 @@ func (a *application) rewriteRefOfInsertExpr(parent SQLNode, node *InsertExpr, r
 	}
 	return true
 }
-func (a *application) rewriteRefOfIntervalExpr(parent SQLNode, node *IntervalExpr, replacer replacerFunc) bool {
+func (a *application) rewriteRefOfIntervalDateExpr(parent SQLNode, node *IntervalDateExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
 	}
@@ -3742,8 +3742,13 @@ func (a *application) rewriteRefOfIntervalExpr(parent SQLNode, node *IntervalExp
 			return true
 		}
 	}
-	if !a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
-		parent.(*IntervalExpr).Expr = newNode.(Expr)
+	if !a.rewriteExpr(node, node.Date, func(newNode, parent SQLNode) {
+		parent.(*IntervalDateExpr).Date = newNode.(Expr)
+	}) {
+		return false
+	}
+	if !a.rewriteExpr(node, node.Interval, func(newNode, parent SQLNode) {
+		parent.(*IntervalDateExpr).Interval = newNode.(Expr)
 	}) {
 		return false
 	}
@@ -9104,6 +9109,8 @@ func (a *application) rewriteCallable(parent SQLNode, node Callable, replacer re
 		return a.rewriteRefOfGroupConcatExpr(parent, node, replacer)
 	case *InsertExpr:
 		return a.rewriteRefOfInsertExpr(parent, node, replacer)
+	case *IntervalDateExpr:
+		return a.rewriteRefOfIntervalDateExpr(parent, node, replacer)
 	case *IntervalFuncExpr:
 		return a.rewriteRefOfIntervalFuncExpr(parent, node, replacer)
 	case *JSONArrayExpr:
@@ -9386,8 +9393,8 @@ func (a *application) rewriteExpr(parent SQLNode, node Expr, replacer replacerFu
 		return a.rewriteRefOfGroupConcatExpr(parent, node, replacer)
 	case *InsertExpr:
 		return a.rewriteRefOfInsertExpr(parent, node, replacer)
-	case *IntervalExpr:
-		return a.rewriteRefOfIntervalExpr(parent, node, replacer)
+	case *IntervalDateExpr:
+		return a.rewriteRefOfIntervalDateExpr(parent, node, replacer)
 	case *IntervalFuncExpr:
 		return a.rewriteRefOfIntervalFuncExpr(parent, node, replacer)
 	case *IntroducerExpr:

@@ -31379,7 +31379,8 @@ export namespace query {
             Gen4Greedy = 3,
             Gen4Left2Right = 4,
             Gen4WithFallback = 5,
-            Gen4CompareV3 = 6
+            Gen4CompareV3 = 6,
+            V3Insert = 7
         }
 
         /** Consolidator enum. */

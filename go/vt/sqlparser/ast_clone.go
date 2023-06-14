@@ -223,8 +223,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfInsert(in)
 	case *InsertExpr:
 		return CloneRefOfInsertExpr(in)
-	case *IntervalExpr:
-		return CloneRefOfIntervalExpr(in)
+	case *IntervalDateExpr:
+		return CloneRefOfIntervalDateExpr(in)
 	case *IntervalFuncExpr:
 		return CloneRefOfIntervalFuncExpr(in)
 	case *IntroducerExpr:
@@ -1613,7 +1613,7 @@ func CloneRefOfInsert(n *Insert) *Insert {
 	}
 	out := *n
 	out.Comments = CloneRefOfParsedComments(n.Comments)
-	out.Table = CloneTableName(n.Table)
+	out.Table = CloneRefOfAliasedTableExpr(n.Table)
 	out.Partitions = ClonePartitions(n.Partitions)
 	out.Columns = CloneColumns(n.Columns)
 	out.Rows = CloneInsertRows(n.Rows)
@@ -1634,13 +1634,14 @@ func CloneRefOfInsertExpr(n *InsertExpr) *InsertExpr {
 	return &out
 }
 
-// CloneRefOfIntervalExpr creates a deep clone of the input.
-func CloneRefOfIntervalExpr(n *IntervalExpr) *IntervalExpr {
+// CloneRefOfIntervalDateExpr creates a deep clone of the input.
+func CloneRefOfIntervalDateExpr(n *IntervalDateExpr) *IntervalDateExpr {
 	if n == nil {
 		return nil
 	}
 	out := *n
-	out.Expr = CloneExpr(n.Expr)
+	out.Date = CloneExpr(n.Date)
+	out.Interval = CloneExpr(n.Interval)
 	return &out
 }
 
@@ -3558,6 +3559,8 @@ func CloneCallable(in Callable) Callable {
 		return CloneRefOfGroupConcatExpr(in)
 	case *InsertExpr:
 		return CloneRefOfInsertExpr(in)
+	case *IntervalDateExpr:
+		return CloneRefOfIntervalDateExpr(in)
 	case *IntervalFuncExpr:
 		return CloneRefOfIntervalFuncExpr(in)
 	case *JSONArrayExpr:
@@ -3852,8 +3855,8 @@ func CloneExpr(in Expr) Expr {
 		return CloneRefOfGroupConcatExpr(in)
 	case *InsertExpr:
 		return CloneRefOfInsertExpr(in)
-	case *IntervalExpr:
-		return CloneRefOfIntervalExpr(in)
+	case *IntervalDateExpr:
+		return CloneRefOfIntervalDateExpr(in)
 	case *IntervalFuncExpr:
 		return CloneRefOfIntervalFuncExpr(in)
 	case *IntroducerExpr:

@@ -39,7 +39,7 @@ import (
 )
 
 var (
-	// BackupEngineImplementation is the implementation to use for BackupEngine
+	// backupEngineImplementation is the implementation to use for BackupEngine
 	backupEngineImplementation = builtinBackupEngineName
 )
 
@@ -165,6 +165,11 @@ func init() {
 	for _, cmd := range []string{"vtcombo", "vttablet", "vttestserver", "vtctld", "vtbackup"} {
 		servenv.OnParseFor(cmd, registerBackupEngineFlags)
 	}
+}
+
+// isIncrementalBackup is a convenience function to check whether the params indicate an incremental backup request
+func isIncrementalBackup(params BackupParams) bool {
+	return params.IncrementalFromPos != ""
 }
 
 func registerBackupEngineFlags(fs *pflag.FlagSet) {

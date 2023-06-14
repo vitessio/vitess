@@ -98,6 +98,7 @@ func TestMain(m *testing.M) {
 
 		// Set extra tablet args for lock timeout
 		clusterInstance.VtTabletExtraArgs = []string{
+			"--throttler-config-via-topo=false",
 			"--lock_tables_timeout", "5s",
 			"--watch_replication_stream",
 			"--enable_replication_reporter",
@@ -105,7 +106,6 @@ func TestMain(m *testing.M) {
 			"--throttle_metrics_query", "show global status like 'threads_running'",
 			"--throttle_metrics_threshold", fmt.Sprintf("%d", testThreshold),
 			"--throttle_check_as_check_self",
-			"--heartbeat_enable",
 			"--heartbeat_interval", "250ms",
 		}
 

@@ -571,7 +571,7 @@ func (r *Route) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.Alia
 	r.Source = src
 
 	// And since we are under the route, we don't need to continue pushing anything further down
-	offset := src.addNoPushCol(expr, false)
+	offset := src.addColumnWithoutPushing(expr, false)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -579,7 +579,8 @@ func (r *Route) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.Alia
 }
 
 type selectExpressions interface {
-	addNoPushCol(expr *sqlparser.AliasedExpr, addToGroupBy bool) int
+	ops.Operator
+	addColumnWithoutPushing(expr *sqlparser.AliasedExpr, addToGroupBy bool) int
 	isDerived() bool
 }
 
@@ -597,7 +598,7 @@ func addColumnToInput(operator ops.Operator, expr *sqlparser.AliasedExpr, addToG
 			// we have to add a new projection and can't build on this one
 			return false, 0
 		}
-		offset := op.addNoPushCol(expr, addToGroupBy)
+		offset := op.addColumnWithoutPushing(expr, addToGroupBy)
 		return true, offset
 	default:
 		return false, 0
@@ -697,16 +698,6 @@ func (r *Route) getOffsetFor(ctx *plancontext.PlanningContext, order ops.OrderBy
 		return 0, err
 	}
 	return offset, nil
-}
-
-func (r *Route) Description() ops.OpDescription {
-	return ops.OpDescription{
-		OperatorType: "Route",
-		Other: map[string]any{
-			"OpCode":   r.Routing.OpCode(),
-			"Keyspace": r.Routing.Keyspace(),
-		},
-	}
 }
 
 func (r *Route) ShortDescription() string {

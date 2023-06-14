@@ -22,13 +22,12 @@ import (
 
 	"golang.org/x/exp/slices"
 
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
-	"vitess.io/vitess/go/vt/vtgate/semantics"
-
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
+	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 type (
@@ -79,13 +78,40 @@ type (
 
 var _ selectExpressions = (*Projection)(nil)
 
+// createSimpleProjection returns a projection where all columns are offsets.
+// used to change the name and order of the columns in the final output
+func createSimpleProjection(ctx *plancontext.PlanningContext, qp *QueryProjection, src ops.Operator) (*Projection, error) {
+	p := &Projection{
+		Source: src,
+	}
+
+	for _, e := range qp.SelectExprs {
+		if _, isStar := e.Col.(*sqlparser.StarExpr); isStar {
+			return nil, errHorizonNotPlanned()
+		}
+		ae, err := e.GetAliasedExpr()
+		if err != nil {
+			return nil, err
+		}
+		newSrc, offset, err := p.Source.AddColumn(ctx, ae, true, false)
+		if err != nil {
+			return nil, err
+		}
+
+		p.Source = newSrc
+		p.Projections = append(p.Projections, Offset{Expr: ae.Expr, Offset: offset})
+		p.Columns = append(p.Columns, ae)
+	}
+	return p, nil
+}
+
 func (p *Projection) addUnexploredExpr(ae *sqlparser.AliasedExpr, e sqlparser.Expr) int {
 	p.Projections = append(p.Projections, UnexploredExpression{E: e})
 	p.Columns = append(p.Columns, ae)
 	return len(p.Projections) - 1
 }
 
-func (p *Projection) addNoPushCol(expr *sqlparser.AliasedExpr, _ bool) int {
+func (p *Projection) addColumnWithoutPushing(expr *sqlparser.AliasedExpr, _ bool) int {
 	return p.addUnexploredExpr(expr, expr.Expr)
 }
 
@@ -165,30 +191,6 @@ func (p *Projection) AllOffsets() (cols []int) {
 	return
 }
 
-func (p *Projection) Description() ops.OpDescription {
-	var columns []string
-	for i, col := range p.Projections {
-		aliasExpr := p.Columns[i]
-		if aliasExpr.Expr == col.GetExpr() {
-			columns = append(columns, sqlparser.String(aliasExpr))
-		} else {
-			columns = append(columns, fmt.Sprintf("%s AS %s", sqlparser.String(col.GetExpr()), aliasExpr.ColumnName()))
-		}
-	}
-
-	other := map[string]any{
-		"OutputColumns": strings.Join(columns, ", "),
-	}
-	if p.TableID != nil {
-		other["Derived"] = true
-		other["Alias"] = p.Alias
-	}
-	return ops.OpDescription{
-		OperatorType: "Projection",
-		Other:        other,
-	}
-}
-
 func (p *Projection) ShortDescription() string {
 	var columns []string
 	if p.Alias != "" {
@@ -205,29 +207,43 @@ func (p *Projection) ShortDescription() string {
 	return strings.Join(columns, ", ")
 }
 
-func (p *Projection) Compact(*plancontext.PlanningContext) (ops.Operator, *rewrite.ApplyResult, error) {
+func (p *Projection) Compact(ctx *plancontext.PlanningContext) (ops.Operator, *rewrite.ApplyResult, error) {
 	switch src := p.Source.(type) {
 	case *Route:
 		return p.compactWithRoute(src)
 	case *ApplyJoin:
-		return p.compactWithJoin(src)
+		return p.compactWithJoin(ctx, src)
 	}
 	return p, rewrite.SameTree, nil
 }
 
-func (p *Projection) compactWithJoin(src *ApplyJoin) (ops.Operator, *rewrite.ApplyResult, error) {
+func (p *Projection) compactWithJoin(ctx *plancontext.PlanningContext, src *ApplyJoin) (ops.Operator, *rewrite.ApplyResult, error) {
 	var newColumns []int
 	var newColumnsAST []JoinColumn
-	for _, col := range p.Projections {
-		offset, ok := col.(Offset)
-		if !ok {
+	for idx, col := range p.Projections {
+		switch col := col.(type) {
+		case Offset:
+			newColumns = append(newColumns, src.Columns[col.Offset])
+			newColumnsAST = append(newColumnsAST, src.ColumnsAST[col.Offset])
+		case UnexploredExpression:
+			if !ctx.SemTable.EqualsExprWithDeps(col.E, p.Columns[idx].Expr) {
+				// the inner expression is different from what we are presenting to the outside - this means we need to evaluate
+				return p, rewrite.SameTree, nil
+			}
+			offset := slices.IndexFunc(src.ColumnsAST, func(jc JoinColumn) bool {
+				return ctx.SemTable.EqualsExprWithDeps(jc.Original.Expr, col.E)
+			})
+			if offset < 0 {
+				return p, rewrite.SameTree, nil
+			}
+			if len(src.Columns) > 0 {
+				newColumns = append(newColumns, src.Columns[offset])
+			}
+			newColumnsAST = append(newColumnsAST, src.ColumnsAST[offset])
+		default:
 			return p, rewrite.SameTree, nil
 		}
-
-		newColumns = append(newColumns, src.Columns[offset.Offset])
-		newColumnsAST = append(newColumnsAST, src.ColumnsAST[offset.Offset])
 	}
-
 	src.Columns = newColumns
 	src.ColumnsAST = newColumnsAST
 	return src, rewrite.NewTree("remove projection from before join", src), nil
@@ -258,23 +274,21 @@ func stopAtAggregations(node, _ sqlparser.SQLNode) bool {
 	return b
 }
 
-func (p *Projection) planOffsets(ctx *plancontext.PlanningContext) error {
-	var err error
-	offsetter := func(cursor *sqlparser.CopyOnWriteCursor) {
-		expr, ok := cursor.Node().(sqlparser.Expr)
-		if !ok || !fetchByOffset(expr) {
-			return
-		}
+func (p *Projection) needsEvaluation(ctx *plancontext.PlanningContext, e sqlparser.Expr) bool {
+	offset := slices.IndexFunc(p.Columns, func(expr *sqlparser.AliasedExpr) bool {
+		return ctx.SemTable.EqualsExprWithDeps(expr.Expr, e)
+	})
 
-		newSrc, offset, terr := p.Source.AddColumn(ctx, aeWrap(expr), true, false)
-		if terr != nil {
-			err = terr
-			return
-		}
-		p.Source = newSrc
-		cursor.Replace(sqlparser.NewOffset(offset, expr))
+	if offset < 0 {
+		return false
 	}
 
+	inside := p.Projections[offset].GetExpr()
+	outside := p.Columns[offset].Expr
+	return inside != outside
+}
+
+func (p *Projection) planOffsets(ctx *plancontext.PlanningContext) error {
 	for i, col := range p.Projections {
 		_, unexplored := col.(UnexploredExpression)
 		if !unexplored {
@@ -282,7 +296,7 @@ func (p *Projection) planOffsets(ctx *plancontext.PlanningContext) error {
 		}
 
 		// first step is to replace the expressions we expect to get from our input with the offsets for these
-		rewritten := sqlparser.CopyOnRewrite(col.GetExpr(), stopAtAggregations, offsetter, nil).(sqlparser.Expr)
+		rewritten, err := useOffsets(ctx, col.GetExpr(), p)
 		if err != nil {
 			return err
 		}
@@ -310,4 +324,64 @@ func (p *Projection) planOffsets(ctx *plancontext.PlanningContext) error {
 	}
 
 	return nil
+}
+
+func useOffsets(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op ops.Operator) (sqlparser.Expr, error) {
+	in := op.Inputs()[0]
+	columns, err := in.GetColumns()
+	if err != nil {
+		return nil, err
+	}
+
+	var exprOffset *sqlparser.Offset
+	down := func(node, parent sqlparser.SQLNode) bool {
+		if err != nil {
+			return false
+		}
+		e, ok := node.(sqlparser.Expr)
+		if !ok {
+			return true
+		}
+		offset := slices.IndexFunc(columns, func(expr *sqlparser.AliasedExpr) bool {
+			return ctx.SemTable.EqualsExprWithDeps(expr.Expr, e)
+		})
+		if offset >= 0 {
+			// this expression can be fetched from the input - we can stop here
+			exprOffset = sqlparser.NewOffset(offset, e)
+			return false
+		}
+
+		if fetchByOffset(e) {
+			// this expression has to be fetched from the input, but we didn't find it in the input. let's add it
+			_, addToGroupBy := e.(*sqlparser.ColName)
+			in, offset, err = in.AddColumn(ctx, aeWrap(e), true, addToGroupBy)
+			if err != nil {
+				return false
+			}
+			op.SetInputs([]ops.Operator{in})
+			columns, err = in.GetColumns()
+			if err != nil {
+				return false
+			}
+			exprOffset = sqlparser.NewOffset(offset, e)
+			return false
+		}
+
+		return true
+	}
+
+	// The cursor replace is not available while walking `down`, so `up` is used to do the replacement.
+	up := func(cursor *sqlparser.CopyOnWriteCursor) {
+		if exprOffset != nil {
+			cursor.Replace(exprOffset)
+			exprOffset = nil
+		}
+	}
+
+	rewritten := sqlparser.CopyOnRewrite(expr, down, up, ctx.SemTable.CopyDependenciesOnSQLNodes)
+	if err != nil {
+		return nil, err
+	}
+
+	return rewritten.(sqlparser.Expr), nil
 }

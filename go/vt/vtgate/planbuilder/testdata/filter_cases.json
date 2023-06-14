@@ -6760,5 +6760,73 @@
         "user.user"
       ]
     }
+  },
+  {
+    "comment": "push filter under aggregation",
+    "query": "select count(*) from user left join user_extra on user.id = user_extra.bar where IFNULL(user_extra.collections_status, 'NOTSET') != 'collections_lock'",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select count(*) from user left join user_extra on user.id = user_extra.bar where IFNULL(user_extra.collections_status, 'NOTSET') != 'collections_lock'",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "sum_count_star(0) AS count(*)",
+        "ResultColumns": 1,
+        "Inputs": [
+          {
+            "OperatorType": "Projection",
+            "Expressions": [
+              "[COLUMN 0] * COALESCE([COLUMN 1], INT64(1)) as count(*)",
+              "[COLUMN 2] as collections_status"
+            ],
+            "Inputs": [
+              {
+                "OperatorType": "Filter",
+                "Predicate": "IFNULL(user_extra.collections_status, 'NOTSET') != 'collections_lock'",
+                "Inputs": [
+                  {
+                    "OperatorType": "Join",
+                    "Variant": "LeftJoin",
+                    "JoinColumnIndexes": "L:0,R:0,R:1",
+                    "JoinVars": {
+                      "user_id": 1
+                    },
+                    "TableName": "`user`_user_extra",
+                    "Inputs": [
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "Scatter",
+                        "Keyspace": {
+                          "Name": "user",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select count(*), `user`.id from `user` where 1 != 1 group by `user`.id",
+                        "Query": "select count(*), `user`.id from `user` group by `user`.id",
+                        "Table": "`user`"
+                      },
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "Scatter",
+                        "Keyspace": {
+                          "Name": "user",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select count(*), user_extra.collections_status from user_extra where 1 != 1 group by user_extra.collections_status",
+                        "Query": "select count(*), user_extra.collections_status from user_extra where user_extra.bar = :user_id group by user_extra.collections_status",
+                        "Table": "user_extra"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user",
+        "user.user_extra"
+      ]
+    }
   }
 ]

@@ -30,6 +30,11 @@ for binary in mysqld etcd etcdctl curl vtctlclient vttablet vtgate vtctld mysqlc
   command -v "$binary" > /dev/null || fail "${binary} is not installed in PATH. See https://vitess.io/docs/get-started/local/ for install instructions."
 done;
 
+# vtctlclient has a separate alias setup below
+for binary in vttablet vtgate vtctld mysqlctl vtorc vtctl; do
+  alias $binary="$binary --config-file-not-found-handling=ignore"
+done;
+
 if [ "${TOPO}" = "zk2" ]; then
     # Each ZooKeeper server needs a list of all servers in the quorum.
     # Since we're running them all locally, we need to give them unique ports.
@@ -51,13 +56,6 @@ if [ "${TOPO}" = "zk2" ]; then
     TOPOLOGY_FLAGS="--topo_implementation zk2 --topo_global_server_address ${ZK_SERVER} --topo_global_root /vitess/global"
 
     mkdir -p "${VTDATAROOT}/tmp"
-elif [ "${TOPO}" = "k8s" ]; then
-    # Set topology environment parameters.
-    K8S_ADDR="localhost"
-    K8S_PORT="8443"
-    K8S_KUBECONFIG=$VTDATAROOT/tmp/k8s.kubeconfig
-    # shellcheck disable=SC2034
-    TOPOLOGY_FLAGS="--topo_implementation k8s --topo_k8s_kubeconfig ${K8S_KUBECONFIG} --topo_global_server_address ${K8S_ADDR}:${K8S_PORT} --topo_global_root /vitess/global"
 elif [ "${TOPO}" = "consul" ]; then
     # Set up topology environment parameters.
     CONSUL_SERVER=127.0.0.1
@@ -79,7 +77,7 @@ mkdir -p "${VTDATAROOT}/tmp"
 # such as ~/.my.cnf
 
 alias mysql="command mysql --no-defaults -h 127.0.0.1 -P 15306"
-alias vtctlclient="command vtctlclient --server localhost:15999 --log_dir ${VTDATAROOT}/tmp --alsologtostderr"
+alias vtctlclient="command vtctlclient --server localhost:15999 --log_dir ${VTDATAROOT}/tmp --alsologtostderr --config-file-not-found-handling=ignore"
 alias vtctldclient="command vtctldclient --server localhost:15999"
 
 # Make sure aliases are expanded in non-interactive shell

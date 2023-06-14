@@ -37,6 +37,7 @@ import (
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
 const mzUpdateQuery = "update _vt.vreplication set state='Running' where db_name='vt_targetks' and workflow='workflow'"
@@ -1179,10 +1180,9 @@ func TestCreateCustomizedVindex(t *testing.T) {
 			"v": {
 				Type: "lookup_unique",
 				Params: map[string]string{
-					"table":     "ks.lkp",
-					"from":      "c1",
-					"to":        "col2",
-					"data_type": "bigint(20)",
+					"table": "ks.lkp",
+					"from":  "c1",
+					"to":    "col2",
 				},
 				Owner: "t1",
 			},
@@ -1231,7 +1231,6 @@ func TestCreateCustomizedVindex(t *testing.T) {
 					"table":      "ks.lkp",
 					"from":       "c1",
 					"to":         "col2",
-					"data_type":  "bigint(20)",
 					"write_only": "true",
 				},
 				Owner: "t1",
@@ -1450,6 +1449,7 @@ func TestCreateLookupVindexFailures(t *testing.T) {
 					Params: map[string]string{
 						"table": "targetks.t",
 						"from":  "c1,c2",
+						"to":    "c3",
 					},
 				},
 			},
@@ -1464,6 +1464,7 @@ func TestCreateLookupVindexFailures(t *testing.T) {
 					Params: map[string]string{
 						"table": "targetks.t",
 						"from":  "c1",
+						"to":    "c2",
 					},
 				},
 			},
@@ -1478,6 +1479,7 @@ func TestCreateLookupVindexFailures(t *testing.T) {
 					Params: map[string]string{
 						"table": "targetks.t",
 						"from":  "c1,c2",
+						"to":    "c2",
 					},
 				},
 			},
@@ -1520,6 +1522,7 @@ func TestCreateLookupVindexFailures(t *testing.T) {
 					Params: map[string]string{
 						"table": "targetks.t",
 						"from":  "c1",
+						"to":    "c2",
 					},
 					Owner: "otherTable",
 				},
@@ -1569,6 +1572,7 @@ func TestCreateLookupVindexFailures(t *testing.T) {
 					Params: map[string]string{
 						"table": "targetks.t",
 						"from":  "c1",
+						"to":    "c2",
 					},
 					Owner: "t1",
 				},
@@ -2450,6 +2454,11 @@ func TestMaterializerNoGoodVindex(t *testing.T) {
 		Vindexes: map[string]*vschemapb.Vindex{
 			"lookup_unique": {
 				Type: "lookup_unique",
+				Params: map[string]string{
+					"table": "t1",
+					"from":  "c1",
+					"to":    "c2",
+				},
 			},
 		},
 		Tables: map[string]*vschemapb.Table{
@@ -2830,6 +2839,198 @@ func TestMoveTablesDDLFlag(t *testing.T) {
 			err := env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", "t1", "",
 				"", false, "", false, true, "", false, false, "", onDDLAction, nil)
 			require.NoError(t, err)
+		})
+	}
+}
+
+func TestAddTablesToVSchema(t *testing.T) {
+	ctx := context.Background()
+	ts := memorytopo.NewServer("zone1")
+	srcks := "source"
+	wr := &Wrangler{
+		logger:   logutil.NewMemoryLogger(),
+		ts:       ts,
+		sourceTs: ts,
+	}
+	tests := []struct {
+		name              string
+		sourceVSchema     *vschemapb.Keyspace
+		inTargetVSchema   *vschemapb.Keyspace
+		tables            []string
+		copyVSchema       bool
+		wantTargetVSchema *vschemapb.Keyspace
+	}{
+		{
+			name: "no target vschema; copy source vschema",
+			sourceVSchema: &vschemapb.Keyspace{
+				Tables: map[string]*vschemapb.Table{
+					"t1": {
+						Type: vindexes.TypeReference,
+					},
+					"t2": {
+						Type: vindexes.TypeSequence,
+					},
+					"t3": {
+						AutoIncrement: &vschemapb.AutoIncrement{
+							Column:   "c1",
+							Sequence: "t2",
+						},
+					},
+				},
+			},
+			inTargetVSchema: &vschemapb.Keyspace{},
+			tables:          []string{"t1", "t2", "t3", "t4"},
+			copyVSchema:     true,
+			wantTargetVSchema: &vschemapb.Keyspace{
+				Tables: map[string]*vschemapb.Table{
+					"t1": {
+						Type: vindexes.TypeReference,
+					},
+					"t2": {
+						Type: vindexes.TypeSequence,
+					},
+					"t3": {
+						AutoIncrement: &vschemapb.AutoIncrement{
+							Column:   "c1",
+							Sequence: "t2",
+						},
+					},
+					"t4": {},
+				},
+			},
+		},
+		{
+			name: "no target vschema; copy source vschema; sharded source",
+			sourceVSchema: &vschemapb.Keyspace{
+				Sharded: true,
+				Tables: map[string]*vschemapb.Table{
+					"t1": {
+						Type: vindexes.TypeReference,
+					},
+					"t2": {
+						Type: vindexes.TypeSequence,
+					},
+					"t3": {
+						AutoIncrement: &vschemapb.AutoIncrement{
+							Column:   "c1",
+							Sequence: "t2",
+						},
+					},
+					"t4": {
+						ColumnVindexes: []*vschemapb.ColumnVindex{ // Should be stripped on target
+							{
+								Column: "c1",
+								Name:   "hash",
+							},
+						},
+					},
+				},
+			},
+			inTargetVSchema: &vschemapb.Keyspace{},
+			tables:          []string{"t1", "t2", "t3", "t4"},
+			copyVSchema:     true,
+			wantTargetVSchema: &vschemapb.Keyspace{
+				Tables: map[string]*vschemapb.Table{
+					"t1": {
+						Type: vindexes.TypeReference,
+					},
+					"t2": {
+						Type: vindexes.TypeSequence,
+					},
+					"t3": {
+						AutoIncrement: &vschemapb.AutoIncrement{
+							Column:   "c1",
+							Sequence: "t2",
+						},
+					},
+					"t4": {},
+				},
+			},
+		},
+		{
+			name: "target vschema; copy source vschema",
+			sourceVSchema: &vschemapb.Keyspace{
+				Tables: map[string]*vschemapb.Table{
+					"t1": {
+						Type: vindexes.TypeReference,
+					},
+					"t2": {
+						Type: vindexes.TypeSequence,
+					},
+					"t3": {
+						AutoIncrement: &vschemapb.AutoIncrement{
+							Column:   "c1",
+							Sequence: "t2",
+						},
+					},
+					"t4": {
+						ColumnVindexes: []*vschemapb.ColumnVindex{ // Should be stripped on target
+							{
+								Column: "c1",
+								Name:   "hash",
+							},
+						},
+					},
+				},
+			},
+			inTargetVSchema: &vschemapb.Keyspace{
+				Tables: map[string]*vschemapb.Table{
+					"t1": {
+						Type: vindexes.TypeReference,
+					},
+					"t2": {},
+					"t3": {},
+					"t4": {},
+				},
+			},
+			tables:      []string{"t1", "t2", "t3", "t4"},
+			copyVSchema: true,
+			wantTargetVSchema: &vschemapb.Keyspace{
+				Tables: map[string]*vschemapb.Table{
+					"t1": {
+						Type: vindexes.TypeReference,
+					},
+					"t2": {},
+					"t3": {},
+					"t4": {},
+				},
+			},
+		},
+		{
+			name: "no target vschema; do not copy source vschema",
+			sourceVSchema: &vschemapb.Keyspace{
+				Tables: map[string]*vschemapb.Table{
+					"t1": {
+						Type: vindexes.TypeReference,
+					},
+					"t2": {
+						Type: vindexes.TypeSequence,
+					},
+					"t3": {
+						AutoIncrement: &vschemapb.AutoIncrement{
+							Column:   "c1",
+							Sequence: "t2",
+						},
+					},
+				},
+			},
+			inTargetVSchema: &vschemapb.Keyspace{},
+			tables:          []string{"t1", "t2"},
+			copyVSchema:     false,
+			wantTargetVSchema: &vschemapb.Keyspace{
+				Tables: map[string]*vschemapb.Table{
+					"t1": {},
+					"t2": {},
+				},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ts.SaveVSchema(ctx, srcks, tt.sourceVSchema)
+			err := wr.addTablesToVSchema(ctx, srcks, tt.inTargetVSchema, tt.tables, tt.copyVSchema)
+			require.NoError(t, err)
+			require.Equal(t, tt.wantTargetVSchema, tt.inTargetVSchema)
 		})
 	}
 }

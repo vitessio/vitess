@@ -50,6 +50,7 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl/mysqlctlclient"
 	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	vtenv "vitess.io/vitess/go/vt/env"
 )
@@ -1024,6 +1025,7 @@ func (mysqld *Mysqld) executeMysqlScript(connParams *mysql.ConnParams, sql io.Re
 	args := []string{
 		"--defaults-extra-file=" + cnf,
 		"--batch",
+		"--default-character-set=utf8mb4",
 	}
 	env, err := buildLdPaths()
 	if err != nil {
@@ -1063,7 +1065,7 @@ socket=%v
 `, connParams.Uname, connParams.Pass, connParams.UnixSocket)
 	}
 
-	tmpfile, err := os.CreateTemp("", "example")
+	tmpfile, err := os.CreateTemp("", "defaults-extra-file-")
 	if err != nil {
 		return "", err
 	}
@@ -1202,12 +1204,13 @@ func (mysqld *Mysqld) ApplyBinlogFile(ctx context.Context, binlogFile string, re
 		mysqlbinlogCmd = exec.Command(name, args...)
 		mysqlbinlogCmd.Dir = dir
 		mysqlbinlogCmd.Env = env
-		log.Infof("ApplyBinlogFile: running %#v", mysqlbinlogCmd)
+		log.Infof("ApplyBinlogFile: running mysqlbinlog command: %#v", mysqlbinlogCmd)
 		pipe, err = mysqlbinlogCmd.StdoutPipe() // to be piped into mysql
 		if err != nil {
 			return err
 		}
 	}
+	var mysqlErrFile *os.File
 	{
 		name, err := binaryPath(dir, "mysql")
 		if err != nil {
@@ -1219,12 +1222,18 @@ func (mysqld *Mysqld) ApplyBinlogFile(ctx context.Context, binlogFile string, re
 		}
 		cnf, err := mysqld.defaultsExtraFile(params)
 		if err != nil {
-			return err
+			return vterrors.Wrapf(err, "failed to create defaults extra file")
 		}
 		defer os.Remove(cnf)
 		args := []string{
 			"--defaults-extra-file=" + cnf,
 		}
+
+		mysqlErrFile, err = os.CreateTemp("", "err-mysql-")
+		if err != nil {
+			return err
+		}
+		defer os.Remove(mysqlErrFile.Name())
 
 		// We disable super_read_only, in case it is in the default MySQL startup
 		// parameters.  We do it blindly, since this will fail on MariaDB, which doesn't
@@ -1252,20 +1261,29 @@ func (mysqld *Mysqld) ApplyBinlogFile(ctx context.Context, binlogFile string, re
 		mysqlCmd.Dir = dir
 		mysqlCmd.Env = env
 		mysqlCmd.Stdin = pipe // piped from mysqlbinlog
+
+		mysqlCmd.Stderr = mysqlErrFile
+		log.Infof("ApplyBinlogFile: running mysql command: %#v with errfile=%v", mysqlCmd, mysqlErrFile.Name())
 	}
 	// Run both processes, piped:
 	if err := mysqlbinlogCmd.Start(); err != nil {
 		return err
 	}
 	if err := mysqlCmd.Start(); err != nil {
-		return err
+		return vterrors.Wrapf(err, "failed to start mysql")
 	}
 	// Wait for both to complete:
 	if err := mysqlbinlogCmd.Wait(); err != nil {
-		return err
+		return vterrors.Wrapf(err, "mysqlbinlog command failed")
 	}
 	if err := mysqlCmd.Wait(); err != nil {
-		return err
+		if mysqlErrFile != nil {
+			errFileContent, _ := os.ReadFile(mysqlErrFile.Name())
+			if len(errFileContent) > 0 {
+				err = vterrors.Wrapf(err, "with error output: %s", string(errFileContent))
+			}
+		}
+		return vterrors.Wrapf(err, "waiting on mysql command")
 	}
 	return nil
 }
@@ -1275,7 +1293,10 @@ func (mysqld *Mysqld) ApplyBinlogFile(ctx context.Context, binlogFile string, re
 // remote through mysqlctl.
 func noSocketFile() {
 	if socketFile != "" {
-		panic("Running remotely through mysqlctl, socketFile must not be set")
+		// We log an error for now until we fix the issue with ApplySchema surfacing in MoveTables.
+		// See https://github.com/vitessio/vitess/issues/13203 and https://github.com/vitessio/vitess/pull/13178
+		//panic("Running remotely through mysqlctl, socketFile must not be set")
+		log.Warning("Running remotely through mysqlctl and thus socketFile should not be set")
 	}
 }
 

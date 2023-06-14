@@ -158,7 +158,7 @@ INPUT
 select date_sub("0069-01-01 00:00:01",INTERVAL 2 SECOND);
 END
 OUTPUT
-select date_sub('0069-01-01 00:00:01', interval 2 SECOND) from dual
+select date_sub('0069-01-01 00:00:01', interval 2 second) from dual
 END
 INPUT
 select count(distinct a) from t1 group by b;
@@ -518,7 +518,7 @@ INPUT
 select date_add("1997-12-31",INTERVAL "10.09" SECOND_MICROSECOND) as a;
 END
 OUTPUT
-select date_add('1997-12-31', interval '10.09' SECOND_MICROSECOND) as a from dual
+select date_add('1997-12-31', interval '10.09' second_microsecond) as a from dual
 END
 INPUT
 select substring('hello', 18446744073709551616, 1);
@@ -740,7 +740,7 @@ INPUT
 select date_add(date,INTERVAL "1 1" YEAR_MONTH) from t1;
 END
 OUTPUT
-select date_add(`date`, interval '1 1' YEAR_MONTH) from t1
+select date_add(`date`, interval '1 1' year_month) from t1
 END
 INPUT
 select a1, a2, b, min(c), max(c) from t1 group by a1,a2,b;
@@ -794,7 +794,7 @@ INPUT
 select date_add("1997-12-31 23:59:59",INTERVAL "1:1" MINUTE_SECOND);
 END
 OUTPUT
-select date_add('1997-12-31 23:59:59', interval '1:1' MINUTE_SECOND) from dual
+select date_add('1997-12-31 23:59:59', interval '1:1' minute_second) from dual
 END
 INPUT
 select st_contains(st_union(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')), st_intersection(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)')));
@@ -896,7 +896,7 @@ INPUT
 select date_add(date,INTERVAL "1" WEEK) from t1;
 END
 OUTPUT
-select date_add(`date`, interval '1' WEEK) from t1
+select date_add(`date`, interval '1' week) from t1
 END
 INPUT
 select timestampdiff(month,'2004-09-11','2004-09-11');
@@ -1016,7 +1016,7 @@ INPUT
 select date_sub("90-01-01 00:00:01",INTERVAL 2 SECOND);
 END
 OUTPUT
-select date_sub('90-01-01 00:00:01', interval 2 SECOND) from dual
+select date_sub('90-01-01 00:00:01', interval 2 second) from dual
 END
 INPUT
 select grp,group_concat(distinct c order by c) from t1 group by grp;
@@ -1322,7 +1322,7 @@ INPUT
 select DATE_ADD(20071108, INTERVAL 1 DAY);
 END
 OUTPUT
-select DATE_ADD(20071108, interval 1 DAY) from dual
+select date_add(20071108, interval 1 day) from dual
 END
 INPUT
 select distinct concat(c1, repeat('xx', 250)) as cc from t2 order by 1;
@@ -2000,7 +2000,7 @@ INPUT
 select date_add(date,INTERVAL "1:1" HOUR_MINUTE) from t1;
 END
 OUTPUT
-select date_add(`date`, interval '1:1' HOUR_MINUTE) from t1
+select date_add(`date`, interval '1:1' hour_minute) from t1
 END
 INPUT
 select timediff(cast('1 12:00:00' as time), '12:00:00');
@@ -2198,7 +2198,7 @@ INPUT
 select date_sub("1998-01-01 00:00:00",INTERVAL 1 DAY);
 END
 OUTPUT
-select date_sub('1998-01-01 00:00:00', interval 1 DAY) from dual
+select date_sub('1998-01-01 00:00:00', interval 1 day) from dual
 END
 INPUT
 select "he";
@@ -2258,7 +2258,7 @@ INPUT
 select date_add("1997-12-31 23:59:59",INTERVAL 1 YEAR);
 END
 OUTPUT
-select date_add('1997-12-31 23:59:59', interval 1 YEAR) from dual
+select date_add('1997-12-31 23:59:59', interval 1 year) from dual
 END
 INPUT
 select monthname("1972-03-04"),monthname("1972-03-04")+0;
@@ -2288,7 +2288,7 @@ INPUT
 select date_sub("1998-01-01 00:00:00.000001",INTERVAL "1:1.000002" MINUTE_MICROSECOND);
 END
 OUTPUT
-select date_sub('1998-01-01 00:00:00.000001', interval '1:1.000002' MINUTE_MICROSECOND) from dual
+select date_sub('1998-01-01 00:00:00.000001', interval '1:1.000002' minute_microsecond) from dual
 END
 INPUT
 select locate('lo','hello',2);
@@ -2300,7 +2300,7 @@ INPUT
 select date_add("1997-12-31 23:59:59.000002",INTERVAL "10000.999999" SECOND_MICROSECOND);
 END
 OUTPUT
-select date_add('1997-12-31 23:59:59.000002', interval '10000.999999' SECOND_MICROSECOND) from dual
+select date_add('1997-12-31 23:59:59.000002', interval '10000.999999' second_microsecond) from dual
 END
 INPUT
 select get_lock("mysqltest_lock", 100);
@@ -2360,7 +2360,7 @@ INPUT
 select date_sub("1998-01-01 00:00:00",INTERVAL "1 1" YEAR_MONTH);
 END
 OUTPUT
-select date_sub('1998-01-01 00:00:00', interval '1 1' YEAR_MONTH) from dual
+select date_sub('1998-01-01 00:00:00', interval '1 1' year_month) from dual
 END
 INPUT
 select min(b) from t1;
@@ -2810,7 +2810,7 @@ INPUT
 select date_sub("1998-01-01 00:00:00",INTERVAL 1 SECOND);
 END
 OUTPUT
-select date_sub('1998-01-01 00:00:00', interval 1 SECOND) from dual
+select date_sub('1998-01-01 00:00:00', interval 1 second) from dual
 END
 INPUT
 select * from t6 order by a,b;
@@ -2966,7 +2966,7 @@ INPUT
 select str_to_date('10:00 PM', '%h:%i %p') + INTERVAL 10 MINUTE;
 END
 OUTPUT
-select str_to_date('10:00 PM', '%h:%i %p') + interval 10 MINUTE from dual
+select str_to_date('10:00 PM', '%h:%i %p') + interval 10 minute from dual
 END
 INPUT
 select 497, TMP.ID, NULL from (select 497 as ID, MAX(t3.DATA) as DATA from t1 join t2 on (t1.ObjectID = t2.ID) join t3 on (t1.ObjectID = t3.ID) group by t2.ParID order by DATA DESC) as TMP;
@@ -3122,7 +3122,7 @@ INPUT
 select date_add("1997-12-31 23:59:59",INTERVAL 1 SECOND);
 END
 OUTPUT
-select date_add('1997-12-31 23:59:59', interval 1 SECOND) from dual
+select date_add('1997-12-31 23:59:59', interval 1 second) from dual
 END
 INPUT
 select t1.id, count(t2.id) from t1,t2 where t2.id = t1.id group by t1.id;
@@ -3248,7 +3248,7 @@ INPUT
 select date_add("1997-12-31 23:59:59",INTERVAL -100000 MINUTE);
 END
 OUTPUT
-select date_add('1997-12-31 23:59:59', interval (-100000) MINUTE) from dual
+select date_add('1997-12-31 23:59:59', interval -100000 minute) from dual
 END
 INPUT
 select insert('hello', 18446744073709551616, 1, 'hi');
@@ -3392,7 +3392,7 @@ INPUT
 select date_sub("1998-01-01 00:00:00",INTERVAL "1:1" HOUR_MINUTE);
 END
 OUTPUT
-select date_sub('1998-01-01 00:00:00', interval '1:1' HOUR_MINUTE) from dual
+select date_sub('1998-01-01 00:00:00', interval '1:1' hour_minute) from dual
 END
 INPUT
 select (select f from (select max(t1.a) as f) as dt) as g from t1;
@@ -3614,7 +3614,7 @@ INPUT
 select date_add("1997-12-31 23:59:59",INTERVAL 1 MINUTE);
 END
 OUTPUT
-select date_add('1997-12-31 23:59:59', interval 1 MINUTE) from dual
+select date_add('1997-12-31 23:59:59', interval 1 minute) from dual
 END
 INPUT
 select hex(_utf32 X'103344');
@@ -3692,7 +3692,7 @@ INPUT
 select date_add("1997-12-31 23:59:59",INTERVAL "1 1" YEAR_MONTH);
 END
 OUTPUT
-select date_add('1997-12-31 23:59:59', interval '1 1' YEAR_MONTH) from dual
+select date_add('1997-12-31 23:59:59', interval '1 1' year_month) from dual
 END
 INPUT
 select distinct pk from v1;
@@ -3728,7 +3728,7 @@ INPUT
 select date_add("1997-12-31 23:59:59.000002",INTERVAL "10000 99:99:99.999999" DAY_MICROSECOND);
 END
 OUTPUT
-select date_add('1997-12-31 23:59:59.000002', interval '10000 99:99:99.999999' DAY_MICROSECOND) from dual
+select date_add('1997-12-31 23:59:59.000002', interval '10000 99:99:99.999999' day_microsecond) from dual
 END
 INPUT
 select * from t5 where a < 3;
@@ -4118,7 +4118,7 @@ INPUT
 select date_add("1997-12-31 23:59:59.000002",INTERVAL "10000:99.999999" MINUTE_MICROSECOND);
 END
 OUTPUT
-select date_add('1997-12-31 23:59:59.000002', interval '10000:99.999999' MINUTE_MICROSECOND) from dual
+select date_add('1997-12-31 23:59:59.000002', interval '10000:99.999999' minute_microsecond) from dual
 END
 INPUT
 select insert(_ucs2 0x006100620063,1,2,_ucs2 0x006400650066);
@@ -4160,7 +4160,7 @@ INPUT
 select date_add("1997-12-31 23:59:59",INTERVAL "1:1" HOUR_MINUTE);
 END
 OUTPUT
-select date_add('1997-12-31 23:59:59', interval '1:1' HOUR_MINUTE) from dual
+select date_add('1997-12-31 23:59:59', interval '1:1' hour_minute) from dual
 END
 INPUT
 select ST_astext(ST_buffer(ST_geometryfromtext('point(1 1)'), 1));
@@ -4262,7 +4262,7 @@ INPUT
 select date_add(date,INTERVAL "1:1" DAY_HOUR) from t1;
 END
 OUTPUT
-select date_add(`date`, interval '1:1' DAY_HOUR) from t1
+select date_add(`date`, interval '1:1' day_hour) from t1
 END
 INPUT
 select * from v1a join v1b on t1.b = t2.b;
@@ -4274,7 +4274,7 @@ INPUT
 select date_sub("1998-01-01 00:00:00",INTERVAL "1 1:1:1" DAY_SECOND);
 END
 OUTPUT
-select date_sub('1998-01-01 00:00:00', interval '1 1:1:1' DAY_SECOND) from dual
+select date_sub('1998-01-01 00:00:00', interval '1 1:1:1' day_second) from dual
 END
 INPUT
 select cast(rtrim(ltrim(' 20.06 ')) as decimal(19,2));
@@ -4388,7 +4388,7 @@ INPUT
 select date_add(datetime, INTERVAL 1 SECOND) from t1;
 END
 OUTPUT
-select date_add(`datetime`, interval 1 SECOND) from t1
+select date_add(`datetime`, interval 1 second) from t1
 END
 INPUT
 select max(a) from t1;
@@ -4910,7 +4910,7 @@ INPUT
 select date_add(date,INTERVAL 1 DAY) from t1;
 END
 OUTPUT
-select date_add(`date`, interval 1 DAY) from t1
+select date_add(`date`, interval 1 day) from t1
 END
 INPUT
 select * from t1 where word between binary 0xDF and binary 0xDF;
@@ -5786,7 +5786,7 @@ INPUT
 select date_sub("0169-01-01 00:00:01",INTERVAL 2 SECOND);
 END
 OUTPUT
-select date_sub('0169-01-01 00:00:01', interval 2 SECOND) from dual
+select date_sub('0169-01-01 00:00:01', interval 2 second) from dual
 END
 INPUT
 select timediff("1997-12-31 23:59:59.000001","1997-12-30 01:01:01.000002");
@@ -5954,7 +5954,7 @@ INPUT
 select INTERVAL 1 DAY + "1997-12-31";
 END
 OUTPUT
-select interval 1 DAY + '1997-12-31' from dual
+select interval 1 day + '1997-12-31' from dual
 END
 INPUT
 select * from t1 where t1 like "a_%";
@@ -6296,7 +6296,7 @@ INPUT
 select date_add("1997-12-31",INTERVAL 1 DAY);
 END
 OUTPUT
-select date_add('1997-12-31', interval 1 DAY) from dual
+select date_add('1997-12-31', interval 1 day) from dual
 END
 INPUT
 select mbrwithin(ST_GeomFromText("linestring(1 0, 2 0)"), ST_GeomFromText("polygon((0 0, 3 0, 3 3, 0 3, 0 0))"));
@@ -6368,7 +6368,7 @@ INPUT
 select date_sub("1998-01-01 00:00:00",INTERVAL "1:1" DAY_HOUR);
 END
 OUTPUT
-select date_sub('1998-01-01 00:00:00', interval '1:1' DAY_HOUR) from dual
+select date_sub('1998-01-01 00:00:00', interval '1:1' day_hour) from dual
 END
 INPUT
 select bin(convert(-9223372036854775808 using ucs2));
@@ -6380,7 +6380,7 @@ INPUT
 select date_add(date,INTERVAL "1:1:1" HOUR_SECOND) from t1;
 END
 OUTPUT
-select date_add(`date`, interval '1:1:1' HOUR_SECOND) from t1
+select date_add(`date`, interval '1:1:1' hour_second) from t1
 END
 INPUT
 select * from t1 where a <> _latin1 'B' collate latin1_bin;
@@ -6722,7 +6722,7 @@ INPUT
 select date_sub("1998-01-01 00:00:00",INTERVAL 1 HOUR);
 END
 OUTPUT
-select date_sub('1998-01-01 00:00:00', interval 1 HOUR) from dual
+select date_sub('1998-01-01 00:00:00', interval 1 hour) from dual
 END
 INPUT
 select 0, st_overlaps(t.geom, p.geom) from tbl_polygon t, tbl_polygon p where t.id = 'POLY1' and p.id = 'POLY2';
@@ -6932,7 +6932,7 @@ INPUT
 select visitor_id,max(ts) as mts from t1 group by visitor_id having DATE_ADD(mts,INTERVAL 3 MONTH) < NOW();
 END
 OUTPUT
-select visitor_id, max(ts) as mts from t1 group by visitor_id having DATE_ADD(mts, interval 3 MONTH) < now()
+select visitor_id, max(ts) as mts from t1 group by visitor_id having date_add(mts, interval 3 month) < now()
 END
 INPUT
 select @category3_id:= 10003;
@@ -7076,7 +7076,7 @@ INPUT
 select date_add("0199-12-31 23:59:59",INTERVAL 2 SECOND);
 END
 OUTPUT
-select date_add('0199-12-31 23:59:59', interval 2 SECOND) from dual
+select date_add('0199-12-31 23:59:59', interval 2 second) from dual
 END
 INPUT
 select a as foo, sum(b) as bar from t1 group by a having foo<10;
@@ -7088,7 +7088,7 @@ INPUT
 select date_sub("0200-01-01 00:00:01",INTERVAL 2 SECOND);
 END
 OUTPUT
-select date_sub('0200-01-01 00:00:01', interval 2 SECOND) from dual
+select date_sub('0200-01-01 00:00:01', interval 2 second) from dual
 END
 INPUT
 select a,b,c from t3 force index (a) where a=1 order by a desc, b desc, c desc;
@@ -7274,7 +7274,7 @@ INPUT
 select date_add(date,INTERVAL 1 MINUTE) from t1;
 END
 OUTPUT
-select date_add(`date`, interval 1 MINUTE) from t1
+select date_add(`date`, interval 1 minute) from t1
 END
 INPUT
 select a as foo, sum(b) as bar from t1 group by a having bar>10 order by foo+10;
@@ -7316,7 +7316,7 @@ INPUT
 select date_add("1997-12-31 23:59:59",INTERVAL 1 MONTH);
 END
 OUTPUT
-select date_add('1997-12-31 23:59:59', interval 1 MONTH) from dual
+select date_add('1997-12-31 23:59:59', interval 1 month) from dual
 END
 INPUT
 select table_name, index_type from information_schema.statistics where table_schema = 'test' and table_name like 't%' and index_name = 'w' order by table_name;
@@ -7670,7 +7670,7 @@ INPUT
 select date_add("1997-12-31 23:59:59",INTERVAL 1 HOUR);
 END
 OUTPUT
-select date_add('1997-12-31 23:59:59', interval 1 HOUR) from dual
+select date_add('1997-12-31 23:59:59', interval 1 hour) from dual
 END
 INPUT
 select 0x903f645a8c507dd79178 like '%-128%';
@@ -7682,7 +7682,7 @@ INPUT
 select date_sub("1998-01-01 00:00:00",INTERVAL "1 1:1" DAY_MINUTE);
 END
 OUTPUT
-select date_sub('1998-01-01 00:00:00', interval '1 1:1' DAY_MINUTE) from dual
+select date_sub('1998-01-01 00:00:00', interval '1 1:1' day_minute) from dual
 END
 INPUT
 select t1.a,t2.b from t1,t2 where t1.a=t2.a group by t1.a,t2.b ORDER BY NULL;
@@ -7934,7 +7934,7 @@ INPUT
 select date_add(date,INTERVAL "1:1" MINUTE_SECOND) from t1;
 END
 OUTPUT
-select date_add(`date`, interval '1:1' MINUTE_SECOND) from t1
+select date_add(`date`, interval '1:1' minute_second) from t1
 END
 INPUT
 select extract(MINUTE_SECOND FROM "10:11:12");
@@ -8066,7 +8066,7 @@ INPUT
 select date_sub("1998-01-01 00:00:00.000001",INTERVAL "000002" MICROSECOND);
 END
 OUTPUT
-select date_sub('1998-01-01 00:00:00.000001', interval '000002' MICROSECOND) from dual
+select date_sub('1998-01-01 00:00:00.000001', interval '000002' microsecond) from dual
 END
 INPUT
 select concat(a1,a2),b,min(c),max(c) from t1 where a1 < 'd' group by a1,a2,b;
@@ -8300,7 +8300,7 @@ INPUT
 select date_add("1997-12-31 23:59:59",INTERVAL 100000 HOUR);
 END
 OUTPUT
-select date_add('1997-12-31 23:59:59', interval 100000 HOUR) from dual
+select date_add('1997-12-31 23:59:59', interval 100000 hour) from dual
 END
 INPUT
 select std(s1/s2) from bug22555 where i=2;
@@ -8348,7 +8348,7 @@ INPUT
 select date_sub("1998-01-01 00:00:00.000001",INTERVAL "1.000002" SECOND_MICROSECOND);
 END
 OUTPUT
-select date_sub('1998-01-01 00:00:00.000001', interval '1.000002' SECOND_MICROSECOND) from dual
+select date_sub('1998-01-01 00:00:00.000001', interval '1.000002' second_microsecond) from dual
 END
 INPUT
 select if(0, 18446744073709551610, 18446744073709551610);
@@ -8366,7 +8366,7 @@ INPUT
 select date_add("1997-12-31 23:59:59",INTERVAL "1:1" DAY_HOUR);
 END
 OUTPUT
-select date_add('1997-12-31 23:59:59', interval '1:1' DAY_HOUR) from dual
+select date_add('1997-12-31 23:59:59', interval '1:1' day_hour) from dual
 END
 INPUT
 select ST_astext(ST_Union(ST_geometryfromtext('point(1 1)'), ST_geometryfromtext('polygon((0 0, 2 0, 1 2, 0 0))')));
@@ -9044,7 +9044,7 @@ INPUT
 select date_add("1997-12-31 23:59:59",INTERVAL "1 1:1" DAY_MINUTE);
 END
 OUTPUT
-select date_add('1997-12-31 23:59:59', interval '1 1:1' DAY_MINUTE) from dual
+select date_add('1997-12-31 23:59:59', interval '1 1:1' day_minute) from dual
 END
 INPUT
 select quote(''"test');
@@ -9230,7 +9230,7 @@ INPUT
 select date_add("1997-12-31 23:59:59",INTERVAL "-10000:1" HOUR_MINUTE);
 END
 OUTPUT
-select date_add('1997-12-31 23:59:59', interval '-10000:1' HOUR_MINUTE) from dual
+select date_add('1997-12-31 23:59:59', interval '-10000:1' hour_minute) from dual
 END
 INPUT
 select mod(12.0, 0) as 'NULL';
@@ -9962,7 +9962,7 @@ INPUT
 select DATE_ADD('20071108181000', INTERVAL 1 DAY);
 END
 OUTPUT
-select DATE_ADD('20071108181000', interval 1 DAY) from dual
+select date_add('20071108181000', interval 1 day) from dual
 END
 INPUT
 select sha('abc');
@@ -10862,7 +10862,7 @@ INPUT
 select date_add(time,INTERVAL 1 SECOND) from t1;
 END
 OUTPUT
-select date_add(`time`, interval 1 SECOND) from t1
+select date_add(`time`, interval 1 second) from t1
 END
 INPUT
 select * from v3;
@@ -11594,7 +11594,7 @@ INPUT
 select date_add("1997-12-31 23:59:59",INTERVAL "1:1:1" HOUR_SECOND);
 END
 OUTPUT
-select date_add('1997-12-31 23:59:59', interval '1:1:1' HOUR_SECOND) from dual
+select date_add('1997-12-31 23:59:59', interval '1:1:1' hour_second) from dual
 END
 INPUT
 select * from v2a;
@@ -11930,7 +11930,7 @@ INPUT
 select date_add("1997-12-31 23:59:59.000002",INTERVAL "999999" MICROSECOND);
 END
 OUTPUT
-select date_add('1997-12-31 23:59:59.000002', interval '999999' MICROSECOND) from dual
+select date_add('1997-12-31 23:59:59.000002', interval '999999' microsecond) from dual
 END
 INPUT
 select inet_aton("122.226.");
@@ -12080,7 +12080,7 @@ INPUT
 select date_add("1997-12-31 23:59:59",INTERVAL "10000:1" DAY_HOUR);
 END
 OUTPUT
-select date_add('1997-12-31 23:59:59', interval '10000:1' DAY_HOUR) from dual
+select date_add('1997-12-31 23:59:59', interval '10000:1' day_hour) from dual
 END
 INPUT
 select st_contains(st_intersection(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')), st_union(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)')));
@@ -12176,7 +12176,7 @@ INPUT
 select date_add("2001-01-01 23:59:59",INTERVAL -2000 YEAR);
 END
 OUTPUT
-select date_add('2001-01-01 23:59:59', interval (-2000) YEAR) from dual
+select date_add('2001-01-01 23:59:59', interval -2000 year) from dual
 END
 INPUT
 select avg(2) from t1;
@@ -12290,7 +12290,7 @@ INPUT
 select date_sub("1998-01-01 00:00:00",INTERVAL "1:1:1" HOUR_SECOND);
 END
 OUTPUT
-select date_sub('1998-01-01 00:00:00', interval '1:1:1' HOUR_SECOND) from dual
+select date_sub('1998-01-01 00:00:00', interval '1:1:1' hour_second) from dual
 END
 INPUT
 select round(std(s1/s2), 17) from bug22555;
@@ -12812,7 +12812,7 @@ INPUT
 select date_add("1997-12-31 23:59:59",INTERVAL -100000 DAY);
 END
 OUTPUT
-select date_add('1997-12-31 23:59:59', interval (-100000) DAY) from dual
+select date_add('1997-12-31 23:59:59', interval -100000 day) from dual
 END
 INPUT
 select dummy1,count(distinct id) from t1 group by dummy1;
@@ -13490,7 +13490,7 @@ INPUT
 select date_sub("1998-01-02",INTERVAL 31 DAY);
 END
 OUTPUT
-select date_sub('1998-01-02', interval 31 DAY) from dual
+select date_sub('1998-01-02', interval 31 day) from dual
 END
 INPUT
 select * from db where user = 'mysqltest_1';
@@ -13514,7 +13514,7 @@ INPUT
 select date_add("1997-12-31 23:59:59.000002",INTERVAL "10000:99:99.999999" HOUR_MICROSECOND);
 END
 OUTPUT
-select date_add('1997-12-31 23:59:59.000002', interval '10000:99:99.999999' HOUR_MICROSECOND) from dual
+select date_add('1997-12-31 23:59:59.000002', interval '10000:99:99.999999' hour_microsecond) from dual
 END
 INPUT
 select @@event_scheduler;
@@ -13754,7 +13754,7 @@ INPUT
 select date_sub("0000-00-00 00:00:00",INTERVAL 1 SECOND);
 END
 OUTPUT
-select date_sub('0000-00-00 00:00:00', interval 1 SECOND) from dual
+select date_sub('0000-00-00 00:00:00', interval 1 second) from dual
 END
 INPUT
 select table_name, index_type from information_schema.statistics where table_schema = 'test' and table_name = 'tm' and index_name = 'v' order by table_name;
@@ -13814,13 +13814,13 @@ INPUT
 select date_sub("1998-01-01 00:00:00.000001",INTERVAL "1 1:1:1.000002" DAY_MICROSECOND);
 END
 OUTPUT
-select date_sub('1998-01-01 00:00:00.000001', interval '1 1:1:1.000002' DAY_MICROSECOND) from dual
+select date_sub('1998-01-01 00:00:00.000001', interval '1 1:1:1.000002' day_microsecond) from dual
 END
 INPUT
 select date_add(date,INTERVAL "1 1:1" DAY_MINUTE) from t1;
 END
 OUTPUT
-select date_add(`date`, interval '1 1:1' DAY_MINUTE) from t1
+select date_add(`date`, interval '1 1:1' day_minute) from t1
 END
 INPUT
 select hex(char(0xFF using utf8));
@@ -13832,7 +13832,7 @@ INPUT
 select date_add("1997-12-31 23:59:59",INTERVAL -100000 YEAR);
 END
 OUTPUT
-select date_add('1997-12-31 23:59:59', interval (-100000) YEAR) from dual
+select date_add('1997-12-31 23:59:59', interval -100000 year) from dual
 END
 INPUT
 select substring_index('the king of the the hill',' ',-2);
@@ -14240,7 +14240,7 @@ INPUT
 select date_add("1997-12-31",INTERVAL 1 SECOND);
 END
 OUTPUT
-select date_add('1997-12-31', interval 1 SECOND) from dual
+select date_add('1997-12-31', interval 1 second) from dual
 END
 INPUT
 select 'a' = 'a	', 'a' < 'a	', 'a' > 'a	';
@@ -14282,7 +14282,7 @@ INPUT
 select date_sub("0050-01-01 00:00:01",INTERVAL 2 SECOND);
 END
 OUTPUT
-select date_sub('0050-01-01 00:00:01', interval 2 SECOND) from dual
+select date_sub('0050-01-01 00:00:01', interval 2 second) from dual
 END
 INPUT
 select t1.f1,count(distinct t2.f2),count(distinct 1,NULL) from t1 left join t2 on t1.f1=t2.f1 group by t1.f1;
@@ -15062,7 +15062,7 @@ INPUT
 select date_add("1997-12-31 23:59:59",INTERVAL "1 1:1:1" DAY_SECOND);
 END
 OUTPUT
-select date_add('1997-12-31 23:59:59', interval '1 1:1:1' DAY_SECOND) from dual
+select date_add('1997-12-31 23:59:59', interval '1 1:1:1' day_second) from dual
 END
 INPUT
 select NULL=NULL,NULL<>NULL,IFNULL(NULL,1.1)+0,IFNULL(NULL,1) | 0;
@@ -15092,7 +15092,7 @@ INPUT
 select date_add(NULL,INTERVAL 100000 SECOND);
 END
 OUTPUT
-select date_add(null, interval 100000 SECOND) from dual
+select date_add(null, interval 100000 second) from dual
 END
 INPUT
 select * from information_schema.tables where table_schema = NULL;
@@ -15680,7 +15680,7 @@ INPUT
 select date_add("1997-12-31 23:59:59",INTERVAL NULL MINUTE_SECOND);
 END
 OUTPUT
-select date_add('1997-12-31 23:59:59', interval null MINUTE_SECOND) from dual
+select date_add('1997-12-31 23:59:59', interval null minute_second) from dual
 END
 INPUT
 select timestampdiff(month,'2005-09-11','2004-09-11');
@@ -15794,7 +15794,7 @@ INPUT
 select date_sub("1998-01-01 00:00:00.000001",INTERVAL "1:1:1.000002" HOUR_MICROSECOND);
 END
 OUTPUT
-select date_sub('1998-01-01 00:00:00.000001', interval '1:1:1.000002' HOUR_MICROSECOND) from dual
+select date_sub('1998-01-01 00:00:00.000001', interval '1:1:1.000002' hour_microsecond) from dual
 END
 INPUT
 select hex(soundex(_utf8 0xE99885E8A788E99A8FE697B6E69BB4E696B0E79A84E696B0E997BB));
@@ -15932,7 +15932,7 @@ INPUT
 select date_add("1997-12-31 23:59:59",INTERVAL NULL SECOND);
 END
 OUTPUT
-select date_add('1997-12-31 23:59:59', interval null SECOND) from dual
+select date_add('1997-12-31 23:59:59', interval null second) from dual
 END
 INPUT
 select 1 from t1 group by 2;
@@ -16094,7 +16094,7 @@ INPUT
 select visitor_id,max(ts) as mts from t1 group by visitor_id having mts < DATE_SUB(NOW(),INTERVAL 3 MONTH);
 END
 OUTPUT
-select visitor_id, max(ts) as mts from t1 group by visitor_id having mts < DATE_SUB(now(), interval 3 MONTH)
+select visitor_id, max(ts) as mts from t1 group by visitor_id having mts < date_sub(now(), interval 3 month)
 END
 INPUT
 select f1, f2, if(f1, 40.0, 5.00) from t1 group by f1 order by f2;
@@ -16622,7 +16622,7 @@ INPUT
 select date_add("1997-12-31 23:59:59",INTERVAL "10000 99:99:99" DAY_SECOND);
 END
 OUTPUT
-select date_add('1997-12-31 23:59:59', interval '10000 99:99:99' DAY_SECOND) from dual
+select date_add('1997-12-31 23:59:59', interval '10000 99:99:99' day_second) from dual
 END
 INPUT
 select host,db,user from mysql.db where user like 'mysqltest_%' order by host,db,user;
@@ -16934,7 +16934,7 @@ INPUT
 select DATE_ADD(20071108181000, INTERVAL 1 DAY);
 END
 OUTPUT
-select DATE_ADD(20071108181000, interval 1 DAY) from dual
+select date_add(20071108181000, interval 1 day) from dual
 END
 INPUT
 select a as gci2 from t1 where a like 'あいうえおかきくけこさしすせそ';
@@ -17072,7 +17072,7 @@ INPUT
 select date_sub("1998-01-01 00:00:00",INTERVAL 1 MONTH);
 END
 OUTPUT
-select date_sub('1998-01-01 00:00:00', interval 1 MONTH) from dual
+select date_sub('1998-01-01 00:00:00', interval 1 month) from dual
 END
 INPUT
 select 1, ST_Intersects(ST_GeomFromText('POLYGON((0 0,20 10,10 30, 0 0))'), ST_GeomFromText('POLYGON((10 10,30 20,20 40, 10 10))'));
@@ -17432,7 +17432,7 @@ INPUT
 select date_add(datetime, INTERVAL 1 YEAR) from t1;
 END
 OUTPUT
-select date_add(`datetime`, interval 1 YEAR) from t1
+select date_add(`datetime`, interval 1 year) from t1
 END
 INPUT
 select group_concat(t1.b,t2.c) from t1 left join t2 using(a) group by t1.a;
@@ -17600,7 +17600,7 @@ INPUT
 select date_sub("0199-01-01 00:00:01",INTERVAL 2 SECOND);
 END
 OUTPUT
-select date_sub('0199-01-01 00:00:01', interval 2 SECOND) from dual
+select date_sub('0199-01-01 00:00:01', interval 2 second) from dual
 END
 INPUT
 select concat('|', text1, '|') from t1 where text1='teststring' or text1 > 'teststring	';
@@ -17744,7 +17744,7 @@ INPUT
 select date_sub("1998-01-01 00:00:00",INTERVAL "1:1" MINUTE_SECOND);
 END
 OUTPUT
-select date_sub('1998-01-01 00:00:00', interval '1:1' MINUTE_SECOND) from dual
+select date_sub('1998-01-01 00:00:00', interval '1:1' minute_second) from dual
 END
 INPUT
 select count(distinct s,t) from t1;
@@ -17810,7 +17810,7 @@ INPUT
 select date_sub("50-01-01 00:00:01",INTERVAL 2 SECOND);
 END
 OUTPUT
-select date_sub('50-01-01 00:00:01', interval 2 SECOND) from dual
+select date_sub('50-01-01 00:00:01', interval 2 second) from dual
 END
 INPUT
 select * from `information_schema`.`REFERENTIAL_CONSTRAINTS` where `TABLE_NAME` = NULL;
@@ -18332,7 +18332,7 @@ INPUT
 select date_add(last_day("1997-12-1"), INTERVAL 1 DAY);
 END
 OUTPUT
-select date_add(last_day('1997-12-1'), interval 1 DAY) from dual
+select date_add(last_day('1997-12-1'), interval 1 day) from dual
 END
 INPUT
 select concat(':',trim(BOTH 'ab' FROM 'ababmyabab'),':',trim(BOTH '*' FROM '***sql'),':');
@@ -18344,7 +18344,7 @@ INPUT
 select date_add(date,INTERVAL 1 YEAR) from t1;
 END
 OUTPUT
-select date_add(`date`, interval 1 YEAR) from t1
+select date_add(`date`, interval 1 year) from t1
 END
 INPUT
 select v,count(t) from t1 group by v order by v limit 10;
@@ -18548,7 +18548,7 @@ INPUT
 select date_add("1997-12-31 23:59:59",INTERVAL "10000:99:99" HOUR_SECOND);
 END
 OUTPUT
-select date_add('1997-12-31 23:59:59', interval '10000:99:99' HOUR_SECOND) from dual
+select date_add('1997-12-31 23:59:59', interval '10000:99:99' hour_second) from dual
 END
 INPUT
 select count(*) from t1 where t='a ';
@@ -18818,7 +18818,7 @@ INPUT
 select date_add("1997-12-31 23:59:59",INTERVAL "10000:1" MINUTE_SECOND);
 END
 OUTPUT
-select date_add('1997-12-31 23:59:59', interval '10000:1' MINUTE_SECOND) from dual
+select date_add('1997-12-31 23:59:59', interval '10000:1' minute_second) from dual
 END
 INPUT
 select unix_timestamp('2038-02-10 01:00:00');
@@ -19016,7 +19016,7 @@ INPUT
 select "1997-12-31 23:59:59" + INTERVAL 1 SECOND;
 END
 OUTPUT
-select '1997-12-31 23:59:59' + interval 1 SECOND from dual
+select '1997-12-31 23:59:59' + interval 1 second from dual
 END
 INPUT
 select * from t2 where b="world";
@@ -19232,7 +19232,7 @@ INPUT
 select date_add(date,INTERVAL "1 1:1:1" DAY_SECOND) from t1;
 END
 OUTPUT
-select date_add(`date`, interval '1 1:1:1' DAY_SECOND) from t1
+select date_add(`date`, interval '1 1:1:1' day_second) from t1
 END
 INPUT
 select column_name from information_schema.columns where table_name='t1' order by column_name;
@@ -19352,7 +19352,7 @@ INPUT
 select LAST_DAY('2007-12-06 08:59:19.05') - INTERVAL 1 SECOND;
 END
 OUTPUT
-select LAST_DAY('2007-12-06 08:59:19.05') - interval 1 SECOND from dual
+select LAST_DAY('2007-12-06 08:59:19.05') - interval 1 second from dual
 END
 INPUT
 select t1.*,t2.*,t3.a from t1 left join t2 on (t3.a=t2.a) left join t1 as t3 on (t2.a=t3.a);
@@ -19484,7 +19484,7 @@ INPUT
 select date_sub("1998-01-01 00:00:00",INTERVAL 1 YEAR);
 END
 OUTPUT
-select date_sub('1998-01-01 00:00:00', interval 1 YEAR) from dual
+select date_sub('1998-01-01 00:00:00', interval 1 year) from dual
 END
 INPUT
 select substr(z.a,-1), z.a from t1 as y join t1 as z on y.a=z.a order by 1;
@@ -19520,7 +19520,7 @@ INPUT
 select date_add("1997-12-31 23:59:59",INTERVAL " -10000 99:99" DAY_MINUTE);
 END
 OUTPUT
-select date_add('1997-12-31 23:59:59', interval ' -10000 99:99' DAY_MINUTE) from dual
+select date_add('1997-12-31 23:59:59', interval ' -10000 99:99' day_minute) from dual
 END
 INPUT
 select insert('hello', 1, 18446744073709551617, 'hi');
@@ -19700,7 +19700,7 @@ INPUT
 select "1998-01-01 00:00:00" - INTERVAL 1 SECOND;
 END
 OUTPUT
-select '1998-01-01 00:00:00' - interval 1 SECOND from dual
+select '1998-01-01 00:00:00' - interval 1 second from dual
 END
 INPUT
 select sql_big_result distinct t1.a from t1,t2 order by t2.a;
@@ -20216,7 +20216,7 @@ INPUT
 select date_add("1997-12-31 23:59:59",INTERVAL 1 DAY);
 END
 OUTPUT
-select date_add('1997-12-31 23:59:59', interval 1 DAY) from dual
+select date_add('1997-12-31 23:59:59', interval 1 day) from dual
 END
 INPUT
 select host,db,user,table_name,column_name from mysql.columns_priv where user = 'mysqltest_1' order by host,db,user,table_name,column_name;
@@ -20348,7 +20348,7 @@ INPUT
 select date_add("1997-12-31 23:59:59",INTERVAL "-100 1" YEAR_MONTH);
 END
 OUTPUT
-select date_add('1997-12-31 23:59:59', interval '-100 1' YEAR_MONTH) from dual
+select date_add('1997-12-31 23:59:59', interval '-100 1' year_month) from dual
 END
 INPUT
 select hex(weight_string('a' as char(0)));
@@ -20384,7 +20384,7 @@ INPUT
 select date_add("9999-12-31 23:59:59",INTERVAL 1 SECOND);
 END
 OUTPUT
-select date_add('9999-12-31 23:59:59', interval 1 SECOND) from dual
+select date_add('9999-12-31 23:59:59', interval 1 second) from dual
 END
 INPUT
 select distinct a1,a2,b from t1 where (a2 >= 'b') and (b = 'a') group by a1,a2,b;
@@ -20870,7 +20870,7 @@ INPUT
 select date_sub("0200-01-01 00:00:01",INTERVAL 1 SECOND);
 END
 OUTPUT
-select date_sub('0200-01-01 00:00:01', interval 1 SECOND) from dual
+select date_sub('0200-01-01 00:00:01', interval 1 second) from dual
 END
 INPUT
 select repeat('monty',5),concat('*',space(5),'*');
@@ -21032,7 +21032,7 @@ INPUT
 select date_add(date,INTERVAL 1 MONTH) from t1;
 END
 OUTPUT
-select date_add(`date`, interval 1 MONTH) from t1
+select date_add(`date`, interval 1 month) from t1
 END
 INPUT
 select substring('hello', -18446744073709551615, 1);
@@ -21122,7 +21122,7 @@ INPUT
 select DATE_ADD('20071108', INTERVAL 1 DAY);
 END
 OUTPUT
-select DATE_ADD('20071108', interval 1 DAY) from dual
+select date_add('20071108', interval 1 day) from dual
 END
 INPUT
 select locate(_ujis 0xa1a3,_ujis 0xa1a2a1a3);
@@ -21302,7 +21302,7 @@ INPUT
 select date_add("1997-12-31",INTERVAL "1 1" YEAR_MONTH);
 END
 OUTPUT
-select date_add('1997-12-31', interval '1 1' YEAR_MONTH) from dual
+select date_add('1997-12-31', interval '1 1' year_month) from dual
 END
 INPUT
 select timestampdiff(month,'1999-09-11','2001-10-10');
@@ -22190,7 +22190,7 @@ INPUT
 select date_add(date,INTERVAL "1" QUARTER) from t1;
 END
 OUTPUT
-select date_add(`date`, interval '1' QUARTER) from t1
+select date_add(`date`, interval '1' quarter) from t1
 END
 INPUT
 select concat('<', user(), '>'), concat('<', current_user(), '>'), database();
@@ -22352,7 +22352,7 @@ INPUT
 select date_sub("1998-01-01 00:00:00",INTERVAL 1 MINUTE);
 END
 OUTPUT
-select date_sub('1998-01-01 00:00:00', interval 1 MINUTE) from dual
+select date_sub('1998-01-01 00:00:00', interval 1 minute) from dual
 END
 INPUT
 select length(repeat("a",65500)),length(concat(repeat("a",32000),repeat("a",32000))),length(replace("aaaaa","a",concat(repeat("a",10000)))),length(insert(repeat("a",40000),1,30000,repeat("b",50000)));
@@ -22364,7 +22364,7 @@ INPUT
 select date_add(date,INTERVAL 1 HOUR) from t1;
 END
 OUTPUT
-select date_add(`date`, interval 1 HOUR) from t1
+select date_add(`date`, interval 1 hour) from t1
 END
 INPUT
 select hex(weight_string(ch)) w, name from t1 order by concat(ch);
@@ -22490,7 +22490,7 @@ INPUT
 select date_add(date,INTERVAL 1 SECOND) from t1;
 END
 OUTPUT
-select date_add(`date`, interval 1 SECOND) from t1
+select date_add(`date`, interval 1 second) from t1
 END
 INPUT
 select * from t1 order by i1;
@@ -22664,7 +22664,7 @@ INPUT
 select date_add("1997-12-31 23:59:59",INTERVAL 100000 SECOND);
 END
 OUTPUT
-select date_add('1997-12-31 23:59:59', interval 100000 SECOND) from dual
+select date_add('1997-12-31 23:59:59', interval 100000 second) from dual
 END
 INPUT
 select n,d,unix_timestamp(t) from t2;
@@ -22934,7 +22934,7 @@ INPUT
 select date_add("1997-12-31 23:59:59",INTERVAL 100000 MONTH);
 END
 OUTPUT
-select date_add('1997-12-31 23:59:59', interval 100000 MONTH) from dual
+select date_add('1997-12-31 23:59:59', interval 100000 month) from dual
 END
 INPUT
 select * from t2 order by name;

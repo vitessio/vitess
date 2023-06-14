@@ -65,6 +65,10 @@ func TestXtrabackupWithExternalZstdCompressionAndManifestedDecompressor(t *testi
 	backup.TestBackup(t, backup.XtraBackup, "tar", 0, cDetails, []string{"TestReplicaBackup"})
 }
 
+func TestDoNotDemoteNewlyPromotedPrimaryIfReparentingDuringBackup(t *testing.T) {
+	backup.TestBackup(t, backup.XtraBackup, "xbstream", 0, nil, []string{"DoNotDemoteNewlyPromotedPrimaryIfReparentingDuringBackup"})
+}
+
 func setDefaultCompressionFlag() {
 	mysqlctl.CompressionEngineName = "pgzip"
 	mysqlctl.ExternalCompressorCmd = ""

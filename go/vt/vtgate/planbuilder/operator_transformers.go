@@ -22,27 +22,19 @@ import (
 	"strconv"
 	"strings"
 
-	"vitess.io/vitess/go/slices2"
-	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
-
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
-
-	"vitess.io/vitess/go/sqltypes"
-
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
-
 	"vitess.io/vitess/go/mysql/collations"
-
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
-
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators"
-
+	"vitess.io/vitess/go/slices2"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vtgate/engine"
-	"vitess.io/vitess/go/vt/vtgate/vindexes"
-
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/engine"
+	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
 func transformToLogicalPlan(ctx *plancontext.PlanningContext, op ops.Operator, isRoot bool) (logicalPlan, error) {
@@ -73,6 +65,8 @@ func transformToLogicalPlan(ctx *plancontext.PlanningContext, op ops.Operator, i
 		return transformOrdering(ctx, op)
 	case *operators.Aggregator:
 		return transformAggregator(ctx, op)
+	case *operators.Distinct:
+		return transformDistinct(ctx, op)
 	}
 
 	return nil, vterrors.VT13001(fmt.Sprintf("unknown type encountered: %T (transformToLogicalPlan)", op))
@@ -96,12 +90,14 @@ func transformAggregator(ctx *plancontext.PlanningContext, op *operators.Aggrega
 			return nil, vterrors.VT12001(fmt.Sprintf("in scatter query: aggregation function '%s'", sqlparser.String(aggr.Original)))
 		}
 		oa.aggregates = append(oa.aggregates, &engine.AggregateParams{
-			Opcode:     aggr.OpCode,
-			Col:        aggr.ColOffset,
-			Alias:      aggr.Alias,
-			Expr:       aggr.Func,
-			Original:   aggr.Original,
-			OrigOpcode: aggr.OriginalOpCode,
+			Opcode:      aggr.OpCode,
+			Col:         aggr.ColOffset,
+			Alias:       aggr.Alias,
+			Expr:        aggr.Func,
+			Original:    aggr.Original,
+			OrigOpcode:  aggr.OriginalOpCode,
+			WCol:        aggr.WSOffset,
+			CollationID: aggr.GetCollation(ctx),
 		})
 	}
 	for _, groupBy := range op.Grouping {
@@ -118,6 +114,14 @@ func transformAggregator(ctx *plancontext.PlanningContext, op *operators.Aggrega
 	}
 	oa.truncateColumnCount = op.ResultColumns
 	return oa, nil
+}
+
+func transformDistinct(ctx *plancontext.PlanningContext, op *operators.Distinct) (logicalPlan, error) {
+	src, err := transformToLogicalPlan(ctx, op.Source, false)
+	if err != nil {
+		return nil, err
+	}
+	return newDistinct(src, op.Columns, op.Truncate), nil
 }
 
 func transformOrdering(ctx *plancontext.PlanningContext, op *operators.Ordering) (logicalPlan, error) {
@@ -366,6 +370,8 @@ func newRoutingParams(ctx *plancontext.PlanningContext, opCode engine.Opcode) *e
 
 func transformRoutePlan(ctx *plancontext.PlanningContext, op *operators.Route) (logicalPlan, error) {
 	switch src := op.Source.(type) {
+	case *operators.Insert:
+		return transformInsertPlan(ctx, op, src)
 	case *operators.Update:
 		return transformUpdatePlan(ctx, op, src)
 	case *operators.Delete:
@@ -399,6 +405,107 @@ func transformRoutePlan(ctx *plancontext.PlanningContext, op *operators.Route) (
 
 }
 
+func transformInsertPlan(ctx *plancontext.PlanningContext, op *operators.Route, ins *operators.Insert) (i *insert, err error) {
+	eins := &engine.Insert{
+		Opcode:            mapToInsertOpCode(op.Routing.OpCode(), ins.Input != nil),
+		Keyspace:          op.Routing.Keyspace(),
+		Table:             ins.VTable,
+		Ignore:            ins.Ignore,
+		ForceNonStreaming: ins.ForceNonStreaming,
+		Generate:          autoIncGenerate(ins.AutoIncrement),
+		ColVindexes:       ins.ColVindexes,
+		VindexValues:      ins.VindexValues,
+		VindexValueOffset: ins.VindexValueOffset,
+	}
+	i = &insert{eInsert: eins}
+
+	// we would need to generate the query on the fly. The only exception here is
+	// when unsharded query with autoincrement for that there is no input operator.
+	if eins.Opcode != engine.InsertUnsharded || ins.Input != nil {
+		eins.Prefix, eins.Mid, eins.Suffix = generateInsertShardedQuery(ins.AST)
+	}
+
+	if ins.Input == nil {
+		eins.Query = generateQuery(ins.AST)
+	} else {
+		i.source, err = transformToLogicalPlan(ctx, ins.Input, true)
+		if err != nil {
+			return
+		}
+	}
+	return
+}
+
+func mapToInsertOpCode(code engine.Opcode, insertSelect bool) engine.InsertOpcode {
+	if code == engine.Unsharded {
+		return engine.InsertUnsharded
+	}
+	if insertSelect {
+		return engine.InsertSelect
+	}
+	return engine.InsertSharded
+}
+
+func autoIncGenerate(gen *operators.Generate) *engine.Generate {
+	if gen == nil {
+		return nil
+	}
+	selNext := &sqlparser.Select{
+		From:        []sqlparser.TableExpr{&sqlparser.AliasedTableExpr{Expr: gen.TableName}},
+		SelectExprs: sqlparser.SelectExprs{&sqlparser.Nextval{Expr: &sqlparser.Argument{Name: "n", Type: sqltypes.Int64}}},
+	}
+	return &engine.Generate{
+		Keyspace: gen.Keyspace,
+		Query:    sqlparser.String(selNext),
+		Values:   gen.Values,
+		Offset:   gen.Offset,
+	}
+}
+
+func generateInsertShardedQuery(ins *sqlparser.Insert) (prefix string, mid []string, suffix string) {
+	valueTuples, isValues := ins.Rows.(sqlparser.Values)
+	prefixFormat := "insert %v%sinto %v%v "
+	if isValues {
+		// the mid values are filled differently
+		// with select uses sqlparser.String for sqlparser.Values
+		// with rows uses string.
+		prefixFormat += "values "
+	}
+	prefixBuf := sqlparser.NewTrackedBuffer(dmlFormatter)
+	prefixBuf.Myprintf(prefixFormat,
+		ins.Comments, ins.Ignore.ToString(),
+		ins.Table, ins.Columns)
+	prefix = prefixBuf.String()
+
+	suffixBuf := sqlparser.NewTrackedBuffer(dmlFormatter)
+	suffixBuf.Myprintf("%v", ins.OnDup)
+	suffix = suffixBuf.String()
+
+	if !isValues {
+		// this is a insert query using select to insert the rows.
+		return
+	}
+
+	midBuf := sqlparser.NewTrackedBuffer(dmlFormatter)
+	mid = make([]string, len(valueTuples))
+	for rowNum, val := range valueTuples {
+		midBuf.Myprintf("%v", val)
+		mid[rowNum] = midBuf.String()
+		midBuf.Reset()
+	}
+	return
+}
+
+// dmlFormatter strips out keyspace name from dmls.
+func dmlFormatter(buf *sqlparser.TrackedBuffer, node sqlparser.SQLNode) {
+	switch node := node.(type) {
+	case sqlparser.TableName:
+		node.Name.Format(buf)
+		return
+	}
+	node.Format(buf)
+}
+
 func transformUpdatePlan(ctx *plancontext.PlanningContext, op *operators.Route, upd *operators.Update) (logicalPlan, error) {
 	ast := upd.AST
 	replaceSubQuery(ctx, ast)
@@ -416,7 +523,7 @@ func transformUpdatePlan(ctx *plancontext.PlanningContext, op *operators.Route, 
 		RoutingParameters: rp,
 	}
 
-	transformDMLPlan(upd.AST, upd.VTable, edml, op.Routing, len(upd.ChangedVindexValues) > 0)
+	transformDMLPlan(upd.VTable, edml, op.Routing, len(upd.ChangedVindexValues) > 0)
 
 	e := &engine.Update{
 		ChangedVindexValues: upd.ChangedVindexValues,
@@ -443,7 +550,7 @@ func transformDeletePlan(ctx *plancontext.PlanningContext, op *operators.Route, 
 		RoutingParameters: rp,
 	}
 
-	transformDMLPlan(del.AST, del.VTable, edml, op.Routing, del.OwnedVindexQuery != "")
+	transformDMLPlan(del.VTable, edml, op.Routing, del.OwnedVindexQuery != "")
 
 	e := &engine.Delete{
 		DML: edml,
@@ -452,13 +559,7 @@ func transformDeletePlan(ctx *plancontext.PlanningContext, op *operators.Route, 
 	return &primitiveWrapper{prim: e}, nil
 }
 
-func transformDMLPlan(stmt sqlparser.Commented, vtable *vindexes.Table, edml *engine.DML, routing operators.Routing, setVindex bool) {
-	directives := stmt.GetParsedComments().Directives()
-	if directives.IsSet(sqlparser.DirectiveMultiShardAutocommit) {
-		edml.MultiShardAutocommit = true
-	}
-	edml.QueryTimeout = queryTimeout(directives)
-
+func transformDMLPlan(vtable *vindexes.Table, edml *engine.DML, routing operators.Routing, setVindex bool) {
 	if routing.OpCode() != engine.Unsharded && setVindex {
 		primary := vtable.ColumnVindexes[0]
 		edml.KsidVindex = primary.Vindex
@@ -584,7 +685,7 @@ func transformUnionPlan(ctx *plancontext.PlanningContext, op *operators.Union, i
 		if err != nil {
 			return nil, err
 		}
-		return newDistinct(result, checkCols, isRoot), nil
+		return newDistinctGen4Legacy(result, checkCols, isRoot), nil
 	}
 	return result, nil
 

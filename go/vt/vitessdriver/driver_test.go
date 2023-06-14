@@ -725,3 +725,41 @@ func TestSessionToken(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// TestStreamExec tests that different kinds of query present in `execMap` can run through streaming api
+func TestStreamExec(t *testing.T) {
+	db, err := OpenForStreaming(testAddress, "@rdonly")
+	require.NoError(t, err)
+	defer db.Close()
+
+	for k, v := range execMap {
+		t.Run(k, func(t *testing.T) {
+			s, err := db.Prepare(k)
+			require.NoError(t, err)
+			defer s.Close()
+
+			r, err := s.Query(0)
+			require.NoError(t, err)
+			defer r.Close()
+
+			fields, err := r.Columns()
+			require.NoError(t, err)
+			require.Equal(t, colList(v.result.Fields), fields)
+
+			for r.Next() {
+				require.NoError(t, r.Err())
+			}
+		})
+	}
+}
+
+func colList(fields []*querypb.Field) []string {
+	if fields == nil {
+		return nil
+	}
+	cols := make([]string, 0, len(fields))
+	for _, field := range fields {
+		cols = append(cols, field.Name)
+	}
+	return cols
+}

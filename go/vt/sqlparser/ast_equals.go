@@ -626,12 +626,12 @@ func (cmp *Comparator) SQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return cmp.RefOfInsertExpr(a, b)
-	case *IntervalExpr:
-		b, ok := inB.(*IntervalExpr)
+	case *IntervalDateExpr:
+		b, ok := inB.(*IntervalDateExpr)
 		if !ok {
 			return false
 		}
-		return cmp.RefOfIntervalExpr(a, b)
+		return cmp.RefOfIntervalDateExpr(a, b)
 	case *IntervalFuncExpr:
 		b, ok := inB.(*IntervalFuncExpr)
 		if !ok {
@@ -2485,7 +2485,7 @@ func (cmp *Comparator) RefOfExtractFuncExpr(a, b *ExtractFuncExpr) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return a.IntervalTypes == b.IntervalTypes &&
+	return a.IntervalType == b.IntervalType &&
 		cmp.Expr(a.Expr, b.Expr)
 }
 
@@ -2594,6 +2594,7 @@ func (cmp *Comparator) RefOfFramePoint(a, b *FramePoint) bool {
 		return false
 	}
 	return a.Type == b.Type &&
+		a.Unit == b.Unit &&
 		cmp.Expr(a.Expr, b.Expr)
 }
 
@@ -2872,7 +2873,7 @@ func (cmp *Comparator) RefOfInsert(a, b *Insert) bool {
 	return a.Action == b.Action &&
 		cmp.RefOfParsedComments(a.Comments, b.Comments) &&
 		a.Ignore == b.Ignore &&
-		cmp.TableName(a.Table, b.Table) &&
+		cmp.RefOfAliasedTableExpr(a.Table, b.Table) &&
 		cmp.Partitions(a.Partitions, b.Partitions) &&
 		cmp.Columns(a.Columns, b.Columns) &&
 		cmp.InsertRows(a.Rows, b.Rows) &&
@@ -2893,16 +2894,18 @@ func (cmp *Comparator) RefOfInsertExpr(a, b *InsertExpr) bool {
 		cmp.Expr(a.NewStr, b.NewStr)
 }
 
-// RefOfIntervalExpr does deep equals between the two objects.
-func (cmp *Comparator) RefOfIntervalExpr(a, b *IntervalExpr) bool {
+// RefOfIntervalDateExpr does deep equals between the two objects.
+func (cmp *Comparator) RefOfIntervalDateExpr(a, b *IntervalDateExpr) bool {
 	if a == b {
 		return true
 	}
 	if a == nil || b == nil {
 		return false
 	}
-	return a.Unit == b.Unit &&
-		cmp.Expr(a.Expr, b.Expr)
+	return a.Syntax == b.Syntax &&
+		cmp.Expr(a.Date, b.Date) &&
+		cmp.Expr(a.Interval, b.Interval) &&
+		a.Unit == b.Unit
 }
 
 // RefOfIntervalFuncExpr does deep equals between the two objects.
@@ -5328,6 +5331,12 @@ func (cmp *Comparator) Callable(inA, inB Callable) bool {
 			return false
 		}
 		return cmp.RefOfInsertExpr(a, b)
+	case *IntervalDateExpr:
+		b, ok := inB.(*IntervalDateExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfIntervalDateExpr(a, b)
 	case *IntervalFuncExpr:
 		b, ok := inB.(*IntervalFuncExpr)
 		if !ok {
@@ -6084,12 +6093,12 @@ func (cmp *Comparator) Expr(inA, inB Expr) bool {
 			return false
 		}
 		return cmp.RefOfInsertExpr(a, b)
-	case *IntervalExpr:
-		b, ok := inB.(*IntervalExpr)
+	case *IntervalDateExpr:
+		b, ok := inB.(*IntervalDateExpr)
 		if !ok {
 			return false
 		}
-		return cmp.RefOfIntervalExpr(a, b)
+		return cmp.RefOfIntervalDateExpr(a, b)
 	case *IntervalFuncExpr:
 		b, ok := inB.(*IntervalFuncExpr)
 		if !ok {

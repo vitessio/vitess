@@ -69,8 +69,9 @@ var (
 	configFileNotFoundHandling = Configure(
 		"config.notfound.handling",
 		Options[ConfigFileNotFoundHandling]{
-			Default: WarnOnConfigFileNotFound,
-			GetFunc: getHandlingValue,
+			Default:  WarnOnConfigFileNotFound,
+			GetFunc:  getHandlingValue,
+			FlagName: "config-file-not-found-handling",
 		},
 	)
 	configPersistenceMinInterval = Configure(
@@ -110,7 +111,7 @@ func RegisterFlags(fs *pflag.FlagSet) {
 	var h = configFileNotFoundHandling.Default()
 	fs.Var(&h, "config-file-not-found-handling", fmt.Sprintf("Behavior when a config file is not found. (Options: %s)", strings.Join(handlingNames, ", ")))
 
-	BindFlags(fs, configPaths, configType, configName, configFile)
+	BindFlags(fs, configPaths, configType, configName, configFile, configFileNotFoundHandling, configPersistenceMinInterval)
 }
 
 // LoadConfig attempts to find, and then load, a config file for viper-backed
@@ -165,6 +166,7 @@ func LoadConfig() (context.CancelFunc, error) {
 			msg := "Failed to read in config %s: %s"
 			switch configFileNotFoundHandling.Get() {
 			case WarnOnConfigFileNotFound:
+				msg += ". This is optional, and can be ignored if you are not using config files. For a detailed explanation, see https://github.com/vitessio/vitess/blob/main/doc/viper/viper.md#config-files."
 				log.WARN(msg, registry.Static.ConfigFileUsed(), nferr.Error())
 				fallthrough // after warning, ignore the error
 			case IgnoreConfigFileNotFound:

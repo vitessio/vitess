@@ -144,7 +144,7 @@ func GraphViz(p Primitive) (*graphviz.Graph, error) {
 func addMap(input map[string]any, buf *bytes.Buffer) error {
 	var mk []string
 	for k, v := range input {
-		if v == "" || v == nil || v == 0 {
+		if v == "" || v == nil || v == 0 || v == false {
 			continue
 		}
 		mk = append(mk, k)

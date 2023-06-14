@@ -433,6 +433,10 @@ func getCheckAndRecoverFunctionCode(analysisCode inst.AnalysisCode, analyzedInst
 	switch analysisCode {
 	// primary
 	case inst.DeadPrimary, inst.DeadPrimaryAndSomeReplicas:
+		// If ERS is disabled, we have no way of repairing the cluster.
+		if !config.ERSEnabled() {
+			return noRecoveryFunc
+		}
 		if isInEmergencyOperationGracefulPeriod(analyzedInstanceKey) {
 			return recoverGenericProblemFunc
 		}

@@ -146,7 +146,7 @@ func (node *Insert) formatFast(buf *TrackedBuffer) {
 		buf.WriteString(node.Ignore.ToString())
 		buf.WriteString("into ")
 
-		node.Table.formatFast(buf)
+		node.Table.Expr.formatFast(buf)
 
 		node.Partitions.formatFast(buf)
 
@@ -165,7 +165,7 @@ func (node *Insert) formatFast(buf *TrackedBuffer) {
 		buf.WriteString(node.Ignore.ToString())
 		buf.WriteString("into ")
 
-		node.Table.formatFast(buf)
+		node.Table.Expr.formatFast(buf)
 
 		node.Partitions.formatFast(buf)
 
@@ -184,7 +184,7 @@ func (node *Insert) formatFast(buf *TrackedBuffer) {
 		buf.WriteString(node.Ignore.ToString())
 		buf.WriteString("into ")
 
-		node.Table.formatFast(buf)
+		node.Table.Expr.formatFast(buf)
 
 		node.Partitions.formatFast(buf)
 
@@ -1820,14 +1820,6 @@ func (node *IntroducerExpr) formatFast(buf *TrackedBuffer) {
 }
 
 // formatFast formats the node.
-func (node *IntervalExpr) formatFast(buf *TrackedBuffer) {
-	buf.WriteString("interval ")
-	buf.printExpr(node, node.Expr, true)
-	buf.WriteByte(' ')
-	buf.WriteString(node.Unit)
-}
-
-// formatFast formats the node.
 func (node *TimestampFuncExpr) formatFast(buf *TrackedBuffer) {
 	buf.WriteString(node.Name)
 	buf.WriteByte('(')
@@ -1842,7 +1834,7 @@ func (node *TimestampFuncExpr) formatFast(buf *TrackedBuffer) {
 // formatFast formats the node.
 func (node *ExtractFuncExpr) formatFast(buf *TrackedBuffer) {
 	buf.WriteString("extract(")
-	buf.WriteString(node.IntervalTypes.ToString())
+	buf.WriteString(node.IntervalType.ToString())
 	buf.WriteString(" from ")
 	buf.printExpr(node, node.Expr, true)
 	buf.WriteByte(')')
@@ -1928,6 +1920,51 @@ func (node *RegexpSubstrExpr) formatFast(buf *TrackedBuffer) {
 		buf.printExpr(node, node.MatchType, true)
 	}
 	buf.WriteByte(')')
+}
+
+// formatFast formats the node
+func (node *IntervalDateExpr) formatFast(buf *TrackedBuffer) {
+	switch node.Syntax {
+	case IntervalDateExprAdddate, IntervalDateExprSubdate:
+		if node.Unit == IntervalNone {
+			buf.WriteString(node.FnName())
+			buf.WriteByte('(')
+			buf.printExpr(node, node.Date, true)
+			buf.WriteString(", ")
+			buf.printExpr(node, node.Interval, true)
+			buf.WriteByte(')')
+			return
+		}
+		fallthrough
+	case IntervalDateExprDateAdd, IntervalDateExprDateSub:
+		buf.WriteString(node.FnName())
+		buf.WriteByte('(')
+		buf.printExpr(node, node.Date, true)
+		buf.WriteString(", interval ")
+		buf.printExpr(node, node.Interval, true)
+		buf.WriteByte(' ')
+		buf.WriteString(node.Unit.ToString())
+		buf.WriteByte(')')
+	case IntervalDateExprBinaryAdd:
+		buf.printExpr(node, node.Date, true)
+		buf.WriteString(" + interval ")
+		buf.printExpr(node, node.Interval, false)
+		buf.WriteByte(' ')
+		buf.WriteString(node.Unit.ToString())
+	case IntervalDateExprBinaryAddLeft:
+		buf.WriteString("interval ")
+		buf.printExpr(node, node.Interval, true)
+		buf.WriteByte(' ')
+		buf.WriteString(node.Unit.ToString())
+		buf.WriteString(" + ")
+		buf.printExpr(node, node.Date, false)
+	case IntervalDateExprBinarySub:
+		buf.printExpr(node, node.Date, true)
+		buf.WriteString(" - interval ")
+		buf.printExpr(node, node.Interval, false)
+		buf.WriteByte(' ')
+		buf.WriteString(node.Unit.ToString())
+	}
 }
 
 // formatFast formats the node.
@@ -2124,8 +2161,15 @@ func (node *FromFirstLastClause) formatFast(buf *TrackedBuffer) {
 // formatFast formats the node
 func (node *FramePoint) formatFast(buf *TrackedBuffer) {
 	if node.Expr != nil {
-		buf.WriteByte(' ')
-		node.Expr.formatFast(buf)
+		if node.Unit != IntervalNone {
+			buf.WriteString(" interval ")
+			node.Expr.formatFast(buf)
+			buf.WriteByte(' ')
+			buf.WriteString(node.Unit.ToString())
+		} else {
+			buf.WriteByte(' ')
+			node.Expr.formatFast(buf)
+		}
 	}
 	buf.WriteByte(' ')
 	buf.WriteString(node.Type.ToString())

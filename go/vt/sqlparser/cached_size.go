@@ -1822,12 +1822,12 @@ func (cached *Insert) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(144)
+		size += int64(128)
 	}
 	// field Comments *vitess.io/vitess/go/vt/sqlparser.ParsedComments
 	size += cached.Comments.CachedSize(true)
-	// field Table vitess.io/vitess/go/vt/sqlparser.TableName
-	size += cached.Table.CachedSize(false)
+	// field Table *vitess.io/vitess/go/vt/sqlparser.AliasedTableExpr
+	size += cached.Table.CachedSize(true)
 	// field Partitions vitess.io/vitess/go/vt/sqlparser.Partitions
 	{
 		size += hack.RuntimeAllocSize(int64(cap(cached.Partitions)) * int64(32))
@@ -1881,20 +1881,22 @@ func (cached *InsertExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
-func (cached *IntervalExpr) CachedSize(alloc bool) int64 {
+func (cached *IntervalDateExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(32)
+		size += int64(48)
 	}
-	// field Expr vitess.io/vitess/go/vt/sqlparser.Expr
-	if cc, ok := cached.Expr.(cachedObject); ok {
+	// field Date vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Date.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
-	// field Unit string
-	size += hack.RuntimeAllocSize(int64(len(cached.Unit)))
+	// field Interval vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Interval.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
 	return size
 }
 func (cached *IntervalFuncExpr) CachedSize(alloc bool) int64 {

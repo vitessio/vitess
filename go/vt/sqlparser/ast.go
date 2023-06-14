@@ -16,7 +16,10 @@ limitations under the License.
 
 package sqlparser
 
-import "vitess.io/vitess/go/sqltypes"
+import (
+	"vitess.io/vitess/go/mysql/datetime"
+	"vitess.io/vitess/go/sqltypes"
+)
 
 /*
 This is the Vitess AST. This file should only contain pure struct declarations,
@@ -322,10 +325,12 @@ type (
 	// of the implications the deletion part may have on vindexes.
 	// If you add fields here, consider adding them to calls to validateUnshardedRoute.
 	Insert struct {
-		Action     InsertAction
-		Comments   *ParsedComments
-		Ignore     Ignore
-		Table      TableName
+		Action   InsertAction
+		Comments *ParsedComments
+		Ignore   Ignore
+		// The Insert as syntax still take TableName.
+		// The change is made for semantic analyzer as it takes AliasedTableExpr to provide TableInfo
+		Table      *AliasedTableExpr
 		Partitions Partitions
 		Columns    Columns
 		Rows       InsertRows
@@ -673,9 +678,6 @@ type (
 		Comments *ParsedComments
 		Name     IdentifierCI
 	}
-
-	// IntervalTypes is an enum to get types of intervals
-	IntervalTypes int8
 
 	// OtherRead represents a DESCRIBE, or EXPLAIN statement.
 	// It should be used only as an indicator. It does not contain
@@ -2154,6 +2156,7 @@ type (
 	// More information available here: https://dev.mysql.com/doc/refman/8.0/en/window-functions-frames.html
 	FramePoint struct {
 		Type FramePointType
+		Unit IntervalType
 		Expr Expr
 	}
 
@@ -2340,12 +2343,6 @@ type (
 		Expr         Expr
 	}
 
-	// IntervalExpr represents a date-time INTERVAL expression.
-	IntervalExpr struct {
-		Expr Expr
-		Unit string
-	}
-
 	// TimestampFuncExpr represents the function and arguments for TIMESTAMP{ADD,DIFF} functions.
 	TimestampFuncExpr struct {
 		Name  string
@@ -2356,8 +2353,8 @@ type (
 
 	// ExtractFuncExpr represents the function and arguments for EXTRACT(YEAR FROM '2019-07-02') type functions.
 	ExtractFuncExpr struct {
-		IntervalTypes IntervalTypes
-		Expr          Expr
+		IntervalType IntervalType
+		Expr         Expr
 	}
 
 	// CollateExpr represents dynamic collate operator.
@@ -2966,7 +2963,7 @@ type (
 	}
 
 	// RegexpInstrExpr represents REGEXP_INSTR()
-	// For more information, postVisit https://dev.mysql.com/doc/refman/8.0/en/regexp.html#function_regexp-instr
+	// For more information, see https://dev.mysql.com/doc/refman/8.0/en/regexp.html#function_regexp-instr
 	RegexpInstrExpr struct {
 		Expr         Expr
 		Pattern      Expr
@@ -2977,7 +2974,7 @@ type (
 	}
 
 	// RegexpLikeExpr represents REGEXP_LIKE()
-	// For more information, postVisit https://dev.mysql.com/doc/refman/8.0/en/regexp.html#function_regexp-like
+	// For more information, see https://dev.mysql.com/doc/refman/8.0/en/regexp.html#function_regexp-like
 	RegexpLikeExpr struct {
 		Expr      Expr
 		Pattern   Expr
@@ -2985,7 +2982,7 @@ type (
 	}
 
 	// RegexpReplaceExpr represents REGEXP_REPLACE()
-	// For more information, postVisit https://dev.mysql.com/doc/refman/8.0/en/regexp.html#function_regexp-replace
+	// For more information, see https://dev.mysql.com/doc/refman/8.0/en/regexp.html#function_regexp-replace
 	RegexpReplaceExpr struct {
 		Expr       Expr
 		Pattern    Expr
@@ -2996,13 +2993,23 @@ type (
 	}
 
 	// RegexpSubstrExpr represents REGEXP_SUBSTR()
-	// For more information, postVisit https://dev.mysql.com/doc/refman/8.0/en/regexp.html#function_regexp-substr
+	// For more information, see https://dev.mysql.com/doc/refman/8.0/en/regexp.html#function_regexp-substr
 	RegexpSubstrExpr struct {
 		Expr       Expr
 		Pattern    Expr
 		Occurrence Expr
 		Position   Expr
 		MatchType  Expr
+	}
+
+	IntervalType = datetime.IntervalType
+
+	// IntervalDateExpr represents ADDDATE(), DATE_ADD()
+	IntervalDateExpr struct {
+		Syntax   IntervalExprSyntax
+		Date     Expr
+		Interval Expr
+		Unit     IntervalType
 	}
 
 	// ArgumentLessWindowExpr stands for the following window_functions: CUME_DIST, DENSE_RANK, PERCENT_RANK, RANK, ROW_NUMBER
@@ -3131,7 +3138,6 @@ func (ListArg) iExpr()                             {}
 func (*BinaryExpr) iExpr()                         {}
 func (*UnaryExpr) iExpr()                          {}
 func (*IntroducerExpr) iExpr()                     {}
-func (*IntervalExpr) iExpr()                       {}
 func (*CollateExpr) iExpr()                        {}
 func (*FuncExpr) iExpr()                           {}
 func (*TimestampFuncExpr) iExpr()                  {}
@@ -3178,6 +3184,7 @@ func (*RegexpInstrExpr) iExpr()                    {}
 func (*RegexpLikeExpr) iExpr()                     {}
 func (*RegexpReplaceExpr) iExpr()                  {}
 func (*RegexpSubstrExpr) iExpr()                   {}
+func (*IntervalDateExpr) iExpr()                   {}
 func (*ArgumentLessWindowExpr) iExpr()             {}
 func (*FirstOrLastValueExpr) iExpr()               {}
 func (*NtileExpr) iExpr()                          {}
@@ -3269,6 +3276,7 @@ func (*RegexpInstrExpr) iCallable()                    {}
 func (*RegexpLikeExpr) iCallable()                     {}
 func (*RegexpReplaceExpr) iCallable()                  {}
 func (*RegexpSubstrExpr) iCallable()                   {}
+func (*IntervalDateExpr) iCallable()                   {}
 func (*ArgumentLessWindowExpr) iCallable()             {}
 func (*FirstOrLastValueExpr) iCallable()               {}
 func (*NtileExpr) iCallable()                          {}

@@ -2274,6 +2274,7 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *pfl
 		vrwp.MaxAllowedTransactionLagSeconds = int64(math.Ceil(maxReplicationLagAllowed.Seconds()))
 	case vReplicationWorkflowActionCancel:
 		vrwp.KeepData = *keepData
+		vrwp.KeepRoutingRules = *keepRoutingRules
 	case vReplicationWorkflowActionComplete:
 		switch workflowType {
 		case wrangler.MoveTablesWorkflow:
