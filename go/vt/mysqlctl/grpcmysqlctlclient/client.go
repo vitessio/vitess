@@ -29,7 +29,6 @@ import (
 	"google.golang.org/grpc/status"
 
 	"vitess.io/vitess/go/vt/grpcclient"
-	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/mysqlctlclient"
 
 	mysqlctlpb "vitess.io/vitess/go/vt/proto/mysqlctl"
@@ -85,12 +84,7 @@ func (c *client) RunMysqlUpgrade(ctx context.Context) error {
 }
 
 // ApplyBinlogFile is part of the MysqlctlClient interface.
-func (c *client) ApplyBinlogFile(ctx context.Context, binlogFileName string, binlogRestorePosition string, binlogRestoreDateTime time.Time) error {
-	req := &mysqlctlpb.ApplyBinlogFileRequest{
-		BinlogFileName:        binlogFileName,
-		BinlogRestorePosition: binlogRestorePosition,
-		BinlogRestoreDatetime: logutil.TimeToProto(binlogRestoreDateTime),
-	}
+func (c *client) ApplyBinlogFile(ctx context.Context, req *mysqlctlpb.ApplyBinlogFileRequest) error {
 	return c.withRetry(ctx, func() error {
 		_, err := c.c.ApplyBinlogFile(ctx, req)
 		return err

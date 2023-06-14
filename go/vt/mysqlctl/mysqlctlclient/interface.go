@@ -21,7 +21,6 @@ package mysqlctlclient
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/spf13/pflag"
 
@@ -52,7 +51,7 @@ type MysqlctlClient interface {
 	RunMysqlUpgrade(ctx context.Context) error
 
 	// ApplyBinlogFile calls Mysqld.ApplyBinlogFile remotely.
-	ApplyBinlogFile(ctx context.Context, binlogFileName, binlogRestorePosition string, binlogRestoreDateTime time.Time) error
+	ApplyBinlogFile(ctx context.Context, req *mysqlctlpb.ApplyBinlogFileRequest) error
 
 	// ReadBinlogFilesTimestamps calls Mysqld.ReadBinlogFilesTimestamps remotely.
 	ReadBinlogFilesTimestamps(ctx context.Context, req *mysqlctlpb.ReadBinlogFilesTimestampsRequest) (*mysqlctlpb.ReadBinlogFilesTimestampsResponse, error)

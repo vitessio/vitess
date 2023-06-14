@@ -1171,7 +1171,7 @@ func (mysqld *Mysqld) GetVersionComment(ctx context.Context) string {
 
 // ApplyBinlogFile extracts a binary log file and applies it to MySQL. It is the equivalent of:
 // $ mysqlbinlog --include-gtids binlog.file | mysql
-func (mysqld *Mysqld) ApplyBinlogFile(ctx context.Context, binlogFile string, restorePos mysql.Position, restoreToTimestamp time.Time) error {
+func (mysqld *Mysqld) ApplyBinlogFile(ctx context.Context, req *mysqlctlpb.ApplyBinlogFileRequest) error {
 	if socketFile != "" {
 		log.Infof("executing Mysqld.ApplyBinlogFile() remotely via mysqlctld server: %v", socketFile)
 		client, err := mysqlctlclient.New("unix", socketFile)
@@ -1179,7 +1179,7 @@ func (mysqld *Mysqld) ApplyBinlogFile(ctx context.Context, binlogFile string, re
 			return fmt.Errorf("can't dial mysqlctld: %v", err)
 		}
 		defer client.Close()
-		return client.ApplyBinlogFile(ctx, binlogFile, mysql.EncodePosition(restorePos), restoreToTimestamp)
+		return client.ApplyBinlogFile(ctx, req)
 	}
 	var pipe io.ReadCloser
 	var mysqlbinlogCmd *exec.Cmd
@@ -1199,20 +1199,20 @@ func (mysqld *Mysqld) ApplyBinlogFile(ctx context.Context, binlogFile string, re
 			return err
 		}
 		args := []string{}
-		if gtids := restorePos.GTIDSet.String(); gtids != "" {
+		if gtids := req.BinlogRestorePosition; gtids != "" {
 			args = append(args,
 				"--include-gtids",
 				gtids,
 			)
 		}
-		if !restoreToTimestamp.IsZero() {
+		if restoreToTimestamp := logutil.ProtoToTime(req.BinlogRestoreDatetime); !restoreToTimestamp.IsZero() {
 			args = append(args,
 				"--stop-datetime",
 				restoreToTimestamp.Format(sqltypes.TimestampFormat),
 			)
 		}
 
-		args = append(args, binlogFile)
+		args = append(args, req.BinlogFileName)
 
 		mysqlbinlogCmd = exec.Command(name, args...)
 		mysqlbinlogCmd.Dir = dir

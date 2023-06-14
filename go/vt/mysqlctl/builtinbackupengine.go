@@ -43,6 +43,7 @@ import (
 	stats "vitess.io/vitess/go/vt/mysqlctl/backupstats"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
 	"vitess.io/vitess/go/vt/proto/mysqlctl"
+	mysqlctlpb "vitess.io/vitess/go/vt/proto/mysqlctl"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
@@ -873,7 +874,12 @@ func (be *BuiltinBackupEngine) executeRestoreIncrementalBackup(ctx context.Conte
 		if err != nil {
 			return vterrors.Wrap(err, "failed to restore file")
 		}
-		if err := mysqld.ApplyBinlogFile(ctx, binlogFile, params.RestoreToPos, params.RestoreToTimestamp); err != nil {
+		req := &mysqlctlpb.ApplyBinlogFileRequest{
+			BinlogFileName:        binlogFile,
+			BinlogRestorePosition: params.RestoreToPos.GTIDSet.String(),
+			BinlogRestoreDatetime: logutil.TimeToProto(params.RestoreToTimestamp),
+		}
+		if err := mysqld.ApplyBinlogFile(ctx, req); err != nil {
 			return vterrors.Wrapf(err, "failed to apply binlog file %v", binlogFile)
 		}
 		defer os.Remove(binlogFile)
