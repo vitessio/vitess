@@ -442,9 +442,11 @@ Cleanup:
 			}
 		}
 		// update the errant gtid map
-		errantGtidMapMu.Lock()
-		defer errantGtidMapMu.Unlock()
-		errantGtidMap[topoproto.TabletAliasString(tablet.Alias)] = instance.GtidErrant
+		go func() {
+			errantGtidMapMu.Lock()
+			defer errantGtidMapMu.Unlock()
+			errantGtidMap[topoproto.TabletAliasString(tablet.Alias)] = instance.GtidErrant
+		}()
 	}
 
 	latency.Stop("instance")
