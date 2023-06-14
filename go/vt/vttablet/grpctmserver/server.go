@@ -176,6 +176,12 @@ func (s *server) ApplySchema(ctx context.Context, request *tabletmanagerdatapb.A
 	return response, err
 }
 
+func (s *server) ResetSequences(ctx context.Context, request *tabletmanagerdatapb.ResetSequencesRequest) (response *tabletmanagerdatapb.ResetSequencesResponse, err error) {
+	defer s.tm.HandleRPCPanic(ctx, "ResetSequences", request, response, true /*verbose*/, &err)
+	response = &tabletmanagerdatapb.ResetSequencesResponse{}
+	return response, err
+}
+
 func (s *server) LockTables(ctx context.Context, req *tabletmanagerdatapb.LockTablesRequest) (*tabletmanagerdatapb.LockTablesResponse, error) {
 	err := s.tm.LockTables(ctx)
 	if err != nil {

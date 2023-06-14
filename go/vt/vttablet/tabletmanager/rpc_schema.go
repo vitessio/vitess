@@ -58,6 +58,11 @@ func (tm *TabletManager) ReloadSchema(ctx context.Context, waitPosition string) 
 	return tm.QueryServiceControl.ReloadSchema(ctx)
 }
 
+func (tm *TabletManager) ResetSequences(ctx context.Context, tables []string) error {
+	tm.QueryServiceControl.SchemaEngine().ResetSequences(tables)
+	return nil
+}
+
 // PreflightSchema will try out the schema changes in "changes".
 func (tm *TabletManager) PreflightSchema(ctx context.Context, changes []string) ([]*tabletmanagerdatapb.SchemaChangeResult, error) {
 	if err := tm.lock(ctx); err != nil {
@@ -92,3 +97,9 @@ func (tm *TabletManager) ApplySchema(ctx context.Context, change *tmutils.Schema
 	tm.ReloadSchema(ctx, "") // nolint:errcheck
 	return scr, nil
 }
+
+//
+//func (tm *TabletManager) ResetSequences(ctx context.Context, request *tabletmanagerdatapb.ResetSequencesRequest) (*tabletmanagerdatapb.ResetSequencesResponse, error) {
+//	tm.QueryServiceControl.SchemaEngine().ResetSequences(request.Tables)
+//	return &tabletmanagerdatapb.ResetSequencesResponse{}, nil
+//}

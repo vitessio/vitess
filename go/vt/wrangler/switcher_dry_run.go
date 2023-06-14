@@ -370,3 +370,10 @@ func (dr *switcherDryRun) dropTargetShards(ctx context.Context) error {
 
 	return nil
 }
+
+func (dr *switcherDryRun) resetSequences(ctx context.Context) error {
+	if dr.ts.mustResetSequences() {
+		dr.drLog.Log("The sequence caches will be reset on the source for all tables which use sequences")
+	}
+	return nil
+}

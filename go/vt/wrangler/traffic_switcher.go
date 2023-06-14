@@ -581,6 +581,13 @@ func (wr *Wrangler) SwitchWrites(ctx context.Context, targetKeyspace, workflowNa
 			return 0, nil, err
 		}
 
+		ts.Logger().Infof("Resetting sequences")
+		if err := sw.resetSequences(ctx); err != nil {
+			ts.Logger().Errorf("resetSequences failed: %v", err)
+			sw.cancelMigration(ctx, sm)
+			return 0, nil, err
+		}
+
 		ts.Logger().Infof("Creating reverse streams")
 		if err := sw.createReverseVReplication(ctx); err != nil {
 			ts.Logger().Errorf("createReverseVReplication failed: %v", err)
@@ -1867,4 +1874,25 @@ func (ts *trafficSwitcher) addParticipatingTablesToKeyspace(ctx context.Context,
 		}
 	}
 	return ts.TopoServer().SaveVSchema(ctx, keyspace, vschema)
+}
+
+func (ts *trafficSwitcher) mustResetSequences() bool {
+	switch ts.workflowType {
+	case binlogdatapb.VReplicationWorkflowType_Migrate,
+		binlogdatapb.VReplicationWorkflowType_MoveTables:
+		return true
+	default:
+		return false
+	}
+}
+
+func (ts *trafficSwitcher) resetSequences(ctx context.Context) error {
+	if !ts.mustResetSequences() {
+		return nil
+	}
+
+	return ts.ForAllSources(func(source *workflow.MigrationSource) error {
+		ts.Logger().Infof("Resetting sequences for source %s", source.GetPrimary().String())
+		return ts.TabletManagerClient().ResetSequences(ctx, source.GetPrimary().Tablet, ts.Tables())
+	})
 }

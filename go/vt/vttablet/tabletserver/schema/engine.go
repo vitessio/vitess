@@ -328,10 +328,7 @@ func (se *Engine) MakeNonPrimary() {
 	se.isServingPrimary = false
 	for _, t := range se.tables {
 		if t.SequenceInfo != nil {
-			t.SequenceInfo.Lock()
-			t.SequenceInfo.NextVal = 0
-			t.SequenceInfo.LastVal = 0
-			t.SequenceInfo.Unlock()
+			t.SequenceInfo.Reset()
 		}
 	}
 }
@@ -846,4 +843,17 @@ func extractNamesFromTablesList(tables []*Table) []string {
 		tableNames = append(tableNames, table.Name.String())
 	}
 	return tableNames
+}
+
+func (se *Engine) ResetSequences(tables []string) {
+	se.mu.Lock()
+	defer se.mu.Unlock()
+	for _, tableName := range tables {
+		if table, ok := se.tables[tableName]; ok {
+			if table.SequenceInfo != nil {
+				log.Infof("Resetting sequence info for table %v: %s", tableName, table.SequenceInfo)
+				table.SequenceInfo.Reset()
+			}
+		}
+	}
 }
