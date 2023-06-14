@@ -1820,10 +1820,9 @@ func (node *IntroducerExpr) formatFast(buf *TrackedBuffer) {
 }
 
 // formatFast formats the node.
-func (node *TimestampFuncExpr) formatFast(buf *TrackedBuffer) {
-	buf.WriteString(node.Name)
-	buf.WriteByte('(')
-	buf.WriteString(node.Unit)
+func (node *TimestampDiffExpr) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("timestampdiff(")
+	buf.WriteString(node.Unit.ToString())
 	buf.WriteString(", ")
 	buf.printExpr(node, node.Expr1, true)
 	buf.WriteString(", ")
@@ -1964,6 +1963,14 @@ func (node *IntervalDateExpr) formatFast(buf *TrackedBuffer) {
 		buf.printExpr(node, node.Interval, false)
 		buf.WriteByte(' ')
 		buf.WriteString(node.Unit.ToString())
+	case IntervalDateExprTimestampadd:
+		buf.WriteString("timestampadd(")
+		buf.WriteString(node.Unit.ToString())
+		buf.WriteString(", ")
+		buf.printExpr(node, node.Interval, true)
+		buf.WriteString(", ")
+		buf.printExpr(node, node.Date, true)
+		buf.WriteByte(')')
 	}
 }
 
