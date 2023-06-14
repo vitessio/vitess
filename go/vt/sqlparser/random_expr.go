@@ -21,6 +21,8 @@ import (
 	"math/rand"
 )
 
+// This file is used to generate random expressions to be used for testing
+
 type (
 	Col struct {
 		Name  string
@@ -34,7 +36,23 @@ type (
 	}
 )
 
-// This file is used to generate random expressions to be used for testing
+func (c *Col) copy() *Col {
+	return &Col{
+		Name:  c.Name,
+		Alias: c.Alias,
+		Typ:   c.Typ,
+	}
+}
+
+func (t *TableT) copy() *TableT {
+	newCols := make([]Col, len(t.Cols))
+	copy(newCols, t.Cols)
+	return &TableT{
+		Name:  t.Name,
+		Alias: t.Alias,
+		Cols:  newCols,
+	}
+}
 
 func NewGenerator(seed int64, maxDepth int, tables ...TableT) *Generator {
 	g := Generator{
@@ -144,7 +162,7 @@ func (g *Generator) randomBool() bool {
 }
 
 func (g *Generator) intLiteral() Expr {
-	t := fmt.Sprintf("%d", g.r.Intn(1000)-g.r.Intn((1000)))
+	t := fmt.Sprintf("%d", g.r.Intn(1000)-g.r.Intn(1000))
 
 	return NewIntLiteral(t)
 }
@@ -250,17 +268,19 @@ func (g *Generator) arithmetic() Expr {
 func (g *Generator) typeColumn(typ string, typeLiteral func() Expr) Expr {
 	tblIdx := rand.Intn(len(g.tables))
 	table := g.tables[tblIdx]
-	for len(table.Cols) > 0 {
-		idx := rand.Intn(len(table.Cols))
-		randCol := table.Cols[idx]
-		if randCol.Typ == typ /* better way to check if int type? */ {
+	tableCopy := table.copy()
+
+	for len(tableCopy.Cols) > 0 {
+		idx := rand.Intn(len(tableCopy.Cols))
+		randCol := tableCopy.Cols[idx]
+		if randCol.Typ == typ {
 			newName := randCol.Name
 			if randCol.Alias != "" {
 				newName = randCol.Alias
 			}
 			newTableName := table.Name
-			if table.Alias != "" {
-				newTableName = table.Alias
+			if tableCopy.Alias != "" {
+				newTableName = tableCopy.Alias
 			}
 			return &ColName{
 				Metadata:  nil,
@@ -269,8 +289,8 @@ func (g *Generator) typeColumn(typ string, typeLiteral func() Expr) Expr {
 			}
 		} else {
 			// delete randCol from table.columns
-			table.Cols[idx] = table.Cols[len(table.Cols)-1]
-			table.Cols = table.Cols[:len(table.Cols)-1]
+			tableCopy.Cols[idx] = tableCopy.Cols[len(tableCopy.Cols)-1]
+			tableCopy.Cols = tableCopy.Cols[:len(tableCopy.Cols)-1]
 		}
 	}
 
@@ -278,6 +298,7 @@ func (g *Generator) typeColumn(typ string, typeLiteral func() Expr) Expr {
 }
 
 func (g *Generator) intColumn() Expr {
+	// better way to check if int type?
 	return g.typeColumn("bigint", g.intLiteral)
 }
 
