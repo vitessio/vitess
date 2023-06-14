@@ -17,8 +17,6 @@ limitations under the License.
 package operators
 
 import (
-	"golang.org/x/exp/slices"
-
 	"vitess.io/vitess/go/slices2"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
@@ -44,76 +42,12 @@ func getPhases() []Phase {
 		Name: "add filter columns to projection or aggregation",
 		action: func(ctx *plancontext.PlanningContext, op ops.Operator) (ops.Operator, error) {
 			ctx.DelegateAggregation = true
-			return addColumnsToFilter(ctx, op)
+			return addColumnsToInput(ctx, op)
 		},
 	}, {
 		Name:   "add ORDER BY to aggregations above the route and add GROUP BY to aggregations on the RHS of join",
 		action: addOrderBysForAggregations,
 	}}
-}
-
-// addColumnsToFilter adds columns from the filter to projection or aggregation operator if the returned columns does not contain it.
-// This happens only when the filter expression can be retrieved as an offset from the underlying mysql.
-func addColumnsToFilter(ctx *plancontext.PlanningContext, root ops.Operator) (ops.Operator, error) {
-	visitor := func(in ops.Operator, _ semantics.TableSet, isRoot bool) (ops.Operator, *rewrite.ApplyResult, error) {
-		filter, ok := in.(*Filter)
-		if !ok {
-			return in, rewrite.SameTree, nil
-		}
-
-		columns, err := filter.GetColumns()
-		if err != nil {
-			return nil, nil, err
-		}
-		proj, areOnTopOfProj := filter.Source.(selectExpressions)
-		if !areOnTopOfProj {
-			// not much we can do here
-			return in, rewrite.SameTree, nil
-		}
-		addedColumns := false
-		for _, expr := range filter.Predicates {
-			sqlparser.Rewrite(expr, func(cursor *sqlparser.Cursor) bool {
-				e, ok := cursor.Node().(sqlparser.Expr)
-				if !ok {
-					return true
-				}
-				offset := slices.IndexFunc(columns, func(expr *sqlparser.AliasedExpr) bool {
-					return ctx.SemTable.EqualsExprWithDeps(expr.Expr, e)
-				})
-
-				if offset >= 0 {
-					// This is already part of the input. No additional column pushing needed here.
-					return false
-				}
-
-				// Only if the expression can be retrieved from mysql without any evaluation at vtgate.
-				// This will be added to filter's input operator.
-				if fetchByOffset(e) {
-					// fetchByOffset return true only if expression is `Column Name` or `Aggregation Function`
-					// if column name then it will be added as a grouping column otherwise as an aggregation
-					// This matters only when the filter's input operator is aggregator.
-					_, addToGroupBy := e.(*sqlparser.ColName)
-					proj.addColumnWithoutPushing(aeWrap(e), addToGroupBy)
-					addedColumns = true
-					columns, err = proj.GetColumns()
-					return false
-				}
-				return true
-			}, nil)
-		}
-		// If error happens inside the rewritter.
-		// return from here.
-		if err != nil {
-			return nil, nil, err
-		}
-		if addedColumns {
-			return in, rewrite.NewTree("added columns because filter needs it", in), nil
-		}
-
-		return in, rewrite.SameTree, nil
-	}
-
-	return rewrite.TopDown(root, TableID, visitor, stopAtRoute)
 }
 
 // addOrderBysForAggregations runs after we have run horizonPlanning until the op tree stops changing
