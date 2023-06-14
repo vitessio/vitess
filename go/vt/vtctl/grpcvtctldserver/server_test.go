@@ -11367,19 +11367,16 @@ func TestValidateVersionShard(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		curT := tt
 		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			curT.setup()
-			resp, err := vtctld.ValidateVersionShard(ctx, curT.req)
-			if curT.shouldErr {
+			tt.setup()
+			resp, err := vtctld.ValidateVersionShard(ctx, tt.req)
+			if tt.shouldErr {
 				assert.Error(t, err)
 				return
 			}
 
 			assert.NoError(t, err)
-			utils.MustMatch(t, curT.expected, resp)
+			utils.MustMatch(t, tt.expected, resp)
 		})
 	}
 }
