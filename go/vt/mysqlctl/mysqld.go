@@ -1294,6 +1294,33 @@ func (mysqld *Mysqld) ApplyBinlogFile(ctx context.Context, binlogFile string, re
 	return nil
 }
 
+func parseBinlogEntryTimestamp(logEntry string) (found bool, t time.Time, err error) {
+	if len(logEntry) == 0 {
+		return false, t, nil
+	}
+	if logEntry[0] != '#' {
+		return false, t, nil
+	}
+	if submatch := binlogEntryCommittedTimestampRegex.FindStringSubmatch(logEntry); submatch != nil {
+		// MySQL 8.0
+		binlogEntryCommittedTimestamp := submatch[1]
+		unixMicros, err := strconv.ParseInt(binlogEntryCommittedTimestamp, 10, 64)
+		if err != nil {
+			return false, t, err
+		}
+		return true, time.UnixMicro(unixMicros), nil
+	}
+	if submatch := binlogEntryTimestampGTIDRegexp.FindStringSubmatch(logEntry); submatch != nil {
+		// MySQL 5.7
+		t, err = ParseBinlogTimestamp(submatch[1])
+		if err != nil {
+			return false, t, err
+		}
+		return true, t, nil
+	}
+	return false, t, nil
+}
+
 // ReadBinlogFilesTimestamps reads all given binlog files via `mysqlbinlog` command and returns the first and last  found transaction timestamps
 func (mysqld *Mysqld) ReadBinlogFilesTimestamps(ctx context.Context, req *mysqlctlpb.ReadBinlogFilesTimestampsRequest) (*mysqlctlpb.ReadBinlogFilesTimestampsResponse, error) {
 	if len(req.BinlogFileNames) == 0 {
@@ -1340,30 +1367,11 @@ func (mysqld *Mysqld) ReadBinlogFilesTimestamps(ctx context.Context, req *mysqlc
 			// Read line by line and process it
 			for scanner.Scan() {
 				logEntry := scanner.Text()
-				if len(logEntry) == 0 {
-					continue
-				}
-				if logEntry[0] != '#' {
-					continue
-				}
-				if submatch := binlogEntryCommittedTimestampRegex.FindStringSubmatch(logEntry); submatch != nil {
-					// MySQL 8.0
-					binlogEntryCommittedTimestamp := submatch[1]
-					unixMicros, err := strconv.ParseInt(binlogEntryCommittedTimestamp, 10, 64)
-					if err != nil {
-						scanComplete <- err
-						return
-					}
-					t = time.UnixMicro(unixMicros)
-					found = true
-				} else if submatch := binlogEntryTimestampGTIDRegexp.FindStringSubmatch(logEntry); submatch != nil {
-					// MySQL 5.7
-					t, err = ParseBinlogTimestamp(submatch[1])
-					if err != nil {
-						scanComplete <- err
-						return
-					}
-					found = true
+
+				found, t, err = parseBinlogEntryTimestamp(logEntry)
+				if err != nil {
+					scanComplete <- err
+					return
 				}
 				if found && stopAtFirst {
 					return
