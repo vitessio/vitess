@@ -401,7 +401,7 @@ With this release `INSERT` queries are moved to Gen4.
 Clients can move to old v3 planner for inserts by using `V3Insert` planner version with `--planner-version` vtgate flag or with comment directive `/*vt+ planner=<planner_version>` for individual query.
 
 ### <a id="vtadmin"/>VTAdmin
-#### <a id="updated-node"/>vtadmin-web updated to node v18.16.0 (LTS)
+#### <a id="update-node"/>vtadmin-web updated to node v18.16.0 (LTS)
 
 Building vtadmin-web now requires node >= v18.16.0 (LTS). Breaking changes from v16 to v18 are listed
 in https://nodejs.org/en/blog/release/v18.0.0, but none apply to VTAdmin. Full details on v18.16.0 are listed here https://nodejs.org/en/blog/release/v18.16.0.
