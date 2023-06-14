@@ -1294,6 +1294,7 @@ func (mysqld *Mysqld) ApplyBinlogFile(ctx context.Context, binlogFile string, re
 	return nil
 }
 
+// parseBinlogEntryTimestamp attempts to extract a timestamp from a binlog entry.
 func parseBinlogEntryTimestamp(logEntry string) (found bool, t time.Time, err error) {
 	if len(logEntry) == 0 {
 		return false, t, nil
@@ -1350,7 +1351,7 @@ func (mysqld *Mysqld) ReadBinlogFilesTimestamps(ctx context.Context, req *mysqlc
 		return nil, err
 	}
 
-	scanTimestamp := func(binlogFile string, stopAtFirst bool) (t time.Time, found bool, err error) {
+	scanTimestamp := func(binlogFile string, stopAtFirst bool) (matchedTime time.Time, matchFound bool, err error) {
 		args := []string{binlogFile}
 		mysqlbinlogCmd = exec.Command(mysqlbinlogName, args...)
 		mysqlbinlogCmd.Dir = dir
@@ -1358,7 +1359,7 @@ func (mysqld *Mysqld) ReadBinlogFilesTimestamps(ctx context.Context, req *mysqlc
 		log.Infof("ApplyBinlogFile: running mysqlbinlog command: %#v", mysqlbinlogCmd)
 		pipe, err := mysqlbinlogCmd.StdoutPipe() // to be piped into mysql
 		if err != nil {
-			return t, false, err
+			return matchedTime, false, err
 		}
 		scanner := bufio.NewScanner(pipe)
 		scanComplete := make(chan error)
@@ -1368,10 +1369,14 @@ func (mysqld *Mysqld) ReadBinlogFilesTimestamps(ctx context.Context, req *mysqlc
 			for scanner.Scan() {
 				logEntry := scanner.Text()
 
-				found, t, err = parseBinlogEntryTimestamp(logEntry)
+				found, t, err := parseBinlogEntryTimestamp(logEntry)
 				if err != nil {
 					scanComplete <- err
 					return
+				}
+				if found {
+					matchedTime = t
+					matchFound = true
 				}
 				if found && stopAtFirst {
 					return
@@ -1379,16 +1384,16 @@ func (mysqld *Mysqld) ReadBinlogFilesTimestamps(ctx context.Context, req *mysqlc
 			}
 		}
 		if err := mysqlbinlogCmd.Start(); err != nil {
-			return t, false, err
+			return matchedTime, false, err
 		}
 		go scan()
 		if err := mysqlbinlogCmd.Wait(); err != nil {
-			return t, false, vterrors.Wrapf(err, "waiting on mysqlbinlog command in ReadBinlogFilesTimestamps")
+			return matchedTime, false, vterrors.Wrapf(err, "waiting on mysqlbinlog command in ReadBinlogFilesTimestamps")
 		}
 		if err := <-scanComplete; err != nil {
-			return t, false, vterrors.Wrapf(err, "scanning mysqlbinlog output in ReadBinlogFilesTimestamps	")
+			return matchedTime, false, vterrors.Wrapf(err, "scanning mysqlbinlog output in ReadBinlogFilesTimestamps	")
 		}
-		return t, found, nil
+		return matchedTime, matchFound, nil
 	}
 	resp := &mysqlctlpb.ReadBinlogFilesTimestampsResponse{}
 	// Find first timestamp
