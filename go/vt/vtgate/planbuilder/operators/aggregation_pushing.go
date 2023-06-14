@@ -34,17 +34,22 @@ func tryPushingDownAggregator(ctx *plancontext.PlanningContext, aggregator *Aggr
 	}
 	switch src := aggregator.Source.(type) {
 	case *Route:
+		// if we have a single sharded route, we can push it down
 		output, applyResult, err = pushDownAggregationThroughRoute(ctx, aggregator, src)
 	case *ApplyJoin:
-		if ctx.Phases.PushAggregation {
+		if ctx.DelegateAggregation {
 			output, applyResult, err = pushDownAggregationThroughJoin(ctx, aggregator, src)
 		}
 	case *Filter:
-		if ctx.Phases.PushAggregation {
+		if ctx.DelegateAggregation {
 			output, applyResult, err = pushDownAggregationThroughFilter(ctx, aggregator, src)
 		}
 	default:
 		return aggregator, rewrite.SameTree, nil
+	}
+
+	if err != nil {
+		return nil, nil, err
 	}
 
 	if output == nil {
@@ -82,7 +87,7 @@ func pushDownAggregationThroughRoute(
 		return rewrite.Swap(aggregator, route, "push down aggregation under route - remove original")
 	}
 
-	if !ctx.Phases.PushAggregation {
+	if !ctx.DelegateAggregation {
 		return nil, nil, nil
 	}
 

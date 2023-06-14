@@ -30,10 +30,8 @@ import (
 // Phase defines the different planning phases to go through to produce an optimized plan for the input query.
 type Phase struct {
 	Name string
-	// preOptimizeAction is the action to be taken before calling plan optimization operation.
-	preOptimizeAction func(ctx *plancontext.PlanningContext, op ops.Operator) (ops.Operator, error)
-	// postOptimizeAction is the action to be taken after calling plan optimization operation.
-	postOptimizeAction func(op ops.Operator) (ops.Operator, error)
+	// action is the action to be taken before calling plan optimization operation.
+	action func(ctx *plancontext.PlanningContext, op ops.Operator) (ops.Operator, error)
 }
 
 // getPhases returns the phases the planner will go through.
@@ -44,20 +42,13 @@ func getPhases() []Phase {
 		Name: "initial horizon planning optimization phase",
 	}, {
 		Name: "add filter columns to projection or aggregation",
-		preOptimizeAction: func(ctx *plancontext.PlanningContext, op ops.Operator) (ops.Operator, error) {
+		action: func(ctx *plancontext.PlanningContext, op ops.Operator) (ops.Operator, error) {
+			ctx.DelegateAggregation = true
 			return addColumnsToFilter(ctx, op)
 		},
 	}, {
-		// Adding Ordering Op - Any aggregation that is performed in the VTGate needs the input to be ordered
-		Name: "add ORDER BY to aggregations above the route and add GROUP BY to aggregations on the RHS of join",
-		preOptimizeAction: func(ctx *plancontext.PlanningContext, op ops.Operator) (ops.Operator, error) {
-			ctx.Phases.PushAggregation = true
-			return addOrderBysForAggregations(ctx, op)
-		},
-		// Adding Group by - This is needed if the grouping is performed on a join with a join condition then
-		//                   aggregation happening at route needs a group by to ensure only matching rows returns
-		//                   the aggregations otherwise returns no result.
-		postOptimizeAction: addGroupByOnRHSOfJoin,
+		Name:   "add ORDER BY to aggregations above the route and add GROUP BY to aggregations on the RHS of join",
+		action: addOrderBysForAggregations,
 	}}
 }
 

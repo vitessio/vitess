@@ -17,6 +17,7 @@ limitations under the License.
 package operators
 
 import (
+	"fmt"
 	"io"
 
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -98,25 +99,22 @@ func planHorizons(ctx *plancontext.PlanningContext, root ops.Operator) (op ops.O
 	op = root
 
 	for _, phase := range phases {
-		if phase.preOptimizeAction != nil {
-			op, err = phase.preOptimizeAction(ctx, op)
+		if phase.action != nil {
+			op, err = phase.action(ctx, op)
 			if err != nil {
 				return nil, err
 			}
+		}
+		if rewrite.DebugOperatorTree {
+			fmt.Printf("PHASE: %s\n", phase.Name)
 		}
 		op, err = optimizeHorizonPlanning(ctx, op)
 		if err != nil {
 			return nil, err
 		}
-		if phase.postOptimizeAction != nil {
-			op, err = phase.postOptimizeAction(op)
-			if err != nil {
-				return nil, err
-			}
-		}
-
 	}
-	return op, nil
+
+	return addGroupByOnRHSOfJoin(op)
 }
 
 func optimizeHorizonPlanning(ctx *plancontext.PlanningContext, root ops.Operator) (ops.Operator, error) {

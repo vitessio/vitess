@@ -40,11 +40,9 @@ type PlanningContext struct {
 	// we can continue using the same argument name
 	ReservedArguments map[sqlparser.Expr]string
 
-	Phases *PlanningPhases
-}
-
-type PlanningPhases struct {
-	PushAggregation bool
+	// DelegateAggregation tells us when we are allowed to split an aggregation across vtgate and mysql
+	// We aggregate within a shard, and then at the vtgate level we aggregate the incoming shard aggregates
+	DelegateAggregation bool
 }
 
 func NewPlanningContext(reservedVars *sqlparser.ReservedVars, semTable *semantics.SemTable, vschema VSchema, version querypb.ExecuteOptions_PlannerVersion) *PlanningContext {
@@ -56,7 +54,6 @@ func NewPlanningContext(reservedVars *sqlparser.ReservedVars, semTable *semantic
 		SkipPredicates:    map[sqlparser.Expr]any{},
 		PlannerVersion:    version,
 		ReservedArguments: map[sqlparser.Expr]string{},
-		Phases:            &PlanningPhases{},
 	}
 	return ctx
 }
