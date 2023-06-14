@@ -58,7 +58,9 @@ var instanceReadChan = make(chan bool, backendDBConcurrency)
 var instanceWriteChan = make(chan bool, backendDBConcurrency)
 
 var (
-	errantGtidMap = make(map[string]string)
+	// Mutex to protect the access of the following variable
+	errantGtidMapMu = sync.Mutex{}
+	errantGtidMap   = make(map[string]string)
 )
 
 // Constant strings for Group Replication information
@@ -94,6 +96,8 @@ func init() {
 	_ = writeBufferLatency.AddMany([]string{"wait", "write"})
 	writeBufferLatency.Start("wait")
 	stats.NewStringMapFuncWithMultiLabels("ErrantGtidMap", "Metric to track the errant GTIDs detected by VTOrc", []string{"TabletAlias"}, "ErrantGtid", func() map[string]string {
+		errantGtidMapMu.Lock()
+		defer errantGtidMapMu.Unlock()
 		return errantGtidMap
 	})
 
@@ -438,6 +442,8 @@ Cleanup:
 			}
 		}
 		// update the errant gtid map
+		errantGtidMapMu.Lock()
+		defer errantGtidMapMu.Unlock()
 		errantGtidMap[topoproto.TabletAliasString(tablet.Alias)] = instance.GtidErrant
 	}
 
