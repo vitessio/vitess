@@ -877,7 +877,6 @@ func (c *CreateTableEntity) TableDiff(other *CreateTableEntity, hints *DiffHints
 	}
 	if tableSpecHasChanged {
 		parentAlterTableEntityDiff = newAlterTableEntityDiff(alterTable)
-
 	}
 	for _, superfluousFulltextKey := range superfluousFulltextKeys {
 		alterTable := &sqlparser.AlterTable{

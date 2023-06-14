@@ -7956,8 +7956,8 @@ func (st *yySymType) integerUnion() int {
 	return v
 }
 
-func (st *yySymType) intervalTypeUnion() IntervalTypes {
-	v, _ := st.union.(IntervalTypes)
+func (st *yySymType) intervalTypeUnion() IntervalType {
+	v, _ := st.union.(IntervalType)
 	return v
 }
 
@@ -17592,7 +17592,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:5348
 		{
-			yyLOCAL = &DateAddExpr{Type: PlusIntervalRightType, Date: yyDollar[1].exprUnion(), Unit: yyDollar[5].intervalTypeUnion(), Expr: yyDollar[4].exprUnion()}
+			yyLOCAL = &IntervalDateExpr{Syntax: IntervalDateExprBinaryAdd, Date: yyDollar[1].exprUnion(), Unit: yyDollar[5].intervalTypeUnion(), Interval: yyDollar[4].exprUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 1028:
@@ -17600,7 +17600,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:5352
 		{
-			yyLOCAL = &DateSubExpr{Type: MinusIntervalRightType, Date: yyDollar[1].exprUnion(), Unit: yyDollar[5].intervalTypeUnion(), Expr: yyDollar[4].exprUnion()}
+			yyLOCAL = &IntervalDateExpr{Syntax: IntervalDateExprBinarySub, Date: yyDollar[1].exprUnion(), Unit: yyDollar[5].intervalTypeUnion(), Interval: yyDollar[4].exprUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 1029:
@@ -17836,7 +17836,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:5474
 		{
-			yyLOCAL = &DateAddExpr{Type: PlusIntervalLeftType, Date: yyDollar[5].exprUnion(), Unit: yyDollar[3].intervalTypeUnion(), Expr: yyDollar[2].exprUnion()}
+			yyLOCAL = &IntervalDateExpr{Syntax: IntervalDateExprBinaryAddLeft, Date: yyDollar[5].exprUnion(), Unit: yyDollar[3].intervalTypeUnion(), Interval: yyDollar[2].exprUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 1058:
@@ -18705,7 +18705,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:5994
 		{
-			yyLOCAL = &ExtractFuncExpr{IntervalTypes: yyDollar[3].intervalTypeUnion(), Expr: yyDollar[5].exprUnion()}
+			yyLOCAL = &ExtractFuncExpr{IntervalType: yyDollar[3].intervalTypeUnion(), Expr: yyDollar[5].exprUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 1170:
@@ -19937,7 +19937,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6610
 		{
-			yyLOCAL = &DateAddExpr{Type: AdddateType, Date: yyDollar[3].exprUnion(), Expr: yyDollar[6].exprUnion(), Unit: yyDollar[7].intervalTypeUnion()}
+			yyLOCAL = &IntervalDateExpr{Syntax: IntervalDateExprAdddate, Date: yyDollar[3].exprUnion(), Interval: yyDollar[6].exprUnion(), Unit: yyDollar[7].intervalTypeUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 1324:
@@ -19945,7 +19945,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6614
 		{
-			yyLOCAL = &DateAddExpr{Type: AdddateType, Date: yyDollar[3].exprUnion(), Expr: yyDollar[5].exprUnion()}
+			yyLOCAL = &IntervalDateExpr{Syntax: IntervalDateExprAdddate, Date: yyDollar[3].exprUnion(), Interval: yyDollar[5].exprUnion(), Unit: IntervalNone}
 		}
 		yyVAL.union = yyLOCAL
 	case 1325:
@@ -19953,7 +19953,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6618
 		{
-			yyLOCAL = &DateAddExpr{Type: DateAddType, Date: yyDollar[3].exprUnion(), Expr: yyDollar[6].exprUnion(), Unit: yyDollar[7].intervalTypeUnion()}
+			yyLOCAL = &IntervalDateExpr{Syntax: IntervalDateExprDateAdd, Date: yyDollar[3].exprUnion(), Interval: yyDollar[6].exprUnion(), Unit: yyDollar[7].intervalTypeUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 1326:
@@ -19961,7 +19961,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6622
 		{
-			yyLOCAL = &DateSubExpr{Type: DateSubType, Date: yyDollar[3].exprUnion(), Expr: yyDollar[6].exprUnion(), Unit: yyDollar[7].intervalTypeUnion()}
+			yyLOCAL = &IntervalDateExpr{Syntax: IntervalDateExprDateSub, Date: yyDollar[3].exprUnion(), Interval: yyDollar[6].exprUnion(), Unit: yyDollar[7].intervalTypeUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 1327:
@@ -19969,7 +19969,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6626
 		{
-			yyLOCAL = &DateSubExpr{Type: SubdateType, Date: yyDollar[3].exprUnion(), Expr: yyDollar[6].exprUnion(), Unit: yyDollar[7].intervalTypeUnion()}
+			yyLOCAL = &IntervalDateExpr{Syntax: IntervalDateExprSubdate, Date: yyDollar[3].exprUnion(), Interval: yyDollar[6].exprUnion(), Unit: yyDollar[7].intervalTypeUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 1328:
@@ -19977,7 +19977,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6630
 		{
-			yyLOCAL = &DateSubExpr{Type: SubdateType, Date: yyDollar[3].exprUnion(), Expr: yyDollar[5].exprUnion()}
+			yyLOCAL = &IntervalDateExpr{Syntax: IntervalDateExprSubdate, Date: yyDollar[3].exprUnion(), Interval: yyDollar[5].exprUnion(), Unit: IntervalNone}
 		}
 		yyVAL.union = yyLOCAL
 	case 1333:
@@ -20273,7 +20273,7 @@ yydefault:
 		yyVAL.union = yyLOCAL
 	case 1369:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL IntervalTypes
+		var yyLOCAL IntervalType
 //line sql.y:6799
 		{
 			yyLOCAL = IntervalDayHour
@@ -20281,7 +20281,7 @@ yydefault:
 		yyVAL.union = yyLOCAL
 	case 1370:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL IntervalTypes
+		var yyLOCAL IntervalType
 //line sql.y:6803
 		{
 			yyLOCAL = IntervalDayMicrosecond
@@ -20289,7 +20289,7 @@ yydefault:
 		yyVAL.union = yyLOCAL
 	case 1371:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL IntervalTypes
+		var yyLOCAL IntervalType
 //line sql.y:6807
 		{
 			yyLOCAL = IntervalDayMinute
@@ -20297,7 +20297,7 @@ yydefault:
 		yyVAL.union = yyLOCAL
 	case 1372:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL IntervalTypes
+		var yyLOCAL IntervalType
 //line sql.y:6811
 		{
 			yyLOCAL = IntervalDaySecond
@@ -20305,7 +20305,7 @@ yydefault:
 		yyVAL.union = yyLOCAL
 	case 1373:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL IntervalTypes
+		var yyLOCAL IntervalType
 //line sql.y:6815
 		{
 			yyLOCAL = IntervalHourMicrosecond
@@ -20313,7 +20313,7 @@ yydefault:
 		yyVAL.union = yyLOCAL
 	case 1374:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL IntervalTypes
+		var yyLOCAL IntervalType
 //line sql.y:6819
 		{
 			yyLOCAL = IntervalHourMinute
@@ -20321,7 +20321,7 @@ yydefault:
 		yyVAL.union = yyLOCAL
 	case 1375:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL IntervalTypes
+		var yyLOCAL IntervalType
 //line sql.y:6823
 		{
 			yyLOCAL = IntervalHourSecond
@@ -20329,7 +20329,7 @@ yydefault:
 		yyVAL.union = yyLOCAL
 	case 1376:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL IntervalTypes
+		var yyLOCAL IntervalType
 //line sql.y:6827
 		{
 			yyLOCAL = IntervalMinuteMicrosecond
@@ -20337,7 +20337,7 @@ yydefault:
 		yyVAL.union = yyLOCAL
 	case 1377:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL IntervalTypes
+		var yyLOCAL IntervalType
 //line sql.y:6831
 		{
 			yyLOCAL = IntervalMinuteSecond
@@ -20345,7 +20345,7 @@ yydefault:
 		yyVAL.union = yyLOCAL
 	case 1378:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL IntervalTypes
+		var yyLOCAL IntervalType
 //line sql.y:6835
 		{
 			yyLOCAL = IntervalSecondMicrosecond
@@ -20353,7 +20353,7 @@ yydefault:
 		yyVAL.union = yyLOCAL
 	case 1379:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL IntervalTypes
+		var yyLOCAL IntervalType
 //line sql.y:6839
 		{
 			yyLOCAL = IntervalYearMonth
@@ -20361,7 +20361,7 @@ yydefault:
 		yyVAL.union = yyLOCAL
 	case 1380:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL IntervalTypes
+		var yyLOCAL IntervalType
 //line sql.y:6843
 		{
 			yyLOCAL = IntervalDay
@@ -20369,7 +20369,7 @@ yydefault:
 		yyVAL.union = yyLOCAL
 	case 1381:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL IntervalTypes
+		var yyLOCAL IntervalType
 //line sql.y:6847
 		{
 			yyLOCAL = IntervalWeek
@@ -20377,7 +20377,7 @@ yydefault:
 		yyVAL.union = yyLOCAL
 	case 1382:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL IntervalTypes
+		var yyLOCAL IntervalType
 //line sql.y:6851
 		{
 			yyLOCAL = IntervalHour
@@ -20385,7 +20385,7 @@ yydefault:
 		yyVAL.union = yyLOCAL
 	case 1383:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL IntervalTypes
+		var yyLOCAL IntervalType
 //line sql.y:6855
 		{
 			yyLOCAL = IntervalMinute
@@ -20393,7 +20393,7 @@ yydefault:
 		yyVAL.union = yyLOCAL
 	case 1384:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL IntervalTypes
+		var yyLOCAL IntervalType
 //line sql.y:6859
 		{
 			yyLOCAL = IntervalMonth
@@ -20401,7 +20401,7 @@ yydefault:
 		yyVAL.union = yyLOCAL
 	case 1385:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL IntervalTypes
+		var yyLOCAL IntervalType
 //line sql.y:6863
 		{
 			yyLOCAL = IntervalQuarter
@@ -20409,7 +20409,7 @@ yydefault:
 		yyVAL.union = yyLOCAL
 	case 1386:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL IntervalTypes
+		var yyLOCAL IntervalType
 //line sql.y:6867
 		{
 			yyLOCAL = IntervalSecond
@@ -20417,7 +20417,7 @@ yydefault:
 		yyVAL.union = yyLOCAL
 	case 1387:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL IntervalTypes
+		var yyLOCAL IntervalType
 //line sql.y:6871
 		{
 			yyLOCAL = IntervalMicrosecond
@@ -20425,7 +20425,7 @@ yydefault:
 		yyVAL.union = yyLOCAL
 	case 1388:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL IntervalTypes
+		var yyLOCAL IntervalType
 //line sql.y:6875
 		{
 			yyLOCAL = IntervalYear

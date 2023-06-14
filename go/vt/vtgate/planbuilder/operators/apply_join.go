@@ -287,21 +287,6 @@ func (a *ApplyJoin) addOffset(offset int) {
 	a.Columns = append(a.Columns, offset)
 }
 
-func (a *ApplyJoin) Description() ops.OpDescription {
-	other := map[string]any{}
-	if len(a.Columns) > 0 {
-		other["OutputColumns"] = a.Columns
-	}
-	if a.Predicate != nil {
-		other["Predicate"] = sqlparser.String(a.Predicate)
-	}
-	return ops.OpDescription{
-		OperatorType: "Join",
-		Variant:      "Apply",
-		Other:        other,
-	}
-}
-
 func (a *ApplyJoin) ShortDescription() string {
 	pred := sqlparser.String(a.Predicate)
 	columns := slices2.Map(a.ColumnsAST, func(from JoinColumn) string {

@@ -171,35 +171,6 @@ install_etcd() {
   ln -snf "$dist/etcd-${version}-${platform}-${target}/etcdctl" "$VTROOT/bin/etcdctl"
 }
 
-
-# Download and install k3s, link k3s binary into our root
-install_k3s() {
-  local version="$1"
-  local dist="$2"
-  case $(uname) in
-    Linux)  local platform=linux;;
-    *)   echo "WARNING: unsupported platform. K3s only supports running on Linux, the k8s topology will not be available for local examples."; return;;
-  esac
-
-  case $(get_arch) in
-      aarch64)  local target="-arm64";;
-      x86_64) local target="";;
-      arm64)  local target="-arm64";;
-      *)   echo "WARNING: unsupported architecture, the k8s topology will not be available for local examples."; return;;
-  esac
-
-  file="k3s${target}"
-
-  local dest="$dist/k3s${target}-${version}-${platform}"
-  # This is how we'd download directly from source:
-  # download_url=https://github.com/rancher/k3s/releases/download
-  # wget -O  $dest "$download_url/$version/$file"
-  "${VTROOT}/tools/wget-retry" -O $dest "${VITESS_RESOURCES_DOWNLOAD_URL}/$file-$version"
-  chmod +x $dest
-  ln -snf  $dest "$VTROOT/bin/k3s"
-}
-
-
 # Download and install consul, link consul binary into our root.
 install_consul() {
   local version="$1"
@@ -298,9 +269,6 @@ install_all() {
 
   # etcd
   install_dep "etcd" "v3.5.6" "$VTROOT/dist/etcd" install_etcd
-
-  # k3s
-  command -v k3s || install_dep "k3s" "v1.0.0" "$VTROOT/dist/k3s" install_k3s
 
   # consul
   if [ "$BUILD_CONSUL" == 1 ] ; then

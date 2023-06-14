@@ -8,6 +8,7 @@
     - [VTOrc flag `--allow-emergency-reparent`](#new-flag-toggle-ers)
   - **[Deprecations and Deletions](#deprecations-and-deletions)**
     - [Deprecated Flags](#deprecated-flags)
+    - [Deleted `k8stopo`](#deleted-k8stopo)
 
 
 ## <a id="major-changes"/>Major Changes
@@ -34,3 +35,6 @@ Throttler related `vttablet` flags:
 - `--throttle_metrics_threshold` is deprecated and will be removed in `v19.0`
 - `--throttle_check_as_check_self` is deprecated and will be removed in `v19.0`
 - `--throttler-config-via-topo` is deprecated after asummed `true` in `v17.0`. It will be removed in a future version.
+#### <a id="deleted-k8stopo"/>Deleted `k8stopo`
+
+The `k8stopo` has been deprecated in Vitess 17, also see https://github.com/vitessio/vitess/issues/13298. With Vitess 18 the `k8stopo` has been removed.

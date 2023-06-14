@@ -23,8 +23,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/buger/jsonparser"
 	"github.com/stretchr/testify/require"
+	"github.com/tidwall/gjson"
 
 	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
@@ -176,7 +176,7 @@ func performVDiff2Action(t *testing.T, ksWorkflow, cells, action, actionArg stri
 	log.Infof("vdiff2 output: %+v (err: %+v)", output, err)
 	if !expectError {
 		require.Nil(t, err)
-		uuid, err = jsonparser.GetString([]byte(output), "UUID")
+		uuid = gjson.Get(output, "UUID").String()
 		if action != "delete" && !(action == "show" && actionArg == "all") { // a UUID is not required
 			require.NoError(t, err)
 			require.NotEmpty(t, uuid)
@@ -195,19 +195,18 @@ type vdiffInfo struct {
 	Progress           vdiff2.ProgressReport
 }
 
-func getVDiffInfo(jsonStr string) *vdiffInfo {
+func getVDiffInfo(json string) *vdiffInfo {
 	var info vdiffInfo
-	json := []byte(jsonStr)
-	info.Workflow, _ = jsonparser.GetString(json, "Workflow")
-	info.Keyspace, _ = jsonparser.GetString(json, "Keyspace")
-	info.State, _ = jsonparser.GetString(json, "State")
-	info.Shards, _ = jsonparser.GetString(json, "Shards")
-	info.RowsCompared, _ = jsonparser.GetInt(json, "RowsCompared")
-	info.StartedAt, _ = jsonparser.GetString(json, "StartedAt")
-	info.CompletedAt, _ = jsonparser.GetString(json, "CompletedAt")
-	info.HasMismatch, _ = jsonparser.GetBoolean(json, "HasMismatch")
-	info.Progress.Percentage, _ = jsonparser.GetFloat(json, "Progress", "Percentage")
-	info.Progress.ETA, _ = jsonparser.GetString(json, "Progress", "ETA")
+	info.Workflow = gjson.Get(json, "Workflow").String()
+	info.Keyspace = gjson.Get(json, "Keyspace").String()
+	info.State = gjson.Get(json, "State").String()
+	info.Shards = gjson.Get(json, "Shards").String()
+	info.RowsCompared = gjson.Get(json, "RowsCompared").Int()
+	info.StartedAt = gjson.Get(json, "StartedAt").String()
+	info.CompletedAt = gjson.Get(json, "CompletedAt").String()
+	info.HasMismatch = gjson.Get(json, "HasMismatch").Bool()
+	info.Progress.Percentage = gjson.Get(json, "Progress.Percentage").Float()
+	info.Progress.ETA = gjson.Get(json, "Progress.ETA").String()
 	return &info
 }
 

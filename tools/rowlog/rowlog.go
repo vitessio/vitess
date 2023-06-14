@@ -443,7 +443,7 @@ func processPositionResult(gtidset string) (string, string) {
 	subs := strings.Split(arr[1], "-")
 	id, err := strconv.Atoi(subs[0])
 	if err != nil {
-		fmt.Printf(err.Error())
+		fmt.Println(err.Error())
 		return "", ""
 	}
 	firstPos := arr[0] + ":" + strconv.Itoa(id) // subs[0]

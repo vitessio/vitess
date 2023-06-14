@@ -33,6 +33,8 @@ type (
 
 		// When offset planning, we'll fill in this field
 		Columns []engine.CheckCol
+
+		Truncate int
 	}
 )
 
@@ -72,10 +74,11 @@ func (d *Distinct) planOffsets(ctx *plancontext.PlanningContext) error {
 
 func (d *Distinct) Clone(inputs []ops.Operator) ops.Operator {
 	return &Distinct{
-		Source:  inputs[0],
-		Columns: slices.Clone(d.Columns),
-		QP:      d.QP,
-		Pushed:  d.Pushed,
+		Source:   inputs[0],
+		Columns:  slices.Clone(d.Columns),
+		QP:       d.QP,
+		Pushed:   d.Pushed,
+		Truncate: d.Truncate,
 	}
 }
 
@@ -109,16 +112,14 @@ func (d *Distinct) GetColumns() ([]*sqlparser.AliasedExpr, error) {
 	return d.Source.GetColumns()
 }
 
-func (d *Distinct) Description() ops.OpDescription {
-	return ops.OpDescription{
-		OperatorType: "Distinct",
-	}
-}
-
 func (d *Distinct) ShortDescription() string {
 	return ""
 }
 
 func (d *Distinct) GetOrdering() ([]ops.OrderBy, error) {
 	return d.Source.GetOrdering()
+}
+
+func (d *Distinct) setTruncateColumnCount(offset int) {
+	d.Truncate = offset
 }
