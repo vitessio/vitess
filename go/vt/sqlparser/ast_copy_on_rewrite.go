@@ -490,8 +490,8 @@ func (c *cow) copyOnRewriteSQLNode(n SQLNode, parent SQLNode) (out SQLNode, chan
 		return c.copyOnRewriteRefOfTableSpec(n, parent)
 	case *TablespaceOperation:
 		return c.copyOnRewriteRefOfTablespaceOperation(n, parent)
-	case *TimestampFuncExpr:
-		return c.copyOnRewriteRefOfTimestampFuncExpr(n, parent)
+	case *TimestampDiffExpr:
+		return c.copyOnRewriteRefOfTimestampDiffExpr(n, parent)
 	case *TrimFuncExpr:
 		return c.copyOnRewriteRefOfTrimFuncExpr(n, parent)
 	case *TruncateTable:
@@ -5861,7 +5861,7 @@ func (c *cow) copyOnRewriteRefOfTablespaceOperation(n *TablespaceOperation, pare
 	}
 	return
 }
-func (c *cow) copyOnRewriteRefOfTimestampFuncExpr(n *TimestampFuncExpr, parent SQLNode) (out SQLNode, changed bool) {
+func (c *cow) copyOnRewriteRefOfTimestampDiffExpr(n *TimestampDiffExpr, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
 	}
@@ -6847,8 +6847,8 @@ func (c *cow) copyOnRewriteCallable(n Callable, parent SQLNode) (out SQLNode, ch
 		return c.copyOnRewriteRefOfSubstrExpr(n, parent)
 	case *Sum:
 		return c.copyOnRewriteRefOfSum(n, parent)
-	case *TimestampFuncExpr:
-		return c.copyOnRewriteRefOfTimestampFuncExpr(n, parent)
+	case *TimestampDiffExpr:
+		return c.copyOnRewriteRefOfTimestampDiffExpr(n, parent)
 	case *TrimFuncExpr:
 		return c.copyOnRewriteRefOfTrimFuncExpr(n, parent)
 	case *UpdateXMLExpr:
@@ -7159,8 +7159,8 @@ func (c *cow) copyOnRewriteExpr(n Expr, parent SQLNode) (out SQLNode, changed bo
 		return c.copyOnRewriteRefOfSubstrExpr(n, parent)
 	case *Sum:
 		return c.copyOnRewriteRefOfSum(n, parent)
-	case *TimestampFuncExpr:
-		return c.copyOnRewriteRefOfTimestampFuncExpr(n, parent)
+	case *TimestampDiffExpr:
+		return c.copyOnRewriteRefOfTimestampDiffExpr(n, parent)
 	case *TrimFuncExpr:
 		return c.copyOnRewriteRefOfTrimFuncExpr(n, parent)
 	case *UnaryExpr:

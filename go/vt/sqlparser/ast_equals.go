@@ -1430,12 +1430,12 @@ func (cmp *Comparator) SQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return cmp.RefOfTablespaceOperation(a, b)
-	case *TimestampFuncExpr:
-		b, ok := inB.(*TimestampFuncExpr)
+	case *TimestampDiffExpr:
+		b, ok := inB.(*TimestampDiffExpr)
 		if !ok {
 			return false
 		}
-		return cmp.RefOfTimestampFuncExpr(a, b)
+		return cmp.RefOfTimestampDiffExpr(a, b)
 	case *TrimFuncExpr:
 		b, ok := inB.(*TrimFuncExpr)
 		if !ok {
@@ -4522,18 +4522,17 @@ func (cmp *Comparator) RefOfTablespaceOperation(a, b *TablespaceOperation) bool 
 	return a.Import == b.Import
 }
 
-// RefOfTimestampFuncExpr does deep equals between the two objects.
-func (cmp *Comparator) RefOfTimestampFuncExpr(a, b *TimestampFuncExpr) bool {
+// RefOfTimestampDiffExpr does deep equals between the two objects.
+func (cmp *Comparator) RefOfTimestampDiffExpr(a, b *TimestampDiffExpr) bool {
 	if a == b {
 		return true
 	}
 	if a == nil || b == nil {
 		return false
 	}
-	return a.Name == b.Name &&
-		a.Unit == b.Unit &&
-		cmp.Expr(a.Expr1, b.Expr1) &&
-		cmp.Expr(a.Expr2, b.Expr2)
+	return cmp.Expr(a.Expr1, b.Expr1) &&
+		cmp.Expr(a.Expr2, b.Expr2) &&
+		a.Unit == b.Unit
 }
 
 // RefOfTrimFuncExpr does deep equals between the two objects.
@@ -5613,12 +5612,12 @@ func (cmp *Comparator) Callable(inA, inB Callable) bool {
 			return false
 		}
 		return cmp.RefOfSum(a, b)
-	case *TimestampFuncExpr:
-		b, ok := inB.(*TimestampFuncExpr)
+	case *TimestampDiffExpr:
+		b, ok := inB.(*TimestampDiffExpr)
 		if !ok {
 			return false
 		}
-		return cmp.RefOfTimestampFuncExpr(a, b)
+		return cmp.RefOfTimestampDiffExpr(a, b)
 	case *TrimFuncExpr:
 		b, ok := inB.(*TrimFuncExpr)
 		if !ok {
@@ -6459,12 +6458,12 @@ func (cmp *Comparator) Expr(inA, inB Expr) bool {
 			return false
 		}
 		return cmp.RefOfSum(a, b)
-	case *TimestampFuncExpr:
-		b, ok := inB.(*TimestampFuncExpr)
+	case *TimestampDiffExpr:
+		b, ok := inB.(*TimestampDiffExpr)
 		if !ok {
 			return false
 		}
-		return cmp.RefOfTimestampFuncExpr(a, b)
+		return cmp.RefOfTimestampDiffExpr(a, b)
 	case *TrimFuncExpr:
 		b, ok := inB.(*TrimFuncExpr)
 		if !ok {

@@ -1392,8 +1392,8 @@ func (node *IntroducerExpr) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node.
-func (node *TimestampFuncExpr) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "%#s(%#s, %v, %v)", node.Name, node.Unit, node.Expr1, node.Expr2)
+func (node *TimestampDiffExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "timestampdiff(%#s, %v, %v)", node.Unit.ToString(), node.Expr1, node.Expr2)
 }
 
 // Format formats the node.
@@ -1475,6 +1475,8 @@ func (node *IntervalDateExpr) Format(buf *TrackedBuffer) {
 		buf.astPrintf(node, "interval %l %#s + %r", node.Interval, node.Unit.ToString(), node.Date)
 	case IntervalDateExprBinarySub:
 		buf.astPrintf(node, "%l - interval %r %#s", node.Date, node.Interval, node.Unit.ToString())
+	case IntervalDateExprTimestampadd:
+		buf.astPrintf(node, "timestampadd(%#s, %v, %v)", node.Unit.ToString(), node.Interval, node.Date)
 	}
 }
 

@@ -374,7 +374,7 @@ INPUT
 select timestampdiff(SQL_TSI_SECOND, '2001-02-01 12:59:59', '2001-05-01 12:58:58') as a;
 END
 OUTPUT
-select timestampdiff(SQL_TSI_SECOND, '2001-02-01 12:59:59', '2001-05-01 12:58:58') as a from dual
+select timestampdiff(second, '2001-02-01 12:59:59', '2001-05-01 12:58:58') as a from dual
 END
 INPUT
 select concat(f1, 2) a from t1 union select 'x' a from t1;
@@ -1526,7 +1526,7 @@ INPUT
 select timestampdiff(YEAR, '2002-05-01', '2001-01-01') as a;
 END
 OUTPUT
-select timestampdiff(YEAR, '2002-05-01', '2001-01-01') as a from dual
+select timestampdiff(year, '2002-05-01', '2001-01-01') as a from dual
 END
 INPUT
 select ST_AsText(Polygon(LineString(Point(0, 0), Point(1, 0), Point(1,1), Point(0, 1), Point(0, 0))));
@@ -2612,7 +2612,7 @@ INPUT
 select timestampdiff(SQL_TSI_HOUR, '2001-02-01', '2001-05-01') as a;
 END
 OUTPUT
-select timestampdiff(SQL_TSI_HOUR, '2001-02-01', '2001-05-01') as a from dual
+select timestampdiff(hour, '2001-02-01', '2001-05-01') as a from dual
 END
 INPUT
 select max(t2.a1) from t2 left outer join t1 on t2.a2=10 where t2.a2=10;
@@ -2624,7 +2624,7 @@ INPUT
 select timestampadd(SQL_TSI_SECOND, 1, date) from t1;
 END
 OUTPUT
-select timestampadd(SQL_TSI_SECOND, 1, `date`) from t1
+select timestampadd(second, 1, `date`) from t1
 END
 INPUT
 select * from (select 1 as a) b left join (select 2 as a) c using(a);
@@ -2900,7 +2900,7 @@ INPUT
 select timestampdiff(QUARTER, '2002-05-01', '2001-01-01') as a;
 END
 OUTPUT
-select timestampdiff(QUARTER, '2002-05-01', '2001-01-01') as a from dual
+select timestampdiff(quarter, '2002-05-01', '2001-01-01') as a from dual
 END
 INPUT
 select * from information_schema.TABLE_CONSTRAINTS where TABLE_NAME= "vo";
@@ -4544,7 +4544,7 @@ INPUT
 select timestampadd(MINUTE, 1, date) from t1;
 END
 OUTPUT
-select timestampadd(MINUTE, 1, `date`) from t1
+select timestampadd(minute, 1, `date`) from t1
 END
 INPUT
 select ST_astext(ST_Intersection(ST_GeomFromText('POLYGON((0 0, 50 45, 40 50, 0 0))'), ST_GeomFromText('LINESTRING(-10 -10, 200 200)')));
@@ -5462,7 +5462,7 @@ INPUT
 select timestampdiff(MONTH, '2000-03-28', '2000-02-29') as a;
 END
 OUTPUT
-select timestampdiff(MONTH, '2000-03-28', '2000-02-29') as a from dual
+select timestampdiff(month, '2000-03-28', '2000-02-29') as a from dual
 END
 INPUT
 select concat(_latin1'a',_latin2'b',_latin5'c' collate latin5_turkish_ci);
@@ -6476,7 +6476,7 @@ INPUT
 select timestampdiff(MONTH, '1991-03-28', '2000-02-29') as a;
 END
 OUTPUT
-select timestampdiff(MONTH, '1991-03-28', '2000-02-29') as a from dual
+select timestampdiff(month, '1991-03-28', '2000-02-29') as a from dual
 END
 INPUT
 select date_format(f1, "%m") as d1, date_format(f1, "%M") as d2 from t1 order by date_format(f1, "%M");
@@ -6632,7 +6632,7 @@ INPUT
 select timestampdiff(MONTH, '2001-02-01', '2001-05-01') as a;
 END
 OUTPUT
-select timestampdiff(MONTH, '2001-02-01', '2001-05-01') as a from dual
+select timestampdiff(month, '2001-02-01', '2001-05-01') as a from dual
 END
 INPUT
 select inet_aton("255.255.255.255.255"),inet_aton("255.255.1.255"),inet_aton("0.1.255");
@@ -11714,7 +11714,7 @@ INPUT
 select timestampdiff(SQL_TSI_WEEK, '2001-02-01', '2001-05-01') as a;
 END
 OUTPUT
-select timestampdiff(SQL_TSI_WEEK, '2001-02-01', '2001-05-01') as a from dual
+select timestampdiff(week, '2001-02-01', '2001-05-01') as a from dual
 END
 INPUT
 select a, MAX(b), INTERVAL (MAX(b), 1,3,10,30,39,40,50,60,100,1000) from t1 group by a;
@@ -15397,8 +15397,8 @@ END
 INPUT
 select t1.time+0,t1.date+0,t1.timestamp+0,concat(date," ",time), t1.quarter+t1.week, t1.year+timestampadd, timestampdiff from t1;
 END
-ERROR
-syntax error at position 107
+OUTPUT
+select t1.`time` + 0, t1.`date` + 0, t1.`timestamp` + 0, concat(`date`, ' ', `time`), t1.`quarter` + t1.`week`, t1.`year` + `timestampadd`, `timestampdiff` from t1
 END
 INPUT
 select substring_index('aaaaaaaaa1','aa',1);
@@ -17966,7 +17966,7 @@ INPUT
 select timestampdiff(SQL_TSI_DAY, '2001-02-01', '2001-05-01') as a;
 END
 OUTPUT
-select timestampdiff(SQL_TSI_DAY, '2001-02-01', '2001-05-01') as a from dual
+select timestampdiff(day, '2001-02-01', '2001-05-01') as a from dual
 END
 INPUT
 select elt(1,c1,'�'),elt(1,'�',c1) from t1;
@@ -18764,7 +18764,7 @@ INPUT
 select timestampadd(WEEK, 1, date) from t1;
 END
 OUTPUT
-select timestampadd(WEEK, 1, `date`) from t1
+select timestampadd(week, 1, `date`) from t1
 END
 INPUT
 select log2(-1);
@@ -19496,7 +19496,7 @@ INPUT
 select timestampdiff(SQL_TSI_DAY, '1986-02-01', '1986-03-01') as a1, timestampdiff(SQL_TSI_DAY, '1900-02-01', '1900-03-01') as a2, timestampdiff(SQL_TSI_DAY, '1996-02-01', '1996-03-01') as a3, timestampdiff(SQL_TSI_DAY, '2000-02-01', '2000-03-01') as a4;
 END
 OUTPUT
-select timestampdiff(SQL_TSI_DAY, '1986-02-01', '1986-03-01') as a1, timestampdiff(SQL_TSI_DAY, '1900-02-01', '1900-03-01') as a2, timestampdiff(SQL_TSI_DAY, '1996-02-01', '1996-03-01') as a3, timestampdiff(SQL_TSI_DAY, '2000-02-01', '2000-03-01') as a4 from dual
+select timestampdiff(day, '1986-02-01', '1986-03-01') as a1, timestampdiff(day, '1900-02-01', '1900-03-01') as a2, timestampdiff(day, '1996-02-01', '1996-03-01') as a3, timestampdiff(day, '2000-02-01', '2000-03-01') as a4 from dual
 END
 INPUT
 select * from information_schema.COLLATION_CHARACTER_SET_APPLICABILITY where COLLATION_NAME like 'latin1%' ORDER BY COLLATION_NAME;
@@ -22658,7 +22658,7 @@ INPUT
 select timestampdiff(SQL_TSI_MINUTE, '2001-02-01 12:59:59', '2001-05-01 12:58:59') as a;
 END
 OUTPUT
-select timestampdiff(SQL_TSI_MINUTE, '2001-02-01 12:59:59', '2001-05-01 12:58:59') as a from dual
+select timestampdiff(minute, '2001-02-01 12:59:59', '2001-05-01 12:58:59') as a from dual
 END
 INPUT
 select date_add("1997-12-31 23:59:59",INTERVAL 100000 SECOND);
