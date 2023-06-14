@@ -32,6 +32,8 @@
   - **[VTGate](#vtgate)**
     - [StreamExecute GRPC API](#stream-execute)
     - [Insert Planner Gen4](#insert-planner)
+  - **[VTAdmin](#vtadmin)**
+    - [Updated to node v18.16.0](#update-node)
   - **[Deprecations and Deletions](#deprecations-and-deletions)**
     - [Deprecated Flags](#deprecated-flags)
     - [Deprecated Stats](#deprecated-stats)
@@ -398,6 +400,11 @@ With this release `INSERT` queries are moved to Gen4.
 
 Clients can move to old v3 planner for inserts by using `V3Insert` planner version with `--planner-version` vtgate flag or with comment directive `/*vt+ planner=<planner_version>` for individual query.
 
+<a id="vtadmin" />
+### <a id="updated-node" />vtadmin-web updated to node v18.16.0 (LTS)
+
+Building vtadmin-web now requires node >= v18.16.0 (LTS). Upgrade notes are given
+in https://github.com/vitessio/vitess/pull/9136.
 ### <a id="deprecations-and-deletions"/>Deprecations and Deletions
 
 - The deprecated `automation` and `automationservice` protobuf definitions and associated client and server packages have been removed.
