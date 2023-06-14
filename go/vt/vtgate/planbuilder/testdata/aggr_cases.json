@@ -6524,7 +6524,7 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "count_star(0) AS count(*)",
+        "Aggregates": "sum_count_star(0) AS count(*)",
         "GroupBy": "(1|2)",
         "ResultColumns": 1,
         "Inputs": [
@@ -6534,35 +6534,45 @@
             "OrderBy": "(1|2) ASC",
             "Inputs": [
               {
-                "OperatorType": "Join",
-                "Variant": "Join",
-                "JoinColumnIndexes": "L:0,R:0,R:1",
-                "JoinVars": {
-                  "user_id": 1
-                },
-                "TableName": "`user`_user_extra",
+                "OperatorType": "Projection",
+                "Expressions": [
+                  "[COLUMN 0] * [COLUMN 1] as count(*)",
+                  "[COLUMN 2] as `user`.id + user_extra.id",
+                  "[COLUMN 3] as weight_string(`user`.id + user_extra.id)"
+                ],
                 "Inputs": [
                   {
-                    "OperatorType": "Route",
-                    "Variant": "Scatter",
-                    "Keyspace": {
-                      "Name": "user",
-                      "Sharded": true
+                    "OperatorType": "Join",
+                    "Variant": "Join",
+                    "JoinColumnIndexes": "L:0,R:0,R:1,R:2",
+                    "JoinVars": {
+                      "user_id": 1
                     },
-                    "FieldQuery": "select 1, `user`.id from `user` where 1 != 1",
-                    "Query": "select 1, `user`.id from `user`",
-                    "Table": "`user`"
-                  },
-                  {
-                    "OperatorType": "Route",
-                    "Variant": "Scatter",
-                    "Keyspace": {
-                      "Name": "user",
-                      "Sharded": true
-                    },
-                    "FieldQuery": "select :user_id + user_extra.id, weight_string(:user_id + user_extra.id) from user_extra where 1 != 1",
-                    "Query": "select :user_id + user_extra.id, weight_string(:user_id + user_extra.id) from user_extra",
-                    "Table": "user_extra"
+                    "TableName": "`user`_user_extra",
+                    "Inputs": [
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "Scatter",
+                        "Keyspace": {
+                          "Name": "user",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select count(*), `user`.id from `user` where 1 != 1 group by `user`.id",
+                        "Query": "select count(*), `user`.id from `user` group by `user`.id",
+                        "Table": "`user`"
+                      },
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "Scatter",
+                        "Keyspace": {
+                          "Name": "user",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select count(*), :user_id + user_extra.id, weight_string(:user_id + user_extra.id) from user_extra where 1 != 1 group by :user_id + user_extra.id",
+                        "Query": "select count(*), :user_id + user_extra.id, weight_string(:user_id + user_extra.id) from user_extra group by :user_id + user_extra.id",
+                        "Table": "user_extra"
+                      }
+                    ]
                   }
                 ]
               }

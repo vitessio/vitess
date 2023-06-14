@@ -264,6 +264,10 @@ func pushDownAggregationThroughJoin(ctx *plancontext.PlanningContext, rootAggr *
 
 	joinColumns, output, err := splitAggrColumnsToLeftAndRight(ctx, rootAggr, join, lhs, rhs)
 	if err != nil {
+		// if we get this error, we just abort the splitting and fall back on simpler ways of solving the same query
+		if err == errAbortAggrPushing {
+			return nil, nil, nil
+		}
 		return nil, nil, err
 	}
 
@@ -292,6 +296,8 @@ func pushDownAggregationThroughJoin(ctx *plancontext.PlanningContext, rootAggr *
 	rootAggr.Source = output
 	return rootAggr, rewrite.NewTree("push Aggregation under join", rootAggr), nil
 }
+
+var errAbortAggrPushing = fmt.Errorf("abort aggregation pushing")
 
 func addColumnsFromLHSInJoinPredicates(ctx *plancontext.PlanningContext, rootAggr *Aggregator, join *ApplyJoin, lhs *joinPusher) error {
 	for _, pred := range join.JoinPredicates {
@@ -340,8 +346,17 @@ func splitGroupingToLeftAndRight(ctx *plancontext.PlanningContext, rootAggr *Agg
 				Original: aeWrap(groupBy.Inner),
 				RHSExpr:  expr,
 			})
+		case deps.IsSolvedBy(lhs.tableID.Merge(rhs.tableID)):
+			jc, err := BreakExpressionInLHSandRHS(ctx, groupBy.SimplifiedExpr, lhs.tableID)
+			if err != nil {
+				return nil, err
+			}
+			for _, lhsExpr := range jc.LHSExprs {
+				lhs.addGrouping(ctx, NewGroupBy(lhsExpr, lhsExpr, aeWrap(lhsExpr)))
+			}
+			rhs.addGrouping(ctx, NewGroupBy(jc.RHSExpr, jc.RHSExpr, aeWrap(jc.RHSExpr)))
 		default:
-			return nil, vterrors.VT12001("grouping on columns from different sources")
+			return nil, vterrors.VT13001(fmt.Sprintf("grouping with bad dependencies %s", groupBy.SimplifiedExpr))
 		}
 	}
 	return groupingJCs, nil
@@ -481,7 +496,7 @@ func (ab *aggBuilder) handlePushThroughAggregation(ctx *plancontext.PlanningCont
 	case deps.IsSolvedBy(ab.rhs.tableID):
 		ab.pushThroughRight(aggr)
 	default:
-		return vterrors.VT12001("aggregation on columns from different sources: " + sqlparser.String(aggr.Original.Expr))
+		return errAbortAggrPushing
 	}
 	return nil
 }
@@ -510,7 +525,7 @@ func (ab *aggBuilder) handleAggrWithCountStarMultiplier(ctx *plancontext.Plannin
 		rhsAE = aggr.Original
 
 	default:
-		return errHorizonNotPlanned()
+		return errAbortAggrPushing
 	}
 
 	ab.buildProjectionForAggr(lhsAE, rhsAE, aggr)
