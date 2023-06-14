@@ -145,7 +145,6 @@ type Vttablet struct {
 	MysqlctlProcess  MysqlctlProcess
 	MysqlctldProcess MysqlctldProcess
 	VttabletProcess  *VttabletProcess
-	VtgrProcess      *VtgrProcess
 }
 
 // Keyspace : Cluster accepts keyspace to launch it
@@ -705,7 +704,7 @@ func (cluster *LocalProcessCluster) NewVtgateInstance() *VtgateProcess {
 		cluster.Cell,
 		cluster.Cell,
 		cluster.Hostname,
-		"PRIMARY,REPLICA",
+		"PRIMARY",
 		cluster.TopoProcess.Port,
 		cluster.TmpDirectory,
 		cluster.VtGateExtraArgs,
@@ -1241,19 +1240,6 @@ func (cluster *LocalProcessCluster) NewVTOrcProcess(config VTOrcConfiguration) *
 		Config:       config,
 		WebPort:      cluster.GetAndReservePort(),
 		Port:         cluster.GetAndReservePort(),
-	}
-}
-
-// NewVtgrProcess creates a new VtgrProcess object
-func (cluster *LocalProcessCluster) NewVtgrProcess(clusters []string, config string, grPort int) *VtgrProcess {
-	base := VtctlProcessInstance(cluster.TopoProcess.Port, cluster.Hostname)
-	base.Binary = "vtgr"
-	return &VtgrProcess{
-		VtctlProcess: *base,
-		LogDir:       cluster.TmpDirectory,
-		clusters:     clusters,
-		config:       config,
-		grPort:       grPort,
 	}
 }
 

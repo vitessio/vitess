@@ -24,6 +24,7 @@ import (
 
 	"golang.org/x/exp/slices"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
@@ -94,7 +95,9 @@ type (
 		Index    *int
 		Distinct bool
 
-		ColOffset int // points to the column on the same aggregator
+		// the offsets point to columns on the same aggregator
+		ColOffset int
+		WSOffset  int
 	}
 
 	AggrRewriter struct {
@@ -104,6 +107,29 @@ type (
 	}
 )
 
+func (aggr Aggr) NeedWeightString(ctx *plancontext.PlanningContext) bool {
+	switch aggr.OpCode {
+	case opcode.AggregateCountDistinct, opcode.AggregateSumDistinct:
+		return ctx.SemTable.NeedsWeightString(aggr.Func.GetArg())
+	case opcode.AggregateMin, opcode.AggregateMax:
+		// currently this returns false, as aggregation engine primitive does not support the usage of weight_string
+		// for comparison. If Min/Max column is non-comparable then it will fail at runtime.
+		return false
+	}
+	return false
+}
+
+func (aggr Aggr) GetCollation(ctx *plancontext.PlanningContext) collations.ID {
+	if aggr.Func == nil {
+		return collations.Unknown
+	}
+	switch aggr.OpCode {
+	case opcode.AggregateMin, opcode.AggregateMax, opcode.AggregateSumDistinct, opcode.AggregateCountDistinct:
+		return ctx.SemTable.CollationForExpr(aggr.Func.GetArg())
+	}
+	return collations.Unknown
+}
+
 // NewGroupBy creates a new group by from the given fields.
 func NewGroupBy(inner, simplified sqlparser.Expr, aliasedExpr *sqlparser.AliasedExpr) GroupBy {
 	return GroupBy{
@@ -112,6 +138,17 @@ func NewGroupBy(inner, simplified sqlparser.Expr, aliasedExpr *sqlparser.Aliased
 		aliasedExpr:    aliasedExpr,
 		ColOffset:      -1,
 		WSOffset:       -1,
+	}
+}
+
+func NewAggr(opCode opcode.AggregateOpcode, f sqlparser.AggrFunc, original *sqlparser.AliasedExpr, alias string) Aggr {
+	return Aggr{
+		Original:  original,
+		Func:      f,
+		OpCode:    opCode,
+		Alias:     alias,
+		ColOffset: -1,
+		WSOffset:  -1,
 	}
 }
 
@@ -183,7 +220,9 @@ func CreateQPFromSelect(ctx *plancontext.PlanningContext, sel *sqlparser.Select)
 	if err := qp.addOrderBy(ctx, sel.OrderBy); err != nil {
 		return nil, err
 	}
-
+	if !qp.HasAggr && sel.Having != nil {
+		qp.HasAggr = sqlparser.ContainsAggregation(sel.Having.Expr)
+	}
 	qp.calculateDistinct(ctx)
 
 	return qp, nil
@@ -617,12 +656,9 @@ orderBy:
 
 		if !sqlparser.ContainsAggregation(expr.Col) {
 			if !qp.isExprInGroupByExprs(ctx, expr) {
-				out = append(out, Aggr{
-					Original: aliasedExpr,
-					OpCode:   opcode.AggregateRandom,
-					Alias:    aliasedExpr.ColumnName(),
-					Index:    &idxCopy,
-				})
+				aggr := NewAggr(opcode.AggregateRandom, nil, aliasedExpr, aliasedExpr.ColumnName())
+				aggr.Index = &idxCopy
+				out = append(out, aggr)
 			}
 			continue
 		}
@@ -631,35 +667,36 @@ orderBy:
 			return nil, vterrors.VT12001("in scatter query: complex aggregate expression")
 		}
 
-		code := opcode.SupportedAggregates[strings.ToLower(fnc.AggrName())]
-
-		if code == opcode.AggregateCount {
-			if _, isStar := fnc.(*sqlparser.CountStar); isStar {
-				code = opcode.AggregateCountStar
-			}
-		}
-
-		aggr, _ := aliasedExpr.Expr.(sqlparser.AggrFunc)
-
-		if aggr.IsDistinct() {
-			switch code {
-			case opcode.AggregateCount:
-				code = opcode.AggregateCountDistinct
-			case opcode.AggregateSum:
-				code = opcode.AggregateSumDistinct
-			}
-		}
-
-		out = append(out, Aggr{
-			Original: aliasedExpr,
-			Func:     aggr,
-			OpCode:   code,
-			Alias:    aliasedExpr.ColumnName(),
-			Index:    &idxCopy,
-			Distinct: aggr.IsDistinct(),
-		})
+		aggr := createAggrFromAggrFunc(fnc, aliasedExpr)
+		aggr.Index = &idxCopy
+		out = append(out, aggr)
 	}
 	return
+}
+
+func createAggrFromAggrFunc(fnc sqlparser.AggrFunc, aliasedExpr *sqlparser.AliasedExpr) Aggr {
+	code := opcode.SupportedAggregates[strings.ToLower(fnc.AggrName())]
+
+	if code == opcode.AggregateCount {
+		if _, isStar := fnc.(*sqlparser.CountStar); isStar {
+			code = opcode.AggregateCountStar
+		}
+	}
+
+	aggrF, _ := aliasedExpr.Expr.(sqlparser.AggrFunc)
+
+	if aggrF.IsDistinct() {
+		switch code {
+		case opcode.AggregateCount:
+			code = opcode.AggregateCountDistinct
+		case opcode.AggregateSum:
+			code = opcode.AggregateSumDistinct
+		}
+	}
+
+	aggr := NewAggr(code, aggrF, aliasedExpr, aliasedExpr.ColumnName())
+	aggr.Distinct = aggrF.IsDistinct()
+	return aggr
 }
 
 // FindSelectExprIndexForExpr returns the index of the given expression in the select expressions, if it is part of it

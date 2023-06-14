@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"io"
 
-	"vitess.io/vitess/go/slices2"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
@@ -95,27 +94,27 @@ func tryHorizonPlanning(ctx *plancontext.PlanningContext, root ops.Operator) (ou
 // If we can push it under a route - done.
 // If we can't, we will instead expand the Horizon into
 // smaller operators and try to push these down as far as possible
-func planHorizons(ctx *plancontext.PlanningContext, root ops.Operator) (ops.Operator, error) {
-	var err error
-	root, err = optimizeHorizonPlanning(ctx, root)
-	if err != nil {
-		return nil, err
+func planHorizons(ctx *plancontext.PlanningContext, root ops.Operator) (op ops.Operator, err error) {
+	phases := getPhases()
+	op = root
+
+	for _, phase := range phases {
+		if phase.action != nil {
+			op, err = phase.action(ctx, op)
+			if err != nil {
+				return nil, err
+			}
+		}
+		if rewrite.DebugOperatorTree {
+			fmt.Printf("PHASE: %s\n", phase.Name)
+		}
+		op, err = optimizeHorizonPlanning(ctx, op)
+		if err != nil {
+			return nil, err
+		}
 	}
 
-	// Adding Ordering Op - This is needed if there is no explicit ordering and aggregation is performed on top of route.
-	// Adding Group by - This is needed if the grouping is performed on a join with a join condition then
-	//                   aggregation happening at route needs a group by to ensure only matching rows returns
-	//                   the aggregations otherwise returns no result.
-	root, err = addOrderBysAndGroupBysForAggregations(ctx, root)
-	if err != nil {
-		return nil, err
-	}
-
-	root, err = optimizeHorizonPlanning(ctx, root)
-	if err != nil {
-		return nil, err
-	}
-	return root, nil
+	return addGroupByOnRHSOfJoin(op)
 }
 
 func optimizeHorizonPlanning(ctx *plancontext.PlanningContext, root ops.Operator) (ops.Operator, error) {
@@ -152,242 +151,35 @@ func optimizeHorizonPlanning(ctx *plancontext.PlanningContext, root ops.Operator
 	return newOp, nil
 }
 
-func tryPushingDownFilter(ctx *plancontext.PlanningContext, in *Filter) (ops.Operator, *rewrite.ApplyResult, error) {
-	proj, ok := in.Source.(*Projection)
-	if !ok {
-		// we can only push filter under a projection
-		return in, rewrite.SameTree, nil
-	}
-
-	for _, p := range in.Predicates {
-		cantPushDown := false
-		_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
-			if !fetchByOffset(node) {
-				return true, nil
-			}
-
-			if proj.needsEvaluation(ctx, node.(sqlparser.Expr)) {
-				cantPushDown = true
-				return false, io.EOF
-			}
-
-			return true, nil
-		}, p)
-
-		if cantPushDown {
-			return in, rewrite.SameTree, nil
+func pushOrExpandHorizon(ctx *plancontext.PlanningContext, in horizonLike) (ops.Operator, *rewrite.ApplyResult, error) {
+	if derived, ok := in.(*Derived); ok {
+		if len(derived.ColumnAliases) > 0 {
+			return nil, nil, errHorizonNotPlanned()
 		}
 	}
-
-	return rewrite.Swap(in, proj, "push filter under projection")
-}
-
-func tryPushingDownDistinct(in *Distinct) (ops.Operator, *rewrite.ApplyResult, error) {
-	if in.Pushed {
-		return in, rewrite.SameTree, nil
-	}
-	switch src := in.Source.(type) {
-	case *Route:
-		if src.IsSingleShard() {
-			return rewrite.Swap(in, src, "push distinct under route")
-		}
-	case *Distinct:
-		return src, rewrite.NewTree("removed double distinct", src), nil
+	rb, isRoute := in.src().(*Route)
+	if isRoute && rb.IsSingleShard() {
+		return rewrite.Swap(in, rb, "push horizon into route")
 	}
 
-	cols, err := in.Source.GetColumns()
+	sel, isSel := in.selectStatement().(*sqlparser.Select)
+	if !isSel {
+		return nil, nil, errHorizonNotPlanned()
+	}
+
+	qp, err := in.getQP(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	aggr := &Aggregator{
-		Source:   in.Source,
-		QP:       in.QP,
-		Original: true,
+	needsOrdering := len(qp.OrderExprs) > 0
+	canPushDown := isRoute && sel.Having == nil && !needsOrdering && !qp.NeedsAggregation() && !sel.Distinct && sel.Limit == nil
+
+	if canPushDown {
+		return rewrite.Swap(in, rb, "push horizon into route")
 	}
 
-	for _, col := range cols {
-		aggr.addColumnWithoutPushing(col, true)
-	}
-
-	return aggr, rewrite.NewTree("replace distinct with aggregator", in), nil
-}
-
-// addOrderBysAndGroupBysForAggregations runs after we have run horizonPlanning until the op tree stops changing
-// this means that we have pushed aggregations and other ops as far down as they'll go
-// addOrderBysAndGroupBysForAggregations will find Aggregators that have not been pushed under routes and
-// add the necessary Ordering operators for them
-func addOrderBysAndGroupBysForAggregations(ctx *plancontext.PlanningContext, root ops.Operator) (ops.Operator, error) {
-	visitor := func(in ops.Operator, _ semantics.TableSet, isRoot bool) (ops.Operator, *rewrite.ApplyResult, error) {
-		switch in := in.(type) {
-		case *Aggregator:
-			// first we update the incoming columns, so we know about any new columns that have been added
-			columns, err := in.Source.GetColumns()
-			if err != nil {
-				return nil, nil, err
-			}
-			in.Columns = columns
-
-			requireOrdering, err := needsOrdering(in, ctx)
-			if err != nil {
-				return nil, nil, err
-			}
-			if !requireOrdering {
-				return in, rewrite.SameTree, nil
-			}
-			in.Source = &Ordering{
-				Source: in.Source,
-				Order: slices2.Map(in.Grouping, func(from GroupBy) ops.OrderBy {
-					return from.AsOrderBy()
-				}),
-			}
-			return in, rewrite.NewTree("added ordering before aggregation", in), nil
-		case *ApplyJoin:
-			_ = rewrite.Visit(in.RHS, func(op ops.Operator) error {
-				aggr, isAggr := op.(*Aggregator)
-				if !isAggr {
-					return nil
-				}
-				if len(aggr.Grouping) == 0 {
-					gb := sqlparser.NewIntLiteral(".0")
-					aggr.Grouping = append(aggr.Grouping, NewGroupBy(gb, gb, aeWrap(gb)))
-				}
-				return nil
-			})
-		}
-		return in, rewrite.SameTree, nil
-	}
-
-	return rewrite.TopDown(root, TableID, visitor, stopAtRoute)
-}
-
-func needsOrdering(in *Aggregator, ctx *plancontext.PlanningContext) (bool, error) {
-	if len(in.Grouping) == 0 {
-		return false, nil
-	}
-	srcOrdering, err := in.Source.GetOrdering()
-	if err != nil {
-		return false, err
-	}
-	if len(srcOrdering) < len(in.Grouping) {
-		return true, nil
-	}
-	for idx, gb := range in.Grouping {
-		if !ctx.SemTable.EqualsExprWithDeps(srcOrdering[idx].SimplifiedExpr, gb.SimplifiedExpr) {
-			return true, nil
-		}
-	}
-	return false, nil
-}
-
-func tryPushingDownOrdering(ctx *plancontext.PlanningContext, in *Ordering) (ops.Operator, *rewrite.ApplyResult, error) {
-	switch src := in.Source.(type) {
-	case *Route:
-		return rewrite.Swap(in, src, "push ordering under route")
-	case *ApplyJoin:
-		if canPushLeft(ctx, src, in.Order) {
-			// ApplyJoin is stable in regard to the columns coming from the LHS,
-			// so if all the ordering columns come from the LHS, we can push down the Ordering there
-			src.LHS, in.Source = in, src.LHS
-			return src, rewrite.NewTree("push down ordering on the LHS of a join", in), nil
-		}
-	case *Ordering:
-		// we'll just remove the order underneath. The top order replaces whatever was incoming
-		in.Source = src.Source
-		return in, rewrite.NewTree("remove double ordering", src), nil
-	case *Projection:
-		// we can move ordering under a projection if it's not introducing a column we're sorting by
-		for _, by := range in.Order {
-			if !fetchByOffset(by.SimplifiedExpr) {
-				return in, rewrite.SameTree, nil
-			}
-		}
-		return rewrite.Swap(in, src, "push ordering under projection")
-	case *Aggregator:
-		if !(src.QP.AlignGroupByAndOrderBy(ctx) || overlaps(ctx, in.Order, src.Grouping)) {
-			return in, rewrite.SameTree, nil
-		}
-
-		return pushOrderingUnderAggr(ctx, in, src)
-
-	}
-	return in, rewrite.SameTree, nil
-}
-
-func overlaps(ctx *plancontext.PlanningContext, order []ops.OrderBy, grouping []GroupBy) bool {
-ordering:
-	for _, orderBy := range order {
-		for _, groupBy := range grouping {
-			if ctx.SemTable.EqualsExprWithDeps(orderBy.SimplifiedExpr, groupBy.SimplifiedExpr) {
-				continue ordering
-			}
-		}
-		return false
-	}
-
-	return true
-}
-
-func pushOrderingUnderAggr(ctx *plancontext.PlanningContext, order *Ordering, aggregator *Aggregator) (ops.Operator, *rewrite.ApplyResult, error) {
-	// Step 1: Align the GROUP BY and ORDER BY.
-	//         Reorder the GROUP BY columns to match the ORDER BY columns.
-	//         Since the GB clause is a set, we can reorder these columns freely.
-	var newGrouping []GroupBy
-	used := make([]bool, len(aggregator.Grouping))
-	for _, orderExpr := range order.Order {
-		for grpIdx, by := range aggregator.Grouping {
-			if !used[grpIdx] && ctx.SemTable.EqualsExprWithDeps(by.SimplifiedExpr, orderExpr.SimplifiedExpr) {
-				newGrouping = append(newGrouping, by)
-				used[grpIdx] = true
-			}
-		}
-	}
-
-	// Step 2: Add any missing columns from the ORDER BY.
-	//         The ORDER BY column is not a set, but we can add more elements
-	//         to the end without changing the semantics of the query.
-	if len(newGrouping) != len(aggregator.Grouping) {
-		// we are missing some groupings. We need to add them both to the new groupings list, but also to the ORDER BY
-		for i, added := range used {
-			if !added {
-				groupBy := aggregator.Grouping[i]
-				newGrouping = append(newGrouping, groupBy)
-				order.Order = append(order.Order, groupBy.AsOrderBy())
-			}
-		}
-	}
-
-	aggregator.Grouping = newGrouping
-	aggrSource, isOrdering := aggregator.Source.(*Ordering)
-	if isOrdering {
-		// Transform the query plan tree:
-		// From:   Ordering(1)      To: Aggregation
-		//               |                 |
-		//         Aggregation          Ordering(1)
-		//               |                 |
-		//         Ordering(2)          <Inputs>
-		//               |
-		//           <Inputs>
-		//
-		// Remove Ordering(2) from the plan tree, as it's redundant
-		// after pushing down the higher ordering.
-		order.Source = aggrSource.Source
-		aggrSource.Source = nil // removing from plan tree
-		aggregator.Source = order
-		return aggregator, rewrite.NewTree("push ordering under aggregation, removing extra ordering", aggregator), nil
-	}
-	return rewrite.Swap(order, aggregator, "push ordering under aggregation")
-}
-
-func canPushLeft(ctx *plancontext.PlanningContext, aj *ApplyJoin, order []ops.OrderBy) bool {
-	lhs := TableID(aj.LHS)
-	for _, order := range order {
-		deps := ctx.SemTable.DirectDeps(order.Inner.Expr)
-		if !deps.IsSolvedBy(lhs) {
-			return false
-		}
-	}
-	return true
+	return expandHorizon(ctx, in)
 }
 
 func tryPushingDownProjection(
@@ -595,11 +387,6 @@ func createProjectionWithTheseColumns(
 	return proj, nil
 }
 
-func stopAtRoute(operator ops.Operator) rewrite.VisitRule {
-	_, isRoute := operator.(*Route)
-	return rewrite.VisitRule(!isRoute)
-}
-
 func tryPushingDownLimit(in *Limit) (ops.Operator, *rewrite.ApplyResult, error) {
 	switch src := in.Source.(type) {
 	case *Route:
@@ -611,6 +398,14 @@ func tryPushingDownLimit(in *Limit) (ops.Operator, *rewrite.ApplyResult, error) 
 	default:
 		return setUpperLimit(in)
 	}
+}
+
+func tryPushingDownLimitInRoute(in *Limit, src *Route) (ops.Operator, *rewrite.ApplyResult, error) {
+	if src.IsSingleShard() {
+		return rewrite.Swap(in, src, "limit pushed into single sharded route")
+	}
+
+	return setUpperLimit(in)
 }
 
 func setUpperLimit(in *Limit) (ops.Operator, *rewrite.ApplyResult, error) {
@@ -646,216 +441,186 @@ func setUpperLimit(in *Limit) (ops.Operator, *rewrite.ApplyResult, error) {
 	return in, rewrite.SameTree, nil
 }
 
-func tryPushingDownLimitInRoute(in *Limit, src *Route) (ops.Operator, *rewrite.ApplyResult, error) {
-	if src.IsSingleShard() {
-		return rewrite.Swap(in, src, "limit pushed into single sharded route")
-	}
+func tryPushingDownOrdering(ctx *plancontext.PlanningContext, in *Ordering) (ops.Operator, *rewrite.ApplyResult, error) {
+	switch src := in.Source.(type) {
+	case *Route:
+		return rewrite.Swap(in, src, "push ordering under route")
+	case *ApplyJoin:
+		if canPushLeft(ctx, src, in.Order) {
+			// ApplyJoin is stable in regard to the columns coming from the LHS,
+			// so if all the ordering columns come from the LHS, we can push down the Ordering there
+			src.LHS, in.Source = in, src.LHS
+			return src, rewrite.NewTree("push down ordering on the LHS of a join", in), nil
+		}
+	case *Ordering:
+		// we'll just remove the order underneath. The top order replaces whatever was incoming
+		in.Source = src.Source
+		return in, rewrite.NewTree("remove double ordering", src), nil
+	case *Projection:
+		// we can move ordering under a projection if it's not introducing a column we're sorting by
+		for _, by := range in.Order {
+			if !fetchByOffset(by.SimplifiedExpr) {
+				return in, rewrite.SameTree, nil
+			}
+		}
+		return rewrite.Swap(in, src, "push ordering under projection")
+	case *Aggregator:
+		if !src.QP.AlignGroupByAndOrderBy(ctx) && !overlaps(ctx, in.Order, src.Grouping) {
+			return in, rewrite.SameTree, nil
+		}
 
-	return setUpperLimit(in)
+		return pushOrderingUnderAggr(ctx, in, src)
+
+	}
+	return in, rewrite.SameTree, nil
 }
 
-func pushOrExpandHorizon(ctx *plancontext.PlanningContext, in horizonLike) (ops.Operator, *rewrite.ApplyResult, error) {
-	if derived, ok := in.(*Derived); ok {
-		if len(derived.ColumnAliases) > 0 {
-			return nil, nil, errHorizonNotPlanned()
+func overlaps(ctx *plancontext.PlanningContext, order []ops.OrderBy, grouping []GroupBy) bool {
+ordering:
+	for _, orderBy := range order {
+		for _, groupBy := range grouping {
+			if ctx.SemTable.EqualsExprWithDeps(orderBy.SimplifiedExpr, groupBy.SimplifiedExpr) {
+				continue ordering
+			}
+		}
+		return false
+	}
+
+	return true
+}
+
+func pushOrderingUnderAggr(ctx *plancontext.PlanningContext, order *Ordering, aggregator *Aggregator) (ops.Operator, *rewrite.ApplyResult, error) {
+	// Step 1: Align the GROUP BY and ORDER BY.
+	//         Reorder the GROUP BY columns to match the ORDER BY columns.
+	//         Since the GB clause is a set, we can reorder these columns freely.
+	var newGrouping []GroupBy
+	used := make([]bool, len(aggregator.Grouping))
+	for _, orderExpr := range order.Order {
+		for grpIdx, by := range aggregator.Grouping {
+			if !used[grpIdx] && ctx.SemTable.EqualsExprWithDeps(by.SimplifiedExpr, orderExpr.SimplifiedExpr) {
+				newGrouping = append(newGrouping, by)
+				used[grpIdx] = true
+			}
 		}
 	}
-	rb, isRoute := in.src().(*Route)
-	if isRoute && rb.IsSingleShard() {
-		return rewrite.Swap(in, rb, "push horizon into route")
+
+	// Step 2: Add any missing columns from the ORDER BY.
+	//         The ORDER BY column is not a set, but we can add more elements
+	//         to the end without changing the semantics of the query.
+	if len(newGrouping) != len(aggregator.Grouping) {
+		// we are missing some groupings. We need to add them both to the new groupings list, but also to the ORDER BY
+		for i, added := range used {
+			if !added {
+				groupBy := aggregator.Grouping[i]
+				newGrouping = append(newGrouping, groupBy)
+				order.Order = append(order.Order, groupBy.AsOrderBy())
+			}
+		}
 	}
 
-	sel, isSel := in.selectStatement().(*sqlparser.Select)
-	if !isSel {
-		return nil, nil, errHorizonNotPlanned()
+	aggregator.Grouping = newGrouping
+	aggrSource, isOrdering := aggregator.Source.(*Ordering)
+	if isOrdering {
+		// Transform the query plan tree:
+		// From:   Ordering(1)      To: Aggregation
+		//               |                 |
+		//         Aggregation          Ordering(1)
+		//               |                 |
+		//         Ordering(2)          <Inputs>
+		//               |
+		//           <Inputs>
+		//
+		// Remove Ordering(2) from the plan tree, as it's redundant
+		// after pushing down the higher ordering.
+		order.Source = aggrSource.Source
+		aggrSource.Source = nil // removing from plan tree
+		aggregator.Source = order
+		return aggregator, rewrite.NewTree("push ordering under aggregation, removing extra ordering", aggregator), nil
+	}
+	return rewrite.Swap(order, aggregator, "push ordering under aggregation")
+}
+
+func canPushLeft(ctx *plancontext.PlanningContext, aj *ApplyJoin, order []ops.OrderBy) bool {
+	lhs := TableID(aj.LHS)
+	for _, order := range order {
+		deps := ctx.SemTable.DirectDeps(order.Inner.Expr)
+		if !deps.IsSolvedBy(lhs) {
+			return false
+		}
+	}
+	return true
+}
+
+func tryPushingDownFilter(ctx *plancontext.PlanningContext, in *Filter) (ops.Operator, *rewrite.ApplyResult, error) {
+	switch src := in.Source.(type) {
+	case *Projection:
+		return pushFilterUnderProjection(ctx, in, src)
+	case *Route:
+		return rewrite.Swap(in, src, "push filter into Route")
 	}
 
-	qp, err := in.getQP(ctx)
+	return in, rewrite.SameTree, nil
+}
+
+func pushFilterUnderProjection(ctx *plancontext.PlanningContext, filter *Filter, projection *Projection) (ops.Operator, *rewrite.ApplyResult, error) {
+	for _, p := range filter.Predicates {
+		cantPushDown := false
+		_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+			if !fetchByOffset(node) {
+				return true, nil
+			}
+
+			if projection.needsEvaluation(ctx, node.(sqlparser.Expr)) {
+				cantPushDown = true
+				return false, io.EOF
+			}
+
+			return true, nil
+		}, p)
+
+		if cantPushDown {
+			return filter, rewrite.SameTree, nil
+		}
+	}
+	return rewrite.Swap(filter, projection, "push filter under projection")
+
+}
+
+func tryPushingDownDistinct(in *Distinct) (ops.Operator, *rewrite.ApplyResult, error) {
+	if in.Pushed {
+		return in, rewrite.SameTree, nil
+	}
+	switch src := in.Source.(type) {
+	case *Route:
+		if src.IsSingleShard() {
+			return rewrite.Swap(in, src, "push distinct under route")
+		}
+	case *Distinct:
+		return src, rewrite.NewTree("removed double distinct", src), nil
+	case *Aggregator:
+		return in, rewrite.SameTree, nil
+	}
+
+	cols, err := in.Source.GetColumns()
 	if err != nil {
 		return nil, nil, err
 	}
 
-	needsOrdering := len(qp.OrderExprs) > 0
-	canPushDown := isRoute && sel.Having == nil && !needsOrdering && !qp.NeedsAggregation() && !sel.Distinct && sel.Limit == nil
-
-	if canPushDown {
-		return rewrite.Swap(in, rb, "push horizon into route")
+	aggr := &Aggregator{
+		Source:   in.Source,
+		QP:       in.QP,
+		Original: true,
 	}
 
-	return expandHorizon(ctx, in)
+	for _, col := range cols {
+		aggr.addColumnWithoutPushing(col, true)
+	}
+
+	return aggr, rewrite.NewTree("replace distinct with aggregator", in), nil
 }
 
-func expandHorizon(ctx *plancontext.PlanningContext, horizon horizonLike) (ops.Operator, *rewrite.ApplyResult, error) {
-	sel, isSel := horizon.selectStatement().(*sqlparser.Select)
-	if !isSel {
-		return nil, nil, errHorizonNotPlanned()
-	}
-
-	if sel.Having != nil {
-		return nil, nil, errHorizonNotPlanned()
-	}
-
-	op, err := createProjectionFromSelect(ctx, horizon)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	qp, err := horizon.getQP(ctx)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	if qp.NeedsDistinct() {
-		op = &Distinct{
-			Source: op,
-			QP:     qp,
-		}
-	}
-
-	if len(qp.OrderExprs) > 0 {
-		op = &Ordering{
-			Source: op,
-			Order:  qp.OrderExprs,
-		}
-	}
-
-	if sel.Limit != nil {
-		op = &Limit{
-			Source: op,
-			AST:    sel.Limit,
-		}
-	}
-
-	return op, rewrite.NewTree("expand horizon into smaller components", op), nil
-}
-
-func checkInvalid(aggregations []Aggr, horizon horizonLike) error {
-	for _, aggregation := range aggregations {
-		if aggregation.Distinct {
-			return errHorizonNotPlanned()
-		}
-	}
-	if _, isDerived := horizon.(*Derived); isDerived {
-		return errHorizonNotPlanned()
-	}
-	return nil
-}
-
-func createProjectionFromSelect(ctx *plancontext.PlanningContext, horizon horizonLike) (out ops.Operator, err error) {
-	qp, err := horizon.getQP(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	if !qp.NeedsAggregation() {
-		projX, err := createProjectionWithoutAggr(qp, horizon.src())
-		if err != nil {
-			return nil, err
-		}
-		if derived, isDerived := horizon.(*Derived); isDerived {
-			id := derived.TableId
-			projX.TableID = &id
-			projX.Alias = derived.Alias
-		}
-		out = projX
-
-		return out, nil
-	}
-
-	err = checkAggregationSupported(horizon)
-	if err != nil {
-		return nil, err
-	}
-
-	aggregations, err := qp.AggregationExpressions(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	if err := checkInvalid(aggregations, horizon); err != nil {
-		return nil, err
-	}
-
-	a := &Aggregator{
-		Source:       horizon.src(),
-		Original:     true,
-		QP:           qp,
-		Grouping:     qp.GetGrouping(),
-		Aggregations: aggregations,
-	}
-
-	if derived, isDerived := horizon.(*Derived); isDerived {
-		id := derived.TableId
-		a.TableID = &id
-		a.Alias = derived.Alias
-	}
-
-outer:
-	for colIdx, expr := range qp.SelectExprs {
-		ae, err := expr.GetAliasedExpr()
-		if err != nil {
-			return nil, err
-		}
-		for idx, groupBy := range a.Grouping {
-			if ae == groupBy.aliasedExpr {
-				a.Columns = append(a.Columns, ae)
-				a.Grouping[idx].ColOffset = colIdx
-				continue outer
-			}
-		}
-		for idx, aggr := range a.Aggregations {
-			if ae == aggr.Original {
-				a.Columns = append(a.Columns, ae)
-				a.Aggregations[idx].ColOffset = colIdx
-				continue outer
-			}
-		}
-		return nil, vterrors.VT13001(fmt.Sprintf("Could not find the %v in aggregation in the original query", expr))
-	}
-
-	return a, nil
-}
-
-func createProjectionWithoutAggr(qp *QueryProjection, src ops.Operator) (*Projection, error) {
-	proj := &Projection{
-		Source: src,
-	}
-
-	for _, e := range qp.SelectExprs {
-		if _, isStar := e.Col.(*sqlparser.StarExpr); isStar {
-			return nil, errHorizonNotPlanned()
-		}
-		ae, err := e.GetAliasedExpr()
-
-		if err != nil {
-			return nil, err
-		}
-		expr := ae.Expr
-		if sqlparser.ContainsAggregation(expr) {
-			aggr, ok := expr.(sqlparser.AggrFunc)
-			if !ok {
-				// need to add logic to extract aggregations and pushed them to the top level
-				return nil, errHorizonNotPlanned()
-			}
-			expr = aggr.GetArg()
-			if expr == nil {
-				expr = sqlparser.NewIntLiteral("1")
-			}
-		}
-
-		proj.addUnexploredExpr(ae, expr)
-	}
-	return proj, nil
-}
-
-func aeWrap(e sqlparser.Expr) *sqlparser.AliasedExpr {
-	return &sqlparser.AliasedExpr{Expr: e}
-}
-
+// makeSureOutputIsCorrect uses the original Horizon to make sure that the output columns line up with what the user asked for
 func makeSureOutputIsCorrect(ctx *plancontext.PlanningContext, oldHorizon ops.Operator, output ops.Operator) (ops.Operator, error) {
-	// next we use the original Horizon to make sure that the output columns line up with what the user asked for
-	// in the future, we'll tidy up the results. for now, we are just failing these queries and going back to the
-	// old horizon planning instead
 	cols, err := output.GetColumns()
 	if err != nil {
 		return nil, err
@@ -877,13 +642,18 @@ func makeSureOutputIsCorrect(ctx *plancontext.PlanningContext, oldHorizon ops.Op
 	if err != nil {
 		return nil, err
 	}
-	proj, err := createProjectionWithoutAggr(qp, output)
-	if err != nil {
-		return nil, err
-	}
-	err = proj.passThroughAllColumns(ctx)
+	proj, err := createSimpleProjection(ctx, qp, output)
 	if err != nil {
 		return nil, err
 	}
 	return proj, nil
+}
+
+func stopAtRoute(operator ops.Operator) rewrite.VisitRule {
+	_, isRoute := operator.(*Route)
+	return rewrite.VisitRule(!isRoute)
+}
+
+func aeWrap(e sqlparser.Expr) *sqlparser.AliasedExpr {
+	return &sqlparser.AliasedExpr{Expr: e}
 }

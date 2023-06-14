@@ -69,7 +69,6 @@ var _binaries = []string{ // binaries that require the flags in this package
 	"vtctl",
 	"vtctld",
 	"vtctldclient",
-	"vtgr",
 	"vtorc",
 	"vttablet",
 	"vttestserver",
