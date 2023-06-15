@@ -3087,12 +3087,7 @@ func TestMoveTablesDDLFlag(t *testing.T) {
 			// This is the default and go does not marshal defaults
 			// for prototext fields so we use the default insert stmt.
 			//insert = fmt.Sprintf(`/insert into .vreplication\(.*on_ddl:%s.*`, onDDLAction)
-			env.tmc.expectVRQuery(100, "/.*", &sqltypes.Result{})
-			env.tmc.expectVRQuery(200, "/.*", &sqltypes.Result{})
-			env.tmc.expectVRQuery(200, "/.*", &sqltypes.Result{})
-			env.tmc.expectVRQuery(200, "/.*", &sqltypes.Result{})
-			env.tmc.expectVRQuery(200, "/.*", &sqltypes.Result{})
-			env.tmc.expectVRQuery(200, "/.*", &sqltypes.Result{})
+			//env.tmc.expectVRQuery(100, "/.*", &sqltypes.Result{})
 			env.tmc.expectVRQuery(200, "/.*", &sqltypes.Result{})
 
 			want := fmt.Sprintf(`summary:"Successfully created the workflow MoveTables workflow on (1) target primary tablets in the %s keyspace" details:{tablet:"%s-200 (%s/0)"}`,

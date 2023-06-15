@@ -79,7 +79,7 @@ message MaterializeSettings {
   repeated TableMaterializeSettings table_settings = 5;
   // optional parameters.
   string cell = 6;
-  string tablet_types = 7;
+  repeated topodata.TabletType tablet_types = 7;
   // ExternalCluster is the name of the mounted cluster which has the source keyspace/db for this workflow
   // it is of the type <cluster_type.cluster_name>
   string external_cluster = 8;
@@ -95,6 +95,7 @@ message MaterializeSettings {
   string on_ddl = 13;
   // DeferSecondaryKeys specifies if secondary keys should be created in one shot after table copy finishes.
   bool defer_secondary_keys = 14;
+  tabletmanagerdata.TabletSelectionPreference tablet_selection_preference = 15;
 }
 
 /* Data types for VtctldServer */
@@ -117,8 +118,8 @@ message Workflow {
   ReplicationLocation target = 3;
   int64 max_v_replication_lag = 4;
   map<string, ShardStream> shard_streams = 5;
-  string workflow_type = 6;
-  string workflow_sub_type = 7;
+  binlogdata.VReplicationWorkflowType workflow_type = 6;
+  binlogdata.VReplicationWorkflowSubType workflow_sub_type = 7;
 
   message ReplicationLocation {
     string keyspace = 1;
@@ -138,7 +139,7 @@ message Workflow {
     binlogdata.BinlogSource binlog_source = 4;
     string position = 5;
     string stop_position = 6;
-    string state = 7;
+    binlogdata.VReplicationWorkflowState state = 7;
     string db_name = 8;
     vttime.Time transaction_timestamp = 9;
     vttime.Time time_updated = 10;
@@ -165,7 +166,7 @@ message Workflow {
       int64 id = 1;
       int64 stream_id = 2;
       string type = 3;
-      string state = 4;
+      binlogdata.VReplicationWorkflowState state = 4;
       vttime.Time created_at = 5;
       vttime.Time updated_at = 6;
       string message = 7;
@@ -820,26 +821,28 @@ message MoveTablesCreateRequest {
   string source_keyspace = 2;
   string target_keyspace = 3;
   repeated string cells = 4;
-  repeated string tablet_types = 5;
-  repeated string source_shards = 6;
-  bool all_tables = 7;
-  repeated string include_tables = 8;
-  repeated string exclude_tables = 9;
+  repeated topodata.TabletType tablet_types = 5;
+  tabletmanagerdata.TabletSelectionPreference tablet_selection_preference = 6;
+
+  repeated string source_shards = 7;
+  bool all_tables = 8;
+  repeated string include_tables = 9;
+  repeated string exclude_tables = 10;
   // ExternalCluster is the name of the mounted cluster which has the source keyspace/db for this workflow
   // it is of the type <cluster_type.cluster_name>
-  string external_cluster = 10;
-  // SourceTimeZone is the time zone in which datetimes on the source were stored, provided as an option in MoveTable
-  string source_time_zone = 11;
+  string external_cluster = 11;
+  // SourceTimeZone is the time zone in which datetimes on the source were stored, provided as an option in MoveTables
+  string source_time_zone = 12;
   // OnDdl specifies the action to be taken when a DDL is encountered.
-  string on_ddl = 12;
+  string on_ddl = 13;
   // StopAfterCopy specifies if vreplication should be stopped after copying.
-  bool stop_after_copy = 13;
+  bool stop_after_copy = 14;
   // DropForeignKeys specifies if foreign key constraints should be elided on the target.
-  bool drop_foreign_keys = 14;
+  bool drop_foreign_keys = 15;
   // DeferSecondaryKeys specifies if secondary keys should be created in one shot after table copy finishes.
-  bool defer_secondary_keys = 15;
+  bool defer_secondary_keys = 16;
   // Start the workflow after creating it.
-  bool auto_start = 16;
+  bool auto_start = 17;
 }
 
 message MoveTablesCompleteRequest {
@@ -853,9 +856,8 @@ message MoveTablesCompleteRequest {
 
 message MoveTablesCreateResponse {
   message TabletInfo {
-    string tablet = 1;
-    // The value is based on the query result's RowsAffected
-    // being 0 or not.
+    topodata.TabletAlias tablet = 1;
+    // Created is set if the workflow was created on this tablet or not.
     bool created = 2;
   }
   string summary = 1;
@@ -1368,9 +1370,8 @@ message WorkflowDeleteRequest {
 
 message WorkflowDeleteResponse {
   message TabletInfo {
-    string tablet = 1;
-    // The value is based on the query result's RowsAffected
-    // being 0 or not.
+    topodata.TabletAlias tablet = 1;
+    // Delete is set if the workflow was deleted on this tablet.
     bool deleted = 2;
   }
   string summary = 1;
@@ -1386,14 +1387,14 @@ message WorkflowStatusResponse {
   message TableCopyState {
     int64 rows_copied = 1;
     int64 rows_total = 2;
-    int32 rows_percentage = 3;
+    float rows_percentage = 3;
     int64 bytes_copied = 4;
     int64 bytes_total = 5;
-    int32 bytes_percentage = 6;
+    float bytes_percentage = 6;
   }
   message ShardStreamState {
     int32 id = 1;
-    string tablet = 2;
+    topodata.TabletAlias tablet = 2;
     string source_shard = 3;
     string position = 4;
     string status = 5;
@@ -1409,7 +1410,7 @@ message WorkflowStatusResponse {
 message WorkflowSwitchTrafficRequest {
   string keyspace = 1;
   string workflow = 2;
-  repeated string tablet_types = 3;
+  repeated topodata.TabletType tablet_types = 3;
   vttime.Duration max_replication_lag_allowed = 4;
   bool enable_reverse_replication = 5;
   int32 direction = 6;
@@ -1430,10 +1431,9 @@ message WorkflowUpdateRequest {
 
 message WorkflowUpdateResponse {
   message TabletInfo {
-    string tablet = 1;
+    topodata.TabletAlias tablet = 1;
     // Changed is true if any of the provided values were different
-    // than what was already stored. The value is based on the query
-    // result's RowsAffected being 0 or not.
+    // than what was already stored on this tablet.
     bool changed = 2;
   }
   string summary = 1;

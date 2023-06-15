@@ -186,6 +186,9 @@ func ParseTabletType(param string) (topodatapb.TabletType, error) {
 // ParseTabletTypes parses a comma separated list of tablet types and returns a slice with the respective enums.
 func ParseTabletTypes(param string) ([]topodatapb.TabletType, error) {
 	var tabletTypes []topodatapb.TabletType
+	if param == "" {
+		return tabletTypes, nil
+	}
 	for _, typeStr := range strings.Split(param, ",") {
 		t, err := ParseTabletType(typeStr)
 		if err != nil {
@@ -225,6 +228,29 @@ func MakeStringTypeList(types []topodatapb.TabletType) []string {
 	}
 	sort.Strings(strs)
 	return strs
+}
+
+// MakeStringTypeUnsortedList returns a list of strings that match the input
+// without modifying the order in the list.
+func MakeStringTypeUnsortedList(types []topodatapb.TabletType) []string {
+	strs := make([]string, len(types))
+	for i, t := range types {
+		strs[i] = strings.ToLower(t.String())
+	}
+	return strs
+}
+
+// MakeStringTypeCSV returns the tablet types in CSV format.
+func MakeStringTypeCSV(types []topodatapb.TabletType) string {
+	var csv strings.Builder
+	lastIdx := len(types) - 1
+	for i, tt := range types {
+		csv.WriteString(strings.ToLower(tt.String()))
+		if i < lastIdx {
+			csv.WriteString(",")
+		}
+	}
+	return csv.String()
 }
 
 // MakeUniqueStringTypeList returns a unique list of strings that match

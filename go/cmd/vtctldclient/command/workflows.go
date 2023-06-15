@@ -29,6 +29,7 @@ import (
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
@@ -125,16 +126,10 @@ var (
 			} else {
 				workflowUpdateOptions.Cells = textutil.SimulatedNullStringSlice
 			}
-			if cmd.Flags().Lookup("tablet-types").Changed { // Validate the provided value(s)
+			if cmd.Flags().Lookup("tablet-types").Changed {
 				changes = true
-				for i, tabletType := range workflowUpdateOptions.TabletTypes {
-					workflowUpdateOptions.TabletTypes[i] = strings.ToUpper(strings.TrimSpace(tabletType))
-					if _, err := topoproto.ParseTabletType(workflowUpdateOptions.TabletTypes[i]); err != nil {
-						return err
-					}
-				}
 			} else {
-				workflowUpdateOptions.TabletTypes = textutil.SimulatedNullStringSlice
+				workflowUpdateOptions.TabletTypes = []topodatapb.TabletType{topodatapb.TabletType(textutil.SimulatedNullInt)}
 			}
 			if cmd.Flags().Lookup("on-ddl").Changed { // Validate the provided value
 				changes = true
@@ -189,10 +184,11 @@ var (
 		KeepRoutingRules bool
 	}{}
 	workflowUpdateOptions = struct {
-		Workflow    string
-		Cells       []string
-		TabletTypes []string
-		OnDDL       string
+		Workflow                     string
+		Cells                        []string
+		TabletTypes                  []topodatapb.TabletType
+		TabletTypesInPreferenceOrder bool
+		OnDDL                        string
 	}{}
 )
 
@@ -212,7 +208,7 @@ func commandWorkflowDelete(cmd *cobra.Command, args []string) error {
 
 	// Sort the inner TabletInfo slice for deterministic output.
 	sort.Slice(resp.Details, func(i, j int) bool {
-		return resp.Details[i].Tablet < resp.Details[j].Tablet
+		return resp.Details[i].Tablet.String() < resp.Details[j].Tablet.String()
 	})
 
 	data, err := cli.MarshalJSON(resp)
@@ -267,13 +263,23 @@ func commandWorkflowUpdate(cmd *cobra.Command, args []string) error {
 		onddl = val
 	}
 
+	tsp := tabletmanagerdatapb.TabletSelectionPreference_UNKNOWN
+	if cmd.Flags().Lookup("tablet-types-in-order").Changed {
+		if workflowUpdateOptions.TabletTypesInPreferenceOrder {
+			tsp = tabletmanagerdatapb.TabletSelectionPreference_INORDER
+		} else {
+			tsp = tabletmanagerdatapb.TabletSelectionPreference_ANY
+		}
+	}
+
 	req := &vtctldatapb.WorkflowUpdateRequest{
 		Keyspace: workflowOptions.Keyspace,
 		TabletRequest: &tabletmanagerdatapb.UpdateVRWorkflowRequest{
-			Workflow:    workflowUpdateOptions.Workflow,
-			Cells:       workflowUpdateOptions.Cells,
-			TabletTypes: workflowUpdateOptions.TabletTypes,
-			OnDdl:       binlogdatapb.OnDDLAction(onddl),
+			Workflow:                  workflowUpdateOptions.Workflow,
+			Cells:                     workflowUpdateOptions.Cells,
+			TabletTypes:               workflowUpdateOptions.TabletTypes,
+			TabletSelectionPreference: tsp,
+			OnDdl:                     binlogdatapb.OnDDLAction(onddl),
 		},
 	}
 
@@ -284,7 +290,7 @@ func commandWorkflowUpdate(cmd *cobra.Command, args []string) error {
 
 	// Sort the inner TabletInfo slice for deterministic output.
 	sort.Slice(resp.Details, func(i, j int) bool {
-		return resp.Details[i].Tablet < resp.Details[j].Tablet
+		return resp.Details[i].Tablet.String() < resp.Details[j].Tablet.String()
 	})
 
 	data, err := cli.MarshalJSON(resp)
@@ -300,12 +306,12 @@ func commandWorkflowUpdate(cmd *cobra.Command, args []string) error {
 func commandWorkflowUpdateState(cmd *cobra.Command, args []string) error {
 	cli.FinishedParsing(cmd)
 
-	var state string
+	var state binlogdatapb.VReplicationWorkflowState
 	switch strings.ToUpper(cmd.Name()) {
 	case "START":
-		state = "Running"
+		state = binlogdatapb.VReplicationWorkflowState_Running
 	case "STOP":
-		state = "Stopped"
+		state = binlogdatapb.VReplicationWorkflowState_Stopped
 	default:
 		return fmt.Errorf("invalid workstate: %s", args[0])
 	}
@@ -316,7 +322,7 @@ func commandWorkflowUpdateState(cmd *cobra.Command, args []string) error {
 		TabletRequest: &tabletmanagerdatapb.UpdateVRWorkflowRequest{
 			Workflow:    workflowUpdateOptions.Workflow,
 			Cells:       textutil.SimulatedNullStringSlice,
-			TabletTypes: textutil.SimulatedNullStringSlice,
+			TabletTypes: []topodatapb.TabletType{topodatapb.TabletType(textutil.SimulatedNullInt)},
 			OnDdl:       binlogdatapb.OnDDLAction(textutil.SimulatedNullInt),
 			State:       state,
 		},
@@ -329,7 +335,7 @@ func commandWorkflowUpdateState(cmd *cobra.Command, args []string) error {
 
 	// Sort the inner TabletInfo slice for deterministic output.
 	sort.Slice(resp.Details, func(i, j int) bool {
-		return resp.Details[i].Tablet < resp.Details[j].Tablet
+		return resp.Details[i].Tablet.String() < resp.Details[j].Tablet.String()
 	})
 
 	data, err := cli.MarshalJSON(resp)
@@ -373,7 +379,8 @@ func init() {
 	WorkflowUpdate.Flags().StringVarP(&workflowUpdateOptions.Workflow, "workflow", "w", "", "The workflow you want to update (required)")
 	WorkflowUpdate.MarkFlagRequired("workflow")
 	WorkflowUpdate.Flags().StringSliceVarP(&workflowUpdateOptions.Cells, "cells", "c", nil, "New Cell(s) or CellAlias(es) (comma-separated) to replicate from")
-	WorkflowUpdate.Flags().StringSliceVarP(&workflowUpdateOptions.TabletTypes, "tablet-types", "t", nil, "New source tablet types to replicate from (e.g. PRIMARY,REPLICA,RDONLY)")
+	WorkflowUpdate.Flags().VarP((*topoproto.TabletTypeListFlag)(&workflowUpdateOptions.TabletTypes), "tablet-types", "t", "New source tablet types to replicate from (e.g. PRIMARY,REPLICA,RDONLY)")
+	WorkflowUpdate.Flags().BoolVar(&workflowUpdateOptions.TabletTypesInPreferenceOrder, "tablet-types-in-order", true, "When performing source tablet selection, look for candidates in the type order as they are listed in the tablet-types flag")
 	WorkflowUpdate.Flags().StringVar(&workflowUpdateOptions.OnDDL, "on-ddl", "", "New instruction on what to do when DDL is encountered in the VReplication stream. Possible values are IGNORE, STOP, EXEC, and EXEC_IGNORE")
 	Workflow.AddCommand(WorkflowUpdate)
 }

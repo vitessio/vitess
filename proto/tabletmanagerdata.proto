@@ -34,6 +34,14 @@ import "vtrpc.proto";
 // Data structures
 //
 
+// This structure allows us to manage tablet selection preferences
+// which are eventually passed to a TabletPicker.
+enum TabletSelectionPreference {
+  ANY = 0;
+  INORDER = 1;
+  UNKNOWN = 3; // Don't change any existing value
+}
+
 message TableDefinition {
   // the table name
   string name = 1;
@@ -508,16 +516,17 @@ message CreateVRWorkflowRequest {
   // optional parameters.
   repeated string cells = 3;
   // TabletTypes is the list of tablet types to use when selecting source tablets.
-  repeated string tablet_types = 4;
-  binlogdata.VReplicationWorkflowType workflow_type = 5;
-  binlogdata.VReplicationWorkflowSubType workflow_sub_type = 6;
+  repeated topodata.TabletType tablet_types = 4;
+  TabletSelectionPreference tablet_selection_preference = 5;
+  binlogdata.VReplicationWorkflowType workflow_type = 6;
+  binlogdata.VReplicationWorkflowSubType workflow_sub_type = 7;
   // DeferSecondaryKeys specifies if secondary keys should be created in one shot after table
   // copy finishes.
-  bool defer_secondary_keys = 7;
+  bool defer_secondary_keys = 8;
   // AutoStart specifies if the workflow should be started when created.
-  bool auto_start = 8;
+  bool auto_start = 9;
   // Should the workflow stop after the copy phase.
-  bool stop_after_copy = 9;
+  bool stop_after_copy = 10;
 }
 
 message CreateVRWorkflowResponse {
@@ -539,12 +548,12 @@ message ReadVRWorkflowRequest {
 message ReadVRWorkflowResponse {
   int32 id = 1;
   string workflow = 2;
-  string cell = 3;
-  string tablet_types = 4;
+  string cells = 3;
+  repeated topodata.TabletType tablet_types = 4;
   string db_name = 5;
   string tags = 6;
-  int32 workflow_type = 7;
-  int32 workflow_sub_type = 8;
+  binlogdata.VReplicationWorkflowType workflow_type = 7;
+  binlogdata.VReplicationWorkflowSubType workflow_sub_type = 8;
   bool defer_secondary_keys = 9;
   message Stream {
     binlogdata.BinlogSource bls = 1;
@@ -554,7 +563,7 @@ message ReadVRWorkflowResponse {
     int64 max_replication_lag = 5;
     vttime.Time time_updated = 6;
     vttime.Time transaction_timestamp = 7;
-    string state = 8;
+    binlogdata.VReplicationWorkflowState state = 8;
     string message = 9;
     int64 rows_copied = 10;
     vttime.Time time_heartbeat = 11;
@@ -562,6 +571,7 @@ message ReadVRWorkflowResponse {
     string component_throttled = 13;
   }
   repeated Stream streams = 10;
+  TabletSelectionPreference tablet_selection_preference = 11;
 }
 
 message VDiffRequest {
@@ -613,9 +623,10 @@ message VDiffOptions {
 message UpdateVRWorkflowRequest {
   string workflow = 1;
   repeated string cells = 2;
-  repeated string tablet_types = 3;
-  binlogdata.OnDDLAction on_ddl = 4;
-  string state = 5;
+  repeated topodata.TabletType tablet_types = 3;
+  TabletSelectionPreference tablet_selection_preference = 4;
+  binlogdata.OnDDLAction on_ddl = 5;
+  binlogdata.VReplicationWorkflowState state = 6;
 }
 
 message UpdateVRWorkflowResponse {

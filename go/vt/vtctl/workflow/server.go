@@ -439,7 +439,7 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 			BinlogSource: &bls,
 			Position:     pos,
 			StopPosition: stopPos,
-			State:        state,
+			State:        binlogdatapb.VReplicationWorkflowState(binlogdatapb.VReplicationWorkflowState_value[state]),
 			DbName:       dbName,
 			TransactionTimestamp: &vttimepb.Time{
 				Seconds: transactionTimeSeconds,
@@ -450,8 +450,8 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 			Message: message,
 			Tags:    tagArray,
 		}
-		workflow.WorkflowType = binlogdatapb.VReplicationWorkflowType_name[workflowType]
-		workflow.WorkflowSubType = binlogdatapb.VReplicationWorkflowSubType_name[workflowSubType]
+		workflow.WorkflowType = binlogdatapb.VReplicationWorkflowType(workflowType)
+		workflow.WorkflowSubType = binlogdatapb.VReplicationWorkflowSubType(workflowSubType)
 		stream.CopyStates, err = s.getWorkflowCopyStates(ctx, tablet, id)
 		if err != nil {
 			return err
@@ -461,11 +461,11 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 
 		switch {
 		case strings.Contains(strings.ToLower(stream.Message), "error"):
-			stream.State = "Error"
-		case stream.State == "Running" && len(stream.CopyStates) > 0:
-			stream.State = "Copying"
-		case stream.State == "Running" && int64(time.Now().Second())-timeUpdatedSeconds > 10:
-			stream.State = "Lagging"
+			stream.State = binlogdatapb.VReplicationWorkflowState_Error
+		case stream.State == binlogdatapb.VReplicationWorkflowState_Running && len(stream.CopyStates) > 0:
+			stream.State = binlogdatapb.VReplicationWorkflowState_Copying
+		case stream.State == binlogdatapb.VReplicationWorkflowState_Running && int64(time.Now().Second())-timeUpdatedSeconds > 10:
+			stream.State = binlogdatapb.VReplicationWorkflowState_Lagging
 		}
 
 		// At this point, we're going to start modifying the maps defined
@@ -675,7 +675,7 @@ ORDER BY
 					Id:       id,
 					StreamId: streamID,
 					Type:     typ,
-					State:    state,
+					State:    binlogdatapb.VReplicationWorkflowState(binlogdatapb.VReplicationWorkflowState_value[state]),
 					CreatedAt: &vttimepb.Time{
 						Seconds: createdAt.Unix(),
 					},
@@ -1031,17 +1031,18 @@ func (s *Server) MoveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 		return nil, err
 	}
 	ms := &vtctldatapb.MaterializeSettings{
-		Workflow:              req.Workflow,
-		MaterializationIntent: vtctldatapb.MaterializationIntent_MOVETABLES,
-		SourceKeyspace:        sourceKeyspace,
-		TargetKeyspace:        targetKeyspace,
-		Cell:                  strings.Join(req.Cells, ","),
-		TabletTypes:           strings.Join(req.TabletTypes, ","),
-		StopAfterCopy:         req.StopAfterCopy,
-		ExternalCluster:       req.ExternalCluster,
-		SourceShards:          req.SourceShards,
-		OnDdl:                 req.OnDdl,
-		DeferSecondaryKeys:    req.DeferSecondaryKeys,
+		Workflow:                  req.Workflow,
+		MaterializationIntent:     vtctldatapb.MaterializationIntent_MOVETABLES,
+		SourceKeyspace:            sourceKeyspace,
+		TargetKeyspace:            targetKeyspace,
+		Cell:                      strings.Join(req.Cells, ","),
+		TabletTypes:               req.TabletTypes,
+		TabletSelectionPreference: req.TabletSelectionPreference,
+		StopAfterCopy:             req.StopAfterCopy,
+		ExternalCluster:           req.ExternalCluster,
+		SourceShards:              req.SourceShards,
+		OnDdl:                     req.OnDdl,
+		DeferSecondaryKeys:        req.DeferSecondaryKeys,
 	}
 	if req.SourceTimeZone != "" {
 		ms.SourceTimeZone = req.SourceTimeZone
@@ -1169,7 +1170,7 @@ func (s *Server) MoveTablesComplete(ctx context.Context, req *vtctldatapb.MoveTa
 	return resp, nil
 }
 
-// WorkflowCreate is part of the vtctlservicepb.VtctldServer interface.
+// WorkflowDelete is part of the vtctlservicepb.VtctldServer interface.
 // It passes on the request to the target primary tablets that are
 // participating in the given workflow.
 func (s *Server) WorkflowDelete(ctx context.Context, req *vtctldatapb.WorkflowDeleteRequest) (*vtctldatapb.WorkflowDeleteResponse, error) {
@@ -1215,7 +1216,7 @@ func (s *Server) WorkflowDelete(ctx context.Context, req *vtctldatapb.WorkflowDe
 	details := make([]*vtctldatapb.WorkflowDeleteResponse_TabletInfo, 0, len(res))
 	for tinfo, tres := range res {
 		result := &vtctldatapb.WorkflowDeleteResponse_TabletInfo{
-			Tablet:  fmt.Sprintf("%s-%d (%s/%s)", tinfo.Alias.Cell, tinfo.Alias.Uid, tinfo.Keyspace, tinfo.Shard),
+			Tablet:  tinfo.Alias,
 			Deleted: tres.RowsAffected > 0, // Can be more than one with shard merges
 		}
 		details = append(details, result)
@@ -1244,21 +1245,21 @@ func (s *Server) WorkflowStatus(ctx context.Context, req *vtctldatapb.WorkflowSt
 		sort.Strings(tables)
 		var progress TableCopyProgress
 		for _, table := range tables {
-			var rowCountPct, tableSizePct int64
+			var rowCountPct, tableSizePct float32
 			resp.TableCopyState[table] = &vtctldatapb.WorkflowStatusResponse_TableCopyState{}
 			progress = *(*copyProgress)[table]
 			if progress.SourceRowCount > 0 {
-				rowCountPct = 100.0 * progress.TargetRowCount / progress.SourceRowCount
+				rowCountPct = float32(100.0 * float64(progress.TargetRowCount) / float64(progress.SourceRowCount))
 			}
 			if progress.SourceTableSize > 0 {
-				tableSizePct = 100.0 * progress.TargetTableSize / progress.SourceTableSize
+				tableSizePct = float32(100.0 * float64(progress.TargetTableSize) / float64(progress.SourceTableSize))
 			}
 			resp.TableCopyState[table].RowsCopied = progress.TargetRowCount
 			resp.TableCopyState[table].RowsTotal = progress.SourceRowCount
-			resp.TableCopyState[table].RowsPercentage = int32(rowCountPct)
+			resp.TableCopyState[table].RowsPercentage = rowCountPct
 			resp.TableCopyState[table].BytesCopied = progress.TargetTableSize
 			resp.TableCopyState[table].BytesTotal = progress.SourceTableSize
-			resp.TableCopyState[table].BytesPercentage = int32(tableSizePct)
+			resp.TableCopyState[table].BytesPercentage = tableSizePct
 		}
 	}
 
@@ -1290,7 +1291,7 @@ func (s *Server) WorkflowStatus(ctx context.Context, req *vtctldatapb.WorkflowSt
 		for i, st := range streams {
 			info := []string{}
 			ts := &vtctldatapb.WorkflowStatusResponse_ShardStreamState{}
-			if st.State == "Error" {
+			if st.State == binlogdatapb.VReplicationWorkflowState_Error {
 				info = append(info, st.Message)
 			} else if st.Position == "" {
 				info = append(info, "VStream has not started")
@@ -1307,10 +1308,10 @@ func (s *Server) WorkflowStatus(ctx context.Context, req *vtctldatapb.WorkflowSt
 				}
 			}
 			ts.Id = int32(st.Id)
-			ts.Tablet = fmt.Sprintf("%s-%010d", st.Tablet.Cell, st.Tablet.Uid)
+			ts.Tablet = st.Tablet
 			ts.SourceShard = fmt.Sprintf("%s/%s", st.BinlogSource.Keyspace, st.BinlogSource.Shard)
 			ts.Position = st.Position
-			ts.Status = st.State
+			ts.Status = binlogdatapb.VReplicationWorkflowState_name[int32(st.State)]
 			ts.Info = strings.Join(info, "; ")
 			resp.ShardStreams[ksShard].Streams[i] = ts
 		}
@@ -1487,7 +1488,7 @@ func (s *Server) WorkflowUpdate(ctx context.Context, req *vtctldatapb.WorkflowUp
 	details := make([]*vtctldatapb.WorkflowUpdateResponse_TabletInfo, 0, len(res))
 	for tinfo, tres := range res {
 		result := &vtctldatapb.WorkflowUpdateResponse_TabletInfo{
-			Tablet:  fmt.Sprintf("%s-%d (%s/%s)", tinfo.Alias.Cell, tinfo.Alias.Uid, tinfo.Keyspace, tinfo.Shard),
+			Tablet:  tinfo.Alias,
 			Changed: tres.RowsAffected > 0, // Can be more than one with shard merges
 		}
 		details = append(details, result)
@@ -2545,9 +2546,9 @@ func (s *Server) canSwitch(ctx context.Context, ts *trafficSwitcher, state *Stat
 				return fmt.Sprintf(cannotSwitchHighLag, vreplLag, maxAllowedReplLagSecs), nil
 			}
 			switch st.State {
-			case "Copying":
+			case binlogdatapb.VReplicationWorkflowState_Copying:
 				return cannotSwitchCopyIncomplete, nil
-			case "Error":
+			case binlogdatapb.VReplicationWorkflowState_Error:
 				return cannotSwitchError, nil
 			}
 		}

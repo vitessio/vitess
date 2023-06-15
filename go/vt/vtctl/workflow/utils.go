@@ -638,7 +638,7 @@ func parseTabletTypesStr(tabletTypesStr string) (hasReplica, hasRdonly, hasPrima
 	return hasReplica, hasRdonly, hasPrimary, nil
 }
 
-func parseTabletTypes(tabletTypes []string) (hasReplica, hasRdonly, hasPrimary bool, err error) {
+func parseTabletTypesString(tabletTypes []string) (hasReplica, hasRdonly, hasPrimary bool, err error) {
 	for _, tabletType := range tabletTypes {
 		tabletType = strings.ToUpper(tabletType)
 		switch {
@@ -647,6 +647,22 @@ func parseTabletTypes(tabletTypes []string) (hasReplica, hasRdonly, hasPrimary b
 		case tabletType == topodatapb.TabletType_name[int32(topodatapb.TabletType_RDONLY)]:
 			hasRdonly = true
 		case tabletType == topodatapb.TabletType_name[int32(topodatapb.TabletType_PRIMARY)]:
+			hasPrimary = true
+		default:
+			return false, false, false, fmt.Errorf("invalid tablet type passed %s", tabletType)
+		}
+	}
+	return hasReplica, hasRdonly, hasPrimary, nil
+}
+
+func parseTabletTypes(tabletTypes []topodatapb.TabletType) (hasReplica, hasRdonly, hasPrimary bool, err error) {
+	for _, tabletType := range tabletTypes {
+		switch {
+		case tabletType == topodatapb.TabletType_REPLICA:
+			hasReplica = true
+		case tabletType == topodatapb.TabletType_RDONLY:
+			hasRdonly = true
+		case tabletType == topodatapb.TabletType_PRIMARY:
 			hasPrimary = true
 		default:
 			return false, false, false, fmt.Errorf("invalid tablet type passed %s", tabletType)

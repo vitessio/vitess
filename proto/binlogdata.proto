@@ -224,6 +224,15 @@ enum VReplicationWorkflowSubType {
   Partial = 1;
 }
 
+// VReplicationWorklfowState defines the valid states that a workflow can be in.
+enum VReplicationWorkflowState {
+  Stopped = 0;
+  Copying = 1;
+  Running = 2;
+  Error = 3;
+  Lagging = 4;
+}
+
 // BinlogSource specifies the source  and filter parameters for
 // Filtered Replication. KeyRange and Tables are legacy. Filter
 // is the new way to specify the filtering rules.

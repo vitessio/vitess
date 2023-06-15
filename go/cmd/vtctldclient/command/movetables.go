@@ -30,11 +30,16 @@ import (
 	"vitess.io/vitess/go/vt/vtctl/workflow"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
 var (
-	tabletTypesDefault       = []string{"RDONLY", "REPLICA", "PRIMARY"}
+	tabletTypesDefault = []topodatapb.TabletType{
+		topodatapb.TabletType_REPLICA,
+		topodatapb.TabletType_PRIMARY,
+	}
 	onDDLDefault             = binlogdatapb.OnDDLAction_name[int32(binlogdatapb.OnDDLAction_IGNORE)]
 	maxReplicationLagDefault = 30 * time.Second
 	timeoutDefault           = 30 * time.Second
@@ -91,13 +96,8 @@ See the --help output for each command for more details.`,
 					moveTablesCreateOptions.Cells[i] = strings.TrimSpace(cell)
 				}
 			}
-			if cmd.Flags().Lookup("tablet-types").Changed { // Validate the provided value(s)
-				for i, tabletType := range moveTablesCreateOptions.TabletTypes {
-					moveTablesCreateOptions.TabletTypes[i] = strings.ToUpper(strings.TrimSpace(tabletType))
-					if _, err := topoproto.ParseTabletType(moveTablesCreateOptions.TabletTypes[i]); err != nil {
-						return err
-					}
-				}
+			if !cmd.Flags().Lookup("tablet-types").Changed {
+				moveTablesCreateOptions.TabletTypes = tabletTypesDefault
 			}
 			if _, ok := binlogdatapb.OnDDLAction_value[strings.ToUpper(moveTablesCreateOptions.OnDDL)]; !ok {
 				return fmt.Errorf("invalid on-ddl value: %s", moveTablesCreateOptions.OnDDL)
@@ -162,13 +162,8 @@ See the --help output for each command for more details.`,
 		Aliases:               []string{"ReverseTraffic"},
 		Args:                  cobra.NoArgs,
 		PreRunE: func(cmd *cobra.Command, args []string) error {
-			if cmd.Flags().Lookup("tablet-types").Changed { // Validate the provided value(s)
-				for i, tabletType := range moveTablesSwitchTrafficOptions.TabletTypes {
-					moveTablesSwitchTrafficOptions.TabletTypes[i] = strings.ToUpper(strings.TrimSpace(tabletType))
-					if _, err := topoproto.ParseTabletType(moveTablesSwitchTrafficOptions.TabletTypes[i]); err != nil {
-						return err
-					}
-				}
+			if !cmd.Flags().Lookup("tablet-types").Changed {
+				moveTablesSwitchTrafficOptions.TabletTypes = tabletTypesDefault
 			}
 			return nil
 		},
@@ -184,13 +179,8 @@ See the --help output for each command for more details.`,
 		Aliases:               []string{"SwitchTraffic"},
 		Args:                  cobra.NoArgs,
 		PreRunE: func(cmd *cobra.Command, args []string) error {
-			if cmd.Flags().Lookup("tablet-types").Changed { // Validate the provided value(s)
-				for i, tabletType := range moveTablesSwitchTrafficOptions.TabletTypes {
-					moveTablesSwitchTrafficOptions.TabletTypes[i] = strings.ToUpper(strings.TrimSpace(tabletType))
-					if _, err := topoproto.ParseTabletType(moveTablesSwitchTrafficOptions.TabletTypes[i]); err != nil {
-						return err
-					}
-				}
+			if !cmd.Flags().Lookup("tablet-types").Changed {
+				moveTablesSwitchTrafficOptions.TabletTypes = tabletTypesDefault
 			}
 			return nil
 		},
@@ -215,23 +205,24 @@ var (
 		DryRun           bool
 	}{}
 	moveTablesCreateOptions = struct {
-		Workflow            string
-		SourceKeyspace      string
-		Cells               []string
-		TabletTypes         []string
-		SourceShards        []string
-		ExternalClusterName string
-		AllTables           bool
-		IncludeTables       []string
-		ExcludeTables       []string
-		SourceTimeZone      string
-		OnDDL               string
-		DeferSecondaryKeys  bool
-		AutoStart           bool
-		StopAfterCopy       bool
+		Workflow                     string
+		SourceKeyspace               string
+		Cells                        []string
+		TabletTypes                  []topodatapb.TabletType
+		TabletTypesInPreferenceOrder bool
+		SourceShards                 []string
+		ExternalClusterName          string
+		AllTables                    bool
+		IncludeTables                []string
+		ExcludeTables                []string
+		SourceTimeZone               string
+		OnDDL                        string
+		DeferSecondaryKeys           bool
+		AutoStart                    bool
+		StopAfterCopy                bool
 	}{}
 	moveTablesSwitchTrafficOptions = struct {
-		TabletTypes              []string
+		TabletTypes              []topodatapb.TabletType
 		MaxReplicationLagAllowed time.Duration
 		EnableReverseReplication bool
 		Timeout                  time.Duration
@@ -248,18 +239,24 @@ func bridgeMoveTablesToWorkflow(cmd *cobra.Command, args []string) {
 func commandMoveTablesCreate(cmd *cobra.Command, args []string) error {
 	cli.FinishedParsing(cmd)
 
+	tsp := tabletmanagerdatapb.TabletSelectionPreference_ANY
+	if moveTablesCreateOptions.TabletTypesInPreferenceOrder {
+		tsp = tabletmanagerdatapb.TabletSelectionPreference_INORDER
+	}
+
 	req := &vtctldatapb.MoveTablesCreateRequest{
-		Workflow:       moveTablesOptions.Workflow,
-		TargetKeyspace: moveTablesOptions.TargetKeyspace,
-		SourceKeyspace: moveTablesCreateOptions.SourceKeyspace,
-		Cells:          moveTablesCreateOptions.Cells,
-		TabletTypes:    moveTablesCreateOptions.TabletTypes,
-		AllTables:      moveTablesCreateOptions.AllTables,
-		IncludeTables:  moveTablesCreateOptions.IncludeTables,
-		ExcludeTables:  moveTablesCreateOptions.ExcludeTables,
-		OnDdl:          moveTablesCreateOptions.OnDDL,
-		AutoStart:      moveTablesCreateOptions.AutoStart,
-		StopAfterCopy:  moveTablesCreateOptions.StopAfterCopy,
+		Workflow:                  moveTablesOptions.Workflow,
+		TargetKeyspace:            moveTablesOptions.TargetKeyspace,
+		SourceKeyspace:            moveTablesCreateOptions.SourceKeyspace,
+		Cells:                     moveTablesCreateOptions.Cells,
+		TabletTypes:               moveTablesCreateOptions.TabletTypes,
+		TabletSelectionPreference: tsp,
+		AllTables:                 moveTablesCreateOptions.AllTables,
+		IncludeTables:             moveTablesCreateOptions.IncludeTables,
+		ExcludeTables:             moveTablesCreateOptions.ExcludeTables,
+		OnDdl:                     moveTablesCreateOptions.OnDDL,
+		AutoStart:                 moveTablesCreateOptions.AutoStart,
+		StopAfterCopy:             moveTablesCreateOptions.StopAfterCopy,
 	}
 
 	resp, err := client.MoveTablesCreate(commandCtx, req)
@@ -293,7 +290,7 @@ func commandMoveTablesCancel(cmd *cobra.Command, args []string) error {
 
 	// Sort the inner TabletInfo slice for deterministic output.
 	sort.Slice(resp.Details, func(i, j int) bool {
-		return resp.Details[i].Tablet < resp.Details[j].Tablet
+		return resp.Details[i].Tablet.String() < resp.Details[j].Tablet.String()
 	})
 
 	data, err := cli.MarshalJSON(resp)
@@ -453,7 +450,8 @@ func init() {
 	MoveTablesCreate.MarkPersistentFlagRequired("source-keyspace")
 	MoveTablesCreate.Flags().StringSliceVarP(&moveTablesCreateOptions.Cells, "cells", "c", nil, "Cells and/or CellAliases to copy table data from")
 	MoveTablesCreate.Flags().StringSliceVar(&moveTablesCreateOptions.SourceShards, "source-shards", nil, "Source shards to copy data from when performing a partial MoveTables (experimental)")
-	MoveTablesCreate.Flags().StringSliceVar(&moveTablesCreateOptions.TabletTypes, "tablet-types", tabletTypesDefault, "Source tablet types to replicate table data from (e.g. PRIMARY,REPLICA,RDONLY)")
+	MoveTablesCreate.Flags().Var((*topoproto.TabletTypeListFlag)(&moveTablesCreateOptions.TabletTypes), "tablet-types", "Source tablet types to replicate table data from (e.g. PRIMARY,REPLICA,RDONLY)")
+	MoveTablesCreate.Flags().BoolVar(&moveTablesCreateOptions.TabletTypesInPreferenceOrder, "tablet-types-in-preference-order", true, "When performing source tablet selection, look for candidates in the type order as they are listed in the tablet-types flag")
 	MoveTablesCreate.Flags().BoolVar(&moveTablesCreateOptions.AllTables, "all-tables", false, "Copy all tables from the source")
 	MoveTablesCreate.Flags().StringSliceVar(&moveTablesCreateOptions.IncludeTables, "tables", nil, "Source tables to copy")
 	MoveTablesCreate.Flags().StringSliceVar(&moveTablesCreateOptions.ExcludeTables, "exclude-tables", nil, "Source tables to exclude from copying")
@@ -470,7 +468,7 @@ func init() {
 
 	MoveTables.AddCommand(MoveTablesStop)
 
-	MoveTablesSwitchTraffic.Flags().StringSliceVar(&moveTablesSwitchTrafficOptions.TabletTypes, "tablet-types", tabletTypesDefault, "Tablet types to switch traffic for")
+	MoveTablesSwitchTraffic.Flags().Var((*topoproto.TabletTypeListFlag)(&moveTablesSwitchTrafficOptions.TabletTypes), "tablet-types", "Tablet types to switch traffic for")
 	MoveTablesSwitchTraffic.Flags().DurationVar(&moveTablesSwitchTrafficOptions.Timeout, "timeout", timeoutDefault, "Specifies the maximum time to wait, in seconds, for VReplication to catch up on primary tablets. The traffic switch will be cancelled on timeout.")
 	MoveTablesSwitchTraffic.Flags().DurationVar(&moveTablesSwitchTrafficOptions.MaxReplicationLagAllowed, "max-replication-lag-allowed", maxReplicationLagDefault, "Allow traffic to be switched only if VReplication lag is below this")
 	MoveTablesSwitchTraffic.Flags().BoolVar(&moveTablesSwitchTrafficOptions.DryRun, "dry-run", false, "Print the actions that would be taken and report any known errors that would have occurred")
@@ -479,7 +477,7 @@ func init() {
 	MoveTablesReverseTraffic.Flags().BoolVar(&moveTablesSwitchTrafficOptions.DryRun, "dry-run", false, "Print the actions that would be taken and report any known errors that would have occurred")
 	MoveTablesReverseTraffic.Flags().DurationVar(&moveTablesSwitchTrafficOptions.MaxReplicationLagAllowed, "max-replication-lag-allowed", maxReplicationLagDefault, "Allow traffic to be switched only if VReplication lag is below this")
 	MoveTablesReverseTraffic.Flags().BoolVar(&moveTablesSwitchTrafficOptions.EnableReverseReplication, "enable-reverse-replication", true, "Setup replication going back to the original source keyspace to support rolling back the traffic cutover")
-	MoveTablesReverseTraffic.Flags().StringSliceVar(&moveTablesSwitchTrafficOptions.TabletTypes, "tablet-types", tabletTypesDefault, "Tablet types to switch traffic for")
+	MoveTablesReverseTraffic.Flags().Var((*topoproto.TabletTypeListFlag)(&moveTablesSwitchTrafficOptions.TabletTypes), "tablet-types", "Tablet types to switch traffic for")
 	MoveTablesReverseTraffic.Flags().DurationVar(&moveTablesSwitchTrafficOptions.Timeout, "timeout", timeoutDefault, "Specifies the maximum time to wait, in seconds, for VReplication to catch up on primary tablets. The traffic switch will be cancelled on timeout.")
 	MoveTables.AddCommand(MoveTablesReverseTraffic)
 }

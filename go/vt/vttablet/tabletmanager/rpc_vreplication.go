@@ -25,6 +25,7 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/textutil"
+	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/proto/vttime"
 	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -35,6 +36,8 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/topo/topoproto"
+	topoprotopb "vitess.io/vitess/go/vt/topo/topoproto"
 )
 
 const (
@@ -65,18 +68,24 @@ func (tm *TabletManager) CreateVRWorkflow(ctx context.Context, req *tabletmanage
 			req.Cells = append(req.Cells, tm.Tablet().Alias.Cell)
 		}
 		wfState := "Stopped"
-		bindVars := map[string]*querypb.BindVariable{
-			"wf":  sqltypes.StringBindVariable(req.Workflow),
-			"sc":  sqltypes.StringBindVariable(string(source)),
-			"cl":  sqltypes.StringBindVariable(strings.Join(req.Cells, ",")),
-			"tt":  sqltypes.StringBindVariable(strings.Join(req.TabletTypes, ",")),
-			"st":  sqltypes.StringBindVariable(wfState),
-			"db":  sqltypes.StringBindVariable(tm.DBConfigs.DBName),
-			"wt":  sqltypes.Int64BindVariable(int64(req.WorkflowType)),
-			"wst": sqltypes.Int64BindVariable(int64(req.WorkflowSubType)),
-			"ds":  sqltypes.BoolBindVariable(req.DeferSecondaryKeys),
+		tabletTypesStr := topoprotopb.MakeStringTypeCSV(req.TabletTypes)
+		if req.TabletSelectionPreference == tabletmanagerdatapb.TabletSelectionPreference_INORDER {
+			tabletTypesStr = discovery.InOrderHint + tabletTypesStr
 		}
-		parsed := sqlparser.BuildParsedQuery(sqlCreateVRWorkflow, sidecardb.GetIdentifier(), ":wf", ":sc", ":cl", ":tt", ":st", ":db", ":wt", ":wst", ":ds")
+		bindVars := map[string]*querypb.BindVariable{
+			"workflow":           sqltypes.StringBindVariable(req.Workflow),
+			"source":             sqltypes.StringBindVariable(string(source)),
+			"cells":              sqltypes.StringBindVariable(strings.Join(req.Cells, ",")),
+			"tabletTypes":        sqltypes.StringBindVariable(tabletTypesStr),
+			"state":              sqltypes.StringBindVariable(wfState),
+			"dbname":             sqltypes.StringBindVariable(tm.DBConfigs.DBName),
+			"workflowType":       sqltypes.Int64BindVariable(int64(req.WorkflowType)),
+			"workflowSubType":    sqltypes.Int64BindVariable(int64(req.WorkflowSubType)),
+			"deferSecondaryKeys": sqltypes.BoolBindVariable(req.DeferSecondaryKeys),
+		}
+		parsed := sqlparser.BuildParsedQuery(sqlCreateVRWorkflow, sidecardb.GetIdentifier(),
+			":workflow", ":source", ":cells", ":tabletTypes", ":state", ":dbname", ":workflowType", ":workflowSubType", ":deferSecondaryKeys",
+		)
 		stmt, err := parsed.GenerateQuery(bindVars, nil)
 		if err != nil {
 			return nil, err
@@ -137,16 +146,28 @@ func (tm *TabletManager) ReadVRWorkflow(ctx context.Context, req *tabletmanagerd
 	if resp.Id, err = rows[0]["id"].ToInt32(); err != nil {
 		return nil, vterrors.Wrap(err, "error parsing id field from vreplication table record")
 	}
-	resp.Cell = rows[0]["cell"].ToString()
-	resp.TabletTypes = rows[0]["tablet_types"].ToString()
+	resp.Cells = rows[0]["cell"].ToString()
+	tabletTypes, inorder, err := discovery.ParseTabletTypesAndOrder(rows[0]["tablet_types"].ToString())
+	if err != nil {
+		return nil, vterrors.Wrap(err, "error parsing the tablet_types field from vreplication table record")
+	}
+	resp.TabletTypes = tabletTypes
+	resp.TabletSelectionPreference = tabletmanagerdatapb.TabletSelectionPreference_ANY
+	if inorder {
+		resp.TabletSelectionPreference = tabletmanagerdatapb.TabletSelectionPreference_INORDER
+	}
 	resp.DbName = rows[0]["db_name"].ToString()
 	resp.Tags = rows[0]["tags"].ToString()
-	if resp.WorkflowType, err = rows[0]["workflow_type"].ToInt32(); err != nil {
+	wft, err := rows[0]["workflow_type"].ToInt32()
+	if err != nil {
 		return nil, vterrors.Wrap(err, "error parsing workflow_type field from vreplication table record")
 	}
-	if resp.WorkflowSubType, err = rows[0]["workflow_sub_type"].ToInt32(); err != nil {
+	resp.WorkflowType = binlogdatapb.VReplicationWorkflowType(wft)
+	wfst, err := rows[0]["workflow_sub_type"].ToInt32()
+	if err != nil {
 		return nil, vterrors.Wrap(err, "error parsing workflow_sub_type field from vreplication table record")
 	}
+	resp.WorkflowSubType = binlogdatapb.VReplicationWorkflowSubType(wfst)
 	resp.DeferSecondaryKeys = rows[0]["defer_secondary_keys"].ToString() == "1"
 
 	// Now the individual streams (there can be more than 1 with shard merges).
@@ -181,7 +202,7 @@ func (tm *TabletManager) ReadVRWorkflow(ctx context.Context, req *tabletmanagerd
 			return nil, vterrors.Wrap(err, "error parsing transaction_timestamp field from vreplication table record")
 		}
 		streams[i].TransactionTimestamp = &vttime.Time{Seconds: txTimestamp}
-		streams[i].State = row["state"].ToString()
+		streams[i].State = binlogdatapb.VReplicationWorkflowState(binlogdatapb.VReplicationWorkflowState_value[row["state"].ToString()])
 		streams[i].Message = row["message"].ToString()
 		if streams[i].RowsCopied, err = row["rows_copied"].ToInt64(); err != nil {
 			return nil, vterrors.Wrap(err, "error parsing rows_copied field from vreplication table record")
@@ -235,12 +256,15 @@ func (tm *TabletManager) UpdateVRWorkflow(ctx context.Context, req *tabletmanage
 	row := res.Named().Row()
 	id := row.AsInt64("id", 0)
 	cells := strings.Split(row.AsString("cell", ""), ",")
-	tabletTypes := strings.Split(row.AsString("tablet_types", ""), ",")
+	tabletTypes, inorder, err := discovery.ParseTabletTypesAndOrder(row.AsString("tablet_types", ""))
+	if err != nil {
+		return nil, err
+	}
 	bls := &binlogdatapb.BinlogSource{}
 	source := row.AsBytes("source", []byte{})
 	state := row.AsString("state", "")
 	message := row.AsString("message", "")
-	if strings.ToUpper(req.State) == workflow.Running && strings.ToUpper(message) == workflow.Frozen {
+	if req.State == binlogdatapb.VReplicationWorkflowState_Running && strings.ToUpper(message) == workflow.Frozen {
 		return &tabletmanagerdatapb.UpdateVRWorkflowResponse{Result: nil},
 			vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "cannot start a workflow when it is frozen")
 	}
@@ -252,6 +276,11 @@ func (tm *TabletManager) UpdateVRWorkflow(ctx context.Context, req *tabletmanage
 	}
 	if !textutil.ValueIsSimulatedNull(req.TabletTypes) {
 		tabletTypes = req.TabletTypes
+	}
+	tabletTypesStr := topoproto.MakeStringTypeCSV(tabletTypes)
+	if inorder && req.TabletSelectionPreference == tabletmanagerdatapb.TabletSelectionPreference_UNKNOWN ||
+		req.TabletSelectionPreference == tabletmanagerdatapb.TabletSelectionPreference_INORDER {
+		tabletTypesStr = discovery.InOrderHint + tabletTypesStr
 	}
 	if err = prototext.Unmarshal(source, bls); err != nil {
 		return nil, err
@@ -266,13 +295,13 @@ func (tm *TabletManager) UpdateVRWorkflow(ctx context.Context, req *tabletmanage
 		return nil, err
 	}
 	if !textutil.ValueIsSimulatedNull(req.State) {
-		state = req.State
+		state = binlogdatapb.VReplicationWorkflowState_name[int32(req.State)]
 	}
 	bindVars = map[string]*querypb.BindVariable{
 		"st": sqltypes.StringBindVariable(state),
 		"sc": sqltypes.StringBindVariable(string(source)),
 		"cl": sqltypes.StringBindVariable(strings.Join(cells, ",")),
-		"tt": sqltypes.StringBindVariable(strings.Join(tabletTypes, ",")),
+		"tt": sqltypes.StringBindVariable(tabletTypesStr),
 		"id": sqltypes.Int64BindVariable(id),
 	}
 	parsed = sqlparser.BuildParsedQuery(sqlUpdateVRWorkflowConfig, sidecardb.GetIdentifier(), ":st", ":sc", ":cl", ":tt", ":id")

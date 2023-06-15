@@ -103,6 +103,7 @@ import (
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/textutil"
+	"vitess.io/vitess/go/vt/discovery"
 	hk "vitess.io/vitess/go/vt/hook"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
@@ -2474,7 +2475,7 @@ func commandExternalizeVindex(ctx context.Context, wr *wrangler.Wrangler, subFla
 
 func commandMaterialize(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {
 	cells := subFlags.String("cells", "", "Source cells to replicate from.")
-	tabletTypes := subFlags.String("tablet_types", "", "Source tablet types to replicate from.")
+	tabletTypesStr := subFlags.String("tablet_types", "", "Source tablet types to replicate from.")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -2486,7 +2487,16 @@ func commandMaterialize(ctx context.Context, wr *wrangler.Wrangler, subFlags *pf
 		return err
 	}
 	ms.Cell = *cells
-	ms.TabletTypes = *tabletTypes
+	tabletTypes, inorder, err := discovery.ParseTabletTypesAndOrder(*tabletTypesStr)
+	if err != nil {
+		return err
+	}
+	tsp := tabletmanagerdatapb.TabletSelectionPreference_ANY
+	if inorder {
+		tsp = tabletmanagerdatapb.TabletSelectionPreference_INORDER
+	}
+	ms.TabletTypes = tabletTypes
+	ms.TabletSelectionPreference = tsp
 	return wr.Materialize(ctx, ms)
 }
 
@@ -3596,7 +3606,7 @@ func commandWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag
 	usage := "usage: Workflow [--dry-run] [--cells] [--tablet-types] <keyspace>[.<workflow>] start/stop/update/delete/show/listall/tags [<tags>]"
 	dryRun := subFlags.Bool("dry-run", false, "Does a dry run of the Workflow action and reports the query and list of tablets on which the operation will be applied")
 	cells := subFlags.StringSlice("cells", []string{}, "New Cell(s) or CellAlias(es) (comma-separated) to replicate from. (Update only)")
-	tabletTypes := subFlags.StringSlice("tablet-types", []string{}, "New source tablet types to replicate from (e.g. PRIMARY, REPLICA, RDONLY). (Update only)")
+	tabletTypesStrs := subFlags.StringSlice("tablet-types", []string{}, "New source tablet types to replicate from (e.g. PRIMARY, REPLICA, RDONLY). (Update only)")
 	onDDL := subFlags.String("on-ddl", "", "New instruction on what to do when DDL is encountered in the VReplication stream. Possible values are IGNORE, STOP, EXEC, and EXEC_IGNORE. (Update only)")
 	if err := subFlags.Parse(args); err != nil {
 		return err
@@ -3649,16 +3659,22 @@ func commandWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag
 			} else {
 				cells = &textutil.SimulatedNullStringSlice
 			}
+			tabletTypes := make([]topodatapb.TabletType, len(*tabletTypesStrs))
+			inorder := false
 			if subFlags.Lookup("tablet-types").Changed { // Validate the provided value(s)
 				changes = true
-				for i, tabletType := range *tabletTypes {
-					(*tabletTypes)[i] = strings.ToUpper(strings.TrimSpace(tabletType))
-					if _, err = topoproto.ParseTabletType((*tabletTypes)[i]); err != nil {
+				if len(*tabletTypesStrs) > 0 && strings.HasPrefix((*tabletTypesStrs)[0], discovery.InOrderHint) {
+					(*tabletTypesStrs)[0] = strings.TrimPrefix((*tabletTypesStrs)[0], discovery.InOrderHint)
+					inorder = true
+				}
+				for i, tabletType := range *tabletTypesStrs {
+					tabletTypes[i], err = topoproto.ParseTabletType(tabletType)
+					if err != nil {
 						return err
 					}
 				}
 			} else {
-				tabletTypes = &textutil.SimulatedNullStringSlice
+				tabletTypes = []topodatapb.TabletType{topodatapb.TabletType(textutil.SimulatedNullInt)}
 			}
 			onddl := int32(textutil.SimulatedNullInt) // To signify no value has been provided
 			if subFlags.Lookup("on-ddl").Changed {    // Validate the provided value
@@ -3672,11 +3688,16 @@ func commandWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag
 			if !changes {
 				return fmt.Errorf(errWorkflowUpdateWithoutChanges)
 			}
+			tsp := tabletmanagerdatapb.TabletSelectionPreference_UNKNOWN
+			if inorder {
+				tsp = tabletmanagerdatapb.TabletSelectionPreference_INORDER
+			}
 			rpcReq = &tabletmanagerdatapb.UpdateVRWorkflowRequest{
-				Workflow:    workflow,
-				Cells:       *cells,
-				TabletTypes: *tabletTypes,
-				OnDdl:       binlogdatapb.OnDDLAction(onddl),
+				Workflow:                  workflow,
+				Cells:                     *cells,
+				TabletTypes:               tabletTypes,
+				TabletSelectionPreference: tsp,
+				OnDdl:                     binlogdatapb.OnDDLAction(onddl),
 			}
 		}
 		results, err = wr.WorkflowAction(ctx, workflow, keyspace, action, *dryRun, rpcReq) // Only update currently uses the new RPC path

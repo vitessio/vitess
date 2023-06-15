@@ -1768,8 +1768,11 @@ func TestMaterializerOneToOne(t *testing.T) {
 				CreateDdl:        "t4ddl",
 			},
 		},
-		Cell:        "zone1",
-		TabletTypes: "primary,rdonly",
+		Cell: "zone1",
+		TabletTypes: []topodatapb.TabletType{
+			topodatapb.TabletType_PRIMARY,
+			topodatapb.TabletType_RDONLY,
+		},
 	}
 	env := newTestMaterializerEnv(t, ms, []string{"0"}, []string{"0"})
 	defer env.close()

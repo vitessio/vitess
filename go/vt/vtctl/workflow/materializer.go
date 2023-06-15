@@ -30,9 +30,6 @@ import (
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
-	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
-	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
-	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtctl/schematools"
@@ -40,6 +37,11 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
+
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
+	topoprotopb "vitess.io/vitess/go/vt/topo/topoproto"
 )
 
 const (
@@ -91,15 +93,16 @@ func (mz *materializer) prepareMaterializerStreams(req *vtctldatapb.MoveTablesCr
 			return err
 		}
 		_, err = mz.tmc.CreateVRWorkflow(mz.ctx, targetPrimary.Tablet, &tabletmanagerdatapb.CreateVRWorkflowRequest{
-			Workflow:           req.Workflow,
-			BinlogSource:       blses,
-			Cells:              req.Cells,
-			TabletTypes:        req.TabletTypes,
-			WorkflowType:       binlogdatapb.VReplicationWorkflowType_MoveTables,
-			WorkflowSubType:    workflowSubType,
-			DeferSecondaryKeys: req.DeferSecondaryKeys,
-			AutoStart:          req.AutoStart,
-			StopAfterCopy:      req.StopAfterCopy,
+			Workflow:                  req.Workflow,
+			BinlogSource:              blses,
+			Cells:                     req.Cells,
+			TabletTypes:               req.TabletTypes,
+			TabletSelectionPreference: req.TabletSelectionPreference,
+			WorkflowType:              binlogdatapb.VReplicationWorkflowType_MoveTables,
+			WorkflowSubType:           workflowSubType,
+			DeferSecondaryKeys:        req.DeferSecondaryKeys,
+			AutoStart:                 req.AutoStart,
+			StopAfterCopy:             req.StopAfterCopy,
 		})
 		return err
 	})
@@ -235,7 +238,7 @@ func (mz *materializer) generateInserts(ctx context.Context, targetShard *topo.S
 		case vtctldatapb.MaterializationIntent_CREATELOOKUPINDEX:
 			workflowType = binlogdatapb.VReplicationWorkflowType_CreateLookupIndex
 		}
-		ig.AddRow(mz.ms.Workflow, bls, "", mz.ms.Cell, mz.ms.TabletTypes,
+		ig.AddRow(mz.ms.Workflow, bls, "", mz.ms.Cell, topoprotopb.MakeStringTypeCSV(mz.ms.TabletTypes),
 			workflowType,
 			workflowSubType, mz.ms.DeferSecondaryKeys)
 	}

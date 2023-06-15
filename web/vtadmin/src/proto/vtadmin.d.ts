@@ -16352,6 +16352,13 @@ export namespace topodata {
 /** Namespace tabletmanagerdata. */
 export namespace tabletmanagerdata {
 
+    /** TabletSelectionPreference enum. */
+    enum TabletSelectionPreference {
+        ANY = 0,
+        INORDER = 1,
+        UNKNOWN = 3
+    }
+
     /** Properties of a TableDefinition. */
     interface ITableDefinition {
 
@@ -25791,7 +25798,10 @@ export namespace tabletmanagerdata {
         cells?: (string[]|null);
 
         /** CreateVRWorkflowRequest tablet_types */
-        tablet_types?: (string[]|null);
+        tablet_types?: (topodata.TabletType[]|null);
+
+        /** CreateVRWorkflowRequest tablet_selection_preference */
+        tablet_selection_preference?: (tabletmanagerdata.TabletSelectionPreference|null);
 
         /** CreateVRWorkflowRequest workflow_type */
         workflow_type?: (binlogdata.VReplicationWorkflowType|null);
@@ -25828,7 +25838,10 @@ export namespace tabletmanagerdata {
         public cells: string[];
 
         /** CreateVRWorkflowRequest tablet_types. */
-        public tablet_types: string[];
+        public tablet_types: topodata.TabletType[];
+
+        /** CreateVRWorkflowRequest tablet_selection_preference. */
+        public tablet_selection_preference: tabletmanagerdata.TabletSelectionPreference;
 
         /** CreateVRWorkflowRequest workflow_type. */
         public workflow_type: binlogdata.VReplicationWorkflowType;
@@ -26320,11 +26333,11 @@ export namespace tabletmanagerdata {
         /** ReadVRWorkflowResponse workflow */
         workflow?: (string|null);
 
-        /** ReadVRWorkflowResponse cell */
-        cell?: (string|null);
+        /** ReadVRWorkflowResponse cells */
+        cells?: (string|null);
 
         /** ReadVRWorkflowResponse tablet_types */
-        tablet_types?: (string|null);
+        tablet_types?: (topodata.TabletType[]|null);
 
         /** ReadVRWorkflowResponse db_name */
         db_name?: (string|null);
@@ -26333,16 +26346,19 @@ export namespace tabletmanagerdata {
         tags?: (string|null);
 
         /** ReadVRWorkflowResponse workflow_type */
-        workflow_type?: (number|null);
+        workflow_type?: (binlogdata.VReplicationWorkflowType|null);
 
         /** ReadVRWorkflowResponse workflow_sub_type */
-        workflow_sub_type?: (number|null);
+        workflow_sub_type?: (binlogdata.VReplicationWorkflowSubType|null);
 
         /** ReadVRWorkflowResponse defer_secondary_keys */
         defer_secondary_keys?: (boolean|null);
 
         /** ReadVRWorkflowResponse streams */
         streams?: (tabletmanagerdata.ReadVRWorkflowResponse.IStream[]|null);
+
+        /** ReadVRWorkflowResponse tablet_selection_preference */
+        tablet_selection_preference?: (tabletmanagerdata.TabletSelectionPreference|null);
     }
 
     /** Represents a ReadVRWorkflowResponse. */
@@ -26360,11 +26376,11 @@ export namespace tabletmanagerdata {
         /** ReadVRWorkflowResponse workflow. */
         public workflow: string;
 
-        /** ReadVRWorkflowResponse cell. */
-        public cell: string;
+        /** ReadVRWorkflowResponse cells. */
+        public cells: string;
 
         /** ReadVRWorkflowResponse tablet_types. */
-        public tablet_types: string;
+        public tablet_types: topodata.TabletType[];
 
         /** ReadVRWorkflowResponse db_name. */
         public db_name: string;
@@ -26373,16 +26389,19 @@ export namespace tabletmanagerdata {
         public tags: string;
 
         /** ReadVRWorkflowResponse workflow_type. */
-        public workflow_type: number;
+        public workflow_type: binlogdata.VReplicationWorkflowType;
 
         /** ReadVRWorkflowResponse workflow_sub_type. */
-        public workflow_sub_type: number;
+        public workflow_sub_type: binlogdata.VReplicationWorkflowSubType;
 
         /** ReadVRWorkflowResponse defer_secondary_keys. */
         public defer_secondary_keys: boolean;
 
         /** ReadVRWorkflowResponse streams. */
         public streams: tabletmanagerdata.ReadVRWorkflowResponse.IStream[];
+
+        /** ReadVRWorkflowResponse tablet_selection_preference. */
+        public tablet_selection_preference: tabletmanagerdata.TabletSelectionPreference;
 
         /**
          * Creates a new ReadVRWorkflowResponse instance using the specified properties.
@@ -26489,7 +26508,7 @@ export namespace tabletmanagerdata {
             transaction_timestamp?: (vttime.ITime|null);
 
             /** Stream state */
-            state?: (string|null);
+            state?: (binlogdata.VReplicationWorkflowState|null);
 
             /** Stream message */
             message?: (string|null);
@@ -26538,7 +26557,7 @@ export namespace tabletmanagerdata {
             public transaction_timestamp?: (vttime.ITime|null);
 
             /** Stream state. */
-            public state: string;
+            public state: binlogdata.VReplicationWorkflowState;
 
             /** Stream message. */
             public message: string;
@@ -27346,13 +27365,16 @@ export namespace tabletmanagerdata {
         cells?: (string[]|null);
 
         /** UpdateVRWorkflowRequest tablet_types */
-        tablet_types?: (string[]|null);
+        tablet_types?: (topodata.TabletType[]|null);
+
+        /** UpdateVRWorkflowRequest tablet_selection_preference */
+        tablet_selection_preference?: (tabletmanagerdata.TabletSelectionPreference|null);
 
         /** UpdateVRWorkflowRequest on_ddl */
         on_ddl?: (binlogdata.OnDDLAction|null);
 
         /** UpdateVRWorkflowRequest state */
-        state?: (string|null);
+        state?: (binlogdata.VReplicationWorkflowState|null);
     }
 
     /** Represents an UpdateVRWorkflowRequest. */
@@ -27371,13 +27393,16 @@ export namespace tabletmanagerdata {
         public cells: string[];
 
         /** UpdateVRWorkflowRequest tablet_types. */
-        public tablet_types: string[];
+        public tablet_types: topodata.TabletType[];
+
+        /** UpdateVRWorkflowRequest tablet_selection_preference. */
+        public tablet_selection_preference: tabletmanagerdata.TabletSelectionPreference;
 
         /** UpdateVRWorkflowRequest on_ddl. */
         public on_ddl: binlogdata.OnDDLAction;
 
         /** UpdateVRWorkflowRequest state. */
-        public state: string;
+        public state: binlogdata.VReplicationWorkflowState;
 
         /**
          * Creates a new UpdateVRWorkflowRequest instance using the specified properties.
@@ -28699,6 +28724,15 @@ export namespace binlogdata {
     enum VReplicationWorkflowSubType {
         None = 0,
         Partial = 1
+    }
+
+    /** VReplicationWorkflowState enum. */
+    enum VReplicationWorkflowState {
+        Stopped = 0,
+        Copying = 1,
+        Running = 2,
+        Error = 3,
+        Lagging = 4
     }
 
     /** Properties of a BinlogSource. */
@@ -41040,7 +41074,7 @@ export namespace vtctldata {
         cell?: (string|null);
 
         /** MaterializeSettings tablet_types */
-        tablet_types?: (string|null);
+        tablet_types?: (topodata.TabletType[]|null);
 
         /** MaterializeSettings external_cluster */
         external_cluster?: (string|null);
@@ -41062,6 +41096,9 @@ export namespace vtctldata {
 
         /** MaterializeSettings defer_secondary_keys */
         defer_secondary_keys?: (boolean|null);
+
+        /** MaterializeSettings tablet_selection_preference */
+        tablet_selection_preference?: (tabletmanagerdata.TabletSelectionPreference|null);
     }
 
     /** Represents a MaterializeSettings. */
@@ -41092,7 +41129,7 @@ export namespace vtctldata {
         public cell: string;
 
         /** MaterializeSettings tablet_types. */
-        public tablet_types: string;
+        public tablet_types: topodata.TabletType[];
 
         /** MaterializeSettings external_cluster. */
         public external_cluster: string;
@@ -41114,6 +41151,9 @@ export namespace vtctldata {
 
         /** MaterializeSettings defer_secondary_keys. */
         public defer_secondary_keys: boolean;
+
+        /** MaterializeSettings tablet_selection_preference. */
+        public tablet_selection_preference: tabletmanagerdata.TabletSelectionPreference;
 
         /**
          * Creates a new MaterializeSettings instance using the specified properties.
@@ -41424,10 +41464,10 @@ export namespace vtctldata {
         shard_streams?: ({ [k: string]: vtctldata.Workflow.IShardStream }|null);
 
         /** Workflow workflow_type */
-        workflow_type?: (string|null);
+        workflow_type?: (binlogdata.VReplicationWorkflowType|null);
 
         /** Workflow workflow_sub_type */
-        workflow_sub_type?: (string|null);
+        workflow_sub_type?: (binlogdata.VReplicationWorkflowSubType|null);
     }
 
     /** Represents a Workflow. */
@@ -41455,10 +41495,10 @@ export namespace vtctldata {
         public shard_streams: { [k: string]: vtctldata.Workflow.IShardStream };
 
         /** Workflow workflow_type. */
-        public workflow_type: string;
+        public workflow_type: binlogdata.VReplicationWorkflowType;
 
         /** Workflow workflow_sub_type. */
-        public workflow_sub_type: string;
+        public workflow_sub_type: binlogdata.VReplicationWorkflowSubType;
 
         /**
          * Creates a new Workflow instance using the specified properties.
@@ -41774,7 +41814,7 @@ export namespace vtctldata {
             stop_position?: (string|null);
 
             /** Stream state */
-            state?: (string|null);
+            state?: (binlogdata.VReplicationWorkflowState|null);
 
             /** Stream db_name */
             db_name?: (string|null);
@@ -41829,7 +41869,7 @@ export namespace vtctldata {
             public stop_position: string;
 
             /** Stream state. */
-            public state: string;
+            public state: binlogdata.VReplicationWorkflowState;
 
             /** Stream db_name. */
             public db_name: string;
@@ -42051,7 +42091,7 @@ export namespace vtctldata {
                 type?: (string|null);
 
                 /** Log state */
-                state?: (string|null);
+                state?: (binlogdata.VReplicationWorkflowState|null);
 
                 /** Log created_at */
                 created_at?: (vttime.ITime|null);
@@ -42085,7 +42125,7 @@ export namespace vtctldata {
                 public type: string;
 
                 /** Log state. */
-                public state: string;
+                public state: binlogdata.VReplicationWorkflowState;
 
                 /** Log created_at. */
                 public created_at?: (vttime.ITime|null);
@@ -51735,7 +51775,10 @@ export namespace vtctldata {
         cells?: (string[]|null);
 
         /** MoveTablesCreateRequest tablet_types */
-        tablet_types?: (string[]|null);
+        tablet_types?: (topodata.TabletType[]|null);
+
+        /** MoveTablesCreateRequest tablet_selection_preference */
+        tablet_selection_preference?: (tabletmanagerdata.TabletSelectionPreference|null);
 
         /** MoveTablesCreateRequest source_shards */
         source_shards?: (string[]|null);
@@ -51793,7 +51836,10 @@ export namespace vtctldata {
         public cells: string[];
 
         /** MoveTablesCreateRequest tablet_types. */
-        public tablet_types: string[];
+        public tablet_types: topodata.TabletType[];
+
+        /** MoveTablesCreateRequest tablet_selection_preference. */
+        public tablet_selection_preference: tabletmanagerdata.TabletSelectionPreference;
 
         /** MoveTablesCreateRequest source_shards. */
         public source_shards: string[];
@@ -52142,7 +52188,7 @@ export namespace vtctldata {
         interface ITabletInfo {
 
             /** TabletInfo tablet */
-            tablet?: (string|null);
+            tablet?: (topodata.ITabletAlias|null);
 
             /** TabletInfo created */
             created?: (boolean|null);
@@ -52158,7 +52204,7 @@ export namespace vtctldata {
             constructor(properties?: vtctldata.MoveTablesCreateResponse.ITabletInfo);
 
             /** TabletInfo tablet. */
-            public tablet: string;
+            public tablet?: (topodata.ITabletAlias|null);
 
             /** TabletInfo created. */
             public created: boolean;
@@ -60785,7 +60831,7 @@ export namespace vtctldata {
         interface ITabletInfo {
 
             /** TabletInfo tablet */
-            tablet?: (string|null);
+            tablet?: (topodata.ITabletAlias|null);
 
             /** TabletInfo deleted */
             deleted?: (boolean|null);
@@ -60801,7 +60847,7 @@ export namespace vtctldata {
             constructor(properties?: vtctldata.WorkflowDeleteResponse.ITabletInfo);
 
             /** TabletInfo tablet. */
-            public tablet: string;
+            public tablet?: (topodata.ITabletAlias|null);
 
             /** TabletInfo deleted. */
             public deleted: boolean;
@@ -61227,7 +61273,7 @@ export namespace vtctldata {
             id?: (number|null);
 
             /** ShardStreamState tablet */
-            tablet?: (string|null);
+            tablet?: (topodata.ITabletAlias|null);
 
             /** ShardStreamState source_shard */
             source_shard?: (string|null);
@@ -61255,7 +61301,7 @@ export namespace vtctldata {
             public id: number;
 
             /** ShardStreamState tablet. */
-            public tablet: string;
+            public tablet?: (topodata.ITabletAlias|null);
 
             /** ShardStreamState source_shard. */
             public source_shard: string;
@@ -61455,7 +61501,7 @@ export namespace vtctldata {
         workflow?: (string|null);
 
         /** WorkflowSwitchTrafficRequest tablet_types */
-        tablet_types?: (string[]|null);
+        tablet_types?: (topodata.TabletType[]|null);
 
         /** WorkflowSwitchTrafficRequest max_replication_lag_allowed */
         max_replication_lag_allowed?: (vttime.IDuration|null);
@@ -61489,7 +61535,7 @@ export namespace vtctldata {
         public workflow: string;
 
         /** WorkflowSwitchTrafficRequest tablet_types. */
-        public tablet_types: string[];
+        public tablet_types: topodata.TabletType[];
 
         /** WorkflowSwitchTrafficRequest max_replication_lag_allowed. */
         public max_replication_lag_allowed?: (vttime.IDuration|null);
@@ -61893,7 +61939,7 @@ export namespace vtctldata {
         interface ITabletInfo {
 
             /** TabletInfo tablet */
-            tablet?: (string|null);
+            tablet?: (topodata.ITabletAlias|null);
 
             /** TabletInfo changed */
             changed?: (boolean|null);
@@ -61909,7 +61955,7 @@ export namespace vtctldata {
             constructor(properties?: vtctldata.WorkflowUpdateResponse.ITabletInfo);
 
             /** TabletInfo tablet. */
-            public tablet: string;
+            public tablet?: (topodata.ITabletAlias|null);
 
             /** TabletInfo changed. */
             public changed: boolean;

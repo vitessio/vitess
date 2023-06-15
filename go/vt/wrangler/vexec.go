@@ -28,6 +28,7 @@ import (
 
 	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	workflow2 "vitess.io/vitess/go/vt/vtctl/workflow"
 
 	"google.golang.org/protobuf/encoding/prototext"
@@ -37,14 +38,15 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/concurrency"
+	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/vterrors"
+
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/topo"
 	vtctldvexec "vitess.io/vitess/go/vt/vtctl/workflow/vexec" // renamed to avoid a collision with the vexec struct in this package
-	"vitess.io/vitess/go/vt/vterrors"
 )
 
 const (
@@ -406,7 +408,7 @@ func (wr *Wrangler) execWorkflowAction(ctx context.Context, workflow, keyspace, 
 			}
 			if !textutil.ValueIsSimulatedNull(rpcReq.TabletTypes) {
 				changes = true
-				dryRunChanges.WriteString(fmt.Sprintf("  tablet_types=%q\n", strings.Join(rpcReq.TabletTypes, ",")))
+				dryRunChanges.WriteString(fmt.Sprintf("  tablet_types=%q\n", topoproto.MakeStringTypeCSV(rpcReq.TabletTypes)))
 			}
 			if !textutil.ValueIsSimulatedNull(rpcReq.OnDdl) {
 				changes = true

@@ -35,12 +35,14 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/concurrency"
+	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vtctl/schematools"
 	"vitess.io/vitess/go/vt/vtctl/workflow"
@@ -128,7 +130,7 @@ func shouldInclude(table string, excludes []string) bool {
 
 // MoveTables initiates moving table(s) over to another keyspace
 func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, targetKeyspace, tableSpecs,
-	cell, tabletTypes string, allTables bool, excludeTables string, autoStart, stopAfterCopy bool,
+	cell, tabletTypesStr string, allTables bool, excludeTables string, autoStart, stopAfterCopy bool,
 	externalCluster string, dropForeignKeys, deferSecondaryKeys bool, sourceTimeZone, onDDL string, sourceShards []string) error {
 	//FIXME validate tableSpecs, allTables, excludeTables
 	var tables []string
@@ -245,18 +247,27 @@ func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, ta
 	if err := wr.ts.RebuildSrvVSchema(ctx, nil); err != nil {
 		return err
 	}
+	tabletTypes, inorder, err := discovery.ParseTabletTypesAndOrder(tabletTypesStr)
+	if err != nil {
+		return err
+	}
+	tsp := tabletmanagerdatapb.TabletSelectionPreference_ANY
+	if inorder {
+		tsp = tabletmanagerdatapb.TabletSelectionPreference_INORDER
+	}
 	ms := &vtctldatapb.MaterializeSettings{
-		Workflow:              workflow,
-		MaterializationIntent: vtctldatapb.MaterializationIntent_MOVETABLES,
-		SourceKeyspace:        sourceKeyspace,
-		TargetKeyspace:        targetKeyspace,
-		Cell:                  cell,
-		TabletTypes:           tabletTypes,
-		StopAfterCopy:         stopAfterCopy,
-		ExternalCluster:       externalCluster,
-		SourceShards:          sourceShards,
-		OnDdl:                 onDDL,
-		DeferSecondaryKeys:    deferSecondaryKeys,
+		Workflow:                  workflow,
+		MaterializationIntent:     vtctldatapb.MaterializationIntent_MOVETABLES,
+		SourceKeyspace:            sourceKeyspace,
+		TargetKeyspace:            targetKeyspace,
+		Cell:                      cell,
+		TabletTypes:               tabletTypes,
+		TabletSelectionPreference: tsp,
+		StopAfterCopy:             stopAfterCopy,
+		ExternalCluster:           externalCluster,
+		SourceShards:              sourceShards,
+		OnDdl:                     onDDL,
+		DeferSecondaryKeys:        deferSecondaryKeys,
 	}
 	if sourceTimeZone != "" {
 		ms.SourceTimeZone = sourceTimeZone
@@ -314,7 +325,7 @@ func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, ta
 	if autoStart {
 		return mz.startStreams(ctx)
 	}
-	wr.Logger().Infof("Streams will not be started since -auto_start is set to false")
+	wr.Logger().Infof("Streams will not be started since --auto_start is set to false")
 
 	return nil
 }
@@ -424,7 +435,7 @@ func (wr *Wrangler) checkIfPreviousJournalExists(ctx context.Context, mz *materi
 }
 
 // CreateLookupVindex creates a lookup vindex and sets up the backfill.
-func (wr *Wrangler) CreateLookupVindex(ctx context.Context, keyspace string, specs *vschemapb.Keyspace, cell, tabletTypes string, continueAfterCopyWithOwner bool) error {
+func (wr *Wrangler) CreateLookupVindex(ctx context.Context, keyspace string, specs *vschemapb.Keyspace, cell, tabletTypesStr string, continueAfterCopyWithOwner bool) error {
 	ms, sourceVSchema, targetVSchema, err := wr.prepareCreateLookup(ctx, keyspace, specs, continueAfterCopyWithOwner)
 	if err != nil {
 		return err
@@ -433,7 +444,17 @@ func (wr *Wrangler) CreateLookupVindex(ctx context.Context, keyspace string, spe
 		return err
 	}
 	ms.Cell = cell
+
+	tabletTypes, inorder, err := discovery.ParseTabletTypesAndOrder(tabletTypesStr)
+	if err != nil {
+		return err
+	}
+	tsp := tabletmanagerdatapb.TabletSelectionPreference_ANY
+	if inorder {
+		tsp = tabletmanagerdatapb.TabletSelectionPreference_INORDER
+	}
 	ms.TabletTypes = tabletTypes
+	ms.TabletSelectionPreference = tsp
 	if err := wr.Materialize(ctx, ms); err != nil {
 		return err
 	}
@@ -1326,7 +1347,12 @@ func (mz *materializer) generateInserts(ctx context.Context, targetShard *topo.S
 			workflowType = binlogdatapb.VReplicationWorkflowType_CreateLookupIndex
 		}
 
-		ig.AddRow(mz.ms.Workflow, bls, "", mz.ms.Cell, mz.ms.TabletTypes,
+		tabletTypeStr := topoproto.MakeStringTypeCSV(mz.ms.TabletTypes)
+		if mz.ms.TabletSelectionPreference == tabletmanagerdatapb.TabletSelectionPreference_INORDER {
+			tabletTypeStr = discovery.InOrderHint + tabletTypeStr
+		}
+
+		ig.AddRow(mz.ms.Workflow, bls, "", mz.ms.Cell, tabletTypeStr,
 			workflowType,
 			workflowSubType,
 			mz.ms.DeferSecondaryKeys,
