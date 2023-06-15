@@ -317,7 +317,7 @@ func getTableName(sqlFile string) string {
 		log.Fatalf("reading sqlFile file %s: %s", sqlFile, err)
 	}
 
-	r, _ := regexp.Compile("CREATE TABLE (IF NOT EXISTS)? ?([a-z_-]*) \\(")
+	r, _ := regexp.Compile("(?i)CREATE[[:space:]]*TABLE[[:space:]]*(IF NOT EXISTS)?[[:space:]]*([a-z_-]*)[[:space:]]*\\(")
 	rs := r.FindStringSubmatch(string(sqlFileData))
 	// replace all ` from table name if exists
 	return strings.ReplaceAll(rs[len(rs)-1], "`", "")
