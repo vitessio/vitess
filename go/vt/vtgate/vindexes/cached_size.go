@@ -416,6 +416,42 @@ func (cached *NumericStaticMap) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
+//go:nocheckptr
+func (cached *Placement) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(80)
+	}
+	// field name string
+	size += hack.RuntimeAllocSize(int64(len(cached.name)))
+	// field placementMap vitess.io/vitess/go/vt/vtgate/vindexes.PlacementMap
+	if cached.placementMap != nil {
+		size += int64(48)
+		hmap := reflect.ValueOf(cached.placementMap)
+		numBuckets := int(math.Pow(2, float64((*(*uint8)(unsafe.Pointer(hmap.Pointer() + uintptr(9)))))))
+		numOldBuckets := (*(*uint16)(unsafe.Pointer(hmap.Pointer() + uintptr(10))))
+		size += hack.RuntimeAllocSize(int64(numOldBuckets * 208))
+		if len(cached.placementMap) > 0 || numBuckets > 1 {
+			size += hack.RuntimeAllocSize(int64(numBuckets * 208))
+		}
+		for k := range cached.placementMap {
+			size += hack.RuntimeAllocSize(int64(len(k)))
+		}
+	}
+	// field subVindex vitess.io/vitess/go/vt/vtgate/vindexes.Vindex
+	if cc, ok := cached.subVindex.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field subVindexType string
+	size += hack.RuntimeAllocSize(int64(len(cached.subVindexType)))
+	// field subVindexName string
+	size += hack.RuntimeAllocSize(int64(len(cached.subVindexName)))
+	return size
+}
 func (cached *RegionExperimental) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
