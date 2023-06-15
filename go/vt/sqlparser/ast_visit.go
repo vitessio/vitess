@@ -490,8 +490,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfTableSpec(in, f)
 	case *TablespaceOperation:
 		return VisitRefOfTablespaceOperation(in, f)
-	case *TimestampFuncExpr:
-		return VisitRefOfTimestampFuncExpr(in, f)
+	case *TimestampDiffExpr:
+		return VisitRefOfTimestampDiffExpr(in, f)
 	case *TrimFuncExpr:
 		return VisitRefOfTrimFuncExpr(in, f)
 	case *TruncateTable:
@@ -3906,7 +3906,7 @@ func VisitRefOfTablespaceOperation(in *TablespaceOperation, f Visit) error {
 	}
 	return nil
 }
-func VisitRefOfTimestampFuncExpr(in *TimestampFuncExpr, f Visit) error {
+func VisitRefOfTimestampDiffExpr(in *TimestampDiffExpr, f Visit) error {
 	if in == nil {
 		return nil
 	}
@@ -4618,8 +4618,8 @@ func VisitCallable(in Callable, f Visit) error {
 		return VisitRefOfSubstrExpr(in, f)
 	case *Sum:
 		return VisitRefOfSum(in, f)
-	case *TimestampFuncExpr:
-		return VisitRefOfTimestampFuncExpr(in, f)
+	case *TimestampDiffExpr:
+		return VisitRefOfTimestampDiffExpr(in, f)
 	case *TrimFuncExpr:
 		return VisitRefOfTrimFuncExpr(in, f)
 	case *UpdateXMLExpr:
@@ -4930,8 +4930,8 @@ func VisitExpr(in Expr, f Visit) error {
 		return VisitRefOfSubstrExpr(in, f)
 	case *Sum:
 		return VisitRefOfSum(in, f)
-	case *TimestampFuncExpr:
-		return VisitRefOfTimestampFuncExpr(in, f)
+	case *TimestampDiffExpr:
+		return VisitRefOfTimestampDiffExpr(in, f)
 	case *TrimFuncExpr:
 		return VisitRefOfTrimFuncExpr(in, f)
 	case *UnaryExpr:

@@ -338,6 +338,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %token <str> CURTIME CURRENT_TIME LOCALTIME LOCALTIMESTAMP CURRENT_USER
 %token <str> UTC_DATE UTC_TIME UTC_TIMESTAMP SYSDATE
 %token <str> DAY DAY_HOUR DAY_MICROSECOND DAY_MINUTE DAY_SECOND HOUR HOUR_MICROSECOND HOUR_MINUTE HOUR_SECOND MICROSECOND MINUTE MINUTE_MICROSECOND MINUTE_SECOND MONTH QUARTER SECOND SECOND_MICROSECOND YEAR_MONTH WEEK
+%token <str> SQL_TSI_DAY SQL_TSI_WEEK SQL_TSI_HOUR SQL_TSI_MINUTE SQL_TSI_MONTH SQL_TSI_QUARTER SQL_TSI_SECOND SQL_TSI_MICROSECOND SQL_TSI_YEAR
 %token <str> REPLACE
 %token <str> CONVERT CAST
 %token <str> SUBSTR SUBSTRING
@@ -452,7 +453,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %type <subPartitionDefinition> subpartition_definition
 %type <subPartitionDefinitions> subpartition_definition_list subpartition_definition_list_with_brackets
 %type <subPartitionDefinitionOptions> subpartition_definition_attribute_list_opt
-%type <intervalType> interval
+%type <intervalType> interval timestampadd_interval
 %type <str> cache_opt separator_opt flush_option for_channel_opt maxvalue
 %type <matchExprOption> match_option
 %type <boolean> distinct_opt union_op replace_opt local_opt
@@ -5982,17 +5983,17 @@ UTC_DATE func_paren_opt
   {
     $$ = &GroupConcatExpr{Distinct: $3, Exprs: $4, OrderBy: $5, Separator: $6, Limit: $7}
   }
-| TIMESTAMPADD openb sql_id ',' expression ',' expression closeb
+| TIMESTAMPADD openb timestampadd_interval ',' expression ',' expression closeb
   {
-    $$ = &TimestampFuncExpr{Name:string("timestampadd"), Unit:$3.String(), Expr1:$5, Expr2:$7}
+    $$ = &IntervalDateExpr{Syntax: IntervalDateExprTimestampadd, Date: $7, Interval: $5, Unit: $3}
   }
-| TIMESTAMPDIFF openb sql_id ',' expression ',' expression closeb
+| TIMESTAMPDIFF openb timestampadd_interval ',' expression ',' expression closeb
   {
-    $$ = &TimestampFuncExpr{Name:string("timestampdiff"), Unit:$3.String(), Expr1:$5, Expr2:$7}
+    $$ = &TimestampDiffExpr{Unit:$3, Expr1:$5, Expr2:$7}
   }
 | EXTRACT openb interval FROM expression closeb
   {
-	$$ = &ExtractFuncExpr{IntervalType: $3, Expr: $5}
+    $$ = &ExtractFuncExpr{IntervalType: $3, Expr: $5}
   }
 | WEIGHT_STRING openb expression convert_type_weight_string closeb
   {
@@ -6874,6 +6875,80 @@ interval:
 | YEAR
   {
 	$$=IntervalYear
+  }
+
+timestampadd_interval:
+  DAY
+  {
+    $$=IntervalDay
+  }
+| WEEK
+  {
+    $$=IntervalWeek
+  }
+| HOUR
+  {
+    $$=IntervalHour
+  }
+| MINUTE
+  {
+    $$=IntervalMinute
+  }
+| MONTH
+  {
+    $$=IntervalMonth
+  }
+| QUARTER
+  {
+    $$=IntervalQuarter
+  }
+| SECOND
+  {
+    $$=IntervalSecond
+  }
+| MICROSECOND
+  {
+    $$=IntervalMicrosecond
+  }
+| YEAR
+  {
+    $$=IntervalYear
+  }
+| SQL_TSI_DAY
+  {
+    $$=IntervalDay
+  }
+| SQL_TSI_WEEK
+  {
+    $$=IntervalWeek
+  }
+| SQL_TSI_HOUR
+  {
+    $$=IntervalHour
+  }
+| SQL_TSI_MINUTE
+  {
+    $$=IntervalMinute
+  }
+| SQL_TSI_MONTH
+  {
+    $$=IntervalMonth
+  }
+| SQL_TSI_QUARTER
+  {
+    $$=IntervalQuarter
+  }
+| SQL_TSI_SECOND
+  {
+    $$=IntervalSecond
+  }
+| SQL_TSI_MICROSECOND
+  {
+    $$=IntervalMicrosecond
+  }
+| SQL_TSI_YEAR
+  {
+    $$=IntervalYear
   }
 
 func_paren_opt:
@@ -7933,8 +8008,6 @@ reserved_keyword:
 | SYSTEM
 | TABLE
 | THEN
-| TIMESTAMPADD
-| TIMESTAMPDIFF
 | TO
 | TRAILING
 | TRUE
@@ -8267,6 +8340,14 @@ non_reserved_keyword:
 | SMALLINT
 | SNAPSHOT
 | SQL
+| SQL_TSI_DAY
+| SQL_TSI_HOUR
+| SQL_TSI_MINUTE
+| SQL_TSI_MONTH
+| SQL_TSI_QUARTER
+| SQL_TSI_SECOND
+| SQL_TSI_WEEK
+| SQL_TSI_YEAR
 | SRID
 | START
 | STARTING
@@ -8342,6 +8423,8 @@ non_reserved_keyword:
 | TIES
 | TIME %prec STRING_TYPE_PREFIX_NON_KEYWORD
 | TIMESTAMP %prec STRING_TYPE_PREFIX_NON_KEYWORD
+| TIMESTAMPADD %prec FUNCTION_CALL_NON_KEYWORD
+| TIMESTAMPDIFF %prec FUNCTION_CALL_NON_KEYWORD
 | TINYBLOB
 | TINYINT
 | TINYTEXT

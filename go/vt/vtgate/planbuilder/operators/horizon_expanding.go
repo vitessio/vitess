@@ -1,9 +1,12 @@
 /*
 Copyright 2023 The Vitess Authors.
+
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
+
     http://www.apache.org/licenses/LICENSE-2.0
+
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -29,10 +32,6 @@ func expandHorizon(ctx *plancontext.PlanningContext, horizon horizonLike) (ops.O
 		return nil, nil, errHorizonNotPlanned()
 	}
 
-	if sel.Having != nil {
-		return nil, nil, errHorizonNotPlanned()
-	}
-
 	op, err := createProjectionFromSelect(ctx, horizon)
 	if err != nil {
 		return nil, nil, err
@@ -47,6 +46,14 @@ func expandHorizon(ctx *plancontext.PlanningContext, horizon horizonLike) (ops.O
 		op = &Distinct{
 			Source: op,
 			QP:     qp,
+		}
+	}
+
+	if sel.Having != nil {
+		op = &Filter{
+			Source:         op,
+			Predicates:     sqlparser.SplitAndExpression(nil, sel.Having.Expr),
+			FinalPredicate: nil,
 		}
 	}
 

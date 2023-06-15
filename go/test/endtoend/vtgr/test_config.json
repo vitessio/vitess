@@ -1,9 +1,0 @@
-{
-  "MySQLTopologyUser": "orc_client_user",
-  "MySQLTopologyPassword": "orc_client_user_password",
-  "MySQLReplicaUser": "vt_repl",
-  "MySQLReplicaPassword": "",
-  "InstancePollSeconds": 1,
-  "MySQLConnectTimeoutSeconds": 50,
-  "MySQLTopologyReadTimeoutSeconds": 50
-}

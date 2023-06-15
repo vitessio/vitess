@@ -1014,4 +1014,5 @@ const (
 	IntervalDateExprBinaryAdd
 	IntervalDateExprBinaryAddLeft
 	IntervalDateExprBinarySub
+	IntervalDateExprTimestampadd
 )

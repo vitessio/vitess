@@ -2362,7 +2362,7 @@ func getAliasedTableExprFromTableName(tblName TableName) *AliasedTableExpr {
 
 func (node *IntervalDateExpr) IsSubtraction() bool {
 	switch node.Syntax {
-	case IntervalDateExprDateAdd, IntervalDateExprAdddate, IntervalDateExprBinaryAdd, IntervalDateExprBinaryAddLeft:
+	case IntervalDateExprDateAdd, IntervalDateExprAdddate, IntervalDateExprBinaryAdd, IntervalDateExprBinaryAddLeft, IntervalDateExprTimestampadd:
 		return false
 	case IntervalDateExprDateSub, IntervalDateExprSubdate, IntervalDateExprBinarySub:
 		return true
@@ -2391,6 +2391,8 @@ func (node *IntervalDateExpr) FnName() string {
 		return "adddate"
 	case IntervalDateExprSubdate:
 		return "subdate"
+	case IntervalDateExprTimestampadd:
+		return "timestampadd"
 	case IntervalDateExprBinaryAdd, IntervalDateExprBinaryAddLeft:
 		return "<arithmetic interval addition>"
 	case IntervalDateExprBinarySub:

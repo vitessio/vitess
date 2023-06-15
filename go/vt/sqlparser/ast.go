@@ -2343,12 +2343,11 @@ type (
 		Expr         Expr
 	}
 
-	// TimestampFuncExpr represents the function and arguments for TIMESTAMP{ADD,DIFF} functions.
-	TimestampFuncExpr struct {
-		Name  string
+	// TimestampDiffExpr represents the function and arguments for TIMESTAMPDIFF functions.
+	TimestampDiffExpr struct {
 		Expr1 Expr
 		Expr2 Expr
-		Unit  string
+		Unit  IntervalType
 	}
 
 	// ExtractFuncExpr represents the function and arguments for EXTRACT(YEAR FROM '2019-07-02') type functions.
@@ -3140,7 +3139,7 @@ func (*UnaryExpr) iExpr()                          {}
 func (*IntroducerExpr) iExpr()                     {}
 func (*CollateExpr) iExpr()                        {}
 func (*FuncExpr) iExpr()                           {}
-func (*TimestampFuncExpr) iExpr()                  {}
+func (*TimestampDiffExpr) iExpr()                  {}
 func (*ExtractFuncExpr) iExpr()                    {}
 func (*WeightStringFuncExpr) iExpr()               {}
 func (*CurTimeFuncExpr) iExpr()                    {}
@@ -3236,7 +3235,7 @@ func (*GeomFromGeoJSONExpr) iExpr()                {}
 
 // iCallable marks all expressions that represent function calls
 func (*FuncExpr) iCallable()                           {}
-func (*TimestampFuncExpr) iCallable()                  {}
+func (*TimestampDiffExpr) iCallable()                  {}
 func (*ExtractFuncExpr) iCallable()                    {}
 func (*WeightStringFuncExpr) iCallable()               {}
 func (*CurTimeFuncExpr) iCallable()                    {}
