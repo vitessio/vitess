@@ -426,7 +426,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <statement> analyze_statement show_statement use_statement prepare_statement execute_statement deallocate_statement
 %type <statement> describe_statement explain_statement explainable_statement
 %type <statement> begin_statement commit_statement rollback_statement start_transaction_statement load_statement
-%type <bytes> work_opt no_opt chain_opt release_opt
+%type <bytes> work_opt no_opt chain_opt release_opt ignored_identifier_opt
 %type <bytes2> comment_opt comment_list
 %type <str> union_op insert_or_replace
 %type <str> distinct_opt straight_join_opt cache_opt match_option format_opt
@@ -535,7 +535,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <strs> enum_values
 %type <columnDefinition> column_definition column_definition_for_create
 %type <indexDefinition> index_definition
-%type <constraintDefinition> constraint_definition check_constraint_definition
+%type <constraintDefinition> foreign_key_definition check_constraint_definition
 %type <str> index_or_key indexes_or_keys index_or_key_opt
 %type <str> from_or_in show_database_opt
 %type <str> name_opt
@@ -552,7 +552,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <replicationOptions> replication_option_list replication_filter_option_list
 %type <replicationOption> replication_option replication_filter_option
 %type <str> relay_logs_attribute
-%type <constraintInfo> constraint_info check_constraint_info
+%type <constraintInfo> foreign_key_details check_constraint_info
 %type <partDefs> partition_definitions
 %type <partDef> partition_definition
 %type <partSpec> partition_operation
@@ -2724,7 +2724,7 @@ table_column_list:
   {
     $$.AddIndex($3)
   }
-| table_column_list ',' constraint_definition
+| table_column_list ',' foreign_key_definition
   {
     $$.AddConstraint($3)
   }
@@ -3845,40 +3845,49 @@ index_column:
       $$ = &IndexColumn{Column: NewColIdent(string($1)), Length: $2, Order: $3}
   }
 
-constraint_definition:
-  CONSTRAINT ID constraint_info
+foreign_key_definition:
+  CONSTRAINT ID foreign_key_details
   {
     $$ = &ConstraintDefinition{Name: string($2), Details: $3}
   }
-|  CONSTRAINT column_name_safe_keyword constraint_info
+|  CONSTRAINT column_name_safe_keyword foreign_key_details
    {
      $$ = &ConstraintDefinition{Name: string($2), Details: $3}
    }
-|  constraint_info
+|  foreign_key_details
   {
     $$ = &ConstraintDefinition{Details: $1}
   }
 
-constraint_info:
-  FOREIGN KEY '(' column_list ')' REFERENCES table_name '(' column_list ')'
+foreign_key_details:
+  FOREIGN KEY ignored_identifier_opt '(' column_list ')' REFERENCES table_name '(' column_list ')'
   {
-    $$ = &ForeignKeyDefinition{Source: $4, ReferencedTable: $7, ReferencedColumns: $9}
+    $$ = &ForeignKeyDefinition{Source: $5, ReferencedTable: $8, ReferencedColumns: $10}
   }
-| FOREIGN KEY '(' column_list ')' REFERENCES table_name '(' column_list ')' fk_on_delete
+| FOREIGN KEY ignored_identifier_opt '(' column_list ')' REFERENCES table_name '(' column_list ')' fk_on_delete
   {
-    $$ = &ForeignKeyDefinition{Source: $4, ReferencedTable: $7, ReferencedColumns: $9, OnDelete: $11}
+    $$ = &ForeignKeyDefinition{Source: $5, ReferencedTable: $8, ReferencedColumns: $10, OnDelete: $12}
   }
-| FOREIGN KEY '(' column_list ')' REFERENCES table_name '(' column_list ')' fk_on_update
+| FOREIGN KEY ignored_identifier_opt '(' column_list ')' REFERENCES table_name '(' column_list ')' fk_on_update
   {
-    $$ = &ForeignKeyDefinition{Source: $4, ReferencedTable: $7, ReferencedColumns: $9, OnUpdate: $11}
+    $$ = &ForeignKeyDefinition{Source: $5, ReferencedTable: $8, ReferencedColumns: $10, OnUpdate: $12}
   }
-| FOREIGN KEY '(' column_list ')' REFERENCES table_name '(' column_list ')' fk_on_delete fk_on_update
+| FOREIGN KEY ignored_identifier_opt '(' column_list ')' REFERENCES table_name '(' column_list ')' fk_on_delete fk_on_update
   {
-    $$ = &ForeignKeyDefinition{Source: $4, ReferencedTable: $7, ReferencedColumns: $9, OnDelete: $11, OnUpdate: $12}
+    $$ = &ForeignKeyDefinition{Source: $5, ReferencedTable: $8, ReferencedColumns: $10, OnDelete: $12, OnUpdate: $13}
   }
-| FOREIGN KEY '(' column_list ')' REFERENCES table_name '(' column_list ')' fk_on_update fk_on_delete
+| FOREIGN KEY ignored_identifier_opt '(' column_list ')' REFERENCES table_name '(' column_list ')' fk_on_update fk_on_delete
   {
-    $$ = &ForeignKeyDefinition{Source: $4, ReferencedTable: $7, ReferencedColumns: $9, OnDelete: $12, OnUpdate: $11}
+    $$ = &ForeignKeyDefinition{Source: $5, ReferencedTable: $8, ReferencedColumns: $10, OnDelete: $13, OnUpdate: $12}
+  }
+
+ignored_identifier_opt:
+  {
+    $$ = nil
+  }
+| ID   
+  {
+    $$ = nil
   }
 
 check_constraint_definition:
@@ -4448,7 +4457,7 @@ alter_table_statement_part:
   {
     $$ = &DDL{Action: AlterStr, PartitionSpec: $1}
   }
-| ADD constraint_definition
+| ADD foreign_key_definition
   {
     ddl := &DDL{Action: AlterStr, ConstraintAction: AddStr, TableSpec: &TableSpec{}}
     ddl.TableSpec.AddConstraint($2)
