@@ -18,6 +18,8 @@ package mysqlctld
 
 import (
 	"context"
+	"fmt"
+	"math/rand"
 	"testing"
 	"time"
 
@@ -27,7 +29,18 @@ import (
 	"vitess.io/vitess/go/mysql"
 	backup "vitess.io/vitess/go/test/endtoend/backup/vtctlbackup"
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/vt/mysqlctl"
 )
+
+var (
+	minimalSleepDuration       = time.Second + 100*time.Millisecond
+	gracefulPostBackupDuration = 10 * time.Millisecond
+)
+
+type testedBackupInfo struct {
+	rows          int
+	postTimestamp time.Time
+}
 
 func waitForReplica(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -53,61 +66,54 @@ func waitForReplica(t *testing.T) {
 func TestIncrementalBackup(t *testing.T) {
 	defer cluster.PanicHandler(t)
 
+	var lastInsertedRowTimestamp time.Time
+	insertRowOnPrimary := func(t *testing.T, hint string) {
+		backup.InsertRowOnPrimary(t, hint)
+		lastInsertedRowTimestamp = time.Now()
+	}
+
 	tcases := []struct {
 		name      string
 		setupType int
-		comprss   *backup.CompressionDetails
 	}{
 		{
-			"BuiltinBackup", backup.BuiltinBackup, nil,
+			"BuiltinBackup", backup.BuiltinBackup,
 		},
 		// {
-		// 	"XtraBackup", backup.XtraBackup, &backup.CompressionDetails{
-		// 		CompressorEngineName: "pgzip",
-		// 	},
+		// 	"XtraBackup", backup.XtraBackup,
 		// },
 		// {
-		// 	"Mysqlctld", backup.Mysqlctld, nil,
+		// 	"Mysqlctld", backup.Mysqlctld,
 		// },
 	}
 	for _, tcase := range tcases {
 		t.Run(tcase.name, func(t *testing.T) {
 			// setup cluster for the testing
-			code, err := backup.LaunchCluster(tcase.setupType, "xbstream", 0, tcase.comprss)
+			code, err := backup.LaunchCluster(tcase.setupType, "xbstream", 0, &backup.CompressionDetails{
+				CompressorEngineName: "pgzip",
+			})
 			require.NoError(t, err, "setup failed with status code %d", code)
 			defer backup.TearDownCluster()
 
 			backup.InitTestTable(t)
 
-			rowsPerPosition := map[string]int{}
-			backupPositions := []string{}
-
-			recordRowsPerPosition := func(t *testing.T) {
-				pos := backup.GetReplicaPosition(t)
-				msgs := backup.ReadRowsFromReplica(t)
-				if _, ok := rowsPerPosition[pos]; !ok {
-					backupPositions = append(backupPositions, pos)
-					rowsPerPosition[pos] = len(msgs)
-				}
-			}
+			testedBackups := []testedBackupInfo{}
 
 			var fullBackupPos mysql.Position
 			t.Run("full backup", func(t *testing.T) {
-				backup.InsertRowOnPrimary(t, "before-full-backup")
+				insertRowOnPrimary(t, "before-full-backup")
 				waitForReplica(t)
 
 				manifest, _ := backup.TestReplicaFullBackup(t)
 				fullBackupPos = manifest.Position
 				require.False(t, fullBackupPos.IsZero())
 				//
-				msgs := backup.ReadRowsFromReplica(t)
-				pos := mysql.EncodePosition(fullBackupPos)
-				backupPositions = append(backupPositions, pos)
-				rowsPerPosition[pos] = len(msgs)
+				rows := backup.ReadRowsFromReplica(t)
+				testedBackups = append(testedBackups, testedBackupInfo{len(rows), time.Now()})
 			})
 
 			lastBackupPos := fullBackupPos
-			backup.InsertRowOnPrimary(t, "before-incremental-backups")
+			insertRowOnPrimary(t, "before-incremental-backups")
 
 			tt := []struct {
 				name              string
@@ -155,15 +161,15 @@ func TestIncrementalBackup(t *testing.T) {
 			for _, tc := range tt {
 				t.Run(tc.name, func(t *testing.T) {
 					if tc.writeBeforeBackup {
-						backup.InsertRowOnPrimary(t, "")
+						insertRowOnPrimary(t, "")
 					}
 					// we wait for 1 second because backups are written to a directory named after the current timestamp,
 					// in 1 second resolution. We want to avoid two backups that have the same pathname. Realistically this
 					// is only ever a problem in this end-to-end test, not in production.
 					// Also, we gie the replica a chance to catch up.
-					time.Sleep(1100 * time.Millisecond)
+					time.Sleep(minimalSleepDuration)
 					waitForReplica(t)
-					recordRowsPerPosition(t)
+					rowsBeforeBackup := backup.ReadRowsFromReplica(t)
 					// configure --incremental-from-pos to either:
 					// - auto
 					// - explicit last backup pos
@@ -179,6 +185,12 @@ func TestIncrementalBackup(t *testing.T) {
 					if tc.expectError != "" {
 						return
 					}
+					// We wish to mark the current post-backup timestamp. We will later on retore to this point in time.
+					// However, the restore is up to and _exclusive_ of the timestamp. So for test's sake, we sleep
+					// an extra few milliseconds just to ensure the timestamp we read is strictly after the backup time.
+					// This is basicaly to avoid weird flakiness in CI.
+					time.Sleep(gracefulPostBackupDuration)
+					testedBackups = append(testedBackups, testedBackupInfo{len(rowsBeforeBackup), time.Now()})
 					defer func() {
 						lastBackupPos = manifest.Position
 					}()
@@ -214,36 +226,51 @@ func TestIncrementalBackup(t *testing.T) {
 						expectFromPosition = incrementalFromPos.GTIDSet.Union(gtidPurgedPos.GTIDSet)
 					}
 					require.Equalf(t, expectFromPosition, fromPositionIncludingPurged, "expected: %v, found: %v, gtid_purged: %v,  manifest.Position: %v", expectFromPosition, fromPositionIncludingPurged, gtidPurgedPos, manifest.Position)
+					backupIndex := len(testedBackups) - 1
+					t.Logf("tested backup num%v: %v rows before %v", backupIndex, testedBackups[backupIndex].rows, mysqlctl.FormatRFC3339(testedBackups[backupIndex].postTimestamp))
 				})
 			}
 
-			// testRestores := func(t *testing.T) {
-			// 	for _, r := range rand.Perm(len(backupPositions)) {
-			// 		pos := backupPositions[r]
-			// 		testName := fmt.Sprintf("%s, %d records", pos, rowsPerPosition[pos])
-			// 		t.Run(testName, func(t *testing.T) {
-			// 			restoreToPos, err := mysql.DecodePosition(pos)
-			// 			require.NoError(t, err)
-			// 			backup.TestReplicaRestoreToPos(t, restoreToPos, "")
-			// 			msgs := backup.ReadRowsFromReplica(t)
-			// 			count, ok := rowsPerPosition[pos]
-			// 			require.True(t, ok)
-			// 			assert.Equalf(t, count, len(msgs), "messages: %v", msgs)
-			// 		})
-			// 	}
-			// }
-			// t.Run("PITR", func(t *testing.T) {
-			// 	testRestores(t)
-			// })
-			// t.Run("remove full position backups", func(t *testing.T) {
-			// 	// Delete the fromFullPosition backup(s), which leaves us with less restore options. Try again.
-			// 	for _, backupName := range fromFullPositionBackups {
-			// 		backup.RemoveBackup(t, backupName)
-			// 	}
-			// })
-			// t.Run("PITR-2", func(t *testing.T) {
-			// 	testRestores(t)
-			// })
+			testRestores := func(t *testing.T) {
+				numFailedRestores := 0
+				numSuccessfulRestores := 0
+				for _, backupIndex := range rand.Perm(len(testedBackups)) {
+					testedBackup := testedBackups[backupIndex]
+					testName := fmt.Sprintf("backup num%v at %v, %v rows", backupIndex, mysqlctl.FormatRFC3339(testedBackup.postTimestamp), testedBackup.rows)
+					t.Run(testName, func(t *testing.T) {
+						expectError := ""
+						if testedBackup.postTimestamp.After(lastInsertedRowTimestamp) {
+							// The restore_to_timestamp value is beyond the last incremental backup.
+							// There is no path to restore to this timestamp.
+							expectError = "no path found"
+							t.Logf("expecting error")
+						}
+						backup.TestReplicaRestoreToTimestamp(t, testedBackup.postTimestamp, expectError)
+						if expectError == "" {
+							msgs := backup.ReadRowsFromReplica(t)
+							assert.Equalf(t, testedBackup.rows, len(msgs), "messages: %v", msgs)
+							numSuccessfulRestores++
+						} else {
+							numFailedRestores++
+						}
+					})
+				}
+				// Integrity check for the test itself: ensure we have both successful and failed restores.
+				require.NotZero(t, numFailedRestores)
+				require.NotZero(t, numSuccessfulRestores)
+			}
+			t.Run("PITR", func(t *testing.T) {
+				testRestores(t)
+			})
+			t.Run("remove full position backups", func(t *testing.T) {
+				// Delete the fromFullPosition backup(s), which leaves us with less restore options. Try again.
+				for _, backupName := range fromFullPositionBackups {
+					backup.RemoveBackup(t, backupName)
+				}
+			})
+			t.Run("PITR-2", func(t *testing.T) {
+				testRestores(t)
+			})
 		})
 	}
 }
