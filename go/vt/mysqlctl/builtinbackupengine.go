@@ -876,8 +876,10 @@ func (be *BuiltinBackupEngine) executeRestoreIncrementalBackup(ctx context.Conte
 		}
 		req := &mysqlctlpb.ApplyBinlogFileRequest{
 			BinlogFileName:        binlogFile,
-			BinlogRestorePosition: params.RestoreToPos.GTIDSet.String(),
 			BinlogRestoreDatetime: logutil.TimeToProto(params.RestoreToTimestamp),
+		}
+		if params.RestoreToPos.GTIDSet != nil {
+			req.BinlogRestorePosition = params.RestoreToPos.GTIDSet.String()
 		}
 		if err := mysqld.ApplyBinlogFile(ctx, req); err != nil {
 			return vterrors.Wrapf(err, "failed to apply binlog file %v", binlogFile)
