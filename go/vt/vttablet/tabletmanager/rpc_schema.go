@@ -58,6 +58,7 @@ func (tm *TabletManager) ReloadSchema(ctx context.Context, waitPosition string) 
 	return tm.QueryServiceControl.ReloadSchema(ctx)
 }
 
+// ResetSequences will reset the auto-inc counters on the specified tables.
 func (tm *TabletManager) ResetSequences(ctx context.Context, tables []string) error {
 	tm.QueryServiceControl.SchemaEngine().ResetSequences(tables)
 	return nil
@@ -97,9 +98,3 @@ func (tm *TabletManager) ApplySchema(ctx context.Context, change *tmutils.Schema
 	tm.ReloadSchema(ctx, "") // nolint:errcheck
 	return scr, nil
 }
-
-//
-//func (tm *TabletManager) ResetSequences(ctx context.Context, request *tabletmanagerdatapb.ResetSequencesRequest) (*tabletmanagerdatapb.ResetSequencesResponse, error) {
-//	tm.QueryServiceControl.SchemaEngine().ResetSequences(request.Tables)
-//	return &tabletmanagerdatapb.ResetSequencesResponse{}, nil
-//}

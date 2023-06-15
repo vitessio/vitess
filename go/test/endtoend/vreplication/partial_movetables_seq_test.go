@@ -87,7 +87,7 @@ func initPartialMoveTablesComplexTestCase(t *testing.T, name string) *vrepTestCa
 	}
 }`
 		seqSchema       = `create table customer_seq(id int, next_id bigint, cache bigint, primary key(id)) comment 'vitess_sequence';`
-		commerceSchema  = `create table customer(cid int, name varchar(128), primary key(cid));`
+		commerceSchema  = `create table customer(cid int, name varchar(128), ts timestamp(3) not null default current_timestamp(3), primary key(cid));`
 		commerceVSchema = `
 {
   "tables": {
@@ -185,7 +185,7 @@ func (tc *vrepTestCase) setupCluster() {
 }
 
 func (tc *vrepTestCase) initData() {
-	_, err := tc.vtgateConn.ExecuteFetch("insert into customer_seq(id, next_id, cache) values(0, 100, 10)", 1000, false)
+	_, err := tc.vtgateConn.ExecuteFetch("insert into customer_seq(id, next_id, cache) values(0, 1000, 1000)", 1000, false)
 	require.NoError(tc.t, err)
 	_, err = tc.vtgateConn.ExecuteFetch("insert into customer(cid, name) values(1, 'customer1'), (2, 'customer2'),(3, 'customer3')", 1000, false)
 	require.NoError(tc.t, err)
@@ -535,6 +535,7 @@ func TestPartialMoveTablesWithSequences(t *testing.T) {
 var customerCount int64
 var currentCustomerCount int64
 var newCustomerCount = int64(201)
+var lastCustomerId int64
 
 func getCustomerCount(t *testing.T, msg string) int64 {
 	qr := execVtgateQuery(t, vtgateConn, "", "select count(*) from customer")
@@ -544,6 +545,15 @@ func getCustomerCount(t *testing.T, msg string) int64 {
 	return count
 }
 
+func confirmLastCustomerIdHasIncreased(t *testing.T) {
+	qr := execVtgateQuery(t, vtgateConn, "", "select cid from customer order by cid desc limit 1")
+	require.NotNil(t, qr)
+	currentCustomerId, err := qr.Rows[0][0].ToInt64()
+	require.NoError(t, err)
+	require.Greater(t, currentCustomerId, lastCustomerId)
+	lastCustomerId = currentCustomerId
+}
+
 func insertCustomers(t *testing.T) {
 	for i := int64(1); i < newCustomerCount+1; i++ {
 		execVtgateQuery(t, vtgateConn, "customer@primary", fmt.Sprintf("insert into customer(name) values ('name-%d')", currentCustomerCount+i))
@@ -551,6 +561,8 @@ func insertCustomers(t *testing.T) {
 	customerCount = getCustomerCount(t, "")
 	require.Equal(t, currentCustomerCount+newCustomerCount, customerCount)
 	currentCustomerCount = customerCount
+
+	confirmLastCustomerIdHasIncreased(t)
 }
 
 func confirmGlobalRoutingToSource(t *testing.T) {

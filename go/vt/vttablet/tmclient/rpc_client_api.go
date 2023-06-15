@@ -71,14 +71,15 @@ type TabletManagerClient interface {
 	// GetSchema asks the remote tablet for its database schema
 	GetSchema(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.GetSchemaRequest) (*tabletmanagerdatapb.SchemaDefinition, error)
 
-	ResetSequences(ctx context.Context, tablet *topodatapb.Tablet, tables []string) error
-
 	// GetPermissions asks the remote tablet for its permissions list
 	GetPermissions(ctx context.Context, tablet *topodatapb.Tablet) (*tabletmanagerdatapb.Permissions, error)
 
 	//
 	// Various read-write methods
 	//
+
+	// ResetSequences asks the remote tablet to reset the sequences for the specified tables
+	ResetSequences(ctx context.Context, tablet *topodatapb.Tablet, tables []string) error
 
 	// SetReadOnly makes the mysql instance read-only
 	SetReadOnly(ctx context.Context, tablet *topodatapb.Tablet) error

@@ -179,6 +179,7 @@ func (s *server) ApplySchema(ctx context.Context, request *tabletmanagerdatapb.A
 func (s *server) ResetSequences(ctx context.Context, request *tabletmanagerdatapb.ResetSequencesRequest) (response *tabletmanagerdatapb.ResetSequencesResponse, err error) {
 	defer s.tm.HandleRPCPanic(ctx, "ResetSequences", request, response, true /*verbose*/, &err)
 	response = &tabletmanagerdatapb.ResetSequencesResponse{}
+	err = s.tm.ResetSequences(ctx, request.Tables)
 	return response, err
 }
 
