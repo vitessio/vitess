@@ -31,6 +31,7 @@ import (
 	"github.com/rcrowley/go-metrics"
 	"github.com/sjmudd/stopwatch"
 
+	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/external/golib/sqlutils"
 
 	vitessmysql "vitess.io/vitess/go/mysql"
@@ -54,6 +55,12 @@ const (
 var instanceReadChan = make(chan bool, backendDBConcurrency)
 var instanceWriteChan = make(chan bool, backendDBConcurrency)
 
+var (
+	// Mutex to protect the access of the following variable
+	errantGtidMapMu = sync.Mutex{}
+	errantGtidMap   = make(map[string]string)
+)
+
 var forgetAliases *cache.Cache
 
 var accessDeniedCounter = metrics.NewCounter()
@@ -72,6 +79,11 @@ func init() {
 	_ = metrics.Register("instance.write", writeInstanceCounter)
 	_ = writeBufferLatency.AddMany([]string{"wait", "write"})
 	writeBufferLatency.Start("wait")
+	stats.NewStringMapFuncWithMultiLabels("ErrantGtidMap", "Metric to track the errant GTIDs detected by VTOrc", []string{"TabletAlias"}, "ErrantGtid", func() map[string]string {
+		errantGtidMapMu.Lock()
+		defer errantGtidMapMu.Unlock()
+		return errantGtidMap
+	})
 
 	go initializeInstanceDao()
 }
@@ -370,6 +382,12 @@ Cleanup:
 				instance.GtidErrant, err = vitessmysql.Subtract(redactedExecutedGtidSet.String(), redactedPrimaryExecutedGtidSet.String())
 			}
 		}
+		// update the errant gtid map
+		go func() {
+			errantGtidMapMu.Lock()
+			defer errantGtidMapMu.Unlock()
+			errantGtidMap[topoproto.TabletAliasString(tablet.Alias)] = instance.GtidErrant
+		}()
 	}
 
 	latency.Stop("instance")

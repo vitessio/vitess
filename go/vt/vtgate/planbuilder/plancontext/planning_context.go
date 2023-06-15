@@ -39,6 +39,10 @@ type PlanningContext struct {
 	// If we during planning have turned this expression into an argument name,
 	// we can continue using the same argument name
 	ReservedArguments map[sqlparser.Expr]string
+
+	// DelegateAggregation tells us when we are allowed to split an aggregation across vtgate and mysql
+	// We aggregate within a shard, and then at the vtgate level we aggregate the incoming shard aggregates
+	DelegateAggregation bool
 }
 
 func NewPlanningContext(reservedVars *sqlparser.ReservedVars, semTable *semantics.SemTable, vschema VSchema, version querypb.ExecuteOptions_PlannerVersion) *PlanningContext {

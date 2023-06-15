@@ -38,10 +38,11 @@ type Ordering struct {
 
 func (o *Ordering) Clone(inputs []ops.Operator) ops.Operator {
 	return &Ordering{
-		Source:  inputs[0],
-		Offset:  slices.Clone(o.Offset),
-		WOffset: slices.Clone(o.WOffset),
-		Order:   slices.Clone(o.Order),
+		Source:        inputs[0],
+		Offset:        slices.Clone(o.Offset),
+		WOffset:       slices.Clone(o.WOffset),
+		Order:         slices.Clone(o.Order),
+		ResultColumns: o.ResultColumns,
 	}
 }
 
@@ -103,13 +104,6 @@ func (o *Ordering) planOffsets(ctx *plancontext.PlanningContext) error {
 	}
 
 	return nil
-}
-
-func (o *Ordering) Description() ops.OpDescription {
-	return ops.OpDescription{
-		OperatorType: "Ordering",
-		Other:        map[string]any{},
-	}
 }
 
 func (o *Ordering) ShortDescription() string {

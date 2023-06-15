@@ -26,7 +26,7 @@ import (
 
 	"github.com/spf13/pflag"
 
-	"k8s.io/utils/strings/slices"
+	"golang.org/x/exp/slices"
 
 	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/proto"

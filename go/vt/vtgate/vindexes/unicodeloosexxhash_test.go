@@ -21,8 +21,6 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 )
@@ -30,15 +28,64 @@ import (
 var charVindexXXHash SingleColumn
 
 func init() {
-	vindex, _ := CreateVindex("unicode_loose_xxhash", "utf8ch", nil)
+	vindex, err := CreateVindex("unicode_loose_xxhash", "utf8ch", nil)
+	if err != nil {
+		panic(err)
+	}
+	unknownParams := vindex.(ParamValidating).UnknownParams()
+	if len(unknownParams) > 0 {
+		panic("unicode_loose_xxhash test init: expected 0 unknown params")
+	}
 	charVindexXXHash = vindex.(SingleColumn)
 }
 
-func TestUnicodeLooseXXHashInfo(t *testing.T) {
-	assert.Equal(t, 1, charVindexXXHash.Cost())
-	assert.Equal(t, "utf8ch", charVindexXXHash.String())
-	assert.True(t, charVindexXXHash.IsUnique())
-	assert.False(t, charVindexXXHash.NeedsVCursor())
+func unicodeLooseXXHashCreateVindexTestCase(
+	testName string,
+	vindexParams map[string]string,
+	expectErr error,
+	expectUnknownParams []string,
+) createVindexTestCase {
+	return createVindexTestCase{
+		testName: testName,
+
+		vindexType:   "unicode_loose_xxhash",
+		vindexName:   "unicode_loose_xxhash",
+		vindexParams: vindexParams,
+
+		expectCost:          1,
+		expectErr:           expectErr,
+		expectIsUnique:      true,
+		expectNeedsVCursor:  false,
+		expectString:        "unicode_loose_xxhash",
+		expectUnknownParams: expectUnknownParams,
+	}
+}
+
+func TestUnicodeLooseXXHashCreateVindex(t *testing.T) {
+	cases := []createVindexTestCase{
+		unicodeLooseXXHashCreateVindexTestCase(
+			"no params",
+			nil,
+			nil,
+			nil,
+		),
+		unicodeLooseXXHashCreateVindexTestCase(
+			"empty params",
+			map[string]string{},
+			nil,
+			nil,
+		),
+		unicodeLooseXXHashCreateVindexTestCase(
+			"unknown params",
+			map[string]string{
+				"hello": "world",
+			},
+			nil,
+			[]string{"hello"},
+		),
+	}
+
+	testCreateVindexes(t, cases)
 }
 
 func TestUnicodeLooseXXHashMap(t *testing.T) {

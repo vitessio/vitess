@@ -26,18 +26,23 @@ import (
 )
 
 var (
-	_ SingleColumn = (*BinaryMD5)(nil)
-	_ Hashing      = (*BinaryMD5)(nil)
+	_ SingleColumn    = (*BinaryMD5)(nil)
+	_ Hashing         = (*BinaryMD5)(nil)
+	_ ParamValidating = (*BinaryMD5)(nil)
 )
 
 // BinaryMD5 is a vindex that hashes binary bits to a keyspace id.
 type BinaryMD5 struct {
-	name string
+	name   string
+	params map[string]string
 }
 
-// NewBinaryMD5 creates a new BinaryMD5.
-func NewBinaryMD5(name string, _ map[string]string) (Vindex, error) {
-	return &BinaryMD5{name: name}, nil
+// newBinaryMD5 creates a new BinaryMD5.
+func newBinaryMD5(name string, params map[string]string) (Vindex, error) {
+	return &BinaryMD5{
+		name:   name,
+		params: params,
+	}, nil
 }
 
 // String returns the name of the vindex.
@@ -94,11 +99,16 @@ func (vind *BinaryMD5) Hash(id sqltypes.Value) ([]byte, error) {
 	return vMD5Hash(idBytes), nil
 }
 
+// UnknownParams implements the ParamValidating interface.
+func (vind *BinaryMD5) UnknownParams() []string {
+	return FindUnknownParams(vind.params, nil)
+}
+
 func vMD5Hash(source []byte) []byte {
 	sum := md5.Sum(source)
 	return sum[:]
 }
 
 func init() {
-	Register("binary_md5", NewBinaryMD5)
+	Register("binary_md5", newBinaryMD5)
 }

@@ -222,13 +222,6 @@ func (qt *QueryTable) Clone() *QueryTable {
 	}
 }
 
-func (qg *QueryGraph) Description() ops.OpDescription {
-	return ops.OpDescription{
-		OperatorType: "QueryGraph",
-		Other:        map[string]any{"Tables": qg.tableNames()},
-	}
-}
-
 func (qg *QueryGraph) tableNames() (tables []string) {
 	for _, table := range qg.Tables {
 		tables = append(tables, sqlparser.String(table.Table))

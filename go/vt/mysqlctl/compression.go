@@ -206,9 +206,9 @@ func newBuiltinDecompressor(engine string, reader io.Reader, logger logutil.Logg
 			return nil, err
 		}
 		decompressor = d
-	case "lz4":
+	case Lz4Compressor:
 		decompressor = io.NopCloser(lz4.NewReader(reader))
-	case "zstd":
+	case ZstdCompressor:
 		d, err := zstd.NewReader(reader)
 		if err != nil {
 			return nil, err

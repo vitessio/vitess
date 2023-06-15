@@ -26,10 +26,9 @@ import (
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
+	"vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/db"
 	"vitess.io/vitess/go/vt/vtorc/inst"
-
-	// import the gRPC client implementation for tablet manager
 	_ "vitess.io/vitess/go/vt/vttablet/grpctmclient"
 )
 
@@ -189,4 +188,71 @@ func TestDifferentAnalysescHaveDifferentCooldowns(t *testing.T) {
 	// because the analysis is different (ReplicationStopped vs DeadPrimary)
 	_, err = AttemptRecoveryRegistration(&primaryAnalysisEntry, true, true)
 	require.Nil(t, err)
+}
+
+func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
+	tests := []struct {
+		name                 string
+		ersEnabled           bool
+		analysisCode         inst.AnalysisCode
+		analyzedInstanceKey  *inst.InstanceKey
+		wantRecoveryFunction recoveryFunction
+	}{
+		{
+			name:         "DeadPrimary with ERS enabled",
+			ersEnabled:   true,
+			analysisCode: inst.DeadPrimary,
+			analyzedInstanceKey: &inst.InstanceKey{
+				Hostname: hostname,
+				Port:     1,
+			},
+			wantRecoveryFunction: recoverDeadPrimaryFunc,
+		}, {
+			name:         "DeadPrimary with ERS disabled",
+			ersEnabled:   false,
+			analysisCode: inst.DeadPrimary,
+			analyzedInstanceKey: &inst.InstanceKey{
+				Hostname: hostname,
+				Port:     1,
+			},
+			wantRecoveryFunction: noRecoveryFunc,
+		}, {
+			name:                 "PrimaryHasPrimary",
+			ersEnabled:           false,
+			analysisCode:         inst.PrimaryHasPrimary,
+			wantRecoveryFunction: recoverPrimaryHasPrimaryFunc,
+		}, {
+			name:                 "ClusterHasNoPrimary",
+			ersEnabled:           false,
+			analysisCode:         inst.ClusterHasNoPrimary,
+			wantRecoveryFunction: electNewPrimaryFunc,
+		}, {
+			name:                 "ReplicationStopped",
+			ersEnabled:           false,
+			analysisCode:         inst.ReplicationStopped,
+			wantRecoveryFunction: fixReplicaFunc,
+		}, {
+			name:                 "PrimarySemiSyncMustBeSet",
+			ersEnabled:           false,
+			analysisCode:         inst.PrimarySemiSyncMustBeSet,
+			wantRecoveryFunction: fixPrimaryFunc,
+		},
+	}
+
+	// Needed for the test to work
+	oldMap := emergencyOperationGracefulPeriodMap
+	emergencyOperationGracefulPeriodMap = cache.New(time.Second*5, time.Millisecond*500)
+	defer func() {
+		emergencyOperationGracefulPeriodMap = oldMap
+	}()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			prevVal := config.ERSEnabled()
+			config.SetERSEnabled(tt.ersEnabled)
+			defer config.SetERSEnabled(prevVal)
+
+			gotFunc := getCheckAndRecoverFunctionCode(tt.analysisCode, tt.analyzedInstanceKey)
+			require.EqualValues(t, tt.wantRecoveryFunction, gotFunc)
+		})
+	}
 }

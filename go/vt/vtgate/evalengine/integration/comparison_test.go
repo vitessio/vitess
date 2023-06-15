@@ -45,7 +45,7 @@ import (
 var (
 	collationEnv *collations.Environment
 
-	debugPrintAll        bool
+	debugGolden          = false
 	debugNormalize       = true
 	debugSimplify        = time.Now().UnixNano()&1 != 0
 	debugCheckTypes      = true
@@ -53,7 +53,7 @@ var (
 )
 
 func registerFlags(fs *pflag.FlagSet) {
-	fs.BoolVar(&debugPrintAll, "print-all", debugPrintAll, "print all matching tests")
+	fs.BoolVar(&debugGolden, "golden", debugGolden, "print golden test files")
 	fs.BoolVar(&debugNormalize, "normalize", debugNormalize, "normalize comparisons against MySQL values")
 	fs.BoolVar(&debugSimplify, "simplify", debugSimplify, "simplify expressions before evaluating them")
 	fs.BoolVar(&debugCheckTypes, "check-types", debugCheckTypes, "check the TypeOf operator for all queries")
@@ -195,12 +195,23 @@ func compareRemoteExprEnv(t *testing.T, env *evalengine.ExpressionEnv, conn *mys
 		Collation: remoteCollation,
 	}
 
+	if debugGolden {
+		g := GoldenTest{Query: localQuery}
+		if remoteErr != nil {
+			g.Error = remoteErr.Error()
+		} else {
+			g.Value = remoteVal.String()
+		}
+		seenGoldenTests = append(seenGoldenTests, g)
+		return
+	}
+
 	if err := compareResult(localResult, remoteResult, cmp); err != nil {
 		t.Errorf("%s\nquery: %s (SIMPLIFY=%v)\nrow: %v", err, localQuery, debugSimplify, env.Row)
-	} else if debugPrintAll {
-		t.Logf("local=%s mysql=%s\nquery: %s\nrow: %v", localVal.String(), remoteVal.String(), localQuery, env.Row)
 	}
 }
+
+var seenGoldenTests []GoldenTest
 
 type vcursor struct {
 }
@@ -260,5 +271,9 @@ func TestMySQL(t *testing.T) {
 				compareRemoteExprEnv(t, env, conn, query, tc.Schema, tc.Compare)
 			})
 		})
+	}
+
+	if debugGolden {
+		writeGolden(t, seenGoldenTests)
 	}
 }
