@@ -84,8 +84,6 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 		MIN(primary_instance.data_center) AS data_center,
 		MIN(primary_instance.region) AS region,
 		MIN(primary_instance.physical_environment) AS physical_environment,
-		MIN(primary_instance.source_host) AS source_host,
-		MIN(primary_instance.source_port) AS source_port,
 		MIN(primary_instance.binary_log_file) AS binary_log_file,
 		MIN(primary_instance.binary_log_pos) AS binary_log_pos,
 		MIN(primary_tablet.info) AS primary_tablet_info,
@@ -327,8 +325,6 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 		a.AnalyzedInstanceHostname = m.GetString("hostname")
 		a.AnalyzedInstancePort = m.GetInt("port")
 		a.AnalyzedInstanceAlias = topoproto.TabletAliasString(tablet.Alias)
-		a.AnalyzedInstancePrimaryHostname = m.GetString("source_host")
-		a.AnalyzedInstancePrimaryPort = m.GetInt("source_port")
 		a.AnalyzedInstancePrimaryAlias = topoproto.TabletAliasString(primaryTablet.Alias)
 		a.AnalyzedInstanceDataCenter = m.GetString("data_center")
 		a.AnalyzedInstanceRegion = m.GetString("region")

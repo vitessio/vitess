@@ -94,8 +94,6 @@ type ReplicationAnalysis struct {
 	AnalyzedInstanceHostname                  string
 	AnalyzedInstancePort                      int
 	AnalyzedInstanceAlias                     string
-	AnalyzedInstancePrimaryHostname           string
-	AnalyzedInstancePrimaryPort               int
 	AnalyzedInstancePrimaryAlias              string
 	TabletType                                topodatapb.TabletType
 	PrimaryTimeStamp                          time.Time

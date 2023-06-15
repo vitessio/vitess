@@ -744,7 +744,6 @@ func CheckAndRecover() {
 		}()
 
 	}
-	return
 }
 
 func postPrsCompletion(topologyRecovery *TopologyRecovery, analysisEntry inst.ReplicationAnalysis, promotedReplica *inst.Instance) {

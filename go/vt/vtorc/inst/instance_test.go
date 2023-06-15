@@ -28,7 +28,7 @@ func init() {
 	config.MarkConfigurationLoaded()
 }
 
-var instance1 = Instance{Key: key1}
+var instance1 = Instance{InstanceAlias: "zone1-100"}
 
 func TestIsSmallerMajorVersion(t *testing.T) {
 	i55 := Instance{Version: "5.5"}
@@ -55,9 +55,9 @@ func TestIsVersion(t *testing.T) {
 }
 
 func TestIsSmallerBinlogFormat(t *testing.T) {
-	iStatement := &Instance{Key: key1, BinlogFormat: "STATEMENT"}
-	iRow := &Instance{Key: key2, BinlogFormat: "ROW"}
-	iMixed := &Instance{Key: key3, BinlogFormat: "MIXED"}
+	iStatement := &Instance{BinlogFormat: "STATEMENT"}
+	iRow := &Instance{BinlogFormat: "ROW"}
+	iMixed := &Instance{BinlogFormat: "MIXED"}
 	require.True(t, iStatement.IsSmallerBinlogFormat(iRow))
 	require.False(t, iStatement.IsSmallerBinlogFormat(iStatement))
 	require.False(t, iRow.IsSmallerBinlogFormat(iStatement))
@@ -79,7 +79,7 @@ func TestReplicationThreads(t *testing.T) {
 		require.True(t, instance1.ReplicationThreadsStopped())
 	}
 	{
-		i := Instance{Key: key1, ReplicationIOThreadState: ReplicationThreadStateNoThread, ReplicationSQLThreadState: ReplicationThreadStateNoThread}
+		i := Instance{InstanceAlias: "zone1-100", ReplicationIOThreadState: ReplicationThreadStateNoThread, ReplicationSQLThreadState: ReplicationThreadStateNoThread}
 		require.False(t, i.ReplicationThreadsExist())
 	}
 }

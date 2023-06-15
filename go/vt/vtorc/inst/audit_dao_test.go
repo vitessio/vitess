@@ -24,6 +24,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/db"
 )
@@ -69,10 +70,7 @@ func TestAuditOperation(t *testing.T) {
 	err = SaveTablet(tab100)
 	require.NoError(t, err)
 
-	instance100 := &InstanceKey{
-		Hostname: hostname,
-		Port:     int(port),
-	}
+	tab100Alias := topoproto.TabletAliasString(tab100.Alias)
 	auditType := "test-audit-operation"
 	message := "test-message"
 
@@ -82,16 +80,16 @@ func TestAuditOperation(t *testing.T) {
 		config.Config.AuditToBackendDB = true
 
 		// Auditing should succeed as expected
-		err = AuditOperation(auditType, instance100, message)
+		err = AuditOperation(auditType, tab100Alias, message)
 		require.NoError(t, err)
 
-		audits, err := ReadRecentAudit(instance100, 0)
+		audits, err := ReadRecentAudit(tab100Alias, 0)
 		require.NoError(t, err)
 		require.Len(t, audits, 1)
 		require.EqualValues(t, 1, audits[0].AuditID)
 		require.EqualValues(t, auditType, audits[0].AuditType)
 		require.EqualValues(t, message, audits[0].Message)
-		require.EqualValues(t, *instance100, audits[0].AuditInstanceKey)
+		require.EqualValues(t, tab100Alias, audits[0].AuditTabletAlias)
 	})
 
 	t.Run("Audit to File", func(t *testing.T) {
@@ -103,7 +101,7 @@ func TestAuditOperation(t *testing.T) {
 		defer os.Remove(file.Name())
 		config.Config.AuditLogFile = file.Name()
 
-		err = AuditOperation(auditType, instance100, message)
+		err = AuditOperation(auditType, tab100Alias, message)
 		require.NoError(t, err)
 
 		// Give a little time for the write to succeed since it happens in a separate go-routine
@@ -112,6 +110,6 @@ func TestAuditOperation(t *testing.T) {
 		time.Sleep(100 * time.Millisecond)
 		fileContent, err := os.ReadFile(file.Name())
 		require.NoError(t, err)
-		require.Contains(t, string(fileContent), "\ttest-audit-operation\tlocalhost\t100\t[ks:0]\ttest-message")
+		require.Contains(t, string(fileContent), "\ttest-audit-operation\tzone-1-0000000100\t[ks:0]\ttest-message")
 	})
 }
