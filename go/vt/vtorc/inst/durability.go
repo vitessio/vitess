@@ -23,7 +23,7 @@ import (
 )
 
 // IsReplicaSemiSync returns the replica semi-sync setting for the instance.
-func IsReplicaSemiSync[V InstanceKey | *topodatapb.Tablet](durabilityPolicy reparentutil.Durabler, primaryInstance V, replicaInstance V) bool {
+func IsReplicaSemiSync[V string | *topodatapb.Tablet](durabilityPolicy reparentutil.Durabler, primaryInstance V, replicaInstance V) bool {
 	primary, err := getTablet(primaryInstance)
 	if err != nil {
 		return false
@@ -37,7 +37,7 @@ func IsReplicaSemiSync[V InstanceKey | *topodatapb.Tablet](durabilityPolicy repa
 
 // SemiSyncAckers returns the primary semi-sync setting for the instance.
 // 0 means none. Non-zero specifies the number of required ackers.
-func SemiSyncAckers[V InstanceKey | *topodatapb.Tablet](durabilityPolicy reparentutil.Durabler, instance V) int {
+func SemiSyncAckers[V string | *topodatapb.Tablet](durabilityPolicy reparentutil.Durabler, instance V) int {
 	primary, err := getTablet(instance)
 	if err != nil {
 		return 0
@@ -46,7 +46,7 @@ func SemiSyncAckers[V InstanceKey | *topodatapb.Tablet](durabilityPolicy reparen
 }
 
 // PromotionRule returns the promotion rule for the instance.
-func PromotionRule[V InstanceKey | *topodatapb.Tablet](durabilityPolicy reparentutil.Durabler, instance V) promotionrule.CandidatePromotionRule {
+func PromotionRule[V string | *topodatapb.Tablet](durabilityPolicy reparentutil.Durabler, instance V) promotionrule.CandidatePromotionRule {
 	tablet, err := getTablet(instance)
 	if err != nil {
 		return promotionrule.MustNot
@@ -54,11 +54,11 @@ func PromotionRule[V InstanceKey | *topodatapb.Tablet](durabilityPolicy reparent
 	return reparentutil.PromotionRule(durabilityPolicy, tablet)
 }
 
-func getTablet[V InstanceKey | *topodatapb.Tablet](instance V) (*topodatapb.Tablet, error) {
+func getTablet[V string | *topodatapb.Tablet](instance V) (*topodatapb.Tablet, error) {
 	var instanceTablet *topodatapb.Tablet
 	var err error
 	switch node := any(instance).(type) {
-	case InstanceKey:
+	case string:
 		instanceTablet, err = ReadTablet(node)
 		if err != nil {
 			return nil, err
@@ -70,7 +70,7 @@ func getTablet[V InstanceKey | *topodatapb.Tablet](instance V) (*topodatapb.Tabl
 }
 
 // GetDurabilityPolicy gets the durability policy for the keyspace of the given instance
-func GetDurabilityPolicy[V InstanceKey | *topodatapb.Tablet](instance V) (reparentutil.Durabler, error) {
+func GetDurabilityPolicy[V string | *topodatapb.Tablet](instance V) (reparentutil.Durabler, error) {
 	tablet, err := getTablet(instance)
 	if err != nil {
 		return nil, err

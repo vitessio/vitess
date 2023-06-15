@@ -21,6 +21,6 @@ type Audit struct {
 	AuditID          int64
 	AuditTimestamp   string
 	AuditType        string
-	AuditInstanceKey InstanceKey
+	AuditTabletAlias string
 	Message          string
 }

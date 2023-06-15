@@ -18,7 +18,6 @@ package inst
 
 import (
 	"encoding/json"
-	"fmt"
 	"strings"
 	"time"
 
@@ -72,22 +71,6 @@ const (
 	NotEnoughValidSemiSyncReplicasStructureWarning       StructureAnalysisCode = "NotEnoughValidSemiSyncReplicasStructureWarning"
 )
 
-type InstanceAnalysis struct {
-	key      *InstanceKey
-	analysis AnalysisCode
-}
-
-func NewInstanceAnalysis(instanceKey *InstanceKey, analysis AnalysisCode) *InstanceAnalysis {
-	return &InstanceAnalysis{
-		key:      instanceKey,
-		analysis: analysis,
-	}
-}
-
-func (instanceAnalysis *InstanceAnalysis) String() string {
-	return fmt.Sprintf("%s/%s", instanceAnalysis.key.StringCode(), string(instanceAnalysis.analysis))
-}
-
 // PeerAnalysisMap indicates the number of peers agreeing on an analysis.
 // Key of this map is a InstanceAnalysis.String()
 type PeerAnalysisMap map[string]int
@@ -97,12 +80,6 @@ type ReplicationAnalysisHints struct {
 	IncludeNoProblem bool
 	AuditAnalysis    bool
 }
-
-const (
-	ForcePrimaryFailoverCommandHint    string = "force-primary-failover"
-	ForcePrimaryTakeoverCommandHint    string = "force-primary-takeover"
-	GracefulPrimaryTakeoverCommandHint string = "graceful-primary-takeover"
-)
 
 type AnalysisInstanceType string
 
@@ -114,9 +91,12 @@ const (
 
 // ReplicationAnalysis notes analysis on replication chain status, per instance
 type ReplicationAnalysis struct {
-	AnalyzedInstanceKey                       InstanceKey
-	AnalyzedInstanceAlias                     *topodatapb.TabletAlias
-	AnalyzedInstancePrimaryKey                InstanceKey
+	AnalyzedInstanceHostname                  string
+	AnalyzedInstancePort                      int
+	AnalyzedInstanceAlias                     string
+	AnalyzedInstancePrimaryHostname           string
+	AnalyzedInstancePrimaryPort               int
+	AnalyzedInstancePrimaryAlias              string
 	TabletType                                topodatapb.TabletType
 	PrimaryTimeStamp                          time.Time
 	ClusterDetails                            ClusterInfo
@@ -171,13 +151,6 @@ type ReplicationAnalysis struct {
 	MaxReplicaGTIDErrant                      string
 	CommandHint                               string
 	IsReadOnly                                bool
-}
-
-type AnalysisMap map[string](*ReplicationAnalysis)
-
-type ReplicationAnalysisChangelog struct {
-	AnalyzedInstanceKey InstanceKey
-	Changelog           []string
 }
 
 func (replicationAnalysis *ReplicationAnalysis) MarshalJSON() ([]byte, error) {

@@ -23,6 +23,7 @@ DROP TABLE IF EXISTS database_instance
 `,
 	`
 CREATE TABLE database_instance (
+	alias varchar(256) NOT NULL,
 	hostname varchar(128) NOT NULL,
 	port smallint NOT NULL,
 	last_checked timestamp not null default (''),
@@ -67,7 +68,6 @@ CREATE TABLE database_instance (
 	has_replication_credentials TINYint not null default 0,
 	allow_tls TINYint not null default 0,
 	semi_sync_enforced TINYint not null default 0,
-	instance_alias varchar(128) not null default '',
 	version_comment varchar(128) NOT NULL DEFAULT '',
 	major_version varchar(16) not null default '',
 	binlog_row_image varchar(16) not null default '',
@@ -87,7 +87,7 @@ CREATE TABLE database_instance (
 	semi_sync_primary_status TINYint NOT NULL DEFAULT 0,
 	semi_sync_replica_status TINYint NOT NULL DEFAULT 0,
 	semi_sync_primary_clients int NOT NULL DEFAULT 0,
-	PRIMARY KEY (hostname,port)
+	PRIMARY KEY (alias)
 )`,
 	`
 CREATE INDEX last_checked_idx_database_instance ON database_instance(last_checked)
@@ -103,8 +103,7 @@ CREATE TABLE audit (
 	audit_id integer,
 	audit_timestamp timestamp not null default (''),
 	audit_type varchar(128) NOT NULL,
-	hostname varchar(128) NOT NULL DEFAULT '',
-	port smallint NOT NULL,
+	alias varchar(256) NOT NULL,
 	message text NOT NULL,
 	keyspace varchar(128) NOT NULL,
 	shard varchar(128) NOT NULL,
@@ -114,7 +113,7 @@ CREATE TABLE audit (
 CREATE INDEX audit_timestamp_idx_audit ON audit (audit_timestamp)
 	`,
 	`
-CREATE INDEX host_port_idx_audit ON audit (hostname, port, audit_timestamp)
+CREATE INDEX alias_idx_audit ON audit (alias, audit_timestamp)
 	`,
 	`
 DROP TABLE IF EXISTS active_node
@@ -150,16 +149,14 @@ DROP TABLE IF EXISTS topology_recovery
 	`
 CREATE TABLE topology_recovery (
 	recovery_id integer,
-	hostname varchar(128) NOT NULL,
-	port smallint NOT NULL,
+	alias varchar(256) NOT NULL,
 	in_active_period tinyint NOT NULL DEFAULT 0,
 	start_active_period timestamp not null default (''),
 	end_active_period_unixtime int,
 	end_recovery timestamp NULL DEFAULT NULL,
 	processing_node_hostname varchar(128) NOT NULL,
 	processcing_node_token varchar(128) NOT NULL,
-	successor_hostname varchar(128) DEFAULT NULL,
-	successor_port smallint DEFAULT NULL,
+	successor_alias varchar(256) DEFAULT NULL,
 	analysis varchar(128) not null default '',
 	keyspace varchar(128) NOT NULL,
 	shard varchar(128) NOT NULL,
@@ -171,7 +168,6 @@ CREATE TABLE topology_recovery (
 	all_errors text not null default '',
 	acknowledged_at TIMESTAMP NULL,
 	last_detection_id bigint not null default 0,
-	successor_alias varchar(128) DEFAULT NULL,
 	uid varchar(128) not null default '',
 	PRIMARY KEY (recovery_id)
 )`,
@@ -182,7 +178,7 @@ CREATE INDEX in_active_start_period_idx_topology_recovery ON topology_recovery (
 CREATE INDEX start_active_period_idx_topology_recovery ON topology_recovery (start_active_period)
 	`,
 	`
-CREATE UNIQUE INDEX hostname_port_active_period_uidx_topology_recovery ON topology_recovery (hostname, port, in_active_period, end_active_period_unixtime)
+CREATE UNIQUE INDEX alias_active_period_uidx_topology_recovery ON topology_recovery (alias, in_active_period, end_active_period_unixtime)
 	`,
 	`
 DROP TABLE IF EXISTS database_instance_topology_history
@@ -190,6 +186,7 @@ DROP TABLE IF EXISTS database_instance_topology_history
 	`
 CREATE TABLE database_instance_topology_history (
 	snapshot_unix_timestamp int NOT NULL,
+	alias varchar(256) NOT NULL,
 	hostname varchar(128) NOT NULL,
 	port smallint NOT NULL,
 	source_host varchar(128) NOT NULL,
@@ -197,7 +194,7 @@ CREATE TABLE database_instance_topology_history (
 	keyspace varchar(128) NOT NULL,
 	shard varchar(128) NOT NULL,
 	version varchar(128) not null default '',
-	PRIMARY KEY (snapshot_unix_timestamp, hostname, port)
+	PRIMARY KEY (snapshot_unix_timestamp, alias)
 )`,
 	`
 CREATE INDEX keyspace_shard_idx_database_instance_topology_history ON database_instance_topology_history (snapshot_unix_timestamp, keyspace, shard)
@@ -207,12 +204,11 @@ DROP TABLE IF EXISTS candidate_database_instance
 `,
 	`
 CREATE TABLE candidate_database_instance (
-	hostname varchar(128) NOT NULL,
-	port smallint NOT NULL,
+	alias varchar(256) NOT NULL,
 	last_suggested timestamp not null default (''),
 	priority TINYINT SIGNED NOT NULL DEFAULT 1,
 	promotion_rule text check(promotion_rule in ('must', 'prefer', 'neutral', 'prefer_not', 'must_not')) NOT NULL DEFAULT 'neutral',
-	PRIMARY KEY (hostname, port)
+	PRIMARY KEY (alias)
 )`,
 	`
 CREATE INDEX last_suggested_idx_candidate_database_instance ON candidate_database_instance (last_suggested)
@@ -223,8 +219,7 @@ DROP TABLE IF EXISTS topology_failure_detection
 	`
 CREATE TABLE topology_failure_detection (
 	detection_id integer,
-	hostname varchar(128) NOT NULL,
-	port smallint NOT NULL,
+	alias varchar(256) NOT NULL,
 	in_active_period tinyint NOT NULL DEFAULT '0',
 	start_active_period timestamp not null default (''),
 	end_active_period_unixtime int NOT NULL,
@@ -245,14 +240,13 @@ DROP TABLE IF EXISTS blocked_topology_recovery
 `,
 	`
 CREATE TABLE blocked_topology_recovery (
-	hostname varchar(128) NOT NULL,
-	port smallint NOT NULL,
+	alias varchar(256) NOT NULL,
 	keyspace varchar(128) NOT NULL,
 	shard varchar(128) NOT NULL,
 	analysis varchar(128) NOT NULL,
 	last_blocked_timestamp timestamp not null default (''),
 	blocking_recovery_id bigint,
-	PRIMARY KEY (hostname, port)
+	PRIMARY KEY (alias)
 )`,
 	`
 CREATE INDEX keyspace_shard_blocked_idx_blocked_topology_recovery ON blocked_topology_recovery (keyspace, shard, last_blocked_timestamp)
@@ -262,11 +256,10 @@ DROP TABLE IF EXISTS database_instance_last_analysis
 `,
 	`
 CREATE TABLE database_instance_last_analysis (
-	hostname varchar(128) NOT NULL,
-	port smallint NOT NULL,
+	alias varchar(256) NOT NULL,
 	analysis_timestamp timestamp not null default (''),
 	analysis varchar(128) NOT NULL,
-	PRIMARY KEY (hostname, port)
+	PRIMARY KEY (alias)
 )`,
 	`
 CREATE INDEX analysis_timestamp_idx_database_instance_last_analysis ON database_instance_last_analysis (analysis_timestamp)
@@ -277,8 +270,7 @@ DROP TABLE IF EXISTS database_instance_analysis_changelog
 	`
 CREATE TABLE database_instance_analysis_changelog (
 	changelog_id integer,
-	hostname varchar(128) NOT NULL,
-	port smallint NOT NULL,
+	alias varchar(256) NOT NULL,
 	analysis_timestamp timestamp not null default (''),
 	analysis varchar(128) NOT NULL,
 	PRIMARY KEY (changelog_id)
@@ -306,9 +298,6 @@ CREATE INDEX first_seen_active_idx_node_health_history ON node_health_history (f
 	`
 CREATE UNIQUE INDEX hostname_token_idx_node_health_history ON node_health_history (hostname, token)
 	`,
-	`
-DROP TABLE IF EXISTS database_instance_coordinates_history
-`,
 	`
 DROP TABLE IF EXISTS vtorc_db_deployments
 `,
@@ -342,12 +331,11 @@ DROP TABLE IF EXISTS database_instance_stale_binlog_coordinates
 `,
 	`
 CREATE TABLE database_instance_stale_binlog_coordinates (
-	hostname varchar(128) NOT NULL,
-	port smallint NOT NULL,
+	alias varchar(256) NOT NULL,
 	binary_log_file varchar(128) NOT NULL,
 	binary_log_pos bigint NOT NULL,
 	first_seen timestamp not null default (''),
-	PRIMARY KEY (hostname, port)
+	PRIMARY KEY (alias)
 )`,
 	`
 CREATE INDEX first_seen_idx_database_instance_stale_binlog_coordinates ON database_instance_stale_binlog_coordinates (first_seen)
@@ -366,8 +354,7 @@ CREATE TABLE vitess_tablet (
 	tablet_type smallint(5) NOT NULL,
 	primary_timestamp timestamp NOT NULL,
 	info varchar(512) NOT NULL,
-	UNIQUE (alias),
-	PRIMARY KEY (hostname, port)
+	PRIMARY KEY (alias)
 )`,
 	`
 CREATE INDEX cell_idx_vitess_tablet ON vitess_tablet (cell)
@@ -401,7 +388,7 @@ CREATE INDEX acknowledged_idx_topology_recovery on topology_recovery (acknowledg
 CREATE INDEX last_blocked_idx_blocked_topology_recovery on blocked_topology_recovery (last_blocked_timestamp)
 	`,
 	`
-CREATE INDEX instance_timestamp_idx_database_instance_analysis_changelog on database_instance_analysis_changelog (hostname, port, analysis_timestamp)
+CREATE INDEX instance_timestamp_idx_database_instance_analysis_changelog on database_instance_analysis_changelog (alias, analysis_timestamp)
 	`,
 	`
 CREATE INDEX last_detection_idx_topology_recovery on topology_recovery (last_detection_id)
@@ -416,6 +403,6 @@ CREATE INDEX uid_idx_topology_recovery ON topology_recovery(uid)
 CREATE INDEX recovery_uid_idx_topology_recovery_steps ON topology_recovery_steps(recovery_uid)
 	`,
 	`
-CREATE UNIQUE INDEX host_port_active_recoverable_uidx_topology_failure_detection ON topology_failure_detection (hostname, port, in_active_period, end_active_period_unixtime, is_actionable)
+CREATE UNIQUE INDEX alias_active_recoverable_uidx_topology_failure_detection ON topology_failure_detection (alias, in_active_period, end_active_period_unixtime, is_actionable)
 	`,
 }

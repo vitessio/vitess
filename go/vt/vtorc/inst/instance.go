@@ -21,14 +21,13 @@ import (
 	"encoding/json"
 	"strings"
 	"time"
-
-	"vitess.io/vitess/go/vt/vtctl/reparentutil/promotionrule"
 )
 
 // Instance represents a database instance, including its current configuration & status.
 // It presents important replication configuration and detailed replication status.
 type Instance struct {
-	Key                          InstanceKey
+	Hostname                     string
+	Port                         int
 	InstanceAlias                string
 	ServerID                     uint
 	ServerUUID                   string
@@ -41,7 +40,8 @@ type Instance struct {
 	LogBinEnabled                bool
 	LogReplicationUpdatesEnabled bool
 	SelfBinlogCoordinates        BinlogCoordinates
-	SourceKey                    InstanceKey
+	SourceHost                   string
+	SourcePort                   int
 	SourceUUID                   string
 	AncestryUUID                 string
 
@@ -92,13 +92,7 @@ type Instance struct {
 	IsRecentlyChecked    bool
 	SecondsSinceLastSeen sql.NullInt64
 
-	// Careful. IsCandidate and PromotionRule are used together
-	// and probably need to be merged. IsCandidate's value may
-	// be picked up from daabase_candidate_instance's value when
-	// reading an instance from the db.
-	IsCandidate   bool
-	PromotionRule promotionrule.CandidatePromotionRule
-	AllowTLS      bool
+	AllowTLS bool
 
 	Problems []string
 
@@ -127,7 +121,7 @@ func (instance *Instance) MarshalJSON() ([]byte, error) {
 // Equals tests that this instance is the same instance as other. The function does not test
 // configuration or status.
 func (instance *Instance) Equals(other *Instance) bool {
-	return instance.Key == other.Key
+	return instance.InstanceAlias == other.InstanceAlias
 }
 
 // MajorVersion returns this instance's major version number (e.g. for 5.5.36 it returns "5.5")
@@ -246,7 +240,7 @@ func (instance *Instance) FlavorNameAndMajorVersion() string {
 
 // IsReplica makes simple heuristics to decide whether this instance is a replica of another instance
 func (instance *Instance) IsReplica() bool {
-	return instance.SourceKey.Hostname != "" && instance.SourceKey.Hostname != "_" && instance.SourceKey.Port != 0 && (instance.ReadBinlogCoordinates.LogFile != "" || instance.UsingGTID())
+	return instance.SourceHost != "" && instance.SourceHost != "_" && instance.SourcePort != 0 && (instance.ReadBinlogCoordinates.LogFile != "" || instance.UsingGTID())
 }
 
 // IsPrimary makes simple heuristics to decide whether this instance is a primary (not replicating from any other server),

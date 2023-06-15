@@ -39,8 +39,6 @@ import (
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo/topoproto"
-	"vitess.io/vitess/go/vt/vtctl/reparentutil"
-	"vitess.io/vitess/go/vt/vtctl/reparentutil/promotionrule"
 	"vitess.io/vitess/go/vt/vtorc/collection"
 	"vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/db"
@@ -56,7 +54,7 @@ const (
 var instanceReadChan = make(chan bool, backendDBConcurrency)
 var instanceWriteChan = make(chan bool, backendDBConcurrency)
 
-var forgetInstanceKeys *cache.Cache
+var forgetAliases *cache.Cache
 
 var accessDeniedCounter = metrics.NewCounter()
 var readTopologyInstanceCounter = metrics.NewCounter()
@@ -80,7 +78,7 @@ func init() {
 
 func initializeInstanceDao() {
 	config.WaitForConfigurationToBeLoaded()
-	forgetInstanceKeys = cache.New(time.Duration(config.Config.InstancePollSeconds*3)*time.Second, time.Second)
+	forgetAliases = cache.New(time.Duration(config.Config.InstancePollSeconds*3)*time.Second, time.Second)
 }
 
 // ExecDBWriteFunc chooses how to execute a write onto the database: whether synchronuously or not
@@ -123,19 +121,19 @@ func ExpireTableData(tableName string, timestampColumn string) error {
 // logReadTopologyInstanceError logs an error, if applicable, for a ReadTopologyInstance operation,
 // providing context and hint as for the source of the error. If there's no hint just provide the
 // original error.
-func logReadTopologyInstanceError(instanceKey *InstanceKey, hint string, err error) error {
+func logReadTopologyInstanceError(tabletAlias string, hint string, err error) error {
 	if err == nil {
 		return nil
 	}
-	if !util.ClearToLog("ReadTopologyInstance", instanceKey.StringCode()) {
+	if !util.ClearToLog("ReadTopologyInstance", tabletAlias) {
 		return err
 	}
 	var msg string
 	if hint == "" {
-		msg = fmt.Sprintf("ReadTopologyInstance(%+v): %+v", *instanceKey, err)
+		msg = fmt.Sprintf("ReadTopologyInstance(%+v): %+v", tabletAlias, err)
 	} else {
 		msg = fmt.Sprintf("ReadTopologyInstance(%+v) %+v: %+v",
-			*instanceKey,
+			tabletAlias,
 			strings.Replace(hint, "%", "%%", -1), // escape %
 			err)
 	}
@@ -146,8 +144,8 @@ func logReadTopologyInstanceError(instanceKey *InstanceKey, hint string, err err
 // ReadTopologyInstance collects information on the state of a MySQL
 // server and writes the result synchronously to the vtorc
 // backend.
-func ReadTopologyInstance(instanceKey *InstanceKey) (*Instance, error) {
-	return ReadTopologyInstanceBufferable(instanceKey, nil)
+func ReadTopologyInstance(tabletAlias string) (*Instance, error) {
+	return ReadTopologyInstanceBufferable(tabletAlias, nil)
 }
 
 // ReadTopologyInstanceBufferable connects to a topology MySQL instance
@@ -155,16 +153,15 @@ func ReadTopologyInstance(instanceKey *InstanceKey) (*Instance, error) {
 // It writes the information retrieved into vtorc's backend.
 // - writes are optionally buffered.
 // - timing information can be collected for the stages performed.
-func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, latency *stopwatch.NamedStopwatch) (inst *Instance, err error) {
+func ReadTopologyInstanceBufferable(tabletAlias string, latency *stopwatch.NamedStopwatch) (inst *Instance, err error) {
 	defer func() {
 		if r := recover(); r != nil {
-			err = logReadTopologyInstanceError(instanceKey, "Unexpected, aborting", tb.Errorf("%+v", r))
+			err = logReadTopologyInstanceError(tabletAlias, "Unexpected, aborting", tb.Errorf("%+v", r))
 		}
 	}()
 
 	var waitGroup sync.WaitGroup
 	var tablet *topodatapb.Tablet
-	var durability reparentutil.Durabler
 	var fullStatus *replicationdatapb.FullStatus
 	readingStartTime := time.Now()
 	instance := NewInstance()
@@ -172,24 +169,19 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, latency *stopwatch
 	partialSuccess := false
 	errorChan := make(chan error, 32)
 
-	if !instanceKey.IsValid() {
-		latency.Start("backend")
-		if err := UpdateInstanceLastAttemptedCheck(instanceKey); err != nil {
-			log.Errorf("ReadTopologyInstanceBufferable: %+v: %v", instanceKey, err)
-		}
-		latency.Stop("backend")
-		return instance, fmt.Errorf("ReadTopologyInstance will not act on invalid instance key: %+v", *instanceKey)
+	if tabletAlias == "" {
+		return instance, fmt.Errorf("ReadTopologyInstance will not act on empty tablet alias")
 	}
 
 	lastAttemptedCheckTimer := time.AfterFunc(time.Second, func() {
 		go func() {
-			_ = UpdateInstanceLastAttemptedCheck(instanceKey)
+			_ = UpdateInstanceLastAttemptedCheck(tabletAlias)
 		}()
 	})
 
 	latency.Start("instance")
 
-	tablet, err = ReadTablet(*instanceKey)
+	tablet, err = ReadTablet(tabletAlias)
 	if err != nil {
 		goto Cleanup
 	}
@@ -200,18 +192,14 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, latency *stopwatch
 		goto Cleanup
 	}
 
-	durability, err = GetDurabilityPolicy(tablet)
-	if err != nil {
-		goto Cleanup
-	}
-
-	fullStatus, err = FullStatus(*instanceKey)
+	fullStatus, err = FullStatus(tabletAlias)
 	if err != nil {
 		goto Cleanup
 	}
 	partialSuccess = true // We at least managed to read something from the server.
 
-	instance.Key = *instanceKey
+	instance.Hostname = tablet.MysqlHostname
+	instance.Port = int(tablet.MysqlPort)
 	{
 		// We begin with a few operations we can run concurrently, and which do not depend on anything
 		instance.ServerID = uint(fullStatus.ServerId)
@@ -262,10 +250,6 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, latency *stopwatch
 			}
 		}
 	}
-	if instance.Key.Hostname == "" {
-		err = fmt.Errorf("ReadTopologyInstance: empty hostname (%+v). Bailing out", *instanceKey)
-		goto Cleanup
-	}
 
 	instance.ReplicationIOThreadState = ReplicationThreadStateNoThread
 	instance.ReplicationSQLThreadState = ReplicationThreadStateNoThread
@@ -300,12 +284,8 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, latency *stopwatch
 		instance.SourceUUID = fullStatus.ReplicationStatus.SourceUuid
 		instance.HasReplicationFilters = fullStatus.ReplicationStatus.HasReplicationFilters
 
-		primaryHostname := fullStatus.ReplicationStatus.SourceHost
-		primaryKey, err := newInstanceKey(primaryHostname, int(fullStatus.ReplicationStatus.SourcePort))
-		if err != nil {
-			_ = logReadTopologyInstanceError(instanceKey, "newInstanceKey()", err)
-		}
-		instance.SourceKey = *primaryKey
+		instance.SourceHost = fullStatus.ReplicationStatus.SourceHost
+		instance.SourcePort = int(fullStatus.ReplicationStatus.SourcePort)
 
 		if fullStatus.ReplicationStatus.ReplicationLagUnknown {
 			instance.SecondsBehindPrimary.Valid = false
@@ -314,7 +294,7 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, latency *stopwatch
 			instance.SecondsBehindPrimary.Int64 = int64(fullStatus.ReplicationStatus.ReplicationLagSeconds)
 		}
 		if instance.SecondsBehindPrimary.Valid && instance.SecondsBehindPrimary.Int64 < 0 {
-			log.Warningf("Host: %+v, instance.ReplicationLagSeconds < 0 [%+v], correcting to 0", instanceKey, instance.SecondsBehindPrimary.Int64)
+			log.Warningf("Host: %+v, instance.ReplicationLagSeconds < 0 [%+v], correcting to 0", tabletAlias, instance.SecondsBehindPrimary.Int64)
 			instance.SecondsBehindPrimary.Int64 = 0
 		}
 		// And until told otherwise:
@@ -337,15 +317,8 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, latency *stopwatch
 		latency.Start("backend")
 		err = ReadInstanceClusterAttributes(instance)
 		latency.Stop("backend")
-		_ = logReadTopologyInstanceError(instanceKey, "ReadInstanceClusterAttributes", err)
+		_ = logReadTopologyInstanceError(tabletAlias, "ReadInstanceClusterAttributes", err)
 	}
-
-	// We need to update candidate_database_instance.
-	// We register the rule even if it hasn't changed,
-	// to bump the last_suggested time.
-	instance.PromotionRule = PromotionRule(durability, tablet)
-	err = RegisterCandidateInstance(NewCandidateDatabaseInstance(instanceKey, instance.PromotionRule).WithCurrentTime())
-	_ = logReadTopologyInstanceError(instanceKey, "RegisterCandidateInstance", err)
 
 Cleanup:
 	waitGroup.Wait()
@@ -418,7 +391,7 @@ Cleanup:
 	// tried to check the instance. last_attempted_check is also
 	// updated on success by writeInstance.
 	latency.Start("backend")
-	_ = UpdateInstanceLastChecked(instanceKey, partialSuccess)
+	_ = UpdateInstanceLastChecked(tabletAlias, partialSuccess)
 	latency.Stop("backend")
 	return nil, err
 }
@@ -445,11 +418,10 @@ func getBinlogCoordinatesFromPositionString(position string) (BinlogCoordinates,
 // It is a non-recursive function and so-called-recursion is performed upon periodic reading of
 // instances.
 func ReadInstanceClusterAttributes(instance *Instance) (err error) {
-	var primaryOrGroupPrimaryInstanceKey InstanceKey
-	var primaryOrGroupPrimaryReplicationDepth uint
+	var primaryReplicationDepth uint
 	var ancestryUUID string
-	var primaryOrGroupPrimaryExecutedGtidSet string
-	primaryOrGroupPrimaryDataFound := false
+	var primaryExecutedGtidSet string
+	primaryDataFound := false
 
 	query := `
 			select
@@ -461,15 +433,16 @@ func ReadInstanceClusterAttributes(instance *Instance) (err error) {
 				from database_instance
 				where hostname=? and port=?
 	`
-	primaryOrGroupPrimaryInstanceKey = instance.SourceKey
-	args := sqlutils.Args(primaryOrGroupPrimaryInstanceKey.Hostname, primaryOrGroupPrimaryInstanceKey.Port)
+	primaryHostname := instance.SourceHost
+	primaryPort := instance.SourcePort
+	args := sqlutils.Args(primaryHostname, primaryPort)
 	err = db.QueryVTOrc(query, args, func(m sqlutils.RowMap) error {
-		primaryOrGroupPrimaryReplicationDepth = m.GetUint("replication_depth")
-		primaryOrGroupPrimaryInstanceKey.Hostname = m.GetString("source_host")
-		primaryOrGroupPrimaryInstanceKey.Port = m.GetInt("source_port")
+		primaryReplicationDepth = m.GetUint("replication_depth")
+		primaryHostname = m.GetString("source_host")
+		primaryPort = m.GetInt("source_port")
 		ancestryUUID = m.GetString("ancestry_uuid")
-		primaryOrGroupPrimaryExecutedGtidSet = m.GetString("executed_gtid_set")
-		primaryOrGroupPrimaryDataFound = true
+		primaryExecutedGtidSet = m.GetString("executed_gtid_set")
+		primaryDataFound = true
 		return nil
 	})
 	if err != nil {
@@ -478,18 +451,18 @@ func ReadInstanceClusterAttributes(instance *Instance) (err error) {
 	}
 
 	var replicationDepth uint
-	if primaryOrGroupPrimaryDataFound {
-		replicationDepth = primaryOrGroupPrimaryReplicationDepth + 1
+	if primaryDataFound {
+		replicationDepth = primaryReplicationDepth + 1
 	}
 	isCoPrimary := false
-	if primaryOrGroupPrimaryInstanceKey.Equals(&instance.Key) {
+	if primaryHostname == instance.Hostname && primaryPort == instance.Port {
 		// co-primary calls for special case, in fear of the infinite loop
 		isCoPrimary = true
 	}
 	instance.ReplicationDepth = replicationDepth
 	instance.IsCoPrimary = isCoPrimary
 	instance.AncestryUUID = ancestryUUID
-	instance.primaryExecutedGtidSet = primaryOrGroupPrimaryExecutedGtidSet
+	instance.primaryExecutedGtidSet = primaryExecutedGtidSet
 	return nil
 }
 
@@ -497,8 +470,8 @@ func ReadInstanceClusterAttributes(instance *Instance) (err error) {
 func readInstanceRow(m sqlutils.RowMap) *Instance {
 	instance := NewInstance()
 
-	instance.Key.Hostname = m.GetString("hostname")
-	instance.Key.Port = m.GetInt("port")
+	instance.Hostname = m.GetString("hostname")
+	instance.Port = m.GetInt("port")
 	instance.ServerID = m.GetUint("server_id")
 	instance.ServerUUID = m.GetString("server_uuid")
 	instance.Version = m.GetString("version")
@@ -508,8 +481,8 @@ func readInstanceRow(m sqlutils.RowMap) *Instance {
 	instance.BinlogRowImage = m.GetString("binlog_row_image")
 	instance.LogBinEnabled = m.GetBool("log_bin")
 	instance.LogReplicationUpdatesEnabled = m.GetBool("log_replica_updates")
-	instance.SourceKey.Hostname = m.GetString("source_host")
-	instance.SourceKey.Port = m.GetInt("source_port")
+	instance.SourceHost = m.GetString("source_host")
+	instance.SourcePort = m.GetInt("source_port")
 	instance.ReplicationSQLThreadRuning = m.GetBool("replica_sql_running")
 	instance.ReplicationIOThreadRuning = m.GetBool("replica_io_running")
 	instance.ReplicationSQLThreadState = ReplicationThreadState(m.GetInt("replication_sql_thread_state"))
@@ -558,10 +531,8 @@ func readInstanceRow(m sqlutils.RowMap) *Instance {
 	instance.LastSeenTimestamp = m.GetString("last_seen")
 	instance.IsLastCheckValid = m.GetBool("is_last_check_valid")
 	instance.SecondsSinceLastSeen = m.GetNullInt64("seconds_since_last_seen")
-	instance.IsCandidate = m.GetBool("is_candidate")
-	instance.PromotionRule = promotionrule.CandidatePromotionRule(m.GetString("promotion_rule"))
 	instance.AllowTLS = m.GetBool("allow_tls")
-	instance.InstanceAlias = m.GetString("instance_alias")
+	instance.InstanceAlias = m.GetString("alias")
 	instance.LastDiscoveryLatency = time.Duration(m.GetInt64("last_discovery_latency")) * time.Nanosecond
 
 	instance.applyFlavorName()
@@ -589,21 +560,17 @@ func readInstancesByCondition(condition string, args []any, sort string) ([](*In
 		var instances []*Instance
 
 		if sort == "" {
-			sort = `hostname, port`
+			sort = `alias`
 		}
 		query := fmt.Sprintf(`
 		select
 			*,
 			unix_timestamp() - unix_timestamp(last_checked) as seconds_since_last_checked,
 			ifnull(last_checked <= last_seen, 0) as is_last_check_valid,
-			unix_timestamp() - unix_timestamp(last_seen) as seconds_since_last_seen,
-			candidate_database_instance.last_suggested is not null
-				 and candidate_database_instance.promotion_rule in ('must', 'prefer') as is_candidate,
-			ifnull(nullif(candidate_database_instance.promotion_rule, ''), 'neutral') as promotion_rule
+			unix_timestamp() - unix_timestamp(last_seen) as seconds_since_last_seen
 		from
-			database_instance
-			left join vitess_tablet using (hostname, port)
-			left join candidate_database_instance using (hostname, port)
+			vitess_tablet
+			left join database_instance using (alias, hostname, port)
 		where
 			%s
 		order by
@@ -627,17 +594,16 @@ func readInstancesByCondition(condition string, args []any, sort string) ([](*In
 	return instances, err
 }
 
-func readInstancesByExactKey(instanceKey *InstanceKey) ([](*Instance), error) {
+func readInstancesByExactKey(tabletAlias string) ([](*Instance), error) {
 	condition := `
-			hostname = ?
-			and port = ?
+			alias = ?
 		`
-	return readInstancesByCondition(condition, sqlutils.Args(instanceKey.Hostname, instanceKey.Port), "")
+	return readInstancesByCondition(condition, sqlutils.Args(tabletAlias), "")
 }
 
 // ReadInstance reads an instance from the vtorc backend database
-func ReadInstance(instanceKey *InstanceKey) (*Instance, bool, error) {
-	instances, err := readInstancesByExactKey(instanceKey)
+func ReadInstance(tabletAlias string) (*Instance, bool, error) {
+	instances, err := readInstancesByExactKey(tabletAlias)
 	// We know there will be at most one (hostname & port are PK)
 	// And we expect to find one
 	readInstanceCounter.Inc(1)
@@ -651,25 +617,25 @@ func ReadInstance(instanceKey *InstanceKey) (*Instance, bool, error) {
 }
 
 // ReadReplicaInstances reads replicas of a given primary
-func ReadReplicaInstances(primaryKey *InstanceKey) ([](*Instance), error) {
+func ReadReplicaInstances(primaryHost string, primaryPort int) ([](*Instance), error) {
 	condition := `
 			source_host = ?
 			and source_port = ?
 		`
-	return readInstancesByCondition(condition, sqlutils.Args(primaryKey.Hostname, primaryKey.Port), "")
+	return readInstancesByCondition(condition, sqlutils.Args(primaryHost, primaryPort), "")
 }
 
 // ReadReplicaInstancesIncludingBinlogServerSubReplicas returns a list of direct slves including any replicas
 // of a binlog server replica
-func ReadReplicaInstancesIncludingBinlogServerSubReplicas(primaryKey *InstanceKey) ([](*Instance), error) {
-	replicas, err := ReadReplicaInstances(primaryKey)
+func ReadReplicaInstancesIncludingBinlogServerSubReplicas(primaryHost string, primaryPort int) ([](*Instance), error) {
+	replicas, err := ReadReplicaInstances(primaryHost, primaryPort)
 	if err != nil {
 		return replicas, err
 	}
 	for _, replica := range replicas {
 		replica := replica
 		if replica.IsBinlogServer() {
-			binlogServerReplicas, err := ReadReplicaInstancesIncludingBinlogServerSubReplicas(&replica.Key)
+			binlogServerReplicas, err := ReadReplicaInstancesIncludingBinlogServerSubReplicas(replica.Hostname, replica.Port)
 			if err != nil {
 				return replicas, err
 			}
@@ -700,7 +666,7 @@ func ReadProblemInstances(keyspace string, shard string) ([](*Instance), error) 
 }
 
 // GetKeyspaceShardName gets the keyspace shard name for the given instance key
-func GetKeyspaceShardName(instanceKey *InstanceKey) (keyspace string, shard string, err error) {
+func GetKeyspaceShardName(tabletAlias string) (keyspace string, shard string, err error) {
 	query := `
 		select
 			keyspace,
@@ -708,10 +674,9 @@ func GetKeyspaceShardName(instanceKey *InstanceKey) (keyspace string, shard stri
 		from
 			vitess_tablet
 		where
-			hostname = ?
-			and port = ?
+			alias = ?
 			`
-	err = db.QueryVTOrc(query, sqlutils.Args(instanceKey.Hostname, instanceKey.Port), func(m sqlutils.RowMap) error {
+	err = db.QueryVTOrc(query, sqlutils.Args(tabletAlias), func(m sqlutils.RowMap) error {
 		keyspace = m.GetString("keyspace")
 		shard = m.GetString("shard")
 		return nil
@@ -731,11 +696,11 @@ func GetKeyspaceShardName(instanceKey *InstanceKey) (keyspace string, shard stri
 // resulted in an actual check! This can happen when TCP/IP connections are hung, in which case the "check"
 // never returns. In such case we multiply interval by a factor, so as not to open too many connections on
 // the instance.
-func ReadOutdatedInstanceKeys() ([]InstanceKey, error) {
-	res := []InstanceKey{}
+func ReadOutdatedInstanceKeys() ([]string, error) {
+	var res []string
 	query := `
 		SELECT
-			hostname, port
+			alias
 		FROM
 			database_instance
 		WHERE
@@ -746,24 +711,21 @@ func ReadOutdatedInstanceKeys() ([]InstanceKey, error) {
 			END
 		UNION
 		SELECT
-			vitess_tablet.hostname, vitess_tablet.port
+			vitess_tablet.alias
 		FROM
 			vitess_tablet LEFT JOIN database_instance ON (
-			vitess_tablet.hostname = database_instance.hostname
-			AND vitess_tablet.port = database_instance.port
+			vitess_tablet.alias = database_instance.alias
 		)
 		WHERE
-			database_instance.hostname IS NULL
+			database_instance.alias IS NULL
 			`
 	args := sqlutils.Args(config.Config.InstancePollSeconds, 2*config.Config.InstancePollSeconds)
 
 	err := db.QueryVTOrc(query, args, func(m sqlutils.RowMap) error {
-		instanceKey, merr := newInstanceKey(m.GetString("hostname"), m.GetInt("port"))
-		if merr != nil {
-			log.Error(merr)
-		} else if !InstanceIsForgotten(instanceKey) {
+		tabletAlias := m.GetString("alias")
+		if !InstanceIsForgotten(tabletAlias) {
 			// only if not in "forget" cache
-			res = append(res, *instanceKey)
+			res = append(res, tabletAlias)
 		}
 		// We don;t return an error because we want to keep filling the outdated instances list.
 		return nil
@@ -830,6 +792,7 @@ func mkInsertOdkuForInstances(instances []*Instance, instanceWasActuallyFound bo
 		insertIgnore = true
 	}
 	var columns = []string{
+		"alias",
 		"hostname",
 		"port",
 		"last_checked",
@@ -891,7 +854,6 @@ func mkInsertOdkuForInstances(instances []*Instance, instanceWasActuallyFound bo
 		"semi_sync_primary_status",
 		"semi_sync_primary_clients",
 		"semi_sync_replica_status",
-		"instance_alias",
 		"last_discovery_latency",
 	}
 
@@ -899,9 +861,9 @@ func mkInsertOdkuForInstances(instances []*Instance, instanceWasActuallyFound bo
 	for i := range columns {
 		values[i] = "?"
 	}
-	values[2] = "NOW()" // last_checked
-	values[3] = "NOW()" // last_attempted_check
-	values[4] = "1"     // last_check_partial_success
+	values[3] = "NOW()" // last_checked
+	values[4] = "NOW()" // last_attempted_check
+	values[5] = "1"     // last_check_partial_success
 
 	if updateLastSeen {
 		columns = append(columns, "last_seen")
@@ -912,8 +874,9 @@ func mkInsertOdkuForInstances(instances []*Instance, instanceWasActuallyFound bo
 	for _, instance := range instances {
 		// number of columns minus 2 as last_checked and last_attempted_check
 		// updated with NOW()
-		args = append(args, instance.Key.Hostname)
-		args = append(args, instance.Key.Port)
+		args = append(args, instance.InstanceAlias)
+		args = append(args, instance.Hostname)
+		args = append(args, instance.Port)
 		args = append(args, instance.ServerID)
 		args = append(args, instance.ServerUUID)
 		args = append(args, instance.Version)
@@ -927,8 +890,8 @@ func mkInsertOdkuForInstances(instances []*Instance, instanceWasActuallyFound bo
 		args = append(args, instance.LogReplicationUpdatesEnabled)
 		args = append(args, instance.SelfBinlogCoordinates.LogFile)
 		args = append(args, instance.SelfBinlogCoordinates.LogPos)
-		args = append(args, instance.SourceKey.Hostname)
-		args = append(args, instance.SourceKey.Port)
+		args = append(args, instance.SourceHost)
+		args = append(args, instance.SourcePort)
 		args = append(args, instance.ReplicationSQLThreadRuning)
 		args = append(args, instance.ReplicationIOThreadRuning)
 		args = append(args, instance.ReplicationSQLThreadState)
@@ -970,7 +933,6 @@ func mkInsertOdkuForInstances(instances []*Instance, instanceWasActuallyFound bo
 		args = append(args, instance.SemiSyncPrimaryStatus)
 		args = append(args, instance.SemiSyncPrimaryClients)
 		args = append(args, instance.SemiSyncReplicaStatus)
-		args = append(args, instance.InstanceAlias)
 		args = append(args, instance.LastDiscoveryLatency.Nanoseconds())
 	}
 
@@ -988,7 +950,7 @@ func mkInsertOdkuForInstances(instances []*Instance, instanceWasActuallyFound bo
 func writeManyInstances(instances []*Instance, instanceWasActuallyFound bool, updateLastSeen bool) error {
 	writeInstances := [](*Instance){}
 	for _, instance := range instances {
-		if InstanceIsForgotten(&instance.Key) && !instance.IsSeed() {
+		if InstanceIsForgotten(instance.InstanceAlias) && !instance.IsSeed() {
 			continue
 		}
 		writeInstances = append(writeInstances, instance)
@@ -1017,7 +979,7 @@ func WriteInstance(instance *Instance, instanceWasActuallyFound bool, lastError 
 
 // UpdateInstanceLastChecked updates the last_check timestamp in the vtorc backed database
 // for a given instance
-func UpdateInstanceLastChecked(instanceKey *InstanceKey, partialSuccess bool) error {
+func UpdateInstanceLastChecked(tabletAlias string, partialSuccess bool) error {
 	writeFunc := func() error {
 		_, err := db.ExecVTOrc(`
         	update
@@ -1026,11 +988,9 @@ func UpdateInstanceLastChecked(instanceKey *InstanceKey, partialSuccess bool) er
 						last_checked = NOW(),
 						last_check_partial_success = ?
 			where
-				hostname = ?
-				and port = ?`,
+				alias = ?`,
 			partialSuccess,
-			instanceKey.Hostname,
-			instanceKey.Port,
+			tabletAlias,
 		)
 		if err != nil {
 			log.Error(err)
@@ -1048,7 +1008,7 @@ func UpdateInstanceLastChecked(instanceKey *InstanceKey, partialSuccess bool) er
 // And so we make sure to note down *before* we even attempt to access the instance; and this raises a red flag when we
 // wish to access the instance again: if last_attempted_check is *newer* than last_checked, that's bad news and means
 // we have a "hanging" issue.
-func UpdateInstanceLastAttemptedCheck(instanceKey *InstanceKey) error {
+func UpdateInstanceLastAttemptedCheck(tabletAlias string) error {
 	writeFunc := func() error {
 		_, err := db.ExecVTOrc(`
     	update
@@ -1056,10 +1016,8 @@ func UpdateInstanceLastAttemptedCheck(instanceKey *InstanceKey) error {
     	set
     		last_attempted_check = NOW()
 			where
-				hostname = ?
-				and port = ?`,
-			instanceKey.Hostname,
-			instanceKey.Port,
+				alias = ?`,
+			tabletAlias,
 		)
 		if err != nil {
 			log.Error(err)
@@ -1069,27 +1027,26 @@ func UpdateInstanceLastAttemptedCheck(instanceKey *InstanceKey) error {
 	return ExecDBWriteFunc(writeFunc)
 }
 
-func InstanceIsForgotten(instanceKey *InstanceKey) bool {
-	_, found := forgetInstanceKeys.Get(instanceKey.StringCode())
+func InstanceIsForgotten(tabletAlias string) bool {
+	_, found := forgetAliases.Get(tabletAlias)
 	return found
 }
 
 // ForgetInstance removes an instance entry from the vtorc backed database.
 // It may be auto-rediscovered through topology or requested for discovery by multiple means.
-func ForgetInstance(instanceKey *InstanceKey) error {
-	if instanceKey == nil {
-		errMsg := "ForgetInstance(): nil instanceKey"
+func ForgetInstance(tabletAlias string) error {
+	if tabletAlias == "" {
+		errMsg := "ForgetInstance(): empty tabletAlias"
 		log.Errorf(errMsg)
 		return fmt.Errorf(errMsg)
 	}
-	forgetInstanceKeys.Set(instanceKey.StringCode(), true, cache.DefaultExpiration)
+	forgetAliases.Set(tabletAlias, true, cache.DefaultExpiration)
 	sqlResult, err := db.ExecVTOrc(`
 			delete
 				from database_instance
 			where
-				hostname = ? and port = ?`,
-		instanceKey.Hostname,
-		instanceKey.Port,
+				alias = ?`,
+		tabletAlias,
 	)
 	if err != nil {
 		log.Error(err)
@@ -1101,11 +1058,11 @@ func ForgetInstance(instanceKey *InstanceKey) error {
 		return err
 	}
 	if rows == 0 {
-		errMsg := fmt.Sprintf("ForgetInstance(): instance %+v not found", *instanceKey)
+		errMsg := fmt.Sprintf("ForgetInstance(): instance %+v not found", tabletAlias)
 		log.Errorf(errMsg)
 		return fmt.Errorf(errMsg)
 	}
-	_ = AuditOperation("forget", instanceKey, "")
+	_ = AuditOperation("forget", tabletAlias, "")
 	return nil
 }
 
@@ -1127,7 +1084,7 @@ func ForgetLongUnseenInstances() error {
 		log.Error(err)
 		return err
 	}
-	_ = AuditOperation("forget-unseen", nil, fmt.Sprintf("Forgotten instances: %d", rows))
+	_ = AuditOperation("forget-unseen", "", fmt.Sprintf("Forgotten instances: %d", rows))
 	return err
 }
 
@@ -1137,10 +1094,10 @@ func SnapshotTopologies() error {
 		_, err := db.ExecVTOrc(`
         	insert ignore into
         		database_instance_topology_history (snapshot_unix_timestamp,
-        			hostname, port, source_host, source_port, version)
+        			alias, hostname, port, source_host, source_port, version)
         	select
         		UNIX_TIMESTAMP(NOW()),
-        		hostname, port, source_host, source_port, version
+				alias, hostname, port, source_host, source_port, version
 			from
 				database_instance
 				`,
@@ -1156,16 +1113,16 @@ func SnapshotTopologies() error {
 }
 
 // RecordStaleInstanceBinlogCoordinates snapshots the binlog coordinates of instances
-func RecordStaleInstanceBinlogCoordinates(instanceKey *InstanceKey, binlogCoordinates *BinlogCoordinates) error {
+func RecordStaleInstanceBinlogCoordinates(tabletAlias string, binlogCoordinates *BinlogCoordinates) error {
 	args := sqlutils.Args(
-		instanceKey.Hostname, instanceKey.Port,
+		tabletAlias,
 		binlogCoordinates.LogFile, binlogCoordinates.LogPos,
 	)
 	_, err := db.ExecVTOrc(`
 			delete from
 				database_instance_stale_binlog_coordinates
 			where
-				hostname=? and port=?
+				alias = ?
 				and (
 					binary_log_file != ?
 					or binary_log_pos != ?
@@ -1180,10 +1137,10 @@ func RecordStaleInstanceBinlogCoordinates(instanceKey *InstanceKey, binlogCoordi
 	_, err = db.ExecVTOrc(`
 			insert ignore into
 				database_instance_stale_binlog_coordinates (
-					hostname, port,	binary_log_file, binary_log_pos, first_seen
+					alias,	binary_log_file, binary_log_pos, first_seen
 				)
 				values (
-					?, ?, ?, ?, NOW()
+					?, ?, ?, NOW()
 				)`,
 		args...)
 	if err != nil {

@@ -188,15 +188,3 @@ func QueryVTOrc(query string, argsArray []any, onRow func(sqlutils.RowMap) error
 
 	return err
 }
-
-// ReadTimeNow reads and returns the current timestamp as string. This is an unfortunate workaround
-// to support both MySQL and SQLite in all possible timezones. SQLite only speaks UTC where MySQL has
-// timezone support. By reading the time as string we get the database's de-facto notion of the time,
-// which we can then feed back to it.
-func ReadTimeNow() (timeNow string, err error) {
-	err = QueryVTOrc(`select now() as time_now`, nil, func(m sqlutils.RowMap) error {
-		timeNow = m.GetString("time_now")
-		return nil
-	})
-	return timeNow, err
-}
