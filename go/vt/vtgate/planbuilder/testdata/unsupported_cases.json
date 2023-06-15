@@ -69,11 +69,6 @@
     "gen4-plan": "cannot use column offsets in group statement when using `*`"
   },
   {
-    "comment": "Complex aggregate expression on scatter",
-    "query": "select 1+count(*) from user",
-    "plan": "VT12001: unsupported: in scatter query: complex aggregate expression"
-  },
-  {
     "comment": "Multi-value aggregates not supported",
     "query": "select count(a,b) from user",
     "v3-plan": "VT12001: unsupported: only one expression is allowed inside aggregates: count(a, b)",
@@ -465,12 +460,6 @@
     "comment": "Assignment expression in delete statement",
     "query": "delete from user where x = (@val := 42)",
     "plan": "VT12001: unsupported: Assignment expression"
-  },
-  {
-    "comment": "combine the output of two aggregations in the final result",
-    "query": "select greatest(sum(user.foo), sum(user_extra.bar)) from user join user_extra on user.col = user_extra.col",
-    "v3-plan": "VT12001: unsupported: cross-shard query with aggregates",
-    "gen4-plan": "VT12001: unsupported: in scatter query: complex aggregate expression"
   },
   {
     "comment": "extremum on input from both sides",
