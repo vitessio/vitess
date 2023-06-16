@@ -30,11 +30,9 @@ import (
 )
 
 func TestSaveAndReadKeyspace(t *testing.T) {
-	orcDb, err := db.OpenVTOrc()
-	require.NoError(t, err)
+	// Clear the database after the test. The easiest way to do that is to run all the initialization commands again.
 	defer func() {
-		_, err = orcDb.Exec("delete from vitess_keyspace")
-		require.NoError(t, err)
+		db.ClearVTOrcDatabase()
 	}()
 
 	tests := []struct {
