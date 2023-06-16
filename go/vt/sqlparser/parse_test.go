@@ -52,6 +52,10 @@ var (
 			output: "alter table t add column (\n\tfk int references parent [id]\n)",
 		},
 		{
+			input:  "CREATE table t (pk int primary key, fk int REFERENCES parent(id))",
+			output: "create table t (\n\tpk int primary key,\n\tfk int references parent [id]\n)",
+		},
+		{
 			input:  "SET @foo = 'o' 'ne';",
 			output: "set @foo = 'one'",
 		},
