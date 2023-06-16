@@ -104,18 +104,14 @@ func TestRefreshTabletsInKeyspaceShard(t *testing.T) {
 		ts = oldTs
 	}()
 
-	// Open the vtorc
-	// After the test completes delete everything from the vitess_tablet table
-	orcDb, err := db.OpenVTOrc()
-	require.NoError(t, err)
+	// Clear the database after the test. The easiest way to do that is to run all the initialization commands again.
 	defer func() {
-		_, err = orcDb.Exec("delete from vitess_tablet")
-		require.NoError(t, err)
+		db.ClearVTOrcDatabase()
 	}()
 
 	// Create a memory topo-server and create the keyspace and shard records
 	ts = memorytopo.NewServer(cell1)
-	_, err = ts.GetOrCreateShard(context.Background(), keyspace, shard)
+	_, err := ts.GetOrCreateShard(context.Background(), keyspace, shard)
 	require.NoError(t, err)
 
 	// Add tablets to the topo-server
@@ -232,22 +228,16 @@ func TestShardPrimary(t *testing.T) {
 		ts = oldTs
 	}()
 
-	// Open the vtorc
-	// After the test completes delete everything from the vitess_tablet table
-	orcDb, err := db.OpenVTOrc()
-	require.NoError(t, err)
-	defer func() {
-		_, err = orcDb.Exec("delete from vitess_tablet")
-		require.NoError(t, err)
-	}()
-
 	for _, testcase := range testcases {
 		t.Run(testcase.name, func(t *testing.T) {
-			_, err = orcDb.Exec("delete from vitess_tablet")
+			// Clear the database after the test. The easiest way to do that is to run all the initialization commands again.
+			defer func() {
+				db.ClearVTOrcDatabase()
+			}()
 
 			// Create a memory topo-server and create the keyspace and shard records
 			ts = memorytopo.NewServer(cell1)
-			_, err = ts.GetOrCreateShard(context.Background(), keyspace, shard)
+			_, err := ts.GetOrCreateShard(context.Background(), keyspace, shard)
 			require.NoError(t, err)
 
 			// Add tablets to the topo-server
