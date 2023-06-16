@@ -112,7 +112,7 @@ func createProjectionFromSelect(ctx *plancontext.PlanningContext, horizon horizo
 		return nil, err
 	}
 
-	aggregations, err := qp.AggregationExpressions(ctx)
+	aggregations, complexAggr, err := qp.AggregationExpressions(ctx, true)
 	if err != nil {
 		return nil, err
 	}
@@ -135,6 +135,13 @@ func createProjectionFromSelect(ctx *plancontext.PlanningContext, horizon horizo
 		a.Alias = derived.Alias
 	}
 
+	if complexAggr {
+		return createProjectionForComplexAggregation(a, qp)
+	}
+	return createProjectionForSimpleAggregation(ctx, a, qp)
+}
+
+func createProjectionForSimpleAggregation(ctx *plancontext.PlanningContext, a *Aggregator, qp *QueryProjection) (ops.Operator, error) {
 outer:
 	for colIdx, expr := range qp.SelectExprs {
 		ae, err := expr.GetAliasedExpr()
@@ -165,8 +172,33 @@ outer:
 		}
 		return nil, vterrors.VT13001(fmt.Sprintf("Could not find the %s in aggregation in the original query", sqlparser.String(ae)))
 	}
-
 	return a, nil
+}
+
+func createProjectionForComplexAggregation(a *Aggregator, qp *QueryProjection) (ops.Operator, error) {
+	p := &Projection{
+		Source:  a,
+		Alias:   a.Alias,
+		TableID: a.TableID,
+	}
+
+	for _, expr := range qp.SelectExprs {
+		ae, err := expr.GetAliasedExpr()
+		if err != nil {
+			return nil, err
+		}
+		p.Columns = append(p.Columns, ae)
+		p.Projections = append(p.Projections, UnexploredExpression{E: ae.Expr})
+	}
+	for i, by := range a.Grouping {
+		a.Grouping[i].ColOffset = len(a.Columns)
+		a.Columns = append(a.Columns, aeWrap(by.SimplifiedExpr))
+	}
+	for i, aggregation := range a.Aggregations {
+		a.Aggregations[i].ColOffset = len(a.Columns)
+		a.Columns = append(a.Columns, aggregation.Original)
+	}
+	return p, nil
 }
 
 func createProjectionWithoutAggr(qp *QueryProjection, src ops.Operator) (*Projection, error) {

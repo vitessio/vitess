@@ -297,7 +297,7 @@ func (hp *horizonPlanning) planAggrUsingOA(
 		}
 	}
 
-	aggregationExprs, err := hp.qp.AggregationExpressions(ctx)
+	aggregationExprs, _, err := hp.qp.AggregationExpressions(ctx, false)
 	if err != nil {
 		return nil, err
 	}

@@ -6626,5 +6626,113 @@
         "user.user_extra"
       ]
     }
+  },
+  {
+    "comment": "Complex aggregate expression on scatter",
+    "query": "select 1+count(*) from user",
+    "v3-plan": "VT12001: unsupported: in scatter query: complex aggregate expression",
+    "gen4-plan": {
+      "QueryType": "SELECT",
+      "Original": "select 1+count(*) from user",
+      "Instructions": {
+        "OperatorType": "Projection",
+        "Expressions": [
+          "[COLUMN 0] + [COLUMN 1] as 1 + count(*)"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Aggregate",
+            "Variant": "Scalar",
+            "Aggregates": "random(0), sum_count_star(1) AS count(*)",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select 1, count(*) from `user` where 1 != 1",
+                "Query": "select 1, count(*) from `user`",
+                "Table": "`user`"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "combine the output of two aggregations in the final result",
+    "query": "select greatest(sum(user.foo), sum(user_extra.bar)) from user join user_extra on user.col = user_extra.col",
+    "v3-plan": "VT12001: unsupported: cross-shard query with aggregates",
+    "gen4-plan": {
+      "QueryType": "SELECT",
+      "Original": "select greatest(sum(user.foo), sum(user_extra.bar)) from user join user_extra on user.col = user_extra.col",
+      "Instructions": {
+        "OperatorType": "Projection",
+        "Expressions": [
+          "GREATEST([COLUMN 0], [COLUMN 1]) as greatest(sum(`user`.foo), sum(user_extra.bar))"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Aggregate",
+            "Variant": "Scalar",
+            "Aggregates": "sum(0) AS sum(`user`.foo), sum(1) AS sum(user_extra.bar)",
+            "Inputs": [
+              {
+                "OperatorType": "Projection",
+                "Expressions": [
+                  "[COLUMN 0] * [COLUMN 1] as sum(`user`.foo)",
+                  "[COLUMN 3] * [COLUMN 2] as sum(user_extra.bar)"
+                ],
+                "Inputs": [
+                  {
+                    "OperatorType": "Join",
+                    "Variant": "Join",
+                    "JoinColumnIndexes": "L:0,R:0,R:1,L:1",
+                    "JoinVars": {
+                      "user_col": 2
+                    },
+                    "TableName": "`user`_user_extra",
+                    "Inputs": [
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "Scatter",
+                        "Keyspace": {
+                          "Name": "user",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select sum(`user`.foo), count(*), `user`.col from `user` where 1 != 1 group by `user`.col",
+                        "Query": "select sum(`user`.foo), count(*), `user`.col from `user` group by `user`.col",
+                        "Table": "`user`"
+                      },
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "Scatter",
+                        "Keyspace": {
+                          "Name": "user",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select count(*), sum(user_extra.bar) from user_extra where 1 != 1 group by .0",
+                        "Query": "select count(*), sum(user_extra.bar) from user_extra where user_extra.col = :user_col group by .0",
+                        "Table": "user_extra"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user",
+        "user.user_extra"
+      ]
+    }
   }
 ]
