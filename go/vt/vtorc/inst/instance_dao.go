@@ -1125,12 +1125,14 @@ func SnapshotTopologies() error {
 		_, err := db.ExecVTOrc(`
         	insert ignore into
         		database_instance_topology_history (snapshot_unix_timestamp,
-        			alias, hostname, port, source_host, source_port, version)
+        			alias, hostname, port, source_host, source_port, keyspace, shard, version)
         	select
         		UNIX_TIMESTAMP(NOW()),
-				alias, hostname, port, source_host, source_port, version
+				vitess_tablet.alias, vitess_tablet.hostname, vitess_tablet.port, 
+				database_instance.source_host, database_instance.source_port, 
+				vitess_tablet.keyspace, vitess_tablet.shard, database_instance.version
 			from
-				database_instance
+				vitess_tablet left join database_instance using (alias, hostname, port)
 				`,
 		)
 		if err != nil {

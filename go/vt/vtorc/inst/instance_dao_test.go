@@ -11,6 +11,7 @@ import (
 	"github.com/patrickmn/go-cache"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/vt/external/golib/sqlutils"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtorc/config"
@@ -601,4 +602,29 @@ func TestForgetInstanceAndInstanceIsForgotten(t *testing.T) {
 			require.EqualValues(t, tt.tabletsExpected, tabletAliases)
 		})
 	}
+}
+
+func TestSnapshotTopologies(t *testing.T) {
+	// Clear the database after the test. The easiest way to do that is to run all the initialization commands again.
+	defer func() {
+		db.ClearVTOrcDatabase()
+	}()
+
+	for _, query := range initialSQL {
+		_, err := db.ExecVTOrc(query)
+		require.NoError(t, err)
+	}
+
+	err := SnapshotTopologies()
+	require.NoError(t, err)
+
+	query := "select alias from database_instance_topology_history"
+	var tabletAliases []string
+	err = db.QueryVTOrc(query, nil, func(rowMap sqlutils.RowMap) error {
+		tabletAliases = append(tabletAliases, rowMap.GetString("alias"))
+		return nil
+	})
+	require.NoError(t, err)
+
+	require.Equal(t, []string{"zone1-0000000100", "zone1-0000000101", "zone1-0000000112", "zone2-0000000200"}, tabletAliases)
 }
