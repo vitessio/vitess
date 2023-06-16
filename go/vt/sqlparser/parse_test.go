@@ -1039,10 +1039,10 @@ var (
 			output: "update (select id from foo) as subqalias set id = 4",
 		}, {
 			input:  "update foo f, bar b set f.id = b.id where b.name = 'test'",
-			output: "update foo as f, bar as b set f.id = b.id where b.name = 'test'",
+			output: "update foo as f, bar as b set f.id = b.id where b.`name` = 'test'",
 		}, {
 			input:  "update foo f join bar b on f.name = b.name set f.id = b.id where b.name = 'test'",
-			output: "update foo as f join bar as b on f.name = b.name set f.id = b.id where b.name = 'test'",
+			output: "update foo as f join bar as b on f.`name` = b.`name` set f.id = b.id where b.`name` = 'test'",
 		}, {
 			input: "update /* ignore */ ignore a set b = 3",
 		}, {
@@ -1057,8 +1057,10 @@ var (
 			input: "delete /* limit */ from a limit 100",
 		}, {
 			input: "delete a from a join b on a.id = b.id where b.name = 'test'",
+			output: "delete a from a join b on a.id = b.id where b.`name` = 'test'",
 		}, {
 			input: "delete a, b from a, b where a.id = b.id and b.name = 'test'",
+			output: "delete a, b from a, b where a.id = b.id and b.`name` = 'test'",
 		}, {
 			input:  "delete from a1, a2 using t1 as a1 inner join t2 as a2 where a1.id=a2.id",
 			output: "delete a1, a2 from t1 as a1 join t2 as a2 where a1.id = a2.id",
@@ -1620,7 +1622,7 @@ var (
 		}, {
 			input: "show function status",
 		}, {
-			input: "show function status where Name = 'hi'",
+			input: "show function status where `Name` = 'hi'",
 		}, {
 			input: "show function status like 'hi'",
 		}, {
@@ -1665,7 +1667,7 @@ var (
 		}, {
 			input: "show procedure status",
 		}, {
-			input: "show procedure status where Name = 'hi'",
+			input: "show procedure status where `Name` = 'hi'",
 		}, {
 			input: "show procedure status like 'hi'",
 		}, {
@@ -1706,7 +1708,7 @@ var (
 			output: "show table status like 't1'",
 		}, {
 			input:  "show table status where name='t1'",
-			output: "show table status where name = 't1'",
+			output: "show table status where `name` = 't1'",
 		}, {
 			input: "show tables",
 		}, {
@@ -1970,14 +1972,14 @@ var (
 		}, {
 			input: "select title from video as v where match(v.title, v.tag) against ('DEMO' in boolean mode)",
 		}, {
-			input: "select name, group_concat(score) from t group by name",
+			input: "select `name`, group_concat(score) from t group by `name`",
 		}, {
-			input:                      `select concAt(  "a",    "b", "c"  ) from t group by name`,
+			input:                      "select concAt(  \"a\",    \"b\", \"c\"  ) from t group by `name`",
 			useSelectExpressionLiteral: true,
 		}, {
-			input: "select name, group_concat(distinct id, score order by id desc separator ':') from t group by name",
+			input: "select `name`, group_concat(distinct id, score order by id desc separator ':') from t group by `name`",
 		}, {
-			input: "select name, group_concat(distinct id, score order by id desc separator '') from t group by name",
+			input: "select `name`, group_concat(distinct id, score order by id desc separator '') from t group by `name`",
 		}, {
 			input: "select * from t partition (p0)",
 		}, {
@@ -1998,161 +2000,161 @@ var (
 		}, {
 			input: "delete from t partition (p0) where a = 1",
 		}, {
-			input: "select name, dense_rank() over () from t",
+			input: "select `name`, dense_rank() over () from t",
 		}, {
 			input:  "select name, avg(a) over (partition by b) as avg from t",
-			output: "select name, avg(a) over (partition by b) as `avg` from t",
+			output: "select `name`, avg(a) over (partition by b) as `avg` from t",
 		}, {
-			input: "select name, bit_and(a) over (partition by b) from t",
+			input: "select `name`, bit_and(a) over (partition by b) from t",
 		}, {
-			input: "select name, bit_or(a) over (partition by b) from t",
+			input: "select `name`, bit_or(a) over (partition by b) from t",
 		}, {
-			input: "select name, bit_xor(a) over (partition by b) from t",
+			input: "select `name`, bit_xor(a) over (partition by b) from t",
 		}, {
-			input: "select name, count(distinct a) over (partition by b) from t",
+			input: "select `name`, count(distinct a) over (partition by b) from t",
 		}, {
 			input:  "select name, count(a) over (partition by b) as count from t",
-			output: "select name, count(a) over (partition by b) as `count` from t",
+			output: "select `name`, count(a) over (partition by b) as `count` from t",
 		}, {
-			input: "select name, json_arrayagg(a) over (partition by b) from t",
+			input: "select `name`, json_arrayagg(a) over (partition by b) from t",
 		}, {
-			input: "select name, json_objectagg(a) over (partition by b) from t",
+			input: "select `name`, json_objectagg(a) over (partition by b) from t",
 		}, {
-			input: "select name, max(a) over (partition by b) from t",
+			input: "select `name`, max(a) over (partition by b) from t",
 		}, {
-			input: "select name, min(a) over (partition by b) from t",
+			input: "select `name`, min(a) over (partition by b) from t",
 		}, {
-			input: "select name, stddev_pop(a) over (partition by b) from t",
+			input: "select `name`, stddev_pop(a) over (partition by b) from t",
 		}, {
-			input: "select name, stddev(a) over (partition by b) from t",
+			input: "select `name`, stddev(a) over (partition by b) from t",
 		}, {
-			input: "select name, std(a) over (partition by b) from t",
+			input: "select `name`, std(a) over (partition by b) from t",
 		}, {
-			input: "select name, stddev_samp(a) over (partition by b) from t",
+			input: "select `name`, stddev_samp(a) over (partition by b) from t",
 		}, {
-			input: "select name, sum(a) over (partition by b) from t",
+			input: "select `name`, sum(a) over (partition by b) from t",
 		}, {
 			input:  "select name, sum(distinct a) over (partition by b) as SUM from t",
-			output: "select name, sum(distinct a) over (partition by b) as `SUM` from t",
+			output: "select `name`, sum(distinct a) over (partition by b) as `SUM` from t",
 		}, {
-			input: "select name, var_pop(a) over (partition by b) from t",
+			input: "select `name`, var_pop(a) over (partition by b) from t",
 		}, {
-			input: "select name, variance(a) over (partition by b) from t",
+			input: "select `name`, variance(a) over (partition by b) from t",
 		}, {
-			input: "select name, cume_dist() over (partition by b) from t",
+			input: "select `name`, cume_dist() over (partition by b) from t",
 		}, {
-			input: "select name, cume_dist() over (partition by b) - 1 in (1, 2) as included from t",
+			input: "select `name`, cume_dist() over (partition by b) - 1 in (1, 2) as included from t",
 		}, {
-			input: "select name, cume_dist() over (partition by b) = dense_rank() over () as included from t",
+			input: "select `name`, cume_dist() over (partition by b) = dense_rank() over () as included from t",
 		}, {
-			input: "select name, dense_rank() over (partition by b) from t",
+			input: "select `name`, dense_rank() over (partition by b) from t",
 		}, {
-			input: "select name, first_value(a) over (partition by b) from t",
+			input: "select `name`, first_value(a) over (partition by b) from t",
 		}, {
-			input: "select name, lag(a) over (partition by b) from t",
+			input: "select `name`, lag(a) over (partition by b) from t",
 		}, {
-			input: "select name, last_value(a) over (partition by b) from t",
+			input: "select `name`, last_value(a) over (partition by b) from t",
 		}, {
-			input: "select name, lead(a) over (partition by b) from t",
+			input: "select `name`, lead(a) over (partition by b) from t",
 		}, {
-			input: "select name, nth_value(a) over (partition by b) from t",
+			input: "select `name`, nth_value(a) over (partition by b) from t",
 		}, {
-			input: "select name, ntile() over (partition by b) from t",
+			input: "select `name`, ntile() over (partition by b) from t",
 		}, {
-			input: "select name, percent_rank() over (partition by b) from t",
+			input: "select `name`, percent_rank() over (partition by b) from t",
 		}, {
-			input: "select name, rank() over (partition by b) from t",
+			input: "select `name`, rank() over (partition by b) from t",
 		}, {
-			input: "select name, row_number() over (partition by b) from t",
+			input: "select `name`, row_number() over (partition by b) from t",
 		}, {
-			input: "select name, dense_rank() over (partition by b) from t",
+			input: "select `name`, dense_rank() over (partition by b) from t",
 		}, {
-			input: "select name, dense_rank() over (partition by b order by c asc) from t",
+			input: "select `name`, dense_rank() over (partition by b order by c asc) from t",
 		}, {
-			input: "select name, cume_dist() over (partition by b order by c asc) from t",
+			input: "select `name`, cume_dist() over (partition by b order by c asc) from t",
 		}, {
-			input: "select name, first_value(a) over (partition by b order by c asc) from t",
+			input: "select `name`, first_value(a) over (partition by b order by c asc) from t",
 		}, {
-			input: "select name, lag(a) over (partition by b order by c asc) from t",
+			input: "select `name`, lag(a) over (partition by b order by c asc) from t",
 		}, {
-			input: "select name, last_value(a) over (partition by b order by c asc) from t",
+			input: "select `name`, last_value(a) over (partition by b order by c asc) from t",
 		}, {
-			input: "select name, lead(a) over (partition by b order by c asc) from t",
+			input: "select `name`, lead(a) over (partition by b order by c asc) from t",
 		}, {
-			input: "select name, nth_value(a) over (partition by b order by c asc) from t",
+			input: "select `name`, nth_value(a) over (partition by b order by c asc) from t",
 		}, {
-			input: "select name, ntile() over (partition by b order by c asc) from t",
+			input: "select `name`, ntile() over (partition by b order by c asc) from t",
 		}, {
-			input: "select name, percent_rank() over (partition by b order by c asc) from t",
+			input: "select `name`, percent_rank() over (partition by b order by c asc) from t",
 		}, {
-			input: "select name, rank() over (partition by b order by c asc) from t",
+			input: "select `name`, rank() over (partition by b order by c asc) from t",
 		}, {
-			input: "select name, row_number() over (partition by b order by c asc) from t",
+			input: "select `name`, row_number() over (partition by b order by c asc) from t",
 		}, {
-			input: "select name, dense_rank() over ( order by b asc) from t",
+			input: "select `name`, dense_rank() over ( order by b asc) from t",
 		}, {
-			input: "select name, dense_rank() over (partition by b order by c asc) from t",
+			input: "select `name`, dense_rank() over (partition by b order by c asc) from t",
 		}, {
-			input: "select name, dense_rank() over (partition by b order by c asc), lag(d) over ( order by e desc) from t",
+			input: "select `name`, dense_rank() over (partition by b order by c asc), lag(d) over ( order by e desc) from t",
 		}, {
-			input: "select name, dense_rank() over ( order by y asc ROWS CURRENT ROW) from t",
+			input: "select `name`, dense_rank() over ( order by y asc ROWS CURRENT ROW) from t",
 		}, {
-			input: "select name, dense_rank() over (partition by x ROWS CURRENT ROW) from t",
+			input: "select `name`, dense_rank() over (partition by x ROWS CURRENT ROW) from t",
 		}, {
-			input: "select name, dense_rank() over (partition by x order by y asc ROWS CURRENT ROW) from t",
+			input: "select `name`, dense_rank() over (partition by x order by y asc ROWS CURRENT ROW) from t",
 		}, {
-			input: "select name, row_number() over (partition by x order by y asc ROWS 2 PRECEDING) from t",
+			input: "select `name`, row_number() over (partition by x order by y asc ROWS 2 PRECEDING) from t",
 		}, {
-			input: "select name, row_number() over (partition by x ROWS UNBOUNDED PRECEDING) from t",
+			input: "select `name`, row_number() over (partition by x ROWS UNBOUNDED PRECEDING) from t",
 		}, {
-			input: "select name, row_number() over (partition by x ROWS interval 5 DAY PRECEDING) from t",
+			input: "select `name`, row_number() over (partition by x ROWS interval 5 DAY PRECEDING) from t",
 		}, {
-			input: "select name, row_number() over (partition by x ROWS interval '2:30' MINUTE_SECOND PRECEDING) from t",
+			input: "select `name`, row_number() over (partition by x ROWS interval '2:30' MINUTE_SECOND PRECEDING) from t",
 		}, {
-			input: "select name, row_number() over (partition by x order by y asc ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING) from t",
+			input: "select `name`, row_number() over (partition by x order by y asc ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING) from t",
 		}, {
-			input: "select name, dense_rank() over (partition by x ROWS BETWEEN CURRENT ROW AND CURRENT ROW) from t",
+			input: "select `name`, dense_rank() over (partition by x ROWS BETWEEN CURRENT ROW AND CURRENT ROW) from t",
 		}, {
-			input: "select name, dense_rank() over (partition by x ROWS BETWEEN CURRENT ROW AND 1 FOLLOWING) from t",
+			input: "select `name`, dense_rank() over (partition by x ROWS BETWEEN CURRENT ROW AND 1 FOLLOWING) from t",
 		}, {
-			input: "select name, row_number() over (partition by x ROWS BETWEEN interval 5 DAY PRECEDING AND CURRENT ROW) from t",
+			input: "select `name`, row_number() over (partition by x ROWS BETWEEN interval 5 DAY PRECEDING AND CURRENT ROW) from t",
 		}, {
-			input: "select name, row_number() over (partition by x ROWS BETWEEN interval '2:30' MINUTE_SECOND PRECEDING AND CURRENT ROW) from t",
+			input: "select `name`, row_number() over (partition by x ROWS BETWEEN interval '2:30' MINUTE_SECOND PRECEDING AND CURRENT ROW) from t",
 		}, {
-			input: "select name, dense_rank() over (partition by x RANGE CURRENT ROW) from t",
+			input: "select `name`, dense_rank() over (partition by x RANGE CURRENT ROW) from t",
 		}, {
-			input: "select name, dense_rank() over (partition by x RANGE 2 PRECEDING) from t",
+			input: "select `name`, dense_rank() over (partition by x RANGE 2 PRECEDING) from t",
 		}, {
-			input: "select name, dense_rank() over (partition by x RANGE UNBOUNDED PRECEDING) from t",
+			input: "select `name`, dense_rank() over (partition by x RANGE UNBOUNDED PRECEDING) from t",
 		}, {
-			input: "select name, row_number() over (partition by x RANGE interval 5 DAY PRECEDING) from t",
+			input: "select `name`, row_number() over (partition by x RANGE interval 5 DAY PRECEDING) from t",
 		}, {
-			input: "select name, row_number() over (partition by x RANGE interval '2:30' MINUTE_SECOND PRECEDING) from t",
+			input: "select `name`, row_number() over (partition by x RANGE interval '2:30' MINUTE_SECOND PRECEDING) from t",
 		}, {
-			input: "select name, dense_rank() over (partition by x RANGE BETWEEN 1 PRECEDING AND 1 FOLLOWING) from t",
+			input: "select `name`, dense_rank() over (partition by x RANGE BETWEEN 1 PRECEDING AND 1 FOLLOWING) from t",
 		}, {
-			input: "select name, dense_rank() over (partition by x RANGE BETWEEN CURRENT ROW AND CURRENT ROW) from t",
+			input: "select `name`, dense_rank() over (partition by x RANGE BETWEEN CURRENT ROW AND CURRENT ROW) from t",
 		}, {
-			input: "select name, dense_rank() over (partition by x RANGE BETWEEN CURRENT ROW AND 1 FOLLOWING) from t",
+			input: "select `name`, dense_rank() over (partition by x RANGE BETWEEN CURRENT ROW AND 1 FOLLOWING) from t",
 		}, {
-			input: "select name, row_number() over (partition by x RANGE BETWEEN interval 5 DAY PRECEDING AND CURRENT ROW) from t",
+			input: "select `name`, row_number() over (partition by x RANGE BETWEEN interval 5 DAY PRECEDING AND CURRENT ROW) from t",
 		}, {
-			input: "select name, row_number() over (partition by x RANGE BETWEEN interval '2:30' MINUTE_SECOND PRECEDING AND CURRENT ROW) from t",
+			input: "select `name`, row_number() over (partition by x RANGE BETWEEN interval '2:30' MINUTE_SECOND PRECEDING AND CURRENT ROW) from t",
 		}, {
-			input: "select name, dense_rank() over (w1 partition by x) from t window w1 as ( order by y asc)",
+			input: "select `name`, dense_rank() over (w1 partition by x) from t window w1 as ( order by y asc)",
 		}, {
-			input: "select name, dense_rank() over (w1 partition by x), count(*) over w2 from t window w1 as ( order by y asc), w2 as (w1 partition by x)",
+			input: "select `name`, dense_rank() over (w1 partition by x), count(*) over w2 from t window w1 as ( order by y asc), w2 as (w1 partition by x)",
 		}, {
-			input: "select name, dense_rank() over w3 from t window w1 as (w2), w2 as (), w3 as (w1)",
+			input: "select `name`, dense_rank() over w3 from t window w1 as (w2), w2 as (), w3 as (w1)",
 		}, {
-			input: "select name, dense_rank() over window_name from t",
+			input: "select `name`, dense_rank() over window_name from t",
 		}, {
 			input:  "with a as (select (1) from dual) select name, dense_rank() over window_name from a",
-			output: "with a as (select (1)) select name, dense_rank() over window_name from a",
+			output: "with a as (select (1)) select `name`, dense_rank() over window_name from a",
 		}, {
-			input: "select name, dense_rank() over (w1 partition by x) from t window w1 as (ROWS UNBOUNDED PRECEDING)",
+			input: "select `name`, dense_rank() over (w1 partition by x) from t window w1 as (ROWS UNBOUNDED PRECEDING)",
 		}, {
-			input: "select name, dense_rank() over (w1 partition by x) from t window w1 as (ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)",
+			input: "select `name`, dense_rank() over (w1 partition by x) from t window w1 as (ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)",
 		}, {
 			input: `SELECT pk,
 					(SELECT max(pk) FROM one_pk WHERE pk < opk.pk) as max,
@@ -2352,7 +2354,7 @@ var (
 				")",
 		}, {
 			input:  "delete a.*, b.* from tbl_a a, tbl_b b where a.id = b.id and b.name = 'test'",
-			output: "delete a, b from tbl_a as a, tbl_b as b where a.id = b.id and b.name = 'test'",
+			output: "delete a, b from tbl_a as a, tbl_b as b where a.id = b.id and b.`name` = 'test'",
 		}, {
 			input: "call f1",
 		}, {
@@ -2794,7 +2796,7 @@ var (
 			output: "create table engine_cost (\n\tcost_name varchar(64) not null primary key,\n\tdefault_value float generated always as ((case cost_name when _utf8mb3 'io_block_read_cost' then 1.0 when _utf8mb3 'memory_block_read_cost' then 0.25 else null end)) virtual\n)",
 		}, {
 			input:  "CREATE VIEW myview AS SELECT concat(a.first_name, _utf8mb4 ' ', a.last_name) AS name, if(a.active, _utf8mb4 'active', _utf8mb4 '') AS notes FROM a",
-			output: "create view myview as select concat(a.first_name, _utf8mb4 ' ', a.last_name) as name, if(a.active, _utf8mb4 'active', _utf8mb4 '') as notes from a",
+			output: "create view myview as select concat(a.first_name, _utf8mb4 ' ', a.last_name) as `name`, if(a.active, _utf8mb4 'active', _utf8mb4 '') as notes from a",
 		}, {
 			input: "select 1 into @aaa",
 		}, {
@@ -2853,7 +2855,7 @@ var (
 			output: "create procedure proc (in p_store_id INT, inout amount INT) select COUNT(*) from inventory where store_id = p_store_id and quantity = amount into amount",
 		}, {
 			input:  "CREATE PROCEDURE new_proc(IN t VARCHAR(100)) SELECT id, name FROM mytable WHERE id < 100 AND name = t INTO OUTFILE 'logs.txt'",
-			output: "create procedure new_proc (in t VARCHAR(100)) select id, name from mytable where id < 100 and name = t into outfile 'logs.txt'",
+			output: "create procedure new_proc (in t VARCHAR(100)) select id, `name` from mytable where id < 100 and `name` = t into outfile 'logs.txt'",
 		}, {
 			input:  "CREATE PROCEDURE proc (IN p_store_id INT) SELECT * FROM inventory WHERE store_id = p_store_id INTO DUMPFILE 'dumpfile.txt'",
 			output: "create procedure proc (in p_store_id INT) select * from inventory where store_id = p_store_id into dumpfile 'dumpfile.txt'",
@@ -2979,6 +2981,46 @@ var (
 		}, {
 			input:  "SELECT * FROM information_schema.events;",
 			output: "select * from information_schema.`events`",
+		}, {
+			input:  "SELECT Event.name AS event FROM Event ORDER BY Event.name",
+			output: "select `Event`.`name` as `event` from `Event` order by `Event`.`name` asc",
+		}, {
+			input:  "ALTER TABLE webhook_events ADD COLUMN event varchar(255) DEFAULT NULL;",
+			output: "alter table webhook_events add column (\n\t`event` varchar(255) default null\n)",
+		},
+		// Create Spatial Reference System Statements
+		{
+			input: "create spatial reference system 1234\n" +
+				"name 'name'\n" +
+				"definition 'definition'\n" +
+				"organization 'organization' identified by 4321\n" +
+				"description 'description'",
+		},
+		{
+			input: "create spatial reference system if not exists 1234\n" +
+				"name 'name'\n" +
+				"definition 'definition'\n" +
+				"organization 'organization' identified by 4321\n" +
+				"description 'description'",
+		},
+		{
+			input: "create or replace spatial reference system 1234\n" +
+				"name 'name'\n" +
+				"definition 'definition'\n" +
+				"organization 'organization' identified by 4321\n" +
+				"description 'description'",
+		},
+		{
+			input: "create spatial reference system 1234\n" +
+				"organization 'organization' identified by 4321\n" +
+				"definition 'definition'\n" +
+				"name 'name'\n" +
+				"description 'description'",
+			output: "create spatial reference system 1234\n" +
+				"name 'name'\n" +
+				"definition 'definition'\n" +
+				"organization 'organization' identified by 4321\n" +
+				"description 'description'",
 		},
 	}
 	// Any tests that contain multiple statements within the body (such as BEGIN/END blocks) should go here.
@@ -3935,7 +3977,44 @@ func TestInvalid(t *testing.T) {
 	}, {
 		input: "select * from test order by a union select * from test",
 		err:   "syntax error",
-	}}
+	},
+	{
+		input: "create spatial reference system 1234\n" +
+			"name 'name'\n" +
+			"name 'name'",
+		err: "multiple definitions of attribute name",
+	},
+	{
+		input: "create spatial reference system 1234\n" +
+			"definition 'definition'\n" +
+			"definition 'definition'\n",
+		err: "multiple definitions of attribute definition",
+	},
+	{
+		input: "create spatial reference system 1234\n" +
+			"organization 'organization' identified by 4321\n" +
+			"organization 'organization' identified by 4321",
+		err: "multiple definitions of attribute organization",
+	},
+	{
+		input: "create spatial reference system 1234\n" +
+			"description 'description'\n" +
+			"description 'description'",
+		err: "multiple definitions of attribute description",
+	},
+	{
+		input: "create or replace spatial reference system 1234\n" +
+			"name 'name'\n" +
+			"name 'name'",
+		err: "multiple definitions of attribute name",
+	},
+	{
+		input: "create spatial reference system if not exists 1234\n" +
+			"name 'name'\n" +
+			"name 'name'",
+		err: "multiple definitions of attribute name",
+	},
+	}
 
 	for _, tcase := range invalidSQL {
 		_, err := Parse(tcase.input)
@@ -7149,9 +7228,8 @@ FROM
 			x varchar(100) path "$.a"
 		)
 	) as tt;`,
-			output: `select * from JSON_TABLE('[{\"a\":1},{\"a\":2}]', "$[*]" COLUMNS(
-	x varchar(100) path "$.a"
-)) as tt`},
+			output: "select * from json_table('[{\\\"a\\\":1},{\\\"a\\\":2}]', \"$[*]\" columns(\n\tx varchar(100) path \"$.a\"\n)) as tt",
+		},
 		{
 			input: `
 SELECT *
@@ -7163,10 +7241,8 @@ FROM
 			y varchar(100) path "$.b"
 		)
 	) as tt;`,
-			output: `select * from JSON_TABLE('[{\"a\":1, \"b\":2},{\"a\":3, \"b\":4}]', "$[*]" COLUMNS(
-	x varchar(100) path "$.a",
-	y varchar(100) path "$.b"
-)) as tt`},
+			output: "select * from json_table('[{\\\"a\\\":1, \\\"b\\\":2},{\\\"a\\\":3, \\\"b\\\":4}]', \"$[*]\" columns(\n\tx varchar(100) path \"$.a\",\n\ty varchar(100) path \"$.b\"\n)) as tt",
+		},
 		{
 			input: `
 SELECT *
@@ -7179,10 +7255,11 @@ FROM
 		)
 	) as t;
 	`,
-			output: `select * from JSON_TABLE(concat('[{},', '{}]'), "$[*]" COLUMNS(
-	x varchar(100) path "$.a",
-	y varchar(100) path "$.b"
-)) as t`},
+			output: "select * from json_table(concat('[{},', '{}]'), \"$[*]\" columns(\n" +
+				"\tx varchar(100) path \"$.a\",\n" +
+				"\ty varchar(100) path \"$.b\"\n" +
+				")) as t",
+		},
 		{
 			input: `
 SELECT *
@@ -7195,10 +7272,11 @@ FROM
 		)
 	) as t;
 	`,
-			output: `select * from JSON_TABLE(123, "$[*]" COLUMNS(
-	x varchar(100) path "$.a",
-	y varchar(100) path "$.b"
-)) as t`},
+			output: "select * from json_table(123, \"$[*]\" columns(\n" +
+				"\tx varchar(100) path \"$.a\",\n" +
+				"\ty varchar(100) path \"$.b\"\n" +
+				")) as t",
+		},
 		{
 			input: `
 SELECT *
@@ -7210,17 +7288,18 @@ FROM
 		)
 	) t1
 JOIN
-	JSON_TABLE(
+	json_table(
 		'[{"a":1},{"a":2}]',
 		"$[*]" COLUMNS(
 			x varchar(100) path "$.a"
 		)
 	) t2;`,
-			output: `select * from JSON_TABLE('[{\"a\":1},{\"a\":2}]', "$[*]" COLUMNS(
-	x varchar(100) path "$.a"
-)) as t1 join JSON_TABLE('[{\"a\":1},{\"a\":2}]', "$[*]" COLUMNS(
-	x varchar(100) path "$.a"
-)) as t2`},
+			output: "select * from json_table('[{\\\"a\\\":1},{\\\"a\\\":2}]', \"$[*]\" columns(\n" +
+				"\tx varchar(100) path \"$.a\"\n" +
+				")) as t1 join json_table('[{\\\"a\\\":1},{\\\"a\\\":2}]', \"$[*]\" columns(\n" +
+				"\tx varchar(100) path \"$.a\"\n" +
+				")) as t2",
+		},
 		{
 			input: `
 SELECT *
@@ -7233,9 +7312,10 @@ FROM
 	) t
 JOIN
 	tt;`,
-			output: `select * from JSON_TABLE('[{\"a\":1},{\"a\":2}]', "$[*]" COLUMNS(
-	x varchar(100) path "$.a"
-)) as t join tt`},
+			output: "select * from json_table('[{\\\"a\\\":1},{\\\"a\\\":2}]', \"$[*]\" columns(\n" +
+				"\tx varchar(100) path \"$.a\"\n" +
+				")) as t join tt",
+		},
 		{
 			input: `
 SELECT *
@@ -7248,9 +7328,10 @@ JOIN
 			x varchar(100) path "$.a"
 		)
 	) tt;`,
-			output: `select * from t join JSON_TABLE('[{\"a\":1},{\"a\":2}]', "$[*]" COLUMNS(
-	x varchar(100) path "$.a"
-)) as tt`},
+			output: "select * from t join json_table('[{\\\"a\\\":1},{\\\"a\\\":2}]', \"$[*]\" columns(\n" +
+				"\tx varchar(100) path \"$.a\"\n" +
+				")) as tt",
+		},
 		{
 			input: `
 SELECT *
@@ -7264,22 +7345,23 @@ FROM
 UNION
 SELECT *
 FROM
-	JSON_TABLE(
+	json_table(
 		'[{"b":1},{"b":2}]',
-		"$[*]" COLUMNS(
+		"$[*]" columns(
 			y varchar(100) path "$.b"
 		)
 	) t2;`,
-			output: `select * from JSON_TABLE('[{\"a\":1},{\"a\":2}]', "$[*]" COLUMNS(
-	x varchar(100) path "$.a"
-)) as t1 union select * from JSON_TABLE('[{\"b\":1},{\"b\":2}]', "$[*]" COLUMNS(
-	y varchar(100) path "$.b"
-)) as t2`},
+			output: "select * from json_table('[{\\\"a\\\":1},{\\\"a\\\":2}]', \"$[*]\" columns(\n" +
+				"\tx varchar(100) path \"$.a\"\n" +
+				")) as t1 union select * from json_table('[{\\\"b\\\":1},{\\\"b\\\":2}]', \"$[*]\" columns(\n" +
+				"\ty varchar(100) path \"$.b\"\n" +
+				")) as t2",
+		},
 		{
 			input: `SELECT * FROM t WHERE i in (SELECT x FROM JSON_TABLE('[{"a":1},{"a":2}]', "$[*]" COLUMNS(x VARCHAR(100) PATH "$.a")) AS tt);`,
-			output: `select * from t where i in (select x from JSON_TABLE('[{\"a\":1},{\"a\":2}]', "$[*]" COLUMNS(
-	x VARCHAR(100) path "$.a"
-)) as tt)`,
+			output: "select * from t where i in (select x from json_table('[{\\\"a\\\":1},{\\\"a\\\":2}]', \"$[*]\" columns(\n" +
+				"\tx VARCHAR(100) path \"$.a\"\n" +
+				")) as tt)",
 		},
 		{
 			input: `
@@ -7297,11 +7379,132 @@ FROM
 			y varchar(100) path "$.b"
 		)
 	) t2;`,
-			output: `select x, y from JSON_TABLE('[{\"a\":1},{\"a\":2}]', "$[*]" COLUMNS(
-	x varchar(100) path "$.a"
-)) as t1, JSON_TABLE('[{\"b\":3},{\"b\":4}]', "$[*]" COLUMNS(
-	y varchar(100) path "$.b"
-)) as t2`,
+			output: "select x, y from json_table('[{\\\"a\\\":1},{\\\"a\\\":2}]', \"$[*]\" columns(\n" +
+				"\tx varchar(100) path \"$.a\"\n" +
+				")) as t1, json_table('[{\\\"b\\\":3},{\\\"b\\\":4}]', \"$[*]\" columns(\n" +
+				"\ty varchar(100) path \"$.b\"\n" +
+				")) as t2",
+		},
+
+		// FOR ORDINALITY TESTS
+		{
+			input: `SELECT * FROM JSON_TABLE('{}', '$' COLUMNS( pk FOR ORDINALITY, c1 INT PATH '$.c1')) as jt;`,
+			output: "select * from json_table('{}', \"$\" columns(\n" +
+				"\tpk INTEGER unsigned auto_increment path \"\",\n" +
+				"\tc1 INT path \"$.c1\"\n" +
+				")) as jt",
+		},
+
+		// EXISTS TESTS
+		{
+			input: `SELECT * FROM JSON_TABLE('{}', '$' COLUMNS( c1 INT EXISTS PATH '$.c1')) as jt;`,
+			output: "select * from json_table('{}', \"$\" columns(\n" +
+				"\tc1 INT path \"$.c1\" exists\n" +
+				")) as jt",
+		},
+
+		// ON EMPTY TESTS
+		{
+			input: `SELECT * FROM JSON_TABLE('{}', '$' COLUMNS( c1 INT PATH '$.c1' NULL ON EMPTY )) as jt;`,
+			output: "select * from json_table('{}', \"$\" columns(\n" +
+				"\tc1 INT path \"$.c1\" null on empty\n" +
+				")) as jt",
+		},
+		{
+			input: `SELECT * FROM JSON_TABLE('{}', '$' COLUMNS( c1 INT PATH '$.c1' DEFAULT 1 ON EMPTY )) as jt;`,
+			output: "select * from json_table('{}', \"$\" columns(\n" +
+				"\tc1 INT path \"$.c1\" 1 on empty\n" +
+				")) as jt",
+		},
+		{
+			input: `SELECT * FROM JSON_TABLE('{}', '$' COLUMNS( c1 INT PATH '$.c1' DEFAULT '1' ON EMPTY )) as jt;`,
+			output: "select * from json_table('{}', \"$\" columns(\n" +
+				"\tc1 INT path \"$.c1\" '1' on empty\n" +
+				")) as jt",
+		},
+		{
+			input: `SELECT * FROM JSON_TABLE('{}', '$' COLUMNS( c1 INT PATH '$.c1' DEFAULT '{"abc": 123}' ON EMPTY )) as jt;`,
+			output: "select * from json_table('{}', \"$\" columns(\n" +
+				"\tc1 INT path \"$.c1\" '{\\\"abc\\\": 123}' on empty\n" +
+				")) as jt",
+		},
+		{
+			input: `SELECT * FROM JSON_TABLE('{}', '$' COLUMNS( c1 INT PATH '$.c1' ERROR ON EMPTY )) as jt;`,
+			output: "select * from json_table('{}', \"$\" columns(\n" +
+				"\tc1 INT path \"$.c1\" error on empty\n" +
+				")) as jt",
+
+		},
+
+		// ON ERROR TESTS
+		{
+			input: `SELECT * FROM JSON_TABLE('{}', '$' COLUMNS( c1 INT PATH '$.c1' NULL ON ERROR )) as jt;`,
+			output: "select * from json_table('{}', \"$\" columns(\n" +
+				"\tc1 INT path \"$.c1\" null on error \n" +
+				")) as jt",
+		},
+		{
+			input: `SELECT * FROM JSON_TABLE('{}', '$' COLUMNS( c1 INT PATH '$.c1' DEFAULT 1 ON ERROR )) as jt;`,
+			output: "select * from json_table('{}', \"$\" columns(\n" +
+				"\tc1 INT path \"$.c1\" 1 on error \n" +
+				")) as jt",
+		},
+		{
+			input: `SELECT * FROM JSON_TABLE('{}', '$' COLUMNS( c1 INT PATH '$.c1' DEFAULT '1' ON ERROR )) as jt;`,
+			output: "select * from json_table('{}', \"$\" columns(\n" +
+				"\tc1 INT path \"$.c1\" '1' on error \n" +
+				")) as jt",
+		},
+		{
+			input: `SELECT * FROM JSON_TABLE('{}', '$' COLUMNS( c1 INT PATH '$.c1' DEFAULT '{"abc": 123}' ON ERROR )) as jt;`,
+			output: "select * from json_table('{}', \"$\" columns(\n" +
+				"\tc1 INT path \"$.c1\" '{\\\"abc\\\": 123}' on error \n" +
+				")) as jt",
+		},
+		{
+			input: `SELECT * FROM JSON_TABLE('{}', '$' COLUMNS( c1 INT PATH '$.c1' ERROR ON ERROR )) as jt;`,
+			output: "select * from json_table('{}', \"$\" columns(\n" +
+				"\tc1 INT path \"$.c1\" error on error\n" +
+				")) as jt",
+		},
+
+		// NESTED PATH TESTS
+		{
+			input: `SELECT * FROM JSON_TABLE('{}', '$' columns(NESTED PATH '$' columns (b INT PATH '$'))) AS jt;`,
+			output: "select * from json_table('{}', \"$\" columns(\n" +
+				"\tnested path \"$\" columns(\n" +
+				"\tb INT path \"$\"\n" +
+				")\n" +
+				")) as jt",
+		},
+		// TODO: MySQL doesn't parse this, but their docs say they do.
+		// https://dev.mysql.com/doc/refman/8.0/en/json-table-functions.html#:~:text=NESTED%20PATH%20(or%20simply%20NESTED%3B%20PATH%20is%20optional)
+		{
+			input: `SELECT * FROM JSON_TABLE('{}', '$' columns(NESTED '$' columns (b INT PATH '$'))) AS jt;`,
+			output: "select * from json_table('{}', \"$\" columns(\n" +
+				"\tnested path \"$\" columns(\n" +
+				"\tb INT path \"$\"\n" +
+				")\n" +
+				")) as jt",
+		},
+		{
+			input: `SELECT * FROM JSON_TABLE('{}', '$' columns(NESTED PATH '$' columns (a INT PATH '$', b INT PATH '$'))) AS jt;`,
+			output: "select * from json_table('{}', \"$\" columns(\n\tnested path \"$\" columns(\n" +
+				"\ta INT path \"$\",\n" +
+				"\tb INT path \"$\"\n" +
+				")\n" +
+				")) as jt",
+		},
+		{
+			input: `SELECT * FROM  JSON_TABLE('{}', 'root_path' COLUMNS( a INT PATH 'a_path', NESTED PATH 'b_path' COLUMNS (NESTED PATH '$' COLUMNS (b1 INT PATH 'b1_path')))) AS jt;`,
+			output: "select * from json_table('{}', \"root_path\" columns(\n" +
+				"\ta INT path \"a_path\",\n" +
+				"\tnested path \"b_path\" columns(\n" +
+				"\tnested path \"$\" columns(\n" +
+				"\tb1 INT path \"b1_path\"\n" +
+				")\n" +
+				")\n" +
+				")) as jt",
 		},
 	}
 
